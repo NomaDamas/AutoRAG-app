@@ -17,14 +17,30 @@ and secrets stay local.
 
 ## Commands
 
+From a fresh clone, run `make setup` once: it verifies the toolchain (bun,
+Node 24+, dupey), installs dependencies, and makes the checkout ready for
+development. It is idempotent, so re-running it is always safe.
+
 ```sh
-bun install --frozen-lockfile
-bun run dev
+make setup
 make run
 bun run test
 bun run typecheck
 bun run build
 ```
+
+Equivalent manual commands (what `make setup` wraps):
+
+```sh
+bun install --frozen-lockfile
+node scripts/ensure-electron.mjs
+bun run dev
+```
+
+`make run` also works from a fresh clone on its own: it runs a fast `--ensure`
+preflight that installs dependencies only when `node_modules` is missing, then
+launches the app. Run `make setup` explicitly when you want the toolchain
+checks (a missing `dupey` fails loudly there instead of at launch).
 
 `make run` starts the dev app on free ports with debugging enabled: it picks
 unused ports for the renderer dev server, the main-process V8 inspector

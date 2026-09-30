@@ -195,7 +195,7 @@
   --evidence-open-height: 44%;
 
   /* ----------------------------------------------------------- §4 Component grids */
-  --grid-file-row: minmax(0,1fr) 100px 60px 96px 66px 76px;
+  --grid-file-row: minmax(0,1fr) 100px 60px 96px 66px;
   --grid-source-row: 28px 1fr 150px 28px 36px;
   --grid-sheet: 24px 1.1fr 1fr 1fr 1fr;
 

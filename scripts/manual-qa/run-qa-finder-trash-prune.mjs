@@ -14,11 +14,11 @@
  * (Not ~/Desktop: a Desktop synced into iCloud Drive is not trashed into
  * ~/.Trash, so the Trash assertion would be meaningless there.)
  * Evidence: .omo/evidence/ai-finder-app/dupey-trash-prune/.
- * Run from the repo root after `cd app && bunx electron-vite build`:
+ * Run from the repo root after `bun run build`:
  *   bun scripts/manual-qa/run-qa-finder-trash-prune.mjs
  */
 
-import { _electron } from "playwright";
+import { launchFinder } from "./launch-finder.mjs";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -95,10 +95,7 @@ fixture();
 rmSync(join(homedir(), ".Trash", VICTIM), { force: true });
 rmSync(join(homedir(), "Library", "Mobile Documents", ".Trash", VICTIM), { force: true });
 
-const app = await _electron.launch({
-	args: [join(REPO, "app"), `--user-data-dir=${USER_DATA}`],
-	cwd: REPO,
-});
+const app = await launchFinder({ userDataDir: USER_DATA });
 const page = await app.firstWindow();
 page.setViewportSize({ width: 1440, height: 900 });
 await page.waitForSelector('[role="row"]', { timeout: 60_000 });
@@ -166,10 +163,7 @@ check("snapshot kept the surviving members", (pruned?.members ?? []).length, fam
 
 // 5. Restart: the snapshot is the only source, so the deleted row cannot come back.
 await app.close();
-const relaunch = await _electron.launch({
-	args: [join(REPO, "app"), `--user-data-dir=${USER_DATA}`],
-	cwd: REPO,
-});
+const relaunch = await launchFinder({ userDataDir: USER_DATA });
 const second = await relaunch.firstWindow();
 second.setViewportSize({ width: 1440, height: 900 });
 await second.waitForSelector('[role="row"]', { timeout: 60_000 });

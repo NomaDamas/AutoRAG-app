@@ -4,7 +4,7 @@ import { RotateIcon } from "../icons";
 import { HollowDot, StatusDot } from "./StatusDot";
 
 /**
- * 22px pill badge (DESIGN.md §5 PillBadge) — Index and Access variants.
+ * 22px pill badge (DESIGN.md §5 PillBadge) — the Index variant.
  * `visual` comes from state/badges so the mapping stays pure and the tooltip
  * doubles as the accessible name.
  */

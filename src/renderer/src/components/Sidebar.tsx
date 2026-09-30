@@ -1,6 +1,6 @@
 import type { ReactElement } from "react";
 import { INDEXING_STATUS, NAV_GROUPS, type NavItem } from "../data/places";
-import { BellIcon, GearIcon, PathIcon } from "./icons";
+import { GearIcon, PathIcon } from "./icons";
 import { FileTile } from "./primitives/FileTile";
 import { Keycap } from "./primitives/Keycap";
 import { StatusDot } from "./primitives/StatusDot";
@@ -11,17 +11,13 @@ import { StatusDot } from "./primitives/StatusDot";
  */
 export function Sidebar({
 	activeLabel,
-	pendingRequests,
 	showHotkeys,
 	onNavigate,
-	onOpenRequests,
 	onOpenSettings,
 }: {
 	readonly activeLabel: string | null;
-	readonly pendingRequests: number;
 	readonly showHotkeys: boolean;
 	readonly onNavigate: (item: NavItem) => void;
-	readonly onOpenRequests?: (() => void) | undefined;
 	readonly onOpenSettings?: (() => void) | undefined;
 }): ReactElement {
 	return (
@@ -64,11 +60,6 @@ export function Sidebar({
 						<div className="sidebar__progress-fill" style={{ width: `${INDEXING_STATUS.percent}%` }} />
 					</div>
 				</div>
-				<button type="button" className="sidebar__item" onClick={onOpenRequests}>
-					<BellIcon className="sidebar__item-icon" />
-					<span className="sidebar__item-label">Requests</span>
-					{pendingRequests > 0 ? <span className="sidebar__count">{pendingRequests}</span> : null}
-				</button>
 				<button type="button" className="sidebar__item" onClick={onOpenSettings}>
 					<GearIcon className="sidebar__item-icon" />
 					<span className="sidebar__item-label">Settings</span>
