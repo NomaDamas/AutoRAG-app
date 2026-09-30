@@ -12,13 +12,13 @@
  * and the datasource virtual-source reveal guard (verbatim error toast).
  *
  * Run from the repo root:  bun scripts/manual-qa/run-qa-finder-evidence-panel.mjs
- * Prereq: cd app && bunx electron-vite build
+ * Prereq: bun run build
  */
 import { mkdirSync, rmSync, writeFileSync, appendFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, basename } from "node:path";
 import { execSync } from "node:child_process";
-import { _electron } from "playwright";
+import { launchFinder } from "./launch-finder.mjs";
 
 const ROOT = new URL("../..", import.meta.url).pathname;
 const EVIDENCE = join(ROOT, ".omo/evidence/ai-finder-app/qa-evidence-panel");
@@ -133,7 +133,7 @@ writeFileSync(QA_CONFIG, JSON.stringify({
 	},
 }, null, 2));
 
-app = await _electron.launch({ args: ["app", `--user-data-dir=${USER_DATA}`], cwd: ROOT, env: { ...process.env, AUTORAG_CONFIG: QA_CONFIG } });
+app = await launchFinder({ userDataDir: USER_DATA, env: { AUTORAG_CONFIG: QA_CONFIG } });
 const page = await app.firstWindow();
 page.setDefaultTimeout(8000);
 page.on("pageerror", (error) => log(`[pageerror] ${String(error).slice(0, 300)}`));

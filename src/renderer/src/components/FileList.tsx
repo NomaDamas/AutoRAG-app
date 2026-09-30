@@ -1,6 +1,5 @@
 import type { ReactElement, RefObject } from "react";
 import { FileRow, type RowCallbacks } from "./FileRow";
-import type { Permission } from "../../../shared/settings-contract";
 import type { StackRow, VersionFamilyError } from "../state/version-family";
 
 /**
@@ -19,7 +18,6 @@ export function FileList({
 	renamePath,
 	renameDraft,
 	indexOverrides,
-	permissions,
 	listPath,
 	versionFamilyError,
 	onRetryVersionFamilies,
@@ -36,7 +34,6 @@ export function FileList({
 	readonly renamePath: string | null;
 	readonly renameDraft: string;
 	readonly indexOverrides: Readonly<Record<string, boolean>>;
-	readonly permissions: Readonly<Record<string, Permission>>;
 	readonly listPath: string;
 	readonly versionFamilyError: VersionFamilyError | null;
 	readonly onRetryVersionFamilies: () => void;
@@ -66,7 +63,6 @@ export function FileList({
 						flash={flashPath === row.entry.path}
 						searching={searching}
 						indexIncluded={indexOverrides[row.entry.path] ?? true}
-						permission={permissions[row.entry.path] ?? "ask"}
 						renameDraft={renamePath === row.entry.path ? renameDraft : null}
 						stackCount={row.stackCount}
 						stackOpen={row.stackOpen}

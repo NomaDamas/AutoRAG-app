@@ -176,6 +176,15 @@ export function ArrowUpIcon({ size = 16, className }: GlyphProps): ReactElement 
 	);
 }
 
+export function PencilIcon({ size = 13, className }: GlyphProps): ReactElement {
+	return (
+		<Stroke size={size} width={2} className={className}>
+			<path d="M17 3a2.85 2.85 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5z" />
+			<path d="M15 5l4 4" />
+		</Stroke>
+	);
+}
+
 export function RotateIcon({ size = 10, className }: GlyphProps): ReactElement {
 	return (
 		<Stroke size={size} width={2.8} className={className}>

@@ -92,7 +92,6 @@ export interface FinderController {
 	/** Non-null when dupey is missing or a version-family scan failed. */
 	readonly versionFamilyError: VersionFamilyError | null;
 	readonly activeNavLabel: string | null;
-	readonly pendingRequests: number;
 	readonly contextMenu: { readonly cursor: { readonly x: number; readonly y: number } } | null;
 	readonly contextMenuEntries: readonly FinderMenuEntry[];
 	readonly listRef: RefObject<HTMLDivElement | null>;
@@ -784,7 +783,6 @@ export function useFinderController(
 		indexOverrides: effectiveIndexOverrides,
 		versionFamilyError,
 		activeNavLabel,
-		pendingRequests: source.pendingRequests,
 		contextMenu: contextMenu === null ? null : { cursor: contextMenu.cursor },
 		contextMenuEntries,
 		listRef,

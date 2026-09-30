@@ -1,6 +1,5 @@
 import type { ChangeEvent, KeyboardEvent, MouseEvent, ReactElement } from "react";
-import { accessBadge, indexBadge } from "../state/badges";
-import type { Permission } from "../../../shared/settings-contract";
+import { indexBadge } from "../state/badges";
 import type { FinderEntry } from "../data/entries";
 import { whereSegments } from "../state/paths";
 import { relationLabel, type VersionRelation } from "../state/version-family";
@@ -15,7 +14,6 @@ export interface RowCallbacks {
 	readonly onContextMenu: (entry: FinderEntry, event: MouseEvent<HTMLDivElement>) => void;
 	readonly onToggleIndex: (entry: FinderEntry) => void;
 	readonly onToggleStack: (entry: FinderEntry) => void;
-	readonly onChangeAccess: (entry: FinderEntry) => void;
 	readonly onRenameChange: (value: string) => void;
 	readonly onRenameCommit: () => void;
 	readonly onRenameCancel: () => void;
@@ -33,7 +31,6 @@ export function FileRow({
 	flash,
 	searching,
 	indexIncluded,
-	permission,
 	renameDraft,
 	stackCount,
 	stackOpen,
@@ -48,7 +45,6 @@ export function FileRow({
 	readonly flash: boolean;
 	readonly searching: boolean;
 	readonly indexIncluded: boolean;
-	readonly permission: Permission;
 	readonly renameDraft: string | null;
 	readonly stackCount: number;
 	readonly stackOpen: boolean;
@@ -148,15 +144,6 @@ export function FileRow({
 						}}
 					/>
 				) : null}
-			</div>
-			<div className="row__cell" role="gridcell">
-				<PillBadge
-					visual={accessBadge(permission, false)}
-					onClick={(event) => {
-						event.stopPropagation();
-						callbacks.onChangeAccess(entry);
-					}}
-				/>
 			</div>
 		</div>
 	);

@@ -290,11 +290,11 @@ Value-named because the contract is pixel fidelity: `--space-14` cannot be mistr
 
 | Token | Value | Use |
 |---|---|---|
-| `--grid-file-row` | `minmax(0,1fr) 100px 60px 96px 66px 76px` | column header and every file row; gap `--space-12`, padding `0 16px 0 20px` |
+| `--grid-file-row` | `minmax(0,1fr) 100px 60px 96px 66px` | column header and every file row; gap `--space-12`, padding `0 16px 0 20px` |
 | `--grid-source-row` | `28px 1fr 150px 28px 36px` | Settings → Data Sources row |
 | `--grid-sheet` | `24px 1.1fr 1fr 1fr 1fr` | Quick Look `sheet` preview |
 
-Columns, in order: **Name | Date Modified | Size (right-aligned) | Kind (or "Where" while searching) | Index | Access**.
+Columns, in order: **Name | Date Modified | Size (right-aligned) | Kind (or "Where" while searching) | Index**. The Access pill is not shown in the Finder column — where (and whether) to surface per-item access is still under review.
 
 ### Overlay widths
 

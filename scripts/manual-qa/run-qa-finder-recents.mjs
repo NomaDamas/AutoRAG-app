@@ -7,13 +7,13 @@
  * Electron userData path, which is what makes it work on Windows and macOS).
  *
  * Run from the repo root:  bun scripts/manual-qa/run-qa-finder-recents.mjs
- * Prereq: cd app && bunx electron-vite build
+ * Prereq: bun run build
  */
 import { execSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { _electron } from "playwright";
+import { launchFinder } from "./launch-finder.mjs";
 
 const ROOT = new URL("../..", import.meta.url).pathname;
 const EVIDENCE = join(ROOT, ".omo/evidence/ai-finder-app/qa-recents");
@@ -125,7 +125,7 @@ const check = (label, ok, detail) => {
 
 const appLog = [];
 const openApp = async () => {
-	const app = await _electron.launch({ args: ["app", `--user-data-dir=${USER_DATA}`], cwd: ROOT });
+	const app = await launchFinder({ userDataDir: USER_DATA });
 	app.process().stdout?.on("data", (chunk) => appLog.push(`stdout: ${String(chunk).trim()}`));
 	app.process().stderr?.on("data", (chunk) => appLog.push(`stderr: ${String(chunk).trim()}`));
 	app.process().on("exit", (code) => appLog.push(`app exited code=${code}`));

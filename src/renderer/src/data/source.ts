@@ -17,7 +17,7 @@ import {
 	type VersionRelation,
 } from "../state/version-family";
 import { type FinderEntry, entryFromFixture, entryFromFs, entryFromSearchHit } from "./entries";
-import { FIXTURE_FAMILIES, FIXTURE_INITIAL_PATH, FIXTURE_PENDING_REQUESTS, FIXTURE_ROOTS, FIXTURE_TREE } from "./fixtures";
+import { FIXTURE_FAMILIES, FIXTURE_INITIAL_PATH, FIXTURE_ROOTS, FIXTURE_TREE } from "./fixtures";
 import type { FixtureItem } from "./entries";
 
 export interface FinderLocation {
@@ -35,8 +35,6 @@ export interface FinderSource {
 	/** True when the native OS surfaces (Reveal, Open) are real. */
 	readonly native: boolean;
 	readonly initialPath: string;
-	/** Pending agent requests behind the sidebar bell; 0 until that lane lands. */
-	readonly pendingRequests: number;
 	list(path: string): Promise<readonly FinderEntry[]>;
 	search(query: string): Promise<readonly FinderEntry[]>;
 	locations(): Promise<readonly FinderLocation[]>;
@@ -66,7 +64,6 @@ export function createBridgeSource(fs: FsBridge, initialPath: string): FinderSou
 	return {
 		native: true,
 		initialPath,
-		pendingRequests: 0,
 		async list(path) {
 			const listing = await fs.listDir(path);
 			// Recents is virtual: a row's location is the real folder that holds the file.
@@ -203,7 +200,6 @@ export function createFixtureSource(): FinderSource {
 	return {
 		native: false,
 		initialPath: FIXTURE_INITIAL_PATH,
-		pendingRequests: FIXTURE_PENDING_REQUESTS,
 		list: (path) =>
 			Promise.resolve((state.tree.get(path) ?? []).map((item) => entryFromFixture(item, path))),
 		search: (query) => {

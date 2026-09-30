@@ -15,7 +15,7 @@ import { execSync } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { deflateSync } from "node:zlib";
-import { _electron } from "playwright";
+import { launchFinder } from "./launch-finder.mjs";
 
 const ROOT = new URL("../../", import.meta.url).pathname.replace(/\/$/, "");
 const EVIDENCE = `${ROOT}/.omo/evidence/ai-finder-app/qa-thumbnails/`;
@@ -92,7 +92,7 @@ const check = (label, actual, expected) => {
 
 let app;
 try {
-	app = await _electron.launch({ args: ["app"], cwd: ROOT });
+	app = await launchFinder();
 	const page = await app.firstWindow();
 	await page.waitForSelector('[role="row"]', { timeout: 30000 });
 	await page.getByLabel("Places").getByRole("button", { name: "Documents", exact: true }).click();
