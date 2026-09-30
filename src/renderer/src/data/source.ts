@@ -7,13 +7,13 @@
  * preload lands. Components never touch `window` directly.
  */
 
-import { RECENTS_PATH, type FsBridge, type FsClipboard } from "../../../shared/fs-contract";
+import { RECENTS_PATH, type FsBridge, type FsClipboard, type FsVersionFamiliesResult } from "../../../shared/fs-contract";
+import type { LayerPublication, LiveBridge, LiveMessage, LiveResync } from "../../../shared/live-contract";
 import { copyName } from "../state/collision";
 import { basename, dirname, joinPath } from "../state/paths";
 import {
 	EMPTY_VERSION_FAMILIES_RESULT,
 	type VersionFamiliesResult,
-	type VersionFamilyData,
 	type VersionRelation,
 } from "../state/version-family";
 import { type FinderEntry, entryFromFixture, entryFromFs, entryFromSearchHit } from "./entries";
@@ -35,6 +35,10 @@ export interface FinderSource {
 	/** True when the native OS surfaces (Quick Look, Reveal) are real. */
 	readonly native: boolean;
 	readonly initialPath: string;
+	setWatchSet(dirs: readonly string[]): Promise<void>;
+	onLive(listener: (message: LiveMessage) => void): () => void;
+	liveLayers(): Promise<LiveResync>;
+	exists(path: string): Promise<boolean>;
 	list(path: string): Promise<readonly FinderEntry[]>;
 	search(query: string): Promise<readonly FinderEntry[]>;
 	locations(): Promise<readonly FinderLocation[]>;
@@ -60,10 +64,42 @@ export interface FinderSource {
 
 /* -------------------------------------------------------------- real bridge */
 
-export function createBridgeSource(fs: FsBridge, initialPath: string): FinderSource {
+export function createBridgeSource(fs: FsBridge, initialPath: string, live?: LiveBridge): FinderSource {
+	const mapVersionFamiliesResult = (result: FsVersionFamiliesResult): VersionFamiliesResult => ({
+		families: result.families.map((family) => ({
+			head: family.head,
+			members: family.members,
+			entriesByPath: Object.fromEntries(
+				family.entries.map((entry) => [entry.path, entryFromFs(entry)]),
+			),
+		})),
+		scannedAt: result.scannedAt,
+		error: result.error,
+	});
+	const mapLayerPublication = (publication: LayerPublication): LayerPublication => ({
+		...publication,
+		data: publication.layer === "dupey"
+			? mapVersionFamiliesResult(publication.data as FsVersionFamiliesResult)
+			: publication.data,
+	});
 	return {
 		native: true,
 		initialPath,
+		setWatchSet: (dirs) => live?.setWatchSet(dirs) ?? Promise.resolve(),
+		onLive: (listener) => {
+			return live?.onMessage(listener) ?? (() => {});
+		},
+		liveLayers: () => live?.layers() ?? Promise.resolve({ seq: 0, layers: [], reconciled: [] }),
+		exists: async (path) => {
+			try {
+				await fs.stat(path);
+				return true;
+			} catch (error) {
+				const code = (error as { code?: string }).code;
+				if (code === "ENOENT" || code === "ENOTDIR") return false;
+				throw error;
+			}
+		},
 		async list(path) {
 			const listing = await fs.listDir(path);
 			// Recents is virtual: a row's location is the real folder that holds the file.
@@ -104,44 +140,21 @@ export function createBridgeSource(fs: FsBridge, initialPath: string): FinderSou
 		clipboardSet: (clipboard) => fs.clipboardSet(clipboard),
 		clipboardGet: () => fs.clipboardGet(),
 		versionFamilies: async () => {
-			const result = await fs.versionFamilies();
-			return {
-				families: result.families.map((family) => ({
-					head: family.head,
-					members: family.members,
-					entriesByPath: Object.fromEntries(
-						family.entries.map((entry) => [entry.path, entryFromFs(entry)]),
-					),
-				})),
-				scannedAt: result.scannedAt,
-				error: result.error,
-			};
+			return mapVersionFamiliesResult(await fs.versionFamilies());
 		},
 		async refreshVersionFamilies() {
-			const result = await fs.refreshVersionFamilies();
-			return {
-				families: result.families.map((family) => ({
-					head: family.head,
-					members: family.members,
-					entriesByPath: Object.fromEntries(
-						family.entries.map((entry) => [entry.path, entryFromFs(entry)]),
-					),
-				})),
-				scannedAt: result.scannedAt,
-				error: result.error,
-			};
+			return mapVersionFamiliesResult(await fs.refreshVersionFamilies());
 		},
-		onVersionFamiliesUpdated: (listener) => fs.onVersionFamiliesUpdated?.((result) => listener({
-			families: result.families.map((family) => ({
-				head: family.head,
-				members: family.members,
-				entriesByPath: Object.fromEntries(
-					family.entries.map((entry) => [entry.path, entryFromFs(entry)]),
-				),
-			})),
-			scannedAt: result.scannedAt,
-			error: result.error,
-		})) ?? (() => {}),
+		onVersionFamiliesUpdated: (listener) => fs.onVersionFamiliesUpdated?.((result) => listener(mapVersionFamiliesResult(result))) ?? (() => {}),
+		...(live === undefined ? {} : {
+			liveLayers: async () => {
+				const result = await live.layers();
+				return {
+					...result,
+					layers: result.layers.map(mapLayerPublication),
+				};
+			},
+		}),
 	};
 }
 
@@ -200,6 +213,10 @@ export function createFixtureSource(): FinderSource {
 	return {
 		native: false,
 		initialPath: FIXTURE_INITIAL_PATH,
+		setWatchSet: resolve,
+		onLive: () => () => {},
+		liveLayers: () => Promise.resolve({ seq: 0, layers: [], reconciled: [] }),
+		exists: (path) => Promise.resolve(state.tree.has(path) || findItem(state, path) !== null),
 		list: (path) =>
 			Promise.resolve((state.tree.get(path) ?? []).map((item) => entryFromFixture(item, path))),
 		search: (query) => {

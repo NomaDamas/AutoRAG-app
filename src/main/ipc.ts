@@ -2,6 +2,8 @@ import { ipcMain } from "electron";
 import { FS_CHANNELS, type FsClipboard, type FsCoreBridge } from "../shared/fs-contract";
 import { SEARCH_CHANNELS, type SearchBridge } from "../shared/search-contract";
 import { SETTINGS_CHANNELS, type SettingsBridge } from "../shared/settings-contract";
+import { LIVE_CHANNELS } from "../shared/live-contract";
+import type { ChangeHub } from "./change-hub";
 import type { VersionFamilyService } from "./version-family-service";
 
 /** Extra work a channel runs after the filesystem operation itself succeeded. */
@@ -84,4 +86,24 @@ export function registerSettingsIpcHandlers(service: SettingsBridge): void {
 	ipcMain.handle(SETTINGS_CHANNELS.sourcesList, () => service.sourcesList());
 	ipcMain.handle(SETTINGS_CHANNELS.sourcesSetEnabled, (_event, id: string, enabled: boolean) => service.sourcesSetEnabled(id, enabled));
 	ipcMain.handle(SETTINGS_CHANNELS.assistantSend, (_event, surface, text: string) => service.assistantSend(surface, text));
+}
+
+export function registerLiveIpcHandlers(
+	watch: { setWatchSet(dirs: readonly string[]): Promise<void> },
+	hub: ChangeHub,
+): void {
+	ipcMain.handle(LIVE_CHANNELS.setWatchSet, (_event, dirs: unknown) => {
+		if (!Array.isArray(dirs) || dirs.some((dir) => typeof dir !== "string")) {
+			const error = new TypeError("live:setWatchSet expects an array of strings");
+			console.error("[live] malformed watch set", error);
+			throw error;
+		}
+		return watch.setWatchSet(dirs);
+	});
+	ipcMain.handle(LIVE_CHANNELS.layers, () => {
+		if (process.env.AUTORAG_FS_WATCH_DIAG === "1") {
+			console.info("[live] layers requested");
+		}
+		return hub.resync();
+	});
 }

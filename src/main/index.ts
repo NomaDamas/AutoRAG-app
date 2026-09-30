@@ -5,6 +5,7 @@ import { app, BrowserWindow, clipboard, shell } from "electron";
 import { BUILTIN_DATASOURCE_SKILL_NAMES, writeConfigObject, writeDefaultConfig } from "@autorag/librarian";
 import type { DataSourceRow } from "../shared/settings-contract";
 import { FS_CHANNELS } from "../shared/fs-contract";
+import { DUPEY_LAYER_ID, LIVE_CHANNELS } from "../shared/live-contract";
 import { APP_NAME, APP_VERSION, formatWindowTitle, type DevLabel } from "../shared/app-info";
 import { createChatStore } from "./chat-store";
 import { readDevLabel, resolveClonePath } from "./dev-label";
@@ -15,10 +16,15 @@ import { createDefaultAgentFactory, createSearchService } from "./search-service
 import { createSettingsService } from "./settings-service";
 import {
 	registerFsIpcHandlers,
+	registerLiveIpcHandlers,
 	registerSearchIpcHandlers,
 	registerSettingsIpcHandlers,
 	registerVersionFamilyIpcHandlers,
 } from "./ipc";
+import { createChangeHub } from "./change-hub";
+import { createDupeyLayer } from "./dupey-layer";
+import { createFsWatchService } from "./fs-watch-service";
+import { createParcelWatchBackend } from "./watch-backend";
 import { createVersionFamilyService, DEFAULT_SCAN_INTERVAL_MINUTES, type VersionFamilyService } from "./version-family-service";
 import { createFileVersionFamilyStore } from "./version-family-store";
 
@@ -155,15 +161,27 @@ app.whenReady().then(() => {
 	});
 	let scanIntervalMinutes = DEFAULT_SCAN_INTERVAL_MINUTES;
 	const sendToWindow = (channel: string, payload: unknown): void => {
-		BrowserWindow.getAllWindows()[0]?.webContents.send(channel, payload);
+		const window = BrowserWindow.getAllWindows()[0];
+		if (window === undefined || window.webContents.isDestroyed()) return;
+		window.webContents.send(channel, payload);
 	};
+	const hub = createChangeHub({
+		send: (message) => sendToWindow(LIVE_CHANNELS.message, message),
+	});
 	versionFamilyService = createVersionFamilyService({
 		locations: () => fsService.locations(),
 		store: createFileVersionFamilyStore(join(app.getPath("userData"), "dupey-cache")),
 		buildEntry: buildFsEntry,
 		intervalMinutes: () => scanIntervalMinutes,
 		onUpdate: (result) => sendToWindow(FS_CHANNELS.versionFamiliesUpdated, result),
+		onChanged: () => hub.publish(DUPEY_LAYER_ID),
 	});
+	hub.register(createDupeyLayer(versionFamilyService));
+	const watch = createFsWatchService({
+		backend: createParcelWatchBackend(),
+		onBatch: (batch) => hub.ingest(batch),
+	});
+	registerLiveIpcHandlers(watch, hub);
 	registerVersionFamilyIpcHandlers(versionFamilyService);
 	const searchService = createSearchService({
 		agentFactory: createDefaultAgentFactory(),
@@ -197,11 +215,21 @@ app.whenReady().then(() => {
 		versionFamilyService?.reschedule();
 	});
 	void versionFamilyService.start();
-	createMainWindow(devLabel);
+	const attachWindowLifecycle = (window: BrowserWindow): void => {
+		const clearWatchSet = (): void => {
+			void watch.setWatchSet([]);
+		};
+		window.webContents.on("render-process-gone", clearWatchSet);
+		window.webContents.on("destroyed", clearWatchSet);
+	};
+	attachWindowLifecycle(createMainWindow(devLabel));
 	app.on("activate", () => {
 		if (BrowserWindow.getAllWindows().length === 0) {
-			createMainWindow(devLabel);
+			attachWindowLifecycle(createMainWindow(devLabel));
 		}
+	});
+	app.once("will-quit", () => {
+		void watch.dispose();
 	});
 });
 

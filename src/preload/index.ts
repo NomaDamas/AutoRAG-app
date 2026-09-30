@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from "electron";
 import { createBridge } from "../shared/bridge";
 import type { DevLabel } from "../shared/app-info";
 import { createFsBridge } from "./fs-bridge";
+import { createLiveBridge } from "./live-bridge";
 import { createSearchBridge } from "./search-bridge";
 import { createSettingsBridge } from "./settings-bridge";
 
@@ -20,6 +21,7 @@ function readDevLabelArg(): DevLabel | null {
 contextBridge.exposeInMainWorld("autorag", {
 	...createBridge(readDevLabelArg()),
 	fs: createFsBridge(ipcRenderer),
+	live: createLiveBridge(ipcRenderer),
 	search: createSearchBridge(ipcRenderer),
 	settings: createSettingsBridge(ipcRenderer),
 });

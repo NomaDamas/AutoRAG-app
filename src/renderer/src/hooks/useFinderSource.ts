@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import type { FsBridge } from "../../../shared/fs-contract";
+import type { LiveBridge } from "../../../shared/live-contract";
 import { createBridgeSource, createFixtureSource, type FinderSource } from "../data/source";
 
 /**
@@ -11,10 +12,12 @@ import { createBridgeSource, createFixtureSource, type FinderSource } from "../d
  */
 export function useFinderSource(): FinderSource {
 	return useMemo(() => {
-		const bridge =
+		const autorag =
 			typeof window === "undefined"
 				? undefined
-				: (window as { autorag?: { fs?: FsBridge } }).autorag?.fs;
-		return bridge === undefined ? createFixtureSource() : createBridgeSource(bridge, "");
+				: (window as { autorag?: { fs?: FsBridge; live?: LiveBridge } }).autorag;
+		return autorag?.fs === undefined || autorag.live === undefined
+			? createFixtureSource()
+			: createBridgeSource(autorag.fs, "", autorag.live);
 	}, []);
 }
