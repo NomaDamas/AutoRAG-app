@@ -186,6 +186,29 @@
 	to { visibility: hidden; }
 }
 
+.ai__thinking {
+	color: var(--text-muted);
+	font-size: var(--font-size-caption);
+}
+
+.ai__thinking summary {
+	cursor: pointer;
+	user-select: none;
+}
+
+.ai__thinking-body {
+	max-height: 160px;
+	margin: var(--space-8) 0 0;
+	padding-left: var(--space-8);
+	overflow-y: auto;
+	border-left: 2px solid var(--border);
+	font-family: inherit;
+	font-size: var(--font-size-caption);
+	line-height: var(--leading-body);
+	white-space: pre-wrap;
+	word-break: keep-all;
+}
+
 .ai__skeleton {
 	display: flex;
 	flex-direction: column;
