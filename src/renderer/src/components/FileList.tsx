@@ -1,6 +1,7 @@
 import type { ReactElement, RefObject } from "react";
 import { FileRow, type RowCallbacks } from "./FileRow";
 import type { StackRow, VersionFamilyError } from "../state/version-family";
+import { VersionFamilyBanner } from "./VersionFamilyBanner";
 
 /**
  * Scrolling file list (handoff README §2): the search summary, the rows, and
@@ -41,17 +42,7 @@ export function FileList({
 }): ReactElement {
 	return (
 		<div className="list" ref={listRef}>
-			{versionFamilyError === null ? null : (
-				<div className="list__error" role="alert">
-					<span className="list__error-text">{versionFamilyError.message}</span>
-					{versionFamilyError.installCommand === null ? null : (
-						<code className="list__error-command">{versionFamilyError.installCommand}</code>
-					)}
-					<button type="button" className="list__error-retry" onClick={onRetryVersionFamilies}>
-						다시 확인
-					</button>
-				</div>
-			)}
+			<VersionFamilyBanner error={versionFamilyError} onRetry={onRetryVersionFamilies} />
 			{searching ? <div className="list__summary">{summary}</div> : null}
 			<div role="grid" aria-label="Files">
 				{rows.map((row) => (

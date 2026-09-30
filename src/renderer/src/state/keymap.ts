@@ -6,6 +6,8 @@
  * which is what keeps `space` out of composed text.
  */
 
+import { type ViewMode, viewModeForKey } from "./view-mode";
+
 export type FocusZone = "finder" | "evidence";
 
 export interface KeyEventLike {
@@ -21,6 +23,8 @@ export interface KeyEventLike {
 export interface KeyContext {
 	readonly zone: FocusZone;
 	readonly typing: boolean;
+	/** Left / right move between tiles or panes outside the list view. Defaults to list. */
+	readonly viewMode?: ViewMode;
 }
 
 export type KeyAction =
@@ -28,7 +32,9 @@ export type KeyAction =
 	| { readonly type: "open" }
 	| { readonly type: "trash" }
 	| { readonly type: "moveSelection"; readonly delta: 1 | -1 }
+	| { readonly type: "moveSelectionSideways"; readonly delta: 1 | -1 }
 	| { readonly type: "moveEvidence"; readonly delta: 1 | -1 }
+	| { readonly type: "setViewMode"; readonly mode: ViewMode }
 	| { readonly type: "dismiss" }
 	| { readonly type: "focusSearch" }
 	| { readonly type: "newTab" }
@@ -46,8 +52,10 @@ export function resolveKeyAction(event: KeyEventLike, context: KeyContext): KeyA
 				return { type: "newTab" };
 			case "w":
 				return { type: "closeTab" };
-			default:
-				return null;
+			default: {
+				const mode = viewModeForKey(event.key);
+				return mode === null ? null : { type: "setViewMode", mode };
+			}
 		}
 	}
 	if (context.typing) {
@@ -61,10 +69,11 @@ export function resolveKeyAction(event: KeyEventLike, context: KeyContext): KeyA
 		return context.zone === "evidence" ? { type: "moveEvidence", delta } : { type: "moveSelection", delta };
 	}
 	if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
-		if (context.zone !== "evidence") {
-			return null;
+		const delta = event.key === "ArrowRight" ? 1 : -1;
+		if (context.zone === "evidence") {
+			return { type: "moveEvidence", delta };
 		}
-		return { type: "moveEvidence", delta: event.key === "ArrowRight" ? 1 : -1 };
+		return (context.viewMode ?? "list") === "list" ? null : { type: "moveSelectionSideways", delta };
 	}
 	if (event.key === "Enter" && context.zone === "finder") {
 		return { type: "open" };

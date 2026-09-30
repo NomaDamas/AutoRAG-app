@@ -70,6 +70,38 @@ export function moveSelection(
 	return next === undefined ? state : single(next);
 }
 
+/**
+ * Keyboard movement in the icon grid: tiles flow left to right in rows of
+ * `columns`. Up/down move a whole row; a short last row catches a move down at
+ * its last tile, and there is no wrap past either end.
+ */
+export function moveInGrid(
+	orderedKeys: readonly string[],
+	state: SelectionState,
+	step: { readonly dx: -1 | 0 | 1; readonly dy: -1 | 0 | 1 },
+	columns: number,
+): SelectionState {
+	const count = orderedKeys.length;
+	if (count === 0) {
+		return state;
+	}
+	const current = state.focus === null ? -1 : orderedKeys.indexOf(state.focus);
+	if (current < 0) {
+		const first = orderedKeys[0];
+		return first === undefined ? state : single(first);
+	}
+	const width = Math.max(1, Math.floor(columns));
+	let target = current + step.dx + step.dy * width;
+	if (step.dy !== 0) {
+		const lastRow = Math.floor((count - 1) / width);
+		if (target < 0 || Math.floor(target / width) > lastRow) {
+			target = current;
+		}
+	}
+	const next = orderedKeys[Math.min(count - 1, Math.max(0, target))];
+	return next === undefined ? state : single(next);
+}
+
 export function scrollTopForIndex(index: number): number {
 	return Math.max(0, index * ROW_HEIGHT - SCROLL_LEAD);
 }

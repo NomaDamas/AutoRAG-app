@@ -92,3 +92,47 @@ export function emptyStateText(query: string, path = ""): string {
 	}
 	return path === RECENTS_PATH ? "최근에 연 파일이 없습니다" : "빈 폴더";
 }
+
+/** Display width in Latin-letter units: CJK and other wide scripts count 2. */
+function labelWidth(text: string): number {
+	let width = 0;
+	for (const char of text) {
+		width += (char.codePointAt(0) ?? 0) >= 0x2e80 ? 2 : 1;
+	}
+	return width;
+}
+
+/** The longest prefix of `text` that fits in `budget` width units. */
+function fitHead(text: string, budget: number): string {
+	let out = "";
+	let width = 0;
+	for (const char of text) {
+		const next = width + labelWidth(char);
+		if (next > budget) break;
+		out += char;
+		width = next;
+	}
+	return out;
+}
+
+/** Characters kept before the extension (or at the end) of a shortened name. */
+const TILE_TAIL_CHARS = 3;
+
+/**
+ * Icon-view caption (about two lines under a tile): long names are cut in the
+ * middle, keeping the start, the last few characters, and the extension, the
+ * way Finder does.
+ */
+export function tileLabel(name: string, budget = 26): string {
+	if (labelWidth(name) <= budget) {
+		return name;
+	}
+	const dot = name.lastIndexOf(".");
+	const hasExt = dot > 0 && name.length - dot <= 8;
+	const stem = hasExt ? name.slice(0, dot) : name;
+	const ext = hasExt ? name.slice(dot) : "";
+	const stemChars = [...stem];
+	const tail = stemChars.slice(-TILE_TAIL_CHARS).join("") + ext;
+	const head = fitHead(stemChars.slice(0, -TILE_TAIL_CHARS).join(""), budget - 1 - labelWidth(tail));
+	return `${head.trimEnd()}…${tail}`;
+}

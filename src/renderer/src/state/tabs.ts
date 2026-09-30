@@ -15,6 +15,8 @@ export interface FinderTab {
 	readonly selection: SelectionState;
 	/** Reveal flash dot, held for --time-flash. */
 	readonly flash: boolean;
+	/** Column view: folders opened pane by pane, each the parent of the next (state/columns.ts). */
+	readonly chain: readonly string[];
 }
 
 export interface TabsState {
@@ -24,7 +26,7 @@ export interface TabsState {
 }
 
 function blankTab(id: number, path: string): FinderTab {
-	return { id, path, back: [], fwd: [], selection: EMPTY_SELECTION, flash: false };
+	return { id, path, back: [], fwd: [], selection: EMPTY_SELECTION, flash: false, chain: [] };
 }
 
 export function createTabsState(path: string): TabsState {
@@ -118,6 +120,23 @@ export function goForward(state: TabsState): TabsState {
 		fwd: t.fwd.slice(1),
 		selection: EMPTY_SELECTION,
 	}));
+}
+
+/**
+ * A column-view pick: the tab adopts the new chain and selection. When the
+ * panes slid (the choice moved the current folder) the move is a navigation,
+ * so Back returns to the previous panes.
+ */
+export function applyColumnChoice(
+	state: TabsState,
+	choice: { readonly path: string; readonly chain: readonly string[] },
+	selection: SelectionState,
+): TabsState {
+	return patchActiveTab(state, (tab) =>
+		choice.path === tab.path
+			? { ...tab, chain: choice.chain, selection }
+			: { ...tab, path: choice.path, back: [...tab.back, tab.path], fwd: [], chain: choice.chain, selection },
+	);
 }
 
 /** The Contacts view keeps its own title while searching. */
