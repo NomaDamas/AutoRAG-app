@@ -5,7 +5,7 @@ import { strToU8, zipSync } from "fflate";
 import { describe, expect, it } from "vitest";
 import { readPreviewFile } from "../src/preview/node/read-file";
 import { parseByteRange } from "../src/preview/shared/range";
-import { describeExtension, viewerForExtension, wantsBytes } from "../src/preview/shared/registry";
+import { claimedViewerExtensions, describeExtension, viewerForExtension, wantsBytes, VIEWER_KINDS } from "../src/preview/shared/registry";
 import { rtfToText } from "../src/preview/shared/rtf";
 import { stepQuickLook, type QuickLookRequest } from "../src/preview/shared/session";
 import { listTarEntries } from "../src/preview/shared/tar-list";
@@ -15,21 +15,19 @@ import { zoomFromAnchor } from "../src/preview/shared/zoom";
 const sample: QuickLookRequest = { path: "/tmp/a.png", name: "a.png", anchor: null };
 
 describe("preview registry", () => {
-	it("routes the families the in-app viewer claims", () => {
-		expect(viewerForExtension("png")).toBe("image");
-		expect(viewerForExtension(".PDF")).toBe("pdf");
-		expect(viewerForExtension("mp4")).toBe("video");
-		expect(viewerForExtension("docx")).toBe("docx");
-		expect(viewerForExtension("xlsx")).toBe("sheet");
-		expect(viewerForExtension("csv")).toBe("sheet");
-		expect(viewerForExtension("pptx")).toBe("pptx");
-		expect(viewerForExtension("md")).toBe("markdown");
-		expect(viewerForExtension("zip")).toBe("archive");
-		expect(viewerForExtension("epub")).toBe("epub");
-		expect(viewerForExtension("hwpx")).toBe("hwpx");
-		expect(viewerForExtension("woff2")).toBe("font");
-		expect(viewerForExtension("heic")).toBe("heic");
-		expect(viewerForExtension("tif")).toBe("tiff");
+	it("resolves every claimed extension to its viewer", () => {
+		const claimed = claimedViewerExtensions();
+		expect(claimed.length).toBeGreaterThan(100);
+		const seen = new Set<string>();
+		for (const { ext, kind } of claimed) {
+			expect(viewerForExtension(ext)).toBe(kind);
+			expect(kind).not.toBe("fallback");
+			seen.add(kind);
+		}
+		for (const kind of VIEWER_KINDS) {
+			if (kind === "fallback") continue;
+			expect(seen.has(kind)).toBe(true);
+		}
 		expect(viewerForExtension("nope")).toBe("fallback");
 		expect(wantsBytes("video")).toBe(false);
 		expect(wantsBytes("docx")).toBe(true);

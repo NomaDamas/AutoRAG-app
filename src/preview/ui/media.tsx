@@ -1,5 +1,4 @@
 import { useEffect, useState, type ReactElement } from "react";
-import heic2any from "heic2any";
 import * as UTIF from "utif";
 import { previewStreamUrl, type PreviewDocument } from "../shared/contract";
 import { FallbackView, Status } from "./fallback";
@@ -124,7 +123,8 @@ export function HeicView({ file }: { readonly file: PreviewDocument }): ReactEle
 		if (bytes === null) return;
 		let cancelled = false;
 		let current: string | null = null;
-		heic2any({ blob: new Blob([copyBytes(bytes)]), toType: "image/jpeg", quality: 0.82 })
+		import("heic2any")
+			.then((mod) => mod.default({ blob: new Blob([copyBytes(bytes)]), toType: "image/jpeg", quality: 0.82 }))
 			.then((converted) => {
 				if (cancelled) return;
 				const blob = converted instanceof Blob ? converted : converted[0];

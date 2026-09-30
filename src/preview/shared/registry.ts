@@ -60,6 +60,10 @@ export function viewerForExtension(ext: string): ViewerKind {
 	return viewers[key] ?? "fallback";
 }
 
+export function claimedViewerExtensions(): readonly { readonly ext: string; readonly kind: ViewerKind }[] {
+	return Object.entries(viewers).map(([ext, kind]) => ({ ext, kind }));
+}
+
 export function wantsBytes(kind: ViewerKind): boolean {
 	switch (kind) {
 		case "video":
