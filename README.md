@@ -20,10 +20,18 @@ and secrets stay local.
 ```sh
 bun install --frozen-lockfile
 bun run dev
+make run
 bun run test
 bun run typecheck
 bun run build
 ```
+
+`make run` starts the dev app on free ports with debugging enabled: it picks
+unused ports for the renderer dev server, the main-process V8 inspector
+(`chrome://inspect`), and the renderer remote-debugging endpoint, and prints
+all three before launching. It goes through `bun run dev`, so the `predev`
+hooks fast-forward the librarian to `origin/main` and rebuild it first: the
+window always runs the latest version.
 
 Set `AUTORAG_SKIP_DUPEY_CHECK=1` only when intentionally testing without
 version-family support. Use `PORT=9234 bun run dev` to select the Vite port.
