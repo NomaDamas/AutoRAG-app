@@ -14,6 +14,8 @@ export interface NavItem {
 	readonly sourceKind: FileKind | null;
 	readonly syncing: boolean;
 	readonly error: boolean;
+	/** A view that is not built yet — navigates to its work-in-progress screen. */
+	readonly wip: boolean;
 }
 
 export interface NavGroup {
@@ -21,23 +23,33 @@ export interface NavGroup {
 	readonly items: readonly NavItem[];
 }
 
-function place(label: string, icon: string, status: { syncing?: boolean; error?: boolean } = {}): NavItem {
+function place(
+	label: string,
+	icon: string,
+	status: { syncing?: boolean; error?: boolean; wip?: boolean } = {},
+): NavItem {
 	return {
 		label,
 		icon,
 		sourceKind: null,
 		syncing: status.syncing ?? false,
 		error: status.error ?? false,
+		wip: status.wip ?? false,
 	};
 }
 
-function source(label: string, sourceKind: FileKind, status: { syncing?: boolean; error?: boolean } = {}): NavItem {
+function source(
+	label: string,
+	sourceKind: FileKind,
+	status: { syncing?: boolean; error?: boolean } = {},
+): NavItem {
 	return {
 		label,
 		icon: null,
 		sourceKind,
 		syncing: status.syncing ?? false,
 		error: status.error ?? false,
+		wip: false,
 	};
 }
 
@@ -75,6 +87,7 @@ export const NAV_GROUPS: readonly NavGroup[] = [
 			place(
 				"Contacts",
 				"M15 19v-1a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v1M9 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM21 19v-1a3.5 3.5 0 0 0-2.6-3.4M15.5 4.2a3 3 0 0 1 0 5.6",
+				{ wip: true },
 			),
 		],
 	},

@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState, type ReactElement } from "react";
-import type { Permission } from "../../shared/settings-contract";
 import type { SettingsBridge } from "../../shared/settings-contract";
 import type { CitationEvidence } from "../../shared/search-contract";
 
@@ -18,8 +17,10 @@ import { StatusBar } from "./components/StatusBar";
 import { formatDevLabel, type DevLabel } from "../../shared/app-info";
 import { TabStrip } from "./components/TabStrip";
 import { Toolbar } from "./components/Toolbar";
+import { WorkInProgress } from "./components/WorkInProgress";
 import { useFinderController } from "./hooks/useFinderController";
 import { useFinderSource } from "./hooks/useFinderSource";
+import { CONTACTS_PATH } from "./state/tabs";
 
 /** The reference's `showHotkeys` prop (default true): keycaps on or off. */
 const SHOW_HOTKEYS = true;
@@ -37,8 +38,6 @@ export function App(): ReactElement {
 	const [settingsTab, setSettingsTab] = useState<"general" | "contacts" | null>(null);
 	const [requestsOpen, setRequestsOpen] = useState(false);
 	const [pendingRequests, setPendingRequests] = useState(finder.pendingRequests);
-	const [permissions, setPermissions] = useState<Readonly<Record<string, Permission>>>({});
-	const [permissionTarget, setPermissionTarget] = useState<{ path: string; name: string } | null>(null);
 	const [evidence, setEvidence] = useState<readonly CitationEvidence[]>([]);
 	const [evidenceSession, setEvidenceSession] = useState<string | null>(null);
 	const [selectedEvidence, setSelectedEvidence] = useState<number | null>(null);
@@ -74,26 +73,12 @@ export function App(): ReactElement {
 		void settingsBridge.requestsList("pending").then((requests) => setPendingRequests(requests.length));
 	}, [requestsOpen]);
 
-	useEffect(() => {
-		let active = true;
-		void Promise.all(finder.rows.map(async (entry) => {
-			const resolved = await autorag.settings.permGet(entry.path);
-			return [entry.path, resolved.value] as const;
-		})).then((values) => {
-			if (active) setPermissions(Object.fromEntries(values));
-		});
-		return () => {
-			active = false;
-		};
-	}, [finder.rows]);
-
 	const rowCallbacks: RowCallbacks = {
 		onClick: finder.clickRow,
 		onOpen: finder.openEntry,
 		onContextMenu: finder.openContextMenu,
 		onToggleIndex: finder.toggleIndex,
 		onToggleStack: finder.toggleStack,
-		onChangeAccess: (entry) => setPermissionTarget({ path: entry.path, name: entry.name }),
 		onRenameChange: finder.setRenameDraft,
 		onRenameCommit: finder.commitRename,
 		onRenameCancel: finder.cancelRename,
@@ -135,25 +120,30 @@ export function App(): ReactElement {
 						onSearchFocus={() => finder.setSearchFocused(true)}
 						onSearchBlur={() => finder.setSearchFocused(false)}
 					/>
-					<ColumnHeader sort={finder.sort} searching={finder.searching} onSort={finder.sortBy} />
-					<FileList
-						rows={finder.stackRows}
-						listPath={finder.path}
-						versionFamilyError={finder.versionFamilyError}
-						onRetryVersionFamilies={finder.retryVersionFamilies}
-						listRef={finder.listRef}
-						searching={finder.searching}
-						summary={finder.searchSummary}
-						emptyText={finder.emptyText}
-						selectedKeys={finder.selection.keys}
-						focusedZone={finder.zone === "finder"}
-						flashPath={finder.flashPath}
-						renamePath={finder.renamePath}
-						renameDraft={finder.renameDraft}
-						indexOverrides={finder.indexOverrides}
-						permissions={permissions}
-						callbacks={rowCallbacks}
-					/>
+					{finder.path === CONTACTS_PATH ? (
+						<WorkInProgress title="Contacts" />
+					) : (
+						<>
+							<ColumnHeader sort={finder.sort} searching={finder.searching} onSort={finder.sortBy} />
+							<FileList
+								rows={finder.stackRows}
+								listPath={finder.path}
+								versionFamilyError={finder.versionFamilyError}
+								onRetryVersionFamilies={finder.retryVersionFamilies}
+								listRef={finder.listRef}
+								searching={finder.searching}
+								summary={finder.searchSummary}
+								emptyText={finder.emptyText}
+								selectedKeys={finder.selection.keys}
+								focusedZone={finder.zone === "finder"}
+								flashPath={finder.flashPath}
+								renamePath={finder.renamePath}
+								renameDraft={finder.renameDraft}
+								indexOverrides={finder.indexOverrides}
+								callbacks={rowCallbacks}
+							/>
+						</>
+					)}
 					<StatusBar text={finder.statusText} showHotkeys={SHOW_HOTKEYS} devLabel={DEV_LABEL} />
 					{evidence.length === 0 ? null : (
 						<EvidencePanel
@@ -191,31 +181,6 @@ export function App(): ReactElement {
 				/>
 			)}
 			{requestsOpen ? <RequestsPopover onClose={() => setRequestsOpen(false)} onChanged={() => void autorag.settings.requestsList("pending").then((requests) => setPendingRequests(requests.length))} /> : null}
-			{permissionTarget === null ? null : (
-				<div className="settings-backdrop" role="dialog" aria-modal="true" aria-label="Access permission">
-					<section className="settings-panel">
-						<header className="settings-panel__header">
-							<strong>Access: {permissionTarget.name}</strong>
-							<button type="button" onClick={() => setPermissionTarget(null)}>Close</button>
-						</header>
-						<div className="settings-panel__body">
-							<p>Choose who may access this file or folder. Folder changes apply to its descendants.</p>
-							{(["ask", "allow", "deny"] as const).map((value) => (
-								<button
-									type="button"
-									key={value}
-									onClick={() => {
-										void autorag.settings.permSet(permissionTarget.path, value, "keep-individual").then(() => {
-											setPermissions((current) => ({ ...current, [permissionTarget.path]: value }));
-											setPermissionTarget(null);
-										});
-									}}
-								>{value[0]?.toUpperCase() + value.slice(1)}</button>
-							))}
-						</div>
-					</section>
-				</div>
-			)}
 		</div>
 	);
 }

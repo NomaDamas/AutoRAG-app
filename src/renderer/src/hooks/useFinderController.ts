@@ -197,6 +197,11 @@ export function useFinderController(
 	}, [path, locations]);
 
 	useEffect(() => {
+		if (path === CONTACTS_PATH) {
+			// The work-in-progress view shows no listing; drop the stale one.
+			setListing([]);
+			return;
+		}
 		if (path === "") {
 			return;
 		}
@@ -338,6 +343,10 @@ export function useFinderController(
 
 	const navigateNav = useCallback(
 		(item: NavItem) => {
+			if (item.wip) {
+				navigate(CONTACTS_PATH);
+				return;
+			}
 			const match = locations.find((location) => location.name === item.label);
 			if (match === undefined) {
 				showToast(`"${item.label}" 위치는 아직 연결되지 않았습니다.`);
