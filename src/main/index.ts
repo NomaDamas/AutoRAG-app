@@ -1,12 +1,12 @@
-import { existsSync, readFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { isAbsolute, join, resolve } from "node:path";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { app, BrowserWindow, clipboard, shell } from "electron";
-import { BUILTIN_DATASOURCE_SKILL_NAMES, writeConfigObject, writeDefaultConfig } from "@autorag/librarian";
-import type { DataSourceRow } from "../shared/settings-contract";
+import { writeDefaultConfig } from "@autorag/librarian";
+import { resolveConfigPath } from "@autorag/librarian/core";
 import { FS_CHANNELS } from "../shared/fs-contract";
 import { APP_NAME, APP_VERSION, formatWindowTitle, type DevLabel } from "../shared/app-info";
 import { createChatStore } from "./chat-store";
+import { createDataSourceStatusService } from "./datasource-status";
 import { readDevLabel, resolveClonePath } from "./dev-label";
 import { buildFsEntry } from "./fs-entry";
 import { createFsService } from "./fs-service";
@@ -22,20 +22,9 @@ import {
 import { createVersionFamilyService, DEFAULT_SCAN_INTERVAL_MINUTES, type VersionFamilyService } from "./version-family-service";
 import { createFileVersionFamilyStore } from "./version-family-store";
 
+/** The one AutoRAG config every surface (CLI, TUI, serve, this app) resolves. */
 function autoragConfigPath(): string {
-	const explicit = process.env.AUTORAG_CONFIG?.trim();
-	if (explicit) return explicit;
-	const home = process.env.AUTORAG_HOME?.trim();
-	const autoragHome = home ? resolve(home) : join(process.env.HOME && isAbsolute(process.env.HOME) ? process.env.HOME : homedir(), ".autorag");
-	return join(autoragHome, "config.json");
-}
-
-function readConfigObject(path: string): Record<string, unknown> {
-	const parsed: unknown = JSON.parse(readFileSync(path, "utf8"));
-	if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
-		throw new Error("AutoRAG config must be a JSON object");
-	}
-	return parsed as Record<string, unknown>;
+	return resolveConfigPath({ flags: {}, env: process.env, cwd: process.cwd() }).configPath;
 }
 
 function ensureAutoRAGConfig(): void {
@@ -50,52 +39,6 @@ function ensureAutoRAGConfig(): void {
 	} catch (error) {
 		console.error("AutoRAG config initialization failed", error);
 	}
-}
-
-function configuredDataSources(): readonly DataSourceRow[] {
-	const configPath = autoragConfigPath();
-	if (!existsSync(configPath)) return [];
-	try {
-		const raw = readConfigObject(configPath);
-		const configured = raw.datasources;
-		if (configured === null || typeof configured !== "object" || Array.isArray(configured)) return [];
-		return Object.entries(configured as Record<string, unknown>)
-			.filter(([, value]) => value !== false)
-			.map(([id, value]) => {
-				const entry = value !== null && typeof value === "object" && !Array.isArray(value)
-					? value as Record<string, unknown>
-					: {};
-				const type = typeof entry.type === "string" ? entry.type : id;
-				const enabled = entry.enabled !== false;
-				return {
-					id,
-					name: id,
-					kind: BUILTIN_DATASOURCE_SKILL_NAMES.includes(type) ? type : "custom",
-					detail: typeof entry.description === "string" ? entry.description : type,
-					status: enabled ? "indexed" : "paused",
-					progress: null,
-					enabled,
-					description: typeof entry.description === "string" ? entry.description : `AutoRAG datasource: ${type}`,
-				} satisfies DataSourceRow;
-			});
-	} catch {
-		return [];
-	}
-}
-
-async function setConfiguredDatasourceEnabled(id: string, enabled: boolean): Promise<void> {
-	const configPath = autoragConfigPath();
-	if (!existsSync(configPath)) return;
-	const raw = readConfigObject(configPath);
-	const configured = raw.datasources;
-	if (configured === null || typeof configured !== "object" || Array.isArray(configured)) return;
-	const entry = (configured as Record<string, unknown>)[id];
-	if (entry === undefined) return;
-	(configured as Record<string, unknown>)[id] =
-		entry !== null && typeof entry === "object" && !Array.isArray(entry)
-			? { ...(entry as Record<string, unknown>), enabled }
-			: { enabled, type: id };
-	writeConfigObject(configPath, raw);
 }
 
 /** Unpackaged runs (and AUTORAG_DEV_LABEL=1) carry the clone label. */
@@ -174,8 +117,7 @@ app.whenReady().then(() => {
 	const agentFactory = createDefaultAgentFactory();
 	const settingsService = createSettingsService({
 		directory: join(app.getPath("userData"), "settings"),
-		initialSources: configuredDataSources(),
-		setSourceEnabled: setConfiguredDatasourceEnabled,
+		dataSources: createDataSourceStatusService({ env: process.env, cwd: process.cwd() }),
 		createChatSession: (surface) => {
 			const agent = agentFactory();
 			if (agent.createChatSession === undefined) {
