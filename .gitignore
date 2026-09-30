@@ -1,0 +1,12 @@
+out/
+dist/
+node_modules/
+.upstream/
+.autorag/
+.autorag-e2e/
+.omo/evidence/
+.env
+.env.*
+!.env.example
+*.key
+*.pem
