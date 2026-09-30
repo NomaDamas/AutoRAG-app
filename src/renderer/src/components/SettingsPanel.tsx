@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactElement } from "react";
-import type { AppSettings, AssistantEvent, Contact, DataSourceRow } from "../../../shared/settings-contract";
+import type { AppSettings, AssistantEvent, Contact, DataSourceRow, DataSourcesSnapshot } from "../../../shared/settings-contract";
 import type { SettingsBridge, AssistantSurface } from "../../../shared/settings-contract";
 import { ArrowUpIcon, CloseIcon, SparklesIcon } from "./icons";
 import { Switch } from "./primitives/Switch";
@@ -53,8 +53,42 @@ function kindTileModifier(kind: string): string {
 	}
 }
 
-function statusModifier(status: DataSourceRow["status"]): string {
-	return `source-status--${status}`;
+const STATUS_LABELS: Record<DataSourceRow["status"], string> = {
+	ready: "Ready",
+	syncing: "Syncing",
+	paused: "Paused",
+	attention: "Needs attention",
+};
+
+const INSTALL_LABELS: Record<DataSourceRow["install"]["state"], string> = {
+	installed: "설치됨",
+	missing: "미설치",
+	builtin: "내장",
+	"credential-missing": "인증 필요",
+	unsupported: "지원 안 함",
+};
+
+const AGENT_LABELS: Record<DataSourceRow["agent"]["state"], string> = {
+	connected: "연동됨",
+	blocked: "접근 차단",
+	disabled: "꺼짐",
+	unsupported: "지원 안 함",
+};
+
+const INDEX_LABELS: Record<DataSourceRow["index"]["state"], string> = {
+	indexed: "인덱싱됨",
+	empty: "비어 있음",
+	"not-indexed": "인덱스 없음",
+	external: "CLI 자체 인덱스",
+};
+
+function formatIndexedAt(iso: string | null): string {
+	return iso === null ? "" : new Date(iso).toLocaleString();
+}
+
+function indexSummary(index: DataSourceRow["index"]): string {
+	if (index.state === "indexed" && index.chunkCount !== null) return `${index.chunkCount.toLocaleString()} chunks`;
+	return INDEX_LABELS[index.state];
 }
 
 export function SettingsPanel({
@@ -69,7 +103,8 @@ export function SettingsPanel({
 	const [tab, setTab] = useState<SettingsTab>(initialTab);
 	const [settings, setSettings] = useState<AppSettings | null>(null);
 	const [contacts, setContacts] = useState<readonly Contact[]>([]);
-	const [sources, setSources] = useState<readonly DataSourceRow[]>([]);
+	const [snapshot, setSnapshot] = useState<DataSourcesSnapshot | null>(null);
+	const [sourcesError, setSourcesError] = useState<string | null>(null);
 	const [openSource, setOpenSource] = useState<string | null>(null);
 	const [contactDraft, setContactDraft] = useState({ id: "", name: "", role: "", description: "" });
 	const [chats, setChats] = useState<Record<AssistantSurface, ChatMessage[]>>({
@@ -86,7 +121,6 @@ export function SettingsPanel({
 		void Promise.all([
 			autorag.settings.get().then(setSettings),
 			autorag.settings.contactsList().then(setContacts),
-			autorag.settings.sourcesList().then(setSources),
 		]);
 		const unsubscribe = autorag.settings.onEvent?.((event: AssistantEvent) => {
 			if (event.type === "text") {
@@ -110,6 +144,10 @@ export function SettingsPanel({
 		});
 		return unsubscribe;
 	}, []);
+
+	useEffect(() => {
+		if (tab === "sources") void reloadSources();
+	}, [tab]);
 
 	useEffect(() => {
 		const list = chatListRef.current;
@@ -142,26 +180,41 @@ export function SettingsPanel({
 		}
 	}
 
+	async function reloadSources(): Promise<void> {
+		try {
+			setSnapshot(await autorag.settings.sourcesList());
+			setSourcesError(null);
+		} catch (error) {
+			setSourcesError(error instanceof Error ? error.message : String(error));
+		}
+	}
+
 	async function toggleSource(source: DataSourceRow): Promise<void> {
-		await autorag.settings.sourcesSetEnabled(source.id, !source.enabled);
-		setSources((items) => items.map((item) => item.id === source.id ? { ...item, enabled: !item.enabled } : item));
+		try {
+			setSnapshot(await autorag.settings.sourcesSetEnabled(source.id, !source.enabled));
+			setSourcesError(null);
+		} catch (error) {
+			setSourcesError(error instanceof Error ? error.message : String(error));
+		}
 	}
 
 	function editSourceDescription(source: DataSourceRow): void {
 		setTab("sources");
-		setDrafts((current) => ({ ...current, sources: `${source.name} 설명 손보기: ` }));
+		setDrafts((current) => ({ ...current, sources: `${source.id} 설명 손보기: ` }));
 		setTimeout(() => chatInputRef.current?.focus(), 0);
 	}
 
-	// WIP: per-source indexed item counts and last-sync timestamps are not
-	// tracked yet — the summary reports source counts only.
-	const syncingCount = sources.filter((s) => s.enabled && s.status === "syncing").length;
-	const attentionCount = sources.filter((s) => s.enabled && s.status === "error").length;
+	const sources = snapshot?.sources ?? [];
+	const connectedCount = sources.filter((s) => s.agent.state === "connected").length;
+	const syncingCount = sources.filter((s) => s.status === "syncing").length;
+	const attentionCount = sources.filter((s) => s.status === "attention").length;
 	const sourcesSummary = [
 		`${sources.length} ${sources.length === 1 ? "source" : "sources"}`,
+		`${connectedCount} connected to the agent`,
 		syncingCount > 0 ? `${syncingCount} syncing` : null,
 		attentionCount > 0 ? `${attentionCount} needs attention` : null,
 	].filter(Boolean).join(" · ");
+	const sourcesProblem = sourcesError ?? snapshot?.error ?? null;
 
 	return (
 		// biome-ignore lint/a11y/useKeyWithClickEvents: modal backdrop dismiss mirrors the prototype
@@ -255,9 +308,18 @@ export function SettingsPanel({
 					) : null}
 					{tab === "sources" ? (
 						<div className="settings-stack">
-							<div className="settings-intro">
-								<strong className="settings-intro__title">Connected sources</strong>
-								<span className="settings-intro__desc">{sourcesSummary}</span>
+							<div className="settings-intro settings-intro--sources">
+								<div className="settings-intro__text">
+									<strong className="settings-intro__title">Connected sources</strong>
+									<span className="settings-intro__desc">{sourcesSummary}</span>
+									{snapshot === null ? null : (
+										<span className="settings-intro__desc settings-intro__config" title="CLI, TUI, serve와 앱의 모든 AutoRAG 에이전트가 같은 설정 파일을 읽습니다">
+											AutoRAG config · <code>{snapshot.configPath}</code>{snapshot.configExists ? "" : " (없음)"}
+										</span>
+									)}
+									{sourcesProblem === null ? null : <span className="settings-intro__error" role="alert">{sourcesProblem}</span>}
+								</div>
+								<button type="button" className="settings-intro__refresh" onClick={() => void reloadSources()}>새로고침</button>
 							</div>
 							<div className="settings-sources">
 								{sources.length === 0 ? <p className="settings-sources__empty">No configured data sources.</p> : sources.map((source) => (
@@ -308,31 +370,45 @@ function SourceRow({
 	readonly onDetail: () => void;
 	readonly onEditDescription: () => void;
 }): ReactElement {
-	const status: DataSourceRow["status"] = source.enabled ? source.status : "paused";
-	const progress = source.progress ?? 0;
 	return (
-		<div className={`settings-source${open ? " is-open" : ""}`}>
+		<div className={`settings-source${open ? " is-open" : ""}`} data-source-id={source.id}>
 			<div className={`settings-source__row${source.enabled ? "" : " is-disabled"}`}>
-				<span className={`settings-source-tile settings-source-tile--${kindTileModifier(source.kind)}`}>{source.name[0] ?? "?"}</span>
+				<span className={`settings-source-tile settings-source-tile--${kindTileModifier(source.type)}`}>{source.id[0]?.toUpperCase() ?? "?"}</span>
 				{/* biome-ignore lint/a11y/noStaticElementInteractions: row body mirrors the prototype's clickable detail target */}
 				<div className="settings-source__body" onClick={onDetail}>
-					<span className="settings-source__name">{source.name}</span>
-					<span className="settings-source__detail">{source.detail}</span>
+					<span className="settings-source__name">{source.id}</span>
+					<span className="settings-source__detail">
+						{source.type} · {INSTALL_LABELS[source.install.state]} · 에이전트 {AGENT_LABELS[source.agent.state]}
+					</span>
 				</div>
 				<div className="settings-source__track">
-					<div className="settings-source__meta">
-						<span className={`settings-status ${statusModifier(status)}`}>{status[0]?.toUpperCase() + status.slice(1)}</span>
-						<span className="settings-source__pct">{source.progress === null ? "" : `${Math.round(progress)}%`}</span>
-					</div>
-					<div className="settings-progress"><div className={`settings-progress__fill settings-progress__fill--${status}`} style={{ width: `${Math.max(0, Math.min(100, progress))}%` }} /></div>
+					<span className={`settings-status source-status--${source.status}`}>{STATUS_LABELS[source.status]}</span>
+					<span className="settings-source__pct">{indexSummary(source.index)}</span>
 				</div>
-				<button type="button" className={`settings-source__chevron${open ? " is-open" : ""}`} title="Description" onClick={onDetail}>
+				<button type="button" className={`settings-source__chevron${open ? " is-open" : ""}`} title="Details" onClick={onDetail}>
 					<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6" /></svg>
 				</button>
-				<Switch checked={source.enabled} onChange={onToggle} />
+				<Switch checked={source.enabled} onChange={onToggle} ariaLabel={`${source.id} 사용`} />
 			</div>
 			{open ? (
 				<div className="settings-source-desc">
+					<dl className="settings-source-facts">
+						<SourceFact fact="install" label="설치" state={source.install.state} value={INSTALL_LABELS[source.install.state]} detail={source.install.detail} />
+						<SourceFact
+							fact="agent"
+							label="에이전트 연동"
+							state={source.agent.state}
+							value={AGENT_LABELS[source.agent.state]}
+							detail={[source.agent.detail, source.agent.tags.length > 0 ? `tags: ${source.agent.tags.join(", ")}` : null].filter(Boolean).join(" · ")}
+						/>
+						<SourceFact
+							fact="index"
+							label="인덱스"
+							state={source.index.state}
+							value={INDEX_LABELS[source.index.state]}
+							detail={[source.index.detail, formatIndexedAt(source.index.indexedAt)].filter(Boolean).join(" · ")}
+						/>
+					</dl>
 					<div className="settings-source-desc__header">
 						<span>Description</span>
 						<div className="settings-source-desc__spacer" />
@@ -341,6 +417,15 @@ function SourceRow({
 					<p>{source.description}</p>
 				</div>
 			) : null}
+		</div>
+	);
+}
+
+function SourceFact({ fact, label, state, value, detail }: { readonly fact: string; readonly label: string; readonly state: string; readonly value: string; readonly detail: string }): ReactElement {
+	return (
+		<div className="settings-source-fact" data-fact={fact} data-state={state}>
+			<dt>{label}</dt>
+			<dd><strong>{value}</strong><span>{detail}</span></dd>
 		</div>
 	);
 }

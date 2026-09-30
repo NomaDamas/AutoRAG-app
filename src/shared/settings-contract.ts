@@ -83,15 +83,59 @@ export const DEFAULT_SETTINGS: AppSettings = {
 	dupeyScanIntervalMinutes: 60,
 };
 
+/** Whether the backend a datasource needs is present on this machine. */
+export type DataSourceInstallState = "installed" | "missing" | "builtin" | "credential-missing" | "unsupported";
+
+/** How the AutoRAG agent sees the datasource, per the shared config and datasourceAccess. */
+export type DataSourceAgentState = "connected" | "blocked" | "disabled" | "unsupported";
+
+/** `external` means the backend CLI owns the index; AutoRAG queries it live. */
+export type DataSourceIndexState = "indexed" | "empty" | "not-indexed" | "external";
+
+export type DataSourceStatus = "ready" | "syncing" | "paused" | "attention";
+
+/** One `datasources.<id>` entry of the shared AutoRAG config, with its live state. */
 export interface DataSourceRow {
 	readonly id: string;
-	readonly name: string;
-	readonly kind: string;
-	readonly detail: string;
-	readonly status: "indexed" | "syncing" | "paused" | "error";
-	readonly progress: number | null;
-	readonly enabled: boolean;
+	/** Built-in template (`type`, else the id). */
+	readonly type: string;
 	readonly description: string;
+	readonly enabled: boolean;
+	readonly status: DataSourceStatus;
+	readonly install: {
+		readonly state: DataSourceInstallState;
+		readonly binary: string | null;
+		readonly path: string | null;
+		readonly detail: string;
+	};
+	readonly agent: {
+		readonly state: DataSourceAgentState;
+		/** Model-visible `datasource-<id>` skill the agent loads for this connection. */
+		readonly skillName: string | null;
+		readonly tags: readonly string[];
+		readonly detail: string;
+	};
+	readonly index: {
+		readonly state: DataSourceIndexState;
+		readonly chunkCount: number | null;
+		readonly indexedAt: string | null;
+		readonly detail: string;
+	};
+}
+
+/** Read fresh from the shared AutoRAG config on every call; the app keeps no copy. */
+export interface DataSourcesSnapshot {
+	readonly configPath: string;
+	readonly configExists: boolean;
+	/** Config could not be read; `sources` is empty. */
+	readonly error: string | null;
+	readonly accessTags: readonly string[];
+	readonly refresh: {
+		readonly state: "idle" | "running" | "success" | "failed";
+		readonly phase: string | null;
+		readonly finishedAt: string | null;
+	};
+	readonly sources: readonly DataSourceRow[];
 }
 
 export type AssistantSurface = "models" | "sources";
@@ -122,8 +166,9 @@ export interface SettingsBridge {
 	requestsList(status: "pending" | "done"): Promise<readonly AccessRequest[]>;
 	requestsRespond(id: string, allow: boolean): Promise<void>;
 
-	sourcesList(): Promise<readonly DataSourceRow[]>;
-	sourcesSetEnabled(id: string, enabled: boolean): Promise<void>;
+	sourcesList(): Promise<DataSourcesSnapshot>;
+	/** Writes `enabled` into the shared AutoRAG config, then returns the fresh snapshot. */
+	sourcesSetEnabled(id: string, enabled: boolean): Promise<DataSourcesSnapshot>;
 
 	/** Send one message to the settings assistant; events stream via assistantEvent. */
 	assistantSend(surface: AssistantSurface, text: string): Promise<void>;

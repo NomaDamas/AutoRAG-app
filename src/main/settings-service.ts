@@ -6,19 +6,18 @@ import type {
 	AssistantEvent,
 	AssistantSurface,
 	Contact,
-	DataSourceRow,
 	Permission,
 	ResolvedPermission,
 	SettingsBridge,
 } from "../shared/settings-contract";
 import { DEFAULT_SETTINGS, SETTINGS_CHANNELS } from "../shared/settings-contract";
+import type { DataSourceStatusService } from "./datasource-status";
 
 interface SettingsState {
 	settings: AppSettings;
 	permissions: Record<string, Permission>;
 	contacts: Contact[];
 	requests: AccessRequest[];
-	sources: DataSourceRow[];
 }
 
 interface ChatAgent {
@@ -33,10 +32,8 @@ export interface SettingsServiceDeps {
 	readonly directory: string;
 	readonly createChatSession: (surface: AssistantSurface) => ChatAgent;
 	readonly send: (channel: string, payload: AssistantEvent) => void;
-	/** Datasources resolved from the real AutoRAG config at app startup. */
-	readonly initialSources?: readonly DataSourceRow[];
-	/** Persists a source toggle back into AutoRAG's trusted config. */
-	readonly setSourceEnabled?: (id: string, enabled: boolean) => Promise<void>;
+	/** Live view of the shared AutoRAG config's datasources; the app keeps no copy. */
+	readonly dataSources: DataSourceStatusService;
 	/** Fired after every successful set() so live services can adopt the change. */
 	readonly onSettingsChanged?: (settings: AppSettings) => void;
 	readonly now?: () => Date;
@@ -47,7 +44,6 @@ const emptyState = (): SettingsState => ({
 	permissions: {},
 	contacts: [],
 	requests: [],
-	sources: [],
 });
 
 function isTextDelta(event: unknown): event is { readonly type: "message_update"; readonly assistantMessageEvent: { readonly type: "text_delta"; readonly delta: string } } {
@@ -60,28 +56,25 @@ function isTextDelta(event: unknown): event is { readonly type: "message_update"
 	return update.type === "text_delta" && typeof update.delta === "string";
 }
 
-async function loadState(path: string, initialSources: readonly DataSourceRow[]): Promise<SettingsState> {
+async function loadState(path: string): Promise<SettingsState> {
 	try {
 		const parsed: unknown = JSON.parse(await readFile(path, "utf8"));
-		if (typeof parsed !== "object" || parsed === null) return { ...emptyState(), sources: [...initialSources] };
+		if (typeof parsed !== "object" || parsed === null) return emptyState();
 		const state = parsed as Partial<SettingsState>;
 		return {
-			...emptyState(),
-			...state,
 			settings: { ...DEFAULT_SETTINGS, ...(state.settings ?? {}) },
 			permissions: state.permissions ?? {},
 			contacts: state.contacts ?? [],
 			requests: state.requests ?? [],
-			sources: state.sources?.length ? state.sources : [...initialSources],
 		};
 	} catch {
-		return { ...emptyState(), sources: [...initialSources] };
+		return emptyState();
 	}
 }
 
 export function createSettingsService(deps: SettingsServiceDeps): SettingsBridge {
 	const path = join(deps.directory, "settings-state.json");
-	let statePromise = loadState(path, deps.initialSources ?? []);
+	let statePromise = loadState(path);
 	const now = deps.now ?? (() => new Date());
 	const persist = async (): Promise<void> => {
 		const state = await statePromise;
@@ -180,14 +173,10 @@ export function createSettingsService(deps: SettingsServiceDeps): SettingsBridge
 				);
 			});
 		},
-		sourcesList: async () => (await statePromise).sources,
+		sourcesList: () => deps.dataSources.list(),
 		sourcesSetEnabled: async (id, enabled) => {
-			await deps.setSourceEnabled?.(id, enabled);
-			await mutate((current) => {
-				current.sources = current.sources.map((source) =>
-					source.id === id ? { ...source, enabled } : source,
-				);
-			});
+			await deps.dataSources.setEnabled(id, enabled);
+			return deps.dataSources.list();
 		},
 		assistantSend: async (surface, text) => {
 			let session: ChatAgent | undefined;
