@@ -12,10 +12,18 @@ import {
 	type VersionFamilyServiceDeps,
 } from "../src/main/version-family-service";
 import { createFileVersionFamilyStore, type StoredVersionFamilies } from "../src/main/version-family-store";
+import type { FileStamp } from "../src/main/version-family-verify";
 import { RECENTS_PATH, type FsEntry, type FsLocation, type FsVersionFamiliesResult, type FsVersionFamily } from "../src/shared/fs-contract";
 
 const dupeyAvailable = { status: async () => ({ available: true, version: "dupey 0.1.2", error: null }) };
 const dupeyMissing = { status: async () => ({ available: false, version: null, error: "spawn dupey ENOENT" }) };
+const fixtureStamp = (path: string): FileStamp => ({
+	dev: "fixture",
+	ino: path,
+	size: "4",
+	mtimeNs: "1",
+	ctimeNs: "1",
+});
 
 function fsEntry(path: string): FsEntry {
 	return {
@@ -85,6 +93,7 @@ function harness(
 			return scanOf([family("/home/Desktop/a.txt", "/home/Desktop/b.txt")]);
 		},
 		intervalMinutes: () => DEFAULT_SCAN_INTERVAL_MINUTES,
+		probe: async (path) => fixtureStamp(path),
 		onUpdate: (result) => updates.push(result),
 		now: () => new Date("2026-09-29T10:00:00.000Z"),
 		setTimer: (handler, ms) => {
