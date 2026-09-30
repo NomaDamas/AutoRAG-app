@@ -1,4 +1,7 @@
-import { useCallback, useEffect, useState, type ReactElement } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactElement } from "react";
+import type { QuickLookRequest } from "../../preview/shared/session";
+import { anchorForPath } from "../../preview/ui/anchor";
+import { QuickLookHost } from "../../preview/ui/QuickLook";
 import type { Permission } from "../../shared/settings-contract";
 import type { SettingsBridge } from "../../shared/settings-contract";
 import type { CitationEvidence } from "../../shared/search-contract";
@@ -33,7 +36,20 @@ const DEV_LABEL = (() => {
 export function App(): ReactElement {
 	const source = useFinderSource();
 	const [showHiddenFiles, setShowHiddenFiles] = useState(false);
-	const finder = useFinderController(source, { showHiddenFiles });
+	const [preview, setPreview] = useState<QuickLookRequest | null>(null);
+	const previewRef = useRef<QuickLookRequest | null>(null);
+	previewRef.current = preview;
+	const openQuickLook = useCallback((target: { readonly path: string; readonly name: string }) => {
+		setPreview((current) =>
+			current?.path === target.path ? null : { path: target.path, name: target.name, anchor: anchorForPath(target.path) },
+		);
+	}, []);
+	const closeQuickLook = useCallback(() => setPreview(null), []);
+	const isQuickLookOpen = useCallback(() => previewRef.current !== null, []);
+	const finder = useFinderController(source, {
+		showHiddenFiles,
+		quickLook: { onQuickLook: openQuickLook, closeQuickLook, isQuickLookOpen },
+	});
 	const [settingsTab, setSettingsTab] = useState<"general" | "contacts" | null>(null);
 	const [requestsOpen, setRequestsOpen] = useState(false);
 	const [pendingRequests, setPendingRequests] = useState(finder.pendingRequests);
@@ -64,6 +80,16 @@ export function App(): ReactElement {
 	}, []);
 
 	const evidenceSelectedNumber = evidence.find((item) => item.number === selectedEvidence)?.number ?? evidence[0]?.number ?? 1;
+	const focusPath = finder.selection.focus;
+	useEffect(() => {
+		if (focusPath === null) return;
+		setPreview((current) => {
+			if (current === null || current.path === focusPath) return current;
+			const match = finder.stackRows.find((row) => row.entry.path === focusPath);
+			if (match === undefined || match.entry.kind !== "file") return current;
+			return { path: match.entry.path, name: match.entry.name, anchor: anchorForPath(match.entry.path) };
+		});
+	}, [focusPath, finder.stackRows]);
 
 	useEffect(() => {
 		void autorag.settings.get().then((settings) => setShowHiddenFiles(settings.showHiddenFiles));
@@ -191,6 +217,15 @@ export function App(): ReactElement {
 				/>
 			)}
 			{requestsOpen ? <RequestsPopover onClose={() => setRequestsOpen(false)} onChanged={() => void autorag.settings.requestsList("pending").then((requests) => setPendingRequests(requests.length))} /> : null}
+			<QuickLookHost
+				target={preview}
+				onClose={closeQuickLook}
+				onOpenFile={(path) => {
+					source.open(path).catch((error: unknown) => {
+						finder.showToast(error instanceof Error ? error.message : String(error));
+					});
+				}}
+			/>
 			{permissionTarget === null ? null : (
 				<div className="settings-backdrop" role="dialog" aria-modal="true" aria-label="Access permission">
 					<section className="settings-panel">

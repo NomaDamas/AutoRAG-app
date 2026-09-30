@@ -74,6 +74,7 @@ export function FileRow({
 	return (
 		<div
 			className={classes.join(" ")}
+			data-quicklook-anchor={entry.path}
 			role="row"
 			aria-selected={selected}
 			onClick={(event) => callbacks.onClick(entry, event)}

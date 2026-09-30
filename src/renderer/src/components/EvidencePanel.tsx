@@ -110,6 +110,7 @@ export function EvidencePanel({
 								type="button"
 								className="evidence__quicklook"
 								disabled={item.source === null}
+								data-quicklook-anchor={item.source ?? undefined}
 								onClick={() => {
 									if (item.source !== null) onQuickLook(item.source);
 								}}

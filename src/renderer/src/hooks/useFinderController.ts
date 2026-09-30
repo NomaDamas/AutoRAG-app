@@ -109,7 +109,7 @@ export interface FinderController {
 	onSearchKeyDown(event: ReactKeyboardEvent<HTMLInputElement>): void;
 	sortBy(key: SortKey): void;
 	showToast(message: string): void;
-	/** Native Quick Look for an arbitrary path (evidence source). Errors toast verbatim. */
+	/** In-app Quick Look for an arbitrary path (evidence source). */
 	quickLookPath(path: string): void;
 	/** Open the path's enclosing folder in a NEW tab, revealing the row. */
 	revealEvidence(path: string): void;
@@ -127,11 +127,19 @@ export interface FinderController {
 	cancelRename(): void;
 }
 
+export interface QuickLookBridge {
+	readonly onQuickLook: (target: { readonly path: string; readonly name: string }) => void;
+	readonly closeQuickLook: () => void;
+	readonly isQuickLookOpen: () => boolean;
+}
+
 export function useFinderController(
 	source: FinderSource,
-	options: { readonly showHiddenFiles?: boolean } = {},
+	options: { readonly showHiddenFiles?: boolean; readonly quickLook?: QuickLookBridge } = {},
 ): FinderController {
 	const showHiddenFiles = options.showHiddenFiles ?? false;
+	const quickLookRef = useRef(options.quickLook);
+	quickLookRef.current = options.quickLook;
 	const [tabsState, setTabsState] = useState<TabsState>(() => createTabsState(source.initialPath));
 	const [query, setQueryValue] = useState("");
 	const [sort, setSort] = useState<SortState | null>(null);
@@ -441,19 +449,25 @@ export function useFinderController(
 		return { ...defaults, ...indexOverrides };
 	}, [families, indexOverrides]);
 
+	const presentQuickLook = useCallback(
+		(target: { readonly path: string; readonly name: string }) => {
+			quickLookRef.current?.onQuickLook(target);
+			source.quickLook(target.path).catch(reportError);
+		},
+		[source, reportError],
+	);
+
 	const quickLookSelection = useCallback(() => {
 		const entry = focusedEntry;
-		if (entry === null || entry.kind === "folder") {
-			return;
-		}
-		source.quickLook(entry.path).catch(reportError);
-	}, [focusedEntry, source, reportError]);
+		if (entry === null || entry.kind === "folder") return;
+		presentQuickLook({ path: entry.path, name: entry.name });
+	}, [focusedEntry, presentQuickLook]);
 
 	const quickLookPath = useCallback(
 		(target: string) => {
-			source.quickLook(target).catch(reportError);
+			presentQuickLook({ path: target, name: basename(target) });
 		},
-		[source, reportError],
+		[presentQuickLook],
 	);
 
 	// An evidence crumb opens the enclosing folder in a NEW tab, with the source row revealed.
@@ -495,7 +509,7 @@ export function useFinderController(
 			setContextMenu(null);
 			switch (action) {
 				case "quickLook":
-					source.quickLook(entry.path).catch(reportError);
+					presentQuickLook({ path: entry.path, name: entry.name });
 					return;
 				case "open":
 					navigate(entry.path);
@@ -564,7 +578,7 @@ export function useFinderController(
 					return;
 			}
 		},
-		[contextMenu, menuTargets, navigate, path, refresh, reportError, source, toggleIndex, trashPaths],
+		[contextMenu, menuTargets, navigate, path, presentQuickLook, refresh, reportError, source, toggleIndex, trashPaths],
 	);
 
 	const commitRename = useCallback(() => {
@@ -615,6 +629,10 @@ export function useFinderController(
 			setRename(null);
 			return;
 		}
+		if (quickLookRef.current?.isQuickLookOpen() === true) {
+			quickLookRef.current.closeQuickLook();
+			return;
+		}
 		if (query !== "") {
 			setQueryValue("");
 		}
@@ -626,6 +644,17 @@ export function useFinderController(
 			const typing =
 				target instanceof HTMLElement &&
 				(target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable);
+			if (
+				!typing &&
+				quickLookRef.current?.isQuickLookOpen() === true &&
+				(event.key === "ArrowLeft" || event.key === "ArrowRight")
+			) {
+				event.preventDefault();
+				const next = moveSelection(orderedKeys, selection, event.key === "ArrowRight" ? 1 : -1);
+				scrollTarget.current = next.focus;
+				patchSelection(next);
+				return;
+			}
 			const action = resolveKeyAction(
 				{
 					key: event.key,

@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 import { app, BrowserWindow, clipboard, shell } from "electron";
+import { registerPreviewIpc, registerPreviewProtocol, registerPreviewSchemes } from "../preview/node/register";
 import { BUILTIN_DATASOURCE_SKILL_NAMES, writeConfigObject, writeDefaultConfig } from "@autorag/librarian";
 import type { DataSourceRow } from "../shared/settings-contract";
 import { FS_CHANNELS } from "../shared/fs-contract";
@@ -137,14 +138,20 @@ function createMainWindow(devLabel: DevLabel | null): BrowserWindow {
 
 let versionFamilyService: VersionFamilyService | null = null;
 
+registerPreviewSchemes();
+
 app.whenReady().then(() => {
+	registerPreviewProtocol();
+	registerPreviewIpc();
 	ensureAutoRAGConfig();
 	const devLabel = resolveDevLabel();
 	console.log(`[autorag] ${formatWindowTitle(APP_NAME, APP_VERSION, devLabel)}`);
+	const qaRoot = process.env.AUTORAG_QA_ROOT?.trim() ?? "";
 	const fsService = createFsService({
 		shell,
 		clipboard,
 		recents: createRecentsStore({ directory: join(app.getPath("userData"), "recents") }),
+		...(qaRoot !== "" && isAbsolute(qaRoot) ? { qaRoot } : {}),
 	});
 	// Both delete surfaces (context menu, ⌘⌫) land on this channel, so the
 	// version-family snapshot learns about the Trash here.
