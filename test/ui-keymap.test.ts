@@ -31,8 +31,10 @@ describe("resolveKeyAction", () => {
 		expect(resolveKeyAction(key("ArrowRight"), evidence)).toEqual({ type: "moveEvidence", delta: 1 });
 	});
 
-	it("ignores left and right in the Finder zone", () => {
-		expect(resolveKeyAction(key("ArrowLeft"), finder)).toBeNull();
+	it("discloses folders with left and right in the Finder zone, never while typing", () => {
+		expect(resolveKeyAction(key("ArrowRight"), finder)).toEqual({ type: "disclose", direction: "expand" });
+		expect(resolveKeyAction(key("ArrowLeft"), finder)).toEqual({ type: "disclose", direction: "collapse" });
+		expect(resolveKeyAction(key("ArrowLeft"), { ...finder, typing: true })).toBeNull();
 	});
 
 	it("opens the selection with Enter", () => {

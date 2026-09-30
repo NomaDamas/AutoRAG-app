@@ -333,7 +333,7 @@
 	gap: var(--space-12);
 	align-items: center;
 	height: var(--size-row);
-	padding: 0 var(--space-8) 0 var(--space-12);
+	padding: 0 var(--space-8) 0 calc(var(--space-12) + var(--row-depth, 0) * var(--tree-indent));
 	border-radius: var(--radius-6);
 	background: transparent;
 	user-select: none;
@@ -391,7 +391,36 @@
 }
 
 .row--child {
-	padding-left: calc(var(--space-12) + 18px);
+	padding-left: calc(var(--space-12) + 18px + var(--row-depth, 0) * var(--tree-indent));
+}
+
+/* Folder disclosure triangle (Finder list view); files keep an empty slot so names align. */
+.row__disclosure {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex: none;
+	width: var(--size-disclosure);
+	height: var(--size-disclosure);
+	margin-right: calc(var(--space-6) - var(--space-10));
+	padding: 0;
+	border: none;
+	border-radius: var(--radius-5);
+	background: transparent;
+	color: var(--text-muted);
+	cursor: default;
+}
+
+button.row__disclosure:hover {
+	color: var(--text-primary);
+}
+
+.row__disclosure svg {
+	transition: transform 150ms;
+}
+
+.row__disclosure--open svg {
+	transform: rotate(90deg);
 }
 
 .row--child .row__label {
