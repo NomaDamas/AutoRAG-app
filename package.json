@@ -6,8 +6,9 @@
 	"main": "out/main/index.js",
 	"scripts": {
 		"preinstall": "node scripts/sync-librarian.mjs",
+		"postinstall": "node scripts/ensure-electron.mjs",
 		"dev": "electron-vite dev",
-		"predev": "node scripts/sync-librarian.mjs && node scripts/require-dupey.mjs",
+		"predev": "node scripts/sync-librarian.mjs && node scripts/require-dupey.mjs && node scripts/ensure-electron.mjs",
 		"prebuild": "node scripts/sync-librarian.mjs && node scripts/require-dupey.mjs",
 		"build": "electron-vite build",
 		"pretest": "node scripts/sync-librarian.mjs",
