@@ -10,7 +10,7 @@
  */
 
 import { mkdirSync } from "node:fs";
-import { _electron } from "playwright";
+import { launchFinder } from "./launch-finder.mjs";
 
 const ROOT = new URL("../../", import.meta.url).pathname.replace(/\/$/, "");
 const EVIDENCE = `${ROOT}/.omo/evidence/ai-finder-app/qa-file-icon/`;
@@ -21,7 +21,7 @@ const paths = [];
 for await (const name of new Bun.Glob("*").scan(DIR)) paths.push(`${DIR}/${name}`);
 paths.sort();
 
-const app = await _electron.launch({ args: ["app"], cwd: ROOT });
+const app = await launchFinder();
 try {
 	const page = await app.firstWindow();
 	await page.waitForSelector('[role="row"]', { timeout: 30000 });

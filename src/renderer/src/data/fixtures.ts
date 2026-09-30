@@ -162,7 +162,6 @@ export const FIXTURE_ROOTS: readonly string[] = [
 ];
 
 /** Pending requests in the reference's `REQ0` fixture — the sidebar bell badge. */
-export const FIXTURE_PENDING_REQUESTS = 3;
 
 /** Version-family fixture, the reference's `FAMS` shape. */
 export interface FixtureFamily {

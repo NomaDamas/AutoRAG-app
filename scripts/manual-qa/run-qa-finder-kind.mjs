@@ -1,7 +1,7 @@
 /**
  * Manual QA — the Kind column shows the OS-detected kind (Finder's Kind).
  *
- * Drives the real production app (app/out) with Playwright's _electron API and
+ * Drives the real production build (out/) via launchFinder and
  * reads the Kind cell for fixtures created in ~/Documents. The expected value
  * is taken straight from `/usr/bin/mdls` (polled until Spotlight answers, since
  * a brand-new file can briefly report no kind), so the assertion is the OS's
@@ -14,7 +14,7 @@
 import { execSync } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import { rm } from "node:fs/promises";
-import { _electron } from "playwright";
+import { launchFinder } from "./launch-finder.mjs";
 
 const ROOT = new URL("../../", import.meta.url).pathname.replace(/\/$/, "");
 const EVIDENCE = `${ROOT}/.omo/evidence/ai-finder-app/qa-os-kind/`;
@@ -70,7 +70,7 @@ for (const fixture of fixtures) {
 
 let app;
 try {
-	app = await _electron.launch({ args: ["app"], cwd: ROOT });
+	app = await launchFinder();
 	const page = await app.firstWindow();
 	await page.waitForSelector('[role="row"]', { timeout: 30000 });
 	await page.getByLabel("Places").getByRole("button", { name: "Documents", exact: true }).click();

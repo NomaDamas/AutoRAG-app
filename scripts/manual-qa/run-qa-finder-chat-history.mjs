@@ -9,12 +9,13 @@
  * popover without clearing the Finder query, and the click-catcher closes it.
  *
  * Run from the repo root:  bun scripts/manual-qa/run-qa-finder-chat-history.mjs
- * Prereq: cd app && bunx electron-vite build
+ * Prereq: bun run build
  */
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { _electron, chromium } from "playwright";
+import { chromium } from "playwright";
+import { launchFinder } from "./launch-finder.mjs";
 
 const ROOT = new URL("../..", import.meta.url).pathname;
 const EVIDENCE = join(ROOT, ".omo/evidence/ai-finder-app/qa-chat-history");
@@ -120,7 +121,7 @@ const popoverClosed = async (page) => {
 	return (await page.locator(".ai__history-popover").count()) === 0;
 };
 
-app = await _electron.launch({ args: ["app", `--user-data-dir=${USER_DATA}`], cwd: ROOT });
+app = await launchFinder({ userDataDir: USER_DATA });
 const page = await app.firstWindow();
 await page.waitForSelector('[role="row"]');
 

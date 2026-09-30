@@ -8,11 +8,11 @@
  *  4. the Settings scan interval persists into settings-state.json
  *
  * Evidence: .omo/evidence/ai-finder-app/dupey-cache/ (screenshots + logs).
- * Run from the repo root after `cd app && bunx electron-vite build`:
+ * Run from the repo root after `bun run build`:
  *   bun scripts/manual-qa/run-qa-finder-dupey-cache.mjs
  */
 
-import { _electron } from "playwright";
+import { launchFinder } from "./launch-finder.mjs";
 import { mkdirSync, readFileSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -48,10 +48,7 @@ async function waitFor(predicate, { timeoutMs, label }) {
 }
 
 async function launch() {
-	const app = await _electron.launch({
-		args: [join(REPO, "app"), `--user-data-dir=${USER_DATA}`],
-		cwd: REPO,
-	});
+	const app = await launchFinder({ userDataDir: USER_DATA });
 	const page = await app.firstWindow();
 	page.setViewportSize({ width: 1440, height: 900 });
 	await page.waitForSelector('[role="row"]');

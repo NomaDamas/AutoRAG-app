@@ -57,7 +57,6 @@ export function ColumnHeader({
 				);
 			})}
 			<span>Index</span>
-			<span>Access</span>
 		</div>
 	);
 }
