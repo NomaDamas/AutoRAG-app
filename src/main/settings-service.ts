@@ -178,6 +178,10 @@ export function createSettingsService(deps: SettingsServiceDeps): SettingsBridge
 			await deps.dataSources.setEnabled(id, enabled);
 			return deps.dataSources.list();
 		},
+		sourcesSetDescription: async (id, description) => {
+			await deps.dataSources.setDescription(id, description);
+			return deps.dataSources.list();
+		},
 		assistantSend: async (surface, text) => {
 			let session: ChatAgent | undefined;
 			let unsubscribe: (() => void) | undefined;

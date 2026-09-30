@@ -23,6 +23,8 @@ import type { DataSourceRow, DataSourcesSnapshot } from "../shared/settings-cont
 export interface DataSourceStatusService {
 	list(): Promise<DataSourcesSnapshot>;
 	setEnabled(id: string, enabled: boolean): Promise<void>;
+	/** Blank text removes the override so the built-in description applies again. */
+	setDescription(id: string, description: string): Promise<void>;
 }
 
 export interface DataSourceStatusDeps {
@@ -180,6 +182,14 @@ function overallStatus(
 
 export function createDataSourceStatusService(deps: DataSourceStatusDeps): DataSourceStatusService {
 	const configPath = (): string => resolveConfigPath({ flags: {}, env: deps.env, cwd: deps.cwd }).configPath;
+	const updateEntry = (id: string, update: (entry: unknown) => unknown): void => {
+		const path = configPath();
+		const raw = readRawConfigObject(path);
+		const datasources = raw.datasources;
+		if (!isRecord(datasources) || !Object.hasOwn(datasources, id)) throw new Error(`Unknown datasource: ${id}`);
+		datasources[id] = update(datasources[id]);
+		writeConfigObject(path, raw);
+	};
 
 	return {
 		list: async () => {
@@ -226,13 +236,14 @@ export function createDataSourceStatusService(deps: DataSourceStatusDeps): DataS
 			return { ...empty, accessTags: allowedTags, refresh, sources };
 		},
 		setEnabled: async (id, enabled) => {
-			const path = configPath();
-			const raw = readRawConfigObject(path);
-			const datasources = raw.datasources;
-			if (!isRecord(datasources) || !Object.hasOwn(datasources, id)) throw new Error(`Unknown datasource: ${id}`);
-			const entry = datasources[id];
-			datasources[id] = isRecord(entry) ? { ...entry, enabled } : enabled;
-			writeConfigObject(path, raw);
+			updateEntry(id, (entry) => (isRecord(entry) ? { ...entry, enabled } : enabled));
+		},
+		setDescription: async (id, description) => {
+			const text = description.trim();
+			updateEntry(id, (entry) => {
+				const { description: _previous, ...rest } = isRecord(entry) ? entry : entry === false ? { enabled: false } : {};
+				return text.length === 0 ? rest : { ...rest, description: text };
+			});
 		},
 	};
 }

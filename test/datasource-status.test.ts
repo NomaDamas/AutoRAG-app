@@ -161,6 +161,32 @@ describe("createDataSourceStatusService", () => {
 		await expect(service.setEnabled("missing", true)).rejects.toThrow("Unknown datasource: missing");
 	});
 
+	it("saves an edited description into the shared config that the agent reads", async () => {
+		const fixture = await createFixtureWithOnlySlacrawlOnPath();
+		await writeConfig(fixture, { slack: { description: "Old", tags: ["chat"] }, telegram: false, whatsapp: true }, ["chat"]);
+		const service = createDataSourceStatusService({ env: fixture.env, cwd: fixture.root });
+
+		await service.setDescription("slack", "  Team Slack for release talk  ");
+		await service.setDescription("telegram", "Family chats");
+		await service.setDescription("whatsapp", "Friends");
+
+		const onDisk = JSON.parse(await readFile(fixture.configPath, "utf8")) as Record<string, any>;
+		expect(onDisk.datasources).toEqual({
+			slack: { description: "Team Slack for release talk", tags: ["chat"] },
+			telegram: { enabled: false, description: "Family chats" },
+			whatsapp: { description: "Friends" },
+		});
+		const agentSlack = buildAgentOptions(resolveConfigReadOnly({ flags: {}, env: fixture.env, cwd: fixture.root }))
+			.datasourceSkills?.find((skill) => skill.describe().name === "slack");
+		expect(agentSlack?.describe().description).toBe("Team Slack for release talk");
+		expect(byId((await service.list()).sources, "slack").description).toBe("Team Slack for release talk");
+
+		await service.setDescription("slack", "   ");
+		const cleared = JSON.parse(await readFile(fixture.configPath, "utf8")) as Record<string, any>;
+		expect(cleared.datasources.slack).toEqual({ tags: ["chat"] });
+		await expect(service.setDescription("missing", "x")).rejects.toThrow("Unknown datasource: missing");
+	});
+
 	it("marks connected sources as syncing while a datasource refresh is running", async () => {
 		const fixture = await createFixtureWithOnlySlacrawlOnPath();
 		await writeConfig(fixture, { slack: {}, telegram: false }, ["chat"]);

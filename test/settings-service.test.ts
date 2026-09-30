@@ -48,6 +48,7 @@ const EMPTY_SNAPSHOT: DataSourcesSnapshot = {
 const noDataSources: DataSourceStatusService = {
 	list: async () => EMPTY_SNAPSHOT,
 	setEnabled: async () => undefined,
+	setDescription: async () => undefined,
 };
 
 describe("createSettingsService", () => {
@@ -158,6 +159,7 @@ describe("createSettingsService", () => {
 				setEnabled: async (id, enabled) => {
 					toggles.push({ id, enabled });
 				},
+				setDescription: async () => undefined,
 			},
 			createChatSession: () => createFakeSession("models", []),
 			send: () => undefined,

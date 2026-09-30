@@ -24,6 +24,7 @@ export const SETTINGS_CHANNELS = {
 	requestsRespond: "requests:respond",
 	sourcesList: "sources:list",
 	sourcesSetEnabled: "sources:setEnabled",
+	sourcesSetDescription: "sources:setDescription",
 	assistantSend: "assistant:send",
 	assistantEvent: "assistant:event",
 } as const;
@@ -169,6 +170,8 @@ export interface SettingsBridge {
 	sourcesList(): Promise<DataSourcesSnapshot>;
 	/** Writes `enabled` into the shared AutoRAG config, then returns the fresh snapshot. */
 	sourcesSetEnabled(id: string, enabled: boolean): Promise<DataSourcesSnapshot>;
+	/** Writes the description the agent reads into the shared AutoRAG config; blank clears it. */
+	sourcesSetDescription(id: string, description: string): Promise<DataSourcesSnapshot>;
 
 	/** Send one message to the settings assistant; events stream via assistantEvent. */
 	assistantSend(surface: AssistantSurface, text: string): Promise<void>;

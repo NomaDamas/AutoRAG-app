@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactElement } from "react";
 import type { AppSettings, AssistantEvent, Contact, DataSourceRow, DataSourcesSnapshot } from "../../../shared/settings-contract";
 import type { SettingsBridge, AssistantSurface } from "../../../shared/settings-contract";
-import { ArrowUpIcon, CloseIcon, SparklesIcon } from "./icons";
+import { ArrowUpIcon, CloseIcon, PencilIcon, SparklesIcon } from "./icons";
 import { Switch } from "./primitives/Switch";
 
 const autorag = (window as unknown as { readonly autorag: { readonly settings: SettingsBridge } }).autorag;
@@ -198,10 +198,15 @@ export function SettingsPanel({
 		}
 	}
 
-	function editSourceDescription(source: DataSourceRow): void {
-		setTab("sources");
-		setDrafts((current) => ({ ...current, sources: `${source.id} 설명 손보기: ` }));
-		setTimeout(() => chatInputRef.current?.focus(), 0);
+	async function saveSourceDescription(source: DataSourceRow, description: string): Promise<boolean> {
+		try {
+			setSnapshot(await autorag.settings.sourcesSetDescription(source.id, description));
+			setSourcesError(null);
+			return true;
+		} catch (error) {
+			setSourcesError(error instanceof Error ? error.message : String(error));
+			return false;
+		}
 	}
 
 	const sources = snapshot?.sources ?? [];
@@ -329,7 +334,7 @@ export function SettingsPanel({
 										open={openSource === source.id}
 										onToggle={() => void toggleSource(source)}
 										onDetail={() => setOpenSource((current) => (current === source.id ? null : source.id))}
-										onEditDescription={() => editSourceDescription(source)}
+										onSaveDescription={(description) => saveSourceDescription(source, description)}
 									/>
 								))}
 							</div>
@@ -362,14 +367,31 @@ function SourceRow({
 	open,
 	onToggle,
 	onDetail,
-	onEditDescription,
+	onSaveDescription,
 }: {
 	readonly source: DataSourceRow;
 	readonly open: boolean;
 	readonly onToggle: () => void;
 	readonly onDetail: () => void;
-	readonly onEditDescription: () => void;
+	readonly onSaveDescription: (description: string) => Promise<boolean>;
 }): ReactElement {
+	const [editing, setEditing] = useState(false);
+	const [draft, setDraft] = useState(source.description);
+	const [saving, setSaving] = useState(false);
+
+	function startEditing(): void {
+		setDraft(source.description);
+		setEditing(true);
+	}
+
+	async function save(): Promise<void> {
+		if (saving) return;
+		setSaving(true);
+		const saved = await onSaveDescription(draft);
+		setSaving(false);
+		if (saved) setEditing(false);
+	}
+
 	return (
 		<div className={`settings-source${open ? " is-open" : ""}`} data-source-id={source.id}>
 			<div className={`settings-source__row${source.enabled ? "" : " is-disabled"}`}>
@@ -411,10 +433,52 @@ function SourceRow({
 					</dl>
 					<div className="settings-source-desc__header">
 						<span>Description</span>
-						<div className="settings-source-desc__spacer" />
-						<button type="button" onClick={onEditDescription}>채팅으로 수정</button>
+						{editing ? null : (
+							<button type="button" className="settings-source-desc__edit" aria-label={`${source.id} 설명 편집`} title="설명 편집" onClick={startEditing}>
+								<PencilIcon />
+							</button>
+						)}
 					</div>
-					<p>{source.description}</p>
+					{editing ? (
+						<form
+							className="settings-source-desc__form"
+							onSubmit={(event) => {
+								event.preventDefault();
+								void save();
+							}}
+						>
+							<textarea
+								className="settings-source-desc__input"
+								aria-label={`${source.id} 설명`}
+								value={draft}
+								rows={3}
+								autoFocus
+								disabled={saving}
+								placeholder="에이전트가 이 데이터소스를 언제 쓰면 좋은지 적어 주세요"
+								onChange={(event) => setDraft(event.target.value)}
+								onKeyDown={(event) => {
+									if (event.nativeEvent.isComposing) return;
+									if (event.key === "Escape") {
+										event.preventDefault();
+										event.stopPropagation();
+										setEditing(false);
+									}
+									if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+										event.preventDefault();
+										void save();
+									}
+								}}
+							/>
+							<div className="settings-source-desc__actions">
+								<button type="button" disabled={saving} onClick={() => setEditing(false)}>취소</button>
+								<button type="submit" className="is-primary" disabled={saving || draft.trim() === source.description.trim()}>
+									{saving ? "저장 중…" : "저장"}
+								</button>
+							</div>
+						</form>
+					) : (
+						<p>{source.description}</p>
+					)}
 				</div>
 			) : null}
 		</div>

@@ -1325,25 +1325,78 @@
 	font-weight: var(--weight-semibold);
 }
 
-.settings-source-desc__spacer {
-	flex: 1;
+.settings-source-desc__edit {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	height: 22px;
+	flex: none;
+	padding: 0;
+	border: 0;
+	border-radius: var(--radius-6);
+	background: transparent;
+	color: var(--text-muted);
+	cursor: pointer;
 }
 
-.settings-source-desc__header button {
+.settings-source-desc__edit:hover {
+	background: var(--bg-input);
+	color: var(--text-primary);
+}
+
+.settings-source-desc__form {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-8);
+}
+
+.settings-source-desc__input {
+	width: 100%;
+	min-height: 64px;
+	box-sizing: border-box;
+	padding: var(--space-8) 10px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-6);
+	background: var(--bg-window);
+	color: var(--text-primary);
+	font: inherit;
+	font-size: var(--font-size-sm);
+	line-height: var(--leading-read);
+	resize: vertical;
+}
+
+.settings-source-desc__input:focus {
+	border-color: var(--accent);
+	outline: none;
+}
+
+.settings-source-desc__actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: var(--space-8);
+}
+
+.settings-source-desc__actions button {
 	height: 26px;
-	flex: none;
-	padding: 0 10px;
+	padding: 0 12px;
 	border: 1px solid var(--border);
 	border-radius: var(--radius-6);
 	background: var(--bg-window);
 	color: var(--text-body);
 	font-size: var(--font-size-meta);
-	white-space: nowrap;
+	cursor: pointer;
 }
 
-.settings-source-desc__header button:hover {
+.settings-source-desc__actions button.is-primary {
 	border-color: var(--accent);
-	color: var(--text-primary);
+	background: var(--accent);
+	color: var(--text-on-accent);
+}
+
+.settings-source-desc__actions button:disabled {
+	opacity: 0.5;
+	cursor: default;
 }
 
 .settings-source-desc p {

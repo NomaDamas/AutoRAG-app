@@ -102,12 +102,33 @@ try {
 	check("my-drive shows its chunk count", driveCount === "3 chunks", driveCount ?? "");
 	await page.screenshot({ path: join(EVIDENCE, "01-sources-expanded.png") });
 
+	await fact("slack", "agent");
+	const slackDesc = row("slack").locator(".settings-source-desc");
+	check("chat edit button is gone", (await page.getByRole("button", { name: "채팅으로 수정" }).count()) === 0);
+	await slackDesc.locator(".settings-source-desc__edit").click();
+	await slackDesc.locator(".settings-source-desc__input").fill("Release and incident chatter");
+	await page.screenshot({ path: join(EVIDENCE, "01b-description-editing.png") });
+	await slackDesc.getByRole("button", { name: "저장" }).click();
+	await slackDesc.locator("p", { hasText: "Release and incident chatter" }).waitFor();
+	const described = JSON.parse(readFileSync(configPath, "utf8"));
+	check("inline save wrote the description into the shared config", described.datasources.slack.description === "Release and incident chatter", JSON.stringify(described.datasources.slack));
+	const agentDescription = (buildAgentOptions(resolveConfigReadOnly({ flags: {}, env: { ...process.env, ...env }, cwd: root })).datasourceSkills ?? [])
+		.find((skill) => skill.describe().name === "slack")?.describe().description;
+	check("a fresh AutoRAG agent reads the new description", agentDescription === "Release and incident chatter", agentDescription);
+	await slackDesc.locator(".settings-source-desc__edit").click();
+	await slackDesc.locator(".settings-source-desc__input").fill("discard me");
+	await slackDesc.locator(".settings-source-desc__input").press("Escape");
+	check("Escape cancels without writing", (await slackDesc.locator("p").textContent()) === "Release and incident chatter"
+		&& JSON.parse(readFileSync(configPath, "utf8")).datasources.slack.description === "Release and incident chatter");
+	check("Escape in the editor keeps Settings open", (await page.locator(".settings-panel").count()) === 1);
+	await page.screenshot({ path: join(EVIDENCE, "01c-description-saved.png") });
+
 	check("agent sees slack before the toggle", agentSkills().includes("slack"), JSON.stringify(agentSkills()));
 	await row("slack").locator(".settings-switch").click();
 	await page.waitForFunction(() =>
 		document.querySelector('.settings-source[data-source-id="slack"] .settings-status')?.textContent === "Paused");
 	const onDisk = JSON.parse(readFileSync(configPath, "utf8"));
-	check("toggle wrote enabled:false into the shared config", onDisk.datasources.slack.enabled === false && onDisk.datasources.slack.description === "Team Slack", JSON.stringify(onDisk.datasources.slack));
+	check("toggle wrote enabled:false into the shared config", onDisk.datasources.slack.enabled === false && onDisk.datasources.slack.description === "Release and incident chatter", JSON.stringify(onDisk.datasources.slack));
 	check("toggle preserved datasourceAccess", JSON.stringify(onDisk.datasourceAccess) === JSON.stringify({ allowedTags: ["chat", "documents"] }));
 	check("a fresh AutoRAG agent no longer loads slack", !agentSkills().includes("slack"), JSON.stringify(agentSkills()));
 	check("slack agent fact now reads disabled", (await fact("slack", "agent")) === "disabled");
