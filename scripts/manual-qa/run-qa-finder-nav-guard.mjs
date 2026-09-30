@@ -10,14 +10,14 @@
  * Run from the repo root: `bun scripts/manual-qa/run-qa-finder-nav-guard.mjs`
  */
 
-import { _electron } from "playwright";
+import { launchFinder } from "./launch-finder.mjs";
 import { mkdirSync } from "node:fs";
 
 const ROOT = new URL("../../", import.meta.url).pathname.replace(/\/$/, "");
 const EVIDENCE = `${ROOT}/.omo/evidence/ai-finder-app/qa-nav-guard/`;
 mkdirSync(EVIDENCE, { recursive: true });
 
-const app = await _electron.launch({ args: ["app"], cwd: ROOT });
+const app = await launchFinder();
 const results = [];
 const check = (label, pass) => {
 	results.push({ label, pass });

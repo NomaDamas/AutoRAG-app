@@ -1,4 +1,4 @@
-import { _electron } from "playwright";
+import { launchFinder } from "./launch-finder.mjs";
 import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { refreshQaIndex } from "./warm-qa-index.mjs";
 
@@ -76,7 +76,7 @@ log("warming the QA parsed mirror and MinSync index...");
 await refreshQaIndex(CONFIG);
 log("warm-up done");
 
-const app = await _electron.launch({ args: ["app"], env: { ...process.env, AUTORAG_CONFIG: CONFIG } });
+const app = await launchFinder({ env: { AUTORAG_CONFIG: CONFIG } });
 const page = await app.firstWindow();
 page.setDefaultTimeout(5000);
 page.on("console", (message) => log(`[console:${message.type()}] ${message.text().slice(0, 300)}`));

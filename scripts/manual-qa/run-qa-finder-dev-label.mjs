@@ -3,11 +3,11 @@
  * Asserts the real BrowserWindow title (not the document title) and the
  * in-window dev label.
  *
- * Run from the repo root after `cd app && bunx electron-vite build`:
+ * Run from the repo root after `bun run build`:
  *   bun scripts/manual-qa/run-qa-finder-dev-label.mjs
  */
 
-import { _electron } from "playwright";
+import { launchFinder } from "./launch-finder.mjs";
 import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -17,10 +17,7 @@ const REPO = join(HERE, "..", "..");
 const EVIDENCE = join(REPO, ".omo", "evidence", "ai-finder-app", "dev-label");
 mkdirSync(EVIDENCE, { recursive: true });
 
-const app = await _electron.launch({
-	args: [join(REPO, "app"), `--user-data-dir=/tmp/pw-electron-qa-dev-label-${Date.now()}`],
-	cwd: REPO,
-});
+const app = await launchFinder({ userDataDir: `/tmp/pw-electron-qa-dev-label-${Date.now()}` });
 const page = await app.firstWindow();
 await page.waitForSelector('[role="row"]');
 

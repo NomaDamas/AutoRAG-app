@@ -12,15 +12,12 @@ import { ContextMenu } from "./components/primitives/ContextMenu";
 import { Toast } from "./components/primitives/Toast";
 import { Sidebar } from "./components/Sidebar";
 import { SettingsPanel } from "./components/SettingsPanel";
-import { RequestsPopover } from "./components/RequestsPopover";
 import { StatusBar } from "./components/StatusBar";
 import { formatDevLabel, type DevLabel } from "../../shared/app-info";
 import { TabStrip } from "./components/TabStrip";
 import { Toolbar } from "./components/Toolbar";
-import { WorkInProgress } from "./components/WorkInProgress";
 import { useFinderController } from "./hooks/useFinderController";
 import { useFinderSource } from "./hooks/useFinderSource";
-import { CONTACTS_PATH } from "./state/tabs";
 
 /** The reference's `showHotkeys` prop (default true): keycaps on or off. */
 const SHOW_HOTKEYS = true;
@@ -36,8 +33,6 @@ export function App(): ReactElement {
 	const [showHiddenFiles, setShowHiddenFiles] = useState(false);
 	const finder = useFinderController(source, { showHiddenFiles });
 	const [settingsTab, setSettingsTab] = useState<"general" | "contacts" | null>(null);
-	const [requestsOpen, setRequestsOpen] = useState(false);
-	const [pendingRequests, setPendingRequests] = useState(finder.pendingRequests);
 	const [evidence, setEvidence] = useState<readonly CitationEvidence[]>([]);
 	const [evidenceSession, setEvidenceSession] = useState<string | null>(null);
 	const [selectedEvidence, setSelectedEvidence] = useState<number | null>(null);
@@ -68,11 +63,6 @@ export function App(): ReactElement {
 		void autorag.settings.get().then((settings) => setShowHiddenFiles(settings.showHiddenFiles));
 	}, []);
 
-	useEffect(() => {
-		const settingsBridge = autorag.settings;
-		void settingsBridge.requestsList("pending").then((requests) => setPendingRequests(requests.length));
-	}, [requestsOpen]);
-
 	const rowCallbacks: RowCallbacks = {
 		onClick: finder.clickRow,
 		onOpen: finder.openEntry,
@@ -89,10 +79,8 @@ export function App(): ReactElement {
 			<div className="window">
 				<Sidebar
 					activeLabel={finder.activeNavLabel}
-					pendingRequests={pendingRequests}
 					showHotkeys={SHOW_HOTKEYS}
 					onNavigate={finder.navigateNav}
-					onOpenRequests={() => setRequestsOpen(true)}
 					onOpenSettings={() => setSettingsTab("general")}
 				/>
 				<section className="finder" aria-label="Finder" onMouseDown={finder.focusFinder}>
@@ -120,10 +108,7 @@ export function App(): ReactElement {
 						onSearchFocus={() => finder.setSearchFocused(true)}
 						onSearchBlur={() => finder.setSearchFocused(false)}
 					/>
-					{finder.path === CONTACTS_PATH ? (
-						<WorkInProgress title="Contacts" />
-					) : (
-						<>
+					<>
 							<ColumnHeader sort={finder.sort} searching={finder.searching} onSort={finder.sortBy} />
 							<FileList
 								rows={finder.stackRows}
@@ -142,8 +127,7 @@ export function App(): ReactElement {
 								indexOverrides={finder.indexOverrides}
 								callbacks={rowCallbacks}
 							/>
-						</>
-					)}
+					</>
 					<StatusBar text={finder.statusText} showHotkeys={SHOW_HOTKEYS} devLabel={DEV_LABEL} />
 					{evidence.length === 0 ? null : (
 						<EvidencePanel
@@ -180,7 +164,6 @@ export function App(): ReactElement {
 					onSettingsChanged={(settings) => setShowHiddenFiles(settings.showHiddenFiles)}
 				/>
 			)}
-			{requestsOpen ? <RequestsPopover onClose={() => setRequestsOpen(false)} onChanged={() => void autorag.settings.requestsList("pending").then((requests) => setPendingRequests(requests.length))} /> : null}
 		</div>
 	);
 }

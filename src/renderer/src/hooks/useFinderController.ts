@@ -92,7 +92,6 @@ export interface FinderController {
 	/** Non-null when dupey is missing or a version-family scan failed. */
 	readonly versionFamilyError: VersionFamilyError | null;
 	readonly activeNavLabel: string | null;
-	readonly pendingRequests: number;
 	readonly contextMenu: { readonly cursor: { readonly x: number; readonly y: number } } | null;
 	readonly contextMenuEntries: readonly FinderMenuEntry[];
 	readonly listRef: RefObject<HTMLDivElement | null>;
@@ -197,11 +196,6 @@ export function useFinderController(
 	}, [path, locations]);
 
 	useEffect(() => {
-		if (path === CONTACTS_PATH) {
-			// The work-in-progress view shows no listing; drop the stale one.
-			setListing([]);
-			return;
-		}
 		if (path === "") {
 			return;
 		}
@@ -343,10 +337,6 @@ export function useFinderController(
 
 	const navigateNav = useCallback(
 		(item: NavItem) => {
-			if (item.wip) {
-				navigate(CONTACTS_PATH);
-				return;
-			}
 			const match = locations.find((location) => location.name === item.label);
 			if (match === undefined) {
 				showToast(`"${item.label}" 위치는 아직 연결되지 않았습니다.`);
@@ -764,7 +754,6 @@ export function useFinderController(
 		indexOverrides: effectiveIndexOverrides,
 		versionFamilyError,
 		activeNavLabel,
-		pendingRequests: source.pendingRequests,
 		contextMenu: contextMenu === null ? null : { cursor: contextMenu.cursor },
 		contextMenuEntries,
 		listRef,

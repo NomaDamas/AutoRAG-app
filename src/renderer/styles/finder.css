@@ -327,33 +327,6 @@
 	text-align: center;
 }
 
-/* ------------------------------------------------------ Work-in-progress view */
-
-.wip-view {
-	display: flex;
-	flex: 1;
-	min-height: 0;
-	flex-direction: column;
-	align-items: center;
-	justify-content: center;
-	gap: var(--space-8);
-	padding: var(--space-40) var(--space-16);
-	color: var(--text-muted);
-	text-align: center;
-}
-
-.wip-view__title {
-	margin: 0;
-	color: var(--text-body);
-	font-size: var(--font-size-body);
-	font-weight: var(--weight-semibold);
-}
-
-.wip-view__body {
-	margin: 0;
-	font-size: var(--font-size-meta);
-}
-
 .row {
 	display: grid;
 	grid-template-columns: var(--grid-file-row);

@@ -1,12 +1,12 @@
-import { _electron } from "playwright";
+import { launchFinder } from "./launch-finder.mjs";
 import { mkdirSync } from "node:fs";
 
 const EVIDENCE = new URL("../../.omo/evidence/ai-finder-app/shadcn-switch/", import.meta.url).pathname;
 mkdirSync(EVIDENCE, { recursive: true });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// Production build first: cd app && bunx electron-vite build
-const app = await _electron.launch({ args: ["app"] }); // run from the repo root
+// Production build first: bun run build
+const app = await launchFinder();
 const page = await app.firstWindow();
 await page.waitForSelector('[role="row"]');
 

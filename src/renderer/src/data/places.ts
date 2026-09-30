@@ -3,6 +3,7 @@
  *
  * Icon path data and the source tiles are verbatim; `syncing` / `error` mark
  * the status dots the reference shows on Gmail, Google Drive, and Discord.
+ * The People/Contacts place is parked until its view ships.
  */
 
 import type { FileKind } from "../state/kinds";
@@ -79,16 +80,6 @@ export const NAV_GROUPS: readonly NavGroup[] = [
 			source("Notion", "notion"),
 			source("Discord", "discord", { error: true }),
 			source("Telegram", "telegram"),
-		],
-	},
-	{
-		label: "People",
-		items: [
-			place(
-				"Contacts",
-				"M15 19v-1a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v1M9 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM21 19v-1a3.5 3.5 0 0 0-2.6-3.4M15.5 4.2a3 3 0 0 1 0 5.6",
-				{ wip: true },
-			),
 		],
 	},
 ];
