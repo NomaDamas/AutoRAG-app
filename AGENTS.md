@@ -29,6 +29,7 @@ librarian sources into this repository.
 Run from this directory:
 
 ```sh
+make setup
 bun install --frozen-lockfile
 bun run dev
 make run
@@ -36,6 +37,12 @@ bun run test
 bun run typecheck
 bun run build
 ```
+
+`make setup` (wrapping `scripts/setup.mjs`) prepares a fresh clone: it checks
+for bun, Node 24+, and dupey, then installs dependencies. `make run` runs a
+lightweight `--ensure` preflight that installs dependencies only when
+`node_modules` is missing, so it also works from a fresh clone without a prior
+`make setup`.
 
 `make run` launches the dev app through `bun run dev` on free ports, with the
 main-process V8 inspector and the renderer remote-debugging endpoint enabled;
