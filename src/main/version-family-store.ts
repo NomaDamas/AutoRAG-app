@@ -7,6 +7,7 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { FsVersionFamily } from "../shared/fs-contract";
+import type { FileStamp } from "./version-family-verify";
 
 export interface StoredVersionFamilies {
 	readonly version: 1;
@@ -15,6 +16,7 @@ export interface StoredVersionFamilies {
 	/** Location roots the snapshot covers. */
 	readonly locations: readonly string[];
 	readonly families: readonly FsVersionFamily[];
+	readonly stamps?: Readonly<Record<string, FileStamp>>;
 }
 
 export interface VersionFamilyStore {
