@@ -89,6 +89,8 @@ function streamedToolAnswer(event: NonNullable<LiveAgentEvent["assistantMessageE
 
 /**
  * Turns raw agent events into thinking/draft stream events for one run.
+ * Reasoning text is dropped: only the first thinking token of each phase is
+ * forwarded, as a `thinking` signal.
  * The two-phase flow runs the fast (Quick) prompt first; the phase flips to
  * Deep once emit_fast_answer has executed or the agent starts its second run
  * (the refinement prompt).
@@ -99,6 +101,7 @@ function createLiveStreamMapper(searchId: string, emit: (event: SearchStreamEven
 	let quickText = "";
 	let quickDraft = "";
 	let deepDraft = "";
+	const thinkingPhases = new Set<AnswerPhaseName>();
 	const phase = (): AnswerPhaseName => (fastAnswerDone || agentRuns > 1 ? "deep" : "quick");
 	const setQuickDraft = (text: string): void => {
 		if (text === quickDraft || text.trim() === "") return;
@@ -117,9 +120,13 @@ function createLiveStreamMapper(searchId: string, emit: (event: SearchStreamEven
 		const update = event.type === "message_update" ? event.assistantMessageEvent : undefined;
 		if (update === undefined) return;
 		switch (update.type) {
-			case "thinking_delta":
-				if (update.delta) emit({ type: "thinking-delta", searchId, phase: phase(), text: update.delta });
+			case "thinking_delta": {
+				const current = phase();
+				if (!update.delta || thinkingPhases.has(current)) return;
+				thinkingPhases.add(current);
+				emit({ type: "thinking", searchId, phase: current });
 				return;
+			}
 			case "text_delta":
 				// A fast phase that answers in plain text (no emit_fast_answer call)
 				// becomes the Quick answer, so its text is the Quick draft.

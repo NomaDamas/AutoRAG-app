@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactElement } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type ReactElement } from "react";
 import type { AnswerPhase, AnswerPhaseName, ChatAttachment, ChatSummary, CitationEvidence, SearchStreamEvent } from "../../../shared/search-contract";
 import type { SearchBridge } from "../../../shared/search-contract";
 import { parseAnswerBlocks, parseInline, type AnswerBlock } from "../state/answer-markdown";
@@ -7,7 +7,7 @@ import { CloseIcon, HistoryIcon, PlusIcon, SearchIcon, SendIcon } from "./icons"
 
 const autorag = (window as unknown as { readonly autorag: { readonly search: SearchBridge } }).autorag;
 
-const NO_THINKING: Readonly<Record<AnswerPhaseName, string>> = { quick: "", deep: "" };
+const NO_THINKING: Readonly<Record<AnswerPhaseName, boolean>> = { quick: false, deep: false };
 
 function errorMessage(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
@@ -27,7 +27,7 @@ export function AiSearchPanel({
 	const [deep, setDeep] = useState<AnswerPhase | null>(null);
 	const [quickDraft, setQuickDraft] = useState("");
 	const [deepDraft, setDeepDraft] = useState("");
-	const [thinking, setThinking] = useState<Readonly<Record<AnswerPhaseName, string>>>(NO_THINKING);
+	const [thinking, setThinking] = useState<Readonly<Record<AnswerPhaseName, boolean>>>(NO_THINKING);
 	const [progress, setProgress] = useState("");
 	const [searchId, setSearchIdState] = useState<string | null>(null);
 	// The event listener reads the active id from a ref: it is set before
@@ -61,8 +61,8 @@ export function AiSearchPanel({
 				case "progress":
 					setProgress(event.text);
 					break;
-				case "thinking-delta":
-					setThinking((current) => ({ ...current, [event.phase]: current[event.phase] + event.text }));
+				case "thinking":
+					setThinking((current) => ({ ...current, [event.phase]: true }));
 					break;
 				case "quick-draft":
 					setQuickDraft(event.text);
@@ -341,24 +341,16 @@ export function AiSearchPanel({
 	);
 }
 
-function ThinkingBlock({ text, live }: { readonly text: string; readonly live: boolean }): ReactElement | null {
-	const bodyRef = useRef<HTMLPreElement | null>(null);
-	const [open, setOpen] = useState(true);
-	useEffect(() => {
-		// While the model reasons the block stays open and follows the newest
-		// tokens; once the answer text starts it folds away.
-		setOpen(live);
-	}, [live]);
-	useEffect(() => {
-		const body = bodyRef.current;
-		if (body !== null && live) body.scrollTop = body.scrollHeight;
-	}, [text, live]);
-	if (text === "") return null;
+const THINKING_LETTERS = [..."Thinking"];
+
+/** Shown while the model reasons; the reasoning text itself is never rendered. */
+function ThinkingIndicator(): ReactElement {
 	return (
-		<details className="ai__thinking" open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>
-			<summary>{live ? "Thinking…" : "Thought process"}</summary>
-			<pre ref={bodyRef} className="ai__thinking-body">{text}</pre>
-		</details>
+		<div className="ai__thinking" role="status" aria-label="Thinking">
+			{THINKING_LETTERS.map((letter, index) => (
+				<span key={index} aria-hidden="true" style={{ "--i": index } as CSSProperties}>{letter}</span>
+			))}
+		</div>
 	);
 }
 
@@ -374,7 +366,7 @@ function AnswerCard({
 	readonly label: string;
 	readonly phase: AnswerPhase | null;
 	readonly draft: string;
-	readonly thinking: string;
+	readonly thinking: boolean;
 	readonly pending: boolean;
 	readonly selectedEvidence: number | null;
 	readonly onCitation: (selected: number) => void;
@@ -383,9 +375,8 @@ function AnswerCard({
 	if (answerText === "") {
 		return (
 			<article className={`ai__answer ai__answer--${label.toLowerCase()} ai__answer--pending`}>
-				<div className="ai__answer-heading"><span className="ai__answer-label"><i />{label}</span><span>{pending ? (thinking === "" ? "Searching…" : "Thinking…") : "Stopped"}</span></div>
-				<ThinkingBlock text={thinking} live={pending} />
-				{thinking === "" ? <div className="ai__skeleton"><span /><span /><span /></div> : null}
+				<div className="ai__answer-heading"><span className="ai__answer-label"><i />{label}</span><span>{pending ? (thinking ? "" : "Searching…") : "Stopped"}</span></div>
+				{pending && thinking ? <ThinkingIndicator /> : <div className="ai__skeleton"><span /><span /><span /></div>}
 			</article>
 		);
 	}
@@ -396,7 +387,6 @@ function AnswerCard({
 				<span className="ai__answer-label"><i />{label}</span>
 				<span>{phase !== null ? phase.meta : streaming ? "Streaming…" : "Incomplete"}</span>
 			</div>
-			<ThinkingBlock text={thinking} live={false} />
 			<div className="ai__answer-content">
 				{parseAnswerBlocks(answerText).map((block, index) => (
 					<AnswerBlockView key={`${index}`} block={block} selected={selectedEvidence} onCitation={onCitation} />

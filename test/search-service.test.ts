@@ -148,7 +148,7 @@ describe("createSearchService", () => {
 		]);
 	});
 
-	it("streams thinking and the emit tool-call answers as live draft events", async () => {
+	it("signals thinking once per phase without its text and streams the emit tool-call answers as drafts", async () => {
 		const update = (assistantMessageEvent: NonNullable<LiveAgentEvent["assistantMessageEvent"]>): LiveAgentEvent => ({
 			type: "message_update",
 			assistantMessageEvent,
@@ -186,12 +186,11 @@ describe("createSearchService", () => {
 		await service.start("search-live", "chat-live", "refund approval", []);
 
 		expect(events).toEqual([
-			{ type: "thinking-delta", searchId: "search-live", phase: "quick", text: "Check the " },
-			{ type: "thinking-delta", searchId: "search-live", phase: "quick", text: "policy." },
+			{ type: "thinking", searchId: "search-live", phase: "quick" },
 			{ type: "quick-draft", searchId: "search-live", text: "Quick" },
 			{ type: "quick-draft", searchId: "search-live", text: "Quick answer" },
 			{ type: "quick", searchId: "search-live", sessionId: "session-1", phase: expect.anything() },
-			{ type: "thinking-delta", searchId: "search-live", phase: "deep", text: "Verify." },
+			{ type: "thinking", searchId: "search-live", phase: "deep" },
 			{ type: "deep-draft", searchId: "search-live", text: "Deep" },
 			{ type: "deep-draft", searchId: "search-live", text: "Deep answer" },
 			{ type: "deep", searchId: "search-live", sessionId: "session-1", phase: expect.anything() },
