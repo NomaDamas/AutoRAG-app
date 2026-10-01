@@ -52,6 +52,52 @@ window always runs the latest version.
 Set `AUTORAG_SKIP_DUPEY_CHECK=1` only when intentionally testing without
 version-family support. Use `PORT=9234 bun run dev` to select the Vite port.
 
+## Live filesystem sync
+
+Folders shown in open tabs are watched for changes made by other apps. A
+created, deleted, renamed, or edited file appears in the tab without clicking
+anything. Only real folders in open tabs are watched: Recents, Contacts, and
+datasource virtual paths never are. Watching uses `@parcel/watcher`, and events
+are coalesced per directory with a 150 ms trailing debounce and a 1 s maximum
+wait. Closing a tab, navigating away, reloading the window, or quitting
+releases the watches. Set `AUTORAG_FS_WATCH_DIAG=1` to log watch, unwatch, and
+batch diagnostics.
+
+All live traffic flows through one serial `ChangeHub` queue in the main
+process. For each batch, every registered derived layer reconciles first, with
+a 750 ms per-layer timeout, and only then does the hub send a single ordered
+`live:message` push. Layers are always reconciled before the view updates. The
+renderer holds a per-layer fence: until the dupey layer has reconciled a batch,
+its rows are shown flat instead of stacked, so the list and the version stacks
+never disagree. Focusing the window or making it visible re-syncs the listing
+and layers through `live:layers`.
+
+Adding a derived layer needs no new IPC channel. Implement `DerivedLayer` in
+the main process:
+
+```ts
+import type { DerivedLayer } from "./change-hub";
+import type { FsDirChange } from "../shared/live-contract";
+
+const myLayer: DerivedLayer<MyData> = {
+	id: "my-layer",
+	snapshot: () => service.result(),           // current published data
+	applyChanges: (dirs: readonly FsDirChange[]) => service.applyDirChanges(dirs),
+	resync: () => service.reverify(),           // optional full re-derivation
+};
+```
+
+Register it in `src/main/index.ts` where the hub is created
+(`hub.register(myLayer)`), and add a selector in
+`src/renderer/src/state/layers.ts`. Publications ride the existing
+`live:message` push and the `live:layers` resync.
+
+Explicit non-goals: live events never trigger a dupey rescan, so a new or
+edited file joins version stacks at the next regular scan. A stack member whose
+content changed after the scan is shown as a normal row (detached) until the
+next scan. An external rename of a stack member re-points the stack within a 2 s
+window. Search results are not live.
+
 ## Manual QA
 
 The Finder QA scripts are under `scripts/manual-qa/`. Build first, then run a
