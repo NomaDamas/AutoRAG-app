@@ -359,9 +359,6 @@ export function SettingsPanel({
 					) : null}
 					{tab === "models" ? (
 						<div className="settings-stack">
-							<div className="settings-models-header">
-								<button type="button" className="settings-intro__refresh" onClick={() => void reloadModel()}>새로고침</button>
-							</div>
 							<div className="settings-model-card">
 								<div>
 									<strong className="settings-model-card__name">{model === null ? "AutoRAG Agent" : model.displayName}</strong>
@@ -369,7 +366,6 @@ export function SettingsPanel({
 										{model === null ? modelStatus : `${model.provider} · ${model.api}`}
 									</span>
 								</div>
-								<em>Quick · Deep 공통</em>
 							</div>
 							{modelProblem === null ? null : <span className="settings-intro__error" role="alert">{modelProblem}</span>}
 							<AssistantPane surface="models" chats={chats.models} draft={drafts.models} busy={busy} listRef={chatListRef} inputRef={null} setDraft={(text) => setDrafts((current) => ({ ...current, models: text }))} onSend={sendAssistant} />

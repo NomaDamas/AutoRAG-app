@@ -841,11 +841,6 @@
 	gap: var(--space-12);
 }
 
-.settings-models-header {
-	display: flex;
-	justify-content: flex-end;
-}
-
 .settings-intro__text {
 	display: flex;
 	flex: 1 1 auto;
@@ -915,16 +910,6 @@
 .settings-model-card__provider {
 	color: var(--text-muted);
 	font-size: var(--font-size-meta);
-}
-
-.settings-model-card em {
-	padding: 2px 8px;
-	border-radius: var(--radius-6);
-	background: var(--bg-input);
-	color: var(--text-muted);
-	font-size: var(--font-size-meta);
-	font-style: normal;
-	white-space: nowrap;
 }
 
 .requests-popover__scrim {

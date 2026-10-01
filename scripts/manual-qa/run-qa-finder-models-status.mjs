@@ -64,23 +64,22 @@ try {
 	check("card carries no avatar tile", (await page.locator(".settings-model-tile").count()) === 0);
 	await page.screenshot({ path: join(EVIDENCE, "01-models.png") });
 
-	// An edit from another AutoRAG surface must show up on refresh (live read).
+	// An edit from another AutoRAG surface must show up when Settings reopens
+	// (the app keeps no copy).
 	writeConfig({ ...MODEL, id: "anthropic/claude-sonnet-4.5" });
 	const roleAfterEdit = resolvedRole();
 	check("a fresh AutoRAG agent resolves the edited model", roleAfterEdit.modelId === "anthropic/claude-sonnet-4.5", roleAfterEdit.modelId);
-	await page.locator(".settings-models-header .settings-intro__refresh").click();
-	await page.waitForFunction(
-		(id) => document.querySelector(".settings-model-card__name")?.textContent === id,
-		"anthropic/claude-sonnet-4.5",
-	);
-	check("refresh reflects the external edit", (await page.locator(".settings-model-card__name").textContent()) === "anthropic/claude-sonnet-4.5");
+	await page.locator(".settings-panel__header .icon-button[aria-label='Close Settings']").click();
+	await openModels();
+	check("reopening Settings re-reads the config", (await page.locator(".settings-model-card__name").textContent()) === "anthropic/claude-sonnet-4.5");
 	await page.screenshot({ path: join(EVIDENCE, "02-models-edited.png") });
 
-	// Reopening Settings must re-read the config (no app-side copy).
-	await page.locator(".settings-panel__header .icon-button[aria-label='Close Settings']").click();
+	// Switch back and confirm it re-reads again.
 	writeConfig(MODEL);
+	await page.locator(".settings-panel__header .icon-button[aria-label='Close Settings']").click();
 	await openModels();
-	check("reopening Settings re-reads the config", (await page.locator(".settings-model-card__name").textContent()) === MODEL.id);
+	check("switching back re-reads the original model", (await page.locator(".settings-model-card__name").textContent()) === MODEL.id);
+	check("card shows no Quick/Deep badge", (await page.locator(".settings-model-card em").count()) === 0);
 } finally {
 	await app.close();
 	rmSync(root, { recursive: true, force: true });
