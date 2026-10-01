@@ -66,6 +66,22 @@ describe("live renderer state", () => {
 		expect(next.map((row) => row.path)).toEqual(["/Users/me/Documents/b.txt"]);
 	});
 
+	it("keeps the previous listing during a pending navigate load", async () => {
+		let resolveList!: (entries: readonly string[]) => void;
+		const loader = createListingLoader<string>(
+			() => new Promise((resolve) => { resolveList = resolve; }),
+		);
+		let listing: readonly string[] = ["previous"];
+		const pending = loader(request("Recents", 1, "navigate", listing)).then((result) => {
+			listing = result.entries;
+		});
+		await Promise.resolve();
+		expect(listing).toEqual(["previous"]);
+		resolveList(["recent"]);
+		await pending;
+		expect(listing).toEqual(["recent"]);
+	});
+
 	it("prunes vanished keys, anchor, and focus", () => {
 		expect(
 			pruneSelection(

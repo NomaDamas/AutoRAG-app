@@ -257,10 +257,6 @@ export function useFinderController(
 				mode,
 				previous: listingRef.current,
 			} as const;
-			if (mode === "navigate") {
-				listingRef.current = [];
-				setListing([]);
-			}
 			void listingLoader(request).then(async (result) => {
 				if (result.kind === "stale" || result.kind === "superseded") {
 					return;
@@ -278,6 +274,7 @@ export function useFinderController(
 						console.error(result.error);
 						return;
 					}
+					adoptListing([]);
 					reportError(result.error);
 					return;
 				}
