@@ -183,21 +183,35 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 		return enriched.map((entry) => withIcon(entry, icons));
 	}
 
+	async function buildListingEntries(dirents: readonly Dirent[], path: string): Promise<FsEntry[]> {
+		const entries: FsEntry[] = [];
+		for (let index = 0; index < dirents.length; index += 64) {
+			const batch = dirents.slice(index, index + 64);
+			const built = await Promise.all(
+				batch.map(async (dirent) => {
+					const fullPath = join(path, dirent.name);
+					try {
+						return await buildFsEntry(fullPath);
+					} catch (error) {
+						// Unreadable entry: skip it, keep the verbatim reason visible.
+						console.warn(`fs:listDir skipping ${fullPath}: ${errorMessage(error)}`);
+						return null;
+					}
+				}),
+			);
+			for (const entry of built) {
+				if (entry !== null) entries.push(entry);
+			}
+		}
+		return entries;
+	}
+
 	async function listDir(path: string): Promise<DirListing> {
 		if (path === RECENTS_PATH) {
 			return { path, entries: await annotateListing(await recentEntries()) };
 		}
 		const dirents = await readdir(path, { withFileTypes: true });
-		const entries: FsEntry[] = [];
-		for (const dirent of dirents) {
-			const fullPath = join(path, dirent.name);
-			try {
-				entries.push(await buildFsEntry(fullPath));
-			} catch (error) {
-				// Unreadable entry: skip it, keep the verbatim reason visible.
-				console.warn(`fs:listDir skipping ${fullPath}: ${errorMessage(error)}`);
-			}
-		}
+		const entries = await buildListingEntries(dirents, path);
 		const rows = await annotateListing(entries);
 		rows.sort(compareEntries);
 		return { path, entries: rows };

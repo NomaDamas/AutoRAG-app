@@ -1,7 +1,7 @@
 import { writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { ICON_LIMIT, type IconTarget, THUMBNAIL_CHUNK, createIconProvider } from "../src/main/file-icon";
+import { ICON_LIMIT, type IconTarget, THUMBNAIL_CHUNK, THUMBNAIL_POOL, createIconProvider } from "../src/main/file-icon";
 
 const BYTES = new Uint8Array([1, 2, 3, 4]);
 const target = (path: string, modifiedAt = "2026-09-29T00:00:00.000Z"): IconTarget => ({ path, modifiedAt });
@@ -88,6 +88,28 @@ describe("createIconProvider", () => {
 		// Then the generator never saw more than one chunk at a time
 		expect(batches.map((batch) => batch.length)).toEqual([THUMBNAIL_CHUNK, THUMBNAIL_CHUNK, 1]);
 		expect(icons.size).toBe(THUMBNAIL_CHUNK * 2 + 1);
+	});
+
+	it("runs thumbnail chunks within the bounded pool", async () => {
+		let active = 0;
+		let maximum = 0;
+		const provider = createIconProvider({
+			platform: "darwin",
+			generate: async (paths, outDir) => {
+				active += 1;
+				maximum = Math.max(maximum, active);
+				await Promise.resolve();
+				for (const path of paths) await writeThumbnail(path, outDir);
+				active -= 1;
+			},
+		});
+		const many = Array.from({ length: THUMBNAIL_CHUNK * (THUMBNAIL_POOL + 1) }, (_value, index) =>
+			target(`/docs/f${index}.png`),
+		);
+
+		await provider.icons(many);
+
+		expect(maximum).toBe(THUMBNAIL_POOL);
 	});
 
 	it("skips a crashed chunk and keeps the rest", async () => {

@@ -122,6 +122,18 @@ describe("listDir", () => {
 		expect(listing.entries.find((entry) => entry.name === "link.txt")?.isSymlink).toBe(true);
 		expect(listing.entries.find((entry) => entry.name === "target.txt")?.isSymlink).toBe(false);
 	});
+
+	it("keeps directory entry order deterministic after concurrent metadata reads", async () => {
+		const dir = join(root, "sorted");
+		await mkdir(dir, { recursive: true });
+		await writeFile(join(dir, "zeta.txt"), "");
+		await writeFile(join(dir, "alpha.txt"), "");
+		await mkdir(join(dir, "middle"), { recursive: true });
+
+		const listing = await createFsService(makeDeps(root).deps).listDir(dir);
+
+		expect(listing.entries.map((entry) => entry.name)).toEqual(["middle", "alpha.txt", "zeta.txt"]);
+	});
 });
 
 describe("stat", () => {
