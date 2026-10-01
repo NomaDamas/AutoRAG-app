@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, RefObject } from "react";
 import { RECENTS_PATH } from "../../../shared/fs-contract";
+import type { FsDirChange, LiveMessage } from "../../../shared/live-contract";
 import type { FinderEntry } from "../data/entries";
 import type { NavItem } from "../data/places";
 import { type FinderLocation, type FinderSource, pickInitialPath } from "../data/source";
@@ -12,6 +13,13 @@ import {
 } from "../state/context-menu";
 import { emptyStateText, indexToast, searchSummaryText, statusBarText, trashToast } from "../state/format";
 import { type FocusZone, resolveKeyAction } from "../state/keymap";
+import {
+	applyOptimisticDeletes,
+	createListingLoader,
+	nearestExistingAncestor,
+	pruneSelection,
+	watchSetFor,
+} from "../state/live";
 import { activeNavPath, basename, breadcrumbTrail, dirname, type Crumb } from "../state/paths";
 import {
 	applyRowClick,
@@ -54,6 +62,13 @@ import type { TabView } from "../components/TabStrip";
 const TOAST_MS = 2400;
 /** --time-flash */
 const FLASH_MS = 1800;
+
+function isMissingPathError(error: unknown): boolean {
+	if (typeof error !== "object" || error === null || !("code" in error)) {
+		return false;
+	}
+	return error.code === "ENOENT" || error.code === "ENOTDIR";
+}
 
 interface ContextMenuState {
 	readonly cursor: { readonly x: number; readonly y: number };
@@ -153,13 +168,26 @@ export function useFinderController(
 	const listRef = useRef<HTMLDivElement | null>(null);
 	const searchRef = useRef<HTMLInputElement | null>(null);
 	const scrollTarget = useRef<string | null>(null);
+	const generationRef = useRef(0);
+	const pathRef = useRef("");
+	const activeTabIdRef = useRef(0);
+	const tabsRef = useRef(tabsState.tabs);
+	const searchingRef = useRef(false);
+	const listingRef = useRef<readonly FinderEntry[]>([]);
+	const staleTabsRef = useRef(new Set<number>());
+	const previousPathRef = useRef<string | null>(null);
+	const previousTabIdRef = useRef<number | null>(null);
+	const previousRevisionRef = useRef(revision);
 
 	const tab = activeTab(tabsState);
 	const path = tab.path;
 	const selection = tab.selection;
 	const searching = query.trim() !== "";
-
-	const refresh = useCallback(() => setRevision((value) => value + 1), []);
+	pathRef.current = path;
+	activeTabIdRef.current = tab.id;
+	tabsRef.current = tabsState.tabs;
+	searchingRef.current = searching;
+	listingRef.current = listing;
 
 	const showToast = useCallback((message: string) => setToast(message), []);
 
@@ -168,6 +196,88 @@ export function useFinderController(
 		(error: unknown) => setToast(error instanceof Error ? error.message : String(error)),
 		[],
 	);
+
+	const listingLoader = useMemo(
+		() =>
+			createListingLoader<FinderEntry>(
+				(nextPath) => source.list(nextPath),
+				(request) =>
+					request.path === pathRef.current && request.generation === generationRef.current,
+			),
+		[source],
+	);
+
+	const navigateToExistingAncestor = useCallback(
+		async (missingPath: string, requestGeneration: number): Promise<void> => {
+			try {
+				const ancestor = await nearestExistingAncestor(missingPath, (candidate) => source.exists(candidate));
+				if (pathRef.current !== missingPath || generationRef.current !== requestGeneration || ancestor === null) {
+					return;
+				}
+				generationRef.current += 1;
+				setTabsState((state) => navigateTab(state, ancestor));
+				setQueryValue("");
+			} catch (error: unknown) {
+				console.error(error);
+			}
+		},
+		[source],
+	);
+
+	const adoptListing = useCallback((entries: readonly FinderEntry[]): void => {
+		listingRef.current = entries;
+		setListing(entries);
+		const survivingPaths = new Set(entries.map((entry) => entry.path));
+		setTabsState((state) =>
+			patchActiveTab(state, (current) => ({
+				...current,
+				selection: pruneSelection(current.selection, survivingPaths),
+			})),
+		);
+		setRename((current) => (current !== null && !survivingPaths.has(current.path) ? null : current));
+	}, []);
+
+	const loadListing = useCallback(
+		(
+			requestedPath: string,
+			mode: "navigate" | "silent",
+			requestGeneration: number,
+		): void => {
+			const request = {
+				path: requestedPath,
+				generation: requestGeneration,
+				mode,
+				previous: listingRef.current,
+			} as const;
+			if (mode === "navigate") {
+				listingRef.current = [];
+				setListing([]);
+			}
+			void listingLoader(request).then((result) => {
+				if (result.kind === "stale" || result.kind === "superseded") {
+					return;
+				}
+				if (result.kind === "error") {
+					if (mode === "silent") {
+						if (isMissingPathError(result.error)) {
+							void navigateToExistingAncestor(requestedPath, requestGeneration);
+						} else {
+							console.error(result.error);
+						}
+						return;
+					}
+					reportError(result.error);
+					return;
+				}
+				adoptListing(result.entries);
+			});
+		},
+		[adoptListing, listingLoader, navigateToExistingAncestor, reportError],
+	);
+
+	const refresh = useCallback(() => {
+		setRevision((value) => value + 1);
+	}, []);
 
 	useEffect(() => {
 		let live = true;
@@ -197,26 +307,83 @@ export function useFinderController(
 
 	useEffect(() => {
 		if (path === "") {
+			previousPathRef.current = path;
+			previousTabIdRef.current = tab.id;
+			previousRevisionRef.current = revision;
 			return;
 		}
-		let live = true;
-		source
-			.list(path)
-			.then((entries) => {
-				if (live) {
-					setListing(entries);
-				}
-			})
-			.catch((error: unknown) => {
-				if (live) {
-					setListing([]);
-					reportError(error);
-				}
-			});
+		const pathChanged = previousPathRef.current !== path;
+		const tabChanged = previousTabIdRef.current !== tab.id;
+		const revisionChanged = previousRevisionRef.current !== revision;
+		if (pathChanged || tabChanged || revisionChanged) {
+			generationRef.current += 1;
+		}
+		previousPathRef.current = path;
+		previousTabIdRef.current = tab.id;
+		previousRevisionRef.current = revision;
+		if (searching && !pathChanged && !tabChanged) {
+			return;
+		}
+		const stale = staleTabsRef.current.has(tab.id);
+		const mode = pathChanged && !stale ? "navigate" : "silent";
+		loadListing(path, mode, generationRef.current);
+		if (stale) {
+			staleTabsRef.current.delete(tab.id);
+		}
+	}, [loadListing, path, revision, searching, tab.id]);
+
+	const tabPathsKey = tabsState.tabs.map((current) => current.path).join("\u0000");
+
+	useEffect(() => {
+		void source.setWatchSet(watchSetFor(tabsState.tabs)).catch((error: unknown) => console.error(error));
+	}, [source, tabPathsKey]);
+
+	useEffect(() => {
 		return () => {
-			live = false;
+			void source.setWatchSet([]).catch((error: unknown) => console.error(error));
 		};
-	}, [source, path, revision, reportError]);
+	}, [source]);
+
+	useEffect(() => {
+		const unsubscribe = source.onLive((message: LiveMessage) => {
+			const activeTabId = activeTabIdRef.current;
+			const activePath = pathRef.current;
+			const activeChanges: FsDirChange[] = [];
+			for (const dirChange of message.dirs) {
+				const tabsForDir = tabsRef.current.filter((current) => current.path === dirChange.dir);
+				if (tabsForDir.length === 0) {
+					continue;
+				}
+				for (const current of tabsForDir) {
+					if (current.id === activeTabId) {
+						activeChanges.push(dirChange);
+					} else {
+						staleTabsRef.current.add(current.id);
+					}
+				}
+			}
+			if (activeChanges.length === 0) {
+				return;
+			}
+			generationRef.current += 1;
+			if (searchingRef.current) {
+				staleTabsRef.current.add(activeTabId);
+				return;
+			}
+			let nextListing = listingRef.current;
+			for (const dirChange of activeChanges) {
+				nextListing = applyOptimisticDeletes(nextListing, dirChange);
+			}
+			adoptListing(nextListing);
+			const requestGeneration = generationRef.current;
+			if (activeChanges.some((change) => change.dirGone)) {
+				void navigateToExistingAncestor(activePath, requestGeneration);
+				return;
+			}
+			loadListing(activePath, "silent", requestGeneration);
+		});
+		return unsubscribe;
+	}, [adoptListing, loadListing, navigateToExistingAncestor, source]);
 
 	useEffect(() => {
 		if (!searching) {
