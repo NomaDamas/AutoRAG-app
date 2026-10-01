@@ -12,17 +12,18 @@ import {
 	type VersionFamilyServiceDeps,
 } from "../src/main/version-family-service";
 import { createFileVersionFamilyStore, type StoredVersionFamilies } from "../src/main/version-family-store";
-import type { FileStamp } from "../src/main/version-family-verify";
+import { DIRTY_STAMP, type FileStamp } from "../src/main/version-family-verify";
 import { RECENTS_PATH, type FsEntry, type FsLocation, type FsVersionFamily } from "../src/shared/fs-contract";
 
 const dupeyAvailable = { status: async () => ({ available: true, version: "dupey 0.1.2", error: null }) };
 const dupeyMissing = { status: async () => ({ available: false, version: null, error: "spawn dupey ENOENT" }) };
-const fixtureStamp = (path: string): FileStamp => ({
+const fixtureStamp = (path: string, overrides: Partial<FileStamp> = {}): FileStamp => ({
 	dev: "fixture",
 	ino: path,
 	size: "4",
 	mtimeNs: "1",
 	ctimeNs: "1",
+	...overrides,
 });
 
 function fsEntry(path: string): FsEntry {
@@ -457,6 +458,166 @@ describe("version-family service — trash prune", () => {
 		expect(scanned).toBe(1);
 		// The scan reported the deleted file; the trash still wins.
 		expect(h.persisted()?.families).toEqual([]);
+	});
+
+	it("detaches a changed head without running another dupey scan", async () => {
+		let changed = false;
+		const h = harness(
+			{
+				probe: async (path) =>
+					changed && path === "/home/Desktop/a.txt"
+						? fixtureStamp(path, { size: "5" })
+						: fixtureStamp(path),
+			},
+			{
+				...seeded([threeFileFamily()]),
+				stamps: {
+					"/home/Desktop/a.txt": fixtureStamp("/home/Desktop/a.txt"),
+					"/home/Desktop/b.txt": fixtureStamp("/home/Desktop/b.txt"),
+					"/home/Desktop/c.txt": fixtureStamp("/home/Desktop/c.txt"),
+				},
+			},
+		);
+		const service = createVersionFamilyService(h.deps);
+		await service.result();
+		changed = true;
+
+		const applied = await service.applyDirChanges([{
+			dir: "/home/Desktop",
+			changes: [{ path: "/home/Desktop/a.txt", type: "update" }],
+			overflow: false,
+			dirGone: false,
+		}]);
+
+		expect(applied).toBe(true);
+		expect(h.scans).toEqual([]);
+		expect((await service.result()).families).toEqual([]);
+		expect(h.persisted()?.stamps?.["/home/Desktop/a.txt"]).toEqual(DIRTY_STAMP);
+	});
+
+	it("remaps a rename before expiry and prunes an unmatched rename at 2000 ms", async () => {
+		let clock = 0;
+		const oldPath = "/home/Desktop/b.txt";
+		const newPath = "/home/Desktop/renamed.txt";
+		const oldStamp = fixtureStamp(oldPath);
+		const h = harness(
+			{
+				now: () => new Date(clock),
+				probe: async (path) => (path === newPath ? oldStamp : fixtureStamp(path)),
+			},
+			{
+				...seeded([threeFileFamily()]),
+				stamps: {
+					"/home/Desktop/a.txt": fixtureStamp("/home/Desktop/a.txt"),
+					[oldPath]: oldStamp,
+					"/home/Desktop/c.txt": fixtureStamp("/home/Desktop/c.txt"),
+				},
+			},
+		);
+		const service = createVersionFamilyService(h.deps);
+		await service.result();
+		await service.applyDirChanges([{
+			dir: "/home/Desktop",
+			changes: [{ path: oldPath, type: "delete" }],
+			overflow: false,
+			dirGone: false,
+		}]);
+		clock = 1999;
+		await service.applyDirChanges([{
+			dir: "/home/Desktop",
+			changes: [{ path: newPath, type: "create" }],
+			overflow: false,
+			dirGone: false,
+		}]);
+		expect((await service.result()).families[0]?.members.map((member) => member.path)).toContain(newPath);
+
+		clock = 2000;
+		await service.applyDirChanges([{
+			dir: "/home/Desktop",
+			changes: [{ path: newPath, type: "delete" }],
+			overflow: false,
+			dirGone: false,
+		}]);
+		const expiry = h.timers.find((timer) => timer.ms === 2000);
+		expect(expiry).toBeDefined();
+		expiry?.fire();
+		await Promise.resolve();
+		await Promise.resolve();
+		expect((await service.result()).families[0]?.members.map((member) => member.path)).not.toContain(newPath);
+	});
+
+	it("fences a path updated while a scan is in flight", async () => {
+		let releaseScan!: () => void;
+		const scanStarted = new Promise<void>((resolve) => {
+			releaseScan = resolve;
+		});
+		let continueScan!: () => void;
+		const scanGate = new Promise<void>((resolve) => {
+			continueScan = resolve;
+		});
+		const h = harness(
+			{
+				scanDuplicates: async () => {
+					releaseScan();
+					await scanGate;
+					return scanOf([family("/home/Desktop/a.txt", "/home/Desktop/b.txt")]);
+				},
+			},
+			{
+				...seeded([threeFileFamily()]),
+				stamps: {
+					"/home/Desktop/a.txt": fixtureStamp("/home/Desktop/a.txt"),
+					"/home/Desktop/b.txt": fixtureStamp("/home/Desktop/b.txt"),
+					"/home/Desktop/c.txt": fixtureStamp("/home/Desktop/c.txt"),
+				},
+			},
+		);
+		const service = createVersionFamilyService(h.deps);
+		const refresh = service.refresh();
+		await scanStarted;
+		await service.applyDirChanges([{
+			dir: "/home/Desktop",
+			changes: [{ path: "/home/Desktop/b.txt", type: "update" }],
+			overflow: false,
+			dirGone: false,
+		}]);
+		continueScan();
+		await refresh;
+
+		expect(h.persisted()?.stamps?.["/home/Desktop/b.txt"]).toEqual(DIRTY_STAMP);
+		expect((await service.result()).families).toEqual([]);
+	});
+
+	it("reverifies all families for an overflow without scanning", async () => {
+		let missing = false;
+		const h = harness(
+			{
+				probe: async (path) => (missing && path === "/home/Desktop/b.txt" ? null : fixtureStamp(path)),
+			},
+			{
+				...seeded([threeFileFamily()]),
+				stamps: {
+					"/home/Desktop/a.txt": fixtureStamp("/home/Desktop/a.txt"),
+					"/home/Desktop/b.txt": fixtureStamp("/home/Desktop/b.txt"),
+					"/home/Desktop/c.txt": fixtureStamp("/home/Desktop/c.txt"),
+				},
+			},
+		);
+		const service = createVersionFamilyService(h.deps);
+		await service.result();
+		missing = true;
+		const applied = await service.applyDirChanges([{
+			dir: "/home/Desktop",
+			changes: [],
+			overflow: true,
+			dirGone: false,
+		}]);
+
+		expect(applied).toBe(true);
+		expect(h.scans).toEqual([]);
+		expect((await service.result()).families[0]?.members.map((member) => member.path)).toEqual([
+			"/home/Desktop/c.txt",
+		]);
 	});
 });
 

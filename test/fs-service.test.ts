@@ -6,6 +6,19 @@ import { createFsService, FsRenameError, type FsServiceDeps } from "../src/main/
 import { createRecentsStore, type RecentsStore } from "../src/main/recents-store";
 import { RECENTS_PATH } from "../src/shared/fs-contract";
 
+const unreadablePaths = vi.hoisted(() => new Set<string>());
+
+vi.mock("../src/main/fs-entry", async () => {
+	const actual = await vi.importActual<typeof import("../src/main/fs-entry")>("../src/main/fs-entry");
+	return {
+		...actual,
+		buildFsEntry: async (path: string) => {
+			if (unreadablePaths.has(path)) throw new Error("simulated lstat failure");
+			return actual.buildFsEntry(path);
+		},
+	};
+});
+
 interface StubbedDeps {
 	readonly deps: FsServiceDeps;
 	readonly trashed: string[];
@@ -121,6 +134,29 @@ describe("listDir", () => {
 		// Then the symlink entry is flagged and the real file is not
 		expect(listing.entries.find((entry) => entry.name === "link.txt")?.isSymlink).toBe(true);
 		expect(listing.entries.find((entry) => entry.name === "target.txt")?.isSymlink).toBe(false);
+	});
+
+	it("skips one unreadable entry, keeps the others, and warns verbatim", async () => {
+		const dir = join(root, "unreadable");
+		const unreadable = join(dir, "unreadable.txt");
+		await mkdir(dir, { recursive: true });
+		await writeFile(join(dir, "visible-a.txt"), "a");
+		await writeFile(unreadable, "hidden");
+		await writeFile(join(dir, "visible-b.txt"), "b");
+		unreadablePaths.add(unreadable);
+		const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+		try {
+			const listing = await createFsService(makeDeps(root).deps).listDir(dir);
+
+			expect(listing.entries.map((entry) => entry.name)).toEqual(["visible-a.txt", "visible-b.txt"]);
+			expect(warning).toHaveBeenCalledWith(
+				`fs:listDir skipping ${unreadable}: simulated lstat failure`,
+			);
+		} finally {
+			unreadablePaths.delete(unreadable);
+			warning.mockRestore();
+		}
 	});
 
 	it("keeps directory entry order deterministic after concurrent metadata reads", async () => {
