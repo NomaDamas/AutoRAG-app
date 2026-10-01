@@ -359,21 +359,10 @@ export function SettingsPanel({
 					) : null}
 					{tab === "models" ? (
 						<div className="settings-stack">
-							<div className="settings-intro settings-intro--models">
-								<div className="settings-intro__text">
-									<strong className="settings-intro__title">Active model</strong>
-									<span className="settings-intro__desc">CLI, TUI, serve와 앱의 모든 AutoRAG 에이전트가 이 모델을 사용합니다.</span>
-									{modelSnapshot === null ? null : (
-										<span className="settings-intro__desc settings-intro__config" title="CLI, TUI, serve와 앱의 모든 AutoRAG 에이전트가 같은 설정 파일을 읽습니다">
-											AutoRAG config · <code>{modelSnapshot.configPath}</code>{modelSnapshot.configExists ? "" : " (없음)"}
-										</span>
-									)}
-									{modelProblem === null ? null : <span className="settings-intro__error" role="alert">{modelProblem}</span>}
-								</div>
+							<div className="settings-models-header">
 								<button type="button" className="settings-intro__refresh" onClick={() => void reloadModel()}>새로고침</button>
 							</div>
 							<div className="settings-model-card">
-								<span className="settings-model-tile">{model === null ? "A" : (model.provider[0] ?? "A").toUpperCase()}</span>
 								<div>
 									<strong className="settings-model-card__name">{model === null ? "AutoRAG Agent" : model.displayName}</strong>
 									<span className="settings-model-card__provider">
@@ -382,13 +371,7 @@ export function SettingsPanel({
 								</div>
 								<em>Quick · Deep 공통</em>
 							</div>
-							{model === null ? null : (
-								<p className="settings-model-meta">
-									<code>{model.modelId}</code>
-									<span>{model.resolutionSource === "config" ? "config 설정값" : `해석 출처: ${model.resolutionSource}`}</span>
-									<span>{model.auth.present ? `인증 ${model.auth.source}${model.auth.envName === null ? "" : ` · ${model.auth.envName}`}` : "인증 키 없음"}</span>
-								</p>
-							)}
+							{modelProblem === null ? null : <span className="settings-intro__error" role="alert">{modelProblem}</span>}
 							<AssistantPane surface="models" chats={chats.models} draft={drafts.models} busy={busy} listRef={chatListRef} inputRef={null} setDraft={(text) => setDrafts((current) => ({ ...current, models: text }))} onSend={sendAssistant} />
 						</div>
 					) : null}

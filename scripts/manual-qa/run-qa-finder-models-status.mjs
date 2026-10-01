@@ -49,30 +49,28 @@ try {
 		await page.locator(".sidebar__item", { hasText: "Settings" }).click();
 		await page.waitForSelector(".settings-panel");
 		await page.locator(".settings-panel__tabs button", { hasText: "Models" }).click();
-		await page.waitForSelector(".settings-model-card__provider");
+		// The card resolves the model asynchronously; wait past the loading label.
+		await page.waitForFunction(() => {
+			const text = document.querySelector(".settings-model-card__provider")?.textContent ?? "";
+			return text.length > 0 && text !== "불러오는 중…";
+		});
 	};
 
 	await openModels();
-	const configLine = await page.locator(".settings-intro__config code").textContent();
-	check("shows the shared config path", configLine === configPath, configLine ?? "");
-
 	const name = await page.locator(".settings-model-card__name").textContent();
 	const provider = await page.locator(".settings-model-card__provider").textContent();
-	const meta = await page.locator(".settings-model-meta code").textContent();
 	check("card names the resolved model", name === MODEL.id, name ?? "");
 	check("card shows provider and api", provider === `${MODEL.provider} · ${MODEL.api}`, provider ?? "");
-	check("meta shows the model id", meta === MODEL.id, meta ?? "");
-	const metaText = await page.locator(".settings-model-meta").textContent();
-	check("meta shows config source and the api-key env", (metaText ?? "").includes("config 설정값") && (metaText ?? "").includes("OPENROUTER_API_KEY"), metaText ?? "");
+	check("card carries no avatar tile", (await page.locator(".settings-model-tile").count()) === 0);
 	await page.screenshot({ path: join(EVIDENCE, "01-models.png") });
 
 	// An edit from another AutoRAG surface must show up on refresh (live read).
 	writeConfig({ ...MODEL, id: "anthropic/claude-sonnet-4.5" });
 	const roleAfterEdit = resolvedRole();
 	check("a fresh AutoRAG agent resolves the edited model", roleAfterEdit.modelId === "anthropic/claude-sonnet-4.5", roleAfterEdit.modelId);
-	await page.locator(".settings-intro__refresh").click();
+	await page.locator(".settings-models-header .settings-intro__refresh").click();
 	await page.waitForFunction(
-		(id) => document.querySelector(".settings-model-meta code")?.textContent === id,
+		(id) => document.querySelector(".settings-model-card__name")?.textContent === id,
 		"anthropic/claude-sonnet-4.5",
 	);
 	check("refresh reflects the external edit", (await page.locator(".settings-model-card__name").textContent()) === "anthropic/claude-sonnet-4.5");
@@ -82,7 +80,7 @@ try {
 	await page.locator(".settings-panel__header .icon-button[aria-label='Close Settings']").click();
 	writeConfig(MODEL);
 	await openModels();
-	check("reopening Settings re-reads the config", (await page.locator(".settings-model-meta code").textContent()) === MODEL.id);
+	check("reopening Settings re-reads the config", (await page.locator(".settings-model-card__name").textContent()) === MODEL.id);
 } finally {
 	await app.close();
 	rmSync(root, { recursive: true, force: true });
