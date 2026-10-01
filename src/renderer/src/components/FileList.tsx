@@ -1,6 +1,7 @@
 import type { ReactElement, RefObject } from "react";
 import { FileRow, type RowCallbacks } from "./FileRow";
-import type { StackRow, VersionFamilyError } from "../state/version-family";
+import type { TreeRow } from "../state/folder-tree";
+import type { VersionFamilyError } from "../state/version-family";
 
 /**
  * Scrolling file list (handoff README §2): the search summary, the rows, and
@@ -23,7 +24,7 @@ export function FileList({
 	onRetryVersionFamilies,
 	callbacks,
 }: {
-	readonly rows: readonly StackRow[];
+	readonly rows: readonly TreeRow[];
 	readonly listRef: RefObject<HTMLDivElement | null>;
 	readonly searching: boolean;
 	readonly summary: string;
@@ -53,7 +54,7 @@ export function FileList({
 				</div>
 			)}
 			{searching ? <div className="list__summary">{summary}</div> : null}
-			<div role="grid" aria-label="Files">
+			<div role={searching ? "grid" : "treegrid"} aria-label="Files">
 				{rows.map((row) => (
 					<FileRow
 						key={row.entry.path}
@@ -68,6 +69,8 @@ export function FileList({
 						stackOpen={row.stackOpen}
 						child={row.child}
 						relation={row.relation}
+						depth={row.depth}
+						disclosure={row.disclosure}
 						listPath={listPath}
 						callbacks={callbacks}
 					/>

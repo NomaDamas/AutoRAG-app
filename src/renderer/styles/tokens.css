@@ -169,6 +169,8 @@
 
   /* ------------------------------------------------------------ §4 Control sizes */
   --size-row: 32px;
+  --size-disclosure: 16px;
+  --tree-indent: 18px;
   --size-pill: 22px;
   --size-icon-sm: 28px;
   --size-chip: 24px;

@@ -69,6 +69,7 @@ export function App(): ReactElement {
 		onContextMenu: finder.openContextMenu,
 		onToggleIndex: finder.toggleIndex,
 		onToggleStack: finder.toggleStack,
+		onToggleFolder: finder.toggleFolder,
 		onRenameChange: finder.setRenameDraft,
 		onRenameCommit: finder.commitRename,
 		onRenameCancel: finder.cancelRename,

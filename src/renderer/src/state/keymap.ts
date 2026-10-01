@@ -29,6 +29,7 @@ export type KeyAction =
 	| { readonly type: "trash" }
 	| { readonly type: "moveSelection"; readonly delta: 1 | -1 }
 	| { readonly type: "moveEvidence"; readonly delta: 1 | -1 }
+	| { readonly type: "disclose"; readonly direction: "expand" | "collapse" }
 	| { readonly type: "dismiss" }
 	| { readonly type: "focusSearch" }
 	| { readonly type: "newTab" }
@@ -62,7 +63,7 @@ export function resolveKeyAction(event: KeyEventLike, context: KeyContext): KeyA
 	}
 	if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
 		if (context.zone !== "evidence") {
-			return null;
+			return { type: "disclose", direction: event.key === "ArrowRight" ? "expand" : "collapse" };
 		}
 		return { type: "moveEvidence", delta: event.key === "ArrowRight" ? 1 : -1 };
 	}
