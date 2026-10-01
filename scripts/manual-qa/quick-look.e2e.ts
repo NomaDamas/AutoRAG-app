@@ -130,9 +130,15 @@ test("Quick Look uses a fast reusable window with Finder navigation", async () =
 		expect(zoomed).toBe(true);
 		expect(icon).not.toBeNull();
 		await preview.screenshot({ path: join(evidence, "photo.png") });
-		// The panel is translucent: the Finder stays visible behind the window.
+		// The panel is translucent: the Finder stays visible behind the window, and
+		// nothing of the page paints a backdrop of its own over the Finder.
 		expect(await preview.locator(".qlw").evaluate((node) => getComputedStyle(node).backgroundColor)).toBe("rgba(246, 246, 248, 0.72)");
-		expect(await preview.locator("body").evaluate((node) => getComputedStyle(node).backgroundColor)).toBe("rgba(0, 0, 0, 0)");
+		const backgrounds = await preview.evaluate(() => ({
+			html: getComputedStyle(document.documentElement).backgroundColor,
+			body: getComputedStyle(document.body).backgroundColor,
+			root: getComputedStyle(document.getElementById("root") ?? document.body).backgroundColor,
+		}));
+		expect(backgrounds).toEqual({ html: "rgba(0, 0, 0, 0)", body: "rgba(0, 0, 0, 0)", root: "rgba(0, 0, 0, 0)" });
 		const photoBounds = await quickLookWindow(app);
 		expect(photoBounds.visible).toBe(true);
 		expect(photoBounds.resizable).toBe(true);

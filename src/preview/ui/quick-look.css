@@ -7,9 +7,12 @@
  * Finder shows through.
  * ========================================================================== */
 
+/* The preview is a transparent window over the Finder. This has to beat the
+ * app's desk backdrop in base.css whatever order the two files land in: dev
+ * injects stylesheets in module order, the production bundle in chunk order. */
 html,
-body,
-#root {
+body.quick-look-page,
+body.quick-look-page #root {
 	height: 100%;
 	background: transparent;
 }

@@ -10,7 +10,12 @@ out — and the main process fits the window to that size before showing it.
 The window is the macOS Quick Look material: on macOS it is a transparent
 window (`transparent: true`, `#00000000`) whose surface is the translucent
 `--bg-quicklook-panel`, so the Finder stays visible behind it; other platforms
-keep the opaque `--bg-chrome` fallback. Content without a measurable size (a
+keep the opaque `--bg-chrome` fallback. The page paints no backdrop of its own:
+the app's desk backdrop lives on the shared `body` in `base.css`, so the
+preview's transparent override is scoped to `body.quick-look-page` (the class on
+`quick-look.html`) to out-specify it — dev injects stylesheets in module order
+and the production bundle in chunk order, and order alone would leak the desk
+grey over the whole window in one of them. Content without a measurable size (a
 sandboxed iframe, or a read that has not finished within 250ms) gets a
 page-shaped 880 × 1040 window instead. The OS draws the window's shadow; there
 is no CSS elevation on the panel itself.
