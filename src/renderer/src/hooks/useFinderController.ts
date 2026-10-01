@@ -1,24 +1,14 @@
-import type {
-	KeyboardEvent as ReactKeyboardEvent,
-	MouseEvent as ReactMouseEvent,
-	RefObject,
-} from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, RefObject } from "react";
 import { RECENTS_PATH } from "../../../shared/fs-contract";
 import type { IndexStatus } from "../../../shared/index-contract";
-import type { ColumnPaneView } from "../components/ColumnBrowser";
-import type { TabView } from "../components/TabStrip";
 import type { FinderEntry } from "../data/entries";
 import type { NavItem } from "../data/places";
-import {
-	type FinderLocation,
-	type FinderSource,
-	pickInitialPath,
-} from "../data/source";
+import { type FinderLocation, type FinderSource, pickInitialPath } from "../data/source";
 import { validateName } from "../state/collision";
 import {
-	type ColumnDirection,
 	chooseInColumn,
+	type ColumnDirection,
 	columnPanes,
 	columnStep,
 	pruneChain,
@@ -29,30 +19,9 @@ import {
 	type FinderMenuAction,
 	type FinderMenuEntry,
 } from "../state/context-menu";
-import {
-	buildFolderTree,
-	discloseStep,
-	expandedFolders,
-	flatTreeRows,
-	isInsideFolder,
-	type TreeRow,
-	toggleExpanded,
-} from "../state/folder-tree";
-import {
-	emptyStateText,
-	indexToast,
-	searchSummaryText,
-	statusBarText,
-	trashToast,
-} from "../state/format";
+import { emptyStateText, indexToast, searchSummaryText, statusBarText, trashToast } from "../state/format";
 import { type FocusZone, resolveKeyAction } from "../state/keymap";
-import {
-	activeNavPath,
-	basename,
-	breadcrumbTrail,
-	type Crumb,
-	dirname,
-} from "../state/paths";
+import { activeNavPath, basename, breadcrumbTrail, dirname, type Crumb } from "../state/paths";
 import {
 	applyRowClick,
 	EMPTY_SELECTION,
@@ -61,29 +30,17 @@ import {
 	type SelectionState,
 	scrollTopForIndex,
 } from "../state/selection";
+import { type SortKey, type SortState, cycleSort, sortEntries } from "../state/sort";
+import { visibleEntries } from "../state/visibility";
 import {
-	cycleSort,
-	type SortKey,
-	type SortState,
-	sortEntries,
-} from "../state/sort";
-import {
-	activeTab,
-	applyColumnChoice,
-	CONTACTS_PATH,
-	canCloseTab,
-	closeTab,
-	createTabsState,
-	goBack,
-	goForward,
-	navigateTab,
-	openTab,
-	openTabAt,
-	patchActiveTab,
-	selectTab,
-	type TabsState,
-	tabTitle,
-} from "../state/tabs";
+	buildFolderTree,
+	discloseStep,
+	expandedFolders,
+	flatTreeRows,
+	isInsideFolder,
+	toggleExpanded,
+	type TreeRow,
+} from "../state/folder-tree";
 import {
 	applyVersionStacks,
 	buildVersionFamilies,
@@ -94,11 +51,25 @@ import {
 	type VersionFamilyError,
 } from "../state/version-family";
 import {
-	parseViewMode,
-	VIEW_MODE_STORAGE_KEY,
-	type ViewMode,
-} from "../state/view-mode";
-import { visibleEntries } from "../state/visibility";
+	activeTab,
+	applyColumnChoice,
+	canCloseTab,
+	closeTab,
+	CONTACTS_PATH,
+	createTabsState,
+	goBack,
+	goForward,
+	navigateTab,
+	openTab,
+	openTabAt,
+	patchActiveTab,
+	selectTab,
+	tabTitle,
+	type TabsState,
+} from "../state/tabs";
+import type { TabView } from "../components/TabStrip";
+import type { ColumnPaneView } from "../components/ColumnBrowser";
+import { parseViewMode, VIEW_MODE_STORAGE_KEY, type ViewMode } from "../state/view-mode";
 
 /** --time-toast */
 const TOAST_MS = 2400;
@@ -116,9 +87,7 @@ function single(path: string): SelectionState {
 
 function readStoredViewMode(): ViewMode {
 	try {
-		return parseViewMode(
-			globalThis.localStorage?.getItem(VIEW_MODE_STORAGE_KEY) ?? null,
-		);
+		return parseViewMode(globalThis.localStorage?.getItem(VIEW_MODE_STORAGE_KEY) ?? null);
 	} catch {
 		// Storage can be unavailable (sandboxed renderer, tests); the list view is the default.
 		return parseViewMode(null);
@@ -126,16 +95,9 @@ function readStoredViewMode(): ViewMode {
 }
 
 /** The tile or column row that renders `path` (the list view scrolls by row index instead). */
-function itemElement(
-	root: HTMLElement | null,
-	path: string,
-): HTMLElement | null {
+function itemElement(root: HTMLElement | null, path: string): HTMLElement | null {
 	const selector = `[data-path="${CSS.escape(path)}"]`;
-	return (
-		root?.querySelector<HTMLElement>(
-			`.icon-tile${selector}, .column-row${selector}`,
-		) ?? null
-	);
+	return root?.querySelector<HTMLElement>(`.icon-tile${selector}, .column-row${selector}`) ?? null;
 }
 
 /** Tiles per row in the icon grid, read from the laid-out DOM. */
@@ -187,13 +149,12 @@ export interface FinderController {
 	readonly flashPath: string | null;
 	readonly renamePath: string | null;
 	readonly renameDraft: string;
+	/** AutoRAG local-index state per file path, read from the parsed mirror and MinSync staging. */
 	readonly indexStatus: Readonly<Record<string, IndexStatus>>;
 	/** Non-null when dupey is missing or a version-family scan failed. */
 	readonly versionFamilyError: VersionFamilyError | null;
 	readonly activeNavLabel: string | null;
-	readonly contextMenu: {
-		readonly cursor: { readonly x: number; readonly y: number };
-	} | null;
+	readonly contextMenu: { readonly cursor: { readonly x: number; readonly y: number } } | null;
 	readonly contextMenuEntries: readonly FinderMenuEntry[];
 	/** The mode the toolbar toggle shows as chosen. */
 	readonly viewMode: ViewMode;
@@ -222,17 +183,10 @@ export interface FinderController {
 	focusFinder(): void;
 	clickRow(entry: FinderEntry, event: ReactMouseEvent<HTMLDivElement>): void;
 	/** A click in column-view pane `pane`: a folder opens in the next pane. */
-	clickColumnRow(
-		pane: number,
-		entry: FinderEntry,
-		event: ReactMouseEvent<HTMLDivElement>,
-	): void;
+	clickColumnRow(pane: number, entry: FinderEntry, event: ReactMouseEvent<HTMLDivElement>): void;
 	setViewMode(mode: ViewMode): void;
 	openEntry(entry: FinderEntry): void;
-	openContextMenu(
-		entry: FinderEntry,
-		event: ReactMouseEvent<HTMLDivElement>,
-	): void;
+	openContextMenu(entry: FinderEntry, event: ReactMouseEvent<HTMLDivElement>): void;
 	closeContextMenu(): void;
 	runMenuAction(action: FinderMenuAction): void;
 	toggleIndex(entry: FinderEntry): void;
@@ -250,18 +204,16 @@ export function useFinderController(
 	options: { readonly showHiddenFiles?: boolean } = {},
 ): FinderController {
 	const showHiddenFiles = options.showHiddenFiles ?? false;
-	const [tabsState, setTabsState] = useState<TabsState>(() =>
-		createTabsState(source.initialPath),
-	);
+	const [tabsState, setTabsState] = useState<TabsState>(() => createTabsState(source.initialPath));
 	const [query, setQueryValue] = useState("");
 	const [sort, setSort] = useState<SortState | null>(null);
 	const [zone, setZone] = useState<FocusZone>("finder");
 	const [listing, setListing] = useState<readonly FinderEntry[]>([]);
 	const [hits, setHits] = useState<readonly FinderEntry[]>([]);
 	const [locations, setLocations] = useState<readonly FinderLocation[]>([]);
-	const [indexStatus, setIndexStatus] = useState<
-		Readonly<Record<string, IndexStatus>>
-	>({});
+	const [indexStatus, setIndexStatus] = useState<Readonly<Record<string, IndexStatus>>>({});
+	/** Bumped when a background AutoRAG refresh settles, so visible rows re-read their state. */
+	const [indexRevision, setIndexRevision] = useState(0);
 	const [toast, setToast] = useState<string | null>(null);
 	const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
 	const [rename, setRename] = useState<RenameState | null>(null);
@@ -269,23 +221,14 @@ export function useFinderController(
 	const [flashPath, setFlashPath] = useState<string | null>(null);
 	const [searchFocused, setSearchFocused] = useState(false);
 	const [revision, setRevision] = useState(0);
-	const [families, setFamilies] = useState<VersionFamilies>(
-		EMPTY_VERSION_FAMILIES,
-	);
-	const [versionFamilyError, setVersionFamilyError] =
-		useState<VersionFamilyError | null>(null);
-	const [stackPinned, setStackPinned] = useState<ReadonlySet<string>>(
-		new Set(),
-	);
+	const [families, setFamilies] = useState<VersionFamilies>(EMPTY_VERSION_FAMILIES);
+	const [versionFamilyError, setVersionFamilyError] = useState<VersionFamilyError | null>(null);
+	const [stackPinned, setStackPinned] = useState<ReadonlySet<string>>(new Set());
 	const [viewMode, setViewModeValue] = useState<ViewMode>(readStoredViewMode);
 	/** Column view: listings by folder path, for every pane. */
-	const [paneListings, setPaneListings] = useState<
-		Readonly<Record<string, readonly FinderEntry[]>>
-	>({});
+	const [paneListings, setPaneListings] = useState<Readonly<Record<string, readonly FinderEntry[]>>>({});
 	const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
-	const [childListings, setChildListings] = useState<
-		Readonly<Record<string, ChildListing>>
-	>({});
+	const [childListings, setChildListings] = useState<Readonly<Record<string, ChildListing>>>({});
 
 	const listRef = useRef<HTMLDivElement | null>(null);
 	const searchRef = useRef<HTMLInputElement | null>(null);
@@ -295,8 +238,7 @@ export function useFinderController(
 	const path = tab.path;
 	const selection = tab.selection;
 	const searching = query.trim() !== "";
-	const layout: ViewMode =
-		viewMode === "columns" && searching ? "list" : viewMode;
+	const layout: ViewMode = viewMode === "columns" && searching ? "list" : viewMode;
 	const chain = tab.chain;
 	const panePaths = useMemo(
 		() => (layout === "columns" && path !== "" ? columnPanes(path, chain) : []),
@@ -309,26 +251,8 @@ export function useFinderController(
 
 	/** Failures surface verbatim — the operator sees the real message. */
 	const reportError = useCallback(
-		(error: unknown) =>
-			setToast(error instanceof Error ? error.message : String(error)),
+		(error: unknown) => setToast(error instanceof Error ? error.message : String(error)),
 		[],
-	);
-	const refreshIndexStatus = useCallback(
-		(entries: readonly FinderEntry[]) => {
-			const paths = entries
-				.filter((entry) => entry.kind === "file")
-				.map((entry) => entry.path);
-			if (paths.length === 0) return;
-			void source
-				.indexStatus(paths)
-				.then((statuses) =>
-					setIndexStatus(
-						Object.fromEntries(statuses.map((status) => [status.path, status])),
-					),
-				)
-				.catch(reportError);
-		},
-		[source, reportError],
 	);
 
 	useEffect(() => {
@@ -368,7 +292,6 @@ export function useFinderController(
 				if (live) {
 					setListing(entries);
 					setPaneListings((current) => ({ ...current, [path]: entries }));
-					refreshIndexStatus(entries);
 				}
 			})
 			.catch((error: unknown) => {
@@ -380,7 +303,7 @@ export function useFinderController(
 		return () => {
 			live = false;
 		};
-	}, [source, path, revision, reportError, refreshIndexStatus]);
+	}, [source, path, revision, reportError]);
 
 	/** Column view: the panes after the first list the folders chosen along the chain. */
 	useEffect(() => {
@@ -395,7 +318,6 @@ export function useFinderController(
 				.then((entries) => {
 					if (live) {
 						setPaneListings((current) => ({ ...current, [target]: entries }));
-						refreshIndexStatus(entries);
 					}
 				})
 				.catch((error: unknown) => {
@@ -408,7 +330,7 @@ export function useFinderController(
 		return () => {
 			live = false;
 		};
-	}, [source, path, panePaths, revision, reportError, refreshIndexStatus]);
+	}, [source, path, panePaths, revision, reportError]);
 
 	useEffect(() => {
 		if (!searching) {
@@ -486,14 +408,11 @@ export function useFinderController(
 
 	const stackRows = useMemo(() => {
 		const prepare = (entries: readonly FinderEntry[]): readonly StackRow[] =>
-			applyVersionStacks(
-				sortEntries(visibleEntries(entries, showHiddenFiles), sort),
-				{
-					families,
-					manualOpen: stackPinned,
-					selectedKeys: selection.keys,
-				},
-			);
+			applyVersionStacks(sortEntries(visibleEntries(entries, showHiddenFiles), sort), {
+				families,
+				manualOpen: stackPinned,
+				selectedKeys: selection.keys,
+			});
 		if (searching) {
 			return flatTreeRows(prepare(hits));
 		}
@@ -504,18 +423,7 @@ export function useFinderController(
 				return loaded === undefined ? undefined : prepare(loaded.entries);
 			},
 		});
-	}, [
-		searching,
-		hits,
-		listing,
-		sort,
-		showHiddenFiles,
-		families,
-		stackPinned,
-		selection.keys,
-		expanded,
-		childListings,
-	]);
+	}, [searching, hits, listing, sort, showHiddenFiles, families, stackPinned, selection.keys, expanded, childListings]);
 
 	const paneViews = useMemo<readonly ColumnPaneView[]>(
 		() =>
@@ -524,30 +432,16 @@ export function useFinderController(
 				return {
 					path: panePath,
 					loaded: entries !== undefined,
-					rows: applyVersionStacks(
-						sortEntries(visibleEntries(entries ?? [], showHiddenFiles), sort),
-						{
-							families,
-							manualOpen: stackPinned,
-							selectedKeys: selection.keys,
-						},
-					),
+					rows: applyVersionStacks(sortEntries(visibleEntries(entries ?? [], showHiddenFiles), sort), {
+						families,
+						manualOpen: stackPinned,
+						selectedKeys: selection.keys,
+					}),
 				};
 			}),
-		[
-			panePaths,
-			paneListings,
-			showHiddenFiles,
-			sort,
-			families,
-			stackPinned,
-			selection.keys,
-		],
+		[panePaths, paneListings, showHiddenFiles, sort, families, stackPinned, selection.keys],
 	);
-	const paneEntries = useMemo(
-		() => paneViews.map((pane) => pane.rows.map((row) => row.entry)),
-		[paneViews],
-	);
+	const paneEntries = useMemo(() => paneViews.map((pane) => pane.rows.map((row) => row.entry)), [paneViews]);
 
 	/** Every folder shown open needs its listing; stale ones re-read after a refresh. */
 	const openFolders = useMemo(() => expandedFolders(stackRows), [stackRows]);
@@ -555,19 +449,14 @@ export function useFinderController(
 	useEffect(() => {
 		for (const folder of openFolders) {
 			const request = `${revision}\u0000${folder}`;
-			if (
-				childListings[folder]?.revision === revision ||
-				requestedListings.current.has(request)
-			) {
+			if (childListings[folder]?.revision === revision || requestedListings.current.has(request)) {
 				continue;
 			}
 			requestedListings.current.add(request);
 			const settle = (entries: readonly FinderEntry[]): void => {
 				requestedListings.current.delete(request);
 				setChildListings((current) =>
-					(current[folder]?.revision ?? -1) > revision
-						? current
-						: { ...current, [folder]: { revision, entries } },
+					(current[folder]?.revision ?? -1) > revision ? current : { ...current, [folder]: { revision, entries } },
 				);
 			};
 			source
@@ -581,14 +470,36 @@ export function useFinderController(
 	}, [openFolders, childListings, revision, source, reportError]);
 	const rows = useMemo(() => stackRows.map((row) => row.entry), [stackRows]);
 	/** Every entry on screen: all panes in the column view, the listing otherwise. */
-	const viewEntries = useMemo(
-		() => (layout === "columns" ? paneEntries.flat() : rows),
-		[layout, paneEntries, rows],
-	);
-	const orderedKeys = useMemo(
-		() => viewEntries.map((entry) => entry.path),
-		[viewEntries],
-	);
+	const viewEntries = useMemo(() => (layout === "columns" ? paneEntries.flat() : rows), [layout, paneEntries, rows]);
+	const orderedKeys = useMemo(() => viewEntries.map((entry) => entry.path), [viewEntries]);
+
+	/** Every file on screen shows its real AutoRAG index state; a settled refresh re-reads it. */
+	useEffect(() => {
+		void indexRevision;
+		const paths = viewEntries.filter((entry) => entry.kind === "file").map((entry) => entry.path);
+		if (paths.length === 0) {
+			return;
+		}
+		let live = true;
+		source
+			.indexStatus(paths)
+			.then((statuses) => {
+				if (live) {
+					setIndexStatus((current) => ({
+						...current,
+						...Object.fromEntries(statuses.map((status) => [status.path, status])),
+					}));
+				}
+			})
+			.catch((error: unknown) => {
+				if (live) {
+					reportError(error);
+				}
+			});
+		return () => {
+			live = false;
+		};
+	}, [source, viewEntries, indexRevision, reportError]);
 
 	/** Keyboard movement keeps the focused item in view (list: row height 32, lead 80). */
 	useEffect(() => {
@@ -613,9 +524,7 @@ export function useFinderController(
 	}, [orderedKeys, layout, selection]);
 
 	const patchSelection = useCallback((next: SelectionState) => {
-		setTabsState((state) =>
-			patchActiveTab(state, (current) => ({ ...current, selection: next })),
-		);
+		setTabsState((state) => patchActiveTab(state, (current) => ({ ...current, selection: next })));
 	}, []);
 
 	const selectedEntries = useMemo(
@@ -631,9 +540,7 @@ export function useFinderController(
 		if (layout !== "columns") {
 			return rows.length;
 		}
-		const focused = paneEntries.find((entries) =>
-			entries.some((entry) => entry.path === selection.focus),
-		);
+		const focused = paneEntries.find((entries) => entries.some((entry) => entry.path === selection.focus));
 		return (focused ?? paneEntries[0] ?? []).length;
 	}, [layout, rows, paneEntries, selection.focus]);
 
@@ -641,46 +548,34 @@ export function useFinderController(
 		setTabsState((state) =>
 			patchActiveTab(state, (current) => {
 				const pruned = pruneChain(current.chain, removed);
-				return pruned === current.chain
-					? current
-					: { ...current, chain: pruned };
+				return pruned === current.chain ? current : { ...current, chain: pruned };
 			}),
 		);
 	}, []);
 
-	const chooseColumnEntry = useCallback((pane: number, entry: FinderEntry) => {
-		setTabsState((state) => {
-			const current = activeTab(state);
-			return applyColumnChoice(
-				state,
-				chooseInColumn(current.path, current.chain, pane, entry),
-				single(entry.path),
-			);
-		});
-		scrollTarget.current = entry.path;
-	}, []);
+	const chooseColumnEntry = useCallback(
+		(pane: number, entry: FinderEntry) => {
+			setTabsState((state) => {
+				const current = activeTab(state);
+				return applyColumnChoice(state, chooseInColumn(current.path, current.chain, pane, entry), single(entry.path));
+			});
+			scrollTarget.current = entry.path;
+		},
+		[],
+	);
 
 	const stepColumns = useCallback(
 		(direction: ColumnDirection) => {
-			const target = columnStep(
-				panePaths,
-				paneEntries,
-				selection.focus,
-				direction,
-			);
+			const target = columnStep(panePaths, paneEntries, selection.focus, direction);
 			if (target === null) {
 				const back = direction === "left" ? slideBack(path, chain) : null;
 				if (back !== null) {
-					setTabsState((state) =>
-						applyColumnChoice(state, back, single(back.focus)),
-					);
+					setTabsState((state) => applyColumnChoice(state, back, single(back.focus)));
 					scrollTarget.current = back.focus;
 				}
 				return;
 			}
-			const entry = paneEntries[target.pane]?.find(
-				(candidate) => candidate.path === target.path,
-			);
+			const entry = paneEntries[target.pane]?.find((candidate) => candidate.path === target.path);
 			if (entry !== undefined) {
 				chooseColumnEntry(target.pane, entry);
 			}
@@ -718,11 +613,7 @@ export function useFinderController(
 		setTabsState((state) =>
 			patchActiveTab(navigateTab(state, entry.location), (current) => ({
 				...current,
-				selection: {
-					keys: [entry.path],
-					anchor: entry.path,
-					focus: entry.path,
-				},
+				selection: { keys: [entry.path], anchor: entry.path, focus: entry.path },
 			})),
 		);
 		setQueryValue("");
@@ -753,17 +644,7 @@ export function useFinderController(
 			// Double-click / Enter on a file: the OS default application opens it.
 			source.open(entry.path).catch(reportError);
 		},
-		[
-			navigate,
-			path,
-			layout,
-			panePaths,
-			openFolders,
-			revealEntry,
-			searching,
-			source,
-			reportError,
-		],
+		[navigate, path, layout, panePaths, openFolders, revealEntry, searching, source, reportError],
 	);
 
 	const trashPaths = useCallback(
@@ -784,20 +665,38 @@ export function useFinderController(
 		[source, patchSelection, pruneColumns, showToast, refresh, reportError],
 	);
 
+	/**
+	 * Flips the file's `excludePaths` entry in the shared AutoRAG config. The row
+	 * adopts the returned status at once (pending while the index catches up);
+	 * the parsed + MinSync refresh runs in main and `onIndexRefreshed` re-reads.
+	 */
 	const toggleIndex = useCallback(
 		(entry: FinderEntry) => {
 			const current = indexStatus[entry.path];
-			if (current?.toggleable === false) return;
-			const excluded = current?.kind !== "excluded";
-			void source
-				.setIndexExcluded(entry.path, excluded)
-				.then(() => {
-					refresh();
-					showToast(indexToast(entry.name, !excluded));
+			if (current === undefined || !current.toggleable) {
+				return;
+			}
+			const exclude = !current.excluded;
+			source
+				.setIndexExcluded(entry.path, exclude)
+				.then((status) => {
+					setIndexStatus((statuses) => ({ ...statuses, [status.path]: status }));
+					showToast(indexToast(entry.name, !exclude));
 				})
 				.catch(reportError);
 		},
-		[indexStatus, source, refresh, showToast, reportError],
+		[indexStatus, source, showToast, reportError],
+	);
+
+	useEffect(
+		() =>
+			source.onIndexRefreshed((error) => {
+				if (error !== null) {
+					reportError(new Error(`AutoRAG 인덱스 새로고침 실패: ${error}`));
+				}
+				setIndexRevision((value) => value + 1);
+			}),
+		[source, reportError],
 	);
 
 	const toggleStack = useCallback((entry: FinderEntry) => {
@@ -815,11 +714,7 @@ export function useFinderController(
 	/** Collapsing a folder drops the selection it hides, so no key acts on unseen rows. */
 	const setFolderOpen = useCallback(
 		(folder: string, open: boolean) => {
-			setExpanded((current) =>
-				current.has(folder) === open
-					? current
-					: toggleExpanded(current, folder),
-			);
+			setExpanded((current) => (current.has(folder) === open ? current : toggleExpanded(current, folder)));
 			if (!open && selection.keys.some((key) => isInsideFolder(key, folder))) {
 				patchSelection({ keys: [folder], anchor: folder, focus: folder });
 			}
@@ -828,8 +723,7 @@ export function useFinderController(
 	);
 
 	const toggleFolder = useCallback(
-		(entry: FinderEntry) =>
-			setFolderOpen(entry.path, !expanded.has(entry.path)),
+		(entry: FinderEntry) => setFolderOpen(entry.path, !expanded.has(entry.path)),
 		[expanded, setFolderOpen],
 	);
 
@@ -889,9 +783,7 @@ export function useFinderController(
 
 	const menuTargets = useCallback(
 		(entry: FinderEntry): readonly string[] =>
-			selection.keys.includes(entry.path) && selection.keys.length > 1
-				? selection.keys
-				: [entry.path],
+			selection.keys.includes(entry.path) && selection.keys.length > 1 ? selection.keys : [entry.path],
 		[selection.keys],
 	);
 
@@ -904,10 +796,7 @@ export function useFinderController(
 			const entry = menu.entry;
 			const targets = menuTargets(entry);
 			// The column view pastes into the pane the menu was opened in.
-			const pasteDir =
-				layout === "columns" && panePaths.includes(entry.location)
-					? entry.location
-					: path;
+			const pasteDir = layout === "columns" && panePaths.includes(entry.location) ? entry.location : path;
 			setContextMenu(null);
 			switch (action) {
 				case "quickLook":
@@ -921,11 +810,7 @@ export function useFinderController(
 					setTabsState((state) =>
 						patchActiveTab(openTabAt(state, dirname(entry.path)), (tab) => ({
 							...tab,
-							selection: {
-								keys: [entry.path],
-								anchor: entry.path,
-								focus: entry.path,
-							},
+							selection: { keys: [entry.path], anchor: entry.path, focus: entry.path },
 						})),
 					);
 					setQueryValue("");
@@ -969,7 +854,10 @@ export function useFinderController(
 						.catch(reportError);
 					return;
 				case "duplicate":
-					source.duplicate(targets).then(refresh).catch(reportError);
+					source
+						.duplicate(targets)
+						.then(refresh)
+						.catch(reportError);
 					return;
 				case "rename":
 					setRename({ path: entry.path, draft: entry.name });
@@ -982,20 +870,7 @@ export function useFinderController(
 					return;
 			}
 		},
-		[
-			contextMenu,
-			menuTargets,
-			navigate,
-			path,
-			layout,
-			panePaths,
-			pruneColumns,
-			refresh,
-			reportError,
-			source,
-			toggleIndex,
-			trashPaths,
-		],
+		[contextMenu, menuTargets, navigate, path, layout, panePaths, pruneColumns, refresh, reportError, source, toggleIndex, trashPaths],
 	);
 
 	const commitRename = useCallback(() => {
@@ -1005,9 +880,7 @@ export function useFinderController(
 		}
 		const current = basename(editing.path);
 		const folder = dirname(editing.path);
-		const siblings = viewEntries
-			.filter((entry) => dirname(entry.path) === folder)
-			.map((entry) => entry.name);
+		const siblings = viewEntries.filter((entry) => dirname(entry.path) === folder).map((entry) => entry.name);
 		const check = validateName(editing.draft, siblings, current);
 		setRename(null);
 		if (!check.ok) {
@@ -1025,26 +898,14 @@ export function useFinderController(
 				refresh();
 			})
 			.catch(reportError);
-	}, [
-		rename,
-		viewEntries,
-		showToast,
-		source,
-		pruneColumns,
-		refresh,
-		reportError,
-	]);
+	}, [rename, viewEntries, showToast, source, pruneColumns, refresh, reportError]);
 
 	const openContextMenu = useCallback(
 		(entry: FinderEntry, event: ReactMouseEvent<HTMLDivElement>) => {
 			event.preventDefault();
 			setZone("finder");
 			if (!selection.keys.includes(entry.path)) {
-				patchSelection({
-					keys: [entry.path],
-					anchor: entry.path,
-					focus: entry.path,
-				});
+				patchSelection({ keys: [entry.path], anchor: entry.path, focus: entry.path });
 			}
 			source
 				.clipboardGet()
@@ -1074,9 +935,7 @@ export function useFinderController(
 			const target = event.target;
 			const typing =
 				target instanceof HTMLElement &&
-				(target.tagName === "INPUT" ||
-					target.tagName === "TEXTAREA" ||
-					target.isContentEditable);
+				(target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable);
 			const action = resolveKeyAction(
 				{
 					key: event.key,
@@ -1117,12 +976,7 @@ export function useFinderController(
 					}
 					const next =
 						layout === "icons"
-							? moveInGrid(
-									orderedKeys,
-									selection,
-									{ dx: 0, dy: action.delta },
-									gridColumns(listRef.current),
-								)
+							? moveInGrid(orderedKeys, selection, { dx: 0, dy: action.delta }, gridColumns(listRef.current))
 							: moveSelection(orderedKeys, selection, action.delta);
 					scrollTarget.current = next.focus;
 					patchSelection(next);
@@ -1134,12 +988,7 @@ export function useFinderController(
 						stepColumns(action.delta === 1 ? "right" : "left");
 						return;
 					}
-					const next = moveInGrid(
-						orderedKeys,
-						selection,
-						{ dx: action.delta, dy: 0 },
-						gridColumns(listRef.current),
-					);
+					const next = moveInGrid(orderedKeys, selection, { dx: action.delta, dy: 0 }, gridColumns(listRef.current));
 					scrollTarget.current = next.focus;
 					patchSelection(next);
 					return;
@@ -1151,22 +1000,14 @@ export function useFinderController(
 				case "moveEvidence":
 					return;
 				case "disclose": {
-					const step = discloseStep(
-						stackRows,
-						selection.focus,
-						action.direction,
-					);
+					const step = discloseStep(stackRows, selection.focus, action.direction);
 					if (step === null) {
 						return;
 					}
 					event.preventDefault();
 					if (step.type === "select") {
 						scrollTarget.current = step.path;
-						patchSelection({
-							keys: [step.path],
-							anchor: step.path,
-							focus: step.path,
-						});
+						patchSelection({ keys: [step.path], anchor: step.path, focus: step.path });
 						return;
 					}
 					setFolderOpen(step.path, step.type === "expand");
@@ -1229,7 +1070,7 @@ export function useFinderController(
 		return buildContextMenu({
 			target: { name: entry.name, kind: entry.kind },
 			selectionCount: menuTargets(entry).length,
-			indexIncluded: indexStatus[entry.path]?.kind === "included",
+			indexIncluded: indexStatus[entry.path]?.excluded !== true,
 			clipboardCount,
 			inRecents: path === RECENTS_PATH,
 		});
@@ -1241,8 +1082,7 @@ export function useFinderController(
 	);
 	const activeNav = activeNavPath(path, navTargets);
 	const activeNavLabel =
-		navTargets.find((target) => target.path === activeNav)?.name ??
-		(path === "" ? null : basename(path));
+		navTargets.find((target) => target.path === activeNav)?.name ?? (path === "" ? null : basename(path));
 
 	return {
 		tabs: tabViews,
@@ -1252,8 +1092,7 @@ export function useFinderController(
 		canGoBack: tab.back.length > 0,
 		canGoForward: tab.fwd.length > 0,
 		query,
-		searchPlaceholder:
-			path === CONTACTS_PATH ? "Search contacts" : "Instant search",
+		searchPlaceholder: path === CONTACTS_PATH ? "Search contacts" : "Instant search",
 		searchFocused,
 		searching,
 		searchSummary: searchSummaryText(rows.length),
@@ -1317,23 +1156,12 @@ export function useFinderController(
 			setZone("finder");
 			if (event.metaKey || event.ctrlKey || event.shiftKey) {
 				// Multi-select stays inside one pane and closes the panes after it.
-				const paneKeys = (paneEntries[pane] ?? []).map(
-					(candidate) => candidate.path,
-				);
-				const inPane = {
-					...selection,
-					keys: selection.keys.filter((key) => paneKeys.includes(key)),
-				};
-				const next = applyRowClick(inPane, entry.path, paneKeys, {
-					meta: event.metaKey || event.ctrlKey,
-					shift: event.shiftKey,
-				});
+				const paneKeys = (paneEntries[pane] ?? []).map((candidate) => candidate.path);
+				const inPane = { ...selection, keys: selection.keys.filter((key) => paneKeys.includes(key)) };
+				const next = applyRowClick(inPane, entry.path, paneKeys, { meta: event.metaKey || event.ctrlKey, shift: event.shiftKey });
 				setTabsState((state) => {
 					const current = activeTab(state);
-					const closed = chooseInColumn(current.path, current.chain, pane, {
-						path: entry.path,
-						kind: "file",
-					});
+					const closed = chooseInColumn(current.path, current.chain, pane, { path: entry.path, kind: "file" });
 					return applyColumnChoice(state, closed, next);
 				});
 				return;
@@ -1349,10 +1177,7 @@ export function useFinderController(
 		toggleStack,
 		toggleFolder,
 		retryVersionFamilies,
-		setRenameDraft: (value) =>
-			setRename((current) =>
-				current === null ? null : { ...current, draft: value },
-			),
+		setRenameDraft: (value) => setRename((current) => (current === null ? null : { ...current, draft: value })),
 		commitRename,
 		cancelRename: () => setRename(null),
 	};

@@ -1,5 +1,6 @@
 import type { ChangeEvent, CSSProperties, KeyboardEvent, MouseEvent, ReactElement } from "react";
-import { indexBadge } from "../state/badges";
+import type { IndexStatus } from "../../../shared/index-contract";
+import { indexStatusBadge } from "../state/badges";
 import type { FinderEntry } from "../data/entries";
 import type { Disclosure } from "../state/folder-tree";
 import { whereSegments } from "../state/paths";
@@ -32,7 +33,7 @@ export function FileRow({
 	zoneFocused,
 	flash,
 	searching,
-	indexIncluded,
+	indexStatus,
 	renameDraft,
 	stackCount,
 	stackOpen,
@@ -48,7 +49,8 @@ export function FileRow({
 	readonly zoneFocused: boolean;
 	readonly flash: boolean;
 	readonly searching: boolean;
-	readonly indexIncluded: boolean;
+	/** Real AutoRAG index state; null until the first status read returns. */
+	readonly indexStatus: IndexStatus | null;
 	readonly renameDraft: string | null;
 	readonly stackCount: number;
 	readonly stackOpen: boolean;
@@ -164,7 +166,7 @@ export function FileRow({
 			<div className="row__cell" role="gridcell">
 				{entry.kind === "file" ? (
 					<PillBadge
-						visual={indexBadge(indexIncluded ? "included" : "excluded")}
+						visual={indexStatusBadge(indexStatus)}
 						onClick={(event) => {
 							event.stopPropagation();
 							callbacks.onToggleIndex(entry);

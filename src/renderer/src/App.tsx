@@ -1,26 +1,21 @@
-import { type ReactElement, useCallback, useEffect, useState } from "react";
-import type { CitationEvidence } from "../../shared/search-contract";
+import { useCallback, useEffect, useState, type ReactElement } from "react";
 import type { SettingsBridge } from "../../shared/settings-contract";
+import type { CitationEvidence } from "../../shared/search-contract";
 
-const autorag = (
-	window as unknown as {
-		readonly autorag: { readonly settings: SettingsBridge };
-	}
-).autorag;
-
-import { type DevLabel, formatDevLabel } from "../../shared/app-info";
+const autorag = (window as unknown as { readonly autorag: { readonly settings: SettingsBridge } }).autorag;
 import { AiSearchPanel } from "./components/AiSearchPanel";
+import { EvidencePanel } from "./components/EvidencePanel";
 import { ColumnBrowser } from "./components/ColumnBrowser";
 import { ColumnHeader } from "./components/ColumnHeader";
-import { EvidencePanel } from "./components/EvidencePanel";
 import { FileList } from "./components/FileList";
 import type { RowCallbacks } from "./components/FileRow";
 import { IconGrid } from "./components/IconGrid";
 import { ContextMenu } from "./components/primitives/ContextMenu";
 import { Toast } from "./components/primitives/Toast";
-import { SettingsPanel } from "./components/SettingsPanel";
 import { Sidebar } from "./components/Sidebar";
+import { SettingsPanel } from "./components/SettingsPanel";
 import { StatusBar } from "./components/StatusBar";
+import { formatDevLabel, type DevLabel } from "../../shared/app-info";
 import { TabStrip } from "./components/TabStrip";
 import { Toolbar } from "./components/Toolbar";
 import { useFinderController } from "./hooks/useFinderController";
@@ -31,11 +26,7 @@ const SHOW_HOTKEYS = true;
 
 /** Unpackaged runs label the window with their clone, branch, and commit. */
 const DEV_LABEL = (() => {
-	const dev = (
-		window as unknown as {
-			readonly autorag?: { readonly dev?: DevLabel | null };
-		}
-	).autorag?.dev;
+	const dev = (window as unknown as { readonly autorag?: { readonly dev?: DevLabel | null } }).autorag?.dev;
 	return dev === undefined || dev === null ? null : formatDevLabel(dev);
 })();
 
@@ -43,41 +34,23 @@ export function App(): ReactElement {
 	const source = useFinderSource();
 	const [showHiddenFiles, setShowHiddenFiles] = useState(false);
 	const finder = useFinderController(source, { showHiddenFiles });
-	const [settingsTab, setSettingsTab] = useState<"general" | "contacts" | null>(
-		null,
-	);
+	const [settingsTab, setSettingsTab] = useState<"general" | "contacts" | null>(null);
 	const [evidence, setEvidence] = useState<readonly CitationEvidence[]>([]);
 	const [evidenceSession, setEvidenceSession] = useState<string | null>(null);
 	const [selectedEvidence, setSelectedEvidence] = useState<number | null>(null);
 	const [evidenceOpen, setEvidenceOpen] = useState(true);
 
-	const publishEvidence = useCallback(
-		(items: readonly CitationEvidence[], sessionId: string | null) => {
-			setEvidence(items);
-			setEvidenceSession(sessionId);
-			setSelectedEvidence((current) =>
-				current !== null && items.some((item) => item.number === current)
-					? current
-					: null,
-			);
-		},
-		[],
-	);
+	const publishEvidence = useCallback((items: readonly CitationEvidence[], sessionId: string | null) => {
+		setEvidence(items);
+		setEvidenceSession(sessionId);
+		setSelectedEvidence((current) => (current !== null && items.some((item) => item.number === current) ? current : null));
+	}, []);
 
 	useEffect(() => {
 		const onKeyDown = (event: globalThis.KeyboardEvent): void => {
 			const target = event.target;
-			if (
-				target instanceof HTMLInputElement ||
-				target instanceof HTMLTextAreaElement
-			)
-				return;
-			if (
-				(event.metaKey || event.ctrlKey) &&
-				!event.shiftKey &&
-				!event.altKey &&
-				event.key.toLowerCase() === "e"
-			) {
+			if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return;
+			if ((event.metaKey || event.ctrlKey) && !event.shiftKey && !event.altKey && event.key.toLowerCase() === "e") {
 				event.preventDefault();
 				setEvidenceOpen((open) => !open);
 			}
@@ -86,15 +59,10 @@ export function App(): ReactElement {
 		return () => window.removeEventListener("keydown", onKeyDown);
 	}, []);
 
-	const evidenceSelectedNumber =
-		evidence.find((item) => item.number === selectedEvidence)?.number ??
-		evidence[0]?.number ??
-		1;
+	const evidenceSelectedNumber = evidence.find((item) => item.number === selectedEvidence)?.number ?? evidence[0]?.number ?? 1;
 
 	useEffect(() => {
-		void autorag.settings
-			.get()
-			.then((settings) => setShowHiddenFiles(settings.showHiddenFiles));
+		void autorag.settings.get().then((settings) => setShowHiddenFiles(settings.showHiddenFiles));
 	}, []);
 
 	const rowCallbacks: RowCallbacks = {
@@ -118,11 +86,7 @@ export function App(): ReactElement {
 					onNavigate={finder.navigateNav}
 					onOpenSettings={() => setSettingsTab("general")}
 				/>
-				<section
-					className="finder"
-					aria-label="Finder"
-					onMouseDown={finder.focusFinder}
-				>
+				<section className="finder" aria-label="Finder" onMouseDown={finder.focusFinder}>
 					<TabStrip
 						tabs={finder.tabs}
 						canClose={finder.canCloseTabs}
@@ -182,11 +146,7 @@ export function App(): ReactElement {
 						/>
 					) : (
 						<>
-							<ColumnHeader
-								sort={finder.sort}
-								searching={finder.searching}
-								onSort={finder.sortBy}
-							/>
+							<ColumnHeader sort={finder.sort} searching={finder.searching} onSort={finder.sortBy} />
 							<FileList
 								rows={finder.stackRows}
 								listPath={finder.path}
@@ -206,11 +166,7 @@ export function App(): ReactElement {
 							/>
 						</>
 					)}
-					<StatusBar
-						text={finder.statusText}
-						showHotkeys={SHOW_HOTKEYS}
-						devLabel={DEV_LABEL}
-					/>
+					<StatusBar text={finder.statusText} showHotkeys={SHOW_HOTKEYS} devLabel={DEV_LABEL} />
 					{evidence.length === 0 ? null : (
 						<EvidencePanel
 							evidence={evidence}
@@ -228,16 +184,7 @@ export function App(): ReactElement {
 						/>
 					)}
 				</section>
-				<AiSearchPanel
-					selectedEvidence={
-						evidence.length === 0 ? null : evidenceSelectedNumber
-					}
-					onSelectEvidence={(number) => {
-						setSelectedEvidence(number);
-						setEvidenceOpen(true);
-					}}
-					onPublish={publishEvidence}
-				/>
+				<AiSearchPanel selectedEvidence={evidence.length === 0 ? null : evidenceSelectedNumber} onSelectEvidence={(number) => { setSelectedEvidence(number); setEvidenceOpen(true); }} onPublish={publishEvidence} />
 				{finder.toast === null ? null : <Toast message={finder.toast} />}
 			</div>
 			{finder.contextMenu === null ? null : (
@@ -252,9 +199,7 @@ export function App(): ReactElement {
 				<SettingsPanel
 					initialTab={settingsTab}
 					onClose={() => setSettingsTab(null)}
-					onSettingsChanged={(settings) =>
-						setShowHiddenFiles(settings.showHiddenFiles)
-					}
+					onSettingsChanged={(settings) => setShowHiddenFiles(settings.showHiddenFiles)}
 				/>
 			)}
 		</div>
