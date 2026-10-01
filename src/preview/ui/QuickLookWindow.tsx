@@ -1,6 +1,6 @@
 import { StrictMode, useEffect, useRef, useState, type ReactElement, type SyntheticEvent } from "react";
 import { createRoot } from "react-dom/client";
-import type { QuickLookAction, QuickLookLoad, QuickLookWindowBridge } from "../shared/contract";
+import type { QuickLookLoad, QuickLookWindowBridge } from "../shared/contract";
 import type { Size } from "../shared/fit";
 import { extensionOf, formatBytes } from "../shared/format";
 import { describeExtension, viewerForExtension, type ViewerKind } from "../shared/registry";
@@ -43,21 +43,6 @@ function contentSize(stage: HTMLElement | null): Size {
 	return width > 0 && height > 0 ? { width, height } : NO_INTRINSIC_SIZE;
 }
 
-function actionForKey(event: KeyboardEvent): QuickLookAction | null {
-	if (event.metaKey || event.ctrlKey || event.altKey) return null;
-	switch (event.key) {
-		case " ":
-		case "Escape":
-			return "close";
-		case "ArrowDown":
-			return "next";
-		case "ArrowUp":
-			return "previous";
-		default:
-			return null;
-	}
-}
-
 function QuickLookWindow({ bridge }: { readonly bridge: QuickLookWindowBridge }): ReactElement {
 	const [load, setLoad] = useState<QuickLookLoad | null>(null);
 	const stageRef = useRef<HTMLDivElement | null>(null);
@@ -66,18 +51,9 @@ function QuickLookWindow({ bridge }: { readonly bridge: QuickLookWindowBridge })
 	useEffect(() => {
 		const offLoad = bridge.onLoad(setLoad);
 		const offUnload = bridge.onUnload(() => setLoad(null));
-		const onKeyDown = (event: KeyboardEvent): void => {
-			const action = actionForKey(event);
-			if (action === null) return;
-			event.preventDefault();
-			event.stopPropagation();
-			void bridge.request(action);
-		};
-		window.addEventListener("keydown", onKeyDown, { capture: true });
 		return () => {
 			offLoad();
 			offUnload();
-			window.removeEventListener("keydown", onKeyDown, { capture: true });
 		};
 	}, [bridge]);
 

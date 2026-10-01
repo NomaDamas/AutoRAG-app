@@ -13,6 +13,7 @@ import {
 	type QuickLookTarget,
 } from "../shared/contract";
 import { fitQuickLook, placeQuickLook, QUICK_LOOK_MIN } from "../shared/fit";
+import { quickLookKeyAction } from "../shared/keys";
 import { viewerForExtension, wantsBytes } from "../shared/registry";
 import { PreviewReadError, readPreviewFile } from "./read-file";
 
@@ -218,9 +219,20 @@ export function attachQuickLook(owner: BrowserWindow, options: QuickLookWindowOp
 		if (state.shown) float(state, true);
 	};
 	const onOwnerLoad = (): void => hide(state, false);
+	// Keys run here, before the page: a focused <video> lets its native controls
+	// consume Space and arrows, so a page keydown listener never sees them.
+	const onInput = (event: Electron.Event, input: Electron.Input): void => {
+		if (input.type !== "keyDown") return;
+		const action = quickLookKeyAction(input);
+		if (action === null) return;
+		event.preventDefault();
+		if (action === "close" && input.isAutoRepeat) return;
+		void act(state, action);
+	};
 	const onOwnerClosed = (): void => state.detach();
 
 	window.on("close", onClose);
+	window.webContents.on("before-input-event", onInput);
 	app.on("did-resign-active", onResignActive);
 	app.on("did-become-active", onBecomeActive);
 	owner.webContents.on("did-finish-load", onOwnerLoad);

@@ -339,7 +339,7 @@ body,
 .ql__rail-item canvas {
 	display: block;
 	width: 100%;
-	height: auto;
+	height: 100%;
 }
 
 .ql__slide {

@@ -3,7 +3,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { strToU8, zipSync } from "fflate";
 import { describe, expect, it } from "vitest";
+import { handlePreviewRequest } from "../src/preview/node/protocol";
 import { readPreviewFile } from "../src/preview/node/read-file";
+import { previewStreamUrl } from "../src/preview/shared/contract";
+import { quickLookKeyAction } from "../src/preview/shared/keys";
 import { parseByteRange } from "../src/preview/shared/range";
 import { claimedViewerExtensions, describeExtension, viewerForExtension, wantsBytes, VIEWER_KINDS } from "../src/preview/shared/registry";
 import { rtfToText } from "../src/preview/shared/rtf";
@@ -98,5 +101,70 @@ describe("preview bytes", () => {
 		} finally {
 			await rm(dir, { recursive: true, force: true });
 		}
+	});
+});
+
+describe("preview stream", () => {
+	it("serves byte ranges so media can seek", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "autorag-preview-"));
+		try {
+			const filePath = join(dir, "clip.mp4");
+			await writeFile(filePath, "0123456789");
+			const whole = await handlePreviewRequest(new Request(previewStreamUrl(filePath)));
+			expect(whole.status).toBe(200);
+			expect(whole.headers.get("accept-ranges")).toBe("bytes");
+			expect(whole.headers.get("content-length")).toBe("10");
+			expect(whole.headers.get("content-type")).toBe("video/mp4");
+			expect(await whole.text()).toBe("0123456789");
+
+			const part = await handlePreviewRequest(new Request(previewStreamUrl(filePath), { headers: { Range: "bytes=7-" } }));
+			expect(part.status).toBe(206);
+			expect(part.headers.get("content-range")).toBe("bytes 7-9/10");
+			expect(part.headers.get("content-length")).toBe("3");
+			expect(await part.text()).toBe("789");
+
+			const beyond = await handlePreviewRequest(new Request(previewStreamUrl(filePath), { headers: { Range: "bytes=10-" } }));
+			expect(beyond.status).toBe(416);
+			expect(beyond.headers.get("content-range")).toBe("bytes */10");
+		} finally {
+			await rm(dir, { recursive: true, force: true });
+		}
+	});
+
+	it("rejects folders and missing files", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "autorag-preview-"));
+		try {
+			expect((await handlePreviewRequest(new Request(previewStreamUrl(dir)))).status).toBe(404);
+			expect((await handlePreviewRequest(new Request(previewStreamUrl(join(dir, "gone.mp4"))))).status).toBe(404);
+			expect((await handlePreviewRequest(new Request(previewStreamUrl("relative.mp4")))).status).toBe(400);
+		} finally {
+			await rm(dir, { recursive: true, force: true });
+		}
+	});
+});
+
+describe("quick look keys", () => {
+	const input = (key: string, mods: Partial<{ meta: boolean; control: boolean; alt: boolean; shift: boolean }> = {}) => ({
+		key,
+		meta: mods.meta ?? false,
+		control: mods.control ?? false,
+		alt: mods.alt ?? false,
+		shift: mods.shift ?? false,
+	});
+
+	it("closes on Space and Escape and walks the Finder selection with up and down", () => {
+		expect(quickLookKeyAction(input(" "))).toBe("close");
+		expect(quickLookKeyAction(input("Escape"))).toBe("close");
+		expect(quickLookKeyAction(input("ArrowDown"))).toBe("next");
+		expect(quickLookKeyAction(input("ArrowUp"))).toBe("previous");
+	});
+
+	it("leaves media keys and shortcuts to the page", () => {
+		expect(quickLookKeyAction(input("ArrowLeft"))).toBeNull();
+		expect(quickLookKeyAction(input("ArrowRight"))).toBeNull();
+		expect(quickLookKeyAction(input("k"))).toBeNull();
+		expect(quickLookKeyAction(input(" ", { meta: true }))).toBeNull();
+		expect(quickLookKeyAction(input(" ", { control: true }))).toBeNull();
+		expect(quickLookKeyAction(input("ArrowDown", { alt: true }))).toBeNull();
 	});
 });

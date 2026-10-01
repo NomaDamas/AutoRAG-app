@@ -13,8 +13,8 @@ let workerReady = false;
 const PDF_MAX_SCALE = 2;
 /** Pages render while they are this close to the viewport and release beyond it. */
 const PDF_RENDER_MARGIN = "600px 0px";
-/** Rail thumbnails render only once their own slot is close to visible. */
-const PDF_RAIL_MARGIN = "80px 0px";
+/** Rail thumbnails render ahead of the rail's own scroll position. */
+const PDF_RAIL_MARGIN = "400px 0px";
 const PDF_THUMB_WIDTH = 80;
 
 function ensurePdfWorker(): void {
@@ -33,18 +33,25 @@ function backingScale(): number {
 	return Math.min(2, window.devicePixelRatio || 1);
 }
 
-/** Reports whether a page or rail slot sits near the viewport of its own scroller. */
-function useNearScreen<T extends HTMLElement>(margin: string): {
+/**
+ * Reports whether a page or rail slot sits near the viewport of `scroller`,
+ * the closest ancestor matching that selector. The rail is fixed-position, so
+ * its thumbnails must observe the rail itself: the stage is not in their
+ * containing-block chain and would never report them intersecting.
+ */
+function useNearScreen<T extends HTMLElement>(
+	scroller: string,
+	margin: string,
+): {
 	readonly attach: (node: T | null) => void;
 	readonly near: boolean;
-	readonly node: T | null;
 } {
 	const [node, setNode] = useState<T | null>(null);
 	const [near, setNear] = useState(false);
 	const attach = useCallback((next: T | null) => setNode(next), []);
 	useEffect(() => {
 		if (node === null) return;
-		const root = node.closest(".ql__stage");
+		const root = node.closest(scroller);
 		const observer = new IntersectionObserver(
 			(entries) => {
 				for (const entry of entries) setNear(entry.isIntersecting);
@@ -53,8 +60,8 @@ function useNearScreen<T extends HTMLElement>(margin: string): {
 		);
 		observer.observe(node);
 		return () => observer.disconnect();
-	}, [node, margin]);
-	return { attach, near, node };
+	}, [node, scroller, margin]);
+	return { attach, near };
 }
 
 interface PdfPageProps {
@@ -71,7 +78,7 @@ interface PdfPageProps {
  * while its canvas is released, so a long document stays cheap to scroll.
  */
 function PdfPage({ pdf, index, box, scale, onError, register }: PdfPageProps): ReactElement {
-	const { attach, near } = useNearScreen<HTMLDivElement>(PDF_RENDER_MARGIN);
+	const { attach, near } = useNearScreen<HTMLDivElement>(".ql__stage", PDF_RENDER_MARGIN);
 	const canvasRef = useRef<HTMLCanvasElement | null>(null);
 	const attachRef = useCallback(
 		(node: HTMLDivElement | null) => {
@@ -119,6 +126,11 @@ function PdfPage({ pdf, index, box, scale, onError, register }: PdfPageProps): R
 	);
 }
 
+/**
+ * One rail thumbnail. It renders the first time its slot nears the rail's
+ * viewport and keeps the pixels: a thumbnail is a few KB, and redrawing it on
+ * every scroll back is what made the rail feel empty.
+ */
 function PdfThumb({
 	pdf,
 	index,
@@ -130,10 +142,18 @@ function PdfThumb({
 	readonly box: Size;
 	readonly onError: (message: string) => void;
 }): ReactElement {
-	const { attach, near } = useNearScreen<HTMLCanvasElement>(PDF_RAIL_MARGIN);
+	const { attach, near } = useNearScreen<HTMLCanvasElement>(".ql__rail", PDF_RAIL_MARGIN);
 	const canvasRef = useRef<HTMLCanvasElement | null>(null);
+	const [drawn, setDrawn] = useState(false);
+	const attachRef = useCallback(
+		(node: HTMLCanvasElement | null) => {
+			canvasRef.current = node;
+			attach(node);
+		},
+		[attach],
+	);
 	useEffect(() => {
-		if (!near) return;
+		if (!near || drawn) return;
 		const canvas = canvasRef.current;
 		if (canvas === null) return;
 		let cancelled = false;
@@ -147,17 +167,21 @@ function PdfThumb({
 				canvas.height = Math.floor(viewport.height);
 				const rendering = page.render({ canvas, viewport });
 				task = rendering;
-				return rendering.promise;
+				return rendering.promise.then(() => {
+					if (!cancelled) setDrawn(true);
+				});
 			})
 			.catch((caught: unknown) => {
-				if (!cancelled) onError(caught instanceof Error ? caught.message : "PDF 페이지를 그리지 못했습니다");
+				if (cancelled) return;
+				if (caught instanceof Error && caught.name === "RenderingCancelledException") return;
+				onError(caught instanceof Error ? caught.message : "PDF 페이지를 그리지 못했습니다");
 			});
 		return () => {
 			cancelled = true;
 			task?.cancel();
 		};
-	}, [near, pdf, index, box.width, onError]);
-	return <canvas ref={attach} />;
+	}, [near, drawn, pdf, index, box.width, onError]);
+	return <canvas ref={attachRef} data-drawn={drawn ? "true" : undefined} />;
 }
 
 /**
@@ -295,6 +319,7 @@ export function PdfView({
 							className="ql__rail-item"
 							data-active={index === active ? "true" : undefined}
 							aria-label={`${index + 1}페이지`}
+							style={{ aspectRatio: `${box.width} / ${box.height}` }}
 							onClick={() => nodesRef.current[index]?.scrollIntoView({ block: "start", behavior: "smooth" })}
 						>
 							<PdfThumb pdf={doc.pdf} index={index} box={box} onError={fail} />

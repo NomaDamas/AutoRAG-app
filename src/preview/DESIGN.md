@@ -28,8 +28,10 @@ its paper-sized slot even while its canvas is released, so a long document
 stays cheap: pages render while they are within 600px of the viewport and drop
 their backing store once they leave. The frosted rail on the right
 (`--bg-quicklook-frost` + `--backdrop-quicklook`) lists every page, marks the
-one nearest the top of the viewport, and jumps to a page on click. Its
-thumbnails render lazily, one slot at a time.
+one nearest the top of the viewport, and jumps to a page on click. Each slot
+takes its page's aspect ratio up front. Thumbnails observe the rail itself (it
+is fixed-position, so the stage never sees them intersect), render once their
+slot is within 400px of the rail's viewport, and keep their pixels afterwards.
 
 Other viewers follow the same "natural size" rule: `pre` blocks, entry lists,
 slide decks, and font samples are no longer stretched to the window, so a
@@ -40,12 +42,15 @@ three-line text file opens in a short window instead of a tall empty one.
 Quick Look is shown with `showInactive()` so the Finder list keeps keyboard
 focus. Arrow Up/Down therefore move the Finder selection and retarget the
 preview, and the wheel scrolls the preview itself. When the preview window
-itself has focus, its Up/Down, Space, and Escape handlers send the equivalent
-action back through IPC. Left/Right do not move the Finder selection.
+itself has focus, the main process intercepts Up/Down, Space, and Escape in
+`before-input-event` and runs the equivalent action, so a focused `<video>`
+whose native controls swallow those keys still closes and navigates.
+Left/Right are left to the page, so a focused video can seek.
 
 Media is cleared when the window hides, which stops playback. Video and audio
 use native autoplay controls. Documents remain capped at 32MB; streamable
-media and fonts use `autorag-preview://` with HTTP range support. HTML,
+media and fonts use `autorag-preview://`, which answers `Range` requests with
+`206 Partial Content`; Chromium only makes a video seekable when it does. HTML,
 Markdown, and Word HTML render in sandboxed iframes with scripts disabled.
 
 The implementation follows sigma-file-manager v1's useful performance pattern

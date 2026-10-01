@@ -39,7 +39,7 @@ function minimalPdf(pageCount: number): Buffer {
 }
 
 async function writeClip(path: string): Promise<void> {
-	await exec("ffmpeg", ["-y", "-loglevel", "error", "-f", "lavfi", "-i", "color=c=red:s=640x360:d=3", "-pix_fmt", "yuv420p", path]);
+	await exec("ffmpeg", ["-y", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc=s=640x360:d=10", "-pix_fmt", "yuv420p", path]);
 }
 
 function quickLookWindow(app: ElectronApplication): Promise<{
@@ -53,6 +53,20 @@ function quickLookWindow(app: ElectronApplication): Promise<{
 		if (window === undefined) return { visible: false, resizable: false, width: 0, height: 0 };
 		return { visible: window.isVisible(), resizable: window.isResizable(), width: window.getBounds().width, height: window.getBounds().height };
 	});
+}
+
+/**
+ * Presses a key in the Quick Look window through Electron's native input path.
+ * Playwright's CDP key events skip `before-input-event`, where Quick Look
+ * handles its keys, so they would not exercise what a user's keyboard does.
+ */
+async function pressInPreview(app: ElectronApplication, keyCode: "Space" | "Escape" | "Up" | "Down"): Promise<void> {
+	await app.evaluate(({ BrowserWindow }, code) => {
+		const window = BrowserWindow.getAllWindows().find((item) => item.webContents.getURL().includes("quick-look.html"));
+		if (window === undefined) throw new Error("Quick Look window is missing");
+		window.webContents.sendInputEvent({ type: "keyDown", keyCode: code });
+		window.webContents.sendInputEvent({ type: "keyUp", keyCode: code });
+	}, keyCode);
 }
 
 test("Quick Look uses a fast reusable window with Finder navigation", async () => {
@@ -94,13 +108,15 @@ test("Quick Look uses a fast reusable window with Finder navigation", async () =
 		await main.keyboard.press("ArrowLeft");
 		await expect(preview.locator(".qlw__name")).toHaveText("photo.png");
 		await preview.bringToFront();
-		await preview.keyboard.press("ArrowUp");
+		await pressInPreview(app, "Up");
 		await expect(preview.locator(".qlw__name")).toHaveText("page.pdf");
 		// Every page is on one continuous scroll: no pager, all pages reachable, rail jumps between them.
 		await expect(preview.locator(".ql__paper")).toHaveCount(3);
 		await expect(preview.locator(".ql__pager")).toHaveCount(0);
 		await expect.poll(() => preview.locator(".ql__paper").first().evaluate((node) => node.querySelector("canvas")?.width ?? 0)).toBeGreaterThan(0);
 		await expect(preview.locator(".ql__rail-item")).toHaveCount(3);
+		// Rail thumbnails observe the fixed rail itself, so every visible slot paints a page preview.
+		await expect(preview.locator('.ql__rail-item canvas[data-drawn="true"]')).toHaveCount(3);
 		const pdfBounds = await quickLookWindow(app);
 		expect(pdfBounds.width / (pdfBounds.height - QUICK_LOOK_TOOLBAR)).toBeCloseTo(1, 1);
 		await expect.poll(() => preview.locator(".ql__stage").evaluate((node) => node.scrollHeight - node.clientHeight)).toBeGreaterThan(600);
@@ -135,7 +151,7 @@ test("Quick Look uses a fast reusable window with Finder navigation", async () =
 		await preview.locator(".ql__rail-item").first().click();
 		await expect.poll(() => preview.locator(".ql__stage").evaluate((node) => node.scrollTop)).toBeLessThan(QUICK_LOOK_TOOLBAR);
 		await preview.screenshot({ path: join(evidence, "page-top.png") });
-		await preview.keyboard.press("ArrowDown");
+		await pressInPreview(app, "Down");
 		await expect(preview.locator(".qlw__name")).toHaveText("photo.png");
 		// Text hugs its own height instead of filling a page-shaped window.
 		await main.getByRole("row", { name: /note\.txt/ }).click();
@@ -158,6 +174,12 @@ test("Quick Look uses a fast reusable window with Finder navigation", async () =
 			)
 			.toBe(true);
 		await preview.screenshot({ path: join(evidence, "video.png") });
+		// The stream answers byte ranges, so the media pipeline can seek the whole clip.
+		await expect.poll(() => preview.locator("video").evaluate((node) => (node instanceof HTMLVideoElement && node.seekable.length > 0 ? node.seekable.end(0) : 0))).toBeGreaterThan(9);
+		await preview.locator("video").evaluate((node) => {
+			if (node instanceof HTMLVideoElement) node.currentTime = 7;
+		});
+		await expect.poll(() => preview.locator("video").evaluate((node) => (node instanceof HTMLVideoElement ? node.currentTime : 0))).toBeGreaterThanOrEqual(7);
 		const resized = await app.evaluate(({ BrowserWindow }) => {
 			const window = BrowserWindow.getAllWindows().find((item) => item.webContents.getURL().includes("quick-look.html"));
 			if (window === undefined) return null;
@@ -168,12 +190,22 @@ test("Quick Look uses a fast reusable window with Finder navigation", async () =
 		expect(resized?.after.width).toBe((resized?.before.width ?? 0) + 120);
 		expect(resized?.after.height).toBe((resized?.before.height ?? 0) + 80);
 		await preview.screenshot({ path: join(evidence, "resized.png") });
-		await preview.keyboard.press("Escape");
+		await pressInPreview(app, "Escape");
 		await expect.poll(async () => (await quickLookWindow(app)).visible).toBe(false);
 		await main.keyboard.press("Space");
 		await expect.poll(async () => (await quickLookWindow(app)).visible).toBe(true);
 		await preview.bringToFront();
-		await preview.keyboard.press("Space");
+		await pressInPreview(app, "Space");
+		await expect.poll(async () => (await quickLookWindow(app)).visible).toBe(false);
+		// A focused video's native controls swallow Space; it must still close the preview.
+		await main.keyboard.press("Space");
+		await expect.poll(async () => (await quickLookWindow(app)).visible).toBe(true);
+		await preview.bringToFront();
+		const video = await preview.locator("video").boundingBox();
+		if (video === null) throw new Error("video has no box");
+		await preview.mouse.click(video.x + video.width / 2, video.y + video.height - 20);
+		await expect.poll(() => preview.evaluate(() => document.activeElement?.tagName)).toBe("VIDEO");
+		await pressInPreview(app, "Space");
 		await expect.poll(async () => (await quickLookWindow(app)).visible).toBe(false);
 	} finally {
 		await app.close();
