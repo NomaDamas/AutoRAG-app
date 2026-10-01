@@ -194,7 +194,9 @@ export function createFsWatchService(deps: FsWatchServiceDeps): FsWatchService {
 
 	const enqueue = (task: () => Promise<void>): Promise<void> => {
 		const next = operation.then(task, task);
-		operation = next.catch(() => undefined);
+		operation = next.catch((error: unknown) => {
+			console.error("[fs-watch] watch operation failed:", error);
+		});
 		return next;
 	};
 

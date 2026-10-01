@@ -60,8 +60,8 @@ function appendLog(line) {
 	process.stdout.write(`${line}\n`);
 	try {
 		appendTo(RUN_LOG, line);
-	} catch {
-		// The process-exit cleanup still removes all QA state.
+	} catch (error) {
+		process.stderr.write(`[qa] run.log append failed: ${error instanceof Error ? error.message : String(error)}\n`);
 	}
 }
 
@@ -92,8 +92,8 @@ function cleanupOnExit() {
 				[FIXTURE_DIR, OTHER_DIR, UNWATCHED_DIR].every((path) => !existsSync(path)) ? "removed" : "present"
 			}`,
 		);
-	} catch {
-		// No further cleanup is possible during process exit.
+	} catch (error) {
+		process.stderr.write(`[qa] run.log append failed: ${error instanceof Error ? error.message : String(error)}\n`);
 	}
 }
 
@@ -162,8 +162,14 @@ async function finishSession() {
 function readJson(path) {
 	try {
 		return JSON.parse(readFileSync(path, "utf8"));
-	} catch {
-		return null;
+	} catch (error) {
+		if (error instanceof SyntaxError) {
+			return null;
+		}
+		if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT") {
+			return null;
+		}
+		throw error;
 	}
 }
 

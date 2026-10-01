@@ -201,15 +201,18 @@ export async function remapRenames(
 	for (const oldPath of deleted) {
 		const oldStamp = stamps[oldPath];
 		if (oldStamp === undefined) continue;
-		const matches = created.filter(
-			(path) => !claimed.has(path) && candidates.get(path) !== null && sameIdentity(oldStamp, candidates.get(path)!),
-		);
+		const live: [string, FileStamp][] = created.flatMap((path) => {
+			const stamp = candidates.get(path);
+			return stamp == null || claimed.has(path) ? [] : [[path, stamp]];
+		});
+		const matches = live.filter(([path, stamp]) => sameIdentity(oldStamp, stamp));
 		if (matches.length !== 1) continue;
-		const newPath = matches[0]!;
+		const entry = matches[0];
+		if (entry === undefined) continue;
+		const [newPath, newStamp] = entry;
 		claimed.add(newPath);
 		nextFamilies = rewriteFamilies(nextFamilies, oldPath, newPath);
 		delete nextStamps[oldPath];
-		const newStamp = candidates.get(newPath)!;
 		nextStamps[newPath] = sameContentForRename(oldStamp, newStamp) ? newStamp : DIRTY_STAMP;
 		remapped.set(oldPath, newPath);
 	}
