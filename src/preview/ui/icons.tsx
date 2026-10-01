@@ -16,6 +16,21 @@ export function FullscreenIcon(): ReactElement {
 	);
 }
 
+export function DocIcon(): ReactElement {
+	return (
+		<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+			<path
+				d="M3 1.5h5.2L11 4.3V12.5H3z"
+				fill="none"
+				stroke="currentColor"
+				strokeWidth="1.3"
+				strokeLinejoin="round"
+			/>
+			<path d="M8 1.5v3h3" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+		</svg>
+	);
+}
+
 export function OpenIcon(): ReactElement {
 	return (
 		<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">

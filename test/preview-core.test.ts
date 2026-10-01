@@ -9,7 +9,7 @@ import { claimedViewerExtensions, describeExtension, viewerForExtension, wantsBy
 import { rtfToText } from "../src/preview/shared/rtf";
 import { listTarEntries } from "../src/preview/shared/tar-list";
 import { listZipEntries } from "../src/preview/shared/zip-list";
-import { fitQuickLook, placeQuickLook } from "../src/preview/shared/fit";
+import { fitQuickLook, placeQuickLook, QUICK_LOOK_MIN, QUICK_LOOK_TOOLBAR } from "../src/preview/shared/fit";
 
 
 describe("preview registry", () => {
@@ -34,11 +34,24 @@ describe("preview registry", () => {
 });
 
 describe("quick look sizing", () => {
-	it("fits intrinsic media inside the work area with toolbar chrome", () => {
+	it("fits measured content inside the work area with toolbar chrome", () => {
 		const size = fitQuickLook({ width: 1600, height: 900 }, { width: 1440, height: 900 });
-		expect(size.width).toBeLessThanOrEqual(Math.ceil(1440 * 0.72));
-		expect(size.height).toBeGreaterThan(52);
-		expect((size.width / (size.height - 52))).toBeCloseTo(1600 / 900, 1);
+		expect(size.width).toBeLessThanOrEqual(Math.ceil(1440 * 0.86));
+		expect(size.height).toBeLessThanOrEqual(Math.ceil(900 * 0.86));
+		expect(size.width / (size.height - QUICK_LOOK_TOOLBAR)).toBeCloseTo(1600 / 900, 1);
+	});
+
+	it("hugs a page-shaped document and never upscales past its natural size", () => {
+		const page = fitQuickLook({ width: 595, height: 842 }, { width: 1440, height: 900 });
+		expect(page.width / (page.height - QUICK_LOOK_TOOLBAR)).toBeCloseTo(595 / 842, 1);
+		expect(page.height).toBeLessThanOrEqual(Math.ceil(900 * 0.86));
+		const small = fitQuickLook({ width: 200, height: 150 }, { width: 1440, height: 900 });
+		expect(small).toEqual(QUICK_LOOK_MIN);
+	});
+
+	it("falls back to a page shape when the content cannot measure itself", () => {
+		const size = fitQuickLook({ width: 0, height: 0 }, { width: 1440, height: 900 });
+		expect(size).toEqual({ width: Math.round(Math.min(880, 1440 * 0.86)), height: Math.round(Math.min(1040, 900 * 0.86)) });
 	});
 
 	it("centers and clamps the preview bounds", () => {

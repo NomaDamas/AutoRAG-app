@@ -175,7 +175,11 @@ export function attachQuickLook(owner: BrowserWindow, options: QuickLookWindowOp
 		minWidth: QUICK_LOOK_MIN.width,
 		minHeight: QUICK_LOOK_MIN.height,
 		title: "Quick Look",
-		backgroundColor: "#F6F6F8",
+		// Translucent panel over the Finder, like macOS Quick Look: the preview
+		// chrome is semi-transparent and the window is sized to the content.
+		transparent: darwin,
+		backgroundColor: darwin ? "#00000000" : "#F6F6F8",
+		hasShadow: true,
 		titleBarStyle: "hidden",
 		minimizable: false,
 		fullscreenable: true,

@@ -1,6 +1,7 @@
 import type { ReactElement } from "react";
 import { assertNever } from "../shared/assert";
 import type { PreviewDocument } from "../shared/contract";
+import type { Size } from "../shared/fit";
 import { viewerForExtension, wantsBytes } from "../shared/registry";
 import { looksLikeText } from "../shared/text-sample";
 import { DocxView, PdfView, SheetView } from "./documents";
@@ -9,7 +10,17 @@ import { AudioView, FontView, HeicView, ImageView, TiffView, VideoView } from ".
 import { ArchiveView, EpubView, HwpxView, PptxView } from "./packages";
 import { HtmlView, MarkdownView, RtfView, TextView } from "./text-view";
 
-export function PreviewBody({ file }: { readonly file: PreviewDocument }): ReactElement {
+/**
+ * `onIntrinsicSize` lets a viewer that knows its own page shape (PDF) size the
+ * preview window before the first paint settles.
+ */
+export function PreviewBody({
+	file,
+	onIntrinsicSize,
+}: {
+	readonly file: PreviewDocument;
+	readonly onIntrinsicSize?: ((size: Size) => void) | undefined;
+}): ReactElement {
 	const kind = viewerForExtension(file.ext);
 	if (file.size === 0) return <FallbackView file={file} note="빈 파일" />;
 	if (file.truncated && file.bytes === null && wantsBytes(kind)) {
@@ -29,7 +40,7 @@ export function PreviewBody({ file }: { readonly file: PreviewDocument }): React
 		case "heic":
 			return <HeicView file={file} />;
 		case "pdf":
-			return <PdfView file={file} />;
+			return <PdfView file={file} onIntrinsicSize={onIntrinsicSize} />;
 		case "docx":
 			return <DocxView file={file} />;
 		case "sheet":

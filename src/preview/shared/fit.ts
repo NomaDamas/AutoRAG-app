@@ -11,15 +11,16 @@ export interface Bounds extends Size {
 export const QUICK_LOOK_TOOLBAR = 52;
 export const QUICK_LOOK_MIN: Size = { width: 360, height: 240 };
 
-const MEDIA_WIDTH_SHARE = 0.72;
-const MEDIA_HEIGHT_SHARE = 0.82;
+const MEDIA_WIDTH_SHARE = 0.86;
+const MEDIA_HEIGHT_SHARE = 0.86;
 const DOCUMENT: Size = { width: 880, height: 1040 };
 const DOCUMENT_SHARE = 0.86;
 
 /**
- * Window size for one previewed item, like macOS Quick Look: media keeps its
- * aspect ratio, never upscales past its natural size, and stays inside a share
- * of the screen; content without an intrinsic size gets a page-shaped window.
+ * Window size for one previewed item, like macOS Quick Look: the window hugs
+ * whatever the renderer measured (media, a PDF page, a laid-out text block),
+ * never upscaling past its natural size and staying inside a share of the
+ * screen. Content that cannot measure itself gets a page-shaped window.
  */
 export function fitQuickLook(content: Size, workArea: Size): Size {
 	if (content.width <= 0 || content.height <= 0) {
