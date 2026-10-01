@@ -1,3 +1,5 @@
+import type { IndexStatus } from "./index-contract";
+
 /**
  * Finder contract shared by the Electron main process and the renderer.
  *
@@ -27,6 +29,8 @@ export const FS_CHANNELS = {
 	versionFamilies: "fs:versionFamilies",
 	versionFamiliesRefresh: "fs:versionFamiliesRefresh",
 	versionFamiliesUpdated: "fs:versionFamiliesUpdated",
+	indexStatus: "index:status",
+	indexSetExcluded: "index:setExcluded",
 } as const;
 
 export type FsChannel = (typeof FS_CHANNELS)[keyof typeof FS_CHANNELS];
@@ -160,10 +164,20 @@ export interface FsVersionFamilyBridge {
 	/** Forces a dupey scan now, persists it, and returns the fresh snapshot. */
 	refreshVersionFamilies(): Promise<FsVersionFamiliesResult>;
 	/** Adopts snapshots produced by the startup scan and the repeating interval. */
-	onVersionFamiliesUpdated?(listener: (result: FsVersionFamiliesResult) => void): () => void;
+	onVersionFamiliesUpdated?(
+		listener: (result: FsVersionFamiliesResult) => void,
+	): () => void;
 }
 
-export interface FsBridge extends FsCoreBridge, FsVersionFamilyBridge {}
+export interface FsIndexBridge {
+	indexStatus(paths: readonly string[]): Promise<readonly IndexStatus[]>;
+	setIndexExcluded(path: string, excluded: boolean): Promise<IndexStatus>;
+}
+
+export interface FsBridge
+	extends FsCoreBridge,
+		FsVersionFamilyBridge,
+		FsIndexBridge {}
 
 export type FsVersionRelation = "exact" | "near" | "contains";
 

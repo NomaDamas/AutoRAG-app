@@ -7,18 +7,32 @@
  * preload lands. Components never touch `window` directly.
  */
 
-import { RECENTS_PATH, type FsBridge, type FsClipboard } from "../../../shared/fs-contract";
+import {
+	type FsBridge,
+	type FsClipboard,
+	RECENTS_PATH,
+} from "../../../shared/fs-contract";
+import type { IndexStatus } from "../../../shared/index-contract";
 import { copyName } from "../state/collision";
 import { basename, dirname, joinPath } from "../state/paths";
 import {
 	EMPTY_VERSION_FAMILIES_RESULT,
 	type VersionFamiliesResult,
-	type VersionFamilyData,
 	type VersionRelation,
 } from "../state/version-family";
-import { type FinderEntry, entryFromFixture, entryFromFs, entryFromSearchHit } from "./entries";
-import { FIXTURE_FAMILIES, FIXTURE_INITIAL_PATH, FIXTURE_ROOTS, FIXTURE_TREE } from "./fixtures";
 import type { FixtureItem } from "./entries";
+import {
+	entryFromFixture,
+	entryFromFs,
+	entryFromSearchHit,
+	type FinderEntry,
+} from "./entries";
+import {
+	FIXTURE_FAMILIES,
+	FIXTURE_INITIAL_PATH,
+	FIXTURE_ROOTS,
+	FIXTURE_TREE,
+} from "./fixtures";
 
 export interface FinderLocation {
 	readonly name: string;
@@ -54,20 +68,28 @@ export interface FinderSource {
 	versionFamilies(): Promise<VersionFamiliesResult>;
 	/** Forces a dupey scan now and returns the fresh snapshot. */
 	refreshVersionFamilies(): Promise<VersionFamiliesResult>;
-	/** Adopts snapshots from the startup scan and the repeating interval. */
-	onVersionFamiliesUpdated(listener: (result: VersionFamiliesResult) => void): () => void;
+	/** Real AutoRAG local-index state and config-backed toggle. */
+	indexStatus(paths: readonly string[]): Promise<readonly IndexStatus[]>;
+	setIndexExcluded(path: string, excluded: boolean): Promise<IndexStatus>;
+	onVersionFamiliesUpdated(
+		listener: (result: VersionFamiliesResult) => void,
+	): () => void;
 }
-
 /* -------------------------------------------------------------- real bridge */
 
-export function createBridgeSource(fs: FsBridge, initialPath: string): FinderSource {
+export function createBridgeSource(
+	fs: FsBridge,
+	initialPath: string,
+): FinderSource {
 	return {
 		native: true,
 		initialPath,
 		async list(path) {
 			const listing = await fs.listDir(path);
 			// Recents is virtual: a row's location is the real folder that holds the file.
-			return listing.entries.map((entry) => entryFromFs(entry, path === RECENTS_PATH ? undefined : path));
+			return listing.entries.map((entry) =>
+				entryFromFs(entry, path === RECENTS_PATH ? undefined : path),
+			);
 		},
 		async search(query) {
 			const hits = await fs.search(query);
@@ -131,17 +153,22 @@ export function createBridgeSource(fs: FsBridge, initialPath: string): FinderSou
 				error: result.error,
 			};
 		},
-		onVersionFamiliesUpdated: (listener) => fs.onVersionFamiliesUpdated?.((result) => listener({
-			families: result.families.map((family) => ({
-				head: family.head,
-				members: family.members,
-				entriesByPath: Object.fromEntries(
-					family.entries.map((entry) => [entry.path, entryFromFs(entry)]),
-				),
-			})),
-			scannedAt: result.scannedAt,
-			error: result.error,
-		})) ?? (() => {}),
+		indexStatus: (paths) => fs.indexStatus(paths),
+		setIndexExcluded: (path, excluded) => fs.setIndexExcluded(path, excluded),
+		onVersionFamiliesUpdated: (listener) =>
+			fs.onVersionFamiliesUpdated?.((result) =>
+				listener({
+					families: result.families.map((family) => ({
+						head: family.head,
+						members: family.members,
+						entriesByPath: Object.fromEntries(
+							family.entries.map((entry) => [entry.path, entryFromFs(entry)]),
+						),
+					})),
+					scannedAt: result.scannedAt,
+					error: result.error,
+				}),
+			) ?? (() => {}),
 	};
 }
 
@@ -201,7 +228,11 @@ export function createFixtureSource(): FinderSource {
 		native: false,
 		initialPath: FIXTURE_INITIAL_PATH,
 		list: (path) =>
-			Promise.resolve((state.tree.get(path) ?? []).map((item) => entryFromFixture(item, path))),
+			Promise.resolve(
+				(state.tree.get(path) ?? []).map((item) =>
+					entryFromFixture(item, path),
+				),
+			),
 		search: (query) => {
 			const needle = query.trim().toLowerCase();
 			if (needle === "") {
@@ -225,9 +256,13 @@ export function createFixtureSource(): FinderSource {
 				FIXTURE_ROOTS.map((name) => ({
 					name,
 					path: name,
-					section: name === RECENTS_PATH || name === "Desktop" || name === "Downloads" || name === "Documents"
-						? ("favorites" as const)
-						: ("cloud" as const),
+					section:
+						name === RECENTS_PATH ||
+						name === "Desktop" ||
+						name === "Downloads" ||
+						name === "Documents"
+							? ("favorites" as const)
+							: ("cloud" as const),
 					available: state.tree.has(name),
 				})),
 			),
@@ -255,7 +290,10 @@ export function createFixtureSource(): FinderSource {
 					continue;
 				}
 				const dir = dirname(path);
-				insertItem(state, dir, { ...item, name: copyName(item.name, [...takenNames(state, dir), item.name]) });
+				insertItem(state, dir, {
+					...item,
+					name: copyName(item.name, [...takenNames(state, dir), item.name]),
+				});
 			}
 			return resolve();
 		},
@@ -265,7 +303,10 @@ export function createFixtureSource(): FinderSource {
 				if (item === null) {
 					continue;
 				}
-				insertItem(state, destDir, { ...item, name: copyName(item.name, takenNames(state, destDir)) });
+				insertItem(state, destDir, {
+					...item,
+					name: copyName(item.name, takenNames(state, destDir)),
+				});
 			}
 			return resolve();
 		},
@@ -276,7 +317,10 @@ export function createFixtureSource(): FinderSource {
 					continue;
 				}
 				removeItem(state, path);
-				insertItem(state, destDir, { ...item, name: copyName(item.name, takenNames(state, destDir)) });
+				insertItem(state, destDir, {
+					...item,
+					name: copyName(item.name, takenNames(state, destDir)),
+				});
 			}
 			return resolve();
 		},
@@ -298,7 +342,9 @@ export function createFixtureSource(): FinderSource {
 						[family.head]: entryFromFixture(headItem, dirname(family.head)),
 					};
 					const members = family.members.flatMap(([where, name, relation]) => {
-						const item = (state.tree.get(where) ?? []).find((candidate) => candidate.name === name);
+						const item = (state.tree.get(where) ?? []).find(
+							(candidate) => candidate.name === name,
+						);
 						if (item === undefined) {
 							return [];
 						}
@@ -310,7 +356,23 @@ export function createFixtureSource(): FinderSource {
 				}),
 				error: null,
 			}),
-		refreshVersionFamilies: () => Promise.resolve(EMPTY_VERSION_FAMILIES_RESULT),
+		refreshVersionFamilies: () =>
+			Promise.resolve(EMPTY_VERSION_FAMILIES_RESULT),
+		indexStatus: (paths) =>
+			Promise.resolve(
+				paths.map((path) => ({
+					path,
+					kind: "included" as const,
+					detail: "Fixture",
+					toggleable: true,
+				})),
+			),
+		setIndexExcluded: async (path, excluded) => ({
+			path,
+			kind: excluded ? "excluded" : "included",
+			detail: "Fixture",
+			toggleable: true,
+		}),
 		onVersionFamiliesUpdated: () => () => {},
 	};
 }
@@ -320,9 +382,13 @@ export function createFixtureSource(): FinderSource {
 /** Favorites order used to choose the tab the real app opens on. */
 const PREFERRED_START = ["Documents", "Desktop", "Downloads"];
 
-export function pickInitialPath(locations: readonly FinderLocation[]): string | null {
+export function pickInitialPath(
+	locations: readonly FinderLocation[],
+): string | null {
 	for (const name of PREFERRED_START) {
-		const match = locations.find((location) => location.name === name && location.available);
+		const match = locations.find(
+			(location) => location.name === name && location.available,
+		);
 		if (match !== undefined) {
 			return match.path;
 		}

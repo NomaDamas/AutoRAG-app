@@ -1,7 +1,8 @@
 import type { ReactElement, RefObject } from "react";
-import { FileRow, type RowCallbacks } from "./FileRow";
+import type { IndexStatus } from "../../../shared/index-contract";
 import type { TreeRow } from "../state/folder-tree";
 import type { VersionFamilyError } from "../state/version-family";
+import { FileRow, type RowCallbacks } from "./FileRow";
 import { VersionFamilyBanner } from "./VersionFamilyBanner";
 
 /**
@@ -19,7 +20,7 @@ export function FileList({
 	flashPath,
 	renamePath,
 	renameDraft,
-	indexOverrides,
+	indexStatus,
 	listPath,
 	versionFamilyError,
 	onRetryVersionFamilies,
@@ -35,7 +36,7 @@ export function FileList({
 	readonly flashPath: string | null;
 	readonly renamePath: string | null;
 	readonly renameDraft: string;
-	readonly indexOverrides: Readonly<Record<string, boolean>>;
+	readonly indexStatus: Readonly<Record<string, IndexStatus>>;
 	readonly listPath: string;
 	readonly versionFamilyError: VersionFamilyError | null;
 	readonly onRetryVersionFamilies: () => void;
@@ -43,7 +44,10 @@ export function FileList({
 }): ReactElement {
 	return (
 		<div className="list" ref={listRef}>
-			<VersionFamilyBanner error={versionFamilyError} onRetry={onRetryVersionFamilies} />
+			<VersionFamilyBanner
+				error={versionFamilyError}
+				onRetry={onRetryVersionFamilies}
+			/>
 			{searching ? <div className="list__summary">{summary}</div> : null}
 			<div role={searching ? "grid" : "treegrid"} aria-label="Files">
 				{rows.map((row) => (
@@ -54,7 +58,7 @@ export function FileList({
 						zoneFocused={focusedZone}
 						flash={flashPath === row.entry.path}
 						searching={searching}
-						indexIncluded={indexOverrides[row.entry.path] ?? true}
+						indexIncluded={indexStatus[row.entry.path]?.kind === "included"}
 						renameDraft={renamePath === row.entry.path ? renameDraft : null}
 						stackCount={row.stackCount}
 						stackOpen={row.stackOpen}
@@ -67,7 +71,9 @@ export function FileList({
 					/>
 				))}
 			</div>
-			{rows.length === 0 ? <div className="list__empty">{emptyText}</div> : null}
+			{rows.length === 0 ? (
+				<div className="list__empty">{emptyText}</div>
+			) : null}
 		</div>
 	);
 }

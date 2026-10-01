@@ -1,31 +1,46 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { app, BrowserWindow, clipboard, shell } from "electron";
 import { writeDefaultConfig } from "@autorag/librarian";
 import { resolveConfigPath } from "@autorag/librarian/core";
+import { app, BrowserWindow, clipboard, shell } from "electron";
+import {
+	APP_NAME,
+	APP_VERSION,
+	type DevLabel,
+	formatWindowTitle,
+} from "../shared/app-info";
 import { FS_CHANNELS } from "../shared/fs-contract";
-import { APP_NAME, APP_VERSION, formatWindowTitle, type DevLabel } from "../shared/app-info";
 import { createChatStore } from "./chat-store";
 import { createDataSourceStatusService } from "./datasource-status";
 import { readDevLabel, resolveClonePath } from "./dev-label";
 import { buildFsEntry } from "./fs-entry";
 import { createFsService } from "./fs-service";
-import { createRecentsStore } from "./recents-store";
-import { createModelStatusService } from "./model-status";
-import { createDefaultAgentFactory, createSearchService } from "./search-service";
-import { createSettingsService } from "./settings-service";
+import { createIndexStatusService } from "./index-status";
 import {
 	registerFsIpcHandlers,
+	registerIndexIpcHandlers,
 	registerSearchIpcHandlers,
 	registerSettingsIpcHandlers,
 	registerVersionFamilyIpcHandlers,
 } from "./ipc";
-import { createVersionFamilyService, DEFAULT_SCAN_INTERVAL_MINUTES, type VersionFamilyService } from "./version-family-service";
+import { createModelStatusService } from "./model-status";
+import { createRecentsStore } from "./recents-store";
+import {
+	createDefaultAgentFactory,
+	createSearchService,
+} from "./search-service";
+import { createSettingsService } from "./settings-service";
+import {
+	createVersionFamilyService,
+	DEFAULT_SCAN_INTERVAL_MINUTES,
+	type VersionFamilyService,
+} from "./version-family-service";
 import { createFileVersionFamilyStore } from "./version-family-store";
 
 /** The one AutoRAG config every surface (CLI, TUI, serve, this app) resolves. */
 function autoragConfigPath(): string {
-	return resolveConfigPath({ flags: {}, env: process.env, cwd: process.cwd() }).configPath;
+	return resolveConfigPath({ flags: {}, env: process.env, cwd: process.cwd() })
+		.configPath;
 }
 
 function ensureAutoRAGConfig(): void {
@@ -60,7 +75,10 @@ function createMainWindow(devLabel: DevLabel | null): BrowserWindow {
 			contextIsolation: true,
 			nodeIntegration: false,
 			sandbox: false,
-			additionalArguments: devLabel === null ? [] : [`--autorag-dev-label=${JSON.stringify(devLabel)}`],
+			additionalArguments:
+				devLabel === null
+					? []
+					: [`--autorag-dev-label=${JSON.stringify(devLabel)}`],
 		},
 	});
 
@@ -84,11 +102,15 @@ let versionFamilyService: VersionFamilyService | null = null;
 app.whenReady().then(() => {
 	ensureAutoRAGConfig();
 	const devLabel = resolveDevLabel();
-	console.log(`[autorag] ${formatWindowTitle(APP_NAME, APP_VERSION, devLabel)}`);
+	console.log(
+		`[autorag] ${formatWindowTitle(APP_NAME, APP_VERSION, devLabel)}`,
+	);
 	const fsService = createFsService({
 		shell,
 		clipboard,
-		recents: createRecentsStore({ directory: join(app.getPath("userData"), "recents") }),
+		recents: createRecentsStore({
+			directory: join(app.getPath("userData"), "recents"),
+		}),
 	});
 	// Both delete surfaces (context menu, ⌘⌫) land on this channel, so the
 	// version-family snapshot learns about the Trash here.
@@ -103,22 +125,34 @@ app.whenReady().then(() => {
 	};
 	versionFamilyService = createVersionFamilyService({
 		locations: () => fsService.locations(),
-		store: createFileVersionFamilyStore(join(app.getPath("userData"), "dupey-cache")),
+		store: createFileVersionFamilyStore(
+			join(app.getPath("userData"), "dupey-cache"),
+		),
 		buildEntry: buildFsEntry,
 		intervalMinutes: () => scanIntervalMinutes,
-		onUpdate: (result) => sendToWindow(FS_CHANNELS.versionFamiliesUpdated, result),
+		onUpdate: (result) =>
+			sendToWindow(FS_CHANNELS.versionFamiliesUpdated, result),
 	});
 	registerVersionFamilyIpcHandlers(versionFamilyService);
+	registerIndexIpcHandlers(
+		createIndexStatusService({ env: process.env, cwd: process.cwd() }),
+	);
 	const searchService = createSearchService({
 		agentFactory: createDefaultAgentFactory(),
-		chatStore: createChatStore({ directory: join(app.getPath("userData"), "chat-history") }),
-		send: (channel, payload) => BrowserWindow.getAllWindows()[0]?.webContents.send(channel, payload),
+		chatStore: createChatStore({
+			directory: join(app.getPath("userData"), "chat-history"),
+		}),
+		send: (channel, payload) =>
+			BrowserWindow.getAllWindows()[0]?.webContents.send(channel, payload),
 	});
 	registerSearchIpcHandlers(searchService);
 	const agentFactory = createDefaultAgentFactory();
 	const settingsService = createSettingsService({
 		directory: join(app.getPath("userData"), "settings"),
-		dataSources: createDataSourceStatusService({ env: process.env, cwd: process.cwd() }),
+		dataSources: createDataSourceStatusService({
+			env: process.env,
+			cwd: process.cwd(),
+		}),
 		models: createModelStatusService({ env: process.env, cwd: process.cwd() }),
 		createChatSession: (surface) => {
 			const agent = agentFactory();
@@ -133,7 +167,8 @@ app.whenReady().then(() => {
 			scanIntervalMinutes = settings.dupeyScanIntervalMinutes;
 			versionFamilyService?.reschedule();
 		},
-		send: (channel, payload) => BrowserWindow.getAllWindows()[0]?.webContents.send(channel, payload),
+		send: (channel, payload) =>
+			BrowserWindow.getAllWindows()[0]?.webContents.send(channel, payload),
 	});
 	registerSettingsIpcHandlers(settingsService);
 	void settingsService.get().then((settings) => {
