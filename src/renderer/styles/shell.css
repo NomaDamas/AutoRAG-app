@@ -889,19 +889,6 @@
 	border-radius: var(--radius-10);
 }
 
-.settings-model-tile {
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	width: 36px;
-	height: 36px;
-	border-radius: var(--radius-8);
-	background: var(--accent);
-	color: var(--text-on-badge) !important;
-	font-size: var(--font-size-body) !important;
-	font-weight: var(--weight-bold);
-}
-
 .settings-model-card {
 	flex: none;
 }
@@ -923,16 +910,6 @@
 .settings-model-card__provider {
 	color: var(--text-muted);
 	font-size: var(--font-size-meta);
-}
-
-.settings-model-card em {
-	padding: 2px 8px;
-	border-radius: var(--radius-6);
-	background: var(--bg-input);
-	color: var(--text-muted);
-	font-size: var(--font-size-meta);
-	font-style: normal;
-	white-space: nowrap;
 }
 
 .requests-popover__scrim {

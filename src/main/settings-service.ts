@@ -12,6 +12,7 @@ import type {
 } from "../shared/settings-contract";
 import { DEFAULT_SETTINGS, SETTINGS_CHANNELS } from "../shared/settings-contract";
 import type { DataSourceStatusService } from "./datasource-status";
+import type { ModelStatusService } from "./model-status";
 
 interface SettingsState {
 	settings: AppSettings;
@@ -34,6 +35,8 @@ export interface SettingsServiceDeps {
 	readonly send: (channel: string, payload: AssistantEvent) => void;
 	/** Live view of the shared AutoRAG config's datasources; the app keeps no copy. */
 	readonly dataSources: DataSourceStatusService;
+	/** Live view of the shared AutoRAG config's resolved model; the app keeps no copy. */
+	readonly models: ModelStatusService;
 	/** Fired after every successful set() so live services can adopt the change. */
 	readonly onSettingsChanged?: (settings: AppSettings) => void;
 	readonly now?: () => Date;
@@ -182,6 +185,7 @@ export function createSettingsService(deps: SettingsServiceDeps): SettingsBridge
 			await deps.dataSources.setDescription(id, description);
 			return deps.dataSources.list();
 		},
+		modelsResolve: () => deps.models.resolve(),
 		assistantSend: async (surface, text) => {
 			let session: ChatAgent | undefined;
 			let unsubscribe: (() => void) | undefined;

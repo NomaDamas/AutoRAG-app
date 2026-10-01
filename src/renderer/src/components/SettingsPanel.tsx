@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactElement } from "react";
-import type { AppSettings, AssistantEvent, Contact, DataSourceRow, DataSourcesSnapshot } from "../../../shared/settings-contract";
+import type { AppSettings, AssistantEvent, ConfiguredModelSnapshot, Contact, DataSourceRow, DataSourcesSnapshot } from "../../../shared/settings-contract";
 import type { SettingsBridge, AssistantSurface } from "../../../shared/settings-contract";
 import { ArrowUpIcon, CloseIcon, PencilIcon, SparklesIcon } from "./icons";
 import { Switch } from "./primitives/Switch";
@@ -105,6 +105,8 @@ export function SettingsPanel({
 	const [contacts, setContacts] = useState<readonly Contact[]>([]);
 	const [snapshot, setSnapshot] = useState<DataSourcesSnapshot | null>(null);
 	const [sourcesError, setSourcesError] = useState<string | null>(null);
+	const [modelSnapshot, setModelSnapshot] = useState<ConfiguredModelSnapshot | null>(null);
+	const [modelError, setModelError] = useState<string | null>(null);
 	const [openSource, setOpenSource] = useState<string | null>(null);
 	const [contactDraft, setContactDraft] = useState({ id: "", name: "", role: "", description: "" });
 	const [chats, setChats] = useState<Record<AssistantSurface, ChatMessage[]>>({
@@ -147,6 +149,7 @@ export function SettingsPanel({
 
 	useEffect(() => {
 		if (tab === "sources") void reloadSources();
+		if (tab === "models") void reloadModel();
 	}, [tab]);
 
 	useEffect(() => {
@@ -189,6 +192,15 @@ export function SettingsPanel({
 		}
 	}
 
+	async function reloadModel(): Promise<void> {
+		try {
+			setModelSnapshot(await autorag.settings.modelsResolve());
+			setModelError(null);
+		} catch (error) {
+			setModelError(error instanceof Error ? error.message : String(error));
+		}
+	}
+
 	async function toggleSource(source: DataSourceRow): Promise<void> {
 		try {
 			setSnapshot(await autorag.settings.sourcesSetEnabled(source.id, !source.enabled));
@@ -220,6 +232,9 @@ export function SettingsPanel({
 		attentionCount > 0 ? `${attentionCount} needs attention` : null,
 	].filter(Boolean).join(" · ");
 	const sourcesProblem = sourcesError ?? snapshot?.error ?? null;
+	const model = modelSnapshot?.model ?? null;
+	const modelProblem = modelError ?? modelSnapshot?.error ?? null;
+	const modelStatus = modelSnapshot === null ? "불러오는 중…" : "설정된 모델이 없습니다";
 
 	return (
 		// biome-ignore lint/a11y/useKeyWithClickEvents: modal backdrop dismiss mirrors the prototype
@@ -344,15 +359,15 @@ export function SettingsPanel({
 					) : null}
 					{tab === "models" ? (
 						<div className="settings-stack">
-							{/* WIP: the bridge does not expose the configured model identity; the card is static. */}
 							<div className="settings-model-card">
-								<span className="settings-model-tile">A</span>
 								<div>
-									<strong className="settings-model-card__name">AutoRAG Agent</strong>
-									<span className="settings-model-card__provider">Connected model</span>
+									<strong className="settings-model-card__name">{model === null ? "AutoRAG Agent" : model.displayName}</strong>
+									<span className="settings-model-card__provider">
+										{model === null ? modelStatus : `${model.provider} · ${model.api}`}
+									</span>
 								</div>
-								<em>Quick · Deep 공통</em>
 							</div>
+							{modelProblem === null ? null : <span className="settings-intro__error" role="alert">{modelProblem}</span>}
 							<AssistantPane surface="models" chats={chats.models} draft={drafts.models} busy={busy} listRef={chatListRef} inputRef={null} setDraft={(text) => setDrafts((current) => ({ ...current, models: text }))} onSend={sendAssistant} />
 						</div>
 					) : null}

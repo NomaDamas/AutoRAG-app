@@ -86,5 +86,6 @@ export function registerSettingsIpcHandlers(service: SettingsBridge): void {
 	ipcMain.handle(SETTINGS_CHANNELS.sourcesSetDescription, (_event, id: string, description: string) =>
 		service.sourcesSetDescription(id, description),
 	);
+	ipcMain.handle(SETTINGS_CHANNELS.modelsResolve, () => service.modelsResolve());
 	ipcMain.handle(SETTINGS_CHANNELS.assistantSend, (_event, surface, text: string) => service.assistantSend(surface, text));
 }
