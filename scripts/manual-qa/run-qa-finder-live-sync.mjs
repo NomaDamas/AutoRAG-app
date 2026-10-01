@@ -122,6 +122,9 @@ async function startSession(label) {
 	USER_DATA = join(tmpdir(), `ulw-live-sync-qa-${process.pid}-${sessionNumber}-${label}`);
 	SNAPSHOT = join(USER_DATA, "dupey-cache", "version-families.json");
 	rmSync(USER_DATA, { recursive: true, force: true });
+	electronLines = [];
+	electronEvents = [];
+	electronBuffer = "";
 	setupFixtures();
 	app = await launchFinder({
 		userDataDir: USER_DATA,
@@ -235,6 +238,51 @@ async function waitForElectronLine(predicate, options) {
 	return waitFor(() => electronLines.find(predicate), options);
 }
 
+async function installLiveRefreshProbe(page, label) {
+	const initialToastCount = await page.locator(".toast").count();
+	if (initialToastCount !== 0) {
+		throw new Error(`${label} started with ${initialToastCount} toast element(s)`);
+	}
+	await page.evaluate((probeLabel) => {
+		const grid = document.querySelector('[role="grid"]');
+		if (grid === null) {
+			throw new Error('live refresh probe could not find [role="grid"]');
+		}
+		const state = {
+			initialRowCount: grid.querySelectorAll('[role="row"]').length,
+			minRowCount: Number.POSITIVE_INFINITY,
+			emptyFlashCount: 0,
+			toastSeen: false,
+			samples: 0,
+		};
+		const sample = () => {
+			const rowCount = grid.querySelectorAll('[role="row"]').length;
+			const toastCount = document.querySelectorAll(".toast").length;
+			state.minRowCount = Math.min(state.minRowCount, rowCount);
+			state.emptyFlashCount += rowCount === 0 ? 1 : 0;
+			state.toastSeen ||= toastCount > 0;
+			state.samples += 1;
+		};
+		sample();
+		const observer = new MutationObserver(sample);
+		observer.observe(document.body, { subtree: true, childList: true, attributes: true, characterData: true });
+		window.__liveSyncRefreshProbes ??= {};
+		window.__liveSyncRefreshProbes[probeLabel] = { state, observer };
+	}, label);
+}
+
+async function finishLiveRefreshProbe(page, label) {
+	return page.evaluate((probeLabel) => {
+		const probe = window.__liveSyncRefreshProbes?.[probeLabel];
+		if (probe === undefined) {
+			throw new Error(`live refresh probe ${probeLabel} was not installed`);
+		}
+		probe.observer.disconnect();
+		delete window.__liveSyncRefreshProbes[probeLabel];
+		return probe.state;
+	}, label);
+}
+
 async function runScenario(label, page, scenario, screenshot = true) {
 	try {
 		await scenario();
@@ -261,16 +309,24 @@ async function runS1(page) {
 		(line) => line.includes(`[fs-watch] watch ${FIXTURE_DIR}`),
 		{ timeoutMs: 1500, label: "fixture directory watch diagnostic" },
 	);
+	await installLiveRefreshProbe(page, "S1");
 	const started = Date.now();
 	writeFileSync(join(FIXTURE_DIR, "new-note.txt"), "created by live-sync S1\n", "utf8");
 	await rowFor(page, "new-note.txt").waitFor({ timeout: LIVE_BOUND_MS });
 	const elapsedMs = Date.now() - started;
 	if (elapsedMs > LIVE_BOUND_MS) throw new Error(`row appeared after ${elapsedMs}ms > ${LIVE_BOUND_MS}ms`);
+	const probe = await finishLiveRefreshProbe(page, "S1");
+	if (probe.emptyFlashCount !== 0) throw new Error(`S1 empty-list flash count ${probe.emptyFlashCount} > 0`);
+	if (probe.toastSeen) throw new Error("S1 live refresh showed a toast");
 	await page.screenshot({ path: join(EVIDENCE, "S1.png") });
-	pass("S1 create", `new-note.txt visible in ${elapsedMs}ms <= ${LIVE_BOUND_MS}ms`);
+	pass(
+		"S1 create",
+		`new-note.txt visible in ${elapsedMs}ms <= ${LIVE_BOUND_MS}ms; minRows=${probe.minRowCount} >= 1; emptyFlashCount=${probe.emptyFlashCount} <= 0; toastSeen=${probe.toastSeen ? 1 : 0} <= 0`,
+	);
 }
 
 async function runS2(page) {
+	await installLiveRefreshProbe(page, "S2");
 	const started = Date.now();
 	rmSync(join(FIXTURE_DIR, "new-note.txt"), { force: true });
 	await waitFor(
@@ -279,13 +335,20 @@ async function runS2(page) {
 	);
 	const elapsedMs = Date.now() - started;
 	if (elapsedMs > LIVE_BOUND_MS) throw new Error(`row disappeared after ${elapsedMs}ms > ${LIVE_BOUND_MS}ms`);
+	const probe = await finishLiveRefreshProbe(page, "S2");
+	if (probe.emptyFlashCount !== 0) throw new Error(`S2 empty-list flash count ${probe.emptyFlashCount} > 0`);
+	if (probe.toastSeen) throw new Error("S2 live refresh showed a toast");
 	await page.screenshot({ path: join(EVIDENCE, "S2.png") });
-	pass("S2 delete", `new-note.txt row count 0 in ${elapsedMs}ms <= ${LIVE_BOUND_MS}ms`);
+	pass(
+		"S2 delete",
+		`new-note.txt row count 0 in ${elapsedMs}ms <= ${LIVE_BOUND_MS}ms; minRows=${probe.minRowCount} >= 1; emptyFlashCount=${probe.emptyFlashCount} <= 0; toastSeen=${probe.toastSeen ? 1 : 0} <= 0`,
+	);
 }
 
 async function runS3(page) {
 	await rowFor(page, "selected-file.txt").click();
 	const selectedBefore = await page.locator('[role="row"][aria-selected="true"]').allInnerTexts();
+	await installLiveRefreshProbe(page, "S3");
 	const started = Date.now();
 	renameSync(join(FIXTURE_DIR, "rename-before.txt"), join(FIXTURE_DIR, "rename-after.txt"));
 	await waitFor(
@@ -298,8 +361,14 @@ async function runS3(page) {
 	}
 	const elapsedMs = Date.now() - started;
 	if (elapsedMs > LIVE_BOUND_MS) throw new Error(`rename appeared after ${elapsedMs}ms > ${LIVE_BOUND_MS}ms`);
+	const probe = await finishLiveRefreshProbe(page, "S3");
+	if (probe.emptyFlashCount !== 0) throw new Error(`S3 empty-list flash count ${probe.emptyFlashCount} > 0`);
+	if (probe.toastSeen) throw new Error("S3 live refresh showed a toast");
 	await page.screenshot({ path: join(EVIDENCE, "S3.png") });
-	pass("S3 rename", `new row present, old row count 0, selection unchanged in ${elapsedMs}ms <= ${LIVE_BOUND_MS}ms`);
+	pass(
+		"S3 rename",
+		`new row present, old row count 0, selection unchanged in ${elapsedMs}ms <= ${LIVE_BOUND_MS}ms; minRows=${probe.minRowCount} >= 1; emptyFlashCount=${probe.emptyFlashCount} <= 0; toastSeen=${probe.toastSeen ? 1 : 0} <= 0`,
+	);
 }
 
 async function openStack(page, family) {
@@ -482,7 +551,8 @@ async function runS7(page) {
 			`${error instanceof Error ? error.message : String(error)}; product defect: ipcRenderer.invoke strips ENOENT code, bridge exists() rethrows, ancestor fallback does not run`,
 		);
 	}
-	if (await page.locator(".toast").count()) {
+	const toastCount = await page.locator(".toast").count();
+	if (toastCount !== 0) {
 		throw new Error("toast/status element visible after folder fallback");
 	}
 	const after = await page.evaluate(() => ({
@@ -493,10 +563,11 @@ async function runS7(page) {
 	const elapsedMs = Date.now() - started;
 	if (elapsedMs > LIVE_BOUND_MS) throw new Error(`folder fallback took ${elapsedMs}ms > ${LIVE_BOUND_MS}ms`);
 	await page.screenshot({ path: join(EVIDENCE, "S7.png") });
-	pass("S7 folder gone", `active tab ${FIXTURE_FOLDER}, no toast, in ${elapsedMs}ms <= ${LIVE_BOUND_MS}ms`);
+	pass("S7 folder gone", `active tab ${FIXTURE_FOLDER}, toastCount=${toastCount} <= 0, in ${elapsedMs}ms <= ${LIVE_BOUND_MS}ms`);
 }
 
 async function runS8(page) {
+	const started = Date.now();
 	await page.getByRole("button", { name: "Documents" }).click();
 	await waitForElectronLine(
 		(line) => line.includes(`[fs-watch] unwatch ${FIXTURE_DIR}`),
@@ -505,7 +576,9 @@ async function runS8(page) {
 	const errors = electronLines.filter((line) => line.includes("[fs-watch]") && line.includes("Error"));
 	if (errors.length !== 0) throw new Error(`fs-watch errors: ${JSON.stringify(errors)}`);
 	const last = electronLines.find((line) => line.includes(`[fs-watch] unwatch ${FIXTURE_DIR}`));
-	pass("S8 no leak", `unwatch observed=${JSON.stringify(last)}; fs-watch Error count ${errors.length}`);
+	const elapsedMs = Date.now() - started;
+	if (elapsedMs > LIVE_BOUND_MS) throw new Error(`unwatch took ${elapsedMs}ms > ${LIVE_BOUND_MS}ms`);
+	pass("S8 no leak", `unwatch observed=${JSON.stringify(last)} in ${elapsedMs}ms <= ${LIVE_BOUND_MS}ms; fs-watch Error count ${errors.length} <= 0`);
 }
 
 async function runS9(page, family) {
@@ -569,7 +642,10 @@ async function runS9(page, family) {
 		throw new Error(`unwatched stack child count ${beforeChildren.length} -> ${afterChildren.length}`);
 	}
 	if (resyncMs > LIVE_BOUND_MS) throw new Error(`focus stack resync took ${resyncMs}ms > ${LIVE_BOUND_MS}ms`);
-	pass("S9 inactive and focus resync", `inactive ${inactiveMs}ms, stack ${beforeChildren.length} -> ${afterChildren.length} in ${resyncMs}ms`);
+	pass(
+		"S9 inactive and focus resync",
+		`inactive refresh ${inactiveMs}ms <= ${LIVE_BOUND_MS}ms; stack ${beforeChildren.length} -> ${afterChildren.length} in ${resyncMs}ms <= ${LIVE_BOUND_MS}ms`,
+	);
 }
 
 async function runS10(page) {
@@ -612,7 +688,10 @@ async function runS10(page) {
 		if (directListMs > LIVE_BOUND_MS) {
 			throw new Error(`product performance: direct fs.list(${bulkDir}) took ${directListMs}ms > ${LIVE_BOUND_MS}ms`);
 		}
-		pass("S10 scale", `zz-live.txt visible in ${elapsedMs}ms <= ${LIVE_BOUND_MS}ms; batchDelta=${batchAt - writeStarted}ms directListMs=${directListMs}`);
+		pass(
+			"S10 scale",
+			`zz-live.txt visible in ${elapsedMs}ms <= ${LIVE_BOUND_MS}ms; batchDelta=${batchAt - writeStarted}ms <= ${LIVE_BOUND_MS}ms; directListMs=${directListMs}ms <= ${LIVE_BOUND_MS}ms`,
+		);
 	} catch (error) {
 		const rowVisibleAt = Date.now();
 		const elapsedMs = rowVisibleAt - writeStarted;
@@ -622,7 +701,9 @@ async function runS10(page) {
 			return Math.round(performance.now() - started);
 		}, bulkDir);
 		appendLog(`S10 timing: write=${writeStarted} batch=${batchAt} row=${rowVisibleAt} directListMs=${directListMs}`);
-		throw new Error(`${error instanceof Error ? error.message : String(error)}; batchDelta=${batchAt - writeStarted}ms; directListMs=${directListMs}`);
+		throw new Error(
+			`${error instanceof Error ? error.message : String(error)}; elapsedMs=${elapsedMs}ms; batchDelta=${batchAt - writeStarted}ms; directListMs=${directListMs}`,
+		);
 	}
 }
 
@@ -670,7 +751,10 @@ async function runS11(page) {
 	if (delta > 32) throw new Error(`scrollTop changed ${delta}px, expected <= 32px`);
 	if (elapsedMs > LIVE_BOUND_MS) throw new Error(`scroll-preserving create took ${elapsedMs}ms > ${LIVE_BOUND_MS}ms; batchDelta=${batchAt - writeStarted}ms; scrollDelta=${delta}px`);
 	appendLog(`S11 timing: write=${writeStarted} batch=${batchAt} row=${rowVisibleAt}`);
-	pass("S11 scroll kept", `scrollTop ${before} -> ${after} (delta ${delta}px) in ${elapsedMs}ms; batchDelta=${batchAt - writeStarted}ms`);
+	pass(
+		"S11 scroll kept",
+		`scrollTop ${before} -> ${after} (delta ${delta}px) <= 32px in ${elapsedMs}ms <= ${LIVE_BOUND_MS}ms; batchDelta=${batchAt - writeStarted}ms <= ${LIVE_BOUND_MS}ms`,
+	);
 }
 
 async function runNegativeControl() {
@@ -689,8 +773,76 @@ async function runNegativeControl() {
 		}
 	}
 	const lines = electronLines.filter((line) => line.includes(UNWATCHED_DIR));
-	appendTo(UNWATCHED_LOG, `window=${LIVE_BOUND_MS}ms elapsed=${Date.now() - started}ms matchingLines=${JSON.stringify(lines)}`);
-	pass("negative control", `unwatched batch line count ${lines.length} after ${Date.now() - started}ms`);
+	const elapsedMs = Date.now() - started;
+	appendTo(UNWATCHED_LOG, `window=${LIVE_BOUND_MS}ms elapsed=${elapsedMs}ms matchingLines=${JSON.stringify(lines)}`);
+	pass(
+		"negative control",
+		`unwatched batch line count ${lines.length} <= 0 within configured ${LIVE_BOUND_MS}ms window; polling settled at ${elapsedMs}ms`,
+	);
+}
+
+async function runS12(page) {
+	await page.locator(".sidebar").getByRole("button", { name: "Downloads", exact: true }).click();
+	await page.locator('[role="row"]').filter({ has: page.getByText(FIXTURE_FOLDER, { exact: true }) }).dblclick();
+	await rowFor(page, "selected-file.txt").waitFor({ timeout: 10_000 });
+	const renameTarget = join(FIXTURE_DIR, "rename-before.txt");
+	await rowFor(page, "rename-before.txt").click({ button: "right" });
+	await page.getByRole("menuitem", { name: "이름 변경", exact: true }).click();
+	const renameInput = page.getByRole("textbox", { name: "새 이름", exact: true });
+	await renameInput.waitFor({ state: "visible", timeout: 10_000 });
+	const createdDuringRename = join(FIXTURE_DIR, "created-during-rename.txt");
+	const createStarted = Date.now();
+	writeFileSync(createdDuringRename, "created while rename editor is open\n", "utf8");
+	await rowFor(page, "created-during-rename.txt").waitFor({ timeout: LIVE_BOUND_MS });
+	const createElapsedMs = Date.now() - createStarted;
+	if (createElapsedMs > LIVE_BOUND_MS) throw new Error(`unrelated create took ${createElapsedMs}ms > ${LIVE_BOUND_MS}ms`);
+	const editorAfterCreateCount = await page.locator('input.row__rename[aria-label="새 이름"]').count();
+	if (editorAfterCreateCount !== 1) {
+		throw new Error("rename editor closed after an unrelated file was created");
+	}
+	const deleteStarted = Date.now();
+	rmSync(renameTarget, { force: true });
+	await waitFor(
+		async () => (await page.locator('input.row__rename[aria-label="새 이름"]').count()) === 0,
+		{ timeoutMs: LIVE_BOUND_MS, label: "rename editor to close after its file vanished" },
+	);
+	const deleteElapsedMs = Date.now() - deleteStarted;
+	if (deleteElapsedMs > LIVE_BOUND_MS) throw new Error(`rename editor close took ${deleteElapsedMs}ms > ${LIVE_BOUND_MS}ms`);
+	const editorAfterDeleteCount = await page.locator('input.row__rename[aria-label="새 이름"]').count();
+	await page.screenshot({ path: join(EVIDENCE, "S12.png") });
+	pass(
+		"S12 rename editor lifecycle",
+		`editorAfterCreate=${editorAfterCreateCount} >= 1 in ${createElapsedMs}ms <= ${LIVE_BOUND_MS}ms; editorAfterDelete=${editorAfterDeleteCount} <= 0 in ${deleteElapsedMs}ms <= ${LIVE_BOUND_MS}ms`,
+	);
+}
+
+async function runS13(page) {
+	await page.locator(".sidebar").getByRole("button", { name: "Downloads", exact: true }).click();
+	await page.locator('[role="row"]').filter({ has: page.getByText(FIXTURE_FOLDER, { exact: true }) }).dblclick();
+	await rowFor(page, "selected-file.txt").waitFor({ timeout: 10_000 });
+	await page.getByRole("button", { name: "New tab ⌘T", exact: true }).click();
+	const watchStarted = Date.now();
+	await rowFor(page, "sub").dblclick();
+	await page.locator(".tab--active .tab__title").filter({ hasText: "sub" }).waitFor({ timeout: 10_000 });
+	await waitForElectronLine(
+		(line) => line.includes(`[fs-watch] watch ${join(FIXTURE_DIR, "sub")}`),
+		{ timeoutMs: LIVE_BOUND_MS, label: "subfolder watch diagnostic" },
+	);
+	const watchElapsedMs = Date.now() - watchStarted;
+	if (watchElapsedMs > LIVE_BOUND_MS) throw new Error(`subfolder watch took ${watchElapsedMs}ms > ${LIVE_BOUND_MS}ms`);
+	const closeStarted = Date.now();
+	await page.locator(".tab--active .tab__close[aria-label='Close tab ⌘W']").click();
+	await waitForElectronLine(
+		(line) => line.includes(`[fs-watch] unwatch ${join(FIXTURE_DIR, "sub")}`),
+		{ timeoutMs: LIVE_BOUND_MS, label: "subfolder unwatch diagnostic after close" },
+	);
+	const closeElapsedMs = Date.now() - closeStarted;
+	if (closeElapsedMs > LIVE_BOUND_MS) throw new Error(`subfolder unwatch took ${closeElapsedMs}ms > ${LIVE_BOUND_MS}ms`);
+	await page.screenshot({ path: join(EVIDENCE, "S13.png") });
+	pass(
+		"S13 close tab unwatch",
+		`subfolder watch observed in ${watchElapsedMs}ms <= ${LIVE_BOUND_MS}ms; close-tab unwatch observed in ${closeElapsedMs}ms <= ${LIVE_BOUND_MS}ms`,
+	);
 }
 
 async function main() {
@@ -699,6 +851,7 @@ async function main() {
 		exitCode = 1;
 		void closeApp().finally(() => process.exit(exitCode));
 	}, OVERALL_TIMEOUT_MS);
+	appendLog("INFO IS-9 overflow real-surface injection unavailable; renderer relist overflow coverage: test/dupey-layer.test.ts:289 and test/fs-watch-service.test.ts:152");
 	let page = await startSession("A");
 	await runScenario("S1", page, () => runS1(page));
 	await runScenario("S2", page, () => runS2(page));
@@ -740,6 +893,14 @@ async function main() {
 	await page.locator('[role="row"]').filter({ has: page.getByText(FIXTURE_FOLDER, { exact: true }) }).dblclick();
 	await rowFor(page, "selected-file.txt").waitFor({ timeout: 10_000 });
 	await runScenario("S9", page, () => runS9(page, familyE));
+	await finishSession();
+
+	page = await startSession("F");
+	await runScenario("S12", page, () => runS12(page));
+	await finishSession();
+
+	page = await startSession("G");
+	await runScenario("S13", page, () => runS13(page));
 	await finishSession();
 }
 
