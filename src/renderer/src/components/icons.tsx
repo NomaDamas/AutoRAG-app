@@ -203,6 +203,35 @@ export function HistoryIcon({ size = 16, className }: GlyphProps): ReactElement 
 	);
 }
 
+export function IconsViewIcon({ size = 16, className }: GlyphProps): ReactElement {
+	return (
+		<Stroke size={size} width={1.9} className={className}>
+			<rect x="4" y="4" width="6.5" height="6.5" rx="1.5" />
+			<rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5" />
+			<rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5" />
+			<rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5" />
+		</Stroke>
+	);
+}
+
+export function ListViewIcon({ size = 16, className }: GlyphProps): ReactElement {
+	return (
+		<Stroke size={size} width={1.9} className={className}>
+			<path d="M9.5 6.5H20M9.5 12H20M9.5 17.5H20" />
+			<path d="M4.5 6.5h.01M4.5 12h.01M4.5 17.5h.01" />
+		</Stroke>
+	);
+}
+
+export function ColumnsViewIcon({ size = 16, className }: GlyphProps): ReactElement {
+	return (
+		<Stroke size={size} width={1.9} className={className}>
+			<rect x="3" y="4.5" width="18" height="15" rx="2.5" />
+			<path d="M9 4.5v15M15 4.5v15" />
+		</Stroke>
+	);
+}
+
 /** Folders render the filled glyph in --folder, never a tile (DESIGN.md §5). */
 export function FolderGlyph({ size = 18 }: GlyphProps): ReactElement {
 	return (

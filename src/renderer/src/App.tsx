@@ -5,9 +5,11 @@ import type { CitationEvidence } from "../../shared/search-contract";
 const autorag = (window as unknown as { readonly autorag: { readonly settings: SettingsBridge } }).autorag;
 import { AiSearchPanel } from "./components/AiSearchPanel";
 import { EvidencePanel } from "./components/EvidencePanel";
+import { ColumnBrowser } from "./components/ColumnBrowser";
 import { ColumnHeader } from "./components/ColumnHeader";
 import { FileList } from "./components/FileList";
 import type { RowCallbacks } from "./components/FileRow";
+import { IconGrid } from "./components/IconGrid";
 import { ContextMenu } from "./components/primitives/ContextMenu";
 import { Toast } from "./components/primitives/Toast";
 import { Sidebar } from "./components/Sidebar";
@@ -101,6 +103,8 @@ export function App(): ReactElement {
 						searchFocused={finder.searchFocused}
 						showHotkeys={SHOW_HOTKEYS}
 						searchRef={finder.searchRef}
+						viewMode={finder.viewMode}
+						onViewModeChange={finder.setViewMode}
 						onNavigate={finder.navigate}
 						onBack={finder.back}
 						onForward={finder.forward}
@@ -109,7 +113,39 @@ export function App(): ReactElement {
 						onSearchFocus={() => finder.setSearchFocused(true)}
 						onSearchBlur={() => finder.setSearchFocused(false)}
 					/>
-					<>
+					{finder.layout === "icons" ? (
+						<IconGrid
+							rows={finder.stackRows}
+							listRef={finder.listRef}
+							searching={finder.searching}
+							summary={finder.searchSummary}
+							emptyText={finder.emptyText}
+							selectedKeys={finder.selection.keys}
+							focusedZone={finder.zone === "finder"}
+							flashPath={finder.flashPath}
+							renamePath={finder.renamePath}
+							renameDraft={finder.renameDraft}
+							versionFamilyError={finder.versionFamilyError}
+							onRetryVersionFamilies={finder.retryVersionFamilies}
+							callbacks={rowCallbacks}
+						/>
+					) : finder.layout === "columns" ? (
+						<ColumnBrowser
+							panes={finder.columnPanes}
+							listRef={finder.listRef}
+							emptyText={finder.emptyText}
+							selectedKeys={finder.selection.keys}
+							focusedZone={finder.zone === "finder"}
+							flashPath={finder.flashPath}
+							renamePath={finder.renamePath}
+							renameDraft={finder.renameDraft}
+							versionFamilyError={finder.versionFamilyError}
+							onRetryVersionFamilies={finder.retryVersionFamilies}
+							columnCallbacks={{ onClick: finder.clickColumnRow }}
+							callbacks={rowCallbacks}
+						/>
+					) : (
+						<>
 							<ColumnHeader sort={finder.sort} searching={finder.searching} onSort={finder.sortBy} />
 							<FileList
 								rows={finder.stackRows}
@@ -128,7 +164,8 @@ export function App(): ReactElement {
 								indexOverrides={finder.indexOverrides}
 								callbacks={rowCallbacks}
 							/>
-					</>
+						</>
+					)}
 					<StatusBar text={finder.statusText} showHotkeys={SHOW_HOTKEYS} devLabel={DEV_LABEL} />
 					{evidence.length === 0 ? null : (
 						<EvidencePanel
