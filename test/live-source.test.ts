@@ -63,7 +63,6 @@ function fakeFs(result: FsVersionFamiliesResult): FsBridge {
 		copyPathsToClipboard: async () => {},
 		versionFamilies: async () => result,
 		refreshVersionFamilies: async () => result,
-		onVersionFamiliesUpdated: () => () => {},
 	};
 }
 

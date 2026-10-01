@@ -26,7 +26,6 @@ export const FS_CHANNELS = {
 	copyPathsToClipboard: "fs:copyPathsToClipboard",
 	versionFamilies: "fs:versionFamilies",
 	versionFamiliesRefresh: "fs:versionFamiliesRefresh",
-	versionFamiliesUpdated: "fs:versionFamiliesUpdated",
 } as const;
 
 export type FsChannel = (typeof FS_CHANNELS)[keyof typeof FS_CHANNELS];
@@ -159,8 +158,6 @@ export interface FsVersionFamilyBridge {
 	versionFamilies(): Promise<FsVersionFamiliesResult>;
 	/** Forces a dupey scan now, persists it, and returns the fresh snapshot. */
 	refreshVersionFamilies(): Promise<FsVersionFamiliesResult>;
-	/** Adopts snapshots produced by the startup scan and the repeating interval. */
-	onVersionFamiliesUpdated?(listener: (result: FsVersionFamiliesResult) => void): () => void;
 }
 
 export interface FsBridge extends FsCoreBridge, FsVersionFamilyBridge {}

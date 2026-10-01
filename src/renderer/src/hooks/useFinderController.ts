@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, RefObject } from "react";
 import { RECENTS_PATH } from "../../../shared/fs-contract";
-import type { FsDirChange, LiveMessage } from "../../../shared/live-contract";
+import { DUPEY_LAYER_ID, type FsDirChange, type LiveMessage } from "../../../shared/live-contract";
 import type { FinderEntry } from "../data/entries";
 import type { NavItem } from "../data/places";
 import { type FinderLocation, type FinderSource, pickInitialPath } from "../data/source";
@@ -20,6 +20,14 @@ import {
 	pruneSelection,
 	watchSetFor,
 } from "../state/live";
+import {
+	adoptInvoke,
+	adoptMessage,
+	adoptResync,
+	EMPTY_LAYER_STORE,
+	selectDupey,
+	type LayerStore,
+} from "../state/layers";
 import { activeNavPath, basename, breadcrumbTrail, dirname, type Crumb } from "../state/paths";
 import {
 	applyRowClick,
@@ -161,8 +169,7 @@ export function useFinderController(
 	const [flashPath, setFlashPath] = useState<string | null>(null);
 	const [searchFocused, setSearchFocused] = useState(false);
 	const [revision, setRevision] = useState(0);
-	const [families, setFamilies] = useState<VersionFamilies>(EMPTY_VERSION_FAMILIES);
-	const [versionFamilyError, setVersionFamilyError] = useState<VersionFamilyError | null>(null);
+	const [layerStore, setLayerStore] = useState<LayerStore>(EMPTY_LAYER_STORE);
 	const [stackPinned, setStackPinned] = useState<ReadonlySet<string>>(new Set());
 
 	const listRef = useRef<HTMLDivElement | null>(null);
@@ -174,6 +181,7 @@ export function useFinderController(
 	const tabsRef = useRef(tabsState.tabs);
 	const searchingRef = useRef(false);
 	const listingRef = useRef<readonly FinderEntry[]>([]);
+	const layerStoreRef = useRef<LayerStore>(EMPTY_LAYER_STORE);
 	const staleTabsRef = useRef(new Set<number>());
 	const previousPathRef = useRef<string | null>(null);
 	const previousTabIdRef = useRef<number | null>(null);
@@ -183,6 +191,13 @@ export function useFinderController(
 	const path = tab.path;
 	const selection = tab.selection;
 	const searching = query.trim() !== "";
+	const dupey = selectDupey(layerStore);
+	layerStoreRef.current = layerStore;
+	const families = useMemo<VersionFamilies>(
+		() => (dupey.fenced ? EMPTY_VERSION_FAMILIES : buildVersionFamilies(dupey.result.families)),
+		[dupey.fenced, dupey.result.families],
+	);
+	const versionFamilyError = dupey.result.error;
 	pathRef.current = path;
 	activeTabIdRef.current = tab.id;
 	tabsRef.current = tabsState.tabs;
@@ -346,6 +361,7 @@ export function useFinderController(
 
 	useEffect(() => {
 		const unsubscribe = source.onLive((message: LiveMessage) => {
+			setLayerStore((current) => adoptMessage(current, message));
 			const activeTabId = activeTabIdRef.current;
 			const activePath = pathRef.current;
 			const activeChanges: FsDirChange[] = [];
@@ -419,37 +435,69 @@ export function useFinderController(
 
 	useEffect(() => {
 		let live = true;
-		const adopt = (result: VersionFamiliesResult): void => {
-			if (!live) return;
-			setFamilies(buildVersionFamilies(result.families));
-			setVersionFamilyError(result.error);
-			if (result.error !== null) {
-				console.error(
-					result.error.installCommand === null
-						? result.error.message
-						: `${result.error.message}\nInstall it with: ${result.error.installCommand}`,
-				);
-			}
-		};
-		const unsubscribe = source.onVersionFamiliesUpdated(adopt);
+		const versionAtRequest = layerStoreRef.current.versions[DUPEY_LAYER_ID] ?? 0;
 		source
 			.versionFamilies()
-			.then(adopt)
+			.then((result) => {
+				if (live) {
+					setLayerStore((current) => adoptInvoke(current, DUPEY_LAYER_ID, result, versionAtRequest));
+				}
+			})
 			.catch((error: unknown) => {
 				console.error("version families request failed", error);
 				if (!live) return;
-				setFamilies(EMPTY_VERSION_FAMILIES);
-				setVersionFamilyError({
-					code: "scan-failed",
-					message: error instanceof Error ? error.message : String(error),
-					installCommand: null,
-				});
+				const result: VersionFamiliesResult = {
+					families: [],
+					scannedAt: null,
+					error: {
+						code: "scan-failed",
+						message: error instanceof Error ? error.message : String(error),
+						installCommand: null,
+					},
+				};
+				setLayerStore((current) => adoptInvoke(current, DUPEY_LAYER_ID, result, versionAtRequest));
 			});
 		return () => {
 			live = false;
-			unsubscribe();
 		};
 	}, [source]);
+
+	useEffect(() => {
+		if (versionFamilyError === null) return;
+		console.error(
+			versionFamilyError.installCommand === null
+				? versionFamilyError.message
+				: `${versionFamilyError.message}\nInstall it with: ${versionFamilyError.installCommand}`,
+		);
+	}, [versionFamilyError]);
+
+	useEffect(() => {
+		let live = true;
+		const resync = (): void => {
+			if (path === "") return;
+			generationRef.current += 1;
+			const requestGeneration = generationRef.current;
+			if (!searchingRef.current) {
+				loadListing(path, "silent", requestGeneration);
+			}
+			void source
+				.liveLayers()
+				.then((result) => {
+					if (live) setLayerStore((current) => adoptResync(current, result));
+				})
+				.catch((error: unknown) => console.error("live layer resync failed", error));
+		};
+		const onVisibilityChange = (): void => {
+			if (document.visibilityState === "visible") resync();
+		};
+		window.addEventListener("focus", resync);
+		document.addEventListener("visibilitychange", onVisibilityChange);
+		return () => {
+			live = false;
+			window.removeEventListener("focus", resync);
+			document.removeEventListener("visibilitychange", onVisibilityChange);
+		};
+	}, [loadListing, path, source]);
 
 	useEffect(() => {
 		if (flashPath === null) {
@@ -582,19 +630,24 @@ export function useFinderController(
 	}, []);
 
 	const retryVersionFamilies = useCallback(() => {
+		const versionAtRequest = layerStoreRef.current.versions[DUPEY_LAYER_ID] ?? 0;
 		source
 			.refreshVersionFamilies()
 			.then((result) => {
-				setFamilies(buildVersionFamilies(result.families));
-				setVersionFamilyError(result.error);
+				setLayerStore((current) => adoptInvoke(current, DUPEY_LAYER_ID, result, versionAtRequest));
 			})
 			.catch((error: unknown) => {
 				console.error("version family refresh failed", error);
-				setVersionFamilyError({
-					code: "scan-failed",
-					message: error instanceof Error ? error.message : String(error),
-					installCommand: null,
-				});
+				const result: VersionFamiliesResult = {
+					families: [],
+					scannedAt: null,
+					error: {
+						code: "scan-failed",
+						message: error instanceof Error ? error.message : String(error),
+						installCommand: null,
+					},
+				};
+				setLayerStore((current) => adoptInvoke(current, DUPEY_LAYER_ID, result, versionAtRequest));
 			});
 	}, [source]);
 

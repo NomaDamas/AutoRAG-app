@@ -52,7 +52,6 @@ interface Fixture {
 	readonly service: ReturnType<typeof createVersionFamilyService>;
 	readonly probeState: Map<string, FileStamp | null>;
 	readonly probeCalls: string[];
-	readonly updates: FsVersionFamiliesResult[];
 	readonly stored: () => StoredVersionFamilies | null;
 	readonly writes: () => number;
 	readonly changed: () => number;
@@ -70,7 +69,6 @@ function fixture(options: {
 		[MEMBER, stamp("member")],
 	]);
 	const probeCalls: string[] = [];
-	const updates: FsVersionFamiliesResult[] = [];
 	let stored = options.seed ?? null;
 	let writes = 0;
 	let changed = 0;
@@ -102,7 +100,6 @@ function fixture(options: {
 			changed += 1;
 			options.onChanged?.();
 		},
-		onUpdate: (result) => updates.push(result),
 		setTimer: (handler, ms) => {
 			const timer = { ms, handler };
 			timers.push(timer);
@@ -119,7 +116,6 @@ function fixture(options: {
 		service,
 		probeState,
 		probeCalls,
-		updates,
 		stored: () => stored,
 		writes: () => writes,
 		changed: () => changed,
@@ -197,12 +193,11 @@ describe("dupey live reconciliation", () => {
 		expect(await h.service.result()).toEqual(second);
 		expect(h.stored()).toBe(persisted);
 		expect(h.writes()).toBe(1);
-		expect(h.updates).toEqual([first, second]);
 		expect(h.changed()).toBe(2);
 
 		const repeated = await h.service.refresh();
 		expect(repeated).toEqual(second);
-		expect(h.updates).toEqual([first, second, repeated]);
+		expect(await h.service.result()).toEqual(repeated);
 		expect(h.changed()).toBe(2);
 	});
 

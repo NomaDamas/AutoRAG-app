@@ -58,8 +58,6 @@ export interface FinderSource {
 	versionFamilies(): Promise<VersionFamiliesResult>;
 	/** Forces a dupey scan now and returns the fresh snapshot. */
 	refreshVersionFamilies(): Promise<VersionFamiliesResult>;
-	/** Adopts snapshots from the startup scan and the repeating interval. */
-	onVersionFamiliesUpdated(listener: (result: VersionFamiliesResult) => void): () => void;
 }
 
 /* -------------------------------------------------------------- real bridge */
@@ -87,7 +85,10 @@ export function createBridgeSource(fs: FsBridge, initialPath: string, live?: Liv
 		initialPath,
 		setWatchSet: (dirs) => live?.setWatchSet(dirs) ?? Promise.resolve(),
 		onLive: (listener) => {
-			return live?.onMessage(listener) ?? (() => {});
+			return live?.onMessage((message) => listener({
+				...message,
+				layers: message.layers.map(mapLayerPublication),
+			})) ?? (() => {});
 		},
 		liveLayers: () => live?.layers() ?? Promise.resolve({ seq: 0, layers: [], reconciled: [] }),
 		exists: async (path) => {
@@ -145,7 +146,6 @@ export function createBridgeSource(fs: FsBridge, initialPath: string, live?: Liv
 		async refreshVersionFamilies() {
 			return mapVersionFamiliesResult(await fs.refreshVersionFamilies());
 		},
-		onVersionFamiliesUpdated: (listener) => fs.onVersionFamiliesUpdated?.((result) => listener(mapVersionFamiliesResult(result))) ?? (() => {}),
 		...(live === undefined ? {} : {
 			liveLayers: async () => {
 				const result = await live.layers();
@@ -328,7 +328,6 @@ export function createFixtureSource(): FinderSource {
 				error: null,
 			}),
 		refreshVersionFamilies: () => Promise.resolve(EMPTY_VERSION_FAMILIES_RESULT),
-		onVersionFamiliesUpdated: () => () => {},
 	};
 }
 

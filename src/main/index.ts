@@ -4,7 +4,6 @@ import { isAbsolute, join, resolve } from "node:path";
 import { app, BrowserWindow, clipboard, shell } from "electron";
 import { BUILTIN_DATASOURCE_SKILL_NAMES, writeConfigObject, writeDefaultConfig } from "@autorag/librarian";
 import type { DataSourceRow } from "../shared/settings-contract";
-import { FS_CHANNELS } from "../shared/fs-contract";
 import { DUPEY_LAYER_ID, LIVE_CHANNELS } from "../shared/live-contract";
 import { APP_NAME, APP_VERSION, formatWindowTitle, type DevLabel } from "../shared/app-info";
 import { createChatStore } from "./chat-store";
@@ -173,7 +172,6 @@ app.whenReady().then(() => {
 		store: createFileVersionFamilyStore(join(app.getPath("userData"), "dupey-cache")),
 		buildEntry: buildFsEntry,
 		intervalMinutes: () => scanIntervalMinutes,
-		onUpdate: (result) => sendToWindow(FS_CHANNELS.versionFamiliesUpdated, result),
 		onChanged: () => hub.publish(DUPEY_LAYER_ID),
 	});
 	hub.register(createDupeyLayer(versionFamilyService));

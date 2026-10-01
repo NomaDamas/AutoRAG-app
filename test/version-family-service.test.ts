@@ -13,7 +13,7 @@ import {
 } from "../src/main/version-family-service";
 import { createFileVersionFamilyStore, type StoredVersionFamilies } from "../src/main/version-family-store";
 import type { FileStamp } from "../src/main/version-family-verify";
-import { RECENTS_PATH, type FsEntry, type FsLocation, type FsVersionFamiliesResult, type FsVersionFamily } from "../src/shared/fs-contract";
+import { RECENTS_PATH, type FsEntry, type FsLocation, type FsVersionFamily } from "../src/shared/fs-contract";
 
 const dupeyAvailable = { status: async () => ({ available: true, version: "dupey 0.1.2", error: null }) };
 const dupeyMissing = { status: async () => ({ available: false, version: null, error: "spawn dupey ENOENT" }) };
@@ -58,7 +58,7 @@ function family(head: string, member: string, relation = "exact"): Record<string
 
 interface Harness {
 	readonly deps: VersionFamilyServiceDeps;
-	readonly updates: FsVersionFamiliesResult[];
+	readonly changes: number;
 	readonly timers: { ms: number; fire: () => void }[];
 	readonly scans: string[];
 	readonly writes: number;
@@ -69,7 +69,7 @@ function harness(
 	overrides: Partial<VersionFamilyServiceDeps> = {},
 	seed: StoredVersionFamilies | null = null,
 ): Harness {
-	const updates: FsVersionFamiliesResult[] = [];
+	let changes = 0;
 	const timers: { ms: number; fire: () => void }[] = [];
 	const scans: string[] = [];
 	const state = { writes: 0 };
@@ -94,7 +94,9 @@ function harness(
 		},
 		intervalMinutes: () => DEFAULT_SCAN_INTERVAL_MINUTES,
 		probe: async (path) => fixtureStamp(path),
-		onUpdate: (result) => updates.push(result),
+		onChanged: () => {
+			changes += 1;
+		},
 		now: () => new Date("2026-09-29T10:00:00.000Z"),
 		setTimer: (handler, ms) => {
 			timers.push({ ms, fire: handler });
@@ -105,7 +107,9 @@ function harness(
 	};
 	return {
 		deps,
-		updates,
+		get changes() {
+			return changes;
+		},
 		timers,
 		scans,
 		get writes() {
@@ -205,7 +209,7 @@ describe("version-family service — SSOT", () => {
 		expect(result.families).toHaveLength(1);
 		expect(result.scannedAt).toBe("2026-09-29T10:00:00.000Z");
 		expect(h.writes).toBe(1);
-		expect(h.updates).toHaveLength(1);
+		expect(h.changes).toBe(1);
 	});
 
 	it("reports dupey-missing and keeps the last snapshot", async () => {
@@ -339,7 +343,7 @@ describe("version-family service — trash prune", () => {
 		const result = await service.removePaths(["/home/Desktop/b.txt"]);
 		expect(h.scans).toEqual([]);
 		expect(h.writes).toBe(1);
-		expect(h.updates).toHaveLength(1);
+		expect(h.changes).toBe(1);
 		expect(result.families[0]?.head).toBe("/home/Desktop/a.txt");
 		expect(result.families[0]?.members.map((member) => member.path)).toEqual(["/home/Desktop/c.txt"]);
 		expect(result.families[0]?.entries.map((entry) => entry.path)).toEqual([
@@ -372,7 +376,7 @@ describe("version-family service — trash prune", () => {
 		const service = createVersionFamilyService(h.deps);
 		const result = await service.removePaths(["/home/Desktop/unrelated.txt"]);
 		expect(h.writes).toBe(0);
-		expect(h.updates).toHaveLength(0);
+		expect(h.changes).toBe(0);
 		expect(result.families).toHaveLength(1);
 	});
 

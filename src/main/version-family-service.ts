@@ -120,8 +120,6 @@ export interface VersionFamilyServiceDeps {
 	readonly dupey?: DupeyProbe;
 	/** Current interval in minutes, read from app Settings on every arm. */
 	readonly intervalMinutes: () => number;
-	/** Fired after every refresh so the renderer can adopt the new snapshot. */
-	readonly onUpdate?: (result: FsVersionFamiliesResult) => void;
 	/** Fired after a verified snapshot mutation for the ChangeHub integration. */
 	readonly onChanged?: () => void;
 	/** Filesystem metadata probe; defaults to bigint lstat without content reads. */
@@ -209,9 +207,8 @@ export function createVersionFamilyService(deps: VersionFamilyServiceDeps): Vers
 		return JSON.stringify(a) === JSON.stringify(b);
 	}
 
-	function emit(result: FsVersionFamiliesResult, changed: boolean): void {
+	function emit(result: FsVersionFamiliesResult, _changed: boolean): void {
 		published = result;
-		if (changed) deps.onUpdate?.(result);
 	}
 
 	async function verifyStored(
@@ -428,9 +425,8 @@ export function createVersionFamilyService(deps: VersionFamilyServiceDeps): Vers
 					message: `dupey CLI is required for version stacks: ${status.error ?? "not found on PATH"}`,
 					installCommand: DUPEY_INSTALL_COMMAND,
 				};
-				const changed = await publishVerified(await load());
+				await publishVerified(await load());
 				const current = published ?? envelope(null);
-				if (!changed) deps.onUpdate?.(current);
 				return current;
 			});
 		}
@@ -496,7 +492,6 @@ export function createVersionFamilyService(deps: VersionFamilyServiceDeps): Vers
 					!sameFamilies(previous.families, current.families);
 				published = current;
 				if (changed) deps.onChanged?.();
-				deps.onUpdate?.(current);
 				return current;
 			});
 		}
