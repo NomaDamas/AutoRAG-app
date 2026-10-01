@@ -56,6 +56,18 @@ export function sameContent(a: FileStamp, b: FileStamp): boolean {
 	);
 }
 
+/** Like sameContent but ignores ctimeNs — for rename detection where the kernel changes ctime on rename(2). */
+function sameContentForRename(a: FileStamp, b: FileStamp): boolean {
+	return (
+		!isDirty(a) &&
+		!isDirty(b) &&
+		a.dev === b.dev &&
+		a.ino === b.ino &&
+		a.size === b.size &&
+		a.mtimeNs === b.mtimeNs
+	);
+}
+
 function isDirty(stamp: FileStamp): boolean {
 	return (
 		stamp.dev === "" &&
@@ -198,7 +210,7 @@ export async function remapRenames(
 		nextFamilies = rewriteFamilies(nextFamilies, oldPath, newPath);
 		delete nextStamps[oldPath];
 		const newStamp = candidates.get(newPath)!;
-		nextStamps[newPath] = sameContent(oldStamp, newStamp) ? oldStamp : DIRTY_STAMP;
+		nextStamps[newPath] = sameContentForRename(oldStamp, newStamp) ? newStamp : DIRTY_STAMP;
 		remapped.set(oldPath, newPath);
 	}
 	return { families: nextFamilies, stamps: nextStamps, remapped };

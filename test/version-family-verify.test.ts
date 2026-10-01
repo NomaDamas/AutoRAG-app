@@ -1,4 +1,4 @@
-import { mkdtemp, readFile } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile, rename, rmdir, lstat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -203,7 +203,63 @@ describe("version-family verification primitives", () => {
 	});
 });
 
-describe("version-family store stamp compatibility", () => {
+	describe("remapRenames ctime-only rename detection", () => {
+		it("remaps when only ctimeNs differs and stores the new probe stamp", async () => {
+			const oldStamp = stamp();
+			const newStamp = stamp({ ctimeNs: "101" });
+			const baseFamily = family();
+			const result = await remapRenames(
+				[baseFamily],
+				{ "/x/member.txt": oldStamp },
+				["/x/member.txt"],
+				["/x/new-member.txt"],
+				probeFrom({ "/x/new-member.txt": newStamp }),
+			);
+			expect(result.remapped).toEqual(new Map([["/x/member.txt", "/x/new-member.txt"]]));
+			expect(result.stamps["/x/new-member.txt"]).toEqual(newStamp);
+			expect(result.stamps["/x/new-member.txt"]).not.toBe(DIRTY_STAMP);
+
+			const published = await verifyFamilies(
+				result.families,
+				result.stamps,
+				probeFrom({
+					"/x/head.txt": stamp(),
+					"/x/new-member.txt": newStamp,
+				}),
+			);
+			expect(published.families.length).toBeGreaterThan(0);
+			const publishedMember = published.families[0]?.members.find(
+				(m) => m.path === "/x/new-member.txt",
+			);
+			expect(publishedMember).toBeDefined();
+		});
+
+		it("stores DIRTY_STAMP when mtime changes on rename", async () => {
+			const oldStamp = stamp();
+			const newStamp = stamp({ mtimeNs: "200" });
+			const result = await remapRenames(
+				[family()],
+				{ "/x/member.txt": oldStamp },
+				["/x/member.txt"],
+				["/x/new-member.txt"],
+				probeFrom({ "/x/new-member.txt": newStamp }),
+			);
+			expect(result.remapped.size).toBe(1);
+			expect(result.stamps["/x/new-member.txt"]).toEqual(DIRTY_STAMP);
+
+			const published = await verifyFamilies(
+				result.families,
+				result.stamps,
+				probeFrom({
+					"/x/head.txt": stamp(),
+					"/x/new-member.txt": newStamp,
+				}),
+			);
+			expect(published.families).toEqual([]);
+		});
+	});
+
+	describe("version-family store stamp compatibility", () => {
 	it("round-trips stamps and still accepts snapshots without stamps", async () => {
 		const dir = await mkdtemp(join(tmpdir(), "vf-verify-"));
 		const store = createFileVersionFamilyStore(dir);
