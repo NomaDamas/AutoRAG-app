@@ -7,12 +7,10 @@ import { readPreviewFile } from "../src/preview/node/read-file";
 import { parseByteRange } from "../src/preview/shared/range";
 import { claimedViewerExtensions, describeExtension, viewerForExtension, wantsBytes, VIEWER_KINDS } from "../src/preview/shared/registry";
 import { rtfToText } from "../src/preview/shared/rtf";
-import { stepQuickLook, type QuickLookRequest } from "../src/preview/shared/session";
 import { listTarEntries } from "../src/preview/shared/tar-list";
 import { listZipEntries } from "../src/preview/shared/zip-list";
-import { zoomFromAnchor } from "../src/preview/shared/zoom";
+import { fitQuickLook, placeQuickLook } from "../src/preview/shared/fit";
 
-const sample: QuickLookRequest = { path: "/tmp/a.png", name: "a.png", anchor: null };
 
 describe("preview registry", () => {
 	it("resolves every claimed extension to its viewer", () => {
@@ -35,32 +33,18 @@ describe("preview registry", () => {
 	});
 });
 
-describe("quick look motion", () => {
-	it("parks the panel center on the row and keeps a uniform scale", () => {
-		const anchor = { x: 100, y: 200, width: 400, height: 32 };
-		const dest = { x: 300, y: 80, width: 760, height: 600 };
-		const zoom = zoomFromAnchor(anchor, dest);
-		expect(zoom.scale).toBeGreaterThanOrEqual(0.12);
-		expect(zoom.scale).toBeLessThanOrEqual(0.22);
-		expect(dest.x + dest.width / 2 + zoom.x).toBeCloseTo(anchor.x + anchor.width / 2);
-		expect(dest.y + dest.height / 2 + zoom.y).toBeCloseTo(anchor.y + anchor.height / 2);
+describe("quick look sizing", () => {
+	it("fits intrinsic media inside the work area with toolbar chrome", () => {
+		const size = fitQuickLook({ width: 1600, height: 900 }, { width: 1440, height: 900 });
+		expect(size.width).toBeLessThanOrEqual(Math.ceil(1440 * 0.72));
+		expect(size.height).toBeGreaterThan(52);
+		expect((size.width / (size.height - 52))).toBeCloseTo(1600 / 900, 1);
 	});
 
-	it("opens, swaps, and closes without reopening a closed preview", () => {
-		const opened = stepQuickLook(sample, null, "closed");
-		expect(opened.phase).toBe("opening");
-		expect(opened.shown?.path).toBe(sample.path);
-		const settled = stepQuickLook(sample, opened.shown, "open");
-		expect(settled.phase).toBe("open");
-		expect(settled.shown).toBe(opened.shown);
-		const swapped = stepQuickLook({ ...sample, path: "/tmp/b.pdf", name: "b.pdf" }, opened.shown, "open");
-		expect(swapped.phase).toBe("open");
-		expect(swapped.shown?.path).toBe("/tmp/b.pdf");
-		const closing = stepQuickLook(null, swapped.shown, "open");
-		expect(closing.phase).toBe("closing");
-		const closed = stepQuickLook(null, closing.shown, "closed");
-		expect(closed.shown).toBeNull();
-		expect(closed.phase).toBe("closed");
+	it("centers and clamps the preview bounds", () => {
+		const bounds = placeQuickLook({ width: 500, height: 400 }, { x: 1300, y: 700, width: 900, height: 700 }, { x: 0, y: 0, width: 1440, height: 900 });
+		expect(bounds.x).toBe(940);
+		expect(bounds.y).toBe(500);
 	});
 });
 

@@ -1,5 +1,26 @@
+/**
+ * Quick Look runs in its own pre-warmed BrowserWindow (the sigma-file-manager
+ * v1 design). The Finder window asks the main process to show or hide a file;
+ * the main process reads the file once and pushes it to the preview window,
+ * which reports the media size back so the window can fit it before it shows.
+ */
 export const PREVIEW_CHANNELS = {
-	read: "preview:read",
+	/** Finder -> main (invoke): preview this file. */
+	show: "preview:show",
+	/** Finder -> main (invoke): hide the preview. */
+	hide: "preview:hide",
+	/** Main -> Finder: the preview closed itself (Space, Escape, close button). */
+	closed: "preview:closed",
+	/** Main -> Finder: move the Finder selection (arrow keys pressed in the preview). */
+	navigate: "preview:navigate",
+	/** Main -> preview window: render this file. */
+	load: "preview:load",
+	/** Main -> preview window: drop the content so media stops. */
+	unload: "preview:unload",
+	/** Preview window -> main: the file rendered; media size when it has one. */
+	ready: "preview:ready",
+	/** Preview window -> main (invoke): toolbar and keyboard actions. */
+	request: "preview:request",
 } as const;
 
 /**
@@ -17,21 +38,89 @@ export interface PreviewDocument {
 	readonly bytes: Uint8Array | null;
 }
 
+export interface QuickLookTarget {
+	readonly path: string;
+	readonly name: string;
+}
+
+/** `seq` orders loads; the main process ignores `ready` for a stale seq. */
+export interface QuickLookLoad {
+	readonly seq: number;
+	readonly name: string;
+	readonly path: string;
+	readonly document: PreviewDocument | null;
+	readonly error: string | null;
+}
+
+/** Zero width or height means the content has no intrinsic size. */
+export interface QuickLookReady {
+	readonly seq: number;
+	readonly width: number;
+	readonly height: number;
+}
+
+export type QuickLookAction = "close" | "next" | "previous" | "open" | "fullscreen";
+
+export type NavigateDelta = 1 | -1;
+
+/** Exposed to the Finder window as `window.autorag.preview`. */
 export interface PreviewBridge {
-	read(path: string, includeBytes: boolean): Promise<PreviewDocument>;
+	show(target: QuickLookTarget): Promise<void>;
+	hide(): Promise<void>;
+	onClosed(listener: () => void): () => void;
+	onNavigate(listener: (delta: NavigateDelta) => void): () => void;
+}
+
+/** Exposed to the Quick Look window as `window.quickLook`. */
+export interface QuickLookWindowBridge {
+	readonly platform: string;
+	onLoad(listener: (load: QuickLookLoad) => void): () => void;
+	onUnload(listener: () => void): () => void;
+	ready(report: QuickLookReady): void;
+	request(action: QuickLookAction): Promise<void>;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null;
 }
 
 export function isPreviewDocument(value: unknown): value is PreviewDocument {
-	if (typeof value !== "object" || value === null) return false;
-	if (!("name" in value) || typeof value.name !== "string") return false;
-	if (!("path" in value) || typeof value.path !== "string") return false;
-	if (!("ext" in value) || typeof value.ext !== "string") return false;
-	if (!("size" in value) || typeof value.size !== "number") return false;
-	if (!("modifiedAt" in value) || typeof value.modifiedAt !== "string") return false;
-	if (!("mime" in value) || typeof value.mime !== "string") return false;
-	if (!("truncated" in value) || typeof value.truncated !== "boolean") return false;
-	if (!("bytes" in value)) return false;
+	if (!isRecord(value)) return false;
+	if (typeof value.name !== "string" || typeof value.path !== "string" || typeof value.ext !== "string") return false;
+	if (typeof value.size !== "number" || typeof value.modifiedAt !== "string" || typeof value.mime !== "string") return false;
+	if (typeof value.truncated !== "boolean") return false;
 	return value.bytes === null || value.bytes instanceof Uint8Array;
+}
+
+export function isQuickLookTarget(value: unknown): value is QuickLookTarget {
+	if (!isRecord(value)) return false;
+	return typeof value.path === "string" && value.path.length > 0 && typeof value.name === "string";
+}
+
+export function isQuickLookLoad(value: unknown): value is QuickLookLoad {
+	if (!isRecord(value)) return false;
+	if (typeof value.seq !== "number" || typeof value.name !== "string" || typeof value.path !== "string") return false;
+	if (value.document !== null && !isPreviewDocument(value.document)) return false;
+	return value.error === null || typeof value.error === "string";
+}
+
+export function isQuickLookReady(value: unknown): value is QuickLookReady {
+	if (!isRecord(value)) return false;
+	return (
+		typeof value.seq === "number" &&
+		typeof value.width === "number" &&
+		Number.isFinite(value.width) &&
+		typeof value.height === "number" &&
+		Number.isFinite(value.height)
+	);
+}
+
+export function isQuickLookAction(value: unknown): value is QuickLookAction {
+	return value === "close" || value === "next" || value === "previous" || value === "open" || value === "fullscreen";
+}
+
+export function isNavigateDelta(value: unknown): value is NavigateDelta {
+	return value === 1 || value === -1;
 }
 
 export const PREVIEW_SCHEME = "autorag-preview";

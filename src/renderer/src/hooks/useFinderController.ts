@@ -110,6 +110,8 @@ export interface FinderController {
 	showToast(message: string): void;
 	/** In-app Quick Look for an arbitrary path (evidence source). */
 	quickLookPath(path: string): void;
+	/** Arrow keys pressed inside the Quick Look window move the Finder selection. */
+	moveSelectionBy(delta: 1 | -1): void;
 	/** Open the path's enclosing folder in a NEW tab, revealing the row. */
 	revealEvidence(path: string): void;
 	focusFinder(): void;
@@ -462,6 +464,15 @@ export function useFinderController(
 		presentQuickLook({ path: entry.path, name: entry.name });
 	}, [focusedEntry, presentQuickLook]);
 
+	const moveSelectionBy = useCallback(
+		(delta: 1 | -1) => {
+			const next = moveSelection(orderedKeys, selection, delta);
+			scrollTarget.current = next.focus;
+			patchSelection(next);
+		},
+		[orderedKeys, selection, patchSelection],
+	);
+
 	const quickLookPath = useCallback(
 		(target: string) => {
 			presentQuickLook({ path: target, name: basename(target) });
@@ -643,17 +654,6 @@ export function useFinderController(
 			const typing =
 				target instanceof HTMLElement &&
 				(target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable);
-			if (
-				!typing &&
-				quickLookRef.current?.isQuickLookOpen() === true &&
-				(event.key === "ArrowLeft" || event.key === "ArrowRight")
-			) {
-				event.preventDefault();
-				const next = moveSelection(orderedKeys, selection, event.key === "ArrowRight" ? 1 : -1);
-				scrollTarget.current = next.focus;
-				patchSelection(next);
-				return;
-			}
 			const action = resolveKeyAction(
 				{
 					key: event.key,
@@ -686,13 +686,10 @@ export function useFinderController(
 					event.preventDefault();
 					quickLookSelection();
 					return;
-				case "moveSelection": {
+				case "moveSelection":
 					event.preventDefault();
-					const next = moveSelection(orderedKeys, selection, action.delta);
-					scrollTarget.current = next.focus;
-					patchSelection(next);
+					moveSelectionBy(action.delta);
 					return;
-				}
 				case "moveEvidence":
 					return;
 				case "open":
@@ -712,9 +709,8 @@ export function useFinderController(
 	}, [
 		zone,
 		dismiss,
-		orderedKeys,
+		moveSelectionBy,
 		selection,
-		patchSelection,
 		quickLookSelection,
 		focusedEntry,
 		openEntry,
@@ -811,6 +807,7 @@ export function useFinderController(
 		sortBy: (key) => setSort((current) => cycleSort(current, key)),
 		showToast,
 		quickLookPath,
+		moveSelectionBy,
 		revealEvidence,
 		focusFinder: () => setZone("finder"),
 		clickRow: (entry, event) => {

@@ -1,49 +1,55 @@
-.ql {
-	--ql-radius: 16px;
-	--ql-open: 280ms;
-	--ql-ease: cubic-bezier(0.16, 1, 0.3, 1);
-	position: fixed;
-	inset: 0;
-	z-index: 40;
-	display: grid;
-	place-items: center;
-	background: var(--scrim-quicklook);
-	backdrop-filter: blur(3px);
+html,
+body,
+#root {
+	height: 100%;
+	background: var(--bg-chrome);
 }
 
-.ql__panel {
+.qlw {
+	--ql-toolbar: 52px;
+	--ql-toolbar-bg: linear-gradient(#f4f4f6, #e9e9ed);
+	--ql-media-bg: #1c1c1e;
 	display: flex;
 	flex-direction: column;
-	width: min(var(--w-quicklook), calc(100vw - 96px));
-	height: min(80vh, 760px);
+	height: 100vh;
 	overflow: hidden;
-	border: 1px solid var(--border);
-	border-radius: var(--ql-radius);
 	background: var(--bg-chrome);
-	box-shadow: var(--shadow-window);
 	color: var(--text-primary);
 	font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", var(--font-sans);
-	transform-origin: center center;
-	will-change: transform, opacity;
+	user-select: none;
 }
 
-.ql__header {
+.qlw__toolbar {
 	display: grid;
-	grid-template-columns: 48px minmax(0, 1fr) 48px;
+	grid-template-columns: minmax(84px, 1fr) minmax(0, auto) minmax(84px, 1fr);
 	align-items: center;
 	flex: none;
-	height: var(--size-toolbar);
-	padding: 0 10px;
-	border-bottom: 1px solid var(--border-divider);
-	background: var(--bg-window);
+	gap: 12px;
+	height: var(--ql-toolbar);
+	padding: 0 12px;
+	border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+	background: var(--ql-toolbar-bg);
+	-webkit-app-region: drag;
 }
 
-.ql__titles {
+.qlw__lead,
+.qlw__trail {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.qlw__trail {
+	justify-content: flex-end;
+}
+
+.qlw__titles {
 	min-width: 0;
+	max-width: 100%;
 	text-align: center;
 }
 
-.ql__name {
+.qlw__name {
 	overflow: hidden;
 	font-size: var(--font-size-sm);
 	font-weight: 600;
@@ -52,7 +58,7 @@
 	white-space: nowrap;
 }
 
-.ql__meta {
+.qlw__meta {
 	overflow: hidden;
 	color: var(--text-muted);
 	font-size: var(--font-size-badge);
@@ -61,34 +67,69 @@
 	white-space: nowrap;
 }
 
-.ql__iconbtn {
-	display: grid;
-	width: 28px;
+.qlw__tool,
+.qlw__open {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
 	height: 28px;
-	place-items: center;
 	padding: 0;
 	border: 0;
-	border-radius: var(--radius-full);
-	background: var(--bg-hover-strong);
-	color: var(--text-primary);
+	border-radius: 6px;
+	background: transparent;
+	color: #3c3c43;
+	-webkit-app-region: no-drag;
 }
 
-.ql__iconbtn:hover {
-	background: var(--bg-input);
+.qlw__tool {
+	width: 28px;
 }
 
-.ql__iconbtn:focus-visible {
+.qlw__open {
+	padding: 0 10px;
+	font-size: var(--font-size-meta);
+	font-weight: 500;
+}
+
+.qlw__tool:hover,
+.qlw__open:hover {
+	background: rgba(0, 0, 0, 0.07);
+}
+
+.qlw__tool:active,
+.qlw__open:active {
+	background: rgba(0, 0, 0, 0.13);
+}
+
+.qlw__tool:focus-visible,
+.qlw__open:focus-visible {
 	outline: 2px solid var(--accent);
-	outline-offset: 2px;
+	outline-offset: 1px;
 }
 
 .ql__stage {
 	display: flex;
 	flex: 1;
 	flex-direction: column;
+	align-items: center;
+	justify-content: center;
 	min-height: 0;
 	overflow: auto;
 	background: var(--bg-chrome);
+}
+
+.ql__stage[data-kind="video"] {
+	background: var(--ql-media-bg);
+}
+
+.ql__stage > .ql__frame,
+.ql__stage > .ql__pre,
+.ql__stage > .ql__tablewrap,
+.ql__stage > .ql__slides,
+.ql__stage > .ql__list,
+.ql__stage > .ql__canvas-host {
+	align-self: stretch;
 }
 
 .ql__canvas-host {
@@ -101,9 +142,15 @@
 
 .ql__image,
 .ql__video {
-	max-width: 100%;
-	max-height: 100%;
+	display: block;
+	width: 100%;
+	height: 100%;
+	min-height: 0;
 	object-fit: contain;
+}
+
+.ql__video {
+	outline: none;
 }
 
 .ql__audio {
@@ -118,6 +165,7 @@
 }
 
 .ql__frame {
+	flex: 1;
 	width: 100%;
 	height: 100%;
 	border: 0;
@@ -126,6 +174,7 @@
 
 .ql__pre {
 	box-sizing: border-box;
+	flex: 1;
 	width: 100%;
 	height: 100%;
 	margin: 0;
@@ -138,6 +187,7 @@
 	line-height: 1.55;
 	white-space: pre-wrap;
 	word-break: break-word;
+	user-select: text;
 }
 
 .ql__status,
@@ -153,6 +203,18 @@
 	justify-items: center;
 	padding: 24px;
 	text-align: center;
+}
+
+.ql__fallback .ql__name {
+	margin: 0;
+	font-size: var(--font-size-sm);
+	font-weight: 600;
+}
+
+.ql__fallback .ql__meta {
+	margin: 0;
+	color: var(--text-muted);
+	font-size: var(--font-size-badge);
 }
 
 .ql__glyph {
@@ -174,6 +236,7 @@
 .ql__slides,
 .ql__list {
 	box-sizing: border-box;
+	flex: 1;
 	width: 100%;
 	height: 100%;
 	margin: 0;
@@ -205,6 +268,7 @@
 .ql__pager {
 	display: flex;
 	flex: none;
+	align-self: stretch;
 	align-items: center;
 	justify-content: center;
 	gap: 12px;
@@ -279,10 +343,4 @@
 
 .ql__row span:last-child {
 	color: var(--text-muted);
-}
-
-@media (prefers-reduced-motion: reduce) {
-	.ql__panel {
-		will-change: opacity;
-	}
 }

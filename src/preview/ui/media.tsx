@@ -12,14 +12,12 @@ function copyBytes(bytes: Uint8Array): Uint8Array<ArrayBuffer> {
 export function ImageView({ file }: { readonly file: PreviewDocument }): ReactElement {
 	const [failed, setFailed] = useState(false);
 	if (failed) return <FallbackView file={file} note="이미지를 열 수 없습니다" />;
-	return <img className="ql__image" alt="" src={previewStreamUrl(file.path)} onError={() => setFailed(true)} />;
+	return <img className="ql__image" alt="" decoding="async" src={previewStreamUrl(file.path)} onError={() => setFailed(true)} />;
 }
 
 export function VideoView({ file }: { readonly file: PreviewDocument }): ReactElement {
 	return (
-		<video className="ql__video" controls>
-			<source src={previewStreamUrl(file.path)} type={file.mime} />
-		</video>
+		<video className="ql__video" src={previewStreamUrl(file.path)} controls autoPlay playsInline preload="auto" />
 	);
 }
 
@@ -27,9 +25,7 @@ export function AudioView({ file }: { readonly file: PreviewDocument }): ReactEl
 	return (
 		<div className="ql__audio">
 			<div className="ql__glyph">{file.ext.slice(0, 4).toUpperCase() || "AUDIO"}</div>
-			<audio controls>
-				<source src={previewStreamUrl(file.path)} type={file.mime} />
-			</audio>
+			<audio src={previewStreamUrl(file.path)} controls autoPlay preload="auto" />
 		</div>
 	);
 }

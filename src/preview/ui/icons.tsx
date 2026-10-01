@@ -8,6 +8,14 @@ export function CloseIcon(): ReactElement {
 	);
 }
 
+export function FullscreenIcon(): ReactElement {
+	return (
+		<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+			<path d="M7 1.5h3.5V5M5 10.5H1.5V7M10.5 1.5L7 5M1.5 10.5L5 7" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+		</svg>
+	);
+}
+
 export function OpenIcon(): ReactElement {
 	return (
 		<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">

@@ -1,11 +1,9 @@
 import { useCallback, useEffect, useRef, useState, type ReactElement } from "react";
-import type { QuickLookRequest } from "../../preview/shared/session";
-import { anchorForPath } from "../../preview/ui/anchor";
-import { QuickLookHost } from "../../preview/ui/QuickLook";
+import type { PreviewBridge, QuickLookTarget } from "../../preview/shared/contract";
 import type { SettingsBridge } from "../../shared/settings-contract";
 import type { CitationEvidence } from "../../shared/search-contract";
 
-const autorag = (window as unknown as { readonly autorag: { readonly settings: SettingsBridge } }).autorag;
+const autorag = (window as unknown as { readonly autorag: { readonly settings: SettingsBridge; readonly preview: PreviewBridge } }).autorag;
 import { AiSearchPanel } from "./components/AiSearchPanel";
 import { EvidencePanel } from "./components/EvidencePanel";
 import { ColumnHeader } from "./components/ColumnHeader";
@@ -34,13 +32,11 @@ const DEV_LABEL = (() => {
 export function App(): ReactElement {
 	const source = useFinderSource();
 	const [showHiddenFiles, setShowHiddenFiles] = useState(false);
-	const [preview, setPreview] = useState<QuickLookRequest | null>(null);
-	const previewRef = useRef<QuickLookRequest | null>(null);
+	const [preview, setPreview] = useState<QuickLookTarget | null>(null);
+	const previewRef = useRef<QuickLookTarget | null>(null);
 	previewRef.current = preview;
-	const openQuickLook = useCallback((target: { readonly path: string; readonly name: string }) => {
-		setPreview((current) =>
-			current?.path === target.path ? null : { path: target.path, name: target.name, anchor: anchorForPath(target.path) },
-		);
+	const openQuickLook = useCallback((target: QuickLookTarget) => {
+		setPreview((current) => (current?.path === target.path ? null : { path: target.path, name: target.name }));
 	}, []);
 	const closeQuickLook = useCallback(() => setPreview(null), []);
 	const isQuickLookOpen = useCallback(() => previewRef.current !== null, []);
@@ -80,10 +76,25 @@ export function App(): ReactElement {
 		setPreview((current) => {
 			if (current === null || current.path === focusPath) return current;
 			const match = finder.stackRows.find((row) => row.entry.path === focusPath);
-			if (match === undefined || match.entry.kind !== "file") return current;
-			return { path: match.entry.path, name: match.entry.name, anchor: anchorForPath(match.entry.path) };
+			if (match === undefined) return current;
+			return { path: match.entry.path, name: match.entry.name };
 		});
 	}, [focusPath, finder.stackRows]);
+
+	useEffect(() => {
+		const request = preview === null ? autorag.preview.hide() : autorag.preview.show(preview);
+		request.catch((error: unknown) => finder.showToast(error instanceof Error ? error.message : String(error)));
+	}, [preview]);
+
+	const moveSelectionBy = finder.moveSelectionBy;
+	useEffect(() => {
+		const offClosed = autorag.preview.onClosed(() => setPreview(null));
+		const offNavigate = autorag.preview.onNavigate((delta) => moveSelectionBy(delta));
+		return () => {
+			offClosed();
+			offNavigate();
+		};
+	}, [moveSelectionBy]);
 
 	useEffect(() => {
 		void autorag.settings.get().then((settings) => setShowHiddenFiles(settings.showHiddenFiles));
@@ -190,15 +201,6 @@ export function App(): ReactElement {
 					onSettingsChanged={(settings) => setShowHiddenFiles(settings.showHiddenFiles)}
 				/>
 			)}
-			<QuickLookHost
-				target={preview}
-				onClose={closeQuickLook}
-				onOpenFile={(path) => {
-					source.open(path).catch((error: unknown) => {
-						finder.showToast(error instanceof Error ? error.message : String(error));
-					});
-				}}
-			/>
 		</div>
 	);
 }
