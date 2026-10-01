@@ -18,14 +18,13 @@ import {
 import { type Bounds, fitQuickLook, placeQuickLook, QUICK_LOOK_MIN } from "../shared/fit";
 import { quickLookKeyAction } from "../shared/keys";
 import { viewerForExtension, wantsBytes } from "../shared/registry";
-import { fallbackOrigin, screenOrigin, ZOOM_IN_MS, ZOOM_OUT_MS, zoomGeometry } from "../shared/zoom";
+import { fallbackOrigin, screenOrigin, ZOOM_DONE_TIMEOUT_MS, zoomGeometry } from "../shared/zoom";
 import { PreviewReadError, readPreviewFile } from "./read-file";
 
 /** Media reports its size once decoded; anything slower still shows by then. */
 const SHOW_DEADLINE_MS = 250;
 /** How long the zoom waits on the page for a step before moving on without it. */
 const ZOOM_PREPARE_MS = 120;
-const ZOOM_SLACK_MS = 120;
 /**
  * The zoom needs a transparent window: it briefly covers the icon and the panel
  * together, and only the scaled panel inside it may be visible.
@@ -139,7 +138,7 @@ async function zoomIn(state: Session, bounds: Bounds): Promise<void> {
 	if (!current(state, id)) return;
 	window.showInactive();
 	sendZoom(state, { id, phase: "run" });
-	await zoomStep(state, id, "done", ZOOM_IN_MS + ZOOM_SLACK_MS);
+	await zoomStep(state, id, "done", ZOOM_DONE_TIMEOUT_MS);
 	if (!current(state, id)) return;
 	state.opening = null;
 	window.setBounds(opening.bounds);
@@ -159,7 +158,7 @@ async function zoomOut(state: Session, origin: Bounds | null): Promise<void> {
 	if (!current(state, id)) return;
 	window.setBounds(geometry.union);
 	sendZoom(state, { id, phase: "run" });
-	await zoomStep(state, id, "done", ZOOM_OUT_MS + ZOOM_SLACK_MS);
+	await zoomStep(state, id, "done", ZOOM_DONE_TIMEOUT_MS);
 	if (!current(state, id)) return;
 	window.hide();
 	resetZoomWindow(state);

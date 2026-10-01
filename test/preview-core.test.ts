@@ -14,6 +14,7 @@ import { listTarEntries } from "../src/preview/shared/tar-list";
 import { listZipEntries } from "../src/preview/shared/zip-list";
 import { fitQuickLook, placeQuickLook, QUICK_LOOK_MIN, QUICK_LOOK_TOOLBAR } from "../src/preview/shared/fit";
 import { fallbackOrigin, screenOrigin, zoomGeometry, zoomTransform } from "../src/preview/shared/zoom";
+import { ZOOM_IN, ZOOM_OUT } from "../src/preview/ui/zoom-motion";
 
 
 describe("preview registry", () => {
@@ -109,6 +110,52 @@ describe("quick look zoom", () => {
 		const content = { x: 50, y: 80, width: 1440, height: 900 };
 		expect(screenOrigin(content, { x: 10, y: 20, width: 18, height: 18 }, 1)).toEqual({ x: 60, y: 100, width: 18, height: 18 });
 		expect(screenOrigin(content, { x: 10, y: 20, width: 18, height: 18 }, 1.25)).toEqual({ x: 63, y: 105, width: 23, height: 23 });
+	});
+});
+
+describe("quick look spring", () => {
+	function stops(easing: string): readonly { readonly value: number; readonly percent: number }[] {
+		const parsed = easing
+			.slice("linear(".length, -1)
+			.split(",")
+			.map((stop) => {
+				const [value = "0", percent] = stop.trim().split(/\s+/);
+				return { value: Number(value), percent: percent === undefined ? null : Number(percent.replace("%", "")) };
+			});
+		const at: (number | null)[] = parsed.map((stop) => stop.percent);
+		if (at.length === 0) return [];
+		at[0] ??= 0;
+		at[at.length - 1] ??= 100;
+		// `linear()` spreads a run of position-less stops evenly between its neighbours.
+		for (let index = 1; index < at.length - 1; index += 1) {
+			if (at[index] !== null) continue;
+			let next = index;
+			while (at[next] === null) next += 1;
+			let previous = index - 1;
+			while (at[previous] === null) previous -= 1;
+			const from = at[previous] ?? 0;
+			const to = at[next] ?? 100;
+			at[index] = from + ((to - from) / (next - previous)) * (index - previous);
+		}
+		return parsed.map((stop, index) => ({ value: stop.value, percent: at[index] ?? 0 }));
+	}
+
+	it("is a real spring curve, not a hand-tuned bezier", () => {
+		const curve = stops(ZOOM_IN.easing);
+		expect(ZOOM_IN.easing.startsWith("linear(")).toBe(true);
+		expect(curve[0]?.value).toBe(0);
+		expect(curve.at(-1)?.value).toBeGreaterThan(0.995);
+		expect(Math.max(...curve.map((stop) => stop.value))).toBeLessThanOrEqual(1.005);
+		// Apple's springs leave the icon fast: most of the travel is over early.
+		const quarter = curve.find((stop) => stop.percent >= 25);
+		expect(quarter?.value).toBeGreaterThan(0.6);
+	});
+
+	it("settles in about Apple's response time", () => {
+		expect(ZOOM_IN.duration).toBeGreaterThanOrEqual(100);
+		expect(ZOOM_IN.duration).toBeLessThanOrEqual(300);
+		expect(ZOOM_OUT.duration).toBeGreaterThanOrEqual(100);
+		expect(ZOOM_OUT.duration).toBeLessThanOrEqual(300);
 	});
 });
 

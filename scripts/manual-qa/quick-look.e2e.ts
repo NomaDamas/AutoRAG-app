@@ -88,13 +88,19 @@ test("Quick Look uses a fast reusable window with Finder navigation", async () =
 		const row = main.getByRole("row", { name: /photo\.png/ });
 		await row.waitFor({ timeout: 30_000 });
 		await row.click();
-		// Record the panel's transform every frame so the Finder-style zoom can be checked.
+		// Record the panel's transform and curve every frame so the Finder-style zoom can be checked.
 		await preview.evaluate(() => {
 			const samples: string[] = [];
+			const easings: string[] = [];
 			const tick = (): void => {
 				const root = document.getElementById("root");
-				if (root?.dataset.zoom !== undefined) samples.push(`${root.dataset.zoom} ${getComputedStyle(root).transform}`);
+				if (root?.dataset.zoom !== undefined) {
+					samples.push(`${root.dataset.zoom} ${getComputedStyle(root).transform}`);
+					const easing = root.getAnimations()[0]?.effect?.getTiming().easing;
+					if (typeof easing === "string" && easings.at(-1) !== easing) easings.push(easing);
+				}
 				document.body.dataset.zoomSamples = samples.join("|");
+				document.body.dataset.zoomEasings = easings.join("|");
 				requestAnimationFrame(tick);
 			};
 			tick();
@@ -105,8 +111,11 @@ test("Quick Look uses a fast reusable window with Finder navigation", async () =
 		await expect(preview.locator(".qlw__name")).toHaveText("photo.png", { timeout: 10_000 });
 		await expect.poll(() => preview.locator(".ql__image").evaluate((node) => (node instanceof HTMLImageElement ? node.naturalWidth : 0))).toBeGreaterThan(0);
 		expect(performance.now() - started).toBeLessThan(500);
-		// Finder zoom: the panel starts as a tiny box on the file's icon and grows, faster as it lands.
+		// Finder zoom: the panel grows out of the icon on Apple's spring curve.
 		await expect.poll(() => preview.evaluate(() => document.getElementById("root")?.dataset.zoom ?? "settled")).toBe("settled");
+		const easings = await preview.evaluate(() => (document.body.dataset.zoomEasings ?? "").split("|").filter((entry) => entry.length > 0));
+		expect(easings.length).toBeGreaterThan(0);
+		expect(easings.every((easing) => easing.startsWith("linear("))).toBe(true);
 		const opening = await preview.evaluate(() =>
 			(document.body.dataset.zoomSamples ?? "")
 				.split("|")
@@ -114,10 +123,9 @@ test("Quick Look uses a fast reusable window with Finder navigation", async () =
 				.map((sample) => Number(sample.slice("in matrix(".length).split(",")[0])),
 		);
 		expect(opening.length).toBeGreaterThan(3);
-		expect(opening[0]).toBeLessThan(0.1);
-		const growth = opening.slice(1).map((scale, index) => scale - (opening[index] ?? 0));
-		expect(growth.every((step) => step >= 0)).toBe(true);
-		expect(growth.at(-1) ?? 0).toBeGreaterThan(growth[0] ?? 0);
+		expect(Math.min(...opening)).toBeLessThan(0.5);
+		expect(opening.at(-1) ?? 0).toBeGreaterThan(0.95);
+		expect(opening.every((scale, index) => index === 0 || scale >= (opening[index - 1] ?? 0) - 0.005)).toBe(true);
 		const zoomed = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find((item) => item.webContents.getURL().includes("quick-look.html"))?.isVisible());
 		expect(zoomed).toBe(true);
 		expect(icon).not.toBeNull();

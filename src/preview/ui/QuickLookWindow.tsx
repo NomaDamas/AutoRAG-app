@@ -2,7 +2,8 @@ import { StrictMode, useEffect, useRef, useState, type ReactElement, type Synthe
 import { createRoot } from "react-dom/client";
 import type { QuickLookLoad, QuickLookWindowBridge, QuickLookZoom } from "../shared/contract";
 import type { Size } from "../shared/fit";
-import { ZOOM_EASING, ZOOM_IDENTITY, ZOOM_IN_MS, ZOOM_OUT_MS, zoomTransform, type ZoomDirection } from "../shared/zoom";
+import { ZOOM_IDENTITY, zoomTransform, type ZoomDirection } from "../shared/zoom";
+import { ZOOM_IN, ZOOM_OUT } from "./zoom-motion";
 import { extensionOf, formatBytes } from "../shared/format";
 import { describeExtension, viewerForExtension, type ViewerKind } from "../shared/registry";
 import { PreviewBody } from "./body";
@@ -92,10 +93,11 @@ function useZoom(bridge: QuickLookWindowBridge): void {
 			}
 			const step = posed;
 			if (step === null || step.id !== zoom.id) return;
-			const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-			const ms = reduced ? 0 : step.direction === "in" ? ZOOM_IN_MS : ZOOM_OUT_MS;
+			const curve = step.direction === "in" ? ZOOM_IN : ZOOM_OUT;
+			const ms = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : curve.duration;
 			// Keyframes carry both the start pose and the end state, so the motion
-			// never needs a painted frame in between.
+			// never needs a painted frame in between; the Apple spring rides on the
+			// easing. `finished` is the real end of the motion.
 			motion = root.animate(
 				step.direction === "in"
 					? [
@@ -106,11 +108,14 @@ function useZoom(bridge: QuickLookWindowBridge): void {
 							{ transform: ZOOM_IDENTITY, opacity: 1 },
 							{ transform: step.start, opacity: 0 },
 						],
-				{ duration: ms, easing: ZOOM_EASING, fill: "forwards" },
+				{ duration: ms, easing: curve.easing, fill: "forwards" },
 			);
-			window.setTimeout(() => {
-				if (posed?.id === zoom.id) bridge.zoomed({ id: zoom.id, phase: "done" });
-			}, ms);
+			const playing = motion;
+			void playing.finished
+				.catch(() => undefined)
+				.then(() => {
+					if (posed?.id === zoom.id) bridge.zoomed({ id: zoom.id, phase: "done" });
+				});
 		};
 		const off = bridge.onZoom(onZoom);
 		return () => {

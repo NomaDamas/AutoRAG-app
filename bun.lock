@@ -13,6 +13,7 @@
         "marked": "^18.0.14",
         "pdfjs-dist": "^6.3.289",
         "radix-ui": "^1.6.7",
+        "spring-easing": "^2.3.3",
         "utif": "^3.1.0",
         "xlsx": "^0.18.5",
       },
@@ -1275,6 +1276,8 @@
     "smol-toml": ["smol-toml@1.8.0", "", {}, "sha512-kCZr2V3ch9i00x8zXRhjUNVcjG9ijES5dDudkXvUVCT5QlJNQWElSJdZqyPemffHoLNUYwOcou0Fy+ojN0uHSQ=="],
 
     "source-map-js": ["source-map-js@1.2.1", "", {}, "sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA=="],
+
+    "spring-easing": ["spring-easing@2.3.3", "", {}, "sha512-ozfwQ7FyhMrSEEDgeZt08ecM3XdzhtN7BZEdjjh4TdbAzrDzKDVc5kU1El8fapFepvN5NOKO8ZFg1O1cR75hew=="],
 
     "ssf": ["ssf@0.11.2", "", { "dependencies": { "frac": "~1.1.2" } }, "sha512-+idbmIXoYET47hH+d7dfm2epdOMUDjqcB4648sTZ+t2JwoyBFL/insLfB/racrDmsKB3diwsDA696pZMieAC5g=="],
 

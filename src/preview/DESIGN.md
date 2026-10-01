@@ -23,8 +23,12 @@ only when it has to (a new file, or a resize that would leave the screen).
 ## Open and close motion
 
 Like Finder, Space grows the panel out of the file's icon and closing shrinks
-it back into the icon, on an accelerating ease-in curve (120ms open, 100ms
-close; instant under `prefers-reduced-motion`). The Finder sends the icon's
+it back into the icon. The curve is an Apple spring, not a hand-tuned bezier:
+`src/preview/ui/zoom-motion.ts` states Apple's `response`/`dampingFraction`
+parameters and `spring-easing` turns them into a CSS `linear()` easing that the
+Web Animation API plays on the panel (180ms open, 150ms close, tail included;
+instant under `prefers-reduced-motion`) — quick off the icon, soft landing, no
+visible bounce. The Finder sends the icon's
 viewport rect with `show`/`hide`; the main process maps it to the screen
 (`src/preview/shared/zoom.ts`). During the zoom the transparent window briefly
 covers the icon and the panel together, ignores the mouse, and drops its
