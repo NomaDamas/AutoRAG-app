@@ -118,7 +118,8 @@ test("Quick Look uses a fast reusable window with Finder navigation", async () =
 		// Rail thumbnails observe the fixed rail itself, so every visible slot paints a page preview.
 		await expect(preview.locator('.ql__rail-item canvas[data-drawn="true"]')).toHaveCount(3);
 		const pdfBounds = await quickLookWindow(app);
-		expect(pdfBounds.width / (pdfBounds.height - QUICK_LOOK_TOOLBAR)).toBeCloseTo(1, 1);
+		// The window hugs a square page plus the rail's gutter (104px rail + 12px on each side).
+		expect((pdfBounds.width - 128) / (pdfBounds.height - QUICK_LOOK_TOOLBAR)).toBeCloseTo(1, 1);
 		await expect.poll(() => preview.locator(".ql__stage").evaluate((node) => node.scrollHeight - node.clientHeight)).toBeGreaterThan(600);
 		await preview.locator(".ql__stage").evaluate((node) => {
 			node.scrollTop = node.scrollHeight;
@@ -126,7 +127,7 @@ test("Quick Look uses a fast reusable window with Finder navigation", async () =
 		await expect.poll(() => preview.locator('[data-page="3"]').evaluate((node) => node.getBoundingClientRect().bottom)).toBeLessThanOrEqual(pdfBounds.height);
 		await expect.poll(() => preview.locator('.ql__rail-item[data-active="true"]').getAttribute("aria-label")).toBe("3페이지");
 		await preview.screenshot({ path: join(evidence, "page.png") });
-		// Toolbar design: close + left-aligned title, actions on the trailing edge, rail over the page's right edge.
+		// Toolbar design: close + left-aligned title, actions on the trailing edge, rail in its own gutter right of the pages.
 		const layout = await preview.evaluate(() => {
 			const name = document.querySelector(".qlw__name")?.getBoundingClientRect();
 			const trail = document.querySelector(".qlw__trail")?.getBoundingClientRect();
@@ -137,7 +138,9 @@ test("Quick Look uses a fast reusable window with Finder navigation", async () =
 				nameLeft: name?.left ?? -1,
 				nameRight: name?.right ?? -1,
 				trailRight: trail?.right ?? -1,
+				railLeft: railBox?.left ?? -1,
 				railRight: railBox?.right ?? -1,
+				pagesRight: Math.max(...Array.from(document.querySelectorAll(".ql__paper"), (node) => node.getBoundingClientRect().right)),
 				railWidth: railBox?.width ?? -1,
 				railBlur: rail === null ? "" : getComputedStyle(rail).backdropFilter,
 			};
@@ -146,6 +149,7 @@ test("Quick Look uses a fast reusable window with Finder navigation", async () =
 		expect(layout.nameRight).toBeLessThan(layout.width / 2);
 		expect(layout.trailRight).toBeGreaterThan(layout.width - 40);
 		expect(layout.railRight).toBeCloseTo(layout.width - 12, 0);
+		expect(layout.pagesRight).toBeLessThanOrEqual(layout.railLeft);
 		expect(layout.railWidth).toBe(104);
 		expect(layout.railBlur).toContain("blur");
 		await preview.locator(".ql__rail-item").first().click();

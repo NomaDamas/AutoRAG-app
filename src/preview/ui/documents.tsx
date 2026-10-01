@@ -16,6 +16,8 @@ const PDF_RENDER_MARGIN = "600px 0px";
 /** Rail thumbnails render ahead of the rail's own scroll position. */
 const PDF_RAIL_MARGIN = "400px 0px";
 const PDF_THUMB_WIDTH = 80;
+/** Width kept free right of the pages for the rail: `--ql-rail` plus its 12px inset on both sides. */
+const PDF_RAIL_GUTTER = 104 + 12 * 2;
 
 function ensurePdfWorker(): void {
 	if (workerReady) return;
@@ -226,7 +228,9 @@ export function PdfView({
 				setDoc({ pdf, boxes });
 				setActive(0);
 				const first = boxes[0];
-				if (first !== undefined) sizeRef.current?.(first);
+				// A multi-page document keeps a gutter for the rail, so the window grows by it.
+				const gutter = boxes.length > 1 ? PDF_RAIL_GUTTER : 0;
+				if (first !== undefined) sizeRef.current?.({ width: first.width + gutter, height: first.height });
 			})
 			.catch((caught: unknown) => {
 				if (!cancelled) setError(caught instanceof Error ? caught.message : "PDF를 열 수 없습니다");
@@ -293,7 +297,7 @@ export function PdfView({
 	if (error !== null) return <FallbackView file={file} note={error} />;
 	return (
 		<>
-			<div ref={hostRef} className="ql__pages">
+			<div ref={hostRef} className="ql__pages" data-rail={doc !== null && doc.boxes.length > 1 ? "true" : undefined}>
 				{doc === null ? (
 					<Status>불러오는 중</Status>
 				) : (

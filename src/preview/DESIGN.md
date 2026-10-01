@@ -27,7 +27,9 @@ scroll container — no pager, every page reachable by scrolling. Each page keep
 its paper-sized slot even while its canvas is released, so a long document
 stays cheap: pages render while they are within 600px of the viewport and drop
 their backing store once they leave. The frosted rail on the right
-(`--bg-quicklook-frost` + `--backdrop-quicklook`) lists every page, marks the
+(`--bg-quicklook-frost` + `--backdrop-quicklook`) sits in its own gutter beside
+the pages, never over them: a multi-page document reserves the rail's width
+(plus its 12px insets) and the window grows by it. The rail lists every page, marks the
 one nearest the top of the viewport, and jumps to a page on click. Each slot
 takes its page's aspect ratio up front. Thumbnails observe the rail itself (it
 is fixed-position, so the stage never sees them intersect), render once their

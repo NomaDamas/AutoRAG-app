@@ -288,6 +288,12 @@ body,
 	padding: var(--space-16) 0;
 }
 
+/* The rail sits in its own gutter right of the pages instead of over them;
+ * the content box excludes it, so pages scale to the space that is left. */
+.ql__pages[data-rail="true"] {
+	padding-right: calc(var(--ql-rail) + var(--space-12) * 2);
+}
+
 .ql__paper {
 	position: relative;
 	flex: none;
