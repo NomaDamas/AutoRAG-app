@@ -213,6 +213,28 @@ describe("createSearchService", () => {
 		]);
 	});
 
+	it("shows only the <answer> body when a plain-text fast phase mimics the tool arguments", async () => {
+		const reply = "<answer>\nDirector approval.\n</answer>\n\n<knowledge_units>\n- /docs/refund-policy.txt — approval rule\n</knowledge_units>";
+		const agent = createFakeAgent(async function*(live) {
+			live({ type: "agent_start" });
+			for (const delta of ["<ans", "wer>\nDirector ", "approval.\n</ans", "wer>\n\n<knowledge_units>\n- /docs/refund-policy.txt"]) {
+				live({ type: "message_update", assistantMessageEvent: { type: "text_delta", delta } });
+			}
+			yield { type: "preliminary", response: createResponse("session-tagged", reply, 1) };
+		});
+		const { events, send } = collectEvents();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send, now });
+
+		await service.start("search-tagged", "chat-tagged", "refund approval", []);
+
+		expect(events.filter((event) => event.type === "quick-draft").map((event) => event.type === "quick-draft" && event.text)).toEqual([
+			"Director",
+			"Director approval.",
+		]);
+		const quick = events.find((event) => event.type === "quick");
+		expect(quick?.type === "quick" && quick.phase.answer).toBe("Director approval.");
+	});
+
 	it("reports an agent construction failure as an error and ends the run", async () => {
 		const { events, send } = collectEvents();
 		const service = createSearchService({

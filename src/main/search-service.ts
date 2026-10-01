@@ -86,6 +86,32 @@ function streamedToolAnswer(event: NonNullable<LiveAgentEvent["assistantMessageE
 	return typeof answer === "string" ? { tool: name, answer } : null;
 }
 
+const ANSWER_OPEN = "<answer>";
+const ANSWER_CLOSE = "</answer>";
+
+/**
+ * A model that skips emit_fast_answer may instead reply in plain text shaped
+ * like that tool's arguments — `<answer>…</answer><knowledge_units>…` — and
+ * the librarian then uses the whole reply as the answer. Only the `<answer>`
+ * body is the answer. Works on partial streamed text too: a still-arriving
+ * opening tag yields "" and a half-written closing tag is cut off.
+ */
+function answerBody(text: string): string {
+	const open = text.indexOf(ANSWER_OPEN);
+	if (open === -1) return ANSWER_OPEN.startsWith(text.trimStart()) ? "" : text;
+	const start = open + ANSWER_OPEN.length;
+	const close = text.indexOf(ANSWER_CLOSE, start);
+	if (close !== -1) return text.slice(start, close).trim();
+	let body = text.slice(start);
+	for (let length = Math.min(body.length, ANSWER_CLOSE.length - 1); length > 0; length--) {
+		if (ANSWER_CLOSE.startsWith(body.slice(-length))) {
+			body = body.slice(0, -length);
+			break;
+		}
+	}
+	return body.trim();
+}
+
 /**
  * Turns raw agent events into thinking/draft stream events for one run.
  * Reasoning text is dropped: only the first thinking token of each phase is
@@ -131,7 +157,7 @@ function createLiveStreamMapper(searchId: string, emit: (event: SearchStreamEven
 				// becomes the Quick answer, so its text is the Quick draft.
 				if (phase() === "quick" && update.delta) {
 					quickText += update.delta;
-					setQuickDraft(quickText);
+					setQuickDraft(answerBody(quickText));
 				}
 				return;
 			case "toolcall_delta": {
@@ -157,7 +183,7 @@ function errorText(error: unknown): string {
 
 function mapPhase(response: SearchDocumentsResponse): AnswerPhase {
 	return {
-		answer: response.answer,
+		answer: answerBody(response.answer),
 		evidence: response.results.map((result) => ({
 			number: result.number,
 			title: result.title,
