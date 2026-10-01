@@ -1,8 +1,8 @@
 import type { Bounds } from "./fit";
 
 /** Finder-style zoom: the panel grows out of the file's icon and shrinks back into it. */
-export const ZOOM_IN_MS = 300;
-export const ZOOM_OUT_MS = 250;
+export const ZOOM_IN_MS = 120;
+export const ZOOM_OUT_MS = 100;
 /** Accelerating curve (ease-in quad): slow off the icon, fastest as it lands. */
 export const ZOOM_EASING = "cubic-bezier(0.55, 0.085, 0.68, 0.53)";
 

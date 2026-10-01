@@ -44,23 +44,23 @@ function contentSize(stage: HTMLElement | null): Size {
 	return width > 0 && height > 0 ? { width, height } : NO_INTRINSIC_SIZE;
 }
 
-/** Waits two frames so a style written now has been painted before the next step. */
-function afterPaint(run: () => void): void {
-	requestAnimationFrame(() => requestAnimationFrame(run));
-}
-
 /**
  * Runs the zoom steps the main process drives (src/preview/node/window.ts) on
  * `#root`: `prepare` lays the panel out at its final size, anchored to the
- * zoom window's edges, and poses it; `run` animates it; `settle` clears it.
+ * zoom window's edges, and poses it at the start of the motion; `run` plays the
+ * motion; `settle` clears it. The pose is in layout before the window shows, so
+ * no full-size panel can flash behind the growing one.
  */
 function useZoom(bridge: QuickLookWindowBridge): void {
 	useEffect(() => {
 		const root = document.getElementById("root");
 		if (root === null) return;
-		let running: { readonly id: number; readonly direction: ZoomDirection; readonly end: string } | null = null;
+		let posed: { readonly id: number; readonly direction: ZoomDirection; readonly start: string } | null = null;
+		let motion: Animation | null = null;
 		const clear = (): void => {
-			running = null;
+			posed = null;
+			motion?.cancel();
+			motion = null;
 			root.removeAttribute("style");
 			delete root.dataset.zoom;
 		};
@@ -71,7 +71,7 @@ function useZoom(bridge: QuickLookWindowBridge): void {
 			}
 			if (zoom.phase === "prepare") {
 				const { geometry, direction } = zoom;
-				const posed = zoomTransform(geometry.from, geometry.to);
+				const start = zoomTransform(geometry.from, geometry.to);
 				clear();
 				Object.assign(root.style, {
 					position: "fixed",
@@ -80,23 +80,36 @@ function useZoom(bridge: QuickLookWindowBridge): void {
 					[geometry.anchorX]: "0px",
 					[geometry.anchorY]: "0px",
 					transformOrigin: "0 0",
-					transform: direction === "in" ? posed : ZOOM_IDENTITY,
+					transform: direction === "in" ? start : ZOOM_IDENTITY,
 					opacity: direction === "in" ? "0.4" : "1",
 				});
 				root.dataset.zoom = direction;
-				running = { id: zoom.id, direction, end: direction === "in" ? ZOOM_IDENTITY : posed };
-				afterPaint(() => bridge.zoomed({ id: zoom.id, phase: "prepared" }));
+				posed = { id: zoom.id, direction, start };
+				// Force the pose, and the panel's size, into layout before the window shows.
+				void root.offsetWidth;
+				bridge.zoomed({ id: zoom.id, phase: "prepared" });
 				return;
 			}
-			const step = running;
+			const step = posed;
 			if (step === null || step.id !== zoom.id) return;
 			const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 			const ms = reduced ? 0 : step.direction === "in" ? ZOOM_IN_MS : ZOOM_OUT_MS;
-			root.style.transition = `transform ${ms}ms ${ZOOM_EASING}, opacity ${ms}ms ${ZOOM_EASING}`;
-			root.style.transform = step.end;
-			root.style.opacity = step.direction === "in" ? "1" : "0";
+			// Keyframes carry both the start pose and the end state, so the motion
+			// never needs a painted frame in between.
+			motion = root.animate(
+				step.direction === "in"
+					? [
+							{ transform: step.start, opacity: 0.4 },
+							{ transform: ZOOM_IDENTITY, opacity: 1 },
+						]
+					: [
+							{ transform: ZOOM_IDENTITY, opacity: 1 },
+							{ transform: step.start, opacity: 0 },
+						],
+				{ duration: ms, easing: ZOOM_EASING, fill: "forwards" },
+			);
 			window.setTimeout(() => {
-				if (running?.id === step.id) bridge.zoomed({ id: step.id, phase: "done" });
+				if (posed?.id === zoom.id) bridge.zoomed({ id: zoom.id, phase: "done" });
 			}, ms);
 		};
 		const off = bridge.onZoom(onZoom);

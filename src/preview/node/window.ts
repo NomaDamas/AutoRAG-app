@@ -131,13 +131,13 @@ async function zoomIn(state: Session, bounds: Bounds): Promise<void> {
 	const opening = { id, bounds };
 	state.opening = opening;
 	const geometry = zoomGeometry(state.origin ?? fallbackOrigin(bounds), bounds);
-	window.setOpacity(0);
+	// Pose the panel while the window is still hidden: the first frame it shows is
+	// already the small panel over the icon, never a full-size one.
 	window.setBounds(geometry.union);
-	window.showInactive();
 	sendZoom(state, { id, phase: "prepare", direction: "in", geometry });
 	await zoomStep(state, id, "prepared", ZOOM_PREPARE_MS);
 	if (!current(state, id)) return;
-	window.setOpacity(1);
+	window.showInactive();
 	sendZoom(state, { id, phase: "run" });
 	await zoomStep(state, id, "done", ZOOM_IN_MS + ZOOM_SLACK_MS);
 	if (!current(state, id)) return;
