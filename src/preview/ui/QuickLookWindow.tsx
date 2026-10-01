@@ -1,7 +1,8 @@
 import { StrictMode, useEffect, useRef, useState, type ReactElement, type SyntheticEvent } from "react";
 import { createRoot } from "react-dom/client";
-import type { QuickLookLoad, QuickLookWindowBridge } from "../shared/contract";
+import type { QuickLookLoad, QuickLookWindowBridge, QuickLookZoom } from "../shared/contract";
 import type { Size } from "../shared/fit";
+import { ZOOM_EASING, ZOOM_IDENTITY, ZOOM_IN_MS, ZOOM_OUT_MS, zoomTransform, type ZoomDirection } from "../shared/zoom";
 import { extensionOf, formatBytes } from "../shared/format";
 import { describeExtension, viewerForExtension, type ViewerKind } from "../shared/registry";
 import { PreviewBody } from "./body";
@@ -43,10 +44,74 @@ function contentSize(stage: HTMLElement | null): Size {
 	return width > 0 && height > 0 ? { width, height } : NO_INTRINSIC_SIZE;
 }
 
+/** Waits two frames so a style written now has been painted before the next step. */
+function afterPaint(run: () => void): void {
+	requestAnimationFrame(() => requestAnimationFrame(run));
+}
+
+/**
+ * Runs the zoom steps the main process drives (src/preview/node/window.ts) on
+ * `#root`: `prepare` lays the panel out at its final size, anchored to the
+ * zoom window's edges, and poses it; `run` animates it; `settle` clears it.
+ */
+function useZoom(bridge: QuickLookWindowBridge): void {
+	useEffect(() => {
+		const root = document.getElementById("root");
+		if (root === null) return;
+		let running: { readonly id: number; readonly direction: ZoomDirection; readonly end: string } | null = null;
+		const clear = (): void => {
+			running = null;
+			root.removeAttribute("style");
+			delete root.dataset.zoom;
+		};
+		const onZoom = (zoom: QuickLookZoom): void => {
+			if (zoom.phase === "settle") {
+				clear();
+				return;
+			}
+			if (zoom.phase === "prepare") {
+				const { geometry, direction } = zoom;
+				const posed = zoomTransform(geometry.from, geometry.to);
+				clear();
+				Object.assign(root.style, {
+					position: "fixed",
+					width: `${geometry.to.width}px`,
+					height: `${geometry.to.height}px`,
+					[geometry.anchorX]: "0px",
+					[geometry.anchorY]: "0px",
+					transformOrigin: "0 0",
+					transform: direction === "in" ? posed : ZOOM_IDENTITY,
+					opacity: direction === "in" ? "0.4" : "1",
+				});
+				root.dataset.zoom = direction;
+				running = { id: zoom.id, direction, end: direction === "in" ? ZOOM_IDENTITY : posed };
+				afterPaint(() => bridge.zoomed({ id: zoom.id, phase: "prepared" }));
+				return;
+			}
+			const step = running;
+			if (step === null || step.id !== zoom.id) return;
+			const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+			const ms = reduced ? 0 : step.direction === "in" ? ZOOM_IN_MS : ZOOM_OUT_MS;
+			root.style.transition = `transform ${ms}ms ${ZOOM_EASING}, opacity ${ms}ms ${ZOOM_EASING}`;
+			root.style.transform = step.end;
+			root.style.opacity = step.direction === "in" ? "1" : "0";
+			window.setTimeout(() => {
+				if (running?.id === step.id) bridge.zoomed({ id: step.id, phase: "done" });
+			}, ms);
+		};
+		const off = bridge.onZoom(onZoom);
+		return () => {
+			off();
+			clear();
+		};
+	}, [bridge]);
+}
+
 function QuickLookWindow({ bridge }: { readonly bridge: QuickLookWindowBridge }): ReactElement {
 	const [load, setLoad] = useState<QuickLookLoad | null>(null);
 	const stageRef = useRef<HTMLDivElement | null>(null);
 	const reported = useRef(-1);
+	useZoom(bridge);
 
 	useEffect(() => {
 		const offLoad = bridge.onLoad(setLoad);

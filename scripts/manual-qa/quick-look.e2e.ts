@@ -88,11 +88,39 @@ test("Quick Look uses a fast reusable window with Finder navigation", async () =
 		const row = main.getByRole("row", { name: /photo\.png/ });
 		await row.waitFor({ timeout: 30_000 });
 		await row.click();
+		// Record the panel's transform every frame so the Finder-style zoom can be checked.
+		await preview.evaluate(() => {
+			const samples: string[] = [];
+			const tick = (): void => {
+				const root = document.getElementById("root");
+				if (root?.dataset.zoom !== undefined) samples.push(`${root.dataset.zoom} ${getComputedStyle(root).transform}`);
+				document.body.dataset.zoomSamples = samples.join("|");
+				requestAnimationFrame(tick);
+			};
+			tick();
+		});
+		const icon = await row.locator(".tile").boundingBox();
 		const started = performance.now();
 		await main.keyboard.press("Space");
 		await expect(preview.locator(".qlw__name")).toHaveText("photo.png", { timeout: 10_000 });
 		await expect.poll(() => preview.locator(".ql__image").evaluate((node) => (node instanceof HTMLImageElement ? node.naturalWidth : 0))).toBeGreaterThan(0);
 		expect(performance.now() - started).toBeLessThan(500);
+		// Finder zoom: the panel starts as a tiny box on the file's icon and grows, faster as it lands.
+		await expect.poll(() => preview.evaluate(() => document.getElementById("root")?.dataset.zoom ?? "settled")).toBe("settled");
+		const opening = await preview.evaluate(() =>
+			(document.body.dataset.zoomSamples ?? "")
+				.split("|")
+				.filter((sample) => sample.startsWith("in matrix("))
+				.map((sample) => Number(sample.slice("in matrix(".length).split(",")[0])),
+		);
+		expect(opening.length).toBeGreaterThan(3);
+		expect(opening[0]).toBeLessThan(0.1);
+		const growth = opening.slice(1).map((scale, index) => scale - (opening[index] ?? 0));
+		expect(growth.every((step) => step >= 0)).toBe(true);
+		expect(growth.at(-1) ?? 0).toBeGreaterThan(growth[0] ?? 0);
+		const zoomed = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find((item) => item.webContents.getURL().includes("quick-look.html"))?.isVisible());
+		expect(zoomed).toBe(true);
+		expect(icon).not.toBeNull();
 		await preview.screenshot({ path: join(evidence, "photo.png") });
 		// The panel is translucent: the Finder stays visible behind the window.
 		expect(await preview.locator(".qlw").evaluate((node) => getComputedStyle(node).backgroundColor)).toBe("rgba(246, 246, 248, 0.72)");
@@ -194,8 +222,20 @@ test("Quick Look uses a fast reusable window with Finder navigation", async () =
 		expect(resized?.after.width).toBe((resized?.before.width ?? 0) + 120);
 		expect(resized?.after.height).toBe((resized?.before.height ?? 0) + 80);
 		await preview.screenshot({ path: join(evidence, "resized.png") });
+		await preview.evaluate(() => {
+			document.body.dataset.zoomSamples = "";
+		});
 		await pressInPreview(app, "Escape");
 		await expect.poll(async () => (await quickLookWindow(app)).visible).toBe(false);
+		// Closing shrinks the panel back toward the icon before the window hides.
+		const closing = await preview.evaluate(() =>
+			(document.body.dataset.zoomSamples ?? "")
+				.split("|")
+				.filter((sample) => sample.startsWith("out matrix("))
+				.map((sample) => Number(sample.slice("out matrix(".length).split(",")[0])),
+		);
+		expect(closing.length).toBeGreaterThan(2);
+		expect(Math.min(...closing)).toBeLessThan(0.5);
 		await main.keyboard.press("Space");
 		await expect.poll(async () => (await quickLookWindow(app)).visible).toBe(true);
 		await preview.bringToFront();
@@ -205,6 +245,7 @@ test("Quick Look uses a fast reusable window with Finder navigation", async () =
 		await main.keyboard.press("Space");
 		await expect.poll(async () => (await quickLookWindow(app)).visible).toBe(true);
 		await preview.bringToFront();
+		await expect.poll(() => preview.evaluate(() => document.getElementById("root")?.dataset.zoom ?? "settled")).toBe("settled");
 		const video = await preview.locator("video").boundingBox();
 		if (video === null) throw new Error("video has no box");
 		await preview.mouse.click(video.x + video.width / 2, video.y + video.height - 20);

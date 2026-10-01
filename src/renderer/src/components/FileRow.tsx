@@ -71,6 +71,7 @@ export function FileRow({
 		<div
 			className={classes.join(" ")}
 			role="row"
+			data-path={entry.path}
 			aria-selected={selected}
 			onClick={(event) => callbacks.onClick(entry, event)}
 			onDoubleClick={() => callbacks.onOpen(entry)}

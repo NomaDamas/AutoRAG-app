@@ -1,9 +1,11 @@
 import { extname } from "node:path";
 import { app, BrowserWindow, ipcMain, screen, shell, type IpcMain, type IpcMainEvent, type IpcMainInvokeEvent } from "electron";
 import {
+	isBounds,
 	isQuickLookAction,
 	isQuickLookReady,
 	isQuickLookTarget,
+	isQuickLookZoomed,
 	PREVIEW_CHANNELS,
 	type NavigateDelta,
 	type PreviewDocument,
@@ -11,14 +13,24 @@ import {
 	type QuickLookLoad,
 	type QuickLookReady,
 	type QuickLookTarget,
+	type QuickLookZoom,
 } from "../shared/contract";
-import { fitQuickLook, placeQuickLook, QUICK_LOOK_MIN } from "../shared/fit";
+import { type Bounds, fitQuickLook, placeQuickLook, QUICK_LOOK_MIN } from "../shared/fit";
 import { quickLookKeyAction } from "../shared/keys";
 import { viewerForExtension, wantsBytes } from "../shared/registry";
+import { fallbackOrigin, screenOrigin, ZOOM_IN_MS, ZOOM_OUT_MS, zoomGeometry } from "../shared/zoom";
 import { PreviewReadError, readPreviewFile } from "./read-file";
 
 /** Media reports its size once decoded; anything slower still shows by then. */
 const SHOW_DEADLINE_MS = 250;
+/** How long the zoom waits on the page for a step before moving on without it. */
+const ZOOM_PREPARE_MS = 120;
+const ZOOM_SLACK_MS = 120;
+/**
+ * The zoom needs a transparent window: it briefly covers the icon and the panel
+ * together, and only the scaled panel inside it may be visible.
+ */
+const ZOOMS = process.platform === "darwin";
 
 export interface QuickLookWindowOptions {
 	readonly preload: string;
@@ -31,8 +43,17 @@ interface Session {
 	readonly loaded: Promise<void>;
 	seq: number;
 	current: QuickLookTarget | null;
+	/** Screen rect of the current file's Finder icon; the panel zooms out of and back into it. */
+	origin: Bounds | null;
 	shown: boolean;
 	deadline: NodeJS.Timeout | null;
+	/** Bumped by every zoom; a zoom whose id is stale stops at its next step. */
+	zoom: number;
+	/** The open zoom still running; its final bounds follow navigation that lands meanwhile. */
+	opening: { readonly id: number; bounds: Bounds } | null;
+	/** A close zoom is running: the content must stay until the panel has shrunk away. */
+	closing: boolean;
+	readonly waiters: Map<string, () => void>;
 	detach: () => void;
 }
 
@@ -59,6 +80,93 @@ function workAreaFor(state: Session): Electron.Rectangle {
 	return screen.getDisplayMatching(anchor).workArea;
 }
 
+function sendZoom(state: Session, zoom: QuickLookZoom): void {
+	if (live(state.window)) state.window.webContents.send(PREVIEW_CHANNELS.zoom, zoom);
+}
+
+/** Resolves when the page reports the zoom step, or after `ms` if it never does. */
+function zoomStep(state: Session, id: number, phase: "prepared" | "done", ms: number): Promise<void> {
+	const key = `${id}:${phase}`;
+	const { promise, resolve } = Promise.withResolvers<void>();
+	const finish = (): void => {
+		clearTimeout(timer);
+		state.waiters.delete(key);
+		resolve();
+	};
+	const timer = setTimeout(finish, ms);
+	state.waiters.set(key, finish);
+	return promise;
+}
+
+function current(state: Session, id: number): boolean {
+	return id === state.zoom && live(state.window);
+}
+
+/** Returns the window to its resting state: opaque, shadowed, and clickable. */
+function resetZoomWindow(state: Session): void {
+	state.closing = false;
+	state.window.setOpacity(1);
+	state.window.setHasShadow(true);
+	state.window.setIgnoreMouseEvents(false);
+}
+
+/** While a zoom runs the window covers Finder around the panel; clicks pass through. */
+function beginZoom(state: Session): number {
+	state.zoom += 1;
+	state.window.setHasShadow(false);
+	state.window.setIgnoreMouseEvents(true);
+	return state.zoom;
+}
+
+/**
+ * Finder's Quick Look open: the panel, laid out at its final size, starts
+ * scaled down over the file's icon and grows into place on an accelerating
+ * curve. The window covers icon and panel while it runs, then snaps to the
+ * panel; the page anchors the panel to their shared edges so the snap is still.
+ */
+async function zoomIn(state: Session, bounds: Bounds): Promise<void> {
+	const { window } = state;
+	const id = beginZoom(state);
+	state.closing = false;
+	const opening = { id, bounds };
+	state.opening = opening;
+	const geometry = zoomGeometry(state.origin ?? fallbackOrigin(bounds), bounds);
+	window.setOpacity(0);
+	window.setBounds(geometry.union);
+	window.showInactive();
+	sendZoom(state, { id, phase: "prepare", direction: "in", geometry });
+	await zoomStep(state, id, "prepared", ZOOM_PREPARE_MS);
+	if (!current(state, id)) return;
+	window.setOpacity(1);
+	sendZoom(state, { id, phase: "run" });
+	await zoomStep(state, id, "done", ZOOM_IN_MS + ZOOM_SLACK_MS);
+	if (!current(state, id)) return;
+	state.opening = null;
+	window.setBounds(opening.bounds);
+	sendZoom(state, { id, phase: "settle" });
+	resetZoomWindow(state);
+}
+
+/** The reverse: the panel shrinks back into the icon, accelerating, then the window hides. */
+async function zoomOut(state: Session, origin: Bounds | null): Promise<void> {
+	const { window } = state;
+	const id = beginZoom(state);
+	state.closing = true;
+	const bounds = window.getBounds();
+	const geometry = zoomGeometry(origin ?? fallbackOrigin(bounds), bounds);
+	sendZoom(state, { id, phase: "prepare", direction: "out", geometry });
+	await zoomStep(state, id, "prepared", ZOOM_PREPARE_MS);
+	if (!current(state, id)) return;
+	window.setBounds(geometry.union);
+	sendZoom(state, { id, phase: "run" });
+	await zoomStep(state, id, "done", ZOOM_OUT_MS + ZOOM_SLACK_MS);
+	if (!current(state, id)) return;
+	window.hide();
+	resetZoomWindow(state);
+	window.webContents.send(PREVIEW_CHANNELS.unload);
+	sendZoom(state, { id, phase: "settle" });
+}
+
 function present(state: Session, report: QuickLookReady): void {
 	clearDeadline(state);
 	const { window } = state;
@@ -66,8 +174,19 @@ function present(state: Session, report: QuickLookReady): void {
 	if (!window.isFullScreen()) {
 		const workArea = workAreaFor(state);
 		const size = fitQuickLook(report, workArea);
-		const bounds = placeQuickLook(size, state.shown ? window.getBounds() : null, workArea);
-		window.setBounds(bounds, state.shown && process.platform === "darwin");
+		const previous = state.opening?.bounds ?? (state.shown ? window.getBounds() : null);
+		const bounds = placeQuickLook(size, previous, workArea);
+		if (!state.shown && ZOOMS) {
+			state.shown = true;
+			float(state, true);
+			void zoomIn(state, bounds);
+			return;
+		}
+		if (state.opening !== null) {
+			state.opening.bounds = bounds;
+		} else {
+			window.setBounds(bounds, state.shown && process.platform === "darwin");
+		}
 	}
 	if (state.shown) return;
 	state.shown = true;
@@ -75,23 +194,34 @@ function present(state: Session, report: QuickLookReady): void {
 	window.showInactive();
 }
 
-function hide(state: Session, notifyOwner: boolean): void {
+function hide(state: Session, notifyOwner: boolean, origin: Bounds | null = state.origin): void {
 	state.seq += 1;
 	state.current = null;
 	clearDeadline(state);
 	const { window, owner } = state;
 	if (live(window)) {
-		window.webContents.send(PREVIEW_CHANNELS.unload);
+		const opening = state.opening !== null;
+		state.opening = null;
 		if (state.shown) {
 			const refocusOwner = window.isFocused();
 			float(state, false);
 			if (window.isFullScreen()) {
+				window.webContents.send(PREVIEW_CHANNELS.unload);
 				window.once("leave-full-screen", () => window.hide());
 				window.setFullScreen(false);
+			} else if (ZOOMS && !opening) {
+				void zoomOut(state, origin);
 			} else {
+				// Closing mid-open (or without a transparent window) hides at once.
+				state.zoom += 1;
 				window.hide();
+				resetZoomWindow(state);
+				window.webContents.send(PREVIEW_CHANNELS.unload);
+				sendZoom(state, { id: state.zoom, phase: "settle" });
 			}
 			if (refocusOwner && live(owner)) owner.focus();
+		} else if (!state.closing) {
+			window.webContents.send(PREVIEW_CHANNELS.unload);
 		}
 	}
 	state.shown = false;
@@ -108,10 +238,11 @@ async function readTarget(target: QuickLookTarget): Promise<{ readonly document:
 	}
 }
 
-async function show(state: Session, target: QuickLookTarget): Promise<void> {
+async function show(state: Session, target: QuickLookTarget, origin: Bounds | null): Promise<void> {
 	state.seq += 1;
 	const seq = state.seq;
 	state.current = target;
+	state.origin = origin;
 	const [{ document, error }] = await Promise.all([readTarget(target), state.loaded]);
 	if (seq !== state.seq || !live(state.window)) return;
 	const load: QuickLookLoad = { seq, name: target.name, path: target.path, document, error };
@@ -161,6 +292,12 @@ function fromPreview(event: IpcMainInvokeEvent | IpcMainEvent): Session | null {
 	return session;
 }
 
+/** The Finder sends its icon rect in page CSS pixels; the zoom needs it on screen. */
+function ownerOrigin(state: Session, origin: unknown): Bounds | null {
+	if (!isBounds(origin) || !live(state.owner)) return null;
+	return screenOrigin(state.owner.getContentBounds(), origin, state.owner.webContents.getZoomFactor());
+}
+
 /**
  * Pre-creates the hidden Quick Look window for `owner` (sigma-file-manager
  * v1's pre-warmed quick view window) so Space only has to send a file to an
@@ -204,8 +341,13 @@ export function attachQuickLook(owner: BrowserWindow, options: QuickLookWindowOp
 		loaded,
 		seq: 0,
 		current: null,
+		origin: null,
 		shown: false,
 		deadline: null,
+		zoom: 0,
+		opening: null,
+		closing: false,
+		waiters: new Map(),
 		detach: () => undefined,
 	};
 
@@ -256,13 +398,19 @@ export function registerQuickLookIpc(ipc: IpcMain = ipcMain): void {
 	app.on("before-quit", () => {
 		quitting = true;
 	});
-	ipc.handle(PREVIEW_CHANNELS.show, async (event, target: unknown) => {
+	ipc.handle(PREVIEW_CHANNELS.show, async (event, target: unknown, origin: unknown) => {
 		const state = fromOwner(event);
 		if (!isQuickLookTarget(target)) throw new Error("미리보기 요청이 올바르지 않습니다");
-		await show(state, target);
+		await show(state, target, ownerOrigin(state, origin));
 	});
-	ipc.handle(PREVIEW_CHANNELS.hide, (event) => {
-		hide(fromOwner(event), false);
+	ipc.handle(PREVIEW_CHANNELS.hide, (event, origin: unknown) => {
+		const state = fromOwner(event);
+		hide(state, false, ownerOrigin(state, origin) ?? state.origin);
+	});
+	ipc.on(PREVIEW_CHANNELS.zoomed, (event, report: unknown) => {
+		const state = fromPreview(event);
+		if (state === null || !isQuickLookZoomed(report)) return;
+		state.waiters.get(`${report.id}:${report.phase}`)?.();
 	});
 	ipc.on(PREVIEW_CHANNELS.ready, (event, report: unknown) => {
 		const state = fromPreview(event);

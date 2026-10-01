@@ -20,7 +20,7 @@ body,
 	--ql-media-bg: #1c1c1e;
 	display: flex;
 	flex-direction: column;
-	height: 100vh;
+	height: 100%;
 	overflow: hidden;
 	background: var(--bg-quicklook-panel);
 	color: var(--text-primary);

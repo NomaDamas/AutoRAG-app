@@ -2,6 +2,7 @@ import type { IpcRenderer, IpcRendererEvent } from "electron";
 import {
 	isNavigateDelta,
 	isQuickLookLoad,
+	isQuickLookZoom,
 	PREVIEW_CHANNELS,
 	type PreviewBridge,
 	type QuickLookWindowBridge,
@@ -17,11 +18,11 @@ function subscribe(ipcRenderer: IpcRenderer, channel: string, listener: (payload
 
 export function createPreviewBridge(ipcRenderer: IpcRenderer): PreviewBridge {
 	return {
-		show: async (target) => {
-			await ipcRenderer.invoke(PREVIEW_CHANNELS.show, { path: target.path, name: target.name });
+		show: async (target, origin) => {
+			await ipcRenderer.invoke(PREVIEW_CHANNELS.show, { path: target.path, name: target.name }, origin);
 		},
-		hide: async () => {
-			await ipcRenderer.invoke(PREVIEW_CHANNELS.hide);
+		hide: async (origin) => {
+			await ipcRenderer.invoke(PREVIEW_CHANNELS.hide, origin);
 		},
 		onClosed: (listener) => subscribe(ipcRenderer, PREVIEW_CHANNELS.closed, () => listener()),
 		onNavigate: (listener) =>
@@ -39,7 +40,12 @@ export function createQuickLookWindowBridge(ipcRenderer: IpcRenderer, platform: 
 				if (isQuickLookLoad(load)) listener(load);
 			}),
 		onUnload: (listener) => subscribe(ipcRenderer, PREVIEW_CHANNELS.unload, () => listener()),
+		onZoom: (listener) =>
+			subscribe(ipcRenderer, PREVIEW_CHANNELS.zoom, (zoom) => {
+				if (isQuickLookZoom(zoom)) listener(zoom);
+			}),
 		ready: (report) => ipcRenderer.send(PREVIEW_CHANNELS.ready, report),
+		zoomed: (report) => ipcRenderer.send(PREVIEW_CHANNELS.zoomed, report),
 		request: async (action) => {
 			await ipcRenderer.invoke(PREVIEW_CHANNELS.request, action);
 		},

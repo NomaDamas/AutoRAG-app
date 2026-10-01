@@ -20,6 +20,20 @@ and 열기 on the trailing side. The filename carries the kind and size in its
 tooltip. The window is resizable and stays where the user put it: it re-centers
 only when it has to (a new file, or a resize that would leave the screen).
 
+## Open and close motion
+
+Like Finder, Space grows the panel out of the file's icon and closing shrinks
+it back into the icon, on an accelerating ease-in curve (300ms open, 250ms
+close; instant under `prefers-reduced-motion`). The Finder sends the icon's
+viewport rect with `show`/`hide`; the main process maps it to the screen
+(`src/preview/shared/zoom.ts`). During the zoom the transparent window briefly
+covers the icon and the panel together, ignores the mouse, and drops its
+shadow; the page lays the panel out at its final size, pinned to the edges it
+shares with that cover, and animates only a CSS transform, so the snap back to
+the panel's own bounds is still. A file whose icon is not on screen (scrolled
+away, or an evidence source) zooms from the panel's center. Non-macOS windows
+are opaque, so they show and hide without the zoom.
+
 ## PDF
 
 Pages render as one continuous column of paper cards inside the stage's single

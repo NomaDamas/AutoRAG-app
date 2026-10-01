@@ -1,3 +1,6 @@
+import type { Bounds } from "./fit";
+import type { ZoomDirection, ZoomGeometry } from "./zoom";
+
 /**
  * Quick Look runs in its own pre-warmed BrowserWindow (the sigma-file-manager
  * v1 design). The Finder window asks the main process to show or hide a file;
@@ -21,6 +24,10 @@ export const PREVIEW_CHANNELS = {
 	ready: "preview:ready",
 	/** Preview window -> main (invoke): toolbar and keyboard actions. */
 	request: "preview:request",
+	/** Main -> preview window: drive one step of the open/close zoom. */
+	zoom: "preview:zoom",
+	/** Preview window -> main: a zoom step finished. */
+	zoomed: "preview:zoomed",
 } as const;
 
 /**
@@ -63,10 +70,25 @@ export type QuickLookAction = "close" | "next" | "previous" | "open" | "fullscre
 
 export type NavigateDelta = 1 | -1;
 
+/**
+ * Main -> preview zoom steps. `prepare` lays the panel out at its final size
+ * inside the larger zoom window, posed at its start; `run` animates it;
+ * `settle` drops the zoom styling once the window has its final bounds.
+ */
+export type QuickLookZoom =
+	| { readonly id: number; readonly phase: "prepare"; readonly direction: ZoomDirection; readonly geometry: ZoomGeometry }
+	| { readonly id: number; readonly phase: "run" | "settle" };
+
+export interface QuickLookZoomed {
+	readonly id: number;
+	readonly phase: "prepared" | "done";
+}
+
 /** Exposed to the Finder window as `window.autorag.preview`. */
 export interface PreviewBridge {
-	show(target: QuickLookTarget): Promise<void>;
-	hide(): Promise<void>;
+	/** `origin` is the file's icon in the Finder viewport (CSS pixels); null when it is not on screen. */
+	show(target: QuickLookTarget, origin: Bounds | null): Promise<void>;
+	hide(origin: Bounds | null): Promise<void>;
 	onClosed(listener: () => void): () => void;
 	onNavigate(listener: (delta: NavigateDelta) => void): () => void;
 }
@@ -76,7 +98,9 @@ export interface QuickLookWindowBridge {
 	readonly platform: string;
 	onLoad(listener: (load: QuickLookLoad) => void): () => void;
 	onUnload(listener: () => void): () => void;
+	onZoom(listener: (zoom: QuickLookZoom) => void): () => void;
 	ready(report: QuickLookReady): void;
+	zoomed(report: QuickLookZoomed): void;
 	request(action: QuickLookAction): Promise<void>;
 }
 
@@ -95,6 +119,24 @@ export function isPreviewDocument(value: unknown): value is PreviewDocument {
 export function isQuickLookTarget(value: unknown): value is QuickLookTarget {
 	if (!isRecord(value)) return false;
 	return typeof value.path === "string" && value.path.length > 0 && typeof value.name === "string";
+}
+
+export function isBounds(value: unknown): value is Bounds {
+	if (!isRecord(value)) return false;
+	return [value.x, value.y, value.width, value.height].every((part) => typeof part === "number" && Number.isFinite(part));
+}
+
+export function isQuickLookZoom(value: unknown): value is QuickLookZoom {
+	if (!isRecord(value) || typeof value.id !== "number") return false;
+	if (value.phase === "run" || value.phase === "settle") return true;
+	if (value.phase !== "prepare" || (value.direction !== "in" && value.direction !== "out")) return false;
+	const geometry = value.geometry;
+	if (!isRecord(geometry) || !isBounds(geometry.union) || !isBounds(geometry.from) || !isBounds(geometry.to)) return false;
+	return (geometry.anchorX === "left" || geometry.anchorX === "right") && (geometry.anchorY === "top" || geometry.anchorY === "bottom");
+}
+
+export function isQuickLookZoomed(value: unknown): value is QuickLookZoomed {
+	return isRecord(value) && typeof value.id === "number" && (value.phase === "prepared" || value.phase === "done");
 }
 
 export function isQuickLookLoad(value: unknown): value is QuickLookLoad {

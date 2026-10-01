@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactElement } from "react";
 import type { PreviewBridge, QuickLookTarget } from "../../preview/shared/contract";
+import type { Bounds } from "../../preview/shared/fit";
 import type { SettingsBridge } from "../../shared/settings-contract";
 import type { CitationEvidence } from "../../shared/search-contract";
 
@@ -23,6 +24,21 @@ import { useFinderSource } from "./hooks/useFinderSource";
 /** The reference's `showHotkeys` prop (default true): keycaps on or off. */
 const SHOW_HOTKEYS = true;
 
+/**
+ * The visible Finder icon for `path`, in viewport CSS pixels: Quick Look zooms
+ * out of it and back into it. Null when the row is scrolled away or absent.
+ */
+function iconRect(path: string): Bounds | null {
+	const row = Array.from(document.querySelectorAll<HTMLElement>("[data-path]")).find((node) => node.dataset.path === path);
+	const icon = row?.querySelector(".tile, .row__name svg") ?? row?.querySelector(".row__name");
+	if (icon === null || icon === undefined) return null;
+	const box = icon.getBoundingClientRect();
+	const list = row?.closest(".list")?.getBoundingClientRect();
+	if (box.width <= 0 || box.height <= 0) return null;
+	if (list !== undefined && (box.bottom <= list.top || box.top >= list.bottom)) return null;
+	return { x: box.x, y: box.y, width: box.width, height: box.height };
+}
+
 /** Unpackaged runs label the window with their clone, branch, and commit. */
 const DEV_LABEL = (() => {
 	const dev = (window as unknown as { readonly autorag?: { readonly dev?: DevLabel | null } }).autorag?.dev;
@@ -35,10 +51,18 @@ export function App(): ReactElement {
 	const [preview, setPreview] = useState<QuickLookTarget | null>(null);
 	const previewRef = useRef<QuickLookTarget | null>(null);
 	previewRef.current = preview;
+	/** Icon of the file the preview closes on: captured before React drops `preview`. */
+	const closingRef = useRef<Bounds | null>(null);
 	const openQuickLook = useCallback((target: QuickLookTarget) => {
+		const open = previewRef.current;
+		if (open?.path === target.path) closingRef.current = iconRect(open.path);
 		setPreview((current) => (current?.path === target.path ? null : { path: target.path, name: target.name }));
 	}, []);
-	const closeQuickLook = useCallback(() => setPreview(null), []);
+	const closeQuickLook = useCallback(() => {
+		const open = previewRef.current;
+		if (open !== null) closingRef.current = iconRect(open.path);
+		setPreview(null);
+	}, []);
 	const isQuickLookOpen = useCallback(() => previewRef.current !== null, []);
 	const finder = useFinderController(source, {
 		showHiddenFiles,
@@ -82,7 +106,8 @@ export function App(): ReactElement {
 	}, [focusPath, finder.stackRows]);
 
 	useEffect(() => {
-		const request = preview === null ? autorag.preview.hide() : autorag.preview.show(preview);
+		const request = preview === null ? autorag.preview.hide(closingRef.current) : autorag.preview.show(preview, iconRect(preview.path));
+		closingRef.current = null;
 		request.catch((error: unknown) => finder.showToast(error instanceof Error ? error.message : String(error)));
 	}, [preview]);
 

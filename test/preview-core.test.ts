@@ -13,6 +13,7 @@ import { rtfToText } from "../src/preview/shared/rtf";
 import { listTarEntries } from "../src/preview/shared/tar-list";
 import { listZipEntries } from "../src/preview/shared/zip-list";
 import { fitQuickLook, placeQuickLook, QUICK_LOOK_MIN, QUICK_LOOK_TOOLBAR } from "../src/preview/shared/fit";
+import { fallbackOrigin, screenOrigin, zoomGeometry, zoomTransform } from "../src/preview/shared/zoom";
 
 
 describe("preview registry", () => {
@@ -61,6 +62,53 @@ describe("quick look sizing", () => {
 		const bounds = placeQuickLook({ width: 500, height: 400 }, { x: 1300, y: 700, width: 900, height: 700 }, { x: 0, y: 0, width: 1440, height: 900 });
 		expect(bounds.x).toBe(940);
 		expect(bounds.y).toBe(500);
+	});
+});
+
+describe("quick look zoom", () => {
+	const panel = { x: 400, y: 100, width: 800, height: 600 };
+
+	it("covers the icon and the panel, anchoring the panel to the edges it shares with them", () => {
+		const geometry = zoomGeometry({ x: 100, y: 800, width: 18, height: 18 }, panel);
+		expect(geometry.union).toEqual({ x: 100, y: 100, width: 1100, height: 718 });
+		expect(geometry.from).toEqual({ x: 0, y: 700, width: 18, height: 18 });
+		expect(geometry.to).toEqual({ x: 300, y: 0, width: 800, height: 600 });
+		expect(geometry.anchorX).toBe("right");
+		expect(geometry.anchorY).toBe("top");
+		const above = zoomGeometry({ x: 1300, y: 20, width: 18, height: 18 }, panel);
+		expect(above.anchorX).toBe("left");
+		expect(above.anchorY).toBe("bottom");
+	});
+
+	it("keeps the window on the panel when the icon is inside it", () => {
+		const geometry = zoomGeometry(fallbackOrigin(panel), panel);
+		expect(geometry.union).toEqual(panel);
+		expect(geometry.to).toEqual({ ...panel, x: 0, y: 0 });
+	});
+
+	it("never zooms from a zero-sized icon", () => {
+		const geometry = zoomGeometry({ x: 100, y: 100, width: 0, height: 0 }, panel);
+		expect(geometry.from.width).toBe(1);
+		expect(geometry.from.height).toBe(1);
+	});
+
+	it("poses the full-size panel exactly over the icon", () => {
+		const from = { x: 0, y: 700, width: 18, height: 18 };
+		const to = { x: 300, y: 0, width: 800, height: 600 };
+		expect(zoomTransform(from, to)).toBe("translate(-300px, 700px) scale(0.0225, 0.03)");
+	});
+
+	it("zooms from the panel's center when the file has no visible icon", () => {
+		const origin = fallbackOrigin(panel);
+		expect(origin.x + origin.width / 2).toBe(panel.x + panel.width / 2);
+		expect(origin.y + origin.height / 2).toBe(panel.y + panel.height / 2);
+		expect(origin.width).toBeLessThan(panel.width / 2);
+	});
+
+	it("maps a Finder viewport rect to screen coordinates", () => {
+		const content = { x: 50, y: 80, width: 1440, height: 900 };
+		expect(screenOrigin(content, { x: 10, y: 20, width: 18, height: 18 }, 1)).toEqual({ x: 60, y: 100, width: 18, height: 18 });
+		expect(screenOrigin(content, { x: 10, y: 20, width: 18, height: 18 }, 1.25)).toEqual({ x: 63, y: 105, width: 23, height: 23 });
 	});
 });
 
