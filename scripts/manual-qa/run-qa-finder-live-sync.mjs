@@ -588,30 +588,36 @@ async function runS10(page) {
 		{ timeoutMs: LIVE_BOUND_MS, label: "bulk fs-watch batch" },
 	);
 	const batchAt = electronEvents.findLast((event) => event.text === batchEvent && event.timestampMs >= writeStarted)?.timestampMs ?? Date.now();
-	const directListMs = await page.evaluate(async (path) => {
-		const started = performance.now();
-		await window.autorag.fs.listDir(path);
-		return Math.round(performance.now() - started);
-	}, bulkDir);
 	const row = rowFor(page, "zz-live.txt");
 	try {
 		await row.scrollIntoViewIfNeeded();
 		await row.waitFor({ state: "visible", timeout: LIVE_BOUND_MS });
+		const rowVisibleAt = Date.now();
+		const elapsedMs = rowVisibleAt - writeStarted;
+		const directListMs = await page.evaluate(async (path) => {
+			const started = performance.now();
+			await window.autorag.fs.listDir(path);
+			return Math.round(performance.now() - started);
+		}, bulkDir);
+		const errors = electronLines.filter((line) => line.includes("[fs-watch]") && line.includes("Error"));
+		appendLog(`S10 timing: write=${writeStarted} batch=${batchAt} row=${rowVisibleAt} directListMs=${directListMs}`);
+		if (elapsedMs > LIVE_BOUND_MS) throw new Error(`bulk live create took ${elapsedMs}ms > ${LIVE_BOUND_MS}ms; batchDelta=${batchAt - writeStarted}ms; directListMs=${directListMs}`);
+		if (errors.length !== 0) throw new Error(`fs-watch errors during bulk: ${JSON.stringify(errors)}; directListMs=${directListMs}`);
+		if (directListMs > LIVE_BOUND_MS) {
+			throw new Error(`product performance: direct fs.list(${bulkDir}) took ${directListMs}ms > ${LIVE_BOUND_MS}ms`);
+		}
+		pass("S10 scale", `zz-live.txt visible in ${elapsedMs}ms <= ${LIVE_BOUND_MS}ms; batchDelta=${batchAt - writeStarted}ms directListMs=${directListMs}`);
 	} catch (error) {
 		const rowVisibleAt = Date.now();
+		const elapsedMs = rowVisibleAt - writeStarted;
+		const directListMs = await page.evaluate(async (path) => {
+			const started = performance.now();
+			await window.autorag.fs.listDir(path);
+			return Math.round(performance.now() - started);
+		}, bulkDir);
 		appendLog(`S10 timing: write=${writeStarted} batch=${batchAt} row=${rowVisibleAt} directListMs=${directListMs}`);
 		throw new Error(`${error instanceof Error ? error.message : String(error)}; batchDelta=${batchAt - writeStarted}ms; directListMs=${directListMs}`);
 	}
-	const rowVisibleAt = Date.now();
-	const elapsedMs = rowVisibleAt - writeStarted;
-	const errors = electronLines.filter((line) => line.includes("[fs-watch]") && line.includes("Error"));
-	appendLog(`S10 timing: write=${writeStarted} batch=${batchAt} row=${rowVisibleAt} directListMs=${directListMs}`);
-	if (elapsedMs > LIVE_BOUND_MS) throw new Error(`bulk live create took ${elapsedMs}ms > ${LIVE_BOUND_MS}ms; batchDelta=${batchAt - writeStarted}ms; directListMs=${directListMs}`);
-	if (errors.length !== 0) throw new Error(`fs-watch errors during bulk: ${JSON.stringify(errors)}; directListMs=${directListMs}`);
-	if (directListMs > LIVE_BOUND_MS) {
-		throw new Error(`product performance: direct fs.list(${bulkDir}) took ${directListMs}ms > ${LIVE_BOUND_MS}ms`);
-	}
-	pass("S10 scale", `zz-live.txt visible in ${elapsedMs}ms <= ${LIVE_BOUND_MS}ms; batchDelta=${batchAt - writeStarted}ms directListMs=${directListMs}`);
 }
 
 async function runS11(page) {
