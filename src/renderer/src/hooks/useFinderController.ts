@@ -32,6 +32,15 @@ import {
 import { type SortKey, type SortState, cycleSort, sortEntries } from "../state/sort";
 import { visibleEntries } from "../state/visibility";
 import {
+	buildFolderTree,
+	discloseStep,
+	expandedFolders,
+	flatTreeRows,
+	isInsideFolder,
+	toggleExpanded,
+	type TreeRow,
+} from "../state/folder-tree";
+import {
 	applyVersionStacks,
 	buildVersionFamilies,
 	defaultIndexIncluded,
@@ -111,6 +120,12 @@ interface RenameState {
 	readonly draft: string;
 }
 
+/** An expanded folder's listing, tagged with the refresh revision it was read at. */
+interface ChildListing {
+	readonly revision: number;
+	readonly entries: readonly FinderEntry[];
+}
+
 export interface FinderController {
 	readonly tabs: readonly TabView[];
 	readonly canCloseTabs: boolean;
@@ -125,7 +140,7 @@ export interface FinderController {
 	readonly searchSummary: string;
 	readonly emptyText: string;
 	readonly rows: readonly FinderEntry[];
-	readonly stackRows: readonly StackRow[];
+	readonly stackRows: readonly TreeRow[];
 	readonly sort: SortState | null;
 	readonly zone: FocusZone;
 	readonly selection: SelectionState;
@@ -175,6 +190,8 @@ export interface FinderController {
 	runMenuAction(action: FinderMenuAction): void;
 	toggleIndex(entry: FinderEntry): void;
 	toggleStack(entry: FinderEntry): void;
+	/** Folder disclosure triangle: nest or hide the folder's contents in place. */
+	toggleFolder(entry: FinderEntry): void;
 	retryVersionFamilies(): void;
 	setRenameDraft(value: string): void;
 	commitRename(): void;
@@ -207,6 +224,8 @@ export function useFinderController(
 	const [viewMode, setViewModeValue] = useState<ViewMode>(readStoredViewMode);
 	/** Column view: listings by folder path, for every pane. */
 	const [paneListings, setPaneListings] = useState<Readonly<Record<string, readonly FinderEntry[]>>>({});
+	const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
+	const [childListings, setChildListings] = useState<Readonly<Record<string, ChildListing>>>({});
 
 	const listRef = useRef<HTMLDivElement | null>(null);
 	const searchRef = useRef<HTMLInputElement | null>(null);
@@ -384,15 +403,25 @@ export function useFinderController(
 		return () => clearTimeout(timer);
 	}, [flashPath]);
 
-	const stackRows = useMemo(
-		() =>
-			applyVersionStacks(sortEntries(visibleEntries(searching ? hits : listing, showHiddenFiles), sort), {
+	const stackRows = useMemo(() => {
+		const prepare = (entries: readonly FinderEntry[]): readonly StackRow[] =>
+			applyVersionStacks(sortEntries(visibleEntries(entries, showHiddenFiles), sort), {
 				families,
 				manualOpen: stackPinned,
 				selectedKeys: selection.keys,
-			}),
-		[searching, hits, listing, sort, showHiddenFiles, families, stackPinned, selection.keys],
-	);
+			});
+		if (searching) {
+			return flatTreeRows(prepare(hits));
+		}
+		return buildFolderTree(prepare(listing), {
+			expanded,
+			childrenOf: (folder) => {
+				const loaded = childListings[folder];
+				return loaded === undefined ? undefined : prepare(loaded.entries);
+			},
+		});
+	}, [searching, hits, listing, sort, showHiddenFiles, families, stackPinned, selection.keys, expanded, childListings]);
+
 	const paneViews = useMemo<readonly ColumnPaneView[]>(
 		() =>
 			panePaths.map((panePath) => {
@@ -410,6 +439,32 @@ export function useFinderController(
 		[panePaths, paneListings, showHiddenFiles, sort, families, stackPinned, selection.keys],
 	);
 	const paneEntries = useMemo(() => paneViews.map((pane) => pane.rows.map((row) => row.entry)), [paneViews]);
+
+	/** Every folder shown open needs its listing; stale ones re-read after a refresh. */
+	const openFolders = useMemo(() => expandedFolders(stackRows), [stackRows]);
+	const requestedListings = useRef(new Set<string>());
+	useEffect(() => {
+		for (const folder of openFolders) {
+			const request = `${revision}\u0000${folder}`;
+			if (childListings[folder]?.revision === revision || requestedListings.current.has(request)) {
+				continue;
+			}
+			requestedListings.current.add(request);
+			const settle = (entries: readonly FinderEntry[]): void => {
+				requestedListings.current.delete(request);
+				setChildListings((current) =>
+					(current[folder]?.revision ?? -1) > revision ? current : { ...current, [folder]: { revision, entries } },
+				);
+			};
+			source
+				.list(folder)
+				.then(settle)
+				.catch((error: unknown) => {
+					settle([]);
+					reportError(error);
+				});
+		}
+	}, [openFolders, childListings, revision, source, reportError]);
 	const rows = useMemo(() => stackRows.map((row) => row.entry), [stackRows]);
 	/** Every entry on screen: all panes in the column view, the listing otherwise. */
 	const viewEntries = useMemo(() => (layout === "columns" ? paneEntries.flat() : rows), [layout, paneEntries, rows]);
@@ -546,15 +601,19 @@ export function useFinderController(
 				return;
 			}
 			// A Recents row always opens: the view is a history, not a folder to reveal into.
-			const shown = entry.location === path || (layout === "columns" && panePaths.includes(entry.location));
-			if (searching || (!shown && path !== RECENTS_PATH)) {
+			// Rows nested under an open folder are in view already, so they open too.
+			const inView =
+				entry.location === path ||
+				openFolders.includes(entry.location) ||
+				(layout === "columns" && panePaths.includes(entry.location));
+			if (searching || (!inView && path !== RECENTS_PATH)) {
 				revealEntry(entry);
 				return;
 			}
 			// Double-click / Enter on a file: the OS default application opens it.
 			source.open(entry.path).catch(reportError);
 		},
-		[navigate, path, layout, panePaths, revealEntry, searching, source, reportError],
+		[navigate, path, layout, panePaths, openFolders, revealEntry, searching, source, reportError],
 	);
 
 	const trashPaths = useCallback(
@@ -595,6 +654,22 @@ export function useFinderController(
 			return next;
 		});
 	}, []);
+
+	/** Collapsing a folder drops the selection it hides, so no key acts on unseen rows. */
+	const setFolderOpen = useCallback(
+		(folder: string, open: boolean) => {
+			setExpanded((current) => (current.has(folder) === open ? current : toggleExpanded(current, folder)));
+			if (!open && selection.keys.some((key) => isInsideFolder(key, folder))) {
+				patchSelection({ keys: [folder], anchor: folder, focus: folder });
+			}
+		},
+		[selection.keys, patchSelection],
+	);
+
+	const toggleFolder = useCallback(
+		(entry: FinderEntry) => setFolderOpen(entry.path, !expanded.has(entry.path)),
+		[expanded, setFolderOpen],
+	);
 
 	const retryVersionFamilies = useCallback(() => {
 		source
@@ -877,6 +952,20 @@ export function useFinderController(
 					return;
 				case "moveEvidence":
 					return;
+				case "disclose": {
+					const step = discloseStep(stackRows, selection.focus, action.direction);
+					if (step === null) {
+						return;
+					}
+					event.preventDefault();
+					if (step.type === "select") {
+						scrollTarget.current = step.path;
+						patchSelection({ keys: [step.path], anchor: step.path, focus: step.path });
+						return;
+					}
+					setFolderOpen(step.path, step.type === "expand");
+					return;
+				}
 				case "open":
 					event.preventDefault();
 					if (layout === "columns" && focusedEntry?.kind === "folder") {
@@ -902,6 +991,8 @@ export function useFinderController(
 		setViewMode,
 		dismiss,
 		orderedKeys,
+		stackRows,
+		setFolderOpen,
 		selection,
 		patchSelection,
 		quickLookSelection,
@@ -1037,6 +1128,7 @@ export function useFinderController(
 		runMenuAction,
 		toggleIndex,
 		toggleStack,
+		toggleFolder,
 		retryVersionFamilies,
 		setRenameDraft: (value) => setRename((current) => (current === null ? null : { ...current, draft: value })),
 		commitRename,

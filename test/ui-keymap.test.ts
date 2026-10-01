@@ -31,8 +31,10 @@ describe("resolveKeyAction", () => {
 		expect(resolveKeyAction(key("ArrowRight"), evidence)).toEqual({ type: "moveEvidence", delta: 1 });
 	});
 
-	it("ignores left and right in the Finder zone", () => {
-		expect(resolveKeyAction(key("ArrowLeft"), finder)).toBeNull();
+	it("discloses folders with left and right in the Finder zone, never while typing", () => {
+		expect(resolveKeyAction(key("ArrowRight"), finder)).toEqual({ type: "disclose", direction: "expand" });
+		expect(resolveKeyAction(key("ArrowLeft"), finder)).toEqual({ type: "disclose", direction: "collapse" });
+		expect(resolveKeyAction(key("ArrowLeft"), { ...finder, typing: true })).toBeNull();
 	});
 
 	it("opens the selection with Enter", () => {
@@ -75,7 +77,7 @@ describe("resolveKeyAction", () => {
 	it("moves sideways with left and right in the icon and column views", () => {
 		expect(resolveKeyAction(key("ArrowRight"), { ...finder, viewMode: "icons" })).toEqual({ type: "moveSelectionSideways", delta: 1 });
 		expect(resolveKeyAction(key("ArrowLeft"), { ...finder, viewMode: "columns" })).toEqual({ type: "moveSelectionSideways", delta: -1 });
-		expect(resolveKeyAction(key("ArrowLeft"), { ...finder, viewMode: "list" })).toBeNull();
+		expect(resolveKeyAction(key("ArrowLeft"), { ...finder, viewMode: "list" })).toEqual({ type: "disclose", direction: "collapse" });
 		expect(resolveKeyAction(key("ArrowRight"), { ...finder, viewMode: "icons", typing: true })).toBeNull();
 	});
 

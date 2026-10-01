@@ -35,6 +35,7 @@ export type KeyAction =
 	| { readonly type: "moveSelectionSideways"; readonly delta: 1 | -1 }
 	| { readonly type: "moveEvidence"; readonly delta: 1 | -1 }
 	| { readonly type: "setViewMode"; readonly mode: ViewMode }
+	| { readonly type: "disclose"; readonly direction: "expand" | "collapse" }
 	| { readonly type: "dismiss" }
 	| { readonly type: "focusSearch" }
 	| { readonly type: "newTab" }
@@ -73,7 +74,10 @@ export function resolveKeyAction(event: KeyEventLike, context: KeyContext): KeyA
 		if (context.zone === "evidence") {
 			return { type: "moveEvidence", delta };
 		}
-		return (context.viewMode ?? "list") === "list" ? null : { type: "moveSelectionSideways", delta };
+		if ((context.viewMode ?? "list") === "list") {
+			return { type: "disclose", direction: event.key === "ArrowRight" ? "expand" : "collapse" };
+		}
+		return { type: "moveSelectionSideways", delta };
 	}
 	if (event.key === "Enter" && context.zone === "finder") {
 		return { type: "open" };
