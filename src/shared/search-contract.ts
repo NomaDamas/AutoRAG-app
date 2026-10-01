@@ -51,8 +51,6 @@ export interface CitationEvidence {
 export interface AnswerPhase {
 	readonly answer: string;
 	readonly evidence: readonly CitationEvidence[];
-	/** e.g. "0.9s · 2 sources". Computed in the main process. */
-	readonly meta: string;
 }
 
 export type AnswerPhaseName = "quick" | "deep";

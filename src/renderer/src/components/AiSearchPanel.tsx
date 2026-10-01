@@ -375,7 +375,7 @@ function AnswerCard({
 	if (answerText === "") {
 		return (
 			<article className={`ai__answer ai__answer--${label.toLowerCase()} ai__answer--pending`}>
-				<div className="ai__answer-heading"><span className="ai__answer-label"><i />{label}</span><span>{pending ? (thinking ? "" : "Searching…") : "Stopped"}</span></div>
+				<span className="ai__answer-label"><i />{label}</span>
 				{pending && thinking ? <ThinkingIndicator /> : <div className="ai__skeleton"><span /><span /><span /></div>}
 			</article>
 		);
@@ -383,10 +383,7 @@ function AnswerCard({
 	const streaming = phase === null && pending;
 	return (
 		<article className={`ai__answer ai__answer--${label.toLowerCase()}${streaming ? " ai__answer--streaming" : ""}`}>
-			<div className="ai__answer-heading">
-				<span className="ai__answer-label"><i />{label}</span>
-				<span>{phase !== null ? phase.meta : streaming ? "Streaming…" : "Incomplete"}</span>
-			</div>
+			<span className="ai__answer-label"><i />{label}</span>
 			<div className="ai__answer-content">
 				{parseAnswerBlocks(answerText).map((block, index) => (
 					<AnswerBlockView key={`${index}`} block={block} selected={selectedEvidence} onCitation={onCitation} />

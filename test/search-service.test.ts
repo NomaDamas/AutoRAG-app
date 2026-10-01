@@ -32,10 +32,9 @@ type TestStreamEvent =
 	| { readonly type: "complete"; readonly response: TestResponse };
 
 const tempDirs: string[] = [];
-let currentMs = 0;
 
 function now(): Date {
-	return new Date(currentMs);
+	return new Date(0);
 }
 
 async function createStore(): Promise<ChatStore> {
@@ -45,7 +44,6 @@ async function createStore(): Promise<ChatStore> {
 }
 
 afterEach(async () => {
-	currentMs = 0;
 	await Promise.all(tempDirs.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
 });
 
@@ -113,7 +111,6 @@ describe("createSearchService", () => {
 		const quickResponse = createResponse("session-quick", "**Quick** answer [1]", 2);
 		const agent = createFakeAgent(async function*() {
 			yield { type: "progress", sessionId: "", query: "refund approval", text: "Reviewing the query." };
-			currentMs = 900;
 			yield { type: "preliminary", response: quickResponse };
 		});
 		const { events, send } = collectEvents();
@@ -134,7 +131,6 @@ describe("createSearchService", () => {
 		expect(quick.searchId).toBe("search-1");
 		expect(quick.sessionId).toBe("session-quick");
 		expect(quick.phase.answer).toBe("**Quick** answer [1]");
-		expect(quick.phase.meta).toBe("0.9s · 2 sources");
 		expect(quick.phase.evidence).toEqual([
 			{
 				number: 1,
@@ -239,7 +235,6 @@ describe("createSearchService", () => {
 	it("maps the complete stream event to a Deep phase", async () => {
 		const deepResponse = createResponse("session-deep", "Deep answer", 4);
 		const agent = createFakeAgent(async function*() {
-			currentMs = 4000;
 			yield { type: "complete", response: deepResponse };
 		});
 		const { events, send } = collectEvents();
@@ -257,7 +252,6 @@ describe("createSearchService", () => {
 		expect(deep.searchId).toBe("search-2");
 		expect(deep.sessionId).toBe("session-deep");
 		expect(deep.phase.answer).toBe("Deep answer");
-		expect(deep.phase.meta).toBe("4.0s · 4 sources");
 		expect(deep.phase.evidence[0]?.feedbackId).toBe("session-deep:1");
 	});
 

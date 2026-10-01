@@ -67,7 +67,6 @@ interface SearchRun {
 	readonly searchId: string;
 	readonly chatId: string;
 	readonly agent: SearchAgent;
-	readonly startedAt: number;
 	readonly finish: Promise<void>;
 	readonly resolveFinish: () => void;
 	cancelled: boolean;
@@ -156,7 +155,7 @@ function errorText(error: unknown): string {
 	return error instanceof Error ? `${error.name}: ${error.message}` : String(error);
 }
 
-function mapPhase(response: SearchDocumentsResponse, elapsedMs: number): AnswerPhase {
+function mapPhase(response: SearchDocumentsResponse): AnswerPhase {
 	return {
 		answer: response.answer,
 		evidence: response.results.map((result) => ({
@@ -168,7 +167,6 @@ function mapPhase(response: SearchDocumentsResponse, elapsedMs: number): AnswerP
 			confidence: result.confidence,
 			feedbackId: result.feedbackId,
 		})),
-		meta: `${(elapsedMs / 1000).toFixed(1)}s · ${response.searched} sources`,
 	};
 }
 
@@ -216,7 +214,7 @@ export function createSearchService(deps: SearchServiceDeps): SearchBridge {
 						break;
 					case "preliminary": {
 						run.sessionId = event.response.sessionId;
-						run.quick = mapPhase(event.response, now().getTime() - run.startedAt);
+						run.quick = mapPhase(event.response);
 						emit({
 							type: "quick",
 							searchId: run.searchId,
@@ -228,7 +226,7 @@ export function createSearchService(deps: SearchServiceDeps): SearchBridge {
 					}
 					case "complete": {
 						run.sessionId = event.response.sessionId;
-						run.deep = mapPhase(event.response, now().getTime() - run.startedAt);
+						run.deep = mapPhase(event.response);
 						emit({
 							type: "deep",
 							searchId: run.searchId,
@@ -281,7 +279,6 @@ export function createSearchService(deps: SearchServiceDeps): SearchBridge {
 				searchId,
 				chatId,
 				agent,
-				startedAt: now().getTime(),
 				finish,
 				resolveFinish,
 				cancelled: false,

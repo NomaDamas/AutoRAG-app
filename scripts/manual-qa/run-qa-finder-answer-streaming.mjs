@@ -129,10 +129,12 @@ async function installRecorder(page) {
 				thinkingTexts: [...document.querySelectorAll(".ai__thinking")].map((element) => element.textContent),
 				quickDraft: text(quick, ".ai__answer-content").length,
 				quickStreaming: quick?.classList.contains("ai__answer--streaming") ?? false,
-				quickMeta: quick?.querySelector(".ai__answer-heading > span:last-child")?.textContent ?? "",
 				deepDraft: text(deep, ".ai__answer-content").length,
 				deepStreaming: deep?.classList.contains("ai__answer--streaming") ?? false,
-				deepMeta: deep?.querySelector(".ai__answer-heading > span:last-child")?.textContent ?? "",
+				// Card text outside the answer body: only the label (and the indicator).
+				chrome: [quick, deep].filter(Boolean).map((card) =>
+					[...card.children].filter((child) => !child.matches(".ai__answer-content")).map((child) => child.textContent).join("|"),
+				),
 				error: document.querySelector(".ai__error")?.textContent ?? "",
 				inputDisabled: document.querySelector('input[aria-label="Ask AutoRAG"]')?.disabled ?? null,
 			};
@@ -196,7 +198,8 @@ try {
 	writeFileSync(join(EVIDENCE, "timeline.json"), JSON.stringify(timeline, null, 2));
 	log(`timeline states: ${timeline.length}`);
 
-	const beforeQuickFinal = timeline.filter((state) => !/sources/.test(state.quickMeta));
+	const quickFinal = (state) => state.quickDraft > 0 && !state.quickStreaming;
+	const beforeQuickFinal = timeline.filter((state) => !quickFinal(state));
 	check(
 		"thinking indicator shown",
 		beforeQuickFinal.some((state) => state.thinkingQuick),
@@ -214,8 +217,14 @@ try {
 		`quick draft lengths while streaming ${JSON.stringify([...new Set(quickStreaming.map((state) => state.quickDraft))].slice(0, 12))}`,
 	);
 	const final = timeline.at(-1);
-	check("quick answer final", /\d+\.\ds · \d+ sources/.test(final.quickMeta), `quick meta "${final.quickMeta}"`);
-	check("deep answer final", /\d+\.\ds · \d+ sources/.test(final.deepMeta), `deep meta "${final.deepMeta}" (${final.deepDraft} chars)`);
+	check("quick answer final", quickFinal(final), `quick ${final.quickDraft} chars`);
+	check("deep answer final", final.deepDraft > 0 && !final.deepStreaming, `deep ${final.deepDraft} chars`);
+	const STATUS = /Searching|Streaming|Stopped|Incomplete|sources|\d\.\ds/;
+	check(
+		"no status text in card headers",
+		timeline.every((state) => state.chrome.every((value) => !STATUS.test(value))),
+		`card chrome ${JSON.stringify([...new Set(timeline.flatMap((state) => state.chrome))])}`,
+	);
 	log(`deep thinking indicator shown=${timeline.some((state) => state.thinkingDeep)}`);
 	const deepStreaming = timeline.filter((state) => state.deepStreaming);
 	const deepStreamed = distinctGrowth(deepStreaming.map((state) => state.deepDraft));

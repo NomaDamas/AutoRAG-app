@@ -241,10 +241,6 @@
 .ai__skeleton span:nth-child(2) { width: 68%; }
 .ai__skeleton span:nth-child(3) { width: 42%; }
 
-.ai__answer-heading {
-	align-items: center;
-}
-
 .ai__answer-label {
 	display: inline-flex;
 	align-items: center;
@@ -265,14 +261,6 @@
 	display: flex;
 	flex-direction: column;
 	gap: var(--space-8);
-}
-
-.ai__answer-heading {
-	display: flex;
-	justify-content: space-between;
-	gap: var(--space-8);
-	color: var(--text-muted);
-	font-size: var(--font-size-caption);
 }
 
 .ai__answer p {
