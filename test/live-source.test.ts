@@ -9,7 +9,11 @@ import type {
 	FsVersionFamiliesResult,
 } from "../src/shared/fs-contract";
 import type { LiveBridge, LiveMessage } from "../src/shared/live-contract";
-import { createBridgeSource, createFixtureSource } from "../src/renderer/src/data/source";
+import {
+	createBridgeSource,
+	createFixtureSource,
+	isMissingPathFailure,
+} from "../src/renderer/src/data/source";
 
 function fsEntry(path: string): FsEntry {
 	return {
@@ -48,6 +52,7 @@ function fakeFs(result: FsVersionFamiliesResult): FsBridge {
 	return {
 		listDir: noResult,
 		stat: async (path) => fsEntry(path),
+		exists: async () => true,
 		search,
 		locations,
 		copy: batch,
@@ -112,5 +117,41 @@ describe("live Finder source adapters", () => {
 		await expect(source.exists("Desktop")).resolves.toBe(true);
 		await expect(source.exists("Desktop/주간보고_0919.pptx")).resolves.toBe(true);
 		await expect(source.exists("Desktop/missing.txt")).resolves.toBe(false);
+	});
+
+	it("forwards missing-path values and rethrows non-missing errors verbatim", async () => {
+		const denied = new Error("EACCES: permission denied");
+		const result = familyResult();
+		const missingFs = fakeFs(result);
+		missingFs.stat = async () => {
+			throw new Error("Error invoking remote method 'fs:stat': ENOENT");
+		};
+		missingFs.exists = vi.fn(async () => false);
+		const missingSource = createBridgeSource(missingFs, "");
+		await expect(missingSource.exists("/tmp/gone")).resolves.toBe(false);
+		await expect(missingFs.stat("/tmp/gone")).rejects.toThrow("ENOENT");
+		await expect(isMissingPathFailure(missingSource, "/tmp/gone")).resolves.toBe(true);
+
+		const deniedFs = fakeFs(result);
+		deniedFs.exists = vi.fn(async () => {
+			throw denied;
+		});
+		const deniedSource = createBridgeSource(deniedFs, "");
+		await expect(deniedSource.exists("/tmp/denied")).rejects.toBe(denied);
+	});
+
+	it("detects a vanished folder after a plain Electron-style list error", async () => {
+		const source = createBridgeSource(
+			{
+				...fakeFs(familyResult()),
+				listDir: async () => {
+					throw new Error("Error invoking remote method 'fs:listDir': ENOENT");
+				},
+				exists: async () => false,
+			},
+			"",
+		);
+		await expect(source.list("/tmp/gone")).rejects.toThrow("ENOENT");
+		await expect(isMissingPathFailure(source, "/tmp/gone")).resolves.toBe(true);
 	});
 });

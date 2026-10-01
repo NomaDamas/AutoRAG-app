@@ -19,6 +19,7 @@ export interface FsIpcHooks {
 export function registerFsIpcHandlers(service: FsCoreBridge, hooks: FsIpcHooks = {}): void {
 	ipcMain.handle(FS_CHANNELS.listDir, (_event, path: string) => service.listDir(path));
 	ipcMain.handle(FS_CHANNELS.stat, (_event, path: string) => service.stat(path));
+	ipcMain.handle(FS_CHANNELS.exists, (_event, path: string) => service.exists(path));
 	ipcMain.handle(FS_CHANNELS.search, (_event, query: string) => service.search(query));
 	ipcMain.handle(FS_CHANNELS.locations, () => service.locations());
 	ipcMain.handle(FS_CHANNELS.copy, (_event, paths: readonly string[], destDir: string) => service.copy(paths, destDir));

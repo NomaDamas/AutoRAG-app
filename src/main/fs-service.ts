@@ -330,6 +330,15 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 	return {
 		listDir,
 		stat: async (path) => applyOsKind(await buildFsEntry(path), osKind),
+		exists: async (path) => {
+			try {
+				await lstat(path);
+				return true;
+			} catch (error) {
+				if (hasErrorCode(error, "ENOENT") || hasErrorCode(error, "ENOTDIR")) return false;
+				throw error;
+			}
+		},
 		search,
 		locations,
 		copy,

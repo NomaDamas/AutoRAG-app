@@ -4,7 +4,7 @@ import { RECENTS_PATH } from "../../../shared/fs-contract";
 import { DUPEY_LAYER_ID, type FsDirChange, type LiveMessage } from "../../../shared/live-contract";
 import type { FinderEntry } from "../data/entries";
 import type { NavItem } from "../data/places";
-import { type FinderLocation, type FinderSource, pickInitialPath } from "../data/source";
+import { isMissingPathFailure, type FinderLocation, type FinderSource, pickInitialPath } from "../data/source";
 import { validateName } from "../state/collision";
 import {
 	buildContextMenu,
@@ -70,13 +70,6 @@ import type { TabView } from "../components/TabStrip";
 const TOAST_MS = 2400;
 /** --time-flash */
 const FLASH_MS = 1800;
-
-function isMissingPathError(error: unknown): boolean {
-	if (typeof error !== "object" || error === null || !("code" in error)) {
-		return false;
-	}
-	return error.code === "ENOENT" || error.code === "ENOTDIR";
-}
 
 interface ContextMenuState {
 	readonly cursor: { readonly x: number; readonly y: number };
@@ -268,17 +261,21 @@ export function useFinderController(
 				listingRef.current = [];
 				setListing([]);
 			}
-			void listingLoader(request).then((result) => {
+			void listingLoader(request).then(async (result) => {
 				if (result.kind === "stale" || result.kind === "superseded") {
 					return;
 				}
 				if (result.kind === "error") {
 					if (mode === "silent") {
-						if (isMissingPathError(result.error)) {
-							void navigateToExistingAncestor(requestedPath, requestGeneration);
-						} else {
-							console.error(result.error);
+						try {
+							if (await isMissingPathFailure(source, requestedPath)) {
+								await navigateToExistingAncestor(requestedPath, requestGeneration);
+								return;
+							}
+						} catch (error: unknown) {
+							console.error(error);
 						}
+						console.error(result.error);
 						return;
 					}
 					reportError(result.error);
@@ -287,7 +284,7 @@ export function useFinderController(
 				adoptListing(result.entries);
 			});
 		},
-		[adoptListing, listingLoader, navigateToExistingAncestor, reportError],
+		[adoptListing, listingLoader, navigateToExistingAncestor, reportError, source],
 	);
 
 	const refresh = useCallback(() => {

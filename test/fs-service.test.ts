@@ -145,6 +145,25 @@ describe("stat", () => {
 	});
 });
 
+describe("exists", () => {
+	it("returns false for a missing path and true for an existing path", async () => {
+		const existing = join(root, "exists.txt");
+		await writeFile(existing, "x");
+		const service = createFsService(makeDeps(root).deps);
+
+		await expect(service.exists(existing)).resolves.toBe(true);
+		await expect(service.exists(join(root, "missing.txt"))).resolves.toBe(false);
+	});
+
+	it("rethrows non-missing filesystem errors verbatim", async () => {
+		const service = createFsService(makeDeps(root).deps);
+		const failure = await service.exists("\u0000").catch((error: unknown) => error);
+
+		expect(failure).toBeInstanceOf(TypeError);
+		expect((failure as TypeError).message).toContain("null bytes");
+	});
+});
+
 describe("copy", () => {
 	it("copies into the destination with Finder-style collision naming", async () => {
 		// Given a source file and a destination already holding "a.txt" and "a copy.txt"

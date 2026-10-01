@@ -60,6 +60,13 @@ export interface FinderSource {
 	refreshVersionFamilies(): Promise<VersionFamiliesResult>;
 }
 
+export async function isMissingPathFailure(
+	source: Pick<FinderSource, "exists">,
+	path: string,
+): Promise<boolean> {
+	return !(await source.exists(path));
+}
+
 /* -------------------------------------------------------------- real bridge */
 
 export function createBridgeSource(fs: FsBridge, initialPath: string, live?: LiveBridge): FinderSource {
@@ -91,16 +98,7 @@ export function createBridgeSource(fs: FsBridge, initialPath: string, live?: Liv
 			})) ?? (() => {});
 		},
 		liveLayers: () => live?.layers() ?? Promise.resolve({ seq: 0, layers: [], reconciled: [] }),
-		exists: async (path) => {
-			try {
-				await fs.stat(path);
-				return true;
-			} catch (error) {
-				const code = (error as { code?: string }).code;
-				if (code === "ENOENT" || code === "ENOTDIR") return false;
-				throw error;
-			}
-		},
+		exists: (path) => fs.exists(path),
 		async list(path) {
 			const listing = await fs.listDir(path);
 			// Recents is virtual: a row's location is the real folder that holds the file.

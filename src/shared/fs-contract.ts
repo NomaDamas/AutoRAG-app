@@ -11,6 +11,7 @@
 export const FS_CHANNELS = {
 	listDir: "fs:listDir",
 	stat: "fs:stat",
+	exists: "fs:exists",
 	search: "fs:search",
 	locations: "fs:locations",
 	copy: "fs:copy",
@@ -106,6 +107,7 @@ export interface FsSearchResult {
 export interface FsCoreBridge {
 	listDir(path: string): Promise<DirListing>;
 	stat(path: string): Promise<FsEntry>;
+	exists(path: string): Promise<boolean>;
 	search(query: string): Promise<readonly FsSearchResult[]>;
 	locations(): Promise<readonly FsLocation[]>;
 	/** Copy paths into destDir. Name collisions get a " copy" suffix (Finder-style). */
