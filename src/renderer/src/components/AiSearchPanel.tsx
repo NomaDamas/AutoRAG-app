@@ -1,11 +1,17 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactElement } from "react";
-import type { AnswerPhase, ChatAttachment, ChatSummary, CitationEvidence, SearchStreamEvent } from "../../../shared/search-contract";
+import type { AnswerPhase, AnswerPhaseName, ChatAttachment, ChatSummary, CitationEvidence, SearchStreamEvent } from "../../../shared/search-contract";
 import type { SearchBridge } from "../../../shared/search-contract";
 import { parseAnswerBlocks, parseInline, type AnswerBlock } from "../state/answer-markdown";
 import { groupChatHistory, historyEmptyText } from "../state/history";
 import { CloseIcon, HistoryIcon, PlusIcon, SearchIcon, SendIcon } from "./icons";
 
 const autorag = (window as unknown as { readonly autorag: { readonly search: SearchBridge } }).autorag;
+
+const NO_THINKING: Readonly<Record<AnswerPhaseName, string>> = { quick: "", deep: "" };
+
+function errorMessage(error: unknown): string {
+	return error instanceof Error ? error.message : String(error);
+}
 
 export function AiSearchPanel({
 	selectedEvidence,
@@ -21,8 +27,17 @@ export function AiSearchPanel({
 	const [deep, setDeep] = useState<AnswerPhase | null>(null);
 	const [quickDraft, setQuickDraft] = useState("");
 	const [deepDraft, setDeepDraft] = useState("");
+	const [thinking, setThinking] = useState<Readonly<Record<AnswerPhaseName, string>>>(NO_THINKING);
 	const [progress, setProgress] = useState("");
-	const [searchId, setSearchId] = useState<string | null>(null);
+	const [searchId, setSearchIdState] = useState<string | null>(null);
+	// The event listener reads the active id from a ref: it is set before
+	// search.start is invoked, so no event of the new run can arrive while a
+	// re-subscription is still pending.
+	const searchIdRef = useRef<string | null>(null);
+	const setSearchId = (value: string | null): void => {
+		searchIdRef.current = value;
+		setSearchIdState(value);
+	};
 	const [sessionId, setSessionId] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [stopped, setStopped] = useState(false);
@@ -41,16 +56,19 @@ export function AiSearchPanel({
 
 	useEffect(() => {
 		const unsubscribe = autorag.search.onEvent?.((event: SearchStreamEvent) => {
-			if (event.searchId !== searchId) return;
+			if (event.searchId !== searchIdRef.current) return;
 			switch (event.type) {
 				case "progress":
 					setProgress(event.text);
 					break;
-				case "quick-delta":
-					setQuickDraft((current) => current + event.text);
+				case "thinking-delta":
+					setThinking((current) => ({ ...current, [event.phase]: current[event.phase] + event.text }));
 					break;
-				case "deep-delta":
-					setDeepDraft((current) => current + event.text);
+				case "quick-draft":
+					setQuickDraft(event.text);
+					break;
+				case "deep-draft":
+					setDeepDraft(event.text);
 					break;
 				case "quick":
 					setSessionId(event.sessionId);
@@ -74,10 +92,14 @@ export function AiSearchPanel({
 					setProgress("");
 					setSearchId(null);
 					break;
+				case "done":
+					setProgress("");
+					setSearchId(null);
+					break;
 			}
 		});
 		return unsubscribe;
-	}, [searchId]);
+	}, []);
 
 	const evidence = useMemo(() => deep?.evidence ?? quick?.evidence ?? [], [deep, quick]);
 
@@ -116,14 +138,24 @@ export function AiSearchPanel({
 		setDeep(null);
 		setQuickDraft("");
 		setDeepDraft("");
+		setThinking(NO_THINKING);
 		setSessionId(null);
 		setError(null);
 		setStopped(false);
 		setSubmittedQuery(text);
 		setProgress("Reviewing the query.");
 		setChatId(nextChatId);
-		await autorag.search.start(nextSearchId, nextChatId, text, attachments);
+		const sent = attachments;
 		setAttachments([]);
+		try {
+			// Resolves when the run ends; the answer itself arrives as events.
+			await autorag.search.start(nextSearchId, nextChatId, text, sent);
+		} catch (startError) {
+			if (searchIdRef.current !== nextSearchId) return;
+			setError(errorMessage(startError));
+			setProgress("");
+			setSearchId(null);
+		}
 	}
 
 	async function openHistory(): Promise<void> {
@@ -163,6 +195,7 @@ export function AiSearchPanel({
 		setDeep(null);
 		setQuickDraft("");
 		setDeepDraft("");
+		setThinking(NO_THINKING);
 		setError(null);
 		setStopped(false);
 		setProgress("");
@@ -182,6 +215,7 @@ export function AiSearchPanel({
 		setDeep(assistant.deep);
 		setQuickDraft(assistant.quick?.answer ?? "");
 		setDeepDraft(assistant.deep?.answer ?? "");
+		setThinking(NO_THINKING);
 		setSessionId(assistant.sessionId);
 		setSubmittedQuery(user?.role === "user" ? user.text : null);
 		setStopped(assistant.stopped);
@@ -277,8 +311,8 @@ export function AiSearchPanel({
 					{submittedQuery === null ? null : <div className="ai__user-message"><span>You</span><p>{submittedQuery}</p></div>}
 					{submittedQuery === null ? null : <div className="ai__assistant-label">Assistant</div>}
 					{error === null ? null : <div className="ai__error">{error}</div>}
-					{submittedQuery === null ? null : <AnswerCard label="Quick" phase={quick} draft={quickDraft} pending={searchId !== null && quick === null} selectedEvidence={selectedEvidence} onCitation={onSelectEvidence} />}
-					{submittedQuery === null ? null : <AnswerCard label="Deep" phase={deep} draft={deepDraft} pending={searchId !== null && deep === null} selectedEvidence={selectedEvidence} onCitation={onSelectEvidence} />}
+					{submittedQuery === null ? null : <AnswerCard label="Quick" phase={quick} draft={quickDraft} thinking={thinking.quick} pending={searchId !== null && quick === null} selectedEvidence={selectedEvidence} onCitation={onSelectEvidence} />}
+					{submittedQuery === null ? null : <AnswerCard label="Deep" phase={deep} draft={deepDraft} thinking={thinking.deep} pending={searchId !== null && deep === null} selectedEvidence={selectedEvidence} onCitation={onSelectEvidence} />}
 					{progress === "" ? null : <div className="ai__progress">{progress}</div>}
 					{stopped ? <div className="ai__stopped">응답 생성을 중단했습니다.</div> : null}
 				</div>
@@ -307,10 +341,32 @@ export function AiSearchPanel({
 	);
 }
 
+function ThinkingBlock({ text, live }: { readonly text: string; readonly live: boolean }): ReactElement | null {
+	const bodyRef = useRef<HTMLPreElement | null>(null);
+	const [open, setOpen] = useState(true);
+	useEffect(() => {
+		// While the model reasons the block stays open and follows the newest
+		// tokens; once the answer text starts it folds away.
+		setOpen(live);
+	}, [live]);
+	useEffect(() => {
+		const body = bodyRef.current;
+		if (body !== null && live) body.scrollTop = body.scrollHeight;
+	}, [text, live]);
+	if (text === "") return null;
+	return (
+		<details className="ai__thinking" open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>
+			<summary>{live ? "Thinking…" : "Thought process"}</summary>
+			<pre ref={bodyRef} className="ai__thinking-body">{text}</pre>
+		</details>
+	);
+}
+
 function AnswerCard({
 	label,
 	phase,
 	draft,
+	thinking,
 	pending,
 	selectedEvidence,
 	onCitation,
@@ -318,6 +374,7 @@ function AnswerCard({
 	readonly label: string;
 	readonly phase: AnswerPhase | null;
 	readonly draft: string;
+	readonly thinking: string;
 	readonly pending: boolean;
 	readonly selectedEvidence: number | null;
 	readonly onCitation: (selected: number) => void;
@@ -326,18 +383,20 @@ function AnswerCard({
 	if (answerText === "") {
 		return (
 			<article className={`ai__answer ai__answer--${label.toLowerCase()} ai__answer--pending`}>
-				<div className="ai__answer-heading"><span className="ai__answer-label"><i />{label}</span><span>{pending ? "Searching…" : "Stopped"}</span></div>
-				<div className="ai__skeleton"><span /><span /><span /></div>
+				<div className="ai__answer-heading"><span className="ai__answer-label"><i />{label}</span><span>{pending ? (thinking === "" ? "Searching…" : "Thinking…") : "Stopped"}</span></div>
+				<ThinkingBlock text={thinking} live={pending} />
+				{thinking === "" ? <div className="ai__skeleton"><span /><span /><span /></div> : null}
 			</article>
 		);
 	}
-	const streaming = phase === null;
+	const streaming = phase === null && pending;
 	return (
 		<article className={`ai__answer ai__answer--${label.toLowerCase()}${streaming ? " ai__answer--streaming" : ""}`}>
 			<div className="ai__answer-heading">
 				<span className="ai__answer-label"><i />{label}</span>
-				<span>{phase !== null ? phase.meta : "Streaming…"}</span>
+				<span>{phase !== null ? phase.meta : streaming ? "Streaming…" : "Incomplete"}</span>
 			</div>
+			<ThinkingBlock text={thinking} live={false} />
 			<div className="ai__answer-content">
 				{parseAnswerBlocks(answerText).map((block, index) => (
 					<AnswerBlockView key={`${index}`} block={block} selected={selectedEvidence} onCitation={onCitation} />
