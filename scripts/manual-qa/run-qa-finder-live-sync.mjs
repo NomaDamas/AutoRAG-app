@@ -271,7 +271,16 @@ async function installLiveRefreshProbe(page, label) {
 	}, label);
 }
 
-async function finishLiveRefreshProbe(page, label) {
+async function finishLiveRefreshProbe(page, label, observationDeadlineMs) {
+	if (observationDeadlineMs !== undefined) {
+		const remainingMs = observationDeadlineMs - Date.now();
+		if (remainingMs > 0) {
+			await waitFor(
+				() => Date.now() >= observationDeadlineMs,
+				{ timeoutMs: remainingMs + 100, label: `${label} full observation window` },
+			);
+		}
+	}
 	return page.evaluate((probeLabel) => {
 		const probe = window.__liveSyncRefreshProbes?.[probeLabel];
 		if (probe === undefined) {
@@ -281,6 +290,70 @@ async function finishLiveRefreshProbe(page, label) {
 		delete window.__liveSyncRefreshProbes[probeLabel];
 		return probe.state;
 	}, label);
+}
+
+async function installS14ListCallRecorder() {
+	return app.evaluate(({ BrowserWindow, ipcMain }) => {
+		globalThis.__qaListCalls = [];
+		const invokeHandlers = ipcMain?._invokeHandlers;
+		if (invokeHandlers instanceof Map) {
+			const original = invokeHandlers.get("fs:listDir");
+			if (typeof original !== "function") {
+				throw new Error("ipcMain._invokeHandlers has no fs:listDir handler");
+			}
+			const wrapped = (...args) => {
+				const path = args[1];
+				if (typeof path === "string") {
+					globalThis.__qaListCalls.push({ path, timestampMs: Date.now() });
+				}
+				return original(...args);
+			};
+			invokeHandlers.set("fs:listDir", wrapped);
+			globalThis.__qaS14Hook = { kind: "ipcMain._invokeHandlers", original };
+			return "ipcMain._invokeHandlers";
+		}
+		const window = BrowserWindow.getAllWindows()[0];
+		if (window === undefined) {
+			throw new Error("no BrowserWindow available for S14 fallback hook");
+		}
+		const listener = (_event, channel, ...args) => {
+			const path = args[0];
+			if (channel === "fs:listDir" && typeof path === "string") {
+				globalThis.__qaListCalls.push({ path, timestampMs: Date.now() });
+			}
+		};
+		window.webContents.on("ipc-message", listener);
+		globalThis.__qaS14Hook = { kind: "webContents.on('ipc-message')", listener, webContents: window.webContents };
+		return "webContents.on('ipc-message')";
+	});
+}
+
+async function removeS14ListCallRecorder() {
+	if (app === null) return;
+	await app.evaluate(({ ipcMain }) => {
+		const hook = globalThis.__qaS14Hook;
+		if (hook?.kind === "ipcMain._invokeHandlers") {
+			const invokeHandlers = ipcMain?._invokeHandlers;
+			if (invokeHandlers instanceof Map) {
+				invokeHandlers.set("fs:listDir", hook.original);
+			}
+		} else if (hook?.kind === "webContents.on('ipc-message')") {
+			hook.webContents.removeListener("ipc-message", hook.listener);
+		}
+		delete globalThis.__qaS14Hook;
+		delete globalThis.__qaListCalls;
+	});
+}
+
+async function readS14ListCalls() {
+	return app.evaluate(() => globalThis.__qaListCalls ?? []);
+}
+
+async function activeTabPath(page) {
+	return page.evaluate(() => ({
+		title: document.querySelector(".tab--active .tab__title")?.textContent?.trim() ?? null,
+		crumbs: [...document.querySelectorAll(".crumb")].map((element) => element.textContent?.trim() ?? ""),
+	}));
 }
 
 async function runScenario(label, page, scenario, screenshot = true) {
@@ -315,13 +388,13 @@ async function runS1(page) {
 	await rowFor(page, "new-note.txt").waitFor({ timeout: LIVE_BOUND_MS });
 	const elapsedMs = Date.now() - started;
 	if (elapsedMs > LIVE_BOUND_MS) throw new Error(`row appeared after ${elapsedMs}ms > ${LIVE_BOUND_MS}ms`);
-	const probe = await finishLiveRefreshProbe(page, "S1");
+	const probe = await finishLiveRefreshProbe(page, "S1", started + LIVE_BOUND_MS);
 	if (probe.emptyFlashCount !== 0) throw new Error(`S1 empty-list flash count ${probe.emptyFlashCount} > 0`);
 	if (probe.toastSeen) throw new Error("S1 live refresh showed a toast");
 	await page.screenshot({ path: join(EVIDENCE, "S1.png") });
 	pass(
 		"S1 create",
-		`new-note.txt visible in ${elapsedMs}ms <= ${LIVE_BOUND_MS}ms; minRows=${probe.minRowCount} >= 1; emptyFlashCount=${probe.emptyFlashCount} <= 0; toastSeen=${probe.toastSeen ? 1 : 0} <= 0`,
+		`new-note.txt visible in ${elapsedMs}ms <= ${LIVE_BOUND_MS}ms; minRows=${probe.minRowCount} >= 1; emptyFlashCount=${probe.emptyFlashCount} <= 0; toastSeen=${probe.toastSeen ? 1 : 0} <= 0; observedWindow=${LIVE_BOUND_MS}ms`,
 	);
 }
 
@@ -335,13 +408,13 @@ async function runS2(page) {
 	);
 	const elapsedMs = Date.now() - started;
 	if (elapsedMs > LIVE_BOUND_MS) throw new Error(`row disappeared after ${elapsedMs}ms > ${LIVE_BOUND_MS}ms`);
-	const probe = await finishLiveRefreshProbe(page, "S2");
+	const probe = await finishLiveRefreshProbe(page, "S2", started + LIVE_BOUND_MS);
 	if (probe.emptyFlashCount !== 0) throw new Error(`S2 empty-list flash count ${probe.emptyFlashCount} > 0`);
 	if (probe.toastSeen) throw new Error("S2 live refresh showed a toast");
 	await page.screenshot({ path: join(EVIDENCE, "S2.png") });
 	pass(
 		"S2 delete",
-		`new-note.txt row count 0 in ${elapsedMs}ms <= ${LIVE_BOUND_MS}ms; minRows=${probe.minRowCount} >= 1; emptyFlashCount=${probe.emptyFlashCount} <= 0; toastSeen=${probe.toastSeen ? 1 : 0} <= 0`,
+		`new-note.txt row count 0 in ${elapsedMs}ms <= ${LIVE_BOUND_MS}ms; minRows=${probe.minRowCount} >= 1; emptyFlashCount=${probe.emptyFlashCount} <= 0; toastSeen=${probe.toastSeen ? 1 : 0} <= 0; observedWindow=${LIVE_BOUND_MS}ms`,
 	);
 }
 
@@ -361,13 +434,13 @@ async function runS3(page) {
 	}
 	const elapsedMs = Date.now() - started;
 	if (elapsedMs > LIVE_BOUND_MS) throw new Error(`rename appeared after ${elapsedMs}ms > ${LIVE_BOUND_MS}ms`);
-	const probe = await finishLiveRefreshProbe(page, "S3");
+	const probe = await finishLiveRefreshProbe(page, "S3", started + LIVE_BOUND_MS);
 	if (probe.emptyFlashCount !== 0) throw new Error(`S3 empty-list flash count ${probe.emptyFlashCount} > 0`);
 	if (probe.toastSeen) throw new Error("S3 live refresh showed a toast");
 	await page.screenshot({ path: join(EVIDENCE, "S3.png") });
 	pass(
 		"S3 rename",
-		`new row present, old row count 0, selection unchanged in ${elapsedMs}ms <= ${LIVE_BOUND_MS}ms; minRows=${probe.minRowCount} >= 1; emptyFlashCount=${probe.emptyFlashCount} <= 0; toastSeen=${probe.toastSeen ? 1 : 0} <= 0`,
+		`new row present, old row count 0, selection unchanged in ${elapsedMs}ms <= ${LIVE_BOUND_MS}ms; minRows=${probe.minRowCount} >= 1; emptyFlashCount=${probe.emptyFlashCount} <= 0; toastSeen=${probe.toastSeen ? 1 : 0} <= 0; observedWindow=${LIVE_BOUND_MS}ms`,
 	);
 }
 
@@ -845,13 +918,81 @@ async function runS13(page) {
 	);
 }
 
+async function runS14(page) {
+	await page.locator(".sidebar").getByRole("button", { name: "Downloads", exact: true }).click();
+	await page.locator('[role="row"]').filter({ has: page.getByText(FIXTURE_FOLDER, { exact: true }) }).dblclick();
+	await rowFor(page, "selected-file.txt").waitFor({ timeout: 10_000 });
+	const tabPathBefore = await activeTabPath(page);
+	const rowsBefore = await page.locator('[role="row"]').count();
+	if (rowsBefore < 1) throw new Error(`S14 requires an initial non-empty listing, got ${rowsBefore} rows`);
+
+	const hookKind = await installS14ListCallRecorder();
+	appendLog(`INFO S14 list-call hook=${hookKind}`);
+	await installLiveRefreshProbe(page, "S14");
+	const seq = (await page.evaluate(async () => (await window.autorag.live.layers()).seq)) + 1;
+	const sentAt = await app.evaluate(({ BrowserWindow }, payload) => {
+		const window = BrowserWindow.getAllWindows()[0];
+		if (window === undefined) {
+			throw new Error("no BrowserWindow available for S14 live message");
+		}
+		const timestampMs = Date.now();
+		window.webContents.send("live:message", {
+			seq: payload.seq,
+			dirs: [{ dir: payload.fixtureDir, changes: [], overflow: true, dirGone: false }],
+			layers: [],
+			reconciled: ["dupey"],
+		});
+		return timestampMs;
+	}, { fixtureDir: FIXTURE_DIR, seq });
+	let probe = null;
+	try {
+		const listCall = await waitFor(
+			async () => (await readS14ListCalls()).find((call) => call.path === FIXTURE_DIR && call.timestampMs >= sentAt),
+			{ timeoutMs: LIVE_BOUND_MS, label: "S14 fixture fs:listDir call" },
+		);
+		const listCallDelayMs = listCall.timestampMs - sentAt;
+		if (listCallDelayMs > LIVE_BOUND_MS) {
+			throw new Error(`S14 fixture fs:listDir call took ${listCallDelayMs}ms > ${LIVE_BOUND_MS}ms`);
+		}
+		await waitFor(
+			async () => (await page.locator('[role="row"]').count()) >= 1,
+			{ timeoutMs: LIVE_BOUND_MS, label: "S14 rows to remain rendered" },
+		);
+		probe = await finishLiveRefreshProbe(page, "S14", sentAt + LIVE_BOUND_MS);
+		const toastCount = await page.locator(".toast").count();
+		const rowsAfter = await page.locator('[role="row"]').count();
+		const tabPathAfter = await activeTabPath(page);
+		const tabPathUnchanged = JSON.stringify(tabPathAfter) === JSON.stringify(tabPathBefore);
+		appendLog(`S14 details: sentAt=${sentAt} listCall=${listCall.timestampMs} listCallDelay=${listCallDelayMs} rowsAfter=${rowsAfter} tabPathBefore=${JSON.stringify(tabPathBefore)} tabPathAfter=${JSON.stringify(tabPathAfter)}`);
+		if (probe.minRowCount < 1) throw new Error(`S14 minRows ${probe.minRowCount} < 1`);
+		if (probe.emptyFlashCount !== 0) throw new Error(`S14 empty-list flash count ${probe.emptyFlashCount} > 0`);
+		if (probe.toastSeen) throw new Error("S14 live refresh showed a toast");
+		if (toastCount !== 0) throw new Error(`S14 toastCount ${toastCount} > 0`);
+		if (!tabPathUnchanged) throw new Error(`S14 tab path changed: before=${JSON.stringify(tabPathBefore)} after=${JSON.stringify(tabPathAfter)}`);
+		await page.screenshot({ path: join(EVIDENCE, "S14.png") });
+		pass(
+			"S14 overflow relist",
+			`listCallDelay=${listCallDelayMs}ms <= ${LIVE_BOUND_MS}ms; minRows=${probe.minRowCount} >= 1; emptyFlashCount=${probe.emptyFlashCount} <= 0; toastCount=${toastCount} == 0; tabPathUnchanged=${tabPathUnchanged}`,
+		);
+	} finally {
+		if (probe === null) {
+			try {
+				await finishLiveRefreshProbe(page, "S14");
+			} catch (error) {
+				appendLog(`INFO S14 probe cleanup: ${error instanceof Error ? error.message : String(error)}`);
+			}
+		}
+		await removeS14ListCallRecorder();
+	}
+}
+
 async function main() {
 	overallTimer = setTimeout(() => {
 		appendLog(`FAIL overall timeout: exceeded ${OVERALL_TIMEOUT_MS}ms`);
 		exitCode = 1;
 		void closeApp().finally(() => process.exit(exitCode));
 	}, OVERALL_TIMEOUT_MS);
-	appendLog("INFO IS-9 overflow real-surface injection unavailable; renderer relist overflow coverage: test/dupey-layer.test.ts:289 and test/fs-watch-service.test.ts:152");
+	appendLog("INFO IS-9 overflow real-surface injection: S14 sends live:message overflow and records fs:listDir relist");
 	let page = await startSession("A");
 	await runScenario("S1", page, () => runS1(page));
 	await runScenario("S2", page, () => runS2(page));
@@ -901,6 +1042,10 @@ async function main() {
 
 	page = await startSession("G");
 	await runScenario("S13", page, () => runS13(page));
+	await finishSession();
+
+	page = await startSession("H");
+	await runScenario("S14", page, () => runS14(page));
 	await finishSession();
 }
 
