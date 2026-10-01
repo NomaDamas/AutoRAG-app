@@ -835,7 +835,8 @@
 	font-size: var(--font-size-meta);
 }
 
-.settings-intro--sources {
+.settings-intro--sources,
+.settings-intro--models {
 	flex-direction: row;
 	align-items: flex-start;
 	gap: var(--space-12);
@@ -933,6 +934,19 @@
 	font-size: var(--font-size-meta);
 	font-style: normal;
 	white-space: nowrap;
+}
+
+.settings-model-meta {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-8);
+	margin: 0;
+	color: var(--text-muted);
+	font-size: var(--font-size-meta);
+}
+
+.settings-model-meta code {
+	font-family: var(--font-mono);
 }
 
 .requests-popover__scrim {
