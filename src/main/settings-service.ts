@@ -1,7 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type {
-	AccessRequest,
 	AppSettings,
 	AssistantEvent,
 	AssistantSurface,
@@ -18,7 +17,6 @@ interface SettingsState {
 	settings: AppSettings;
 	permissions: Record<string, Permission>;
 	contacts: Contact[];
-	requests: AccessRequest[];
 }
 
 interface ChatAgent {
@@ -46,7 +44,6 @@ const emptyState = (): SettingsState => ({
 	settings: DEFAULT_SETTINGS,
 	permissions: {},
 	contacts: [],
-	requests: [],
 });
 
 function isTextDelta(event: unknown): event is { readonly type: "message_update"; readonly assistantMessageEvent: { readonly type: "text_delta"; readonly delta: string } } {
@@ -68,7 +65,6 @@ async function loadState(path: string): Promise<SettingsState> {
 			settings: { ...DEFAULT_SETTINGS, ...(state.settings ?? {}) },
 			permissions: state.permissions ?? {},
 			contacts: state.contacts ?? [],
-			requests: state.requests ?? [],
 		};
 	} catch {
 		return emptyState();
@@ -164,17 +160,6 @@ export function createSettingsService(deps: SettingsServiceDeps): SettingsBridge
 			const started = now().getTime();
 			const exists = (await statePromise).contacts.some((contact) => contact.id === id);
 			return { ok: exists, latencyMs: exists ? Math.max(0, now().getTime() - started) : null };
-		},
-		requestsList: async (status) => {
-			const state = await statePromise;
-			return state.requests.filter((request) => (status === "pending" ? request.status === "pending" : request.status !== "pending"));
-		},
-		requestsRespond: async (id, allow) => {
-			await mutate((current) => {
-				current.requests = current.requests.map((request) =>
-					request.id === id ? { ...request, status: allow ? "allowed" : "denied" } : request,
-				);
-			});
 		},
 		sourcesList: () => deps.dataSources.list(),
 		sourcesSetEnabled: async (id, enabled) => {

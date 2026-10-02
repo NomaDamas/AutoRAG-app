@@ -1,5 +1,5 @@
 /**
- * Settings, access-rule, contacts, and requests contract shared by the
+ * Settings, access-rule, and contacts contract shared by the
  * Electron main process and the renderer.
  *
  * Persistence lives in the main process under Electron's userData dir.
@@ -20,8 +20,6 @@ export const SETTINGS_CHANNELS = {
 	contactsUpdate: "contacts:update",
 	contactsRemove: "contacts:remove",
 	contactsTest: "contacts:test",
-	requestsList: "requests:list",
-	requestsRespond: "requests:respond",
 	sourcesList: "sources:list",
 	sourcesSetEnabled: "sources:setEnabled",
 	sourcesSetDescription: "sources:setDescription",
@@ -47,20 +45,6 @@ export interface Contact {
 	readonly name: string;
 	readonly role: string;
 	readonly description: string;
-}
-
-export type RequestStatus = "pending" | "allowed" | "denied";
-
-export interface AccessRequest {
-	readonly id: string;
-	readonly contactName: string;
-	readonly contactRole: string;
-	readonly question: string;
-	readonly files: readonly { readonly path: string; readonly name: string }[];
-	readonly status: RequestStatus;
-	readonly requestedAt: string;
-	/** True when an access rule handled it automatically. */
-	readonly automatic: boolean;
 }
 
 export interface AppSettings {
@@ -193,9 +177,6 @@ export interface SettingsBridge {
 	contactsUpdate(id: string, patch: Partial<Omit<Contact, "id">>): Promise<void>;
 	contactsRemove(id: string): Promise<void>;
 	contactsTest(id: string): Promise<{ readonly ok: boolean; readonly latencyMs: number | null }>;
-
-	requestsList(status: "pending" | "done"): Promise<readonly AccessRequest[]>;
-	requestsRespond(id: string, allow: boolean): Promise<void>;
 
 	sourcesList(): Promise<DataSourcesSnapshot>;
 	/** Writes `enabled` into the shared AutoRAG config, then returns the fresh snapshot. */

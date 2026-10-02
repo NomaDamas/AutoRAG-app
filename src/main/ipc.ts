@@ -90,8 +90,6 @@ export function registerSettingsIpcHandlers(service: SettingsBridge): void {
 	ipcMain.handle(SETTINGS_CHANNELS.contactsUpdate, (_event, id: string, patch) => service.contactsUpdate(id, patch));
 	ipcMain.handle(SETTINGS_CHANNELS.contactsRemove, (_event, id: string) => service.contactsRemove(id));
 	ipcMain.handle(SETTINGS_CHANNELS.contactsTest, (_event, id: string) => service.contactsTest(id));
-	ipcMain.handle(SETTINGS_CHANNELS.requestsList, (_event, status) => service.requestsList(status));
-	ipcMain.handle(SETTINGS_CHANNELS.requestsRespond, (_event, id: string, allow: boolean) => service.requestsRespond(id, allow));
 	ipcMain.handle(SETTINGS_CHANNELS.sourcesList, () => service.sourcesList());
 	ipcMain.handle(SETTINGS_CHANNELS.sourcesSetEnabled, (_event, id: string, enabled: boolean) => service.sourcesSetEnabled(id, enabled));
 	ipcMain.handle(SETTINGS_CHANNELS.sourcesSetDescription, (_event, id: string, description: string) =>
