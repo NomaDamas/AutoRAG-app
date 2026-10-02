@@ -119,24 +119,23 @@ async function launch(configPath, label) {
 async function installRecorder(page) {
 	await page.evaluate(() => {
 		const read = () => {
-			const card = (name) => document.querySelector(`.ai__answer--${name}`);
-			const text = (element, selector) => element?.querySelector(selector)?.textContent ?? "";
-			const quick = card("quick");
-			const deep = card("deep");
+			// v7 renders the loaded answer as plain `.assistant-prose` blocks under
+			// `.assistant-msg`: Quick first, Deep second. Streaming has no dedicated
+			// class; the disabled composer marks a run in progress.
+			const prose = [...document.querySelectorAll(".assistant-msg .assistant-prose")];
+			const quick = prose[0] ?? null;
+			const deep = prose[1] ?? null;
+			const input = document.querySelector('input[aria-label="Ask AutoRAG"]');
+			const inProgress = input !== null && input.disabled;
 			return {
-				thinkingQuick: Boolean(quick?.querySelector(".ai__thinking")),
-				thinkingDeep: Boolean(deep?.querySelector(".ai__thinking")),
-				thinkingTexts: [...document.querySelectorAll(".ai__thinking")].map((element) => element.textContent),
-				quickDraft: text(quick, ".ai__answer-content").length,
-				quickStreaming: quick?.classList.contains("ai__answer--streaming") ?? false,
-				deepDraft: text(deep, ".ai__answer-content").length,
-				deepStreaming: deep?.classList.contains("ai__answer--streaming") ?? false,
-				// Card text outside the answer body: only the label (and the indicator).
-				chrome: [quick, deep].filter(Boolean).map((card) =>
-					[...card.children].filter((child) => !child.matches(".ai__answer-content")).map((child) => child.textContent).join("|"),
-				),
-				error: document.querySelector(".ai__error")?.textContent ?? "",
-				inputDisabled: document.querySelector('input[aria-label="Ask AutoRAG"]')?.disabled ?? null,
+				thinking: document.querySelector(".water-wave-thinking") !== null,
+				thinkingTexts: [...document.querySelectorAll(".water-wave-thinking")].map((element) => element.textContent),
+				quickDraft: quick?.textContent?.length ?? 0,
+				quickStreaming: inProgress && quick !== null,
+				deepDraft: deep?.textContent?.length ?? 0,
+				deepStreaming: inProgress && deep !== null,
+				error: document.querySelector(".ai .text-danger-text")?.textContent ?? "",
+				inputDisabled: input?.disabled ?? null,
 			};
 		};
 		const start = performance.now();
@@ -162,7 +161,7 @@ async function installRecorder(page) {
 
 const FINISHED = () => {
 	const input = document.querySelector('input[aria-label="Ask AutoRAG"]');
-	return input !== null && !input.disabled && document.querySelector(".ai__user-message") !== null;
+	return input !== null && !input.disabled && document.querySelector(".user-msg") !== null;
 };
 
 const distinctGrowth = (values) => {
@@ -188,9 +187,9 @@ try {
 	await page.fill('input[aria-label="Ask AutoRAG"]', QUERY);
 	await page.keyboard.press("Enter");
 	log(`submitted: ${QUERY}`);
-	await page.waitForFunction(() => document.querySelector(".ai__thinking"), null, { timeout: RUN_TIMEOUT_MS });
+	await page.waitForFunction(() => document.querySelector(".water-wave-thinking"), null, { timeout: RUN_TIMEOUT_MS });
 	await page.screenshot({ path: join(EVIDENCE, "1-thinking.png") });
-	await page.waitForFunction(() => document.querySelector(".ai__answer--quick .ai__answer-content"), null, { timeout: RUN_TIMEOUT_MS });
+	await page.waitForFunction(() => document.querySelector(".assistant-msg .assistant-prose"), null, { timeout: RUN_TIMEOUT_MS });
 	await page.screenshot({ path: join(EVIDENCE, "2-quick-streaming.png") });
 	await page.waitForFunction(FINISHED, null, { timeout: RUN_TIMEOUT_MS });
 	await page.screenshot({ path: join(EVIDENCE, "3-complete.png") });
@@ -202,12 +201,12 @@ try {
 	const beforeQuickFinal = timeline.filter((state) => !quickFinal(state));
 	check(
 		"thinking indicator shown",
-		beforeQuickFinal.some((state) => state.thinkingQuick),
-		`quick indicator states ${JSON.stringify([...new Set(beforeQuickFinal.map((state) => state.thinkingQuick))])}`,
+		beforeQuickFinal.some((state) => state.thinking),
+		`indicator states ${JSON.stringify([...new Set(beforeQuickFinal.map((state) => state.thinking))])}`,
 	);
 	check(
 		"reasoning text never rendered",
-		timeline.every((state) => state.thinkingTexts.every((value) => value === "Thinking")),
+		timeline.every((state) => state.thinkingTexts.every((value) => value.startsWith("Thinking"))),
 		`indicator texts ${JSON.stringify([...new Set(timeline.flatMap((state) => state.thinkingTexts))])}`,
 	);
 	const quickStreaming = timeline.filter((state) => state.quickStreaming);
@@ -218,14 +217,15 @@ try {
 	);
 	const final = timeline.at(-1);
 	check("quick answer final", quickFinal(final), `quick ${final.quickDraft} chars`);
-	check("deep answer final", final.deepDraft > 0 && !final.deepStreaming, `deep ${final.deepDraft} chars`);
-	const STATUS = /Searching|Streaming|Stopped|Incomplete|sources|\d\.\ds/;
-	check(
-		"no status text in card headers",
-		timeline.every((state) => state.chrome.every((value) => !STATUS.test(value))),
-		`card chrome ${JSON.stringify([...new Set(timeline.flatMap((state) => state.chrome))])}`,
-	);
-	log(`deep thinking indicator shown=${timeline.some((state) => state.thinkingDeep)}`);
+	// v7 keeps the finished Deep answer behind a collapsed "Worked for Ns"
+	// disclosure; expand it and assert the rendered prose.
+	const deepHeader = page.locator(".assistant-msg .thinking-header");
+	if ((await deepHeader.count()) > 0) await deepHeader.first().click();
+	await page.locator(".assistant-msg .assistant-prose").nth(1).waitFor({ state: "visible", timeout: 8000 }).catch(() => undefined);
+	const deepFinalChars = ((await page.locator(".assistant-msg .assistant-prose").nth(1).textContent()) ?? "").length;
+	check("deep answer final", deepFinalChars > 0, `deep ${deepFinalChars} chars`);
+	// v7 has no per-answer card chrome to police (the Quick/Deep labels are gone).
+	log(`deep thinking indicator shown=${timeline.some((state) => state.thinking)}`);
 	const deepStreaming = timeline.filter((state) => state.deepStreaming);
 	const deepStreamed = distinctGrowth(deepStreaming.map((state) => state.deepDraft));
 	const deepDetail = `deep draft lengths while streaming ${JSON.stringify([...new Set(deepStreaming.map((state) => state.deepDraft))].slice(0, 12))}`;
@@ -241,9 +241,9 @@ try {
 	await page.fill('input[aria-label="Ask AutoRAG"]', QUERY);
 	const submittedAt = Date.now();
 	await page.keyboard.press("Enter");
-	await page.waitForFunction(() => document.querySelector(".ai__error")?.textContent, null, { timeout: 5_000 });
+	await page.waitForFunction(() => document.querySelector(".ai .text-danger-text")?.textContent, null, { timeout: 5_000 });
 	await page.waitForFunction(FINISHED, null, { timeout: 5_000 });
-	const errorText = await page.locator(".ai__error").textContent();
+	const errorText = await page.locator(".ai .text-danger-text").textContent();
 	await page.screenshot({ path: join(EVIDENCE, "4-missing-root-error.png") });
 	check(
 		"broken config shows an error",

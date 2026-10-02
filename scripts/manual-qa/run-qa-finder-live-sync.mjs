@@ -203,6 +203,26 @@ function rowFor(page, name) {
 	return page.locator('[role="row"]').filter({ has: page.getByText(name, { exact: true }) });
 }
 
+/**
+ * v7 virtualizes the listing, so a fixture folder buried in ~/Downloads is not
+ * mounted until scrolled into the window: page it in, then open it.
+ */
+async function openFixtureFolder(page) {
+	const row = () => page.locator('[role="row"]').filter({ has: page.getByText(FIXTURE_FOLDER, { exact: true }) });
+	if ((await row().count()) === 0) {
+		const list = page.locator(".list").first();
+		for (let step = 0; step < 80 && (await row().count()) === 0; step += 1) {
+			await list
+				.evaluate((element) => {
+					element.scrollTop = Math.min(element.scrollHeight, element.scrollTop + Math.max(200, element.clientHeight - 80));
+				})
+				.catch(() => undefined);
+			await new Promise((resolve) => setTimeout(resolve, 60));
+		}
+	}
+	await row().first().dblclick();
+}
+
 function familyForFixture(snapshot) {
 	const known = new Set([
 		...readdirSync(FIXTURE_DIR, { withFileTypes: true })
@@ -352,7 +372,7 @@ async function readS14ListCalls() {
 async function activeTabPath(page) {
 	return page.evaluate(() => ({
 		title: document.querySelector(".tab--active .tab__title")?.textContent?.trim() ?? null,
-		crumbs: [...document.querySelectorAll(".crumb")].map((element) => element.textContent?.trim() ?? ""),
+		crumbs: [...document.querySelectorAll(".pathbar .path-name")].map((element) => element.textContent?.trim() ?? ""),
 	}));
 }
 
@@ -376,7 +396,7 @@ async function runScenario(label, page, scenario, screenshot = true) {
 
 async function runS1(page) {
 	await page.locator(".sidebar").getByRole("button", { name: "Downloads", exact: true }).click();
-	await page.locator('[role="row"]').filter({ has: page.getByText(FIXTURE_FOLDER, { exact: true }) }).dblclick();
+	await openFixtureFolder(page);
 	await rowFor(page, "selected-file.txt").waitFor({ timeout: 30_000 });
 	await waitForElectronLine(
 		(line) => line.includes(`[fs-watch] watch ${FIXTURE_DIR}`),
@@ -444,22 +464,27 @@ async function runS3(page) {
 	);
 }
 
+/** v7 list children of an expanded version stack carry a relation vtag. */
+function stackChildRows(page) {
+	return page.locator('[role="row"]').filter({ has: page.locator(".vtag", { hasText: /동일본|유사본|포함본/ }) });
+}
+
 async function openStack(page, family) {
 	const headName = family.head.split("/").pop() ?? family.head;
 	const headRow = rowFor(page, headName);
 	try {
-		await headRow.locator(".row__stackbadge").waitFor({ state: "visible", timeout: 10_000 });
+		await headRow.locator(".row__disclosure").waitFor({ state: "visible", timeout: 10_000 });
 	} catch (error) {
-		appendLog(`STACK badge diagnostic: rows=${JSON.stringify(await page.locator('[role="row"] .row__label').allInnerTexts())}`);
+		appendLog(`STACK disclosure diagnostic: rows=${JSON.stringify(await page.locator('[role="row"] .row__label').allInnerTexts())}`);
 		throw error;
 	}
-	const badge = headRow.locator(".row__stackbadge");
-	await badge.click();
-	await page.locator(".row--child").first().waitFor({ timeout: 10_000 });
+	const badge = headRow.locator(".row__disclosure");
+	if ((await badge.getAttribute("aria-expanded")) !== "true") await badge.click();
+	await stackChildRows(page).first().waitFor({ timeout: 10_000 });
 	return {
 		headRow,
 		badge,
-		children: () => page.locator(".row--child .row__label").allInnerTexts(),
+		children: () => stackChildRows(page).locator(".row__label").allInnerTexts(),
 	};
 }
 
@@ -474,18 +499,18 @@ async function runS4(page, family) {
 	appendLog(`S4 DUMP snapshot.stamps.keys=${JSON.stringify(Object.keys(snapshot?.stamps ?? {}))}`);
 	const headName = family.head.split("/").pop() ?? family.head;
 	const domProbe = await page.evaluate((name) => {
-		const labels = [...document.querySelectorAll(".row__stackbadge")].map((element) => element.getAttribute("aria-label"));
+		const labels = [...document.querySelectorAll(".row__disclosure")].map((element) => element.getAttribute("aria-label"));
 		const headLabel = [...document.querySelectorAll(".row__label")].find((element) => element.textContent === name);
 		const headRow = headLabel?.closest('[role="row"]') ?? null;
 		return {
-			badgeCount: document.querySelectorAll(".row__stackbadge").length,
+			badgeCount: document.querySelectorAll(".row__disclosure").length,
 			badgeLabels: labels,
 			headRowOuterHTML: headRow?.outerHTML ?? null,
 			rows: [...document.querySelectorAll('[role="row"]')].map((element) => element.textContent?.trim() ?? ""),
 		};
 	}, headName);
 	appendLog(`S4 DOM probe: ${JSON.stringify(domProbe)}`);
-	appendLog(`S4 locator probe: rowFor(page, ${JSON.stringify(headName)}) = page.locator('[role="row"]').filter({ has: page.getByText(${JSON.stringify(headName)}, { exact: true }) }); badge = .row__stackbadge`);
+	appendLog(`S4 locator probe: rowFor(page, ${JSON.stringify(headName)}) = page.locator('[role="row"]').filter({ has: page.getByText(${JSON.stringify(headName)}, { exact: true }) }); badge = .row__disclosure`);
 	await page.screenshot({ path: join(EVIDENCE, "S4-debug.png") });
 	const victim = join(FIXTURE_DIR, "quarterly-report-copy.txt");
 	if (victim === undefined) throw new Error("no non-head fixture member available for S4");
@@ -509,7 +534,7 @@ async function runS5(page, family) {
 	await page.reload();
 	await page.waitForSelector('[role="row"]', { timeout: 60_000 });
 	await page.getByRole("button", { name: "Downloads" }).click();
-	await page.locator('[role="row"]').filter({ has: page.getByText(FIXTURE_FOLDER, { exact: true }) }).dblclick();
+	await openFixtureFolder(page);
 	await rowFor(page, "selected-file.txt").waitFor({ timeout: 10_000 });
 	family = familyForFixture(readJson(SNAPSHOT)) ?? family;
 	const stack = await openStack(page, family);
@@ -525,7 +550,7 @@ async function runS5(page, family) {
 				const count = await rows.count();
 				for (let index = 0; index < count; index += 1) {
 					const row = rows.nth(index);
-					if (!(await row.evaluate((element) => element.classList.contains("row--child")))) return true;
+					if ((await row.locator(".vtag").count()) === 0) return true;
 				}
 				return false;
 			},
@@ -548,7 +573,7 @@ async function runS6(page, family) {
 	await page.reload();
 	await page.waitForSelector('[role="row"]', { timeout: 60_000 });
 	await page.locator(".sidebar").getByRole("button", { name: "Downloads", exact: true }).click();
-	await page.locator('[role="row"]').filter({ has: page.getByText(FIXTURE_FOLDER, { exact: true }) }).dblclick();
+	await openFixtureFolder(page);
 	await rowFor(page, "selected-file.txt").waitFor({ timeout: 10_000 });
 	family = await waitFor(() => {
 		const current = familyForFixture(readJson(SNAPSHOT));
@@ -604,7 +629,7 @@ async function runS7(page) {
 	await page.locator(".tab--active .tab__title").waitFor({ timeout: 10_000 });
 	const before = await page.evaluate(() => ({
 		tab: document.querySelector(".tab--active .tab__title")?.textContent?.trim() ?? null,
-		crumbs: [...document.querySelectorAll(".crumb")].map((element) => element.textContent?.trim() ?? ""),
+		crumbs: [...document.querySelectorAll(".pathbar .path-name")].map((element) => element.textContent?.trim() ?? ""),
 	}));
 	appendLog(`S7 before deletion: ${JSON.stringify(before)}`);
 	const started = Date.now();
@@ -617,7 +642,7 @@ async function runS7(page) {
 	} catch (error) {
 		const afterFailure = await page.evaluate(() => ({
 			tab: document.querySelector(".tab--active .tab__title")?.textContent?.trim() ?? null,
-			crumbs: [...document.querySelectorAll(".crumb")].map((element) => element.textContent?.trim() ?? ""),
+			crumbs: [...document.querySelectorAll(".pathbar .path-name")].map((element) => element.textContent?.trim() ?? ""),
 		}));
 		appendLog(`S7 after deletion (failure): ${JSON.stringify(afterFailure)}`);
 		throw new Error(
@@ -630,7 +655,7 @@ async function runS7(page) {
 	}
 	const after = await page.evaluate(() => ({
 		tab: document.querySelector(".tab--active .tab__title")?.textContent?.trim() ?? null,
-		crumbs: [...document.querySelectorAll(".crumb")].map((element) => element.textContent?.trim() ?? ""),
+		crumbs: [...document.querySelectorAll(".pathbar .path-name")].map((element) => element.textContent?.trim() ?? ""),
 	}));
 	appendLog(`S7 after deletion: ${JSON.stringify(after)}`);
 	const elapsedMs = Date.now() - started;
@@ -657,7 +682,7 @@ async function runS8(page) {
 async function runS9(page, family) {
 	family = familyForFixture(readJson(SNAPSHOT)) ?? family;
 	await page.locator(".sidebar").getByRole("button", { name: "Downloads", exact: true }).click();
-	await rowFor(page, FIXTURE_FOLDER).dblclick();
+	await openFixtureFolder(page);
 	await rowFor(page, "selected-file.txt").waitFor({ timeout: 10_000 });
 	await page.getByRole("button", { name: "New tab ⌘T" }).click();
 	await page.getByRole("button", { name: "Documents" }).click();
@@ -676,7 +701,7 @@ async function runS9(page, family) {
 	const currentFamily = familyForFixture(readJson(SNAPSHOT)) ?? family;
 	appendLog(`S9 current family=${JSON.stringify(currentFamily)}`);
 	await waitFor(
-		async () => (await rowFor(page, currentFamily.head.split("/").pop() ?? currentFamily.head).locator(".row__stackbadge").count()) === 1,
+		async () => (await rowFor(page, currentFamily.head.split("/").pop() ?? currentFamily.head).locator(".row__disclosure").count()) === 1,
 		{ timeoutMs: 10_000, label: "S9 current stack badge" },
 	);
 	const stackForListing = await openStack(page, currentFamily);
@@ -728,7 +753,7 @@ async function runS10(page) {
 		writeFileSync(join(bulkDir, `bulk-${String(index).padStart(4, "0")}.txt`), "");
 	}
 	await page.locator(".sidebar").getByRole("button", { name: "Downloads", exact: true }).click();
-	await page.locator('[role="row"]').filter({ has: page.getByText(FIXTURE_FOLDER, { exact: true }) }).dblclick();
+	await openFixtureFolder(page);
 	await rowFor(page, "bulk").waitFor({ timeout: 30_000 });
 	await rowFor(page, "bulk").dblclick();
 	await rowFor(page, "bulk-0000.txt").waitFor({ timeout: 60_000 });
@@ -873,7 +898,7 @@ async function runNegativeControl() {
 
 async function runS12(page) {
 	await page.locator(".sidebar").getByRole("button", { name: "Downloads", exact: true }).click();
-	await page.locator('[role="row"]').filter({ has: page.getByText(FIXTURE_FOLDER, { exact: true }) }).dblclick();
+	await openFixtureFolder(page);
 	await rowFor(page, "selected-file.txt").waitFor({ timeout: 10_000 });
 	const renameTarget = join(FIXTURE_DIR, "rename-before.txt");
 	await rowFor(page, "rename-before.txt").click({ button: "right" });
@@ -908,7 +933,7 @@ async function runS12(page) {
 
 async function runS13(page) {
 	await page.locator(".sidebar").getByRole("button", { name: "Downloads", exact: true }).click();
-	await page.locator('[role="row"]').filter({ has: page.getByText(FIXTURE_FOLDER, { exact: true }) }).dblclick();
+	await openFixtureFolder(page);
 	await rowFor(page, "selected-file.txt").waitFor({ timeout: 10_000 });
 	await page.getByRole("button", { name: "New tab ⌘T", exact: true }).click();
 	const watchStarted = Date.now();
@@ -937,7 +962,7 @@ async function runS13(page) {
 
 async function runS14(page) {
 	await page.locator(".sidebar").getByRole("button", { name: "Downloads", exact: true }).click();
-	await page.locator('[role="row"]').filter({ has: page.getByText(FIXTURE_FOLDER, { exact: true }) }).dblclick();
+	await openFixtureFolder(page);
 	await rowFor(page, "selected-file.txt").waitFor({ timeout: 10_000 });
 	const tabPathBefore = await activeTabPath(page);
 	const rowsBefore = await page.locator('[role="row"]').count();
@@ -1024,7 +1049,7 @@ async function main() {
 	page = await startSession("B");
 	const familyB = await waitFor(() => familyForFixture(readJson(SNAPSHOT)), { timeoutMs: 420_000, label: "S4 startup family" });
 	await page.locator(".sidebar").getByRole("button", { name: "Downloads", exact: true }).click();
-	await page.locator('[role="row"]').filter({ has: page.getByText(FIXTURE_FOLDER, { exact: true }) }).dblclick();
+	await openFixtureFolder(page);
 	await rowFor(page, "selected-file.txt").waitFor({ timeout: 10_000 });
 	await runScenario("S4", page, () => runS4(page, familyB));
 	await finishSession();
@@ -1032,7 +1057,7 @@ async function main() {
 	page = await startSession("C");
 	const familyC = await waitFor(() => familyForFixture(readJson(SNAPSHOT)), { timeoutMs: 420_000, label: "S5 startup family" });
 	await page.locator(".sidebar").getByRole("button", { name: "Downloads", exact: true }).click();
-	await page.locator('[role="row"]').filter({ has: page.getByText(FIXTURE_FOLDER, { exact: true }) }).dblclick();
+	await openFixtureFolder(page);
 	await rowFor(page, "selected-file.txt").waitFor({ timeout: 10_000 });
 	await runScenario("S5", page, () => runS5(page, familyC));
 	await finishSession();
@@ -1040,7 +1065,7 @@ async function main() {
 	page = await startSession("D");
 	const familyD = await waitFor(() => familyForFixture(readJson(SNAPSHOT)), { timeoutMs: 420_000, label: "S6 startup family" });
 	await page.locator(".sidebar").getByRole("button", { name: "Downloads", exact: true }).click();
-	await page.locator('[role="row"]').filter({ has: page.getByText(FIXTURE_FOLDER, { exact: true }) }).dblclick();
+	await openFixtureFolder(page);
 	await rowFor(page, "selected-file.txt").waitFor({ timeout: 10_000 });
 	await runScenario("S6", page, () => runS6(page, familyD));
 	await finishSession();
@@ -1048,7 +1073,7 @@ async function main() {
 	page = await startSession("E");
 	const familyE = await waitFor(() => familyForFixture(readJson(SNAPSHOT)), { timeoutMs: 420_000, label: "S9 startup family" });
 	await page.locator(".sidebar").getByRole("button", { name: "Downloads", exact: true }).click();
-	await page.locator('[role="row"]').filter({ has: page.getByText(FIXTURE_FOLDER, { exact: true }) }).dblclick();
+	await openFixtureFolder(page);
 	await rowFor(page, "selected-file.txt").waitFor({ timeout: 10_000 });
 	await runScenario("S9", page, () => runS9(page, familyE));
 	await finishSession();

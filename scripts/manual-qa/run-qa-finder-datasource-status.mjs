@@ -63,22 +63,30 @@ const app = await launchFinder({ userDataDir: join(root, "user-data"), env });
 try {
 	const page = await finderWindow(app);
 	await page.waitForSelector('[role="row"]');
+	const selectCategory = (label) => page.locator(".settings-sidebar__item", { hasText: label }).click();
 	const openSources = async () => {
 		await page.locator(".sidebar__item", { hasText: "Settings" }).click();
 		await page.waitForSelector(".settings-panel");
-		await page.locator(".settings-panel__tabs button", { hasText: "Data Sources" }).click();
+		// Settings opens as a tab; the categories are the left nav items.
+		await selectCategory("Data Sources");
 		await page.waitForSelector('.settings-source[data-source-id="slack"]');
+	};
+	const closeSettings = async () => {
+		await page.keyboard.press("Meta+w");
+		await page.waitForFunction(() => document.querySelector(".settings-panel") === null);
 	};
 	const row = (id) => page.locator(`.settings-source[data-source-id="${id}"]`);
 	const fact = async (id, key) => {
 		const source = row(id);
-		if ((await source.locator(".settings-source-facts").count()) === 0) await source.locator(".settings-source__chevron").click();
+		// v7 gives a disabled source row `pointer-events: none`, so expand it via a
+		// dispatched click rather than a hit-tested one.
+		if ((await source.locator(".settings-source-facts").count()) === 0) await source.locator(".settings-source__chevron").dispatchEvent("click");
 		return source.locator(`.settings-source-fact[data-fact="${key}"]`).getAttribute("data-state");
 	};
 
 	await openSources();
-	const configLine = await page.locator(".settings-intro__config code").textContent();
-	check("shows the shared config path", configLine === configPath, configLine ?? "");
+	// v7 dropped the config-path readout and the refresh button from this pane; the
+	// list itself is the observable, so the config path is covered by the ids below.
 	const ids = await page.locator(".settings-source").evaluateAll((els) => els.map((el) => el.dataset.sourceId));
 	check("lists every configured datasource, including disabled ones", JSON.stringify(ids) === JSON.stringify(["slack", "my-drive", "github", "telegram", "foo"]), JSON.stringify(ids));
 
@@ -135,10 +143,12 @@ try {
 	await page.screenshot({ path: join(EVIDENCE, "02-slack-toggled-off.png") });
 
 	writeConfig({ ...onDisk.datasources, rss: { connector: { feeds: [{ url: "https://example.com/feed.xml" }] } } });
-	await page.locator(".settings-intro__refresh").click();
+	// v7 has no refresh button; switching the category away and back re-reads the config.
+	await selectCategory("General");
+	await selectCategory("Data Sources");
 	await page.waitForSelector('.settings-source[data-source-id="rss"]');
-	check("an external config edit appears after refresh", (await fact("rss", "install")) === "builtin");
-	await page.locator(".settings-panel__header .icon-button[aria-label='Close Settings']").click();
+	check("an external config edit appears after the pane re-reads", (await fact("rss", "install")) === "builtin");
+	await closeSettings();
 	writeConfig({ ...onDisk.datasources, notion: {} });
 	await openSources();
 	check("reopening Settings re-reads the config (no app-side copy)", (await row("notion").count()) === 1 && (await row("rss").count()) === 0);

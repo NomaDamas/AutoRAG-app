@@ -26,12 +26,12 @@ const windowTitle = await app.evaluate(({ BrowserWindow }) => {
 	return window?.getTitle() ?? "";
 });
 const documentTitle = await page.title();
-const devLabelText = await page.locator(".status-bar__dev").innerText().catch(() => null);
+const devLabelText = await page.locator(".pathbar .font-mono").innerText().catch(() => null);
 const bridgeDev = await page.evaluate(() => globalThis.autorag?.dev ?? null);
 
 console.log("WINDOW-TITLE:", JSON.stringify(windowTitle));
 console.log("DOCUMENT-TITLE:", JSON.stringify(documentTitle));
-console.log("STATUS-BAR-DEV:", JSON.stringify(devLabelText));
+console.log("PATHBAR-DEV:", JSON.stringify(devLabelText));
 console.log("BRIDGE-DEV:", JSON.stringify(bridgeDev));
 
 const ok =

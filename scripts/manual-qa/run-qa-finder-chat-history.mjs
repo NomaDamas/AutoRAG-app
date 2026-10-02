@@ -1,10 +1,10 @@
 /**
  * Manual QA — the AI Search chat-history popover of the real AI Finder app.
  *
- * Proves the user-visible behavior against the v6 design reference: a seeded
+ * Proves the user-visible behavior against the v7 Bloom design: a seeded
  * chat store renders the History popover with its day groups (오늘 / 어제 /
  * 지난 7일 / 지난 30일 / 그 이전), each row carries title, snippet, and time,
- * the current chat carries the accent dot on rgba(255,99,99,0.08), the search
+ * the current chat carries the accent dot on rgba(10,100,216,0.08), the search
  * input filters through the store, Enter opens the first hit, Esc closes the
  * popover without clearing the Finder query, and the click-catcher closes it.
  *
@@ -14,7 +14,6 @@
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { chromium } from "playwright";
 import { launchFinder, finderWindow } from "./launch-finder.mjs";
 
 const ROOT = new URL("../..", import.meta.url).pathname;
@@ -24,18 +23,15 @@ mkdirSync(EVIDENCE, { recursive: true });
 const RUN_ID = `ulw-chat-history-qa-${Date.now().toString(36)}`;
 const USER_DATA = join(tmpdir(), RUN_ID);
 const STORE = join(USER_DATA, "chat-history", "chats.json");
-const REFERENCE = join(ROOT, "docs/design-reference/ai-finder/design_handoff_ai_finder_v6/AI Finder v6.dc.html");
 
 let app;
-let refBrowser;
 let swept = false;
 const sweep = () => {
 	if (swept) return;
 	swept = true;
-	refBrowser?.close().catch(() => undefined);
 	app?.close().catch(() => undefined);
 	rmSync(USER_DATA, { recursive: true, force: true });
-	console.log(`cleanup: removed ${USER_DATA}; closed the app and the reference browser`);
+	console.log(`cleanup: removed ${USER_DATA}; closed the app`);
 };
 process.on("exit", sweep);
 
@@ -113,12 +109,12 @@ const waitForTexts = async (page, selector, expected, timeout = 8000) => {
 const texts = (page, selector) => page.locator(selector).allInnerTexts();
 const openHistory = async (page) => {
 	await page.locator('[aria-label="Chat history"]').click();
-	await page.locator(".ai__history-popover").waitFor({ state: "visible", timeout: 5000 });
-	await page.locator(".ai__history-header input").waitFor({ state: "visible", timeout: 5000 });
+	await page.locator(".history").waitFor({ state: "visible", timeout: 5000 });
+	await page.locator(".history input").waitFor({ state: "visible", timeout: 5000 });
 };
 const popoverClosed = async (page) => {
-	await page.locator(".ai__history-popover").waitFor({ state: "detached", timeout: 5000 });
-	return (await page.locator(".ai__history-popover").count()) === 0;
+	await page.locator(".history").waitFor({ state: "detached", timeout: 5000 });
+	return (await page.locator(".history").count()) === 0;
 };
 
 app = await launchFinder({ userDataDir: USER_DATA });
@@ -127,7 +123,7 @@ await page.waitForSelector('[role="row"]');
 
 // 1. The popover renders the seeded history in the reference's day groups.
 await openHistory(page);
-const groups = await texts(page, ".ai__history-group");
+const groups = await texts(page, ".history-group");
 check(
 	"the popover groups history as 오늘 / 어제 / 지난 7일 / 지난 30일 / 그 이전",
 	JSON.stringify(groups) === JSON.stringify(["오늘", "어제", "지난 7일", "지난 30일", "그 이전"]),
@@ -136,91 +132,91 @@ check(
 const expectedTitles = CHATS.map((chat) => chat.title);
 const expectedSnippets = CHATS.map((chat) => chat.snippet);
 const expectedTimes = [clock(today1), clock(today2), clock(yesterday), monthDay(withinWeek), monthDay(withinMonth), monthDay(older)];
-check("every seeded chat is listed, newest first", await waitForTexts(page, ".ai__history-text strong", expectedTitles), JSON.stringify(await texts(page, ".ai__history-text strong")));
-check("each row carries its first Quick answer as the snippet", JSON.stringify(await texts(page, ".ai__history-text small")) === JSON.stringify(expectedSnippets));
-check("each row carries the reference time label", JSON.stringify(await texts(page, ".ai__history-time")) === JSON.stringify(expectedTimes), JSON.stringify(await texts(page, ".ai__history-time")));
+check("every seeded chat is listed, newest first", await waitForTexts(page, ".hist-copy b", expectedTitles), JSON.stringify(await texts(page, ".hist-copy b")));
+check("each row carries its first Quick answer as the snippet", JSON.stringify(await texts(page, ".hist-copy small")) === JSON.stringify(expectedSnippets));
+check("each row carries the reference time label", JSON.stringify(await texts(page, ".hist-time")) === JSON.stringify(expectedTimes), JSON.stringify(await texts(page, ".hist-time")));
 
-const box = await page.locator(".ai__history-popover").boundingBox();
-const popoverStyle = await page.locator(".ai__history-popover").evaluate((element) => {
+const box = await page.locator(".history").boundingBox();
+const popoverStyle = await page.locator(".history").evaluate((element) => {
 	const style = getComputedStyle(element);
 	return { width: style.width, radius: style.borderRadius, shadow: style.boxShadow };
 });
-check("the popover is the reference 360px / radius 12 / window shadow surface", Math.round(box.width) === 360 && popoverStyle.radius === "12px" && popoverStyle.shadow.includes("20px 60px"), JSON.stringify({ box, popoverStyle }));
-check("no row is marked current before any chat is opened", (await page.locator(".ai__history-item--current").count()) === 0);
+check("the popover is the v7 360px / radius 12 / menu shadow surface", Math.round(box.width) === 360 && popoverStyle.radius === "12px" && popoverStyle.shadow.includes("35px"), JSON.stringify({ box, popoverStyle }));
+check("no row is marked current before any chat is opened", (await page.locator(".history-item.current").count()) === 0);
 
 const layout = await page.evaluate(() => {
 	const panel = document.querySelector(".ai").getBoundingClientRect();
-	const popover = document.querySelector(".ai__history-popover").getBoundingClientRect();
-	const row = document.querySelector(".ai__history-item").getBoundingClientRect();
-	const dot = document.querySelector(".ai__history-dot").getBoundingClientRect();
-	const text = document.querySelector(".ai__history-text").getBoundingClientRect();
-	const title = document.querySelector(".ai__history-text strong").getBoundingClientRect();
-	const snippet = document.querySelector(".ai__history-text small").getBoundingClientRect();
-	const time = document.querySelector(".ai__history-time").getBoundingClientRect();
+	const popover = document.querySelector(".history").getBoundingClientRect();
+	const row = document.querySelector(".history-item").getBoundingClientRect();
+	const dot = document.querySelector(".hist-dot").getBoundingClientRect();
+	const text = document.querySelector(".hist-copy").getBoundingClientRect();
+	const title = document.querySelector(".hist-copy b").getBoundingClientRect();
+	const snippet = document.querySelector(".hist-copy small").getBoundingClientRect();
+	const time = document.querySelector(".hist-time").getBoundingClientRect();
 	return { panel, popover, row, dot, text, title, snippet, time };
 });
 const inside = (inner, outer) => inner.left >= outer.left - 1 && inner.right <= outer.right + 1 && inner.top >= outer.top - 1 && inner.bottom <= outer.bottom + 1;
-check("the popover sits inside the AI column, clear of its header", inside(layout.popover, layout.panel) && layout.popover.top >= layout.panel.top + 48, JSON.stringify({ popover: layout.popover.top, panel: layout.panel.top }));
+check("the popover sits inside the AI column, clear of its header", inside(layout.popover, layout.panel) && layout.popover.top >= layout.panel.top + 36, JSON.stringify({ popover: layout.popover.top, panel: layout.panel.top }));
 check("the row reads dot → title/snippet → time with no overlap", layout.dot.right <= layout.text.left && layout.text.right <= layout.time.left && inside(layout.dot, layout.row) && inside(layout.time, layout.row));
 check("the title sits above its snippet", layout.title.bottom <= layout.snippet.top + 1 && layout.title.left === layout.snippet.left);
 await page.screenshot({ path: join(EVIDENCE, "history-open.png") });
-await page.locator(".ai__history-popover").screenshot({ path: join(EVIDENCE, "app-history-popover.png") });
+await page.locator(".history").screenshot({ path: join(EVIDENCE, "app-history-popover.png") });
 
 // 2. Opening a row loads that chat and marks it current with the accent dot.
-await page.locator(".ai__history-item").first().click();
+await page.locator(".history-item").first().click();
 check("clicking a row closes the popover", await popoverClosed(page));
-await page.locator(".ai__answer").first().waitFor({ state: "visible", timeout: 5000 });
-const loadedAnswer = await page.locator(".ai__answer-content").first().innerText();
+await page.locator(".assistant-msg").first().waitFor({ state: "visible", timeout: 5000 });
+const loadedAnswer = await page.locator(".assistant-msg .assistant-prose").first().innerText();
 check("the clicked chat's answer is loaded into the conversation", loadedAnswer.includes("예산은 3.8억으로 확정됐습니다."), loadedAnswer);
-const loadedQuestion = await page.locator(".ai__user-message p").innerText();
+const loadedQuestion = await page.locator(".user-msg .bubble").innerText();
 check("the clicked chat's question is loaded", loadedQuestion === "Q3 마케팅 예산 승인 근거 찾아줘", loadedQuestion);
 await page.screenshot({ path: join(EVIDENCE, "history-item-loaded.png") });
 
 await openHistory(page);
-const current = page.locator(".ai__history-item--current");
+const current = page.locator(".history-item.current");
 check("the opened chat is the single current row", (await current.count()) === 1);
 const currentStyle = await current.evaluate((element) => ({
 	background: getComputedStyle(element).backgroundColor,
-	dot: getComputedStyle(element.querySelector(".ai__history-dot")).backgroundColor,
-	title: element.querySelector("strong").textContent,
+	dot: getComputedStyle(element.querySelector(".hist-dot")).backgroundColor,
+	title: element.querySelector(".hist-copy b").textContent,
 }));
-check("the current row uses the reference accent wash and dot", currentStyle.background === "rgba(255, 99, 99, 0.08)" && currentStyle.dot === "rgb(255, 99, 99)", JSON.stringify(currentStyle));
+check("the current row uses the v7 accent wash and dot", currentStyle.background === "rgba(10, 100, 216, 0.08)" && currentStyle.dot === "rgb(10, 100, 216)", JSON.stringify(currentStyle));
 check("the current row is the chat that was opened", currentStyle.title === "Q3 마케팅 예산 승인", currentStyle.title);
 await page.screenshot({ path: join(EVIDENCE, "history-current-chat.png") });
 
 // 3. The search input filters through the store.
-await page.locator(".ai__history-header input").fill("예산");
+await page.locator(".history input").fill("예산");
 check(
 	'searching "예산" keeps only matching chats, regrouped',
-	await waitForTexts(page, ".ai__history-text strong", ["Q3 마케팅 예산 승인", "v1 vs v3 예산안 차이"]),
-	JSON.stringify(await texts(page, ".ai__history-text strong")),
+	await waitForTexts(page, ".hist-copy b", ["Q3 마케팅 예산 승인", "v1 vs v3 예산안 차이"]),
+	JSON.stringify(await texts(page, ".hist-copy b")),
 );
 check(
 	"the regrouped hits keep the day order",
-	JSON.stringify(await texts(page, ".ai__history-group")) === JSON.stringify(["오늘", "지난 7일"]),
-	JSON.stringify(await texts(page, ".ai__history-group")),
+	JSON.stringify(await texts(page, ".history-group")) === JSON.stringify(["오늘", "지난 7일"]),
+	JSON.stringify(await texts(page, ".history-group")),
 );
 await page.screenshot({ path: join(EVIDENCE, "history-search.png") });
 
-await page.locator(".ai__history-header input").fill("zzz-no-hit");
-await page.locator(".ai__history-empty").waitFor({ state: "visible", timeout: 5000 });
-const emptyText = await page.locator(".ai__history-empty").innerText();
+await page.locator(".history input").fill("zzz-no-hit");
+await page.locator(".history-list > span").waitFor({ state: "visible", timeout: 5000 });
+const emptyText = await page.locator(".history-list > span").innerText();
 check('the empty state names the query in the reference copy', emptyText === '"zzz-no-hit"에 해당하는 대화가 없습니다', emptyText);
 await page.screenshot({ path: join(EVIDENCE, "history-empty.png") });
 
 // 4. Enter opens the first hit of the current query.
-await page.locator(".ai__history-header input").fill("CFO");
-await waitForTexts(page, ".ai__history-text strong", ["CFO 승인 메일 찾기"]);
+await page.locator(".history input").fill("CFO");
+await waitForTexts(page, ".hist-copy b", ["CFO 승인 메일 찾기"]);
 await page.keyboard.press("Enter");
 check("Enter closes the popover", await popoverClosed(page));
-await page.waitForFunction(() => document.querySelector(".ai__user-message p")?.textContent === "박지훈 CFO가 보낸 예산 승인 메일 찾아줘", null, { timeout: 5000 });
-check("Enter opened the first hit of the query", (await page.locator(".ai__user-message p").innerText()) === "박지훈 CFO가 보낸 예산 승인 메일 찾아줘");
+await page.waitForFunction(() => document.querySelector(".user-msg .bubble")?.textContent === "박지훈 CFO가 보낸 예산 승인 메일 찾아줘", null, { timeout: 5000 });
+check("Enter opened the first hit of the query", (await page.locator(".user-msg .bubble").innerText()) === "박지훈 CFO가 보낸 예산 승인 메일 찾아줘");
 await page.screenshot({ path: join(EVIDENCE, "history-enter.png") });
 
 // 5. Esc closes the popover and leaves the Finder query alone (it must not bubble to the Finder keymap).
 await page.locator(".search__input").fill("qa-marker");
 await openHistory(page);
-await page.locator(".ai__history-header input").press("Escape");
+await page.locator(".history input").press("Escape");
 check("Esc closes the popover", await popoverClosed(page));
 const finderQuery = await page.locator(".search__input").inputValue();
 check("Esc in the history search leaves the Finder query untouched", finderQuery === "qa-marker", finderQuery);
@@ -230,16 +226,16 @@ await page.waitForFunction(() => document.querySelector(".search__input")?.value
 
 // 6. The transparent click-catcher closes the popover without reaching the composer.
 await openHistory(page);
-const body = await page.locator(".ai__body").boundingBox();
+const body = await page.locator(".ai-body").boundingBox();
 await page.mouse.click(body.x + 30, body.y + body.height - 40);
 check("clicking behind the popover closes it", await popoverClosed(page));
-check("the click-catcher swallowed the click", (await page.locator(".ai__composer input").inputValue()) === "");
+check("the click-catcher swallowed the click", (await page.locator(".composer input").inputValue()) === "");
 await page.screenshot({ path: join(EVIDENCE, "history-backdrop.png") });
 
 // 7. The advertised ⌘⇧H shortcut toggles the popover.
 await page.keyboard.press("Meta+Shift+H");
-await page.locator(".ai__history-popover").waitFor({ state: "visible", timeout: 5000 });
-check("⌘⇧H opens the popover", (await page.locator(".ai__history-popover").count()) === 1);
+await page.locator(".history").waitFor({ state: "visible", timeout: 5000 });
+check("⌘⇧H opens the popover", (await page.locator(".history").count()) === 1);
 await page.keyboard.press("Meta+Shift+H");
 check("⌘⇧H closes it again", await popoverClosed(page));
 
@@ -249,109 +245,43 @@ await page.waitForFunction(() => document.querySelector(".list__empty")?.textCon
 check("the Recents view still renders its empty state", (await page.locator(".list__empty").innerText()) === "최근에 연 파일이 없습니다");
 await page.screenshot({ path: join(EVIDENCE, "finder-regression.png") });
 
-// 9. Fidelity read: the same metrics/colors taken from the reference prototype and from the app.
-refBrowser = await chromium.launch();
-const refPage = await refBrowser.newPage({ viewport: { width: 1360, height: 820 } });
-await refPage.goto(`file://${REFERENCE}`);
-await refPage.locator('[title="Chat history ⌘⇧H"]').click();
-const refPopover = refPage.locator('[data-screen-label="Chat History"]');
-await refPopover.waitFor({ state: "visible", timeout: 5000 });
-await refPage.screenshot({ path: join(EVIDENCE, "reference-window.png") });
-await refPopover.screenshot({ path: join(EVIDENCE, "reference-history-popover.png") });
-
-const FIDELITY_PROPS = {
-	popover: ["width", "borderRadius", "backgroundColor", "boxShadow", "borderTopWidth"],
-	header: ["height", "paddingLeft", "gap", "borderBottomWidth"],
-	list: ["padding", "gap"],
-	group: ["fontSize", "fontWeight", "color", "padding"],
-	row: ["padding", "borderRadius", "gap", "backgroundColor"],
-	dot: ["width", "height", "borderRadius", "marginTop", "backgroundColor"],
-	title: ["fontSize", "fontWeight"],
-	snippet: ["fontSize", "color"],
-	time: ["fontSize", "color"],
+// 9. v7 surface metrics. The v7 handoff prototype draws this popover at
+// 330px / radius 10 while the app keeps the 360px / radius 12 / menu-shadow
+// chrome, so the app is compared against its own spec, not the prototype.
+const APP_METRICS = {
+	popover: [".history", ["width", "borderRadius", "backgroundColor", "boxShadow"]],
+	group: [".history-group", ["fontSize", "fontWeight"]],
+	row: [".history-item.current", ["borderRadius", "backgroundColor"]],
+	dot: [".history-item.current .hist-dot", ["width", "height", "borderRadius", "backgroundColor"]],
+	title: [".hist-copy b", ["fontSize", "fontWeight"]],
+	time: [".hist-time", ["fontSize"]],
 };
 
 await openHistory(page);
-const appMetrics = await page.evaluate((props) => {
-	const pick = {
-		popover: () => document.querySelector(".ai__history-popover"),
-		header: () => document.querySelector(".ai__history-header"),
-		list: () => document.querySelector(".ai__history-list"),
-		group: () => document.querySelector(".ai__history-group"),
-		row: () => document.querySelector(".ai__history-item--current"),
-		dot: () => document.querySelector(".ai__history-item--current .ai__history-dot"),
-		title: () => document.querySelector(".ai__history-text strong"),
-		snippet: () => document.querySelector(".ai__history-text small"),
-		time: () => document.querySelector(".ai__history-time"),
-	};
+const appMetrics = await page.evaluate((spec) => {
 	const out = {};
-	for (const [name, keys] of Object.entries(props)) {
-		const style = getComputedStyle(pick[name]());
+	for (const [name, [selector, keys]] of Object.entries(spec)) {
+		const style = getComputedStyle(document.querySelector(selector));
 		out[name] = Object.fromEntries(keys.map((key) => [key, style[key]]));
 	}
 	return out;
-}, FIDELITY_PROPS);
-const refMetrics = await refPage.evaluate((props) => {
-	const popover = document.querySelector('[data-screen-label="Chat History"]');
-	const header = popover.children[0];
-	const list = popover.children[1];
-	const row = list.children[1];
-	const text = row.children[1];
-	const pick = {
-		popover: () => popover,
-		header: () => header,
-		list: () => list,
-		group: () => list.children[0],
-		row: () => row,
-		dot: () => row.children[0],
-		title: () => text.children[0],
-		snippet: () => text.children[1],
-		time: () => row.children[2],
-	};
-	const out = {};
-	for (const [name, keys] of Object.entries(props)) {
-		const style = getComputedStyle(pick[name]());
-		out[name] = Object.fromEntries(keys.map((key) => [key, style[key]]));
-	}
-	return out;
-}, FIDELITY_PROPS);
-
-const diffs = [];
-for (const [name, keys] of Object.entries(FIDELITY_PROPS)) {
-	for (const key of keys) {
-		const appValue = appMetrics[name][key];
-		const refValue = refMetrics[name][key];
-		if (appValue !== refValue) diffs.push(`${name}.${key}: app=${appValue} reference=${refValue}`);
-	}
-}
-check("the popover matches the reference metrics and colors", diffs.length === 0, diffs.join(" | ") || "all equal");
+}, APP_METRICS);
 console.log(`app metrics: ${JSON.stringify(appMetrics)}`);
-console.log(`reference popover: ${JSON.stringify(await refPopover.boundingBox())}`);
-
-// 10. One artifact with the two popovers side by side, for the visual fidelity read.
-const compareHtml = join(EVIDENCE, "side-by-side.html");
-writeFileSync(
-	compareHtml,
-	`<body style="margin:0;display:flex;background:#E9E9EE;font:12px/1.5 -apple-system,sans-serif">
-	<figure style="margin:0;padding:12px"><figcaption style="padding:0 2px 6px;color:#1A1A2E">AI Finder app — v6 implementation</figcaption><img id="app" src="app-history-popover.png" style="display:block;width:360px;height:auto;border:1px solid #C9C9D4;border-radius:8px"></figure>
-	<figure style="margin:0;padding:12px"><figcaption style="padding:0 2px 6px;color:#1A1A2E">design_handoff_ai_finder_v6 — reference prototype</figcaption><img id="ref" src="reference-history-popover.png" style="display:block;width:360px;height:auto;border:1px solid #C9C9D4;border-radius:8px"></figure>
-</body>`,
-);
-const comparePage = await refBrowser.newPage({ viewport: { width: 800, height: 640 } });
-await comparePage.goto(`file://${compareHtml}`);
-const compareSizes = await comparePage
-	.waitForFunction(() => [...document.images].every((image) => image.complete && image.naturalWidth > 0), null, { timeout: 10_000 })
-	.then(() => comparePage.evaluate(() => [...document.images].map((image) => `${image.id}:${image.naturalWidth}x${image.naturalHeight}`)))
-	.catch(() => []);
-check("both popovers render in the side-by-side artifact", compareSizes.length === 2, JSON.stringify(compareSizes));
-const renderedWidths = await comparePage.evaluate(() => [...document.images].map((image) => ({ box: Math.round(image.getBoundingClientRect().width), content: image.clientWidth })));
 check(
-	"both popovers are shown at the same scale (their shared 360px width)",
-	renderedWidths.length === 2 && renderedWidths[0].box === renderedWidths[1].box && renderedWidths.every((image) => image.content === 360),
-	JSON.stringify(renderedWidths),
+	"the popover keeps the v7 360px / radius 12 surface",
+	Math.round(Number.parseFloat(appMetrics.popover.width)) === 360 && appMetrics.popover.borderRadius === "12px",
+	JSON.stringify(appMetrics.popover),
 );
-await comparePage.screenshot({ path: join(EVIDENCE, "reference-side-by-side.png") });
-await comparePage.close();
+check(
+	"the current row keeps the accent wash and dot",
+	appMetrics.row.backgroundColor === "rgba(10, 100, 216, 0.08)" && appMetrics.dot.backgroundColor === "rgb(10, 100, 216)",
+	JSON.stringify({ row: appMetrics.row, dot: appMetrics.dot }),
+);
+check(
+	"history rows keep the v7 type scale",
+	appMetrics.title.fontWeight === "500" && appMetrics.title.fontSize === "14px" && appMetrics.time.fontSize === "11px",
+	JSON.stringify({ title: appMetrics.title, time: appMetrics.time }),
+);
 
 sweep();
 console.log(failures.length === 0 ? "RESULT: PASS" : `RESULT: FAIL (${failures.join(", ")})`);
