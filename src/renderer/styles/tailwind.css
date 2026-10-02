@@ -1,0 +1,272 @@
+/* ============================================================================
+ * Tailwind entry + token bridge (DESIGN.md §0 "Styling contract").
+ *
+ * `tokens.css` stays the single source of truth. This file does not define a
+ * value of its own: every `@theme inline` entry forwards to a token, and
+ * `inline` makes Tailwind substitute the `var(--token)` reference straight into
+ * the generated utility instead of emitting a second custom property.
+ *
+ *   tokens.css          --bg-window: #FFFFFF
+ *   tailwind.css        @theme inline { --color-window: var(--bg-window) }
+ *   component           class="bg-window"   →   background-color: var(--bg-window)
+ *
+ * Naming rules (token prefix → Tailwind namespace → utility):
+ *   --bg-*            → --color-*      (prefix dropped)   bg-*, text-*, border-*
+ *   --text-* (ink)    → --color-ink-*                     text-ink, text-ink-muted
+ *   --border*         → --color-border* / --color-divider border-border, border-divider
+ *   --accent*, --ok-*, --warn-*, --info-*, --danger-*,
+ *   --error-orange-*, --tile-*, --traffic-*, --scrim-*,
+ *   --folder, --switch-off, --index-dot-included          → --color-<same>
+ *   --font-size-*     → --text-*                          text-title, text-meta
+ *   --weight-*        → --font-weight-*                   font-semibold
+ *   --tracking-*, --leading-*                             → --tracking-*, --leading-*
+ *   --space-N         → --spacing-N                       p-16, gap-8
+ *   --size-*, --knob-*, --tree-indent, --desk-padding,
+ *   --app-min-*, --evidence-open-height, --col-sidebar    → --spacing-<name>
+ *   --w-*, --col-sidebar                                  → --container-<name>  w-settings
+ *   --shadow-*        → --shadow-*                        shadow-raised
+ *   --radius-*        → --radius-*                        rounded-10
+ *   --dur-*, --time-* → none (use `duration-(--dur-color)`)
+ *
+ * Deliberate non-entries, because the token name already IS a Tailwind theme
+ * key and a bridge entry would be `var(--x): var(--x)` (a CSS cycle):
+ *   --font-sans, --font-mono, --radius-full, --ease-out
+ * tokens.css is unlayered while Tailwind's theme defaults are not, so the token
+ * value wins at runtime and `font-sans` / `rounded-full` / `ease-out` resolve
+ * to the reference values. `test/design-tokens.test.ts` guards this file
+ * against drifting from tokens.css.
+ *
+ * Layer order: `legacy` is declared before `utilities`, so a Tailwind utility
+ * always beats a rule that is still in the hand-written stylesheets. That is
+ * what makes the migration incremental: migrating a component means deleting
+ * its rules, and until then the legacy rule simply wins.
+ *
+ * Preflight is NOT imported. `base.css` already defines the document surface
+ * (reset, scrollbars, focus ring, reduced motion) exactly as the reference
+ * specifies, and Tailwind's preflight would change it.
+ * ========================================================================== */
+
+@layer theme, legacy, utilities;
+
+@import "tailwindcss/theme.css" layer(theme);
+
+@import "./tokens.css";
+
+@source "../src";
+
+@import "tailwindcss/utilities.css" layer(utilities);
+
+@theme inline {
+	/* ---------------------------------------------------------- §2.1 Surfaces */
+	--color-desk: var(--bg-desk);
+	--color-window: var(--bg-window);
+	--color-chrome: var(--bg-chrome);
+	--color-subtle: var(--bg-subtle);
+	--color-subtle-alt: var(--bg-subtle-alt);
+	--color-input: var(--bg-input);
+	--color-selected-nav: var(--bg-selected-nav);
+	--color-code: var(--bg-code);
+	--color-chip-sent: var(--bg-chip-sent);
+	--color-tile-fallback: var(--bg-tile-fallback);
+	--color-quicklook-panel: var(--bg-quicklook-panel);
+	--color-quicklook-frost: var(--bg-quicklook-frost);
+
+	/* ------------------------------------------------------- §2.2 Hover washes */
+	--color-hover: var(--bg-hover);
+	--color-hover-row: var(--bg-hover-row);
+	--color-hover-icon: var(--bg-hover-icon);
+	--color-hover-strong: var(--bg-hover-strong);
+
+	/* ------------------------------------------------------------ §2.3 Borders */
+	--color-border: var(--border);
+	--color-divider: var(--border-divider);
+	--color-border-strong: var(--border-strong);
+
+	/* ---------------------------------------------------------------- §2.4 Ink */
+	--color-ink: var(--text-primary);
+	--color-ink-body: var(--text-body);
+	--color-ink-muted: var(--text-muted);
+	--color-ink-faint: var(--text-faint);
+	--color-on-accent: var(--text-on-accent);
+	--color-on-tile: var(--text-on-tile);
+	--color-on-badge: var(--text-on-badge);
+
+	/* ------------------------------------------------------------- §2.5 Accent */
+	--color-accent: var(--accent);
+	--color-accent-hover: var(--accent-hover);
+	--color-accent-text: var(--accent-text);
+	--color-accent-text-strong: var(--accent-text-strong);
+	--color-accent-drop-hover: var(--accent-drop-hover);
+	--color-accent-history-current: var(--accent-history-current);
+	--color-accent-soft: var(--accent-soft);
+	--color-accent-chat-mark: var(--accent-chat-mark);
+	--color-accent-chip: var(--accent-chip);
+	--color-accent-flash: var(--accent-flash);
+	--color-accent-preview-mark: var(--accent-preview-mark);
+	--color-accent-doc-mark: var(--accent-doc-mark);
+	--color-accent-pending-border: var(--accent-pending-border);
+	--color-accent-flash-ring: var(--accent-flash-ring);
+
+	/* ----------------------------------------------------- §2.6 Object colors */
+	--color-folder: var(--folder);
+	--color-switch-off: var(--switch-off);
+	--color-traffic-close: var(--traffic-close);
+	--color-traffic-min: var(--traffic-min);
+	--color-traffic-max: var(--traffic-max);
+
+	/* ------------------------------------------------------------ §2.7 Status */
+	--color-ok-dot: var(--ok-dot);
+	--color-ok-text: var(--ok-text);
+	--color-ok-bg: var(--ok-bg);
+	--color-ok-bg-soft: var(--ok-bg-soft);
+	--color-ok-border: var(--ok-border);
+	--color-warn-dot: var(--warn-dot);
+	--color-warn-text: var(--warn-text);
+	--color-warn-bg: var(--warn-bg);
+	--color-warn-bg-strong: var(--warn-bg-strong);
+	--color-info-dot: var(--info-dot);
+	--color-info-text: var(--info-text);
+	--color-info-bg: var(--info-bg);
+	--color-danger-dot: var(--danger-dot);
+	--color-danger-text: var(--danger-text);
+	--color-danger-bg: var(--danger-bg);
+	--color-danger-bg-soft: var(--danger-bg-soft);
+	--color-danger-border: var(--danger-border);
+	--color-error-orange-dot: var(--error-orange-dot);
+	--color-error-orange-text: var(--error-orange-text);
+	--color-error-orange-bg: var(--error-orange-bg);
+	--color-error-orange-bg-strong: var(--error-orange-bg-strong);
+	--color-index-included: var(--index-dot-included);
+
+	/* ------------------------------------------------------------ §2.8 Scrims */
+	--color-scrim-quicklook: var(--scrim-quicklook);
+	--color-scrim-modal: var(--scrim-modal);
+	--color-drop-overlay: var(--drop-overlay-bg);
+
+	/* ------------------------------------------------------- §2.9 File tiles */
+	--color-tile-xlsx: var(--tile-xlsx);
+	--color-tile-csv: var(--tile-csv);
+	--color-tile-pdf: var(--tile-pdf);
+	--color-tile-docx: var(--tile-docx);
+	--color-tile-pptx: var(--tile-pptx);
+	--color-tile-md: var(--tile-md);
+	--color-tile-zip: var(--tile-zip);
+	--color-tile-png: var(--tile-png);
+	--color-tile-slack: var(--tile-slack);
+	--color-tile-mail: var(--tile-mail);
+	--color-tile-notion: var(--tile-notion);
+	--color-tile-notion-fg: var(--tile-notion-fg);
+	--color-tile-discord: var(--tile-discord);
+	--color-tile-telegram: var(--tile-telegram);
+	--color-tile-contact: var(--tile-contact);
+
+	/* --------------------------------------------------------- §7 Scrollbars */
+	--color-scrollbar-thumb: var(--scrollbar-thumb);
+
+	/* ------------------------------------------------------- §3 Typography */
+	--text-title: var(--font-size-title);
+	--text-body: var(--font-size-body);
+	--text-sm: var(--font-size-sm);
+	--text-meta: var(--font-size-meta);
+	--text-caption: var(--font-size-caption);
+	--text-badge: var(--font-size-badge);
+	--text-tile: var(--font-size-tile);
+	--text-tile-xs: var(--font-size-tile-xs);
+
+	--font-weight-regular: var(--weight-regular);
+	--font-weight-medium: var(--weight-medium);
+	--font-weight-semibold: var(--weight-semibold);
+	--font-weight-bold: var(--weight-bold);
+
+	--tracking-label: var(--tracking-label);
+	--leading-body: var(--leading-body);
+	--leading-read: var(--leading-read);
+
+	/* ---------------------------------------------------------- §4 Spacing */
+	/* The reference scale is px-based and the token names carry the px value,
+	 * so the numeric multiplier is 1px: `p-16` is `--space-16` is 16px. */
+	--spacing: 1px;
+	--spacing-1: var(--space-1);
+	--spacing-2: var(--space-2);
+	--spacing-3: var(--space-3);
+	--spacing-4: var(--space-4);
+	--spacing-5: var(--space-5);
+	--spacing-6: var(--space-6);
+	--spacing-8: var(--space-8);
+	--spacing-10: var(--space-10);
+	--spacing-12: var(--space-12);
+	--spacing-14: var(--space-14);
+	--spacing-16: var(--space-16);
+	--spacing-18: var(--space-18);
+	--spacing-20: var(--space-20);
+	--spacing-22: var(--space-22);
+	--spacing-24: var(--space-24);
+	--spacing-40: var(--space-40);
+
+	/* ---------------------------------------------------- §4 Control sizes */
+	--spacing-row: var(--size-row);
+	--spacing-disclosure: var(--size-disclosure);
+	--spacing-tree-indent: var(--tree-indent);
+	--spacing-pill: var(--size-pill);
+	--spacing-icon-sm: var(--size-icon-sm);
+	--spacing-chip: var(--size-chip);
+	--spacing-chip-draft: var(--size-chip-draft);
+	--spacing-tab: var(--size-tab);
+	--spacing-bar: var(--size-bar);
+	--spacing-toolbar: var(--size-toolbar);
+	--spacing-col-header: var(--size-col-header);
+	--spacing-status-bar: var(--size-status-bar);
+	--spacing-ev-strip: var(--size-ev-strip);
+	--spacing-settings-row: var(--size-settings-row);
+	--spacing-dot: var(--size-dot);
+	--spacing-traffic: var(--size-traffic);
+	--spacing-knob: var(--size-knob);
+	--spacing-knob-on: var(--knob-on);
+	--spacing-knob-off: var(--knob-off);
+
+	/* -------------------------------------------------------- §4 App shell */
+	--spacing-desk-padding: var(--desk-padding);
+	--spacing-app-min-width: var(--app-min-width);
+	--spacing-app-min-height: var(--app-min-height);
+	--spacing-evidence-open-height: var(--evidence-open-height);
+
+	/* --------------------------------------------------- §4 Overlay widths */
+	--container-search-field: var(--w-search-field);
+	--container-access-menu: var(--w-access-menu);
+	--container-context-menu: var(--w-context-menu);
+	--container-history: var(--w-history);
+	--container-requests: var(--w-requests);
+	--container-quicklook: var(--w-quicklook);
+	--container-contact-editor: var(--w-contact-editor);
+	--container-permission-confirm: var(--w-permission-confirm);
+	--container-settings: var(--w-settings);
+	--container-col-sidebar: var(--col-sidebar);
+	--container-tab-min: var(--w-tab-min);
+	--container-tab-max: var(--w-tab-max);
+	--container-crumb-max: var(--w-crumb-max);
+	--container-bubble-max: var(--w-bubble-max);
+
+	/* --------------------------------------------------------- §7 Shadows */
+	--shadow-raised: var(--shadow-raised);
+	--shadow-drag: var(--shadow-drag);
+	--shadow-window: var(--shadow-window);
+
+	/* ----------------------------------------------------------- §7 Radii */
+	--radius-2: var(--radius-2);
+	--radius-3: var(--radius-3);
+	--radius-4: var(--radius-4);
+	--radius-5: var(--radius-5);
+	--radius-6: var(--radius-6);
+	--radius-7: var(--radius-7);
+	--radius-8: var(--radius-8);
+	--radius-9: var(--radius-9);
+	--radius-10: var(--radius-10);
+	--radius-11: var(--radius-11);
+	--radius-12: var(--radius-12);
+	--radius-14: var(--radius-14);
+
+	/* ---------------------------------------------------------- §6 Motion */
+	--animate-spin: spin var(--dur-spin) linear infinite;
+	--animate-rise: rise var(--dur-modal) var(--ease-out);
+	--animate-shimmer: shimmer var(--dur-shimmer) linear infinite;
+}
