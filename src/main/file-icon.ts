@@ -22,7 +22,7 @@ export const ICON_LIMIT = 240;
 /** One qlmanage call only handles this many files at once — bigger in-process batches drive its internal thumbnail queue into a known SIGSEGV. */
 export const THUMBNAIL_CHUNK = 10;
 /** Chunk pools running side by side; each pool member is its own qlmanage process, so the per-process queue stays shallow. */
-export const THUMBNAIL_POOL = 3;
+export const THUMBNAIL_POOL = 8;
 
 const ICON_TIMEOUT_MS = 4000;
 const ICON_MAX_BUFFER = 1 << 20;

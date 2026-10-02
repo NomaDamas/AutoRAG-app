@@ -6,6 +6,19 @@ import { createFsService, FsRenameError, type FsServiceDeps } from "../src/main/
 import { createRecentsStore, type RecentsStore } from "../src/main/recents-store";
 import { RECENTS_PATH } from "../src/shared/fs-contract";
 
+const unreadablePaths = vi.hoisted(() => new Set<string>());
+
+vi.mock("../src/main/fs-entry", async () => {
+	const actual = await vi.importActual<typeof import("../src/main/fs-entry")>("../src/main/fs-entry");
+	return {
+		...actual,
+		buildFsEntry: async (path: string) => {
+			if (unreadablePaths.has(path)) throw new Error("simulated lstat failure");
+			return actual.buildFsEntry(path);
+		},
+	};
+});
+
 interface StubbedDeps {
 	readonly deps: FsServiceDeps;
 	readonly trashed: string[];
@@ -116,6 +129,41 @@ describe("listDir", () => {
 		expect(listing.entries.find((entry) => entry.name === "link.txt")?.isSymlink).toBe(true);
 		expect(listing.entries.find((entry) => entry.name === "target.txt")?.isSymlink).toBe(false);
 	});
+
+	it("skips one unreadable entry, keeps the others, and warns verbatim", async () => {
+		const dir = join(root, "unreadable");
+		const unreadable = join(dir, "unreadable.txt");
+		await mkdir(dir, { recursive: true });
+		await writeFile(join(dir, "visible-a.txt"), "a");
+		await writeFile(unreadable, "hidden");
+		await writeFile(join(dir, "visible-b.txt"), "b");
+		unreadablePaths.add(unreadable);
+		const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+		try {
+			const listing = await createFsService(makeDeps(root).deps).listDir(dir);
+
+			expect(listing.entries.map((entry) => entry.name)).toEqual(["visible-a.txt", "visible-b.txt"]);
+			expect(warning).toHaveBeenCalledWith(
+				`fs:listDir skipping ${unreadable}: simulated lstat failure`,
+			);
+		} finally {
+			unreadablePaths.delete(unreadable);
+			warning.mockRestore();
+		}
+	});
+
+	it("keeps directory entry order deterministic after concurrent metadata reads", async () => {
+		const dir = join(root, "sorted");
+		await mkdir(dir, { recursive: true });
+		await writeFile(join(dir, "zeta.txt"), "");
+		await writeFile(join(dir, "alpha.txt"), "");
+		await mkdir(join(dir, "middle"), { recursive: true });
+
+		const listing = await createFsService(makeDeps(root).deps).listDir(dir);
+
+		expect(listing.entries.map((entry) => entry.name)).toEqual(["middle", "alpha.txt", "zeta.txt"]);
+	});
 });
 
 describe("stat", () => {
@@ -136,6 +184,147 @@ describe("stat", () => {
 			size: 3,
 			isSymlink: false,
 		});
+	});
+});
+
+describe("readEntries", () => {
+	it("resolves and enriches only the requested direct children", async () => {
+		// Given a directory with three files
+		const dir = join(root, "incremental");
+		await mkdir(dir, { recursive: true });
+		for (const name of ["a.txt", "b.txt", "c.txt"]) {
+			await writeFile(join(dir, name), name);
+		}
+		const requested = [join(dir, "a.txt"), join(dir, "c.txt")];
+		const iconTargets: string[] = [];
+		const osKindPaths: string[] = [];
+		const deps: FsServiceDeps = {
+			...makeDeps(root).deps,
+			osKind: async (path) => {
+				osKindPaths.push(path);
+				return null;
+			},
+			icons: {
+				icons: async (targets) => {
+					iconTargets.push(...targets.map((target) => target.path));
+					return new Map();
+				},
+			},
+		};
+
+		// When reading only two of them
+		const patch = await createFsService(deps).readEntries(dir, requested);
+
+		// Then only the requested rows come back, and only they were enriched
+		expect(patch.entries.map((entry) => entry.name)).toEqual(["a.txt", "c.txt"]);
+		expect(patch.removed).toEqual([]);
+		expect(iconTargets).toEqual(requested);
+		expect(osKindPaths).toEqual(requested);
+	});
+
+	it("deduplicates repeated requested paths", async () => {
+		// Given a file requested three times
+		const dir = join(root, "dedupe");
+		await mkdir(dir, { recursive: true });
+		const filePath = join(dir, "once.txt");
+		await writeFile(filePath, "x");
+
+		// When reading it
+		const patch = await createFsService(makeDeps(root).deps).readEntries(dir, [filePath, filePath, filePath]);
+
+		// Then it appears exactly once
+		expect(patch.entries.map((entry) => entry.path)).toEqual([filePath]);
+	});
+
+	it("returns the final on-disk state across a delete and recreate", async () => {
+		// Given a file
+		const dir = join(root, "atomic");
+		await mkdir(dir, { recursive: true });
+		const filePath = join(dir, "save.txt");
+		await writeFile(filePath, "old");
+		const service = createFsService(makeDeps(root).deps);
+
+		// When it exists, then is deleted, then is recreated with fresh content
+		const first = await service.readEntries(dir, [filePath]);
+		await rm(filePath);
+		const afterDelete = await service.readEntries(dir, [filePath]);
+		await writeFile(filePath, "recreated");
+
+		// Then both the removal and the recreated entry are truthful
+		expect(first.entries[0]?.size).toBe(3);
+		expect(afterDelete.entries).toEqual([]);
+		expect(afterDelete.removed).toEqual([filePath]);
+		const afterRecreate = await service.readEntries(dir, [filePath]);
+		expect(afterRecreate.removed).toEqual([]);
+		expect(afterRecreate.entries[0]?.size).toBe("recreated".length);
+	});
+
+	it("reports missing and ENOTDIR children as removed", async () => {
+		// Given a real directory and a regular file standing in as a "directory"
+		const dir = join(root, "removals");
+		await mkdir(dir, { recursive: true });
+		const missing = join(dir, "gone.txt");
+		const filePath = join(root, "not-a-dir.txt");
+		await writeFile(filePath, "x");
+		const child = join(filePath, "child.txt");
+		const service = createFsService(makeDeps(root).deps);
+
+		// When reading a missing child and a child under a non-directory
+		const patch = await service.readEntries(dir, [missing]);
+		const enotdir = await service.readEntries(filePath, [child]);
+
+		// Then both are reported removed rather than failing
+		expect(patch.removed).toEqual([missing]);
+		expect(enotdir.removed).toEqual([child]);
+	});
+
+	it("rejects a relative directory or a path outside the requested dir", async () => {
+		// Given an absolute directory
+		const dir = join(root, "scope");
+		await mkdir(dir, { recursive: true });
+		const service = createFsService(makeDeps(root).deps);
+
+		// When the scope is not absolute or the path is not a direct child
+		await expect(service.readEntries("relative/dir", [])).rejects.toThrow(/absolute/);
+		await expect(service.readEntries(dir, [join(root, "elsewhere.txt")])).rejects.toThrow(/direct child/);
+		await expect(service.readEntries(dir, ["relative.txt"])).rejects.toThrow(/direct child/);
+	});
+
+	it("rethrows non-missing filesystem errors verbatim", async () => {
+		// Given a child whose metadata read fails
+		const dir = join(root, "incremental-error");
+		const unreadable = join(dir, "unreadable.txt");
+		await mkdir(dir, { recursive: true });
+		await writeFile(unreadable, "x");
+		unreadablePaths.add(unreadable);
+
+		try {
+			// When reading it, the real error surfaces rather than a false removal
+			await expect(createFsService(makeDeps(root).deps).readEntries(dir, [unreadable])).rejects.toThrow(
+				"simulated lstat failure",
+			);
+		} finally {
+			unreadablePaths.delete(unreadable);
+		}
+	});
+});
+
+describe("exists", () => {
+	it("returns false for a missing path and true for an existing path", async () => {
+		const existing = join(root, "exists.txt");
+		await writeFile(existing, "x");
+		const service = createFsService(makeDeps(root).deps);
+
+		await expect(service.exists(existing)).resolves.toBe(true);
+		await expect(service.exists(join(root, "missing.txt"))).resolves.toBe(false);
+	});
+
+	it("rethrows non-missing filesystem errors verbatim", async () => {
+		const service = createFsService(makeDeps(root).deps);
+		const failure = await service.exists("\u0000").catch((error: unknown) => error);
+
+		expect(failure).toBeInstanceOf(TypeError);
+		expect((failure as TypeError).message).toContain("null bytes");
 	});
 });
 

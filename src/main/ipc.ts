@@ -1,7 +1,9 @@
 import { ipcMain } from "electron";
-import { FS_CHANNELS, type FsClipboard, type FsCoreBridge } from "../shared/fs-contract";
+import { FS_CHANNELS, type FsClipboard, type FsCoreBridge, type FsIndexBridge } from "../shared/fs-contract";
 import { SEARCH_CHANNELS, type SearchBridge } from "../shared/search-contract";
 import { SETTINGS_CHANNELS, type SettingsBridge } from "../shared/settings-contract";
+import { LIVE_CHANNELS } from "../shared/live-contract";
+import type { ChangeHub } from "./change-hub";
 import type { VersionFamilyService } from "./version-family-service";
 
 /** Extra work a channel runs after the filesystem operation itself succeeded. */
@@ -16,7 +18,11 @@ export interface FsIpcHooks {
 /** Register one ipcMain.handle per FS_CHANNELS channel, in contract order. */
 export function registerFsIpcHandlers(service: FsCoreBridge, hooks: FsIpcHooks = {}): void {
 	ipcMain.handle(FS_CHANNELS.listDir, (_event, path: string) => service.listDir(path));
+	ipcMain.handle(FS_CHANNELS.readEntries, (_event, dir: string, paths: readonly string[]) =>
+		service.readEntries(dir, paths),
+	);
 	ipcMain.handle(FS_CHANNELS.stat, (_event, path: string) => service.stat(path));
+	ipcMain.handle(FS_CHANNELS.exists, (_event, path: string) => service.exists(path));
 	ipcMain.handle(FS_CHANNELS.search, (_event, query: string) => service.search(query));
 	ipcMain.handle(FS_CHANNELS.locations, () => service.locations());
 	ipcMain.handle(FS_CHANNELS.copy, (_event, paths: readonly string[], destDir: string) => service.copy(paths, destDir));
@@ -50,6 +56,11 @@ export function registerFsIpcHandlers(service: FsCoreBridge, hooks: FsIpcHooks =
 export function registerVersionFamilyIpcHandlers(service: VersionFamilyService): void {
 	ipcMain.handle(FS_CHANNELS.versionFamilies, () => service.result());
 	ipcMain.handle(FS_CHANNELS.versionFamiliesRefresh, () => service.refresh());
+}
+
+export function registerIndexIpcHandlers(service: FsIndexBridge): void {
+	ipcMain.handle(FS_CHANNELS.indexStatus, (_event, paths: readonly string[]) => service.indexStatus(paths));
+	ipcMain.handle(FS_CHANNELS.indexSetExcluded, (_event, path: string, excluded: boolean) => service.setIndexExcluded(path, excluded));
 }
 
 export function registerSearchIpcHandlers(service: SearchBridge): void {
@@ -88,4 +99,24 @@ export function registerSettingsIpcHandlers(service: SettingsBridge): void {
 	);
 	ipcMain.handle(SETTINGS_CHANNELS.modelsResolve, () => service.modelsResolve());
 	ipcMain.handle(SETTINGS_CHANNELS.assistantSend, (_event, surface, text: string) => service.assistantSend(surface, text));
+}
+
+export function registerLiveIpcHandlers(
+	watch: { setWatchSet(dirs: readonly string[]): Promise<void> },
+	hub: ChangeHub,
+): void {
+	ipcMain.handle(LIVE_CHANNELS.setWatchSet, (_event, dirs: unknown) => {
+		if (!Array.isArray(dirs) || dirs.some((dir) => typeof dir !== "string")) {
+			const error = new TypeError("live:setWatchSet expects an array of strings");
+			console.error("[live] malformed watch set", error);
+			throw error;
+		}
+		return watch.setWatchSet(dirs);
+	});
+	ipcMain.handle(LIVE_CHANNELS.layers, () => {
+		if (process.env.AUTORAG_FS_WATCH_DIAG === "1") {
+			console.info("[live] layers requested");
+		}
+		return hub.resync();
+	});
 }

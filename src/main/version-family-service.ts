@@ -7,6 +7,11 @@
  * that reacts here: the snapshot is pruned in place (no scan, no CLI) so a
  * deleted duplicate leaves the UI immediately and stays gone across a scan
  * that was already reading the disk.
+ *
+ * A modification that lands after dupey read a file but before its post-scan
+ * probe keeps the old relation until the next scan unless a live event for it
+ * was seen (the fence covers watched folders only). Renames whose destination
+ * is outside every watched folder degrade to prune after 2000 ms.
  */
 
 import { scanWithDupey, type DupeyScanResult } from "@autorag/librarian";
@@ -20,7 +25,9 @@ import type {
 	FsVersionRelation,
 } from "../shared/fs-contract";
 import { RECENTS_PATH } from "../shared/fs-contract";
+import type { FsDirChange } from "../shared/live-contract";
 import { createDupeyProbe, DUPEY_INSTALL_COMMAND, type DupeyProbe } from "./dupey";
+import { DIRTY_STAMP, lstatProbe, remapRenames, sameContent, verifyFamilies, type FileStamp, type Probe } from "./version-family-verify";
 import type { StoredVersionFamilies, VersionFamilyStore } from "./version-family-store";
 
 export const DEFAULT_SCAN_INTERVAL_MINUTES = 60;
@@ -113,8 +120,10 @@ export interface VersionFamilyServiceDeps {
 	readonly dupey?: DupeyProbe;
 	/** Current interval in minutes, read from app Settings on every arm. */
 	readonly intervalMinutes: () => number;
-	/** Fired after every refresh so the renderer can adopt the new snapshot. */
-	readonly onUpdate?: (result: FsVersionFamiliesResult) => void;
+	/** Fired after a verified snapshot mutation for the ChangeHub integration. */
+	readonly onChanged?: () => void;
+	/** Filesystem metadata probe; defaults to bigint lstat without content reads. */
+	readonly probe?: Probe;
 	readonly now?: () => Date;
 	readonly setTimer?: (handler: () => void, ms: number) => unknown;
 	readonly clearTimer?: (handle: unknown) => void;
@@ -135,18 +144,29 @@ export interface VersionFamilyService {
 	 * never touches the dupey CLI: a deletion must land in the UI immediately.
 	 */
 	removePaths(paths: readonly string[]): Promise<FsVersionFamiliesResult>;
+	/** Re-verifies the published families against current filesystem metadata. */
+	reverify(): Promise<boolean>;
+	/** Applies ordered filesystem changes without running a dupey scan. */
+	applyDirChanges(dirs: readonly FsDirChange[]): Promise<boolean>;
 }
 
 export function createVersionFamilyService(deps: VersionFamilyServiceDeps): VersionFamilyService {
 	const scanDuplicates = deps.scanDuplicates ?? ((dir: string) => scanWithDupey(dir));
 	const dupey = deps.dupey ?? createDupeyProbe();
+	const probe = deps.probe ?? lstatProbe();
 	const now = deps.now ?? (() => new Date());
 	const setTimer = deps.setTimer ?? ((handler: () => void, ms: number) => setInterval(handler, ms));
 	const clearTimer = deps.clearTimer ?? ((handle: unknown) => clearInterval(handle as NodeJS.Timeout));
 
 	let snapshot: StoredVersionFamilies | null | undefined;
+	let published: FsVersionFamiliesResult | undefined;
 	let lastError: FsVersionFamilyError | null = null;
 	let timer: unknown = null;
+	let mutationSeq = 0;
+	const touchedAt = new Map<string, number>();
+	/** Paths deleted by a live event while their rename/recreate outcome is still unknown. */
+	const pendingRename = new Set<string>();
+	const pendingRenameTimers = new Map<string, unknown>();
 	/** Paths trashed since the last completed scan; a fresh scan must not resurrect them. */
 	const trashedPaths = new Set<string>();
 	/**
@@ -177,18 +197,194 @@ export function createVersionFamilyService(deps: VersionFamilyServiceDeps): Vers
 		};
 	}
 
+	function sameFamilies(a: readonly FsVersionFamily[], b: readonly FsVersionFamily[]): boolean {
+		return JSON.stringify(a) === JSON.stringify(b);
+	}
+
+	function sameError(a: FsVersionFamilyError | null, b: FsVersionFamilyError | null): boolean {
+		return JSON.stringify(a) === JSON.stringify(b);
+	}
+
+	function emit(result: FsVersionFamiliesResult): void {
+		published = result;
+	}
+
+	async function verifyStored(
+		stored: StoredVersionFamilies | null,
+		only?: ReadonlySet<string>,
+	): Promise<{ readonly result: FsVersionFamiliesResult; readonly vanished: readonly string[] }> {
+		if (stored === null) {
+			return { result: envelope(null), vanished: [] };
+		}
+		const verified = await verifyFamilies(stored.families, stored.stamps ?? {}, probe, only);
+		const families = verified.families.map((family) => ({
+			...family,
+			entries: family.entries.filter(
+				(entry) => entry.path === family.head || family.members.some((member) => member.path === entry.path),
+			),
+		}));
+		return { result: { ...envelope(stored), families }, vanished: verified.vanished };
+	}
+
+	async function publishVerified(
+		stored: StoredVersionFamilies | null,
+		only?: ReadonlySet<string>,
+	): Promise<boolean> {
+		const previous = published;
+		const verified = await verifyStored(stored, only);
+		let current = verified.result;
+		if (stored !== null && verified.vanished.length > 0) {
+			const vanished = new Set(verified.vanished.filter((path) => !pendingRename.has(path)));
+			if (vanished.size > 0) {
+				const pruned: StoredVersionFamilies = {
+					...stored,
+					families: pruneVersionFamilies(stored.families, vanished),
+					stamps: Object.fromEntries(
+						Object.entries(stored.stamps ?? {}).filter(([path]) => !vanished.has(path)),
+					),
+				};
+				await deps.store.write(pruned);
+				snapshot = pruned;
+				current = (await verifyStored(pruned, only)).result;
+			}
+		}
+		if (only !== undefined && previous !== undefined && stored !== null) {
+			const affected = affectedFamilyPaths(stored.families, only);
+			current = {
+				...current,
+				families: [
+					...previous.families.filter((family) => !familyPaths(family).some((path) => affected.has(path))),
+					...current.families.filter((family) => familyPaths(family).some((path) => affected.has(path))),
+				],
+			};
+		}
+		current = {
+			...current,
+			families: pruneVersionFamilies(current.families, new Set([...pendingRename, ...trashedPaths])),
+		};
+		const changed =
+			previous !== undefined &&
+			(previous.scannedAt !== current.scannedAt ||
+				!sameError(previous.error, current.error) ||
+				!sameFamilies(previous.families, current.families));
+		emit(current);
+		return changed;
+	}
+
+	function familyPaths(family: FsVersionFamily): readonly string[] {
+		return [family.head, ...family.members.map((member) => member.path)];
+	}
+
+	function affectedFamilyPaths(
+		families: readonly FsVersionFamily[],
+		paths: ReadonlySet<string>,
+	): Set<string> {
+		const affected = new Set<string>();
+		for (const family of families) {
+			if (familyPaths(family).some((path) => paths.has(path))) {
+				for (const path of familyPaths(family)) affected.add(path);
+			}
+		}
+		return affected;
+	}
+
+	async function rebuildRemappedEntries(
+		families: readonly FsVersionFamily[],
+		remapped: ReadonlyMap<string, string>,
+	): Promise<readonly FsVersionFamily[]> {
+		if (remapped.size === 0) return families;
+		return Promise.all(
+			families.map(async (family) => ({
+				...family,
+				entries: await Promise.all(
+					family.entries.map(async (entry) => {
+						if (![...remapped.values()].includes(entry.path)) return entry;
+						try {
+							return await deps.buildEntry(entry.path);
+						} catch (error) {
+							console.warn(
+								`dupey entry rebuild failed for ${entry.path}: ${
+									error instanceof Error ? error.message : String(error)
+								}`,
+							);
+							return entry;
+						}
+					}),
+				),
+			})),
+		);
+	}
+
+	function clearPendingRename(path: string): void {
+		const timerHandle = pendingRenameTimers.get(path);
+		if (timerHandle !== undefined) clearTimer(timerHandle);
+		pendingRenameTimers.delete(path);
+		pendingRename.delete(path);
+	}
+
+	function schedulePendingRename(path: string): void {
+		const timerHandle = setTimer(() => {
+			void serialize(async () => {
+				if (!pendingRename.has(path)) return;
+				clearPendingRename(path);
+				const stored = await load();
+				if (stored === null) return;
+				const current = await probe(path);
+				if (current !== null) {
+					// The path exists again (delete+recreate or an atomic save): never
+					// trash it. Mark it dirty only when the content actually changed, so
+					// the next scan re-includes an untouched path instead of hiding it.
+					const recorded = stored.stamps?.[path];
+					const changed = recorded !== undefined && !sameContent(current, recorded);
+					const nextStored: StoredVersionFamilies = changed
+						? { ...stored, stamps: { ...(stored.stamps ?? {}), [path]: DIRTY_STAMP } }
+						: stored;
+					if (changed) {
+						await deps.store.write(nextStored);
+						snapshot = nextStored;
+					}
+					touchedAt.set(path, ++mutationSeq);
+					await publishVerified(nextStored);
+					deps.onChanged?.();
+					return;
+				}
+				trashedPaths.add(path);
+				touchedAt.set(path, ++mutationSeq);
+				const pruned: StoredVersionFamilies = {
+					...stored,
+					families: pruneVersionFamilies(stored.families, new Set([path])),
+					stamps: Object.fromEntries(
+						Object.entries(stored.stamps ?? {}).filter(([candidate]) => candidate !== path),
+					),
+				};
+				await deps.store.write(pruned);
+				snapshot = pruned;
+				await publishVerified(pruned);
+				deps.onChanged?.();
+			});
+		}, 2000);
+		pendingRenameTimers.set(path, timerHandle);
+	}
+
 	async function result(): Promise<FsVersionFamiliesResult> {
-		return envelope(await load());
+		if (published !== undefined) return published;
+		return serialize(async () => {
+			if (published !== undefined) return published;
+			await publishVerified(await load());
+			return published ?? envelope(null);
+		});
 	}
 
 	async function scanLocations(): Promise<{
 		readonly families: readonly FsVersionFamily[];
 		readonly locations: readonly string[];
 		readonly errors: readonly string[];
+		readonly stamps: Record<string, FileStamp>;
 	}> {
 		const families: FsVersionFamily[] = [];
 		const locations: string[] = [];
 		const errors: string[] = [];
+		const stamps: Record<string, FileStamp> = {};
 		for (const location of await deps.locations()) {
 			// The virtual Recents location is a listing of recorded paths, not a
 			// directory dupey could scan.
@@ -216,7 +412,14 @@ export function createVersionFamilyService(deps: VersionFamilyServiceDeps): Vers
 						entries.some((entry) => entry.path === member.path),
 					);
 					if (members.length === 0) continue;
-					families.push({ head: mapped.head, members, entries });
+					const family = { head: mapped.head, members, entries };
+					const paths = [family.head, ...family.members.map((member) => member.path)];
+					const currentStamps = await Promise.all(paths.map(async (path) => [path, await probe(path)] as const));
+					if (currentStamps.some(([, stamp]) => stamp === null)) continue;
+					for (const [path, stamp] of currentStamps) {
+						if (stamp !== null) stamps[path] = stamp;
+					}
+					families.push(family);
 				}
 			} catch (error) {
 				const message = `dupey scan failed for ${location.path}: ${
@@ -226,42 +429,89 @@ export function createVersionFamilyService(deps: VersionFamilyServiceDeps): Vers
 				errors.push(message);
 			}
 		}
-		return { families, locations, errors };
+		return { families, locations, errors, stamps };
 	}
 
 	async function refresh(): Promise<FsVersionFamiliesResult> {
 		const status = await dupey.status();
 		if (!status.available) {
-			lastError = {
-				code: "dupey-missing",
-				message: `dupey CLI is required for version stacks: ${status.error ?? "not found on PATH"}`,
-				installCommand: DUPEY_INSTALL_COMMAND,
-			};
-			const current = envelope(await load());
-			deps.onUpdate?.(current);
-			return current;
+			return serialize(async () => {
+				const previous = published;
+				lastError = {
+					code: "dupey-missing",
+					message: `dupey CLI is required for version stacks: ${status.error ?? "not found on PATH"}`,
+					installCommand: DUPEY_INSTALL_COMMAND,
+				};
+				const changed = (await publishVerified(await load())) || previous === undefined;
+				if (changed) deps.onChanged?.();
+				return published ?? envelope(null);
+			});
 		}
 		// A scan reads the disk over seconds; a trash that landed meanwhile must
 		// win, or the deleted duplicate comes back until the next interval.
-		const { families: scanned, locations, errors } = await scanLocations();
+		const startedAtSeq = mutationSeq;
+		const { families: scanned, locations, errors, stamps: scannedStamps } = await scanLocations();
+		const scanError =
+			errors.length === 0 ? null : { code: "scan-failed" as const, message: errors.join("\n"), installCommand: null };
 		if (scanned.length > 0 || errors.length === 0) {
 			await serialize(async () => {
+				lastError = scanError;
 				const honored = new Set(trashedPaths);
+				const fencedPaths = new Set(
+					scanned.flatMap((family) =>
+						familyPaths(family).filter((path) => (touchedAt.get(path) ?? -1) > startedAtSeq),
+					),
+				);
+				for (const path of fencedPaths) scannedStamps[path] = DIRTY_STAMP;
 				const stored: StoredVersionFamilies = {
 					version: 1,
 					scannedAt: now().toISOString(),
 					locations,
 					families: pruneVersionFamilies(scanned, honored),
+					stamps: scannedStamps,
 				};
-				await deps.store.write(stored);
-				snapshot = stored;
-				for (const path of honored) trashedPaths.delete(path);
+				const verified = await verifyStored(stored);
+				const persisted: StoredVersionFamilies = {
+					...stored,
+					families: pruneVersionFamilies(stored.families, new Set(verified.vanished)),
+					stamps: Object.fromEntries(
+						Object.entries(stored.stamps ?? {}).filter(([path]) => !verified.vanished.includes(path)),
+					),
+				};
+				await deps.store.write(persisted);
+				snapshot = persisted;
+				emit(
+					{ ...verified.result, families: pruneVersionFamilies(verified.result.families, honored) },
+				);
+				deps.onChanged?.();
+				for (const path of honored) {
+					if ((touchedAt.get(path) ?? -1) <= startedAtSeq) {
+						trashedPaths.delete(path);
+					}
+				}
+				for (const [path, sequence] of touchedAt) {
+					if (sequence <= startedAtSeq) touchedAt.delete(path);
+				}
 			});
 		}
-		lastError =
-			errors.length === 0 ? null : { code: "scan-failed", message: errors.join("\n"), installCommand: null };
-		const current = envelope(await load());
-		deps.onUpdate?.(current);
+		if (scanned.length === 0 && scanError !== null) {
+			return serialize(async () => {
+				lastError = scanError;
+				const previous = published;
+				const currentBase =
+					previous ?? (await verifyStored(await load())).result;
+				const current: FsVersionFamiliesResult = { ...currentBase, error: scanError };
+				const changed =
+					previous === undefined ||
+					previous.scannedAt !== current.scannedAt ||
+					!sameError(previous.error, current.error) ||
+					!sameFamilies(previous.families, current.families);
+				published = current;
+				if (changed) deps.onChanged?.();
+				return current;
+			});
+		}
+		const current = await result();
 		return current;
 	}
 
@@ -277,27 +527,137 @@ export function createVersionFamilyService(deps: VersionFamilyServiceDeps): Vers
 	}
 
 	async function removePaths(paths: readonly string[]): Promise<FsVersionFamiliesResult> {
-		if (paths.length === 0) return envelope(await load());
-		for (const path of paths) trashedPaths.add(path);
+		const sequence = ++mutationSeq;
+		if (paths.length === 0) return result();
+		for (const path of paths) {
+			trashedPaths.add(path);
+			touchedAt.set(path, sequence);
+		}
 		return serialize(async () => {
 			const stored = await load();
 			if (stored === null) return envelope(stored);
+			if (published === undefined) published = (await verifyStored(stored)).result;
 			const removed = new Set(paths);
 			const touched = stored.families.some(
 				(family) => removed.has(family.head) || family.members.some((member) => removed.has(member.path)),
 			);
-			if (!touched) return envelope(stored);
+			if (!touched) return published ?? envelope(stored);
 			// scannedAt still names the scan these families came from; the prune only
 			// subtracts paths the user sent to the Trash.
 			const pruned: StoredVersionFamilies = {
 				...stored,
 				families: pruneVersionFamilies(stored.families, removed),
+				stamps: Object.fromEntries(
+					Object.entries(stored.stamps ?? {}).filter(([path]) => !removed.has(path)),
+				),
 			};
 			await deps.store.write(pruned);
 			snapshot = pruned;
-			const current = envelope(pruned);
-			deps.onUpdate?.(current);
+			const current: FsVersionFamiliesResult = {
+				...envelope(pruned),
+				families: pruneVersionFamilies(published?.families ?? [], removed),
+			};
+			emit(current);
+			deps.onChanged?.();
 			return current;
+		});
+	}
+
+	async function reverify(): Promise<boolean> {
+		return serialize(async () => {
+			const stored = await load();
+			if (stored === null) {
+				const changed = published !== undefined && published.families.length > 0;
+				emit(envelope(null));
+				return changed;
+			}
+			const only = new Set(
+				stored.families.flatMap((family) => familyPaths(family).filter((path) => !pendingRename.has(path))),
+			);
+			return publishVerified(stored, only);
+		});
+	}
+
+	async function applyDirChanges(dirs: readonly FsDirChange[]): Promise<boolean> {
+		const sequence = ++mutationSeq;
+		const changes = dirs.flatMap((dir) => dir.changes);
+		for (const change of changes) touchedAt.set(change.path, sequence);
+		return serialize(async () => {
+			const stored = await load();
+			if (stored === null) return false;
+			if (published === undefined) published = (await verifyStored(stored)).result;
+
+			const deleted = changes.filter((change) => change.type === "delete").map((change) => change.path);
+			const created = changes.filter((change) => change.type === "create").map((change) => change.path);
+			const updates = new Set(
+				changes.filter((change) => change.type === "update").map((change) => change.path),
+			);
+			const claimed = new Set(stored.families.flatMap((family) => familyPaths(family)));
+			let deletedPublished = false;
+			for (const path of deleted) {
+				if (!claimed.has(path) || pendingRename.has(path)) continue;
+				pendingRename.add(path);
+				schedulePendingRename(path);
+				const next = pruneVersionFamilies(published?.families ?? [], new Set([path]));
+				deletedPublished = deletedPublished || !sameFamilies(published?.families ?? [], next);
+				emit({ ...(published ?? envelope(stored)), families: next });
+			}
+
+			// A create on a path the snapshot already claims is a delete+recreate or
+			// an atomic rename-over save: verify and detach it like an update. Clearing
+			// its pending delete keeps the recreated path out of the trash set, so the
+			// next scan re-includes it.
+			const recreated = new Set<string>();
+			for (const path of created) {
+				if (!claimed.has(path) && !pendingRename.has(path)) continue;
+				clearPendingRename(path);
+				updates.add(path);
+				recreated.add(path);
+			}
+
+			const candidates = created.filter((path) => !recreated.has(path));
+			if (candidates.length > 0 && pendingRename.size > 0) {
+				const remapped = await remapRenames(
+					stored.families,
+					stored.stamps ?? {},
+					[...pendingRename],
+					candidates,
+					probe,
+				);
+				if (remapped.remapped.size > 0) {
+					for (const [oldPath, newPath] of remapped.remapped) {
+						clearPendingRename(oldPath);
+						updates.add(newPath);
+					}
+					const nextStored: StoredVersionFamilies = {
+						...stored,
+						families: await rebuildRemappedEntries(remapped.families, remapped.remapped),
+						stamps: remapped.stamps,
+					};
+					await deps.store.write(nextStored);
+					snapshot = nextStored;
+					const only = affectedFamilyPaths(nextStored.families, new Set([...updates, ...deleted]));
+					return publishVerified(nextStored, only);
+				}
+			}
+
+			if (dirs.some((dir) => dir.dirGone || dir.overflow)) {
+				const only = new Set(
+					stored.families.flatMap((family) =>
+						familyPaths(family).filter((path) => !pendingRename.has(path)),
+					),
+				);
+				return publishVerified(stored, only);
+			}
+			// Updates detach a member only when its probed stamp proves the content
+			// changed; a metadata-only touch (chmod/xattr) leaves the family intact.
+			const affected = affectedFamilyPaths(stored.families, new Set([...updates, ...deleted]));
+			for (const path of pendingRename) affected.delete(path);
+			if (affected.size === 0) return deletedPublished;
+			const changed = await publishVerified(stored, affected);
+			// A delete already pruned and published the stack; the hub must send it now
+			// rather than waiting out the rename window.
+			return deletedPublished || changed;
 		});
 	}
 
@@ -305,8 +665,11 @@ export function createVersionFamilyService(deps: VersionFamilyServiceDeps): Vers
 		result,
 		refresh,
 		removePaths,
+		reverify,
+		applyDirChanges,
 		async start(): Promise<FsVersionFamiliesResult> {
 			arm();
+			for (const path of pendingRename) schedulePendingRename(path);
 			return refresh();
 		},
 		stop(): void {
@@ -314,6 +677,8 @@ export function createVersionFamilyService(deps: VersionFamilyServiceDeps): Vers
 				clearTimer(timer);
 				timer = null;
 			}
+			for (const handle of pendingRenameTimers.values()) clearTimer(handle);
+			pendingRenameTimers.clear();
 		},
 		reschedule: arm,
 	};

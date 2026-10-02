@@ -1,11 +1,14 @@
 import type { IpcRenderer } from "electron";
-import { FS_CHANNELS, type FsBridge, type FsVersionFamiliesResult } from "../shared/fs-contract";
+import type { IndexStatus } from "../shared/index-contract";
+import { FS_CHANNELS, type FsBridge } from "../shared/fs-contract";
 
 /** Typed window.autorag.fs wrappers over ipcRenderer.invoke on the contract channels. */
 export function createFsBridge(ipcRenderer: IpcRenderer): FsBridge {
 	return {
 		listDir: (path) => ipcRenderer.invoke(FS_CHANNELS.listDir, path),
+		readEntries: (dir, paths) => ipcRenderer.invoke(FS_CHANNELS.readEntries, dir, paths),
 		stat: (path) => ipcRenderer.invoke(FS_CHANNELS.stat, path),
+		exists: (path) => ipcRenderer.invoke(FS_CHANNELS.exists, path),
 		search: (query) => ipcRenderer.invoke(FS_CHANNELS.search, query),
 		locations: () => ipcRenderer.invoke(FS_CHANNELS.locations),
 		copy: (paths, destDir) => ipcRenderer.invoke(FS_CHANNELS.copy, paths, destDir),
@@ -20,13 +23,15 @@ export function createFsBridge(ipcRenderer: IpcRenderer): FsBridge {
 		clipboardGet: () => ipcRenderer.invoke(FS_CHANNELS.clipboardGet),
 		copyPathsToClipboard: (paths) => ipcRenderer.invoke(FS_CHANNELS.copyPathsToClipboard, paths),
 		versionFamilies: () => ipcRenderer.invoke(FS_CHANNELS.versionFamilies),
-		refreshVersionFamilies: () => ipcRenderer.invoke(FS_CHANNELS.versionFamiliesRefresh),
-		onVersionFamiliesUpdated: (listener) => {
-			const handler = (_event: unknown, result: FsVersionFamiliesResult): void => listener(result);
-			ipcRenderer.on(FS_CHANNELS.versionFamiliesUpdated, handler);
+		indexStatus: (paths) => ipcRenderer.invoke(FS_CHANNELS.indexStatus, paths) as Promise<readonly IndexStatus[]>,
+		setIndexExcluded: (path, excluded) => ipcRenderer.invoke(FS_CHANNELS.indexSetExcluded, path, excluded) as Promise<IndexStatus>,
+		onIndexRefreshed: (listener) => {
+			const handler = (_event: unknown, error: string | null): void => listener(error);
+			ipcRenderer.on(FS_CHANNELS.indexRefreshed, handler);
 			return () => {
-				ipcRenderer.removeListener(FS_CHANNELS.versionFamiliesUpdated, handler);
+				ipcRenderer.removeListener(FS_CHANNELS.indexRefreshed, handler);
 			};
 		},
+		refreshVersionFamilies: () => ipcRenderer.invoke(FS_CHANNELS.versionFamiliesRefresh),
 	};
 }

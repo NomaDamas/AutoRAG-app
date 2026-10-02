@@ -7,13 +7,20 @@
  * preload lands. Components never touch `window` directly.
  */
 
-import { RECENTS_PATH, type FsBridge, type FsClipboard } from "../../../shared/fs-contract";
+import { RECENTS_PATH, type FsBridge, type FsClipboard, type FsVersionFamiliesResult } from "../../../shared/fs-contract";
+import type { IndexStatus } from "../../../shared/index-contract";
+import {
+	DUPEY_LAYER_ID,
+	type LayerPublication,
+	type LiveBridge,
+	type LiveMessage,
+	type LiveResync,
+} from "../../../shared/live-contract";
 import { copyName } from "../state/collision";
 import { basename, dirname, joinPath } from "../state/paths";
 import {
 	EMPTY_VERSION_FAMILIES_RESULT,
 	type VersionFamiliesResult,
-	type VersionFamilyData,
 	type VersionRelation,
 } from "../state/version-family";
 import { type FinderEntry, entryFromFixture, entryFromFs, entryFromSearchHit } from "./entries";
@@ -35,7 +42,21 @@ export interface FinderSource {
 	/** True when the native OS surfaces (Reveal, Open) are real. */
 	readonly native: boolean;
 	readonly initialPath: string;
+	setWatchSet(dirs: readonly string[]): Promise<void>;
+	onLive(listener: (message: LiveMessage) => void): () => void;
+	liveLayers(): Promise<LiveResync>;
+	exists(path: string): Promise<boolean>;
 	list(path: string): Promise<readonly FinderEntry[]>;
+	/**
+	 * Incremental refresh after a live change: resolve only the given direct
+	 * children of `dir`, mapping the ones that exist as rows and naming the
+	 * rest as removed. On an ordinary event the renderer asks `readEntries`
+	 * for exactly the changed paths instead of relisting the whole directory.
+	 */
+	readEntries(
+		dir: string,
+		paths: readonly string[],
+	): Promise<{ readonly entries: readonly FinderEntry[]; readonly removed: readonly string[] }>;
 	search(query: string): Promise<readonly FinderEntry[]>;
 	locations(): Promise<readonly FinderLocation[]>;
 	quickLook(path: string): Promise<void>;
@@ -54,20 +75,67 @@ export interface FinderSource {
 	versionFamilies(): Promise<VersionFamiliesResult>;
 	/** Forces a dupey scan now and returns the fresh snapshot. */
 	refreshVersionFamilies(): Promise<VersionFamiliesResult>;
-	/** Adopts snapshots from the startup scan and the repeating interval. */
-	onVersionFamiliesUpdated(listener: (result: VersionFamiliesResult) => void): () => void;
+	/** Real AutoRAG local-index state and config-backed exclusion toggle. */
+	indexStatus(paths: readonly string[]): Promise<readonly IndexStatus[]>;
+	setIndexExcluded(path: string, excluded: boolean): Promise<IndexStatus>;
+	/** Fires when the background refresh a toggle started has settled. */
+	onIndexRefreshed(listener: (error: string | null) => void): () => void;
+}
+
+export async function isMissingPathFailure(
+	source: Pick<FinderSource, "exists">,
+	path: string,
+): Promise<boolean> {
+	return !(await source.exists(path));
 }
 
 /* -------------------------------------------------------------- real bridge */
 
-export function createBridgeSource(fs: FsBridge, initialPath: string): FinderSource {
+export function createBridgeSource(fs: FsBridge, initialPath: string, live?: LiveBridge): FinderSource {
+	const mapVersionFamiliesResult = (result: FsVersionFamiliesResult): VersionFamiliesResult => ({
+		families: result.families.map((family) => ({
+			head: family.head,
+			members: family.members,
+			entriesByPath: Object.fromEntries(
+				family.entries.map((entry) => [entry.path, entryFromFs(entry)]),
+			),
+		})),
+		scannedAt: result.scannedAt,
+		error: result.error,
+	});
+	const mapLayerPublication = (publication: LayerPublication): LayerPublication => ({
+		...publication,
+		data: publication.layer === DUPEY_LAYER_ID
+			? mapVersionFamiliesResult(publication.data as FsVersionFamiliesResult)
+			: publication.data,
+	});
 	return {
 		native: true,
 		initialPath,
+		setWatchSet: (dirs) => live?.setWatchSet(dirs) ?? Promise.resolve(),
+		onLive: (listener) => {
+			return live?.onMessage((message) => listener({
+				...message,
+				layers: message.layers.map(mapLayerPublication),
+			})) ?? (() => {});
+		},
+		async liveLayers() {
+			if (live === undefined) {
+				return { seq: 0, layers: [], reconciled: [] };
+			}
+			const result = await live.layers();
+			return { ...result, layers: result.layers.map(mapLayerPublication) };
+		},
+		exists: (path) => fs.exists(path),
 		async list(path) {
 			const listing = await fs.listDir(path);
 			// Recents is virtual: a row's location is the real folder that holds the file.
 			return listing.entries.map((entry) => entryFromFs(entry, path === RECENTS_PATH ? undefined : path));
+		},
+		async readEntries(dir, paths) {
+			const patch = await fs.readEntries(dir, paths);
+			// Rows belong to the requested dir, not the child's own parent lookup.
+			return { entries: patch.entries.map((entry) => entryFromFs(entry, dir)), removed: patch.removed };
 		},
 		async search(query) {
 			const hits = await fs.search(query);
@@ -104,44 +172,14 @@ export function createBridgeSource(fs: FsBridge, initialPath: string): FinderSou
 		clipboardSet: (clipboard) => fs.clipboardSet(clipboard),
 		clipboardGet: () => fs.clipboardGet(),
 		versionFamilies: async () => {
-			const result = await fs.versionFamilies();
-			return {
-				families: result.families.map((family) => ({
-					head: family.head,
-					members: family.members,
-					entriesByPath: Object.fromEntries(
-						family.entries.map((entry) => [entry.path, entryFromFs(entry)]),
-					),
-				})),
-				scannedAt: result.scannedAt,
-				error: result.error,
-			};
+			return mapVersionFamiliesResult(await fs.versionFamilies());
 		},
 		async refreshVersionFamilies() {
-			const result = await fs.refreshVersionFamilies();
-			return {
-				families: result.families.map((family) => ({
-					head: family.head,
-					members: family.members,
-					entriesByPath: Object.fromEntries(
-						family.entries.map((entry) => [entry.path, entryFromFs(entry)]),
-					),
-				})),
-				scannedAt: result.scannedAt,
-				error: result.error,
-			};
+			return mapVersionFamiliesResult(await fs.refreshVersionFamilies());
 		},
-		onVersionFamiliesUpdated: (listener) => fs.onVersionFamiliesUpdated?.((result) => listener({
-			families: result.families.map((family) => ({
-				head: family.head,
-				members: family.members,
-				entriesByPath: Object.fromEntries(
-					family.entries.map((entry) => [entry.path, entryFromFs(entry)]),
-				),
-			})),
-			scannedAt: result.scannedAt,
-			error: result.error,
-		})) ?? (() => {}),
+		indexStatus: (paths) => fs.indexStatus(paths),
+		setIndexExcluded: (path, excluded) => fs.setIndexExcluded(path, excluded),
+		onIndexRefreshed: (listener) => fs.onIndexRefreshed?.(listener) ?? (() => {}),
 	};
 }
 
@@ -150,6 +188,8 @@ export function createBridgeSource(fs: FsBridge, initialPath: string): FinderSou
 interface FixtureState {
 	tree: Map<string, FixtureItem[]>;
 	clipboard: FsClipboard | null;
+	/** Paths the fixture treats as excluded from indexing. */
+	indexExcluded: Set<string>;
 }
 
 function seedFixtureState(): FixtureState {
@@ -157,7 +197,7 @@ function seedFixtureState(): FixtureState {
 	for (const [path, items] of Object.entries(FIXTURE_TREE)) {
 		tree.set(path, [...items]);
 	}
-	return { tree, clipboard: null };
+	return { tree, clipboard: null, indexExcluded: new Set() };
 }
 
 function takenNames(state: FixtureState, dir: string): string[] {
@@ -196,12 +236,36 @@ function findItem(state: FixtureState, path: string): FixtureItem | null {
 export function createFixtureSource(): FinderSource {
 	const state = seedFixtureState();
 	const resolve = (): Promise<void> => Promise.resolve();
+	const fixtureIndexStatus = (path: string): IndexStatus =>
+		state.indexExcluded.has(path)
+			? { path, kind: "excluded", excluded: true, toggleable: true, detail: "인덱싱에서 제외됨" }
+			: { path, kind: "included", excluded: false, toggleable: true, detail: "MinSync 인덱스에 포함됨" };
 
 	return {
 		native: false,
 		initialPath: FIXTURE_INITIAL_PATH,
+		setWatchSet: resolve,
+		onLive: () => () => {},
+		liveLayers: () => Promise.resolve({ seq: 0, layers: [], reconciled: [] }),
+		exists: (path) => Promise.resolve(state.tree.has(path) || findItem(state, path) !== null),
 		list: (path) =>
 			Promise.resolve((state.tree.get(path) ?? []).map((item) => entryFromFixture(item, path))),
+		readEntries: async (dir, paths) => {
+			const entries: FinderEntry[] = [];
+			const removed: string[] = [];
+			for (const path of new Set(paths)) {
+				if (dirname(path) !== dir) {
+					throw new Error(`Invalid path "${path}": expected a direct child of "${dir}"`);
+				}
+				const item = findItem(state, path);
+				if (item === null) {
+					removed.push(path);
+				} else {
+					entries.push(entryFromFixture(item, dir));
+				}
+			}
+			return { entries, removed };
+		},
 		search: (query) => {
 			const needle = query.trim().toLowerCase();
 			if (needle === "") {
@@ -311,7 +375,13 @@ export function createFixtureSource(): FinderSource {
 				error: null,
 			}),
 		refreshVersionFamilies: () => Promise.resolve(EMPTY_VERSION_FAMILIES_RESULT),
-		onVersionFamiliesUpdated: () => () => {},
+		indexStatus: (paths) => Promise.resolve(paths.map(fixtureIndexStatus)),
+		setIndexExcluded: (path, excluded) => {
+			if (excluded) state.indexExcluded.add(path);
+			else state.indexExcluded.delete(path);
+			return Promise.resolve(fixtureIndexStatus(path));
+		},
+		onIndexRefreshed: () => () => {},
 	};
 }
 

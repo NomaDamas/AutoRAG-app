@@ -223,7 +223,7 @@ export function App(): ReactElement {
 								flashPath={finder.flashPath}
 								renamePath={finder.renamePath}
 								renameDraft={finder.renameDraft}
-								indexOverrides={finder.indexOverrides}
+								indexStatus={finder.indexStatus}
 								callbacks={rowCallbacks}
 							/>
 						</>
