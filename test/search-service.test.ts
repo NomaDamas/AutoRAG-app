@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createChatStore, type ChatStore } from "../src/main/chat-store";
-import { createSearchService } from "../src/main/search-service";
+import { createSearchService, type LiveAgentEvent } from "../src/main/search-service";
 import { SEARCH_CHANNELS, type ChatRecord, type SearchStreamEvent } from "../src/shared/search-contract";
 
 interface TestResponse {
@@ -28,7 +28,6 @@ interface TestResponse {
 
 type TestStreamEvent =
 	| { readonly type: "progress"; readonly sessionId: string; readonly query: string; readonly text: string }
-	| { readonly type: "answer_delta"; readonly phase: "preliminary" | "final"; readonly sessionId: string; readonly query: string; readonly text: string }
 	| { readonly type: "preliminary"; readonly response: TestResponse }
 	| { readonly type: "complete"; readonly response: TestResponse };
 
@@ -73,11 +72,22 @@ function createResponse(sessionId: string, answer: string, searched: number): Te
 	};
 }
 
-function createFakeAgent(stream: () => AsyncGenerator<TestStreamEvent, void, void>) {
+function createFakeAgent(stream: (live: (event: LiveAgentEvent) => void) => AsyncGenerator<TestStreamEvent, void, void>) {
 	const feedbackCalls: { sessionId: string; useful: readonly number[]; notUseful: readonly number[] }[] = [];
+	const listeners = new Set<(event: LiveAgentEvent) => void>();
+	const live = (event: LiveAgentEvent): void => {
+		for (const listener of listeners) listener(event);
+	};
 	return {
 		feedbackCalls,
-		searchDocumentsStream: vi.fn(stream),
+		listeners,
+		searchDocumentsStream: vi.fn(() => stream(live)),
+		subscribe: (listener: (event: LiveAgentEvent) => void) => {
+			listeners.add(listener);
+			return () => {
+				listeners.delete(listener);
+			};
+		},
 		recordFeedbackByNumbers: vi.fn(
 			(sessionId: string, useful: readonly number[], notUseful: readonly number[] = []) => {
 				feedbackCalls.push({ sessionId, useful, notUseful });
@@ -138,11 +148,31 @@ describe("createSearchService", () => {
 		]);
 	});
 
-	it("forwards answer deltas as quick-delta and deep-delta events", async () => {
-		const agent = createFakeAgent(async function*() {
-			yield { type: "answer_delta", phase: "preliminary", sessionId: "session-1", query: "refund approval", text: "Quick " };
-			yield { type: "answer_delta", phase: "preliminary", sessionId: "session-1", query: "refund approval", text: "answer" };
-			yield { type: "answer_delta", phase: "final", sessionId: "session-1", query: "refund approval", text: "Deep answer" };
+	it("streams thinking and the emit tool-call answers as live draft events", async () => {
+		const update = (assistantMessageEvent: NonNullable<LiveAgentEvent["assistantMessageEvent"]>): LiveAgentEvent => ({
+			type: "message_update",
+			assistantMessageEvent,
+		});
+		const toolDelta = (name: string, answer: string): LiveAgentEvent =>
+			update({
+				type: "toolcall_delta",
+				delta: "…",
+				contentIndex: 1,
+				partial: { content: [{ type: "thinking" }, { type: "toolCall", name, arguments: { answer } }] },
+			});
+		const agent = createFakeAgent(async function*(live) {
+			live({ type: "agent_start" });
+			live(update({ type: "thinking_delta", delta: "Check the " }));
+			live(update({ type: "thinking_delta", delta: "policy." }));
+			live(toolDelta("emit_fast_answer", "Quick"));
+			live(toolDelta("emit_fast_answer", "Quick answer"));
+			live({ type: "tool_execution_end", toolName: "emit_fast_answer" });
+			yield { type: "preliminary", response: createResponse("session-1", "Quick answer", 1) };
+			live({ type: "agent_start" });
+			live(update({ type: "thinking_delta", delta: "Verify." }));
+			live(update({ type: "text_delta", delta: "Plan note." }));
+			live(toolDelta("emit_autorag_results", "Deep"));
+			live(toolDelta("emit_autorag_results", "Deep answer"));
 			yield { type: "complete", response: createResponse("session-1", "Deep answer", 1) };
 		});
 		const { events, send } = collectEvents();
@@ -153,13 +183,57 @@ describe("createSearchService", () => {
 			now,
 		});
 
-		await service.start("search-delta", "chat-delta", "refund approval", []);
+		await service.start("search-live", "chat-live", "refund approval", []);
 
 		expect(events).toEqual([
-			{ type: "quick-delta", searchId: "search-delta", text: "Quick " },
-			{ type: "quick-delta", searchId: "search-delta", text: "answer" },
-			{ type: "deep-delta", searchId: "search-delta", text: "Deep answer" },
-			{ type: "deep", searchId: "search-delta", sessionId: "session-1", phase: expect.anything() },
+			{ type: "thinking-delta", searchId: "search-live", phase: "quick", text: "Check the " },
+			{ type: "thinking-delta", searchId: "search-live", phase: "quick", text: "policy." },
+			{ type: "quick-draft", searchId: "search-live", text: "Quick" },
+			{ type: "quick-draft", searchId: "search-live", text: "Quick answer" },
+			{ type: "quick", searchId: "search-live", sessionId: "session-1", phase: expect.anything() },
+			{ type: "thinking-delta", searchId: "search-live", phase: "deep", text: "Verify." },
+			{ type: "deep-draft", searchId: "search-live", text: "Deep" },
+			{ type: "deep-draft", searchId: "search-live", text: "Deep answer" },
+			{ type: "deep", searchId: "search-live", sessionId: "session-1", phase: expect.anything() },
+			{ type: "done", searchId: "search-live" },
+		]);
+		expect(agent.listeners.size).toBe(0);
+	});
+
+	it("streams a plain-text fast phase as the Quick draft", async () => {
+		const agent = createFakeAgent(async function*(live) {
+			live({ type: "agent_start" });
+			live({ type: "message_update", assistantMessageEvent: { type: "text_delta", delta: "Director " } });
+			live({ type: "message_update", assistantMessageEvent: { type: "text_delta", delta: "approval." } });
+			yield { type: "preliminary", response: createResponse("session-text", "Director approval.", 1) };
+		});
+		const { events, send } = collectEvents();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send, now });
+
+		await service.start("search-text", "chat-text", "refund approval", []);
+
+		expect(events.filter((event) => event.type === "quick-draft")).toEqual([
+			{ type: "quick-draft", searchId: "search-text", text: "Director " },
+			{ type: "quick-draft", searchId: "search-text", text: "Director approval." },
+		]);
+	});
+
+	it("reports an agent construction failure as an error and ends the run", async () => {
+		const { events, send } = collectEvents();
+		const service = createSearchService({
+			agentFactory: () => {
+				throw new Error("AutoRAG search root does not exist: /gone");
+			},
+			chatStore: await createStore(),
+			send,
+			now,
+		});
+
+		await service.start("search-bad", "chat-bad", "refund approval", []);
+
+		expect(events).toEqual([
+			{ type: "error", searchId: "search-bad", message: "Error: AutoRAG search root does not exist: /gone" },
+			{ type: "done", searchId: "search-bad" },
 		]);
 	});
 
@@ -241,7 +315,10 @@ describe("createSearchService", () => {
 
 		await service.start("search-4", "chat-4", "refund approval", []);
 
-		expect(events).toContainEqual({ type: "error", searchId: "search-4", message: "Error: provider exploded" });
+		expect(events.slice(-2)).toEqual([
+			{ type: "error", searchId: "search-4", message: "Error: provider exploded" },
+			{ type: "done", searchId: "search-4" },
+		]);
 	});
 
 	it("delegates numbered feedback without changing the arrays", async () => {

@@ -32,7 +32,7 @@ export interface SearchHits {
 }
 
 export interface FinderSource {
-	/** True when the native OS surfaces (Quick Look, Reveal) are real. */
+	/** True when the native OS surfaces (Reveal, Open) are real. */
 	readonly native: boolean;
 	readonly initialPath: string;
 	setWatchSet(dirs: readonly string[]): Promise<void>;
@@ -332,7 +332,7 @@ export function createFixtureSource(): FinderSource {
 /* ------------------------------------------------------------- port picking */
 
 /** Favorites order used to choose the tab the real app opens on. */
-const PREFERRED_START = ["Documents", "Desktop", "Downloads"];
+const PREFERRED_START = ["QA", "Documents", "Desktop", "Downloads"];
 
 export function pickInitialPath(locations: readonly FinderLocation[]): string | null {
 	for (const name of PREFERRED_START) {

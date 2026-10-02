@@ -1,16 +1,18 @@
-import { existsSync, readFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { isAbsolute, join, resolve } from "node:path";
+import { existsSync } from "node:fs";
+import { isAbsolute, join } from "node:path";
 import { app, BrowserWindow, clipboard, shell } from "electron";
-import { BUILTIN_DATASOURCE_SKILL_NAMES, writeConfigObject, writeDefaultConfig } from "@autorag/librarian";
-import type { DataSourceRow } from "../shared/settings-contract";
+import { attachQuickLook, registerPreviewProtocol, registerPreviewSchemes, registerQuickLookIpc } from "../preview/node/register";
+import { writeDefaultConfig } from "@autorag/librarian";
+import { resolveConfigPath } from "@autorag/librarian/core";
 import { DUPEY_LAYER_ID, LIVE_CHANNELS } from "../shared/live-contract";
 import { APP_NAME, APP_VERSION, formatWindowTitle, type DevLabel } from "../shared/app-info";
 import { createChatStore } from "./chat-store";
+import { createDataSourceStatusService } from "./datasource-status";
 import { readDevLabel, resolveClonePath } from "./dev-label";
 import { buildFsEntry } from "./fs-entry";
 import { createFsService } from "./fs-service";
 import { createRecentsStore } from "./recents-store";
+import { createModelStatusService } from "./model-status";
 import { createDefaultAgentFactory, createSearchService } from "./search-service";
 import { createSettingsService } from "./settings-service";
 import {
@@ -27,20 +29,9 @@ import { createParcelWatchBackend } from "./watch-backend";
 import { createVersionFamilyService, DEFAULT_SCAN_INTERVAL_MINUTES, type VersionFamilyService } from "./version-family-service";
 import { createFileVersionFamilyStore } from "./version-family-store";
 
+/** The one AutoRAG config every surface (CLI, TUI, serve, this app) resolves. */
 function autoragConfigPath(): string {
-	const explicit = process.env.AUTORAG_CONFIG?.trim();
-	if (explicit) return explicit;
-	const home = process.env.AUTORAG_HOME?.trim();
-	const autoragHome = home ? resolve(home) : join(process.env.HOME && isAbsolute(process.env.HOME) ? process.env.HOME : homedir(), ".autorag");
-	return join(autoragHome, "config.json");
-}
-
-function readConfigObject(path: string): Record<string, unknown> {
-	const parsed: unknown = JSON.parse(readFileSync(path, "utf8"));
-	if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
-		throw new Error("AutoRAG config must be a JSON object");
-	}
-	return parsed as Record<string, unknown>;
+	return resolveConfigPath({ flags: {}, env: process.env, cwd: process.cwd() }).configPath;
 }
 
 function ensureAutoRAGConfig(): void {
@@ -57,56 +48,19 @@ function ensureAutoRAGConfig(): void {
 	}
 }
 
-function configuredDataSources(): readonly DataSourceRow[] {
-	const configPath = autoragConfigPath();
-	if (!existsSync(configPath)) return [];
-	try {
-		const raw = readConfigObject(configPath);
-		const configured = raw.datasources;
-		if (configured === null || typeof configured !== "object" || Array.isArray(configured)) return [];
-		return Object.entries(configured as Record<string, unknown>)
-			.filter(([, value]) => value !== false)
-			.map(([id, value]) => {
-				const entry = value !== null && typeof value === "object" && !Array.isArray(value)
-					? value as Record<string, unknown>
-					: {};
-				const type = typeof entry.type === "string" ? entry.type : id;
-				const enabled = entry.enabled !== false;
-				return {
-					id,
-					name: id,
-					kind: BUILTIN_DATASOURCE_SKILL_NAMES.includes(type) ? type : "custom",
-					detail: typeof entry.description === "string" ? entry.description : type,
-					status: enabled ? "indexed" : "paused",
-					progress: null,
-					enabled,
-					description: typeof entry.description === "string" ? entry.description : `AutoRAG datasource: ${type}`,
-				} satisfies DataSourceRow;
-			});
-	} catch {
-		return [];
-	}
-}
-
-async function setConfiguredDatasourceEnabled(id: string, enabled: boolean): Promise<void> {
-	const configPath = autoragConfigPath();
-	if (!existsSync(configPath)) return;
-	const raw = readConfigObject(configPath);
-	const configured = raw.datasources;
-	if (configured === null || typeof configured !== "object" || Array.isArray(configured)) return;
-	const entry = (configured as Record<string, unknown>)[id];
-	if (entry === undefined) return;
-	(configured as Record<string, unknown>)[id] =
-		entry !== null && typeof entry === "object" && !Array.isArray(entry)
-			? { ...(entry as Record<string, unknown>), enabled }
-			: { enabled, type: id };
-	writeConfigObject(configPath, raw);
-}
-
 /** Unpackaged runs (and AUTORAG_DEV_LABEL=1) carry the clone label. */
 function resolveDevLabel(): DevLabel | null {
 	if (app.isPackaged && process.env.AUTORAG_DEV_LABEL !== "1") return null;
 	return readDevLabel(resolveClonePath(app.getAppPath()));
+}
+
+function loadRendererPage(window: BrowserWindow, page: string): void {
+	const rendererUrl = process.env.ELECTRON_RENDERER_URL;
+	if (rendererUrl) {
+		void window.loadURL(new URL(page, `${rendererUrl}/`).toString());
+	} else {
+		void window.loadFile(join(import.meta.dirname, "../renderer", page));
+	}
 }
 
 function createMainWindow(devLabel: DevLabel | null): BrowserWindow {
@@ -131,25 +85,36 @@ function createMainWindow(devLabel: DevLabel | null): BrowserWindow {
 		window.setTitle(formatWindowTitle(APP_NAME, APP_VERSION, devLabel));
 	});
 
-	const rendererUrl = process.env.ELECTRON_RENDERER_URL;
-	if (rendererUrl) {
-		void window.loadURL(rendererUrl);
-	} else {
-		void window.loadFile(join(import.meta.dirname, "../renderer/index.html"));
-	}
+	loadRendererPage(window, "index.html");
+	attachQuickLook(window, {
+		preload: join(import.meta.dirname, "../preload/quick-look.mjs"),
+		loadPage: (preview) => loadRendererPage(preview, "quick-look.html"),
+	});
 	return window;
 }
 
 let versionFamilyService: VersionFamilyService | null = null;
+let mainWindow: BrowserWindow | null = null;
+
+function sendToMainWindow(channel: string, payload: unknown): void {
+	if (mainWindow === null || mainWindow.isDestroyed()) return;
+	mainWindow.webContents.send(channel, payload);
+}
+
+registerPreviewSchemes();
 
 app.whenReady().then(() => {
+	registerPreviewProtocol();
+	registerQuickLookIpc();
 	ensureAutoRAGConfig();
 	const devLabel = resolveDevLabel();
 	console.log(`[autorag] ${formatWindowTitle(APP_NAME, APP_VERSION, devLabel)}`);
+	const qaRoot = process.env.AUTORAG_QA_ROOT?.trim() ?? "";
 	const fsService = createFsService({
 		shell,
 		clipboard,
 		recents: createRecentsStore({ directory: join(app.getPath("userData"), "recents") }),
+		...(qaRoot !== "" && isAbsolute(qaRoot) ? { qaRoot } : {}),
 	});
 	// Both delete surfaces (context menu, ⌘⌫) land on this channel, so the
 	// version-family snapshot learns about the Trash here.
@@ -159,13 +124,8 @@ app.whenReady().then(() => {
 		},
 	});
 	let scanIntervalMinutes = DEFAULT_SCAN_INTERVAL_MINUTES;
-	const sendToWindow = (channel: string, payload: unknown): void => {
-		const window = BrowserWindow.getAllWindows()[0];
-		if (window === undefined || window.webContents.isDestroyed()) return;
-		window.webContents.send(channel, payload);
-	};
 	const hub = createChangeHub({
-		send: (message) => sendToWindow(LIVE_CHANNELS.message, message),
+		send: (message) => sendToMainWindow(LIVE_CHANNELS.message, message),
 	});
 	versionFamilyService = createVersionFamilyService({
 		locations: () => fsService.locations(),
@@ -184,14 +144,14 @@ app.whenReady().then(() => {
 	const searchService = createSearchService({
 		agentFactory: createDefaultAgentFactory(),
 		chatStore: createChatStore({ directory: join(app.getPath("userData"), "chat-history") }),
-		send: (channel, payload) => BrowserWindow.getAllWindows()[0]?.webContents.send(channel, payload),
+		send: sendToMainWindow,
 	});
 	registerSearchIpcHandlers(searchService);
 	const agentFactory = createDefaultAgentFactory();
 	const settingsService = createSettingsService({
 		directory: join(app.getPath("userData"), "settings"),
-		initialSources: configuredDataSources(),
-		setSourceEnabled: setConfiguredDatasourceEnabled,
+		dataSources: createDataSourceStatusService({ env: process.env, cwd: process.cwd() }),
+		models: createModelStatusService({ env: process.env, cwd: process.cwd() }),
 		createChatSession: (surface) => {
 			const agent = agentFactory();
 			if (agent.createChatSession === undefined) {
@@ -205,7 +165,7 @@ app.whenReady().then(() => {
 			scanIntervalMinutes = settings.dupeyScanIntervalMinutes;
 			versionFamilyService?.reschedule();
 		},
-		send: (channel, payload) => BrowserWindow.getAllWindows()[0]?.webContents.send(channel, payload),
+		send: sendToMainWindow,
 	});
 	registerSettingsIpcHandlers(settingsService);
 	void settingsService.get().then((settings) => {
@@ -213,17 +173,19 @@ app.whenReady().then(() => {
 		versionFamilyService?.reschedule();
 	});
 	void versionFamilyService.start();
-	const attachWindowLifecycle = (window: BrowserWindow): void => {
+	const openMainWindow = (): BrowserWindow => {
+		const window = createMainWindow(devLabel);
 		const clearWatchSet = (): void => {
 			void watch.setWatchSet([]);
 		};
 		window.webContents.on("render-process-gone", clearWatchSet);
 		window.webContents.on("destroyed", clearWatchSet);
+		return window;
 	};
-	attachWindowLifecycle(createMainWindow(devLabel));
+	mainWindow = openMainWindow();
 	app.on("activate", () => {
-		if (BrowserWindow.getAllWindows().length === 0) {
-			attachWindowLifecycle(createMainWindow(devLabel));
+		if (mainWindow === null || mainWindow.isDestroyed()) {
+			mainWindow = openMainWindow();
 		}
 	});
 	app.once("will-quit", () => {

@@ -1,13 +1,17 @@
-import { useCallback, useEffect, useState, type ReactElement } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactElement } from "react";
+import type { PreviewBridge, QuickLookTarget } from "../../preview/shared/contract";
+import type { Bounds } from "../../preview/shared/fit";
 import type { SettingsBridge } from "../../shared/settings-contract";
 import type { CitationEvidence } from "../../shared/search-contract";
 
-const autorag = (window as unknown as { readonly autorag: { readonly settings: SettingsBridge } }).autorag;
+const autorag = (window as unknown as { readonly autorag: { readonly settings: SettingsBridge; readonly preview: PreviewBridge } }).autorag;
 import { AiSearchPanel } from "./components/AiSearchPanel";
 import { EvidencePanel } from "./components/EvidencePanel";
+import { ColumnBrowser } from "./components/ColumnBrowser";
 import { ColumnHeader } from "./components/ColumnHeader";
 import { FileList } from "./components/FileList";
 import type { RowCallbacks } from "./components/FileRow";
+import { IconGrid } from "./components/IconGrid";
 import { ContextMenu } from "./components/primitives/ContextMenu";
 import { Toast } from "./components/primitives/Toast";
 import { Sidebar } from "./components/Sidebar";
@@ -22,6 +26,21 @@ import { useFinderSource } from "./hooks/useFinderSource";
 /** The reference's `showHotkeys` prop (default true): keycaps on or off. */
 const SHOW_HOTKEYS = true;
 
+/**
+ * The visible Finder icon for `path`, in viewport CSS pixels: Quick Look zooms
+ * out of it and back into it. Null when the row is scrolled away or absent.
+ */
+function iconRect(path: string): Bounds | null {
+	const row = Array.from(document.querySelectorAll<HTMLElement>("[data-path]")).find((node) => node.dataset.path === path);
+	const icon = row?.querySelector(".tile, .row__name svg") ?? row?.querySelector(".row__name");
+	if (icon === null || icon === undefined) return null;
+	const box = icon.getBoundingClientRect();
+	const list = row?.closest(".list")?.getBoundingClientRect();
+	if (box.width <= 0 || box.height <= 0) return null;
+	if (list !== undefined && (box.bottom <= list.top || box.top >= list.bottom)) return null;
+	return { x: box.x, y: box.y, width: box.width, height: box.height };
+}
+
 /** Unpackaged runs label the window with their clone, branch, and commit. */
 const DEV_LABEL = (() => {
 	const dev = (window as unknown as { readonly autorag?: { readonly dev?: DevLabel | null } }).autorag?.dev;
@@ -31,7 +50,26 @@ const DEV_LABEL = (() => {
 export function App(): ReactElement {
 	const source = useFinderSource();
 	const [showHiddenFiles, setShowHiddenFiles] = useState(false);
-	const finder = useFinderController(source, { showHiddenFiles });
+	const [preview, setPreview] = useState<QuickLookTarget | null>(null);
+	const previewRef = useRef<QuickLookTarget | null>(null);
+	previewRef.current = preview;
+	/** Icon of the file the preview closes on: captured before React drops `preview`. */
+	const closingRef = useRef<Bounds | null>(null);
+	const openQuickLook = useCallback((target: QuickLookTarget) => {
+		const open = previewRef.current;
+		if (open?.path === target.path) closingRef.current = iconRect(open.path);
+		setPreview((current) => (current?.path === target.path ? null : { path: target.path, name: target.name }));
+	}, []);
+	const closeQuickLook = useCallback(() => {
+		const open = previewRef.current;
+		if (open !== null) closingRef.current = iconRect(open.path);
+		setPreview(null);
+	}, []);
+	const isQuickLookOpen = useCallback(() => previewRef.current !== null, []);
+	const finder = useFinderController(source, {
+		showHiddenFiles,
+		quickLook: { onQuickLook: openQuickLook, closeQuickLook, isQuickLookOpen },
+	});
 	const [settingsTab, setSettingsTab] = useState<"general" | "contacts" | null>(null);
 	const [evidence, setEvidence] = useState<readonly CitationEvidence[]>([]);
 	const [evidenceSession, setEvidenceSession] = useState<string | null>(null);
@@ -58,6 +96,32 @@ export function App(): ReactElement {
 	}, []);
 
 	const evidenceSelectedNumber = evidence.find((item) => item.number === selectedEvidence)?.number ?? evidence[0]?.number ?? 1;
+	const focusPath = finder.selection.focus;
+	useEffect(() => {
+		if (focusPath === null) return;
+		setPreview((current) => {
+			if (current === null || current.path === focusPath) return current;
+			const match = finder.stackRows.find((row) => row.entry.path === focusPath);
+			if (match === undefined) return current;
+			return { path: match.entry.path, name: match.entry.name };
+		});
+	}, [focusPath, finder.stackRows]);
+
+	useEffect(() => {
+		const request = preview === null ? autorag.preview.hide(closingRef.current) : autorag.preview.show(preview, iconRect(preview.path));
+		closingRef.current = null;
+		request.catch((error: unknown) => finder.showToast(error instanceof Error ? error.message : String(error)));
+	}, [preview]);
+
+	const moveSelectionBy = finder.moveSelectionBy;
+	useEffect(() => {
+		const offClosed = autorag.preview.onClosed(() => setPreview(null));
+		const offNavigate = autorag.preview.onNavigate((delta) => moveSelectionBy(delta));
+		return () => {
+			offClosed();
+			offNavigate();
+		};
+	}, [moveSelectionBy]);
 
 	useEffect(() => {
 		void autorag.settings.get().then((settings) => setShowHiddenFiles(settings.showHiddenFiles));
@@ -69,6 +133,7 @@ export function App(): ReactElement {
 		onContextMenu: finder.openContextMenu,
 		onToggleIndex: finder.toggleIndex,
 		onToggleStack: finder.toggleStack,
+		onToggleFolder: finder.toggleFolder,
 		onRenameChange: finder.setRenameDraft,
 		onRenameCommit: finder.commitRename,
 		onRenameCancel: finder.cancelRename,
@@ -100,6 +165,8 @@ export function App(): ReactElement {
 						searchFocused={finder.searchFocused}
 						showHotkeys={SHOW_HOTKEYS}
 						searchRef={finder.searchRef}
+						viewMode={finder.viewMode}
+						onViewModeChange={finder.setViewMode}
 						onNavigate={finder.navigate}
 						onBack={finder.back}
 						onForward={finder.forward}
@@ -108,7 +175,39 @@ export function App(): ReactElement {
 						onSearchFocus={() => finder.setSearchFocused(true)}
 						onSearchBlur={() => finder.setSearchFocused(false)}
 					/>
-					<>
+					{finder.layout === "icons" ? (
+						<IconGrid
+							rows={finder.stackRows}
+							listRef={finder.listRef}
+							searching={finder.searching}
+							summary={finder.searchSummary}
+							emptyText={finder.emptyText}
+							selectedKeys={finder.selection.keys}
+							focusedZone={finder.zone === "finder"}
+							flashPath={finder.flashPath}
+							renamePath={finder.renamePath}
+							renameDraft={finder.renameDraft}
+							versionFamilyError={finder.versionFamilyError}
+							onRetryVersionFamilies={finder.retryVersionFamilies}
+							callbacks={rowCallbacks}
+						/>
+					) : finder.layout === "columns" ? (
+						<ColumnBrowser
+							panes={finder.columnPanes}
+							listRef={finder.listRef}
+							emptyText={finder.emptyText}
+							selectedKeys={finder.selection.keys}
+							focusedZone={finder.zone === "finder"}
+							flashPath={finder.flashPath}
+							renamePath={finder.renamePath}
+							renameDraft={finder.renameDraft}
+							versionFamilyError={finder.versionFamilyError}
+							onRetryVersionFamilies={finder.retryVersionFamilies}
+							columnCallbacks={{ onClick: finder.clickColumnRow }}
+							callbacks={rowCallbacks}
+						/>
+					) : (
+						<>
 							<ColumnHeader sort={finder.sort} searching={finder.searching} onSort={finder.sortBy} />
 							<FileList
 								rows={finder.stackRows}
@@ -127,7 +226,8 @@ export function App(): ReactElement {
 								indexOverrides={finder.indexOverrides}
 								callbacks={rowCallbacks}
 							/>
-					</>
+						</>
+					)}
 					<StatusBar text={finder.statusText} showHotkeys={SHOW_HOTKEYS} devLabel={DEV_LABEL} />
 					{evidence.length === 0 ? null : (
 						<EvidencePanel

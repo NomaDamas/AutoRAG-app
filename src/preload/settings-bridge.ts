@@ -19,6 +19,8 @@ export function createSettingsBridge(ipcRenderer: IpcRenderer): SettingsBridge {
 		requestsRespond: (id, allow) => ipcRenderer.invoke(SETTINGS_CHANNELS.requestsRespond, id, allow),
 		sourcesList: () => ipcRenderer.invoke(SETTINGS_CHANNELS.sourcesList),
 		sourcesSetEnabled: (id, enabled) => ipcRenderer.invoke(SETTINGS_CHANNELS.sourcesSetEnabled, id, enabled),
+		sourcesSetDescription: (id, description) => ipcRenderer.invoke(SETTINGS_CHANNELS.sourcesSetDescription, id, description),
+		modelsResolve: () => ipcRenderer.invoke(SETTINGS_CHANNELS.modelsResolve),
 		assistantSend: (surface, text) => ipcRenderer.invoke(SETTINGS_CHANNELS.assistantSend, surface, text),
 		onEvent: (listener: (event: AssistantEvent) => void) => {
 			const handler = (_event: Electron.IpcRendererEvent, payload: AssistantEvent): void => listener(payload);

@@ -5,6 +5,7 @@ import {
 	applyOptimisticDeletes,
 	createListingLoader,
 	nearestExistingAncestor,
+	listingSurvivor,
 	pruneSelection,
 	watchSetFor,
 	type ListingLoadRequest,
@@ -83,12 +84,18 @@ describe("live renderer state", () => {
 	});
 
 	it("prunes vanished keys, anchor, and focus", () => {
-		expect(
-			pruneSelection(
-				{ keys: ["a", "b"], anchor: "a", focus: "b" },
-				new Set(["b"]),
-			),
-		).toEqual({ keys: ["b"], anchor: null, focus: "b" });
+		const survives = listingSurvivor("/d", [entry("/d/a"), entry("/d/b")], [entry("/d/b")]);
+		expect(pruneSelection({ keys: ["/d/a", "/d/b"], anchor: "/d/a", focus: "/d/b" }, survives)).toEqual({
+			keys: ["/d/b"],
+			anchor: null,
+			focus: "/d/b",
+		});
+	});
+
+	it("keeps selections outside the relisted folder", () => {
+		const survives = listingSurvivor("/d", [entry("/d/sub")], [entry("/d/sub")]);
+		expect(survives("/d/sub/nested.txt")).toBe(true);
+		expect(survives("/d/gone.txt")).toBe(false);
 	});
 
 	it("returns the deepest existing ancestor", async () => {

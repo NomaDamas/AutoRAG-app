@@ -31,8 +31,10 @@ describe("resolveKeyAction", () => {
 		expect(resolveKeyAction(key("ArrowRight"), evidence)).toEqual({ type: "moveEvidence", delta: 1 });
 	});
 
-	it("ignores left and right in the Finder zone", () => {
-		expect(resolveKeyAction(key("ArrowLeft"), finder)).toBeNull();
+	it("discloses folders with left and right in the Finder zone, never while typing", () => {
+		expect(resolveKeyAction(key("ArrowRight"), finder)).toEqual({ type: "disclose", direction: "expand" });
+		expect(resolveKeyAction(key("ArrowLeft"), finder)).toEqual({ type: "disclose", direction: "collapse" });
+		expect(resolveKeyAction(key("ArrowLeft"), { ...finder, typing: true })).toBeNull();
 	});
 
 	it("opens the selection with Enter", () => {
@@ -62,6 +64,21 @@ describe("resolveKeyAction", () => {
 
 	it("maps control shortcuts for Windows and Linux", () => {
 		expect(resolveKeyAction(key("f", { ctrl: true }), finder)).toEqual({ type: "focusSearch" });
+	});
+
+	it("switches the view mode with command 1, 2, 3", () => {
+		expect(resolveKeyAction(key("1", { meta: true }), finder)).toEqual({ type: "setViewMode", mode: "icons" });
+		expect(resolveKeyAction(key("2", { meta: true }), finder)).toEqual({ type: "setViewMode", mode: "list" });
+		expect(resolveKeyAction(key("3", { meta: true }), finder)).toEqual({ type: "setViewMode", mode: "columns" });
+		expect(resolveKeyAction(key("3", { ctrl: true }), finder)).toEqual({ type: "setViewMode", mode: "columns" });
+		expect(resolveKeyAction(key("4", { meta: true }), finder)).toBeNull();
+	});
+
+	it("moves sideways with left and right in the icon and column views", () => {
+		expect(resolveKeyAction(key("ArrowRight"), { ...finder, viewMode: "icons" })).toEqual({ type: "moveSelectionSideways", delta: 1 });
+		expect(resolveKeyAction(key("ArrowLeft"), { ...finder, viewMode: "columns" })).toEqual({ type: "moveSelectionSideways", delta: -1 });
+		expect(resolveKeyAction(key("ArrowLeft"), { ...finder, viewMode: "list" })).toEqual({ type: "disclose", direction: "collapse" });
+		expect(resolveKeyAction(key("ArrowRight"), { ...finder, viewMode: "icons", typing: true })).toBeNull();
 	});
 
 	it("ignores unmapped keys", () => {

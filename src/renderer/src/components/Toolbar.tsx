@@ -1,12 +1,14 @@
 import { Fragment } from "react";
 import type { ChangeEvent, KeyboardEvent, ReactElement, RefObject } from "react";
 import type { Crumb } from "../state/paths";
+import type { ViewMode } from "../state/view-mode";
 import { ChevronLeftIcon, ChevronRightIcon, SearchIcon } from "./icons";
 import { Keycap } from "./primitives/Keycap";
+import { ViewModeToggle } from "./ViewModeToggle";
 
 /**
- * Toolbar (handoff README §2): back/forward, truncated breadcrumbs, and the
- * 236 × 32 instant-search field.
+ * Toolbar (handoff README §2): back/forward, truncated breadcrumbs, the view
+ * mode toggle, and the 236 × 32 instant-search field.
  */
 export function Toolbar({
 	crumbs,
@@ -17,6 +19,8 @@ export function Toolbar({
 	searchFocused,
 	showHotkeys,
 	searchRef,
+	viewMode,
+	onViewModeChange,
 	onNavigate,
 	onBack,
 	onForward,
@@ -33,6 +37,8 @@ export function Toolbar({
 	readonly searchFocused: boolean;
 	readonly showHotkeys: boolean;
 	readonly searchRef: RefObject<HTMLInputElement | null>;
+	readonly viewMode: ViewMode;
+	readonly onViewModeChange: (mode: ViewMode) => void;
 	readonly onNavigate: (path: string) => void;
 	readonly onBack: () => void;
 	readonly onForward: () => void;
@@ -78,6 +84,7 @@ export function Toolbar({
 					</Fragment>
 				))}
 			</nav>
+			<ViewModeToggle mode={viewMode} onChange={onViewModeChange} />
 			<div className={`search${searchFocused ? " search--focused" : ""}`}>
 				<SearchIcon className="search__icon" />
 				<input

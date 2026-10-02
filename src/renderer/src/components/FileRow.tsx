@@ -1,6 +1,7 @@
-import type { ChangeEvent, KeyboardEvent, MouseEvent, ReactElement } from "react";
+import type { ChangeEvent, CSSProperties, KeyboardEvent, MouseEvent, ReactElement } from "react";
 import { indexBadge } from "../state/badges";
 import type { FinderEntry } from "../data/entries";
+import type { Disclosure } from "../state/folder-tree";
 import { whereSegments } from "../state/paths";
 import { relationLabel, type VersionRelation } from "../state/version-family";
 import { isHiddenName } from "../state/visibility";
@@ -14,6 +15,7 @@ export interface RowCallbacks {
 	readonly onContextMenu: (entry: FinderEntry, event: MouseEvent<HTMLDivElement>) => void;
 	readonly onToggleIndex: (entry: FinderEntry) => void;
 	readonly onToggleStack: (entry: FinderEntry) => void;
+	readonly onToggleFolder: (entry: FinderEntry) => void;
 	readonly onRenameChange: (value: string) => void;
 	readonly onRenameCommit: () => void;
 	readonly onRenameCancel: () => void;
@@ -36,6 +38,8 @@ export function FileRow({
 	stackOpen,
 	child,
 	relation,
+	depth,
+	disclosure,
 	listPath,
 	callbacks,
 }: {
@@ -50,6 +54,9 @@ export function FileRow({
 	readonly stackOpen: boolean;
 	readonly child: boolean;
 	readonly relation: VersionRelation | null;
+	/** Folder-tree nesting level; 0 for the listed folder's own rows. */
+	readonly depth: number;
+	readonly disclosure: Disclosure;
 	readonly listPath: string;
 	readonly callbacks: RowCallbacks;
 }): ReactElement {
@@ -71,12 +78,34 @@ export function FileRow({
 		<div
 			className={classes.join(" ")}
 			role="row"
+			data-path={entry.path}
 			aria-selected={selected}
+			aria-level={disclosure === "none" ? undefined : depth + 1}
+			aria-expanded={disclosure === "expanded" ? true : disclosure === "collapsed" ? false : undefined}
+			style={depth > 0 ? ({ "--row-depth": depth } as CSSProperties) : undefined}
 			onClick={(event) => callbacks.onClick(entry, event)}
 			onDoubleClick={() => callbacks.onOpen(entry)}
 			onContextMenu={(event) => callbacks.onContextMenu(entry, event)}
 		>
 			<div className="row__name" role="gridcell">
+				{disclosure === "none" ? null : disclosure === "leaf" ? (
+					<span className="row__disclosure" aria-hidden="true" />
+				) : (
+					<button
+						type="button"
+						className={disclosure === "expanded" ? "row__disclosure row__disclosure--open" : "row__disclosure"}
+						aria-label={disclosure === "expanded" ? `${entry.name} 접기` : `${entry.name} 펼치기`}
+						aria-expanded={disclosure === "expanded"}
+						tabIndex={-1}
+						onClick={(event) => {
+							event.stopPropagation();
+							callbacks.onToggleFolder(entry);
+						}}
+						onDoubleClick={(event) => event.stopPropagation()}
+					>
+						<ChevronRightIcon size={10} />
+					</button>
+				)}
 				{child ? <span className="row__connector" aria-hidden="true" /> : <FileTile kind={entry.fileKind} iconDataUrl={entry.iconDataUrl} />}
 				{renameDraft === null ? (
 					<span className="row__label">{entry.name}</span>

@@ -27,6 +27,12 @@
   --bg-code: #F4F4F7;
   --bg-chip-sent: #F3F3F7;
   --bg-tile-fallback: #8A8A9C;
+  /* Added by the Quick Look lane: the pre-warmed preview window is a translucent
+   * panel floating over the Finder (macOS Quick Look material, owner request
+   * 2026-10-01). DESIGN.md §2.1 and §8 carry the same names and values. */
+  --bg-quicklook-panel: rgba(246,246,248,0.72);
+  --bg-quicklook-frost: rgba(252,252,253,0.82);
+  --backdrop-quicklook: saturate(1.6) blur(18px);
 
   /* ------------------------------------------------------------ §2.2 Hover washes */
   --bg-hover: rgba(26,26,46,0.05);
@@ -169,6 +175,8 @@
 
   /* ------------------------------------------------------------ §4 Control sizes */
   --size-row: 32px;
+  --size-disclosure: 16px;
+  --tree-indent: 18px;
   --size-pill: 22px;
   --size-icon-sm: 28px;
   --size-chip: 24px;

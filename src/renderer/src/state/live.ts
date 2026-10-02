@@ -35,19 +35,27 @@ export function applyOptimisticDeletes(
 	return deleted.size === 0 ? listing : listing.filter((entry) => !deleted.has(entry.path));
 }
 
-function hasPath(survivingPaths: ReadonlySet<string> | readonly string[], path: string): boolean {
-	return "has" in survivingPaths ? survivingPaths.has(path) : survivingPaths.includes(path);
+/**
+ * The keep-test for a relisted folder: a path vanished only when it belonged to
+ * that listing (shown before, or a direct child of `dir`) and is absent now.
+ * Selections in expanded subfolders and other column panes are left alone.
+ */
+export function listingSurvivor(
+	dir: string,
+	previous: readonly FinderEntry[],
+	next: readonly FinderEntry[],
+): (path: string) => boolean {
+	const surviving = new Set(next.map((entry) => entry.path));
+	const shown = new Set(previous.map((entry) => entry.path));
+	return (path) => surviving.has(path) || (!shown.has(path) && dirname(path) !== dir);
 }
 
-export function pruneSelection(
-	selection: SelectionState,
-	survivingPaths: ReadonlySet<string> | readonly string[],
-): SelectionState {
-	const keys = selection.keys.filter((path) => hasPath(survivingPaths, path));
+export function pruneSelection(selection: SelectionState, survives: (path: string) => boolean): SelectionState {
+	const keys = selection.keys.filter(survives);
 	return {
 		keys,
-		anchor: selection.anchor !== null && hasPath(survivingPaths, selection.anchor) ? selection.anchor : null,
-		focus: selection.focus !== null && hasPath(survivingPaths, selection.focus) ? selection.focus : null,
+		anchor: selection.anchor !== null && survives(selection.anchor) ? selection.anchor : null,
+		focus: selection.focus !== null && survives(selection.focus) ? selection.focus : null,
 	};
 }
 

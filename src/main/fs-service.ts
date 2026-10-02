@@ -1,4 +1,3 @@
-import { spawn } from "node:child_process";
 import type { Dirent } from "node:fs";
 import { cp, lstat, readdir, rename as fsRename, rm } from "node:fs/promises";
 import { homedir } from "node:os";
@@ -32,8 +31,6 @@ export interface FsOsClipboard {
 	writeText(text: string): void;
 }
 
-export type QuickLookSpawner = (path: string) => void;
-
 /** OS-native file-kind lookup: Finder's kind on macOS, Explorer's type on Windows. */
 export type OsKindLookup = (path: string, ext: string) => Promise<string | null>;
 
@@ -42,8 +39,8 @@ export interface FsServiceDeps {
 	readonly clipboard: FsOsClipboard;
 	/** Defaults to os.homedir(); tests inject a fixture home. */
 	readonly homeDir?: string;
-	/** Defaults to spawning `/usr/bin/qlmanage -p <path>` detached. */
-	readonly spawnQuickLook?: QuickLookSpawner;
+	/** Playwright points the first tab here. Absent in normal runs. */
+	readonly qaRoot?: string;
 	/** Recently opened/previewed files. Defaults to `<homeDir>/recents`; production injects the userData store. */
 	readonly recents?: RecentsStore;
 	/** Defaults to the platform resolver (mdls on macOS, the registry on Windows). */
@@ -73,21 +70,6 @@ interface SearchContext {
 	readonly location: string;
 	readonly results: FsSearchResult[];
 	readonly lookup: OsKindLookup;
-}
-
-export function previewCommandForPlatform(
-	platform: NodeJS.Platform,
-	path: string,
-): { readonly command: string; readonly args: readonly string[] } {
-	if (platform === "darwin") return { command: "/usr/bin/qlmanage", args: ["-p", path] };
-	if (platform === "win32") return { command: "explorer.exe", args: [path] };
-	return { command: "xdg-open", args: [path] };
-}
-
-function defaultQuickLook(path: string): void {
-	const preview = previewCommandForPlatform(process.platform, path);
-	const child = spawn(preview.command, preview.args, { detached: true, stdio: "ignore" });
-	child.unref();
 }
 
 function compareEntries(a: FsEntry, b: FsEntry): number {
@@ -171,7 +153,6 @@ async function walkForSearch(dir: string, depth: number, context: SearchContext)
 
 export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 	const home = deps.homeDir ?? homedir();
-	const spawnQuickLook = deps.spawnQuickLook ?? defaultQuickLook;
 	const recents = deps.recents ?? createRecentsStore({ directory: join(home, "recents") });
 	const osKind: OsKindLookup = deps.osKind ?? createOsKindResolver().kindFor;
 	const iconProvider: IconProvider = deps.icons ?? createIconProvider();
@@ -240,6 +221,14 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 		const result: FsLocation[] = [
 			{ name: RECENTS_PATH, path: RECENTS_PATH, section: "favorites", available: true },
 		];
+		if (deps.qaRoot !== undefined) {
+			result.push({
+				name: "QA",
+				path: deps.qaRoot,
+				section: "favorites",
+				available: await isAvailable(deps.qaRoot),
+			});
+		}
 		const fixed: readonly { readonly name: string; readonly path: string; readonly section: "favorites" | "cloud" }[] =
 			[
 				{ name: "Desktop", path: join(home, "Desktop"), section: "favorites" },
@@ -365,7 +354,6 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 		},
 		quickLook: async (path) => {
 			await recents.record(path);
-			spawnQuickLook(path);
 		},
 		open: async (path) => {
 			const message = await deps.shell.openPath(path);

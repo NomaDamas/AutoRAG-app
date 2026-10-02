@@ -24,6 +24,8 @@ export const SETTINGS_CHANNELS = {
 	requestsRespond: "requests:respond",
 	sourcesList: "sources:list",
 	sourcesSetEnabled: "sources:setEnabled",
+	sourcesSetDescription: "sources:setDescription",
+	modelsResolve: "models:resolve",
 	assistantSend: "assistant:send",
 	assistantEvent: "assistant:event",
 } as const;
@@ -83,15 +85,88 @@ export const DEFAULT_SETTINGS: AppSettings = {
 	dupeyScanIntervalMinutes: 60,
 };
 
+/** Whether the backend a datasource needs is present on this machine. */
+export type DataSourceInstallState = "installed" | "missing" | "builtin" | "credential-missing" | "unsupported";
+
+/** How the AutoRAG agent sees the datasource, per the shared config and datasourceAccess. */
+export type DataSourceAgentState = "connected" | "blocked" | "disabled" | "unsupported";
+
+/** `external` means the backend CLI owns the index; AutoRAG queries it live. */
+export type DataSourceIndexState = "indexed" | "empty" | "not-indexed" | "external";
+
+export type DataSourceStatus = "ready" | "syncing" | "paused" | "attention";
+
+/** One `datasources.<id>` entry of the shared AutoRAG config, with its live state. */
 export interface DataSourceRow {
 	readonly id: string;
-	readonly name: string;
-	readonly kind: string;
-	readonly detail: string;
-	readonly status: "indexed" | "syncing" | "paused" | "error";
-	readonly progress: number | null;
-	readonly enabled: boolean;
+	/** Built-in template (`type`, else the id). */
+	readonly type: string;
 	readonly description: string;
+	readonly enabled: boolean;
+	readonly status: DataSourceStatus;
+	readonly install: {
+		readonly state: DataSourceInstallState;
+		readonly binary: string | null;
+		readonly path: string | null;
+		readonly detail: string;
+	};
+	readonly agent: {
+		readonly state: DataSourceAgentState;
+		/** Model-visible `datasource-<id>` skill the agent loads for this connection. */
+		readonly skillName: string | null;
+		readonly tags: readonly string[];
+		readonly detail: string;
+	};
+	readonly index: {
+		readonly state: DataSourceIndexState;
+		readonly chunkCount: number | null;
+		readonly indexedAt: string | null;
+		readonly detail: string;
+	};
+}
+
+/** Read fresh from the shared AutoRAG config on every call; the app keeps no copy. */
+export interface DataSourcesSnapshot {
+	readonly configPath: string;
+	readonly configExists: boolean;
+	/** Config could not be read; `sources` is empty. */
+	readonly error: string | null;
+	readonly accessTags: readonly string[];
+	readonly refresh: {
+		readonly state: "idle" | "running" | "success" | "failed";
+		readonly phase: string | null;
+		readonly finishedAt: string | null;
+	};
+	readonly sources: readonly DataSourceRow[];
+}
+
+/** Where the librarian's model resolution took this identity from. */
+export type ModelResolutionSource = "config" | "flags" | "env" | "local_runtime" | "catalog" | "configured_alias" | "mixed";
+
+/** The provider/model the shared AutoRAG config resolves to, as the running agent sees it. */
+export interface ConfiguredModel {
+	readonly provider: string;
+	/** Catalog or configured id, e.g. `deepseek/deepseek-v4.1-flash`. */
+	readonly modelId: string;
+	readonly displayName: string;
+	readonly api: string;
+	readonly baseUrl: string | null;
+	readonly resolutionSource: ModelResolutionSource;
+	readonly auth: {
+		readonly present: boolean;
+		readonly source: "env" | "local_runtime" | "catalog" | "none" | "unknown";
+		/** Env var the key is read from, when one is known. */
+		readonly envName: string | null;
+	};
+}
+
+/** Read fresh from the shared AutoRAG config on every call; the app keeps no copy. */
+export interface ConfiguredModelSnapshot {
+	readonly configPath: string;
+	readonly configExists: boolean;
+	/** Config or model could not be resolved; `model` is null. */
+	readonly error: string | null;
+	readonly model: ConfiguredModel | null;
 }
 
 export type AssistantSurface = "models" | "sources";
@@ -122,8 +197,14 @@ export interface SettingsBridge {
 	requestsList(status: "pending" | "done"): Promise<readonly AccessRequest[]>;
 	requestsRespond(id: string, allow: boolean): Promise<void>;
 
-	sourcesList(): Promise<readonly DataSourceRow[]>;
-	sourcesSetEnabled(id: string, enabled: boolean): Promise<void>;
+	sourcesList(): Promise<DataSourcesSnapshot>;
+	/** Writes `enabled` into the shared AutoRAG config, then returns the fresh snapshot. */
+	sourcesSetEnabled(id: string, enabled: boolean): Promise<DataSourcesSnapshot>;
+	/** Writes the description the agent reads into the shared AutoRAG config; blank clears it. */
+	sourcesSetDescription(id: string, description: string): Promise<DataSourcesSnapshot>;
+
+	/** The provider/model the shared AutoRAG config resolves for the agent right now. */
+	modelsResolve(): Promise<ConfiguredModelSnapshot>;
 
 	/** Send one message to the settings assistant; events stream via assistantEvent. */
 	assistantSend(surface: AssistantSurface, text: string): Promise<void>;

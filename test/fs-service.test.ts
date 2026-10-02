@@ -23,7 +23,6 @@ interface StubbedDeps {
 	readonly deps: FsServiceDeps;
 	readonly trashed: string[];
 	readonly revealed: string[];
-	readonly quickLooked: string[];
 	readonly opened: string[];
 	readonly clipboardText: string[];
 	readonly recents: RecentsStore;
@@ -32,7 +31,6 @@ interface StubbedDeps {
 function makeDeps(homeDir: string): StubbedDeps {
 	const trashed: string[] = [];
 	const revealed: string[] = [];
-	const quickLooked: string[] = [];
 	const opened: string[] = [];
 	const clipboardText: string[] = [];
 	return {
@@ -55,16 +53,12 @@ function makeDeps(homeDir: string): StubbedDeps {
 				},
 			},
 			homeDir,
-			spawnQuickLook: (path: string) => {
-				quickLooked.push(path);
-			},
 			recents: createRecentsStore({ directory: join(homeDir, "recents-store") }),
 			osKind: async () => null,
 			icons: { icons: async () => new Map() },
 		},
 		trashed,
 		revealed,
-		quickLooked,
 		opened,
 		clipboardText,
 		recents: createRecentsStore({ directory: join(homeDir, "recents-store") }),
@@ -499,8 +493,8 @@ describe("shell and clipboard side effects", () => {
 		expect(stubs.revealed).toEqual([filePath]);
 	});
 
-	it("quickLook forwards the path to the injected spawner", async () => {
-		// Given a stubbed qlmanage spawner
+	it("quickLook records the path and does not need an OS preview command", async () => {
+		// Given a file
 		const stubs = makeDeps(root);
 		const filePath = join(root, "peek.txt");
 		await writeFile(filePath, "x");
@@ -508,8 +502,9 @@ describe("shell and clipboard side effects", () => {
 		// When opening Quick Look
 		await createFsService(stubs.deps).quickLook(filePath);
 
-		// Then the spawner received the path
-		expect(stubs.quickLooked).toEqual([filePath]);
+		// Then only the recents list changes
+		expect(await stubs.recents.list()).toEqual([filePath]);
+		expect(stubs.opened).toEqual([]);
 	});
 
 	it("open forwards the path to shell.openPath, the OS default application", async () => {
@@ -636,9 +631,8 @@ describe("recents", () => {
 		// When previewing it
 		await createFsService(stubs.deps).quickLook(filePath);
 
-		// Then it joins the recent files and the preview still spawned
+		// Then it joins the recent files
 		expect(await stubs.recents.list()).toEqual([filePath]);
-		expect(stubs.quickLooked).toEqual([filePath]);
 	});
 
 	it("does not walk the virtual location while searching", async () => {

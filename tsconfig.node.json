@@ -17,6 +17,6 @@
 		"skipLibCheck": true,
 		"noEmit": true
 	},
-	"include": ["src/main", "src/preload", "src/shared", "test", "electron.vite.config.ts"],
+	"include": ["src/main", "src/preload", "src/shared", "src/preview/shared", "src/preview/node", "test", "electron.vite.config.ts"],
 	"exclude": ["node_modules", "out"]
 }

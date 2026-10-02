@@ -176,6 +176,15 @@ export function ArrowUpIcon({ size = 16, className }: GlyphProps): ReactElement 
 	);
 }
 
+export function PencilIcon({ size = 13, className }: GlyphProps): ReactElement {
+	return (
+		<Stroke size={size} width={2} className={className}>
+			<path d="M17 3a2.85 2.85 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5z" />
+			<path d="M15 5l4 4" />
+		</Stroke>
+	);
+}
+
 export function RotateIcon({ size = 10, className }: GlyphProps): ReactElement {
 	return (
 		<Stroke size={size} width={2.8} className={className}>
@@ -190,6 +199,35 @@ export function HistoryIcon({ size = 16, className }: GlyphProps): ReactElement 
 			<path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
 			<path d="M3 3v5h5" />
 			<path d="M12 7v5l3 2" />
+		</Stroke>
+	);
+}
+
+export function IconsViewIcon({ size = 16, className }: GlyphProps): ReactElement {
+	return (
+		<Stroke size={size} width={1.9} className={className}>
+			<rect x="4" y="4" width="6.5" height="6.5" rx="1.5" />
+			<rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5" />
+			<rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5" />
+			<rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5" />
+		</Stroke>
+	);
+}
+
+export function ListViewIcon({ size = 16, className }: GlyphProps): ReactElement {
+	return (
+		<Stroke size={size} width={1.9} className={className}>
+			<path d="M9.5 6.5H20M9.5 12H20M9.5 17.5H20" />
+			<path d="M4.5 6.5h.01M4.5 12h.01M4.5 17.5h.01" />
+		</Stroke>
+	);
+}
+
+export function ColumnsViewIcon({ size = 16, className }: GlyphProps): ReactElement {
+	return (
+		<Stroke size={size} width={1.9} className={className}>
+			<rect x="3" y="4.5" width="18" height="15" rx="2.5" />
+			<path d="M9 4.5v15M15 4.5v15" />
 		</Stroke>
 	);
 }

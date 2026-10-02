@@ -2,8 +2,10 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import type { DataSourceStatusService } from "../src/main/datasource-status";
+import type { ModelStatusService } from "../src/main/model-status";
 import { createSettingsService } from "../src/main/settings-service";
-import type { AssistantSurface, DataSourceRow } from "../src/shared/settings-contract";
+import type { AssistantSurface, ConfiguredModelSnapshot, DataSourcesSnapshot } from "../src/shared/settings-contract";
 
 const directories: string[] = [];
 
@@ -35,12 +37,40 @@ function createFakeSession(surface: AssistantSurface, events: unknown[]): {
 	};
 }
 
+const EMPTY_SNAPSHOT: DataSourcesSnapshot = {
+	configPath: "/autorag/config.json",
+	configExists: true,
+	error: null,
+	accessTags: [],
+	refresh: { state: "idle", phase: null, finishedAt: null },
+	sources: [],
+};
+
+const noDataSources: DataSourceStatusService = {
+	list: async () => EMPTY_SNAPSHOT,
+	setEnabled: async () => undefined,
+	setDescription: async () => undefined,
+};
+
+const EMPTY_MODEL: ConfiguredModelSnapshot = {
+	configPath: "/autorag/config.json",
+	configExists: true,
+	error: null,
+	model: null,
+};
+
+const noModels: ModelStatusService = {
+	resolve: async () => EMPTY_MODEL,
+};
+
 describe("createSettingsService", () => {
 	it("persists settings, permissions, and contacts", async () => {
 		const directory = await mkdtemp(join(tmpdir(), "autorag-settings-"));
 		directories.push(directory);
 		const service = createSettingsService({
 			directory,
+			dataSources: noDataSources,
+			models: noModels,
 			createChatSession: () => createFakeSession("models", []),
 			send: () => undefined,
 		});
@@ -53,6 +83,8 @@ describe("createSettingsService", () => {
 
 		const reloaded = createSettingsService({
 			directory,
+			dataSources: noDataSources,
+			models: noModels,
 			createChatSession: () => createFakeSession("models", []),
 			send: () => undefined,
 		});
@@ -66,6 +98,8 @@ describe("createSettingsService", () => {
 		const events: unknown[] = [];
 		const service = createSettingsService({
 			directory,
+			dataSources: noDataSources,
+			models: noModels,
 			createChatSession: (surface) =>
 				createFakeSession(surface, [
 					{ type: "message_update", assistantMessageEvent: { type: "text_delta", delta: "Use the active model." } },
@@ -86,6 +120,8 @@ describe("createSettingsService", () => {
 		directories.push(directory);
 		const service = createSettingsService({
 			directory,
+			dataSources: noDataSources,
+			models: noModels,
 			createChatSession: () => createFakeSession("models", []),
 			send: () => undefined,
 		});
@@ -95,6 +131,8 @@ describe("createSettingsService", () => {
 		await service.set({ showHiddenFiles: true });
 		const reloaded = createSettingsService({
 			directory,
+			dataSources: noDataSources,
+			models: noModels,
 			createChatSession: () => createFakeSession("models", []),
 			send: () => undefined,
 		});
@@ -107,6 +145,8 @@ describe("createSettingsService", () => {
 		const seen: number[] = [];
 		const service = createSettingsService({
 			directory,
+			dataSources: noDataSources,
+			models: noModels,
 			createChatSession: () => createFakeSession("models", []),
 			send: () => undefined,
 			onSettingsChanged: (settings) => seen.push(settings.dupeyScanIntervalMinutes),
@@ -118,40 +158,69 @@ describe("createSettingsService", () => {
 		expect(seen).toEqual([15]);
 		const reloaded = createSettingsService({
 			directory,
+			dataSources: noDataSources,
+			models: noModels,
 			createChatSession: () => createFakeSession("models", []),
 			send: () => undefined,
 		});
 		expect((await reloaded.get()).dupeyScanIntervalMinutes).toBe(15);
 	});
 
-	it("hydrates configured datasource rows and persists toggles through AutoRAG config", async () => {
+	it("serves datasources live from the shared config instead of a persisted copy", async () => {
 		const directory = await mkdtemp(join(tmpdir(), "autorag-settings-sources-"));
 		directories.push(directory);
-		const sources: readonly DataSourceRow[] = [{
-			id: "team-slack",
-			name: "team-slack",
-			kind: "slack",
-			detail: "Team messages",
-			status: "indexed",
-			progress: null,
-			enabled: true,
-			description: "Team Slack",
-		}];
 		const toggles: Array<{ id: string; enabled: boolean }> = [];
+		let listed = 0;
 		const service = createSettingsService({
 			directory,
-			initialSources: sources,
-			setSourceEnabled: async (id, enabled) => {
-				toggles.push({ id, enabled });
+			dataSources: {
+				list: async () => ({ ...EMPTY_SNAPSHOT, configPath: `/autorag/config-${++listed}.json` }),
+				setEnabled: async (id, enabled) => {
+					toggles.push({ id, enabled });
+				},
+				setDescription: async () => undefined,
+			},
+			models: noModels,
+			createChatSession: () => createFakeSession("models", []),
+			send: () => undefined,
+		});
+
+		expect((await service.sourcesList()).configPath).toBe("/autorag/config-1.json");
+		expect((await service.sourcesSetEnabled("team-slack", false)).configPath).toBe("/autorag/config-2.json");
+		expect((await service.sourcesList()).configPath).toBe("/autorag/config-3.json");
+		expect(toggles).toEqual([{ id: "team-slack", enabled: false }]);
+	});
+
+	it("resolves the active model live from the shared config instead of a persisted copy", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "autorag-settings-models-"));
+		directories.push(directory);
+		let resolved = 0;
+		const service = createSettingsService({
+			directory,
+			dataSources: noDataSources,
+			models: {
+				resolve: async () => ({
+					...EMPTY_MODEL,
+					configPath: `/autorag/config-${++resolved}.json`,
+					model: {
+						provider: "openrouter",
+						modelId: "deepseek/deepseek-v4.1-flash",
+						displayName: "deepseek/deepseek-v4.1-flash",
+						api: "openai-completions",
+						baseUrl: "https://openrouter.ai/api/v1",
+						resolutionSource: "config",
+						auth: { present: true, source: "env", envName: "OPENROUTER_API_KEY" },
+					},
+				}),
 			},
 			createChatSession: () => createFakeSession("models", []),
 			send: () => undefined,
 		});
 
-		expect(await service.sourcesList()).toEqual(sources);
-		await service.sourcesSetEnabled("team-slack", false);
-
-		expect(toggles).toEqual([{ id: "team-slack", enabled: false }]);
-		expect((await service.sourcesList())[0]?.enabled).toBe(false);
+		const first = await service.modelsResolve();
+		expect(first.configPath).toBe("/autorag/config-1.json");
+		expect(first.model?.provider).toBe("openrouter");
+		expect(first.model?.modelId).toBe("deepseek/deepseek-v4.1-flash");
+		expect((await service.modelsResolve()).configPath).toBe("/autorag/config-2.json");
 	});
 });
