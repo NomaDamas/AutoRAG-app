@@ -60,7 +60,12 @@ export function Sidebar({
 						<div className="sidebar__progress-fill" style={{ width: `${INDEXING_STATUS.percent}%` }} />
 					</div>
 				</div>
-				<button type="button" className="sidebar__item" onClick={onOpenSettings}>
+				<button
+					type="button"
+					className={`sidebar__item${activeLabel === "Settings" ? " sidebar__item--active" : ""}`}
+					aria-current={activeLabel === "Settings" ? "true" : undefined}
+					onClick={onOpenSettings}
+				>
 					<GearIcon className="sidebar__item-icon" />
 					<span className="sidebar__item-label">Settings</span>
 					{showHotkeys ? <Keycap label="⌘," /> : null}

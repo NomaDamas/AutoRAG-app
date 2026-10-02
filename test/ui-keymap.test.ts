@@ -59,6 +59,7 @@ describe("resolveKeyAction", () => {
 		expect(resolveKeyAction(key("F", { meta: true }), finder)).toEqual({ type: "focusSearch" });
 		expect(resolveKeyAction(key("t", { meta: true }), finder)).toEqual({ type: "newTab" });
 		expect(resolveKeyAction(key("w", { meta: true }), finder)).toEqual({ type: "closeTab" });
+		expect(resolveKeyAction(key(",", { meta: true }), finder)).toEqual({ type: "openSettings" });
 		expect(resolveKeyAction(key("f", { meta: true }), { ...finder, typing: true })).toEqual({ type: "focusSearch" });
 	});
 

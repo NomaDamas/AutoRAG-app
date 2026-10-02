@@ -72,16 +72,6 @@ export const NAV_GROUPS: readonly NavGroup[] = [
 			place("Dropbox", "M4 7l8-4 8 4-8 4zM4 7v10l8 4 8-4V7"),
 		],
 	},
-	{
-		label: "Sources",
-		items: [
-			source("Slack", "slack"),
-			source("Gmail", "mail", { syncing: true }),
-			source("Notion", "notion"),
-			source("Discord", "discord", { error: true }),
-			source("Telegram", "telegram"),
-		],
-	},
 ];
 
 /** Footer indexing progress — the reference's fixed "Indexing · Gmail 88%". */

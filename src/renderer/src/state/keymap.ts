@@ -33,7 +33,8 @@ export type KeyAction =
 	| { readonly type: "dismiss" }
 	| { readonly type: "focusSearch" }
 	| { readonly type: "newTab" }
-	| { readonly type: "closeTab" };
+	| { readonly type: "closeTab" }
+	| { readonly type: "openSettings" };
 
 export function resolveKeyAction(event: KeyEventLike, context: KeyContext): KeyAction | null {
 	if (event.key === "Escape") {
@@ -47,6 +48,8 @@ export function resolveKeyAction(event: KeyEventLike, context: KeyContext): KeyA
 				return { type: "newTab" };
 			case "w":
 				return { type: "closeTab" };
+			case ",":
+				return { type: "openSettings" };
 			default:
 				return null;
 		}

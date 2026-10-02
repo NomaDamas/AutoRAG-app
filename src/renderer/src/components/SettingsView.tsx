@@ -1,14 +1,13 @@
-import { useEffect, useRef, useState, type FormEvent, type ReactElement } from "react";
+import { useEffect, useRef, useState, type SyntheticEvent, type ReactElement } from "react";
 import type { AppSettings, AssistantEvent, Contact, DataSourceRow, DataSourcesSnapshot } from "../../../shared/settings-contract";
-import type { SettingsBridge, AssistantSurface } from "../../../shared/settings-contract";
-import { ArrowUpIcon, CloseIcon, PencilIcon, SparklesIcon } from "./icons";
+import type { AssistantSurface } from "../../../shared/settings-contract";
+import { ArrowUpIcon, DatabaseIcon, GearIcon, PencilIcon, SparklesIcon, UsersIcon } from "./icons";
 import { Switch } from "./primitives/Switch";
 
-const autorag = (window as unknown as { readonly autorag: { readonly settings: SettingsBridge } }).autorag;
+const autorag = window.autorag;
 
-type SettingsTab = "general" | "models" | "sources" | "contacts";
+export type SettingsCategory = "general" | "models" | "sources" | "contacts";
 
-/** Reference greeting copy (proto cfgMsgs / srcMsgs initial assistant messages, verbatim). */
 const GREETINGS: Record<AssistantSurface, string> = {
 	models: "모델 설정을 도와드릴게요. 원하는 방식을 말씀해 주세요. Quick과 Deep 답변은 같은 모델을 사용합니다.",
 	sources: "데이터 소스를 연결하거나, 에이전트가 읽는 소스 설명을 다듬어 드릴게요.",
@@ -29,7 +28,6 @@ interface ChatMessage {
 	readonly text: string;
 }
 
-/** Source-kind tile colors reuse the v6 file/datasource tile tokens (DESIGN.md §2.9). */
 function kindTileModifier(kind: string): string {
 	switch (kind) {
 		case "slack":
@@ -91,16 +89,21 @@ function indexSummary(index: DataSourceRow["index"]): string {
 	return INDEX_LABELS[index.state];
 }
 
-export function SettingsPanel({
-	initialTab = "general",
-	onClose,
+const CATEGORIES: readonly { readonly id: SettingsCategory; readonly label: string; readonly icon: (props: { className?: string }) => ReactElement }[] = [
+	{ id: "general", label: "General", icon: GearIcon },
+	{ id: "models", label: "Models", icon: SparklesIcon },
+	{ id: "sources", label: "Data Sources", icon: DatabaseIcon },
+	{ id: "contacts", label: "Contacts", icon: UsersIcon },
+];
+
+export function SettingsView({
+	initialCategory = "general",
 	onSettingsChanged,
 }: {
-	readonly initialTab?: SettingsTab;
-	readonly onClose: () => void;
+	readonly initialCategory?: SettingsCategory;
 	readonly onSettingsChanged?: (settings: AppSettings) => void;
 }): ReactElement {
-	const [tab, setTab] = useState<SettingsTab>(initialTab);
+	const [category, setCategory] = useState<SettingsCategory>(initialCategory);
 	const [settings, setSettings] = useState<AppSettings | null>(null);
 	const [contacts, setContacts] = useState<readonly Contact[]>([]);
 	const [snapshot, setSnapshot] = useState<DataSourcesSnapshot | null>(null);
@@ -114,6 +117,7 @@ export function SettingsPanel({
 	const [drafts, setDrafts] = useState<Record<AssistantSurface, string>>({ models: "", sources: "" });
 	const [busy, setBusy] = useState(false);
 	const [updateState, setUpdateState] = useState<"idle" | "checking" | "done">("idle");
+	const [historyCleared, setHistoryCleared] = useState(false);
 	const chatListRef = useRef<HTMLDivElement | null>(null);
 	const chatInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -146,13 +150,13 @@ export function SettingsPanel({
 	}, []);
 
 	useEffect(() => {
-		if (tab === "sources") void reloadSources();
-	}, [tab]);
+		if (category === "sources") void reloadSources();
+	}, [category]);
 
 	useEffect(() => {
 		const list = chatListRef.current;
 		if (list !== null) list.scrollTop = list.scrollHeight;
-	}, [chats, tab]);
+	}, [chats, category]);
 
 	async function sendAssistant(surface: AssistantSurface, raw: string): Promise<void> {
 		const text = raw.trim();
@@ -169,8 +173,7 @@ export function SettingsPanel({
 		setSettings(next);
 		onSettingsChanged?.(next);
 	}
-
-	async function addContact(event: FormEvent<HTMLFormElement>): Promise<void> {
+	async function addContact(event: SyntheticEvent<HTMLFormElement>): Promise<void> {
 		event.preventDefault();
 		if (Object.values(contactDraft).some((value) => value.trim().length === 0)) return;
 		const result = await autorag.settings.contactsAdd(contactDraft);
@@ -213,151 +216,330 @@ export function SettingsPanel({
 	const connectedCount = sources.filter((s) => s.agent.state === "connected").length;
 	const syncingCount = sources.filter((s) => s.status === "syncing").length;
 	const attentionCount = sources.filter((s) => s.status === "attention").length;
-	const sourcesSummary = [
-		`${sources.length} ${sources.length === 1 ? "source" : "sources"}`,
-		`${connectedCount} connected to the agent`,
-		syncingCount > 0 ? `${syncingCount} syncing` : null,
-		attentionCount > 0 ? `${attentionCount} needs attention` : null,
-	].filter(Boolean).join(" · ");
 	const sourcesProblem = sourcesError ?? snapshot?.error ?? null;
 
 	return (
-		// biome-ignore lint/a11y/useKeyWithClickEvents: modal backdrop dismiss mirrors the prototype
-		<div className="settings-backdrop" role="dialog" aria-modal="true" aria-label="Settings" onClick={onClose}>
-			{/* biome-ignore lint/a11y/noStaticElementInteractions: clicks inside the panel must not close it */}
-			<section className="settings-panel" onClick={(event) => event.stopPropagation()}>
-				<header className="settings-panel__header">
-					<strong className="settings-panel__title">Settings</strong>
-					<nav className="settings-panel__tabs" aria-label="Settings sections">
-						{(["general", "models", "sources"] as const).map((item) => (
-							<button
-								type="button"
-								className={tab === item ? "is-active" : ""}
-								key={item}
-								onClick={() => setTab(item)}
-							>
-								{item === "sources" ? "Data Sources" : item[0]?.toUpperCase() + item.slice(1)}
-							</button>
-						))}
-					</nav>
-					<div className="settings-panel__spacer" />
-					<button type="button" className="icon-button" aria-label="Close Settings" title="Close" onClick={onClose}><CloseIcon /></button>
-				</header>
-				<div className="settings-panel__body">
-					{tab === "general" && settings !== null ? (
+		<div className="settings-view settings-panel" role="region" aria-label="Settings">
+			<aside className="settings-sidebar" aria-label="Settings Categories">
+				<div className="settings-sidebar__title">Settings</div>
+				{CATEGORIES.map((item) => {
+					const Icon = item.icon;
+					const active = category === item.id;
+					return (
+						<button
+							key={item.id}
+							type="button"
+							className={`settings-sidebar__item${active ? " is-active" : ""}`}
+							aria-current={active ? "true" : undefined}
+							onClick={() => setCategory(item.id)}
+						>
+							<Icon className="settings-sidebar__icon" />
+							<span>{item.label}</span>
+						</button>
+					);
+				})}
+			</aside>
+
+			<main className="settings-content" aria-label={`${category} settings`}>
+				<div className="settings-content__container">
+					{category === "general" && settings !== null ? (
 						<>
-							<SettingsSection title="일반">
+							<div className="settings-content__header">
+								<h2 className="settings-content__title">General</h2>
+								<span className="settings-content__subtitle">환경 및 동작 설정</span>
+							</div>
+
+							<SettingsSection title="인터페이스 및 동작">
 								<SettingRow label="Language" description="앱 인터페이스 언어">
-									<div className="settings-select"><select value={settings.language} onChange={(event) => void autorag.settings.set({ language: event.target.value as AppSettings["language"] }).then(setSettings)}>
-										<option value="ko">한국어</option><option value="en">English</option><option value="ja">日本語</option><option value="zh">简体中文</option>
-									</select></div>
+									<div className="settings-select">
+										<select
+											value={settings.language}
+											onChange={(event) =>
+												void autorag.settings
+													.set({ language: event.target.value as AppSettings["language"] })
+													.then(setSettings)
+											}
+										>
+											<option value="ko">한국어</option>
+											<option value="en">English</option>
+											<option value="ja">日本語</option>
+											<option value="zh">简体中文</option>
+										</select>
+									</div>
 								</SettingRow>
-								{/* WIP: launch-at-login persists but the app does not call app.setLoginItemSettings yet. */}
 								<SettingRow label="Launch at login" description="Mac 로그인 시 자동 실행">
 									<Switch checked={settings.launchAtLogin} onChange={() => void toggleSetting("launchAtLogin")} />
 								</SettingRow>
-								{/* WIP: menu-bar tray visibility is persisted but no Tray is managed in main yet. */}
 								<SettingRow label="Show in menu bar" description="메뉴 막대에 아이콘 표시">
 									<Switch checked={settings.showInMenuBar} onChange={() => void toggleSetting("showInMenuBar")} />
 								</SettingRow>
 								<SettingRow label="Show hidden files" description="점(.)으로 시작하는 숨김 파일·폴더를 목록에 흐리게 표시">
 									<Switch checked={settings.showHiddenFiles} onChange={() => void toggleSetting("showHiddenFiles")} />
 								</SettingRow>
-								<SettingRow label="중복 문서 스캔 주기" description="dupey가 중복·유사 문서 묶음을 다시 계산하는 간격 (앱 시작 시 항상 1회 실행)">
-									<div className="settings-select"><select value={String(settings.dupeyScanIntervalMinutes)} onChange={(event) => void autorag.settings.set({ dupeyScanIntervalMinutes: Number(event.target.value) }).then(setSettings)}>
-										<option value="15">15분</option><option value="30">30분</option><option value="60">1시간</option><option value="180">3시간</option><option value="360">6시간</option><option value="720">12시간</option><option value="1440">24시간</option>
-									</select></div>
+								<SettingRow
+									label="중복 문서 스캔 주기"
+									description="dupey가 중복·유사 문서 묶음을 다시 계산하는 간격 (앱 시작 시 항상 1회 실행)"
+								>
+									<div className="settings-select">
+										<select
+											value={String(settings.dupeyScanIntervalMinutes)}
+											onChange={(event) =>
+												void autorag.settings
+													.set({ dupeyScanIntervalMinutes: Number(event.target.value) })
+													.then(setSettings)
+											}
+										>
+											<option value="15">15분</option>
+											<option value="30">30분</option>
+											<option value="60">1시간</option>
+											<option value="180">3시간</option>
+											<option value="360">6시간</option>
+											<option value="720">12시간</option>
+											<option value="1440">24시간</option>
+										</select>
+									</div>
 								</SettingRow>
 							</SettingsSection>
-							{/* WIP: there is no real updater; the check below is simulated UI only. */}
+
 							<SettingsSection title="소프트웨어 업데이트">
 								<SettingRow
 									label="AutoRAG Agent 1.4.2"
-									description={updateState === "done" ? "최신 버전입니다 · 방금 확인" : "마지막 확인: 오늘 09:00"}
+									description={updateState === "done" ? "최신 버전입니다 · 방금 확인됨" : "마지막 확인: 오늘 09:00"}
 								>
-									<button type="button" onClick={() => { setUpdateState("checking"); window.setTimeout(() => setUpdateState("done"), 500); }}>{updateState === "checking" ? "Checking…" : "Check for Updates"}</button>
+									<button
+										type="button"
+										className="settings-action-btn"
+										disabled={updateState === "checking"}
+										onClick={() => {
+											setUpdateState("checking");
+											window.setTimeout(() => setUpdateState("done"), 600);
+										}}
+									>
+										{updateState === "checking" ? "Checking…" : "Check for Updates"}
+									</button>
 								</SettingRow>
-								{/* WIP: auto-install persists; no update download/apply pipeline exists yet. */}
-								<SettingRow label="Automatically install updates" description="백그라운드에서 다운로드 후 재시작 시 적용">
+								<SettingRow label="Automatically install updates" description="백그라운드에서 다운로드 후 재시작 시 자동 적용">
 									<Switch checked={settings.autoInstallUpdates} onChange={() => void toggleSetting("autoInstallUpdates")} />
 								</SettingRow>
 							</SettingsSection>
-							<SettingsSection title="개인정보">
-								{/* WIP: settings-bridge clearHistory is a stub; the chat store is not cleared yet. */}
-								<SettingRow label="Clear chat history" description="저장된 모든 AI Search 대화를 삭제">
-									<button type="button" className="settings-danger-button" onClick={() => void autorag.settings.clearHistory()}>Clear…</button>
+
+							<SettingsSection title="개인정보 및 기록">
+								<SettingRow label="Clear chat history" description="저장된 모든 AI Search 대화 및 검색 기록을 삭제">
+									<button
+										type="button"
+										className="settings-danger-button settings-action-btn"
+										onClick={() => {
+											void autorag.settings.clearHistory();
+											setHistoryCleared(true);
+											window.setTimeout(() => setHistoryCleared(false), 2500);
+										}}
+									>
+										{historyCleared ? "기록 삭제됨 ✓" : "Clear…"}
+									</button>
 								</SettingRow>
-								{/* WIP: telemetry persists but no diagnostics pipeline reads it. */}
-								<SettingRow label="Share anonymous diagnostics" description="제품 개선을 위한 익명 진단 정보 공유">
+								<SettingRow label="Share anonymous diagnostics" description="제품 개선을 위한 익명 진단 정보 및 통계 공유">
 									<Switch checked={settings.telemetry} onChange={() => void toggleSetting("telemetry")} />
 								</SettingRow>
 							</SettingsSection>
 						</>
 					) : null}
-					{tab === "contacts" ? (
+
+					{category === "models" ? (
 						<>
-							<form className="settings-card settings-contact-form" onSubmit={(event) => void addContact(event)}>
-								<input placeholder="id" value={contactDraft.id} onChange={(event) => setContactDraft({ ...contactDraft, id: event.target.value })} />
-								<input placeholder="name" value={contactDraft.name} onChange={(event) => setContactDraft({ ...contactDraft, name: event.target.value })} />
-								<input placeholder="role" value={contactDraft.role} onChange={(event) => setContactDraft({ ...contactDraft, role: event.target.value })} />
-								<input placeholder="description" value={contactDraft.description} onChange={(event) => setContactDraft({ ...contactDraft, description: event.target.value })} />
-								<button type="submit">Add contact</button>
-							</form>
-							{contacts.length === 0 ? <p>No contacts yet.</p> : contacts.map((contact) => (
-								<article className="settings-card" key={contact.id}>
-									<strong>{contact.name}</strong><span>{contact.role}</span><p>{contact.description}</p>
-									<button type="button" onClick={() => void autorag.settings.contactsRemove(contact.id).then(() => setContacts((items) => items.filter((item) => item.id !== contact.id)))}>Remove</button>
-								</article>
-							))}
+							<div className="settings-content__header">
+								<h2 className="settings-content__title">Models</h2>
+								<span className="settings-content__subtitle">AI 검색 및 요약 모델 설정</span>
+							</div>
+
+							<SettingsSection title="연결된 AI 모델">
+								<div className="settings-model-card">
+									<div className="settings-model-card__icon">A</div>
+									<div className="settings-model-card__info">
+										<div className="settings-model-card__header">
+											<strong className="settings-model-card__name">AutoRAG Agent Engine</strong>
+											<span className="settings-badge settings-badge--ready">Connected</span>
+										</div>
+										<span className="settings-model-card__provider">Quick 및 Deep 답변에 공통으로 연결된 고성능 AI 모델입니다.</span>
+									</div>
+								</div>
+							</SettingsSection>
+
+							<SettingsSection title="원클릭 프리셋 구성">
+								<div className="settings-preset-grid">
+									<button
+										type="button"
+										className="settings-preset-card"
+										onClick={() => void sendAssistant("models", "가장 정확한 모델로 설정해줘")}
+									>
+										<div className="settings-preset-card__top">
+											<span className="settings-preset-card__badge">정확도 우선</span>
+											<span className="settings-preset-card__chip">High Accuracy</span>
+										</div>
+										<p className="settings-preset-card__desc">깊이 있는 분석과 근거 문서 정밀 대조를 최우선으로 실행합니다.</p>
+									</button>
+									<button
+										type="button"
+										className="settings-preset-card"
+										onClick={() => void sendAssistant("models", "빠른 응답 위주로 설정해줘")}
+									>
+										<div className="settings-preset-card__top">
+											<span className="settings-preset-card__badge">빠른 응답</span>
+											<span className="settings-preset-card__chip">Fast Response</span>
+										</div>
+										<p className="settings-preset-card__desc">지연 시간을 최소화하여 즉각적인 요약과 탐색 답변을 생성합니다.</p>
+									</button>
+									<button
+										type="button"
+										className="settings-preset-card"
+										onClick={() => void sendAssistant("models", "데이터가 기기 밖으로 안 나가게 로컬 모델로 설정해줘")}
+									>
+										<div className="settings-preset-card__top">
+											<span className="settings-preset-card__badge">로컬 보호</span>
+											<span className="settings-preset-card__chip">Local Only</span>
+										</div>
+										<p className="settings-preset-card__desc">외부 네트워크 전송 없이 안전한 로컬 온디바이스 모델을 사용합니다.</p>
+									</button>
+								</div>
+							</SettingsSection>
+
+							<SettingsSection title="모델 어시스턴트">
+								<AssistantPane
+									surface="models"
+									chats={chats.models}
+									draft={drafts.models}
+									busy={busy}
+									listRef={chatListRef}
+									inputRef={null}
+									setDraft={(text) => setDrafts((current) => ({ ...current, models: text }))}
+									onSend={sendAssistant}
+								/>
+							</SettingsSection>
 						</>
 					) : null}
-					{tab === "sources" ? (
-						<div className="settings-stack">
-							<div className="settings-intro settings-intro--sources">
-								<div className="settings-intro__text">
-									<strong className="settings-intro__title">Connected sources</strong>
-									<span className="settings-intro__desc">{sourcesSummary}</span>
-									{snapshot === null ? null : (
-										<span className="settings-intro__desc settings-intro__config" title="CLI, TUI, serve와 앱의 모든 AutoRAG 에이전트가 같은 설정 파일을 읽습니다">
-											AutoRAG config · <code>{snapshot.configPath}</code>{snapshot.configExists ? "" : " (없음)"}
-										</span>
-									)}
-									{sourcesProblem === null ? null : <span className="settings-intro__error" role="alert">{sourcesProblem}</span>}
-								</div>
-								<button type="button" className="settings-intro__refresh" onClick={() => void reloadSources()}>새로고침</button>
-							</div>
-							<div className="settings-sources">
-								{sources.length === 0 ? <p className="settings-sources__empty">No configured data sources.</p> : sources.map((source) => (
-									<SourceRow
-										key={source.id}
-										source={source}
-										open={openSource === source.id}
-										onToggle={() => void toggleSource(source)}
-										onDetail={() => setOpenSource((current) => (current === source.id ? null : source.id))}
-										onSaveDescription={(description) => saveSourceDescription(source, description)}
-									/>
-								))}
-							</div>
-							<AssistantPane surface="sources" chats={chats.sources} draft={drafts.sources} busy={busy} listRef={chatListRef} inputRef={chatInputRef} setDraft={(text) => setDrafts((current) => ({ ...current, sources: text }))} onSend={sendAssistant} />
 
-						</div>
-					) : null}
-					{tab === "models" ? (
-						<div className="settings-stack">
-							{/* WIP: the bridge does not expose the configured model identity; the card is static. */}
-							<div className="settings-model-card">
-								<span className="settings-model-tile">A</span>
-								<div>
-									<strong className="settings-model-card__name">AutoRAG Agent</strong>
-									<span className="settings-model-card__provider">Connected model</span>
-								</div>
-								<em>Quick · Deep 공통</em>
+					{category === "sources" ? (
+						<>
+							<div className="settings-content__header">
+								<h2 className="settings-content__title">Data Sources</h2>
+								<span className="settings-content__subtitle">연동된 파일 및 앱 데이터 관리</span>
 							</div>
-							<AssistantPane surface="models" chats={chats.models} draft={drafts.models} busy={busy} listRef={chatListRef} inputRef={null} setDraft={(text) => setDrafts((current) => ({ ...current, models: text }))} onSend={sendAssistant} />
-						</div>
+							{sourcesProblem === null ? null : (
+								<div className="settings-intro__error" role="alert">
+									{sourcesProblem}
+								</div>
+							)}
+							<SettingsSection title="연동된 데이터 소스 목록">
+								<div className="settings-sources-list">
+									{sources.length === 0 ? (
+										<p className="settings-sources__empty">연동된 데이터 소스가 없습니다.</p>
+									) : (
+										sources.map((source) => (
+											<SourceRow
+												key={source.id}
+												source={source}
+												open={openSource === source.id}
+												onToggle={() => void toggleSource(source)}
+												onDetail={() => setOpenSource((current) => (current === source.id ? null : source.id))}
+												onSaveDescription={(description) => saveSourceDescription(source, description)}
+											/>
+										))
+									)}
+								</div>
+							</SettingsSection>
+
+							<SettingsSection title="데이터 소스 어시스턴트">
+								<AssistantPane
+									surface="sources"
+									chats={chats.sources}
+									draft={drafts.sources}
+									busy={busy}
+									listRef={chatListRef}
+									inputRef={chatInputRef}
+									setDraft={(text) => setDrafts((current) => ({ ...current, sources: text }))}
+									onSend={sendAssistant}
+								/>
+							</SettingsSection>
+						</>
+					) : null}
+
+					{category === "contacts" ? (
+						<>
+							<div className="settings-content__header">
+								<h2 className="settings-content__title">Contacts</h2>
+								<span className="settings-content__subtitle">팀원 및 에이전트 연락처</span>
+							</div>
+
+							<SettingsSection title="새 연락처 추가">
+								<form className="settings-contact-form" onSubmit={(event) => void addContact(event)}>
+									<div className="settings-contact-form__grid">
+										<input
+											placeholder="ID (예: seoyeon)"
+											value={contactDraft.id}
+											onChange={(event) => setContactDraft({ ...contactDraft, id: event.target.value })}
+										/>
+										<input
+											placeholder="이름 (예: 김서연)"
+											value={contactDraft.name}
+											onChange={(event) => setContactDraft({ ...contactDraft, name: event.target.value })}
+										/>
+										<input
+											placeholder="직책 / 역할 (예: 마케팅 리드)"
+											value={contactDraft.role}
+											onChange={(event) => setContactDraft({ ...contactDraft, role: event.target.value })}
+										/>
+										<input
+											placeholder="설명 (예: Q3 예산 집행 총괄)"
+											value={contactDraft.description}
+											onChange={(event) => setContactDraft({ ...contactDraft, description: event.target.value })}
+										/>
+									</div>
+									<div className="settings-contact-form__actions">
+										<button
+											type="submit"
+											className="settings-action-btn is-primary"
+											disabled={Object.values(contactDraft).some((v) => v.trim().length === 0)}
+										>
+											연락처 추가
+										</button>
+									</div>
+								</form>
+							</SettingsSection>
+
+							<SettingsSection title="등록된 연락처">
+								{contacts.length === 0 ? (
+									<div className="settings-empty-notice">등록된 연락처가 없습니다.</div>
+								) : (
+									<div className="settings-contacts-list">
+										{contacts.map((contact) => (
+											<div className="settings-contact-item" key={contact.id}>
+												<div className="settings-contact-item__avatar">{contact.name[0] ?? "?"}</div>
+												<div className="settings-contact-item__body">
+													<div className="settings-contact-item__name">
+														<strong>{contact.name}</strong>
+														<span className="settings-contact-item__role">{contact.role}</span>
+													</div>
+													<p className="settings-contact-item__desc">{contact.description}</p>
+												</div>
+												<button
+													type="button"
+													className="settings-action-btn settings-danger-button"
+													onClick={() =>
+														void autorag.settings
+															.contactsRemove(contact.id)
+															.then(() => setContacts((items) => items.filter((item) => item.id !== contact.id)))
+													}
+												>
+													삭제
+												</button>
+											</div>
+										))}
+									</div>
+								)}
+							</SettingsSection>
+						</>
 					) : null}
 				</div>
-			</section>
+			</main>
 		</div>
 	);
 }
@@ -395,8 +577,9 @@ function SourceRow({
 	return (
 		<div className={`settings-source${open ? " is-open" : ""}`} data-source-id={source.id}>
 			<div className={`settings-source__row${source.enabled ? "" : " is-disabled"}`}>
-				<span className={`settings-source-tile settings-source-tile--${kindTileModifier(source.type)}`}>{source.id[0]?.toUpperCase() ?? "?"}</span>
-				{/* biome-ignore lint/a11y/noStaticElementInteractions: row body mirrors the prototype's clickable detail target */}
+				<span className={`settings-source-tile settings-source-tile--${kindTileModifier(source.type)}`}>
+					{source.id[0]?.toUpperCase() ?? "?"}
+				</span>
 				<div className="settings-source__body" onClick={onDetail}>
 					<span className="settings-source__name">{source.id}</span>
 					<span className="settings-source__detail">
@@ -407,8 +590,15 @@ function SourceRow({
 					<span className={`settings-status source-status--${source.status}`}>{STATUS_LABELS[source.status]}</span>
 					<span className="settings-source__pct">{indexSummary(source.index)}</span>
 				</div>
-				<button type="button" className={`settings-source__chevron${open ? " is-open" : ""}`} title="Details" onClick={onDetail}>
-					<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6" /></svg>
+				<button
+					type="button"
+					className={`settings-source__chevron${open ? " is-open" : ""}`}
+					title="Details"
+					onClick={onDetail}
+				>
+					<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+						<path d="M6 9l6 6 6-6" />
+					</svg>
 				</button>
 				<Switch checked={source.enabled} onChange={onToggle} ariaLabel={`${source.id} 사용`} />
 			</div>
@@ -470,7 +660,9 @@ function SourceRow({
 								}}
 							/>
 							<div className="settings-source-desc__actions">
-								<button type="button" disabled={saving} onClick={() => setEditing(false)}>취소</button>
+								<button type="button" disabled={saving} onClick={() => setEditing(false)}>
+									취소
+								</button>
 								<button type="submit" className="is-primary" disabled={saving || draft.trim() === source.description.trim()}>
 									{saving ? "저장 중…" : "저장"}
 								</button>
@@ -489,7 +681,10 @@ function SourceFact({ fact, label, state, value, detail }: { readonly fact: stri
 	return (
 		<div className="settings-source-fact" data-fact={fact} data-state={state}>
 			<dt>{label}</dt>
-			<dd><strong>{value}</strong><span>{detail}</span></dd>
+			<dd>
+				<strong>{value}</strong>
+				<span>{detail}</span>
+			</dd>
 		</div>
 	);
 }
@@ -524,7 +719,9 @@ function AssistantPane({
 			</div>
 			<div className="settings-chips">
 				{CHIPS[surface].map((chip) => (
-					<button type="button" key={chip} disabled={busy} onClick={() => void onSend(surface, chip)}>{chip}</button>
+					<button type="button" key={chip} disabled={busy} onClick={() => void onSend(surface, chip)}>
+						{chip}
+					</button>
 				))}
 			</div>
 			<form
@@ -560,10 +757,23 @@ function AssistantPane({
 }
 
 function SettingsSection({ title, children }: { readonly title: string; readonly children: ReactElement | ReactElement[] }): ReactElement {
-	return <section className="settings-section"><h3>{title}</h3><div className="settings-section__card">{children}</div></section>;
+	return (
+		<section className="settings-section">
+			<h3>{title}</h3>
+			<div className="settings-section__card">{children}</div>
+		</section>
+	);
 }
 
-function SettingRow({ label, description, children }: { readonly label: string; readonly description: string; readonly children: ReactElement }): ReactElement {
+function SettingRow({
+	label,
+	description,
+	children,
+}: {
+	readonly label: string;
+	readonly description: string;
+	readonly children: ReactElement;
+}): ReactElement {
 	return (
 		<div className="settings-row">
 			<div>

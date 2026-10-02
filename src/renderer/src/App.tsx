@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useState, type ReactElement } from "react";
-import type { SettingsBridge } from "../../shared/settings-contract";
 import type { CitationEvidence } from "../../shared/search-contract";
 
-const autorag = (window as unknown as { readonly autorag: { readonly settings: SettingsBridge } }).autorag;
+const autorag = window.autorag;
 import { AiSearchPanel } from "./components/AiSearchPanel";
 import { EvidencePanel } from "./components/EvidencePanel";
 import { ColumnHeader } from "./components/ColumnHeader";
@@ -11,7 +10,8 @@ import type { RowCallbacks } from "./components/FileRow";
 import { ContextMenu } from "./components/primitives/ContextMenu";
 import { Toast } from "./components/primitives/Toast";
 import { Sidebar } from "./components/Sidebar";
-import { SettingsPanel } from "./components/SettingsPanel";
+import { SettingsView } from "./components/SettingsView";
+import { SETTINGS_PATH } from "./state/tabs";
 import { StatusBar } from "./components/StatusBar";
 import { formatDevLabel, type DevLabel } from "../../shared/app-info";
 import { TabStrip } from "./components/TabStrip";
@@ -32,7 +32,6 @@ export function App(): ReactElement {
 	const source = useFinderSource();
 	const [showHiddenFiles, setShowHiddenFiles] = useState(false);
 	const finder = useFinderController(source, { showHiddenFiles });
-	const [settingsTab, setSettingsTab] = useState<"general" | "contacts" | null>(null);
 	const [evidence, setEvidence] = useState<readonly CitationEvidence[]>([]);
 	const [evidenceSession, setEvidenceSession] = useState<string | null>(null);
 	const [selectedEvidence, setSelectedEvidence] = useState<number | null>(null);
@@ -82,7 +81,7 @@ export function App(): ReactElement {
 					activeLabel={finder.activeNavLabel}
 					showHotkeys={SHOW_HOTKEYS}
 					onNavigate={finder.navigateNav}
-					onOpenSettings={() => setSettingsTab("general")}
+					onOpenSettings={finder.openSettings}
 				/>
 				<section className="finder" aria-label="Finder" onMouseDown={finder.focusFinder}>
 					<TabStrip
@@ -109,7 +108,10 @@ export function App(): ReactElement {
 						onSearchFocus={() => finder.setSearchFocused(true)}
 						onSearchBlur={() => finder.setSearchFocused(false)}
 					/>
-					<>
+					{finder.path === SETTINGS_PATH ? (
+						<SettingsView onSettingsChanged={(settings) => setShowHiddenFiles(settings.showHiddenFiles)} />
+					) : (
+						<>
 							<ColumnHeader sort={finder.sort} searching={finder.searching} onSort={finder.sortBy} />
 							<FileList
 								rows={finder.stackRows}
@@ -128,7 +130,8 @@ export function App(): ReactElement {
 								indexOverrides={finder.indexOverrides}
 								callbacks={rowCallbacks}
 							/>
-					</>
+						</>
+					)}
 					<StatusBar text={finder.statusText} showHotkeys={SHOW_HOTKEYS} devLabel={DEV_LABEL} />
 					{evidence.length === 0 ? null : (
 						<EvidencePanel
@@ -156,13 +159,6 @@ export function App(): ReactElement {
 					entries={finder.contextMenuEntries}
 					onSelect={finder.runMenuAction}
 					onClose={finder.closeContextMenu}
-				/>
-			)}
-			{settingsTab === null ? null : (
-				<SettingsPanel
-					initialTab={settingsTab}
-					onClose={() => setSettingsTab(null)}
-					onSettingsChanged={(settings) => setShowHiddenFiles(settings.showHiddenFiles)}
 				/>
 			)}
 		</div>

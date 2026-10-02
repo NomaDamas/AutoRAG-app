@@ -9,7 +9,9 @@ import {
 	navigateTab,
 	openTab,
 	openTabAt,
+	openOrSelectSettingsTab,
 	selectTab,
+	SETTINGS_PATH,
 	tabTitle,
 } from "../src/renderer/src/state/tabs";
 
@@ -120,5 +122,29 @@ describe("tabTitle", () => {
 
 	it("keeps the Contacts title while searching", () => {
 		expect(tabTitle({ path: "Contacts" }, { isActive: true, query: "박" })).toBe("Contacts");
+	});
+
+	it("keeps the Settings title and ignores search query", () => {
+		expect(tabTitle({ path: SETTINGS_PATH }, { isActive: true, query: "model" })).toBe("Settings");
+	});
+});
+
+describe("openOrSelectSettingsTab", () => {
+	it("opens a new Settings tab if none exists", () => {
+		const state = createTabsState("Documents");
+		const next = openOrSelectSettingsTab(state);
+		expect(next.tabs).toHaveLength(2);
+		expect(next.tabs[1]?.path).toBe(SETTINGS_PATH);
+		expect(next.activeId).toBe(next.tabs[1]?.id);
+	});
+
+	it("selects existing Settings tab if already open", () => {
+		const initial = createTabsState("Documents");
+		const withSettings = openOrSelectSettingsTab(initial);
+		const switchedToFirst = selectTab(withSettings, initial.tabs[0]!.id);
+		expect(switchedToFirst.activeId).toBe(initial.tabs[0]!.id);
+		const reopened = openOrSelectSettingsTab(switchedToFirst);
+		expect(reopened.tabs).toHaveLength(2);
+		expect(reopened.activeId).toBe(withSettings.tabs[1]!.id);
 	});
 });
