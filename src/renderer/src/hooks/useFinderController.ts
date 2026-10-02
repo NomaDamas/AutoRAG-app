@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, RefObject } from "react";
 import { RECENTS_PATH } from "../../../shared/fs-contract";
+import type { IndexStatus } from "../../../shared/index-contract";
 import type { FinderEntry } from "../data/entries";
 import type { NavItem } from "../data/places";
 import { type FinderLocation, type FinderSource, pickInitialPath } from "../data/source";
@@ -43,7 +44,6 @@ import {
 import {
 	applyVersionStacks,
 	buildVersionFamilies,
-	defaultIndexIncluded,
 	EMPTY_VERSION_FAMILIES,
 	type StackRow,
 	type VersionFamilies,
@@ -149,7 +149,8 @@ export interface FinderController {
 	readonly flashPath: string | null;
 	readonly renamePath: string | null;
 	readonly renameDraft: string;
-	readonly indexOverrides: Readonly<Record<string, boolean>>;
+	/** AutoRAG local-index state per file path, read from the parsed mirror and MinSync staging. */
+	readonly indexStatus: Readonly<Record<string, IndexStatus>>;
 	/** Non-null when dupey is missing or a version-family scan failed. */
 	readonly versionFamilyError: VersionFamilyError | null;
 	readonly activeNavLabel: string | null;
@@ -220,7 +221,9 @@ export function useFinderController(
 	const [listing, setListing] = useState<readonly FinderEntry[]>([]);
 	const [hits, setHits] = useState<readonly FinderEntry[]>([]);
 	const [locations, setLocations] = useState<readonly FinderLocation[]>([]);
-	const [indexOverrides, setIndexOverrides] = useState<Readonly<Record<string, boolean>>>({});
+	const [indexStatus, setIndexStatus] = useState<Readonly<Record<string, IndexStatus>>>({});
+	/** Bumped when a background AutoRAG refresh settles, so visible rows re-read their state. */
+	const [indexRevision, setIndexRevision] = useState(0);
 	const [toast, setToast] = useState<string | null>(null);
 	const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
 	const [rename, setRename] = useState<RenameState | null>(null);
@@ -480,6 +483,34 @@ export function useFinderController(
 	const viewEntries = useMemo(() => (layout === "columns" ? paneEntries.flat() : rows), [layout, paneEntries, rows]);
 	const orderedKeys = useMemo(() => viewEntries.map((entry) => entry.path), [viewEntries]);
 
+	/** Every file on screen shows its real AutoRAG index state; a settled refresh re-reads it. */
+	useEffect(() => {
+		void indexRevision;
+		const paths = viewEntries.filter((entry) => entry.kind === "file").map((entry) => entry.path);
+		if (paths.length === 0) {
+			return;
+		}
+		let live = true;
+		source
+			.indexStatus(paths)
+			.then((statuses) => {
+				if (live) {
+					setIndexStatus((current) => ({
+						...current,
+						...Object.fromEntries(statuses.map((status) => [status.path, status])),
+					}));
+				}
+			})
+			.catch((error: unknown) => {
+				if (live) {
+					reportError(error);
+				}
+			});
+		return () => {
+			live = false;
+		};
+	}, [source, viewEntries, indexRevision, reportError]);
+
 	/** Keyboard movement keeps the focused item in view (list: row height 32, lead 80). */
 	useEffect(() => {
 		const target = scrollTarget.current;
@@ -644,13 +675,38 @@ export function useFinderController(
 		[source, patchSelection, pruneColumns, showToast, refresh, reportError],
 	);
 
+	/**
+	 * Flips the file's `excludePaths` entry in the shared AutoRAG config. The row
+	 * adopts the returned status at once (pending while the index catches up);
+	 * the parsed + MinSync refresh runs in main and `onIndexRefreshed` re-reads.
+	 */
 	const toggleIndex = useCallback(
 		(entry: FinderEntry) => {
-			const included = indexOverrides[entry.path] ?? defaultIndexIncluded(entry.path, families);
-			setIndexOverrides((current) => ({ ...current, [entry.path]: !included }));
-			showToast(indexToast(entry.name, !included));
+			const current = indexStatus[entry.path];
+			if (current === undefined || !current.toggleable) {
+				return;
+			}
+			const exclude = !current.excluded;
+			source
+				.setIndexExcluded(entry.path, exclude)
+				.then((status) => {
+					setIndexStatus((statuses) => ({ ...statuses, [status.path]: status }));
+					showToast(indexToast(entry.name, !exclude));
+				})
+				.catch(reportError);
 		},
-		[indexOverrides, families, showToast],
+		[indexStatus, source, showToast, reportError],
+	);
+
+	useEffect(
+		() =>
+			source.onIndexRefreshed((error) => {
+				if (error !== null) {
+					reportError(new Error(`AutoRAG 인덱스 새로고침 실패: ${error}`));
+				}
+				setIndexRevision((value) => value + 1);
+			}),
+		[source, reportError],
 	);
 
 	const toggleStack = useCallback((entry: FinderEntry) => {
@@ -697,15 +753,6 @@ export function useFinderController(
 				});
 			});
 	}, [source]);
-
-	/** Stack members default to index-excluded; explicit toggles win. */
-	const effectiveIndexOverrides = useMemo(() => {
-		const defaults: Record<string, boolean> = {};
-		for (const path of families.memberOf.keys()) {
-			defaults[path] = false;
-		}
-		return { ...defaults, ...indexOverrides };
-	}, [families, indexOverrides]);
 
 	const presentQuickLook = useCallback(
 		(target: { readonly path: string; readonly name: string }) => {
@@ -1051,11 +1098,11 @@ export function useFinderController(
 		return buildContextMenu({
 			target: { name: entry.name, kind: entry.kind },
 			selectionCount: menuTargets(entry).length,
-			indexIncluded: effectiveIndexOverrides[entry.path] ?? true,
+			indexIncluded: indexStatus[entry.path]?.excluded !== true,
 			clipboardCount,
 			inRecents: path === RECENTS_PATH,
 		});
-	}, [contextMenu, menuTargets, effectiveIndexOverrides, clipboardCount, path]);
+	}, [contextMenu, menuTargets, indexStatus, clipboardCount, path]);
 
 	const navTargets = useMemo(
 		() => (locations.length > 0 ? locations : [{ name: basename(path), path }]),
@@ -1088,7 +1135,7 @@ export function useFinderController(
 		flashPath,
 		renamePath: rename?.path ?? null,
 		renameDraft: rename?.draft ?? "",
-		indexOverrides: effectiveIndexOverrides,
+		indexStatus,
 		versionFamilyError,
 		activeNavLabel,
 		contextMenu: contextMenu === null ? null : { cursor: contextMenu.cursor },

@@ -8,6 +8,7 @@ import { FS_CHANNELS } from "../shared/fs-contract";
 import { APP_NAME, APP_VERSION, formatWindowTitle, type DevLabel } from "../shared/app-info";
 import { createChatStore } from "./chat-store";
 import { createDataSourceStatusService } from "./datasource-status";
+import { createIndexStatusService } from "./index-status";
 import { readDevLabel, resolveClonePath } from "./dev-label";
 import { buildFsEntry } from "./fs-entry";
 import { createFsService } from "./fs-service";
@@ -17,6 +18,7 @@ import { createDefaultAgentFactory, createSearchService } from "./search-service
 import { createSettingsService } from "./settings-service";
 import {
 	registerFsIpcHandlers,
+	registerIndexIpcHandlers,
 	registerSearchIpcHandlers,
 	registerSettingsIpcHandlers,
 	registerVersionFamilyIpcHandlers,
@@ -127,6 +129,13 @@ app.whenReady().then(() => {
 		onUpdate: (result) => sendToMainWindow(FS_CHANNELS.versionFamiliesUpdated, result),
 	});
 	registerVersionFamilyIpcHandlers(versionFamilyService);
+	registerIndexIpcHandlers(
+		createIndexStatusService({
+			env: process.env,
+			cwd: process.cwd(),
+			onRefreshed: (error) => sendToMainWindow(FS_CHANNELS.indexRefreshed, error),
+		}),
+	);
 	const searchService = createSearchService({
 		agentFactory: createDefaultAgentFactory(),
 		chatStore: createChatStore({ directory: join(app.getPath("userData"), "chat-history") }),
