@@ -12,7 +12,7 @@ function fsEntry(over: Partial<FsEntry>): FsEntry {
 		modifiedAt: new Date(0).toISOString(),
 		isSymlink: false,
 		osKind: null,
-		iconDataUrl: null,
+		iconUrl: null,
 		...over,
 	};
 }
@@ -41,11 +41,11 @@ describe("entryFromFs kind label", () => {
 
 	it("carries the OS tile icon through to the row", () => {
 		// Given a file the OS produced an icon for
-		const icon = "data:image/png;base64,AAAA";
+		const icon = "autorag-thumb://local/?path=%2Fdocs%2Fa.mp4&mtime=2026-09-29T00%3A00%3A00.000Z";
 
 		// When the row is built
 		// Then the tile receives it
-		expect(entryFromFs(fsEntry({ iconDataUrl: icon })).iconDataUrl).toBe(icon);
-		expect(entryFromFs(fsEntry({ iconDataUrl: null })).iconDataUrl).toBeNull();
+		expect(entryFromFs(fsEntry({ iconUrl: icon })).iconUrl).toBe(icon);
+		expect(entryFromFs(fsEntry({ iconUrl: null })).iconUrl).toBeNull();
 	});
 });

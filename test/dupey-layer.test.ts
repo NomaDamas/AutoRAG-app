@@ -26,7 +26,7 @@ function entry(path: string): FsEntry {
 		modifiedAt: "2026-09-29T00:00:00.000Z",
 		isSymlink: false,
 		osKind: null,
-		iconDataUrl: null,
+		iconUrl: null,
 	};
 }
 

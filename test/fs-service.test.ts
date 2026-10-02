@@ -212,12 +212,18 @@ describe("readEntries", () => {
 			},
 		};
 
-		// When reading only two of them
-		const patch = await createFsService(deps).readEntries(dir, requested);
+		const service = createFsService(deps);
+		const patch = await service.readEntries(dir, requested);
 
-		// Then only the requested rows come back, and only they were enriched
+		// The live patch carries basic metadata immediately; enrichment is a separate call.
 		expect(patch.entries.map((entry) => entry.name)).toEqual(["a.txt", "c.txt"]);
 		expect(patch.removed).toEqual([]);
+		expect(iconTargets).toEqual([]);
+		expect(osKindPaths).toEqual([]);
+		await service.enrichEntries(
+			patch.entries.map(({ path, kind, ext, modifiedAt }) => ({ path, kind, ext, modifiedAt })),
+			true,
+		);
 		expect(iconTargets).toEqual(requested);
 		expect(osKindPaths).toEqual(requested);
 	});
@@ -789,12 +795,16 @@ describe("osKind", () => {
 			osKind: async (_path, ext) => (ext === "mp4" ? "MPEG-4 movie" : ext === "md" ? "Markdown Document" : null),
 		};
 
-		// When listing the folder
-		const listing = await createFsService(deps).listDir(dir);
-
-		// Then each file carries its OS kind
-		expect(listing.entries.find((entry) => entry.name === "clip.mp4")?.osKind).toBe("MPEG-4 movie");
-		expect(listing.entries.find((entry) => entry.name === "note.md")?.osKind).toBe("Markdown Document");
+		const service = createFsService(deps);
+		const listing = await service.listDir(dir);
+		// The basic listing is immediately usable and carries no blocking OS metadata.
+		expect(listing.entries.find((entry) => entry.name === "clip.mp4")?.osKind).toBeNull();
+		const enriched = await service.enrichEntries(
+			listing.entries.map(({ path, kind, ext, modifiedAt }) => ({ path, kind, ext, modifiedAt })),
+			false,
+		);
+		expect(enriched.find((entry) => entry.path.endsWith("clip.mp4"))?.osKind).toBe("MPEG-4 movie");
+		expect(enriched.find((entry) => entry.path.endsWith("note.md"))?.osKind).toBe("Markdown Document");
 		await rm(dir, { recursive: true, force: true });
 	});
 
@@ -844,17 +854,24 @@ describe("icons", () => {
 			icons: {
 				icons: async (targets) =>
 					new Map(
-						targets.filter((target) => target.path.endsWith(".mp4")).map((target) => [target.path, "data:image/png;base64,AAAA"]),
+						targets
+							.filter((target) => target.path.endsWith(".mp4"))
+							.map((target) => [target.path, "autorag-thumb://local/?path=clip.mp4&mtime=2026-09-29T00%3A00%3A00.000Z"]),
 					),
 			},
 		};
 
-		// When listing the folder
-		const listing = await createFsService(deps).listDir(dir);
-
-		// Then the video carries the icon and the other file keeps the letter tile
-		expect(listing.entries.find((entry) => entry.name === "clip.mp4")?.iconDataUrl).toBe("data:image/png;base64,AAAA");
-		expect(listing.entries.find((entry) => entry.name === "note.txt")?.iconDataUrl).toBeNull();
+		const service = createFsService(deps);
+		const listing = await service.listDir(dir);
+		expect(listing.entries.find((entry) => entry.name === "clip.mp4")?.iconUrl).toBeNull();
+		const enriched = await service.enrichEntries(
+			listing.entries.map(({ path, kind, ext, modifiedAt }) => ({ path, kind, ext, modifiedAt })),
+			true,
+		);
+		expect(enriched.find((entry) => entry.path.endsWith("clip.mp4"))?.iconUrl).toBe(
+			"autorag-thumb://local/?path=clip.mp4&mtime=2026-09-29T00%3A00%3A00.000Z",
+		);
+		expect(enriched.find((entry) => entry.path.endsWith("note.txt"))?.iconUrl).toBeNull();
 		await rm(dir, { recursive: true, force: true });
 	});
 });

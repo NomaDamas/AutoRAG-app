@@ -5,7 +5,7 @@
  *   timeout 300 bun scripts/manual-qa/run-qa-finder-live-sync.mjs
  */
 
-import { launchFinder } from "./launch-finder.mjs";
+import { finderWindow, launchFinder } from "./launch-finder.mjs";
 import {
 	existsSync,
 	lstatSync,
@@ -145,7 +145,7 @@ async function startSession(label) {
 			}
 		});
 	}
-	const page = await app.firstWindow();
+	const page = await finderWindow(app);
 	page.on("console", (message) => appendLog(`RENDERER console.${message.type()}: ${message.text()}`));
 	page.on("pageerror", (error) => appendLog(`RENDERER pageerror: ${error.message}`));
 	await page.setViewportSize({ width: 1440, height: 900 });
@@ -312,7 +312,7 @@ async function installS14ListCallRecorder() {
 			globalThis.__qaS14Hook = { kind: "ipcMain._invokeHandlers", original };
 			return "ipcMain._invokeHandlers";
 		}
-		const window = BrowserWindow.getAllWindows()[0];
+		const window = BrowserWindow.getAllWindows().find((item) => item.webContents.getURL().includes("index.html"));
 		if (window === undefined) {
 			throw new Error("no BrowserWindow available for S14 fallback hook");
 		}
@@ -732,8 +732,10 @@ async function runS10(page) {
 	await rowFor(page, "bulk").waitFor({ timeout: 30_000 });
 	await rowFor(page, "bulk").dblclick();
 	await rowFor(page, "bulk-0000.txt").waitFor({ timeout: 60_000 });
-	const grid = page.locator('[role="grid"], [role="treegrid"]');
-	await grid.evaluate((element) => {
+	// The list is virtualized: `[role="grid"]` is the padded rows container, so
+// the real scroller is its `.list` ancestor.
+	const scroller = page.locator(".list");
+	await scroller.evaluate((element) => {
 		element.scrollTop = element.scrollHeight;
 	});
 	const writeStarted = Date.now();
@@ -810,20 +812,35 @@ async function runS11(page) {
 		{ timeoutMs: LIVE_BOUND_MS, label: "scroll fs-watch batch" },
 	);
 	const batchAt = electronEvents.findLast((event) => event.text === batchEvent && event.timestampMs >= writeStarted)?.timestampMs ?? Date.now();
-	const row = rowFor(page, "scroll-live.txt");
+	// The list is virtualized: a row appended at the end stays unmounted while
+	// the viewport is at the middle, so adoption is proven by the content height
+	// growing; the row itself is confirmed after scrolling it into the window.
+	const beforeHeight = beforeState.scrollHeight;
 	await waitFor(
-		async () => (await row.count()) === 1,
-		{ timeoutMs: LIVE_BOUND_MS, label: "scroll-live.txt row to be listed" },
+		async () => {
+			const state = await scrollState(false);
+			return (state?.scrollHeight ?? 0) > beforeHeight;
+		},
+		{ timeoutMs: LIVE_BOUND_MS, label: "scroll-live.txt to extend the list" },
 	);
+	const rowVisibleAt = Date.now();
+	const elapsedMs = rowVisibleAt - writeStarted;
+	// Scroll preservation is measured before scrolling anywhere: the patch
+	// must not have moved the viewport.
 	const afterState = await scrollState(false);
 	const after = afterState?.scrollTop ?? 0;
 	const delta = Math.abs(after - before);
-	const rowVisibleAt = Date.now();
-	const elapsedMs = rowVisibleAt - writeStarted;
+	await page.locator(".list").evaluate((element) => {
+		element.scrollTop = element.scrollHeight;
+	});
+	const row = rowFor(page, "scroll-live.txt");
+	await waitFor(
+		async () => (await row.count()) === 1,
+		{ timeoutMs: LIVE_BOUND_MS, label: "scroll-live.txt row to mount" },
+	);
 	appendLog(`S11 timing: write=${writeStarted} batch=${batchAt} row=${rowVisibleAt}`);
 	if (delta > 32) throw new Error(`scrollTop changed ${delta}px, expected <= 32px`);
 	if (elapsedMs > LIVE_BOUND_MS) throw new Error(`scroll-preserving create took ${elapsedMs}ms > ${LIVE_BOUND_MS}ms; batchDelta=${batchAt - writeStarted}ms; scrollDelta=${delta}px`);
-	appendLog(`S11 timing: write=${writeStarted} batch=${batchAt} row=${rowVisibleAt}`);
 	pass(
 		"S11 scroll kept",
 		`scrollTop ${before} -> ${after} (delta ${delta}px) <= 32px in ${elapsedMs}ms <= ${LIVE_BOUND_MS}ms; batchDelta=${batchAt - writeStarted}ms <= ${LIVE_BOUND_MS}ms`,
@@ -931,7 +948,7 @@ async function runS14(page) {
 	await installLiveRefreshProbe(page, "S14");
 	const seq = (await page.evaluate(async () => (await window.autorag.live.layers()).seq)) + 1;
 	const sentAt = await app.evaluate(({ BrowserWindow }, payload) => {
-		const window = BrowserWindow.getAllWindows()[0];
+		const window = BrowserWindow.getAllWindows().find((item) => item.webContents.getURL().includes("index.html"));
 		if (window === undefined) {
 			throw new Error("no BrowserWindow available for S14 live message");
 		}

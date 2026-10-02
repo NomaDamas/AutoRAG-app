@@ -528,8 +528,11 @@ button.row__disclosure:hover {
 }
 
 .icon-grid {
+	--tile-min: 112px;
+	--tile-row: 128px;
 	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+	grid-template-columns: repeat(auto-fill, minmax(var(--tile-min), 1fr));
+	grid-auto-rows: var(--tile-row);
 	gap: var(--space-8) var(--space-4);
 	align-items: start;
 }
@@ -539,6 +542,7 @@ button.row__disclosure:hover {
 	flex-direction: column;
 	align-items: center;
 	gap: var(--space-6);
+	height: var(--tile-row);
 	min-width: 0;
 	padding: var(--space-8) var(--space-4) var(--space-6);
 	border-radius: var(--radius-8);

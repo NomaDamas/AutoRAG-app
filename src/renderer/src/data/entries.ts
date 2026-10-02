@@ -16,8 +16,10 @@ export interface FinderEntry extends SortableEntry {
 	readonly path: string;
 	readonly kind: "folder" | "file";
 	readonly fileKind: FileKind;
-	/** OS tile icon (Finder thumbnail) as a data URL; null renders the letter tile. */
-	readonly iconDataUrl: string | null;
+	/** OS tile icon URL; null renders the extension letter tile. */
+	readonly iconUrl: string | null;
+	/** Exact filesystem mtime used to reject stale background enrichment. */
+	readonly modifiedAt?: string;
 	readonly dateLabel: string;
 	readonly sizeLabel: string;
 }
@@ -29,7 +31,8 @@ export function entryFromFs(entry: FsEntry, location?: string): FinderEntry {
 		path: entry.path,
 		kind: entry.kind,
 		fileKind,
-		iconDataUrl: entry.iconDataUrl,
+		iconUrl: entry.iconUrl,
+		modifiedAt: entry.modifiedAt,
 		dateLabel: formatModified(entry.modifiedAt),
 		sizeLabel: formatSize(entry.kind === "folder" ? null : entry.size),
 		// The OS-reported kind wins; the extension map is the fallback.
@@ -42,6 +45,22 @@ export function entryFromFs(entry: FsEntry, location?: string): FinderEntry {
 
 export function entryFromSearchHit(hit: FsSearchResult): FinderEntry {
 	return { ...entryFromFs(hit.entry), location: dirname(hit.entry.path) };
+}
+
+export function applyEntryEnrichment(
+	entries: readonly FinderEntry[],
+	enriched: readonly { readonly path: string; readonly modifiedAt: string; readonly osKind: string | null; readonly iconUrl: string | null }[],
+): readonly FinderEntry[] {
+	const byPath = new Map(enriched.map((entry) => [entry.path, entry]));
+	let changed = false;
+	const result = entries.map((entry) => {
+		const patch = byPath.get(entry.path);
+		if (patch === undefined || (entry.modifiedAt !== undefined && entry.modifiedAt !== patch.modifiedAt)) return entry;
+		const next = { ...entry, kindLabel: patch.osKind ?? entry.kindLabel, iconUrl: patch.iconUrl };
+		if (next.kindLabel !== entry.kindLabel || next.iconUrl !== entry.iconUrl) changed = true;
+		return next;
+	});
+	return changed ? result : entries;
 }
 
 /** A prototype fixture row: the reference's `F()` / `D()` shape. */
@@ -58,7 +77,7 @@ export function entryFromFixture(item: FixtureItem, location: string): FinderEnt
 		path: joinPath(location, item.name),
 		kind: item.fileKind === "folder" ? "folder" : "file",
 		fileKind: item.fileKind,
-		iconDataUrl: null,
+		iconUrl: null,
 		dateLabel: item.dateLabel,
 		sizeLabel: item.sizeLabel,
 		kindLabel: kindMeta(item.fileKind).label,

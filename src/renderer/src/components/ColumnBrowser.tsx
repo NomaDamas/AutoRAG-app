@@ -131,7 +131,7 @@ function ColumnRow({
 			onDoubleClick={() => callbacks.onOpen(entry)}
 			onContextMenu={(event) => callbacks.onContextMenu(entry, event)}
 		>
-			{row.child ? <span className="row__connector" aria-hidden="true" /> : <FileTile kind={entry.fileKind} iconDataUrl={entry.iconDataUrl} size={16} />}
+			{row.child ? <span className="row__connector" aria-hidden="true" /> : <FileTile kind={entry.fileKind} iconUrl={entry.iconUrl} size={16} />}
 			{renameDraft === null ? (
 				<span className="column-row__label">{entry.name}</span>
 			) : (

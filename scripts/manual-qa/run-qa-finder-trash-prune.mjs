@@ -18,7 +18,7 @@
  *   bun scripts/manual-qa/run-qa-finder-trash-prune.mjs
  */
 
-import { launchFinder } from "./launch-finder.mjs";
+import { finderWindow, launchFinder } from "./launch-finder.mjs";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -96,7 +96,7 @@ rmSync(join(homedir(), ".Trash", VICTIM), { force: true });
 rmSync(join(homedir(), "Library", "Mobile Documents", ".Trash", VICTIM), { force: true });
 
 const app = await launchFinder({ userDataDir: USER_DATA });
-const page = await app.firstWindow();
+const page = await finderWindow(app);
 page.setViewportSize({ width: 1440, height: 900 });
 await page.waitForSelector('[role="row"]', { timeout: 60_000 });
 await page.screenshot({ path: join(EVIDENCE, "0-launch.png") });
@@ -164,7 +164,7 @@ check("snapshot kept the surviving members", (pruned?.members ?? []).length, fam
 // 5. Restart: the snapshot is the only source, so the deleted row cannot come back.
 await app.close();
 const relaunch = await launchFinder({ userDataDir: USER_DATA });
-const second = await relaunch.firstWindow();
+const second = await finderWindow(relaunch);
 second.setViewportSize({ width: 1440, height: 900 });
 await second.waitForSelector('[role="row"]', { timeout: 60_000 });
 await second.getByRole("button", { name: "Downloads" }).click();

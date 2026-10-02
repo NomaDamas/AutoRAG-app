@@ -14,7 +14,7 @@
 import { execSync } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import { rm } from "node:fs/promises";
-import { launchFinder } from "./launch-finder.mjs";
+import { finderWindow, launchFinder } from "./launch-finder.mjs";
 
 const ROOT = new URL("../../", import.meta.url).pathname.replace(/\/$/, "");
 const EVIDENCE = `${ROOT}/.omo/evidence/ai-finder-app/qa-os-kind/`;
@@ -71,35 +71,66 @@ for (const fixture of fixtures) {
 let app;
 try {
 	app = await launchFinder();
-	const page = await app.firstWindow();
+	let page = await finderWindow(app);
 	await page.waitForSelector('[role="row"]', { timeout: 30000 });
 	await page.getByLabel("Places").getByRole("button", { name: "Documents", exact: true }).click();
-	await page.waitForSelector(`[role="row"]:has-text("${fixtures[0].name}")`, { timeout: 30000 });
-
-	const rowCellText = async (name) => {
-		const row = page.locator('[role="row"]').filter({ hasText: name }).first();
-		return row.locator('[role="gridcell"]').allInnerTexts();
+	const rowFor = (name) => page.locator('[role="row"]').filter({ hasText: name }).first();
+	const mountRow = async (name) => {
+		await page.locator(".list").evaluate((node) => {
+			node.scrollTop = 0;
+		});
+		for (let attempt = 0; attempt < 160; attempt += 1) {
+			if ((await rowFor(name).count()) > 0) return rowFor(name);
+			const atEnd = await page.locator(".list").evaluate((node) => {
+				node.scrollTop = node.scrollTop + node.clientHeight * 0.9;
+				return node.scrollTop + node.clientHeight >= node.scrollHeight - 1;
+			});
+			if (atEnd) break;
+			await page.waitForTimeout(25);
+		}
+		return rowFor(name).waitFor({ timeout: 30000 }).then(() => rowFor(name));
+	};
+	await mountRow(fixtures[0].name);
+	// The OS kind now lands through background enrichment, and rows mount
+	// through virtualization: mount each row and poll until its Kind cell shows
+	// the OS's own answer.
+	const kindCell = async (name) => {
+		await mountRow(name);
+		const cells = await page
+			.locator('[role="row"]')
+			.filter({ hasText: name })
+			.first()
+			.locator('[role="gridcell"]')
+			.allInnerTexts();
+		return cells[3]?.trim() ?? "";
+	};
+	const kindCellReady = async (name, expected, timeoutMs = 15000) => {
+		const deadline = Date.now() + timeoutMs;
+		for (;;) {
+			const value = await kindCell(name);
+			if (value === expected || Date.now() >= deadline) return value;
+			await page.waitForTimeout(100);
+		}
 	};
 
 	const observed = [];
 	for (const fixture of fixtures) {
-		const cells = await rowCellText(fixture.name);
-		observed.push({ name: fixture.name, cells });
-		check(fixture.name, cells[3].trim(), fixture.expected);
+		const kind = await kindCellReady(fixture.name, fixture.expected);
+		observed.push({ name: fixture.name, kind });
+		check(fixture.name, kind, fixture.expected);
 	}
-	const fallbackCells = await rowCellText(fallbackName);
-	observed.push({ name: fallbackName, cells: fallbackCells });
-	const fallbackKind = fallbackCells[3].trim();
+	const fallbackKind = await kindCell(fallbackName);
+	observed.push({ name: fallbackName, kind: fallbackKind });
 	results.push({ label: fallbackName, actual: fallbackKind, expected: "non-empty fallback", pass: fallbackKind !== "" });
 	console.log(`${fallbackKind !== "" ? "PASS" : "FAIL"}  ${fallbackName}: app=${JSON.stringify(fallbackKind)} (fallback row, non-empty)`);
 
-	const folderCells = await rowCellText(folderName);
-	observed.push({ name: folderName, cells: folderCells });
-	check(folderName, folderCells[3].trim(), "Folder");
+	const folderKind = await kindCell(folderName);
+	observed.push({ name: folderName, kind: folderKind });
+	check(folderName, folderKind, "Folder");
 
-	check(`${fixtures[0].name} is not Markdown`, observed[0].cells[3].trim() === "Markdown" ? "Markdown" : "not-Markdown", "not-Markdown");
+	check(`${fixtures[0].name} is not Markdown`, observed[0].kind === "Markdown" ? "Markdown" : "not-Markdown", "not-Markdown");
 
-	const row = page.locator('[role="row"]').filter({ hasText: fixtures[0].name }).first();
+	const row = await mountRow(fixtures[0].name);
 	await page.screenshot({ path: `${EVIDENCE}/documents-list.png` });
 	await row.screenshot({ path: `${EVIDENCE}/mp4-row.png` });
 	await Bun.write(

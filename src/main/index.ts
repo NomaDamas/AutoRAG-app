@@ -4,6 +4,8 @@ import { app, BrowserWindow, clipboard, shell } from "electron";
 import { attachQuickLook, registerPreviewProtocol, registerPreviewSchemes, registerQuickLookIpc } from "../preview/node/register";
 import { writeDefaultConfig } from "@autorag/librarian";
 import { resolveConfigPath } from "@autorag/librarian/core";
+import { createIconProvider } from "./file-icon";
+import { registerIconProtocol, registerIconSchemes } from "./icon-register";
 import { FS_CHANNELS } from "../shared/fs-contract";
 import { DUPEY_LAYER_ID, LIVE_CHANNELS } from "../shared/live-contract";
 import { APP_NAME, APP_VERSION, formatWindowTitle, type DevLabel } from "../shared/app-info";
@@ -105,9 +107,12 @@ function sendToMainWindow(channel: string, payload: unknown): void {
 }
 
 registerPreviewSchemes();
+registerIconSchemes();
 
 app.whenReady().then(() => {
 	registerPreviewProtocol();
+	const iconProvider = createIconProvider();
+	registerIconProtocol(iconProvider);
 	registerQuickLookIpc();
 	ensureAutoRAGConfig();
 	const devLabel = resolveDevLabel();
@@ -116,6 +121,7 @@ app.whenReady().then(() => {
 	const fsService = createFsService({
 		shell,
 		clipboard,
+		icons: iconProvider,
 		recents: createRecentsStore({ directory: join(app.getPath("userData"), "recents") }),
 		...(qaRoot !== "" && isAbsolute(qaRoot) ? { qaRoot } : {}),
 	});

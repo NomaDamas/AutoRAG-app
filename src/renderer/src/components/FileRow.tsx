@@ -108,7 +108,7 @@ export function FileRow({
 						<ChevronRightIcon size={10} />
 					</button>
 				)}
-				{child ? <span className="row__connector" aria-hidden="true" /> : <FileTile kind={entry.fileKind} iconDataUrl={entry.iconDataUrl} />}
+				{child ? <span className="row__connector" aria-hidden="true" /> : <FileTile kind={entry.fileKind} iconUrl={entry.iconUrl} />}
 				{renameDraft === null ? (
 					<span className="row__label">{entry.name}</span>
 				) : (

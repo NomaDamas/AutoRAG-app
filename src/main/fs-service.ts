@@ -9,7 +9,9 @@ import {
 	type FsCoreBridge,
 	type FsClipboard,
 	type FsEntriesPatch,
+	type FsEnrichmentTarget,
 	type FsEntry,
+	type FsEntryEnrichment,
 	type FsLocation,
 	type FsOpError,
 	type FsSearchResult,
@@ -70,7 +72,6 @@ interface SearchContext {
 	readonly needle: string;
 	readonly location: string;
 	readonly results: FsSearchResult[];
-	readonly lookup: OsKindLookup;
 }
 
 function compareEntries(a: FsEntry, b: FsEntry): number {
@@ -106,7 +107,7 @@ async function resolveIcons(entries: readonly FsEntry[], provider: IconProvider)
 /** A file the OS produced no icon for keeps its letter tile. */
 function withIcon(entry: FsEntry, icons: ReadonlyMap<string, string>): FsEntry {
 	const url = icons.get(entry.path);
-	return url === undefined ? entry : { ...entry, iconDataUrl: url };
+	return url === undefined ? entry : { ...entry, iconUrl: url };
 }
 
 async function runBatch(paths: readonly string[], operation: (path: string) => Promise<void>): Promise<FsBatchResult> {
@@ -139,7 +140,7 @@ async function walkForSearch(dir: string, depth: number, context: SearchContext)
 		if (dirent.name.toLowerCase().includes(context.needle)) {
 			try {
 				context.results.push({
-					entry: await applyOsKind(await buildFsEntry(fullPath), context.lookup),
+					entry: await buildFsEntry(fullPath),
 					location: context.location,
 				});
 			} catch (error) {
@@ -159,10 +160,37 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 	const iconProvider: IconProvider = deps.icons ?? createIconProvider();
 	// In-app clipboard lives in main-process memory only.
 	let inAppClipboard: FsClipboard | null = null;
-	/** One enrichment pass per listing: OS kind + OS tile icon. */
-	async function annotateListing(entries: readonly FsEntry[]): Promise<FsEntry[]> {
-		const [icons, enriched] = await Promise.all([resolveIcons(entries, iconProvider), enrichOsKinds(entries, osKind)]);
+	/** Resolve OS metadata and optional thumbnails without blocking listDir. */
+	async function annotateEntries(entries: readonly FsEntry[], thumbnails: boolean): Promise<FsEntry[]> {
+		const [icons, enriched] = await Promise.all([
+			thumbnails ? resolveIcons(entries, iconProvider) : Promise.resolve(new Map<string, string>()),
+			enrichOsKinds(entries, osKind),
+		]);
 		return enriched.map((entry) => withIcon(entry, icons));
+	}
+
+	async function enrichEntries(
+		targets: readonly FsEnrichmentTarget[],
+		thumbnails: boolean,
+	): Promise<readonly FsEntryEnrichment[]> {
+		const base = targets.map((target) => ({
+			name: basename(target.path),
+			path: target.path,
+			kind: target.kind,
+			ext: target.ext,
+			size: null,
+			modifiedAt: target.modifiedAt,
+			isSymlink: false,
+			osKind: null,
+			iconUrl: null,
+		} satisfies FsEntry));
+		const enriched = await annotateEntries(base, thumbnails);
+		return enriched.map((entry) => ({
+			path: entry.path,
+			modifiedAt: entry.modifiedAt,
+			osKind: entry.osKind,
+			iconUrl: entry.iconUrl,
+		}));
 	}
 
 	async function buildListingEntries(dirents: readonly Dirent[], path: string): Promise<FsEntry[]> {
@@ -190,13 +218,14 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 
 	async function listDir(path: string): Promise<DirListing> {
 		if (path === RECENTS_PATH) {
-			return { path, entries: await annotateListing(await recentEntries()) };
+			// The recents store already lists most-recent first; sorting by
+			// name would destroy that order.
+			return { path, entries: await recentEntries() };
 		}
 		const dirents = await readdir(path, { withFileTypes: true });
 		const entries = await buildListingEntries(dirents, path);
-		const rows = await annotateListing(entries);
-		rows.sort(compareEntries);
-		return { path, entries: rows };
+		entries.sort(compareEntries);
+		return { path, entries };
 	}
 
 	/**
@@ -224,7 +253,6 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 					try {
 						return { path, entry: await buildFsEntry(path) };
 					} catch (error) {
-						// A vanished child is a removal; anything else surfaces verbatim.
 						if (hasErrorCode(error, "ENOENT") || hasErrorCode(error, "ENOTDIR")) {
 							return { path, entry: null };
 						}
@@ -237,7 +265,7 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 				else entries.push(item.entry);
 			}
 		}
-		return { entries: await annotateListing(entries), removed };
+		return { entries, removed };
 	}
 
 	/**
@@ -313,11 +341,10 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 		for (const location of await locations()) {
 			// The virtual Recents location has no path on disk to walk.
 			if (!location.available || location.path === RECENTS_PATH) continue;
-			await walkForSearch(location.path, 0, { needle, location: location.name, results, lookup: osKind });
+			await walkForSearch(location.path, 0, { needle, location: location.name, results });
 			if (results.length >= SEARCH_MAX_RESULTS) break;
 		}
-		const icons = await resolveIcons(results.map((result) => result.entry), iconProvider);
-		return results.map((result) => ({ location: result.location, entry: withIcon(result.entry, icons) }));
+		return results;
 	}
 
 	async function copy(paths: readonly string[], destDir: string): Promise<FsBatchResult> {
@@ -373,6 +400,7 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 	}
 
 	return {
+		enrichEntries,
 		listDir,
 		readEntries,
 		stat: async (path) => applyOsKind(await buildFsEntry(path), osKind),

@@ -13,7 +13,7 @@ import { execSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { launchFinder } from "./launch-finder.mjs";
+import { finderWindow, launchFinder } from "./launch-finder.mjs";
 
 const ROOT = new URL("../..", import.meta.url).pathname;
 const EVIDENCE = join(ROOT, ".omo/evidence/ai-finder-app/qa-recents");
@@ -129,7 +129,7 @@ const openApp = async () => {
 	app.process().stdout?.on("data", (chunk) => appLog.push(`stdout: ${String(chunk).trim()}`));
 	app.process().stderr?.on("data", (chunk) => appLog.push(`stderr: ${String(chunk).trim()}`));
 	app.process().on("exit", (code) => appLog.push(`app exited code=${code}`));
-	const page = await app.firstWindow();
+	const page = await finderWindow(app);
 	page.on("crash", () => appLog.push("renderer crashed"));
 	await page.waitForSelector('[role="row"]');
 	return { app, page };
@@ -169,8 +169,24 @@ check("no store file before anything was opened", !existsSync(STORE), STORE);
 
 // 2. Double-click a real file in Documents → the OS default app opens it and it becomes recent.
 await clickNav(page, "Documents");
-const openedRow = page.locator('[role="row"]', { hasText: `${RUN_ID}-opened.txt` });
-await openedRow.waitFor({ timeout: 10_000 });
+const mountRow = async (name) => {
+	const row = page.locator('[role="row"]', { hasText: name }).first();
+	await page.locator(".list").evaluate((node) => {
+		node.scrollTop = 0;
+	});
+	for (let attempt = 0; attempt < 160; attempt += 1) {
+		if ((await row.count()) > 0) return row;
+		const atEnd = await page.locator(".list").evaluate((node) => {
+			node.scrollTop = node.scrollTop + node.clientHeight * 0.9;
+			return node.scrollTop + node.clientHeight >= node.scrollHeight - 1;
+		});
+		if (atEnd) break;
+		await sleep(25);
+	}
+	await row.waitFor({ timeout: 10_000 });
+	return row;
+};
+const openedRow = await mountRow(`${RUN_ID}-opened.txt`);
 const guiBefore = guiProcesses();
 await openedRow.dblclick();
 await sleep(4000);
@@ -189,8 +205,8 @@ check("the fixture document was closed again", handlerHolding(RUN_ID) === "", ha
 
 // 3. Space on a second file → Quick Look previews it and it becomes recent too.
 await page.bringToFront();
-const previewRow = page.locator('[role="row"]', { hasText: `${RUN_ID}-previewed.txt` });
-await previewRow.click();
+const previewRow = await mountRow(`${RUN_ID}-previewed.txt`);
+await previewRow.dispatchEvent("click");
 await page.keyboard.press(" ");
 await sleep(4000);
 // The qlmanage process is host-dependent (macOS hands the preview to QuickLookUIService and
