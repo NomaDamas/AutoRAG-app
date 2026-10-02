@@ -57,6 +57,9 @@ All values are literal from the reference. Token names below are the exact custo
 | `--bg-code` | `#F4F4F7` | evidence `code` block |
 | `--bg-chip-sent` | `#F3F3F7` | attachment chip under a sent user message (`proto:281`) |
 | `--bg-tile-fallback` | `#8A8A9C` | md / zip tiles and the unknown-kind fallback |
+| `--bg-quicklook-panel` | `rgba(246,246,248,0.72)` | Quick Look window surface (translucent) |
+| `--bg-quicklook-frost` | `rgba(252,252,253,0.82)` | Quick Look toolbar and page rail |
+| `--backdrop-quicklook` | `saturate(1.6) blur(18px)` | Quick Look frosted chrome material |
 
 ### 2.2 Hover washes
 
@@ -614,3 +617,4 @@ Tabs use `10px 10px 0 0` — `--radius-10` on the top corners only.
 8. **`--tile-md` and `--tile-zip` are the same value** (`#8A8A9C`, also `--bg-tile-fallback`). Kept as three names because the reference treats them as three concepts; consolidating would lose the "unknown kind" meaning.
 9. **Evidence/code/paper surfaces use four near-white values** (`#FAFAFB`, `#FAFAFC`, `#F4F4F7`, `#F3F3F7`) that are visually indistinguishable in isolation. They are preserved exactly because the reference is pixel-final; do not "simplify" them into one token.
 10. **The dupey-required banner is outside the reference.** The reference assumes duplicate detection always works. The app adds one operational error surface, `.list__error` (handoff README has no counterpart), shown above the file list when the required `dupey` CLI is missing or a version-family scan fails. It is built only from existing tokens (`--danger-text`, `--danger-bg-soft`, `--danger-border`, `--bg-window`, `--font-mono`), carries `role="alert"`, states the failure and the exact install command, and offers 다시 확인 to re-probe. It is an error path, never a normal state.
+11. **Quick Look is a separate translucent panel, not the in-window overlay (§4.1 of the handoff).** The preview runs in its own pre-warmed `BrowserWindow` so `space` never waits on a mount, so the scrim, the 760px `--w-quicklook` overlay panel, and its header buttons do not apply. The panel follows macOS Quick Look instead: a translucent `--bg-quicklook-panel` surface over the Finder, a toolbar with close · name · fullscreen · 열기, and a frosted page rail (`--bg-quicklook-frost` + `--backdrop-quicklook`) for multi-page documents. The window has no CSS elevation — the OS draws its shadow — and it hugs the content it previews (page-shaped only when the content cannot measure itself).

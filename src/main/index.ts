@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { isAbsolute, join } from "node:path";
 import { app, BrowserWindow, clipboard, shell } from "electron";
+import { attachQuickLook, registerPreviewProtocol, registerPreviewSchemes, registerQuickLookIpc } from "../preview/node/register";
 import { writeDefaultConfig } from "@autorag/librarian";
 import { resolveConfigPath } from "@autorag/librarian/core";
 import { FS_CHANNELS } from "../shared/fs-contract";
@@ -48,6 +49,15 @@ function resolveDevLabel(): DevLabel | null {
 	return readDevLabel(resolveClonePath(app.getAppPath()));
 }
 
+function loadRendererPage(window: BrowserWindow, page: string): void {
+	const rendererUrl = process.env.ELECTRON_RENDERER_URL;
+	if (rendererUrl) {
+		void window.loadURL(new URL(page, `${rendererUrl}/`).toString());
+	} else {
+		void window.loadFile(join(import.meta.dirname, "../renderer", page));
+	}
+}
+
 function createMainWindow(devLabel: DevLabel | null): BrowserWindow {
 	const window = new BrowserWindow({
 		width: 1440,
@@ -70,25 +80,36 @@ function createMainWindow(devLabel: DevLabel | null): BrowserWindow {
 		window.setTitle(formatWindowTitle(APP_NAME, APP_VERSION, devLabel));
 	});
 
-	const rendererUrl = process.env.ELECTRON_RENDERER_URL;
-	if (rendererUrl) {
-		void window.loadURL(rendererUrl);
-	} else {
-		void window.loadFile(join(import.meta.dirname, "../renderer/index.html"));
-	}
+	loadRendererPage(window, "index.html");
+	attachQuickLook(window, {
+		preload: join(import.meta.dirname, "../preload/quick-look.mjs"),
+		loadPage: (preview) => loadRendererPage(preview, "quick-look.html"),
+	});
 	return window;
 }
 
 let versionFamilyService: VersionFamilyService | null = null;
+let mainWindow: BrowserWindow | null = null;
+
+function sendToMainWindow(channel: string, payload: unknown): void {
+	if (mainWindow === null || mainWindow.isDestroyed()) return;
+	mainWindow.webContents.send(channel, payload);
+}
+
+registerPreviewSchemes();
 
 app.whenReady().then(() => {
+	registerPreviewProtocol();
+	registerQuickLookIpc();
 	ensureAutoRAGConfig();
 	const devLabel = resolveDevLabel();
 	console.log(`[autorag] ${formatWindowTitle(APP_NAME, APP_VERSION, devLabel)}`);
+	const qaRoot = process.env.AUTORAG_QA_ROOT?.trim() ?? "";
 	const fsService = createFsService({
 		shell,
 		clipboard,
 		recents: createRecentsStore({ directory: join(app.getPath("userData"), "recents") }),
+		...(qaRoot !== "" && isAbsolute(qaRoot) ? { qaRoot } : {}),
 	});
 	// Both delete surfaces (context menu, ⌘⌫) land on this channel, so the
 	// version-family snapshot learns about the Trash here.
@@ -98,21 +119,18 @@ app.whenReady().then(() => {
 		},
 	});
 	let scanIntervalMinutes = DEFAULT_SCAN_INTERVAL_MINUTES;
-	const sendToWindow = (channel: string, payload: unknown): void => {
-		BrowserWindow.getAllWindows()[0]?.webContents.send(channel, payload);
-	};
 	versionFamilyService = createVersionFamilyService({
 		locations: () => fsService.locations(),
 		store: createFileVersionFamilyStore(join(app.getPath("userData"), "dupey-cache")),
 		buildEntry: buildFsEntry,
 		intervalMinutes: () => scanIntervalMinutes,
-		onUpdate: (result) => sendToWindow(FS_CHANNELS.versionFamiliesUpdated, result),
+		onUpdate: (result) => sendToMainWindow(FS_CHANNELS.versionFamiliesUpdated, result),
 	});
 	registerVersionFamilyIpcHandlers(versionFamilyService);
 	const searchService = createSearchService({
 		agentFactory: createDefaultAgentFactory(),
 		chatStore: createChatStore({ directory: join(app.getPath("userData"), "chat-history") }),
-		send: (channel, payload) => BrowserWindow.getAllWindows()[0]?.webContents.send(channel, payload),
+		send: sendToMainWindow,
 	});
 	registerSearchIpcHandlers(searchService);
 	const agentFactory = createDefaultAgentFactory();
@@ -133,7 +151,7 @@ app.whenReady().then(() => {
 			scanIntervalMinutes = settings.dupeyScanIntervalMinutes;
 			versionFamilyService?.reschedule();
 		},
-		send: (channel, payload) => BrowserWindow.getAllWindows()[0]?.webContents.send(channel, payload),
+		send: sendToMainWindow,
 	});
 	registerSettingsIpcHandlers(settingsService);
 	void settingsService.get().then((settings) => {
@@ -141,10 +159,10 @@ app.whenReady().then(() => {
 		versionFamilyService?.reschedule();
 	});
 	void versionFamilyService.start();
-	createMainWindow(devLabel);
+	mainWindow = createMainWindow(devLabel);
 	app.on("activate", () => {
-		if (BrowserWindow.getAllWindows().length === 0) {
-			createMainWindow(devLabel);
+		if (mainWindow === null || mainWindow.isDestroyed()) {
+			mainWindow = createMainWindow(devLabel);
 		}
 	});
 });
