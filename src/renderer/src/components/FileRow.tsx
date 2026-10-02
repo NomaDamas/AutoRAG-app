@@ -78,13 +78,19 @@ export function FileRow({
 		child
 			? "pl-[calc(var(--space-12)+18px+var(--row-depth,0)*var(--tree-indent))]"
 			: "pl-[calc(var(--space-12)+var(--row-depth,0)*var(--tree-indent))]",
+		// State background first, then the hover wash unconditionally: the
+		// reference's `.row:hover` is (0,2,0) while every `row--*` state class is
+		// (0,1,0), so a hovered row always paints the hover wash, whatever else it
+		// is. Making the state exclusive and dropping the hover rule would change
+		// a hovered selected row from the wash to the selection tint.
 		flash
 			? "bg-accent-flash shadow-[inset_0_0_0_1px_var(--accent-flash-ring)]"
 			: selected
 				? zoneFocused
 					? "bg-accent-soft"
 					: "bg-input"
-				: "hover:bg-hover-row",
+				: "",
+		"hover:bg-hover-row",
 		isHiddenName(entry.name) ? "opacity-45" : "",
 	);
 

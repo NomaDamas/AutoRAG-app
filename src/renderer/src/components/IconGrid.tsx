@@ -124,11 +124,11 @@ function IconTile({
 				className={[
 					"icon-tile__art relative flex items-center justify-center w-[72px] h-[72px] rounded-8",
 					child ? "shadow-[inset_0_0_0_1px_var(--border-strong)]" : "",
-					selected
-						? zoneFocused
-							? "bg-accent-soft"
-							: "bg-input"
-						: "group-hover:bg-hover-row",
+					// The art background is the one place a selection tint does not
+					// win: `.icon-tile:hover .icon-tile__art` is (0,3,0) while the
+					// selected variants are (0,2,0), so the hover wash still applies.
+					selected ? (zoneFocused ? "bg-accent-soft" : "bg-input") : "",
+					"group-hover:bg-hover-row",
 				].join(" ")}
 			>
 				<FileTile kind={entry.fileKind} iconDataUrl={entry.iconDataUrl} size={64} />

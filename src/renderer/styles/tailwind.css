@@ -173,6 +173,21 @@
 	--text-tile: var(--font-size-tile);
 	--text-tile-xs: var(--font-size-tile-xs);
 
+	/* The reference's font-size tokens are sizes only: line-height always comes
+	 * from `--leading-*` or inheritance. Tailwind pairs a line-height with every
+	 * `--text-*` size, and its default `--text-sm--line-height` would otherwise
+	 * survive our override of `--text-sm` and silently change `text-sm` from the
+	 * inherited 1.5 to 1.4286. `inherit` reproduces "no line-height declared".
+	 * `leading-*` still wins, because `--tw-leading` takes precedence. */
+	--text-title--line-height: inherit;
+	--text-body--line-height: inherit;
+	--text-sm--line-height: inherit;
+	--text-meta--line-height: inherit;
+	--text-caption--line-height: inherit;
+	--text-badge--line-height: inherit;
+	--text-tile--line-height: inherit;
+	--text-tile-xs--line-height: inherit;
+
 	--font-weight-regular: var(--weight-regular);
 	--font-weight-medium: var(--weight-medium);
 	--font-weight-semibold: var(--weight-semibold);

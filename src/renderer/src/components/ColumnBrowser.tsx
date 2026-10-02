@@ -124,6 +124,9 @@ function ColumnRow({
 	classes.push(
 		"flex items-center gap-8 h-[26px] pr-6 rounded-6 select-none cursor-default transition-[background,box-shadow] duration-(--dur-flash-fade) ease-[ease]",
 		row.child ? "pl-16" : "pl-8",
+		// State background first, then the hover wash unconditionally:
+		// `.column-row:hover` is (0,2,0) and every `column-row--*` state class is
+		// (0,1,0), so a hovered row always paints the wash.
 		flash
 			? "bg-accent-flash shadow-[inset_0_0_0_1px_var(--accent-flash-ring)]"
 			: selected
@@ -132,7 +135,8 @@ function ColumnRow({
 					: "bg-input"
 				: opened
 					? "bg-input"
-					: "hover:bg-hover-row",
+					: "",
+		"hover:bg-hover-row",
 	);
 	return (
 		<div
