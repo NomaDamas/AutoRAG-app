@@ -18,6 +18,7 @@ import {
 	ChevronUp,
 	ChevronsUp,
 	Columns3,
+	Database,
 	Eye,
 	History,
 	LayoutGrid,
@@ -31,6 +32,7 @@ import {
 	Sparkles,
 	ThumbsDown,
 	ThumbsUp,
+	Users,
 	X,
 	type LucideIcon,
 } from "lucide-react";
@@ -92,6 +94,10 @@ export const IconsViewIcon = glyph(LayoutGrid, 16, 1.9);
 export const ListViewIcon = glyph(List, 16, 1.9);
 
 export const ColumnsViewIcon = glyph(Columns3, 16, 1.9);
+export const DatabaseIcon = glyph(Database, 16, 1.8);
+
+export const UsersIcon = glyph(Users, 16, 1.8);
+
 
 /**
  * Folders render the filled glyph in `--folder`, never a tile (DESIGN.md §5).

@@ -1,0 +1,881 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AutoRAG Finder — Bloom Mac Finder reference v7</title>
+<style>
+:root{--desk:#e9eaee;--window:#fff;--sidebar:rgba(235,236,240,.92);--chrome:#f5f5f7;--chrome2:#fafafa;--line:#d9dadd;--line2:#e7e7ea;--ink:#1d1d1f;--body:#3a3a3c;--muted:#6e6e73;--faint:#a1a1a6;--blue:#0a64d8;--blue2:#007aff;--bluewash:#dbeafe;--sel:#0a64d8;--selmute:#d9d9dc;--green:#34c759;--orange:#ff9500;--red:#ff3b30;--shadow:0 18px 54px rgba(0,0,0,.18);--menu:0 10px 35px rgba(0,0,0,.2);--radius:12px;--font:-apple-system,BlinkMacSystemFont,"SF Pro Text","Apple SD Gothic Neo",Pretendard,system-ui,sans-serif;--mono:ui-monospace,SFMono-Regular,Menlo,monospace}
+*{box-sizing:border-box}html,body{margin:0;height:100%;background:var(--desk);color:var(--ink);font-family:var(--font);font-size:13px;-webkit-font-smoothing:antialiased}button,input,textarea,select{font:inherit}button{color:inherit}button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:2px solid rgba(10,100,216,.55);outline-offset:1px}::-webkit-scrollbar{width:10px;height:10px}::-webkit-scrollbar-thumb{background:#c9c9ce;border:3px solid transparent;background-clip:padding-box;border-radius:9px}::-webkit-scrollbar-track{background:transparent}
+#root{height:100%;padding:18px;display:flex}.window{width:100%;height:100%;min-width:1120px;min-height:680px;display:grid;grid-template-columns:220px minmax(0,1fr) 390px;background:var(--window);border:1px solid #cfd0d4;border-radius:14px;overflow:hidden;box-shadow:var(--shadow);position:relative}.sidebar{min-width:0;background:var(--sidebar);border-right:1px solid var(--line);display:flex;flex-direction:column;backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)}.side-head{height:52px;display:flex;align-items:center;gap:8px;padding:0 12px}.traffic{display:flex;gap:7px;margin-right:auto}.traffic i{width:12px;height:12px;border-radius:50%;display:block}.traffic i:nth-child(1){background:#ff5f57}.traffic i:nth-child(2){background:#febc2e}.traffic i:nth-child(3){background:#28c840}.icon-btn{width:28px;height:28px;border:0;background:transparent;border-radius:7px;display:inline-flex;align-items:center;justify-content:center;color:var(--muted);cursor:pointer}.icon-btn:hover{background:rgba(0,0,0,.08);color:var(--ink)}.side-scroll{flex:1;min-height:0;overflow:auto;padding:6px 10px 12px}.side-group{margin-bottom:14px}.side-label{padding:5px 8px 6px;color:#74757a;font-size:11px;font-weight:650}.side-item{width:100%;height:29px;border:0;background:transparent;border-radius:6px;padding:0 8px;display:flex;align-items:center;gap:9px;text-align:left;cursor:pointer;color:#3f4045}.side-item:hover{background:rgba(0,0,0,.055)}.side-item.active{background:#d8d9dd;color:#1d1d1f}.side-icon{width:17px;height:17px;display:grid;place-items:center;color:#1474d4;flex:none}.side-item.active .side-icon{color:#0064d8}.side-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.side-spacer{flex:1}.dot{width:6px;height:6px;border-radius:50%;background:var(--muted);display:inline-block;flex:none}.dot.sync{background:var(--orange)}.dot.err{background:var(--red)}.side-footer{border-top:1px solid var(--line);padding:10px}.progress-row{display:flex;justify-content:space-between;color:var(--muted);font-size:11px;margin:0 4px 5px}.progress{height:4px;background:#dadadd;border-radius:4px;overflow:hidden;margin:0 4px 8px}.progress b{display:block;height:100%;width:88%;background:var(--orange);border-radius:4px}.side-footer .side-item{margin-top:3px}
+.finder{min-width:0;display:flex;flex-direction:column}.toolbar-traffic{display:flex;gap:7px;margin-right:6px;align-items:center}.toolbar{height:52px;flex:none;border-bottom:1px solid var(--line);background:linear-gradient(#fff,#fbfbfc);display:flex;align-items:center;gap:6px;padding:0 12px}.toolbar-title{font-size:15px;font-weight:650;min-width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.toolbar-spacer{flex:1}.seg{display:flex;gap:0;padding:2px;border:0;border-radius:10px;background:#fcfcfd;align-items:center}.seg button{width:31px;height:25px;min-width:31px;border:0;border-radius:7px;background:transparent;color:#65656a;cursor:pointer}.seg button:hover{color:var(--ink)}.seg button.active{background:#d0d0d2;color:var(--ink);box-shadow:none}.search{width:190px;height:29px;display:flex;align-items:center;gap:6px;background:#ededf0;border:1px solid transparent;border-radius:8px;padding:0 9px;color:var(--muted)}.search:focus-within{background:#fff;border-color:var(--blue2)}.search input{min-width:0;flex:1;border:0;outline:0;background:transparent;font-size:12px;color:var(--ink)}.tabs{height:25px;flex:none;display:flex;align-items:stretch;padding:0;background:#d4d4d8;border-bottom:1px solid #c3c3c7;overflow:hidden}.tab{position:relative;flex:1 1 0;min-width:0;display:flex;align-items:center;justify-content:center;padding:0 24px;border:0;border-left:1px solid #c3c3c7;border-radius:0;background:linear-gradient(#d8d8dc,#d0d0d4);color:#5d5d62;font-size:11px;cursor:default;user-select:none}.tab:first-child{border-left:0}.tab:hover{background:linear-gradient(#cfcfd3,#c8c8cc)}.tab.active{background:#ececee;color:var(--ink)}.tab span{flex:0 1 auto;min-width:0;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.tab .close{position:absolute;left:5px;top:50%;width:15px;height:15px;margin-top:-7.5px;padding:0;border:0;border-radius:3px;background:transparent;color:#6e6e73;display:grid;place-items:center;opacity:0;cursor:default}.tab:hover .close{opacity:1}.tab .close:hover{background:rgba(0,0,0,.12);color:var(--ink)}.tabs>.icon-btn{flex:none;width:28px;height:auto;border-radius:0;border-left:1px solid #c3c3c7;background:linear-gradient(#d8d8dc,#d0d0d4);color:#5d5d62}.tabs>.icon-btn:hover{background:linear-gradient(#cfcfd3,#c8c8cc);color:var(--ink)}
+.browser{min-width:0;min-height:0;display:flex;flex-direction:column}.scope{height:27px;flex:none;display:flex;align-items:center;gap:8px;padding:0 15px;color:var(--muted);font-size:11px;border-bottom:1px solid var(--line2)}.scope b{color:var(--ink);font-weight:600}.view{flex:1;min-height:0;overflow:auto}.list-head,.file-row{display:grid;grid-template-columns:var(--name-col,minmax(180px,1fr)) 112px var(--size-col,68px) var(--kind-col,106px) var(--ix,);gap:8px;align-items:center}.list-head{height:24px;padding:0 13px;border-bottom:1px solid var(--line);color:var(--muted);font-size:11px;font-weight:500;position:sticky;top:0;z-index:2;background:#fff}.list-head>*{position:relative;height:100%;display:flex;align-items:center}.list-head>*+*:before{content:"";position:absolute;left:-4.5px;top:5px;bottom:5px;width:1px;background:var(--line)}.list-head .sort-h{position:relative;width:100%;gap:4px;justify-content:space-between;border:0;background:transparent;color:inherit;font:inherit;text-align:left;padding:0 10px 0 0;cursor:default;white-space:nowrap;overflow:visible}.col-grip{position:absolute;z-index:3;right:-6px;top:0;width:12px;height:100%;cursor:col-resize}.col-grip:after{content:"";position:absolute;left:5px;top:6px;bottom:6px;width:1px;border-radius:1px;background:transparent}.col-grip:hover:after,.col-grip:active:after{background:var(--blue2);box-shadow:0 0 0 1px rgba(0,122,255,.12)}.lv.is-resizing,.lv.is-resizing *{cursor:col-resize!important;user-select:none!important}.list-head .sort-h>span{min-width:0;overflow:hidden;text-overflow:ellipsis}.list-head .sort-h:active{color:var(--ink)}.list-head .sort-h.on{color:var(--ink);font-weight:600}.sort-chev{flex:none;width:10px;height:10px;display:grid;place-items:center;color:#6e6e73}.sort-chev svg{width:10px;height:10px}.file-row{height:28px;margin:1px 6px;padding:0 7px;border-radius:5px;cursor:default;user-select:none;color:var(--body)}.file-row:nth-child(even){background:rgba(0,0,0,.018)}.file-row:hover{background:#eef0f3}.file-row.selected{background:var(--sel);color:#fff}.file-row.selected.unfocused{background:var(--selmute);color:var(--ink)}.name-cell{display:flex;align-items:center;gap:7px;min-width:0}.name-cell .name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.indent{width:0;flex:none}.disclosure{width:13px;height:17px;border:0;background:transparent;color:var(--muted);padding:0;cursor:pointer}.disclosure:before{content:"";display:inline-block;border-left:5px solid currentColor;border-top:4px solid transparent;border-bottom:4px solid transparent;transition:transform .15s}.disclosure.open:before{transform:rotate(90deg)}.kind,.date,.size{color:var(--muted);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.file-row.selected .kind,.file-row.selected .date,.file-row.selected .size{color:rgba(255,255,255,.78)}.file-row.selected.unfocused .kind,.file-row.selected.unfocused .date,.file-row.selected.unfocused .size{color:var(--muted)}.badge{height:19px;display:inline-flex;align-items:center;gap:4px;padding:0 7px;border-radius:10px;font-size:10px;font-weight:650;white-space:nowrap;border:1px solid var(--line);background:#fff;color:var(--body);cursor:pointer}.lv.with-index{--ix:52px}.list-head .ix-head{justify-content:center}.ix-cell{display:flex;justify-content:center}.chk{width:14px;height:14px;flex:none;padding:0;border:1px solid #b5b5ba;border-radius:3.5px;background:linear-gradient(#fff,#f4f4f6);box-shadow:0 .5px 1px rgba(0,0,0,.12);display:inline-grid;place-items:center;color:#fff;cursor:default}.chk svg{width:10px;height:10px;opacity:0}.chk.on{background:linear-gradient(#3b8cf5,#1f6fe5);border-color:#1a63d1}.chk.on svg{opacity:1}.chk:active{filter:brightness(.92)}.file-row.selected .chk{border-color:rgba(255,255,255,.9)}.file-row.selected .chk.on{background:#fff;color:var(--sel);border-color:#fff}.chk-label{display:inline-flex;align-items:center;gap:6px;cursor:default}.chk-label small{color:var(--muted)}.file-row.excluded .name{opacity:.55}.file-row.selected.excluded .name{opacity:.8}.empty{padding:56px 20px;text-align:center;color:var(--muted)}.columns{height:100%;display:flex;overflow:auto;background:#fff}.column{flex:0 0 218px;min-width:218px;border-right:1px solid var(--line);padding:6px;background:#fafafa}.column:last-child{background:#fff}.column-title{height:24px;padding:3px 7px 4px;color:var(--muted);font-size:11px;font-weight:650}.col-row{height:27px;border-radius:5px;display:flex;align-items:center;gap:7px;padding:0 7px;cursor:pointer}.col-row:hover{background:#e9eaed}.col-row.active{background:var(--sel);color:#fff}.col-row.ancestor{background:#dedfe2;color:var(--ink)}.col-row .col-name{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.col-arrow{color:var(--muted);font-size:15px}.icon-grid{padding:16px;display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px;align-content:start}.icon-card{min-height:100px;border-radius:8px;display:flex;flex-direction:column;align-items:center;gap:5px;padding:7px 4px;cursor:pointer}.icon-card:hover{background:#f0f1f3}.icon-card.selected{background:#dceaff}.icon-card .icon-name{text-align:center;font-size:11px;line-height:1.25;max-width:90px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.pathbar{height:24px;flex:none;display:flex;align-items:center;gap:1px;padding:0 8px;border-top:1px solid var(--line);background:#f7f7f8;color:var(--body);font-size:11px;overflow:hidden;white-space:nowrap}.path-seg{min-width:24px;height:20px;flex:0 1 auto;display:inline-flex;align-items:center;gap:4px;padding:0 5px;border:0;border-radius:4px;background:transparent;color:inherit;font-size:11px;overflow:hidden;cursor:default}button.path-seg:hover{background:rgba(0,0,0,.07);color:var(--ink)}.path-seg:last-child{flex-shrink:0;max-width:45%}.path-ic{width:14px;height:14px;flex:none;display:grid;place-items:center;color:#8e8e93}.path-ic svg{width:14px;height:14px}.path-ic .doc-icon{transform:scale(.78)}.path-name{min-width:0;overflow:hidden;text-overflow:ellipsis}.path-sep{flex:none;color:#a1a1a6;font-size:12px;padding:0 1px}
+.inspector{min-width:0;border-left:1px solid var(--line);display:flex;flex-direction:column;background:#fafafa;height:100%;overflow:hidden}
+.inspector-split{display:flex;flex-direction:column;height:100%}
+.inspector-half{flex:1 1 50%;min-height:0;display:flex;flex-direction:column;overflow:hidden;position:relative}
+.inspector-half.is-split{height:50%;max-height:50%}
+.inspector-half + .inspector-half{border-top:1px solid var(--line);box-shadow:0 -2px 8px rgba(0,0,0,.04)}
+.inspector-half .inspector-head{height:42px;flex:none;display:flex;align-items:center;gap:8px;padding:0 12px;border-bottom:1px solid var(--line);background:#f7f7f8}
+.inspector-half .inspector-head strong{font-size:13px}
+.inspector-half .inspector-body{flex:1;min-height:0;overflow:auto;padding:12px 14px 18px}
+.inspector-half.is-split .preview-paper{height:100px;margin:0 auto 10px}
+.inspector-half.is-split .mini-doc{width:64px;height:82px;padding:10px 6px 6px}.inspector-head{height:52px;flex:none;display:flex;align-items:center;gap:8px;padding:0 12px;border-bottom:1px solid var(--line);background:#f7f7f8}.inspector-head strong{font-size:14px}.inspector-head .seg{margin-left:auto}.inspector-body{flex:1;min-height:0;overflow:auto;padding:18px 16px 24px}.preview-paper{height:152px;border:1px solid #d4d5d8;border-radius:6px;background:#fff;box-shadow:0 4px 14px rgba(0,0,0,.1);display:flex;align-items:center;justify-content:center;overflow:hidden;margin:0 16px 14px}.mini-doc{width:86px;height:112px;border:1px solid #d5d6da;border-radius:3px;background:#fff;position:relative;padding:18px 8px 8px;box-shadow:0 2px 5px rgba(0,0,0,.08)}.mini-doc:before{content:"";position:absolute;top:0;right:0;border-left:14px solid transparent;border-top:14px solid #e8e9eb}.mini-doc .line{height:4px;background:#d9dce2;border-radius:3px;margin:6px 0}.mini-doc .mark{height:5px;background:#ffe66b;margin:7px 0}.mini-sheet{width:150px;border:1px solid #d4d5d8;border-radius:3px;overflow:hidden;font-size:7px}.mini-sheet .sheet-grid{display:grid;grid-template-columns:repeat(4,1fr)}.mini-sheet span{height:20px;border-right:1px solid #ddd;border-bottom:1px solid #ddd;padding:4px 2px}.mini-sheet span.hl{background:#fff3a3}.preview-title{font-size:16px;font-weight:650;line-height:1.3;overflow-wrap:anywhere}.preview-sub{color:var(--muted);margin-top:4px;font-size:12px}.chip-row{display:flex;gap:6px;flex-wrap:wrap;margin:12px 0 16px}.info-section{border-top:1px solid var(--line);padding-top:12px;margin-top:12px}.section-title{display:flex;justify-content:space-between;align-items:center;font-size:12px;font-weight:650;margin-bottom:6px}.link-btn{border:0;background:transparent;color:var(--blue);font-size:11px;cursor:pointer}.info-row{display:grid;grid-template-columns:78px minmax(0,1fr);gap:8px;padding:5px 0;font-size:11px}.info-row dt{color:var(--muted)}.info-row dd{margin:0;overflow-wrap:anywhere}.action-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}.action{min-height:31px;border:1px solid var(--line);border-radius:7px;background:#fff;color:var(--body);cursor:pointer;font-size:11px}.action:hover{background:#f0f1f3}.action.blue{color:var(--blue);font-weight:600}.inspector-actions{flex:none;display:flex;align-items:flex-start;justify-content:space-between;gap:2px;padding:10px 10px 12px;border-top:1px solid var(--line);background:#f7f7f8}.inspector-action{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;gap:6px;padding:6px 2px;border:0;border-radius:8px;background:transparent;color:var(--muted);font-size:11px;line-height:1.25;text-align:center;word-break:keep-all;cursor:pointer}.inspector-action span{max-width:100%}.inspector-action:hover{background:rgba(0,0,0,.05);color:var(--ink)}.inspector-action.primary{color:var(--blue)}.inspector-action.primary:hover{background:var(--bluewash)}.inspector-action.danger:hover{background:rgba(255,59,48,.1);color:var(--red)}.inspector-action svg{flex:none}.evidence-tabs{display:flex;gap:3px;overflow:auto;margin-bottom:10px}.evidence-tab{min-width:25px;height:24px;border:1px solid var(--line);border-radius:6px;background:#fff;color:var(--muted);cursor:pointer}.evidence-tab.active{background:var(--blue);border-color:var(--blue);color:#fff}.excerpt{font-size:12px;line-height:1.6;color:var(--body)}.excerpt h3{font-size:13px;color:var(--ink);margin:10px 0 5px}.excerpt p{margin:7px 0}.excerpt mark{background:linear-gradient(transparent 55%,#ffe66b 55%);padding:0 1px}.excerpt blockquote{border-left:2px solid var(--line);padding-left:9px;color:var(--muted);margin:8px 0}.feedback{display:flex;align-items:center;gap:6px;margin:8px 0}.feedback button{width:28px;height:28px;padding:0;display:inline-grid;place-items:center;border:1px solid var(--line);background:#fff;border-radius:6px;cursor:pointer;color:var(--muted);transition:all .12s}.feedback button:hover{background:#f5f5f7;color:var(--ink)}.feedback button[data-feedback="up"].on{background:#e5f7e9;color:#17833c;border-color:#9bd8aa}.feedback button[data-feedback="down"].on{background:#ffebee;color:#c62828;border-color:#ffcdd2}.no-selection{padding:70px 10px;text-align:center;color:var(--muted)}
+.ai{flex:none;height:var(--ai-h);min-height:0;border-top:1px solid var(--line);display:flex;flex-direction:column;background:#fbfbfc;position:relative;box-shadow:0 -6px 18px rgba(0,0,0,.05)}.ai.collapsed{height:36px;box-shadow:none}.ai.anim-up{animation:dock-up .2s ease-out}.ai.anim-down{animation:dock-down .16s ease-in}@keyframes dock-up{from{height:36px}}@keyframes dock-down{from{height:var(--ai-h)}}.ai-grip{position:absolute;left:0;right:0;top:-4px;height:9px;cursor:ns-resize;z-index:5}.ai-grip:after{content:"";position:absolute;left:50%;top:6px;width:34px;height:3px;margin-left:-17px;border-radius:2px;background:#d1d1d6}.ai-grip:hover:after,.ai.resizing .ai-grip:after{background:var(--blue2)}.ai-head{height:36px;flex:none;display:flex;align-items:center;gap:8px;padding:0 8px 0 12px;background:#f7f7f8;border-bottom:1px solid var(--line);cursor:pointer;user-select:none}.ai.collapsed .ai-head{border-bottom:0}.ai-head strong{font-size:13px;flex:none}.ai-head .spacer{flex:1}.ai-head .icon-btn{width:26px;height:26px}.ai-mark{color:var(--blue2);display:grid;place-items:center}.ai-peek{min-width:0;color:var(--muted);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ai-head kbd{flex:none;font:10px var(--font);color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:1px 5px;background:#fff}.ai-body{flex:1;min-height:0;overflow:auto;padding:16px 20px 6px}.ai-body>.message,.ai-body>.ai-empty,.composer .compose-box{max-width:820px;margin-left:auto;margin-right:auto}.ai-empty{margin:28px auto;text-align:center}.ai-empty strong{font-size:17px}.ai-empty p{color:var(--muted);line-height:1.5}.message{margin-bottom:17px}.user-msg{display:flex;justify-content:flex-end}.bubble{max-width:84%;padding:9px 12px;border-radius:12px;background:#e8e8eb;border:1px solid #d9d9dd;line-height:1.45}.answer-label{font-size:11px;color:var(--muted);margin-bottom:6px}.answer-card{background:#fff;border:1px solid var(--line);border-radius:9px;padding:11px 12px;margin:7px 0}.answer-card.deep{border-color:#b9d6ff}.answer-head{display:flex;align-items:center;gap:7px;font-size:11px;margin-bottom:8px}.answer-head i{width:6px;height:6px;border-radius:50%;background:#6e6e73}.answer-card.deep .answer-head i{background:var(--blue2)}.answer-meta{color:var(--muted);margin-left:auto}.answer-text{line-height:1.55;color:var(--body);margin:0 0 7px}.answer-text strong{color:var(--ink)}.cite{height:18px;min-width:18px;padding:0 5px;margin:0 2px;border:0;border-radius:5px;background:#dceaff;color:#0758bc;font-size:10.5px;font-weight:700;cursor:pointer;vertical-align:1.5px;transition:all .12s;display:inline-flex;align-items:center;justify-content:center}.cite + .cite{margin-left:3px}.cite:hover{background:#c8dfff;color:#064ca3}.cite.active{background:var(--blue);color:#fff;box-shadow:0 1px 3px rgba(10,100,216,.25)}.skeleton{height:8px;border-radius:4px;background:linear-gradient(90deg,#eee,#dfeaff,#eee);background-size:200%;animation:shimmer 1.3s linear infinite;margin:8px 0}.think{font-size:11px;color:var(--muted);padding:6px 0}.composer{padding:6px 20px 12px}.compose-box{min-height:40px;display:flex;align-items:center;gap:7px;border:1px solid var(--line);border-radius:12px;background:#f0f0f2;padding:4px 5px 4px 11px;box-shadow:0 3px 12px rgba(0,0,0,.06)}.compose-box input{min-width:0;flex:1;border:0;outline:0;background:transparent;font-size:12px}.send{width:30px;height:30px;border:0;border-radius:50%;background:var(--blue2);color:#fff;display:grid;place-items:center;cursor:pointer}.send:disabled{background:#c9c9ce;cursor:default}.history{position:absolute;z-index:20;right:10px;top:48px;width:330px;max-height:72%;background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:var(--menu);overflow:hidden}.history input{height:38px;width:100%;border:0;border-bottom:1px solid var(--line2);padding:0 12px;outline:0}.history-list{max-height:330px;overflow:auto;padding:5px}.history-group{font-size:10px;font-weight:700;color:var(--muted);padding:8px}.history-item{width:100%;display:flex;gap:8px;text-align:left;border:0;border-radius:7px;background:transparent;padding:8px;cursor:pointer}.history-item:hover,.history-item.current{background:#eef3fb}.history-item .hist-dot{width:5px;height:5px;border-radius:50%;background:transparent;margin-top:5px}.history-item.current .hist-dot{background:var(--blue)}.hist-copy{min-width:0;flex:1}.hist-copy b,.hist-copy small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.hist-copy small{color:var(--muted);margin-top:2px}.hist-time{color:var(--muted);font-size:10px}.ai .history{top:40px;right:12px;max-height:calc(100% - 50px)}
+.overlay{position:absolute;inset:0;background:rgba(20,20,25,.18);backdrop-filter:blur(3px);z-index:40;display:flex;align-items:center;justify-content:center}.modal{background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);overflow:hidden}.quicklook{width:min(760px,calc(100% - 70px));height:min(620px,calc(100% - 70px));display:flex;flex-direction:column}.modal-head{height:46px;display:flex;align-items:center;gap:8px;padding:0 10px;border-bottom:1px solid var(--line);background:#f5f5f7}.modal-head strong{flex:1;text-align:center;font-size:13px}.quick-body{flex:1;min-height:0;overflow:auto;background:#f0f0f2;padding:22px}.quick-paper{max-width:570px;min-height:430px;margin:0 auto;background:#fff;border:1px solid var(--line);box-shadow:0 4px 16px rgba(0,0,0,.12);padding:30px;color:var(--body);line-height:1.6}.menu{position:fixed;z-index:80;width:230px;background:rgba(255,255,255,.96);border:1px solid var(--line);border-radius:9px;padding:5px;box-shadow:var(--menu)}.menu button{width:100%;height:27px;border:0;background:transparent;border-radius:5px;display:flex;align-items:center;gap:7px;padding:0 8px;text-align:left;font-size:12px;cursor:pointer}.menu button:hover{background:var(--blue);color:#fff}.menu button.danger{color:var(--red)}.menu button:hover.danger{color:#fff}.menu button span:last-child{margin-left:auto;color:var(--muted);font-size:10px}.menu button:hover span:last-child{color:rgba(255,255,255,.8)}.menu hr{border:0;border-top:1px solid var(--line2);margin:4px 5px}.settings-view{flex:1;min-height:0;min-width:0;display:flex;background:#fff;overflow:hidden}
+.settings-sidebar{width:200px;flex:none;background:#f5f5f7;border-right:1px solid var(--line);padding:14px 10px;display:flex;flex-direction:column;gap:3px;overflow-y:auto}
+.settings-sidebar-title{padding:4px 10px 8px;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.settings-nav-item{display:flex;align-items:center;gap:9px;width:100%;height:32px;border:0;border-radius:7px;background:transparent;padding:0 10px;font-size:13px;font-weight:500;color:var(--body);cursor:pointer;text-align:left;transition:background .12s}
+.settings-nav-item:hover{background:rgba(0,0,0,.06);color:var(--ink)}
+.settings-nav-item.active{background:#0a64d8;color:#fff;font-weight:600}
+.settings-nav-icon{width:16px;height:16px;display:grid;place-items:center;flex:none}
+.settings-content{flex:1;min-width:0;min-height:0;overflow:auto;background:#fafafc;padding:26px 36px 44px}
+.settings-content-wrap{max-width:680px;margin:0 auto}
+.settings-content h3{font-size:19px;font-weight:700;margin:0 0 16px;color:var(--ink);display:flex;align-items:baseline;justify-content:space-between}
+.settings-content h3 small{font-size:12px;font-weight:400;color:var(--muted)}
+.settings-group-label{font-size:11px;font-weight:650;color:var(--muted);margin:18px 4px 6px;text-transform:uppercase;letter-spacing:.02em}
+.settings-group{border:1px solid var(--line);border-radius:10px;background:#fff;overflow:hidden;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,.02)}
+.setting{min-height:50px;display:flex;align-items:center;gap:14px;padding:8px 16px;border-bottom:1px solid var(--line2)}
+.setting:last-child{border-bottom:0}
+.setting-copy{flex:1}
+.setting-copy b{display:block;font-size:13px;font-weight:500;color:var(--ink)}
+.setting-copy small{display:block;color:var(--muted);margin-top:2px;font-size:11px;line-height:1.35}
+.setting select{height:28px;padding:0 8px;border:1px solid var(--line);border-radius:6px;background:#fff;color:var(--ink);font-size:12px}
+.setting button.action{height:28px;padding:0 12px;border:1px solid var(--line);border-radius:6px;background:#fff;color:var(--ink);font-size:12px;font-weight:500;cursor:pointer}
+.setting button.action:hover{background:#f5f5f7}
+.setting button.action.danger{color:var(--red)}
+.setting button.action.danger:hover{background:#fee}
+.model-hero{display:flex;align-items:center;gap:12px;padding:14px 16px}
+.model-hero-tile{width:36px;height:36px;border-radius:8px;background:linear-gradient(135deg,#0a64d8,#5e5ce6);color:#fff;display:grid;place-items:center;font-weight:700;font-size:15px;flex:none}
+.model-hero-info{flex:1;min-width:0}
+.model-hero-title{display:flex;align-items:center;gap:8px}
+.model-hero-title strong{font-size:14px}
+.model-badge{display:inline-block;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:650;background:#e3f6e8;color:#1f7a3a}
+.model-hero-desc{color:var(--muted);font-size:12px;margin-top:2px}
+.preset-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+.preset-card{display:flex;flex-direction:column;align-items:flex-start;text-align:left;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:#fff;cursor:pointer;transition:all .15s}
+.preset-card:hover{border-color:var(--blue);background:#f6f9fe;box-shadow:0 2px 8px rgba(10,100,216,.08);transform:translateY(-1px)}
+.preset-card-top{display:flex;align-items:center;justify-content:space-between;width:100%;margin-bottom:5px}
+.preset-card-title{font-size:13px;font-weight:650;color:var(--ink)}
+.preset-card-tag{font-size:10px;color:var(--muted);background:#ededf0;padding:2px 5px;border-radius:4px}
+.preset-card-desc{font-size:11px;color:var(--muted);line-height:1.35;margin:0}
+.sources-stat-bar{display:flex;align-items:center;gap:8px;padding:10px 14px;background:#fff;border:1px solid var(--line);border-radius:10px;margin-bottom:14px;flex-wrap:wrap}
+.source-pill{display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:3px 8px;border-radius:10px;background:#f0f0f4;color:var(--body)}
+.source-pill.ok{background:#e3f6e8;color:#1f7a3a}
+.source-pill.sync{background:#fff3e0;color:#e65100}
+.source-pill.err{background:#ffebee;color:#c62828}
+.sources-stat-bar code{margin-left:auto;font-size:10px;background:#ededf0;padding:2px 6px;border-radius:4px;font-family:var(--mono)}
+.settings{width:min(820px,calc(100% - 70px));height:min(610px,calc(100% - 70px));display:grid;grid-template-columns:190px 1fr}.settings-nav{background:#f1f1f3;padding:16px 10px}.settings-nav h2{font-size:15px;margin:8px 10px 18px}.settings-nav button{width:100%;height:34px;border:0;background:transparent;border-radius:7px;text-align:left;padding:0 10px;cursor:pointer;color:var(--body)}.settings-nav button.active,.settings-nav button:hover{background:#d9dade}.settings-content{min-width:0;background:#fafafa;overflow:auto;padding:22px}.settings-content h3{font-size:18px;margin:0 0 17px}.settings-group{border:1px solid var(--line);border-radius:9px;background:#fff;overflow:hidden;margin-bottom:17px}.setting{min-height:54px;display:flex;align-items:center;gap:12px;padding:10px 13px;border-bottom:1px solid var(--line2)}.setting:last-child{border-bottom:0}.setting-copy{flex:1}.setting-copy b,.setting-copy small{display:block}.setting-copy small{color:var(--muted);margin-top:3px}.switch{width:34px;height:20px;border:0;border-radius:10px;background:#c7c7cc;position:relative;cursor:pointer}.switch.on{background:var(--blue2)}.switch:before{content:"";position:absolute;width:16px;height:16px;border-radius:50%;background:#fff;top:2px;left:2px;transition:left .15s}.switch.on:before{left:16px}.source-setting{padding:12px;border-bottom:1px solid var(--line2)}.source-setting:last-child{border-bottom:0}.source-top{display:flex;align-items:center;gap:9px}.source-tile{width:26px;height:26px;border-radius:7px;background:#dceaff;color:var(--blue);display:grid;place-items:center;font-weight:700}.source-setting .source-copy{flex:1}.source-copy small{display:block;color:var(--muted);margin-top:2px}.source-setting details{margin:9px 0 0 35px;color:var(--body)}.toast{position:absolute;z-index:100;left:50%;bottom:22px;transform:translateX(-50%);background:rgba(30,30,32,.9);color:#fff;border-radius:18px;padding:8px 14px;font-size:12px;box-shadow:0 5px 20px rgba(0,0,0,.2)}@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}@media(max-width:1250px){.window{grid-template-columns:200px minmax(0,1fr) 350px}.search{width:150px}.list-head,.file-row{grid-template-columns:var(--name-col,minmax(150px,1fr)) 95px var(--size-col,58px) var(--kind-col,80px) var(--ix,)}}@media(max-width:1120px){#root{padding:0}.window{border-radius:0;min-width:0}.sidebar{width:190px}}
+/* Quick Look: no desktop scrim; the Finder remains visible through the translucent chrome. */
+.quick-overlay{background:transparent;backdrop-filter:none;-webkit-backdrop-filter:none;pointer-events:none}
+.quick-overlay .quicklook{position:absolute;top:0;right:0;bottom:0;left:0;width:auto;height:auto;display:flex;flex-direction:column;pointer-events:auto;border:0;border-radius:0;background:linear-gradient(180deg,rgba(250,251,253,.82),rgba(255,255,255,.64));backdrop-filter:blur(8px) saturate(135%);-webkit-backdrop-filter:blur(8px) saturate(135%);box-shadow:inset 0 1px 0 rgba(255,255,255,.95);overflow:hidden}
+.quick-overlay .quicklook.maximized{top:0;right:0;bottom:0;left:0}
+.quick-overlay .modal-head{height:38px;flex:none;padding:0 9px;gap:8px;border-bottom:1px solid rgba(120,124,132,.2);background:rgba(246,247,249,.7)}
+.quick-overlay .modal-head strong{flex:1;min-width:0;text-align:left;font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.quick-controls{display:flex;align-items:center;gap:5px;flex:none}.quick-control{width:21px;height:24px;padding:0;border:0;border-radius:6px;background:transparent;color:#626368;display:grid;place-items:center;cursor:pointer}.quick-control:hover{background:rgba(0,0,0,.07);color:#25262a}.quick-control svg{display:block}
+.quick-share{width:28px;height:26px;flex:none;border:0;border-radius:7px;background:transparent;display:grid;place-items:center;cursor:pointer;color:var(--body)}.quick-share:hover{background:rgba(0,0,0,.07)}
+.quick-open{height:26px;flex:none;border:1px solid rgba(0,0,0,.1);border-radius:14px;padding:0 12px;background:rgba(255,255,255,.62);box-shadow:inset 0 1px 0 rgba(255,255,255,.7);font-size:12px;cursor:pointer}.quick-open:hover{background:rgba(255,255,255,.92)}
+.quick-overlay .quick-body{flex:1;min-height:0;overflow:auto;background:rgba(255,255,255,.58);padding:0 4px 5px}.quick-overlay .quick-paper{width:100%;max-width:none;min-height:100%;margin:0;background:rgba(255,255,255,.9);border:0;border-radius:14px 14px 0 0;box-shadow:none;padding:32px 80px;color:var(--body);line-height:1.6}
+.quick-thumbs{width:126px;flex:none;overflow:auto;padding:4px 7px 12px 0;background:rgba(238,239,242,.72);border-left:1px solid rgba(120,124,132,.2)}.quick-thumb{width:100%;height:116px;margin:0 0 9px;padding:4px;border:2px solid transparent;border-radius:6px;background:rgba(255,255,255,.86);box-shadow:0 1px 4px rgba(0,0,0,.12);cursor:pointer}.quick-thumb.active{border-color:#555;background:#fff}.quick-thumb:before{content:"";display:block;height:100%;border:1px solid #e1e1e3;background:linear-gradient(#fff 0 18%,transparent 18%),repeating-linear-gradient(to bottom,transparent 0 8px,#e8e8ea 9px 10px);opacity:.9}
+.quick-open:hover{background:rgba(100,105,115,.16)}
+.quick-overlay .quick-body{display:flex;flex:1;min-height:0;overflow:auto;background:transparent;padding:0 4px 5px}.quick-overlay .quick-paper{flex:1;min-width:0;width:auto;max-width:none;min-height:100%;margin:0;background:#fff;border:0;border-radius:14px;box-shadow:none;padding:32px 48px;color:var(--body);line-height:1.6}
+/* pane layout: U-shape — sidebar | center (Finder browser over the bottom AI Search dock) | optional Info inspector */
+.window{display:flex}.sidebar{flex:0 0 220px}.center{flex:1 1 0;min-width:0;min-height:0;display:flex;flex-direction:column}.center>.finder{flex:1 1 0;min-height:0}.browser{flex:1}.inspector{flex:0 0 300px}
+.doc-icon{width:15px;height:18px;flex:none;position:relative;display:inline-block;background:#fff;border:1px solid #c9cad0;border-radius:2px;box-shadow:0 1px 1px rgba(0,0,0,.06)}.doc-icon:before{content:"";position:absolute;top:-1px;right:-1px;border-left:5px solid #e4e5e8;border-top:5px solid #fff}.doc-icon i{position:absolute;left:2px;right:2px;bottom:2px;height:7px;border-radius:1px;background:var(--tile);color:#fff;font-style:normal;font-size:6px;font-weight:800;line-height:7px;text-align:center}.doc-icon.doc-large{width:52px;height:64px;border-radius:4px}.doc-icon.doc-large:before{border-left-width:14px;border-top-width:14px}.doc-icon.doc-large i{left:6px;right:6px;bottom:8px;height:18px;line-height:18px;font-size:12px;border-radius:3px}
+.column-menu{width:230px;max-height:min(520px,calc(100vh - 20px));overflow:auto}.column-menu .column-option{height:27px}.column-menu .column-check{width:14px;flex:none;color:var(--ink);font-size:12px;text-align:center}.column-menu .column-option:not(.is-visible) .column-check{color:transparent}.column-menu .column-option.is-fixed{color:var(--muted)}.column-menu .column-option.is-fixed:hover{color:#fff}.column-menu .menu-section-label{height:24px;display:flex;align-items:center;padding:0 8px;color:var(--muted);font-size:10px;font-weight:600}.column-menu .menu-section-label + hr{margin-top:0}.list-head{cursor:default}
+.lv .list-head,.lv .file-row{grid-template-columns:var(--list-grid)}.lv .list-head,.lv .file-row{min-width:max-content}.lv .file-row>span:not(.ix-cell){color:var(--muted);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.lv .file-row.selected>span:not(.ix-cell){color:rgba(255,255,255,.78)}
+.file-row.flash{box-shadow:inset 0 0 0 2px rgba(10,100,216,.55)}
+/* duplicate families: latest file discloses its 유사본/동일본 like a folder discloses children */
+.vtag{flex:none;height:16px;display:inline-flex;align-items:center;padding:0 6px;border-radius:4px;font-size:10px;font-weight:650;white-space:nowrap;line-height:1}.vtag.latest{background:#e3f6e8;color:#1f7a3a}.vtag.near{background:#efe7fb;color:#6b3fb5}.vtag.exact{background:#fff0df;color:#b45309}.vcount{flex:none;color:var(--muted);font-size:10px}.vwhere{flex:none;display:inline-flex;align-items:center;gap:3px;color:var(--muted);font-size:10px;white-space:nowrap}.vwhere svg{width:11px;height:11px}.stack .doc-icon{box-shadow:2px -2px 0 -1px #fff,2px -2px 0 0 #c9cad0,4px -4px 0 -1px #fff,4px -4px 0 0 #dcdde1}.file-row.variant .name,.col-row.variant .col-name{color:var(--muted)}.file-row.variant .doc-icon,.col-row.variant .doc-icon{opacity:.8;border-style:dashed}.file-row.selected .name,.col-row.active .col-name{color:inherit}.file-row.selected .disclosure{color:rgba(255,255,255,.9)}.file-row.selected .vtag,.col-row.active .vtag{background:rgba(255,255,255,.92)}.file-row.selected .vwhere,.file-row.selected .vcount{color:rgba(255,255,255,.8)}.col-row .vtag{margin-left:auto}.column.variants{background:#fcfbfe}.column.variants .column-title{display:flex;align-items:center;gap:6px}.ver-row{display:flex;align-items:center;gap:7px;width:100%;min-height:26px;border:0;border-radius:5px;background:transparent;padding:3px 5px;text-align:left;cursor:pointer;font-size:11px;color:var(--body)}.ver-row:hover{background:#eef0f3}.ver-row.current{background:#e9f1fd}.ver-row .ver-name{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ver-row .vwhere{max-width:40%;overflow:hidden;text-overflow:ellipsis}.icon-btn.active{background:#dceaff;color:var(--blue)}
+
+.finder{container-type:inline-size}.list-head>*,.file-row>*{min-width:0}
+@container (max-width:760px){.list-head,.file-row{grid-template-columns:var(--name-col,minmax(140px,1fr)) 64px var(--size-col,92px) var(--kind-col,62px) var(--ix,)}.list-head [data-sortkey=date],.file-row .date{display:none}.search{width:150px}.toolbar-title{min-width:0;flex:0 1 auto}}
+@container (max-width:560px){.list-head,.file-row{grid-template-columns:var(--name-col,minmax(120px,1fr)) 58px var(--size-col,58px) var(--kind-col,58px) var(--ix,)}.list-head [data-sortkey=kind],.file-row .kind{display:none}.search{width:118px}.search small{display:none}}
+.no-sidebar .sidebar{display:none}
+@media(max-width:1250px){.sidebar{flex-basis:200px}.inspector{flex-basis:270px}}
+
+/* ================= Linear & Modern Settings Styling ================= */
+.settings-view{flex:1;min-height:0;min-width:0;display:flex;background:#fff;overflow:hidden}
+.settings-sidebar{width:220px;flex:none;background:#f8f9fa;border-right:1px solid var(--line);padding:16px 10px;display:flex;flex-direction:column;gap:2px;overflow-y:auto}
+.settings-sidebar-group-title{padding:14px 10px 4px;font-size:11px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.settings-sidebar-divider{height:1px;background:var(--line2);margin:10px 6px}
+.settings-nav-item{display:flex;align-items:center;gap:9px;width:100%;height:32px;border:0;border-radius:7px;background:transparent;padding:0 10px;font-size:13px;font-weight:400;color:var(--body);cursor:pointer;text-align:left;transition:background .12s}
+.settings-nav-item:hover{background:rgba(0,0,0,.055);color:var(--ink)}
+.settings-nav-item.active{background:#0a64d8;color:#fff;font-weight:500}
+.settings-nav-item.active .settings-nav-icon{color:#fff}
+.settings-nav-icon{width:16px;height:16px;display:grid;place-items:center;flex:none;color:var(--muted)}
+.settings-nav-dot{width:6px;height:6px;border-radius:50%;background:#28c840;margin-left:auto}
+
+.settings-content{flex:1;min-width:0;min-height:0;overflow-y:auto;background:#fff;padding:36px 56px 64px}
+.settings-content-wrap{max-width:680px;margin:0 auto}
+
+/* Linear-inspired borderless rows: ONLY section titles are bold (600), items are 400 */
+.linear-header{margin-bottom:28px}
+.linear-title{font-size:20px;font-weight:600;color:var(--ink);letter-spacing:-.01em;margin:0 0 6px}
+.linear-desc{font-size:13px;font-weight:400;color:var(--muted);line-height:1.5;margin:0}
+.linear-section-title{font-size:14.5px;font-weight:600;color:var(--ink);margin:30px 0 4px;letter-spacing:-.005em}
+.linear-section-desc{font-size:12px;font-weight:400;color:var(--muted);margin:0 0 10px;line-height:1.4}
+.linear-row{display:flex;align-items:flex-start;justify-content:space-between;padding:15px 0;border-bottom:1px solid var(--line2);gap:24px}
+.linear-row:last-child{border-bottom:0}
+.linear-row-label{flex:1;min-width:0}
+.linear-row-label b,
+.linear-row-label .linear-row-name{display:block;font-size:13.5px;font-weight:400;color:var(--ink);line-height:1.35}
+.linear-row-label small{display:block;font-size:12.5px;font-weight:400;color:var(--muted);line-height:1.45;margin-top:3px}
+.linear-control{flex:none;display:flex;align-items:center;gap:10px}
+.linear-select{height:30px;padding:0 24px 0 10px;border:1px solid var(--line);border-radius:6px;background:#f7f7f9;color:var(--ink);font-size:12px;font-weight:400;outline:0;cursor:pointer}
+.linear-btn{height:30px;padding:0 12px;border:1px solid var(--line);border-radius:6px;background:#fff;color:var(--ink);font-size:12px;font-weight:400;cursor:pointer;transition:all .12s}
+.linear-btn:hover{background:#f5f5f7;border-color:#c7c7cc}
+.linear-btn.danger{color:var(--red);border-color:#ffd0ce;background:#fff9f9}
+.linear-btn.danger:hover{background:#fee2e2;border-color:#fca5a5}
+.linear-textarea{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:#fbfbfc;font-size:12.5px;font-weight:400;color:var(--ink);line-height:1.5;outline:0;resize:vertical}
+.linear-textarea:focus{border-color:#0a64d8;background:#fff}
+
+/* Image #2 Style: Provider & Data Source Card Rows */
+.provider-quick-bar{display:flex;gap:10px;margin:16px 0 24px;flex-wrap:wrap}
+.provider-quick-btn{display:inline-flex;align-items:center;gap:8px;height:36px;padding:0 14px;border-radius:18px;border:1px solid #dcdde1;background:#fff;font-size:12px;font-weight:400;color:var(--ink);cursor:pointer;transition:all .15s;box-shadow:0 1px 2px rgba(0,0,0,.03)}
+.provider-quick-btn:hover{border-color:#0a64d8;background:#f5f9ff;color:#0a64d8}
+.provider-list{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+.provider-row{display:flex;align-items:center;gap:14px;padding:12px 16px;border:1px solid #e7e7eb;border-radius:10px;background:#fff;transition:all .15s}
+.provider-row:hover{border-color:#c7c7cc;box-shadow:0 2px 6px rgba(0,0,0,.04)}
+.provider-icon{width:34px;height:34px;border-radius:8px;background:#f0f1f4;display:grid;place-items:center;font-size:13px;font-weight:500;color:var(--ink);flex:none}
+.provider-body{flex:1;min-width:0}
+.provider-name{font-size:13.5px;font-weight:400;color:var(--ink);display:flex;align-items:center;gap:6px}
+.provider-models{font-size:12px;font-weight:400;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.provider-status{display:inline-flex;align-items:center;gap:6px;padding:4px 11px;border-radius:12px;font-size:11.5px;font-weight:400;cursor:pointer;border:1px solid transparent;user-select:none;transition:all .12s}
+.provider-status.connected{background:#e3f6e8;color:#187334;border-color:#c6ebd0}
+.provider-status.connected i{width:6px;height:6px;border-radius:50%;background:#28c840}
+.provider-status.disconnected{background:#f3f3f5;color:#6e6e73;border-color:#e4e4e7}
+.provider-status.disconnected i{width:6px;height:6px;border-radius:50%;background:#8e8e93}
+.provider-status.checking{background:#fff8e6;color:#b45309;border-color:#fde68a}
+.provider-status.checking i{width:6px;height:6px;border-radius:50%;background:#f59e0b}
+
+
+/* ================= macOS Spotlight / Finder Search Dropdown & Scope Bar ================= */
+.search-wrap{position:relative;display:flex;align-items:center}
+.search{width:210px;height:29px;display:flex;align-items:center;gap:6px;background:#ededf0;border:1px solid transparent;border-radius:8px;padding:0 8px;color:var(--muted);position:relative;transition:all .15s}
+.search:focus-within,.search.active{background:#fff;border-color:var(--blue2);box-shadow:0 0 0 3px rgba(10,100,216,.15)}
+.search input{min-width:0;flex:1;border:0;outline:0;background:transparent;font-size:12px;color:var(--ink)}
+.search-clear{width:16px;height:16px;border-radius:50%;border:0;background:#c7c7cc;color:#fff;display:inline-grid;place-items:center;padding:0;cursor:pointer;font-size:9px;line-height:1}
+.search-clear:hover{background:#8e8e93}
+
+.search-dropdown{position:absolute;top:calc(100% + 6px);right:0;width:260px;background:rgba(255,255,255,.98);border:1px solid var(--line);border-radius:10px;box-shadow:0 12px 36px rgba(0,0,0,.18);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);padding:6px;z-index:90;display:flex;flex-direction:column;gap:2px}
+.search-dd-section{padding:5px 8px 3px;font-size:10px;font-weight:650;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.search-dd-item{display:flex;align-items:center;gap:8px;padding:6px 9px;border-radius:6px;border:0;background:transparent;color:var(--body);font-size:12px;cursor:pointer;text-align:left;width:100%;transition:background .1s}
+.search-dd-item:hover,.search-dd-item.selected{background:var(--blue);color:#fff}
+.search-dd-item:hover strong,.search-dd-item.selected strong{color:#fff}
+.search-dd-item strong{color:var(--ink);font-weight:600}
+.search-dd-sub{font-size:11px;color:var(--muted);margin-left:auto}
+.search-dd-item:hover .search-dd-sub,.search-dd-item.selected .search-dd-sub{color:rgba(255,255,255,.8)}
+
+.finder-scope-bar{height:32px;flex:none;display:flex;align-items:center;gap:10px;padding:0 16px;background:#fff;border-bottom:1px solid var(--line);font-size:12px;color:var(--muted)}
+.finder-scope-label{font-weight:600;color:#555558;font-size:12px}
+.finder-scope-seg{display:inline-flex;align-items:center;background:transparent;padding:0;gap:6px}
+.finder-scope-btn{border:0;background:transparent;padding:3px 12px;height:24px;border-radius:7px;font-size:12px;font-weight:500;color:#66666a;cursor:pointer;transition:all .12s}
+.finder-scope-btn:hover:not(.active){background:rgba(0,0,0,.04);color:var(--ink)}
+.finder-scope-btn.active{background:#e3e3e7;color:#1c1c1e;font-weight:650;box-shadow:none}
+.finder-scope-info{margin-left:auto;font-size:11.5px;color:var(--muted)}
+.finder-scope-info b{color:var(--ink)}
+
+
+/* ================= Raycast-style Chat, Water-wave Thinking & File References ================= */
+.message{margin-bottom:20px;position:relative}
+.user-msg{display:flex;flex-direction:column;align-items:flex-end;gap:8px}
+.user-bubble-wrap{max-width:88%;display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+.bubble{width:100%;padding:10px 14px;border-radius:12px;background:#eef0f3;border:1px solid #dcdde2;color:var(--ink);line-height:1.5;font-size:13px;word-break:break-word}
+
+/* Referenced file badge/pill above user message like in reference image */
+.ref-attachments{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.ref-file-chip{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:8px;background:#eef0f3;border:1px solid #dcdde2;box-shadow:none;font-size:11.5px;color:var(--ink);cursor:pointer;transition:all .12s}
+.ref-file-chip:hover{background:#e3e6eb;border-color:#c8cad2}
+.ref-file-chip .ref-chip-icon{width:15px;height:15px;display:grid;place-items:center;flex:none}
+.ref-file-chip .ref-chip-name{font-weight:550;color:var(--ink)}
+.ref-file-chip .ref-chip-sub{font-size:10.5px;color:var(--muted)}
+.ref-file-chip .ref-chip-del{border:0;background:transparent;color:var(--muted);cursor:pointer;padding:0;margin-left:4px;font-size:11px}
+.ref-file-chip .ref-chip-del:hover{color:var(--red)}
+
+/* Assistant response: borderless, natural prose stream */
+.assistant-msg{display:flex;flex-direction:column;gap:14px;padding:0 2px}
+.assistant-section{display:flex;flex-direction:column;gap:6px}
+.thinking-header{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--muted);font-weight:500;cursor:pointer;user-select:none;margin-bottom:2px}
+.thinking-header:hover{color:var(--ink)}
+.thinking-header svg{transition:transform .15s}
+.thinking-header.open svg{transform:rotate(90deg)}
+
+.assistant-prose{font-size:13.5px;line-height:1.65;color:var(--body);margin:0}
+.assistant-prose strong{color:var(--ink);font-weight:600}
+.assistant-prose p{margin:0 0 8px}
+.assistant-prose p:last-child{margin-bottom:0}
+
+/* Left-to-right water wave / shimmer thinking animation */
+.water-wave-thinking{display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:550;margin:6px 0;background:linear-gradient(90deg, #8a8a92 0%, #2563eb 25%, #60a5fa 50%, #8a8a92 75%, #8a8a92 100%);background-size:200% auto;color:transparent;-webkit-background-clip:text;background-clip:text;animation:shimmerWave 1.6s linear infinite}
+@keyframes shimmerWave{0%{background-position:100% 0}100%{background-position:-100% 0}}
+
+.water-wave-dot{width:7px;height:7px;border-radius:50%;background:#3b82f6;display:inline-block;animation:pulseDot 1.4s ease-in-out infinite}
+@keyframes pulseDot{0%,100%{opacity:.4;transform:scale(.85)}50%{opacity:1;transform:scale(1.2)}}
+
+/* Composer attached files preview tray */
+.composer-attach-tray{display:flex;align-items:center;gap:6px;padding:4px 10px 0;flex-wrap:wrap}
+.composer-attach-pill{display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border-radius:5px;background:#e5e7eb;font-size:11px;color:var(--ink)}
+.composer-attach-pill button{border:0;background:transparent;cursor:pointer;padding:0 2px;color:var(--muted)}
+.composer-attach-pill button:hover{color:var(--red)}
+
+</style>
+</head>
+<body><div id="root"></div>
+<script>
+
+(function(){
+"use strict";
+const KD={folder:{kind:"Folder"},xlsx:{l:"X",bg:"#36a269",kind:"Excel Spreadsheet"},csv:{l:"C",bg:"#2c9c99",kind:"CSV Document"},pdf:{l:"P",bg:"#df6846",kind:"PDF Document"},docx:{l:"W",bg:"#5575c8",kind:"Word Document"},pptx:{l:"P",bg:"#e59b3e",kind:"PowerPoint"},md:{l:"M",bg:"#888994",kind:"Markdown"},png:{l:"I",bg:"#b25bc2",kind:"PNG Image"},zip:{l:"Z",bg:"#888994",kind:"ZIP Archive"},slack:{l:"S",bg:"#bf3e82",kind:"Slack Thread"},mail:{l:"M",bg:"#d35d46",kind:"Email"},notion:{l:"N",bg:"#1d1d1f",kind:"Notion Page"},discord:{l:"D",bg:"#6671cf",kind:"Discord Thread"},telegram:{l:"T",bg:"#4f9bd0",kind:"Telegram Message"}};
+const F=(n,k,d,s)=>({n,k,d,s:s||"—"}),D=(n,d)=>({n,k:"folder",d,s:"—"});
+const FS={
+Recents:[F("Q3_마케팅예산_v3.xlsx","xlsx","Sep 13, 16:48","84 KB"),F("주간보고_0919.pptx","pptx","Sep 19, 18:02","4.8 MB"),F("예산승인_품의서_0915.pdf","pdf","Sep 15, 17:10","312 KB"),F("Q3_캠페인_브리프.docx","docx","Sep 5, 11:20","1.1 MB")],
+Desktop:[D("스크린샷","Sep 22, 11:40"),F("주간보고_0919.pptx","pptx","Sep 19, 18:02","4.8 MB"),F("회의록_0922.md","md","Sep 22, 10:05","6 KB"),F("스크린샷 2026-09-22.png","png","Sep 22, 11:40","1.2 MB")],
+"Desktop/스크린샷":[F("대시보드_캡처_01.png","png","Sep 22, 11:40","1.2 MB"),F("대시보드_캡처_02.png","png","Sep 22, 11:41","1.1 MB")],
+Downloads:[F("Blue_Agency_견적서_v2.pdf","pdf","Sep 14, 09:12","680 KB"),F("media_plan_v3.xlsx","xlsx","Sep 16, 15:30","142 KB"),F("8월_광고성과_리포트.pdf","pdf","Sep 3, 14:22","2.4 MB"),F("brand_assets.zip","zip","Aug 30, 10:00","48 MB"),F("invoice_0831.pdf","pdf","Aug 31, 18:40","96 KB"),F("Q3_마케팅예산_v3 (1).xlsx","xlsx","Sep 13, 16:52","84 KB")],
+Documents:[D("Finance","Sep 15, 17:10"),D("Marketing","Sep 19, 18:02"),D("Contracts","Aug 21, 13:00"),D("HR","Jul 30, 09:45"),F("업무인수인계.docx","docx","Jun 2, 16:10","220 KB")],
+"Documents/Finance":[D("2026 Q2","Jun 30, 18:00"),D("2026 Q3","Sep 15, 17:10"),F("연간예산_2026.xlsx","xlsx","Jan 12, 10:30","210 KB"),F("비용집행_가이드.pdf","pdf","Feb 3, 09:00","1.4 MB")],
+"Documents/Finance/2026 Q2":[F("Q2_결산.xlsx","xlsx","Jul 4, 17:00","190 KB")],
+"Documents/Finance/2026 Q3":[D("벤더 견적","Sep 14, 09:12"),F("Q3_마케팅예산_v1.xlsx","xlsx","Aug 28, 11:02","78 KB"),F("Q3_마케팅예산_v2.xlsx","xlsx","Sep 8, 15:40","81 KB"),F("Q3_마케팅예산_v3.xlsx","xlsx","Sep 13, 16:48","84 KB"),F("예산승인_품의서_0915.pdf","pdf","Sep 15, 17:10","312 KB"),F("집행내역_8월.csv","csv","Sep 2, 09:30","44 KB"),F("집행내역_9월_중간.csv","csv","Sep 20, 12:15","39 KB")],
+"Documents/Finance/2026 Q3/벤더 견적":[F("Blue_Agency_견적서_v2.pdf","pdf","Sep 14, 09:12","680 KB")],
+"Documents/Marketing":[F("Q3_캠페인_캘린더.xlsx","xlsx","Sep 1, 10:00","66 KB"),F("브랜드_가이드_2026.pdf","pdf","Mar 3, 12:00","12 MB")],
+"Documents/Contracts":[F("Blue_Agency_MSA.pdf","pdf","Aug 21, 13:00","840 KB")],"Documents/HR":[F("휴가계획_Q3.xlsx","xlsx","Jul 30, 09:45","24 KB")],
+"iCloud Drive":[D("Personal","Sep 1, 08:00"),F("메모_예산아이디어.md","md","Aug 20, 22:14","3 KB")],"iCloud Drive/Personal":[],
+"Google Drive":[D("Marketing","Sep 5, 11:20"),D("Shared with me","Sep 18, 16:00")],"Google Drive/Marketing":[F("Q3_캠페인_브리프.docx","docx","Sep 5, 11:20","1.1 MB"),F("KPI_트래커.xlsx","xlsx","Sep 21, 09:00","120 KB")],"Google Drive/Shared with me":[F("해외법인_마케팅_가이드.pdf","pdf","Sep 18, 16:00","2.2 MB")],
+Dropbox:[F("agency_creatives_Q3.zip","zip","Sep 10, 19:30","320 MB")],Slack:[D("#mkt-budget","Sep 12, 14:11"),D("#marketing","Sep 22, 09:40"),D("#general","Sep 23, 08:30")],"Slack/#mkt-budget":[F("2026-09-12 · 예산 조정 스레드","slack","Sep 12, 14:11","14 msgs")],"Slack/#marketing":[F("2026-09-22 · 캠페인 킥오프","slack","Sep 22, 09:40","22 msgs")],Gmail:[D("Inbox","Sep 23, 08:12"),D("Sent","Sep 15, 11:02")],"Gmail/Inbox":[F("RE: Q3 마케팅 예산 최종 승인 요청","mail","Sep 15, 10:24","1 thread"),F("[Blue Agency] 재견적서 송부","mail","Sep 14, 09:10","1 thread")],Notion:[D("Marketing Wiki","Aug 29, 18:20")],"Notion/Marketing Wiki":[F("Q3 Planning","notion","Aug 29, 18:20","12 blocks")],Discord:[D("#agency-sync","Sep 16, 15:28")],"Discord/#agency-sync":[F("2026-09-16 · 미디어 플랜 v3","discord","Sep 16, 15:28","6 msgs")],Telegram:[D("해외법인 공지","Sep 18, 21:05")],"Telegram/해외법인 공지":[F("2026-09-18 · Q3 budget notice","telegram","Sep 18, 21:05","2 msgs")]
+};
+const FAMS=[{head:"Documents/Finance/2026 Q3/Q3_마케팅예산_v3.xlsx",m:[["Documents/Finance/2026 Q3","Q3_마케팅예산_v2.xlsx","near"],["Documents/Finance/2026 Q3","Q3_마케팅예산_v1.xlsx","near"],["Downloads","Q3_마케팅예산_v3 (1).xlsx","exact"]]}];
+const EV=[{n:1,k:"xlsx",title:"Q3_마케팅예산_v3.xlsx",loc:"Documents/Finance/2026 Q3",meta:'Sheet "Summary" · 수정 9월 13일 김서연',blocks:["Summary — Q3 Marketing Budget","합계 v1 420,000,000 → v3 380,000,000 (−40,000,000, 퍼포먼스)"]},{n:2,k:"mail",title:"RE: Q3 마케팅 예산 최종 승인 요청",loc:"Gmail/Inbox",meta:"박지훈 → 김서연 · Sep 15, 10:24",blocks:["RE: Q3 마케팅 예산 최종 승인 요청","에이전시 재견적 반영하는 조건으로 Q3 마케팅 예산 3.8억 승인합니다.","집행은 10월 1일부터 가능합니다."]},{n:3,k:"slack",title:"#mkt-budget · 예산 조정 스레드",file:"2026-09-12 · 예산 조정 스레드",loc:"Slack/#mkt-budget",meta:"Thread · Sep 12, 14:02–14:11",blocks:["#mkt-budget — thread","퍼포먼스 4천 줄이고 3.8억으로 가죠. v3 올릴게요."]},{n:4,k:"pdf",title:"예산승인_품의서_0915.pdf",loc:"Documents/Finance/2026 Q3",meta:"p.1 · 전자결재 완료",blocks:["품의서 — 2026년 3분기 마케팅 예산 집행","금 삼억팔천만원정 (₩380,000,000)","승인 박지훈 CFO (2026.09.15 17:10)"]}];
+const A1={q:"Q3 마케팅 예산 최종 승인 금액이랑, 누가 언제 승인했는지 알려줘",quick:["최종 승인액은 **₩3.8억**이며, 9월 15일 CFO 박지훈이 이메일로 승인했습니다. [2][4]"],deep:["최종 승인액은 **₩380,000,000**입니다. 초안(v1)은 ₩4.2억이었지만 9월 12일 Slack에서 퍼포먼스 광고 ₩4천만을 줄이기로 합의했습니다. [1][3]","승인은 9월 15일 CFO 박지훈의 조건부 승인 메일과 전자결재로 완료됐습니다. [2][4]"],quickMeta:"0.9s · 2 sources",deepMeta:"14 sources read · 41s"};
+const A2={quick:["근거 자료 9건을 찾았습니다. 핵심은 품의서와 CFO 승인 메일입니다. [4][2]"],deep:["시간순 정리: 9/5 브리프 → 9/12 Slack 감액 합의 → 9/13 v3 작성 → 9/15 CFO 승인·결재 → 9/19 주간보고 반영입니다. [1][2][3][4]"],quickMeta:"0.8s · 2 sources",deepMeta:"22 sources read · 38s"};
+const escape=s=>String(s??"").replace(/[&<>\"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
+const icon=(name,size=16)=>{const p={back:'M15 6l-6 6 6 6',forward:'M9 6l6 6-6 6',search:'M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zm5 12 5 5',info:'M12 11v5M12 7.5h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0',grid:'M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z',list:'M5 6h14M5 12h14M5 18h14',columns:'M5 4h5v16H5zM14 4h5v16h-5z',sidebartoggle:'M3 4h18a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zm6 0v16M5.5 8.5h1M5.5 12h1M5.5 15.5h1',folderplus:'M12 19H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h4l2 2h3a2 2 0 0 1 2 2v1.5M18 9.5a4.5 4.5 0 1 0 0 9 4.5 4.5 0 0 0 0-9zm0 2.5v4m-2-2h4',share:'M12 15V3m-4 4l4-4 4 4M5 14v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5',plus:'M12 5v14M5 12h14',close:'M6 6l12 12M18 6 6 18',history:'M4 12a8 8 0 1 0 2-5.6L4 8m0-5v5h5',spark:'M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z',up:'M6 15l6-6 6 6',chevup:'M6 14.5l6-6 6 6',chevdown:'M6 9.5l6 6 6-6',check:'M5 12.5l4.2 4L19 7',indexcol:'M4 5.5h4.5v4.5H4zM4 14h4.5v4.5H4zM12 7.75h8M12 16.25h8M5 16.3l1.3 1.2 2-2.4',down:'M6 9l6 6 6-6',home:'M4 11l8-6.5 8 6.5M6 9.5V20h4.5v-5.5h3V20H18V9.5',thumbup:'M7 10v12M15 5.88L14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88z',thumbdown:'M17 14V2M9 18.12L10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88z',disk:'M3 13.5 5.2 6h13.6l2.2 7.5V18H3zM3 13.5h18M17 15.8h.01',gear:'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM4 12h-1m18 0h-1M12 4V3m0 18v-1M6.3 6.3l-.7-.7m13.4 13.4-.7-.7m0-12-.7.7M7 19l-.7.7',folder:'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z',file:'M6 3h8l4 4v14H6zM14 3v4h4',copy:'M9.5 9.5h10v10h-10zM4.5 14.5v-10h10',trash:'M4 7h16M9.5 7V4.5h5V7M6.5 7l.9 12.5h9.2L17.5 7M10 10.5v6M14 10.5v6',clock:'M12 7v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0',cloud:'M7 18h10a4 4 0 0 0 .5-7.97A6 6 0 0 0 6.1 11 3.5 3.5 0 0 0 7 18z',people:'M16 20v-1a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v1M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8m7-5a3 3 0 0 1 0 6m5 8v-1a4 4 0 0 0-3-3'}[name]||'M4 12h16';return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="${p}"/></svg>`};
+const fileIcon=(k,large=false)=>{if(k==='folder')return `<svg class="${large?'large-icon':''}" width="${large?70:18}" height="${large?58:18}" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" fill="#70a8f5" stroke="#4c89dc" stroke-width=".7"/><path d="M3 9h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" fill="#8cb9f7"/></svg>`;const d=KD[k]||KD.md;return `<span class="doc-icon ${large?'doc-large':''}" style="--tile:${d.bg}"><i>${d.l||'·'}</i></span>`};
+const parent=p=>p.includes('/')?p.slice(0,p.lastIndexOf('/')):"";const base=p=>p.split('/').pop();const join=(p,n)=>p?p+'/'+n:n;const kind=k=>(KD[k]||KD.md).kind;const MON={Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};const dateVal=d=>{const m=String(d).match(/^(\w{3}) (\d+), (\d+):(\d+)/);return m?((MON[m[1]]*31+ +m[2])*24+ +m[3])*60+ +m[4]:Infinity};
+const sizeVal=s=>{const m=String(s).match(/([\d.]+)\s*(KB|MB|GB)/);return m?+m[1]*({KB:1,MB:1024,GB:1048576}[m[2]]):0};
+function App(){
+function showToast(msg){set({toast:msg});setTimeout(()=>set({toast:null}),2200)}
+let S={tabs:[{id:1,path:"Documents/Finance/2026 Q3",sel:"Q3_마케팅예산_v3.xlsx",back:[],fwd:[],view:"columns"},{id:2,path:"Downloads",sel:null,back:[],fwd:[],view:"list"},{id:3,path:"Slack/#mkt-budget",sel:null,back:[],fwd:[],view:"list"}],active:1,next:4,query:"",searchDraft:"",searchScope:"all",searchTarget:"name",searchFocused:false,view:"columns",inspector:true,ai:true,inspectorMode:"info",evidence:1,messages:[{role:"user",text:A1.q,attachments:[{name:"Q3_마케팅예산_v3.xlsx",kind:"xlsx",where:"Documents/Finance/2026 Q3"}]},{role:"assistant",a:A1,ready:true,thinking:false}],draft:"",draftAttachments:[],history:false,settings:false,settingsTab:"general",providers:{openai:true,anthropic:false,cursor:false,xai:false,gemini:true,custom:false},customEndpoint:{baseUrl:"https://api.together.xyz/v1",apiKey:"",modelName:"meta-llama/Llama-4-Scout"},sourcesConnected:{"Slack":true,"Gmail":true,"Google Drive":true,"Notion":true,"Local Files":true,"Discord":false,"iCloud Drive":false},sort:{key:"name",dir:"asc"},idx:{},showIndex:true,columns:{name:true,date:true,size:true,kind:true,index:true},colWidths:{},trashed:{},expanded:{"Documents/Finance/2026 Q3/Q3_마케팅예산_v3.xlsx":true},context:null,quick:null,toast:null,flash:null,showHidden:false,parallel:true,generating:false,feedback:{},clipboard:null,drop:false,sidebar:true,aiH:280,aiAnim:null};
+const listeners={};function on(type,fn){(listeners[type]??=[]).push(fn)}function emit(type,e){(listeners[type]||[]).forEach(fn=>fn(e))}
+const COLUMN_OPTIONS=[{key:'name',label:'Name',fixed:true,width:'minmax(180px,1fr)'},{key:'extension',label:'Extension',width:'92px'},{key:'dateCreated',label:'Date Created',width:'112px'},{key:'date',label:'Date Modified',fixed:true,width:'112px'},{key:'dateAdded',label:'Date Added',width:'112px'},{key:'dateLastOpened',label:'Date Last Opened',width:'112px'},{key:'size',label:'Size',fixed:true,width:'68px'},{key:'tags',label:'Tags',width:'92px'},{key:'comments',label:'Comments',width:'112px'},{key:'dimensions',label:'Dimensions',width:'92px'},{key:'rating',label:'Rating',width:'72px'},{key:'duration',label:'Duration',width:'82px'},{key:'version',label:'Version',width:'82px'},{key:'entryCount',label:'Entry Count',width:'82px'},{key:'relativePath',label:'Relative Path',width:'150px'},{key:'kind',label:'Kind',fixed:true,width:'106px'},{key:'index',label:'Index',fixed:true,width:'52px'}];
+const DEFAULT_COLUMNS={name:true,date:true,size:true,kind:true,index:true};
+const columnText=(x,key)=>({name:x.n,extension:x.k==='folder'?'—':(x.n.includes('.')?x.n.slice(x.n.lastIndexOf('.')+1).toUpperCase():'—'),date:x.d,dateCreated:x.k==='folder'?'Sep 1, 08:00':x.d,dateAdded:x.d,dateLastOpened:x.d,size:x.s,tags:'—',comments:'—',dimensions:x.k==='png'?'1440 × 900':'—',rating:'—',duration:'—',version:'—',entryCount:x.k==='folder'?String((FS[join(x.where,x.n)]||[]).length):'—',relativePath:x.where,kind:kind(x.k),index:''}[key]??'—');
+const LOCAL_ROOTS=['Desktop','Downloads','Documents'],ROOT_ICON={Recents:'clock','iCloud Drive':'cloud','Google Drive':'cloud',Dropbox:'cloud'};
+function set(p){S={...S,...(typeof p==='function'?p(S):p)};render()};function tab(){return S.tabs.find(t=>t.id===S.active)||S.tabs[0]};function pathRows(path){return sortItems((FS[path]||[]).filter(x=>!S.trashed[join(path,x.n)]&&(!x.n.startsWith('.')||S.showHidden)&&!nestedUnderHead(path,x)))};function sortItems(list){const{key,dir}=S.sort,byName=(a,c)=>a.n.localeCompare(c.n,'ko',{numeric:true});const cmp=key==='date'?(a,c)=>dateVal(a.d)-dateVal(c.d):key==='size'?(a,c)=>(a.k==='folder'?-1:sizeVal(a.s))-(c.k==='folder'?-1:sizeVal(c.s)):key==='kind'?(a,c)=>kind(a.k).localeCompare(kind(c.k),'en'):byName;return [...list].sort((a,c)=>(cmp(a,c)||byName(a,c))*(dir==='asc'?1:-1))};const SORT_DEFAULT_DIR={name:'asc',kind:'asc',date:'desc',size:'desc'};function setSort(key){set(s=>({sort:s.sort.key===key?{key,dir:s.sort.dir==='asc'?'desc':'asc'}:{key,dir:SORT_DEFAULT_DIR[key]||'asc'}}))};function famRole(p){for(const f of FAMS){if(f.head===p)return{f,role:'latest'};const m=f.m.find(m=>join(m[0],m[1])===p);if(m)return{f,role:m[2]}}return null};function famMembers(f){return f.m.map(([w,n,v])=>{const x=findItem(w,n);return x&&!S.trashed[join(w,n)]?{...x,where:w,variant:v}:null}).filter(Boolean)};function nestedUnderHead(path,x){const r=famRole(join(path,x.n));return !!r&&r.role!=='latest'&&parent(r.f.head)===path};function findItem(path,name){return (FS[path]||[]).find(x=>x.n===name)};function currentItem(){const t=tab();const x=t.sel?findItem(t.selWhere||t.path,t.sel):null;return x?{...x,where:t.selWhere||t.path}:null};
+function rows(){
+  const q = S.query.trim().toLowerCase();
+  if (q) {
+    const out = [];
+    const scopePath = S.searchScope === 'current' ? tab().path : null;
+    Object.keys(FS).forEach(p => {
+      if (p === 'Recents') return;
+      if (scopePath && p !== scopePath && !p.startsWith(scopePath + '/')) return;
+      (FS[p] || []).forEach(x => {
+        if (!x.n.startsWith('.') || S.showHidden) {
+          const matchName = x.n.toLowerCase().includes(q);
+          const matchContent = S.searchTarget === 'content' ? (x.n.toLowerCase().includes(q) || (x.d && x.d.toLowerCase().includes(q)) || (x.s && x.s.toLowerCase().includes(q)) || x.k.toLowerCase().includes(q)) : matchName;
+          if (matchContent) out.push({...x, where: p});
+        }
+      });
+    });
+    return sortItems(out);
+  }
+  return pathRows(tab().path).map(x => ({...x, where: tab().path}));
+}
+function selectedKey(r){return join(r.where,r.n)};function itemPath(){const t=tab();const r=currentItem();return r?join(t.selWhere||t.path,r.n):t.path}
+function navigate(path,sel=null){set(s=>({tabs:s.tabs.map(t=>t.id===s.active?{...t,path,sel,selWhere:null,back:[...t.back,t.path],fwd:[]}:t),query:"",inspectorMode:"info"}))}function select(r){set(s=>({tabs:s.tabs.map(t=>t.id===s.active?{...t,sel:r.n,selWhere:r.where}:t)}))}function open(r){if(r.k==='folder')navigate(join(r.where,r.n));else{select(r);set({inspectorMode:"info",inspector:true,quick:r})}}function newTab(){set(s=>{const t=tab(),id=s.next;return{tabs:[...s.tabs,{id,path:t.path,sel:t.sel,back:[],fwd:[],view:t.view}],active:id,next:id+1}})}function closeTab(id){set(s=>{if(s.tabs.length<2)return s;const tabs=s.tabs.filter(t=>t.id!==id);return{tabs,active:s.active===id?tabs[Math.max(0,tabs.findIndex(x=>x.id===id)-1)].id:s.active}})}function back(){const t=tab();if(!t.back.length)return;const path=t.back[t.back.length-1];set(s=>({tabs:s.tabs.map(x=>x.id===t.id?{...x,path,sel:null,back:t.back.slice(0,-1),fwd:[t.path,...t.fwd]}:x)}))}function forward(){const t=tab();if(!t.fwd.length)return;const path=t.fwd[0];set(s=>({tabs:s.tabs.map(x=>x.id===t.id?{...x,path,sel:null,back:[...t.back,t.path],fwd:t.fwd.slice(1)}:x)}))}
+function toggleIndex(r){const p=selectedKey(r);set(s=>({idx:{...s.idx,[p]:!isIncluded(p)},toast:`${r.n} — 인덱싱에서 ${isIncluded(p)?"제외":"포함"}했습니다`}));hideToast()};function trash(r){const p=selectedKey(r);set(s=>({trashed:{...s.trashed,[p]:true},toast:`${r.n} — 휴지통으로 이동했습니다`,tabs:s.tabs.map(t=>t.id===s.active?{...t,sel:null}:t)}));hideToast()};function reveal(e){const file=e.file||e.title;navigate(e.loc,file);set({flash:file,inspectorMode:"info"});setTimeout(()=>set({flash:null}),1200)}function openEvidence(n){set({evidence:n,inspector:true,inspectorMode:"evidence"})}function toggleAi(open){if(open===S.ai)return;set({ai:open,aiAnim:open?'up':'down'});S.aiAnim=null}function ask(r){set(s=>({ai:true,aiAnim:s.ai?null:'up',draft:s.draft||`이 파일을 기준으로 정리해줘: ${r.n}`}));S.aiAnim=null;setTimeout(()=>document.querySelector('[data-compose]')?.focus(),0)}function showToast(msg){set({toast:msg});hideToast()}function hideToast(){clearTimeout(App.toastTimer);App.toastTimer=setTimeout(()=>set({toast:null}),2400)}
+function send(){
+  const text = S.draft.trim();
+  if(!text || S.generating) return;
+  const currentAttachments = [...(S.draftAttachments || [])];
+  const userMsg = { role: 'user', text, attachments: currentAttachments };
+  const assistMsg = { role: 'assistant', a: A2, quickReady: false, thinking: true, deepReady: false, ready: false };
+  
+  set(s => ({
+    draft: "",
+    draftAttachments: [],
+    generating: true,
+    messages: [...s.messages, userMsg, assistMsg]
+  }));
+
+  // Quick answer appears fast
+  setTimeout(() => {
+    set(s => ({
+      messages: s.messages.map((m, i) => i === s.messages.length - 1 ? { ...m, quickReady: true, thinking: true } : m)
+    }));
+  }, 350);
+
+  // Deep answer thinking completes with wave effect transition
+  setTimeout(() => {
+    set(s => ({
+      generating: false,
+      messages: s.messages.map((m, i) => i === s.messages.length - 1 ? { ...m, thinking: false, deepReady: true, ready: true } : m)
+    }));
+  }, 1600);
+}
+function newFolderMock(){const p=tab().path;const taken=(FS[p]||[]).map(x=>x.n);let name='untitled folder',i=2;while(taken.includes(name)){name='untitled folder '+(i++)}FS[p]=(FS[p]||[]).concat([D(name,'Just now')]);render();showToast(name+' — 새 폴더를 만들었습니다')}
+function render(){document.querySelector('#root').innerHTML=html();bind()};
+function sideGroup(label,items){return `<div class="side-group"><div class="side-label">${label}</div>${items.map(x=>{const active=tab().path===x.path||tab().path.split('/')[0]===x.label;return `<button class="side-item ${active?'active':''}" data-nav="${escape(x.path)}"><span class="side-icon">${icon(x.icon)}</span><span class="side-name">${x.label}</span><span class="side-spacer"></span>${x.sync?'<i class="dot sync"></i>':''}${x.err?'<i class="dot err"></i>':''}</button>`}).join('')}</div>`}
+function html(){const t=tab(),r=rows(),q=S.query.trim(),item=currentItem();return `<div class="window${S.sidebar?'':' no-sidebar'}"><aside class="sidebar"><div class="side-head"><div class="traffic"><i></i><i></i><i></i></div><button class="icon-btn" title="Hide sidebar" data-collapse>${icon('sidebartoggle')}</button><button class="icon-btn" title="New folder" data-newfolder>${icon('folderplus')}</button></div><div class="side-scroll">${sideGroup('Favorites',[{label:'Recents',path:'Recents',icon:'clock'},{label:'Desktop',path:'Desktop',icon:'grid'},{label:'Downloads',path:'Downloads',icon:'forward'},{label:'Documents',path:'Documents',icon:'file'}])}${sideGroup('Cloud',[{label:'iCloud Drive',path:'iCloud Drive',icon:'cloud'},{label:'Google Drive',path:'Google Drive',icon:'cloud',sync:true},{label:'Dropbox',path:'Dropbox',icon:'cloud'}])}</div><div class="side-footer"><button class="side-item ${t.path==='Settings'?'active':''}" data-settings><span class="side-icon">${icon('gear')}</span><span class="side-name">Settings</span><span class="side-spacer"></span><small>⌘,</small></button></div></aside><div class="center"><main class="finder"><div class="toolbar">${!S.sidebar ? `
+  <div class="traffic toolbar-traffic"><i></i><i></i><i></i></div>
+  <button class="icon-btn" title="Show sidebar" data-collapse>${icon('sidebartoggle')}</button>
+  <button class="icon-btn" title="New folder" data-newfolder>${icon('folderplus')}</button>
+` : ''}<button class="icon-btn" data-back>${icon('back')}</button><button class="icon-btn" data-forward>${icon('forward')}</button><strong class="toolbar-title">${q?`Search “${escape(q)}”`:escape(base(t.path))}</strong><span class="toolbar-spacer"></span><div class="seg"><button class="${t.view==='icons'?'active':''}" data-view="icons">${icon('grid',14)}</button><button class="${t.view==='list'?'active':''}" data-view="list">${icon('list',14)}</button><button class="${t.view==='columns'?'active':''}" data-view="columns">${icon('columns',14)}</button></div><div class="search-wrap">
+  <div class="search${S.searchFocused?' active':''}">
+    ${icon('search',14)}
+    <input data-search value="${escape(S.searchDraft !== undefined ? S.searchDraft : S.query)}" placeholder="Search files, contents…">
+    ${(S.searchDraft||S.query)?`<button class="search-clear" data-searchclear title="Clear search">✕</button>`:`<small>⌘F</small>`}
+  </div>
+  ${(S.searchFocused && (S.searchDraft||'').trim()) ? `
+    <div class="search-dropdown">
+      <div class="search-dd-section">Filenames</div>
+      <button class="search-dd-item${S.searchTarget==='name'?' selected':''}" data-applysearch="name">
+        ${icon('file',14)}
+        <span>Name Contains &ldquo;<strong>${escape(S.searchDraft.trim())}</strong>&rdquo;</span>
+        <span class="search-dd-sub">↵ Enter</span>
+      </button>
+      <div class="search-dd-section" style="margin-top:4px">Content</div>
+      <button class="search-dd-item${S.searchTarget==='content'?' selected':''}" data-applysearch="content">
+        ${icon('spark',14)}
+        <span>Contains &ldquo;<strong>${escape(S.searchDraft.trim())}</strong>&rdquo;</span>
+        <span class="search-dd-sub">⌥↵ Option+Enter</span>
+      </button>
+    </div>
+  ` : ''}
+</div></div>${S.tabs.length>1?`<div class="tabs">${S.tabs.map(x=>`<div class="tab ${x.id===S.active?'active':''}" role="tab" data-tab="${x.id}"><span>${escape(x.query&&x.id===S.active?`Search “${x.query}”`:base(x.path))}</span><button class="close" data-close="${x.id}" title="Close tab">${icon('close',11)}</button></div>`).join('')}<button class="icon-btn" data-newtab>${icon('plus',14)}</button></div>`:''}<div class="browser">${q ? `
+  <div class="finder-scope-bar">
+    <span class="finder-scope-label">Search:</span>
+    <div class="finder-scope-seg">
+      <button class="finder-scope-btn${S.searchScope==='all'?' active':''}" data-setscope="all">This Mac</button>
+      <button class="finder-scope-btn${S.searchScope==='current'?' active':''}" data-setscope="current">${escape(base(t.path))}</button>
+    </div>
+    <div class="finder-scope-info">
+      <b>${r.length}</b> ${r.length===1?'item':'items'} found
+    </div>
+  </div>
+` : ''}${t.path==='Settings'?settingsView():S.view==='columns'&&!q?columnsView(t):S.view==='icons'&&!q?iconsView(r):listView(r)}${t.path==='Settings'?'':pathBar(t,item)}</div></main>${aiPane()}</div>${inspector(item)}${overlays()}</div>`}
+const isIncluded=p=>S.idx[p]??(!p.includes('Q3_마케팅예산_v2')&&!p.includes('Q3_마케팅예산_v1'));const chk=(p,on)=>`<button class="chk ${on?'on':''}" role="checkbox" aria-checked="${on}" data-index="${escape(p)}" title="${on?'AI 검색 인덱스에 포함됨':'AI 검색 인덱스에서 제외됨'}">${icon('check',10)}</button>`;
+const VLABEL={latest:'최신본',near:'유사본',exact:'동일본'};const vtag=(role,title='')=>`<span class="vtag ${role}"${title?` title="${escape(title)}"`:''}>${VLABEL[role]}</span>`;const vwhere=w=>`<span class="vwhere" title="${escape(w)}">${fileIcon('folder')}${escape(base(w))}</span>`;
+function pathBar(t,item){const where=item?item.where:t.path,seg=where.split('/'),parts=[];if(LOCAL_ROOTS.includes(seg[0]))parts.push({label:'Macintosh HD',ic:icon('disk',14)},{label:'Users',ic:fileIcon('folder')},{label:'seoyeon',ic:icon('home',14)});seg.forEach((c,i)=>parts.push({label:c,path:seg.slice(0,i+1).join('/'),ic:i===0&&ROOT_ICON[c]?icon(ROOT_ICON[c],14):fileIcon('folder')}));if(item)parts.push(item.k==='folder'?{label:item.n,path:join(item.where,item.n),ic:fileIcon('folder')}:{label:item.n,file:true,ic:fileIcon(item.k)});return `<nav class="pathbar" aria-label="Path">${parts.map((p,i)=>{const inner=`<span class="path-ic">${p.ic}</span><span class="path-name">${escape(p.label)}</span>`;return (i?'<span class="path-sep">›</span>':'')+(p.path?`<button class="path-seg" data-crumb="${escape(p.path)}" title="${escape(p.path)}">${inner}</button>`:p.file?`<button class="path-seg" data-pathql title="Quick Look">${inner}</button>`:`<span class="path-seg">${inner}</span>`)}).join('')}</nav>`}
+function listView(r){const visible=COLUMN_OPTIONS.filter(c=>S.columns[c.key]);const grid=visible.map(c=>c.width).join(' ');const head=visible.map(c=>{if(c.key==='index')return '<span class="ix-head" title="AI 검색 인덱스에 포함">Index</span>';const on=S.sort.key===c.key;return c.key==='name'||c.key==='date'||c.key==='size'||c.key==='kind'?`<button class="sort-h ${on?'on':''}" data-sortkey="${c.key}" aria-sort="${on?(S.sort.dir==='asc'?'ascending':'descending'):'none'}"><span>${c.label}</span>${on?`<span class="sort-chev">${icon(S.sort.dir==='asc'?'chevup':'chevdown',10)}</span>`:''}</button>`:`<span title="${c.label}">${c.label}</span>`}).join('');return `<div class="view lv" style="--list-grid:${grid}"><div class="list-head" data-column-menu-target>${head}</div>${r.length?flatten(r,0).map(([x,d])=>row(x,d)).join(''):`<div class="empty">${S.query.trim()?`“${escape(S.query.trim())}”와 일치하는 파일이 없습니다`:'빈 폴더'}</div>`}</div>`}function flatten(list,d){const out=[];list.forEach(x=>{out.push([x,d]);const p=join(x.where,x.n);if(!S.expanded[p]||S.query.trim()||x.variant)return;if(x.k==='folder'){out.push(...flatten(pathRows(p).map(y=>({...y,where:p})),d+1));return}const r=famRole(p);if(r&&r.role==='latest')famMembers(r.f).forEach(y=>out.push([y,d+1]))});return out}function row(x,depth){const selected=currentItem()?.n===x.n&&((tab().selWhere||tab().path)===x.where);const p=selectedKey(x),included=isIncluded(p),fr=famRole(p),role=x.variant||fr?.role,isHead=role==='latest',members=isHead?famMembers(fr.f):[],canOpen=!S.query.trim()&&(x.k==='folder'||isHead&&members.length>0),headWhere=fr?parent(fr.f.head):'',tags=isHead?`${vtag('latest')}<span class="vcount">+${members.length}</span>`:role?`${vtag(role,'최신본: '+base(fr.f.head))}${x.variant&&x.where!==headWhere?vwhere(x.where):''}`:'';const cells=visibleCells(x,depth,p,included,canOpen,isHead,tags);return `<div class="file-row ${selected?'selected':''} ${S.flash===x.n?'flash':''} ${role&&!isHead?'variant':''} ${S.columns.index&&x.k!=='folder'&&!included?'excluded':''}" draggable="true" data-row="${escape(p)}" data-open="${escape(p)}" data-kind="${x.k}" style="--list-grid:${COLUMN_OPTIONS.filter(c=>S.columns[c.key]).map(c=>c.width).join(' ')}">${cells}</div>`}function visibleCells(x,depth,p,included,canOpen,isHead,tags){return COLUMN_OPTIONS.filter(c=>S.columns[c.key]).map(c=>{if(c.key==='name')return `<div class="name-cell"><span class="indent" style="width:${depth*16}px"></span>${canOpen?`<button class="disclosure${S.expanded[p]?' open':''}" data-openfolder="${escape(p)}" aria-label="${escape(x.n)} ${isHead?'유사·중복본 ':''}${S.expanded[p]?'접기':'펼치기'}"></button>`:'<span style="width:13px;flex:none"></span>'}<span class="${isHead?'stack':''}" style="display:contents">${fileIcon(x.k)}</span><span class="name">${escape(x.n)}</span>${tags}</div>`;if(c.key==='index')return x.k==='folder'?'<span></span>':`<span class="ix-cell">${chk(p,included)}</span>`;return `<span class="${c.key}">${escape(columnText(x,c.key))}</span>`}).join('')}
+function columnsView(t){const seg=t.path.split('/');const sw=t.selWhere||t.path,selP=t.sel?join(sw,t.sel):null,fr=selP?famRole(selP):null,fam=fr&&parent(fr.f.head)===t.path?fr.f:null;let out='';for(let i=0;i<seg.length;i++){const p=seg.slice(0,i+1).join('/');const list=pathRows(p);const next=seg[i+1],lastCol=i===seg.length-1;out+=`<div class="column"><div class="column-title">${escape(seg[i])}</div>${list.map(x=>{const xp=join(p,x.n),head=famRole(xp)?.role==='latest';const active=next===x.n||(lastCol&&selP===xp);const ancestor=(next===x.n&&!lastCol)||(lastCol&&fam&&fam.head===xp&&selP!==xp);return `<div class="col-row ${active?'active':''} ${ancestor?'ancestor':''}" data-open="${escape(xp)}" data-kind="${x.k}"><span class="${head?'stack':''}" style="display:contents">${fileIcon(x.k)}</span><span class="col-name">${escape(x.n)}</span>${x.k==='folder'||head?'<span class="col-arrow">›</span>':''}</div>`}).join('')}</div>`}if(fam){const ms=famMembers(fam);out+=`<div class="column variants"><div class="column-title">유사·중복본 <span class="vcount">${ms.length}</span></div>${ms.map(y=>{const yp=join(y.where,y.n);return `<div class="col-row variant ${selP===yp?'active':''}" data-open="${escape(yp)}" data-kind="${y.k}" title="${escape(yp)}">${fileIcon(y.k)}<span class="col-name">${escape(y.n)}</span>${vtag(y.variant)}</div>`}).join('')}</div>`}else if(t.sel&&!findItem(sw,t.sel))out+=`<div class="column"><div class="column-title">Preview</div><div class="no-selection">선택한 항목을 찾을 수 없습니다.</div></div>`;return `<div class="view columns">${out}<div style="flex:1"></div></div>`}
+function iconsView(r){return `<div class="view icon-grid">${r.map(x=>{const selected=currentItem()?.n===x.n;return `<div class="icon-card ${selected?'selected':''}" data-open="${escape(join(x.where,x.n))}" data-kind="${x.k}">${fileIcon(x.k,true)}<span class="icon-name">${escape(x.n)}</span></div>`}).join('')}</div>`}
+function previewFor(r){const e=EV.find(x=>r&&x.n===x.title||r&&x.n===x.title);if(r&&r.k==='xlsx')return '<div class="mini-sheet"><div class="sheet-grid">'+['항목','v1','v3','변동','브랜드','120M','120M','—','퍼포먼스','160M','120M','−40M','합계','420M','380M','−40M'].map((x,i)=>`<span class="${i>8?'hl':''}">${x}</span>`).join('')+'</div></div>';return `<div class="mini-doc">${[1,2,3,4,5].map((_,i)=>i===2?'<div class="mark"></div>':'<div class="line"></div>').join('')}</div>`}
+function infoInner(r,split=false){if(!r)return `<div class="inspector-half inspector-info${split?' is-split':''}"><div class="inspector-head"><strong>Info</strong><span class="toolbar-spacer"></span></div><div class="no-selection">파일을 선택하면<br>미리보기와 정보를 표시합니다.</div></div>`;const p=join(r.where,r.n),inc=isIncluded(p);return `<div class="inspector-half inspector-info${split?' is-split':''}"><div class="inspector-head"><strong>Info</strong><span class="toolbar-spacer"></span><button class="icon-btn" data-share title="Share" aria-label="Share">${icon('share')}</button></div><div class="inspector-body"><div class="preview-paper">${previewFor(r)}</div><div class="preview-title">${escape(r.n)}</div><div class="preview-sub">${escape(kind(r.k))} · ${escape(r.s)} · ${escape(r.d)}</div><div class="chip-row"><button class="badge" data-index="${escape(p)}">${icon('check',12)} ${inc?'인덱스 포함':'인덱스 제외'}</button><button class="badge" data-trash="${escape(p)}">${icon('trash',12)} 휴지통</button><button class="badge" data-copy="${escape(p)}">${icon('copy',12)} 경로 복사</button></div>${versionsSection(p)}<div class="info-section"><div class="section-title">일반 정보 <button class="link-btn" data-infotoggle>${S.infoLess?'더보기':'간략히'}</button></div><dl class="info-row"><dt>종류</dt><dd>${escape(kind(r.k))}</dd><dt>크기</dt><dd>${escape(r.s)}</dd><dt>위치</dt><dd>${escape(r.where)}</dd><dt>수정한 날짜</dt><dd>${escape(r.d)}</dd>${S.infoLess?'':`<dt>생성일</dt><dd>2026-09-01</dd><dt>마지막 연 날짜</dt><dd>오늘 10:14</dd>`}</dl></div></div><div class="inspector-actions"><button class="inspector-action primary" data-openql>${icon('grid',18)}<span>Quick Look</span></button><button class="inspector-action" data-copy="${escape(p)}">${icon('copy',18)}<span>경로 복사</span></button><button class="inspector-action" data-ask="${escape(p)}">${icon('spark',18)}<span>AI 요약</span></button><button class="inspector-action danger" data-trash="${escape(p)}">${icon('trash',18)}<span>휴지통</span></button></div></div>`}
+function evidenceInner(split=true){const e=EV.find(x=>x.n===S.evidence)||EV[0];return `<div class="inspector-half inspector-evidence${split?' is-split':''}"><div class="inspector-head"><strong>Evidence</strong><span class="toolbar-spacer"></span><button class="icon-btn" data-openql title="Quick Look">${icon('grid')}</button><button class="icon-btn" data-evidenceclose title="Close evidence">${icon('close')}</button></div><div class="inspector-body"><div class="evidence-tabs">${EV.map(x=>`<button class="evidence-tab ${x.n===S.evidence?'active':''}" data-evidence="${x.n}">${x.n}</button>`).join('')}</div><div class="preview-paper">${previewFor({k:e.k,n:e.title,s:'',d:''})}</div><div class="preview-title">${e.n}. ${escape(e.title)}</div><div class="preview-sub">${escape(kind(e.k))} · ${escape(e.meta)}</div><div class="feedback"><button class="${S.feedback[S.evidence]==='up'?'on':''}" data-feedback="up" title="도움 됨" aria-label="도움 됨">${icon('thumbup',14)}</button><button class="${S.feedback[S.evidence]==='down'?'on':''}" data-feedback="down" title="도움 안 됨" aria-label="도움 안 됨">${icon('thumbdown',14)}</button></div><div class="excerpt"><h3>근거 내용 발췌</h3>${e.blocks.map(b=>`<p>${inline(b)}</p>`).join('')}</div><div class="info-section"><div class="section-title">출처 위치</div><p style="color:var(--muted);font-size:11px">${escape(e.loc)}</p><button class="action" data-reveal="${e.n}">Finder에서 위치 보기</button></div></div></div>`}
+function inspector(r){if(S.inspectorMode==='evidence')return `<aside class="inspector inspector-split">${infoInner(r,true)}${evidenceInner(true)}</aside>`;return `<aside class="inspector">${infoInner(r,false)}</aside>`}
+function versionsSection(p){const fr=famRole(p);if(!fr)return '';const h=fr.f.head,hx=findItem(parent(h),base(h)),all=[...(hx?[{...hx,where:parent(h),variant:'latest'}]:[]),...famMembers(fr.f)];return `<div class="info-section"><div class="section-title">Versions <span class="badge">${all.length}</span></div>${all.map(y=>{const yp=join(y.where,y.n);return `<button class="ver-row ${yp===p?'current':''}" data-version="${escape(yp)}">${vtag(y.variant)}<span class="ver-name">${escape(y.n)}</span>${vwhere(y.where)}</button>`}).join('')}</div>`}
+function evidencePane(){const e=EV.find(x=>x.n===S.evidence)||EV[0];return `<aside class="inspector"><div class="inspector-head"><strong>Evidence</strong><span class="toolbar-spacer"></span><button class="icon-btn" data-openql>${icon('grid')}</button><button class="icon-btn" data-evidenceclose>${icon('close')}</button></div><div class="inspector-body"><div class="evidence-tabs">${EV.map(x=>`<button class="evidence-tab ${x.n===S.evidence?'active':''}" data-evidence="${x.n}">${x.n}</button>`).join('')}</div><div class="preview-paper">${previewFor({k:e.k,n:e.title,s:'',d:''})}</div><div class="preview-title">${e.n}. ${escape(e.title)}</div><div class="preview-sub">${escape(kind(e.k))} · ${escape(e.meta)}</div><div class="feedback"><button class="${S.feedback[e.n]==='up'?'on':''}" data-feedback="up">👍</button><button class="${S.feedback[e.n]==='down'?'on':''}" data-feedback="down">👎</button><button class="action" data-reveal="${e.n}">Show in Finder</button></div><div class="info-section"><div class="section-title">Excerpt</div><div class="excerpt"><h3>${escape(e.blocks[0])}</h3><p><mark>${escape(e.blocks[1])}</mark></p>${e.blocks[2]?`<p>${escape(e.blocks[2])}</p>`:''}<blockquote>${escape(e.meta)}</blockquote></div></div></div></aside>`}
+function aiPane(){
+  const open = S.ai;
+  const lastQ = [...S.messages].reverse().find(m => m.role === 'user');
+  const attachedFiles = S.draftAttachments || [];
+
+  return `<aside class="ai ${open ? 'open' : 'collapsed'}${S.aiAnim ? ' anim-' + S.aiAnim : ''}" style="--ai-h:${S.aiH}px">
+    ${open ? '<div class="ai-grip" data-aigrip title="드래그해서 높이 조절"></div>' : ''}
+    <div class="ai-head" data-aitoggle>
+      <span class="ai-mark">${icon('spark',14)}</span>
+      <strong>AI Search</strong>
+      ${open ? '' : `<span class="ai-peek">${escape(lastQ ? lastQ.text : '파일, 메일, 메신저 전체에서 물어보세요')}</span><kbd>⌘K</kbd>`}
+      <span class="spacer"></span>
+      ${open ? `
+        <button class="icon-btn" data-history title="Chat history">${icon('history')}</button>
+        <button class="icon-btn" data-newchat title="New chat">${icon('plus')}</button>
+      ` : ''}
+      <button class="icon-btn" title="${open ? 'AI Search 닫기' : 'AI Search 열기'}">${icon(open ? 'down' : 'up', 15)}</button>
+    </div>
+
+    ${!open ? '' : `
+      ${S.history ? `
+        <div class="history">
+          <input data-history-search placeholder="대화 기록 검색">
+          <div class="history-list">
+            <div class="history-group">오늘</div>
+            <button class="history-item current" data-loadchat><i class="hist-dot"></i><span class="hist-copy"><b>Q3 마케팅 예산 승인</b><small>최종 승인액과 승인자를 확인했습니다.</small></span><span class="hist-time">10:42</span></button>
+            <div class="history-group">어제</div>
+            <button class="history-item" data-loadchat><i class="hist-dot"></i><span class="hist-copy"><b>v1 vs v3 예산안 차이</b><small>총액이 4.2억에서 3.8억으로 줄었습니다.</small></span><span class="hist-time">17:30</span></button>
+          </div>
+        </div>
+      ` : ''}
+
+      <div class="ai-body">
+        ${S.messages.length ? S.messages.map(m => {
+          if (m.role === 'user') {
+            return `
+              <div class="message user-msg">
+                <div class="user-bubble-wrap">
+                  ${m.attachments && m.attachments.length ? `
+                    <div class="ref-attachments">
+                      ${m.attachments.map(att => `
+                        <div class="ref-file-chip" title="${escape(att.where || '')}/${escape(att.name)}">
+                          <span class="ref-chip-icon">${fileIcon(att.kind || 'file')}</span>
+                          <span class="ref-chip-name">${escape(att.name)}</span>
+                          ${att.where ? `<span class="ref-chip-sub">· ${escape(base(att.where))}</span>` : ''}
+                        </div>
+                      `).join('')}
+                    </div>
+                  ` : ''}
+                  <div class="bubble">${escape(m.text)}</div>
+                </div>
+              </div>
+            `;
+          }
+
+          // Assistant message: borderless, natural prose
+          const isReady = m.ready === true;
+          const quickReady = m.quickReady === true || isReady;
+          const isThinking = m.thinking === true && !isReady;
+          const deepReady = m.deepReady === true || isReady;
+          return `
+            <div class="message assistant-msg">
+              <!-- Quick Response Section -->
+              ${quickReady ? `
+                <div class="assistant-section">
+                  <div class="assistant-prose">
+                    ${m.a.quick.map(text => `<p>${inline(text)}</p>`).join('')}
+                  </div>
+                </div>
+              ` : `
+                <div class="skeleton" style="width:85%"></div>
+                <div class="skeleton" style="width:65%"></div>
+              `}
+
+              <!-- Thinking water wave indicator under quick response -->
+              ${isThinking ? `
+                <div class="assistant-section" style="margin-top:6px">
+                  <div class="water-wave-thinking">
+                    <span class="water-wave-dot"></span>
+                    <span>Thinking... Searching relevant sources &amp; cross-checking figures</span>
+                  </div>
+                </div>
+              ` : ''}
+
+              <!-- Deep Response Section once thinking is complete -->
+              ${deepReady ? `
+                <div class="assistant-section" style="margin-top:10px">
+                  <div class="thinking-header" data-togglethink>
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg>
+                    <span>Worked for ${m.a.deepMeta ? m.a.deepMeta.split('·')[1]?.trim() || '5s' : '5s'}</span>
+                  </div>
+                  <div class="assistant-prose" style="margin-top:4px">
+                    ${m.a.deep.map(text => `<p>${inline(text)}</p>`).join('')}
+                  </div>
+                </div>
+              ` : ''}
+            </div>
+          `;
+        }).join('') : `
+          <div class="ai-empty">
+            <strong>무엇을 찾아드릴까요?</strong>
+            <p>파일, 메일, 메신저 전체에서 찾아 빠른 답변과 정밀한 답변을 함께 드립니다.</p>
+          </div>
+        `}
+      </div>
+
+      <!-- Composer with Drag & Drop attachment support -->
+      <form class="composer" data-compose-form>
+        ${attachedFiles.length ? `
+          <div class="composer-attach-tray">
+            ${attachedFiles.map((file, idx) => `
+              <span class="composer-attach-pill">
+                ${fileIcon(file.kind || 'file')}
+                <span>${escape(file.name)}</span>
+                <button type="button" data-removeattach="${idx}" title="Remove attachment">✕</button>
+              </span>
+            `).join('')}
+          </div>
+        ` : ''}
+        <div class="compose-box" data-composedrop>
+          <input data-compose value="${escape(S.draft)}" placeholder="파일, 메일, 메신저 전체에서 물어보세요 (파일 드래그 앤 드롭 가능)" ${S.generating ? 'disabled' : ''}>
+          <button type="submit" class="send" ${(S.draft.trim() || attachedFiles.length) && !S.generating ? '' : 'disabled'}>${S.generating ? '■' : '↑'}</button>
+        </div>
+      </form>
+    `}
+  </aside>`;
+}
+function inline(text){return escape(text).replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>').replace(/\[(\d+)\]/g,(m,n)=>`<button class="cite ${S.evidence===+n&&S.inspectorMode==='evidence'?'active':''}" data-evidence="${n}">${n}</button>`)}
+function overlays(){let x='';if(S.quick){x+=`<div class="overlay quick-overlay" onclick="if(event.target===this)this.querySelector('[data-closequick]').click()"><div class="modal quicklook"><div class="modal-head"><div class="quick-controls"><button class="icon-btn" data-closequick title="Close">${icon('close')}</button><button class="quick-max" title="Maximize" aria-label="Maximize"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.35"><path d="M3 5.5V3h2.5M11 5.5V3H8.5M3 8.5V11h2.5M11 8.5V11H8.5"/></svg></button></div><strong>${escape(S.quick.n)}</strong><span class="toolbar-spacer"></span><button class="quick-share" data-share title="Share" aria-label="Share"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3"/><path d="m7 8 5-5 5 5"/><path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg></button><button class="quick-open" data-open-preview>Open with Preview</button></div><div class="quick-body"><div class="quick-paper"><h2>${escape(S.quick.n)}</h2><p>${escape(kind(S.quick.k))} · ${escape(S.quick.s)}</p><hr><p>AutoRAG Finder Quick Look preview</p><p><mark>Q3 마케팅 예산과 관련된 문서 미리보기</mark></p></div></div></div></div>`}if(S.context){x+=`<div class="menu" style="left:${S.context.x}px;top:${S.context.y}px">${S.context.items.map((it,i)=>it==='-'?'<hr>':`<button class="${it.danger?'danger':''}" data-menuaction="${it.action}">${it.label}<span>${it.key||''}</span></button>`).join('')}</div>`}if(S.toast)x+=`<div class="toast">✓ ${escape(S.toast)}</div>`;return x}
+function openSettings(){const ex=S.tabs.find(x=>x.path==='Settings');if(ex)return set({active:ex.id,query:""});const id=S.next;set(s=>({tabs:[...s.tabs,{id,path:'Settings',sel:null,back:[],fwd:[],view:'columns'}],active:id,next:id+1,query:""}))}
+
+const SOURCE_META = {
+  'Slack': { icon: 'spark', tag: 'Workspace', desc: 'Workplace channels, threads, and direct messages' },
+  'Gmail': { icon: 'file', tag: 'Mail', desc: 'Google Workspace email threads and attachments' },
+  'Google Drive': { icon: 'cloud', tag: 'Cloud', desc: 'Shared drives, Google Docs, and team folders' },
+  'Notion': { icon: 'file', tag: 'Wiki', desc: 'Team wikis, databases, and meeting notes' },
+  'Local Files': { icon: 'home', tag: 'Local', desc: 'Desktop, Downloads, and Documents directory indexing' },
+  'Discord': { icon: 'people', tag: 'Community', desc: 'Community server channels and announcements' },
+  'iCloud Drive': { icon: 'cloud', tag: 'Cloud', desc: 'Personal iCloud storage and synced document notes' }
+};
+
+const PROVIDER_DATA = [
+  { id: 'openai', name: 'OpenAI', models: 'GPT-6.1 Sol · GPT-6.1 Astra · GPT-6 Terra · o4-high', letter: 'O' },
+  { id: 'anthropic', name: 'Anthropic', models: 'Opus 5.5 · Sonnet 5.5 · Haiku 4.5 · Claude Code', letter: 'A' },
+  { id: 'cursor', name: 'Cursor Composer', models: 'Composer 2.5 · Grok 4.6 · Gemini 3.8 Flash', letter: 'C' },
+  { id: 'xai', name: 'xAI', models: 'Grok 4.7 · Grok 4.5 Multi-modal · Grok 4 Vision', letter: 'X' },
+  { id: 'gemini', name: 'Google Gemini', models: 'Gemini 3.8 Flash · Gemini 3.5 Pro · Gemini 3.1 Ultra', letter: 'G' },
+  { id: 'custom', name: 'Custom OpenAI-Compatible Provider', models: 'Custom Base URL · API Key · vLLM, SGLang, LiteLLM, Ollama', letter: '⚙', isCustom: true }
+];
+
+function settingsView(){
+  const connectedSources = Object.keys(S.sourcesConnected).filter(k => S.sourcesConnected[k]);
+  const isSourcePage = S.settingsTab.startsWith('src_');
+  const curSourceName = isSourcePage ? S.settingsTab.slice(4) : null;
+
+  return `<div class="settings-view">
+    <nav class="settings-sidebar" aria-label="Settings Categories">
+      <div class="settings-sidebar-group-title">Settings</div>
+      ${[['general','General','gear'],['models','Models','spark'],['sources','Data Sources','disk']].map(x=>`
+        <button class="settings-nav-item ${S.settingsTab===x[0]?'active':''}" data-settingtab="${x[0]}">
+          <span class="settings-nav-icon">${icon(x[2],16)}</span>
+          <span>${x[1]}</span>
+        </button>
+      `).join('')}
+
+
+    </nav>
+
+    <div class="settings-content">
+      <div class="settings-content-wrap">
+        ${S.settingsTab === 'general' ? `
+          <div class="linear-header">
+            <h2 class="linear-title">Display &amp; General</h2>
+            <p class="linear-desc">Customize interface preferences, animations, and system startup behavior.</p>
+          </div>
+
+          <div class="linear-section-title">Display &amp; Motion</div>
+                    <div class="linear-row">
+            <div class="linear-row-label"><span class="linear-row-name">Reduce motion and animations</span>
+              <small>Reduce motion in the user interface by disabling window transitions and effects.</small>
+            </div>
+            <div class="linear-control"><button class="switch"></button></div>
+          </div>
+          <div class="linear-row">
+            <div class="linear-row-label"><span class="linear-row-name">Interface language</span>
+              <small>Choose your preferred language for menus, labels, and citations.</small>
+            </div>
+            <div class="linear-control">
+              <select class="linear-select"><option>한국어 (Korean)</option><option>English</option><option>日本語 (Japanese)</option></select>
+            </div>
+          </div>
+          <div class="linear-row">
+            <div class="linear-row-label"><span class="linear-row-name">Global shortcut</span>
+              <small>Quickly summon the AutoRAG search interface from any application on your Mac.</small>
+            </div>
+            <div class="linear-control"><kbd>⌥ Space</kbd></div>
+          </div>
+          <div class="linear-row">
+            <div class="linear-row-label"><span class="linear-row-name">Launch at login</span>
+              <small>Automatically launch AutoRAG Finder silently in the background when logging in.</small>
+            </div>
+            <div class="linear-control"><button class="switch on"></button></div>
+          </div>
+          <div class="linear-row">
+            <div class="linear-row-label"><span class="linear-row-name">Show hidden files</span>
+              <small>Display files and directories starting with a period (.) in all browsing views.</small>
+            </div>
+            <div class="linear-control"><button class="switch ${S.showHidden?'on':''}" data-hidden></button></div>
+          </div>
+          <div class="linear-row">
+            <div class="linear-row-label"><span class="linear-row-name">Deduplication interval</span>
+              <small>Frequency at which dupey clusters similar and duplicate office documents.</small>
+            </div>
+            <div class="linear-control">
+              <select class="linear-select"><option>15 minutes</option><option selected>1 hour</option><option>24 hours</option></select>
+            </div>
+          </div>
+
+          <div class="linear-section-title">Software Updates</div>
+          <div class="linear-row">
+            <div class="linear-row-label"><span class="linear-row-name">AutoRAG Agent 1.4.2</span>
+              <small>You are running the latest production build · Last checked moments ago.</small>
+            </div>
+            <div class="linear-control"><button class="linear-btn" onclick="showToast('최신 버전입니다')">Check for Updates</button></div>
+          </div>
+          <div class="linear-row">
+            <div class="linear-row-label"><span class="linear-row-name">Automatically install updates</span>
+              <small>Silently download new versions and apply them during the next app relaunch.</small>
+            </div>
+            <div class="linear-control"><button class="switch on"></button></div>
+          </div>
+
+          <div class="linear-section-title">Privacy &amp; Data</div>
+          <div class="linear-row">
+            <div class="linear-row-label"><span class="linear-row-name">Clear chat history</span>
+              <small>Permanently delete all previous conversational sessions, queries, and citations.</small>
+            </div>
+            <div class="linear-control"><button class="linear-btn danger" onclick="showToast('대화 기록을 모두 삭제했습니다')">Clear…</button></div>
+          </div>
+          <div class="linear-row">
+            <div class="linear-row-label"><span class="linear-row-name">Share anonymous diagnostics</span>
+              <small>Help improve AutoRAG indexing speed and accuracy with anonymized metrics.</small>
+            </div>
+            <div class="linear-control"><button class="switch on"></button></div>
+          </div>
+        ` : S.settingsTab === 'models' ? `
+          <div class="linear-header">
+            <h2 class="linear-title">LLM Models Configuration</h2>
+          </div>
+
+          <div class="linear-section-title">Setup Providers</div>
+          <div class="provider-list">
+            ${PROVIDER_DATA.map(p => {
+              const connected = S.providers[p.id];
+              const isCustom = p.isCustom;
+              return `
+                <div class="provider-row${isCustom && connected ? ' custom-active' : ''}" style="flex-direction:column;align-items:stretch;gap:12px">
+                  <div style="display:flex;align-items:center;gap:14px;width:100%">
+                    <div class="provider-icon">${p.letter}</div>
+                    <div class="provider-body">
+                      <div class="provider-name">${p.name}</div>
+                      <div class="provider-models">${p.models}</div>
+                    </div>
+                    <button class="provider-status ${connected ? 'connected' : 'disconnected'}" data-toggleprovider="${p.id}">
+                      <i></i>${connected ? 'Connected' : 'Not connected'}
+                    </button>
+                  </div>
+                  ${isCustom && connected ? `
+                    <div style="border-top:1px solid var(--line2);padding-top:12px;margin-top:2px;display:flex;flex-direction:column;gap:10px">
+                      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+                        <div>
+                          <span style="display:block;font-size:11.5px;color:var(--muted);margin-bottom:4px">Base URL</span>
+                          <input class="linear-textarea" style="height:32px;padding:4px 10px;resize:none" value="${escape(S.customEndpoint.baseUrl)}" placeholder="https://api.openai.com/v1" data-customfield="baseUrl">
+                        </div>
+                        <div>
+                          <span style="display:block;font-size:11.5px;color:var(--muted);margin-bottom:4px">Default Model ID</span>
+                          <input class="linear-textarea" style="height:32px;padding:4px 10px;resize:none" value="${escape(S.customEndpoint.modelName)}" placeholder="e.g. meta-llama/Llama-4-Scout" data-customfield="modelName">
+                        </div>
+                      </div>
+                      <div>
+                        <span style="display:block;font-size:11.5px;color:var(--muted);margin-bottom:4px">API Key</span>
+                        <input type="password" class="linear-textarea" style="height:32px;padding:4px 10px;resize:none" value="${escape(S.customEndpoint.apiKey)}" placeholder="sk-..." data-customfield="apiKey">
+                      </div>
+                      <div style="display:flex;justify-content:flex-end">
+                        <button class="linear-btn" data-savecustom>Save Configuration</button>
+                      </div>
+                    </div>
+                  ` : ''}
+                </div>
+              `;
+            }).join('')}
+          </div>
+        ` : S.settingsTab === 'sources' ? `
+          <div class="linear-header">
+            <h2 class="linear-title">Data Sources</h2>
+          </div>
+
+          <div class="linear-section-title">Available Integrations</div>
+          <div class="provider-list">
+            ${Object.keys(SOURCE_META).map(name => {
+              const info = SOURCE_META[name];
+              const connected = !!S.sourcesConnected[name];
+              return `
+                <div class="provider-row">
+                  <div class="provider-icon">${icon(info.icon, 18)}</div>
+                  <div class="provider-body">
+                    <div class="provider-name">
+                      ${escape(name)}
+                      <span style="font-size:11px;font-weight:500;color:var(--muted);background:#f0f1f4;padding:1px 6px;border-radius:4px;margin-left:4px">${info.tag}</span>
+                    </div>
+                    <div class="provider-models">${escape(info.desc)}</div>
+                  </div>
+                  <button class="provider-status ${connected ? 'connected' : 'disconnected'}" data-togglesource="${escape(name)}">
+                    <i></i>${connected ? 'Connected' : 'Not connected'}
+                  </button>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        ` : isSourcePage ? `
+          <div class="linear-header">
+            <h2 class="linear-title">${escape(curSourceName)} Integration</h2>
+            <p class="linear-desc">Manage indexing parameters, sync schedule, and agent instructions for ${escape(curSourceName)}.</p>
+          </div>
+
+          <div class="linear-section-title">Synchronization &amp; Scope</div>
+          <div class="linear-row">
+            <div class="linear-row-label"><span class="linear-row-name">Index items automatically</span>
+              <small>Allow AutoRAG agent to continuously crawl and vectorize documents from this source.</small>
+            </div>
+            <div class="linear-control"><button class="switch on"></button></div>
+          </div>
+          <div class="linear-row">
+            <div class="linear-row-label"><span class="linear-row-name">Include thread replies &amp; attachments</span>
+              <small>Process nested thread discussions, PDF attachments, and shared spreadsheets.</small>
+            </div>
+            <div class="linear-control"><button class="switch on"></button></div>
+          </div>
+          <div class="linear-row">
+            <div class="linear-row-label"><span class="linear-row-name">Sync frequency</span>
+              <small>How often the background indexer polls ${escape(curSourceName)} for new updates.</small>
+            </div>
+            <div class="linear-control">
+              <select class="linear-select">
+                <option>Real-time (Webhooks)</option>
+                <option selected>Every 15 minutes</option>
+                <option>Every 1 hour</option>
+                <option>Manual only</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="linear-section-title">Agent Instructions</div>
+                    <div style="margin-top:10px">
+            <textarea class="linear-textarea" rows="3" placeholder="예: 팀 의사결정과 Q3 마케팅 예산 합의 내역을 찾을 때 이 데이터소스를 최우선으로 탐색해줘">${curSourceName === 'Slack' ? '에이전시 재견적, 3분기 예산 합의 스레드, 주간 싱크 대화 내역 질의 시 가장 먼저 참조하세요.' : curSourceName === 'Gmail' ? 'CFO 및 임원 승인 메일, 외부 파트너사 견적서 PDF가 포함된 스레드를 우선 검색하세요.' : '팀 위키 문서와 공식 가이드 문서를 우선 확인하세요.'}</textarea>
+          </div>
+
+          <div class="linear-section-title" style="color:var(--red)">Danger Zone</div>
+          <div class="linear-row">
+            <div class="linear-row-label">
+              <b style="color:var(--red)">Disconnect ${escape(curSourceName)}</b>
+              <small>Unlink this data source, remove it from the sidebar, and delete all local index vectors.</small>
+            </div>
+            <div class="linear-control">
+              <button class="linear-btn danger" data-disconnectsource="${escape(curSourceName)}">Disconnect ${escape(curSourceName)}</button>
+            </div>
+          </div>
+        ` : ''}
+      </div>
+    </div>
+  </div>`;
+}
+
+function settingsModal(){return settingsView()}
+function toggleColumn(key){if(key==='name')return;set(s=>{const visible=!s.columns[key];return{columns:{...s.columns,[key]:visible},...(key==='index'?{showIndex:visible}:{}),context:null}})}
+function columnMenu(){if(S.context?.type!=='columns')return '';return `<div class="menu column-menu" role="menu" aria-label="Columns" style="left:${S.context.x}px;top:${S.context.y}px">${COLUMN_OPTIONS.map(c=>`<button class="column-option ${S.columns[c.key]?'is-visible':''} ${c.key==='name'?'is-fixed':''}" role="menuitemcheckbox" aria-checked="${!!S.columns[c.key]}" ${c.key==='name'?'disabled':''} data-togglecolumn="${c.key}"><i class="column-check" aria-hidden="true">✓</i><span class="column-label">${c.label}</span></button>`).join('')}<hr><button data-resetcolumns>Use Default Columns</button></div>`}
+function bindColumns(){document.querySelector('.list-head')?.addEventListener('contextmenu',e=>{e.preventDefault();set({context:{type:'columns',x:Math.max(10,Math.min(e.clientX,innerWidth-240)),y:Math.max(10,Math.min(e.clientY,innerHeight-520))}})});document.querySelectorAll('[data-togglecolumn]').forEach(b=>b.onclick=()=>toggleColumn(b.dataset.togglecolumn));document.querySelector('[data-resetcolumns]')?.addEventListener('click',()=>set({columns:{...DEFAULT_COLUMNS},showIndex:true,context:null}))}
+const baseOverlays=overlays;overlays=function(){if(S.context?.type==='columns'){const saved=S.context;S.context=null;const out=baseOverlays();S.context=saved;return out+columnMenu()}return baseOverlays()};const baseBind=bind;bind=function(){baseBind();bindColumns()};
+function bind(){document.querySelectorAll('[data-nav]').forEach(b=>b.onclick=()=>navigate(b.dataset.nav));document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>set({active:+b.dataset.tab,query:""}));document.querySelectorAll('[data-close]').forEach(b=>b.onclick=e=>{e.stopPropagation();closeTab(+b.dataset.close)});document.querySelector('[data-newtab]')?.addEventListener('click',newTab);document.querySelector('[data-back]')?.addEventListener('click',back);document.querySelector('[data-forward]')?.addEventListener('click',forward);document.querySelector('[data-inspector]')?.addEventListener('click',()=>set({inspector:!S.inspector}));document.querySelector('[data-aitoggle]')?.addEventListener('click',e=>{if(e.target.closest('[data-history],[data-newchat]'))return;toggleAi(!S.ai)});document.querySelector('[data-aigrip]')?.addEventListener('mousedown',e=>{e.preventDefault();const pane=document.querySelector('.ai'),startY=e.clientY,startH=pane.offsetHeight,max=document.querySelector('.window').offsetHeight-220;let h=startH;pane.classList.add('resizing');document.body.style.cursor='ns-resize';const move=ev=>{h=Math.max(140,Math.min(max,startH+startY-ev.clientY));pane.style.setProperty('--ai-h',h+'px')};const up=()=>{document.removeEventListener('mousemove',move);document.removeEventListener('mouseup',up);document.body.style.cursor='';pane.classList.remove('resizing');S.aiH=h};document.addEventListener('mousemove',move);document.addEventListener('mouseup',up)});document.querySelectorAll('[data-version]').forEach(b=>b.onclick=()=>{const p=b.dataset.version,w=parent(p),x=findItem(w,base(p));if(!x)return;const head=famRole(p)?.f.head;set(s=>({expanded:{...s.expanded,[head]:true}}));if(tab().path!==w&&parent(head)!==tab().path)navigate(w);select({...x,where:w})});document.querySelectorAll('[data-pathql]').forEach(b=>b.onclick=()=>{const x=currentItem();if(x)set({quick:x})});
+const searchInput = document.querySelector('[data-search]');
+if (searchInput) {
+  searchInput.oninput = (e) => {
+    S.searchDraft = e.target.value;
+    if (!S.searchFocused) S.searchFocused = true;
+    render();
+    const curInput = document.querySelector('[data-search]');
+    if (curInput) {
+      curInput.focus();
+      const val = curInput.value;
+      curInput.setSelectionRange(val.length, val.length);
+    }
+  };
+  searchInput.onfocus = () => {
+    if (!S.searchFocused) {
+      S.searchFocused = true;
+      if (S.searchDraft === undefined) S.searchDraft = S.query;
+      render();
+      const curInput = document.querySelector('[data-search]');
+      if (curInput) {
+        curInput.focus();
+        const val = curInput.value;
+        curInput.setSelectionRange(val.length, val.length);
+      }
+    }
+  };
+  searchInput.onkeydown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const target = e.altKey ? 'content' : S.searchTarget || 'name';
+      set({query: S.searchDraft || '', searchTarget: target, searchFocused: false});
+      const curInput = document.querySelector('[data-search]');
+      if (curInput) curInput.blur();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      set({searchFocused: false});
+      const curInput = document.querySelector('[data-search]');
+      if (curInput) curInput.blur();
+    }
+  };
+}
+
+document.querySelectorAll('[data-applysearch]').forEach(btn => {
+  btn.onclick = (e) => {
+    e.stopPropagation();
+    const target = btn.dataset.applysearch;
+    set({query: S.searchDraft || '', searchTarget: target, searchFocused: false});
+  };
+});
+
+document.querySelector('[data-searchclear]')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  set({query: '', searchDraft: '', searchFocused: false});
+});
+
+document.querySelectorAll('[data-setscope]').forEach(btn => {
+  btn.onclick = () => set({searchScope: btn.dataset.setscope});
+});
+
+document.querySelectorAll('[data-settarget]').forEach(btn => {
+  btn.onclick = () => set({searchTarget: btn.dataset.settarget});
+});
+document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>set(s=>({tabs:s.tabs.map(t=>t.id===s.active?{...t,view:b.dataset.view}:t),view:b.dataset.view})));document.querySelectorAll('[data-crumb]').forEach(b=>b.onclick=()=>navigate(b.dataset.crumb));document.querySelectorAll('[data-open]').forEach(b=>{const pick=()=>{const p=b.dataset.open,w=parent(p),n=base(p),x=findItem(w,n)||findItem(tab().path,n);return x?{...x,where:w||tab().path}:null};b.onclick=()=>{const x=pick();if(!x)return;if(x.k==='folder'&&S.view==='columns'){navigate(join(x.where,x.n));return}select(x)};b.ondblclick=()=>{const x=pick();if(!x)return;if(x.k==='folder')navigate(join(x.where,x.n));else set({quick:{...x}})}});document.querySelectorAll('[data-collapse]').forEach(b=>b.onclick=()=>set({sidebar:!S.sidebar}));document.querySelectorAll('[data-newfolder]').forEach(b=>b.onclick=newFolderMock);document.querySelectorAll('[data-share]').forEach(b=>b.onclick=()=>showToast('공유 메뉴를 열었습니다'));document.querySelectorAll('[data-copy]').forEach(b=>b.onclick=()=>{navigator.clipboard?.writeText(b.dataset.copy);showToast('경로를 복사했습니다')});document.querySelectorAll('[data-openfolder]').forEach(b=>b.onclick=e=>{e.stopPropagation();set(s=>({expanded:{...s.expanded,[b.dataset.openfolder]:!s.expanded[b.dataset.openfolder]}}))});document.querySelectorAll('[data-index]').forEach(b=>b.onclick=e=>{e.stopPropagation();const p=b.dataset.index,w=parent(p),x=findItem(w,base(p));if(x)toggleIndex({...x,where:w})});document.querySelectorAll('[data-trash]').forEach(b=>b.onclick=()=>{const p=b.dataset.trash,w=parent(p),x=findItem(w,base(p));if(x)trash({...x,where:w})});document.querySelectorAll('[data-ask]').forEach(b=>b.onclick=()=>{const p=b.dataset.ask,w=parent(p),x=findItem(w,base(p));if(x)ask({...x,where:w});});document.querySelectorAll('[data-openql]').forEach(b=>b.onclick=()=>{const x=currentItem();if(x)set({quick:{...x,where:tab().selWhere||tab().path}})});document.querySelectorAll('[data-closequick]').forEach(b=>b.onclick=e=>{if(e.target===b||b.dataset.closequick!==undefined)set({quick:null})});document.querySelectorAll('[data-evidence]').forEach(b=>b.onclick=()=>openEvidence(+b.dataset.evidence));document.querySelector('[data-evidenceclose]')?.addEventListener('click',()=>set({inspectorMode:'info'}));document.querySelectorAll('[data-reveal]').forEach(b=>b.onclick=()=>reveal(EV.find(x=>x.n===+b.dataset.reveal)));document.querySelectorAll('[data-feedback]').forEach(b=>b.onclick=()=>set(s=>({feedback:{...s.feedback,[s.evidence]:s.feedback[s.evidence]===b.dataset.feedback?null:b.dataset.feedback}})));
+document.querySelector('[data-compose-form]')?.addEventListener('submit', e => {
+  e.preventDefault();
+  send();
+});
+
+document.querySelectorAll('[data-removeattach]').forEach(btn => {
+  btn.onclick = (e) => {
+    e.stopPropagation();
+    const idx = +btn.dataset.removeattach;
+    set(s => ({ draftAttachments: (s.draftAttachments || []).filter((_, i) => i !== idx) }));
+  };
+});
+
+// Drag and drop file onto composer to attach
+const dropArea = document.querySelector('[data-composedrop]');
+if (dropArea) {
+  dropArea.ondragover = (e) => { e.preventDefault(); dropArea.style.borderColor = 'var(--blue2)'; };
+  dropArea.ondragleave = () => { dropArea.style.borderColor = ''; };
+  dropArea.ondrop = (e) => {
+    e.preventDefault();
+    dropArea.style.borderColor = '';
+    const item = currentItem();
+    if (item) {
+      const newAtt = { name: item.n, kind: item.k, where: item.where || tab().path };
+      set(s => ({ draftAttachments: [...(s.draftAttachments || []), newAtt] }));
+      showToast(`${item.n} — 메시지에 첨부했습니다`);
+    } else {
+      const curTabItem = rows()[0];
+      if (curTabItem) {
+        const newAtt = { name: curTabItem.n, kind: curTabItem.k, where: curTabItem.where || tab().path };
+        set(s => ({ draftAttachments: [...(s.draftAttachments || []), newAtt] }));
+        showToast(`${curTabItem.n} — 메시지에 첨부했습니다`);
+      }
+    }
+  };
+}
+document.querySelector('[data-compose]')?.addEventListener('input',e=>{S.draft=e.target.value;document.querySelector('.send').disabled=!S.draft.trim()});document.querySelector('[data-history]')?.addEventListener('click',()=>set({history:!S.history}));document.querySelector('[data-newchat]')?.addEventListener('click',()=>set({messages:[],draft:"",history:false}));document.querySelectorAll('[data-loadchat]').forEach(b=>b.onclick=()=>set({history:false,messages:[{role:'user',text:A1.q},{role:'assistant',a:A1,ready:true}]}));document.querySelectorAll('[data-settings]').forEach(b=>b.onclick=()=>openSettings());document.querySelectorAll('[data-settingsclose]').forEach(b=>b.onclick=()=>set({settings:false}));
+document.querySelectorAll('[data-settingtab]').forEach(b=>b.onclick=()=>set({settingsTab:b.dataset.settingtab}));
+document.querySelectorAll('[data-toggleprovider]').forEach(b=>b.onclick=()=>{
+  const id = b.dataset.toggleprovider;
+  const next = !S.providers[id];
+  set(s=>({providers:{...s.providers,[id]:next}}));
+  showToast(next ? 'Provider를 연결했습니다' : 'Provider 연결을 해제했습니다');
+});
+document.querySelector('[data-savecustom]')?.addEventListener('click',()=>showToast('Custom Provider 설정을 저장했습니다'));
+document.querySelectorAll('[data-customfield]').forEach(input => {
+  input.oninput = (e) => {
+    const field = e.target.dataset.customfield;
+    S.customEndpoint[field] = e.target.value;
+  };
+});
+document.querySelectorAll('[data-togglesource]').forEach(b=>b.onclick=()=>{
+  const name = b.dataset.togglesource;
+  const next = !S.sourcesConnected[name];
+  set(s=>({sourcesConnected:{...s.sourcesConnected,[name]:next}}));
+  showToast(next ? (name + ' — 연결되었습니다. 좌측 메뉴에 추가되었습니다.') : (name + ' — 연결이 해제되었습니다.'));
+});
+document.querySelectorAll('[data-disconnectsource]').forEach(b=>b.onclick=()=>{
+  const name = b.dataset.disconnectsource;
+  set(s=>({sourcesConnected:{...s.sourcesConnected,[name]:false},settingsTab:'sources'}));
+  showToast(name + ' — 연결을 해제했습니다.');
+});
+document.querySelector('[data-hidden]')?.addEventListener('click',()=>set({showHidden:!S.showHidden}));document.querySelector('[data-newfolder]')?.addEventListener('click',newFolderMock);document.querySelectorAll('[data-sortkey]').forEach(b=>b.onclick=e=>{if(e.target.closest('[data-resize]'))return;setSort(b.dataset.sortkey)});document.querySelectorAll('[data-resize]').forEach(g=>g.onmousedown=e=>{e.preventDefault();e.stopPropagation();const key=g.dataset.resize,view=g.closest('.lv'),track=g.closest('.sort-h'),startX=e.clientX,startW=track.getBoundingClientRect().width,mins={name:180,size:58,kind:62},maxs={name:720,size:280,kind:260};let width=Math.max(mins[key],Math.min(maxs[key],startW));view.classList.add('is-resizing');document.body.style.cursor='col-resize';const move=ev=>{width=Math.max(mins[key],Math.min(maxs[key],startW+ev.clientX-startX));view.style.setProperty(`--${key}-col`,`${Math.round(width)}px`)};const up=()=>{document.removeEventListener('mousemove',move);document.removeEventListener('mouseup',up);document.body.style.cursor='';view.classList.remove('is-resizing');set(s=>({colWidths:{...s.colWidths,[key]:Math.round(width)}}))};document.addEventListener('mousemove',move);document.addEventListener('mouseup',up)});document.querySelectorAll('[data-row]').forEach(b=>{b.oncontextmenu=e=>{e.preventDefault();const p=b.dataset.row,w=parent(p),x=findItem(w,base(p));if(x)set(s=>({tabs:s.tabs.map(t=>t.id===s.active?{...t,sel:x.n,selWhere:w}:t),context:{x:e.clientX,y:e.clientY,items:[{label:x.k==='folder'?'열기':'Quick Look',action:x.k==='folder'?'open':'quick',key:x.k==='folder'?'↩':'space'},'-',{label:'복사',action:'copy',key:'⌘C'},{label:'이름 변경',action:'rename',key:''},'-',{label:'휴지통으로 이동',action:'trash',key:'⌫',danger:true}]}}))}});document.querySelectorAll('[data-menuaction]').forEach(b=>b.onclick=()=>{const x=currentItem();const a=b.dataset.menuaction;set({context:null});if(!x)return;if(a==='quick')set({quick:x});if(a==='trash')trash(x);if(a==='copy')showToast('항목을 복사했습니다');if(a==='rename')showToast('이름 변경은 실제 앱에서 사용할 수 있습니다');if(a==='open')navigate(join(x.where,x.n))});document.querySelector('[data-infotoggle]')?.addEventListener('click',()=>set({infoLess:!S.infoLess}));document.addEventListener('mousedown',outside,{once:true})}
+const baseQuickBind=bind;bind=function(){baseQuickBind();const q=document.querySelector('.quick-overlay');if(!q)return;const look=q.querySelector('.quicklook'),body=q.querySelector('.quick-body');if(body&&!body.querySelector('.quick-thumbs'))body.insertAdjacentHTML('beforeend','<aside class="quick-thumbs" aria-label="Pages">'+Array.from({length:7},(_,i)=>`<button class="quick-thumb ${i===0?'active':''}" aria-label="Page ${i+1}"></button>`).join('')+'</aside>');q.querySelector('.quick-max')?.addEventListener('click',()=>look.classList.toggle('maximized'));q.querySelector('[data-share]')?.addEventListener('click',()=>showToast('공유 메뉴를 열었습니다'));q.querySelector('[data-open-preview]')?.addEventListener('click',()=>showToast('Preview에서 열 준비가 되었습니다'));q.querySelectorAll('.quick-thumb').forEach(b=>b.onclick=()=>{q.querySelectorAll('.quick-thumb').forEach(x=>x.classList.remove('active'));b.classList.add('active')})}
+function outside(e){if(S.context&&!e.target.closest('.menu'))set({context:null})}
+window.addEventListener('keydown',e=>{const typing=/input|textarea|select/i.test(e.target.tagName);const m=e.metaKey||e.ctrlKey;if(e.key==='Escape'){if(S.quick)return set({quick:null});if(S.history)return set({history:false});if(S.context)return set({context:null});if(S.inspectorMode==='evidence')return set({inspectorMode:'info'});if(S.query&&!typing)return set({query:""})}if(m&&e.key.toLowerCase()==='f'){e.preventDefault();document.querySelector('[data-search]')?.focus()}if(m&&e.key.toLowerCase()==='t'){e.preventDefault();newTab()}if(m&&e.key.toLowerCase()==='k'){e.preventDefault();toggleAi(true);document.querySelector('[data-compose]')?.focus()}if(m&&e.key===','){e.preventDefault();openSettings()}if(m&&e.key.toLowerCase()==='i'){e.preventDefault()}if(e.altKey&&/^[1-9]$/.test(e.key)){e.preventDefault();openEvidence(+e.key)}if(!typing&&(e.key==='ArrowDown'||e.key==='ArrowUp')&&!S.settings&&!S.quick){e.preventDefault();const list=S.view==='list'||S.query.trim()?flatten(rows(),0).map(([x])=>x):rows();if(!list.length)return;const cur=currentItem();const i=cur?list.findIndex(x=>x.n===cur.n&&x.where===cur.where):-1;const n=list[Math.min(list.length-1,Math.max(0,i<0?0:i+(e.key==='ArrowDown'?1:-1)))];select(n);return}if(!typing&&e.key==='Enter'&&!S.settings){const x=currentItem();if(x){e.preventDefault();if(x.k==='folder')navigate(join(x.where,x.n));else set({quick:x})}return}if(!typing&&e.key===' '){e.preventDefault();const x=currentItem();if(x)set({quick:{...x,where:tab().selWhere||tab().path}})}if(!typing&&(e.key==='Delete'||e.key==='Backspace')){const x=currentItem();if(x)trash({...x,where:tab().selWhere||tab().path})}});
+render();
+}
+App();
+})();
+</script></body></html>
