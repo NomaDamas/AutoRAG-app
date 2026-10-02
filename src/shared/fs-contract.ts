@@ -128,9 +128,8 @@ export interface FsCoreBridge {
 	/** Reveal in the real Finder (shell.showItemInFolder). */
 	reveal(path: string): Promise<void>;
 	/**
-	 * Open the NATIVE macOS Quick Look for the path, exactly like pressing
-	 * Space in Finder. Implementation: spawn `qlmanage -p <path>` detached.
-	 * Folders and missing paths are rejected by the caller, not here.
+	 * Remember a file the in-app Quick Look opened. The renderer draws the
+	 * preview; this does not spawn a platform preview app.
 	 */
 	quickLook(path: string): Promise<void>;
 	/**

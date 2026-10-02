@@ -80,6 +80,7 @@ export function FileRow({
 		<div
 			className={classes.join(" ")}
 			role="row"
+			data-path={entry.path}
 			aria-selected={selected}
 			aria-level={disclosure === "none" ? undefined : depth + 1}
 			aria-expanded={disclosure === "expanded" ? true : disclosure === "collapsed" ? false : undefined}

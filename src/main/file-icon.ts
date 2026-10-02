@@ -2,8 +2,8 @@
  * OS-provided file icons for the tile left of a file name.
  *
  * macOS produces real Finder-style thumbnails: one batched
- * `qlmanage -t -s 128 -o <tmpdir> <paths...>` covers a whole folder, the same
- * QuickLook family the Space preview already uses. Other platforms fall back to
+ * `qlmanage -t -s 128 -o <tmpdir> <paths...>` covers a whole folder. The Space
+ * preview is the in-app viewer, not this thumbnail pass. Other platforms fall back to
  * Electron's `app.getFileIcon`, the OS's per-type icon. Generation failures
  * degrade to "no icon" (the caller keeps the letter tile) and are logged
  * verbatim.
