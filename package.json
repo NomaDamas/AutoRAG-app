@@ -19,6 +19,7 @@
 	},
 	"dependencies": {
 		"@autorag/librarian": "file:./.upstream/autorag",
+		"@parcel/watcher": "^2.6.0",
 		"docx-preview": "^0.4.1",
 		"fflate": "^0.8.3",
 		"heic2any": "^0.0.4",

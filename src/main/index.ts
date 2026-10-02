@@ -5,6 +5,7 @@ import { attachQuickLook, registerPreviewProtocol, registerPreviewSchemes, regis
 import { writeDefaultConfig } from "@autorag/librarian";
 import { resolveConfigPath } from "@autorag/librarian/core";
 import { FS_CHANNELS } from "../shared/fs-contract";
+import { DUPEY_LAYER_ID, LIVE_CHANNELS } from "../shared/live-contract";
 import { APP_NAME, APP_VERSION, formatWindowTitle, type DevLabel } from "../shared/app-info";
 import { createChatStore } from "./chat-store";
 import { createDataSourceStatusService } from "./datasource-status";
@@ -19,10 +20,15 @@ import { createSettingsService } from "./settings-service";
 import {
 	registerFsIpcHandlers,
 	registerIndexIpcHandlers,
+	registerLiveIpcHandlers,
 	registerSearchIpcHandlers,
 	registerSettingsIpcHandlers,
 	registerVersionFamilyIpcHandlers,
 } from "./ipc";
+import { createChangeHub } from "./change-hub";
+import { createDupeyLayer } from "./dupey-layer";
+import { createFsWatchService } from "./fs-watch-service";
+import { createParcelWatchBackend } from "./watch-backend";
 import { createVersionFamilyService, DEFAULT_SCAN_INTERVAL_MINUTES, type VersionFamilyService } from "./version-family-service";
 import { createFileVersionFamilyStore } from "./version-family-store";
 
@@ -121,13 +127,22 @@ app.whenReady().then(() => {
 		},
 	});
 	let scanIntervalMinutes = DEFAULT_SCAN_INTERVAL_MINUTES;
+	const hub = createChangeHub({
+		send: (message) => sendToMainWindow(LIVE_CHANNELS.message, message),
+	});
 	versionFamilyService = createVersionFamilyService({
 		locations: () => fsService.locations(),
 		store: createFileVersionFamilyStore(join(app.getPath("userData"), "dupey-cache")),
 		buildEntry: buildFsEntry,
 		intervalMinutes: () => scanIntervalMinutes,
-		onUpdate: (result) => sendToMainWindow(FS_CHANNELS.versionFamiliesUpdated, result),
+		onChanged: () => hub.publish(DUPEY_LAYER_ID),
 	});
+	hub.register(createDupeyLayer(versionFamilyService));
+	const watch = createFsWatchService({
+		backend: createParcelWatchBackend(),
+		onBatch: (batch) => hub.ingest(batch),
+	});
+	registerLiveIpcHandlers(watch, hub);
 	registerVersionFamilyIpcHandlers(versionFamilyService);
 	registerIndexIpcHandlers(
 		createIndexStatusService({
@@ -168,11 +183,23 @@ app.whenReady().then(() => {
 		versionFamilyService?.reschedule();
 	});
 	void versionFamilyService.start();
-	mainWindow = createMainWindow(devLabel);
+	const openMainWindow = (): BrowserWindow => {
+		const window = createMainWindow(devLabel);
+		const clearWatchSet = (): void => {
+			void watch.setWatchSet([]);
+		};
+		window.webContents.on("render-process-gone", clearWatchSet);
+		window.webContents.on("destroyed", clearWatchSet);
+		return window;
+	};
+	mainWindow = openMainWindow();
 	app.on("activate", () => {
 		if (mainWindow === null || mainWindow.isDestroyed()) {
-			mainWindow = createMainWindow(devLabel);
+			mainWindow = openMainWindow();
 		}
+	});
+	app.once("will-quit", () => {
+		void watch.dispose();
 	});
 });
 

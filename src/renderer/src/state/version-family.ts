@@ -114,12 +114,13 @@ export function applyVersionStacks(
 	if (families.byHead.size === 0) return rows.map(stackRow);
 
 	const selected = new Set(selectedKeys);
+	const pathsInRows = new Set(rows.map((r) => r.path));
 	const out: StackRow[] = [];
 	for (const entry of rows) {
 		const membership = families.memberOf.get(entry.path);
 		if (membership !== undefined) {
 			const headDir = dirname(membership.family.head);
-			if (headDir === entry.location) continue;
+			if (headDir === entry.location && pathsInRows.has(membership.family.head)) continue;
 		}
 		const family = families.byHead.get(entry.path);
 		if (family === undefined) {

@@ -12,8 +12,8 @@ function readerFor(files: Readonly<Record<string, string>>) {
 const CLONE = "/clones/autorag";
 
 describe("resolveClonePath", () => {
-	it("takes the parent of the app directory", () => {
-		expect(resolveClonePath("/clones/autorag/app")).toBe(CLONE);
+	it("returns the app path unchanged (single-repo layout)", () => {
+		expect(resolveClonePath(CLONE)).toBe(CLONE);
 	});
 });
 

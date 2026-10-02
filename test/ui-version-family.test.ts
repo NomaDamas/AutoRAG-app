@@ -108,6 +108,29 @@ describe("applyVersionStacks", () => {
 		expect(out[0]?.stackOpen).toBe(true);
 	});
 
+	it("shows a same-folder member as a row when its head is not listed", () => {
+		const out = applyVersionStacks([entry(SAME_FOLDER_MEMBER)], {
+			families: buildVersionFamilies(families()),
+			manualOpen: new Set(),
+			selectedKeys: [],
+		});
+		expect(out.map((row) => row.entry.path)).toEqual([SAME_FOLDER_MEMBER]);
+		expect(out[0]?.child).toBe(false);
+		expect(out[0]?.stackCount).toBe(0);
+	});
+
+	it("stackCount equals emitted child rows", () => {
+		const out = applyVersionStacks([entry(HEAD)], {
+			families: buildVersionFamilies(families()),
+			manualOpen: new Set(),
+			selectedKeys: [HEAD],
+		});
+		// Two members with entries → stackCount should be 2
+		expect(out[0]?.stackCount).toBe(2);
+		expect(out.length).toBe(3); // head + 2 child rows
+		expect(out.filter((r) => r.child).length).toBe(out[0]?.stackCount);
+	});
+
 	it("stays closed when nothing selects or pins it", () => {
 		const out = applyVersionStacks([entry(HEAD)], {
 			families: buildVersionFamilies(families()),
@@ -116,6 +139,34 @@ describe("applyVersionStacks", () => {
 		});
 		expect(out[0]?.stackOpen).toBe(false);
 		expect(out.map((row) => row.entry.path)).toEqual([HEAD]);
+	});
+});
+
+describe("stackCount matches children", () => {
+	it("stackCount equals the number of child rows when open", () => {
+		// Use a family where one member has no entry (filtered out)
+		const partialFamilies: VersionFamilyData[] = [
+			{
+				head: HEAD,
+				members: [
+					{ path: SAME_FOLDER_MEMBER, relation: "near" },
+					{ path: CROSS_FOLDER_MEMBER, relation: "exact" },
+				],
+				// Only one member has an entry
+				entriesByPath: {
+					[HEAD]: entry(HEAD),
+					[SAME_FOLDER_MEMBER]: entry(SAME_FOLDER_MEMBER),
+				},
+			},
+		];
+		const out = applyVersionStacks([entry(HEAD)], {
+			families: buildVersionFamilies(partialFamilies),
+			manualOpen: new Set(),
+			selectedKeys: [HEAD],
+		});
+		expect(out[0]?.stackCount).toBe(1);
+		expect(out.length).toBe(2); // head + 1 child
+		expect(out.filter((r) => r.child).length).toBe(out[0]?.stackCount);
 	});
 });
 

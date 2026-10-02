@@ -1,13 +1,16 @@
 /**
  * Resolves which clone a running window belongs to, for the dev window title.
  *
+ * The repository root IS the app root (single-repo layout), so the clone path
+ * equals the app path unchanged.
+ *
  * Read from `.git` files rather than spawning git: the label is cosmetic, so a
  * missing or unusual repository must degrade to "path only" instead of failing
  * or slowing startup.
  */
 
 import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import type { DevLabel } from "../shared/app-info";
 
 const SHORT_SHA_LENGTH = 7;
@@ -17,7 +20,7 @@ export interface DevLabelReader {
 }
 
 export function resolveClonePath(appPath: string): string {
-	return dirname(appPath);
+	return appPath;
 }
 
 function readFile(reader: DevLabelReader, path: string): string | null {

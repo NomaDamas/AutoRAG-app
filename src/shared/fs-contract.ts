@@ -12,7 +12,9 @@ import type { IndexStatus } from "./index-contract";
 /** IPC channel names. Keep in 1:1 sync with the main-process handlers. */
 export const FS_CHANNELS = {
 	listDir: "fs:listDir",
+	readEntries: "fs:readEntries",
 	stat: "fs:stat",
+	exists: "fs:exists",
 	search: "fs:search",
 	locations: "fs:locations",
 	copy: "fs:copy",
@@ -28,7 +30,6 @@ export const FS_CHANNELS = {
 	copyPathsToClipboard: "fs:copyPathsToClipboard",
 	versionFamilies: "fs:versionFamilies",
 	versionFamiliesRefresh: "fs:versionFamiliesRefresh",
-	versionFamiliesUpdated: "fs:versionFamiliesUpdated",
 	indexStatus: "index:status",
 	indexSetExcluded: "index:setExcluded",
 	/** Main → renderer: a background parsed + MinSync refresh settled (payload: error or null). */
@@ -66,6 +67,15 @@ export interface FsEntry {
 export interface DirListing {
 	readonly path: string;
 	readonly entries: readonly FsEntry[];
+}
+
+/**
+ * Incremental refresh result for a watched directory: the requested children
+ * that currently exist, and the requested paths that are gone (ENOENT/ENOTDIR).
+ */
+export interface FsEntriesPatch {
+	readonly entries: readonly FsEntry[];
+	readonly removed: readonly string[];
 }
 
 /**
@@ -112,7 +122,16 @@ export interface FsSearchResult {
 
 export interface FsCoreBridge {
 	listDir(path: string): Promise<DirListing>;
+	/**
+	 * Re-resolve only the requested direct children of `dir` after a change
+	 * event. Every path is queried against the current disk, so a file deleted
+	 * and recreated (or atomically replaced) reports its real, final state
+	 * rather than a stale removal. Children that are now missing (ENOENT or
+	 * ENOTDIR) come back in `removed`; any other filesystem error propagates.
+	 */
+	readEntries(dir: string, paths: readonly string[]): Promise<FsEntriesPatch>;
 	stat(path: string): Promise<FsEntry>;
+	exists(path: string): Promise<boolean>;
 	search(query: string): Promise<readonly FsSearchResult[]>;
 	locations(): Promise<readonly FsLocation[]>;
 	/** Copy paths into destDir. Name collisions get a " copy" suffix (Finder-style). */
@@ -142,12 +161,6 @@ export interface FsCoreBridge {
 	clipboardGet(): Promise<FsClipboard | null>;
 	/** Write the absolute paths as text to the OS clipboard ("Copy Path"). */
 	copyPathsToClipboard(paths: readonly string[]): Promise<void>;
-	/**
-	 * Version families from the persisted dupey snapshot (SSOT): one entry per
-	 * family (head path, members with relations, entries for rendering), plus an
-	 * explicit error when dupey is missing or the last scan failed. Reads the
-	 * snapshot; it never runs a scan itself.
-	 */
 }
 
 /**
@@ -164,8 +177,6 @@ export interface FsVersionFamilyBridge {
 	versionFamilies(): Promise<FsVersionFamiliesResult>;
 	/** Forces a dupey scan now, persists it, and returns the fresh snapshot. */
 	refreshVersionFamilies(): Promise<FsVersionFamiliesResult>;
-	/** Adopts snapshots produced by the startup scan and the repeating interval. */
-	onVersionFamiliesUpdated?(listener: (result: FsVersionFamiliesResult) => void): () => void;
 }
 
 export interface FsIndexBridge {

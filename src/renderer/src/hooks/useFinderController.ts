@@ -2,9 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, RefObject } from "react";
 import { RECENTS_PATH } from "../../../shared/fs-contract";
 import type { IndexStatus } from "../../../shared/index-contract";
+import { DUPEY_LAYER_ID, type FsDirChange, type LiveMessage } from "../../../shared/live-contract";
 import type { FinderEntry } from "../data/entries";
 import type { NavItem } from "../data/places";
-import { type FinderLocation, type FinderSource, pickInitialPath } from "../data/source";
+import { isMissingPathFailure, type FinderLocation, type FinderSource, pickInitialPath } from "../data/source";
 import { validateName } from "../state/collision";
 import {
 	chooseInColumn,
@@ -21,6 +22,26 @@ import {
 } from "../state/context-menu";
 import { emptyStateText, indexToast, searchSummaryText, statusBarText, trashToast } from "../state/format";
 import { type FocusZone, resolveKeyAction } from "../state/keymap";
+import {
+	applyEntryPatch,
+	applyOptimisticDeletes,
+	createIncrementalListing,
+	createListingLoader,
+	nearestExistingAncestor,
+	listingSurvivor,
+	pruneSelection,
+	watchSetFor,
+	type IncrementalListing,
+	type ListingScope,
+} from "../state/live";
+import {
+	adoptInvoke,
+	adoptMessage,
+	adoptResync,
+	EMPTY_LAYER_STORE,
+	selectDupey,
+	type LayerStore,
+} from "../state/layers";
 import { activeNavPath, basename, breadcrumbTrail, dirname, type Crumb } from "../state/paths";
 import {
 	applyRowClick,
@@ -231,8 +252,7 @@ export function useFinderController(
 	const [flashPath, setFlashPath] = useState<string | null>(null);
 	const [searchFocused, setSearchFocused] = useState(false);
 	const [revision, setRevision] = useState(0);
-	const [families, setFamilies] = useState<VersionFamilies>(EMPTY_VERSION_FAMILIES);
-	const [versionFamilyError, setVersionFamilyError] = useState<VersionFamilyError | null>(null);
+	const [layerStore, setLayerStore] = useState<LayerStore>(EMPTY_LAYER_STORE);
 	const [stackPinned, setStackPinned] = useState<ReadonlySet<string>>(new Set());
 	const [viewMode, setViewModeValue] = useState<ViewMode>(readStoredViewMode);
 	/** Column view: listings by folder path, for every pane. */
@@ -243,19 +263,43 @@ export function useFinderController(
 	const listRef = useRef<HTMLDivElement | null>(null);
 	const searchRef = useRef<HTMLInputElement | null>(null);
 	const scrollTarget = useRef<string | null>(null);
+	const generationRef = useRef(0);
+	const pathRef = useRef("");
+	const activeTabIdRef = useRef(0);
+	const tabsRef = useRef(tabsState.tabs);
+	const searchingRef = useRef(false);
+	const listingRef = useRef<readonly FinderEntry[]>([]);
+	const layerStoreRef = useRef<LayerStore>(EMPTY_LAYER_STORE);
+	const staleTabsRef = useRef(new Set<number>());
+	const previousPathRef = useRef<string | null>(null);
+	const previousTabIdRef = useRef<number | null>(null);
+	const incrementalRef = useRef<{ source: FinderSource; listing: IncrementalListing } | null>(null);
+	const resyncTimerRef = useRef<number | null>(null);
+	const previousRevisionRef = useRef(revision);
+	const previousSourceRef = useRef(source);
 
 	const tab = activeTab(tabsState);
 	const path = tab.path;
 	const selection = tab.selection;
 	const searching = query.trim() !== "";
+	const dupey = selectDupey(layerStore);
+	layerStoreRef.current = layerStore;
+	const families = useMemo<VersionFamilies>(
+		() => (dupey.fenced ? EMPTY_VERSION_FAMILIES : buildVersionFamilies(dupey.result.families)),
+		[dupey.fenced, dupey.result.families],
+	);
+	const versionFamilyError = dupey.result.error;
+	pathRef.current = path;
+	activeTabIdRef.current = tab.id;
+	tabsRef.current = tabsState.tabs;
+	searchingRef.current = searching;
+	listingRef.current = listing;
 	const layout: ViewMode = viewMode === "columns" && searching ? "list" : viewMode;
 	const chain = tab.chain;
 	const panePaths = useMemo(
 		() => (layout === "columns" && path !== "" ? columnPanes(path, chain) : []),
 		[layout, path, chain],
 	);
-
-	const refresh = useCallback(() => setRevision((value) => value + 1), []);
 
 	const showToast = useCallback((message: string) => setToast(message), []);
 
@@ -264,6 +308,146 @@ export function useFinderController(
 		(error: unknown) => setToast(error instanceof Error ? error.message : String(error)),
 		[],
 	);
+
+	const listingLoader = useMemo(
+		() =>
+			createListingLoader<FinderEntry>(
+				(nextPath) => source.list(nextPath),
+				(request) =>
+					request.path === pathRef.current && request.generation === generationRef.current,
+			),
+		[source],
+	);
+
+	/**
+	 * Start a navigation scope: bump the generation and tell the incremental
+	 * coordinator its baseline full listing is pending. Old work is orphaned.
+	 */
+	const beginScope = useCallback((): ListingScope => {
+		generationRef.current += 1;
+		const scope: ListingScope = {
+			generation: generationRef.current,
+			path: pathRef.current,
+			tabId: activeTabIdRef.current,
+		};
+		incrementalRef.current?.listing.begin(scope);
+		return scope;
+	}, []);
+
+	const navigateToExistingAncestor = useCallback(
+		async (missingPath: string, requestGeneration: number): Promise<void> => {
+			try {
+				const ancestor = await nearestExistingAncestor(missingPath, (candidate) => source.exists(candidate));
+				if (pathRef.current !== missingPath || generationRef.current !== requestGeneration || ancestor === null) {
+					return;
+				}
+				beginScope();
+				setTabsState((state) => navigateTab(state, ancestor));
+				setQueryValue("");
+			} catch (error: unknown) {
+				console.error(error);
+			}
+		},
+		[beginScope, source],
+	);
+
+	/**
+	 * The listing for `dir` (the tab's folder) lands: it also feeds the first
+	 * column pane, and drops selection and rename targets it no longer holds.
+	 */
+	const adoptListing = useCallback((dir: string, entries: readonly FinderEntry[]): void => {
+		const previous = listingRef.current;
+		const survives = listingSurvivor(dir, previous, entries);
+		listingRef.current = entries;
+		if (previous !== entries) {
+			setListing(entries);
+		}
+		setPaneListings((current) => (current[dir] === entries ? current : { ...current, [dir]: entries }));
+		setTabsState((state) => {
+			const current = activeTab(state);
+			const selection = pruneSelection(current.selection, survives);
+			return selection === current.selection ? state : patchActiveTab(state, (tab) => ({ ...tab, selection }));
+		});
+		setRename((current) => (current !== null && !survives(current.path) ? null : current));
+	}, []);
+
+	const loadListing = useCallback(
+		(
+			requestedPath: string,
+			mode: "navigate" | "silent",
+			requestGeneration: number,
+		): void => {
+			const scope: ListingScope = {
+				generation: requestGeneration,
+				path: requestedPath,
+				tabId: activeTabIdRef.current,
+			};
+			// A full load is in flight: live patches wait for its baseline.
+			incrementalRef.current?.listing.fullStarted(scope);
+			const request = {
+				path: requestedPath,
+				generation: requestGeneration,
+				mode,
+				previous: listingRef.current,
+			} as const;
+			void listingLoader(request).then(async (result) => {
+				if (result.kind === "stale" || result.kind === "superseded") {
+					// A newer scope or request owns the baseline now.
+					return;
+				}
+				if (result.kind === "error") {
+					if (mode === "silent") {
+						let missing = false;
+						try {
+							missing = await isMissingPathFailure(source, requestedPath);
+						} catch (error: unknown) {
+							console.error(error);
+						}
+						if (missing) {
+							await navigateToExistingAncestor(requestedPath, requestGeneration);
+						} else {
+							console.error(result.error);
+						}
+						incrementalRef.current?.listing.fullAdopted(scope);
+						return;
+					}
+					adoptListing(requestedPath, []);
+					incrementalRef.current?.listing.fullAdopted(scope);
+					reportError(result.error);
+					return;
+				}
+				adoptListing(requestedPath, result.entries);
+				incrementalRef.current?.listing.fullAdopted(scope);
+			});
+		},
+		[adoptListing, listingLoader, navigateToExistingAncestor, reportError, source],
+	);
+
+	const currentIncremental = incrementalRef.current;
+	let incremental: IncrementalListing;
+	if (currentIncremental !== null && currentIncremental.source === source) {
+		incremental = currentIncremental.listing;
+	} else {
+		currentIncremental?.listing.cancel();
+		incremental = createIncrementalListing({
+			read: (dir, paths) => source.readEntries(dir, paths),
+			apply: (dir, patch) => adoptListing(dir, applyEntryPatch(listingRef.current, patch)),
+			isCurrent: (scope) =>
+				scope.path === pathRef.current &&
+				scope.generation === generationRef.current &&
+				scope.tabId === activeTabIdRef.current &&
+				!searchingRef.current,
+			onError: (error) => {
+				console.error("live incremental listing failed", error);
+				loadListing(pathRef.current, "silent", generationRef.current);
+			},
+		});
+		incrementalRef.current = { source, listing: incremental };
+	}
+
+	const refresh = useCallback(() => {
+		setRevision((value) => value + 1);
+	}, []);
 
 	useEffect(() => {
 		let live = true;
@@ -293,27 +477,99 @@ export function useFinderController(
 
 	useEffect(() => {
 		if (path === "") {
+			previousPathRef.current = path;
+			previousTabIdRef.current = tab.id;
+			previousRevisionRef.current = revision;
 			return;
 		}
-		let live = true;
-		source
-			.list(path)
-			.then((entries) => {
-				if (live) {
-					setListing(entries);
-					setPaneListings((current) => ({ ...current, [path]: entries }));
-				}
-			})
-			.catch((error: unknown) => {
-				if (live) {
-					setListing([]);
-					reportError(error);
-				}
-			});
+		const pathChanged = previousPathRef.current !== path;
+		const tabChanged = previousTabIdRef.current !== tab.id;
+		const revisionChanged = previousRevisionRef.current !== revision;
+		const sourceChanged = previousSourceRef.current !== source;
+		if (pathChanged || tabChanged || revisionChanged || sourceChanged) {
+			beginScope();
+		}
+		previousPathRef.current = path;
+		previousTabIdRef.current = tab.id;
+		previousRevisionRef.current = revision;
+		previousSourceRef.current = source;
+		if (searching && !pathChanged && !tabChanged) {
+			return;
+		}
+		const stale = staleTabsRef.current.has(tab.id);
+		const mode = pathChanged && !stale ? "navigate" : "silent";
+		loadListing(path, mode, generationRef.current);
+		if (stale) {
+			staleTabsRef.current.delete(tab.id);
+		}
+	}, [beginScope, loadListing, path, revision, searching, source, tab.id]);
+
+	const tabPathsKey = tabsState.tabs.map((current) => current.path).join("\u0000");
+
+	useEffect(() => {
+		void source.setWatchSet(watchSetFor(tabsState.tabs)).catch((error: unknown) => console.error(error));
+	}, [source, tabPathsKey]);
+
+	useEffect(() => {
 		return () => {
-			live = false;
+			void source.setWatchSet([]).catch((error: unknown) => console.error(error));
 		};
-	}, [source, path, revision, reportError]);
+	}, [source]);
+
+	useEffect(() => {
+		const unsubscribe = source.onLive((message: LiveMessage) => {
+			setLayerStore((current) => adoptMessage(current, message));
+			const activeTabId = activeTabIdRef.current;
+			const activePath = pathRef.current;
+			const activeChanges: FsDirChange[] = [];
+			for (const dirChange of message.dirs) {
+				const tabsForDir = tabsRef.current.filter((current) => current.path === dirChange.dir);
+				if (tabsForDir.length === 0) {
+					continue;
+				}
+				for (const current of tabsForDir) {
+					if (current.id === activeTabId) {
+						activeChanges.push(dirChange);
+					} else {
+						staleTabsRef.current.add(current.id);
+					}
+				}
+			}
+			if (activeChanges.length === 0) {
+				return;
+			}
+			if (searchingRef.current) {
+				staleTabsRef.current.add(activeTabId);
+				return;
+			}
+			if (activeChanges.some((change) => change.dirGone || change.overflow)) {
+				const scope = beginScope();
+				let optimistic = listingRef.current;
+				for (const change of activeChanges) optimistic = applyOptimisticDeletes(optimistic, change);
+				adoptListing(activePath, optimistic);
+				if (activeChanges.some((change) => change.dirGone)) {
+					const { generation } = scope;
+					void navigateToExistingAncestor(activePath, generation).then(() => {
+						// The folder never moved (no existing ancestor): relist so the
+						// scope settles and patches stop waiting on a missing baseline.
+						if (pathRef.current === activePath && generationRef.current === generation) {
+							loadListing(activePath, "silent", generation);
+						}
+					});
+					return;
+				}
+				loadListing(activePath, "silent", scope.generation);
+				return;
+			}
+			const changedPaths = [...new Set(activeChanges.flatMap((change) => change.changes.map(({ path }) => path)))];
+			if (changedPaths.length === 0) return;
+			incremental.changed(changedPaths);
+		});
+		return () => {
+			unsubscribe();
+			incremental.cancel();
+		};
+	}, [adoptListing, beginScope, incremental, loadListing, navigateToExistingAncestor, source]);
 
 	/** Column view: the panes after the first list the folders chosen along the chain. */
 	useEffect(() => {
@@ -376,37 +632,78 @@ export function useFinderController(
 
 	useEffect(() => {
 		let live = true;
-		const adopt = (result: VersionFamiliesResult): void => {
-			if (!live) return;
-			setFamilies(buildVersionFamilies(result.families));
-			setVersionFamilyError(result.error);
-			if (result.error !== null) {
-				console.error(
-					result.error.installCommand === null
-						? result.error.message
-						: `${result.error.message}\nInstall it with: ${result.error.installCommand}`,
-				);
-			}
-		};
-		const unsubscribe = source.onVersionFamiliesUpdated(adopt);
+		const versionAtRequest = layerStoreRef.current.versions[DUPEY_LAYER_ID] ?? 0;
 		source
 			.versionFamilies()
-			.then(adopt)
+			.then((result) => {
+				if (live) {
+					setLayerStore((current) => adoptInvoke(current, DUPEY_LAYER_ID, result, versionAtRequest));
+				}
+			})
 			.catch((error: unknown) => {
 				console.error("version families request failed", error);
 				if (!live) return;
-				setFamilies(EMPTY_VERSION_FAMILIES);
-				setVersionFamilyError({
-					code: "scan-failed",
-					message: error instanceof Error ? error.message : String(error),
-					installCommand: null,
-				});
+				const result: VersionFamiliesResult = {
+					families: [],
+					scannedAt: null,
+					error: {
+						code: "scan-failed",
+						message: error instanceof Error ? error.message : String(error),
+						installCommand: null,
+					},
+				};
+				setLayerStore((current) => adoptInvoke(current, DUPEY_LAYER_ID, result, versionAtRequest));
 			});
 		return () => {
 			live = false;
-			unsubscribe();
 		};
 	}, [source]);
+
+	useEffect(() => {
+		if (versionFamilyError === null) return;
+		console.error(
+			versionFamilyError.installCommand === null
+				? versionFamilyError.message
+				: `${versionFamilyError.message}\nInstall it with: ${versionFamilyError.installCommand}`,
+		);
+	}, [versionFamilyError]);
+
+	useEffect(() => {
+		let live = true;
+		const resync = (): void => {
+			if (path === "") return;
+			const scope = beginScope();
+			void source.setWatchSet(watchSetFor(tabsRef.current)).catch((error: unknown) =>
+				console.error("live watch resync failed", error),
+			);
+			if (!searchingRef.current) loadListing(path, "silent", scope.generation);
+			void source
+				.liveLayers()
+				.then((result) => {
+					if (live) setLayerStore((current) => adoptResync(current, result));
+				})
+				.catch((error: unknown) => console.error("live layer resync failed", error));
+		};
+		const queueResync = (): void => {
+			if (resyncTimerRef.current !== null) window.clearTimeout(resyncTimerRef.current);
+			resyncTimerRef.current = window.setTimeout(() => {
+				resyncTimerRef.current = null;
+				resync();
+			}, 50);
+		};
+		const onVisibilityChange = (): void => {
+			if (document.visibilityState === "visible") queueResync();
+		};
+		window.addEventListener("focus", queueResync);
+		document.addEventListener("visibilitychange", onVisibilityChange);
+		return () => {
+			live = false;
+			if (resyncTimerRef.current !== null) window.clearTimeout(resyncTimerRef.current);
+			resyncTimerRef.current = null;
+			window.removeEventListener("focus", queueResync);
+			document.removeEventListener("visibilitychange", onVisibilityChange);
+		};
+	}, [beginScope, loadListing, path, source]);
 
 	useEffect(() => {
 		if (flashPath === null) {
@@ -738,19 +1035,24 @@ export function useFinderController(
 	);
 
 	const retryVersionFamilies = useCallback(() => {
+		const versionAtRequest = layerStoreRef.current.versions[DUPEY_LAYER_ID] ?? 0;
 		source
 			.refreshVersionFamilies()
 			.then((result) => {
-				setFamilies(buildVersionFamilies(result.families));
-				setVersionFamilyError(result.error);
+				setLayerStore((current) => adoptInvoke(current, DUPEY_LAYER_ID, result, versionAtRequest));
 			})
 			.catch((error: unknown) => {
 				console.error("version family refresh failed", error);
-				setVersionFamilyError({
-					code: "scan-failed",
-					message: error instanceof Error ? error.message : String(error),
-					installCommand: null,
-				});
+				const result: VersionFamiliesResult = {
+					families: [],
+					scannedAt: null,
+					error: {
+						code: "scan-failed",
+						message: error instanceof Error ? error.message : String(error),
+						installCommand: null,
+					},
+				};
+				setLayerStore((current) => adoptInvoke(current, DUPEY_LAYER_ID, result, versionAtRequest));
 			});
 	}, [source]);
 
