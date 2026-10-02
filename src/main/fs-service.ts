@@ -1,13 +1,14 @@
 import type { Dirent } from "node:fs";
 import { cp, lstat, readdir, rename as fsRename, rm } from "node:fs/promises";
 import { homedir } from "node:os";
-import { basename, dirname, join } from "node:path";
+import { basename, dirname, isAbsolute, join } from "node:path";
 import {
 	RECENTS_PATH,
 	type DirListing,
 	type FsBatchResult,
 	type FsCoreBridge,
 	type FsClipboard,
+	type FsEntriesPatch,
 	type FsEntry,
 	type FsLocation,
 	type FsOpError,
@@ -164,24 +165,79 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 		return enriched.map((entry) => withIcon(entry, icons));
 	}
 
+	async function buildListingEntries(dirents: readonly Dirent[], path: string): Promise<FsEntry[]> {
+		const entries: FsEntry[] = [];
+		for (let index = 0; index < dirents.length; index += 64) {
+			const batch = dirents.slice(index, index + 64);
+			const built = await Promise.all(
+				batch.map(async (dirent) => {
+					const fullPath = join(path, dirent.name);
+					try {
+						return await buildFsEntry(fullPath);
+					} catch (error) {
+						// Unreadable entry: skip it, keep the verbatim reason visible.
+						console.warn(`fs:listDir skipping ${fullPath}: ${errorMessage(error)}`);
+						return null;
+					}
+				}),
+			);
+			for (const entry of built) {
+				if (entry !== null) entries.push(entry);
+			}
+		}
+		return entries;
+	}
+
 	async function listDir(path: string): Promise<DirListing> {
 		if (path === RECENTS_PATH) {
 			return { path, entries: await annotateListing(await recentEntries()) };
 		}
 		const dirents = await readdir(path, { withFileTypes: true });
-		const entries: FsEntry[] = [];
-		for (const dirent of dirents) {
-			const fullPath = join(path, dirent.name);
-			try {
-				entries.push(await buildFsEntry(fullPath));
-			} catch (error) {
-				// Unreadable entry: skip it, keep the verbatim reason visible.
-				console.warn(`fs:listDir skipping ${fullPath}: ${errorMessage(error)}`);
-			}
-		}
+		const entries = await buildListingEntries(dirents, path);
 		const rows = await annotateListing(entries);
 		rows.sort(compareEntries);
 		return { path, entries: rows };
+	}
+
+	/**
+	 * Incremental relist for a watched directory: resolve exactly the requested
+	 * direct children against the current disk, enrich only those with OS kind
+	 * and tile icon, and report the ones that vanished. Paths are deduplicated
+	 * and resolved with bounded concurrency so a large change burst stays cheap.
+	 */
+	async function readEntries(dir: string, paths: readonly string[]): Promise<FsEntriesPatch> {
+		if (!isAbsolute(dir)) {
+			throw new Error(`Invalid directory "${dir}": expected an absolute path`);
+		}
+		const requested = [...new Set(paths)];
+		for (const path of requested) {
+			if (!isAbsolute(path) || dirname(path) !== dir) {
+				throw new Error(`Invalid path "${path}": expected a direct child of "${dir}"`);
+			}
+		}
+		const entries: FsEntry[] = [];
+		const removed: string[] = [];
+		for (let index = 0; index < requested.length; index += 64) {
+			const batch = requested.slice(index, index + 64);
+			const resolved = await Promise.all(
+				batch.map(async (path) => {
+					try {
+						return { path, entry: await buildFsEntry(path) };
+					} catch (error) {
+						// A vanished child is a removal; anything else surfaces verbatim.
+						if (hasErrorCode(error, "ENOENT") || hasErrorCode(error, "ENOTDIR")) {
+							return { path, entry: null };
+						}
+						throw error;
+					}
+				}),
+			);
+			for (const item of resolved) {
+				if (item.entry === null) removed.push(item.path);
+				else entries.push(item.entry);
+			}
+		}
+		return { entries: await annotateListing(entries), removed };
 	}
 
 	/**
@@ -318,7 +374,17 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 
 	return {
 		listDir,
+		readEntries,
 		stat: async (path) => applyOsKind(await buildFsEntry(path), osKind),
+		exists: async (path) => {
+			try {
+				await lstat(path);
+				return true;
+			} catch (error) {
+				if (hasErrorCode(error, "ENOENT") || hasErrorCode(error, "ENOTDIR")) return false;
+				throw error;
+			}
+		},
 		search,
 		locations,
 		copy,

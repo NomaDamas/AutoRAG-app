@@ -11,6 +11,7 @@ const TONE_CLASS: Record<PillTone, string> = {
 	included: "border-border text-ink-body",
 	excluded: "bg-input text-ink-muted",
 	failed: "bg-error-orange-bg text-error-orange-text",
+	ask: "bg-warn-bg text-warn-text",
 };
 
 /**

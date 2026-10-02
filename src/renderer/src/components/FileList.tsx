@@ -1,4 +1,5 @@
 import type { ReactElement, RefObject } from "react";
+import type { IndexStatus } from "../../../shared/index-contract";
 import { FileRow, type RowCallbacks } from "./FileRow";
 import type { TreeRow } from "../state/folder-tree";
 import type { VersionFamilyError } from "../state/version-family";
@@ -19,7 +20,7 @@ export function FileList({
 	flashPath,
 	renamePath,
 	renameDraft,
-	indexOverrides,
+	indexStatus,
 	listPath,
 	versionFamilyError,
 	onRetryVersionFamilies,
@@ -35,7 +36,7 @@ export function FileList({
 	readonly flashPath: string | null;
 	readonly renamePath: string | null;
 	readonly renameDraft: string;
-	readonly indexOverrides: Readonly<Record<string, boolean>>;
+	readonly indexStatus: Readonly<Record<string, IndexStatus>>;
 	readonly listPath: string;
 	readonly versionFamilyError: VersionFamilyError | null;
 	readonly onRetryVersionFamilies: () => void;
@@ -56,7 +57,7 @@ export function FileList({
 						zoneFocused={focusedZone}
 						flash={flashPath === row.entry.path}
 						searching={searching}
-						indexIncluded={indexOverrides[row.entry.path] ?? true}
+						indexStatus={indexStatus[row.entry.path] ?? null}
 						renameDraft={renamePath === row.entry.path ? renameDraft : null}
 						stackCount={row.stackCount}
 						stackOpen={row.stackOpen}
