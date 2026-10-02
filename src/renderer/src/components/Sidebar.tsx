@@ -2,7 +2,6 @@ import type { ReactElement } from "react";
 import { INDEXING_STATUS, NAV_GROUPS, type NavItem } from "../data/places";
 import { cn } from "../lib/cn";
 import { GearIcon } from "./icons";
-import { FileTile } from "./primitives/FileTile";
 import { Keycap } from "./primitives/Keycap";
 import { StatusDot } from "./primitives/StatusDot";
 
@@ -44,17 +43,11 @@ export function Sidebar({
 									aria-current={active ? "true" : undefined}
 									onClick={() => onNavigate(item)}
 								>
-									{item.sourceKind === null ? (
-										Icon !== undefined ? (
-											<Icon
-												className={cn("sidebar__item-icon flex-none text-ink-muted", active && "text-accent")}
-												size={16}
-												strokeWidth={1.8}
-											/>
-										) : null
-									) : (
-										<FileTile kind={item.sourceKind} size={16} />
-									)}
+									<Icon
+										className={cn("sidebar__item-icon flex-none text-ink-muted", active && "text-accent")}
+										size={16}
+										strokeWidth={1.8}
+									/>
 									<span className="sidebar__item-label flex-1 min-w-0 truncate">{item.label}</span>
 									{item.syncing ? <StatusDot token="--warn-dot" /> : null}
 									{item.error ? <StatusDot token="--error-orange-dot" /> : null}

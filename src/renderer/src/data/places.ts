@@ -1,20 +1,22 @@
 /**
  * Sidebar navigation — the reference's `PLACES` groups (proto:774-779).
  *
- * Each place carries its `lucide-react` glyph and the source tiles are
- * verbatim; `syncing` / `error` mark the status dots the reference shows on
- * Gmail, Google Drive, and Discord.
+ * Each place carries its `lucide-react` glyph; `syncing` / `error` mark the
+ * status dots the reference shows on Google Drive and on sources.
  * The People/Contacts place is parked until its view ships.
+ *
+ * The reference's **Sources** group (Slack / Gmail / Notion / Discord /
+ * Telegram) is not rendered: those entries are not wired to the librarian's
+ * crawler CLIs yet, so they only produced a "not linked" toast. Tracked as
+ * issue #20; re-add the group (and a source-tile branch) with that work.
  */
 
 import { Box, Clock, Cloud, Download, File, Hexagon, Monitor, type LucideIcon } from "lucide-react";
-import type { FileKind } from "../state/kinds";
 
 export interface NavItem {
 	readonly label: string;
-	/** Lucide glyph for a place; omitted when the item renders a source tile. */
-	readonly icon?: LucideIcon;
-	readonly sourceKind: FileKind | null;
+	/** Lucide glyph for the place. */
+	readonly icon: LucideIcon;
 	readonly syncing: boolean;
 	readonly error: boolean;
 	/** A view that is not built yet — navigates to its work-in-progress screen. */
@@ -34,24 +36,9 @@ function place(
 	return {
 		label,
 		icon,
-		sourceKind: null,
 		syncing: status.syncing ?? false,
 		error: status.error ?? false,
 		wip: status.wip ?? false,
-	};
-}
-
-function source(
-	label: string,
-	sourceKind: FileKind,
-	status: { syncing?: boolean; error?: boolean } = {},
-): NavItem {
-	return {
-		label,
-		sourceKind,
-		syncing: status.syncing ?? false,
-		error: status.error ?? false,
-		wip: false,
 	};
 }
 
@@ -71,16 +58,6 @@ export const NAV_GROUPS: readonly NavGroup[] = [
 			place("iCloud Drive", Cloud),
 			place("Google Drive", Hexagon, { syncing: true }),
 			place("Dropbox", Box),
-		],
-	},
-	{
-		label: "Sources",
-		items: [
-			source("Slack", "slack"),
-			source("Gmail", "mail", { syncing: true }),
-			source("Notion", "notion"),
-			source("Discord", "discord", { error: true }),
-			source("Telegram", "telegram"),
 		],
 	},
 ];
