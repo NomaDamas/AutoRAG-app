@@ -1,0 +1,28 @@
+/* ============================================================================
+ * AI Search keyframes — moved out of `shell.css` when its rules became
+ * Tailwind utilities. Tailwind's theme only bridges the global animations
+ * (`base.css` owns rise/shimmer/spin); these two are component-local, so they
+ * live beside the component whose utilities reference them.
+ * ========================================================================== */
+
+@keyframes ai-caret {
+	to { visibility: hidden; }
+}
+
+@keyframes ai-thinking-wave {
+	0%, 45%, 100% {
+		color: var(--text-faint);
+		transform: translateY(0);
+	}
+	20% {
+		color: var(--accent);
+		transform: translateY(-3px);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	@keyframes ai-thinking-wave {
+		0%, 45%, 100% { color: var(--text-faint); }
+		20% { color: var(--accent); }
+	}
+}

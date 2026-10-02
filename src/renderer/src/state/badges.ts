@@ -3,13 +3,16 @@ import type { IndexStatus } from "../../../shared/index-contract";
 /**
  * Badge state → documented visual state (DESIGN.md §5 PillBadge).
  *
- * Pure mapping: labels, tone class, dot token, and the tooltip that doubles as
- * the accessible name. Every label ships with its dot.
+ * Pure mapping: labels, tone, dot token, and the tooltip that doubles as the
+ * accessible name. Every label ships with its dot. The tone is semantic;
+ * PillBadge maps it to utilities and to the `pill--*` selector hook.
  */
+
+export type PillTone = "included" | "excluded" | "failed" | "ask";
 
 export interface BadgeVisual {
 	readonly label: string;
-	readonly toneClass: string;
+	readonly tone: PillTone;
 	readonly dotToken: string | null;
 	readonly hollowDot: boolean;
 	readonly spinning: boolean;
@@ -23,7 +26,7 @@ export function indexBadge(state: IndexState, reason = ""): BadgeVisual {
 		case "included":
 			return {
 				label: "포함",
-				toneClass: "pill--included",
+				tone: "included",
 				dotToken: "--index-dot-included",
 				hollowDot: false,
 				spinning: false,
@@ -32,7 +35,7 @@ export function indexBadge(state: IndexState, reason = ""): BadgeVisual {
 		case "excluded":
 			return {
 				label: "제외",
-				toneClass: "pill--excluded",
+				tone: "excluded",
 				dotToken: null,
 				hollowDot: true,
 				spinning: false,
@@ -41,7 +44,7 @@ export function indexBadge(state: IndexState, reason = ""): BadgeVisual {
 		case "failed":
 			return {
 				label: "재시도",
-				toneClass: "pill--failed",
+				tone: "failed",
 				dotToken: null,
 				hollowDot: false,
 				spinning: false,
@@ -50,7 +53,7 @@ export function indexBadge(state: IndexState, reason = ""): BadgeVisual {
 		case "retrying":
 			return {
 				label: "재시도 중",
-				toneClass: "pill--failed",
+				tone: "failed",
 				dotToken: null,
 				hollowDot: false,
 				spinning: true,
@@ -66,7 +69,7 @@ export function indexBadge(state: IndexState, reason = ""): BadgeVisual {
  */
 export function indexStatusBadge(status: IndexStatus | null): BadgeVisual {
 	if (status === null) {
-		return { label: "확인 중", toneClass: "pill--excluded", dotToken: null, hollowDot: true, spinning: false, title: "인덱스 상태 확인 중" };
+		return { label: "확인 중", tone: "excluded", dotToken: null, hollowDot: true, spinning: false, title: "인덱스 상태 확인 중" };
 	}
 	const hint = status.toggleable ? (status.excluded ? " · 클릭하면 포함" : " · 클릭하면 제외") : "";
 	switch (status.kind) {
@@ -77,15 +80,15 @@ export function indexStatusBadge(status: IndexStatus | null): BadgeVisual {
 		case "pending":
 			return {
 				label: status.excluded ? "제외 대기" : "대기",
-				toneClass: "pill--ask",
+				tone: "ask",
 				dotToken: null,
 				hollowDot: true,
 				spinning: false,
 				title: `${status.detail}${hint}`,
 			};
 		case "skipped":
-			return { label: "건너뜀", toneClass: "pill--failed", dotToken: null, hollowDot: true, spinning: false, title: `${status.detail}${hint}` };
+			return { label: "건너뜀", tone: "failed", dotToken: null, hollowDot: true, spinning: false, title: `${status.detail}${hint}` };
 		case "outside":
-			return { label: "범위 밖", toneClass: "pill--excluded", dotToken: null, hollowDot: true, spinning: false, title: status.detail };
+			return { label: "범위 밖", tone: "excluded", dotToken: null, hollowDot: true, spinning: false, title: status.detail };
 	}
 }

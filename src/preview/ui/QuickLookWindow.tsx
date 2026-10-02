@@ -174,7 +174,7 @@ function QuickLookWindow({ bridge }: { readonly bridge: QuickLookWindowBridge })
 		return () => cancelAnimationFrame(frame);
 	}, [load, selfSized]);
 
-	if (load === null) return <div className="qlw" data-quicklook-state="idle" />;
+	if (load === null) return <div className="qlw [--ql-toolbar:52px] [--ql-rail:104px] [--ql-media-bg:#1c1c1e] flex flex-col h-full overflow-hidden bg-quicklook-panel text-ink [font-family:-apple-system,BlinkMacSystemFont,'SF_Pro_Text',var(--font-sans)] select-none" data-quicklook-state="idle" />;
 	const seq = load.seq;
 	const document = load.document;
 	const meta = document === null ? describeExtension(extensionOf(load.name)) : `${describeExtension(document.ext)} · ${formatBytes(document.size)}`;
@@ -189,26 +189,43 @@ function QuickLookWindow({ bridge }: { readonly bridge: QuickLookWindowBridge })
 	}
 
 	return (
-		<div className="qlw" data-quicklook-state="ready" data-platform={bridge.platform} role="dialog" aria-label={load.name}>
-			<header className="qlw__toolbar">
-				<button type="button" className="qlw__tool" aria-label="닫기" title="닫기" onClick={() => void bridge.request("close")}>
+		<div
+			className="qlw [--ql-toolbar:52px] [--ql-rail:104px] [--ql-media-bg:#1c1c1e] flex flex-col h-full overflow-hidden bg-quicklook-panel text-ink [font-family:-apple-system,BlinkMacSystemFont,'SF_Pro_Text',var(--font-sans)] select-none"
+			data-quicklook-state="ready"
+			data-platform={bridge.platform}
+			role="dialog"
+			aria-label={load.name}
+		>
+			<header className="qlw__toolbar flex items-center flex-none gap-8 h-(--ql-toolbar) px-12 border-b border-border bg-quicklook-frost [backdrop-filter:var(--backdrop-quicklook)] [-webkit-app-region:drag]">
+				<button
+					type="button"
+					className="qlw__tool inline-flex items-center justify-center gap-6 h-icon-sm w-icon-sm p-0 border-0 rounded-6 bg-transparent text-ink-body [-webkit-app-region:no-drag] hover:bg-hover active:bg-hover-strong focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-1"
+					aria-label="닫기"
+					title="닫기"
+					onClick={() => void bridge.request("close")}
+				>
 					<CloseIcon />
 				</button>
-				<div className="qlw__titles" title={meta}>
+				<div className="qlw__titles flex flex-1 items-center gap-8 min-w-0 text-ink-faint" title={meta}>
 					<DocIcon />
-					<span className="qlw__name">{load.name}</span>
+					<span className="qlw__name overflow-hidden text-ink text-sm font-semibold leading-[1.25] text-ellipsis whitespace-nowrap">{load.name}</span>
 				</div>
-				<div className="qlw__trail">
+				<div className="qlw__trail flex flex-none items-center gap-6">
 					<button
 						type="button"
-						className="qlw__tool"
+						className="qlw__tool inline-flex items-center justify-center gap-6 h-icon-sm w-icon-sm p-0 border-0 rounded-6 bg-transparent text-ink-body [-webkit-app-region:no-drag] hover:bg-hover active:bg-hover-strong focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-1"
 						aria-label="전체 화면"
 						title="전체 화면"
 						onClick={() => void bridge.request("fullscreen")}
 					>
 						<FullscreenIcon />
 					</button>
-					<button type="button" className="qlw__open" title="기본 앱으로 열기" onClick={() => void bridge.request("open")}>
+					<button
+						type="button"
+						className="qlw__open inline-flex items-center justify-center gap-6 h-icon-sm px-10 border-0 rounded-6 bg-transparent text-ink-body [-webkit-app-region:no-drag] text-meta font-medium hover:bg-hover active:bg-hover-strong focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-1"
+						title="기본 앱으로 열기"
+						onClick={() => void bridge.request("open")}
+					>
 						<OpenIcon />
 						<span>열기</span>
 					</button>
@@ -217,7 +234,7 @@ function QuickLookWindow({ bridge }: { readonly bridge: QuickLookWindowBridge })
 			<div
 				ref={stageRef}
 				key={seq}
-				className="ql__stage"
+				className="ql__stage flex flex-1 flex-col items-center justify-center-safe min-h-0 overflow-auto bg-transparent data-[kind=video]:bg-(--ql-media-bg)"
 				data-kind={kind}
 				onLoadCapture={onMediaEvent}
 				onLoadedMetadataCapture={onMediaEvent}

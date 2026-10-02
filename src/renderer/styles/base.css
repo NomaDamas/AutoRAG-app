@@ -60,18 +60,6 @@ small {
 	word-break: keep-all;
 }
 
-p,
-span,
-small {
-	text-wrap: pretty;
-}
-
-.ai__empty-sub,
-.ai__user-message p,
-.ai__answer p {
-	word-break: keep-all;
-}
-
 /* §6 Keyframes — the only two the reference defines. */
 @keyframes rise {
 	from {

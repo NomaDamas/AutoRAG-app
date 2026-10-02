@@ -16,7 +16,7 @@ import { rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { deflateSync } from "node:zlib";
-import { launchFinder } from "./launch-finder.mjs";
+import { launchFinder, finderWindow } from "./launch-finder.mjs";
 
 const ROOT = new URL("../../", import.meta.url).pathname.replace(/\/$/, "");
 const EVIDENCE = `${ROOT}/.omo/evidence/ai-finder-app/qa-view-modes`;
@@ -92,7 +92,7 @@ const userDataDir = mkdtempSync(join(tmpdir(), "ulw-view-modes-"));
 let app;
 try {
 	app = await launchFinder({ userDataDir, env: { HOME: home } });
-	const page = await app.firstWindow();
+	const page = await finderWindow(app);
 	await page.setViewportSize({ width: 1500, height: 900 }).catch(() => {});
 	await page.waitForSelector(".crumb--last", { timeout: 30000 });
 	await page.getByLabel("Places").getByRole("button", { name: "Documents", exact: true }).click();
@@ -134,7 +134,7 @@ try {
 	check("C2 red.png tile shows its red thumbnail", redTile.redDominant, true);
 	check("C2 tile renders at 64px", redTile.rendered, 64);
 	check("C2 thumbnail is at least 2x the tile (>=128px)", redTile.natural >= 128, true);
-	check("C2 folder tile renders the folder glyph", await page.locator('.icon-tile[aria-label="alpha"] svg.tile--folder').count(), 1);
+	check("C2 folder tile renders the folder glyph", await page.locator('.icon-tile[aria-label="alpha"] svg').count(), 1);
 	await page.locator('.icon-tile[aria-label="notes.md"]').click();
 	check("C2 click selects a tile", await page.locator('.icon-tile[aria-label="notes.md"]').getAttribute("aria-selected"), "true");
 	await page.keyboard.press("ArrowLeft");
@@ -178,7 +178,12 @@ try {
 	await page.waitForSelector(`.column-pane[data-path="${topPath}/alpha/beta"] .column-row`);
 	check("C3 subfolder in pane 2 opens pane 3", await panes(), [topPath, `${topPath}/alpha`, `${topPath}/alpha/beta`]);
 	check("C3 pane 3 lists the sub-subfolder", await paneNames(2), ["beta-1.md", "gamma"]);
-	check("C3 the opened folder stays marked in pane 1", await page.locator(`.column-pane[data-path="${topPath}"] .column-row[aria-label="alpha"]`).getAttribute("class"), "column-row column-row--opened");
+	const openedClasses = (await page.locator(`.column-pane[data-path="${topPath}"] .column-row[aria-label="alpha"]`).getAttribute("class")).split(" ");
+	check(
+		"C3 the opened folder stays marked in pane 1",
+		[openedClasses.includes("column-row--opened"), openedClasses.includes("column-row--selected")],
+		[true, false],
+	);
 	await page.screenshot({ path: `${EVIDENCE}/columns-3.png` });
 	await page.locator(`.column-pane[data-path="${topPath}/alpha/beta"] .column-row[aria-label="gamma"]`).click();
 	await page.waitForFunction((p) => document.querySelector(".column-pane")?.getAttribute("data-path") === p, `${topPath}/alpha`);
@@ -213,7 +218,7 @@ try {
 	// Persistence: the chosen mode survives a relaunch.
 	await app.close();
 	app = await launchFinder({ userDataDir, env: { HOME: home } });
-	const relaunched = await app.firstWindow();
+	const relaunched = await finderWindow(app);
 	await relaunched.waitForSelector(".view-toggle");
 	await relaunched.waitForSelector(".column-pane", { timeout: 30000 });
 	check(

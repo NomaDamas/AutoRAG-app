@@ -107,10 +107,10 @@ export function TextView({ file }: { readonly file: PreviewDocument }): ReactEle
 	if (text === null) return <FallbackView file={file} note="텍스트를 읽지 못했습니다" />;
 	if (html !== null) {
 		const srcdoc = `<!doctype html><meta charset="utf-8"><style>${HIGHLIGHT_STYLE}</style><pre>${html}</pre>`;
-		return <iframe className="ql__frame" sandbox="" title={file.name} srcDoc={srcdoc} />;
+		return <iframe className="ql__frame flex-1 self-stretch w-full h-full border-0 bg-window" sandbox="" title={file.name} srcDoc={srcdoc} />;
 	}
 	return (
-		<pre className="ql__pre">
+		<pre className="ql__pre box-border self-stretch w-full h-auto m-0 px-24 py-20 bg-window text-ink font-mono text-meta leading-[1.55] whitespace-pre-wrap [word-break:break-word] select-text">
 			{text}
 			{file.truncated ? "\n\n… 파일이 너무 커서 앞부분만 보여 줍니다" : ""}
 		</pre>
@@ -141,17 +141,17 @@ export function MarkdownView({ file }: { readonly file: PreviewDocument }): Reac
 	}, [text]);
 	if (text === null) return <FallbackView file={file} note="문서를 읽지 못했습니다" />;
 	if (srcdoc === null) return <Status>불러오는 중</Status>;
-	return <iframe className="ql__frame" sandbox="" title={file.name} srcDoc={srcdoc} />;
+	return <iframe className="ql__frame flex-1 self-stretch w-full h-full border-0 bg-window" sandbox="" title={file.name} srcDoc={srcdoc} />;
 }
 
 export function HtmlView({ file }: { readonly file: PreviewDocument }): ReactElement {
 	const text = plainText(file);
 	if (text === null) return <FallbackView file={file} note="문서를 읽지 못했습니다" />;
-	return <iframe className="ql__frame" sandbox="" title={file.name} srcDoc={text} />;
+	return <iframe className="ql__frame flex-1 self-stretch w-full h-full border-0 bg-window" sandbox="" title={file.name} srcDoc={text} />;
 }
 
 export function RtfView({ file }: { readonly file: PreviewDocument }): ReactElement {
 	const text = plainText(file);
 	if (text === null) return <FallbackView file={file} note="문서를 읽지 못했습니다" />;
-	return <pre className="ql__pre">{rtfToText(text)}</pre>;
+	return <pre className="ql__pre box-border self-stretch w-full h-auto m-0 px-24 py-20 bg-window text-ink font-mono text-meta leading-[1.55] whitespace-pre-wrap [word-break:break-word] select-text">{rtfToText(text)}</pre>;
 }

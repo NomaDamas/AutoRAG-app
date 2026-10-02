@@ -15,8 +15,6 @@ export function createSettingsBridge(ipcRenderer: IpcRenderer): SettingsBridge {
 		contactsUpdate: (id, patch) => ipcRenderer.invoke(SETTINGS_CHANNELS.contactsUpdate, id, patch),
 		contactsRemove: (id) => ipcRenderer.invoke(SETTINGS_CHANNELS.contactsRemove, id),
 		contactsTest: (id) => ipcRenderer.invoke(SETTINGS_CHANNELS.contactsTest, id),
-		requestsList: (status) => ipcRenderer.invoke(SETTINGS_CHANNELS.requestsList, status),
-		requestsRespond: (id, allow) => ipcRenderer.invoke(SETTINGS_CHANNELS.requestsRespond, id, allow),
 		sourcesList: () => ipcRenderer.invoke(SETTINGS_CHANNELS.sourcesList),
 		sourcesSetEnabled: (id, enabled) => ipcRenderer.invoke(SETTINGS_CHANNELS.sourcesSetEnabled, id, enabled),
 		sourcesSetDescription: (id, description) => ipcRenderer.invoke(SETTINGS_CHANNELS.sourcesSetDescription, id, description),

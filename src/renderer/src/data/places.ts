@@ -1,18 +1,22 @@
 /**
  * Sidebar navigation — the reference's `PLACES` groups (proto:774-779).
  *
- * Icon path data and the source tiles are verbatim; `syncing` / `error` mark
- * the status dots the reference shows on Gmail, Google Drive, and Discord.
+ * Each place carries its `lucide-react` glyph; `syncing` / `error` mark the
+ * status dots the reference shows on Google Drive and on sources.
  * The People/Contacts place is parked until its view ships.
+ *
+ * The reference's **Sources** group (Slack / Gmail / Notion / Discord /
+ * Telegram) is not rendered: those entries are not wired to the librarian's
+ * crawler CLIs yet, so they only produced a "not linked" toast. Tracked as
+ * issue #20; re-add the group (and a source-tile branch) with that work.
  */
 
-import type { FileKind } from "../state/kinds";
+import { Box, Clock, Cloud, Download, File, Hexagon, Monitor, type LucideIcon } from "lucide-react";
 
 export interface NavItem {
 	readonly label: string;
-	/** Stroke path for a place icon; null when the item renders a source tile. */
-	readonly icon: string | null;
-	readonly sourceKind: FileKind | null;
+	/** Lucide glyph for the place. */
+	readonly icon: LucideIcon;
 	readonly syncing: boolean;
 	readonly error: boolean;
 	/** A view that is not built yet — navigates to its work-in-progress screen. */
@@ -26,31 +30,15 @@ export interface NavGroup {
 
 function place(
 	label: string,
-	icon: string,
+	icon: LucideIcon,
 	status: { syncing?: boolean; error?: boolean; wip?: boolean } = {},
 ): NavItem {
 	return {
 		label,
 		icon,
-		sourceKind: null,
 		syncing: status.syncing ?? false,
 		error: status.error ?? false,
 		wip: status.wip ?? false,
-	};
-}
-
-function source(
-	label: string,
-	sourceKind: FileKind,
-	status: { syncing?: boolean; error?: boolean } = {},
-): NavItem {
-	return {
-		label,
-		icon: null,
-		sourceKind,
-		syncing: status.syncing ?? false,
-		error: status.error ?? false,
-		wip: false,
 	};
 }
 
@@ -58,28 +46,18 @@ export const NAV_GROUPS: readonly NavGroup[] = [
 	{
 		label: "Favorites",
 		items: [
-			place("Recents", "M12 7v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"),
-			place("Desktop", "M3 5h18v11H3zM8 20h8M12 16v4"),
-			place("Downloads", "M12 4v11m0 0l-4-4m4 4l4-4M5 20h14"),
-			place("Documents", "M6 3h8l4 4v14H6zM14 3v4h4"),
+			place("Recents", Clock),
+			place("Desktop", Monitor),
+			place("Downloads", Download),
+			place("Documents", File),
 		],
 	},
 	{
 		label: "Cloud",
 		items: [
-			place("iCloud Drive", "M7 18h10a4 4 0 0 0 .5-7.97A6 6 0 0 0 6.1 11 3.5 3.5 0 0 0 7 18z"),
-			place("Google Drive", "M8.5 4h7l6 10.5-3.5 6h-12l-3.5-6z", { syncing: true }),
-			place("Dropbox", "M4 7l8-4 8 4-8 4zM4 7v10l8 4 8-4V7"),
-		],
-	},
-	{
-		label: "Sources",
-		items: [
-			source("Slack", "slack"),
-			source("Gmail", "mail", { syncing: true }),
-			source("Notion", "notion"),
-			source("Discord", "discord", { error: true }),
-			source("Telegram", "telegram"),
+			place("iCloud Drive", Cloud),
+			place("Google Drive", Hexagon, { syncing: true }),
+			place("Dropbox", Box),
 		],
 	},
 ];

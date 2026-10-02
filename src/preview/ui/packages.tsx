@@ -49,7 +49,7 @@ export function ArchiveView({ file }: { readonly file: PreviewDocument }): React
 			const inflated = gunzipSync(bytes);
 			const tar = listTarEntries(inflated);
 			if (tar !== null) return <EntryList rows={tar.map((entry) => ({ name: entry.name, detail: formatBytes(entry.size) }))} />;
-			if (looksLikeText(inflated)) return <pre className="ql__pre">{decodeUtf8(inflated)}</pre>;
+			if (looksLikeText(inflated)) return <pre className="ql__pre box-border self-stretch w-full h-auto m-0 px-24 py-20 bg-window text-ink font-mono text-meta leading-[1.55] whitespace-pre-wrap [word-break:break-word] select-text">{decodeUtf8(inflated)}</pre>;
 		} catch (caught) {
 			const message = caught instanceof Error ? caught.message : "압축을 풀지 못했습니다";
 			return <FallbackView file={file} note={message} />;
@@ -67,9 +67,9 @@ export function ArchiveView({ file }: { readonly file: PreviewDocument }): React
 
 function EntryList({ rows }: { readonly rows: readonly { readonly name: string; readonly detail: string }[] }): ReactElement {
 	return (
-		<div className="ql__list">
+		<div className="ql__list box-border self-stretch w-full h-auto m-0 p-16">
 			{rows.map((row) => (
-				<div className="ql__row" key={row.name}>
+				<div className="ql__row flex justify-between gap-16 py-8 border-b border-divider text-sm [&_span:last-child]:text-ink-muted" key={row.name}>
 					<span>{row.name}</span>
 					<span>{row.detail}</span>
 				</div>
@@ -98,7 +98,7 @@ export function EpubView({ file }: { readonly file: PreviewDocument }): ReactEle
 	}, [bytes]);
 	if (text === null) return <FallbackView file={file} note="책을 읽지 못했습니다" />;
 	if (text.trim() === "") return <FallbackView file={file} note="본문을 찾지 못했습니다" />;
-	return <pre className="ql__pre">{text}</pre>;
+	return <pre className="ql__pre box-border self-stretch w-full h-auto m-0 px-24 py-20 bg-window text-ink font-mono text-meta leading-[1.55] whitespace-pre-wrap [word-break:break-word] select-text">{text}</pre>;
 }
 
 export function HwpxView({ file }: { readonly file: PreviewDocument }): ReactElement {
@@ -117,7 +117,7 @@ export function HwpxView({ file }: { readonly file: PreviewDocument }): ReactEle
 	}, [bytes]);
 	if (text === null) return <FallbackView file={file} note="문서를 읽지 못했습니다" />;
 	if (text.trim() === "") return <FallbackView file={file} note="본문을 찾지 못했습니다" />;
-	return <pre className="ql__pre">{text}</pre>;
+	return <pre className="ql__pre box-border self-stretch w-full h-auto m-0 px-24 py-20 bg-window text-ink font-mono text-meta leading-[1.55] whitespace-pre-wrap [word-break:break-word] select-text">{text}</pre>;
 }
 
 export function PptxView({ file }: { readonly file: PreviewDocument }): ReactElement {
@@ -153,15 +153,15 @@ export function PptxView({ file }: { readonly file: PreviewDocument }): ReactEle
 	if (bytes === null) return <FallbackView file={file} note="프레젠테이션을 읽지 못했습니다" />;
 	if (slides === null) return <Status>불러오는 중</Status>;
 	return (
-		<div className="ql__slides">
+		<div className="ql__slides box-border self-stretch w-full h-auto m-0 p-16">
 			{slides.pages.map((page, index) => (
-				<section className="ql__slide" key={page.name}>
+				<section className="ql__slide m-0 mb-16 px-18 py-16 rounded-8 bg-window shadow-raised [&_h2]:m-0 [&_h2]:mb-8 [&_h2]:text-sm [&_p]:m-0 [&_p]:text-sm [&_p]:leading-body" key={page.name}>
 					<h2>슬라이드 {index + 1}</h2>
 					<p>{page.text === "" ? "텍스트 없음" : page.text}</p>
 				</section>
 			))}
 			{slides.images.length === 0 ? null : (
-				<div className="ql__thumbs">
+				<div className="ql__thumbs flex flex-wrap gap-8 mt-12 [&_img]:max-w-[180px] [&_img]:max-h-[120px] [&_img]:object-contain [&_img]:bg-subtle">
 					{slides.images.map((image) => (
 						<img key={image.name} alt="" src={image.url} />
 					))}

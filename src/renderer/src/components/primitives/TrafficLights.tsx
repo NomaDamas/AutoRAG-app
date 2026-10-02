@@ -6,10 +6,10 @@ import type { ReactElement } from "react";
  */
 export function TrafficLights(): ReactElement {
 	return (
-		<div className="traffic" aria-hidden="true">
-			<span className="traffic__light" style={{ background: "var(--traffic-close)" }} />
-			<span className="traffic__light" style={{ background: "var(--traffic-min)" }} />
-			<span className="traffic__light" style={{ background: "var(--traffic-max)" }} />
+		<div className="traffic flex items-center gap-8" aria-hidden="true">
+			<span className="traffic__light size-traffic rounded-full" style={{ background: "var(--traffic-close)" }} />
+			<span className="traffic__light size-traffic rounded-full" style={{ background: "var(--traffic-min)" }} />
+			<span className="traffic__light size-traffic rounded-full" style={{ background: "var(--traffic-max)" }} />
 		</div>
 	);
 }

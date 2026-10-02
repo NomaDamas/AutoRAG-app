@@ -4,6 +4,7 @@ import type { Crumb } from "../state/paths";
 import type { ViewMode } from "../state/view-mode";
 import { ChevronLeftIcon, ChevronRightIcon, SearchIcon } from "./icons";
 import { Keycap } from "./primitives/Keycap";
+import { iconButtonClass } from "./primitives/icon-button";
 import { ViewModeToggle } from "./ViewModeToggle";
 
 /**
@@ -48,10 +49,10 @@ export function Toolbar({
 	readonly onSearchBlur: () => void;
 }): ReactElement {
 	return (
-		<div className="toolbar">
+		<div className="toolbar flex flex-none items-center gap-8 h-toolbar px-12 bg-window border-b border-border">
 			<button
 				type="button"
-				className="icon-button"
+				className={`icon-button ${iconButtonClass()}`}
 				title="Back"
 				aria-label="Back"
 				disabled={!canGoBack}
@@ -61,7 +62,7 @@ export function Toolbar({
 			</button>
 			<button
 				type="button"
-				className="icon-button"
+				className={`icon-button ${iconButtonClass()}`}
 				title="Forward"
 				aria-label="Forward"
 				disabled={!canGoForward}
@@ -69,13 +70,17 @@ export function Toolbar({
 			>
 				<ChevronRightIcon />
 			</button>
-			<nav className="crumbs" aria-label="Location">
+			<nav className="crumbs flex flex-1 items-center gap-2 min-w-0 overflow-hidden" aria-label="Location">
 				{crumbs.map((crumb) => (
 					<Fragment key={crumb.path}>
-						{crumb.separator ? <span className="crumbs__sep">/</span> : null}
+						{crumb.separator ? <span className="crumbs__sep text-border-strong text-body px-2">/</span> : null}
 						<button
 							type="button"
-							className={`crumb${crumb.isLast ? " crumb--last" : ""}`}
+							className={[
+								`crumb${crumb.isLast ? " crumb--last" : ""}`,
+								"min-w-0 max-w-crumb-max h-icon-sm px-6 border-0 rounded-6 bg-transparent text-body overflow-hidden whitespace-nowrap text-ellipsis transition-[background] duration-(--dur-color) ease-[ease] hover:bg-hover-icon",
+								crumb.isLast ? "flex-none text-ink font-semibold" : "flex-[0_1_auto] text-ink-muted",
+							].join(" ")}
 							title={crumb.label}
 							onClick={() => onNavigate(crumb.path)}
 						>
@@ -85,11 +90,17 @@ export function Toolbar({
 				))}
 			</nav>
 			<ViewModeToggle mode={viewMode} onChange={onViewModeChange} />
-			<div className={`search${searchFocused ? " search--focused" : ""}`}>
-				<SearchIcon className="search__icon" />
+			<div
+				className={[
+					`search${searchFocused ? " search--focused" : ""}`,
+					"flex flex-none items-center gap-8 w-search-field h-row pl-10 pr-8 border rounded-10 bg-input transition-[border-color] duration-(--dur-modal) ease-[ease]",
+					searchFocused ? "border-accent" : "border-border",
+				].join(" ")}
+			>
+				<SearchIcon className="search__icon flex-none text-ink-muted" />
 				<input
 					ref={searchRef}
-					className="search__input"
+					className="search__input flex-1 min-w-0 h-full border-0 outline-none bg-transparent text-ink text-meta"
 					type="text"
 					value={query}
 					placeholder={placeholder}

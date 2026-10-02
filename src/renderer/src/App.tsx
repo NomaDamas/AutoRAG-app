@@ -140,15 +140,15 @@ export function App(): ReactElement {
 	};
 
 	return (
-		<div className="desk">
-			<div className="window">
+		<div className="desk flex h-full bg-window">
+			<div className="window relative grid grid-cols-(--grid-main) flex-1 min-w-0 bg-window overflow-hidden">
 				<Sidebar
 					activeLabel={finder.activeNavLabel}
 					showHotkeys={SHOW_HOTKEYS}
 					onNavigate={finder.navigateNav}
 					onOpenSettings={() => setSettingsTab("general")}
 				/>
-				<section className="finder" aria-label="Finder" onMouseDown={finder.focusFinder}>
+				<section className="finder flex flex-col min-w-0 min-h-0" aria-label="Finder" onMouseDown={finder.focusFinder}>
 					<TabStrip
 						tabs={finder.tabs}
 						canClose={finder.canCloseTabs}

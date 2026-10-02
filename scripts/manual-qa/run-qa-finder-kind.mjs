@@ -85,8 +85,11 @@ try {
 				node.scrollTop = node.scrollTop + node.clientHeight * 0.9;
 				return node.scrollTop + node.clientHeight >= node.scrollHeight - 1;
 			});
-			if (atEnd) break;
 			await page.waitForTimeout(25);
+			// The target can sit in the last window: check after scrolling, before
+			// the loop stops on `atEnd`.
+			if ((await rowFor(name).count()) > 0) return rowFor(name);
+			if (atEnd) break;
 		}
 		return rowFor(name).waitFor({ timeout: 30000 }).then(() => rowFor(name));
 	};

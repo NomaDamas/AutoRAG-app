@@ -7,7 +7,7 @@
  *   bun scripts/manual-qa/run-qa-finder-dev-label.mjs
  */
 
-import { launchFinder } from "./launch-finder.mjs";
+import { launchFinder, finderWindow } from "./launch-finder.mjs";
 import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -18,10 +18,13 @@ const EVIDENCE = join(REPO, ".omo", "evidence", "ai-finder-app", "dev-label");
 mkdirSync(EVIDENCE, { recursive: true });
 
 const app = await launchFinder({ userDataDir: `/tmp/pw-electron-qa-dev-label-${Date.now()}` });
-const page = await app.firstWindow();
+const page = await finderWindow(app);
 await page.waitForSelector('[role="row"]');
 
-const windowTitle = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.getTitle() ?? "");
+const windowTitle = await app.evaluate(({ BrowserWindow }) => {
+	const window = BrowserWindow.getAllWindows().find((item) => item.webContents.getURL().endsWith("/index.html"));
+	return window?.getTitle() ?? "";
+});
 const documentTitle = await page.title();
 const devLabelText = await page.locator(".status-bar__dev").innerText().catch(() => null);
 const bridgeDev = await page.evaluate(() => globalThis.autorag?.dev ?? null);
