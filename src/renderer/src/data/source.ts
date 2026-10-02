@@ -8,6 +8,7 @@
  */
 
 import { RECENTS_PATH, type FsBridge, type FsClipboard, type FsVersionFamiliesResult } from "../../../shared/fs-contract";
+import type { IndexStatus } from "../../../shared/index-contract";
 import {
 	DUPEY_LAYER_ID,
 	type LayerPublication,
@@ -74,6 +75,11 @@ export interface FinderSource {
 	versionFamilies(): Promise<VersionFamiliesResult>;
 	/** Forces a dupey scan now and returns the fresh snapshot. */
 	refreshVersionFamilies(): Promise<VersionFamiliesResult>;
+	/** Real AutoRAG local-index state and config-backed exclusion toggle. */
+	indexStatus(paths: readonly string[]): Promise<readonly IndexStatus[]>;
+	setIndexExcluded(path: string, excluded: boolean): Promise<IndexStatus>;
+	/** Fires when the background refresh a toggle started has settled. */
+	onIndexRefreshed(listener: (error: string | null) => void): () => void;
 }
 
 export async function isMissingPathFailure(
@@ -171,6 +177,9 @@ export function createBridgeSource(fs: FsBridge, initialPath: string, live?: Liv
 		async refreshVersionFamilies() {
 			return mapVersionFamiliesResult(await fs.refreshVersionFamilies());
 		},
+		indexStatus: (paths) => fs.indexStatus(paths),
+		setIndexExcluded: (path, excluded) => fs.setIndexExcluded(path, excluded),
+		onIndexRefreshed: (listener) => fs.onIndexRefreshed?.(listener) ?? (() => {}),
 	};
 }
 
@@ -179,6 +188,8 @@ export function createBridgeSource(fs: FsBridge, initialPath: string, live?: Liv
 interface FixtureState {
 	tree: Map<string, FixtureItem[]>;
 	clipboard: FsClipboard | null;
+	/** Paths the fixture treats as excluded from indexing. */
+	indexExcluded: Set<string>;
 }
 
 function seedFixtureState(): FixtureState {
@@ -186,7 +197,7 @@ function seedFixtureState(): FixtureState {
 	for (const [path, items] of Object.entries(FIXTURE_TREE)) {
 		tree.set(path, [...items]);
 	}
-	return { tree, clipboard: null };
+	return { tree, clipboard: null, indexExcluded: new Set() };
 }
 
 function takenNames(state: FixtureState, dir: string): string[] {
@@ -225,6 +236,10 @@ function findItem(state: FixtureState, path: string): FixtureItem | null {
 export function createFixtureSource(): FinderSource {
 	const state = seedFixtureState();
 	const resolve = (): Promise<void> => Promise.resolve();
+	const fixtureIndexStatus = (path: string): IndexStatus =>
+		state.indexExcluded.has(path)
+			? { path, kind: "excluded", excluded: true, toggleable: true, detail: "인덱싱에서 제외됨" }
+			: { path, kind: "included", excluded: false, toggleable: true, detail: "MinSync 인덱스에 포함됨" };
 
 	return {
 		native: false,
@@ -360,6 +375,13 @@ export function createFixtureSource(): FinderSource {
 				error: null,
 			}),
 		refreshVersionFamilies: () => Promise.resolve(EMPTY_VERSION_FAMILIES_RESULT),
+		indexStatus: (paths) => Promise.resolve(paths.map(fixtureIndexStatus)),
+		setIndexExcluded: (path, excluded) => {
+			if (excluded) state.indexExcluded.add(path);
+			else state.indexExcluded.delete(path);
+			return Promise.resolve(fixtureIndexStatus(path));
+		},
+		onIndexRefreshed: () => () => {},
 	};
 }
 

@@ -69,6 +69,15 @@ function fakeFs(result: FsVersionFamiliesResult): FsBridge {
 		copyPathsToClipboard: async () => {},
 		versionFamilies: async () => result,
 		refreshVersionFamilies: async () => result,
+		indexStatus: async (paths) =>
+			paths.map((path) => ({ path, kind: "included" as const, excluded: false, toggleable: true, detail: "" })),
+		setIndexExcluded: async (path, excluded) => ({
+			path,
+			kind: excluded ? ("excluded" as const) : ("included" as const),
+			excluded,
+			toggleable: true,
+			detail: "",
+		}),
 	};
 }
 

@@ -1,4 +1,5 @@
 import type { IpcRenderer } from "electron";
+import type { IndexStatus } from "../shared/index-contract";
 import { FS_CHANNELS, type FsBridge } from "../shared/fs-contract";
 
 /** Typed window.autorag.fs wrappers over ipcRenderer.invoke on the contract channels. */
@@ -22,6 +23,15 @@ export function createFsBridge(ipcRenderer: IpcRenderer): FsBridge {
 		clipboardGet: () => ipcRenderer.invoke(FS_CHANNELS.clipboardGet),
 		copyPathsToClipboard: (paths) => ipcRenderer.invoke(FS_CHANNELS.copyPathsToClipboard, paths),
 		versionFamilies: () => ipcRenderer.invoke(FS_CHANNELS.versionFamilies),
+		indexStatus: (paths) => ipcRenderer.invoke(FS_CHANNELS.indexStatus, paths) as Promise<readonly IndexStatus[]>,
+		setIndexExcluded: (path, excluded) => ipcRenderer.invoke(FS_CHANNELS.indexSetExcluded, path, excluded) as Promise<IndexStatus>,
+		onIndexRefreshed: (listener) => {
+			const handler = (_event: unknown, error: string | null): void => listener(error);
+			ipcRenderer.on(FS_CHANNELS.indexRefreshed, handler);
+			return () => {
+				ipcRenderer.removeListener(FS_CHANNELS.indexRefreshed, handler);
+			};
+		},
 		refreshVersionFamilies: () => ipcRenderer.invoke(FS_CHANNELS.versionFamiliesRefresh),
 	};
 }

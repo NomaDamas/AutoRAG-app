@@ -6,7 +6,8 @@
  * Quick = the stream's `preliminary` event (emit_fast_answer fast phase);
  * Deep = the stream's `complete` event (full SearchDocumentsResponse).
  * While a phase runs, the main process also forwards the agent's live model
- * stream: `thinking-delta` appends reasoning text for that phase, and
+ * stream: `thinking` signals (once per phase) that the model started
+ * reasoning — the reasoning text itself never crosses IPC — and
  * `quick-draft` / `deep-draft` carry the answer text streamed so far (a full
  * snapshot, not a delta). The following `quick` / `deep` event carries the
  * authoritative full answer and supersedes the draft. `done` closes every run
@@ -50,15 +51,13 @@ export interface CitationEvidence {
 export interface AnswerPhase {
 	readonly answer: string;
 	readonly evidence: readonly CitationEvidence[];
-	/** e.g. "0.9s · 2 sources". Computed in the main process. */
-	readonly meta: string;
 }
 
 export type AnswerPhaseName = "quick" | "deep";
 
 export type SearchStreamEvent =
 	| { readonly type: "progress"; readonly searchId: string; readonly text: string }
-	| { readonly type: "thinking-delta"; readonly searchId: string; readonly phase: AnswerPhaseName; readonly text: string }
+	| { readonly type: "thinking"; readonly searchId: string; readonly phase: AnswerPhaseName }
 	| { readonly type: "quick-draft"; readonly searchId: string; readonly text: string }
 	| { readonly type: "deep-draft"; readonly searchId: string; readonly text: string }
 	| { readonly type: "quick"; readonly searchId: string; readonly sessionId: string; readonly phase: AnswerPhase }

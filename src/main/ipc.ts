@@ -1,5 +1,5 @@
 import { ipcMain } from "electron";
-import { FS_CHANNELS, type FsClipboard, type FsCoreBridge } from "../shared/fs-contract";
+import { FS_CHANNELS, type FsClipboard, type FsCoreBridge, type FsIndexBridge } from "../shared/fs-contract";
 import { SEARCH_CHANNELS, type SearchBridge } from "../shared/search-contract";
 import { SETTINGS_CHANNELS, type SettingsBridge } from "../shared/settings-contract";
 import { LIVE_CHANNELS } from "../shared/live-contract";
@@ -56,6 +56,11 @@ export function registerFsIpcHandlers(service: FsCoreBridge, hooks: FsIpcHooks =
 export function registerVersionFamilyIpcHandlers(service: VersionFamilyService): void {
 	ipcMain.handle(FS_CHANNELS.versionFamilies, () => service.result());
 	ipcMain.handle(FS_CHANNELS.versionFamiliesRefresh, () => service.refresh());
+}
+
+export function registerIndexIpcHandlers(service: FsIndexBridge): void {
+	ipcMain.handle(FS_CHANNELS.indexStatus, (_event, paths: readonly string[]) => service.indexStatus(paths));
+	ipcMain.handle(FS_CHANNELS.indexSetExcluded, (_event, path: string, excluded: boolean) => service.setIndexExcluded(path, excluded));
 }
 
 export function registerSearchIpcHandlers(service: SearchBridge): void {

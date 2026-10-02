@@ -1,3 +1,5 @@
+import type { IndexStatus } from "../../../shared/index-contract";
+
 /**
  * Badge state → documented visual state (DESIGN.md §5 PillBadge).
  *
@@ -54,5 +56,36 @@ export function indexBadge(state: IndexState, reason = ""): BadgeVisual {
 				spinning: true,
 				title: `인덱싱 실패 · ${reason} — 클릭하면 다시 시도`,
 			};
+	}
+}
+
+/**
+ * The Finder row badge for a real AutoRAG index status. The tooltip carries the
+ * service's detail, so the reason a file is pending or skipped stays visible.
+ * `null` (status not loaded yet) renders as pending rather than guessing.
+ */
+export function indexStatusBadge(status: IndexStatus | null): BadgeVisual {
+	if (status === null) {
+		return { label: "확인 중", toneClass: "pill--excluded", dotToken: null, hollowDot: true, spinning: false, title: "인덱스 상태 확인 중" };
+	}
+	const hint = status.toggleable ? (status.excluded ? " · 클릭하면 포함" : " · 클릭하면 제외") : "";
+	switch (status.kind) {
+		case "included":
+			return { ...indexBadge("included"), title: `${status.detail}${hint}` };
+		case "excluded":
+			return { ...indexBadge("excluded"), title: `${status.detail}${hint}` };
+		case "pending":
+			return {
+				label: status.excluded ? "제외 대기" : "대기",
+				toneClass: "pill--ask",
+				dotToken: null,
+				hollowDot: true,
+				spinning: false,
+				title: `${status.detail}${hint}`,
+			};
+		case "skipped":
+			return { label: "건너뜀", toneClass: "pill--failed", dotToken: null, hollowDot: true, spinning: false, title: `${status.detail}${hint}` };
+		case "outside":
+			return { label: "범위 밖", toneClass: "pill--excluded", dotToken: null, hollowDot: true, spinning: false, title: status.detail };
 	}
 }

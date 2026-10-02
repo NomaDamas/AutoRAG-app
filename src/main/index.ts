@@ -4,10 +4,12 @@ import { app, BrowserWindow, clipboard, shell } from "electron";
 import { attachQuickLook, registerPreviewProtocol, registerPreviewSchemes, registerQuickLookIpc } from "../preview/node/register";
 import { writeDefaultConfig } from "@autorag/librarian";
 import { resolveConfigPath } from "@autorag/librarian/core";
+import { FS_CHANNELS } from "../shared/fs-contract";
 import { DUPEY_LAYER_ID, LIVE_CHANNELS } from "../shared/live-contract";
 import { APP_NAME, APP_VERSION, formatWindowTitle, type DevLabel } from "../shared/app-info";
 import { createChatStore } from "./chat-store";
 import { createDataSourceStatusService } from "./datasource-status";
+import { createIndexStatusService } from "./index-status";
 import { readDevLabel, resolveClonePath } from "./dev-label";
 import { buildFsEntry } from "./fs-entry";
 import { createFsService } from "./fs-service";
@@ -17,6 +19,7 @@ import { createDefaultAgentFactory, createSearchService } from "./search-service
 import { createSettingsService } from "./settings-service";
 import {
 	registerFsIpcHandlers,
+	registerIndexIpcHandlers,
 	registerLiveIpcHandlers,
 	registerSearchIpcHandlers,
 	registerSettingsIpcHandlers,
@@ -141,6 +144,13 @@ app.whenReady().then(() => {
 	});
 	registerLiveIpcHandlers(watch, hub);
 	registerVersionFamilyIpcHandlers(versionFamilyService);
+	registerIndexIpcHandlers(
+		createIndexStatusService({
+			env: process.env,
+			cwd: process.cwd(),
+			onRefreshed: (error) => sendToMainWindow(FS_CHANNELS.indexRefreshed, error),
+		}),
+	);
 	const searchService = createSearchService({
 		agentFactory: createDefaultAgentFactory(),
 		chatStore: createChatStore({ directory: join(app.getPath("userData"), "chat-history") }),
