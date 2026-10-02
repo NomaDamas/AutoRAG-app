@@ -1,10 +1,40 @@
 /**
- * Inline icon set — Lucide-style strokes on a 24 × 24 viewBox, stroke-width
- * 1.8–2.6, round caps (handoff README "Assets"). No icon package, no emoji.
+ * Icon set — adapters over `lucide-react` (DESIGN.md §5).
  *
- * Path data is the reference prototype's, verbatim.
+ * The reference draws every icon as an inline 24 × 24 stroke glyph with round
+ * caps, and lucide is the library those glyphs come from, so each adapter is a
+ * named lucide icon pinned to the size and stroke width the reference specifies
+ * at its call site. Consumers keep passing the same props they always did.
+ *
+ * `FolderGlyph` is the one exception: the reference requires a *filled* folder
+ * in `--folder`, and lucide's `folder` is stroke-only, so there is no library
+ * equivalent to substitute and the path stays here.
  */
 
+import {
+	ArrowUp,
+	Bell,
+	ChevronLeft,
+	ChevronRight,
+	ChevronUp,
+	ChevronsUp,
+	Columns3,
+	Eye,
+	History,
+	LayoutGrid,
+	List,
+	Pencil,
+	Plus,
+	RotateCw,
+	Search,
+	Send,
+	Settings,
+	Sparkles,
+	ThumbsDown,
+	ThumbsUp,
+	X,
+	type LucideIcon,
+} from "lucide-react";
 import type { ReactElement } from "react";
 
 interface GlyphProps {
@@ -12,231 +42,69 @@ interface GlyphProps {
 	readonly className?: string | undefined;
 }
 
-interface StrokeProps extends GlyphProps {
-	readonly width?: number | undefined;
-	readonly children: ReactElement | readonly ReactElement[];
+/** The reference's default stroke: 24 × 24 viewBox, round caps, 1.8. */
+const GLYPH_STROKE = 1.8;
+
+/** Pin a lucide icon to the reference's per-glyph size and stroke width. */
+function glyph(Icon: LucideIcon, defaultSize: number, strokeWidth: number = GLYPH_STROKE) {
+	return function Glyph({ size = defaultSize, className }: GlyphProps): ReactElement {
+		return (
+			<Icon aria-hidden="true" focusable="false" className={className} size={size} strokeWidth={strokeWidth} />
+		);
+	};
 }
 
-function Stroke({ size = 16, width = 1.8, className, children }: StrokeProps): ReactElement {
-	return (
-		<svg
-			className={className}
-			width={size}
-			height={size}
-			viewBox="0 0 24 24"
-			fill="none"
-			stroke="currentColor"
-			strokeWidth={width}
-			strokeLinecap="round"
-			strokeLinejoin="round"
-			aria-hidden="true"
-			focusable="false"
-		>
-			{children}
-		</svg>
-	);
-}
+export const BellIcon = glyph(Bell, 16);
 
-/** Sidebar place icons carry their path in the nav data. */
-export function PathIcon({ d, size = 16, className }: GlyphProps & { readonly d: string }): ReactElement {
-	return (
-		<Stroke size={size} className={className}>
-			<path d={d} />
-		</Stroke>
-	);
-}
+export const GearIcon = glyph(Settings, 16);
 
-export function BellIcon(props: GlyphProps): ReactElement {
-	return (
-		<Stroke {...props}>
-			<path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
-			<path d="M10.3 21a1.9 1.9 0 0 0 3.4 0" />
-		</Stroke>
-	);
-}
+export const SearchIcon = glyph(Search, 14, 2.2);
 
-export function GearIcon(props: GlyphProps): ReactElement {
-	return (
-		<Stroke {...props}>
-			<circle cx="12" cy="12" r="3" />
-			<path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" />
-		</Stroke>
-	);
-}
+export const ChevronLeftIcon = glyph(ChevronLeft, 16, 2.2);
 
-export function SearchIcon({ size = 14, className }: GlyphProps): ReactElement {
-	return (
-		<Stroke size={size} width={2.2} className={className}>
-			<circle cx="11" cy="11" r="7" />
-			<path d="M20 20l-3.5-3.5" />
-		</Stroke>
-	);
-}
+export const ChevronRightIcon = glyph(ChevronRight, 16, 2.2);
 
-export function ChevronLeftIcon({ size = 16, className }: GlyphProps): ReactElement {
-	return (
-		<Stroke size={size} width={2.2} className={className}>
-			<path d="M15 6l-6 6 6 6" />
-		</Stroke>
-	);
-}
+export const ChevronUpIcon = glyph(ChevronUp, 10, 3);
 
-export function ChevronRightIcon({ size = 16, className }: GlyphProps): ReactElement {
-	return (
-		<Stroke size={size} width={2.2} className={className}>
-			<path d="M9 6l6 6-6 6" />
-		</Stroke>
-	);
-}
+export const ChevronsUpIcon = glyph(ChevronsUp, 16, 2.2);
 
-export function ChevronUpIcon({ size = 10, className }: GlyphProps): ReactElement {
-	return (
-		<Stroke size={size} width={3} className={className}>
-			<path d="M6 15l6-6 6 6" />
-		</Stroke>
-	);
-}
+export const EyeIcon = glyph(Eye, 14, 2);
 
-export function ChevronsUpIcon({ size = 16, className }: GlyphProps): ReactElement {
-	return (
-		<Stroke size={size} width={2.2} className={className}>
-			<path d="M6 7l6 6 6-6M6 13l6 6 6-6" />
-		</Stroke>
-	);
-}
+export const ThumbsUpIcon = glyph(ThumbsUp, 14, 2);
 
-export function EyeIcon({ size = 14, className }: GlyphProps): ReactElement {
-	return (
-		<Stroke size={size} width={2} className={className}>
-			<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" />
-			<circle cx="12" cy="12" r="3" />
-		</Stroke>
-	);
-}
+export const ThumbsDownIcon = glyph(ThumbsDown, 14, 2);
 
-const THUMB_PATH =
-	"M7 10v12M15 5.88L14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88z";
+export const CloseIcon = glyph(X, 10, 3);
 
-export function ThumbsUpIcon({ size = 14, className }: GlyphProps): ReactElement {
-	return (
-		<Stroke size={size} width={2} className={className}>
-			<path d={THUMB_PATH} />
-		</Stroke>
-	);
-}
+export const PlusIcon = glyph(Plus, 14, 2.4);
 
-export function ThumbsDownIcon({ size = 14, className }: GlyphProps): ReactElement {
-	return (
-		<Stroke size={size} width={2} className={className}>
-			<g style={{ transform: "scale(1,-1)", transformOrigin: "12px 12px" }}>
-				<path d={THUMB_PATH} />
-			</g>
-		</Stroke>
-	);
-}
+export const SendIcon = glyph(Send, 16, 2.4);
 
-export function CloseIcon({ size = 10, className }: GlyphProps): ReactElement {
-	return (
-		<Stroke size={size} width={3} className={className}>
-			<path d="M6 6l12 12M18 6L6 18" />
-		</Stroke>
-	);
-}
+export const SparklesIcon = glyph(Sparkles, 14, 2);
 
-export function PlusIcon({ size = 14, className }: GlyphProps): ReactElement {
-	return (
-		<Stroke size={size} width={2.4} className={className}>
-			<path d="M12 5v14M5 12h14" />
-		</Stroke>
-	);
-}
+export const ArrowUpIcon = glyph(ArrowUp, 16, 2.6);
 
-export function SendIcon({ size = 16, className }: GlyphProps): ReactElement {
-	return (
-		<Stroke size={size} width={2.4} className={className}>
-			<path d="M4 4l16 8-16 8 3-8z" />
-			<path d="M7 12h13" />
-		</Stroke>
-	);
-}
+export const PencilIcon = glyph(Pencil, 13, 2);
 
-export function SparklesIcon({ size = 14, className }: GlyphProps): ReactElement {
-	return (
-		<Stroke size={size} width={2} className={className}>
-			<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" />
-		</Stroke>
-	);
-}
+export const RotateIcon = glyph(RotateCw, 10, 2.8);
 
-export function ArrowUpIcon({ size = 16, className }: GlyphProps): ReactElement {
-	return (
-		<Stroke size={size} width={2.6} className={className}>
-			<path d="M12 19V5M6 11l6-6 6 6" />
-		</Stroke>
-	);
-}
+export const HistoryIcon = glyph(History, 16, 2);
 
-export function PencilIcon({ size = 13, className }: GlyphProps): ReactElement {
-	return (
-		<Stroke size={size} width={2} className={className}>
-			<path d="M17 3a2.85 2.85 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5z" />
-			<path d="M15 5l4 4" />
-		</Stroke>
-	);
-}
+export const IconsViewIcon = glyph(LayoutGrid, 16, 1.9);
 
-export function RotateIcon({ size = 10, className }: GlyphProps): ReactElement {
-	return (
-		<Stroke size={size} width={2.8} className={className}>
-			<path d="M21 12a9 9 0 1 1-2.6-6.4M21 4v5h-5" />
-		</Stroke>
-	);
-}
+export const ListViewIcon = glyph(List, 16, 1.9);
 
-export function HistoryIcon({ size = 16, className }: GlyphProps): ReactElement {
-	return (
-		<Stroke size={size} width={2} className={className}>
-			<path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
-			<path d="M3 3v5h5" />
-			<path d="M12 7v5l3 2" />
-		</Stroke>
-	);
-}
+export const ColumnsViewIcon = glyph(Columns3, 16, 1.9);
 
-export function IconsViewIcon({ size = 16, className }: GlyphProps): ReactElement {
-	return (
-		<Stroke size={size} width={1.9} className={className}>
-			<rect x="4" y="4" width="6.5" height="6.5" rx="1.5" />
-			<rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5" />
-			<rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5" />
-			<rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5" />
-		</Stroke>
-	);
-}
-
-export function ListViewIcon({ size = 16, className }: GlyphProps): ReactElement {
-	return (
-		<Stroke size={size} width={1.9} className={className}>
-			<path d="M9.5 6.5H20M9.5 12H20M9.5 17.5H20" />
-			<path d="M4.5 6.5h.01M4.5 12h.01M4.5 17.5h.01" />
-		</Stroke>
-	);
-}
-
-export function ColumnsViewIcon({ size = 16, className }: GlyphProps): ReactElement {
-	return (
-		<Stroke size={size} width={1.9} className={className}>
-			<rect x="3" y="4.5" width="18" height="15" rx="2.5" />
-			<path d="M9 4.5v15M15 4.5v15" />
-		</Stroke>
-	);
-}
-
-/** Folders render the filled glyph in --folder, never a tile (DESIGN.md §5). */
+/**
+ * Folders render the filled glyph in `--folder`, never a tile (DESIGN.md §5).
+ * lucide has no filled folder, so this stays a bespoke path; the classes are the
+ * `.tile` + `.tile--folder` pair it used to inherit, now as utilities.
+ */
 export function FolderGlyph({ size = 18 }: GlyphProps): ReactElement {
 	return (
 		<svg
-			className="tile tile--folder"
+			className="flex flex-none items-center justify-center text-folder"
 			width={size}
 			height={size}
 			viewBox="0 0 24 24"

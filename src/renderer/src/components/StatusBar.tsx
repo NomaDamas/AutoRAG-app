@@ -15,10 +15,17 @@ export function StatusBar({
 	readonly devLabel: string | null;
 }): ReactElement {
 	return (
-		<div className="status-bar">
+		<div className="status-bar flex flex-none items-center justify-between gap-12 h-status-bar px-16 border-t border-border text-ink-muted text-meta">
 			<span>{text}</span>
-			{devLabel === null ? null : <span className="status-bar__dev" title={devLabel}>{devLabel}</span>}
-			<span className="status-bar__hint">
+			{devLabel === null ? null : (
+				<span
+					className="status-bar__dev overflow-hidden max-w-[46ch] text-ink-faint font-mono text-badge whitespace-nowrap text-ellipsis"
+					title={devLabel}
+				>
+					{devLabel}
+				</span>
+			)}
+			<span className="status-bar__hint flex items-center gap-6 whitespace-nowrap">
 				{showHotkeys ? <Keycap label="space" variant="surface" /> : null}
 				Quick Look · Drag into chat to ask
 			</span>

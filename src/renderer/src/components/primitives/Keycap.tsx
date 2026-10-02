@@ -12,7 +12,12 @@ export function Keycap({
 	readonly variant?: "chrome" | "surface";
 }): ReactElement {
 	return (
-		<span className={variant === "surface" ? "keycap keycap--surface" : "keycap"} aria-hidden="true">
+		<span
+			className={`${variant === "surface" ? "keycap keycap--surface" : "keycap"} flex-none px-5 border border-border rounded-5 text-ink-muted text-badge whitespace-nowrap ${
+				variant === "surface" ? "py-0 bg-window" : "py-1 bg-hover-row"
+			}`}
+			aria-hidden="true"
+		>
 			{label}
 		</span>
 	);

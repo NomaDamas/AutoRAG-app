@@ -1,5 +1,4 @@
 import { mountQuickLookWindow } from "../../preview/ui/QuickLookWindow";
-import "../styles/tokens.css";
-import "../styles/base.css";
+import "../styles/quick-look.css";
 
 mountQuickLookWindow();

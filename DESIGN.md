@@ -1,6 +1,6 @@
 # AI Finder v6 Design System
 
-Implementation contract for the **AutoRAG Agent — AI Finder** desktop app (Electron + React + TypeScript, hand-written CSS, no Tailwind).
+Implementation contract for the **AutoRAG Agent — AI Finder** desktop app (Electron + React + TypeScript, Tailwind 4 utilities generated from `tokens.css`).
 
 ## Reference contract
 
@@ -16,11 +16,47 @@ This is a **concrete-reference implementation**. The design is final and is recr
 
 **Binding rules.**
 
-1. No hard-coded color, radius, shadow, duration, or font size in component CSS. Reference a token from `tokens.css`.
+1. No hard-coded color, radius, shadow, duration, or font size anywhere in a component. Reference a token from `tokens.css` — through a bridged utility (below) or, where Tailwind has no namespace for the property, through `(--token)` arbitrary syntax.
 2. Pixel sizes that belong to a single component (a 236px search field, a 44% evidence panel) live in §4/§5 and are tokenized when they repeat. Sizes that appear once are still written from the token names in §4 where one exists.
 3. A value the reference does not contain requires a reference change first, then a token, then usage. Never a one-off override.
 4. `tokens.css` and this document change in the same commit, always.
 5. UI copy is Korean with some English labels. Every string is reproduced **exactly** as written in this document or the prototype — no re-translation, no rewording, no punctuation drift (`·`, `›`, `…`, `⌘`, `⇧`, `⌥`, `↩`, `⌫`).
+
+### Styling contract
+
+Components are styled with Tailwind 4 utilities. `tokens.css` is still the only place a value is defined; `app/src/renderer/styles/tailwind.css` bridges each token into a Tailwind theme namespace with `@theme inline`, so a utility resolves straight to `var(--token)` and no second copy of a value exists.
+
+| `tokens.css` | `tailwind.css` | component |
+|---|---|---|
+| `--bg-window: #FFFFFF` | `--color-window: var(--bg-window)` | `bg-window` |
+| `--text-body: #3A3A4E` | `--color-ink-body: var(--text-body)` | `text-ink-body` |
+| `--font-size-meta: 12px` | `--text-meta: var(--font-size-meta)` | `text-meta` |
+| `--space-16: 16px` | `--spacing-16: var(--space-16)` | `p-16`, `gap-16` |
+| `--size-row: 32px` | `--spacing-row: var(--size-row)` | `h-row`, `w-row` |
+| `--w-settings: 760px` | `--container-settings: var(--w-settings)` | `w-settings` |
+| `--radius-10: 10px` | `--radius-10: var(--radius-10)` | `rounded-10` |
+
+The bridge must stay `@theme inline`: `inline` substitutes the value into each utility and emits no custom property, which is what makes the radius and shadow entries (whose token name is already the Tailwind key, so they can only be written as a self-reference) safe. `test/design-tokens.test.ts` fails when a token has no bridge entry, when an entry forwards to a token that no longer exists, or when the bridge stops being `inline`.
+
+Tailwind has no namespace for some properties; those use arbitrary syntax rather than a new token-shaped name: `h-(--h-settings)`, `bg-(--highlight-marker)`, `grid-cols-(--grid-file-row)`, `shadow-(--index-dot-excluded-ring)`, `duration-(--dur-color)`.
+
+**Cascade.** `app.css` imports `tailwind.css` first — which declares `@layer theme, base, utilities` — then `base.css` into `layer(base)`. A utility therefore beats any rule in `base.css` without needing `!important`. `base.css` holds only the document surface (reset, keyframes, scrollbars, focus ring), and Tailwind's preflight is deliberately not loaded, because the reference defines those rules and preflight would change them.
+
+**State.** No component stylesheet is left. `sidebar.css`, `finder.css`, `primitives.css` and `shell.css` were migrated to utilities on their components and deleted. Three things cannot be utilities and live beside their owner instead: the two AI keyframes in `components/ai-animations.css`, and the shared icon-button rules in `components/primitives/icon-button.ts`. Every element keeps its original class names — see §8 debt 14 for why.
+
+**Verification.** `scripts/manual-qa/run-qa-finder-visual-parity.mjs` boots the built app on a fixed fixture and writes 37 screenshots to a directory: the list, icon and column views, the three settings tabs, the context menu, the hover/focus/selected state of every interactive surface, and — through a seeded chat store, so no model is needed — the AI history popover, both answers, the citation chips and the Evidence panel. `scripts/manual-qa/compare-visual-parity.mjs` compares two such directories byte-for-byte and falls back to ffmpeg SSIM plus a difference image. Run it before and after any styling change:
+
+```sh
+bun run build
+bun scripts/manual-qa/run-qa-finder-visual-parity.mjs /tmp/parity/before
+# ...change styles, bun run build...
+bun scripts/manual-qa/run-qa-finder-visual-parity.mjs /tmp/parity/after
+bun scripts/manual-qa/compare-visual-parity.mjs /tmp/parity/before /tmp/parity/after
+```
+
+On an unchanged tree the two runs are byte-identical, which is what makes the comparison meaningful. The harness caught three silent regressions during this migration that no unit test could see: a hovered row painting the selection tint instead of the hover wash, `text-sm` losing the inherited line-height, and a colour transition quietly switching its easing curve.
+
+Two surfaces it cannot reach, recorded in §8 debt 13: the Quick Look window (it boots only the Finder window, so `scripts/manual-qa/quick-look.e2e.ts` covers that geometry instead) and the AI states that need a live model (thinking, skeleton, pending, streaming, progress, stop).
 
 ---
 
@@ -35,7 +71,7 @@ A **macOS-native, paper-quiet workspace**: a soft gray desk, one floating white 
 - **Motion:** one 6px rise on enter, 150–200ms color fades. Nothing bounces, nothing parallaxes.
 - **Density:** 32px rows, 22px pills, 11px badges. Finder density, not marketing-page air.
 
-**Anti-patterns for this product.** No colored accent borders to mark selection (the reference marks selection with an accent *wash* + zone-dependent tint). No emoji as icons — inline SVG strokes only (Lucide-style, `24 × 24` viewBox, stroke-width 1.8–2.6, round caps). No gradients except the two the reference defines (the evidence marker and the skeleton shimmer). No white-on-accent text.
+**Anti-patterns for this product.** No colored accent borders to mark selection (the reference marks selection with an accent *wash* + zone-dependent tint). No emoji as icons. Every glyph comes from `lucide-react` through `app/src/renderer/src/components/icons.tsx`, which pins each one to the size and stroke width the reference specifies (`24 × 24` viewBox, stroke-width 1.8–2.6, round caps). The single exception is `FolderGlyph`: the reference requires a *filled* folder in `--folder` and lucide is stroke-only, so that path stays hand-written. No gradients except the two the reference defines (the evidence marker and the skeleton shimmer). No white-on-accent text.
 
 ---
 
@@ -513,9 +549,12 @@ Each is specified literally in the handoff README §§1–4; this document does 
 
 `--shimmer-gradient` is `linear-gradient(90deg,#F0F0F4 0%,#E4E4EA 50%,#F0F0F4 100%)` at `background-size: 200% 100%`. The README gives the stops (`#F0F0F4 → #E4E4EA → #F0F0F4`) and the 200% size; the `90deg` axis and the stop positions come from `proto:1151`.
 
+`--animate-spin` (`spin` at `--dur-spin`) and `--animate-rise` (`rise` at `--dur-modal`) are bridged, so the retry spinner is `animate-spin` and the toast enter is `animate-rise`. Any other pairing of keyframe and duration has no named utility and uses arbitrary syntax — the context menu is `animate-[rise_var(--dur-menu)_var(--ease-out)]`.
+
 ### Rules
 
 - Animate `transform`, `opacity`, `filter`, `background`, `border-color`, and `left` (the toggle knob only). Never animate width/height/top/margin.
+- **Colour/transform transitions use `ease`.** The reference writes them as shorthands with no timing function (`transition: background var(--dur-color)`), which means `ease` — not `ease-out`, and not Tailwind's default `cubic-bezier(0.4,0,0.2,1)`. Tailwind's `transition-*` utilities inject that default curve, so every migrated transition must carry `ease-[ease]`: `transition-[background] duration-(--dur-color) ease-[ease]`. `--ease-out` is for enter animations only.
 - Every overlay enters with `rise`; nothing exits with an animation (the reference removes overlays immediately).
 - Motion is state feedback only: enter, hover/active color, toggle knob, pending shimmer, retry spin, reveal flash. No decorative or idle motion anywhere.
 - `prefers-reduced-motion: reduce` → `rise` collapses to an opacity-only fade, shimmer and spin become static (shimmer holds the mid stop `#E4E4EA`, the retry icon stays at 0°), color transitions stay (they carry state, and are under 200ms).
@@ -618,3 +657,9 @@ Tabs use `10px 10px 0 0` — `--radius-10` on the top corners only.
 9. **Evidence/code/paper surfaces use four near-white values** (`#FAFAFB`, `#FAFAFC`, `#F4F4F7`, `#F3F3F7`) that are visually indistinguishable in isolation. They are preserved exactly because the reference is pixel-final; do not "simplify" them into one token.
 10. **The dupey-required banner is outside the reference.** The reference assumes duplicate detection always works. The app adds one operational error surface, `.list__error` (handoff README has no counterpart), shown above the file list when the required `dupey` CLI is missing or a version-family scan fails. It is built only from existing tokens (`--danger-text`, `--danger-bg-soft`, `--danger-border`, `--bg-window`, `--font-mono`), carries `role="alert"`, states the failure and the exact install command, and offers 다시 확인 to re-probe. It is an error path, never a normal state.
 11. **Quick Look is a separate translucent panel, not the in-window overlay (§4.1 of the handoff).** The preview runs in its own pre-warmed `BrowserWindow` so `space` never waits on a mount, so the scrim, the 760px `--w-quicklook` overlay panel, and its header buttons do not apply. The panel follows macOS Quick Look instead: a translucent `--bg-quicklook-panel` surface over the Finder, a toolbar with close · name · fullscreen · 열기, and a frosted page rail (`--bg-quicklook-frost` + `--backdrop-quicklook`) for multi-page documents. The window has no CSS elevation — the OS draws its shadow — and it hugs the content it previews (page-shaped only when the content cannot measure itself).
+12. **Icon glyphs come from `lucide-react`.** The reference's paths were hand-authored in the Lucide style; the app now renders the library's current drawings for the same named glyphs. For chevrons, close, plus, and arrow-up the geometry is identical. For search, eye, bell, settings, thumbs, send, sparkles, pencil, rotate, history, and the three view-mode toggles the library's current drawing differs from the copy the reference shipped. The handoff explicitly sanctions "your icon library's equivalents", so the substitution is intended rather than drift — but it is the one place the render is knowingly not pixel-identical to the prototype. `FolderGlyph` is exempt because lucide has no filled folder.
+
+    Measured against the previous build with `scripts/manual-qa/run-qa-finder-visual-parity.mjs` (29 screenshots, 1500 × 900): every difference sits inside an icon box, and the largest window-wide difference is 1453 pixels — 0.11% of the frame. Layout, spacing, colour, radii, shadows, type metrics, and every hover/selected/flash state are otherwise identical.
+13. **Two surfaces have no screenshot coverage.** Every rule was translated 1:1, but these could not be captured, so their utilities rest on review rather than on the harness. (a) The **Quick Look window**: the harness boots only the Finder window, so `app/src/preview/ui/quick-look.css` keeps just its unlayered `body.quick-look-page { background: transparent }` override and everything else moved to utilities in `app/src/preview/ui/*`; `scripts/manual-qa/quick-look.e2e.ts` asserts that window's geometry instead. That override must stay unlayered — `base.css` now sits in `layer(base)`, and an unlayered rule is what beats it. (b) The **AI states that require a live model**: thinking, skeleton, pending, streaming, progress, and stop. They cannot be produced deterministically, so they are the only rules in the app with neither a screenshot nor a unit test behind them.
+14. **Retained class names are selectors, not styles.** Elements keep their original BEM class names (`.row__name`, `.settings-row__label`, `.is-active`, …) even where no stylesheet defines them any more. They are used as selectors by `App.tsx`, `hooks/useFinderController.ts`, the Quick Look UI, and the `scripts/manual-qa` scripts, so removing them would break behaviour and the migration's own verification. Styling for those elements comes from utilities; the class names are inert hooks. Moving them to `data-*` attributes is a separate, mechanical follow-up.
+15. **`RequestsPopover.tsx` is never mounted.** Nothing imports it — `grep -rn RequestsPopover src` finds only its own definition — so it styles a surface that does not render. Its rules were migrated to utilities anyway so the file is not left half-styled, but the component is dead code: either mount it deliberately or delete it. Its sibling `.sidebar__count` rule was already dead and removed.

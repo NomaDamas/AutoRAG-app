@@ -1,4 +1,5 @@
 import { resolve } from "node:path";
+import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "electron-vite";
 
 export default defineConfig({
@@ -14,6 +15,7 @@ export default defineConfig({
 		},
 	},
 	renderer: {
+		plugins: [tailwindcss()],
 		esbuild: {
 			jsx: "automatic",
 		},

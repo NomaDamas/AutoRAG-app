@@ -1,0 +1,16 @@
+/* ============================================================================
+ * Finder renderer stylesheet entry (main window).
+ *
+ * Tailwind first so it declares the layer order (`theme < base < utilities`),
+ * then `base.css`: the document surface — reset, keyframes, scrollbars, focus
+ * ring — which the reference defines and which Tailwind's preflight would
+ * replace. Everything else is styled with utilities.
+ *
+ * Every component stylesheet has been migrated to utilities and deleted:
+ * `sidebar.css`, `finder.css`, `primitives.css`, `shell.css`. See tailwind.css
+ * for the bridge and the naming rules.
+ * ========================================================================== */
+
+@import "./tailwind.css";
+
+@import "./base.css" layer(base);

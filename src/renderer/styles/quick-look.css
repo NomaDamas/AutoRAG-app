@@ -1,0 +1,10 @@
+/* ============================================================================
+ * Quick Look preview window stylesheet entry.
+ *
+ * Same Tailwind bridge and base layer as the Finder window, without the
+ * Finder-only stylesheets the preview window never renders.
+ * ========================================================================== */
+
+@import "./tailwind.css";
+
+@import "./base.css" layer(base);

@@ -12,19 +12,19 @@ function copyBytes(bytes: Uint8Array): Uint8Array<ArrayBuffer> {
 export function ImageView({ file }: { readonly file: PreviewDocument }): ReactElement {
 	const [failed, setFailed] = useState(false);
 	if (failed) return <FallbackView file={file} note="이미지를 열 수 없습니다" />;
-	return <img className="ql__image" alt="" decoding="async" src={previewStreamUrl(file.path)} onError={() => setFailed(true)} />;
+	return <img className="ql__image block max-w-full max-h-full min-h-0 object-contain" alt="" decoding="async" src={previewStreamUrl(file.path)} onError={() => setFailed(true)} />;
 }
 
 export function VideoView({ file }: { readonly file: PreviewDocument }): ReactElement {
 	return (
-		<video className="ql__video" src={previewStreamUrl(file.path)} controls autoPlay playsInline preload="auto" />
+		<video className="ql__video block max-w-full max-h-full min-h-0 object-contain outline-none" src={previewStreamUrl(file.path)} controls autoPlay playsInline preload="auto" />
 	);
 }
 
 export function AudioView({ file }: { readonly file: PreviewDocument }): ReactElement {
 	return (
-		<div className="ql__audio">
-			<div className="ql__glyph">{file.ext.slice(0, 4).toUpperCase() || "AUDIO"}</div>
+		<div className="ql__audio grid gap-16 justify-items-center w-[min(420px,86%)] [&_audio]:w-full">
+			<div className="ql__glyph grid w-[88px] h-[108px] place-items-center border border-border rounded-12 bg-window shadow-raised text-ink-muted text-sm font-bold tracking-label">{file.ext.slice(0, 4).toUpperCase() || "AUDIO"}</div>
 			<audio src={previewStreamUrl(file.path)} controls autoPlay preload="auto" />
 		</div>
 	);
@@ -56,7 +56,7 @@ export function FontView({ file }: { readonly file: PreviewDocument }): ReactEle
 	if (error !== null) return <FallbackView file={file} note={error} />;
 	if (!ready) return <Status>불러오는 중</Status>;
 	return (
-		<div className="ql__font" style={{ fontFamily: "QuickLookSample, sans-serif" }}>
+		<div className="ql__font grid gap-12 p-24 bg-window" style={{ fontFamily: "QuickLookSample, sans-serif" }}>
 			<div style={{ fontSize: 42 }}>가나다 Abc 123</div>
 			<div style={{ fontSize: 24 }}>The quick brown fox jumps over the lazy dog.</div>
 			<div style={{ fontSize: 16 }}>0123456789 — 미리보기</div>
@@ -108,7 +108,7 @@ export function TiffView({ file }: { readonly file: PreviewDocument }): ReactEle
 	if (bytes === null) return <FallbackView file={file} note="이미지를 읽지 못했습니다" />;
 	if (error !== null) return <FallbackView file={file} note={error} />;
 	if (url === null) return <Status>불러오는 중</Status>;
-	return <img className="ql__image" alt="" src={url} />;
+	return <img className="ql__image block max-w-full max-h-full min-h-0 object-contain" alt="" src={url} />;
 }
 
 export function HeicView({ file }: { readonly file: PreviewDocument }): ReactElement {
@@ -143,5 +143,5 @@ export function HeicView({ file }: { readonly file: PreviewDocument }): ReactEle
 	if (bytes === null) return <FallbackView file={file} note="이미지를 읽지 못했습니다" />;
 	if (error !== null) return <FallbackView file={file} note={error} />;
 	if (url === null) return <Status>불러오는 중</Status>;
-	return <img className="ql__image" alt="" src={url} />;
+	return <img className="ql__image block max-w-full max-h-full min-h-0 object-contain" alt="" src={url} />;
 }
