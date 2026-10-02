@@ -13,7 +13,6 @@
 
 import {
 	ArrowUp,
-	Bell,
 	ChevronLeft,
 	ChevronRight,
 	ChevronUp,
@@ -53,8 +52,6 @@ function glyph(Icon: LucideIcon, defaultSize: number, strokeWidth: number = GLYP
 		);
 	};
 }
-
-export const BellIcon = glyph(Bell, 16);
 
 export const GearIcon = glyph(Settings, 16);
 

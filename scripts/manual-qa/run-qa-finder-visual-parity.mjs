@@ -212,6 +212,13 @@ try {
 	await page.locator('[role="row"]').filter({ hasText: "notes.md" }).waitFor();
 	await sleep(600);
 
+	// Park the pointer before any shot. Cursor hover is real state: the double
+	// click that opened the folder leaves the pointer over what is now row 1, so
+	// without this the first rows carry a hover wash that depends on the click
+	// history rather than on the styling.
+	await page.mouse.move(2, 2);
+	await sleep(400);
+
 	console.log("list view");
 	await shot(page, "01-list");
 	await shot(page, "02-toolbar", ".toolbar");
