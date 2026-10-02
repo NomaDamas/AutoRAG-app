@@ -33,7 +33,7 @@ function createRecord(id: string, userText: string, quickAnswer: string, updated
 			{
 				role: "assistant",
 				sessionId: `${id}-session`,
-				quick: { answer: quickAnswer, evidence: [], meta: "0.9s · 1 sources" },
+				quick: { answer: quickAnswer, evidence: [] },
 				deep: null,
 				stopped: false,
 				at: updatedAt,

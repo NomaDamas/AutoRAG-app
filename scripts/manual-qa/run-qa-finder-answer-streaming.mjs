@@ -1,5 +1,6 @@
 // Live AI Search QA: drives the built Finder app with Playwright and proves
-// that a query streams thinking, a Quick draft, and a Deep answer, and that a
+// that a query shows the Thinking indicator (never the reasoning text), streams
+// a Quick draft and a Deep answer, and that a
 // broken config surfaces as an error instead of an endless wait.
 //
 // Prerequisites: `bun run build`, OPENROUTER_API_KEY in the environment.
@@ -123,14 +124,17 @@ async function installRecorder(page) {
 			const quick = card("quick");
 			const deep = card("deep");
 			return {
-				thinkingQuick: text(quick, ".ai__thinking-body").length,
-				thinkingDeep: text(deep, ".ai__thinking-body").length,
+				thinkingQuick: Boolean(quick?.querySelector(".ai__thinking")),
+				thinkingDeep: Boolean(deep?.querySelector(".ai__thinking")),
+				thinkingTexts: [...document.querySelectorAll(".ai__thinking")].map((element) => element.textContent),
 				quickDraft: text(quick, ".ai__answer-content").length,
 				quickStreaming: quick?.classList.contains("ai__answer--streaming") ?? false,
-				quickMeta: quick?.querySelector(".ai__answer-heading > span:last-child")?.textContent ?? "",
 				deepDraft: text(deep, ".ai__answer-content").length,
 				deepStreaming: deep?.classList.contains("ai__answer--streaming") ?? false,
-				deepMeta: deep?.querySelector(".ai__answer-heading > span:last-child")?.textContent ?? "",
+				// Card text outside the answer body: only the label (and the indicator).
+				chrome: [quick, deep].filter(Boolean).map((card) =>
+					[...card.children].filter((child) => !child.matches(".ai__answer-content")).map((child) => child.textContent).join("|"),
+				),
 				error: document.querySelector(".ai__error")?.textContent ?? "",
 				inputDisabled: document.querySelector('input[aria-label="Ask AutoRAG"]')?.disabled ?? null,
 			};
@@ -177,14 +181,14 @@ try {
 	log(`work dir: ${WORK}`);
 	await warmIndex(GOOD_CONFIG);
 
-	// Scenario 1: a real query streams thinking, Quick, and Deep.
+	// Scenario 1: a real query shows Thinking, then streams Quick and Deep.
 	running = await launch(GOOD_CONFIG, "stream");
 	let { page } = running;
 	await installRecorder(page);
 	await page.fill('input[aria-label="Ask AutoRAG"]', QUERY);
 	await page.keyboard.press("Enter");
 	log(`submitted: ${QUERY}`);
-	await page.waitForFunction(() => document.querySelector(".ai__thinking-body")?.textContent, null, { timeout: RUN_TIMEOUT_MS });
+	await page.waitForFunction(() => document.querySelector(".ai__thinking"), null, { timeout: RUN_TIMEOUT_MS });
 	await page.screenshot({ path: join(EVIDENCE, "1-thinking.png") });
 	await page.waitForFunction(() => document.querySelector(".ai__answer--quick .ai__answer-content"), null, { timeout: RUN_TIMEOUT_MS });
 	await page.screenshot({ path: join(EVIDENCE, "2-quick-streaming.png") });
@@ -194,11 +198,17 @@ try {
 	writeFileSync(join(EVIDENCE, "timeline.json"), JSON.stringify(timeline, null, 2));
 	log(`timeline states: ${timeline.length}`);
 
-	const beforeQuickFinal = timeline.filter((state) => !/sources/.test(state.quickMeta));
+	const quickFinal = (state) => state.quickDraft > 0 && !state.quickStreaming;
+	const beforeQuickFinal = timeline.filter((state) => !quickFinal(state));
 	check(
-		"thinking streams",
-		distinctGrowth(beforeQuickFinal.map((state) => state.thinkingQuick)),
-		`quick thinking lengths ${JSON.stringify([...new Set(beforeQuickFinal.map((state) => state.thinkingQuick))].slice(0, 12))}`,
+		"thinking indicator shown",
+		beforeQuickFinal.some((state) => state.thinkingQuick),
+		`quick indicator states ${JSON.stringify([...new Set(beforeQuickFinal.map((state) => state.thinkingQuick))])}`,
+	);
+	check(
+		"reasoning text never rendered",
+		timeline.every((state) => state.thinkingTexts.every((value) => value === "Thinking")),
+		`indicator texts ${JSON.stringify([...new Set(timeline.flatMap((state) => state.thinkingTexts))])}`,
 	);
 	const quickStreaming = timeline.filter((state) => state.quickStreaming);
 	check(
@@ -207,10 +217,15 @@ try {
 		`quick draft lengths while streaming ${JSON.stringify([...new Set(quickStreaming.map((state) => state.quickDraft))].slice(0, 12))}`,
 	);
 	const final = timeline.at(-1);
-	check("quick answer final", /\d+\.\ds · \d+ sources/.test(final.quickMeta), `quick meta "${final.quickMeta}"`);
-	check("deep answer final", /\d+\.\ds · \d+ sources/.test(final.deepMeta), `deep meta "${final.deepMeta}" (${final.deepDraft} chars)`);
-	const deepThinking = timeline.map((state) => state.thinkingDeep);
-	log(`deep thinking lengths ${JSON.stringify([...new Set(deepThinking)].slice(0, 12))}`);
+	check("quick answer final", quickFinal(final), `quick ${final.quickDraft} chars`);
+	check("deep answer final", final.deepDraft > 0 && !final.deepStreaming, `deep ${final.deepDraft} chars`);
+	const STATUS = /Searching|Streaming|Stopped|Incomplete|sources|\d\.\ds/;
+	check(
+		"no status text in card headers",
+		timeline.every((state) => state.chrome.every((value) => !STATUS.test(value))),
+		`card chrome ${JSON.stringify([...new Set(timeline.flatMap((state) => state.chrome))])}`,
+	);
+	log(`deep thinking indicator shown=${timeline.some((state) => state.thinkingDeep)}`);
 	const deepStreaming = timeline.filter((state) => state.deepStreaming);
 	const deepStreamed = distinctGrowth(deepStreaming.map((state) => state.deepDraft));
 	const deepDetail = `deep draft lengths while streaming ${JSON.stringify([...new Set(deepStreaming.map((state) => state.deepDraft))].slice(0, 12))}`;

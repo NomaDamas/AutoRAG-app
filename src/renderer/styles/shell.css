@@ -186,27 +186,40 @@
 	to { visibility: hidden; }
 }
 
+/* Thinking indicator: a wave runs left → right through the letters — each one
+   lifts and lights up in the accent color in turn. */
 .ai__thinking {
-	color: var(--text-muted);
-	font-size: var(--font-size-caption);
+	display: inline-flex;
+	align-self: flex-start;
+	padding: var(--space-2) 0;
+	color: var(--text-faint);
+	font-size: var(--font-size-body);
+	font-weight: var(--weight-semibold);
+	letter-spacing: 0.02em;
 }
 
-.ai__thinking summary {
-	cursor: pointer;
-	user-select: none;
+.ai__thinking span {
+	display: inline-block;
+	animation: ai-thinking-wave 1.6s ease-in-out infinite;
+	animation-delay: calc(var(--i) * 0.08s);
 }
 
-.ai__thinking-body {
-	max-height: 160px;
-	margin: var(--space-8) 0 0;
-	padding-left: var(--space-8);
-	overflow-y: auto;
-	border-left: 2px solid var(--border);
-	font-family: inherit;
-	font-size: var(--font-size-caption);
-	line-height: var(--leading-body);
-	white-space: pre-wrap;
-	word-break: keep-all;
+@keyframes ai-thinking-wave {
+	0%, 45%, 100% {
+		color: var(--text-faint);
+		transform: translateY(0);
+	}
+	20% {
+		color: var(--accent);
+		transform: translateY(-3px);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	@keyframes ai-thinking-wave {
+		0%, 45%, 100% { color: var(--text-faint); }
+		20% { color: var(--accent); }
+	}
 }
 
 .ai__skeleton {
@@ -228,10 +241,6 @@
 .ai__skeleton span:nth-child(2) { width: 68%; }
 .ai__skeleton span:nth-child(3) { width: 42%; }
 
-.ai__answer-heading {
-	align-items: center;
-}
-
 .ai__answer-label {
 	display: inline-flex;
 	align-items: center;
@@ -252,14 +261,6 @@
 	display: flex;
 	flex-direction: column;
 	gap: var(--space-8);
-}
-
-.ai__answer-heading {
-	display: flex;
-	justify-content: space-between;
-	gap: var(--space-8);
-	color: var(--text-muted);
-	font-size: var(--font-size-caption);
 }
 
 .ai__answer p {
