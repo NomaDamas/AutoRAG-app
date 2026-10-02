@@ -2,8 +2,8 @@
  * OS-provided file icons for the tile left of a file name.
  *
  * macOS produces real Finder-style thumbnails: one batched
- * `qlmanage -t -s 64 -o <tmpdir> <paths...>` covers a whole folder. Space preview
- * is the in-app viewer, not this thumbnail pass. Other platforms fall back to
+ * `qlmanage -t -s 128 -o <tmpdir> <paths...>` covers a whole folder. The Space
+ * preview is the in-app viewer, not this thumbnail pass. Other platforms fall back to
  * Electron's `app.getFileIcon`, the OS's per-type icon. Generation failures
  * degrade to "no icon" (the caller keeps the letter tile) and are logged
  * verbatim.
@@ -15,8 +15,8 @@ import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { errorMessage, hasErrorCode } from "./fs-entry";
 
-/** Thumbnail edge in px; 64 covers an 18px tile at 3x. */
-export const ICON_SIZE = 64;
+/** Thumbnail edge in px; 128 covers the icon view's 64px tile at 2x (and the 18px row tile easily). */
+export const ICON_SIZE = 128;
 /** One listing never generates more than this many icons. */
 export const ICON_LIMIT = 240;
 /** One qlmanage call only handles this many files at once — bigger in-process batches drive its internal thumbnail queue into a known SIGSEGV. */

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
 	activeTab,
+	applyColumnChoice,
 	canCloseTab,
 	closeTab,
 	createTabsState,
@@ -120,5 +121,33 @@ describe("tabTitle", () => {
 
 	it("keeps the Contacts title while searching", () => {
 		expect(tabTitle({ path: "Contacts" }, { isActive: true, query: "박" })).toBe("Contacts");
+	});
+});
+
+describe("applyColumnChoice", () => {
+	const pick = { keys: ["/a/b"], anchor: "/a/b", focus: "/a/b" };
+
+	it("keeps the path and history when the panes do not slide", () => {
+		const state = applyColumnChoice(createTabsState("/a"), { path: "/a", chain: ["/a", "/a/b"] }, pick);
+		expect(activeTab(state).path).toBe("/a");
+		expect(activeTab(state).back).toEqual([]);
+		expect(activeTab(state).chain).toEqual(["/a", "/a/b"]);
+		expect(activeTab(state).selection).toEqual(pick);
+	});
+
+	it("moves the path with history when the panes slide, and back restores it", () => {
+		const chain = ["/a", "/a/b", "/a/b/c", "/a/b/c/d"];
+		const slid = applyColumnChoice(createTabsState("/a"), { path: "/a/b", chain }, pick);
+		expect(activeTab(slid).path).toBe("/a/b");
+		expect(activeTab(slid).back).toEqual(["/a"]);
+		expect(activeTab(slid).chain).toEqual(chain);
+		const back = goBack(slid);
+		expect(activeTab(back).path).toBe("/a");
+		expect(activeTab(back).chain).toEqual(chain);
+	});
+
+	it("starts every new tab with an empty chain", () => {
+		expect(activeTab(createTabsState("/a")).chain).toEqual([]);
+		expect(activeTab(openTabAt(createTabsState("/a"), "/b")).chain).toEqual([]);
 	});
 });

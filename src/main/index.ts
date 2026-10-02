@@ -12,6 +12,7 @@ import { readDevLabel, resolveClonePath } from "./dev-label";
 import { buildFsEntry } from "./fs-entry";
 import { createFsService } from "./fs-service";
 import { createRecentsStore } from "./recents-store";
+import { createModelStatusService } from "./model-status";
 import { createDefaultAgentFactory, createSearchService } from "./search-service";
 import { createSettingsService } from "./settings-service";
 import {
@@ -136,6 +137,7 @@ app.whenReady().then(() => {
 	const settingsService = createSettingsService({
 		directory: join(app.getPath("userData"), "settings"),
 		dataSources: createDataSourceStatusService({ env: process.env, cwd: process.cwd() }),
+		models: createModelStatusService({ env: process.env, cwd: process.cwd() }),
 		createChatSession: (surface) => {
 			const agent = agentFactory();
 			if (agent.createChatSession === undefined) {

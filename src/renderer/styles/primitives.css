@@ -74,6 +74,13 @@
 	font-size: var(--font-size-badge);
 }
 
+.tile--64 {
+	width: 64px;
+	height: 64px;
+	border-radius: var(--radius-12);
+	font-size: var(--font-size-title);
+}
+
 .tile--folder {
 	color: var(--folder);
 }

@@ -25,6 +25,7 @@ export const SETTINGS_CHANNELS = {
 	sourcesList: "sources:list",
 	sourcesSetEnabled: "sources:setEnabled",
 	sourcesSetDescription: "sources:setDescription",
+	modelsResolve: "models:resolve",
 	assistantSend: "assistant:send",
 	assistantEvent: "assistant:event",
 } as const;
@@ -139,6 +140,35 @@ export interface DataSourcesSnapshot {
 	readonly sources: readonly DataSourceRow[];
 }
 
+/** Where the librarian's model resolution took this identity from. */
+export type ModelResolutionSource = "config" | "flags" | "env" | "local_runtime" | "catalog" | "configured_alias" | "mixed";
+
+/** The provider/model the shared AutoRAG config resolves to, as the running agent sees it. */
+export interface ConfiguredModel {
+	readonly provider: string;
+	/** Catalog or configured id, e.g. `deepseek/deepseek-v4.1-flash`. */
+	readonly modelId: string;
+	readonly displayName: string;
+	readonly api: string;
+	readonly baseUrl: string | null;
+	readonly resolutionSource: ModelResolutionSource;
+	readonly auth: {
+		readonly present: boolean;
+		readonly source: "env" | "local_runtime" | "catalog" | "none" | "unknown";
+		/** Env var the key is read from, when one is known. */
+		readonly envName: string | null;
+	};
+}
+
+/** Read fresh from the shared AutoRAG config on every call; the app keeps no copy. */
+export interface ConfiguredModelSnapshot {
+	readonly configPath: string;
+	readonly configExists: boolean;
+	/** Config or model could not be resolved; `model` is null. */
+	readonly error: string | null;
+	readonly model: ConfiguredModel | null;
+}
+
 export type AssistantSurface = "models" | "sources";
 
 export type AssistantEvent =
@@ -172,6 +202,9 @@ export interface SettingsBridge {
 	sourcesSetEnabled(id: string, enabled: boolean): Promise<DataSourcesSnapshot>;
 	/** Writes the description the agent reads into the shared AutoRAG config; blank clears it. */
 	sourcesSetDescription(id: string, description: string): Promise<DataSourcesSnapshot>;
+
+	/** The provider/model the shared AutoRAG config resolves for the agent right now. */
+	modelsResolve(): Promise<ConfiguredModelSnapshot>;
 
 	/** Send one message to the settings assistant; events stream via assistantEvent. */
 	assistantSend(surface: AssistantSurface, text: string): Promise<void>;

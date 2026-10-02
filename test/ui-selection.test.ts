@@ -3,6 +3,7 @@ import {
 	EMPTY_SELECTION,
 	ROW_HEIGHT,
 	applyRowClick,
+	moveInGrid,
 	moveSelection,
 	scrollTopForIndex,
 	selectionCount,
@@ -75,6 +76,41 @@ describe("moveSelection", () => {
 
 	it("keeps the selection on an empty list", () => {
 		expect(moveSelection([], EMPTY_SELECTION, 1)).toEqual(EMPTY_SELECTION);
+	});
+});
+
+describe("moveInGrid", () => {
+	// 7 tiles in rows of 3:  a b c / d e f / g
+	const tiles = ["a", "b", "c", "d", "e", "f", "g"];
+	const at = (key: string) => ({ keys: [key], anchor: key, focus: key });
+
+	it("moves one tile sideways and clamps at the ends", () => {
+		expect(moveInGrid(tiles, at("b"), { dx: 1, dy: 0 }, 3).focus).toBe("c");
+		expect(moveInGrid(tiles, at("c"), { dx: 1, dy: 0 }, 3).focus).toBe("d");
+		expect(moveInGrid(tiles, at("a"), { dx: -1, dy: 0 }, 3).focus).toBe("a");
+		expect(moveInGrid(tiles, at("g"), { dx: 1, dy: 0 }, 3).focus).toBe("g");
+	});
+
+	it("moves a whole row up and down", () => {
+		expect(moveInGrid(tiles, at("b"), { dx: 0, dy: 1 }, 3).focus).toBe("e");
+		expect(moveInGrid(tiles, at("e"), { dx: 0, dy: -1 }, 3).focus).toBe("b");
+	});
+
+	it("stays put when there is no row above", () => {
+		expect(moveInGrid(tiles, at("b"), { dx: 0, dy: -1 }, 3).focus).toBe("b");
+	});
+
+	it("drops into a short last row at its last tile, and stays on the last row", () => {
+		expect(moveInGrid(tiles, at("f"), { dx: 0, dy: 1 }, 3).focus).toBe("g");
+		expect(moveInGrid(tiles, at("g"), { dx: 0, dy: 1 }, 3).focus).toBe("g");
+	});
+
+	it("starts at the first tile when nothing is focused", () => {
+		expect(moveInGrid(tiles, EMPTY_SELECTION, { dx: 0, dy: 1 }, 3).focus).toBe("a");
+	});
+
+	it("keeps the selection on an empty grid", () => {
+		expect(moveInGrid([], EMPTY_SELECTION, { dx: 1, dy: 0 }, 3)).toEqual(EMPTY_SELECTION);
 	});
 });
 
