@@ -15,7 +15,7 @@ import { execSync } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { deflateSync } from "node:zlib";
-import { launchFinder } from "./launch-finder.mjs";
+import { finderWindow, launchFinder } from "./launch-finder.mjs";
 
 const ROOT = new URL("../../", import.meta.url).pathname.replace(/\/$/, "");
 const EVIDENCE = `${ROOT}/.omo/evidence/ai-finder-app/qa-thumbnails/`;
@@ -93,11 +93,30 @@ const check = (label, actual, expected) => {
 let app;
 try {
 	app = await launchFinder();
-	const page = await app.firstWindow();
+	const page = await finderWindow(app);
 	await page.waitForSelector('[role="row"]', { timeout: 30000 });
 	await page.getByLabel("Places").getByRole("button", { name: "Documents", exact: true }).click();
-	await page.waitForSelector(`[role="row"]:has-text("${fixtures[0].name}")`, { timeout: 30000 });
-	await page.waitForSelector("img.tile--image", { timeout: 15000 });
+	const rowFor = (name) => page.locator(`[role="row"]:has-text("${name}")`).first();
+	const mountRow = async (name) => {
+		await page.locator(".list").evaluate((node) => {
+			node.scrollTop = 0;
+		});
+		for (let attempt = 0; attempt < 160; attempt += 1) {
+			if ((await rowFor(name).count()) > 0) return rowFor(name);
+			const atEnd = await page.locator(".list").evaluate((node) => {
+				node.scrollTop = node.scrollTop + node.clientHeight * 0.9;
+				return node.scrollTop + node.clientHeight >= node.scrollHeight - 1;
+			});
+			if (atEnd) break;
+			await page.waitForTimeout(25);
+		}
+		return rowFor(name).waitFor({ timeout: 30000 }).then(() => rowFor(name));
+	};
+	// Enrichment lands asynchronously now; mount each row and wait for its icon.
+	for (const fixture of fixtures) {
+		const row = await mountRow(fixture.name);
+		await row.locator("img.tile--image").waitFor({ timeout: 30000 });
+	}
 
 	const sampleTile = (rowName) =>
 		page.evaluate(async (name) => {
@@ -134,22 +153,34 @@ try {
 
 	const dominant = (avg) => (avg[0] > avg[1] && avg[0] > avg[2] ? "red" : avg[2] > avg[1] ? "blue" : "other");
 	const observed = [];
+	const sampleMounted = async (name, expectIcon) => {
+		for (let attempt = 0; attempt < 30; attempt += 1) {
+			await mountRow(name);
+			const sample = await sampleTile(name);
+			if (sample.error !== undefined && expectIcon) {
+				await page.waitForTimeout(100);
+				continue;
+			}
+			return sample;
+		}
+		return sampleTile(name);
+	};
 	for (const fixture of fixtures) {
-		const sample = await sampleTile(fixture.name);
+		const sample = await sampleMounted(fixture.name, true);
 		observed.push({ name: fixture.name, sample });
 		if (sample.error !== undefined) {
 			check(fixture.name, sample.error, fixture.expect);
 			continue;
 		}
 		check(
-			`${fixture.name} tile is a PNG data URL`,
-			sample.src.startsWith("data:image/png;base64,") ? "png-data-url" : sample.src,
-			"png-data-url",
+			`${fixture.name} tile is a custom-protocol URL`,
+			sample.src.startsWith("autorag-thumb://") ? "thumb-protocol" : sample.src,
+			"thumb-protocol",
 		);
 		check(`${fixture.name} tile is ${fixture.expect}-true`, dominant(sample.avg), fixture.expect);
 	}
 
-	const folderSample = await sampleTile(folderName);
+	const folderSample = await sampleMounted(folderName, false);
 	observed.push({ name: folderName, sample: folderSample });
 	check("folder renders no image tile", folderSample.error ?? "has image tile", "no image tile");
 
@@ -167,7 +198,7 @@ try {
 	console.log(`INFO  listDir(${probeDir}): cold=${coldMs}ms warm=${warmMs}ms`);
 
 	await page.screenshot({ path: `${EVIDENCE}/documents-list.png` });
-	const row = page.locator('[role="row"]').filter({ hasText: fixtures[0].name }).first();
+	const row = await mountRow(fixtures[0].name);
 	await row.screenshot({ path: `${EVIDENCE}/red-png-row.png` });
 	await Bun.write(`${EVIDENCE}/result.json`, JSON.stringify({ checks: results, observed, latency: { coldMs, warmMs } }, null, 2));
 } finally {

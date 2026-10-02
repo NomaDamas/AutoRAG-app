@@ -22,7 +22,7 @@ function entry(path: string): FinderEntry {
 		path,
 		kind: "file",
 		fileKind: "md",
-		iconDataUrl: null,
+		iconUrl: null,
 		dateLabel: "Sep 30, 00:00",
 		sizeLabel: "1 B",
 		kindLabel: "Plain Text",

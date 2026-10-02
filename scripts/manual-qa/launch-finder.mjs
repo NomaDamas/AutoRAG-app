@@ -20,3 +20,18 @@ export async function launchFinder({ userDataDir, env } = {}) {
 		env: env === undefined ? undefined : { ...process.env, ...env },
 	});
 }
+
+/**
+ * The Finder renderer page. The pre-warmed Quick Look window can register
+ * with Playwright before the main window, so poll for the /index.html page
+ * instead of trusting `firstWindow()`.
+ */
+export async function finderWindow(app, timeoutMs = 6000) {
+	const deadline = Date.now() + timeoutMs;
+	for (;;) {
+		const page = (await app.windows()).find((candidate) => candidate.url().endsWith("/index.html"));
+		if (page !== undefined) return page;
+		if (Date.now() >= deadline) throw new Error("Finder index window did not open");
+		await new Promise((resolve) => setTimeout(resolve, 100));
+	}
+}

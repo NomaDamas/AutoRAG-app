@@ -141,7 +141,7 @@ export function FileRow({
 						aria-hidden="true"
 					/>
 				) : (
-					<FileTile kind={entry.fileKind} iconDataUrl={entry.iconDataUrl} />
+					<FileTile kind={entry.fileKind} iconUrl={entry.iconUrl} />
 				)}
 				{renameDraft === null ? (
 					<span

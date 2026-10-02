@@ -269,6 +269,8 @@ export function useFinderController(
 	const tabsRef = useRef(tabsState.tabs);
 	const searchingRef = useRef(false);
 	const listingRef = useRef<readonly FinderEntry[]>([]);
+	/** The folder whose rows `listing` currently holds; gates scroll-to-target. */
+	const listingDirRef = useRef("");
 	const layerStoreRef = useRef<LayerStore>(EMPTY_LAYER_STORE);
 	const staleTabsRef = useRef(new Set<number>());
 	const previousPathRef = useRef<string | null>(null);
@@ -356,6 +358,7 @@ export function useFinderController(
 	 * column pane, and drops selection and rename targets it no longer holds.
 	 */
 	const adoptListing = useCallback((dir: string, entries: readonly FinderEntry[]): void => {
+		listingDirRef.current = dir;
 		const previous = listingRef.current;
 		const survives = listingSurvivor(dir, previous, entries);
 		listingRef.current = entries;
@@ -417,6 +420,9 @@ export function useFinderController(
 					return;
 				}
 				adoptListing(requestedPath, result.entries);
+				void source.enrich(requestedPath, result.entries).then((enriched) => {
+					if (pathRef.current === requestedPath && generationRef.current === requestGeneration) adoptListing(requestedPath, enriched);
+				}).catch((error: unknown) => console.error("background listing enrichment failed", error));
 				incrementalRef.current?.listing.fullAdopted(scope);
 			});
 		},
@@ -431,7 +437,14 @@ export function useFinderController(
 		currentIncremental?.listing.cancel();
 		incremental = createIncrementalListing({
 			read: (dir, paths) => source.readEntries(dir, paths),
-			apply: (dir, patch) => adoptListing(dir, applyEntryPatch(listingRef.current, patch)),
+			apply: (dir, patch) => {
+				adoptListing(dir, applyEntryPatch(listingRef.current, patch));
+				const generation = generationRef.current;
+				void source.enrich(dir, patch.entries).then((enriched) => {
+					if (pathRef.current !== dir || generationRef.current !== generation || searchingRef.current) return;
+					adoptListing(dir, applyEntryPatch(listingRef.current, { entries: enriched, removed: [] }));
+				}).catch((error: unknown) => console.error("background live enrichment failed", error));
+			},
 			isCurrent: (scope) =>
 				scope.path === pathRef.current &&
 				scope.generation === generationRef.current &&
@@ -582,9 +595,11 @@ export function useFinderController(
 			source
 				.list(target)
 				.then((entries) => {
-					if (live) {
-						setPaneListings((current) => ({ ...current, [target]: entries }));
-					}
+					if (!live) return;
+					setPaneListings((current) => ({ ...current, [target]: entries }));
+					void source.enrich(target, entries).then((enriched) => {
+						if (live) setPaneListings((current) => ({ ...current, [target]: enriched }));
+					}).catch((error: unknown) => console.error("background pane enrichment failed", error));
 				})
 				.catch((error: unknown) => {
 					if (live) {
@@ -607,9 +622,11 @@ export function useFinderController(
 		source
 			.search(query)
 			.then((entries) => {
-				if (live) {
-					setHits(entries);
-				}
+				if (!live) return;
+				setHits(entries);
+				void source.enrich("search", entries).then((enriched) => {
+					if (live) setHits(enriched);
+				}).catch((error: unknown) => console.error("background search enrichment failed", error));
 			})
 			.catch((error: unknown) => {
 				if (live) {
@@ -765,6 +782,11 @@ export function useFinderController(
 				setChildListings((current) =>
 					(current[folder]?.revision ?? -1) > revision ? current : { ...current, [folder]: { revision, entries } },
 				);
+				void source.enrich(folder, entries).then((enriched) => {
+					setChildListings((current) =>
+						(current[folder]?.revision ?? -1) > revision ? current : { ...current, [folder]: { revision, entries: enriched } },
+					);
+				}).catch((error: unknown) => console.error("background child enrichment failed", error));
 			};
 			source
 				.list(folder)
@@ -823,12 +845,20 @@ export function useFinderController(
 			}
 			return;
 		}
-		scrollTarget.current = null;
-		const index = orderedKeys.indexOf(target);
-		if (index >= 0 && listRef.current !== null) {
-			listRef.current.scrollTop = scrollTopForIndex(index);
-		}
-	}, [orderedKeys, layout, selection]);
+	// The previous tab's rows can still be on screen while a revealed folder
+	// loads; the target must only be consumed by the current folder's rows (a
+	// search list may come from many folders, so it is exempt).
+	const index = orderedKeys.indexOf(target);
+	if (index < 0 || (!searchingRef.current && listingDirRef.current !== path)) {
+		// The target's listing has not landed yet (a revealed folder still
+		// loading); keep the target so the next row set scrolls to it.
+		return;
+	}
+	scrollTarget.current = null;
+	if (listRef.current !== null) {
+		listRef.current.scrollTop = scrollTopForIndex(index);
+	}
+	}, [orderedKeys, layout, selection, path]);
 
 	const patchSelection = useCallback((next: SelectionState) => {
 		setTabsState((state) => patchActiveTab(state, (current) => ({ ...current, selection: next })));

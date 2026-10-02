@@ -2,7 +2,7 @@ import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildAgentOptions, resolveConfigReadOnly } from "@autorag/librarian";
-import { launchFinder } from "./launch-finder.mjs";
+import { launchFinder, finderWindow } from "./launch-finder.mjs";
 
 // Settings > Data Sources must mirror the shared AutoRAG config (the one the
 // CLI, TUI, serve, and every agent read) in both directions. Runs against a
@@ -61,7 +61,7 @@ const check = (name, ok, detail) => {
 
 const app = await launchFinder({ userDataDir: join(root, "user-data"), env });
 try {
-	const page = await app.firstWindow();
+	const page = await finderWindow(app);
 	await page.waitForSelector('[role="row"]');
 	const openSources = async () => {
 		await page.locator(".sidebar__item", { hasText: "Settings" }).click();

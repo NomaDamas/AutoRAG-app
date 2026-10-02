@@ -13,6 +13,7 @@ import type { IndexStatus } from "./index-contract";
 export const FS_CHANNELS = {
 	listDir: "fs:listDir",
 	readEntries: "fs:readEntries",
+	enrichEntries: "fs:enrichEntries",
 	stat: "fs:stat",
 	exists: "fs:exists",
 	search: "fs:search",
@@ -58,10 +59,12 @@ export interface FsEntry {
 	 */
 	readonly osKind: string | null;
 	/**
-	 * OS-provided tile icon — a Finder thumbnail on macOS — as a PNG data URL.
-	 * Null when the OS produced none; the tile then renders its letter instead.
+	 * `autorag-thumb://` URL for the OS-provided tile icon — a Finder thumbnail
+	 * on macOS. Null when the OS produced none; the tile then renders its
+	 * letter. The PNG bytes stay in the main-process icon cache and load
+	 * lazily through the protocol, so this field never carries base64.
 	 */
-	readonly iconDataUrl: string | null;
+	readonly iconUrl: string | null;
 }
 
 export interface DirListing {
@@ -76,6 +79,22 @@ export interface DirListing {
 export interface FsEntriesPatch {
 	readonly entries: readonly FsEntry[];
 	readonly removed: readonly string[];
+}
+
+/** Lightweight identity sent back to the main process for background enrichment. */
+export interface FsEnrichmentTarget {
+	readonly path: string;
+	readonly kind: "folder" | "file";
+	readonly ext: string;
+	readonly modifiedAt: string;
+}
+
+/** Background metadata/thumbnail result; identity fields echo the requested entry. */
+export interface FsEntryEnrichment {
+	readonly path: string;
+	readonly modifiedAt: string;
+	readonly osKind: string | null;
+	readonly iconUrl: string | null;
 }
 
 /**
@@ -122,6 +141,7 @@ export interface FsSearchResult {
 
 export interface FsCoreBridge {
 	listDir(path: string): Promise<DirListing>;
+	enrichEntries(targets: readonly FsEnrichmentTarget[], thumbnails: boolean): Promise<readonly FsEntryEnrichment[]>;
 	/**
 	 * Re-resolve only the requested direct children of `dir` after a change
 	 * event. Every path is queried against the current disk, so a file deleted

@@ -7,7 +7,7 @@
  * preload lands. Components never touch `window` directly.
  */
 
-import { RECENTS_PATH, type FsBridge, type FsClipboard, type FsVersionFamiliesResult } from "../../../shared/fs-contract";
+import { RECENTS_PATH, type FsBridge, type FsClipboard, type FsEnrichmentTarget, type FsVersionFamiliesResult } from "../../../shared/fs-contract";
 import type { IndexStatus } from "../../../shared/index-contract";
 import {
 	DUPEY_LAYER_ID,
@@ -23,7 +23,7 @@ import {
 	type VersionFamiliesResult,
 	type VersionRelation,
 } from "../state/version-family";
-import { type FinderEntry, entryFromFixture, entryFromFs, entryFromSearchHit } from "./entries";
+import { type FinderEntry, applyEntryEnrichment, entryFromFixture, entryFromFs, entryFromSearchHit } from "./entries";
 import { FIXTURE_FAMILIES, FIXTURE_INITIAL_PATH, FIXTURE_ROOTS, FIXTURE_TREE } from "./fixtures";
 import type { FixtureItem } from "./entries";
 
@@ -47,6 +47,8 @@ export interface FinderSource {
 	liveLayers(): Promise<LiveResync>;
 	exists(path: string): Promise<boolean>;
 	list(path: string): Promise<readonly FinderEntry[]>;
+	/** Fill OS kind and icon URLs after the basic listing is visible. */
+	enrich(path: string, entries: readonly FinderEntry[]): Promise<readonly FinderEntry[]>;
 	/**
 	 * Incremental refresh after a live change: resolve only the given direct
 	 * children of `dir`, mapping the ones that exist as rows and naming the
@@ -131,6 +133,18 @@ export function createBridgeSource(fs: FsBridge, initialPath: string, live?: Liv
 			const listing = await fs.listDir(path);
 			// Recents is virtual: a row's location is the real folder that holds the file.
 			return listing.entries.map((entry) => entryFromFs(entry, path === RECENTS_PATH ? undefined : path));
+		},
+		async enrich(_path, entries) {
+			const targets: FsEnrichmentTarget[] = entries
+				.filter((entry) => entry.kind === "file" && entry.modifiedAt !== undefined)
+				.map((entry) => ({
+					path: entry.path,
+					kind: entry.kind,
+					ext: entry.name.includes(".") ? entry.name.split(".").pop()?.toLowerCase() ?? "" : "",
+					modifiedAt: entry.modifiedAt ?? "",
+				}));
+			const results = await fs.enrichEntries(targets, true);
+			return applyEntryEnrichment(entries, results);
 		},
 		async readEntries(dir, paths) {
 			const patch = await fs.readEntries(dir, paths);
@@ -247,6 +261,7 @@ export function createFixtureSource(): FinderSource {
 		setWatchSet: resolve,
 		onLive: () => () => {},
 		liveLayers: () => Promise.resolve({ seq: 0, layers: [], reconciled: [] }),
+		enrich: async (_path, entries) => entries,
 		exists: (path) => Promise.resolve(state.tree.has(path) || findItem(state, path) !== null),
 		list: (path) =>
 			Promise.resolve((state.tree.get(path) ?? []).map((item) => entryFromFixture(item, path))),

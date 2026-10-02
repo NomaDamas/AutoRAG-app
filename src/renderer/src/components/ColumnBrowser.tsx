@@ -156,7 +156,7 @@ function ColumnRow({
 					aria-hidden="true"
 				/>
 			) : (
-				<FileTile kind={entry.fileKind} iconDataUrl={entry.iconDataUrl} size={16} />
+				<FileTile kind={entry.fileKind} iconUrl={entry.iconUrl} size={16} />
 			)}
 			{renameDraft === null ? (
 				<span

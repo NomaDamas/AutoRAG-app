@@ -15,7 +15,7 @@ import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { chromium } from "playwright";
-import { launchFinder } from "./launch-finder.mjs";
+import { launchFinder, finderWindow } from "./launch-finder.mjs";
 
 const ROOT = new URL("../..", import.meta.url).pathname;
 const EVIDENCE = join(ROOT, ".omo/evidence/ai-finder-app/qa-chat-history");
@@ -122,7 +122,7 @@ const popoverClosed = async (page) => {
 };
 
 app = await launchFinder({ userDataDir: USER_DATA });
-const page = await app.firstWindow();
+const page = await finderWindow(app);
 await page.waitForSelector('[role="row"]');
 
 // 1. The popover renders the seeded history in the reference's day groups.

@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { resolveConfigReadOnly } from "@autorag/librarian";
 import { resolveAgentModelDetailed } from "@autorag/librarian/core";
-import { launchFinder } from "./launch-finder.mjs";
+import { launchFinder, finderWindow } from "./launch-finder.mjs";
 
 // Settings > Models must show the provider/model the shared AutoRAG config
 // resolves for the agent — read live, not a persisted copy. Runs against a
@@ -43,7 +43,7 @@ const check = (name, ok, detail) => {
 
 const app = await launchFinder({ userDataDir: join(root, "user-data"), env });
 try {
-	const page = await app.firstWindow();
+	const page = await finderWindow(app);
 	await page.waitForSelector('[role="row"]');
 	const openModels = async () => {
 		await page.locator(".sidebar__item", { hasText: "Settings" }).click();

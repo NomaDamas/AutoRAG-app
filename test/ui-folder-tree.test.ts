@@ -17,7 +17,7 @@ function entry(path: string, kind: "folder" | "file" = "file"): FinderEntry {
 		path,
 		kind,
 		fileKind: kind === "folder" ? "folder" : "md",
-		iconDataUrl: null,
+		iconUrl: null,
 		dateLabel: "Sep 13, 16:48",
 		sizeLabel: kind === "folder" ? "—" : "6 KB",
 		kindLabel: kind === "folder" ? "Folder" : "Markdown",

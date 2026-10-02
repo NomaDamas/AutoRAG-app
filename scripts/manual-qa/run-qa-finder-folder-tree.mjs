@@ -18,7 +18,7 @@
 
 import { mkdirSync } from "node:fs";
 import { rm } from "node:fs/promises";
-import { launchFinder } from "./launch-finder.mjs";
+import { finderWindow, launchFinder } from "./launch-finder.mjs";
 
 const ROOT = new URL("../../", import.meta.url).pathname.replace(/\/$/, "");
 const EVIDENCE = `${ROOT}/.omo/evidence/ai-finder-app/qa-folder-tree`;
@@ -41,7 +41,7 @@ const check = (label, actual, expected) => {
 let app;
 try {
 	app = await launchFinder();
-	const page = await app.firstWindow();
+	let page = await finderWindow(app);
 	await page.waitForSelector('[role="row"]', { timeout: 30000 });
 	await page.getByLabel("Places").getByRole("button", { name: "Documents", exact: true }).click();
 

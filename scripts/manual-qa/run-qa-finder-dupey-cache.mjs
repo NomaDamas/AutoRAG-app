@@ -12,7 +12,7 @@
  *   bun scripts/manual-qa/run-qa-finder-dupey-cache.mjs
  */
 
-import { launchFinder } from "./launch-finder.mjs";
+import { launchFinder, finderWindow } from "./launch-finder.mjs";
 import { mkdirSync, readFileSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -49,7 +49,7 @@ async function waitFor(predicate, { timeoutMs, label }) {
 
 async function launch() {
 	const app = await launchFinder({ userDataDir: USER_DATA });
-	const page = await app.firstWindow();
+	const page = await finderWindow(app);
 	page.setViewportSize({ width: 1440, height: 900 });
 	await page.waitForSelector('[role="row"]');
 	return { app, page };

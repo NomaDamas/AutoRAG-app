@@ -1,4 +1,4 @@
-import type { ReactElement } from "react";
+import { useEffect, useState, type ReactElement } from "react";
 import { type FileKind, kindMeta } from "../../state/kinds";
 import { FolderGlyph } from "../icons";
 
@@ -24,24 +24,30 @@ function tileSizeClass(size: 16 | 18 | 22 | 64): string {
  */
 export function FileTile({
 	kind,
-	iconDataUrl,
+	iconUrl,
 	size = 18,
 }: {
 	readonly kind: FileKind;
-	readonly iconDataUrl?: string | null;
+	readonly iconUrl?: string | null;
 	readonly size?: 16 | 18 | 22 | 64;
 }): ReactElement {
+	const [failed, setFailed] = useState(false);
+	useEffect(() => setFailed(false), [iconUrl]);
 	if (kind === "folder") {
 		return <FolderGlyph size={size} />;
 	}
-	if (iconDataUrl !== undefined && iconDataUrl !== null) {
+	if (iconUrl !== undefined && iconUrl !== null && !failed) {
 		return (
 			<img
 				className={`tile tile--${size} tile--image ${TILE_BASE} ${tileSizeClass(size)} block object-contain`}
-				src={iconDataUrl}
+				crossOrigin="anonymous"
+				src={iconUrl}
 				alt=""
+				loading="lazy"
+				decoding="async"
 				aria-hidden="true"
 				draggable={false}
+				onError={() => setFailed(true)}
 			/>
 		);
 	}

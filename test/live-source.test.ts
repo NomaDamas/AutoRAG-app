@@ -25,7 +25,7 @@ function fsEntry(path: string): FsEntry {
 		modifiedAt: "2026-09-30T00:00:00.000Z",
 		isSymlink: false,
 		osKind: null,
-		iconDataUrl: null,
+		iconUrl: null,
 	};
 }
 
@@ -51,6 +51,7 @@ function fakeFs(result: FsVersionFamiliesResult): FsBridge {
 	const search = async (): Promise<readonly FsSearchResult[]> => [];
 	return {
 		listDir: noResult,
+		enrichEntries: async () => [],
 		readEntries: async () => ({ entries: [], removed: [] }),
 		stat: async (path) => fsEntry(path),
 		exists: async () => true,
