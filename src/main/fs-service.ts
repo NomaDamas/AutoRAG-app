@@ -48,7 +48,7 @@ export interface FsServiceDeps {
 	readonly recents?: RecentsStore;
 	/** Defaults to the platform resolver (mdls on macOS, the registry on Windows). */
 	readonly osKind?: OsKindLookup;
-	/** Defaults to the platform icon provider (qlmanage thumbnails on macOS). */
+	/** Defaults to the platform icon provider (native Quick Look thumbnails on macOS/Windows). */
 	readonly icons?: IconProvider;
 }
 

@@ -74,7 +74,7 @@ reconciliation cheap as folders grow.
 The same benchmark against the Vite dev server (`--renderer-url
 http://localhost:5173`): first paint 57–96 ms across the same scenarios,
 5,000-entry scroll p95 18 ms, one frame over 33 ms in one Downloads run
-(168.5 ms, dev-tool overhead during the qlmanage-heavy enrichment window).
+(168.5 ms, dev-tool overhead during the thumbnail-enrichment window).
 Dev is not the performance bottleneck anymore; the blocking-IO design was.
 
 ## Quick Look readiness
@@ -86,7 +86,37 @@ already streaming-based.
 ## Regression suites passing on this branch
 
 `bun run typecheck`, `bun run test`, `bun run build`, plus manual QA:
-thumbnails (protocol + pixel-true tiles) 9/9, os-kind 5/5, view-modes 33/33,
-folder-tree 14/14, Recents PASS (including reveal-into-virtualized-list),
-trash-prune PASS, live-sync PASS (15 scenarios incl. 5,000-file live create,
-scroll preservation, overflow relist).
+thumbnails (protocol + pixel-true tiles + native path) 11/11, os-kind 5/5,
+view-modes 33/33, folder-tree 14/14, Recents PASS (including
+reveal-into-virtualized-list), trash-prune PASS, live-sync PASS (15 scenarios
+incl. 5,000-file live create, scroll preservation, overflow relist).
+
+## Native thumbnail generation (issue #24)
+
+macOS/Windows tiles no longer shell out to `/usr/bin/qlmanage`; the icon
+provider calls Electron's in-process `nativeImage.createThumbnailFromPath`
+(`src/main/file-icon.ts`). Linux keeps `app.getFileIcon`. This removes the
+qlmanage process pool, its temp dirs, the 4 s `execFile` timeout, and the
+Dock-tile/orphan leak with them.
+
+`scripts/manual-qa/benchmark-thumbnails.mjs` drives the built app over three
+fixture dirs (24 noisy 1024×768 PNGs + 8 PDFs each) and times the renderer's
+real path, `fs.listDir` → `fs.enrichEntries(targets, true)`, cold (generation)
+and warm (cache hit), while sampling `pgrep -x qlmanage`. Median cold across
+runs, same machine:
+
+| build | cold median | cold range | warm | qlmanage during cold |
+|---|---|---|---|---|
+| `main` (qlmanage) | ~105–130 ms | 86–505 ms | 0–1 ms | 3 spawned, 1 orphan left per run |
+| native (this branch) | ~105 ms | 94–129 ms | 0–1 ms | 0 |
+
+Typical cold generation is unchanged; the native path removes qlmanage's
+400–500 ms spikes (daemon/process contention) and is stable run to run. Warm
+listings are identical because both paths serve the same in-process LRU cache.
+The Quick Look daemon serializes thumbnailing (~4–5 ms/file throughput), so
+raising `THUMBNAIL_CONCURRENCY` above 8 does not change cold time — the bound
+exists to cap in-flight lookups, not to add speed.
+
+Regression gate: `run-qa-finder-thumbnails.mjs` reaps pre-existing qlmanage
+orphans, then asserts the count stays 0 while generating 40 thumbnails and that
+every image still yields a thumbnail.

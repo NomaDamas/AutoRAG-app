@@ -25,6 +25,7 @@ const stamp = Date.now();
 const documents = `${process.env.HOME}/Documents`;
 const folderName = `ulw-thumb-${stamp}-dir`;
 const probeDir = `${documents}/ulw-thumb-${stamp}-latency`;
+const qlDir = `${documents}/ulw-thumb-${stamp}-ql`;
 const RED = [220, 40, 40];
 const BLUE = [40, 60, 220];
 const fixtures = [
@@ -88,6 +89,33 @@ const check = (label, actual, expected) => {
 	const pass = actual === expected;
 	results.push({ label, actual, expected, pass });
 	console.log(`${pass ? "PASS" : "FAIL"}  ${label}: ${JSON.stringify(actual)}`);
+};
+/** Live exact-name qlmanage process count; issue #24 requires it to stay 0. */
+const qlmanageCount = () => {
+	try {
+		return Number(execSync("pgrep -x qlmanage | wc -l", { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim());
+	} catch {
+		return 0;
+	}
+};
+/** SIGKILL qlmanage orphans (ppid=1) leaked by earlier builds, so the gate starts from a clean slate. */
+const reapQlmanageOrphans = () => {
+	try {
+		const pids = execSync("ps -axo pid=,ppid=,comm= | awk '$2==1 && $3 ~ /qlmanage/ {print $1}'", { encoding: "utf8" })
+			.trim()
+			.split(/\s+/)
+			.filter(Boolean);
+		for (const pid of pids) {
+			try {
+				process.kill(Number(pid), "SIGKILL");
+			} catch {
+				// Already gone.
+			}
+		}
+		return pids.length;
+	} catch {
+		return 0;
+	}
 };
 
 let app;
@@ -197,6 +225,32 @@ try {
 	const warmMs = await timeList(probeDir);
 	console.log(`INFO  listDir(${probeDir}): cold=${coldMs}ms warm=${warmMs}ms`);
 
+	// Issue #24: the native Quick Look path must never fork the qlmanage CLI.
+	// Start from a clean slate by reaping orphans leaked by the pre-change build.
+	const reaped = reapQlmanageOrphans();
+	if (reaped > 0) console.log(`INFO  reaped ${reaped} orphaned qlmanage before the gate`);
+	await new Promise((resolve) => setTimeout(resolve, 700));
+	mkdirSync(qlDir, { recursive: true });
+	const qlImages = 40;
+	for (let index = 0; index < qlImages; index += 1) {
+		await Bun.write(`${qlDir}/q-${index}.png`, solidPng(64, 64, [(index * 17) % 255, 90, 200]));
+	}
+	let qlMax = 0;
+	const sampler = setInterval(() => {
+		qlMax = Math.max(qlMax, qlmanageCount());
+	}, 100);
+	const qlIcons = await page.evaluate(async (target) => {
+		const listing = await window.autorag.fs.listDir(target);
+		const targets = listing.entries
+			.filter((entry) => entry.kind === "file")
+			.map((entry) => ({ path: entry.path, kind: entry.kind, ext: entry.ext, modifiedAt: entry.modifiedAt }));
+		const enriched = await window.autorag.fs.enrichEntries(targets, true);
+		return enriched.filter((entry) => entry.iconUrl !== null && entry.iconUrl !== undefined).length;
+	}, qlDir);
+	clearInterval(sampler);
+	check("no qlmanage spawned while generating 40 thumbnails", qlMax, 0);
+	check("every image produced a thumbnail", qlIcons, qlImages);
+
 	await page.screenshot({ path: `${EVIDENCE}/documents-list.png` });
 	const row = await mountRow(fixtures[0].name);
 	await row.screenshot({ path: `${EVIDENCE}/red-png-row.png` });
@@ -206,6 +260,7 @@ try {
 	for (const fixture of fixtures) await rm(`${documents}/${fixture.name}`, { force: true });
 	await rm(`${documents}/${folderName}`, { recursive: true, force: true });
 	await rm(probeDir, { recursive: true, force: true });
+	await rm(qlDir, { recursive: true, force: true });
 }
 
 const failed = results.filter((result) => !result.pass);

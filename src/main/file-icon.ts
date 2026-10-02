@@ -1,16 +1,15 @@
 /**
  * OS-provided file icons for the tile left of a file name.
  *
- * macOS produces real Finder-style thumbnails: batched
- * `qlmanage -t -s 128 -o <chunkdir> <paths...>` calls cover a listing, split
- * into small chunks so qlmanage's internal thumbnail queue never goes deep
- * (bigger in-process batches hit a known SIGSEGV). Chunks run through one
- * provider-wide process semaphore, so two concurrent listings never multiply
- * the qlmanage process count. Other platforms fall back to Electron's
- * `app.getFileIcon`, the OS's per-type icon, also through a bounded pool with
- * a per-file timeout. Generation failures degrade to "no icon" (the caller
- * keeps the letter tile) and are logged verbatim; a failed chunk never costs
- * the chunks that succeeded.
+ * macOS and Windows produce real Finder-style thumbnails through Electron's
+ * in-process Quick Look Thumbnailing API
+ * (`nativeImage.createThumbnailFromPath`): no child process, no Dock tile —
+ * so nothing can orphan to `ppid=1` and pile up. Other platforms fall back to
+ * Electron's `app.getFileIcon`, the OS's per-type icon. Both paths run through
+ * a provider-wide bounded pool with a per-file deadline, so two concurrent
+ * listings share one budget and one stuck Quick Look extension never stalls
+ * the rest. Generation failures degrade to "no icon" (the caller keeps the
+ * letter tile) and are logged verbatim; one failed file never costs the batch.
  *
  * The produced PNG bytes stay in this module's in-process cache, keyed by the
  * same `(path, modifiedAt)` identity the caller passes in, and bounded both by
@@ -21,21 +20,15 @@
  * listing that races another never regenerates the same file twice.
  */
 
-import { execFile } from "node:child_process";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
-import { errorMessage, hasErrorCode } from "./fs-entry";
+import { errorMessage } from "./fs-entry";
 import { iconUrl } from "./icon-protocol";
 
 /** Thumbnail edge in px; 128 covers the icon view's 64px tile at 2x (and the 18px row tile easily). */
 export const ICON_SIZE = 128;
 /** One listing never generates more than this many icons. */
 export const ICON_LIMIT = 240;
-/** One qlmanage call only handles this many files at once — bigger in-process batches drive its internal thumbnail queue into a known SIGSEGV. */
-export const THUMBNAIL_CHUNK = 10;
-/** qlmanage processes allowed to run at once across every concurrent listing. */
-export const THUMBNAIL_POOL = 8;
+/** Native thumbnail calls allowed to run at once across every concurrent listing. */
+export const THUMBNAIL_CONCURRENCY = 8;
 /** OS type-icon lookups allowed to run at once across every concurrent listing. */
 export const SYSTEM_ICON_CONCURRENCY = 8;
 /** Icon cache entries kept before the least-recently-used ones are evicted. */
@@ -43,10 +36,8 @@ export const ICON_CACHE_MAX_ENTRIES = 4096;
 /** Total PNG bytes kept in the icon cache before the least-recently-used entries are evicted. */
 export const ICON_CACHE_MAX_BYTES = 64 * 1024 * 1024;
 
-const ICON_TIMEOUT_MS = 4000;
-const ICON_MAX_BUFFER = 1 << 20;
+const THUMBNAIL_TIMEOUT_MS = 4000;
 const SYSTEM_ICON_TIMEOUT_MS = 4000;
-const THUMBNAIL_SUFFIX = ".png";
 
 export interface IconTarget {
 	/** Absolute OS path. */
@@ -84,17 +75,19 @@ export type IconSource = IconProvider & IconStore;
 export interface IconProviderDeps {
 	/** Defaults to process.platform. */
 	readonly platform?: NodeJS.Platform;
-	/** macOS thumbnail generation into outDir; defaults to qlmanage. */
-	readonly generate?: (paths: readonly string[], outDir: string) => Promise<void>;
+	/** Native thumbnail PNG bytes, or null; defaults to Electron nativeImage.createThumbnailFromPath on macOS/Windows. */
+	readonly thumbnail?: (path: string) => Promise<Uint8Array | null>;
 	/** OS type icon PNG bytes, or null; defaults to Electron app.getFileIcon. */
 	readonly systemIcon?: (path: string) => Promise<Uint8Array | null>;
 	/** Cap on the selected targets for a single call; defaults to ICON_LIMIT. */
 	readonly limit?: number;
-	/** qlmanage processes at once across calls; defaults to THUMBNAIL_POOL. */
-	readonly maxConcurrent?: number;
+	/** Native thumbnail calls at once across calls; defaults to THUMBNAIL_CONCURRENCY. */
+	readonly thumbnailConcurrency?: number;
 	/** getFileIcon lookups at once across calls; defaults to SYSTEM_ICON_CONCURRENCY. */
 	readonly systemConcurrency?: number;
-	/** Per-file getFileIcon deadline; defaults to ICON_TIMEOUT_MS. */
+	/** Per-file native thumbnail deadline; defaults to THUMBNAIL_TIMEOUT_MS. */
+	readonly thumbnailTimeoutMs?: number;
+	/** Per-file getFileIcon deadline; defaults to SYSTEM_ICON_TIMEOUT_MS. */
 	readonly systemIconTimeoutMs?: number;
 	/** Icon cache entry cap; defaults to ICON_CACHE_MAX_ENTRIES. */
 	readonly cacheMaxEntries?: number;
@@ -139,10 +132,10 @@ function createSemaphore(permits: number): { acquire(): Promise<void>; release()
 }
 
 /** Reject when the underlying promise outlives `timeoutMs` (<= 0 disables). */
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
 	if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) return promise;
 	const { promise: guarded, resolve, reject } = Promise.withResolvers<T>();
-	const timer = setTimeout(() => reject(new Error(`getFileIcon timed out after ${timeoutMs}ms`)), timeoutMs);
+	const timer = setTimeout(() => reject(new Error(`${label} timed out after ${timeoutMs}ms`)), timeoutMs);
 	promise.then(
 		(value) => {
 			clearTimeout(timer);
@@ -193,17 +186,12 @@ class IconCache {
 	}
 }
 
-function defaultGenerate(paths: readonly string[], outDir: string): Promise<void> {
-	const { promise, resolve, reject } = Promise.withResolvers<void>();
-	const args = ["-t", "-s", String(ICON_SIZE), "-o", outDir, ...paths];
-	execFile("/usr/bin/qlmanage", args, { timeout: ICON_TIMEOUT_MS, maxBuffer: ICON_MAX_BUFFER }, (error) => {
-		if (error) {
-			reject(error);
-			return;
-		}
-		resolve();
-	});
-	return promise;
+async function defaultThumbnail(path: string): Promise<Uint8Array | null> {
+	// Dynamic: `electron` is a main-process-only module and is not importable when
+	// this file is loaded outside Electron (unit tests inject `thumbnail` instead).
+	const { nativeImage } = await import("electron");
+	const image = await nativeImage.createThumbnailFromPath(path, { width: ICON_SIZE, height: ICON_SIZE });
+	return image.isEmpty() ? null : image.toPNG();
 }
 
 async function defaultSystemIcon(path: string): Promise<Uint8Array | null> {
@@ -214,102 +202,52 @@ async function defaultSystemIcon(path: string): Promise<Uint8Array | null> {
 	return image.isEmpty() ? null : image.toPNG();
 }
 
-/**
- * Split targets into qlmanage chunks of at most `THUMBNAIL_CHUNK`, never
- * putting two targets with the same basename in one chunk. qlmanage writes
- * `<basename>.png` into a single directory, so same-named files from different
- * folders must run in their own chunk (and therefore their own temp dir) or
- * they overwrite each other.
- */
-function planChunks(targets: readonly IconTarget[]): IconTarget[][] {
-	const chunks: IconTarget[][] = [];
-	const names: Array<Set<string>> = [];
-	for (const target of targets) {
-		const name = basename(target.path);
-		let placed = -1;
-		for (let index = 0; index < chunks.length; index += 1) {
-			if ((chunks[index]?.length ?? 0) < THUMBNAIL_CHUNK && !names[index]?.has(name)) {
-				placed = index;
-				break;
-			}
-		}
-		if (placed === -1) {
-			chunks.push([target]);
-			names.push(new Set([name]));
-		} else {
-			chunks[placed]?.push(target);
-			names[placed]?.add(name);
-		}
-	}
-	return chunks;
-}
-
 export function createIconProvider(deps: IconProviderDeps = {}): IconSource {
 	const platform = deps.platform ?? process.platform;
-	const generate = deps.generate ?? defaultGenerate;
+	// Preview thumbnails come from the in-process Quick Look Thumbnailing API on
+	// macOS/Windows; other platforms keep the OS's per-type icon.
+	const usesNativeThumbnails = platform === "darwin" || platform === "win32";
+	const thumbnail = deps.thumbnail ?? defaultThumbnail;
 	const systemIcon = deps.systemIcon ?? defaultSystemIcon;
 	const limit = Math.max(0, Math.floor(deps.limit ?? ICON_LIMIT));
-	const maxConcurrent = positive(deps.maxConcurrent ?? THUMBNAIL_POOL, THUMBNAIL_POOL);
+	const thumbnailConcurrency = positive(deps.thumbnailConcurrency ?? THUMBNAIL_CONCURRENCY, THUMBNAIL_CONCURRENCY);
 	const systemConcurrency = positive(deps.systemConcurrency ?? SYSTEM_ICON_CONCURRENCY, SYSTEM_ICON_CONCURRENCY);
+	const thumbnailTimeoutMs = deps.thumbnailTimeoutMs ?? THUMBNAIL_TIMEOUT_MS;
 	const systemIconTimeoutMs = deps.systemIconTimeoutMs ?? SYSTEM_ICON_TIMEOUT_MS;
 	const warn = deps.warn ?? ((message: string) => console.warn(message));
 	// Bounded by entries and bytes; nulls are cached too, so files with no OS
-	// thumbnail (and timed-out chunks) are not regenerated on every listing.
+	// thumbnail (and timed-out lookups) are not regenerated on every listing.
 	const cache = new IconCache(
 		positive(deps.cacheMaxEntries ?? ICON_CACHE_MAX_ENTRIES, ICON_CACHE_MAX_ENTRIES),
 		Math.max(1, Math.floor(deps.cacheMaxBytes ?? ICON_CACHE_MAX_BYTES)),
 	);
 	// One semaphore per provider (the app has exactly one), so concurrent
-	// listings share the process/lookup budget rather than each opening its own.
-	const qlmanageSemaphore = createSemaphore(maxConcurrent);
+	// listings share the lookup budget rather than each opening its own.
+	const thumbnailSemaphore = createSemaphore(thumbnailConcurrency);
 	const systemSemaphore = createSemaphore(systemConcurrency);
 	/** key -> the generation currently producing that identity, for single-flight reuse. */
 	const inflight = new Map<string, Promise<Uint8Array | null>>();
 
-	/** macOS path: chunked qlmanage processes, one temp dir per chunk. */
+	/** macOS/Windows: in-process Quick Look thumbnails, bounded and individually fault-tolerant. */
 	async function runThumbnails(
 		targets: readonly IconTarget[],
 		resolve: (key: string, bytes: Uint8Array | null) => void,
 	): Promise<void> {
-		const chunks = planChunks(targets);
-		const workers = Math.max(1, Math.min(maxConcurrent, chunks.length));
-		let cursor = 0;
-		const run = async (): Promise<void> => {
-			for (let index = cursor++; index < chunks.length; index = cursor++) {
-				const chunk = chunks[index] ?? [];
-				const outDir = await mkdtemp(join(tmpdir(), "autorag-icons-"));
+		await Promise.all(
+			targets.map(async (target): Promise<void> => {
+				await thumbnailSemaphore.acquire();
 				try {
-					await qlmanageSemaphore.acquire();
-					try {
-						await generate(
-							chunk.map((target) => target.path),
-							outDir,
-						);
-					} finally {
-						qlmanageSemaphore.release();
-					}
-					for (const target of chunk) {
-						try {
-							const bytes = new Uint8Array(await readFile(join(outDir, `${basename(target.path)}${THUMBNAIL_SUFFIX}`)));
-							resolve(cacheKey(target), bytes);
-						} catch (error) {
-							// No thumbnail for this file: qlmanage simply writes nothing.
-							if (!hasErrorCode(error, "ENOENT")) {
-								warn(`file-icon: reading thumbnail for ${target.path} failed: ${errorMessage(error)}`);
-							}
-							resolve(cacheKey(target), null);
-						}
-					}
+					const bytes = await withTimeout(thumbnail(target.path), thumbnailTimeoutMs, "thumbnail");
+					resolve(cacheKey(target), bytes);
 				} catch (error) {
-					// A crashed or stuck qlmanage costs only this chunk; the others keep trying.
-					warn(`file-icon: thumbnail chunk of ${chunk.length} failed: ${errorMessage(error)}`);
-					for (const target of chunk) resolve(cacheKey(target), null);
+					// One unreadable/timed-out file must not cost the rest of the batch.
+					warn(`file-icon: thumbnail for ${target.path} failed: ${errorMessage(error)}`);
+					resolve(cacheKey(target), null);
 				} finally {
-					await rm(outDir, { recursive: true, force: true });
+					thumbnailSemaphore.release();
 				}
-			}
-		};
-		await Promise.all(Array.from({ length: workers }, run));
+			}),
+		);
 	}
 
 	/** Other platforms: Electron `getFileIcon` per file, bounded and individually fault-tolerant. */
@@ -321,7 +259,7 @@ export function createIconProvider(deps: IconProviderDeps = {}): IconSource {
 			targets.map(async (target): Promise<void> => {
 				await systemSemaphore.acquire();
 				try {
-					const bytes = await withTimeout(systemIcon(target.path), systemIconTimeoutMs);
+					const bytes = await withTimeout(systemIcon(target.path), systemIconTimeoutMs, "getFileIcon");
 					resolve(cacheKey(target), bytes);
 				} catch (error) {
 					// One unreadable/timed-out file must not cost the rest of the batch.
@@ -352,9 +290,9 @@ export function createIconProvider(deps: IconProviderDeps = {}): IconSource {
 			cache.set(key, bytes);
 			resolvers.get(key)?.(bytes);
 		};
-		const generation = platform === "darwin" ? runThumbnails(missing, resolve) : runSystem(missing, resolve);
+		const generation = usesNativeThumbnails ? runThumbnails(missing, resolve) : runSystem(missing, resolve);
 		void generation.catch((error: unknown) => {
-			// mkdtemp/pool-level failure: the whole batch degrades to "no icon".
+			// Pool-level failure: the whole batch degrades to "no icon".
 			warn(`file-icon: icon generation failed for ${missing.length} file(s): ${errorMessage(error)}`);
 			for (const target of missing) {
 				const key = cacheKey(target);
