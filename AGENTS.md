@@ -85,7 +85,12 @@ switch branches in place.
 
 - `src/main/` — Electron main process and filesystem/search services.
 - `src/preload/` — typed renderer bridge.
-- `src/renderer/` — React Finder UI and state.
+- `src/renderer/` — React Finder UI and state. Styled with Tailwind 4
+  utilities: `styles/tokens.css` holds every design value, `styles/tailwind.css`
+  bridges those tokens into Tailwind theme namespaces (`@theme inline`), and
+  `styles/app.css` layers the remaining hand-written sheets below the utilities.
+  Icons come from `lucide-react` through `components/icons.tsx`. See
+  `DESIGN.md` §0 "Styling contract" before touching styles.
 - `src/shared/` — process-boundary contracts.
 - `test/` — Vitest unit tests.
 - `scripts/` — dev tooling (`make run`, librarian sync, dupey check).

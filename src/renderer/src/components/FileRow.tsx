@@ -73,6 +73,20 @@ export function FileRow({
 	if (child) {
 		classes.push("row--child");
 	}
+	classes.push(
+		"grid grid-cols-(--grid-file-row) gap-12 items-center h-row pr-8 rounded-6 select-none cursor-default transition-[background,box-shadow] duration-(--dur-flash-fade) ease-[ease]",
+		child
+			? "pl-[calc(var(--space-12)+18px+var(--row-depth,0)*var(--tree-indent))]"
+			: "pl-[calc(var(--space-12)+var(--row-depth,0)*var(--tree-indent))]",
+		flash
+			? "bg-accent-flash shadow-[inset_0_0_0_1px_var(--accent-flash-ring)]"
+			: selected
+				? zoneFocused
+					? "bg-accent-soft"
+					: "bg-input"
+				: "hover:bg-hover-row",
+		isHiddenName(entry.name) ? "opacity-45" : "",
+	);
 
 	return (
 		<div
@@ -87,13 +101,20 @@ export function FileRow({
 			onDoubleClick={() => callbacks.onOpen(entry)}
 			onContextMenu={(event) => callbacks.onContextMenu(entry, event)}
 		>
-			<div className="row__name" role="gridcell">
+			<div className="row__name flex items-center gap-10 min-w-0" role="gridcell">
 				{disclosure === "none" ? null : disclosure === "leaf" ? (
-					<span className="row__disclosure" aria-hidden="true" />
+					<span
+						className="row__disclosure flex items-center justify-center flex-none size-disclosure mr-[calc(var(--space-6)-var(--space-10))] p-0 border-0 rounded-5 bg-transparent text-ink-muted cursor-default"
+						aria-hidden="true"
+					/>
 				) : (
 					<button
 						type="button"
-						className={disclosure === "expanded" ? "row__disclosure row__disclosure--open" : "row__disclosure"}
+						className={[
+							`row__disclosure${disclosure === "expanded" ? " row__disclosure--open" : ""}`,
+							"flex items-center justify-center flex-none size-disclosure mr-[calc(var(--space-6)-var(--space-10))] p-0 border-0 rounded-5 bg-transparent text-ink-muted cursor-default hover:text-ink [&_svg]:transition-transform [&_svg]:duration-(--dur-color) [&_svg]:ease-[ease]",
+							disclosure === "expanded" ? "[&_svg]:rotate-90" : "",
+						].join(" ")}
 						aria-label={disclosure === "expanded" ? `${entry.name} 접기` : `${entry.name} 펼치기`}
 						aria-expanded={disclosure === "expanded"}
 						tabIndex={-1}
@@ -106,14 +127,28 @@ export function FileRow({
 						<ChevronRightIcon size={10} />
 					</button>
 				)}
-				{child ? <span className="row__connector" aria-hidden="true" /> : <FileTile kind={entry.fileKind} iconDataUrl={entry.iconDataUrl} />}
+				{child ? (
+					<span
+						className="row__connector flex-none w-[18px] h-[14px] border-l border-b border-border-strong rounded-bl-4"
+						aria-hidden="true"
+					/>
+				) : (
+					<FileTile kind={entry.fileKind} iconDataUrl={entry.iconDataUrl} />
+				)}
 				{renameDraft === null ? (
-					<span className="row__label">{entry.name}</span>
+					<span
+						className={[
+							"row__label overflow-hidden whitespace-nowrap text-ellipsis text-body",
+							child ? "text-ink-body" : "text-ink",
+						].join(" ")}
+					>
+						{entry.name}
+					</span>
 				) : (
 					<input
 						// biome-ignore lint/a11y/noAutofocus: inline rename must take the caret immediately
 						autoFocus
-						className="row__rename"
+						className="row__rename flex-1 min-w-0 h-pill px-5 border border-accent rounded-5 outline-none bg-window text-ink text-body"
 						type="text"
 						value={renameDraft}
 						aria-label="새 이름"
@@ -135,7 +170,13 @@ export function FileRow({
 				{stackCount > 0 ? (
 					<button
 						type="button"
-						className={stackOpen ? "row__stackbadge row__stackbadge--open" : "row__stackbadge"}
+						className={[
+							`row__stackbadge${stackOpen ? " row__stackbadge--open" : ""}`,
+							"flex items-center gap-3 flex-none h-18 px-5 border-0 rounded-9 text-badge font-semibold cursor-pointer [&_svg]:transition-transform [&_svg]:duration-(--dur-color) [&_svg]:ease-[ease]",
+							stackOpen
+								? "bg-border text-ink [&_svg]:rotate-90"
+								: "bg-input text-ink-body hover:bg-border",
+						].join(" ")}
 						title={`다른 버전 ${stackCount}개 · 클릭하면 펼쳐집니다`}
 						aria-label={`다른 버전 ${stackCount}개 · 클릭하면 펼쳐집니다`}
 						aria-expanded={stackOpen}
@@ -149,20 +190,23 @@ export function FileRow({
 					</button>
 				) : null}
 			</div>
-			<span className="row__meta" role="gridcell">
+			<span className="row__meta text-ink-muted text-meta whitespace-nowrap overflow-hidden text-ellipsis" role="gridcell">
 				{entry.dateLabel}
 			</span>
-			<span className="row__meta row__meta--right" role="gridcell">
+			<span
+				className="row__meta row__meta--right text-ink-muted text-meta whitespace-nowrap overflow-hidden text-ellipsis text-right"
+				role="gridcell"
+			>
 				{entry.sizeLabel}
 			</span>
-			<span className="row__meta" role="gridcell">
+			<span className="row__meta text-ink-muted text-meta whitespace-nowrap overflow-hidden text-ellipsis" role="gridcell">
 				{child && relation !== null
 					? relationLabel(relation, entry.location, listPath)
 					: searching
 						? whereSegments(entry.location)
 						: entry.kindLabel}
 			</span>
-			<div className="row__cell" role="gridcell">
+			<div className="row__cell flex min-w-0" role="gridcell">
 				{entry.kind === "file" ? (
 					<PillBadge
 						visual={indexBadge(indexIncluded ? "included" : "excluded")}

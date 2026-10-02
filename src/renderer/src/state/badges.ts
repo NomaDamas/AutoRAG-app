@@ -1,13 +1,16 @@
 /**
  * Badge state → documented visual state (DESIGN.md §5 PillBadge).
  *
- * Pure mapping: labels, tone class, dot token, and the tooltip that doubles as
- * the accessible name. Every label ships with its dot.
+ * Pure mapping: labels, tone, dot token, and the tooltip that doubles as the
+ * accessible name. Every label ships with its dot. The tone is semantic;
+ * PillBadge maps it to utilities and to the `pill--*` selector hook.
  */
+
+export type PillTone = "included" | "excluded" | "failed";
 
 export interface BadgeVisual {
 	readonly label: string;
-	readonly toneClass: string;
+	readonly tone: PillTone;
 	readonly dotToken: string | null;
 	readonly hollowDot: boolean;
 	readonly spinning: boolean;
@@ -21,7 +24,7 @@ export function indexBadge(state: IndexState, reason = ""): BadgeVisual {
 		case "included":
 			return {
 				label: "포함",
-				toneClass: "pill--included",
+				tone: "included",
 				dotToken: "--index-dot-included",
 				hollowDot: false,
 				spinning: false,
@@ -30,7 +33,7 @@ export function indexBadge(state: IndexState, reason = ""): BadgeVisual {
 		case "excluded":
 			return {
 				label: "제외",
-				toneClass: "pill--excluded",
+				tone: "excluded",
 				dotToken: null,
 				hollowDot: true,
 				spinning: false,
@@ -39,7 +42,7 @@ export function indexBadge(state: IndexState, reason = ""): BadgeVisual {
 		case "failed":
 			return {
 				label: "재시도",
-				toneClass: "pill--failed",
+				tone: "failed",
 				dotToken: null,
 				hollowDot: false,
 				spinning: false,
@@ -48,7 +51,7 @@ export function indexBadge(state: IndexState, reason = ""): BadgeVisual {
 		case "retrying":
 			return {
 				label: "재시도 중",
-				toneClass: "pill--failed",
+				tone: "failed",
 				dotToken: null,
 				hollowDot: false,
 				spinning: true,

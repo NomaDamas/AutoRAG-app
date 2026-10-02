@@ -42,9 +42,11 @@ export function FileList({
 	readonly callbacks: RowCallbacks;
 }): ReactElement {
 	return (
-		<div className="list" ref={listRef}>
+		<div className="list flex-1 min-h-0 py-4 px-8 overflow-auto" ref={listRef}>
 			<VersionFamilyBanner error={versionFamilyError} onRetry={onRetryVersionFamilies} />
-			{searching ? <div className="list__summary">{summary}</div> : null}
+			{searching ? (
+				<div className="list__summary pt-6 px-12 pb-8 text-ink-muted text-meta">{summary}</div>
+			) : null}
 			<div role={searching ? "grid" : "treegrid"} aria-label="Files">
 				{rows.map((row) => (
 					<FileRow
@@ -67,7 +69,9 @@ export function FileList({
 					/>
 				))}
 			</div>
-			{rows.length === 0 ? <div className="list__empty">{emptyText}</div> : null}
+			{rows.length === 0 ? (
+				<div className="list__empty py-40 px-12 text-ink-muted text-body text-center">{emptyText}</div>
+			) : null}
 		</div>
 	);
 }

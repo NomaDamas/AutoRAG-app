@@ -2,16 +2,17 @@
  * Finder renderer stylesheet entry (main window).
  *
  * Tailwind first so it declares the layer order (theme < legacy < utilities),
- * then every remaining hand-written stylesheet inside `layer(legacy)`. A rule
- * still living in `legacy` is beaten by any Tailwind utility of the same
- * specificity, so migrating a component is: write the utilities, delete the
- * rule. See tailwind.css for the bridge and the naming rules.
+ * then whatever is still hand-written inside `layer(legacy)`. A rule still
+ * living in `legacy` is beaten by any Tailwind utility of the same specificity,
+ * so migrating a component is: write the utilities, delete the rule. See
+ * tailwind.css for the bridge and the naming rules.
+ *
+ * Migrated and deleted: `sidebar.css`, `finder.css`, `primitives.css`, and the
+ * settings surface of `shell.css`. What remains here is the shell, the AI
+ * search column, the requests popover, and the evidence panel.
  * ========================================================================== */
 
 @import "./tailwind.css";
 
 @import "./base.css" layer(legacy);
 @import "./shell.css" layer(legacy);
-@import "./sidebar.css" layer(legacy);
-@import "./finder.css" layer(legacy);
-@import "./primitives.css" layer(legacy);
