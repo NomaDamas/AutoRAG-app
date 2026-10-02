@@ -44,6 +44,18 @@ Tailwind has no namespace for some properties; those use arbitrary syntax rather
 
 **Migration state.** `primitives.css`, `sidebar.css` and `finder.css` are fully migrated to utilities and deleted. The settings surface of `shell.css` is migrated. The rest of `shell.css` (`shell`, `ai`, `requests`, `evidence`) is still hand-written and is migrated the same way, one component at a time.
 
+**Verification.** `scripts/manual-qa/run-qa-finder-visual-parity.mjs` boots the built app on a fixed fixture and writes 29 screenshots — the list, icon and column views, the three settings tabs, the context menu, and the hover/focus/selected states of every interactive surface — to a directory. `scripts/manual-qa/compare-visual-parity.mjs` compares two such directories byte-for-byte and falls back to ffmpeg SSIM plus a difference image. Run it before and after any styling change:
+
+```sh
+bun run build
+bun scripts/manual-qa/run-qa-finder-visual-parity.mjs /tmp/parity/before
+# ...change styles, bun run build...
+bun scripts/manual-qa/run-qa-finder-visual-parity.mjs /tmp/parity/after
+bun scripts/manual-qa/compare-visual-parity.mjs /tmp/parity/before /tmp/parity/after
+```
+
+On an unchanged tree the two runs are byte-identical, which is what makes the comparison meaningful. The harness caught three silent regressions during this migration that no unit test could see: a hovered row painting the selection tint instead of the hover wash, `text-sm` losing the inherited line-height, and a colour transition quietly switching its easing curve.
+
 ---
 
 ## 1. Atmosphere & Identity
@@ -644,5 +656,7 @@ Tabs use `10px 10px 0 0` — `--radius-10` on the top corners only.
 10. **The dupey-required banner is outside the reference.** The reference assumes duplicate detection always works. The app adds one operational error surface, `.list__error` (handoff README has no counterpart), shown above the file list when the required `dupey` CLI is missing or a version-family scan fails. It is built only from existing tokens (`--danger-text`, `--danger-bg-soft`, `--danger-border`, `--bg-window`, `--font-mono`), carries `role="alert"`, states the failure and the exact install command, and offers 다시 확인 to re-probe. It is an error path, never a normal state.
 11. **Quick Look is a separate translucent panel, not the in-window overlay (§4.1 of the handoff).** The preview runs in its own pre-warmed `BrowserWindow` so `space` never waits on a mount, so the scrim, the 760px `--w-quicklook` overlay panel, and its header buttons do not apply. The panel follows macOS Quick Look instead: a translucent `--bg-quicklook-panel` surface over the Finder, a toolbar with close · name · fullscreen · 열기, and a frosted page rail (`--bg-quicklook-frost` + `--backdrop-quicklook`) for multi-page documents. The window has no CSS elevation — the OS draws its shadow — and it hugs the content it previews (page-shaped only when the content cannot measure itself).
 12. **Icon glyphs come from `lucide-react`.** The reference's paths were hand-authored in the Lucide style; the app now renders the library's current drawings for the same named glyphs. For chevrons, close, plus, and arrow-up the geometry is identical. For search, eye, bell, settings, thumbs, send, sparkles, pencil, rotate, history, and the three view-mode toggles the library's current drawing differs from the copy the reference shipped. The handoff explicitly sanctions "your icon library's equivalents", so the substitution is intended rather than drift — but it is the one place the render is knowingly not pixel-identical to the prototype. `FolderGlyph` is exempt because lucide has no filled folder.
+
+    Measured against the previous build with `scripts/manual-qa/run-qa-finder-visual-parity.mjs` (29 screenshots, 1500 × 900): every difference sits inside an icon box, and the largest window-wide difference is 1453 pixels — 0.11% of the frame. Layout, spacing, colour, radii, shadows, type metrics, and every hover/selected/flash state are otherwise identical.
 13. **The stylesheet migration is staged.** `primitives.css`, `sidebar.css` and `finder.css` are fully migrated and deleted, and the settings surface of `shell.css` is migrated. Two things remain hand-written inside `layer(legacy)`: the rest of `shell.css` (`shell`, `ai`, `requests`, `evidence`) and `app/src/preview/ui/quick-look.css`, which belongs to the separate Quick Look window. Until a file is migrated its rules stay authoritative for its components, and any utility placed on the same element wins over them. The Quick Look window is left for a follow-up because it is not covered by the screenshot-parity harness, so a migration there could not be verified the same way.
 14. **Retained class names are selectors, not styles.** Elements keep their original BEM class names (`.row__name`, `.settings-row__label`, `.is-active`, …) even where no stylesheet defines them any more. They are used as selectors by `App.tsx`, `hooks/useFinderController.ts`, the Quick Look UI, and the `scripts/manual-qa` scripts, so removing them would break behaviour and the migration's own verification. Styling for those elements comes from utilities; the class names are inert hooks. Moving them to `data-*` attributes is a separate, mechanical follow-up.

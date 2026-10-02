@@ -57,6 +57,21 @@ replace the dependency with `file:..` or a local sibling path.
 `dupey` is required for development and production builds. Set
 `AUTORAG_SKIP_DUPEY_CHECK=1` only for an intentional degraded run.
 
+Any change that can move pixels — a stylesheet, a component's `className`, an
+icon — must be checked with the screenshot harness, not just the unit tests:
+
+```sh
+bun run build
+bun scripts/manual-qa/run-qa-finder-visual-parity.mjs /tmp/parity/before
+# ...change, then bun run build...
+bun scripts/manual-qa/run-qa-finder-visual-parity.mjs /tmp/parity/after
+bun scripts/manual-qa/compare-visual-parity.mjs /tmp/parity/before /tmp/parity/after
+```
+
+`DESIGN.md` §0 "Styling contract" explains the token bridge, the cascade layers,
+and what the harness has caught. On an unchanged tree the harness is
+byte-identical between runs; anything else is a real difference to explain.
+
 ## Workflow
 
 Feature work and fixes never land straight on `main`. Start from the latest

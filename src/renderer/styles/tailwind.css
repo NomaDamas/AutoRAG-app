@@ -173,20 +173,18 @@
 	--text-tile: var(--font-size-tile);
 	--text-tile-xs: var(--font-size-tile-xs);
 
-	/* The reference's font-size tokens are sizes only: line-height always comes
-	 * from `--leading-*` or inheritance. Tailwind pairs a line-height with every
-	 * `--text-*` size, and its default `--text-sm--line-height` would otherwise
-	 * survive our override of `--text-sm` and silently change `text-sm` from the
-	 * inherited 1.5 to 1.4286. `inherit` reproduces "no line-height declared".
-	 * `leading-*` still wins, because `--tw-leading` takes precedence. */
-	--text-title--line-height: inherit;
-	--text-body--line-height: inherit;
+	/* `sm` is the one size whose name is already a Tailwind key, so Tailwind's
+	 * default `--text-sm--line-height` (1.4286) would survive our override of
+	 * `--text-sm` and silently replace the inherited 1.5. `inherit` restores the
+	 * reference's behaviour, where a font-size declaration never touches
+	 * line-height; `leading-*` still wins, because `--tw-leading` precedes it.
+	 *
+	 * Do NOT add this for the other sizes. They are not Tailwind keys, so they
+	 * already emit font-size alone — which is exactly right. Declaring
+	 * `line-height: inherit` on them is not a no-op: it is an author declaration
+	 * and therefore beats the UA stylesheet, which changes form controls (a
+	 * `<select>` uses the UA's `line-height: normal`, not the inherited 1.5). */
 	--text-sm--line-height: inherit;
-	--text-meta--line-height: inherit;
-	--text-caption--line-height: inherit;
-	--text-badge--line-height: inherit;
-	--text-tile--line-height: inherit;
-	--text-tile-xs--line-height: inherit;
 
 	--font-weight-regular: var(--weight-regular);
 	--font-weight-medium: var(--weight-medium);

@@ -100,6 +100,29 @@ describe("design token bridge", () => {
 		expect(uncovered.filter((token) => !ARBITRARY_ONLY_TOKENS.includes(token))).toEqual([]);
 	});
 
+	it("pins a line-height for every font size that collides with a Tailwind key", () => {
+		// Tailwind pairs a line-height with its stock `--text-*` sizes. Overriding
+		// such a name without also pinning the pair leaves the stock line-height in
+		// place, which silently replaces the inherited one — `text-sm` rendered at
+		// 1.4286 instead of 1.5. Sizes that are NOT stock keys must not carry a
+		// pair: `line-height: inherit` is an author declaration and would beat the
+		// UA stylesheet on a form control.
+		const stockSizes = ["xs", "sm", "base", "lg", "xl", "2xl", "3xl", "4xl", "5xl", "6xl", "7xl", "8xl", "9xl"];
+		const source = stripComments(read("tailwind.css"));
+		const sizes = [...source.matchAll(/--text-([a-z0-9-]+):\s*var\(--font-size-([a-z0-9-]+)\);/g)].map(
+			(match) => match[1] as string,
+		);
+		expect(sizes.length).toBeGreaterThan(0);
+		for (const size of sizes) {
+			const pairs = new RegExp(`--text-${size}--line-height:\\s*([^;]+);`).exec(source);
+			if (stockSizes.includes(size)) {
+				expect(pairs?.[1]?.trim()).toBe("inherit");
+			} else {
+				expect(pairs).toBeNull();
+			}
+		}
+	});
+
 	it("keeps every token name reachable from a component", () => {
 		// Guards the allowlists themselves: a token listed as arbitrary-only must
 		// still be a real token, or the allowlist has rotted.
