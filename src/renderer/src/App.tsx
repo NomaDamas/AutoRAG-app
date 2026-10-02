@@ -15,7 +15,8 @@ import { IconGrid } from "./components/IconGrid";
 import { ContextMenu } from "./components/primitives/ContextMenu";
 import { Toast } from "./components/primitives/Toast";
 import { Sidebar } from "./components/Sidebar";
-import { SettingsPanel } from "./components/SettingsPanel";
+import { SettingsView } from "./components/SettingsView";
+import { SETTINGS_PATH } from "./state/tabs";
 import { StatusBar } from "./components/StatusBar";
 import { formatDevLabel, type DevLabel } from "../../shared/app-info";
 import { TabStrip } from "./components/TabStrip";
@@ -70,7 +71,6 @@ export function App(): ReactElement {
 		showHiddenFiles,
 		quickLook: { onQuickLook: openQuickLook, closeQuickLook, isQuickLookOpen },
 	});
-	const [settingsTab, setSettingsTab] = useState<"general" | "contacts" | null>(null);
 	const [evidence, setEvidence] = useState<readonly CitationEvidence[]>([]);
 	const [evidenceSession, setEvidenceSession] = useState<string | null>(null);
 	const [selectedEvidence, setSelectedEvidence] = useState<number | null>(null);
@@ -146,7 +146,7 @@ export function App(): ReactElement {
 					activeLabel={finder.activeNavLabel}
 					showHotkeys={SHOW_HOTKEYS}
 					onNavigate={finder.navigateNav}
-					onOpenSettings={() => setSettingsTab("general")}
+					onOpenSettings={finder.openSettings}
 				/>
 				<section className="finder flex flex-col min-w-0 min-h-0" aria-label="Finder" onMouseDown={finder.focusFinder}>
 					<TabStrip
@@ -175,7 +175,9 @@ export function App(): ReactElement {
 						onSearchFocus={() => finder.setSearchFocused(true)}
 						onSearchBlur={() => finder.setSearchFocused(false)}
 					/>
-					{finder.layout === "icons" ? (
+					{finder.path === SETTINGS_PATH ? (
+						<SettingsView onSettingsChanged={(settings) => setShowHiddenFiles(settings.showHiddenFiles)} />
+					) : finder.layout === "icons" ? (
 						<IconGrid
 							rows={finder.stackRows}
 							listRef={finder.listRef}
@@ -255,13 +257,6 @@ export function App(): ReactElement {
 					entries={finder.contextMenuEntries}
 					onSelect={finder.runMenuAction}
 					onClose={finder.closeContextMenu}
-				/>
-			)}
-			{settingsTab === null ? null : (
-				<SettingsPanel
-					initialTab={settingsTab}
-					onClose={() => setSettingsTab(null)}
-					onSettingsChanged={(settings) => setShowHiddenFiles(settings.showHiddenFiles)}
 				/>
 			)}
 		</div>

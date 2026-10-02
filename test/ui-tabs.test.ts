@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
 	activeTab,
-	applyColumnChoice,
 	canCloseTab,
 	closeTab,
 	createTabsState,
@@ -10,7 +9,9 @@ import {
 	navigateTab,
 	openTab,
 	openTabAt,
+	openOrSelectSettingsTab,
 	selectTab,
+	SETTINGS_PATH,
 	tabTitle,
 } from "../src/renderer/src/state/tabs";
 
@@ -122,32 +123,28 @@ describe("tabTitle", () => {
 	it("keeps the Contacts title while searching", () => {
 		expect(tabTitle({ path: "Contacts" }, { isActive: true, query: "박" })).toBe("Contacts");
 	});
+
+	it("keeps the Settings title and ignores search query", () => {
+		expect(tabTitle({ path: SETTINGS_PATH }, { isActive: true, query: "model" })).toBe("Settings");
+	});
 });
 
-describe("applyColumnChoice", () => {
-	const pick = { keys: ["/a/b"], anchor: "/a/b", focus: "/a/b" };
-
-	it("keeps the path and history when the panes do not slide", () => {
-		const state = applyColumnChoice(createTabsState("/a"), { path: "/a", chain: ["/a", "/a/b"] }, pick);
-		expect(activeTab(state).path).toBe("/a");
-		expect(activeTab(state).back).toEqual([]);
-		expect(activeTab(state).chain).toEqual(["/a", "/a/b"]);
-		expect(activeTab(state).selection).toEqual(pick);
+describe("openOrSelectSettingsTab", () => {
+	it("opens a new Settings tab if none exists", () => {
+		const state = createTabsState("Documents");
+		const next = openOrSelectSettingsTab(state);
+		expect(next.tabs).toHaveLength(2);
+		expect(next.tabs[1]?.path).toBe(SETTINGS_PATH);
+		expect(next.activeId).toBe(next.tabs[1]?.id);
 	});
 
-	it("moves the path with history when the panes slide, and back restores it", () => {
-		const chain = ["/a", "/a/b", "/a/b/c", "/a/b/c/d"];
-		const slid = applyColumnChoice(createTabsState("/a"), { path: "/a/b", chain }, pick);
-		expect(activeTab(slid).path).toBe("/a/b");
-		expect(activeTab(slid).back).toEqual(["/a"]);
-		expect(activeTab(slid).chain).toEqual(chain);
-		const back = goBack(slid);
-		expect(activeTab(back).path).toBe("/a");
-		expect(activeTab(back).chain).toEqual(chain);
-	});
-
-	it("starts every new tab with an empty chain", () => {
-		expect(activeTab(createTabsState("/a")).chain).toEqual([]);
-		expect(activeTab(openTabAt(createTabsState("/a"), "/b")).chain).toEqual([]);
+	it("selects existing Settings tab if already open", () => {
+		const initial = createTabsState("Documents");
+		const withSettings = openOrSelectSettingsTab(initial);
+		const switchedToFirst = selectTab(withSettings, initial.tabs[0]!.id);
+		expect(switchedToFirst.activeId).toBe(initial.tabs[0]!.id);
+		const reopened = openOrSelectSettingsTab(switchedToFirst);
+		expect(reopened.tabs).toHaveLength(2);
+		expect(reopened.activeId).toBe(withSettings.tabs[1]!.id);
 	});
 });

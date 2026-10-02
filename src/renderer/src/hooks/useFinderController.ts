@@ -81,10 +81,12 @@ import {
 	goBack,
 	goForward,
 	navigateTab,
+	openOrSelectSettingsTab,
 	openTab,
 	openTabAt,
 	patchActiveTab,
 	selectTab,
+	SETTINGS_PATH,
 	tabTitle,
 	type TabsState,
 } from "../state/tabs";
@@ -190,6 +192,7 @@ export interface FinderController {
 	selectTabId(id: number): void;
 	closeTabId(id: number): void;
 	newTab(): void;
+	openSettings(): void;
 	back(): void;
 	forward(): void;
 	setQuery(value: string): void;
@@ -489,7 +492,7 @@ export function useFinderController(
 	}, [path, locations]);
 
 	useEffect(() => {
-		if (path === "") {
+		if (path === "" || path === SETTINGS_PATH) {
 			previousPathRef.current = path;
 			previousTabIdRef.current = tab.id;
 			previousRevisionRef.current = revision;
@@ -1325,6 +1328,10 @@ export function useFinderController(
 					event.preventDefault();
 					setTabsState((state) => closeTab(state, state.activeId));
 					return;
+				case "openSettings":
+					event.preventDefault();
+					setTabsState((state) => openOrSelectSettingsTab(state));
+					return;
 				case "quickLook":
 					event.preventDefault();
 					quickLookSelection();
@@ -1452,7 +1459,8 @@ export function useFinderController(
 		canGoBack: tab.back.length > 0,
 		canGoForward: tab.fwd.length > 0,
 		query,
-		searchPlaceholder: path === CONTACTS_PATH ? "Search contacts" : "Instant search",
+		searchPlaceholder:
+			path === CONTACTS_PATH ? "Search contacts" : path === SETTINGS_PATH ? "Search settings" : "Instant search",
 		searchFocused,
 		searching,
 		searchSummary: searchSummaryText(rows.length),
@@ -1482,6 +1490,7 @@ export function useFinderController(
 		selectTabId: (id) => setTabsState((state) => selectTab(state, id)),
 		closeTabId: (id) => setTabsState((state) => closeTab(state, id)),
 		newTab: () => setTabsState((state) => openTab(state)),
+		openSettings: () => setTabsState((state) => openOrSelectSettingsTab(state)),
 		back: () => setTabsState((state) => goBack(state)),
 		forward: () => setTabsState((state) => goForward(state)),
 		setQuery: setQueryValue,
