@@ -119,7 +119,7 @@ function PdfPage({ pdf, index, box, scale, onError, register }: PdfPageProps): R
 	return (
 		<div
 			ref={attachRef}
-			className="ql__paper"
+			className="ql__paper relative flex-none overflow-hidden bg-window shadow-raised scroll-mt-16 [&_canvas]:block [&_canvas]:w-full [&_canvas]:h-full"
 			data-page={index + 1}
 			style={{ width: box.width * scale, height: box.height * scale }}
 		>
@@ -297,7 +297,11 @@ export function PdfView({
 	if (error !== null) return <FallbackView file={file} note={error} />;
 	return (
 		<>
-			<div ref={hostRef} className="ql__pages" data-rail={doc !== null && doc.boxes.length > 1 ? "true" : undefined}>
+			<div
+				ref={hostRef}
+				className="ql__pages flex flex-col items-center gap-16 w-full py-16 data-[rail=true]:pr-[calc(var(--ql-rail)+var(--space-12)*2)]"
+				data-rail={doc !== null && doc.boxes.length > 1 ? "true" : undefined}
+			>
 				{doc === null ? (
 					<Status>불러오는 중</Status>
 				) : (
@@ -315,12 +319,12 @@ export function PdfView({
 				)}
 			</div>
 			{doc !== null && doc.boxes.length > 1 ? (
-				<div className="ql__rail" role="group" aria-label="페이지">
+				<div className="ql__rail fixed top-[calc(var(--ql-toolbar)+var(--space-12))] right-12 bottom-12 flex flex-col gap-8 w-(--ql-rail) p-8 overflow-y-auto border border-border rounded-12 bg-quicklook-frost [backdrop-filter:var(--backdrop-quicklook)] shadow-raised" role="group" aria-label="페이지">
 					{doc.boxes.map((box, index) => (
 						<button
 							key={index}
 							type="button"
-							className="ql__rail-item"
+							className="ql__rail-item block flex-none p-0 overflow-hidden border border-border rounded-4 bg-window data-[active=true]:border-accent data-[active=true]:shadow-raised [&_canvas]:block [&_canvas]:w-full [&_canvas]:h-full"
 							data-active={index === active ? "true" : undefined}
 							aria-label={`${index + 1}페이지`}
 							style={{ aspectRatio: `${box.width} / ${box.height}` }}
@@ -359,7 +363,7 @@ export function DocxView({ file }: { readonly file: PreviewDocument }): ReactEle
 	if (bytes === null) return <FallbackView file={file} note="문서를 읽지 못했습니다" />;
 	if (error !== null) return <FallbackView file={file} note={error} />;
 	if (srcdoc === null) return <Status>불러오는 중</Status>;
-	return <iframe className="ql__frame" sandbox="" title={file.name} srcDoc={srcdoc} />;
+	return <iframe className="ql__frame flex-1 self-stretch w-full h-full border-0 bg-window" sandbox="" title={file.name} srcDoc={srcdoc} />;
 }
 
 function cellText(cell: unknown): string {
@@ -392,8 +396,8 @@ export function SheetView({ file }: { readonly file: PreviewDocument }): ReactEl
 	if (names.length === 0) return <FallbackView file={file} note="시트가 없습니다" />;
 	return (
 		<>
-			<div className="ql__tablewrap">
-				<table className="ql__table">
+			<div className="ql__tablewrap box-border self-stretch w-full h-auto m-0 p-16">
+				<table className="ql__table border-collapse bg-window text-meta [&_th]:max-w-[240px] [&_td]:max-w-[240px] [&_th]:px-10 [&_td]:px-10 [&_th]:py-6 [&_td]:py-6 [&_th]:overflow-hidden [&_td]:overflow-hidden [&_th]:border [&_td]:border [&_th]:border-divider [&_td]:border-divider [&_th]:text-ellipsis [&_td]:text-ellipsis [&_th]:whitespace-nowrap [&_td]:whitespace-nowrap [&_th]:bg-subtle [&_th]:font-semibold">
 					<tbody>
 						{rows.map((row, rowIndex) => (
 							<tr key={rowIndex}>
@@ -406,7 +410,7 @@ export function SheetView({ file }: { readonly file: PreviewDocument }): ReactEl
 				</table>
 			</div>
 			{names.length > 1 ? (
-				<div className="ql__pager">
+				<div className="ql__pager flex flex-none self-stretch items-center justify-center gap-12 h-[40px] border-t border-divider bg-quicklook-frost text-ink-muted text-meta [&_button]:h-icon-sm [&_button]:px-10 [&_button]:border [&_button]:border-border [&_button]:rounded-6 [&_button]:bg-window [&_button]:text-ink [&_button]:disabled:text-ink-faint">
 					<button type="button" disabled={sheet <= 0} onClick={() => setSheet((current) => current - 1)}>
 						이전
 					</button>

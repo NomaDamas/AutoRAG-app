@@ -22,7 +22,7 @@
  *   state.
  */
 
-import { mkdirSync, mkdtempSync, rmSync, utimesSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { deflateSync } from "node:zlib";
@@ -85,6 +85,66 @@ mkdirSync(home, { recursive: true });
 /** Every fixture file gets this mtime so the Modified column is stable. */
 const FIXTURE_MTIME = new Date("2026-01-02T09:05:00Z");
 const userDataDir = mkdtempSync(join(tmpdir(), "ulw-parity-data-"));
+
+/**
+ * A seeded chat makes the AI answer, citation and Evidence surfaces reachable
+ * without a model: loading it drives the real `loadHistory -> publish ->
+ * EvidencePanel` path (the same deterministic lane as
+ * `run-qa-finder-evidence-panel.mjs`). Without it, `shell.css`'s `.ai*` and
+ * `.evidence*` rules could not be screenshot-verified at all.
+ */
+const seedChatHistory = (documents) => {
+	const source = (name) => join(documents, "ulw-parity", name);
+	const evidence = [
+		{
+			number: 1,
+			title: "notes.md",
+			summary: "발췌 요약입니다.",
+			source: source("notes.md"),
+			excerpts: ["## 승인 규칙\n1. 일반 환불은 5영업일 내 처리합니다.\n2. 예외는 **임원 승인**이 필요합니다.\n> 인용: 긴급 예외도 승인 생략 불가\n```\nif (!director) reject()\n```"],
+			confidence: 0.92,
+			feedbackId: "fb-1",
+		},
+		{
+			number: 2,
+			title: "alpha-1.md",
+			summary: "두 번째 근거입니다.",
+			source: source("alpha/alpha-1.md"),
+			excerpts: ["승인 체인 원본 첨부 필수."],
+			confidence: 0.81,
+			feedbackId: "fb-2",
+		},
+	];
+	const at = "2026-01-02T09:05:00.000Z";
+	const record = {
+		id: "c-parity-1",
+		title: "환불 예외 승인 규칙",
+		snippet: "최종 승인액은 ₩3.8억이며, 승인 체인 첨부가 필요합니다.",
+		updatedAt: at,
+		messages: [
+			{ role: "user", text: "환불 예외 승인 규칙 요약해줘", attachments: [], at },
+			{
+				role: "assistant",
+				sessionId: "parity-session",
+				quick: {
+					answer: "최종 승인액은 **₩3.8억**이며, 승인 체인 첨부가 필요합니다. [1][2]",
+					evidence: evidence.slice(0, 2),
+					meta: "0.4s · 2 sources",
+				},
+				deep: {
+					answer:
+						"## 승인 규칙 요약\n환불 예외는 지급 전 **임원 승인**이 필요합니다. [1][2]\n\n- 예외는 자동 반려되지 않습니다 [2]\n- 긴급 예외도 승인 생략 불가 [1]\n\n> 내규 인용 구문이 함께 표시됩니다.\n\n관련 명령은 `bun run qa` 입니다.",
+					evidence,
+					meta: "3 sources read · 2s",
+				},
+				stopped: false,
+				at,
+			},
+		],
+	};
+	mkdirSync(join(userDataDir, "chat-history"), { recursive: true });
+	writeFileSync(join(userDataDir, "chat-history", "chats.json"), `${JSON.stringify([record], null, 2)}\n`);
+};
 const documents = join(home, "Documents");
 const topName = "ulw-parity";
 const top = join(documents, topName);
@@ -108,6 +168,8 @@ for (const [dir, items] of Object.entries(tree)) {
 		utimesSync(file, FIXTURE_MTIME, FIXTURE_MTIME);
 	}
 }
+
+seedChatHistory(documents);
 
 // ---------------------------------------------------------------- capture
 
@@ -292,6 +354,32 @@ try {
 	await page.locator(".tabs__new").hover();
 	await sleep(300);
 	await shot(page, "29-tabs-new-hover", ".tabs");
+
+	// The AI answer, citation and Evidence surfaces. The seeded chat drives them
+	// through the real loadHistory -> publish -> EvidencePanel path, so these
+	// rules are screenshot-verified rather than merely translated. The states
+	// that need a live model — thinking, skeleton, pending, streaming, progress,
+	// stop — cannot be reached deterministically and stay uncovered.
+	console.log("ai answers + evidence");
+	await page.locator('[aria-label="Chat history"]').click();
+	await page.locator(".ai__history-item").first().waitFor({ state: "visible" });
+	await sleep(400);
+	await shot(page, "30-ai-history-popover");
+	await shot(page, "31-ai-history-element", ".ai__history-popover");
+
+	await page.locator(".ai__history-item").first().click();
+	await page.waitForSelector(".ai__answer--deep .ai__block--heading", { timeout: 15000 });
+	await sleep(700);
+	await shot(page, "32-ai-answers");
+	await shot(page, "33-ai-answer-quick", ".ai__answer--quick");
+	await shot(page, "34-ai-answer-deep", ".ai__answer--deep");
+
+	await page.locator(".ai__answer--quick .ai__citation", { hasText: "2" }).first().click();
+	await page.waitForSelector(".evidence__tab--active", { timeout: 15000 });
+	await sleep(700);
+	await shot(page, "35-evidence-panel");
+	await shot(page, "36-evidence-element", ".evidence");
+	await shot(page, "37-evidence-view", ".evidence__view");
 } catch (error) {
 	// A failed capture is only diagnosable with the state it failed in.
 	const failureDir = join(outDir, "failure");

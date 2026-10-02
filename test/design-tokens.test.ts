@@ -60,13 +60,13 @@ const ARBITRARY_ONLY_TOKENS = [
 const ARBITRARY_ONLY_PATTERNS = [/^--dur-/, /^--time-/];
 
 describe("design token bridge", () => {
-	it("declares the layer order that lets utilities beat legacy rules", () => {
+	it("declares the layer order that lets utilities beat the base layer", () => {
 		const statement = /@layer\s+([a-z0-9,\s]+);/.exec(stripComments(read("tailwind.css")));
 		expect(statement).not.toBeNull();
 		const layers = (statement?.[1] ?? "").split(",").map((layer) => layer.trim());
-		expect(layers).toContain("legacy");
+		expect(layers).toContain("base");
 		expect(layers).toContain("utilities");
-		expect(layers.indexOf("legacy")).toBeLessThan(layers.indexOf("utilities"));
+		expect(layers.indexOf("base")).toBeLessThan(layers.indexOf("utilities"));
 	});
 
 	it("forwards every bridge entry to a token that exists", () => {

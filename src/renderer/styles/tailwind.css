@@ -36,23 +36,27 @@
  * to the reference values. `test/design-tokens.test.ts` guards this file
  * against drifting from tokens.css.
  *
- * Layer order: `legacy` is declared before `utilities`, so a Tailwind utility
- * always beats a rule that is still in the hand-written stylesheets. That is
- * what makes the migration incremental: migrating a component means deleting
- * its rules, and until then the legacy rule simply wins.
+ * Layer order: `base` is declared before `utilities`, so a Tailwind utility
+ * beats any rule in `base.css` without needing `!important`. `base.css` holds
+ * only the document surface now; every component rule is a utility.
  *
  * Preflight is NOT imported. `base.css` already defines the document surface
  * (reset, scrollbars, focus ring, reduced motion) exactly as the reference
  * specifies, and Tailwind's preflight would change it.
  * ========================================================================== */
 
-@layer theme, legacy, utilities;
+@layer theme, base, utilities;
 
 @import "tailwindcss/theme.css" layer(theme);
 
 @import "./tokens.css";
 
+/* `@source` paths are relative to this file. electron-vite sets the renderer's
+ * Vite root to `src/renderer`, so Tailwind's automatic scan stops there and the
+ * Quick Look window's components under `src/preview` would never be scanned —
+ * their utilities would silently not exist. Scan them explicitly. */
 @source "../src";
+@source "../../preview";
 
 @import "tailwindcss/utilities.css" layer(utilities);
 
