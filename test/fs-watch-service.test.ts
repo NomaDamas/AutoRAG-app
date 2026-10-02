@@ -32,9 +32,23 @@ function fakeBackend() {
 	return { backend, subscribe, subscriptions, unsubscribed };
 }
 
-async function settle(): Promise<void> {
-	await Promise.resolve();
-	await Promise.resolve();
+async function settle(turns = 20): Promise<void> {
+	for (let i = 0; i < turns; i += 1) await Promise.resolve();
+}
+
+const identity = async (dir: string): Promise<string> => dir;
+
+/** Backend + canonicalization that model a directory that can be deleted and recreated. */
+function recreatableDir(initial: boolean) {
+	const state = { exists: initial };
+	return {
+		state,
+		canonicalize: async (dir: string): Promise<string> => {
+			if (!state.exists) throw new Error("ENOENT");
+			return dir;
+		},
+		stat: async (): Promise<boolean> => state.exists,
+	};
 }
 
 describe("FsWatchService", () => {
@@ -48,7 +62,7 @@ describe("FsWatchService", () => {
 		const fake = fakeBackend();
 		const batches: FsDirChange[] = [];
 		const dir = "/tmp/watch";
-		const service = createFsWatchService({ backend: fake.backend, onBatch: (batch) => batches.push(batch) });
+		const service = createFsWatchService({ backend: fake.backend, onBatch: (batch) => batches.push(batch), canonicalize: identity });
 		await service.setWatchSet([dir]);
 		fake.subscriptions.get(dir)?.emit([
 			{ path: join(dir, "a.txt"), type: "create" },
@@ -68,6 +82,7 @@ describe("FsWatchService", () => {
 		const service = createFsWatchService({
 			backend: fake.backend,
 			onBatch: (batch) => batches.push(batch),
+			canonicalize: identity,
 			now: () => Date.now(),
 		});
 		await service.setWatchSet([dir]);
@@ -84,7 +99,7 @@ describe("FsWatchService", () => {
 		const fake = fakeBackend();
 		const batches: FsDirChange[] = [];
 		const dir = "/tmp/watch-order";
-		const service = createFsWatchService({ backend: fake.backend, onBatch: (batch) => batches.push(batch) });
+		const service = createFsWatchService({ backend: fake.backend, onBatch: (batch) => batches.push(batch), canonicalize: identity });
 		await service.setWatchSet([dir]);
 		fake.subscriptions.get(dir)?.emit([
 			{ path: join(dir, "old.txt"), type: "delete" },
@@ -103,7 +118,7 @@ describe("FsWatchService", () => {
 
 	it("diffs, deduplicates, and ignores virtual watch paths", async () => {
 		const fake = fakeBackend();
-		const service = createFsWatchService({ backend: fake.backend, onBatch: () => { } });
+		const service = createFsWatchService({ backend: fake.backend, onBatch: () => { }, canonicalize: identity });
 		await service.setWatchSet(["relative", "Recents", "Contacts", "/kakao/people", "/tmp/a", "/tmp/a"]);
 		expect(fake.subscribe).toHaveBeenCalledTimes(1);
 		expect(fake.subscribe).toHaveBeenCalledWith("/tmp/a", expect.any(Function), expect.any(Function));
@@ -114,10 +129,46 @@ describe("FsWatchService", () => {
 		expect(fake.subscribe).toHaveBeenCalledTimes(2);
 	});
 
+	it("watches the real path and translates events back to the user-visible alias", async () => {
+		vi.useFakeTimers();
+		const fake = fakeBackend();
+		const batches: FsDirChange[] = [];
+		const alias = "/tmp/link";
+		const canonical = "/private/tmp/real";
+		const service = createFsWatchService({
+			backend: fake.backend,
+			onBatch: (batch) => batches.push(batch),
+			canonicalize: async (dir) => (dir === alias ? canonical : dir),
+		});
+		await service.setWatchSet([alias]);
+		expect(fake.subscribe).toHaveBeenCalledWith(canonical, expect.any(Function), expect.any(Function));
+		fake.subscriptions.get(canonical)?.emit([
+			{ path: join(canonical, "a.txt"), type: "create" },
+			{ path: join(canonical, "nested", "b.txt"), type: "update" },
+			{ path: canonical, type: "update" },
+		]);
+		await vi.advanceTimersByTimeAsync(150);
+		expect(batches).toEqual([
+			{
+				dir: alias,
+				changes: [
+					{ path: join(alias, "a.txt"), type: "create" },
+					{ path: alias, type: "update" },
+				],
+				overflow: false,
+				dirGone: false,
+			},
+		]);
+	});
+
 	it("serializes interrupted watch-set updates and ends with the latest set", async () => {
 		const firstSubscribe = vi.fn<(dir: string, onEvents: (events: readonly FsChange[]) => void, onError: (error: Error) => void) => Promise<() => Promise<void>>>();
 		let release!: (unsubscribe: () => Promise<void>) => void;
-		firstSubscribe.mockImplementationOnce(async () => new Promise((resolve) => { release = resolve; }));
+		firstSubscribe.mockImplementationOnce(async () => {
+			const { promise, resolve } = Promise.withResolvers<() => Promise<void>>();
+			release = resolve;
+			return promise;
+		});
 		const fake = fakeBackend();
 		const backend: WatchBackend = {
 			subscribe: async (dir, onEvents, onError) => {
@@ -125,7 +176,7 @@ describe("FsWatchService", () => {
 				return fake.backend.subscribe(dir, onEvents, onError);
 			},
 		};
-		const service = createFsWatchService({ backend, onBatch: () => { } });
+		const service = createFsWatchService({ backend, onBatch: () => { }, canonicalize: identity });
 		const first = service.setWatchSet(["/tmp/first"]);
 		const latest = service.setWatchSet(["/tmp/latest"]);
 		await settle();
@@ -143,6 +194,7 @@ describe("FsWatchService", () => {
 		const service = createFsWatchService({
 			backend: fake.backend,
 			onBatch: (batch) => batches.push(batch),
+			canonicalize: identity,
 			stat: async () => true,
 		});
 		await service.setWatchSet(["/tmp/rejected"]);
@@ -151,22 +203,158 @@ describe("FsWatchService", () => {
 		expect(fake.subscriptions.has("/tmp/works")).toBe(true);
 	});
 
-	it("emits dirGone and unsubscribes when the watched directory is deleted", async () => {
+	it("emits dirGone and drops the subscription when the watched directory is deleted", async () => {
 		vi.useFakeTimers();
 		const fake = fakeBackend();
 		const batches: FsDirChange[] = [];
 		const dir = "/tmp/gone";
+		const state = recreatableDir(true);
 		const service = createFsWatchService({
 			backend: fake.backend,
 			onBatch: (batch) => batches.push(batch),
-			stat: async () => false,
+			canonicalize: state.canonicalize,
+			stat: state.stat,
 		});
 		await service.setWatchSet([dir]);
+		state.state.exists = false;
 		fake.subscriptions.get(dir)?.emit([{ path: dir, type: "delete" }]);
-		await vi.advanceTimersByTimeAsync(0);
 		await settle();
 		expect(batches).toEqual([{ dir, changes: [], overflow: false, dirGone: true }]);
 		expect(fake.subscriptions.has(dir)).toBe(false);
+		await service.dispose();
+	});
+
+	it("reattaches a recreated directory without an explicit watch-set resend", async () => {
+		vi.useFakeTimers();
+		const fake = fakeBackend();
+		const batches: FsDirChange[] = [];
+		const dir = "/tmp/recreate";
+		const state = recreatableDir(true);
+		const service = createFsWatchService({
+			backend: fake.backend,
+			onBatch: (batch) => batches.push(batch),
+			canonicalize: state.canonicalize,
+			stat: state.stat,
+		});
+		await service.setWatchSet([dir]);
+		state.state.exists = false;
+		fake.subscriptions.get(dir)?.emit([{ path: dir, type: "delete" }]);
+		await settle();
+		expect(fake.subscriptions.has(dir)).toBe(false);
+
+		state.state.exists = true;
+		await vi.advanceTimersByTimeAsync(1000);
+		await settle();
+		expect(fake.subscriptions.has(dir)).toBe(true);
+		expect(batches[batches.length - 1]).toEqual({ dir, changes: [], overflow: true, dirGone: false });
+
+		fake.subscriptions.get(dir)?.emit([{ path: join(dir, "new.txt"), type: "create" }]);
+		await vi.advanceTimersByTimeAsync(150);
+		expect(batches[batches.length - 1]?.changes).toEqual([{ path: join(dir, "new.txt"), type: "create" }]);
+	});
+
+	it("reattaches a gone directory when the same watch set is re-sent", async () => {
+		vi.useFakeTimers();
+		const fake = fakeBackend();
+		const batches: FsDirChange[] = [];
+		const dir = "/tmp/focus";
+		const state = recreatableDir(true);
+		const service = createFsWatchService({
+			backend: fake.backend,
+			onBatch: (batch) => batches.push(batch),
+			canonicalize: state.canonicalize,
+			stat: state.stat,
+		});
+		await service.setWatchSet([dir]);
+		state.state.exists = false;
+		fake.subscriptions.get(dir)?.emit([{ path: dir, type: "delete" }]);
+		await settle();
+		expect(fake.subscriptions.has(dir)).toBe(false);
+		expect(batches).toEqual([{ dir, changes: [], overflow: false, dirGone: true }]);
+
+		state.state.exists = true;
+		await service.setWatchSet([dir]);
+		expect(fake.subscriptions.has(dir)).toBe(true);
+		expect(batches).toEqual([
+			{ dir, changes: [], overflow: false, dirGone: true },
+			{ dir, changes: [], overflow: true, dirGone: false },
+		]);
+	});
+
+	it("ignores late events from a subscription superseded by a root recreate", async () => {
+		vi.useFakeTimers();
+		const fake = fakeBackend();
+		const batches: FsDirChange[] = [];
+		const dir = "/tmp/supersede";
+		const state = recreatableDir(true);
+		const service = createFsWatchService({
+			backend: fake.backend,
+			onBatch: (batch) => batches.push(batch),
+			canonicalize: state.canonicalize,
+			stat: state.stat,
+		});
+		await service.setWatchSet([dir]);
+		const superseded = fake.subscriptions.get(dir);
+		state.state.exists = false;
+		superseded?.emit([{ path: dir, type: "delete" }]);
+		await settle();
+		state.state.exists = true;
+		await vi.advanceTimersByTimeAsync(1000);
+		await settle();
+		const settled = batches.length;
+		superseded?.emit([{ path: join(dir, "stale.txt"), type: "create" }]);
+		await vi.advanceTimersByTimeAsync(150);
+		expect(batches.length).toBe(settled);
+	});
+
+	it("retries only missing wanted roots and stops once none are wanted", async () => {
+		vi.useFakeTimers();
+		const fake = fakeBackend();
+		const batches: FsDirChange[] = [];
+		const dir = "/tmp/gone-retry";
+		const state = recreatableDir(true);
+		const service = createFsWatchService({
+			backend: fake.backend,
+			onBatch: (batch) => batches.push(batch),
+			canonicalize: state.canonicalize,
+			stat: state.stat,
+		});
+		await service.setWatchSet([dir]);
+		state.state.exists = false;
+		fake.subscriptions.get(dir)?.emit([{ path: dir, type: "delete" }]);
+		await settle();
+		const afterGone = fake.subscribe.mock.calls.length;
+		await vi.advanceTimersByTimeAsync(1000);
+		await settle();
+		expect(fake.subscribe.mock.calls.length).toBe(afterGone);
+
+		await service.setWatchSet([]);
+		const afterRemove = fake.subscribe.mock.calls.length;
+		await vi.advanceTimersByTimeAsync(3000);
+		await settle();
+		expect(fake.subscribe.mock.calls.length).toBe(afterRemove);
+	});
+
+	it("releases the retry timer on dispose", async () => {
+		vi.useFakeTimers();
+		const fake = fakeBackend();
+		const dir = "/tmp/gone-dispose";
+		const state = recreatableDir(true);
+		const service = createFsWatchService({
+			backend: fake.backend,
+			onBatch: () => { },
+			canonicalize: state.canonicalize,
+			stat: state.stat,
+		});
+		await service.setWatchSet([dir]);
+		state.state.exists = false;
+		fake.subscriptions.get(dir)?.emit([{ path: dir, type: "delete" }]);
+		await settle();
+		await service.dispose();
+		const afterDispose = fake.subscribe.mock.calls.length;
+		await vi.advanceTimersByTimeAsync(3000);
+		await settle();
+		expect(fake.subscribe.mock.calls.length).toBe(afterDispose);
 	});
 
 	it("emits overflow and logs the directory when the backend reports an error", async () => {
@@ -177,6 +365,7 @@ describe("FsWatchService", () => {
 		const service = createFsWatchService({
 			backend: fake.backend,
 			onBatch: (batch) => batches.push(batch),
+			canonicalize: identity,
 			stat: async () => true,
 		});
 		await service.setWatchSet([dir]);
@@ -188,7 +377,7 @@ describe("FsWatchService", () => {
 
 	it("unsubscribes every active directory on dispose", async () => {
 		const fake = fakeBackend();
-		const service = createFsWatchService({ backend: fake.backend, onBatch: () => { } });
+		const service = createFsWatchService({ backend: fake.backend, onBatch: () => { }, canonicalize: identity });
 		await service.setWatchSet(["/tmp/a", "/tmp/b"]);
 		await service.dispose();
 		expect(fake.unsubscribed.sort()).toEqual(["/tmp/a", "/tmp/b"]);

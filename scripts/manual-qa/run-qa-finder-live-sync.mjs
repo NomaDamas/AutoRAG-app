@@ -244,9 +244,9 @@ async function installLiveRefreshProbe(page, label) {
 		throw new Error(`${label} started with ${initialToastCount} toast element(s)`);
 	}
 	await page.evaluate((probeLabel) => {
-		const grid = document.querySelector('[role="grid"]');
+		const grid = document.querySelector('[role="grid"], [role="treegrid"]');
 		if (grid === null) {
-			throw new Error('live refresh probe could not find [role="grid"]');
+			throw new Error('live refresh probe could not find [role="grid"] or [role="treegrid"]');
 		}
 		const state = {
 			initialRowCount: grid.querySelectorAll('[role="row"]').length,
@@ -732,7 +732,7 @@ async function runS10(page) {
 	await rowFor(page, "bulk").waitFor({ timeout: 30_000 });
 	await rowFor(page, "bulk").dblclick();
 	await rowFor(page, "bulk-0000.txt").waitFor({ timeout: 60_000 });
-	const grid = page.locator('[role="grid"]');
+	const grid = page.locator('[role="grid"], [role="treegrid"]');
 	await grid.evaluate((element) => {
 		element.scrollTop = element.scrollHeight;
 	});

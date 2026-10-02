@@ -44,20 +44,13 @@ export function sameIdentity(a: FileStamp, b: FileStamp): boolean {
 	return a.dev === b.dev && a.ino === b.ino;
 }
 
+/**
+ * Content identity: same inode with the same size and mtime. ctime is
+ * deliberately ignored — chmod, xattr, and rename(2) all bump it without
+ * changing the file's content, and detaching on those would hide a family
+ * member on a pure metadata touch.
+ */
 export function sameContent(a: FileStamp, b: FileStamp): boolean {
-	return (
-		!isDirty(a) &&
-		!isDirty(b) &&
-		a.dev === b.dev &&
-		a.ino === b.ino &&
-		a.size === b.size &&
-		a.mtimeNs === b.mtimeNs &&
-		a.ctimeNs === b.ctimeNs
-	);
-}
-
-/** Like sameContent but ignores ctimeNs — for rename detection where the kernel changes ctime on rename(2). */
-function sameContentForRename(a: FileStamp, b: FileStamp): boolean {
 	return (
 		!isDirty(a) &&
 		!isDirty(b) &&
@@ -213,7 +206,7 @@ export async function remapRenames(
 		claimed.add(newPath);
 		nextFamilies = rewriteFamilies(nextFamilies, oldPath, newPath);
 		delete nextStamps[oldPath];
-		nextStamps[newPath] = sameContentForRename(oldStamp, newStamp) ? newStamp : DIRTY_STAMP;
+		nextStamps[newPath] = sameContent(oldStamp, newStamp) ? newStamp : DIRTY_STAMP;
 		remapped.set(oldPath, newPath);
 	}
 	return { families: nextFamilies, stamps: nextStamps, remapped };

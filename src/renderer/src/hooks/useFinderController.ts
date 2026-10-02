@@ -22,12 +22,16 @@ import {
 import { emptyStateText, indexToast, searchSummaryText, statusBarText, trashToast } from "../state/format";
 import { type FocusZone, resolveKeyAction } from "../state/keymap";
 import {
+	applyEntryPatch,
 	applyOptimisticDeletes,
+	createIncrementalListing,
 	createListingLoader,
 	nearestExistingAncestor,
 	listingSurvivor,
 	pruneSelection,
 	watchSetFor,
+	type IncrementalListing,
+	type ListingScope,
 } from "../state/live";
 import {
 	adoptInvoke,
@@ -266,7 +270,10 @@ export function useFinderController(
 	const staleTabsRef = useRef(new Set<number>());
 	const previousPathRef = useRef<string | null>(null);
 	const previousTabIdRef = useRef<number | null>(null);
+	const incrementalRef = useRef<{ source: FinderSource; listing: IncrementalListing } | null>(null);
+	const resyncTimerRef = useRef<number | null>(null);
 	const previousRevisionRef = useRef(revision);
+	const previousSourceRef = useRef(source);
 
 	const tab = activeTab(tabsState);
 	const path = tab.path;
@@ -309,6 +316,21 @@ export function useFinderController(
 		[source],
 	);
 
+	/**
+	 * Start a navigation scope: bump the generation and tell the incremental
+	 * coordinator its baseline full listing is pending. Old work is orphaned.
+	 */
+	const beginScope = useCallback((): ListingScope => {
+		generationRef.current += 1;
+		const scope: ListingScope = {
+			generation: generationRef.current,
+			path: pathRef.current,
+			tabId: activeTabIdRef.current,
+		};
+		incrementalRef.current?.listing.begin(scope);
+		return scope;
+	}, []);
+
 	const navigateToExistingAncestor = useCallback(
 		async (missingPath: string, requestGeneration: number): Promise<void> => {
 			try {
@@ -316,14 +338,14 @@ export function useFinderController(
 				if (pathRef.current !== missingPath || generationRef.current !== requestGeneration || ancestor === null) {
 					return;
 				}
-				generationRef.current += 1;
+				beginScope();
 				setTabsState((state) => navigateTab(state, ancestor));
 				setQueryValue("");
 			} catch (error: unknown) {
 				console.error(error);
 			}
 		},
-		[source],
+		[beginScope, source],
 	);
 
 	/**
@@ -331,16 +353,18 @@ export function useFinderController(
 	 * column pane, and drops selection and rename targets it no longer holds.
 	 */
 	const adoptListing = useCallback((dir: string, entries: readonly FinderEntry[]): void => {
-		const survives = listingSurvivor(dir, listingRef.current, entries);
+		const previous = listingRef.current;
+		const survives = listingSurvivor(dir, previous, entries);
 		listingRef.current = entries;
-		setListing(entries);
-		setPaneListings((current) => ({ ...current, [dir]: entries }));
-		setTabsState((state) =>
-			patchActiveTab(state, (current) => ({
-				...current,
-				selection: pruneSelection(current.selection, survives),
-			})),
-		);
+		if (previous !== entries) {
+			setListing(entries);
+		}
+		setPaneListings((current) => (current[dir] === entries ? current : { ...current, [dir]: entries }));
+		setTabsState((state) => {
+			const current = activeTab(state);
+			const selection = pruneSelection(current.selection, survives);
+			return selection === current.selection ? state : patchActiveTab(state, (tab) => ({ ...tab, selection }));
+		});
 		setRename((current) => (current !== null && !survives(current.path) ? null : current));
 	}, []);
 
@@ -350,6 +374,13 @@ export function useFinderController(
 			mode: "navigate" | "silent",
 			requestGeneration: number,
 		): void => {
+			const scope: ListingScope = {
+				generation: requestGeneration,
+				path: requestedPath,
+				tabId: activeTabIdRef.current,
+			};
+			// A full load is in flight: live patches wait for its baseline.
+			incrementalRef.current?.listing.fullStarted(scope);
 			const request = {
 				path: requestedPath,
 				generation: requestGeneration,
@@ -358,30 +389,58 @@ export function useFinderController(
 			} as const;
 			void listingLoader(request).then(async (result) => {
 				if (result.kind === "stale" || result.kind === "superseded") {
+					// A newer scope or request owns the baseline now.
 					return;
 				}
 				if (result.kind === "error") {
 					if (mode === "silent") {
+						let missing = false;
 						try {
-							if (await isMissingPathFailure(source, requestedPath)) {
-								await navigateToExistingAncestor(requestedPath, requestGeneration);
-								return;
-							}
+							missing = await isMissingPathFailure(source, requestedPath);
 						} catch (error: unknown) {
 							console.error(error);
 						}
-						console.error(result.error);
+						if (missing) {
+							await navigateToExistingAncestor(requestedPath, requestGeneration);
+						} else {
+							console.error(result.error);
+						}
+						incrementalRef.current?.listing.fullAdopted(scope);
 						return;
 					}
 					adoptListing(requestedPath, []);
+					incrementalRef.current?.listing.fullAdopted(scope);
 					reportError(result.error);
 					return;
 				}
 				adoptListing(requestedPath, result.entries);
+				incrementalRef.current?.listing.fullAdopted(scope);
 			});
 		},
 		[adoptListing, listingLoader, navigateToExistingAncestor, reportError, source],
 	);
+
+	const currentIncremental = incrementalRef.current;
+	let incremental: IncrementalListing;
+	if (currentIncremental !== null && currentIncremental.source === source) {
+		incremental = currentIncremental.listing;
+	} else {
+		currentIncremental?.listing.cancel();
+		incremental = createIncrementalListing({
+			read: (dir, paths) => source.readEntries(dir, paths),
+			apply: (dir, patch) => adoptListing(dir, applyEntryPatch(listingRef.current, patch)),
+			isCurrent: (scope) =>
+				scope.path === pathRef.current &&
+				scope.generation === generationRef.current &&
+				scope.tabId === activeTabIdRef.current &&
+				!searchingRef.current,
+			onError: (error) => {
+				console.error("live incremental listing failed", error);
+				loadListing(pathRef.current, "silent", generationRef.current);
+			},
+		});
+		incrementalRef.current = { source, listing: incremental };
+	}
 
 	const refresh = useCallback(() => {
 		setRevision((value) => value + 1);
@@ -423,12 +482,14 @@ export function useFinderController(
 		const pathChanged = previousPathRef.current !== path;
 		const tabChanged = previousTabIdRef.current !== tab.id;
 		const revisionChanged = previousRevisionRef.current !== revision;
-		if (pathChanged || tabChanged || revisionChanged) {
-			generationRef.current += 1;
+		const sourceChanged = previousSourceRef.current !== source;
+		if (pathChanged || tabChanged || revisionChanged || sourceChanged) {
+			beginScope();
 		}
 		previousPathRef.current = path;
 		previousTabIdRef.current = tab.id;
 		previousRevisionRef.current = revision;
+		previousSourceRef.current = source;
 		if (searching && !pathChanged && !tabChanged) {
 			return;
 		}
@@ -438,7 +499,7 @@ export function useFinderController(
 		if (stale) {
 			staleTabsRef.current.delete(tab.id);
 		}
-	}, [loadListing, path, revision, searching, tab.id]);
+	}, [beginScope, loadListing, path, revision, searching, source, tab.id]);
 
 	const tabPathsKey = tabsState.tabs.map((current) => current.path).join("\u0000");
 
@@ -474,25 +535,38 @@ export function useFinderController(
 			if (activeChanges.length === 0) {
 				return;
 			}
-			generationRef.current += 1;
 			if (searchingRef.current) {
 				staleTabsRef.current.add(activeTabId);
 				return;
 			}
-			let nextListing = listingRef.current;
-			for (const dirChange of activeChanges) {
-				nextListing = applyOptimisticDeletes(nextListing, dirChange);
-			}
-			adoptListing(activePath, nextListing);
-			const requestGeneration = generationRef.current;
-			if (activeChanges.some((change) => change.dirGone)) {
-				void navigateToExistingAncestor(activePath, requestGeneration);
+			if (activeChanges.some((change) => change.dirGone || change.overflow)) {
+				const scope = beginScope();
+				let optimistic = listingRef.current;
+				for (const change of activeChanges) optimistic = applyOptimisticDeletes(optimistic, change);
+				adoptListing(activePath, optimistic);
+				if (activeChanges.some((change) => change.dirGone)) {
+					const { generation } = scope;
+					void navigateToExistingAncestor(activePath, generation).then(() => {
+						// The folder never moved (no existing ancestor): relist so the
+						// scope settles and patches stop waiting on a missing baseline.
+						if (pathRef.current === activePath && generationRef.current === generation) {
+							loadListing(activePath, "silent", generation);
+						}
+					});
+					return;
+				}
+				loadListing(activePath, "silent", scope.generation);
 				return;
 			}
-			loadListing(activePath, "silent", requestGeneration);
+			const changedPaths = [...new Set(activeChanges.flatMap((change) => change.changes.map(({ path }) => path)))];
+			if (changedPaths.length === 0) return;
+			incremental.changed(changedPaths);
 		});
-		return unsubscribe;
-	}, [adoptListing, loadListing, navigateToExistingAncestor, source]);
+		return () => {
+			unsubscribe();
+			incremental.cancel();
+		};
+	}, [adoptListing, beginScope, incremental, loadListing, navigateToExistingAncestor, source]);
 
 	/** Column view: the panes after the first list the folders chosen along the chain. */
 	useEffect(() => {
@@ -595,11 +669,11 @@ export function useFinderController(
 		let live = true;
 		const resync = (): void => {
 			if (path === "") return;
-			generationRef.current += 1;
-			const requestGeneration = generationRef.current;
-			if (!searchingRef.current) {
-				loadListing(path, "silent", requestGeneration);
-			}
+			const scope = beginScope();
+			void source.setWatchSet(watchSetFor(tabsRef.current)).catch((error: unknown) =>
+				console.error("live watch resync failed", error),
+			);
+			if (!searchingRef.current) loadListing(path, "silent", scope.generation);
 			void source
 				.liveLayers()
 				.then((result) => {
@@ -607,17 +681,26 @@ export function useFinderController(
 				})
 				.catch((error: unknown) => console.error("live layer resync failed", error));
 		};
-		const onVisibilityChange = (): void => {
-			if (document.visibilityState === "visible") resync();
+		const queueResync = (): void => {
+			if (resyncTimerRef.current !== null) window.clearTimeout(resyncTimerRef.current);
+			resyncTimerRef.current = window.setTimeout(() => {
+				resyncTimerRef.current = null;
+				resync();
+			}, 50);
 		};
-		window.addEventListener("focus", resync);
+		const onVisibilityChange = (): void => {
+			if (document.visibilityState === "visible") queueResync();
+		};
+		window.addEventListener("focus", queueResync);
 		document.addEventListener("visibilitychange", onVisibilityChange);
 		return () => {
 			live = false;
-			window.removeEventListener("focus", resync);
+			if (resyncTimerRef.current !== null) window.clearTimeout(resyncTimerRef.current);
+			resyncTimerRef.current = null;
+			window.removeEventListener("focus", queueResync);
 			document.removeEventListener("visibilitychange", onVisibilityChange);
 		};
-	}, [loadListing, path, source]);
+	}, [beginScope, loadListing, path, source]);
 
 	useEffect(() => {
 		if (flashPath === null) {

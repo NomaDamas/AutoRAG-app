@@ -53,11 +53,12 @@ function probeFrom(values: Readonly<Record<string, FileStamp | null>>, calls: st
 }
 
 describe("version-family verification primitives", () => {
-	it("compares identity and all content fields, including dirty stamps", () => {
+	it("compares identity, content fields, and dirty stamps, ignoring ctime", () => {
 		expect(sameIdentity(stamp(), stamp({ size: "99" }))).toBe(true);
 		expect(sameIdentity(stamp(), stamp({ ino: "2" }))).toBe(false);
 		expect(sameContent(stamp(), stamp())).toBe(true);
-		expect(sameContent(stamp(), stamp({ ctimeNs: "101" }))).toBe(false);
+		// A chmod/xattr/rename touches ctime without changing the bytes.
+		expect(sameContent(stamp(), stamp({ ctimeNs: "101" }))).toBe(true);
 		expect(sameContent(DIRTY_STAMP, DIRTY_STAMP)).toBe(false);
 		expect(sameContent({ ...DIRTY_STAMP }, { ...DIRTY_STAMP })).toBe(false);
 	});
@@ -104,6 +105,29 @@ describe("version-family verification primitives", () => {
 			probeFrom({ "/x/head.txt": stamp({ mtimeNs: "101" }), "/x/member.txt": stamp() }),
 		);
 		expect(changedHead.families).toEqual([]);
+	});
+
+	it("ignores a ctime-only change and detaches on an mtime or inode change", async () => {
+		const ctimeOnly = await verifyFamilies(
+			[family()],
+			{ "/x/head.txt": stamp(), "/x/member.txt": stamp() },
+			probeFrom({ "/x/head.txt": stamp(), "/x/member.txt": stamp({ ctimeNs: "999" }) }),
+		);
+		expect(ctimeOnly.families).toEqual([family()]);
+
+		const mtime = await verifyFamilies(
+			[family()],
+			{ "/x/head.txt": stamp(), "/x/member.txt": stamp() },
+			probeFrom({ "/x/head.txt": stamp(), "/x/member.txt": stamp({ mtimeNs: "999" }) }),
+		);
+		expect(mtime.families).toEqual([]);
+
+		const inode = await verifyFamilies(
+			[family()],
+			{ "/x/head.txt": stamp(), "/x/member.txt": stamp() },
+			probeFrom({ "/x/head.txt": stamp(), "/x/member.txt": stamp({ ino: "999" }) }),
+		);
+		expect(inode.families).toEqual([]);
 	});
 
 	it("detaches a dirty member and keeps an existing path without a stamp", async () => {

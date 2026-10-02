@@ -133,7 +133,7 @@ async function scannedFixture(): Promise<Fixture> {
 }
 
 async function flushQueue(): Promise<void> {
-	for (let index = 0; index < 8; index += 1) await Promise.resolve();
+	for (let index = 0; index < 64; index += 1) await Promise.resolve();
 }
 
 describe("dupey derived layer", () => {
@@ -204,12 +204,65 @@ describe("dupey live reconciliation", () => {
 	it("hides a deleted member immediately and prunes it after the rename window", async () => {
 		const h = await scannedFixture();
 		h.probeState.set(MEMBER, null);
-		await h.service.applyDirChanges(dirChanges([MEMBER, "delete"]));
+		const applied = await h.service.applyDirChanges(dirChanges([MEMBER, "delete"]));
+		// A pure delete must publish the pruned stack right away, not after the 2s window.
+		expect(applied).toBe(true);
 		expect((await h.service.result()).families).toEqual([]);
 		h.fireTimers(2000);
 		await flushQueue();
 		expect(h.stored()?.families).toEqual([]);
 		expect(h.stored()?.stamps?.[MEMBER]).toBeUndefined();
+	});
+
+	it("verifies and detaches a create on an already-claimed path (atomic save)", async () => {
+		const h = await scannedFixture();
+		// The rename-over save replaced the inode behind the same path.
+		h.probeState.set(MEMBER, stamp("member-new", "4"));
+		const applied = await h.service.applyDirChanges(dirChanges([MEMBER, "create"]));
+		expect(applied).toBe(true);
+		expect((await h.service.result()).families).toEqual([]);
+		// The stored family survives so the next scan can re-verify it.
+		expect(h.stored()?.families).toHaveLength(1);
+	});
+
+	it("keeps a delete+recreate at the same path and re-includes it on the next scan", async () => {
+		const h = await scannedFixture();
+		h.probeState.set(MEMBER, null);
+		expect(await h.service.applyDirChanges(dirChanges([MEMBER, "delete"]))).toBe(true);
+		h.probeState.set(MEMBER, stamp("member-new", "4"));
+		await h.service.applyDirChanges(dirChanges([MEMBER, "create"]));
+		// The recreated path must never enter the trash set when the window expires.
+		h.fireTimers(2000);
+		await flushQueue();
+		const refreshed = await h.service.refresh();
+		expect(refreshed.families[0]?.members.map((member) => member.path)).toContain(MEMBER);
+	});
+
+	it("does not trash a path that exists again when the rename window expires", async () => {
+		const h = await scannedFixture();
+		h.probeState.set(MEMBER, null);
+		await h.service.applyDirChanges(dirChanges([MEMBER, "delete"]));
+		// No create event arrives, but the file is back on disk with a new inode.
+		h.probeState.set(MEMBER, stamp("member-new", "4"));
+		h.fireTimers(2000);
+		await flushQueue();
+		expect(h.stored()?.stamps?.[MEMBER]).toEqual({
+			dev: "",
+			ino: "",
+			size: "",
+			mtimeNs: "",
+			ctimeNs: "",
+		});
+		const refreshed = await h.service.refresh();
+		expect(refreshed.families[0]?.members.map((member) => member.path)).toContain(MEMBER);
+	});
+
+	it("does not detach on a metadata-only (ctime) update", async () => {
+		const h = await scannedFixture();
+		h.probeState.set(MEMBER, { dev: "dev", ino: "member", size: "4", mtimeNs: "mtime", ctimeNs: "chmod" });
+		const applied = await h.service.applyDirChanges(dirChanges([MEMBER, "update"]));
+		expect(applied).toBe(false);
+		expect((await h.service.result()).families).toHaveLength(1);
 	});
 
 	it("remaps a same-identity rename in a later batch without pruning", async () => {
@@ -233,16 +286,14 @@ describe("dupey live reconciliation", () => {
 		expect(h.stored()?.families[0]?.members[0]?.path).toBe(RENAMED);
 	});
 
-	it("does not remap a different identity and expires the old path", async () => {
+	it("does not remap a different identity and leaves the persisted family for the next scan", async () => {
 		const h = await scannedFixture();
 		h.probeState.set(MEMBER, null);
 		await h.service.applyDirChanges(dirChanges([MEMBER, "delete"]));
 		h.probeState.set(RENAMED, stamp("other"));
 		await h.service.applyDirChanges(dirChanges([RENAMED, "create"]));
-		h.fireTimers(2000);
-		await Promise.resolve();
-		await Promise.resolve();
-		expect(h.stored()?.families).toEqual([]);
+		expect((await h.service.result()).families).toEqual([]);
+		expect(h.stored()?.families).toHaveLength(1);
 	});
 
 	it("detaches changed members and heads while retaining persisted families", async () => {

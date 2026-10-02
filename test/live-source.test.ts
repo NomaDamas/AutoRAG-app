@@ -51,6 +51,7 @@ function fakeFs(result: FsVersionFamiliesResult): FsBridge {
 	const search = async (): Promise<readonly FsSearchResult[]> => [];
 	return {
 		listDir: noResult,
+		readEntries: async () => ({ entries: [], removed: [] }),
 		stat: async (path) => fsEntry(path),
 		exists: async () => true,
 		search,
@@ -153,5 +154,54 @@ describe("live Finder source adapters", () => {
 		);
 		await expect(source.list("/tmp/gone")).rejects.toThrow("ENOENT");
 		await expect(isMissingPathFailure(source, "/tmp/gone")).resolves.toBe(true);
+	});
+
+	it("bridge readEntries maps rows to the requested dir and passes removals through", async () => {
+		const fs = {
+			...fakeFs(familyResult()),
+			readEntries: vi.fn(async () => ({ entries: [fsEntry("/tmp/dir/added.txt")], removed: ["/tmp/dir/gone.txt"] })),
+		};
+		const source = createBridgeSource(fs, "");
+
+		const patch = await source.readEntries("/tmp/dir", ["/tmp/dir/added.txt", "/tmp/dir/gone.txt"]);
+
+		expect(fs.readEntries).toHaveBeenCalledWith("/tmp/dir", ["/tmp/dir/added.txt", "/tmp/dir/gone.txt"]);
+		expect(patch.entries.map((entry) => entry.path)).toEqual(["/tmp/dir/added.txt"]);
+		expect(patch.entries[0]?.location).toBe("/tmp/dir");
+		expect(patch.removed).toEqual(["/tmp/dir/gone.txt"]);
+	});
+
+	it("bridge readEntries surfaces real errors verbatim", async () => {
+		const failure = new Error("EACCES: permission denied");
+		const fs = {
+			...fakeFs(familyResult()),
+			readEntries: async () => {
+				throw failure;
+			},
+		};
+		const source = createBridgeSource(fs, "");
+
+		await expect(source.readEntries("/tmp/dir", [])).rejects.toBe(failure);
+	});
+
+	it("fixture readEntries returns existing children and removes absent ones", async () => {
+		const source = createFixtureSource();
+		const dir = "Documents/Finance/2026 Q3";
+
+		const patch = await source.readEntries(dir, [
+			`${dir}/Q3_마케팅예산_v3.xlsx`,
+			`${dir}/missing.xlsx`,
+			`${dir}/Q3_마케팅예산_v3.xlsx`,
+		]);
+
+		expect(patch.entries.map((entry) => entry.name)).toEqual(["Q3_마케팅예산_v3.xlsx"]);
+		expect(patch.entries[0]?.location).toBe(dir);
+		expect(patch.removed).toEqual([`${dir}/missing.xlsx`]);
+	});
+
+	it("fixture readEntries rejects a path outside the requested dir", async () => {
+		const source = createFixtureSource();
+
+		await expect(source.readEntries("Desktop", ["Documents/x.txt"])).rejects.toThrow(/direct child/);
 	});
 });

@@ -27,7 +27,7 @@ import type {
 import { RECENTS_PATH } from "../shared/fs-contract";
 import type { FsDirChange } from "../shared/live-contract";
 import { createDupeyProbe, DUPEY_INSTALL_COMMAND, type DupeyProbe } from "./dupey";
-import { DIRTY_STAMP, lstatProbe, remapRenames, verifyFamilies, type FileStamp, type Probe } from "./version-family-verify";
+import { DIRTY_STAMP, lstatProbe, remapRenames, sameContent, verifyFamilies, type FileStamp, type Probe } from "./version-family-verify";
 import type { StoredVersionFamilies, VersionFamilyStore } from "./version-family-store";
 
 export const DEFAULT_SCAN_INTERVAL_MINUTES = 60;
@@ -164,10 +164,8 @@ export function createVersionFamilyService(deps: VersionFamilyServiceDeps): Vers
 	let timer: unknown = null;
 	let mutationSeq = 0;
 	const touchedAt = new Map<string, number>();
-	const pendingRename = new Map<
-		string,
-		{ readonly stamp: FileStamp; readonly family: FsVersionFamily; readonly at: number }
-	>();
+	/** Paths deleted by a live event while their rename/recreate outcome is still unknown. */
+	const pendingRename = new Set<string>();
 	const pendingRenameTimers = new Map<string, unknown>();
 	/** Paths trashed since the last completed scan; a fresh scan must not resurrect them. */
 	const trashedPaths = new Set<string>();
@@ -207,7 +205,7 @@ export function createVersionFamilyService(deps: VersionFamilyServiceDeps): Vers
 		return JSON.stringify(a) === JSON.stringify(b);
 	}
 
-	function emit(result: FsVersionFamiliesResult, _changed: boolean): void {
+	function emit(result: FsVersionFamiliesResult): void {
 		published = result;
 	}
 
@@ -262,14 +260,14 @@ export function createVersionFamilyService(deps: VersionFamilyServiceDeps): Vers
 		}
 		current = {
 			...current,
-			families: pruneVersionFamilies(current.families, new Set([...pendingRename.keys(), ...trashedPaths])),
+			families: pruneVersionFamilies(current.families, new Set([...pendingRename, ...trashedPaths])),
 		};
 		const changed =
 			previous !== undefined &&
 			(previous.scannedAt !== current.scannedAt ||
 				!sameError(previous.error, current.error) ||
 				!sameFamilies(previous.families, current.families));
-		emit(current, changed);
+		emit(current);
 		return changed;
 	}
 
@@ -327,11 +325,29 @@ export function createVersionFamilyService(deps: VersionFamilyServiceDeps): Vers
 	function schedulePendingRename(path: string): void {
 		const timerHandle = setTimer(() => {
 			void serialize(async () => {
-				const pending = pendingRename.get(path);
-				if (pending === undefined) return;
+				if (!pendingRename.has(path)) return;
 				clearPendingRename(path);
 				const stored = await load();
 				if (stored === null) return;
+				const current = await probe(path);
+				if (current !== null) {
+					// The path exists again (delete+recreate or an atomic save): never
+					// trash it. Mark it dirty only when the content actually changed, so
+					// the next scan re-includes an untouched path instead of hiding it.
+					const recorded = stored.stamps?.[path];
+					const changed = recorded !== undefined && !sameContent(current, recorded);
+					const nextStored: StoredVersionFamilies = changed
+						? { ...stored, stamps: { ...(stored.stamps ?? {}), [path]: DIRTY_STAMP } }
+						: stored;
+					if (changed) {
+						await deps.store.write(nextStored);
+						snapshot = nextStored;
+					}
+					touchedAt.set(path, ++mutationSeq);
+					await publishVerified(nextStored);
+					deps.onChanged?.();
+					return;
+				}
 				trashedPaths.add(path);
 				touchedAt.set(path, ++mutationSeq);
 				const pruned: StoredVersionFamilies = {
@@ -420,14 +436,15 @@ export function createVersionFamilyService(deps: VersionFamilyServiceDeps): Vers
 		const status = await dupey.status();
 		if (!status.available) {
 			return serialize(async () => {
+				const previous = published;
 				lastError = {
 					code: "dupey-missing",
 					message: `dupey CLI is required for version stacks: ${status.error ?? "not found on PATH"}`,
 					installCommand: DUPEY_INSTALL_COMMAND,
 				};
-				await publishVerified(await load());
-				const current = published ?? envelope(null);
-				return current;
+				const changed = (await publishVerified(await load())) || previous === undefined;
+				if (changed) deps.onChanged?.();
+				return published ?? envelope(null);
 			});
 		}
 		// A scan reads the disk over seconds; a trash that landed meanwhile must
@@ -465,7 +482,6 @@ export function createVersionFamilyService(deps: VersionFamilyServiceDeps): Vers
 				snapshot = persisted;
 				emit(
 					{ ...verified.result, families: pruneVersionFamilies(verified.result.families, honored) },
-					true,
 				);
 				deps.onChanged?.();
 				for (const path of honored) {
@@ -541,7 +557,7 @@ export function createVersionFamilyService(deps: VersionFamilyServiceDeps): Vers
 				...envelope(pruned),
 				families: pruneVersionFamilies(published?.families ?? [], removed),
 			};
-			emit(current, true);
+			emit(current);
 			deps.onChanged?.();
 			return current;
 		});
@@ -552,7 +568,7 @@ export function createVersionFamilyService(deps: VersionFamilyServiceDeps): Vers
 			const stored = await load();
 			if (stored === null) {
 				const changed = published !== undefined && published.families.length > 0;
-				emit(envelope(null), changed);
+				emit(envelope(null));
 				return changed;
 			}
 			const only = new Set(
@@ -577,23 +593,35 @@ export function createVersionFamilyService(deps: VersionFamilyServiceDeps): Vers
 				changes.filter((change) => change.type === "update").map((change) => change.path),
 			);
 			const claimed = new Set(stored.families.flatMap((family) => familyPaths(family)));
+			let deletedPublished = false;
 			for (const path of deleted) {
 				if (!claimed.has(path) || pendingRename.has(path)) continue;
-				const stamp = stored.stamps?.[path] ?? DIRTY_STAMP;
-				const family = stored.families.find((candidate) => familyPaths(candidate).includes(path));
-				if (family === undefined) continue;
-				pendingRename.set(path, { stamp, family, at: now().getTime() });
+				pendingRename.add(path);
 				schedulePendingRename(path);
 				const next = pruneVersionFamilies(published?.families ?? [], new Set([path]));
-				emit({ ...(published ?? envelope(stored)), families: next }, !sameFamilies(published?.families ?? [], next));
+				deletedPublished = deletedPublished || !sameFamilies(published?.families ?? [], next);
+				emit({ ...(published ?? envelope(stored)), families: next });
 			}
 
-			if (created.length > 0 && pendingRename.size > 0) {
+			// A create on a path the snapshot already claims is a delete+recreate or
+			// an atomic rename-over save: verify and detach it like an update. Clearing
+			// its pending delete keeps the recreated path out of the trash set, so the
+			// next scan re-includes it.
+			const recreated = new Set<string>();
+			for (const path of created) {
+				if (!claimed.has(path) && !pendingRename.has(path)) continue;
+				clearPendingRename(path);
+				updates.add(path);
+				recreated.add(path);
+			}
+
+			const candidates = created.filter((path) => !recreated.has(path));
+			if (candidates.length > 0 && pendingRename.size > 0) {
 				const remapped = await remapRenames(
 					stored.families,
 					stored.stamps ?? {},
-					[...pendingRename.keys()],
-					created,
+					[...pendingRename],
+					candidates,
 					probe,
 				);
 				if (remapped.remapped.size > 0) {
@@ -621,20 +649,15 @@ export function createVersionFamilyService(deps: VersionFamilyServiceDeps): Vers
 				);
 				return publishVerified(stored, only);
 			}
+			// Updates detach a member only when its probed stamp proves the content
+			// changed; a metadata-only touch (chmod/xattr) leaves the family intact.
 			const affected = affectedFamilyPaths(stored.families, new Set([...updates, ...deleted]));
-			for (const path of pendingRename.keys()) affected.delete(path);
-			if (affected.size === 0) return false;
-			if (updates.size > 0) {
-				const nextStamps = { ...(stored.stamps ?? {}) };
-				for (const path of updates) {
-					if (claimed.has(path)) nextStamps[path] = DIRTY_STAMP;
-				}
-				const nextStored: StoredVersionFamilies = { ...stored, stamps: nextStamps };
-				await deps.store.write(nextStored);
-				snapshot = nextStored;
-				return publishVerified(nextStored, affected);
-			}
-			return publishVerified(stored, affected);
+			for (const path of pendingRename) affected.delete(path);
+			if (affected.size === 0) return deletedPublished;
+			const changed = await publishVerified(stored, affected);
+			// A delete already pruned and published the stack; the hub must send it now
+			// rather than waiting out the rename window.
+			return deletedPublished || changed;
 		});
 	}
 
@@ -646,7 +669,7 @@ export function createVersionFamilyService(deps: VersionFamilyServiceDeps): Vers
 		applyDirChanges,
 		async start(): Promise<FsVersionFamiliesResult> {
 			arm();
-			for (const path of pendingRename.keys()) schedulePendingRename(path);
+			for (const path of pendingRename) schedulePendingRename(path);
 			return refresh();
 		},
 		stop(): void {

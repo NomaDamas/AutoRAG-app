@@ -8,7 +8,13 @@
  */
 
 import { RECENTS_PATH, type FsBridge, type FsClipboard, type FsVersionFamiliesResult } from "../../../shared/fs-contract";
-import type { LayerPublication, LiveBridge, LiveMessage, LiveResync } from "../../../shared/live-contract";
+import {
+	DUPEY_LAYER_ID,
+	type LayerPublication,
+	type LiveBridge,
+	type LiveMessage,
+	type LiveResync,
+} from "../../../shared/live-contract";
 import { copyName } from "../state/collision";
 import { basename, dirname, joinPath } from "../state/paths";
 import {
@@ -40,6 +46,16 @@ export interface FinderSource {
 	liveLayers(): Promise<LiveResync>;
 	exists(path: string): Promise<boolean>;
 	list(path: string): Promise<readonly FinderEntry[]>;
+	/**
+	 * Incremental refresh after a live change: resolve only the given direct
+	 * children of `dir`, mapping the ones that exist as rows and naming the
+	 * rest as removed. On an ordinary event the renderer asks `readEntries`
+	 * for exactly the changed paths instead of relisting the whole directory.
+	 */
+	readEntries(
+		dir: string,
+		paths: readonly string[],
+	): Promise<{ readonly entries: readonly FinderEntry[]; readonly removed: readonly string[] }>;
 	search(query: string): Promise<readonly FinderEntry[]>;
 	locations(): Promise<readonly FinderLocation[]>;
 	quickLook(path: string): Promise<void>;
@@ -83,7 +99,7 @@ export function createBridgeSource(fs: FsBridge, initialPath: string, live?: Liv
 	});
 	const mapLayerPublication = (publication: LayerPublication): LayerPublication => ({
 		...publication,
-		data: publication.layer === "dupey"
+		data: publication.layer === DUPEY_LAYER_ID
 			? mapVersionFamiliesResult(publication.data as FsVersionFamiliesResult)
 			: publication.data,
 	});
@@ -97,12 +113,23 @@ export function createBridgeSource(fs: FsBridge, initialPath: string, live?: Liv
 				layers: message.layers.map(mapLayerPublication),
 			})) ?? (() => {});
 		},
-		liveLayers: () => live?.layers() ?? Promise.resolve({ seq: 0, layers: [], reconciled: [] }),
+		async liveLayers() {
+			if (live === undefined) {
+				return { seq: 0, layers: [], reconciled: [] };
+			}
+			const result = await live.layers();
+			return { ...result, layers: result.layers.map(mapLayerPublication) };
+		},
 		exists: (path) => fs.exists(path),
 		async list(path) {
 			const listing = await fs.listDir(path);
 			// Recents is virtual: a row's location is the real folder that holds the file.
 			return listing.entries.map((entry) => entryFromFs(entry, path === RECENTS_PATH ? undefined : path));
+		},
+		async readEntries(dir, paths) {
+			const patch = await fs.readEntries(dir, paths);
+			// Rows belong to the requested dir, not the child's own parent lookup.
+			return { entries: patch.entries.map((entry) => entryFromFs(entry, dir)), removed: patch.removed };
 		},
 		async search(query) {
 			const hits = await fs.search(query);
@@ -144,15 +171,6 @@ export function createBridgeSource(fs: FsBridge, initialPath: string, live?: Liv
 		async refreshVersionFamilies() {
 			return mapVersionFamiliesResult(await fs.refreshVersionFamilies());
 		},
-		...(live === undefined ? {} : {
-			liveLayers: async () => {
-				const result = await live.layers();
-				return {
-					...result,
-					layers: result.layers.map(mapLayerPublication),
-				};
-			},
-		}),
 	};
 }
 
@@ -217,6 +235,22 @@ export function createFixtureSource(): FinderSource {
 		exists: (path) => Promise.resolve(state.tree.has(path) || findItem(state, path) !== null),
 		list: (path) =>
 			Promise.resolve((state.tree.get(path) ?? []).map((item) => entryFromFixture(item, path))),
+		readEntries: async (dir, paths) => {
+			const entries: FinderEntry[] = [];
+			const removed: string[] = [];
+			for (const path of new Set(paths)) {
+				if (dirname(path) !== dir) {
+					throw new Error(`Invalid path "${path}": expected a direct child of "${dir}"`);
+				}
+				const item = findItem(state, path);
+				if (item === null) {
+					removed.push(path);
+				} else {
+					entries.push(entryFromFixture(item, dir));
+				}
+			}
+			return { entries, removed };
+		},
 		search: (query) => {
 			const needle = query.trim().toLowerCase();
 			if (needle === "") {

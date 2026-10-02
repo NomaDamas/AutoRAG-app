@@ -224,6 +224,16 @@ describe("version-family service — SSOT", () => {
 		expect(h.writes).toBe(0);
 	});
 
+	it("fires onChanged when the dupey CLI turns missing", async () => {
+		const h = harness({ dupey: dupeyMissing });
+		const service = createVersionFamilyService(h.deps);
+		await service.refresh();
+		expect(h.changes).toBe(1);
+		// The same missing error and empty families publish nothing further.
+		await service.refresh();
+		expect(h.changes).toBe(1);
+	});
+
 	it("reports scan-failed and keeps the stored snapshot when every root fails", async () => {
 		const h = harness({
 			store: {
@@ -492,7 +502,12 @@ describe("version-family service — trash prune", () => {
 		expect(applied).toBe(true);
 		expect(h.scans).toEqual([]);
 		expect((await service.result()).families).toEqual([]);
-		expect(h.persisted()?.stamps?.["/home/Desktop/a.txt"]).toEqual(DIRTY_STAMP);
+		// A real content change detaches the published family but leaves the stored
+		// stamp intact, so the next scan re-verifies it instead of hiding it.
+		expect(h.persisted()?.families).toHaveLength(1);
+		expect(h.persisted()?.stamps?.["/home/Desktop/a.txt"]).toEqual(
+			fixtureStamp("/home/Desktop/a.txt"),
+		);
 	});
 
 	it("remaps a rename before expiry and prunes an unmatched rename at 2000 ms", async () => {

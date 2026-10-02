@@ -5,6 +5,7 @@ import { FS_CHANNELS, type FsBridge } from "../shared/fs-contract";
 export function createFsBridge(ipcRenderer: IpcRenderer): FsBridge {
 	return {
 		listDir: (path) => ipcRenderer.invoke(FS_CHANNELS.listDir, path),
+		readEntries: (dir, paths) => ipcRenderer.invoke(FS_CHANNELS.readEntries, dir, paths),
 		stat: (path) => ipcRenderer.invoke(FS_CHANNELS.stat, path),
 		exists: (path) => ipcRenderer.invoke(FS_CHANNELS.exists, path),
 		search: (query) => ipcRenderer.invoke(FS_CHANNELS.search, query),
