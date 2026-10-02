@@ -60,7 +60,11 @@ describe("resolveKeyAction", () => {
 		expect(resolveKeyAction(key("t", { meta: true }), finder)).toEqual({ type: "newTab" });
 		expect(resolveKeyAction(key("w", { meta: true }), finder)).toEqual({ type: "closeTab" });
 		expect(resolveKeyAction(key(",", { meta: true }), finder)).toEqual({ type: "openSettings" });
+		expect(resolveKeyAction(key("k", { meta: true }), finder)).toEqual({ type: "focusComposer" });
+		expect(resolveKeyAction(key("K", { meta: true }), finder)).toEqual({ type: "focusComposer" });
+		expect(resolveKeyAction(key("k", { meta: true, alt: true }), finder)).toBeNull();
 		expect(resolveKeyAction(key("f", { meta: true }), { ...finder, typing: true })).toEqual({ type: "focusSearch" });
+		expect(resolveKeyAction(key("k", { meta: true }), { ...finder, typing: true })).toEqual({ type: "focusComposer" });
 	});
 
 	it("maps control shortcuts for Windows and Linux", () => {

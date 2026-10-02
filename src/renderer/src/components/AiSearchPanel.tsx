@@ -1,36 +1,114 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type ReactElement } from "react";
-import "./ai-animations.css";
-import type { AnswerPhase, AnswerPhaseName, ChatAttachment, ChatSummary, CitationEvidence, SearchStreamEvent } from "../../../shared/search-contract";
-import type { SearchBridge } from "../../../shared/search-contract";
+import {
+	forwardRef,
+	useEffect,
+	useImperativeHandle,
+	useMemo,
+	useRef,
+	useState,
+	type CSSProperties,
+	type DragEvent as ReactDragEvent,
+	type FormEvent,
+	type PointerEvent as ReactPointerEvent,
+	type ReactElement,
+} from "react";
+import { ChevronDown, ChevronRight, ChevronUp, Square } from "lucide-react";
+import type {
+	AnswerPhase,
+	ChatAttachment,
+	ChatSummary,
+	CitationEvidence,
+	SearchBridge,
+	SearchStreamEvent,
+} from "../../../shared/search-contract";
 import { parseAnswerBlocks, parseInline, type AnswerBlock } from "../state/answer-markdown";
+import { evidenceKind } from "../state/evidence";
 import { groupChatHistory, historyEmptyText } from "../state/history";
 import { cn } from "../lib/cn";
-import { CloseIcon, HistoryIcon, PlusIcon, SearchIcon, SendIcon } from "./icons";
+import { ArrowUpIcon, CloseIcon, HistoryIcon, PlusIcon, SparklesIcon } from "./icons";
 import { iconButtonClass } from "./primitives/icon-button";
+import { FileTile } from "./primitives/FileTile";
 
 const autorag = (window as unknown as { readonly autorag: { readonly search: SearchBridge } }).autorag;
 
-const NO_THINKING: Readonly<Record<AnswerPhaseName, boolean>> = { quick: false, deep: false };
+/** v7 dock geometry (AI Finder v7 `.ai` / `.ai-grip` / `.ai-head`). */
+const COLLAPSED_HEIGHT = 36;
+const MIN_OPEN_HEIGHT = 140;
+/** The dock never grows within 200px of the top of the finder column. */
+const TOP_RESERVE = 200;
+const DEFAULT_PEEK = "파일, 메일, 메신저 전체에서 물어보세요";
+const COMPOSER_PLACEHOLDER = "파일, 메일, 메신저 전체에서 물어보세요 (파일 드래그 앤 드롭 가능)";
+const CENTERED = "mx-auto w-full max-w-[820px]";
 
-function errorMessage(error: unknown): string {
-	return error instanceof Error ? error.message : String(error);
+/**
+ * Imperative surface the shell drives: ⌘K / evidence "AI 요약" open the dock and
+ * focus the composer, ⌥Enter in the search field routes a query straight in, and
+ * drag-and-drop from the finder attaches a file to the draft.
+ */
+export interface AiDockHandle {
+	/** Seed the composer with `text` and send it at once. The App shell opens the dock first. */
+	sendQuery(text: string): void;
+	/** Append a draft attachment and focus the composer. The App shell opens the dock first. */
+	attachFile(att: ChatAttachment): void;
+	/** Focus the composer (pending until the dock renders open). The App shell opens the dock first. */
+	focusComposer(): void;
 }
 
-export function AiSearchPanel({
-	selectedEvidence,
-	onSelectEvidence,
-	onPublish,
-}: {
+export interface AiSearchPanelProps {
+	readonly open: boolean;
+	/** Open dock height in px. */
+	readonly height: number;
+	readonly onToggleOpen: () => void;
+	readonly onHeightChange: (height: number) => void;
 	readonly selectedEvidence: number | null;
-	readonly onSelectEvidence: (selected: number) => void;
+	readonly onSelectEvidence: (number: number) => void;
 	readonly onPublish: (evidence: readonly CitationEvidence[], sessionId: string | null) => void;
-}): ReactElement {
+}
+
+/** The parent folder of a local attachment, derived from its absolute path. */
+function parentFolder(att: ChatAttachment): string | null {
+	if (att.kind !== "file") return null;
+	const parts = att.id.split(/[\\/]/u).filter((part) => part.length > 0);
+	return parts.length >= 2 ? parts[parts.length - 2] ?? null : null;
+}
+
+/** The v7 composer dedupes drops by file name. */
+function dedupeAttachments(list: readonly ChatAttachment[]): readonly ChatAttachment[] {
+	const seen = new Set<string>();
+	const out: ChatAttachment[] = [];
+	for (const att of list) {
+		if (seen.has(att.name)) continue;
+		seen.add(att.name);
+		out.push(att);
+	}
+	return out;
+}
+
+function formatElapsed(ms: number): string {
+	return `${Math.max(1, Math.round(ms / 1000))}s`;
+}
+
+function hasFiles(event: { readonly dataTransfer: DataTransfer | null }): boolean {
+	const types = event.dataTransfer?.types;
+	return types !== undefined && Array.from(types).includes("Files");
+}
+
+function droppedAttachments(event: ReactDragEvent): readonly ChatAttachment[] {
+	return [...event.dataTransfer.files].map((file) => {
+		// Electron exposes the absolute path on the dropped File; the DOM type omits it.
+		const path = "path" in file && typeof file.path === "string" ? file.path : null;
+		return { kind: "file" as const, id: path ?? file.name, name: file.name };
+	});
+}
+
+export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(function AiSearchPanel(
+	{ open, height, onToggleOpen, onHeightChange, selectedEvidence, onSelectEvidence, onPublish },
+	ref,
+): ReactElement {
 	const [query, setQuery] = useState("");
 	const [quick, setQuick] = useState<AnswerPhase | null>(null);
 	const [deep, setDeep] = useState<AnswerPhase | null>(null);
 	const [quickDraft, setQuickDraft] = useState("");
 	const [deepDraft, setDeepDraft] = useState("");
-	const [thinking, setThinking] = useState<Readonly<Record<AnswerPhaseName, boolean>>>(NO_THINKING);
 	const [progress, setProgress] = useState("");
 	const [searchId, setSearchIdState] = useState<string | null>(null);
 	// The event listener reads the active id from a ref: it is set before
@@ -45,17 +123,50 @@ export function AiSearchPanel({
 	const [error, setError] = useState<string | null>(null);
 	const [stopped, setStopped] = useState(false);
 	const [submittedQuery, setSubmittedQuery] = useState<string | null>(null);
+	const [submittedAttachments, setSubmittedAttachments] = useState<readonly ChatAttachment[]>([]);
 	const [chatId, setChatId] = useState<string | null>(null);
 	const [historyOpen, setHistoryOpen] = useState(false);
 	const [historyQuery, setHistoryQuery] = useState("");
 	const [history, setHistory] = useState<readonly ChatSummary[]>([]);
 	const [attachments, setAttachments] = useState<readonly ChatAttachment[]>([]);
-	const queryRef = useRef(query);
+	const [deepOpen, setDeepOpen] = useState(false);
+	const [deepElapsed, setDeepElapsed] = useState<number | null>(null);
+	const [anim, setAnim] = useState<"up" | "down" | null>(null);
+	const [resizing, setResizing] = useState(false);
+	const [dragActive, setDragActive] = useState(false);
+	const [dragOver, setDragOver] = useState(false);
+	const [dragName, setDragName] = useState<string | null>(null);
+
+	const rootRef = useRef<HTMLElement | null>(null);
+	const inputRef = useRef<HTMLInputElement | null>(null);
+	const bodyRef = useRef<HTMLDivElement | null>(null);
 	const historySeq = useRef(0);
+	const startedAtRef = useRef(0);
+	const gripRef = useRef<{ readonly startY: number; readonly startH: number } | null>(null);
+	const prevOpenRef = useRef(open);
+	const pendingFocusRef = useRef(false);
+	const openRef = useRef(open);
+	openRef.current = open;
+	const attachmentsRef = useRef(attachments);
+	attachmentsRef.current = attachments;
 
 	useEffect(() => {
-		queryRef.current = query;
-	}, [query]);
+		if (prevOpenRef.current === open) return;
+		prevOpenRef.current = open;
+		setAnim(open ? "up" : "down");
+		const timer = window.setTimeout(() => setAnim(null), 220);
+		return () => window.clearTimeout(timer);
+	}, [open]);
+
+	useEffect(() => {
+		if (!open || !pendingFocusRef.current) return;
+		pendingFocusRef.current = false;
+		inputRef.current?.focus();
+	}, [open]);
+
+	useEffect(() => {
+		if (!open) setHistoryOpen(false);
+	}, [open]);
 
 	useEffect(() => {
 		const unsubscribe = autorag.search.onEvent?.((event: SearchStreamEvent) => {
@@ -65,7 +176,8 @@ export function AiSearchPanel({
 					setProgress(event.text);
 					break;
 				case "thinking":
-					setThinking((current) => ({ ...current, [event.phase]: true }));
+					// The reasoning text never crosses IPC; the dock's own pending
+					// state drives the water-wave row, so the signal needs no state.
 					break;
 				case "quick-draft":
 					setQuickDraft(event.text);
@@ -83,6 +195,7 @@ export function AiSearchPanel({
 					setSessionId(event.sessionId);
 					setDeep(event.phase);
 					setDeepDraft(event.phase.answer);
+					setDeepElapsed(startedAtRef.current === 0 ? null : Date.now() - startedAtRef.current);
 					setProgress("");
 					break;
 				case "error":
@@ -113,6 +226,11 @@ export function AiSearchPanel({
 	const historyGroups = useMemo(() => groupChatHistory(history, new Date()), [history]);
 
 	useEffect(() => {
+		const body = bodyRef.current;
+		if (body !== null) body.scrollTop = body.scrollHeight;
+	}, [quick, deep, quickDraft, deepDraft, submittedQuery, progress, attachments]);
+
+	useEffect(() => {
 		const onKeyDown = (event: globalThis.KeyboardEvent): void => {
 			const meta = event.metaKey || event.ctrlKey;
 			if (meta && event.shiftKey && event.key.toLowerCase() === "h") {
@@ -120,7 +238,17 @@ export function AiSearchPanel({
 				toggleHistory();
 				return;
 			}
+			if (historyOpen && event.key === "Escape") {
+				event.preventDefault();
+				setHistoryOpen(false);
+				return;
+			}
 			if (historyOpen) return;
+			if (event.key === "Escape" && searchIdRef.current !== null) {
+				event.preventDefault();
+				void stop();
+				return;
+			}
 			if (meta && !event.shiftKey && !event.altKey && event.key.toLowerCase() === "n") {
 				event.preventDefault();
 				newChat();
@@ -130,10 +258,32 @@ export function AiSearchPanel({
 		return () => window.removeEventListener("keydown", onKeyDown);
 	});
 
-	async function submit(event: FormEvent<HTMLFormElement>): Promise<void> {
-		event.preventDefault();
-		const text = query.trim();
-		if (text.length === 0 || searchId !== null) return;
+	useEffect(() => {
+		const onDragOver = (event: globalThis.DragEvent): void => {
+			if (!hasFiles(event)) return;
+			if (event.clientX <= 0 && event.clientY <= 0) {
+				setDragActive(false);
+				return;
+			}
+			setDragActive(true);
+		};
+		const reset = (): void => {
+			setDragActive(false);
+			setDragOver(false);
+			setDragName(null);
+		};
+		window.addEventListener("dragover", onDragOver);
+		window.addEventListener("drop", reset);
+		window.addEventListener("dragend", reset);
+		return () => {
+			window.removeEventListener("dragover", onDragOver);
+			window.removeEventListener("drop", reset);
+			window.removeEventListener("dragend", reset);
+		};
+	}, []);
+
+	async function runSearch(text: string, sent: readonly ChatAttachment[]): Promise<void> {
+		if (searchIdRef.current !== null) return;
 		const nextChatId = crypto.randomUUID();
 		const nextSearchId = crypto.randomUUID();
 		setSearchId(nextSearchId);
@@ -141,24 +291,34 @@ export function AiSearchPanel({
 		setDeep(null);
 		setQuickDraft("");
 		setDeepDraft("");
-		setThinking(NO_THINKING);
 		setSessionId(null);
 		setError(null);
 		setStopped(false);
 		setSubmittedQuery(text);
+		setSubmittedAttachments(sent);
+		setDeepOpen(false);
+		setDeepElapsed(null);
 		setProgress("Reviewing the query.");
 		setChatId(nextChatId);
-		const sent = attachments;
+		startedAtRef.current = Date.now();
 		setAttachments([]);
+		setQuery("");
 		try {
 			// Resolves when the run ends; the answer itself arrives as events.
 			await autorag.search.start(nextSearchId, nextChatId, text, sent);
 		} catch (startError) {
 			if (searchIdRef.current !== nextSearchId) return;
-			setError(errorMessage(startError));
+			setError(startError instanceof Error ? startError.message : String(startError));
 			setProgress("");
 			setSearchId(null);
 		}
+	}
+
+	function submit(event: FormEvent<HTMLFormElement>): void {
+		event.preventDefault();
+		const text = query.trim();
+		if (text.length === 0 || searchIdRef.current !== null) return;
+		void runSearch(text, attachments);
 	}
 
 	async function openHistory(): Promise<void> {
@@ -193,20 +353,29 @@ export function AiSearchPanel({
 		setHistory(items);
 	}
 
+	async function clearHistory(): Promise<void> {
+		historySeq.current += 1;
+		await autorag.search.historyClear();
+		setHistory([]);
+		setHistoryQuery("");
+	}
+
 	function newChat(): void {
 		setQuick(null);
 		setDeep(null);
 		setQuickDraft("");
 		setDeepDraft("");
-		setThinking(NO_THINKING);
 		setError(null);
 		setStopped(false);
 		setProgress("");
 		setQuery("");
 		setSubmittedQuery(null);
+		setSubmittedAttachments([]);
 		setAttachments([]);
 		setChatId(null);
 		setHistoryOpen(false);
+		setDeepOpen(false);
+		setDeepElapsed(null);
 	}
 
 	async function loadHistory(id: string): Promise<void> {
@@ -218,39 +387,215 @@ export function AiSearchPanel({
 		setDeep(assistant.deep);
 		setQuickDraft(assistant.quick?.answer ?? "");
 		setDeepDraft(assistant.deep?.answer ?? "");
-		setThinking(NO_THINKING);
 		setSessionId(assistant.sessionId);
 		setSubmittedQuery(user?.role === "user" ? user.text : null);
+		setSubmittedAttachments(user?.role === "user" ? user.attachments : []);
 		setStopped(assistant.stopped);
 		setError(null);
 		setProgress("");
 		setChatId(id);
 		setHistoryOpen(false);
+		setDeepOpen(false);
+		// The store keeps no timing, so a restored chat shows its deep answer
+		// expanded instead of inventing a "Worked for Ns" duration.
+		setDeepElapsed(null);
 	}
 
 	async function stop(): Promise<void> {
-		if (searchId === null) return;
-		await autorag.search.cancel(searchId);
+		if (searchIdRef.current === null) return;
+		await autorag.search.cancel(searchIdRef.current);
 		setSearchId(null);
 		setProgress("");
 		setStopped(true);
 	}
 
+	function removeAttachment(index: number): void {
+		setAttachments((current) => current.filter((_, position) => position !== index));
+	}
+
+	function ensureFocus(): void {
+		if (openRef.current) {
+			inputRef.current?.focus();
+			return;
+		}
+		// The App shell owns `open` and opens the dock before invoking the
+		// handle; the effect above focuses the input once it renders open.
+		pendingFocusRef.current = true;
+	}
+
+	useImperativeHandle(ref, () => ({
+		sendQuery(text: string): void {
+			const trimmed = text.trim();
+			if (trimmed.length === 0 || searchIdRef.current !== null) return;
+			setQuery(trimmed);
+			void runSearch(trimmed, attachmentsRef.current);
+		},
+		attachFile(att: ChatAttachment): void {
+			setAttachments((current) => dedupeAttachments([...current, att]));
+			ensureFocus();
+		},
+		focusComposer(): void {
+			ensureFocus();
+		},
+	}));
+
+	function onGripPointerDown(event: ReactPointerEvent<HTMLDivElement>): void {
+		event.preventDefault();
+		gripRef.current = { startY: event.clientY, startH: height };
+		setResizing(true);
+		event.currentTarget.setPointerCapture(event.pointerId);
+	}
+
+	function onGripPointerMove(event: ReactPointerEvent<HTMLDivElement>): void {
+		const start = gripRef.current;
+		if (start === null) return;
+		const columnHeight = rootRef.current?.parentElement?.clientHeight ?? window.innerHeight;
+		const max = Math.max(MIN_OPEN_HEIGHT, columnHeight - TOP_RESERVE);
+		const next = Math.min(max, Math.max(MIN_OPEN_HEIGHT, start.startH + (start.startY - event.clientY)));
+		onHeightChange(next);
+	}
+
+	function onGripPointerUp(event: ReactPointerEvent<HTMLDivElement>): void {
+		gripRef.current = null;
+		setResizing(false);
+		if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+			event.currentTarget.releasePointerCapture(event.pointerId);
+		}
+	}
+
+	function onDockDragEnter(event: ReactDragEvent): void {
+		if (!hasFiles(event)) return;
+		event.preventDefault();
+		setDragActive(true);
+		setDragOver(true);
+	}
+
+	function onDockDragOver(event: ReactDragEvent): void {
+		if (!hasFiles(event)) return;
+		event.preventDefault();
+		event.dataTransfer.dropEffect = "copy";
+		setDragActive(true);
+		setDragOver(true);
+		const item = event.dataTransfer.items?.[0];
+		const file = item?.kind === "file" ? item.getAsFile() : null;
+		setDragName(file?.name ?? null);
+	}
+
+	function onDockDragLeave(event: ReactDragEvent): void {
+		const next = event.relatedTarget;
+		if (next instanceof Node && event.currentTarget.contains(next)) return;
+		setDragOver(false);
+		setDragName(null);
+	}
+
+	function onDockDrop(event: ReactDragEvent): void {
+		if (!hasFiles(event)) return;
+		event.preventDefault();
+		setAttachments((current) => dedupeAttachments([...current, ...droppedAttachments(event)]));
+		setDragActive(false);
+		setDragOver(false);
+		setDragName(null);
+		ensureFocus();
+	}
+
+	const quickText = quick !== null ? quick.answer : quickDraft;
+	const deepText = deep !== null ? deep.answer : deepDraft;
+	const quickReady = quickText !== "";
+	const deepReady = deepText !== "";
+	const thinkingVisible = searchId !== null && quickReady && !deepReady;
+	const showEmpty = submittedQuery === null && error === null && !quickReady && !deepReady;
+
 	return (
-		<section className="ai relative flex flex-col min-w-0 min-h-0 border-l border-border" aria-label="AI Search">
-			<div className="ai__header flex flex-none items-center gap-10 h-bar py-0 pr-12 pl-20 bg-chrome border-b border-border">
-				<span className="ai__title flex-none text-body font-semibold whitespace-nowrap">AI Search</span>
-				<div className="ai__header-actions flex items-center gap-2 ml-auto">
-					<button type="button" className={cn("icon-button", historyOpen && "icon-button--active", iconButtonClass({ active: historyOpen }))} title="Chat history ⌘⇧H" aria-label="Chat history" onClick={() => void toggleHistory()}><HistoryIcon /></button>
-					<button type="button" className={cn("icon-button", iconButtonClass())} title="New chat ⌘N" aria-label="New chat" onClick={newChat}><PlusIcon /></button>
-				</div>
+		<section
+			ref={rootRef}
+			className={cn(
+				"ai relative flex-none flex flex-col border-t border-border bg-subtle-alt",
+				open ? "open shadow-[0_-6px_18px_rgba(0,0,0,0.05)]" : "collapsed shadow-none",
+				anim === "up" && "animate-[dock-up_0.2s_ease-out]",
+				anim === "down" && "animate-[dock-down_0.16s_ease-in]",
+			)}
+			style={{ height: open ? height : COLLAPSED_HEIGHT, "--ai-h": `${height}px` } as CSSProperties}
+			aria-label="AI Search"
+			onDragEnter={onDockDragEnter}
+			onDragOver={onDockDragOver}
+			onDragLeave={onDockDragLeave}
+			onDrop={onDockDrop}
+		>
+			{open ? (
+				<div
+					className={cn(
+						"ai-grip absolute inset-x-0 -top-4 z-5 h-9 cursor-ns-resize",
+						"after:absolute after:left-1/2 after:top-6 after:-ml-[17px] after:h-3 after:w-[34px] after:rounded-2 after:bg-sel-mute after:content-['']",
+						resizing ? "after:bg-accent" : "hover:after:bg-accent",
+					)}
+					title="드래그해서 높이 조절"
+					onPointerDown={onGripPointerDown}
+					onPointerMove={onGripPointerMove}
+					onPointerUp={onGripPointerUp}
+					onPointerCancel={onGripPointerUp}
+				/>
+			) : null}
+
+			<div
+				className={cn("ai-head flex flex-none items-center gap-8 h-tab px-12 cursor-pointer select-none", open && "border-b border-border")}
+				role="button"
+				tabIndex={0}
+				aria-expanded={open}
+				aria-label={open ? "AI Search 닫기" : "AI Search 열기"}
+				onClick={onToggleOpen}
+				onKeyDown={(event) => {
+					if (event.key !== "Enter" && event.key !== " ") return;
+					event.preventDefault();
+					onToggleOpen();
+				}}
+			>
+				<span className="ai-mark grid flex-none place-items-center text-accent">
+					<SparklesIcon />
+				</span>
+				<strong className="flex-none text-sm font-semibold text-ink">AI Search</strong>
+				{open ? null : (
+					<>
+						<span className="ai-peek min-w-0 text-meta text-ink-muted truncate">{submittedQuery ?? DEFAULT_PEEK}</span>
+						<kbd className="flex-none rounded-4 border border-border bg-window px-5 py-1 text-tile text-ink-muted">⌘K</kbd>
+					</>
+				)}
+				<span className="flex-1" />
+				{open ? (
+					<>
+						<button
+							type="button"
+							className={cn(iconButtonClass({ size: "size-icon-sm", tone: "text-ink-muted" }), historyOpen && "bg-selected-nav text-ink")}
+							title="Chat history ⌘⇧H"
+							aria-label="Chat history"
+							onClick={(event) => {
+								event.stopPropagation();
+								void toggleHistory();
+							}}
+						>
+							<HistoryIcon size={15} />
+						</button>
+						<button
+							type="button"
+							className={iconButtonClass({ size: "size-icon-sm", tone: "text-ink-muted" })}
+							title="New chat ⌘N"
+							aria-label="New chat"
+							onClick={(event) => {
+								event.stopPropagation();
+								newChat();
+							}}
+						>
+							<PlusIcon />
+						</button>
+					</>
+				) : null}
+				<span className="grid flex-none place-items-center text-ink-muted">{open ? <ChevronDown size={15} /> : <ChevronUp size={15} />}</span>
 			</div>
-			{historyOpen ? (
+
+			{historyOpen && open ? (
 				<>
-					<div className="ai__history-scrim absolute inset-0 z-[25]" aria-hidden="true" onClick={closeHistory} />
-					<div className="ai__history-popover absolute top-[52px] right-12 z-[26] flex flex-col w-[min(var(--w-history),calc(100%_-_24px))] max-h-[72%] border border-border rounded-12 bg-window shadow-window overflow-hidden animate-[rise_var(--dur-popover)_var(--ease-out)]" aria-label="Chat history">
-						<div className="ai__history-header flex flex-none items-center gap-8 h-[44px] px-12 border-b border-border text-ink-muted">
-							<SearchIcon className="ai__history-search-icon" />
+					<div className="absolute inset-0 z-20" aria-hidden="true" onClick={closeHistory} />
+					<div className="history absolute right-12 top-40 z-30 flex max-h-[72%] w-360 flex-col overflow-hidden rounded-12 border border-border bg-window shadow-menu" aria-label="Chat history">
+						<div className="flex flex-none items-center gap-8 p-8">
 							<input
 								autoFocus
 								value={historyQuery}
@@ -269,30 +614,35 @@ export function AiSearchPanel({
 								}}
 								placeholder="대화 기록 검색"
 								aria-label="대화 기록 검색"
-								className="flex-1 min-w-0 h-row border-0 outline-none bg-transparent text-ink text-body"
+								className="h-icon-sm min-w-0 flex-1 rounded-8 border-0 bg-input px-10 text-meta text-ink outline-none placeholder:text-ink-muted"
 							/>
-							<button type="button" className={cn("icon-button", iconButtonClass({ size: "size-icon-sm", tone: "text-ink-muted" }))} aria-label="Close history" onClick={closeHistory}><CloseIcon size={12} /></button>
+							<button type="button" className="flex-none cursor-pointer text-badge text-ink-muted hover:text-danger-text" onClick={() => void clearHistory()}>
+								지우기
+							</button>
 						</div>
-						<div className="ai__history-list flex flex-1 flex-col gap-2 min-h-0 p-6 overflow-auto">
+						<div className="history-list min-h-0 flex-1 overflow-auto px-6 pb-6">
 							{historyGroups.length === 0 ? (
-								<span className="ai__history-empty py-[28px] px-12 text-ink-muted text-meta text-center">{historyEmptyText(historyQuery)}</span>
+								<span className="block px-12 py-28 text-center text-meta text-ink-muted">{historyEmptyText(historyQuery)}</span>
 							) : (
 								historyGroups.map((group) => (
 									<div key={group.label}>
-										<div className="ai__history-group pt-10 px-10 pb-4 text-ink-muted text-badge font-semibold">{group.label}</div>
+										<div className="history-group px-10 pb-4 pt-10 text-badge font-semibold text-ink-muted">{group.label}</div>
 										{group.items.map((item) => (
 											<button
 												type="button"
 												key={item.id}
-												className={cn("ai__history-item flex items-start gap-10 w-full py-8 px-10 border-0 rounded-8 text-ink text-left hover:bg-input", item.id === chatId ? "ai__history-item--current bg-accent-history-current" : "bg-transparent")}
+												className={cn(
+													"history-item flex w-full items-start gap-8 rounded-7 border-0 px-10 py-8 text-left cursor-pointer transition-colors duration-(--dur-color) ease-out hover:bg-hover",
+													item.id === chatId ? "current bg-accent-history-current" : "bg-transparent",
+												)}
 												onClick={() => void loadHistory(item.id)}
 											>
-												<span className="ai__history-dot flex-none size-dot mt-[7px] rounded-full bg-transparent [.ai\_\_history-item--current_&]:bg-accent" />
-												<span className="ai__history-text flex flex-1 flex-col gap-2 min-w-0">
-													<strong className="text-body font-medium truncate">{item.title}</strong>
-													<small className="text-ink-muted text-meta truncate">{item.snippet}</small>
+												<span className={cn("hist-dot mt-5 size-dot flex-none rounded-full", item.id === chatId ? "bg-accent" : "bg-transparent")} />
+												<span className="hist-copy min-w-0 flex-1">
+													<b className="block truncate text-body font-medium text-ink">{item.title}</b>
+													<small className="mt-2 block truncate text-meta text-ink-muted">{item.snippet}</small>
 												</span>
-												<span className="ai__history-time flex-none mt-2 text-ink-muted text-badge">{item.time}</span>
+												<span className="hist-time flex-none text-badge text-ink-faint">{item.time}</span>
 											</button>
 										))}
 									</div>
@@ -302,100 +652,178 @@ export function AiSearchPanel({
 					</div>
 				</>
 			) : null}
-			<div className="ai__body flex flex-col flex-1 min-h-0 p-20 overflow-auto">
-				<div className="ai__messages flex flex-1 flex-col gap-12 overflow-auto">
-					{quick === null && deep === null && error === null && submittedQuery === null ? (
-						<div className="ai__empty flex flex-col items-center gap-8 m-auto text-center">
-							<div className="ai__empty-title text-title font-semibold">무엇을 찾아드릴까요?</div>
-							<div className="ai__empty-sub max-w-[360px] text-ink-muted text-pretty break-keep">
-								파일, 메일, Slack, Notion 전체에서 찾아 빠른 답변과 정확한 답변을 함께 드립니다.
+
+			{open ? (
+				<div ref={bodyRef} className="ai-body min-h-0 flex-1 overflow-auto px-20 py-16">
+					<div className={cn(CENTERED, "flex flex-col space-y-16")}>
+						{showEmpty ? (
+							<div className="ai-empty my-28 text-center">
+								<strong className="block text-title font-semibold text-ink">무엇을 찾아드릴까요?</strong>
+								<p className="mt-8 text-body leading-[1.5] text-ink-muted break-keep">파일, 메일, 메신저 전체에서 찾아 빠른 답변과 정밀한 답변을 함께 드립니다.</p>
 							</div>
-						</div>
-					) : null}
-					{submittedQuery === null ? null : <div className="ai__user-message flex flex-col items-end gap-4 ml-auto max-w-[88%]"><span className="text-ink-muted text-meta">You</span><p className="m-0 py-10 px-12 rounded-tl-10 rounded-tr-10 rounded-br-3 rounded-bl-10 bg-chip-sent text-ink-body break-keep">{submittedQuery}</p></div>}
-					{submittedQuery === null ? null : <div className="ai__assistant-label text-ink-muted text-meta mt-2">Assistant</div>}
-					{error === null ? null : <div className="ai__error p-12 border border-border rounded-10 bg-chrome">{error}</div>}
-					{submittedQuery === null ? null : <AnswerCard label="Quick" phase={quick} draft={quickDraft} thinking={thinking.quick} pending={searchId !== null && quick === null} selectedEvidence={selectedEvidence} onCitation={onSelectEvidence} />}
-					{submittedQuery === null ? null : <AnswerCard label="Deep" phase={deep} draft={deepDraft} thinking={thinking.deep} pending={searchId !== null && deep === null} selectedEvidence={selectedEvidence} onCitation={onSelectEvidence} />}
-					{progress === "" ? null : <div className="ai__progress p-12 border border-border rounded-10 bg-chrome">{progress}</div>}
-					{stopped ? <div className="ai__stopped p-12 border border-border rounded-10 bg-subtle-alt">응답 생성을 중단했습니다.</div> : null}
+						) : null}
+
+						{submittedQuery === null ? null : (
+							<div className="message user-msg flex justify-end">
+								<div className="user-bubble-wrap flex max-w-bubble-max flex-col items-end gap-6">
+									{submittedAttachments.length > 0 ? (
+										<div className="ref-attachments flex flex-wrap justify-end gap-6">
+											{submittedAttachments.map((att) => (
+												<RefFileChip key={`${att.id}:${att.name}`} att={att} />
+											))}
+										</div>
+									) : null}
+									<div className="bubble w-full rounded-10 border border-border bg-input px-14 py-10 text-body leading-[1.5] text-ink-body break-words">{submittedQuery}</div>
+								</div>
+							</div>
+						)}
+
+						{error === null ? null : <div className="rounded-10 border border-danger-border bg-danger-bg-soft px-14 py-10 text-body text-danger-text">{error}</div>}
+
+						{submittedQuery === null ? null : (
+							<div className="message assistant-msg flex flex-col gap-14">
+								{quickReady ? (
+									<div className="assistant-prose flex flex-col gap-8 text-body leading-[1.55] text-ink-body">
+										<ProseBlocks text={quickText} selected={selectedEvidence} onCitation={onSelectEvidence} />
+									</div>
+								) : (
+									<div className="flex flex-col gap-8">
+										<span className="skeleton block h-8 w-[85%] rounded-4 bg-[linear-gradient(90deg,var(--bg-input),var(--bg-window),var(--bg-input))] bg-[length:200%_100%] animate-shimmer" />
+										<span className="skeleton block h-8 w-[65%] rounded-4 bg-[linear-gradient(90deg,var(--bg-input),var(--bg-window),var(--bg-input))] bg-[length:200%_100%] animate-shimmer" />
+									</div>
+								)}
+
+								{thinkingVisible ? (
+									<div className="water-wave-thinking my-6 flex items-center gap-8 text-meta text-ink-muted">
+										<span className="size-7 flex-none rounded-full bg-info-dot animate-[pulseDot_1.4s_ease-in-out_infinite]" />
+										<span className="min-w-0 truncate">Thinking…{progress === "" ? "" : ` ${progress}`}</span>
+									</div>
+								) : null}
+
+								{deepReady ? (
+									<div className="flex flex-col gap-6">
+										{deepElapsed === null ? null : (
+											<button
+												type="button"
+												className={cn(
+													"thinking-header inline-flex cursor-pointer select-none items-center gap-5 text-meta font-medium text-ink-muted transition-colors duration-(--dur-color) ease-out hover:text-ink",
+													deepOpen && "open",
+												)}
+												aria-expanded={deepOpen}
+												onClick={() => setDeepOpen((value) => !value)}
+											>
+												<ChevronRight size={10} strokeWidth={2.5} className={cn("transition-transform duration-150 ease-out", deepOpen && "rotate-90")} />
+												<span>Worked for {formatElapsed(deepElapsed)}</span>
+											</button>
+										)}
+										{deepElapsed === null || deepOpen ? (
+											<div className="assistant-prose flex flex-col gap-8 text-body leading-[1.55] text-ink-body">
+												<ProseBlocks text={deepText} selected={selectedEvidence} onCitation={onSelectEvidence} />
+											</div>
+										) : null}
+									</div>
+								) : null}
+							</div>
+						)}
+
+						{stopped ? <div className="text-body text-ink-muted">응답 생성을 중단했습니다.</div> : null}
+					</div>
 				</div>
-				<form
-					className="ai__composer flex flex-col gap-8 flex-none mt-12 p-8 border border-border rounded-10 bg-input shadow-[0_3px_12px_rgb(26_26_46_/_8%)]"
-					onSubmit={(event) => void submit(event)}
-					onDragOver={(event) => event.preventDefault()}
-					onDrop={(event) => {
-						event.preventDefault();
-						const dropped = [...event.dataTransfer.files].map((file) => ({
-							kind: "file" as const,
-							id: (file as File & { readonly path?: string }).path ?? file.name,
-							name: file.name,
-						}));
-						setAttachments((current) => [...current, ...dropped]);
-					}}
-				>
-					{attachments.length > 0 ? <span className="ai__attachments text-ink-muted">{attachments.map((item) => item.name).join(", ")}</span> : null}
-					<div className="ai__composer-row flex gap-8 w-full">
-						<input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="파일, 메일, 메신저 전체에서 물어보세요" aria-label="Ask AutoRAG" disabled={searchId !== null} className="min-w-0 flex-1 py-[9px] px-[11px] border-0 rounded-8 bg-transparent" />
-						{searchId === null ? <button type="submit" className="ai__send-button inline-flex items-center justify-center size-row flex-none py-5 px-10 border-0 rounded-8 bg-ink text-on-badge cursor-pointer disabled:bg-border-strong disabled:text-ink-muted disabled:cursor-default" title="Ask AutoRAG" aria-label="Ask AutoRAG" disabled={query.trim().length === 0}><SendIcon /></button> : <button type="button" className="ai__send-button ai__send-button--stop inline-flex items-center justify-center size-row flex-none py-5 px-10 border-0 rounded-8 bg-ink text-on-badge cursor-pointer disabled:bg-border-strong disabled:text-ink-muted disabled:cursor-default" title="Stop search" aria-label="Stop search" onClick={() => void stop()}><span className="size-10 rounded-2 bg-current" /></button>}
+			) : null}
+
+			{open ? (
+				<form className="composer flex-none px-20 pt-8 pb-14" onSubmit={submit}>
+					<div className={CENTERED}>
+						{attachments.length > 0 ? (
+							<div className="composer-attach-tray flex flex-wrap items-center gap-6 pb-6">
+								{attachments.map((att, index) => (
+									<span key={`${att.id}:${att.name}`} className="composer-attach-pill inline-flex h-chip-draft items-center gap-5 rounded-5 bg-selected-nav px-8 text-badge text-ink">
+										<FileTile kind={att.kind === "contact" ? "contact" : evidenceKind(att.name)} size={16} />
+										<span className="max-w-[180px] truncate">{att.name}</span>
+										<button type="button" className="cursor-pointer text-ink-muted hover:text-danger-text" aria-label="첨부 제거" onClick={() => removeAttachment(index)}>
+											<CloseIcon size={9} />
+										</button>
+									</span>
+								))}
+							</div>
+						) : null}
+						<div className="compose-box flex min-h-40 items-center gap-7 rounded-12 border border-border bg-input px-11 py-4 transition-colors duration-(--dur-color) ease-out focus-within:border-accent">
+							<input
+								ref={inputRef}
+								value={query}
+								onChange={(event) => setQuery(event.target.value)}
+								placeholder={COMPOSER_PLACEHOLDER}
+								aria-label="Ask AutoRAG"
+								disabled={searchId !== null}
+								className="h-30 min-w-0 flex-1 border-0 bg-transparent text-body text-ink-body outline-none placeholder:text-ink-muted"
+							/>
+							{searchId === null ? (
+								<button
+									type="submit"
+									className="send flex size-32 flex-none items-center justify-center rounded-full border-0 bg-accent text-on-accent cursor-pointer transition-colors duration-(--dur-color) ease-out enabled:hover:bg-accent-hover disabled:cursor-default disabled:bg-border-strong"
+									title="Ask AutoRAG"
+									aria-label="Ask AutoRAG"
+									disabled={query.trim().length === 0 && attachments.length === 0}
+								>
+									<ArrowUpIcon />
+								</button>
+							) : (
+								<button
+									type="button"
+									className="send flex size-32 flex-none items-center justify-center rounded-full border-0 bg-ink text-on-accent cursor-pointer"
+									title="중단"
+									aria-label="Stop search"
+									onClick={() => void stop()}
+								>
+									<Square size={10} strokeWidth={3} fill="currentColor" />
+								</button>
+							)}
+						</div>
 					</div>
 				</form>
-			</div>
+			) : null}
+
+			{dragActive && open ? (
+				<div className="pointer-events-none absolute inset-8 z-20 flex flex-col items-center justify-center gap-10 rounded-14 border-[1.5px] border-dashed border-accent bg-accent-drop-hover backdrop-blur-sm">
+					<span className="relative flex size-64 items-center justify-center rounded-12 bg-accent-soft text-accent">
+						<SparklesIcon size={28} />
+						<span className="absolute -bottom-4 -right-4 flex size-22 items-center justify-center rounded-full bg-accent text-badge font-bold text-on-accent">+</span>
+					</span>
+					<span className="text-body font-medium text-ink">{dragOver ? "놓으면 대화에 첨부됩니다" : "여기로 끌어서 AI에게 물어보기"}</span>
+					{dragName === null ? null : <span className="text-meta text-ink-muted">{dragName}</span>}
+				</div>
+			) : null}
 		</section>
 	);
-}
+});
 
-const THINKING_LETTERS = [..."Thinking"];
-
-/** Shown while the model reasons; the reasoning text itself is never rendered. */
-function ThinkingIndicator(): ReactElement {
+/** A referenced file badge above the user bubble (v7 `.ref-file-chip`). */
+function RefFileChip({ att }: { readonly att: ChatAttachment }): ReactElement {
+	const folder = parentFolder(att);
 	return (
-		<div className="ai__thinking inline-flex self-start py-2 px-0 text-ink-faint text-body font-semibold tracking-label" role="status" aria-label="Thinking">
-			{THINKING_LETTERS.map((letter, index) => (
-				<span key={index} aria-hidden="true" className="inline-block animate-[ai-thinking-wave_1.6s_ease-in-out_infinite] [animation-delay:calc(var(--i)*0.08s)]" style={{ "--i": index } as CSSProperties}>{letter}</span>
-			))}
-		</div>
+		<span className="ref-file-chip inline-flex h-chip items-center gap-6 rounded-6 border border-border bg-input px-8 text-ink" title={att.id}>
+			<FileTile kind={att.kind === "contact" ? "contact" : evidenceKind(att.name)} size={16} />
+			<span className="ref-chip-name text-meta font-medium text-ink">{att.name}</span>
+			{folder === null ? null : <span className="ref-chip-sub text-badge text-ink-muted">· {folder}</span>}
+		</span>
 	);
 }
 
-function AnswerCard({
-	label,
-	phase,
-	draft,
-	thinking,
-	pending,
-	selectedEvidence,
+function ProseBlocks({
+	text,
+	selected,
 	onCitation,
 }: {
-	readonly label: string;
-	readonly phase: AnswerPhase | null;
-	readonly draft: string;
-	readonly thinking: boolean;
-	readonly pending: boolean;
-	readonly selectedEvidence: number | null;
-	readonly onCitation: (selected: number) => void;
+	readonly text: string;
+	readonly selected: number | null;
+	readonly onCitation: (number: number) => void;
 }): ReactElement {
-	const answerText = phase !== null ? phase.answer : draft;
-	const modifier = `ai__answer--${label.toLowerCase()}`;
-	const isQuick = label === "Quick";
-	if (answerText === "") {
-		return (
-			<article className={cn("ai__answer flex flex-col gap-8 py-14 px-16 border border-border rounded-10", modifier, isQuick ? "bg-window" : "bg-subtle-alt", "ai__answer--pending min-h-[82px]")}>
-				<span className="ai__answer-label inline-flex items-center gap-8 text-ink font-semibold"><i className="inline-block size-6 rounded-full bg-accent [.ai\_\_answer--deep_&]:bg-accent" />{label}</span>
-				{pending && thinking ? <ThinkingIndicator /> : <div className="ai__skeleton flex flex-col gap-8"><span className="block h-10 rounded-6 bg-[linear-gradient(90deg,var(--bg-input),var(--bg-window),var(--bg-input))] bg-[length:200%_100%] animate-shimmer [&:nth-child(1)]:w-[86%]" /><span className="block h-10 rounded-6 bg-[linear-gradient(90deg,var(--bg-input),var(--bg-window),var(--bg-input))] bg-[length:200%_100%] animate-shimmer [&:nth-child(2)]:w-[68%]" /><span className="block h-10 rounded-6 bg-[linear-gradient(90deg,var(--bg-input),var(--bg-window),var(--bg-input))] bg-[length:200%_100%] animate-shimmer [&:nth-child(3)]:w-[42%]" /></div>}
-			</article>
-		);
-	}
-	const streaming = phase === null && pending;
 	return (
-		<article className={cn("ai__answer flex flex-col gap-8 py-14 px-16 border border-border rounded-10", modifier, isQuick ? "bg-window" : "bg-subtle-alt", streaming && "ai__answer--streaming")}>
-			<span className="ai__answer-label inline-flex items-center gap-8 text-ink font-semibold"><i className="inline-block size-6 rounded-full bg-accent [.ai\_\_answer--deep_&]:bg-accent" />{label}</span>
-			<div className={cn("ai__answer-content flex flex-col gap-8", streaming && "[&>:last-child]:after:content-['▍'] [&>:last-child]:after:ml-2 [&>:last-child]:after:text-accent [&>:last-child]:after:animate-[ai-caret_1s_steps(2,start)_infinite]")}>
-				{parseAnswerBlocks(answerText).map((block, index) => (
-					<AnswerBlockView key={`${index}`} block={block} selected={selectedEvidence} onCitation={onCitation} />
-				))}
-			</div>
-		</article>
+		<>
+			{parseAnswerBlocks(text).map((block, index) => (
+				<AnswerBlockView key={`${index}`} block={block} selected={selected} onCitation={onCitation} />
+			))}
+		</>
 	);
 }
 
@@ -406,20 +834,31 @@ function AnswerBlockView({
 }: {
 	readonly block: AnswerBlock;
 	readonly selected: number | null;
-	readonly onCitation: (selected: number) => void;
+	readonly onCitation: (number: number) => void;
 }): ReactElement {
 	const segments = parseInline(block.text).map((segment, index) => {
 		switch (segment.kind) {
 			case "bold":
-				return <strong key={`${index}`}>{segment.text}</strong>;
+				return (
+					<strong key={`${index}`} className="font-semibold text-ink">
+						{segment.text}
+					</strong>
+				);
 			case "code":
-				return <code key={`${index}`} className="ai__inline-code py-1 px-4 rounded-4 bg-code font-mono text-sm">{segment.text}</code>;
+				return (
+					<code key={`${index}`} className="rounded-4 bg-code px-4 py-1 font-mono text-caption text-ink-body">
+						{segment.text}
+					</code>
+				);
 			case "citation":
 				return (
 					<button
 						type="button"
 						key={`${index}`}
-						className={cn("ai__citation inline-flex items-center justify-center min-w-18 h-18 py-0 px-4 mx-2 my-0 border-0 rounded-5 text-badge font-semibold cursor-pointer align-[1px] transition-[background] duration-(--dur-color-slow) ease-[ease]", segment.number === selected ? "ai__citation--active bg-accent text-on-accent" : "bg-accent-chip text-accent-text")}
+						className={cn(
+							"cite mx-2 inline-flex h-18 min-w-18 items-center justify-center rounded-5 border-0 px-5 align-[1.5px] text-badge font-semibold cursor-pointer transition-[background,color] duration-(--dur-color) ease-[ease]",
+							segment.number === selected ? "active bg-accent text-on-accent" : "bg-accent-wash text-accent-text hover:bg-accent-soft",
+						)}
 						onClick={() => onCitation(segment.number)}
 					>
 						{segment.number}
@@ -431,19 +870,19 @@ function AnswerBlockView({
 	});
 	switch (block.kind) {
 		case "heading":
-			return <><div className="ai__block ai__block--heading text-ink font-semibold [&_strong]:text-ink [&_strong]:font-semibold">{segments}</div></>;
+			return <div className="text-body font-semibold text-ink">{segments}</div>;
 		case "list":
 			return (
-				<div className="ai__block ai__block--list flex gap-8 text-ink-body text-body leading-body [&_strong]:text-ink [&_strong]:font-semibold">
-					<span className="ai__block-marker text-ink-muted">–</span>
+				<div className="flex gap-8">
+					<span className="text-ink-muted">–</span>
 					<span>{segments}</span>
 				</div>
 			);
 		case "quote":
-			return <div className="ai__block ai__block--quote pl-10 text-ink-muted text-body leading-body shadow-[inset_2px_0_0_var(--border)] [&_strong]:text-ink [&_strong]:font-semibold">{segments}</div>;
+			return <div className="pl-10 text-ink-muted shadow-[inset_2px_0_0_var(--border)]">{segments}</div>;
 		case "code":
-			return <pre className="ai__block ai__block--code m-0 py-8 px-10 border border-border rounded-6 bg-code text-ink-body font-mono text-caption leading-read overflow-auto whitespace-pre [&_strong]:text-ink [&_strong]:font-semibold">{block.text}</pre>;
+			return <pre className="m-0 overflow-auto whitespace-pre rounded-6 border border-border bg-code px-10 py-8 font-mono text-caption text-ink-body">{block.text}</pre>;
 		default:
-			return <p className="ai__block ai__block--paragraph m-0 text-ink-body text-body leading-body whitespace-pre-wrap break-keep [&_strong]:text-ink [&_strong]:font-semibold">{segments}</p>;
+			return <p className="m-0 whitespace-pre-wrap break-keep">{segments}</p>;
 	}
 }

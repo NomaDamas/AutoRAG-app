@@ -70,10 +70,6 @@ export function statusBarText(itemCount: number, selectedCount: number): string 
 	return `${itemCount} items${selectedCount > 0 ? ` · ${selectedCount} selected` : ""}`;
 }
 
-export function searchSummaryText(count: number): string {
-	return `${count} results across all locations`;
-}
-
 export function trashToast(paths: readonly string[]): string {
 	if (paths.length === 1) {
 		return `${basename(paths[0] ?? "")} — 휴지통으로 이동했습니다`;

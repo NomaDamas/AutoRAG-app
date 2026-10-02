@@ -22,6 +22,7 @@ export const FS_CHANNELS = {
 	move: "fs:move",
 	duplicate: "fs:duplicate",
 	rename: "fs:rename",
+	createFolder: "fs:createFolder",
 	trash: "fs:trash",
 	reveal: "fs:reveal",
 	quickLook: "fs:quickLook",
@@ -162,6 +163,13 @@ export interface FsCoreBridge {
 	duplicate(paths: readonly string[]): Promise<FsBatchResult>;
 	/** Rename a single entry. Rejects empty names and name collisions. */
 	rename(path: string, newName: string): Promise<FsEntry>;
+	/**
+	 * Create a new folder inside `directory` (Finder "New Folder"). The first
+	 * one is "untitled folder"; a taken name falls through to "untitled folder
+	 * 2", "untitled folder 3", … Returns the created folder's absolute path
+	 * and name.
+	 */
+	createFolder(directory: string): Promise<{ readonly path: string; readonly name: string }>;
 	/** Move to the macOS Trash (shell.trashItem). */
 	trash(paths: readonly string[]): Promise<FsBatchResult>;
 	/** Reveal in the real Finder (shell.showItemInFolder). */

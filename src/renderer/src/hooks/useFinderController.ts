@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, RefObject } from "react";
+import type { MouseEvent as ReactMouseEvent, RefObject } from "react";
 import { RECENTS_PATH } from "../../../shared/fs-contract";
 import type { IndexStatus } from "../../../shared/index-contract";
 import { DUPEY_LAYER_ID, type FsDirChange, type LiveMessage } from "../../../shared/live-contract";
@@ -20,7 +20,7 @@ import {
 	type FinderMenuAction,
 	type FinderMenuEntry,
 } from "../state/context-menu";
-import { emptyStateText, indexToast, searchSummaryText, statusBarText, trashToast } from "../state/format";
+import { emptyStateText, indexToast, statusBarText, trashToast } from "../state/format";
 import { type FocusZone, resolveKeyAction } from "../state/keymap";
 import {
 	applyEntryPatch,
@@ -66,10 +66,13 @@ import {
 	applyVersionStacks,
 	buildVersionFamilies,
 	EMPTY_VERSION_FAMILIES,
+	familyViewFor,
 	type StackRow,
 	type VersionFamilies,
 	type VersionFamiliesResult,
 	type VersionFamilyError,
+	type VersionFamilyView,
+	type VersionRelation,
 } from "../state/version-family";
 import {
 	activeTab,
@@ -160,7 +163,6 @@ export interface FinderController {
 	readonly searchPlaceholder: string;
 	readonly searchFocused: boolean;
 	readonly searching: boolean;
-	readonly searchSummary: string;
 	readonly emptyText: string;
 	readonly rows: readonly FinderEntry[];
 	readonly stackRows: readonly TreeRow[];
@@ -183,6 +185,23 @@ export interface FinderController {
 	readonly viewMode: ViewMode;
 	/** The view actually rendered: the column view shows search results as a list. */
 	readonly layout: ViewMode;
+	/** Search scope: every location, or only the current folder subtree (v7 scope bar). */
+	readonly searchScope: SearchScope;
+	setSearchScope(scope: SearchScope): void;
+	/** The single focused row (null when the selection is empty or multiple). */
+	readonly focusedEntry: FinderEntry | null;
+	/** The dupey family a path heads or belongs to — the inspector "Versions" section. */
+	versionFamilyFor(path: string): VersionFamilyView | null;
+	/** Same family with real entries attached — the column view's variants pane. */
+	familyEntriesFor(path: string): { readonly head: FinderEntry; readonly members: readonly { readonly entry: FinderEntry; readonly relation: VersionRelation }[] } | null;
+	/** Navigate the current tab to the entry's folder and reveal the row (version-member click). */
+	revealEntry(entry: FinderEntry): void;
+	/** Create an "untitled folder" in the current directory and select it. */
+	newFolder(): void;
+	/** Trash a single entry (inspector action bar). */
+	trashEntry(entry: FinderEntry): void;
+	/** Copy a single entry's path to the system clipboard (inspector action bar). */
+	copyEntryPath(entry: FinderEntry): void;
 	/** Column view panes, left to right (empty outside the column layout). */
 	readonly columnPanes: readonly ColumnPaneView[];
 	readonly listRef: RefObject<HTMLDivElement | null>;
@@ -197,7 +216,6 @@ export interface FinderController {
 	forward(): void;
 	setQuery(value: string): void;
 	setSearchFocused(value: boolean): void;
-	onSearchKeyDown(event: ReactKeyboardEvent<HTMLInputElement>): void;
 	sortBy(key: SortKey): void;
 	showToast(message: string): void;
 	/** In-app Quick Look for an arbitrary path (evidence source). */
@@ -231,15 +249,30 @@ export interface QuickLookBridge {
 	readonly isQuickLookOpen: () => boolean;
 }
 
+/** v7 search scope bar: the whole Mac or only the current folder subtree. */
+export type SearchScope = "all" | "current";
+
 export function useFinderController(
 	source: FinderSource,
-	options: { readonly showHiddenFiles?: boolean; readonly quickLook?: QuickLookBridge } = {},
+	options: {
+		readonly showHiddenFiles?: boolean;
+		readonly quickLook?: QuickLookBridge;
+		/** ⌘K: open the AI dock and focus its composer (owned by the App shell). */
+		readonly onFocusComposer?: () => void;
+		/** Esc: close the inspector's evidence half; return true when consumed. */
+		readonly onDismissEvidence?: () => boolean;
+	} = {},
 ): FinderController {
 	const showHiddenFiles = options.showHiddenFiles ?? false;
 	const quickLookRef = useRef(options.quickLook);
 	quickLookRef.current = options.quickLook;
+	const focusComposerRef = useRef(options.onFocusComposer);
+	focusComposerRef.current = options.onFocusComposer;
+	const dismissEvidenceRef = useRef(options.onDismissEvidence);
+	dismissEvidenceRef.current = options.onDismissEvidence;
 	const [tabsState, setTabsState] = useState<TabsState>(() => createTabsState(source.initialPath));
 	const [query, setQueryValue] = useState("");
+	const [searchScope, setSearchScope] = useState<SearchScope>("all");
 	const [sort, setSort] = useState<SortState | null>(null);
 	const [zone, setZone] = useState<FocusZone>("finder");
 	const [listing, setListing] = useState<readonly FinderEntry[]>([]);
@@ -741,7 +774,9 @@ export function useFinderController(
 				selectedKeys: selection.keys,
 			});
 		if (searching) {
-			return flatTreeRows(prepare(hits));
+			const scoped =
+				searchScope === "current" ? hits.filter((hit) => hit.path === path || hit.path.startsWith(`${path}/`)) : hits;
+			return flatTreeRows(prepare(scoped));
 		}
 		return buildFolderTree(prepare(listing), {
 			expanded,
@@ -750,7 +785,7 @@ export function useFinderController(
 				return loaded === undefined ? undefined : prepare(loaded.entries);
 			},
 		});
-	}, [searching, hits, listing, sort, showHiddenFiles, families, stackPinned, selection.keys, expanded, childListings]);
+	}, [searching, hits, listing, sort, showHiddenFiles, families, stackPinned, selection.keys, expanded, childListings, searchScope, path]);
 
 	const paneViews = useMemo<readonly ColumnPaneView[]>(
 		() =>
@@ -1067,6 +1102,51 @@ export function useFinderController(
 		[expanded, setFolderOpen],
 	);
 
+	const versionFamilyFor = useCallback((target: string) => familyViewFor(target, families), [families]);
+
+	const familyEntriesFor = useCallback(
+		(target: string) => {
+			const data = families.byHead.get(target) ?? families.memberOf.get(target)?.family;
+			if (data === undefined) return null;
+			const head = data.entriesByPath[data.head];
+			if (head === undefined) return null;
+			const members = data.members.flatMap((member) => {
+				const entry = data.entriesByPath[member.path];
+				return entry === undefined ? [] : [{ entry, relation: member.relation }];
+			});
+			return { head, members };
+		},
+		[families],
+	);
+
+	/** Sidebar "New folder": real mkdir in the current folder, then select the row. */
+	const newFolder = useCallback(() => {
+		if (searching || path === "" || path === RECENTS_PATH || path === SETTINGS_PATH || path === CONTACTS_PATH) {
+			return;
+		}
+		source
+			.createFolder(path)
+			.then((created) => {
+				showToast(`${created.name} — 새 폴더를 만들었습니다`);
+				scrollTarget.current = created.path;
+				patchSelection({ keys: [created.path], anchor: created.path, focus: created.path });
+				refresh();
+			})
+			.catch(reportError);
+	}, [source, searching, path, showToast, patchSelection, refresh, reportError]);
+
+	const trashEntry = useCallback((entry: FinderEntry) => trashPaths([entry.path]), [trashPaths]);
+
+	const copyEntryPath = useCallback(
+		(entry: FinderEntry) => {
+			source
+				.copyPaths([entry.path])
+				.then(() => showToast("경로를 복사했습니다"))
+				.catch(reportError);
+		},
+		[source, showToast, reportError],
+	);
+
 	const retryVersionFamilies = useCallback(() => {
 		const versionAtRequest = layerStoreRef.current.versions[DUPEY_LAYER_ID] ?? 0;
 		source
@@ -1289,6 +1369,9 @@ export function useFinderController(
 			quickLookRef.current.closeQuickLook();
 			return;
 		}
+		if (dismissEvidenceRef.current?.() === true) {
+			return;
+		}
 		if (query !== "") {
 			setQueryValue("");
 		}
@@ -1331,6 +1414,10 @@ export function useFinderController(
 				case "openSettings":
 					event.preventDefault();
 					setTabsState((state) => openOrSelectSettingsTab(state));
+					return;
+				case "focusComposer":
+					event.preventDefault();
+					focusComposerRef.current?.();
 					return;
 				case "quickLook":
 					event.preventDefault();
@@ -1460,10 +1547,9 @@ export function useFinderController(
 		canGoForward: tab.fwd.length > 0,
 		query,
 		searchPlaceholder:
-			path === CONTACTS_PATH ? "Search contacts" : path === SETTINGS_PATH ? "Search settings" : "Instant search",
+			path === CONTACTS_PATH ? "Search contacts" : path === SETTINGS_PATH ? "Search settings" : "Search files, contents…",
 		searchFocused,
 		searching,
-		searchSummary: searchSummaryText(rows.length),
 		emptyText: emptyStateText(query, path),
 		rows,
 		stackRows,
@@ -1482,6 +1568,15 @@ export function useFinderController(
 		contextMenuEntries,
 		viewMode,
 		layout,
+		searchScope,
+		setSearchScope,
+		focusedEntry,
+		versionFamilyFor,
+		familyEntriesFor,
+		revealEntry,
+		newFolder,
+		trashEntry,
+		copyEntryPath,
 		columnPanes: paneViews,
 		listRef,
 		searchRef,
@@ -1495,18 +1590,6 @@ export function useFinderController(
 		forward: () => setTabsState((state) => goForward(state)),
 		setQuery: setQueryValue,
 		setSearchFocused,
-		onSearchKeyDown: (event) => {
-			if (event.key === "Enter") {
-				const first = rows[0];
-				if (first !== undefined) {
-					openEntry(first);
-				}
-			}
-			if (event.key === "Escape") {
-				setQueryValue("");
-				event.currentTarget.blur();
-			}
-		},
 		sortBy: (key) => setSort((current) => cycleSort(current, key)),
 		showToast,
 		quickLookPath,

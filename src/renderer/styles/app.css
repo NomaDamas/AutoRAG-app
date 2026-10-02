@@ -14,3 +14,7 @@
 @import "./tailwind.css";
 
 @import "./base.css" layer(base);
+
+/* Settings — hand-written BEM sheet for SettingsView.tsx (v7 Bloom). Layered
+ * with base so Tailwind utilities still win, same as base.css. */
+@import "./settings.css" layer(base);

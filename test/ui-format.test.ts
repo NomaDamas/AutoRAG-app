@@ -6,7 +6,6 @@ import {
 	formatSize,
 	indexToast,
 	parseModifiedLabel,
-	searchSummaryText,
 	statusBarText,
 	tileLabel,
 	trashToast,
@@ -47,10 +46,6 @@ describe("status strings", () => {
 	it("counts items and the selection", () => {
 		expect(statusBarText(12, 0)).toBe("12 items");
 		expect(statusBarText(12, 3)).toBe("12 items · 3 selected");
-	});
-
-	it("summarises a search", () => {
-		expect(searchSummaryText(7)).toBe("7 results across all locations");
 	});
 });
 
