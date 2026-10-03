@@ -7,13 +7,14 @@ export const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 
 /**
  * Launch the built Finder app for QA. Requires `bun run build` from the repo
- * root first; userDataDir and env pass through to the Electron process.
+ * root first; userDataDir and env pass through to the Electron process, and
+ * `args` appends Chromium switches (e.g. `--force-device-scale-factor=2`).
  */
-export async function launchFinder({ userDataDir, env } = {}) {
+export async function launchFinder({ userDataDir, env, args: extraArgs = [] } = {}) {
 	if (!existsSync(join(ROOT, "out/main/index.js"))) {
 		throw new Error("out/main/index.js is missing — run `bun run build` first");
 	}
-	const args = userDataDir === undefined ? ["."] : [".", `--user-data-dir=${userDataDir}`];
+	const args = [".", ...(userDataDir === undefined ? [] : [`--user-data-dir=${userDataDir}`]), ...extraArgs];
 	return _electron.launch({
 		args,
 		cwd: ROOT,
