@@ -1,4 +1,5 @@
-import type { Bounds } from "./fit";
+import type { BinaryKind } from "./binary-kind";
+import type { Bounds, QuickLookFit } from "./fit";
 import type { ZoomDirection, ZoomGeometry } from "./zoom";
 
 /**
@@ -28,6 +29,20 @@ export const PREVIEW_CHANNELS = {
 	zoom: "preview:zoom",
 	/** Preview window -> main: a zoom step finished. */
 	zoomed: "preview:zoomed",
+	/** Main -> preview window: the default app that "Open with" launches, once known. */
+	app: "preview:app",
+	/** Preview window -> main (invoke): creation date, location, and binary kind of the shown file. */
+	details: "preview:details",
+	/** Preview window -> main (invoke): SHA-256 of the shown file. */
+	sha256: "preview:sha256",
+	/** Preview window -> main (invoke): total size below the shown folder. */
+	folderSize: "preview:folder-size",
+	/** Preview window -> main (invoke): tags, cover art, and stream facts of the shown audio file. */
+	audioMetadata: "preview:audio-metadata",
+	/** Preview window -> main (invoke): the macOS share menu, anchored under a toolbar rect. */
+	share: "preview:share",
+	/** Preview window -> main (invoke): put text on the system clipboard. */
+	copyText: "preview:copy-text",
 } as const;
 
 /**
@@ -50,13 +65,40 @@ export interface QuickLookTarget {
 	readonly name: string;
 }
 
-/** `seq` orders loads; the main process ignores `ready` for a stale seq. */
+/** One child of a previewed folder. */
+export interface FolderItem {
+	readonly name: string;
+	readonly folder: boolean;
+	readonly ext: string;
+	readonly modifiedAt: string;
+}
+
+/** What a folder preview shows without walking the tree: its direct children. */
+export interface FolderSummary {
+	readonly name: string;
+	readonly path: string;
+	readonly modifiedAt: string;
+	/** Visible (non-dot) direct children. */
+	readonly itemCount: number;
+	/** The most recently modified visible children, newest first. */
+	readonly recent: readonly FolderItem[];
+}
+
+/** `seq` orders loads; the main process ignores `ready` for a stale seq. Exactly one of `document`, `folder`, `error` is set. */
 export interface QuickLookLoad {
 	readonly seq: number;
 	readonly name: string;
 	readonly path: string;
 	readonly document: PreviewDocument | null;
+	readonly folder: FolderSummary | null;
 	readonly error: string | null;
+	/** Default app name when already known; otherwise it follows on the `app` channel. */
+	readonly app: string | null;
+}
+
+export interface QuickLookApp {
+	readonly seq: number;
+	readonly name: string | null;
 }
 
 /** Zero width or height means the content has no intrinsic size. */
@@ -64,9 +106,42 @@ export interface QuickLookReady {
 	readonly seq: number;
 	readonly width: number;
 	readonly height: number;
+	readonly fit: QuickLookFit;
 }
 
-export type QuickLookAction = "close" | "next" | "previous" | "open" | "fullscreen";
+export interface FileDetails {
+	readonly createdAt: string;
+	/** Enclosing folders from the volume down, e.g. ["Macintosh HD", "Users", "me"]. */
+	readonly location: readonly string[];
+	readonly binary: BinaryKind | null;
+}
+
+export interface FolderSize {
+	readonly bytes: number;
+	/** False when the walk stopped at its entry or time budget; `bytes` is then a lower bound. */
+	readonly complete: boolean;
+}
+
+export interface AudioPicture {
+	readonly mime: string;
+	readonly data: Uint8Array;
+}
+
+export interface AudioMetadata {
+	readonly title: string | null;
+	readonly artist: string | null;
+	readonly album: string | null;
+	/** Seconds. */
+	readonly duration: number | null;
+	/** Bits per second. */
+	readonly bitrate: number | null;
+	/** Hz. */
+	readonly sampleRate: number | null;
+	readonly codec: string | null;
+	readonly picture: AudioPicture | null;
+}
+
+export type QuickLookAction = "close" | "next" | "previous" | "open" | "fullscreen" | "reveal";
 
 export type NavigateDelta = 1 | -1;
 
@@ -99,9 +174,18 @@ export interface QuickLookWindowBridge {
 	onLoad(listener: (load: QuickLookLoad) => void): () => void;
 	onUnload(listener: () => void): () => void;
 	onZoom(listener: (zoom: QuickLookZoom) => void): () => void;
+	onApp(listener: (app: QuickLookApp) => void): () => void;
 	ready(report: QuickLookReady): void;
 	zoomed(report: QuickLookZoomed): void;
 	request(action: QuickLookAction): Promise<void>;
+	/** The detail calls answer only for the file or folder the window is showing. */
+	details(path: string): Promise<FileDetails>;
+	sha256(path: string): Promise<string>;
+	folderSize(path: string): Promise<FolderSize>;
+	audioMetadata(path: string): Promise<AudioMetadata>;
+	/** `anchor` is the share button's rect in page CSS pixels. macOS only. */
+	share(anchor: Bounds): Promise<void>;
+	copyText(text: string): Promise<void>;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -139,11 +223,28 @@ export function isQuickLookZoomed(value: unknown): value is QuickLookZoomed {
 	return isRecord(value) && typeof value.id === "number" && (value.phase === "prepared" || value.phase === "done");
 }
 
+function isFolderItem(value: unknown): value is FolderItem {
+	if (!isRecord(value)) return false;
+	return typeof value.name === "string" && typeof value.folder === "boolean" && typeof value.ext === "string" && typeof value.modifiedAt === "string";
+}
+
+export function isFolderSummary(value: unknown): value is FolderSummary {
+	if (!isRecord(value)) return false;
+	if (typeof value.name !== "string" || typeof value.path !== "string" || typeof value.modifiedAt !== "string") return false;
+	return typeof value.itemCount === "number" && Array.isArray(value.recent) && value.recent.every(isFolderItem);
+}
+
 export function isQuickLookLoad(value: unknown): value is QuickLookLoad {
 	if (!isRecord(value)) return false;
 	if (typeof value.seq !== "number" || typeof value.name !== "string" || typeof value.path !== "string") return false;
 	if (value.document !== null && !isPreviewDocument(value.document)) return false;
+	if (value.folder !== null && !isFolderSummary(value.folder)) return false;
+	if (value.app !== null && typeof value.app !== "string") return false;
 	return value.error === null || typeof value.error === "string";
+}
+
+export function isQuickLookApp(value: unknown): value is QuickLookApp {
+	return isRecord(value) && typeof value.seq === "number" && (value.name === null || typeof value.name === "string");
 }
 
 export function isQuickLookReady(value: unknown): value is QuickLookReady {
@@ -153,12 +254,13 @@ export function isQuickLookReady(value: unknown): value is QuickLookReady {
 		typeof value.width === "number" &&
 		Number.isFinite(value.width) &&
 		typeof value.height === "number" &&
-		Number.isFinite(value.height)
+		Number.isFinite(value.height) &&
+		(value.fit === "aspect" || value.fit === "clamp")
 	);
 }
 
 export function isQuickLookAction(value: unknown): value is QuickLookAction {
-	return value === "close" || value === "next" || value === "previous" || value === "open" || value === "fullscreen";
+	return value === "close" || value === "next" || value === "previous" || value === "open" || value === "fullscreen" || value === "reveal";
 }
 
 export function isNavigateDelta(value: unknown): value is NavigateDelta {

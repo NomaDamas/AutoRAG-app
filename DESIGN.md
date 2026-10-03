@@ -27,6 +27,9 @@ The application is not an isolated AI chatbot; it is a **living macOS Finder bro
   - Center area hosts Finder tab browsing and bottom AI Search dock.
   - Right panel (Info / Evidence) is **permanently present**, preventing jarring layout shifts during file inspection.
 
+### 1.2 Path bar
+The path bar under the Finder list is one line at every window size and never shows an ellipsis. When the trail does not fit, labels give up space in a fixed order — middle segments left to right (`Users`, the home folder, …), then the root (`Macintosh HD`), then the parent of the current location, then the current location or selected file. A label first narrows with its last `--fade-label` (14px) faded out, so the word reads as cut off; once fewer than 32px would remain, the segment shows only its icon. If even the icon-only trail is too wide, it stays pinned to its end and fades in from the leading edge. Logic: `src/renderer/src/state/path-fit.ts`; visual check: `scripts/manual-qa/run-qa-finder-path-bar.mjs`.
+
 ---
 
 ## 2. Keyboard Shortcuts
@@ -38,7 +41,7 @@ The application is not an isolated AI chatbot; it is a **living macOS Finder bro
 | `⌘W` | Window | Close current Finder tab |
 | `⌘F` | Window | Focus Instant Search bar |
 | `⌘K` | Window | Toggle and focus AI Search composer |
-| `Space` | File List | Native Quick Look preview |
+| `Space` | File List | Quick Look preview of the selected file or folder (`src/preview/DESIGN.md`) |
 | `⌥ Space` | Global | Global AutoRAG Spotlight summon |
 | `Enter` | Search Bar | Commit search with Filenames |
 | `⌥ Enter` | Search Bar | Commit search with Content |

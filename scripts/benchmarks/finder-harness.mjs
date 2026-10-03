@@ -106,8 +106,8 @@ export function elapsedSinceReady(page, descriptor, timeout = 30000) {
 					}
 					return null;
 				}
-				const last = document.querySelector(".crumb--last");
-				if (last === null || last.getAttribute("title") !== descriptor.label) return null;
+				const title = document.querySelector(".toolbar-title");
+				if (title === null || title.textContent !== descriptor.label) return null;
 				const rows = document.querySelectorAll('[role="row"][data-path], [role="option"][data-path]');
 				if (rows.length === 0) return null;
 				for (const row of rows) {
@@ -128,7 +128,7 @@ export function elapsedSinceReady(page, descriptor, timeout = 30000) {
 		.then((value) => Math.round(value.ms * 100) / 100);
 }
 
-/** Waits for the target folder (crumb + a direct child row), timing from the click. */
+/** Waits for the target folder (toolbar title + a direct child row), timing from the click. */
 export function waitForFolder(page, { target, label, recents = null }, timeout = 30000) {
 	return elapsedSinceReady(page, { kind: "folder", target, label, recents }, timeout);
 }

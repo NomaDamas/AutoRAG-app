@@ -24,6 +24,7 @@ import {
 import { emptyStateText, indexToast, trashToast } from "../state/format";
 import { type FocusZone, resolveKeyAction } from "../state/keymap";
 import {
+	applyEntryEnrichmentPatch,
 	applyEntryPatch,
 	applyOptimisticDeletes,
 	createIncrementalListing,
@@ -31,6 +32,7 @@ import {
 	nearestExistingAncestor,
 	listingSurvivor,
 	pruneSelection,
+	reconcileListing,
 	watchSetFor,
 	type IncrementalListing,
 	type ListingScope,
@@ -80,7 +82,6 @@ import {
 	applyColumnChoice,
 	canCloseTab,
 	closeTab,
-	CONTACTS_PATH,
 	createTabsState,
 	goBack,
 	goForward,
@@ -283,6 +284,8 @@ export function useFinderController(
 	const [sort, setSort] = useState<SortState | null>(null);
 	const [zone, setZone] = useState<FocusZone>("finder");
 	const [listing, setListing] = useState<readonly FinderEntry[]>([]);
+	/** The tab whose folder `listing` was last switched to; see the swap below. */
+	const [listingTabId, setListingTabId] = useState(tabsState.activeId);
 	const [hits, setHits] = useState<readonly FinderEntry[]>([]);
 	const [locations, setLocations] = useState<readonly FinderLocation[]>([]);
 	const [indexStatus, setIndexStatus] = useState<Readonly<Record<string, IndexStatus>>>({});
@@ -316,6 +319,8 @@ export function useFinderController(
 	const listingDirRef = useRef("");
 	const layerStoreRef = useRef<LayerStore>(EMPTY_LAYER_STORE);
 	const staleTabsRef = useRef(new Set<number>());
+	/** Each tab's last adopted listing, so switching back paints it at once. */
+	const tabListingsRef = useRef(new Map<number, { readonly dir: string; readonly entries: readonly FinderEntry[] }>());
 	const previousPathRef = useRef<string | null>(null);
 	const previousTabIdRef = useRef<number | null>(null);
 	const incrementalRef = useRef<{ source: FinderSource; listing: IncrementalListing } | null>(null);
@@ -336,6 +341,21 @@ export function useFinderController(
 	const tab = activeTab(tabsState);
 	const path = tab.path;
 	const selection = tab.selection;
+	// A tab switch shows that tab's last listing in the same render that
+	// switches tabs, so the first frame after the click is already the target
+	// folder — not the previous tab's rows, then bare rows, then icons. The
+	// reload the switch starts revalidates it underneath (`reconcileListing`).
+	if (listingTabId !== tab.id) {
+		setListingTabId(tab.id);
+		const snapshot = tabListingsRef.current.get(tab.id);
+		if (snapshot !== undefined && snapshot.dir === path) {
+			listingDirRef.current = snapshot.dir;
+			setListing(snapshot.entries);
+			setPaneListings((current) =>
+				current[path] === snapshot.entries ? current : { ...current, [path]: snapshot.entries },
+			);
+		}
+	}
 	const searching = query.trim() !== "";
 	const dupey = selectDupey(layerStore);
 	layerStoreRef.current = layerStore;
@@ -412,6 +432,11 @@ export function useFinderController(
 	 */
 	const adoptListing = useCallback((dir: string, entries: readonly FinderEntry[]): void => {
 		listingDirRef.current = dir;
+		const snapshots = tabListingsRef.current;
+		snapshots.set(activeTabIdRef.current, { dir, entries });
+		for (const id of snapshots.keys()) {
+			if (!tabsRef.current.some((current) => current.id === id)) snapshots.delete(id);
+		}
 		const previous = listingRef.current;
 		const survives = listingSurvivor(dir, previous, entries);
 		listingRef.current = entries;
@@ -480,9 +505,24 @@ export function useFinderController(
 					reportError(result.error);
 					return;
 				}
-				adoptListing(requestedPath, result.entries);
-				void source.enrich(requestedPath, result.entries).then((enriched) => {
-					if (pathRef.current === requestedPath && generationRef.current === requestGeneration) adoptListing(requestedPath, enriched);
+				// Rows unchanged on disk keep their icons and identity: a tab
+				// switch or focus resync that finds nothing new paints nothing.
+				const entries = reconcileListing(listingRef.current, result.entries);
+				adoptListing(requestedPath, entries);
+				void source.enrich(requestedPath, entries).then((enriched) => {
+					if (pathRef.current === requestedPath && generationRef.current === requestGeneration) {
+						adoptListing(requestedPath, applyEntryEnrichmentPatch(listingRef.current, enriched));
+						return;
+					}
+					// The user switched tabs before the icons landed: finish that
+					// tab's snapshot anyway, unless it has moved on since.
+					const snapshot = tabListingsRef.current.get(scope.tabId);
+					if (snapshot?.entries === entries) {
+						tabListingsRef.current.set(scope.tabId, {
+							dir: requestedPath,
+							entries: applyEntryEnrichmentPatch(snapshot.entries, enriched),
+						});
+					}
 				}).catch((error: unknown) => console.error("background listing enrichment failed", error));
 				incrementalRef.current?.listing.fullAdopted(scope);
 			});
@@ -520,7 +560,7 @@ export function useFinderController(
 					return;
 				}
 				if (pathRef.current !== dir || generationRef.current !== generation || searchingRef.current) return;
-				adoptListing(dir, applyEntryPatch(listingRef.current, { entries: enriched, removed: [] }));
+				adoptListing(dir, applyEntryEnrichmentPatch(listingRef.current, enriched));
 			})
 			.catch((error: unknown) => console.error("viewport thumbnail enrichment failed", error));
 	}, [adoptListing, source]);
@@ -560,7 +600,7 @@ export function useFinderController(
 				const generation = generationRef.current;
 				void source.enrich(dir, patch.entries).then((enriched) => {
 					if (pathRef.current !== dir || generationRef.current !== generation || searchingRef.current) return;
-					adoptListing(dir, applyEntryPatch(listingRef.current, { entries: enriched, removed: [] }));
+					adoptListing(dir, applyEntryEnrichmentPatch(listingRef.current, enriched));
 				}).catch((error: unknown) => console.error("background live enrichment failed", error));
 			},
 			isCurrent: (scope) =>
@@ -714,9 +754,16 @@ export function useFinderController(
 				.list(target)
 				.then((entries) => {
 					if (!live) return;
-					setPaneListings((current) => ({ ...current, [target]: entries }));
+					setPaneListings((current) => {
+						const reconciled = reconcileListing(current[target] ?? [], entries);
+						return reconciled === current[target] ? current : { ...current, [target]: reconciled };
+					});
 					void source.enrich(target, entries).then((enriched) => {
-						if (live) setPaneListings((current) => ({ ...current, [target]: enriched }));
+						if (!live) return;
+						setPaneListings((current) => {
+							const patched = applyEntryEnrichmentPatch(current[target] ?? [], enriched);
+							return patched === current[target] ? current : { ...current, [target]: patched };
+						});
 					}).catch((error: unknown) => console.error("background pane enrichment failed", error));
 				})
 				.catch((error: unknown) => {
@@ -1194,7 +1241,7 @@ export function useFinderController(
 
 	/** Sidebar "New folder": real mkdir in the current folder, then select the row. */
 	const newFolder = useCallback(() => {
-		if (searching || path === "" || path === RECENTS_PATH || path === SETTINGS_PATH || path === CONTACTS_PATH) {
+		if (searching || path === "" || path === RECENTS_PATH || path === SETTINGS_PATH) {
 			return;
 		}
 		source
@@ -1257,7 +1304,12 @@ export function useFinderController(
 
 	const quickLookSelection = useCallback(() => {
 		const entry = focusedEntry;
-		if (entry === null || entry.kind === "folder") return;
+		if (entry === null) return;
+		// Like Finder, Space previews folders too; only files land in Recents.
+		if (entry.kind === "folder") {
+			quickLookRef.current?.onQuickLook({ path: entry.path, name: entry.name });
+			return;
+		}
 		presentQuickLook({ path: entry.path, name: entry.name });
 	}, [focusedEntry, presentQuickLook]);
 
@@ -1458,6 +1510,16 @@ export function useFinderController(
 	useEffect(() => {
 		const onKeyDown = (event: globalThis.KeyboardEvent): void => {
 			const target = event.target;
+			if (
+				target instanceof HTMLElement &&
+				target.tagName === "BUTTON" &&
+				(event.key === "Enter" || event.key === " ") &&
+				!event.metaKey &&
+				!event.ctrlKey &&
+				!event.altKey
+			) {
+				return;
+			}
 			const typing =
 				target instanceof HTMLElement &&
 				(target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable);
@@ -1624,8 +1686,7 @@ export function useFinderController(
 		canGoBack: tab.back.length > 0,
 		canGoForward: tab.fwd.length > 0,
 		query,
-		searchPlaceholder:
-			path === CONTACTS_PATH ? "Search contacts" : path === SETTINGS_PATH ? "Search settings" : "Search files, contents…",
+		searchPlaceholder: path === SETTINGS_PATH ? "Search settings" : "Search files, contents…",
 		searchFocused,
 		searching,
 		emptyText: emptyStateText(query, path),

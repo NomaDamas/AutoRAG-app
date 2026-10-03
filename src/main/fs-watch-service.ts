@@ -4,7 +4,6 @@ import type { FsChange, FsDirChange } from "../shared/live-contract";
 import { RECENTS_PATH } from "../shared/fs-contract";
 import type { WatchBackend } from "./watch-backend";
 
-const CONTACTS_PATH = "Contacts"; // Must match src/renderer/src/state/tabs.ts:124.
 const TRAILING_MS = 150;
 const MAX_WAIT_MS = 1000;
 /** How often a wanted directory without a live subscription is probed for recreation. */
@@ -67,7 +66,7 @@ function normalizedWatchSet(dirs: readonly string[]): string[] {
 		if (!isAbsolute(input)) continue;
 		if (input === "/kakao" || input.startsWith("/kakao/")) continue;
 		const dir = resolve(input);
-		if (dir === RECENTS_PATH || dir === CONTACTS_PATH) continue;
+		if (dir === RECENTS_PATH) continue;
 		result.add(dir);
 	}
 	return [...result];

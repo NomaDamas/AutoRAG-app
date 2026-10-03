@@ -7,7 +7,9 @@ import { _electron as electron, expect, test, type ElectronApplication } from "@
 
 const exec = promisify(execFile);
 const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
-const QUICK_LOOK_TOOLBAR = 52;
+const QUICK_LOOK_TOOLBAR = 46;
+/** PDF panel geometry: 56px of panel either side of the page and the 128px page rail. */
+const PDF_CHROME_WIDTH = 56 * 2 + 128;
 
 /** A square multi-page PDF, so the window can hug the page shape and the rail matters. */
 function minimalPdf(pageCount: number): Buffer {
@@ -132,7 +134,7 @@ test("Quick Look uses a fast reusable window with Finder navigation", async () =
 		await preview.screenshot({ path: join(evidence, "photo.png") });
 		// The panel is translucent: the Finder stays visible behind the window, and
 		// nothing of the page paints a backdrop of its own over the Finder.
-		expect(await preview.locator(".qlw").evaluate((node) => getComputedStyle(node).backgroundColor)).toBe("rgba(246, 246, 248, 0.72)");
+		expect(await preview.locator(".qlw").evaluate((node) => getComputedStyle(node).backgroundColor)).toBe("rgba(242, 242, 244, 0.72)");
 		const backgrounds = await preview.evaluate(() => ({
 			html: getComputedStyle(document.documentElement).backgroundColor,
 			body: getComputedStyle(document.body).backgroundColor,
@@ -157,52 +159,51 @@ test("Quick Look uses a fast reusable window with Finder navigation", async () =
 		await expect(preview.locator(".ql__pager")).toHaveCount(0);
 		await expect.poll(() => preview.locator(".ql__paper").first().evaluate((node) => node.querySelector("canvas")?.width ?? 0)).toBeGreaterThan(0);
 		await expect(preview.locator(".ql__rail-item")).toHaveCount(3);
-		// Rail thumbnails observe the fixed rail itself, so every visible slot paints a page preview.
-		await expect(preview.locator('.ql__rail-item canvas[data-drawn="true"]')).toHaveCount(3);
+		// Rail thumbnails observe the rail itself, so every visible slot paints a page preview.
+		await expect(preview.locator('.ql__rail-item [data-drawn="true"]')).toHaveCount(3);
 		const pdfBounds = await quickLookWindow(app);
-		// The window hugs a square page plus the rail's gutter (104px rail + 12px on each side).
-		expect((pdfBounds.width - 128) / (pdfBounds.height - QUICK_LOOK_TOOLBAR)).toBeCloseTo(1, 1);
-		await expect.poll(() => preview.locator(".ql__stage").evaluate((node) => node.scrollHeight - node.clientHeight)).toBeGreaterThan(600);
-		await preview.locator(".ql__stage").evaluate((node) => {
+		// The window is the page's width plus the paper margins and the rail.
+		expect(pdfBounds.width).toBe(600 + PDF_CHROME_WIDTH);
+		const scroller = preview.locator(".ql-pdf__scroll");
+		// Three pages are taller than the screen allows, so the column scrolls.
+		await expect.poll(() => scroller.evaluate((node) => node.scrollHeight - node.clientHeight)).toBeGreaterThan(100);
+		await scroller.evaluate((node) => {
 			node.scrollTop = node.scrollHeight;
 		});
 		await expect.poll(() => preview.locator('[data-page="3"]').evaluate((node) => node.getBoundingClientRect().bottom)).toBeLessThanOrEqual(pdfBounds.height);
-		await expect.poll(() => preview.locator('.ql__rail-item[data-active="true"]').getAttribute("aria-label")).toBe("3페이지");
+		await expect.poll(() => preview.locator('.ql__rail-item[data-active="true"]').getAttribute("aria-label")).toBe("3페이지로 이동");
+		await expect(preview.locator(".ql-pdf__pill")).toContainText("3 / 3");
 		await preview.screenshot({ path: join(evidence, "page.png") });
-		// Toolbar design: close + left-aligned title, actions on the trailing edge, rail in its own gutter right of the pages.
+		// Toolbar design: close, full screen, then the title; share and "Open with" on the trailing edge; the rail in its own column.
 		const layout = await preview.evaluate(() => {
-			const name = document.querySelector(".qlw__name")?.getBoundingClientRect();
-			const trail = document.querySelector(".qlw__trail")?.getBoundingClientRect();
-			const rail = document.querySelector(".ql__rail");
-			const railBox = rail?.getBoundingClientRect();
+			const box = (selector: string): DOMRect | undefined => document.querySelector(selector)?.getBoundingClientRect();
+			const rail = box(".ql__rail");
 			return {
 				width: window.innerWidth,
-				nameLeft: name?.left ?? -1,
-				nameRight: name?.right ?? -1,
-				trailRight: trail?.right ?? -1,
-				railLeft: railBox?.left ?? -1,
-				railRight: railBox?.right ?? -1,
+				nameLeft: box(".qlw__name")?.left ?? -1,
+				openRight: box(".qlw__open")?.right ?? -1,
+				share: document.querySelector('button[aria-label="공유"]') !== null,
+				railLeft: rail?.left ?? -1,
+				railRight: rail?.right ?? -1,
+				railWidth: rail?.width ?? -1,
 				pagesRight: Math.max(...Array.from(document.querySelectorAll(".ql__paper"), (node) => node.getBoundingClientRect().right)),
-				railWidth: railBox?.width ?? -1,
-				railBlur: rail === null ? "" : getComputedStyle(rail).backdropFilter,
 			};
 		});
 		expect(layout.nameLeft).toBeLessThan(120);
-		expect(layout.nameRight).toBeLessThan(layout.width / 2);
-		expect(layout.trailRight).toBeGreaterThan(layout.width - 40);
-		expect(layout.railRight).toBeCloseTo(layout.width - 12, 0);
+		expect(layout.openRight).toBeGreaterThan(layout.width - 20);
+		expect(layout.share).toBe(process.platform === "darwin");
+		expect(layout.railRight).toBe(layout.width);
+		expect(layout.railWidth).toBe(128);
 		expect(layout.pagesRight).toBeLessThanOrEqual(layout.railLeft);
-		expect(layout.railWidth).toBe(104);
-		expect(layout.railBlur).toContain("blur");
 		await preview.locator(".ql__rail-item").first().click();
-		await expect.poll(() => preview.locator(".ql__stage").evaluate((node) => node.scrollTop)).toBeLessThan(QUICK_LOOK_TOOLBAR);
+		await expect.poll(() => scroller.evaluate((node) => node.scrollTop)).toBeLessThan(QUICK_LOOK_TOOLBAR);
 		await preview.screenshot({ path: join(evidence, "page-top.png") });
 		await pressInPreview(app, "Down");
 		await expect(preview.locator(".qlw__name")).toHaveText("photo.png");
 		// Text hugs its own height instead of filling a page-shaped window.
 		await main.getByRole("row", { name: /note\.txt/ }).click();
 		await expect(preview.locator(".qlw__name")).toHaveText("note.txt");
-		await expect.poll(() => preview.locator(".ql__stage").evaluate((node) => node.scrollHeight - node.clientHeight)).toBe(0);
+		await expect.poll(() => preview.locator(".ql-lines").evaluate((node) => node.scrollHeight - node.clientHeight)).toBe(0);
 		const noteBounds = await quickLookWindow(app);
 		expect(noteBounds.height).toBeGreaterThanOrEqual(240);
 		expect(noteBounds.height).toBeLessThan(320);
@@ -210,7 +211,7 @@ test("Quick Look uses a fast reusable window with Finder navigation", async () =
 		await main.getByRole("row", { name: /long\.txt/ }).click();
 		await expect(preview.locator(".qlw__name")).toHaveText("long.txt");
 		await expect.poll(async () => (await quickLookWindow(app)).height).toBeGreaterThan(noteBounds.height + 100);
-		await expect.poll(() => preview.locator(".ql__stage").evaluate((node) => node.scrollHeight - node.clientHeight)).toBeGreaterThan(600);
+		await expect.poll(() => preview.locator(".ql-lines").evaluate((node) => node.scrollHeight - node.clientHeight)).toBeGreaterThan(600);
 		await preview.screenshot({ path: join(evidence, "long.png") });
 		await main.getByRole("row", { name: /clip\.mp4/ }).click();
 		await expect(preview.locator(".qlw__name")).toHaveText("clip.mp4");
@@ -255,15 +256,13 @@ test("Quick Look uses a fast reusable window with Finder navigation", async () =
 		await preview.bringToFront();
 		await pressInPreview(app, "Space");
 		await expect.poll(async () => (await quickLookWindow(app)).visible).toBe(false);
-		// A focused video's native controls swallow Space; it must still close the preview.
+		// A focused control would take Space as a click; the preview must still close.
 		await main.keyboard.press("Space");
 		await expect.poll(async () => (await quickLookWindow(app)).visible).toBe(true);
 		await preview.bringToFront();
 		await expect.poll(() => preview.evaluate(() => document.getElementById("root")?.dataset.zoom ?? "settled")).toBe("settled");
-		const video = await preview.locator("video").boundingBox();
-		if (video === null) throw new Error("video has no box");
-		await preview.mouse.click(video.x + video.width / 2, video.y + video.height - 20);
-		await expect.poll(() => preview.evaluate(() => document.activeElement?.tagName)).toBe("VIDEO");
+		await preview.locator('.ql-hud button[aria-label="15초 뒤로"]').focus();
+		await expect.poll(() => preview.evaluate(() => document.activeElement?.getAttribute("aria-label"))).toBe("15초 뒤로");
 		await pressInPreview(app, "Space");
 		await expect.poll(async () => (await quickLookWindow(app)).visible).toBe(false);
 	} finally {

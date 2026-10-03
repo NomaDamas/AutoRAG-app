@@ -5,10 +5,11 @@ import { resolveConfigReadOnly } from "@autorag/librarian";
 import { resolveAgentModelDetailed } from "@autorag/librarian/core";
 import { launchFinder, finderWindow } from "./launch-finder.mjs";
 
-// Settings opens as a tab and its Models pane renders the v7 connected-model
-// card; ⌘W closes the tab. The card no longer mirrors the shared AutoRAG
-// config's model id (v6 behavior) — this lane asserts the v7 card copy plus
-// that the throwaway AUTORAG_CONFIG still resolves through the librarian.
+// Settings opens as a tab and its Models pane renders the shared AutoRAG
+// config's resolved provider/model card; ⌘W closes the tab. The card mirrors
+// the librarian's model resolution (provider name, then `displayName · modelId`)
+// and re-reads the config every time the pane is entered, so this lane edits a
+// throwaway AUTORAG_CONFIG and re-enters the pane to prove it is live.
 // Production build first: bun run build
 const EVIDENCE = new URL("../../.omo/evidence/ai-finder-app/models-status/", import.meta.url).pathname;
 mkdirSync(EVIDENCE, { recursive: true });
@@ -51,8 +52,11 @@ try {
 		await page.locator(".sidebar__item", { hasText: "Settings" }).click();
 		await page.waitForSelector(".settings-panel");
 		// Settings opens as a tab; the categories are the left nav items.
-		await page.locator(".settings-sidebar__item", { hasText: "Models" }).click();
+		await page.locator(".settings-nav-item", { hasText: "Models" }).click();
 		await page.waitForSelector(".settings-model-card");
+		// `modelsResolve` is async: wait until the card carries a resolved
+		// `displayName · modelId` line instead of the unresolved placeholder.
+		await page.waitForFunction(() => (document.querySelector(".settings-model-card__provider")?.textContent ?? "").includes(" · "));
 	};
 	const closeSettings = async () => {
 		await page.keyboard.press("Meta+w");
@@ -62,21 +66,23 @@ try {
 	await openModels();
 	const name = await page.locator(".settings-model-card__name").textContent();
 	const provider = await page.locator(".settings-model-card__provider").textContent();
-	// v7 replaced the config-driven model row with a static connected-model card;
-	// the pane no longer mirrors the shared AutoRAG config's model id.
-	check("Models pane renders the connected-model card", (name ?? "").trim().length > 0, name ?? "");
-	check("the card carries the v7 model copy", provider === "Quick 및 Deep 답변에 공통으로 연결된 고성능 AI 모델입니다.", provider ?? "");
+	// The card mirrors the shared AutoRAG config's resolved model: the provider
+	// name on top, and `displayName · modelId` underneath.
+	check("Models card names the resolved provider", (name ?? "").trim() === MODEL.provider, name ?? "");
+	check("Models card carries the resolved model id", (provider ?? "").includes(MODEL.id), provider ?? "");
 	check("card carries no avatar tile", (await page.locator(".settings-model-tile").count()) === 0);
 	await page.screenshot({ path: join(EVIDENCE, "01-models.png") });
 
-	// The card is static now, but the config the app was handed must still resolve
-	// through the librarian (guards the shared config file).
+	// The card is live: editing the shared config and re-entering the pane shows
+	// the new identity.
 	writeConfig({ ...MODEL, id: "anthropic/claude-sonnet-4.5" });
 	const roleAfterEdit = resolvedRole();
 	check("a fresh AutoRAG agent resolves the edited model", roleAfterEdit.modelId === "anthropic/claude-sonnet-4.5", roleAfterEdit.modelId);
 	await closeSettings();
 	check("⌘W closes the Settings tab", (await settingsOpen()) === 0);
 	await openModels();
+	const editedProvider = await page.locator(".settings-model-card__provider").textContent();
+	check("reopening Models shows the edited model", (editedProvider ?? "").includes("anthropic/claude-sonnet-4.5"), editedProvider ?? "");
 	check("reopening Settings reaches the Models pane again", (await page.locator(".settings-panel .settings-model-card__name").count()) === 1);
 	await page.screenshot({ path: join(EVIDENCE, "02-models-edited.png") });
 
@@ -84,7 +90,7 @@ try {
 	await closeSettings();
 	await openModels();
 	check("switching back resolves the original model", resolvedRole().modelId === MODEL.id);
-	check("card shows no Quick/Deep badge", (await page.locator(".settings-model-card em").count()) === 0);
+	check("Models card has no extra badges", (await page.locator(".settings-model-card em").count()) === 0);
 } finally {
 	await app.close();
 	rmSync(root, { recursive: true, force: true });

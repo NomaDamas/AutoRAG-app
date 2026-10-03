@@ -82,8 +82,61 @@
 	--color-code: var(--bg-code);
 	--color-chip-sent: var(--bg-chip-sent);
 	--color-tile-fallback: var(--bg-tile-fallback);
-	--color-quicklook-panel: var(--bg-quicklook-panel);
-	--color-quicklook-frost: var(--bg-quicklook-frost);
+
+	/* ------------------------------------------------------ §2.10 Quick Look */
+	--color-ql-panel: var(--ql-panel);
+	--color-ql-panel-solid: var(--ql-panel-solid);
+	--color-ql-ink: var(--ql-ink);
+	--color-ql-ink-secondary: var(--ql-ink-secondary);
+	--color-ql-hairline: var(--ql-hairline);
+	--color-ql-button: var(--ql-button);
+	--color-ql-button-hover: var(--ql-button-hover);
+	--color-ql-sunk: var(--ql-sunk);
+	--color-ql-paper: var(--ql-paper);
+	--color-ql-page: var(--ql-page);
+	--color-ql-accent: var(--ql-accent);
+	--color-ql-highlight: var(--ql-highlight);
+	--color-ql-knockout: var(--ql-knockout);
+	--color-ql-wave-off: var(--ql-wave-off);
+	--color-ql-page-ring: var(--ql-page-ring);
+	--color-ql-code: var(--ql-code);
+	--color-ql-syntax-keyword: var(--ql-syntax-keyword);
+	--color-ql-syntax-string: var(--ql-syntax-string);
+	--color-ql-syntax-number: var(--ql-syntax-number);
+	--color-ql-syntax-comment: var(--ql-syntax-comment);
+	--color-ql-syntax-function: var(--ql-syntax-function);
+	--color-ql-syntax-builtin: var(--ql-syntax-builtin);
+	--color-ql-syntax-constant: var(--ql-syntax-constant);
+	--color-ql-syntax-punctuation: var(--ql-syntax-punctuation);
+	--color-ql-md-mark: var(--ql-md-mark);
+	--color-ql-md-heading: var(--ql-md-heading);
+	--color-ql-md-list: var(--ql-md-list);
+	--color-ql-md-quote: var(--ql-md-quote);
+	--color-ql-media: var(--ql-media);
+	--color-ql-hud: var(--ql-hud);
+	--color-ql-hud-audio: var(--ql-hud-audio);
+	--color-ql-hud-volume: var(--ql-hud-volume);
+	--color-ql-hud-ink: var(--ql-hud-ink);
+	--color-ql-hud-ink-dim: var(--ql-hud-ink-dim);
+	--color-ql-hud-ink-off: var(--ql-hud-ink-off);
+	--color-ql-hud-hover: var(--ql-hud-hover);
+	--color-ql-hud-pill: var(--ql-hud-pill);
+	--color-ql-hud-track: var(--ql-hud-track);
+	--color-ql-hud-badge: var(--ql-hud-badge);
+	--color-ql-glyph-paper: var(--ql-glyph-paper);
+	--color-ql-art-ink: var(--ql-art-ink);
+	--color-ql-badge-code: var(--ql-badge-code);
+	--color-ql-badge-text: var(--ql-badge-text);
+	--color-ql-badge-video: var(--ql-badge-video);
+	--color-ql-badge-audio: var(--ql-badge-audio);
+	--color-ql-badge-image: var(--ql-badge-image);
+	--color-ql-badge-pdf: var(--ql-badge-pdf);
+	--color-ql-badge-html: var(--ql-badge-html);
+	--color-ql-badge-doc: var(--ql-badge-doc);
+	--color-ql-badge-sheet: var(--ql-badge-sheet);
+	--color-ql-badge-slides: var(--ql-badge-slides);
+	--color-ql-badge-archive: var(--ql-badge-archive);
+	--color-ql-badge-other: var(--ql-badge-other);
 
 	/* ------------------------------------------------------- §2.2 Hover washes */
 	--color-hover: var(--bg-hover);
@@ -176,7 +229,6 @@
 	--color-tile-notion-fg: var(--tile-notion-fg);
 	--color-tile-discord: var(--tile-discord);
 	--color-tile-telegram: var(--tile-telegram);
-	--color-tile-contact: var(--tile-contact);
 
 	/* ------------------------------------------------------ §2.10 Version tags */
 	--color-vtag-latest-bg: var(--vtag-latest-bg);
@@ -216,6 +268,9 @@
 	--font-weight-medium: var(--weight-medium);
 	--font-weight-semibold: var(--weight-semibold);
 	--font-weight-bold: var(--weight-bold);
+
+	--font-ql: var(--ql-font);
+	--font-ql-mono: var(--ql-font-mono);
 
 	--tracking-label: var(--tracking-label);
 	--leading-body: var(--leading-body);
@@ -292,6 +347,16 @@
 	--shadow-raised: var(--shadow-raised);
 	--shadow-drag: var(--shadow-drag);
 	--shadow-window: var(--shadow-window);
+	--shadow-ql-panel: var(--shadow-ql-panel);
+	--shadow-ql-segment: var(--shadow-ql-segment);
+	--shadow-ql-float: var(--shadow-ql-float);
+	--shadow-ql-hud: var(--shadow-ql-hud);
+	--shadow-ql-knob: var(--shadow-ql-knob);
+	--shadow-ql-page: var(--shadow-ql-page);
+	--shadow-ql-art: var(--shadow-ql-art);
+	--shadow-ql-doc: var(--shadow-ql-doc);
+	--shadow-ql-phone: var(--shadow-ql-phone);
+	--shadow-ql-page-active: var(--shadow-ql-page-active);
 	--shadow-menu: var(--shadow-menu);
 
 	/* ----------------------------------------------------------- §7 Radii */

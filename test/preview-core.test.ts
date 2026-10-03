@@ -4,11 +4,11 @@ import { join } from "node:path";
 import { strToU8, zipSync } from "fflate";
 import { describe, expect, it } from "vitest";
 import { handlePreviewRequest } from "../src/preview/node/protocol";
-import { readPreviewFile } from "../src/preview/node/read-file";
+import { PREVIEW_BYTE_CAP, readPreviewFile } from "../src/preview/node/read-file";
 import { previewStreamUrl } from "../src/preview/shared/contract";
 import { quickLookKeyAction } from "../src/preview/shared/keys";
 import { parseByteRange } from "../src/preview/shared/range";
-import { claimedViewerExtensions, describeExtension, viewerForExtension, wantsBytes, VIEWER_KINDS } from "../src/preview/shared/registry";
+import { byteNeed, claimedViewerExtensions, describeExtension, viewerForExtension, VIEWER_KINDS } from "../src/preview/shared/registry";
 import { rtfToText } from "../src/preview/shared/rtf";
 import { listTarEntries } from "../src/preview/shared/tar-list";
 import { listZipEntries } from "../src/preview/shared/zip-list";
@@ -32,30 +32,33 @@ describe("preview registry", () => {
 			expect(seen.has(kind)).toBe(true);
 		}
 		expect(viewerForExtension("nope")).toBe("fallback");
-		expect(wantsBytes("video")).toBe(false);
-		expect(wantsBytes("docx")).toBe(true);
+		expect(byteNeed("video")).toBe("stream");
+		expect(byteNeed("pdf")).toBe("stream");
+		expect(byteNeed("text")).toBe("prefix");
+		expect(byteNeed("docx")).toBe("whole");
+		expect(byteNeed("fallback")).toBe("sniff");
 		expect(describeExtension("png").length).toBeGreaterThan(0);
 	});
 });
 
 describe("quick look sizing", () => {
 	it("fits measured content inside the work area with toolbar chrome", () => {
-		const size = fitQuickLook({ width: 1600, height: 900 }, { width: 1440, height: 900 });
+		const size = fitQuickLook({ width: 1600, height: 900 }, { width: 1440, height: 900 }, "aspect");
 		expect(size.width).toBeLessThanOrEqual(Math.ceil(1440 * 0.86));
 		expect(size.height).toBeLessThanOrEqual(Math.ceil(900 * 0.86));
 		expect(size.width / (size.height - QUICK_LOOK_TOOLBAR)).toBeCloseTo(1600 / 900, 1);
 	});
 
 	it("hugs a page-shaped document and never upscales past its natural size", () => {
-		const page = fitQuickLook({ width: 595, height: 842 }, { width: 1440, height: 900 });
+		const page = fitQuickLook({ width: 595, height: 842 }, { width: 1440, height: 900 }, "aspect");
 		expect(page.width / (page.height - QUICK_LOOK_TOOLBAR)).toBeCloseTo(595 / 842, 1);
 		expect(page.height).toBeLessThanOrEqual(Math.ceil(900 * 0.86));
-		const small = fitQuickLook({ width: 200, height: 150 }, { width: 1440, height: 900 });
+		const small = fitQuickLook({ width: 200, height: 150 }, { width: 1440, height: 900 }, "aspect");
 		expect(small).toEqual(QUICK_LOOK_MIN);
 	});
 
 	it("falls back to a page shape when the content cannot measure itself", () => {
-		const size = fitQuickLook({ width: 0, height: 0 }, { width: 1440, height: 900 });
+		const size = fitQuickLook({ width: 0, height: 0 }, { width: 1440, height: 900 }, "clamp");
 		expect(size).toEqual({ width: Math.round(Math.min(880, 1440 * 0.86)), height: Math.round(Math.min(1040, 900 * 0.86)) });
 	});
 
@@ -230,12 +233,30 @@ describe("preview bytes", () => {
 		try {
 			const filePath = join(dir, "note.txt");
 			await writeFile(filePath, "hello");
-			const document = await readPreviewFile(filePath, true);
+			const document = await readPreviewFile(filePath, PREVIEW_BYTE_CAP);
 			expect(document.ext).toBe("txt");
 			expect(document.truncated).toBe(false);
 			expect(new TextDecoder().decode(document.bytes ?? new Uint8Array())).toBe("hello");
-			await expect(readPreviewFile(dir, true)).rejects.toThrow("폴더는 미리볼 수 없습니다");
-			await expect(readPreviewFile("relative.txt", true)).rejects.toThrow("미리보기 경로가 올바르지 않습니다");
+			await expect(readPreviewFile(dir, PREVIEW_BYTE_CAP)).rejects.toThrow("폴더는 미리볼 수 없습니다");
+			await expect(readPreviewFile("relative.txt", PREVIEW_BYTE_CAP)).rejects.toThrow("미리보기 경로가 올바르지 않습니다");
+		} finally {
+			await rm(dir, { recursive: true, force: true });
+		}
+	});
+
+	it("cuts text at the limit but drops a document a prefix cannot render", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "autorag-preview-"));
+		try {
+			const filePath = join(dir, "log.txt");
+			await writeFile(filePath, "0123456789");
+			const prefix = await readPreviewFile(filePath, 4);
+			expect(prefix.truncated).toBe(true);
+			expect(prefix.size).toBe(10);
+			expect(new TextDecoder().decode(prefix.bytes ?? new Uint8Array())).toBe("0123");
+			const whole = await readPreviewFile(filePath, 4, true);
+			expect(whole.truncated).toBe(true);
+			expect(whole.bytes).toBeNull();
+			expect((await readPreviewFile(filePath, 0)).bytes).toBeNull();
 		} finally {
 			await rm(dir, { recursive: true, force: true });
 		}

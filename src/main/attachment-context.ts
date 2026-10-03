@@ -113,8 +113,6 @@ function attributes(attachment: ChatAttachment): string {
 			return `kind="${attachment.kind}" path=${JSON.stringify(attachment.id)}`;
 		case "url":
 			return `kind="url" url=${JSON.stringify(attachment.id)}`;
-		case "contact":
-			return `kind="contact" id=${JSON.stringify(attachment.id)} name=${JSON.stringify(attachment.name)}`;
 	}
 }
 
@@ -125,8 +123,6 @@ async function attachmentBody(attachment: ChatAttachment, withContent: boolean):
 			return localBody(attachment, withContent);
 		case "url":
 			return { note: "Linked page; its content was not fetched. Open the URL with the web tools when the answer depends on it." };
-		case "contact":
-			return { note: "A contact the query refers to." };
 	}
 }
 

@@ -1,5 +1,18 @@
 import { extname } from "node:path";
-import { app, BrowserWindow, ipcMain, screen, shell, type IpcMain, type IpcMainEvent, type IpcMainInvokeEvent } from "electron";
+import {
+	app,
+	BrowserWindow,
+	clipboard,
+	ipcMain,
+	nativeTheme,
+	screen,
+	ShareMenu,
+	shell,
+	type IpcMain,
+	type IpcMainEvent,
+	type IpcMainInvokeEvent,
+} from "electron";
+import { looksLikeText } from "../shared/text-sample";
 import {
 	isBounds,
 	isQuickLookAction,
@@ -7,9 +20,11 @@ import {
 	isQuickLookTarget,
 	isQuickLookZoomed,
 	PREVIEW_CHANNELS,
+	type FolderSummary,
 	type NavigateDelta,
 	type PreviewDocument,
 	type QuickLookAction,
+	type QuickLookApp,
 	type QuickLookLoad,
 	type QuickLookReady,
 	type QuickLookTarget,
@@ -17,9 +32,13 @@ import {
 } from "../shared/contract";
 import { type Bounds, fitQuickLook, placeQuickLook, QUICK_LOOK_MIN } from "../shared/fit";
 import { quickLookKeyAction } from "../shared/keys";
-import { viewerForExtension, wantsBytes } from "../shared/registry";
+import { byteNeed, viewerForExtension } from "../shared/registry";
 import { fallbackOrigin, screenOrigin, ZOOM_DONE_TIMEOUT_MS, zoomGeometry } from "../shared/zoom";
-import { PreviewReadError, readPreviewFile } from "./read-file";
+import { readAudioMetadata } from "./audio-metadata";
+import { knownDefaultApp, lookupDefaultApp } from "./default-app";
+import { fileDetails, sha256File } from "./details";
+import { measureFolder, summarizeFolder } from "./folder";
+import { PREVIEW_BYTE_CAP, PreviewReadError, readPreviewFile, SNIFF_BYTES, TEXT_BYTE_CAP } from "./read-file";
 
 /** Media reports its size once decoded; anything slower still shows by then. */
 const SHOW_DEADLINE_MS = 250;
@@ -30,6 +49,17 @@ const ZOOM_PREPARE_MS = 120;
  * together, and only the scaled panel inside it may be visible.
  */
 const ZOOMS = process.platform === "darwin";
+/** Children a folder preview lists. */
+const FOLDER_PREVIEW_ITEMS = 6;
+/** A folder's size walk gives up here and reports a lower bound. */
+const FOLDER_SIZE_BUDGET = { maxEntries: 200_000, maxMs: 2500 } as const;
+/**
+ * macOS blurs what is behind the panel with a native material, the same one
+ * Quick Look uses; CSS `backdrop-filter` cannot see past the window.
+ */
+const MATERIAL = "hud";
+/** Opaque panel colors for platforms without a transparent window. */
+const SOLID_PANEL = { light: "#F2F2F4", dark: "#2A2A2C" } as const;
 
 export interface QuickLookWindowOptions {
 	readonly preload: string;
@@ -101,6 +131,15 @@ function current(state: Session, id: number): boolean {
 	return id === state.zoom && live(state.window);
 }
 
+/**
+ * The native blur behind the panel. It fills the whole window, so it is off
+ * while a zoom stretches the window over the icon and the Finder around it.
+ */
+function material(state: Session, on: boolean): void {
+	if (process.platform !== "darwin" || !live(state.window)) return;
+	state.window.setVibrancy(on ? MATERIAL : null, { animationDuration: on ? 120 : 0 });
+}
+
 /** Returns the window to its resting state: opaque, shadowed, and clickable. */
 function resetZoomWindow(state: Session): void {
 	state.closing = false;
@@ -144,6 +183,7 @@ async function zoomIn(state: Session, bounds: Bounds): Promise<void> {
 	window.setBounds(opening.bounds);
 	sendZoom(state, { id, phase: "settle" });
 	resetZoomWindow(state);
+	material(state, true);
 }
 
 /** The reverse: the panel shrinks back into the icon, accelerating, then the window hides. */
@@ -151,6 +191,7 @@ async function zoomOut(state: Session, origin: Bounds | null): Promise<void> {
 	const { window } = state;
 	const id = beginZoom(state);
 	state.closing = true;
+	material(state, false);
 	const bounds = window.getBounds();
 	const geometry = zoomGeometry(origin ?? fallbackOrigin(bounds), bounds);
 	sendZoom(state, { id, phase: "prepare", direction: "out", geometry });
@@ -172,7 +213,7 @@ function present(state: Session, report: QuickLookReady): void {
 	if (!live(window) || state.current === null) return;
 	if (!window.isFullScreen()) {
 		const workArea = workAreaFor(state);
-		const size = fitQuickLook(report, workArea);
+		const size = fitQuickLook(report, workArea, report.fit);
 		const previous = state.opening?.bounds ?? (state.shown ? window.getBounds() : null);
 		const bounds = placeQuickLook(size, previous, workArea);
 		if (!state.shown && ZOOMS) {
@@ -206,13 +247,17 @@ function hide(state: Session, notifyOwner: boolean, origin: Bounds | null = stat
 			float(state, false);
 			if (window.isFullScreen()) {
 				window.webContents.send(PREVIEW_CHANNELS.unload);
-				window.once("leave-full-screen", () => window.hide());
+				window.once("leave-full-screen", () => {
+					material(state, false);
+					window.hide();
+				});
 				window.setFullScreen(false);
 			} else if (ZOOMS && !opening) {
 				void zoomOut(state, origin);
 			} else {
 				// Closing mid-open (or without a transparent window) hides at once.
 				state.zoom += 1;
+				material(state, false);
 				window.hide();
 				resetZoomWindow(state);
 				window.webContents.send(PREVIEW_CHANNELS.unload);
@@ -227,12 +272,52 @@ function hide(state: Session, notifyOwner: boolean, origin: Bounds | null = stat
 	if (notifyOwner && live(owner)) owner.webContents.send(PREVIEW_CHANNELS.closed);
 }
 
-async function readTarget(target: QuickLookTarget): Promise<{ readonly document: PreviewDocument | null; readonly error: string | null }> {
-	const kind = viewerForExtension(extname(target.path).slice(1));
+interface TargetContent {
+	readonly document: PreviewDocument | null;
+	readonly folder: FolderSummary | null;
+	readonly error: string | null;
+}
+
+function isUnreadableFolder(error: unknown): boolean {
+	return typeof error === "object" && error !== null && "code" in error && (error.code === "EACCES" || error.code === "EPERM");
+}
+
+async function readFolder(path: string): Promise<TargetContent> {
 	try {
-		return { document: await readPreviewFile(target.path, wantsBytes(kind)), error: null };
+		return { document: null, folder: await summarizeFolder(path, FOLDER_PREVIEW_ITEMS), error: null };
 	} catch (error) {
-		if (error instanceof PreviewReadError) return { document: null, error: error.message };
+		if (isUnreadableFolder(error)) return { document: null, folder: null, error: "이 폴더를 읽을 권한이 없습니다" };
+		throw error;
+	}
+}
+
+/**
+ * Reads only what the viewer will use: nothing for streamed media and PDF,
+ * the first 4MB of text, whole documents up to 32MB, and a 64KB sniff of an
+ * unknown file, which is read on as text only when it looks like text.
+ */
+async function readDocument(path: string): Promise<PreviewDocument> {
+	switch (byteNeed(viewerForExtension(extname(path).slice(1)))) {
+		case "stream":
+			return readPreviewFile(path, 0);
+		case "prefix":
+			return readPreviewFile(path, TEXT_BYTE_CAP);
+		case "whole":
+			return readPreviewFile(path, PREVIEW_BYTE_CAP, true);
+		case "sniff": {
+			const sniffed = await readPreviewFile(path, SNIFF_BYTES);
+			if (!sniffed.truncated || sniffed.bytes === null || !looksLikeText(sniffed.bytes)) return sniffed;
+			return readPreviewFile(path, TEXT_BYTE_CAP);
+		}
+	}
+}
+
+async function readTarget(target: QuickLookTarget): Promise<TargetContent> {
+	try {
+		return { document: await readDocument(target.path), folder: null, error: null };
+	} catch (error) {
+		if (error instanceof PreviewReadError && error.code === "not-file") return readFolder(target.path);
+		if (error instanceof PreviewReadError) return { document: null, folder: null, error: error.message };
 		throw error;
 	}
 }
@@ -242,14 +327,23 @@ async function show(state: Session, target: QuickLookTarget, origin: Bounds | nu
 	const seq = state.seq;
 	state.current = target;
 	state.origin = origin;
-	const [{ document, error }] = await Promise.all([readTarget(target), state.loaded]);
+	const [content] = await Promise.all([readTarget(target), state.loaded]);
 	if (seq !== state.seq || !live(state.window)) return;
-	const load: QuickLookLoad = { seq, name: target.name, path: target.path, document, error };
+	const folder = content.folder !== null;
+	const known = knownDefaultApp(target.path, folder);
+	const load: QuickLookLoad = { seq, name: target.name, path: target.path, ...content, app: known };
 	state.window.setTitle(target.name);
 	state.window.webContents.send(PREVIEW_CHANNELS.load, load);
+	if (known === null && content.error === null) {
+		void lookupDefaultApp(target.path, folder).then((name) => {
+			if (seq !== state.seq || !live(state.window)) return;
+			const update: QuickLookApp = { seq, name };
+			state.window.webContents.send(PREVIEW_CHANNELS.app, update);
+		});
+	}
 	clearDeadline(state);
 	state.deadline = setTimeout(() => {
-		if (seq === state.seq) present(state, { seq, width: 0, height: 0 });
+		if (seq === state.seq) present(state, { seq, width: 0, height: 0, fit: "clamp" });
 	}, SHOW_DEADLINE_MS);
 }
 
@@ -276,6 +370,9 @@ async function act(state: Session, action: QuickLookAction): Promise<void> {
 			if (message !== "") throw new Error(message);
 			return;
 		}
+		case "reveal":
+			if (state.current !== null) shell.showItemInFolder(state.current.path);
+			return;
 	}
 }
 
@@ -289,6 +386,17 @@ function fromOwner(event: IpcMainInvokeEvent): Session {
 function fromPreview(event: IpcMainInvokeEvent | IpcMainEvent): Session | null {
 	if (session === null || !live(session.window) || event.sender !== session.window.webContents) return null;
 	return session;
+}
+
+/**
+ * The shown path, when the preview window asks about it. The preview page may
+ * only learn about the file or folder it is showing, never an arbitrary path.
+ */
+function shownPath(event: IpcMainInvokeEvent, path: unknown): { readonly state: Session; readonly path: string } {
+	const state = fromPreview(event);
+	if (state === null) throw new Error("Quick Look is not attached to this window");
+	if (typeof path !== "string" || state.current?.path !== path) throw new Error("미리보기 중인 항목이 아닙니다");
+	return { state, path };
 }
 
 /** The Finder sends its icon rect in page CSS pixels; the zoom needs it on screen. */
@@ -305,6 +413,7 @@ function ownerOrigin(state: Session, origin: unknown): Bounds | null {
 export function attachQuickLook(owner: BrowserWindow, options: QuickLookWindowOptions): void {
 	if (session !== null) session.detach();
 	const darwin = process.platform === "darwin";
+	const solid = (): string => (nativeTheme.shouldUseDarkColors ? SOLID_PANEL.dark : SOLID_PANEL.light);
 	const window = new BrowserWindow({
 		show: false,
 		width: 880,
@@ -315,7 +424,9 @@ export function attachQuickLook(owner: BrowserWindow, options: QuickLookWindowOp
 		// Translucent panel over the Finder, like macOS Quick Look: the preview
 		// chrome is semi-transparent and the window is sized to the content.
 		transparent: darwin,
-		backgroundColor: darwin ? "#00000000" : "#F6F6F8",
+		backgroundColor: darwin ? "#00000000" : solid(),
+		// The panel is shown without taking focus; the blur must not go flat for that.
+		...(darwin ? { visualEffectState: "active" as const } : {}),
 		hasShadow: true,
 		titleBarStyle: "hidden",
 		minimizable: false,
@@ -333,6 +444,9 @@ export function attachQuickLook(owner: BrowserWindow, options: QuickLookWindowOp
 		},
 	});
 	if (darwin) window.setWindowButtonVisibility(false);
+	// Previewed HTML and Markdown can carry links; none of them may replace the preview page.
+	window.webContents.on("will-navigate", (event) => event.preventDefault());
+	window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
 	const loaded = new Promise<void>((resolve) => window.webContents.once("did-finish-load", () => resolve()));
 	const state: Session = {
 		owner,
@@ -359,6 +473,9 @@ export function attachQuickLook(owner: BrowserWindow, options: QuickLookWindowOp
 	const onBecomeActive = (): void => {
 		if (state.shown) float(state, true);
 	};
+	const onTheme = (): void => {
+		if (!darwin && live(window)) window.setBackgroundColor(solid());
+	};
 	const onOwnerLoad = (): void => hide(state, false);
 	// Keys run here, before the page: a focused <video> lets its native controls
 	// consume Space and arrows, so a page keydown listener never sees them.
@@ -376,12 +493,14 @@ export function attachQuickLook(owner: BrowserWindow, options: QuickLookWindowOp
 	window.webContents.on("before-input-event", onInput);
 	app.on("did-resign-active", onResignActive);
 	app.on("did-become-active", onBecomeActive);
+	nativeTheme.on("updated", onTheme);
 	owner.webContents.on("did-finish-load", onOwnerLoad);
 	owner.once("closed", onOwnerClosed);
 	state.detach = () => {
 		clearDeadline(state);
 		app.off("did-resign-active", onResignActive);
 		app.off("did-become-active", onBecomeActive);
+		nativeTheme.off("updated", onTheme);
 		if (live(owner)) {
 			owner.webContents.off("did-finish-load", onOwnerLoad);
 			owner.off("closed", onOwnerClosed);
@@ -421,5 +540,32 @@ export function registerQuickLookIpc(ipc: IpcMain = ipcMain): void {
 		if (state === null) throw new Error("Quick Look is not attached to this window");
 		if (!isQuickLookAction(action)) throw new Error("알 수 없는 Quick Look 동작입니다");
 		await act(state, action);
+	});
+	ipc.handle(PREVIEW_CHANNELS.details, (event, path: unknown) => fileDetails(shownPath(event, path).path));
+	ipc.handle(PREVIEW_CHANNELS.sha256, async (event, path: unknown) => {
+		const shown = shownPath(event, path);
+		const digest = await sha256File(shown.path, () => shown.state.current?.path !== shown.path);
+		if (digest === null) throw new Error("미리보기 항목이 바뀌어 계산을 멈췄습니다");
+		return digest;
+	});
+	ipc.handle(PREVIEW_CHANNELS.folderSize, (event, path: unknown) => {
+		const shown = shownPath(event, path);
+		return measureFolder(shown.path, { ...FOLDER_SIZE_BUDGET, stopped: () => shown.state.current?.path !== shown.path });
+	});
+	ipc.handle(PREVIEW_CHANNELS.audioMetadata, (event, path: unknown) => readAudioMetadata(shownPath(event, path).path));
+	ipc.handle(PREVIEW_CHANNELS.share, (event, anchor: unknown) => {
+		const state = fromPreview(event);
+		if (state === null || state.current === null || process.platform !== "darwin") return;
+		if (!isBounds(anchor)) throw new Error("공유 위치가 올바르지 않습니다");
+		new ShareMenu({ filePaths: [state.current.path] }).popup({
+			window: state.window,
+			x: Math.round(anchor.x),
+			y: Math.round(anchor.y + anchor.height + 4),
+		});
+	});
+	ipc.handle(PREVIEW_CHANNELS.copyText, (event, text: unknown) => {
+		if (fromPreview(event) === null) throw new Error("Quick Look is not attached to this window");
+		if (typeof text !== "string") throw new Error("복사할 내용이 올바르지 않습니다");
+		clipboard.writeText(text);
 	});
 }

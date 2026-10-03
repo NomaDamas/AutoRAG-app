@@ -59,8 +59,8 @@ created, deleted, renamed, or edited file appears in the tab without clicking
 anything. Ordinary direct-child changes are applied incrementally: the main
 process re-reads only the changed paths and the renderer patches those rows.
 An event overflow, a recreated watched root, or a missing-path recovery falls
-back to a full relist. Only real folders in open tabs are watched: Recents,
-Contacts, and datasource virtual paths never are. Watching uses
+back to a full relist. Only real folders in open tabs are watched: Recents and
+datasource virtual paths never are. Watching uses
 `@parcel/watcher`; symlinked folders are canonicalized for native events and
 mapped back to the path shown in the tab. Events are coalesced per directory
 with a 150 ms trailing debounce and a 1 s maximum wait. Closing a tab,

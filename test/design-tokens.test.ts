@@ -44,9 +44,12 @@ function bridgeEntries(): Map<string, string> {
  */
 const THEME_KEY_TOKENS = ["--font-sans", "--font-mono", "--radius-full", "--ease-out"];
 const ARBITRARY_ONLY_TOKENS = [
-	"--backdrop-quicklook",
+	"--backdrop-ql-hud",
+	"--backdrop-ql-float",
+	"--ql-art-placeholder",
 	"--highlight-marker",
 	"--shimmer-gradient",
+	"--fade-label",
 	"--index-dot-excluded-ring",
 	"--grid-main",
 	"--grid-file-row",

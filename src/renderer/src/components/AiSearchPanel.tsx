@@ -772,8 +772,7 @@ function AttachmentGlyph({ att }: { readonly att: ChatAttachment }): ReactElemen
 				</span>
 			);
 		case "folder":
-		case "contact":
-			return <FileTile kind={att.kind} size={16} />;
+			return <FileTile kind="folder" size={16} />;
 		case "file":
 			return <FileTile kind={evidenceKind(att.name)} size={16} />;
 	}

@@ -1,11 +1,19 @@
-import type { ReactElement, ReactNode } from "react";
+import { useCallback, useLayoutEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
+import { flushSync } from "react-dom";
 import { HardDrive, Home } from "lucide-react";
 import { cn } from "../lib/cn";
+import { fitPathBar, sameFit, type PathFit, type SegmentFit } from "../state/path-fit";
 import type { Crumb } from "../state/paths";
 import { kindFromExtension } from "../state/kinds";
 import { FileTile } from "./primitives/FileTile";
 
-/** v7 `.pathbar` (proto:.pathbar): macOS path bar docked above the AI dock. */
+/**
+ * v7 `.pathbar` (proto:.pathbar): macOS path bar docked above the AI dock.
+ *
+ * One line, always. The trail is measured against the bar and `fitPathBar`
+ * decides, per segment, whether the label shows in full, is clipped behind a
+ * trailing fade (never an ellipsis), or is dropped so only the icon remains.
+ */
 
 interface PathSegment {
 	readonly key: string;
@@ -15,9 +23,18 @@ interface PathSegment {
 	readonly icon: ReactNode;
 }
 
+/** Narrowest clipped label slot (4px icon gap + a few glyphs); below it the segment shows its icon only. */
+const MIN_LABEL = 32;
+const NO_FIT: PathFit = { segments: [], overflow: false };
+const FULL: SegmentFit = { mode: "full" };
+
 const SEGMENT_CLASS =
-	"path-seg inline-flex h-20 min-w-24 flex-[0_1_auto] items-center gap-4 overflow-hidden rounded-4 border-0 bg-transparent px-5 text-badge text-inherit";
+	"path-seg inline-flex h-20 flex-none items-center rounded-4 border-0 bg-transparent px-5 text-badge text-inherit";
 const ICON_CLASS = "path-ic grid size-14 flex-none place-items-center text-ink-faint";
+/** The last `--fade-label` px of a clipped label fade out, so the word looks cut rather than elided. */
+const FADE_END = "[mask-image:linear-gradient(to_right,#000_calc(100%_-_var(--fade-label)),transparent)]";
+/** An overflowing icon-only trail is pinned to its end and fades out at the start edge. */
+const FADE_START = "[mask-image:linear-gradient(to_left,#000_calc(100%_-_var(--fade-label)),transparent)]";
 
 function extensionOf(name: string): string {
 	const dot = name.lastIndexOf(".");
@@ -55,25 +72,80 @@ export function PathBar({
 			icon: <FileTile kind={kindFromExtension(extensionOf(selectedName))} size={16} />,
 		});
 	}
+
+	const viewportRef = useRef<HTMLDivElement>(null);
+	const trailRef = useRef<HTMLDivElement>(null);
+	const [fit, setFit] = useState<PathFit>(NO_FIT);
+
+	const refit = useCallback(() => {
+		const viewport = viewportRef.current;
+		const trail = trailRef.current;
+		if (viewport === null || trail === null) return;
+		// Each `.path-label` slot holds one unconstrained `.path-name`, so the
+		// name's box is the label's natural width whatever the slot is showing.
+		const labels: number[] = [];
+		let slots = 0;
+		for (const slot of trail.querySelectorAll<HTMLElement>(".path-label")) {
+			slots += slot.getBoundingClientRect().width;
+			labels.push(slot.firstElementChild?.getBoundingClientRect().width ?? 0);
+		}
+		const next = fitPathBar({
+			available: viewport.getBoundingClientRect().width,
+			fixed: trail.getBoundingClientRect().width - slots,
+			labels,
+			minLabel: MIN_LABEL,
+		});
+		setFit((current) => (sameFit(current, next) ? current : next));
+	}, []);
+
+	// Label widths depend only on the label text; width changes arrive through
+	// the observer. Both paths settle before paint, so a stale fit never shows.
+	const labelKey = segments.map((segment) => segment.label).join("\u0000");
+	useLayoutEffect(refit, [refit, labelKey]);
+	useLayoutEffect(() => {
+		const viewport = viewportRef.current;
+		if (viewport === null || typeof ResizeObserver === "undefined") return;
+		const observer = new ResizeObserver(() => flushSync(refit));
+		observer.observe(viewport);
+		return () => observer.disconnect();
+	}, [refit]);
+
 	return (
 		<nav
-			className="pathbar flex h-24 flex-none items-center gap-1 overflow-hidden whitespace-nowrap border-t border-border bg-chrome px-8 text-badge text-ink-body"
+			className="pathbar flex h-24 flex-none items-center overflow-hidden whitespace-nowrap border-t border-border bg-chrome px-8 text-badge text-ink-body"
 			aria-label="Path"
 		>
-			{segments.map((segment, index) => (
-				<span key={segment.key} className="flex min-w-0 flex-[0_1_auto] items-center gap-1">
-					{index > 0 ? <span className="path-sep flex-none px-1 text-meta text-ink-faint">›</span> : null}
-					<button
-						type="button"
-						className={cn(SEGMENT_CLASS, segment.path !== null && "cursor-pointer hover:bg-hover hover:text-ink")}
-						title={segment.path ?? segment.label}
-						onClick={segment.path === null ? undefined : () => onNavigate(segment.path ?? "")}
-					>
-						<span className={ICON_CLASS}>{segment.icon}</span>
-						<span className="path-name min-w-0 overflow-hidden text-ellipsis">{segment.label}</span>
-					</button>
-				</span>
-			))}
+			<div ref={viewportRef} className={cn("flex min-w-0 flex-1 overflow-hidden", fit.overflow && ["justify-end", FADE_START])}>
+				<div ref={trailRef} className="path-trail flex w-max flex-none items-center gap-1">
+					{segments.map((segment, index) => {
+						const segmentFit = fit.segments[index] ?? FULL;
+						return (
+							<span key={segment.key} className="flex flex-none items-center gap-1">
+								{index > 0 ? <span className="path-sep flex-none px-1 text-meta text-ink-faint">›</span> : null}
+								<button
+									type="button"
+									className={cn(SEGMENT_CLASS, segment.path !== null && "cursor-pointer hover:bg-hover hover:text-ink")}
+									title={segment.path ?? segment.label}
+									onClick={segment.path === null ? undefined : () => onNavigate(segment.path ?? "")}
+								>
+									<span className={ICON_CLASS}>{segment.icon}</span>
+									<span
+										className={cn(
+											"path-label flex flex-none overflow-hidden",
+											segmentFit.mode === "clip" && FADE_END,
+											segmentFit.mode === "icon" && "w-0",
+										)}
+										style={segmentFit.mode === "clip" ? { width: segmentFit.width } : undefined}
+										data-fit={segmentFit.mode}
+									>
+										<span className="path-name flex-none pl-4">{segment.label}</span>
+									</span>
+								</button>
+							</span>
+						);
+					})}
+				</div>
+			</div>
 		</nav>
 	);
 }
