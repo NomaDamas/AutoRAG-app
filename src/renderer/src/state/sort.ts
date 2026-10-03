@@ -2,8 +2,9 @@
  * Column sorting for the Finder list — the 3-click cycle and the comparator.
  *
  * Reference: handoff README §2 "Column header" — first click ascending (Date
- * and Size start descending), second flips, third clears. Folders always sort
- * before files and Name compares with the Korean locale.
+ * and Size start descending), second flips, third clears. Folders rank by the
+ * same key as files (a folder has size 0), an unparseable stamp or size counts
+ * as 0 (the minimum), and Name compares with the Korean locale.
  */
 
 export type SortKey = "name" | "date" | "size" | "kind" | "where";
@@ -19,6 +20,18 @@ export interface SortState {
 /** Columns whose first click sorts descending. */
 const DESCENDING_FIRST: readonly SortKey[] = ["date", "size"];
 
+/**
+ * The list columns that expose a sort button, and the key each one cycles —
+ * Name included, matching the v7 reference (`c.key === 'name' || 'date' ||
+ * 'size' || 'kind'`). Any column absent here renders a static label.
+ */
+export const SORT_KEY_BY_COLUMN: Readonly<Record<string, SortKey>> = {
+	name: "name",
+	date: "date",
+	size: "size",
+	kind: "kind",
+};
+
 export function cycleSort(current: SortState | null, key: SortKey): SortState | null {
 	if (current !== null && current.key === key) {
 		return current.flipped ? null : { key, dir: current.dir === 1 ? -1 : 1, flipped: true };
@@ -31,7 +44,7 @@ export interface SortableEntry {
 	readonly kind: "folder" | "file";
 	/** Sortable modification stamp; see state/format.parseModifiedLabel. */
 	readonly modifiedValue: number;
-	/** Sortable size in bytes; folders are 0. */
+	/** Sortable size in bytes; folders and unstatable entries are 0. */
 	readonly sizeValue: number;
 	readonly kindLabel: string;
 	/** Parent location, shown in the "Where" column while searching. */
@@ -40,14 +53,19 @@ export interface SortableEntry {
 
 const collator = new Intl.Collator("ko");
 
+/** An unparseable stamp or size (NaN) ranks as 0, the minimum of its column. */
+function orZero(value: number): number {
+	return Number.isNaN(value) ? 0 : value;
+}
+
 function byName(a: SortableEntry, b: SortableEntry): number {
 	return collator.compare(a.name, b.name);
 }
 
 const COMPARATORS: Record<SortKey, (a: SortableEntry, b: SortableEntry) => number> = {
 	name: byName,
-	date: (a, b) => a.modifiedValue - b.modifiedValue,
-	size: (a, b) => a.sizeValue - b.sizeValue,
+	date: (a, b) => orZero(a.modifiedValue) - orZero(b.modifiedValue),
+	size: (a, b) => orZero(a.sizeValue) - orZero(b.sizeValue),
 	kind: (a, b) => collator.compare(a.kindLabel, b.kindLabel) || byName(a, b),
 	where: (a, b) => collator.compare(a.location, b.location) || byName(a, b),
 };
@@ -57,7 +75,5 @@ export function sortEntries<T extends SortableEntry>(entries: readonly T[], sort
 		return [...entries];
 	}
 	const compare = COMPARATORS[sort.key];
-	return [...entries].sort((a, b) =>
-		a.kind !== b.kind ? (a.kind === "folder" ? -1 : 1) : compare(a, b) * sort.dir,
-	);
+	return [...entries].sort((a, b) => compare(a, b) * sort.dir);
 }

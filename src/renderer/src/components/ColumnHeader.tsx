@@ -6,16 +6,8 @@ import {
 	type ListColumnKey,
 	type ListColumnsState,
 } from "../state/list-columns";
-import type { SortKey, SortState } from "../state/sort";
+import { SORT_KEY_BY_COLUMN, type SortKey, type SortState } from "../state/sort";
 import { ChevronUpIcon } from "./icons";
-
-/** Columns the header can sort by; everything else renders a static label. */
-const SORT_KEYS: Readonly<Record<string, SortKey>> = {
-	name: "name",
-	date: "date",
-	size: "size",
-	kind: "kind",
-};
 
 /** Columns whose right edge carries a drag grip. */
 const RESIZABLE: Readonly<Record<string, true>> = { name: true, size: true, kind: true };
@@ -107,7 +99,7 @@ export function ColumnHeader({
 				onContextMenu={openMenu}
 			>
 				{visible.map((option, index) => {
-					const sortKey = option.key === "name" ? undefined : SORT_KEYS[option.key];
+					const sortKey = SORT_KEY_BY_COLUMN[option.key];
 					const active = sortKey !== undefined && sort !== null && sort.key === sortKey;
 					return (
 						<div
@@ -131,6 +123,7 @@ export function ColumnHeader({
 										active ? "text-ink font-semibold" : "text-inherit hover:text-ink",
 									].join(" ")}
 									title={`Sort by ${option.label}`}
+									aria-sort={active ? (descending ? "descending" : "ascending") : "none"}
 									onClick={() => onSort(sortKey)}
 								>
 									<span className="col-header__label overflow-hidden text-ellipsis">{option.label}</span>
