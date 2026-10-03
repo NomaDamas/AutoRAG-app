@@ -47,6 +47,7 @@ const ARBITRARY_ONLY_TOKENS = [
 	"--backdrop-quicklook",
 	"--highlight-marker",
 	"--shimmer-gradient",
+	"--fade-label",
 	"--index-dot-excluded-ring",
 	"--grid-main",
 	"--grid-file-row",

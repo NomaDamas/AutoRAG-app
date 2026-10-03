@@ -254,6 +254,9 @@
   --w-tab-max: 190px;
   --w-crumb-max: 220px;
   --w-bubble-max: 78%;
+  /* Trailing fade that cuts a one-line label off instead of an ellipsis
+   * (path bar segments). */
+  --fade-label: 14px;
 
   /* ------------------------------------------------------------------- §6 Motion */
   --dur-menu: 120ms;
