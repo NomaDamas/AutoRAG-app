@@ -31,6 +31,9 @@ export type KeyAction =
 	| { readonly type: "quickLook" }
 	| { readonly type: "open" }
 	| { readonly type: "trash" }
+	| { readonly type: "copy" }
+	| { readonly type: "cut" }
+	| { readonly type: "paste"; readonly move: boolean }
 	| { readonly type: "moveSelection"; readonly delta: 1 | -1 }
 	| { readonly type: "moveSelectionSideways"; readonly delta: 1 | -1 }
 	| { readonly type: "moveEvidence"; readonly delta: 1 | -1 }
@@ -58,11 +61,24 @@ export function resolveKeyAction(event: KeyEventLike, context: KeyContext): KeyA
 				return { type: "closeTab" };
 			case ",":
 				return { type: "openSettings" };
+			// The file clipboard is the Finder zone's; a text field keeps its own
+			// native copy/cut/paste, so these are never swallowed while typing.
+			case "c":
+				return context.typing || context.zone !== "finder" ? null : { type: "copy" };
+			case "x":
+				return context.typing || context.zone !== "finder" ? null : { type: "cut" };
+			case "v":
+				return context.typing || context.zone !== "finder" ? null : { type: "paste", move: false };
 			default: {
 				const mode = viewModeForKey(event.key);
 				return mode === null ? null : { type: "setViewMode", mode };
 			}
 		}
+	}
+	// ⌥⌘V (Finder's "Move Item Here"): paste the clipboard as a move, whatever
+	// the clipboard was cut or copied with.
+	if ((event.meta || event.ctrl === true) && event.alt && event.key.toLowerCase() === "v") {
+		return context.typing || context.zone !== "finder" ? null : { type: "paste", move: true };
 	}
 	if (context.typing) {
 		return null;

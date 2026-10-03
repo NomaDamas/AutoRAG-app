@@ -90,9 +90,9 @@ export function buildContextMenu(input: ContextMenuInput): FinderMenuEntry[] {
 
 	entries.push(
 		SEPARATOR,
-		item("copy", "복사"),
-		item("paste", "붙여넣기", { disabled: input.clipboardCount === 0 }),
-		item("cut", "잘라내기"),
+		item("copy", "복사", { keycap: "⌘C" }),
+		item("paste", "붙여넣기", { keycap: "⌘V", disabled: input.clipboardCount === 0 }),
+		item("cut", "잘라내기", { keycap: "⌘X" }),
 		item("duplicate", "복제"),
 		item("rename", "이름 변경", { disabled: multi }),
 		item("copyPath", "경로 복사"),

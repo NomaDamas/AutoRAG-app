@@ -19,7 +19,7 @@ import { Toast } from "./components/primitives/Toast";
 import { Sidebar } from "./components/Sidebar";
 import { SettingsView } from "./components/SettingsView";
 import { SETTINGS_PATH } from "./state/tabs";
-import { writeFinderDrag } from "./state/attachments";
+import { isFinderDrag, readFinderDragPaths, writeFinderDrag } from "./state/attachments";
 import { basename, breadcrumbTrail, dirname } from "./state/paths";
 import {
 	loadListColumns,
@@ -191,6 +191,8 @@ export function App(): ReactElement {
 	const [sidebarWidth, setSidebarWidth] = useState(() => loadNumber(SIDEBAR_WIDTH_KEY, 220));
 	const [inspectorWidth, setInspectorWidth] = useState(() => loadNumber(INSPECTOR_WIDTH_KEY, 390));
 	const [listColumns, setListColumns] = useState<ListColumnsState>(loadListColumns);
+	const [dropTargetPath, setDropTargetPath] = useState<string | null>(null);
+	const [dropTabId, setDropTabId] = useState<number | null>(null);
 	const [sourceStatus, setSourceStatus] = useState<Readonly<Record<string, "syncing" | "error">>>({});
 	const aiDockRef = useRef<AiDockHandle | null>(null);
 
@@ -309,11 +311,42 @@ export function App(): ReactElement {
 		void autorag.settings.get().then((settings) => setShowHiddenFiles(settings.showHiddenFiles));
 	}, []);
 
+	/* A drag that leaves the app (or ends anywhere) clears the drop highlights. */
+	useEffect(() => {
+		const reset = (): void => {
+			setDropTargetPath(null);
+			setDropTabId(null);
+		};
+		window.addEventListener("dragend", reset);
+		window.addEventListener("drop", reset);
+		return () => {
+			window.removeEventListener("dragend", reset);
+			window.removeEventListener("drop", reset);
+		};
+	}, []);
+
 	const rowCallbacks: RowCallbacks = {
 		onClick: finder.clickRow,
 		onOpen: finder.openEntry,
 		onContextMenu: finder.openContextMenu,
 		onDragStart: (entry, event) => writeFinderDrag(event.dataTransfer, finder.dragEntries(entry)),
+		// An in-app row drag lands on folders: the rows move there (⌥ copies).
+		onDragOver: (entry, event) => {
+			if (entry.kind !== "folder" || !isFinderDrag(event.dataTransfer.types)) return;
+			event.preventDefault();
+			event.dataTransfer.dropEffect = event.altKey ? "copy" : "move";
+			setDropTargetPath((current) => (current === entry.path ? current : entry.path));
+		},
+		onDrop: (entry, event) => {
+			setDropTargetPath(null);
+			if (entry.kind !== "folder") return;
+			const paths = readFinderDragPaths(event.dataTransfer);
+			if (paths.length === 0) return;
+			event.preventDefault();
+			event.stopPropagation();
+			finder.transferDropped(paths, entry.path, event.altKey);
+		},
+		dropTargetPath,
 		onToggleIndex: finder.toggleIndex,
 		onToggleStack: finder.toggleStack,
 		onToggleFolder: finder.toggleFolder,
@@ -407,6 +440,22 @@ export function App(): ReactElement {
 						onSelect={finder.selectTabId}
 						onClose={finder.closeTabId}
 						onNewTab={finder.newTab}
+						dropTabId={dropTabId}
+						onTabDragOver={(id, event) => {
+							if (!isFinderDrag(event.dataTransfer.types)) return;
+							event.preventDefault();
+							event.dataTransfer.dropEffect = event.altKey ? "copy" : "move";
+							setDropTabId((current) => (current === id ? current : id));
+						}}
+						onTabDragLeave={(id) => setDropTabId((current) => (current === id ? null : current))}
+						onTabDrop={(id, event) => {
+							setDropTabId(null);
+							const paths = readFinderDragPaths(event.dataTransfer);
+							if (paths.length === 0) return;
+							event.preventDefault();
+							event.stopPropagation();
+							finder.dropOnTab(id, paths, event.altKey);
+						}}
 					/>
 					{finder.path === SETTINGS_PATH ? (
 						<SettingsView onSettingsChanged={(settings) => setShowHiddenFiles(settings.showHiddenFiles)} />

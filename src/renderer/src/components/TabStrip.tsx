@@ -1,4 +1,4 @@
-import type { MouseEvent, ReactElement } from "react";
+import type { DragEvent, MouseEvent, ReactElement } from "react";
 import { cn } from "../lib/cn";
 import { TabCloseIcon, TabPlusIcon } from "./icons";
 import { StatusDot } from "./primitives/StatusDot";
@@ -24,25 +24,42 @@ export function TabStrip({
 	onSelect,
 	onClose,
 	onNewTab,
+	dropTabId,
+	onTabDragOver,
+	onTabDragLeave,
+	onTabDrop,
 }: {
 	readonly tabs: readonly TabView[];
 	readonly canClose: boolean;
 	readonly onSelect: (id: number) => void;
 	readonly onClose: (id: number) => void;
 	readonly onNewTab: () => void;
+	/** The tab under an in-app row drag, highlighted as the drop target. */
+	readonly dropTabId: number | null;
+	readonly onTabDragOver: (id: number, event: DragEvent<HTMLDivElement>) => void;
+	readonly onTabDragLeave: (id: number) => void;
+	readonly onTabDrop: (id: number, event: DragEvent<HTMLDivElement>) => void;
 }): ReactElement {
 	return (
 		<div className="tabs flex h-25 flex-none items-stretch overflow-hidden border-b border-tabstrip-line bg-tabstrip [-webkit-app-region:drag]">
 			{tabs.map((tab, index) => (
 				<div
 					key={tab.id}
+					data-tab-id={tab.id}
 					className={[
 						`tab group/tab${tab.active ? " tab--active" : ""}`,
 						"relative flex flex-1 min-w-0 items-center justify-center px-24 text-badge font-normal select-none cursor-pointer [-webkit-app-region:no-drag]",
 						index > 0 ? "border-l border-tabstrip-line" : "",
 						tab.active ? "bg-tab-active text-ink" : cn(TAB_GRADIENT, TAB_GRADIENT_HOVER, "text-tab-text"),
+						dropTabId === tab.id ? "shadow-[inset_0_0_0_1.5px_var(--accent)]" : "",
 					].join(" ")}
 					onClick={() => onSelect(tab.id)}
+					onDragOver={(event) => onTabDragOver(tab.id, event)}
+					onDragLeave={(event) => {
+						if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return;
+						onTabDragLeave(tab.id);
+					}}
+					onDrop={(event) => onTabDrop(tab.id, event)}
 				>
 					{tab.flash ? (
 						<span className="absolute left-6 top-1/2 -mt-3 flex" aria-hidden="true">

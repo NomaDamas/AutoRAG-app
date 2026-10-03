@@ -127,6 +127,7 @@ export function ColumnBrowser({
 											? "bg-accent text-on-accent"
 											: "bg-sel-mute text-ink"
 										: "hover:bg-hover-row",
+									callbacks.dropTargetPath === member.entry.path && "bg-accent-drop-hover shadow-[inset_0_0_0_1.5px_var(--accent)]",
 								)}
 								role="option"
 								aria-selected={selectedKeys.includes(member.entry.path)}
@@ -138,6 +139,8 @@ export function ColumnBrowser({
 								onDoubleClick={() => callbacks.onOpen(member.entry)}
 								onContextMenu={(event) => callbacks.onContextMenu(member.entry, event)}
 								onDragStart={(event) => callbacks.onDragStart(member.entry, event)}
+								onDragOver={(event) => callbacks.onDragOver(member.entry, event)}
+								onDrop={(event) => callbacks.onDrop(member.entry, event)}
 							>
 								<FileTile kind={member.entry.fileKind} iconUrl={member.entry.iconUrl} size={16} />
 								<span className="col-name flex-1 min-w-0 overflow-hidden whitespace-nowrap text-ellipsis text-sm">
@@ -191,6 +194,7 @@ function ColumnRow({
 						: opened || row.child
 							? "text-ink-muted"
 							: "hover:bg-hover-row",
+				callbacks.dropTargetPath === entry.path && "bg-accent-drop-hover shadow-[inset_0_0_0_1.5px_var(--accent)]",
 			)}
 			role="option"
 			aria-selected={selected}
@@ -202,6 +206,8 @@ function ColumnRow({
 			onDoubleClick={() => callbacks.onOpen(entry)}
 			onContextMenu={(event) => callbacks.onContextMenu(entry, event)}
 			onDragStart={(event) => callbacks.onDragStart(entry, event)}
+			onDragOver={(event) => callbacks.onDragOver(entry, event)}
+			onDrop={(event) => callbacks.onDrop(entry, event)}
 		>
 			<FileTile kind={entry.fileKind} iconUrl={entry.iconUrl} size={16} />
 			{renameDraft === null ? (

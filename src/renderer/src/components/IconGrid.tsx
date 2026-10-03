@@ -178,6 +178,7 @@ function IconTile({
 							? "bg-accent-wash shadow-[inset_0_0_0_1.5px_var(--accent)]"
 							: "bg-sel-mute"
 						: "hover:bg-hover-row",
+				callbacks.dropTargetPath === entry.path && "bg-accent-drop-hover shadow-[inset_0_0_0_1.5px_var(--accent)]",
 			)}
 			role="option"
 			aria-selected={selected}
@@ -189,6 +190,8 @@ function IconTile({
 			onDoubleClick={() => callbacks.onOpen(entry)}
 			onContextMenu={(event) => callbacks.onContextMenu(entry, event)}
 			onDragStart={(event) => callbacks.onDragStart(entry, event)}
+			onDragOver={(event) => callbacks.onDragOver(entry, event)}
+			onDrop={(event) => callbacks.onDrop(entry, event)}
 		>
 			<div
 				className={cn(
