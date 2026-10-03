@@ -29,13 +29,20 @@ export interface FolderTreeOptions {
 export function buildFolderTree(rows: readonly StackRow[], options: FolderTreeOptions): TreeRow[] {
 	const out: TreeRow[] = [];
 	const visit = (level: readonly StackRow[], depth: number, parent: string | null): void => {
+		// A version-stack head discloses its members like a folder does its
+		// children, so each member row sits one indent deeper than its head.
+		// Members are contiguous after the head, and `headDepth` survives the
+		// run so siblings all land at the same level.
+		let headDepth = depth;
 		for (const row of level) {
+			if (!row.child) headDepth = depth;
+			const rowDepth = row.child ? headDepth + 1 : depth;
 			const folder = row.entry.kind === "folder" && !row.child;
 			const open = folder && options.expanded.has(row.entry.path);
-			out.push({ ...row, depth, parent, disclosure: folder ? (open ? "expanded" : "collapsed") : "leaf" });
+			out.push({ ...row, depth: rowDepth, parent, disclosure: folder ? (open ? "expanded" : "collapsed") : "leaf" });
 			if (open) {
 				const children = options.childrenOf(row.entry.path);
-				if (children !== undefined) visit(children, depth + 1, row.entry.path);
+				if (children !== undefined) visit(children, rowDepth + 1, row.entry.path);
 			}
 		}
 	};
@@ -44,7 +51,13 @@ export function buildFolderTree(rows: readonly StackRow[], options: FolderTreeOp
 }
 
 export function flatTreeRows(rows: readonly StackRow[]): TreeRow[] {
-	return rows.map((row) => ({ ...row, depth: 0, parent: null, disclosure: "none" }));
+	// Search hits are flat, but an open version stack still nests its members
+	// one indent deeper so the relation reads at a glance.
+	let headDepth = 0;
+	return rows.map((row) => {
+		if (!row.child) headDepth = 0;
+		return { ...row, depth: row.child ? headDepth + 1 : 0, parent: null, disclosure: "none" };
+	});
 }
 
 export function toggleExpanded(expanded: ReadonlySet<string>, path: string): ReadonlySet<string> {
