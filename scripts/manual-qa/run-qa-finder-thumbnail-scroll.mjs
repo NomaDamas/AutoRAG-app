@@ -117,7 +117,7 @@ try {
 	app = await launchFinder();
 	const page = await finderWindow(app);
 	await page.waitForSelector('[role="row"]', { timeout: 30000 });
-	await page.locator('.view-toggle__button[aria-label="List"]').click();
+	await page.locator('.seg__button[aria-label="List"]').click();
 	await page.getByLabel("Places").getByRole("button", { name: "Documents", exact: true }).click();
 
 	const rowFor = (name) => page.locator(`[role="row"]:has-text("${name}")`).first();

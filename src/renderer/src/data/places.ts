@@ -1,8 +1,11 @@
 /**
  * Sidebar navigation — the reference's `PLACES` groups (proto:774-779).
  *
- * Each place carries its `lucide-react` glyph; `syncing` / `error` mark the
- * status dots the reference shows on Google Drive and on sources.
+ * Each place carries its `lucide-react` glyph. The status dot beside a place is
+ * NOT data: it is driven by the live datasource status the shell reads from
+ * `settings.sourcesList` and passes down as `sourceStatus`. A place with no
+ * reported status renders no dot.
+ *
  * The People/Contacts place is parked until its view ships.
  *
  * The reference's **Sources** group (Slack / Gmail / Notion / Discord /
@@ -17,8 +20,6 @@ export interface NavItem {
 	readonly label: string;
 	/** Lucide glyph for the place. */
 	readonly icon: LucideIcon;
-	readonly syncing: boolean;
-	readonly error: boolean;
 	/** A view that is not built yet — navigates to its work-in-progress screen. */
 	readonly wip: boolean;
 }
@@ -28,18 +29,8 @@ export interface NavGroup {
 	readonly items: readonly NavItem[];
 }
 
-function place(
-	label: string,
-	icon: LucideIcon,
-	status: { syncing?: boolean; error?: boolean; wip?: boolean } = {},
-): NavItem {
-	return {
-		label,
-		icon,
-		syncing: status.syncing ?? false,
-		error: status.error ?? false,
-		wip: status.wip ?? false,
-	};
+function place(label: string, icon: LucideIcon, wip = false): NavItem {
+	return { label, icon, wip };
 }
 
 export const NAV_GROUPS: readonly NavGroup[] = [
@@ -54,13 +45,6 @@ export const NAV_GROUPS: readonly NavGroup[] = [
 	},
 	{
 		label: "Cloud",
-		items: [
-			place("iCloud Drive", Cloud),
-			place("Google Drive", Hexagon, { syncing: true }),
-			place("Dropbox", Box),
-		],
+		items: [place("iCloud Drive", Cloud), place("Google Drive", Hexagon), place("Dropbox", Box)],
 	},
 ];
-
-/** Footer indexing progress — the reference's fixed "Indexing · Gmail 88%". */
-export const INDEXING_STATUS = { label: "Indexing · Gmail", percent: 88 } as const;

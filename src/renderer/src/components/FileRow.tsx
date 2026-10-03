@@ -1,14 +1,14 @@
-import { useEffect, type ChangeEvent, type CSSProperties, type KeyboardEvent, type MouseEvent, type ReactElement } from "react";
+import { useEffect, type ChangeEvent, type KeyboardEvent, type MouseEvent, type ReactElement } from "react";
 import type { IndexStatus } from "../../../shared/index-contract";
-import { indexStatusBadge } from "../state/badges";
 import type { FinderEntry } from "../data/entries";
 import type { Disclosure } from "../state/folder-tree";
-import { whereSegments } from "../state/paths";
-import { relationLabel, type VersionRelation } from "../state/version-family";
+import { LIST_COLUMN_OPTIONS, type ListColumnKey, type ListColumnsState, listGridTemplate } from "../state/list-columns";
+import { basename, dirname } from "../state/paths";
+import { RELATION_LABELS, type VersionRelation } from "../state/version-family";
 import { isHiddenName } from "../state/visibility";
-import { ChevronRightIcon } from "./icons";
+import { cn } from "../lib/cn";
+import { CheckIcon } from "./icons";
 import { FileTile } from "./primitives/FileTile";
-import { PillBadge } from "./primitives/PillBadge";
 
 export interface RowCallbacks {
 	readonly onClick: (entry: FinderEntry, event: MouseEvent<HTMLDivElement>) => void;
@@ -29,10 +29,41 @@ export interface RowCallbacks {
 	readonly onVisible: (entry: FinderEntry) => void;
 }
 
+const VTAG_BASE = "vtag inline-flex flex-none items-center h-16 px-6 rounded-4 text-tile font-semibold whitespace-nowrap";
+const VTAG_TONE: Readonly<Record<"latest" | VersionRelation, string>> = {
+	latest: "bg-vtag-latest-bg text-vtag-latest-text",
+	near: "bg-vtag-near-bg text-vtag-near-text",
+	exact: "bg-vtag-exact-bg text-vtag-exact-text",
+	contains: "bg-vtag-exact-bg text-vtag-exact-text",
+};
+
+/** v7 `.vtag` — the duplicate-family relation chip shared by the list, columns,
+ * and variants rows. */
+export function VersionTag({ tone, label }: { readonly tone: "latest" | VersionRelation; readonly label: string }): ReactElement {
+	return <span className={`${VTAG_BASE} ${VTAG_TONE[tone]}`}>{label}</span>;
+}
+
+const FOLDER_BACK = "M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z";
+const FOLDER_FRONT = "M3 9h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z";
+
+/** v7 `.vwhere` — the parent folder a family member lives in. */
+function LocationChip({ location }: { readonly location: string }): ReactElement {
+	return (
+		<span className="vwhere inline-flex flex-none items-center gap-3 text-badge text-ink-muted whitespace-nowrap" title={location}>
+			<svg width="11" height="11" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+				<path d={FOLDER_BACK} fill="var(--folder)" stroke="var(--folder-stroke)" strokeWidth="0.7" />
+				<path d={FOLDER_FRONT} fill="var(--folder-front)" />
+			</svg>
+			{basename(location)}
+		</span>
+	);
+}
+
 /**
- * One 32px file row on --grid-file-row (handoff README §2 "File rows").
- * Selection is a wash, never an edge: --accent-soft while the Finder zone owns
- * focus, --bg-input otherwise.
+ * One 32px v7 list row: the columns come from `listGridTemplate(columns)`, the
+ * name cell carries the disclosure, tile, name, and any version tags. Selection
+ * is a wash; while the Finder zone owns focus it is the solid accent with white
+ * text, otherwise the muted selection gray.
  */
 export function FileRow({
 	entry,
@@ -44,11 +75,11 @@ export function FileRow({
 	renameDraft,
 	stackCount,
 	stackOpen,
-	child,
 	relation,
 	depth,
 	disclosure,
 	listPath,
+	columns,
 	callbacks,
 }: {
 	readonly entry: FinderEntry;
@@ -67,6 +98,7 @@ export function FileRow({
 	readonly depth: number;
 	readonly disclosure: Disclosure;
 	readonly listPath: string;
+	readonly columns: ListColumnsState;
 	readonly callbacks: RowCallbacks;
 }): ReactElement {
 	// Virtualized: only rows near the viewport mount, so reporting them fills
@@ -77,93 +109,105 @@ export function FileRow({
 		}
 	}, [callbacks.onVisible, entry]);
 
-	const classes = ["row"];
-	if (isHiddenName(entry.name)) {
-		classes.push("row--hidden");
-	}
-	if (selected) {
-		classes.push(zoneFocused ? "row--selected-focused" : "row--selected");
-	}
-	if (flash) {
-		classes.push("row--flash");
-	}
-	if (child) {
-		classes.push("row--child");
-	}
-	classes.push(
-		"grid grid-cols-(--grid-file-row) gap-12 items-center h-row pr-8 rounded-6 select-none cursor-default transition-[background,box-shadow] duration-(--dur-flash-fade) ease-[ease]",
-		child
-			? "pl-[calc(var(--space-12)+18px+var(--row-depth,0)*var(--tree-indent))]"
-			: "pl-[calc(var(--space-12)+var(--row-depth,0)*var(--tree-indent))]",
-		// State background first, then the hover wash unconditionally: the
-		// reference's `.row:hover` is (0,2,0) while every `row--*` state class is
-		// (0,1,0), so a hovered row always paints the hover wash, whatever else it
-		// is. Making the state exclusive and dropping the hover rule would change
-		// a hovered selected row from the wash to the selection tint.
-		flash
-			? "bg-accent-flash shadow-[inset_0_0_0_1px_var(--accent-flash-ring)]"
-			: selected
-				? zoneFocused
-					? "bg-accent-soft"
-					: "bg-input"
-				: "",
-		"hover:bg-hover-row",
-		isHiddenName(entry.name) ? "opacity-45" : "",
+	const isHead = stackCount > 0;
+	const isVariant = relation !== null && !isHead;
+	const folderDisclosure = disclosure === "collapsed" || disclosure === "expanded";
+	const canOpen = !searching && (folderDisclosure || isHead);
+	const open = folderDisclosure ? disclosure === "expanded" : stackOpen;
+
+	const state = indexStatus?.kind ?? "pending";
+	const included = state === "included";
+	const outside = state === "outside";
+
+	const rowTone = selected ? (zoneFocused ? "text-on-accent" : "text-ink") : "text-ink-body";
+	const metaTone = selected ? (zoneFocused ? "text-on-accent/80" : "text-ink-muted") : "text-ink-muted";
+
+	const cellText = (key: ListColumnKey): string => {
+		switch (key) {
+			case "extension": {
+				if (entry.kind === "folder") return "—";
+				const dot = entry.name.lastIndexOf(".");
+				return dot > 0 ? entry.name.slice(dot + 1).toUpperCase() : "—";
+			}
+			case "date":
+				return entry.dateLabel;
+			case "size":
+				return entry.sizeLabel;
+			case "kind":
+				return entry.kindLabel;
+			case "relativePath":
+				return dirname(entry.path);
+			case "index":
+				return "—";
+		}
+	};
+
+	const visibleColumns = LIST_COLUMN_OPTIONS.filter(
+		(column): column is { readonly key: ListColumnKey; readonly label: string } =>
+			column.key !== "name" && columns.visible[column.key],
 	);
 
 	return (
 		<div
-			className={classes.join(" ")}
+			className={cn(
+				"row grid gap-8 items-center h-row mx-6 px-7 rounded-6 select-none cursor-default transition-[background,box-shadow] duration-(--dur-flash-fade) ease-[ease] [&>*]:min-w-0",
+				rowTone,
+				isHiddenName(entry.name) && "opacity-45",
+				flash
+					? "bg-accent-flash shadow-[inset_0_0_0_1px_var(--accent-flash-ring)]"
+					: selected
+						? zoneFocused
+							? "bg-accent"
+							: "bg-sel-mute"
+						: "hover:bg-hover-row",
+			)}
 			role="row"
 			data-path={entry.path}
 			aria-selected={selected}
 			aria-level={disclosure === "none" ? undefined : depth + 1}
-			aria-expanded={disclosure === "expanded" ? true : disclosure === "collapsed" ? false : undefined}
-			style={depth > 0 ? ({ "--row-depth": depth } as CSSProperties) : undefined}
+			aria-expanded={canOpen ? open : undefined}
+			style={{ gridTemplateColumns: listGridTemplate(columns) }}
 			onClick={(event) => callbacks.onClick(entry, event)}
 			onDoubleClick={() => callbacks.onOpen(entry)}
 			onContextMenu={(event) => callbacks.onContextMenu(entry, event)}
 		>
-			<div className="row__name flex items-center gap-10 min-w-0" role="gridcell">
-				{disclosure === "none" ? null : disclosure === "leaf" ? (
-					<span
-						className="row__disclosure flex items-center justify-center flex-none size-disclosure mr-[calc(var(--space-6)-var(--space-10))] p-0 border-0 rounded-5 bg-transparent text-ink-muted cursor-default"
-						aria-hidden="true"
-					/>
-				) : (
+			<div className="row__name flex items-center gap-7 min-w-0" role="gridcell">
+				<span className="indent flex-none" style={{ width: depth * 16 }} aria-hidden="true" />
+				{canOpen ? (
 					<button
 						type="button"
-						className={[
-							`row__disclosure${disclosure === "expanded" ? " row__disclosure--open" : ""}`,
-							"flex items-center justify-center flex-none size-disclosure mr-[calc(var(--space-6)-var(--space-10))] p-0 border-0 rounded-5 bg-transparent text-ink-muted cursor-default hover:text-ink [&_svg]:transition-transform [&_svg]:duration-(--dur-color) [&_svg]:ease-[ease]",
-							disclosure === "expanded" ? "[&_svg]:rotate-90" : "",
-						].join(" ")}
-						aria-label={disclosure === "expanded" ? `${entry.name} 접기` : `${entry.name} 펼치기`}
-						aria-expanded={disclosure === "expanded"}
+						className={cn(
+							`row__disclosure${open ? " row__disclosure--open" : ""}`,
+							"disclosure flex flex-none items-center justify-center w-[13px] h-[17px] p-0 border-0 bg-transparent cursor-default",
+							selected ? "text-inherit" : "text-ink-muted",
+						)}
+						aria-label={`${entry.name} ${isHead ? "유사·중복본 " : ""}${open ? "접기" : "펼치기"}`}
+						aria-expanded={open}
 						tabIndex={-1}
 						onClick={(event) => {
 							event.stopPropagation();
-							callbacks.onToggleFolder(entry);
+							if (isHead) callbacks.onToggleStack(entry);
+							else callbacks.onToggleFolder(entry);
 						}}
 						onDoubleClick={(event) => event.stopPropagation()}
 					>
-						<ChevronRightIcon size={10} />
+						<span
+							className={cn(
+								"block border-l-[5px] border-y-[4px] border-l-current border-y-transparent transition-transform duration-(--dur-color) ease-[ease]",
+								open && "rotate-90",
+							)}
+						/>
 					</button>
-				)}
-				{child ? (
-					<span
-						className="row__connector flex-none w-[18px] h-[14px] border-l border-b border-border-strong rounded-bl-4"
-						aria-hidden="true"
-					/>
 				) : (
-					<FileTile kind={entry.fileKind} iconUrl={entry.iconUrl} />
+					<span className="flex-none w-[13px]" aria-hidden="true" />
 				)}
+				<FileTile kind={entry.fileKind} iconUrl={entry.iconUrl} />
 				{renameDraft === null ? (
 					<span
-						className={[
-							"row__label overflow-hidden whitespace-nowrap text-ellipsis text-body",
-							child ? "text-ink-body" : "text-ink",
-						].join(" ")}
+						className={cn(
+							"row__label min-w-0 overflow-hidden whitespace-nowrap text-ellipsis text-sm",
+							isVariant && "text-ink-muted",
+						)}
 					>
 						{entry.name}
 					</span>
@@ -171,7 +215,7 @@ export function FileRow({
 					<input
 						// biome-ignore lint/a11y/noAutofocus: inline rename must take the caret immediately
 						autoFocus
-						className="row__rename flex-1 min-w-0 h-pill px-5 border border-accent rounded-5 outline-none bg-window text-ink text-body"
+						className="row__rename flex-1 min-w-0 h-pill px-5 border border-accent rounded-5 outline-none bg-window text-ink text-sm"
 						type="text"
 						value={renameDraft}
 						aria-label="새 이름"
@@ -190,56 +234,63 @@ export function FileRow({
 						onBlur={callbacks.onRenameCancel}
 					/>
 				)}
-				{stackCount > 0 ? (
-					<button
-						type="button"
-						className={[
-							`row__stackbadge${stackOpen ? " row__stackbadge--open" : ""}`,
-							"flex items-center gap-3 flex-none h-18 px-5 border-0 rounded-9 text-badge font-semibold cursor-pointer [&_svg]:transition-transform [&_svg]:duration-(--dur-color) [&_svg]:ease-[ease]",
-							stackOpen
-								? "bg-border text-ink [&_svg]:rotate-90"
-								: "bg-input text-ink-body hover:bg-border",
-						].join(" ")}
-						title={`다른 버전 ${stackCount}개 · 클릭하면 펼쳐집니다`}
-						aria-label={`다른 버전 ${stackCount}개 · 클릭하면 펼쳐집니다`}
-						aria-expanded={stackOpen}
-						onClick={(event) => {
-							event.stopPropagation();
-							callbacks.onToggleStack(entry);
-						}}
+				{isHead ? (
+					<>
+						<VersionTag tone="latest" label="최신본" />
+						<span className="vcount inline-flex flex-none items-center h-16 px-6 rounded-full bg-input text-tile text-ink-muted">
+							+{stackCount}
+						</span>
+					</>
+				) : relation !== null ? (
+					<>
+						<VersionTag tone={relation} label={RELATION_LABELS[relation]} />
+						{entry.location !== listPath ? <LocationChip location={entry.location} /> : null}
+					</>
+				) : null}
+			</div>
+			{visibleColumns.map((column) =>
+				column.key === "index" ? (
+					<div key="index" className="ix-cell flex min-w-0 justify-center" role="gridcell">
+						{entry.kind === "folder" ? null : outside ? (
+							<span className={cn("text-meta", metaTone)}>—</span>
+						) : (
+							<button
+								type="button"
+								role="checkbox"
+								aria-checked={included}
+								className={cn(
+									"chk inline-grid flex-none place-items-center size-14 rounded-4 border cursor-default",
+									included
+										? selected
+											? "bg-window border-window text-accent"
+											: "bg-accent border-accent text-on-accent"
+										: cn("bg-window text-accent", selected ? "border-on-accent/90" : "border-border-strong"),
+								)}
+								title={included ? "AI 검색 인덱스에 포함됨" : "AI 검색 인덱스에서 제외됨"}
+								aria-label={included ? "AI 검색 인덱스에 포함됨" : "AI 검색 인덱스에서 제외됨"}
+								onClick={(event) => {
+									event.stopPropagation();
+									callbacks.onToggleIndex(entry);
+								}}
+							>
+								<CheckIcon size={10} className={included ? undefined : "opacity-0"} />
+							</button>
+						)}
+					</div>
+				) : (
+					<span
+						key={column.key}
+						className={cn(
+							"row__meta min-w-0 whitespace-nowrap overflow-hidden text-ellipsis text-meta",
+							column.key === "size" && "text-right",
+							metaTone,
+						)}
+						role="gridcell"
 					>
-						<ChevronRightIcon size={9} />
-						{stackCount}
-					</button>
-				) : null}
-			</div>
-			<span className="row__meta text-ink-muted text-meta whitespace-nowrap overflow-hidden text-ellipsis" role="gridcell">
-				{entry.dateLabel}
-			</span>
-			<span
-				className="row__meta row__meta--right text-ink-muted text-meta whitespace-nowrap overflow-hidden text-ellipsis text-right"
-				role="gridcell"
-			>
-				{entry.sizeLabel}
-			</span>
-			<span className="row__meta text-ink-muted text-meta whitespace-nowrap overflow-hidden text-ellipsis" role="gridcell">
-				{child && relation !== null
-					? relationLabel(relation, entry.location, listPath)
-					: searching
-						? whereSegments(entry.location)
-						: entry.kindLabel}
-			</span>
-			<div className="row__cell flex min-w-0" role="gridcell">
-				{entry.kind === "file" ? (
-					<PillBadge
-						visual={indexStatusBadge(indexStatus)}
-						onClick={(event) => {
-							event.stopPropagation();
-							callbacks.onToggleIndex(entry);
-						}}
-					/>
-				) : null}
-			</div>
+						{cellText(column.key)}
+					</span>
+				),
+			)}
 		</div>
 	);
 }

@@ -75,6 +75,8 @@ function createMainWindow(devLabel: DevLabel | null): BrowserWindow {
 		minWidth: 1360,
 		minHeight: 820,
 		title: formatWindowTitle(APP_NAME, APP_VERSION, devLabel),
+		// v7: traffic lights overlay the sidebar header / toolbar (macOS-native chrome).
+		titleBarStyle: "hiddenInset",
 		webPreferences: {
 			preload: join(import.meta.dirname, "../preload/index.mjs"),
 			contextIsolation: true,

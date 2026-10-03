@@ -15,14 +15,15 @@
  *   --text-* (ink)    → --color-ink-*                     text-ink, text-ink-muted
  *   --border*         → --color-border* / --color-divider border-border, border-divider
  *   --accent*, --ok-*, --warn-*, --info-*, --danger-*,
- *   --error-orange-*, --tile-*, --traffic-*, --scrim-*,
- *   --folder, --switch-off, --index-dot-included          → --color-<same>
+ *   --error-orange-*, --tile-*, --traffic-*, --scrim-*, --vtag-*,
+ *   --folder, --folder-stroke, --folder-front, --switch-off,
+ *   --index-dot-included                                  → --color-<same>
  *   --font-size-*     → --text-*                          text-title, text-meta
  *   --weight-*        → --font-weight-*                   font-semibold
  *   --tracking-*, --leading-*                             → --tracking-*, --leading-*
  *   --space-N         → --spacing-N                       p-16, gap-8
  *   --size-*, --knob-*, --tree-indent, --desk-padding,
- *   --app-min-*, --evidence-open-height, --col-sidebar    → --spacing-<name>
+ *   --app-min-*, --evidence-open-height, --ai-h           → --spacing-<name>
  *   --w-*, --col-sidebar                                  → --container-<name>  w-settings
  *   --shadow-*        → --shadow-*                        shadow-raised
  *   --radius-*        → --radius-*                        rounded-10
@@ -64,11 +65,20 @@
 	/* ---------------------------------------------------------- §2.1 Surfaces */
 	--color-desk: var(--bg-desk);
 	--color-window: var(--bg-window);
+	--color-sidebar: var(--bg-sidebar);
 	--color-chrome: var(--bg-chrome);
 	--color-subtle: var(--bg-subtle);
 	--color-subtle-alt: var(--bg-subtle-alt);
 	--color-input: var(--bg-input);
 	--color-selected-nav: var(--bg-selected-nav);
+	--color-tabstrip: var(--bg-tabstrip);
+	--color-tabstrip-line: var(--border-tabstrip);
+	--color-tab-from: var(--tab-grad-from);
+	--color-tab-to: var(--tab-grad-to);
+	--color-tab-hover-from: var(--tab-grad-hover-from);
+	--color-tab-hover-to: var(--tab-grad-hover-to);
+	--color-tab-active: var(--bg-tab-active);
+	--color-tab-text: var(--text-tab);
 	--color-code: var(--bg-code);
 	--color-chip-sent: var(--bg-chip-sent);
 	--color-tile-fallback: var(--bg-tile-fallback);
@@ -153,6 +163,8 @@
 	--color-accent-hover: var(--accent-hover);
 	--color-accent-text: var(--accent-text);
 	--color-accent-text-strong: var(--accent-text-strong);
+	--color-accent-wash: var(--accent-wash);
+	--color-sel-mute: var(--sel-mute);
 	--color-accent-drop-hover: var(--accent-drop-hover);
 	--color-accent-history-current: var(--accent-history-current);
 	--color-accent-soft: var(--accent-soft);
@@ -166,6 +178,8 @@
 
 	/* ----------------------------------------------------- §2.6 Object colors */
 	--color-folder: var(--folder);
+	--color-folder-stroke: var(--folder-stroke);
+	--color-folder-front: var(--folder-front);
 	--color-switch-off: var(--switch-off);
 	--color-traffic-close: var(--traffic-close);
 	--color-traffic-min: var(--traffic-min);
@@ -216,6 +230,14 @@
 	--color-tile-discord: var(--tile-discord);
 	--color-tile-telegram: var(--tile-telegram);
 	--color-tile-contact: var(--tile-contact);
+
+	/* ------------------------------------------------------ §2.10 Version tags */
+	--color-vtag-latest-bg: var(--vtag-latest-bg);
+	--color-vtag-latest-text: var(--vtag-latest-text);
+	--color-vtag-near-bg: var(--vtag-near-bg);
+	--color-vtag-near-text: var(--vtag-near-text);
+	--color-vtag-exact-bg: var(--vtag-exact-bg);
+	--color-vtag-exact-text: var(--vtag-exact-text);
 
 	/* --------------------------------------------------------- §7 Scrollbars */
 	--color-scrollbar-thumb: var(--scrollbar-thumb);
@@ -302,6 +324,7 @@
 	--spacing-app-min-width: var(--app-min-width);
 	--spacing-app-min-height: var(--app-min-height);
 	--spacing-evidence-open-height: var(--evidence-open-height);
+	--spacing-ai-h: var(--ai-h);
 
 	/* --------------------------------------------------- §4 Overlay widths */
 	--container-search-field: var(--w-search-field);
@@ -314,6 +337,8 @@
 	--container-permission-confirm: var(--w-permission-confirm);
 	--container-settings: var(--w-settings);
 	--container-col-sidebar: var(--col-sidebar);
+	--container-sidebar: var(--w-sidebar);
+	--container-inspector: var(--w-inspector);
 	--container-tab-min: var(--w-tab-min);
 	--container-tab-max: var(--w-tab-max);
 	--container-crumb-max: var(--w-crumb-max);
@@ -333,6 +358,7 @@
 	--shadow-ql-doc: var(--shadow-ql-doc);
 	--shadow-ql-phone: var(--shadow-ql-phone);
 	--shadow-ql-page-active: var(--shadow-ql-page-active);
+	--shadow-menu: var(--shadow-menu);
 
 	/* ----------------------------------------------------------- §7 Radii */
 	--radius-2: var(--radius-2);

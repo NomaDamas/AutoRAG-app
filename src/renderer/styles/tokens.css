@@ -1,14 +1,15 @@
 /* ============================================================================
- * AI Finder v6 — design tokens
+ * AI Finder v7 — design tokens (Bloom palette)
  *
  * Machine-consumed copy of app/DESIGN.md §2–§7. Every custom property below
  * appears in that document with the same name and the same value.
  *
  * Source of truth:
- *   docs/design-reference/ai-finder/design_handoff_ai_finder_v6/README.md
- * Values the README documents only through the prototype are cited in
- * DESIGN.md as `proto:<line>` against:
- *   docs/design-reference/ai-finder/design_handoff_ai_finder_v6/AI Finder v6.dc.html
+ *   docs/design-reference/ai-finder/design_handoff_ai_finder_v7_bloom/
+ *     AI Finder v7.html — palette in its `:root` block (extracted verbatim to
+ *     /tmp/v7/css_pretty.css line ~2) plus the component rules that name a
+ *     value without a token (.cite, .chk, .vtag, .menu, .water-wave-dot).
+ * Token names are unchanged from v6; only their values moved to Bloom.
  *
  * Do not add, rename, or re-value a token here without changing DESIGN.md in
  * the same commit. Components reference these tokens; they never inline a
@@ -17,16 +18,26 @@
 
 :root {
   /* ---------------------------------------------------------------- §2.1 Surfaces */
-  --bg-desk: #E9E9EE;
+  --bg-desk: #E9EAEE;
   --bg-window: #FFFFFF;
-  --bg-chrome: #F6F6F8;
-  --bg-subtle: #FAFAFB;
+  --bg-sidebar: rgba(235,236,240,0.92);
+  --bg-chrome: #F5F5F7;
+  --bg-subtle: #FAFAFA;
   --bg-subtle-alt: #FAFAFC;
   --bg-input: #F0F0F4;
-  --bg-selected-nav: #EAEAF0;
+  --bg-selected-nav: #E5E5EA;
+  /* v7 Safari-style tab strip (proto:.tabs/.tab). */
+  --bg-tabstrip: #D4D4D8;
+  --border-tabstrip: #C3C3C7;
+  --tab-grad-from: #D8D8DC;
+  --tab-grad-to: #D0D0D4;
+  --tab-grad-hover-from: #CFCFD3;
+  --tab-grad-hover-to: #C8C8CC;
+  --bg-tab-active: #ECECEE;
+  --text-tab: #5D5D62;
   --bg-code: #F4F4F7;
   --bg-chip-sent: #F3F3F7;
-  --bg-tile-fallback: #8A8A9C;
+  --bg-tile-fallback: #888994;
 
   /* -------------------------------------------------------------- §2.10 Quick Look */
   /* The Quick Look panel (src/preview/DESIGN.md), lifted from the owner's
@@ -95,22 +106,22 @@
   --ql-badge-other: #8E8E93;
 
   /* ------------------------------------------------------------ §2.2 Hover washes */
-  --bg-hover: rgba(26,26,46,0.05);
-  --bg-hover-row: rgba(26,26,46,0.04);
-  --bg-hover-icon: rgba(26,26,46,0.06);
-  --bg-hover-strong: rgba(26,26,46,0.08);
+  --bg-hover: rgba(29,29,31,0.05);
+  --bg-hover-row: rgba(29,29,31,0.04);
+  --bg-hover-icon: rgba(29,29,31,0.06);
+  --bg-hover-strong: rgba(29,29,31,0.08);
 
   /* ----------------------------------------------------------------- §2.3 Borders */
-  --border: #E3E3EA;
-  --border-divider: #EDEDF2;
+  --border: #D9DADD;
+  --border-divider: #E7E7EA;
   --border-strong: #C9C9D4;
 
   /* -------------------------------------------------------------------- §2.4 Text */
-  --text-primary: #1A1A2E;
-  --text-body: #3A3A4E;
-  --text-muted: #6E6E80;
-  --text-faint: #A0A0B0;
-  --text-on-accent: #1A1A2E;
+  --text-primary: #1D1D1F;
+  --text-body: #3A3A3C;
+  --text-muted: #6E6E73;
+  --text-faint: #A1A1A6;
+  --text-on-accent: #FFFFFF;
   --text-on-tile: #FFFFFF;
   /* Added by the renderer lane: the Requests count badge is white 11/700 on
    * --accent-text (DESIGN.md §5 StatusDot note, handoff README §1 Footer).
@@ -118,31 +129,38 @@
   --text-on-badge: #FFFFFF;
 
   /* ------------------------------------------------------------------ §2.5 Accent */
-  --accent: #FF6363;
-  --accent-hover: #FF7A7A;
-  --accent-text: #D64545;
-  --accent-text-strong: #C73A3A;
-  --accent-drop-hover: rgba(255,99,99,0.07);
-  --accent-history-current: rgba(255,99,99,0.08);
-  --accent-soft: rgba(255,99,99,0.12);
-  --accent-chat-mark: rgba(255,99,99,0.14);
-  --accent-chip: rgba(255,99,99,0.16);
-  --accent-flash: rgba(255,99,99,0.18);
-  --accent-preview-mark: rgba(255,99,99,0.2);
-  --accent-doc-mark: rgba(255,99,99,0.22);
-  --accent-pending-border: rgba(255,99,99,0.35);
-  --accent-flash-ring: rgba(255,99,99,0.6);
+  --accent: #0A64D8;
+  --accent-hover: #007AFF;
+  --accent-text: #0A64D8;
+  --accent-text-strong: #0A64D8;
+  /* Inactive citation chip wash (v7 `.cite` background). The reference `:root`
+   * names the same value as `--bluewash`. */
+  --accent-wash: #DBEAFE;
+  --accent-drop-hover: rgba(10,100,216,0.07);
+  --accent-history-current: rgba(10,100,216,0.08);
+  --accent-soft: rgba(10,100,216,0.12);
+  --accent-chat-mark: rgba(10,100,216,0.14);
+  --accent-chip: rgba(10,100,216,0.16);
+  --accent-flash: rgba(10,100,216,0.18);
+  --accent-preview-mark: rgba(10,100,216,0.2);
+  --accent-doc-mark: rgba(10,100,216,0.22);
+  --accent-pending-border: rgba(10,100,216,0.35);
+  --accent-flash-ring: rgba(10,100,216,0.6);
+  /* Selection while the zone is unfocused (v7 `--selmute`). */
+  --sel-mute: #D9D9DC;
 
   /* ---------------------------------------------------------- §2.6 Object colors */
-  --folder: #7C86E8;
-  --switch-off: #CFCFD9;
+  --folder: #70A8F5;
+  --folder-stroke: #4C89DC;
+  --folder-front: #8CB9F7;
+  --switch-off: #C9C9CE;
   --highlight-marker: linear-gradient(transparent 55%, rgba(255,214,10,0.55) 55%);
   --traffic-close: #FF5F57;
   --traffic-min: #FEBC2E;
   --traffic-max: #28C840;
 
   /* ------------------------------------------------------------------ §2.7 Status */
-  --ok-dot: #22C55E;
+  --ok-dot: #34C759;
   --ok-text: #15803D;
   --ok-bg: rgba(34,197,94,0.14);
   --ok-bg-soft: rgba(34,197,94,0.12);
@@ -157,8 +175,8 @@
   --info-text: #1D4ED8;
   --info-bg: rgba(59,130,246,0.12);
 
-  --danger-dot: #EF4444;
-  --danger-text: #C62828;
+  --danger-dot: #FF3B30;
+  --danger-text: #FF3B30;
   --danger-bg: rgba(239,68,68,0.12);
   --danger-bg-soft: rgba(239,68,68,0.10);
   --danger-border: rgba(239,68,68,0.4);
@@ -172,29 +190,39 @@
   --index-dot-excluded-ring: inset 0 0 0 1.5px #A0A0B0;
 
   /* ------------------------------------------------------------------ §2.8 Scrims */
-  --scrim-quicklook: rgba(20,20,40,0.16);
-  --scrim-modal: rgba(20,20,40,0.22);
+  --scrim-quicklook: rgba(20,20,25,0.18);
+  --scrim-modal: rgba(20,20,25,0.22);
   --drop-overlay-bg: rgba(250,250,252,0.86);
 
   /* -------------------------------------------------------- §2.9 File-type tiles */
-  --tile-xlsx: oklch(0.62 0.14 150);
-  --tile-csv: oklch(0.58 0.1 175);
-  --tile-pdf: oklch(0.6 0.17 28);
-  --tile-docx: oklch(0.58 0.15 258);
-  --tile-pptx: oklch(0.66 0.15 55);
-  --tile-md: #8A8A9C;
-  --tile-zip: #8A8A9C;
-  --tile-png: oklch(0.58 0.13 305);
-  --tile-slack: oklch(0.52 0.16 340);
-  --tile-mail: oklch(0.58 0.15 12);
-  --tile-notion: #1A1A2E;
+  --tile-xlsx: #36A269;
+  --tile-csv: #2C9C99;
+  --tile-pdf: #DF6846;
+  --tile-docx: #5575C8;
+  --tile-pptx: #E59B3E;
+  --tile-md: #888994;
+  --tile-zip: #888994;
+  --tile-png: #B25BC2;
+  --tile-slack: #BF3E82;
+  --tile-mail: #D35D46;
+  --tile-notion: #1D1D1F;
   --tile-notion-fg: #FFFFFF;
-  --tile-discord: oklch(0.56 0.17 278);
-  --tile-telegram: oklch(0.64 0.13 232);
+  --tile-discord: #6671CF;
+  --tile-telegram: #4F9BD0;
   --tile-contact: oklch(0.52 0.13 285);
 
+  /* ------------------------------------------------------- §2.10 Version tags */
+  /* v7 `.vtag` rules. `near`/`exact` use the reference's exact values, which
+   * differ from the palette plan (plan: #F3E8FD/#7E3FBF and #FDEBD8/#C05F1A). */
+  --vtag-latest-bg: #E3F6E8;
+  --vtag-latest-text: #1F7A3A;
+  --vtag-near-bg: #EFE7FB;
+  --vtag-near-text: #6B3FB5;
+  --vtag-exact-bg: #FFF0DF;
+  --vtag-exact-text: #B45309;
+
   /* -------------------------------------------------------------- §3 Typography */
-  --font-sans: Inter, Pretendard, -apple-system, system-ui, sans-serif;
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Apple SD Gothic Neo", Pretendard, system-ui, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
 
   --font-size-title: 18px;
@@ -258,9 +286,14 @@
   --desk-padding: 18px;
   --app-min-width: 1360px;
   --app-min-height: 820px;
-  --grid-main: 212px minmax(640px, 1.4fr) minmax(440px, 1fr);
-  --col-sidebar: 212px;
+  --grid-main: 220px minmax(0,1fr) 390px;
+  --col-sidebar: 220px;
   --evidence-open-height: 44%;
+  /* v7 window grid columns (sidebar / finder / inspector) and the AI dock's
+   * remembered open height (v7 sets `--ai-h` inline; this is its 280px default). */
+  --w-sidebar: 220px;
+  --w-inspector: 390px;
+  --ai-h: 280px;
 
   /* ----------------------------------------------------------- §4 Component grids */
   --grid-file-row: minmax(0,1fr) 100px 60px 96px 66px;
@@ -303,7 +336,8 @@
   /* ------------------------------------------------------------------ §7 Shadows */
   --shadow-raised: 0 4px 16px rgba(20,20,40,0.08);
   --shadow-drag: 0 4px 16px rgba(20,20,40,0.12);
-  --shadow-window: 0 20px 60px rgba(20,20,40,0.18);
+  --shadow-window: 0 18px 54px rgba(0,0,0,0.18);
+  --shadow-menu: 0 10px 35px rgba(0,0,0,0.2);
   --shadow-ql-panel: inset 0 0 0 0.5px var(--ql-hairline), inset 0 0.5px 0 var(--ql-highlight);
   --shadow-ql-segment: 0 0.5px 1.5px rgba(0,0,0,0.18);
   --shadow-ql-float: 0 0 0 0.5px var(--ql-hairline), 0 4px 14px rgba(0,0,0,0.16);
@@ -332,7 +366,7 @@
 
   /* --------------------------------------------------------------- §7 Scrollbars */
   --scrollbar-size: 10px;
-  --scrollbar-thumb: #E3E3EA;
+  --scrollbar-thumb: #C9C9CE;
   --scrollbar-radius: 10px;
   --scrollbar-inset: 3px;
 }

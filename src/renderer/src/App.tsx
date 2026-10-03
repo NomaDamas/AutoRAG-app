@@ -1,24 +1,35 @@
 import { useCallback, useEffect, useRef, useState, type ReactElement } from "react";
 import type { PreviewBridge, QuickLookTarget } from "../../preview/shared/contract";
 import type { Bounds } from "../../preview/shared/fit";
-import type { SettingsBridge } from "../../shared/settings-contract";
+import type { DataSourcesSnapshot, SettingsBridge } from "../../shared/settings-contract";
 import type { CitationEvidence } from "../../shared/search-contract";
 
 const autorag = (window as unknown as { readonly autorag: { readonly settings: SettingsBridge; readonly preview: PreviewBridge } }).autorag;
-import { AiSearchPanel } from "./components/AiSearchPanel";
-import { EvidencePanel } from "./components/EvidencePanel";
+import { AiSearchPanel, type AiDockHandle } from "./components/AiSearchPanel";
 import { ColumnBrowser } from "./components/ColumnBrowser";
 import { ColumnHeader } from "./components/ColumnHeader";
 import { FileList } from "./components/FileList";
 import type { RowCallbacks } from "./components/FileRow";
 import { IconGrid } from "./components/IconGrid";
+import { Inspector, type InspectorFamily } from "./components/Inspector";
+import { PathBar } from "./components/PathBar";
+import { ScopeBar } from "./components/ScopeBar";
 import { ContextMenu } from "./components/primitives/ContextMenu";
 import { Toast } from "./components/primitives/Toast";
 import { Sidebar } from "./components/Sidebar";
 import { SettingsView } from "./components/SettingsView";
 import { SETTINGS_PATH } from "./state/tabs";
-import { StatusBar } from "./components/StatusBar";
-import { formatDevLabel, type DevLabel } from "../../shared/app-info";
+import { basename, breadcrumbTrail, dirname } from "./state/paths";
+import {
+	loadListColumns,
+	listFixedWidth,
+	resetListColumns,
+	saveListColumns,
+	setListColumnWidth,
+	toggleListColumn,
+	type ListColumnKey,
+	type ListColumnsState,
+} from "./state/list-columns";
 import { TabStrip } from "./components/TabStrip";
 import { Toolbar } from "./components/Toolbar";
 import { useFinderController } from "./hooks/useFinderController";
@@ -26,6 +37,75 @@ import { useFinderSource } from "./hooks/useFinderSource";
 
 /** The reference's `showHotkeys` prop (default true): keycaps on or off. */
 const SHOW_HOTKEYS = true;
+
+const SIDEBAR_KEY = "autorag.shell.sidebar";
+const INSPECTOR_KEY = "autorag.shell.inspector";
+const AI_OPEN_KEY = "autorag.shell.aiOpen";
+const AI_HEIGHT_KEY = "autorag.shell.aiHeight";
+const SIDEBAR_WIDTH_KEY = "autorag.shell.sidebarWidth";
+const INSPECTOR_WIDTH_KEY = "autorag.shell.inspectorWidth";
+
+/** Pane resize limits (px): the sidebar and inspector stay usable at both ends. */
+const SIDEBAR_MIN = 180;
+const SIDEBAR_MAX = 320;
+const INSPECTOR_MIN = 300;
+const INSPECTOR_MAX = 560;
+
+function clampWidth(value: number, min: number, max: number): number {
+	return Math.min(max, Math.max(min, Math.round(value)));
+}
+
+function loadFlag(key: string, fallback: boolean): boolean {
+	try {
+		const value = window.localStorage.getItem(key);
+		return value === null ? fallback : value === "1";
+	} catch {
+		return fallback;
+	}
+}
+
+function saveFlag(key: string, value: boolean): void {
+	try {
+		window.localStorage.setItem(key, value ? "1" : "0");
+	} catch {
+		/* private mode: session-only */
+	}
+}
+
+function loadNumber(key: string, fallback: number): number {
+	try {
+		const value = Number(window.localStorage.getItem(key));
+		return Number.isFinite(value) && value > 0 ? value : fallback;
+	} catch {
+		return fallback;
+	}
+}
+
+function saveNumber(key: string, value: number): void {
+	try {
+		window.localStorage.setItem(key, String(value));
+	} catch {
+		/* private mode: session-only */
+	}
+}
+
+/** Sidebar cloud labels → live datasource rows (status dots). */
+const SOURCE_LABEL_MATCH: readonly (readonly [string, RegExp])[] = [
+	["Google Drive", /gdrive|google[- ]?drive/i],
+	["Dropbox", /dropbox/i],
+	["iCloud Drive", /icloud/i],
+];
+
+function mapSourceStatus(snapshot: DataSourcesSnapshot): Record<string, "syncing" | "error"> {
+	const out: Record<string, "syncing" | "error"> = {};
+	for (const [label, needle] of SOURCE_LABEL_MATCH) {
+		const row = snapshot.sources.find((source) => needle.test(source.id) || needle.test(source.type));
+		if (row === undefined) continue;
+		if (row.status === "syncing") out[label] = "syncing";
+		else if (row.status === "attention") out[label] = "error";
+	}
+	return out;
+}
 
 /**
  * The visible Finder icon for `path`, in viewport CSS pixels: Quick Look zooms
@@ -42,11 +122,45 @@ function iconRect(path: string): Bounds | null {
 	return { x: box.x, y: box.y, width: box.width, height: box.height };
 }
 
-/** Unpackaged runs label the window with their clone, branch, and commit. */
-const DEV_LABEL = (() => {
-	const dev = (window as unknown as { readonly autorag?: { readonly dev?: DevLabel | null } }).autorag?.dev;
-	return dev === undefined || dev === null ? null : formatDevLabel(dev);
-})();
+/** Vertical pane resize grip: an invisible 6px hit strip with a hover wash. */
+function PaneGrip({
+	position,
+	label,
+	onDelta,
+}: {
+	readonly position: { readonly left: number } | { readonly right: number };
+	readonly label: string;
+	/** Incremental horizontal delta (px) since the last move event. */
+	readonly onDelta: (dx: number) => void;
+}): ReactElement {
+	const drag = useRef<number | null>(null);
+	return (
+		<div
+			role="separator"
+			aria-label={label}
+			aria-orientation="vertical"
+			className="absolute top-0 bottom-0 z-20 w-6 cursor-col-resize [-webkit-app-region:no-drag] hover:bg-accent-soft"
+			style={position}
+			onPointerDown={(event) => {
+				event.preventDefault();
+				drag.current = event.clientX;
+				event.currentTarget.setPointerCapture(event.pointerId);
+			}}
+			onPointerMove={(event) => {
+				if (drag.current === null) return;
+				onDelta(event.clientX - drag.current);
+				drag.current = event.clientX;
+			}}
+			onPointerUp={(event) => {
+				drag.current = null;
+				event.currentTarget.releasePointerCapture(event.pointerId);
+			}}
+			onPointerCancel={() => {
+				drag.current = null;
+			}}
+		/>
+	);
+}
 
 export function App(): ReactElement {
 	const source = useFinderSource();
@@ -67,10 +181,40 @@ export function App(): ReactElement {
 		setPreview(null);
 	}, []);
 	const isQuickLookOpen = useCallback(() => previewRef.current !== null, []);
-	const finder = useFinderController(source, {
-		showHiddenFiles,
-		quickLook: { onQuickLook: openQuickLook, closeQuickLook, isQuickLookOpen },
-	});
+
+	/* ------------------------------------------------ v7 shell chrome state */
+	const [sidebarVisible, setSidebarVisible] = useState(() => loadFlag(SIDEBAR_KEY, true));
+	const [inspectorVisible, setInspectorVisible] = useState(() => loadFlag(INSPECTOR_KEY, true));
+	const [aiOpen, setAiOpen] = useState(() => loadFlag(AI_OPEN_KEY, true));
+	const [aiHeight, setAiHeight] = useState(() => loadNumber(AI_HEIGHT_KEY, 280));
+	const [sidebarWidth, setSidebarWidth] = useState(() => loadNumber(SIDEBAR_WIDTH_KEY, 220));
+	const [inspectorWidth, setInspectorWidth] = useState(() => loadNumber(INSPECTOR_WIDTH_KEY, 390));
+	const [listColumns, setListColumns] = useState<ListColumnsState>(loadListColumns);
+	const [sourceStatus, setSourceStatus] = useState<Readonly<Record<string, "syncing" | "error">>>({});
+	const aiDockRef = useRef<AiDockHandle | null>(null);
+
+	useEffect(() => saveFlag(SIDEBAR_KEY, sidebarVisible), [sidebarVisible]);
+	useEffect(() => saveFlag(INSPECTOR_KEY, inspectorVisible), [inspectorVisible]);
+	useEffect(() => saveFlag(AI_OPEN_KEY, aiOpen), [aiOpen]);
+	useEffect(() => saveNumber(AI_HEIGHT_KEY, aiHeight), [aiHeight]);
+	useEffect(() => saveNumber(SIDEBAR_WIDTH_KEY, sidebarWidth), [sidebarWidth]);
+	useEffect(() => saveNumber(INSPECTOR_WIDTH_KEY, inspectorWidth), [inspectorWidth]);
+	useEffect(() => saveListColumns(listColumns), [listColumns]);
+
+	useEffect(() => {
+		let live = true;
+		autorag.settings
+			.sourcesList()
+			.then((snapshot) => {
+				if (live) setSourceStatus(mapSourceStatus(snapshot));
+			})
+			.catch(() => undefined);
+		return () => {
+			live = false;
+		};
+	}, []);
+
+	/* --------------------------------------------------------- evidence state */
 	const [evidence, setEvidence] = useState<readonly CitationEvidence[]>([]);
 	const [evidenceSession, setEvidenceSession] = useState<string | null>(null);
 	const [selectedEvidence, setSelectedEvidence] = useState<number | null>(null);
@@ -80,6 +224,43 @@ export function App(): ReactElement {
 		setEvidence(items);
 		setEvidenceSession(sessionId);
 		setSelectedEvidence((current) => (current !== null && items.some((item) => item.number === current) ? current : null));
+	}, []);
+
+	const dismissEvidence = useCallback((): boolean => {
+		if (evidence.length > 0 && evidenceOpen) {
+			setEvidenceOpen(false);
+			return true;
+		}
+		return false;
+	}, [evidence.length, evidenceOpen]);
+
+	const finder = useFinderController(source, {
+		showHiddenFiles,
+		quickLook: { onQuickLook: openQuickLook, closeQuickLook, isQuickLookOpen },
+		onFocusComposer: () => {
+			setAiOpen(true);
+			aiDockRef.current?.focusComposer();
+		},
+		onDismissEvidence: dismissEvidence,
+	});
+
+	/** ⌥Enter "content search": hand the query to the AI dock (real librarian search). */
+	const contentSearch = useCallback((text: string) => {
+		if (text.trim() === "") return;
+		setAiOpen(true);
+		aiDockRef.current?.sendQuery(text);
+	}, []);
+
+	/** Inspector "AI 요약": attach the file to the composer and focus it. */
+	const askAi = useCallback((entry: { readonly path: string; readonly name: string }) => {
+		setAiOpen(true);
+		aiDockRef.current?.attachFile({ kind: "file", id: entry.path, name: entry.name });
+	}, []);
+
+	const selectEvidence = useCallback((number: number) => {
+		setSelectedEvidence(number);
+		setEvidenceOpen(true);
+		setInspectorVisible(true);
 	}, []);
 
 	useEffect(() => {
@@ -140,16 +321,84 @@ export function App(): ReactElement {
 		onVisible: finder.noteVisible,
 	};
 
+	const focused = finder.focusedEntry;
+	const familyEntries = focused !== null ? finder.familyEntriesFor(focused.path) : null;
+	const inspectorFamily: InspectorFamily | null =
+		familyEntries === null
+			? null
+			: {
+					headPath: familyEntries.head.path,
+					headName: familyEntries.head.name,
+					members: familyEntries.members.map((member) => ({
+						path: member.entry.path,
+						name: member.entry.name,
+						relation: member.relation,
+						where: dirname(member.entry.path),
+					})),
+				};
+	const variantColumn =
+		familyEntries !== null && finder.layout === "columns" && familyEntries.members.length > 0
+			? { count: familyEntries.members.length, rows: familyEntries.members }
+			: null;
+	const openMemberEntry = useCallback(
+		(path: string) => {
+			const entry =
+				familyEntries?.members.find((member) => member.entry.path === path)?.entry ??
+				(familyEntries?.head.path === path ? familyEntries.head : undefined);
+			if (entry !== undefined) finder.revealEntry(entry);
+		},
+		[familyEntries, finder],
+	);
+
+	const toolbarTitle =
+		finder.path === SETTINGS_PATH
+			? "Settings"
+			: finder.searching
+				? `Search "${finder.query}"`
+				: basename(finder.path);
+	const gridColumns = `${sidebarVisible ? `${sidebarWidth}px ` : ""}minmax(0,1fr)${inspectorVisible ? ` ${inspectorWidth}px` : ""}`;
+
 	return (
 		<div className="desk flex h-full bg-window">
-			<div className="window relative grid grid-cols-(--grid-main) flex-1 min-w-0 bg-window overflow-hidden">
-				<Sidebar
-					activeLabel={finder.activeNavLabel}
-					showHotkeys={SHOW_HOTKEYS}
-					onNavigate={finder.navigateNav}
-					onOpenSettings={finder.openSettings}
-				/>
+			<div
+				className="window relative grid flex-1 min-w-0 bg-window overflow-hidden"
+				style={{ gridTemplateColumns: gridColumns }}
+			>
+				{sidebarVisible ? (
+					<Sidebar
+						activeLabel={finder.activeNavLabel}
+						showHotkeys={SHOW_HOTKEYS}
+						onNavigate={finder.navigateNav}
+						onOpenSettings={finder.openSettings}
+						onHideSidebar={() => setSidebarVisible(false)}
+						onNewFolder={finder.newFolder}
+						sourceStatus={sourceStatus}
+					/>
+				) : null}
 				<section className="finder flex flex-col min-w-0 min-h-0" aria-label="Finder" onMouseDown={finder.focusFinder}>
+					<Toolbar
+						title={toolbarTitle}
+						canGoBack={finder.canGoBack}
+						canGoForward={finder.canGoForward}
+						onBack={finder.back}
+						onForward={finder.forward}
+						viewMode={finder.viewMode}
+						onViewModeChange={finder.setViewMode}
+						inspectorVisible={inspectorVisible}
+						onToggleInspector={() => setInspectorVisible((visible) => !visible)}
+						committedQuery={finder.query}
+						onCommitQuery={finder.setQuery}
+						onContentSearch={contentSearch}
+						searchRef={finder.searchRef}
+						searchFocused={finder.searchFocused}
+						onSearchFocus={() => finder.setSearchFocused(true)}
+						onSearchBlur={() => finder.setSearchFocused(false)}
+						showHotkeys={SHOW_HOTKEYS}
+						placeholder={finder.searchPlaceholder}
+						sidebarHidden={!sidebarVisible}
+						onShowSidebar={() => setSidebarVisible(true)}
+						onNewFolder={finder.newFolder}
+					/>
 					<TabStrip
 						tabs={finder.tabs}
 						canClose={finder.canCloseTabs}
@@ -157,100 +406,137 @@ export function App(): ReactElement {
 						onClose={finder.closeTabId}
 						onNewTab={finder.newTab}
 					/>
-					<Toolbar
-						crumbs={finder.crumbs}
-						canGoBack={finder.canGoBack}
-						canGoForward={finder.canGoForward}
-						query={finder.query}
-						placeholder={finder.searchPlaceholder}
-						searchFocused={finder.searchFocused}
-						showHotkeys={SHOW_HOTKEYS}
-						searchRef={finder.searchRef}
-						viewMode={finder.viewMode}
-						onViewModeChange={finder.setViewMode}
-						onNavigate={finder.navigate}
-						onBack={finder.back}
-						onForward={finder.forward}
-						onQueryChange={finder.setQuery}
-						onSearchKeyDown={finder.onSearchKeyDown}
-						onSearchFocus={() => finder.setSearchFocused(true)}
-						onSearchBlur={() => finder.setSearchFocused(false)}
-					/>
 					{finder.path === SETTINGS_PATH ? (
 						<SettingsView onSettingsChanged={(settings) => setShowHiddenFiles(settings.showHiddenFiles)} />
-					) : finder.layout === "icons" ? (
-						<IconGrid
-							rows={finder.stackRows}
-							listRef={finder.listRef}
-							searching={finder.searching}
-							summary={finder.searchSummary}
-							emptyText={finder.emptyText}
-							selectedKeys={finder.selection.keys}
-							focusedZone={finder.zone === "finder"}
-							flashPath={finder.flashPath}
-							renamePath={finder.renamePath}
-							renameDraft={finder.renameDraft}
-							versionFamilyError={finder.versionFamilyError}
-							onRetryVersionFamilies={finder.retryVersionFamilies}
-							callbacks={rowCallbacks}
-						/>
-					) : finder.layout === "columns" ? (
-						<ColumnBrowser
-							panes={finder.columnPanes}
-							listRef={finder.listRef}
-							emptyText={finder.emptyText}
-							selectedKeys={finder.selection.keys}
-							focusedZone={finder.zone === "finder"}
-							flashPath={finder.flashPath}
-							renamePath={finder.renamePath}
-							renameDraft={finder.renameDraft}
-							versionFamilyError={finder.versionFamilyError}
-							onRetryVersionFamilies={finder.retryVersionFamilies}
-							columnCallbacks={{ onClick: finder.clickColumnRow }}
-							callbacks={rowCallbacks}
-						/>
 					) : (
 						<>
-							<ColumnHeader sort={finder.sort} searching={finder.searching} onSort={finder.sortBy} />
-							<FileList
-								rows={finder.stackRows}
-								listPath={finder.path}
-								versionFamilyError={finder.versionFamilyError}
-								onRetryVersionFamilies={finder.retryVersionFamilies}
-								listRef={finder.listRef}
-								searching={finder.searching}
-								summary={finder.searchSummary}
-								emptyText={finder.emptyText}
-								selectedKeys={finder.selection.keys}
-								focusedZone={finder.zone === "finder"}
-								flashPath={finder.flashPath}
-								renamePath={finder.renamePath}
-								renameDraft={finder.renameDraft}
-								indexStatus={finder.indexStatus}
-								callbacks={rowCallbacks}
+							{finder.searching ? (
+								<ScopeBar
+									scope={finder.searchScope}
+									folderName={basename(finder.path)}
+									resultCount={finder.rows.length}
+									onScopeChange={finder.setSearchScope}
+								/>
+							) : null}
+							{finder.layout === "icons" ? (
+								<IconGrid
+									rows={finder.stackRows}
+									listRef={finder.listRef}
+									searching={finder.searching}
+									emptyText={finder.emptyText}
+									selectedKeys={finder.selection.keys}
+									focusedZone={finder.zone === "finder"}
+									flashPath={finder.flashPath}
+									renamePath={finder.renamePath}
+									renameDraft={finder.renameDraft}
+									versionFamilyError={finder.versionFamilyError}
+									onRetryVersionFamilies={finder.retryVersionFamilies}
+									callbacks={rowCallbacks}
+								/>
+							) : finder.layout === "columns" ? (
+								<ColumnBrowser
+									panes={finder.columnPanes}
+									listRef={finder.listRef}
+									emptyText={finder.emptyText}
+									selectedKeys={finder.selection.keys}
+									focusedZone={finder.zone === "finder"}
+									flashPath={finder.flashPath}
+									renamePath={finder.renamePath}
+									renameDraft={finder.renameDraft}
+									versionFamilyError={finder.versionFamilyError}
+									onRetryVersionFamilies={finder.retryVersionFamilies}
+									variantColumn={variantColumn}
+									onSelectVariant={finder.revealEntry}
+									columnCallbacks={{ onClick: finder.clickColumnRow }}
+									callbacks={rowCallbacks}
+								/>
+							) : (
+								<div className="flex min-h-0 flex-1 flex-col overflow-x-auto">
+									<ColumnHeader
+										sort={finder.sort}
+										searching={finder.searching}
+										onSort={finder.sortBy}
+										columns={listColumns}
+										minWidth={listFixedWidth(listColumns)}
+										onToggleColumn={(key: ListColumnKey) => setListColumns((current) => toggleListColumn(current, key))}
+										onResetColumns={() => setListColumns(resetListColumns())}
+										onResizeColumn={(key: string, px: number) => setListColumns((current) => setListColumnWidth(current, key, px))}
+									/>
+									<FileList
+										rows={finder.stackRows}
+										listPath={finder.path}
+										columns={listColumns}
+										minWidth={listFixedWidth(listColumns)}
+										versionFamilyError={finder.versionFamilyError}
+										onRetryVersionFamilies={finder.retryVersionFamilies}
+										listRef={finder.listRef}
+										searching={finder.searching}
+										emptyText={finder.emptyText}
+										selectedKeys={finder.selection.keys}
+										focusedZone={finder.zone === "finder"}
+										flashPath={finder.flashPath}
+										renamePath={finder.renamePath}
+										renameDraft={finder.renameDraft}
+										indexStatus={finder.indexStatus}
+										callbacks={rowCallbacks}
+									/>
+								</div>
+							)}
+							<PathBar
+								crumbs={breadcrumbTrail(finder.path, Number.MAX_SAFE_INTEGER)}
+								selectedName={focused !== null && focused.kind === "file" ? focused.name : null}
+								onNavigate={finder.navigate}
 							/>
 						</>
 					)}
-					<StatusBar text={finder.statusText} showHotkeys={SHOW_HOTKEYS} devLabel={DEV_LABEL} />
-					{evidence.length === 0 ? null : (
-						<EvidencePanel
-							evidence={evidence}
-							sessionId={evidenceSession}
-							selected={evidenceSelectedNumber}
-							open={evidenceOpen}
-							onToggleOpen={() => setEvidenceOpen((open) => !open)}
-							onSelect={(number) => {
-								setSelectedEvidence(number);
-								setEvidenceOpen(true);
-							}}
-							onQuickLook={finder.quickLookPath}
-							onReveal={finder.revealEvidence}
-							onToast={finder.showToast}
-						/>
-					)}
+					<AiSearchPanel
+						ref={aiDockRef}
+						open={aiOpen}
+						height={aiHeight}
+						onToggleOpen={() => setAiOpen((open) => !open)}
+						onHeightChange={setAiHeight}
+						selectedEvidence={evidence.length === 0 ? null : evidenceSelectedNumber}
+						onSelectEvidence={selectEvidence}
+						onPublish={publishEvidence}
+					/>
 				</section>
-				<AiSearchPanel selectedEvidence={evidence.length === 0 ? null : evidenceSelectedNumber} onSelectEvidence={(number) => { setSelectedEvidence(number); setEvidenceOpen(true); }} onPublish={publishEvidence} />
+				{inspectorVisible ? (
+					<Inspector
+						entry={focused}
+						indexStatus={focused !== null ? (finder.indexStatus[focused.path] ?? null) : null}
+						onToggleIndex={finder.toggleIndex}
+						onTrash={finder.trashEntry}
+						onCopyPath={finder.copyEntryPath}
+						onQuickLook={(entry) => finder.quickLookPath(entry.path)}
+						onAskAi={askAi}
+						family={inspectorFamily}
+						onOpenMember={openMemberEntry}
+						evidence={evidence}
+						evidenceVisible={evidence.length > 0 && evidenceOpen}
+						evidenceSelected={evidenceSelectedNumber}
+						sessionId={evidenceSession}
+						onSelectEvidence={selectEvidence}
+						onCloseEvidence={() => setEvidenceOpen(false)}
+						onRevealPath={finder.revealEvidence}
+						onQuickLookPath={finder.quickLookPath}
+						onToast={finder.showToast}
+					/>
+				) : null}
 				{finder.toast === null ? null : <Toast message={finder.toast} />}
+				{sidebarVisible ? (
+					<PaneGrip
+						position={{ left: sidebarWidth - 3 }}
+						label="Resize sidebar"
+						onDelta={(dx) => setSidebarWidth((width) => clampWidth(width + dx, SIDEBAR_MIN, SIDEBAR_MAX))}
+					/>
+				) : null}
+				{inspectorVisible ? (
+					<PaneGrip
+						position={{ right: inspectorWidth - 3 }}
+						label="Resize inspector"
+						onDelta={(dx) => setInspectorWidth((width) => clampWidth(width - dx, INSPECTOR_MIN, INSPECTOR_MAX))}
+					/>
+				) : null}
 			</div>
 			{finder.contextMenu === null ? null : (
 				<ContextMenu

@@ -94,12 +94,12 @@ try {
 	app = await launchFinder({ userDataDir, env: { HOME: home } });
 	const page = await finderWindow(app);
 	await page.setViewportSize({ width: 1500, height: 900 }).catch(() => {});
-	await page.waitForSelector(".crumb--last", { timeout: 30000 });
+	await page.waitForSelector(".toolbar-title", { timeout: 30000 });
 	await page.getByLabel("Places").getByRole("button", { name: "Documents", exact: true }).click();
 	const topRow = page.locator('[role="row"]').filter({ hasText: top }).first();
 	await topRow.waitFor({ timeout: 30000 });
 	await topRow.dblclick();
-	await page.waitForFunction((name) => document.querySelector(".crumb--last")?.textContent === name, top);
+	await page.waitForFunction((name) => document.querySelector(".toolbar-title")?.textContent === name, top);
 	await page.locator('[role="row"]').filter({ hasText: "notes.md" }).waitFor();
 
 	const toggle = page.getByRole("group", { name: "View" });
@@ -141,12 +141,12 @@ try {
 	check("C2 ArrowLeft moves to the previous tile", await page.locator('.icon-tile[aria-selected="true"]').getAttribute("aria-label"), "blue.png");
 	await page.screenshot({ path: `${EVIDENCE}/icons.png` });
 	await page.locator('.icon-tile[aria-label="alpha"]').dblclick();
-	await page.waitForFunction(() => document.querySelector(".crumb--last")?.textContent === "alpha");
+	await page.waitForFunction(() => document.querySelector(".toolbar-title")?.textContent === "alpha");
 	await page.waitForSelector('.icon-tile[aria-label="alpha-1.md"]');
-	check("C2 double-click on a folder tile opens it", await page.locator(".crumb--last").textContent(), "alpha");
+	check("C2 double-click on a folder tile opens it", await page.locator(".toolbar-title").textContent(), "alpha");
 	check("C2 opened folder shows its tiles", await page.locator(".icon-tile").count(), tree[`${topPath}/alpha`].length);
 	await page.getByRole("button", { name: "Back" }).click();
-	await page.waitForFunction((name) => document.querySelector(".crumb--last")?.textContent === name, top);
+	await page.waitForFunction((name) => document.querySelector(".toolbar-title")?.textContent === name, top);
 
 	// ----- C4 keyboard mode switching + list regression
 	await page.locator(".finder").click({ position: { x: 5, y: 200 } }).catch(() => {});
@@ -160,67 +160,69 @@ try {
 	await page.waitForSelector(".icon-grid");
 	check("C4 ⌘1 shows the icons", await pressed(), ["Icons=true", "List=false", "Columns=false"]);
 	await page.keyboard.press("Meta+3");
-	await page.waitForSelector(".column-pane");
+	await page.waitForSelector(".column");
 	check("C4 ⌘3 shows the columns", await pressed(), ["Icons=false", "List=false", "Columns=true"]);
 
 	// ----- C3 columns
-	const panes = () => page.locator(".column-pane").evaluateAll((nodes) => nodes.map((n) => n.getAttribute("data-path")));
+	const panes = () => page.locator(".column").evaluateAll((nodes) => nodes.map((n) => n.getAttribute("data-path")));
 	const paneNames = (index) =>
-		page.locator(".column-pane").nth(index).locator(".column-row").evaluateAll((rows) => rows.map((r) => r.getAttribute("aria-label")).sort());
+		page.locator(".column").nth(index).locator(".column-row").evaluateAll((rows) => rows.map((r) => r.getAttribute("aria-label")).sort());
 	check("C3 columns start with the current folder only", await panes(), [topPath]);
-	await page.locator(`.column-pane[data-path="${topPath}"] .column-row[aria-label="alpha"]`).click();
-	await page.waitForFunction(() => document.querySelectorAll(".column-pane").length === 2);
+	await page.locator(`.column[data-path="${topPath}"] .column-row[aria-label="alpha"]`).click();
+	await page.waitForFunction(() => document.querySelectorAll(".column").length === 2);
 	check("C3 folder in pane 1 opens pane 2", await panes(), [topPath, `${topPath}/alpha`]);
-	await page.waitForSelector(`.column-pane[data-path="${topPath}/alpha"] .column-row`);
+	await page.waitForSelector(`.column[data-path="${topPath}/alpha"] .column-row`);
 	check("C3 pane 2 lists the folder's children", await paneNames(1), ["alpha-1.md", "alpha-2.md", "beta"]);
-	await page.locator(`.column-pane[data-path="${topPath}/alpha"] .column-row[aria-label="beta"]`).click();
-	await page.waitForFunction(() => document.querySelectorAll(".column-pane").length === 3);
-	await page.waitForSelector(`.column-pane[data-path="${topPath}/alpha/beta"] .column-row`);
+	await page.locator(`.column[data-path="${topPath}/alpha"] .column-row[aria-label="beta"]`).click();
+	await page.waitForFunction(() => document.querySelectorAll(".column").length === 3);
+	await page.waitForSelector(`.column[data-path="${topPath}/alpha/beta"] .column-row`);
 	check("C3 subfolder in pane 2 opens pane 3", await panes(), [topPath, `${topPath}/alpha`, `${topPath}/alpha/beta`]);
 	check("C3 pane 3 lists the sub-subfolder", await paneNames(2), ["beta-1.md", "gamma"]);
-	const openedClasses = (await page.locator(`.column-pane[data-path="${topPath}"] .column-row[aria-label="alpha"]`).getAttribute("class")).split(" ");
+	// v7 marks the opened-but-not-selected folder row by muting it (`text-ink-muted`)
+	// instead of the v6 `column-row--opened` modifier; the selected state stays on aria-selected.
+	const openedRow = page.locator(`.column[data-path="${topPath}"] .column-row[aria-label="alpha"]`);
 	check(
 		"C3 the opened folder stays marked in pane 1",
-		[openedClasses.includes("column-row--opened"), openedClasses.includes("column-row--selected")],
-		[true, false],
+		[(await openedRow.getAttribute("class")).includes("text-ink-muted"), await openedRow.getAttribute("aria-selected")],
+		[true, "false"],
 	);
 	await page.screenshot({ path: `${EVIDENCE}/columns-3.png` });
-	await page.locator(`.column-pane[data-path="${topPath}/alpha/beta"] .column-row[aria-label="gamma"]`).click();
-	await page.waitForFunction((p) => document.querySelector(".column-pane")?.getAttribute("data-path") === p, `${topPath}/alpha`);
-	await page.waitForSelector(`.column-pane[data-path="${topPath}/alpha/beta/gamma"] .column-row`);
+	await page.locator(`.column[data-path="${topPath}/alpha/beta"] .column-row[aria-label="gamma"]`).click();
+	await page.waitForFunction((p) => document.querySelector(".column")?.getAttribute("data-path") === p, `${topPath}/alpha`);
+	await page.waitForSelector(`.column[data-path="${topPath}/alpha/beta/gamma"] .column-row`);
 	check("C3 folder in pane 3 slides the panes (still 3, pane 1 = old pane 2)", await panes(), [`${topPath}/alpha`, `${topPath}/alpha/beta`, `${topPath}/alpha/beta/gamma`]);
 	check("C3 slid pane 3 lists gamma", await paneNames(2), ["delta.txt"]);
-	check("C3 breadcrumb follows the first pane", await page.locator(".crumb--last").textContent(), "alpha");
+	check("C3 breadcrumb follows the first pane", await page.locator(".toolbar-title").textContent(), "alpha");
 	await page.screenshot({ path: `${EVIDENCE}/columns-slid.png` });
-	await page.locator(`.column-pane[data-path="${topPath}/alpha/beta/gamma"] .column-row[aria-label="delta.txt"]`).click();
+	await page.locator(`.column[data-path="${topPath}/alpha/beta/gamma"] .column-row[aria-label="delta.txt"]`).click();
 	await page.keyboard.press("ArrowLeft");
 	check("C3 ArrowLeft moves back to the parent folder row", await page.locator('.column-row[aria-selected="true"]').getAttribute("aria-label"), "gamma");
 	await page.keyboard.press("ArrowLeft");
 	await page.keyboard.press("ArrowLeft");
-	await page.waitForFunction((p) => document.querySelector(".column-pane")?.getAttribute("data-path") === p, topPath);
+	await page.waitForFunction((p) => document.querySelector(".column")?.getAttribute("data-path") === p, topPath);
 	// Like Finder, stepping left closes the rightmost pane: the focused folder's contents stay open.
 	check("C3 ArrowLeft past pane 1 slides the panes back", await panes(), [topPath, `${topPath}/alpha`]);
 	check("C3 slid-back focus is the folder it slid from", await page.locator('.column-row[aria-selected="true"]').getAttribute("aria-label"), "alpha");
-	await page.locator(`.column-pane[data-path="${topPath}"] .column-row[aria-label="notes.md"]`).click();
+	await page.locator(`.column[data-path="${topPath}"] .column-row[aria-label="notes.md"]`).click();
 	check("C3 choosing a file closes the deeper panes", await panes(), [topPath]);
 
 	// Column-view context menu rename in pane 2
-	await page.locator(`.column-pane[data-path="${topPath}"] .column-row[aria-label="alpha"]`).click();
-	await page.waitForSelector(`.column-pane[data-path="${topPath}/alpha"] .column-row[aria-label="alpha-1.md"]`);
-	await page.locator(`.column-pane[data-path="${topPath}/alpha"] .column-row[aria-label="alpha-1.md"]`).click({ button: "right" });
+	await page.locator(`.column[data-path="${topPath}"] .column-row[aria-label="alpha"]`).click();
+	await page.waitForSelector(`.column[data-path="${topPath}/alpha"] .column-row[aria-label="alpha-1.md"]`);
+	await page.locator(`.column[data-path="${topPath}/alpha"] .column-row[aria-label="alpha-1.md"]`).click({ button: "right" });
 	await page.getByRole("menuitem", { name: /이름 변경/ }).click();
 	await page.keyboard.press("Meta+a");
 	await page.keyboard.type("alpha-renamed.md");
 	await page.keyboard.press("Enter");
-	await page.waitForSelector(`.column-pane[data-path="${topPath}/alpha"] .column-row[aria-label="alpha-renamed.md"]`, { timeout: 10000 });
+	await page.waitForSelector(`.column[data-path="${topPath}/alpha"] .column-row[aria-label="alpha-renamed.md"]`, { timeout: 10000 });
 	check("C3 rename from pane 2 renames on disk", await Bun.file(`${topPath}/alpha/alpha-renamed.md`).exists(), true);
 
 	// Persistence: the chosen mode survives a relaunch.
 	await app.close();
 	app = await launchFinder({ userDataDir, env: { HOME: home } });
 	const relaunched = await finderWindow(app);
-	await relaunched.waitForSelector(".view-toggle");
-	await relaunched.waitForSelector(".column-pane", { timeout: 30000 });
+	await relaunched.waitForSelector(".seg");
+	await relaunched.waitForSelector(".column", { timeout: 30000 });
 	check(
 		"C4 the chosen mode survives a relaunch",
 		await relaunched.getByRole("group", { name: "View" }).locator("button[aria-pressed=true]").getAttribute("aria-label"),

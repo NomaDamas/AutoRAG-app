@@ -7,21 +7,8 @@
  */
 
 import { type FileKind, kindFromExtension } from "./kinds";
-import { pathSegments } from "./paths";
 
-export interface EvidenceCrumb {
-	readonly label: string;
-	/** The file/id tail renders in 600 weight; folders render 400. */
-	readonly last: boolean;
-}
-
-/** Breadcrumb segments of a source path or a datasource virtual id. */
-export function evidenceCrumbs(source: string): readonly EvidenceCrumb[] {
-	const segments = pathSegments(source);
-	return segments.map((label, index) => ({ label, last: index === segments.length - 1 }));
-}
-
-/** Confidence as a percentage, shown right of the breadcrumb row. */
+/** Confidence as a percentage, shown right of the source line. */
 export function evidenceDetail(confidence: number): string {
 	return `관련도 ${Math.round(confidence * 100)}%`;
 }

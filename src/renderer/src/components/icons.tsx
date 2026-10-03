@@ -13,27 +13,36 @@
 
 import {
 	ArrowUp,
+	Check,
 	ChevronLeft,
 	ChevronRight,
 	ChevronUp,
 	ChevronsUp,
 	Columns3,
+	Copy,
 	Database,
 	Eye,
+	FolderPlus,
 	History,
 	LayoutGrid,
 	List,
+	PanelLeft,
+	PanelRight,
 	Pencil,
 	Plus,
 	RotateCw,
+	Rows3,
 	Search,
 	Send,
 	Settings,
+	Share,
 	Sparkles,
 	ThumbsDown,
 	ThumbsUp,
+	Trash2,
 	Users,
 	X,
+	createLucideIcon,
 	type LucideIcon,
 } from "lucide-react";
 import type { ReactElement } from "react";
@@ -73,9 +82,32 @@ export const ThumbsUpIcon = glyph(ThumbsUp, 14, 2);
 
 export const ThumbsDownIcon = glyph(ThumbsDown, 14, 2);
 
+/** Inspector badges: 12px check / copy / trash, matching the reference's `icon(...,12)`. */
+export const CheckIcon = glyph(Check, 12, 2.4);
+
+export const CopyIcon = glyph(Copy, 12, 2);
+
+export const TrashIcon = glyph(Trash2, 12, 2);
+
+export const ShareIcon = glyph(Share, 14, 2);
+
 export const CloseIcon = glyph(X, 10, 3);
 
 export const PlusIcon = glyph(Plus, 14, 2.4);
+
+/**
+ * Tab strip: the reference's `icon('close',11)` / `icon('plus',14)` at the
+ * default stroke. lucide's `X` and `Plus` split the strokes into separate
+ * `<path>`s, which Chromium rasterizes with a soft fringe the reference's
+ * single path does not have, so these carry the reference's path data.
+ */
+const TabX = createLucideIcon("tab-x", [["path", { d: "M6 6l12 12M18 6 6 18", key: "tab-x" }]]);
+
+const TabPlus = createLucideIcon("tab-plus", [["path", { d: "M12 5v14M5 12h14", key: "tab-plus" }]]);
+
+export const TabCloseIcon = glyph(TabX, 11);
+
+export const TabPlusIcon = glyph(TabPlus, 14);
 
 export const SendIcon = glyph(Send, 16, 2.4);
 
@@ -94,6 +126,15 @@ export const IconsViewIcon = glyph(LayoutGrid, 16, 1.9);
 export const ListViewIcon = glyph(List, 16, 1.9);
 
 export const ColumnsViewIcon = glyph(Columns3, 16, 1.9);
+
+export const ListRowsIcon = glyph(Rows3, 16, 1.9);
+
+export const PanelLeftIcon = glyph(PanelLeft, 16, 1.9);
+
+export const PanelRightIcon = glyph(PanelRight, 16, 1.9);
+
+export const FolderPlusIcon = glyph(FolderPlus, 16, 1.9);
+
 export const DatabaseIcon = glyph(Database, 16, 1.8);
 
 export const UsersIcon = glyph(Users, 16, 1.8);

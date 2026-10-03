@@ -5,8 +5,8 @@
  * Root/Thumb, data-state attributes). The `settings-switch` /
  * `settings-switch__thumb` class names stay as stable selectors (QA drives
  * them); the shadcn Tailwind utilities resolve through the tokens.css bridge
- * to the v6 handoff tokens, not the shadcn palette
- * (#FF6363 checked / #CFCFD9 off).
+ * to the v7 Bloom tokens, not the shadcn palette
+ * (`--accent` checked / `--switch-off` off).
  */
 
 import type { ReactElement } from "react";

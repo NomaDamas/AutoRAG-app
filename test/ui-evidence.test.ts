@@ -1,32 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
-	evidenceCrumbs,
 	evidenceDetail,
 	evidenceKind,
 	feedbackToastText,
 	nextEvidenceFeedback,
 } from "../src/renderer/src/state/evidence";
-
-describe("evidenceCrumbs", () => {
-	it("splits an OS-absolute path and marks the last segment bold", () => {
-		expect(evidenceCrumbs("/Users/me/Documents/Finance/Q3_마케팅예산_v3.xlsx")).toEqual([
-			{ label: "Users", last: false },
-			{ label: "me", last: false },
-			{ label: "Documents", last: false },
-			{ label: "Finance", last: false },
-			{ label: "Q3_마케팅예산_v3.xlsx", last: true },
-		]);
-	});
-
-	it("handles datasource virtual ids the same way (display only)", () => {
-		expect(evidenceCrumbs("/kakao/qa-instance/chunks/42")).toEqual([
-			{ label: "kakao", last: false },
-			{ label: "qa-instance", last: false },
-			{ label: "chunks", last: false },
-			{ label: "42", last: true },
-		]);
-	});
-});
 
 describe("evidenceDetail", () => {
 	it("shows the confidence as a percentage", () => {
