@@ -36,6 +36,8 @@ const MIN_OPEN_HEIGHT = 140;
 /** The dock never grows within 200px of the top of the finder column. */
 const TOP_RESERVE = 200;
 const DEFAULT_PEEK = "파일, 메일, 메신저 전체에서 물어보세요";
+/** History search fires this long after the last keystroke, so typing stays smooth. */
+const HISTORY_SEARCH_DEBOUNCE_MS = 300;
 const COMPOSER_PLACEHOLDER = "파일, 메일, 메신저 전체에서 물어보세요 (파일 드래그 앤 드롭 가능)";
 const CENTERED = "mx-auto w-full max-w-[820px]";
 
@@ -140,6 +142,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	const inputRef = useRef<HTMLInputElement | null>(null);
 	const bodyRef = useRef<HTMLDivElement | null>(null);
 	const historySeq = useRef(0);
+	const historyDebounce = useRef<number | null>(null);
 	const startedAtRef = useRef(0);
 	const gripRef = useRef<{ readonly startY: number; readonly startH: number } | null>(null);
 	const prevOpenRef = useRef(open);
@@ -166,6 +169,13 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	useEffect(() => {
 		if (!open) setHistoryOpen(false);
 	}, [open]);
+
+	useEffect(
+		() => () => {
+			if (historyDebounce.current !== null) window.clearTimeout(historyDebounce.current);
+		},
+		[],
+	);
 
 	useEffect(() => {
 		const unsubscribe = autorag.search.onEvent?.((event: SearchStreamEvent) => {
@@ -319,7 +329,14 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		void runSearch(text, attachments);
 	}
 
+	function clearHistoryDebounce(): void {
+		if (historyDebounce.current === null) return;
+		window.clearTimeout(historyDebounce.current);
+		historyDebounce.current = null;
+	}
+
 	async function openHistory(): Promise<void> {
+		clearHistoryDebounce();
 		historySeq.current += 1;
 		const seq = historySeq.current;
 		const items = await autorag.search.historyList();
@@ -330,6 +347,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	}
 
 	function closeHistory(): void {
+		clearHistoryDebounce();
 		setHistoryOpen(false);
 	}
 
@@ -341,17 +359,29 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		void openHistory();
 	}
 
-	/** The store owns the matching (title + first Quick answer); a stale reply never lands after a newer keystroke. */
-	async function searchHistory(value: string): Promise<void> {
+	/** The store owns the matching (every question and answer body); a stale reply never lands after a newer keystroke. */
+	async function searchHistory(value: string): Promise<readonly ChatSummary[]> {
 		setHistoryQuery(value);
 		historySeq.current += 1;
 		const seq = historySeq.current;
 		const items = await autorag.search.historySearch(value);
-		if (seq !== historySeq.current) return;
+		if (seq !== historySeq.current) return [];
 		setHistory(items);
+		return items;
+	}
+
+	/** Coalesce keystrokes so one query reaches the store per 300ms burst of typing. */
+	function onHistoryQueryChange(value: string): void {
+		setHistoryQuery(value);
+		clearHistoryDebounce();
+		historyDebounce.current = window.setTimeout(() => {
+			historyDebounce.current = null;
+			void searchHistory(value);
+		}, HISTORY_SEARCH_DEBOUNCE_MS);
 	}
 
 	function newChat(): void {
+		clearHistoryDebounce();
 		setQuick(null);
 		setDeep(null);
 		setQuickDraft("");
@@ -369,6 +399,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	}
 
 	async function loadHistory(id: string): Promise<void> {
+		clearHistoryDebounce();
 		const record = await autorag.search.historyGet(id);
 		const assistant = record?.messages.findLast((message) => message.role === "assistant");
 		if (assistant?.role !== "assistant") return;
@@ -587,7 +618,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 						<input
 							autoFocus
 							value={historyQuery}
-							onChange={(event) => void searchHistory(event.target.value)}
+							onChange={(event) => onHistoryQueryChange(event.target.value)}
 							onKeyDown={(event) => {
 								if (event.key === "Escape") {
 									event.preventDefault();
@@ -597,8 +628,13 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 								}
 								if (event.key !== "Enter") return;
 								event.preventDefault();
-								const first = history[0];
-								if (first !== undefined) void loadHistory(first.id);
+								// Flush the debounce so Enter opens the first hit of what is typed right now.
+								clearHistoryDebounce();
+								const value = event.currentTarget.value;
+								void searchHistory(value).then((items) => {
+									const first = items[0];
+									if (first !== undefined) void loadHistory(first.id);
+								});
 							}}
 							placeholder="대화 기록 검색"
 							aria-label="대화 기록 검색"

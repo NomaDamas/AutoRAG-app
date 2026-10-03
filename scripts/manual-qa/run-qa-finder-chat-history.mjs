@@ -52,7 +52,7 @@ const monthDay = (date) => `${date.getMonth() + 1}월 ${date.getDate()}일`;
 const clock = (date) => `${pad(date.getHours())}:${pad(date.getMinutes())}`;
 
 /** The store's own record shape; the list and the search both read these summaries back verbatim. */
-const record = (id, title, snippet, when, question, answer) => ({
+const record = (id, title, snippet, when, question, answer, deepAnswer = null) => ({
 	id,
 	title,
 	snippet,
@@ -63,7 +63,7 @@ const record = (id, title, snippet, when, question, answer) => ({
 			role: "assistant",
 			sessionId: `${id}-session`,
 			quick: { answer, evidence: [], meta: "0.7s · 1 source" },
-			deep: null,
+			deep: deepAnswer === null ? null : { answer: deepAnswer, evidence: [] },
 			stopped: false,
 			at: when.toISOString(),
 		},
@@ -78,7 +78,7 @@ const withinMonth = at(9, 11, 2);
 const older = at(40, 11, 2);
 
 const CHATS = [
-	record("c1", "Q3 마케팅 예산 승인", "9월 12일 Slack #mkt-budget에서 CPA 악화를 이유로 감액이 합의됐습니다.", today1, "Q3 마케팅 예산 승인 근거 찾아줘", "예산은 3.8억으로 확정됐습니다."),
+	record("c1", "Q3 마케팅 예산 승인", "9월 12일 Slack #mkt-budget에서 CPA 악화를 이유로 감액이 합의됐습니다.", today1, "Q3 마케팅 예산 승인 근거 찾아줘", "예산은 3.8억으로 확정됐습니다.", "세부 승인 근거는 지라드 규정과 9월 12일 메일을 따릅니다."),
 	record("c2", "퍼포먼스 광고 감액 사유", "8월 CPA가 목표 대비 31% 높았습니다.", today2, "퍼포먼스 광고 예산이 왜 4천만 원 줄었어?", "CPA 악화가 감액 사유입니다."),
 	record("c3", "CFO 승인 메일 찾기", "9월 15일 오후 4:12에 보낸 메일입니다.", yesterday, "박지훈 CFO가 보낸 예산 승인 메일 찾아줘", "승인 메일을 찾았습니다."),
 	record("c4", "v1 vs v3 예산안 차이", "총액이 4.2억에서 3.8억으로 줄었습니다.", withinWeek, "예산안 v1이랑 v3 차이 정리해줘", "퍼포먼스 광고가 가장 크게 줄었습니다."),
@@ -184,19 +184,36 @@ check("the current row uses the v7 accent wash and dot", currentStyle.background
 check("the current row is the chat that was opened", currentStyle.title === "Q3 마케팅 예산 승인", currentStyle.title);
 await page.screenshot({ path: join(EVIDENCE, "history-current-chat.png") });
 
-// 3. The search input filters through the store.
+// 3. The search input filters through the store, reading the whole conversation
+// body — every question and every Quick/Deep answer — not just the row summary.
 await page.locator(".history input").fill("예산");
 check(
-	'searching "예산" keeps only matching chats, regrouped',
-	await waitForTexts(page, ".hist-copy b", ["Q3 마케팅 예산 승인", "v1 vs v3 예산안 차이"]),
+	'searching "예산" keeps every chat whose question, answer, title or snippet matches, regrouped',
+	await waitForTexts(page, ".hist-copy b", ["Q3 마케팅 예산 승인", "퍼포먼스 광고 감액 사유", "CFO 승인 메일 찾기", "v1 vs v3 예산안 차이", "해외법인 분리 여부"]),
 	JSON.stringify(await texts(page, ".hist-copy b")),
 );
 check(
 	"the regrouped hits keep the day order",
-	JSON.stringify(await texts(page, ".history-group")) === JSON.stringify(["오늘", "지난 7일"]),
+	JSON.stringify(await texts(page, ".history-group")) === JSON.stringify(["오늘", "어제", "지난 7일", "지난 30일"]),
 	JSON.stringify(await texts(page, ".history-group")),
 );
 await page.screenshot({ path: join(EVIDENCE, "history-search.png") });
+
+// 3b. A needle that lives only in the conversation body still finds its chat:
+// "지라드" is in c1's Deep answer, "근거" only in c1's question and Deep answer.
+await page.locator(".history input").fill("지라드");
+check(
+	"a Deep answer word matches the chat that contains it",
+	await waitForTexts(page, ".hist-copy b", ["Q3 마케팅 예산 승인"]),
+	JSON.stringify(await texts(page, ".hist-copy b")),
+);
+await page.locator(".history input").fill("근거");
+check(
+	"a question word outside the row title and snippet matches too",
+	await waitForTexts(page, ".hist-copy b", ["Q3 마케팅 예산 승인"]),
+	JSON.stringify(await texts(page, ".hist-copy b")),
+);
+await page.screenshot({ path: join(EVIDENCE, "history-search-body.png") });
 
 await page.locator(".history input").fill("zzz-no-hit");
 await page.locator(".history-list > span").waitFor({ state: "visible", timeout: 5000 });
