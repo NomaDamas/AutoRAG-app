@@ -15,21 +15,6 @@ export function ImageView({ file }: { readonly file: PreviewDocument }): ReactEl
 	return <img className="ql__image block max-w-full max-h-full min-h-0 object-contain" alt="" decoding="async" src={previewStreamUrl(file.path)} onError={() => setFailed(true)} />;
 }
 
-export function VideoView({ file }: { readonly file: PreviewDocument }): ReactElement {
-	return (
-		<video className="ql__video block max-w-full max-h-full min-h-0 object-contain outline-none" src={previewStreamUrl(file.path)} controls autoPlay playsInline preload="auto" />
-	);
-}
-
-export function AudioView({ file }: { readonly file: PreviewDocument }): ReactElement {
-	return (
-		<div className="ql__audio grid gap-16 justify-items-center w-[min(420px,86%)] [&_audio]:w-full">
-			<div className="ql__glyph grid w-[88px] h-[108px] place-items-center border border-border rounded-12 bg-window shadow-raised text-ink-muted text-sm font-bold tracking-label">{file.ext.slice(0, 4).toUpperCase() || "AUDIO"}</div>
-			<audio src={previewStreamUrl(file.path)} controls autoPlay preload="auto" />
-		</div>
-	);
-}
-
 export function FontView({ file }: { readonly file: PreviewDocument }): ReactElement {
 	const [ready, setReady] = useState(false);
 	const [error, setError] = useState<string | null>(null);

@@ -38,12 +38,72 @@
   --bg-code: #F4F4F7;
   --bg-chip-sent: #F3F3F7;
   --bg-tile-fallback: #888994;
-  /* Added by the Quick Look lane: the pre-warmed preview window is a translucent
-   * panel floating over the Finder (macOS Quick Look material, owner request
-   * 2026-10-01). DESIGN.md §2.1 and §8 carry the same names and values. */
-  --bg-quicklook-panel: rgba(246,246,248,0.72);
-  --bg-quicklook-frost: rgba(252,252,253,0.82);
-  --backdrop-quicklook: saturate(1.6) blur(18px);
+
+  /* -------------------------------------------------------------- §2.10 Quick Look */
+  /* The Quick Look panel (src/preview/DESIGN.md), lifted from the owner's
+   * quicklook-preview-reference prototypes (2026-10-03). `--ql-*` colors bridge
+   * to `--color-ql-*`. Light values here; the dark set follows `:root` below. */
+  --ql-panel: rgba(242,242,244,0.72);
+  --ql-panel-solid: #F2F2F4;
+  --ql-ink: #1D1D1F;
+  --ql-ink-secondary: rgba(60,60,67,0.66);
+  --ql-hairline: rgba(0,0,0,0.14);
+  --ql-button: rgba(0,0,0,0.065);
+  --ql-button-hover: rgba(0,0,0,0.11);
+  --ql-sunk: rgba(0,0,0,0.045);
+  --ql-paper: rgba(255,255,255,0.62);
+  --ql-page: #FFFFFF;
+  --ql-accent: #0A64D8;
+  --ql-highlight: rgba(255,255,255,0.85);
+  --ql-knockout: #F2F2F4;
+  --ql-wave-off: rgba(60,60,67,0.25);
+  --ql-page-ring: #1D1D1F;
+  --ql-code: rgba(0,0,0,0.055);
+  --ql-syntax-keyword: #9B2393;
+  --ql-syntax-string: #C41A16;
+  --ql-syntax-number: #1C00CF;
+  --ql-syntax-comment: #5D6C79;
+  --ql-syntax-function: #326D74;
+  --ql-syntax-builtin: #6C36A9;
+  --ql-syntax-constant: #0B4F79;
+  --ql-syntax-punctuation: #8E8E93;
+  --ql-md-mark: #A1A1A6;
+  --ql-md-heading: #0A64D8;
+  --ql-md-list: #C25E00;
+  --ql-md-quote: rgba(60,60,67,0.7);
+  /* Media controls float over the picture, so they keep one dark material in both appearances. */
+  --ql-media: #000000;
+  --ql-hud: rgba(30,30,32,0.55);
+  --ql-hud-audio: rgba(70,70,74,0.66);
+  --ql-hud-volume: rgba(66,66,70,0.62);
+  --ql-hud-ink: #FFFFFF;
+  --ql-hud-ink-dim: rgba(255,255,255,0.78);
+  --ql-hud-ink-off: rgba(255,255,255,0.5);
+  --ql-hud-hover: rgba(255,255,255,0.14);
+  --ql-hud-pill: rgba(255,255,255,0.16);
+  --ql-hud-track: rgba(255,255,255,0.25);
+  --ql-hud-badge: rgba(20,20,22,0.5);
+  --ql-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", "Apple SD Gothic Neo", "Segoe UI", "Malgun Gothic", "Noto Sans KR", sans-serif;
+  --ql-font-mono: "SF Mono", ui-monospace, Menlo, Consolas, "Cascadia Mono", "JetBrains Mono", "D2Coding", "Noto Sans KR", monospace;
+  --backdrop-ql-hud: blur(24px) saturate(180%);
+  --backdrop-ql-float: blur(20px) saturate(180%);
+  --ql-glyph-paper: #FBFBFB;
+  /* Album art stand-in when an audio file carries no cover (reference's AFTERGLOW sleeve). */
+  --ql-art-placeholder: repeating-radial-gradient(circle at 50% 58%, #F7C548 0 13px, #EF6E3A 13px 26px, #C23A5D 26px 39px, #2D2F72 39px 52px);
+  --ql-art-ink: #FDF3D8;
+  /* Extension badges on the folder panel's item grid. */
+  --ql-badge-code: #D79A12;
+  --ql-badge-text: #6E7781;
+  --ql-badge-video: #7A5AF8;
+  --ql-badge-audio: #E0457B;
+  --ql-badge-image: #2FA86A;
+  --ql-badge-pdf: #D93F3F;
+  --ql-badge-html: #E8743B;
+  --ql-badge-doc: #2B6CD8;
+  --ql-badge-sheet: #1F9D55;
+  --ql-badge-slides: #D9622B;
+  --ql-badge-archive: #8D6E63;
+  --ql-badge-other: #8E8E93;
 
   /* ------------------------------------------------------------ §2.2 Hover washes */
   --bg-hover: rgba(29,29,31,0.05);
@@ -280,6 +340,16 @@
   --shadow-drag: 0 4px 16px rgba(20,20,40,0.12);
   --shadow-window: 0 18px 54px rgba(0,0,0,0.18);
   --shadow-menu: 0 10px 35px rgba(0,0,0,0.2);
+  --shadow-ql-panel: inset 0 0 0 0.5px var(--ql-hairline), inset 0 0.5px 0 var(--ql-highlight);
+  --shadow-ql-segment: 0 0.5px 1.5px rgba(0,0,0,0.18);
+  --shadow-ql-float: 0 0 0 0.5px var(--ql-hairline), 0 4px 14px rgba(0,0,0,0.16);
+  --shadow-ql-hud: 0 0 0 0.5px rgba(255,255,255,0.14), 0 10px 30px rgba(0,0,0,0.35);
+  --shadow-ql-knob: 0 1px 3px rgba(0,0,0,0.4);
+  --shadow-ql-page: 0 0 0 0.5px rgba(0,0,0,0.12), 0 3px 10px rgba(0,0,0,0.14);
+  --shadow-ql-art: 0 4px 14px rgba(0,0,0,0.22);
+  --shadow-ql-doc: 0 0 0 0.5px rgba(0,0,0,0.2), 0 1px 2px rgba(0,0,0,0.12);
+  --shadow-ql-phone: 0 0 0 0.5px rgba(0,0,0,0.18), 0 12px 32px rgba(0,0,0,0.2);
+  --shadow-ql-page-active: 0 0 0 3px var(--ql-page-ring);
 
   /* -------------------------------------------------------------------- §7 Radii */
   --radius-2: 2px;
@@ -301,4 +371,37 @@
   --scrollbar-thumb: #C9C9CE;
   --scrollbar-radius: 10px;
   --scrollbar-inset: 3px;
+}
+
+/* Quick Look follows the system appearance like the macOS panel it mirrors;
+ * the Finder window itself has no dark theme. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ql-panel: rgba(36,36,38,0.7);
+    --ql-panel-solid: #2A2A2C;
+    --ql-ink: #F5F5F7;
+    --ql-ink-secondary: rgba(235,235,245,0.6);
+    --ql-hairline: rgba(255,255,255,0.16);
+    --ql-button: rgba(255,255,255,0.12);
+    --ql-button-hover: rgba(255,255,255,0.2);
+    --ql-sunk: rgba(0,0,0,0.2);
+    --ql-paper: rgba(22,22,24,0.55);
+    --ql-accent: #0A84FF;
+    --ql-highlight: rgba(255,255,255,0.2);
+    --ql-knockout: #2C2C2E;
+    --ql-wave-off: rgba(235,235,245,0.22);
+    --ql-page-ring: #F5F5F7;
+    --ql-code: rgba(255,255,255,0.08);
+    --ql-syntax-keyword: #FC5FA3;
+    --ql-syntax-string: #FC6A5D;
+    --ql-syntax-number: #D0BF69;
+    --ql-syntax-comment: #7F8C98;
+    --ql-syntax-function: #67B7A4;
+    --ql-syntax-builtin: #A167E6;
+    --ql-syntax-constant: #5DD8FF;
+    --ql-md-mark: #8E8E93;
+    --ql-md-heading: #5AC8FA;
+    --ql-md-list: #FF9F0A;
+    --ql-md-quote: rgba(235,235,245,0.6);
+  }
 }

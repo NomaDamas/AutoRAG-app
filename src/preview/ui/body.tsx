@@ -1,29 +1,22 @@
 import type { ReactElement } from "react";
 import { assertNever } from "../shared/assert";
 import type { PreviewDocument } from "../shared/contract";
-import type { Size } from "../shared/fit";
-import { viewerForExtension, wantsBytes } from "../shared/registry";
+import { viewerForExtension } from "../shared/registry";
 import { looksLikeText } from "../shared/text-sample";
-import { DocxView, PdfView, SheetView } from "./documents";
-import { FallbackView, Status } from "./fallback";
-import { AudioView, FontView, HeicView, ImageView, TiffView, VideoView } from "./media";
+import { HtmlView, TextView } from "./code";
+import { DocxView, RtfView, SheetView } from "./documents";
+import { FallbackView } from "./fallback";
+import { MarkdownView } from "./markdown";
+import { FontView, HeicView, ImageView, TiffView } from "./media";
 import { ArchiveView, EpubView, HwpxView, PptxView } from "./packages";
-import { HtmlView, MarkdownView, RtfView, TextView } from "./text-view";
+import { PdfView } from "./pdf";
+import { AudioView, VideoView } from "./player";
 
-/**
- * `onIntrinsicSize` lets a viewer that knows its own page shape (PDF) size the
- * preview window before the first paint settles.
- */
-export function PreviewBody({
-	file,
-	onIntrinsicSize,
-}: {
-	readonly file: PreviewDocument;
-	readonly onIntrinsicSize?: ((size: Size) => void) | undefined;
-}): ReactElement {
+export function PreviewBody({ file }: { readonly file: PreviewDocument }): ReactElement {
 	const kind = viewerForExtension(file.ext);
 	if (file.size === 0) return <FallbackView file={file} note="빈 파일" />;
-	if (file.truncated && file.bytes === null && wantsBytes(kind)) {
+	// Only whole-file viewers arrive truncated without bytes; streamed and prefix viewers always have what they need.
+	if (file.truncated && file.bytes === null) {
 		return <FallbackView file={file} note="이 파일은 너무 커서 내용 대신 정보만 보여 줍니다" />;
 	}
 	switch (kind) {
@@ -40,7 +33,7 @@ export function PreviewBody({
 		case "heic":
 			return <HeicView file={file} />;
 		case "pdf":
-			return <PdfView file={file} onIntrinsicSize={onIntrinsicSize} />;
+			return <PdfView file={file} />;
 		case "docx":
 			return <DocxView file={file} />;
 		case "sheet":
@@ -63,12 +56,8 @@ export function PreviewBody({
 			return <HwpxView file={file} />;
 		case "fallback":
 			if (file.bytes !== null && looksLikeText(file.bytes)) return <TextView file={file} />;
-			return <FallbackView file={file} note="이 형식은 미리보기를 지원하지 않습니다" />;
+			return <FallbackView file={file} />;
 		default:
 			return assertNever(kind);
 	}
-}
-
-export function LoadingBody(): ReactElement {
-	return <Status>불러오는 중</Status>;
 }

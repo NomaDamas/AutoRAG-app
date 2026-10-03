@@ -1,10 +1,31 @@
+// @vitest-environment happy-dom
 import { strToU8, zipSync } from "fflate";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import type { PreviewDocument } from "../../src/preview/shared/contract";
+import type { PreviewDocument, QuickLookWindowBridge } from "../../src/preview/shared/contract";
 import { VIEWER_KINDS, viewerForExtension, type ViewerKind } from "../../src/preview/shared/registry";
 import { PreviewBody } from "../../src/preview/ui/body";
+import { ChromeProvider, type QuickLookChrome } from "../../src/preview/ui/chrome";
+
+const never = (): Promise<never> => new Promise(() => undefined);
+const bridge: QuickLookWindowBridge = {
+	platform: "darwin",
+	onLoad: () => () => undefined,
+	onUnload: () => () => undefined,
+	onZoom: () => () => undefined,
+	onApp: () => () => undefined,
+	ready: () => undefined,
+	zoomed: () => undefined,
+	request: never,
+	details: never,
+	sha256: never,
+	folderSize: never,
+	audioMetadata: never,
+	share: never,
+	copyText: never,
+};
+const chrome: QuickLookChrome = { bridge, toolbar: null, report: () => undefined, resize: () => undefined, hideTitle: () => undefined, app: null };
 
 const png = Uint8Array.from(
 	Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64"),
@@ -70,7 +91,7 @@ describe("preview families", () => {
 		for (const kind of VIEWER_KINDS) {
 			const ext = extForKind[kind];
 			expect(viewerForExtension(ext)).toBe(kind);
-			const markup = renderToStaticMarkup(createElement(PreviewBody, { file: documentFor(ext, bytesForKind[kind]) }));
+			const markup = renderToStaticMarkup(createElement(ChromeProvider, { value: chrome }, createElement(PreviewBody, { file: documentFor(ext, bytesForKind[kind]) })));
 			expect(markup.length).toBeGreaterThan(0);
 		}
 	});

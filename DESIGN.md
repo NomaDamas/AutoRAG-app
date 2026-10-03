@@ -41,7 +41,7 @@ The path bar under the Finder list is one line at every window size and never sh
 | `⌘W` | Window | Close current Finder tab |
 | `⌘F` | Window | Focus Instant Search bar |
 | `⌘K` | Window | Toggle and focus AI Search composer |
-| `Space` | File List | Native Quick Look preview |
+| `Space` | File List | Quick Look preview of the selected file or folder (`src/preview/DESIGN.md`) |
 | `⌥ Space` | Global | Global AutoRAG Spotlight summon |
 | `Enter` | Search Bar | Commit search with Filenames |
 | `⌥ Enter` | Search Bar | Commit search with Content |

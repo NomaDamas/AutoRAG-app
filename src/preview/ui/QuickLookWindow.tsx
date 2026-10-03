@@ -1,14 +1,16 @@
-import { StrictMode, useEffect, useRef, useState, type ReactElement, type SyntheticEvent } from "react";
+import { StrictMode, useCallback, useEffect, useMemo, useRef, useState, type ReactElement, type SyntheticEvent } from "react";
 import { createRoot } from "react-dom/client";
 import type { QuickLookLoad, QuickLookWindowBridge, QuickLookZoom } from "../shared/contract";
-import type { Size } from "../shared/fit";
-import { ZOOM_IDENTITY, zoomTransform, type ZoomDirection } from "../shared/zoom";
-import { ZOOM_IN, ZOOM_OUT } from "./zoom-motion";
+import type { QuickLookFit, Size } from "../shared/fit";
 import { extensionOf, formatBytes } from "../shared/format";
 import { describeExtension, viewerForExtension, type ViewerKind } from "../shared/registry";
+import { ZOOM_IDENTITY, zoomTransform, type ZoomDirection } from "../shared/zoom";
 import { PreviewBody } from "./body";
-import { Status } from "./fallback";
-import { CloseIcon, DocIcon, FullscreenIcon, OpenIcon } from "./icons";
+import { ChromeProvider, TOOL_BUTTON, type QuickLookChrome } from "./chrome";
+import { ErrorView } from "./fallback";
+import { FolderView } from "./folder";
+import { CloseIcon, FullscreenIcon, ShareIcon } from "./icons";
+import { ZOOM_IN, ZOOM_OUT } from "./zoom-motion";
 import "./quick-look.css";
 
 declare global {
@@ -17,13 +19,34 @@ declare global {
 	}
 }
 
+type StageKind = ViewerKind | "folder" | "error";
+
 const NO_INTRINSIC_SIZE: Size = { width: 0, height: 0 };
-/** Frames a viewer gets to lay out before the window falls back to a page shape. */
+/** Frames a measured viewer gets to lay out before the window falls back to a page shape. */
 const MEASURE_FRAMES = 12;
 
-function waitsForMedia(kind: ViewerKind): boolean {
-	return kind === "image" || kind === "tiff" || kind === "heic" || kind === "video";
-}
+/**
+ * Viewers that state their own panel size through the chrome (or, for
+ * pictures, through their decoded size). The rest are measured from the box
+ * they lay out in a centering stage.
+ */
+const SELF_SIZED: Partial<Record<StageKind, true>> = {
+	image: true,
+	tiff: true,
+	heic: true,
+	video: true,
+	audio: true,
+	pdf: true,
+	markdown: true,
+	html: true,
+	text: true,
+	fallback: true,
+	folder: true,
+	error: true,
+};
+
+/** Pictures size the window by their decoded pixels, scaled as a whole. */
+const MEDIA: Partial<Record<StageKind, true>> = { image: true, tiff: true, heic: true, video: true };
 
 function mediaSize(target: EventTarget): Size | null {
 	if (target instanceof HTMLImageElement) return { width: target.naturalWidth, height: target.naturalHeight };
@@ -32,9 +55,9 @@ function mediaSize(target: EventTarget): Size | null {
 }
 
 /**
- * The box a viewer laid out, which is the size the window should hug. Iframes
- * and the loading line carry no size of their own, so they report zero and the
- * window keeps a page shape.
+ * The box a measured viewer laid out, which is the size the window should
+ * hug. Iframes and the loading line carry no size of their own, so they report
+ * zero and the window keeps a page shape.
  */
 function contentSize(stage: HTMLElement | null): Size {
 	const child = stage?.firstElementChild;
@@ -125,45 +148,74 @@ function useZoom(bridge: QuickLookWindowBridge): void {
 	}, [bridge]);
 }
 
+/** macOS draws a translucent panel over a native blur; other platforms get an opaque one. */
+const PANEL =
+	"qlw relative flex flex-col h-full overflow-hidden text-ql-ink font-ql antialiased select-none data-[material=glass]:rounded-[18px] data-[material=glass]:bg-ql-panel data-[material=glass]:shadow-ql-panel data-[material=solid]:bg-ql-panel-solid";
+
 function QuickLookWindow({ bridge }: { readonly bridge: QuickLookWindowBridge }): ReactElement {
 	const [load, setLoad] = useState<QuickLookLoad | null>(null);
-	const stageRef = useRef<HTMLDivElement | null>(null);
+	const [app, setApp] = useState<string | null>(null);
+	const [toolbar, setToolbar] = useState<HTMLElement | null>(null);
+	const [titleHidden, setTitleHidden] = useState(false);
+	const stageRef = useRef<HTMLElement | null>(null);
 	const reported = useRef(-1);
+	const seqRef = useRef(-1);
 	useZoom(bridge);
 
 	useEffect(() => {
-		const offLoad = bridge.onLoad(setLoad);
-		const offUnload = bridge.onUnload(() => setLoad(null));
+		const offLoad = bridge.onLoad((next) => {
+			seqRef.current = next.seq;
+			setLoad(next);
+			setApp(next.app);
+		});
+		const offApp = bridge.onApp((update) => {
+			if (update.seq === seqRef.current) setApp(update.name);
+		});
+		const offUnload = bridge.onUnload(() => {
+			seqRef.current = -1;
+			setLoad(null);
+		});
 		return () => {
 			offLoad();
+			offApp();
 			offUnload();
 		};
 	}, [bridge]);
 
-	const kind = load === null ? "fallback" : viewerForExtension(extensionOf(load.name));
-	const media = load !== null && load.document !== null && load.document.size > 0 && waitsForMedia(kind);
-	// Media reports its decoded size and PDF reports its first page's shape;
-	// every other viewer reports the box it laid out after the first frames.
-	const selfSized = media || kind === "pdf";
+	const report = useCallback(
+		(size: Size, fit: QuickLookFit) => {
+			const seq = seqRef.current;
+			if (seq < 0 || reported.current === seq) return;
+			reported.current = seq;
+			bridge.ready({ seq, width: size.width, height: size.height, fit });
+		},
+		[bridge],
+	);
+	const resize = useCallback(
+		(size: Size) => {
+			const seq = seqRef.current;
+			if (seq < 0) return;
+			reported.current = seq;
+			bridge.ready({ seq, width: size.width, height: size.height, fit: "clamp" });
+		},
+		[bridge],
+	);
+	const chrome = useMemo<QuickLookChrome>(() => ({ bridge, toolbar, report, resize, hideTitle: setTitleHidden, app }), [bridge, toolbar, report, resize, app]);
 
-	function report(seq: number, size: Size): void {
-		if (reported.current === seq) return;
-		reported.current = seq;
-		bridge.ready({ seq, width: size.width, height: size.height });
-	}
+	const kind: StageKind = load === null ? "fallback" : load.folder !== null ? "folder" : load.document === null ? "error" : viewerForExtension(extensionOf(load.name));
+	const measured = load !== null && SELF_SIZED[kind] !== true;
 
 	useEffect(() => {
-		if (load === null || selfSized) return;
+		if (load === null || !measured) return;
 		const stage = stageRef.current;
 		if (stage === null) return;
-		const seq = load.seq;
 		let frame = 0;
 		let frames = 0;
 		const step = (): void => {
 			frame = requestAnimationFrame(() => {
 				const size = contentSize(stage);
 				if (size.width > 0) {
-					report(seq, size);
+					report(size, "clamp");
 					return;
 				}
 				frames += 1;
@@ -172,81 +224,71 @@ function QuickLookWindow({ bridge }: { readonly bridge: QuickLookWindowBridge })
 		};
 		step();
 		return () => cancelAnimationFrame(frame);
-	}, [load, selfSized]);
+	}, [load, measured, report]);
 
-	if (load === null) return <div className="qlw [--ql-toolbar:52px] [--ql-rail:104px] [--ql-media-bg:#1c1c1e] flex flex-col h-full overflow-hidden bg-quicklook-panel text-ink [font-family:-apple-system,BlinkMacSystemFont,'SF_Pro_Text',var(--font-sans)] select-none" data-quicklook-state="idle" />;
-	const seq = load.seq;
-	const document = load.document;
+	const material = bridge.platform === "darwin" ? "glass" : "solid";
+	if (load === null) return <div className={PANEL} data-material={material} data-quicklook-state="idle" />;
+	const { document, folder } = load;
 	const meta = document === null ? describeExtension(extensionOf(load.name)) : `${describeExtension(document.ext)} · ${formatBytes(document.size)}`;
 
-	function onMediaEvent(event: SyntheticEvent<HTMLDivElement>): void {
+	function onMediaEvent(event: SyntheticEvent<HTMLElement>): void {
+		if (MEDIA[kind] !== true) return;
 		const size = mediaSize(event.target);
-		if (size !== null) report(seq, size);
+		if (size !== null && size.width > 0) report(size, "aspect");
 	}
 
-	function onMediaError(event: SyntheticEvent<HTMLDivElement>): void {
-		if (mediaSize(event.target) !== null) report(seq, NO_INTRINSIC_SIZE);
+	function share(event: SyntheticEvent<HTMLButtonElement>): void {
+		const rect = event.currentTarget.getBoundingClientRect();
+		void bridge.share({ x: rect.x, y: rect.y, width: rect.width, height: rect.height });
 	}
 
 	return (
-		<div
-			className="qlw [--ql-toolbar:52px] [--ql-rail:104px] [--ql-media-bg:#1c1c1e] flex flex-col h-full overflow-hidden bg-quicklook-panel text-ink [font-family:-apple-system,BlinkMacSystemFont,'SF_Pro_Text',var(--font-sans)] select-none"
-			data-quicklook-state="ready"
-			data-platform={bridge.platform}
-			role="dialog"
-			aria-label={load.name}
-		>
-			<header className="qlw__toolbar flex items-center flex-none gap-8 h-(--ql-toolbar) px-12 border-b border-border bg-quicklook-frost [backdrop-filter:var(--backdrop-quicklook)] [-webkit-app-region:drag]">
-				<button
-					type="button"
-					className="qlw__tool inline-flex items-center justify-center gap-6 h-icon-sm w-icon-sm p-0 border-0 rounded-6 bg-transparent text-ink-body [-webkit-app-region:no-drag] hover:bg-hover active:bg-hover-strong focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-1"
-					aria-label="닫기"
-					title="닫기"
-					onClick={() => void bridge.request("close")}
-				>
-					<CloseIcon />
-				</button>
-				<div className="qlw__titles flex flex-1 items-center gap-8 min-w-0 text-ink-faint" title={meta}>
-					<DocIcon />
-					<span className="qlw__name overflow-hidden text-ink text-sm font-semibold leading-[1.25] text-ellipsis whitespace-nowrap">{load.name}</span>
-				</div>
-				<div className="qlw__trail flex flex-none items-center gap-6">
-					<button
-						type="button"
-						className="qlw__tool inline-flex items-center justify-center gap-6 h-icon-sm w-icon-sm p-0 border-0 rounded-6 bg-transparent text-ink-body [-webkit-app-region:no-drag] hover:bg-hover active:bg-hover-strong focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-1"
-						aria-label="전체 화면"
-						title="전체 화면"
-						onClick={() => void bridge.request("fullscreen")}
-					>
+		<ChromeProvider value={chrome}>
+			<div className={PANEL} data-material={material} data-quicklook-state="ready" data-platform={bridge.platform} role="dialog" aria-label={load.name}>
+				<header className="qlw__toolbar flex flex-none items-center gap-6 h-46 pl-12 pr-10 [-webkit-app-region:drag]">
+					<button type="button" className={TOOL_BUTTON} aria-label="닫기" title="닫기" onClick={() => void bridge.request("close")}>
+						<CloseIcon />
+					</button>
+					<button type="button" className={TOOL_BUTTON} aria-label="전체 화면" title="전체 화면" onClick={() => void bridge.request("fullscreen")}>
 						<FullscreenIcon />
 					</button>
+					<div className="qlw__name flex-1 min-w-0 ml-4 overflow-hidden text-[14px] font-semibold tracking-[-0.01em] text-ellipsis whitespace-nowrap" title={meta}>
+						{titleHidden ? "" : load.name}
+					</div>
+					<div ref={setToolbar} className="qlw__slot contents" />
+					{bridge.platform === "darwin" ? (
+						<button type="button" className={TOOL_BUTTON} aria-label="공유" title="공유" onClick={share}>
+							<ShareIcon />
+						</button>
+					) : null}
 					<button
 						type="button"
-						className="qlw__open inline-flex items-center justify-center gap-6 h-icon-sm px-10 border-0 rounded-6 bg-transparent text-ink-body [-webkit-app-region:no-drag] text-meta font-medium hover:bg-hover active:bg-hover-strong focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-1"
+						className="qlw__open flex-none h-28 ml-4 px-14 border-0 rounded-[999px] bg-ql-button text-ql-ink font-ql text-[13px] font-medium whitespace-nowrap cursor-default hover:bg-ql-button-hover [-webkit-app-region:no-drag]"
 						title="기본 앱으로 열기"
 						onClick={() => void bridge.request("open")}
 					>
-						<OpenIcon />
-						<span>열기</span>
+						{app === null ? "Open" : `Open with ${app}`}
 					</button>
-				</div>
-			</header>
-			<div
-				ref={stageRef}
-				key={seq}
-				className="ql__stage flex flex-1 flex-col items-center justify-center-safe min-h-0 overflow-auto bg-transparent data-[kind=video]:bg-(--ql-media-bg)"
-				data-kind={kind}
-				onLoadCapture={onMediaEvent}
-				onLoadedMetadataCapture={onMediaEvent}
-				onErrorCapture={onMediaError}
-			>
-				{document === null ? (
-					<Status>{load.error ?? "파일을 열 수 없습니다"}</Status>
-				) : (
-					<PreviewBody file={document} onIntrinsicSize={(size) => report(seq, size)} />
-				)}
+				</header>
+				<main
+					ref={stageRef}
+					key={load.seq}
+					className="ql__stage relative flex flex-1 flex-col min-h-0 data-[layout=measured]:items-center data-[layout=measured]:justify-center-safe data-[layout=measured]:overflow-auto data-[layout=fill]:overflow-hidden data-[kind=video]:bg-ql-media data-[kind=image]:items-center data-[kind=image]:justify-center data-[kind=tiff]:items-center data-[kind=tiff]:justify-center data-[kind=heic]:items-center data-[kind=heic]:justify-center"
+					data-kind={kind}
+					data-layout={measured ? "measured" : "fill"}
+					onLoadCapture={onMediaEvent}
+					onLoadedMetadataCapture={onMediaEvent}
+				>
+					{folder !== null ? (
+						<FolderView folder={folder} />
+					) : document === null ? (
+						<ErrorView message={load.error ?? "파일을 열 수 없습니다"} />
+					) : (
+						<PreviewBody file={document} />
+					)}
+				</main>
 			</div>
-		</div>
+		</ChromeProvider>
 	);
 }
 
