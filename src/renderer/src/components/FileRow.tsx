@@ -1,4 +1,4 @@
-import { useEffect, type ChangeEvent, type KeyboardEvent, type MouseEvent, type ReactElement } from "react";
+import { useEffect, type ChangeEvent, type DragEvent, type KeyboardEvent, type MouseEvent, type ReactElement } from "react";
 import type { IndexStatus } from "../../../shared/index-contract";
 import type { FinderEntry } from "../data/entries";
 import type { Disclosure } from "../state/folder-tree";
@@ -15,6 +15,8 @@ export interface RowCallbacks {
 	readonly onOpen: (entry: FinderEntry) => void;
 	readonly onContextMenu: (entry: FinderEntry, event: MouseEvent<HTMLDivElement>) => void;
 	readonly onToggleIndex: (entry: FinderEntry) => void;
+	/** A row drag began: fills the drag with the rows it carries (the AI dock attaches them). */
+	readonly onDragStart: (entry: FinderEntry, event: DragEvent<HTMLDivElement>) => void;
 	readonly onToggleStack: (entry: FinderEntry) => void;
 	readonly onToggleFolder: (entry: FinderEntry) => void;
 	readonly onRenameChange: (value: string) => void;
@@ -167,9 +169,11 @@ export function FileRow({
 			aria-level={disclosure === "none" ? undefined : depth + 1}
 			aria-expanded={canOpen ? open : undefined}
 			style={{ gridTemplateColumns: listGridTemplate(columns) }}
+			draggable={renameDraft === null}
 			onClick={(event) => callbacks.onClick(entry, event)}
 			onDoubleClick={() => callbacks.onOpen(entry)}
 			onContextMenu={(event) => callbacks.onContextMenu(entry, event)}
+			onDragStart={(event) => callbacks.onDragStart(entry, event)}
 		>
 			<div className="row__name flex items-center gap-7 min-w-0" role="gridcell">
 				<span className="indent flex-none" style={{ width: depth * 16 }} aria-hidden="true" />

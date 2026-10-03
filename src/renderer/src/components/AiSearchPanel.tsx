@@ -17,18 +17,18 @@ import type {
 	ChatAttachment,
 	ChatSummary,
 	CitationEvidence,
-	SearchBridge,
 	SearchStreamEvent,
 } from "../../../shared/search-contract";
 import { parseAnswerBlocks, parseInline, type AnswerBlock } from "../state/answer-markdown";
+import { attachmentsFromDrop, isAttachmentDrag, mergeAttachments } from "../state/attachments";
 import { evidenceKind } from "../state/evidence";
 import { groupChatHistory, historyEmptyText } from "../state/history";
 import { cn } from "../lib/cn";
-import { ArrowUpIcon, CloseIcon, HistoryIcon, PlusIcon, SparklesIcon } from "./icons";
+import { ArrowUpIcon, CloseIcon, HistoryIcon, LinkIcon, PlusIcon, SparklesIcon } from "./icons";
 import { iconButtonClass } from "./primitives/icon-button";
 import { FileTile } from "./primitives/FileTile";
 
-const autorag = (window as unknown as { readonly autorag: { readonly search: SearchBridge } }).autorag;
+const autorag = window.autorag;
 
 /** v7 dock geometry (AI Finder v7 `.ai` / `.ai-grip` / `.ai-head`). */
 const COLLAPSED_HEIGHT = 36;
@@ -42,7 +42,8 @@ const CENTERED = "mx-auto w-full max-w-[820px]";
 /**
  * Imperative surface the shell drives: ⌘K / evidence "AI 요약" open the dock and
  * focus the composer, ⌥Enter in the search field routes a query straight in, and
- * drag-and-drop from the finder attaches a file to the draft.
+ * the inspector attaches a file to the draft. Drops (Finder rows, files from
+ * other apps, browser links) land on the dock itself.
  */
 export interface AiDockHandle {
 	/** Seed the composer with `text` and send it at once. The App shell opens the dock first. */
@@ -66,38 +67,13 @@ export interface AiSearchPanelProps {
 
 /** The parent folder of a local attachment, derived from its absolute path. */
 function parentFolder(att: ChatAttachment): string | null {
-	if (att.kind !== "file") return null;
+	if (att.kind !== "file" && att.kind !== "folder") return null;
 	const parts = att.id.split(/[\\/]/u).filter((part) => part.length > 0);
 	return parts.length >= 2 ? parts[parts.length - 2] ?? null : null;
 }
 
-/** The v7 composer dedupes drops by file name. */
-function dedupeAttachments(list: readonly ChatAttachment[]): readonly ChatAttachment[] {
-	const seen = new Set<string>();
-	const out: ChatAttachment[] = [];
-	for (const att of list) {
-		if (seen.has(att.name)) continue;
-		seen.add(att.name);
-		out.push(att);
-	}
-	return out;
-}
-
 function formatElapsed(ms: number): string {
 	return `${Math.max(1, Math.round(ms / 1000))}s`;
-}
-
-function hasFiles(event: { readonly dataTransfer: DataTransfer | null }): boolean {
-	const types = event.dataTransfer?.types;
-	return types !== undefined && Array.from(types).includes("Files");
-}
-
-function droppedAttachments(event: ReactDragEvent): readonly ChatAttachment[] {
-	return [...event.dataTransfer.files].map((file) => {
-		// Electron exposes the absolute path on the dropped File; the DOM type omits it.
-		const path = "path" in file && typeof file.path === "string" ? file.path : null;
-		return { kind: "file" as const, id: path ?? file.name, name: file.name };
-	});
 }
 
 export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(function AiSearchPanel(
@@ -259,7 +235,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 
 	useEffect(() => {
 		const onDragOver = (event: globalThis.DragEvent): void => {
-			if (!hasFiles(event)) return;
+			if (event.dataTransfer === null || !isAttachmentDrag(event.dataTransfer.types)) return;
 			if (event.clientX <= 0 && event.clientY <= 0) {
 				setDragActive(false);
 				return;
@@ -427,7 +403,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 			void runSearch(trimmed, attachmentsRef.current);
 		},
 		attachFile(att: ChatAttachment): void {
-			setAttachments((current) => dedupeAttachments([...current, att]));
+			setAttachments((current) => mergeAttachments(current, [att]));
 			ensureFocus();
 		},
 		focusComposer(): void {
@@ -460,14 +436,14 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	}
 
 	function onDockDragEnter(event: ReactDragEvent): void {
-		if (!hasFiles(event)) return;
+		if (!isAttachmentDrag(event.dataTransfer.types)) return;
 		event.preventDefault();
 		setDragActive(true);
 		setDragOver(true);
 	}
 
 	function onDockDragOver(event: ReactDragEvent): void {
-		if (!hasFiles(event)) return;
+		if (!isAttachmentDrag(event.dataTransfer.types)) return;
 		event.preventDefault();
 		event.dataTransfer.dropEffect = "copy";
 		setDragActive(true);
@@ -485,12 +461,16 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	}
 
 	function onDockDrop(event: ReactDragEvent): void {
-		if (!hasFiles(event)) return;
+		if (!isAttachmentDrag(event.dataTransfer.types)) return;
 		event.preventDefault();
-		setAttachments((current) => dedupeAttachments([...current, ...droppedAttachments(event)]));
+		const dropped = attachmentsFromDrop(event.dataTransfer, autorag.pathForFile);
 		setDragActive(false);
 		setDragOver(false);
 		setDragName(null);
+		if (dropped.length === 0) return;
+		setAttachments((current) => mergeAttachments(current, dropped));
+		// A drop on the collapsed bar opens the dock so the new chips are visible.
+		if (!openRef.current) onToggleOpen();
 		ensureFocus();
 	}
 
@@ -722,8 +702,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 						{attachments.length > 0 ? (
 							<div className="composer-attach-tray flex flex-wrap items-center gap-6 pb-6">
 								{attachments.map((att, index) => (
-									<span key={`${att.id}:${att.name}`} className="composer-attach-pill inline-flex h-chip-draft items-center gap-5 rounded-5 bg-selected-nav px-8 text-badge text-ink">
-										<FileTile kind={att.kind === "contact" ? "contact" : evidenceKind(att.name)} size={16} />
+									<span key={`${att.id}:${att.name}`} className="composer-attach-pill inline-flex h-chip-draft items-center gap-5 rounded-5 bg-selected-nav px-8 text-badge text-ink" title={att.id}>
+										<AttachmentGlyph att={att} />
 										<span className="max-w-[180px] truncate">{att.name}</span>
 										<button type="button" className="cursor-pointer text-ink-muted hover:text-danger-text" aria-label="첨부 제거" onClick={() => removeAttachment(index)}>
 											<CloseIcon size={9} />
@@ -782,12 +762,29 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	);
 });
 
+/** The 16px glyph of an attachment chip: the file-kind tile, the folder glyph, or a link badge. */
+function AttachmentGlyph({ att }: { readonly att: ChatAttachment }): ReactElement {
+	switch (att.kind) {
+		case "url":
+			return (
+				<span className="flex size-16 flex-none items-center justify-center rounded-4 bg-accent-soft text-accent" aria-hidden="true">
+					<LinkIcon size={11} />
+				</span>
+			);
+		case "folder":
+		case "contact":
+			return <FileTile kind={att.kind} size={16} />;
+		case "file":
+			return <FileTile kind={evidenceKind(att.name)} size={16} />;
+	}
+}
+
 /** A referenced file badge above the user bubble (v7 `.ref-file-chip`). */
 function RefFileChip({ att }: { readonly att: ChatAttachment }): ReactElement {
 	const folder = parentFolder(att);
 	return (
 		<span className="ref-file-chip inline-flex h-chip items-center gap-6 rounded-6 border border-border bg-input px-8 text-ink" title={att.id}>
-			<FileTile kind={att.kind === "contact" ? "contact" : evidenceKind(att.name)} size={16} />
+			<AttachmentGlyph att={att} />
 			<span className="ref-chip-name text-meta font-medium text-ink">{att.name}</span>
 			{folder === null ? null : <span className="ref-chip-sub text-badge text-ink-muted">· {folder}</span>}
 		</span>

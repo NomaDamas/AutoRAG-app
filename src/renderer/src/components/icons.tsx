@@ -25,6 +25,7 @@ import {
 	FolderPlus,
 	History,
 	LayoutGrid,
+	Link2,
 	List,
 	PanelLeft,
 	PanelRight,
@@ -120,6 +121,9 @@ export const PencilIcon = glyph(Pencil, 13, 2);
 export const RotateIcon = glyph(RotateCw, 10, 2.8);
 
 export const HistoryIcon = glyph(History, 16, 2);
+
+/** AI dock: a dropped web link's attachment chip. */
+export const LinkIcon = glyph(Link2, 12, 2.2);
 
 export const IconsViewIcon = glyph(LayoutGrid, 16, 1.9);
 
