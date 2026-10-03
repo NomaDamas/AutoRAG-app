@@ -139,8 +139,6 @@ export function applyColumnChoice(
 	);
 }
 
-/** The Contacts view keeps its own title while searching. */
-export const CONTACTS_PATH = "Contacts";
 export const SETTINGS_PATH = "Settings";
 
 export function openOrSelectSettingsTab(state: TabsState): TabsState {
@@ -156,7 +154,7 @@ export function tabTitle(tab: { readonly path: string }, view: { readonly isActi
 		return "Settings";
 	}
 	const query = view.query.trim();
-	if (view.isActive && query !== "" && tab.path !== CONTACTS_PATH) {
+	if (view.isActive && query !== "") {
 		return `Search "${query}"`;
 	}
 	return basename(tab.path) || tab.path;

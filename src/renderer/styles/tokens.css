@@ -149,7 +149,6 @@
   --tile-notion-fg: #FFFFFF;
   --tile-discord: #6671CF;
   --tile-telegram: #4F9BD0;
-  --tile-contact: oklch(0.52 0.13 285);
 
   /* ------------------------------------------------------- §2.10 Version tags */
   /* v7 `.vtag` rules. `near`/`exact` use the reference's exact values, which

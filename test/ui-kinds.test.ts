@@ -43,7 +43,6 @@ describe("kindMeta", () => {
 			"notion",
 			"discord",
 			"telegram",
-			"contact",
 		]);
 	});
 });
