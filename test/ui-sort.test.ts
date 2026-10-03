@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cycleSort, sortEntries } from "../src/renderer/src/state/sort";
+import { SORT_KEY_BY_COLUMN, cycleSort, sortEntries } from "../src/renderer/src/state/sort";
 import type { SortableEntry } from "../src/renderer/src/state/sort";
 
 function e(
@@ -36,6 +36,21 @@ describe("cycleSort", () => {
 	it("restarts the cycle when another column is clicked", () => {
 		const flipped = cycleSort(cycleSort(null, "name"), "name");
 		expect(cycleSort(flipped, "size")).toEqual({ key: "size", dir: -1, flipped: false });
+	});
+});
+
+describe("SORT_KEY_BY_COLUMN", () => {
+	it("maps every sortable column, Name included", () => {
+		expect(SORT_KEY_BY_COLUMN.name).toBe("name");
+		expect(SORT_KEY_BY_COLUMN.date).toBe("date");
+		expect(SORT_KEY_BY_COLUMN.size).toBe("size");
+		expect(SORT_KEY_BY_COLUMN.kind).toBe("kind");
+	});
+
+	it("leaves the non-sortable columns out", () => {
+		expect(SORT_KEY_BY_COLUMN.extension).toBeUndefined();
+		expect(SORT_KEY_BY_COLUMN.relativePath).toBeUndefined();
+		expect(SORT_KEY_BY_COLUMN.index).toBeUndefined();
 	});
 });
 

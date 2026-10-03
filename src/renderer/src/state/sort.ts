@@ -19,6 +19,18 @@ export interface SortState {
 /** Columns whose first click sorts descending. */
 const DESCENDING_FIRST: readonly SortKey[] = ["date", "size"];
 
+/**
+ * The list columns that expose a sort button, and the key each one cycles —
+ * Name included, matching the v7 reference (`c.key === 'name' || 'date' ||
+ * 'size' || 'kind'`). Any column absent here renders a static label.
+ */
+export const SORT_KEY_BY_COLUMN: Readonly<Record<string, SortKey>> = {
+	name: "name",
+	date: "date",
+	size: "size",
+	kind: "kind",
+};
+
 export function cycleSort(current: SortState | null, key: SortKey): SortState | null {
 	if (current !== null && current.key === key) {
 		return current.flipped ? null : { key, dir: current.dir === 1 ? -1 : 1, flipped: true };
