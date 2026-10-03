@@ -6,8 +6,6 @@
  * `settings.sourcesList` and passes down as `sourceStatus`. A place with no
  * reported status renders no dot.
  *
- * The People/Contacts place is parked until its view ships.
- *
  * The reference's **Sources** group (Slack / Gmail / Notion / Discord /
  * Telegram) is not rendered: those entries are not wired to the librarian's
  * crawler CLIs yet, so they only produced a "not linked" toast. Tracked as

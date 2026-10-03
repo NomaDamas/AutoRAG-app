@@ -3,7 +3,6 @@ import type { FsDirChange } from "../../../shared/live-contract";
 import type { FinderEntry } from "../data/entries";
 import { dirname } from "./paths";
 import type { SelectionState } from "./selection";
-import { CONTACTS_PATH } from "./tabs";
 
 export interface LiveTab {
 	readonly path: string;
@@ -14,7 +13,7 @@ export function watchSetFor(tabs: readonly LiveTab[]): string[] {
 	const dirs: string[] = [];
 	for (const tab of tabs) {
 		const path = tab.path;
-		if (path === "" || path === RECENTS_PATH || path === CONTACTS_PATH || seen.has(path)) {
+		if (path === "" || path === RECENTS_PATH || seen.has(path)) {
 			continue;
 		}
 		seen.add(path);

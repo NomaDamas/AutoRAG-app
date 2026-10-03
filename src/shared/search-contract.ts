@@ -27,10 +27,10 @@ export const SEARCH_CHANNELS = {
 	historyClear: "search:historyClear",
 } as const;
 
-/** A file or contact attached to a chat message. */
+/** A file attached to a chat message. */
 export interface ChatAttachment {
-	readonly kind: "file" | "contact";
-	/** Absolute path for files; contact id for contacts. */
+	readonly kind: "file";
+	/** Absolute path of the attached file. */
 	readonly id: string;
 	/** Display name. */
 	readonly name: string;

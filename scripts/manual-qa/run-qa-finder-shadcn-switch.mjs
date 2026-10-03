@@ -13,7 +13,7 @@ await page.waitForSelector('[role="row"]');
 await page.locator(".sidebar__item", { hasText: "Settings" }).click();
 await page.waitForSelector(".settings-panel");
 
-const sw = page.locator(".settings-row", { hasText: "Show hidden files" }).locator(".settings-switch");
+const sw = page.locator(".linear-row", { hasText: "Show hidden files" }).locator(".settings-switch");
 const thumb = sw.locator(".settings-switch__thumb");
 
 const geometry = async () => ({
@@ -42,7 +42,7 @@ await page.screenshot({ path: `${EVIDENCE}/switch-on.png` });
 const fails = [];
 if ((await sw.getAttribute("role")) !== "switch") fails.push("Radix role missing");
 if (onState.track.w !== 32 || onState.track.h !== 18.4) fails.push(`track ${onState.track.w}x${onState.track.h}`);
-if (onState.track.bg !== "rgb(255, 99, 99)") fails.push(`on bg ${onState.track.bg}`);
+if (onState.track.bg !== "rgb(10, 100, 216)") fails.push(`on bg ${onState.track.bg}`); // --accent (#0A64D8)
 if (onState.thumb.size !== 16 || onState.thumb.x !== 15) fails.push(`thumb ${JSON.stringify(onState.thumb)}`);
 
 await sw.click(); // restore off
