@@ -66,36 +66,60 @@ describe("sortEntries", () => {
 		expect(sortEntries(rows, null).map((r) => r.name)).toEqual(["나무.pdf", "Zebra", "가방.xlsx", "apple"]);
 	});
 
-	it("puts folders before files in both directions", () => {
-		expect(sortEntries(rows, { key: "name", dir: 1, flipped: false }).map((r) => r.kind)).toEqual([
-			"folder",
-			"folder",
-			"file",
-			"file",
+	it("interleaves folders and files by the active key instead of pinning folders first", () => {
+		const mixed = [
+			e("zebra.txt", "file", 1, 100, "PDF Document"),
+			e("bravo", "folder", 2, 0, "Folder"),
+			e("alpha.txt", "file", 3, 200, "PDF Document"),
+		];
+		// Name ascending: the folder sits between the two files.
+		expect(sortEntries(mixed, { key: "name", dir: 1, flipped: false }).map((r) => r.name)).toEqual([
+			"alpha.txt",
+			"bravo",
+			"zebra.txt",
 		]);
-		expect(sortEntries(rows, { key: "name", dir: -1, flipped: true }).map((r) => r.kind)).toEqual([
-			"folder",
-			"folder",
-			"file",
-			"file",
+		// Size descending: the folder (size 0) ranks last, not first.
+		expect(sortEntries(mixed, { key: "size", dir: -1, flipped: true }).map((r) => r.name)).toEqual([
+			"alpha.txt",
+			"zebra.txt",
+			"bravo",
+		]);
+	});
+
+	it("ranks an unparseable stamp or size (NaN) as 0, the minimum", () => {
+		const unknown = [
+			e("known.txt", "file", 50, 500, "PDF Document"),
+			e("unknown.txt", "file", Number.NaN, Number.NaN, "PDF Document"),
+		];
+		expect(sortEntries(unknown, { key: "size", dir: 1, flipped: false }).map((r) => r.name)).toEqual([
+			"unknown.txt",
+			"known.txt",
+		]);
+		expect(sortEntries(unknown, { key: "date", dir: 1, flipped: false }).map((r) => r.name)).toEqual([
+			"unknown.txt",
+			"known.txt",
+		]);
+		expect(sortEntries(unknown, { key: "size", dir: -1, flipped: true }).map((r) => r.name)).toEqual([
+			"known.txt",
+			"unknown.txt",
 		]);
 	});
 
 	it("compares names with the Korean locale", () => {
 		expect(sortEntries(rows, { key: "name", dir: 1, flipped: false }).map((r) => r.name)).toEqual([
-			"apple",
-			"Zebra",
 			"가방.xlsx",
 			"나무.pdf",
+			"apple",
+			"Zebra",
 		]);
 	});
 
 	it("sorts dates and sizes numerically", () => {
 		expect(sortEntries(rows, { key: "date", dir: -1, flipped: false }).map((r) => r.name)).toEqual([
 			"apple",
-			"Zebra",
 			"가방.xlsx",
 			"나무.pdf",
+			"Zebra",
 		]);
 		expect(sortEntries(rows, { key: "size", dir: 1, flipped: false }).map((r) => r.name)).toEqual([
 			"Zebra",

@@ -27,21 +27,22 @@ const home = mkdtempSync(join(tmpdir(), "ulw-sort-home-"));
 const documents = join(home, "Documents");
 const folderName = `ulw-sort-${stamp}`;
 const folderPath = join(documents, folderName);
-// Distinct sizes and distinct repeated content so dupey does not fold the
-// fixtures into one version family (identical bodies would stack them).
+// Distinct sizes and distinct repeated content so dupey does not fold the file
+// fixtures into one version family (identical bodies would stack them). The
+// extra folder proves folders are no longer pinned above the files.
 const fixtures = [
 	["alpha.txt", "a", 120],
-	["bravo.txt", "b", 3000],
 	["charlie.txt", "c", 1500],
 	["delta.txt", "d", 40],
 ];
-mkdirSync(folderPath, { recursive: true });
+mkdirSync(join(folderPath, "bravo-dir"), { recursive: true });
 for (const [name, char, size] of fixtures) await Bun.write(join(folderPath, name), char.repeat(size));
 
 const localeName = (a, b) => a.localeCompare(b, "ko");
-const namesAsc = fixtures.map(([name]) => name).sort(localeName);
+const namesAsc = ["alpha.txt", "bravo-dir", "charlie.txt", "delta.txt"];
 const namesDesc = [...namesAsc].reverse();
-const sizeDesc = ["bravo.txt", "charlie.txt", "alpha.txt", "delta.txt"];
+// Folders carry size 0, so Size ranks bravo-dir last descending / first ascending.
+const sizeDesc = ["charlie.txt", "alpha.txt", "delta.txt", "bravo-dir"];
 const sizeAsc = [...sizeDesc].reverse();
 
 const results = [];
@@ -73,7 +74,7 @@ try {
 		);
 	const sortedRows = async () => (await rows()).slice().sort(localeName);
 	const baseline = await rows();
-	check("S0 the fixture folder lists the four files", (await sortedRows()), namesAsc);
+	check("S0 the fixture folder lists the three files and one folder", (await sortedRows()), namesAsc);
 
 	// ----- header band exposes a sort button on every sortable column
 	const header = page.locator(".col-header");
@@ -110,6 +111,7 @@ try {
 	await nameButton.click();
 	await page.waitForTimeout(200);
 	check("S2 first Name click sorts ascending", await rows(), namesAsc);
+	check("S2 the folder sorts between the files by name, not above them", (await rows()).indexOf("bravo-dir"), 1);
 	check("S2 ascending state shows an up chevron and aria-sort=ascending", await headerState("Name"), {
 		tag: "BUTTON",
 		ariaSort: "ascending",
