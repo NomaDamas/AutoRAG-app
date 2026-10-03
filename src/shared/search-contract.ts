@@ -27,10 +27,15 @@ export const SEARCH_CHANNELS = {
 	historyClear: "search:historyClear",
 } as const;
 
-/** A file or contact attached to a chat message. */
+/**
+ * Something attached to a chat message: a local file or folder, a web link, or
+ * a contact. Files and folders dropped on the AI dock (from the Finder rows or
+ * from another app) and dropped links reach the agent as context: the path or
+ * URL always, and file content when it can be read.
+ */
 export interface ChatAttachment {
-	readonly kind: "file" | "contact";
-	/** Absolute path for files; contact id for contacts. */
+	readonly kind: "file" | "folder" | "url" | "contact";
+	/** Absolute path for files and folders; the URL for links; contact id for contacts. */
 	readonly id: string;
 	/** Display name. */
 	readonly name: string;
