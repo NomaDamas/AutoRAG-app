@@ -89,18 +89,12 @@ export function registerSettingsIpcHandlers(service: SettingsBridge): void {
 	ipcMain.handle(SETTINGS_CHANNELS.permSet, (_event, path: string, value, cascade) => service.permSet(path, value, cascade));
 	ipcMain.handle(SETTINGS_CHANNELS.permClear, (_event, path: string) => service.permClear(path));
 	ipcMain.handle(SETTINGS_CHANNELS.permExplicitUnder, (_event, path: string) => service.permExplicitUnder(path));
-	ipcMain.handle(SETTINGS_CHANNELS.contactsList, () => service.contactsList());
-	ipcMain.handle(SETTINGS_CHANNELS.contactsAdd, (_event, contact) => service.contactsAdd(contact));
-	ipcMain.handle(SETTINGS_CHANNELS.contactsUpdate, (_event, id: string, patch) => service.contactsUpdate(id, patch));
-	ipcMain.handle(SETTINGS_CHANNELS.contactsRemove, (_event, id: string) => service.contactsRemove(id));
-	ipcMain.handle(SETTINGS_CHANNELS.contactsTest, (_event, id: string) => service.contactsTest(id));
 	ipcMain.handle(SETTINGS_CHANNELS.sourcesList, () => service.sourcesList());
 	ipcMain.handle(SETTINGS_CHANNELS.sourcesSetEnabled, (_event, id: string, enabled: boolean) => service.sourcesSetEnabled(id, enabled));
 	ipcMain.handle(SETTINGS_CHANNELS.sourcesSetDescription, (_event, id: string, description: string) =>
 		service.sourcesSetDescription(id, description),
 	);
 	ipcMain.handle(SETTINGS_CHANNELS.modelsResolve, () => service.modelsResolve());
-	ipcMain.handle(SETTINGS_CHANNELS.assistantSend, (_event, surface, text: string) => service.assistantSend(surface, text));
 }
 
 export function registerLiveIpcHandlers(

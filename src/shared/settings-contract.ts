@@ -1,10 +1,8 @@
 /**
- * Settings, access-rule, and contacts contract shared by the
- * Electron main process and the renderer.
+ * Settings and access-rule contract shared by the Electron main process and
+ * the renderer.
  *
  * Persistence lives in the main process under Electron's userData dir.
- * The settings assistant chat is driven by a persona-configured
- * AutoRAGAgent (see persona options) — never a separately written agent.
  */
 
 export const SETTINGS_CHANNELS = {
@@ -15,17 +13,10 @@ export const SETTINGS_CHANNELS = {
 	permSet: "access:set",
 	permClear: "access:clear",
 	permExplicitUnder: "access:explicitUnder",
-	contactsList: "contacts:list",
-	contactsAdd: "contacts:add",
-	contactsUpdate: "contacts:update",
-	contactsRemove: "contacts:remove",
-	contactsTest: "contacts:test",
 	sourcesList: "sources:list",
 	sourcesSetEnabled: "sources:setEnabled",
 	sourcesSetDescription: "sources:setDescription",
 	modelsResolve: "models:resolve",
-	assistantSend: "assistant:send",
-	assistantEvent: "assistant:event",
 } as const;
 
 export type Permission = "ask" | "allow" | "deny";
@@ -38,13 +29,6 @@ export interface ResolvedPermission {
 	readonly sourcePath: string | null;
 	/** True when explicit descendant values differ from this folder's resolved value. */
 	readonly mixed: boolean;
-}
-
-export interface Contact {
-	readonly id: string;
-	readonly name: string;
-	readonly role: string;
-	readonly description: string;
 }
 
 export interface AppSettings {
@@ -153,13 +137,6 @@ export interface ConfiguredModelSnapshot {
 	readonly model: ConfiguredModel | null;
 }
 
-export type AssistantSurface = "models" | "sources";
-
-export type AssistantEvent =
-	| { readonly type: "text"; readonly surface: AssistantSurface; readonly delta: string }
-	| { readonly type: "done"; readonly surface: AssistantSurface }
-	| { readonly type: "error"; readonly surface: AssistantSurface; readonly message: string };
-
 export interface SettingsBridge {
 	get(): Promise<AppSettings>;
 	set(patch: Partial<AppSettings>): Promise<AppSettings>;
@@ -172,12 +149,6 @@ export interface SettingsBridge {
 	/** Explicit values at or under a folder path (drives Mixed detection and the confirm modal counts). */
 	permExplicitUnder(path: string): Promise<readonly { readonly path: string; readonly value: Permission }[]>;
 
-	contactsList(): Promise<readonly Contact[]>;
-	contactsAdd(contact: Contact): Promise<{ readonly ok: true } | { readonly ok: false; readonly error: "duplicate-id" }>;
-	contactsUpdate(id: string, patch: Partial<Omit<Contact, "id">>): Promise<void>;
-	contactsRemove(id: string): Promise<void>;
-	contactsTest(id: string): Promise<{ readonly ok: boolean; readonly latencyMs: number | null }>;
-
 	sourcesList(): Promise<DataSourcesSnapshot>;
 	/** Writes `enabled` into the shared AutoRAG config, then returns the fresh snapshot. */
 	sourcesSetEnabled(id: string, enabled: boolean): Promise<DataSourcesSnapshot>;
@@ -186,8 +157,4 @@ export interface SettingsBridge {
 
 	/** The provider/model the shared AutoRAG config resolves for the agent right now. */
 	modelsResolve(): Promise<ConfiguredModelSnapshot>;
-
-	/** Send one message to the settings assistant; events stream via assistantEvent. */
-	assistantSend(surface: AssistantSurface, text: string): Promise<void>;
-	readonly onEvent?: (listener: (event: AssistantEvent) => void) => () => void;
 }

@@ -119,7 +119,7 @@ describe("FsWatchService", () => {
 	it("diffs, deduplicates, and ignores virtual watch paths", async () => {
 		const fake = fakeBackend();
 		const service = createFsWatchService({ backend: fake.backend, onBatch: () => { }, canonicalize: identity });
-		await service.setWatchSet(["relative", "Recents", "Contacts", "/kakao/people", "/tmp/a", "/tmp/a"]);
+		await service.setWatchSet(["relative", "Recents", "/kakao/people", "/tmp/a", "/tmp/a"]);
 		expect(fake.subscribe).toHaveBeenCalledTimes(1);
 		expect(fake.subscribe).toHaveBeenCalledWith("/tmp/a", expect.any(Function), expect.any(Function));
 		await service.setWatchSet(["/tmp/b"]);

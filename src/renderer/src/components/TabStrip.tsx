@@ -38,10 +38,11 @@ export function TabStrip({
 					key={tab.id}
 					className={[
 						`tab group/tab${tab.active ? " tab--active" : ""}`,
-						"relative flex flex-1 min-w-0 items-center justify-center px-24 text-badge font-normal select-none cursor-default [-webkit-app-region:no-drag]",
+						"relative flex flex-1 min-w-0 items-center justify-center px-24 text-badge font-normal select-none cursor-pointer [-webkit-app-region:no-drag]",
 						index > 0 ? "border-l border-tabstrip-line" : "",
 						tab.active ? "bg-tab-active text-ink" : cn(TAB_GRADIENT, TAB_GRADIENT_HOVER, "text-tab-text"),
 					].join(" ")}
+					onClick={() => onSelect(tab.id)}
 				>
 					{tab.flash ? (
 						<span className="absolute left-6 top-1/2 -mt-3 flex" aria-hidden="true">
@@ -50,8 +51,11 @@ export function TabStrip({
 					) : null}
 					<button
 						type="button"
-						className="tab__title min-w-0 flex-[0_1_auto] overflow-hidden whitespace-nowrap text-ellipsis p-0 border-0 rounded-none bg-transparent text-inherit appearance-none text-center cursor-default"
-						onClick={() => onSelect(tab.id)}
+						className="tab__title min-w-0 flex-[0_1_auto] overflow-hidden whitespace-nowrap text-ellipsis p-0 border-0 rounded-none bg-transparent text-inherit appearance-none text-center cursor-pointer"
+						onClick={(event: MouseEvent<HTMLButtonElement>) => {
+							event.stopPropagation();
+							onSelect(tab.id);
+						}}
 					>
 						{tab.title}
 					</button>

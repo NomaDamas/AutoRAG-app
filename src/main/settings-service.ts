@@ -1,60 +1,29 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import type {
-	AppSettings,
-	AssistantEvent,
-	AssistantSurface,
-	Contact,
-	Permission,
-	ResolvedPermission,
-	SettingsBridge,
-} from "../shared/settings-contract";
-import { DEFAULT_SETTINGS, SETTINGS_CHANNELS } from "../shared/settings-contract";
+import type { AppSettings, Permission, ResolvedPermission, SettingsBridge } from "../shared/settings-contract";
+import { DEFAULT_SETTINGS } from "../shared/settings-contract";
 import type { DataSourceStatusService } from "./datasource-status";
 import type { ModelStatusService } from "./model-status";
 
 interface SettingsState {
 	settings: AppSettings;
 	permissions: Record<string, Permission>;
-	contacts: Contact[];
-}
-
-interface ChatAgent {
-	readonly agent: {
-		subscribe(listener: (event: unknown) => void): () => void;
-	};
-	prompt(text: string): Promise<void>;
-	dispose(): void;
 }
 
 export interface SettingsServiceDeps {
 	readonly directory: string;
-	readonly createChatSession: (surface: AssistantSurface) => ChatAgent;
-	readonly send: (channel: string, payload: AssistantEvent) => void;
 	/** Live view of the shared AutoRAG config's datasources; the app keeps no copy. */
 	readonly dataSources: DataSourceStatusService;
 	/** Live view of the shared AutoRAG config's resolved model; the app keeps no copy. */
 	readonly models: ModelStatusService;
 	/** Fired after every successful set() so live services can adopt the change. */
 	readonly onSettingsChanged?: (settings: AppSettings) => void;
-	readonly now?: () => Date;
 }
 
 const emptyState = (): SettingsState => ({
 	settings: DEFAULT_SETTINGS,
 	permissions: {},
-	contacts: [],
 });
-
-function isTextDelta(event: unknown): event is { readonly type: "message_update"; readonly assistantMessageEvent: { readonly type: "text_delta"; readonly delta: string } } {
-	if (typeof event !== "object" || event === null) return false;
-	const candidate = event as { readonly type?: unknown; readonly assistantMessageEvent?: unknown };
-	if (candidate.type !== "message_update" || typeof candidate.assistantMessageEvent !== "object" || candidate.assistantMessageEvent === null) {
-		return false;
-	}
-	const update = candidate.assistantMessageEvent as { readonly type?: unknown; readonly delta?: unknown };
-	return update.type === "text_delta" && typeof update.delta === "string";
-}
 
 async function loadState(path: string): Promise<SettingsState> {
 	try {
@@ -64,7 +33,6 @@ async function loadState(path: string): Promise<SettingsState> {
 		return {
 			settings: { ...DEFAULT_SETTINGS, ...(state.settings ?? {}) },
 			permissions: state.permissions ?? {},
-			contacts: state.contacts ?? [],
 		};
 	} catch {
 		return emptyState();
@@ -74,7 +42,6 @@ async function loadState(path: string): Promise<SettingsState> {
 export function createSettingsService(deps: SettingsServiceDeps): SettingsBridge {
 	const path = join(deps.directory, "settings-state.json");
 	let statePromise = loadState(path);
-	const now = deps.now ?? (() => new Date());
 	const persist = async (): Promise<void> => {
 		const state = await statePromise;
 		await mkdir(dirname(path), { recursive: true });
@@ -135,32 +102,6 @@ export function createSettingsService(deps: SettingsServiceDeps): SettingsBridge
 				.filter(([source]) => source === pathName || source.startsWith(`${pathName}/`))
 				.map(([source, value]) => ({ path: source, value }));
 		},
-		contactsList: async () => (await statePromise).contacts,
-		contactsAdd: async (contact) => {
-			const state = await statePromise;
-			if (state.contacts.some((candidate) => candidate.id === contact.id)) return { ok: false, error: "duplicate-id" };
-			await mutate((current) => {
-				current.contacts.push(contact);
-			});
-			return { ok: true };
-		},
-		contactsUpdate: async (id, patch) => {
-			await mutate((current) => {
-				current.contacts = current.contacts.map((contact) =>
-					contact.id === id ? { ...contact, ...patch, id: contact.id } : contact,
-				);
-			});
-		},
-		contactsRemove: async (id) => {
-			await mutate((current) => {
-				current.contacts = current.contacts.filter((contact) => contact.id !== id);
-			});
-		},
-		contactsTest: async (id) => {
-			const started = now().getTime();
-			const exists = (await statePromise).contacts.some((contact) => contact.id === id);
-			return { ok: exists, latencyMs: exists ? Math.max(0, now().getTime() - started) : null };
-		},
 		sourcesList: () => deps.dataSources.list(),
 		sourcesSetEnabled: async (id, enabled) => {
 			await deps.dataSources.setEnabled(id, enabled);
@@ -171,33 +112,5 @@ export function createSettingsService(deps: SettingsServiceDeps): SettingsBridge
 			return deps.dataSources.list();
 		},
 		modelsResolve: () => deps.models.resolve(),
-		assistantSend: async (surface, text) => {
-			let session: ChatAgent | undefined;
-			let unsubscribe: (() => void) | undefined;
-			try {
-				session = deps.createChatSession(surface);
-				unsubscribe = session.agent.subscribe((event) => {
-					if (isTextDelta(event)) {
-						deps.send(SETTINGS_CHANNELS.assistantEvent, {
-							type: "text",
-							surface,
-							delta: event.assistantMessageEvent.delta,
-						});
-					}
-				});
-				await session.prompt(text);
-				deps.send(SETTINGS_CHANNELS.assistantEvent, { type: "done", surface });
-			} catch (error) {
-				deps.send(SETTINGS_CHANNELS.assistantEvent, {
-					type: "error",
-					surface,
-					message: error instanceof Error ? error.message : String(error),
-				});
-			} finally {
-				unsubscribe?.();
-				session?.dispose();
-			}
-		},
-		onEvent: () => () => undefined,
 	};
 }

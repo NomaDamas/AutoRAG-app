@@ -120,10 +120,6 @@ describe("tabTitle", () => {
 		expect(tabTitle(tab, { isActive: false, query: "예산" })).toBe("2026 Q3");
 	});
 
-	it("keeps the Contacts title while searching", () => {
-		expect(tabTitle({ path: "Contacts" }, { isActive: true, query: "박" })).toBe("Contacts");
-	});
-
 	it("keeps the Settings title and ignores search query", () => {
 		expect(tabTitle({ path: SETTINGS_PATH }, { isActive: true, query: "model" })).toBe("Settings");
 	});
