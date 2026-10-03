@@ -30,6 +30,7 @@ import {
 	nearestExistingAncestor,
 	listingSurvivor,
 	pruneSelection,
+	reconcileListing,
 	watchSetFor,
 	type IncrementalListing,
 	type ListingScope,
@@ -280,6 +281,8 @@ export function useFinderController(
 	const [sort, setSort] = useState<SortState | null>(null);
 	const [zone, setZone] = useState<FocusZone>("finder");
 	const [listing, setListing] = useState<readonly FinderEntry[]>([]);
+	/** The tab whose folder `listing` was last switched to; see the swap below. */
+	const [listingTabId, setListingTabId] = useState(tabsState.activeId);
 	const [hits, setHits] = useState<readonly FinderEntry[]>([]);
 	const [locations, setLocations] = useState<readonly FinderLocation[]>([]);
 	const [indexStatus, setIndexStatus] = useState<Readonly<Record<string, IndexStatus>>>({});
@@ -313,6 +316,8 @@ export function useFinderController(
 	const listingDirRef = useRef("");
 	const layerStoreRef = useRef<LayerStore>(EMPTY_LAYER_STORE);
 	const staleTabsRef = useRef(new Set<number>());
+	/** Each tab's last adopted listing, so switching back paints it at once. */
+	const tabListingsRef = useRef(new Map<number, { readonly dir: string; readonly entries: readonly FinderEntry[] }>());
 	const previousPathRef = useRef<string | null>(null);
 	const previousTabIdRef = useRef<number | null>(null);
 	const incrementalRef = useRef<{ source: FinderSource; listing: IncrementalListing } | null>(null);
@@ -333,6 +338,18 @@ export function useFinderController(
 	const tab = activeTab(tabsState);
 	const path = tab.path;
 	const selection = tab.selection;
+	// A tab switch shows that tab's last listing in the same render that
+	// switches tabs, so the first frame after the click is already the target
+	// folder — not the previous tab's rows, then bare rows, then icons. The
+	// reload the switch starts revalidates it underneath (`reconcileListing`).
+	if (listingTabId !== tab.id) {
+		setListingTabId(tab.id);
+		const snapshot = tabListingsRef.current.get(tab.id);
+		if (snapshot !== undefined && snapshot.dir === path) {
+			listingDirRef.current = snapshot.dir;
+			setListing(snapshot.entries);
+		}
+	}
 	const searching = query.trim() !== "";
 	const dupey = selectDupey(layerStore);
 	layerStoreRef.current = layerStore;
@@ -409,6 +426,11 @@ export function useFinderController(
 	 */
 	const adoptListing = useCallback((dir: string, entries: readonly FinderEntry[]): void => {
 		listingDirRef.current = dir;
+		const snapshots = tabListingsRef.current;
+		snapshots.set(activeTabIdRef.current, { dir, entries });
+		for (const id of snapshots.keys()) {
+			if (!tabsRef.current.some((current) => current.id === id)) snapshots.delete(id);
+		}
 		const previous = listingRef.current;
 		const survives = listingSurvivor(dir, previous, entries);
 		listingRef.current = entries;
@@ -477,9 +499,21 @@ export function useFinderController(
 					reportError(result.error);
 					return;
 				}
-				adoptListing(requestedPath, result.entries);
-				void source.enrich(requestedPath, result.entries).then((enriched) => {
-					if (pathRef.current === requestedPath && generationRef.current === requestGeneration) adoptListing(requestedPath, enriched);
+				// Rows unchanged on disk keep their icons and identity: a tab
+				// switch or focus resync that finds nothing new paints nothing.
+				const entries = reconcileListing(listingRef.current, result.entries);
+				adoptListing(requestedPath, entries);
+				void source.enrich(requestedPath, entries).then((enriched) => {
+					if (pathRef.current === requestedPath && generationRef.current === requestGeneration) {
+						adoptListing(requestedPath, enriched);
+						return;
+					}
+					// The user switched tabs before the icons landed: finish that
+					// tab's snapshot anyway, unless it has moved on since.
+					const snapshot = tabListingsRef.current.get(scope.tabId);
+					if (snapshot?.entries === entries) {
+						tabListingsRef.current.set(scope.tabId, { dir: requestedPath, entries: enriched });
+					}
 				}).catch((error: unknown) => console.error("background listing enrichment failed", error));
 				incrementalRef.current?.listing.fullAdopted(scope);
 			});
@@ -711,9 +745,16 @@ export function useFinderController(
 				.list(target)
 				.then((entries) => {
 					if (!live) return;
-					setPaneListings((current) => ({ ...current, [target]: entries }));
+					setPaneListings((current) => {
+						const reconciled = reconcileListing(current[target] ?? [], entries);
+						return reconciled === current[target] ? current : { ...current, [target]: reconciled };
+					});
 					void source.enrich(target, entries).then((enriched) => {
-						if (live) setPaneListings((current) => ({ ...current, [target]: enriched }));
+						if (!live) return;
+						setPaneListings((current) => {
+							const patched = applyEntryPatch(current[target] ?? [], { entries: enriched, removed: [] });
+							return patched === current[target] ? current : { ...current, [target]: patched };
+						});
 					}).catch((error: unknown) => console.error("background pane enrichment failed", error));
 				})
 				.catch((error: unknown) => {

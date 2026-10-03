@@ -10,6 +10,7 @@ import {
 	nearestExistingAncestor,
 	listingSurvivor,
 	pruneSelection,
+	reconcileListing,
 	watchSetFor,
 	type EntryPatch,
 	type IncrementalListing,
@@ -340,6 +341,34 @@ describe("live renderer state", () => {
 		expect(changed[0]).not.toBe(rows[0]);
 		expect(changed[1]).toBe(rows[1]);
 		expect(changed[0]?.sizeLabel).toBe("2 B");
+	});
+
+	it("revalidating an unchanged folder keeps the enriched listing itself", () => {
+		const stamp = "2026-09-30T00:00:00.000Z";
+		const bare = (path: string): FinderEntry => ({ ...entry(path), modifiedAt: stamp });
+		const shown = [
+			{ ...bare("/d/a.md"), iconUrl: "thumb://a", kindLabel: "Markdown Document" },
+			{ ...bare("/d/b.md"), iconUrl: null, kindLabel: "Markdown Document" },
+		];
+		expect(reconcileListing(shown, [bare("/d/a.md"), bare("/d/b.md")])).toBe(shown);
+	});
+
+	it("a relist carries enrichment only for rows unchanged on disk", () => {
+		const stamp = "2026-09-30T00:00:00.000Z";
+		const bare = (path: string, modifiedAt = stamp): FinderEntry => ({ ...entry(path), modifiedAt });
+		const shown = [
+			{ ...bare("/d/keep.md"), iconUrl: "thumb://keep", kindLabel: "Markdown Document" },
+			{ ...bare("/d/edited.md"), iconUrl: "thumb://edited-old", kindLabel: "Markdown Document" },
+			{ ...bare("/d/gone.md"), iconUrl: "thumb://gone", kindLabel: "Markdown Document" },
+		];
+		const edited = bare("/d/edited.md", "2026-10-01T00:00:00.000Z");
+		const created = bare("/d/new.md");
+		const next = reconcileListing(shown, [bare("/d/keep.md"), edited, created]);
+		expect(next.map((row) => row.path)).toEqual(["/d/keep.md", "/d/edited.md", "/d/new.md"]);
+		expect(next[0]).toBe(shown[0]);
+		// A newer mtime means the old thumbnail and OS kind may be wrong: bare until re-enriched.
+		expect(next[1]).toBe(edited);
+		expect(next[2]).toBe(created);
 	});
 
 	it("returns the same selection object when nothing is pruned", () => {

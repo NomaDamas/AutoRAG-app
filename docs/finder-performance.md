@@ -83,6 +83,58 @@ Space → visible preview content: image 43 ms, PDF 55 ms (both windows
 visible), unchanged from the baseline shape because the preview pipeline was
 already streaming-based.
 
+## Tab switching
+
+```sh
+bun run build
+bun scripts/benchmarks/finder-tab-switch.mjs --view list \
+  --seed-user-data "$HOME/Library/Application Support/@autorag/app"
+# Dev renderer, as `make run` serves it. `--rendererOnly` still spawns
+# Electron (on the real userData) and exits with it, so hand it a stand-in:
+printf '#!/bin/sh\nexec sleep 86400\n' > /tmp/noop-electron && chmod +x /tmp/noop-electron
+ELECTRON_EXEC_PATH=/tmp/noop-electron node_modules/.bin/electron-vite dev --rendererOnly &
+bun scripts/benchmarks/finder-tab-switch.mjs --renderer-url http://localhost:5173 \
+  --seed-user-data "$HOME/Library/Application Support/@autorag/app"
+```
+
+Two tabs on ~/Downloads (376 entries) and ~/Desktop (48); every switch is a
+click on the other tab, 8 each way, sampling every animation frame for 1.5 s.
+`--seed-user-data` copies only `dupey-cache` and `settings`, so version stacks
+match a real install. "First correct frame" is the first frame with the target
+tab's title over rows that live in the target folder; "last change" is the
+last frame whose rows or icons still changed; a "stale frame" named the target
+folder over the previous tab's rows.
+
+Before, a switch only moved `activeId`. The controller holds one listing, so
+the first frame put the new title over the previous tab's rows; the effect then
+relisted the folder over IPC and painted bare rows (letter tiles, no OS icons),
+and the enrichment pass painted the icons again: three pictures per switch.
+Now each tab keeps the last listing it adopted and the render that switches
+tabs adopts it, so the first frame is the target folder with its icons. The
+reload the switch starts is a revalidation: `reconcileListing` keeps rows that
+are unchanged on disk (same path and mtime) with their enrichment and object
+identity, so an unchanged folder paints nothing more, and a folder that changed
+while its tab was in the background updates in place.
+
+Dev renderer (macOS, 2026-10-03), p50 / p90 ms:
+
+| view | to | first correct frame (before → after) | last change (before → after) | stale frames, mean |
+| --- | --- | ---: | ---: | ---: |
+| list | Downloads | 43.8 / 56.2 → 15.8 / 17.0 | 43.8 / 56.2 → none | 1.4 → 0 |
+| list | Desktop | 47.8 / 59.8 → 15.7 / 17.7 | 58.4 / 73.8 → none | 1.5 → 0 |
+| icons | Downloads | 43.6 / 74.6 → 16.6 / 27.9 | 59.2 / 90.6 → none | 1.6 → 0 |
+| icons | Desktop | 46.1 / 73.6 → 15.2 / 26.0 | 58.3 / 73.6 → none | 1.8 → 0 |
+| columns | Downloads | 42.2 / 46.1 → 41.3 / 42.5 | 121.2 / 132.2 → none | 0 → 0 |
+| columns | Desktop | 14.3 / 15.1 → 14.4 / 15.6 | 54.5 / 55.6 → none | 0 → 0 |
+
+Production build, same runs: the first correct frame was already about one
+frame (list 17.4 / 21.5 → 14.7 / 16.0 ms for Downloads); what changes is that
+2–4 of every 8 switches used to repaint 20–38 ms later (bare rows, then icons)
+and now none do. The columns ~41 ms for Downloads is the dev build rendering all
+348 rows of the unvirtualized column pane (14.5 ms in production); the IPC
+cost is not on the switch path any more (`listDir` 3.4 ms, `enrichEntries`
+1.7 ms, `indexStatus` 8.4 ms warm for Downloads, now all off-screen).
+
 ## Regression suites passing on this branch
 
 `bun run typecheck`, `bun run test`, `bun run build`, plus manual QA:
