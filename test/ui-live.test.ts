@@ -100,7 +100,6 @@ describe("live renderer state", () => {
 			watchSetFor([
 				{ path: "" },
 				{ path: "Recents" },
-				{ path: "Contacts" },
 				{ path: "/Users/me/Documents" },
 				{ path: "/Users/me/Documents" },
 				{ path: "/Users/me/Desktop" },

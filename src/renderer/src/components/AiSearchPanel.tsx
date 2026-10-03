@@ -723,7 +723,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 							<div className="composer-attach-tray flex flex-wrap items-center gap-6 pb-6">
 								{attachments.map((att, index) => (
 									<span key={`${att.id}:${att.name}`} className="composer-attach-pill inline-flex h-chip-draft items-center gap-5 rounded-5 bg-selected-nav px-8 text-badge text-ink">
-										<FileTile kind={att.kind === "contact" ? "contact" : evidenceKind(att.name)} size={16} />
+										<FileTile kind={evidenceKind(att.name)} size={16} />
 										<span className="max-w-[180px] truncate">{att.name}</span>
 										<button type="button" className="cursor-pointer text-ink-muted hover:text-danger-text" aria-label="첨부 제거" onClick={() => removeAttachment(index)}>
 											<CloseIcon size={9} />
@@ -787,7 +787,7 @@ function RefFileChip({ att }: { readonly att: ChatAttachment }): ReactElement {
 	const folder = parentFolder(att);
 	return (
 		<span className="ref-file-chip inline-flex h-chip items-center gap-6 rounded-6 border border-border bg-input px-8 text-ink" title={att.id}>
-			<FileTile kind={att.kind === "contact" ? "contact" : evidenceKind(att.name)} size={16} />
+			<FileTile kind={evidenceKind(att.name)} size={16} />
 			<span className="ref-chip-name text-meta font-medium text-ink">{att.name}</span>
 			{folder === null ? null : <span className="ref-chip-sub text-badge text-ink-muted">· {folder}</span>}
 		</span>

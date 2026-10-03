@@ -267,17 +267,17 @@ try {
 	await sleep(600);
 	await shot(page, "11-settings-general");
 	await shot(page, "12-settings-panel", ".settings-panel");
-	await shot(page, "13-settings-section", ".settings-section >> nth=0");
-	await shot(page, "14-settings-switch-row", ".settings-row:has(.settings-switch) >> nth=0");
+	await shot(page, "13-settings-section", ".linear-section-title >> nth=0");
+	await shot(page, "14-settings-switch-row", ".linear-row:has(.settings-switch) >> nth=0");
 	for (const [tab, name] of [
 		["Models", "15-settings-models"],
 		["Data Sources", "16-settings-sources"],
 	]) {
-		await page.locator(".settings-sidebar__item", { hasText: tab }).click();
+		await page.locator(".settings-nav-item", { hasText: tab }).click();
 		await sleep(600);
 		await shot(page, name);
 	}
-	await page.locator(".settings-sidebar__item", { hasText: "General" }).click();
+	await page.locator(".settings-nav-item", { hasText: "General" }).click();
 	await sleep(400);
 	// Settings lives in its own tab in v7; ⌘W closes it back to the finder tab.
 	await page.keyboard.press("Meta+w");

@@ -79,7 +79,6 @@ import {
 	applyColumnChoice,
 	canCloseTab,
 	closeTab,
-	CONTACTS_PATH,
 	createTabsState,
 	goBack,
 	goForward,
@@ -1191,7 +1190,7 @@ export function useFinderController(
 
 	/** Sidebar "New folder": real mkdir in the current folder, then select the row. */
 	const newFolder = useCallback(() => {
-		if (searching || path === "" || path === RECENTS_PATH || path === SETTINGS_PATH || path === CONTACTS_PATH) {
+		if (searching || path === "" || path === RECENTS_PATH || path === SETTINGS_PATH) {
 			return;
 		}
 		source
@@ -1616,8 +1615,7 @@ export function useFinderController(
 		canGoBack: tab.back.length > 0,
 		canGoForward: tab.fwd.length > 0,
 		query,
-		searchPlaceholder:
-			path === CONTACTS_PATH ? "Search contacts" : path === SETTINGS_PATH ? "Search settings" : "Search files, contents…",
+		searchPlaceholder: path === SETTINGS_PATH ? "Search settings" : "Search files, contents…",
 		searchFocused,
 		searching,
 		emptyText: emptyStateText(query, path),
