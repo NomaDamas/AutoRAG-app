@@ -67,8 +67,13 @@ export function Sidebar({
 						<div className="sidebar__progress-fill h-full rounded-4 bg-warn-dot" style={{ width: `${INDEXING_STATUS.percent}%` }} />
 					</div>
 				</div>
-				<button type="button" className={ITEM_CLASS} onClick={onOpenSettings}>
-					<GearIcon className="sidebar__item-icon flex-none text-ink-muted" />
+				<button
+					type="button"
+					className={`${ITEM_CLASS}${activeLabel === "Settings" ? " bg-selected-nav text-ink-primary font-medium shadow-xs" : ""}`}
+					aria-current={activeLabel === "Settings" ? "true" : undefined}
+					onClick={onOpenSettings}
+				>
+					<GearIcon className={`sidebar__item-icon flex-none ${activeLabel === "Settings" ? "text-accent-text" : "text-ink-muted"}`} />
 					<span className="sidebar__item-label flex-1 min-w-0 truncate">Settings</span>
 					{showHotkeys ? <Keycap label="⌘," /> : null}
 				</button>
