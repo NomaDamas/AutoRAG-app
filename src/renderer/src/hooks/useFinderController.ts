@@ -20,7 +20,7 @@ import {
 	type FinderMenuAction,
 	type FinderMenuEntry,
 } from "../state/context-menu";
-import { emptyStateText, indexToast, statusBarText, trashToast } from "../state/format";
+import { emptyStateText, indexToast, trashToast } from "../state/format";
 import { type FocusZone, resolveKeyAction } from "../state/keymap";
 import {
 	applyEntryPatch,
@@ -169,7 +169,6 @@ export interface FinderController {
 	readonly sort: SortState | null;
 	readonly zone: FocusZone;
 	readonly selection: SelectionState;
-	readonly statusText: string;
 	readonly toast: string | null;
 	readonly flashPath: string | null;
 	readonly renamePath: string | null;
@@ -902,22 +901,10 @@ export function useFinderController(
 		setTabsState((state) => patchActiveTab(state, (current) => ({ ...current, selection: next })));
 	}, []);
 
-	const selectedEntries = useMemo(
-		() => viewEntries.filter((entry) => selection.keys.includes(entry.path)),
-		[viewEntries, selection.keys],
-	);
 	const focusedEntry = useMemo(
 		() => viewEntries.find((entry) => entry.path === selection.focus) ?? null,
 		[viewEntries, selection.focus],
 	);
-	/** The status bar counts the pane that holds the focus in the column view. */
-	const statusCount = useMemo(() => {
-		if (layout !== "columns") {
-			return rows.length;
-		}
-		const focused = paneEntries.find((entries) => entries.some((entry) => entry.path === selection.focus));
-		return (focused ?? paneEntries[0] ?? []).length;
-	}, [layout, rows, paneEntries, selection.focus]);
 
 	const pruneColumns = useCallback((removed: readonly string[]) => {
 		setTabsState((state) =>
@@ -1556,7 +1543,6 @@ export function useFinderController(
 		sort,
 		zone,
 		selection,
-		statusText: statusBarText(statusCount, selectedEntries.length),
 		toast,
 		flashPath,
 		renamePath: rename?.path ?? null,

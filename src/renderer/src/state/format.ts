@@ -66,10 +66,6 @@ export function parseSizeLabel(label: string): number {
 	return Number(match[1]) * (scale[match[2] ?? "B"] ?? 1);
 }
 
-export function statusBarText(itemCount: number, selectedCount: number): string {
-	return `${itemCount} items${selectedCount > 0 ? ` · ${selectedCount} selected` : ""}`;
-}
-
 export function trashToast(paths: readonly string[]): string {
 	if (paths.length === 1) {
 		return `${basename(paths[0] ?? "")} — 휴지통으로 이동했습니다`;

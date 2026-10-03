@@ -18,7 +18,6 @@ import type { CitationEvidence } from "../../../shared/search-contract";
 import type { FinderEntry } from "../data/entries";
 import { cn } from "../lib/cn";
 import {
-	evidenceCrumbs,
 	evidenceDetail,
 	evidenceKind,
 	feedbackToastText,
@@ -105,7 +104,7 @@ export function Inspector({
 	const split = evidenceVisible && evidence.length > 0;
 	return (
 		<aside
-			className="inspector w-inspector min-w-0 h-full flex flex-col bg-subtle border-l border-border overflow-hidden"
+			className="inspector w-full min-w-0 h-full flex flex-col bg-subtle border-l border-border overflow-hidden"
 			aria-label="Inspector"
 		>
 			<InfoHalf
@@ -436,9 +435,20 @@ function EvidenceHalf({
 				<div className="preview-paper flex-none h-100 flex items-center justify-center overflow-hidden rounded-6 border border-border bg-window shadow-raised mb-10">
 					<FileTile kind={evidenceKind(item.title)} large />
 				</div>
-				<div className="preview-title text-sm font-semibold text-ink leading-[1.3] [overflow-wrap:anywhere]">
-					{item.number}. {item.title}
-				</div>
+				{source === null ? (
+					<div className="preview-title text-sm font-semibold text-ink leading-[1.3] [overflow-wrap:anywhere]">
+						{item.number}. {item.title}
+					</div>
+				) : (
+					<button
+						type="button"
+						className="preview-title text-left text-sm font-semibold text-ink leading-[1.3] [overflow-wrap:anywhere] cursor-pointer border-0 bg-transparent p-0 transition-colors duration-(--dur-color) ease-[ease] hover:text-accent-text"
+						title="Show in Finder"
+						onClick={() => onReveal(source)}
+					>
+						{item.number}. {item.title}
+					</button>
+				)}
 				<div className="preview-sub mt-4 text-badge text-ink-muted">
 					{source === null ? evidenceDetail(item.confidence) : `${source} · ${evidenceDetail(item.confidence)}`}
 				</div>
@@ -479,22 +489,6 @@ function EvidenceHalf({
 						<EvidenceExcerpt key={`${index}`} text={excerpt} />
 					))}
 				</div>
-
-				{source === null ? null : (
-					<button
-						type="button"
-						className="mt-12 flex items-center gap-4 min-w-0 max-w-full h-chip px-8 rounded-6 border-0 bg-input text-badge text-ink-body cursor-pointer transition-[background,color] duration-(--dur-color) ease-[ease] hover:bg-hover-strong hover:text-ink"
-						title="Show in Finder"
-						onClick={() => onReveal(source)}
-					>
-						{evidenceCrumbs(source).map((segment, index) => (
-							<span key={`${index}`} className="flex items-center gap-4 min-w-0 truncate">
-								<span className={cn(segment.last && "font-semibold")}>{segment.label}</span>
-								{segment.last ? null : <span className="text-ink-faint">›</span>}
-							</span>
-						))}
-					</button>
-				)}
 			</div>
 		</div>
 	);

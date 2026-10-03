@@ -22,6 +22,7 @@ import { SETTINGS_PATH } from "./state/tabs";
 import { basename, breadcrumbTrail, dirname } from "./state/paths";
 import {
 	loadListColumns,
+	listFixedWidth,
 	resetListColumns,
 	saveListColumns,
 	setListColumnWidth,
@@ -29,7 +30,6 @@ import {
 	type ListColumnKey,
 	type ListColumnsState,
 } from "./state/list-columns";
-import { formatDevLabel, type DevLabel } from "../../shared/app-info";
 import { TabStrip } from "./components/TabStrip";
 import { Toolbar } from "./components/Toolbar";
 import { useFinderController } from "./hooks/useFinderController";
@@ -42,6 +42,18 @@ const SIDEBAR_KEY = "autorag.shell.sidebar";
 const INSPECTOR_KEY = "autorag.shell.inspector";
 const AI_OPEN_KEY = "autorag.shell.aiOpen";
 const AI_HEIGHT_KEY = "autorag.shell.aiHeight";
+const SIDEBAR_WIDTH_KEY = "autorag.shell.sidebarWidth";
+const INSPECTOR_WIDTH_KEY = "autorag.shell.inspectorWidth";
+
+/** Pane resize limits (px): the sidebar and inspector stay usable at both ends. */
+const SIDEBAR_MIN = 180;
+const SIDEBAR_MAX = 320;
+const INSPECTOR_MIN = 300;
+const INSPECTOR_MAX = 560;
+
+function clampWidth(value: number, min: number, max: number): number {
+	return Math.min(max, Math.max(min, Math.round(value)));
+}
 
 function loadFlag(key: string, fallback: boolean): boolean {
 	try {
@@ -110,11 +122,45 @@ function iconRect(path: string): Bounds | null {
 	return { x: box.x, y: box.y, width: box.width, height: box.height };
 }
 
-/** Unpackaged runs label the window with their clone, branch, and commit. */
-const DEV_LABEL = (() => {
-	const dev = (window as unknown as { readonly autorag?: { readonly dev?: DevLabel | null } }).autorag?.dev;
-	return dev === undefined || dev === null ? null : formatDevLabel(dev);
-})();
+/** Vertical pane resize grip: an invisible 6px hit strip with a hover wash. */
+function PaneGrip({
+	position,
+	label,
+	onDelta,
+}: {
+	readonly position: { readonly left: number } | { readonly right: number };
+	readonly label: string;
+	/** Incremental horizontal delta (px) since the last move event. */
+	readonly onDelta: (dx: number) => void;
+}): ReactElement {
+	const drag = useRef<number | null>(null);
+	return (
+		<div
+			role="separator"
+			aria-label={label}
+			aria-orientation="vertical"
+			className="absolute top-0 bottom-0 z-20 w-6 cursor-col-resize [-webkit-app-region:no-drag] hover:bg-accent-soft"
+			style={position}
+			onPointerDown={(event) => {
+				event.preventDefault();
+				drag.current = event.clientX;
+				event.currentTarget.setPointerCapture(event.pointerId);
+			}}
+			onPointerMove={(event) => {
+				if (drag.current === null) return;
+				onDelta(event.clientX - drag.current);
+				drag.current = event.clientX;
+			}}
+			onPointerUp={(event) => {
+				drag.current = null;
+				event.currentTarget.releasePointerCapture(event.pointerId);
+			}}
+			onPointerCancel={() => {
+				drag.current = null;
+			}}
+		/>
+	);
+}
 
 export function App(): ReactElement {
 	const source = useFinderSource();
@@ -141,6 +187,8 @@ export function App(): ReactElement {
 	const [inspectorVisible, setInspectorVisible] = useState(() => loadFlag(INSPECTOR_KEY, true));
 	const [aiOpen, setAiOpen] = useState(() => loadFlag(AI_OPEN_KEY, true));
 	const [aiHeight, setAiHeight] = useState(() => loadNumber(AI_HEIGHT_KEY, 280));
+	const [sidebarWidth, setSidebarWidth] = useState(() => loadNumber(SIDEBAR_WIDTH_KEY, 220));
+	const [inspectorWidth, setInspectorWidth] = useState(() => loadNumber(INSPECTOR_WIDTH_KEY, 390));
 	const [listColumns, setListColumns] = useState<ListColumnsState>(loadListColumns);
 	const [sourceStatus, setSourceStatus] = useState<Readonly<Record<string, "syncing" | "error">>>({});
 	const aiDockRef = useRef<AiDockHandle | null>(null);
@@ -149,6 +197,8 @@ export function App(): ReactElement {
 	useEffect(() => saveFlag(INSPECTOR_KEY, inspectorVisible), [inspectorVisible]);
 	useEffect(() => saveFlag(AI_OPEN_KEY, aiOpen), [aiOpen]);
 	useEffect(() => saveNumber(AI_HEIGHT_KEY, aiHeight), [aiHeight]);
+	useEffect(() => saveNumber(SIDEBAR_WIDTH_KEY, sidebarWidth), [sidebarWidth]);
+	useEffect(() => saveNumber(INSPECTOR_WIDTH_KEY, inspectorWidth), [inspectorWidth]);
 	useEffect(() => saveListColumns(listColumns), [listColumns]);
 
 	useEffect(() => {
@@ -305,7 +355,7 @@ export function App(): ReactElement {
 			: finder.searching
 				? `Search "${finder.query}"`
 				: basename(finder.path);
-	const gridColumns = `${sidebarVisible ? "var(--w-sidebar) " : ""}minmax(0,1fr)${inspectorVisible ? " var(--w-inspector)" : ""}`;
+	const gridColumns = `${sidebarVisible ? `${sidebarWidth}px ` : ""}minmax(0,1fr)${inspectorVisible ? ` ${inspectorWidth}px` : ""}`;
 
 	return (
 		<div className="desk flex h-full bg-window">
@@ -400,12 +450,13 @@ export function App(): ReactElement {
 									callbacks={rowCallbacks}
 								/>
 							) : (
-								<>
+								<div className="flex min-h-0 flex-1 flex-col overflow-x-auto">
 									<ColumnHeader
 										sort={finder.sort}
 										searching={finder.searching}
 										onSort={finder.sortBy}
 										columns={listColumns}
+										minWidth={listFixedWidth(listColumns)}
 										onToggleColumn={(key: ListColumnKey) => setListColumns((current) => toggleListColumn(current, key))}
 										onResetColumns={() => setListColumns(resetListColumns())}
 										onResizeColumn={(key: string, px: number) => setListColumns((current) => setListColumnWidth(current, key, px))}
@@ -414,6 +465,7 @@ export function App(): ReactElement {
 										rows={finder.stackRows}
 										listPath={finder.path}
 										columns={listColumns}
+										minWidth={listFixedWidth(listColumns)}
 										versionFamilyError={finder.versionFamilyError}
 										onRetryVersionFamilies={finder.retryVersionFamilies}
 										listRef={finder.listRef}
@@ -427,14 +479,12 @@ export function App(): ReactElement {
 										indexStatus={finder.indexStatus}
 										callbacks={rowCallbacks}
 									/>
-								</>
+								</div>
 							)}
 							<PathBar
 								crumbs={breadcrumbTrail(finder.path, Number.MAX_SAFE_INTEGER)}
 								selectedName={focused !== null && focused.kind === "file" ? focused.name : null}
 								onNavigate={finder.navigate}
-								statusText={finder.statusText}
-								devLabel={DEV_LABEL}
 							/>
 						</>
 					)}
@@ -472,6 +522,20 @@ export function App(): ReactElement {
 					/>
 				) : null}
 				{finder.toast === null ? null : <Toast message={finder.toast} />}
+				{sidebarVisible ? (
+					<PaneGrip
+						position={{ left: sidebarWidth - 3 }}
+						label="Resize sidebar"
+						onDelta={(dx) => setSidebarWidth((width) => clampWidth(width + dx, SIDEBAR_MIN, SIDEBAR_MAX))}
+					/>
+				) : null}
+				{inspectorVisible ? (
+					<PaneGrip
+						position={{ right: inspectorWidth - 3 }}
+						label="Resize inspector"
+						onDelta={(dx) => setInspectorWidth((width) => clampWidth(width - dx, INSPECTOR_MIN, INSPECTOR_MAX))}
+					/>
+				) : null}
 			</div>
 			{finder.contextMenu === null ? null : (
 				<ContextMenu

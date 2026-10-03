@@ -28,14 +28,10 @@ export function PathBar({
 	crumbs,
 	selectedName,
 	onNavigate,
-	statusText,
-	devLabel,
 }: {
 	readonly crumbs: readonly Crumb[];
 	readonly selectedName: string | null;
 	readonly onNavigate: (path: string) => void;
-	readonly statusText: string;
-	readonly devLabel: string | null;
 }): ReactElement {
 	const local = crumbs[0]?.label === "Users";
 	const segments: PathSegment[] = [];
@@ -78,10 +74,6 @@ export function PathBar({
 					</button>
 				</span>
 			))}
-			<span className="ml-auto flex flex-none items-center gap-8 pl-8">
-				{devLabel === null ? null : <span className="font-mono text-[10px] text-ink-faint">{devLabel}</span>}
-				<span className="text-ink-muted">{statusText}</span>
-			</span>
 		</nav>
 	);
 }

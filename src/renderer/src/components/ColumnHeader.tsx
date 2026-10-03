@@ -30,6 +30,7 @@ export function ColumnHeader({
 	searching,
 	onSort,
 	columns,
+	minWidth,
 	onToggleColumn,
 	onResetColumns,
 	onResizeColumn,
@@ -38,6 +39,8 @@ export function ColumnHeader({
 	readonly searching: boolean;
 	readonly onSort: (key: SortKey) => void;
 	readonly columns: ListColumnsState;
+	/** Fixed total track width once the name column is user-resized (x-scroll). */
+	readonly minWidth: number | null;
 	readonly onToggleColumn: (key: ListColumnKey) => void;
 	readonly onResetColumns: () => void;
 	readonly onResizeColumn: (key: string, px: number) => void;
@@ -99,7 +102,7 @@ export function ColumnHeader({
 		<>
 			<div
 				className="col-header grid flex-none items-center gap-8 h-[24px] px-13 border-b border-border text-ink-muted text-badge font-medium cursor-default"
-				style={{ gridTemplateColumns: listGridTemplate(columns) }}
+				style={{ gridTemplateColumns: listGridTemplate(columns), minWidth: minWidth ?? undefined }}
 				data-searching={searching ? "" : undefined}
 				onContextMenu={openMenu}
 			>

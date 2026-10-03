@@ -160,10 +160,10 @@ check("Recents starts empty", (await rowNames(page)).length === 0, JSON.stringif
 check("empty state names the Recents view", emptyText === "최근에 연 파일이 없습니다", emptyText);
 const emptyNav = await page.locator('.sidebar__item[aria-current="true"] .sidebar__item-label').innerText();
 const emptyTab = await page.locator(".tab--active .tab__title").innerText();
-const emptyStatus = await page.locator(".pathbar .text-ink-muted").first().innerText();
 check("the Recents place is the active sidebar item", emptyNav === "Recents", emptyNav);
 check("the tab is titled Recents", emptyTab === "Recents", emptyTab);
-check("the status bar counts zero items", emptyStatus === "0 items", emptyStatus);
+// The v7 path bar shows only breadcrumbs — the empty list itself proves the count.
+check("the Recents list renders no rows", (await rowNames(page)).length === 0, JSON.stringify(await rowNames(page)));
 await page.screenshot({ path: join(EVIDENCE, "recents-empty.png") });
 check("no store file before anything was opened", !existsSync(STORE), STORE);
 
@@ -242,9 +242,8 @@ check(
 	JSON.stringify(recentNames) === JSON.stringify([`${RUN_ID}-previewed.txt`, `${RUN_ID}-opened.txt`]),
 	JSON.stringify(recentNames),
 );
-const populatedStatus = await page.locator(".pathbar .text-ink-muted").first().innerText();
 const populatedColumns = await page.locator(".col-header__label").allInnerTexts();
-check("the status bar counts the two recents", populatedStatus === "2 items", populatedStatus);
+check("the Recents list holds the two files", recentNames.length === 2, JSON.stringify(recentNames));
 // v7 adds the Index column (the `.chk` include/exclude toggle) to the default set.
 check(
 	"the file columns are shown for the Recents list",

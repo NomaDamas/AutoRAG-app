@@ -16,8 +16,8 @@
  * Determinism notes:
  * - The fixture folder name is fixed (no timestamp), so paths and counts match
  *   across runs.
- * - The dev label (`.pathbar .font-mono`) carries `branch@commit` and would differ
- *   between two builds of two commits, so it is removed before any screenshot.
+ * - The v7 path bar carries no trailing text, so no chrome element needs
+ *   hiding before screenshots.
  * - Shots are taken after a settle delay so entry animations reach their end
  *   state.
  */
@@ -44,10 +44,7 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
  * - subpixel (LCD) text antialiasing is not rasterised bit-identically across
  *   renderer processes, so grayscale antialiasing is forced instead.
  */
-const DETERMINISM_STYLE = [
-	".pathbar .font-mono { display: none !important; }",
-	"* { -webkit-font-smoothing: antialiased !important; }",
-].join("\n");
+const DETERMINISM_STYLE = ["* { -webkit-font-smoothing: antialiased !important; }"].join("\n");
 
 // ---------------------------------------------------------------- fixture
 

@@ -11,7 +11,7 @@ import {
 	type PointerEvent as ReactPointerEvent,
 	type ReactElement,
 } from "react";
-import { ChevronDown, ChevronRight, ChevronUp, Square } from "lucide-react";
+import { ChevronDown, ChevronUp, Square } from "lucide-react";
 import type {
 	AnswerPhase,
 	ChatAttachment,
@@ -129,7 +129,6 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	const [historyQuery, setHistoryQuery] = useState("");
 	const [history, setHistory] = useState<readonly ChatSummary[]>([]);
 	const [attachments, setAttachments] = useState<readonly ChatAttachment[]>([]);
-	const [deepOpen, setDeepOpen] = useState(false);
 	const [deepElapsed, setDeepElapsed] = useState<number | null>(null);
 	const [anim, setAnim] = useState<"up" | "down" | null>(null);
 	const [resizing, setResizing] = useState(false);
@@ -296,7 +295,6 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		setStopped(false);
 		setSubmittedQuery(text);
 		setSubmittedAttachments(sent);
-		setDeepOpen(false);
 		setDeepElapsed(null);
 		setProgress("Reviewing the query.");
 		setChatId(nextChatId);
@@ -374,7 +372,6 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		setAttachments([]);
 		setChatId(null);
 		setHistoryOpen(false);
-		setDeepOpen(false);
 		setDeepElapsed(null);
 	}
 
@@ -395,9 +392,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		setProgress("");
 		setChatId(id);
 		setHistoryOpen(false);
-		setDeepOpen(false);
 		// The store keeps no timing, so a restored chat shows its deep answer
-		// expanded instead of inventing a "Worked for Ns" duration.
+		// without a "Worked for Ns" label rather than inventing a duration.
 		setDeepElapsed(null);
 	}
 
@@ -703,24 +699,13 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 								{deepReady ? (
 									<div className="flex flex-col gap-6">
 										{deepElapsed === null ? null : (
-											<button
-												type="button"
-												className={cn(
-													"thinking-header inline-flex cursor-pointer select-none items-center gap-5 text-meta font-medium text-ink-muted transition-colors duration-(--dur-color) ease-out hover:text-ink",
-													deepOpen && "open",
-												)}
-												aria-expanded={deepOpen}
-												onClick={() => setDeepOpen((value) => !value)}
-											>
-												<ChevronRight size={10} strokeWidth={2.5} className={cn("transition-transform duration-150 ease-out", deepOpen && "rotate-90")} />
+											<div className="thinking-header flex items-center gap-5 text-meta font-medium text-ink-muted">
 												<span>Worked for {formatElapsed(deepElapsed)}</span>
-											</button>
-										)}
-										{deepElapsed === null || deepOpen ? (
-											<div className="assistant-prose flex flex-col gap-8 text-body leading-[1.55] text-ink-body">
-												<ProseBlocks text={deepText} selected={selectedEvidence} onCitation={onSelectEvidence} />
 											</div>
-										) : null}
+										)}
+										<div className="assistant-prose flex flex-col gap-8 text-body leading-[1.55] text-ink-body">
+											<ProseBlocks text={deepText} selected={selectedEvidence} onCitation={onSelectEvidence} />
+										</div>
 									</div>
 								) : null}
 							</div>

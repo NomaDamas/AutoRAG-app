@@ -71,6 +71,14 @@
 	--color-subtle-alt: var(--bg-subtle-alt);
 	--color-input: var(--bg-input);
 	--color-selected-nav: var(--bg-selected-nav);
+	--color-tabstrip: var(--bg-tabstrip);
+	--color-tabstrip-line: var(--border-tabstrip);
+	--color-tab-from: var(--tab-grad-from);
+	--color-tab-to: var(--tab-grad-to);
+	--color-tab-hover-from: var(--tab-grad-hover-from);
+	--color-tab-hover-to: var(--tab-grad-hover-to);
+	--color-tab-active: var(--bg-tab-active);
+	--color-tab-text: var(--text-tab);
 	--color-code: var(--bg-code);
 	--color-chip-sent: var(--bg-chip-sent);
 	--color-tile-fallback: var(--bg-tile-fallback);

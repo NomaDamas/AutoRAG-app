@@ -31,6 +31,7 @@ export function FileList({
 	indexStatus,
 	listPath,
 	columns,
+	minWidth,
 	versionFamilyError,
 	onRetryVersionFamilies,
 	callbacks,
@@ -47,6 +48,8 @@ export function FileList({
 	readonly indexStatus: Readonly<Record<string, IndexStatus>>;
 	readonly listPath: string;
 	readonly columns: ListColumnsState;
+	/** Fixed total track width once the name column is user-resized (x-scroll). */
+	readonly minWidth: number | null;
 	readonly versionFamilyError: VersionFamilyError | null;
 	readonly onRetryVersionFamilies: () => void;
 	readonly callbacks: RowCallbacks;
@@ -62,7 +65,7 @@ export function FileList({
 	});
 
 	return (
-		<div className="list flex-1 min-h-0 py-4 overflow-auto" ref={listRef}>
+		<div className="list flex-1 min-h-0 py-4 overflow-auto" ref={listRef} style={{ minWidth: minWidth ?? undefined }}>
 			<VersionFamilyBanner error={versionFamilyError} onRetry={onRetryVersionFamilies} />
 			<div
 				ref={rowsRef}

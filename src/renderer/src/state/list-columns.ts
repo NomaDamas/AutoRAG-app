@@ -83,7 +83,10 @@ export function setListColumnWidth(state: ListColumnsState, key: string, px: num
  * every other track uses its stored width or the reference default.
  */
 export function listGridTemplate(state: ListColumnsState): string {
-	const parts = [`minmax(${state.widths.name ?? NAME_DEFAULT}px,1fr)`];
+	// Once the user drags the name grip the track freezes to the dragged width
+	// (the reference's --name-col override); the untouched default stays fluid.
+	const name = state.widths.name;
+	const parts = [name === undefined ? `minmax(${NAME_DEFAULT}px,1fr)` : `${name}px`];
 	for (const option of LIST_COLUMN_OPTIONS) {
 		if (option.key === "name") continue;
 		if (!state.visible[option.key]) continue;
@@ -91,6 +94,22 @@ export function listGridTemplate(state: ListColumnsState): string {
 		parts.push(`${width}px`);
 	}
 	return parts.join(" ");
+}
+
+/**
+ * Total fixed track width when the name track is frozen (px), null while the
+ * name column is still fluid. The list uses it to widen beyond the pane and
+ * scroll horizontally, like the reference's `.view { overflow: auto }`.
+ */
+export function listFixedWidth(state: ListColumnsState): number | null {
+	if (state.widths.name === undefined) return null;
+	let total = state.widths.name;
+	for (const option of LIST_COLUMN_OPTIONS) {
+		if (option.key === "name") continue;
+		if (!state.visible[option.key]) continue;
+		total += option.key === "index" ? INDEX_WIDTH : (state.widths[option.key] ?? DEFAULT_WIDTHS[option.key]);
+	}
+	return total;
 }
 
 /** localStorage key that remembers the visible columns across launches. */

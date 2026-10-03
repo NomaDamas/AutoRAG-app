@@ -189,12 +189,13 @@ await page.waitForSelector(`${EVIDENCE_HALF} .evidence-tab.bg-accent`);
 const activeCite = await quickProse.locator(".cite.active").allTextContents();
 const activeTab = (await page.locator(`${EVIDENCE_HALF} .evidence-tab.bg-accent`).textContent())?.trim();
 const evTitle = (await page.locator(`${EVIDENCE_HALF} .preview-title`).textContent()) ?? "";
-const crumbText = (await page.locator(`${EVIDENCE_HALF} button[title="Show in Finder"]`).textContent()) ?? "";
+const revealBtn = page.locator(`${EVIDENCE_HALF} .preview-title[title="Show in Finder"]`);
 check("the cited chip lights up with the active accent", JSON.stringify(activeCite) === JSON.stringify(["2"]), JSON.stringify(activeCite));
 check("the evidence half opens on evidence 2", activeTab === "2" && evTitle.startsWith("2. "), `tab=${activeTab} title=${evTitle.slice(0, 32)}`);
-check("the breadcrumb shows folder and file segments", crumbText.includes("Documents") && crumbText.includes("qa-evidence-memo.md"), crumbText.replace(/\s+/g, " ").slice(0, 120));
+// v7: the title itself is the Show-in-Finder action (no separate crumb row).
+check("the evidence title is the Show-in-Finder action", (await revealBtn.count()) === 1, `count=${await revealBtn.count()}`);
 const detail = (await page.locator(`${EVIDENCE_HALF} .preview-sub`).textContent()) ?? "";
-check("the detail shows the confidence percentage", detail.includes("관련도 81%"), detail);
+check("the detail shows the source path and confidence", detail.includes("qa-evidence-memo.md") && detail.includes("관련도 81%"), detail.replace(/\s+/g, " ").slice(0, 120));
 await page.screenshot({ path: join(EVIDENCE, "02-evidence-panel.png") });
 
 // 2b. Layout geometry per the v7 reference (evidence half = lower 50% of the

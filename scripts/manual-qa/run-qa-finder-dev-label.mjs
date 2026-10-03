@@ -26,19 +26,20 @@ const windowTitle = await app.evaluate(({ BrowserWindow }) => {
 	return window?.getTitle() ?? "";
 });
 const documentTitle = await page.title();
-const devLabelText = await page.locator(".pathbar .font-mono").innerText().catch(() => null);
+// The dev label left the chrome (v7 path bar carries no trailing text); the
+// window title and the bridge remain the dev-label surfaces.
+const pathbarText = await page.locator(".pathbar").innerText().catch(() => "");
 const bridgeDev = await page.evaluate(() => globalThis.autorag?.dev ?? null);
 
 console.log("WINDOW-TITLE:", JSON.stringify(windowTitle));
 console.log("DOCUMENT-TITLE:", JSON.stringify(documentTitle));
-console.log("PATHBAR-DEV:", JSON.stringify(devLabelText));
+console.log("PATHBAR-TEXT:", JSON.stringify(pathbarText));
 console.log("BRIDGE-DEV:", JSON.stringify(bridgeDev));
 
 const ok =
 	windowTitle.includes(REPO) &&
 	windowTitle.includes("@") &&
-	devLabelText !== null &&
-	devLabelText.includes(REPO) &&
+	!pathbarText.includes(REPO) &&
 	bridgeDev?.clonePath === REPO;
 console.log("VERDICT:", ok ? "PASS" : "FAIL");
 

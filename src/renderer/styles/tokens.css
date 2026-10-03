@@ -26,6 +26,15 @@
   --bg-subtle-alt: #FAFAFC;
   --bg-input: #F0F0F4;
   --bg-selected-nav: #E5E5EA;
+  /* v7 Safari-style tab strip (proto:.tabs/.tab). */
+  --bg-tabstrip: #D4D4D8;
+  --border-tabstrip: #C3C3C7;
+  --tab-grad-from: #D8D8DC;
+  --tab-grad-to: #D0D0D4;
+  --tab-grad-hover-from: #CFCFD3;
+  --tab-grad-hover-to: #C8C8CC;
+  --bg-tab-active: #ECECEE;
+  --text-tab: #5D5D62;
   --bg-code: #F4F4F7;
   --bg-chip-sent: #F3F3F7;
   --bg-tile-fallback: #888994;

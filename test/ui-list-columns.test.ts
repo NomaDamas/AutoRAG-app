@@ -3,6 +3,7 @@ import {
 	DEFAULT_LIST_COLUMNS,
 	LIST_COLUMNS_STORAGE_KEY,
 	listGridTemplate,
+	listFixedWidth,
 	loadListColumns,
 	resetListColumns,
 	saveListColumns,
@@ -69,9 +70,11 @@ describe("list columns", () => {
 		expect(listGridTemplate(withoutKind)).toBe("minmax(180px,1fr) 112px 68px 44px");
 	});
 
-	it("uses a stored width for the resizable tracks", () => {
+	it("freezes the name track once the user resizes it, other tracks stay fixed", () => {
 		const sized = setListColumnWidth(setListColumnWidth(DEFAULT_LIST_COLUMNS, "name", 320), "size", 120);
-		expect(listGridTemplate(sized)).toBe("minmax(320px,1fr) 112px 120px 106px 44px");
+		expect(listGridTemplate(sized)).toBe("320px 112px 120px 106px 44px");
+		expect(listFixedWidth(sized)).toBe(320 + 112 + 120 + 106 + 44);
+		expect(listFixedWidth(DEFAULT_LIST_COLUMNS)).toBeNull();
 	});
 
 	it("clamps widths to each column's range", () => {

@@ -44,7 +44,7 @@ export function Sidebar({
 }): ReactElement {
 	return (
 		<aside
-			className="sidebar flex w-sidebar flex-none flex-col min-h-0 bg-sidebar border-r border-border backdrop-blur-[18px]"
+			className="sidebar flex w-full flex-none flex-col min-h-0 bg-sidebar border-r border-border backdrop-blur-[18px]"
 			aria-label="Places"
 		>
 			<div className="side-head flex flex-none items-center gap-8 h-toolbar px-12 [-webkit-app-region:drag]">

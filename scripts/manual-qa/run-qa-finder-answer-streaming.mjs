@@ -217,10 +217,8 @@ try {
 	);
 	const final = timeline.at(-1);
 	check("quick answer final", quickFinal(final), `quick ${final.quickDraft} chars`);
-	// v7 keeps the finished Deep answer behind a collapsed "Worked for Ns"
-	// disclosure; expand it and assert the rendered prose.
-	const deepHeader = page.locator(".assistant-msg .thinking-header");
-	if ((await deepHeader.count()) > 0) await deepHeader.first().click();
+	// v7 renders the Deep answer permanently under a static "Worked for Ns"
+	// label (no disclosure), so the prose is visible as soon as it exists.
 	await page.locator(".assistant-msg .assistant-prose").nth(1).waitFor({ state: "visible", timeout: 8000 }).catch(() => undefined);
 	const deepFinalChars = ((await page.locator(".assistant-msg .assistant-prose").nth(1).textContent()) ?? "").length;
 	check("deep answer final", deepFinalChars > 0, `deep ${deepFinalChars} chars`);
