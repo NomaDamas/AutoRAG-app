@@ -63,7 +63,7 @@ const app = await launchFinder({ userDataDir: join(root, "user-data"), env });
 try {
 	const page = await finderWindow(app);
 	await page.waitForSelector('[role="row"]');
-	const selectCategory = (label) => page.locator(".settings-sidebar__item", { hasText: label }).click();
+	const selectCategory = (label) => page.locator(".settings-nav-item", { hasText: label }).click();
 	const openSources = async () => {
 		await page.locator(".sidebar__item", { hasText: "Settings" }).click();
 		await page.waitForSelector(".settings-panel");

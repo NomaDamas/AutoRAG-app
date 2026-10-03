@@ -19,8 +19,7 @@ export type FileKind =
 	| "mail"
 	| "notion"
 	| "discord"
-	| "telegram"
-	| "contact";
+	| "telegram";
 
 export interface KindMeta {
 	/** Tile letter; empty for folders, which render the folder glyph. */
@@ -45,7 +44,6 @@ export const KIND_ORDER: readonly FileKind[] = [
 	"notion",
 	"discord",
 	"telegram",
-	"contact",
 ];
 
 const ON_TILE = "--text-on-tile";
@@ -65,7 +63,6 @@ export const KIND_META: Readonly<Record<FileKind, KindMeta>> = {
 	notion: { letter: "N", tileToken: "--tile-notion", foregroundToken: "--tile-notion-fg", label: "Notion Page" },
 	discord: { letter: "D", tileToken: "--tile-discord", foregroundToken: ON_TILE, label: "Discord Thread" },
 	telegram: { letter: "T", tileToken: "--tile-telegram", foregroundToken: ON_TILE, label: "Telegram Message" },
-	contact: { letter: "@", tileToken: "--tile-contact", foregroundToken: ON_TILE, label: "Contact" },
 };
 
 /** Unknown kinds fall back to the md entry (DESIGN.md §2.9). */
