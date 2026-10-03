@@ -67,6 +67,8 @@ export interface FinderSource {
 	reveal(path: string): Promise<void>;
 	trash(paths: readonly string[]): Promise<void>;
 	rename(path: string, name: string): Promise<void>;
+	/** Create a new folder (Finder-style "untitled folder" / "untitled folder 2"). */
+	createFolder(dir: string): Promise<{ readonly path: string; readonly name: string }>;
 	duplicate(paths: readonly string[]): Promise<void>;
 	copyInto(paths: readonly string[], destDir: string): Promise<void>;
 	moveInto(paths: readonly string[], destDir: string): Promise<void>;
@@ -173,6 +175,7 @@ export function createBridgeSource(fs: FsBridge, initialPath: string, live?: Liv
 		rename: async (path, name) => {
 			await fs.rename(path, name);
 		},
+		createFolder: (dir) => fs.createFolder(dir),
 		duplicate: async (paths) => {
 			await fs.duplicate(paths);
 		},
@@ -326,6 +329,19 @@ export function createFixtureSource(): FinderSource {
 				insertItem(state, dirname(path), { ...item, name });
 			}
 			return resolve();
+		},
+		createFolder: (dir) => {
+			const taken = takenNames(state, dir);
+			let name = "untitled folder";
+			for (let attempt = 2; taken.includes(name); attempt += 1) {
+				name = `untitled folder ${attempt}`;
+			}
+			// Match the seed rows' "Sep 22, 11:40" shape with the current time.
+			const now = new Date();
+			const month = now.toLocaleString("en-US", { month: "short" });
+			const dateLabel = `${month} ${now.getDate()}, ${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+			insertItem(state, dir, { name, fileKind: "folder", dateLabel, sizeLabel: "—" });
+			return Promise.resolve({ path: joinPath(dir, name), name });
 		},
 		duplicate: (paths) => {
 			for (const path of paths) {

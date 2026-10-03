@@ -2,6 +2,7 @@ import { useRef, type ReactElement, type RefObject } from "react";
 import type { IndexStatus } from "../../../shared/index-contract";
 import { FileRow, type RowCallbacks } from "./FileRow";
 import type { TreeRow } from "../state/folder-tree";
+import type { ListColumnsState } from "../state/list-columns";
 import { ROW_HEIGHT } from "../state/selection";
 import { LIST_OVERSCAN, linearWindow } from "../state/virtual";
 import type { VersionFamilyError } from "../state/version-family";
@@ -9,18 +10,18 @@ import { useScrollWindow } from "../hooks/useScrollWindow";
 import { VersionFamilyBanner } from "./VersionFamilyBanner";
 
 /**
- * Scrolling file list (handoff README §2): the search summary, the rows, and
- * the two empty states. Rows are virtualized (issue #16): the container is
- * sized to the full row count and only the window around the viewport is
- * mounted, so a 5,000-entry folder stays cheap to paint. The controller keeps
- * scrolling the list by setting `listRef.current.scrollTop`; this view derives
- * its window from that same element.
+ * Scrolling file list (v7 `.lv`): the rows and the two empty states. The search
+ * summary lives in the ScopeBar now, so the list no longer renders it. Rows are
+ * virtualized (issue #16): the container is sized to the full row count and
+ * only the window around the viewport is mounted, so a 5,000-entry folder stays
+ * cheap to paint. The controller keeps scrolling the list by setting
+ * `listRef.current.scrollTop`; this view derives its window from that same
+ * element.
  */
 export function FileList({
 	rows,
 	listRef,
 	searching,
-	summary,
 	emptyText,
 	selectedKeys,
 	focusedZone,
@@ -29,6 +30,8 @@ export function FileList({
 	renameDraft,
 	indexStatus,
 	listPath,
+	columns,
+	minWidth,
 	versionFamilyError,
 	onRetryVersionFamilies,
 	callbacks,
@@ -36,7 +39,6 @@ export function FileList({
 	readonly rows: readonly TreeRow[];
 	readonly listRef: RefObject<HTMLDivElement | null>;
 	readonly searching: boolean;
-	readonly summary: string;
 	readonly emptyText: string;
 	readonly selectedKeys: readonly string[];
 	readonly focusedZone: boolean;
@@ -45,6 +47,9 @@ export function FileList({
 	readonly renameDraft: string;
 	readonly indexStatus: Readonly<Record<string, IndexStatus>>;
 	readonly listPath: string;
+	readonly columns: ListColumnsState;
+	/** Fixed total track width once the name column is user-resized (x-scroll). */
+	readonly minWidth: number | null;
 	readonly versionFamilyError: VersionFamilyError | null;
 	readonly onRetryVersionFamilies: () => void;
 	readonly callbacks: RowCallbacks;
@@ -60,11 +65,8 @@ export function FileList({
 	});
 
 	return (
-		<div className="list flex-1 min-h-0 py-4 px-8 overflow-auto" ref={listRef}>
+		<div className="list flex-1 min-h-0 py-4 overflow-auto" ref={listRef} style={{ minWidth: minWidth ?? undefined }}>
 			<VersionFamilyBanner error={versionFamilyError} onRetry={onRetryVersionFamilies} />
-			{searching ? (
-				<div className="list__summary pt-6 px-12 pb-8 text-ink-muted text-meta">{summary}</div>
-			) : null}
 			<div
 				ref={rowsRef}
 				role={searching ? "grid" : "treegrid"}
@@ -91,6 +93,7 @@ export function FileList({
 						depth={row.depth}
 						disclosure={row.disclosure}
 						listPath={listPath}
+						columns={columns}
 						callbacks={callbacks}
 					/>
 				))}

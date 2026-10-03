@@ -39,6 +39,41 @@ export interface VersionFamilies {
 	readonly memberOf: ReadonlyMap<string, ResolvedMembership>;
 }
 
+/** Inspector "Versions" section: the family one path belongs to, flattened for display. */
+export interface VersionFamilyViewMember {
+	readonly path: string;
+	readonly name: string;
+	readonly relation: VersionRelation;
+	/** Parent folder of the member — shown as the location chip. */
+	readonly where: string;
+}
+
+export interface VersionFamilyView {
+	readonly headPath: string;
+	readonly headName: string;
+	readonly members: readonly VersionFamilyViewMember[];
+}
+
+/**
+ * The family `path` heads or belongs to, or null. Head lookups win so the
+ * head row and any member row present the same section.
+ */
+export function familyViewFor(path: string, families: VersionFamilies): VersionFamilyView | null {
+	const head = families.byHead.get(path);
+	const data = head ?? families.memberOf.get(path)?.family;
+	if (data === undefined) return null;
+	return {
+		headPath: data.head,
+		headName: basename(data.head),
+		members: data.members.map((member) => ({
+			path: member.path,
+			name: basename(member.path),
+			relation: member.relation,
+			where: dirname(member.path),
+		})),
+	};
+}
+
 export interface VersionFamilyError {
 	readonly code: "dupey-missing" | "scan-failed";
 	readonly message: string;

@@ -1,5 +1,5 @@
 import type { Dirent } from "node:fs";
-import { cp, lstat, readdir, rename as fsRename, rm } from "node:fs/promises";
+import { cp, lstat, mkdir, readdir, rename as fsRename, rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join } from "node:path";
 import {
@@ -67,6 +67,16 @@ export class FsRenameError extends Error {
 /** Search stays bounded: shallow walk, hard result cap, symlinked dirs not followed. */
 const SEARCH_MAX_DEPTH = 4;
 const SEARCH_MAX_RESULTS = 200;
+
+/**
+ * Finder's new-folder naming for the Nth mkdir attempt: the first free name is
+ * "untitled folder", then "untitled folder 2", "untitled folder 3", … The
+ * caller retries with the next attempt only when mkdir reports EEXIST, so the
+ * numbering matches exactly the names already on disk.
+ */
+export function untitledFolderName(attempt: number): string {
+	return attempt === 1 ? "untitled folder" : `untitled folder ${attempt}`;
+}
 
 interface SearchContext {
 	readonly needle: string;
@@ -399,6 +409,21 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 		return applyOsKind(await buildFsEntry(target), osKind);
 	}
 
+	async function createFolder(directory: string): Promise<{ readonly path: string; readonly name: string }> {
+		// Non-recursive mkdir: the EEXIST collision is what drives the numbering,
+		// so a folder that appears between two attempts is handled the same way.
+		for (let attempt = 1; ; attempt += 1) {
+			const name = untitledFolderName(attempt);
+			const target = join(directory, name);
+			try {
+				await mkdir(target);
+				return { path: target, name };
+			} catch (error) {
+				if (!hasErrorCode(error, "EEXIST")) throw error;
+			}
+		}
+	}
+
 	return {
 		enrichEntries,
 		listDir,
@@ -419,6 +444,7 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 		move,
 		duplicate,
 		rename,
+		createFolder,
 		trash: (paths) => runBatch(paths, (path) => deps.shell.trashItem(path)),
 		reveal: async (path) => {
 			deps.shell.showItemInFolder(path);

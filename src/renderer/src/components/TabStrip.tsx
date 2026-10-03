@@ -1,5 +1,6 @@
 import type { MouseEvent, ReactElement } from "react";
-import { CloseIcon, PlusIcon } from "./icons";
+import { cn } from "../lib/cn";
+import { TabCloseIcon, TabPlusIcon } from "./icons";
 import { StatusDot } from "./primitives/StatusDot";
 
 export interface TabView {
@@ -9,9 +10,13 @@ export interface TabView {
 	readonly flash: boolean;
 }
 
+const TAB_GRADIENT = "bg-[linear-gradient(var(--tab-grad-from),var(--tab-grad-to))]";
+const TAB_GRADIENT_HOVER = "hover:bg-[linear-gradient(var(--tab-grad-hover-from),var(--tab-grad-hover-to))]";
+
 /**
- * Tab strip (handoff README §2): 48px chrome bar with bottom-aligned 36px
- * tabs; the active tab is white and merges into the toolbar via -1px margin.
+ * Tab strip (v7 handoff, proto:.tabs/.tab): a 25px #D4D4D8 bar of equal-width
+ * Safari-style segments with hairline dividers; the active tab is #ECECEE and
+ * the close button fades in on hover. A flash dot marks the reveal target.
  */
 export function TabStrip({
 	tabs,
@@ -27,22 +32,25 @@ export function TabStrip({
 	readonly onNewTab: () => void;
 }): ReactElement {
 	return (
-		<div className="tabs flex flex-none items-end gap-2 h-bar pr-8 pl-6 bg-chrome border-b border-border">
-			{tabs.map((tab) => (
+		<div className="tabs flex h-25 flex-none items-stretch overflow-hidden border-b border-tabstrip-line bg-tabstrip [-webkit-app-region:drag]">
+			{tabs.map((tab, index) => (
 				<div
 					key={tab.id}
 					className={[
-						`tab${tab.active ? " tab--active" : ""}`,
-						"flex flex-[1_1_0] items-center gap-8 min-w-tab-min max-w-tab-max h-tab -mb-px pl-12 pr-6 border border-b-0 rounded-t-10 text-meta transition-[background] duration-(--dur-modal) ease-[ease]",
-						tab.active
-							? "bg-window border-border text-ink shadow-[0_-1px_0_var(--bg-window)]"
-							: "border-transparent bg-transparent text-ink-muted",
+						`tab group/tab${tab.active ? " tab--active" : ""}`,
+						"relative flex flex-1 min-w-0 items-center justify-center px-24 text-badge font-normal select-none cursor-default [-webkit-app-region:no-drag]",
+						index > 0 ? "border-l border-tabstrip-line" : "",
+						tab.active ? "bg-tab-active text-ink" : cn(TAB_GRADIENT, TAB_GRADIENT_HOVER, "text-tab-text"),
 					].join(" ")}
 				>
-					{tab.flash ? <StatusDot token="--accent" /> : null}
+					{tab.flash ? (
+						<span className="absolute left-6 top-1/2 -mt-3 flex" aria-hidden="true">
+							<StatusDot token="--accent" />
+						</span>
+					) : null}
 					<button
 						type="button"
-						className="tab__title flex-1 min-w-0 overflow-hidden whitespace-nowrap text-ellipsis p-0 border-0 rounded-none bg-transparent text-inherit appearance-none font-medium text-left"
+						className="tab__title min-w-0 flex-[0_1_auto] overflow-hidden whitespace-nowrap text-ellipsis p-0 border-0 rounded-none bg-transparent text-inherit appearance-none text-center cursor-default"
 						onClick={() => onSelect(tab.id)}
 					>
 						{tab.title}
@@ -50,7 +58,7 @@ export function TabStrip({
 					{canClose ? (
 						<button
 							type="button"
-							className="tab__close flex flex-none items-center justify-center size-pill border-0 rounded-6 bg-transparent text-ink-muted transition-[background] duration-(--dur-color) ease-[ease] hover:bg-hover-strong hover:text-ink"
+							className="tab__close absolute left-5 top-1/2 mt-[-7.5px] flex flex-none size-15 items-center justify-center p-0 border-0 rounded-3 bg-transparent text-ink-muted opacity-0 transition-[background,opacity] duration-(--dur-color) ease-[ease] group-hover/tab:opacity-100 hover:bg-[rgba(0,0,0,0.12)] hover:text-ink"
 							title="Close tab ⌘W"
 							aria-label="Close tab ⌘W"
 							onClick={(event: MouseEvent<HTMLButtonElement>) => {
@@ -58,19 +66,23 @@ export function TabStrip({
 								onClose(tab.id);
 							}}
 						>
-							<CloseIcon />
+							<TabCloseIcon />
 						</button>
 					) : null}
 				</div>
 			))}
 			<button
 				type="button"
-				className="tabs__new flex flex-none items-center justify-center size-row mb-2 border-0 rounded-8 bg-transparent text-ink-muted transition-[background] duration-(--dur-color) ease-[ease] hover:bg-hover-icon hover:text-ink"
+				className={cn(
+					"tabs__new flex flex-none w-28 items-center justify-center border-0 border-l border-tabstrip-line text-tab-text hover:text-ink [-webkit-app-region:no-drag]",
+					TAB_GRADIENT,
+					TAB_GRADIENT_HOVER,
+				)}
 				title="New tab ⌘T"
 				aria-label="New tab ⌘T"
 				onClick={onNewTab}
 			>
-				<PlusIcon />
+				<TabPlusIcon />
 			</button>
 		</div>
 	);

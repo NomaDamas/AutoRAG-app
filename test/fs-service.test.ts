@@ -1,8 +1,8 @@
-import { access, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createFsService, FsRenameError, type FsServiceDeps } from "../src/main/fs-service";
+import { createFsService, FsRenameError, untitledFolderName, type FsServiceDeps } from "../src/main/fs-service";
 import { createRecentsStore, type RecentsStore } from "../src/main/recents-store";
 import { RECENTS_PATH } from "../src/shared/fs-contract";
 
@@ -465,6 +465,47 @@ describe("rename", () => {
 		expect(entry.kind).toBe("file");
 		await expect(access(oldPath)).rejects.toThrow();
 		expect(await readFile(entry.path, "utf8")).toBe("content");
+	});
+});
+
+describe("createFolder", () => {
+	it("creates 'untitled folder' and numbers subsequent folders on collision", async () => {
+		// Given a fresh service
+		const service = createFsService(makeDeps(root).deps);
+
+		// When creating three folders in a row
+		const first = await service.createFolder(root);
+		const second = await service.createFolder(root);
+		const third = await service.createFolder(root);
+
+		// Then Finder-style names are chosen and the folders exist on disk
+		expect(first).toEqual({ path: join(root, "untitled folder"), name: "untitled folder" });
+		expect(second).toEqual({ path: join(root, "untitled folder 2"), name: "untitled folder 2" });
+		expect(third).toEqual({ path: join(root, "untitled folder 3"), name: "untitled folder 3" });
+		for (const folder of [first, second, third]) {
+			expect((await stat(folder.path)).isDirectory()).toBe(true);
+		}
+	});
+
+	it("skips over a non-folder entry that already owns the name", async () => {
+		// Given a plain file occupying "untitled folder"
+		await writeFile(join(root, "untitled folder"), "not a folder");
+		const service = createFsService(makeDeps(root).deps);
+
+		// When creating a folder, Then it takes the next number
+		expect(await service.createFolder(root)).toEqual({
+			path: join(root, "untitled folder 2"),
+			name: "untitled folder 2",
+		});
+	});
+
+	it("names the Nth attempt Finder-style", () => {
+		expect([1, 2, 3, 11].map(untitledFolderName)).toEqual([
+			"untitled folder",
+			"untitled folder 2",
+			"untitled folder 3",
+			"untitled folder 11",
+		]);
 	});
 });
 

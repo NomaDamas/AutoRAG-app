@@ -32,6 +32,7 @@ export function registerFsIpcHandlers(service: FsCoreBridge, hooks: FsIpcHooks =
 	ipcMain.handle(FS_CHANNELS.move, (_event, paths: readonly string[], destDir: string) => service.move(paths, destDir));
 	ipcMain.handle(FS_CHANNELS.duplicate, (_event, paths: readonly string[]) => service.duplicate(paths));
 	ipcMain.handle(FS_CHANNELS.rename, (_event, path: string, newName: string) => service.rename(path, newName));
+	ipcMain.handle(FS_CHANNELS.createFolder, (_event, directory: string) => service.createFolder(directory));
 	ipcMain.handle(FS_CHANNELS.trash, async (_event, paths: readonly string[]) => {
 		const result = await service.trash(paths);
 		if (result.ok.length > 0) {

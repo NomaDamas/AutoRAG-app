@@ -10,3 +10,5 @@ node_modules/
 !.env.example
 *.key
 *.pem
+fastembed_cache
+.fastembed_cache

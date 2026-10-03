@@ -38,6 +38,7 @@ export type KeyAction =
 	| { readonly type: "disclose"; readonly direction: "expand" | "collapse" }
 	| { readonly type: "dismiss" }
 	| { readonly type: "focusSearch" }
+	| { readonly type: "focusComposer" }
 	| { readonly type: "newTab" }
 	| { readonly type: "closeTab" }
 	| { readonly type: "openSettings" };
@@ -49,6 +50,8 @@ export function resolveKeyAction(event: KeyEventLike, context: KeyContext): KeyA
 		switch (event.key.toLowerCase()) {
 			case "f":
 				return { type: "focusSearch" };
+			case "k":
+				return { type: "focusComposer" };
 			case "t":
 				return { type: "newTab" };
 			case "w":

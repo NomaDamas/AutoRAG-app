@@ -16,8 +16,8 @@
  * Determinism notes:
  * - The fixture folder name is fixed (no timestamp), so paths and counts match
  *   across runs.
- * - The dev label (`.status-bar__dev`) carries `branch@commit` and would differ
- *   between two builds of two commits, so it is removed before any screenshot.
+ * - The v7 path bar carries no trailing text, so no chrome element needs
+ *   hiding before screenshots.
  * - Shots are taken after a settle delay so entry animations reach their end
  *   state.
  */
@@ -36,6 +36,15 @@ if (outDir === undefined) {
 mkdirSync(outDir, { recursive: true });
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Injected before every screenshot so two runs of the same build render
+ * bit-identically:
+ * - the dev label carries `branch@commit` and would differ between builds;
+ * - subpixel (LCD) text antialiasing is not rasterised bit-identically across
+ *   renderer processes, so grayscale antialiasing is forced instead.
+ */
+const DETERMINISM_STYLE = ["* { -webkit-font-smoothing: antialiased !important; }"].join("\n");
 
 // ---------------------------------------------------------------- fixture
 
@@ -197,18 +206,18 @@ let page;
 try {
 	page = await finderWindow(app);
 	await page.setViewportSize({ width: 1500, height: 900 }).catch(() => {});
-	await page.waitForSelector(".crumb--last", { timeout: 30000 });
+	await page.waitForSelector(".toolbar-title", { timeout: 30000 });
 	await page.waitForSelector(".sidebar__item", { timeout: 30000 });
 
-	// The dev label carries branch@commit; two builds of two commits would
-	// otherwise never match.
-	await page.addStyleTag({ content: ".status-bar__dev { display: none !important; }" });
+	// Mask the dev label and non-deterministic text AA before any screenshot.
+	await page.addStyleTag({ content: DETERMINISM_STYLE });
 
 	await page.getByLabel("Places").getByRole("button", { name: "Documents", exact: true }).click();
+
 	const row = page.locator('[role="row"]').filter({ hasText: topName }).first();
 	await row.waitFor({ timeout: 30000 });
 	await row.dblclick();
-	await page.waitForFunction((name) => document.querySelector(".crumb--last")?.textContent === name, topName);
+	await page.waitForFunction((name) => document.querySelector(".toolbar-title")?.textContent === name, topName);
 	await page.locator('[role="row"]').filter({ hasText: "notes.md" }).waitFor();
 	await sleep(600);
 
@@ -217,19 +226,21 @@ try {
 	// without this the first rows carry a hover wash that depends on the click
 	// history rather than on the styling.
 	await page.mouse.move(2, 2);
-	await sleep(400);
+	// Rows fade their background over `--dur-flash-fade` (600ms); a shorter wait
+	// would capture them mid-transition, which is non-deterministic run to run.
+	await sleep(700);
 
 	console.log("list view");
 	await shot(page, "01-list");
 	await shot(page, "02-toolbar", ".toolbar");
 	await shot(page, "03-sidebar", ".sidebar");
-	await shot(page, "04-status-bar", ".status-bar");
+	await shot(page, "04-path-bar", "nav.pathbar");
 	await shot(page, "05-tab-strip", ".tabs");
 
 	console.log("context menu");
 	await page.locator('[role="row"]').filter({ hasText: "notes.md" }).first().click({ button: "right" });
 	await page.waitForSelector('[role="menuitem"]');
-	await sleep(300);
+	await sleep(700);
 	await shot(page, "06-context-menu");
 	await shot(page, "07-context-menu-element", ".menu");
 	await page.keyboard.press("Escape");
@@ -244,7 +255,7 @@ try {
 
 	console.log("column view");
 	await page.keyboard.press("Meta+3");
-	await page.waitForSelector(".column-pane");
+	await page.waitForSelector(".column");
 	await sleep(600);
 	await shot(page, "10-columns");
 
@@ -262,13 +273,14 @@ try {
 		["Models", "15-settings-models"],
 		["Data Sources", "16-settings-sources"],
 	]) {
-		await page.locator(".settings-panel__tabs button", { hasText: tab }).click();
+		await page.locator(".settings-sidebar__item", { hasText: tab }).click();
 		await sleep(600);
 		await shot(page, name);
 	}
-	await page.locator(".settings-panel__tabs button", { hasText: "General" }).click();
+	await page.locator(".settings-sidebar__item", { hasText: "General" }).click();
 	await sleep(400);
-	await page.locator('.settings-panel button[aria-label="Close Settings"]').click();
+	// Settings lives in its own tab in v7; ⌘W closes it back to the finder tab.
+	await page.keyboard.press("Meta+w");
 	await page.waitForSelector(".settings-panel", { state: "detached" });
 
 	// Interaction states. Static shots cannot see a :hover, :focus, or
@@ -283,14 +295,14 @@ try {
 	app = await launchFinder({ userDataDir, env: { HOME: home } });
 	page = await finderWindow(app);
 	await page.setViewportSize({ width: 1500, height: 900 }).catch(() => {});
-	await page.waitForSelector(".crumb--last", { timeout: 30000 });
+	await page.waitForSelector(".toolbar-title", { timeout: 30000 });
 	await page.waitForSelector(".sidebar__item", { timeout: 30000 });
-	await page.addStyleTag({ content: ".status-bar__dev { display: none !important; }" });
+	await page.addStyleTag({ content: DETERMINISM_STYLE });
 	await page.getByLabel("Places").getByRole("button", { name: "Documents", exact: true }).click();
 	const reopened = page.locator('[role="row"]').filter({ hasText: topName }).first();
 	await reopened.waitFor({ timeout: 30000 });
 	await reopened.dblclick();
-	await page.waitForFunction((name) => document.querySelector(".crumb--last")?.textContent === name, topName);
+	await page.waitForFunction((name) => document.querySelector(".toolbar-title")?.textContent === name, topName);
 	await page.locator('[role="row"]').filter({ hasText: "notes.md" }).waitFor();
 	await sleep(600);
 
@@ -300,10 +312,10 @@ try {
 	if ((await selectedCount()) !== 0) throw new Error("hover shot needs an empty selection");
 
 	await notesRow.hover();
-	await sleep(400);
+	await sleep(700);
 	await shot(page, "17-row-hover");
 
-	await page.locator(".toolbar .icon-button").first().hover();
+	await page.locator('.toolbar button[aria-label="Back"]').hover();
 	await sleep(400);
 	await shot(page, "18-toolbar-icon-hover");
 
@@ -314,11 +326,11 @@ try {
 	await page.locator(".search__input").click();
 	await sleep(400);
 	await shot(page, "20-search-focused");
-	await shot(page, "21-search-focused-element", ".search");
+	await shot(page, "21-search-focused-element", ".search-wrap");
 
 	await page.mouse.move(2, 2);
 	await notesRow.click();
-	await sleep(400);
+	await sleep(700);
 	if ((await selectedCount()) !== 1) throw new Error("selection shot needs exactly one selected row");
 	await shot(page, "22-row-selected");
 
@@ -327,10 +339,10 @@ try {
 	await sleep(400);
 	const notesTile = page.locator('.icon-tile[aria-label="notes.md"]');
 	await notesTile.hover();
-	await sleep(400);
+	await sleep(700);
 	await shot(page, "23-tile-hover");
 	await notesTile.click();
-	await sleep(400);
+	await sleep(700);
 	await shot(page, "24-tile-selected");
 	await page.keyboard.press("Meta+2");
 	await page.waitForSelector('[role="row"]');
@@ -339,11 +351,11 @@ try {
 	// The remaining hover targets. Each one has a hover rule whose specificity
 	// against a neighbouring state class decides the result, which is exactly the
 	// kind of thing a utility migration gets wrong.
-	await page.locator(".crumb").first().hover();
+	await page.locator(".path-seg").nth(1).hover();
 	await sleep(300);
-	await shot(page, "25-crumb-hover", ".toolbar");
+	await shot(page, "25-crumb-hover", ".pathbar");
 
-	await page.locator(".view-toggle__button").nth(1).hover();
+	await page.locator(".seg button").nth(1).hover();
 	await sleep(300);
 	await shot(page, "26-view-toggle-active-hover", ".toolbar");
 
@@ -369,24 +381,26 @@ try {
 	// stop — cannot be reached deterministically and stay uncovered.
 	console.log("ai answers + evidence");
 	await page.locator('[aria-label="Chat history"]').click();
-	await page.locator(".ai__history-item").first().waitFor({ state: "visible" });
+	await page.locator(".history-item").first().waitFor({ state: "visible" });
 	await sleep(400);
 	await shot(page, "30-ai-history-popover");
-	await shot(page, "31-ai-history-element", ".ai__history-popover");
+	await shot(page, "31-ai-history-element", ".history");
 
-	await page.locator(".ai__history-item").first().click();
-	await page.waitForSelector(".ai__answer--deep .ai__block--heading", { timeout: 15000 });
+	await page.locator(".history-item").first().click();
+	// A restored chat renders both the Quick and the Deep prose synchronously
+	// (deepElapsed is null, so the deep half is expanded rather than collapsed).
+	await page.waitForSelector(".assistant-msg .assistant-prose >> nth=1", { timeout: 15000 });
 	await sleep(700);
 	await shot(page, "32-ai-answers");
-	await shot(page, "33-ai-answer-quick", ".ai__answer--quick");
-	await shot(page, "34-ai-answer-deep", ".ai__answer--deep");
+	await shot(page, "33-ai-answer-quick", ".assistant-msg .assistant-prose >> nth=0");
+	await shot(page, "34-ai-answer-deep", ".assistant-msg .assistant-prose >> nth=1");
 
-	await page.locator(".ai__answer--quick .ai__citation", { hasText: "2" }).first().click();
-	await page.waitForSelector(".evidence__tab--active", { timeout: 15000 });
+	await page.locator(".cite", { hasText: "2" }).first().click();
+	await page.waitForSelector(".evidence-tab.bg-accent", { timeout: 15000 });
 	await sleep(700);
 	await shot(page, "35-evidence-panel");
-	await shot(page, "36-evidence-element", ".evidence");
-	await shot(page, "37-evidence-view", ".evidence__view");
+	await shot(page, "36-evidence-element", '.inspector-half[aria-label="Evidence"]');
+	await shot(page, "37-evidence-view", '.inspector-half[aria-label="Evidence"] .inspector-body');
 } catch (error) {
 	// A failed capture is only diagnosable with the state it failed in.
 	const failureDir = join(outDir, "failure");
