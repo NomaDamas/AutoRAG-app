@@ -25,6 +25,7 @@ export function registerFsIpcHandlers(service: FsCoreBridge, hooks: FsIpcHooks =
 		service.readEntries(dir, paths),
 	);
 	ipcMain.handle(FS_CHANNELS.stat, (_event, path: string) => service.stat(path));
+	ipcMain.handle(FS_CHANNELS.details, (_event, path: string) => service.details(path));
 	ipcMain.handle(FS_CHANNELS.exists, (_event, path: string) => service.exists(path));
 	ipcMain.handle(FS_CHANNELS.search, (_event, query: string) => service.search(query));
 	ipcMain.handle(FS_CHANNELS.locations, () => service.locations());

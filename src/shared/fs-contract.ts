@@ -15,6 +15,7 @@ export const FS_CHANNELS = {
 	readEntries: "fs:readEntries",
 	enrichEntries: "fs:enrichEntries",
 	stat: "fs:stat",
+	details: "fs:details",
 	exists: "fs:exists",
 	search: "fs:search",
 	locations: "fs:locations",
@@ -140,6 +141,77 @@ export interface FsSearchResult {
 	readonly location: string;
 }
 
+/** A geographic coordinate read from a photo's EXIF GPS IFD. */
+export interface FsGeoPoint {
+	readonly latitude: number;
+	readonly longitude: number;
+}
+
+/**
+ * Camera/photo metadata read from a file's EXIF. Every field is optional
+ * because cameras write different subsets; null means the file carries no such
+ * tag (or the file is not an image exifr can read).
+ */
+export interface FsImageMetadata {
+	readonly width: number | null;
+	readonly height: number | null;
+	readonly make: string | null;
+	readonly model: string | null;
+	readonly lens: string | null;
+	/** ISO sensitivity. */
+	readonly iso: number | null;
+	/** Relative aperture, e.g. 2.8 for f/2.8. */
+	readonly fNumber: number | null;
+	/** Exposure time in seconds, e.g. 0.008 for 1/125 s. */
+	readonly exposureTime: number | null;
+	/** Focal length in millimeters. */
+	readonly focalLength: number | null;
+	/** 35mm-equivalent focal length in millimeters. */
+	readonly focalLength35mm: number | null;
+	/** ISO 8601 capture time (EXIF DateTimeOriginal), null when untagged. */
+	readonly dateTaken: string | null;
+	readonly exposureProgram: string | null;
+	readonly meteringMode: string | null;
+	readonly flash: string | null;
+	readonly whiteBalance: string | null;
+	readonly colorSpace: string | null;
+	readonly orientation: string | null;
+	readonly software: string | null;
+	readonly artist: string | null;
+	readonly copyright: string | null;
+	readonly gps: FsGeoPoint | null;
+}
+
+/**
+ * Rich file metadata for the Inspector's Info panel: everything the OS
+ * reports for a path (times, size, mode, ownership, symlink) plus EXIF for
+ * images. Read on demand for the focused entry, so it never rides on listings.
+ */
+export interface FsFileDetails {
+	readonly path: string;
+	readonly kind: "folder" | "file";
+	/** Bytes; null for folders. */
+	readonly size: number | null;
+	/** ISO 8601 creation (birth) time; falls back to the inode change time like Finder. */
+	readonly createdAt: string;
+	readonly modifiedAt: string;
+	readonly accessedAt: string;
+	/** Inode change time (ctime). */
+	readonly changedAt: string;
+	readonly isSymlink: boolean;
+	/** Absolute target of a symlink; null otherwise. */
+	readonly linkTarget: string | null;
+	/** ls-style permission string, e.g. "-rw-r--r--". */
+	readonly permissions: string;
+	/** Owning user name when resolvable, else the numeric uid. */
+	readonly owner: string;
+	/** Owning group name when resolvable, else the numeric gid. */
+	readonly group: string;
+	readonly inode: number;
+	/** EXIF metadata for image files; null otherwise. */
+	readonly image: FsImageMetadata | null;
+}
+
 export interface FsCoreBridge {
 	listDir(path: string): Promise<DirListing>;
 	enrichEntries(targets: readonly FsEnrichmentTarget[], thumbnails: boolean): Promise<readonly FsEntryEnrichment[]>;
@@ -152,6 +224,8 @@ export interface FsCoreBridge {
 	 */
 	readEntries(dir: string, paths: readonly string[]): Promise<FsEntriesPatch>;
 	stat(path: string): Promise<FsEntry>;
+	/** Rich metadata for the Info panel: OS stat fields plus EXIF for images. */
+	details(path: string): Promise<FsFileDetails>;
 	exists(path: string): Promise<boolean>;
 	search(query: string): Promise<readonly FsSearchResult[]>;
 	locations(): Promise<readonly FsLocation[]>;
