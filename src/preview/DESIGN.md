@@ -2,28 +2,109 @@
 
 Quick Look is a pre-warmed, reusable Electron `BrowserWindow`. The Finder
 renderer sends the selected path to the main process; the main process reads
-the file once and sends a sequenced document payload to the preview renderer.
-The preview renderer reports the size of what it is about to show — an image's
-decoded pixels, a PDF's first page, or the box a text/table/list viewer laid
-out — and the main process fits the window to that size before showing it.
+only what the viewer needs and sends a sequenced payload to the preview
+renderer. The preview renderer reports the size it wants and how to fit it,
+and the main process fits the window to that before showing it.
 
-The window is the macOS Quick Look material: on macOS it is a transparent
-window (`transparent: true`, `#00000000`) whose surface is the translucent
-`--bg-quicklook-panel`, so the Finder stays visible behind it; other platforms
-keep the opaque `--bg-chrome` fallback. The page paints no backdrop of its own:
-the app's desk backdrop lives on the shared `body` in `base.css`, so the
-preview's transparent override is scoped to `body.quick-look-page` (the class on
-`quick-look.html`) to out-specify it — dev injects stylesheets in module order
-and the production bundle in chunk order, and order alone would leak the desk
-grey over the whole window in one of them. Content without a measurable size (a
-sandboxed iframe, or a read that has not finished within 250ms) gets a
-page-shaped 880 × 1040 window instead. The OS draws the window's shadow; there
-is no CSS elevation on the panel itself.
+The design follows the owner's quicklook-preview-reference prototypes
+(2026-10-03): one panel per file type, all sharing the same chrome.
+`scripts/manual-qa/run-qa-quick-look-reference.mjs` opens one fixture per
+reference panel in the real app, in light and dark, checks the behaviour, and
+captures the window for a side-by-side with the reference.
 
-The toolbar is one row: close, the document glyph and filename, then fullscreen
-and 열기 on the trailing side. The filename carries the kind and size in its
-tooltip. The window is resizable and stays where the user put it: it re-centers
-only when it has to (a new file, or a resize that would leave the screen).
+## Material and appearance
+
+On macOS the window is transparent and carries the native `hud` vibrancy
+material behind an 18px-radius panel tinted with `--ql-panel`; CSS
+`backdrop-filter` cannot see past the window, so the blur is the OS's. The
+material is switched off while the open/close zoom stretches the window over
+the icon, and on again once it settles. `visualEffectState: "active"` keeps the
+blur while the panel is shown without focus. Other platforms get an opaque
+`--ql-panel-solid` window that follows the theme through `nativeTheme`.
+
+Quick Look follows the system appearance: the `--ql-*` tokens in `tokens.css`
+have a dark set under `prefers-color-scheme: dark`. The Finder window has no
+dark theme. Media controls keep one dark HUD material in both appearances,
+since they float over the picture.
+
+## Chrome
+
+The 46px toolbar holds close and full screen (filled circular glyphs), the
+file name, a slot where the viewer puts its own controls (segmented views,
+wrap, copy), share (macOS only; the native share menu), and a pill
+"Open with <app>". The default app name comes from Launch Services through
+JavaScript for Automation, about 100ms, cached per extension and sent after
+the load so it never delays the preview; Windows shows "Open".
+
+Viewers reach the chrome through `ChromeProvider` (`src/preview/ui/chrome.tsx`):
+`ToolbarSlot` portals controls into the toolbar, `report(size, fit)` asks for
+the window size once per load, `resize(size)` follows a later user change (the
+자세한 정보 disclosure), and `useHiddenTitle` leaves the toolbar title empty for
+panels that print the name themselves.
+
+## Sizing
+
+`fitQuickLook` takes a fit mode. `aspect` scales media uniformly (images and
+video report their decoded size). `clamp` keeps a panel's preferred width and
+caps each side on its own, so a long file opens tall rather than narrow.
+Panel sizes come from the reference: audio 620 × 368, other 620 × 290 (419
+with details), folder 640 wide, code 840 wide, HTML 980 × 720, Markdown 1100
+wide, and PDF the page width plus 56px margins and the 128px rail. Text-like
+panels measure their content, not their scroller, because the window still has
+the previous file's size when they lay out.
+
+## Viewers
+
+- **Video** — the picture on black with the reference's floating HUD: volume,
+  ±15s, play, speed (1 → 1.25 → 1.5 → 2 → 0.5), loop, picture-in-picture, and
+  a scrubber with elapsed and remaining time. Clicking the picture toggles
+  playback; the HUD fades while playing and the pointer rests. ←/→ seek 5s.
+- **Audio** — cover art (or a stand-in sleeve), title, artist, album, and time
+  from the tags (`music-metadata`, read in the main process without a full
+  scan), a 56-bar waveform decoded at 8kHz that doubles as a scrubber, stream
+  facts, speed and repeat chips, a volume pill, and a transport bar whose last
+  button continues in the default app. Files over 24MB skip the waveform.
+- **PDF** — paper cards in one scrolling column, a floating pill with zoom
+  steps and the current page, and a page rail. pdf.js streams the file over the
+  range-capable protocol with auto-fetch off, so a large document opens on its
+  first page. Pages keep their slot while released and render within 600px of
+  the viewport; a zoom keeps the old pixels until the new ones are drawn.
+- **HTML** — a sandboxed frame with scripts off, at desktop width, in a 390px
+  phone column, or as highlighted source.
+- **Code** — numbered lines on the paper material with the reference's Xcode
+  palette (highlight.js, plus call and constant classes the grammars leave
+  out), wrap and copy in the toolbar, and a footer with language, encoding
+  (UTF-8, BOM, UTF-16, EUC-KR fallback), line ending, and line count. Only the
+  first 512KB is highlighted; lines render in 400-line chunks as they scroll
+  near.
+- **Markdown** — coloured source and the rendered page side by side (원본 ·
+  나란히 · 렌더링), with a footer counting lines, words, headings, tables, and
+  code blocks. Raw HTML in Markdown is reduced to an allowlist in an inert
+  document (`markdown-html.ts`); relative images load through the preview
+  protocol and remote ones are dropped, so the preview never reaches the
+  network.
+- **Other** — a large page glyph labelled with the extension, the name, kind,
+  size, and date, and a 자세한 정보 disclosure with creation date, location,
+  SHA-256, and what a binary is (PE, Mach-O, ELF platform; UDIF disk images).
+- **Folder** — Space previews folders too. The folder glyph, item count, size
+  (a bounded walk: 200k entries or 2.5s, then a lower bound marked `+`), date,
+  and the six most recently modified children.
+
+Images, TIFF, HEIC, fonts, Word, sheets, slides, archives, EPUB, and HWPX keep
+their existing viewers inside the new chrome.
+
+## Reads
+
+The main process reads only what the viewer will use (`byteNeed` in
+`registry.ts`): nothing for media, PDF, images, and fonts, which stream through
+`autorag-preview://` (it answers `Range` with `206`); the first 4MB of text,
+code, Markdown, and HTML; whole documents up to 32MB; and a 64KB sniff of an
+unknown file, read on as text only when it looks like text. The detail calls
+(details, SHA-256, folder size, audio tags) answer only for the path the window
+is showing, and the hash and folder walk stop when the preview moves on.
+
+Electron honours only one `registerSchemesAsPrivileged` call, so the preview
+and thumbnail schemes register together in `src/main/index.ts`.
 
 ## Open and close motion
 
@@ -32,54 +113,22 @@ it back into the icon. The curve is an Apple spring, not a hand-tuned bezier:
 `src/preview/ui/zoom-motion.ts` states Apple's `response`/`dampingFraction`
 parameters and `spring-easing` turns them into a CSS `linear()` easing that the
 Web Animation API plays on the panel (180ms open, 150ms close, tail included;
-instant under `prefers-reduced-motion`) — quick off the icon, soft landing, no
-visible bounce. The Finder sends the icon's
-viewport rect with `show`/`hide`; the main process maps it to the screen
+instant under `prefers-reduced-motion`). The Finder sends the icon's viewport
+rect with `show`/`hide`; the main process maps it to the screen
 (`src/preview/shared/zoom.ts`). During the zoom the transparent window briefly
 covers the icon and the panel together, ignores the mouse, and drops its
-shadow; the page lays the panel out at its final size, pinned to the edges it
-shares with that cover, and animates only a CSS transform, so the snap back to
-the panel's own bounds is still. The page poses the panel before the window is
-shown, so a full-size panel can never flash behind the growing one. A file
-whose icon is not on screen (scrolled away, or an evidence source) zooms from
-the panel's center. Non-macOS windows are opaque, so they show and hide without
-the zoom.
-
-## PDF
-
-Pages render as one continuous column of paper cards inside the stage's single
-scroll container — no pager, every page reachable by scrolling. Each page keeps
-its paper-sized slot even while its canvas is released, so a long document
-stays cheap: pages render while they are within 600px of the viewport and drop
-their backing store once they leave. The frosted rail on the right
-(`--bg-quicklook-frost` + `--backdrop-quicklook`) sits in its own gutter beside
-the pages, never over them: a multi-page document reserves the rail's width
-(plus its 12px insets) and the window grows by it. The rail lists every page, marks the
-one nearest the top of the viewport, and jumps to a page on click. Each slot
-takes its page's aspect ratio up front. Thumbnails observe the rail itself (it
-is fixed-position, so the stage never sees them intersect), render once their
-slot is within 400px of the rail's viewport, and keep their pixels afterwards.
-
-Other viewers follow the same "natural size" rule: `pre` blocks, entry lists,
-slide decks, and font samples are no longer stretched to the window, so a
-three-line text file opens in a short window instead of a tall empty one.
+shadow and material; the page lays the panel out at its final size, pinned to
+the edges it shares with that cover, and animates only a CSS transform. A file
+whose icon is not on screen zooms from the panel's center. Non-macOS windows
+are opaque, so they show and hide without the zoom.
 
 ## Keys and lifecycle
 
 Quick Look is shown with `showInactive()` so the Finder list keeps keyboard
-focus. Arrow Up/Down therefore move the Finder selection and retarget the
-preview, and the wheel scrolls the preview itself. When the preview window
-itself has focus, the main process intercepts Up/Down, Space, and Escape in
-`before-input-event` and runs the equivalent action, so a focused `<video>`
-whose native controls swallow those keys still closes and navigates.
-Left/Right are left to the page, so a focused video can seek.
+focus. Arrow Up/Down move the Finder selection and retarget the preview.
+When the preview window itself has focus, the main process intercepts Up/Down,
+Space, and Escape in `before-input-event`, so a focused control still closes
+and navigates. Left/Right stay with the page, where media seeks.
 
-Media is cleared when the window hides, which stops playback. Video and audio
-use native autoplay controls. Documents remain capped at 32MB; streamable
-media and fonts use `autorag-preview://`, which answers `Range` requests with
-`206 Partial Content`; Chromium only makes a video seekable when it does. HTML,
-Markdown, and Word HTML render in sandboxed iframes with scripts disabled.
-
-The implementation follows sigma-file-manager v1's useful performance pattern
-(a hidden, reused preview window and native media elements) while keeping the
-viewer registry and cross-platform custom protocol already used by this app.
+Media is cleared when the window hides, which stops playback. Previewed pages
+can never navigate the window or open new ones.

@@ -1182,7 +1182,12 @@ export function useFinderController(
 
 	const quickLookSelection = useCallback(() => {
 		const entry = focusedEntry;
-		if (entry === null || entry.kind === "folder") return;
+		if (entry === null) return;
+		// Like Finder, Space previews folders too; only files land in Recents.
+		if (entry.kind === "folder") {
+			quickLookRef.current?.onQuickLook({ path: entry.path, name: entry.name });
+			return;
+		}
 		presentQuickLook({ path: entry.path, name: entry.name });
 	}, [focusedEntry, presentQuickLook]);
 

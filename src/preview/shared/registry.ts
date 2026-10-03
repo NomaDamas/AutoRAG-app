@@ -64,28 +64,39 @@ export function claimedViewerExtensions(): readonly { readonly ext: string; read
 	return Object.entries(viewers).map(([ext, kind]) => ({ ext, kind }));
 }
 
-export function wantsBytes(kind: ViewerKind): boolean {
+/**
+ * What a viewer needs from the main process. `stream` viewers load the file
+ * through the range-capable protocol (media, fonts, and PDF, which pdf.js
+ * fetches page by page); `prefix` viewers render however much text arrives;
+ * `whole` viewers parse the entire file; `sniff` reads enough to tell text
+ * from binary.
+ */
+export type ByteNeed = "stream" | "prefix" | "whole" | "sniff";
+
+export function byteNeed(kind: ViewerKind): ByteNeed {
 	switch (kind) {
 		case "video":
 		case "audio":
 		case "image":
 		case "font":
-			return false;
-		case "tiff":
-		case "heic":
 		case "pdf":
-		case "docx":
-		case "sheet":
-		case "pptx":
+			return "stream";
 		case "markdown":
 		case "html":
 		case "text":
+		case "rtf":
+			return "prefix";
+		case "tiff":
+		case "heic":
+		case "docx":
+		case "sheet":
+		case "pptx":
 		case "archive":
 		case "epub":
 		case "hwpx":
-		case "rtf":
+			return "whole";
 		case "fallback":
-			return true;
+			return "sniff";
 		default:
 			return assertNever(kind);
 	}
@@ -161,6 +172,16 @@ const LABELS: Readonly<Record<string, string>> = {
 	otf: "OpenType font",
 	woff: "Web font",
 	woff2: "Web font",
+	exe: "Windows EXE File",
+	msi: "Windows Installer Package",
+	dll: "Windows Dynamic Library",
+	dmg: "Disk Image",
+	iso: "Disc Image",
+	pkg: "Installer Package",
+	app: "Application",
+	py: "Python Source",
+	html: "HTML Document",
+	htm: "HTML Document",
 };
 
 export function describeExtension(ext: string): string {

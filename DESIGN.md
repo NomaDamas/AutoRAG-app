@@ -38,7 +38,7 @@ The application is not an isolated AI chatbot; it is a **living macOS Finder bro
 | `⌘W` | Window | Close current Finder tab |
 | `⌘F` | Window | Focus Instant Search bar |
 | `⌘K` | Window | Toggle and focus AI Search composer |
-| `Space` | File List | Native Quick Look preview |
+| `Space` | File List | Quick Look preview of the selected file or folder (`src/preview/DESIGN.md`) |
 | `⌥ Space` | Global | Global AutoRAG Spotlight summon |
 | `Enter` | Search Bar | Commit search with Filenames |
 | `⌥ Enter` | Search Bar | Commit search with Content |

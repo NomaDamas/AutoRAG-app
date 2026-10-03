@@ -1,9 +1,13 @@
 import type { IpcRenderer, IpcRendererEvent } from "electron";
 import {
 	isNavigateDelta,
+	isQuickLookApp,
 	isQuickLookLoad,
 	isQuickLookZoom,
 	PREVIEW_CHANNELS,
+	type AudioMetadata,
+	type FileDetails,
+	type FolderSize,
 	type PreviewBridge,
 	type QuickLookWindowBridge,
 } from "../shared/contract";
@@ -44,10 +48,24 @@ export function createQuickLookWindowBridge(ipcRenderer: IpcRenderer, platform: 
 			subscribe(ipcRenderer, PREVIEW_CHANNELS.zoom, (zoom) => {
 				if (isQuickLookZoom(zoom)) listener(zoom);
 			}),
+		onApp: (listener) =>
+			subscribe(ipcRenderer, PREVIEW_CHANNELS.app, (update) => {
+				if (isQuickLookApp(update)) listener(update);
+			}),
 		ready: (report) => ipcRenderer.send(PREVIEW_CHANNELS.ready, report),
 		zoomed: (report) => ipcRenderer.send(PREVIEW_CHANNELS.zoomed, report),
 		request: async (action) => {
 			await ipcRenderer.invoke(PREVIEW_CHANNELS.request, action);
+		},
+		details: (path): Promise<FileDetails> => ipcRenderer.invoke(PREVIEW_CHANNELS.details, path),
+		sha256: (path): Promise<string> => ipcRenderer.invoke(PREVIEW_CHANNELS.sha256, path),
+		folderSize: (path): Promise<FolderSize> => ipcRenderer.invoke(PREVIEW_CHANNELS.folderSize, path),
+		audioMetadata: (path): Promise<AudioMetadata> => ipcRenderer.invoke(PREVIEW_CHANNELS.audioMetadata, path),
+		share: async (anchor) => {
+			await ipcRenderer.invoke(PREVIEW_CHANNELS.share, { x: anchor.x, y: anchor.y, width: anchor.width, height: anchor.height });
+		},
+		copyText: async (text) => {
+			await ipcRenderer.invoke(PREVIEW_CHANNELS.copyText, text);
 		},
 	};
 }

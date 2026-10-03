@@ -8,7 +8,7 @@ export interface Bounds extends Size {
 	readonly y: number;
 }
 
-export const QUICK_LOOK_TOOLBAR = 52;
+export const QUICK_LOOK_TOOLBAR = 46;
 export const QUICK_LOOK_MIN: Size = { width: 360, height: 240 };
 
 const MEDIA_WIDTH_SHARE = 0.86;
@@ -17,12 +17,19 @@ const DOCUMENT: Size = { width: 880, height: 1040 };
 const DOCUMENT_SHARE = 0.86;
 
 /**
- * Window size for one previewed item, like macOS Quick Look: the window hugs
- * whatever the renderer measured (media, a PDF page, a laid-out text block),
- * never upscaling past its natural size and staying inside a share of the
- * screen. Content that cannot measure itself gets a page-shaped window.
+ * How a viewer's preferred size meets the screen. `aspect` scales media and
+ * page-shaped content uniformly; `clamp` keeps a document's preferred width and
+ * caps each side on its own, so a long file opens tall instead of narrow.
  */
-export function fitQuickLook(content: Size, workArea: Size): Size {
+export type QuickLookFit = "aspect" | "clamp";
+
+/**
+ * Window size for one previewed item, like macOS Quick Look: the window hugs
+ * the size the viewer asked for (media, a PDF page, a laid-out panel), never
+ * upscaling past it and staying inside a share of the screen. Content that
+ * cannot measure itself gets a page-shaped window.
+ */
+export function fitQuickLook(content: Size, workArea: Size, fit: QuickLookFit): Size {
 	if (content.width <= 0 || content.height <= 0) {
 		return {
 			width: Math.round(Math.min(DOCUMENT.width, workArea.width * DOCUMENT_SHARE)),
@@ -31,10 +38,13 @@ export function fitQuickLook(content: Size, workArea: Size): Size {
 	}
 	const maxWidth = workArea.width * MEDIA_WIDTH_SHARE;
 	const maxHeight = workArea.height * MEDIA_HEIGHT_SHARE - QUICK_LOOK_TOOLBAR;
-	const scale = Math.min(1, maxWidth / content.width, maxHeight / content.height);
+	const widthScale = Math.min(1, maxWidth / content.width);
+	const heightScale = Math.min(1, maxHeight / content.height);
+	const uniform = Math.min(widthScale, heightScale);
+	const [x, y] = fit === "aspect" ? [uniform, uniform] : [widthScale, heightScale];
 	return {
-		width: Math.max(QUICK_LOOK_MIN.width, Math.round(content.width * scale)),
-		height: Math.max(QUICK_LOOK_MIN.height, Math.round(content.height * scale) + QUICK_LOOK_TOOLBAR),
+		width: Math.max(QUICK_LOOK_MIN.width, Math.round(content.width * x)),
+		height: Math.max(QUICK_LOOK_MIN.height, Math.round(content.height * y) + QUICK_LOOK_TOOLBAR),
 	};
 }
 
