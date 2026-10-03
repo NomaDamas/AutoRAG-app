@@ -52,7 +52,7 @@ const monthDay = (date) => `${date.getMonth() + 1}월 ${date.getDate()}일`;
 const clock = (date) => `${pad(date.getHours())}:${pad(date.getMinutes())}`;
 
 /** The store's own record shape; the list and the search both read these summaries back verbatim. */
-const record = (id, title, snippet, when, question, answer) => ({
+const record = (id, title, snippet, when, question, answer, deepAnswer = null) => ({
 	id,
 	title,
 	snippet,
@@ -63,7 +63,7 @@ const record = (id, title, snippet, when, question, answer) => ({
 			role: "assistant",
 			sessionId: `${id}-session`,
 			quick: { answer, evidence: [], meta: "0.7s · 1 source" },
-			deep: null,
+			deep: deepAnswer === null ? null : { answer: deepAnswer, evidence: [] },
 			stopped: false,
 			at: when.toISOString(),
 		},
@@ -78,7 +78,7 @@ const withinMonth = at(9, 11, 2);
 const older = at(40, 11, 2);
 
 const CHATS = [
-	record("c1", "Q3 마케팅 예산 승인", "9월 12일 Slack #mkt-budget에서 CPA 악화를 이유로 감액이 합의됐습니다.", today1, "Q3 마케팅 예산 승인 근거 찾아줘", "예산은 3.8억으로 확정됐습니다."),
+	record("c1", "Q3 마케팅 예산 승인", "9월 12일 Slack #mkt-budget에서 CPA 악화를 이유로 감액이 합의됐습니다.", today1, "Q3 마케팅 예산 승인 근거 찾아줘", "예산은 3.8억으로 확정됐습니다.", "세부 승인 근거는 지라드 규정과 9월 12일 메일을 따릅니다."),
 	record("c2", "퍼포먼스 광고 감액 사유", "8월 CPA가 목표 대비 31% 높았습니다.", today2, "퍼포먼스 광고 예산이 왜 4천만 원 줄었어?", "CPA 악화가 감액 사유입니다."),
 	record("c3", "CFO 승인 메일 찾기", "9월 15일 오후 4:12에 보낸 메일입니다.", yesterday, "박지훈 CFO가 보낸 예산 승인 메일 찾아줘", "승인 메일을 찾았습니다."),
 	record("c4", "v1 vs v3 예산안 차이", "총액이 4.2억에서 3.8억으로 줄었습니다.", withinWeek, "예산안 v1이랑 v3 차이 정리해줘", "퍼포먼스 광고가 가장 크게 줄었습니다."),
@@ -184,19 +184,36 @@ check("the current row uses the v7 accent wash and dot", currentStyle.background
 check("the current row is the chat that was opened", currentStyle.title === "Q3 마케팅 예산 승인", currentStyle.title);
 await page.screenshot({ path: join(EVIDENCE, "history-current-chat.png") });
 
-// 3. The search input filters through the store.
+// 3. The search input filters through the store, reading the whole conversation
+// body — every question and every Quick/Deep answer — not just the row summary.
 await page.locator(".history input").fill("예산");
 check(
-	'searching "예산" keeps only matching chats, regrouped',
-	await waitForTexts(page, ".hist-copy b", ["Q3 마케팅 예산 승인", "v1 vs v3 예산안 차이"]),
+	'searching "예산" keeps every chat whose question, answer, title or snippet matches, regrouped',
+	await waitForTexts(page, ".hist-copy b", ["Q3 마케팅 예산 승인", "퍼포먼스 광고 감액 사유", "CFO 승인 메일 찾기", "v1 vs v3 예산안 차이", "해외법인 분리 여부"]),
 	JSON.stringify(await texts(page, ".hist-copy b")),
 );
 check(
 	"the regrouped hits keep the day order",
-	JSON.stringify(await texts(page, ".history-group")) === JSON.stringify(["오늘", "지난 7일"]),
+	JSON.stringify(await texts(page, ".history-group")) === JSON.stringify(["오늘", "어제", "지난 7일", "지난 30일"]),
 	JSON.stringify(await texts(page, ".history-group")),
 );
 await page.screenshot({ path: join(EVIDENCE, "history-search.png") });
+
+// 3b. A needle that lives only in the conversation body still finds its chat:
+// "지라드" is in c1's Deep answer, "근거" only in c1's question and Deep answer.
+await page.locator(".history input").fill("지라드");
+check(
+	"a Deep answer word matches the chat that contains it",
+	await waitForTexts(page, ".hist-copy b", ["Q3 마케팅 예산 승인"]),
+	JSON.stringify(await texts(page, ".hist-copy b")),
+);
+await page.locator(".history input").fill("근거");
+check(
+	"a question word outside the row title and snippet matches too",
+	await waitForTexts(page, ".hist-copy b", ["Q3 마케팅 예산 승인"]),
+	JSON.stringify(await texts(page, ".hist-copy b")),
+);
+await page.screenshot({ path: join(EVIDENCE, "history-search-body.png") });
 
 await page.locator(".history input").fill("zzz-no-hit");
 await page.locator(".history-list > span").waitFor({ state: "visible", timeout: 5000 });
@@ -247,14 +264,17 @@ await page.screenshot({ path: join(EVIDENCE, "finder-regression.png") });
 
 // 9. v7 surface metrics. The v7 handoff prototype draws this popover at
 // 330px / radius 10 while the app keeps the 360px / radius 12 / menu-shadow
-// chrome, so the app is compared against its own spec, not the prototype.
+// chrome, so the popover *surface* is compared against its own spec. Its
+// *contents* — the flat search field, the list paddings and the row type
+// scale — follow the prototype exactly.
 const APP_METRICS = {
 	popover: [".history", ["width", "borderRadius", "backgroundColor", "boxShadow"]],
-	group: [".history-group", ["fontSize", "fontWeight"]],
-	row: [".history-item.current", ["borderRadius", "backgroundColor"]],
-	dot: [".history-item.current .hist-dot", ["width", "height", "borderRadius", "backgroundColor"]],
+	input: [".history input", ["height", "borderBottomWidth", "borderBottomStyle", "borderBottomColor", "borderRadius", "fontSize", "paddingLeft", "paddingRight"]],
+	group: [".history-group", ["fontSize", "fontWeight", "padding"]],
+	row: [".history-item.current", ["borderRadius", "backgroundColor", "padding", "gap", "fontSize"]],
+	dot: [".history-item.current .hist-dot", ["width", "height", "marginTop", "backgroundColor"]],
 	title: [".hist-copy b", ["fontSize", "fontWeight"]],
-	time: [".hist-time", ["fontSize"]],
+	time: [".hist-time", ["fontSize", "color"]],
 };
 
 await openHistory(page);
@@ -273,13 +293,34 @@ check(
 	JSON.stringify(appMetrics.popover),
 );
 check(
+	"the popover has a flat reference search field, not a pill or a clear button",
+	appMetrics.input.height === "38px" &&
+		appMetrics.input.borderBottomWidth === "1px" &&
+		appMetrics.input.borderBottomStyle === "solid" &&
+		appMetrics.input.borderBottomColor === "rgb(231, 231, 234)" &&
+		appMetrics.input.borderRadius === "0px" &&
+		appMetrics.input.fontSize === "13px" &&
+		appMetrics.input.paddingLeft === "12px" &&
+		appMetrics.input.paddingRight === "12px",
+	JSON.stringify(appMetrics.input),
+);
+const historyChildren = await page.locator(".history > *").evaluateAll((nodes) => nodes.map((node) => node.tagName.toLowerCase()));
+check("the popover is only the search field and the list — no clear button", JSON.stringify(historyChildren) === JSON.stringify(["input", "div"]), JSON.stringify(historyChildren));
+check(
 	"the current row keeps the accent wash and dot",
 	appMetrics.row.backgroundColor === "rgba(10, 100, 216, 0.08)" && appMetrics.dot.backgroundColor === "rgb(10, 100, 216)",
 	JSON.stringify({ row: appMetrics.row, dot: appMetrics.dot }),
 );
 check(
-	"history rows keep the v7 type scale",
-	appMetrics.title.fontWeight === "500" && appMetrics.title.fontSize === "14px" && appMetrics.time.fontSize === "11px",
+	"the row and group geometry follow the reference",
+	appMetrics.row.borderRadius === "7px" && appMetrics.row.padding === "8px" && appMetrics.row.gap === "8px" && appMetrics.row.fontSize === "13px" &&
+		appMetrics.dot.width === "5px" && appMetrics.dot.height === "5px" &&
+		appMetrics.group.fontSize === "10px" && appMetrics.group.fontWeight === "700" && appMetrics.group.padding === "8px",
+	JSON.stringify({ row: appMetrics.row, dot: appMetrics.dot, group: appMetrics.group }),
+);
+check(
+	"the row type scale follows the reference",
+	appMetrics.title.fontWeight === "700" && appMetrics.title.fontSize === "13px" && appMetrics.time.fontSize === "10px" && appMetrics.time.color === "rgb(110, 110, 115)",
 	JSON.stringify({ title: appMetrics.title, time: appMetrics.time }),
 );
 

@@ -71,7 +71,7 @@ describe("createChatStore", () => {
 		expect(await readdir(join(tempDirs[0] ?? ""))).toEqual(["chats.json"]);
 	});
 
-	it("searches titles and snippets case-insensitively", async () => {
+	it("matches the question and answer text case-insensitively", async () => {
 		const store = await createStore();
 		await store.save(createRecord("chat-1", "Refund approval", "Director approval is required.", "2026-09-28T10:00:00.000Z"));
 		await store.save(createRecord("chat-2", "Lunch places", "The **best** option is documented [4].", "2026-09-28T11:00:00.000Z"));
@@ -79,6 +79,42 @@ describe("createChatStore", () => {
 		expect((await store.search("REFUND")).map((record) => record.id)).toEqual(["chat-1"]);
 		expect((await store.search("director")).map((record) => record.id)).toEqual(["chat-1"]);
 		expect((await store.search("missing"))).toEqual([]);
+	});
+
+	it("searches every message, including deep answers and later turns", async () => {
+		const store = await createStore();
+		const record: ChatRecord = {
+			id: "chat-1",
+			title: "placeholder title",
+			snippet: "placeholder snippet",
+			updatedAt: "2026-09-28T10:00:00.000Z",
+			messages: [
+				{ role: "user", text: "예산 승인 근거를 찾아줘", attachments: [], at: "2026-09-28T10:00:00.000Z" },
+				{
+					role: "assistant",
+					sessionId: "chat-1-session",
+					quick: { answer: "최종 승인액은 3.8억입니다.", evidence: [] },
+					deep: { answer: "승인 근거는 지라드 규정을 따릅니다.", evidence: [] },
+					stopped: false,
+					at: "2026-09-28T10:00:00.000Z",
+				},
+				{ role: "user", text: "그럼 사내 규정 문서는 어디에 있나?", attachments: [], at: "2026-09-28T10:05:00.000Z" },
+				{
+					role: "assistant",
+					sessionId: "chat-1-session",
+					quick: { answer: "문서함에 있습니다.", evidence: [] },
+					deep: null,
+					stopped: false,
+					at: "2026-09-28T10:05:00.000Z",
+				},
+			],
+		};
+		await store.save(record);
+
+		expect((await store.search("3.8억")).map((entry) => entry.id)).toEqual(["chat-1"]);
+		expect((await store.search("지라드")).map((entry) => entry.id)).toEqual(["chat-1"]);
+		expect((await store.search("문서")).map((entry) => entry.id)).toEqual(["chat-1"]);
+		expect(await store.search("없는단어")).toEqual([]);
 	});
 
 	it("clears every persisted chat", async () => {

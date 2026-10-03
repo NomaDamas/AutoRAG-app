@@ -36,6 +36,8 @@ const MIN_OPEN_HEIGHT = 140;
 /** The dock never grows within 200px of the top of the finder column. */
 const TOP_RESERVE = 200;
 const DEFAULT_PEEK = "파일, 메일, 메신저 전체에서 물어보세요";
+/** History search fires this long after the last keystroke, so typing stays smooth. */
+const HISTORY_SEARCH_DEBOUNCE_MS = 300;
 const COMPOSER_PLACEHOLDER = "파일, 메일, 메신저 전체에서 물어보세요 (파일 드래그 앤 드롭 가능)";
 const CENTERED = "mx-auto w-full max-w-[820px]";
 
@@ -116,6 +118,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	const inputRef = useRef<HTMLInputElement | null>(null);
 	const bodyRef = useRef<HTMLDivElement | null>(null);
 	const historySeq = useRef(0);
+	const historyDebounce = useRef<number | null>(null);
 	const startedAtRef = useRef(0);
 	const gripRef = useRef<{ readonly startY: number; readonly startH: number } | null>(null);
 	const prevOpenRef = useRef(open);
@@ -142,6 +145,13 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	useEffect(() => {
 		if (!open) setHistoryOpen(false);
 	}, [open]);
+
+	useEffect(
+		() => () => {
+			if (historyDebounce.current !== null) window.clearTimeout(historyDebounce.current);
+		},
+		[],
+	);
 
 	useEffect(() => {
 		const unsubscribe = autorag.search.onEvent?.((event: SearchStreamEvent) => {
@@ -295,7 +305,14 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		void runSearch(text, attachments);
 	}
 
+	function clearHistoryDebounce(): void {
+		if (historyDebounce.current === null) return;
+		window.clearTimeout(historyDebounce.current);
+		historyDebounce.current = null;
+	}
+
 	async function openHistory(): Promise<void> {
+		clearHistoryDebounce();
 		historySeq.current += 1;
 		const seq = historySeq.current;
 		const items = await autorag.search.historyList();
@@ -306,6 +323,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	}
 
 	function closeHistory(): void {
+		clearHistoryDebounce();
 		setHistoryOpen(false);
 	}
 
@@ -317,24 +335,29 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		void openHistory();
 	}
 
-	/** The store owns the matching (title + first Quick answer); a stale reply never lands after a newer keystroke. */
-	async function searchHistory(value: string): Promise<void> {
+	/** The store owns the matching (every question and answer body); a stale reply never lands after a newer keystroke. */
+	async function searchHistory(value: string): Promise<readonly ChatSummary[]> {
 		setHistoryQuery(value);
 		historySeq.current += 1;
 		const seq = historySeq.current;
 		const items = await autorag.search.historySearch(value);
-		if (seq !== historySeq.current) return;
+		if (seq !== historySeq.current) return [];
 		setHistory(items);
+		return items;
 	}
 
-	async function clearHistory(): Promise<void> {
-		historySeq.current += 1;
-		await autorag.search.historyClear();
-		setHistory([]);
-		setHistoryQuery("");
+	/** Coalesce keystrokes so one query reaches the store per 300ms burst of typing. */
+	function onHistoryQueryChange(value: string): void {
+		setHistoryQuery(value);
+		clearHistoryDebounce();
+		historyDebounce.current = window.setTimeout(() => {
+			historyDebounce.current = null;
+			void searchHistory(value);
+		}, HISTORY_SEARCH_DEBOUNCE_MS);
 	}
 
 	function newChat(): void {
+		clearHistoryDebounce();
 		setQuick(null);
 		setDeep(null);
 		setQuickDraft("");
@@ -352,6 +375,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	}
 
 	async function loadHistory(id: string): Promise<void> {
+		clearHistoryDebounce();
 		const record = await autorag.search.historyGet(id);
 		const assistant = record?.messages.findLast((message) => message.role === "assistant");
 		if (assistant?.role !== "assistant") return;
@@ -571,54 +595,54 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 				<>
 					<div className="absolute inset-0 z-20" aria-hidden="true" onClick={closeHistory} />
 					<div className="history absolute right-12 top-40 z-30 flex max-h-[72%] w-360 flex-col overflow-hidden rounded-12 border border-border bg-window shadow-menu" aria-label="Chat history">
-						<div className="flex flex-none items-center gap-8 p-8">
-							<input
-								autoFocus
-								value={historyQuery}
-								onChange={(event) => void searchHistory(event.target.value)}
-								onKeyDown={(event) => {
-									if (event.key === "Escape") {
-										event.preventDefault();
-										event.stopPropagation();
-										closeHistory();
-										return;
-									}
-									if (event.key !== "Enter") return;
+						<input
+							autoFocus
+							value={historyQuery}
+							onChange={(event) => onHistoryQueryChange(event.target.value)}
+							onKeyDown={(event) => {
+								if (event.key === "Escape") {
 									event.preventDefault();
-									const first = history[0];
+									event.stopPropagation();
+									closeHistory();
+									return;
+								}
+								if (event.key !== "Enter") return;
+								event.preventDefault();
+								// Flush the debounce so Enter opens the first hit of what is typed right now.
+								clearHistoryDebounce();
+								const value = event.currentTarget.value;
+								void searchHistory(value).then((items) => {
+									const first = items[0];
 									if (first !== undefined) void loadHistory(first.id);
-								}}
-								placeholder="대화 기록 검색"
-								aria-label="대화 기록 검색"
-								className="h-icon-sm min-w-0 flex-1 rounded-8 border-0 bg-input px-10 text-meta text-ink outline-none placeholder:text-ink-muted"
-							/>
-							<button type="button" className="flex-none cursor-pointer text-badge text-ink-muted hover:text-danger-text" onClick={() => void clearHistory()}>
-								지우기
-							</button>
-						</div>
-						<div className="history-list min-h-0 flex-1 overflow-auto px-6 pb-6">
+								});
+							}}
+							placeholder="대화 기록 검색"
+							aria-label="대화 기록 검색"
+							className="h-[38px] w-full flex-none border-x-0 border-t-0 border-b border-divider bg-transparent px-12 text-sm text-ink outline-none placeholder:text-ink-muted"
+						/>
+						<div className="history-list min-h-0 flex-1 overflow-auto p-5">
 							{historyGroups.length === 0 ? (
 								<span className="block px-12 py-28 text-center text-meta text-ink-muted">{historyEmptyText(historyQuery)}</span>
 							) : (
 								historyGroups.map((group) => (
 									<div key={group.label}>
-										<div className="history-group px-10 pb-4 pt-10 text-badge font-semibold text-ink-muted">{group.label}</div>
+										<div className="history-group px-8 py-8 text-tile font-bold text-ink-muted">{group.label}</div>
 										{group.items.map((item) => (
 											<button
 												type="button"
 												key={item.id}
 												className={cn(
-													"history-item flex w-full items-start gap-8 rounded-7 border-0 px-10 py-8 text-left cursor-pointer transition-colors duration-(--dur-color) ease-out hover:bg-hover",
+													"history-item flex w-full items-start gap-8 rounded-7 border-0 p-8 text-sm text-left cursor-pointer transition-colors duration-(--dur-color) ease-out hover:bg-accent-history-current",
 													item.id === chatId ? "current bg-accent-history-current" : "bg-transparent",
 												)}
 												onClick={() => void loadHistory(item.id)}
 											>
-												<span className={cn("hist-dot mt-5 size-dot flex-none rounded-full", item.id === chatId ? "bg-accent" : "bg-transparent")} />
+												<span className={cn("hist-dot mt-5 size-5 flex-none rounded-full", item.id === chatId ? "bg-accent" : "bg-transparent")} />
 												<span className="hist-copy min-w-0 flex-1">
-													<b className="block truncate text-body font-medium text-ink">{item.title}</b>
-													<small className="mt-2 block truncate text-meta text-ink-muted">{item.snippet}</small>
+													<b className="block truncate font-bold text-ink">{item.title}</b>
+													<small className="mt-2 block truncate text-badge text-ink-muted">{item.snippet}</small>
 												</span>
-												<span className="hist-time flex-none text-badge text-ink-faint">{item.time}</span>
+												<span className="hist-time flex-none text-tile text-ink-muted">{item.time}</span>
 											</button>
 										))}
 									</div>
