@@ -86,10 +86,11 @@ already streaming-based.
 ## Regression suites passing on this branch
 
 `bun run typecheck`, `bun run test`, `bun run build`, plus manual QA:
-thumbnails (protocol + pixel-true tiles + native path) 11/11, os-kind 5/5,
-view-modes 33/33, folder-tree 14/14, Recents PASS (including
-reveal-into-virtualized-list), trash-prune PASS, live-sync PASS (15 scenarios
-incl. 5,000-file live create, scroll preservation, overflow relist).
+thumbnails (protocol + pixel-true tiles + native path) 11/11, thumbnail scroll
+fill 3/3, os-kind 5/5, view-modes 33/33, folder-tree 14/14, Recents PASS
+(including reveal-into-virtualized-list), trash-prune PASS, live-sync PASS
+(15 scenarios incl. 5,000-file live create, scroll preservation, overflow
+relist).
 
 ## Native thumbnail generation (issue #24)
 
@@ -120,3 +121,21 @@ exists to cap in-flight lookups, not to add speed.
 Regression gate: `run-qa-finder-thumbnails.mjs` reaps pre-existing qlmanage
 orphans, then asserts the count stays 0 while generating 40 thumbnails and that
 every image still yields a thumbnail.
+
+### Viewport-driven thumbnail fill
+
+The icon provider caps one enrichment call at `ICON_LIMIT` (240) targets, so
+the single background pass that follows a listing only covered the first 240
+files of a folder; rows past that kept their letter tile and scrolling never
+asked again. Both views are virtualized, so a mounted row *is* a near-viewport
+row: `FileRow`/`IconTile` report themselves through `RowCallbacks.onVisible`,
+and the controller coalesces those requests (`state/thumbnails.ts`) into one
+`fs.enrichEntries` batch every 60 ms and patches the icons in place. A folder
+larger than the cap now fills in as the user scrolls, in both the list and the
+icon grid.
+
+`run-qa-finder-thumbnail-scroll.mjs` is the gate: a 300-image folder (names
+zero-padded so the bottom rows are exactly the ones past the 240 cap). Row 300
+is proven unmounted before scrolling, then must show a thumbnail after scrolling
+to the bottom, with qlmanage still at 0. Red on `main` (no thumbnail, qlmanage
+spawned), green here — 3/3.

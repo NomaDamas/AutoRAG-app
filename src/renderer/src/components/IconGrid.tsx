@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, type ReactElement, type RefObject } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactElement, type RefObject } from "react";
 import type { FinderEntry } from "../data/entries";
 import { tileLabel } from "../state/format";
 import type { StackRow, VersionFamilyError } from "../state/version-family";
@@ -163,6 +163,14 @@ function IconTile({
 	readonly renameDraft: string | null;
 	readonly callbacks: RowCallbacks;
 }): ReactElement {
+	// Virtualized: only tiles near the viewport mount, so reporting them fills
+	// thumbnails in on scroll for folders larger than the per-call icon cap.
+	useEffect(() => {
+		if (entry.kind === "file" && (entry.iconUrl === null || entry.iconUrl === undefined)) {
+			callbacks.onVisible(entry);
+		}
+	}, [callbacks.onVisible, entry]);
+
 	const classes = ["icon-tile"];
 	if (isHiddenName(entry.name)) classes.push("icon-tile--hidden");
 	if (selected) classes.push(zoneFocused ? "icon-tile--selected-focused" : "icon-tile--selected");

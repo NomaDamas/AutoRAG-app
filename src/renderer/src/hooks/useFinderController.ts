@@ -91,11 +91,14 @@ import {
 import type { TabView } from "../components/TabStrip";
 import type { ColumnPaneView } from "../components/ColumnBrowser";
 import { parseViewMode, VIEW_MODE_STORAGE_KEY, type ViewMode } from "../state/view-mode";
+import { needsThumbnail, takeThumbnailBatch, thumbnailKey } from "../state/thumbnails";
 
 /** --time-toast */
 const TOAST_MS = 2400;
 /** --time-flash */
 const FLASH_MS = 1800;
+/** Coalescing window for viewport-visible thumbnail requests, so a scroll burst is one batch. */
+const THUMBNAIL_FLUSH_MS = 60;
 
 interface ContextMenuState {
 	readonly cursor: { readonly x: number; readonly y: number };
@@ -216,6 +219,8 @@ export interface FinderController {
 	toggleStack(entry: FinderEntry): void;
 	/** Folder disclosure triangle: nest or hide the folder's contents in place. */
 	toggleFolder(entry: FinderEntry): void;
+	/** A row/tile mounted without an OS icon; the controller fills it in on scroll. */
+	noteVisible(entry: FinderEntry): void;
 	retryVersionFamilies(): void;
 	setRenameDraft(value: string): void;
 	commitRename(): void;
@@ -279,6 +284,16 @@ export function useFinderController(
 	const resyncTimerRef = useRef<number | null>(null);
 	const previousRevisionRef = useRef(revision);
 	const previousSourceRef = useRef(source);
+	/**
+	 * Viewport-driven thumbnail requests. Both views are virtualized, so a row
+	 * only calls `noteVisible` while it is near the viewport; requests coalesce
+	 * here and drain through `source.enrich`, so a folder larger than the
+	 * provider's per-call icon cap fills in as the user scrolls instead of
+	 * going iconless past the first batch. Keyed by `(path, modifiedAt)`.
+	 */
+	const thumbRequestsRef = useRef(new Set<string>());
+	const thumbQueueRef = useRef(new Map<string, FinderEntry>());
+	const thumbTimerRef = useRef<number | null>(null);
 
 	const tab = activeTab(tabsState);
 	const path = tab.path;
@@ -380,6 +395,14 @@ export function useFinderController(
 			mode: "navigate" | "silent",
 			requestGeneration: number,
 		): void => {
+			// A fresh listing invalidates which identities the viewport has asked
+			// for, so the next mounted rows request their icons again.
+			thumbRequestsRef.current.clear();
+			thumbQueueRef.current.clear();
+			if (thumbTimerRef.current !== null) {
+				window.clearTimeout(thumbTimerRef.current);
+				thumbTimerRef.current = null;
+			}
 			const scope: ListingScope = {
 				generation: requestGeneration,
 				path: requestedPath,
@@ -427,6 +450,63 @@ export function useFinderController(
 			});
 		},
 		[adoptListing, listingLoader, navigateToExistingAncestor, reportError, source],
+	);
+
+	/**
+	 * Drain the coalesced viewport requests as one enrichment batch, then patch
+	 * the visible entries so their tiles pick up the icon. Mirrors the background
+	 * enrichment guards: search hits patch `hits`, a folder listing patches the
+	 * current listing only while that scope is still active.
+	 */
+	const flushThumbnails = useCallback((): void => {
+		thumbTimerRef.current = null;
+		if (thumbQueueRef.current.size === 0) {
+			return;
+		}
+		const searchingNow = searchingRef.current;
+		const dir = pathRef.current;
+		const generation = generationRef.current;
+		const batch = takeThumbnailBatch(
+			thumbQueueRef.current,
+			thumbRequestsRef.current,
+			(location) => searchingNow || location === dir,
+		);
+		if (batch.length === 0) {
+			return;
+		}
+		void source
+			.enrich(searchingNow ? "search" : dir, batch)
+			.then((enriched) => {
+				if (searchingNow) {
+					if (searchingRef.current) setHits((current) => applyEntryPatch(current, { entries: enriched, removed: [] }));
+					return;
+				}
+				if (pathRef.current !== dir || generationRef.current !== generation || searchingRef.current) return;
+				adoptListing(dir, applyEntryPatch(listingRef.current, { entries: enriched, removed: [] }));
+			})
+			.catch((error: unknown) => console.error("viewport thumbnail enrichment failed", error));
+	}, [adoptListing, source]);
+
+	/**
+	 * One row/tile reported itself as mounted without an OS icon. Coalesce it
+	 * with the other visible requests, then drain a batch through the same
+	 * `source.enrich` the background pass uses and patch the icon in place.
+	 */
+	const noteVisible = useCallback(
+		(entry: FinderEntry): void => {
+			if (!needsThumbnail(entry)) {
+				return;
+			}
+			const key = thumbnailKey(entry);
+			if (thumbRequestsRef.current.has(key) || thumbQueueRef.current.has(key)) {
+				return;
+			}
+			thumbQueueRef.current.set(key, entry);
+			if (thumbTimerRef.current === null) {
+				thumbTimerRef.current = window.setTimeout(flushThumbnails, THUMBNAIL_FLUSH_MS);
+			}
+		},
+		[flushThumbnails],
 	);
 
 	const currentIncremental = incrementalRef.current;
@@ -618,6 +698,9 @@ export function useFinderController(
 			setHits([]);
 			return;
 		}
+		// Search results are a new viewport; let their visible rows ask fresh.
+		thumbRequestsRef.current.clear();
+		thumbQueueRef.current.clear();
 		let live = true;
 		source
 			.search(query)
@@ -1537,6 +1620,7 @@ export function useFinderController(
 		toggleIndex,
 		toggleStack,
 		toggleFolder,
+		noteVisible,
 		retryVersionFamilies,
 		setRenameDraft: (value) => setRename((current) => (current === null ? null : { ...current, draft: value })),
 		commitRename,

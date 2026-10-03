@@ -137,6 +137,7 @@ export function App(): ReactElement {
 		onRenameChange: finder.setRenameDraft,
 		onRenameCommit: finder.commitRename,
 		onRenameCancel: finder.cancelRename,
+		onVisible: finder.noteVisible,
 	};
 
 	return (

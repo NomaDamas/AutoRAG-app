@@ -1,4 +1,4 @@
-import type { ChangeEvent, CSSProperties, KeyboardEvent, MouseEvent, ReactElement } from "react";
+import { useEffect, type ChangeEvent, type CSSProperties, type KeyboardEvent, type MouseEvent, type ReactElement } from "react";
 import type { IndexStatus } from "../../../shared/index-contract";
 import { indexStatusBadge } from "../state/badges";
 import type { FinderEntry } from "../data/entries";
@@ -20,6 +20,13 @@ export interface RowCallbacks {
 	readonly onRenameChange: (value: string) => void;
 	readonly onRenameCommit: () => void;
 	readonly onRenameCancel: () => void;
+	/**
+	 * A row/tile mounted without an OS icon. Because both views are virtualized,
+	 * this fires only for entries near the viewport, so the controller can fill
+	 * thumbnails in as the user scrolls instead of leaning on the single capped
+	 * background pass.
+	 */
+	readonly onVisible: (entry: FinderEntry) => void;
 }
 
 /**
@@ -62,6 +69,14 @@ export function FileRow({
 	readonly listPath: string;
 	readonly callbacks: RowCallbacks;
 }): ReactElement {
+	// Virtualized: only rows near the viewport mount, so reporting them fills
+	// thumbnails in on scroll for folders larger than the per-call icon cap.
+	useEffect(() => {
+		if (entry.kind === "file" && (entry.iconUrl === null || entry.iconUrl === undefined)) {
+			callbacks.onVisible(entry);
+		}
+	}, [callbacks.onVisible, entry]);
+
 	const classes = ["row"];
 	if (isHiddenName(entry.name)) {
 		classes.push("row--hidden");
