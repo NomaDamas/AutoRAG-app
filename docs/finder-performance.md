@@ -116,6 +116,27 @@ are unchanged on disk (same path and mtime) with their enrichment and object
 identity, so an unchanged folder paints nothing more, and a folder that changed
 while its tab was in the background updates in place.
 
+### Tab hit area and background refresh safety
+
+The entire `.tab` segment is now the activation target, not only the title
+button. The close button stops propagation, so clicking it never switches tabs.
+The title remains a real button for keyboard activation and accessibility.
+
+The per-tab snapshot does not suppress filesystem changes. The native watcher
+keeps every open real directory in its watch set; a change in an inactive tab
+marks that tab stale. Returning to it paints the cached snapshot first and then
+performs a silent full listing. The generation and tab/path guards discard old
+list, live-patch, and enrichment completions, so an earlier request cannot
+resurrect a deleted or renamed row. Reconciliation only carries icon/OS-kind
+metadata when path and mtime still match; new, deleted, or modified entries
+remain eligible for fresh data.
+
+One cache edge was fixed during this follow-up: late enrichment for a tab used
+to update only its per-tab snapshot, leaving the shared first column-pane cache
+stale in Columns view. A tab switch now swaps both caches together. Electron
+smoke coverage verified that an inactive-tab create and delete both appear on
+return, and that the first frame contains only the selected tab's folder.
+
 Dev renderer (macOS, 2026-10-03), p50 / p90 ms:
 
 | view | to | first correct frame (before → after) | last change (before → after) | stale frames, mean |

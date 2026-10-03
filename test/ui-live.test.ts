@@ -3,6 +3,7 @@ import type { FsDirChange } from "../src/shared/live-contract";
 import type { FinderEntry } from "../src/renderer/src/data/entries";
 import type { ListingLoadRequest } from "../src/renderer/src/state/live";
 import {
+	applyEntryEnrichmentPatch,
 	applyEntryPatch,
 	applyOptimisticDeletes,
 	createIncrementalListing,
@@ -369,6 +370,15 @@ describe("live renderer state", () => {
 		// A newer mtime means the old thumbnail and OS kind may be wrong: bare until re-enriched.
 		expect(next[1]).toBe(edited);
 		expect(next[2]).toBe(created);
+	});
+
+	it("does not apply enrichment from an older file version", () => {
+		const current = { ...entry("/d/a.md"), modifiedAt: "2026-10-01T00:00:00.000Z", iconUrl: "thumb://new" };
+		const shown = [current];
+		const stale = { ...entry("/d/a.md"), modifiedAt: "2026-09-30T00:00:00.000Z", iconUrl: "thumb://old" };
+		const fresh = { ...current, iconUrl: "thumb://fresh" };
+		expect(applyEntryEnrichmentPatch(shown, [stale])).toBe(shown);
+		expect(applyEntryEnrichmentPatch(shown, [fresh])).toEqual([fresh]);
 	});
 
 	it("returns the same selection object when nothing is pruned", () => {

@@ -23,6 +23,7 @@ import {
 import { emptyStateText, indexToast, trashToast } from "../state/format";
 import { type FocusZone, resolveKeyAction } from "../state/keymap";
 import {
+	applyEntryEnrichmentPatch,
 	applyEntryPatch,
 	applyOptimisticDeletes,
 	createIncrementalListing,
@@ -348,6 +349,9 @@ export function useFinderController(
 		if (snapshot !== undefined && snapshot.dir === path) {
 			listingDirRef.current = snapshot.dir;
 			setListing(snapshot.entries);
+			setPaneListings((current) =>
+				current[path] === snapshot.entries ? current : { ...current, [path]: snapshot.entries },
+			);
 		}
 	}
 	const searching = query.trim() !== "";
@@ -505,14 +509,17 @@ export function useFinderController(
 				adoptListing(requestedPath, entries);
 				void source.enrich(requestedPath, entries).then((enriched) => {
 					if (pathRef.current === requestedPath && generationRef.current === requestGeneration) {
-						adoptListing(requestedPath, enriched);
+						adoptListing(requestedPath, applyEntryEnrichmentPatch(listingRef.current, enriched));
 						return;
 					}
 					// The user switched tabs before the icons landed: finish that
 					// tab's snapshot anyway, unless it has moved on since.
 					const snapshot = tabListingsRef.current.get(scope.tabId);
 					if (snapshot?.entries === entries) {
-						tabListingsRef.current.set(scope.tabId, { dir: requestedPath, entries: enriched });
+						tabListingsRef.current.set(scope.tabId, {
+							dir: requestedPath,
+							entries: applyEntryEnrichmentPatch(snapshot.entries, enriched),
+						});
 					}
 				}).catch((error: unknown) => console.error("background listing enrichment failed", error));
 				incrementalRef.current?.listing.fullAdopted(scope);
@@ -551,7 +558,7 @@ export function useFinderController(
 					return;
 				}
 				if (pathRef.current !== dir || generationRef.current !== generation || searchingRef.current) return;
-				adoptListing(dir, applyEntryPatch(listingRef.current, { entries: enriched, removed: [] }));
+				adoptListing(dir, applyEntryEnrichmentPatch(listingRef.current, enriched));
 			})
 			.catch((error: unknown) => console.error("viewport thumbnail enrichment failed", error));
 	}, [adoptListing, source]);
@@ -591,7 +598,7 @@ export function useFinderController(
 				const generation = generationRef.current;
 				void source.enrich(dir, patch.entries).then((enriched) => {
 					if (pathRef.current !== dir || generationRef.current !== generation || searchingRef.current) return;
-					adoptListing(dir, applyEntryPatch(listingRef.current, { entries: enriched, removed: [] }));
+					adoptListing(dir, applyEntryEnrichmentPatch(listingRef.current, enriched));
 				}).catch((error: unknown) => console.error("background live enrichment failed", error));
 			},
 			isCurrent: (scope) =>
@@ -752,7 +759,7 @@ export function useFinderController(
 					void source.enrich(target, entries).then((enriched) => {
 						if (!live) return;
 						setPaneListings((current) => {
-							const patched = applyEntryPatch(current[target] ?? [], { entries: enriched, removed: [] });
+							const patched = applyEntryEnrichmentPatch(current[target] ?? [], enriched);
 							return patched === current[target] ? current : { ...current, [target]: patched };
 						});
 					}).catch((error: unknown) => console.error("background pane enrichment failed", error));

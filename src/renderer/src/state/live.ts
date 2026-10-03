@@ -219,6 +219,19 @@ export function applyEntryPatch(listing: readonly FinderEntry[], patch: EntryPat
 	return changed ? result : listing;
 }
 
+/** Applies enrichment only while the row still has the requested filesystem mtime. */
+export function applyEntryEnrichmentPatch(
+	listing: readonly FinderEntry[],
+	enriched: readonly FinderEntry[],
+): readonly FinderEntry[] {
+	const currentByPath = new Map(listing.map((entry) => [entry.path, entry]));
+	const fresh = enriched.filter((entry) => {
+		const current = currentByPath.get(entry.path);
+		return current !== undefined && current.modifiedAt === entry.modifiedAt;
+	});
+	return applyEntryPatch(listing, { entries: fresh, removed: [] });
+}
+
 /**
  * A fresh full listing of a folder whose rows are already known. `list`
  * returns bare rows — the OS kind and icon arrive later from `enrich` — so a
