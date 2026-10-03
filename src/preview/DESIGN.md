@@ -15,17 +15,21 @@ captures the window for a side-by-side with the reference.
 ## Material and appearance
 
 On macOS the window is transparent and carries the native `hud` vibrancy
-material behind an 18px-radius panel tinted with `--ql-panel`; CSS
-`backdrop-filter` cannot see past the window, so the blur is the OS's. The
-material is switched off while the open/close zoom stretches the window over
-the icon, and on again once it settles. `visualEffectState: "active"` keeps the
-blur while the panel is shown without focus. Other platforms get an opaque
-`--ql-panel-solid` window that follows the theme through `nativeTheme`.
+material behind an 18px-radius panel tinted with `--ql-panel`;
+CSS `backdrop-filter` cannot see past the window, so the blur is the OS's.
+The material is switched off while the open/close zoom stretches the window
+over the icon, and on again once it settles. `visualEffectState: "active"`
+keeps the blur while the panel is shown without focus. Other platforms get an
+opaque `--ql-panel-solid` window whose background follows `nativeTheme`.
 
-Quick Look follows the system appearance: the `--ql-*` tokens in `tokens.css`
-have a dark set under `prefers-color-scheme: dark`. The Finder window has no
-dark theme. Media controls keep one dark HUD material in both appearances,
-since they float over the picture.
+Appearance is global. The persisted `AppSettings.appearance` value is applied
+as Electron's `nativeTheme.themeSource` before either renderer is created, and
+each preload mirrors it into `data-appearance` before first paint. Finder and
+Quick Look therefore share one appearance policy; changing it in Settings
+updates an open preview without reloading its file. The default is light and
+the choice survives restart; there is no Quick Look-only setting. Media
+controls keep one dark HUD material in both appearances, since they float over
+the picture.
 
 ## Chrome
 

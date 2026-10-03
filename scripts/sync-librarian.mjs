@@ -20,9 +20,9 @@ const previous = hasClone
 if (!hasClone) {
 	run("git", ["clone", "--depth", "1", "--branch", "main", remote, upstream]);
 } else {
-	run("git", ["pull", "--ff-only", "origin", "main"], upstream);
+	run("git", ["fetch", "origin", "main"], upstream);
+	run("git", ["merge", "--ff-only", "FETCH_HEAD"], upstream);
 }
-
 const head = spawnSync("git", ["rev-parse", "HEAD"], { cwd: upstream, encoding: "utf8" });
 if (head.status !== 0) process.exit(head.status ?? 1);
 const revision = head.stdout.trim();

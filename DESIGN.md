@@ -14,6 +14,16 @@ The design strictly reproduces the **v7 Bloom macOS Native Finder** philosophy. 
 | **Tokens & Theming** | `src/renderer/styles/tokens.css` (Surfaces, Typography, Radii, Shadows, Accents) |
 | **Component Styles** | `src/renderer/styles/shell.css`, `src/renderer/styles/finder.css`, `src/renderer/styles/sidebar.css` |
 
+
+### Global appearance
+The persisted `AppSettings.appearance` value is the only appearance control and
+accepts `light` or `dark`. The main process applies it through Electron's
+`nativeTheme.themeSource` before creating the Finder and pre-warmed Quick Look
+windows, and each preload mirrors it into `data-appearance` before the first
+paint. Both renderers therefore use the same appearance; Quick Look has no
+separate theme setting. Switching Appearance in Settings updates Finder,
+Settings, AI surfaces, and an already-open Quick Look window without reloading
+its file. The default is light and the choice survives restart.
 ---
 
 ## 1. Atmosphere & Design Principles

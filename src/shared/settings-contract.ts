@@ -31,7 +31,10 @@ export interface ResolvedPermission {
 	readonly mixed: boolean;
 }
 
+export type AppAppearance = "light" | "dark";
+
 export interface AppSettings {
+	readonly appearance: AppAppearance;
 	readonly language: "ko" | "en" | "ja" | "zh";
 	readonly launchAtLogin: boolean;
 	readonly showInMenuBar: boolean;
@@ -44,6 +47,7 @@ export interface AppSettings {
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
+	appearance: "light",
 	language: "ko",
 	launchAtLogin: false,
 	showInMenuBar: true,

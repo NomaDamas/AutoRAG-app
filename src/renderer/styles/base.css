@@ -21,6 +21,14 @@ body {
 	padding: 0;
 }
 
+html {
+	color-scheme: light;
+}
+
+html[data-appearance="dark"] {
+	color-scheme: dark;
+}
+
 body {
 	background: var(--bg-desk);
 	color: var(--text-primary);
