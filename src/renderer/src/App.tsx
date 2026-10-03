@@ -219,11 +219,15 @@ export function App(): ReactElement {
 	const [evidence, setEvidence] = useState<readonly CitationEvidence[]>([]);
 	const [evidenceSession, setEvidenceSession] = useState<string | null>(null);
 	const [selectedEvidence, setSelectedEvidence] = useState<number | null>(null);
-	const [evidenceOpen, setEvidenceOpen] = useState(true);
+	const [evidenceOpen, setEvidenceOpen] = useState(false);
+	const evidenceSessionRef = useRef<string | null>(null);
 
 	const publishEvidence = useCallback((items: readonly CitationEvidence[], sessionId: string | null) => {
+		const sessionChanged = evidenceSessionRef.current !== sessionId;
+		evidenceSessionRef.current = sessionId;
 		setEvidence(items);
 		setEvidenceSession(sessionId);
+		if (items.length === 0 || sessionChanged) setEvidenceOpen(false);
 		setSelectedEvidence((current) => (current !== null && items.some((item) => item.number === current) ? current : null));
 	}, []);
 
@@ -518,9 +522,7 @@ export function App(): ReactElement {
 						evidenceSelected={evidenceSelectedNumber}
 						sessionId={evidenceSession}
 						onSelectEvidence={selectEvidence}
-						onCloseEvidence={() => setEvidenceOpen(false)}
 						onRevealPath={finder.revealEvidence}
-						onQuickLookPath={finder.quickLookPath}
 						onToast={finder.showToast}
 					/>
 				) : null}

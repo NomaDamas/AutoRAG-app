@@ -4,9 +4,8 @@
  *   Info     preview paper, name, kind·size·date, index/trash/copy chips, the
  *            dupey Versions family, the metadata rows, and the 4-button action
  *            bar. 52px head when it is the only half, 42px in split mode.
- *   Evidence the citation half shown while a citation is selected: tabs,
- *            preview, title, thumbs feedback (real `search.feedback` IPC), and
- *            the source excerpt + reveal breadcrumb.
+ *   Evidence the citation half shown while a citation is selected: numbered tabs,
+ *            preview, title reveal, feedback (real `search.feedback` IPC), and excerpts.
  *
  * All callbacks are real IPC-backed actions supplied by App; this component
  * renders no fabricated data. Esc handling stays in App's keymap.
@@ -29,7 +28,6 @@ import { RELATION_LABELS } from "../state/version-family";
 import { EvidenceExcerpt, renderInline } from "./EvidenceBlocks";
 import {
 	CheckIcon,
-	CloseIcon,
 	CopyIcon,
 	EyeIcon,
 	ShareIcon,
@@ -71,10 +69,8 @@ export interface InspectorProps {
 	readonly evidenceSelected: number;
 	readonly sessionId: string | null;
 	readonly onSelectEvidence: (n: number) => void;
-	readonly onCloseEvidence: () => void;
 	/** Show in Finder. */
 	readonly onRevealPath: (path: string) => void;
-	readonly onQuickLookPath: (path: string) => void;
 	readonly onToast: (msg: string) => void;
 }
 
@@ -96,9 +92,7 @@ export function Inspector({
 	evidenceSelected,
 	sessionId,
 	onSelectEvidence,
-	onCloseEvidence,
 	onRevealPath,
-	onQuickLookPath,
 	onToast,
 }: InspectorProps): ReactElement {
 	const split = evidenceVisible && evidence.length > 0;
@@ -125,9 +119,7 @@ export function Inspector({
 					selected={evidenceSelected}
 					sessionId={sessionId}
 					onSelect={onSelectEvidence}
-					onClose={onCloseEvidence}
 					onReveal={onRevealPath}
-					onQuickLook={onQuickLookPath}
 					onToast={onToast}
 				/>
 			) : null}
@@ -360,18 +352,14 @@ function EvidenceHalf({
 	selected,
 	sessionId,
 	onSelect,
-	onClose,
 	onReveal,
-	onQuickLook,
 	onToast,
 }: {
 	readonly evidence: readonly CitationEvidence[];
 	readonly selected: number;
 	readonly sessionId: string | null;
 	readonly onSelect: (n: number) => void;
-	readonly onClose: () => void;
 	readonly onReveal: (path: string) => void;
-	readonly onQuickLook: (path: string) => void;
 	readonly onToast: (msg: string) => void;
 }): ReactElement {
 	const [votes, setVotes] = useState<Readonly<Record<string, EvidenceFeedback>>>({});
@@ -396,25 +384,6 @@ function EvidenceHalf({
 
 	return (
 		<div className="inspector-half is-split h-[50%] max-h-[50%] min-h-0 flex flex-col overflow-hidden relative border-t border-border shadow-[0_-2px_8px_rgba(0,0,0,0.04)]" aria-label="Evidence">
-			<div className="inspector-head flex-none h-42 flex items-center gap-8 px-12 border-b border-border bg-chrome">
-				<strong className="text-sm font-semibold text-ink">Evidence</strong>
-				<span className="flex-1" />
-				<button
-					type="button"
-					className={HEAD_BUTTON}
-					title="Quick Look"
-					aria-label="Quick Look"
-					disabled={source === null}
-					onClick={() => {
-						if (source !== null) onQuickLook(source);
-					}}
-				>
-					<EyeIcon size={16} />
-				</button>
-				<button type="button" className={HEAD_BUTTON} title="근거 닫기" aria-label="근거 닫기" onClick={onClose}>
-					<CloseIcon size={12} />
-				</button>
-			</div>
 			<div className="inspector-body flex-1 min-h-0 overflow-auto px-14 pt-12 pb-18">
 				<div className="evidence-tabs flex gap-3 overflow-auto mb-10">
 					{evidence.map((entry) => (
@@ -435,7 +404,7 @@ function EvidenceHalf({
 				<div className="preview-paper flex-none h-100 flex items-center justify-center overflow-hidden rounded-6 border border-border bg-window shadow-raised mb-10">
 					<FileTile kind={evidenceKind(item.title)} large />
 				</div>
-				{source === null ? (
+				{source === null || source.startsWith("/kakao/") ? (
 					<div className="preview-title text-sm font-semibold text-ink leading-[1.3] [overflow-wrap:anywhere]">
 						{item.number}. {item.title}
 					</div>
@@ -449,18 +418,16 @@ function EvidenceHalf({
 						{item.number}. {item.title}
 					</button>
 				)}
-				<div className="preview-sub mt-4 text-badge text-ink-muted">
-					{source === null ? evidenceDetail(item.confidence) : `${source} · ${evidenceDetail(item.confidence)}`}
-				</div>
+                <div className="preview-sub mt-4 text-badge text-ink-muted">{evidenceDetail(item.confidence)}</div>
 
-				<div className="feedback flex items-center gap-6 my-8">
+				<div className="feedback flex items-center gap-10 my-8">
 					<button
 						type="button"
 						title="이 근거가 도움이 됨"
 						aria-label="이 근거가 도움이 됨"
 						className={cn(
-							"flex items-center justify-center size-row rounded-6 border cursor-pointer transition-[background,color,border-color] duration-(--dur-color) ease-[ease]",
-							vote === "up" ? "border-ok-border bg-ok-bg-soft text-ok-text" : "border-border bg-window text-ink-muted hover:bg-chrome hover:text-ink",
+							"border-0 bg-transparent p-0 text-caption cursor-pointer transition-colors duration-(--dur-color) ease-[ease]",
+							vote === "up" ? "text-ok-text" : "text-ink-muted hover:text-ink",
 						)}
 						onClick={() => sendVote("up")}
 					>
@@ -471,8 +438,8 @@ function EvidenceHalf({
 						title="이 근거는 도움이 안 됨"
 						aria-label="이 근거는 도움이 안 됨"
 						className={cn(
-							"flex items-center justify-center size-row rounded-6 border cursor-pointer transition-[background,color,border-color] duration-(--dur-color) ease-[ease]",
-							vote === "down" ? "border-danger-border bg-danger-bg-soft text-danger-text" : "border-border bg-window text-ink-muted hover:bg-chrome hover:text-ink",
+							"border-0 bg-transparent p-0 text-caption cursor-pointer transition-colors duration-(--dur-color) ease-[ease]",
+							vote === "down" ? "text-danger-text" : "text-ink-muted hover:text-ink",
 						)}
 						onClick={() => sendVote("down")}
 					>

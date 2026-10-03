@@ -7,17 +7,16 @@
  * lists, quote, inline code) and numbered citations, and whose evidence items
  * point at REAL fixture files on disk. Loading the chat exercises only the
  * real render path (loadHistory -> publish -> Inspector evidence half), then
- * drives: citation chips, evidence tabs, thumbs feedback (toast), native Quick
- * Look (qlmanage process grep), crumb -> new-tab reveal with row flash, ⌘E
- * toggle, and the datasource virtual-source reveal guard (verbatim error toast).
+ * drives: citation chips, evidence tabs, background-free feedback (toast),
+ * title -> new-tab reveal with file selection, ⌘E toggle, and the datasource
+ * virtual-source title guard.
  *
  * Run from the repo root:  bun scripts/manual-qa/run-qa-finder-evidence-panel.mjs
  * Prereq: bun run build
  */
-import { mkdirSync, rmSync, writeFileSync, appendFileSync, existsSync, readFileSync } from "node:fs";
+import { mkdirSync, rmSync, writeFileSync, appendFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, basename } from "node:path";
-import { execSync } from "node:child_process";
 import { launchFinder, finderWindow } from "./launch-finder.mjs";
 
 const ROOT = new URL("../..", import.meta.url).pathname;
@@ -26,7 +25,6 @@ mkdirSync(EVIDENCE, { recursive: true });
 const LOG = join(EVIDENCE, "run.log");
 const log = (line) => { console.log(line); appendFileSync(LOG, `${line}\n`); };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const sh = (cmd) => { try { return execSync(cmd, { encoding: "utf8" }); } catch { return ""; } };
 const failures = [];
 const check = (label, ok, detail) => { log(`${ok ? "PASS" : "FAIL"} ${label}${detail ? ` :: ${detail}` : ""}`); if (!ok) failures.push(label); };
 
@@ -43,10 +41,9 @@ const sweep = () => {
 	if (swept) return;
 	swept = true;
 	app?.close().catch(() => undefined);
-	sh(`pkill -f "qlmanage -p ${POLICY}"`);
 	rmSync(USER_DATA, { recursive: true, force: true });
 	rmSync(DOCS, { recursive: true, force: true });
-	log(`cleanup: removed ${USER_DATA} and ${DOCS}; killed fixture qlmanage; app closed`);
+	log(`cleanup: removed ${USER_DATA} and ${DOCS}; app closed`);
 };
 process.on("exit", sweep);
 
@@ -183,7 +180,8 @@ check("deep answer renders the quote block", deepText.includes("내규 인용 �
 const inlineCode = await deepProse.locator("code").first().textContent();
 check("deep answer renders inline code", (inlineCode ?? "").includes("bun run qa"), inlineCode);
 
-// 2. Citation click -> inspector evidence half, selected tab, crumb text.
+check("the Evidence half stays hidden until a citation is clicked", (await page.locator(EVIDENCE_HALF).count()) === 0);
+// 2. Citation click -> inspector evidence half, selected tab, title reveal.
 await chipOf(2).click();
 await page.waitForSelector(`${EVIDENCE_HALF} .evidence-tab.bg-accent`);
 const activeCite = await quickProse.locator(".cite.active").allTextContents();
@@ -192,40 +190,37 @@ const evTitle = (await page.locator(`${EVIDENCE_HALF} .preview-title`).textConte
 const revealBtn = page.locator(`${EVIDENCE_HALF} .preview-title[title="Show in Finder"]`);
 check("the cited chip lights up with the active accent", JSON.stringify(activeCite) === JSON.stringify(["2"]), JSON.stringify(activeCite));
 check("the evidence half opens on evidence 2", activeTab === "2" && evTitle.startsWith("2. "), `tab=${activeTab} title=${evTitle.slice(0, 32)}`);
-// v7: the title itself is the Show-in-Finder action (no separate crumb row).
 check("the evidence title is the Show-in-Finder action", (await revealBtn.count()) === 1, `count=${await revealBtn.count()}`);
 const detail = (await page.locator(`${EVIDENCE_HALF} .preview-sub`).textContent()) ?? "";
-check("the detail shows the source path and confidence", detail.includes("qa-evidence-memo.md") && detail.includes("관련도 81%"), detail.replace(/\s+/g, " ").slice(0, 120));
+check("the detail shows confidence without the source path", detail.includes("관련도 81%") && !detail.includes("qa-evidence-memo.md"), detail.replace(/\s+/g, " ").slice(0, 120));
+check("the Evidence header, eye, and close controls are removed", (await page.locator(`${EVIDENCE_HALF} .inspector-head`).count()) === 0 && (await page.locator(`${EVIDENCE_HALF} button[aria-label="Quick Look"]`).count()) === 0 && (await page.locator(`${EVIDENCE_HALF} button[aria-label="근거 닫기"]`).count()) === 0, "header controls absent");
 await page.screenshot({ path: join(EVIDENCE, "02-evidence-panel.png") });
 
 // 2b. Layout geometry per the v7 reference (evidence half = lower 50% of the
-// column, 42px head on chrome, 22x22 tabs, 32x32 votes, subtle inspector surface).
+// column, numbered tabs first, transparent feedback controls, subtle inspector surface).
 const geometry = await page.evaluate((half) => {
-	const box = (sel) => { const e = document.querySelector(sel); return e ? JSON.parse(JSON.stringify(e.getBoundingClientRect())) : null; };
-	const style = (sel, props) => {
-		const e = document.querySelector(sel);
-		if (!e) return null;
-		const s = getComputedStyle(e);
-		return Object.fromEntries(props.map((p) => [p, s[p]]));
-	};
-	return {
-		panel: box(half),
-		finder: box('section[aria-label="Finder"]'),
-		head: box(`${half} .inspector-head`),
-		tab: box(`${half} .evidence-tab`),
-		vote: box(`${half} .feedback button`),
-		inspectorBg: style(".inspector", ["backgroundColor"]),
-		headBg: style(`${half} .inspector-head`, ["backgroundColor"]),
-		headPad: style(`${half} .inspector-head`, ["paddingLeft"]),
-	};
+    const box = (sel) => { const e = document.querySelector(sel); return e ? JSON.parse(JSON.stringify(e.getBoundingClientRect())) : null; };
+    const style = (sel, props) => {
+        const e = document.querySelector(sel);
+        if (!e) return null;
+        const s = getComputedStyle(e);
+        return Object.fromEntries(props.map((p) => [p, s[p]]));
+    };
+    return {
+        panel: box(half),
+        finder: box('section[aria-label="Finder"]'),
+        tabs: box(`${half} .evidence-tabs`),
+        tab: box(`${half} .evidence-tab`),
+        vote: box(`${half} .feedback button`),
+        voteStyle: style(`${half} .feedback button`, ["backgroundColor", "borderTopWidth", "borderLeftWidth"]),
+        inspectorBg: style(".inspector", ["backgroundColor"]),
+    };
 }, EVIDENCE_HALF);
 const ratio = geometry.panel.height / geometry.finder.height;
 check("the open evidence half takes the lower 50% of the column", Math.abs(ratio - 0.5) < 0.03, `ratio=${ratio.toFixed(3)}`);
-check("the evidence head is 42px on the chrome surface", Math.round(geometry.head.height) === 42 && geometry.headBg.backgroundColor === "rgb(245, 245, 247)", JSON.stringify({ h: geometry.head.height, bg: geometry.headBg }));
-check("evidence tabs are 22x22", Math.round(geometry.tab.width) === 22 && Math.round(geometry.tab.height) === 22, JSON.stringify(geometry.tab));
-check("feedback votes are 32x32", Math.round(geometry.vote.width) === 32 && Math.round(geometry.vote.height) === 32, JSON.stringify(geometry.vote));
+check("evidence tabs are the first content row", geometry.tabs !== null && geometry.tab !== null && geometry.tabs.top <= geometry.tab.top + 1, JSON.stringify({ tabs: geometry.tabs, tab: geometry.tab }));
+check("feedback votes have no box background or border", geometry.voteStyle.backgroundColor === "rgba(0, 0, 0, 0)" && geometry.voteStyle.borderTopWidth === "0px" && geometry.voteStyle.borderLeftWidth === "0px", JSON.stringify(geometry.voteStyle));
 check("the inspector sits on the subtle surface", geometry.inspectorBg.backgroundColor === "rgb(250, 250, 250)", JSON.stringify(geometry.inspectorBg));
-check("the evidence head padding follows the v7 12px rhythm", geometry.headPad.paddingLeft === "12px", JSON.stringify(geometry.headPad));
 
 // 3. Tabs switch; the excerpt renders the reference block types.
 await page.locator(`${EVIDENCE_HALF} .evidence-tab`, { hasText: /^1$/ }).first().click();
@@ -246,46 +241,23 @@ const toastText = (await page.locator(".toast").textContent()) ?? "";
 check("thumbs-up toast follows the reference copy", toastText.includes("근거 1 — 도움이 됨으로 기록했습니다"), toastText.trim());
 await sleep(300);
 const voteStyle = await page.locator(`${EVIDENCE_HALF} button[title="이 근거가 도움이 됨"]`).evaluate((el) => {
-	const s = getComputedStyle(el);
-	return { bg: s.backgroundColor, border: s.borderColor, color: s.color };
+    const s = getComputedStyle(el);
+    return { bg: s.backgroundColor, borderTopWidth: s.borderTopWidth, borderLeftWidth: s.borderLeftWidth, color: s.color };
 });
-check("the active vote uses the green ok set", voteStyle.bg === "rgba(34, 197, 94, 0.12)", JSON.stringify(voteStyle));
+check("the active vote keeps the transparent Apple-style control", voteStyle.bg === "rgba(0, 0, 0, 0)" && voteStyle.borderTopWidth === "0px" && voteStyle.borderLeftWidth === "0px", JSON.stringify(voteStyle));
 await page.screenshot({ path: join(EVIDENCE, "03-feedback.png") });
-
-// 5. The evidence Quick Look button drives the real preview bridge and records
-// the source as recent. macOS routes the visible preview to QuickLookUIService,
-// so the deterministic observable is the recents record, not a `qlmanage` process.
-await page.locator(`${EVIDENCE_HALF} button[aria-label="Quick Look"]`).click();
-const recentsStore = join(USER_DATA, "recents", "recents.json");
-let quickLookRecorded = false;
-for (let attempt = 0; attempt < 40; attempt += 1) {
-	if (existsSync(recentsStore)) {
-		try {
-			if (JSON.parse(readFileSync(recentsStore, "utf8")).includes(POLICY)) {
-				quickLookRecorded = true;
-				break;
-			}
-		} catch {
-			/* store mid-write; retry */
-		}
-	}
-	await sleep(100);
-}
-check("Quick Look drives the preview bridge (source recorded as recent)", quickLookRecorded, recentsStore);
-
-// 6. Crumb click opens the enclosing folder in a NEW tab and reveals the row.
+// 5. Title click opens the enclosing folder in a NEW tab and selects the source row.
 const tabsBefore = await page.locator(".tabs .tab").count();
 await page.locator(`${EVIDENCE_HALF} button[title="Show in Finder"]`).click();
 await page.waitForFunction((count) => document.querySelectorAll(".tabs .tab").length === count + 1, tabsBefore);
 await sleep(400);
 const newTabTitle = (await page.locator(".tabs .tab--active .tab__title").textContent()) ?? "";
-check("the crumb opens the source folder in a new tab", newTabTitle === FOLDER, `tab="${newTabTitle}" want="${FOLDER}"`);
-check("the source row is revealed with the flash marker", (await page.locator(".row.bg-accent-flash").count()) >= 1);
+const sourceRow = page.locator(`[role="row"][data-path="${POLICY}"]`);
+check("the title opens the source folder in a new tab", newTabTitle === FOLDER, `tab="${newTabTitle}" want="${FOLDER}"`);
+check("the title selects and flashes the source row", (await sourceRow.getAttribute("aria-selected")) === "true" && (await page.locator(".row.bg-accent-flash").count()) >= 1);
 await page.screenshot({ path: join(EVIDENCE, "04-new-tab-reveal.png") });
 
-// 7. ⌘E hides and reopens the evidence half (v7 renders it as the inspector's
-// lower half; there is no separate collapsible strip).
-await page.locator(`${EVIDENCE_HALF} .inspector-head strong`).click();
+// 6. ⌘E hides and reopens the evidence half without a persistent header.
 await page.keyboard.press("Meta+e");
 await page.waitForFunction((half) => document.querySelector(half) === null, EVIDENCE_HALF);
 check("⌘E hides the evidence half", true);
@@ -294,17 +266,12 @@ await page.keyboard.press("Meta+e");
 await page.waitForFunction((half) => document.querySelector(half) !== null, EVIDENCE_HALF);
 check("⌘E reopens the evidence half", true);
 
-// 8. A datasource virtual source cannot be revealed; the error toasts verbatim.
+// 7. Datasource evidence has no local Finder title action.
 await page.locator(`${EVIDENCE_HALF} .evidence-tab`, { hasText: /^3$/ }).first().click();
 await page.waitForFunction((sel) => document.querySelector(sel)?.textContent?.startsWith("3. "), `${EVIDENCE_HALF} .preview-title`);
-await page.locator(`${EVIDENCE_HALF} button[title="Show in Finder"]`).click();
-// Wait for this error's toast specifically: an earlier feedback toast can linger.
-await page
-	.waitForFunction(() => document.querySelector(".toast")?.textContent?.includes("/kakao/ulw-qa"), null, { timeout: 8000 })
-	.catch(() => undefined);
-const guardToast = (await page.locator(".toast").textContent()) ?? "";
-check("the datasource source fails with a verbatim error toast", guardToast.includes("/kakao/ulw-qa"), guardToast.trim().slice(0, 160));
-await page.screenshot({ path: join(EVIDENCE, "06-datasource-guard.png") });
+check("a virtual datasource title is not a local Finder action", (await page.locator(`${EVIDENCE_HALF} .preview-title[title="Show in Finder"]`).count()) === 0);
+await page.screenshot({ path: join(EVIDENCE, "06-datasource.png") });
+
 
 log(`RESULT ${failures.length === 0 ? "ALL PASS" : `${failures.length} FAILURES: ${failures.join(" | ")}`}`);
 sweep();

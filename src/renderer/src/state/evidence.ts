@@ -1,9 +1,7 @@
 /**
  * Evidence-panel view model (DESIGN.md §5 Evidence panel; handoff README §1).
- *
- * Pure helpers for the bottom evidence strip: breadcrumb segments of the
- * source path, tile kind inference from the evidence title, thumbs-up/down
- * toggle state, and the reference toast copy.
+ * Pure helpers for the citation-driven Evidence half: tile kind inference from
+ * the evidence title, thumbs-up/down toggle state, and the reference toast copy.
  */
 
 import { type FileKind, kindFromExtension } from "./kinds";
