@@ -1498,6 +1498,16 @@ export function useFinderController(
 	useEffect(() => {
 		const onKeyDown = (event: globalThis.KeyboardEvent): void => {
 			const target = event.target;
+			if (
+				target instanceof HTMLElement &&
+				target.tagName === "BUTTON" &&
+				(event.key === "Enter" || event.key === " ") &&
+				!event.metaKey &&
+				!event.ctrlKey &&
+				!event.altKey
+			) {
+				return;
+			}
 			const typing =
 				target instanceof HTMLElement &&
 				(target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable);
