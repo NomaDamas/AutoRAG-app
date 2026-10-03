@@ -1,6 +1,6 @@
 import type { MouseEvent, ReactElement } from "react";
 import { cn } from "../lib/cn";
-import { CloseIcon, PlusIcon } from "./icons";
+import { TabCloseIcon, TabPlusIcon } from "./icons";
 import { StatusDot } from "./primitives/StatusDot";
 
 export interface TabView {
@@ -58,7 +58,7 @@ export function TabStrip({
 					{canClose ? (
 						<button
 							type="button"
-							className="tab__close absolute left-5 top-1/2 mt-[-7.5px] flex flex-none size-15 items-center justify-center border-0 rounded-4 bg-transparent text-ink-muted opacity-0 transition-[background,opacity] duration-(--dur-color) ease-[ease] group-hover/tab:opacity-100 hover:bg-[rgba(0,0,0,0.12)] hover:text-ink"
+							className="tab__close absolute left-5 top-1/2 mt-[-7.5px] flex flex-none size-15 items-center justify-center p-0 border-0 rounded-3 bg-transparent text-ink-muted opacity-0 transition-[background,opacity] duration-(--dur-color) ease-[ease] group-hover/tab:opacity-100 hover:bg-[rgba(0,0,0,0.12)] hover:text-ink"
 							title="Close tab ⌘W"
 							aria-label="Close tab ⌘W"
 							onClick={(event: MouseEvent<HTMLButtonElement>) => {
@@ -66,7 +66,7 @@ export function TabStrip({
 								onClose(tab.id);
 							}}
 						>
-							<CloseIcon />
+							<TabCloseIcon />
 						</button>
 					) : null}
 				</div>
@@ -74,7 +74,7 @@ export function TabStrip({
 			<button
 				type="button"
 				className={cn(
-					"tabs__new flex flex-none w-28 items-center justify-center border-l border-tabstrip-line text-tab-text hover:text-ink [-webkit-app-region:no-drag]",
+					"tabs__new flex flex-none w-28 items-center justify-center border-0 border-l border-tabstrip-line text-tab-text hover:text-ink [-webkit-app-region:no-drag]",
 					TAB_GRADIENT,
 					TAB_GRADIENT_HOVER,
 				)}
@@ -82,7 +82,7 @@ export function TabStrip({
 				aria-label="New tab ⌘T"
 				onClick={onNewTab}
 			>
-				<PlusIcon />
+				<TabPlusIcon />
 			</button>
 		</div>
 	);
