@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from "electron";
+import { contextBridge, ipcRenderer, webUtils } from "electron";
 import { createBridge } from "../shared/bridge";
 import type { DevLabel } from "../shared/app-info";
 import { createPreviewBridge } from "../preview/node/bridge";
@@ -26,4 +26,6 @@ contextBridge.exposeInMainWorld("autorag", {
 	preview: createPreviewBridge(ipcRenderer),
 	search: createSearchBridge(ipcRenderer),
 	settings: createSettingsBridge(ipcRenderer),
+	// Electron dropped `File.path`; only the preload can map a dropped file to its disk path.
+	pathForFile: (file: File) => webUtils.getPathForFile(file),
 });

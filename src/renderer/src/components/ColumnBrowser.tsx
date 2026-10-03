@@ -133,9 +133,11 @@ export function ColumnBrowser({
 								aria-label={member.entry.name}
 								data-path={member.entry.path}
 								title={member.entry.name}
+								draggable
 								onClick={() => onSelectVariant(member.entry)}
 								onDoubleClick={() => callbacks.onOpen(member.entry)}
 								onContextMenu={(event) => callbacks.onContextMenu(member.entry, event)}
+								onDragStart={(event) => callbacks.onDragStart(member.entry, event)}
 							>
 								<FileTile kind={member.entry.fileKind} iconUrl={member.entry.iconUrl} size={16} />
 								<span className="col-name flex-1 min-w-0 overflow-hidden whitespace-nowrap text-ellipsis text-sm">
@@ -195,9 +197,11 @@ function ColumnRow({
 			aria-label={entry.name}
 			data-path={entry.path}
 			title={entry.name}
+			draggable={renameDraft === null}
 			onClick={(event) => columnCallbacks.onClick(pane, entry, event)}
 			onDoubleClick={() => callbacks.onOpen(entry)}
 			onContextMenu={(event) => callbacks.onContextMenu(entry, event)}
+			onDragStart={(event) => callbacks.onDragStart(entry, event)}
 		>
 			<FileTile kind={entry.fileKind} iconUrl={entry.iconUrl} size={16} />
 			{renameDraft === null ? (

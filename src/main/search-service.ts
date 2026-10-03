@@ -1,8 +1,8 @@
 import {
-	AutoRAGAgent,
 	buildAgentOptions,
 	EMIT_AUTORAG_RESULTS_TOOL_NAME,
 	resolveConfigReadOnly,
+	type AutoRAGAgent,
 	type AutoRAGAgentOptions,
 	type SearchDocumentsResponse,
 	type SearchDocumentsStreamEvent,
@@ -11,12 +11,14 @@ import { resolveAgentModel } from "@autorag/librarian/core";
 import type {
 	AnswerPhase,
 	AnswerPhaseName,
+	ChatAttachment,
 	ChatMessageAssistant,
 	ChatMessageUser,
 	SearchBridge,
 	SearchStreamEvent,
 } from "../shared/search-contract";
 import { SEARCH_CHANNELS } from "../shared/search-contract";
+import { AttachmentContextAgent, buildAttachmentContext } from "./attachment-context";
 import type { ChatStore } from "./chat-store";
 
 /**
@@ -51,6 +53,8 @@ type ChatSession = {
 
 type SearchAgent = Pick<AutoRAGAgent, "recordFeedbackByNumbers"> & {
 	readonly searchDocumentsStream: (query: string) => AsyncGenerator<SearchDocumentsStreamEvent, void, void>;
+	/** The attachment block the next run puts in front of the model ("" for none). */
+	readonly setAttachmentContext: (context: string) => void;
 	readonly subscribe?: (listener: (event: LiveAgentEvent) => void) => () => void;
 	readonly abort?: () => void;
 	readonly createChatSession?: (options: { readonly systemPrompt: string }) => ChatSession;
@@ -61,6 +65,8 @@ export interface SearchServiceDeps {
 	readonly chatStore: ChatStore;
 	readonly send: (channel: string, payload: SearchStreamEvent) => void;
 	readonly now?: () => Date;
+	/** Reads a message's attachments into the agent's context block. Defaults to {@link buildAttachmentContext}. */
+	readonly attachmentContext?: (attachments: readonly ChatAttachment[]) => Promise<string>;
 }
 
 interface SearchRun {
@@ -198,7 +204,7 @@ export function createSearchService(deps: SearchServiceDeps): SearchBridge {
 		});
 	}
 
-	async function consume(run: SearchRun, query: string): Promise<void> {
+	async function consume(run: SearchRun, query: string, attachments: readonly ChatAttachment[]): Promise<void> {
 		const mapLive = createLiveStreamMapper(run.searchId, (event) => {
 			if (!run.cancelled) emit(event);
 		});
@@ -206,6 +212,10 @@ export function createSearchService(deps: SearchServiceDeps): SearchBridge {
 		// tokens are lost.
 		const unsubscribe = run.agent.subscribe?.(mapLive);
 		try {
+			// Reading a large PDF can outlast a Stop; a cancelled run never reaches the agent.
+			const context = await (deps.attachmentContext ?? buildAttachmentContext)(attachments);
+			if (run.cancelled) return;
+			run.agent.setAttachmentContext(context);
 			for await (const event of run.agent.searchDocumentsStream(query)) {
 				if (run.cancelled) return;
 				switch (event.type) {
@@ -295,7 +305,7 @@ export function createSearchService(deps: SearchServiceDeps): SearchBridge {
 				updatedAt: at,
 				messages: [...(existing?.messages ?? []), userMessage],
 			});
-			void consume(run, query);
+			void consume(run, query, attachments);
 			await finish;
 		},
 		cancel: async (searchId) => {
@@ -329,6 +339,6 @@ export function createDefaultAgentFactory(): () => SearchAgent {
 			...(resolved.apiKey !== undefined ? { apiKey: resolved.apiKey } : {}),
 			...(resolved.providerApiKeys !== undefined ? { providerApiKeys: resolved.providerApiKeys } : {}),
 		};
-		return new AutoRAGAgent(options) as SearchAgent;
+		return new AttachmentContextAgent(options) as SearchAgent;
 	};
 }
