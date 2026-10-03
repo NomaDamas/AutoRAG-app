@@ -2,8 +2,12 @@
  * Inspector — the right column (v7 Bloom). Two stacked halves:
  *
  *   Info     preview paper, name, kind·size·date, index/trash/copy chips, the
- *            dupey Versions family, the metadata rows, and the 4-button action
- *            bar. 52px head when it is the only half, 42px in split mode.
+ *            dupey Versions family, the metadata rows, and the suggested-action
+ *            bar. The bar is data-driven: `state/file-actions.ts` decides which
+ *            actions the focused file's own type implies, the machine's
+ *            capabilities decide which of those are real, and a multi-variant
+ *            action (image edit, video conversion) opens a menu instead of a
+ *            row of near-identical buttons.
  *   Evidence the citation half shown while a citation is selected: tabs,
  *            preview, title, thumbs feedback (real `search.feedback` IPC), and
  *            the source excerpt + reveal breadcrumb.
@@ -12,7 +16,8 @@
  * renders no fabricated data. Esc handling stays in App's keymap.
  */
 
-import { useState, type ReactElement, type ReactNode } from "react";
+import { useState, type MouseEvent as ReactMouseEvent, type ReactElement, type ReactNode } from "react";
+import type { ActionAnchor, ActionCapabilities } from "../../../shared/actions-contract";
 import type { IndexStatus } from "../../../shared/index-contract";
 import type { CitationEvidence } from "../../../shared/search-contract";
 import type { FinderEntry } from "../data/entries";
@@ -24,20 +29,33 @@ import {
 	nextEvidenceFeedback,
 	type EvidenceFeedback,
 } from "../state/evidence";
+import {
+	suggestedActions,
+	type FileActionIcon,
+	type FileActionItem,
+	type FileActionTarget,
+} from "../state/file-actions";
 import { basename, dirname } from "../state/paths";
 import { RELATION_LABELS } from "../state/version-family";
 import { EvidenceExcerpt, renderInline } from "./EvidenceBlocks";
 import {
 	CheckIcon,
 	CloseIcon,
+	CompressIcon,
 	CopyIcon,
+	ExtractIcon,
 	EyeIcon,
+	ImageEditIcon,
+	OpenIcon,
+	OpenWithIcon,
 	ShareIcon,
 	SparklesIcon,
 	ThumbsDownIcon,
 	ThumbsUpIcon,
 	TrashIcon,
+	VideoConvertIcon,
 } from "./icons";
+import { ActionMenu } from "./primitives/ActionMenu";
 import { FileTile } from "./primitives/FileTile";
 
 export interface InspectorFamilyMember {
@@ -60,8 +78,11 @@ export interface InspectorProps {
 	readonly onToggleIndex: (entry: FinderEntry) => void;
 	readonly onTrash: (entry: FinderEntry) => void;
 	readonly onCopyPath: (entry: FinderEntry) => void;
-	readonly onQuickLook: (entry: FinderEntry) => void;
 	readonly onAskAi: (entry: FinderEntry) => void;
+	/** What this machine can actually run (probed in main, cached by the controller). */
+	readonly actionCapabilities: ActionCapabilities;
+	/** Run a suggested action; `anchor` is the clicked button's rect (share sheet). */
+	readonly onAction: (target: FileActionTarget, anchor: ActionAnchor | null) => void;
 	/** Dupey family of `entry`; null when it has no versions. */
 	readonly family: InspectorFamily | null;
 	readonly onOpenMember: (path: string) => void;
@@ -81,14 +102,33 @@ export interface InspectorProps {
 const HEAD_BUTTON =
 	"flex flex-none items-center justify-center size-icon-sm p-0 border-0 rounded-6 bg-transparent text-ink-muted cursor-pointer transition-[background,color] duration-(--dur-color) ease-[ease] enabled:hover:bg-hover-icon enabled:hover:text-ink disabled:text-border-strong disabled:cursor-default disabled:hover:bg-transparent";
 
+/** Inspector action glyphs, 18px in the bar and 16px in the head. */
+const ACTION_ICONS: Readonly<Record<FileActionIcon, (props: { readonly size?: number }) => ReactElement>> = {
+	open: OpenIcon,
+	openWith: OpenWithIcon,
+	compress: CompressIcon,
+	extract: ExtractIcon,
+	share: ShareIcon,
+	askAi: SparklesIcon,
+	image: ImageEditIcon,
+	video: VideoConvertIcon,
+};
+
+/** The clicked button's rect, for menus and the share sheet. */
+function anchorOf(element: Element): ActionAnchor {
+	const rect = element.getBoundingClientRect();
+	return { x: rect.left, y: rect.top, width: rect.width, height: rect.height };
+}
+
 export function Inspector({
 	entry,
 	indexStatus,
 	onToggleIndex,
 	onTrash,
 	onCopyPath,
-	onQuickLook,
 	onAskAi,
+	actionCapabilities,
+	onAction,
 	family,
 	onOpenMember,
 	evidence,
@@ -116,8 +156,9 @@ export function Inspector({
 				onToggleIndex={onToggleIndex}
 				onTrash={onTrash}
 				onCopyPath={onCopyPath}
-				onQuickLook={onQuickLook}
 				onAskAi={onAskAi}
+				actionCapabilities={actionCapabilities}
+				onAction={onAction}
 			/>
 			{split ? (
 				<EvidenceHalf
@@ -144,8 +185,9 @@ function InfoHalf({
 	onToggleIndex,
 	onTrash,
 	onCopyPath,
-	onQuickLook,
 	onAskAi,
+	actionCapabilities,
+	onAction,
 }: {
 	readonly entry: FinderEntry | null;
 	readonly indexStatus: IndexStatus | null;
@@ -155,8 +197,9 @@ function InfoHalf({
 	readonly onToggleIndex: (entry: FinderEntry) => void;
 	readonly onTrash: (entry: FinderEntry) => void;
 	readonly onCopyPath: (entry: FinderEntry) => void;
-	readonly onQuickLook: (entry: FinderEntry) => void;
 	readonly onAskAi: (entry: FinderEntry) => void;
+	readonly actionCapabilities: ActionCapabilities;
+	readonly onAction: (target: FileActionTarget, anchor: ActionAnchor | null) => void;
 }): ReactElement {
 	const [brief, setBrief] = useState(false);
 	const included = indexStatus === null || !indexStatus.excluded;
@@ -166,18 +209,20 @@ function InfoHalf({
 			<div className={cn("inspector-head flex-none flex items-center gap-8 px-12 border-b border-border bg-chrome", split ? "h-42" : "h-52")}>
 				<strong className={cn("font-semibold text-ink", split ? "text-sm" : "text-body")}>Info</strong>
 				<span className="flex-1" />
-				<button
-					type="button"
-					className={HEAD_BUTTON}
-					title="경로 복사"
-					aria-label="경로 복사"
-					disabled={entry === null}
-					onClick={() => {
-						if (entry !== null) onCopyPath(entry);
-					}}
-				>
-					<ShareIcon size={16} />
-				</button>
+				{actionCapabilities.share ? (
+					<button
+						type="button"
+						className={HEAD_BUTTON}
+						title="공유"
+						aria-label="공유"
+						disabled={entry === null}
+						onClick={(event) => {
+							if (entry !== null) onAction({ kind: "share" }, anchorOf(event.currentTarget));
+						}}
+					>
+						<ShareIcon size={16} />
+					</button>
+				) : null}
 			</div>
 
 			{entry === null ? (
@@ -244,12 +289,69 @@ function InfoHalf({
 				</div>
 			)}
 
-			<div className="inspector-actions flex-none grid grid-cols-4 gap-2 border-t border-border bg-chrome px-10 pt-10 pb-12">
-				<ActionButton icon={<EyeIcon size={16} />} label="Quick Look" disabled={entry === null} onClick={() => entry !== null && onQuickLook(entry)} />
-				<ActionButton icon={<CopyIcon size={16} />} label="경로 복사" disabled={entry === null} onClick={() => entry !== null && onCopyPath(entry)} />
-				<ActionButton icon={<SparklesIcon size={16} />} label="AI 요약" disabled={entry === null} onClick={() => entry !== null && onAskAi(entry)} />
-				<ActionButton icon={<TrashIcon size={16} />} label="휴지통" disabled={entry === null} onClick={() => entry !== null && onTrash(entry)} />
+			{entry === null ? null : (
+				<ActionBar entry={entry} capabilities={actionCapabilities} onAction={onAction} onAskAi={onAskAi} />
+			)}
+		</div>
+	);
+}
+
+/**
+ * The bottom action bar: every action the focused file's type suggests, in
+ * priority order. A `menu` action (`이미지 편집`, `동영상 변환`) opens its
+ * variants anchored to its button; a flat action runs at once.
+ */
+function ActionBar({
+	entry,
+	capabilities,
+	onAction,
+	onAskAi,
+}: {
+	readonly entry: FinderEntry;
+	readonly capabilities: ActionCapabilities;
+	readonly onAction: (target: FileActionTarget, anchor: ActionAnchor | null) => void;
+	readonly onAskAi: (entry: FinderEntry) => void;
+}): ReactElement {
+	const actions = suggestedActions(entry, capabilities);
+	const [menu, setMenu] = useState<{ readonly items: readonly FileActionItem[]; readonly anchor: ActionAnchor } | null>(null);
+
+	function run(target: FileActionTarget, anchor: ActionAnchor): void {
+		// "AI 요약" is the App shell's concern (it owns the composer), not IPC.
+		if (target.kind === "askAi") onAskAi(entry);
+		else onAction(target, anchor);
+	}
+
+	return (
+		<div className="inspector-actions flex-none border-t border-border bg-chrome px-10 pt-10 pb-12">
+			<div className="grid grid-cols-4 gap-2 max-h-[45vh] overflow-y-auto">
+				{actions.map((action) => {
+					const Icon = ACTION_ICONS[action.icon];
+					return (
+						<ActionButton
+							key={action.id}
+							icon={<Icon size={18} />}
+							label={action.label}
+							onClick={(event) => {
+								const anchor = anchorOf(event.currentTarget);
+								if (action.kind === "action") run(action.target, anchor);
+								else setMenu({ items: action.items, anchor });
+							}}
+						/>
+					);
+				})}
 			</div>
+			{menu === null ? null : (
+				<ActionMenu
+					items={menu.items}
+					anchor={menu.anchor}
+					onSelect={(target) => {
+						const anchor = menu.anchor;
+						setMenu(null);
+						run(target, anchor);
+					}}
+					onClose={() => setMenu(null)}
+				/>
+			)}
 		</div>
 	);
 }
@@ -278,23 +380,20 @@ function InfoRow({ label, value }: { readonly label: string; readonly value: str
 function ActionButton({
 	icon,
 	label,
-	disabled,
 	onClick,
 }: {
 	readonly icon: ReactElement;
 	readonly label: string;
-	readonly disabled: boolean;
-	readonly onClick: () => void;
+	readonly onClick: (event: ReactMouseEvent<HTMLButtonElement>) => void;
 }): ReactElement {
 	return (
 		<button
 			type="button"
-			className="inspector-action min-w-0 flex flex-col items-center gap-6 px-2 py-6 rounded-8 border-0 bg-transparent text-ink-muted text-tile leading-[1.25] text-center cursor-pointer transition-[background,color] duration-(--dur-color) ease-[ease] hover:bg-hover hover:text-ink disabled:text-ink-faint disabled:cursor-default disabled:hover:bg-transparent disabled:hover:text-ink-faint"
-			disabled={disabled}
+			className="inspector-action min-w-0 flex flex-col items-center gap-6 px-2 py-6 rounded-8 border-0 bg-transparent text-ink-muted text-tile leading-[1.25] text-center cursor-pointer transition-[background,color] duration-(--dur-color) ease-[ease] hover:bg-hover hover:text-ink"
 			onClick={onClick}
 		>
 			{icon}
-			<span className="max-w-full">{label}</span>
+			<span className="max-w-full [word-break:keep-all]">{label}</span>
 		</button>
 	);
 }

@@ -1,0 +1,338 @@
+import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { zipSync } from "fflate";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import type { ActionAnchor } from "../src/shared/actions-contract";
+import {
+	createActionService,
+	imageFormatOf,
+	stemOf,
+	uniqueChild,
+	zipEntryPath,
+	type ActionService,
+	type CommandRunner,
+} from "../src/main/action-service";
+
+let root: string;
+
+beforeEach(async () => {
+	root = await mkdtemp(join(tmpdir(), "autorag-actions-"));
+});
+
+afterEach(async () => {
+	await rm(root, { recursive: true, force: true });
+});
+
+interface Harness {
+	readonly service: ActionService;
+	readonly commands: { readonly command: string; readonly args: readonly string[] }[];
+	readonly shares: { readonly path: string; readonly anchor: ActionAnchor }[];
+}
+
+/** A service whose external commands are recorded and whose "image" output is written. */
+function makeService(options: { readonly platform?: NodeJS.Platform; readonly ffmpeg?: boolean; readonly picked?: string | null } = {}): Harness {
+	const commands: { command: string; args: readonly string[] }[] = [];
+	const shares: { path: string; anchor: ActionAnchor }[] = [];
+	const run: CommandRunner = async (command, args) => {
+		commands.push({ command, args: [...args] });
+		if (command === "ffmpeg" && args[0] === "-version") {
+			if (options.ffmpeg === false) throw new Error("ffmpeg: command not found");
+			return { stdout: "ffmpeg version 9", stderr: "" };
+		}
+		const outIndex = args.indexOf("--out");
+		const target = outIndex >= 0 ? args[outIndex + 1] : args[args.length - 1];
+		if (target !== undefined && target.startsWith("/")) {
+			await writeFile(target, "encoded");
+		}
+		return { stdout: "", stderr: "" };
+	};
+	return {
+		service: createActionService({
+			platform: options.platform ?? "darwin",
+			applications: { pick: async () => options.picked ?? null },
+			share: {
+				present: (path, anchor) => {
+					shares.push({ path, anchor });
+				},
+			},
+			run,
+		}),
+		commands,
+		shares,
+	};
+}
+
+describe("zipEntryPath", () => {
+	it("keeps ordinary and nested entries inside the destination", () => {
+		expect(zipEntryPath("/tmp/out", "docs/readme.md")).toEqual({
+			path: "/tmp/out/docs/readme.md",
+			directory: false,
+		});
+		expect(zipEntryPath("/tmp/out", "docs/")).toEqual({ path: "/tmp/out/docs", directory: true });
+	});
+
+	it("refuses zip-slip and absolute entries", () => {
+		expect(() => zipEntryPath("/tmp/out", "../evil.txt")).toThrow(/벗어납니다/);
+		expect(() => zipEntryPath("/tmp/out", "docs/../../evil.txt")).toThrow(/벗어납니다/);
+		expect(() => zipEntryPath("/tmp/out", "/etc/passwd")).toThrow(/절대 경로/);
+		expect(() => zipEntryPath("/tmp/out", "C:/Windows/evil.dll")).toThrow(/절대 경로/);
+		expect(() => zipEntryPath("/tmp/out", "docs/bad\0.txt")).toThrow(/올바르지 않습니다/);
+	});
+});
+
+describe("uniqueChild", () => {
+	it("numbers the way Finder does", async () => {
+		await writeFile(join(root, "photo.jpg"), "x");
+		const first = await uniqueChild(root, "photo.jpg");
+		expect(first).toBe(join(root, "photo 2.jpg"));
+		await writeFile(first, "x");
+		expect(await uniqueChild(root, "photo.jpg")).toBe(join(root, "photo 3.jpg"));
+		expect(await uniqueChild(root, "fresh.jpg")).toBe(join(root, "fresh.jpg"));
+	});
+});
+
+describe("archive round-trip", () => {
+	it("compresses a folder, keeps empty directories, and extracts it back", async () => {
+		const { service } = makeService();
+		const source = join(root, "docs");
+		await mkdir(join(source, "empty"), { recursive: true });
+		await writeFile(join(source, "readme.md"), "hello");
+		await writeFile(join(source, "empty", "keep.txt"), "keep");
+
+		const packed = await service.run(source, { kind: "compress" }, null);
+		expect(packed.output).toBe(join(root, "docs.zip"));
+		expect((await readFile(packed.output ?? "", "utf8")).slice(0, 2)).toBe("PK");
+
+		const unpacked = await service.run(packed.output ?? "", { kind: "extract" }, null);
+		expect(unpacked.output).toBe(join(root, "docs 2"));
+		expect(await readFile(join(unpacked.output ?? "", "readme.md"), "utf8")).toBe("hello");
+		expect(await readFile(join(unpacked.output ?? "", "empty", "keep.txt"), "utf8")).toBe("keep");
+		expect((await readdir(join(unpacked.output ?? "", "empty"))).length).toBe(1);
+	});
+
+	it("names a single-file archive after the full file name", async () => {
+		const { service } = makeService();
+		const file = join(root, "note.txt");
+		await writeFile(file, "note");
+		const packed = await service.run(file, { kind: "compress" }, null);
+		expect(packed.output).toBe(join(root, "note.txt.zip"));
+		expect(stemOf(file)).toBe("note");
+	});
+
+	it("strips the single wrapper folder that matches the archive name", async () => {
+		const { service } = makeService();
+		const archive = join(root, "packed.zip");
+		await writeFile(
+			archive,
+			zipSync({
+				"packed/": new Uint8Array(0),
+				"packed/one.txt": new Uint8Array(Buffer.from("one")),
+				"packed/deep/two.txt": new Uint8Array(Buffer.from("two")),
+			}),
+		);
+		const unpacked = await service.run(archive, { kind: "extract" }, null);
+		expect(unpacked.output).toBe(join(root, "packed"));
+		expect(await readFile(join(unpacked.output ?? "", "one.txt"), "utf8")).toBe("one");
+		expect(await readFile(join(unpacked.output ?? "", "deep", "two.txt"), "utf8")).toBe("two");
+	});
+
+	it("keeps several top-level folders intact", async () => {
+		const { service } = makeService();
+		const archive = join(root, "backup.zip");
+		await writeFile(
+			archive,
+			zipSync({
+				"alpha/": new Uint8Array(0),
+				"alpha/a.txt": new Uint8Array(Buffer.from("a")),
+				"beta/b.txt": new Uint8Array(Buffer.from("b")),
+			}),
+		);
+		const unpacked = await service.run(archive, { kind: "extract" }, null);
+		expect(await readFile(join(unpacked.output ?? "", "alpha", "a.txt"), "utf8")).toBe("a");
+		expect(await readFile(join(unpacked.output ?? "", "beta", "b.txt"), "utf8")).toBe("b");
+	});
+
+	it("refuses a hostile archive and writes nothing outside the destination", async () => {
+		const { service } = makeService();
+		const hostile = join(root, "hostile.zip");
+		const bytes = zipSync({ "../escape.txt": new Uint8Array(Buffer.from("pwned")) });
+		await writeFile(hostile, bytes);
+
+		await expect(service.run(hostile, { kind: "extract" }, null)).rejects.toThrow(/벗어납니다/);
+		await expect(readFile(join(root, "escape.txt"))).rejects.toThrow();
+		// The destination folder itself is created, but stays empty.
+		expect(await readdir(join(root, "hostile"))).toEqual([]);
+	});
+});
+
+describe("image actions", () => {
+	it("routes a native conversion through sips with the target format", async () => {
+		const { service, commands } = makeService({ ffmpeg: false });
+		const source = join(root, "photo.png");
+		await writeFile(source, "png");
+
+		const outcome = await service.run(source, { kind: "convertImage", format: "jpeg" }, null);
+		expect(outcome.output).toBe(join(root, "photo.jpg"));
+		expect(commands.at(-1)).toEqual({
+			command: "sips",
+			args: ["-s", "format", "jpeg", "--out", join(root, "photo.jpg"), source],
+		});
+	});
+
+	it("routes WebP through ffmpeg and only offers it when ffmpeg exists", async () => {
+		const without = makeService({ ffmpeg: false });
+		const source = join(root, "photo.png");
+		await writeFile(source, "png");
+		await expect(without.service.run(source, { kind: "convertImage", format: "webp" }, null)).rejects.toThrow(
+			/WEBP/,
+		);
+
+		const withFfmpeg = makeService({ ffmpeg: true });
+		const outcome = await withFfmpeg.service.run(source, { kind: "convertImage", format: "webp" }, null);
+		expect(outcome.output).toBe(join(root, "photo.webp"));
+		expect(withFfmpeg.commands.at(-1)?.command).toBe("ffmpeg");
+		expect(withFfmpeg.commands.at(-1)?.args).toEqual([
+			"-y",
+			"-i",
+			source,
+			"-c:v",
+			"libwebp",
+			"-quality",
+			"80",
+			join(root, "photo.webp"),
+		]);
+	});
+
+	it("resizes to a bounded long edge and refuses WebP sources", async () => {
+		const { service, commands } = makeService();
+		const source = join(root, "photo.jpeg");
+		await writeFile(source, "jpg");
+		const outcome = await service.run(source, { kind: "resizeImage", maxEdge: 1920 }, null);
+		expect(outcome.output).toBe(join(root, "photo-1920.jpeg"));
+		expect(commands.at(-1)?.args).toEqual(["-Z", "1920", "--out", join(root, "photo-1920.jpeg"), source]);
+
+		const webp = join(root, "vector.webp");
+		await writeFile(webp, "webp");
+		await expect(service.run(webp, { kind: "resizeImage", maxEdge: 1920 }, null)).rejects.toThrow(/지원하지 않습니다/);
+	});
+
+	it("optimizes only lossy formats", async () => {
+		const { service } = makeService();
+		const photo = join(root, "photo.jpeg");
+		await writeFile(photo, "jpg");
+		const outcome = await service.run(photo, { kind: "optimizeImage" }, null);
+		expect(outcome.output).toBe(join(root, "photo-optimized.jpeg"));
+
+		const png = join(root, "flat.png");
+		await writeFile(png, "png");
+		await expect(service.run(png, { kind: "optimizeImage" }, null)).rejects.toThrow(/지원하지 않습니다/);
+	});
+});
+
+describe("video actions", () => {
+	it("remuxes with ffmpeg when it is present", async () => {
+		const { service, commands } = makeService({ ffmpeg: true });
+		const source = join(root, "clip.mov");
+		await writeFile(source, "mov");
+		const outcome = await service.run(source, { kind: "convertVideo", container: "mp4" }, null);
+		expect(outcome.output).toBe(join(root, "clip.mp4"));
+		expect(commands.at(-1)).toEqual({
+			command: "ffmpeg",
+			args: ["-y", "-i", source, "-c", "copy", join(root, "clip.mp4")],
+		});
+	});
+
+	it("refuses container conversion without ffmpeg", async () => {
+		const { service } = makeService({ ffmpeg: false });
+		const source = join(root, "clip.mov");
+		await writeFile(source, "mov");
+		await expect(service.run(source, { kind: "convertVideo", container: "mp4" }, null)).rejects.toThrow(/ffmpeg/);
+	});
+});
+
+describe("open with", () => {
+	it("launches the chosen application through Launch Services", async () => {
+		const { service, commands } = makeService({ picked: "/Applications/IINA.app" });
+		const source = join(root, "clip.mkv");
+		await writeFile(source, "mkv");
+		const outcome = await service.run(source, { kind: "openWith" }, null);
+		expect(outcome.note).toContain("IINA.app");
+		expect(commands.at(-1)).toEqual({
+			command: "open",
+			args: ["-a", "/Applications/IINA.app", source],
+		});
+	});
+
+	it("reports a cancelled chooser without launching anything", async () => {
+		const { service, commands } = makeService({ picked: null });
+		const source = join(root, "clip.mkv");
+		await writeFile(source, "mkv");
+		const outcome = await service.run(source, { kind: "openWith" }, null);
+		expect(outcome.output).toBeNull();
+		expect(commands).toEqual([]);
+	});
+});
+
+describe("capabilities", () => {
+	it("reports the macOS engines and probes ffmpeg once", async () => {
+		const { service, commands } = makeService({ ffmpeg: true });
+		const capabilities = await service.capabilities();
+		expect(capabilities).toEqual({
+			openWith: true,
+			share: true,
+			archive: true,
+			imageFormats: ["jpeg", "png", "tiff", "heic", "webp"],
+			videoContainers: ["mp4", "mov", "mkv"],
+		});
+		await service.capabilities();
+		expect(commands.filter((command) => command.command === "ffmpeg")).toHaveLength(1);
+	});
+
+	it("drops video containers without ffmpeg and keeps the native image formats", async () => {
+		const { service } = makeService({ ffmpeg: false });
+		const capabilities = await service.capabilities();
+		expect(capabilities.videoContainers).toEqual([]);
+		expect(capabilities.imageFormats).toEqual(["jpeg", "png", "tiff", "heic"]);
+	});
+
+	it("offers no image or share actions on a platform without those engines", async () => {
+		const { service } = makeService({ platform: "win32" });
+		const capabilities = await service.capabilities();
+		expect(capabilities.imageFormats).toEqual([]);
+		expect(capabilities.share).toBe(false);
+		await expect(service.share(join(root, "a.txt"), { x: 0, y: 0, width: 10, height: 10 }, null)).rejects.toThrow(
+			/지원하지 않습니다/,
+		);
+	});
+
+	it("pops the share sheet with the anchored rect on macOS", async () => {
+		const { service, shares } = makeService();
+		const anchor = { x: 10, y: 20, width: 30, height: 40 };
+		await service.share("/tmp/a.txt", anchor, null);
+		expect(shares).toEqual([{ path: "/tmp/a.txt", anchor }]);
+	});
+});
+
+describe("imageFormatOf", () => {
+	it("maps extensions to their canonical format", () => {
+		expect(imageFormatOf("/a/photo.JPG")).toBe("jpeg");
+		expect(imageFormatOf("/a/photo.tif")).toBe("tiff");
+		expect(imageFormatOf("/a/photo.webp")).toBe("webp");
+		expect(imageFormatOf("/a/photo.txt")).toBeNull();
+	});
+});
+
+describe("extract into an existing name", () => {
+	it("numbers the output folder", async () => {
+		const { service } = makeService();
+		await mkdir(join(root, "docs"), { recursive: true });
+		const file = join(root, "note.txt");
+		await writeFile(file, "note");
+		const packed = await service.run(file, { kind: "compress" }, null);
+		// "note.txt.zip" extracts to "note.txt", which is taken by the source file.
+		const unpacked = await service.run(packed.output ?? "", { kind: "extract" }, null);
+		expect(unpacked.output).toBe(join(root, "note 2.txt"));
+		expect((await stat(join(unpacked.output ?? "", "note.txt"))).isFile()).toBe(true);
+	});
+});
