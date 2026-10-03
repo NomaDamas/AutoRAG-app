@@ -351,13 +351,6 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		setHistory(items);
 	}
 
-	async function clearHistory(): Promise<void> {
-		historySeq.current += 1;
-		await autorag.search.historyClear();
-		setHistory([]);
-		setHistoryQuery("");
-	}
-
 	function newChat(): void {
 		setQuick(null);
 		setDeep(null);
@@ -591,54 +584,49 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 				<>
 					<div className="absolute inset-0 z-20" aria-hidden="true" onClick={closeHistory} />
 					<div className="history absolute right-12 top-40 z-30 flex max-h-[72%] w-360 flex-col overflow-hidden rounded-12 border border-border bg-window shadow-menu" aria-label="Chat history">
-						<div className="flex flex-none items-center gap-8 p-8">
-							<input
-								autoFocus
-								value={historyQuery}
-								onChange={(event) => void searchHistory(event.target.value)}
-								onKeyDown={(event) => {
-									if (event.key === "Escape") {
-										event.preventDefault();
-										event.stopPropagation();
-										closeHistory();
-										return;
-									}
-									if (event.key !== "Enter") return;
+						<input
+							autoFocus
+							value={historyQuery}
+							onChange={(event) => void searchHistory(event.target.value)}
+							onKeyDown={(event) => {
+								if (event.key === "Escape") {
 									event.preventDefault();
-									const first = history[0];
-									if (first !== undefined) void loadHistory(first.id);
-								}}
-								placeholder="대화 기록 검색"
-								aria-label="대화 기록 검색"
-								className="h-icon-sm min-w-0 flex-1 rounded-8 border-0 bg-input px-10 text-meta text-ink outline-none placeholder:text-ink-muted"
-							/>
-							<button type="button" className="flex-none cursor-pointer text-badge text-ink-muted hover:text-danger-text" onClick={() => void clearHistory()}>
-								지우기
-							</button>
-						</div>
-						<div className="history-list min-h-0 flex-1 overflow-auto px-6 pb-6">
+									event.stopPropagation();
+									closeHistory();
+									return;
+								}
+								if (event.key !== "Enter") return;
+								event.preventDefault();
+								const first = history[0];
+								if (first !== undefined) void loadHistory(first.id);
+							}}
+							placeholder="대화 기록 검색"
+							aria-label="대화 기록 검색"
+							className="h-[38px] w-full flex-none border-x-0 border-t-0 border-b border-divider bg-transparent px-12 text-sm text-ink outline-none placeholder:text-ink-muted"
+						/>
+						<div className="history-list min-h-0 flex-1 overflow-auto p-5">
 							{historyGroups.length === 0 ? (
 								<span className="block px-12 py-28 text-center text-meta text-ink-muted">{historyEmptyText(historyQuery)}</span>
 							) : (
 								historyGroups.map((group) => (
 									<div key={group.label}>
-										<div className="history-group px-10 pb-4 pt-10 text-badge font-semibold text-ink-muted">{group.label}</div>
+										<div className="history-group px-8 py-8 text-tile font-bold text-ink-muted">{group.label}</div>
 										{group.items.map((item) => (
 											<button
 												type="button"
 												key={item.id}
 												className={cn(
-													"history-item flex w-full items-start gap-8 rounded-7 border-0 px-10 py-8 text-left cursor-pointer transition-colors duration-(--dur-color) ease-out hover:bg-hover",
+													"history-item flex w-full items-start gap-8 rounded-7 border-0 p-8 text-sm text-left cursor-pointer transition-colors duration-(--dur-color) ease-out hover:bg-accent-history-current",
 													item.id === chatId ? "current bg-accent-history-current" : "bg-transparent",
 												)}
 												onClick={() => void loadHistory(item.id)}
 											>
-												<span className={cn("hist-dot mt-5 size-dot flex-none rounded-full", item.id === chatId ? "bg-accent" : "bg-transparent")} />
+												<span className={cn("hist-dot mt-5 size-5 flex-none rounded-full", item.id === chatId ? "bg-accent" : "bg-transparent")} />
 												<span className="hist-copy min-w-0 flex-1">
-													<b className="block truncate text-body font-medium text-ink">{item.title}</b>
-													<small className="mt-2 block truncate text-meta text-ink-muted">{item.snippet}</small>
+													<b className="block truncate font-bold text-ink">{item.title}</b>
+													<small className="mt-2 block truncate text-badge text-ink-muted">{item.snippet}</small>
 												</span>
-												<span className="hist-time flex-none text-badge text-ink-faint">{item.time}</span>
+												<span className="hist-time flex-none text-tile text-ink-muted">{item.time}</span>
 											</button>
 										))}
 									</div>

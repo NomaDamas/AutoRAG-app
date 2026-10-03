@@ -247,14 +247,17 @@ await page.screenshot({ path: join(EVIDENCE, "finder-regression.png") });
 
 // 9. v7 surface metrics. The v7 handoff prototype draws this popover at
 // 330px / radius 10 while the app keeps the 360px / radius 12 / menu-shadow
-// chrome, so the app is compared against its own spec, not the prototype.
+// chrome, so the popover *surface* is compared against its own spec. Its
+// *contents* — the flat search field, the list paddings and the row type
+// scale — follow the prototype exactly.
 const APP_METRICS = {
 	popover: [".history", ["width", "borderRadius", "backgroundColor", "boxShadow"]],
-	group: [".history-group", ["fontSize", "fontWeight"]],
-	row: [".history-item.current", ["borderRadius", "backgroundColor"]],
-	dot: [".history-item.current .hist-dot", ["width", "height", "borderRadius", "backgroundColor"]],
+	input: [".history input", ["height", "borderBottomWidth", "borderBottomStyle", "borderBottomColor", "borderRadius", "fontSize", "paddingLeft", "paddingRight"]],
+	group: [".history-group", ["fontSize", "fontWeight", "padding"]],
+	row: [".history-item.current", ["borderRadius", "backgroundColor", "padding", "gap", "fontSize"]],
+	dot: [".history-item.current .hist-dot", ["width", "height", "marginTop", "backgroundColor"]],
 	title: [".hist-copy b", ["fontSize", "fontWeight"]],
-	time: [".hist-time", ["fontSize"]],
+	time: [".hist-time", ["fontSize", "color"]],
 };
 
 await openHistory(page);
@@ -273,13 +276,34 @@ check(
 	JSON.stringify(appMetrics.popover),
 );
 check(
+	"the popover has a flat reference search field, not a pill or a clear button",
+	appMetrics.input.height === "38px" &&
+		appMetrics.input.borderBottomWidth === "1px" &&
+		appMetrics.input.borderBottomStyle === "solid" &&
+		appMetrics.input.borderBottomColor === "rgb(231, 231, 234)" &&
+		appMetrics.input.borderRadius === "0px" &&
+		appMetrics.input.fontSize === "13px" &&
+		appMetrics.input.paddingLeft === "12px" &&
+		appMetrics.input.paddingRight === "12px",
+	JSON.stringify(appMetrics.input),
+);
+const historyChildren = await page.locator(".history > *").evaluateAll((nodes) => nodes.map((node) => node.tagName.toLowerCase()));
+check("the popover is only the search field and the list — no clear button", JSON.stringify(historyChildren) === JSON.stringify(["input", "div"]), JSON.stringify(historyChildren));
+check(
 	"the current row keeps the accent wash and dot",
 	appMetrics.row.backgroundColor === "rgba(10, 100, 216, 0.08)" && appMetrics.dot.backgroundColor === "rgb(10, 100, 216)",
 	JSON.stringify({ row: appMetrics.row, dot: appMetrics.dot }),
 );
 check(
-	"history rows keep the v7 type scale",
-	appMetrics.title.fontWeight === "500" && appMetrics.title.fontSize === "14px" && appMetrics.time.fontSize === "11px",
+	"the row and group geometry follow the reference",
+	appMetrics.row.borderRadius === "7px" && appMetrics.row.padding === "8px" && appMetrics.row.gap === "8px" && appMetrics.row.fontSize === "13px" &&
+		appMetrics.dot.width === "5px" && appMetrics.dot.height === "5px" &&
+		appMetrics.group.fontSize === "10px" && appMetrics.group.fontWeight === "700" && appMetrics.group.padding === "8px",
+	JSON.stringify({ row: appMetrics.row, dot: appMetrics.dot, group: appMetrics.group }),
+);
+check(
+	"the row type scale follows the reference",
+	appMetrics.title.fontWeight === "700" && appMetrics.title.fontSize === "13px" && appMetrics.time.fontSize === "10px" && appMetrics.time.color === "rgb(110, 110, 115)",
 	JSON.stringify({ title: appMetrics.title, time: appMetrics.time }),
 );
 
