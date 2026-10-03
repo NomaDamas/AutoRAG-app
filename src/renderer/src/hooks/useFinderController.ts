@@ -165,7 +165,6 @@ export interface FinderController {
 	readonly canGoBack: boolean;
 	readonly canGoForward: boolean;
 	readonly query: string;
-	readonly searchPlaceholder: string;
 	readonly searchFocused: boolean;
 	readonly searching: boolean;
 	readonly emptyText: string;
@@ -265,6 +264,8 @@ export function useFinderController(
 	options: {
 		readonly showHiddenFiles?: boolean;
 		readonly quickLook?: QuickLookBridge;
+		/** ⌘F: reveal the shell that hosts the search field (it lives in the sidebar). */
+		readonly onFocusSearch?: () => void;
 		/** ⌘K: open the AI dock and focus its composer (owned by the App shell). */
 		readonly onFocusComposer?: () => void;
 		/** Esc: close the inspector's evidence half; return true when consumed. */
@@ -274,6 +275,8 @@ export function useFinderController(
 	const showHiddenFiles = options.showHiddenFiles ?? false;
 	const quickLookRef = useRef(options.quickLook);
 	quickLookRef.current = options.quickLook;
+	const focusSearchRef = useRef(options.onFocusSearch);
+	focusSearchRef.current = options.onFocusSearch;
 	const focusComposerRef = useRef(options.onFocusComposer);
 	focusComposerRef.current = options.onFocusComposer;
 	const dismissEvidenceRef = useRef(options.onDismissEvidence);
@@ -1541,6 +1544,7 @@ export function useFinderController(
 					return;
 				case "focusSearch":
 					event.preventDefault();
+					focusSearchRef.current?.();
 					searchRef.current?.focus();
 					return;
 				case "newTab":
@@ -1686,7 +1690,6 @@ export function useFinderController(
 		canGoBack: tab.back.length > 0,
 		canGoForward: tab.fwd.length > 0,
 		query,
-		searchPlaceholder: path === SETTINGS_PATH ? "Search settings" : "Search files, contents…",
 		searchFocused,
 		searching,
 		emptyText: emptyStateText(query, path),

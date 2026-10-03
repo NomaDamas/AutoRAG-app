@@ -6,6 +6,7 @@ import type { CitationEvidence } from "../../shared/search-contract";
 
 const autorag = (window as unknown as { readonly autorag: { readonly settings: SettingsBridge; readonly preview: PreviewBridge } }).autorag;
 import { AiSearchPanel, type AiDockHandle } from "./components/AiSearchPanel";
+import type { SearchMode } from "./components/SidebarSearch";
 import { ColumnBrowser } from "./components/ColumnBrowser";
 import { ColumnHeader } from "./components/ColumnHeader";
 import { FileList } from "./components/FileList";
@@ -238,6 +239,7 @@ export function App(): ReactElement {
 	const finder = useFinderController(source, {
 		showHiddenFiles,
 		quickLook: { onQuickLook: openQuickLook, closeQuickLook, isQuickLookOpen },
+		onFocusSearch: () => setSidebarVisible(true),
 		onFocusComposer: () => {
 			setAiOpen(true);
 			aiDockRef.current?.focusComposer();
@@ -251,6 +253,28 @@ export function App(): ReactElement {
 		setAiOpen(true);
 		aiDockRef.current?.sendQuery(text);
 	}, []);
+
+	/**
+	 * Sidebar search commit. Enter runs a filename search in the chip's scope
+	 * (전체 = This Mac, 파일 이름 = current folder); the 내용 chip — or ⌥Enter
+	 * from any chip — hands the query to the AI dock's real content search.
+	 */
+	const submitSidebarSearch = useCallback(
+		(mode: SearchMode, text: string) => {
+			const value = text.trim();
+			if (value === "") {
+				finder.setQuery("");
+				return;
+			}
+			if (mode === "content") {
+				contentSearch(value);
+				return;
+			}
+			finder.setSearchScope(mode === "name" ? "current" : "all");
+			finder.setQuery(value);
+		},
+		[contentSearch, finder],
+	);
 
 	/** Inspector "AI 요약": attach the entry to the composer and focus it. */
 	const askAi = useCallback((entry: { readonly path: string; readonly name: string; readonly kind: "file" | "folder" }) => {
@@ -375,6 +399,12 @@ export function App(): ReactElement {
 						onHideSidebar={() => setSidebarVisible(false)}
 						onNewFolder={finder.newFolder}
 						sourceStatus={sourceStatus}
+						searchQuery={finder.query}
+						searchRef={finder.searchRef}
+						searchFocused={finder.searchFocused}
+						onSearchFocus={() => finder.setSearchFocused(true)}
+						onSearchBlur={() => finder.setSearchFocused(false)}
+						onSubmitSearch={submitSidebarSearch}
 					/>
 				) : null}
 				<section className="finder flex flex-col min-w-0 min-h-0" aria-label="Finder" onMouseDown={finder.focusFinder}>
@@ -388,15 +418,12 @@ export function App(): ReactElement {
 						onViewModeChange={finder.setViewMode}
 						inspectorVisible={inspectorVisible}
 						onToggleInspector={() => setInspectorVisible((visible) => !visible)}
-						committedQuery={finder.query}
-						onCommitQuery={finder.setQuery}
-						onContentSearch={contentSearch}
-						searchRef={finder.searchRef}
-						searchFocused={finder.searchFocused}
-						onSearchFocus={() => finder.setSearchFocused(true)}
-						onSearchBlur={() => finder.setSearchFocused(false)}
-						showHotkeys={SHOW_HOTKEYS}
-						placeholder={finder.searchPlaceholder}
+						aiOpen={aiOpen}
+						onToggleAi={() => setAiOpen((open) => !open)}
+						canShare={focused !== null}
+						onShare={() => {
+							if (focused !== null) finder.copyEntryPath(focused);
+						}}
 						sidebarHidden={!sidebarVisible}
 						onShowSidebar={() => setSidebarVisible(true)}
 						onNewFolder={finder.newFolder}
@@ -514,7 +541,7 @@ export function App(): ReactElement {
 						family={inspectorFamily}
 						onOpenMember={openMemberEntry}
 						evidence={evidence}
-						evidenceVisible={evidence.length > 0 && evidenceOpen}
+						evidenceVisible={evidence.length > 0 && evidenceOpen && selectedEvidence !== null}
 						evidenceSelected={evidenceSelectedNumber}
 						sessionId={evidenceSession}
 						onSelectEvidence={selectEvidence}

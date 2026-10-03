@@ -1,11 +1,12 @@
 import { FolderPlus, PanelLeft } from "lucide-react";
-import type { ReactElement } from "react";
+import type { ReactElement, RefObject } from "react";
 import { NAV_GROUPS, type NavItem } from "../data/places";
 import { cn } from "../lib/cn";
 import { GearIcon } from "./icons";
 import { iconButtonClass } from "./primitives/icon-button";
 import { Keycap } from "./primitives/Keycap";
 import { StatusDot } from "./primitives/StatusDot";
+import { SidebarSearch, type SearchMode } from "./SidebarSearch";
 
 /** Shared shape of a sidebar row (nav item and the footer settings button). */
 const ITEM_CLASS =
@@ -33,6 +34,12 @@ export function Sidebar({
 	onHideSidebar,
 	onNewFolder,
 	sourceStatus,
+	searchQuery,
+	searchRef,
+	searchFocused,
+	onSearchFocus,
+	onSearchBlur,
+	onSubmitSearch,
 }: {
 	readonly activeLabel: string | null;
 	readonly showHotkeys: boolean;
@@ -41,6 +48,12 @@ export function Sidebar({
 	readonly onHideSidebar: () => void;
 	readonly onNewFolder: () => void;
 	readonly sourceStatus?: Readonly<Record<string, "syncing" | "error">>;
+	readonly searchQuery: string;
+	readonly searchRef: RefObject<HTMLInputElement | null>;
+	readonly searchFocused: boolean;
+	readonly onSearchFocus: () => void;
+	readonly onSearchBlur: () => void;
+	readonly onSubmitSearch: (mode: SearchMode, text: string) => void;
 }): ReactElement {
 	return (
 		<aside
@@ -68,6 +81,15 @@ export function Sidebar({
 					<FolderPlus size={16} strokeWidth={1.8} />
 				</button>
 			</div>
+			<SidebarSearch
+				query={searchQuery}
+				inputRef={searchRef}
+				focused={searchFocused}
+				showHotkeys={showHotkeys}
+				onFocus={onSearchFocus}
+				onBlur={onSearchBlur}
+				onSubmit={onSubmitSearch}
+			/>
 			<div className="side-scroll flex flex-1 flex-col gap-14 min-h-0 px-10 pt-6 pb-12 overflow-auto">
 				{NAV_GROUPS.map((group) => (
 					<div key={group.label} className="side-group flex flex-col gap-1">

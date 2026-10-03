@@ -24,6 +24,7 @@ import {
 	Eye,
 	FolderPlus,
 	History,
+	Info,
 	LayoutGrid,
 	Link2,
 	List,
@@ -136,6 +137,9 @@ export const ListRowsIcon = glyph(Rows3, 16, 1.9);
 export const PanelLeftIcon = glyph(PanelLeft, 16, 1.9);
 
 export const PanelRightIcon = glyph(PanelRight, 16, 1.9);
+
+/** Toolbar inspector toggle — the mockup's info-circle glyph, not the panel glyph. */
+export const InfoIcon = glyph(Info, 16, 1.8);
 
 export const FolderPlusIcon = glyph(FolderPlus, 16, 1.9);
 
