@@ -170,10 +170,10 @@ relist).
 macOS/Windows tiles no longer shell out to `/usr/bin/qlmanage`; the icon
 provider calls Electron's in-process `nativeImage.createThumbnailFromPath`
 (`src/main/file-icon.ts`). Linux keeps `app.getFileIcon`. Native Quick Look is
-requested only for visual extensions (images, video, and PDF); text, source,
-office, archive, and other non-visual files keep their letter tiles. This
-avoids sending large plain-text folders through Quick Look, where macOS can
-wait for the full 4 s deadline without producing a useful thumbnail. The
+requested only for visual extensions (images, video, and PDF); plain text,
+source, office, archive, and other non-visual files keep their letter tiles.
+This avoids sending large plain-text folders through Quick Look, where macOS
+can wait for the full 4 s deadline without producing a useful thumbnail. The
 provider still caches successful and negative visual lookups by path + mtime.
 
 This removes the qlmanage process pool, its temp dirs, the 4 s `execFile`

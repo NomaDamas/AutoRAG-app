@@ -40,18 +40,17 @@ const THUMBNAIL_TIMEOUT_MS = 4000;
 const SYSTEM_ICON_TIMEOUT_MS = 4000;
 
 /**
-	* Extensions for which a content thumbnail is useful and Quick Look has a
-	* stable visual representation. Text, source, office, and archive files
-	* deliberately stay on their letter tiles: macOS Quick Look can spend the
-	* full deadline on those files without producing a useful tile.
-	*/
+ * Extensions for which a content thumbnail is useful and Quick Look has a
+ * stable visual representation. Plain text/source files deliberately stay on
+ * their letter tiles: macOS Quick Look can spend the full deadline on large
+ * batches of plain-text files without producing a useful tile.
+ */
 const NATIVE_THUMBNAIL_EXTENSIONS = new Set([
 	"png", "jpg", "jpeg", "jfif", "pjpeg", "pjp", "gif", "webp", "bmp", "svg", "avif", "ico", "apng",
 	"tif", "tiff", "heic", "heif",
 	"mp4", "m4v", "webm", "ogv", "mov", "mkv", "avi", "mpeg", "mpg", "mpe", "3gp", "3gpp",
-	"pdf",
+	"pdf", "md", "markdown", "mdx", "csv", "tsv",
 ]);
-
 export function isNativeThumbnailExtension(ext: string): boolean {
 	return NATIVE_THUMBNAIL_EXTENSIONS.has(ext.toLowerCase().replace(/^\./, ""));
 }
