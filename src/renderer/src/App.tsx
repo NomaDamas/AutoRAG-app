@@ -391,7 +391,7 @@ export function App(): ReactElement {
 		<div className="desk flex h-full bg-window">
 			<div
 				className="window relative grid flex-1 min-w-0 bg-window overflow-hidden"
-				style={{ gridTemplateColumns: windowColumns }}
+				style={{ gridTemplateColumns: windowColumns, gridTemplateRows: "minmax(0, 1fr)" }}
 			>
 				{sidebarVisible ? (
 					<Sidebar
@@ -410,7 +410,7 @@ export function App(): ReactElement {
 						onSubmitSearch={submitSidebarSearch}
 					/>
 				) : null}
-				<div className="flex min-w-0 flex-col">
+				<div className="flex min-w-0 min-h-0 flex-col">
 					<Toolbar
 						title={toolbarTitle}
 						canGoBack={finder.canGoBack}
@@ -431,7 +431,7 @@ export function App(): ReactElement {
 						onShowSidebar={() => setSidebarVisible(true)}
 						onNewFolder={finder.newFolder}
 					/>
-					<div className="grid min-h-0 flex-1" style={{ gridTemplateColumns: finderColumns }}>
+					<div className="grid min-h-0 flex-1" style={{ gridTemplateColumns: finderColumns, gridTemplateRows: "minmax(0, 1fr)" }}>
 						<section className="finder flex flex-col min-w-0 min-h-0" aria-label="Finder" onMouseDown={finder.focusFinder}>
 					<TabStrip
 						tabs={finder.tabs}
