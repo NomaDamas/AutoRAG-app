@@ -49,7 +49,7 @@ describe("createModelStatusService", () => {
 		// (e.g. "DeepSeek: DeepSeek V4.1 Flash") and falls back to the model id when
 		// the catalog entry is unavailable, so assert against what it actually
 		// labeled instead of pinning one build's catalog text.
-		const { role } = resolveAgentModelDetailed(
+		const { role } = await resolveAgentModelDetailed(
 			resolveConfigReadOnly({ flags: {}, env: fixture.env, cwd: fixture.root }),
 			{ env: fixture.env },
 		);
