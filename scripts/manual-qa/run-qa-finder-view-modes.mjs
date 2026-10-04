@@ -177,8 +177,9 @@ try {
 	const rowTypography = await listRows.nth(1).evaluate((row) => ({
 		name: getComputedStyle(row.querySelector(".row__label")).fontSize,
 		meta: getComputedStyle(row.querySelector(".row__meta")).fontSize,
+		nameColor: getComputedStyle(row.querySelector(".row__label")).color,
 	}));
-	check("C4 compact Finder row typography", rowTypography, { name: "11px", meta: "10px" });
+	check("C4 Finder row typography and default ink", rowTypography, { name: "12px", meta: "12px", nameColor: "rgb(29, 29, 31)" });
 	await page.locator(".col-header__sort").first().click();
 	check("C4 sort indicator is larger", await page.locator(".col-header__sort svg").first().evaluate((svg) => {
 		const box = svg.getBoundingClientRect();

@@ -123,7 +123,7 @@ export function FileRow({
 	const included = state === "included";
 	const outside = state === "outside";
 
-	const rowTone = selected ? (zoneFocused ? "text-on-accent" : "text-ink") : "text-ink-body";
+	const rowTone = selected ? (zoneFocused ? "text-on-accent" : "text-ink") : "text-ink";
 	const metaTone = selected ? (zoneFocused ? "text-on-accent/80" : "text-ink-muted") : "text-ink-muted";
 
 	const cellText = (key: ListColumnKey): string => {
