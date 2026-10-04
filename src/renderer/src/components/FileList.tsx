@@ -65,7 +65,7 @@ export function FileList({
 	});
 
 	return (
-		<div className="list flex-1 min-h-0 py-4 overflow-auto" ref={listRef} style={{ minWidth: minWidth ?? undefined }}>
+		<div className="list flex-1 min-h-0 py-0 overflow-auto" ref={listRef} style={{ minWidth: minWidth ?? undefined }}>
 			<VersionFamilyBanner error={versionFamilyError} onRetry={onRetryVersionFamilies} />
 			<div
 				ref={rowsRef}
@@ -76,10 +76,11 @@ export function FileList({
 					paddingBottom: (rows.length - window.end) * ROW_HEIGHT,
 				}}
 			>
-				{rows.slice(window.start, window.end).map((row) => (
+				{rows.slice(window.start, window.end).map((row, index) => (
 					<FileRow
 						key={row.entry.path}
 						entry={row.entry}
+						zebra={(window.start + index) % 2 === 1}
 						selected={selectedKeys.includes(row.entry.path)}
 						zoneFocused={focusedZone}
 						flash={flashPath === row.entry.path}
@@ -103,4 +104,5 @@ export function FileList({
 			) : null}
 		</div>
 	);
+
 }

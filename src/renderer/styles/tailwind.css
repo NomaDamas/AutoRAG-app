@@ -143,6 +143,7 @@
 	--color-hover-row: var(--bg-hover-row);
 	--color-hover-icon: var(--bg-hover-icon);
 	--color-hover-strong: var(--bg-hover-strong);
+	--color-row-alt: var(--bg-row-alt);
 
 	/* ------------------------------------------------------------ §2.3 Borders */
 	--color-border: var(--border);
@@ -248,6 +249,7 @@
 	--text-meta: var(--font-size-meta);
 	--text-caption: var(--font-size-caption);
 	--text-badge: var(--font-size-badge);
+	--text-file-row: var(--font-size-file-row);
 	--text-tile: var(--font-size-tile);
 	--text-tile-xs: var(--font-size-tile-xs);
 
@@ -299,6 +301,7 @@
 
 	/* ---------------------------------------------------- §4 Control sizes */
 	--spacing-row: var(--size-row);
+	--spacing-file-row: var(--size-file-row);
 	--spacing-disclosure: var(--size-disclosure);
 	--spacing-tree-indent: var(--tree-indent);
 	--spacing-pill: var(--size-pill);

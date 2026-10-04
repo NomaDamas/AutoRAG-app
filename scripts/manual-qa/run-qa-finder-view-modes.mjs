@@ -155,6 +155,22 @@ try {
 	check("C4 ⌘2 shows the list", await pressed(), ["Icons=false", "List=true", "Columns=false"]);
 	check("C4 list keeps its column header", await page.locator(".col-header").count(), 1);
 	check("C4 list shows one row per entry", await page.locator('[role="row"]').count(), tree[topPath].length);
+	const listRows = page.locator('[role="row"]');
+	const rowGeometry = await listRows.nth(0).evaluate((row) => {
+		const style = getComputedStyle(row);
+		return { height: Math.round(row.getBoundingClientRect().height), radius: style.borderRadius, margin: `${style.marginLeft}/${style.marginRight}` };
+	});
+	const stripeColors = await listRows.evaluateAll((rows) => rows.slice(0, 2).map((row) => getComputedStyle(row).backgroundColor));
+	check("C4 compact Bloom row geometry", rowGeometry, { height: 28, radius: "0px", margin: "0px/0px" });
+	check("C4 adjacent list rows use alternating washes", stripeColors[0] !== stripeColors[1], true);
+	const selectedRow = page.locator('[role="row"][data-path$="/notes.md"]');
+	await selectedRow.click();
+	await page.waitForFunction(() =>
+		Array.from(document.querySelectorAll('[role="row"]')).some((row) => row.getAttribute("data-path")?.endsWith("/notes.md") && row.getAttribute("aria-selected") === "true"),
+	);
+	await new Promise((resolve) => setTimeout(resolve, 700));
+	const selectedStyle = await page.locator('[role="row"][data-path$="/notes.md"]').evaluate((row) => ({ ariaSelected: row.getAttribute("aria-selected"), className: row.className, background: getComputedStyle(row).backgroundColor }));
+	check("C4 focused selection fills the row with the accent", [selectedStyle.ariaSelected, selectedStyle.className.includes("bg-accent"), selectedStyle.background], ["true", true, "rgb(10, 100, 216)"]);
 	await page.screenshot({ path: `${EVIDENCE}/list.png` });
 	await page.keyboard.press("Meta+1");
 	await page.waitForSelector(".icon-grid");

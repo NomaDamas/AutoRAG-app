@@ -230,9 +230,11 @@
   --font-size-meta: 12px;
   --font-size-caption: 12px;
   --font-size-badge: 11px;
+  --font-size-file-row: 12px;
   --font-size-tile: 10px;
   --font-size-tile-xs: 9px;
 
+  --bg-row-alt: rgba(29,29,31,0.018);
   --weight-regular: 400;
   --weight-medium: 500;
   --weight-semibold: 600;
@@ -262,6 +264,7 @@
 
   /* ------------------------------------------------------------ §4 Control sizes */
   --size-row: 32px;
+  --size-file-row: 28px;
   --size-disclosure: 16px;
   --tree-indent: 18px;
   --size-pill: 22px;
@@ -403,6 +406,7 @@ html[data-appearance="dark"] {
     --bg-hover-row: rgba(255,255,255,0.06);
     --bg-hover-icon: rgba(255,255,255,0.1);
     --bg-hover-strong: rgba(255,255,255,0.12);
+    --bg-row-alt: rgba(255,255,255,0.045);
 
     /* -------------------------------------------------------------- Borders */
     --border: #48484A;
