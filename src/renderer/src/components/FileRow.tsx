@@ -154,7 +154,7 @@ export function FileRow({
 	return (
 		<div
 			className={cn(
-				"row grid gap-8 items-center h-file-row px-13 rounded-none select-none cursor-default transition-[background,box-shadow] duration-(--dur-flash-fade) ease-[ease] [&>*]:min-w-0",
+				"row grid gap-8 items-center h-file-row px-13 rounded-none select-none cursor-default transition-[box-shadow] duration-(--dur-flash-fade) ease-[ease] [&>*]:min-w-0",
 				rowTone,
 				isHiddenName(entry.name) && "opacity-45",
 				flash

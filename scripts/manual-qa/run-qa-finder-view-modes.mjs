@@ -187,12 +187,16 @@ try {
 	}), [12, 12]);
 	const selectedRow = page.locator('[role="row"][data-path$="/notes.md"]');
 	await selectedRow.click();
-	await page.waitForFunction(() =>
-		Array.from(document.querySelectorAll('[role="row"]')).some((row) => row.getAttribute("data-path")?.endsWith("/notes.md") && row.getAttribute("aria-selected") === "true"),
-	);
-	await new Promise((resolve) => setTimeout(resolve, 700));
-	const selectedStyle = await page.locator('[role="row"][data-path$="/notes.md"]').evaluate((row) => ({ ariaSelected: row.getAttribute("aria-selected"), className: row.className, background: getComputedStyle(row).backgroundColor }));
-	check("C4 focused selection fills the row with the accent", [selectedStyle.ariaSelected, selectedStyle.className.includes("bg-accent"), selectedStyle.background], ["true", true, "rgb(10, 100, 216)"]);
+	const selectedStyle = await selectedRow.evaluate((row) => {
+		const style = getComputedStyle(row);
+		return {
+			ariaSelected: row.getAttribute("aria-selected"),
+			className: row.className,
+			background: style.backgroundColor,
+			transitionProperty: style.transitionProperty,
+		};
+	});
+	check("C4 focused selection applies immediately", [selectedStyle.ariaSelected, selectedStyle.className.includes("bg-accent"), selectedStyle.background, selectedStyle.transitionProperty], ["true", true, "rgb(10, 100, 216)", "box-shadow"]);
 	await page.screenshot({ path: `${EVIDENCE}/list.png` });
 	await page.keyboard.press("Meta+1");
 	await page.waitForSelector(".icon-grid");
