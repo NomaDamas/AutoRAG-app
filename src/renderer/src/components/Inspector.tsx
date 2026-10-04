@@ -346,7 +346,10 @@ function PreviewImage({ entry, className }: { readonly entry: FinderEntry; reado
 	}, [kind, path, modifiedAt]);
 	const src = url ?? entry.iconUrl;
 	if (src === null) return <FileTile kind={entry.fileKind} large />;
-	return <img className={className} src={src} alt="" aria-hidden="true" draggable={false} onError={() => setUrl(null)} />;
+	// crossOrigin pairs with the protocol's ACAO:* so QA can read pixels back.
+	return (
+		<img className={className} src={src} alt="" aria-hidden="true" draggable={false} crossOrigin="anonymous" onError={() => setUrl(null)} />
+	);
 }
 
 /**
@@ -372,7 +375,7 @@ function MultiInfoHalf({
 	return (
 		<div className={cn("inspector-half flex-1 min-h-0 flex flex-col overflow-hidden relative", split && "h-[50%] max-h-[50%]")}>
 			<div className={cn("inspector-body flex-1 min-h-0 overflow-auto", split ? "px-14 pt-12 pb-18" : "px-16 pt-18 pb-24")}>
-				<div className={cn("preview-stack relative flex-none flex items-center justify-center", split ? "h-100 mb-10" : "h-152 mb-14")}>
+				<div className={cn("preview-stack relative flex-none flex items-center justify-center", split ? "h-100 mb-10" : "h-208 mb-14")}>
 					{staged.map((card, index) => {
 						const depth = staged.length - 1 - index;
 						const pose =
