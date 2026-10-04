@@ -2,16 +2,18 @@
  * Manual QA — Inspector preview paper and the multi-selection paper stack
  * (real Electron).
  *
- * Builds a fixture folder with two real one-page PDFs, an EXIF JPEG, and a
+ * Builds a fixture folder with four real one-page PDFs, an EXIF JPEG, and a
  * text file, then checks on the running app that:
- *  - selecting a PDF renders the 640px Quick Look tier in the preview paper
- *    (the img URL carries `size=640` and decodes well past tile size), so the
- *    page's real content is visible, not just the letter tile;
+ *  - selecting a PDF renders the 640px Quick Look tier full-width in the
+ *    preview paper — no fixed frame, the image's own aspect sets the height
+ *    (paper box height equals the decoded image height), and canvas readback
+ *    proves real page content, not a letter tile;
  *  - ⌘-clicking a second file switches the Info panel to the paper stack:
- *    `.preview-stack` fans one card per selected file (focused in front), the
- *    title reads "2개 항목", and the rows carry the total size and the
- *    created/modified date ranges;
- *  - returning to a single selection restores the single preview.
+ *    one card per selected file, focused in front, back cards rotated;
+ *  - shift-selecting five files fans five papers at distinct angles, every
+ *    sheet dog-eared (.page-curl) and shadowed, with the "5개 항목" title
+ *    and the per-kind total-size subtitle;
+ *  - returning to a single selection restores the full-width preview.
  * Screenshots land in EVIDENCE.
  *
  * `bun run build` first, then
@@ -58,15 +60,15 @@ mkdirSync(home, { recursive: true });
 const fixtureName = "ulw-preview-qa";
 const folder = join(home, "Documents", fixtureName);
 mkdirSync(folder, { recursive: true });
-await Bun.write(join(folder, "deck-a.pdf"), buildPdf("AutoRAG Meetup Deck A"));
-await Bun.write(join(folder, "deck-b.pdf"), buildPdf("AutoRAG Meetup Deck B"));
-await Bun.write(join(folder, "photo.jpg"), buildExifJpeg());
-await Bun.write(join(folder, "notes.txt"), "preview qa\n");
+const FIXTURES = ["deck-a.pdf", "deck-b.pdf", "deck-c.pdf", "deck-d.pdf", "notes.txt", "photo.jpg"];
+for (const name of FIXTURES) {
+	if (name.endsWith(".pdf")) await Bun.write(join(folder, name), buildPdf(`AutoRAG Meetup ${name}`));
+	else if (name.endsWith(".jpg")) await Bun.write(join(folder, name), buildExifJpeg());
+	else await Bun.write(join(folder, name), "preview qa\n");
+}
 // A stable mtime so the date-range assertion does not depend on run time.
 const FIXTURE_MTIME = new Date("2026-01-02T09:05:00Z");
-for (const name of ["deck-a.pdf", "deck-b.pdf", "photo.jpg", "notes.txt"]) {
-	utimesSync(join(folder, name), FIXTURE_MTIME, FIXTURE_MTIME);
-}
+for (const name of FIXTURES) utimesSync(join(folder, name), FIXTURE_MTIME, FIXTURE_MTIME);
 
 const userDataDir = mkdtempSync(join(tmpdir(), "ulw-preview-data-"));
 
@@ -109,18 +111,28 @@ const probe = (page) =>
 		const cards = [...document.querySelectorAll(".preview-stack-card")].map((card) => {
 			const cardImg = card.querySelector("img");
 			const style = getComputedStyle(card);
-			return { hasImage: cardImg !== null && cardImg.naturalWidth > 0, rotate: style.rotate, left: card.getBoundingClientRect().left };
+			return {
+				hasImage: cardImg !== null && cardImg.naturalWidth > 0,
+				rotate: style.rotate,
+				left: Math.round(card.getBoundingClientRect().left),
+				boxShadow: style.boxShadow,
+				curl: card.querySelector(".page-curl") !== null,
+			};
 		});
 		const rows = [...document.querySelectorAll(".inspector-body dl > div")].map((row) => ({
 			label: row.querySelector("dt")?.textContent ?? "",
 			value: row.querySelector("dd")?.textContent ?? "",
 		}));
+		const paperRect = paper?.getBoundingClientRect() ?? null;
+		const imgRect = document.querySelector(".preview-paper img")?.getBoundingClientRect() ?? null;
 		return {
 			mode: stack !== null ? "stack" : paper !== null ? "paper" : "none",
 			imgSrc: img?.getAttribute("src") ?? null,
 			naturalWidth: img?.naturalWidth ?? 0,
 			naturalHeight: img?.naturalHeight ?? 0,
 			contentSpread,
+			paperBox: paperRect === null ? null : { width: Math.round(paperRect.width), height: Math.round(paperRect.height) },
+			imgBox: imgRect === null ? null : { width: Math.round(imgRect.width), height: Math.round(imgRect.height) },
 			cards,
 			title: document.querySelector(".preview-title")?.textContent ?? "",
 			sub: document.querySelector(".preview-sub")?.textContent ?? "",
@@ -130,6 +142,7 @@ const probe = (page) =>
 	});
 
 const valueOf = (rows, label) => rows.find((row) => row.label === label)?.value;
+const rowNamed = (page, name) => page.locator('[role="row"]').filter({ hasText: name }).first();
 
 let app;
 try {
@@ -144,11 +157,11 @@ try {
 	await fixtureRow.waitFor({ timeout: 30000 });
 	await fixtureRow.dblclick();
 	await page.waitForFunction((name) => document.querySelector(".toolbar-title")?.textContent === name, fixtureName);
-	await page.locator('[role="row"]').filter({ hasText: "deck-a.pdf" }).waitFor();
+	await rowNamed(page, "deck-a.pdf").waitFor();
 	await page.mouse.move(2, 2);
 
 	// ------------------------------------------------ single selection: paper
-	await page.locator('[role="row"]').filter({ hasText: "deck-a.pdf" }).first().click();
+	await rowNamed(page, "deck-a.pdf").click();
 	await page.waitForFunction(
 		() => {
 			const img = document.querySelector(".preview-paper img");
@@ -177,11 +190,21 @@ try {
 		single.contentSpread !== null && single.contentSpread > 60,
 		`spread=${single.contentSpread}`,
 	);
+	check(
+		"the paper has no fixed frame: the image fills the panel width and sets the height",
+		single.paperBox !== null &&
+			single.imgBox !== null &&
+			Math.abs(single.paperBox.width - single.imgBox.width) <= 2 &&
+			Math.abs(single.paperBox.height - single.imgBox.height) <= 2 &&
+			single.imgBox.width > 300,
+		JSON.stringify({ paper: single.paperBox, img: single.imgBox }),
+	);
+	check("a portrait page renders taller than the old 152px frame", single.imgBox !== null && single.imgBox.height > 200, JSON.stringify(single.imgBox));
 	check("the file name still shows under the paper", single.title === "deck-a.pdf", single.title);
 
-	// ------------------------------------------- multi selection: paper stack
+	// ------------------------------------------- two selections: paper stack
 	await page.keyboard.down("Meta");
-	await page.locator('[role="row"]').filter({ hasText: "deck-b.pdf" }).first().click();
+	await rowNamed(page, "deck-b.pdf").click();
 	await page.keyboard.up("Meta");
 	await page.waitForFunction(
 		() => document.querySelector(".preview-stack") !== null && document.querySelectorAll(".preview-stack-card").length === 2,
@@ -206,9 +229,10 @@ try {
 	check(
 		"the back card is rotated and offset, so the fan reads as stacked papers",
 		multi.cards.some((card) => card.rotate !== "none" && card.rotate !== "") &&
-			new Set(multi.cards.map((card) => Math.round(card.left))).size === multi.cards.length,
-		JSON.stringify(multi.cards.map((card) => ({ rotate: card.rotate, left: Math.round(card.left) }))),
+			new Set(multi.cards.map((card) => card.left)).size === multi.cards.length,
+		JSON.stringify(multi.cards.map((card) => ({ rotate: card.rotate, left: card.left }))),
 	);
+	check("every sheet is dog-eared and shadowed", multi.cards.every((card) => card.curl && card.boxShadow !== "none"), "");
 	check("the title counts the selection", multi.title === "2개 항목", multi.title);
 	check("the subtitle carries the kind breakdown and the total size", /PDF document 2개 · .+/.test(multi.sub), multi.sub);
 	check("the rows carry the total size", /B$/.test(String(valueOf(multi.rows, "총 크기"))), String(valueOf(multi.rows, "총 크기")));
@@ -219,8 +243,41 @@ try {
 	);
 	check("no single-file action bar in the stack mode", !multi.text.includes("인덱스 포함"), "");
 
+	// ------------------------------------------- five selections: full fan
+	await rowNamed(page, "deck-a.pdf").click();
+	await page.keyboard.down("Shift");
+	await rowNamed(page, "notes.txt").click();
+	await page.keyboard.up("Shift");
+	await page.waitForFunction(
+		() => document.querySelectorAll(".preview-stack-card").length === 5,
+		undefined,
+		{ timeout: 10000 },
+	);
+	await page.waitForFunction(
+		() => {
+			const imgs = [...document.querySelectorAll(".preview-stack-card img")];
+			return imgs.length === 5 && imgs.every((img) => img.complete && img.naturalWidth > 0);
+		},
+		undefined,
+		{ timeout: 15000 },
+	);
+	await new Promise((resolve) => setTimeout(resolve, 300));
+	const five = await probe(page);
+	await page.screenshot({ path: join(EVIDENCE, "03-five-paper-stack.png") });
+
+	check("five-file selection fans five papers", five.cards.length === 5, String(five.cards.length));
+	check("every fanned sheet shows its own decoded preview", five.cards.every((card) => card.hasImage));
+	check(
+		"the papers sit at distinct angles like a real paper pile",
+		new Set(five.cards.map((card) => card.rotate)).size >= 4,
+		JSON.stringify(five.cards.map((card) => card.rotate)),
+	);
+	check("every fanned sheet is dog-eared and shadowed", five.cards.every((card) => card.curl && card.boxShadow !== "none"), "");
+	check("the title counts five items", five.title === "5개 항목", five.title);
+	check("the subtitle breaks the kinds down", five.sub.startsWith("PDF document 4개"), five.sub);
+
 	// --------------------------------------------- back to single: restore
-	await page.locator('[role="row"]').filter({ hasText: "photo.jpg" }).first().click();
+	await rowNamed(page, "photo.jpg").click();
 	await page.waitForFunction(
 		() => {
 			const paper = document.querySelector(".preview-paper");
@@ -232,10 +289,11 @@ try {
 	);
 	await new Promise((resolve) => setTimeout(resolve, 300));
 	const restored = await probe(page);
-	await page.screenshot({ path: join(EVIDENCE, "03-single-image-preview.png") });
+	await page.screenshot({ path: join(EVIDENCE, "04-single-image-preview.png") });
 
 	check("returning to a single selection restores the paper mode", restored.mode === "paper", restored.mode);
 	check("the image preview decodes its pixels", restored.naturalWidth > 0 && restored.naturalHeight > 0, `${restored.naturalWidth}x${restored.naturalHeight}`);
+	check("the restored preview is full-width too", restored.imgBox !== null && restored.imgBox.width > 300, JSON.stringify(restored.imgBox));
 	check("the image name shows under the paper", restored.title === "photo.jpg", restored.title);
 
 	await Bun.write(join(EVIDENCE, "manifest.json"), `${JSON.stringify({ results, folder }, null, 2)}\n`);

@@ -109,9 +109,11 @@ describe("stackCards", () => {
 		expect(cards.map((card) => card.path)).toEqual(["/c.pdf", "/Users/me/Documents/a.pdf", "/b.pdf"]);
 	});
 
-	it("caps the fan at three cards", () => {
-		const many = [1, 2, 3, 4, 5].map((n) => entry({ path: `/f${n}.pdf`, name: `f${n}.pdf` }));
-		expect(stackCards(many, null)).toHaveLength(3);
+	it("caps the fan at five cards", () => {
+		const many = [1, 2, 3, 4, 5, 6, 7].map((n) => entry({ path: `/f${n}.pdf`, name: `f${n}.pdf` }));
+		const cards = stackCards(many, null);
+		expect(cards).toHaveLength(5);
+		expect(cards[0]?.path).toBe("/f1.pdf");
 	});
 
 	it("starts from the first entry when the focus is absent from the selection", () => {

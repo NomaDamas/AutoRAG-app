@@ -8,11 +8,13 @@
  *            capabilities decide which of those are real, and a multi-variant
  *            action (image edit, video conversion) opens a menu instead of a
  *            row of near-identical buttons. The paper shows the file's real
- *            content: the 640px Quick Look tier from `fs:previewIcon`, with the
- *            listing icon and then the letter tile as fallbacks. A multi-
- *            selection replaces all of it with the aggregate view — a fan of
- *            the selection's own preview papers, the count title, the per-kind
- *            breakdown with total size, and created/modified date ranges.
+ *            content: the 640px Quick Look tier from `fs:previewIcon` rendered
+ *            at the panel's full width (no fixed frame), with the listing icon
+ *            and then the letter tile as fallbacks. A multi-selection replaces
+ *            all of it with the aggregate view — a fan of up to five of the
+ *            selection's own preview papers (focused file in front, each sheet
+ *            dog-eared and shadowed), the count title, the per-kind breakdown
+ *            with total size, and created/modified date ranges.
  *   Evidence the citation half shown while a citation is selected: numbered tabs,
  *            preview, title reveal, feedback (real `search.feedback` IPC), and excerpts.
  *
@@ -250,9 +252,7 @@ function InfoHalf({
 				</div>
 			) : (
 				<div className={cn("inspector-body flex-1 min-h-0 overflow-auto", split ? "px-14 pt-12 pb-18" : "px-16 pt-18 pb-24")}>
-					<div className={cn("preview-paper flex-none flex items-center justify-center overflow-hidden rounded-6 border border-border bg-window shadow-raised", split ? "h-100 mb-10" : "h-152 mb-14")}>
-						<PreviewImage entry={entry} className="max-w-full max-h-full object-contain" />
-					</div>
+					<PreviewPaper entry={entry} split={split} />
 					<div className="preview-title text-body font-semibold text-ink leading-[1.3] [overflow-wrap:anywhere]">{entry.name}</div>
 					<div className="preview-sub mt-4 text-meta text-ink-muted">
 						{entry.kindLabel} · {entry.sizeLabel} · {entry.dateLabel}
@@ -318,13 +318,13 @@ function InfoHalf({
 }
 
 /**
- * The preview paper's content: the 640px Quick Look tier for real files, the
- * 128px listing icon while that loads (or when no large tier exists), and the
- * letter tile when the OS has nothing at all. Fetching is per entry identity
- * (path + mtime), so a changed file re-renders and a stale answer for a file
- * the user already left never lands.
+ * The 640px Quick Look tier for one entry: fetched per identity (path +
+ * mtime) with cancellation, so a changed file re-renders and a stale answer
+ * for a file the user already left never lands. Null for folders, fixture
+ * rows without an mtime, and files the OS has no preview for. The reset
+ * handle lets an <img> onError drop a URL whose bytes were evicted.
  */
-function PreviewImage({ entry, className }: { readonly entry: FinderEntry; readonly className: string }): ReactElement {
+function usePreviewUrl(entry: FinderEntry): readonly [string | null, () => void] {
 	const [url, setUrl] = useState<string | null>(null);
 	const { path, modifiedAt, kind } = entry;
 	useEffect(() => {
@@ -344,13 +344,82 @@ function PreviewImage({ entry, className }: { readonly entry: FinderEntry; reado
 			cancelled = true;
 		};
 	}, [kind, path, modifiedAt]);
-	const src = url ?? entry.iconUrl;
-	if (src === null) return <FileTile kind={entry.fileKind} large />;
-	// crossOrigin pairs with the protocol's ACAO:* so QA can read pixels back.
+	return [url, () => setUrl(null)];
+}
+
+/**
+ * The single-file preview: the file's real content at the panel's full width
+ * with no fixed frame — the image's own aspect ratio sets the height, capped
+ * only on short windows. Until the large tier arrives (or when the OS has
+ * none) the panel keeps the bordered box with the listing icon or the letter
+ * tile.
+ */
+function PreviewPaper({ entry, split }: { readonly entry: FinderEntry; readonly split: boolean }): ReactElement {
+	const [url, resetUrl] = usePreviewUrl(entry);
+	if (url !== null) {
+		return (
+			<div className={cn("preview-paper flex-none", split ? "mb-10" : "mb-14")}>
+				{/* crossOrigin pairs with the protocol's ACAO:* so QA can read pixels back. */}
+				<img
+					className={cn(
+						"block w-full h-auto object-contain rounded-6 border border-border bg-window shadow-raised",
+						split ? "max-h-[32vh]" : "max-h-[70vh]",
+					)}
+					src={url}
+					alt=""
+					aria-hidden="true"
+					draggable={false}
+					crossOrigin="anonymous"
+					onError={resetUrl}
+				/>
+			</div>
+		);
+	}
 	return (
-		<img className={className} src={src} alt="" aria-hidden="true" draggable={false} crossOrigin="anonymous" onError={() => setUrl(null)} />
+		<div
+			className={cn(
+				"preview-paper flex-none flex items-center justify-center overflow-hidden rounded-6 border border-border bg-window shadow-raised",
+				split ? "h-100 mb-10" : "h-152 mb-14",
+			)}
+		>
+			{entry.iconUrl === null ? (
+				<FileTile kind={entry.fileKind} large />
+			) : (
+				<img className="max-w-full max-h-full object-contain" src={entry.iconUrl} alt="" aria-hidden="true" draggable={false} />
+			)}
+		</div>
 	);
 }
+
+/** One paper in the stack: the file's preview cropped to fill the sheet, or the letter tile while it loads. */
+function PreviewCardImage({ entry }: { readonly entry: FinderEntry }): ReactElement {
+	const [url, resetUrl] = usePreviewUrl(entry);
+	if (url === null) return <FileTile kind={entry.fileKind} large />;
+	return (
+		<img
+			className="h-full w-full object-cover"
+			src={url}
+			alt=""
+			aria-hidden="true"
+			draggable={false}
+			crossOrigin="anonymous"
+			onError={resetUrl}
+		/>
+	);
+}
+
+/**
+ * The fan's poses, front card first: each deeper paper rotates a little wider
+ * and steps a little further out and down, so a five-file selection still
+ * reads as five distinct sheets (the Finder multi-preview reference).
+ */
+const STACK_POSES: readonly string[] = [
+	"z-30 -rotate-[1.5deg]",
+	"z-20 translate-x-[16%] translate-y-[3%] rotate-[7deg] scale-[0.96]",
+	"z-10 -translate-x-[17%] translate-y-[4%] -rotate-[8.5deg] scale-[0.96]",
+	"z-[5] translate-x-[23%] translate-y-[6%] rotate-[14deg] scale-[0.92]",
+	"z-0 -translate-x-[24%] translate-y-[7%] -rotate-[15deg] scale-[0.92]",
+];
 
 /**
  * The aggregate Info half for a multi-selection: a fan of the selection's own
@@ -375,24 +444,24 @@ function MultiInfoHalf({
 	return (
 		<div className={cn("inspector-half flex-1 min-h-0 flex flex-col overflow-hidden relative", split && "h-[50%] max-h-[50%]")}>
 			<div className={cn("inspector-body flex-1 min-h-0 overflow-auto", split ? "px-14 pt-12 pb-18" : "px-16 pt-18 pb-24")}>
-				<div className={cn("preview-stack relative flex-none flex items-center justify-center", split ? "h-100 mb-10" : "h-208 mb-14")}>
+				<div className={cn("preview-stack relative flex-none flex items-center justify-center", split ? "h-100 mb-10" : "h-240 mb-14")}>
 					{staged.map((card, index) => {
 						const depth = staged.length - 1 - index;
-						const pose =
-							depth === 0
-								? "z-20"
-								: depth === 1
-									? "z-10 -translate-x-[18%] translate-y-[4%] -rotate-[8deg] scale-[0.92]"
-									: "z-0 translate-x-[18%] translate-y-[7%] rotate-[8deg] scale-[0.92]";
+						const pose = STACK_POSES[Math.min(depth, STACK_POSES.length - 1)] ?? "";
 						return (
 							<div
 								key={card.path}
 								className={cn(
-									"preview-stack-card absolute flex h-[88%] aspect-[3/4] items-center justify-center overflow-hidden rounded-6 border border-border bg-window shadow-raised",
+									"preview-stack-card absolute flex h-[84%] aspect-[3/4] items-center justify-center overflow-hidden rounded-6 border border-border bg-window shadow-drag",
 									pose,
 								)}
 							>
-								<PreviewImage entry={card} className="max-h-full max-w-full object-contain" />
+								<PreviewCardImage entry={card} />
+								{/* Dog-eared top-right corner: the folded triangle, its own soft shadow onto the sheet. */}
+								<div
+									aria-hidden="true"
+									className="page-curl pointer-events-none absolute top-0 right-0 size-24 bg-[linear-gradient(225deg,rgba(20,20,40,0.16)_0%,rgba(20,20,40,0.04)_42%,var(--bg-window)_78%)] [clip-path:polygon(0_0,100%_0,100%_100%)] drop-shadow-[-1px_2px_2px_rgba(20,20,40,0.20)]"
+								/>
 							</div>
 						);
 					})}

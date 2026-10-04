@@ -11,7 +11,7 @@ import type { FinderEntry } from "../data/entries";
 import { formatSize } from "./format";
 
 /** The fan shows at most this many papers; the rest of the selection is implied. */
-export const STACK_CARD_MAX = 3;
+export const STACK_CARD_MAX = 5;
 /** Kind breakdown keeps at most this many groups before folding the tail into 외 N종. */
 const KIND_GROUP_MAX = 2;
 
