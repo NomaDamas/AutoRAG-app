@@ -26,6 +26,15 @@ export function formatModified(iso: string): string {
 	return `${MONTHS[date.getMonth()] ?? NO_VALUE} ${date.getDate()}, ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
+/** Full local date and time for the Info panel, e.g. "2026-01-02 03:04:05". */
+export function formatTimestamp(iso: string): string {
+	const date = new Date(iso);
+	if (Number.isNaN(date.getTime())) {
+		return NO_VALUE;
+	}
+	return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+}
+
 /** Sortable stamp for a "Sep 13, 16:48" label; 0 when it cannot be read. */
 export function parseModifiedLabel(label: string): number {
 	const match = /^(\w{3}) (\d+), (\d+):(\d+)$/.exec(label);

@@ -9,6 +9,7 @@ export function createFsBridge(ipcRenderer: IpcRenderer): FsBridge {
 		enrichEntries: (targets, thumbnails) => ipcRenderer.invoke(FS_CHANNELS.enrichEntries, targets, thumbnails),
 		readEntries: (dir, paths) => ipcRenderer.invoke(FS_CHANNELS.readEntries, dir, paths),
 		stat: (path) => ipcRenderer.invoke(FS_CHANNELS.stat, path),
+		details: (path) => ipcRenderer.invoke(FS_CHANNELS.details, path),
 		exists: (path) => ipcRenderer.invoke(FS_CHANNELS.exists, path),
 		search: (query) => ipcRenderer.invoke(FS_CHANNELS.search, query),
 		locations: () => ipcRenderer.invoke(FS_CHANNELS.locations),
