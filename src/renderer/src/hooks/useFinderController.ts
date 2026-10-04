@@ -272,7 +272,7 @@ export function useFinderController(
 		readonly quickLook?: QuickLookBridge;
 		/** ⌘F: reveal the shell that hosts the search field (it lives in the sidebar). */
 		readonly onFocusSearch?: () => void;
-		/** ⌘K: open the AI dock and focus its composer (owned by the App shell). */
+		/** ⌘K: toggle the AI dock; opening also focuses its composer (owned by the App shell). */
 		readonly onFocusComposer?: () => void;
 		/** Esc: close the inspector's evidence half; return true when consumed. */
 		readonly onDismissEvidence?: () => boolean;

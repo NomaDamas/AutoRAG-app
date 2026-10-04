@@ -290,13 +290,13 @@
   --desk-padding: 18px;
   --app-min-width: 1360px;
   --app-min-height: 820px;
-  --grid-main: 220px minmax(0,1fr) 390px;
-  --col-sidebar: 220px;
+  --grid-main: 180px minmax(0,1fr) 300px;
+  --col-sidebar: 180px;
   --evidence-open-height: 44%;
   /* v7 window grid columns (sidebar / finder / inspector) and the AI dock's
    * remembered open height (v7 sets `--ai-h` inline; this is its 280px default). */
-  --w-sidebar: 220px;
-  --w-inspector: 390px;
+  --w-sidebar: 180px;
+  --w-inspector: 300px;
   --ai-h: 280px;
 
   /* ----------------------------------------------------------- §4 Component grids */
