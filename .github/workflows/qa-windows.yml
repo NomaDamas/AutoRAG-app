@@ -37,6 +37,10 @@ jobs:
       - name: Install ffmpeg
         run: choco install ffmpeg -y --no-progress
 
+      # The production build's prebuild requires the dupey CLI (version families).
+      - name: Install dupey
+        run: cargo install dupey --locked
+
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
