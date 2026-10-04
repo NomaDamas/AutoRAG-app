@@ -8,7 +8,7 @@
  */
 
 import { NO_CAPABILITIES, type ActionsBridge } from "../../../shared/actions-contract";
-import { RECENTS_PATH, type FsBridge, type FsClipboard, type FsEnrichmentTarget, type FsVersionFamiliesResult } from "../../../shared/fs-contract";
+import { RECENTS_PATH, type FsBridge, type FsClipboard, type FsEnrichmentTarget, type FsOpError, type FsUndoOutcome, type FsVersionFamiliesResult } from "../../../shared/fs-contract";
 import type { IndexStatus } from "../../../shared/index-contract";
 import {
 	DUPEY_LAYER_ID,
@@ -85,6 +85,8 @@ export interface FinderSource {
 	duplicate(paths: readonly string[]): Promise<void>;
 	copyInto(paths: readonly string[], destDir: string): Promise<void>;
 	moveInto(paths: readonly string[], destDir: string): Promise<void>;
+	/** Undo the most recent recorded copy/move transfer (⌘Z); the record is consumed. */
+	undo(): Promise<FsUndoOutcome>;
 	copyPaths(paths: readonly string[]): Promise<void>;
 	clipboardSet(clipboard: FsClipboard): Promise<void>;
 	clipboardGet(): Promise<FsClipboard | null>;
@@ -205,6 +207,7 @@ export function createBridgeSource(
 		moveInto: async (paths, destDir) => {
 			await fs.move(paths, destDir);
 		},
+		undo: () => fs.undo(),
 		copyPaths: (paths) => fs.copyPathsToClipboard(paths),
 		clipboardSet: (clipboard) => fs.clipboardSet(clipboard),
 		clipboardGet: () => fs.clipboardGet(),
@@ -273,6 +276,14 @@ function findItem(state: FixtureState, path: string): FixtureItem | null {
 export function createFixtureSource(): FinderSource {
 	const state = seedFixtureState();
 	const resolve = (): Promise<void> => Promise.resolve();
+
+	/** One fixture undo step: the row the transfer created or moved, and its origin. */
+	interface FixtureUndoStep {
+		readonly kind: "copy" | "move";
+		readonly path: string;
+		readonly from: string;
+	}
+	let lastUndo: readonly FixtureUndoStep[] | null = null;
 	const fixtureIndexStatus = (path: string): IndexStatus =>
 		state.indexExcluded.has(path)
 			? { path, kind: "excluded", excluded: true, toggleable: true, detail: "인덱싱에서 제외됨" }
@@ -376,25 +387,57 @@ export function createFixtureSource(): FinderSource {
 			return resolve();
 		},
 		copyInto: (paths, destDir) => {
+			const steps: FixtureUndoStep[] = [];
 			for (const path of paths) {
 				const item = findItem(state, path);
 				if (item === null) {
 					continue;
 				}
-				insertItem(state, destDir, { ...item, name: copyName(item.name, takenNames(state, destDir)) });
+				const name = copyName(item.name, takenNames(state, destDir));
+				insertItem(state, destDir, { ...item, name });
+				steps.push({ kind: "copy", path: joinPath(destDir, name), from: path });
 			}
+			if (steps.length > 0) lastUndo = steps;
 			return resolve();
 		},
 		moveInto: (paths, destDir) => {
+			const steps: FixtureUndoStep[] = [];
 			for (const path of paths) {
 				const item = findItem(state, path);
 				if (item === null || dirname(path) === destDir) {
 					continue;
 				}
+				const name = copyName(item.name, takenNames(state, destDir));
 				removeItem(state, path);
-				insertItem(state, destDir, { ...item, name: copyName(item.name, takenNames(state, destDir)) });
+				insertItem(state, destDir, { ...item, name });
+				steps.push({ kind: "move", path: joinPath(destDir, name), from: path });
 			}
+			if (steps.length > 0) lastUndo = steps;
 			return resolve();
+		},
+		undo: async () => {
+			const steps = lastUndo;
+			lastUndo = null;
+			if (steps === null || steps.length === 0) {
+				return { ok: false, empty: true, failed: [] };
+			}
+			const failed: FsOpError[] = [];
+			for (const step of steps) {
+				const item = findItem(state, step.path);
+				if (item === null) {
+					failed.push({ path: step.path, message: "되돌릴 항목이 없습니다" });
+					continue;
+				}
+				if (step.kind === "copy") {
+					removeItem(state, step.path);
+					continue;
+				}
+				const restoreDir = dirname(step.from);
+				const name = copyName(item.name, takenNames(state, restoreDir));
+				removeItem(state, step.path);
+				insertItem(state, restoreDir, { ...item, name });
+			}
+			return { ok: failed.length === 0, empty: false, failed };
 		},
 		copyPaths: resolve,
 		clipboardSet: (clipboard) => {

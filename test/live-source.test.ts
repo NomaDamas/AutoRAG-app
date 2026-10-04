@@ -70,6 +70,7 @@ function fakeFs(result: FsVersionFamiliesResult): FsBridge {
 		open: async () => {},
 		clipboardSet: async () => {},
 		clipboardGet,
+		undo: async () => ({ ok: false, empty: true, failed: [] }),
 		copyPathsToClipboard: async () => {},
 		versionFamilies: async () => result,
 		refreshVersionFamilies: async () => result,
@@ -216,5 +217,51 @@ describe("live Finder source adapters", () => {
 		const source = createFixtureSource();
 
 		await expect(source.readEntries("Desktop", ["Documents/x.txt"])).rejects.toThrow(/direct child/);
+	});
+
+	it("fixture undo reverses the most recent copy and the most recent move", async () => {
+		const source = createFixtureSource();
+
+		// Given a file copied from Desktop into Documents
+		await source.copyInto(["Desktop/회의록_0922.md"], "Documents");
+		expect(await source.exists("Documents/회의록_0922.md")).toBe(true);
+
+		// When undoing the copy
+		expect(await source.undo()).toEqual({ ok: true, empty: false, failed: [] });
+
+		// Then the copy is gone and the original stays
+		expect(await source.exists("Documents/회의록_0922.md")).toBe(false);
+		expect(await source.exists("Desktop/회의록_0922.md")).toBe(true);
+
+		// Given a file moved from Desktop into Documents
+		await source.moveInto(["Desktop/Q3_캠페인_브리프_초안.docx"], "Documents");
+		expect(await source.exists("Desktop/Q3_캠페인_브리프_초안.docx")).toBe(false);
+
+		// When undoing the move
+		expect(await source.undo()).toEqual({ ok: true, empty: false, failed: [] });
+
+		// Then the file is back in its original folder
+		expect(await source.exists("Desktop/Q3_캠페인_브리프_초안.docx")).toBe(true);
+		expect(await source.exists("Documents/Q3_캠페인_브리프_초안.docx")).toBe(false);
+	});
+
+	it("fixture undo reports empty when nothing was transferred", async () => {
+		const source = createFixtureSource();
+		await expect(source.undo()).resolves.toEqual({ ok: false, empty: true, failed: [] });
+	});
+
+	it("bridge source undo forwards to the fs bridge", async () => {
+		const undoCalls: number[] = [];
+		const fs = {
+			...fakeFs(familyResult()),
+			undo: async () => {
+				undoCalls.push(1);
+				return { ok: true, empty: false, failed: [] };
+			},
+		};
+		const source = createBridgeSource(fs, "");
+
+		await expect(source.undo()).resolves.toEqual({ ok: true, empty: false, failed: [] });
+		expect(undoCalls).toHaveLength(1);
 	});
 });

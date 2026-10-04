@@ -596,6 +596,142 @@ describe("trash", () => {
 	});
 });
 
+describe("undo", () => {
+	it("removes the copies a copy created, keeping the originals", async () => {
+		// Given a source file copied into another folder
+		const srcDir = join(root, "undo-copy-src");
+		const destDir = join(root, "undo-copy-dest");
+		await mkdir(srcDir, { recursive: true });
+		await mkdir(destDir, { recursive: true });
+		const source = join(srcDir, "undo-me.txt");
+		await writeFile(source, "payload");
+		const service = createFsService(makeDeps(root).deps);
+		await service.copy([source], destDir);
+
+		// When undoing the copy
+		const outcome = await service.undo();
+
+		// Then the copy is gone, the original stays, and the undo applied fully
+		expect(outcome).toEqual({ ok: true, empty: false, failed: [] });
+		expect(await readFile(source, "utf8")).toBe("payload");
+		await expect(access(join(destDir, "undo-me.txt"))).rejects.toThrow();
+	});
+
+	it("removes a collision-named copy without touching the pre-existing file", async () => {
+		// Given a destination already holding the same name
+		const srcDir = join(root, "undo-collide-src");
+		const destDir = join(root, "undo-collide-dest");
+		await mkdir(srcDir, { recursive: true });
+		await mkdir(destDir, { recursive: true });
+		const source = join(srcDir, "same.txt");
+		await writeFile(source, "incoming");
+		await writeFile(join(destDir, "same.txt"), "existing");
+		const service = createFsService(makeDeps(root).deps);
+		await service.copy([source], destDir);
+
+		// When undoing the copy that landed as "same copy.txt"
+		const outcome = await service.undo();
+
+		// Then only the created copy is removed
+		expect(outcome).toEqual({ ok: true, empty: false, failed: [] });
+		expect(await readFile(join(destDir, "same.txt"), "utf8")).toBe("existing");
+		await expect(access(join(destDir, "same copy.txt"))).rejects.toThrow();
+		expect(await readFile(source, "utf8")).toBe("incoming");
+	});
+
+	it("moves rows back to their original folder after a move", async () => {
+		// Given a file moved into another folder
+		const srcDir = join(root, "undo-move-src");
+		const destDir = join(root, "undo-move-dest");
+		await mkdir(srcDir, { recursive: true });
+		await mkdir(destDir, { recursive: true });
+		const source = join(srcDir, "move-back.txt");
+		await writeFile(source, "payload");
+		const service = createFsService(makeDeps(root).deps);
+		await service.move([source], destDir);
+
+		// When undoing the move
+		const outcome = await service.undo();
+
+		// Then the file is back in its original folder with its content
+		expect(outcome).toEqual({ ok: true, empty: false, failed: [] });
+		expect(await readFile(join(srcDir, "move-back.txt"), "utf8")).toBe("payload");
+		await expect(access(join(destDir, "move-back.txt"))).rejects.toThrow();
+	});
+
+	it("keeps undoing to Finder-style collision names when the original name was retaken", async () => {
+		// Given a moved file whose original folder now holds another file with the same name
+		const srcDir = join(root, "undo-retake-src");
+		const destDir = join(root, "undo-retake-dest");
+		await mkdir(srcDir, { recursive: true });
+		await mkdir(destDir, { recursive: true });
+		const source = join(srcDir, "retake.txt");
+		await writeFile(source, "moved");
+		const service = createFsService(makeDeps(root).deps);
+		await service.move([source], destDir);
+		await writeFile(join(srcDir, "retake.txt"), "new occupant");
+
+		// When undoing the move
+		const outcome = await service.undo();
+
+		// Then the moved file returns under a " copy" name and both survive
+		expect(outcome).toEqual({ ok: true, empty: false, failed: [] });
+		expect(await readFile(join(srcDir, "retake copy.txt"), "utf8")).toBe("moved");
+		expect(await readFile(join(srcDir, "retake.txt"), "utf8")).toBe("new occupant");
+	});
+
+	it("consumes the record: a second undo reports empty", async () => {
+		// Given a copied file that was undone
+		const srcDir = join(root, "undo-once-src");
+		const destDir = join(root, "undo-once-dest");
+		await mkdir(srcDir, { recursive: true });
+		await mkdir(destDir, { recursive: true });
+		const source = join(srcDir, "once.txt");
+		await writeFile(source, "payload");
+		const service = createFsService(makeDeps(root).deps);
+		await service.copy([source], destDir);
+		await service.undo();
+		await writeFile(join(destDir, "once.txt"), "recreated by the user");
+
+		// When undoing again
+		const outcome = await service.undo();
+
+		// Then there is nothing left to undo and the user's file survives
+		expect(outcome).toEqual({ ok: false, empty: true, failed: [] });
+		expect(await readFile(join(destDir, "once.txt"), "utf8")).toBe("recreated by the user");
+	});
+
+	it("reports empty when no transfer was ever recorded", async () => {
+		// Given a fresh service
+		const outcome = await createFsService(makeDeps(root).deps).undo();
+
+		// Then there is nothing to undo
+		expect(outcome).toEqual({ ok: false, empty: true, failed: [] });
+	});
+
+	it("names a failed undo step with the verbatim reason", async () => {
+		// Given a copy whose created file was already removed before the undo
+		const srcDir = join(root, "undo-gone-src");
+		const destDir = join(root, "undo-gone-dest");
+		await mkdir(srcDir, { recursive: true });
+		await mkdir(destDir, { recursive: true });
+		const source = join(srcDir, "gone.txt");
+		await writeFile(source, "payload");
+		const service = createFsService(makeDeps(root).deps);
+		await service.copy([source], destDir);
+		await rm(join(destDir, "gone.txt"));
+
+		// When undoing
+		const outcome = await service.undo();
+
+		// Then the failure carries the path and a non-empty reason
+		expect(outcome.ok).toBe(false);
+		expect(outcome.failed).toHaveLength(1);
+		expect(outcome.failed[0]?.path).toBe(join(destDir, "gone.txt"));
+		expect(outcome.failed[0]?.message.length).toBeGreaterThan(0);
+	});
+});
+
 describe("search", () => {
 	it("finds files and folders by case-insensitive name substring across locations", async () => {
 		// Given a home whose Documents tree holds a matching file and a matching folder
@@ -924,13 +1060,13 @@ describe("previewIcon", () => {
 		// Given a provider whose preview tier answers a 640px URL for the file
 		const dir = await mkdtemp(join(tmpdir(), "fs-preview-"));
 		await writeFile(join(dir, "deck.pdf"), "x");
-		const seen: Array<{ readonly path: string; readonly modifiedAt: string }> = [];
+		const seen: Array<{ readonly path: string; readonly ext: string; readonly modifiedAt: string }> = [];
 		const deps: FsServiceDeps = {
 			...makeDeps(dir).deps,
 			icons: {
 				icons: async () => new Map(),
 				preview: async (target) => {
-					seen.push({ path: target.path, modifiedAt: target.modifiedAt });
+					seen.push({ path: target.path, ext: target.ext, modifiedAt: target.modifiedAt });
 					return "autorag-thumb://local/?path=deck.pdf&mtime=t&size=640";
 				},
 			},
@@ -940,9 +1076,9 @@ describe("previewIcon", () => {
 		const service = createFsService(deps);
 		const url = await service.previewIcon(join(dir, "deck.pdf"), "2026-09-29T00:00:00.000Z");
 
-		// Then the provider answered for exactly that identity
+		// Then the provider answered for exactly that identity, extension included for the visual-types gate
 		expect(url).toBe("autorag-thumb://local/?path=deck.pdf&mtime=t&size=640");
-		expect(seen).toEqual([{ path: join(dir, "deck.pdf"), modifiedAt: "2026-09-29T00:00:00.000Z" }]);
+		expect(seen).toEqual([{ path: join(dir, "deck.pdf"), ext: "pdf", modifiedAt: "2026-09-29T00:00:00.000Z" }]);
 		await rm(dir, { recursive: true, force: true });
 	});
 

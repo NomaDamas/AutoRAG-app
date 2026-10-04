@@ -199,8 +199,8 @@ export function App(): ReactElement {
 	const [inspectorVisible, setInspectorVisible] = useState(() => loadFlag(INSPECTOR_KEY, true));
 	const [aiOpen, setAiOpen] = useState(() => loadFlag(AI_OPEN_KEY, true));
 	const [aiHeight, setAiHeight] = useState(() => loadNumber(AI_HEIGHT_KEY, 280));
-	const [sidebarWidth, setSidebarWidth] = useState(() => loadNumber(SIDEBAR_WIDTH_KEY, 220));
-	const [inspectorWidth, setInspectorWidth] = useState(() => loadNumber(INSPECTOR_WIDTH_KEY, 390));
+	const [sidebarWidth, setSidebarWidth] = useState(() => loadNumber(SIDEBAR_WIDTH_KEY, SIDEBAR_MIN));
+	const [inspectorWidth, setInspectorWidth] = useState(() => loadNumber(INSPECTOR_WIDTH_KEY, INSPECTOR_MIN));
 	const [listColumns, setListColumns] = useState<ListColumnsState>(loadListColumns);
 	const [dropTargetPath, setDropTargetPath] = useState<string | null>(null);
 	const [dropTabId, setDropTabId] = useState<number | null>(null);
@@ -258,6 +258,10 @@ export function App(): ReactElement {
 		quickLook: { onQuickLook: openQuickLook, closeQuickLook, isQuickLookOpen },
 		onFocusSearch: () => setSidebarVisible(true),
 		onFocusComposer: () => {
+			if (aiOpen) {
+				setAiOpen(false);
+				return;
+			}
 			setAiOpen(true);
 			aiDockRef.current?.focusComposer();
 		},

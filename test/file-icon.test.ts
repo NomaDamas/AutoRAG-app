@@ -11,7 +11,11 @@ import { iconUrl, handleIconRequest } from "../src/main/icon-protocol";
 
 const BYTES = new Uint8Array([1, 2, 3, 4]);
 const MTIME = "2026-09-29T00:00:00.000Z";
-const target = (path: string, modifiedAt = MTIME): IconTarget => ({ path, modifiedAt });
+const target = (path: string, modifiedAt = MTIME): IconTarget => ({
+	path,
+	modifiedAt,
+	ext: path.slice(path.lastIndexOf(".") + 1).toLowerCase(),
+});
 
 describe("createIconProvider", () => {
 	it("generates one thumbnail per listed file and returns a URL per produced thumbnail", async () => {
@@ -34,6 +38,26 @@ describe("createIconProvider", () => {
 			"autorag-thumb://local/?path=%2Fdocs%2Fa.png&mtime=2026-09-29T00%3A00%3A00.000Z",
 		);
 		expect(icons.get("/docs/b.mp4")).toBe(iconUrl("/docs/b.mp4", MTIME));
+	});
+
+	it("skips known non-thumbnail files before native generation", async () => {
+		// Given a mixed listing whose text file is not a visual thumbnail candidate
+		const generated: string[] = [];
+		const provider = createIconProvider({
+			platform: "darwin",
+			limit: 1,
+			thumbnail: async (path) => {
+				generated.push(path);
+				return BYTES;
+			},
+		});
+
+		// When both entries are enriched
+		const icons = await provider.icons([target("/docs/readme.txt"), target("/docs/photo.png")]);
+
+		// Then Quick Look was called only for the visual file, despite the cap
+		expect(generated).toEqual(["/docs/photo.png"]);
+		expect([...icons.keys()]).toEqual(["/docs/photo.png"]);
 	});
 
 	it("keeps the produced bytes in the store so the protocol can serve them", async () => {
@@ -249,7 +273,7 @@ describe("createIconProvider", () => {
 		const provider = createIconProvider({
 			platform: "darwin",
 			thumbnail: async (path) => {
-				if (path.endsWith("b.bin")) throw new Error("XPC connection interrupted");
+				if (path.endsWith("b.png")) throw new Error("XPC connection interrupted");
 				return BYTES;
 			},
 			warn: (message) => {
@@ -258,7 +282,7 @@ describe("createIconProvider", () => {
 		});
 
 		// When three files are listed
-		const icons = await provider.icons([target("/docs/a.png"), target("/docs/b.bin"), target("/docs/c.png")]);
+		const icons = await provider.icons([target("/docs/a.png"), target("/docs/b.png"), target("/docs/c.png")]);
 
 		// Then only the failing file is missing and the failure surfaced verbatim
 		expect([...icons.keys()].sort()).toEqual(["/docs/a.png", "/docs/c.png"]);
@@ -277,8 +301,8 @@ describe("createIconProvider", () => {
 		});
 
 		// When the same file is listed twice
-		expect((await provider.icons([target("/docs/app.zip")])).size).toBe(0);
-		expect((await provider.icons([target("/docs/app.zip")])).size).toBe(0);
+		expect((await provider.icons([target("/docs/app.png")])).size).toBe(0);
+		expect((await provider.icons([target("/docs/app.png")])).size).toBe(0);
 
 		// Then the OS was only asked once — per-file nulls are cached too
 		expect(generateCalls).toBe(1);
@@ -292,7 +316,7 @@ describe("createIconProvider", () => {
 		});
 
 		// When both are listed
-		const icons = await provider.icons([target("/docs/a.png"), target("/docs/unsupported.bin")]);
+		const icons = await provider.icons([target("/docs/a.png"), target("/docs/unsupported.png")]);
 
 		// Then only the produced one has an icon
 		expect([...icons.keys()]).toEqual(["/docs/a.png"]);
@@ -329,14 +353,14 @@ describe("createIconProvider", () => {
 				platform: "darwin",
 				thumbnailTimeoutMs: 5,
 				thumbnail: (path) =>
-					path.endsWith("slow.bin") ? Promise.withResolvers<Uint8Array | null>().promise : Promise.resolve(BYTES),
+					path.endsWith("slow.png") ? Promise.withResolvers<Uint8Array | null>().promise : Promise.resolve(BYTES),
 				warn: (message) => {
 					warnings.push(message);
 				},
 			});
 
 			// When a stuck file and a fast file are listed
-			const pending = provider.icons([target("/docs/slow.bin"), target("/docs/fast.png")]);
+			const pending = provider.icons([target("/docs/slow.png"), target("/docs/fast.png")]);
 			await vi.advanceTimersByTimeAsync(0);
 			await vi.advanceTimersByTimeAsync(5);
 
@@ -510,7 +534,7 @@ describe("preview tier", () => {
 		});
 
 		// When the inspector asks for one file's preview
-		const url = await provider.preview({ path: "/docs/a.pdf", modifiedAt: MTIME });
+		const url = await provider.preview(target("/docs/a.pdf"));
 
 		// Then the OS rendered the large tier and the URL carries it
 		expect(sizes).toEqual([PREVIEW_ICON_SIZE]);
@@ -528,7 +552,7 @@ describe("preview tier", () => {
 
 		// When the listing tier and the preview tier both render the same file
 		await provider.icons([target("/docs/a.pdf")]);
-		await provider.preview({ path: "/docs/a.pdf", modifiedAt: MTIME });
+		await provider.preview(target("/docs/a.pdf"));
 
 		// Then each tier reads back its own bytes
 		expect(provider.read("/docs/a.pdf", MTIME)).toEqual(small);
@@ -541,7 +565,7 @@ describe("preview tier", () => {
 			platform: "darwin",
 			thumbnail: async () => BYTES,
 		});
-		const url = await provider.preview({ path: "/docs/a.pdf", modifiedAt: MTIME });
+		const url = await provider.preview(target("/docs/a.pdf"));
 		expect(url).not.toBeNull();
 
 		// When the protocol handler answers that URL
@@ -558,7 +582,25 @@ describe("preview tier", () => {
 			thumbnail: async () => null,
 		});
 
-		expect(await provider.preview({ path: "/docs/a.bin", modifiedAt: MTIME })).toBeNull();
+		expect(await provider.preview(target("/docs/a.pdf"))).toBeNull();
+	});
+
+	it("skips non-visual extensions without ever entering Quick Look", async () => {
+		// Given a macOS provider whose generator must stay untouched
+		let runs = 0;
+		const provider = createIconProvider({
+			platform: "darwin",
+			thumbnail: async () => {
+				runs += 1;
+				return BYTES;
+			},
+		});
+
+		// When the inspector asks for a spreadsheet and a source file
+		// Then both answers are null at once — Quick Look is never entered
+		expect(await provider.preview(target("/docs/books.xlsx"))).toBeNull();
+		expect(await provider.preview(target("/src/main.swift"))).toBeNull();
+		expect(runs).toBe(0);
 	});
 
 	it("caches the preview so re-inspecting an unchanged file never regenerates it", async () => {
@@ -571,8 +613,8 @@ describe("preview tier", () => {
 			},
 		});
 
-		await provider.preview({ path: "/docs/a.pdf", modifiedAt: MTIME });
-		await provider.preview({ path: "/docs/a.pdf", modifiedAt: MTIME });
+		await provider.preview(target("/docs/a.pdf"));
+		await provider.preview(target("/docs/a.pdf"));
 
 		expect(runs).toBe(1);
 	});
@@ -589,8 +631,8 @@ describe("preview tier", () => {
 			},
 		});
 
-		const first = provider.preview({ path: "/docs/a.pdf", modifiedAt: MTIME });
-		const second = provider.preview({ path: "/docs/a.pdf", modifiedAt: MTIME });
+		const first = provider.preview(target("/docs/a.pdf"));
+		const second = provider.preview(target("/docs/a.pdf"));
 		gate.resolve();
 
 		expect(await first).toBe(await second);
@@ -612,7 +654,7 @@ describe("preview tier", () => {
 		});
 
 		// When the preview fails
-		const url = await provider.preview({ path: "/docs/a.pdf", modifiedAt: MTIME });
+		const url = await provider.preview(target("/docs/a.pdf"));
 
 		// Then the failure is verbatim in the log and the tile tier still works
 		expect(url).toBeNull();

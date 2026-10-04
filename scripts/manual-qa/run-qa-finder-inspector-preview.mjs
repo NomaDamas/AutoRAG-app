@@ -163,6 +163,7 @@ try {
 	await rowNamed(page, "deck-a.pdf").waitFor();
 	await page.mouse.move(2, 2);
 
+	console.log("phase: single");
 	// ------------------------------------------------ single selection: paper
 	await rowNamed(page, "deck-a.pdf").click();
 	await page.waitForFunction(
@@ -199,12 +200,13 @@ try {
 			single.imgBox !== null &&
 			Math.abs(single.paperBox.width - single.imgBox.width) <= 2 &&
 			Math.abs(single.paperBox.height - single.imgBox.height) <= 2 &&
-			single.imgBox.width > 300,
+			single.imgBox.width >= single.paperBox.width - 2,
 		JSON.stringify({ paper: single.paperBox, img: single.imgBox }),
 	);
 	check("a portrait page renders taller than the old 152px frame", single.imgBox !== null && single.imgBox.height > 200, JSON.stringify(single.imgBox));
 	check("the file name still shows under the paper", single.title === "deck-a.pdf", single.title);
 
+	console.log("phase: two");
 	// ------------------------------------------- two selections: paper stack
 	await page.keyboard.down("Meta");
 	await rowNamed(page, "deck-b.pdf").click();
@@ -246,6 +248,7 @@ try {
 	);
 	check("no single-file action bar in the stack mode", !multi.text.includes("인덱스 포함"), "");
 
+	console.log("phase: five");
 	// ------------------------------------------- five selections: full fan
 	await rowNamed(page, "deck-a.pdf").click();
 	await page.keyboard.down("Shift");
@@ -256,10 +259,11 @@ try {
 		undefined,
 		{ timeout: 10000 },
 	);
+	// The text file is gated out of Quick Look (letter tile), so four sheets get previews.
 	await page.waitForFunction(
 		() => {
 			const imgs = [...document.querySelectorAll(".preview-stack-card img")];
-			return imgs.length === 5 && imgs.every((img) => img.complete && img.naturalWidth > 0);
+			return imgs.length === 4 && imgs.every((img) => img.complete && img.naturalWidth > 0);
 		},
 		undefined,
 		{ timeout: 15000 },
@@ -269,7 +273,8 @@ try {
 	await page.screenshot({ path: join(EVIDENCE, "03-five-paper-stack.png") });
 
 	check("five-file selection fans five papers", five.cards.length === 5, String(five.cards.length));
-	check("every fanned sheet shows its own decoded preview", five.cards.every((card) => card.hasImage));
+	check("the four visual files show their own decoded previews", five.cards.filter((card) => card.hasImage).length === 4, JSON.stringify(five.cards.map((card) => card.hasImage)));
+	check("the text file keeps its letter tile inside its sheet (Quick Look gate)", five.cards.some((card) => !card.hasImage));
 	check(
 		"the papers sit at distinct angles like a real paper pile",
 		new Set(five.cards.map((card) => card.rotate)).size >= 4,
@@ -279,6 +284,7 @@ try {
 	check("the title counts five items", five.title === "5개 항목", five.title);
 	check("the subtitle breaks the kinds down", five.sub.startsWith("PDF document 4개"), five.sub);
 
+	console.log("phase: restore");
 	// --------------------------------------------- back to single: restore
 	await rowNamed(page, "photo.jpg").click();
 	await page.waitForFunction(
@@ -296,9 +302,14 @@ try {
 
 	check("returning to a single selection restores the paper mode", restored.mode === "paper", restored.mode);
 	check("the image preview decodes its pixels", restored.naturalWidth > 0 && restored.naturalHeight > 0, `${restored.naturalWidth}x${restored.naturalHeight}`);
-	check("the restored preview is full-width too", restored.imgBox !== null && restored.imgBox.width > 300, JSON.stringify(restored.imgBox));
+	check(
+		"the restored preview is full-width too",
+		restored.paperBox !== null && restored.imgBox !== null && restored.imgBox.width >= restored.paperBox.width - 2,
+		JSON.stringify(restored.imgBox),
+	);
 	check("the image name shows under the paper", restored.title === "photo.jpg", restored.title);
 
+	console.log("phase: reselect");
 	// ----------------------- reselect a previewed file: no loading state at all
 	// The renderer caches (path, mtime) → preview + aspect, so coming back to a
 	// file must paint the final full-width paper on the first frames — never

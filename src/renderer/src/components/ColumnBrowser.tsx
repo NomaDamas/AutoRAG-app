@@ -87,6 +87,7 @@ export function ColumnBrowser({
 					return (
 						<div
 							key={pane.path}
+							data-path={pane.path}
 							className={cn(
 								"column flex-1 basis-0 min-w-0 min-h-0 p-6 overflow-auto border-r border-border",
 								dropBackgroundDir === pane.path && "bg-accent-drop-hover",

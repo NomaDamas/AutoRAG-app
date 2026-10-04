@@ -44,9 +44,27 @@ export const ICON_CACHE_MAX_BYTES = 64 * 1024 * 1024;
 const THUMBNAIL_TIMEOUT_MS = 4000;
 const SYSTEM_ICON_TIMEOUT_MS = 4000;
 
+/**
+ * Extensions for which a content thumbnail is useful and Quick Look has a
+ * stable visual representation. Plain text/source files deliberately stay on
+ * their letter tiles: macOS Quick Look can spend the full deadline on large
+ * batches of plain-text files without producing a useful tile.
+ */
+const NATIVE_THUMBNAIL_EXTENSIONS = new Set([
+	"png", "jpg", "jpeg", "jfif", "pjpeg", "pjp", "gif", "webp", "bmp", "svg", "avif", "ico", "apng",
+	"tif", "tiff", "heic", "heif",
+	"mp4", "m4v", "webm", "ogv", "mov", "mkv", "avi", "mpeg", "mpg", "mpe", "3gp", "3gpp",
+	"pdf", "md", "markdown", "mdx", "csv", "tsv",
+]);
+export function isNativeThumbnailExtension(ext: string): boolean {
+	return NATIVE_THUMBNAIL_EXTENSIONS.has(ext.toLowerCase().replace(/^\./, ""));
+}
+
 export interface IconTarget {
 	/** Absolute OS path. */
 	readonly path: string;
+	/** Lowercase file extension without the dot; folders are never targets. */
+	readonly ext: string;
 	/** Cache identity: a changed file must not reuse a stale thumbnail. */
 	readonly modifiedAt: string;
 	/** Tier edge in px; the listing's tile tier when omitted. */
@@ -112,8 +130,8 @@ export interface IconProviderDeps {
 	readonly warn?: (message: string) => void;
 }
 
-function cacheKey(target: IconTarget): string {
-	return `${target.path} ${target.modifiedAt} ${target.size ?? ICON_SIZE}`;
+function cacheKey(target: Pick<IconTarget, "path" | "modifiedAt"> & { readonly size?: number }): string {
+	return `${target.path}\u0000${target.modifiedAt}\u0000${target.size ?? ICON_SIZE}`;
 }
 
 /** Positive integer with a floor of one, so a zero/negative option still makes progress. */
@@ -319,9 +337,14 @@ export function createIconProvider(deps: IconProviderDeps = {}): IconSource {
 
 	return {
 		async icons(targets) {
+			// Native Quick Look is deliberately limited to visual document types:
+			// unsupported text/source files can otherwise occupy every permit until
+			// the deadline while producing no useful image. Linux keeps the existing
+			// getFileIcon behavior for every target.
+			const candidates = usesNativeThumbnails ? targets.filter((target) => isNativeThumbnailExtension(target.ext)) : targets;
 			// Cap applies to the selected target slice, not to whatever happens to
 			// miss the cache this call: a warm listing stays at `limit` total.
-			const selected = targets.slice(0, limit);
+			const selected = candidates.slice(0, limit);
 			const seen = new Set<string>();
 			const missing: IconTarget[] = [];
 			const awaited: Array<Promise<Uint8Array | null>> = [];
@@ -350,6 +373,10 @@ export function createIconProvider(deps: IconProviderDeps = {}): IconSource {
 			return found;
 		},
 		async preview(target) {
+			// Same visual-types gate as the listing: text/source/spreadsheet files
+			// can occupy the whole deadline in Quick Look for no usable image, so
+			// the panel keeps its letter tile instead of waiting.
+			if (usesNativeThumbnails && !isNativeThumbnailExtension(target.ext)) return null;
 			const sized: IconTarget = { ...target, size: PREVIEW_ICON_SIZE };
 			const key = cacheKey(sized);
 			if (cache.get(key) === undefined) {
@@ -366,8 +393,8 @@ export function createIconProvider(deps: IconProviderDeps = {}): IconSource {
 				: iconUrl(target.path, target.modifiedAt, PREVIEW_ICON_SIZE);
 		},
 		read(path, modifiedAt, size) {
-			const target: IconTarget = size === undefined ? { path, modifiedAt } : { path, modifiedAt, size };
-			return cache.get(cacheKey(target)) ?? null;
+			const key = cacheKey(size === undefined ? { path, modifiedAt } : { path, modifiedAt, size });
+			return cache.get(key) ?? null;
 		},
 	};
 }
