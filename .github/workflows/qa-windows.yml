@@ -27,6 +27,13 @@ jobs:
         with:
           node-version: 24
 
+      # `bun install` resolves the `file:./.upstream/autorag` dependency before
+      # its `preinstall` hook runs, so a fresh runner must clone and build the
+      # librarian first. This is the same script the preinstall hook calls; on
+      # CI there is no cached `.upstream`, so run it explicitly before install.
+      - name: Sync librarian
+        run: node scripts/sync-librarian.mjs
+
       - name: Install ffmpeg
         run: choco install ffmpeg -y --no-progress
 
