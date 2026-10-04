@@ -382,13 +382,16 @@ export function App(): ReactElement {
 			: finder.searching
 				? `Search "${finder.query}"`
 				: basename(finder.path);
-	const gridColumns = `${sidebarVisible ? `${sidebarWidth}px ` : ""}minmax(0,1fr)${inspectorVisible ? ` ${inspectorWidth}px` : ""}`;
+	/** Outer grid: sidebar + the region that holds the full-width toolbar. */
+	const windowColumns = `${sidebarVisible ? `${sidebarWidth}px ` : ""}minmax(0,1fr)`;
+	/** Inner grid under the toolbar: Finder + inspector. */
+	const finderColumns = `minmax(0,1fr)${inspectorVisible ? ` ${inspectorWidth}px` : ""}`;
 
 	return (
 		<div className="desk flex h-full bg-window">
 			<div
 				className="window relative grid flex-1 min-w-0 bg-window overflow-hidden"
-				style={{ gridTemplateColumns: gridColumns }}
+				style={{ gridTemplateColumns: windowColumns }}
 			>
 				{sidebarVisible ? (
 					<Sidebar
@@ -407,7 +410,7 @@ export function App(): ReactElement {
 						onSubmitSearch={submitSidebarSearch}
 					/>
 				) : null}
-				<section className="finder flex flex-col min-w-0 min-h-0" aria-label="Finder" onMouseDown={finder.focusFinder}>
+				<div className="flex min-w-0 flex-col">
 					<Toolbar
 						title={toolbarTitle}
 						canGoBack={finder.canGoBack}
@@ -428,6 +431,8 @@ export function App(): ReactElement {
 						onShowSidebar={() => setSidebarVisible(true)}
 						onNewFolder={finder.newFolder}
 					/>
+					<div className="grid min-h-0 flex-1" style={{ gridTemplateColumns: finderColumns }}>
+						<section className="finder flex flex-col min-w-0 min-h-0" aria-label="Finder" onMouseDown={finder.focusFinder}>
 					<TabStrip
 						tabs={finder.tabs}
 						canClose={finder.canCloseTabs}
@@ -551,6 +556,8 @@ export function App(): ReactElement {
 						onToast={finder.showToast}
 					/>
 				) : null}
+					</div>
+				</div>
 				{finder.toast === null ? null : <Toast message={finder.toast} />}
 				{sidebarVisible ? (
 					<PaneGrip
