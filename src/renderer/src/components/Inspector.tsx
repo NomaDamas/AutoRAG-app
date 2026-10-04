@@ -317,75 +317,132 @@ function InfoHalf({
 	);
 }
 
-/**
- * The 640px Quick Look tier for one entry: fetched per identity (path +
- * mtime) with cancellation, so a changed file re-renders and a stale answer
- * for a file the user already left never lands. Null for folders, fixture
- * rows without an mtime, and files the OS has no preview for. The reset
- * handle lets an <img> onError drop a URL whose bytes were evicted.
- */
-function usePreviewUrl(entry: FinderEntry): readonly [string | null, () => void] {
-	const [url, setUrl] = useState<string | null>(null);
-	const { path, modifiedAt, kind } = entry;
-	useEffect(() => {
-		setUrl(null);
-		if (kind !== "file" || modifiedAt === undefined) return;
-		const load = window.autorag?.fs?.previewIcon;
-		if (load === undefined) return;
-		let cancelled = false;
-		void load(path, modifiedAt)
-			.then((next) => {
-				if (!cancelled) setUrl(next);
-			})
-			.catch(() => {
-				if (!cancelled) setUrl(null);
-			});
-		return () => {
-			cancelled = true;
-		};
-	}, [kind, path, modifiedAt]);
-	return [url, () => setUrl(null)];
+interface PreviewState {
+	readonly url: string | null;
+	/** width / height of the decoded preview; remembered so revisits reserve the exact height. */
+	readonly aspect: number | null;
+	/** The OS answer (or "not fetchable") arrived — null url then means "no preview, use the tile". */
+	readonly resolved: boolean;
 }
 
 /**
- * The single-file preview: the file's real content at the panel's full width
- * with no fixed frame — the image's own aspect ratio sets the height, capped
- * only on short windows. Until the large tier arrives (or when the OS has
- * none) the panel keeps the bordered box with the listing icon or the letter
- * tile.
+ * Process-local identity (path + mtime) → preview answer and decoded aspect.
+ * Re-selecting a file the panel already previewed renders the final
+ * full-width layout on the very first frame — no loading state, no layout
+ * shift, no repeat IPC. Entries are a string and a number; the map stays
+ * session-scoped and unbounded on purpose.
+ */
+const previewCache = new Map<string, PreviewState>();
+
+/** The loading skeleton's aspect before the first decode says otherwise. */
+const DEFAULT_PAPER_ASPECT = 4 / 3;
+
+function usePreviewState(entry: FinderEntry): {
+	readonly state: PreviewState;
+	readonly loaded: boolean;
+	readonly onLoad: (img: HTMLImageElement) => void;
+	readonly onError: () => void;
+} {
+	const identity = `${entry.path} ${entry.modifiedAt ?? ""}`;
+	const [state, setState] = useState<PreviewState>(
+		() => previewCache.get(identity) ?? { url: null, aspect: null, resolved: false },
+	);
+	const [loaded, setLoaded] = useState(false);
+	const fetchable = entry.kind === "file" && entry.modifiedAt !== undefined;
+	useEffect(() => {
+		setLoaded(false);
+		const cached = previewCache.get(identity);
+		if (cached !== undefined) {
+			setState(cached);
+			return;
+		}
+		// Keep the previous paper's aspect while the next file loads, so
+		// file-to-file navigation never snaps the height twice.
+		setState((prev) => ({ url: null, resolved: false, aspect: prev.aspect }));
+		const modifiedAt = entry.modifiedAt;
+		if (entry.kind !== "file" || modifiedAt === undefined) return;
+		const load = window.autorag?.fs?.previewIcon;
+		if (load === undefined) return;
+		const path = entry.path;
+		let cancelled = false;
+		const settle = (next: PreviewState): void => {
+			previewCache.set(identity, next);
+			if (!cancelled) setState(next);
+		};
+		void load(path, modifiedAt)
+			.then((url) => settle({ url, aspect: null, resolved: true }))
+			.catch(() => settle({ url: null, aspect: null, resolved: true }));
+		return () => {
+			cancelled = true;
+		};
+	}, [identity, fetchable, entry.path, entry.modifiedAt]);
+	return {
+		state,
+		loaded,
+		onLoad: (img) => {
+			setLoaded(true);
+			setState((prev) => {
+				const next: PreviewState = { ...prev, aspect: img.naturalWidth / img.naturalHeight };
+				previewCache.set(identity, next);
+				return next;
+			});
+		},
+		onError: () => {
+			previewCache.delete(identity);
+			setState((prev) => ({ ...prev, url: null, resolved: true }));
+		},
+	};
+}
+
+/**
+ * The single-file preview is always the full-width paper: while the 640px
+ * tier loads it is a blank sheet at the last known aspect (the exact one on
+ * any revisit), then the content fades in and the aspect-ratio transition
+ * settles the height — the compact bordered box only ever appears for
+ * folders and files the OS provably has no preview for.
  */
 function PreviewPaper({ entry, split }: { readonly entry: FinderEntry; readonly split: boolean }): ReactElement {
-	const [url, resetUrl] = usePreviewUrl(entry);
-	if (url !== null) {
+	const { state, loaded, onLoad, onError } = usePreviewState(entry);
+	if (entry.kind !== "file" || (state.resolved && state.url === null)) {
 		return (
-			<div className={cn("preview-paper flex-none", split ? "mb-10" : "mb-14")}>
-				{/* crossOrigin pairs with the protocol's ACAO:* so QA can read pixels back. */}
-				<img
-					className={cn(
-						"block w-full h-auto object-contain rounded-6 border border-border bg-window shadow-raised",
-						split ? "max-h-[32vh]" : "max-h-[70vh]",
-					)}
-					src={url}
-					alt=""
-					aria-hidden="true"
-					draggable={false}
-					crossOrigin="anonymous"
-					onError={resetUrl}
-				/>
+			<div
+				className={cn(
+					"preview-paper flex-none flex items-center justify-center overflow-hidden rounded-6 border border-border bg-window shadow-raised",
+					split ? "h-100 mb-10" : "h-152 mb-14",
+				)}
+			>
+				{entry.iconUrl === null ? (
+					<FileTile kind={entry.fileKind} large />
+				) : (
+					<img className="max-w-full max-h-full object-contain" src={entry.iconUrl} alt="" aria-hidden="true" draggable={false} />
+				)}
 			</div>
 		);
 	}
 	return (
 		<div
 			className={cn(
-				"preview-paper flex-none flex items-center justify-center overflow-hidden rounded-6 border border-border bg-window shadow-raised",
-				split ? "h-100 mb-10" : "h-152 mb-14",
+				"preview-paper relative flex-none w-full overflow-hidden rounded-6 border border-border bg-window shadow-raised transition-[aspect-ratio] duration-200 ease-out",
+				split ? "mb-10 max-h-[32vh]" : "mb-14 max-h-[70vh]",
 			)}
+			style={{ aspectRatio: String(state.aspect ?? DEFAULT_PAPER_ASPECT) }}
 		>
-			{entry.iconUrl === null ? (
-				<FileTile kind={entry.fileKind} large />
-			) : (
-				<img className="max-w-full max-h-full object-contain" src={entry.iconUrl} alt="" aria-hidden="true" draggable={false} />
+			{state.url === null ? null : (
+				// crossOrigin pairs with the protocol's ACAO:* so QA can read pixels back.
+				<img
+					key={state.url}
+					className={cn(
+						"absolute inset-0 h-full w-full object-contain transition-opacity duration-150",
+						loaded ? "opacity-100" : "opacity-0",
+					)}
+					src={state.url}
+					alt=""
+					aria-hidden="true"
+					draggable={false}
+					crossOrigin="anonymous"
+					onLoad={(event) => onLoad(event.currentTarget)}
+					onError={onError}
+				/>
 			)}
 		</div>
 	);
@@ -393,17 +450,21 @@ function PreviewPaper({ entry, split }: { readonly entry: FinderEntry; readonly 
 
 /** One paper in the stack: the file's preview cropped to fill the sheet, or the letter tile while it loads. */
 function PreviewCardImage({ entry }: { readonly entry: FinderEntry }): ReactElement {
-	const [url, resetUrl] = usePreviewUrl(entry);
-	if (url === null) return <FileTile kind={entry.fileKind} large />;
+	const { state, loaded, onLoad, onError } = usePreviewState(entry);
+	if (state.url === null) return <FileTile kind={entry.fileKind} large />;
 	return (
 		<img
-			className="h-full w-full object-cover"
-			src={url}
+			className={cn(
+				"absolute inset-0 h-full w-full object-cover transition-opacity duration-150",
+				loaded ? "opacity-100" : "opacity-0",
+			)}
+			src={state.url}
 			alt=""
 			aria-hidden="true"
 			draggable={false}
 			crossOrigin="anonymous"
-			onError={resetUrl}
+			onLoad={(event) => onLoad(event.currentTarget)}
+			onError={onError}
 		/>
 	);
 }

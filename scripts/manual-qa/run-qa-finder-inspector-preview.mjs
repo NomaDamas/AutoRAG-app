@@ -13,7 +13,10 @@
  *  - shift-selecting five files fans five papers at distinct angles, every
  *    sheet dog-eared (.page-curl) and shadowed, with the "5개 항목" title
  *    and the per-kind total-size subtitle;
- *  - returning to a single selection restores the full-width preview.
+ *  - returning to a single selection restores the full-width preview;
+ *  - re-selecting a file the panel already previewed paints the final
+ *    full-size paper within two frames — the renderer caches (path, mtime) →
+ *    preview + aspect, so there is no fixed-box flash and no height snap.
  * Screenshots land in EVIDENCE.
  *
  * `bun run build` first, then
@@ -295,6 +298,47 @@ try {
 	check("the image preview decodes its pixels", restored.naturalWidth > 0 && restored.naturalHeight > 0, `${restored.naturalWidth}x${restored.naturalHeight}`);
 	check("the restored preview is full-width too", restored.imgBox !== null && restored.imgBox.width > 300, JSON.stringify(restored.imgBox));
 	check("the image name shows under the paper", restored.title === "photo.jpg", restored.title);
+
+	// ----------------------- reselect a previewed file: no loading state at all
+	// The renderer caches (path, mtime) → preview + aspect, so coming back to a
+	// file must paint the final full-width paper on the first frames — never
+	// the legacy fixed box, never a height snap.
+	await rowNamed(page, "deck-b.pdf").click();
+	await page.waitForFunction(
+		() => {
+			const img = document.querySelector(".preview-paper img");
+			return img !== null && img.getAttribute("src")?.includes("size=640") && img.complete && img.naturalWidth > 0;
+		},
+		undefined,
+		{ timeout: 15000 },
+	);
+	await rowNamed(page, "photo.jpg").click();
+	const immediate = await page.evaluate(
+		() =>
+			new Promise((resolve) =>
+				requestAnimationFrame(() =>
+					requestAnimationFrame(() => {
+						const img = document.querySelector(".preview-paper img");
+						const paper = document.querySelector(".preview-paper");
+						resolve({
+							src: img?.getAttribute("src") ?? null,
+							paperHeight: Math.round(paper?.getBoundingClientRect().height ?? 0),
+							imgHeight: Math.round(img?.getBoundingClientRect().height ?? 0),
+						});
+					}),
+				),
+			),
+	);
+	check(
+		"re-selecting a previewed file paints its full-size paper within two frames — no fixed-box flash, no height snap",
+		immediate.src !== null &&
+			immediate.src.includes("size=640") &&
+			immediate.src.includes("photo.jpg") &&
+			Math.abs(immediate.paperHeight - immediate.imgHeight) <= 2 &&
+			immediate.paperHeight > 200,
+		JSON.stringify(immediate),
+	);
+	await page.screenshot({ path: join(EVIDENCE, "05-reselected-instant.png") });
 
 	await Bun.write(join(EVIDENCE, "manifest.json"), `${JSON.stringify({ results, folder }, null, 2)}\n`);
 } finally {
