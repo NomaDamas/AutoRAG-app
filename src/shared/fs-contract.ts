@@ -30,6 +30,7 @@ export const FS_CHANNELS = {
 	open: "fs:open",
 	clipboardSet: "fs:clipboardSet",
 	clipboardGet: "fs:clipboardGet",
+	undo: "fs:undo",
 	copyPathsToClipboard: "fs:copyPathsToClipboard",
 	versionFamilies: "fs:versionFamilies",
 	versionFamiliesRefresh: "fs:versionFamiliesRefresh",
@@ -153,6 +154,19 @@ export interface FsBatchResult {
 	readonly failed: readonly FsOpError[];
 }
 
+/**
+ * Outcome of ⌘Z: the main process undoes its most recent recorded copy/move
+ * transfer (a copy step deletes the created row, a move step moves the row
+ * back to its original folder). The record is consumed by the call.
+ */
+export interface FsUndoOutcome {
+	/** True when a record existed and every step was applied. */
+	readonly ok: boolean;
+	/** True when no transfer was recorded to undo. */
+	readonly empty: boolean;
+	/** Per-step failures with the verbatim reason. */
+	readonly failed: readonly FsOpError[];
+}
 /** Substring filename search over every available location (except Recents). */
 export interface FsSearchResult {
 	readonly entry: FsEntry;
@@ -280,6 +294,8 @@ export interface FsCoreBridge {
 	open(path: string): Promise<void>;
 	clipboardSet(clipboard: FsClipboard): Promise<void>;
 	clipboardGet(): Promise<FsClipboard | null>;
+	/** Undo the most recent recorded copy/move transfer (⌘Z). The record is consumed. */
+	undo(): Promise<FsUndoOutcome>;
 	/** Write the absolute paths as text to the OS clipboard ("Copy Path"). */
 	copyPathsToClipboard(paths: readonly string[]): Promise<void>;
 }

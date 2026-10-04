@@ -337,6 +337,8 @@ export interface FinderController {
 	cutSelection(): void;
 	/** Paste the file clipboard into the current folder (⌘V; `move` is ⌥⌘V). */
 	pasteClipboard(move: boolean): void;
+	/** Undo the most recent recorded copy/move transfer (⌘Z). */
+	undoLastTransfer(): void;
 	/** An in-app row drop: ⌥ copies, otherwise the rows move into the target folder. */
 	transferDropped(paths: readonly string[], destDir: string, copy: boolean): void;
 	/** A drop on another tab: switch to it, then move/copy the rows into its folder. */
@@ -1656,6 +1658,27 @@ export function useFinderController(
 		[path, source, transferInto, reportError],
 	);
 
+	/**
+	 * ⌘Z: undo the most recent recorded transfer. An empty record is a no-op
+	 * (Finder does nothing either); a partially-failed undo reports the first
+	 * verbatim reason.
+	 */
+	const undoLastTransfer = useCallback((): void => {
+		source
+			.undo()
+			.then((outcome) => {
+				if (outcome.empty) return;
+				if (outcome.failed.length > 0) {
+					showToast(`되돌리기 실패: ${outcome.failed[0]?.message ?? "알 수 없는 오류"}`);
+					refresh();
+					return;
+				}
+				showToast("마지막 파일 작업을 되돌렸습니다");
+				refresh();
+			})
+			.catch(reportError);
+	}, [source, showToast, refresh, reportError]);
+
 	const copySelection = useCallback(() => copyPaths(selection.keys), [copyPaths, selection.keys]);
 	const cutSelection = useCallback(() => cutPaths(selection.keys), [cutPaths, selection.keys]);
 
@@ -1958,6 +1981,10 @@ export function useFinderController(
 					event.preventDefault();
 					pasteClipboard(action.move);
 					return;
+				case "undo":
+					event.preventDefault();
+					undoLastTransfer();
+					return;
 			}
 		};
 		window.addEventListener("keydown", onKeyDown);
@@ -1980,6 +2007,7 @@ export function useFinderController(
 		copySelection,
 		cutSelection,
 		pasteClipboard,
+		undoLastTransfer,
 	]);
 
 	const tabViews = useMemo<readonly TabView[]>(
@@ -2062,6 +2090,7 @@ export function useFinderController(
 		copySelection,
 		cutSelection,
 		pasteClipboard,
+		undoLastTransfer,
 		transferDropped,
 		dropOnTab,
 		columnPanes: paneViews,

@@ -57,6 +57,7 @@ export function registerFsIpcHandlers(service: FsCoreBridge, hooks: FsIpcHooks =
 	ipcMain.handle(FS_CHANNELS.quickLook, (_event, path: string) => service.quickLook(path));
 	ipcMain.handle(FS_CHANNELS.open, (_event, path: string) => service.open(path));
 	ipcMain.handle(FS_CHANNELS.clipboardSet, (_event, clipboard: FsClipboard) => service.clipboardSet(clipboard));
+	ipcMain.handle(FS_CHANNELS.undo, () => service.undo());
 	ipcMain.handle(FS_CHANNELS.clipboardGet, () => service.clipboardGet());
 	ipcMain.handle(FS_CHANNELS.copyPathsToClipboard, (_event, paths: readonly string[]) =>
 		service.copyPathsToClipboard(paths),
