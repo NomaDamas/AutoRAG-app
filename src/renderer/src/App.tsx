@@ -20,7 +20,7 @@ import { ContextMenu } from "./components/primitives/ContextMenu";
 import { Toast } from "./components/primitives/Toast";
 import { Sidebar } from "./components/Sidebar";
 import { SettingsView } from "./components/SettingsView";
-import { RECENTS_PATH } from "../../shared/fs-contract";
+import { RECENTS_PATH, type FsLocationIcon } from "../../shared/fs-contract";
 import { SETTINGS_PATH } from "./state/tabs";
 import { isFinderDrag, readFinderDragPaths, writeFinderDrag } from "./state/attachments";
 import { backgroundDropDir } from "./state/file-transfer";
@@ -101,20 +101,21 @@ function saveNumber(key: string, value: number): void {
 	}
 }
 
-/** Sidebar cloud labels → live datasource rows (status dots). */
-const SOURCE_LABEL_MATCH: readonly (readonly [string, RegExp])[] = [
-	["Google Drive", /gdrive|google[- ]?drive/i],
-	["Dropbox", /dropbox/i],
-	["iCloud Drive", /icloud/i],
+/** Sidebar cloud glyphs → live datasource rows (status dots on every account of that provider). */
+const SOURCE_ICON_MATCH: readonly (readonly [FsLocationIcon, RegExp])[] = [
+	["google-drive", /gdrive|google[- ]?drive/i],
+	["dropbox", /dropbox/i],
+	["icloud", /icloud/i],
+	["onedrive", /onedrive/i],
 ];
 
-function mapSourceStatus(snapshot: DataSourcesSnapshot): Record<string, "syncing" | "error"> {
-	const out: Record<string, "syncing" | "error"> = {};
-	for (const [label, needle] of SOURCE_LABEL_MATCH) {
+function mapSourceStatus(snapshot: DataSourcesSnapshot): Partial<Record<FsLocationIcon, "syncing" | "error">> {
+	const out: Partial<Record<FsLocationIcon, "syncing" | "error">> = {};
+	for (const [icon, needle] of SOURCE_ICON_MATCH) {
 		const row = snapshot.sources.find((source) => needle.test(source.id) || needle.test(source.type));
 		if (row === undefined) continue;
-		if (row.status === "syncing") out[label] = "syncing";
-		else if (row.status === "attention") out[label] = "error";
+		if (row.status === "syncing") out[icon] = "syncing";
+		else if (row.status === "attention") out[icon] = "error";
 	}
 	return out;
 }
@@ -205,7 +206,7 @@ export function App(): ReactElement {
 	const [dropTargetPath, setDropTargetPath] = useState<string | null>(null);
 	const [dropTabId, setDropTabId] = useState<number | null>(null);
 	const [dropBackgroundDir, setDropBackgroundDir] = useState<string | null>(null);
-	const [sourceStatus, setSourceStatus] = useState<Readonly<Record<string, "syncing" | "error">>>({});
+	const [sourceStatus, setSourceStatus] = useState<Readonly<Partial<Record<FsLocationIcon, "syncing" | "error">>>>({});
 	const aiDockRef = useRef<AiDockHandle | null>(null);
 
 	useEffect(() => saveFlag(SIDEBAR_KEY, sidebarVisible), [sidebarVisible]);
@@ -521,9 +522,12 @@ export function App(): ReactElement {
 			>
 				{sidebarVisible ? (
 					<Sidebar
-						activeLabel={finder.activeNavLabel}
+						groups={finder.navGroups}
+						activePath={finder.activeNavPath}
+						settingsActive={finder.path === SETTINGS_PATH}
 						showHotkeys={SHOW_HOTKEYS}
 						onNavigate={finder.navigateNav}
+						onEject={finder.ejectNav}
 						onOpenSettings={finder.openSettings}
 						onHideSidebar={() => setSidebarVisible(false)}
 						onNewFolder={finder.newFolder}

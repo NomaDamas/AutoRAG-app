@@ -4,7 +4,8 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createFsService, FsRenameError, untitledFolderName, type FsServiceDeps } from "../src/main/fs-service";
 import { createRecentsStore, type RecentsStore } from "../src/main/recents-store";
-import { RECENTS_PATH } from "../src/shared/fs-contract";
+import { RECENTS_PATH, type FsLocation } from "../src/shared/fs-contract";
+import { createPlaces, type Places } from "../src/main/places";
 
 const unreadablePaths = vi.hoisted(() => new Set<string>());
 
@@ -18,6 +19,19 @@ vi.mock("../src/main/fs-entry", async () => {
 		},
 	};
 });
+
+function fakePlaces(rows: readonly FsLocation[]): Places & { readonly ejected: string[] } {
+	const ejected: string[] = [];
+	return {
+		ejected,
+		list: async () => rows,
+		eject: async (path) => {
+			ejected.push(path);
+		},
+		signature: async () => "",
+		watch: () => () => {},
+	};
+}
 
 interface StubbedDeps {
 	readonly deps: FsServiceDeps;
@@ -53,6 +67,13 @@ function makeDeps(homeDir: string): StubbedDeps {
 				},
 			},
 			homeDir,
+			places: createPlaces({
+				homeDir,
+				platform: "darwin",
+				volumesRoot: join(homeDir, "Volumes"),
+				applicationsDir: join(homeDir, "Applications"),
+				run: async () => "",
+			}),
 			recents: createRecentsStore({ directory: join(homeDir, "recents-store") }),
 			osKind: async () => null,
 			icons: { icons: async () => new Map(), preview: async () => null },
@@ -763,25 +784,80 @@ describe("search", () => {
 });
 
 describe("locations", () => {
-	it("lists existing home dirs as available and missing ones as unavailable", async () => {
-		// Given a home with Desktop and Documents but no Downloads, iCloud, or third-party drives
+	const disk: FsLocation = {
+		name: "SSD1",
+		path: "/Volumes/SSD1",
+		section: "locations",
+		icon: "disk",
+		available: true,
+		scanned: false,
+		ejectable: true,
+	};
+
+	it("leads with Recents and the QA root, then the OS places in order", async () => {
+		// Given OS places and a QA root
 		const home = join(root, "home-locations");
-		await mkdir(join(home, "Desktop"), { recursive: true });
-		await mkdir(join(home, "Documents"), { recursive: true });
+		await mkdir(join(home, "qa"), { recursive: true });
+		const places = fakePlaces([disk]);
+		const service = createFsService({ ...makeDeps(home).deps, places, qaRoot: join(home, "qa") });
 
 		// When listing locations
-		const locations = await createFsService(makeDeps(home).deps).locations();
+		const locations = await service.locations();
 
-		// Then Desktop/Documents are available, Downloads and iCloud are listed but unavailable
-		const byName = new Map(locations.map((location) => [location.name, location]));
-		expect(byName.get("Desktop")).toMatchObject({ path: join(home, "Desktop"), section: "favorites", available: true });
-		expect(byName.get("Documents")).toMatchObject({ available: true });
-		expect(byName.get("Downloads")).toMatchObject({ available: false });
-		expect(byName.get("iCloud Drive")).toMatchObject({ section: "cloud", available: false });
+		// Then the app's own rows come first and the OS places follow untouched
+		expect(locations.map((location) => location.name)).toEqual([RECENTS_PATH, "QA", "SSD1"]);
+		expect(locations[1]).toMatchObject({ section: "favorites", icon: "qa", available: true, scanned: true });
+	});
 
-		// And Google Drive / Dropbox are omitted entirely when their well-known paths do not exist
-		expect(byName.has("Google Drive")).toBe(false);
-		expect(byName.has("Dropbox")).toBe(false);
+	it("searches only the scanned locations, never a whole disk", async () => {
+		// Given a mounted disk and a scanned Documents folder that both hold a match
+		const home = join(root, "home-scan");
+		await mkdir(join(home, "Documents"), { recursive: true });
+		await mkdir(join(home, "disk"), { recursive: true });
+		await writeFile(join(home, "Documents", "plan.txt"), "p");
+		await writeFile(join(home, "disk", "plan-copy.txt"), "p");
+		const places = fakePlaces([
+			{ ...disk, name: "Documents", path: join(home, "Documents"), section: "favorites", icon: "documents", scanned: true, ejectable: false },
+			{ ...disk, path: join(home, "disk") },
+		]);
+
+		// When searching
+		const hits = await createFsService({ ...makeDeps(home).deps, places }).search("plan");
+
+		// Then only the Documents hit comes back
+		expect(hits.map((hit) => [hit.entry.name, hit.location])).toEqual([["plan.txt", "Documents"]]);
+	});
+
+	it("ejects through the places service", async () => {
+		// Given a mounted disk
+		const places = fakePlaces([disk]);
+
+		// When ejecting it from the fs bridge
+		await createFsService({ ...makeDeps(root).deps, places }).ejectLocation("/Volumes/SSD1");
+
+		// Then the places service unmounted exactly that path
+		expect(places.ejected).toEqual(["/Volumes/SSD1"]);
+	});
+});
+
+describe("Windows Recycle Bin listing", () => {
+	it("shows each deleted item under its original name and hides the $I records", async () => {
+		// Given a Recycle Bin folder with one $R payload and its $I record
+		const bin = join(root, "bin");
+		await mkdir(bin);
+		await writeFile(join(bin, "$RAB12CD.txt"), "payload");
+		const original = "C:\\Users\\me\\Documents\\메모.txt";
+		const header = Buffer.alloc(28);
+		header.writeBigInt64LE(2n, 0);
+		header.writeInt32LE(original.length + 1, 24);
+		await writeFile(join(bin, "$IAB12CD.txt"), Buffer.concat([header, Buffer.from(`${original}\0`, "utf16le")]));
+		const service = createFsService({ ...makeDeps(root).deps, recycleBin: (dir) => dir === bin });
+
+		// When listing it
+		const listing = await service.listDir(bin);
+
+		// Then the row keeps its real path but reads like Explorer
+		expect(listing.entries.map((entry) => [entry.name, entry.path])).toEqual([["메모.txt", join(bin, "$RAB12CD.txt")]]);
 	});
 });
 
@@ -866,7 +942,15 @@ describe("recents", () => {
 		const locations = await createFsService(makeDeps(home).deps).locations();
 
 		// Then Recents leads the favorites and is offered even before anything was opened
-		expect(locations[0]).toEqual({ name: RECENTS_PATH, path: RECENTS_PATH, section: "favorites", available: true });
+		expect(locations[0]).toEqual({
+			name: RECENTS_PATH,
+			path: RECENTS_PATH,
+			section: "favorites",
+			icon: "recents",
+			available: true,
+			scanned: false,
+			ejectable: false,
+		});
 	});
 
 	it("lists recorded files most-recent first and drops the ones that no longer exist", async () => {

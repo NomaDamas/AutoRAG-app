@@ -13,7 +13,31 @@ import {
 	selectTab,
 	SETTINGS_PATH,
 	tabTitle,
+	evacuateTabs,
 } from "../src/renderer/src/state/tabs";
+
+describe("evacuateTabs", () => {
+	it("moves every tab inside an unmounted volume to the fallback and drops history into it", () => {
+		// Given one tab deep inside /Volumes/USB with history that also visits it, and one tab elsewhere
+		let state = navigateTab(createTabsState("/Users/me/Documents"), "/Volumes/USB");
+		state = navigateTab(state, "/Volumes/USB/photos");
+		state = openTabAt(state, "/Users/me/Desktop");
+		state = navigateTab(state, "/Volumes/USB-backup");
+
+		// When the volume is ejected
+		const next = evacuateTabs(state, "/Volumes/USB", "/Users/me");
+
+		// Then the inside tab lands on the fallback, keeping only history outside the volume
+		expect(next.tabs[0]).toMatchObject({ path: "/Users/me", back: ["/Users/me/Documents"], fwd: [] });
+		// And a sibling volume whose name merely shares the prefix is untouched
+		expect(next.tabs[1]).toMatchObject({ path: "/Volumes/USB-backup", back: ["/Users/me/Desktop"] });
+	});
+
+	it("is a no-op when no tab is inside the volume", () => {
+		const state = createTabsState("/Users/me");
+		expect(evacuateTabs(state, "/Volumes/USB", "/")).toBe(state);
+	});
+});
 
 describe("tab model", () => {
 	it("starts with one tab on the given path", () => {

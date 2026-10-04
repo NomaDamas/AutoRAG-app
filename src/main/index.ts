@@ -17,6 +17,7 @@ import { createIndexStatusService } from "./index-status";
 import { readDevLabel, resolveClonePath } from "./dev-label";
 import { buildFsEntry } from "./fs-entry";
 import { createFsService } from "./fs-service";
+import { createPlaces } from "./places";
 import { createRecentsStore } from "./recents-store";
 import { createModelStatusService } from "./model-status";
 import { createDefaultAgentFactory, createSearchService } from "./search-service";
@@ -137,13 +138,33 @@ app.whenReady().then(async () => {
 	const devLabel = resolveDevLabel();
 	console.log(`[autorag] ${formatWindowTitle(APP_NAME, APP_VERSION, devLabel)}`);
 	const qaRoot = process.env.AUTORAG_QA_ROOT?.trim() ?? "";
+	// Windows can redirect the known folders (OneDrive backup moves Desktop/Documents),
+	// so Explorer's real paths come from Electron; on macOS they always live under $HOME.
+	const places = createPlaces(
+		process.platform === "win32"
+			? {
+					knownFolders: {
+						desktop: app.getPath("desktop"),
+						documents: app.getPath("documents"),
+						downloads: app.getPath("downloads"),
+						music: app.getPath("music"),
+						videos: app.getPath("videos"),
+						pictures: app.getPath("pictures"),
+					},
+				}
+			: {},
+	);
 	const fsService = createFsService({
 		shell,
 		clipboard,
 		icons: iconProvider,
+		places,
 		recents: createRecentsStore({ directory: join(app.getPath("userData"), "recents") }),
 		...(qaRoot !== "" && isAbsolute(qaRoot) ? { qaRoot } : {}),
 	});
+	// A volume mounting or a cloud account connecting re-renders the sidebar.
+	const stopPlacesWatch = places.watch(() => sendToMainWindow(FS_CHANNELS.locationsChanged, null));
+	app.once("will-quit", stopPlacesWatch);
 	// Both delete surfaces (context menu, ⌘⌫) land on this channel, so the
 	// version-family snapshot learns about the Trash here.
 	registerFsIpcHandlers(fsService, {
