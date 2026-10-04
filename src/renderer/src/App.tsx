@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactElement } from "react";
 import type { PreviewBridge, QuickLookTarget } from "../../preview/shared/contract";
 import type { Bounds } from "../../preview/shared/fit";
+import type { ActionAnchor } from "../../shared/actions-contract";
 import type { DataSourcesSnapshot, SettingsBridge } from "../../shared/settings-contract";
 import type { CitationEvidence } from "../../shared/search-contract";
 
@@ -19,6 +20,7 @@ import { Toast } from "./components/primitives/Toast";
 import { Sidebar } from "./components/Sidebar";
 import { SettingsView } from "./components/SettingsView";
 import { SETTINGS_PATH } from "./state/tabs";
+import type { FileActionTarget } from "./state/file-actions";
 import { writeFinderDrag } from "./state/attachments";
 import { basename, breadcrumbTrail, dirname } from "./state/paths";
 import {
@@ -257,6 +259,15 @@ export function App(): ReactElement {
 		setAiOpen(true);
 		aiDockRef.current?.attachFile({ kind: entry.kind, id: entry.path, name: entry.name });
 	}, []);
+
+	/** Inspector action bar: open, share, archive, and edits all run through the controller. */
+	const runInspectorAction = useCallback(
+		(target: FileActionTarget, anchor: ActionAnchor | null) => {
+			const entry = finder.focusedEntry;
+			if (entry !== null) finder.runEntryAction(entry, target, anchor);
+		},
+		[finder],
+	);
 
 	const selectEvidence = useCallback((number: number) => {
 		setSelectedEvidence(number);
@@ -509,8 +520,9 @@ export function App(): ReactElement {
 						onToggleIndex={finder.toggleIndex}
 						onTrash={finder.trashEntry}
 						onCopyPath={finder.copyEntryPath}
-						onQuickLook={(entry) => finder.quickLookPath(entry.path)}
 						onAskAi={askAi}
+						actionCapabilities={finder.actionCapabilities}
+						onAction={runInspectorAction}
 						family={inspectorFamily}
 						onOpenMember={openMemberEntry}
 						evidence={evidence}
