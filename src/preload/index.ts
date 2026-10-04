@@ -7,6 +7,7 @@ import { createFsBridge } from "./fs-bridge";
 import { createLiveBridge } from "./live-bridge";
 import { createSearchBridge } from "./search-bridge";
 import { createSettingsBridge } from "./settings-bridge";
+import { installAppearancePreload } from "./appearance";
 
 const DEV_LABEL_FLAG = "--autorag-dev-label=";
 
@@ -20,6 +21,7 @@ function readDevLabelArg(): DevLabel | null {
 	}
 }
 
+installAppearancePreload(ipcRenderer);
 contextBridge.exposeInMainWorld("autorag", {
 	...createBridge(readDevLabelArg()),
 	fs: createFsBridge(ipcRenderer),
