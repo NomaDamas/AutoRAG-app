@@ -126,7 +126,7 @@ export interface ConfiguredModel {
 	readonly resolutionSource: ModelResolutionSource;
 	readonly auth: {
 		readonly present: boolean;
-		readonly source: "env" | "local_runtime" | "catalog" | "none" | "unknown";
+		readonly source: "env" | "local_runtime" | "pi_auth" | "catalog" | "none" | "unknown";
 		/** Env var the key is read from, when one is known. */
 		readonly envName: string | null;
 	};

@@ -48,10 +48,12 @@ describe("createModelStatusService", () => {
 		expect(snapshot.error).toBeNull();
 		expect(snapshot.configPath).toBe(fixture.configPath);
 		expect(snapshot.configExists).toBe(true);
+		// displayName is passed through from the librarian's catalog, so its exact
+		// text tracks upstream data; assert the shape, not the catalog wording.
 		expect(snapshot.model).toEqual({
 			provider: "openrouter",
 			modelId: "deepseek/deepseek-v4.1-flash",
-			displayName: "deepseek/deepseek-v4.1-flash",
+			displayName: expect.any(String),
 			api: "openai-completions",
 			baseUrl: "https://openrouter.ai/api/v1",
 			resolutionSource: "config",
