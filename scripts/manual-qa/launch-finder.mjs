@@ -36,3 +36,15 @@ export async function finderWindow(app, timeoutMs = 6000) {
 		await new Promise((resolve) => setTimeout(resolve, 100));
 	}
 }
+
+/** The visible AI Search panel (hidden AI tabs keep theirs mounted with aria-hidden). */
+export const AI_PANEL = 'section[aria-label="AI Search"]:not([aria-hidden="true"])';
+
+/**
+ * Show AI Search in the focused tab through the sidebar's Favorites item, the
+ * way a user does, and wait for its composer.
+ */
+export async function openAiSearch(page, timeoutMs = 30_000) {
+	await page.locator(".sidebar__item", { hasText: "AI Search" }).click({ timeout: timeoutMs });
+	await page.waitForSelector(`${AI_PANEL} input[aria-label="Ask AutoRAG"]`, { timeout: timeoutMs });
+}

@@ -98,19 +98,6 @@ small {
 	}
 }
 
-/* v7 AI dock collapse/expand — `.ai.anim-up` / `.ai.anim-down`. */
-@keyframes dock-up {
-	from {
-		height: 36px;
-	}
-}
-
-@keyframes dock-down {
-	from {
-		height: var(--ai-h);
-	}
-}
-
 /* v7 water-wave thinking line — `.water-wave-thinking` / `.water-wave-dot`. */
 @keyframes shimmerWave {
 	0% {
@@ -167,18 +154,6 @@ small {
 		from,
 		to {
 			transform: none;
-		}
-	}
-
-	@keyframes dock-up {
-		from {
-			height: auto;
-		}
-	}
-
-	@keyframes dock-down {
-		from {
-			height: auto;
 		}
 	}
 

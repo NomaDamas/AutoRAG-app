@@ -33,8 +33,8 @@ The application is not an isolated AI chatbot; it is a **living macOS Finder bro
 - **Material & Surfaces:** Soft translucent sidebar with backdrop blur (`blur(18px)`), crisp white canvas, clean 1px hairline dividers (`--border: #E3E3EA` / `#D9DADD`).
 - **Restraint & Typography:** Bold type is strictly reserved for primary titles and top-level section headers (`font-weight: 600`). All setting item labels, descriptions, and list rows maintain comfortable regular weights (`font-weight: 400` / `500`).
 - **Permanent Multi-Pane Architecture:** 
-  - Left navigation (Sidebar) provides collapsible place groups (`Favorites`, `Cloud`).
-  - Center area hosts Finder tab browsing and bottom AI Search dock.
+  - Left navigation (Sidebar) provides collapsible place groups (`Favorites`, `Cloud`). `Favorites` opens with **AI Search** above Recents.
+  - Center area hosts the tab strip. A tab shows a folder, Settings, or the AI Search chat — AI Search is a tab, not a bottom dock.
   - Right panel (Info / Evidence) is **permanently present**, preventing jarring layout shifts during file inspection.
 
 
@@ -56,7 +56,16 @@ Pure behavior is covered by `test/ui-sort.test.ts` and `test/ui-grouping.test.ts
 The path bar under the Finder list is one line at every window size and never shows an ellipsis. When the trail does not fit, labels give up space in a fixed order — middle segments left to right (`Users`, the home folder, …), then the root (`Macintosh HD`), then the parent of the current location, then the current location or selected file. A label first narrows with its last `--fade-label` (14px) faded out, so the word reads as cut off; once fewer than 32px would remain, the segment shows only its icon. If even the icon-only trail is too wide, it stays pinned to its end and fades in from the leading edge. Logic: `src/renderer/src/state/path-fit.ts`; visual check: `scripts/manual-qa/run-qa-finder-path-bar.mjs`.
 ### 1.3 Finder list density
 The list view follows the Bloom Finder density contract: file rows are 24px high, names and metadata use 12px text, default file names use the primary near-black ink, and alternate rows use `#F4F5F5`. A focused selection fills the complete row with the accent color immediately, with no background-color transition and no visible corner rounding; an unfocused selection remains muted gray. Virtualized row geometry and keyboard reveal scrolling use the same 24px stride. The top Finder chrome uses larger 32px controls with 18px glyphs so navigation, sorting, view mode, and folder actions remain easy to target.
-Fresh windows start with the sidebar at its minimum 180px width and the inspector at its minimum 300px width; user-resized values remain persisted. `⌘K` toggles the AI Search dock: it opens and focuses the composer when closed, and closes the dock when already open.
+Fresh windows start with the sidebar at its minimum 180px width and the inspector at its minimum 300px width; user-resized values remain persisted.
+
+### 1.3a AI Search tabs
+AI Search is a tab view like Settings (`AI_SEARCH_PATH`, `src/renderer/src/state/tabs.ts`). Each AI Search tab owns its chat; the panel stays mounted while its tab is in the background or browses a folder, and unmounts when the tab closes. Entry points:
+- **Sidebar → Favorites → AI Search**: the *focused* tab becomes AI Search (a navigation, so Back returns to the folder).
+- **`⌘K`** and the toolbar sparkles: the nearest open AI Search tab, else a new one; the composer is focused.
+- **Inspector "AI 요약"** and the sidebar search's **내용** chip: always a *new* AI Search tab, with the file attached or the query sent.
+- **Drops**: Finder rows, OS files, and links attach when dropped on the AI Search panel, on an AI Search strip tab (it switches to that tab; dwelling springs it open), or on the sidebar AI Search item (the focused tab becomes AI Search). A Finder row dropped on an AI Search tab is attached, never moved.
+
+A Settings or AI Search tab lists no rows: ⌘T opens a folder tab on the last folder it showed, and a filename search returns the tab to that folder. Pure behavior: `test/ui-tabs.test.ts`; on-device check: `scripts/manual-qa/run-qa-finder-ai-search-tab.mjs`.
 
 
 ### 1.4 Info panel metadata
@@ -80,7 +89,7 @@ The list is expanded by default and the "간략히 / 전체 정보" button colla
 | `⌘T` | Window | Open new Finder tab |
 | `⌘W` | Window | Close current Finder tab |
 | `⌘F` | Window | Focus Instant Search bar |
-| `⌘K` | Window | Toggle and focus AI Search composer |
+| `⌘K` | Window | Show the nearest AI Search tab (or open one) and focus its composer |
 | `Space` | File List | Quick Look preview of the selected file or folder (`src/preview/DESIGN.md`) |
 | `⌥ Space` | Global | Global AutoRAG Spotlight summon |
 | `Enter` | Search Bar | Commit search with Filenames |

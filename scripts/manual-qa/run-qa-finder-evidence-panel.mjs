@@ -17,7 +17,7 @@
 import { mkdirSync, rmSync, writeFileSync, appendFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, basename } from "node:path";
-import { launchFinder, finderWindow } from "./launch-finder.mjs";
+import { launchFinder, finderWindow, openAiSearch } from "./launch-finder.mjs";
 
 const ROOT = new URL("../..", import.meta.url).pathname;
 const EVIDENCE = join(ROOT, ".omo/evidence/ai-finder-app/qa-evidence-panel");
@@ -134,7 +134,8 @@ app = await launchFinder({ userDataDir: USER_DATA, env: { AUTORAG_CONFIG: QA_CON
 const page = await finderWindow(app);
 page.setDefaultTimeout(8000);
 page.on("pageerror", (error) => log(`[pageerror] ${String(error).slice(0, 300)}`));
-await page.waitForSelector('[aria-label="Ask AutoRAG"]');
+await page.waitForSelector(".sidebar__item", { timeout: 30_000 });
+await openAiSearch(page);
 log("app ready");
 
 const EVIDENCE_HALF = '.inspector-half[aria-label="Evidence"]';

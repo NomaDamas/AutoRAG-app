@@ -26,7 +26,7 @@ import { planTransfer } from "../state/file-transfer";
 import type { FileActionTarget } from "../state/file-actions";
 import { emptyStateText, indexToast, trashToast } from "../state/format";
 import { findEvidenceSource } from "../state/evidence";
-import { type FocusZone, resolveKeyAction } from "../state/keymap";
+import { type FocusZone, type KeyAction, resolveKeyAction } from "../state/keymap";
 import {
 	applyEntryEnrichmentPatch,
 	applyEntryPatch,
@@ -91,19 +91,24 @@ import {
 } from "../state/version-family";
 import {
 	activeTab,
+	AI_SEARCH_PATH,
 	applyColumnChoice,
 	canCloseTab,
 	closeTab,
 	createTabsState,
+	exitVirtualTab,
+	focusAiSearchTab,
 	goBack,
 	goForward,
+	isVirtualTabPath,
 	navigateTab,
+	openAiSearchTab,
 	openOrSelectSettingsTab,
 	openTab,
 	openTabAt,
 	patchActiveTab,
 	selectTab,
-	SETTINGS_PATH,
+	showAiSearchInActiveTab,
 	tabTitle,
 	type TabsState,
 } from "../state/tabs";
@@ -118,6 +123,16 @@ const TOAST_MS = 2400;
 const FLASH_MS = 1800;
 /** Coalescing window for viewport-visible thumbnail requests, so a scroll burst is one batch. */
 const THUMBNAIL_FLUSH_MS = 60;
+/** Shortcuts that act on the window, not on rows: the only ones a Settings or AI Search tab answers. */
+const WINDOW_KEY_ACTIONS: Partial<Record<KeyAction["type"], true>> = {
+	dismiss: true,
+	focusSearch: true,
+	focusComposer: true,
+	newTab: true,
+	closeTab: true,
+	openSettings: true,
+	setViewMode: true,
+};
 
 interface ContextMenuState {
 	readonly cursor: { readonly x: number; readonly y: number };
@@ -355,6 +370,14 @@ export interface FinderController {
 	closeTabId(id: number): void;
 	newTab(): void;
 	openSettings(): void;
+	/** Sidebar "AI Search": the focused tab becomes AI Search. */
+	showAiSearch(): void;
+	/** A new AI Search tab with an empty chat ("AI 요약", content search). */
+	openAiSearch(): void;
+	/** ⌘K: adopt the nearest AI Search tab, or open one. */
+	focusAiSearch(): void;
+	/** A filename search from a Settings / AI Search tab returns that tab to its folder. */
+	leaveVirtualTab(): void;
 	back(): void;
 	forward(): void;
 	setQuery(value: string): void;
@@ -408,7 +431,7 @@ export function useFinderController(
 		readonly quickLook?: QuickLookBridge;
 		/** ⌘F: reveal the shell that hosts the search field (it lives in the sidebar). */
 		readonly onFocusSearch?: () => void;
-		/** ⌘K: toggle the AI dock; opening also focuses its composer (owned by the App shell). */
+		/** ⌘K: show an AI Search tab and focus its composer (owned by the App shell). */
 		readonly onFocusComposer?: () => void;
 		/** Esc: close the inspector's evidence half; return true when consumed. */
 		readonly onDismissEvidence?: () => boolean;
@@ -520,7 +543,7 @@ export function useFinderController(
 	const layout: ViewMode = viewMode === "columns" && searching ? "list" : viewMode;
 	const chain = tab.chain;
 	const panePaths = useMemo(
-		() => (layout === "columns" && path !== "" ? columnPanes(path, chain) : []),
+		() => (layout === "columns" && path !== "" && !isVirtualTabPath(path) ? columnPanes(path, chain) : []),
 		[layout, path, chain],
 	);
 
@@ -813,7 +836,7 @@ export function useFinderController(
 	}, [path, locations]);
 
 	useEffect(() => {
-		if (path === "" || path === SETTINGS_PATH) {
+		if (path === "" || isVirtualTabPath(path)) {
 			previousPathRef.current = path;
 			previousTabIdRef.current = tab.id;
 			previousRevisionRef.current = revision;
@@ -1022,7 +1045,7 @@ export function useFinderController(
 	useEffect(() => {
 		let live = true;
 		const resync = (): void => {
-			if (path === "") return;
+			if (path === "" || isVirtualTabPath(path)) return;
 			const scope = beginScope();
 			void source.setWatchSet(watchSetFor(tabsRef.current)).catch((error: unknown) =>
 				console.error("live watch resync failed", error),
@@ -1443,7 +1466,7 @@ export function useFinderController(
 
 	/** Sidebar "New folder": real mkdir in the current folder, then select the row. */
 	const newFolder = useCallback(() => {
-		if (searching || path === "" || path === RECENTS_PATH || path === SETTINGS_PATH) {
+		if (searching || path === "" || path === RECENTS_PATH || isVirtualTabPath(path)) {
 			return;
 		}
 		source
@@ -1653,7 +1676,7 @@ export function useFinderController(
 	/** ⌘V pastes the clipboard op as-is; ⌥⌘V forces a move. */
 	const pasteClipboard = useCallback(
 		(move: boolean) => {
-			if (path === "" || path === RECENTS_PATH || path === SETTINGS_PATH) return;
+			if (path === "" || path === RECENTS_PATH || isVirtualTabPath(path)) return;
 			source
 				.clipboardGet()
 				.then((clipboard) => {
@@ -1692,7 +1715,7 @@ export function useFinderController(
 	/** An in-app row drop: ⌥ copies, otherwise the rows move into the target folder. */
 	const transferDropped = useCallback(
 		(paths: readonly string[], destDir: string, copy: boolean) => {
-			if (destDir === "" || destDir === RECENTS_PATH || destDir === SETTINGS_PATH) return;
+			if (destDir === "" || destDir === RECENTS_PATH || isVirtualTabPath(destDir)) return;
 			transferInto(paths, destDir, copy ? "copy" : "move");
 		},
 		[transferInto],
@@ -1873,6 +1896,10 @@ export function useFinderController(
 			if (action === null) {
 				return;
 			}
+			// A Settings or AI Search tab shows no rows: only window-level shortcuts apply.
+			if (isVirtualTabPath(path) && WINDOW_KEY_ACTIONS[action.type] !== true) {
+				return;
+			}
 			switch (action.type) {
 				case "dismiss":
 					dismiss();
@@ -1896,6 +1923,7 @@ export function useFinderController(
 					return;
 				case "focusComposer":
 					event.preventDefault();
+					setTabsState((state) => focusAiSearchTab(state));
 					focusComposerRef.current?.();
 					return;
 				case "quickLook":
@@ -1998,6 +2026,7 @@ export function useFinderController(
 		return () => window.removeEventListener("keydown", onKeyDown);
 	}, [
 		zone,
+		path,
 		layout,
 		stepColumns,
 		setViewMode,
@@ -2026,6 +2055,7 @@ export function useFinderController(
 					title: tabTitle(current, { isActive: active, query }),
 					active,
 					flash: current.flash,
+					aiSearch: current.path === AI_SEARCH_PATH,
 				};
 			}),
 		[tabsState, query],
@@ -2110,6 +2140,10 @@ export function useFinderController(
 		closeTabId: (id) => setTabsState((state) => closeTab(state, id)),
 		newTab: () => setTabsState((state) => openTab(state)),
 		openSettings: () => setTabsState((state) => openOrSelectSettingsTab(state)),
+		showAiSearch: () => setTabsState((state) => showAiSearchInActiveTab(state)),
+		openAiSearch: () => setTabsState((state) => openAiSearchTab(state)),
+		focusAiSearch: () => setTabsState((state) => focusAiSearchTab(state)),
+		leaveVirtualTab: () => setTabsState((state) => exitVirtualTab(state)),
 		back: () => setTabsState((state) => goBack(state)),
 		forward: () => setTabsState((state) => goForward(state)),
 		setQuery: setQueryValue,

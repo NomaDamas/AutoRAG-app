@@ -8,7 +8,7 @@ import { kindFromExtension } from "../state/kinds";
 import { FileTile } from "./primitives/FileTile";
 
 /**
- * v7 `.pathbar` (proto:.pathbar): macOS path bar docked above the AI dock.
+ * v7 `.pathbar` (proto:.pathbar): macOS path bar at the foot of the Finder column.
  *
  * One line, always. The trail is measured against the bar and `fitPathBar`
  * decides, per segment, whether the label shows in full, is clipped behind a

@@ -5,13 +5,11 @@ import {
 	useMemo,
 	useRef,
 	useState,
-	type CSSProperties,
 	type DragEvent as ReactDragEvent,
 	type FormEvent,
-	type PointerEvent as ReactPointerEvent,
 	type ReactElement,
 } from "react";
-import { ChevronDown, ChevronUp, Square } from "lucide-react";
+import { Square } from "lucide-react";
 import type {
 	AnswerPhase,
 	ChatAttachment,
@@ -30,38 +28,32 @@ import { FileTile } from "./primitives/FileTile";
 
 const autorag = window.autorag;
 
-/** v7 dock geometry (AI Finder v7 `.ai` / `.ai-grip` / `.ai-head`). */
-const COLLAPSED_HEIGHT = 36;
-const MIN_OPEN_HEIGHT = 140;
-/** The dock never grows within 200px of the top of the finder column. */
-const TOP_RESERVE = 200;
-const DEFAULT_PEEK = "파일, 메일, 메신저 전체에서 물어보세요";
 /** History search fires this long after the last keystroke, so typing stays smooth. */
 const HISTORY_SEARCH_DEBOUNCE_MS = 300;
 const COMPOSER_PLACEHOLDER = "파일, 메일, 메신저 전체에서 물어보세요 (파일 드래그 앤 드롭 가능)";
 const CENTERED = "mx-auto w-full max-w-[820px]";
 
 /**
- * Imperative surface the shell drives: ⌘K / evidence "AI 요약" open the dock and
- * focus the composer, ⌥Enter in the search field routes a query straight in, and
- * the inspector attaches a file to the draft. Drops (Finder rows, files from
- * other apps, browser links) land on the dock itself.
+ * Imperative surface the shell drives on the active AI Search tab: ⌘K focuses
+ * the composer, the sidebar's content search sends a query, and "AI 요약" or a
+ * drop on the tab / sidebar item attaches files. Drops on the panel itself
+ * (Finder rows, files from other apps, browser links) land here directly.
  */
 export interface AiDockHandle {
-	/** Seed the composer with `text` and send it at once. The App shell opens the dock first. */
+	/** Seed the composer with `text` and send it at once. */
 	sendQuery(text: string): void;
-	/** Append a draft attachment and focus the composer. The App shell opens the dock first. */
-	attachFile(att: ChatAttachment): void;
-	/** Focus the composer (pending until the dock renders open). The App shell opens the dock first. */
+	/** Append draft attachments and focus the composer. */
+	attach(atts: readonly ChatAttachment[]): void;
+	/** Focus the composer (pending until the panel is the visible tab). */
 	focusComposer(): void;
 }
 
 export interface AiSearchPanelProps {
-	readonly open: boolean;
-	/** Open dock height in px. */
-	readonly height: number;
-	readonly onToggleOpen: () => void;
-	readonly onHeightChange: (height: number) => void;
+	/**
+	 * The panel's tab is the visible one. A hidden panel keeps its chat but
+	 * answers no shortcut, drag, or evidence publication.
+	 */
+	readonly active: boolean;
 	readonly selectedEvidence: number | null;
 	readonly onSelectEvidence: (number: number) => void;
 	readonly onPublish: (evidence: readonly CitationEvidence[], sessionId: string | null) => void;
@@ -79,7 +71,7 @@ function formatElapsed(ms: number): string {
 }
 
 export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(function AiSearchPanel(
-	{ open, height, onToggleOpen, onHeightChange, selectedEvidence, onSelectEvidence, onPublish },
+	{ active, selectedEvidence, onSelectEvidence, onPublish },
 	ref,
 ): ReactElement {
 	const [query, setQuery] = useState("");
@@ -108,43 +100,30 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	const [history, setHistory] = useState<readonly ChatSummary[]>([]);
 	const [attachments, setAttachments] = useState<readonly ChatAttachment[]>([]);
 	const [deepElapsed, setDeepElapsed] = useState<number | null>(null);
-	const [anim, setAnim] = useState<"up" | "down" | null>(null);
-	const [resizing, setResizing] = useState(false);
 	const [dragActive, setDragActive] = useState(false);
 	const [dragOver, setDragOver] = useState(false);
 	const [dragName, setDragName] = useState<string | null>(null);
 	const lastDragAtRef = useRef(0);
-	const rootRef = useRef<HTMLElement | null>(null);
 	const inputRef = useRef<HTMLInputElement | null>(null);
 	const bodyRef = useRef<HTMLDivElement | null>(null);
 	const historySeq = useRef(0);
 	const historyDebounce = useRef<number | null>(null);
 	const startedAtRef = useRef(0);
-	const gripRef = useRef<{ readonly startY: number; readonly startH: number } | null>(null);
-	const prevOpenRef = useRef(open);
 	const pendingFocusRef = useRef(false);
-	const openRef = useRef(open);
-	openRef.current = open;
+	const activeRef = useRef(active);
+	activeRef.current = active;
 	const attachmentsRef = useRef(attachments);
 	attachmentsRef.current = attachments;
 
 	useEffect(() => {
-		if (prevOpenRef.current === open) return;
-		prevOpenRef.current = open;
-		setAnim(open ? "up" : "down");
-		const timer = window.setTimeout(() => setAnim(null), 220);
-		return () => window.clearTimeout(timer);
-	}, [open]);
-
-	useEffect(() => {
-		if (!open || !pendingFocusRef.current) return;
+		if (!active) {
+			setHistoryOpen(false);
+			return;
+		}
+		if (!pendingFocusRef.current) return;
 		pendingFocusRef.current = false;
 		inputRef.current?.focus();
-	}, [open]);
-
-	useEffect(() => {
-		if (!open) setHistoryOpen(false);
-	}, [open]);
+	}, [active]);
 
 	useEffect(
 		() => () => {
@@ -161,7 +140,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 					setProgress(event.text);
 					break;
 				case "thinking":
-					// The reasoning text never crosses IPC; the dock's own pending
+					// The reasoning text never crosses IPC; the panel's own pending
 					// state drives the water-wave row, so the signal needs no state.
 					break;
 				case "quick-draft":
@@ -204,9 +183,11 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 
 	const evidence = useMemo(() => deep?.evidence ?? quick?.evidence ?? [], [deep, quick]);
 
+	// Only the visible tab's chat feeds the inspector; it keeps that evidence
+	// while the user browses folders in other tabs.
 	useEffect(() => {
-		onPublish(evidence, sessionId);
-	}, [evidence, sessionId, onPublish]);
+		if (active) onPublish(evidence, sessionId);
+	}, [active, evidence, sessionId, onPublish]);
 
 	const historyGroups = useMemo(() => groupChatHistory(history, new Date()), [history]);
 
@@ -216,6 +197,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	}, [quick, deep, quickDraft, deepDraft, submittedQuery, progress, attachments]);
 
 	useEffect(() => {
+		if (!active) return;
 		const onKeyDown = (event: globalThis.KeyboardEvent): void => {
 			const meta = event.metaKey || event.ctrlKey;
 			if (meta && event.shiftKey && event.key.toLowerCase() === "h") {
@@ -244,6 +226,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	});
 
 	useEffect(() => {
+		if (!active) return;
 		const onDragOver = (event: globalThis.DragEvent): void => {
 			if (event.dataTransfer === null || !isAttachmentDrag(event.dataTransfer.types)) return;
 			if (event.clientX <= 0 && event.clientY <= 0) {
@@ -273,8 +256,9 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 			window.removeEventListener("drop", reset);
 			window.removeEventListener("dragend", reset);
 			window.clearInterval(watchdog);
+			reset();
 		};
-	}, []);
+	}, [active]);
 
 	async function runSearch(text: string, sent: readonly ChatAttachment[]): Promise<void> {
 		if (searchIdRef.current !== null) return;
@@ -419,12 +403,11 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	}
 
 	function ensureFocus(): void {
-		if (openRef.current) {
+		if (activeRef.current) {
 			inputRef.current?.focus();
 			return;
 		}
-		// The App shell owns `open` and opens the dock before invoking the
-		// handle; the effect above focuses the input once it renders open.
+		// The effect above focuses the input once this tab is the visible one.
 		pendingFocusRef.current = true;
 	}
 
@@ -435,38 +418,14 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 			setQuery(trimmed);
 			void runSearch(trimmed, attachmentsRef.current);
 		},
-		attachFile(att: ChatAttachment): void {
-			setAttachments((current) => mergeAttachments(current, [att]));
+		attach(atts: readonly ChatAttachment[]): void {
+			setAttachments((current) => mergeAttachments(current, atts));
 			ensureFocus();
 		},
 		focusComposer(): void {
 			ensureFocus();
 		},
 	}));
-
-	function onGripPointerDown(event: ReactPointerEvent<HTMLDivElement>): void {
-		event.preventDefault();
-		gripRef.current = { startY: event.clientY, startH: height };
-		setResizing(true);
-		event.currentTarget.setPointerCapture(event.pointerId);
-	}
-
-	function onGripPointerMove(event: ReactPointerEvent<HTMLDivElement>): void {
-		const start = gripRef.current;
-		if (start === null) return;
-		const columnHeight = rootRef.current?.parentElement?.clientHeight ?? window.innerHeight;
-		const max = Math.max(MIN_OPEN_HEIGHT, columnHeight - TOP_RESERVE);
-		const next = Math.min(max, Math.max(MIN_OPEN_HEIGHT, start.startH + (start.startY - event.clientY)));
-		onHeightChange(next);
-	}
-
-	function onGripPointerUp(event: ReactPointerEvent<HTMLDivElement>): void {
-		gripRef.current = null;
-		setResizing(false);
-		if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-			event.currentTarget.releasePointerCapture(event.pointerId);
-		}
-	}
 
 	function onDockDragEnter(event: ReactDragEvent): void {
 		if (!isAttachmentDrag(event.dataTransfer.types)) return;
@@ -504,8 +463,6 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		setDragName(null);
 		if (dropped.length === 0) return;
 		setAttachments((current) => mergeAttachments(current, dropped));
-		// A drop on the collapsed bar opens the dock so the new chips are visible.
-		if (!openRef.current) onToggleOpen();
 		ensureFocus();
 	}
 
@@ -518,91 +475,41 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 
 	return (
 		<section
-			ref={rootRef}
-			className={cn(
-				"ai relative flex-none flex flex-col border-t border-border bg-subtle-alt",
-				open ? "open shadow-[0_-6px_18px_rgba(0,0,0,0.05)]" : "collapsed shadow-none",
-				anim === "up" && "animate-[dock-up_0.2s_ease-out]",
-				anim === "down" && "animate-[dock-down_0.16s_ease-in]",
-			)}
-			style={{ height: open ? height : COLLAPSED_HEIGHT, "--ai-h": `${height}px` } as CSSProperties}
+			className={cn("ai relative min-h-0 flex-1 flex-col bg-subtle-alt", active ? "flex" : "hidden")}
 			aria-label="AI Search"
+			aria-hidden={active ? undefined : true}
 			onDragEnter={onDockDragEnter}
 			onDragOver={onDockDragOver}
 			onDragLeave={onDockDragLeave}
 			onDrop={onDockDrop}
 		>
-			{open ? (
-				<div
-					className={cn(
-						"ai-grip absolute inset-x-0 -top-4 z-5 h-9 cursor-ns-resize",
-						"after:absolute after:left-1/2 after:top-6 after:-ml-[17px] after:h-3 after:w-[34px] after:rounded-2 after:bg-sel-mute after:content-['']",
-						resizing ? "after:bg-accent" : "hover:after:bg-accent",
-					)}
-					title="드래그해서 높이 조절"
-					onPointerDown={onGripPointerDown}
-					onPointerMove={onGripPointerMove}
-					onPointerUp={onGripPointerUp}
-					onPointerCancel={onGripPointerUp}
-				/>
-			) : null}
-
-			<div
-				className={cn("ai-head flex flex-none items-center gap-8 h-tab px-12 cursor-pointer select-none", open && "border-b border-border")}
-				role="button"
-				tabIndex={0}
-				aria-expanded={open}
-				aria-label={open ? "AI Search 닫기" : "AI Search 열기"}
-				onClick={onToggleOpen}
-				onKeyDown={(event) => {
-					if (event.key !== "Enter" && event.key !== " ") return;
-					event.preventDefault();
-					onToggleOpen();
-				}}
-			>
+			<div className="ai-head flex flex-none items-center gap-8 h-tab px-12 border-b border-border select-none">
 				<span className="ai-mark grid flex-none place-items-center text-accent">
 					<SparklesIcon />
 				</span>
 				<strong className="flex-none text-sm font-semibold text-ink">AI Search</strong>
-				{open ? null : (
-					<>
-						<span className="ai-peek min-w-0 text-meta text-ink-muted truncate">{submittedQuery ?? DEFAULT_PEEK}</span>
-						<kbd className="flex-none rounded-4 border border-border bg-window px-5 py-1 text-tile text-ink-muted">⌘K</kbd>
-					</>
-				)}
 				<span className="flex-1" />
-				{open ? (
-					<>
-						<button
-							type="button"
-							className={cn(iconButtonClass({ size: "size-icon-sm", tone: "text-ink-muted" }), historyOpen && "bg-selected-nav text-ink")}
-							title="Chat history ⌘⇧H"
-							aria-label="Chat history"
-							onClick={(event) => {
-								event.stopPropagation();
-								void toggleHistory();
-							}}
-						>
-							<HistoryIcon size={15} />
-						</button>
-						<button
-							type="button"
-							className={iconButtonClass({ size: "size-icon-sm", tone: "text-ink-muted" })}
-							title="New chat ⌘N"
-							aria-label="New chat"
-							onClick={(event) => {
-								event.stopPropagation();
-								newChat();
-							}}
-						>
-							<PlusIcon />
-						</button>
-					</>
-				) : null}
-				<span className="grid flex-none place-items-center text-ink-muted">{open ? <ChevronDown size={15} /> : <ChevronUp size={15} />}</span>
+				<button
+					type="button"
+					className={cn(iconButtonClass({ size: "size-icon-sm", tone: "text-ink-muted" }), historyOpen && "bg-selected-nav text-ink")}
+					title="Chat history ⌘⇧H"
+					aria-label="Chat history"
+					onClick={() => toggleHistory()}
+				>
+					<HistoryIcon size={15} />
+				</button>
+				<button
+					type="button"
+					className={iconButtonClass({ size: "size-icon-sm", tone: "text-ink-muted" })}
+					title="New chat ⌘N"
+					aria-label="New chat"
+					onClick={() => newChat()}
+				>
+					<PlusIcon />
+				</button>
 			</div>
 
-			{historyOpen && open ? (
+			{historyOpen ? (
 				<>
 					<div className="absolute inset-0 z-20" aria-hidden="true" onClick={closeHistory} />
 					<div className="history absolute right-12 top-40 z-30 flex max-h-[72%] w-360 flex-col overflow-hidden rounded-12 border border-border bg-window shadow-menu" aria-label="Chat history">
@@ -664,126 +571,122 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 				</>
 			) : null}
 
-			{open ? (
-				<div ref={bodyRef} className="ai-body min-h-0 flex-1 overflow-auto px-20 py-16">
-					<div className={cn(CENTERED, "flex flex-col space-y-16")}>
-						{showEmpty ? (
-							<div className="ai-empty my-28 text-center">
-								<strong className="block text-title font-semibold text-ink">무엇을 찾아드릴까요?</strong>
-								<p className="mt-8 text-body leading-[1.5] text-ink-muted break-keep">파일, 메일, 메신저 전체에서 찾아 빠른 답변과 정밀한 답변을 함께 드립니다.</p>
-							</div>
-						) : null}
+			<div ref={bodyRef} className="ai-body min-h-0 flex-1 overflow-auto px-20 py-16">
+				<div className={cn(CENTERED, "flex flex-col space-y-16")}>
+					{showEmpty ? (
+						<div className="ai-empty my-28 text-center">
+							<strong className="block text-title font-semibold text-ink">무엇을 찾아드릴까요?</strong>
+							<p className="mt-8 text-body leading-[1.5] text-ink-muted break-keep">파일, 메일, 메신저 전체에서 찾아 빠른 답변과 정밀한 답변을 함께 드립니다.</p>
+						</div>
+					) : null}
 
-						{submittedQuery === null ? null : (
-							<div className="message user-msg flex justify-end">
-								<div className="user-bubble-wrap flex max-w-bubble-max flex-col items-end gap-6">
-									{submittedAttachments.length > 0 ? (
-										<div className="ref-attachments flex flex-wrap justify-end gap-6">
-											{submittedAttachments.map((att) => (
-												<RefFileChip key={`${att.id}:${att.name}`} att={att} />
-											))}
-										</div>
-									) : null}
-									<div className="bubble w-full rounded-10 border border-border bg-input px-14 py-10 text-body leading-[1.5] text-ink-body break-words">{submittedQuery}</div>
+					{submittedQuery === null ? null : (
+						<div className="message user-msg flex justify-end">
+							<div className="user-bubble-wrap flex max-w-bubble-max flex-col items-end gap-6">
+								{submittedAttachments.length > 0 ? (
+									<div className="ref-attachments flex flex-wrap justify-end gap-6">
+										{submittedAttachments.map((att) => (
+											<RefFileChip key={`${att.id}:${att.name}`} att={att} />
+										))}
+									</div>
+								) : null}
+								<div className="bubble w-full rounded-10 border border-border bg-input px-14 py-10 text-body leading-[1.5] text-ink-body break-words">{submittedQuery}</div>
+							</div>
+						</div>
+					)}
+
+					{error === null ? null : <div className="rounded-10 border border-danger-border bg-danger-bg-soft px-14 py-10 text-body text-danger-text">{error}</div>}
+
+					{submittedQuery === null ? null : (
+						<div className="message assistant-msg flex flex-col gap-14">
+							{quickReady ? (
+								<div className="assistant-prose flex flex-col gap-8 text-body leading-[1.55] text-ink-body">
+									<ProseBlocks text={quickText} selected={selectedEvidence} onCitation={onSelectEvidence} />
 								</div>
-							</div>
-						)}
+							) : (
+								<div className="flex flex-col gap-8">
+									<span className="skeleton block h-8 w-[85%] rounded-4 bg-[linear-gradient(90deg,var(--bg-input),var(--bg-window),var(--bg-input))] bg-[length:200%_100%] animate-shimmer" />
+									<span className="skeleton block h-8 w-[65%] rounded-4 bg-[linear-gradient(90deg,var(--bg-input),var(--bg-window),var(--bg-input))] bg-[length:200%_100%] animate-shimmer" />
+								</div>
+							)}
 
-						{error === null ? null : <div className="rounded-10 border border-danger-border bg-danger-bg-soft px-14 py-10 text-body text-danger-text">{error}</div>}
+							{thinkingVisible ? (
+								<div className="water-wave-thinking my-6 flex items-center gap-8 text-meta text-ink-muted">
+									<span className="size-7 flex-none rounded-full bg-info-dot animate-[pulseDot_1.4s_ease-in-out_infinite]" />
+									<span className="min-w-0 truncate">Thinking…{progress === "" ? "" : ` ${progress}`}</span>
+								</div>
+							) : null}
 
-						{submittedQuery === null ? null : (
-							<div className="message assistant-msg flex flex-col gap-14">
-								{quickReady ? (
-									<div className="assistant-prose flex flex-col gap-8 text-body leading-[1.55] text-ink-body">
-										<ProseBlocks text={quickText} selected={selectedEvidence} onCitation={onSelectEvidence} />
-									</div>
-								) : (
-									<div className="flex flex-col gap-8">
-										<span className="skeleton block h-8 w-[85%] rounded-4 bg-[linear-gradient(90deg,var(--bg-input),var(--bg-window),var(--bg-input))] bg-[length:200%_100%] animate-shimmer" />
-										<span className="skeleton block h-8 w-[65%] rounded-4 bg-[linear-gradient(90deg,var(--bg-input),var(--bg-window),var(--bg-input))] bg-[length:200%_100%] animate-shimmer" />
-									</div>
-								)}
-
-								{thinkingVisible ? (
-									<div className="water-wave-thinking my-6 flex items-center gap-8 text-meta text-ink-muted">
-										<span className="size-7 flex-none rounded-full bg-info-dot animate-[pulseDot_1.4s_ease-in-out_infinite]" />
-										<span className="min-w-0 truncate">Thinking…{progress === "" ? "" : ` ${progress}`}</span>
-									</div>
-								) : null}
-
-								{deepReady ? (
-									<div className="flex flex-col gap-6">
-										{deepElapsed === null ? null : (
-											<div className="thinking-header flex items-center gap-5 text-meta font-medium text-ink-muted">
-												<span>Worked for {formatElapsed(deepElapsed)}</span>
-											</div>
-										)}
-										<div className="assistant-prose flex flex-col gap-8 text-body leading-[1.55] text-ink-body">
-											<ProseBlocks text={deepText} selected={selectedEvidence} onCitation={onSelectEvidence} />
+							{deepReady ? (
+								<div className="flex flex-col gap-6">
+									{deepElapsed === null ? null : (
+										<div className="thinking-header flex items-center gap-5 text-meta font-medium text-ink-muted">
+											<span>Worked for {formatElapsed(deepElapsed)}</span>
 										</div>
+									)}
+									<div className="assistant-prose flex flex-col gap-8 text-body leading-[1.55] text-ink-body">
+										<ProseBlocks text={deepText} selected={selectedEvidence} onCitation={onSelectEvidence} />
 									</div>
-								) : null}
-							</div>
-						)}
+								</div>
+							) : null}
+						</div>
+					)}
 
-						{stopped ? <div className="text-body text-ink-muted">응답 생성을 중단했습니다.</div> : null}
+					{stopped ? <div className="text-body text-ink-muted">응답 생성을 중단했습니다.</div> : null}
+				</div>
+			</div>
+
+			<form className="composer flex-none px-20 pt-8 pb-14" onSubmit={submit}>
+				<div className={CENTERED}>
+					{attachments.length > 0 ? (
+						<div className="composer-attach-tray flex flex-wrap items-center gap-6 pb-6">
+							{attachments.map((att, index) => (
+								<span key={`${att.id}:${att.name}`} className="composer-attach-pill inline-flex h-chip-draft items-center gap-5 rounded-5 bg-selected-nav px-8 text-badge text-ink" title={att.id}>
+									<AttachmentGlyph att={att} />
+									<span className="max-w-[180px] truncate">{att.name}</span>
+									<button type="button" className="cursor-pointer text-ink-muted hover:text-danger-text" aria-label="첨부 제거" onClick={() => removeAttachment(index)}>
+										<CloseIcon size={9} />
+									</button>
+								</span>
+							))}
+						</div>
+					) : null}
+					<div className="compose-box flex min-h-40 items-center gap-7 rounded-12 border border-border bg-input px-11 py-4 transition-colors duration-(--dur-color) ease-out focus-within:border-accent">
+						<input
+							ref={inputRef}
+							value={query}
+							onChange={(event) => setQuery(event.target.value)}
+							placeholder={COMPOSER_PLACEHOLDER}
+							aria-label="Ask AutoRAG"
+							disabled={searchId !== null}
+							className="h-30 min-w-0 flex-1 border-0 bg-transparent text-body text-ink-body outline-none placeholder:text-ink-muted"
+						/>
+						{searchId === null ? (
+							<button
+								type="submit"
+								className="send flex size-32 flex-none items-center justify-center rounded-full border-0 bg-accent text-on-accent cursor-pointer transition-colors duration-(--dur-color) ease-out enabled:hover:bg-accent-hover disabled:cursor-default disabled:bg-border-strong"
+								title="Ask AutoRAG"
+								aria-label="Ask AutoRAG"
+								disabled={query.trim().length === 0 && attachments.length === 0}
+							>
+								<ArrowUpIcon />
+							</button>
+						) : (
+							<button
+								type="button"
+								className="send flex size-32 flex-none items-center justify-center rounded-full border-0 bg-ink text-on-accent cursor-pointer"
+								title="중단"
+								aria-label="Stop search"
+								onClick={() => void stop()}
+							>
+								<Square size={10} strokeWidth={3} fill="currentColor" />
+							</button>
+						)}
 					</div>
 				</div>
-			) : null}
+			</form>
 
-			{open ? (
-				<form className="composer flex-none px-20 pt-8 pb-14" onSubmit={submit}>
-					<div className={CENTERED}>
-						{attachments.length > 0 ? (
-							<div className="composer-attach-tray flex flex-wrap items-center gap-6 pb-6">
-								{attachments.map((att, index) => (
-									<span key={`${att.id}:${att.name}`} className="composer-attach-pill inline-flex h-chip-draft items-center gap-5 rounded-5 bg-selected-nav px-8 text-badge text-ink" title={att.id}>
-										<AttachmentGlyph att={att} />
-										<span className="max-w-[180px] truncate">{att.name}</span>
-										<button type="button" className="cursor-pointer text-ink-muted hover:text-danger-text" aria-label="첨부 제거" onClick={() => removeAttachment(index)}>
-											<CloseIcon size={9} />
-										</button>
-									</span>
-								))}
-							</div>
-						) : null}
-						<div className="compose-box flex min-h-40 items-center gap-7 rounded-12 border border-border bg-input px-11 py-4 transition-colors duration-(--dur-color) ease-out focus-within:border-accent">
-							<input
-								ref={inputRef}
-								value={query}
-								onChange={(event) => setQuery(event.target.value)}
-								placeholder={COMPOSER_PLACEHOLDER}
-								aria-label="Ask AutoRAG"
-								disabled={searchId !== null}
-								className="h-30 min-w-0 flex-1 border-0 bg-transparent text-body text-ink-body outline-none placeholder:text-ink-muted"
-							/>
-							{searchId === null ? (
-								<button
-									type="submit"
-									className="send flex size-32 flex-none items-center justify-center rounded-full border-0 bg-accent text-on-accent cursor-pointer transition-colors duration-(--dur-color) ease-out enabled:hover:bg-accent-hover disabled:cursor-default disabled:bg-border-strong"
-									title="Ask AutoRAG"
-									aria-label="Ask AutoRAG"
-									disabled={query.trim().length === 0 && attachments.length === 0}
-								>
-									<ArrowUpIcon />
-								</button>
-							) : (
-								<button
-									type="button"
-									className="send flex size-32 flex-none items-center justify-center rounded-full border-0 bg-ink text-on-accent cursor-pointer"
-									title="중단"
-									aria-label="Stop search"
-									onClick={() => void stop()}
-								>
-									<Square size={10} strokeWidth={3} fill="currentColor" />
-								</button>
-							)}
-						</div>
-					</div>
-				</form>
-			) : null}
-
-			{dragActive && open ? (
+			{dragActive ? (
 				<div className="pointer-events-none absolute inset-8 z-20 flex flex-col items-center justify-center gap-10 rounded-14 border-[1.5px] border-dashed border-accent bg-accent-drop-hover backdrop-blur-sm">
 					<span className="relative flex size-64 items-center justify-center rounded-12 bg-accent-soft text-accent">
 						<SparklesIcon size={28} />

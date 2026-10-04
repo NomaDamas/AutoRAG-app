@@ -12,7 +12,7 @@
  * issue #20; re-add the group (and a source-tile branch) with that work.
  */
 
-import { Box, Clock, Cloud, Download, File, Hexagon, Monitor, type LucideIcon } from "lucide-react";
+import { Box, Clock, Cloud, Download, File, Hexagon, Monitor, Sparkles, type LucideIcon } from "lucide-react";
 
 export interface NavItem {
 	readonly label: string;
@@ -20,6 +20,8 @@ export interface NavItem {
 	readonly icon: LucideIcon;
 	/** A view that is not built yet — navigates to its work-in-progress screen. */
 	readonly wip: boolean;
+	/** An app view instead of a folder: "aiSearch" turns the focused tab into AI Search. */
+	readonly view?: "aiSearch";
 }
 
 export interface NavGroup {
@@ -35,6 +37,7 @@ export const NAV_GROUPS: readonly NavGroup[] = [
 	{
 		label: "Favorites",
 		items: [
+			{ label: "AI Search", icon: Sparkles, wip: false, view: "aiSearch" },
 			place("Recents", Clock),
 			place("Desktop", Monitor),
 			place("Downloads", Download),

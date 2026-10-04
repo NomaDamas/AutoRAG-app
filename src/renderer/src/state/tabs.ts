@@ -45,8 +45,35 @@ export function patchActiveTab(state: TabsState, patch: (tab: FinderTab) => Find
 	return { ...state, tabs: state.tabs.map((tab) => (tab.id === state.activeId ? patch(tab) : tab)) };
 }
 
+/**
+ * ⌘T / "+": a new tab on the active tab's folder. A Settings or AI Search tab
+ * has no folder, so the new tab takes the last folder that tab showed, else
+ * the folder of the nearest other tab.
+ */
 export function openTab(state: TabsState): TabsState {
-	return openTabAt(state, activeTab(state).path);
+	return openTabAt(state, folderOf(state) ?? activeTab(state).path);
+}
+
+/**
+ * A filename search from a Settings or AI Search tab: the tab returns to the
+ * folder it showed last (Back undoes it). Unchanged when there is no folder.
+ */
+export function exitVirtualTab(state: TabsState): TabsState {
+	const folder = folderOf(state);
+	return folder === null || folder === activeTab(state).path ? state : navigateTab(state, folder);
+}
+
+/** The active tab's folder; for a virtual tab, the last folder it showed, else the nearest folder tab's. */
+function folderOf(state: TabsState): string | null {
+	const current = activeTab(state);
+	if (!isVirtualTabPath(current.path)) {
+		return current.path;
+	}
+	return (
+		current.back.findLast((path) => !isVirtualTabPath(path)) ??
+		nearestTab(state, (tab) => !isVirtualTabPath(tab.path))?.path ??
+		null
+	);
 }
 
 /** A new tab on an explicit path, e.g. the folder that encloses a Recents row. */
@@ -141,6 +168,17 @@ export function applyColumnChoice(
 
 export const SETTINGS_PATH = "Settings";
 
+/**
+ * The AI Search conversation, shown as a tab like Settings. Each tab on this
+ * path holds its own chat; the path is never a folder.
+ */
+export const AI_SEARCH_PATH = "AI Search";
+
+/** Paths a tab shows that are app views, not folders: never listed, watched, or dropped into. */
+export function isVirtualTabPath(path: string): boolean {
+	return path === SETTINGS_PATH || path === AI_SEARCH_PATH;
+}
+
 export function openOrSelectSettingsTab(state: TabsState): TabsState {
 	const existing = state.tabs.find((tab) => tab.path === SETTINGS_PATH);
 	if (existing !== undefined) {
@@ -149,9 +187,64 @@ export function openOrSelectSettingsTab(state: TabsState): TabsState {
 	return openTabAt(state, SETTINGS_PATH);
 }
 
+/** Sidebar "AI Search": the focused tab becomes AI Search; Back returns to where it was. */
+export function showAiSearchInActiveTab(state: TabsState): TabsState {
+	return activeTab(state).path === AI_SEARCH_PATH ? state : navigateTab(state, AI_SEARCH_PATH);
+}
+
+/** "AI 요약" and other fresh questions: a new AI Search tab with an empty chat. */
+export function openAiSearchTab(state: TabsState): TabsState {
+	return openTabAt(state, AI_SEARCH_PATH);
+}
+
+/**
+ * ⌘K: stay on the active AI Search tab, else adopt the open AI Search tab
+ * nearest the focused one, else open a new one.
+ */
+export function focusAiSearchTab(state: TabsState): TabsState {
+	if (activeTab(state).path === AI_SEARCH_PATH) {
+		return state;
+	}
+	const nearest = nearestTab(state, (tab) => tab.path === AI_SEARCH_PATH);
+	return nearest === null ? openAiSearchTab(state) : selectTab(state, nearest.id);
+}
+
+/** The tab matching `test` closest to the active tab in strip order (ties go left). */
+function nearestTab(state: TabsState, test: (tab: FinderTab) => boolean): FinderTab | null {
+	const here = state.tabs.findIndex((tab) => tab.id === state.activeId);
+	let nearest: FinderTab | null = null;
+	let distance = Number.POSITIVE_INFINITY;
+	for (const [index, tab] of state.tabs.entries()) {
+		const gap = Math.abs(index - here);
+		if (test(tab) && gap < distance) {
+			nearest = tab;
+			distance = gap;
+		}
+	}
+	return nearest;
+}
+
+/**
+ * The tabs whose AI Search panel stays mounted: every tab showing AI Search,
+ * plus any that showed it earlier and is still open — its chat survives a
+ * navigation to a folder and back. Returns `mounted` itself when unchanged.
+ */
+export function aiPanelTabs(
+	mounted: readonly number[],
+	tabs: readonly { readonly id: number; readonly aiSearch: boolean }[],
+): readonly number[] {
+	const open = new Set(tabs.map((tab) => tab.id));
+	const kept = mounted.filter((id) => open.has(id));
+	const added = tabs.filter((tab) => tab.aiSearch && !kept.includes(tab.id)).map((tab) => tab.id);
+	return kept.length === mounted.length && added.length === 0 ? mounted : [...kept, ...added];
+}
+
 export function tabTitle(tab: { readonly path: string }, view: { readonly isActive: boolean; readonly query: string }): string {
 	if (tab.path === SETTINGS_PATH) {
 		return "Settings";
+	}
+	if (tab.path === AI_SEARCH_PATH) {
+		return "AI Search";
 	}
 	const query = view.query.trim();
 	if (view.isActive && query !== "") {

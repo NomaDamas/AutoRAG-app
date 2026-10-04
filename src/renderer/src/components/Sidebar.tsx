@@ -1,5 +1,5 @@
 import { FolderPlus, PanelLeft } from "lucide-react";
-import type { ReactElement, RefObject } from "react";
+import type { DragEvent, ReactElement, RefObject } from "react";
 import { NAV_GROUPS, type NavItem } from "../data/places";
 import { cn } from "../lib/cn";
 import { GearIcon } from "./icons";
@@ -40,6 +40,7 @@ export function Sidebar({
 	onSearchFocus,
 	onSearchBlur,
 	onSubmitSearch,
+	aiSearchDrop,
 }: {
 	readonly activeLabel: string | null;
 	readonly showHotkeys: boolean;
@@ -54,6 +55,13 @@ export function Sidebar({
 	readonly onSearchFocus: () => void;
 	readonly onSearchBlur: () => void;
 	readonly onSubmitSearch: (mode: SearchMode, text: string) => void;
+	/** The AI Search item takes Finder rows and OS files as chat attachments. */
+	readonly aiSearchDrop: {
+		readonly hovered: boolean;
+		readonly onDragOver: (event: DragEvent<HTMLButtonElement>) => void;
+		readonly onDragLeave: () => void;
+		readonly onDrop: (event: DragEvent<HTMLButtonElement>) => void;
+	};
 }): ReactElement {
 	return (
 		<aside
@@ -100,13 +108,28 @@ export function Sidebar({
 							const active = item.label === activeLabel;
 							const status = sourceStatus?.[item.label];
 							const Icon = item.icon;
+							const drop = item.view === "aiSearch" ? aiSearchDrop : null;
 							return (
 								<button
 									key={item.label}
 									type="button"
-									className={cn(ITEM_CLASS, active && "sidebar__item--active bg-selected-nav text-ink")}
+									className={cn(
+										ITEM_CLASS,
+										active && "sidebar__item--active bg-selected-nav text-ink",
+										drop?.hovered === true && "shadow-[inset_0_0_0_1.5px_var(--accent)]",
+									)}
 									aria-current={active ? "true" : undefined}
 									onClick={() => onNavigate(item)}
+									onDragOver={drop?.onDragOver}
+									onDragLeave={
+										drop === null
+											? undefined
+											: (event) => {
+													if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return;
+													drop.onDragLeave();
+												}
+									}
+									onDrop={drop?.onDrop}
 								>
 									<Icon
 										className={cn("sidebar__item-icon flex-none", active ? "text-accent" : "text-ink-muted")}

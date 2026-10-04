@@ -7,7 +7,7 @@
  *   3. focusing shows the 전체 / 파일 이름 / 내용 chips, 전체 active;
  *   4. Enter commits a filename search (scope bar appears, rows filter);
  *   5. 파일 이름 scopes the commit to the current folder;
- *   6. 내용 hands the query to the AI dock's real content search;
+ *   6. 내용 opens a new AI Search tab running the real content search;
  *   7. ⌘F focuses the sidebar field;
  *   8. the toolbar's inspector / AI / Share cluster behaves.
  *
@@ -99,13 +99,13 @@ try {
 	check("파일 이름 commits scoped to the current folder, not This Mac", scopedButton.trim() !== "This Mac", scopedButton.trim());
 	await page.screenshot({ path: join(EVIDENCE, "04-folder-scope.png") });
 
-	// 6. 내용 hands the query to the AI dock's real content search.
+	// 6. 내용 opens a new AI Search tab running the real content search.
 	await chip("내용").click();
 	await search.fill("approval notes");
 	await search.press("Enter");
 	await page.locator(".user-msg .user-bubble-wrap").first().waitFor({ timeout: 10000 });
 	const bubble = await page.locator(".user-msg .bubble").first().innerText();
-	check("내용 opens the AI dock and sends the query as a user message", bubble.trim() === "approval notes", bubble.trim());
+	check("내용 opens an AI Search tab and sends the query as a user message", bubble.trim() === "approval notes", bubble.trim());
 	await sleep(400);
 	await page.screenshot({ path: join(EVIDENCE, "05-content-search.png") });
 
@@ -119,9 +119,10 @@ try {
 	// 8. Toolbar inspector / AI / Share cluster.
 	await page.locator('[aria-label="Toggle inspector"]').waitFor({ timeout: 5000 });
 	check("the toolbar exposes the inspector toggle", (await page.locator('[aria-label="Toggle inspector"]').count()) === 1);
-	check("the toolbar exposes the AI Search toggle", (await page.locator('[aria-label="Toggle AI Search"]').count()) === 1);
+	check("the toolbar exposes the AI Search button", (await page.locator('[aria-label="Show AI Search"]').count()) === 1);
 	const share = page.locator('.toolbar [aria-label="Copy path"]');
 	check("the toolbar exposes Share", (await share.count()) === 1);
+	await page.locator(".tabs .tab").first().click();
 	await search.fill("");
 	await search.press("Enter");
 	await page.locator(".scope").waitFor({ state: "detached", timeout: 10000 }).catch(() => undefined);

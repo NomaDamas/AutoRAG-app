@@ -14,7 +14,7 @@
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { launchFinder, finderWindow } from "./launch-finder.mjs";
+import { AI_PANEL, launchFinder, finderWindow, openAiSearch } from "./launch-finder.mjs";
 
 const ROOT = new URL("../..", import.meta.url).pathname;
 const EVIDENCE = join(ROOT, ".omo/evidence/ai-finder-app/qa-chat-history");
@@ -120,6 +120,7 @@ const popoverClosed = async (page) => {
 app = await launchFinder({ userDataDir: USER_DATA });
 const page = await finderWindow(app);
 await page.waitForSelector('[role="row"]');
+await openAiSearch(page);
 
 // 1. The popover renders the seeded history in the reference's day groups.
 await openHistory(page);
@@ -144,8 +145,8 @@ const popoverStyle = await page.locator(".history").evaluate((element) => {
 check("the popover is the v7 360px / radius 12 / menu shadow surface", Math.round(box.width) === 360 && popoverStyle.radius === "12px" && popoverStyle.shadow.includes("35px"), JSON.stringify({ box, popoverStyle }));
 check("no row is marked current before any chat is opened", (await page.locator(".history-item.current").count()) === 0);
 
-const layout = await page.evaluate(() => {
-	const panel = document.querySelector(".ai").getBoundingClientRect();
+const layout = await page.evaluate((selector) => {
+	const panel = document.querySelector(selector).getBoundingClientRect();
 	const popover = document.querySelector(".history").getBoundingClientRect();
 	const row = document.querySelector(".history-item").getBoundingClientRect();
 	const dot = document.querySelector(".hist-dot").getBoundingClientRect();
@@ -154,7 +155,7 @@ const layout = await page.evaluate(() => {
 	const snippet = document.querySelector(".hist-copy small").getBoundingClientRect();
 	const time = document.querySelector(".hist-time").getBoundingClientRect();
 	return { panel, popover, row, dot, text, title, snippet, time };
-});
+}, AI_PANEL);
 const inside = (inner, outer) => inner.left >= outer.left - 1 && inner.right <= outer.right + 1 && inner.top >= outer.top - 1 && inner.bottom <= outer.bottom + 1;
 check("the popover sits inside the AI column, clear of its header", inside(layout.popover, layout.panel) && layout.popover.top >= layout.panel.top + 36, JSON.stringify({ popover: layout.popover.top, panel: layout.panel.top }));
 check("the row reads dot → title/snippet → time with no overlap", layout.dot.right <= layout.text.left && layout.text.right <= layout.time.left && inside(layout.dot, layout.row) && inside(layout.time, layout.row));
@@ -243,10 +244,10 @@ await page.waitForFunction(() => document.querySelector(".side-search input")?.v
 
 // 6. The transparent click-catcher closes the popover without reaching the composer.
 await openHistory(page);
-const body = await page.locator(".ai-body").boundingBox();
+const body = await page.locator(`${AI_PANEL} .ai-body`).boundingBox();
 await page.mouse.click(body.x + 30, body.y + body.height - 40);
 check("clicking behind the popover closes it", await popoverClosed(page));
-check("the click-catcher swallowed the click", (await page.locator(".composer input").inputValue()) === "");
+check("the click-catcher swallowed the click", (await page.locator(`${AI_PANEL} .composer input`).inputValue()) === "");
 await page.screenshot({ path: join(EVIDENCE, "history-backdrop.png") });
 
 // 7. The advertised ⌘⇧H shortcut toggles the popover.
@@ -277,6 +278,7 @@ const APP_METRICS = {
 	time: [".hist-time", ["fontSize", "color"]],
 };
 
+await openAiSearch(page);
 await openHistory(page);
 const appMetrics = await page.evaluate((spec) => {
 	const out = {};

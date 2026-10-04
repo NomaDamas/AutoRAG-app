@@ -26,7 +26,7 @@ import { existsSync, mkdirSync, mkdtempSync, utimesSync, writeFileSync } from "n
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { deflateSync } from "node:zlib";
-import { launchFinder } from "./launch-finder.mjs";
+import { launchFinder, openAiSearch } from "./launch-finder.mjs";
 
 const outDir = process.argv[2];
 if (outDir === undefined) {
@@ -386,6 +386,7 @@ try {
 	// that need a live model — thinking, skeleton, pending, streaming, progress,
 	// stop — cannot be reached deterministically and stay uncovered.
 	console.log("ai answers + evidence");
+	await openAiSearch(page);
 	await page.locator('[aria-label="Chat history"]').click();
 	await page.locator(".history-item").first().waitFor({ state: "visible" });
 	await sleep(400);
