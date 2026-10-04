@@ -12,8 +12,11 @@
  *      highlight while the drag hovers the folder;
  *   5. holding ⌥ while dragging onto a folder row copies instead;
  *   6. dropping a row on another tab switches to that tab and moves the row
- *      into that tab's folder, with the tab highlighted while hovered;
- *   7. ⌘C/⌘V while the search field has focus never touches the filesystem.
+ *      into that tab's folder, with the tab highlighted while hovered, and the
+ *      AI dock's full-window drag overlay clears once the drop is done;
+ *   7. dwelling on a tab for ~1.5s adopts that tab with the drag still held, so
+ *      the rows can then be dropped into a folder inside that tab;
+ *   8. ⌘C/⌘V while the search field has focus never touches the filesystem.
  *
  * Drags go through Chromium's native drag path (`Input.dispatchDragEvent`, the
  * same route an OS drag takes); the ⌥ variant dispatches the identical
@@ -35,24 +38,29 @@ const EVIDENCE = join(ROOT, ".omo", "evidence", "ai-finder-app", "qa-file-ops");
 mkdirSync(EVIDENCE, { recursive: true });
 
 const FINDER_DRAG_TYPE = "application/x-autorag-finder-entries";
+/** Copy shown by the AI dock's full-window drag overlay. */
+const DOCK_OVERLAY = "여기로 끌어서 AI에게 물어보기";
 
 const home = mkdtempSync(join(tmpdir(), "ulw-fileops-home-"));
 const top = join(home, "Documents", "qa-file-ops");
 const dirA = join(top, "A");
 const dirB = join(top, "B");
-for (const directory of [top, dirA, dirB]) mkdirSync(directory, { recursive: true });
+const sub = join(dirB, "sub");
+for (const directory of [top, dirA, dirB, sub]) mkdirSync(directory, { recursive: true });
 
 const COPIES = join(top, "copy-me.txt");
 const MOVES = join(top, "move-me.txt");
 const DRAGS = join(top, "drag-me.txt");
 const ALTS = join(top, "alt-me.txt");
 const TABS = join(top, "tab-me.txt");
+const SPRINGS = join(top, "spring-me.txt");
 for (const [path, body] of [
 	[COPIES, "copy fixture\n"],
 	[MOVES, "move fixture\n"],
 	[DRAGS, "drag fixture\n"],
 	[ALTS, "alt fixture\n"],
 	[TABS, "tab fixture\n"],
+	[SPRINGS, "spring fixture\n"],
 ]) {
 	await Bun.write(path, body);
 }
@@ -212,9 +220,56 @@ try {
 		`highlight=${tabHighlighted} B=${listNames(dirB)}`,
 	);
 	await page.screenshot({ path: join(EVIDENCE, "6-tab-drop.png") });
+	check(
+		"the AI dock drag overlay clears once a tab drop has moved the rows",
+		(await page.getByText(DOCK_OVERLAY).count()) === 0,
+		`overlay nodes=${await page.getByText(DOCK_OVERLAY).count()}`,
+	);
 
-	/* ---------------------------------------- 7. ⌘V while typing stays text */
-	const count = () => listNames(top).length + listNames(dirA).length + listNames(dirB).length;
+	/* --------------------------------------- 7. spring-loaded tab dwell */
+	await page.locator(".tab").first().click();
+	await atTitle(page, "qa-file-ops");
+	await waitForRow(page, SPRINGS);
+	const from = await row(page, SPRINGS).boundingBox();
+	const tabBox = await page.locator(".tab").nth(1).boundingBox();
+	await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+	await page.mouse.down();
+	await page.mouse.move(from.x + from.width / 2 + 16, from.y + from.height / 2, { steps: 4 });
+	await page.mouse.move(tabBox.x + tabBox.width / 2, tabBox.y + tabBox.height / 2, { steps: 8 });
+	const tabX = tabBox.x + tabBox.width / 2;
+	const tabY = tabBox.y + tabBox.height / 2;
+	let springSwitched = false;
+	let overlayDuringDwell = 0;
+	for (let tick = 0; tick < 15 && !springSwitched; tick += 1) {
+		await page.mouse.move(tabX + (tick % 2 === 0 ? 3 : -3), tabY, { steps: 1 });
+		await page.waitForTimeout(150);
+		overlayDuringDwell = await page.getByText(DOCK_OVERLAY).count();
+		springSwitched = (await page.locator(".toolbar-title").textContent()) === "B";
+	}
+	// The rows are still held: drop them into a folder inside the tab we adopted.
+	await page.waitForSelector(`[data-path="${sub}"]`, { timeout: 15_000 });
+	const subBox = await row(page, sub).boundingBox();
+	await page.mouse.move(subBox.x + subBox.width / 2, subBox.y + subBox.height / 2, { steps: 8 });
+	await page.mouse.move(subBox.x + subBox.width / 2 + 3, subBox.y + subBox.height / 2, { steps: 1 });
+	await page.mouse.up();
+	// The file lands inside `sub`, so it is not a row in B's listing — wait on disk.
+	const deadline = Date.now() + 10_000;
+	while (!existsSync(join(sub, "spring-me.txt")) && Date.now() < deadline) await page.waitForTimeout(150);
+	await page.waitForTimeout(400);
+	await page.screenshot({ path: join(EVIDENCE, "7-spring-load.png") });
+	check(
+		"dwelling on a tab adopts it, so the held rows can drop into a folder inside it",
+		springSwitched && existsSync(join(sub, "spring-me.txt")) && !existsSync(SPRINGS),
+		`switched=${springSwitched} B/sub=${listNames(sub)} root=${listNames(top)}`,
+	);
+	check(
+		"the AI dock drag overlay clears after the spring-loaded drop",
+		(await page.getByText(DOCK_OVERLAY).count()) === 0,
+		`overlay nodes during dwell=${overlayDuringDwell}, after drop=${await page.getByText(DOCK_OVERLAY).count()}`,
+	);
+
+	/* ---------------------------------------- 8. ⌘V while typing stays text */
+	const count = () => listNames(top).length + listNames(dirA).length + listNames(dirB).length + listNames(sub).length;
 	const before = count();
 	await page.locator(".search__input").click();
 	await page.keyboard.type("copy");

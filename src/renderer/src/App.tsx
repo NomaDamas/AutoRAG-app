@@ -52,6 +52,12 @@ const SIDEBAR_MAX = 320;
 const INSPECTOR_MIN = 300;
 const INSPECTOR_MAX = 560;
 
+/**
+ * How long an in-app drag must dwell on a tab before the tab adopts itself
+ * (Finder's spring-loaded folders, applied to the tab strip).
+ */
+const TAB_SPRING_LOAD_MS = 1500;
+
 function clampWidth(value: number, min: number, max: number): number {
 	return Math.min(max, Math.max(min, Math.round(value)));
 }
@@ -311,19 +317,50 @@ export function App(): ReactElement {
 		void autorag.settings.get().then((settings) => setShowHiddenFiles(settings.showHiddenFiles));
 	}, []);
 
+	/**
+	 * Spring-loaded tabs: dwelling with an in-app drag over a tab for
+	 * TAB_SPRING_LOAD_MS adopts that tab, so the rows can then be dropped into a
+	 * folder inside it. Leaving the tab, dropping, or the drag ending cancels
+	 * the pending switch.
+	 */
+	const springTabRef = useRef<{ readonly id: number; readonly timer: number } | null>(null);
+	const cancelSpringTab = useCallback((): void => {
+		const armed = springTabRef.current;
+		if (armed === null) return;
+		window.clearTimeout(armed.timer);
+		springTabRef.current = null;
+	}, []);
+	const armSpringTab = useCallback(
+		(id: number): void => {
+			if (springTabRef.current?.id === id) return;
+			cancelSpringTab();
+			springTabRef.current = {
+				id,
+				timer: window.setTimeout(() => {
+					springTabRef.current = null;
+					setDropTabId(null);
+					finder.selectTabId(id);
+				}, TAB_SPRING_LOAD_MS),
+			};
+		},
+		[cancelSpringTab, finder],
+	);
+	useEffect(() => cancelSpringTab, [cancelSpringTab]);
+
 	/* A drag that leaves the app (or ends anywhere) clears the drop highlights. */
+	const reset = useCallback((): void => {
+		setDropTargetPath(null);
+		setDropTabId(null);
+		cancelSpringTab();
+	}, [cancelSpringTab]);
 	useEffect(() => {
-		const reset = (): void => {
-			setDropTargetPath(null);
-			setDropTabId(null);
-		};
 		window.addEventListener("dragend", reset);
 		window.addEventListener("drop", reset);
 		return () => {
 			window.removeEventListener("dragend", reset);
 			window.removeEventListener("drop", reset);
 		};
-	}, []);
+	}, [reset]);
 
 	const rowCallbacks: RowCallbacks = {
 		onClick: finder.clickRow,
@@ -342,8 +379,9 @@ export function App(): ReactElement {
 			if (entry.kind !== "folder") return;
 			const paths = readFinderDragPaths(event.dataTransfer);
 			if (paths.length === 0) return;
+			// No stopPropagation: the window "drop" listener clears the AI dock's
+			// drag overlay (and the highlights) once the transfer has started.
 			event.preventDefault();
-			event.stopPropagation();
 			finder.transferDropped(paths, entry.path, event.altKey);
 		},
 		dropTargetPath,
@@ -446,14 +484,21 @@ export function App(): ReactElement {
 							event.preventDefault();
 							event.dataTransfer.dropEffect = event.altKey ? "copy" : "move";
 							setDropTabId((current) => (current === id ? current : id));
+							// Dwelling adopts the tab; an already-active tab has nothing to switch to.
+							if (finder.tabs.some((tab) => tab.id === id && !tab.active)) armSpringTab(id);
 						}}
-						onTabDragLeave={(id) => setDropTabId((current) => (current === id ? null : current))}
+						onTabDragLeave={(id) => {
+							cancelSpringTab();
+							setDropTabId((current) => (current === id ? null : current));
+						}}
 						onTabDrop={(id, event) => {
+							cancelSpringTab();
 							setDropTabId(null);
 							const paths = readFinderDragPaths(event.dataTransfer);
 							if (paths.length === 0) return;
+							// No stopPropagation: the window "drop" listener clears the AI
+							// dock's drag overlay once the transfer has started.
 							event.preventDefault();
-							event.stopPropagation();
 							finder.dropOnTab(id, paths, event.altKey);
 						}}
 					/>
