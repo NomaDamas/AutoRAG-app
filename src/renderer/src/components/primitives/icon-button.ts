@@ -1,7 +1,7 @@
 import { cn } from "../../lib/cn";
 
-/** `--size-row` (32px) is the default; the history header is 28px (`--size-icon-sm`). */
-export type IconButtonSize = "size-row" | "size-icon-sm";
+/** `--size-row` (32px) is the default; toolbar chrome uses a 32px hit area and history headers use 28px (`--size-icon-sm`). */
+export type IconButtonSize = "size-row" | "size-icon-sm" | "size-toolbar-icon";
 
 /** `--text-body` by default; the history header uses `--text-muted`. */
 export type IconButtonTone = "text-ink-body" | "text-ink-muted";

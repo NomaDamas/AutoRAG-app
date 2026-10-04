@@ -94,7 +94,26 @@ try {
 	app = await launchFinder({ userDataDir, env: { HOME: home } });
 	const page = await finderWindow(app);
 	await page.setViewportSize({ width: 1500, height: 900 }).catch(() => {});
-	await page.waitForSelector(".toolbar-title", { timeout: 30000 });
+	const sidebarBox = await page.locator(".sidebar").boundingBox();
+	const inspectorBox = await page.locator(".inspector").boundingBox();
+	check("C1 sidebar defaults to minimum width", Math.round(sidebarBox.width), 180);
+	check("C1 inspector defaults to minimum width", Math.round(inspectorBox.width), 300);
+	const aiDock = page.locator('section[aria-label="AI Search"]');
+	const aiHead = aiDock.locator(".ai-head");
+	const composer = page.locator('section[aria-label="AI Search"] input[placeholder*="파일, 메일"]');
+	check("C1 AI Search starts open", await aiHead.getAttribute("aria-expanded"), "true");
+	await page.keyboard.press("Meta+k");
+	await page.waitForFunction(() => document.querySelector('section[aria-label="AI Search"] .ai-head')?.getAttribute("aria-expanded") === "false");
+	check("C1 Cmd+K closes AI Search", await aiHead.getAttribute("aria-expanded"), "false");
+	await page.keyboard.press("Meta+k");
+	await page.waitForFunction(() => document.querySelector('section[aria-label="AI Search"] .ai-head')?.getAttribute("aria-expanded") === "true");
+	await composer.fill("draft survives toggle");
+	await page.keyboard.press("Meta+k");
+	await page.waitForFunction(() => document.querySelector('section[aria-label="AI Search"] .ai-head')?.getAttribute("aria-expanded") === "false");
+	await page.keyboard.press("Meta+k");
+	await page.waitForFunction(() => document.querySelector('section[aria-label="AI Search"] .ai-head')?.getAttribute("aria-expanded") === "true");
+	check("C1 Cmd+K preserves the composer draft", await composer.inputValue(), "draft survives toggle");
+	check("C1 Cmd+K refocuses the composer", await composer.evaluate((input) => document.activeElement === input), true);
 	await page.getByLabel("Places").getByRole("button", { name: "Documents", exact: true }).click();
 	const topRow = page.locator('[role="row"]').filter({ hasText: top }).first();
 	await topRow.waitFor({ timeout: 30000 });
@@ -109,6 +128,16 @@ try {
 	const toggleBox = await toggle.boundingBox();
 	check("C1 toggle lives in the toolbar's right half", toggleBox.x > toolbarBox.x + toolbarBox.width / 2, true);
 	check("C1 list is the default mode", await pressed(), ["Icons=false", "List=true", "Columns=false"]);
+	check("C1 toolbar navigation hit area is larger", await page.getByRole("button", { name: "Back" }).evaluate((button) => {
+		const box = button.getBoundingClientRect();
+		const glyph = button.querySelector("svg")?.getBoundingClientRect();
+		return { button: [Math.round(box.width), Math.round(box.height)], glyph: glyph === undefined ? null : [Math.round(glyph.width), Math.round(glyph.height)] };
+	}), { button: [32, 32], glyph: [18, 18] });
+	check("C1 view mode controls are larger", await toggle.locator("button").first().evaluate((button) => {
+		const box = button.getBoundingClientRect();
+		const glyph = button.querySelector("svg")?.getBoundingClientRect();
+		return { button: [Math.round(box.width), Math.round(box.height)], glyph: glyph === undefined ? null : [Math.round(glyph.width), Math.round(glyph.height)] };
+	}), { button: [32, 32], glyph: [18, 18] });
 	await page.locator(".toolbar").screenshot({ path: `${EVIDENCE}/toolbar-toggle.png` });
 
 	// ----- C2 icons
@@ -155,6 +184,38 @@ try {
 	check("C4 ⌘2 shows the list", await pressed(), ["Icons=false", "List=true", "Columns=false"]);
 	check("C4 list keeps its column header", await page.locator(".col-header").count(), 1);
 	check("C4 list shows one row per entry", await page.locator('[role="row"]').count(), tree[topPath].length);
+	const listRows = page.locator('[role="row"]');
+	const rowGeometry = await listRows.nth(0).evaluate((row) => {
+		const style = getComputedStyle(row);
+		return { height: Math.round(row.getBoundingClientRect().height), radius: style.borderRadius, margin: `${style.marginLeft}/${style.marginRight}` };
+	});
+	const stripeColors = await listRows.evaluateAll((rows) => rows.slice(0, 2).map((row) => getComputedStyle(row).backgroundColor));
+	check("C4 compact Bloom row geometry", rowGeometry, { height: 24, radius: "0px", margin: "0px/0px" });
+	check("C4 adjacent list rows use alternating washes", stripeColors[0] !== stripeColors[1], true);
+	check("C4 alternate list row uses #F4F5F5", stripeColors[1], "rgb(244, 245, 245)");
+	const rowTypography = await listRows.nth(1).evaluate((row) => ({
+		name: getComputedStyle(row.querySelector(".row__label")).fontSize,
+		meta: getComputedStyle(row.querySelector(".row__meta")).fontSize,
+		nameColor: getComputedStyle(row.querySelector(".row__label")).color,
+	}));
+	check("C4 Finder row typography and default ink", rowTypography, { name: "12px", meta: "12px", nameColor: "rgb(29, 29, 31)" });
+	await page.locator(".col-header__sort").first().click();
+	check("C4 sort indicator is larger", await page.locator(".col-header__sort svg").first().evaluate((svg) => {
+		const box = svg.getBoundingClientRect();
+		return [Math.round(box.width), Math.round(box.height)];
+	}), [12, 12]);
+	const selectedRow = page.locator('[role="row"][data-path$="/notes.md"]');
+	await selectedRow.click();
+	const selectedStyle = await selectedRow.evaluate((row) => {
+		const style = getComputedStyle(row);
+		return {
+			ariaSelected: row.getAttribute("aria-selected"),
+			className: row.className,
+			background: style.backgroundColor,
+			transitionProperty: style.transitionProperty,
+		};
+	});
+	check("C4 focused selection applies immediately", [selectedStyle.ariaSelected, selectedStyle.className.includes("bg-accent"), selectedStyle.background, selectedStyle.transitionProperty], ["true", true, "rgb(10, 100, 216)", "box-shadow"]);
 	await page.screenshot({ path: `${EVIDENCE}/list.png` });
 	await page.keyboard.press("Meta+1");
 	await page.waitForSelector(".icon-grid");
@@ -217,12 +278,37 @@ try {
 	await page.waitForSelector(`.column[data-path="${topPath}/alpha"] .column-row[aria-label="alpha-renamed.md"]`, { timeout: 10000 });
 	check("C3 rename from pane 2 renames on disk", await Bun.file(`${topPath}/alpha/alpha-renamed.md`).exists(), true);
 
-	// Persistence: the chosen mode survives a relaunch.
+	// Pane widths remain user-resizable and persist across relaunch.
+	const dragSeparator = async (label, delta) => {
+		const separator = page.getByRole("separator", { name: label });
+		const box = await separator.boundingBox();
+		if (box === null) throw new Error(`${label} has no bounds`);
+		const y = box.y + box.height / 2;
+		const x = box.x + box.width / 2;
+		await page.mouse.move(x, y);
+		await page.mouse.down();
+		await page.mouse.move(x + delta, y);
+		await page.mouse.up();
+	};
+	await dragSeparator("Resize sidebar", 24);
+	await dragSeparator("Resize inspector", -24);
+	const resized = await page.evaluate(() => ({
+		sidebar: Math.round(document.querySelector(".sidebar")?.getBoundingClientRect().width ?? 0),
+		inspector: Math.round(document.querySelector(".inspector")?.getBoundingClientRect().width ?? 0),
+	}));
+	check("C4 resized pane widths apply", resized, { sidebar: 204, inspector: 324 });
+
+	// Persistence: the chosen mode and pane widths survive a relaunch.
 	await app.close();
 	app = await launchFinder({ userDataDir, env: { HOME: home } });
 	const relaunched = await finderWindow(app);
 	await relaunched.waitForSelector(".seg");
 	await relaunched.waitForSelector(".column", { timeout: 30000 });
+	const persistedSizes = await relaunched.evaluate(() => ({
+		sidebar: Math.round(document.querySelector(".sidebar")?.getBoundingClientRect().width ?? 0),
+		inspector: Math.round(document.querySelector(".inspector")?.getBoundingClientRect().width ?? 0),
+	}));
+	check("C4 pane widths survive a relaunch", persistedSizes, { sidebar: 204, inspector: 324 });
 	check(
 		"C4 the chosen mode survives a relaunch",
 		await relaunched.getByRole("group", { name: "View" }).locator("button[aria-pressed=true]").getAttribute("aria-label"),

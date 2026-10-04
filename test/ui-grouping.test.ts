@@ -405,18 +405,19 @@ describe("groupedRowTop", () => {
 	];
 
 	it("computes the content-space top of a flattened row index", () => {
-		// Section 0: header 40 + rows 0..2 at 40/72/104.
+		// Section 0: header 40 + rows 0..2 at 40/64/88.
 		expect(groupedRowTop(sections, 0)).toBe(40);
-		expect(groupedRowTop(sections, 2)).toBe(104);
-		// Section 1 has no header: rows continue at 136/168.
-		expect(groupedRowTop(sections, 3)).toBe(136);
-		expect(groupedRowTop(sections, 4)).toBe(168);
-		// Section 2: header after 200, row at 240.
-		expect(groupedRowTop(sections, 5)).toBe(240);
+		expect(groupedRowTop(sections, 2)).toBe(88);
+		// Section 1 has no header: rows continue at 112/136.
+		expect(groupedRowTop(sections, 3)).toBe(112);
+		expect(groupedRowTop(sections, 4)).toBe(136);
+		// Section 2: header after 160, row at 200.
+		expect(groupedRowTop(sections, 5)).toBe(200);
+
 	});
 
 	it("clamps an out-of-range index", () => {
-		expect(groupedRowTop(sections, 99)).toBe(272);
+		expect(groupedRowTop(sections, 99)).toBe(224);
 		expect(groupedRowTop(sections, -1)).toBe(0);
 	});
 });

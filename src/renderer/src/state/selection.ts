@@ -7,7 +7,7 @@
  */
 
 /** File row height; the list is a fixed-height grid. */
-export const ROW_HEIGHT = 32;
+export const ROW_HEIGHT = 24;
 /** Pixels of context kept above the focused row when scrolling it into view. */
 export const SCROLL_LEAD = 80;
 

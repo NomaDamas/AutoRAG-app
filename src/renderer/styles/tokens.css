@@ -230,9 +230,12 @@
   --font-size-meta: 12px;
   --font-size-caption: 12px;
   --font-size-badge: 11px;
+  --font-size-file-row: 12px;
+  --font-size-file-meta: 12px;
   --font-size-tile: 10px;
   --font-size-tile-xs: 9px;
 
+  --bg-row-alt: #F4F5F5;
   --weight-regular: 400;
   --weight-medium: 500;
   --weight-semibold: 600;
@@ -262,6 +265,8 @@
 
   /* ------------------------------------------------------------ §4 Control sizes */
   --size-row: 32px;
+  --size-file-row: 24px;
+  --size-toolbar-icon: 32px;
   --size-disclosure: 16px;
   --tree-indent: 18px;
   --size-pill: 22px;
@@ -285,13 +290,13 @@
   --desk-padding: 18px;
   --app-min-width: 1360px;
   --app-min-height: 820px;
-  --grid-main: 220px minmax(0,1fr) 390px;
-  --col-sidebar: 220px;
+  --grid-main: 180px minmax(0,1fr) 300px;
+  --col-sidebar: 180px;
   --evidence-open-height: 44%;
   /* v7 window grid columns (sidebar / finder / inspector) and the AI dock's
    * remembered open height (v7 sets `--ai-h` inline; this is its 280px default). */
-  --w-sidebar: 220px;
-  --w-inspector: 390px;
+  --w-sidebar: 180px;
+  --w-inspector: 300px;
   --ai-h: 280px;
 
   /* ----------------------------------------------------------- §4 Component grids */
@@ -403,6 +408,7 @@ html[data-appearance="dark"] {
     --bg-hover-row: rgba(255,255,255,0.06);
     --bg-hover-icon: rgba(255,255,255,0.1);
     --bg-hover-strong: rgba(255,255,255,0.12);
+    --bg-row-alt: rgba(255,255,255,0.045);
 
     /* -------------------------------------------------------------- Borders */
     --border: #48484A;

@@ -75,13 +75,14 @@ function LocationChip({ location }: { readonly location: string }): ReactElement
 }
 
 /**
- * One 32px v7 list row: the columns come from `listGridTemplate(columns)`, the
- * name cell carries the disclosure, tile, name, and any version tags. Selection
- * is a wash; while the Finder zone owns focus it is the solid accent with white
- * text, otherwise the muted selection gray.
+ * One 24px Bloom-style list row: the columns come from
+ * `listGridTemplate(columns)`, the name cell carries the disclosure, tile,
+ * name, and any version tags. Selection is full-width; while the Finder zone
+ * owns focus it is the solid accent with white text, otherwise muted gray.
  */
 export function FileRow({
 	entry,
+	zebra,
 	selected,
 	zoneFocused,
 	flash,
@@ -98,6 +99,7 @@ export function FileRow({
 	callbacks,
 }: {
 	readonly entry: FinderEntry;
+	readonly zebra: boolean;
 	readonly selected: boolean;
 	readonly zoneFocused: boolean;
 	readonly flash: boolean;
@@ -134,7 +136,7 @@ export function FileRow({
 	const included = state === "included";
 	const outside = state === "outside";
 
-	const rowTone = selected ? (zoneFocused ? "text-on-accent" : "text-ink") : "text-ink-body";
+	const rowTone = selected ? (zoneFocused ? "text-on-accent" : "text-ink") : "text-ink";
 	const metaTone = selected ? (zoneFocused ? "text-on-accent/80" : "text-ink-muted") : "text-ink-muted";
 
 	const cellText = (key: ListColumnKey): string => {
@@ -165,7 +167,7 @@ export function FileRow({
 	return (
 		<div
 			className={cn(
-				"row grid gap-8 items-center h-row mx-6 px-7 rounded-6 select-none cursor-default transition-[background,box-shadow] duration-(--dur-flash-fade) ease-[ease] [&>*]:min-w-0",
+				"row grid gap-8 items-center h-file-row px-13 rounded-none select-none cursor-default transition-[box-shadow] duration-(--dur-flash-fade) ease-[ease] [&>*]:min-w-0",
 				rowTone,
 				isHiddenName(entry.name) && "opacity-45",
 				flash
@@ -174,7 +176,9 @@ export function FileRow({
 						? zoneFocused
 							? "bg-accent"
 							: "bg-sel-mute"
-						: "hover:bg-hover-row",
+						: zebra
+							? "bg-row-alt hover:bg-hover-row"
+							: "bg-window hover:bg-hover-row",
 				callbacks.dropTargetPath === entry.path && "bg-accent-drop-hover shadow-[inset_0_0_0_1.5px_var(--accent)]",
 			)}
 			role="row"
@@ -225,7 +229,7 @@ export function FileRow({
 				{renameDraft === null ? (
 					<span
 						className={cn(
-							"row__label min-w-0 overflow-hidden whitespace-nowrap text-ellipsis text-sm",
+							"row__label min-w-0 overflow-hidden whitespace-nowrap text-ellipsis text-file-row",
 							isVariant && "text-ink-muted",
 						)}
 					>
@@ -235,7 +239,7 @@ export function FileRow({
 					<input
 						// biome-ignore lint/a11y/noAutofocus: inline rename must take the caret immediately
 						autoFocus
-						className="row__rename flex-1 min-w-0 h-pill px-5 border border-accent rounded-5 outline-none bg-window text-ink text-sm"
+						className="row__rename flex-1 min-w-0 h-pill px-5 border border-accent rounded-5 outline-none bg-window text-ink text-file-row"
 						type="text"
 						value={renameDraft}
 						aria-label="새 이름"
@@ -301,7 +305,7 @@ export function FileRow({
 					<span
 						key={column.key}
 						className={cn(
-							"row__meta min-w-0 whitespace-nowrap overflow-hidden text-ellipsis text-meta",
+							"row__meta min-w-0 whitespace-nowrap overflow-hidden text-ellipsis text-file-meta",
 							column.key === "size" && "text-right",
 							metaTone,
 						)}
