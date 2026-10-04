@@ -8,7 +8,13 @@ import { createIndexStatusService } from "../src/main/index-status";
 const directories: string[] = [];
 
 afterEach(async () => {
-	await Promise.all(directories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
+	// `fs.rm` with `recursive` retries EBUSY/ENOTEMPTY (seen on Windows when a
+	// handle is briefly still open). Keep the budget under the 10s hook timeout.
+	await Promise.all(
+		directories
+			.splice(0)
+			.map((directory) => rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })),
+	);
 });
 
 interface Fixture {
