@@ -113,6 +113,7 @@ const report = {};
 		label: "a version stack chip served from the persisted snapshot",
 	});
 	report.warmBadges = await page.locator(".vcount").count();
+	report.warmBadgeMs = Date.now() - started;
 	console.log("WARM badges:", report.warmBadges, "after", report.warmBadgeMs, "ms");
 	await page.screenshot({ path: join(EVIDENCE, "2-warm-start.png") });
 

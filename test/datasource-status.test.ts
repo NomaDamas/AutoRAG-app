@@ -150,6 +150,22 @@ describe("createDataSourceStatusService", () => {
 		expect(slack?.status).toBe("ready");
 	});
 
+	it("resolves an explicitly extended CLI before appending PATHEXT suffixes", async () => {
+		const fixture = await createFixtureWithOnlySlacrawlOnPath();
+		const cli = join(fixture.root, "bin", "slacrawl.cmd");
+		await writeFile(cli, "@echo off\r\n");
+		await chmod(cli, 0o755);
+		const windowsFixture: Fixture = {
+			...fixture,
+			env: { ...fixture.env, PATHEXT: ".COM;.EXE;.BAT;.CMD" },
+		};
+		await writeConfig(windowsFixture, { slack: { connector: { binaryPath: "slacrawl.cmd" } } }, ["chat"]);
+
+		const [slack] = (await createDataSourceStatusService({ env: windowsFixture.env, cwd: windowsFixture.root }).list()).sources;
+
+		expect(slack?.install).toMatchObject({ state: "installed", path: cli });
+	});
+
 	it("still treats an exact CLI name as executable on POSIX", async () => {
 		// Given the existing extensionless script on PATH
 		const fixture = await createFixtureWithOnlySlacrawlOnPath();

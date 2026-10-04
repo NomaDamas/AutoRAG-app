@@ -1,5 +1,5 @@
 import { accessSync, constants, existsSync, readFileSync, statSync } from "node:fs";
-import { delimiter, join } from "node:path";
+import { delimiter, extname, join } from "node:path";
 import {
 	BUILTIN_DATASOURCE_SKILL_NAMES,
 	buildDatasourceSkills,
@@ -58,16 +58,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /**
- * Executable suffixes to try for a bare CLI name. POSIX names carry their own
- * extension, so only the name itself is tried; Windows resolves by extension
- * (PATHEXT: .COM/.EXE/.BAT/.CMD/...). The bare name is never tried there: the
- * extensionless file npm/bun install next to `name.cmd` is a POSIX sh shim,
- * not something Windows can run.
+ * Executable suffixes for CLI lookup. POSIX tries the name itself; Windows
+ * appends PATHEXT unless the name already has a runnable extension. Never try
+ * an extensionless npm/bun POSIX shim as a Windows executable.
  */
-function executableExtensions(env: NodeJS.ProcessEnv): readonly string[] {
+function executableExtensions(name: string, env: NodeJS.ProcessEnv): readonly string[] {
 	const pathext = env.PATHEXT;
 	if (pathext === undefined || pathext.length === 0) return [""];
-	return pathext.split(";").map((extension) => extension.trim()).filter((extension) => extension.length > 0);
+	const extensions = pathext.split(";").map((extension) => extension.trim()).filter((extension) => extension.length > 0);
+	const explicitExtension = extname(name).toLowerCase();
+	return extensions.some((extension) => extension.toLowerCase() === explicitExtension) ? ["", ...extensions] : extensions;
 }
 
 /** `accessSync(X_OK)` on Windows only proves existence, so a directory would pass too. */
@@ -84,7 +84,7 @@ function findExecutable(name: string, env: NodeJS.ProcessEnv): string | null {
 	if (name.includes("/") || name.includes("\\")) {
 		return isExecutableFile(name) ? name : null;
 	}
-	const extensions = executableExtensions(env);
+	const extensions = executableExtensions(name, env);
 	const directories = (env.PATH ?? "").split(delimiter).filter(Boolean);
 	for (const directory of directories) {
 		for (const extension of extensions) {

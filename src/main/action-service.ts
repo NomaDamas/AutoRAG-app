@@ -368,16 +368,20 @@ function sipsOptimizeArgs(source: string, target: string, format: ImageFormat): 
 /**
  * image2 reads `%d`/`%0Nd` sequences in a path as frame-number patterns, so
  * `report%20draft.png` would be written as `report00000001raft.jpg` (with `-y`,
- * overwriting an unrelated file) and `shot%d.png` would read `shot1.png` when
- * it exists. Pin every image side to literal single files.
+ * overwriting an unrelated file) and `shot%d.png` would read `shot1.png` when it
+ * exists. Pin only formats handled by image2; container-like image formats must
+ * use ffmpeg's native demuxer so HEIC, GIF, and AVIF inputs still decode.
  */
-const FFMPEG_IMAGE_INPUT: readonly string[] = ["-f", "image2", "-pattern_type", "none"];
+const IMAGE2_INPUT_EXTENSIONS = new Set(["bmp", "jpeg", "jpg", "png", "tif", "tiff", "webp"]);
+const ffmpegImageInput = (source: string): readonly string[] =>
+	IMAGE2_INPUT_EXTENSIONS.has(extname(source).slice(1).toLowerCase()) ? ["-f", "image2", "-pattern_type", "none"] : [];
+
 /** image2 (the muxer for jpg/png/tiff) also expands output patterns; the webp muxer writes literal names and rejects the flag. */
 const ffmpegImageOutput = (format: ImageFormat): readonly string[] =>
 	format === "jpeg" || format === "png" || format === "tiff" ? ["-update", "1"] : [];
 
 function ffmpegWebpArgs(source: string, target: string): readonly string[] {
-	return ["-y", ...FFMPEG_IMAGE_INPUT, "-i", source, "-c:v", "libwebp", "-quality", String(LOSSY_QUALITY), target];
+	return ["-y", ...ffmpegImageInput(source), "-i", source, "-c:v", "libwebp", "-quality", String(LOSSY_QUALITY), target];
 }
 
 /** Lossy quality flags for the ffmpeg image backend; lossless formats add none. */
@@ -396,7 +400,7 @@ function ffmpegQualityArgs(format: ImageFormat): readonly string[] {
 
 /** Decode one frame and re-encode to `format`, keeping alpha where the target supports it. */
 function ffmpegConvertArgs(source: string, target: string, format: ImageFormat): readonly string[] {
-	const args = ["-y", ...FFMPEG_IMAGE_INPUT, "-i", source, "-frames:v", "1"];
+	const args = ["-y", ...ffmpegImageInput(source), "-i", source, "-frames:v", "1"];
 	if (format === "jpeg") args.push("-pix_fmt", "yuvj420p");
 	else if (format === "png" || format === "webp") args.push("-pix_fmt", "rgba");
 	args.push(...ffmpegQualityArgs(format), ...ffmpegImageOutput(format), target);
@@ -406,14 +410,14 @@ function ffmpegConvertArgs(source: string, target: string, format: ImageFormat):
 /** Fit inside a `maxEdge` box without enlarging, preserving aspect ratio. */
 function ffmpegResizeArgs(source: string, target: string, maxEdge: number, format: ImageFormat): readonly string[] {
 	const filter = `scale='min(iw,${maxEdge})':'min(ih,${maxEdge})':force_original_aspect_ratio=decrease`;
-	const args = ["-y", ...FFMPEG_IMAGE_INPUT, "-i", source, "-frames:v", "1", "-vf", filter];
+	const args = ["-y", ...ffmpegImageInput(source), "-i", source, "-frames:v", "1", "-vf", filter];
 	args.push(...ffmpegQualityArgs(format), ...ffmpegImageOutput(format), target);
 	return args;
 }
 
 /** Re-encode for size: PNG uses maximum deflate, lossy formats re-encode at the tuning quality. */
 function ffmpegOptimizeArgs(source: string, target: string, format: ImageFormat): readonly string[] {
-	const args = ["-y", ...FFMPEG_IMAGE_INPUT, "-i", source, "-frames:v", "1"];
+	const args = ["-y", ...ffmpegImageInput(source), "-i", source, "-frames:v", "1"];
 	if (format === "png") args.push("-compression_level", "9", "-pred", "mixed");
 	else args.push(...ffmpegQualityArgs(format));
 	args.push(...ffmpegImageOutput(format), target);

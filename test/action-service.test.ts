@@ -335,6 +335,18 @@ describe("image actions on Windows (ffmpeg backend)", () => {
 		expect(args.at(-1)).toBe(join(root, "report%20draft.jpg"));
 	});
 
+	it.each(["heic", "gif", "avif"])("leaves the %s input to ffmpeg's native demuxer", async (extension) => {
+		const { service, commands } = makeService({ platform: "win32" });
+		const source = join(root, `photo.${extension}`);
+		await writeFile(source, extension);
+
+		await service.run(source, { kind: "convertImage", format: "jpeg" }, null);
+		const args = commands.at(-1)?.args ?? [];
+		expect(args).not.toContain("image2");
+		expect(args).not.toContain("-pattern_type");
+		expect(args).toContain(source);
+	});
+
 	it("encodes JPEG at the mjpeg qscale, not the sips quality", async () => {
 		const { service, commands } = makeService({ platform: "win32" });
 		const source = join(root, "shot.png");
