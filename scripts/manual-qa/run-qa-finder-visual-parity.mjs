@@ -273,13 +273,12 @@ try {
 	await sleep(600);
 	await shot(page, "11-settings-general");
 	await shot(page, "12-settings-panel", ".settings-panel");
-	await shot(page, "13-settings-section", ".linear-section-title >> nth=0");
+	await shot(page, "13-settings-section", ".linear-header");
 	await shot(page, "14-settings-switch-row", ".linear-row:has(.settings-switch) >> nth=0");
 	for (const [tab, name] of [
-		["Models", "15-settings-models"],
+		["LLM Models", "15-settings-models"],
 		["Data Sources", "16-settings-sources"],
 	]) {
-		await page.locator(".settings-nav-item", { hasText: tab }).click();
 		await sleep(600);
 		await shot(page, name);
 	}
@@ -329,7 +328,7 @@ try {
 	await sleep(400);
 	await shot(page, "19-sidebar-item-hover");
 
-	await page.locator(".side-search input").click();
+	await page.locator(".sidebar-search input").click();
 	await sleep(400);
 	await shot(page, "20-search-focused");
 	await shot(page, "21-search-focused-element", ".side-search");

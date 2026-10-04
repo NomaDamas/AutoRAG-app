@@ -60,6 +60,38 @@ through Electron's native theme; Quick Look has no separate appearance switch.
 The default is Light, and changing it while Quick Look is open updates the panel
 without reloading the previewed file. The choice is retained after restart.
 
+### AutoRAG configuration settings
+
+Settings writes to the shared AutoRAG `config.json`; the Finder does not keep a
+second datasource or model configuration. The categories are:
+
+- **General** — document languages and app preferences.
+- **LLM Models** — provider/model catalog selection, provider endpoint, allowed
+  API protocol, model limits/modalities, and encrypted provider credentials.
+- **Embedding Models** — local MinSync profiles or loopback endpoints, vector
+  dimensions, prefixes, request limits, and reindexing.
+- **Reranker Models** — the v2.7 OpenRouter reranker, wire model, limits, and
+  encrypted credentials. Other reranker providers are not offered because the
+  upstream resolver rejects them.
+- **Data Sources** — multiple named connections per datasource template,
+  instance ids, channel filters, connector-specific fields, tags, access
+  policy, and encrypted GitHub credentials. Unknown config fields are retained.
+- **Deep Indexing / Light Indexing / Other Apps** — search paths, MinSync,
+  Jikji, retrieval limits, FSearch/Everything, web search, parser/OCR, dupey,
+  datasource access, P2P, and exclusions.
+
+`workspacePath` and `memoryPath` remain AutoRAG-owned defaults. Automatic code
+folder exclusions default to `.git`, `node_modules`, virtual environments,
+build outputs, coverage, and `__pycache__`; they can be disabled or edited in
+**Light Indexing**. Parsed/MinSync/Jikji receive these exclusions. The native
+FSearch/Everything clients expose no arbitrary-folder exclusion option, so a
+refresh reports that limitation instead of pretending it was applied.
+
+API keys are never written into `config.json`. The app uses Electron's encrypted
+credential store and injects the selected environment variable into the live
+agent process. Remote embedding endpoints and datasource embedding/rerank
+endpoints are rejected; use a loopback service for corpus-bearing requests.
+
 ## Live filesystem sync
 
 Folders shown in open tabs are watched for changes made by other apps. A

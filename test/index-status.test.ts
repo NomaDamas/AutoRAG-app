@@ -85,17 +85,22 @@ describe("createIndexStatusService", () => {
 	it("persists an exclusion to the shared config and reports it pending while the file is still indexed", async () => {
 		const fixture = await createFixture();
 		const staged = await indexFile(fixture, "staged.txt", true);
-		const service = createIndexStatusService({ env: fixture.env, cwd: fixture.workspace, onRefreshed: () => {} });
+		let refreshedResolve: (() => void) | null = null;
+		let refreshed = new Promise<void>((resolve) => { refreshedResolve = resolve; });
+		const service = createIndexStatusService({ env: fixture.env, cwd: fixture.workspace, onRefreshed: () => refreshedResolve?.(), refresh: async () => undefined });
 
 		const status = await service.setIndexExcluded(staged, true);
 		const config = JSON.parse(await readFile(fixture.configPath, "utf8")) as { excludePaths?: string[] };
 
 		expect(config.excludePaths).toEqual([staged]);
 		expect(status).toMatchObject({ kind: "pending", excluded: true, toggleable: true });
+		await refreshed;
 
+		refreshed = new Promise<void>((resolve) => { refreshedResolve = resolve; });
 		await service.setIndexExcluded(staged, false);
 		const cleared = JSON.parse(await readFile(fixture.configPath, "utf8")) as { excludePaths?: string[] };
 		expect(cleared.excludePaths).toBeUndefined();
+		await refreshed;
 	});
 
 	it("marks files under an excluded folder excluded but leaves the toggle to the folder", async () => {

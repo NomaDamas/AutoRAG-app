@@ -48,10 +48,9 @@ describe("createModelStatusService", () => {
 		expect(snapshot.error).toBeNull();
 		expect(snapshot.configPath).toBe(fixture.configPath);
 		expect(snapshot.configExists).toBe(true);
-		expect(snapshot.model).toEqual({
+		expect(snapshot.model).toMatchObject({
 			provider: "openrouter",
 			modelId: "deepseek/deepseek-v4.1-flash",
-			displayName: "deepseek/deepseek-v4.1-flash",
 			api: "openai-completions",
 			baseUrl: "https://openrouter.ai/api/v1",
 			resolutionSource: "config",

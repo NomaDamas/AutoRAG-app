@@ -19,6 +19,8 @@
 	},
 	"dependencies": {
 		"@autorag/librarian": "file:./.upstream/autorag",
+		"@earendil-works/pi-ai": "0.86.1",
+		"@earendil-works/pi-coding-agent": "0.86.1",
 		"@parcel/watcher": "^2.6.0",
 		"clsx": "^2.1.1",
 		"docx-preview": "^0.4.1",

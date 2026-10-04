@@ -14,5 +14,15 @@ export function createSettingsBridge(ipcRenderer: IpcRenderer): SettingsBridge {
 		sourcesSetEnabled: (id, enabled) => ipcRenderer.invoke(SETTINGS_CHANNELS.sourcesSetEnabled, id, enabled),
 		sourcesSetDescription: (id, description) => ipcRenderer.invoke(SETTINGS_CHANNELS.sourcesSetDescription, id, description),
 		modelsResolve: () => ipcRenderer.invoke(SETTINGS_CHANNELS.modelsResolve),
+		configGet: () => ipcRenderer.invoke(SETTINGS_CHANNELS.configGet),
+		configSet: (path, value) => ipcRenderer.invoke(SETTINGS_CHANNELS.configSet, path, value),
+		configRemove: (path) => ipcRenderer.invoke(SETTINGS_CHANNELS.configRemove, path),
+		configPatch: (updates) => ipcRenderer.invoke(SETTINGS_CHANNELS.configPatch, updates),
+		configRename: (from, to) => ipcRenderer.invoke(SETTINGS_CHANNELS.configRename, from, to),
+		modelsCatalog: () => ipcRenderer.invoke(SETTINGS_CHANNELS.modelsCatalog),
+		configRefresh: (methods) => ipcRenderer.invoke(SETTINGS_CHANNELS.configRefresh, methods),
+		credentialsList: (envNames) => ipcRenderer.invoke(SETTINGS_CHANNELS.credentialsList, envNames),
+		credentialsSet: (envName, secret) => ipcRenderer.invoke(SETTINGS_CHANNELS.credentialsSet, envName, secret),
+		credentialsRemove: (envName) => ipcRenderer.invoke(SETTINGS_CHANNELS.credentialsRemove, envName),
 	};
 }

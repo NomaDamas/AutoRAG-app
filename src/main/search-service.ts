@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import {
 	buildAgentOptions,
 	EMIT_AUTORAG_RESULTS_TOOL_NAME,
@@ -7,7 +8,8 @@ import {
 	type SearchDocumentsResponse,
 	type SearchDocumentsStreamEvent,
 } from "@autorag/librarian";
-import { resolveAgentModel } from "@autorag/librarian/core";
+import { readRawConfigObject, resolveAgentModel, resolveConfigPath, type CliConfig } from "@autorag/librarian/core";
+import { applyAppIndexing } from "./app-indexing";
 import type {
 	AnswerPhase,
 	AnswerPhaseName,
@@ -61,7 +63,7 @@ type SearchAgent = Pick<AutoRAGAgent, "recordFeedbackByNumbers"> & {
 };
 
 export interface SearchServiceDeps {
-	readonly agentFactory: () => SearchAgent;
+	readonly agentFactory: () => SearchAgent | Promise<SearchAgent>;
 	readonly chatStore: ChatStore;
 	readonly send: (channel: string, payload: SearchStreamEvent) => void;
 	readonly now?: () => Date;
@@ -72,7 +74,8 @@ export interface SearchServiceDeps {
 interface SearchRun {
 	readonly searchId: string;
 	readonly chatId: string;
-	readonly agent: SearchAgent;
+	/** Null while the async agent factory is still building it. */
+	agent: SearchAgent | null;
 	readonly finish: Promise<void>;
 	readonly resolveFinish: () => void;
 	cancelled: boolean;
@@ -190,6 +193,8 @@ function assistantMessage(run: SearchRun, stopped: boolean, now: () => Date): Ch
 export function createSearchService(deps: SearchServiceDeps): SearchBridge {
 	const now = deps.now ?? (() => new Date());
 	const active = new Map<string, SearchRun>();
+	/** Most recently built agent, reused to record feedback without a rebuild. */
+	let lastAgent: SearchAgent | null = null;
 
 	const emit = (event: SearchStreamEvent): void => deps.send(SEARCH_CHANNELS.event, event);
 
@@ -204,19 +209,19 @@ export function createSearchService(deps: SearchServiceDeps): SearchBridge {
 		});
 	}
 
-	async function consume(run: SearchRun, query: string, attachments: readonly ChatAttachment[]): Promise<void> {
+	async function consume(run: SearchRun, agent: SearchAgent, query: string, attachments: readonly ChatAttachment[]): Promise<void> {
 		const mapLive = createLiveStreamMapper(run.searchId, (event) => {
 			if (!run.cancelled) emit(event);
 		});
 		// Subscribe before the generator starts the run, or the first thinking
 		// tokens are lost.
-		const unsubscribe = run.agent.subscribe?.(mapLive);
+		const unsubscribe = agent.subscribe?.(mapLive);
 		try {
 			// Reading a large PDF can outlast a Stop; a cancelled run never reaches the agent.
 			const context = await (deps.attachmentContext ?? buildAttachmentContext)(attachments);
 			if (run.cancelled) return;
-			run.agent.setAttachmentContext(context);
-			for await (const event of run.agent.searchDocumentsStream(query)) {
+			agent.setAttachmentContext(context);
+			for await (const event of agent.searchDocumentsStream(query)) {
 				if (run.cancelled) return;
 				switch (event.type) {
 					case "progress":
@@ -264,16 +269,6 @@ export function createSearchService(deps: SearchServiceDeps): SearchBridge {
 
 	return {
 		start: async (searchId, chatId, query, attachments) => {
-			let agent: SearchAgent;
-			try {
-				// A bad config (e.g. a search root that no longer exists) throws
-				// here; the panel must show it instead of waiting forever.
-				agent = deps.agentFactory();
-			} catch (error) {
-				emit({ type: "error", searchId, message: errorText(error) });
-				emit({ type: "done", searchId });
-				return;
-			}
 			let resolveFinish = (): void => undefined;
 			const finish = new Promise<void>((resolve) => {
 				resolveFinish = resolve;
@@ -288,7 +283,7 @@ export function createSearchService(deps: SearchServiceDeps): SearchBridge {
 			const run: SearchRun = {
 				searchId,
 				chatId,
-				agent,
+				agent: null,
 				finish,
 				resolveFinish,
 				cancelled: false,
@@ -296,6 +291,8 @@ export function createSearchService(deps: SearchServiceDeps): SearchBridge {
 				deep: null,
 				sessionId: "",
 			};
+			// Register before the async factory resolves so Stop during creation
+			// cancels the run instead of racing it.
 			active.set(searchId, run);
 			const existing = await deps.chatStore.get(chatId);
 			await deps.chatStore.save({
@@ -305,21 +302,45 @@ export function createSearchService(deps: SearchServiceDeps): SearchBridge {
 				updatedAt: at,
 				messages: [...(existing?.messages ?? []), userMessage],
 			});
-			void consume(run, query, attachments);
+			let agent: SearchAgent;
+			try {
+				// A bad config (e.g. a search root that no longer exists) throws
+				// here; the panel must show it instead of waiting forever.
+				agent = await deps.agentFactory();
+			} catch (error) {
+				active.delete(searchId);
+				if (!run.cancelled) {
+					emit({ type: "error", searchId, message: errorText(error) });
+					emit({ type: "done", searchId });
+				}
+				run.resolveFinish();
+				return;
+			}
+			if (run.cancelled) {
+				// Stop landed while the agent was being built; never start it.
+				run.resolveFinish();
+				return;
+			}
+			run.agent = agent;
+			lastAgent = agent;
+			void consume(run, agent, query, attachments);
 			await finish;
 		},
 		cancel: async (searchId) => {
 			const run = active.get(searchId);
 			if (run === undefined || run.cancelled) return;
 			run.cancelled = true;
-			run.agent.abort?.();
+			run.agent?.abort?.();
 			emit({ type: "cancelled", searchId });
 			await saveRunMessage(run, true);
 			active.delete(searchId);
 			run.resolveFinish();
 		},
 		feedback: async (sessionId, useful, notUseful) => {
-			deps.agentFactory().recordFeedbackByNumbers(sessionId, [...useful], [...notUseful]);
+			// Reuse the agent that produced the session; only build one when no
+			// search has run yet in this process.
+			const agent = lastAgent ?? (await deps.agentFactory());
+			await agent.recordFeedbackByNumbers(sessionId, [...useful], [...notUseful]);
 		},
 		historyList: () => deps.chatStore.list(),
 		historyGet: (chatId) => deps.chatStore.get(chatId),
@@ -329,12 +350,22 @@ export function createSearchService(deps: SearchServiceDeps): SearchBridge {
 	};
 }
 
-export function createDefaultAgentFactory(): () => SearchAgent {
-	return () => {
-		const config = resolveConfigReadOnly({ flags: {}, env: process.env, cwd: process.cwd() });
-		const resolved = resolveAgentModel(config);
+export function createDefaultAgentFactory(): () => Promise<SearchAgent> {
+	return async () => {
+		const input = { flags: {}, env: process.env, cwd: process.cwd() };
+		const config = resolveConfigReadOnly(input);
+		const configPath = resolveConfigPath(input).configPath;
+		const raw = existsSync(configPath) ? readRawConfigObject(configPath) : {};
+		// librarian's resolveConfig drops `webSearch`; re-attach the raw block so
+		// buildAgentOptions applies it, then layer the app's code-folder exclusions.
+		const withWebSearch: CliConfig =
+			raw.webSearch === undefined
+				? config
+				: { ...config, webSearch: raw.webSearch as NonNullable<CliConfig["webSearch"]> };
+		const effective = applyAppIndexing(withWebSearch, raw);
+		const resolved = await resolveAgentModel(effective);
 		const options: AutoRAGAgentOptions = {
-			...buildAgentOptions(config),
+			...buildAgentOptions(effective),
 			model: resolved.model,
 			...(resolved.apiKey !== undefined ? { apiKey: resolved.apiKey } : {}),
 			...(resolved.providerApiKeys !== undefined ? { providerApiKeys: resolved.providerApiKeys } : {}),

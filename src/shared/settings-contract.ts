@@ -17,6 +17,16 @@ export const SETTINGS_CHANNELS = {
 	sourcesSetEnabled: "sources:setEnabled",
 	sourcesSetDescription: "sources:setDescription",
 	modelsResolve: "models:resolve",
+	configGet: "config:get",
+	configSet: "config:set",
+	configRemove: "config:remove",
+	configPatch: "config:patch",
+	configRename: "config:rename",
+	modelsCatalog: "models:catalog",
+	configRefresh: "config:refresh",
+	credentialsList: "credentials:list",
+	credentialsSet: "credentials:set",
+	credentialsRemove: "credentials:remove",
 } as const;
 
 export type Permission = "ask" | "allow" | "deny";
@@ -126,7 +136,8 @@ export interface ConfiguredModel {
 	readonly resolutionSource: ModelResolutionSource;
 	readonly auth: {
 		readonly present: boolean;
-		readonly source: "env" | "local_runtime" | "catalog" | "none" | "unknown";
+		/** `pi_auth` = credential stored/refreshed by the Pi runtime (auth.json or OAuth). */
+		readonly source: "env" | "local_runtime" | "pi_auth" | "catalog" | "none" | "unknown";
 		/** Env var the key is read from, when one is known. */
 		readonly envName: string | null;
 	};
@@ -139,6 +150,84 @@ export interface ConfiguredModelSnapshot {
 	/** Config or model could not be resolved; `model` is null. */
 	readonly error: string | null;
 	readonly model: ConfiguredModel | null;
+}
+
+export type JsonPrimitive = string | number | boolean | null;
+export type JsonValue = JsonPrimitive | JsonObject | readonly JsonValue[];
+export interface JsonObject {
+	readonly [key: string]: JsonValue;
+}
+
+/** Narrow a JSON boundary value to an object whose fields remain unknown. */
+export function isJsonObject(value: unknown): value is Record<string, unknown> {
+	return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+/**
+ * One leaf write in an all-or-nothing `configPatch`. Either a set (`value`) or a
+ * removal (`remove: true`); both are applied to the same candidate config so a
+ * mixed batch is validated and written once.
+ */
+export type AutoRagConfigUpdate =
+	| { readonly path: readonly string[]; readonly value: JsonValue }
+	| { readonly path: readonly string[]; readonly remove: true };
+
+export interface AutoRagConfigSnapshot {
+	readonly configPath: string;
+	readonly configExists: boolean;
+	readonly error: string | null;
+	/** Secret values are redacted; unchanged redacted values preserve the original. */
+	readonly config: JsonObject;
+}
+
+export interface ModelCatalogEntry {
+	readonly provider: string;
+	readonly id: string;
+	readonly name: string;
+	readonly api: string;
+	readonly available: boolean;
+}
+
+export interface ModelCatalogProvider {
+	readonly id: string;
+	readonly name: string;
+	readonly baseUrl: string | null;
+	readonly authConfigured: boolean;
+	/** Environment variable the provider key is read from (never a secret). */
+	readonly apiKeyEnv: string | null;
+	readonly models: readonly ModelCatalogEntry[];
+}
+
+export interface ModelCatalogSnapshot {
+	readonly error: string | null;
+	readonly providers: readonly ModelCatalogProvider[];
+}
+
+/** One encrypted credential the app stores for a provider API-key env var. */
+export interface ProviderCredentialStatus {
+	readonly envName: string;
+	/** True when the app holds an encrypted value for this variable. */
+	readonly stored: boolean;
+	/** The value the agent will use: stored > env > none. */
+	readonly source: "stored" | "env" | "none";
+}
+
+export interface ConfigRefreshDiagnostic {
+	readonly code: string;
+	readonly severity: "info" | "warning" | "error";
+	readonly message: string;
+}
+
+/** Outcome of a manual AutoRAGLite index refresh, with its diagnostics. */
+export interface ConfigRefreshResult {
+	readonly ok: boolean;
+	readonly methods: readonly string[];
+	readonly scanned: number;
+	readonly written: number;
+	readonly deleted: number;
+	readonly skipped: number;
+	readonly diagnostics: readonly ConfigRefreshDiagnostic[];
+	readonly error: string | null;
 }
 
 export interface SettingsBridge {
@@ -161,4 +250,20 @@ export interface SettingsBridge {
 
 	/** The provider/model the shared AutoRAG config resolves for the agent right now. */
 	modelsResolve(): Promise<ConfiguredModelSnapshot>;
+	configGet(): Promise<AutoRagConfigSnapshot>;
+	configSet(path: readonly string[], value: JsonValue): Promise<AutoRagConfigSnapshot>;
+	configRemove(path: readonly string[]): Promise<AutoRagConfigSnapshot>;
+	/** All-or-nothing batch of leaf sets/removals, applied to the freshest config in one write. */
+	configPatch(updates: readonly AutoRagConfigUpdate[]): Promise<AutoRagConfigSnapshot>;
+	/** Move the value at `from` to `to` in one write (fails if `from` is absent). */
+	configRename(from: readonly string[], to: readonly string[]): Promise<AutoRagConfigSnapshot>;
+	modelsCatalog(): Promise<ModelCatalogSnapshot>;
+	/** Runs an AutoRAGLite index refresh (parsed/minsync by default) and reports its diagnostics. */
+	configRefresh(methods?: readonly string[]): Promise<ConfigRefreshResult>;
+
+	/** Status for the requested env vars, unioned with every stored credential. */
+	credentialsList(envNames?: readonly string[]): Promise<readonly ProviderCredentialStatus[]>;
+	/** Encrypts and persists a provider key under `envName`; never returns the secret. */
+	credentialsSet(envName: string, secret: string): Promise<readonly ProviderCredentialStatus[]>;
+	credentialsRemove(envName: string): Promise<readonly ProviderCredentialStatus[]>;
 }
