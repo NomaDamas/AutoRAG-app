@@ -77,13 +77,13 @@ AppShell (window, 14px radius, shadow)
 │   │   ├── Header (+ Add contact)
 │   │   └── ContactCard[] (drag source → chat)
 │   ├── StatusBar (32px)
-│   └── EvidencePanel (flex 0 0 44, collapsible)
-│       ├── EvidenceTabStrip (40px)
+│   └── EvidencePanel (flex 0 0 44, citation-driven and collapsible)
+│       ├── EvidenceTabStrip (numbered tabs appear first)
 │       ├── [evOpen] EvidenceContent
-│       │   ├── EvidenceHeader (tile, title, 👍/👎, Quick Look)
-│       │   ├── EvidenceBreadcrumb (click → reveal in Finder)
+│       │   ├── EvidenceTitle (click → reveal folder and select file)
+│       │   ├── FeedbackControls (background-free thumbs)
 │       │   └── EvidenceBody (scrollable, MD-like blocks)
-│       └── [evOpen] ToggleButton (chevron, ⌘E)
+│       └── [evOpen] Toggle via ⌘E
 │
 ├── AiSearchColumn (grid col 3, left border)
 │   ├── AiHeader (48px)
@@ -206,11 +206,10 @@ AppShell (window, 14px radius, shadow)
 | Event | Handler | State mutated |
 |-------|---------|---------------|
 | Click tab | `onClick` | `ev`, `evOpen: true`, `zone: 'evidence'` |
-| Click 👍 | `evUp` | `evFb` (toggle up/null) |
-| Click 👎 | `evDown` | `evFb` (toggle down/null) |
-| Click Quick Look | `openEvQL` | `ql: 'ev'` |
-| Click breadcrumb | `revealEv` | new tab, `flash`, `ql: null` |
-| Toggle button | `toggleEv` | `evOpen` toggled |
+| Click 좋아요 | `evUp` | `evFb` (toggle up/null; background-free control) |
+| Click 싫어요 | `evDown` | `evFb` (toggle down/null; background-free control) |
+| Click title | `revealEv` | new tab, source folder, selected file, `flash`; NFC/NFD-equivalent filenames resolve to the listing's real path |
+| Toggle Evidence | `toggleEv` | `evOpen` toggled; panel hidden otherwise |
 | Focus evidence content | `focusEvidence` | `zone: 'evidence'` |
 
 ### AiSearch (MessageList)

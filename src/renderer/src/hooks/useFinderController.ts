@@ -24,6 +24,7 @@ import {
 } from "../state/context-menu";
 import type { FileActionTarget } from "../state/file-actions";
 import { emptyStateText, indexToast, trashToast } from "../state/format";
+import { findEvidenceSource } from "../state/evidence";
 import { type FocusZone, resolveKeyAction } from "../state/keymap";
 import {
 	applyEntryEnrichmentPatch,
@@ -1391,22 +1392,26 @@ export function useFinderController(
 		[presentQuickLook],
 	);
 
-	// An evidence crumb opens the enclosing folder in a NEW tab, with the source row revealed.
+	// An evidence title opens the enclosing folder in a NEW tab and selects the source file.
 	const revealEvidence = useCallback(
 		(target: string) => {
 			const folder = dirname(target);
 			source
 				.list(folder)
-				.then(() => {
+				.then((entries) => {
+					const entry = findEvidenceSource(entries, target);
+					if (entry === undefined) {
+						throw new Error(`Evidence source was not found in its folder: ${target}`);
+					}
 					setTabsState((state) =>
 						patchActiveTab(openTabAt(state, folder), (tab) => ({
 							...tab,
-							selection: { keys: [target], anchor: target, focus: target },
+							selection: single(entry.path),
 						})),
 					);
 					setQueryValue("");
-					setFlashPath(target);
-					scrollTarget.current = target;
+					setFlashPath(entry.path);
+					scrollTarget.current = entry.path;
 				})
 				.catch(reportError);
 		},
