@@ -66,7 +66,7 @@ const RESOLUTION_LABELS: Record<string, string> = {
 const AUTH_LABELS: Record<string, string> = {
 	env: "환경변수",
 	local_runtime: "local runtime",
-	catalog: "카탈로그",
+	pi_auth: "pi auth",
 	none: "없음",
 	unknown: "알 수 없음",
 };
