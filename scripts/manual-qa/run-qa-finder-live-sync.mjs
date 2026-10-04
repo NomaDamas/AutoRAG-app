@@ -6,7 +6,7 @@
  */
 
 import { finderWindow, launchFinder } from "./launch-finder.mjs";
-import { baseName, isWindows } from "./platform.mjs";
+import { baseName, isWindows, rmRetry } from "./platform.mjs";
 import {
 	existsSync,
 	lstatSync,
@@ -89,7 +89,7 @@ function fail(label, observable) {
 
 function removeFixtures() {
 	for (const path of [FIXTURE_DIR, OTHER_DIR, UNWATCHED_DIR]) {
-		rmSync(path, { recursive: true, force: true });
+		rmRetry(path);
 	}
 }
 
@@ -97,7 +97,7 @@ function cleanupOnExit() {
 	if (cleanupComplete) return;
 	cleanupComplete = true;
 	removeFixtures();
-	rmSync(USER_DATA, { recursive: true, force: true });
+	rmRetry(USER_DATA);
 	try {
 		appendTo(
 			RUN_LOG,
@@ -169,7 +169,7 @@ async function startSession(label) {
 async function finishSession() {
 	await closeApp();
 	removeFixtures();
-	rmSync(USER_DATA, { recursive: true, force: true });
+	rmRetry(USER_DATA);
 	appendLog(`SESSION CLEANUP userData=${existsSync(USER_DATA) ? "present" : "removed"} fixtures=${
 		[FIXTURE_DIR, OTHER_DIR, UNWATCHED_DIR].every((path) => !existsSync(path)) ? "removed" : "present"
 	}`);

@@ -174,34 +174,37 @@ try {
 	const panes = () => page.locator(".column").evaluateAll((nodes) => nodes.map((n) => n.getAttribute("data-path")));
 	const paneNames = (index) =>
 		page.locator(".column").nth(index).locator(".column-row").evaluateAll((rows) => rows.map((r) => r.getAttribute("aria-label")).sort());
+	/** Playwright's CSS engine eats a lone backslash in an attribute value (measured:
+	 * `[data-path="C:\Users"]` matches nothing), so Windows paths need `\\`. */
+	const cssAttr = (value) => value.replace(/\\/g, "\\\\");
 	check("C3 columns start with the current folder only", await panes(), [topPath]);
-	await page.locator(`.column[data-path="${topPath}"] .column-row[aria-label="alpha"]`).click();
+	await page.locator(`.column[data-path="${cssAttr(topPath)}"] .column-row[aria-label="alpha"]`).click();
 	await page.waitForFunction(() => document.querySelectorAll(".column").length === 2);
 	check("C3 folder in pane 1 opens pane 2", await panes(), [topPath, alphaPath]);
-	await page.waitForSelector(`.column[data-path="${alphaPath}"] .column-row`);
+	await page.waitForSelector(`.column[data-path="${cssAttr(alphaPath)}"] .column-row`);
 	check("C3 pane 2 lists the folder's children", await paneNames(1), ["alpha-1.md", "alpha-2.md", "beta"]);
-	await page.locator(`.column[data-path="${alphaPath}"] .column-row[aria-label="beta"]`).click();
+	await page.locator(`.column[data-path="${cssAttr(alphaPath)}"] .column-row[aria-label="beta"]`).click();
 	await page.waitForFunction(() => document.querySelectorAll(".column").length === 3);
-	await page.waitForSelector(`.column[data-path="${betaPath}"] .column-row`);
+	await page.waitForSelector(`.column[data-path="${cssAttr(betaPath)}"] .column-row`);
 	check("C3 subfolder in pane 2 opens pane 3", await panes(), [topPath, alphaPath, betaPath]);
 	check("C3 pane 3 lists the sub-subfolder", await paneNames(2), ["beta-1.md", "gamma"]);
 	// v7 marks the opened-but-not-selected folder row by muting it (`text-ink-muted`)
 	// instead of the v6 `column-row--opened` modifier; the selected state stays on aria-selected.
-	const openedRow = page.locator(`.column[data-path="${topPath}"] .column-row[aria-label="alpha"]`);
+	const openedRow = page.locator(`.column[data-path="${cssAttr(topPath)}"] .column-row[aria-label="alpha"]`);
 	check(
 		"C3 the opened folder stays marked in pane 1",
 		[(await openedRow.getAttribute("class")).includes("text-ink-muted"), await openedRow.getAttribute("aria-selected")],
 		[true, "false"],
 	);
 	await page.screenshot({ path: `${EVIDENCE}/columns-3.png` });
-	await page.locator(`.column[data-path="${betaPath}"] .column-row[aria-label="gamma"]`).click();
+	await page.locator(`.column[data-path="${cssAttr(betaPath)}"] .column-row[aria-label="gamma"]`).click();
 	await page.waitForFunction((p) => document.querySelector(".column")?.getAttribute("data-path") === p, alphaPath);
-	await page.waitForSelector(`.column[data-path="${gammaPath}"] .column-row`);
+	await page.waitForSelector(`.column[data-path="${cssAttr(gammaPath)}"] .column-row`);
 	check("C3 folder in pane 3 slides the panes (still 3, pane 1 = old pane 2)", await panes(), [alphaPath, betaPath, gammaPath]);
 	check("C3 slid pane 3 lists gamma", await paneNames(2), ["delta.txt"]);
 	check("C3 breadcrumb follows the first pane", await page.locator(".toolbar-title").textContent(), "alpha");
 	await page.screenshot({ path: `${EVIDENCE}/columns-slid.png` });
-	await page.locator(`.column[data-path="${gammaPath}"] .column-row[aria-label="delta.txt"]`).click();
+	await page.locator(`.column[data-path="${cssAttr(gammaPath)}"] .column-row[aria-label="delta.txt"]`).click();
 	await page.keyboard.press("ArrowLeft");
 	check("C3 ArrowLeft moves back to the parent folder row", await page.locator('.column-row[aria-selected="true"]').getAttribute("aria-label"), "gamma");
 	await page.keyboard.press("ArrowLeft");
@@ -210,18 +213,18 @@ try {
 	// Like Finder, stepping left closes the rightmost pane: the focused folder's contents stay open.
 	check("C3 ArrowLeft past pane 1 slides the panes back", await panes(), [topPath, alphaPath]);
 	check("C3 slid-back focus is the folder it slid from", await page.locator('.column-row[aria-selected="true"]').getAttribute("aria-label"), "alpha");
-	await page.locator(`.column[data-path="${topPath}"] .column-row[aria-label="notes.md"]`).click();
+	await page.locator(`.column[data-path="${cssAttr(topPath)}"] .column-row[aria-label="notes.md"]`).click();
 	check("C3 choosing a file closes the deeper panes", await panes(), [topPath]);
 
 	// Column-view context menu rename in pane 2
-	await page.locator(`.column[data-path="${topPath}"] .column-row[aria-label="alpha"]`).click();
-	await page.waitForSelector(`.column[data-path="${alphaPath}"] .column-row[aria-label="alpha-1.md"]`);
-	await page.locator(`.column[data-path="${alphaPath}"] .column-row[aria-label="alpha-1.md"]`).click({ button: "right" });
+	await page.locator(`.column[data-path="${cssAttr(topPath)}"] .column-row[aria-label="alpha"]`).click();
+	await page.waitForSelector(`.column[data-path="${cssAttr(alphaPath)}"] .column-row[aria-label="alpha-1.md"]`);
+	await page.locator(`.column[data-path="${cssAttr(alphaPath)}"] .column-row[aria-label="alpha-1.md"]`).click({ button: "right" });
 	await page.getByRole("menuitem", { name: /이름 변경/ }).click();
 	await page.keyboard.press(chord("a"));
 	await page.keyboard.type("alpha-renamed.md");
 	await page.keyboard.press("Enter");
-	await page.waitForSelector(`.column[data-path="${alphaPath}"] .column-row[aria-label="alpha-renamed.md"]`, { timeout: 10000 });
+	await page.waitForSelector(`.column[data-path="${cssAttr(alphaPath)}"] .column-row[aria-label="alpha-renamed.md"]`, { timeout: 10000 });
 	check("C3 rename from pane 2 renames on disk", await Bun.file(join(alphaPath, "alpha-renamed.md")).exists(), true);
 
 	// Persistence: the chosen mode survives a relaunch.

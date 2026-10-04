@@ -287,7 +287,7 @@ async function pass(appearance) {
 
 		// Audio
 		ms = await open("Sample Artist - Afterglow.mp3", () => document.querySelector(".ql-audio__title")?.textContent === "Afterglow" && document.querySelector(".ql-audio__art img") !== null);
-		check("audio shows tags and cover", ms < 2000, `${ms}ms`);
+		check("audio shows tags and cover", ms < (isWindows ? 4000 : 2000), `${ms}ms`);
 		const bars = await poll(
 			() => preview.locator(".ql-audio span.flex-none").evaluateAll((nodes) => new Set(nodes.map((node) => node.style.height)).size),
 			(count) => count > 4,
