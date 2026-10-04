@@ -12,23 +12,38 @@
  * letter tile) and are logged verbatim; one failed file never costs the batch.
  *
  * The produced PNG bytes stay in this module's in-process cache, keyed by the
- * same `(path, modifiedAt)` identity the caller passes in, and bounded both by
- * entry count and total bytes (least-recently-used eviction). Callers receive
- * a stable `autorag-thumb://` URL (never a base64 data URL); the protocol
- * handler in `icon-protocol.ts` serves the cached bytes for that identity.
- * Concurrent requests for the same identity are single-flighted, so one
- * listing that races another never regenerates the same file twice.
+ * same `(path, modifiedAt)` identity the caller passes in plus the tier edge,
+ * and bounded both by entry count and total bytes (least-recently-used
+ * eviction). Callers receive a stable `autorag-thumb://` URL (never a base64
+ * data URL); the protocol handler in `icon-protocol.ts` serves the cached
+ * bytes for that identity. Two tiers share the cache: the listing's 128px
+ * tile tier (`icons`) and the Inspector's 640px preview tier (`preview`), so
+ * the panel renders the page's real content crisply at 2x. Generation runs on
+ * two lanes — the listing pool and a small dedicated preview lane — because
+ * inspecting a file is the user's critical path and must never queue behind
+ * a slow batch. Concurrent requests for the same identity are
+ * single-flighted, so one listing that races another never regenerates the
+ * same file twice.
  */
 
 import { errorMessage } from "./fs-entry";
-import { iconUrl } from "./icon-protocol";
+import { ICON_SIZE, iconUrl } from "./icon-protocol";
 
-/** Thumbnail edge in px; 128 covers the icon view's 64px tile at 2x (and the 18px row tile easily). */
-export const ICON_SIZE = 128;
+/** Tile tier edge in px, defined beside the URL contract; re-exported for the listing code. */
+export { ICON_SIZE } from "./icon-protocol";
+/** Inspector preview tier edge in px: the large Quick Look rendering the Info panel shows. */
+export const PREVIEW_ICON_SIZE = 640;
 /** One listing never generates more than this many icons. */
 export const ICON_LIMIT = 240;
 /** Native thumbnail calls allowed to run at once across every concurrent listing. */
 export const THUMBNAIL_CONCURRENCY = 8;
+/**
+ * Inspector previews allowed to run at once, on a lane separate from the
+ * listing pool: inspecting a file is the user's critical path, so a slow
+ * 240-file batch (videos can hold a permit until the deadline) must never
+ * make the panel wait.
+ */
+export const PREVIEW_CONCURRENCY = 2;
 /** OS type-icon lookups allowed to run at once across every concurrent listing. */
 export const SYSTEM_ICON_CONCURRENCY = 8;
 /** Icon cache entries kept before the least-recently-used ones are evicted. */
@@ -62,6 +77,8 @@ export interface IconTarget {
 	readonly ext: string;
 	/** Cache identity: a changed file must not reuse a stale thumbnail. */
 	readonly modifiedAt: string;
+	/** Tier edge in px; the listing's tile tier when omitted. */
+	readonly size?: number;
 }
 
 export interface IconProvider {
@@ -74,6 +91,14 @@ export interface IconProvider {
 	 * simply absent from the map; the caller keeps the letter tile.
 	 */
 	icons(targets: readonly IconTarget[]): Promise<ReadonlyMap<string, string>>;
+	/**
+	 * One file's large-tier thumbnail for the Inspector's preview paper, as an
+	 * `autorag-thumb://` URL carrying `size=PREVIEW_ICON_SIZE`; null when the
+	 * OS produced nothing (the panel keeps its letter tile). Bypasses the
+	 * listing's `limit` cap — inspecting a file is an explicit user action —
+	 * but shares the cache, the single-flight map, and the bounded pool.
+	 */
+	preview(target: IconTarget): Promise<string | null>;
 }
 
 /**
@@ -83,8 +108,8 @@ export interface IconProvider {
  * live.
  */
 export interface IconStore {
-	/** PNG bytes for one cache identity, or null when the OS produced none. */
-	read(path: string, modifiedAt: string): Uint8Array | null;
+	/** PNG bytes for one cache identity and tier, or null when the OS produced none. */
+	read(path: string, modifiedAt: string, size?: number): Uint8Array | null;
 }
 
 /** The provider the fs service consumes, plus the byte cache the protocol serves. */
@@ -93,14 +118,16 @@ export type IconSource = IconProvider & IconStore;
 export interface IconProviderDeps {
 	/** Defaults to process.platform. */
 	readonly platform?: NodeJS.Platform;
-	/** Native thumbnail PNG bytes, or null; defaults to Electron nativeImage.createThumbnailFromPath on macOS/Windows. */
-	readonly thumbnail?: (path: string) => Promise<Uint8Array | null>;
+	/** Native thumbnail PNG bytes at the requested tier edge, or null; defaults to Electron nativeImage.createThumbnailFromPath on macOS/Windows. */
+	readonly thumbnail?: (path: string, size: number) => Promise<Uint8Array | null>;
 	/** OS type icon PNG bytes, or null; defaults to Electron app.getFileIcon. */
 	readonly systemIcon?: (path: string) => Promise<Uint8Array | null>;
 	/** Cap on the selected targets for a single call; defaults to ICON_LIMIT. */
 	readonly limit?: number;
 	/** Native thumbnail calls at once across calls; defaults to THUMBNAIL_CONCURRENCY. */
 	readonly thumbnailConcurrency?: number;
+	/** Inspector previews at once on their own lane; defaults to PREVIEW_CONCURRENCY. */
+	readonly previewConcurrency?: number;
 	/** getFileIcon lookups at once across calls; defaults to SYSTEM_ICON_CONCURRENCY. */
 	readonly systemConcurrency?: number;
 	/** Per-file native thumbnail deadline; defaults to THUMBNAIL_TIMEOUT_MS. */
@@ -115,8 +142,8 @@ export interface IconProviderDeps {
 	readonly warn?: (message: string) => void;
 }
 
-function cacheKey(target: Pick<IconTarget, "path" | "modifiedAt">): string {
-	return `${target.path}\u0000${target.modifiedAt}`;
+function cacheKey(target: Pick<IconTarget, "path" | "modifiedAt"> & { readonly size?: number }): string {
+	return `${target.path}\u0000${target.modifiedAt}\u0000${target.size ?? ICON_SIZE}`;
 }
 
 /** Positive integer with a floor of one, so a zero/negative option still makes progress. */
@@ -204,11 +231,11 @@ class IconCache {
 	}
 }
 
-async function defaultThumbnail(path: string): Promise<Uint8Array | null> {
+async function defaultThumbnail(path: string, size: number): Promise<Uint8Array | null> {
 	// Dynamic: `electron` is a main-process-only module and is not importable when
 	// this file is loaded outside Electron (unit tests inject `thumbnail` instead).
 	const { nativeImage } = await import("electron");
-	const image = await nativeImage.createThumbnailFromPath(path, { width: ICON_SIZE, height: ICON_SIZE });
+	const image = await nativeImage.createThumbnailFromPath(path, { width: size, height: size });
 	return image.isEmpty() ? null : image.toPNG();
 }
 
@@ -229,6 +256,7 @@ export function createIconProvider(deps: IconProviderDeps = {}): IconSource {
 	const systemIcon = deps.systemIcon ?? defaultSystemIcon;
 	const limit = Math.max(0, Math.floor(deps.limit ?? ICON_LIMIT));
 	const thumbnailConcurrency = positive(deps.thumbnailConcurrency ?? THUMBNAIL_CONCURRENCY, THUMBNAIL_CONCURRENCY);
+	const previewConcurrency = positive(deps.previewConcurrency ?? PREVIEW_CONCURRENCY, PREVIEW_CONCURRENCY);
 	const systemConcurrency = positive(deps.systemConcurrency ?? SYSTEM_ICON_CONCURRENCY, SYSTEM_ICON_CONCURRENCY);
 	const thumbnailTimeoutMs = deps.thumbnailTimeoutMs ?? THUMBNAIL_TIMEOUT_MS;
 	const systemIconTimeoutMs = deps.systemIconTimeoutMs ?? SYSTEM_ICON_TIMEOUT_MS;
@@ -240,29 +268,33 @@ export function createIconProvider(deps: IconProviderDeps = {}): IconSource {
 		Math.max(1, Math.floor(deps.cacheMaxBytes ?? ICON_CACHE_MAX_BYTES)),
 	);
 	// One semaphore per provider (the app has exactly one), so concurrent
-	// listings share the lookup budget rather than each opening its own.
+	// listings share the lookup budget rather than each opening its own. The
+	// Inspector preview gets its own lane: the user is staring at the panel
+	// while a listing batch can hold every shared permit until the deadline.
 	const thumbnailSemaphore = createSemaphore(thumbnailConcurrency);
+	const previewSemaphore = createSemaphore(previewConcurrency);
 	const systemSemaphore = createSemaphore(systemConcurrency);
 	/** key -> the generation currently producing that identity, for single-flight reuse. */
 	const inflight = new Map<string, Promise<Uint8Array | null>>();
 
-	/** macOS/Windows: in-process Quick Look thumbnails, bounded and individually fault-tolerant. */
+	/** macOS/Windows: in-process Quick Look thumbnails, bounded per lane and individually fault-tolerant. */
 	async function runThumbnails(
 		targets: readonly IconTarget[],
 		resolve: (key: string, bytes: Uint8Array | null) => void,
+		semaphore: { acquire(): Promise<void>; release(): void },
 	): Promise<void> {
 		await Promise.all(
 			targets.map(async (target): Promise<void> => {
-				await thumbnailSemaphore.acquire();
+				await semaphore.acquire();
 				try {
-					const bytes = await withTimeout(thumbnail(target.path), thumbnailTimeoutMs, "thumbnail");
+					const bytes = await withTimeout(thumbnail(target.path, target.size ?? ICON_SIZE), thumbnailTimeoutMs, "thumbnail");
 					resolve(cacheKey(target), bytes);
 				} catch (error) {
 					// One unreadable/timed-out file must not cost the rest of the batch.
 					warn(`file-icon: thumbnail for ${target.path} failed: ${errorMessage(error)}`);
 					resolve(cacheKey(target), null);
 				} finally {
-					thumbnailSemaphore.release();
+					semaphore.release();
 				}
 			}),
 		);
@@ -290,8 +322,11 @@ export function createIconProvider(deps: IconProviderDeps = {}): IconSource {
 		);
 	}
 
-	/** Register single-flight promises for every missing identity, then generate them. */
-	function startGeneration(missing: readonly IconTarget[]): Array<Promise<Uint8Array | null>> {
+	/** Register single-flight promises for every missing identity, then generate them on the given lane. */
+	function startGeneration(
+		missing: readonly IconTarget[],
+		semaphore: { acquire(): Promise<void>; release(): void },
+	): Array<Promise<Uint8Array | null>> {
 		const resolvers = new Map<string, (bytes: Uint8Array | null) => void>();
 		const promises: Array<Promise<Uint8Array | null>> = [];
 		for (const target of missing) {
@@ -308,7 +343,7 @@ export function createIconProvider(deps: IconProviderDeps = {}): IconSource {
 			cache.set(key, bytes);
 			resolvers.get(key)?.(bytes);
 		};
-		const generation = usesNativeThumbnails ? runThumbnails(missing, resolve) : runSystem(missing, resolve);
+		const generation = usesNativeThumbnails ? runThumbnails(missing, resolve, semaphore) : runSystem(missing, resolve);
 		void generation.catch((error: unknown) => {
 			// Pool-level failure: the whole batch degrades to "no icon".
 			warn(`file-icon: icon generation failed for ${missing.length} file(s): ${errorMessage(error)}`);
@@ -346,7 +381,7 @@ export function createIconProvider(deps: IconProviderDeps = {}): IconSource {
 				missing.push(target);
 			}
 			if (missing.length > 0) {
-				for (const promise of startGeneration(missing)) awaited.push(promise);
+				for (const promise of startGeneration(missing, thumbnailSemaphore)) awaited.push(promise);
 			}
 			if (awaited.length > 0) await Promise.all(awaited);
 
@@ -357,8 +392,29 @@ export function createIconProvider(deps: IconProviderDeps = {}): IconSource {
 			}
 			return found;
 		},
-		read(path, modifiedAt) {
-			return cache.get(cacheKey({ path, modifiedAt })) ?? null;
+		async preview(target) {
+			// Same visual-types gate as the listing: text/source/spreadsheet files
+			// can occupy the whole deadline in Quick Look for no usable image, so
+			// the panel keeps its letter tile instead of waiting.
+			if (usesNativeThumbnails && !isNativeThumbnailExtension(target.ext)) return null;
+			const sized: IconTarget = { ...target, size: PREVIEW_ICON_SIZE };
+			const key = cacheKey(sized);
+			if (cache.get(key) === undefined) {
+				const pending = inflight.get(key);
+				if (pending !== undefined) {
+					await pending;
+				} else {
+					await Promise.all(startGeneration([sized], previewSemaphore));
+				}
+			}
+			const bytes = cache.get(key);
+			return bytes === null || bytes === undefined
+				? null
+				: iconUrl(target.path, target.modifiedAt, PREVIEW_ICON_SIZE);
+		},
+		read(path, modifiedAt, size) {
+			const key = cacheKey(size === undefined ? { path, modifiedAt } : { path, modifiedAt, size });
+			return cache.get(key) ?? null;
 		},
 	};
 }

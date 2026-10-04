@@ -133,22 +133,11 @@ small {
 	}
 }
 
-/* §7 Scrollbars */
-::-webkit-scrollbar {
-	width: var(--scrollbar-size);
-	height: var(--scrollbar-size);
-}
-
-::-webkit-scrollbar-thumb {
-	background: var(--scrollbar-thumb);
-	border-radius: var(--scrollbar-radius);
-	border: var(--scrollbar-inset) solid transparent;
-	background-clip: padding-box;
-}
-
-::-webkit-scrollbar-track {
-	background: transparent;
-}
+/* §7 Scrollbars — deliberately unstyled: any ::-webkit-scrollbar rule forces
+ * Chromium's classic scrollbars, which consume layout width and shift the
+ * Inspector's preview whenever content starts or stops scrolling. Leaving
+ * them untouched keeps the macOS-native overlay scrollbars that float above
+ * the content (System Settings → Show scroll bars is respected). */
 
 /* §8 Constraint 4 — focus is always visible. */
 :focus-visible {

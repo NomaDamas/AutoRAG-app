@@ -7,7 +7,14 @@
  *            actions the focused file's own type implies, the machine's
  *            capabilities decide which of those are real, and a multi-variant
  *            action (image edit, video conversion) opens a menu instead of a
- *            row of near-identical buttons.
+ *            row of near-identical buttons. The paper shows the file's real
+ *            content: the 640px Quick Look tier from `fs:previewIcon` rendered
+ *            at the panel's full width (no fixed frame), with the listing icon
+ *            and then the letter tile as fallbacks. A multi-selection replaces
+ *            all of it with the aggregate view — a fan of up to five of the
+ *            selection's own preview papers (focused file in front, each sheet
+ *            dog-eared and shadowed), the count title, the per-kind breakdown
+ *            with total size, and created/modified date ranges.
  *   Evidence the citation half shown while a citation is selected: numbered tabs,
  *            preview, title reveal, feedback (real `search.feedback` IPC), and excerpts.
  *
@@ -23,6 +30,7 @@ import type { CitationEvidence } from "../../../shared/search-contract";
 import type { FinderEntry } from "../data/entries";
 import { cn } from "../lib/cn";
 import { buildInfoRows, hasMoreInfoRows, visibleInfoRows } from "../state/inspector-info";
+import { stackCards, summarizeSelection } from "../state/inspector-multi";
 import {
 	evidenceDetail,
 	evidenceKind,
@@ -75,6 +83,8 @@ export interface InspectorFamily {
 export interface InspectorProps {
 	/** Focused/selected entry; null renders the empty-state placeholder. */
 	readonly entry: FinderEntry | null;
+	/** Every selected entry in visual order; more than one switches the Info half to the aggregate paper-stack view. */
+	readonly entries: readonly FinderEntry[];
 	readonly indexStatus: IndexStatus | null;
 	readonly onToggleIndex: (entry: FinderEntry) => void;
 	readonly onTrash: (entry: FinderEntry) => void;
@@ -121,6 +131,7 @@ function anchorOf(element: Element): ActionAnchor {
 
 export function Inspector({
 	entry,
+	entries,
 	indexStatus,
 	onToggleIndex,
 	onTrash,
@@ -144,19 +155,23 @@ export function Inspector({
 			className="inspector w-full min-w-0 h-full flex flex-col bg-subtle border-l border-border overflow-hidden"
 			aria-label="Inspector"
 		>
-			<InfoHalf
-				entry={entry}
-				indexStatus={indexStatus}
-				split={split}
-				family={family}
-				onOpenMember={onOpenMember}
-				onToggleIndex={onToggleIndex}
-				onTrash={onTrash}
-				onCopyPath={onCopyPath}
-				onAskAi={onAskAi}
-				actionCapabilities={actionCapabilities}
-				onAction={onAction}
-			/>
+			{entries.length > 1 ? (
+				<MultiInfoHalf entries={entries} focusPath={entry?.path ?? null} split={split} />
+			) : (
+				<InfoHalf
+					entry={entry}
+					indexStatus={indexStatus}
+					split={split}
+					family={family}
+					onOpenMember={onOpenMember}
+					onToggleIndex={onToggleIndex}
+					onTrash={onTrash}
+					onCopyPath={onCopyPath}
+					onAskAi={onAskAi}
+					actionCapabilities={actionCapabilities}
+					onAction={onAction}
+				/>
+			)}
 			{split ? (
 				<EvidenceHalf
 					evidence={evidence}
@@ -237,19 +252,7 @@ function InfoHalf({
 				</div>
 			) : (
 				<div className={cn("inspector-body flex-1 min-h-0 overflow-auto", split ? "px-14 pt-12 pb-18" : "px-16 pt-18 pb-24")}>
-					<div className={cn("preview-paper flex-none flex items-center justify-center overflow-hidden rounded-6 border border-border bg-window shadow-raised", split ? "h-100 mb-10" : "h-152 mb-14")}>
-						{entry.iconUrl ? (
-							<img
-								className="max-w-full max-h-full object-contain"
-								src={entry.iconUrl}
-								alt=""
-								aria-hidden="true"
-								draggable={false}
-							/>
-						) : (
-							<FileTile kind={entry.fileKind} large />
-						)}
-					</div>
+					<PreviewPaper entry={entry} split={split} />
 					<div className="preview-title text-body font-semibold text-ink leading-[1.3] [overflow-wrap:anywhere]">{entry.name}</div>
 					<div className="preview-sub mt-4 text-meta text-ink-muted">
 						{entry.kindLabel} · {entry.sizeLabel} · {entry.dateLabel}
@@ -310,6 +313,236 @@ function InfoHalf({
 			{entry === null ? null : (
 				<ActionBar entry={entry} capabilities={actionCapabilities} onAction={onAction} onAskAi={onAskAi} />
 			)}
+		</div>
+	);
+}
+
+interface PreviewState {
+	readonly url: string | null;
+	/** width / height of the decoded preview; remembered so revisits reserve the exact height. */
+	readonly aspect: number | null;
+	/** The OS answer (or "not fetchable") arrived — null url then means "no preview, use the tile". */
+	readonly resolved: boolean;
+}
+
+/**
+ * Process-local identity (path + mtime) → preview answer and decoded aspect.
+ * Re-selecting a file the panel already previewed renders the final
+ * full-width layout on the very first frame — no loading state, no layout
+ * shift, no repeat IPC. Entries are a string and a number; the map stays
+ * session-scoped and unbounded on purpose.
+ */
+const previewCache = new Map<string, PreviewState>();
+
+/** The loading skeleton's aspect before the first decode says otherwise. */
+const DEFAULT_PAPER_ASPECT = 4 / 3;
+
+function usePreviewState(entry: FinderEntry): {
+	readonly state: PreviewState;
+	readonly loaded: boolean;
+	readonly onLoad: (img: HTMLImageElement) => void;
+	readonly onError: () => void;
+} {
+	const identity = `${entry.path} ${entry.modifiedAt ?? ""}`;
+	const [state, setState] = useState<PreviewState>(
+		() => previewCache.get(identity) ?? { url: null, aspect: null, resolved: false },
+	);
+	const [loaded, setLoaded] = useState(false);
+	const fetchable = entry.kind === "file" && entry.modifiedAt !== undefined;
+	useEffect(() => {
+		setLoaded(false);
+		const cached = previewCache.get(identity);
+		if (cached !== undefined) {
+			setState(cached);
+			return;
+		}
+		// Keep the previous paper's aspect while the next file loads, so
+		// file-to-file navigation never snaps the height twice.
+		setState((prev) => ({ url: null, resolved: false, aspect: prev.aspect }));
+		const modifiedAt = entry.modifiedAt;
+		if (entry.kind !== "file" || modifiedAt === undefined) return;
+		const load = window.autorag?.fs?.previewIcon;
+		if (load === undefined) return;
+		const path = entry.path;
+		let cancelled = false;
+		const settle = (next: PreviewState): void => {
+			previewCache.set(identity, next);
+			if (!cancelled) setState(next);
+		};
+		void load(path, modifiedAt)
+			.then((url) => settle({ url, aspect: null, resolved: true }))
+			.catch(() => settle({ url: null, aspect: null, resolved: true }));
+		return () => {
+			cancelled = true;
+		};
+	}, [identity, fetchable, entry.path, entry.modifiedAt]);
+	return {
+		state,
+		loaded,
+		onLoad: (img) => {
+			setLoaded(true);
+			setState((prev) => {
+				const next: PreviewState = { ...prev, aspect: img.naturalWidth / img.naturalHeight };
+				previewCache.set(identity, next);
+				return next;
+			});
+		},
+		onError: () => {
+			previewCache.delete(identity);
+			setState((prev) => ({ ...prev, url: null, resolved: true }));
+		},
+	};
+}
+
+/**
+ * The single-file preview is always the full-width paper: while the 640px
+ * tier loads it is a blank sheet at the last known aspect (the exact one on
+ * any revisit), then the content fades in and the aspect-ratio transition
+ * settles the height — the compact bordered box only ever appears for
+ * folders and files the OS provably has no preview for.
+ */
+function PreviewPaper({ entry, split }: { readonly entry: FinderEntry; readonly split: boolean }): ReactElement {
+	const { state, loaded, onLoad, onError } = usePreviewState(entry);
+	if (entry.kind !== "file" || (state.resolved && state.url === null)) {
+		return (
+			<div
+				className={cn(
+					"preview-paper flex-none flex items-center justify-center overflow-hidden rounded-6 border border-border bg-window shadow-raised",
+					split ? "h-100 mb-10" : "h-152 mb-14",
+				)}
+			>
+				{entry.iconUrl === null ? (
+					<FileTile kind={entry.fileKind} large />
+				) : (
+					<img className="max-w-full max-h-full object-contain" src={entry.iconUrl} alt="" aria-hidden="true" draggable={false} />
+				)}
+			</div>
+		);
+	}
+	return (
+		<div
+			className={cn(
+				"preview-paper relative flex-none w-full overflow-hidden rounded-6 border border-border bg-window shadow-raised transition-[aspect-ratio] duration-200 ease-out",
+				split ? "mb-10 max-h-[32vh]" : "mb-14 max-h-[70vh]",
+			)}
+			style={{ aspectRatio: String(state.aspect ?? DEFAULT_PAPER_ASPECT) }}
+		>
+			{state.url === null ? null : (
+				// crossOrigin pairs with the protocol's ACAO:* so QA can read pixels back.
+				<img
+					key={state.url}
+					className={cn(
+						"absolute inset-0 h-full w-full object-contain transition-opacity duration-150",
+						loaded ? "opacity-100" : "opacity-0",
+					)}
+					src={state.url}
+					alt=""
+					aria-hidden="true"
+					draggable={false}
+					crossOrigin="anonymous"
+					onLoad={(event) => onLoad(event.currentTarget)}
+					onError={onError}
+				/>
+			)}
+		</div>
+	);
+}
+
+/** One paper in the stack: the file's preview cropped to fill the sheet, or the letter tile while it loads. */
+function PreviewCardImage({ entry }: { readonly entry: FinderEntry }): ReactElement {
+	const { state, loaded, onLoad, onError } = usePreviewState(entry);
+	if (state.url === null) return <FileTile kind={entry.fileKind} large />;
+	return (
+		<img
+			className={cn(
+				"absolute inset-0 h-full w-full object-cover transition-opacity duration-150",
+				loaded ? "opacity-100" : "opacity-0",
+			)}
+			src={state.url}
+			alt=""
+			aria-hidden="true"
+			draggable={false}
+			crossOrigin="anonymous"
+			onLoad={(event) => onLoad(event.currentTarget)}
+			onError={onError}
+		/>
+	);
+}
+
+/**
+ * The fan's poses, front card first: each deeper paper rotates a little wider
+ * and steps a little further out and down, so a five-file selection still
+ * reads as five distinct sheets (the Finder multi-preview reference).
+ */
+const STACK_POSES: readonly string[] = [
+	"z-30 -rotate-[1.5deg]",
+	"z-20 translate-x-[16%] translate-y-[3%] rotate-[7deg] scale-[0.96]",
+	"z-10 -translate-x-[17%] translate-y-[4%] -rotate-[8.5deg] scale-[0.96]",
+	"z-[5] translate-x-[23%] translate-y-[6%] rotate-[14deg] scale-[0.92]",
+	"z-0 -translate-x-[24%] translate-y-[7%] -rotate-[15deg] scale-[0.92]",
+];
+
+/**
+ * The aggregate Info half for a multi-selection: a fan of the selection's own
+ * previews (focused file in front), the count title, the per-kind breakdown
+ * with the total size, and the created/modified date ranges. Per-file actions
+ * (index chip, versions, the action bar) are single-selection concerns and
+ * stay out.
+ */
+function MultiInfoHalf({
+	entries,
+	focusPath,
+	split,
+}: {
+	readonly entries: readonly FinderEntry[];
+	readonly focusPath: string | null;
+	readonly split: boolean;
+}): ReactElement {
+	const summary = summarizeSelection(entries);
+	const cards = stackCards(entries, focusPath);
+	// DOM order paints back-to-front so the focused paper lands on top.
+	const staged = [...cards].reverse();
+	return (
+		<div className={cn("inspector-half flex-1 min-h-0 flex flex-col overflow-hidden relative", split && "h-[50%] max-h-[50%]")}>
+			<div className={cn("inspector-body flex-1 min-h-0 overflow-auto", split ? "px-14 pt-12 pb-18" : "px-16 pt-18 pb-24")}>
+				<div className={cn("preview-stack relative flex-none flex items-center justify-center", split ? "h-100 mb-10" : "h-240 mb-14")}>
+					{staged.map((card, index) => {
+						const depth = staged.length - 1 - index;
+						const pose = STACK_POSES[Math.min(depth, STACK_POSES.length - 1)] ?? "";
+						return (
+							<div
+								key={card.path}
+								className={cn(
+									"preview-stack-card absolute flex h-[84%] aspect-[3/4] items-center justify-center overflow-hidden rounded-6 border border-border bg-window shadow-drag",
+									pose,
+								)}
+							>
+								<PreviewCardImage entry={card} />
+								{/* Dog-eared top-right corner: the folded triangle, its own soft shadow onto the sheet. */}
+								<div
+									aria-hidden="true"
+									className="page-curl pointer-events-none absolute top-0 right-0 size-24 bg-[linear-gradient(225deg,rgba(20,20,40,0.16)_0%,rgba(20,20,40,0.04)_42%,var(--bg-window)_78%)] [clip-path:polygon(0_0,100%_0,100%_100%)] drop-shadow-[-1px_2px_2px_rgba(20,20,40,0.20)]"
+								/>
+							</div>
+						);
+					})}
+				</div>
+				<div className="preview-title text-body font-semibold text-ink leading-[1.3]">{summary.title}</div>
+				<div className="preview-sub mt-4 text-meta text-ink-muted">
+					{summary.kindSummary}
+					{summary.sizeLabel === null ? "" : ` · ${summary.sizeLabel}`}
+				</div>
+				<div className="info-section border-t border-border pt-12 mt-12">
+					<div className="section-title mb-6">
+						<span className="text-meta font-semibold text-ink">일반 정보</span>
+					</div>
+					<dl className="m-0">
+						{summary.sizeLabel === null ? null : <InfoRow label="총 크기" value={summary.sizeLabel} />}
+						{summary.createdRange === null ? null : <InfoRow label="생성한 날짜" value={summary.createdRange} />}
+						{summary.modifiedRange === null ? null : <InfoRow label="수정한 날짜" value={summary.modifiedRange} />}
+					</dl>
+				</div>
+			</div>
 		</div>
 	);
 }

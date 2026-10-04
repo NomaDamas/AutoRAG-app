@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
 	ICON_LIMIT,
+	PREVIEW_ICON_SIZE,
 	type IconTarget,
 	SYSTEM_ICON_CONCURRENCY,
 	THUMBNAIL_CONCURRENCY,
@@ -517,5 +518,174 @@ describe("createIconProvider", () => {
 		} finally {
 			vi.useRealTimers();
 		}
+	});
+});
+
+describe("preview tier", () => {
+	it("generates the preview at the large size and returns a size-carrying URL", async () => {
+		// Given a macOS provider whose generator records the requested sizes
+		const sizes: number[] = [];
+		const provider = createIconProvider({
+			platform: "darwin",
+			thumbnail: async (_path, size) => {
+				sizes.push(size);
+				return BYTES;
+			},
+		});
+
+		// When the inspector asks for one file's preview
+		const url = await provider.preview(target("/docs/a.pdf"));
+
+		// Then the OS rendered the large tier and the URL carries it
+		expect(sizes).toEqual([PREVIEW_ICON_SIZE]);
+		expect(url).toBe(iconUrl("/docs/a.pdf", MTIME, PREVIEW_ICON_SIZE));
+	});
+
+	it("keeps preview bytes separate from the tile-icon tier in the same store", async () => {
+		// Given a generator whose bytes depend on the requested tier
+		const small = new Uint8Array([1]);
+		const big = new Uint8Array([2]);
+		const provider = createIconProvider({
+			platform: "darwin",
+			thumbnail: async (_path, size) => (size === PREVIEW_ICON_SIZE ? big : small),
+		});
+
+		// When the listing tier and the preview tier both render the same file
+		await provider.icons([target("/docs/a.pdf")]);
+		await provider.preview(target("/docs/a.pdf"));
+
+		// Then each tier reads back its own bytes
+		expect(provider.read("/docs/a.pdf", MTIME)).toEqual(small);
+		expect(provider.read("/docs/a.pdf", MTIME, PREVIEW_ICON_SIZE)).toEqual(big);
+	});
+
+	it("serves the produced preview through the protocol handler", async () => {
+		// Given a provider that rendered one preview
+		const provider = createIconProvider({
+			platform: "darwin",
+			thumbnail: async () => BYTES,
+		});
+		const url = await provider.preview(target("/docs/a.pdf"));
+		expect(url).not.toBeNull();
+
+		// When the protocol handler answers that URL
+		const response = await handleIconRequest(new Request(url ?? ""), provider);
+
+		// Then the inspector's <img> receives the large-tier bytes
+		expect(response.status).toBe(200);
+		expect(new Uint8Array(await response.arrayBuffer())).toEqual(BYTES);
+	});
+
+	it("returns null when the OS produced no preview, so the inspector keeps its letter tile", async () => {
+		const provider = createIconProvider({
+			platform: "darwin",
+			thumbnail: async () => null,
+		});
+
+		expect(await provider.preview(target("/docs/a.pdf"))).toBeNull();
+	});
+
+	it("skips non-visual extensions without ever entering Quick Look", async () => {
+		// Given a macOS provider whose generator must stay untouched
+		let runs = 0;
+		const provider = createIconProvider({
+			platform: "darwin",
+			thumbnail: async () => {
+				runs += 1;
+				return BYTES;
+			},
+		});
+
+		// When the inspector asks for a spreadsheet and a source file
+		// Then both answers are null at once — Quick Look is never entered
+		expect(await provider.preview(target("/docs/books.xlsx"))).toBeNull();
+		expect(await provider.preview(target("/src/main.swift"))).toBeNull();
+		expect(runs).toBe(0);
+	});
+
+	it("caches the preview so re-inspecting an unchanged file never regenerates it", async () => {
+		let runs = 0;
+		const provider = createIconProvider({
+			platform: "darwin",
+			thumbnail: async () => {
+				runs += 1;
+				return BYTES;
+			},
+		});
+
+		await provider.preview(target("/docs/a.pdf"));
+		await provider.preview(target("/docs/a.pdf"));
+
+		expect(runs).toBe(1);
+	});
+
+	it("single-flights concurrent previews of the same identity", async () => {
+		let runs = 0;
+		const gate = Promise.withResolvers<void>();
+		const provider = createIconProvider({
+			platform: "darwin",
+			thumbnail: async () => {
+				runs += 1;
+				await gate.promise;
+				return BYTES;
+			},
+		});
+
+		const first = provider.preview(target("/docs/a.pdf"));
+		const second = provider.preview(target("/docs/a.pdf"));
+		gate.resolve();
+
+		expect(await first).toBe(await second);
+		expect(runs).toBe(1);
+	});
+
+	it("survives a failed preview without poisoning the icon tier", async () => {
+		// Given a generator that fails the preview tier only
+		const warnings: string[] = [];
+		const provider = createIconProvider({
+			platform: "darwin",
+			thumbnail: async (_path, size) => {
+				if (size === PREVIEW_ICON_SIZE) throw new Error("QLThumbnailGenerationError: cancelled");
+				return BYTES;
+			},
+			warn: (message) => {
+				warnings.push(message);
+			},
+		});
+
+		// When the preview fails
+		const url = await provider.preview(target("/docs/a.pdf"));
+
+		// Then the failure is verbatim in the log and the tile tier still works
+		expect(url).toBeNull();
+		expect(warnings.join("\n")).toContain("QLThumbnailGenerationError: cancelled");
+		const icons = await provider.icons([target("/docs/a.pdf")]);
+		expect(icons.get("/docs/a.pdf")).toBe(iconUrl("/docs/a.pdf", MTIME));
+	});
+});
+
+describe("preview lane", () => {
+	it("never queues the Inspector preview behind a stuck listing batch", async () => {
+		// Given a one-permit listing pool fully occupied by a stalled batch
+		const barrier = Promise.withResolvers<void>();
+		const provider = createIconProvider({
+			platform: "darwin",
+			thumbnailConcurrency: 1,
+			previewConcurrency: 1,
+			thumbnail: async (_path, size) => {
+				if (size === PREVIEW_ICON_SIZE) return BYTES;
+				await barrier.promise;
+				return BYTES;
+			},
+		});
+		const listing = provider.icons([target("/docs/a.png"), target("/docs/b.png")]);
+
+		// When the inspector asks for a preview while the listing pool is stuck
+		const url = await provider.preview(target("/docs/deck.pdf"));
+
+		// Then it answers through its own lane instead of timing out behind the batch
+		expect(url).toBe(iconUrl("/docs/deck.pdf", MTIME, PREVIEW_ICON_SIZE));
+		barrier.resolve();
+		await listing;
 	});
 });

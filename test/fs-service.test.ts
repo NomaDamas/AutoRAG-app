@@ -55,7 +55,7 @@ function makeDeps(homeDir: string): StubbedDeps {
 			homeDir,
 			recents: createRecentsStore({ directory: join(homeDir, "recents-store") }),
 			osKind: async () => null,
-			icons: { icons: async () => new Map() },
+			icons: { icons: async () => new Map(), preview: async () => null },
 		},
 		trashed,
 		revealed,
@@ -209,6 +209,7 @@ describe("readEntries", () => {
 					iconTargets.push(...targets.map((target) => target.path));
 					return new Map();
 				},
+				preview: async () => null,
 			},
 		};
 
@@ -1035,6 +1036,7 @@ describe("icons", () => {
 							.filter((target) => target.path.endsWith(".mp4"))
 							.map((target) => [target.path, "autorag-thumb://local/?path=clip.mp4&mtime=2026-09-29T00%3A00%3A00.000Z"]),
 					),
+				preview: async () => null,
 			},
 		};
 
@@ -1049,6 +1051,47 @@ describe("icons", () => {
 			"autorag-thumb://local/?path=clip.mp4&mtime=2026-09-29T00%3A00%3A00.000Z",
 		);
 		expect(enriched.find((entry) => entry.path.endsWith("note.txt"))?.iconUrl).toBeNull();
+		await rm(dir, { recursive: true, force: true });
+	});
+});
+
+describe("previewIcon", () => {
+	it("serves the Inspector preview through the provider's large tier", async () => {
+		// Given a provider whose preview tier answers a 640px URL for the file
+		const dir = await mkdtemp(join(tmpdir(), "fs-preview-"));
+		await writeFile(join(dir, "deck.pdf"), "x");
+		const seen: Array<{ readonly path: string; readonly ext: string; readonly modifiedAt: string }> = [];
+		const deps: FsServiceDeps = {
+			...makeDeps(dir).deps,
+			icons: {
+				icons: async () => new Map(),
+				preview: async (target) => {
+					seen.push({ path: target.path, ext: target.ext, modifiedAt: target.modifiedAt });
+					return "autorag-thumb://local/?path=deck.pdf&mtime=t&size=640";
+				},
+			},
+		};
+
+		// When the inspector asks for the file's preview
+		const service = createFsService(deps);
+		const url = await service.previewIcon(join(dir, "deck.pdf"), "2026-09-29T00:00:00.000Z");
+
+		// Then the provider answered for exactly that identity, extension included for the visual-types gate
+		expect(url).toBe("autorag-thumb://local/?path=deck.pdf&mtime=t&size=640");
+		expect(seen).toEqual([{ path: join(dir, "deck.pdf"), ext: "pdf", modifiedAt: "2026-09-29T00:00:00.000Z" }]);
+		await rm(dir, { recursive: true, force: true });
+	});
+
+	it("returns null when the OS has no preview for the file, so the panel keeps its letter tile", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "fs-preview-"));
+		const deps: FsServiceDeps = {
+			...makeDeps(dir).deps,
+			icons: { icons: async () => new Map(), preview: async () => null },
+		};
+
+		const service = createFsService(deps);
+
+		expect(await service.previewIcon(join(dir, "a.bin"), "2026-09-29T00:00:00.000Z")).toBeNull();
 		await rm(dir, { recursive: true, force: true });
 	});
 });
