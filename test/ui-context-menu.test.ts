@@ -56,6 +56,13 @@ describe("buildContextMenu", () => {
 		expect(enabled?.disabled).toBe(false);
 	});
 
+	it("shows the clipboard shortcuts on 복사 / 붙여넣기 / 잘라내기", () => {
+		const menu = items(buildContextMenu(file));
+		expect(menu.find((i) => i.action === "copy")?.keycap).toBe("⌘C");
+		expect(menu.find((i) => i.action === "paste")?.keycap).toBe("⌘V");
+		expect(menu.find((i) => i.action === "cut")?.keycap).toBe("⌘X");
+	});
+
 	it("disables 이름 변경 for a multi-selection", () => {
 		const single = items(buildContextMenu(file)).find((i) => i.action === "rename");
 		expect(single?.disabled).toBe(false);

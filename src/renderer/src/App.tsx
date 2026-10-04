@@ -11,7 +11,7 @@ import type { SearchMode } from "./components/SidebarSearch";
 import { ColumnBrowser } from "./components/ColumnBrowser";
 import { ColumnHeader } from "./components/ColumnHeader";
 import { FileList } from "./components/FileList";
-import type { RowCallbacks } from "./components/FileRow";
+import type { BackgroundDropHandlers, RowCallbacks } from "./components/FileRow";
 import { IconGrid } from "./components/IconGrid";
 import { Inspector, type InspectorFamily } from "./components/Inspector";
 import { PathBar } from "./components/PathBar";
@@ -20,9 +20,11 @@ import { ContextMenu } from "./components/primitives/ContextMenu";
 import { Toast } from "./components/primitives/Toast";
 import { Sidebar } from "./components/Sidebar";
 import { SettingsView } from "./components/SettingsView";
+import { RECENTS_PATH } from "../../shared/fs-contract";
 import { SETTINGS_PATH } from "./state/tabs";
+import { isFinderDrag, readFinderDragPaths, writeFinderDrag } from "./state/attachments";
+import { backgroundDropDir } from "./state/file-transfer";
 import type { FileActionTarget } from "./state/file-actions";
-import { writeFinderDrag } from "./state/attachments";
 import { basename, breadcrumbTrail, dirname } from "./state/paths";
 import {
 	loadListColumns,
@@ -54,6 +56,12 @@ const SIDEBAR_MIN = 180;
 const SIDEBAR_MAX = 320;
 const INSPECTOR_MIN = 300;
 const INSPECTOR_MAX = 560;
+
+/**
+ * How long an in-app drag must dwell on a tab before the tab adopts itself
+ * (Finder's spring-loaded folders, applied to the tab strip).
+ */
+const TAB_SPRING_LOAD_MS = 1500;
 
 function clampWidth(value: number, min: number, max: number): number {
 	return Math.min(max, Math.max(min, Math.round(value)));
@@ -194,6 +202,9 @@ export function App(): ReactElement {
 	const [sidebarWidth, setSidebarWidth] = useState(() => loadNumber(SIDEBAR_WIDTH_KEY, 220));
 	const [inspectorWidth, setInspectorWidth] = useState(() => loadNumber(INSPECTOR_WIDTH_KEY, 390));
 	const [listColumns, setListColumns] = useState<ListColumnsState>(loadListColumns);
+	const [dropTargetPath, setDropTargetPath] = useState<string | null>(null);
+	const [dropTabId, setDropTabId] = useState<number | null>(null);
+	const [dropBackgroundDir, setDropBackgroundDir] = useState<string | null>(null);
 	const [sourceStatus, setSourceStatus] = useState<Readonly<Record<string, "syncing" | "error">>>({});
 	const aiDockRef = useRef<AiDockHandle | null>(null);
 
@@ -348,11 +359,107 @@ export function App(): ReactElement {
 		void autorag.settings.get().then((settings) => setShowHiddenFiles(settings.showHiddenFiles));
 	}, []);
 
+	/**
+	 * Spring-loaded tabs: dwelling with an in-app drag over a tab for
+	 * TAB_SPRING_LOAD_MS adopts that tab, so the rows can then be dropped into a
+	 * folder inside it. Leaving the tab, dropping, or the drag ending cancels
+	 * the pending switch.
+	 */
+	const springTabRef = useRef<{ readonly id: number; readonly timer: number } | null>(null);
+	const cancelSpringTab = useCallback((): void => {
+		const armed = springTabRef.current;
+		if (armed === null) return;
+		window.clearTimeout(armed.timer);
+		springTabRef.current = null;
+	}, []);
+	const armSpringTab = useCallback(
+		(id: number): void => {
+			if (springTabRef.current?.id === id) return;
+			cancelSpringTab();
+			springTabRef.current = {
+				id,
+				timer: window.setTimeout(() => {
+					springTabRef.current = null;
+					setDropTabId(null);
+					finder.selectTabId(id);
+				}, TAB_SPRING_LOAD_MS),
+			};
+		},
+		[cancelSpringTab, finder],
+	);
+	useEffect(() => cancelSpringTab, [cancelSpringTab]);
+
+	/* A drag that leaves the app (or ends anywhere) clears the drop highlights. */
+	const reset = useCallback((): void => {
+		setDropTargetPath(null);
+		setDropTabId(null);
+		setDropBackgroundDir(null);
+		cancelSpringTab();
+	}, [cancelSpringTab]);
+	useEffect(() => {
+		window.addEventListener("dragend", reset);
+		window.addEventListener("drop", reset);
+		return () => {
+			window.removeEventListener("dragend", reset);
+			window.removeEventListener("drop", reset);
+		};
+	}, [reset]);
+
+	const backgroundDrop = useCallback(
+		(dir: string): BackgroundDropHandlers => ({
+			onDragOver: (event) => {
+				const overRow = event.target instanceof Element && event.target.closest('[role="row"], [role="option"]') !== null;
+				const destination = backgroundDropDir(dir, { searching: finder.searching, overRow });
+				if (destination === null || !isFinderDrag(event.dataTransfer.types)) return;
+				event.preventDefault();
+				event.dataTransfer.dropEffect = event.altKey ? "copy" : "move";
+				setDropTargetPath(null);
+				setDropTabId(null);
+				setDropBackgroundDir((current) => (current === destination ? current : destination));
+			},
+			onDrop: (event) => {
+				const overRow = event.target instanceof Element && event.target.closest('[role="row"], [role="option"]') !== null;
+				const destination = backgroundDropDir(dir, { searching: finder.searching, overRow });
+				setDropBackgroundDir(null);
+				if (destination === null) return;
+				const paths = readFinderDragPaths(event.dataTransfer);
+				if (paths.length === 0) return;
+				event.preventDefault();
+				finder.transferDropped(paths, destination, event.altKey);
+			},
+			onDragLeave: (event) => {
+				if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return;
+				setDropBackgroundDir((current) => (current === dir ? null : current));
+			},
+		}),
+		[finder.searching, finder.transferDropped],
+	);
+
 	const rowCallbacks: RowCallbacks = {
 		onClick: finder.clickRow,
 		onOpen: finder.openEntry,
 		onContextMenu: finder.openContextMenu,
 		onDragStart: (entry, event) => writeFinderDrag(event.dataTransfer, finder.dragEntries(entry)),
+		// An in-app row drag lands on folders: the rows move there (⌥ copies).
+		onDragOver: (entry, event) => {
+			if (isFinderDrag(event.dataTransfer.types)) setDropBackgroundDir(null);
+			if (entry.kind !== "folder" || !isFinderDrag(event.dataTransfer.types)) return;
+			event.preventDefault();
+			event.dataTransfer.dropEffect = event.altKey ? "copy" : "move";
+			setDropTargetPath((current) => (current === entry.path ? current : entry.path));
+		},
+		onDrop: (entry, event) => {
+			setDropTargetPath(null);
+			setDropBackgroundDir(null);
+			if (entry.kind !== "folder") return;
+			const paths = readFinderDragPaths(event.dataTransfer);
+			if (paths.length === 0) return;
+			// No stopPropagation: the window "drop" listener clears the AI dock's
+			// drag overlay (and the highlights) once the transfer has started.
+			event.preventDefault();
+			finder.transferDropped(paths, entry.path, event.altKey);
+		},
+		dropTargetPath,
 		onToggleIndex: finder.toggleIndex,
 		onToggleStack: finder.toggleStack,
 		onToggleFolder: finder.toggleFolder,
@@ -454,6 +561,28 @@ export function App(): ReactElement {
 						onSelect={finder.selectTabId}
 						onClose={finder.closeTabId}
 						onNewTab={finder.newTab}
+						dropTabId={dropTabId}
+						onTabDragOver={(id, event) => {
+							if (!isFinderDrag(event.dataTransfer.types)) return;
+							setDropBackgroundDir(null);
+							event.preventDefault();
+							event.dataTransfer.dropEffect = event.altKey ? "copy" : "move";
+							setDropTabId((current) => (current === id ? current : id));
+							if (finder.tabs.some((tab) => tab.id === id && !tab.active)) armSpringTab(id);
+						}}
+						onTabDragLeave={(id) => {
+							cancelSpringTab();
+							setDropTabId((current) => (current === id ? null : current));
+						}}
+						onTabDrop={(id, event) => {
+							cancelSpringTab();
+							setDropTabId(null);
+							setDropBackgroundDir(null);
+							const paths = readFinderDragPaths(event.dataTransfer);
+							if (paths.length === 0) return;
+							event.preventDefault();
+							finder.dropOnTab(id, paths, event.altKey);
+						}}
 					/>
 					{finder.path === SETTINGS_PATH ? (
 						<SettingsView onSettingsChanged={(settings) => setShowHiddenFiles(settings.showHiddenFiles)} />
@@ -480,6 +609,8 @@ export function App(): ReactElement {
 									renameDraft={finder.renameDraft}
 									versionFamilyError={finder.versionFamilyError}
 									onRetryVersionFamilies={finder.retryVersionFamilies}
+									background={backgroundDrop(finder.path === RECENTS_PATH || finder.path === SETTINGS_PATH ? "" : finder.path)}
+									dropBackground={dropBackgroundDir === finder.path}
 									callbacks={rowCallbacks}
 								/>
 							) : finder.layout === "columns" ? (
@@ -497,6 +628,8 @@ export function App(): ReactElement {
 									variantColumn={variantColumn}
 									onSelectVariant={finder.revealEntry}
 									columnCallbacks={{ onClick: finder.clickColumnRow }}
+									paneBackground={backgroundDrop}
+									dropBackgroundDir={dropBackgroundDir}
 									callbacks={rowCallbacks}
 								/>
 							) : (
@@ -527,6 +660,8 @@ export function App(): ReactElement {
 										renamePath={finder.renamePath}
 										renameDraft={finder.renameDraft}
 										indexStatus={finder.indexStatus}
+										background={backgroundDrop(finder.path === RECENTS_PATH || finder.path === SETTINGS_PATH ? "" : finder.path)}
+										dropBackground={dropBackgroundDir === finder.path}
 										callbacks={rowCallbacks}
 									/>
 								</div>

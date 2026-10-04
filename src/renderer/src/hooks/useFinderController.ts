@@ -22,6 +22,7 @@ import {
 	type FinderMenuAction,
 	type FinderMenuEntry,
 } from "../state/context-menu";
+import { planTransfer } from "../state/file-transfer";
 import type { FileActionTarget } from "../state/file-actions";
 import { emptyStateText, indexToast, trashToast } from "../state/format";
 import { findEvidenceSource } from "../state/evidence";
@@ -214,6 +215,16 @@ export interface FinderController {
 	runEntryAction(entry: FinderEntry, target: FileActionTarget, anchor: ActionAnchor | null): void;
 	/** The rows a drag of `entry` carries: the whole selection when it is selected, else just `entry`. */
 	dragEntries(entry: FinderEntry): readonly FinderEntry[];
+	/** Copy the current selection to the in-app file clipboard (⌘C). */
+	copySelection(): void;
+	/** Cut the current selection to the in-app file clipboard (⌘X). */
+	cutSelection(): void;
+	/** Paste the file clipboard into the current folder (⌘V; `move` is ⌥⌘V). */
+	pasteClipboard(move: boolean): void;
+	/** An in-app row drop: ⌥ copies, otherwise the rows move into the target folder. */
+	transferDropped(paths: readonly string[], destDir: string, copy: boolean): void;
+	/** A drop on another tab: switch to it, then move/copy the rows into its folder. */
+	dropOnTab(tabId: number, paths: readonly string[], copy: boolean): void;
 	/** Column view panes, left to right (empty outside the column layout). */
 	readonly columnPanes: readonly ColumnPaneView[];
 	readonly listRef: RefObject<HTMLDivElement | null>;
@@ -1424,6 +1435,98 @@ export function useFinderController(
 		[selection.keys],
 	);
 
+	/**
+	 * Copy or move rows into `destDir`. A transfer that would be a no-op (the
+	 * rows already live there, or the destination sits inside a dragged folder)
+	 * resolves without touching the filesystem.
+	 */
+	const transferInto = useCallback(
+		(paths: readonly string[], destDir: string, op: "copy" | "move"): void => {
+			const plan = planTransfer({ paths, destDir, op });
+			if (plan === null) {
+				return;
+			}
+			const run =
+				plan.op === "copy"
+					? source.copyInto(plan.paths, plan.destDir)
+					: source.moveInto(plan.paths, plan.destDir);
+			run
+				.then(() => {
+					if (plan.op === "move") {
+						pruneColumns(plan.paths);
+						setClipboardCount(0);
+						showToast(`${plan.paths.length}개 항목을 옮겼습니다`);
+					} else {
+						showToast(`${plan.paths.length}개 항목을 복사했습니다`);
+					}
+					refresh();
+				})
+				.catch(reportError);
+		},
+		[source, pruneColumns, showToast, refresh, reportError],
+	);
+
+	const copyPaths = useCallback(
+		(paths: readonly string[]) => {
+			if (paths.length === 0) return;
+			source
+				.clipboardSet({ op: "copy", paths })
+				.then(() => setClipboardCount(paths.length))
+				.catch(reportError);
+		},
+		[source, reportError],
+	);
+
+	const cutPaths = useCallback(
+		(paths: readonly string[]) => {
+			if (paths.length === 0) return;
+			source
+				.clipboardSet({ op: "cut", paths })
+				.then(() => setClipboardCount(paths.length))
+				.catch(reportError);
+		},
+		[source, reportError],
+	);
+
+	/** ⌘V pastes the clipboard op as-is; ⌥⌘V forces a move. */
+	const pasteClipboard = useCallback(
+		(move: boolean) => {
+			if (path === "" || path === RECENTS_PATH || path === SETTINGS_PATH) return;
+			source
+				.clipboardGet()
+				.then((clipboard) => {
+					if (clipboard === null || clipboard.paths.length === 0) return;
+					transferInto(clipboard.paths, path, move || clipboard.op === "cut" ? "move" : "copy");
+				})
+				.catch(reportError);
+		},
+		[path, source, transferInto, reportError],
+	);
+
+	const copySelection = useCallback(() => copyPaths(selection.keys), [copyPaths, selection.keys]);
+	const cutSelection = useCallback(() => cutPaths(selection.keys), [cutPaths, selection.keys]);
+
+	/** An in-app row drop: ⌥ copies, otherwise the rows move into the target folder. */
+	const transferDropped = useCallback(
+		(paths: readonly string[], destDir: string, copy: boolean) => {
+			if (destDir === "" || destDir === RECENTS_PATH || destDir === SETTINGS_PATH) return;
+			transferInto(paths, destDir, copy ? "copy" : "move");
+		},
+		[transferInto],
+	);
+
+	/** A drop on another tab: show that tab, then move/copy the rows into its folder. */
+	const dropOnTab = useCallback(
+		(tabId: number, paths: readonly string[], copy: boolean) => {
+			const target = tabsRef.current.find((current) => current.id === tabId);
+			if (target === undefined) return;
+			setTabsState((state) => selectTab(state, tabId));
+			setQueryValue("");
+			transferDropped(paths, target.path, copy);
+		},
+		[transferDropped],
+	);
+
 	const runMenuAction = useCallback(
 		(action: FinderMenuAction) => {
 			const menu = contextMenu;
@@ -1461,32 +1564,17 @@ export function useFinderController(
 				case "retryIndex":
 					return;
 				case "copy":
-					source
-						.clipboardSet({ op: "copy", paths: targets })
-						.then(() => setClipboardCount(targets.length))
-						.catch(reportError);
+					copyPaths(targets);
 					return;
 				case "cut":
-					source
-						.clipboardSet({ op: "cut", paths: targets })
-						.then(() => setClipboardCount(targets.length))
-						.catch(reportError);
+					cutPaths(targets);
 					return;
 				case "paste":
 					source
 						.clipboardGet()
-						.then(async (clipboard) => {
-							if (clipboard === null || clipboard.paths.length === 0) {
-								return;
-							}
-							if (clipboard.op === "copy") {
-								await source.copyInto(clipboard.paths, pasteDir);
-							} else {
-								await source.moveInto(clipboard.paths, pasteDir);
-								pruneColumns(clipboard.paths);
-								setClipboardCount(0);
-							}
-							refresh();
+						.then((clipboard) => {
+							if (clipboard === null || clipboard.paths.length === 0) return;
+							transferInto(clipboard.paths, pasteDir, clipboard.op === "cut" ? "move" : "copy");
 						})
 						.catch(reportError);
 					return;
@@ -1507,7 +1595,7 @@ export function useFinderController(
 					return;
 			}
 		},
-		[contextMenu, menuTargets, navigate, path, layout, panePaths, presentQuickLook, pruneColumns, refresh, reportError, source, toggleIndex, trashPaths],
+		[contextMenu, menuTargets, copyPaths, cutPaths, transferInto, navigate, path, layout, panePaths, presentQuickLook, refresh, reportError, source, toggleIndex, trashPaths],
 	);
 
 	const commitRename = useCallback(() => {
@@ -1690,6 +1778,18 @@ export function useFinderController(
 					event.preventDefault();
 					trashPaths(selection.keys);
 					return;
+				case "copy":
+					event.preventDefault();
+					copySelection();
+					return;
+				case "cut":
+					event.preventDefault();
+					cutSelection();
+					return;
+				case "paste":
+					event.preventDefault();
+					pasteClipboard(action.move);
+					return;
 			}
 		};
 		window.addEventListener("keydown", onKeyDown);
@@ -1708,6 +1808,9 @@ export function useFinderController(
 		focusedEntry,
 		openEntry,
 		trashPaths,
+		copySelection,
+		cutSelection,
+		pasteClipboard,
 	]);
 
 	const tabViews = useMemo<readonly TabView[]>(
@@ -1785,6 +1888,11 @@ export function useFinderController(
 		actionCapabilities,
 		runEntryAction,
 		dragEntries,
+		copySelection,
+		cutSelection,
+		pasteClipboard,
+		transferDropped,
+		dropOnTab,
 		columnPanes: paneViews,
 		listRef,
 		searchRef,

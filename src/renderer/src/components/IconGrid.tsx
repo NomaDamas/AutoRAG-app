@@ -6,7 +6,7 @@ import type { StackRow, VersionFamilyError } from "../state/version-family";
 import { GRID_OVERSCAN, columnsForWidth, gridColumnCount, gridWindow } from "../state/virtual";
 import { isHiddenName } from "../state/visibility";
 import { useScrollWindow } from "../hooks/useScrollWindow";
-import type { RowCallbacks } from "./FileRow";
+import { type BackgroundDropHandlers, type RowCallbacks } from "./FileRow";
 import { FileTile } from "./primitives/FileTile";
 import { RenameInput } from "./RenameInput";
 import { VersionFamilyBanner } from "./VersionFamilyBanner";
@@ -38,6 +38,8 @@ export function IconGrid({
 	renameDraft,
 	versionFamilyError,
 	onRetryVersionFamilies,
+	background,
+	dropBackground,
 	callbacks,
 }: {
 	readonly rows: readonly StackRow[];
@@ -51,6 +53,8 @@ export function IconGrid({
 	readonly renameDraft: string;
 	readonly versionFamilyError: VersionFamilyError | null;
 	readonly onRetryVersionFamilies: () => void;
+	readonly background: BackgroundDropHandlers;
+	readonly dropBackground: boolean;
 	readonly callbacks: RowCallbacks;
 }): ReactElement {
 	const gridRef = useRef<HTMLDivElement | null>(null);
@@ -103,7 +107,13 @@ export function IconGrid({
 	}, []);
 
 	return (
-		<div className="list list--icons flex-1 min-h-0 overflow-auto p-16" ref={listRef}>
+		<div
+			className={cn("list list--icons flex-1 min-h-0 overflow-auto p-16", dropBackground && "bg-accent-drop-hover")}
+			ref={listRef}
+			onDragOver={background.onDragOver}
+			onDrop={background.onDrop}
+			onDragLeave={background.onDragLeave}
+		>
 			<VersionFamilyBanner error={versionFamilyError} onRetry={onRetryVersionFamilies} />
 			<div
 				className="icon-grid grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] auto-rows-[var(--tile-row)] gap-8 items-start [--tile-min:96px] [--tile-row:124px]"
@@ -178,6 +188,7 @@ function IconTile({
 							? "bg-accent-wash shadow-[inset_0_0_0_1.5px_var(--accent)]"
 							: "bg-sel-mute"
 						: "hover:bg-hover-row",
+				callbacks.dropTargetPath === entry.path && "bg-accent-drop-hover shadow-[inset_0_0_0_1.5px_var(--accent)]",
 			)}
 			role="option"
 			aria-selected={selected}
@@ -189,6 +200,8 @@ function IconTile({
 			onDoubleClick={() => callbacks.onOpen(entry)}
 			onContextMenu={(event) => callbacks.onContextMenu(entry, event)}
 			onDragStart={(event) => callbacks.onDragStart(entry, event)}
+			onDragOver={(event) => callbacks.onDragOver(entry, event)}
+			onDrop={(event) => callbacks.onDrop(entry, event)}
 		>
 			<div
 				className={cn(

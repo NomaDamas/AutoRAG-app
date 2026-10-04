@@ -4,7 +4,9 @@ import {
 	attachmentsFromDrop,
 	finderDragEntries,
 	isAttachmentDrag,
+	isFinderDrag,
 	mergeAttachments,
+	readFinderDragPaths,
 	writeFinderDrag,
 	type DropData,
 } from "../src/renderer/src/state/attachments";
@@ -115,7 +117,7 @@ describe("attachmentsFromDrop", () => {
 });
 
 describe("writeFinderDrag", () => {
-	it("offers the rows as a copy with file URLs and plain paths for other drop targets", () => {
+	it("offers the rows as a copy-or-move with file URLs and plain paths for other drop targets", () => {
 		const data: Record<string, string> = {};
 		const target = {
 			effectAllowed: "uninitialized",
@@ -126,9 +128,35 @@ describe("writeFinderDrag", () => {
 
 		writeFinderDrag(target, [{ path: "/Users/me/한글 문서.md", name: "한글 문서.md", kind: "file" }]);
 
-		expect(target.effectAllowed).toBe("copy");
+		expect(target.effectAllowed).toBe("copyMove");
 		expect(data["text/uri-list"]).toBe("file:///Users/me/%ED%95%9C%EA%B8%80%20%EB%AC%B8%EC%84%9C.md");
 		expect(data["text/plain"]).toBe("/Users/me/한글 문서.md");
+	});
+});
+
+describe("readFinderDragPaths", () => {
+	it("reads the absolute paths an in-app row drag carries", () => {
+		const data: Record<string, string> = {};
+		writeFinderDrag(
+			{
+				effectAllowed: "uninitialized",
+				setData: (format, value) => {
+					data[format] = value;
+				},
+			},
+			[
+				{ path: "/d/a.txt", name: "a.txt", kind: "file" },
+				{ path: "/d/Sub", name: "Sub", kind: "folder" },
+			],
+		);
+		expect(readFinderDragPaths(drop(data))).toEqual(["/d/a.txt", "/d/Sub"]);
+	});
+
+	it("returns nothing for a foreign drag or a malformed payload", () => {
+		expect(readFinderDragPaths(drop({ "text/plain": "/d/a.txt" }))).toEqual([]);
+		expect(readFinderDragPaths(drop({ [FINDER_DRAG_TYPE]: "not json" }))).toEqual([]);
+		expect(isFinderDrag([FINDER_DRAG_TYPE, "text/plain"])).toBe(true);
+		expect(isFinderDrag(["Files", "text/plain"])).toBe(false);
 	});
 });
 

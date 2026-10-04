@@ -113,7 +113,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	const [dragActive, setDragActive] = useState(false);
 	const [dragOver, setDragOver] = useState(false);
 	const [dragName, setDragName] = useState<string | null>(null);
-
+	const lastDragAtRef = useRef(0);
 	const rootRef = useRef<HTMLElement | null>(null);
 	const inputRef = useRef<HTMLInputElement | null>(null);
 	const bodyRef = useRef<HTMLDivElement | null>(null);
@@ -247,12 +247,17 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		const onDragOver = (event: globalThis.DragEvent): void => {
 			if (event.dataTransfer === null || !isAttachmentDrag(event.dataTransfer.types)) return;
 			if (event.clientX <= 0 && event.clientY <= 0) {
+				lastDragAtRef.current = 0;
 				setDragActive(false);
+				setDragOver(false);
+				setDragName(null);
 				return;
 			}
+			lastDragAtRef.current = Date.now();
 			setDragActive(true);
 		};
 		const reset = (): void => {
+			lastDragAtRef.current = 0;
 			setDragActive(false);
 			setDragOver(false);
 			setDragName(null);
@@ -260,10 +265,14 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		window.addEventListener("dragover", onDragOver);
 		window.addEventListener("drop", reset);
 		window.addEventListener("dragend", reset);
+		const watchdog = window.setInterval(() => {
+			if (lastDragAtRef.current !== 0 && Date.now() - lastDragAtRef.current > 1000) reset();
+		}, 250);
 		return () => {
 			window.removeEventListener("dragover", onDragOver);
 			window.removeEventListener("drop", reset);
 			window.removeEventListener("dragend", reset);
+			window.clearInterval(watchdog);
 		};
 	}, []);
 
@@ -461,6 +470,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 
 	function onDockDragEnter(event: ReactDragEvent): void {
 		if (!isAttachmentDrag(event.dataTransfer.types)) return;
+		lastDragAtRef.current = Date.now();
 		event.preventDefault();
 		setDragActive(true);
 		setDragOver(true);
@@ -468,6 +478,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 
 	function onDockDragOver(event: ReactDragEvent): void {
 		if (!isAttachmentDrag(event.dataTransfer.types)) return;
+		lastDragAtRef.current = Date.now();
 		event.preventDefault();
 		event.dataTransfer.dropEffect = "copy";
 		setDragActive(true);

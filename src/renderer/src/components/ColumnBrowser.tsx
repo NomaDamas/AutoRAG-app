@@ -5,7 +5,7 @@ import { basename } from "../state/paths";
 import { RELATION_LABELS, type StackRow, type VersionFamilyError } from "../state/version-family";
 import { isHiddenName } from "../state/visibility";
 import { ChevronRightIcon } from "./icons";
-import { type RowCallbacks, VersionTag } from "./FileRow";
+import { type BackgroundDropHandlers, type RowCallbacks, VersionTag } from "./FileRow";
 import { FileTile } from "./primitives/FileTile";
 import { RenameInput } from "./RenameInput";
 import { VersionFamilyBanner } from "./VersionFamilyBanner";
@@ -52,6 +52,8 @@ export function ColumnBrowser({
 	versionFamilyError,
 	onRetryVersionFamilies,
 	columnCallbacks,
+	paneBackground,
+	dropBackgroundDir,
 	callbacks,
 }: {
 	readonly panes: readonly ColumnPaneView[];
@@ -67,6 +69,8 @@ export function ColumnBrowser({
 	readonly versionFamilyError: VersionFamilyError | null;
 	readonly onRetryVersionFamilies: () => void;
 	readonly columnCallbacks: ColumnCallbacks;
+	readonly paneBackground: (dir: string) => BackgroundDropHandlers;
+	readonly dropBackgroundDir: string | null;
 	readonly callbacks: RowCallbacks;
 }): ReactElement {
 	return (
@@ -75,14 +79,17 @@ export function ColumnBrowser({
 			<div className="columns__panes flex flex-1 min-h-0">
 				{panes.map((pane, index) => {
 					const opened = panes[index + 1]?.path ?? null;
+					const background = paneBackground(pane.path);
 					return (
 						<div
 							key={pane.path}
-							className="column flex-1 basis-0 min-w-0 min-h-0 p-6 overflow-auto border-r border-border"
-							role="listbox"
-							aria-label={basename(pane.path) || pane.path}
-							aria-multiselectable="true"
-							data-path={pane.path}
+							className={cn(
+								"column flex-1 basis-0 min-w-0 min-h-0 p-6 overflow-auto border-r border-border",
+								dropBackgroundDir === pane.path && "bg-accent-drop-hover",
+							)}
+							onDragOver={background.onDragOver}
+							onDrop={background.onDrop}
+							onDragLeave={background.onDragLeave}
 						>
 							{pane.rows.map((row) => (
 								<ColumnRow
@@ -127,6 +134,7 @@ export function ColumnBrowser({
 											? "bg-accent text-on-accent"
 											: "bg-sel-mute text-ink"
 										: "hover:bg-hover-row",
+									callbacks.dropTargetPath === member.entry.path && "bg-accent-drop-hover shadow-[inset_0_0_0_1.5px_var(--accent)]",
 								)}
 								role="option"
 								aria-selected={selectedKeys.includes(member.entry.path)}
@@ -138,6 +146,8 @@ export function ColumnBrowser({
 								onDoubleClick={() => callbacks.onOpen(member.entry)}
 								onContextMenu={(event) => callbacks.onContextMenu(member.entry, event)}
 								onDragStart={(event) => callbacks.onDragStart(member.entry, event)}
+								onDragOver={(event) => callbacks.onDragOver(member.entry, event)}
+								onDrop={(event) => callbacks.onDrop(member.entry, event)}
 							>
 								<FileTile kind={member.entry.fileKind} iconUrl={member.entry.iconUrl} size={16} />
 								<span className="col-name flex-1 min-w-0 overflow-hidden whitespace-nowrap text-ellipsis text-sm">
@@ -191,6 +201,7 @@ function ColumnRow({
 						: opened || row.child
 							? "text-ink-muted"
 							: "hover:bg-hover-row",
+				callbacks.dropTargetPath === entry.path && "bg-accent-drop-hover shadow-[inset_0_0_0_1.5px_var(--accent)]",
 			)}
 			role="option"
 			aria-selected={selected}
@@ -202,6 +213,8 @@ function ColumnRow({
 			onDoubleClick={() => callbacks.onOpen(entry)}
 			onContextMenu={(event) => callbacks.onContextMenu(entry, event)}
 			onDragStart={(event) => callbacks.onDragStart(entry, event)}
+			onDragOver={(event) => callbacks.onDragOver(entry, event)}
+			onDrop={(event) => callbacks.onDrop(entry, event)}
 		>
 			<FileTile kind={entry.fileKind} iconUrl={entry.iconUrl} size={16} />
 			{renameDraft === null ? (
