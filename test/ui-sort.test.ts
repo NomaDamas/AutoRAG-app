@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SORT_KEY_BY_COLUMN, cycleSort, sortEntries } from "../src/renderer/src/state/sort";
+import { SORT_KEY_BY_COLUMN, SORT_OPTIONS, cycleSort, explicitSort, sortEntries } from "../src/renderer/src/state/sort";
 import type { SortableEntry } from "../src/renderer/src/state/sort";
 
 function e(
@@ -36,6 +36,29 @@ describe("cycleSort", () => {
 	it("restarts the cycle when another column is clicked", () => {
 		const flipped = cycleSort(cycleSort(null, "name"), "name");
 		expect(cycleSort(flipped, "size")).toEqual({ key: "size", dir: -1, flipped: false });
+	});
+});
+
+describe("toolbar sort choices", () => {
+	it("exposes Finder criteria and creates explicit menu selections", () => {
+		expect(SORT_OPTIONS.map((option) => option.key)).toEqual([
+			"name",
+			"kind",
+			"application",
+			"extension",
+			"dateCreated",
+			"date",
+			"dateAdded",
+			"dateLastOpened",
+			"size",
+			"tags",
+			"comments",
+			"dimensions",
+			"rating",
+			"where",
+		]);
+		expect(explicitSort("date", -1)).toEqual({ key: "date", dir: -1, flipped: false });
+		expect(explicitSort("name", -1)).toEqual({ key: "name", dir: -1, flipped: true });
 	});
 });
 

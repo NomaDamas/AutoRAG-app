@@ -90,6 +90,8 @@ export async function buildFsEntry(path: string): Promise<FsEntry> {
 		ext: isFolder ? "" : extensionOf(name),
 		size: isFolder ? null : effective.size,
 		modifiedAt: effective.mtime.toISOString(),
+		// Only a real birth time is a creation time; never substitute mtime/ctime.
+		...(effective.birthtimeMs > 0 ? { createdAt: effective.birthtime.toISOString() } : {}),
 		isSymlink,
 		// The OS metadata lookup lands in fs-service, which owns process spawning.
 		osKind: null,

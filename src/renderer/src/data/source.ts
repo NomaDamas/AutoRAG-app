@@ -157,12 +157,13 @@ export function createBridgeSource(
 		},
 		async enrich(_path, entries) {
 			const targets: FsEnrichmentTarget[] = entries
-				.filter((entry) => entry.kind === "file" && entry.modifiedAt !== undefined)
+				.filter((entry) => entry.modifiedAt !== undefined)
 				.map((entry) => ({
 					path: entry.path,
 					kind: entry.kind,
-					ext: entry.name.includes(".") ? entry.name.split(".").pop()?.toLowerCase() ?? "" : "",
+					ext: entry.kind === "folder" ? "" : entry.name.includes(".") ? entry.name.split(".").pop()?.toLowerCase() ?? "" : "",
 					modifiedAt: entry.modifiedAt ?? "",
+					...(entry.createdAt === undefined ? {} : { createdAt: entry.createdAt }),
 				}));
 			const results = await fs.enrichEntries(targets, true);
 			return applyEntryEnrichment(entries, results);

@@ -1,12 +1,14 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactElement, type RefObject } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactElement, type RefObject } from "react";
 import type { FinderEntry } from "../data/entries";
 import { cn } from "../lib/cn";
 import { tileLabel } from "../state/format";
+import { GROUP_HEADER_HEIGHT, groupedLayout, groupedWindow, type GroupSection } from "../state/grouping";
 import type { StackRow, VersionFamilyError } from "../state/version-family";
-import { GRID_OVERSCAN, columnsForWidth, gridColumnCount, gridWindow } from "../state/virtual";
+import { GRID_OVERSCAN, columnsForWidth, gridColumnCount } from "../state/virtual";
 import { isHiddenName } from "../state/visibility";
 import { useScrollWindow } from "../hooks/useScrollWindow";
-import type { RowCallbacks } from "./FileRow";
+import { GroupHeader } from "./GroupHeader";
+import { type BackgroundDropHandlers, type RowCallbacks } from "./FileRow";
 import { FileTile } from "./primitives/FileTile";
 import { RenameInput } from "./RenameInput";
 import { VersionFamilyBanner } from "./VersionFamilyBanner";
@@ -14,6 +16,10 @@ import { VersionFamilyBanner } from "./VersionFamilyBanner";
 const DEFAULT_COLUMNS = 1;
 const DEFAULT_TILE_MIN = 96;
 const DEFAULT_TILE_ROW = 124;
+const DEFAULT_GAP = 8;
+/** The grid template every section's tile block shares; the constants above must match it. */
+const GRID_CLASS =
+	"icon-grid grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] auto-rows-[var(--tile-row)] gap-8 items-start [--tile-min:96px] [--tile-row:124px]";
 
 /**
  * View mode 1: every entry as a large folder/doc tile on a wrapping grid, its
@@ -21,14 +27,15 @@ const DEFAULT_TILE_ROW = 124;
  * open, context menu, and rename behavior as the list rows. The search summary
  * lives in the ScopeBar now, so the grid no longer renders it.
  *
- * Tiles are virtualized (issue #16): the real CSS grid stays in place, the
- * column count is read from its laid-out tracks, and only the rows around the
- * viewport are mounted via top/bottom padding. A keyboard/reveal target outside
- * the window is pulled into the DOM (see `gridWindow`) so the controller's
- * `scrollIntoView` still finds it.
+ * Tiles are virtualized (issue #16): only the rows around the viewport mount
+ * via top/bottom padding, and a keyboard/reveal target outside the window is
+ * pulled into the DOM (see `state/grouping.groupedWindow`) so the controller's
+ * `scrollIntoView` still finds it. Grouping (issue #47) renders one header plus
+ * one grid block per section; a section's visible tile-rows merge into a single
+ * grid so the tracks line up, and the window math runs on the grouped layout.
  */
 export function IconGrid({
-	rows,
+	sections,
 	listRef,
 	emptyText,
 	selectedKeys,
@@ -38,9 +45,12 @@ export function IconGrid({
 	renameDraft,
 	versionFamilyError,
 	onRetryVersionFamilies,
+	background,
+	dropBackground,
 	callbacks,
 }: {
-	readonly rows: readonly StackRow[];
+	/** The rows split into the toolbar Group control's sections (one when off). */
+	readonly sections: readonly GroupSection<StackRow>[];
 	readonly listRef: RefObject<HTMLDivElement | null>;
 	readonly searching: boolean;
 	readonly emptyText: string;
@@ -51,11 +61,21 @@ export function IconGrid({
 	readonly renameDraft: string;
 	readonly versionFamilyError: VersionFamilyError | null;
 	readonly onRetryVersionFamilies: () => void;
+	readonly background: BackgroundDropHandlers;
+	readonly dropBackground: boolean;
 	readonly callbacks: RowCallbacks;
 }): ReactElement {
-	const gridRef = useRef<HTMLDivElement | null>(null);
-	const scroll = useScrollWindow(listRef, gridRef);
-	const [layout, setLayout] = useState({ columns: DEFAULT_COLUMNS, stride: DEFAULT_TILE_ROW });
+	const contentRef = useRef<HTMLDivElement | null>(null);
+	const scroll = useScrollWindow(listRef, contentRef);
+	// Tile geometry read from the laid-out grid: tracks per row and one row's
+	// stride. Group headers add a fixed block on top of the tile rows.
+	const [metrics, setMetrics] = useState({
+		columns: DEFAULT_COLUMNS,
+		stride: DEFAULT_TILE_ROW + DEFAULT_GAP,
+		gap: DEFAULT_GAP,
+	});
+
+	const rows = useMemo(() => sections.flatMap((section) => section.rows), [sections]);
 
 	// The controller scrolls to the focused tile by element, so a keyboard or
 	// reveal target that lands outside the natural window must still be mounted
@@ -68,68 +88,138 @@ export function IconGrid({
 		previous.current = single;
 	}, [single]);
 
+	const layout = useMemo(
+		() =>
+			groupedLayout(
+				sections.map((section) => ({ label: section.label, rows: section.rows.length })),
+				{
+					columns: metrics.columns,
+					rowStride: metrics.stride,
+					rowGap: metrics.gap,
+					headerStride: GROUP_HEADER_HEIGHT,
+				},
+			),
+		[sections, metrics],
+	);
 	const revealIndex = reveal === null ? -1 : rows.findIndex((row) => row.entry.path === reveal);
-	const totalRows = layout.columns > 0 ? Math.ceil(rows.length / layout.columns) : 0;
-	const window = gridWindow({
-		count: rows.length,
+	const window = groupedWindow(layout, {
 		offset: scroll.offset,
 		viewport: scroll.viewport,
-		stride: layout.stride,
 		overscan: GRID_OVERSCAN,
-		columns: layout.columns,
-		include: revealIndex >= 0 ? revealIndex : undefined,
+		includeRow: revealIndex >= 0 ? revealIndex : undefined,
 	});
 
-	useLayoutEffect(() => {
-		const element = gridRef.current;
+	const measure = (): void => {
+		const element = contentRef.current;
 		if (element === null) {
 			return;
 		}
-		const measure = (): void => {
-			const styles = getComputedStyle(element);
-			const minTrack = Number.parseFloat(styles.getPropertyValue("--tile-min")) || DEFAULT_TILE_MIN;
-			const columnGap = Number.parseFloat(styles.columnGap) || 0;
-			const columns =
-				gridColumnCount(styles.gridTemplateColumns) ||
-				columnsForWidth(element.clientWidth, minTrack, columnGap);
-			const rowHeight = Number.parseFloat(styles.gridAutoRows) || Number.parseFloat(styles.getPropertyValue("--tile-row")) || DEFAULT_TILE_ROW;
-			const stride = rowHeight + (Number.parseFloat(styles.rowGap) || 0);
-			setLayout((current) => (current.columns === columns && current.stride === stride ? current : { columns, stride }));
-		};
-		measure();
+		// Prefer the resolved grid template (always the real track count); fall
+		// back to width math before the first grid block has mounted.
+		const grid = element.querySelector<HTMLElement>(".icon-grid");
+		const styles = grid === null ? null : getComputedStyle(grid);
+		const minTrack = Number.parseFloat(styles?.getPropertyValue("--tile-min") ?? "") || DEFAULT_TILE_MIN;
+		const columnGap = styles !== null ? Number.parseFloat(styles.columnGap) || DEFAULT_GAP : DEFAULT_GAP;
+		const columns =
+			(styles !== null ? gridColumnCount(styles.gridTemplateColumns) : 0) ||
+			columnsForWidth(element.clientWidth, minTrack, columnGap);
+		const rowHeight =
+			Number.parseFloat(styles?.gridAutoRows ?? "") || Number.parseFloat(styles?.getPropertyValue("--tile-row") ?? "") || DEFAULT_TILE_ROW;
+		const rowGap = styles !== null ? Number.parseFloat(styles.rowGap) || DEFAULT_GAP : DEFAULT_GAP;
+		const stride = rowHeight + rowGap;
+		setMetrics((current) =>
+			current.columns === columns && current.stride === stride && current.gap === rowGap
+				? current
+				: { columns, stride, gap: rowGap },
+		);
+	};
+	// Re-measure after every commit: the first grid block mounts only once its
+	// listing lands, and the content box can move without a resize event.
+	useLayoutEffect(measure);
+	useEffect(() => {
+		const element = contentRef.current;
+		if (element === null) {
+			return;
+		}
 		const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
 		observer?.observe(element);
-		return () => observer?.disconnect();
+		return () => {
+			observer?.disconnect();
+		};
 	}, []);
 
+	const padTop = window.start < layout.items.length ? (layout.offsets[window.start] ?? layout.total) : layout.total;
+	const padBottom = layout.total - (window.end < layout.items.length ? (layout.offsets[window.end] ?? layout.total) : layout.total);
+
+	// Merge a section's consecutive visible tile-rows into one grid block so
+	// the tracks line up; headers stay their own blocks.
+	type Block =
+		| { readonly kind: "header"; readonly section: number }
+		| { kind: "tiles"; section: number; start: number; end: number };
+	const blocks: Block[] = [];
+	for (const item of layout.items.slice(window.start, window.end)) {
+		if (item.kind === "header") {
+			blocks.push({ kind: "header", section: item.section });
+			continue;
+		}
+		const last = blocks[blocks.length - 1];
+		if (last !== undefined && last.kind === "tiles" && last.section === item.section && last.end === item.start) {
+			last.end = item.start + item.count;
+		} else {
+			blocks.push({ kind: "tiles", section: item.section, start: item.start, end: item.start + item.count });
+		}
+	}
+
+	// A grid block's CSS gap only sits between rows, so a block the virtual
+	// window cuts before its section's last row renders one row-gap shorter than
+	// its layout offset; marginBottom restores it (the layout counted a full
+	// stride for that row), so padBottom lands the next window exactly and the
+	// content height stays stable while scrolling.
 	return (
-		<div className="list list--icons flex-1 min-h-0 overflow-auto p-16" ref={listRef}>
+		<div
+			className={cn("list list--icons flex-1 min-h-0 overflow-auto p-16", dropBackground && "bg-accent-drop-hover")}
+			ref={listRef}
+			onDragOver={background.onDragOver}
+			onDrop={background.onDrop}
+			onDragLeave={background.onDragLeave}
+		>
 			<VersionFamilyBanner error={versionFamilyError} onRetry={onRetryVersionFamilies} />
 			<div
-				className="icon-grid grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] auto-rows-[var(--tile-row)] gap-8 items-start [--tile-min:96px] [--tile-row:124px]"
-				ref={gridRef}
+				ref={contentRef}
 				role="listbox"
 				aria-label="Files"
 				aria-multiselectable="true"
 				style={{
-					paddingTop: window.startRow * layout.stride,
-					paddingBottom: (totalRows - window.endRow) * layout.stride,
+					paddingTop: padTop,
+					paddingBottom: padBottom,
 				}}
 			>
-				{rows.slice(window.start, window.end).map((row) => (
-					<IconTile
-						key={row.entry.path}
-						entry={row.entry}
-						selected={selectedKeys.includes(row.entry.path)}
-						focusedZone={focusedZone}
-						flash={flashPath === row.entry.path}
-						child={row.child}
-						stackCount={row.stackCount}
-						stackOpen={row.stackOpen}
-						renameDraft={renamePath === row.entry.path ? renameDraft : null}
-						callbacks={callbacks}
-					/>
-				))}
+				{blocks.map((block) =>
+					block.kind === "header" ? (
+						<GroupHeader key={`group-${block.section}`} label={sections[block.section]?.label ?? ""} />
+					) : (
+						<div
+							key={`tiles-${block.section}-${block.start}`}
+							className={GRID_CLASS}
+							style={block.end < (sections[block.section]?.rows.length ?? 0) ? { marginBottom: metrics.gap } : undefined}
+						>
+							{sections[block.section]?.rows.slice(block.start, block.end).map((row) => (
+								<IconTile
+									key={row.entry.path}
+									entry={row.entry}
+									selected={selectedKeys.includes(row.entry.path)}
+									focusedZone={focusedZone}
+									flash={flashPath === row.entry.path}
+									child={row.child}
+									stackCount={row.stackCount}
+									stackOpen={row.stackOpen}
+									renameDraft={renamePath === row.entry.path ? renameDraft : null}
+									callbacks={callbacks}
+								/>
+							))}
+						</div>
+					),
+				)}
 			</div>
 			{rows.length === 0 ? (
 				<div className="list__empty py-40 px-12 text-ink-muted text-body text-center">{emptyText}</div>
@@ -178,6 +268,7 @@ function IconTile({
 							? "bg-accent-wash shadow-[inset_0_0_0_1.5px_var(--accent)]"
 							: "bg-sel-mute"
 						: "hover:bg-hover-row",
+				callbacks.dropTargetPath === entry.path && "bg-accent-drop-hover shadow-[inset_0_0_0_1.5px_var(--accent)]",
 			)}
 			role="option"
 			aria-selected={selected}
@@ -189,6 +280,8 @@ function IconTile({
 			onDoubleClick={() => callbacks.onOpen(entry)}
 			onContextMenu={(event) => callbacks.onContextMenu(entry, event)}
 			onDragStart={(event) => callbacks.onDragStart(entry, event)}
+			onDragOver={(event) => callbacks.onDragOver(entry, event)}
+			onDrop={(event) => callbacks.onDrop(entry, event)}
 		>
 			<div
 				className={cn(

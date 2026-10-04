@@ -10,6 +10,13 @@ import { cn } from "../lib/cn";
 import { CheckIcon } from "./icons";
 import { FileTile } from "./primitives/FileTile";
 
+/** Drag handlers for the empty background of a listing. */
+export interface BackgroundDropHandlers {
+	readonly onDragOver: (event: DragEvent<HTMLDivElement>) => void;
+	readonly onDrop: (event: DragEvent<HTMLDivElement>) => void;
+	readonly onDragLeave: (event: DragEvent<HTMLDivElement>) => void;
+}
+
 export interface RowCallbacks {
 	readonly onClick: (entry: FinderEntry, event: MouseEvent<HTMLDivElement>) => void;
 	readonly onOpen: (entry: FinderEntry) => void;
@@ -17,6 +24,12 @@ export interface RowCallbacks {
 	readonly onToggleIndex: (entry: FinderEntry) => void;
 	/** A row drag began: fills the drag with the rows it carries (the AI dock attaches them). */
 	readonly onDragStart: (entry: FinderEntry, event: DragEvent<HTMLDivElement>) => void;
+	/** An in-app drag hovers the row; folder rows accept it as a drop target. */
+	readonly onDragOver: (entry: FinderEntry, event: DragEvent<HTMLDivElement>) => void;
+	/** An in-app drag was dropped on the row; folder rows receive the dragged rows. */
+	readonly onDrop: (entry: FinderEntry, event: DragEvent<HTMLDivElement>) => void;
+	/** The folder row currently under an in-app drag; null when none. */
+	readonly dropTargetPath: string | null;
 	readonly onToggleStack: (entry: FinderEntry) => void;
 	readonly onToggleFolder: (entry: FinderEntry) => void;
 	readonly onRenameChange: (value: string) => void;
@@ -166,6 +179,7 @@ export function FileRow({
 						: zebra
 							? "bg-row-alt hover:bg-hover-row"
 							: "bg-window hover:bg-hover-row",
+				callbacks.dropTargetPath === entry.path && "bg-accent-drop-hover shadow-[inset_0_0_0_1.5px_var(--accent)]",
 			)}
 			role="row"
 			data-path={entry.path}
@@ -178,6 +192,8 @@ export function FileRow({
 			onDoubleClick={() => callbacks.onOpen(entry)}
 			onContextMenu={(event) => callbacks.onContextMenu(entry, event)}
 			onDragStart={(event) => callbacks.onDragStart(entry, event)}
+			onDragOver={(event) => callbacks.onDragOver(entry, event)}
+			onDrop={(event) => callbacks.onDrop(entry, event)}
 		>
 			<div className="row__name flex items-center gap-7 min-w-0" role="gridcell">
 				<span className="indent flex-none" style={{ width: depth * 16 }} aria-hidden="true" />

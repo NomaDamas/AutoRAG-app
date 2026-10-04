@@ -1,5 +1,6 @@
 /**
- * Column sorting for the Finder list — the 3-click cycle and the comparator.
+ * Sorting for the Finder — the toolbar Sort menu (issue #47) and the list
+ * column headers drive the same state, so both stay in sync.
  *
  * Reference: handoff README §2 "Column header" — first click ascending (Date
  * and Size start descending), second flips, third clears. Folders rank by the
@@ -7,7 +8,21 @@
  * as 0 (the minimum), and Name compares with the Korean locale.
  */
 
-export type SortKey = "name" | "date" | "size" | "kind" | "where";
+export type SortKey =
+	| "name"
+	| "kind"
+	| "application"
+	| "extension"
+	| "dateCreated"
+	| "date"
+	| "dateAdded"
+	| "dateLastOpened"
+	| "size"
+	| "tags"
+	| "comments"
+	| "dimensions"
+	| "rating"
+	| "where";
 export type SortDirection = 1 | -1;
 
 export interface SortState {
@@ -17,8 +32,26 @@ export interface SortState {
 	readonly flipped: boolean;
 }
 
+/** Every criterion the toolbar Sort menu offers (Finder's Sort By list). */
+export const SORT_OPTIONS: readonly { readonly key: SortKey; readonly label: string }[] = [
+	{ key: "name", label: "Name" },
+	{ key: "kind", label: "Kind" },
+	{ key: "application", label: "Application" },
+	{ key: "extension", label: "Extension" },
+	{ key: "dateCreated", label: "Date Created" },
+	{ key: "date", label: "Date Modified" },
+	{ key: "dateAdded", label: "Date Added" },
+	{ key: "dateLastOpened", label: "Date Last Opened" },
+	{ key: "size", label: "Size" },
+	{ key: "tags", label: "Tags" },
+	{ key: "comments", label: "Comments" },
+	{ key: "dimensions", label: "Dimensions" },
+	{ key: "rating", label: "Rating" },
+	{ key: "where", label: "Relative Path" },
+];
+
 /** Columns whose first click sorts descending. */
-const DESCENDING_FIRST: readonly SortKey[] = ["date", "size"];
+const DESCENDING_FIRST: readonly SortKey[] = ["dateCreated", "date", "dateAdded", "dateLastOpened", "size", "rating"];
 
 /**
  * The list columns that expose a sort button, and the key each one cycles —
@@ -39,6 +72,11 @@ export function cycleSort(current: SortState | null, key: SortKey): SortState | 
 	return { key, dir: DESCENDING_FIRST.includes(key) ? -1 : 1, flipped: false };
 }
 
+/** The toolbar Sort menu's explicit choice: a key plus a direction. */
+export function explicitSort(key: SortKey, dir: SortDirection): SortState {
+	return { key, dir, flipped: dir === (DESCENDING_FIRST.includes(key) ? 1 : -1) };
+}
+
 export interface SortableEntry {
 	readonly name: string;
 	readonly kind: "folder" | "file";
@@ -49,13 +87,33 @@ export interface SortableEntry {
 	readonly kindLabel: string;
 	/** Parent location, shown in the "Where" column while searching. */
 	readonly location: string;
+	/** Finder metadata populated by the native enrichment pass. */
+	readonly createdValue?: number;
+	readonly addedValue?: number;
+	readonly lastOpenedValue?: number;
+	readonly tagsLabel?: string;
+	readonly commentsLabel?: string;
+	readonly dimensionsLabel?: string;
+	readonly dimensionsValue?: number;
+	readonly ratingValue?: number;
+	readonly applicationLabel?: string;
 }
 
-const collator = new Intl.Collator("ko");
+const collator = new Intl.Collator("ko", { numeric: true });
 
 /** An unparseable stamp or size (NaN) ranks as 0, the minimum of its column. */
-function orZero(value: number): number {
-	return Number.isNaN(value) ? 0 : value;
+function orZero(value: number | undefined): number {
+	return value !== undefined && Number.isFinite(value) ? value : 0;
+}
+
+function extensionOf(entry: SortableEntry): string {
+	if (entry.kind === "folder") return "";
+	const dot = entry.name.lastIndexOf(".");
+	return dot > 0 ? entry.name.slice(dot + 1) : "";
+}
+
+function textOf(value: string | undefined): string {
+	return value ?? "";
 }
 
 function byName(a: SortableEntry, b: SortableEntry): number {
@@ -64,9 +122,18 @@ function byName(a: SortableEntry, b: SortableEntry): number {
 
 const COMPARATORS: Record<SortKey, (a: SortableEntry, b: SortableEntry) => number> = {
 	name: byName,
-	date: (a, b) => orZero(a.modifiedValue) - orZero(b.modifiedValue),
-	size: (a, b) => orZero(a.sizeValue) - orZero(b.sizeValue),
 	kind: (a, b) => collator.compare(a.kindLabel, b.kindLabel) || byName(a, b),
+	application: (a, b) => collator.compare(textOf(a.applicationLabel), textOf(b.applicationLabel)) || byName(a, b),
+	extension: (a, b) => collator.compare(extensionOf(a), extensionOf(b)),
+	dateCreated: (a, b) => orZero(a.createdValue) - orZero(b.createdValue),
+	date: (a, b) => orZero(a.modifiedValue) - orZero(b.modifiedValue),
+	dateAdded: (a, b) => orZero(a.addedValue) - orZero(b.addedValue),
+	dateLastOpened: (a, b) => orZero(a.lastOpenedValue) - orZero(b.lastOpenedValue),
+	size: (a, b) => orZero(a.sizeValue) - orZero(b.sizeValue),
+	tags: (a, b) => collator.compare(textOf(a.tagsLabel), textOf(b.tagsLabel)),
+	comments: (a, b) => collator.compare(textOf(a.commentsLabel), textOf(b.commentsLabel)),
+	dimensions: (a, b) => orZero(a.dimensionsValue) - orZero(b.dimensionsValue),
+	rating: (a, b) => orZero(a.ratingValue) - orZero(b.ratingValue),
 	where: (a, b) => collator.compare(a.location, b.location) || byName(a, b),
 };
 

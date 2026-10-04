@@ -37,7 +37,22 @@ The application is not an isolated AI chatbot; it is a **living macOS Finder bro
   - Center area hosts Finder tab browsing and bottom AI Search dock.
   - Right panel (Info / Evidence) is **permanently present**, preventing jarring layout shifts during file inspection.
 
-### 1.2 Path bar
+
+### 1.2 Sort and grouping controls
+The Finder toolbar exposes Sort and Group pop-up controls beside the view-mode
+segmented control. Sort writes the shared `SortState` used by list column headers
+and applies in icon, list, column, and search layouts. Grouping is visual only:
+`state/grouping.ts` splits the same rows into section headers without creating
+folders or changing entry identity; the virtualized list and icon views account
+for header height in their window geometry, and column panes render the same
+sections inline. Native Finder criteria are populated during filesystem
+enrichment: creation time comes from the real filesystem birth time, tags and
+comments use Finder extended attributes with Spotlight fallback, dimensions use
+the image reader, Date Added / Date Last Opened / rating use Spotlight, and
+Application uses Launch Services' default opener. Unknown values remain unknown;
+they are never replaced with modification time or an unrelated application.
+Pure behavior is covered by `test/ui-sort.test.ts` and `test/ui-grouping.test.ts`.
+### 1.3 Path bar
 The path bar under the Finder list is one line at every window size and never shows an ellipsis. When the trail does not fit, labels give up space in a fixed order — middle segments left to right (`Users`, the home folder, …), then the root (`Macintosh HD`), then the parent of the current location, then the current location or selected file. A label first narrows with its last `--fade-label` (14px) faded out, so the word reads as cut off; once fewer than 32px would remain, the segment shows only its icon. If even the icon-only trail is too wide, it stays pinned to its end and fades in from the leading edge. Logic: `src/renderer/src/state/path-fit.ts`; visual check: `scripts/manual-qa/run-qa-finder-path-bar.mjs`.
 ### 1.3 Finder list density
 The list view follows the Bloom Finder density contract: file rows are 24px high, names and metadata use 12px text, default file names use the primary near-black ink, and alternate rows use `#F4F5F5`. A focused selection fills the complete row with the accent color immediately, with no background-color transition and no visible corner rounding; an unfocused selection remains muted gray. Virtualized row geometry and keyboard reveal scrolling use the same 24px stride. The top Finder chrome uses larger 32px controls with 18px glyphs so navigation, sorting, view mode, and folder actions remain easy to target.

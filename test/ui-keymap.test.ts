@@ -71,6 +71,22 @@ describe("resolveKeyAction", () => {
 		expect(resolveKeyAction(key("f", { ctrl: true }), finder)).toEqual({ type: "focusSearch" });
 	});
 
+	it("maps the file clipboard: ⌘C copy, ⌘X cut, ⌘V paste, ⌥⌘V move-paste", () => {
+		expect(resolveKeyAction(key("c", { meta: true }), finder)).toEqual({ type: "copy" });
+		expect(resolveKeyAction(key("x", { meta: true }), finder)).toEqual({ type: "cut" });
+		expect(resolveKeyAction(key("v", { meta: true }), finder)).toEqual({ type: "paste", move: false });
+		expect(resolveKeyAction(key("V", { meta: true, alt: true }), finder)).toEqual({ type: "paste", move: true });
+		expect(resolveKeyAction(key("v", { ctrl: true }), finder)).toEqual({ type: "paste", move: false });
+		expect(resolveKeyAction(key("c", { meta: true, alt: true }), finder)).toBeNull();
+	});
+
+	it("leaves text copy/cut/paste to the focused field and never hijacks the evidence zone", () => {
+		expect(resolveKeyAction(key("c", { meta: true }), { ...finder, typing: true })).toBeNull();
+		expect(resolveKeyAction(key("v", { meta: true }), { ...finder, typing: true })).toBeNull();
+		expect(resolveKeyAction(key("v", { meta: true, alt: true }), { ...finder, typing: true })).toBeNull();
+		expect(resolveKeyAction(key("c", { meta: true }), { zone: "evidence", typing: false })).toBeNull();
+	});
+
 	it("ignores unmapped keys", () => {
 		expect(resolveKeyAction(key("x"), finder)).toBeNull();
 		expect(resolveKeyAction(key("t"), finder)).toBeNull();

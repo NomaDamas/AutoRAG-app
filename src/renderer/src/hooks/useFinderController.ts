@@ -22,8 +22,10 @@ import {
 	type FinderMenuAction,
 	type FinderMenuEntry,
 } from "../state/context-menu";
+import { planTransfer } from "../state/file-transfer";
 import type { FileActionTarget } from "../state/file-actions";
 import { emptyStateText, indexToast, trashToast } from "../state/format";
+import { findEvidenceSource } from "../state/evidence";
 import { type FocusZone, resolveKeyAction } from "../state/keymap";
 import {
 	applyEntryEnrichmentPatch,
@@ -51,13 +53,21 @@ import { activeNavPath, basename, breadcrumbTrail, dirname, type Crumb } from ".
 import {
 	applyRowClick,
 	EMPTY_SELECTION,
-	moveInGrid,
 	moveSelection,
 	type SelectionState,
-	scrollTopForIndex,
+	SCROLL_LEAD,
 } from "../state/selection";
-import { type SortKey, type SortState, cycleSort, sortEntries } from "../state/sort";
+import {
+	GROUP_STORAGE_KEY,
+	groupedRowTop,
+	groupRows,
+	parseGroupKey,
+	type GroupKey,
+	type GroupSection,
+} from "../state/grouping";
+import { type SortDirection, type SortKey, type SortState, cycleSort, explicitSort, sortEntries } from "../state/sort";
 import { visibleEntries } from "../state/visibility";
+import { columnsForWidth, gridColumnCount } from "../state/virtual";
 import {
 	buildFolderTree,
 	discloseStep,
@@ -127,25 +137,129 @@ function readStoredViewMode(): ViewMode {
 	}
 }
 
+function readStoredGrouping(): GroupKey {
+	try {
+		return parseGroupKey(globalThis.localStorage?.getItem(GROUP_STORAGE_KEY) ?? null);
+	} catch {
+		// Storage can be unavailable (sandboxed renderer, tests); grouping stays off.
+		return parseGroupKey(null);
+	}
+}
+
 /** The tile or column row that renders `path` (the list view scrolls by row index instead). */
 function itemElement(root: HTMLElement | null, path: string): HTMLElement | null {
 	const selector = `[data-path="${CSS.escape(path)}"]`;
 	return root?.querySelector<HTMLElement>(`.icon-tile${selector}, .column-row${selector}`) ?? null;
 }
 
-/** Tiles per row in the icon grid, read from the laid-out DOM. */
+/**
+ * Tiles per row in the icon grid. The resolved `grid-template-columns` is the
+ * real track count and is shared by every section's grid block; the first
+ * DOM row is only a fallback because grouping can leave the first rendered row
+ * short (a small section), which would undercount the tracks.
+ */
 function gridColumns(root: HTMLElement | null): number {
-	const tiles = root?.querySelectorAll<HTMLElement>(".icon-tile");
-	const first = tiles?.[0];
-	if (tiles === undefined || first === undefined) {
+	if (root === null) {
 		return 1;
 	}
-	let count = 0;
-	for (const tile of tiles) {
-		if (tile.offsetTop !== first.offsetTop) break;
-		count += 1;
+	const grid = root.querySelector<HTMLElement>(".icon-grid");
+	if (grid !== null) {
+		const styles = getComputedStyle(grid);
+		const tracks = gridColumnCount(styles.gridTemplateColumns);
+		if (tracks > 0) {
+			return tracks;
+		}
+		// Computed style still symbolic: width math on the tracked template.
+		const minTrack = Number.parseFloat(styles.getPropertyValue("--tile-min")) || 96;
+		const columnGap = Number.parseFloat(styles.columnGap) || 8;
+		const byWidth = columnsForWidth(grid.clientWidth, minTrack, columnGap);
+		if (byWidth > 0) {
+			return byWidth;
+		}
 	}
-	return Math.max(1, count);
+	const counts = new Map<number, number>();
+	let most = 0;
+	for (const tile of root.querySelectorAll<HTMLElement>(".icon-tile")) {
+		const count = (counts.get(tile.offsetTop) ?? 0) + 1;
+		counts.set(tile.offsetTop, count);
+		if (count > most) {
+			most = count;
+		}
+	}
+	return Math.max(1, most);
+}
+
+/**
+ * Arrow target in the grouped icon grid. Every section lays its rows out in
+ * `columns` tracks and a group restarts the tracks, so up/down move by a whole
+ * tile-row inside the focused section and step to the adjacent section at its
+ * edge, keeping the column when that section's row is long enough (a short
+ * final row clamps to its last tile). Left/right walk the section's flattened
+ * rows; a header separates sections, so they do not cross one. Returns the path
+ * to focus, or null when the grid is empty.
+ */
+function groupedGridTarget(
+	sections: readonly GroupSection<StackRow>[],
+	columns: number,
+	focus: string | null,
+	step: { readonly dx: -1 | 0 | 1; readonly dy: -1 | 0 | 1 },
+): string | null {
+	const width = Math.max(1, Math.floor(columns));
+	// One pass locates the focused path's section, its start, and the total.
+	let total = 0;
+	let index = -1;
+	let section = 0;
+	let sectionStart = 0;
+	for (let i = 0; i < sections.length; i += 1) {
+		const rows = sections[i]?.rows ?? [];
+		if (index < 0 && focus !== null) {
+			const at = rows.findIndex((row) => row.entry.path === focus);
+			if (at >= 0) {
+				index = total + at;
+				section = i;
+				sectionStart = total;
+			}
+		}
+		total += rows.length;
+	}
+	if (total === 0) {
+		return null;
+	}
+	if (index < 0) {
+		index = 0;
+		section = 0;
+		sectionStart = 0;
+	}
+	const rowsHere = sections[section]?.rows.length ?? 0;
+	let local = index - sectionStart;
+	if (step.dy !== 0) {
+		const row = Math.floor(local / width);
+		const lastRow = Math.floor((rowsHere - 1) / width);
+		const column = local % width;
+		const nextRow = row + step.dy;
+		if (nextRow >= 0 && nextRow <= lastRow) {
+			// Same section: clamp to a short final row.
+			local = Math.min(nextRow * width + column, rowsHere - 1);
+		} else if (nextRow < 0) {
+			const previousRows = sections[section - 1]?.rows.length ?? 0;
+			if (previousRows > 0) {
+				section -= 1;
+				local = Math.min(column, previousRows - 1);
+			}
+		} else {
+			const nextRows = sections[section + 1]?.rows.length ?? 0;
+			if (nextRows > 0) {
+				section += 1;
+				local = Math.min(column, nextRows - 1);
+			}
+		}
+	} else if (step.dx !== 0) {
+		const candidate = local + step.dx;
+		if (candidate >= 0 && candidate < rowsHere) {
+			local = candidate;
+		}
+	}
+	return sections[section]?.rows[local]?.entry.path ?? focus;
 }
 
 interface RenameState {
@@ -172,7 +286,11 @@ export interface FinderController {
 	readonly emptyText: string;
 	readonly rows: readonly FinderEntry[];
 	readonly stackRows: readonly TreeRow[];
+	/** The same rows split into the toolbar Group control's visual sections. */
+	readonly stackSections: readonly GroupSection<TreeRow>[];
 	readonly sort: SortState | null;
+	/** The toolbar Group control's active criterion. */
+	readonly grouping: GroupKey;
 	readonly zone: FocusZone;
 	readonly selection: SelectionState;
 	readonly toast: string | null;
@@ -213,6 +331,16 @@ export interface FinderController {
 	runEntryAction(entry: FinderEntry, target: FileActionTarget, anchor: ActionAnchor | null): void;
 	/** The rows a drag of `entry` carries: the whole selection when it is selected, else just `entry`. */
 	dragEntries(entry: FinderEntry): readonly FinderEntry[];
+	/** Copy the current selection to the in-app file clipboard (⌘C). */
+	copySelection(): void;
+	/** Cut the current selection to the in-app file clipboard (⌘X). */
+	cutSelection(): void;
+	/** Paste the file clipboard into the current folder (⌘V; `move` is ⌥⌘V). */
+	pasteClipboard(move: boolean): void;
+	/** An in-app row drop: ⌥ copies, otherwise the rows move into the target folder. */
+	transferDropped(paths: readonly string[], destDir: string, copy: boolean): void;
+	/** A drop on another tab: switch to it, then move/copy the rows into its folder. */
+	dropOnTab(tabId: number, paths: readonly string[], copy: boolean): void;
 	/** Column view panes, left to right (empty outside the column layout). */
 	readonly columnPanes: readonly ColumnPaneView[];
 	readonly listRef: RefObject<HTMLDivElement | null>;
@@ -228,6 +356,10 @@ export interface FinderController {
 	setQuery(value: string): void;
 	setSearchFocused(value: boolean): void;
 	sortBy(key: SortKey): void;
+	/** The toolbar Sort menu: an explicit key and direction (synced with the header cycle). */
+	applySort(key: SortKey, direction: SortDirection): void;
+	/** The toolbar Group menu: choose the grouping criterion (persisted). */
+	setGrouping(key: GroupKey): void;
 	showToast(message: string): void;
 	/** In-app Quick Look for an arbitrary path (evidence source). */
 	quickLookPath(path: string): void;
@@ -291,6 +423,8 @@ export function useFinderController(
 	const [query, setQueryValue] = useState("");
 	const [searchScope, setSearchScope] = useState<SearchScope>("all");
 	const [sort, setSort] = useState<SortState | null>(null);
+	/** The toolbar Group control's criterion; the views render section headers for it. */
+	const [grouping, setGroupingValue] = useState<GroupKey>(readStoredGrouping);
 	const [zone, setZone] = useState<FocusZone>("finder");
 	const [listing, setListing] = useState<readonly FinderEntry[]>([]);
 	/** The tab whose folder `listing` was last switched to; see the swap below. */
@@ -926,44 +1060,59 @@ export function useFinderController(
 		return () => clearTimeout(timer);
 	}, [flashPath]);
 
-	const stackRows = useMemo(() => {
+	const stackSections = useMemo<readonly GroupSection<TreeRow>[]>(() => {
 		const prepare = (entries: readonly FinderEntry[]): readonly StackRow[] =>
 			applyVersionStacks(sortEntries(visibleEntries(entries, showHiddenFiles), sort), {
 				families,
 				manualOpen: stackPinned,
 				selectedKeys: selection.keys,
 			});
+		// Grouping partitions only the top level: an expanded folder's nested
+		// rows stay with their parent, and an open version stack's members stay
+		// with their head (`groupRows` carries child rows along).
+		const grouped = (rows: readonly StackRow[]): readonly GroupSection<StackRow>[] => groupRows(rows, grouping, Date.now());
 		if (searching) {
 			const scoped =
 				searchScope === "current" ? hits.filter((hit) => hit.path === path || hit.path.startsWith(`${path}/`)) : hits;
-			return flatTreeRows(prepare(scoped));
+			return grouped(prepare(scoped)).map((section) => ({ ...section, rows: flatTreeRows(section.rows) }));
 		}
-		return buildFolderTree(prepare(listing), {
-			expanded,
-			childrenOf: (folder) => {
-				const loaded = childListings[folder];
-				return loaded === undefined ? undefined : prepare(loaded.entries);
-			},
-		});
-	}, [searching, hits, listing, sort, showHiddenFiles, families, stackPinned, selection.keys, expanded, childListings, searchScope, path]);
+		return grouped(prepare(listing)).map((section) => ({
+			...section,
+			rows: buildFolderTree(section.rows, {
+				expanded,
+				childrenOf: (folder) => {
+					const loaded = childListings[folder];
+					return loaded === undefined ? undefined : prepare(loaded.entries);
+				},
+			}),
+		}));
+	}, [searching, hits, listing, sort, grouping, showHiddenFiles, families, stackPinned, selection.keys, expanded, childListings, searchScope, path]);
+	const stackRows = useMemo(() => stackSections.flatMap((section) => section.rows), [stackSections]);
 
 	const paneViews = useMemo<readonly ColumnPaneView[]>(
 		() =>
 			panePaths.map((panePath) => {
 				const entries = paneListings[panePath];
+				const rows = applyVersionStacks(sortEntries(visibleEntries(entries ?? [], showHiddenFiles), sort), {
+					families,
+					manualOpen: stackPinned,
+					selectedKeys: selection.keys,
+				});
 				return {
 					path: panePath,
 					loaded: entries !== undefined,
-					rows: applyVersionStacks(sortEntries(visibleEntries(entries ?? [], showHiddenFiles), sort), {
-						families,
-						manualOpen: stackPinned,
-						selectedKeys: selection.keys,
-					}),
+					rows,
+					sections: groupRows(rows, grouping, Date.now()),
 				};
 			}),
-		[panePaths, paneListings, showHiddenFiles, sort, families, stackPinned, selection.keys],
+		[panePaths, paneListings, showHiddenFiles, sort, grouping, families, stackPinned, selection.keys],
 	);
-	const paneEntries = useMemo(() => paneViews.map((pane) => pane.rows.map((row) => row.entry)), [paneViews]);
+	// Keyboard and shift-range order inside a pane is the visual section order
+	// (each section's rows, sections flattened), not the pre-group sort order.
+	const paneEntries = useMemo(
+		() => paneViews.map((pane) => pane.sections.flatMap((section) => section.rows.map((row) => row.entry))),
+		[paneViews],
+	);
 
 	/** Every folder shown open needs its listing; stale ones re-read after a refresh. */
 	const openFolders = useMemo(() => expandedFolders(stackRows), [stackRows]);
@@ -1054,9 +1203,11 @@ export function useFinderController(
 	}
 	scrollTarget.current = null;
 	if (listRef.current !== null) {
-		listRef.current.scrollTop = scrollTopForIndex(index);
+		// Group headers add height above a row, so the top comes from the
+		// grouped layout (identical to index * ROW_HEIGHT when ungrouped).
+		listRef.current.scrollTop = Math.max(0, groupedRowTop(stackSections, index) - SCROLL_LEAD);
 	}
-	}, [orderedKeys, layout, selection, path]);
+	}, [orderedKeys, layout, selection, path, stackSections]);
 
 	const patchSelection = useCallback((next: SelectionState) => {
 		setTabsState((state) => patchActiveTab(state, (current) => ({ ...current, selection: next })));
@@ -1113,6 +1264,20 @@ export function useFinderController(
 		} catch (error) {
 			console.warn("view mode could not be stored", error);
 		}
+	}, []);
+
+	const setGrouping = useCallback((key: GroupKey) => {
+		setGroupingValue(key);
+		try {
+			globalThis.localStorage?.setItem(GROUP_STORAGE_KEY, key);
+		} catch (error) {
+			console.warn("grouping could not be stored", error);
+		}
+	}, []);
+
+	/** The toolbar Sort menu: an explicit key/direction, in the same state the header cycle drives. */
+	const applySort = useCallback((key: SortKey, direction: SortDirection) => {
+		setSort(explicitSort(key, direction));
 	}, []);
 
 	const navigate = useCallback((next: string) => {
@@ -1391,22 +1556,26 @@ export function useFinderController(
 		[presentQuickLook],
 	);
 
-	// An evidence crumb opens the enclosing folder in a NEW tab, with the source row revealed.
+	// An evidence title opens the enclosing folder in a NEW tab and selects the source file.
 	const revealEvidence = useCallback(
 		(target: string) => {
 			const folder = dirname(target);
 			source
 				.list(folder)
-				.then(() => {
+				.then((entries) => {
+					const entry = findEvidenceSource(entries, target);
+					if (entry === undefined) {
+						throw new Error(`Evidence source was not found in its folder: ${target}`);
+					}
 					setTabsState((state) =>
 						patchActiveTab(openTabAt(state, folder), (tab) => ({
 							...tab,
-							selection: { keys: [target], anchor: target, focus: target },
+							selection: single(entry.path),
 						})),
 					);
 					setQueryValue("");
-					setFlashPath(target);
-					scrollTarget.current = target;
+					setFlashPath(entry.path);
+					scrollTarget.current = entry.path;
 				})
 				.catch(reportError);
 		},
@@ -1417,6 +1586,98 @@ export function useFinderController(
 		(entry: FinderEntry): readonly string[] =>
 			selection.keys.includes(entry.path) && selection.keys.length > 1 ? selection.keys : [entry.path],
 		[selection.keys],
+	);
+
+	/**
+	 * Copy or move rows into `destDir`. A transfer that would be a no-op (the
+	 * rows already live there, or the destination sits inside a dragged folder)
+	 * resolves without touching the filesystem.
+	 */
+	const transferInto = useCallback(
+		(paths: readonly string[], destDir: string, op: "copy" | "move"): void => {
+			const plan = planTransfer({ paths, destDir, op });
+			if (plan === null) {
+				return;
+			}
+			const run =
+				plan.op === "copy"
+					? source.copyInto(plan.paths, plan.destDir)
+					: source.moveInto(plan.paths, plan.destDir);
+			run
+				.then(() => {
+					if (plan.op === "move") {
+						pruneColumns(plan.paths);
+						setClipboardCount(0);
+						showToast(`${plan.paths.length}개 항목을 옮겼습니다`);
+					} else {
+						showToast(`${plan.paths.length}개 항목을 복사했습니다`);
+					}
+					refresh();
+				})
+				.catch(reportError);
+		},
+		[source, pruneColumns, showToast, refresh, reportError],
+	);
+
+	const copyPaths = useCallback(
+		(paths: readonly string[]) => {
+			if (paths.length === 0) return;
+			source
+				.clipboardSet({ op: "copy", paths })
+				.then(() => setClipboardCount(paths.length))
+				.catch(reportError);
+		},
+		[source, reportError],
+	);
+
+	const cutPaths = useCallback(
+		(paths: readonly string[]) => {
+			if (paths.length === 0) return;
+			source
+				.clipboardSet({ op: "cut", paths })
+				.then(() => setClipboardCount(paths.length))
+				.catch(reportError);
+		},
+		[source, reportError],
+	);
+
+	/** ⌘V pastes the clipboard op as-is; ⌥⌘V forces a move. */
+	const pasteClipboard = useCallback(
+		(move: boolean) => {
+			if (path === "" || path === RECENTS_PATH || path === SETTINGS_PATH) return;
+			source
+				.clipboardGet()
+				.then((clipboard) => {
+					if (clipboard === null || clipboard.paths.length === 0) return;
+					transferInto(clipboard.paths, path, move || clipboard.op === "cut" ? "move" : "copy");
+				})
+				.catch(reportError);
+		},
+		[path, source, transferInto, reportError],
+	);
+
+	const copySelection = useCallback(() => copyPaths(selection.keys), [copyPaths, selection.keys]);
+	const cutSelection = useCallback(() => cutPaths(selection.keys), [cutPaths, selection.keys]);
+
+	/** An in-app row drop: ⌥ copies, otherwise the rows move into the target folder. */
+	const transferDropped = useCallback(
+		(paths: readonly string[], destDir: string, copy: boolean) => {
+			if (destDir === "" || destDir === RECENTS_PATH || destDir === SETTINGS_PATH) return;
+			transferInto(paths, destDir, copy ? "copy" : "move");
+		},
+		[transferInto],
+	);
+
+	/** A drop on another tab: show that tab, then move/copy the rows into its folder. */
+	const dropOnTab = useCallback(
+		(tabId: number, paths: readonly string[], copy: boolean) => {
+			const target = tabsRef.current.find((current) => current.id === tabId);
+			if (target === undefined) return;
+			setTabsState((state) => selectTab(state, tabId));
+			setQueryValue("");
+			transferDropped(paths, target.path, copy);
+		},
+		[transferDropped],
 	);
 
 	const runMenuAction = useCallback(
@@ -1456,32 +1717,17 @@ export function useFinderController(
 				case "retryIndex":
 					return;
 				case "copy":
-					source
-						.clipboardSet({ op: "copy", paths: targets })
-						.then(() => setClipboardCount(targets.length))
-						.catch(reportError);
+					copyPaths(targets);
 					return;
 				case "cut":
-					source
-						.clipboardSet({ op: "cut", paths: targets })
-						.then(() => setClipboardCount(targets.length))
-						.catch(reportError);
+					cutPaths(targets);
 					return;
 				case "paste":
 					source
 						.clipboardGet()
-						.then(async (clipboard) => {
-							if (clipboard === null || clipboard.paths.length === 0) {
-								return;
-							}
-							if (clipboard.op === "copy") {
-								await source.copyInto(clipboard.paths, pasteDir);
-							} else {
-								await source.moveInto(clipboard.paths, pasteDir);
-								pruneColumns(clipboard.paths);
-								setClipboardCount(0);
-							}
-							refresh();
+						.then((clipboard) => {
+							if (clipboard === null || clipboard.paths.length === 0) return;
+							transferInto(clipboard.paths, pasteDir, clipboard.op === "cut" ? "move" : "copy");
 						})
 						.catch(reportError);
 					return;
@@ -1502,7 +1748,7 @@ export function useFinderController(
 					return;
 			}
 		},
-		[contextMenu, menuTargets, navigate, path, layout, panePaths, presentQuickLook, pruneColumns, refresh, reportError, source, toggleIndex, trashPaths],
+		[contextMenu, menuTargets, copyPaths, cutPaths, transferInto, navigate, path, layout, panePaths, presentQuickLook, refresh, reportError, source, toggleIndex, trashPaths],
 	);
 
 	const commitRename = useCallback(() => {
@@ -1584,7 +1830,7 @@ export function useFinderController(
 			}
 			const typing =
 				target instanceof HTMLElement &&
-				(target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable);
+				(target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable || target.closest('[role="menu"]') !== null);
 			const action = resolveKeyAction(
 				{
 					key: event.key,
@@ -1632,10 +1878,19 @@ export function useFinderController(
 						stepColumns(action.delta === 1 ? "down" : "up");
 						return;
 					}
-					const next =
-						layout === "icons"
-							? moveInGrid(orderedKeys, selection, { dx: 0, dy: action.delta }, gridColumns(listRef.current))
-							: moveSelection(orderedKeys, selection, action.delta);
+					if (layout === "icons") {
+						const path = groupedGridTarget(stackSections, gridColumns(listRef.current), selection.focus, {
+							dx: 0,
+							dy: action.delta,
+						});
+						if (path === null) {
+							return;
+						}
+						scrollTarget.current = path;
+						patchSelection(single(path));
+						return;
+					}
+					const next = moveSelection(orderedKeys, selection, action.delta);
 					scrollTarget.current = next.focus;
 					patchSelection(next);
 					return;
@@ -1646,9 +1901,15 @@ export function useFinderController(
 						stepColumns(action.delta === 1 ? "right" : "left");
 						return;
 					}
-					const next = moveInGrid(orderedKeys, selection, { dx: action.delta, dy: 0 }, gridColumns(listRef.current));
-					scrollTarget.current = next.focus;
-					patchSelection(next);
+					const path = groupedGridTarget(stackSections, gridColumns(listRef.current), selection.focus, {
+						dx: action.delta,
+						dy: 0,
+					});
+					if (path === null) {
+						return;
+					}
+					scrollTarget.current = path;
+					patchSelection(single(path));
 					return;
 				}
 				case "setViewMode":
@@ -1685,6 +1946,18 @@ export function useFinderController(
 					event.preventDefault();
 					trashPaths(selection.keys);
 					return;
+				case "copy":
+					event.preventDefault();
+					copySelection();
+					return;
+				case "cut":
+					event.preventDefault();
+					cutSelection();
+					return;
+				case "paste":
+					event.preventDefault();
+					pasteClipboard(action.move);
+					return;
 			}
 		};
 		window.addEventListener("keydown", onKeyDown);
@@ -1697,12 +1970,16 @@ export function useFinderController(
 		dismiss,
 		orderedKeys,
 		stackRows,
+		stackSections,
 		setFolderOpen,
 		selection,
 		quickLookSelection,
 		focusedEntry,
 		openEntry,
 		trashPaths,
+		copySelection,
+		cutSelection,
+		pasteClipboard,
 	]);
 
 	const tabViews = useMemo<readonly TabView[]>(
@@ -1754,7 +2031,9 @@ export function useFinderController(
 		emptyText: emptyStateText(query, path),
 		rows,
 		stackRows,
+		stackSections,
 		sort,
+		grouping,
 		zone,
 		selection,
 		toast,
@@ -1780,6 +2059,11 @@ export function useFinderController(
 		actionCapabilities,
 		runEntryAction,
 		dragEntries,
+		copySelection,
+		cutSelection,
+		pasteClipboard,
+		transferDropped,
+		dropOnTab,
 		columnPanes: paneViews,
 		listRef,
 		searchRef,
@@ -1794,6 +2078,8 @@ export function useFinderController(
 		setQuery: setQueryValue,
 		setSearchFocused,
 		sortBy: (key) => setSort((current) => cycleSort(current, key)),
+		applySort,
+		setGrouping,
 		showToast,
 		quickLookPath,
 		moveSelectionBy,

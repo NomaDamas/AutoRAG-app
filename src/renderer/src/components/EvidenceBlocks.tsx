@@ -1,9 +1,8 @@
 /**
- * Evidence excerpt rendering, shared by the Inspector's Evidence half and the
- * legacy bottom-strip EvidencePanel.
+ * Evidence excerpt rendering, shared by the Inspector's Evidence half.
  *
  * Block/inline parsing lives in `state/answer-markdown`; this module is only the
- * React adapter, so the two panels render an excerpt with identical markup.
+ * React adapter, so the panel renders an excerpt with consistent markup.
  */
 
 import type { ReactElement } from "react";

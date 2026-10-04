@@ -2,9 +2,36 @@ import { describe, expect, it } from "vitest";
 import {
 	evidenceDetail,
 	evidenceKind,
+	findEvidenceSource,
 	feedbackToastText,
 	nextEvidenceFeedback,
 } from "../src/renderer/src/state/evidence";
+
+describe("findEvidenceSource", () => {
+	const source = "/Documents/참고 자료/Andrej Karpathy가 추천한 nanoclaw 사용기.pdf";
+	const decomposed = { path: source.normalize("NFD") };
+
+	it("matches a composed citation to a decomposed filename and keeps the listing identity", () => {
+		expect(findEvidenceSource([decomposed], source)).toBe(decomposed);
+	});
+
+	it("matches a decomposed citation to a composed filename", () => {
+		const composed = { path: source };
+		expect(findEvidenceSource([composed], source.normalize("NFD"))).toBe(composed);
+	});
+
+	it("prefers the exact filename when canonically equivalent files both exist", () => {
+		const exact = { path: source };
+		expect(findEvidenceSource([decomposed, exact], source)).toBe(exact);
+	});
+
+	it("does not rewrite spaces, case, or URI escapes into a different file", () => {
+		const entry = { path: "/Documents/Café notes.pdf" };
+		for (const wrong of ["Café  notes.pdf", "café notes.pdf", "Café%20notes.pdf", "Café notes.pdf ", "missing.pdf"]) {
+			expect(findEvidenceSource([entry], `/Documents/${wrong}`)).toBeUndefined();
+		}
+	});
+});
 
 describe("evidenceDetail", () => {
 	it("shows the confidence as a percentage", () => {

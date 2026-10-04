@@ -53,6 +53,21 @@ export function isAttachmentDrag(types: ArrayLike<string>): boolean {
 	return Array.from(types).some((type) => type === FILES || type === URI_LIST || type === FINDER_DRAG_TYPE);
 }
 
+/**
+ * Whether a drag carries the Finder's own rows, as opposed to OS files or
+ * links. The in-app drop targets (folder rows, tabs) accept only this, so an
+ * OS drag keeps falling through to the default browser handling.
+ */
+export function isFinderDrag(types: ArrayLike<string>): boolean {
+	return Array.from(types).some((type) => type === FINDER_DRAG_TYPE);
+}
+
+/** The absolute paths a Finder row drag carries; [] when the payload is absent or malformed. */
+export function readFinderDragPaths(data: Pick<DropData<unknown>, "types" | "getData">): readonly string[] {
+	if (!isFinderDrag(data.types)) return [];
+	return finderEntries(data.getData(FINDER_DRAG_TYPE)).map((attachment) => attachment.id);
+}
+
 /** The rows a drag carries: the whole selection when the grabbed row is in it, else just that row. */
 export function finderDragEntries<E extends FinderDragEntry>(
 	entry: E,
@@ -67,9 +82,12 @@ export function finderDragEntries<E extends FinderDragEntry>(
 /**
  * Fill a Finder row drag: the rows for the AI dock, plus file URLs and plain
  * paths so text fields and other apps receive something sensible.
+ *
+ * The drag can both copy and move: an in-app drop onto a folder or tab moves
+ * the rows (⌥ copies), while a drop on the AI dock or another app copies.
  */
 export function writeFinderDrag(data: DragDataWriter, entries: readonly FinderDragEntry[]): void {
-	data.effectAllowed = "copy";
+	data.effectAllowed = "copyMove";
 	data.setData(
 		FINDER_DRAG_TYPE,
 		JSON.stringify(entries.map(({ path, name, kind }) => ({ path, name, kind }))),
