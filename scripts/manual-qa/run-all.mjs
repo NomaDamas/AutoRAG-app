@@ -40,8 +40,8 @@ const LANES = [
 	{ name: "info-metadata", script: "run-qa-finder-info-metadata.mjs", timeout: 240 },
 	{ name: "file-actions", script: "run-qa-finder-file-actions.mjs", timeout: 300 },
 	{ name: "nav-guard", script: "run-qa-finder-nav-guard.mjs", timeout: 240 },
-	{ name: "dupey-cache", script: "run-qa-finder-dupey-cache.mjs", timeout: 420 },
-	{ name: "trash-prune", script: "run-qa-finder-trash-prune.mjs", timeout: 300 },
+	{ name: "dupey-cache", script: "run-qa-finder-dupey-cache.mjs", timeout: 600 },
+	{ name: "trash-prune", script: "run-qa-finder-trash-prune.mjs", timeout: 480 },
 	{ name: "evidence-panel", script: "run-qa-finder-evidence-panel.mjs", timeout: 300 },
 	{ name: "datasource-status", script: "run-qa-finder-datasource-status.mjs", timeout: 240 },
 	{ name: "models-status", script: "run-qa-finder-models-status.mjs", timeout: 240 },
@@ -49,10 +49,21 @@ const LANES = [
 	{ name: "quick-look-reference", script: "run-qa-quick-look-reference.mjs", timeout: 420 },
 ];
 
-/** Kill any Electron left behind by a timed-out lane so the next one starts clean. */
-function reapElectron() {
-	if (isWindows) sh("taskkill /F /IM electron.exe /T");
-	else sh("pkill -f 'electron .'");
+/**
+ * Kill one lane's own process tree (its bun process and the Electron it
+ * launched). Never kills by image name: a developer (or CI) may be running
+ * other Electron apps alongside the sweep.
+ */
+function reapLane(pid) {
+	if (isWindows) sh(`taskkill /F /T /PID ${pid}`);
+	else {
+		sh(`pkill -P ${pid}`);
+		try {
+			process.kill(pid, "SIGKILL");
+		} catch {
+			// Already gone.
+		}
+	}
 }
 
 /** Run one lane to completion or its deadline; resolves with its result. */
@@ -67,7 +78,7 @@ function runLane(lane) {
 		child.stdout.on("data", (chunk) => (output += chunk));
 		child.stderr.on("data", (chunk) => (output += chunk));
 		const timer = setTimeout(() => {
-			reapElectron();
+			if (child.pid !== undefined) reapLane(child.pid);
 			child.kill("SIGKILL");
 		}, lane.timeout * 1000);
 		child.on("close", (code) => {
@@ -102,18 +113,17 @@ async function main() {
 		process.stdout.write(`=== ${lane.name} ===\n`);
 		const result = await runLane(lane);
 		writeFileSync(join(OUT, `${lane.name}.log`), result.output);
-		reapElectron();
 		const ok = !result.timedOut && result.exit === 0 && result.failures === 0;
+		summary.push({ name: lane.name, ok, exit: result.exit, timedOut: result.timedOut, failures: result.failures, seconds: result.seconds });
+		// Written per lane: a later lane's timeout (or a job-level cancel) must
+		// not lose the results gathered so far.
+		writeFileSync(join(OUT, "summary.json"), `${JSON.stringify(summary, null, 2)}\n`);
 		process.stdout.write(
 			`--- ${lane.name}: ${ok ? "PASS" : "FAIL"} (exit=${result.exit ?? "?"}${result.timedOut ? " timeout" : ""}, ${result.failures} FAIL lines, ${result.seconds}s)\n`,
 		);
-		summary.push({ name: lane.name, ok, exit: result.exit, timedOut: result.timedOut, failures: result.failures, seconds: result.seconds });
-		// Keep `output` out of the JSON summary; it is already in the lane log.
-		delete result.output;
 	}
 
-	writeFileSync(join(OUT, "summary.json"), `${JSON.stringify(summary, null, 2)}\n`);
-	const failed = summary.filter((lane) => !lane.ok);
+const failed = summary.filter((lane) => !lane.ok);
 	process.stdout.write(`QA_SWEEP_DONE ${summary.length - failed.length}/${summary.length} passed\n`);
 	if (failed.length > 0) process.exitCode = 1;
 }

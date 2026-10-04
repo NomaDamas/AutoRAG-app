@@ -34,7 +34,8 @@ describe("connectedNavGroups", () => {
 		expect(cloudLabels([location("Google Drive", false), location("Dropbox")])).toEqual(["Dropbox"]);
 	});
 
-	it("renders no Cloud rows when nothing is connected", () => {
+	it("drops the Cloud group entirely when nothing is connected", () => {
+		expect(connectedNavGroups([]).some((group) => group.label === "Cloud")).toBe(false);
 		expect(cloudLabels([])).toEqual([]);
 	});
 

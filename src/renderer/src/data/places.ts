@@ -66,5 +66,5 @@ export function connectedNavGroups(locations: readonly NavLocation[]): readonly 
 	const available = new Set(locations.filter((location) => location.available).map((location) => location.name));
 	return NAV_GROUPS.map((group) =>
 		group.label === "Cloud" ? { ...group, items: group.items.filter((item) => available.has(item.label)) } : group,
-	);
+	).filter((group) => group.items.length > 0);
 }

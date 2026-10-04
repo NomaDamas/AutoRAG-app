@@ -15,7 +15,10 @@ on:
 jobs:
   qa-windows:
     runs-on: windows-latest
-    timeout-minutes: 60
+    # The sweep's per-lane budgets sum past an hour in the worst case; a healthy
+    # run finishes in ~25 minutes. 90 keeps a few slow lanes from cancelling the
+    # job (and losing the uploaded evidence) while still bounding a hang.
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
 

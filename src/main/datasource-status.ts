@@ -1,4 +1,4 @@
-import { accessSync, constants, existsSync, readFileSync } from "node:fs";
+import { accessSync, constants, existsSync, readFileSync, statSync } from "node:fs";
 import { delimiter, join } from "node:path";
 import {
 	BUILTIN_DATASOURCE_SKILL_NAMES,
@@ -60,19 +60,21 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 /**
  * Executable suffixes to try for a bare CLI name. POSIX names carry their own
  * extension, so only the name itself is tried; Windows resolves by extension
- * (PATHEXT: .COM/.EXE/.BAT/.CMD/...). "" is always first so an exact-name match
- * still wins before any suffix is appended.
+ * (PATHEXT: .COM/.EXE/.BAT/.CMD/...). The bare name is never tried there: the
+ * extensionless file npm/bun install next to `name.cmd` is a POSIX sh shim,
+ * not something Windows can run.
  */
 function executableExtensions(env: NodeJS.ProcessEnv): readonly string[] {
 	const pathext = env.PATHEXT;
 	if (pathext === undefined || pathext.length === 0) return [""];
-	return ["", ...pathext.split(";").map((extension) => extension.trim()).filter((extension) => extension.length > 0)];
+	return pathext.split(";").map((extension) => extension.trim()).filter((extension) => extension.length > 0);
 }
 
+/** `accessSync(X_OK)` on Windows only proves existence, so a directory would pass too. */
 function isExecutableFile(candidate: string): boolean {
 	try {
 		accessSync(candidate, constants.X_OK);
-		return true;
+		return statSync(candidate).isFile();
 	} catch {
 		return false;
 	}

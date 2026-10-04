@@ -25,7 +25,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { zipSync } from "fflate";
 import { finderWindow, launchFinder } from "./launch-finder.mjs";
-import { isMac } from "./platform.mjs";
+import { isMac, rmRetry } from "./platform.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = join(HERE, "..", "..");
@@ -219,11 +219,19 @@ try {
 
 	await page.screenshot({ path: join(EVIDENCE, "7-final.png") });
 } finally {
-	await app.close();
+	// The macOS ShareMenu's native tracking session (and the open-with sheet)
+	// outlives the checks and blocks even `app.exit(0)` — only killing the
+	// Electron process ends it. All assertions and screenshots are done here.
+	try {
+		process.kill(app.process().pid, "SIGKILL");
+	} catch {
+		// Already gone.
+	}
+	await app.close().catch(() => undefined);
 }
 
 // Cleanup: only this run's own artifacts.
-rmSync(HOME, { recursive: true, force: true });
-rmSync(USER_DATA, { recursive: true, force: true });
+rmRetry(HOME);
+rmRetry(USER_DATA);
 console.log(`EVIDENCE ${EVIDENCE}`);
 console.log(process.exitCode === 1 ? "RESULT FAIL" : "RESULT PASS");

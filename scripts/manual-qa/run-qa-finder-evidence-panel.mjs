@@ -16,7 +16,7 @@ import { fileURLToPath } from "node:url";
  * Run from the repo root:  bun scripts/manual-qa/run-qa-finder-evidence-panel.mjs
  * Prereq: bun run build
  */
-import { mkdirSync, writeFileSync, appendFileSync } from "node:fs";
+import { mkdirSync, rmSync, writeFileSync, appendFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, basename } from "node:path";
 import { launchFinder, finderWindow } from "./launch-finder.mjs";
@@ -40,15 +40,27 @@ const FOLDER = basename(DOCS);
 
 let app;
 let swept = false;
-const sweep = () => {
+/**
+ * Best-effort cleanup. On the exit path (`patient === false`) a single
+ * non-throwing attempt per directory: blocking retries there would freeze the
+ * event loop that `app.close()` still needs, and a throw would mask the lane's
+ * real failure. After an awaited close the patient path retries through
+ * Windows' teardown locks.
+ */
+const sweep = (patient) => {
 	if (swept) return;
 	swept = true;
 	app?.close().catch(() => undefined);
-	rmRetry(USER_DATA);
-	rmRetry(DOCS);
-	log(`cleanup: removed ${USER_DATA} and ${DOCS}; app closed`);
+	for (const dir of [USER_DATA, DOCS]) {
+		try {
+			if (patient === true) rmRetry(dir);
+			else rmSync(dir, { recursive: true, force: true });
+		} catch (error) {
+			log(`cleanup: ${dir} stayed behind (${error.code ?? error.message})`);
+		}
+	}
 };
-process.on("exit", sweep);
+process.on("exit", () => sweep(false));
 
 mkdirSync(join(USER_DATA, "chat-history"), { recursive: true });
 mkdirSync(DOCS, { recursive: true });
@@ -282,5 +294,5 @@ log(`RESULT ${failures.length === 0 ? "ALL PASS" : `${failures.length} FAILURES:
 // Close before sweeping: on Windows, deleting userData while Electron is
 // still tearing down loses the EBUSY race even with rmRetry.
 await app?.close().catch(() => undefined);
-sweep();
+sweep(true);
 process.exitCode = failures.length === 0 ? 0 : 1;

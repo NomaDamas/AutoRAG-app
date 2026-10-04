@@ -46,3 +46,13 @@ export function formatShortcut(spec: ShortcutSpec, platform: string = hostPlatfo
 		.filter((part): part is string => part !== null)
 		.join("+");
 }
+
+/** The delete key's label: `⌫` on macOS, `Del` elsewhere. */
+export function deleteKeyLabel(platform: string = hostPlatform()): string {
+	return platform === "darwin" ? "⌫" : "Del";
+}
+
+/** The open key's label: `↩` on macOS, `Enter` elsewhere. */
+export function enterKeyLabel(platform: string = hostPlatform()): string {
+	return platform === "darwin" ? "↩" : "Enter";
+}

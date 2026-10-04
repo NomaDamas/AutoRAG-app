@@ -57,10 +57,22 @@ const TRASH_ROOTS = [
 const windowsRecycleHas = (name) => {
 	try {
 		const out = execSync(
-			'powershell.exe -NoProfile -NonInteractive -Command "(New-Object -ComObject Shell.Application).Namespace(10).Items() | ForEach-Object { $_.Name }"',
+			'powershell.exe -NoProfile -NonInteractive -Command "(New-Object -ComObject Shell.Application).Namespace(10).Items() | ForEach-Object { $_.Name + \'|\' + $_.ExtendedProperty(\'System.Recycle.DeletedFrom\') }"',
 			{ encoding: "utf8" },
 		);
-		return out.split(/\r?\n/).map((line) => line.trim()).includes(name);
+		// FolderItem.Name is the shell display name: with "hide known extensions"
+		// on (the Windows default) a recycled .txt reports without its extension.
+		const stem = name.replace(/\.[^.]+$/, "");
+		return out
+			.split(/\r?\n/)
+			.map((line) => line.trim())
+			.some((row) => {
+				const [itemName, deletedFrom] = row.split("|");
+				if (itemName !== name && itemName !== stem) return false;
+				// When the origin is reported it must be this run's fixture folder,
+				// so a same-named file trashed earlier from elsewhere cannot pass.
+				return deletedFrom === "" || deletedFrom === FIXTURE_DIR;
+			});
 	} catch {
 		return false;
 	}

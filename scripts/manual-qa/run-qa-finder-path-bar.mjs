@@ -169,19 +169,17 @@ try {
 
 	const first = await probe(page);
 	check("device scale factor is 2", first.dpr === 2, String(first.dpr));
-	check(
-		"trail mirrors the reference path",
-		JSON.stringify(first.segments.map((segment) => segment.label)) ===
-			JSON.stringify([
-				isWindows ? "C:" : "Macintosh HD",
-				"Users",
-				isWindows ? process.env.USERNAME : process.env.USER,
-				"Documents",
-				fixtureName,
-				leafName,
-			]),
-		JSON.stringify(first.segments.map((segment) => segment.label)),
-	);
+// The app renders the real home path's segments; `%USERNAME%`/`$USER` and the
+// profile folder can differ (truncated Microsoft-account profiles, renamed
+// accounts, non-C: profiles), so derive the expectation from `homedir()`.
+const homeSegments = homedir().split(/[\\/]+/).filter(Boolean);
+const deviceLabel = isWindows ? homeSegments[0] : "Macintosh HD";
+const expectedTrail = [deviceLabel, ...homeSegments.slice(isWindows ? 1 : 0), "Documents", fixtureName, leafName];
+check(
+	"trail mirrors the reference path",
+	JSON.stringify(first.segments.map((segment) => segment.label)) === JSON.stringify(expectedTrail),
+	JSON.stringify(first.segments.map((segment) => segment.label)),
+);
 
 	// Sweep every width at every height; remember one width per distinct state.
 	const sweeps = {};

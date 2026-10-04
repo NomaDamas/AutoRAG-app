@@ -52,6 +52,8 @@ function makeService(
 		readonly picked?: string | null;
 		/** Bytes written for a produced image; keep below the source to pass optimize. */
 		readonly imageOutput?: string;
+		/** Overrides the fake `ffmpeg -muxers` body (default: no heif muxer). */
+		readonly muxers?: string;
 	} = {},
 ): Harness {
 	const commands: { command: string; args: string[] }[] = [];
@@ -64,7 +66,7 @@ function makeService(
 			return { stdout: "ffmpeg version 9", stderr: "" };
 		}
 		if (command === "ffmpeg" && args.includes("-encoders")) return { stdout: FFMPEG_ENCODERS, stderr: "" };
-		if (command === "ffmpeg" && args.includes("-muxers")) return { stdout: FFMPEG_MUXERS, stderr: "" };
+		if (command === "ffmpeg" && args.includes("-muxers")) return { stdout: options.muxers ?? FFMPEG_MUXERS, stderr: "" };
 		const outIndex = args.indexOf("--out");
 		const target = outIndex >= 0 ? args[outIndex + 1] : args[args.length - 1];
 		if (target !== undefined && isAbsolute(target)) {
@@ -219,6 +221,10 @@ describe("image actions", () => {
 		expect(withFfmpeg.commands.at(-1)?.command).toBe("ffmpeg");
 		expect(withFfmpeg.commands.at(-1)?.args).toEqual([
 			"-y",
+			"-f",
+			"image2",
+			"-pattern_type",
+			"none",
 			"-i",
 			source,
 			"-c:v",
@@ -312,6 +318,53 @@ describe("image actions on Windows (ffmpeg backend)", () => {
 		await writeFile(source, "png");
 		// No heif muxer is listed, so HEIC is not a capability and cannot be run.
 		await expect(service.run(source, { kind: "convertImage", format: "heic" }, null)).rejects.toThrow(/HEIC/);
+	});
+
+	it("pins literal filenames against image2's %d pattern expansion", async () => {
+		const { service, commands } = makeService({ platform: "win32" });
+		const source = join(root, "report%20draft.png");
+		await writeFile(source, "png");
+
+		const outcome = await service.run(source, { kind: "convertImage", format: "jpeg" }, null);
+		expect(outcome.output).toBe(join(root, "report%20draft.jpg"));
+		const args = commands.at(-1)?.args ?? [];
+		// Pattern matching off before the input; literal single-file output.
+		expect(args.slice(0, 5)).toEqual(["-y", "-f", "image2", "-pattern_type", "none"]);
+		expect(args.indexOf("none")).toBeLessThan(args.indexOf("-i"));
+		expect(args.join(" ")).toContain("-update 1");
+		expect(args.at(-1)).toBe(join(root, "report%20draft.jpg"));
+	});
+
+	it("encodes JPEG at the mjpeg qscale, not the sips quality", async () => {
+		const { service, commands } = makeService({ platform: "win32" });
+		const source = join(root, "shot.png");
+		await writeFile(source, "png");
+		await service.run(source, { kind: "convertImage", format: "jpeg" }, null);
+		const args = commands.at(-1)?.args ?? [];
+		expect(args.join(" ")).toContain("-q:v 4");
+		expect(args).not.toContain("70");
+	});
+
+	it("leaves the webp muxer its literal output (no -update flag)", async () => {
+		const { service, commands } = makeService({ platform: "win32" });
+		const source = join(root, "shot.png");
+		await writeFile(source, "png");
+		await service.run(source, { kind: "convertImage", format: "webp" }, null);
+		expect((commands.at(-1)?.args ?? []).join(" ")).not.toContain("-update");
+	});
+
+	it("rate-controls HEIC with -crf when the build has a heif muxer", async () => {
+		const { service, commands } = makeService({
+			platform: "win32",
+			muxers: "  E  image2          image2 sequence\n  E  heif            HEIF\n",
+		});
+		const source = join(root, "shot.png");
+		await writeFile(source, "png");
+		const outcome = await service.run(source, { kind: "convertImage", format: "heic" }, null);
+		expect(outcome.output).toBe(join(root, "shot.heic"));
+		const args = commands.at(-1)?.args ?? [];
+		expect(args.join(" ")).toContain("-crf 23");
+		expect(args.join(" ")).not.toContain("-q:v");
 	});
 });
 

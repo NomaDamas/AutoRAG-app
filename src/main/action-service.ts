@@ -80,6 +80,13 @@ const ZIP_LEVEL = 6;
 /** Re-encode quality for lossy formats (sips `formatOptions`, ffmpeg `-quality`). */
 const LOSSY_QUALITY = 80;
 const JPEG_QUALITY = "70";
+/**
+ * ffmpeg's mjpeg `-q:v` runs 2 (best)–31 (worst); the sips 0–100 scale does
+ * not apply there, so the ffmpeg backend uses its own tuned value (≈ quality 80).
+ */
+const FFMPEG_JPEG_QSCALE = "4";
+/** libx265 (HEIC) is rate-controlled by `-crf`, not `-q:v`. */
+const FFMPEG_HEIC_CRF = "23";
 /** sips writes these; `webp` arrives only when ffmpeg can encode it. */
 const SIPS_FORMATS: readonly ImageFormat[] = ["jpeg", "png", "tiff", "heic"];
 /**
@@ -331,12 +338,16 @@ function parseEncoderNames(listing: string): ReadonlySet<string> {
 	return names;
 }
 
-/** Muxer names from `ffmpeg -muxers`: two flag characters, then the name. */
+/** Muxer names from `ffmpeg -muxers`: a three-column flag field (`  E`, ` DE`) then the name. */
 function parseMuxerNames(listing: string): ReadonlySet<string> {
 	const names = new Set<string>();
 	for (const line of listing.split("\n")) {
-		const name = /^\s*[A-Z.]{2}\s+(\S+)/.exec(line)?.[1];
-		if (name !== undefined) names.add(name);
+		const match = /^\s*([A-Z. ]{3})\s{2}(\S+)/.exec(line);
+		const flags = match?.[1];
+		if (flags === undefined) continue;
+		const name = match?.[2];
+		// Column three of the flag field marks muxing support: `  E  mp4`, ` DE  mov`.
+		if (name !== undefined && flags[2] === "E") names.add(name);
 	}
 	return names;
 }
@@ -354,16 +365,28 @@ function sipsOptimizeArgs(source: string, target: string, format: ImageFormat): 
 	return ["-s", "format", format, "-s", "formatOptions", JPEG_QUALITY, "--out", target, source];
 }
 
+/**
+ * image2 reads `%d`/`%0Nd` sequences in a path as frame-number patterns, so
+ * `report%20draft.png` would be written as `report00000001raft.jpg` (with `-y`,
+ * overwriting an unrelated file) and `shot%d.png` would read `shot1.png` when
+ * it exists. Pin every image side to literal single files.
+ */
+const FFMPEG_IMAGE_INPUT: readonly string[] = ["-f", "image2", "-pattern_type", "none"];
+/** image2 (the muxer for jpg/png/tiff) also expands output patterns; the webp muxer writes literal names and rejects the flag. */
+const ffmpegImageOutput = (format: ImageFormat): readonly string[] =>
+	format === "jpeg" || format === "png" || format === "tiff" ? ["-update", "1"] : [];
+
 function ffmpegWebpArgs(source: string, target: string): readonly string[] {
-	return ["-y", "-i", source, "-c:v", "libwebp", "-quality", String(LOSSY_QUALITY), target];
+	return ["-y", ...FFMPEG_IMAGE_INPUT, "-i", source, "-c:v", "libwebp", "-quality", String(LOSSY_QUALITY), target];
 }
 
 /** Lossy quality flags for the ffmpeg image backend; lossless formats add none. */
 function ffmpegQualityArgs(format: ImageFormat): readonly string[] {
 	switch (format) {
 		case "jpeg":
+			return ["-q:v", FFMPEG_JPEG_QSCALE];
 		case "heic":
-			return ["-q:v", JPEG_QUALITY];
+			return ["-crf", FFMPEG_HEIC_CRF];
 		case "webp":
 			return ["-quality", String(LOSSY_QUALITY)];
 		default:
@@ -373,27 +396,27 @@ function ffmpegQualityArgs(format: ImageFormat): readonly string[] {
 
 /** Decode one frame and re-encode to `format`, keeping alpha where the target supports it. */
 function ffmpegConvertArgs(source: string, target: string, format: ImageFormat): readonly string[] {
-	const args = ["-y", "-i", source, "-frames:v", "1"];
+	const args = ["-y", ...FFMPEG_IMAGE_INPUT, "-i", source, "-frames:v", "1"];
 	if (format === "jpeg") args.push("-pix_fmt", "yuvj420p");
 	else if (format === "png" || format === "webp") args.push("-pix_fmt", "rgba");
-	args.push(...ffmpegQualityArgs(format), target);
+	args.push(...ffmpegQualityArgs(format), ...ffmpegImageOutput(format), target);
 	return args;
 }
 
 /** Fit inside a `maxEdge` box without enlarging, preserving aspect ratio. */
 function ffmpegResizeArgs(source: string, target: string, maxEdge: number, format: ImageFormat): readonly string[] {
 	const filter = `scale='min(iw,${maxEdge})':'min(ih,${maxEdge})':force_original_aspect_ratio=decrease`;
-	const args = ["-y", "-i", source, "-frames:v", "1", "-vf", filter];
-	args.push(...ffmpegQualityArgs(format), target);
+	const args = ["-y", ...FFMPEG_IMAGE_INPUT, "-i", source, "-frames:v", "1", "-vf", filter];
+	args.push(...ffmpegQualityArgs(format), ...ffmpegImageOutput(format), target);
 	return args;
 }
 
 /** Re-encode for size: PNG uses maximum deflate, lossy formats re-encode at the tuning quality. */
 function ffmpegOptimizeArgs(source: string, target: string, format: ImageFormat): readonly string[] {
-	const args = ["-y", "-i", source, "-frames:v", "1"];
+	const args = ["-y", ...FFMPEG_IMAGE_INPUT, "-i", source, "-frames:v", "1"];
 	if (format === "png") args.push("-compression_level", "9", "-pred", "mixed");
 	else args.push(...ffmpegQualityArgs(format));
-	args.push(target);
+	args.push(...ffmpegImageOutput(format), target);
 	return args;
 }
 

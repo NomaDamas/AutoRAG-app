@@ -32,17 +32,21 @@ const fixtures = [
 const fallbackName = `ulw-kind-qa-${stamp}.weird`;
 
 const windowsKind = (path) => {
-	const ext = path.slice(path.lastIndexOf("."));
+	// Mirrors the app's own probe (src/main/file-kind.ts windowsKindScript):
+	// extension → ProgID → the ProgID's own (default) description, nothing else.
+	// A FriendlyTypeName/raw-ProgID fallback would expect strings the app never
+	// shows, and FriendlyTypeName is usually an unresolved indirect string.
+	const literal = path.replace(/'/g, "''");
 	const script = [
-		`$e='${ext}'`,
-		"$p=(Get-ItemProperty -LiteralPath ('Registry::HKEY_CLASSES_ROOT\\'+$e) -ErrorAction SilentlyContinue).'(default)'",
-		"if ([string]::IsNullOrEmpty($p)) { return }",
-		"$n=(Get-ItemProperty -LiteralPath ('Registry::HKEY_CLASSES_ROOT\\'+$p) -ErrorAction SilentlyContinue).'(default)'",
-		"if ([string]::IsNullOrEmpty($n)) { $n=(Get-ItemProperty -LiteralPath ('Registry::HKEY_CLASSES_ROOT\\'+$p) -ErrorAction SilentlyContinue).'FriendlyTypeName' }",
-		"if ([string]::IsNullOrEmpty($n)) { $n=$p }",
-		"if (-not [string]::IsNullOrEmpty($n)) { [Console]::Out.Write($n) }",
+		`$path = '${literal}'`,
+		"$ext = [System.IO.Path]::GetExtension($path)",
+		"if ([string]::IsNullOrEmpty($ext)) { return }",
+		"$progId = (Get-ItemProperty -LiteralPath ('Registry::HKEY_CLASSES_ROOT\\' + $ext) -ErrorAction SilentlyContinue).'(default)'",
+		"if ([string]::IsNullOrEmpty($progId)) { return }",
+		"$typeName = (Get-ItemProperty -LiteralPath ('Registry::HKEY_CLASSES_ROOT\\' + $progId) -ErrorAction SilentlyContinue).'(default)'",
+		"if (-not [string]::IsNullOrEmpty($typeName)) { [Console]::Out.Write($typeName) }",
 	].join("; ");
-	// argv array, not a shell string: backslashes in the registry path survive cmd quoting.
+	// argv array, not a shell string: backslashes in the registry path survive quoting.
 	return execFileSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], {
 		encoding: "utf8",
 	}).trim();

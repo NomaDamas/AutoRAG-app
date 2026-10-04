@@ -55,7 +55,11 @@ writeConfig({
 	foo: {},
 });
 
-const env = { AUTORAG_CONFIG: configPath, AUTORAG_HOME: root, PATH: IS_WIN ? `${bin};${process.env.PATH ?? ""}` : `${bin}:/usr/bin:/bin`, GITHUB_TOKEN: "" };
+// Pin the PATH like the POSIX branch: the fake `slacrawl` must be the only
+// datasource CLI visible, or a host-installed rclone/telecrawl flips the
+// "install: missing" assertions. System32 stays for Windows system lookups.
+const windowsPath = `${bin};${process.env.SystemRoot ?? "C:\\Windows"}\\System32;${process.env.SystemRoot ?? "C:\\Windows"}`;
+const env = { AUTORAG_CONFIG: configPath, AUTORAG_HOME: root, PATH: IS_WIN ? windowsPath : `${bin}:/usr/bin:/bin`, GITHUB_TOKEN: "" };
 const agentSkills = () =>
 	(buildAgentOptions(resolveConfigReadOnly({ flags: {}, env: { ...process.env, ...env }, cwd: root })).datasourceSkills ?? [])
 		.map((skill) => skill.describe().name);
