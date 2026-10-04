@@ -15,7 +15,7 @@ import { fileURLToPath } from "node:url";
 import { mkdirSync, mkdtempSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, sep } from "node:path";
 import { deflateSync } from "node:zlib";
 import { launchFinder, finderWindow } from "./launch-finder.mjs";
 import { chord } from "./platform.mjs";
@@ -41,6 +41,10 @@ const tree = {
 	[betaPath]: ["gamma/", "beta-1.md"],
 	[gammaPath]: ["delta.txt"],
 };
+
+/** Playwright's CSS engine eats a lone backslash in an attribute value (measured:
+ * `[data-path="C:\Users"]` matches nothing), so Windows paths need `\\`. */
+const cssAttr = (value) => value.replace(/\\/g, "\\\\");
 
 function crc32(buf) {
 	let crc = 0xffffffff;
@@ -211,7 +215,9 @@ try {
 		const box = svg.getBoundingClientRect();
 		return [Math.round(box.width), Math.round(box.height)];
 	}), [12, 12]);
-	const selectedRow = page.locator('[role="row"][data-path$="/notes.md"]');
+	// The row's data-path ends with the platform separator (CSS attribute
+	// selectors need a lone backslash escaped on Windows).
+	const selectedRow = page.locator(`[role="row"][data-path$="${cssAttr(`${sep}notes.md`)}"]`);
 	await selectedRow.click();
 	const selectedStyle = await selectedRow.evaluate((row) => {
 		const style = getComputedStyle(row);
@@ -235,9 +241,6 @@ try {
 	const panes = () => page.locator(".column").evaluateAll((nodes) => nodes.map((n) => n.getAttribute("data-path")));
 	const paneNames = (index) =>
 		page.locator(".column").nth(index).locator(".column-row").evaluateAll((rows) => rows.map((r) => r.getAttribute("aria-label")).sort());
-	/** Playwright's CSS engine eats a lone backslash in an attribute value (measured:
-	 * `[data-path="C:\Users"]` matches nothing), so Windows paths need `\\`. */
-	const cssAttr = (value) => value.replace(/\\/g, "\\\\");
 	check("C3 columns start with the current folder only", await panes(), [topPath]);
 	await page.locator(`.column[data-path="${cssAttr(topPath)}"] .column-row[aria-label="alpha"]`).click();
 	await page.waitForFunction(() => document.querySelectorAll(".column").length === 2);

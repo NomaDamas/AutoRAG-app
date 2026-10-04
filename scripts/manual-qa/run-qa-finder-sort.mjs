@@ -69,10 +69,12 @@ try {
 	await page.waitForSelector(".col-header");
 	await page.waitForTimeout(300);
 
-	const rows = () =>
-		page.locator('[role="row"]').evaluateAll((list) =>
-			list.map((row) => (row.querySelector('[role="gridcell"]')?.textContent ?? "").trim()).filter(Boolean),
-		);
+const rows = () =>
+	page.locator('[role="row"]').evaluateAll((list) =>
+		list
+			.map((row) => (row.querySelector('[role="gridcell"] .row__label')?.textContent ?? "").trim())
+			.filter(Boolean),
+	);
 	const sortedRows = async () => (await rows()).slice().sort(localeName);
 	const baseline = await rows();
 	check("S0 the fixture folder lists the three files and one folder", (await sortedRows()), namesAsc);
