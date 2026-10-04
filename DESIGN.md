@@ -54,7 +54,30 @@ The list is expanded by default and the "간략히 / 전체 정보" button colla
 
 ---
 
-## 3. Verification & Testing Guardrails
+## 3. Inspector file actions
+
+The Info half's bottom bar is data-driven, not a fixed four buttons.
+
+- **Which actions** a file offers comes from `src/renderer/src/state/file-actions.ts`:
+  the base set is 열기 · 다른 앱으로 열기 · 압축 · 공유 · AI 요약, plus 압축 해제
+  for `.zip`, an 이미지 편집 menu for images, and a 동영상 변환 menu for video.
+  Quick Look, 경로 복사, and 휴지통 are deliberately absent — Space, the row
+  context menu, ⌘⌫, and the Info chips already cover them.
+- **Whether an action is real** comes from `actions:capabilities` in main: the
+  macOS share sheet, the image engine (`sips`, plus WebP through `ffmpeg`), and
+  video container conversion (`ffmpeg`) are probed once per session. A missing
+  engine removes the button instead of failing on click.
+- **Adding an action** is two edits: one entry in `suggestedActions` (label,
+  icon, and the `ActionRequest` it runs) and one `case` in
+  `createActionService.run` (`src/main/action-service.ts`). The bar, the menu,
+  the IPC channels, and the capability gating need no change.
+- Action outputs never overwrite: `uniqueChild` numbers them Finder-style
+  (`photo.jpeg`, `photo 2.jpeg`), and extraction strips a wrapper folder that
+  matches the archive name so `docs.zip` restores `docs/`'s contents directly.
+
+---
+
+## 4. Verification & Testing Guardrails
 
 - All UI components and behaviors are backed by automated tests:
   - Unit & contract tests via Vitest (`bun run test`).

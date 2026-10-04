@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
-import { app, BrowserWindow, clipboard, protocol, shell } from "electron";
+import { app, BrowserWindow, clipboard, dialog, protocol, ShareMenu, shell, type OpenDialogOptions } from "electron";
 import { attachQuickLook, PREVIEW_PRIVILEGED_SCHEME, registerPreviewProtocol, registerQuickLookIpc } from "../preview/node/register";
 import { writeDefaultConfig } from "@autorag/librarian";
 import { resolveConfigPath } from "@autorag/librarian/core";
@@ -20,6 +20,7 @@ import { createModelStatusService } from "./model-status";
 import { createDefaultAgentFactory, createSearchService } from "./search-service";
 import { createSettingsService } from "./settings-service";
 import {
+	registerActionsIpcHandlers,
 	registerFsIpcHandlers,
 	registerIndexIpcHandlers,
 	registerLiveIpcHandlers,
@@ -27,6 +28,7 @@ import {
 	registerSettingsIpcHandlers,
 	registerVersionFamilyIpcHandlers,
 } from "./ipc";
+import { createActionService } from "./action-service";
 import { createChangeHub } from "./change-hub";
 import { createDupeyLayer } from "./dupey-layer";
 import { createFsWatchService } from "./fs-watch-service";
@@ -134,6 +136,40 @@ app.whenReady().then(() => {
 			await versionFamilyService?.removePaths(paths);
 		},
 	});
+	// Inspector actions: a chooser for "Open with" and the macOS share sheet,
+	// anchored to the button that opened it.
+	registerActionsIpcHandlers(
+		createActionService({
+			applications: {
+				async pick(window) {
+					const options: OpenDialogOptions = {
+						title: "다른 앱으로 열기",
+						buttonLabel: "열기",
+						properties: ["openFile"],
+						...(process.platform === "darwin" ? { defaultPath: "/Applications" } : {}),
+					};
+					const result =
+						window === null
+							? await dialog.showOpenDialog(options)
+							: await dialog.showOpenDialog(window, options);
+					return result.canceled ? null : (result.filePaths[0] ?? null);
+				},
+			},
+			share:
+				process.platform === "darwin"
+					? {
+							present(path, anchor, window) {
+								if (window === null) return;
+								new ShareMenu({ filePaths: [path] }).popup({
+									window,
+									x: Math.round(anchor.x),
+									y: Math.round(anchor.y + anchor.height + 4),
+								});
+							},
+						}
+					: null,
+		}),
+	);
 	let scanIntervalMinutes = DEFAULT_SCAN_INTERVAL_MINUTES;
 	const hub = createChangeHub({
 		send: (message) => sendToMainWindow(LIVE_CHANNELS.message, message),

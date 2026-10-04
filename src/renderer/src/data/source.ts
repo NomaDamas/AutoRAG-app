@@ -7,6 +7,7 @@
  * preload lands. Components never touch `window` directly.
  */
 
+import { NO_CAPABILITIES, type ActionsBridge } from "../../../shared/actions-contract";
 import { RECENTS_PATH, type FsBridge, type FsClipboard, type FsEnrichmentTarget, type FsVersionFamiliesResult } from "../../../shared/fs-contract";
 import type { IndexStatus } from "../../../shared/index-contract";
 import {
@@ -38,10 +39,22 @@ export interface SearchHits {
 	readonly entries: readonly FinderEntry[];
 }
 
+/**
+ * The action port when the real bridge is absent: nothing is capable and every
+ * call refuses, so the UI can render but never pretends work happened.
+ */
+const UNAVAILABLE_ACTIONS: ActionsBridge = {
+	capabilities: () => Promise.resolve(NO_CAPABILITIES),
+	run: () => Promise.reject(new Error("이 환경에서는 파일 작업을 실행할 수 없습니다")),
+	share: () => Promise.reject(new Error("이 환경에서는 공유를 실행할 수 없습니다")),
+};
+
 export interface FinderSource {
 	/** True when the native OS surfaces (Reveal, Open) are real. */
 	readonly native: boolean;
 	readonly initialPath: string;
+	/** Inspection actions (open with, archive, share, simple edits). */
+	readonly actions: ActionsBridge;
 	setWatchSet(dirs: readonly string[]): Promise<void>;
 	onLive(listener: (message: LiveMessage) => void): () => void;
 	liveLayers(): Promise<LiveResync>;
@@ -95,7 +108,12 @@ export async function isMissingPathFailure(
 
 /* -------------------------------------------------------------- real bridge */
 
-export function createBridgeSource(fs: FsBridge, initialPath: string, live?: LiveBridge): FinderSource {
+export function createBridgeSource(
+	fs: FsBridge,
+	initialPath: string,
+	live?: LiveBridge,
+	actions: ActionsBridge = UNAVAILABLE_ACTIONS,
+): FinderSource {
 	const mapVersionFamiliesResult = (result: FsVersionFamiliesResult): VersionFamiliesResult => ({
 		families: result.families.map((family) => ({
 			head: family.head,
@@ -116,6 +134,7 @@ export function createBridgeSource(fs: FsBridge, initialPath: string, live?: Liv
 	return {
 		native: true,
 		initialPath,
+		actions,
 		setWatchSet: (dirs) => live?.setWatchSet(dirs) ?? Promise.resolve(),
 		onLive: (listener) => {
 			return live?.onMessage((message) => listener({
@@ -261,6 +280,7 @@ export function createFixtureSource(): FinderSource {
 	return {
 		native: false,
 		initialPath: FIXTURE_INITIAL_PATH,
+		actions: UNAVAILABLE_ACTIONS,
 		setWatchSet: resolve,
 		onLive: () => () => {},
 		liveLayers: () => Promise.resolve({ seq: 0, layers: [], reconciled: [] }),
