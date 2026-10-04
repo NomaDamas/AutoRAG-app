@@ -34,10 +34,11 @@ const MODEL = {
 writeConfig(MODEL);
 
 const env = { AUTORAG_CONFIG: configPath, AUTORAG_HOME: root, OPENROUTER_API_KEY: "qa-key", PATH: "/usr/bin:/bin" };
-const resolvedRole = () => resolveAgentModelDetailed(
-	resolveConfigReadOnly({ flags: {}, env: { ...process.env, ...env }, cwd: root }),
-	{ env: { ...process.env, ...env } },
-).role;
+const resolvedRole = async () =>
+	(await resolveAgentModelDetailed(
+		resolveConfigReadOnly({ flags: {}, env: { ...process.env, ...env }, cwd: root }),
+		{ env: { ...process.env, ...env } },
+	)).role;
 
 const fails = [];
 const check = (name, ok, detail) => {
@@ -78,7 +79,7 @@ try {
 	// The card is live: editing the shared config and re-entering the pane shows
 	// the new identity.
 	writeConfig({ ...MODEL, id: "anthropic/claude-sonnet-4.5" });
-	const roleAfterEdit = resolvedRole();
+	const roleAfterEdit = await resolvedRole();
 	check("a fresh AutoRAG agent resolves the edited model", roleAfterEdit.modelId === "anthropic/claude-sonnet-4.5", roleAfterEdit.modelId);
 	await closeSettings();
 	check("⌘W closes the Settings tab", (await settingsOpen()) === 0);
@@ -91,7 +92,7 @@ try {
 	writeConfig(MODEL);
 	await closeSettings();
 	await openModels();
-	check("switching back resolves the original model", resolvedRole().modelId === MODEL.id);
+	check("switching back resolves the original model", (await resolvedRole()).modelId === MODEL.id);
 	check("Models card has no extra badges", (await page.locator(".settings-model-card em").count()) === 0);
 } finally {
 	await app.close();
