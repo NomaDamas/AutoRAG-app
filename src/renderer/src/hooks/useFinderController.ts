@@ -22,6 +22,7 @@ import {
 	type FinderMenuEntry,
 } from "../state/context-menu";
 import { emptyStateText, indexToast, trashToast } from "../state/format";
+import { findEvidenceSource } from "../state/evidence";
 import { type FocusZone, resolveKeyAction } from "../state/keymap";
 import {
 	applyEntryEnrichmentPatch,
@@ -1336,9 +1337,9 @@ export function useFinderController(
 			source
 				.list(folder)
 				.then((entries) => {
-					const entry = entries.find((candidate) => candidate.path === target);
+					const entry = findEvidenceSource(entries, target);
 					if (entry === undefined) {
-						throw new Error(`Evidence source is not a local file: ${target}`);
+						throw new Error(`Evidence source was not found in its folder: ${target}`);
 					}
 					setTabsState((state) =>
 						patchActiveTab(openTabAt(state, folder), (tab) => ({

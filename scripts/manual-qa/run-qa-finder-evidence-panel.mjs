@@ -31,7 +31,7 @@ const check = (label, ok, detail) => { log(`${ok ? "PASS" : "FAIL"} ${label}${de
 const RUN_ID = `ulw-evidence-qa-${Date.now().toString(36)}`;
 const USER_DATA = join(tmpdir(), RUN_ID);
 const DOCS = join(process.env.HOME, "Documents", RUN_ID);
-const POLICY = join(DOCS, "qa-evidence-policy.md");
+const POLICY = join(DOCS, "한글 공백 정책.md");
 const MEMO = join(DOCS, "qa-evidence-memo.md");
 const FOLDER = basename(DOCS);
 
@@ -49,14 +49,14 @@ process.on("exit", sweep);
 
 mkdirSync(join(USER_DATA, "chat-history"), { recursive: true });
 mkdirSync(DOCS, { recursive: true });
-writeFileSync(POLICY, "## 승인 규칙\n1. 일반 환불은 5영업일 내 처리합니다.\n2. 예외는 임원 승인이 필요합니다.\n비고: 긴급 예외도 승인 생략 불가.\n");
+writeFileSync(POLICY.normalize("NFD"), "## 승인 규칙\n1. 일반 환불은 5영업일 내 처리합니다.\n2. 예외는 임원 승인이 필요합니다.\n비고: 긴급 예외도 승인 생략 불가.\n");
 writeFileSync(MEMO, "## 메모\n승인 체인 원본 첨부 필수.\n");
 log(`fixtures: ${DOCS}`);
 
 const evidenceAll = [
 	{
 		number: 1,
-		title: "qa-evidence-policy.md",
+		title: basename(POLICY),
 		summary: "환불 정책에서 승인 규칙을 발췌했습니다.",
 		source: POLICY,
 		excerpts: [
@@ -252,9 +252,9 @@ await page.locator(`${EVIDENCE_HALF} button[title="Show in Finder"]`).click();
 await page.waitForFunction((count) => document.querySelectorAll(".tabs .tab").length === count + 1, tabsBefore);
 await sleep(400);
 const newTabTitle = (await page.locator(".tabs .tab--active .tab__title").textContent()) ?? "";
-const sourceRow = page.locator(`[role="row"][data-path="${POLICY}"]`);
+const sourceRow = page.locator('[role="row"]').filter({ hasText: basename(POLICY).normalize("NFD") }).first();
 check("the title opens the source folder in a new tab", newTabTitle === FOLDER, `tab="${newTabTitle}" want="${FOLDER}"`);
-check("the title selects and flashes the source row", (await sourceRow.getAttribute("aria-selected")) === "true" && (await page.locator(".row.bg-accent-flash").count()) >= 1);
+check("the title selects and flashes a Korean filename with spaces and different Unicode normalization", (await sourceRow.getAttribute("aria-selected")) === "true" && (await page.locator(".row.bg-accent-flash").count()) >= 1);
 await page.screenshot({ path: join(EVIDENCE, "04-new-tab-reveal.png") });
 
 // 6. ⌘E hides and reopens the evidence half without a persistent header.
