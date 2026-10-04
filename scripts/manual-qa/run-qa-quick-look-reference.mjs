@@ -7,7 +7,8 @@
  * the panel's behaviour in the DOM, times Space → content, and captures the
  * real window (native material included) with `screencapture` on macOS.
  *
- * Run from the repo root: `bun scripts/manual-qa/run-qa-quick-look-reference.mjs [evidence-dir]`
+ * Set `AUTORAG_SKIP_NATIVE_CAPTURE=1` when the display server cannot capture
+ * native window rectangles; DOM and page screenshots still run.
  * Needs ffmpeg for the media fixtures.
  */
 
@@ -189,9 +190,8 @@ async function poll(read, accept, timeoutMs = 8000) {
 }
 
 /**
- * One full pass in `appearance`. The native material follows `nativeTheme`
- * and the page follows `prefers-color-scheme`; Playwright pins the page to
- * light unless told otherwise, so both are set together.
+ * One full pass in `appearance`. The native material and both renderer roots
+ * are pinned to the same appearance so the reference panels are comparable.
  */
 async function pass(appearance) {
 	const app = await launchFinder({ env: { AUTORAG_QA_ROOT: root, AUTORAG_SKIP_DUPEY_CHECK: "1" } });
@@ -205,8 +205,15 @@ async function pass(appearance) {
 			(page) => page !== undefined,
 			30_000,
 		);
+		if (preview === undefined) throw new Error("Quick Look window did not pre-warm");
 		await preview.emulateMedia({ colorScheme: appearance });
 		await main.emulateMedia({ colorScheme: appearance });
+		await preview.evaluate((source) => {
+			document.documentElement.dataset.appearance = source;
+		}, appearance);
+		await main.evaluate((source) => {
+			document.documentElement.dataset.appearance = source;
+		}, appearance);
 		const windowState = () =>
 			app.evaluate(({ BrowserWindow }) => {
 				const window = BrowserWindow.getAllWindows().find((item) => item.webContents.getURL().includes("quick-look.html"));
@@ -232,7 +239,7 @@ async function pass(appearance) {
 			const slug = `${appearance}-${name}`;
 			const state = await windowState();
 			await preview.screenshot({ path: join(EVIDENCE, `${slug}-page.png`) });
-			if (process.platform === "darwin" && state !== null) {
+			if (process.platform === "darwin" && state !== null && process.env.AUTORAG_SKIP_NATIVE_CAPTURE !== "1") {
 				const { x, y, width, height } = state.bounds;
 				execFileSync("screencapture", ["-x", "-R", `${x - 24},${y - 24},${width + 48},${height + 48}`, join(EVIDENCE, `${slug}-window.png`)]);
 			}

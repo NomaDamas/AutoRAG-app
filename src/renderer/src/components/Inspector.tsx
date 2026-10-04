@@ -2,21 +2,27 @@
  * Inspector — the right column (v7 Bloom). Two stacked halves:
  *
  *   Info     preview paper, name, kind·size·date, index/trash/copy chips, the
- *            dupey Versions family, the metadata rows, and the 4-button action
- *            bar. 52px head when it is the only half, 42px in split mode.
- *   Evidence the citation half shown while a citation is selected: tabs,
- *            preview, title, thumbs feedback (real `search.feedback` IPC), and
- *            the source excerpt + reveal breadcrumb.
+ *            dupey Versions family, the metadata rows, and the suggested-action
+ *            bar. The bar is data-driven: `state/file-actions.ts` decides which
+ *            actions the focused file's own type implies, the machine's
+ *            capabilities decide which of those are real, and a multi-variant
+ *            action (image edit, video conversion) opens a menu instead of a
+ *            row of near-identical buttons.
+ *   Evidence the citation half shown while a citation is selected: numbered tabs,
+ *            preview, title reveal, feedback (real `search.feedback` IPC), and excerpts.
  *
  * All callbacks are real IPC-backed actions supplied by App; this component
  * renders no fabricated data. Esc handling stays in App's keymap.
  */
 
-import { useState, type ReactElement, type ReactNode } from "react";
+import { useEffect, useState, type MouseEvent as ReactMouseEvent, type ReactElement, type ReactNode } from "react";
+import type { ActionAnchor, ActionCapabilities } from "../../../shared/actions-contract";
+import type { FsFileDetails } from "../../../shared/fs-contract";
 import type { IndexStatus } from "../../../shared/index-contract";
 import type { CitationEvidence } from "../../../shared/search-contract";
 import type { FinderEntry } from "../data/entries";
 import { cn } from "../lib/cn";
+import { buildInfoRows, hasMoreInfoRows, visibleInfoRows } from "../state/inspector-info";
 import {
 	evidenceDetail,
 	evidenceKind,
@@ -24,20 +30,33 @@ import {
 	nextEvidenceFeedback,
 	type EvidenceFeedback,
 } from "../state/evidence";
+import {
+	suggestedActions,
+	type FileActionIcon,
+	type FileActionItem,
+	type FileActionTarget,
+} from "../state/file-actions";
 import { basename, dirname } from "../state/paths";
 import { RELATION_LABELS } from "../state/version-family";
 import { EvidenceExcerpt, renderInline } from "./EvidenceBlocks";
 import {
 	CheckIcon,
 	CloseIcon,
+	CompressIcon,
 	CopyIcon,
+	ExtractIcon,
 	EyeIcon,
+	ImageEditIcon,
+	OpenIcon,
+	OpenWithIcon,
 	ShareIcon,
 	SparklesIcon,
 	ThumbsDownIcon,
 	ThumbsUpIcon,
 	TrashIcon,
+	VideoConvertIcon,
 } from "./icons";
+import { ActionMenu } from "./primitives/ActionMenu";
 import { FileTile } from "./primitives/FileTile";
 
 export interface InspectorFamilyMember {
@@ -60,8 +79,11 @@ export interface InspectorProps {
 	readonly onToggleIndex: (entry: FinderEntry) => void;
 	readonly onTrash: (entry: FinderEntry) => void;
 	readonly onCopyPath: (entry: FinderEntry) => void;
-	readonly onQuickLook: (entry: FinderEntry) => void;
 	readonly onAskAi: (entry: FinderEntry) => void;
+	/** What this machine can actually run (probed in main, cached by the controller). */
+	readonly actionCapabilities: ActionCapabilities;
+	/** Run a suggested action; `anchor` is the clicked button's rect (share sheet). */
+	readonly onAction: (target: FileActionTarget, anchor: ActionAnchor | null) => void;
 	/** Dupey family of `entry`; null when it has no versions. */
 	readonly family: InspectorFamily | null;
 	readonly onOpenMember: (path: string) => void;
@@ -71,15 +93,31 @@ export interface InspectorProps {
 	readonly evidenceSelected: number;
 	readonly sessionId: string | null;
 	readonly onSelectEvidence: (n: number) => void;
-	readonly onCloseEvidence: () => void;
 	/** Show in Finder. */
 	readonly onRevealPath: (path: string) => void;
-	readonly onQuickLookPath: (path: string) => void;
 	readonly onToast: (msg: string) => void;
 }
 
 const HEAD_BUTTON =
 	"flex flex-none items-center justify-center size-icon-sm p-0 border-0 rounded-6 bg-transparent text-ink-muted cursor-pointer transition-[background,color] duration-(--dur-color) ease-[ease] enabled:hover:bg-hover-icon enabled:hover:text-ink disabled:text-border-strong disabled:cursor-default disabled:hover:bg-transparent";
+
+/** Inspector action glyphs, 18px in the bar and 16px in the head. */
+const ACTION_ICONS: Readonly<Record<FileActionIcon, (props: { readonly size?: number }) => ReactElement>> = {
+	open: OpenIcon,
+	openWith: OpenWithIcon,
+	compress: CompressIcon,
+	extract: ExtractIcon,
+	share: ShareIcon,
+	askAi: SparklesIcon,
+	image: ImageEditIcon,
+	video: VideoConvertIcon,
+};
+
+/** The clicked button's rect, for menus and the share sheet. */
+function anchorOf(element: Element): ActionAnchor {
+	const rect = element.getBoundingClientRect();
+	return { x: rect.left, y: rect.top, width: rect.width, height: rect.height };
+}
 
 export function Inspector({
 	entry,
@@ -87,8 +125,9 @@ export function Inspector({
 	onToggleIndex,
 	onTrash,
 	onCopyPath,
-	onQuickLook,
 	onAskAi,
+	actionCapabilities,
+	onAction,
 	family,
 	onOpenMember,
 	evidence,
@@ -96,9 +135,7 @@ export function Inspector({
 	evidenceSelected,
 	sessionId,
 	onSelectEvidence,
-	onCloseEvidence,
 	onRevealPath,
-	onQuickLookPath,
 	onToast,
 }: InspectorProps): ReactElement {
 	const split = evidenceVisible && evidence.length > 0;
@@ -116,8 +153,9 @@ export function Inspector({
 				onToggleIndex={onToggleIndex}
 				onTrash={onTrash}
 				onCopyPath={onCopyPath}
-				onQuickLook={onQuickLook}
 				onAskAi={onAskAi}
+				actionCapabilities={actionCapabilities}
+				onAction={onAction}
 			/>
 			{split ? (
 				<EvidenceHalf
@@ -125,9 +163,7 @@ export function Inspector({
 					selected={evidenceSelected}
 					sessionId={sessionId}
 					onSelect={onSelectEvidence}
-					onClose={onCloseEvidence}
 					onReveal={onRevealPath}
-					onQuickLook={onQuickLookPath}
 					onToast={onToast}
 				/>
 			) : null}
@@ -144,8 +180,9 @@ function InfoHalf({
 	onToggleIndex,
 	onTrash,
 	onCopyPath,
-	onQuickLook,
 	onAskAi,
+	actionCapabilities,
+	onAction,
 }: {
 	readonly entry: FinderEntry | null;
 	readonly indexStatus: IndexStatus | null;
@@ -155,30 +192,42 @@ function InfoHalf({
 	readonly onToggleIndex: (entry: FinderEntry) => void;
 	readonly onTrash: (entry: FinderEntry) => void;
 	readonly onCopyPath: (entry: FinderEntry) => void;
-	readonly onQuickLook: (entry: FinderEntry) => void;
 	readonly onAskAi: (entry: FinderEntry) => void;
+	readonly actionCapabilities: ActionCapabilities;
+	readonly onAction: (target: FileActionTarget, anchor: ActionAnchor | null) => void;
 }): ReactElement {
 	const [brief, setBrief] = useState(false);
+	const [details, setDetails] = useState<FsFileDetails | null>(null);
+	const focusedPath = entry?.path ?? null;
+	// Rich metadata is per-file and read on focus; a stale answer for a path the
+	// user already left must not overwrite the current one.
+	useEffect(() => {
+		setDetails(null);
+		setBrief(false);
+		if (focusedPath === null) return;
+		let cancelled = false;
+		const load = window.autorag?.fs?.details;
+		if (load === undefined) return;
+		void load(focusedPath)
+			.then((next) => {
+				if (!cancelled) setDetails(next);
+			})
+			.catch(() => {
+				if (!cancelled) setDetails(null);
+			});
+		return () => {
+			cancelled = true;
+		};
+	}, [focusedPath]);
 	const included = indexStatus === null || !indexStatus.excluded;
+	const infoRows = entry === null ? [] : buildInfoRows(details, entry);
+	const shownRows = visibleInfoRows(infoRows, brief);
+	const generalRows = shownRows.filter((row) => row.section === "general");
+	const imageRows = shownRows.filter((row) => row.section === "image");
+	const moreInfo = hasMoreInfoRows(infoRows);
 
 	return (
 		<div className={cn("inspector-half flex-1 min-h-0 flex flex-col overflow-hidden relative", split && "h-[50%] max-h-[50%]")}>
-			<div className={cn("inspector-head flex-none flex items-center gap-8 px-12 border-b border-border bg-chrome", split ? "h-42" : "h-52")}>
-				<strong className={cn("font-semibold text-ink", split ? "text-sm" : "text-body")}>Info</strong>
-				<span className="flex-1" />
-				<button
-					type="button"
-					className={HEAD_BUTTON}
-					title="경로 복사"
-					aria-label="경로 복사"
-					disabled={entry === null}
-					onClick={() => {
-						if (entry !== null) onCopyPath(entry);
-					}}
-				>
-					<ShareIcon size={16} />
-				</button>
-			</div>
 
 			{entry === null ? (
 				<div className="flex-1 flex items-center justify-center px-10 text-center text-sm text-ink-muted leading-body">
@@ -226,30 +275,101 @@ function InfoHalf({
 					<div className="info-section border-t border-border pt-12 mt-12">
 						<div className="section-title flex items-center justify-between mb-6">
 							<span className="text-meta font-semibold text-ink">일반 정보</span>
-							<button
-								type="button"
-								className="p-0 border-0 bg-transparent text-accent-text text-badge cursor-pointer"
-								onClick={() => setBrief((current) => !current)}
-							>
-								{brief ? "전체 정보" : "간략히"}
-							</button>
+							{moreInfo ? (
+								<button
+									type="button"
+									className="p-0 border-0 bg-transparent text-accent-text text-badge cursor-pointer"
+									onClick={() => setBrief((current) => !current)}
+								>
+									{brief ? "전체 정보" : "간략히"}
+								</button>
+							) : null}
 						</div>
 						<dl className="m-0">
-							<InfoRow label="종류" value={entry.kindLabel} />
-							<InfoRow label="크기" value={entry.sizeLabel} />
-							{brief ? null : <InfoRow label="위치" value={entry.location} />}
-							{brief ? null : <InfoRow label="수정한 날짜" value={entry.dateLabel} />}
+							{generalRows.map((row) => (
+								<InfoRow key={row.label} label={row.label} value={row.value} />
+							))}
 						</dl>
 					</div>
+
+					{imageRows.length === 0 ? null : (
+						<div className="info-section border-t border-border pt-12 mt-12">
+							<div className="section-title mb-6">
+								<span className="text-meta font-semibold text-ink">사진 정보</span>
+							</div>
+							<dl className="m-0">
+								{imageRows.map((row) => (
+									<InfoRow key={row.label} label={row.label} value={row.value} />
+								))}
+							</dl>
+						</div>
+					)}
 				</div>
 			)}
 
-			<div className="inspector-actions flex-none grid grid-cols-4 gap-2 border-t border-border bg-chrome px-10 pt-10 pb-12">
-				<ActionButton icon={<EyeIcon size={16} />} label="Quick Look" disabled={entry === null} onClick={() => entry !== null && onQuickLook(entry)} />
-				<ActionButton icon={<CopyIcon size={16} />} label="경로 복사" disabled={entry === null} onClick={() => entry !== null && onCopyPath(entry)} />
-				<ActionButton icon={<SparklesIcon size={16} />} label="AI 요약" disabled={entry === null} onClick={() => entry !== null && onAskAi(entry)} />
-				<ActionButton icon={<TrashIcon size={16} />} label="휴지통" disabled={entry === null} onClick={() => entry !== null && onTrash(entry)} />
+			{entry === null ? null : (
+				<ActionBar entry={entry} capabilities={actionCapabilities} onAction={onAction} onAskAi={onAskAi} />
+			)}
+		</div>
+	);
+}
+
+/**
+ * The bottom action bar: every action the focused file's type suggests, in
+ * priority order. A `menu` action (`이미지 편집`, `동영상 변환`) opens its
+ * variants anchored to its button; a flat action runs at once.
+ */
+function ActionBar({
+	entry,
+	capabilities,
+	onAction,
+	onAskAi,
+}: {
+	readonly entry: FinderEntry;
+	readonly capabilities: ActionCapabilities;
+	readonly onAction: (target: FileActionTarget, anchor: ActionAnchor | null) => void;
+	readonly onAskAi: (entry: FinderEntry) => void;
+}): ReactElement {
+	const actions = suggestedActions(entry, capabilities);
+	const [menu, setMenu] = useState<{ readonly items: readonly FileActionItem[]; readonly anchor: ActionAnchor } | null>(null);
+
+	function run(target: FileActionTarget, anchor: ActionAnchor): void {
+		// "AI 요약" is the App shell's concern (it owns the composer), not IPC.
+		if (target.kind === "askAi") onAskAi(entry);
+		else onAction(target, anchor);
+	}
+
+	return (
+		<div className="inspector-actions flex-none border-t border-border bg-chrome px-10 pt-10 pb-12">
+			<div className="grid grid-cols-4 gap-2 max-h-[45vh] overflow-y-auto">
+				{actions.map((action) => {
+					const Icon = ACTION_ICONS[action.icon];
+					return (
+						<ActionButton
+							key={action.id}
+							icon={<Icon size={18} />}
+							label={action.label}
+							onClick={(event) => {
+								const anchor = anchorOf(event.currentTarget);
+								if (action.kind === "action") run(action.target, anchor);
+								else setMenu({ items: action.items, anchor });
+							}}
+						/>
+					);
+				})}
 			</div>
+			{menu === null ? null : (
+				<ActionMenu
+					items={menu.items}
+					anchor={menu.anchor}
+					onSelect={(target) => {
+						const anchor = menu.anchor;
+						setMenu(null);
+						run(target, anchor);
+					}}
+					onClose={() => setMenu(null)}
+				/>
+			)}
 		</div>
 	);
 }
@@ -278,23 +398,20 @@ function InfoRow({ label, value }: { readonly label: string; readonly value: str
 function ActionButton({
 	icon,
 	label,
-	disabled,
 	onClick,
 }: {
 	readonly icon: ReactElement;
 	readonly label: string;
-	readonly disabled: boolean;
-	readonly onClick: () => void;
+	readonly onClick: (event: ReactMouseEvent<HTMLButtonElement>) => void;
 }): ReactElement {
 	return (
 		<button
 			type="button"
-			className="inspector-action min-w-0 flex flex-col items-center gap-6 px-2 py-6 rounded-8 border-0 bg-transparent text-ink-muted text-tile leading-[1.25] text-center cursor-pointer transition-[background,color] duration-(--dur-color) ease-[ease] hover:bg-hover hover:text-ink disabled:text-ink-faint disabled:cursor-default disabled:hover:bg-transparent disabled:hover:text-ink-faint"
-			disabled={disabled}
+			className="inspector-action min-w-0 flex flex-col items-center gap-6 px-2 py-6 rounded-8 border-0 bg-transparent text-ink-muted text-tile leading-[1.25] text-center cursor-pointer transition-[background,color] duration-(--dur-color) ease-[ease] hover:bg-hover hover:text-ink"
 			onClick={onClick}
 		>
 			{icon}
-			<span className="max-w-full">{label}</span>
+			<span className="max-w-full [word-break:keep-all]">{label}</span>
 		</button>
 	);
 }
@@ -360,18 +477,14 @@ function EvidenceHalf({
 	selected,
 	sessionId,
 	onSelect,
-	onClose,
 	onReveal,
-	onQuickLook,
 	onToast,
 }: {
 	readonly evidence: readonly CitationEvidence[];
 	readonly selected: number;
 	readonly sessionId: string | null;
 	readonly onSelect: (n: number) => void;
-	readonly onClose: () => void;
 	readonly onReveal: (path: string) => void;
-	readonly onQuickLook: (path: string) => void;
 	readonly onToast: (msg: string) => void;
 }): ReactElement {
 	const [votes, setVotes] = useState<Readonly<Record<string, EvidenceFeedback>>>({});
@@ -396,25 +509,6 @@ function EvidenceHalf({
 
 	return (
 		<div className="inspector-half is-split h-[50%] max-h-[50%] min-h-0 flex flex-col overflow-hidden relative border-t border-border shadow-[0_-2px_8px_rgba(0,0,0,0.04)]" aria-label="Evidence">
-			<div className="inspector-head flex-none h-42 flex items-center gap-8 px-12 border-b border-border bg-chrome">
-				<strong className="text-sm font-semibold text-ink">Evidence</strong>
-				<span className="flex-1" />
-				<button
-					type="button"
-					className={HEAD_BUTTON}
-					title="Quick Look"
-					aria-label="Quick Look"
-					disabled={source === null}
-					onClick={() => {
-						if (source !== null) onQuickLook(source);
-					}}
-				>
-					<EyeIcon size={16} />
-				</button>
-				<button type="button" className={HEAD_BUTTON} title="근거 닫기" aria-label="근거 닫기" onClick={onClose}>
-					<CloseIcon size={12} />
-				</button>
-			</div>
 			<div className="inspector-body flex-1 min-h-0 overflow-auto px-14 pt-12 pb-18">
 				<div className="evidence-tabs flex gap-3 overflow-auto mb-10">
 					{evidence.map((entry) => (
@@ -435,7 +529,7 @@ function EvidenceHalf({
 				<div className="preview-paper flex-none h-100 flex items-center justify-center overflow-hidden rounded-6 border border-border bg-window shadow-raised mb-10">
 					<FileTile kind={evidenceKind(item.title)} large />
 				</div>
-				{source === null ? (
+				{source === null || source.startsWith("/kakao/") ? (
 					<div className="preview-title text-sm font-semibold text-ink leading-[1.3] [overflow-wrap:anywhere]">
 						{item.number}. {item.title}
 					</div>
@@ -449,18 +543,16 @@ function EvidenceHalf({
 						{item.number}. {item.title}
 					</button>
 				)}
-				<div className="preview-sub mt-4 text-badge text-ink-muted">
-					{source === null ? evidenceDetail(item.confidence) : `${source} · ${evidenceDetail(item.confidence)}`}
-				</div>
+                <div className="preview-sub mt-4 text-badge text-ink-muted">{evidenceDetail(item.confidence)}</div>
 
-				<div className="feedback flex items-center gap-6 my-8">
+				<div className="feedback flex items-center gap-10 my-8">
 					<button
 						type="button"
 						title="이 근거가 도움이 됨"
 						aria-label="이 근거가 도움이 됨"
 						className={cn(
-							"flex items-center justify-center size-row rounded-6 border cursor-pointer transition-[background,color,border-color] duration-(--dur-color) ease-[ease]",
-							vote === "up" ? "border-ok-border bg-ok-bg-soft text-ok-text" : "border-border bg-window text-ink-muted hover:bg-chrome hover:text-ink",
+							"border-0 bg-transparent p-0 text-caption cursor-pointer transition-colors duration-(--dur-color) ease-[ease]",
+							vote === "up" ? "text-ok-text" : "text-ink-muted hover:text-ink",
 						)}
 						onClick={() => sendVote("up")}
 					>
@@ -471,8 +563,8 @@ function EvidenceHalf({
 						title="이 근거는 도움이 안 됨"
 						aria-label="이 근거는 도움이 안 됨"
 						className={cn(
-							"flex items-center justify-center size-row rounded-6 border cursor-pointer transition-[background,color,border-color] duration-(--dur-color) ease-[ease]",
-							vote === "down" ? "border-danger-border bg-danger-bg-soft text-danger-text" : "border-border bg-window text-ink-muted hover:bg-chrome hover:text-ink",
+							"border-0 bg-transparent p-0 text-caption cursor-pointer transition-colors duration-(--dur-color) ease-[ease]",
+							vote === "down" ? "text-danger-text" : "text-ink-muted hover:text-ink",
 						)}
 						onClick={() => sendVote("down")}
 					>

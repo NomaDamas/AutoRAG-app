@@ -54,6 +54,7 @@ function fakeFs(result: FsVersionFamiliesResult): FsBridge {
 		enrichEntries: async () => [],
 		readEntries: async () => ({ entries: [], removed: [] }),
 		stat: async (path) => fsEntry(path),
+		details: noResult,
 		exists: async () => true,
 		search,
 		locations,

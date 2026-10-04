@@ -231,15 +231,15 @@ check("Enter opened the first hit of the query", (await page.locator(".user-msg 
 await page.screenshot({ path: join(EVIDENCE, "history-enter.png") });
 
 // 5. Esc closes the popover and leaves the Finder query alone (it must not bubble to the Finder keymap).
-await page.locator(".search__input").fill("qa-marker");
+await page.locator(".side-search input").fill("qa-marker");
 await openHistory(page);
 await page.locator(".history input").press("Escape");
 check("Esc closes the popover", await popoverClosed(page));
-const finderQuery = await page.locator(".search__input").inputValue();
+const finderQuery = await page.locator(".side-search input").inputValue();
 check("Esc in the history search leaves the Finder query untouched", finderQuery === "qa-marker", finderQuery);
 await page.screenshot({ path: join(EVIDENCE, "history-esc.png") });
-await page.locator(".search__input").fill("");
-await page.waitForFunction(() => document.querySelector(".search__input")?.value === "");
+await page.locator(".side-search input").fill("");
+await page.waitForFunction(() => document.querySelector(".side-search input")?.value === "");
 
 // 6. The transparent click-catcher closes the popover without reaching the composer.
 await openHistory(page);

@@ -1,12 +1,18 @@
 /**
  * Evidence-panel view model (DESIGN.md §5 Evidence panel; handoff README §1).
- *
- * Pure helpers for the bottom evidence strip: breadcrumb segments of the
- * source path, tile kind inference from the evidence title, thumbs-up/down
- * toggle state, and the reference toast copy.
+ * Pure helpers for the citation-driven Evidence half: tile kind inference from
+ * the evidence title, thumbs-up/down toggle state, and the reference toast copy.
  */
 
 import { type FileKind, kindFromExtension } from "./kinds";
+
+/** Prefer the exact path; otherwise resolve NFC/NFD spelling to the listing's real identity. */
+export function findEvidenceSource<T extends { readonly path: string }>(entries: readonly T[], source: string): T | undefined {
+	const exact = entries.find((entry) => entry.path === source);
+	if (exact !== undefined) return exact;
+	const normalized = source.normalize("NFC");
+	return entries.find((entry) => entry.path.normalize("NFC") === normalized);
+}
 
 /** Confidence as a percentage, shown right of the source line. */
 export function evidenceDetail(confidence: number): string {

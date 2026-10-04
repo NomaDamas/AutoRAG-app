@@ -142,6 +142,11 @@ export function estimateMenuHeight(entries: readonly FinderMenuEntry[]): number 
 	return height;
 }
 
+/** Estimated menu height for `count` plain items (the Inspector action menus have no separators). */
+export function menuHeightForItems(count: number): number {
+	return MENU_PADDING * 2 + count * MENU_ITEM_HEIGHT;
+}
+
 export function menuPlacement(cursor: MenuPoint, size: MenuSize, viewport: MenuSize): MenuPlacement {
 	const left = Math.max(MENU_MARGIN, Math.min(cursor.x, viewport.width - size.width - MENU_MARGIN));
 	const overflows = cursor.y + size.height > viewport.height - MENU_MARGIN;

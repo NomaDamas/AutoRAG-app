@@ -1,6 +1,8 @@
 import { existsSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
-import { app, BrowserWindow, clipboard, protocol, shell } from "electron";
+import { app, BrowserWindow, clipboard, dialog, nativeTheme, protocol, ShareMenu, shell, type OpenDialogOptions } from "electron";
+import { APPEARANCE_CHANNELS } from "../shared/appearance-contract";
+import type { AppAppearance } from "../shared/settings-contract";
 import { attachQuickLook, PREVIEW_PRIVILEGED_SCHEME, registerPreviewProtocol, registerQuickLookIpc } from "../preview/node/register";
 import { writeDefaultConfig } from "@autorag/librarian";
 import { resolveConfigPath } from "@autorag/librarian/core";
@@ -20,6 +22,7 @@ import { createModelStatusService } from "./model-status";
 import { createDefaultAgentFactory, createSearchService } from "./search-service";
 import { createSettingsService } from "./settings-service";
 import {
+	registerActionsIpcHandlers,
 	registerFsIpcHandlers,
 	registerIndexIpcHandlers,
 	registerLiveIpcHandlers,
@@ -27,6 +30,7 @@ import {
 	registerSettingsIpcHandlers,
 	registerVersionFamilyIpcHandlers,
 } from "./ipc";
+import { createActionService } from "./action-service";
 import { createChangeHub } from "./change-hub";
 import { createDupeyLayer } from "./dupey-layer";
 import { createFsWatchService } from "./fs-watch-service";
@@ -68,7 +72,7 @@ function loadRendererPage(window: BrowserWindow, page: string): void {
 	}
 }
 
-function createMainWindow(devLabel: DevLabel | null): BrowserWindow {
+function createMainWindow(devLabel: DevLabel | null, appearance: AppAppearance): BrowserWindow {
 	const window = new BrowserWindow({
 		width: 1440,
 		height: 900,
@@ -82,7 +86,10 @@ function createMainWindow(devLabel: DevLabel | null): BrowserWindow {
 			contextIsolation: true,
 			nodeIntegration: false,
 			sandbox: false,
-			additionalArguments: devLabel === null ? [] : [`--autorag-dev-label=${JSON.stringify(devLabel)}`],
+			additionalArguments: [
+				...(devLabel === null ? [] : [`--autorag-dev-label=${JSON.stringify(devLabel)}`]),
+				`--autorag-appearance=${appearance}`,
+			],
 		},
 	});
 
@@ -95,6 +102,7 @@ function createMainWindow(devLabel: DevLabel | null): BrowserWindow {
 	loadRendererPage(window, "index.html");
 	attachQuickLook(window, {
 		preload: join(import.meta.dirname, "../preload/quick-look.mjs"),
+		appearance,
 		loadPage: (preview) => loadRendererPage(preview, "quick-look.html"),
 	});
 	return window;
@@ -102,16 +110,25 @@ function createMainWindow(devLabel: DevLabel | null): BrowserWindow {
 
 let versionFamilyService: VersionFamilyService | null = null;
 let mainWindow: BrowserWindow | null = null;
-
+let currentAppearance: AppAppearance = "light";
 function sendToMainWindow(channel: string, payload: unknown): void {
 	if (mainWindow === null || mainWindow.isDestroyed()) return;
 	mainWindow.webContents.send(channel, payload);
 }
 
+function sendAppearance(appearance: AppAppearance): void {
+	for (const window of BrowserWindow.getAllWindows()) {
+		if (!window.isDestroyed()) window.webContents.send(APPEARANCE_CHANNELS.changed, appearance);
+	}
+}
+
 // Electron keeps only the last `registerSchemesAsPrivileged` call: every scheme registers here, together.
 protocol.registerSchemesAsPrivileged([PREVIEW_PRIVILEGED_SCHEME, THUMB_PRIVILEGED_SCHEME]);
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+	nativeTheme.on("updated", () => {
+		sendAppearance(nativeTheme.shouldUseDarkColors ? "dark" : "light");
+	});
 	registerPreviewProtocol();
 	const iconProvider = createIconProvider();
 	registerIconProtocol(iconProvider);
@@ -134,6 +151,40 @@ app.whenReady().then(() => {
 			await versionFamilyService?.removePaths(paths);
 		},
 	});
+	// Inspector actions: a chooser for "Open with" and the macOS share sheet,
+	// anchored to the button that opened it.
+	registerActionsIpcHandlers(
+		createActionService({
+			applications: {
+				async pick(window) {
+					const options: OpenDialogOptions = {
+						title: "다른 앱으로 열기",
+						buttonLabel: "열기",
+						properties: ["openFile"],
+						...(process.platform === "darwin" ? { defaultPath: "/Applications" } : {}),
+					};
+					const result =
+						window === null
+							? await dialog.showOpenDialog(options)
+							: await dialog.showOpenDialog(window, options);
+					return result.canceled ? null : (result.filePaths[0] ?? null);
+				},
+			},
+			share:
+				process.platform === "darwin"
+					? {
+							present(path, anchor, window) {
+								if (window === null) return;
+								new ShareMenu({ filePaths: [path] }).popup({
+									window,
+									x: Math.round(anchor.x),
+									y: Math.round(anchor.y + anchor.height + 4),
+								});
+							},
+						}
+					: null,
+		}),
+	);
 	let scanIntervalMinutes = DEFAULT_SCAN_INTERVAL_MINUTES;
 	const hub = createChangeHub({
 		send: (message) => sendToMainWindow(LIVE_CHANNELS.message, message),
@@ -165,23 +216,29 @@ app.whenReady().then(() => {
 		send: sendToMainWindow,
 	});
 	registerSearchIpcHandlers(searchService);
+	const applyAppearance = (appearance: AppAppearance): void => {
+		currentAppearance = appearance;
+		nativeTheme.themeSource = appearance;
+		sendAppearance(appearance);
+	};
 	const settingsService = createSettingsService({
 		directory: join(app.getPath("userData"), "settings"),
 		dataSources: createDataSourceStatusService({ env: process.env, cwd: process.cwd() }),
 		models: createModelStatusService({ env: process.env, cwd: process.cwd() }),
 		onSettingsChanged: (settings) => {
+			applyAppearance(settings.appearance);
 			scanIntervalMinutes = settings.dupeyScanIntervalMinutes;
 			versionFamilyService?.reschedule();
 		},
 	});
 	registerSettingsIpcHandlers(settingsService);
-	void settingsService.get().then((settings) => {
-		scanIntervalMinutes = settings.dupeyScanIntervalMinutes;
-		versionFamilyService?.reschedule();
-	});
+	const settings = await settingsService.get();
+	applyAppearance(settings.appearance);
+	scanIntervalMinutes = settings.dupeyScanIntervalMinutes;
+	versionFamilyService?.reschedule();
 	void versionFamilyService.start();
 	const openMainWindow = (): BrowserWindow => {
-		const window = createMainWindow(devLabel);
+		const window = createMainWindow(devLabel, currentAppearance);
 		const clearWatchSet = (): void => {
 			void watch.setWatchSet([]);
 		};

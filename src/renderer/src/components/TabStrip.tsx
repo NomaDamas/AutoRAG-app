@@ -79,7 +79,7 @@ export function TabStrip({
 					{canClose ? (
 						<button
 							type="button"
-							className="tab__close absolute left-5 top-1/2 mt-[-7.5px] flex flex-none size-15 items-center justify-center p-0 border-0 rounded-3 bg-transparent text-ink-muted opacity-0 transition-[background,opacity] duration-(--dur-color) ease-[ease] group-hover/tab:opacity-100 hover:bg-[rgba(0,0,0,0.12)] hover:text-ink"
+							className="tab__close absolute left-5 top-1/2 mt-[-7.5px] flex flex-none items-center justify-center size-15 p-0 border-0 rounded-3 bg-transparent text-ink-muted opacity-0 transition-[background,opacity] duration-(--dur-color) ease-[ease] group-hover/tab:opacity-100 hover:bg-hover-strong hover:text-ink"
 							title="Close tab ⌘W"
 							aria-label="Close tab ⌘W"
 							onClick={(event: MouseEvent<HTMLButtonElement>) => {

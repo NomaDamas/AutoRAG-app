@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useRef, useState, type ReactElement } from "react";
 import type { PreviewBridge, QuickLookTarget } from "../../preview/shared/contract";
 import type { Bounds } from "../../preview/shared/fit";
+import type { ActionAnchor } from "../../shared/actions-contract";
 import type { DataSourcesSnapshot, SettingsBridge } from "../../shared/settings-contract";
 import type { CitationEvidence } from "../../shared/search-contract";
 
 const autorag = (window as unknown as { readonly autorag: { readonly settings: SettingsBridge; readonly preview: PreviewBridge } }).autorag;
 import { AiSearchPanel, type AiDockHandle } from "./components/AiSearchPanel";
+import type { SearchMode } from "./components/SidebarSearch";
 import { ColumnBrowser } from "./components/ColumnBrowser";
 import { ColumnHeader } from "./components/ColumnHeader";
 import { FileList } from "./components/FileList";
@@ -22,6 +24,7 @@ import { RECENTS_PATH } from "../../shared/fs-contract";
 import { SETTINGS_PATH } from "./state/tabs";
 import { isFinderDrag, readFinderDragPaths, writeFinderDrag } from "./state/attachments";
 import { backgroundDropDir } from "./state/file-transfer";
+import type { FileActionTarget } from "./state/file-actions";
 import { basename, breadcrumbTrail, dirname } from "./state/paths";
 import {
 	loadListColumns,
@@ -230,11 +233,15 @@ export function App(): ReactElement {
 	const [evidence, setEvidence] = useState<readonly CitationEvidence[]>([]);
 	const [evidenceSession, setEvidenceSession] = useState<string | null>(null);
 	const [selectedEvidence, setSelectedEvidence] = useState<number | null>(null);
-	const [evidenceOpen, setEvidenceOpen] = useState(true);
+	const [evidenceOpen, setEvidenceOpen] = useState(false);
+	const evidenceSessionRef = useRef<string | null>(null);
 
 	const publishEvidence = useCallback((items: readonly CitationEvidence[], sessionId: string | null) => {
+		const sessionChanged = evidenceSessionRef.current !== sessionId;
+		evidenceSessionRef.current = sessionId;
 		setEvidence(items);
 		setEvidenceSession(sessionId);
+		if (items.length === 0 || sessionChanged) setEvidenceOpen(false);
 		setSelectedEvidence((current) => (current !== null && items.some((item) => item.number === current) ? current : null));
 	}, []);
 
@@ -249,6 +256,7 @@ export function App(): ReactElement {
 	const finder = useFinderController(source, {
 		showHiddenFiles,
 		quickLook: { onQuickLook: openQuickLook, closeQuickLook, isQuickLookOpen },
+		onFocusSearch: () => setSidebarVisible(true),
 		onFocusComposer: () => {
 			setAiOpen(true);
 			aiDockRef.current?.focusComposer();
@@ -263,11 +271,42 @@ export function App(): ReactElement {
 		aiDockRef.current?.sendQuery(text);
 	}, []);
 
+	/**
+	 * Sidebar search commit. Enter runs a filename search in the chip's scope
+	 * (전체 = This Mac, 파일 이름 = current folder); the 내용 chip — or ⌥Enter
+	 * from any chip — hands the query to the AI dock's real content search.
+	 */
+	const submitSidebarSearch = useCallback(
+		(mode: SearchMode, text: string) => {
+			const value = text.trim();
+			if (value === "") {
+				finder.setQuery("");
+				return;
+			}
+			if (mode === "content") {
+				contentSearch(value);
+				return;
+			}
+			finder.setSearchScope(mode === "name" ? "current" : "all");
+			finder.setQuery(value);
+		},
+		[contentSearch, finder],
+	);
+
 	/** Inspector "AI 요약": attach the entry to the composer and focus it. */
 	const askAi = useCallback((entry: { readonly path: string; readonly name: string; readonly kind: "file" | "folder" }) => {
 		setAiOpen(true);
 		aiDockRef.current?.attachFile({ kind: entry.kind, id: entry.path, name: entry.name });
 	}, []);
+
+	/** Inspector action bar: open, share, archive, and edits all run through the controller. */
+	const runInspectorAction = useCallback(
+		(target: FileActionTarget, anchor: ActionAnchor | null) => {
+			const entry = finder.focusedEntry;
+			if (entry !== null) finder.runEntryAction(entry, target, anchor);
+		},
+		[finder],
+	);
 
 	const selectEvidence = useCallback((number: number) => {
 		setSelectedEvidence(number);
@@ -465,13 +504,16 @@ export function App(): ReactElement {
 			: finder.searching
 				? `Search "${finder.query}"`
 				: basename(finder.path);
-	const gridColumns = `${sidebarVisible ? `${sidebarWidth}px ` : ""}minmax(0,1fr)${inspectorVisible ? ` ${inspectorWidth}px` : ""}`;
+	/** Outer grid: sidebar + the region that holds the full-width toolbar. */
+	const windowColumns = `${sidebarVisible ? `${sidebarWidth}px ` : ""}minmax(0,1fr)`;
+	/** Inner grid under the toolbar: Finder + inspector. */
+	const finderColumns = `minmax(0,1fr)${inspectorVisible ? ` ${inspectorWidth}px` : ""}`;
 
 	return (
 		<div className="desk flex h-full bg-window">
 			<div
 				className="window relative grid flex-1 min-w-0 bg-window overflow-hidden"
-				style={{ gridTemplateColumns: gridColumns }}
+				style={{ gridTemplateColumns: windowColumns, gridTemplateRows: "minmax(0, 1fr)" }}
 			>
 				{sidebarVisible ? (
 					<Sidebar
@@ -482,9 +524,15 @@ export function App(): ReactElement {
 						onHideSidebar={() => setSidebarVisible(false)}
 						onNewFolder={finder.newFolder}
 						sourceStatus={sourceStatus}
+						searchQuery={finder.query}
+						searchRef={finder.searchRef}
+						searchFocused={finder.searchFocused}
+						onSearchFocus={() => finder.setSearchFocused(true)}
+						onSearchBlur={() => finder.setSearchFocused(false)}
+						onSubmitSearch={submitSidebarSearch}
 					/>
 				) : null}
-				<section className="finder flex flex-col min-w-0 min-h-0" aria-label="Finder" onMouseDown={finder.focusFinder}>
+				<div className="flex min-w-0 min-h-0 flex-col">
 					<Toolbar
 						title={toolbarTitle}
 						canGoBack={finder.canGoBack}
@@ -495,19 +543,18 @@ export function App(): ReactElement {
 						onViewModeChange={finder.setViewMode}
 						inspectorVisible={inspectorVisible}
 						onToggleInspector={() => setInspectorVisible((visible) => !visible)}
-						committedQuery={finder.query}
-						onCommitQuery={finder.setQuery}
-						onContentSearch={contentSearch}
-						searchRef={finder.searchRef}
-						searchFocused={finder.searchFocused}
-						onSearchFocus={() => finder.setSearchFocused(true)}
-						onSearchBlur={() => finder.setSearchFocused(false)}
-						showHotkeys={SHOW_HOTKEYS}
-						placeholder={finder.searchPlaceholder}
+						aiOpen={aiOpen}
+						onToggleAi={() => setAiOpen((open) => !open)}
+						canShare={focused !== null}
+						onShare={() => {
+							if (focused !== null) finder.copyEntryPath(focused);
+						}}
 						sidebarHidden={!sidebarVisible}
 						onShowSidebar={() => setSidebarVisible(true)}
 						onNewFolder={finder.newFolder}
 					/>
+					<div className="grid min-h-0 flex-1" style={{ gridTemplateColumns: finderColumns, gridTemplateRows: "minmax(0, 1fr)" }}>
+						<section className="finder flex flex-col min-w-0 min-h-0" aria-label="Finder" onMouseDown={finder.focusFinder}>
 					<TabStrip
 						tabs={finder.tabs}
 						canClose={finder.canCloseTabs}
@@ -644,21 +691,22 @@ export function App(): ReactElement {
 						onToggleIndex={finder.toggleIndex}
 						onTrash={finder.trashEntry}
 						onCopyPath={finder.copyEntryPath}
-						onQuickLook={(entry) => finder.quickLookPath(entry.path)}
 						onAskAi={askAi}
+						actionCapabilities={finder.actionCapabilities}
+						onAction={runInspectorAction}
 						family={inspectorFamily}
 						onOpenMember={openMemberEntry}
 						evidence={evidence}
-						evidenceVisible={evidence.length > 0 && evidenceOpen}
+						evidenceVisible={evidence.length > 0 && evidenceOpen && selectedEvidence !== null}
 						evidenceSelected={evidenceSelectedNumber}
 						sessionId={evidenceSession}
 						onSelectEvidence={selectEvidence}
-						onCloseEvidence={() => setEvidenceOpen(false)}
 						onRevealPath={finder.revealEvidence}
-						onQuickLookPath={finder.quickLookPath}
 						onToast={finder.showToast}
 					/>
 				) : null}
+					</div>
+				</div>
 				{finder.toast === null ? null : <Toast message={finder.toast} />}
 				{sidebarVisible ? (
 					<PaneGrip
