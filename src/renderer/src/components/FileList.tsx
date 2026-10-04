@@ -1,11 +1,13 @@
 import { useRef, type ReactElement, type RefObject } from "react";
 import type { IndexStatus } from "../../../shared/index-contract";
 import { FileRow, type BackgroundDropHandlers, type RowCallbacks } from "./FileRow";
+import { GroupHeader } from "./GroupHeader";
 import { cn } from "../lib/cn";
 import type { TreeRow } from "../state/folder-tree";
+import { GROUP_HEADER_HEIGHT, groupedLayout, groupedWindow, type GroupSection } from "../state/grouping";
 import type { ListColumnsState } from "../state/list-columns";
 import { ROW_HEIGHT } from "../state/selection";
-import { LIST_OVERSCAN, linearWindow } from "../state/virtual";
+import { LIST_OVERSCAN } from "../state/virtual";
 import type { VersionFamilyError } from "../state/version-family";
 import { useScrollWindow } from "../hooks/useScrollWindow";
 import { VersionFamilyBanner } from "./VersionFamilyBanner";
@@ -15,12 +17,14 @@ import { VersionFamilyBanner } from "./VersionFamilyBanner";
  * summary lives in the ScopeBar now, so the list no longer renders it. Rows are
  * virtualized (issue #16): the container is sized to the full row count and
  * only the window around the viewport is mounted, so a 5,000-entry folder stays
- * cheap to paint. The controller keeps scrolling the list by setting
- * `listRef.current.scrollTop`; this view derives its window from that same
- * element.
+ * cheap to paint. Grouping (issue #47) inserts a section header between row
+ * runs; the header adds fixed height, so the window math runs on the grouped
+ * layout in `state/grouping`. The controller keeps scrolling the list by
+ * setting `listRef.current.scrollTop`; this view derives its window from that
+ * same element.
  */
 export function FileList({
-	rows,
+	sections,
 	listRef,
 	searching,
 	emptyText,
@@ -39,7 +43,8 @@ export function FileList({
 	dropBackground,
 	callbacks,
 }: {
-	readonly rows: readonly TreeRow[];
+	/** The rows split into the toolbar Group control's sections (one when off). */
+	readonly sections: readonly GroupSection<TreeRow>[];
 	readonly listRef: RefObject<HTMLDivElement | null>;
 	readonly searching: boolean;
 	readonly emptyText: string;
@@ -61,13 +66,40 @@ export function FileList({
 }): ReactElement {
 	const rowsRef = useRef<HTMLDivElement | null>(null);
 	const scroll = useScrollWindow(listRef, rowsRef);
-	const window = linearWindow({
-		count: rows.length,
+	const layout = groupedLayout(
+		sections.map((section) => ({ label: section.label, rows: section.rows.length })),
+		{ columns: 1, rowStride: ROW_HEIGHT, headerStride: GROUP_HEADER_HEIGHT },
+	);
+	const window = groupedWindow(layout, {
 		offset: scroll.offset,
 		viewport: scroll.viewport,
-		stride: ROW_HEIGHT,
 		overscan: LIST_OVERSCAN,
 	});
+	const rowCount = sections.reduce((total, section) => total + section.rows.length, 0);
+	const padTop = window.start < layout.items.length ? (layout.offsets[window.start] ?? layout.total) : layout.total;
+	const padBottom = layout.total - (window.end < layout.items.length ? (layout.offsets[window.end] ?? layout.total) : layout.total);
+
+	const row = (row_: TreeRow): ReactElement => (
+		<FileRow
+			key={row_.entry.path}
+			entry={row_.entry}
+			selected={selectedKeys.includes(row_.entry.path)}
+			zoneFocused={focusedZone}
+			flash={flashPath === row_.entry.path}
+			searching={searching}
+			indexStatus={indexStatus[row_.entry.path] ?? null}
+			renameDraft={renamePath === row_.entry.path ? renameDraft : null}
+			stackCount={row_.stackCount}
+			stackOpen={row_.stackOpen}
+			child={row_.child}
+			relation={row_.relation}
+			depth={row_.depth}
+			disclosure={row_.disclosure}
+			listPath={listPath}
+			columns={columns}
+			callbacks={callbacks}
+		/>
+	);
 
 	return (
 		<div
@@ -84,33 +116,19 @@ export function FileList({
 				role={searching ? "grid" : "treegrid"}
 				aria-label="Files"
 				style={{
-					paddingTop: window.start * ROW_HEIGHT,
-					paddingBottom: (rows.length - window.end) * ROW_HEIGHT,
+					paddingTop: padTop,
+					paddingBottom: padBottom,
 				}}
 			>
-				{rows.slice(window.start, window.end).map((row) => (
-					<FileRow
-						key={row.entry.path}
-						entry={row.entry}
-						selected={selectedKeys.includes(row.entry.path)}
-						zoneFocused={focusedZone}
-						flash={flashPath === row.entry.path}
-						searching={searching}
-						indexStatus={indexStatus[row.entry.path] ?? null}
-						renameDraft={renamePath === row.entry.path ? renameDraft : null}
-						stackCount={row.stackCount}
-						stackOpen={row.stackOpen}
-						child={row.child}
-						relation={row.relation}
-						depth={row.depth}
-						disclosure={row.disclosure}
-						listPath={listPath}
-						columns={columns}
-						callbacks={callbacks}
-					/>
-				))}
+				{layout.items.slice(window.start, window.end).map((item) =>
+					item.kind === "header" ? (
+						<GroupHeader key={`group-${item.section}`} label={sections[item.section]?.label ?? ""} />
+					) : (
+						sections[item.section]?.rows.slice(item.start, item.start + item.count).map(row)
+					),
+				)}
 			</div>
-			{rows.length === 0 ? (
+			{rowCount === 0 ? (
 				<div className="list__empty py-40 px-12 text-ink-muted text-body text-center">{emptyText}</div>
 			) : null}
 		</div>

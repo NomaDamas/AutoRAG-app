@@ -186,6 +186,14 @@ const ENTRY_KEYS: readonly (keyof FinderEntry)[] = [
 	"location",
 	"modifiedValue",
 	"sizeValue",
+	"createdValue",
+	"addedValue",
+	"lastOpenedValue",
+	"tagsLabel",
+	"commentsLabel",
+	"dimensionsLabel",
+	"dimensionsValue",
+	"applicationLabel",
 ];
 
 /** Applies current filesystem state for only the changed direct children. */
@@ -255,8 +263,20 @@ export function reconcileListing(
 			return entry;
 		}
 		const unchangedOnDisk = entry.modifiedAt !== undefined && entry.modifiedAt === before.modifiedAt;
-		const carried = unchangedOnDisk
-			? { ...entry, iconUrl: entry.iconUrl ?? before.iconUrl, kindLabel: before.kindLabel }
+		const carried: FinderEntry = unchangedOnDisk
+			? {
+					...entry,
+					iconUrl: entry.iconUrl ?? before.iconUrl,
+					kindLabel: before.kindLabel,
+					...(before.createdValue === undefined ? {} : { createdValue: before.createdValue }),
+					...(before.addedValue === undefined ? {} : { addedValue: before.addedValue }),
+					...(before.lastOpenedValue === undefined ? {} : { lastOpenedValue: before.lastOpenedValue }),
+					...(before.tagsLabel === undefined ? {} : { tagsLabel: before.tagsLabel }),
+					...(before.commentsLabel === undefined ? {} : { commentsLabel: before.commentsLabel }),
+					...(before.dimensionsLabel === undefined ? {} : { dimensionsLabel: before.dimensionsLabel }),
+					...(before.dimensionsValue === undefined ? {} : { dimensionsValue: before.dimensionsValue }),
+					...(before.ratingValue === undefined ? {} : { ratingValue: before.ratingValue }),
+				}
 			: entry;
 		if (ENTRY_KEYS.every((key) => carried[key] === before[key])) {
 			if (previous[index] !== before) changed = true;

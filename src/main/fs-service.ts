@@ -17,6 +17,7 @@ import {
 	type FsOpError,
 	type FsSearchResult,
 } from "../shared/fs-contract";
+import { createFinderMetadataResolver, type FinderMetadataLookup } from "./finder-metadata";
 import { createIconProvider, type IconProvider } from "./file-icon";
 import { createOsKindResolver } from "./file-kind";
 import { readFileDetails } from "./file-details";
@@ -54,6 +55,8 @@ export interface FsServiceDeps {
 	readonly icons?: IconProvider;
 	/** Defaults to the real stat + EXIF reader; tests inject a stub. */
 	readonly details?: (path: string) => Promise<FsFileDetails>;
+	/** Defaults to the macOS extended-attribute + Spotlight resolver; tests may inject one. */
+	readonly finderMetadata?: FinderMetadataLookup;
 }
 
 export type FsRenameErrorCode = "invalid-name" | "name-collision";
@@ -171,16 +174,25 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 	const home = deps.homeDir ?? homedir();
 	const recents = deps.recents ?? createRecentsStore({ directory: join(home, "recents") });
 	const osKind: OsKindLookup = deps.osKind ?? createOsKindResolver().kindFor;
+	const finderMetadata = deps.finderMetadata ?? createFinderMetadataResolver();
 	const iconProvider: IconProvider = deps.icons ?? createIconProvider();
 	// In-app clipboard lives in main-process memory only.
 	let inAppClipboard: FsClipboard | null = null;
 	/** Resolve OS metadata and optional thumbnails without blocking listDir. */
 	async function annotateEntries(entries: readonly FsEntry[], thumbnails: boolean): Promise<FsEntry[]> {
-		const [icons, enriched] = await Promise.all([
+		const [icons, enriched, finders] = await Promise.all([
 			thumbnails ? resolveIcons(entries, iconProvider) : Promise.resolve(new Map<string, string>()),
 			enrichOsKinds(entries, osKind),
+			Promise.all(entries.map((entry) => finderMetadata(entry.path))),
 		]);
-		return enriched.map((entry) => withIcon(entry, icons));
+		return enriched.map((entry, index) => {
+			const finder = finders[index];
+			const withMetadata =
+				finder === null || finder === undefined
+					? entry
+					: { ...entry, finder: { ...finder, createdAt: finder.createdAt ?? entry.createdAt ?? null } };
+			return withIcon(withMetadata, icons);
+		});
 	}
 
 	async function enrichEntries(
@@ -194,6 +206,7 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 			ext: target.ext,
 			size: null,
 			modifiedAt: target.modifiedAt,
+			...(target.createdAt === undefined ? {} : { createdAt: target.createdAt }),
 			isSymlink: false,
 			osKind: null,
 			iconUrl: null,
@@ -204,6 +217,7 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 			modifiedAt: entry.modifiedAt,
 			osKind: entry.osKind,
 			iconUrl: entry.iconUrl,
+			...(entry.finder === undefined ? {} : { finder: entry.finder }),
 		}));
 	}
 
