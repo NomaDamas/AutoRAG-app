@@ -34,6 +34,7 @@ export type KeyAction =
 	| { readonly type: "copy" }
 	| { readonly type: "cut" }
 	| { readonly type: "paste"; readonly move: boolean }
+	| { readonly type: "undo" }
 	| { readonly type: "moveSelection"; readonly delta: 1 | -1 }
 	| { readonly type: "moveSelectionSideways"; readonly delta: 1 | -1 }
 	| { readonly type: "moveEvidence"; readonly delta: 1 | -1 }
@@ -69,6 +70,9 @@ export function resolveKeyAction(event: KeyEventLike, context: KeyContext): KeyA
 				return context.typing || context.zone !== "finder" ? null : { type: "cut" };
 			case "v":
 				return context.typing || context.zone !== "finder" ? null : { type: "paste", move: false };
+			case "z":
+				// ⌘Z undoes the last file transfer; ⇧⌘Z stays free for redo.
+				return context.typing || context.zone !== "finder" || event.shift ? null : { type: "undo" };
 			default: {
 				const mode = viewModeForKey(event.key);
 				return mode === null ? null : { type: "setViewMode", mode };
