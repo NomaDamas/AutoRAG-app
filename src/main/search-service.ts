@@ -61,7 +61,7 @@ type SearchAgent = Pick<AutoRAGAgent, "recordFeedbackByNumbers"> & {
 };
 
 export interface SearchServiceDeps {
-	readonly agentFactory: () => SearchAgent;
+	readonly agentFactory: () => SearchAgent | Promise<SearchAgent>;
 	readonly chatStore: ChatStore;
 	readonly send: (channel: string, payload: SearchStreamEvent) => void;
 	readonly now?: () => Date;
@@ -268,7 +268,7 @@ export function createSearchService(deps: SearchServiceDeps): SearchBridge {
 			try {
 				// A bad config (e.g. a search root that no longer exists) throws
 				// here; the panel must show it instead of waiting forever.
-				agent = deps.agentFactory();
+				agent = await deps.agentFactory();
 			} catch (error) {
 				emit({ type: "error", searchId, message: errorText(error) });
 				emit({ type: "done", searchId });
@@ -319,7 +319,7 @@ export function createSearchService(deps: SearchServiceDeps): SearchBridge {
 			run.resolveFinish();
 		},
 		feedback: async (sessionId, useful, notUseful) => {
-			deps.agentFactory().recordFeedbackByNumbers(sessionId, [...useful], [...notUseful]);
+			(await deps.agentFactory()).recordFeedbackByNumbers(sessionId, [...useful], [...notUseful]);
 		},
 		historyList: () => deps.chatStore.list(),
 		historyGet: (chatId) => deps.chatStore.get(chatId),
@@ -329,10 +329,10 @@ export function createSearchService(deps: SearchServiceDeps): SearchBridge {
 	};
 }
 
-export function createDefaultAgentFactory(): () => SearchAgent {
-	return () => {
+export function createDefaultAgentFactory(): () => Promise<SearchAgent> {
+	return async () => {
 		const config = resolveConfigReadOnly({ flags: {}, env: process.env, cwd: process.cwd() });
-		const resolved = resolveAgentModel(config);
+		const resolved = await resolveAgentModel(config);
 		const options: AutoRAGAgentOptions = {
 			...buildAgentOptions(config),
 			model: resolved.model,
