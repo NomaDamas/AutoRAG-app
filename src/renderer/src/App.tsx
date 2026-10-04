@@ -9,7 +9,7 @@ import { AiSearchPanel, type AiDockHandle } from "./components/AiSearchPanel";
 import { ColumnBrowser } from "./components/ColumnBrowser";
 import { ColumnHeader } from "./components/ColumnHeader";
 import { FileList } from "./components/FileList";
-import type { RowCallbacks } from "./components/FileRow";
+import type { BackgroundDropHandlers, RowCallbacks } from "./components/FileRow";
 import { IconGrid } from "./components/IconGrid";
 import { Inspector, type InspectorFamily } from "./components/Inspector";
 import { PathBar } from "./components/PathBar";
@@ -18,8 +18,10 @@ import { ContextMenu } from "./components/primitives/ContextMenu";
 import { Toast } from "./components/primitives/Toast";
 import { Sidebar } from "./components/Sidebar";
 import { SettingsView } from "./components/SettingsView";
+import { RECENTS_PATH } from "../../shared/fs-contract";
 import { SETTINGS_PATH } from "./state/tabs";
 import { isFinderDrag, readFinderDragPaths, writeFinderDrag } from "./state/attachments";
+import { backgroundDropDir } from "./state/file-transfer";
 import { basename, breadcrumbTrail, dirname } from "./state/paths";
 import {
 	loadListColumns,
@@ -199,6 +201,7 @@ export function App(): ReactElement {
 	const [listColumns, setListColumns] = useState<ListColumnsState>(loadListColumns);
 	const [dropTargetPath, setDropTargetPath] = useState<string | null>(null);
 	const [dropTabId, setDropTabId] = useState<number | null>(null);
+	const [dropBackgroundDir, setDropBackgroundDir] = useState<string | null>(null);
 	const [sourceStatus, setSourceStatus] = useState<Readonly<Record<string, "syncing" | "error">>>({});
 	const aiDockRef = useRef<AiDockHandle | null>(null);
 
@@ -351,6 +354,7 @@ export function App(): ReactElement {
 	const reset = useCallback((): void => {
 		setDropTargetPath(null);
 		setDropTabId(null);
+		setDropBackgroundDir(null);
 		cancelSpringTab();
 	}, [cancelSpringTab]);
 	useEffect(() => {
@@ -362,6 +366,36 @@ export function App(): ReactElement {
 		};
 	}, [reset]);
 
+	const backgroundDrop = useCallback(
+		(dir: string): BackgroundDropHandlers => ({
+			onDragOver: (event) => {
+				const overRow = event.target instanceof Element && event.target.closest('[role="row"], [role="option"]') !== null;
+				const destination = backgroundDropDir(dir, { searching: finder.searching, overRow });
+				if (destination === null || !isFinderDrag(event.dataTransfer.types)) return;
+				event.preventDefault();
+				event.dataTransfer.dropEffect = event.altKey ? "copy" : "move";
+				setDropTargetPath(null);
+				setDropTabId(null);
+				setDropBackgroundDir((current) => (current === destination ? current : destination));
+			},
+			onDrop: (event) => {
+				const overRow = event.target instanceof Element && event.target.closest('[role="row"], [role="option"]') !== null;
+				const destination = backgroundDropDir(dir, { searching: finder.searching, overRow });
+				setDropBackgroundDir(null);
+				if (destination === null) return;
+				const paths = readFinderDragPaths(event.dataTransfer);
+				if (paths.length === 0) return;
+				event.preventDefault();
+				finder.transferDropped(paths, destination, event.altKey);
+			},
+			onDragLeave: (event) => {
+				if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return;
+				setDropBackgroundDir((current) => (current === dir ? null : current));
+			},
+		}),
+		[finder.searching, finder.transferDropped],
+	);
+
 	const rowCallbacks: RowCallbacks = {
 		onClick: finder.clickRow,
 		onOpen: finder.openEntry,
@@ -369,6 +403,7 @@ export function App(): ReactElement {
 		onDragStart: (entry, event) => writeFinderDrag(event.dataTransfer, finder.dragEntries(entry)),
 		// An in-app row drag lands on folders: the rows move there (⌥ copies).
 		onDragOver: (entry, event) => {
+			if (isFinderDrag(event.dataTransfer.types)) setDropBackgroundDir(null);
 			if (entry.kind !== "folder" || !isFinderDrag(event.dataTransfer.types)) return;
 			event.preventDefault();
 			event.dataTransfer.dropEffect = event.altKey ? "copy" : "move";
@@ -376,6 +411,7 @@ export function App(): ReactElement {
 		},
 		onDrop: (entry, event) => {
 			setDropTargetPath(null);
+			setDropBackgroundDir(null);
 			if (entry.kind !== "folder") return;
 			const paths = readFinderDragPaths(event.dataTransfer);
 			if (paths.length === 0) return;
@@ -481,10 +517,10 @@ export function App(): ReactElement {
 						dropTabId={dropTabId}
 						onTabDragOver={(id, event) => {
 							if (!isFinderDrag(event.dataTransfer.types)) return;
+							setDropBackgroundDir(null);
 							event.preventDefault();
 							event.dataTransfer.dropEffect = event.altKey ? "copy" : "move";
 							setDropTabId((current) => (current === id ? current : id));
-							// Dwelling adopts the tab; an already-active tab has nothing to switch to.
 							if (finder.tabs.some((tab) => tab.id === id && !tab.active)) armSpringTab(id);
 						}}
 						onTabDragLeave={(id) => {
@@ -494,10 +530,9 @@ export function App(): ReactElement {
 						onTabDrop={(id, event) => {
 							cancelSpringTab();
 							setDropTabId(null);
+							setDropBackgroundDir(null);
 							const paths = readFinderDragPaths(event.dataTransfer);
 							if (paths.length === 0) return;
-							// No stopPropagation: the window "drop" listener clears the AI
-							// dock's drag overlay once the transfer has started.
 							event.preventDefault();
 							finder.dropOnTab(id, paths, event.altKey);
 						}}
@@ -527,6 +562,8 @@ export function App(): ReactElement {
 									renameDraft={finder.renameDraft}
 									versionFamilyError={finder.versionFamilyError}
 									onRetryVersionFamilies={finder.retryVersionFamilies}
+									background={backgroundDrop(finder.path === RECENTS_PATH || finder.path === SETTINGS_PATH ? "" : finder.path)}
+									dropBackground={dropBackgroundDir === finder.path}
 									callbacks={rowCallbacks}
 								/>
 							) : finder.layout === "columns" ? (
@@ -544,6 +581,8 @@ export function App(): ReactElement {
 									variantColumn={variantColumn}
 									onSelectVariant={finder.revealEntry}
 									columnCallbacks={{ onClick: finder.clickColumnRow }}
+									paneBackground={backgroundDrop}
+									dropBackgroundDir={dropBackgroundDir}
 									callbacks={rowCallbacks}
 								/>
 							) : (
@@ -574,6 +613,8 @@ export function App(): ReactElement {
 										renamePath={finder.renamePath}
 										renameDraft={finder.renameDraft}
 										indexStatus={finder.indexStatus}
+										background={backgroundDrop(finder.path === RECENTS_PATH || finder.path === SETTINGS_PATH ? "" : finder.path)}
+										dropBackground={dropBackgroundDir === finder.path}
 										callbacks={rowCallbacks}
 									/>
 								</div>

@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { isSameOrInside, planTransfer } from "../src/renderer/src/state/file-transfer";
+import { backgroundDropDir, isSameOrInside, planTransfer } from "../src/renderer/src/state/file-transfer";
 
+
+describe("backgroundDropDir", () => {
+	it("accepts a real listing folder only when the pointer is on its background", () => {
+		expect(backgroundDropDir("/a", { searching: false, overRow: false })).toBe("/a");
+		expect(backgroundDropDir("", { searching: false, overRow: false })).toBeNull();
+		expect(backgroundDropDir("/a", { searching: true, overRow: false })).toBeNull();
+		expect(backgroundDropDir("/a", { searching: false, overRow: true })).toBeNull();
+	});
+});
 describe("isSameOrInside", () => {
 	it("matches the path itself and its descendants, but not a sibling prefix", () => {
 		expect(isSameOrInside("/a/b", "/a/b")).toBe(true);

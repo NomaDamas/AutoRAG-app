@@ -1,6 +1,7 @@
 import { useRef, type ReactElement, type RefObject } from "react";
 import type { IndexStatus } from "../../../shared/index-contract";
-import { FileRow, type RowCallbacks } from "./FileRow";
+import { FileRow, type BackgroundDropHandlers, type RowCallbacks } from "./FileRow";
+import { cn } from "../lib/cn";
 import type { TreeRow } from "../state/folder-tree";
 import type { ListColumnsState } from "../state/list-columns";
 import { ROW_HEIGHT } from "../state/selection";
@@ -34,6 +35,8 @@ export function FileList({
 	minWidth,
 	versionFamilyError,
 	onRetryVersionFamilies,
+	background,
+	dropBackground,
 	callbacks,
 }: {
 	readonly rows: readonly TreeRow[];
@@ -52,6 +55,8 @@ export function FileList({
 	readonly minWidth: number | null;
 	readonly versionFamilyError: VersionFamilyError | null;
 	readonly onRetryVersionFamilies: () => void;
+	readonly background: BackgroundDropHandlers;
+	readonly dropBackground: boolean;
 	readonly callbacks: RowCallbacks;
 }): ReactElement {
 	const rowsRef = useRef<HTMLDivElement | null>(null);
@@ -65,7 +70,14 @@ export function FileList({
 	});
 
 	return (
-		<div className="list flex-1 min-h-0 py-4 overflow-auto" ref={listRef} style={{ minWidth: minWidth ?? undefined }}>
+		<div
+			className={cn("list flex-1 min-h-0 py-4 overflow-auto", dropBackground && "bg-accent-drop-hover")}
+			ref={listRef}
+			style={{ minWidth: minWidth ?? undefined }}
+			onDragOver={background.onDragOver}
+			onDrop={background.onDrop}
+			onDragLeave={background.onDragLeave}
+		>
 			<VersionFamilyBanner error={versionFamilyError} onRetry={onRetryVersionFamilies} />
 			<div
 				ref={rowsRef}

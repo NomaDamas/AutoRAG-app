@@ -10,6 +10,13 @@ import { cn } from "../lib/cn";
 import { CheckIcon } from "./icons";
 import { FileTile } from "./primitives/FileTile";
 
+/** Drag handlers for the empty background of a listing. */
+export interface BackgroundDropHandlers {
+	readonly onDragOver: (event: DragEvent<HTMLDivElement>) => void;
+	readonly onDrop: (event: DragEvent<HTMLDivElement>) => void;
+	readonly onDragLeave: (event: DragEvent<HTMLDivElement>) => void;
+}
+
 export interface RowCallbacks {
 	readonly onClick: (entry: FinderEntry, event: MouseEvent<HTMLDivElement>) => void;
 	readonly onOpen: (entry: FinderEntry) => void;

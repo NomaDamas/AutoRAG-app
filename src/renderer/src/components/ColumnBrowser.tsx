@@ -5,7 +5,7 @@ import { basename } from "../state/paths";
 import { RELATION_LABELS, type StackRow, type VersionFamilyError } from "../state/version-family";
 import { isHiddenName } from "../state/visibility";
 import { ChevronRightIcon } from "./icons";
-import { type RowCallbacks, VersionTag } from "./FileRow";
+import { type BackgroundDropHandlers, type RowCallbacks, VersionTag } from "./FileRow";
 import { FileTile } from "./primitives/FileTile";
 import { RenameInput } from "./RenameInput";
 import { VersionFamilyBanner } from "./VersionFamilyBanner";
@@ -52,6 +52,8 @@ export function ColumnBrowser({
 	versionFamilyError,
 	onRetryVersionFamilies,
 	columnCallbacks,
+	paneBackground,
+	dropBackgroundDir,
 	callbacks,
 }: {
 	readonly panes: readonly ColumnPaneView[];
@@ -67,6 +69,8 @@ export function ColumnBrowser({
 	readonly versionFamilyError: VersionFamilyError | null;
 	readonly onRetryVersionFamilies: () => void;
 	readonly columnCallbacks: ColumnCallbacks;
+	readonly paneBackground: (dir: string) => BackgroundDropHandlers;
+	readonly dropBackgroundDir: string | null;
 	readonly callbacks: RowCallbacks;
 }): ReactElement {
 	return (
@@ -75,14 +79,17 @@ export function ColumnBrowser({
 			<div className="columns__panes flex flex-1 min-h-0">
 				{panes.map((pane, index) => {
 					const opened = panes[index + 1]?.path ?? null;
+					const background = paneBackground(pane.path);
 					return (
 						<div
 							key={pane.path}
-							className="column flex-1 basis-0 min-w-0 min-h-0 p-6 overflow-auto border-r border-border"
-							role="listbox"
-							aria-label={basename(pane.path) || pane.path}
-							aria-multiselectable="true"
-							data-path={pane.path}
+							className={cn(
+								"column flex-1 basis-0 min-w-0 min-h-0 p-6 overflow-auto border-r border-border",
+								dropBackgroundDir === pane.path && "bg-accent-drop-hover",
+							)}
+							onDragOver={background.onDragOver}
+							onDrop={background.onDrop}
+							onDragLeave={background.onDragLeave}
 						>
 							{pane.rows.map((row) => (
 								<ColumnRow

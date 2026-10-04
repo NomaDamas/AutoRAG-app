@@ -15,6 +15,17 @@ export interface TransferPlan {
 	readonly op: "copy" | "move";
 }
 
+/**
+ * The listing folder that accepts a drop on empty space, or null when the
+ * pointer is over a row or the listing is not a real destination.
+ */
+export function backgroundDropDir(
+	dir: string,
+	state: { readonly searching: boolean; readonly overRow: boolean },
+): string | null {
+	return dir !== "" && !state.searching && !state.overRow ? dir : null;
+}
+
 /** True when `candidate` is `ancestor` or lives inside it (separator-aware). */
 export function isSameOrInside(candidate: string, ancestor: string): boolean {
 	if (ancestor === "") return false;

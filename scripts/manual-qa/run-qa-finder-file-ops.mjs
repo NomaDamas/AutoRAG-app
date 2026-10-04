@@ -15,8 +15,10 @@
  *      into that tab's folder, with the tab highlighted while hovered, and the
  *      AI dock's full-window drag overlay clears once the drop is done;
  *   7. dwelling on a tab for ~1.5s adopts that tab with the drag still held, so
- *      the rows can then be dropped into a folder inside that tab;
- *   8. ⌘C/⌘V while the search field has focus never touches the filesystem.
+ *      the rows can then be dropped into a folder inside it;
+ *   8. dwelling on a tab and dropping on its listing background moves the row
+ *      into that tab's folder;
+ *   9. ⌘C/⌘V while the search field has focus never touches the filesystem.
  *
  * Drags go through Chromium's native drag path (`Input.dispatchDragEvent`, the
  * same route an OS drag takes); the ⌥ variant dispatches the identical
@@ -54,6 +56,7 @@ const DRAGS = join(top, "drag-me.txt");
 const ALTS = join(top, "alt-me.txt");
 const TABS = join(top, "tab-me.txt");
 const SPRINGS = join(top, "spring-me.txt");
+const BACKGROUNDS = join(top, "background-me.txt");
 for (const [path, body] of [
 	[COPIES, "copy fixture\n"],
 	[MOVES, "move fixture\n"],
@@ -61,6 +64,7 @@ for (const [path, body] of [
 	[ALTS, "alt fixture\n"],
 	[TABS, "tab fixture\n"],
 	[SPRINGS, "spring fixture\n"],
+	[BACKGROUNDS, "background fixture\n"],
 ]) {
 	await Bun.write(path, body);
 }
@@ -268,7 +272,73 @@ try {
 		`overlay nodes during dwell=${overlayDuringDwell}, after drop=${await page.getByText(DOCK_OVERLAY).count()}`,
 	);
 
-	/* ---------------------------------------- 8. ⌘V while typing stays text */
+	/* ---------------------------- 8. spring-loaded tab background drop */
+	await page.locator(".tab").first().click();
+	await atTitle(page, "qa-file-ops");
+	await waitForRow(page, BACKGROUNDS);
+	const backgroundSource = await row(page, BACKGROUNDS).boundingBox();
+	const backgroundTab = await page.locator(".tab").nth(1).boundingBox();
+	await page.mouse.move(backgroundSource.x + backgroundSource.width / 2, backgroundSource.y + backgroundSource.height / 2);
+	await page.mouse.down();
+	await page.mouse.move(backgroundSource.x + backgroundSource.width / 2 + 16, backgroundSource.y + backgroundSource.height / 2, { steps: 4 });
+	await page.mouse.move(backgroundTab.x + backgroundTab.width / 2, backgroundTab.y + backgroundTab.height / 2, { steps: 8 });
+	const backgroundTabX = backgroundTab.x + backgroundTab.width / 2;
+	const backgroundTabY = backgroundTab.y + backgroundTab.height / 2;
+	let backgroundSwitched = false;
+	for (let tick = 0; tick < 15 && !backgroundSwitched; tick += 1) {
+		await page.mouse.move(backgroundTabX + (tick % 2 === 0 ? 3 : -3), backgroundTabY, { steps: 1 });
+		await page.waitForTimeout(150);
+		backgroundSwitched = (await page.locator(".toolbar-title").textContent()) === "B";
+	}
+	const listBox = await page.locator(".list").boundingBox();
+	const lastRowBox = await page.locator('[role="row"]').last().boundingBox();
+	if (listBox === null || lastRowBox === null || listBox.y + listBox.height - 24 <= lastRowBox.y + lastRowBox.height) {
+		throw new Error("fixture has no empty listing background below its rows");
+	}
+	const backgroundX = listBox.x + listBox.width / 2;
+	const backgroundY = listBox.y + listBox.height - 24;
+	await page.mouse.move(backgroundX, backgroundY, { steps: 8 });
+	await page.mouse.move(backgroundX + 3, backgroundY, { steps: 1 });
+	await page.mouse.up();
+	const backgroundDeadline = Date.now() + 10_000;
+	while (!existsSync(join(dirB, "background-me.txt")) && Date.now() < backgroundDeadline) await page.waitForTimeout(150);
+	await page.waitForTimeout(400);
+	await page.screenshot({ path: join(EVIDENCE, "8-background-drop.png") });
+	check(
+		"dwelling on a tab then dropping on its listing background moves the row into that tab",
+		backgroundSwitched && existsSync(join(dirB, "background-me.txt")) && !existsSync(BACKGROUNDS),
+		`switched=${backgroundSwitched} B=${listNames(dirB)} root=${listNames(top)}`,
+	);
+	check(
+		"the AI dock drag overlay clears after a spring-loaded background drop",
+		(await page.getByText(DOCK_OVERLAY).count()) === 0,
+		`overlay nodes=${await page.getByText(DOCK_OVERLAY).count()}`,
+	);
+
+	/* --------------------------------------- 10. orphaned drag overlay watchdog */
+	await page.evaluate((mime) => {
+		const data = new DataTransfer();
+		data.setData(mime, JSON.stringify([]));
+		window.dispatchEvent(
+			new DragEvent("dragover", {
+				bubbles: true,
+				cancelable: true,
+				clientX: 20,
+				clientY: 20,
+				dataTransfer: data,
+			}),
+		);
+	}, FINDER_DRAG_TYPE);
+	await page.waitForTimeout(100);
+	const watchdogShown = (await page.getByText(DOCK_OVERLAY).count()) > 0;
+	await page.waitForTimeout(1_300);
+	check(
+		"the AI dock watchdog clears an orphaned drag overlay without drop or dragend",
+		watchdogShown && (await page.getByText(DOCK_OVERLAY).count()) === 0,
+		`shown=${watchdogShown} overlay nodes=${await page.getByText(DOCK_OVERLAY).count()}`,
+	);
+
+	/* ---------------------------------------- 11. ⌘V while typing stays text */
 	const count = () => listNames(top).length + listNames(dirA).length + listNames(dirB).length + listNames(sub).length;
 	const before = count();
 	await page.locator(".search__input").click();
