@@ -108,6 +108,29 @@ describe("buildFolderTree", () => {
 		expect(rows.map((r: TreeRow) => r.disclosure)).toEqual(["leaf", "leaf"]);
 		expect(rows[1]?.child).toBe(true);
 	});
+
+	it("indents version-stack members one level under their head", () => {
+		const rows = buildFolderTree(
+			[row("Home/a.md"), row("Other/a (1).md", "file", true), row("Other/a (2).md", "file", true), row("Home/b.md")],
+			{ expanded: new Set(), childrenOf },
+		);
+		expect(rows.map((r: TreeRow) => r.depth)).toEqual([0, 1, 1, 0]);
+	});
+
+	it("indents a version stack nested in an expanded folder below that folder's depth", () => {
+		const nested: Record<string, readonly StackRow[]> = {
+			"Home/f": [
+				{ entry: entry("Home/f/a.md"), stackCount: 2, stackOpen: true, child: false, relation: null },
+				row("Home/f/a (1).md", "file", true),
+				row("Home/f/a (2).md", "file", true),
+			],
+		};
+		const rows = buildFolderTree([row("Home/f", "folder")], {
+			expanded: new Set(["Home/f"]),
+			childrenOf: (path: string) => nested[path],
+		});
+		expect(rows.map((r: TreeRow) => r.depth)).toEqual([0, 1, 2, 2]);
+	});
 });
 
 describe("flatTreeRows", () => {

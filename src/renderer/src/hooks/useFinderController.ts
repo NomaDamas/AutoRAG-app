@@ -6,6 +6,7 @@ import { DUPEY_LAYER_ID, type FsDirChange, type LiveMessage } from "../../../sha
 import type { FinderEntry } from "../data/entries";
 import type { NavItem } from "../data/places";
 import { isMissingPathFailure, type FinderLocation, type FinderSource, pickInitialPath } from "../data/source";
+import { finderDragEntries } from "../state/attachments";
 import { validateName } from "../state/collision";
 import {
 	chooseInColumn,
@@ -205,6 +206,8 @@ export interface FinderController {
 	trashEntry(entry: FinderEntry): void;
 	/** Copy a single entry's path to the system clipboard (inspector action bar). */
 	copyEntryPath(entry: FinderEntry): void;
+	/** The rows a drag of `entry` carries: the whole selection when it is selected, else just `entry`. */
+	dragEntries(entry: FinderEntry): readonly FinderEntry[];
 	/** Column view panes, left to right (empty outside the column layout). */
 	readonly columnPanes: readonly ColumnPaneView[];
 	readonly listRef: RefObject<HTMLDivElement | null>;
@@ -1264,6 +1267,11 @@ export function useFinderController(
 		[source, showToast, reportError],
 	);
 
+	const dragEntries = useCallback(
+		(entry: FinderEntry) => finderDragEntries(entry, selection.keys, viewEntries),
+		[selection.keys, viewEntries],
+	);
+
 	const retryVersionFamilies = useCallback(() => {
 		const versionAtRequest = layerStoreRef.current.versions[DUPEY_LAYER_ID] ?? 0;
 		source
@@ -1707,6 +1715,7 @@ export function useFinderController(
 		newFolder,
 		trashEntry,
 		copyEntryPath,
+		dragEntries,
 		columnPanes: paneViews,
 		listRef,
 		searchRef,

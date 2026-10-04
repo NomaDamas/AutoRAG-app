@@ -110,8 +110,42 @@ content changed after the scan is shown as a normal row (detached) until the
 next scan. An external rename of a stack member re-points the stack within a 2 s
 window. Search results are not live.
 
+## AI Search attachments
+
+Drop files, folders, or links on the AI Search dock to attach them to the next
+question:
+
+- **Finder rows** from the list, icon, or column view. Dragging a selected row
+  carries the whole selection.
+- **Files and folders from another app**, such as macOS Finder. The preload
+  resolves each dropped file to its absolute path with Electron's
+  `webUtils.getPathForFile`.
+- **Links** (`text/uri-list`) dragged from a browser. A `file://` link becomes
+  a file attachment.
+
+A drop on the collapsed bar opens the dock. A bare text drag is not an
+attachment. Attachments are deduplicated by path or URL.
+
+On send, `src/main/attachment-context.ts` builds one context block for the
+agent. It includes every attachment's path or URL and each file's text. PDF,
+Office, HWP, and mail files go through the librarian's document parsers. Other
+text files are read as UTF-8. Folders contribute a listing of their children.
+Binary files, files over 32 MiB, and links go by path or URL only; the agent
+opens them with its own tools when needed. Content is capped at 8,000
+characters per attachment and 24,000 per question. The block goes in front of
+the run's first model prompt. The query string, which the librarian uses for
+baseline retrieval and records in its retrieval memory, stays the user's own
+words.
+
 ## Manual QA
 
 The Finder QA scripts are under `scripts/manual-qa/`. Build first, then run a
 script with `bun scripts/manual-qa/run-qa-finder-<topic>.mjs`. Evidence belongs
 under `.omo/evidence/ai-finder-app/` and is ignored.
+
+`run-qa-finder-drop-attachments.mjs` needs `OPENROUTER_API_KEY`. It drags
+Finder rows, drops external files, folders, and links through Chromium's
+native drop path, and checks that a live agent answers from the attached
+content. With `QA_REAL_FINDER_DRAG=1` it also drags a file out of a real
+macOS Finder window. That run moves the mouse, and the terminal needs
+Accessibility permission.

@@ -184,9 +184,11 @@ function IconTile({
 			aria-label={entry.name}
 			data-path={entry.path}
 			title={entry.name}
+			draggable={renameDraft === null}
 			onClick={(event) => callbacks.onClick(entry, event)}
 			onDoubleClick={() => callbacks.onOpen(entry)}
 			onContextMenu={(event) => callbacks.onContextMenu(entry, event)}
+			onDragStart={(event) => callbacks.onDragStart(entry, event)}
 		>
 			<div
 				className={cn(

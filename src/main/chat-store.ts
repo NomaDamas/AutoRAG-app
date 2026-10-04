@@ -65,12 +65,38 @@ function toSummary(record: ChatRecord): ChatSummary {
 	return { id: record.id, title: record.title, snippet: record.snippet, updatedAt: record.updatedAt };
 }
 
+/** Everything a chat can be found by: its derived title and snippet plus every
+ * question and every Quick/Deep answer body, so the search reads the whole
+ * conversation rather than the first turn's summary alone. */
+function buildHaystack(record: ChatRecord): string {
+	const parts: string[] = [record.title, record.snippet];
+	for (const message of record.messages) {
+		if (message.role === "user") {
+			parts.push(message.text);
+			continue;
+		}
+		if (message.quick !== null) parts.push(message.quick.answer);
+		if (message.deep !== null) parts.push(message.deep.answer);
+	}
+	return parts.join("\n").toLowerCase();
+}
+
 /** JSON persistence for chat history. Writes are serialized and atomic. */
 export function createChatStore(deps: ChatStoreDeps): ChatStore {
 	const filePath = join(deps.directory, STORE_FILENAME);
 	const now = deps.now ?? (() => new Date());
 	let records: Map<string, ChatRecord> | undefined;
 	let queue: Promise<void> = Promise.resolve();
+	/** Lower-cased search text per record id; rebuilt lazily and dropped when a record is replaced or cleared. */
+	const haystacks = new Map<string, string>();
+
+	function haystack(record: ChatRecord): string {
+		const cached = haystacks.get(record.id);
+		if (cached !== undefined) return cached;
+		const built = buildHaystack(record);
+		haystacks.set(record.id, built);
+		return built;
+	}
 
 	async function loadRecords(): Promise<Map<string, ChatRecord>> {
 		if (records !== undefined) return records;
@@ -125,6 +151,7 @@ export function createChatStore(deps: ChatStoreDeps): ChatStore {
 			enqueue(async () => {
 				const loaded = await loadRecords();
 				loaded.set(record.id, normalizeRecord(record));
+				haystacks.delete(record.id);
 				await writeRecords(loaded);
 			}),
 		list: () =>
@@ -137,16 +164,15 @@ export function createChatStore(deps: ChatStoreDeps): ChatStore {
 		search: (query) =>
 			enqueue(async () => {
 				const needle = query.trim().toLowerCase();
-				const summaries = [...(await loadRecords()).values()]
-					.map(toSummary)
-					.sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
-				if (needle.length === 0) return summaries;
-				return summaries.filter((record) => `${record.title}\n${record.snippet}`.toLowerCase().includes(needle));
+				const all = [...(await loadRecords()).values()].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
+				const matched = needle.length === 0 ? all : all.filter((record) => haystack(record).includes(needle));
+				return matched.map(toSummary);
 			}),
 		clear: () =>
 			enqueue(async () => {
 				const loaded = await loadRecords();
 				loaded.clear();
+				haystacks.clear();
 				await writeRecords(loaded);
 			}),
 	};

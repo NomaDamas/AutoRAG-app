@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -92,6 +92,7 @@ function createFakeAgent(stream: (live: (event: LiveAgentEvent) => void) => Asyn
 			},
 		),
 		abort: vi.fn(),
+		setAttachmentContext: vi.fn((_context: string) => undefined),
 	};
 }
 
@@ -327,6 +328,69 @@ describe("createSearchService", () => {
 
 		expect(agent.recordFeedbackByNumbers).toHaveBeenCalledWith("session-1", [1, 3], [2]);
 		expect(agent.feedbackCalls).toEqual([{ sessionId: "session-1", useful: [1, 3], notUseful: [2] }]);
+	});
+
+	it("hands the attachment context to the agent before the run and keeps the query plain", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "autorag-search-attach-"));
+		tempDirs.push(directory);
+		const path = join(directory, "refund-exceptions.md");
+		await writeFile(path, "Refund exceptions over 1M KRW need CFO sign-off.");
+		const agent = createFakeAgent(async function*() {
+			yield { type: "complete", response: createResponse("session-attach", "CFO sign-off [1]", 1) };
+		});
+		const store = await createStore();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: store, send: () => undefined, now });
+		const attachments = [
+			{ kind: "file" as const, id: path, name: "refund-exceptions.md" },
+			{ kind: "url" as const, id: "https://example.com/policy", name: "example.com/policy" },
+		];
+
+		await service.start("search-attach", "chat-attach", "who signs off refund exceptions?", attachments);
+
+		expect(agent.setAttachmentContext).toHaveBeenCalledTimes(1);
+		const context = agent.setAttachmentContext.mock.calls[0]?.[0] ?? "";
+		expect(context).toContain(path);
+		expect(context).toContain("Refund exceptions over 1M KRW need CFO sign-off.");
+		expect(context).toContain("https://example.com/policy");
+		expect(agent.searchDocumentsStream).toHaveBeenCalledWith("who signs off refund exceptions?");
+		expect(agent.setAttachmentContext.mock.invocationCallOrder[0]).toBeLessThan(
+			agent.searchDocumentsStream.mock.invocationCallOrder[0] ?? 0,
+		);
+		const record = await service.historyGet("chat-attach");
+		expect(record?.messages[0]).toMatchObject({ role: "user", text: "who signs off refund exceptions?", attachments });
+	});
+
+	it("never starts the agent when the run is cancelled while attachments are read", async () => {
+		const reading = Promise.withResolvers<void>();
+		const context = Promise.withResolvers<string>();
+		const agent = createFakeAgent(async function*() {
+			yield { type: "complete", response: createResponse("session-late", "Late answer", 1) };
+		});
+		const { events, send } = collectEvents();
+		const service = createSearchService({
+			agentFactory: () => agent,
+			chatStore: await createStore(),
+			send,
+			now,
+			attachmentContext: () => {
+				reading.resolve();
+				return context.promise;
+			},
+		});
+
+		const started = service.start("search-slow", "chat-slow", "summarize", [{ kind: "file", id: "/tmp/big.pdf", name: "big.pdf" }]);
+		await reading.promise;
+		await service.cancel("search-slow");
+		context.resolve("context");
+		await started;
+		// The run's continuation after the read is pure microtasks; one macrotask
+		// turn lets every one of them settle without a wall-clock wait.
+		const drained = Promise.withResolvers<void>();
+		setImmediate(drained.resolve);
+		await drained.promise;
+
+		expect(agent.searchDocumentsStream).not.toHaveBeenCalled();
+		expect(events).toEqual([{ type: "cancelled", searchId: "search-slow" }]);
 	});
 
 	it("delegates history reads and clear to the chat store", async () => {

@@ -19,6 +19,7 @@ import { Toast } from "./components/primitives/Toast";
 import { Sidebar } from "./components/Sidebar";
 import { SettingsView } from "./components/SettingsView";
 import { SETTINGS_PATH } from "./state/tabs";
+import { writeFinderDrag } from "./state/attachments";
 import { basename, breadcrumbTrail, dirname } from "./state/paths";
 import {
 	loadListColumns,
@@ -251,10 +252,10 @@ export function App(): ReactElement {
 		aiDockRef.current?.sendQuery(text);
 	}, []);
 
-	/** Inspector "AI 요약": attach the file to the composer and focus it. */
-	const askAi = useCallback((entry: { readonly path: string; readonly name: string }) => {
+	/** Inspector "AI 요약": attach the entry to the composer and focus it. */
+	const askAi = useCallback((entry: { readonly path: string; readonly name: string; readonly kind: "file" | "folder" }) => {
 		setAiOpen(true);
-		aiDockRef.current?.attachFile({ kind: "file", id: entry.path, name: entry.name });
+		aiDockRef.current?.attachFile({ kind: entry.kind, id: entry.path, name: entry.name });
 	}, []);
 
 	const selectEvidence = useCallback((number: number) => {
@@ -312,6 +313,7 @@ export function App(): ReactElement {
 		onClick: finder.clickRow,
 		onOpen: finder.openEntry,
 		onContextMenu: finder.openContextMenu,
+		onDragStart: (entry, event) => writeFinderDrag(event.dataTransfer, finder.dragEntries(entry)),
 		onToggleIndex: finder.toggleIndex,
 		onToggleStack: finder.toggleStack,
 		onToggleFolder: finder.toggleFolder,
