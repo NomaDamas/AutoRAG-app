@@ -346,7 +346,7 @@ export function groupedWindow(layout: GroupedLayout, input: GroupedWindowInput):
 
 /**
  * Content-space top of the flattened row `rowIndex` in list geometry (row
- * height 32, header block 40). The controller scrolls the list to this top
+ * height 24, header block 40). The controller scrolls the list to this top
  * minus the keyboard lead.
  */
 export function groupedRowTop(sections: readonly GroupSection<unknown>[], rowIndex: number): number {

@@ -15,7 +15,7 @@ const ITEM_CLASS =
 
 /** The window head's chrome buttons (28px) opt out of the drag region. */
 const HEAD_BUTTON_CLASS = cn(
-	iconButtonClass({ size: "size-icon-sm", tone: "text-ink-muted" }),
+	iconButtonClass({ size: "size-toolbar-icon", tone: "text-ink-muted" }),
 	"[-webkit-app-region:no-drag]",
 );
 
@@ -72,7 +72,7 @@ export function Sidebar({
 					aria-label="Hide sidebar"
 					onClick={onHideSidebar}
 				>
-					<PanelLeft size={16} strokeWidth={1.8} />
+					<PanelLeft size={18} strokeWidth={1.8} />
 				</button>
 				<button
 					type="button"
@@ -81,7 +81,7 @@ export function Sidebar({
 					aria-label="New folder"
 					onClick={onNewFolder}
 				>
-					<FolderPlus size={16} strokeWidth={1.8} />
+					<FolderPlus size={18} strokeWidth={1.8} />
 				</button>
 			</div>
 			<SidebarSearch

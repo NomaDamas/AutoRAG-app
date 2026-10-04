@@ -26,7 +26,7 @@ const VIEW_OPTIONS: readonly { readonly mode: ViewMode; readonly label: string; 
 ];
 
 const NAV_BUTTON =
-	"flex flex-none items-center justify-center size-icon-sm p-0 border-0 rounded-6 bg-transparent text-ink-body transition-[background,color] duration-(--dur-color) ease-[ease] enabled:hover:bg-hover-icon enabled:hover:text-ink disabled:text-ink-faint disabled:cursor-default";
+	"flex flex-none items-center justify-center size-toolbar-icon p-0 border-0 rounded-6 bg-transparent text-ink-body transition-[background,color] duration-(--dur-color) ease-[ease] enabled:hover:bg-hover-icon enabled:hover:text-ink disabled:text-ink-faint disabled:cursor-default";
 
 /**
  * Toolbar (v7 handoff): back/forward, the folder title, the view segmented
@@ -102,7 +102,7 @@ export function Toolbar({
 						aria-label="Show sidebar"
 						onClick={onShowSidebar}
 					>
-						<PanelLeftIcon />
+						<PanelLeftIcon size={18} />
 					</button>
 					<button
 						type="button"
@@ -111,7 +111,7 @@ export function Toolbar({
 						aria-label="New folder"
 						onClick={onNewFolder}
 					>
-						<FolderPlusIcon />
+						<FolderPlusIcon size={18} />
 					</button>
 				</>
 			) : null}
@@ -123,7 +123,7 @@ export function Toolbar({
 				disabled={!canGoBack}
 				onClick={onBack}
 			>
-				<ChevronLeftIcon />
+				<ChevronLeftIcon size={18} />
 			</button>
 			<button
 				type="button"
@@ -133,7 +133,7 @@ export function Toolbar({
 				disabled={!canGoForward}
 				onClick={onForward}
 			>
-				<ChevronRightIcon />
+				<ChevronRightIcon size={18} />
 			</button>
 			<strong className="toolbar-title min-w-150 overflow-hidden whitespace-nowrap text-ellipsis text-[15px] font-[650] text-ink">
 				{title}
@@ -146,7 +146,7 @@ export function Toolbar({
 						type="button"
 						className={[
 							`seg__button${mode === viewMode ? " seg__button--active" : ""}`,
-							"flex items-center justify-center w-[31px] h-[25px] min-w-[31px] p-0 border-0 rounded-7 transition-[background,color] duration-(--dur-color) ease-[ease]",
+							"flex items-center justify-center size-toolbar-icon p-0 border-0 rounded-7 transition-[background,color] duration-(--dur-color) ease-[ease]",
 							mode === viewMode ? "bg-sel-mute text-ink" : "bg-transparent text-ink-muted hover:text-ink",
 						].join(" ")}
 						title={`as ${label} (${formatShortcut({ key })})`}
@@ -154,7 +154,7 @@ export function Toolbar({
 						aria-pressed={mode === viewMode}
 						onClick={() => onViewModeChange(mode)}
 					>
-						<Icon size={14} />
+						<Icon size={18} />
 					</button>
 				))}
 			</div>
@@ -176,7 +176,7 @@ export function Toolbar({
 				<button
 					type="button"
 					className={[
-						"flex flex-none items-center justify-center size-icon-sm p-0 border-0 rounded-6 cursor-pointer transition-[background,color] duration-(--dur-color) ease-[ease]",
+						"flex flex-none items-center justify-center size-toolbar-icon p-0 border-0 rounded-6 cursor-pointer transition-[background,color] duration-(--dur-color) ease-[ease]",
 						inspectorVisible
 							? "bg-transparent text-accent"
 							: "bg-transparent text-ink-muted hover:bg-hover-icon hover:text-ink",
@@ -186,12 +186,12 @@ export function Toolbar({
 					aria-pressed={inspectorVisible}
 					onClick={onToggleInspector}
 				>
-					<InfoIcon />
+					<InfoIcon size={18} />
 				</button>
 				<button
 					type="button"
 					className={[
-						"flex flex-none items-center justify-center size-icon-sm p-0 border-0 rounded-6 cursor-pointer transition-[background,color] duration-(--dur-color) ease-[ease]",
+						"flex flex-none items-center justify-center size-toolbar-icon p-0 border-0 rounded-6 cursor-pointer transition-[background,color] duration-(--dur-color) ease-[ease]",
 						aiOpen ? "bg-transparent text-accent" : "bg-transparent text-ink-muted hover:bg-hover-icon hover:text-ink",
 					].join(" ")}
 					title={`AI Search (${formatShortcut({ key: "K" })})`}
@@ -199,7 +199,7 @@ export function Toolbar({
 					aria-pressed={aiOpen}
 					onClick={onToggleAi}
 				>
-					<SparklesIcon />
+					<SparklesIcon size={18} />
 				</button>
 				<button
 					type="button"
@@ -209,7 +209,7 @@ export function Toolbar({
 					disabled={!canShare}
 					onClick={onShare}
 				>
-					<ShareIcon size={16} />
+					<ShareIcon size={18} />
 				</button>
 			</div>
 			{menu === null ? null : (

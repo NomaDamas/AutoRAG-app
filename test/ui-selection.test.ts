@@ -116,8 +116,8 @@ describe("moveInGrid", () => {
 
 describe("scrollTopForIndex", () => {
 	it("keeps the target row 80px below the top edge", () => {
-		expect(ROW_HEIGHT).toBe(32);
-		expect(scrollTopForIndex(10)).toBe(240);
+		expect(ROW_HEIGHT).toBe(24);
+		expect(scrollTopForIndex(10)).toBe(160);
 	});
 
 	it("never scrolls above the top", () => {

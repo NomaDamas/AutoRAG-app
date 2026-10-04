@@ -5,6 +5,7 @@ import { basename, dirname, isAbsolute, join, win32 } from "node:path";
 import {
 	RECENTS_PATH,
 	type DirListing,
+	type FsUndoOutcome,
 	type FsBatchResult,
 	type FsCoreBridge,
 	type FsClipboard,
@@ -128,7 +129,7 @@ function enrichOsKinds(entries: readonly FsEntry[], lookup: OsKindLookup): Promi
 async function resolveIcons(entries: readonly FsEntry[], provider: IconProvider): Promise<ReadonlyMap<string, string>> {
 	const targets = entries
 		.filter((entry) => entry.kind === "file")
-		.map((entry) => ({ path: entry.path, modifiedAt: entry.modifiedAt }));
+		.map((entry) => ({ path: entry.path, ext: entry.ext, modifiedAt: entry.modifiedAt }));
 	if (targets.length === 0) return new Map();
 	return provider.icons(targets);
 }
@@ -393,16 +394,34 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 		return results;
 	}
 
+	/** One undo step of the most recent copy/move transfer, consumed by ⌘Z. */
+	interface FsUndoStep {
+		readonly kind: "copy" | "move";
+		/** The row the transfer created (copy) or now occupies (move). */
+		readonly path: string;
+		/** The folder a move took the row from; "" for copy steps. */
+		readonly restoreDir: string;
+	}
+
+	/** Undo record of the most recent successful copy/move transfer. */
+	let lastUndoSteps: readonly FsUndoStep[] | null = null;
+
 	async function copy(paths: readonly string[], destDir: string): Promise<FsBatchResult> {
-		return runBatch(paths, async (source) => {
+		const steps: FsUndoStep[] = [];
+		const result = await runBatch(paths, async (source) => {
 			const sourceStat = await lstat(source);
 			const targetName = await resolveCopyName(destDir, basename(source), sourceStat.isDirectory());
-			await cp(source, join(destDir, targetName), { recursive: true });
+			const target = join(destDir, targetName);
+			await cp(source, target, { recursive: true });
+			steps.push({ kind: "copy", path: target, restoreDir: "" });
 		});
+		if (steps.length > 0) lastUndoSteps = steps;
+		return result;
 	}
 
 	async function move(paths: readonly string[], destDir: string): Promise<FsBatchResult> {
-		return runBatch(paths, async (source) => {
+		const steps: FsUndoStep[] = [];
+		const result = await runBatch(paths, async (source) => {
 			const sourceStat = await lstat(source);
 			const target = join(destDir, await resolveCopyName(destDir, basename(source), sourceStat.isDirectory()));
 			try {
@@ -413,7 +432,45 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 				await cp(source, target, { recursive: true });
 				await rm(source, { recursive: true, force: true });
 			}
+			steps.push({ kind: "move", path: target, restoreDir: dirname(source) });
 		});
+		if (steps.length > 0) lastUndoSteps = steps;
+		return result;
+	}
+
+	/**
+	 * Undo the most recent recorded transfer (⌘Z). A copy step deletes the row
+	 * the copy created; a move step puts the row back into the folder it came
+	 * from, with Finder-style collision naming when the original name was
+	 * retaken in the meantime. The record is consumed by the call.
+	 */
+	async function undo(): Promise<FsUndoOutcome> {
+		const steps = lastUndoSteps;
+		lastUndoSteps = null;
+		if (steps === null || steps.length === 0) {
+			return { ok: false, empty: true, failed: [] };
+		}
+		const failed: FsOpError[] = [];
+		for (const step of steps) {
+			try {
+				if (step.kind === "copy") {
+					await rm(step.path, { recursive: true });
+				} else {
+					const stepStat = await lstat(step.path);
+					const back = join(step.restoreDir, await resolveCopyName(step.restoreDir, basename(step.path), stepStat.isDirectory()));
+					try {
+						await fsRename(step.path, back);
+					} catch (error) {
+						if (!hasErrorCode(error, "EXDEV")) throw error;
+						await cp(step.path, back, { recursive: true });
+						await rm(step.path, { recursive: true, force: true });
+					}
+				}
+			} catch (error) {
+				failed.push({ path: step.path, message: errorMessage(error) });
+			}
+		}
+		return { ok: failed.length === 0, empty: false, failed };
 	}
 
 	async function duplicate(paths: readonly string[]): Promise<FsBatchResult> {
@@ -481,6 +538,7 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 		move,
 		duplicate,
 		rename,
+		undo,
 		createFolder,
 		trash: (paths) => runBatch(paths, (path) => deps.shell.trashItem(toHandoffPath(path, platform))),
 		reveal: async (path) => {

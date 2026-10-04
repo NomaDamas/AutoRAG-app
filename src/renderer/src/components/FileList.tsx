@@ -79,10 +79,11 @@ export function FileList({
 	const padTop = window.start < layout.items.length ? (layout.offsets[window.start] ?? layout.total) : layout.total;
 	const padBottom = layout.total - (window.end < layout.items.length ? (layout.offsets[window.end] ?? layout.total) : layout.total);
 
-	const row = (row_: TreeRow): ReactElement => (
+	const row = (row_: TreeRow, zebra: boolean): ReactElement => (
 		<FileRow
 			key={row_.entry.path}
 			entry={row_.entry}
+			zebra={zebra}
 			selected={selectedKeys.includes(row_.entry.path)}
 			zoneFocused={focusedZone}
 			flash={flashPath === row_.entry.path}
@@ -103,7 +104,7 @@ export function FileList({
 
 	return (
 		<div
-			className={cn("list flex-1 min-h-0 py-4 overflow-auto", dropBackground && "bg-accent-drop-hover")}
+			className={cn("list flex-1 min-h-0 py-0 overflow-auto", dropBackground && "bg-accent-drop-hover")}
 			ref={listRef}
 			style={{ minWidth: minWidth ?? undefined }}
 			onDragOver={background.onDragOver}
@@ -120,11 +121,13 @@ export function FileList({
 					paddingBottom: padBottom,
 				}}
 			>
-				{layout.items.slice(window.start, window.end).map((item) =>
+				{layout.items.slice(window.start, window.end).map((item, renderedIndex) =>
 					item.kind === "header" ? (
 						<GroupHeader key={`group-${item.section}`} label={sections[item.section]?.label ?? ""} />
 					) : (
-						sections[item.section]?.rows.slice(item.start, item.start + item.count).map(row)
+						sections[item.section]?.rows.slice(item.start, item.start + item.count).map((entry, rowIndex) =>
+							row(entry, (((layout.rowBases[window.start + renderedIndex] ?? 0) + rowIndex) % 2) === 1),
+						)
 					),
 				)}
 			</div>
@@ -133,4 +136,5 @@ export function FileList({
 			) : null}
 		</div>
 	);
+
 }

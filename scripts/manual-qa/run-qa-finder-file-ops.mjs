@@ -18,7 +18,9 @@
  *      the rows can then be dropped into a folder inside it;
  *   8. dwelling on a tab and dropping on its listing background moves the row
  *      into that tab's folder;
- *   9. ⌘C/⌘V while the search field has focus never touches the filesystem.
+ *   9. ⌘Z undoes the most recent ⌘C/⌘V copy and the most recent ⌘X/⌘V move,
+ *      and a second ⌘Z does nothing once the record is consumed;
+ *  10. ⌘C/⌘V while the search field has focus never touches the filesystem.
  *
  * Drags go through Chromium's native drag path (`Input.dispatchDragEvent`, the
  * same route an OS drag takes); the ⌥ variant dispatches the identical
@@ -57,6 +59,8 @@ const ALTS = join(top, "alt-me.txt");
 const TABS = join(top, "tab-me.txt");
 const SPRINGS = join(top, "spring-me.txt");
 const BACKGROUNDS = join(top, "background-me.txt");
+const UNDO_COPIES = join(top, "alpha-restore.txt");
+const UNDO_MOVES = join(top, "bravo-restore.txt");
 for (const [path, body] of [
 	[COPIES, "copy fixture\n"],
 	[MOVES, "move fixture\n"],
@@ -65,6 +69,8 @@ for (const [path, body] of [
 	[TABS, "tab fixture\n"],
 	[SPRINGS, "spring fixture\n"],
 	[BACKGROUNDS, "background fixture\n"],
+	[UNDO_COPIES, "zulu\n"],
+	[UNDO_MOVES, "yankee\n"],
 ]) {
 	await Bun.write(path, body);
 }
@@ -338,18 +344,68 @@ try {
 		`shown=${watchdogShown} overlay nodes=${await page.getByText(DOCK_OVERLAY).count()}`,
 	);
 
-	/* ---------------------------------------- 11. ⌘V while typing stays text */
+	/* ------------------------------------ 11. ⌘Z undoes the last transfer */
+	await page.locator(".tab").first().click();
+	await atTitle(page, "qa-file-ops");
+	await waitForRow(page, UNDO_COPIES);
+	await row(page, UNDO_COPIES).click();
+	await page.keyboard.press("Meta+c");
+	await page.locator(".tab").nth(1).click();
+	await atTitle(page, "B");
+	await page.keyboard.press("Meta+v");
+	await waitForRow(page, join(dirB, "alpha-restore.txt"));
+	await page.keyboard.press("Meta+z");
+	await page.screenshot({ path: join(EVIDENCE, "10-undo-copy.png") });
+	await waitForRow(page, join(dirB, "alpha-restore.txt"), false);
+	check(
+		"⌘Z removes the copy the last ⌘C/⌘V created",
+		!existsSync(join(dirB, "alpha-restore.txt")) && existsSync(UNDO_COPIES),
+		`B=${listNames(dirB)} root=${listNames(top)}`,
+	);
+
+	await page.locator(".tab").first().click();
+	await atTitle(page, "qa-file-ops");
+	await waitForRow(page, UNDO_MOVES);
+	await row(page, UNDO_MOVES).click();
+	await page.keyboard.press("Meta+x");
+	await page.locator(".tab").nth(1).click();
+	await atTitle(page, "B");
+	await page.keyboard.press("Meta+v");
+	await waitForRow(page, join(dirB, "bravo-restore.txt"));
+	await waitForRow(page, UNDO_MOVES, false);
+	await page.keyboard.press("Meta+z");
+	const undoMoveDeadline = Date.now() + 10_000;
+	while (!existsSync(UNDO_MOVES) && Date.now() < undoMoveDeadline) await page.waitForTimeout(150);
+	await page.screenshot({ path: join(EVIDENCE, "11-undo-move.png") });
+	check(
+		"⌘Z moves the rows of the last ⌘X/⌘V back to their original folder",
+		existsSync(UNDO_MOVES) && !existsSync(join(dirB, "bravo-restore.txt")),
+		`root=${listNames(top)} B=${listNames(dirB)}`,
+	);
+
+	const afterUndo = listNames(top).length + listNames(dirA).length + listNames(dirB).length + listNames(sub).length;
+	await page.waitForTimeout(800);
+	await page.keyboard.press("Meta+z");
+	await page.waitForTimeout(600);
+	check(
+		"a second ⌘Z does nothing once the record is consumed",
+		listNames(top).length + listNames(dirA).length + listNames(dirB).length + listNames(sub).length === afterUndo,
+		`entries=${listNames(top).length + listNames(dirA).length + listNames(dirB).length + listNames(sub).length} (was ${afterUndo})`,
+	);
+	/* --------------------------------------- 12. ⌘V/⌘Z while typing stay text */
 	const count = () => listNames(top).length + listNames(dirA).length + listNames(dirB).length + listNames(sub).length;
 	const before = count();
-	await page.locator(".search__input").click();
+	const sideSearch = page.locator(".side-search input");
+	await sideSearch.click();
 	await page.keyboard.type("copy");
 	await page.keyboard.press("Meta+a");
 	await page.keyboard.press("Meta+c");
 	await page.keyboard.press("Meta+v");
+	await page.keyboard.press("Meta+z");
 	await page.waitForTimeout(600);
 	await page.keyboard.press("Escape");
 	check(
-		"⌘C/⌘V in the search field never touches the filesystem",
+		"⌘C/⌘V/⌘Z in the sidebar search field never touch the filesystem",
 		count() === before && !listNames(top).some((name) => name.startsWith("copy-me copy")),
 		`entries=${count()} (was ${before})`,
 	);

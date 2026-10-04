@@ -80,6 +80,15 @@ describe("resolveKeyAction", () => {
 		expect(resolveKeyAction(key("c", { meta: true, alt: true }), finder)).toBeNull();
 	});
 
+	it("maps ⌘Z to undo the last file operation, never while typing or outside the Finder zone", () => {
+		expect(resolveKeyAction(key("z", { meta: true }), finder)).toEqual({ type: "undo" });
+		expect(resolveKeyAction(key("Z", { meta: true }), finder)).toEqual({ type: "undo" });
+		expect(resolveKeyAction(key("z", { ctrl: true }), finder)).toEqual({ type: "undo" });
+		expect(resolveKeyAction(key("z", { meta: true }), { ...finder, typing: true })).toBeNull();
+		expect(resolveKeyAction(key("z", { meta: true }), { zone: "evidence", typing: false })).toBeNull();
+		expect(resolveKeyAction(key("z", { meta: true, shift: true }), finder)).toBeNull();
+	});
+
 	it("leaves text copy/cut/paste to the focused field and never hijacks the evidence zone", () => {
 		expect(resolveKeyAction(key("c", { meta: true }), { ...finder, typing: true })).toBeNull();
 		expect(resolveKeyAction(key("v", { meta: true }), { ...finder, typing: true })).toBeNull();
