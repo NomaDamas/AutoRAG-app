@@ -12,19 +12,24 @@
  * letter tile) and are logged verbatim; one failed file never costs the batch.
  *
  * The produced PNG bytes stay in this module's in-process cache, keyed by the
- * same `(path, modifiedAt)` identity the caller passes in, and bounded both by
- * entry count and total bytes (least-recently-used eviction). Callers receive
- * a stable `autorag-thumb://` URL (never a base64 data URL); the protocol
- * handler in `icon-protocol.ts` serves the cached bytes for that identity.
+ * same `(path, modifiedAt)` identity the caller passes in plus the tier edge,
+ * and bounded both by entry count and total bytes (least-recently-used
+ * eviction). Callers receive a stable `autorag-thumb://` URL (never a base64
+ * data URL); the protocol handler in `icon-protocol.ts` serves the cached
+ * bytes for that identity. Two tiers share the cache and the pool: the
+ * listing's 128px tile tier (`icons`) and the Inspector's 640px preview tier
+ * (`preview`), so the panel renders the page's real content crisply at 2x.
  * Concurrent requests for the same identity are single-flighted, so one
  * listing that races another never regenerates the same file twice.
  */
 
 import { errorMessage } from "./fs-entry";
-import { iconUrl } from "./icon-protocol";
+import { ICON_SIZE, iconUrl } from "./icon-protocol";
 
-/** Thumbnail edge in px; 128 covers the icon view's 64px tile at 2x (and the 18px row tile easily). */
-export const ICON_SIZE = 128;
+/** Tile tier edge in px, defined beside the URL contract; re-exported for the listing code. */
+export { ICON_SIZE } from "./icon-protocol";
+/** Inspector preview tier edge in px: the large Quick Look rendering the Info panel shows. */
+export const PREVIEW_ICON_SIZE = 640;
 /** One listing never generates more than this many icons. */
 export const ICON_LIMIT = 240;
 /** Native thumbnail calls allowed to run at once across every concurrent listing. */
@@ -44,6 +49,8 @@ export interface IconTarget {
 	readonly path: string;
 	/** Cache identity: a changed file must not reuse a stale thumbnail. */
 	readonly modifiedAt: string;
+	/** Tier edge in px; the listing's tile tier when omitted. */
+	readonly size?: number;
 }
 
 export interface IconProvider {
@@ -56,6 +63,14 @@ export interface IconProvider {
 	 * simply absent from the map; the caller keeps the letter tile.
 	 */
 	icons(targets: readonly IconTarget[]): Promise<ReadonlyMap<string, string>>;
+	/**
+	 * One file's large-tier thumbnail for the Inspector's preview paper, as an
+	 * `autorag-thumb://` URL carrying `size=PREVIEW_ICON_SIZE`; null when the
+	 * OS produced nothing (the panel keeps its letter tile). Bypasses the
+	 * listing's `limit` cap — inspecting a file is an explicit user action —
+	 * but shares the cache, the single-flight map, and the bounded pool.
+	 */
+	preview(target: IconTarget): Promise<string | null>;
 }
 
 /**
@@ -65,8 +80,8 @@ export interface IconProvider {
  * live.
  */
 export interface IconStore {
-	/** PNG bytes for one cache identity, or null when the OS produced none. */
-	read(path: string, modifiedAt: string): Uint8Array | null;
+	/** PNG bytes for one cache identity and tier, or null when the OS produced none. */
+	read(path: string, modifiedAt: string, size?: number): Uint8Array | null;
 }
 
 /** The provider the fs service consumes, plus the byte cache the protocol serves. */
@@ -75,8 +90,8 @@ export type IconSource = IconProvider & IconStore;
 export interface IconProviderDeps {
 	/** Defaults to process.platform. */
 	readonly platform?: NodeJS.Platform;
-	/** Native thumbnail PNG bytes, or null; defaults to Electron nativeImage.createThumbnailFromPath on macOS/Windows. */
-	readonly thumbnail?: (path: string) => Promise<Uint8Array | null>;
+	/** Native thumbnail PNG bytes at the requested tier edge, or null; defaults to Electron nativeImage.createThumbnailFromPath on macOS/Windows. */
+	readonly thumbnail?: (path: string, size: number) => Promise<Uint8Array | null>;
 	/** OS type icon PNG bytes, or null; defaults to Electron app.getFileIcon. */
 	readonly systemIcon?: (path: string) => Promise<Uint8Array | null>;
 	/** Cap on the selected targets for a single call; defaults to ICON_LIMIT. */
@@ -98,7 +113,7 @@ export interface IconProviderDeps {
 }
 
 function cacheKey(target: IconTarget): string {
-	return `${target.path}\u0000${target.modifiedAt}`;
+	return `${target.path} ${target.modifiedAt} ${target.size ?? ICON_SIZE}`;
 }
 
 /** Positive integer with a floor of one, so a zero/negative option still makes progress. */
@@ -186,11 +201,11 @@ class IconCache {
 	}
 }
 
-async function defaultThumbnail(path: string): Promise<Uint8Array | null> {
+async function defaultThumbnail(path: string, size: number): Promise<Uint8Array | null> {
 	// Dynamic: `electron` is a main-process-only module and is not importable when
 	// this file is loaded outside Electron (unit tests inject `thumbnail` instead).
 	const { nativeImage } = await import("electron");
-	const image = await nativeImage.createThumbnailFromPath(path, { width: ICON_SIZE, height: ICON_SIZE });
+	const image = await nativeImage.createThumbnailFromPath(path, { width: size, height: size });
 	return image.isEmpty() ? null : image.toPNG();
 }
 
@@ -237,7 +252,7 @@ export function createIconProvider(deps: IconProviderDeps = {}): IconSource {
 			targets.map(async (target): Promise<void> => {
 				await thumbnailSemaphore.acquire();
 				try {
-					const bytes = await withTimeout(thumbnail(target.path), thumbnailTimeoutMs, "thumbnail");
+					const bytes = await withTimeout(thumbnail(target.path, target.size ?? ICON_SIZE), thumbnailTimeoutMs, "thumbnail");
 					resolve(cacheKey(target), bytes);
 				} catch (error) {
 					// One unreadable/timed-out file must not cost the rest of the batch.
@@ -334,8 +349,24 @@ export function createIconProvider(deps: IconProviderDeps = {}): IconSource {
 			}
 			return found;
 		},
-		read(path, modifiedAt) {
-			return cache.get(cacheKey({ path, modifiedAt })) ?? null;
+		async preview(target) {
+			const sized: IconTarget = { ...target, size: PREVIEW_ICON_SIZE };
+			const key = cacheKey(sized);
+			if (cache.get(key) === undefined) {
+				const pending = inflight.get(key);
+				if (pending !== undefined) {
+					await pending;
+				} else {
+					await Promise.all(startGeneration([sized]));
+				}
+			}
+			const bytes = cache.get(key);
+			return bytes === null || bytes === undefined
+				? null
+				: iconUrl(target.path, target.modifiedAt, PREVIEW_ICON_SIZE);
+		},
+		read(path, modifiedAt, size) {
+			return cache.get(cacheKey({ path, modifiedAt, size })) ?? null;
 		},
 	};
 }

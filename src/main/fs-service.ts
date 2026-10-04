@@ -448,6 +448,7 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 		readEntries,
 		stat: async (path) => applyOsKind(await buildFsEntry(path), osKind),
 		details: deps.details ?? readFileDetails,
+		previewIcon: (path, modifiedAt) => iconProvider.preview({ path, modifiedAt }),
 		exists: async (path) => {
 			try {
 				await lstat(path);

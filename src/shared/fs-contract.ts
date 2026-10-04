@@ -16,6 +16,7 @@ export const FS_CHANNELS = {
 	enrichEntries: "fs:enrichEntries",
 	stat: "fs:stat",
 	details: "fs:details",
+	previewIcon: "fs:previewIcon",
 	exists: "fs:exists",
 	search: "fs:search",
 	locations: "fs:locations",
@@ -245,6 +246,13 @@ export interface FsCoreBridge {
 	stat(path: string): Promise<FsEntry>;
 	/** Rich metadata for the Info panel: OS stat fields plus EXIF for images. */
 	details(path: string): Promise<FsFileDetails>;
+	/**
+	 * Large-tier (640px) Quick Look thumbnail for the Info panel's preview
+	 * paper, as an `autorag-thumb://` URL; null when the OS produced none and
+	 * the panel keeps its letter tile. On demand per inspected file — never
+	 * part of listings.
+	 */
+	previewIcon(path: string, modifiedAt: string): Promise<string | null>;
 	exists(path: string): Promise<boolean>;
 	search(query: string): Promise<readonly FsSearchResult[]>;
 	locations(): Promise<readonly FsLocation[]>;
