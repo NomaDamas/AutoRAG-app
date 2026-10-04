@@ -235,24 +235,6 @@ function InfoHalf({
 
 	return (
 		<div className={cn("inspector-half flex-1 min-h-0 flex flex-col overflow-hidden relative", split && "h-[50%] max-h-[50%]")}>
-			<div className={cn("inspector-head flex-none flex items-center gap-8 px-12 border-b border-border bg-chrome", split ? "h-42" : "h-52")}>
-				<strong className={cn("font-semibold text-ink", split ? "text-sm" : "text-body")}>Info</strong>
-				<span className="flex-1" />
-				{actionCapabilities.share ? (
-					<button
-						type="button"
-						className={HEAD_BUTTON}
-						title="공유"
-						aria-label="공유"
-						disabled={entry === null}
-						onClick={(event) => {
-							if (entry !== null) onAction({ kind: "share" }, anchorOf(event.currentTarget));
-						}}
-					>
-						<ShareIcon size={16} />
-					</button>
-				) : null}
-			</div>
 
 			{entry === null ? (
 				<div className="flex-1 flex items-center justify-center px-10 text-center text-sm text-ink-muted leading-body">

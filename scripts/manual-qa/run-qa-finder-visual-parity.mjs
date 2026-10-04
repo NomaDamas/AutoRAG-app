@@ -323,10 +323,10 @@ try {
 	await sleep(400);
 	await shot(page, "19-sidebar-item-hover");
 
-	await page.locator(".search__input").click();
+	await page.locator(".side-search input").click();
 	await sleep(400);
 	await shot(page, "20-search-focused");
-	await shot(page, "21-search-focused-element", ".search-wrap");
+	await shot(page, "21-search-focused-element", ".side-search");
 
 	await page.mouse.move(2, 2);
 	await notesRow.click();
