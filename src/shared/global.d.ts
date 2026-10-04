@@ -1,4 +1,5 @@
 import type { PreviewBridge } from "../preview/shared/contract";
+import type { ActionsBridge } from "./actions-contract";
 import type { AutoRagBridge } from "./bridge";
 import type { FsBridge } from "./fs-contract";
 import type { LiveBridge } from "./live-contract";
@@ -9,6 +10,7 @@ declare global {
 	interface Window {
 		readonly autorag: AutoRagBridge & {
 			readonly fs: FsBridge;
+			readonly actions: ActionsBridge;
 			readonly live: LiveBridge;
 			readonly preview: PreviewBridge;
 			readonly search: SearchBridge;

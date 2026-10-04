@@ -147,6 +147,8 @@ await page.locator('[aria-label="Chat history"]').click();
 await page.locator(".history-item").first().waitFor({ state: "visible" });
 await page.locator(".history-item").first().click();
 await deepProse.waitFor({ state: "visible" });
+// The evidence half is on-demand now: a restored answer alone must not paint it.
+check("evidence stays hidden until a citation is clicked", (await page.locator(EVIDENCE_HALF).count()) === 0, `count=${await page.locator(EVIDENCE_HALF).count()}`);
 await page.screenshot({ path: join(EVIDENCE, "01-answers.png") });
 
 const boldCount = await quickProse.locator("strong").count();

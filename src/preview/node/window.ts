@@ -1,4 +1,5 @@
 import { extname } from "node:path";
+import type { AppAppearance } from "../../shared/settings-contract";
 import {
 	app,
 	BrowserWindow,
@@ -12,7 +13,6 @@ import {
 	type IpcMainEvent,
 	type IpcMainInvokeEvent,
 } from "electron";
-import { looksLikeText } from "../shared/text-sample";
 import {
 	isBounds,
 	isQuickLookAction,
@@ -30,6 +30,7 @@ import {
 	type QuickLookTarget,
 	type QuickLookZoom,
 } from "../shared/contract";
+import { looksLikeText } from "../shared/text-sample";
 import { type Bounds, fitQuickLook, placeQuickLook, QUICK_LOOK_MIN } from "../shared/fit";
 import { quickLookKeyAction } from "../shared/keys";
 import { byteNeed, viewerForExtension } from "../shared/registry";
@@ -63,6 +64,7 @@ const SOLID_PANEL = { light: "#F2F2F4", dark: "#2A2A2C" } as const;
 
 export interface QuickLookWindowOptions {
 	readonly preload: string;
+	readonly appearance: AppAppearance;
 	readonly loadPage: (window: BrowserWindow) => void;
 }
 
@@ -441,6 +443,7 @@ export function attachQuickLook(owner: BrowserWindow, options: QuickLookWindowOp
 			spellcheck: false,
 			backgroundThrottling: false,
 			autoplayPolicy: "no-user-gesture-required",
+			additionalArguments: [`--autorag-appearance=${options.appearance}`],
 		},
 	});
 	if (darwin) window.setWindowButtonVisibility(false);

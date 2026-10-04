@@ -1,0 +1,131 @@
+import { describe, expect, it } from "vitest";
+import { NO_CAPABILITIES, type ActionCapabilities } from "../src/shared/actions-contract";
+import {
+	fileExtension,
+	suggestedActions,
+	type FileAction,
+	type FileActionItem,
+} from "../src/renderer/src/state/file-actions";
+
+const DARWIN: ActionCapabilities = {
+	openWith: true,
+	share: true,
+	archive: true,
+	imageFormats: ["jpeg", "png", "tiff", "heic"],
+	videoContainers: [],
+};
+
+const DARWIN_FFMPEG: ActionCapabilities = {
+	...DARWIN,
+	imageFormats: ["jpeg", "png", "tiff", "heic", "webp"],
+	videoContainers: ["mp4", "mov", "mkv"],
+};
+
+function ids(actions: readonly FileAction[]): readonly string[] {
+	return actions.map((action) => action.id);
+}
+
+function menuItems(actions: readonly FileAction[], id: string): readonly FileActionItem[] {
+	const action = actions.find((candidate) => candidate.id === id);
+	return action !== undefined && action.kind === "menu" ? action.items : [];
+}
+
+describe("fileExtension", () => {
+	it("reads the trailing extension, ignoring dotfiles and missing suffixes", () => {
+		expect(fileExtension("photo.JPEG")).toBe("jpeg");
+		expect(fileExtension("archive.tar.gz")).toBe("gz");
+		expect(fileExtension(".gitignore")).toBe("");
+		expect(fileExtension("README")).toBe("");
+		expect(fileExtension("trailing.")).toBe("");
+	});
+});
+
+describe("base action set", () => {
+	it("offers open, open-with, archive, share and AI to a plain file", () => {
+		const actions = suggestedActions({ name: "notes.txt", kind: "file" }, DARWIN);
+		expect(ids(actions)).toEqual(["open", "openWith", "compress", "share", "askAi"]);
+		expect(actions.every((action) => action.kind === "action")).toBe(true);
+	});
+
+	it("drops open-with, archive and share for a folder", () => {
+		const actions = suggestedActions({ name: "docs", kind: "folder" }, DARWIN);
+		expect(ids(actions)).toEqual(["compress", "share", "askAi"]);
+	});
+
+	it("never offers an action the machine cannot run", () => {
+		expect(ids(suggestedActions({ name: "notes.txt", kind: "file" }, NO_CAPABILITIES))).toEqual(["open", "askAi"]);
+		expect(ids(suggestedActions({ name: "docs", kind: "folder" }, NO_CAPABILITIES))).toEqual(["askAi"]);
+	});
+
+	it("keeps Quick Look, copy path and trash out of the bar", () => {
+		const actions = suggestedActions({ name: "notes.txt", kind: "file" }, DARWIN);
+		expect(ids(actions)).not.toContain("quickLook");
+		expect(ids(actions)).not.toContain("copyPath");
+		expect(ids(actions)).not.toContain("trash");
+	});
+});
+
+describe("zip", () => {
+	it("extracts in place, before compressing", () => {
+		const actions = suggestedActions({ name: "docs.zip", kind: "file" }, DARWIN);
+		expect(ids(actions)).toEqual(["open", "openWith", "extract", "compress", "share", "askAi"]);
+	});
+
+	it("only offers extraction for zip archives", () => {
+		expect(ids(suggestedActions({ name: "docs.tar", kind: "file" }, DARWIN))).not.toContain("extract");
+	});
+});
+
+describe("image menu", () => {
+	it("offers every other native format plus resize presets, but no lossy-only optimize for a PNG", () => {
+		const actions = suggestedActions({ name: "photo.png", kind: "file" }, DARWIN);
+		const items = menuItems(actions, "imageEdit");
+		expect(items.map((item) => item.label)).toEqual([
+			"JPEG로 변환",
+			"TIFF로 변환",
+			"HEIC로 변환",
+			"최대 1920px",
+			"최대 1280px",
+			"최대 640px",
+		]);
+		expect(items.map((item) => item.id)).not.toContain("image:convert:png");
+	});
+
+	it("optimizes a lossy source and excludes its own format from conversion", () => {
+		const actions = suggestedActions({ name: "photo.heic", kind: "file" }, DARWIN);
+		const items = menuItems(actions, "imageEdit");
+		expect(items.map((item) => item.label)).toContain("용량 최적화");
+		expect(items.map((item) => item.label)).not.toContain("HEIC로 변환");
+	});
+
+	it("adds WebP conversion only when the machine can encode it", () => {
+		const withoutWebp = suggestedActions({ name: "photo.jpg", kind: "file" }, DARWIN);
+		expect(menuItems(withoutWebp, "imageEdit").map((item) => item.label)).not.toContain("WebP로 변환");
+
+		const withWebp = suggestedActions({ name: "photo.png", kind: "file" }, DARWIN_FFMPEG);
+		const labels = menuItems(withWebp, "imageEdit").map((item) => item.label);
+		expect(labels).toContain("JPEG로 변환");
+		expect(labels).toContain("WebP로 변환");
+		expect(labels).not.toContain("PNG로 변환");
+	});
+
+	it("hides the image menu entirely without an image engine", () => {
+		const actions = suggestedActions({ name: "photo.png", kind: "file" }, NO_CAPABILITIES);
+		expect(ids(actions)).not.toContain("imageEdit");
+	});
+
+	it("offers no image menu for a document", () => {
+		expect(ids(suggestedActions({ name: "notes.md", kind: "file" }, DARWIN_FFMPEG))).not.toContain("imageEdit");
+	});
+});
+
+describe("video menu", () => {
+	it("converts to every other container", () => {
+		const actions = suggestedActions({ name: "clip.mov", kind: "file" }, DARWIN_FFMPEG);
+		expect(menuItems(actions, "videoConvert").map((item) => item.label)).toEqual(["MP4로 변환", "MKV로 변환"]);
+	});
+
+	it("hides the menu without ffmpeg", () => {
+		expect(ids(suggestedActions({ name: "clip.mov", kind: "file" }, DARWIN))).not.toContain("videoConvert");
+	});
+});

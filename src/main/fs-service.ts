@@ -12,12 +12,14 @@ import {
 	type FsEnrichmentTarget,
 	type FsEntry,
 	type FsEntryEnrichment,
+	type FsFileDetails,
 	type FsLocation,
 	type FsOpError,
 	type FsSearchResult,
 } from "../shared/fs-contract";
 import { createIconProvider, type IconProvider } from "./file-icon";
 import { createOsKindResolver } from "./file-kind";
+import { readFileDetails } from "./file-details";
 import { buildFsEntry, errorMessage, hasErrorCode, isAvailable, pathExists, resolveCopyName } from "./fs-entry";
 import { createRecentsStore, type RecentsStore } from "./recents-store";
 
@@ -50,6 +52,8 @@ export interface FsServiceDeps {
 	readonly osKind?: OsKindLookup;
 	/** Defaults to the platform icon provider (native Quick Look thumbnails on macOS/Windows). */
 	readonly icons?: IconProvider;
+	/** Defaults to the real stat + EXIF reader; tests inject a stub. */
+	readonly details?: (path: string) => Promise<FsFileDetails>;
 }
 
 export type FsRenameErrorCode = "invalid-name" | "name-collision";
@@ -429,6 +433,7 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 		listDir,
 		readEntries,
 		stat: async (path) => applyOsKind(await buildFsEntry(path), osKind),
+		details: deps.details ?? readFileDetails,
 		exists: async (path) => {
 			try {
 				await lstat(path);

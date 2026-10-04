@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent as ReactMouseEvent, RefObject } from "react";
+import { NO_CAPABILITIES, type ActionAnchor, type ActionCapabilities } from "../../../shared/actions-contract";
 import { RECENTS_PATH } from "../../../shared/fs-contract";
 import type { IndexStatus } from "../../../shared/index-contract";
 import { DUPEY_LAYER_ID, type FsDirChange, type LiveMessage } from "../../../shared/live-contract";
@@ -21,6 +22,7 @@ import {
 	type FinderMenuAction,
 	type FinderMenuEntry,
 } from "../state/context-menu";
+import type { FileActionTarget } from "../state/file-actions";
 import { emptyStateText, indexToast, trashToast } from "../state/format";
 import { findEvidenceSource } from "../state/evidence";
 import { type FocusZone, resolveKeyAction } from "../state/keymap";
@@ -166,7 +168,6 @@ export interface FinderController {
 	readonly canGoBack: boolean;
 	readonly canGoForward: boolean;
 	readonly query: string;
-	readonly searchPlaceholder: string;
 	readonly searchFocused: boolean;
 	readonly searching: boolean;
 	readonly emptyText: string;
@@ -203,10 +204,14 @@ export interface FinderController {
 	revealEntry(entry: FinderEntry): void;
 	/** Create an "untitled folder" in the current directory and select it. */
 	newFolder(): void;
-	/** Trash a single entry (inspector action bar). */
+	/** Trash a single entry (inspector chip). */
 	trashEntry(entry: FinderEntry): void;
-	/** Copy a single entry's path to the system clipboard (inspector action bar). */
+	/** Copy a single entry's path to the system clipboard (inspector chip). */
 	copyEntryPath(entry: FinderEntry): void;
+	/** What this machine can run, so the Inspector action bar never offers a dead button. */
+	readonly actionCapabilities: ActionCapabilities;
+	/** Run one Inspector action (open, share, or an action request). */
+	runEntryAction(entry: FinderEntry, target: FileActionTarget, anchor: ActionAnchor | null): void;
 	/** The rows a drag of `entry` carries: the whole selection when it is selected, else just `entry`. */
 	dragEntries(entry: FinderEntry): readonly FinderEntry[];
 	/** Column view panes, left to right (empty outside the column layout). */
@@ -266,6 +271,8 @@ export function useFinderController(
 	options: {
 		readonly showHiddenFiles?: boolean;
 		readonly quickLook?: QuickLookBridge;
+		/** ⌘F: reveal the shell that hosts the search field (it lives in the sidebar). */
+		readonly onFocusSearch?: () => void;
 		/** ⌘K: open the AI dock and focus its composer (owned by the App shell). */
 		readonly onFocusComposer?: () => void;
 		/** Esc: close the inspector's evidence half; return true when consumed. */
@@ -275,6 +282,8 @@ export function useFinderController(
 	const showHiddenFiles = options.showHiddenFiles ?? false;
 	const quickLookRef = useRef(options.quickLook);
 	quickLookRef.current = options.quickLook;
+	const focusSearchRef = useRef(options.onFocusSearch);
+	focusSearchRef.current = options.onFocusSearch;
 	const focusComposerRef = useRef(options.onFocusComposer);
 	focusComposerRef.current = options.onFocusComposer;
 	const dismissEvidenceRef = useRef(options.onDismissEvidence);
@@ -299,6 +308,7 @@ export function useFinderController(
 	const [flashPath, setFlashPath] = useState<string | null>(null);
 	const [searchFocused, setSearchFocused] = useState(false);
 	const [revision, setRevision] = useState(0);
+	const [actionCapabilities, setActionCapabilities] = useState<ActionCapabilities>(NO_CAPABILITIES);
 	const [layerStore, setLayerStore] = useState<LayerStore>(EMPTY_LAYER_STORE);
 	const [stackPinned, setStackPinned] = useState<ReadonlySet<string>>(new Set());
 	const [viewMode, setViewModeValue] = useState<ViewMode>(readStoredViewMode);
@@ -376,6 +386,24 @@ export function useFinderController(
 		() => (layout === "columns" && path !== "" ? columnPanes(path, chain) : []),
 		[layout, path, chain],
 	);
+
+	// One probe per session: main answers with the engines it actually has, so
+	// the action bar can omit anything the machine cannot run.
+	useEffect(() => {
+		let live = true;
+		source.actions
+			.capabilities()
+			.then((capabilities) => {
+				if (live) setActionCapabilities(capabilities);
+			})
+			.catch((error: unknown) => {
+				// A failed probe leaves the empty capability set: no dead buttons.
+				console.warn("actions: capability probe failed", error);
+			});
+		return () => {
+			live = false;
+		};
+	}, [source]);
 
 	const showToast = useCallback((message: string) => setToast(message), []);
 
@@ -1268,6 +1296,40 @@ export function useFinderController(
 		[source, showToast, reportError],
 	);
 
+	/**
+	 * Run one Inspector action. "AI 요약" never lands here — the App shell owns
+	 * the composer — so this covers only the filesystem and OS actions. A
+	 * successful action relists the folder so the new file appears at once.
+	 */
+	const runEntryAction = useCallback(
+		(entry: FinderEntry, target: FileActionTarget, anchor: ActionAnchor | null) => {
+			switch (target.kind) {
+				case "open":
+					source.open(entry.path).catch(reportError);
+					return;
+				case "share":
+					if (anchor === null) {
+						showToast("공유 위치를 찾지 못했습니다");
+						return;
+					}
+					source.actions.share(entry.path, anchor).catch(reportError);
+					return;
+				case "request":
+					source.actions
+						.run(entry.path, target.request)
+						.then((outcome) => {
+							showToast(outcome.note);
+							if (outcome.output !== null) refresh();
+						})
+						.catch(reportError);
+					return;
+				case "askAi":
+					return;
+			}
+		},
+		[source, showToast, refresh, reportError],
+	);
+
 	const dragEntries = useCallback(
 		(entry: FinderEntry) => finderDragEntries(entry, selection.keys, viewEntries),
 		[selection.keys, viewEntries],
@@ -1546,6 +1608,7 @@ export function useFinderController(
 					return;
 				case "focusSearch":
 					event.preventDefault();
+					focusSearchRef.current?.();
 					searchRef.current?.focus();
 					return;
 				case "newTab":
@@ -1691,7 +1754,6 @@ export function useFinderController(
 		canGoBack: tab.back.length > 0,
 		canGoForward: tab.fwd.length > 0,
 		query,
-		searchPlaceholder: path === SETTINGS_PATH ? "Search settings" : "Search files, contents…",
 		searchFocused,
 		searching,
 		emptyText: emptyStateText(query, path),
@@ -1720,6 +1782,8 @@ export function useFinderController(
 		newFolder,
 		trashEntry,
 		copyEntryPath,
+		actionCapabilities,
+		runEntryAction,
 		dragEntries,
 		columnPanes: paneViews,
 		listRef,

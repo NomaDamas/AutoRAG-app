@@ -373,10 +373,103 @@
   --scrollbar-inset: 3px;
 }
 
-/* Quick Look follows the system appearance like the macOS panel it mirrors;
- * the Finder window itself has no dark theme. */
-@media (prefers-color-scheme: dark) {
-  :root {
+/* The persisted app appearance drives Electron's nativeTheme.themeSource. Both
+ * Finder and Quick Look therefore receive the same appearance without a
+ * renderer-only theme flag or a preview-specific setting. */
+html[data-appearance="dark"] {
+	color-scheme: dark;
+    /* ----------------------------------------------------------- App surfaces */
+    --bg-desk: #1C1C1E;
+    --bg-window: #1E1E20;
+    --bg-sidebar: rgba(44,44,46,0.92);
+    --bg-chrome: #2C2C2E;
+    --bg-subtle: #242426;
+    --bg-subtle-alt: #202022;
+    --bg-input: #3A3A3C;
+    --bg-selected-nav: #48484A;
+    --bg-tabstrip: #38383A;
+    --border-tabstrip: #48484A;
+    --tab-grad-from: #414143;
+    --tab-grad-to: #373739;
+    --tab-grad-hover-from: #4A4A4C;
+    --tab-grad-hover-to: #414143;
+    --bg-tab-active: #505052;
+    --text-tab: #D1D1D6;
+    --bg-code: #2C2C2E;
+    --bg-chip-sent: #343438;
+
+    /* --------------------------------------------------------------- Hovers */
+    --bg-hover: rgba(255,255,255,0.08);
+    --bg-hover-row: rgba(255,255,255,0.06);
+    --bg-hover-icon: rgba(255,255,255,0.1);
+    --bg-hover-strong: rgba(255,255,255,0.12);
+
+    /* -------------------------------------------------------------- Borders */
+    --border: #48484A;
+    --border-divider: #38383A;
+    --border-strong: #5A5A5E;
+
+    /* ---------------------------------------------------------------- Ink */
+    --text-primary: #F5F5F7;
+    --text-body: #D1D1D6;
+    --text-muted: #98989D;
+    --text-faint: #636366;
+
+    /* -------------------------------------------------------------- Accent */
+    --accent: #0A84FF;
+    --accent-hover: #409CFF;
+    --accent-text: #409CFF;
+    --accent-text-strong: #64B5FF;
+    --accent-wash: rgba(10,132,255,0.22);
+    --accent-drop-hover: rgba(10,132,255,0.14);
+    --accent-history-current: rgba(10,132,255,0.16);
+    --accent-soft: rgba(10,132,255,0.2);
+    --accent-chat-mark: rgba(10,132,255,0.22);
+    --accent-chip: rgba(10,132,255,0.24);
+    --accent-flash: rgba(10,132,255,0.26);
+    --accent-preview-mark: rgba(10,132,255,0.28);
+    --accent-doc-mark: rgba(10,132,255,0.3);
+    --accent-pending-border: rgba(10,132,255,0.5);
+    --accent-flash-ring: rgba(10,132,255,0.72);
+    --sel-mute: #48484A;
+
+    /* --------------------------------------------------------- Object/status */
+    --switch-off: #636366;
+    --ok-text: #30D158;
+    --ok-bg: rgba(48,209,88,0.18);
+    --ok-bg-soft: rgba(48,209,88,0.14);
+    --ok-border: rgba(48,209,88,0.5);
+    --warn-text: #FFD60A;
+    --warn-bg: rgba(255,214,10,0.16);
+    --warn-bg-strong: rgba(255,214,10,0.22);
+    --info-text: #64D2FF;
+    --info-bg: rgba(100,210,255,0.16);
+    --danger-text: #FF453A;
+    --danger-bg: rgba(255,69,58,0.18);
+    --danger-bg-soft: rgba(255,69,58,0.14);
+    --danger-border: rgba(255,69,58,0.5);
+    --error-orange-text: #FF9F0A;
+    --error-orange-bg: rgba(255,159,10,0.18);
+    --error-orange-bg-strong: rgba(255,159,10,0.22);
+
+    /* --------------------------------------------------------- Scrims/tags */
+    --scrim-quicklook: rgba(0,0,0,0.42);
+    --scrim-modal: rgba(0,0,0,0.55);
+    --drop-overlay-bg: rgba(44,44,46,0.92);
+    --tile-notion: #F5F5F7;
+    --tile-notion-fg: #1C1C1E;
+    --vtag-latest-bg: rgba(48,209,88,0.2);
+    --vtag-latest-text: #30D158;
+    --vtag-near-bg: rgba(191,90,242,0.2);
+    --vtag-near-text: #BF5AF2;
+    --vtag-exact-bg: rgba(255,159,10,0.2);
+    --vtag-exact-text: #FF9F0A;
+
+    /* ------------------------------------------------------------ Scrollbars */
+    --scrollbar-thumb: #636366;
+    --shimmer-gradient: linear-gradient(90deg,#2C2C2E 0%,#3A3A3C 50%,#2C2C2E 100%);
+
+    /* -------------------------------------------------------------- Quick Look */
     --ql-panel: rgba(36,36,38,0.7);
     --ql-panel-solid: #2A2A2C;
     --ql-ink: #F5F5F7;
@@ -399,9 +492,9 @@
     --ql-syntax-function: #67B7A4;
     --ql-syntax-builtin: #A167E6;
     --ql-syntax-constant: #5DD8FF;
+    --ql-syntax-punctuation: #98989D;
     --ql-md-mark: #8E8E93;
     --ql-md-heading: #5AC8FA;
     --ql-md-list: #FF9F0A;
     --ql-md-quote: rgba(235,235,245,0.6);
-  }
 }

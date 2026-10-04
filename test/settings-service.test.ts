@@ -66,6 +66,32 @@ describe("createSettingsService", () => {
 		expect((await reloaded.get()).showHiddenFiles).toBe(true);
 	});
 
+	it("defaults to light appearance and persists the global dark choice", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "autorag-settings-appearance-"));
+		directories.push(directory);
+		const service = createSettingsService({ directory, dataSources: noDataSources, models: noModels });
+
+		expect((await service.get()).appearance).toBe("light");
+		await service.set({ appearance: "dark" });
+		const reloaded = createSettingsService({ directory, dataSources: noDataSources, models: noModels });
+		expect((await reloaded.get()).appearance).toBe("dark");
+	});
+
+	it("notifies the host when appearance changes", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "autorag-settings-appearance-change-"));
+		directories.push(directory);
+		const seen: string[] = [];
+		const service = createSettingsService({
+			directory,
+			dataSources: noDataSources,
+			models: noModels,
+			onSettingsChanged: (settings) => seen.push(settings.appearance),
+		});
+
+		await service.set({ appearance: "dark" });
+		expect(seen).toEqual(["dark"]);
+	});
+
 	it("defaults the dupey scan interval to 60 minutes and notifies listeners on change", async () => {
 		const directory = await mkdtemp(join(tmpdir(), "autorag-settings-dupey-"));
 		directories.push(directory);

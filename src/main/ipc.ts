@@ -1,8 +1,14 @@
-import { ipcMain } from "electron";
+import { BrowserWindow, ipcMain } from "electron";
+import {
+	ACTIONS_CHANNELS,
+	isActionAnchor,
+	isActionRequest,
+} from "../shared/actions-contract";
 import { FS_CHANNELS, type FsClipboard, type FsCoreBridge, type FsIndexBridge } from "../shared/fs-contract";
 import { SEARCH_CHANNELS, type SearchBridge } from "../shared/search-contract";
 import { SETTINGS_CHANNELS, type SettingsBridge } from "../shared/settings-contract";
 import { LIVE_CHANNELS } from "../shared/live-contract";
+import type { ActionService } from "./action-service";
 import type { ChangeHub } from "./change-hub";
 import type { VersionFamilyService } from "./version-family-service";
 
@@ -25,6 +31,7 @@ export function registerFsIpcHandlers(service: FsCoreBridge, hooks: FsIpcHooks =
 		service.readEntries(dir, paths),
 	);
 	ipcMain.handle(FS_CHANNELS.stat, (_event, path: string) => service.stat(path));
+	ipcMain.handle(FS_CHANNELS.details, (_event, path: string) => service.details(path));
 	ipcMain.handle(FS_CHANNELS.exists, (_event, path: string) => service.exists(path));
 	ipcMain.handle(FS_CHANNELS.search, (_event, query: string) => service.search(query));
 	ipcMain.handle(FS_CHANNELS.locations, () => service.locations());
@@ -54,6 +61,21 @@ export function registerFsIpcHandlers(service: FsCoreBridge, hooks: FsIpcHooks =
 	ipcMain.handle(FS_CHANNELS.copyPathsToClipboard, (_event, paths: readonly string[]) =>
 		service.copyPathsToClipboard(paths),
 	);
+}
+
+/** Inspector file actions: probe once, run one request, or pop the share sheet. */
+export function registerActionsIpcHandlers(service: ActionService): void {
+	ipcMain.handle(ACTIONS_CHANNELS.capabilities, () => service.capabilities());
+	ipcMain.handle(ACTIONS_CHANNELS.run, (event, path: unknown, request: unknown) => {
+		if (typeof path !== "string" || path.length === 0) throw new Error("파일 경로가 올바르지 않습니다");
+		if (!isActionRequest(request)) throw new Error("알 수 없는 파일 작업입니다");
+		return service.run(path, request, BrowserWindow.fromWebContents(event.sender));
+	});
+	ipcMain.handle(ACTIONS_CHANNELS.share, (event, path: unknown, anchor: unknown) => {
+		if (typeof path !== "string" || path.length === 0) throw new Error("파일 경로가 올바르지 않습니다");
+		if (!isActionAnchor(anchor)) throw new Error("공유 위치가 올바르지 않습니다");
+		return service.share(path, anchor, BrowserWindow.fromWebContents(event.sender));
+	});
 }
 
 /** The persisted-snapshot version-family service owns its own two channels. */
