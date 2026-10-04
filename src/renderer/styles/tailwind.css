@@ -42,7 +42,7 @@
  * only the document surface now; every component rule is a utility.
  *
  * Preflight is NOT imported. `base.css` already defines the document surface
- * (reset, scrollbars, focus ring, reduced motion) exactly as the reference
+ * (reset, focus ring, reduced motion) exactly as the reference
  * specifies, and Tailwind's preflight would change it.
  * ========================================================================== */
 
@@ -240,7 +240,7 @@
 	--color-vtag-exact-text: var(--vtag-exact-text);
 
 	/* --------------------------------------------------------- §7 Scrollbars */
-	--color-scrollbar-thumb: var(--scrollbar-thumb);
+	/* (none — native overlay scrollbars; see base.css §7) */
 
 	/* ------------------------------------------------------- §3 Typography */
 	--text-title: var(--font-size-title);

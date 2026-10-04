@@ -315,6 +315,8 @@ export interface FinderController {
 	setSearchScope(scope: SearchScope): void;
 	/** The single focused row (null when the selection is empty or multiple). */
 	readonly focusedEntry: FinderEntry | null;
+	/** Every selected row in visual order — the Inspector summarizes the set when more than one is selected. */
+	readonly selectedEntries: readonly FinderEntry[];
 	/** The dupey family a path heads or belongs to — the inspector "Versions" section. */
 	versionFamilyFor(path: string): VersionFamilyView | null;
 	/** Same family with real entries attached — the column view's variants pane. */
@@ -1222,6 +1224,11 @@ export function useFinderController(
 		() => viewEntries.find((entry) => entry.path === selection.focus) ?? null,
 		[viewEntries, selection.focus],
 	);
+	const selectedEntries = useMemo(() => {
+		if (selection.keys.length === 0) return [];
+		const keys = new Set(selection.keys);
+		return viewEntries.filter((entry) => keys.has(entry.path));
+	}, [viewEntries, selection.keys]);
 
 	const pruneColumns = useCallback((removed: readonly string[]) => {
 		setTabsState((state) =>
@@ -2082,6 +2089,7 @@ export function useFinderController(
 		searchScope,
 		setSearchScope,
 		focusedEntry,
+		selectedEntries,
 		versionFamilyFor,
 		familyEntriesFor,
 		revealEntry,

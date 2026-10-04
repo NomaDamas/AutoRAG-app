@@ -696,6 +696,7 @@ export function App(): ReactElement {
 				{inspectorVisible ? (
 					<Inspector
 						entry={focused}
+						entries={finder.selectedEntries}
 						indexStatus={focused !== null ? (finder.indexStatus[focused.path] ?? null) : null}
 						onToggleIndex={finder.toggleIndex}
 						onTrash={finder.trashEntry}

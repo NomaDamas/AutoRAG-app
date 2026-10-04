@@ -1,7 +1,7 @@
 import type { Dirent } from "node:fs";
 import { cp, lstat, mkdir, readdir, rename as fsRename, rm } from "node:fs/promises";
 import { homedir } from "node:os";
-import { basename, dirname, isAbsolute, join, win32 } from "node:path";
+import { basename, dirname, extname, isAbsolute, join, win32 } from "node:path";
 import {
 	RECENTS_PATH,
 	type DirListing,
@@ -523,6 +523,8 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 		readEntries,
 		stat: async (path) => applyOsKind(await buildFsEntry(path), osKind),
 		details: deps.details ?? readFileDetails,
+		previewIcon: (path, modifiedAt) =>
+			iconProvider.preview({ path, ext: extname(path).slice(1).toLowerCase(), modifiedAt }),
 		exists: async (path) => {
 			try {
 				await lstat(path);

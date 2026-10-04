@@ -56,9 +56,6 @@ const ARBITRARY_ONLY_TOKENS = [
 	"--grid-source-row",
 	"--grid-sheet",
 	"--h-settings",
-	"--scrollbar-size",
-	"--scrollbar-radius",
-	"--scrollbar-inset",
 ];
 const ARBITRARY_ONLY_PATTERNS = [/^--dur-/, /^--time-/];
 
