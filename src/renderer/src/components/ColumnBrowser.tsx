@@ -1,10 +1,12 @@
 import type { MouseEvent, ReactElement, RefObject } from "react";
 import type { FinderEntry } from "../data/entries";
 import { cn } from "../lib/cn";
+import type { GroupSection } from "../state/grouping";
 import { basename } from "../state/paths";
 import { RELATION_LABELS, type StackRow, type VersionFamilyError } from "../state/version-family";
 import { isHiddenName } from "../state/visibility";
 import { ChevronRightIcon } from "./icons";
+import { GroupHeader } from "./GroupHeader";
 import { type BackgroundDropHandlers, type RowCallbacks, VersionTag } from "./FileRow";
 import { FileTile } from "./primitives/FileTile";
 import { RenameInput } from "./RenameInput";
@@ -16,6 +18,8 @@ export interface ColumnPaneView {
 	/** False until the folder's first listing arrives. */
 	readonly loaded: boolean;
 	readonly rows: readonly StackRow[];
+	/** The same rows split into the toolbar Group control's sections (one when off). */
+	readonly sections: readonly GroupSection<StackRow>[];
 }
 
 export interface ColumnVariantRow {
@@ -91,19 +95,24 @@ export function ColumnBrowser({
 							onDrop={background.onDrop}
 							onDragLeave={background.onDragLeave}
 						>
-							{pane.rows.map((row) => (
-								<ColumnRow
-									key={row.entry.path}
-									pane={index}
-									row={row}
-									selected={selectedKeys.includes(row.entry.path)}
-									focusedZone={focusedZone}
-									opened={opened === row.entry.path}
-									flash={flashPath === row.entry.path}
-									renameDraft={renamePath === row.entry.path ? renameDraft : null}
-									columnCallbacks={columnCallbacks}
-									callbacks={callbacks}
-								/>
+							{pane.sections.map((section, sectionIndex) => (
+								<div key={section.label ?? `section-${sectionIndex}`}>
+									{section.label === null ? null : <GroupHeader label={section.label} />}
+									{section.rows.map((row) => (
+										<ColumnRow
+											key={row.entry.path}
+											pane={index}
+											row={row}
+											selected={selectedKeys.includes(row.entry.path)}
+											focusedZone={focusedZone}
+											opened={opened === row.entry.path}
+											flash={flashPath === row.entry.path}
+											renameDraft={renamePath === row.entry.path ? renameDraft : null}
+											columnCallbacks={columnCallbacks}
+											callbacks={callbacks}
+										/>
+									))}
+								</div>
 							))}
 							{pane.loaded && pane.rows.length === 0 ? (
 								<div className="column-pane__empty px-8 py-24 text-ink-muted text-meta text-center">{emptyText}</div>

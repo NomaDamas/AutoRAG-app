@@ -4,7 +4,7 @@
  * prototype fixtures (display-domain labels such as "14 msgs").
  */
 
-import type { FsEntry, FsSearchResult } from "../../../shared/fs-contract";
+import type { FsEntry, FsEntryEnrichment, FsSearchResult } from "../../../shared/fs-contract";
 import { formatModified, formatSize, parseModifiedLabel, parseSizeLabel } from "../state/format";
 import { type FileKind, kindFromExtension, kindMeta } from "../state/kinds";
 import { basename, dirname, joinPath } from "../state/paths";
@@ -20,8 +20,53 @@ export interface FinderEntry extends SortableEntry {
 	readonly iconUrl: string | null;
 	/** Exact filesystem mtime used to reject stale background enrichment. */
 	readonly modifiedAt?: string;
+	readonly createdAt?: string;
 	readonly dateLabel: string;
 	readonly sizeLabel: string;
+}
+
+function timestamp(value: string | null | undefined): number | undefined {
+	if (value === null || value === undefined) return undefined;
+	const parsed = Date.parse(value);
+	return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+type MetadataFields = {
+	createdValue?: number;
+	addedValue?: number;
+	lastOpenedValue?: number;
+	tagsLabel?: string;
+	commentsLabel?: string;
+	dimensionsLabel?: string;
+	dimensionsValue?: number;
+	ratingValue?: number;
+	applicationLabel?: string;
+};
+
+function metadataFields(
+	finder: FsEntry["finder"],
+	fallbackCreated: string | undefined,
+): MetadataFields {
+	const fields: MetadataFields = {};
+	const createdValue = timestamp(finder?.createdAt ?? fallbackCreated);
+	if (createdValue !== undefined) fields.createdValue = createdValue;
+	const addedValue = timestamp(finder?.addedAt);
+	if (addedValue !== undefined) fields.addedValue = addedValue;
+	const lastOpenedValue = timestamp(finder?.lastOpenedAt);
+	if (lastOpenedValue !== undefined) fields.lastOpenedValue = lastOpenedValue;
+	if (finder?.tags.length) fields.tagsLabel = finder.tags.join(", ");
+	if (finder?.comments !== null && finder?.comments !== undefined) fields.commentsLabel = finder.comments;
+	if (finder?.width !== null && finder?.height !== null && finder?.width !== undefined && finder?.height !== undefined) {
+		fields.dimensionsLabel = `${finder.width} × ${finder.height}`;
+		fields.dimensionsValue = finder.width * finder.height;
+	}
+	if (finder?.rating !== null && finder?.rating !== undefined) fields.ratingValue = finder.rating;
+	if (finder?.application !== null && finder?.application !== undefined) fields.applicationLabel = finder.application;
+	return fields;
+}
+
+function finderFields(entry: FsEntry): MetadataFields {
+	return metadataFields(entry.finder, entry.createdAt);
 }
 
 export function entryFromFs(entry: FsEntry, location?: string): FinderEntry {
@@ -33,6 +78,7 @@ export function entryFromFs(entry: FsEntry, location?: string): FinderEntry {
 		fileKind,
 		iconUrl: entry.iconUrl,
 		modifiedAt: entry.modifiedAt,
+		...(entry.createdAt === undefined ? {} : { createdAt: entry.createdAt }),
 		dateLabel: formatModified(entry.modifiedAt),
 		sizeLabel: formatSize(entry.kind === "folder" ? null : entry.size),
 		// The OS-reported kind wins; the extension map is the fallback.
@@ -40,6 +86,7 @@ export function entryFromFs(entry: FsEntry, location?: string): FinderEntry {
 		location: location ?? dirname(entry.path),
 		modifiedValue: Date.parse(entry.modifiedAt) || 0,
 		sizeValue: entry.size ?? 0,
+		...finderFields(entry),
 	};
 }
 
@@ -47,17 +94,41 @@ export function entryFromSearchHit(hit: FsSearchResult): FinderEntry {
 	return { ...entryFromFs(hit.entry), location: dirname(hit.entry.path) };
 }
 
-export function applyEntryEnrichment(
-	entries: readonly FinderEntry[],
-	enriched: readonly { readonly path: string; readonly modifiedAt: string; readonly osKind: string | null; readonly iconUrl: string | null }[],
-): readonly FinderEntry[] {
+export function applyEntryEnrichment(entries: readonly FinderEntry[], enriched: readonly FsEntryEnrichment[]): readonly FinderEntry[] {
 	const byPath = new Map(enriched.map((entry) => [entry.path, entry]));
 	let changed = false;
 	const result = entries.map((entry) => {
 		const patch = byPath.get(entry.path);
 		if (patch === undefined || (entry.modifiedAt !== undefined && entry.modifiedAt !== patch.modifiedAt)) return entry;
-		const next = { ...entry, kindLabel: patch.osKind ?? entry.kindLabel, iconUrl: patch.iconUrl };
-		if (next.kindLabel !== entry.kindLabel || next.iconUrl !== entry.iconUrl) changed = true;
+		const finder = patch.finder;
+		const {
+			createdValue,
+			addedValue,
+			lastOpenedValue,
+			tagsLabel,
+			commentsLabel,
+			dimensionsLabel,
+			dimensionsValue,
+			ratingValue,
+			applicationLabel,
+			...baseEntry
+		} = entry;
+		const next: FinderEntry = finder === undefined
+			? { ...entry, kindLabel: patch.osKind ?? entry.kindLabel, iconUrl: patch.iconUrl }
+			: {
+					...baseEntry,
+					kindLabel: patch.osKind ?? entry.kindLabel,
+					iconUrl: patch.iconUrl,
+					...metadataFields(finder, finder.createdAt ?? entry.createdAt),
+				};
+		if (
+			 next.kindLabel !== entry.kindLabel || next.iconUrl !== entry.iconUrl ||
+			next.createdValue !== entry.createdValue || next.addedValue !== entry.addedValue ||
+			next.lastOpenedValue !== entry.lastOpenedValue || next.tagsLabel !== entry.tagsLabel ||
+			next.commentsLabel !== entry.commentsLabel || next.dimensionsLabel !== entry.dimensionsLabel ||
+			next.dimensionsValue !== entry.dimensionsValue || next.ratingValue !== entry.ratingValue ||
+			next.applicationLabel !== entry.applicationLabel
+		) changed = true;
 		return next;
 	});
 	return changed ? result : entries;

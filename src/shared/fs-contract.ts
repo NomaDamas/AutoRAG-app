@@ -42,6 +42,19 @@ export const FS_CHANNELS = {
 
 export type FsChannel = (typeof FS_CHANNELS)[keyof typeof FS_CHANNELS];
 
+/** Finder/Spotlight metadata used by Sort By and Group By. */
+export interface FsFinderMetadata {
+	readonly createdAt: string | null;
+	readonly addedAt: string | null;
+	readonly lastOpenedAt: string | null;
+	readonly tags: readonly string[];
+	readonly comments: string | null;
+	readonly width: number | null;
+	readonly height: number | null;
+	readonly rating: number | null;
+	readonly application: string | null;
+}
+
 export interface FsEntry {
 	/** File or folder name (last path segment). */
 	readonly name: string;
@@ -55,6 +68,10 @@ export interface FsEntry {
 	/** ISO 8601 modification time. */
 	readonly modifiedAt: string;
 	readonly isSymlink: boolean;
+	/** ISO 8601 creation time, when the filesystem exposes one. */
+	readonly createdAt?: string;
+	/** Spotlight/Finder metadata; absent when the platform has no equivalent. */
+	readonly finder?: FsFinderMetadata;
 	/**
 	 * The kind the OS itself reports — Finder's Kind / Explorer's Type, e.g.
 	 * "MPEG-4 movie". Null for folders and whenever the OS answers nothing; the
@@ -90,6 +107,7 @@ export interface FsEnrichmentTarget {
 	readonly kind: "folder" | "file";
 	readonly ext: string;
 	readonly modifiedAt: string;
+	readonly createdAt?: string;
 }
 
 /** Background metadata/thumbnail result; identity fields echo the requested entry. */
@@ -98,6 +116,7 @@ export interface FsEntryEnrichment {
 	readonly modifiedAt: string;
 	readonly osKind: string | null;
 	readonly iconUrl: string | null;
+	readonly finder?: FsFinderMetadata;
 }
 
 /**
