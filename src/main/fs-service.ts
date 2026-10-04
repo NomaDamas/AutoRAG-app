@@ -114,7 +114,7 @@ function enrichOsKinds(entries: readonly FsEntry[], lookup: OsKindLookup): Promi
 async function resolveIcons(entries: readonly FsEntry[], provider: IconProvider): Promise<ReadonlyMap<string, string>> {
 	const targets = entries
 		.filter((entry) => entry.kind === "file")
-		.map((entry) => ({ path: entry.path, modifiedAt: entry.modifiedAt }));
+		.map((entry) => ({ path: entry.path, ext: entry.ext, modifiedAt: entry.modifiedAt }));
 	if (targets.length === 0) return new Map();
 	return provider.icons(targets);
 }
