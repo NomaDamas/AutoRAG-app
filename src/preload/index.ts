@@ -23,7 +23,7 @@ function readDevLabelArg(): DevLabel | null {
 
 installAppearancePreload(ipcRenderer);
 contextBridge.exposeInMainWorld("autorag", {
-	...createBridge(readDevLabelArg()),
+	...createBridge(readDevLabelArg(), process.platform),
 	fs: createFsBridge(ipcRenderer),
 	actions: createActionsBridge(ipcRenderer),
 	live: createLiveBridge(ipcRenderer),

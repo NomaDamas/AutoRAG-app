@@ -1,3 +1,6 @@
+import { copyFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { fileURLToPath } from "node:url";
 /**
  * Manual QA — the row tile shows the OS thumbnail (Finder-style), not a letter.
  *
@@ -16,13 +19,14 @@ import { mkdirSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { deflateSync } from "node:zlib";
 import { finderWindow, launchFinder } from "./launch-finder.mjs";
+import { qlmanageCount, reapQlmanageOrphans } from "./platform.mjs";
 
-const ROOT = new URL("../../", import.meta.url).pathname.replace(/\/$/, "");
+const ROOT = fileURLToPath(new URL("../../", import.meta.url)).replace(/\/$/, "");
 const EVIDENCE = `${ROOT}/.omo/evidence/ai-finder-app/qa-thumbnails/`;
 mkdirSync(EVIDENCE, { recursive: true });
 
 const stamp = Date.now();
-const documents = `${process.env.HOME}/Documents`;
+const documents = `${homedir()}/Documents`;
 const folderName = `ulw-thumb-${stamp}-dir`;
 const probeDir = `${documents}/ulw-thumb-${stamp}-latency`;
 const qlDir = `${documents}/ulw-thumb-${stamp}-ql`;
@@ -90,34 +94,6 @@ const check = (label, actual, expected) => {
 	results.push({ label, actual, expected, pass });
 	console.log(`${pass ? "PASS" : "FAIL"}  ${label}: ${JSON.stringify(actual)}`);
 };
-/** Live exact-name qlmanage process count; issue #24 requires it to stay 0. */
-const qlmanageCount = () => {
-	try {
-		return Number(execSync("pgrep -x qlmanage | wc -l", { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim());
-	} catch {
-		return 0;
-	}
-};
-/** SIGKILL qlmanage orphans (ppid=1) leaked by earlier builds, so the gate starts from a clean slate. */
-const reapQlmanageOrphans = () => {
-	try {
-		const pids = execSync("ps -axo pid=,ppid=,comm= | awk '$2==1 && $3 ~ /qlmanage/ {print $1}'", { encoding: "utf8" })
-			.trim()
-			.split(/\s+/)
-			.filter(Boolean);
-		for (const pid of pids) {
-			try {
-				process.kill(Number(pid), "SIGKILL");
-			} catch {
-				// Already gone.
-			}
-		}
-		return pids.length;
-	} catch {
-		return 0;
-	}
-};
-
 let app;
 try {
 	app = await launchFinder();
@@ -214,7 +190,7 @@ try {
 
 	// Informational: what the icon work costs a real listing (cold = icons generated now).
 	mkdirSync(probeDir, { recursive: true });
-	for (const fixture of fixtures) execSync(`cp "${documents}/${fixture.name}" "${probeDir}/"`);
+	for (const fixture of fixtures) copyFileSync(`${documents}/${fixture.name}`, `${probeDir}/${fixture.name}`);
 	const timeList = (dir) =>
 		page.evaluate(async (target) => {
 			const start = performance.now();

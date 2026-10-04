@@ -72,6 +72,25 @@ bun scripts/manual-qa/compare-visual-parity.mjs /tmp/parity/before /tmp/parity/a
 and what the harness has caught. On an unchanged tree the harness is
 byte-identical between runs; anything else is a real difference to explain.
 
+## Windows QA
+
+The manual-QA lanes run on Windows 11 as well as macOS. Build once, then run
+the sweep from PowerShell or cmd:
+
+```sh
+bun run build
+bun scripts/manual-qa/run-all.mjs                  # all lanes
+bun scripts/manual-qa/run-all.mjs live-sync kind   # selected lanes
+```
+
+`scripts/manual-qa/platform.mjs` holds the cross-platform differences: repo
+paths via `fileURLToPath`, a home env with `USERPROFILE`, the `chord()` key
+modifier (`⌘` on macOS, `Ctrl` elsewhere), separator-agnostic basenames, and
+macOS-only process tools that degrade to no-ops on Windows. Prerequisites are
+Node 24+, Bun, `dupey`, and `ffmpeg` on `PATH`. Logs and `summary.json` land in
+`.omo/evidence/win-qa/`; the same sweep runs in
+`.github/workflows/qa-windows.yml`.
+
 ## Workflow
 
 Feature work and fixes never land straight on `main`. Start from the latest

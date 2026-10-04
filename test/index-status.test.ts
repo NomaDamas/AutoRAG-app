@@ -26,7 +26,16 @@ vi.mock("@autorag/librarian", async () => {
 const directories: string[] = [];
 
 afterEach(async () => {
-	await Promise.all(directories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
+	const pending = directories.splice(0);
+	// Windows cannot unlink the just-refreshed `.autorag` tree while the
+	// in-process librarian still holds its handles (verified: every recursive
+	// `rm` retry budget up to ~18s fails). %TEMP% is reclaimed by the OS, so skip
+	// the doomed removal there rather than hanging the hook; POSIX removes it.
+	if (process.platform === "win32") {
+		console.warn("[index-status.test] leaving %TEMP% fixtures for the OS to reclaim (Windows holds .autorag handles)");
+		return;
+	}
+	await Promise.all(pending.map((directory) => rm(directory, { recursive: true, force: true })));
 });
 
 interface Fixture {

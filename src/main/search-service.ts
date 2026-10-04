@@ -319,7 +319,7 @@ export function createSearchService(deps: SearchServiceDeps): SearchBridge {
 			run.resolveFinish();
 		},
 		feedback: async (sessionId, useful, notUseful) => {
-			(await deps.agentFactory()).recordFeedbackByNumbers(sessionId, [...useful], [...notUseful]);
+			await (await deps.agentFactory()).recordFeedbackByNumbers(sessionId, [...useful], [...notUseful]);
 		},
 		historyList: () => deps.chatStore.list(),
 		historyGet: (chatId) => deps.chatStore.get(chatId),

@@ -32,6 +32,20 @@ function pathRoot(path: string): PathRoot | null {
 	return null;
 }
 
+/**
+ * Volume label for the decorative root crumb a "Users"-rooted path sits on.
+ * The breadcrumb trail never renders the root, so the bar reconstructs it:
+ * a Windows drive shows as "C:", a UNC share as its `\\server\share` prefix,
+ * and a POSIX boot volume keeps the macOS Finder label.
+ */
+export function volumeLabel(path: string): string {
+	const drive = DRIVE_ROOT.exec(path);
+	if (drive !== null) return drive[1]!.toUpperCase();
+	const unc = UNC_ROOT.exec(path);
+	if (unc !== null) return `\\\\${unc[1]}\\${unc[2]}`;
+	return "Macintosh HD";
+}
+
 function separatorOf(path: string): "/" | "\\" {
 	const root = pathRoot(path);
 	if (root !== null) {

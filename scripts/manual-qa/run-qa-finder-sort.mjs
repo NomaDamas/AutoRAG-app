@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 /**
  * Manual QA — the list column header sorts the rows on click and shows the
  * ascending/descending state.
@@ -18,7 +19,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { finderWindow, launchFinder } from "./launch-finder.mjs";
 
-const ROOT = new URL("../../", import.meta.url).pathname.replace(/\/$/, "");
+const ROOT = fileURLToPath(new URL("../../", import.meta.url)).replace(/\/$/, "");
 const EVIDENCE = `${ROOT}/.omo/evidence/ai-finder-app/qa-list-sort`;
 mkdirSync(EVIDENCE, { recursive: true });
 
@@ -55,7 +56,7 @@ const check = (label, actual, expected) => {
 const userDataDir = mkdtempSync(join(tmpdir(), "ulw-list-sort-"));
 let app;
 try {
-	app = await launchFinder({ userDataDir, env: { HOME: home } });
+	app = await launchFinder({ userDataDir, env: { HOME: home, USERPROFILE: home } });
 	const page = await finderWindow(app);
 	await page.setViewportSize({ width: 1500, height: 900 }).catch(() => {});
 	await page.waitForSelector(".toolbar-title", { timeout: 30000 });
@@ -68,10 +69,12 @@ try {
 	await page.waitForSelector(".col-header");
 	await page.waitForTimeout(300);
 
-	const rows = () =>
-		page.locator('[role="row"]').evaluateAll((list) =>
-			list.map((row) => (row.querySelector('[role="gridcell"]')?.textContent ?? "").trim()).filter(Boolean),
-		);
+const rows = () =>
+	page.locator('[role="row"]').evaluateAll((list) =>
+		list
+			.map((row) => (row.querySelector('[role="gridcell"] .row__label')?.textContent ?? "").trim())
+			.filter(Boolean),
+	);
 	const sortedRows = async () => (await rows()).slice().sort(localeName);
 	const baseline = await rows();
 	check("S0 the fixture folder lists the three files and one folder", (await sortedRows()), namesAsc);
