@@ -62,7 +62,7 @@ function LocationChip({ location }: { readonly location: string }): ReactElement
 }
 
 /**
- * One 28px Bloom-style list row: the columns come from
+ * One 24px Bloom-style list row: the columns come from
  * `listGridTemplate(columns)`, the name cell carries the disclosure, tile,
  * name, and any version tags. Selection is full-width; while the Finder zone
  * owns focus it is the solid accent with white text, otherwise muted gray.
@@ -289,7 +289,7 @@ export function FileRow({
 					<span
 						key={column.key}
 						className={cn(
-							"row__meta min-w-0 whitespace-nowrap overflow-hidden text-ellipsis text-badge",
+							"row__meta min-w-0 whitespace-nowrap overflow-hidden text-ellipsis text-file-meta",
 							column.key === "size" && "text-right",
 							metaTone,
 						)}

@@ -230,11 +230,12 @@
   --font-size-meta: 12px;
   --font-size-caption: 12px;
   --font-size-badge: 11px;
-  --font-size-file-row: 12px;
+  --font-size-file-row: 11px;
+  --font-size-file-meta: 10px;
   --font-size-tile: 10px;
   --font-size-tile-xs: 9px;
 
-  --bg-row-alt: rgba(29,29,31,0.018);
+  --bg-row-alt: #F4F5F5;
   --weight-regular: 400;
   --weight-medium: 500;
   --weight-semibold: 600;
@@ -264,7 +265,8 @@
 
   /* ------------------------------------------------------------ §4 Control sizes */
   --size-row: 32px;
-  --size-file-row: 28px;
+  --size-file-row: 24px;
+  --size-toolbar-icon: 32px;
   --size-disclosure: 16px;
   --tree-indent: 18px;
   --size-pill: 22px;

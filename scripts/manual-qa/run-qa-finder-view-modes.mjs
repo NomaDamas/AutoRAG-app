@@ -109,6 +109,16 @@ try {
 	const toggleBox = await toggle.boundingBox();
 	check("C1 toggle lives in the toolbar's right half", toggleBox.x > toolbarBox.x + toolbarBox.width / 2, true);
 	check("C1 list is the default mode", await pressed(), ["Icons=false", "List=true", "Columns=false"]);
+	check("C1 toolbar navigation hit area is larger", await page.getByRole("button", { name: "Back" }).evaluate((button) => {
+		const box = button.getBoundingClientRect();
+		const glyph = button.querySelector("svg")?.getBoundingClientRect();
+		return { button: [Math.round(box.width), Math.round(box.height)], glyph: glyph === undefined ? null : [Math.round(glyph.width), Math.round(glyph.height)] };
+	}), { button: [32, 32], glyph: [18, 18] });
+	check("C1 view mode controls are larger", await toggle.locator("button").first().evaluate((button) => {
+		const box = button.getBoundingClientRect();
+		const glyph = button.querySelector("svg")?.getBoundingClientRect();
+		return { button: [Math.round(box.width), Math.round(box.height)], glyph: glyph === undefined ? null : [Math.round(glyph.width), Math.round(glyph.height)] };
+	}), { button: [32, 32], glyph: [18, 18] });
 	await page.locator(".toolbar").screenshot({ path: `${EVIDENCE}/toolbar-toggle.png` });
 
 	// ----- C2 icons
@@ -161,8 +171,19 @@ try {
 		return { height: Math.round(row.getBoundingClientRect().height), radius: style.borderRadius, margin: `${style.marginLeft}/${style.marginRight}` };
 	});
 	const stripeColors = await listRows.evaluateAll((rows) => rows.slice(0, 2).map((row) => getComputedStyle(row).backgroundColor));
-	check("C4 compact Bloom row geometry", rowGeometry, { height: 28, radius: "0px", margin: "0px/0px" });
+	check("C4 compact Bloom row geometry", rowGeometry, { height: 24, radius: "0px", margin: "0px/0px" });
 	check("C4 adjacent list rows use alternating washes", stripeColors[0] !== stripeColors[1], true);
+	check("C4 alternate list row uses #F4F5F5", stripeColors[1], "rgb(244, 245, 245)");
+	const rowTypography = await listRows.nth(1).evaluate((row) => ({
+		name: getComputedStyle(row.querySelector(".row__label")).fontSize,
+		meta: getComputedStyle(row.querySelector(".row__meta")).fontSize,
+	}));
+	check("C4 compact Finder row typography", rowTypography, { name: "11px", meta: "10px" });
+	await page.locator(".col-header__sort").first().click();
+	check("C4 sort indicator is larger", await page.locator(".col-header__sort svg").first().evaluate((svg) => {
+		const box = svg.getBoundingClientRect();
+		return [Math.round(box.width), Math.round(box.height)];
+	}), [12, 12]);
 	const selectedRow = page.locator('[role="row"][data-path$="/notes.md"]');
 	await selectedRow.click();
 	await page.waitForFunction(() =>

@@ -250,6 +250,7 @@
 	--text-caption: var(--font-size-caption);
 	--text-badge: var(--font-size-badge);
 	--text-file-row: var(--font-size-file-row);
+	--text-file-meta: var(--font-size-file-meta);
 	--text-tile: var(--font-size-tile);
 	--text-tile-xs: var(--font-size-tile-xs);
 
@@ -302,6 +303,7 @@
 	/* ---------------------------------------------------- §4 Control sizes */
 	--spacing-row: var(--size-row);
 	--spacing-file-row: var(--size-file-row);
+	--spacing-toolbar-icon: var(--size-toolbar-icon);
 	--spacing-disclosure: var(--size-disclosure);
 	--spacing-tree-indent: var(--tree-indent);
 	--spacing-pill: var(--size-pill);

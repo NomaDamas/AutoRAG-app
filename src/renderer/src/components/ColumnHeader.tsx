@@ -129,6 +129,7 @@ export function ColumnHeader({
 									<span className="col-header__label overflow-hidden text-ellipsis">{option.label}</span>
 									{active ? (
 										<ChevronUpIcon
+											size={12}
 											className={[
 												"col-header__chevron flex-none",
 												descending ? "rotate-180" : "",

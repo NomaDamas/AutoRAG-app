@@ -9,7 +9,7 @@ import { extendTailwindMerge } from "tailwind-merge";
  *
  * `text-sm` is already a stock font size and is listed only for completeness.
  */
-const FONT_SIZES = ["title", "body", "sm", "meta", "caption", "badge", "file-row", "tile", "tile-xs"];
+const FONT_SIZES = ["title", "body", "sm", "meta", "caption", "badge", "file-row", "file-meta", "tile", "tile-xs"];
 const RADII = ["2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "14", "full"];
 const SHADOWS = ["raised", "drag", "window"];
 
