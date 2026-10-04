@@ -366,7 +366,8 @@ export function createIconProvider(deps: IconProviderDeps = {}): IconSource {
 				: iconUrl(target.path, target.modifiedAt, PREVIEW_ICON_SIZE);
 		},
 		read(path, modifiedAt, size) {
-			return cache.get(cacheKey({ path, modifiedAt, size })) ?? null;
+			const target: IconTarget = size === undefined ? { path, modifiedAt } : { path, modifiedAt, size };
+			return cache.get(cacheKey(target)) ?? null;
 		},
 	};
 }

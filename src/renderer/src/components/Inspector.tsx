@@ -7,7 +7,12 @@
  *            actions the focused file's own type implies, the machine's
  *            capabilities decide which of those are real, and a multi-variant
  *            action (image edit, video conversion) opens a menu instead of a
- *            row of near-identical buttons.
+ *            row of near-identical buttons. The paper shows the file's real
+ *            content: the 640px Quick Look tier from `fs:previewIcon`, with the
+ *            listing icon and then the letter tile as fallbacks. A multi-
+ *            selection replaces all of it with the aggregate view — a fan of
+ *            the selection's own preview papers, the count title, the per-kind
+ *            breakdown with total size, and created/modified date ranges.
  *   Evidence the citation half shown while a citation is selected: numbered tabs,
  *            preview, title reveal, feedback (real `search.feedback` IPC), and excerpts.
  *
@@ -23,6 +28,7 @@ import type { CitationEvidence } from "../../../shared/search-contract";
 import type { FinderEntry } from "../data/entries";
 import { cn } from "../lib/cn";
 import { buildInfoRows, hasMoreInfoRows, visibleInfoRows } from "../state/inspector-info";
+import { stackCards, summarizeSelection } from "../state/inspector-multi";
 import {
 	evidenceDetail,
 	evidenceKind,
@@ -75,6 +81,8 @@ export interface InspectorFamily {
 export interface InspectorProps {
 	/** Focused/selected entry; null renders the empty-state placeholder. */
 	readonly entry: FinderEntry | null;
+	/** Every selected entry in visual order; more than one switches the Info half to the aggregate paper-stack view. */
+	readonly entries: readonly FinderEntry[];
 	readonly indexStatus: IndexStatus | null;
 	readonly onToggleIndex: (entry: FinderEntry) => void;
 	readonly onTrash: (entry: FinderEntry) => void;
@@ -121,6 +129,7 @@ function anchorOf(element: Element): ActionAnchor {
 
 export function Inspector({
 	entry,
+	entries,
 	indexStatus,
 	onToggleIndex,
 	onTrash,
@@ -144,19 +153,23 @@ export function Inspector({
 			className="inspector w-full min-w-0 h-full flex flex-col bg-subtle border-l border-border overflow-hidden"
 			aria-label="Inspector"
 		>
-			<InfoHalf
-				entry={entry}
-				indexStatus={indexStatus}
-				split={split}
-				family={family}
-				onOpenMember={onOpenMember}
-				onToggleIndex={onToggleIndex}
-				onTrash={onTrash}
-				onCopyPath={onCopyPath}
-				onAskAi={onAskAi}
-				actionCapabilities={actionCapabilities}
-				onAction={onAction}
-			/>
+			{entries.length > 1 ? (
+				<MultiInfoHalf entries={entries} focusPath={entry?.path ?? null} split={split} />
+			) : (
+				<InfoHalf
+					entry={entry}
+					indexStatus={indexStatus}
+					split={split}
+					family={family}
+					onOpenMember={onOpenMember}
+					onToggleIndex={onToggleIndex}
+					onTrash={onTrash}
+					onCopyPath={onCopyPath}
+					onAskAi={onAskAi}
+					actionCapabilities={actionCapabilities}
+					onAction={onAction}
+				/>
+			)}
 			{split ? (
 				<EvidenceHalf
 					evidence={evidence}
@@ -238,17 +251,7 @@ function InfoHalf({
 			) : (
 				<div className={cn("inspector-body flex-1 min-h-0 overflow-auto", split ? "px-14 pt-12 pb-18" : "px-16 pt-18 pb-24")}>
 					<div className={cn("preview-paper flex-none flex items-center justify-center overflow-hidden rounded-6 border border-border bg-window shadow-raised", split ? "h-100 mb-10" : "h-152 mb-14")}>
-						{entry.iconUrl ? (
-							<img
-								className="max-w-full max-h-full object-contain"
-								src={entry.iconUrl}
-								alt=""
-								aria-hidden="true"
-								draggable={false}
-							/>
-						) : (
-							<FileTile kind={entry.fileKind} large />
-						)}
+						<PreviewImage entry={entry} className="max-w-full max-h-full object-contain" />
 					</div>
 					<div className="preview-title text-body font-semibold text-ink leading-[1.3] [overflow-wrap:anywhere]">{entry.name}</div>
 					<div className="preview-sub mt-4 text-meta text-ink-muted">
@@ -310,6 +313,103 @@ function InfoHalf({
 			{entry === null ? null : (
 				<ActionBar entry={entry} capabilities={actionCapabilities} onAction={onAction} onAskAi={onAskAi} />
 			)}
+		</div>
+	);
+}
+
+/**
+ * The preview paper's content: the 640px Quick Look tier for real files, the
+ * 128px listing icon while that loads (or when no large tier exists), and the
+ * letter tile when the OS has nothing at all. Fetching is per entry identity
+ * (path + mtime), so a changed file re-renders and a stale answer for a file
+ * the user already left never lands.
+ */
+function PreviewImage({ entry, className }: { readonly entry: FinderEntry; readonly className: string }): ReactElement {
+	const [url, setUrl] = useState<string | null>(null);
+	const { path, modifiedAt, kind } = entry;
+	useEffect(() => {
+		setUrl(null);
+		if (kind !== "file" || modifiedAt === undefined) return;
+		const load = window.autorag?.fs?.previewIcon;
+		if (load === undefined) return;
+		let cancelled = false;
+		void load(path, modifiedAt)
+			.then((next) => {
+				if (!cancelled) setUrl(next);
+			})
+			.catch(() => {
+				if (!cancelled) setUrl(null);
+			});
+		return () => {
+			cancelled = true;
+		};
+	}, [kind, path, modifiedAt]);
+	const src = url ?? entry.iconUrl;
+	if (src === null) return <FileTile kind={entry.fileKind} large />;
+	return <img className={className} src={src} alt="" aria-hidden="true" draggable={false} onError={() => setUrl(null)} />;
+}
+
+/**
+ * The aggregate Info half for a multi-selection: a fan of the selection's own
+ * previews (focused file in front), the count title, the per-kind breakdown
+ * with the total size, and the created/modified date ranges. Per-file actions
+ * (index chip, versions, the action bar) are single-selection concerns and
+ * stay out.
+ */
+function MultiInfoHalf({
+	entries,
+	focusPath,
+	split,
+}: {
+	readonly entries: readonly FinderEntry[];
+	readonly focusPath: string | null;
+	readonly split: boolean;
+}): ReactElement {
+	const summary = summarizeSelection(entries);
+	const cards = stackCards(entries, focusPath);
+	// DOM order paints back-to-front so the focused paper lands on top.
+	const staged = [...cards].reverse();
+	return (
+		<div className={cn("inspector-half flex-1 min-h-0 flex flex-col overflow-hidden relative", split && "h-[50%] max-h-[50%]")}>
+			<div className={cn("inspector-body flex-1 min-h-0 overflow-auto", split ? "px-14 pt-12 pb-18" : "px-16 pt-18 pb-24")}>
+				<div className={cn("preview-stack relative flex-none flex items-center justify-center", split ? "h-100 mb-10" : "h-152 mb-14")}>
+					{staged.map((card, index) => {
+						const depth = staged.length - 1 - index;
+						const pose =
+							depth === 0
+								? "z-20"
+								: depth === 1
+									? "z-10 -translate-x-[18%] translate-y-[4%] -rotate-[8deg] scale-[0.92]"
+									: "z-0 translate-x-[18%] translate-y-[7%] rotate-[8deg] scale-[0.92]";
+						return (
+							<div
+								key={card.path}
+								className={cn(
+									"preview-stack-card absolute flex h-[88%] aspect-[3/4] items-center justify-center overflow-hidden rounded-6 border border-border bg-window shadow-raised",
+									pose,
+								)}
+							>
+								<PreviewImage entry={card} className="max-h-full max-w-full object-contain" />
+							</div>
+						);
+					})}
+				</div>
+				<div className="preview-title text-body font-semibold text-ink leading-[1.3]">{summary.title}</div>
+				<div className="preview-sub mt-4 text-meta text-ink-muted">
+					{summary.kindSummary}
+					{summary.sizeLabel === null ? "" : ` · ${summary.sizeLabel}`}
+				</div>
+				<div className="info-section border-t border-border pt-12 mt-12">
+					<div className="section-title mb-6">
+						<span className="text-meta font-semibold text-ink">일반 정보</span>
+					</div>
+					<dl className="m-0">
+						{summary.sizeLabel === null ? null : <InfoRow label="총 크기" value={summary.sizeLabel} />}
+						{summary.createdRange === null ? null : <InfoRow label="생성한 날짜" value={summary.createdRange} />}
+						{summary.modifiedRange === null ? null : <InfoRow label="수정한 날짜" value={summary.modifiedRange} />}
+					</dl>
+				</div>
+			</div>
 		</div>
 	);
 }

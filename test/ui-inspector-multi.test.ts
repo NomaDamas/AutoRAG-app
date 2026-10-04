@@ -15,7 +15,6 @@ function entry(overrides: Partial<FinderEntry> = {}): FinderEntry {
 		location: "/Users/me/Documents",
 		modifiedValue: new Date(2026, 8, 30, 12, 0, 0).getTime(),
 		sizeValue: 1_468_006,
-		createdValue: new Date(2026, 8, 30, 9, 0, 0).getTime(),
 		...overrides,
 	};
 }
@@ -93,8 +92,8 @@ describe("summarizeSelection", () => {
 
 	it("ignores unparseable zero stamps and reports null when no stamp survives", () => {
 		const summary = summarizeSelection([
-			entry({ modifiedValue: 0, createdValue: undefined }),
-			entry({ path: "/b.pdf", modifiedValue: 0, createdValue: undefined }),
+			entry({ modifiedValue: 0 }),
+			entry({ path: "/b.pdf", modifiedValue: 0 }),
 		]);
 		expect(summary.modifiedRange).toBeNull();
 		expect(summary.createdRange).toBeNull();
