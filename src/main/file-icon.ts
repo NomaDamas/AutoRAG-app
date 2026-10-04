@@ -16,11 +16,14 @@
  * and bounded both by entry count and total bytes (least-recently-used
  * eviction). Callers receive a stable `autorag-thumb://` URL (never a base64
  * data URL); the protocol handler in `icon-protocol.ts` serves the cached
- * bytes for that identity. Two tiers share the cache and the pool: the
- * listing's 128px tile tier (`icons`) and the Inspector's 640px preview tier
- * (`preview`), so the panel renders the page's real content crisply at 2x.
- * Concurrent requests for the same identity are single-flighted, so one
- * listing that races another never regenerates the same file twice.
+ * bytes for that identity. Two tiers share the cache: the listing's 128px
+ * tile tier (`icons`) and the Inspector's 640px preview tier (`preview`), so
+ * the panel renders the page's real content crisply at 2x. Generation runs on
+ * two lanes — the listing pool and a small dedicated preview lane — because
+ * inspecting a file is the user's critical path and must never queue behind
+ * a slow batch. Concurrent requests for the same identity are
+ * single-flighted, so one listing that races another never regenerates the
+ * same file twice.
  */
 
 import { errorMessage } from "./fs-entry";
@@ -34,6 +37,13 @@ export const PREVIEW_ICON_SIZE = 640;
 export const ICON_LIMIT = 240;
 /** Native thumbnail calls allowed to run at once across every concurrent listing. */
 export const THUMBNAIL_CONCURRENCY = 8;
+/**
+ * Inspector previews allowed to run at once, on a lane separate from the
+ * listing pool: inspecting a file is the user's critical path, so a slow
+ * 240-file batch (videos can hold a permit until the deadline) must never
+ * make the panel wait.
+ */
+export const PREVIEW_CONCURRENCY = 2;
 /** OS type-icon lookups allowed to run at once across every concurrent listing. */
 export const SYSTEM_ICON_CONCURRENCY = 8;
 /** Icon cache entries kept before the least-recently-used ones are evicted. */
@@ -116,6 +126,8 @@ export interface IconProviderDeps {
 	readonly limit?: number;
 	/** Native thumbnail calls at once across calls; defaults to THUMBNAIL_CONCURRENCY. */
 	readonly thumbnailConcurrency?: number;
+	/** Inspector previews at once on their own lane; defaults to PREVIEW_CONCURRENCY. */
+	readonly previewConcurrency?: number;
 	/** getFileIcon lookups at once across calls; defaults to SYSTEM_ICON_CONCURRENCY. */
 	readonly systemConcurrency?: number;
 	/** Per-file native thumbnail deadline; defaults to THUMBNAIL_TIMEOUT_MS. */
@@ -244,6 +256,7 @@ export function createIconProvider(deps: IconProviderDeps = {}): IconSource {
 	const systemIcon = deps.systemIcon ?? defaultSystemIcon;
 	const limit = Math.max(0, Math.floor(deps.limit ?? ICON_LIMIT));
 	const thumbnailConcurrency = positive(deps.thumbnailConcurrency ?? THUMBNAIL_CONCURRENCY, THUMBNAIL_CONCURRENCY);
+	const previewConcurrency = positive(deps.previewConcurrency ?? PREVIEW_CONCURRENCY, PREVIEW_CONCURRENCY);
 	const systemConcurrency = positive(deps.systemConcurrency ?? SYSTEM_ICON_CONCURRENCY, SYSTEM_ICON_CONCURRENCY);
 	const thumbnailTimeoutMs = deps.thumbnailTimeoutMs ?? THUMBNAIL_TIMEOUT_MS;
 	const systemIconTimeoutMs = deps.systemIconTimeoutMs ?? SYSTEM_ICON_TIMEOUT_MS;
@@ -255,20 +268,24 @@ export function createIconProvider(deps: IconProviderDeps = {}): IconSource {
 		Math.max(1, Math.floor(deps.cacheMaxBytes ?? ICON_CACHE_MAX_BYTES)),
 	);
 	// One semaphore per provider (the app has exactly one), so concurrent
-	// listings share the lookup budget rather than each opening its own.
+	// listings share the lookup budget rather than each opening its own. The
+	// Inspector preview gets its own lane: the user is staring at the panel
+	// while a listing batch can hold every shared permit until the deadline.
 	const thumbnailSemaphore = createSemaphore(thumbnailConcurrency);
+	const previewSemaphore = createSemaphore(previewConcurrency);
 	const systemSemaphore = createSemaphore(systemConcurrency);
 	/** key -> the generation currently producing that identity, for single-flight reuse. */
 	const inflight = new Map<string, Promise<Uint8Array | null>>();
 
-	/** macOS/Windows: in-process Quick Look thumbnails, bounded and individually fault-tolerant. */
+	/** macOS/Windows: in-process Quick Look thumbnails, bounded per lane and individually fault-tolerant. */
 	async function runThumbnails(
 		targets: readonly IconTarget[],
 		resolve: (key: string, bytes: Uint8Array | null) => void,
+		semaphore: { acquire(): Promise<void>; release(): void },
 	): Promise<void> {
 		await Promise.all(
 			targets.map(async (target): Promise<void> => {
-				await thumbnailSemaphore.acquire();
+				await semaphore.acquire();
 				try {
 					const bytes = await withTimeout(thumbnail(target.path, target.size ?? ICON_SIZE), thumbnailTimeoutMs, "thumbnail");
 					resolve(cacheKey(target), bytes);
@@ -277,7 +294,7 @@ export function createIconProvider(deps: IconProviderDeps = {}): IconSource {
 					warn(`file-icon: thumbnail for ${target.path} failed: ${errorMessage(error)}`);
 					resolve(cacheKey(target), null);
 				} finally {
-					thumbnailSemaphore.release();
+					semaphore.release();
 				}
 			}),
 		);
@@ -305,8 +322,11 @@ export function createIconProvider(deps: IconProviderDeps = {}): IconSource {
 		);
 	}
 
-	/** Register single-flight promises for every missing identity, then generate them. */
-	function startGeneration(missing: readonly IconTarget[]): Array<Promise<Uint8Array | null>> {
+	/** Register single-flight promises for every missing identity, then generate them on the given lane. */
+	function startGeneration(
+		missing: readonly IconTarget[],
+		semaphore: { acquire(): Promise<void>; release(): void },
+	): Array<Promise<Uint8Array | null>> {
 		const resolvers = new Map<string, (bytes: Uint8Array | null) => void>();
 		const promises: Array<Promise<Uint8Array | null>> = [];
 		for (const target of missing) {
@@ -323,7 +343,7 @@ export function createIconProvider(deps: IconProviderDeps = {}): IconSource {
 			cache.set(key, bytes);
 			resolvers.get(key)?.(bytes);
 		};
-		const generation = usesNativeThumbnails ? runThumbnails(missing, resolve) : runSystem(missing, resolve);
+		const generation = usesNativeThumbnails ? runThumbnails(missing, resolve, semaphore) : runSystem(missing, resolve);
 		void generation.catch((error: unknown) => {
 			// Pool-level failure: the whole batch degrades to "no icon".
 			warn(`file-icon: icon generation failed for ${missing.length} file(s): ${errorMessage(error)}`);
@@ -361,7 +381,7 @@ export function createIconProvider(deps: IconProviderDeps = {}): IconSource {
 				missing.push(target);
 			}
 			if (missing.length > 0) {
-				for (const promise of startGeneration(missing)) awaited.push(promise);
+				for (const promise of startGeneration(missing, thumbnailSemaphore)) awaited.push(promise);
 			}
 			if (awaited.length > 0) await Promise.all(awaited);
 
@@ -384,7 +404,7 @@ export function createIconProvider(deps: IconProviderDeps = {}): IconSource {
 				if (pending !== undefined) {
 					await pending;
 				} else {
-					await Promise.all(startGeneration([sized]));
+					await Promise.all(startGeneration([sized], previewSemaphore));
 				}
 			}
 			const bytes = cache.get(key);

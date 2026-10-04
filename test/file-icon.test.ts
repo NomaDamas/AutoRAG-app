@@ -663,3 +663,29 @@ describe("preview tier", () => {
 		expect(icons.get("/docs/a.pdf")).toBe(iconUrl("/docs/a.pdf", MTIME));
 	});
 });
+
+describe("preview lane", () => {
+	it("never queues the Inspector preview behind a stuck listing batch", async () => {
+		// Given a one-permit listing pool fully occupied by a stalled batch
+		const barrier = Promise.withResolvers<void>();
+		const provider = createIconProvider({
+			platform: "darwin",
+			thumbnailConcurrency: 1,
+			previewConcurrency: 1,
+			thumbnail: async (_path, size) => {
+				if (size === PREVIEW_ICON_SIZE) return BYTES;
+				await barrier.promise;
+				return BYTES;
+			},
+		});
+		const listing = provider.icons([target("/docs/a.png"), target("/docs/b.png")]);
+
+		// When the inspector asks for a preview while the listing pool is stuck
+		const url = await provider.preview(target("/docs/deck.pdf"));
+
+		// Then it answers through its own lane instead of timing out behind the batch
+		expect(url).toBe(iconUrl("/docs/deck.pdf", MTIME, PREVIEW_ICON_SIZE));
+		barrier.resolve();
+		await listing;
+	});
+});
