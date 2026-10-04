@@ -134,6 +134,12 @@ export function SettingsView({
 		onSettingsChanged?.(next);
 	}
 
+	async function setAppearance(appearance: AppSettings["appearance"]): Promise<void> {
+		const next = await autorag.settings.set({ appearance });
+		setSettings(next);
+		onSettingsChanged?.(next);
+	}
+
 	async function setLanguage(language: AppSettings["language"]): Promise<void> {
 		const next = await autorag.settings.set({ language });
 		setSettings(next);
@@ -202,7 +208,17 @@ export function SettingsView({
 								<p className="linear-desc">Customize interface preferences and system startup behavior.</p>
 							</div>
 
-							<div className="linear-section-title">Display &amp; Motion</div>
+							<LinearRow name="Appearance" hint="Use one light or dark appearance across Finder, Settings, and Quick Look.">
+								<select
+									className="linear-select"
+									aria-label="Appearance"
+									value={settings.appearance}
+									onChange={(event) => void setAppearance(event.target.value as AppSettings["appearance"])}
+								>
+									<option value="light">Light</option>
+									<option value="dark">Dark</option>
+								</select>
+							</LinearRow>
 							<LinearRow name="Interface language" hint="Choose your preferred language for menus, labels, and citations.">
 								<select
 									className="linear-select"

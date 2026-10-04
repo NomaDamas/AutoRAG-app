@@ -52,6 +52,14 @@ window always runs the latest version.
 Set `AUTORAG_SKIP_DUPEY_CHECK=1` only when intentionally testing without
 version-family support. Use `PORT=9234 bun run dev` to select the Vite port.
 
+### Appearance
+
+Settings → General → Appearance controls the entire app with `Light` or `Dark`.
+The same persisted choice drives Finder, Settings, AI surfaces, and Quick Look
+through Electron's native theme; Quick Look has no separate appearance switch.
+The default is Light, and changing it while Quick Look is open updates the panel
+without reloading the previewed file. The choice is retained after restart.
+
 ## Live filesystem sync
 
 Folders shown in open tabs are watched for changes made by other apps. A

@@ -30,8 +30,13 @@ async function loadState(path: string): Promise<SettingsState> {
 		const parsed: unknown = JSON.parse(await readFile(path, "utf8"));
 		if (typeof parsed !== "object" || parsed === null) return emptyState();
 		const state = parsed as Partial<SettingsState>;
+		const persisted: Partial<AppSettings> = state.settings ?? {};
 		return {
-			settings: { ...DEFAULT_SETTINGS, ...(state.settings ?? {}) },
+			settings: {
+				...DEFAULT_SETTINGS,
+				...persisted,
+				appearance: persisted.appearance === "dark" ? "dark" : "light",
+			},
 			permissions: state.permissions ?? {},
 		};
 	} catch {
@@ -74,7 +79,8 @@ export function createSettingsService(deps: SettingsServiceDeps): SettingsBridge
 		get: async () => (await statePromise).settings,
 		set: async (patch) => {
 			const state = await mutate((current) => {
-				current.settings = { ...current.settings, ...patch };
+				const appearance = patch.appearance === "dark" || patch.appearance === "light" ? patch.appearance : current.settings.appearance;
+				current.settings = { ...current.settings, ...patch, appearance };
 			});
 			deps.onSettingsChanged?.(state.settings);
 			return state.settings;

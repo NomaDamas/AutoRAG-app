@@ -12,6 +12,8 @@
  */
 
 import {
+	AppWindow,
+	Archive,
 	ArrowUp,
 	Check,
 	ChevronLeft,
@@ -21,13 +23,17 @@ import {
 	Columns3,
 	Copy,
 	Database,
+	ExternalLink,
 	Eye,
+	Film,
 	FolderPlus,
 	History,
+	Image as ImageGlyph,
 	Info,
 	LayoutGrid,
 	Link2,
 	List,
+	PackageOpen,
 	PanelLeft,
 	PanelRight,
 	Pencil,
@@ -92,6 +98,19 @@ export const CopyIcon = glyph(Copy, 12, 2);
 export const TrashIcon = glyph(Trash2, 12, 2);
 
 export const ShareIcon = glyph(Share, 14, 2);
+
+/** Inspector action bar (18px call size is passed by the bar itself). */
+export const OpenIcon = glyph(ExternalLink, 16, 2);
+
+export const OpenWithIcon = glyph(AppWindow, 16, 1.9);
+
+export const CompressIcon = glyph(Archive, 16, 1.8);
+
+export const ExtractIcon = glyph(PackageOpen, 16, 1.8);
+
+export const ImageEditIcon = glyph(ImageGlyph, 16, 1.8);
+
+export const VideoConvertIcon = glyph(Film, 16, 1.8);
 
 export const CloseIcon = glyph(X, 10, 3);
 
