@@ -100,14 +100,20 @@ try {
 	check("C1 inspector defaults to minimum width", Math.round(inspectorBox.width), 300);
 	const aiDock = page.locator('section[aria-label="AI Search"]');
 	const aiHead = aiDock.locator(".ai-head");
+	const composer = page.locator('section[aria-label="AI Search"] input[placeholder*="파일, 메일"]');
 	check("C1 AI Search starts open", await aiHead.getAttribute("aria-expanded"), "true");
 	await page.keyboard.press("Meta+k");
 	await page.waitForFunction(() => document.querySelector('section[aria-label="AI Search"] .ai-head')?.getAttribute("aria-expanded") === "false");
 	check("C1 Cmd+K closes AI Search", await aiHead.getAttribute("aria-expanded"), "false");
 	await page.keyboard.press("Meta+k");
 	await page.waitForFunction(() => document.querySelector('section[aria-label="AI Search"] .ai-head')?.getAttribute("aria-expanded") === "true");
-	check("C1 Cmd+K opens AI Search", await aiHead.getAttribute("aria-expanded"), "true");
-	check("C1 Cmd+K focuses the composer", await page.locator('section[aria-label="AI Search"] input[placeholder*="파일, 메일"]').evaluate((input) => document.activeElement === input), true);
+	await composer.fill("draft survives toggle");
+	await page.keyboard.press("Meta+k");
+	await page.waitForFunction(() => document.querySelector('section[aria-label="AI Search"] .ai-head')?.getAttribute("aria-expanded") === "false");
+	await page.keyboard.press("Meta+k");
+	await page.waitForFunction(() => document.querySelector('section[aria-label="AI Search"] .ai-head')?.getAttribute("aria-expanded") === "true");
+	check("C1 Cmd+K preserves the composer draft", await composer.inputValue(), "draft survives toggle");
+	check("C1 Cmd+K refocuses the composer", await composer.evaluate((input) => document.activeElement === input), true);
 	await page.getByLabel("Places").getByRole("button", { name: "Documents", exact: true }).click();
 	const topRow = page.locator('[role="row"]').filter({ hasText: top }).first();
 	await topRow.waitFor({ timeout: 30000 });
@@ -272,12 +278,37 @@ try {
 	await page.waitForSelector(`.column[data-path="${topPath}/alpha"] .column-row[aria-label="alpha-renamed.md"]`, { timeout: 10000 });
 	check("C3 rename from pane 2 renames on disk", await Bun.file(`${topPath}/alpha/alpha-renamed.md`).exists(), true);
 
-	// Persistence: the chosen mode survives a relaunch.
+	// Pane widths remain user-resizable and persist across relaunch.
+	const dragSeparator = async (label, delta) => {
+		const separator = page.getByRole("separator", { name: label });
+		const box = await separator.boundingBox();
+		if (box === null) throw new Error(`${label} has no bounds`);
+		const y = box.y + box.height / 2;
+		const x = box.x + box.width / 2;
+		await page.mouse.move(x, y);
+		await page.mouse.down();
+		await page.mouse.move(x + delta, y);
+		await page.mouse.up();
+	};
+	await dragSeparator("Resize sidebar", 24);
+	await dragSeparator("Resize inspector", -24);
+	const resized = await page.evaluate(() => ({
+		sidebar: Math.round(document.querySelector(".sidebar")?.getBoundingClientRect().width ?? 0),
+		inspector: Math.round(document.querySelector(".inspector")?.getBoundingClientRect().width ?? 0),
+	}));
+	check("C4 resized pane widths apply", resized, { sidebar: 204, inspector: 324 });
+
+	// Persistence: the chosen mode and pane widths survive a relaunch.
 	await app.close();
 	app = await launchFinder({ userDataDir, env: { HOME: home } });
 	const relaunched = await finderWindow(app);
 	await relaunched.waitForSelector(".seg");
 	await relaunched.waitForSelector(".column", { timeout: 30000 });
+	const persistedSizes = await relaunched.evaluate(() => ({
+		sidebar: Math.round(document.querySelector(".sidebar")?.getBoundingClientRect().width ?? 0),
+		inspector: Math.round(document.querySelector(".inspector")?.getBoundingClientRect().width ?? 0),
+	}));
+	check("C4 pane widths survive a relaunch", persistedSizes, { sidebar: 204, inspector: 324 });
 	check(
 		"C4 the chosen mode survives a relaunch",
 		await relaunched.getByRole("group", { name: "View" }).locator("button[aria-pressed=true]").getAttribute("aria-label"),
