@@ -372,10 +372,7 @@
   --radius-full: 50%;
 
   /* --------------------------------------------------------------- §7 Scrollbars */
-  --scrollbar-size: 10px;
-  --scrollbar-thumb: #C9C9CE;
-  --scrollbar-radius: 10px;
-  --scrollbar-inset: 3px;
+  /* (none — native overlay scrollbars; see base.css §7) */
 }
 
 /* The persisted app appearance drives Electron's nativeTheme.themeSource. Both
@@ -472,7 +469,7 @@ html[data-appearance="dark"] {
     --vtag-exact-text: #FF9F0A;
 
     /* ------------------------------------------------------------ Scrollbars */
-    --scrollbar-thumb: #636366;
+    /* (none — native overlay scrollbars; see base.css §7) */
     --shimmer-gradient: linear-gradient(90deg,#2C2C2E 0%,#3A3A3C 50%,#2C2C2E 100%);
 
     /* -------------------------------------------------------------- Quick Look */
