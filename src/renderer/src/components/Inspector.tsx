@@ -16,12 +16,14 @@
  * renders no fabricated data. Esc handling stays in App's keymap.
  */
 
-import { useState, type MouseEvent as ReactMouseEvent, type ReactElement, type ReactNode } from "react";
+import { useEffect, useState, type MouseEvent as ReactMouseEvent, type ReactElement, type ReactNode } from "react";
 import type { ActionAnchor, ActionCapabilities } from "../../../shared/actions-contract";
+import type { FsFileDetails } from "../../../shared/fs-contract";
 import type { IndexStatus } from "../../../shared/index-contract";
 import type { CitationEvidence } from "../../../shared/search-contract";
 import type { FinderEntry } from "../data/entries";
 import { cn } from "../lib/cn";
+import { buildInfoRows, hasMoreInfoRows, visibleInfoRows } from "../state/inspector-info";
 import {
 	evidenceDetail,
 	evidenceKind,
@@ -202,7 +204,34 @@ function InfoHalf({
 	readonly onAction: (target: FileActionTarget, anchor: ActionAnchor | null) => void;
 }): ReactElement {
 	const [brief, setBrief] = useState(false);
+	const [details, setDetails] = useState<FsFileDetails | null>(null);
+	const focusedPath = entry?.path ?? null;
+	// Rich metadata is per-file and read on focus; a stale answer for a path the
+	// user already left must not overwrite the current one.
+	useEffect(() => {
+		setDetails(null);
+		setBrief(false);
+		if (focusedPath === null) return;
+		let cancelled = false;
+		const load = window.autorag?.fs?.details;
+		if (load === undefined) return;
+		void load(focusedPath)
+			.then((next) => {
+				if (!cancelled) setDetails(next);
+			})
+			.catch(() => {
+				if (!cancelled) setDetails(null);
+			});
+		return () => {
+			cancelled = true;
+		};
+	}, [focusedPath]);
 	const included = indexStatus === null || !indexStatus.excluded;
+	const infoRows = entry === null ? [] : buildInfoRows(details, entry);
+	const shownRows = visibleInfoRows(infoRows, brief);
+	const generalRows = shownRows.filter((row) => row.section === "general");
+	const imageRows = shownRows.filter((row) => row.section === "image");
+	const moreInfo = hasMoreInfoRows(infoRows);
 
 	return (
 		<div className={cn("inspector-half flex-1 min-h-0 flex flex-col overflow-hidden relative", split && "h-[50%] max-h-[50%]")}>
@@ -271,21 +300,35 @@ function InfoHalf({
 					<div className="info-section border-t border-border pt-12 mt-12">
 						<div className="section-title flex items-center justify-between mb-6">
 							<span className="text-meta font-semibold text-ink">일반 정보</span>
-							<button
-								type="button"
-								className="p-0 border-0 bg-transparent text-accent-text text-badge cursor-pointer"
-								onClick={() => setBrief((current) => !current)}
-							>
-								{brief ? "전체 정보" : "간략히"}
-							</button>
+							{moreInfo ? (
+								<button
+									type="button"
+									className="p-0 border-0 bg-transparent text-accent-text text-badge cursor-pointer"
+									onClick={() => setBrief((current) => !current)}
+								>
+									{brief ? "전체 정보" : "간략히"}
+								</button>
+							) : null}
 						</div>
 						<dl className="m-0">
-							<InfoRow label="종류" value={entry.kindLabel} />
-							<InfoRow label="크기" value={entry.sizeLabel} />
-							{brief ? null : <InfoRow label="위치" value={entry.location} />}
-							{brief ? null : <InfoRow label="수정한 날짜" value={entry.dateLabel} />}
+							{generalRows.map((row) => (
+								<InfoRow key={row.label} label={row.label} value={row.value} />
+							))}
 						</dl>
 					</div>
+
+					{imageRows.length === 0 ? null : (
+						<div className="info-section border-t border-border pt-12 mt-12">
+							<div className="section-title mb-6">
+								<span className="text-meta font-semibold text-ink">사진 정보</span>
+							</div>
+							<dl className="m-0">
+								{imageRows.map((row) => (
+									<InfoRow key={row.label} label={row.label} value={row.value} />
+								))}
+							</dl>
+						</div>
+					)}
 				</div>
 			)}
 
