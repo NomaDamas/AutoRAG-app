@@ -20,21 +20,26 @@ import { deflateSync } from "node:zlib";
 import { launchFinder, finderWindow } from "./launch-finder.mjs";
 import { chord } from "./platform.mjs";
 
-const ROOT = fileURLToPath(new URL("../../", import.meta.url)).replace(/\/$/, "");
-const EVIDENCE = `${ROOT}/.omo/evidence/ai-finder-app/qa-view-modes`;
+const ROOT = fileURLToPath(new URL("../../", import.meta.url)).replace(/[\\/]$/, "");
+const EVIDENCE = join(ROOT, ".omo", "evidence", "ai-finder-app", "qa-view-modes");
 mkdirSync(EVIDENCE, { recursive: true });
 
 const stamp = Date.now();
 const home = mkdtempSync(join(tmpdir(), "ulw-view-home-"));
-const documents = `${home}/Documents`;
+const documents = join(home, "Documents");
 const top = `ulw-view-${stamp}`;
-const topPath = `${documents}/${top}`;
+// Native-separator paths: the app's data-path attributes join with path.sep,
+// so the lane's selectors must too (issue #51).
+const topPath = join(documents, top);
+const alphaPath = join(topPath, "alpha");
+const betaPath = join(alphaPath, "beta");
+const gammaPath = join(betaPath, "gamma");
 // top/ alpha/ beta/ gamma/ delta.txt, plus files at every level
 const tree = {
 	[topPath]: ["alpha/", "red.png", "blue.png", "notes.md"],
-	[`${topPath}/alpha`]: ["beta/", "alpha-1.md", "alpha-2.md"],
-	[`${topPath}/alpha/beta`]: ["gamma/", "beta-1.md"],
-	[`${topPath}/alpha/beta/gamma`]: ["delta.txt"],
+	[alphaPath]: ["beta/", "alpha-1.md", "alpha-2.md"],
+	[betaPath]: ["gamma/", "beta-1.md"],
+	[gammaPath]: ["delta.txt"],
 };
 
 function crc32(buf) {
@@ -76,7 +81,7 @@ for (const [dir, items] of Object.entries(tree)) {
 	mkdirSync(dir, { recursive: true });
 	for (const item of items) {
 		if (item.endsWith("/")) continue;
-		const file = `${dir}/${item}`;
+		const file = join(dir, item);
 		if (item === "red.png") await Bun.write(file, solidPng(256, [220, 40, 40]));
 		else if (item === "blue.png") await Bun.write(file, solidPng(256, [40, 60, 220]));
 		else await Bun.write(file, `fixture ${item}\n`);
@@ -146,7 +151,7 @@ try {
 	await page.waitForFunction(() => document.querySelector(".toolbar-title")?.textContent === "alpha");
 	await page.waitForSelector('.icon-tile[aria-label="alpha-1.md"]');
 	check("C2 double-click on a folder tile opens it", await page.locator(".toolbar-title").textContent(), "alpha");
-	check("C2 opened folder shows its tiles", await page.locator(".icon-tile").count(), tree[`${topPath}/alpha`].length);
+	check("C2 opened folder shows its tiles", await page.locator(".icon-tile").count(), tree[alphaPath].length);
 	await page.getByRole("button", { name: "Back" }).click();
 	await page.waitForFunction((name) => document.querySelector(".toolbar-title")?.textContent === name, top);
 
@@ -172,13 +177,13 @@ try {
 	check("C3 columns start with the current folder only", await panes(), [topPath]);
 	await page.locator(`.column[data-path="${topPath}"] .column-row[aria-label="alpha"]`).click();
 	await page.waitForFunction(() => document.querySelectorAll(".column").length === 2);
-	check("C3 folder in pane 1 opens pane 2", await panes(), [topPath, `${topPath}/alpha`]);
-	await page.waitForSelector(`.column[data-path="${topPath}/alpha"] .column-row`);
+	check("C3 folder in pane 1 opens pane 2", await panes(), [topPath, alphaPath]);
+	await page.waitForSelector(`.column[data-path="${alphaPath}"] .column-row`);
 	check("C3 pane 2 lists the folder's children", await paneNames(1), ["alpha-1.md", "alpha-2.md", "beta"]);
-	await page.locator(`.column[data-path="${topPath}/alpha"] .column-row[aria-label="beta"]`).click();
+	await page.locator(`.column[data-path="${alphaPath}"] .column-row[aria-label="beta"]`).click();
 	await page.waitForFunction(() => document.querySelectorAll(".column").length === 3);
-	await page.waitForSelector(`.column[data-path="${topPath}/alpha/beta"] .column-row`);
-	check("C3 subfolder in pane 2 opens pane 3", await panes(), [topPath, `${topPath}/alpha`, `${topPath}/alpha/beta`]);
+	await page.waitForSelector(`.column[data-path="${betaPath}"] .column-row`);
+	check("C3 subfolder in pane 2 opens pane 3", await panes(), [topPath, alphaPath, betaPath]);
 	check("C3 pane 3 lists the sub-subfolder", await paneNames(2), ["beta-1.md", "gamma"]);
 	// v7 marks the opened-but-not-selected folder row by muting it (`text-ink-muted`)
 	// instead of the v6 `column-row--opened` modifier; the selected state stays on aria-selected.
@@ -189,35 +194,35 @@ try {
 		[true, "false"],
 	);
 	await page.screenshot({ path: `${EVIDENCE}/columns-3.png` });
-	await page.locator(`.column[data-path="${topPath}/alpha/beta"] .column-row[aria-label="gamma"]`).click();
-	await page.waitForFunction((p) => document.querySelector(".column")?.getAttribute("data-path") === p, `${topPath}/alpha`);
-	await page.waitForSelector(`.column[data-path="${topPath}/alpha/beta/gamma"] .column-row`);
-	check("C3 folder in pane 3 slides the panes (still 3, pane 1 = old pane 2)", await panes(), [`${topPath}/alpha`, `${topPath}/alpha/beta`, `${topPath}/alpha/beta/gamma`]);
+	await page.locator(`.column[data-path="${betaPath}"] .column-row[aria-label="gamma"]`).click();
+	await page.waitForFunction((p) => document.querySelector(".column")?.getAttribute("data-path") === p, alphaPath);
+	await page.waitForSelector(`.column[data-path="${gammaPath}"] .column-row`);
+	check("C3 folder in pane 3 slides the panes (still 3, pane 1 = old pane 2)", await panes(), [alphaPath, betaPath, gammaPath]);
 	check("C3 slid pane 3 lists gamma", await paneNames(2), ["delta.txt"]);
 	check("C3 breadcrumb follows the first pane", await page.locator(".toolbar-title").textContent(), "alpha");
 	await page.screenshot({ path: `${EVIDENCE}/columns-slid.png` });
-	await page.locator(`.column[data-path="${topPath}/alpha/beta/gamma"] .column-row[aria-label="delta.txt"]`).click();
+	await page.locator(`.column[data-path="${gammaPath}"] .column-row[aria-label="delta.txt"]`).click();
 	await page.keyboard.press("ArrowLeft");
 	check("C3 ArrowLeft moves back to the parent folder row", await page.locator('.column-row[aria-selected="true"]').getAttribute("aria-label"), "gamma");
 	await page.keyboard.press("ArrowLeft");
 	await page.keyboard.press("ArrowLeft");
 	await page.waitForFunction((p) => document.querySelector(".column")?.getAttribute("data-path") === p, topPath);
 	// Like Finder, stepping left closes the rightmost pane: the focused folder's contents stay open.
-	check("C3 ArrowLeft past pane 1 slides the panes back", await panes(), [topPath, `${topPath}/alpha`]);
+	check("C3 ArrowLeft past pane 1 slides the panes back", await panes(), [topPath, alphaPath]);
 	check("C3 slid-back focus is the folder it slid from", await page.locator('.column-row[aria-selected="true"]').getAttribute("aria-label"), "alpha");
 	await page.locator(`.column[data-path="${topPath}"] .column-row[aria-label="notes.md"]`).click();
 	check("C3 choosing a file closes the deeper panes", await panes(), [topPath]);
 
 	// Column-view context menu rename in pane 2
 	await page.locator(`.column[data-path="${topPath}"] .column-row[aria-label="alpha"]`).click();
-	await page.waitForSelector(`.column[data-path="${topPath}/alpha"] .column-row[aria-label="alpha-1.md"]`);
-	await page.locator(`.column[data-path="${topPath}/alpha"] .column-row[aria-label="alpha-1.md"]`).click({ button: "right" });
+	await page.waitForSelector(`.column[data-path="${alphaPath}"] .column-row[aria-label="alpha-1.md"]`);
+	await page.locator(`.column[data-path="${alphaPath}"] .column-row[aria-label="alpha-1.md"]`).click({ button: "right" });
 	await page.getByRole("menuitem", { name: /이름 변경/ }).click();
 	await page.keyboard.press(chord("a"));
 	await page.keyboard.type("alpha-renamed.md");
 	await page.keyboard.press("Enter");
-	await page.waitForSelector(`.column[data-path="${topPath}/alpha"] .column-row[aria-label="alpha-renamed.md"]`, { timeout: 10000 });
-	check("C3 rename from pane 2 renames on disk", await Bun.file(`${topPath}/alpha/alpha-renamed.md`).exists(), true);
+	await page.waitForSelector(`.column[data-path="${alphaPath}"] .column-row[aria-label="alpha-renamed.md"]`, { timeout: 10000 });
+	check("C3 rename from pane 2 renames on disk", await Bun.file(join(alphaPath, "alpha-renamed.md")).exists(), true);
 
 	// Persistence: the chosen mode survives a relaunch.
 	await app.close();

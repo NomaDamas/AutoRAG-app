@@ -279,5 +279,8 @@ await page.screenshot({ path: join(EVIDENCE, "06-datasource.png") });
 
 
 log(`RESULT ${failures.length === 0 ? "ALL PASS" : `${failures.length} FAILURES: ${failures.join(" | ")}`}`);
+// Close before sweeping: on Windows, deleting userData while Electron is
+// still tearing down loses the EBUSY race even with rmRetry.
+await app?.close().catch(() => undefined);
 sweep();
 process.exitCode = failures.length === 0 ? 0 : 1;

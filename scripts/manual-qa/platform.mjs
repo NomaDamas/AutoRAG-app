@@ -62,12 +62,28 @@ export function sleep(ms) {
 }
 
 /**
+ * The Finder list virtualizes rows, so a target sorting below the fold is not
+ * in the DOM. Scrolls `.list` one page down, wrapping back to the top at the
+ * end, so a caller can sweep a long listing until its locator mounts.
+ */
+export async function scrollFinderList(page) {
+	await page
+		.locator(".list")
+		.first()
+		.evaluate((element) => {
+			if (element.scrollTop + element.clientHeight >= element.scrollHeight) element.scrollTop = 0;
+			else element.scrollTop += Math.max(200, element.clientHeight - 80);
+		})
+		.catch(() => undefined);
+}
+
+/**
  * `rmSync` with a short retry on Windows: right after the app closes, Electron
  * can still hold userData or a fixture briefly, so a single `rm` fails with
  * EBUSY/EPERM. Retries only on Windows; elsewhere one attempt, one throw.
  */
 export function rmRetry(path) {
-	const attempts = isWindows ? 25 : 1;
+	const attempts = isWindows ? 40 : 1;
 	for (let attempt = 1; ; attempt += 1) {
 		try {
 			rmSync(path, { recursive: true, force: true });
@@ -75,7 +91,7 @@ export function rmRetry(path) {
 		} catch (error) {
 			if (!isWindows || attempt >= attempts) throw error;
 			// Synchronous pause; Atomics.wait is allowed on Node/Bun's main thread.
-			Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 150);
+			Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 250);
 		}
 	}
 }

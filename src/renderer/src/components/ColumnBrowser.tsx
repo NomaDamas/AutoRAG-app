@@ -91,7 +91,8 @@ export function ColumnBrowser({
 								"column flex-1 basis-0 min-w-0 min-h-0 p-6 overflow-auto border-r border-border",
 								dropBackgroundDir === pane.path && "bg-accent-drop-hover",
 							)}
-							onDragOver={background.onDragOver}
+							data-path={pane.path}
+ 							onDragOver={background.onDragOver}
 							onDrop={background.onDrop}
 							onDragLeave={background.onDragLeave}
 						>

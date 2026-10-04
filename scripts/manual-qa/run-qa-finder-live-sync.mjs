@@ -41,6 +41,13 @@ const OVERALL_TIMEOUT_MS = 12 * 60 * 1000;
  * false-fail there; both still catch a real regression.
  */
 const LIVE_BOUND_MS = isWindows ? 4000 : 1500;
+/**
+ * S7/S8 wait on @parcel/watcher noticing that a watched root disappeared. On
+ * Windows the native backend reports that (and unwinds the subscription)
+ * only after its own settle: CI measured ~5.6s where macOS FSEvents is
+ * immediate (issue #59). Everything else stays on the tight LIVE_BOUND_MS.
+ */
+const FOLDER_GONE_BOUND_MS = isWindows ? 10_000 : LIVE_BOUND_MS;
 const DUPLICATE_BODY = `${"Live sync duplicate fixture. ".repeat(80)}\n`;
 const DUMP_DIAGNOSTICS = process.env.QA_DUMP === "1";
 
@@ -643,7 +650,7 @@ async function runS7(page) {
 	try {
 		await waitFor(
 			async () => (await page.locator(".tab--active .tab__title").textContent())?.trim() === FIXTURE_FOLDER,
-			{ timeoutMs: LIVE_BOUND_MS, label: "tab to fall back to fixture folder" },
+		{ timeoutMs: FOLDER_GONE_BOUND_MS, label: "tab to fall back to fixture folder" },
 		);
 	} catch (error) {
 		const afterFailure = await page.evaluate(() => ({
@@ -665,9 +672,9 @@ async function runS7(page) {
 	}));
 	appendLog(`S7 after deletion: ${JSON.stringify(after)}`);
 	const elapsedMs = Date.now() - started;
-	if (elapsedMs > LIVE_BOUND_MS) throw new Error(`folder fallback took ${elapsedMs}ms > ${LIVE_BOUND_MS}ms`);
+	if (elapsedMs > FOLDER_GONE_BOUND_MS) throw new Error(`folder fallback took ${elapsedMs}ms > ${FOLDER_GONE_BOUND_MS}ms`);
 	await page.screenshot({ path: join(EVIDENCE, "S7.png") });
-	pass("S7 folder gone", `active tab ${FIXTURE_FOLDER}, toastCount=${toastCount} <= 0, in ${elapsedMs}ms <= ${LIVE_BOUND_MS}ms`);
+	pass("S7 folder gone", `active tab ${FIXTURE_FOLDER}, toastCount=${toastCount} <= 0, in ${elapsedMs}ms <= ${FOLDER_GONE_BOUND_MS}ms`);
 }
 
 async function runS8(page) {
@@ -675,14 +682,14 @@ async function runS8(page) {
 	await page.getByRole("button", { name: "Documents" }).click();
 	await waitForElectronLine(
 		(line) => line.includes(`[fs-watch] unwatch ${FIXTURE_DIR}`),
-		{ timeoutMs: LIVE_BOUND_MS, label: "fixture directory unwatch diagnostic" },
+		{ timeoutMs: FOLDER_GONE_BOUND_MS, label: "fixture directory unwatch diagnostic" },
 	);
 	const errors = electronLines.filter((line) => line.includes("[fs-watch]") && line.includes("Error"));
 	if (errors.length !== 0) throw new Error(`fs-watch errors: ${JSON.stringify(errors)}`);
 	const last = electronLines.find((line) => line.includes(`[fs-watch] unwatch ${FIXTURE_DIR}`));
 	const elapsedMs = Date.now() - started;
-	if (elapsedMs > LIVE_BOUND_MS) throw new Error(`unwatch took ${elapsedMs}ms > ${LIVE_BOUND_MS}ms`);
-	pass("S8 no leak", `unwatch observed=${JSON.stringify(last)} in ${elapsedMs}ms <= ${LIVE_BOUND_MS}ms; fs-watch Error count ${errors.length} <= 0`);
+	if (elapsedMs > FOLDER_GONE_BOUND_MS) throw new Error(`unwatch took ${elapsedMs}ms > ${FOLDER_GONE_BOUND_MS}ms`);
+	pass("S8 no leak", `unwatch observed=${JSON.stringify(last)} in ${elapsedMs}ms <= ${FOLDER_GONE_BOUND_MS}ms; fs-watch Error count ${errors.length} <= 0`);
 }
 
 async function runS9(page, family) {

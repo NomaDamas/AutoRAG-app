@@ -30,7 +30,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { collapseOrder } from "../../src/renderer/src/state/path-fit.ts";
 import { finderWindow, launchFinder, ROOT } from "./launch-finder.mjs";
-import { isWindows } from "./platform.mjs";
+import { isWindows, rmRetry } from "./platform.mjs";
 
 const EVIDENCE = join(ROOT, ".omo/evidence/ai-finder-app/qa-path-bar");
 rmSync(EVIDENCE, { recursive: true, force: true });
@@ -243,8 +243,9 @@ try {
 	for (const shot of shots) console.log(`${shot.name}: ${shot.fits}`);
 } finally {
 	if (app !== undefined) await app.close();
-	rmSync(fixture, { recursive: true, force: true });
-	rmSync(userDataDir, { recursive: true, force: true });
+	// Electron can hold userData briefly after close on Windows (EBUSY).
+	rmRetry(fixture);
+	rmRetry(userDataDir);
 }
 
 const failed = results.filter((result) => !result.pass);
