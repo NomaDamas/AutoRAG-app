@@ -22,7 +22,7 @@
  *   state.
  */
 
-import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { deflateSync } from "node:zlib";
@@ -88,7 +88,6 @@ function solidPng(size, [r, g, b]) {
 // A fixed HOME, not mkdtemp: the Models tab surfaces a model-status error that
 // embeds the HOME path, so a random one would differ on every run.
 const home = join(tmpdir(), "ulw-parity-home");
-rmSync(home, { recursive: true, force: true });
 mkdirSync(home, { recursive: true });
 
 /** Every fixture file gets this mtime so the Modified column is stable. */
@@ -165,18 +164,25 @@ const tree = {
 	[`${top}/alpha/beta/gamma`]: ["delta.txt"],
 };
 
+const createdDirs = new Set();
 for (const [dir, items] of Object.entries(tree)) {
-	mkdirSync(dir, { recursive: true });
+	if (!existsSync(dir)) {
+		mkdirSync(dir, { recursive: true });
+		createdDirs.add(dir);
+	}
 	for (const item of items) {
 		if (item.endsWith("/")) continue;
 		const file = join(dir, item);
-		if (item === "red.png") await Bun.write(file, solidPng(256, [220, 40, 40]));
-		else await Bun.write(file, `fixture ${item}\n`);
-		// The list's Modified column renders the mtime, so a fresh fixture would
-		// differ between two runs taken a minute apart.
+		if (existsSync(file)) continue;
+		if (item === "red.png") writeFileSync(file, solidPng(256, [220, 40, 40]));
+		else writeFileSync(file, `fixture ${item}\n`);
+		// Keep creation/change metadata stable after the first fixture initialization.
 		utimesSync(file, FIXTURE_MTIME, FIXTURE_MTIME);
 	}
 }
+
+for (const dir of createdDirs) utimesSync(dir, FIXTURE_MTIME, FIXTURE_MTIME);
+
 
 seedChatHistory(documents);
 

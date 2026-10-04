@@ -14,6 +14,7 @@
 import {
 	AppWindow,
 	Archive,
+	ArrowDownUp,
 	ArrowUp,
 	Check,
 	ChevronLeft,
@@ -30,6 +31,7 @@ import {
 	History,
 	Image as ImageGlyph,
 	Info,
+	Layers,
 	LayoutGrid,
 	Link2,
 	List,
@@ -161,6 +163,10 @@ export const PanelRightIcon = glyph(PanelRight, 16, 1.9);
 export const InfoIcon = glyph(Info, 16, 1.8);
 
 export const FolderPlusIcon = glyph(FolderPlus, 16, 1.9);
+
+export const SortIcon = glyph(ArrowDownUp, 16, 1.9);
+
+export const GroupIcon = glyph(Layers, 16, 1.9);
 
 export const DatabaseIcon = glyph(Database, 16, 1.8);
 

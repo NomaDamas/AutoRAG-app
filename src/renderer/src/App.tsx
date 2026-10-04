@@ -541,6 +541,10 @@ export function App(): ReactElement {
 						onForward={finder.forward}
 						viewMode={finder.viewMode}
 						onViewModeChange={finder.setViewMode}
+						sort={finder.sort}
+						grouping={finder.grouping}
+						onApplySort={finder.applySort}
+						onSetGrouping={finder.setGrouping}
 						inspectorVisible={inspectorVisible}
 						onToggleInspector={() => setInspectorVisible((visible) => !visible)}
 						aiOpen={aiOpen}
@@ -598,7 +602,7 @@ export function App(): ReactElement {
 							) : null}
 							{finder.layout === "icons" ? (
 								<IconGrid
-									rows={finder.stackRows}
+									sections={finder.stackSections}
 									listRef={finder.listRef}
 									searching={finder.searching}
 									emptyText={finder.emptyText}
@@ -645,7 +649,7 @@ export function App(): ReactElement {
 										onResizeColumn={(key: string, px: number) => setListColumns((current) => setListColumnWidth(current, key, px))}
 									/>
 									<FileList
-										rows={finder.stackRows}
+										sections={finder.stackSections}
 										listPath={finder.path}
 										columns={listColumns}
 										minWidth={listFixedWidth(listColumns)}
