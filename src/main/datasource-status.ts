@@ -57,15 +57,38 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 	return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
+/**
+ * Executable suffixes to try for a bare CLI name. POSIX names carry their own
+ * extension, so only the name itself is tried; Windows resolves by extension
+ * (PATHEXT: .COM/.EXE/.BAT/.CMD/...). "" is always first so an exact-name match
+ * still wins before any suffix is appended.
+ */
+function executableExtensions(env: NodeJS.ProcessEnv): readonly string[] {
+	const pathext = env.PATHEXT;
+	if (pathext === undefined || pathext.length === 0) return [""];
+	return ["", ...pathext.split(";").map((extension) => extension.trim()).filter((extension) => extension.length > 0)];
+}
+
+function isExecutableFile(candidate: string): boolean {
+	try {
+		accessSync(candidate, constants.X_OK);
+		return true;
+	} catch {
+		return false;
+	}
+}
+
 function findExecutable(name: string, env: NodeJS.ProcessEnv): string | null {
-	const candidates = name.includes("/")
-		? [name]
-		: (env.PATH ?? "").split(delimiter).filter(Boolean).map((dir) => join(dir, name));
-	for (const candidate of candidates) {
-		try {
-			accessSync(candidate, constants.X_OK);
-			return candidate;
-		} catch {}
+	if (name.includes("/") || name.includes("\\")) {
+		return isExecutableFile(name) ? name : null;
+	}
+	const extensions = executableExtensions(env);
+	const directories = (env.PATH ?? "").split(delimiter).filter(Boolean);
+	for (const directory of directories) {
+		for (const extension of extensions) {
+			const candidate = join(directory, `${name}${extension}`);
+			if (isExecutableFile(candidate)) return candidate;
+		}
 	}
 	return null;
 }

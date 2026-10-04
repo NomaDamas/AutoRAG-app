@@ -1,7 +1,7 @@
 import type { Dirent } from "node:fs";
 import { cp, lstat, mkdir, readdir, rename as fsRename, rm } from "node:fs/promises";
 import { homedir } from "node:os";
-import { basename, dirname, isAbsolute, join } from "node:path";
+import { basename, dirname, isAbsolute, join, win32 } from "node:path";
 import {
 	RECENTS_PATH,
 	type DirListing,
@@ -43,6 +43,8 @@ export type OsKindLookup = (path: string, ext: string) => Promise<string | null>
 export interface FsServiceDeps {
 	readonly shell: FsShell;
 	readonly clipboard: FsOsClipboard;
+	/** Defaults to process.platform; tests inject one to pin platform-specific behavior. */
+	readonly platform?: NodeJS.Platform;
 	/** Defaults to os.homedir(); tests inject a fixture home. */
 	readonly homeDir?: string;
 	/** Playwright points the first tab here. Absent in normal runs. */
@@ -74,6 +76,16 @@ export class FsRenameError extends Error {
 /** Search stays bounded: shallow walk, hard result cap, symlinked dirs not followed. */
 const SEARCH_MAX_DEPTH = 4;
 const SEARCH_MAX_RESULTS = 200;
+
+/**
+ * Normalize a path before handing it to Electron's `shell` (trash/reveal/open).
+ * Windows rejects forward-slash paths in `shell.trashItem` ("Failed to parse
+ * path"), while Node's own fs calls accept them, so only the OS handoff needs
+ * backslashes. POSIX platforms keep the path byte-for-byte.
+ */
+export function toHandoffPath(path: string, platform: NodeJS.Platform): string {
+	return platform === "win32" ? win32.normalize(path) : path;
+}
 
 /**
  * Finder's new-folder naming for the Nth mkdir attempt: the first free name is
@@ -171,6 +183,7 @@ async function walkForSearch(dir: string, depth: number, context: SearchContext)
 }
 
 export function createFsService(deps: FsServiceDeps): FsCoreBridge {
+	const platform = deps.platform ?? process.platform;
 	const home = deps.homeDir ?? homedir();
 	const recents = deps.recents ?? createRecentsStore({ directory: join(home, "recents") });
 	const osKind: OsKindLookup = deps.osKind ?? createOsKindResolver().kindFor;
@@ -327,17 +340,22 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 				available: await isAvailable(deps.qaRoot),
 			});
 		}
-		const fixed: readonly { readonly name: string; readonly path: string; readonly section: "favorites" | "cloud" }[] =
-			[
-				{ name: "Desktop", path: join(home, "Desktop"), section: "favorites" },
-				{ name: "Downloads", path: join(home, "Downloads"), section: "favorites" },
-				{ name: "Documents", path: join(home, "Documents"), section: "favorites" },
-				{ name: "iCloud Drive", path: join(home, "Library", "Mobile Documents", "com~apple~CloudDocs"), section: "cloud" },
-			];
-		for (const spec of fixed) {
-			result.push({ name: spec.name, path: spec.path, section: spec.section, available: await isAvailable(spec.path) });
+		const favorites: readonly { readonly name: string; readonly path: string }[] = [
+			{ name: "Desktop", path: join(home, "Desktop") },
+			{ name: "Downloads", path: join(home, "Downloads") },
+			{ name: "Documents", path: join(home, "Documents") },
+		];
+		for (const spec of favorites) {
+			result.push({ name: spec.name, path: spec.path, section: "favorites", available: await isAvailable(spec.path) });
 		}
-		// Third-party cloud drives appear only when their well-known paths exist.
+		// Cloud drives appear only while they are actually mounted and readable.
+		// iCloud Drive is a macOS-only source, so Windows never sees its path.
+		if (platform === "darwin") {
+			const iCloud = join(home, "Library", "Mobile Documents", "com~apple~CloudDocs");
+			if (await isAvailable(iCloud)) {
+				result.push({ name: "iCloud Drive", path: iCloud, section: "cloud", available: true });
+			}
+		}
 		const cloudStorage = join(home, "Library", "CloudStorage");
 		const googleDrive = await resolveCloudDrive(cloudStorage, "GoogleDrive-", join(home, "Google Drive"));
 		if (googleDrive !== null) {
@@ -464,15 +482,15 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 		duplicate,
 		rename,
 		createFolder,
-		trash: (paths) => runBatch(paths, (path) => deps.shell.trashItem(path)),
+		trash: (paths) => runBatch(paths, (path) => deps.shell.trashItem(toHandoffPath(path, platform))),
 		reveal: async (path) => {
-			deps.shell.showItemInFolder(path);
+			deps.shell.showItemInFolder(toHandoffPath(path, platform));
 		},
 		quickLook: async (path) => {
 			await recents.record(path);
 		},
 		open: async (path) => {
-			const message = await deps.shell.openPath(path);
+			const message = await deps.shell.openPath(toHandoffPath(path, platform));
 			// Failures surface verbatim — the operator sees the real message.
 			if (message !== "") {
 				throw new Error(message);

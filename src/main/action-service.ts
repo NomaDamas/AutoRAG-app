@@ -17,7 +17,7 @@
 
 import { execFile } from "node:child_process";
 import { createReadStream, createWriteStream } from "node:fs";
-import { lstat, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, join, resolve, sep } from "node:path";
 import { finished } from "node:stream/promises";
 import { Unzip, UnzipInflate, Zip, ZipDeflate, ZipPassThrough } from "fflate";
@@ -82,6 +82,20 @@ const LOSSY_QUALITY = 80;
 const JPEG_QUALITY = "70";
 /** sips writes these; `webp` arrives only when ffmpeg can encode it. */
 const SIPS_FORMATS: readonly ImageFormat[] = ["jpeg", "png", "tiff", "heic"];
+/**
+ * ffmpeg image encoders that satisfy each format on the non-macOS backend. The
+ * session probe keeps only the formats whose encoder is actually listed, so the
+ * Inspector never offers a conversion this build cannot write.
+ */
+const FFMPEG_IMAGE_ENCODERS: readonly { readonly format: ImageFormat; readonly encoders: readonly string[] }[] = [
+	{ format: "jpeg", encoders: ["mjpeg"] },
+	{ format: "png", encoders: ["png"] },
+	{ format: "webp", encoders: ["libwebp", "webp"] },
+	{ format: "tiff", encoders: ["tiff"] },
+];
+/** HEIC needs a HEVC encoder and the heif muxer; both must be present. */
+const HEIC_ENCODER = "libx265";
+const HEIC_MUXER = "heif";
 const VIDEO_CONTAINERS: readonly VideoContainer[] = ["mp4", "mov", "mkv"];
 /** The extension written for each image format. */
 const FORMAT_EXTENSIONS: Readonly<Record<ImageFormat, string>> = {
@@ -307,6 +321,26 @@ async function readZip(source: string, destDir: string, stem: string): Promise<v
 	if (failure !== null) throw failure;
 }
 
+/** Encoder names from `ffmpeg -encoders`: six flag characters, then the name. */
+function parseEncoderNames(listing: string): ReadonlySet<string> {
+	const names = new Set<string>();
+	for (const line of listing.split("\n")) {
+		const name = /^\s*[A-Z.]{6}\s+(\S+)/.exec(line)?.[1];
+		if (name !== undefined) names.add(name);
+	}
+	return names;
+}
+
+/** Muxer names from `ffmpeg -muxers`: two flag characters, then the name. */
+function parseMuxerNames(listing: string): ReadonlySet<string> {
+	const names = new Set<string>();
+	for (const line of listing.split("\n")) {
+		const name = /^\s*[A-Z.]{2}\s+(\S+)/.exec(line)?.[1];
+		if (name !== undefined) names.add(name);
+	}
+	return names;
+}
+
 /** External-tool argv, one function per command shape. */
 function sipsConvertArgs(source: string, target: string, format: ImageFormat): readonly string[] {
 	return ["-s", "format", format, "--out", target, source];
@@ -324,6 +358,45 @@ function ffmpegWebpArgs(source: string, target: string): readonly string[] {
 	return ["-y", "-i", source, "-c:v", "libwebp", "-quality", String(LOSSY_QUALITY), target];
 }
 
+/** Lossy quality flags for the ffmpeg image backend; lossless formats add none. */
+function ffmpegQualityArgs(format: ImageFormat): readonly string[] {
+	switch (format) {
+		case "jpeg":
+		case "heic":
+			return ["-q:v", JPEG_QUALITY];
+		case "webp":
+			return ["-quality", String(LOSSY_QUALITY)];
+		default:
+			return [];
+	}
+}
+
+/** Decode one frame and re-encode to `format`, keeping alpha where the target supports it. */
+function ffmpegConvertArgs(source: string, target: string, format: ImageFormat): readonly string[] {
+	const args = ["-y", "-i", source, "-frames:v", "1"];
+	if (format === "jpeg") args.push("-pix_fmt", "yuvj420p");
+	else if (format === "png" || format === "webp") args.push("-pix_fmt", "rgba");
+	args.push(...ffmpegQualityArgs(format), target);
+	return args;
+}
+
+/** Fit inside a `maxEdge` box without enlarging, preserving aspect ratio. */
+function ffmpegResizeArgs(source: string, target: string, maxEdge: number, format: ImageFormat): readonly string[] {
+	const filter = `scale='min(iw,${maxEdge})':'min(ih,${maxEdge})':force_original_aspect_ratio=decrease`;
+	const args = ["-y", "-i", source, "-frames:v", "1", "-vf", filter];
+	args.push(...ffmpegQualityArgs(format), target);
+	return args;
+}
+
+/** Re-encode for size: PNG uses maximum deflate, lossy formats re-encode at the tuning quality. */
+function ffmpegOptimizeArgs(source: string, target: string, format: ImageFormat): readonly string[] {
+	const args = ["-y", "-i", source, "-frames:v", "1"];
+	if (format === "png") args.push("-compression_level", "9", "-pred", "mixed");
+	else args.push(...ffmpegQualityArgs(format));
+	args.push(target);
+	return args;
+}
+
 function ffmpegRemuxArgs(source: string, target: string): readonly string[] {
 	return ["-y", "-i", source, "-c", "copy", target];
 }
@@ -334,6 +407,8 @@ export function createActionService(deps: ActionServiceDeps): ActionService {
 	const share = deps.share ?? null;
 	/** Memoized ffmpeg probe: one `ffmpeg -version` per session, at most. */
 	let ffmpeg: Promise<boolean> | null = null;
+	/** Memoized image-encoder probe: one `-encoders` / `-muxers` pass per session. */
+	let ffmpegImageFormats: Promise<readonly ImageFormat[]> | null = null;
 
 	function hasFfmpeg(): Promise<boolean> {
 		ffmpeg ??= run("ffmpeg", ["-version"], { timeoutMs: 5000 }).then(
@@ -343,36 +418,79 @@ export function createActionService(deps: ActionServiceDeps): ActionService {
 		return ffmpeg;
 	}
 
-	function imageTargets(ffmpegPresent: boolean): readonly ImageFormat[] {
-		if (platform !== "darwin") return [];
-		return ffmpegPresent ? [...SIPS_FORMATS, "webp"] : SIPS_FORMATS;
+	/**
+	 * The image formats this machine's ffmpeg can write, read once from its
+	 * encoder list (and the heif muxer for HEIC). A machine without ffmpeg — or a
+	 * build missing an encoder — simply does not expose that format.
+	 */
+	function probeImageFormats(): Promise<readonly ImageFormat[]> {
+		ffmpegImageFormats ??= (async () => {
+			try {
+				const [encoders, muxers] = await Promise.all([
+					run("ffmpeg", ["-hide_banner", "-encoders"], { timeoutMs: 5000 }),
+					run("ffmpeg", ["-hide_banner", "-muxers"], { timeoutMs: 5000 }),
+				]);
+				const encoderNames = parseEncoderNames(encoders.stdout);
+				const formats = FFMPEG_IMAGE_ENCODERS.filter((spec) =>
+					spec.encoders.some((name) => encoderNames.has(name)),
+				).map((spec) => spec.format);
+				if (encoderNames.has(HEIC_ENCODER) && parseMuxerNames(muxers.stdout).has(HEIC_MUXER)) formats.push("heic");
+				return formats;
+			} catch {
+				return [];
+			}
+		})();
+		return ffmpegImageFormats;
+	}
+
+	async function imageTargets(): Promise<readonly ImageFormat[]> {
+		if (platform !== "darwin") return probeImageFormats();
+		return (await hasFfmpeg()) ? [...SIPS_FORMATS, "webp"] : SIPS_FORMATS;
 	}
 
 	async function convertImage(source: string, format: ImageFormat): Promise<string> {
 		const target = await uniqueChild(dirname(source), `${stemOf(source)}.${FORMAT_EXTENSIONS[format]}`);
-		if (format === "webp") await run("ffmpeg", ffmpegWebpArgs(source, target));
-		else await run("sips", sipsConvertArgs(source, target, format));
+		if (platform === "darwin" && format !== "webp") await run("sips", sipsConvertArgs(source, target, format));
+		else if (platform === "darwin") await run("ffmpeg", ffmpegWebpArgs(source, target));
+		else await run("ffmpeg", ffmpegConvertArgs(source, target, format));
 		return target;
 	}
 
 	async function resizeImage(source: string, maxEdge: number): Promise<string> {
 		const format = imageFormatOf(source);
-		if (format === null || format === "webp") {
+		if (format === null) throw new Error("이 형식은 크기 조절을 지원하지 않습니다");
+		if (platform === "darwin" && format === "webp") {
+			throw new Error("이 형식은 크기 조절을 지원하지 않습니다");
+		}
+		if (platform !== "darwin" && !(await probeImageFormats()).includes(format)) {
 			throw new Error("이 형식은 크기 조절을 지원하지 않습니다");
 		}
 		const target = await uniqueChild(dirname(source), `${stemOf(source)}-${maxEdge}${extname(source)}`);
-		await run("sips", sipsResizeArgs(source, target, maxEdge));
+		if (platform === "darwin") await run("sips", sipsResizeArgs(source, target, maxEdge));
+		else await run("ffmpeg", ffmpegResizeArgs(source, target, maxEdge, format));
 		return target;
 	}
 
 	async function optimizeImage(source: string): Promise<string> {
 		const format = imageFormatOf(source);
-		if (format === null || !LOSSY_FORMATS.includes(format)) {
+		if (format === null) throw new Error("이 형식은 용량 최적화를 지원하지 않습니다");
+		if (platform === "darwin" && !LOSSY_FORMATS.includes(format)) {
+			throw new Error("이 형식은 용량 최적화를 지원하지 않습니다");
+		}
+		if (platform !== "darwin" && !(await probeImageFormats()).includes(format)) {
 			throw new Error("이 형식은 용량 최적화를 지원하지 않습니다");
 		}
 		const target = await uniqueChild(dirname(source), `${stemOf(source)}-optimized${extname(source)}`);
-		if (format === "webp") await run("ffmpeg", ffmpegWebpArgs(source, target));
-		else await run("sips", sipsOptimizeArgs(source, target, format));
+		if (platform === "darwin" && format === "webp") await run("ffmpeg", ffmpegWebpArgs(source, target));
+		else if (platform === "darwin") await run("sips", sipsOptimizeArgs(source, target, format));
+		else {
+			await run("ffmpeg", ffmpegOptimizeArgs(source, target, format));
+			// Keep the output only when it actually shrank; ffmpeg may re-encode larger.
+			if ((await lstat(target)).size >= (await lstat(source)).size) {
+				await rm(target, { force: true });
+				throw new Error("이미 최적화된 파일입니다");
+			}
+		}
 		return target;
 	}
 
@@ -383,7 +501,7 @@ export function createActionService(deps: ActionServiceDeps): ActionService {
 				openWith: true,
 				share: platform === "darwin" && share !== null,
 				archive: true,
-				imageFormats: imageTargets(ffmpegPresent),
+				imageFormats: await imageTargets(),
 				videoContainers: ffmpegPresent ? VIDEO_CONTAINERS : [],
 			};
 		},
@@ -410,7 +528,7 @@ export function createActionService(deps: ActionServiceDeps): ActionService {
 					return { output: target, note: `${basename(target)} — 압축을 풀었습니다` };
 				}
 				case "convertImage": {
-					if (!imageTargets(await hasFfmpeg()).includes(request.format)) {
+					if (!(await imageTargets()).includes(request.format)) {
 						throw new Error(`${request.format.toUpperCase()} 변환을 지원하지 않습니다`);
 					}
 					const output = await convertImage(path, request.format);

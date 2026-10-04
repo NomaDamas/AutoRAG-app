@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 /**
  * Manual QA — the Finder view toggle (icons / list / columns).
  *
@@ -17,8 +18,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { deflateSync } from "node:zlib";
 import { launchFinder, finderWindow } from "./launch-finder.mjs";
+import { chord } from "./platform.mjs";
 
-const ROOT = new URL("../../", import.meta.url).pathname.replace(/\/$/, "");
+const ROOT = fileURLToPath(new URL("../../", import.meta.url)).replace(/\/$/, "");
 const EVIDENCE = `${ROOT}/.omo/evidence/ai-finder-app/qa-view-modes`;
 mkdirSync(EVIDENCE, { recursive: true });
 
@@ -91,7 +93,7 @@ const check = (label, actual, expected) => {
 const userDataDir = mkdtempSync(join(tmpdir(), "ulw-view-modes-"));
 let app;
 try {
-	app = await launchFinder({ userDataDir, env: { HOME: home } });
+	app = await launchFinder({ userDataDir, env: { HOME: home, USERPROFILE: home } });
 	const page = await finderWindow(app);
 	await page.setViewportSize({ width: 1500, height: 900 }).catch(() => {});
 	await page.waitForSelector(".toolbar-title", { timeout: 30000 });
@@ -150,16 +152,16 @@ try {
 
 	// ----- C4 keyboard mode switching + list regression
 	await page.locator(".finder").click({ position: { x: 5, y: 200 } }).catch(() => {});
-	await page.keyboard.press("Meta+2");
+	await page.keyboard.press(chord("2"));
 	await page.waitForSelector('[role="row"]');
 	check("C4 ⌘2 shows the list", await pressed(), ["Icons=false", "List=true", "Columns=false"]);
 	check("C4 list keeps its column header", await page.locator(".col-header").count(), 1);
 	check("C4 list shows one row per entry", await page.locator('[role="row"]').count(), tree[topPath].length);
 	await page.screenshot({ path: `${EVIDENCE}/list.png` });
-	await page.keyboard.press("Meta+1");
+	await page.keyboard.press(chord("1"));
 	await page.waitForSelector(".icon-grid");
 	check("C4 ⌘1 shows the icons", await pressed(), ["Icons=true", "List=false", "Columns=false"]);
-	await page.keyboard.press("Meta+3");
+	await page.keyboard.press(chord("3"));
 	await page.waitForSelector(".column");
 	check("C4 ⌘3 shows the columns", await pressed(), ["Icons=false", "List=false", "Columns=true"]);
 
@@ -211,7 +213,7 @@ try {
 	await page.waitForSelector(`.column[data-path="${topPath}/alpha"] .column-row[aria-label="alpha-1.md"]`);
 	await page.locator(`.column[data-path="${topPath}/alpha"] .column-row[aria-label="alpha-1.md"]`).click({ button: "right" });
 	await page.getByRole("menuitem", { name: /이름 변경/ }).click();
-	await page.keyboard.press("Meta+a");
+	await page.keyboard.press(chord("a"));
 	await page.keyboard.type("alpha-renamed.md");
 	await page.keyboard.press("Enter");
 	await page.waitForSelector(`.column[data-path="${topPath}/alpha"] .column-row[aria-label="alpha-renamed.md"]`, { timeout: 10000 });
@@ -219,7 +221,7 @@ try {
 
 	// Persistence: the chosen mode survives a relaunch.
 	await app.close();
-	app = await launchFinder({ userDataDir, env: { HOME: home } });
+	app = await launchFinder({ userDataDir, env: { HOME: home, USERPROFILE: home } });
 	const relaunched = await finderWindow(app);
 	await relaunched.waitForSelector(".seg");
 	await relaunched.waitForSelector(".column", { timeout: 30000 });

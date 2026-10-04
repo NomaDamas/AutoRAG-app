@@ -120,6 +120,48 @@ describe("createDataSourceStatusService", () => {
 		expect(foo.status).toBe("attention");
 	});
 
+	it("resolves a Windows CLI by its PATHEXT extension", async () => {
+		// Given a Windows-style PATH with only slacrawl.cmd (no extensionless file)
+		const root = await mkdtemp(join(tmpdir(), "autorag-datasource-pathext-"));
+		directories.push(root);
+		const workspace = join(root, "workspace");
+		const bin = join(root, "bin");
+		await mkdir(join(workspace, "docs"), { recursive: true });
+		await mkdir(bin, { recursive: true });
+		const cli = join(bin, "slacrawl.cmd");
+		await writeFile(cli, "@echo off\r\n");
+		await chmod(cli, 0o755);
+		const configPath = join(root, "config.json");
+		const fixture: Fixture = {
+			root,
+			workspace,
+			configPath,
+			env: { HOME: root, PATH: bin, PATHEXT: ".COM;.EXE;.BAT;.CMD", AUTORAG_CONFIG: configPath },
+		};
+		await writeConfig(fixture, { slack: {} }, ["chat"]);
+
+		// When the status is listed
+		const [slack] = (await createDataSourceStatusService({ env: fixture.env, cwd: fixture.root }).list()).sources;
+
+		// Then the installer found the .cmd on PATH instead of reporting it missing.
+		// Windows resolves the extension case-insensitively, so compare case-insensitively.
+		expect(slack?.install).toMatchObject({ state: "installed", binary: "slacrawl" });
+		expect(slack?.install.path?.toLowerCase()).toBe(cli.toLowerCase());
+		expect(slack?.status).toBe("ready");
+	});
+
+	it("still treats an exact CLI name as executable on POSIX", async () => {
+		// Given the existing extensionless script on PATH
+		const fixture = await createFixtureWithOnlySlacrawlOnPath();
+		await writeConfig(fixture, { slack: {} }, ["chat"]);
+
+		// When the status is listed
+		const [slack] = (await createDataSourceStatusService({ env: fixture.env, cwd: fixture.root }).list()).sources;
+
+		// Then it is found without any PATHEXT
+		expect(slack?.install).toMatchObject({ state: "installed", path: join(fixture.root, "bin", "slacrawl") });
+	});
+
 	it("reports default-deny when datasourceAccess has no allowed tags", async () => {
 		const fixture = await createFixtureWithOnlySlacrawlOnPath();
 		await writeConfig(fixture, { slack: {} }, []);

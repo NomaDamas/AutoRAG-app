@@ -4,8 +4,11 @@
  * macOS and Windows produce real Finder-style thumbnails through Electron's
  * in-process Quick Look Thumbnailing API
  * (`nativeImage.createThumbnailFromPath`): no child process, no Dock tile —
- * so nothing can orphan to `ppid=1` and pile up. Other platforms fall back to
- * Electron's `app.getFileIcon`, the OS's per-type icon. Both paths run through
+ * so nothing can orphan to `ppid=1` and pile up. A file the thumbnail API
+ * renders nothing for falls back to Electron's `app.getFileIcon` — the OS's
+ * per-type icon — and platforms that have no native thumbnail API use it
+ * directly, so every file gets an OS icon (the caller's letter tile is the
+ * last resort, not the first). Both paths run through
  * a provider-wide bounded pool with a per-file deadline, so two concurrent
  * listings share one budget and one stuck Quick Look extension never stalls
  * the rest. Generation failures degrade to "no icon" (the caller keeps the
@@ -228,24 +231,46 @@ export function createIconProvider(deps: IconProviderDeps = {}): IconSource {
 	/** key -> the generation currently producing that identity, for single-flight reuse. */
 	const inflight = new Map<string, Promise<Uint8Array | null>>();
 
-	/** macOS/Windows: in-process Quick Look thumbnails, bounded and individually fault-tolerant. */
+	/** One bounded `getFileIcon` lookup; a failure or deadline degrades to "no icon" and is logged. */
+	async function generateSystemIcon(target: IconTarget): Promise<Uint8Array | null> {
+		await systemSemaphore.acquire();
+		try {
+			return await withTimeout(systemIcon(target.path), systemIconTimeoutMs, "getFileIcon");
+		} catch (error) {
+			// One unreadable/timed-out file must not cost the rest of the batch.
+			warn(`file-icon: system icon for ${target.path} failed: ${errorMessage(error)}`);
+			return null;
+		} finally {
+			systemSemaphore.release();
+		}
+	}
+
+	/**
+	 * macOS/Windows: in-process Quick Look thumbnails first, then the OS type
+	 * icon for every file the thumbnail API produced nothing for (Windows has no
+	 * native thumbnail for most documents, so without the fallback those rows
+	 * would be left with a letter tile). Bounded and individually fault-tolerant.
+	 */
 	async function runThumbnails(
 		targets: readonly IconTarget[],
 		resolve: (key: string, bytes: Uint8Array | null) => void,
 	): Promise<void> {
 		await Promise.all(
 			targets.map(async (target): Promise<void> => {
+				let bytes: Uint8Array | null = null;
 				await thumbnailSemaphore.acquire();
 				try {
-					const bytes = await withTimeout(thumbnail(target.path), thumbnailTimeoutMs, "thumbnail");
-					resolve(cacheKey(target), bytes);
+					bytes = await withTimeout(thumbnail(target.path), thumbnailTimeoutMs, "thumbnail");
 				} catch (error) {
 					// One unreadable/timed-out file must not cost the rest of the batch.
 					warn(`file-icon: thumbnail for ${target.path} failed: ${errorMessage(error)}`);
-					resolve(cacheKey(target), null);
 				} finally {
 					thumbnailSemaphore.release();
 				}
+				if (bytes === null) {
+					bytes = await generateSystemIcon(target);
+				}
+				resolve(cacheKey(target), bytes);
 			}),
 		);
 	}
@@ -257,17 +282,7 @@ export function createIconProvider(deps: IconProviderDeps = {}): IconSource {
 	): Promise<void> {
 		await Promise.all(
 			targets.map(async (target): Promise<void> => {
-				await systemSemaphore.acquire();
-				try {
-					const bytes = await withTimeout(systemIcon(target.path), systemIconTimeoutMs, "getFileIcon");
-					resolve(cacheKey(target), bytes);
-				} catch (error) {
-					// One unreadable/timed-out file must not cost the rest of the batch.
-					warn(`file-icon: system icon for ${target.path} failed: ${errorMessage(error)}`);
-					resolve(cacheKey(target), null);
-				} finally {
-					systemSemaphore.release();
-				}
+				resolve(cacheKey(target), await generateSystemIcon(target));
 			}),
 		);
 	}

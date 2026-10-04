@@ -251,6 +251,7 @@ describe("createIconProvider", () => {
 				if (path.endsWith("b.bin")) throw new Error("XPC connection interrupted");
 				return BYTES;
 			},
+			systemIcon: async () => null,
 			warn: (message) => {
 				warnings.push(message);
 			},
@@ -265,12 +266,17 @@ describe("createIconProvider", () => {
 	});
 
 	it("does not regenerate icons for files that produced none", async () => {
-		// Given a file with no native thumbnail (the API yields null)
+		// Given a file with no native thumbnail and no type icon either (both yield null)
 		let generateCalls = 0;
+		let iconCalls = 0;
 		const provider = createIconProvider({
 			platform: "darwin",
 			thumbnail: async () => {
 				generateCalls += 1;
+				return null;
+			},
+			systemIcon: async () => {
+				iconCalls += 1;
 				return null;
 			},
 		});
@@ -279,15 +285,17 @@ describe("createIconProvider", () => {
 		expect((await provider.icons([target("/docs/app.zip")])).size).toBe(0);
 		expect((await provider.icons([target("/docs/app.zip")])).size).toBe(0);
 
-		// Then the OS was only asked once — per-file nulls are cached too
+		// Then the OS was only asked once per generator — per-file nulls are cached too
 		expect(generateCalls).toBe(1);
+		expect(iconCalls).toBe(1);
 	});
 
 	it("skips a file the generator produced nothing for", async () => {
-		// Given a generator that only produces one of two files
+		// Given a generator that only produces one of two files, with no type icon either
 		const provider = createIconProvider({
 			platform: "darwin",
 			thumbnail: async (path) => (path === "/docs/a.png" ? BYTES : null),
+			systemIcon: async () => null,
 		});
 
 		// When both are listed
@@ -305,6 +313,7 @@ describe("createIconProvider", () => {
 			thumbnail: async () => {
 				throw new Error("nativeImage: failed to generate thumbnails");
 			},
+			systemIcon: async () => null,
 			warn: (message) => {
 				warnings.push(message);
 			},
@@ -329,6 +338,7 @@ describe("createIconProvider", () => {
 				thumbnailTimeoutMs: 5,
 				thumbnail: (path) =>
 					path.endsWith("slow.bin") ? Promise.withResolvers<Uint8Array | null>().promise : Promise.resolve(BYTES),
+				systemIcon: async () => null,
 				warn: (message) => {
 					warnings.push(message);
 				},
@@ -370,6 +380,56 @@ describe("createIconProvider", () => {
 		// Then only macOS/Windows took the native path and only Linux the type icon
 		expect(native).toEqual(["/docs/a.png", "/docs/a.png"]);
 		expect(type).toEqual(["/docs/a.png"]);
+	});
+
+	it("falls back to getFileIcon for a file the native thumbnail API produced nothing for", async () => {
+		// Given a Windows provider whose thumbnail API renders only the image
+		const SYSTEM_BYTES = new Uint8Array([9, 8, 7]);
+		const thumbnailPaths: string[] = [];
+		const iconPaths: string[] = [];
+		const provider = createIconProvider({
+			platform: "win32",
+			thumbnail: async (path) => {
+				thumbnailPaths.push(path);
+				return path.endsWith(".png") ? BYTES : null;
+			},
+			systemIcon: async (path) => {
+				iconPaths.push(path);
+				return SYSTEM_BYTES;
+			},
+		});
+
+		// When an image and a document are listed
+		const icons = await provider.icons([target("/docs/pic.png"), target("/docs/report.pdf")]);
+
+		// Then the document got the OS type icon and the fallback only ran for it
+		expect(thumbnailPaths.sort()).toEqual(["/docs/pic.png", "/docs/report.pdf"]);
+		expect(iconPaths).toEqual(["/docs/report.pdf"]);
+		expect(provider.read("/docs/report.pdf", MTIME)).toEqual(SYSTEM_BYTES);
+		expect(icons.get("/docs/pic.png")).toBe(iconUrl("/docs/pic.png", MTIME));
+		expect(icons.get("/docs/report.pdf")).toBe(iconUrl("/docs/report.pdf", MTIME));
+	});
+
+	it("degrades to no icon when the getFileIcon fallback also fails", async () => {
+		// Given a thumbnail API that yields nothing and a type-icon lookup that fails
+		const warnings: string[] = [];
+		const provider = createIconProvider({
+			platform: "win32",
+			thumbnail: async () => null,
+			systemIcon: async () => {
+				throw new Error("getFileIcon: unsupported type");
+			},
+			warn: (message) => {
+				warnings.push(message);
+			},
+		});
+
+		// When the document is listed
+		const icons = await provider.icons([target("/docs/report.xyz")]);
+
+		// Then the row keeps its letter tile and the fallback failure is logged
+		expect(icons.size).toBe(0);
+		expect(warnings.join("\n")).toContain("getFileIcon: unsupported type");
 	});
 
 	it("evicts the least-recently-used identities when the entry cap is exceeded", async () => {

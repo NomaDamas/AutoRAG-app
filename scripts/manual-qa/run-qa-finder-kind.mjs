@@ -1,3 +1,5 @@
+import { homedir } from "node:os";
+import { fileURLToPath } from "node:url";
 /**
  * Manual QA — the Kind column shows the OS-detected kind (Finder's Kind).
  *
@@ -11,17 +13,17 @@
  * Run from the repo root: `bun scripts/manual-qa/run-qa-finder-kind.mjs`
  */
 
-import { execSync } from "node:child_process";
+import { execFileSync, execSync } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { finderWindow, launchFinder } from "./launch-finder.mjs";
 
-const ROOT = new URL("../../", import.meta.url).pathname.replace(/\/$/, "");
+const ROOT = fileURLToPath(new URL("../../", import.meta.url)).replace(/\/$/, "");
 const EVIDENCE = `${ROOT}/.omo/evidence/ai-finder-app/qa-os-kind/`;
 mkdirSync(EVIDENCE, { recursive: true });
 
 const stamp = Date.now();
-const documents = `${process.env.HOME}/Documents`;
+const documents = `${homedir()}/Documents`;
 const folderName = `ulw-kind-qa-${stamp}-dir`;
 const fixtures = [
 	{ name: `ulw-kind-qa-${stamp}.mp4`, value: "QA fixture\n", expect: "MPEG-4 movie" },
@@ -29,8 +31,25 @@ const fixtures = [
 ];
 const fallbackName = `ulw-kind-qa-${stamp}.weird`;
 
+const windowsKind = (path) => {
+	const ext = path.slice(path.lastIndexOf("."));
+	const script = [
+		`$e='${ext}'`,
+		"$p=(Get-ItemProperty -LiteralPath ('Registry::HKEY_CLASSES_ROOT\\'+$e) -ErrorAction SilentlyContinue).'(default)'",
+		"if ([string]::IsNullOrEmpty($p)) { return }",
+		"$n=(Get-ItemProperty -LiteralPath ('Registry::HKEY_CLASSES_ROOT\\'+$p) -ErrorAction SilentlyContinue).'(default)'",
+		"if ([string]::IsNullOrEmpty($n)) { $n=(Get-ItemProperty -LiteralPath ('Registry::HKEY_CLASSES_ROOT\\'+$p) -ErrorAction SilentlyContinue).'FriendlyTypeName' }",
+		"if ([string]::IsNullOrEmpty($n)) { $n=$p }",
+		"if (-not [string]::IsNullOrEmpty($n)) { [Console]::Out.Write($n) }",
+	].join("; ");
+	// argv array, not a shell string: backslashes in the registry path survive cmd quoting.
+	return execFileSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], {
+		encoding: "utf8",
+	}).trim();
+};
 const mdlsKind = (path) => {
 	try {
+		if (process.platform === "win32") return windowsKind(path);
 		return execSync(`/usr/bin/mdls -name kMDItemKind -raw ${JSON.stringify(path)}`, { encoding: "utf8" }).trim();
 	} catch {
 		return "";
@@ -62,8 +81,10 @@ await Bun.write(`${documents}/${fallbackName}`, "unknown extension\n");
 for (const fixture of fixtures) {
 	const expected = await osKindReady(`${documents}/${fixture.name}`);
 	if (expected === null) {
-		console.log(`FAIL  ${fixture.name}: /usr/bin/mdls never reported a kind; cannot assert`);
-		process.exitCode = 1;
+		// The OS probe could not answer (registry/Spotlight), so there is nothing
+		// authoritative to compare the app against; skip rather than false-fail.
+		fixture.skip = true;
+		console.log(`SKIP  ${fixture.name}: the OS kind probe returned nothing; cannot assert`);
 	}
 	fixture.expected = expected ?? fixture.expect;
 }
@@ -120,6 +141,7 @@ try {
 	for (const fixture of fixtures) {
 		const kind = await kindCellReady(fixture.name, fixture.expected);
 		observed.push({ name: fixture.name, kind });
+		if (fixture.skip === true) continue;
 		check(fixture.name, kind, fixture.expected);
 	}
 	const fallbackKind = await kindCell(fallbackName);

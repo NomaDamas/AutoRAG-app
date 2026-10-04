@@ -13,6 +13,7 @@
  */
 
 import { launchFinder, finderWindow } from "./launch-finder.mjs";
+import { isWindows } from "./platform.mjs";
 import { mkdirSync, readFileSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -24,6 +25,9 @@ mkdirSync(EVIDENCE, { recursive: true });
 
 const USER_DATA = "/tmp/pw-electron-qa-dupey-cache";
 rmSync(USER_DATA, { recursive: true, force: true });
+
+/** Windows dupey reconciliation is slower (issue #59); give the badge more time there. */
+const STACK_BADGE_TIMEOUT = isWindows ? 120_000 : 30_000;
 
 const SNAPSHOT = join(USER_DATA, "dupey-cache", "version-families.json");
 const SETTINGS = join(USER_DATA, "settings", "settings-state.json");
@@ -73,7 +77,7 @@ const report = {};
 	console.log("COLD-START snapshot:", JSON.stringify(report.coldStart));
 
 	await page.getByRole("button", { name: "Downloads" }).click();
-	await page.waitForSelector(".row__stackbadge", { timeout: 30_000 });
+	await page.waitForSelector(".row__stackbadge", { timeout: STACK_BADGE_TIMEOUT });
 	report.coldStartBadges = await page.locator(".row__stackbadge").count();
 	report.coldStartBanner = await page.locator(".list__error").count();
 	console.log("COLD-START badges:", report.coldStartBadges, "banner:", report.coldStartBanner);
@@ -86,7 +90,7 @@ const report = {};
 	const { app, page } = await launch();
 	const started = Date.now();
 	await page.getByRole("button", { name: "Downloads" }).click();
-	await page.waitForSelector(".row__stackbadge", { timeout: 30_000 });
+	await page.waitForSelector(".row__stackbadge", { timeout: STACK_BADGE_TIMEOUT });
 	report.warmBadgeMs = Date.now() - started;
 	report.warmBadges = await page.locator(".row__stackbadge").count();
 	console.log("WARM badges:", report.warmBadges, "after", report.warmBadgeMs, "ms");

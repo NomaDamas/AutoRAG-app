@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 /**
  * Feasibility probe — can the OS give us the FileTile icon (Finder thumbnails)?
  *
@@ -11,8 +12,9 @@
 
 import { mkdirSync } from "node:fs";
 import { launchFinder } from "./launch-finder.mjs";
+import { baseName } from "./platform.mjs";
 
-const ROOT = new URL("../../", import.meta.url).pathname.replace(/\/$/, "");
+const ROOT = fileURLToPath(new URL("../../", import.meta.url)).replace(/\/$/, "");
 const EVIDENCE = `${ROOT}/.omo/evidence/ai-finder-app/qa-file-icon/`;
 const DIR = process.env.ICON_PROBE_DIR;
 mkdirSync(EVIDENCE, { recursive: true });
@@ -50,7 +52,7 @@ try {
 
 	const summary = [];
 	for (const row of result) {
-		const name = row.path.split("/").pop();
+		const name = baseName(row.path);
 		await Bun.write(`${EVIDENCE}/normal-${name}`, Buffer.from(row.normal.png, "base64"));
 		await Bun.write(`${EVIDENCE}/small-${name}`, Buffer.from(row.small.png, "base64"));
 		summary.push({

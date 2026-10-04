@@ -518,6 +518,7 @@ export function App(): ReactElement {
 				{sidebarVisible ? (
 					<Sidebar
 						activeLabel={finder.activeNavLabel}
+						locations={finder.locations}
 						showHotkeys={SHOW_HOTKEYS}
 						onNavigate={finder.navigateNav}
 						onOpenSettings={finder.openSettings}

@@ -25,6 +25,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { zipSync } from "fflate";
 import { finderWindow, launchFinder } from "./launch-finder.mjs";
+import { isMac } from "./platform.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = join(HERE, "..", "..");
@@ -104,7 +105,7 @@ const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
  * actions operate on.
  */
 async function selectFile(page, name) {
-	const input = page.locator(".search__input");
+	const input = page.locator(".sidebar-search input");
 	await input.click();
 	await input.fill(name);
 	await input.press("Enter");
@@ -119,22 +120,29 @@ async function selectFile(page, name) {
 
 fixture();
 const ffmpeg = hasFfmpeg();
+/** The share sheet is macOS-only; the Windows button is hidden by capability. */
+const canShare = isMac;
+/** PNG conversion/resize needs sips (macOS) or the ffmpeg image backend (Windows). */
+const expectsImage = isMac || ffmpeg;
 console.log(`INFO ffmpeg ${ffmpeg ? "present" : "missing"}`);
 
 const app = await launchFinder({
 	userDataDir: USER_DATA,
-	env: { HOME, AUTORAG_QA_ROOT: QA_ROOT },
+	env: { HOME, USERPROFILE: HOME, AUTORAG_QA_ROOT: QA_ROOT },
 });
 try {
 	const page = await finderWindow(app);
 	page.setViewportSize({ width: 1500, height: 900 });
 	await page.waitForSelector(".toolbar-title", { timeout: 60_000 });
-	await page.waitForSelector(".search__input", { timeout: 30_000 });
+	await page.waitForSelector(".sidebar-search input", { timeout: 30_000 });
 
-	// 1. Text file: the base set, with no Quick Look / copy-path / trash buttons.
+	// 1. Text file: the base set. 공유 only appears where the OS has a share sheet.
 	await selectFile(page, "notes.txt");
 	const textActions = await actionLabels(page);
-	check("text actions", JSON.stringify(textActions), JSON.stringify(["열기", "다른 앱으로 열기", "압축", "공유", "AI 요약"]));
+	const expectedTextActions = canShare
+		? ["열기", "다른 앱으로 열기", "압축", "공유", "AI 요약"]
+		: ["열기", "다른 앱으로 열기", "압축", "AI 요약"];
+	check("text actions", JSON.stringify(textActions), JSON.stringify(expectedTextActions));
 	check("no Quick Look button", textActions.includes("Quick Look"), false);
 	await page.screenshot({ path: join(EVIDENCE, "1-text-actions.png") });
 
@@ -153,19 +161,24 @@ try {
 	await waitFor(() => existsSync(join(QA_ROOT, "bundle", "inside.txt")), { label: "the extracted folder" });
 	check("extract restored the folder", existsSync(join(QA_ROOT, "bundle", "inside.txt")), true);
 
-	// 4. PNG -> image menu -> JPEG (real sips).
-	await selectFile(page, "photo.png");
-	check("png offers the image menu", (await actionLabels(page)).includes("이미지 편집"), true);
-	await page.getByRole("button", { name: "이미지 편집", exact: true }).click();
-	const imageItems = await page.locator('[role="menu"][aria-label="세부 작업"] [role="menuitem"] span').allInnerTexts();
-	check("image menu has a JPEG target", imageItems.includes("JPEG로 변환"), true);
-	check("image menu resizes", imageItems.some((label) => label.startsWith("최대 ")), true);
-	// The menu rises in over `--dur-menu`; shoot it settled, not mid-animation.
-	await sleep(400);
-	await page.screenshot({ path: join(EVIDENCE, "3-image-menu.png") });
-	await page.getByRole("menuitem", { name: "JPEG로 변환", exact: true }).click();
-	await waitFor(() => existsSync(join(QA_ROOT, "photo.jpg")), { label: "photo.jpg" });
-	check("convert wrote a JPEG", existsSync(join(QA_ROOT, "photo.jpg")), true);
+	// 4. PNG -> image menu -> JPEG (sips on macOS, ffmpeg on Windows).
+	if (expectsImage) {
+		await selectFile(page, "photo.png");
+		check("png offers the image menu", (await actionLabels(page)).includes("이미지 편집"), true);
+		await page.getByRole("button", { name: "이미지 편집", exact: true }).click();
+		const imageItems = await page.locator('[role="menu"][aria-label="세부 작업"] [role="menuitem"] span').allInnerTexts();
+		check("image menu has a JPEG target", imageItems.includes("JPEG로 변환"), true);
+		check("image menu resizes", imageItems.some((label) => label.startsWith("최대 ")), true);
+		// The menu rises in over `--dur-menu`; shoot it settled, not mid-animation.
+		await sleep(400);
+		await page.screenshot({ path: join(EVIDENCE, "3-image-menu.png") });
+		await page.getByRole("menuitem", { name: "JPEG로 변환", exact: true }).click();
+		await waitFor(() => existsSync(join(QA_ROOT, "photo.jpg")), { label: "photo.jpg" });
+		check("convert wrote a JPEG", existsSync(join(QA_ROOT, "photo.jpg")), true);
+	} else {
+		check("png hides the image menu without an image engine", (await actionLabels(page)).includes("이미지 편집"), false);
+		console.log("SKIP image convert checks: no sips or ffmpeg image engine");
+	}
 
 	// 5. MOV -> MP4 through ffmpeg.
 	if (ffmpeg) {
@@ -182,13 +195,17 @@ try {
 		console.log("SKIP video checks: ffmpeg is not installed");
 	}
 
-	// 6. 공유 opens the sheet without an error toast.
+	// 6. 공유 opens the sheet on macOS; elsewhere the capability hides the button.
 	await selectFile(page, "notes.txt");
-	await page.getByRole("button", { name: "공유", exact: true }).first().click();
-	await sleep(800);
-	const toast = await page.locator(".toast").allInnerTexts();
-	check("share did not error", toast.some((text) => text.includes("지원하지 않") || text.includes("Error")), false);
-	await page.screenshot({ path: join(EVIDENCE, "5-share.png") });
+	if (canShare) {
+		await page.getByRole("button", { name: "공유", exact: true }).first().click();
+		await sleep(800);
+		const toast = await page.locator(".toast").allInnerTexts();
+		check("share did not error", toast.some((text) => text.includes("지원하지 않") || text.includes("Error")), false);
+		await page.screenshot({ path: join(EVIDENCE, "5-share.png") });
+	} else {
+		check("share button is absent without a share sheet", (await actionLabels(page)).includes("공유"), false);
+	}
 
 	// 7. 다른 앱으로 열기 opens the native application chooser. The sheet is a
 	// native modal, so the assertion is that the renderer survives it — the

@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 /**
  * Manual QA — sidebar items must never crash fs:listDir.
  *
@@ -19,7 +20,7 @@
 import { launchFinder } from "./launch-finder.mjs";
 import { mkdirSync } from "node:fs";
 
-const ROOT = new URL("../../", import.meta.url).pathname.replace(/\/$/, "");
+const ROOT = fileURLToPath(new URL("../../", import.meta.url)).replace(/\/$/, "");
 const EVIDENCE = `${ROOT}/.omo/evidence/ai-finder-app/qa-nav-guard/`;
 mkdirSync(EVIDENCE, { recursive: true });
 

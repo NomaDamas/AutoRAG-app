@@ -46,3 +46,25 @@ export const NAV_GROUPS: readonly NavGroup[] = [
 		items: [place("iCloud Drive", Cloud), place("Google Drive", Hexagon), place("Dropbox", Box)],
 	},
 ];
+
+/** The bit of a location the sidebar needs; `FinderLocation` satisfies it structurally. */
+export interface NavLocation {
+	readonly name: string;
+	readonly available: boolean;
+}
+
+/**
+ * Navigation groups with only the cloud drives this machine actually has.
+ *
+ * Favorites always render (a missing folder answers with its own friendly
+ * "not linked" toast), but a Cloud entry appears only when its location is
+ * available — so a disconnected drive, or a macOS-only one on Windows, is
+ * never offered. Availability is recomputed whenever the app reloads its
+ * locations.
+ */
+export function connectedNavGroups(locations: readonly NavLocation[]): readonly NavGroup[] {
+	const available = new Set(locations.filter((location) => location.available).map((location) => location.name));
+	return NAV_GROUPS.map((group) =>
+		group.label === "Cloud" ? { ...group, items: group.items.filter((item) => available.has(item.label)) } : group,
+	);
+}

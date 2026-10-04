@@ -1,7 +1,8 @@
 import { FolderPlus, PanelLeft } from "lucide-react";
 import type { ReactElement, RefObject } from "react";
-import { NAV_GROUPS, type NavItem } from "../data/places";
+import { connectedNavGroups, type NavItem, type NavLocation } from "../data/places";
 import { cn } from "../lib/cn";
+import { formatShortcut } from "../lib/shortcuts";
 import { GearIcon } from "./icons";
 import { iconButtonClass } from "./primitives/icon-button";
 import { Keycap } from "./primitives/Keycap";
@@ -28,6 +29,7 @@ const HEAD_BUTTON_CLASS = cn(
  */
 export function Sidebar({
 	activeLabel,
+	locations,
 	showHotkeys,
 	onNavigate,
 	onOpenSettings,
@@ -42,6 +44,7 @@ export function Sidebar({
 	onSubmitSearch,
 }: {
 	readonly activeLabel: string | null;
+	readonly locations: readonly NavLocation[];
 	readonly showHotkeys: boolean;
 	readonly onNavigate: (item: NavItem) => void;
 	readonly onOpenSettings?: (() => void) | undefined;
@@ -91,7 +94,7 @@ export function Sidebar({
 				onSubmit={onSubmitSearch}
 			/>
 			<div className="side-scroll flex flex-1 flex-col gap-14 min-h-0 px-10 pt-6 pb-12 overflow-auto">
-				{NAV_GROUPS.map((group) => (
+				{connectedNavGroups(locations).map((group) => (
 					<div key={group.label} className="side-group flex flex-col gap-1">
 						<div className="side-label px-8 pt-4 pb-6 text-ink-muted text-badge font-semibold tracking-label">
 							{group.label}
@@ -141,7 +144,7 @@ export function Sidebar({
 						)}
 					/>
 					<span className="sidebar__item-label flex-1 min-w-0 truncate">Settings</span>
-					{showHotkeys ? <Keycap label="⌘," /> : null}
+					{showHotkeys ? <Keycap label={formatShortcut({ key: "," })} /> : null}
 				</button>
 			</div>
 		</aside>

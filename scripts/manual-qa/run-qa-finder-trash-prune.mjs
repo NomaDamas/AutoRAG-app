@@ -1,3 +1,4 @@
+import { execSync } from "node:child_process";
 /**
  * Manual QA: a trashed duplicate leaves the version stack immediately.
  *
@@ -19,6 +20,7 @@
  */
 
 import { finderWindow, launchFinder } from "./launch-finder.mjs";
+import { baseName, isWindows } from "./platform.mjs";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -28,6 +30,10 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = join(HERE, "..", "..");
 const EVIDENCE = join(REPO, ".omo", "evidence", "ai-finder-app", "dupey-trash-prune");
 mkdirSync(EVIDENCE, { recursive: true });
+
+/** Windows dupey reconciliation and native trash are slower (issue #59). */
+const STACK_BADGE_TIMEOUT = isWindows ? 120_000 : 30_000;
+const CHILD_ROW_TIMEOUT = isWindows ? 30_000 : 10_000;
 
 const USER_DATA = join(tmpdir(), "pw-electron-qa-trash-prune");
 rmSync(USER_DATA, { recursive: true, force: true });
@@ -48,7 +54,21 @@ const TRASH_ROOTS = [
 	join(homedir(), "Library", "Mobile Documents", ".Trash"),
 	join(homedir(), ".Trash"),
 ];
-const trashedAt = () => TRASH_ROOTS.find((root) => existsSync(join(root, VICTIM))) ?? null;
+const windowsRecycleHas = (name) => {
+	try {
+		const out = execSync(
+			'powershell.exe -NoProfile -NonInteractive -Command "(New-Object -ComObject Shell.Application).Namespace(10).Items() | ForEach-Object { $_.Name }"',
+			{ encoding: "utf8" },
+		);
+		return out.split(/\r?\n/).map((line) => line.trim()).includes(name);
+	} catch {
+		return false;
+	}
+};
+const trashedAt = () =>
+	process.platform === "win32"
+		? (windowsRecycleHas(VICTIM) ? "RecycleBin" : null)
+		: (TRASH_ROOTS.find((root) => existsSync(join(root, VICTIM))) ?? null);
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -92,8 +112,8 @@ function fixtureFamily(snapshot) {
 }
 
 fixture();
-rmSync(join(homedir(), ".Trash", VICTIM), { force: true });
-rmSync(join(homedir(), "Library", "Mobile Documents", ".Trash", VICTIM), { force: true });
+if (process.platform !== "win32") rmSync(join(homedir(), ".Trash", VICTIM), { force: true });
+if (process.platform !== "win32") rmSync(join(homedir(), "Library", "Mobile Documents", ".Trash", VICTIM), { force: true });
 
 const app = await launchFinder({ userDataDir: USER_DATA });
 const page = await finderWindow(app);
@@ -107,7 +127,7 @@ const family = await waitFor(async () => fixtureFamily(readJson(SNAPSHOT)), {
 	label: "the startup scan to write the fixture family",
 });
 const head = family.head;
-const headName = head.split("/").pop() ?? head;
+const headName = baseName(head);
 console.log("SCAN family:", JSON.stringify({ head, members: family.members.map((m) => m.path) }));
 
 // 2. Navigate into the fixture folder and open the stack. Scoping every
@@ -115,13 +135,13 @@ console.log("SCAN family:", JSON.stringify({ head, members: family.members.map((
 await page.getByRole("button", { name: "Downloads" }).click();
 await page.locator('[role="row"]', { hasText: FOLDER }).dblclick();
 const headRow = page.locator('[role="row"]', { hasText: headName });
-await headRow.waitFor({ timeout: 30_000 });
+await headRow.waitFor({ timeout: STACK_BADGE_TIMEOUT });
 
 const badge = headRow.locator(".row__stackbadge");
-const badgeText = async () => (await badge.textContent())?.trim() ?? null;
+const badgeText = async () => (await badge.textContent({ timeout: STACK_BADGE_TIMEOUT }))?.trim() ?? null;
 check("badge count before", await badgeText(), String(family.members.length));
 await badge.click();
-await page.locator(".row--child").first().waitFor({ timeout: 10_000 });
+await page.locator(".row--child").first().waitFor({ timeout: CHILD_ROW_TIMEOUT });
 
 const childrenBefore = await page.locator(".row--child .row__label").allInnerTexts();
 check("child rows before", childrenBefore.length, family.members.length);
@@ -135,7 +155,7 @@ await page.getByRole("menuitem", { name: "휴지통으로 이동" }).click();
 
 // The row must be gone the moment the trash lands — not after the next scan.
 const vanished = await waitFor(async () => !(await page.locator(".row--child .row__label").allInnerTexts()).includes(VICTIM), {
-	timeoutMs: 5000,
+	timeoutMs: isWindows ? 15_000 : 5000,
 	label: "the trashed duplicate to leave the stack",
 	stepMs: 100,
 }).catch(() => false);
@@ -169,9 +189,9 @@ second.setViewportSize({ width: 1440, height: 900 });
 await second.waitForSelector('[role="row"]', { timeout: 60_000 });
 await second.getByRole("button", { name: "Downloads" }).click();
 await second.locator('[role="row"]', { hasText: FOLDER }).dblclick();
-await second.locator('[role="row"]', { hasText: family.head.split("/").pop() ?? "" }).waitFor({ timeout: 30_000 });
+await second.locator('[role="row"]', { hasText: baseName(family.head) }).waitFor({ timeout: STACK_BADGE_TIMEOUT });
 await second.locator(".row__stackbadge").click();
-await second.locator(".row--child").first().waitFor({ timeout: 10_000 });
+await second.locator(".row--child").first().waitFor({ timeout: CHILD_ROW_TIMEOUT });
 const restarted = await second.locator(".row--child .row__label").allInnerTexts();
 check("restart does not resurrect the trashed member", restarted.includes(VICTIM), false);
 await second.screenshot({ path: join(EVIDENCE, "3-after-restart.png") });

@@ -72,7 +72,7 @@ const hasLabel = (state, label) => state.sections.some((section) => section.rows
 
 let app;
 try {
-	app = await launchFinder({ userDataDir, env: { HOME: home } });
+	app = await launchFinder({ userDataDir, env: { HOME: home, USERPROFILE: home } });
 	const page = await finderWindow(app, 30000);
 	await page.setViewportSize({ width: 1500, height: 900 }).catch(() => {});
 	await page.waitForSelector(".toolbar-title", { timeout: 30000 });

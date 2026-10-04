@@ -1,3 +1,4 @@
+import { homedir } from "node:os";
 /**
  * Manual QA — path bar fitting (macOS Finder path bar behaviour).
  *
@@ -29,6 +30,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { collapseOrder } from "../../src/renderer/src/state/path-fit.ts";
 import { finderWindow, launchFinder, ROOT } from "./launch-finder.mjs";
+import { isWindows } from "./platform.mjs";
 
 const EVIDENCE = join(ROOT, ".omo/evidence/ai-finder-app/qa-path-bar");
 rmSync(EVIDENCE, { recursive: true, force: true });
@@ -37,7 +39,7 @@ mkdirSync(EVIDENCE, { recursive: true });
 const fixtureName = "ulw-pathbar-qa";
 const leafName = "quicklook-preview-reference";
 const fileName = "preview-notes.md";
-const fixture = join(process.env.HOME, "Documents", fixtureName);
+const fixture = join(homedir(), "Documents", fixtureName);
 rmSync(fixture, { recursive: true, force: true });
 await Bun.write(join(fixture, leafName, fileName), "path bar qa\n");
 const userDataDir = mkdtempSync(join(tmpdir(), "ulw-pathbar-data-"));
@@ -170,7 +172,14 @@ try {
 	check(
 		"trail mirrors the reference path",
 		JSON.stringify(first.segments.map((segment) => segment.label)) ===
-			JSON.stringify(["Macintosh HD", "Users", process.env.USER, "Documents", fixtureName, leafName]),
+			JSON.stringify([
+				isWindows ? "C:" : "Macintosh HD",
+				"Users",
+				isWindows ? process.env.USERNAME : process.env.USER,
+				"Documents",
+				fixtureName,
+				leafName,
+			]),
 		JSON.stringify(first.segments.map((segment) => segment.label)),
 	);
 

@@ -1,6 +1,6 @@
 import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { isAbsolute, join, resolve } from "node:path";
 import { zipSync } from "fflate";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { ActionAnchor } from "../src/shared/actions-contract";
@@ -30,20 +30,45 @@ interface Harness {
 	readonly shares: { readonly path: string; readonly anchor: ActionAnchor }[];
 }
 
+/**
+ * A realistic `ffmpeg -encoders` body: the image encoders this machine has, but
+ * no heif muxer (so HEIC stays hidden), matching the probe's parsing contract.
+ */
+const FFMPEG_ENCODERS =
+	" V....D apng                 APNG image\n" +
+	" VFS..D mjpeg                MJPEG (Motion JPEG)\n" +
+	" VF...D png                  PNG image\n" +
+	" VF...D tiff                 TIFF image\n" +
+	" V....D libwebp              libwebp WebP image\n" +
+	" V....D libx265              libx265 H.265 / HEVC\n";
+/** A muxer list without `heif`, so HEIC is not offered. */
+const FFMPEG_MUXERS = "  E  image2          image2 sequence\n  E  mp4             MP4\n";
+
 /** A service whose external commands are recorded and whose "image" output is written. */
-function makeService(options: { readonly platform?: NodeJS.Platform; readonly ffmpeg?: boolean; readonly picked?: string | null } = {}): Harness {
-	const commands: { command: string; args: readonly string[] }[] = [];
+function makeService(
+	options: {
+		readonly platform?: NodeJS.Platform;
+		readonly ffmpeg?: boolean;
+		readonly picked?: string | null;
+		/** Bytes written for a produced image; keep below the source to pass optimize. */
+		readonly imageOutput?: string;
+	} = {},
+): Harness {
+	const commands: { command: string; args: string[] }[] = [];
 	const shares: { path: string; anchor: ActionAnchor }[] = [];
+	const imageOutput = options.imageOutput ?? "encoded";
 	const run: CommandRunner = async (command, args) => {
 		commands.push({ command, args: [...args] });
+		if (command === "ffmpeg" && options.ffmpeg === false) throw new Error("ffmpeg: command not found");
 		if (command === "ffmpeg" && args[0] === "-version") {
-			if (options.ffmpeg === false) throw new Error("ffmpeg: command not found");
 			return { stdout: "ffmpeg version 9", stderr: "" };
 		}
+		if (command === "ffmpeg" && args.includes("-encoders")) return { stdout: FFMPEG_ENCODERS, stderr: "" };
+		if (command === "ffmpeg" && args.includes("-muxers")) return { stdout: FFMPEG_MUXERS, stderr: "" };
 		const outIndex = args.indexOf("--out");
 		const target = outIndex >= 0 ? args[outIndex + 1] : args[args.length - 1];
-		if (target !== undefined && target.startsWith("/")) {
-			await writeFile(target, "encoded");
+		if (target !== undefined && isAbsolute(target)) {
+			await writeFile(target, imageOutput);
 		}
 		return { stdout: "", stderr: "" };
 	};
@@ -66,10 +91,10 @@ function makeService(options: { readonly platform?: NodeJS.Platform; readonly ff
 describe("zipEntryPath", () => {
 	it("keeps ordinary and nested entries inside the destination", () => {
 		expect(zipEntryPath("/tmp/out", "docs/readme.md")).toEqual({
-			path: "/tmp/out/docs/readme.md",
+			path: resolve("/tmp/out", "docs/readme.md"),
 			directory: false,
 		});
-		expect(zipEntryPath("/tmp/out", "docs/")).toEqual({ path: "/tmp/out/docs", directory: true });
+		expect(zipEntryPath("/tmp/out", "docs/")).toEqual({ path: resolve("/tmp/out", "docs"), directory: true });
 	});
 
 	it("refuses zip-slip and absolute entries", () => {
@@ -230,6 +255,66 @@ describe("image actions", () => {
 	});
 });
 
+describe("image actions on Windows (ffmpeg backend)", () => {
+	it("converts PNG to JPEG through ffmpeg with a JPEG pixel format", async () => {
+		const { service, commands } = makeService({ platform: "win32" });
+		const source = join(root, "shot.png");
+		await writeFile(source, "png");
+
+		const outcome = await service.run(source, { kind: "convertImage", format: "jpeg" }, null);
+		expect(outcome.output).toBe(join(root, "shot.jpg"));
+		const last = commands.at(-1);
+		expect(last?.command).toBe("ffmpeg");
+		expect(last?.args).toContain("-pix_fmt");
+		expect(last?.args).toContain("yuvj420p");
+		expect(last?.args.at(-1)).toBe(join(root, "shot.jpg"));
+	});
+
+	it("resizes through ffmpeg with a no-enlarge scale filter", async () => {
+		const { service, commands } = makeService({ platform: "win32" });
+		const source = join(root, "shot.png");
+		await writeFile(source, "png");
+
+		const outcome = await service.run(source, { kind: "resizeImage", maxEdge: 800 }, null);
+		expect(outcome.output).toBe(join(root, "shot-800.png"));
+		const args = commands.at(-1)?.args ?? [];
+		expect(args).toContain("-vf");
+		expect(args.join(" ")).toContain("force_original_aspect_ratio=decrease");
+		expect(args.join(" ")).toContain("min(iw,800)");
+	});
+
+	it("optimizes a JPEG and keeps the output only when it shrank", async () => {
+		const { service, commands } = makeService({ platform: "win32", imageOutput: "s" });
+		const source = join(root, "big.jpeg");
+		await writeFile(source, "jpeg-bytes");
+
+		const outcome = await service.run(source, { kind: "optimizeImage" }, null);
+		expect(outcome.output).toBe(join(root, "big-optimized.jpeg"));
+		expect(commands.at(-1)?.command).toBe("ffmpeg");
+	});
+
+	it("optimizes PNG losslessly and drops the output when it did not shrink", async () => {
+		const shrink = makeService({ platform: "win32", imageOutput: "s" });
+		const png = join(root, "flat.png");
+		await writeFile(png, "png-bytes");
+		await shrink.service.run(png, { kind: "optimizeImage" }, null);
+		expect((shrink.commands.at(-1)?.args ?? []).join(" ")).toContain("-compression_level 9");
+
+		const bigger = makeService({ platform: "win32", imageOutput: "much-larger-than-source" });
+		const other = join(root, "flat2.png");
+		await writeFile(other, "png");
+		await expect(bigger.service.run(other, { kind: "optimizeImage" }, null)).rejects.toThrow(/최적화/);
+	});
+
+	it("hides formats the ffmpeg build cannot encode", async () => {
+		const { service } = makeService({ platform: "win32" });
+		const source = join(root, "shot.png");
+		await writeFile(source, "png");
+		// No heif muxer is listed, so HEIC is not a capability and cannot be run.
+		await expect(service.run(source, { kind: "convertImage", format: "heic" }, null)).rejects.toThrow(/HEIC/);
+	});
+});
+
 describe("video actions", () => {
 	it("remuxes with ffmpeg when it is present", async () => {
 		const { service, commands } = makeService({ ffmpeg: true });
@@ -296,14 +381,22 @@ describe("capabilities", () => {
 		expect(capabilities.imageFormats).toEqual(["jpeg", "png", "tiff", "heic"]);
 	});
 
-	it("offers no image or share actions on a platform without those engines", async () => {
+	it("offers ffmpeg-backed image formats on Windows but still no share sheet", async () => {
 		const { service } = makeService({ platform: "win32" });
 		const capabilities = await service.capabilities();
-		expect(capabilities.imageFormats).toEqual([]);
+		// The probe lists mjpeg/png/libwebp/tiff and no heif muxer.
+		expect(capabilities.imageFormats).toEqual(["jpeg", "png", "webp", "tiff"]);
 		expect(capabilities.share).toBe(false);
 		await expect(service.share(join(root, "a.txt"), { x: 0, y: 0, width: 10, height: 10 }, null)).rejects.toThrow(
 			/지원하지 않습니다/,
 		);
+	});
+
+	it("hides image actions on Windows without ffmpeg", async () => {
+		const { service } = makeService({ platform: "win32", ffmpeg: false });
+		const capabilities = await service.capabilities();
+		expect(capabilities.imageFormats).toEqual([]);
+		expect(capabilities.videoContainers).toEqual([]);
 	});
 
 	it("pops the share sheet with the anchored rect on macOS", async () => {
