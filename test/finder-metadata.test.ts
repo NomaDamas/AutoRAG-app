@@ -209,7 +209,9 @@ describe("createFinderMetadataResolver", () => {
 		expect(run).not.toHaveBeenCalled();
 	});
 
-	it("spawns no helper for a protected folder the user cannot read", async () => {
+	// POSIX mode bits are the fixture: Windows chmod cannot revoke read access, and
+	// Finder metadata is macOS-only there anyway.
+	it.skipIf(process.platform === "win32")("spawns no helper for a protected folder the user cannot read", async () => {
 		// Given a folder like /Volumes/X/.Trashes: listable from its parent, but not readable
 		const protectedDir = join(root, ".Trashes");
 		await mkdir(protectedDir);
