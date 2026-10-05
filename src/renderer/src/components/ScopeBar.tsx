@@ -1,6 +1,12 @@
 import type { ReactElement } from "react";
+import { hostPlatform } from "../lib/shortcuts";
 
 export type SearchScope = "all" | "current";
+
+/** The whole-machine scope pill: "This Mac" on macOS, "This Computer" on Windows. */
+export function allScopeLabel(platform: string = hostPlatform()): string {
+	return platform === "win32" ? "This Computer" : "This Mac";
+}
 
 const ACTIVE_BUTTON_CLASS =
 	"flex-none h-[20px] px-8 border-0 rounded-5 text-badge whitespace-nowrap cursor-default transition-[background,color] duration-(--dur-color) ease-[ease] bg-accent text-on-accent font-semibold";
@@ -9,8 +15,8 @@ const INACTIVE_BUTTON_CLASS =
 
 /**
  * Search scope bar (v7 handoff, screenshot 13): shown above the flat result
- * list while a query is committed. "Search:" then the This Mac / folder pills
- * and the result count on the right.
+ * list while a query is committed. "Search:" then the whole-machine / folder
+ * pills and the result count on the right.
  */
 export function ScopeBar({
 	scope,
@@ -34,7 +40,7 @@ export function ScopeBar({
 				aria-pressed={scope === "all"}
 				onClick={() => onScopeChange("all")}
 			>
-				This Mac
+				{allScopeLabel()}
 			</button>
 			<button
 				type="button"

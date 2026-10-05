@@ -10,9 +10,9 @@ import { finderWindow, launchFinder, ROOT } from "./launch-finder.mjs";
  * Builds a private fsearch database over a throwaway home, points the built
  * app at it through XDG_DATA_HOME, and verifies against the real UI:
  *   1. the app warms a `fsearch-cli watch` daemon at startup (cold start gone);
- *   2. "전체" answers from the index — it finds a file the disk walk cannot
- *      reach (outside the scanned sidebar locations);
- *   3. "파일 이름" commits scoped to the folder in view;
+ *   2. "파일 이름" answers from the index over the whole machine — it finds a
+ *      file the disk walk cannot reach (outside the scanned sidebar places);
+ *   3. the scope bar's folder pill narrows the search to the folder in view;
  *   4. the daemon is still live while the app is running.
  *
  * Run `bun run build` first. Evidence lands in the ignored `.omo/` tree.
@@ -26,6 +26,8 @@ const check = (label, ok, detail) => {
 	console.log(`${ok ? "PASS" : "FAIL"} ${label}${detail ? ` :: ${detail}` : ""}`);
 	if (!ok) failures.push(label);
 };
+
+const ALL_LABEL = process.platform === "win32" ? "This Computer" : "This Mac";
 
 const RUN_ID = `qa-fsearch-${Date.now().toString(36)}`;
 // A real (non-symlinked) base: fsearch-cli canonicalizes /var and /tmp, and a
@@ -86,10 +88,11 @@ try {
 	}
 	check("the app starts a fsearch-cli watch daemon at launch", live && existsSync(pidFile), `live=${live} pidFile=${existsSync(pidFile)}`);
 
-	// 2. "전체" answers from the index: the outside file is outside every
-	//    scanned sidebar location, so only the index can return it.
+	// 2. "파일 이름" answers from the index over the whole machine: the outside
+	//    file is outside every scanned sidebar place, so only the index can
+	//    return it.
 	await search.click();
-	await chip("전체").click();
+	await chip("파일 이름").click();
 	await search.fill(outsideName);
 	await search.press("Enter");
 	await page.waitForSelector(".scope", { timeout: 15000 });
@@ -104,10 +107,12 @@ try {
 	await sleep(400);
 	const allRows = await rowNames();
 	check(
-		'전체 filename search finds a file outside the scanned locations (index hit)',
+		"a filename search finds a file outside the scanned places (index hit)",
 		allRows.includes(outsideName),
 		JSON.stringify(allRows),
 	);
+	const defaultScope = (await page.locator(".scope button[aria-pressed='true']").innerText()).trim();
+	check("a filename search defaults to the whole machine", defaultScope === ALL_LABEL, defaultScope);
 	check(
 		"the scope bar reports the index hits",
 		/\d+\s*items found/.test(await page.locator(".scope__count").innerText()),
@@ -117,23 +122,24 @@ try {
 	await sleep(500);
 	await page.screenshot({ path: join(EVIDENCE, "01-all-index-hit.png") });
 
-	// 3. "파일 이름" scopes the commit to the folder in view.
+	// 3. The scope bar's folder pill narrows the search to the folder in view.
 	await page.locator(".sidebar__item", { hasText: "Documents" }).first().click();
 	await search.click();
-	await chip("파일 이름").click();
 	await search.fill(insideName);
 	await search.press("Enter");
+	await page.waitForSelector(".scope", { timeout: 15000 });
+	await page.locator(".scope button").nth(1).click();
 	await page.waitForFunction(
-		() => document.querySelector(".scope button[aria-pressed='true']")?.textContent?.trim() !== "This Mac",
-		null,
+		(all) => document.querySelector(".scope button[aria-pressed='true']")?.textContent?.trim() !== all,
+		ALL_LABEL,
 		{ timeout: 15000 },
 	);
 	const scopedButton = (await page.locator(".scope button[aria-pressed='true']").innerText()).trim();
 	await waitForRow(insideName).catch(() => undefined);
 	await sleep(400);
 	const scopedRows = await rowNames();
-	check("파일 이름 commits scoped to the folder in view", scopedButton !== "This Mac", scopedButton);
-	check("파일 이름 finds the file under the scoped folder", scopedRows.includes(insideName), JSON.stringify(scopedRows));
+	check("the folder pill narrows the search to the folder in view", scopedButton !== ALL_LABEL, scopedButton);
+	check("the scoped search finds the file under the folder", scopedRows.includes(insideName), JSON.stringify(scopedRows));
 	await page.screenshot({ path: join(EVIDENCE, "02-folder-scope.png") });
 
 	// 4. The daemon is still live while the app runs (keep-alive, not one-shot).

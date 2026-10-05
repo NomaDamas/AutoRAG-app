@@ -985,9 +985,9 @@ export function useFinderController(
 		thumbRequestsRef.current.clear();
 		thumbQueueRef.current.clear();
 		let live = true;
-		// The "파일 이름" chip searches the folder in view; "전체" searches the
-		// whole file-name index. The scope rides to the main process so the
-		// index narrows before its result cap, not after.
+		// A filename search defaults to the whole file-name index; the scope bar's
+		// folder pill narrows it to the folder in view. The scope rides to the main
+		// process so the index narrows before its result cap, not after.
 		source
 			.search(query, searchScope === "current" ? { scope: path } : undefined)
 			.then((entries) => {
