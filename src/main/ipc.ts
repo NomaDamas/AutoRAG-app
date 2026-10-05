@@ -4,7 +4,13 @@ import {
 	isActionAnchor,
 	isActionRequest,
 } from "../shared/actions-contract";
-import { FS_CHANNELS, type FsClipboard, type FsCoreBridge, type FsIndexBridge } from "../shared/fs-contract";
+import {
+	FS_CHANNELS,
+	type FsClipboard,
+	type FsCoreBridge,
+	type FsIndexBridge,
+	type FsSearchOptions,
+} from "../shared/fs-contract";
 import { SEARCH_CHANNELS, type SearchBridge } from "../shared/search-contract";
 import { SETTINGS_CHANNELS, type SettingsBridge } from "../shared/settings-contract";
 import { LIVE_CHANNELS } from "../shared/live-contract";
@@ -36,7 +42,9 @@ export function registerFsIpcHandlers(service: FsCoreBridge, hooks: FsIpcHooks =
 		service.previewIcon(path, modifiedAt),
 	);
 	ipcMain.handle(FS_CHANNELS.exists, (_event, path: string) => service.exists(path));
-	ipcMain.handle(FS_CHANNELS.search, (_event, query: string) => service.search(query));
+	ipcMain.handle(FS_CHANNELS.search, (_event, query: string, options: FsSearchOptions | undefined) =>
+		service.search(query, options),
+	);
 	ipcMain.handle(FS_CHANNELS.locations, () => service.locations());
 	ipcMain.handle(FS_CHANNELS.ejectLocation, (_event, path: string) => service.ejectLocation(path));
 	ipcMain.handle(FS_CHANNELS.copy, (_event, paths: readonly string[], destDir: string) => service.copy(paths, destDir));
