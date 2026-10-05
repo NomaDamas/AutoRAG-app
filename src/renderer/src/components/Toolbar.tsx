@@ -1,7 +1,9 @@
 import { useState, type MouseEvent, type ReactElement } from "react";
+import type { ActionAnchor } from "../../../shared/actions-contract";
 import type { GroupKey } from "../state/grouping";
 import type { ViewMode } from "../state/view-mode";
 import type { SortDirection, SortKey, SortState } from "../state/sort";
+import { anchorOf } from "../lib/anchor";
 import { formatShortcut } from "../lib/shortcuts";
 import {
 	ChevronLeftIcon,
@@ -31,7 +33,8 @@ const NAV_BUTTON =
 /**
  * Toolbar (v7 handoff): back/forward, the folder title, the view segmented
  * control, the Sort and Group pop-ups (issue #47), and the top-right cluster —
- * the inspector toggle, the AI Search toggle and Share. Instant search lives in
+ * the inspector toggle, the AI Search toggle, and Share (the OS share sheet for
+ * the focused row; hidden where the platform has none). Instant search lives in
  * the sidebar now (`SidebarSearch`), so this bar holds no search field.
  */
 export function Toolbar({
@@ -50,6 +53,7 @@ export function Toolbar({
 	onToggleInspector,
 	aiActive,
 	onShowAi,
+	shareAvailable,
 	canShare,
 	onShare,
 	sidebarHidden,
@@ -75,8 +79,12 @@ export function Toolbar({
 	readonly aiActive: boolean;
 	/** Show the nearest AI Search tab (⌘K), or open one. */
 	readonly onShowAi: () => void;
+	/** The OS has a share sheet, so the Share item is shown at all. */
+	readonly shareAvailable: boolean;
+	/** A row is focused, so the shown Share item is enabled. */
 	readonly canShare: boolean;
-	readonly onShare: () => void;
+	/** Open the OS share sheet for the focused row, anchored to the button. */
+	readonly onShare: (anchor: ActionAnchor) => void;
 	readonly sidebarHidden: boolean;
 	readonly onShowSidebar: () => void;
 	readonly onNewFolder: () => void;
@@ -203,16 +211,18 @@ export function Toolbar({
 				>
 					<SparklesIcon size={18} />
 				</button>
-				<button
-					type="button"
-					className={NAV_BUTTON}
-					title="Share"
-					aria-label="Copy path"
-					disabled={!canShare}
-					onClick={onShare}
-				>
-					<ShareIcon size={18} />
-				</button>
+				{shareAvailable ? (
+					<button
+						type="button"
+						className={NAV_BUTTON}
+						title="Share"
+						aria-label="Share"
+						disabled={!canShare}
+						onClick={(event) => onShare(anchorOf(event.currentTarget))}
+					>
+						<ShareIcon size={18} />
+					</button>
+				) : null}
 			</div>
 			{menu === null ? null : (
 				<ToolbarMenu

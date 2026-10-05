@@ -152,6 +152,22 @@ function videoItems(name: string, capabilities: ActionCapabilities): readonly Fi
 		}));
 }
 
+/** Shown/enabled state of the toolbar Share item. */
+export interface ShareControl {
+	readonly shown: boolean;
+	readonly enabled: boolean;
+}
+
+/**
+ * The toolbar Share item. macOS Finder keeps Share in the toolbar, and it is
+ * the same OS share sheet the Inspector's 공유 action opens; where the platform
+ * has no share sheet (Windows) the item is hidden rather than dead. It is
+ * enabled only with a focused row to share.
+ */
+export function toolbarShareControl(hasFocusedEntry: boolean, capabilities: ActionCapabilities): ShareControl {
+	return { shown: capabilities.share, enabled: capabilities.share && hasFocusedEntry };
+}
+
 /**
  * The Inspector action bar for `subject`. Capability-gated: an action whose
  * backing engine is missing never renders, so the bar never lies about the
