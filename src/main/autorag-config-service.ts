@@ -526,7 +526,9 @@ export function createAutoRagConfigService(deps: AutoRagConfigServiceDeps): Auto
 		}
 	}
 
-	async function commit(
+	let writeQueue: Promise<void> = Promise.resolve();
+
+	async function commitCandidate(
 		apply: (candidate: Record<string, unknown>, previous: Record<string, unknown>) => void,
 	): Promise<AutoRagConfigSnapshot> {
 		const path = currentPath();
@@ -537,6 +539,14 @@ export function createAutoRagConfigService(deps: AutoRagConfigServiceDeps): Auto
 		validateCandidate(path, candidate, deps.env, deps.cwd);
 		writeConfigObject(path, candidate);
 		return snapshot();
+	}
+
+	function commit(
+		apply: (candidate: Record<string, unknown>, previous: Record<string, unknown>) => void,
+	): Promise<AutoRagConfigSnapshot> {
+		const run = writeQueue.then(() => commitCandidate(apply), () => commitCandidate(apply));
+		writeQueue = run.then(() => undefined, () => undefined);
+		return run;
 	}
 
 	function readAt(root: Record<string, unknown>, path: readonly string[]): unknown {

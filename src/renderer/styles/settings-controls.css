@@ -44,6 +44,12 @@
 	overflow-wrap: anywhere;
 }
 
+.settings-inline-status {
+	font-size: var(--font-size-badge);
+	line-height: 1.4;
+	color: var(--text-faint);
+}
+
 .settings-config__note {
 	font-size: var(--font-size-badge);
 	line-height: 1.4;

@@ -2,11 +2,18 @@
  * Model configuration panels for Settings → Models.
  *
  * Three provider-centric panels edit the shared AutoRAG config (the same file
- * the CLI/TUI resolve) through narrow `configSet`/`configRemove` writes:
+ * the CLI/TUI resolve). Ordinary settings auto-save through leaf-level
+ * `configPatch` writes that never clobber sibling/unknown leaves; only the
+ * rerank enable/disable transition replaces the block (a `false` marker cannot
+ * hold leaves). Discrete selects/toggles write immediately, text/number fields
+ * debounce and flush on blur, and all writes are serialized so a tab switch
+ * cannot drop or double-apply an edit:
  *
  * - `llm`       → `model` (Pi runtime catalog + custom provider/endpoint)
  * - `embedding` → `minSync.embedder` (built-in local profiles or a local HTTP
- *                 endpoint; never a remote corpus embedder)
+ *                 endpoint; never a remote corpus embedder). Identity
+ *                 (profile/id/baseUrl) keeps an explicit save plus reindex
+ *                 warning; advanced tuning auto-saves without touching it.
  * - `reranker`  → `rerank` (OpenRouter is the only provider supported by v2.7)
  *
  * Secrets never live in the config: `apiKeyEnv` is an env-var name, and the
@@ -14,9 +21,10 @@
  * env var. The bridge returns only stored/env presence, never the value.
  */
 
-import { useCallback, useEffect, useMemo, useState, type ReactElement, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from "react";
 import type {
 	AutoRagConfigSnapshot,
+	AutoRagConfigUpdate,
 	ConfigRefreshResult,
 	JsonObject,
 	JsonValue,
@@ -27,6 +35,7 @@ import type {
 } from "../../../../shared/settings-contract";
 import { isJsonObject } from "../../../../shared/settings-contract";
 import { Switch } from "../primitives/Switch";
+import { useAutoSave, useLatestConfig } from "./useAutoSave";
 
 const autorag = window.autorag;
 
@@ -75,6 +84,15 @@ function parsePositiveInt(text: string): number | null {
 	return Number.isInteger(value) && value > 0 ? value : null;
 }
 
+/**
+ * Numeric text compared by parsed value so "01" and "1" are the same edit and
+ * never leave a panel stuck dirty after the normalized value is written.
+ */
+function numericKey(text: string): string {
+	const parsed = parsePositiveInt(text);
+	return parsed === null ? text.trim() : String(parsed);
+}
+
 function errorMessage(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
 }
@@ -120,6 +138,7 @@ function TextField({
 	list,
 	disabled = false,
 	width = 260,
+	onBlur,
 }: {
 	readonly value: string;
 	readonly onChange: (value: string) => void;
@@ -129,6 +148,8 @@ function TextField({
 	readonly list?: string | undefined;
 	readonly disabled?: boolean | undefined;
 	readonly width?: number | undefined;
+	/** Flush a debounced auto-save as soon as the field loses focus. */
+	readonly onBlur?: (() => void) | undefined;
 }): ReactElement {
 	return (
 		<input
@@ -143,6 +164,7 @@ function TextField({
 			spellCheck={false}
 			autoComplete="off"
 			onChange={(event) => onChange(event.target.value)}
+			onBlur={onBlur}
 		/>
 	);
 }
@@ -322,17 +344,115 @@ function llmDraftFrom(snapshot: AutoRagConfigSnapshot): LlmDraft {
 	};
 }
 
+/**
+ * Semantic identity of an LLM draft. Trims values and drops a non-overridable
+ * `api` so whitespace or an ignored protocol never leaves the panel "dirty"
+ * (which would otherwise re-save forever).
+ */
+function llmKey(draft: LlmDraft): string {
+	return JSON.stringify([
+		draft.provider.trim(),
+		draft.id.trim(),
+		draft.name.trim(),
+		isAllowedAgentApi(draft.api.trim()) ? draft.api.trim() : "",
+		draft.baseUrl.trim(),
+		draft.apiKeyEnv.trim(),
+	]);
+}
+
 function LlmPanel({ snapshot, onSaved }: { readonly snapshot: AutoRagConfigSnapshot; readonly onSaved: (next: AutoRagConfigSnapshot) => void }): ReactElement {
-	const signature = useMemo(() => JSON.stringify(snapshot.config), [snapshot.config]);
 	const [draft, setDraft] = useState<LlmDraft>(() => llmDraftFrom(snapshot));
 	const [catalog, setCatalog] = useState<ModelCatalogSnapshot | null>(null);
 	const [credentials, setCredentials] = useState<readonly ProviderCredentialStatus[]>([]);
-	const [saving, setSaving] = useState(false);
+	const [resetting, setResetting] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 
+	const savedDraft = useMemo(() => llmDraftFrom(snapshot), [snapshot]);
+	const dirty = llmKey(draft) !== llmKey(savedDraft);
+	const immediateRef = useRef(false);
+	const lastSavedKeyRef = useRef(llmKey(savedDraft));
+	const configRef = useLatestConfig(snapshot);
+
+	const autoSave = useAutoSave<LlmDraft>({
+		key: llmKey,
+		perform: async (value) => {
+			const problems: string[] = [];
+			const provider = value.provider.trim();
+			const id = value.id.trim();
+			const api = value.api.trim();
+			const apiKeyEnv = value.apiKeyEnv.trim();
+			if (provider.length === 0) problems.push("Provider is required.");
+			if (id.length === 0) problems.push("Model id is required.");
+			if (api.length > 0 && !isAllowedAgentApi(api)) problems.push(`API protocol "${api}" is not supported by AutoRAG.`);
+			if (apiKeyEnv.length > 0 && !ENV_NAME_PATTERN.test(apiKeyEnv)) problems.push("API key env var must match /^[A-Za-z_][A-Za-z0-9_]*$/.");
+			if (problems.length > 0) {
+				const message = problems.join(" ");
+				setError(message);
+				throw new Error(message);
+			}
+			// Diff against the freshest known config so a follow-up write that
+			// drained before the previous response re-rendered still converges.
+			// Write only the leaves this panel owns so unknown model leaves survive.
+			const record = asRecord(getAt(configRef.current, ["model"]));
+			const updates: AutoRagConfigUpdate[] = [];
+			const put = (leaf: string, desired: string, removable: boolean): void => {
+				const current = record === null ? "" : stringOf(record[leaf]);
+				if (desired === current) return;
+				if (desired.length === 0 && removable) updates.push({ path: ["model", leaf], remove: true });
+				else updates.push({ path: ["model", leaf], value: desired });
+			};
+			put("provider", provider, false);
+			put("id", id, false);
+			put("name", value.name.trim(), true);
+			put("api", api, true);
+			put("baseUrl", value.baseUrl.trim(), true);
+			put("apiKeyEnv", apiKeyEnv, true);
+			if (updates.length === 0) {
+				setError(null);
+				return;
+			}
+			try {
+				const next = await autorag.settings.configPatch(updates);
+				configRef.record(next.config);
+				onSaved(next);
+				setError(null);
+			} catch (cause) {
+				setError(errorMessage(cause));
+				throw cause;
+			}
+		},
+	});
+	const { queue: queueSave, flush: flushSave, cancel: cancelSave, drain: drainSave, busy: autoSaving } = autoSave;
+
+	// Adopt a new snapshot only while the draft still matches the previously saved
+	// value, so external updates apply but a late response never clobbers typing.
 	useEffect(() => {
-		setDraft(llmDraftFrom(snapshot));
-	}, [signature, snapshot]);
+		const previousSavedKey = lastSavedKeyRef.current;
+		lastSavedKeyRef.current = llmKey(savedDraft);
+		if (llmKey(draft) === previousSavedKey) setDraft(savedDraft);
+	}, [savedDraft]);
+
+	// Text edits debounce; selects/toggles flip `immediateRef` and flush; a draft
+	// back at the saved value cancels any stale queued write.
+	useEffect(() => {
+		const immediate = immediateRef.current;
+		immediateRef.current = false;
+		if (!dirty) {
+			cancelSave();
+			return;
+		}
+		if (immediate) flushSave(draft);
+		else queueSave(draft);
+	}, [draft, dirty, cancelSave, flushSave, queueSave]);
+
+	function editText(mutate: (current: LlmDraft) => LlmDraft): void {
+		setDraft(mutate);
+	}
+
+	function editNow(mutate: (current: LlmDraft) => LlmDraft): void {
+		immediateRef.current = true;
+		setDraft(mutate);
+	}
 
 	const loadCatalog = useCallback(async (): Promise<void> => {
 		try {
@@ -404,7 +524,7 @@ function LlmPanel({ snapshot, onSaved }: { readonly snapshot: AutoRagConfigSnaps
 					: "No key";
 
 	function selectProvider(provider: ModelCatalogProvider): void {
-		setDraft((current) => ({
+		editNow((current) => ({
 			...current,
 			provider: provider.id,
 			id: "",
@@ -416,7 +536,7 @@ function LlmPanel({ snapshot, onSaved }: { readonly snapshot: AutoRagConfigSnaps
 	}
 
 	function selectModel(model: ModelCatalogEntry): void {
-		setDraft((current) => ({
+		editNow((current) => ({
 			...current,
 			provider: model.provider,
 			id: model.id,
@@ -425,49 +545,21 @@ function LlmPanel({ snapshot, onSaved }: { readonly snapshot: AutoRagConfigSnaps
 		}));
 	}
 
-	async function commit(path: readonly string[], value: JsonValue): Promise<boolean> {
-		setSaving(true);
-		setError(null);
-		try {
-			onSaved(await autorag.settings.configSet(path, value));
-			return true;
-		} catch (cause) {
-			setError(errorMessage(cause));
-			return false;
-		} finally {
-			setSaving(false);
-		}
-	}
-
-	async function save(): Promise<void> {
-		const provider = draft.provider.trim();
-		const id = draft.id.trim();
-		const problems: string[] = [];
-		if (provider.length === 0) problems.push("Provider is required.");
-		if (id.length === 0) problems.push("Model id is required.");
-		if (draft.apiKeyEnv.trim().length > 0 && !ENV_NAME_PATTERN.test(draft.apiKeyEnv.trim())) {
-			problems.push("API key env var must match /^[A-Za-z_][A-Za-z0-9_]*$/.");
-		}
-		if (problems.length > 0) {
-			setError(problems.join(" "));
-			return;
-		}
-		const model: Record<string, JsonValue> = { provider, id };
-		if (draft.name.trim().length > 0) model.name = draft.name.trim();
-		if (draft.api.trim().length > 0) model.api = draft.api.trim();
-		if (draft.baseUrl.trim().length > 0) model.baseUrl = draft.baseUrl.trim();
-		if (draft.apiKeyEnv.trim().length > 0) model.apiKeyEnv = draft.apiKeyEnv.trim();
-		await commit(["model"], model);
-	}
 	async function reset(): Promise<void> {
-		setSaving(true);
+		// Drop any debounced write, wait for an in-flight one, then remove the block.
+		cancelSave();
+		await drainSave();
+		setResetting(true);
 		setError(null);
 		try {
-			onSaved(await autorag.settings.configRemove(["model"]));
+			const next = await autorag.settings.configRemove(["model"]);
+			configRef.record(next.config);
+			onSaved(next);
+			setDraft(llmDraftFrom(next));
 		} catch (cause) {
 			setError(errorMessage(cause));
 		} finally {
-			setSaving(false);
+			setResetting(false);
 		}
 	}
 
@@ -515,7 +607,7 @@ function LlmPanel({ snapshot, onSaved }: { readonly snapshot: AutoRagConfigSnaps
 							]}
 							onChange={(value) => {
 								if (value === "__custom__") {
-									setDraft((current) => ({ ...current, provider: "", id: "", name: "", api: "", baseUrl: "", apiKeyEnv: "" }));
+									editNow((current) => ({ ...current, provider: "", id: "", name: "", api: "", baseUrl: "", apiKeyEnv: "" }));
 									return;
 								}
 								const provider = providers.find((item) => item.id === value);
@@ -529,7 +621,8 @@ function LlmPanel({ snapshot, onSaved }: { readonly snapshot: AutoRagConfigSnaps
 								ariaLabel="Custom provider id"
 								placeholder="provider"
 								value={draft.provider}
-								onChange={(value) => setDraft((current) => ({ ...current, provider: value }))}
+								onChange={(value) => editText((current) => ({ ...current, provider: value }))}
+								onBlur={() => flushSave()}
 							/>
 						</Row>
 					) : null}
@@ -549,14 +642,14 @@ function LlmPanel({ snapshot, onSaved }: { readonly snapshot: AutoRagConfigSnaps
 						</div>
 					) : null}
 					<Row name="Base URL" hint="Endpoint override for this provider connection, e.g. a gateway or local server. Blank uses the catalog endpoint.">
-						<TextField ariaLabel="Base URL" placeholder="https://…" value={draft.baseUrl} onChange={(value) => setDraft((current) => ({ ...current, baseUrl: value }))} />
+						<TextField ariaLabel="Base URL" placeholder="https://…" value={draft.baseUrl} onChange={(value) => editText((current) => ({ ...current, baseUrl: value }))} onBlur={() => flushSave()} />
 					</Row>
 					<Row name="API" hint="Optional wire-protocol override; only AutoRAG-recognized protocols can be stored. Catalog models use their own protocol when blank.">
 						<SelectField
 							ariaLabel="API"
 							value={isAllowedAgentApi(draft.api) ? draft.api : ""}
 							options={[{ value: "", label: "Catalog / default" }, ...ALLOWED_AGENT_APIS.map((api) => ({ value: api, label: api }))]}
-							onChange={(value) => setDraft((current) => ({ ...current, api: value }))}
+							onChange={(value) => editNow((current) => ({ ...current, api: value }))}
 						/>
 					</Row>
 					<Row name="API key env var" hint="Env var holding this provider's key; blank defaults to ${PROVIDER}_API_KEY. Reused across models and roles that reference it.">
@@ -564,7 +657,8 @@ function LlmPanel({ snapshot, onSaved }: { readonly snapshot: AutoRagConfigSnaps
 							ariaLabel="API key env var"
 							placeholder={defaultEnvName(draft.provider) || "PROVIDER_API_KEY"}
 							value={draft.apiKeyEnv}
-							onChange={(value) => setDraft((current) => ({ ...current, apiKeyEnv: value }))}
+							onChange={(value) => editText((current) => ({ ...current, apiKeyEnv: value }))}
+							onBlur={() => flushSave()}
 						/>
 					</Row>
 					{catalogApiNotice !== null ? <div className="linear-section-desc">{catalogApiNotice}</div> : null}
@@ -584,7 +678,7 @@ function LlmPanel({ snapshot, onSaved }: { readonly snapshot: AutoRagConfigSnaps
 						})),
 					]}
 					onChange={(value) => {
-						if (value === "__custom__") setDraft((current) => ({ ...current, id: "", name: "" }));
+						if (value === "__custom__") editNow((current) => ({ ...current, id: "", name: "" }));
 						else {
 							const model = modelOptions.find((item) => item.id === value);
 							if (model !== undefined) selectModel(model);
@@ -598,12 +692,13 @@ function LlmPanel({ snapshot, onSaved }: { readonly snapshot: AutoRagConfigSnaps
 						ariaLabel="Custom model id"
 						placeholder="provider/model"
 						value={draft.id}
-						onChange={(value) => setDraft((current) => ({ ...current, id: value }))}
+						onChange={(value) => editText((current) => ({ ...current, id: value }))}
+						onBlur={() => flushSave()}
 					/>
 				</Row>
 			) : null}
 			<Row name="Display name" hint="Human-readable label; defaults to the model id when blank.">
-				<TextField ariaLabel="Display name" placeholder="(defaults to id)" value={draft.name} onChange={(value) => setDraft((current) => ({ ...current, name: value }))} />
+				<TextField ariaLabel="Display name" placeholder="(defaults to id)" value={draft.name} onChange={(value) => editText((current) => ({ ...current, name: value }))} onBlur={() => flushSave()} />
 			</Row>
 
 			<div className="linear-section-title">Credentials</div>
@@ -618,12 +713,8 @@ function LlmPanel({ snapshot, onSaved }: { readonly snapshot: AutoRagConfigSnaps
 
 
 			<div className="settings-source-desc__actions" style={{ marginTop: 16 }}>
-				<button type="button" className="linear-btn" disabled={saving} onClick={() => void reset()}>
-					Reset to catalog default
-				</button>
-				<button type="button" className="linear-btn" disabled={saving} onClick={() => void save()}>
-					{saving ? "Saving…" : "Save model"}
-				</button>
+				<button type="button" className="linear-btn" disabled={resetting || autoSaving} onClick={() => void reset()}>Reset to catalog default</button>
+				{resetting || autoSaving ? <span className="settings-inline-status">Saving…</span> : <span className="settings-inline-status">Changes save automatically</span>}
 			</div>
 		</>
 	);
@@ -685,57 +776,140 @@ function embedDraftFrom(snapshot: AutoRagConfigSnapshot): EmbedDraft {
 	};
 }
 
+/**
+ * Identity whose reindex was requested but not yet confirmed by an explicit
+ * refresh result. Module-scoped so the warning survives the panel unmount a
+ * Settings tab switch causes; cleared only by a successful reindex.
+ */
+let modulePendingReindexIdentity: string | null = null;
+
+/** Identity leaves (provider/profile/id/baseUrl) that force a reindex. */
+function embedIdentityKey(draft: EmbedDraft): string {
+	return draft.mode === "endpoint"
+		? JSON.stringify(["endpoint", draft.id.trim(), draft.baseUrl.trim()])
+		: JSON.stringify(["profile", draft.profile]);
+}
+
+/** Advanced leaves that auto-save without touching the embedding identity. */
+function embedAdvancedKey(draft: EmbedDraft): string {
+	return JSON.stringify([draft.apiKeyEnv.trim(), numericKey(draft.timeoutMs), numericKey(draft.batchSize), numericKey(draft.maxConcurrent)]);
+}
+
+/** Combined draft signature used to detect local edits across identity + advanced. */
+function embedDraftKey(draft: EmbedDraft): string {
+	return `${embedIdentityKey(draft)}\u0000${embedAdvancedKey(draft)}`;
+}
+
 function EmbeddingPanel({ snapshot, onSaved }: { readonly snapshot: AutoRagConfigSnapshot; readonly onSaved: (next: AutoRagConfigSnapshot) => void }): ReactElement {
-	const signature = useMemo(() => JSON.stringify(snapshot.config), [snapshot.config]);
 	const [draft, setDraft] = useState<EmbedDraft>(() => embedDraftFrom(snapshot));
-	const [saving, setSaving] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [refreshing, setRefreshing] = useState(false);
 	const [refreshResult, setRefreshResult] = useState<ConfigRefreshResult | null>(null);
 	const [refreshError, setRefreshError] = useState<string | null>(null);
+	const [resetting, setResetting] = useState(false);
+	const [identitySaving, setIdentitySaving] = useState(false);
+	const [pendingReindexIdentity, setPendingReindexIdentity] = useState<string | null>(() => modulePendingReindexIdentity);
 
+	const saved = useMemo(() => embedDraftFrom(snapshot), [snapshot]);
+	const identityChanged = embedIdentityKey(draft) !== embedIdentityKey(saved);
+	const advancedChanged = embedAdvancedKey(draft) !== embedAdvancedKey(saved);
+	const lastSavedKeyRef = useRef(embedDraftKey(saved));
+	const configRef = useLatestConfig(snapshot);
+
+	const autoSave = useAutoSave<EmbedDraft>({
+		key: embedAdvancedKey,
+		// Advanced timeout/batch/concurrency/API-env leaves save on their own,
+		// even while an unrelated identity (profile/id/baseUrl) draft is pending.
+		// This never touches an identity leaf, so the pending identity is not applied.
+		perform: async (value) => {
+			const problems: string[] = [];
+			const apiKeyEnv = value.apiKeyEnv.trim();
+			if (apiKeyEnv.length > 0 && !ENV_NAME_PATTERN.test(apiKeyEnv)) problems.push("API key env var must match /^[A-Za-z_][A-Za-z0-9_]*$/.");
+			const numeric: readonly { readonly key: "timeoutMs" | "batchSize" | "maxConcurrent"; readonly label: string }[] = [
+				{ key: "timeoutMs", label: "Timeout" },
+				{ key: "batchSize", label: "Batch size" },
+				{ key: "maxConcurrent", label: "Max concurrency" },
+			];
+			const parsed: Record<string, number | null> = {};
+			for (const field of numeric) {
+				const text = value[field.key].trim();
+				const parsedValue = parsePositiveInt(text);
+				if (text.length > 0 && parsedValue === null) problems.push(`${field.label} must be a positive integer.`);
+				parsed[field.key] = parsedValue;
+			}
+			if (problems.length > 0) {
+				const message = problems.join(" ");
+				setError(message);
+				throw new Error(message);
+			}
+			const record = asRecord(getAt(configRef.current, ["minSync", "embedder"]));
+			const updates: AutoRagConfigUpdate[] = [];
+			const apiKeyEnvCurrent = record === null ? "" : stringOf(record.apiKeyEnv);
+			if (apiKeyEnv !== apiKeyEnvCurrent) {
+				updates.push(apiKeyEnv.length === 0 ? { path: ["minSync", "embedder", "apiKeyEnv"], remove: true } : { path: ["minSync", "embedder", "apiKeyEnv"], value: apiKeyEnv });
+			}
+			for (const field of numeric) {
+				const desired = parsed[field.key] ?? null;
+				const current = record === null ? null : numberOf(record[field.key]);
+				if (desired === null) {
+					if (current !== null) updates.push({ path: ["minSync", "embedder", field.key], remove: true });
+					continue;
+				}
+				if (current === desired) continue;
+				updates.push({ path: ["minSync", "embedder", field.key], value: desired });
+			}
+			if (updates.length === 0) {
+				setError(null);
+				return;
+			}
+			try {
+				const next = await autorag.settings.configPatch(updates);
+				configRef.record(next.config);
+				onSaved(next);
+				setError(null);
+			} catch (cause) {
+				setError(errorMessage(cause));
+				throw cause;
+			}
+		},
+	});
+	const { queue: queueSave, flush: flushSave, cancel: cancelSave, drain: drainSave, busy: autoSaving } = autoSave;
+
+	// Adopt a new snapshot only while the draft still matches the previously saved
+	// value, so external updates apply but a pending identity draft is preserved.
 	useEffect(() => {
-		setDraft(embedDraftFrom(snapshot));
-	}, [signature, snapshot]);
+		const previousSavedKey = lastSavedKeyRef.current;
+		lastSavedKeyRef.current = embedDraftKey(saved);
+		if (embedDraftKey(draft) === previousSavedKey) setDraft(saved);
+	}, [saved]);
 
-	const saved = useMemo(() => embedDraftFrom(snapshot), [signature, snapshot]);
-	const identityChanged =
-		draft.mode !== saved.mode ||
-		draft.profile !== saved.profile ||
-		draft.id.trim() !== saved.id.trim() ||
-		draft.baseUrl.trim() !== saved.baseUrl.trim();
-
-	async function commit(path: readonly string[], value: JsonValue): Promise<boolean> {
-		setSaving(true);
-		setError(null);
-		try {
-			onSaved(await autorag.settings.configSet(path, value));
-			return true;
-		} catch (cause) {
-			setError(errorMessage(cause));
-			return false;
-		} finally {
-			setSaving(false);
+	// Advanced edits debounce; a draft back at the saved value cancels a stale
+	// queued advanced write. The select is an explicit identity draft, never auto-saved.
+	useEffect(() => {
+		if (!advancedChanged) {
+			cancelSave();
+			return;
 		}
-	}
-
+		queueSave(draft);
+	}, [draft, advancedChanged, cancelSave, queueSave]);
 	function selectMode(value: string): void {
+		// The selector edits the explicit identity draft only; other advanced
+		// leaves (timeout/batch/concurrency/apiKeyEnv) are preserved as-is.
 		if (value === "endpoint") {
-			setDraft((current) => ({ ...current, mode: "endpoint", profile: "qwen3-embedding-0.6b" }));
+			setDraft((current) => ({ ...current, mode: "endpoint" }));
 			return;
 		}
 		const profile = EMBED_PROFILES.find((item) => item.id === value) ?? EMBED_PROFILES[0]!;
-		setDraft((current) => ({
-			...current,
-			mode: "profile",
-			profile: profile.id,
-			id: "",
-			baseUrl: "",
-			apiKeyEnv: "",
-		}));
+		setDraft((current) => ({ ...current, mode: "profile", profile: profile.id }));
 	}
 
-async function save(): Promise<void> {
+	/** Explicit identity save; advanced leaves auto-save and are not rewritten here. */
+	async function saveIdentity(): Promise<void> {
+		if (!identityChanged || identitySaving) return;
+		// Flush pending advanced edits, then wait: the identity write must be the
+		// only thing in flight so its snapshot is the newest response.
+		flushSave();
+		await drainSave();
 		const problems: string[] = [];
 		const id = draft.id.trim();
 		const baseUrl = draft.baseUrl.trim();
@@ -743,46 +917,52 @@ async function save(): Promise<void> {
 			if (id.length === 0) problems.push("Embedder id is required for a local endpoint.");
 			if (baseUrl.length === 0) problems.push("Endpoint base URL is required for a local endpoint.");
 		}
-		if (draft.apiKeyEnv.trim().length > 0 && !ENV_NAME_PATTERN.test(draft.apiKeyEnv.trim())) {
-			problems.push("API key env var must match /^[A-Za-z_][A-Za-z0-9_]*$/.");
-		}
-		const numeric: readonly { readonly key: "timeoutMs" | "batchSize" | "maxConcurrent"; readonly label: string }[] = [
-			{ key: "timeoutMs", label: "Timeout" },
-			{ key: "batchSize", label: "Batch size" },
-			{ key: "maxConcurrent", label: "Max concurrency" },
-		];
-		const parsed: Record<string, number | null> = {};
-		for (const field of numeric) {
-			const value = parsePositiveInt(draft[field.key]);
-			if (draft[field.key].trim().length > 0 && value === null) problems.push(`${field.label} must be a positive integer.`);
-			parsed[field.key] = value;
-		}
 		if (problems.length > 0) {
 			setError(problems.join(" "));
 			return;
 		}
-		const embedder: Record<string, JsonValue> = {};
+		const record = asRecord(getAt(configRef.current, ["minSync", "embedder"]));
+		const updates: AutoRagConfigUpdate[] = [];
 		if (draft.mode === "profile") {
 			const preset = EMBED_PROFILES.find((item) => item.id === draft.profile) ?? EMBED_PROFILES[0]!;
-			embedder.profile = draft.profile;
-			embedder.dimension = preset.dimension;
+			updates.push({ path: ["minSync", "embedder", "profile"], value: draft.profile });
+			updates.push({ path: ["minSync", "embedder", "dimension"], value: preset.dimension });
+			if (record !== null && record.id !== undefined) updates.push({ path: ["minSync", "embedder", "id"], remove: true });
+			if (record !== null && record.baseUrl !== undefined) updates.push({ path: ["minSync", "embedder", "baseUrl"], remove: true });
 		} else {
-			embedder.id = id;
-			embedder.baseUrl = baseUrl;
+			updates.push({ path: ["minSync", "embedder", "id"], value: id });
+			updates.push({ path: ["minSync", "embedder", "baseUrl"], value: baseUrl });
+			if (record !== null && record.profile !== undefined) updates.push({ path: ["minSync", "embedder", "profile"], remove: true });
+			if (record !== null && record.dimension !== undefined) updates.push({ path: ["minSync", "embedder", "dimension"], remove: true });
 		}
-		if (draft.apiKeyEnv.trim().length > 0) embedder.apiKeyEnv = draft.apiKeyEnv.trim();
-		for (const field of numeric) {
-			const value = parsed[field.key];
-			if (value !== null && value !== undefined) embedder[field.key] = value;
+		setIdentitySaving(true);
+		setError(null);
+		try {
+			const next = await autorag.settings.configPatch(updates);
+			configRef.record(next.config);
+			onSaved(next);
+			const nextDraft = embedDraftFrom(next);
+			setDraft(nextDraft);
+			const fingerprint = embedIdentityKey(nextDraft);
+			modulePendingReindexIdentity = fingerprint;
+			setPendingReindexIdentity(fingerprint);
+		} catch (cause) {
+			setError(errorMessage(cause));
+		} finally {
+			setIdentitySaving(false);
 		}
-		await commit(["minSync", "embedder"], embedder);
 	}
 
 	async function reindex(): Promise<void> {
 		setRefreshing(true);
 		setRefreshError(null);
 		try {
-			setRefreshResult(await autorag.settings.configRefresh(["minsync"]));
+			const result = await autorag.settings.configRefresh(["minsync"]);
+			setRefreshResult(result);
+			if (result.ok) {
+				modulePendingReindexIdentity = null;
+				setPendingReindexIdentity(null);
+			}
 		} catch (cause) {
 			setRefreshResult(null);
 			setRefreshError(errorMessage(cause));
@@ -792,14 +972,28 @@ async function save(): Promise<void> {
 	}
 
 	async function reset(): Promise<void> {
-		setSaving(true);
+		cancelSave();
+		await drainSave();
+		setResetting(true);
 		setError(null);
 		try {
-			onSaved(await autorag.settings.configRemove(["minSync", "embedder"]));
+			const next = await autorag.settings.configRemove(["minSync", "embedder"]);
+			configRef.record(next.config);
+			onSaved(next);
+			const nextDraft = embedDraftFrom(next);
+			setDraft(nextDraft);
+			// Removing the embedder reverts to the default identity; when that
+			// differs from what was saved it still needs a reindex, so retain the
+			// warning instead of clearing it.
+			const resetIdentity = embedIdentityKey(nextDraft);
+			if (resetIdentity !== embedIdentityKey(saved)) {
+				modulePendingReindexIdentity = resetIdentity;
+				setPendingReindexIdentity(resetIdentity);
+			}
 		} catch (cause) {
 			setError(errorMessage(cause));
 		} finally {
-			setSaving(false);
+			setResetting(false);
 		}
 	}
 
@@ -843,10 +1037,10 @@ async function save(): Promise<void> {
 				/>
 			</Row>
 
-			{identityChanged ? (
+			{identityChanged || (pendingReindexIdentity !== null && pendingReindexIdentity === embedIdentityKey(saved)) ? (
 				<div className="settings-error" role="alert" style={{ borderColor: "var(--warn-border, var(--border-strong))", background: "var(--warn-bg-soft, var(--bg-input))", color: "var(--warn-text, var(--text-primary))" }}>
 					Changing the embedding identity (provider/profile, endpoint, or id) selects its automatic dimension and forces a full MinSync reindex before
-					existing vectors can be reused.
+					existing vectors can be reused. Run the reindex below after saving the identity.
 				</div>
 			) : null}
 
@@ -874,20 +1068,22 @@ async function save(): Promise<void> {
 							placeholder="EMBEDDER_API_KEY"
 							value={draft.apiKeyEnv}
 							onChange={(value) => setDraft((current) => ({ ...current, apiKeyEnv: value }))}
+							onBlur={() => flushSave()}
 						/>
 					</Row>
 				</>
 			)}
 
 			<div className="linear-section-title">Advanced</div>
+			<div className="linear-section-desc">These tuning values save automatically and do not change the embedding identity.</div>
 			<Row name="Timeout (ms)" hint="Per-request timeout in milliseconds.">
-				<TextField ariaLabel="Embedding timeout" type="number" placeholder="(default)" value={draft.timeoutMs} onChange={(value) => setDraft((current) => ({ ...current, timeoutMs: value }))} />
+				<TextField ariaLabel="Embedding timeout" type="number" placeholder="(default)" value={draft.timeoutMs} onChange={(value) => setDraft((current) => ({ ...current, timeoutMs: value }))} onBlur={() => flushSave()} />
 			</Row>
 			<Row name="Batch size" hint="Texts sent per embedding request.">
-				<TextField ariaLabel="Embedding batch size" type="number" placeholder="(default)" value={draft.batchSize} onChange={(value) => setDraft((current) => ({ ...current, batchSize: value }))} />
+				<TextField ariaLabel="Embedding batch size" type="number" placeholder="(default)" value={draft.batchSize} onChange={(value) => setDraft((current) => ({ ...current, batchSize: value }))} onBlur={() => flushSave()} />
 			</Row>
 			<Row name="Max concurrency" hint="Concurrent embedding requests.">
-				<TextField ariaLabel="Embedding max concurrency" type="number" placeholder="(default)" value={draft.maxConcurrent} onChange={(value) => setDraft((current) => ({ ...current, maxConcurrent: value }))} />
+				<TextField ariaLabel="Embedding max concurrency" type="number" placeholder="(default)" value={draft.maxConcurrent} onChange={(value) => setDraft((current) => ({ ...current, maxConcurrent: value }))} onBlur={() => flushSave()} />
 			</Row>
 
 			{draft.mode === "endpoint" ? (
@@ -922,17 +1118,18 @@ async function save(): Promise<void> {
 					))}
 				</ul>
 			) : null}
-			<button type="button" className="linear-btn" disabled={refreshing || saving} onClick={() => void reindex()}>
+			<button type="button" className="linear-btn" disabled={refreshing || resetting || autoSaving || identitySaving || identityChanged} onClick={() => void reindex()}>
 				{refreshing ? "Reindexing…" : "Reindex MinSync vectors"}
 			</button>
 
 			<div className="settings-source-desc__actions" style={{ marginTop: 16 }}>
-				<button type="button" className="linear-btn" disabled={saving} onClick={() => void reset()}>
+				<button type="button" className="linear-btn" disabled={resetting || autoSaving} onClick={() => void reset()}>
 					Reset to defaults
 				</button>
-				<button type="button" className="linear-btn" disabled={saving} onClick={() => void save()}>
-					{saving ? "Saving…" : "Save embedder"}
+				<button type="button" className="linear-btn" disabled={identitySaving || autoSaving || !identityChanged} onClick={() => void saveIdentity()}>
+					{identitySaving ? "Saving…" : "Save embedding identity"}
 				</button>
+				{autoSaving ? <span className="settings-inline-status">Saving advanced…</span> : <span className="settings-inline-status">Advanced settings save automatically</span>}
 			</div>
 		</>
 	);
@@ -993,67 +1190,171 @@ function rerankDraftFrom(snapshot: AutoRagConfigSnapshot): { readonly draft: Rer
 	};
 }
 
+/** Semantic identity of a rerank draft; trims values and parses numerics so a
+ * whitespace-only or "01" vs "1" difference never re-saves. */
+function rerankKey(draft: RerankDraft): string {
+	return JSON.stringify([draft.enabled, draft.model.trim(), draft.apiKeyEnv.trim(), draft.baseUrl.trim(), numericKey(draft.topN), numericKey(draft.timeoutMs)]);
+}
+
 function RerankerPanel({ snapshot, onSaved }: { readonly snapshot: AutoRagConfigSnapshot; readonly onSaved: (next: AutoRagConfigSnapshot) => void }): ReactElement {
-	const signature = useMemo(() => JSON.stringify(snapshot.config), [snapshot.config]);
-	const parsed = useMemo(() => rerankDraftFrom(snapshot), [signature, snapshot]);
-	const [draft, setDraft] = useState<RerankDraft>(parsed.draft);
-	const [saving, setSaving] = useState(false);
+	const parsed = useMemo(() => rerankDraftFrom(snapshot), [snapshot]);
+	const savedDraft = parsed.draft;
+	const [draft, setDraft] = useState<RerankDraft>(savedDraft);
+	const [resetting, setResetting] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 
-	useEffect(() => {
-		setDraft(rerankDraftFrom(snapshot).draft);
-	}, [signature, snapshot]);
+	const dirty = rerankKey(draft) !== rerankKey(savedDraft);
+	const immediateRef = useRef(false);
+	const lastSavedKeyRef = useRef(rerankKey(savedDraft));
+	const configRef = useLatestConfig(snapshot);
 
-	async function commit(path: readonly string[], value: JsonValue): Promise<boolean> {
-		setSaving(true);
-		setError(null);
-		try {
-			onSaved(await autorag.settings.configSet(path, value));
-			return true;
-		} catch (cause) {
-			setError(errorMessage(cause));
-			return false;
-		} finally {
-			setSaving(false);
+	const autoSave = useAutoSave<RerankDraft>({
+		key: rerankKey,
+		perform: async (value) => {
+			// Diff against the freshest known config: a queued re-enable can drain
+			// before the previous disable's snapshot re-rendered, and a `false`
+			// marker cannot hold leaves.
+			const raw = getAt(configRef.current, ["rerank"]);
+			// Disabling is an intended block transition: store `false`, not leaves.
+			if (!value.enabled) {
+				if (raw === false || raw === undefined) {
+					setError(null);
+					return;
+				}
+				try {
+					const next = await autorag.settings.configSet(["rerank"], false);
+					configRef.record(next.config);
+					onSaved(next);
+					setDraft(rerankDraftFrom(next).draft);
+					setError(null);
+				} catch (cause) {
+					setError(errorMessage(cause));
+					throw cause;
+				}
+				return;
+			}
+			const problems: string[] = [];
+			const model = value.model.trim();
+			if (model.length === 0) problems.push("Rerank model wire id is required.");
+			const apiKeyEnv = value.apiKeyEnv.trim();
+			if (apiKeyEnv.length > 0 && !ENV_NAME_PATTERN.test(apiKeyEnv)) problems.push("API key env var must match /^[A-Za-z_][A-Za-z0-9_]*$/.");
+			const topNText = value.topN.trim();
+			const topN = parsePositiveInt(topNText);
+			if (topNText.length > 0 && topN === null) problems.push("Top N must be a positive integer.");
+			const timeoutText = value.timeoutMs.trim();
+			const timeoutMs = parsePositiveInt(timeoutText);
+			if (timeoutText.length > 0 && timeoutMs === null) problems.push("Timeout must be a positive integer.");
+			if (problems.length > 0) {
+				const message = problems.join(" ");
+				setError(message);
+				throw new Error(message);
+			}
+			const record = isJsonObject(raw) ? (raw as JsonObject) : null;
+			if (record === null) {
+				// Enabling is an intended block transition: `false` cannot hold leaves.
+				const rerank: Record<string, JsonValue> = { provider: RERANK_PROVIDER, model };
+				if (apiKeyEnv.length > 0) rerank.apiKeyEnv = apiKeyEnv;
+				if (value.baseUrl.trim().length > 0) rerank.baseUrl = value.baseUrl.trim();
+				if (topN !== null) rerank.topN = topN;
+				if (timeoutMs !== null) rerank.timeoutMs = timeoutMs;
+				try {
+					const next = await autorag.settings.configSet(["rerank"], rerank);
+					configRef.record(next.config);
+					onSaved(next);
+					setDraft(rerankDraftFrom(next).draft);
+					setError(null);
+				} catch (cause) {
+					setError(errorMessage(cause));
+					throw cause;
+				}
+				return;
+			}
+			// Enabled object: write only the leaves this panel owns so unknown
+			// rerank leaves survive.
+			const updates: AutoRagConfigUpdate[] = [];
+			const put = (leaf: string, desired: string, removable: boolean): void => {
+				const current = stringOf(record[leaf]);
+				if (desired === current) return;
+				if (desired.length === 0 && removable) updates.push({ path: ["rerank", leaf], remove: true });
+				else updates.push({ path: ["rerank", leaf], value: desired });
+			};
+			put("provider", RERANK_PROVIDER, false);
+			put("model", model, false);
+			put("apiKeyEnv", apiKeyEnv, true);
+			put("baseUrl", value.baseUrl.trim(), true);
+			const putNumber = (leaf: string, desired: number | null): void => {
+				const current = numberOf(record[leaf]);
+				if (desired === null) {
+					if (current !== null) updates.push({ path: ["rerank", leaf], remove: true });
+					return;
+				}
+				if (current === desired) return;
+				updates.push({ path: ["rerank", leaf], value: desired });
+			};
+			putNumber("topN", topN);
+			putNumber("timeoutMs", timeoutMs);
+			if (boolOf(record.enabled) === false) updates.push({ path: ["rerank", "enabled"], value: true });
+			if (updates.length === 0) {
+				setError(null);
+				return;
+			}
+			try {
+				const next = await autorag.settings.configPatch(updates);
+				configRef.record(next.config);
+				onSaved(next);
+				setError(null);
+			} catch (cause) {
+				setError(errorMessage(cause));
+				throw cause;
+			}
+		},
+	});
+	const { queue: queueSave, flush: flushSave, cancel: cancelSave, drain: drainSave, busy: autoSaving } = autoSave;
+
+	// Adopt a new snapshot only while the draft still matches the previously saved
+	// value, so external updates apply but a local edit is never clobbered.
+	useEffect(() => {
+		const previousSavedKey = lastSavedKeyRef.current;
+		lastSavedKeyRef.current = rerankKey(savedDraft);
+		if (rerankKey(draft) === previousSavedKey) setDraft(savedDraft);
+	}, [savedDraft]);
+
+	// Selects/toggles flush immediately; text/number debounce; a draft back at the
+	// saved value cancels any stale queued write.
+	useEffect(() => {
+		const immediate = immediateRef.current;
+		immediateRef.current = false;
+		if (!dirty) {
+			cancelSave();
+			return;
 		}
+		if (immediate) flushSave(draft);
+		else queueSave(draft);
+	}, [draft, dirty, cancelSave, flushSave, queueSave]);
+
+	function editText(mutate: (current: RerankDraft) => RerankDraft): void {
+		setDraft(mutate);
 	}
 
-	async function save(): Promise<void> {
-		if (!draft.enabled) {
-			await commit(["rerank"], false);
-			return;
-		}
-		const problems: string[] = [];
-		const model = draft.model.trim();
-		if (model.length === 0) problems.push("Rerank model wire id is required.");
-		if (draft.apiKeyEnv.trim().length > 0 && !ENV_NAME_PATTERN.test(draft.apiKeyEnv.trim())) {
-			problems.push("API key env var must match /^[A-Za-z_][A-Za-z0-9_]*$/.");
-		}
-		const topN = parsePositiveInt(draft.topN);
-		if (draft.topN.trim().length > 0 && topN === null) problems.push("Top N must be a positive integer.");
-		const timeoutMs = parsePositiveInt(draft.timeoutMs);
-		if (draft.timeoutMs.trim().length > 0 && timeoutMs === null) problems.push("Timeout must be a positive integer.");
-		if (problems.length > 0) {
-			setError(problems.join(" "));
-			return;
-		}
-		const rerank: Record<string, JsonValue> = { provider: RERANK_PROVIDER, model };
-		if (draft.apiKeyEnv.trim().length > 0) rerank.apiKeyEnv = draft.apiKeyEnv.trim();
-		if (draft.baseUrl.trim().length > 0) rerank.baseUrl = draft.baseUrl.trim();
-		if (topN !== null) rerank.topN = topN;
-		if (timeoutMs !== null) rerank.timeoutMs = timeoutMs;
-		await commit(["rerank"], rerank);
+	function editNow(mutate: (current: RerankDraft) => RerankDraft): void {
+		immediateRef.current = true;
+		setDraft(mutate);
 	}
 
 	async function reset(): Promise<void> {
-		setSaving(true);
+		cancelSave();
+		await drainSave();
+		setResetting(true);
 		setError(null);
 		try {
-			onSaved(await autorag.settings.configRemove(["rerank"]));
+			const next = await autorag.settings.configRemove(["rerank"]);
+			configRef.record(next.config);
+			onSaved(next);
+			setDraft(rerankDraftFrom(next).draft);
 		} catch (cause) {
 			setError(errorMessage(cause));
 		} finally {
-			setSaving(false);
+			setResetting(false);
 		}
 	}
 
@@ -1086,7 +1387,7 @@ function RerankerPanel({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 
 			<div className="linear-section-title">Reranking</div>
 			<Row name="Enabled" hint="When off, the config stores rerank: false and the stage is skipped.">
-				<Switch checked={draft.enabled} onChange={() => setDraft((current) => ({ ...current, enabled: !current.enabled }))} ariaLabel="Reranking enabled" />
+				<Switch checked={draft.enabled} onChange={() => editNow((current) => ({ ...current, enabled: !current.enabled }))} ariaLabel="Reranking enabled" />
 			</Row>
 			{draft.enabled ? (
 				<>
@@ -1110,26 +1411,28 @@ function RerankerPanel({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 								list="rerank-model-options"
 								placeholder={DEFAULT_RERANK_MODEL}
 								value={draft.model}
-								onChange={(value) => setDraft((current) => ({ ...current, model: value }))}
+								onChange={(value) => editText((current) => ({ ...current, model: value }))}
+								onBlur={() => flushSave()}
 							/>
 						</>
 					</Row>
 					<Row name="Base URL" hint="Optional override, e.g. a Cohere-compatible /v1/rerank gateway. Blank uses OpenRouter.">
-						<TextField ariaLabel="Rerank base URL" placeholder="https://…" value={draft.baseUrl} onChange={(value) => setDraft((current) => ({ ...current, baseUrl: value }))} />
+						<TextField ariaLabel="Rerank base URL" placeholder="https://…" value={draft.baseUrl} onChange={(value) => editText((current) => ({ ...current, baseUrl: value }))} onBlur={() => flushSave()} />
 					</Row>
 					<Row name="API key env var" hint="Env var holding the OpenRouter key; defaults to OPENROUTER_API_KEY.">
 						<TextField
 							ariaLabel="Rerank API key env var"
 							placeholder={DEFAULT_RERANK_ENV}
 							value={draft.apiKeyEnv}
-							onChange={(value) => setDraft((current) => ({ ...current, apiKeyEnv: value }))}
+							onChange={(value) => editText((current) => ({ ...current, apiKeyEnv: value }))}
+							onBlur={() => flushSave()}
 						/>
 					</Row>
 					<Row name="Top N" hint="Return only the top N merged results; blank reorders all.">
-						<TextField ariaLabel="Rerank top N" type="number" placeholder="(all results)" value={draft.topN} onChange={(value) => setDraft((current) => ({ ...current, topN: value }))} />
+						<TextField ariaLabel="Rerank top N" type="number" placeholder="(all results)" value={draft.topN} onChange={(value) => editText((current) => ({ ...current, topN: value }))} onBlur={() => flushSave()} />
 					</Row>
 					<Row name="Timeout (ms)" hint="Per-request timeout in milliseconds; blank uses the SDK default.">
-						<TextField ariaLabel="Rerank timeout" type="number" placeholder="(default)" value={draft.timeoutMs} onChange={(value) => setDraft((current) => ({ ...current, timeoutMs: value }))} />
+						<TextField ariaLabel="Rerank timeout" type="number" placeholder="(default)" value={draft.timeoutMs} onChange={(value) => editText((current) => ({ ...current, timeoutMs: value }))} onBlur={() => flushSave()} />
 					</Row>
 
 					<div className="linear-section-title">Credentials</div>
@@ -1141,12 +1444,8 @@ function RerankerPanel({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 			) : null}
 
 			<div className="settings-source-desc__actions" style={{ marginTop: 16 }}>
-				<button type="button" className="linear-btn" disabled={saving} onClick={() => void reset()}>
-					Remove rerank settings
-				</button>
-				<button type="button" className="linear-btn" disabled={saving} onClick={() => void save()}>
-					{saving ? "Saving…" : "Save reranker"}
-				</button>
+				<button type="button" className="linear-btn" disabled={resetting || autoSaving} onClick={() => void reset()}>Remove rerank settings</button>
+				{resetting || autoSaving ? <span className="settings-inline-status">Saving…</span> : <span className="settings-inline-status">Changes save automatically</span>}
 			</div>
 		</>
 	);

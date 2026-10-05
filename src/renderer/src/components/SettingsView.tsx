@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState, type ReactElement, type ReactNode } from "react";
 import type { AppSettings, AutoRagConfigSnapshot } from "../../../shared/settings-contract";
+import { isJsonObject } from "../../../shared/settings-contract";
 import { DatabaseIcon, GearIcon, GroupIcon, PencilIcon, SearchIcon, SparklesIcon } from "./icons";
-import { DatasourceSettings } from "./settings/DatasourceSettings";
+import { DatasourceSettings, DATASOURCE_TEMPLATES } from "./settings/DatasourceSettings";
 import { AppsSettings, DeepSettings, LightSettings } from "./settings/ConfigSections";
 import { LanguageSettings } from "./settings/LanguageSettings";
 import { ModelSettings, type ModelSettingsKind } from "./settings/ModelSettings";
@@ -10,10 +11,11 @@ import { settings } from "../settings-runtime";
 
 const autorag = { settings };
 
-export type SettingsCategory = "general" | "llm" | "embedding" | "reranker" | "sources" | "deep" | "light" | "apps";
+type StaticSettingsCategory = "general" | "llm" | "embedding" | "reranker" | "sources" | "deep" | "light" | "apps";
+export type SettingsCategory = StaticSettingsCategory | `source:${string}`;
 
 type CategoryItem = {
-	readonly id: SettingsCategory;
+	readonly id: StaticSettingsCategory;
 	readonly label: string;
 	readonly icon: (props: { size?: number }) => ReactElement;
 };
@@ -28,6 +30,44 @@ const CATEGORIES: readonly CategoryItem[] = [
 	{ id: "light", label: "Light Indexing", icon: SearchIcon },
 	{ id: "apps", label: "Other Apps", icon: GearIcon },
 ];
+
+const DATASOURCE_NAV_ORDER = ["discord", "kakao", "cloud-drive", "mailcrawl", "slack", "spotlight"] as const;
+const DATASOURCE_TEMPLATE_LABELS = new Map(DATASOURCE_TEMPLATES.map((template) => [template.id, template.label]));
+
+function sourceType(alias: string, raw: unknown): string {
+	return isJsonObject(raw) && typeof raw.type === "string" && raw.type.length > 0 ? raw.type : alias;
+}
+
+function sourceLabel(alias: string, type: string): string {
+	const normalized = `${alias} ${type}`.toLowerCase();
+	if (normalized.includes("icloud")) return alias === type ? "iCloud Drive" : `iCloud Drive · ${alias}`;
+	const label = DATASOURCE_TEMPLATE_LABELS.get(type) ?? type;
+	return alias === type ? label : `${label} · ${alias}`;
+}
+
+function sourceCategory(alias: string): SettingsCategory {
+	return `source:${alias}`;
+}
+
+function sourceAlias(category: SettingsCategory): string | null {
+	return category.startsWith("source:") ? category.slice("source:".length) : null;
+}
+
+function datasourceEntries(snapshot: AutoRagConfigSnapshot | null): readonly { readonly alias: string; readonly type: string; readonly label: string }[] {
+	if (snapshot === null || !isJsonObject(snapshot.config.datasources)) return [];
+	return Object.entries(snapshot.config.datasources)
+		.map(([alias, raw]) => {
+			const type = sourceType(alias, raw);
+			return { alias, type, label: sourceLabel(alias, type) };
+		})
+		.sort((a, b) => {
+			const order = (type: string): number => {
+				const index = DATASOURCE_NAV_ORDER.indexOf(type as (typeof DATASOURCE_NAV_ORDER)[number]);
+				return index < 0 ? DATASOURCE_NAV_ORDER.length : index;
+			};
+			return order(a.type) - order(b.type) || a.label.localeCompare(b.label);
+		});
+}
 
 const DUPEY_INTERVALS: readonly { readonly value: number; readonly label: string }[] = [
 	{ value: 15, label: "15분" },
@@ -93,6 +133,7 @@ export function SettingsView({ initialCategory = "general", onSettingsChanged }:
 	const [snapshot, setSnapshot] = useState<AutoRagConfigSnapshot | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [loading, setLoading] = useState(true);
+	const sources = useMemo(() => datasourceEntries(snapshot), [snapshot]);
 	const load = useCallback(async (): Promise<void> => {
 		setLoading(true);
 		try {
@@ -107,17 +148,48 @@ export function SettingsView({ initialCategory = "general", onSettingsChanged }:
 		}
 	}, []);
 	useEffect(() => { void load(); }, [load]);
-	const saveSnapshot = useCallback((next: AutoRagConfigSnapshot): void => { setSnapshot(next); setError(next.error); }, []);
+	useEffect(() => {
+		const alias = sourceAlias(category);
+		if (snapshot !== null && alias !== null && sources.every((source) => source.alias !== alias)) setCategory("sources");
+	}, [category, snapshot, sources]);
+	const saveSnapshot = useCallback((next: AutoRagConfigSnapshot): void => {
+		setSnapshot(next);
+		setError(next.error);
+	}, []);
+	const source = sourceAlias(category);
 	const content = useMemo(() => {
 		if (loading || appSettings === null || snapshot === null) return <p className="linear-section-desc">설정을 불러오는 중…</p>;
 		if (category === "general") return <GeneralSettings appSettings={appSettings} onAppSettingsChanged={(next) => { setAppSettings(next); onSettingsChanged?.(next); }} snapshot={snapshot} onSaved={saveSnapshot} />;
 		if (category === "llm" || category === "embedding" || category === "reranker") return <ModelSettings kind={category as ModelSettingsKind} snapshot={snapshot} onSaved={saveSnapshot} />;
-		if (category === "sources") return <DatasourceSettings snapshot={snapshot} onSaved={saveSnapshot} />;
+		if (category === "sources") return <DatasourceSettings key="sources" snapshot={snapshot} onSaved={saveSnapshot} />;
+		if (source !== null) return <DatasourceSettings key={source} snapshot={snapshot} onSaved={saveSnapshot} initialAlias={source} singleConnection />;
 		if (category === "deep") return <DeepSettings snapshot={snapshot} onSaved={saveSnapshot} />;
 		if (category === "light") return <LightSettings snapshot={snapshot} onSaved={saveSnapshot} />;
 		return <AppsSettings snapshot={snapshot} onSaved={saveSnapshot} />;
-	}, [appSettings, category, loading, onSettingsChanged, saveSnapshot, snapshot]);
-	return <div className="settings-view settings-panel" role="region" aria-label="Settings"><aside className="settings-sidebar" aria-label="Settings Categories"><div className="settings-sidebar-group-title">Settings</div>{CATEGORIES.map((item) => { const Icon = item.icon; const active = category === item.id; return <button key={item.id} type="button" className={`settings-nav-item${active ? " is-active" : ""}`} aria-current={active ? "true" : undefined} onClick={() => setCategory(item.id)}><span className="settings-nav-icon"><Icon size={16} /></span><span>{item.label}</span></button>; })}</aside><main className="settings-content" aria-label={`${category} settings`}><div className="settings-content-wrap">{error ? <div className="settings-error" role="alert">{error}</div> : null}{content}</div></main></div>;
+	}, [appSettings, category, loading, onSettingsChanged, saveSnapshot, snapshot, source]);
+	return (
+		<div className="settings-view settings-panel" role="region" aria-label="Settings">
+			<aside className="settings-sidebar" aria-label="Settings Categories">
+				<div className="settings-sidebar-group-title">Settings</div>
+				{CATEGORIES.map((item) => {
+					const Icon = item.icon;
+					const active = category === item.id;
+					return <button key={item.id} type="button" className={`settings-nav-item${active ? " is-active" : ""}`} aria-current={active ? "true" : undefined} onClick={() => setCategory(item.id)}><span className="settings-nav-icon"><Icon size={16} /></span><span>{item.label}</span></button>;
+				})}
+				<div className="settings-sidebar-group-title settings-sidebar-group-title--datasources">
+					<span>Data Sources</span>
+					<button type="button" className="settings-sidebar-add" aria-label="Add data source" title="Add data source" onClick={() => setCategory("sources")}>+</button>
+				</div>
+				{sources.map((item) => {
+					const active = category === sourceCategory(item.alias);
+					return <button key={item.alias} type="button" className={`settings-nav-item settings-nav-item--source${active ? " is-active" : ""}`} aria-current={active ? "true" : undefined} onClick={() => setCategory(sourceCategory(item.alias))}><span className="settings-nav-source-dot" aria-hidden="true" /><span>{item.label}</span></button>;
+				})}
+			</aside>
+			<main className="settings-content" aria-label={`${source === null ? category : `${source} datasource`} settings`}>
+				<div className="settings-content-wrap">{error ? <div className="settings-error" role="alert">{error}</div> : null}{content}</div>
+			</main>
+		</div>
+	);
 }
 
 export function SettingsFieldLabel({ children }: { readonly children: ReactNode }): ReactElement { return <span className="linear-row-name">{children}</span>; }

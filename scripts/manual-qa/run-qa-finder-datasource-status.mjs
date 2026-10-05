@@ -78,8 +78,7 @@ try {
 	const openSources = async () => {
 		await page.locator(".sidebar__item", { hasText: "Settings" }).click();
 		await page.waitForSelector(".settings-panel");
-		// Settings opens as a tab; the categories are the left nav items.
-		await selectCategory("Data Sources");
+		await page.locator(".settings-sidebar-add").click();
 		await page.waitForSelector('.settings-source[data-source-id="slack"]');
 	};
 	const closeSettings = async () => {
@@ -98,8 +97,11 @@ try {
 	await openSources();
 	// v7 dropped the config-path readout and the refresh button from this pane; the
 	// list itself is the observable, so the config path is covered by the ids below.
+	// The overview keeps all configured connections sorted by alias; each alias also has a direct tab in the sidebar group.
 	const ids = await page.locator(".settings-source").evaluateAll((els) => els.map((el) => el.dataset.sourceId));
-	check("lists every configured datasource, including disabled ones", JSON.stringify(ids) === JSON.stringify(["slack", "my-drive", "github", "telegram", "foo"]), JSON.stringify(ids));
+	check("lists every configured datasource, including disabled ones", JSON.stringify(ids) === JSON.stringify(["foo", "github", "my-drive", "slack", "telegram"]), JSON.stringify(ids));
+	const directTabs = await page.locator(".settings-nav-item--source").allTextContents();
+	check("exposes one direct Settings tab per configured datasource", directTabs.length === 5, JSON.stringify(directTabs));
 
 	const expected = {
 		slack: { install: "installed", agent: "connected", index: "external", status: "Ready" },
@@ -113,7 +115,7 @@ try {
 			install: await fact(id, "install"),
 			agent: await fact(id, "agent"),
 			...(want.index === undefined ? {} : { index: await fact(id, "index") }),
-			status: await row(id).locator(".settings-status").textContent(),
+			status: await row(id).locator(".provider-status").textContent(),
 		};
 		check(`${id} states`, JSON.stringify(got) === JSON.stringify(want), JSON.stringify(got));
 	}
@@ -123,29 +125,20 @@ try {
 
 	await fact("slack", "agent");
 	const slackDesc = row("slack").locator(".settings-source-desc");
-	check("chat edit button is gone", (await page.getByRole("button", { name: "채팅으로 수정" }).count()) === 0);
-	await slackDesc.locator(".settings-source-desc__edit").click();
-	await slackDesc.locator(".settings-source-desc__input").fill("Release and incident chatter");
-	await page.screenshot({ path: join(EVIDENCE, "01b-description-editing.png") });
-	await slackDesc.getByRole("button", { name: "저장" }).click();
-	await slackDesc.locator("p", { hasText: "Release and incident chatter" }).waitFor();
+	const description = slackDesc.locator('textarea[aria-label="설명"]');
+	await description.fill("Release and incident chatter");
+	await description.press("Tab");
+	await page.waitForTimeout(900);
 	const described = JSON.parse(readFileSync(configPath, "utf8"));
-	check("inline save wrote the description into the shared config", described.datasources.slack.description === "Release and incident chatter", JSON.stringify(described.datasources.slack));
+	check("datasource fields autosave into the shared config", described.datasources.slack.description === "Release and incident chatter", JSON.stringify(described.datasources.slack));
 	const agentDescription = (buildAgentOptions(resolveConfigReadOnly({ flags: {}, env: { ...process.env, ...env }, cwd: root })).datasourceSkills ?? [])
 		.find((skill) => skill.describe().name === "slack")?.describe().description;
 	check("a fresh AutoRAG agent reads the new description", agentDescription === "Release and incident chatter", agentDescription);
-	await slackDesc.locator(".settings-source-desc__edit").click();
-	await slackDesc.locator(".settings-source-desc__input").fill("discard me");
-	await slackDesc.locator(".settings-source-desc__input").press("Escape");
-	check("Escape cancels without writing", (await slackDesc.locator("p").textContent()) === "Release and incident chatter"
-		&& JSON.parse(readFileSync(configPath, "utf8")).datasources.slack.description === "Release and incident chatter");
-	check("Escape in the editor keeps Settings open", (await page.locator(".settings-panel").count()) === 1);
-	await page.screenshot({ path: join(EVIDENCE, "01c-description-saved.png") });
+	await page.screenshot({ path: join(EVIDENCE, "01b-description-autosaved.png") });
 
 	check("agent sees slack before the toggle", agentSkills().includes("slack"), JSON.stringify(agentSkills()));
 	await row("slack").locator(".settings-switch").click();
-	await page.waitForFunction(() =>
-		document.querySelector('.settings-source[data-source-id="slack"] .settings-status')?.textContent === "Paused");
+	await page.waitForFunction(() => document.querySelector('.settings-source[data-source-id="slack"] .provider-status')?.textContent === "Paused");
 	const onDisk = JSON.parse(readFileSync(configPath, "utf8"));
 	check("toggle wrote enabled:false into the shared config", onDisk.datasources.slack.enabled === false && onDisk.datasources.slack.description === "Release and incident chatter", JSON.stringify(onDisk.datasources.slack));
 	check("toggle preserved datasourceAccess", JSON.stringify(onDisk.datasourceAccess) === JSON.stringify({ allowedTags: ["chat", "documents"] }));
@@ -154,13 +147,14 @@ try {
 	await page.screenshot({ path: join(EVIDENCE, "02-slack-toggled-off.png") });
 
 	writeConfig({ ...onDisk.datasources, rss: { connector: { feeds: [{ url: "https://example.com/feed.xml" }] } } });
-	// v7 has no refresh button; switching the category away and back re-reads the config.
-	await selectCategory("General");
-	await selectCategory("Data Sources");
-	await page.waitForSelector('.settings-source[data-source-id="rss"]');
-	check("an external config edit appears after the pane re-reads", (await fact("rss", "install")) === "builtin");
+	// A Settings mount reads a fresh config snapshot; close/reopen is the supported
+	// external-edit refresh boundary and avoids clobbering an in-progress draft.
 	await closeSettings();
+	await openSources();
+	await page.waitForSelector('.settings-source[data-source-id="rss"]');
+	check("an external config edit appears after reopening Settings", (await fact("rss", "install")) === "builtin");
 	writeConfig({ ...onDisk.datasources, notion: {} });
+	await closeSettings();
 	await openSources();
 	check("reopening Settings re-reads the config (no app-side copy)", (await row("notion").count()) === 1 && (await row("rss").count()) === 0);
 	await page.screenshot({ path: join(EVIDENCE, "03-external-edit.png") });

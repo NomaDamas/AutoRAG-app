@@ -15,7 +15,7 @@
  *   .upstream/autorag/src/p2p/policy.ts
  */
 
-import { useCallback, useEffect, useState, type ReactElement, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
 import type {
 	AutoRagConfigSnapshot,
 	AutoRagConfigUpdate,
@@ -94,32 +94,303 @@ function ResetButton({ label, onClick, disabled }: { readonly label: string; rea
 
 /* ---------------------------------------------------------------- writes -- */
 
+/**
+ * Serialized config writer. Commits run one after another so a burst of
+ * autosaves or a reset during an in-flight save never races on disk. Resolves
+ * `true` when the batch landed, `false` when the backend rejected it, so a
+ * caller can stop retrying a value that just failed.
+ */
 function useFieldCommit(onSaved: (next: AutoRagConfigSnapshot) => void): {
 	readonly saving: boolean;
 	readonly error: string | null;
 	readonly setError: (message: string | null) => void;
-	readonly commit: (ops: readonly AutoRagConfigUpdate[]) => Promise<void>;
+	readonly commit: (ops: readonly AutoRagConfigUpdate[]) => Promise<boolean>;
 } {
 	const [saving, setSaving] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	const chainRef = useRef<Promise<void>>(Promise.resolve());
+	const pendingRef = useRef(0);
+	const mountedRef = useRef(true);
+	useEffect(() => {
+		mountedRef.current = true;
+		return (): void => {
+			mountedRef.current = false;
+		};
+	}, []);
 	const commit = useCallback(
-		async (ops: readonly AutoRagConfigUpdate[]): Promise<void> => {
-			if (ops.length === 0) return;
-			setSaving(true);
-			setError(null);
-			try {
-				const next = await settings.configPatch(ops);
-				onSaved(next);
-			} catch (cause) {
-				setError(cause instanceof Error ? cause.message : String(cause));
-			} finally {
-				setSaving(false);
-			}
+		(ops: readonly AutoRagConfigUpdate[]): Promise<boolean> => {
+			if (ops.length === 0) return Promise.resolve(true);
+			pendingRef.current += 1;
+			if (mountedRef.current) setSaving(true);
+			const run = async (): Promise<boolean> => {
+				if (mountedRef.current) setError(null);
+				try {
+					const next = await settings.configPatch(ops);
+					onSaved(next);
+					return true;
+				} catch (cause) {
+					if (mountedRef.current) setError(cause instanceof Error ? cause.message : String(cause));
+					return false;
+				} finally {
+					pendingRef.current -= 1;
+					if (pendingRef.current === 0 && mountedRef.current) setSaving(false);
+				}
+			};
+			const result = chainRef.current.then(run, run);
+			chainRef.current = result.then(
+				() => undefined,
+				() => undefined,
+			);
+			return result;
 		},
 		[onSaved],
 	);
 	return { saving, error, setError, commit };
 }
+
+type DraftAttempt =
+	| { readonly ops: readonly AutoRagConfigUpdate[] }
+	| { readonly error: string };
+
+/**
+ * How a field maps between the stored JSON leaf and its editable string draft.
+ * `*Signature` canonicalizes both sides so "unchanged" is decided on the value
+ * that would actually be written, never on raw whitespace.
+ */
+interface DraftCodec {
+	readonly serialize: (stored: JsonValue | undefined) => string;
+	readonly storedSignature: (stored: JsonValue | undefined) => string;
+	readonly draftSignature: (draft: string) => string;
+	readonly build: (path: ConfigPath, draft: string) => DraftAttempt;
+}
+
+/** Debounce window for text/number/list edits before the implicit autosave. */
+const AUTOSAVE_DELAY_MS = 300;
+
+/**
+ * Draft state for a non-boolean field: short-debounce autosave, blur/unmount
+ * flush, serialized writes, unchanged-write guard, and no retry loop after a
+ * validation or backend failure until the draft changes again.
+ *
+ * External snapshot updates adopt into the draft only when the draft has no
+ * pending edits, so a save echo or a concurrent write to another leaf never
+ * clobbers what the user is typing.
+ */
+function useDraftField(options: {
+	readonly stored: JsonValue | undefined;
+	readonly path: ConfigPath;
+	readonly codec: DraftCodec;
+	readonly onSaved: (next: AutoRagConfigSnapshot) => void;
+	readonly enabled: boolean;
+}): {
+	readonly draft: string;
+	readonly setDraft: (next: string) => void;
+	readonly saving: boolean;
+	readonly error: string | null;
+	readonly flush: () => void;
+	readonly reset: () => void;
+} {
+	const { stored, path, codec, onSaved, enabled } = options;
+	const { saving, error, setError, commit } = useFieldCommit(onSaved);
+	const storedSig = codec.storedSignature(stored);
+
+	const [draft, setDraftState] = useState<string>(() => codec.serialize(stored));
+	const draftRef = useRef(draft);
+	const storedRef = useRef(stored);
+	const codecRef = useRef(codec);
+	const enabledRef = useRef(enabled);
+	const pathRef = useRef(path);
+	const storedSigRef = useRef(storedSig);
+	const blockedRef = useRef<string | null>(null);
+	const attemptedRef = useRef<string | null>(null);
+	const timerRef = useRef<number | null>(null);
+	const commitRef = useRef(commit);
+
+	draftRef.current = draft;
+	storedRef.current = stored;
+	codecRef.current = codec;
+	enabledRef.current = enabled;
+	pathRef.current = path;
+	commitRef.current = commit;
+
+	const clearTimer = useCallback((): void => {
+		if (timerRef.current !== null) {
+			window.clearTimeout(timerRef.current);
+			timerRef.current = null;
+		}
+	}, []);
+
+	const setDraft = useCallback(
+		(next: string): void => {
+			draftRef.current = next;
+			setDraftState(next);
+			if (blockedRef.current !== null && codecRef.current.draftSignature(next) !== blockedRef.current) {
+				blockedRef.current = null;
+				setError(null);
+			}
+		},
+		[setError],
+	);
+
+	// What would be written right now, or null when there is nothing new to write:
+	// unchanged, disabled, a value that was already rejected, or a write already in
+	// flight for the same signature. This is the single guard shared by the debounce
+	// flush and the unmount flush, so a rejected value is never re-attempted unchanged.
+	const resolvePending = useCallback((): { readonly sig: string; readonly attempt: DraftAttempt } | null => {
+		if (!enabledRef.current) return null;
+		const sig = codecRef.current.draftSignature(draftRef.current);
+		const slot = codecRef.current.storedSignature(storedRef.current);
+		const inFlight = attemptedRef.current;
+		if (sig === slot) {
+			// Nothing new — unless a stale in-flight write for another value may still
+			// land and move disk away from this draft; then re-assert this draft after it.
+			if (inFlight === null || inFlight === sig) return null;
+		} else if (sig === blockedRef.current || sig === inFlight) {
+			return null;
+		}
+		return { sig, attempt: codecRef.current.build(pathRef.current, draftRef.current) };
+	}, []);
+
+	const flush = useCallback((): void => {
+		clearTimer();
+		const resolved = resolvePending();
+		if (resolved === null) return;
+		if ("error" in resolved.attempt) {
+			blockedRef.current = resolved.sig;
+			setError(resolved.attempt.error);
+			return;
+		}
+		attemptedRef.current = resolved.sig;
+		void commitRef.current(resolved.attempt.ops).then((ok) => {
+			if (!ok) {
+				attemptedRef.current = null;
+				blockedRef.current = resolved.sig;
+			}
+		});
+	}, [clearTimer, resolvePending, setError]);
+
+	const reset = useCallback((): void => {
+		clearTimer();
+		const next = codecRef.current.serialize(undefined);
+		const nextSig = codecRef.current.draftSignature(next);
+		draftRef.current = next;
+		setDraftState(next);
+		blockedRef.current = null;
+		attemptedRef.current = nextSig;
+		void commitRef.current([{ path: [...pathRef.current], remove: true }]).then((ok) => {
+			if (ok) return;
+			// The removal never landed: snap back to what is still on disk so the
+			// control is truthful, and block a silent re-attempt until the user acts.
+			attemptedRef.current = null;
+			blockedRef.current = nextSig;
+			const onDisk = codecRef.current.serialize(storedRef.current);
+			draftRef.current = onDisk;
+			setDraftState(onDisk);
+		});
+	}, [clearTimer]);
+
+	// Snapshot updates. An echo of our own write never clobbers a newer draft — the
+	// autosave below persists whatever the user last intended. External changes adopt
+	// only when this draft has no pending user edit.
+	useEffect(() => {
+		const previous = storedSigRef.current;
+		if (storedSig === previous) return;
+		storedSigRef.current = storedSig;
+		if (attemptedRef.current === storedSig) {
+			attemptedRef.current = null;
+			return;
+		}
+		// A write is still in flight: this update is an older echo or a racing write,
+		// not a trustworthy external change. Keep the draft; the echo of the latest
+		// write resolves it.
+		if (attemptedRef.current !== null) return;
+		if (codecRef.current.draftSignature(draftRef.current) !== previous) return;
+		const next = codecRef.current.serialize(storedRef.current);
+		draftRef.current = next;
+		setDraftState(next);
+	}, [storedSig]);
+
+	// Debounced autosave. The guards skip unchanged, rejected, and in-flight drafts,
+	// so no value is written on every render.
+	useEffect(() => {
+		if (!enabled) return;
+		const sig = codecRef.current.draftSignature(draft);
+		if (sig === storedSig || sig === blockedRef.current || sig === attemptedRef.current) return;
+		const timer = window.setTimeout(flush, AUTOSAVE_DELAY_MS);
+		timerRef.current = timer;
+		return (): void => {
+			if (timerRef.current === timer) {
+				window.clearTimeout(timer);
+				timerRef.current = null;
+			}
+		};
+	}, [draft, storedSig, enabled, flush]);
+
+	// Persist the latest draft when the row unmounts (category switch/collapse).
+	// Depends only on stable callbacks, never on the per-render path array.
+	useEffect(
+		() => (): void => {
+			clearTimer();
+			const resolved = resolvePending();
+			if (resolved === null || "error" in resolved.attempt) return;
+			void commitRef.current(resolved.attempt.ops);
+		},
+		[clearTimer, resolvePending],
+	);
+
+	return { draft, setDraft, saving, error, flush, reset };
+}
+
+function normalizeList(draft: string): string[] {
+	return draft
+		.split(/\r?\n/u)
+		.map((item) => item.trim())
+		.filter(Boolean);
+}
+
+const TEXT_CODEC: DraftCodec = {
+	serialize: (stored) => (typeof stored === "string" ? stored : ""),
+	// An absent leaf and an explicit empty string both mean "default".
+	storedSignature: (stored) => JSON.stringify(typeof stored === "string" ? stored : ""),
+	draftSignature: (draft) => JSON.stringify(draft),
+	build: (path, draft) => (draft.length === 0 ? { ops: [{ path: [...path], remove: true }] } : { ops: [{ path: [...path], value: draft }] }),
+};
+
+function isFiniteNumber(value: JsonValue | undefined): value is number {
+	return typeof value === "number" && Number.isFinite(value);
+}
+
+function numberCodec(min: number | undefined, max: number | undefined): DraftCodec {
+	return {
+		serialize: (stored) => (isFiniteNumber(stored) ? String(stored) : ""),
+		storedSignature: (stored) => JSON.stringify(isFiniteNumber(stored) ? stored : null),
+		draftSignature: (draft) => {
+			const trimmed = draft.trim();
+			if (trimmed.length === 0) return JSON.stringify(null);
+			const parsed = Number(trimmed);
+			return Number.isFinite(parsed) ? JSON.stringify(parsed) : `invalid:${draft}`;
+		},
+		build: (path, draft) => {
+			const trimmed = draft.trim();
+			if (trimmed.length === 0) return { ops: [{ path: [...path], remove: true }] };
+			const parsed = Number(trimmed);
+			if (!Number.isFinite(parsed)) return { error: "숫자를 입력하세요." };
+			if (min !== undefined && parsed < min) return { error: `최소값은 ${min}입니다.` };
+			if (max !== undefined && parsed > max) return { error: `최대값은 ${max}입니다.` };
+			return { ops: [{ path: [...path], value: parsed }] };
+		},
+	};
+}
+
+const LIST_CODEC: DraftCodec = {
+	serialize: (stored) => listOf(stored).join("\n"),
+	storedSignature: (stored) => JSON.stringify(listOf(stored)),
+	draftSignature: (draft) => JSON.stringify(normalizeList(draft)),
+	build: (path, draft) => {
+		const values = normalizeList(draft);
+		return values.length === 0 ? { ops: [{ path: [...path], remove: true }] } : { ops: [{ path: [...path], value: values }] };
+	},
+};
 
 /* ------------------------------------------------------------- field rows -- */
 
@@ -141,31 +412,15 @@ function TextFieldRow({
 	readonly disabled?: boolean;
 }): ReactElement {
 	const stored = readAt(snapshot.config, path);
-	const current = typeof stored === "string" ? stored : "";
-	const [draft, setDraft] = useState(current);
-	const signature = typeof stored === "string" ? stored : null;
-	useEffect(() => setDraft(current), [signature]);
-	const { saving, error, commit } = useFieldCommit(onSaved);
-	function save(): void {
-		void commit([draft.length === 0 ? { path: [...path], remove: true } : { path: [...path], value: draft }]);
-	}
+	const field = useDraftField({ stored, path, codec: TEXT_CODEC, onSaved, enabled: !disabled });
 	return (
 		<Row name={name} hint={hint}>
 			<div className="settings-field-stack">
-				<input
-					className="settings-source-desc__input"
-					aria-label={name}
-					value={draft}
-					placeholder={placeholder}
-					disabled={disabled || saving}
-					onChange={(event) => setDraft(event.target.value)}
-				/>
+				<input className="settings-source-desc__input" aria-label={name} value={field.draft} placeholder={placeholder} disabled={disabled} onChange={(event) => field.setDraft(event.target.value)} onBlur={field.flush} />
 				<div className="settings-field-actions">
-					<button type="button" className="linear-btn" disabled={disabled || saving} onClick={save}>
-						{saving ? "저장 중…" : "저장"}
-					</button>
-					{stored !== undefined ? <ResetButton label={name} disabled={disabled || saving} onClick={() => void commit([{ path: [...path], remove: true }])} /> : null}
-					{error ? <span className="settings-inline-error">{error}</span> : null}
+					{field.saving ? <span className="settings-inline-status">저장 중…</span> : null}
+					{stored !== undefined ? <ResetButton label={name} disabled={disabled || field.saving} onClick={field.reset} /> : null}
+					{field.error ? <span className="settings-inline-error">{field.error}</span> : null}
 				</div>
 			</div>
 		</Row>
@@ -194,51 +449,15 @@ function NumberFieldRow({
 	readonly disabled?: boolean;
 }): ReactElement {
 	const stored = readAt(snapshot.config, path);
-	const current = typeof stored === "number" && Number.isFinite(stored) ? stored : null;
-	const [draft, setDraft] = useState(current === null ? "" : String(current));
-	const signature = current === null ? null : String(current);
-	useEffect(() => setDraft(current === null ? "" : String(current)), [signature]);
-	const { saving, error, setError, commit } = useFieldCommit(onSaved);
-	function save(): void {
-		const trimmed = draft.trim();
-		if (trimmed.length === 0) {
-			void commit([{ path: [...path], remove: true }]);
-			return;
-		}
-		const parsed = Number(trimmed);
-		if (!Number.isFinite(parsed)) {
-			setError("숫자를 입력하세요.");
-			return;
-		}
-		if (min !== undefined && parsed < min) {
-			setError(`최소값은 ${min}입니다.`);
-			return;
-		}
-		if (max !== undefined && parsed > max) {
-			setError(`최대값은 ${max}입니다.`);
-			return;
-		}
-		void commit([{ path: [...path], value: parsed }]);
-	}
+	const field = useDraftField({ stored, path, codec: numberCodec(min, max), onSaved, enabled: !disabled });
 	return (
 		<Row name={name} hint={hint}>
 			<div className="settings-field-stack">
-				<input
-					className="settings-source-desc__input"
-					style={{ width: 180 }}
-					type="number"
-					aria-label={name}
-					value={draft}
-					placeholder={placeholder}
-					disabled={disabled || saving}
-					onChange={(event) => setDraft(event.target.value)}
-				/>
+				<input className="settings-source-desc__input" style={{ width: 180 }} type="number" aria-label={name} value={field.draft} placeholder={placeholder} disabled={disabled} onChange={(event) => field.setDraft(event.target.value)} onBlur={field.flush} />
 				<div className="settings-field-actions">
-					<button type="button" className="linear-btn" disabled={disabled || saving} onClick={save}>
-						{saving ? "저장 중…" : "저장"}
-					</button>
-					{stored !== undefined ? <ResetButton label={name} disabled={disabled || saving} onClick={() => void commit([{ path: [...path], remove: true }])} /> : null}
-					{error ? <span className="settings-inline-error">{error}</span> : null}
+					{field.saving ? <span className="settings-inline-status">저장 중…</span> : null}
+					{stored !== undefined ? <ResetButton label={name} disabled={disabled || field.saving} onClick={field.reset} /> : null}
+					{field.error ? <span className="settings-inline-error">{field.error}</span> : null}
 				</div>
 			</div>
 		</Row>
@@ -312,10 +531,15 @@ function SelectFieldRow({
 	useEffect(() => setDraft(currentKey), [currentKey]);
 	const { saving, error, commit } = useFieldCommit(onSaved);
 	function change(key: string): void {
-		setDraft(key);
 		const option = allOptions.find((item) => item.key === key);
 		if (option === undefined || option.key === "__custom__") return;
-		void commit([option.value === null ? { path: [...path], remove: true } : { path: [...path], value: option.value as JsonValue }]);
+		if (JSON.stringify(option.value) === JSON.stringify(stored === undefined ? null : stored)) return;
+		setDraft(key);
+		void commit([option.value === null ? { path: [...path], remove: true } : { path: [...path], value: option.value as JsonValue }]).then((ok) => {
+			// A failed write never happened on disk; snap the select back so the
+			// control cannot show a value the config does not hold.
+			if (!ok) setDraft(currentKey);
+		});
 	}
 	return (
 		<Row name={name} hint={hint}>
@@ -353,36 +577,15 @@ function ListFieldRow({
 	readonly disabled?: boolean;
 }): ReactElement {
 	const stored = readAt(snapshot.config, path);
-	const current = listOf(stored);
-	const [draft, setDraft] = useState(current.join("\n"));
-	const signature = JSON.stringify(current);
-	useEffect(() => setDraft(current.join("\n")), [signature]);
-	const { saving, error, commit } = useFieldCommit(onSaved);
-	function save(): void {
-		const values = draft
-			.split(/\r?\n/u)
-			.map((item) => item.trim())
-			.filter(Boolean);
-		void commit([values.length === 0 ? { path: [...path], remove: true } : { path: [...path], value: values }]);
-	}
+	const field = useDraftField({ stored, path, codec: LIST_CODEC, onSaved, enabled: !disabled });
 	return (
 		<Row name={name} hint={hint}>
 			<div className="settings-field-stack">
-				<textarea
-					className="linear-textarea"
-					aria-label={name}
-					rows={rows}
-					value={draft}
-					placeholder={placeholder}
-					disabled={disabled || saving}
-					onChange={(event) => setDraft(event.target.value)}
-				/>
+				<textarea className="linear-textarea" aria-label={name} rows={rows} value={field.draft} placeholder={placeholder} disabled={disabled} onChange={(event) => field.setDraft(event.target.value)} onBlur={field.flush} />
 				<div className="settings-field-actions">
-					<button type="button" className="linear-btn" disabled={disabled || saving} onClick={save}>
-						{saving ? "저장 중…" : "저장"}
-					</button>
-					{stored !== undefined ? <ResetButton label={name} disabled={disabled || saving} onClick={() => void commit([{ path: [...path], remove: true }])} /> : null}
-					{error ? <span className="settings-inline-error">{error}</span> : null}
+					{field.saving ? <span className="settings-inline-status">저장 중…</span> : null}
+					{stored !== undefined ? <ResetButton label={name} disabled={disabled || field.saving} onClick={field.reset} /> : null}
+					{field.error ? <span className="settings-inline-error">{field.error}</span> : null}
 				</div>
 			</div>
 		</Row>

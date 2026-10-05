@@ -80,13 +80,21 @@ second datasource or model configuration. The categories are:
 - **Reranker Models** — the v2.7 OpenRouter reranker, wire model, Top N,
   timeout, and encrypted credentials. Other reranker providers are not offered
   because the upstream resolver rejects them.
-- **Data Sources** — multiple named connections per datasource template,
-  instance ids, channel filters, connector-specific fields, tags, access
-  policy, and encrypted GitHub credentials. Unknown config fields are retained.
+- **Data Sources** — the management view for adding and inspecting multiple
+  named connections per datasource template. After it, a separate **Data Sources**
+  sidebar group exposes one direct Settings tab per configured connection (for
+  example Discord, KakaoTalk, iCloud Drive, mailcrawl, Slack, or Spotlight), so
+  connector fields are not nested inside one crowded page.
 - **Deep Indexing / Light Indexing / Other Apps** — search paths, MinSync,
   Jikji, platform-detected FSearch/Everything, web search, parser/OCR, dupey,
   datasource access, and exclusions. Installer paths, retrieval limits, P2P,
   and code-folder quick exclusions stay on AutoRAG defaults and are not exposed.
+
+Ordinary datasource, indexing, model, and app-option edits apply automatically
+after validation. Embedding identity changes remain explicit because they require
+a full MinSync reindex; the identity is saved separately and Settings keeps the
+reindex warning until an explicit refresh succeeds. API credentials remain
+explicit encrypted-store actions.
 
 The parser and OCR language controls are multi-select fields backed by the
 upstream-supported tags (`ko`, `en`, `ja`, `zh-hans`, `zh-hant`, `fr`, `de`,

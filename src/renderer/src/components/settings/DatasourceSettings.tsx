@@ -665,10 +665,16 @@ export function DatasourceSettings({
 	snapshot,
 	onSaved,
 	initialType,
+	initialAlias,
+	singleConnection = false,
 }: {
 	readonly snapshot: AutoRagConfigSnapshot;
 	readonly onSaved: (snapshot: AutoRagConfigSnapshot) => void;
 	readonly initialType?: string;
+	/** Open one configured connection from the Settings datasource group. */
+	readonly initialAlias?: string;
+	/** Hide the all-connections overview and show only `initialAlias`. */
+	readonly singleConnection?: boolean;
 }): ReactElement {
 	const [data, setData] = useState<AutoRagConfigSnapshot>(snapshot);
 	const [statuses, setStatuses] = useState<DataSourceRow[] | null>(null);
@@ -704,14 +710,15 @@ export function DatasourceSettings({
 		void reloadStatus();
 	}, [reloadStatus]);
 
-	const config = data.config;
+const config = data.config;
 	const datasources = useMemo<Record<string, unknown>>(() => asRecord(config.datasources), [config]);
 	const aliases = useMemo(() => Object.keys(datasources).sort((a, b) => a.localeCompare(b)), [datasources]);
 	const aliasSet = useMemo(() => new Set(aliases), [aliases]);
-	const visibleAliases = useMemo(
-		() => (focusedTemplate === null ? aliases : aliases.filter((alias) => typeOf(alias, datasources[alias]) === focusedTemplate)),
-		[aliases, datasources, focusedTemplate],
-	);
+	const visibleAliases = useMemo(() => {
+		if (initialAlias !== undefined) return aliases.includes(initialAlias) ? [initialAlias] : [];
+		return focusedTemplate === null ? aliases : aliases.filter((alias) => typeOf(alias, datasources[alias]) === focusedTemplate);
+	}, [aliases, datasources, focusedTemplate, initialAlias]);
+	const isSingleConnection = singleConnection && initialAlias !== undefined;
 	const rowById = useMemo(() => new Map((statuses ?? []).map((row) => [row.id, row])), [statuses]);
 	const countsByTemplate = useMemo(() => {
 		const counts = new Map<string, number>();
@@ -754,6 +761,12 @@ export function DatasourceSettings({
 	);
 
 	useEffect(() => {
+		if (initialAlias !== undefined) {
+			setExpanded(initialAlias);
+			setFocusedTemplate(null);
+			setAddTemplate(null);
+			return;
+		}
 		if (initialType === undefined || initialType.length === 0) return;
 		if (initialHandled.current === initialType) return;
 		initialHandled.current = initialType;
@@ -761,7 +774,7 @@ export function DatasourceSettings({
 			setFocusedTemplate(initialType);
 			setAddForm(initialType);
 		}
-	}, [initialType, setAddForm]);
+	}, [initialAlias, initialType, setAddForm]);
 
 	const addConnection = useCallback(async (): Promise<void> => {
 		if (addTemplate === null) return;
@@ -916,62 +929,30 @@ export function DatasourceSettings({
 
 	const problem = actionError ?? statusError ?? data.error;
 
-	return (
-		<div className="settings-datasources" role="region" aria-label="Data Sources">
+return (
+		<div className="settings-datasources" role="region" aria-label={isSingleConnection ? `${initialAlias} data source` : "Data Sources"}>
 			<div className="linear-header">
-				<h2 className="linear-title">Data Sources</h2>
+				<h2 className="linear-title">{isSingleConnection ? (initialAlias === undefined ? "Data Source" : `${TEMPLATE_BY_ID[typeOf(initialAlias, datasources[initialAlias])]?.label ?? typeOf(initialAlias, datasources[initialAlias])} · ${initialAlias}`) : "Data Sources"}</h2>
 				<p className="linear-desc">
-					공유 AutoRAG 설정의 데이터 소스를 추가·편집합니다. 여기서 저장한 값은 에이전트가 읽는 동일한 config.json에 반영됩니다.
+					{isSingleConnection
+						? "변경 사항은 저장 버튼 없이 즉시 AutoRAG config.json에 반영됩니다. 인덱스 재생성이 필요한 변경은 해당 모델 설정에서만 별도로 실행합니다."
+						: "공유 AutoRAG 설정의 데이터 소스를 추가·편집합니다. 여기서 저장한 값은 에이전트가 읽는 동일한 config.json에 반영됩니다."}
 				</p>
 			</div>
 
-			{problem !== null ? (
-				<div className="settings-error" role="alert">
-					{problem}
-				</div>
-			) : null}
+			{problem !== null ? <div className="settings-error" role="alert">{problem}</div> : null}
 
-			<div className="linear-section-title">연결</div>
-			{focusedTemplate !== null ? (
-				<div
-					style={{
-						display: "flex",
-						alignItems: "center",
-						justifyContent: "space-between",
-						gap: "var(--space-12)",
-						padding: "10px var(--space-12)",
-						marginBottom: "var(--space-8)",
-						border: "1px solid var(--border-divider)",
-						borderRadius: "var(--radius-8)",
-						background: "var(--bg-subtle)",
-					}}
-				>
-					<span style={HINT_TEXT}>
-						{TEMPLATE_BY_ID[focusedTemplate]?.label ?? focusedTemplate} 연결 {visibleAliases.length}개만 보는 중
-					</span>
+			{!isSingleConnection && focusedTemplate !== null ? (
+				<div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "var(--space-12)", padding: "10px var(--space-12)", marginBottom: "var(--space-8)", border: "1px solid var(--border-divider)", borderRadius: "var(--radius-8)", background: "var(--bg-subtle)" }}>
+					<span style={HINT_TEXT}>{TEMPLATE_BY_ID[focusedTemplate]?.label ?? focusedTemplate} 연결 {visibleAliases.length}개만 보는 중</span>
 					<span style={{ display: "flex", gap: "var(--space-6)" }}>
-						<button
-							type="button"
-							className="linear-btn"
-							onClick={() => {
-								setFocusedTemplate(null);
-								setAddForm(null);
-							}}
-						>
-							모든 연결
-						</button>
-						<button type="button" className="linear-btn" onClick={() => setAddForm(focusedTemplate)}>
-							다른 연결 추가
-						</button>
+						<button type="button" className="linear-btn" onClick={() => { setFocusedTemplate(null); setAddForm(null); }}>모든 연결</button>
+						<button type="button" className="linear-btn" onClick={() => setAddForm(focusedTemplate)}>다른 연결 추가</button>
 					</span>
 				</div>
 			) : null}
 			{visibleAliases.length === 0 ? (
-				<p className="linear-section-desc">
-					{aliases.length === 0
-						? "아직 연결이 없습니다. 아래 템플릿 카드에서 추가하세요."
-						: `${TEMPLATE_BY_ID[focusedTemplate ?? ""]?.label ?? focusedTemplate} 유형의 연결이 없습니다. 아래에서 추가하세요.`}
-				</p>
+				<p className="linear-section-desc">{isSingleConnection ? "이 연결은 더 이상 config에 존재하지 않습니다. 왼쪽 Data Sources에서 다른 연결을 선택하세요." : aliases.length === 0 ? "아직 연결이 없습니다. 아래 템플릿 카드에서 추가하세요." : `${TEMPLATE_BY_ID[focusedTemplate ?? ""]?.label ?? focusedTemplate} 유형의 연결이 없습니다. 아래에서 추가하세요.`}</p>
 			) : (
 				<div className="provider-list">
 					{visibleAliases.map((alias) => (
@@ -982,7 +963,7 @@ export function DatasourceSettings({
 							row={rowById.get(alias)}
 							allowedTags={accessTags}
 							busy={busy}
-							expanded={expanded === alias}
+							expanded={isSingleConnection || expanded === alias}
 							confirmingDelete={confirmDelete === alias}
 							onToggleExpanded={() => setExpanded((current) => (current === alias ? null : alias))}
 							onToggleEnabled={(enabled) => void toggleEnabled(alias, enabled)}
@@ -997,41 +978,13 @@ export function DatasourceSettings({
 				</div>
 			)}
 
-			<div className="linear-section-title">통합 템플릿</div>
-			<p className="linear-section-desc">
-				각 템플릿은 여러 연결을 가질 수 있습니다 (예: Slack 여러 채널, mailcrawl 여러 계정). 카드를 누르면 그 유형만 보고 연결을 추가합니다.
-			</p>
-			<IntegrationsGrid
-				counts={countsByTemplate}
-				active={focusedTemplate ?? addTemplate}
-				onPick={(templateId) => {
-					if (focusedTemplate === templateId) {
-						setFocusedTemplate(null);
-						setAddForm(null);
-					} else {
-						setFocusedTemplate(templateId);
-						setAddForm(templateId);
-					}
-				}}
-			/>
-
-			{addTemplate !== null ? (
-				<AddConnectionForm
-					templateId={addTemplate}
-					alias={addAlias}
-					instanceId={addInstanceId}
-					error={addError}
-					busy={busy}
-					onTemplate={(templateId) => {
-						setFocusedTemplate(templateId);
-						setAddTemplate(templateId);
-						setAddAlias(defaultAlias(aliasSet, templateId));
-					}}
-					onAlias={setAddAlias}
-					onInstanceId={setAddInstanceId}
-					onCancel={() => setAddForm(null)}
-					onSubmit={() => void addConnection()}
-				/>
+			{!isSingleConnection ? (
+				<>
+					<div className="linear-section-title">통합 템플릿</div>
+					<p className="linear-section-desc">각 템플릿은 여러 연결을 가질 수 있습니다. 카드를 눌러 해당 유형의 연결을 추가합니다.</p>
+					<IntegrationsGrid counts={countsByTemplate} active={focusedTemplate ?? addTemplate} onPick={(templateId) => { if (focusedTemplate === templateId) { setFocusedTemplate(null); setAddForm(null); } else { setFocusedTemplate(templateId); setAddForm(templateId); } }} />
+					{addTemplate !== null ? <AddConnectionForm templateId={addTemplate} alias={addAlias} instanceId={addInstanceId} error={addError} busy={busy} onTemplate={(templateId) => { setFocusedTemplate(templateId); setAddTemplate(templateId); setAddAlias(defaultAlias(aliasSet, templateId)); }} onAlias={setAddAlias} onInstanceId={setAddInstanceId} onCancel={() => setAddForm(null)} onSubmit={() => void addConnection()} /> : null}
+				</>
 			) : null}
 		</div>
 	);
@@ -1228,19 +1181,23 @@ function ConnectionCard({
 	const [baseline, setBaseline] = useState<Record<string, unknown>>(() => clone(original));
 	const [draft, setDraft] = useState<Record<string, unknown>>(() => clone(original));
 	const baselineRef = useRef(baseline);
+	const failedSignatureRef = useRef<string | null>(null);
 	const [newAlias, setNewAlias] = useState(alias);
 	const [saving, setSaving] = useState(false);
 	const [saveError, setSaveError] = useState<string | null>(null);
 
-	// Adopt external changes (enable toggles, concurrent saves) for fields the
-	// user has not edited, keeping the draft baseline in step with the disk.
+	// Adopt external changes for fields the user has not edited. The debounce below
+	// turns every non-destructive field edit into an immediate config write without
+	// writing one JSON file per keystroke.
 	useEffect(() => {
 		const incoming = entryOf(raw);
 		const previous = baselineRef.current;
-		setDraft((current) => asRecord(reconcileValue(current, previous, incoming)));
+		const nextDraft = asRecord(reconcileValue(draft, previous, incoming));
+		setDraft(nextDraft);
 		const nextBaseline = clone(incoming);
 		baselineRef.current = nextBaseline;
 		setBaseline(nextBaseline);
+		failedSignatureRef.current = null;
 	}, [raw]);
 
 	const templateType = typeof draft.type === "string" && draft.type.length > 0 ? draft.type : alias;
@@ -1251,17 +1208,42 @@ function ConnectionCard({
 	const tags = asStringArray(draft.tags);
 	const effectiveTags = row?.agent.tags.length ? row.agent.tags : tags;
 	const dirty = JSON.stringify(baseline) !== JSON.stringify(draft) || newAlias.trim() !== alias;
+	const draftSignature = JSON.stringify({ draft, newAlias: newAlias.trim() });
 
-	const setField = (path: string[], value: unknown): void => setDraft((current) => withPath(current, path, value));
+	const setField = (path: string[], value: unknown): void => {
+		failedSignatureRef.current = null;
+		setDraft((current) => withPath(current, path, value));
+	};
 
 	async function save(): Promise<void> {
-		if (saving) return;
+		if (saving || !dirty || failedSignatureRef.current === draftSignature) return;
 		setSaving(true);
 		setSaveError(null);
-		const error = await onCommit(draft, baseline, newAlias);
+		const error = await onCommit(draft, baselineRef.current, newAlias);
 		setSaving(false);
-		if (error !== null) setSaveError(error);
+		if (error !== null) {
+			failedSignatureRef.current = draftSignature;
+			setSaveError(error);
+			return;
+		}
+		failedSignatureRef.current = null;
+		const nextBaseline = clone(draft);
+		baselineRef.current = nextBaseline;
+		setBaseline(nextBaseline);
 	}
+
+	useEffect(() => {
+		if (!dirty || saving || failedSignatureRef.current === draftSignature) return;
+		const timer = window.setTimeout(() => void save(), 350);
+		return () => window.clearTimeout(timer);
+	}, [dirty, draft, draftSignature, newAlias, saving]);
+	const dirtyRef = useRef(dirty);
+	const saveRef = useRef<() => void>(() => undefined);
+	dirtyRef.current = dirty;
+	saveRef.current = () => { void save(); };
+	useEffect(() => () => {
+		if (dirtyRef.current) saveRef.current();
+	}, []);
 
 	return (
 		<div className={`settings-source${expanded ? " is-open" : ""}`} data-source-id={alias}>
@@ -1480,24 +1462,12 @@ function ConnectionCard({
 
 					{meta === undefined ? null : (
 						<div className="settings-source-desc__actions">
+							{saving ? <span style={HINT_TEXT}>변경 사항 저장 중…</span> : null}
 							<button type="button" className="linear-btn is-danger" onClick={onRequestDelete} disabled={busy || saving}>
 								<TrashIcon /> 연결 삭제
 							</button>
-							<button
-								type="button"
-								className="linear-btn"
-								disabled={saving || !dirty}
-								onClick={() => {
-									onDismissError();
-									setDraft(clone(baseline));
-									setNewAlias(alias);
-									setSaveError(null);
-								}}
-							>
+							<button type="button" className="linear-btn" disabled={saving || !dirty} onClick={() => { onDismissError(); setDraft(clone(baselineRef.current)); setNewAlias(alias); setSaveError(null); }}>
 								되돌리기
-							</button>
-							<button type="button" className="linear-btn is-primary" disabled={busy || saving || !dirty} onClick={() => void save()}>
-								{saving ? "저장 중…" : "저장"}
 							</button>
 						</div>
 					)}
