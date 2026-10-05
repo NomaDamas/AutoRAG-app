@@ -66,6 +66,14 @@ through Electron's native theme; Quick Look has no separate appearance switch.
 The default is Light, and changing it while Quick Look is open updates the panel
 without reloading the previewed file. The choice is retained after restart.
 
+### Quick Look
+
+Space previews the selected file in its own panel (`src/preview/DESIGN.md`).
+HWP and HWPX documents open like a PDF: page-accurate paper cards, zoom, and a
+page rail, drawn locally by [rhwp](https://github.com/edwardkim/rhwp)
+(`@rhwp/core`, MIT) on macOS and Windows alike. Nothing is uploaded; Hancom
+Office is not required.
+
 ## Live filesystem sync
 
 Folders shown in open tabs are watched for changes made by other apps. A
