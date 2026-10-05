@@ -394,6 +394,27 @@ describe("Windows places", () => {
 		]);
 	});
 
+	it("still lists every place when the user SID cannot be read", async () => {
+		// Given a machine where whoami is unavailable (e.g. a stripped PATH)
+		const { deps } = winDeps({}, { whoami: new Error("spawn whoami ENOENT"), reg: NO_SYNC_ROOTS, "powershell.exe": C_ONLY });
+
+		// When listing places
+		const locations = await createPlaces(deps).list();
+
+		// Then the favorites and the system drive still appear; only the per-user Recycle Bin is missing
+		expect(bySection(locations, "favorites").map((location) => location.name)).toEqual([
+			"me",
+			"Program Files",
+			"Desktop",
+			"Documents",
+			"Downloads",
+			"Music",
+			"Videos",
+			"Pictures",
+		]);
+		expect(bySection(locations, "locations").map((location) => location.name)).toEqual(["Local Disk (C:)"]);
+	});
+
 	it("lists the cloud sync roots registered with the OS, one per account", async () => {
 		// Given two OneDrive accounts and Google Drive registered as sync roots
 		const base = "HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\SyncRootManager";

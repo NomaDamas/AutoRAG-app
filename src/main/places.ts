@@ -246,20 +246,27 @@ export function createPlaces(deps: PlacesDeps = {}): Places {
 	const systemDrive = (env.SystemDrive ?? "C:").toUpperCase();
 	const cloudStorage = join(home, "Library", "CloudStorage");
 	const iCloud = join(home, "Library", "Mobile Documents", "com~apple~CloudDocs");
-	let userSid: Promise<string> | null = null;
+	let userSid: Promise<string | null> | null = null;
 	/** Cloud + disk rows cost subprocesses; they are reused until the signature moves. */
 	let cached: { readonly signature: string; readonly rows: Promise<readonly FsLocation[]> } | null = null;
 
-	function sid(): Promise<string> {
-		userSid ??= run("whoami", ["/user", "/fo", "csv", "/nh"]).then((output) => {
-			const match = /"(S-[\d-]+)"/.exec(output);
-			if (match?.[1] === undefined) throw new Error(`whoami printed no SID: ${output.trim()}`);
-			return match[1];
-		});
+	/** The user's SID, or null when `whoami` cannot answer; only the per-user rows depend on it. */
+	function sid(): Promise<string | null> {
+		userSid ??= run("whoami", ["/user", "/fo", "csv", "/nh"])
+			.then((output) => {
+				const match = /"(S-[\d-]+)"/.exec(output);
+				if (match?.[1] === undefined) throw new Error(`whoami printed no SID: ${output.trim()}`);
+				return match[1];
+			})
+			.catch((error: unknown) => {
+				console.warn(`places: no user SID, skipping the Recycle Bin and sync roots: ${errorMessage(error)}`);
+				return null;
+			});
 		return userSid;
 	}
 
 	async function favorites(): Promise<FsLocation[]> {
+		const userSid = windows ? await sid() : null;
 		const specs: [string, string, FsLocationIcon, boolean][] = windows
 			? [
 					[win32.basename(home), home, "home", false],
@@ -270,7 +277,9 @@ export function createPlaces(deps: PlacesDeps = {}): Places {
 					["Music", known.music, "music", false],
 					["Videos", known.videos, "movies", false],
 					["Pictures", known.pictures, "pictures", false],
-					["Recycle Bin", `${systemDrive}\\$Recycle.Bin\\${await sid()}`, "trash", false],
+					...(userSid === null
+						? []
+						: [["Recycle Bin", `${systemDrive}\\$Recycle.Bin\\${userSid}`, "trash", false] as [string, string, FsLocationIcon, boolean]]),
 				]
 			: [
 					[basename(home), home, "home", false],
@@ -358,11 +367,14 @@ export function createPlaces(deps: PlacesDeps = {}): Places {
 
 	async function windowsRows(): Promise<FsLocation[]> {
 		let cloud: FsLocation[] = [];
-		try {
-			cloud = parseSyncRoots(await run("reg", ["query", SYNC_ROOT_KEY, "/s"]), await sid());
-		} catch (error) {
-			// No SyncRootManager key means no cloud provider is registered.
-			console.warn(`places: no sync roots: ${errorMessage(error)}`);
+		const userSid = await sid();
+		if (userSid !== null) {
+			try {
+				cloud = parseSyncRoots(await run("reg", ["query", SYNC_ROOT_KEY, "/s"]), userSid);
+			} catch (error) {
+				// No SyncRootManager key means no cloud provider is registered.
+				console.warn(`places: no sync roots: ${errorMessage(error)}`);
+			}
 		}
 		const disks: FsLocation[] = [];
 		for (const disk of await logicalDisks()) {

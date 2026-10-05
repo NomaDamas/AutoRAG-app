@@ -140,16 +140,27 @@ app.whenReady().then(async () => {
 	const qaRoot = process.env.AUTORAG_QA_ROOT?.trim() ?? "";
 	// Windows can redirect the known folders (OneDrive backup moves Desktop/Documents),
 	// so Explorer's real paths come from Electron; on macOS they always live under $HOME.
+	// A profile without a resolvable known folder (a throwaway USERPROFILE) makes
+	// app.getPath throw; that must fall back to `<home>\<Folder>`, never abort startup.
+	const knownFolder = (name: Parameters<typeof app.getPath>[0], fallback: string): string => {
+		try {
+			return app.getPath(name);
+		} catch (error) {
+			console.warn(`places: app.getPath("${name}") failed, using ${fallback}: ${error instanceof Error ? error.message : String(error)}`);
+			return fallback;
+		}
+	};
+	const home = app.getPath("home");
 	const places = createPlaces(
 		process.platform === "win32"
 			? {
 					knownFolders: {
-						desktop: app.getPath("desktop"),
-						documents: app.getPath("documents"),
-						downloads: app.getPath("downloads"),
-						music: app.getPath("music"),
-						videos: app.getPath("videos"),
-						pictures: app.getPath("pictures"),
+						desktop: knownFolder("desktop", join(home, "Desktop")),
+						documents: knownFolder("documents", join(home, "Documents")),
+						downloads: knownFolder("downloads", join(home, "Downloads")),
+						music: knownFolder("music", join(home, "Music")),
+						videos: knownFolder("videos", join(home, "Videos")),
+						pictures: knownFolder("pictures", join(home, "Pictures")),
 					},
 				}
 			: {},
