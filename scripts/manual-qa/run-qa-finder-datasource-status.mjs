@@ -1,10 +1,10 @@
 import { fileURLToPath } from "node:url";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildAgentOptions, resolveConfigReadOnly } from "@autorag/librarian";
 import { launchFinder, finderWindow } from "./launch-finder.mjs";
-import { chord } from "./platform.mjs";
+import { chord, rmRetry } from "./platform.mjs";
 
 // Settings > Data Sources must mirror the shared AutoRAG config (the one the
 // CLI, TUI, serve, and every agent read) in both directions. Runs against a
@@ -166,7 +166,8 @@ try {
 	await page.screenshot({ path: join(EVIDENCE, "03-external-edit.png") });
 } finally {
 	await app.close();
-	rmSync(root, { recursive: true, force: true });
+	// Electron can still hold the temp profile for a moment after close on Windows (EBUSY).
+	rmRetry(root);
 }
 
 if (fails.length > 0) {

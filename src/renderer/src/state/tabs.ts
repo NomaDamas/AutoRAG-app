@@ -5,7 +5,7 @@
  */
 
 import { EMPTY_SELECTION, type SelectionState } from "./selection";
-import { basename } from "./paths";
+import { basename, parentPrefix } from "./paths";
 
 export interface FinderTab {
 	readonly id: number;
@@ -120,6 +120,25 @@ export function goForward(state: TabsState): TabsState {
 		fwd: t.fwd.slice(1),
 		selection: EMPTY_SELECTION,
 	}));
+}
+
+/**
+ * A volume is about to unmount: every tab inside it moves to `fallback`, and
+ * history entries inside it are dropped so Back/Forward never land on a dead
+ * mount. Tabs elsewhere keep their state; with none inside, `state` is returned.
+ */
+export function evacuateTabs(state: TabsState, volume: string, fallback: string): TabsState {
+	const prefix = parentPrefix(volume);
+	const inside = (path: string): boolean => path === volume || path.startsWith(prefix);
+	if (!state.tabs.some((tab) => inside(tab.path))) return state;
+	return {
+		...state,
+		tabs: state.tabs.map((tab) =>
+			inside(tab.path)
+				? { ...blankTab(tab.id, fallback), back: tab.back.filter((path) => !inside(path)) }
+				: tab,
+		),
+	};
 }
 
 /**
