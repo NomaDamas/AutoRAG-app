@@ -158,7 +158,7 @@ export function ColumnHeader({
 			{menu !== null ? (
 				<div
 					ref={menuRef}
-					className="col-menu fixed z-[80] w-[230px] p-4 bg-window border border-border rounded-10 shadow-menu"
+					className="col-menu fixed z-[80] w-max p-4 bg-window border border-border rounded-10 shadow-menu"
 					role="menu"
 					aria-label="Columns"
 					style={{ left: menu.x, top: menu.y }}
@@ -172,7 +172,7 @@ export function ColumnHeader({
 								key={option.key}
 								type="button"
 								className={[
-									"col-menu__option flex items-center gap-7 w-full h-[24px] px-8 border-0 rounded-5 bg-transparent text-badge text-left",
+									"col-menu__option flex items-center gap-4 w-full h-[22px] pl-4 pr-12 border-0 rounded-5 bg-transparent text-badge text-left whitespace-nowrap",
 									fixed
 										? "text-ink-muted cursor-default"
 										: "text-ink-body cursor-default hover:bg-hover hover:text-ink",
@@ -190,14 +190,14 @@ export function ColumnHeader({
 								>
 									✓
 								</span>
-								<span className="col-menu__label ml-auto">{option.label}</span>
+								<span className="col-menu__label">{option.label}</span>
 							</button>
 						);
 					})}
 					<hr className="col-menu__sep my-4 border-0 border-t border-divider" />
 					<button
 						type="button"
-						className="col-menu__reset flex items-center w-full h-[24px] px-8 border-0 rounded-5 bg-transparent text-badge text-ink-body text-left cursor-default hover:bg-hover hover:text-ink"
+						className="col-menu__reset flex items-center w-full h-[22px] pl-22 pr-12 border-0 rounded-5 bg-transparent text-badge text-ink-body text-left whitespace-nowrap cursor-default hover:bg-hover hover:text-ink"
 						role="menuitem"
 						onClick={() => {
 							onResetColumns();
