@@ -18,6 +18,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from "react";
+import { useAutoSave } from "./useAutoSave";
 import type {
 	AutoRagConfigSnapshot,
 	AutoRagConfigUpdate,
@@ -667,6 +668,7 @@ export function DatasourceSettings({
 	initialType,
 	initialAlias,
 	singleConnection = false,
+	overviewOnly = false,
 }: {
 	readonly snapshot: AutoRagConfigSnapshot;
 	readonly onSaved: (snapshot: AutoRagConfigSnapshot) => void;
@@ -675,6 +677,8 @@ export function DatasourceSettings({
 	readonly initialAlias?: string;
 	/** Hide the all-connections overview and show only `initialAlias`. */
 	readonly singleConnection?: boolean;
+	/** Management view: add/select templates without nesting connection editors. */
+	readonly overviewOnly?: boolean;
 }): ReactElement {
 	const [data, setData] = useState<AutoRagConfigSnapshot>(snapshot);
 	const [statuses, setStatuses] = useState<DataSourceRow[] | null>(null);
@@ -936,13 +940,15 @@ return (
 				<p className="linear-desc">
 					{isSingleConnection
 						? "변경 사항은 저장 버튼 없이 즉시 AutoRAG config.json에 반영됩니다. 인덱스 재생성이 필요한 변경은 해당 모델 설정에서만 별도로 실행합니다."
-						: "공유 AutoRAG 설정의 데이터 소스를 추가·편집합니다. 여기서 저장한 값은 에이전트가 읽는 동일한 config.json에 반영됩니다."}
+						: overviewOnly
+							? "새 데이터 소스를 아래 템플릿에서 추가하세요. 기존 연결은 왼쪽 Data Sources 그룹에서 연결별 탭을 선택해 편집합니다."
+							: "공유 AutoRAG 설정의 데이터 소스를 추가·편집합니다. 여기서 저장한 값은 에이전트가 읽는 동일한 config.json에 반영됩니다."}
 				</p>
 			</div>
 
 			{problem !== null ? <div className="settings-error" role="alert">{problem}</div> : null}
 
-			{!isSingleConnection && focusedTemplate !== null ? (
+			{!overviewOnly && !isSingleConnection && focusedTemplate !== null ? (
 				<div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "var(--space-12)", padding: "10px var(--space-12)", marginBottom: "var(--space-8)", border: "1px solid var(--border-divider)", borderRadius: "var(--radius-8)", background: "var(--bg-subtle)" }}>
 					<span style={HINT_TEXT}>{TEMPLATE_BY_ID[focusedTemplate]?.label ?? focusedTemplate} 연결 {visibleAliases.length}개만 보는 중</span>
 					<span style={{ display: "flex", gap: "var(--space-6)" }}>
@@ -951,7 +957,9 @@ return (
 					</span>
 				</div>
 			) : null}
-			{visibleAliases.length === 0 ? (
+			{overviewOnly ? (
+				<p className="linear-section-desc">{aliases.length === 0 ? "아직 연결이 없습니다. 아래 템플릿 카드에서 추가하세요." : `현재 ${aliases.length}개의 연결이 있습니다. 왼쪽 Data Sources 그룹에서 편집할 연결을 선택하세요.`}</p>
+			) : visibleAliases.length === 0 ? (
 				<p className="linear-section-desc">{isSingleConnection ? "이 연결은 더 이상 config에 존재하지 않습니다. 왼쪽 Data Sources에서 다른 연결을 선택하세요." : aliases.length === 0 ? "아직 연결이 없습니다. 아래 템플릿 카드에서 추가하세요." : `${TEMPLATE_BY_ID[focusedTemplate ?? ""]?.label ?? focusedTemplate} 유형의 연결이 없습니다. 아래에서 추가하세요.`}</p>
 			) : (
 				<div className="provider-list">
@@ -1181,23 +1189,22 @@ function ConnectionCard({
 	const [baseline, setBaseline] = useState<Record<string, unknown>>(() => clone(original));
 	const [draft, setDraft] = useState<Record<string, unknown>>(() => clone(original));
 	const baselineRef = useRef(baseline);
-	const failedSignatureRef = useRef<string | null>(null);
 	const [newAlias, setNewAlias] = useState(alias);
-	const [saving, setSaving] = useState(false);
 	const [saveError, setSaveError] = useState<string | null>(null);
 
-	// Adopt external changes for fields the user has not edited. The debounce below
-	// turns every non-destructive field edit into an immediate config write without
-	// writing one JSON file per keystroke.
+	// Adopt external changes for fields the user has not edited. The shared
+	// autosave queue serializes a write already in flight and retains the latest
+	// pending draft when the user switches datasource tabs.
 	useEffect(() => {
 		const incoming = entryOf(raw);
 		const previous = baselineRef.current;
 		const nextDraft = asRecord(reconcileValue(draft, previous, incoming));
+		draftRef.current = nextDraft;
 		setDraft(nextDraft);
 		const nextBaseline = clone(incoming);
 		baselineRef.current = nextBaseline;
 		setBaseline(nextBaseline);
-		failedSignatureRef.current = null;
+		setSaveError(null);
 	}, [raw]);
 
 	const templateType = typeof draft.type === "string" && draft.type.length > 0 ? draft.type : alias;
@@ -1208,42 +1215,59 @@ function ConnectionCard({
 	const tags = asStringArray(draft.tags);
 	const effectiveTags = row?.agent.tags.length ? row.agent.tags : tags;
 	const dirty = JSON.stringify(baseline) !== JSON.stringify(draft) || newAlias.trim() !== alias;
-	const draftSignature = JSON.stringify({ draft, newAlias: newAlias.trim() });
 
-	const setField = (path: string[], value: unknown): void => {
-		failedSignatureRef.current = null;
-		setDraft((current) => withPath(current, path, value));
-	};
-
-	async function save(): Promise<void> {
-		if (saving || !dirty || failedSignatureRef.current === draftSignature) return;
-		setSaving(true);
-		setSaveError(null);
-		const error = await onCommit(draft, baselineRef.current, newAlias);
-		setSaving(false);
-		if (error !== null) {
-			failedSignatureRef.current = draftSignature;
-			setSaveError(error);
-			return;
-		}
-		failedSignatureRef.current = null;
-		const nextBaseline = clone(draft);
-		baselineRef.current = nextBaseline;
-		setBaseline(nextBaseline);
-	}
+	const autoSave = useAutoSave<{ readonly draft: Record<string, unknown>; readonly newAlias: string }>({
+		key: (value) => JSON.stringify({ draft: value.draft, newAlias: value.newAlias.trim() }),
+		perform: async (value) => {
+			const error = await onCommit(value.draft, baselineRef.current, value.newAlias);
+			if (error !== null) {
+				setSaveError(error);
+				throw new Error(error);
+			}
+			const nextBaseline = clone(value.draft);
+			baselineRef.current = nextBaseline;
+			setBaseline(nextBaseline);
+			setSaveError(null);
+		},
+	});
+	const { queue: queueSave, flush: flushSave, cancel: cancelSave, busy: saving } = autoSave;
+	const draftRef = useRef(draft);
+	const newAliasRef = useRef(newAlias);
+	const dirtyRef = useRef(dirty);
+	draftRef.current = draft;
+	newAliasRef.current = newAlias;
+	dirtyRef.current = dirty;
 
 	useEffect(() => {
-		if (!dirty || saving || failedSignatureRef.current === draftSignature) return;
-		const timer = window.setTimeout(() => void save(), 350);
-		return () => window.clearTimeout(timer);
-	}, [dirty, draft, draftSignature, newAlias, saving]);
-	const dirtyRef = useRef(dirty);
-	const saveRef = useRef<() => void>(() => undefined);
-	dirtyRef.current = dirty;
-	saveRef.current = () => { void save(); };
+		if (!dirty) {
+			if (!saving) cancelSave();
+			return;
+		}
+		queueSave({ draft: clone(draft), newAlias });
+	}, [cancelSave, dirty, draft, newAlias, queueSave, saving]);
+
 	useEffect(() => () => {
-		if (dirtyRef.current) saveRef.current();
-	}, []);
+		if (dirtyRef.current) flushSave({ draft: clone(draftRef.current), newAlias: newAliasRef.current });
+	}, [flushSave]);
+
+	const updateDraft = (mutate: (current: Record<string, unknown>) => Record<string, unknown>, enqueue = true): void => {
+		const next = mutate(draftRef.current);
+		draftRef.current = next;
+		dirtyRef.current = JSON.stringify(baselineRef.current) !== JSON.stringify(next) || newAliasRef.current.trim() !== alias;
+		setDraft(next);
+		if (enqueue) queueSave({ draft: clone(next), newAlias: newAliasRef.current });
+	};
+	const updateAlias = (value: string, enqueue = true): void => {
+		newAliasRef.current = value;
+		dirtyRef.current = JSON.stringify(baselineRef.current) !== JSON.stringify(draftRef.current) || value.trim() !== alias;
+		setNewAlias(value);
+		if (enqueue) queueSave({ draft: clone(draftRef.current), newAlias: value });
+	};
+
+	const setField = (path: string[], value: unknown): void => {
+		setSaveError(null);
+		updateDraft((current) => withPath(current, path, value));
+	};
 
 	return (
 		<div className={`settings-source${expanded ? " is-open" : ""}`} data-source-id={alias}>
@@ -1341,7 +1365,7 @@ function ConnectionCard({
 										className="settings-source-desc__input"
 										aria-label="연결 id (alias)"
 										value={newAlias}
-										onChange={(event) => setNewAlias(event.target.value)}
+										onChange={(event) => updateAlias(event.target.value)}
 									/>
 								</FieldShell>
 								<FieldShell label="템플릿 (type)" hint="이 연결이 사용할 AutoRAG 데이터소스 템플릿입니다.">
@@ -1466,7 +1490,7 @@ function ConnectionCard({
 							<button type="button" className="linear-btn is-danger" onClick={onRequestDelete} disabled={busy || saving}>
 								<TrashIcon /> 연결 삭제
 							</button>
-							<button type="button" className="linear-btn" disabled={saving || !dirty} onClick={() => { onDismissError(); setDraft(clone(baselineRef.current)); setNewAlias(alias); setSaveError(null); }}>
+							<button type="button" className="linear-btn" disabled={saving || !dirty} onClick={() => { onDismissError(); updateDraft(() => clone(baselineRef.current)); updateAlias(alias); setSaveError(null); }}>
 								되돌리기
 							</button>
 						</div>

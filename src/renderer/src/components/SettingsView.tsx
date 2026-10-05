@@ -161,7 +161,7 @@ export function SettingsView({ initialCategory = "general", onSettingsChanged }:
 		if (loading || appSettings === null || snapshot === null) return <p className="linear-section-desc">설정을 불러오는 중…</p>;
 		if (category === "general") return <GeneralSettings appSettings={appSettings} onAppSettingsChanged={(next) => { setAppSettings(next); onSettingsChanged?.(next); }} snapshot={snapshot} onSaved={saveSnapshot} />;
 		if (category === "llm" || category === "embedding" || category === "reranker") return <ModelSettings kind={category as ModelSettingsKind} snapshot={snapshot} onSaved={saveSnapshot} />;
-		if (category === "sources") return <DatasourceSettings key="sources" snapshot={snapshot} onSaved={saveSnapshot} />;
+		if (category === "sources") return <DatasourceSettings key="sources" snapshot={snapshot} onSaved={saveSnapshot} overviewOnly />;
 		if (source !== null) return <DatasourceSettings key={source} snapshot={snapshot} onSaved={saveSnapshot} initialAlias={source} singleConnection />;
 		if (category === "deep") return <DeepSettings snapshot={snapshot} onSaved={saveSnapshot} />;
 		if (category === "light") return <LightSettings snapshot={snapshot} onSaved={saveSnapshot} />;

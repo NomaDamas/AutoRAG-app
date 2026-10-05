@@ -80,11 +80,11 @@ second datasource or model configuration. The categories are:
 - **Reranker Models** — the v2.7 OpenRouter reranker, wire model, Top N,
   timeout, and encrypted credentials. Other reranker providers are not offered
   because the upstream resolver rejects them.
-- **Data Sources** — the management view for adding and inspecting multiple
-  named connections per datasource template. After it, a separate **Data Sources**
-  sidebar group exposes one direct Settings tab per configured connection (for
-  example Discord, KakaoTalk, iCloud Drive, mailcrawl, Slack, or Spotlight), so
-  connector fields are not nested inside one crowded page.
+- **Data Sources** — the management view for adding named connections per
+  datasource template. A separate **Data Sources** sidebar group exposes one
+  direct Settings tab per configured connection (for example Discord, KakaoTalk,
+  iCloud Drive, mailcrawl, Slack, or Spotlight), so connector fields are not
+  nested inside one crowded page.
 - **Deep Indexing / Light Indexing / Other Apps** — search paths, MinSync,
   Jikji, platform-detected FSearch/Everything, web search, parser/OCR, dupey,
   datasource access, and exclusions. Installer paths, retrieval limits, P2P,

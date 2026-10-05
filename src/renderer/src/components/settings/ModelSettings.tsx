@@ -362,6 +362,8 @@ function llmKey(draft: LlmDraft): string {
 
 function LlmPanel({ snapshot, onSaved }: { readonly snapshot: AutoRagConfigSnapshot; readonly onSaved: (next: AutoRagConfigSnapshot) => void }): ReactElement {
 	const [draft, setDraft] = useState<LlmDraft>(() => llmDraftFrom(snapshot));
+	const draftRef = useRef(draft);
+	draftRef.current = draft;
 	const [catalog, setCatalog] = useState<ModelCatalogSnapshot | null>(null);
 	const [credentials, setCredentials] = useState<readonly ProviderCredentialStatus[]>([]);
 	const [resetting, setResetting] = useState(false);
@@ -423,13 +425,17 @@ function LlmPanel({ snapshot, onSaved }: { readonly snapshot: AutoRagConfigSnaps
 		},
 	});
 	const { queue: queueSave, flush: flushSave, cancel: cancelSave, drain: drainSave, busy: autoSaving } = autoSave;
+	const setDraftLatest = (next: LlmDraft): void => {
+		draftRef.current = next;
+		setDraft(next);
+	};
 
 	// Adopt a new snapshot only while the draft still matches the previously saved
 	// value, so external updates apply but a late response never clobbers typing.
 	useEffect(() => {
 		const previousSavedKey = lastSavedKeyRef.current;
 		lastSavedKeyRef.current = llmKey(savedDraft);
-		if (llmKey(draft) === previousSavedKey) setDraft(savedDraft);
+		if (llmKey(draft) === previousSavedKey) setDraftLatest(savedDraft);
 	}, [savedDraft]);
 
 	// Text edits debounce; selects/toggles flip `immediateRef` and flush; a draft
@@ -438,20 +444,25 @@ function LlmPanel({ snapshot, onSaved }: { readonly snapshot: AutoRagConfigSnaps
 		const immediate = immediateRef.current;
 		immediateRef.current = false;
 		if (!dirty) {
-			cancelSave();
+			if (autoSaving) queueSave(draft);
+			else cancelSave();
 			return;
 		}
 		if (immediate) flushSave(draft);
 		else queueSave(draft);
-	}, [draft, dirty, cancelSave, flushSave, queueSave]);
+	}, [draft, dirty, autoSaving, cancelSave, flushSave, queueSave]);
 
 	function editText(mutate: (current: LlmDraft) => LlmDraft): void {
-		setDraft(mutate);
+		const next = mutate(draftRef.current);
+		setDraftLatest(next);
+		queueSave(next);
 	}
 
 	function editNow(mutate: (current: LlmDraft) => LlmDraft): void {
 		immediateRef.current = true;
-		setDraft(mutate);
+		const next = mutate(draftRef.current);
+		setDraftLatest(next);
+		flushSave(next);
 	}
 
 	const loadCatalog = useCallback(async (): Promise<void> => {
@@ -555,7 +566,7 @@ function LlmPanel({ snapshot, onSaved }: { readonly snapshot: AutoRagConfigSnaps
 			const next = await autorag.settings.configRemove(["model"]);
 			configRef.record(next.config);
 			onSaved(next);
-			setDraft(llmDraftFrom(next));
+			setDraftLatest(llmDraftFrom(next));
 		} catch (cause) {
 			setError(errorMessage(cause));
 		} finally {
@@ -802,6 +813,8 @@ function embedDraftKey(draft: EmbedDraft): string {
 
 function EmbeddingPanel({ snapshot, onSaved }: { readonly snapshot: AutoRagConfigSnapshot; readonly onSaved: (next: AutoRagConfigSnapshot) => void }): ReactElement {
 	const [draft, setDraft] = useState<EmbedDraft>(() => embedDraftFrom(snapshot));
+	const draftRef = useRef(draft);
+	draftRef.current = draft;
 	const [error, setError] = useState<string | null>(null);
 	const [refreshing, setRefreshing] = useState(false);
 	const [refreshResult, setRefreshResult] = useState<ConfigRefreshResult | null>(null);
@@ -874,33 +887,44 @@ function EmbeddingPanel({ snapshot, onSaved }: { readonly snapshot: AutoRagConfi
 		},
 	});
 	const { queue: queueSave, flush: flushSave, cancel: cancelSave, drain: drainSave, busy: autoSaving } = autoSave;
+	const setDraftLatest = (next: EmbedDraft): void => {
+		draftRef.current = next;
+		setDraft(next);
+	};
 
 	// Adopt a new snapshot only while the draft still matches the previously saved
 	// value, so external updates apply but a pending identity draft is preserved.
 	useEffect(() => {
 		const previousSavedKey = lastSavedKeyRef.current;
 		lastSavedKeyRef.current = embedDraftKey(saved);
-		if (embedDraftKey(draft) === previousSavedKey) setDraft(saved);
+		if (embedDraftKey(draft) === previousSavedKey) setDraftLatest(saved);
 	}, [saved]);
 
 	// Advanced edits debounce; a draft back at the saved value cancels a stale
 	// queued advanced write. The select is an explicit identity draft, never auto-saved.
 	useEffect(() => {
 		if (!advancedChanged) {
-			cancelSave();
+			if (autoSaving) queueSave(draft);
+			else cancelSave();
 			return;
 		}
 		queueSave(draft);
-	}, [draft, advancedChanged, cancelSave, queueSave]);
+	}, [draft, advancedChanged, autoSaving, cancelSave, queueSave]);
+	function editDraft(mutate: (current: EmbedDraft) => EmbedDraft, queueAdvanced = false): void {
+		const next = mutate(draftRef.current);
+		setDraftLatest(next);
+		if (queueAdvanced) queueSave(next);
+	}
+
 	function selectMode(value: string): void {
 		// The selector edits the explicit identity draft only; other advanced
 		// leaves (timeout/batch/concurrency/apiKeyEnv) are preserved as-is.
 		if (value === "endpoint") {
-			setDraft((current) => ({ ...current, mode: "endpoint" }));
+			editDraft((current) => ({ ...current, mode: "endpoint" }));
 			return;
 		}
 		const profile = EMBED_PROFILES.find((item) => item.id === value) ?? EMBED_PROFILES[0]!;
-		setDraft((current) => ({ ...current, mode: "profile", profile: profile.id }));
+		editDraft((current) => ({ ...current, mode: "profile", profile: profile.id }));
 	}
 
 	/** Explicit identity save; advanced leaves auto-save and are not rewritten here. */
@@ -942,7 +966,7 @@ function EmbeddingPanel({ snapshot, onSaved }: { readonly snapshot: AutoRagConfi
 			configRef.record(next.config);
 			onSaved(next);
 			const nextDraft = embedDraftFrom(next);
-			setDraft(nextDraft);
+			setDraftLatest(nextDraft);
 			const fingerprint = embedIdentityKey(nextDraft);
 			modulePendingReindexIdentity = fingerprint;
 			setPendingReindexIdentity(fingerprint);
@@ -981,7 +1005,7 @@ function EmbeddingPanel({ snapshot, onSaved }: { readonly snapshot: AutoRagConfi
 			configRef.record(next.config);
 			onSaved(next);
 			const nextDraft = embedDraftFrom(next);
-			setDraft(nextDraft);
+			setDraftLatest(nextDraft);
 			// Removing the embedder reverts to the default identity; when that
 			// differs from what was saved it still needs a reindex, so retain the
 			// warning instead of clearing it.
@@ -1057,17 +1081,17 @@ function EmbeddingPanel({ snapshot, onSaved }: { readonly snapshot: AutoRagConfi
 				<>
 					<div className="linear-section-title">Local Endpoint</div>
 					<Row name="Embedder id" hint="Endpoint embedder id, e.g. native:Qwen/Qwen3-Embedding-0.6B.">
-						<TextField ariaLabel="Embedder id" placeholder="native:model/id" value={draft.id} onChange={(value) => setDraft((current) => ({ ...current, id: value }))} />
+						<TextField ariaLabel="Embedder id" placeholder="native:model/id" value={draft.id} onChange={(value) => editDraft((current) => ({ ...current, id: value }))} />
 					</Row>
 					<Row name="Base URL" hint="Loopback HTTP endpoint that serves embeddings. Non-loopback URLs are rejected.">
-						<TextField ariaLabel="Embedder base URL" placeholder="http://127.0.0.1:…" value={draft.baseUrl} onChange={(value) => setDraft((current) => ({ ...current, baseUrl: value }))} />
+						<TextField ariaLabel="Embedder base URL" placeholder="http://127.0.0.1:…" value={draft.baseUrl} onChange={(value) => editDraft((current) => ({ ...current, baseUrl: value }))} />
 					</Row>
 					<Row name="API key env var" hint="Optional env var holding the endpoint key. The secret is stored encrypted below.">
 						<TextField
 							ariaLabel="Embedder API key env var"
 							placeholder="EMBEDDER_API_KEY"
 							value={draft.apiKeyEnv}
-							onChange={(value) => setDraft((current) => ({ ...current, apiKeyEnv: value }))}
+							onChange={(value) => editDraft((current) => ({ ...current, apiKeyEnv: value }), true)}
 							onBlur={() => flushSave()}
 						/>
 					</Row>
@@ -1077,13 +1101,13 @@ function EmbeddingPanel({ snapshot, onSaved }: { readonly snapshot: AutoRagConfi
 			<div className="linear-section-title">Advanced</div>
 			<div className="linear-section-desc">These tuning values save automatically and do not change the embedding identity.</div>
 			<Row name="Timeout (ms)" hint="Per-request timeout in milliseconds.">
-				<TextField ariaLabel="Embedding timeout" type="number" placeholder="(default)" value={draft.timeoutMs} onChange={(value) => setDraft((current) => ({ ...current, timeoutMs: value }))} onBlur={() => flushSave()} />
+				<TextField ariaLabel="Embedding timeout" type="number" placeholder="(default)" value={draft.timeoutMs} onChange={(value) => editDraft((current) => ({ ...current, timeoutMs: value }), true)} onBlur={() => flushSave()} />
 			</Row>
 			<Row name="Batch size" hint="Texts sent per embedding request.">
-				<TextField ariaLabel="Embedding batch size" type="number" placeholder="(default)" value={draft.batchSize} onChange={(value) => setDraft((current) => ({ ...current, batchSize: value }))} onBlur={() => flushSave()} />
+				<TextField ariaLabel="Embedding batch size" type="number" placeholder="(default)" value={draft.batchSize} onChange={(value) => editDraft((current) => ({ ...current, batchSize: value }), true)} onBlur={() => flushSave()} />
 			</Row>
 			<Row name="Max concurrency" hint="Concurrent embedding requests.">
-				<TextField ariaLabel="Embedding max concurrency" type="number" placeholder="(default)" value={draft.maxConcurrent} onChange={(value) => setDraft((current) => ({ ...current, maxConcurrent: value }))} onBlur={() => flushSave()} />
+				<TextField ariaLabel="Embedding max concurrency" type="number" placeholder="(default)" value={draft.maxConcurrent} onChange={(value) => editDraft((current) => ({ ...current, maxConcurrent: value }), true)} onBlur={() => flushSave()} />
 			</Row>
 
 			{draft.mode === "endpoint" ? (
@@ -1200,6 +1224,8 @@ function RerankerPanel({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 	const parsed = useMemo(() => rerankDraftFrom(snapshot), [snapshot]);
 	const savedDraft = parsed.draft;
 	const [draft, setDraft] = useState<RerankDraft>(savedDraft);
+	const draftRef = useRef(draft);
+	draftRef.current = draft;
 	const [resetting, setResetting] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 
@@ -1225,7 +1251,7 @@ function RerankerPanel({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 					const next = await autorag.settings.configSet(["rerank"], false);
 					configRef.record(next.config);
 					onSaved(next);
-					setDraft(rerankDraftFrom(next).draft);
+					setDraftLatest(rerankDraftFrom(next).draft);
 					setError(null);
 				} catch (cause) {
 					setError(errorMessage(cause));
@@ -1261,7 +1287,7 @@ function RerankerPanel({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 					const next = await autorag.settings.configSet(["rerank"], rerank);
 					configRef.record(next.config);
 					onSaved(next);
-					setDraft(rerankDraftFrom(next).draft);
+					setDraftLatest(rerankDraftFrom(next).draft);
 					setError(null);
 				} catch (cause) {
 					setError(errorMessage(cause));
@@ -1310,13 +1336,17 @@ function RerankerPanel({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 		},
 	});
 	const { queue: queueSave, flush: flushSave, cancel: cancelSave, drain: drainSave, busy: autoSaving } = autoSave;
+	const setDraftLatest = (next: RerankDraft): void => {
+		draftRef.current = next;
+		setDraft(next);
+	};
 
 	// Adopt a new snapshot only while the draft still matches the previously saved
 	// value, so external updates apply but a local edit is never clobbered.
 	useEffect(() => {
 		const previousSavedKey = lastSavedKeyRef.current;
 		lastSavedKeyRef.current = rerankKey(savedDraft);
-		if (rerankKey(draft) === previousSavedKey) setDraft(savedDraft);
+		if (rerankKey(draft) === previousSavedKey) setDraftLatest(savedDraft);
 	}, [savedDraft]);
 
 	// Selects/toggles flush immediately; text/number debounce; a draft back at the
@@ -1325,20 +1355,25 @@ function RerankerPanel({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 		const immediate = immediateRef.current;
 		immediateRef.current = false;
 		if (!dirty) {
-			cancelSave();
+			if (autoSaving) queueSave(draft);
+			else cancelSave();
 			return;
 		}
 		if (immediate) flushSave(draft);
 		else queueSave(draft);
-	}, [draft, dirty, cancelSave, flushSave, queueSave]);
+	}, [draft, dirty, autoSaving, cancelSave, flushSave, queueSave]);
 
 	function editText(mutate: (current: RerankDraft) => RerankDraft): void {
-		setDraft(mutate);
+		const next = mutate(draftRef.current);
+		setDraftLatest(next);
+		queueSave(next);
 	}
 
 	function editNow(mutate: (current: RerankDraft) => RerankDraft): void {
 		immediateRef.current = true;
-		setDraft(mutate);
+		const next = mutate(draftRef.current);
+		setDraftLatest(next);
+		flushSave(next);
 	}
 
 	async function reset(): Promise<void> {
@@ -1350,7 +1385,7 @@ function RerankerPanel({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 			const next = await autorag.settings.configRemove(["rerank"]);
 			configRef.record(next.config);
 			onSaved(next);
-			setDraft(rerankDraftFrom(next).draft);
+			setDraftLatest(rerankDraftFrom(next).draft);
 		} catch (cause) {
 			setError(errorMessage(cause));
 		} finally {

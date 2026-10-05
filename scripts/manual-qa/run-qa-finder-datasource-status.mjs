@@ -74,18 +74,22 @@ const app = await launchFinder({ userDataDir: join(root, "user-data"), env });
 try {
 	const page = await finderWindow(app);
 	await page.waitForSelector('[role="row"]');
-	const selectCategory = (label) => page.locator(".settings-nav-item", { hasText: label }).click();
 	const openSources = async () => {
 		await page.locator(".sidebar__item", { hasText: "Settings" }).click();
 		await page.waitForSelector(".settings-panel");
 		await page.locator(".settings-sidebar-add").click();
-		await page.waitForSelector('.settings-source[data-source-id="slack"]');
+		await page.waitForSelector(".settings-datasources");
 	};
 	const closeSettings = async () => {
 		await page.keyboard.press(chord("w"));
 		await page.waitForFunction(() => document.querySelector(".settings-panel") === null);
 	};
 	const row = (id) => page.locator(`.settings-source[data-source-id="${id}"]`);
+	const openConnection = async (id) => {
+		if ((await page.locator(".settings-panel").count()) === 0) await openSources();
+		await page.locator(".settings-nav-item--source").filter({ hasText: id }).click();
+		await page.waitForSelector(`.settings-source[data-source-id="${id}"]`);
+	};
 	const fact = async (id, key) => {
 		const source = row(id);
 		// v7 gives a disabled source row `pointer-events: none`, so expand it via a
@@ -95,13 +99,11 @@ try {
 	};
 
 	await openSources();
-	// v7 dropped the config-path readout and the refresh button from this pane; the
-	// list itself is the observable, so the config path is covered by the ids below.
-	// The overview keeps all configured connections sorted by alias; each alias also has a direct tab in the sidebar group.
-	const ids = await page.locator(".settings-source").evaluateAll((els) => els.map((el) => el.dataset.sourceId));
-	check("lists every configured datasource, including disabled ones", JSON.stringify(ids) === JSON.stringify(["foo", "github", "my-drive", "slack", "telegram"]), JSON.stringify(ids));
+	check("Data Sources overview hides nested connection editors", (await page.locator(".settings-source").count()) === 0);
 	const directTabs = await page.locator(".settings-nav-item--source").allTextContents();
 	check("exposes one direct Settings tab per configured datasource", directTabs.length === 5, JSON.stringify(directTabs));
+	await openConnection("slack");
+	check("direct datasource tab opens only the selected connection", (await page.locator(".settings-source").count()) === 1 && (await row("slack").count()) === 1, JSON.stringify(await page.locator(".settings-source").evaluateAll((els) => els.map((el) => el.dataset.sourceId))));
 
 	const expected = {
 		slack: { install: "installed", agent: "connected", index: "external", status: "Ready" },
@@ -111,6 +113,7 @@ try {
 		foo: { install: "unsupported", agent: "unsupported", status: "Needs attention" },
 	};
 	for (const [id, want] of Object.entries(expected)) {
+		await openConnection(id);
 		const got = {
 			install: await fact(id, "install"),
 			agent: await fact(id, "agent"),
@@ -119,10 +122,12 @@ try {
 		};
 		check(`${id} states`, JSON.stringify(got) === JSON.stringify(want), JSON.stringify(got));
 	}
+	await openConnection("my-drive");
 	const driveCount = await row("my-drive").locator(".settings-source__pct").textContent();
 	check("my-drive shows its chunk count", driveCount === "3 chunks", driveCount ?? "");
 	await page.screenshot({ path: join(EVIDENCE, "01-sources-expanded.png") });
 
+	await openConnection("slack");
 	await fact("slack", "agent");
 	const slackDesc = row("slack").locator(".settings-source-desc");
 	const description = slackDesc.locator('textarea[aria-label="설명"]');
@@ -151,12 +156,12 @@ try {
 	// external-edit refresh boundary and avoids clobbering an in-progress draft.
 	await closeSettings();
 	await openSources();
-	await page.waitForSelector('.settings-source[data-source-id="rss"]');
+	await openConnection("rss");
 	check("an external config edit appears after reopening Settings", (await fact("rss", "install")) === "builtin");
 	writeConfig({ ...onDisk.datasources, notion: {} });
 	await closeSettings();
 	await openSources();
-	check("reopening Settings re-reads the config (no app-side copy)", (await row("notion").count()) === 1 && (await row("rss").count()) === 0);
+	check("reopening Settings re-reads the config (no app-side copy)", (await page.locator(".settings-nav-item--source").filter({ hasText: "notion" }).count()) === 1 && (await page.locator(".settings-nav-item--source").filter({ hasText: "rss" }).count()) === 0);
 	await page.screenshot({ path: join(EVIDENCE, "03-external-edit.png") });
 } finally {
 	await app.close();

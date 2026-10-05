@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AutoRagConfigSnapshot, JsonObject } from "../../../../shared/settings-contract";
 
 /**
- * Serialized, debounced config writes for the Model settings panels.
+ * Serialized, debounced config writes for Settings panels.
  *
  * Guarantees:
  * - at most one write is in flight; requests arriving during a write coalesce to
