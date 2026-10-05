@@ -4,7 +4,7 @@ import { NO_CAPABILITIES, type ActionAnchor, type ActionCapabilities } from "../
 import { RECENTS_PATH } from "../../../shared/fs-contract";
 import type { IndexStatus } from "../../../shared/index-contract";
 import { DUPEY_LAYER_ID, type FsDirChange, type LiveMessage } from "../../../shared/live-contract";
-import type { FinderEntry } from "../data/entries";
+import { applyEntryEnrichment, applyFinderEnrichment, type FinderEntry } from "../data/entries";
 import { navGroups, type NavGroup, type NavItem } from "../data/places";
 import { isMissingPathFailure, type FinderLocation, type FinderSource, pickInitialPath } from "../data/source";
 import { finderDragEntries } from "../state/attachments";
@@ -28,7 +28,6 @@ import { emptyStateText, indexToast, trashToast } from "../state/format";
 import { evidenceSourceUrl, findEvidenceSource } from "../state/evidence";
 import { type FocusZone, type KeyAction, resolveKeyAction } from "../state/keymap";
 import {
-	applyEntryEnrichmentPatch,
 	applyEntryPatch,
 	applyOptimisticDeletes,
 	createIncrementalListing,
@@ -126,6 +125,29 @@ const FLASH_MS = 1800;
 const FLASH_WAIT_MS = 10_000;
 /** Coalescing window for viewport-visible thumbnail requests, so a scroll burst is one batch. */
 const THUMBNAIL_FLUSH_MS = 60;
+
+/**
+ * Background enrichment for rows already on screen, in two independent
+ * passes: OS kind + icon, then Finder metadata. Each pass patches whatever
+ * rows `apply` holds when it lands, so icons never wait for the much slower
+ * metadata helpers and neither pass overwrites what the other filled in.
+ */
+function enrichInBackground(
+	source: FinderSource,
+	entries: readonly FinderEntry[],
+	label: string,
+	apply: (patch: (rows: readonly FinderEntry[]) => readonly FinderEntry[]) => void,
+): void {
+	void source
+		.enrich(entries)
+		.then((enriched) => apply((rows) => applyEntryEnrichment(rows, enriched)))
+		.catch((error: unknown) => console.error(`background ${label} enrichment failed`, error));
+	void source
+		.finderMetadata(entries)
+		.then((enriched) => apply((rows) => applyFinderEnrichment(rows, enriched)))
+		.catch((error: unknown) => console.error(`background ${label} metadata failed`, error));
+}
+
 /** Shortcuts that act on the window, not on rows: the only ones a Settings or AI Search tab answers. */
 const WINDOW_KEY_ACTIONS: Partial<Record<KeyAction["type"], true>> = {
 	dismiss: true,
@@ -702,21 +724,19 @@ export function useFinderController(
 				// switch or focus resync that finds nothing new paints nothing.
 				const entries = reconcileListing(listingRef.current, result.entries);
 				adoptListing(requestedPath, entries);
-				void source.enrich(requestedPath, entries).then((enriched) => {
+				enrichInBackground(source, entries, "listing", (patch) => {
 					if (pathRef.current === requestedPath && generationRef.current === requestGeneration) {
-						adoptListing(requestedPath, applyEntryEnrichmentPatch(listingRef.current, enriched));
+						adoptListing(requestedPath, patch(listingRef.current));
 						return;
 					}
-					// The user switched tabs before the icons landed: finish that
-					// tab's snapshot anyway, unless it has moved on since.
+					// The user switched tabs before the patch landed: finish that
+					// tab's snapshot anyway while it still shows this folder. Each
+					// patch is mtime-gated, so a newer listing of it is safe too.
 					const snapshot = tabListingsRef.current.get(scope.tabId);
-					if (snapshot?.entries === entries) {
-						tabListingsRef.current.set(scope.tabId, {
-							dir: requestedPath,
-							entries: applyEntryEnrichmentPatch(snapshot.entries, enriched),
-						});
+					if (snapshot?.dir === requestedPath) {
+						tabListingsRef.current.set(scope.tabId, { dir: requestedPath, entries: patch(snapshot.entries) });
 					}
-				}).catch((error: unknown) => console.error("background listing enrichment failed", error));
+				});
 				incrementalRef.current?.listing.fullAdopted(scope);
 			});
 		},
@@ -745,15 +765,16 @@ export function useFinderController(
 		if (batch.length === 0) {
 			return;
 		}
+		// Icons only: the background pass already asked for these rows' Finder metadata.
 		void source
-			.enrich(searchingNow ? "search" : dir, batch)
+			.enrich(batch)
 			.then((enriched) => {
 				if (searchingNow) {
-					if (searchingRef.current) setHits((current) => applyEntryPatch(current, { entries: enriched, removed: [] }));
+					if (searchingRef.current) setHits((current) => applyEntryEnrichment(current, enriched));
 					return;
 				}
 				if (pathRef.current !== dir || generationRef.current !== generation || searchingRef.current) return;
-				adoptListing(dir, applyEntryEnrichmentPatch(listingRef.current, enriched));
+				adoptListing(dir, applyEntryEnrichment(listingRef.current, enriched));
 			})
 			.catch((error: unknown) => console.error("viewport thumbnail enrichment failed", error));
 	}, [adoptListing, source]);
@@ -791,10 +812,10 @@ export function useFinderController(
 			apply: (dir, patch) => {
 				adoptListing(dir, applyEntryPatch(listingRef.current, patch));
 				const generation = generationRef.current;
-				void source.enrich(dir, patch.entries).then((enriched) => {
+				enrichInBackground(source, patch.entries, "live", (apply) => {
 					if (pathRef.current !== dir || generationRef.current !== generation || searchingRef.current) return;
-					adoptListing(dir, applyEntryEnrichmentPatch(listingRef.current, enriched));
-				}).catch((error: unknown) => console.error("background live enrichment failed", error));
+					adoptListing(dir, apply(listingRef.current));
+				});
 			},
 			isCurrent: (scope) =>
 				scope.path === pathRef.current &&
@@ -956,13 +977,13 @@ export function useFinderController(
 						const reconciled = reconcileListing(current[target] ?? [], entries);
 						return reconciled === current[target] ? current : { ...current, [target]: reconciled };
 					});
-					void source.enrich(target, entries).then((enriched) => {
+					enrichInBackground(source, entries, "pane", (patch) => {
 						if (!live) return;
 						setPaneListings((current) => {
-							const patched = applyEntryEnrichmentPatch(current[target] ?? [], enriched);
+							const patched = patch(current[target] ?? []);
 							return patched === current[target] ? current : { ...current, [target]: patched };
 						});
-					}).catch((error: unknown) => console.error("background pane enrichment failed", error));
+					});
 				})
 				.catch((error: unknown) => {
 					if (live) {
@@ -990,9 +1011,9 @@ export function useFinderController(
 			.then((entries) => {
 				if (!live) return;
 				setHits(entries);
-				void source.enrich("search", entries).then((enriched) => {
-					if (live) setHits(enriched);
-				}).catch((error: unknown) => console.error("background search enrichment failed", error));
+				enrichInBackground(source, entries, "search", (patch) => {
+					if (live) setHits(patch);
+				});
 			})
 			.catch((error: unknown) => {
 				if (live) {
@@ -1168,11 +1189,14 @@ export function useFinderController(
 				setChildListings((current) =>
 					(current[folder]?.revision ?? -1) > revision ? current : { ...current, [folder]: { revision, entries } },
 				);
-				void source.enrich(folder, entries).then((enriched) => {
-					setChildListings((current) =>
-						(current[folder]?.revision ?? -1) > revision ? current : { ...current, [folder]: { revision, entries: enriched } },
-					);
-				}).catch((error: unknown) => console.error("background child enrichment failed", error));
+				enrichInBackground(source, entries, "child", (patch) => {
+					setChildListings((current) => {
+						const shown = current[folder];
+						if (shown === undefined || shown.revision > revision) return current;
+						const patched = patch(shown.entries);
+						return patched === shown.entries ? current : { ...current, [folder]: { revision: shown.revision, entries: patched } };
+					});
+				});
 			};
 			source
 				.list(folder)

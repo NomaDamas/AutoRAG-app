@@ -45,12 +45,18 @@ and applies in icon, list, column, and search layouts. Grouping is visual only:
 `state/grouping.ts` splits the same rows into section headers without creating
 folders or changing entry identity; the virtualized list and icon views account
 for header height in their window geometry, and column panes render the same
-sections inline. Native Finder criteria are populated during filesystem
-enrichment: creation time comes from the real filesystem birth time, tags and
-comments use Finder extended attributes with Spotlight fallback, dimensions use
-the image reader, Date Added / Date Last Opened / rating use Spotlight, and
-Application uses Launch Services' default opener. Unknown values remain unknown;
-they are never replaced with modification time or an unrelated application.
+sections inline. Native Finder criteria are populated by a background
+`fs:finderMetadata` call, separate from the `fs:enrichEntries` call that fills
+OS kinds and tile icons: creation time comes from the real filesystem birth
+time, tags and comments use Finder extended attributes with Spotlight fallback,
+dimensions read only the first 256 KiB of the image, Date Added / Date Last
+Opened / rating use Spotlight, and Application uses Launch Services' default
+opener. Those helper processes are far slower than the icon pool on a USB/HDD
+volume, so icons never wait for them; each result patches only its own fields
+on whatever rows are on screen when it lands. Both the metadata and thumbnail
+queues serve the newest request first, so leaving a folder of thousands of
+photos never stalls the next one. Unknown values remain unknown; they are never
+replaced with modification time or an unrelated application.
 Pure behavior is covered by `test/ui-sort.test.ts` and `test/ui-grouping.test.ts`.
 ### 1.3 Path bar
 The path bar under the Finder list is one line at every window size and never shows an ellipsis. When the trail does not fit, labels give up space in a fixed order — middle segments left to right (`Users`, the home folder, …), then the root (`Macintosh HD`), then the parent of the current location, then the current location or selected file. A label first narrows with its last `--fade-label` (14px) faded out, so the word reads as cut off; once fewer than 32px would remain, the segment shows only its icon. If even the icon-only trail is too wide, it stays pinned to its end and fades in from the leading edge. Logic: `src/renderer/src/state/path-fit.ts`; visual check: `scripts/manual-qa/run-qa-finder-path-bar.mjs`.

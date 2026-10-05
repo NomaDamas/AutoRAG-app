@@ -14,6 +14,7 @@ import {
 	type FsEnrichmentTarget,
 	type FsEntry,
 	type FsEntryEnrichment,
+	type FsFinderEnrichment,
 	type FsFileDetails,
 	type FsLocation,
 	type FsOpError,
@@ -129,24 +130,13 @@ async function applyOsKind(entry: FsEntry, lookup: OsKindLookup): Promise<FsEntr
 	}
 }
 
-/** Attach OS kinds to a batch; the resolver dedupes one query per extension. */
-function enrichOsKinds(entries: readonly FsEntry[], lookup: OsKindLookup): Promise<FsEntry[]> {
-	return Promise.all(entries.map((entry) => applyOsKind(entry, lookup)));
-}
-
 /** OS tile icons for a batch's files; the provider batches one call per listing. */
-async function resolveIcons(entries: readonly FsEntry[], provider: IconProvider): Promise<ReadonlyMap<string, string>> {
-	const targets = entries
-		.filter((entry) => entry.kind === "file")
-		.map((entry) => ({ path: entry.path, ext: entry.ext, modifiedAt: entry.modifiedAt }));
-	if (targets.length === 0) return new Map();
-	return provider.icons(targets);
-}
-
-/** A file the OS produced no icon for keeps its letter tile. */
-function withIcon(entry: FsEntry, icons: ReadonlyMap<string, string>): FsEntry {
-	const url = icons.get(entry.path);
-	return url === undefined ? entry : { ...entry, iconUrl: url };
+async function resolveIcons(targets: readonly FsEnrichmentTarget[], provider: IconProvider): Promise<ReadonlyMap<string, string>> {
+	const files = targets
+		.filter((target) => target.kind === "file")
+		.map((target) => ({ path: target.path, ext: target.ext, modifiedAt: target.modifiedAt }));
+	if (files.length === 0) return new Map();
+	return provider.icons(files);
 }
 
 async function runBatch(paths: readonly string[], operation: (path: string) => Promise<void>): Promise<FsBatchResult> {
@@ -203,47 +193,51 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 	const recycleBin = deps.recycleBin ?? isRecycleBinDir;
 	// In-app clipboard lives in main-process memory only.
 	let inAppClipboard: FsClipboard | null = null;
-	/** Resolve OS metadata and optional thumbnails without blocking listDir. */
-	async function annotateEntries(entries: readonly FsEntry[], thumbnails: boolean): Promise<FsEntry[]> {
-		const [icons, enriched, finders] = await Promise.all([
-			thumbnails ? resolveIcons(entries, iconProvider) : Promise.resolve(new Map<string, string>()),
-			enrichOsKinds(entries, osKind),
-			Promise.all(entries.map((entry) => finderMetadata(entry.path))),
-		]);
-		return enriched.map((entry, index) => {
-			const finder = finders[index];
-			const withMetadata =
-				finder === null || finder === undefined
-					? entry
-					: { ...entry, finder: { ...finder, createdAt: finder.createdAt ?? entry.createdAt ?? null } };
-			return withIcon(withMetadata, icons);
-		});
-	}
-
+	/**
+	 * OS kind and tile icon only. Finder metadata is a separate call: its
+	 * helper processes and EXIF reads are far slower than the icon pool on a
+	 * slow disk, and folding it in made every icon in the batch wait for the
+	 * slowest file's metadata.
+	 */
 	async function enrichEntries(
 		targets: readonly FsEnrichmentTarget[],
 		thumbnails: boolean,
 	): Promise<readonly FsEntryEnrichment[]> {
-		const base = targets.map((target) => ({
-			name: basename(target.path),
+		const [icons, kinds] = await Promise.all([
+			thumbnails ? resolveIcons(targets, iconProvider) : Promise.resolve(new Map<string, string>()),
+			Promise.all(
+				targets.map(async (target) => {
+					if (target.kind !== "file") return null;
+					try {
+						return await osKind(target.path, target.ext);
+					} catch (error) {
+						console.warn(`fs:osKind failed for ${target.path}: ${errorMessage(error)}`);
+						return null;
+					}
+				}),
+			),
+		]);
+		return targets.map((target, index) => ({
 			path: target.path,
-			kind: target.kind,
-			ext: target.ext,
-			size: null,
 			modifiedAt: target.modifiedAt,
-			...(target.createdAt === undefined ? {} : { createdAt: target.createdAt }),
-			isSymlink: false,
-			osKind: null,
-			iconUrl: null,
-		} satisfies FsEntry));
-		const enriched = await annotateEntries(base, thumbnails);
-		return enriched.map((entry) => ({
-			path: entry.path,
-			modifiedAt: entry.modifiedAt,
-			osKind: entry.osKind,
-			iconUrl: entry.iconUrl,
-			...(entry.finder === undefined ? {} : { finder: entry.finder }),
+			osKind: kinds[index] ?? null,
+			iconUrl: icons.get(target.path) ?? null,
 		}));
+	}
+
+	async function finderMetadataFor(targets: readonly FsEnrichmentTarget[]): Promise<readonly FsFinderEnrichment[]> {
+		const results = await Promise.all(
+			targets.map(async (target): Promise<FsFinderEnrichment | null> => {
+				const finder = await finderMetadata(target.path);
+				if (finder === null) return null;
+				return {
+					path: target.path,
+					modifiedAt: target.modifiedAt,
+					finder: { ...finder, createdAt: finder.createdAt ?? target.createdAt ?? null },
+				};
+			}),
+		);
+		return results.filter((result) => result !== null);
 	}
 
 	async function buildListingEntries(dirents: readonly Dirent[], path: string): Promise<FsEntry[]> {
@@ -529,6 +523,7 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 
 	return {
 		enrichEntries,
+		finderMetadata: finderMetadataFor,
 		listDir,
 		readEntries,
 		stat: async (path) => applyOsKind(await buildFsEntry(path), osKind),
