@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
+import type { FsFinderMetadata } from "../src/shared/fs-contract";
 import type { FsDirChange } from "../src/shared/live-contract";
-import type { FinderEntry } from "../src/renderer/src/data/entries";
+import { applyEntryEnrichment, applyFinderEnrichment, type FinderEntry } from "../src/renderer/src/data/entries";
 import type { ListingLoadRequest } from "../src/renderer/src/state/live";
 import {
-	applyEntryEnrichmentPatch,
 	applyEntryPatch,
 	applyOptimisticDeletes,
 	createIncrementalListing,
@@ -31,6 +31,21 @@ function entry(path: string): FinderEntry {
 		location: path.slice(0, path.lastIndexOf("/")) || path,
 		modifiedValue: 0,
 		sizeValue: 1,
+	};
+}
+
+function finderMetadata(over: Partial<FsFinderMetadata>): FsFinderMetadata {
+	return {
+		createdAt: null,
+		addedAt: null,
+		lastOpenedAt: null,
+		tags: [],
+		comments: null,
+		width: null,
+		height: null,
+		rating: null,
+		application: null,
+		...over,
 	};
 }
 
@@ -372,12 +387,31 @@ describe("live renderer state", () => {
 	});
 
 	it("does not apply enrichment from an older file version", () => {
-		const current = { ...entry("/d/a.md"), modifiedAt: "2026-10-01T00:00:00.000Z", iconUrl: "thumb://new" };
-		const shown = [current];
-		const stale = { ...entry("/d/a.md"), modifiedAt: "2026-09-30T00:00:00.000Z", iconUrl: "thumb://old" };
-		const fresh = { ...current, iconUrl: "thumb://fresh" };
-		expect(applyEntryEnrichmentPatch(shown, [stale])).toBe(shown);
-		expect(applyEntryEnrichmentPatch(shown, [fresh])).toEqual([fresh]);
+		const shown = [{ ...entry("/d/a.md"), modifiedAt: "2026-10-01T00:00:00.000Z", iconUrl: "thumb://new" }];
+		const stale = { path: "/d/a.md", modifiedAt: "2026-09-30T00:00:00.000Z", osKind: "Old", iconUrl: "thumb://old" };
+		expect(applyEntryEnrichment(shown, [stale])).toBe(shown);
+		const staleFinder = { ...stale, finder: finderMetadata({ tags: ["Old"] }) };
+		expect(applyFinderEnrichment(shown, [staleFinder])).toBe(shown);
+	});
+
+	it("keeps an icon the viewport already loaded when a capped background pass returns none", () => {
+		const stamp = "2026-09-30T00:00:00.000Z";
+		const shown = [{ ...entry("/d/a.jpg"), modifiedAt: stamp, iconUrl: "thumb://viewport" }];
+		const next = applyEntryEnrichment(shown, [{ path: "/d/a.jpg", modifiedAt: stamp, osKind: "JPEG image", iconUrl: null }]);
+		expect(next[0]?.iconUrl).toBe("thumb://viewport");
+		expect(next[0]?.kindLabel).toBe("JPEG image");
+	});
+
+	it("lands icons and Finder metadata in either order without one erasing the other", () => {
+		const stamp = "2026-09-30T00:00:00.000Z";
+		const shown = [{ ...entry("/d/a.jpg"), modifiedAt: stamp }];
+		const icon = { path: "/d/a.jpg", modifiedAt: stamp, osKind: "JPEG image", iconUrl: "thumb://a" };
+		const finder = { path: "/d/a.jpg", modifiedAt: stamp, finder: finderMetadata({ tags: ["Red"], width: 4, height: 3 }) };
+		const iconFirst = applyFinderEnrichment(applyEntryEnrichment(shown, [icon]), [finder]);
+		const metadataFirst = applyEntryEnrichment(applyFinderEnrichment(shown, [finder]), [icon]);
+		for (const rows of [iconFirst, metadataFirst]) {
+			expect(rows[0]).toMatchObject({ iconUrl: "thumb://a", kindLabel: "JPEG image", tagsLabel: "Red", dimensionsLabel: "4 × 3" });
+		}
 	});
 
 	it("returns the same selection object when nothing is pruned", () => {

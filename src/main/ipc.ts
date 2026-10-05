@@ -33,6 +33,7 @@ export function registerFsIpcHandlers(service: FsCoreBridge, hooks: FsIpcHooks =
 	ipcMain.handle(FS_CHANNELS.enrichEntries, (_event, targets, thumbnails: boolean) =>
 		service.enrichEntries(targets, thumbnails),
 	);
+	ipcMain.handle(FS_CHANNELS.finderMetadata, (_event, targets) => service.finderMetadata(targets));
 	ipcMain.handle(FS_CHANNELS.readEntries, (_event, dir: string, paths: readonly string[]) =>
 		service.readEntries(dir, paths),
 	);

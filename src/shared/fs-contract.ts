@@ -14,6 +14,7 @@ export const FS_CHANNELS = {
 	listDir: "fs:listDir",
 	readEntries: "fs:readEntries",
 	enrichEntries: "fs:enrichEntries",
+	finderMetadata: "fs:finderMetadata",
 	stat: "fs:stat",
 	details: "fs:details",
 	previewIcon: "fs:previewIcon",
@@ -115,13 +116,24 @@ export interface FsEnrichmentTarget {
 	readonly createdAt?: string;
 }
 
-/** Background metadata/thumbnail result; identity fields echo the requested entry. */
+/**
+ * Background OS kind and tile icon for one requested entry; identity fields
+ * echo the request. Finder metadata travels separately (`finderMetadata`):
+ * its helper processes and EXIF reads are far slower than the icon pool, and
+ * a folder's icons must never wait for them.
+ */
 export interface FsEntryEnrichment {
 	readonly path: string;
 	readonly modifiedAt: string;
 	readonly osKind: string | null;
 	readonly iconUrl: string | null;
-	readonly finder?: FsFinderMetadata;
+}
+
+/** Finder/Spotlight metadata for one requested entry; identity fields echo the request. */
+export interface FsFinderEnrichment {
+	readonly path: string;
+	readonly modifiedAt: string;
+	readonly finder: FsFinderMetadata;
 }
 
 /**
@@ -306,6 +318,8 @@ export interface FsFileDetails {
 export interface FsCoreBridge {
 	listDir(path: string): Promise<DirListing>;
 	enrichEntries(targets: readonly FsEnrichmentTarget[], thumbnails: boolean): Promise<readonly FsEntryEnrichment[]>;
+	/** Finder metadata for the targets the platform answers for; the rest are omitted. */
+	finderMetadata(targets: readonly FsEnrichmentTarget[]): Promise<readonly FsFinderEnrichment[]>;
 	/**
 	 * Re-resolve only the requested direct children of `dir` after a change
 	 * event. Every path is queried against the current disk, so a file deleted

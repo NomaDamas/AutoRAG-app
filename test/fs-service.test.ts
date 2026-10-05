@@ -1272,6 +1272,39 @@ describe("icons", () => {
 		expect(enriched.find((entry) => entry.path.endsWith("note.txt"))?.iconUrl).toBeNull();
 		await rm(dir, { recursive: true, force: true });
 	});
+
+	it("returns icons without waiting for Finder metadata, which arrives on its own call", async () => {
+		// Given Finder metadata that never answers until released (a slow disk)
+		const dir = await mkdtemp(join(tmpdir(), "fs-icons-metadata-"));
+		await writeFile(join(dir, "photo.jpg"), "x");
+		const release = Promise.withResolvers<void>();
+		const deps: FsServiceDeps = {
+			...makeDeps(dir).deps,
+			icons: {
+				icons: async (targets) => new Map(targets.map((target) => [target.path, "autorag-thumb://local/?path=photo.jpg&mtime=t"])),
+				preview: async () => null,
+			},
+			finderMetadata: async () => {
+				await release.promise;
+				return { createdAt: null, addedAt: null, lastOpenedAt: null, tags: ["Red"], comments: null, width: 4, height: 3, rating: null, application: null };
+			},
+		};
+		const service = createFsService(deps);
+		const listing = await service.listDir(dir);
+		const targets = listing.entries.map(({ path, kind, ext, modifiedAt }) => ({ path, kind, ext, modifiedAt }));
+
+		// When both passes start, the icon pass settles while metadata is still pending
+		const metadata = service.finderMetadata(targets);
+		const enriched = await service.enrichEntries(targets, true);
+		expect(enriched[0]?.iconUrl).toBe("autorag-thumb://local/?path=photo.jpg&mtime=t");
+
+		// Then the metadata lands separately, echoing the requested identity
+		release.resolve();
+		expect(await metadata).toEqual([
+			{ path: targets[0]?.path, modifiedAt: targets[0]?.modifiedAt, finder: expect.objectContaining({ tags: ["Red"], width: 4, height: 3 }) },
+		]);
+		await rm(dir, { recursive: true, force: true });
+	});
 });
 
 describe("previewIcon", () => {

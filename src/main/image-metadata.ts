@@ -1,12 +1,13 @@
 /**
  * EXIF reader for the Inspector's photo metadata. exifr handles the container
  * formats (JPEG, PNG, WebP, HEIC/HEIF, AVIF, TIFF); this module decides which
- * extensions are worth opening, guards the read against oversized files, and
- * maps exifr's tag bag onto the typed contract so the renderer never sees an
- * unbounded object.
+ * extensions are worth opening and maps exifr's tag bag onto the typed
+ * contract so the renderer never sees an unbounded object. Only the file's
+ * head is read: the Finder asks for every photo in a folder, and reading each
+ * multi-megabyte file whole saturates a slow (USB/HDD) disk for minutes.
  */
 
-import { readFile, stat } from "node:fs/promises";
+import { open } from "node:fs/promises";
 // exifr ships CommonJS; electron-vite externalizes it, so take the interop default.
 import exifr from "exifr";
 import type { FsImageMetadata } from "../shared/fs-contract";
@@ -28,8 +29,27 @@ export const IMAGE_EXTENSIONS: ReadonlySet<string> = new Set([
 	"tiff",
 ]);
 
-/** Reading a whole photo costs memory; anything past this is left unparsed. */
-const MAX_IMAGE_BYTES = 128 * 1024 * 1024;
+/**
+ * Bytes read from the start of an image. Camera JPEG/HEIC/PNG files keep the
+ * metadata block near the front; on real phone/camera photos a 128 KiB head
+ * parsed identically to the whole file (64 KiB missed one HEIC), so this
+ * leaves margin. exifr's own path reader is not used: it calls
+ * `FileHandle.stat(path)`, which newer Node versions reject.
+ */
+const HEAD_BYTES = 256 * 1024;
+
+/** Up to `HEAD_BYTES` from the start of a regular file; null for anything else. */
+async function readHead(path: string): Promise<Uint8Array | null> {
+	const handle = await open(path, "r");
+	try {
+		if (!(await handle.stat()).isFile()) return null;
+		const buffer = new Uint8Array(HEAD_BYTES);
+		const { bytesRead } = await handle.read(buffer, 0, HEAD_BYTES, 0);
+		return buffer.subarray(0, bytesRead);
+	} finally {
+		await handle.close();
+	}
+}
 
 type ParsedExif = Readonly<Record<string, unknown>>;
 
@@ -105,15 +125,14 @@ function hasAnyValue(image: FsImageMetadata): boolean {
 	return Object.values(image).some((value) => value !== null);
 }
 
-/** EXIF for an image path, or null when the extension, size, or file rules it out. */
+/** EXIF for an image path, or null when the extension or file rules it out. */
 export async function readImageMetadata(path: string, ext: string): Promise<FsImageMetadata | null> {
 	if (!IMAGE_EXTENSIONS.has(ext.toLowerCase())) return null;
 	try {
-		const info = await stat(path);
-		if (!info.isFile() || info.size > MAX_IMAGE_BYTES) return null;
-		const bytes = await readFile(path);
+		const head = await readHead(path);
+		if (head === null) return null;
 		// exifr types `parse` as `Promise<any>`; the tag bag is opaque until mapped.
-		const parsed = (await exifr.parse(bytes, {
+		const parsed = (await exifr.parse(head, {
 			tiff: true,
 			exif: true,
 			gps: true,
