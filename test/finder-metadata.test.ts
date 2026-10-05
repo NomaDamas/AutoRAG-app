@@ -1,4 +1,4 @@
-import { chmod, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
@@ -207,6 +207,25 @@ describe("createFinderMetadataResolver", () => {
 		const resolve = createFinderMetadataResolver({ platform: "win32", run, warn: () => {} });
 		expect(await resolve(await tempFile("doc.txt"))).toBeNull();
 		expect(run).not.toHaveBeenCalled();
+	});
+
+	it("spawns no helper for a protected folder the user cannot read", async () => {
+		// Given a folder like /Volumes/X/.Trashes: listable from its parent, but not readable
+		const protectedDir = join(root, ".Trashes");
+		await mkdir(protectedDir);
+		await chmod(protectedDir, 0o300);
+		const run = vi.fn(fixtureRunner());
+		const warnings: string[] = [];
+		const resolve = createFinderMetadataResolver({ platform: "darwin", run, warn: (message) => warnings.push(message) });
+
+		// When its metadata is requested
+		const metadata = await resolve(protectedDir);
+		await chmod(protectedDir, 0o700);
+
+		// Then there is none, and no xattr/mdls process was started to fail on it
+		expect(metadata).toBeNull();
+		expect(run).not.toHaveBeenCalled();
+		expect(warnings).toEqual([]);
 	});
 
 	it("leaves every optional value null when the helpers answer nothing", async () => {
