@@ -1006,8 +1006,11 @@ export function useFinderController(
 		thumbRequestsRef.current.clear();
 		thumbQueueRef.current.clear();
 		let live = true;
+		// A filename search defaults to the whole file-name index; the scope bar's
+		// folder pill narrows it to the folder in view. The scope rides to the main
+		// process so the index narrows before its result cap, not after.
 		source
-			.search(query)
+			.search(query, searchScope === "current" ? { scope: path } : undefined)
 			.then((entries) => {
 				if (!live) return;
 				setHits(entries);
@@ -1024,7 +1027,7 @@ export function useFinderController(
 		return () => {
 			live = false;
 		};
-	}, [source, query, searching, revision, reportError]);
+	}, [source, query, searching, revision, reportError, searchScope, path]);
 
 	useEffect(() => {
 		if (toast === null) {
@@ -1121,8 +1124,15 @@ export function useFinderController(
 		// with their head (`groupRows` carries child rows along).
 		const grouped = (rows: readonly StackRow[]): readonly GroupSection<StackRow>[] => groupRows(rows, grouping, Date.now());
 		if (searching) {
+			// The main process already narrows "current" to the folder in view;
+			// this keeps the same guarantee for the fixture source. Both
+			// separators match so a Windows path still scopes correctly.
 			const scoped =
-				searchScope === "current" ? hits.filter((hit) => hit.path === path || hit.path.startsWith(`${path}/`)) : hits;
+				searchScope === "current"
+					? hits.filter(
+							(hit) => hit.path === path || hit.path.startsWith(`${path}/`) || hit.path.startsWith(`${path}\\`),
+						)
+					: hits;
 			return grouped(prepare(scoped)).map((section) => ({ ...section, rows: flatTreeRows(section.rows) }));
 		}
 		return grouped(prepare(listing)).map((section) => ({
@@ -1467,7 +1477,7 @@ export function useFinderController(
 		() =>
 			source.onIndexRefreshed((error) => {
 				if (error !== null) {
-					reportError(new Error(`AutoRAG 인덱스 새로고침 실패: ${error}`));
+					reportError(new Error(`Dazzi 인덱스 새로고침 실패: ${error}`));
 				}
 				setIndexRevision((value) => value + 1);
 			}),

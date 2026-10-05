@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createFsService, FsRenameError, toHandoffPath, untitledFolderName, type FsServiceDeps } from "../src/main/fs-service";
+import type { FileNameSearchBackend } from "../src/main/file-name-search";
 import { createRecentsStore, type RecentsStore } from "../src/main/recents-store";
 import { RECENTS_PATH, type FsLocation } from "../src/shared/fs-contract";
 import { createPlaces, type Places } from "../src/main/places";
@@ -813,6 +814,92 @@ describe("search", () => {
 
 		// When searching for a missing substring, Then the result is empty
 		expect(await createFsService(makeDeps(home).deps).search("zzz-nothing")).toEqual([]);
+	});
+
+	it("prefers the file-name index and attributes each hit to its location", async () => {
+		// Given two walkable matches, but an index that returns only the Documents one
+		const home = join(root, "home-index");
+		await mkdir(join(home, "Documents"), { recursive: true });
+		await mkdir(join(home, "Downloads"), { recursive: true });
+		await writeFile(join(home, "Documents", "report-final.txt"), "r");
+		await writeFile(join(home, "Downloads", "report-other.txt"), "u");
+		const calls: { query: string; scope: string | undefined }[] = [];
+		const fileNameSearch: FileNameSearchBackend = {
+			search: async (query, scope) => {
+				calls.push({ query, scope });
+				return [join(home, "Documents", "report-final.txt")];
+			},
+			ensureDaemon: async () => {},
+			stop: async () => {},
+		};
+
+		// When searching
+		const results = await createFsService({ ...makeDeps(home).deps, fileNameSearch }).search("REPORT");
+
+		// Then only the indexed hit comes back, labeled by its location
+		expect(results.map((hit) => [hit.entry.name, hit.location])).toEqual([["report-final.txt", "Documents"]]);
+		expect(calls).toEqual([{ query: "REPORT", scope: undefined }]);
+	});
+
+	it("passes the current-folder scope to the index", async () => {
+		// Given an index that records the scope it was asked for
+		const home = join(root, "home-scope");
+		await mkdir(join(home, "Documents"), { recursive: true });
+		await writeFile(join(home, "Documents", "plan.txt"), "p");
+		const scopes: (string | undefined)[] = [];
+		const fileNameSearch: FileNameSearchBackend = {
+			search: async (_query, scope) => {
+				scopes.push(scope);
+				return [join(home, "Documents", "plan.txt")];
+			},
+			ensureDaemon: async () => {},
+			stop: async () => {},
+		};
+
+		// When searching with the folder in view as scope
+		const results = await createFsService({ ...makeDeps(home).deps, fileNameSearch }).search("plan", {
+			scope: join(home, "Documents"),
+		});
+
+		// Then the scope rode through and the hit is scoped to it
+		expect(scopes).toEqual([join(home, "Documents")]);
+		expect(results.map((hit) => hit.entry.path)).toEqual([join(home, "Documents", "plan.txt")]);
+	});
+
+	it("falls back to the disk walk when the index answers null", async () => {
+		// Given an index with no database to answer from
+		const home = join(root, "home-noindex");
+		await mkdir(join(home, "Documents"), { recursive: true });
+		await writeFile(join(home, "Documents", "report.txt"), "r");
+		const fileNameSearch: FileNameSearchBackend = {
+			search: async () => null,
+			ensureDaemon: async () => {},
+			stop: async () => {},
+		};
+
+		// When searching, Then the walk still finds the file
+		const results = await createFsService({ ...makeDeps(home).deps, fileNameSearch }).search("report");
+
+		expect(results.map((hit) => [hit.entry.name, hit.location])).toEqual([["report.txt", "Documents"]]);
+	});
+
+	it("falls back to the disk walk when the index throws", async () => {
+		// Given an index that fails
+		const home = join(root, "home-broken");
+		await mkdir(join(home, "Documents"), { recursive: true });
+		await writeFile(join(home, "Documents", "report.txt"), "r");
+		const fileNameSearch: FileNameSearchBackend = {
+			search: async () => {
+				throw new Error("fsearch-cli exploded");
+			},
+			ensureDaemon: async () => {},
+			stop: async () => {},
+		};
+
+		// When searching, Then the walk answers instead of surfacing the failure
+		const results = await createFsService({ ...makeDeps(home).deps, fileNameSearch }).search("report");
+
+		expect(results.map((hit) => hit.entry.name)).toEqual(["report.txt"]);
 	});
 });
 

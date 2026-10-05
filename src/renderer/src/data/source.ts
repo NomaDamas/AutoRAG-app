@@ -8,7 +8,7 @@
  */
 
 import { NO_CAPABILITIES, type ActionsBridge } from "../../../shared/actions-contract";
-import { RECENTS_PATH, type FsBridge, type FsClipboard, type FsEnrichmentTarget, type FsEntryEnrichment, type FsFinderEnrichment, type FsLocation, type FsLocationIcon, type FsOpError, type FsUndoOutcome, type FsVersionFamiliesResult } from "../../../shared/fs-contract";
+import { RECENTS_PATH, type FsBridge, type FsClipboard, type FsEnrichmentTarget, type FsEntryEnrichment, type FsFinderEnrichment, type FsLocation, type FsLocationIcon, type FsOpError, type FsSearchOptions, type FsUndoOutcome, type FsVersionFamiliesResult } from "../../../shared/fs-contract";
 import type { IndexStatus } from "../../../shared/index-contract";
 import {
 	DUPEY_LAYER_ID,
@@ -78,7 +78,7 @@ export interface FinderSource {
 		dir: string,
 		paths: readonly string[],
 	): Promise<{ readonly entries: readonly FinderEntry[]; readonly removed: readonly string[] }>;
-	search(query: string): Promise<readonly FinderEntry[]>;
+	search(query: string, options?: FsSearchOptions): Promise<readonly FinderEntry[]>;
 	locations(): Promise<readonly FinderLocation[]>;
 	/** Unmount a mounted volume (sidebar eject button); rejects with the OS reason. */
 	ejectLocation(path: string): Promise<void>;
@@ -191,8 +191,8 @@ export function createBridgeSource(
 			// Rows belong to the requested dir, not the child's own parent lookup.
 			return { entries: patch.entries.map((entry) => entryFromFs(entry, dir)), removed: patch.removed };
 		},
-		async search(query) {
-			const hits = await fs.search(query);
+		async search(query, options) {
+			const hits = await fs.search(query, options);
 			return hits.map(entryFromSearchHit);
 		},
 		locations: () => fs.locations(),
@@ -343,20 +343,22 @@ export function createFixtureSource(): FinderSource {
 			}
 			return { entries, removed };
 		},
-		search: (query) => {
+		search: (query, options) => {
 			const needle = query.trim().toLowerCase();
 			if (needle === "") {
 				return Promise.resolve([]);
 			}
+			const scope = options?.scope;
 			const hits: FinderEntry[] = [];
 			for (const [path, items] of state.tree) {
 				if (path === RECENTS_PATH) {
 					continue;
 				}
 				for (const item of items) {
-					if (item.name.toLowerCase().includes(needle)) {
-						hits.push(entryFromFixture(item, path));
-					}
+					if (!item.name.toLowerCase().includes(needle)) continue;
+					const entry = entryFromFixture(item, path);
+					if (scope !== undefined && entry.path !== scope && !entry.path.startsWith(`${scope}/`)) continue;
+					hits.push(entry);
 				}
 			}
 			return Promise.resolve(hits);

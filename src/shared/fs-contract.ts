@@ -235,6 +235,15 @@ export interface FsSearchResult {
 	readonly location: string;
 }
 
+/** Options for {@link FsCoreBridge.search}. */
+export interface FsSearchOptions {
+	/**
+	 * Restrict hits to this folder subtree (an absolute path); absent searches
+	 * the whole file-name index. The "파일 이름" chip passes the folder in view.
+	 */
+	readonly scope?: string;
+}
+
 /** A geographic coordinate read from a photo's EXIF GPS IFD. */
 export interface FsGeoPoint {
 	readonly latitude: number;
@@ -330,7 +339,7 @@ export interface FsCoreBridge {
 	 */
 	previewIcon(path: string, modifiedAt: string): Promise<string | null>;
 	exists(path: string): Promise<boolean>;
-	search(query: string): Promise<readonly FsSearchResult[]>;
+	search(query: string, options?: FsSearchOptions): Promise<readonly FsSearchResult[]>;
 	locations(): Promise<readonly FsLocation[]>;
 	/** Unmount the ejectable location at `path` (diskutil on macOS, eject / net use on Windows); rejects with the OS reason. */
 	ejectLocation(path: string): Promise<void>;

@@ -97,7 +97,7 @@ function findExecutable(name: string, env: NodeJS.ProcessEnv): string | null {
 
 function installState(type: string, entry: DatasourceSkillConfig, env: NodeJS.ProcessEnv): DataSourceRow["install"] {
 	if (!BUILTIN_DATASOURCE_SKILL_NAMES.includes(type)) {
-		return { state: "unsupported", binary: null, path: null, detail: `No built-in AutoRAG datasource named "${type}"` };
+		return { state: "unsupported", binary: null, path: null, detail: `No built-in Dazzi datasource named "${type}"` };
 	}
 	const connector = isRecord(entry.connector) ? entry.connector : {};
 	if (type === "github" || type === "github-gist") {
@@ -106,10 +106,10 @@ function installState(type: string, entry: DatasourceSkillConfig, env: NodeJS.Pr
 		const gh = type === "github-gist" ? findExecutable("gh", env) : null;
 		return hasToken || gh !== null
 			? { state: "builtin", binary: null, path: gh, detail: hasToken ? `Token from ${tokenEnv}` : "Token from gh auth" }
-			: { state: "credential-missing", binary: null, path: null, detail: `Set ${tokenEnv} to let AutoRAG reach GitHub` };
+			: { state: "credential-missing", binary: null, path: null, detail: `Set ${tokenEnv} to let Dazzi reach GitHub` };
 	}
 	const binary = BACKEND_BINARIES[type];
-	if (binary === undefined) return { state: "builtin", binary: null, path: null, detail: "Built into AutoRAG" };
+	if (binary === undefined) return { state: "builtin", binary: null, path: null, detail: "Built into Dazzi" };
 	const configured = typeof connector.binaryPath === "string" ? connector.binaryPath : binary;
 	const path = findExecutable(configured, env);
 	return path === null
@@ -129,7 +129,7 @@ function agentState(
 	allowedTags: readonly string[],
 ): DataSourceRow["agent"] {
 	if (skill === undefined) {
-		return { state: "unsupported", skillName: null, tags: [], detail: "The AutoRAG agent skips unknown datasources" };
+		return { state: "unsupported", skillName: null, tags: [], detail: "The Dazzi agent skips unknown datasources" };
 	}
 	const descriptor = skill.describe();
 	const skillName = skill.skillManifest().name;
