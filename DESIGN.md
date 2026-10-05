@@ -1,6 +1,8 @@
-# AI Finder v7 Design System
+# Dazzi Design System (v7 Bloom)
 
-Implementation contract and design specification for the **AutoRAG Agent — AI Finder** desktop app (Electron + React + TypeScript, hand-written CSS, macOS Native Finder fidelity).
+Implementation contract and design specification for **Dazzi** — the AI Finder
+desktop app (Electron + React + TypeScript, hand-written CSS, macOS Native
+Finder fidelity) whose backend is the AutoRAG agent.
 
 ---
 
@@ -45,12 +47,18 @@ and applies in icon, list, column, and search layouts. Grouping is visual only:
 `state/grouping.ts` splits the same rows into section headers without creating
 folders or changing entry identity; the virtualized list and icon views account
 for header height in their window geometry, and column panes render the same
-sections inline. Native Finder criteria are populated during filesystem
-enrichment: creation time comes from the real filesystem birth time, tags and
-comments use Finder extended attributes with Spotlight fallback, dimensions use
-the image reader, Date Added / Date Last Opened / rating use Spotlight, and
-Application uses Launch Services' default opener. Unknown values remain unknown;
-they are never replaced with modification time or an unrelated application.
+sections inline. Native Finder criteria are populated by a background
+`fs:finderMetadata` call, separate from the `fs:enrichEntries` call that fills
+OS kinds and tile icons: creation time comes from the real filesystem birth
+time, tags and comments use Finder extended attributes with Spotlight fallback,
+dimensions read only the first 256 KiB of the image, Date Added / Date Last
+Opened / rating use Spotlight, and Application uses Launch Services' default
+opener. Those helper processes are far slower than the icon pool on a USB/HDD
+volume, so icons never wait for them; each result patches only its own fields
+on whatever rows are on screen when it lands. Both the metadata and thumbnail
+queues serve the newest request first, so leaving a folder of thousands of
+photos never stalls the next one. Unknown values remain unknown; they are never
+replaced with modification time or an unrelated application.
 Pure behavior is covered by `test/ui-sort.test.ts` and `test/ui-grouping.test.ts`.
 ### 1.3 Path bar
 The path bar under the Finder list is one line at every window size and never shows an ellipsis. When the trail does not fit, labels give up space in a fixed order — middle segments left to right (`Users`, the home folder, …), then the root (`Macintosh HD`), then the parent of the current location, then the current location or selected file. A label first narrows with its last `--fade-label` (14px) faded out, so the word reads as cut off; once fewer than 32px would remain, the segment shows only its icon. If even the icon-only trail is too wide, it stays pinned to its end and fades in from the leading edge. Logic: `src/renderer/src/state/path-fit.ts`; visual check: `scripts/manual-qa/run-qa-finder-path-bar.mjs`.
@@ -95,7 +103,9 @@ Every sidebar row comes from the OS, through `fs:locations` (`src/main/places.ts
 - **Cloud** — exactly the drives connected to the OS, one row per account: iCloud Drive plus every `~/Library/CloudStorage/<Provider>-<account>` File Provider domain on macOS (e.g. `Google Drive - me@example.com`, `OneDrive - Personal`); the `SyncRootManager` roots registered for the user's SID and a Google Drive virtual drive letter on Windows.
 - **Locations** — the boot disk (`/`, or the system drive) plus every browsable mounted volume: `/Volumes/*` mount points without `nobrowse`, or every other drive letter. Each carries an eject button flush right; ejecting moves tabs out of the volume first (so no watcher holds it), then runs `diskutil unmount` (macOS), `net use X: /delete` for network drives, or the shell Eject verb (Windows). A refusal surfaces verbatim in the toast.
 
-The main process polls a cheap mount signature (volume names and device ids, cloud domains) every 2s and pushes `fs:locationsChanged`, so a volume or cloud account that comes or goes updates the sidebar without a restart. Search and the dupey scan walk only `scanned` places (Desktop, Documents, Downloads, cloud drives) — never the home folder or a whole disk. Rows are 28px with 12px labels and 14px glyphs. Automated checks: `test/places.test.ts`, `test/ui-places.test.ts`; on-device check (attaches and ejects a real disk image): `scripts/manual-qa/run-qa-finder-sidebar-places.mjs`.
+The main process polls a cheap mount signature (volume names and device ids, cloud domains) every 2s and pushes `fs:locationsChanged`, so a volume or cloud account that comes or goes updates the sidebar without a restart. The dupey scan walks only `scanned` places (Desktop, Documents, Downloads, cloud drives) — never the home folder or a whole disk. Rows are 28px with 12px labels and 14px glyphs. Automated checks: `test/places.test.ts`, `test/ui-places.test.ts`; on-device check (attaches and ejects a real disk image): `scripts/manual-qa/run-qa-finder-sidebar-places.mjs`.
+
+Instant Search's filename search ("전체" and "파일 이름") answers from the platform name index first, through `src/main/file-name-search.ts`: the user's `fsearch-cli` database on macOS/Linux (the same default database the FSearch app shares) and the bundled voidtools Everything on Windows. "파일 이름" narrows the index request to the folder in view before its result cap. When no index is installed or no database answers, the search falls back to the bounded disk walk over the `scanned` places. The app warms the index at launch — a `fsearch-cli watch` daemon on macOS/Linux, the Everything instance on Windows — and deliberately leaves it running across quits, because restarting a watch over a whole-machine database re-scans every monitored folder. Automated checks: `test/file-name-search.test.ts`, `test/fs-service.test.ts`; on-device check: `scripts/manual-qa/run-qa-finder-fsearch-search.mjs`.
 
 ---
 
@@ -109,7 +119,7 @@ The main process polls a cheap mount signature (volume names and device ids, clo
 | `⌘F` | Window | Focus Instant Search bar |
 | `⌘K` | Window | Show the nearest AI Search tab (or open one) and focus its composer |
 | `Space` | File List | Quick Look preview of the selected file or folder (`src/preview/DESIGN.md`) |
-| `⌥ Space` | Global | Global AutoRAG Spotlight summon |
+| `⌥ Space` | Global | Global Dazzi Spotlight summon |
 | `Enter` | Search Bar | Commit search with Filenames |
 | `⌥ Enter` | Search Bar | Commit search with Content |
 | `Escape` | Window | Dismiss dropdowns, clear active search focus |

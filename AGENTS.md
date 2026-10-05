@@ -1,4 +1,12 @@
-# AutoRAG Finder App
+# Dazzi App
+
+**Dazzi is this app's commercial name** (official URL `https://dazziapp.com`).
+Every user-facing surface — the window title, renderer UI copy, README,
+DESIGN, and this document — uses **Dazzi**. "AutoRAG" is the backend only: the
+app still consumes the public AutoRAG librarian/agent (`@autorag/librarian`),
+the shared AutoRAG config, and the `AutoRAGAgent`/`AutoRAGLite` classes, and
+those internal names stay. Never put the word Dazzi on a backend identifier,
+and never put an AutoRAG product name in front of the user.
 
 This repository is the standalone Electron Finder app: one repository, one
 app. It is not a monorepo, and no other package is built or released from

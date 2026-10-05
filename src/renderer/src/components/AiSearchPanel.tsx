@@ -18,6 +18,7 @@ import type {
 	SearchStreamEvent,
 } from "../../../shared/search-contract";
 import { isImageOnlyLine, parseAnswerBlocks, parseInline, type AnswerBlock } from "../state/answer-markdown";
+import { answerViewState } from "../state/answer-view";
 import { ImageRow, lineImages, type ImageActions } from "./AnswerImage";
 import { attachmentsFromDrop, isAttachmentDrag, mergeAttachments } from "../state/attachments";
 import { evidenceKind, unresolvedCitationNumbers } from "../state/evidence";
@@ -395,11 +396,15 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	}
 
 	async function stop(): Promise<void> {
-		if (searchIdRef.current === null) return;
-		await autorag.search.cancel(searchIdRef.current);
+		const id = searchIdRef.current;
+		if (id === null) return;
+		// Drop the generating look before the IPC round trip: Stop is instant and
+		// no pending shimmer or Thinking row survives the cancel, whatever the
+		// backend was still doing.
 		setSearchId(null);
 		setProgress("");
 		setStopped(true);
+		await autorag.search.cancel(id);
 	}
 
 	function removeAttachment(index: number): void {
@@ -480,7 +485,11 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	const deepUnresolved = useMemo(() => unresolvedCitationNumbers(deepText, deep?.evidence ?? []), [deepText, deep]);
 	const quickReady = quickText !== "";
 	const deepReady = deepText !== "";
-	const thinkingVisible = searchId !== null && quickReady && !deepReady;
+	const { skeleton, thinking } = answerViewState({
+		pending: searchId !== null,
+		quickReady,
+		deepReady,
+	});
 	const showEmpty = submittedQuery === null && error === null && !quickReady && !deepReady;
 
 	return (
@@ -613,14 +622,14 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 								<div className="assistant-prose flex flex-col gap-8 text-body leading-[1.55] text-ink-body">
 									<ProseBlocks text={quickText} selected={selectedEvidence} unresolved={quickUnresolved} onCitation={onSelectEvidence} imageActions={imageActions} />
 								</div>
-							) : (
+							) : skeleton ? (
 								<div className="flex flex-col gap-8">
 									<span className="skeleton block h-8 w-[85%] rounded-4 bg-[linear-gradient(90deg,var(--bg-input),var(--bg-window),var(--bg-input))] bg-[length:200%_100%] animate-shimmer" />
 									<span className="skeleton block h-8 w-[65%] rounded-4 bg-[linear-gradient(90deg,var(--bg-input),var(--bg-window),var(--bg-input))] bg-[length:200%_100%] animate-shimmer" />
 								</div>
-							)}
+							) : null}
 
-							{thinkingVisible ? (
+							{thinking ? (
 								<div className="water-wave-thinking my-6 flex items-center gap-8 text-meta text-ink-muted">
 									<span className="size-7 flex-none rounded-full bg-info-dot animate-[pulseDot_1.4s_ease-in-out_infinite]" />
 									<span className="min-w-0 truncate">Thinking…{progress === "" ? "" : ` ${progress}`}</span>
@@ -667,7 +676,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 							value={query}
 							onChange={(event) => setQuery(event.target.value)}
 							placeholder={COMPOSER_PLACEHOLDER}
-							aria-label="Ask AutoRAG"
+							aria-label="Ask Dazzi"
 							disabled={searchId !== null}
 							className="h-30 min-w-0 flex-1 border-0 bg-transparent text-body text-ink-body outline-none placeholder:text-ink-muted"
 						/>
@@ -675,8 +684,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 							<button
 								type="submit"
 								className="send flex size-32 flex-none items-center justify-center rounded-full border-0 bg-accent text-on-accent cursor-pointer transition-colors duration-(--dur-color) ease-out enabled:hover:bg-accent-hover disabled:cursor-default disabled:bg-border-strong"
-								title="Ask AutoRAG"
-								aria-label="Ask AutoRAG"
+								title="Ask Dazzi"
+								aria-label="Ask Dazzi"
 								disabled={query.trim().length === 0 && attachments.length === 0}
 							>
 								<ArrowUpIcon />

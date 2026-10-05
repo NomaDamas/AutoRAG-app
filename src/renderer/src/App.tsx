@@ -24,7 +24,7 @@ import { RECENTS_PATH, type FsLocationIcon } from "../../shared/fs-contract";
 import { aiPanelTabs, AI_SEARCH_PATH, SETTINGS_PATH } from "./state/tabs";
 import { attachmentsFromDrop, isAttachmentDrag, isFinderDrag, readFinderDragPaths, writeFinderDrag } from "./state/attachments";
 import { backgroundDropDir } from "./state/file-transfer";
-import type { FileActionTarget } from "./state/file-actions";
+import { toolbarShareControl, type FileActionTarget } from "./state/file-actions";
 import { basename, breadcrumbTrail, dirname } from "./state/paths";
 import {
 	loadListColumns,
@@ -295,9 +295,9 @@ export function App(): ReactElement {
 	);
 
 	/**
-	 * Sidebar search commit. Enter runs a filename search in the chip's scope
-	 * (전체 = This Mac, 파일 이름 = current folder); the 내용 chip — or ⌥Enter
-	 * from any chip — hands the query to a new AI Search tab.
+	 * Sidebar search commit. Enter runs a filename search over the whole machine
+	 * (This Mac / This Computer); the 내용 chip — or ⌥Enter from either chip —
+	 * hands the query to a new AI Search tab.
 	 */
 	const submitSidebarSearch = useCallback(
 		(mode: SearchMode, text: string) => {
@@ -312,7 +312,7 @@ export function App(): ReactElement {
 			}
 			// A Settings / AI Search tab lists nothing: the results show in its last folder.
 			finder.leaveVirtualTab();
-			finder.setSearchScope(mode === "name" ? "current" : "all");
+			finder.setSearchScope("all");
 			finder.setQuery(value);
 		},
 		[contentSearch, finder],
@@ -499,6 +499,8 @@ export function App(): ReactElement {
 	};
 
 	const focused = finder.focusedEntry;
+	/** The toolbar Share item: shown where the OS has a share sheet, enabled with a focused row. */
+	const shareControl = toolbarShareControl(focused !== null, finder.actionCapabilities);
 	const familyEntries = focused !== null ? finder.familyEntriesFor(focused.path) : null;
 	const inspectorFamily: InspectorFamily | null =
 		familyEntries === null
@@ -610,9 +612,10 @@ export function App(): ReactElement {
 							finder.focusAiSearch();
 							deliverToAi({});
 						}}
-						canShare={focused !== null}
-						onShare={() => {
-							if (focused !== null) finder.copyEntryPath(focused);
+						shareAvailable={shareControl.shown}
+						canShare={shareControl.enabled}
+						onShare={(anchor) => {
+							if (focused !== null) finder.runEntryAction(focused, { kind: "share" }, anchor);
 						}}
 						sidebarHidden={!sidebarVisible}
 						onShowSidebar={() => setSidebarVisible(true)}

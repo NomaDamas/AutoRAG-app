@@ -65,7 +65,7 @@ const folder = join(home, "Documents", fixtureName);
 mkdirSync(folder, { recursive: true });
 const FIXTURES = ["deck-a.pdf", "deck-b.pdf", "deck-c.pdf", "deck-d.pdf", "notes.txt", "photo.jpg"];
 for (const name of FIXTURES) {
-	if (name.endsWith(".pdf")) await Bun.write(join(folder, name), buildPdf(`AutoRAG Meetup ${name}`));
+	if (name.endsWith(".pdf")) await Bun.write(join(folder, name), buildPdf(`Dazzi Meetup ${name}`));
 	else if (name.endsWith(".jpg")) await Bun.write(join(folder, name), buildExifJpeg());
 	else await Bun.write(join(folder, name), "preview qa\n");
 }

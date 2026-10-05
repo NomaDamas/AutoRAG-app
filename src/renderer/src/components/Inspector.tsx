@@ -32,6 +32,7 @@ import type { IndexStatus } from "../../../shared/index-contract";
 import type { CitationEvidence } from "../../../shared/search-contract";
 import type { FinderEntry } from "../data/entries";
 import { cn } from "../lib/cn";
+import { anchorOf } from "../lib/anchor";
 import { buildInfoRows, hasMoreInfoRows, visibleInfoRows } from "../state/inspector-info";
 import { stackCards, summarizeSelection } from "../state/inspector-multi";
 import {
@@ -132,12 +133,6 @@ const ACTION_ICONS: Readonly<Record<FileActionIcon, (props: { readonly size?: nu
 	image: ImageEditIcon,
 	video: VideoConvertIcon,
 };
-
-/** The clicked button's rect, for menus and the share sheet. */
-function anchorOf(element: Element): ActionAnchor {
-	const rect = element.getBoundingClientRect();
-	return { x: rect.left, y: rect.top, width: rect.width, height: rect.height };
-}
 
 export function Inspector({
 	entry,

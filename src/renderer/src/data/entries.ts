@@ -4,7 +4,7 @@
  * prototype fixtures (display-domain labels such as "14 msgs").
  */
 
-import type { FsEntry, FsEntryEnrichment, FsSearchResult } from "../../../shared/fs-contract";
+import type { FsEntry, FsEntryEnrichment, FsFinderEnrichment, FsSearchResult } from "../../../shared/fs-contract";
 import { formatModified, formatSize, parseModifiedLabel, parseSizeLabel } from "../state/format";
 import { type FileKind, kindFromExtension, kindMeta } from "../state/kinds";
 import { basename, dirname, joinPath } from "../state/paths";
@@ -94,13 +94,50 @@ export function entryFromSearchHit(hit: FsSearchResult): FinderEntry {
 	return { ...entryFromFs(hit.entry), location: dirname(hit.entry.path) };
 }
 
+/**
+ * OS kind and tile icon for rows still at the requested mtime. A null icon
+ * keeps the one a row already shows: the background pass caps its icon batch,
+ * so a row the viewport pass already filled must not fall back to its letter.
+ * Returns `entries` itself when nothing changed.
+ */
 export function applyEntryEnrichment(entries: readonly FinderEntry[], enriched: readonly FsEntryEnrichment[]): readonly FinderEntry[] {
-	const byPath = new Map(enriched.map((entry) => [entry.path, entry]));
+	const byPath = new Map(enriched.map((patch) => [patch.path, patch]));
 	let changed = false;
 	const result = entries.map((entry) => {
 		const patch = byPath.get(entry.path);
-		if (patch === undefined || (entry.modifiedAt !== undefined && entry.modifiedAt !== patch.modifiedAt)) return entry;
-		const finder = patch.finder;
+		if (patch === undefined || entry.modifiedAt !== patch.modifiedAt) return entry;
+		const kindLabel = patch.osKind ?? entry.kindLabel;
+		const iconUrl = patch.iconUrl ?? entry.iconUrl;
+		if (kindLabel === entry.kindLabel && iconUrl === entry.iconUrl) return entry;
+		changed = true;
+		return { ...entry, kindLabel, iconUrl };
+	});
+	return changed ? result : entries;
+}
+
+const METADATA_KEYS = [
+	"createdValue",
+	"addedValue",
+	"lastOpenedValue",
+	"tagsLabel",
+	"commentsLabel",
+	"dimensionsLabel",
+	"dimensionsValue",
+	"ratingValue",
+	"applicationLabel",
+] as const satisfies readonly (keyof MetadataFields)[];
+
+/**
+ * Finder metadata for rows still at the requested mtime. Only the metadata
+ * fields are replaced, so an icon that landed first survives. Returns
+ * `entries` itself when nothing changed.
+ */
+export function applyFinderEnrichment(entries: readonly FinderEntry[], enriched: readonly FsFinderEnrichment[]): readonly FinderEntry[] {
+	const byPath = new Map(enriched.map((patch) => [patch.path, patch]));
+	let changed = false;
+	const result = entries.map((entry) => {
+		const patch = byPath.get(entry.path);
+		if (patch === undefined || entry.modifiedAt !== patch.modifiedAt) return entry;
 		const {
 			createdValue,
 			addedValue,
@@ -113,22 +150,9 @@ export function applyEntryEnrichment(entries: readonly FinderEntry[], enriched: 
 			applicationLabel,
 			...baseEntry
 		} = entry;
-		const next: FinderEntry = finder === undefined
-			? { ...entry, kindLabel: patch.osKind ?? entry.kindLabel, iconUrl: patch.iconUrl }
-			: {
-					...baseEntry,
-					kindLabel: patch.osKind ?? entry.kindLabel,
-					iconUrl: patch.iconUrl,
-					...metadataFields(finder, finder.createdAt ?? entry.createdAt),
-				};
-		if (
-			 next.kindLabel !== entry.kindLabel || next.iconUrl !== entry.iconUrl ||
-			next.createdValue !== entry.createdValue || next.addedValue !== entry.addedValue ||
-			next.lastOpenedValue !== entry.lastOpenedValue || next.tagsLabel !== entry.tagsLabel ||
-			next.commentsLabel !== entry.commentsLabel || next.dimensionsLabel !== entry.dimensionsLabel ||
-			next.dimensionsValue !== entry.dimensionsValue || next.ratingValue !== entry.ratingValue ||
-			next.applicationLabel !== entry.applicationLabel
-		) changed = true;
+		const next: FinderEntry = { ...baseEntry, ...metadataFields(patch.finder, entry.createdAt) };
+		if (METADATA_KEYS.every((key) => next[key] === entry[key])) return entry;
+		changed = true;
 		return next;
 	});
 	return changed ? result : entries;

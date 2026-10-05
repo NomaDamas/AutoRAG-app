@@ -8,7 +8,7 @@
  */
 
 import { NO_CAPABILITIES, type ActionsBridge } from "../../../shared/actions-contract";
-import { RECENTS_PATH, type FsBridge, type FsClipboard, type FsEnrichmentTarget, type FsLocation, type FsLocationIcon, type FsOpError, type FsUndoOutcome, type FsVersionFamiliesResult } from "../../../shared/fs-contract";
+import { RECENTS_PATH, type FsBridge, type FsClipboard, type FsEnrichmentTarget, type FsEntryEnrichment, type FsFinderEnrichment, type FsLocation, type FsLocationIcon, type FsOpError, type FsSearchOptions, type FsUndoOutcome, type FsVersionFamiliesResult } from "../../../shared/fs-contract";
 import type { IndexStatus } from "../../../shared/index-contract";
 import {
 	DUPEY_LAYER_ID,
@@ -24,7 +24,7 @@ import {
 	type VersionFamiliesResult,
 	type VersionRelation,
 } from "../state/version-family";
-import { type FinderEntry, applyEntryEnrichment, entryFromFixture, entryFromFs, entryFromSearchHit } from "./entries";
+import { type FinderEntry, entryFromFixture, entryFromFs, entryFromSearchHit } from "./entries";
 import { FIXTURE_FAMILIES, FIXTURE_INITIAL_PATH, FIXTURE_TREE } from "./fixtures";
 import type { FixtureItem } from "./entries";
 
@@ -56,8 +56,18 @@ export interface FinderSource {
 	liveLayers(): Promise<LiveResync>;
 	exists(path: string): Promise<boolean>;
 	list(path: string): Promise<readonly FinderEntry[]>;
-	/** Fill OS kind and icon URLs after the basic listing is visible. */
-	enrich(path: string, entries: readonly FinderEntry[]): Promise<readonly FinderEntry[]>;
+	/**
+	 * OS kind and icon URLs for rows already on screen. The caller applies the
+	 * patches to whatever rows it holds when they land (`applyEntryEnrichment`),
+	 * so an icon another pass filled in meanwhile is never overwritten.
+	 */
+	enrich(entries: readonly FinderEntry[]): Promise<readonly FsEntryEnrichment[]>;
+	/**
+	 * Finder metadata (tags, dates, dimensions, default app) for the same rows,
+	 * applied with `applyFinderEnrichment`. Separate from `enrich` because it is
+	 * far slower on a slow disk, and icons must never wait for it.
+	 */
+	finderMetadata(entries: readonly FinderEntry[]): Promise<readonly FsFinderEnrichment[]>;
 	/**
 	 * Incremental refresh after a live change: resolve only the given direct
 	 * children of `dir`, mapping the ones that exist as rows and naming the
@@ -68,7 +78,7 @@ export interface FinderSource {
 		dir: string,
 		paths: readonly string[],
 	): Promise<{ readonly entries: readonly FinderEntry[]; readonly removed: readonly string[] }>;
-	search(query: string): Promise<readonly FinderEntry[]>;
+	search(query: string, options?: FsSearchOptions): Promise<readonly FinderEntry[]>;
 	locations(): Promise<readonly FinderLocation[]>;
 	/** Unmount a mounted volume (sidebar eject button); rejects with the OS reason. */
 	ejectLocation(path: string): Promise<void>;
@@ -108,6 +118,21 @@ export async function isMissingPathFailure(
 	path: string,
 ): Promise<boolean> {
 	return !(await source.exists(path));
+}
+
+/** Main-process identity for each row that knows its mtime; the mtime gates every patch. */
+function enrichmentTargets(entries: readonly FinderEntry[]): FsEnrichmentTarget[] {
+	return entries.flatMap((entry) =>
+		entry.modifiedAt === undefined
+			? []
+			: [{
+					path: entry.path,
+					kind: entry.kind,
+					ext: entry.kind === "folder" ? "" : entry.name.includes(".") ? entry.name.split(".").pop()?.toLowerCase() ?? "" : "",
+					modifiedAt: entry.modifiedAt,
+					...(entry.createdAt === undefined ? {} : { createdAt: entry.createdAt }),
+				}],
+	);
 }
 
 /* -------------------------------------------------------------- real bridge */
@@ -159,26 +184,15 @@ export function createBridgeSource(
 			// Recents is virtual: a row's location is the real folder that holds the file.
 			return listing.entries.map((entry) => entryFromFs(entry, path === RECENTS_PATH ? undefined : path));
 		},
-		async enrich(_path, entries) {
-			const targets: FsEnrichmentTarget[] = entries
-				.filter((entry) => entry.modifiedAt !== undefined)
-				.map((entry) => ({
-					path: entry.path,
-					kind: entry.kind,
-					ext: entry.kind === "folder" ? "" : entry.name.includes(".") ? entry.name.split(".").pop()?.toLowerCase() ?? "" : "",
-					modifiedAt: entry.modifiedAt ?? "",
-					...(entry.createdAt === undefined ? {} : { createdAt: entry.createdAt }),
-				}));
-			const results = await fs.enrichEntries(targets, true);
-			return applyEntryEnrichment(entries, results);
-		},
+		enrich: (entries) => fs.enrichEntries(enrichmentTargets(entries), true),
+		finderMetadata: (entries) => fs.finderMetadata(enrichmentTargets(entries)),
 		async readEntries(dir, paths) {
 			const patch = await fs.readEntries(dir, paths);
 			// Rows belong to the requested dir, not the child's own parent lookup.
 			return { entries: patch.entries.map((entry) => entryFromFs(entry, dir)), removed: patch.removed };
 		},
-		async search(query) {
-			const hits = await fs.search(query);
+		async search(query, options) {
+			const hits = await fs.search(query, options);
 			return hits.map(entryFromSearchHit);
 		},
 		locations: () => fs.locations(),
@@ -308,7 +322,8 @@ export function createFixtureSource(): FinderSource {
 		setWatchSet: resolve,
 		onLive: () => () => {},
 		liveLayers: () => Promise.resolve({ seq: 0, layers: [], reconciled: [] }),
-		enrich: async (_path, entries) => entries,
+		enrich: async () => [],
+		finderMetadata: async () => [],
 		exists: (path) => Promise.resolve(state.tree.has(path) || findItem(state, path) !== null),
 		list: (path) =>
 			Promise.resolve((state.tree.get(path) ?? []).map((item) => entryFromFixture(item, path))),
@@ -328,20 +343,22 @@ export function createFixtureSource(): FinderSource {
 			}
 			return { entries, removed };
 		},
-		search: (query) => {
+		search: (query, options) => {
 			const needle = query.trim().toLowerCase();
 			if (needle === "") {
 				return Promise.resolve([]);
 			}
+			const scope = options?.scope;
 			const hits: FinderEntry[] = [];
 			for (const [path, items] of state.tree) {
 				if (path === RECENTS_PATH) {
 					continue;
 				}
 				for (const item of items) {
-					if (item.name.toLowerCase().includes(needle)) {
-						hits.push(entryFromFixture(item, path));
-					}
+					if (!item.name.toLowerCase().includes(needle)) continue;
+					const entry = entryFromFixture(item, path);
+					if (scope !== undefined && entry.path !== scope && !entry.path.startsWith(`${scope}/`)) continue;
+					hits.push(entry);
 				}
 			}
 			return Promise.resolve(hits);

@@ -14,11 +14,14 @@ import {
 	type FsEnrichmentTarget,
 	type FsEntry,
 	type FsEntryEnrichment,
+	type FsFinderEnrichment,
 	type FsFileDetails,
 	type FsLocation,
 	type FsOpError,
+	type FsSearchOptions,
 	type FsSearchResult,
 } from "../shared/fs-contract";
+import type { FileNameSearchBackend } from "./file-name-search";
 import { createFinderMetadataResolver, type FinderMetadataLookup } from "./finder-metadata";
 import { createIconProvider, type IconProvider } from "./file-icon";
 import { createOsKindResolver } from "./file-kind";
@@ -69,6 +72,11 @@ export interface FsServiceDeps {
 	readonly places?: Places;
 	/** Defaults to the Windows `$Recycle.Bin\<SID>` shape; tests point it at a fixture folder. */
 	readonly recycleBin?: (dir: string) => boolean;
+	/**
+	 * Fast filename search (fsearch on macOS/Linux, Everything on Windows).
+	 * When absent, or when it reports no index, search walks the disk.
+	 */
+	readonly fileNameSearch?: FileNameSearchBackend;
 }
 
 export type FsRenameErrorCode = "invalid-name" | "name-collision";
@@ -118,6 +126,11 @@ function compareEntries(a: FsEntry, b: FsEntry): number {
 	return a.name.localeCompare(b.name);
 }
 
+/** Compare paths across platforms: the Windows index reports backslash paths. */
+function normalizeSlashes(path: string): string {
+	return path.replace(/\\/g, "/");
+}
+
 /** Attach the OS-reported kind to one entry; a failed lookup keeps the letter/fallback kind. */
 async function applyOsKind(entry: FsEntry, lookup: OsKindLookup): Promise<FsEntry> {
 	if (entry.kind !== "file") return entry;
@@ -129,24 +142,13 @@ async function applyOsKind(entry: FsEntry, lookup: OsKindLookup): Promise<FsEntr
 	}
 }
 
-/** Attach OS kinds to a batch; the resolver dedupes one query per extension. */
-function enrichOsKinds(entries: readonly FsEntry[], lookup: OsKindLookup): Promise<FsEntry[]> {
-	return Promise.all(entries.map((entry) => applyOsKind(entry, lookup)));
-}
-
 /** OS tile icons for a batch's files; the provider batches one call per listing. */
-async function resolveIcons(entries: readonly FsEntry[], provider: IconProvider): Promise<ReadonlyMap<string, string>> {
-	const targets = entries
-		.filter((entry) => entry.kind === "file")
-		.map((entry) => ({ path: entry.path, ext: entry.ext, modifiedAt: entry.modifiedAt }));
-	if (targets.length === 0) return new Map();
-	return provider.icons(targets);
-}
-
-/** A file the OS produced no icon for keeps its letter tile. */
-function withIcon(entry: FsEntry, icons: ReadonlyMap<string, string>): FsEntry {
-	const url = icons.get(entry.path);
-	return url === undefined ? entry : { ...entry, iconUrl: url };
+async function resolveIcons(targets: readonly FsEnrichmentTarget[], provider: IconProvider): Promise<ReadonlyMap<string, string>> {
+	const files = targets
+		.filter((target) => target.kind === "file")
+		.map((target) => ({ path: target.path, ext: target.ext, modifiedAt: target.modifiedAt }));
+	if (files.length === 0) return new Map();
+	return provider.icons(files);
 }
 
 async function runBatch(paths: readonly string[], operation: (path: string) => Promise<void>): Promise<FsBatchResult> {
@@ -203,47 +205,51 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 	const recycleBin = deps.recycleBin ?? isRecycleBinDir;
 	// In-app clipboard lives in main-process memory only.
 	let inAppClipboard: FsClipboard | null = null;
-	/** Resolve OS metadata and optional thumbnails without blocking listDir. */
-	async function annotateEntries(entries: readonly FsEntry[], thumbnails: boolean): Promise<FsEntry[]> {
-		const [icons, enriched, finders] = await Promise.all([
-			thumbnails ? resolveIcons(entries, iconProvider) : Promise.resolve(new Map<string, string>()),
-			enrichOsKinds(entries, osKind),
-			Promise.all(entries.map((entry) => finderMetadata(entry.path))),
-		]);
-		return enriched.map((entry, index) => {
-			const finder = finders[index];
-			const withMetadata =
-				finder === null || finder === undefined
-					? entry
-					: { ...entry, finder: { ...finder, createdAt: finder.createdAt ?? entry.createdAt ?? null } };
-			return withIcon(withMetadata, icons);
-		});
-	}
-
+	/**
+	 * OS kind and tile icon only. Finder metadata is a separate call: its
+	 * helper processes and EXIF reads are far slower than the icon pool on a
+	 * slow disk, and folding it in made every icon in the batch wait for the
+	 * slowest file's metadata.
+	 */
 	async function enrichEntries(
 		targets: readonly FsEnrichmentTarget[],
 		thumbnails: boolean,
 	): Promise<readonly FsEntryEnrichment[]> {
-		const base = targets.map((target) => ({
-			name: basename(target.path),
+		const [icons, kinds] = await Promise.all([
+			thumbnails ? resolveIcons(targets, iconProvider) : Promise.resolve(new Map<string, string>()),
+			Promise.all(
+				targets.map(async (target) => {
+					if (target.kind !== "file") return null;
+					try {
+						return await osKind(target.path, target.ext);
+					} catch (error) {
+						console.warn(`fs:osKind failed for ${target.path}: ${errorMessage(error)}`);
+						return null;
+					}
+				}),
+			),
+		]);
+		return targets.map((target, index) => ({
 			path: target.path,
-			kind: target.kind,
-			ext: target.ext,
-			size: null,
 			modifiedAt: target.modifiedAt,
-			...(target.createdAt === undefined ? {} : { createdAt: target.createdAt }),
-			isSymlink: false,
-			osKind: null,
-			iconUrl: null,
-		} satisfies FsEntry));
-		const enriched = await annotateEntries(base, thumbnails);
-		return enriched.map((entry) => ({
-			path: entry.path,
-			modifiedAt: entry.modifiedAt,
-			osKind: entry.osKind,
-			iconUrl: entry.iconUrl,
-			...(entry.finder === undefined ? {} : { finder: entry.finder }),
+			osKind: kinds[index] ?? null,
+			iconUrl: icons.get(target.path) ?? null,
 		}));
+	}
+
+	async function finderMetadataFor(targets: readonly FsEnrichmentTarget[]): Promise<readonly FsFinderEnrichment[]> {
+		const results = await Promise.all(
+			targets.map(async (target): Promise<FsFinderEnrichment | null> => {
+				const finder = await finderMetadata(target.path);
+				if (finder === null) return null;
+				return {
+					path: target.path,
+					modifiedAt: target.modifiedAt,
+					finder: { ...finder, createdAt: finder.createdAt ?? target.createdAt ?? null },
+				};
+			}),
+		);
+		return results.filter((result) => result !== null);
 	}
 
 	async function buildListingEntries(dirents: readonly Dirent[], path: string): Promise<FsEntry[]> {
@@ -391,10 +397,66 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 		return result;
 	}
 
-	async function search(query: string): Promise<readonly FsSearchResult[]> {
+	/**
+	 * Filename substring search, case-insensitive. The platform index answers
+	 * when it can (fsearch / Everything); otherwise the disk walk runs. `scope`
+	 * restricts both to one folder subtree — the "파일 이름" chip's folder.
+	 */
+	async function search(query: string, options?: FsSearchOptions): Promise<readonly FsSearchResult[]> {
 		const needle = query.trim().toLowerCase();
 		if (needle.length === 0) return [];
+		const rawScope = options?.scope?.trim();
+		const scope = rawScope !== undefined && rawScope.length > 0 ? rawScope : undefined;
+		const backend = deps.fileNameSearch;
+		if (backend !== undefined) {
+			try {
+				const paths = await backend.search(query, scope);
+				if (paths !== null) return indexedHits(paths);
+			} catch (error) {
+				console.warn(`fs:search index failed, walking instead: ${errorMessage(error)}`);
+			}
+		}
+		return walkSearch(needle, scope);
+	}
+
+	/** Turn index paths into rows, attributing each to its location by longest prefix. */
+	async function indexedHits(paths: readonly string[]): Promise<readonly FsSearchResult[]> {
+		const known = (await locations()).filter((location) => location.path !== RECENTS_PATH);
 		const results: FsSearchResult[] = [];
+		for (const path of paths) {
+			if (results.length >= SEARCH_MAX_RESULTS) break;
+			try {
+				results.push({ entry: await buildFsEntry(path), location: searchLocation(path, known) });
+			} catch (error) {
+				// The index can be stale: a path that vanished since indexing is skipped.
+				if (!hasErrorCode(error, "ENOENT") && !hasErrorCode(error, "ENOTDIR")) {
+					console.warn(`fs:search skipping ${path}: ${errorMessage(error)}`);
+				}
+			}
+		}
+		return results;
+	}
+
+	function searchLocation(path: string, known: readonly FsLocation[]): string {
+		const target = normalizeSlashes(path);
+		let match: FsLocation | undefined;
+		for (const location of known) {
+			const root = normalizeSlashes(location.path);
+			if (target !== root && !target.startsWith(`${root}/`)) continue;
+			if (match === undefined || location.path.length > match.path.length) match = location;
+		}
+		return match?.name ?? dirname(path);
+	}
+
+	async function walkSearch(needle: string, scope: string | undefined): Promise<readonly FsSearchResult[]> {
+		const results: FsSearchResult[] = [];
+		if (scope !== undefined) {
+			// The "파일 이름" chip scopes to the folder in view, which may sit
+			// outside the scanned places (e.g. inside a mounted disk).
+			const known = (await locations()).filter((location) => location.path !== RECENTS_PATH);
+			await walkForSearch(scope, 0, { needle, location: searchLocation(scope, known), results });
+			return results;
+		}
 		for (const location of await locations()) {
 			// Recents is virtual and whole disks are too large to walk; only scanned places count.
 			if (!location.available || !location.scanned) continue;
@@ -529,6 +591,7 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 
 	return {
 		enrichEntries,
+		finderMetadata: finderMetadataFor,
 		listDir,
 		readEntries,
 		stat: async (path) => applyOsKind(await buildFsEntry(path), osKind),

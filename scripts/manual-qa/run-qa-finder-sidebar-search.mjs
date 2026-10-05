@@ -5,9 +5,9 @@ import { fileURLToPath } from "node:url";
  * Verifies the relocation and the new behavior against the built app:
  *   1. the field sits at the top of the sidebar, above the nav groups;
  *   2. the toolbar no longer holds a search field;
- *   3. focusing shows the 전체 / 파일 이름 / 내용 chips, 전체 active;
- *   4. Enter commits a filename search (scope bar appears, rows filter);
- *   5. 파일 이름 scopes the commit to the current folder;
+ *   3. focusing shows the 파일 이름 / 내용 chips, 파일 이름 active;
+ *   4. Enter commits a filename search over the whole machine (scope bar, rows);
+ *   5. the scope bar's folder pill narrows the commit to the folder in view;
  *   6. 내용 opens a new AI Search tab running the real content search;
  *   7. ⌘F focuses the sidebar field;
  *   8. the toolbar's inspector / AI / Share cluster behaves.
@@ -18,7 +18,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { finderWindow, launchFinder } from "./launch-finder.mjs";
-import { chord } from "./platform.mjs";
+import { chord, isMac } from "./platform.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const EVIDENCE = join(ROOT, ".omo/evidence/ai-finder-app/qa-sidebar-search");
@@ -30,6 +30,8 @@ const check = (label, ok, detail) => {
 	console.log(`${ok ? "PASS" : "FAIL"} ${label}${detail ? ` :: ${detail}` : ""}`);
 	if (!ok) failures.push(label);
 };
+
+const ALL_LABEL = process.platform === "win32" ? "This Computer" : "This Mac";
 
 const RUN_ID = `ulw-search-qa-${Date.now().toString(36)}`;
 const home = mkdtempSync(join(tmpdir(), "ulw-search-home-"));
@@ -71,12 +73,12 @@ try {
 	);
 	await page.screenshot({ path: join(EVIDENCE, "01-sidebar-resting.png") });
 
-	// 3. Focus reveals the chips, 전체 active by default.
+	// 3. Focus reveals the chips, 파일 이름 active by default.
 	await search.click();
-	await chip("전체").waitFor({ timeout: 5000 });
+	await chip("파일 이름").waitFor({ timeout: 5000 });
 	const chipLabels = await page.locator(".scope-chip").allInnerTexts();
-	check("focusing shows the three scope chips", JSON.stringify(chipLabels) === JSON.stringify(["전체", "파일 이름", "내용"]), JSON.stringify(chipLabels));
-	check("전체 is the default active chip", (await chip("전체").getAttribute("aria-pressed")) === "true");
+	check("focusing shows the two scope chips", JSON.stringify(chipLabels) === JSON.stringify(["파일 이름", "내용"]), JSON.stringify(chipLabels));
+	check("파일 이름 is the default active chip", (await chip("파일 이름").getAttribute("aria-pressed")) === "true");
 	await page.screenshot({ path: join(EVIDENCE, "02-chips-focused.png") });
 	await page.locator(".side-search").screenshot({ path: join(EVIDENCE, "02-chips-element.png") });
 
@@ -89,19 +91,27 @@ try {
 	const rowNames = await page.locator('[role="row"] .row__label').allInnerTexts();
 	check("a filename search shows the scope bar with a count", /\d+\s*items found/.test(scopeCount), scopeCount);
 	check("the search filtered to the matching file", rowNames.includes("notes.md") && rowNames.length >= 1, JSON.stringify(rowNames));
+	const defaultScope = (await page.locator(".scope button[aria-pressed='true']").innerText()).trim();
+	check("a filename search defaults to the whole machine", defaultScope === ALL_LABEL, defaultScope);
 	await page.mouse.move(2, 2);
 	await sleep(600);
 	await page.screenshot({ path: join(EVIDENCE, "03-filename-search.png") });
 
-	// 5. 파일 이름 chip scopes the commit to the current folder.
-	await chip("파일 이름").click();
-	await search.press("Enter");
-	await page.waitForFunction(() => document.querySelector(".scope button[aria-pressed='true']")?.textContent?.trim() !== "This Mac", null, { timeout: 10000 });
-	const scopedButton = await page.locator(".scope button[aria-pressed='true']").innerText();
-	check("파일 이름 commits scoped to the current folder, not This Mac", scopedButton.trim() !== "This Mac", scopedButton.trim());
+	// 5. The scope bar's folder pill narrows the commit to the folder in view.
+	await page.locator(".scope button").nth(1).click();
+	await page.waitForFunction(
+		(all) => document.querySelector(".scope button[aria-pressed='true']")?.textContent?.trim() !== all,
+		ALL_LABEL,
+		{ timeout: 10000 },
+	);
+	const scopedButton = (await page.locator(".scope button[aria-pressed='true']").innerText()).trim();
+	check("the folder pill narrows the commit to the folder in view", scopedButton !== ALL_LABEL, scopedButton);
 	await page.screenshot({ path: join(EVIDENCE, "04-folder-scope.png") });
 
 	// 6. 내용 opens a new AI Search tab running the real content search.
+	// Clicking the scope bar's folder pill blurred the field, which hides the
+	// chips; refocus it the way a user would before picking the 내용 chip.
+	await search.click();
 	await chip("내용").click();
 	await search.fill("approval notes");
 	await search.press("Enter");
@@ -122,15 +132,18 @@ try {
 	await page.locator('[aria-label="Toggle inspector"]').waitFor({ timeout: 5000 });
 	check("the toolbar exposes the inspector toggle", (await page.locator('[aria-label="Toggle inspector"]').count()) === 1);
 	check("the toolbar exposes the AI Search button", (await page.locator('[aria-label="Show AI Search"]').count()) === 1);
-	const share = page.locator('.toolbar [aria-label="Copy path"]');
-	check("the toolbar exposes Share", (await share.count()) === 1);
+	// The Share item opens the OS share sheet, so it is shown on macOS only.
+	const share = page.locator('.toolbar [aria-label="Share"]');
+	check("the toolbar exposes Share on macOS only", (await share.count()) === (isMac ? 1 : 0), `count=${await share.count()}`);
 	await page.locator(".tabs .tab").first().click();
 	await search.fill("");
 	await search.press("Enter");
 	await page.locator(".scope").waitFor({ state: "detached", timeout: 10000 }).catch(() => undefined);
 	await page.locator('[role="row"]').first().click();
 	await sleep(200);
-	check("Share enables once a row is selected", (await share.isEnabled()), `disabled=${await share.isDisabled()}`);
+	if (isMac) {
+		check("Share enables once a row is selected", (await share.isEnabled()), `disabled=${await share.isDisabled()}`);
+	}
 	await page.screenshot({ path: join(EVIDENCE, "06-toolbar-cluster.png") });
 } catch (error) {
 	console.error(`capture failed: ${String(error).slice(0, 400)}`);
