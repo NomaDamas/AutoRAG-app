@@ -1,46 +1,52 @@
 import { describe, expect, it } from "vitest";
-import { NAV_GROUPS, connectedNavGroups, type NavLocation } from "../src/renderer/src/data/places";
+import { navGroups } from "../src/renderer/src/data/places";
+import type { FsLocation } from "../src/shared/fs-contract";
 
-const location = (name: string, available = true): NavLocation => ({ name, available });
-
-function cloudLabels(locations: readonly NavLocation[]): string[] {
-	const cloud = connectedNavGroups(locations).find((group) => group.label === "Cloud");
-	return (cloud?.items ?? []).map((item) => item.label);
+function place(name: string, section: FsLocation["section"], overrides: Partial<FsLocation> = {}): FsLocation {
+	return {
+		name,
+		path: `/${name}`,
+		section,
+		icon: section === "locations" ? "disk" : "documents",
+		available: true,
+		scanned: false,
+		ejectable: false,
+		...overrides,
+	};
 }
 
-function favoriteLabels(locations: readonly NavLocation[]): string[] {
-	const favorites = connectedNavGroups(locations).find((group) => group.label === "Favorites");
-	return (favorites?.items ?? []).map((item) => item.label);
-}
+describe("navGroups", () => {
+	it("groups the live locations into Favorites, Cloud, and Locations, keeping the OS order", () => {
+		// Given locations as the main process reports them, sections interleaved
+		const locations = [
+			place("Recents", "favorites", { icon: "recents" }),
+			place("Desktop", "favorites"),
+			place("Google Drive - a@x.com", "cloud", { icon: "google-drive" }),
+			place("Macintosh HD", "locations"),
+			place("Google Drive - b@y.com", "cloud", { icon: "google-drive" }),
+			place("SSD1", "locations", { ejectable: true }),
+		];
 
-describe("connectedNavGroups", () => {
-	it("offers every connected cloud drive", () => {
-		expect(cloudLabels([location("iCloud Drive"), location("Google Drive"), location("Dropbox")])).toEqual([
-			"iCloud Drive",
-			"Google Drive",
-			"Dropbox",
+		// When grouping
+		const groups = navGroups(locations);
+
+		// Then each section keeps its own order and carries the eject affordance
+		expect(groups.map((group) => [group.label, group.items.map((item) => item.label)])).toEqual([
+			["Favorites", ["Recents", "Desktop"]],
+			["Cloud", ["Google Drive - a@x.com", "Google Drive - b@y.com"]],
+			["Locations", ["Macintosh HD", "SSD1"]],
+		]);
+		expect(groups[2]?.items.map((item) => [item.path, item.ejectable])).toEqual([
+			["/Macintosh HD", false],
+			["/SSD1", true],
 		]);
 	});
 
-	it("drops an available-but-unmounted drive so Windows never shows iCloud Drive", () => {
-		// Given a Windows-like listing with no iCloud (platform-absent) but a mounted Google Drive
-		const labels = cloudLabels([location("Google Drive")]);
+	it("omits a section with nothing connected", () => {
+		// Given no cloud accounts
+		const groups = navGroups([place("Desktop", "favorites"), place("Macintosh HD", "locations")]);
 
-		// Then only the connected drive survives
-		expect(labels).toEqual(["Google Drive"]);
-	});
-
-	it("hides a disconnected drive", () => {
-		expect(cloudLabels([location("Google Drive", false), location("Dropbox")])).toEqual(["Dropbox"]);
-	});
-
-	it("drops the Cloud group entirely when nothing is connected", () => {
-		expect(connectedNavGroups([]).some((group) => group.label === "Cloud")).toBe(false);
-		expect(cloudLabels([])).toEqual([]);
-	});
-
-	it("leaves the Favorites group untouched", () => {
-		const expected = NAV_GROUPS.find((group) => group.label === "Favorites")?.items.map((item) => item.label);
-		expect(favoriteLabels([location("Desktop"), location("Documents")])).toEqual(expected);
+		// Then there is no empty Cloud header
+		expect(groups.map((group) => group.label)).toEqual(["Favorites", "Locations"]);
 	});
 });

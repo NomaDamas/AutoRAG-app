@@ -7,7 +7,8 @@
  */
 
 import { execFile } from "node:child_process";
-import { errorMessage } from "./fs-entry";
+import { lstat, stat } from "node:fs/promises";
+import { errorMessage, hasErrorCode } from "./fs-entry";
 
 export interface KindQuery {
 	readonly command: string;
@@ -77,6 +78,18 @@ function defaultRun(query: KindQuery): Promise<string | null> {
 	});
 }
 
+/** True when `path` is a symlink whose target no longer exists. */
+async function isDanglingSymlink(path: string): Promise<boolean> {
+	const link = await lstat(path).catch(() => null);
+	if (link === null || !link.isSymbolicLink()) return false;
+	try {
+		await stat(path);
+		return false;
+	} catch (error) {
+		return hasErrorCode(error, "ENOENT") || hasErrorCode(error, "ENOTDIR");
+	}
+}
+
 /**
  * One OS-query process per distinct extension, shared across a session: the
  * kind follows the type identifier, which the extension determines, so a folder
@@ -88,14 +101,18 @@ export function createOsKindResolver(deps: OsKindDeps = {}): OsKindResolver {
 	const warn = deps.warn ?? ((message: string) => console.warn(message));
 	const cache = new Map<string, Promise<string | null>>();
 
+	/** The OS kind, or a rejection when there is no answer to share with other files of the extension. */
 	async function query(path: string): Promise<string | null> {
 		const request = kindQueryForPlatform(platform, path);
 		if (request === null) return null;
+		// A symlink whose target is gone (an uninstalled app's alias, an Android
+		// device's /bin) has no kind for the OS to report; asking only logs noise.
+		if (await isDanglingSymlink(path)) throw new Error("dangling symlink");
 		try {
 			return await run(request);
 		} catch (error) {
 			warn(`file-kind: ${request.command} failed for ${path}: ${errorMessage(error)}`);
-			return null;
+			throw error;
 		}
 	}
 
@@ -104,7 +121,11 @@ export function createOsKindResolver(deps: OsKindDeps = {}): OsKindResolver {
 			const key = ext === "" ? path : ext;
 			const cached = cache.get(key);
 			if (cached !== undefined) return cached;
-			const pending = query(path);
+			const pending = query(path).catch(() => {
+				// One unanswerable file must not erase the kind of every file sharing its extension.
+				cache.delete(key);
+				return null;
+			});
 			cache.set(key, pending);
 			return pending;
 		},

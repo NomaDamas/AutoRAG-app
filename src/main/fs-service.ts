@@ -23,6 +23,8 @@ import { createIconProvider, type IconProvider } from "./file-icon";
 import { createOsKindResolver } from "./file-kind";
 import { readFileDetails } from "./file-details";
 import { buildFsEntry, errorMessage, hasErrorCode, isAvailable, pathExists, resolveCopyName } from "./fs-entry";
+import { createPlaces, type Places } from "./places";
+import { isRecycleBinDir, readRecycleBinName } from "./recycle-bin";
 import { createRecentsStore, type RecentsStore } from "./recents-store";
 
 /** Subset of Electron's shell used by the service (injected for testability). */
@@ -60,6 +62,10 @@ export interface FsServiceDeps {
 	readonly details?: (path: string) => Promise<FsFileDetails>;
 	/** Defaults to the macOS extended-attribute + Spotlight resolver; tests may inject one. */
 	readonly finderMetadata?: FinderMetadataLookup;
+	/** Defaults to the OS places for `homeDir`; production injects one with Electron's known-folder paths. */
+	readonly places?: Places;
+	/** Defaults to the Windows `$Recycle.Bin\<SID>` shape; tests point it at a fixture folder. */
+	readonly recycleBin?: (dir: string) => boolean;
 }
 
 export type FsRenameErrorCode = "invalid-name" | "name-collision";
@@ -190,6 +196,8 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 	const osKind: OsKindLookup = deps.osKind ?? createOsKindResolver().kindFor;
 	const finderMetadata = deps.finderMetadata ?? createFinderMetadataResolver();
 	const iconProvider: IconProvider = deps.icons ?? createIconProvider();
+	const places = deps.places ?? createPlaces({ homeDir: home, platform });
+	const recycleBin = deps.recycleBin ?? isRecycleBinDir;
 	// In-app clipboard lives in main-process memory only.
 	let inAppClipboard: FsClipboard | null = null;
 	/** Resolve OS metadata and optional thumbnails without blocking listDir. */
@@ -265,9 +273,33 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 			return { path, entries: await recentEntries() };
 		}
 		const dirents = await readdir(path, { withFileTypes: true });
+		if (recycleBin(path)) {
+			return { path, entries: await recycleBinEntries(path, dirents) };
+		}
 		const entries = await buildListingEntries(dirents, path);
 		entries.sort(compareEntries);
 		return { path, entries };
+	}
+
+	/**
+	 * A Windows Recycle Bin folder, as Explorer shows it: one row per `$R`
+	 * payload, named after its `$I` record's original path. The row keeps the
+	 * payload's real path, so open / Quick Look / delete act on the actual file.
+	 */
+	async function recycleBinEntries(path: string, dirents: readonly Dirent[]): Promise<FsEntry[]> {
+		const payloads = dirents.filter((dirent) => dirent.name.startsWith("$R"));
+		const entries = await buildListingEntries(payloads, path);
+		const named = await Promise.all(
+			entries.map(async (entry) => {
+				const record = join(path, `$I${entry.name.slice(2)}`);
+				const original = await readRecycleBinName(record).catch((error: unknown) => {
+					console.warn(`fs:listDir ${record}: ${errorMessage(error)}`);
+					return null;
+				});
+				return original === null ? entry : { ...entry, name: original };
+			}),
+		);
+		return named.sort(compareEntries);
 	}
 
 	/**
@@ -331,54 +363,29 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 
 	async function locations(): Promise<readonly FsLocation[]> {
 		const result: FsLocation[] = [
-			{ name: RECENTS_PATH, path: RECENTS_PATH, section: "favorites", available: true },
+			{
+				name: RECENTS_PATH,
+				path: RECENTS_PATH,
+				section: "favorites",
+				icon: "recents",
+				available: true,
+				scanned: false,
+				ejectable: false,
+			},
 		];
 		if (deps.qaRoot !== undefined) {
 			result.push({
 				name: "QA",
 				path: deps.qaRoot,
 				section: "favorites",
+				icon: "qa",
 				available: await isAvailable(deps.qaRoot),
+				scanned: true,
+				ejectable: false,
 			});
 		}
-		const favorites: readonly { readonly name: string; readonly path: string }[] = [
-			{ name: "Desktop", path: join(home, "Desktop") },
-			{ name: "Downloads", path: join(home, "Downloads") },
-			{ name: "Documents", path: join(home, "Documents") },
-		];
-		for (const spec of favorites) {
-			result.push({ name: spec.name, path: spec.path, section: "favorites", available: await isAvailable(spec.path) });
-		}
-		// Cloud drives appear only while they are actually mounted and readable.
-		// iCloud Drive is a macOS-only source, so Windows never sees its path.
-		if (platform === "darwin") {
-			const iCloud = join(home, "Library", "Mobile Documents", "com~apple~CloudDocs");
-			if (await isAvailable(iCloud)) {
-				result.push({ name: "iCloud Drive", path: iCloud, section: "cloud", available: true });
-			}
-		}
-		const cloudStorage = join(home, "Library", "CloudStorage");
-		const googleDrive = await resolveCloudDrive(cloudStorage, "GoogleDrive-", join(home, "Google Drive"));
-		if (googleDrive !== null) {
-			result.push({ name: "Google Drive", path: googleDrive, section: "cloud", available: true });
-		}
-		const dropbox = await resolveCloudDrive(cloudStorage, "Dropbox", join(home, "Dropbox"));
-		if (dropbox !== null) {
-			result.push({ name: "Dropbox", path: dropbox, section: "cloud", available: true });
-		}
+		result.push(...(await places.list()));
 		return result;
-	}
-
-	async function resolveCloudDrive(cloudStorage: string, prefix: string, legacyPath: string): Promise<string | null> {
-		try {
-			const names = await readdir(cloudStorage);
-			const match = names.find((name) => name.startsWith(prefix));
-			if (match !== undefined) return join(cloudStorage, match);
-		} catch (error) {
-			// No CloudStorage directory means no modern-style drive; fall through to the legacy path.
-			if (!hasErrorCode(error, "ENOENT") && !hasErrorCode(error, "ENOTDIR")) throw error;
-		}
-		return (await pathExists(legacyPath)) ? legacyPath : null;
 	}
 
 	async function search(query: string): Promise<readonly FsSearchResult[]> {
@@ -386,8 +393,8 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 		if (needle.length === 0) return [];
 		const results: FsSearchResult[] = [];
 		for (const location of await locations()) {
-			// The virtual Recents location has no path on disk to walk.
-			if (!location.available || location.path === RECENTS_PATH) continue;
+			// Recents is virtual and whole disks are too large to walk; only scanned places count.
+			if (!location.available || !location.scanned) continue;
 			await walkForSearch(location.path, 0, { needle, location: location.name, results });
 			if (results.length >= SEARCH_MAX_RESULTS) break;
 		}
@@ -536,6 +543,7 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 		},
 		search,
 		locations,
+		ejectLocation: (path) => places.eject(path),
 		copy,
 		move,
 		duplicate,

@@ -18,7 +18,8 @@
  */
 
 import { execFile } from "node:child_process";
-import { stat } from "node:fs/promises";
+import { constants } from "node:fs";
+import { access, stat } from "node:fs/promises";
 import { basename } from "node:path";
 import type { FsFinderMetadata } from "../shared/fs-contract";
 import { errorMessage, extensionOf, hasErrorCode } from "./fs-entry";
@@ -253,16 +254,23 @@ interface CacheEntry {
 	readonly value: Promise<FsFinderMetadata | null>;
 }
 
-/** A path's current state: mtime and ctime catch content and metadata changes alike. */
+/**
+ * A path's current state: mtime and ctime catch content and metadata changes
+ * alike. Null when there is nothing the helpers could read: the path (or a
+ * symlink's target) is gone, or the user lacks read access — a volume's
+ * `.Trashes` / `.TemporaryItems` / `.DocumentRevisions-V100`, a cloud domain's
+ * `.tmp` — where `xattr` and `mdls` can only fail with a permission error.
+ */
 async function identify(path: string): Promise<Identity | null> {
 	try {
 		const info = await stat(path);
+		await access(path, constants.R_OK);
 		return {
 			fingerprint: `${info.mtimeMs}:${info.ctimeMs}:${info.size}:${info.ino}`,
 			isDirectory: info.isDirectory(),
 		};
 	} catch (error) {
-		if (hasErrorCode(error, "ENOENT") || hasErrorCode(error, "ENOTDIR")) return null;
+		if (["ENOENT", "ENOTDIR", "EACCES", "EPERM"].some((code) => hasErrorCode(error, code))) return null;
 		throw error;
 	}
 }

@@ -76,7 +76,7 @@ function harness(
 	const state = { writes: 0 };
 	let snapshot: unknown = seed;
 	const locations: FsLocation[] = [
-		{ name: "Desktop", path: "/home/Desktop", section: "favorites", available: true },
+		{ name: "Desktop", path: "/home/Desktop", section: "favorites", icon: "desktop", available: true, scanned: true, ejectable: false },
 	];
 	const deps: VersionFamilyServiceDeps = {
 		locations: async () => locations,
@@ -305,12 +305,14 @@ describe("version-family service — schedule", () => {
 });
 
 describe("version-family service — location scope", () => {
-	it("never scans the virtual Recents location", async () => {
+	it("scans only the scanned locations — never Recents, the home folder, or a whole disk", async () => {
 		const scanned: string[] = [];
 		const h = harness({
 			locations: async () => [
-				{ name: RECENTS_PATH, path: RECENTS_PATH, section: "favorites", available: true },
-				{ name: "Desktop", path: "/home/Desktop", section: "favorites", available: true },
+				{ name: RECENTS_PATH, path: RECENTS_PATH, section: "favorites", icon: "recents", available: true, scanned: false, ejectable: false },
+				{ name: "me", path: "/home", section: "favorites", icon: "home", available: true, scanned: false, ejectable: false },
+				{ name: "Desktop", path: "/home/Desktop", section: "favorites", icon: "desktop", available: true, scanned: true, ejectable: false },
+				{ name: "SSD1", path: "/Volumes/SSD1", section: "locations", icon: "disk", available: true, scanned: false, ejectable: true },
 			],
 			scanDuplicates: async (dir) => {
 				scanned.push(dir);

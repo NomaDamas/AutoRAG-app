@@ -145,22 +145,6 @@ export const FIXTURE_TREE: Readonly<Record<string, readonly FixtureItem[]>> = {
 	],
 };
 
-/** Sidebar roots, in reference order. */
-export const FIXTURE_ROOTS: readonly string[] = [
-	"Recents",
-	"Desktop",
-	"Downloads",
-	"Documents",
-	"iCloud Drive",
-	"Google Drive",
-	"Dropbox",
-	"Slack",
-	"Gmail",
-	"Notion",
-	"Discord",
-	"Telegram",
-];
-
 /** Pending requests in the reference's `REQ0` fixture — the sidebar bell badge. */
 
 /** Version-family fixture, the reference's `FAMS` shape. */

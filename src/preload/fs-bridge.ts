@@ -14,6 +14,14 @@ export function createFsBridge(ipcRenderer: IpcRenderer): FsBridge {
 		exists: (path) => ipcRenderer.invoke(FS_CHANNELS.exists, path),
 		search: (query) => ipcRenderer.invoke(FS_CHANNELS.search, query),
 		locations: () => ipcRenderer.invoke(FS_CHANNELS.locations),
+		ejectLocation: (path) => ipcRenderer.invoke(FS_CHANNELS.ejectLocation, path),
+		onLocationsChanged: (listener) => {
+			const handler = (): void => listener();
+			ipcRenderer.on(FS_CHANNELS.locationsChanged, handler);
+			return () => {
+				ipcRenderer.removeListener(FS_CHANNELS.locationsChanged, handler);
+			};
+		},
 		copy: (paths, destDir) => ipcRenderer.invoke(FS_CHANNELS.copy, paths, destDir),
 		move: (paths, destDir) => ipcRenderer.invoke(FS_CHANNELS.move, paths, destDir),
 		duplicate: (paths) => ipcRenderer.invoke(FS_CHANNELS.duplicate, paths),
