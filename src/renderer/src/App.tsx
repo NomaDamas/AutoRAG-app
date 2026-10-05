@@ -313,11 +313,20 @@ export function App(): ReactElement {
 		[finder],
 	);
 
-	const selectEvidence = useCallback((number: number) => {
-		setSelectedEvidence(number);
-		setEvidenceOpen(true);
-		setInspectorVisible(true);
-	}, []);
+	const selectEvidence = useCallback(
+		(number: number) => {
+			// A citation chip with no evidence entry must never open a different
+			// result: the panel would silently show unrelated evidence.
+			if (!evidence.some((item) => item.number === number)) {
+				finder.showToast(`근거 ${number}에 대한 정보를 찾을 수 없습니다`);
+				return;
+			}
+			setSelectedEvidence(number);
+			setEvidenceOpen(true);
+			setInspectorVisible(true);
+		},
+		[evidence, finder.showToast],
+	);
 
 	useEffect(() => {
 		const onKeyDown = (event: globalThis.KeyboardEvent): void => {

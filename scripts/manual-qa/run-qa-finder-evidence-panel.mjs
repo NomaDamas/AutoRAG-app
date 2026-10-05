@@ -115,7 +115,7 @@ const record = {
 				meta: "0.4s · 2 sources",
 			},
 			deep: {
-				answer: "## 승인 규칙 요약\n환불 예외는 지급 전 **임원 승인**이 필요합니다. [1][2]\n\n- 예외는 자동 반려되지 않습니다 [2]\n- 긴급 예외도 승인 생략 불가 [1]\n\n> 내규 인용 구문이 함께 표시됩니다.\n\n관련 명령은 `bun run qa` 입니다.",
+				answer: "## 승인 규칙 요약\n환불 예외는 지급 전 **임원 승인**이 필요합니다. [1][2]\n\n- 예외는 자동 반려되지 않습니다 [2]\n- 긴급 예외도 승인 생략 불가 [1]\n\n> 내규 인용 구문이 함께 표시됩니다.\n\n관련 명령은 `bun run qa` 입니다.\n\n별도 확인이 필요한 항목입니다[7].",
 				evidence: evidenceAll,
 				meta: "3 sources read · 2s",
 			},
@@ -196,6 +196,15 @@ check("deep answer renders two list bullets", (deepText.match(/–/g) ?? []).len
 check("deep answer renders the quote block", deepText.includes("내규 인용 구문"), deepText.slice(-80));
 const inlineCode = await deepProse.locator("code").first().textContent();
 check("deep answer renders inline code", (inlineCode ?? "").includes("bun run qa"), inlineCode);
+
+// A citation whose number has no evidence entry (the library can cite fast-
+// answer units that never reach `results`; see AutoRAG#1788) is dropped from
+// the rendered answer, and can never open unrelated evidence.
+const missingChip = deepProse.locator(".cite", { hasText: /^7$/ });
+check("an unresolved citation is not rendered at all", (await missingChip.count()) === 0, `count=${await missingChip.count()}`);
+const renderedDeep = await deepProse.innerText();
+check("the sentence keeps its text without the dead marker", renderedDeep.includes("별도 확인이 필요한 항목입니다."), renderedDeep.slice(-60));
+check("the deep answer no longer shows the unresolved number", !/\[?7\]?/.test(renderedDeep.split("별도 확인이 필요한 항목입니다.")[1] ?? ""), renderedDeep.slice(-60));
 
 check("the Evidence half stays hidden until a citation is clicked", (await page.locator(EVIDENCE_HALF).count()) === 0);
 // 2. Citation click -> inspector evidence half, selected tab, title reveal.
