@@ -18,6 +18,7 @@ import type {
 	SearchStreamEvent,
 } from "../../../shared/search-contract";
 import { parseAnswerBlocks, parseInline, type AnswerBlock } from "../state/answer-markdown";
+import { answerViewState } from "../state/answer-view";
 import { attachmentsFromDrop, isAttachmentDrag, mergeAttachments } from "../state/attachments";
 import { evidenceKind, unresolvedCitationNumbers } from "../state/evidence";
 import { groupChatHistory, historyEmptyText } from "../state/history";
@@ -392,11 +393,15 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	}
 
 	async function stop(): Promise<void> {
-		if (searchIdRef.current === null) return;
-		await autorag.search.cancel(searchIdRef.current);
+		const id = searchIdRef.current;
+		if (id === null) return;
+		// Drop the generating look before the IPC round trip: Stop is instant and
+		// no pending shimmer or Thinking row survives the cancel, whatever the
+		// backend was still doing.
 		setSearchId(null);
 		setProgress("");
 		setStopped(true);
+		await autorag.search.cancel(id);
 	}
 
 	function removeAttachment(index: number): void {
@@ -477,7 +482,11 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	const deepUnresolved = useMemo(() => unresolvedCitationNumbers(deepText, deep?.evidence ?? []), [deepText, deep]);
 	const quickReady = quickText !== "";
 	const deepReady = deepText !== "";
-	const thinkingVisible = searchId !== null && quickReady && !deepReady;
+	const { skeleton, thinking } = answerViewState({
+		pending: searchId !== null,
+		quickReady,
+		deepReady,
+	});
 	const showEmpty = submittedQuery === null && error === null && !quickReady && !deepReady;
 
 	return (
@@ -610,14 +619,14 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 								<div className="assistant-prose flex flex-col gap-8 text-body leading-[1.55] text-ink-body">
 									<ProseBlocks text={quickText} selected={selectedEvidence} unresolved={quickUnresolved} onCitation={onSelectEvidence} />
 								</div>
-							) : (
+							) : skeleton ? (
 								<div className="flex flex-col gap-8">
 									<span className="skeleton block h-8 w-[85%] rounded-4 bg-[linear-gradient(90deg,var(--bg-input),var(--bg-window),var(--bg-input))] bg-[length:200%_100%] animate-shimmer" />
 									<span className="skeleton block h-8 w-[65%] rounded-4 bg-[linear-gradient(90deg,var(--bg-input),var(--bg-window),var(--bg-input))] bg-[length:200%_100%] animate-shimmer" />
 								</div>
-							)}
+							) : null}
 
-							{thinkingVisible ? (
+							{thinking ? (
 								<div className="water-wave-thinking my-6 flex items-center gap-8 text-meta text-ink-muted">
 									<span className="size-7 flex-none rounded-full bg-info-dot animate-[pulseDot_1.4s_ease-in-out_infinite]" />
 									<span className="min-w-0 truncate">Thinking…{progress === "" ? "" : ` ${progress}`}</span>
