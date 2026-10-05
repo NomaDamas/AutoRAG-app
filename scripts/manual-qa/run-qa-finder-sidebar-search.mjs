@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 /**
  * Manual QA — the sidebar instant search (mockup "Search redesign").
  *
@@ -17,8 +18,9 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { finderWindow, launchFinder } from "./launch-finder.mjs";
+import { chord } from "./platform.mjs";
 
-const ROOT = new URL("../..", import.meta.url).pathname;
+const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const EVIDENCE = join(ROOT, ".omo/evidence/ai-finder-app/qa-sidebar-search");
 mkdirSync(EVIDENCE, { recursive: true });
 
@@ -42,11 +44,11 @@ writeFileSync(join(folder, "other.txt"), "unrelated\n");
 
 let app;
 try {
-	app = await launchFinder({ userDataDir, env: { HOME: home } });
+	app = await launchFinder({ userDataDir, env: { HOME: home, USERPROFILE: home } });
 	const page = await finderWindow(app);
 	page.setDefaultTimeout(10000);
 	page.on("pageerror", (error) => console.log(`[pageerror] ${String(error).slice(0, 200)}`));
-	await page.waitForSelector(".search__input, .side-search input", { timeout: 30000 });
+	await page.waitForSelector(".sidebar-search input, .side-search input", { timeout: 30000 });
 	await page.waitForSelector(".sidebar__item", { timeout: 30000 });
 
 	const search = page.locator(".side-search input");
@@ -64,8 +66,8 @@ try {
 	// 2. The toolbar no longer carries a search field.
 	check(
 		"the toolbar has no search field",
-		(await page.locator(".toolbar .search__input, .toolbar .search-wrap").count()) === 0,
-		`count=${await page.locator(".toolbar .search__input, .toolbar .search-wrap").count()}`,
+		(await page.locator(".toolbar .sidebar-search input, .toolbar .search-wrap").count()) === 0,
+		`count=${await page.locator(".toolbar .sidebar-search input, .toolbar .search-wrap").count()}`,
 	);
 	await page.screenshot({ path: join(EVIDENCE, "01-sidebar-resting.png") });
 
@@ -111,7 +113,7 @@ try {
 
 	// 7. ⌘F focuses the sidebar field from anywhere.
 	await page.mouse.click(700, 300);
-	await page.keyboard.press("Meta+f");
+	await page.keyboard.press(chord("f"));
 	await sleep(300);
 	const focused = await page.evaluate(() => document.activeElement?.matches(".side-search input") ?? false);
 	check("⌘F focuses the sidebar search field", focused, String(focused));

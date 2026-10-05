@@ -1,9 +1,11 @@
+import { fileURLToPath } from "node:url";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { resolveConfigReadOnly } from "@autorag/librarian";
 import { resolveAgentModelDetailed } from "@autorag/librarian/core";
 import { launchFinder, finderWindow } from "./launch-finder.mjs";
+import { chord } from "./platform.mjs";
 
 // Settings opens as a tab and its Models pane renders the shared AutoRAG
 // config's resolved provider/model card; ⌘W closes the tab. The card mirrors
@@ -11,7 +13,7 @@ import { launchFinder, finderWindow } from "./launch-finder.mjs";
 // and re-reads the config every time the pane is entered, so this lane edits a
 // throwaway AUTORAG_CONFIG and re-enters the pane to prove it is live.
 // Production build first: bun run build
-const EVIDENCE = new URL("../../.omo/evidence/ai-finder-app/models-status/", import.meta.url).pathname;
+const EVIDENCE = fileURLToPath(new URL("../../.omo/evidence/ai-finder-app/models-status/", import.meta.url));
 mkdirSync(EVIDENCE, { recursive: true });
 
 const root = mkdtempSync(join(tmpdir(), "autorag-qa-models-"));
@@ -32,10 +34,11 @@ const MODEL = {
 writeConfig(MODEL);
 
 const env = { AUTORAG_CONFIG: configPath, AUTORAG_HOME: root, OPENROUTER_API_KEY: "qa-key", PATH: "/usr/bin:/bin" };
-const resolvedRole = () => resolveAgentModelDetailed(
-	resolveConfigReadOnly({ flags: {}, env: { ...process.env, ...env }, cwd: root }),
-	{ env: { ...process.env, ...env } },
-).role;
+const resolvedRole = async () =>
+	(await resolveAgentModelDetailed(
+		resolveConfigReadOnly({ flags: {}, env: { ...process.env, ...env }, cwd: root }),
+		{ env: { ...process.env, ...env } },
+	)).role;
 
 const fails = [];
 const check = (name, ok, detail) => {
@@ -59,7 +62,7 @@ try {
 		await page.waitForFunction(() => (document.querySelector(".settings-model-card__provider")?.textContent ?? "").includes(" · "));
 	};
 	const closeSettings = async () => {
-		await page.keyboard.press("Meta+w");
+		await page.keyboard.press(chord("w"));
 		await page.waitForFunction(() => document.querySelector(".settings-panel") === null);
 	};
 
@@ -76,7 +79,7 @@ try {
 	// The card is live: editing the shared config and re-entering the pane shows
 	// the new identity.
 	writeConfig({ ...MODEL, id: "anthropic/claude-sonnet-4.5" });
-	const roleAfterEdit = resolvedRole();
+	const roleAfterEdit = await resolvedRole();
 	check("a fresh AutoRAG agent resolves the edited model", roleAfterEdit.modelId === "anthropic/claude-sonnet-4.5", roleAfterEdit.modelId);
 	await closeSettings();
 	check("⌘W closes the Settings tab", (await settingsOpen()) === 0);
@@ -89,7 +92,7 @@ try {
 	writeConfig(MODEL);
 	await closeSettings();
 	await openModels();
-	check("switching back resolves the original model", resolvedRole().modelId === MODEL.id);
+	check("switching back resolves the original model", (await resolvedRole()).modelId === MODEL.id);
 	check("Models card has no extra badges", (await page.locator(".settings-model-card em").count()) === 0);
 } finally {
 	await app.close();

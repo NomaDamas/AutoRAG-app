@@ -1,3 +1,5 @@
+import { homedir } from "node:os";
+import { fileURLToPath } from "node:url";
 /**
  * Manual QA — AI Search markdown answers + the Evidence half of the real
  * AI Finder app, per the v7 Bloom design reference.
@@ -18,8 +20,9 @@ import { mkdirSync, rmSync, writeFileSync, appendFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, basename } from "node:path";
 import { launchFinder, finderWindow } from "./launch-finder.mjs";
+import { chord, isWindows, rmRetry } from "./platform.mjs";
 
-const ROOT = new URL("../..", import.meta.url).pathname;
+const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const EVIDENCE = join(ROOT, ".omo/evidence/ai-finder-app/qa-evidence-panel");
 mkdirSync(EVIDENCE, { recursive: true });
 const LOG = join(EVIDENCE, "run.log");
@@ -30,22 +33,34 @@ const check = (label, ok, detail) => { log(`${ok ? "PASS" : "FAIL"} ${label}${de
 
 const RUN_ID = `ulw-evidence-qa-${Date.now().toString(36)}`;
 const USER_DATA = join(tmpdir(), RUN_ID);
-const DOCS = join(process.env.HOME, "Documents", RUN_ID);
+const DOCS = join(homedir(), "Documents", RUN_ID);
 const POLICY = join(DOCS, "한글 공백 정책.md");
 const MEMO = join(DOCS, "qa-evidence-memo.md");
 const FOLDER = basename(DOCS);
 
 let app;
 let swept = false;
-const sweep = () => {
+/**
+ * Best-effort cleanup. On the exit path (`patient === false`) a single
+ * non-throwing attempt per directory: blocking retries there would freeze the
+ * event loop that `app.close()` still needs, and a throw would mask the lane's
+ * real failure. After an awaited close the patient path retries through
+ * Windows' teardown locks.
+ */
+const sweep = (patient) => {
 	if (swept) return;
 	swept = true;
 	app?.close().catch(() => undefined);
-	rmSync(USER_DATA, { recursive: true, force: true });
-	rmSync(DOCS, { recursive: true, force: true });
-	log(`cleanup: removed ${USER_DATA} and ${DOCS}; app closed`);
+	for (const dir of [USER_DATA, DOCS]) {
+		try {
+			if (patient === true) rmRetry(dir);
+			else rmSync(dir, { recursive: true, force: true });
+		} catch (error) {
+			log(`cleanup: ${dir} stayed behind (${error.code ?? error.message})`);
+		}
+	}
 };
-process.on("exit", sweep);
+process.on("exit", () => sweep(false));
 
 mkdirSync(join(USER_DATA, "chat-history"), { recursive: true });
 mkdirSync(DOCS, { recursive: true });
@@ -238,7 +253,7 @@ check("chunk text bold renders as emphasized strong", evBold >= 1, `strong=${evB
 
 // 4. Thumbs-up feedback records through the real bridge and toasts.
 await page.locator(`${EVIDENCE_HALF} button[title="이 근거가 도움이 됨"]`).click();
-await page.waitForSelector(".toast", { timeout: 8000 });
+await page.waitForSelector(".toast", { timeout: isWindows ? 20_000 : 8_000 });
 const toastText = (await page.locator(".toast").textContent()) ?? "";
 check("thumbs-up toast follows the reference copy", toastText.includes("근거 1 — 도움이 됨으로 기록했습니다"), toastText.trim());
 await sleep(300);
@@ -260,11 +275,11 @@ check("the title selects and flashes a Korean filename with spaces and different
 await page.screenshot({ path: join(EVIDENCE, "04-new-tab-reveal.png") });
 
 // 6. ⌘E hides and reopens the evidence half without a persistent header.
-await page.keyboard.press("Meta+e");
+await page.keyboard.press(chord("e"));
 await page.waitForFunction((half) => document.querySelector(half) === null, EVIDENCE_HALF);
 check("⌘E hides the evidence half", true);
 await page.screenshot({ path: join(EVIDENCE, "05-collapsed.png") });
-await page.keyboard.press("Meta+e");
+await page.keyboard.press(chord("e"));
 await page.waitForFunction((half) => document.querySelector(half) !== null, EVIDENCE_HALF);
 check("⌘E reopens the evidence half", true);
 
@@ -276,5 +291,8 @@ await page.screenshot({ path: join(EVIDENCE, "06-datasource.png") });
 
 
 log(`RESULT ${failures.length === 0 ? "ALL PASS" : `${failures.length} FAILURES: ${failures.join(" | ")}`}`);
-sweep();
+// Close before sweeping: on Windows, deleting userData while Electron is
+// still tearing down loses the EBUSY race even with rmRetry.
+await app?.close().catch(() => undefined);
+sweep(true);
 process.exitCode = failures.length === 0 ? 0 : 1;

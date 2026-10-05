@@ -2,7 +2,7 @@ import { access, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from "
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createFsService, FsRenameError, untitledFolderName, type FsServiceDeps } from "../src/main/fs-service";
+import { createFsService, FsRenameError, toHandoffPath, untitledFolderName, type FsServiceDeps } from "../src/main/fs-service";
 import { createRecentsStore, type RecentsStore } from "../src/main/recents-store";
 import { RECENTS_PATH, type FsLocation } from "../src/shared/fs-contract";
 import { createPlaces, type Places } from "../src/main/places";
@@ -42,7 +42,7 @@ interface StubbedDeps {
 	readonly recents: RecentsStore;
 }
 
-function makeDeps(homeDir: string): StubbedDeps {
+function makeDeps(homeDir: string, platform: NodeJS.Platform = "darwin"): StubbedDeps {
 	const trashed: string[] = [];
 	const revealed: string[] = [];
 	const opened: string[] = [];
@@ -67,6 +67,7 @@ function makeDeps(homeDir: string): StubbedDeps {
 				},
 			},
 			homeDir,
+			platform,
 			places: createPlaces({
 				homeDir,
 				platform: "darwin",
@@ -617,6 +618,31 @@ describe("trash", () => {
 	});
 });
 
+describe("OS handoff path normalization", () => {
+	it("normalizes forward slashes for Windows and leaves POSIX paths alone", () => {
+		expect(toHandoffPath("C:/Users/me/Documents/a.txt", "win32")).toBe("C:\\Users\\me\\Documents\\a.txt");
+		expect(toHandoffPath("C:\\Users\\me\\a.txt", "win32")).toBe("C:\\Users\\me\\a.txt");
+		expect(toHandoffPath("/Users/me/a.txt", "darwin")).toBe("/Users/me/a.txt");
+		expect(toHandoffPath("/Users/me/a.txt", "linux")).toBe("/Users/me/a.txt");
+	});
+
+	it("hands Windows trash/reveal/open backslash paths even when given slashes", async () => {
+		// Given a win32 service whose shell records what it receives
+		const stubs = makeDeps(root);
+		const service = createFsService({ ...stubs.deps, platform: "win32" });
+
+		// When the caller passes a forward-slash path (clipboard, QA fixture, other OS)
+		const result = await service.trash(["C:/Users/me/Documents/a.txt"]);
+		await service.reveal("C:/Users/me/Documents/b.txt");
+		await service.open("C:/Users/me/Documents/c.txt");
+
+		// Then the batch reports the caller's path but the shell sees backslashes
+		expect(result).toEqual({ ok: ["C:/Users/me/Documents/a.txt"], failed: [] });
+		expect(stubs.trashed).toEqual(["C:\\Users\\me\\Documents\\a.txt"]);
+		expect(stubs.revealed).toEqual(["C:\\Users\\me\\Documents\\b.txt"]);
+		expect(stubs.opened).toEqual(["C:\\Users\\me\\Documents\\c.txt"]);
+	});
+});
 describe("undo", () => {
 	it("removes the copies a copy created, keeping the originals", async () => {
 		// Given a source file copied into another folder

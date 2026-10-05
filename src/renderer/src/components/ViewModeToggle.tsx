@@ -1,11 +1,12 @@
 import type { ReactElement } from "react";
 import type { ViewMode } from "../state/view-mode";
+import { formatShortcut } from "../lib/shortcuts";
 import { ColumnsViewIcon, IconsViewIcon, ListViewIcon } from "./icons";
 
-const OPTIONS: readonly { readonly mode: ViewMode; readonly label: string; readonly keycap: string; readonly Icon: typeof IconsViewIcon }[] = [
-	{ mode: "icons", label: "Icons", keycap: "⌘1", Icon: IconsViewIcon },
-	{ mode: "list", label: "List", keycap: "⌘2", Icon: ListViewIcon },
-	{ mode: "columns", label: "Columns", keycap: "⌘3", Icon: ColumnsViewIcon },
+const OPTIONS: readonly { readonly mode: ViewMode; readonly label: string; readonly key: string; readonly Icon: typeof IconsViewIcon }[] = [
+	{ mode: "icons", label: "Icons", key: "1", Icon: IconsViewIcon },
+	{ mode: "list", label: "List", key: "2", Icon: ListViewIcon },
+	{ mode: "columns", label: "Columns", key: "3", Icon: ColumnsViewIcon },
 ];
 
 /** Toolbar segmented control: how the Finder shows the folder (icons, list, columns). */
@@ -22,7 +23,7 @@ export function ViewModeToggle({
 			role="group"
 			aria-label="View"
 		>
-			{OPTIONS.map(({ mode: option, label, keycap, Icon }) => (
+			{OPTIONS.map(({ mode: option, label, key, Icon }) => (
 				<button
 					key={option}
 					type="button"
@@ -33,7 +34,7 @@ export function ViewModeToggle({
 							? "bg-hover-strong text-ink hover:bg-hover-strong"
 							: "bg-transparent text-ink-muted hover:bg-hover-icon hover:text-ink",
 					].join(" ")}
-					title={`as ${label} (${keycap})`}
+					title={`as ${label} (${formatShortcut({ key })})`}
 					aria-label={label}
 					aria-pressed={option === mode}
 					onClick={() => onChange(option)}

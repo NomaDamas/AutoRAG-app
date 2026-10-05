@@ -277,12 +277,20 @@ describe("createFinderMetadataResolver", () => {
 		const resolve = createFinderMetadataResolver({ platform: "darwin", run, now: () => 1000, warn: () => {} });
 
 		expect((await resolve(path))?.addedAt).toBe("2026-09-02T12:00:00.000Z");
-		const before = await stat(path);
 		mdls = indexedPlist("<key>kMDItemDateAdded</key><date>2026-09-05T12:00:00Z</date>");
-		// chmod bumps the inode change time while leaving the modification time untouched.
-		await chmod(path, 0o600);
-		const after = await stat(path);
-		expect(after.mtimeMs).toBe(before.mtimeMs);
+		if (process.platform === "win32") {
+			// NTFS reports ctime as the creation time and chmod cannot advance it, so a
+			// metadata-only change at the same modification time is not observable there.
+			// Force a real write (which advances mtime and size) to still exercise the
+			// recompute path on Windows.
+			await writeFile(path, "xy");
+		} else {
+			const before = await stat(path);
+			// chmod bumps the inode change time while leaving the modification time untouched.
+			await chmod(path, 0o600);
+			const after = await stat(path);
+			expect(after.mtimeMs).toBe(before.mtimeMs);
+		}
 
 		expect((await resolve(path))?.addedAt).toBe("2026-09-05T12:00:00.000Z");
 	});

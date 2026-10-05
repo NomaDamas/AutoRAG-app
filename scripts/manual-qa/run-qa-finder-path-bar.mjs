@@ -1,3 +1,4 @@
+import { homedir } from "node:os";
 /**
  * Manual QA — path bar fitting (macOS Finder path bar behaviour).
  *
@@ -29,6 +30,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { collapseOrder } from "../../src/renderer/src/state/path-fit.ts";
 import { finderWindow, launchFinder, ROOT } from "./launch-finder.mjs";
+import { isWindows, rmRetry } from "./platform.mjs";
 
 const EVIDENCE = join(ROOT, ".omo/evidence/ai-finder-app/qa-path-bar");
 rmSync(EVIDENCE, { recursive: true, force: true });
@@ -37,7 +39,7 @@ mkdirSync(EVIDENCE, { recursive: true });
 const fixtureName = "ulw-pathbar-qa";
 const leafName = "quicklook-preview-reference";
 const fileName = "preview-notes.md";
-const fixture = join(process.env.HOME, "Documents", fixtureName);
+const fixture = join(homedir(), "Documents", fixtureName);
 rmSync(fixture, { recursive: true, force: true });
 await Bun.write(join(fixture, leafName, fileName), "path bar qa\n");
 const userDataDir = mkdtempSync(join(tmpdir(), "ulw-pathbar-data-"));
@@ -167,12 +169,17 @@ try {
 
 	const first = await probe(page);
 	check("device scale factor is 2", first.dpr === 2, String(first.dpr));
-	check(
-		"trail mirrors the reference path",
-		JSON.stringify(first.segments.map((segment) => segment.label)) ===
-			JSON.stringify(["Macintosh HD", "Users", process.env.USER, "Documents", fixtureName, leafName]),
-		JSON.stringify(first.segments.map((segment) => segment.label)),
-	);
+// The app renders the real home path's segments; `%USERNAME%`/`$USER` and the
+// profile folder can differ (truncated Microsoft-account profiles, renamed
+// accounts, non-C: profiles), so derive the expectation from `homedir()`.
+const homeSegments = homedir().split(/[\\/]+/).filter(Boolean);
+const deviceLabel = isWindows ? homeSegments[0] : "Macintosh HD";
+const expectedTrail = [deviceLabel, ...homeSegments.slice(isWindows ? 1 : 0), "Documents", fixtureName, leafName];
+check(
+	"trail mirrors the reference path",
+	JSON.stringify(first.segments.map((segment) => segment.label)) === JSON.stringify(expectedTrail),
+	JSON.stringify(first.segments.map((segment) => segment.label)),
+);
 
 	// Sweep every width at every height; remember one width per distinct state.
 	const sweeps = {};
@@ -234,8 +241,9 @@ try {
 	for (const shot of shots) console.log(`${shot.name}: ${shot.fits}`);
 } finally {
 	if (app !== undefined) await app.close();
-	rmSync(fixture, { recursive: true, force: true });
-	rmSync(userDataDir, { recursive: true, force: true });
+	// Electron can hold userData briefly after close on Windows (EBUSY).
+	rmRetry(fixture);
+	rmRetry(userDataDir);
 }
 
 const failed = results.filter((result) => !result.pass);

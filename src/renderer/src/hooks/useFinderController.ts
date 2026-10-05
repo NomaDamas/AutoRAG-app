@@ -809,7 +809,8 @@ export function useFinderController(
 			live = false;
 			off();
 		};
-	}, [source, reportError]);
+		// Refresh recomputes availability, so a drive unplugged mid-session drops out.
+	}, [source, reportError, revision]);
 
 	/** The bridge source starts with no path; the first listing needs one. */
 	useEffect(() => {

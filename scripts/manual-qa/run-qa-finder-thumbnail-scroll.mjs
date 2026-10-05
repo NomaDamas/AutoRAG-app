@@ -1,3 +1,5 @@
+import { homedir } from "node:os";
+import { fileURLToPath } from "node:url";
 /**
  * Manual QA — thumbnails keep loading as the user scrolls (viewport-driven).
  *
@@ -15,17 +17,17 @@
  * Run from the repo root: `bun run build && bun scripts/manual-qa/run-qa-finder-thumbnail-scroll.mjs`
  */
 
-import { execSync } from "node:child_process";
 import { mkdirSync, rmSync } from "node:fs";
 import { deflateSync } from "node:zlib";
 import { finderWindow, launchFinder } from "./launch-finder.mjs";
+import { qlmanageCount, reapQlmanageOrphans } from "./platform.mjs";
 
-const ROOT = new URL("../../", import.meta.url).pathname.replace(/\/$/, "");
+const ROOT = fileURLToPath(new URL("../../", import.meta.url)).replace(/\/$/, "");
 const EVIDENCE = `${ROOT}/.omo/evidence/ai-finder-app/qa-thumbnail-scroll/`;
 mkdirSync(EVIDENCE, { recursive: true });
 
 const stamp = Date.now();
-const documents = `${process.env.HOME}/Documents`;
+const documents = `${homedir()}/Documents`;
 const folderName = `ulw-thumb-scroll-${stamp}`;
 const dir = `${documents}/${folderName}`;
 const COUNT = 300;
@@ -70,35 +72,6 @@ function solidPng(width, height, [r, g, b]) {
 		chunk("IEND", Buffer.alloc(0)),
 	]);
 }
-
-const qlmanageCount = () => {
-	try {
-		return Number(
-			execSync("pgrep -x qlmanage | wc -l", { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim(),
-		);
-	} catch {
-		return 0;
-	}
-};
-/** SIGKILL qlmanage orphans (ppid=1) leaked by earlier builds, so the gate starts clean. */
-const reapQlmanageOrphans = () => {
-	try {
-		const pids = execSync("ps -axo pid=,ppid=,comm= | awk '$2==1 && $3 ~ /qlmanage/ {print $1}'", { encoding: "utf8" })
-			.trim()
-			.split(/\s+/)
-			.filter(Boolean);
-		for (const pid of pids) {
-			try {
-				process.kill(Number(pid), "SIGKILL");
-			} catch {
-				// Already gone.
-			}
-		}
-		return pids.length;
-	} catch {
-		return 0;
-	}
-};
 
 mkdirSync(dir, { recursive: true });
 for (let index = 0; index < COUNT; index += 1) {

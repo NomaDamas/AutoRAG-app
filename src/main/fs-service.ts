@@ -1,7 +1,7 @@
 import type { Dirent } from "node:fs";
 import { cp, lstat, mkdir, readdir, rename as fsRename, rm } from "node:fs/promises";
 import { homedir } from "node:os";
-import { basename, dirname, extname, isAbsolute, join } from "node:path";
+import { basename, dirname, extname, isAbsolute, join, win32 } from "node:path";
 import {
 	RECENTS_PATH,
 	type DirListing,
@@ -46,6 +46,8 @@ export type OsKindLookup = (path: string, ext: string) => Promise<string | null>
 export interface FsServiceDeps {
 	readonly shell: FsShell;
 	readonly clipboard: FsOsClipboard;
+	/** Defaults to process.platform; tests inject one to pin platform-specific behavior. */
+	readonly platform?: NodeJS.Platform;
 	/** Defaults to os.homedir(); tests inject a fixture home. */
 	readonly homeDir?: string;
 	/** Playwright points the first tab here. Absent in normal runs. */
@@ -81,6 +83,16 @@ export class FsRenameError extends Error {
 /** Search stays bounded: shallow walk, hard result cap, symlinked dirs not followed. */
 const SEARCH_MAX_DEPTH = 4;
 const SEARCH_MAX_RESULTS = 200;
+
+/**
+ * Normalize a path before handing it to Electron's `shell` (trash/reveal/open).
+ * Windows rejects forward-slash paths in `shell.trashItem` ("Failed to parse
+ * path"), while Node's own fs calls accept them, so only the OS handoff needs
+ * backslashes. POSIX platforms keep the path byte-for-byte.
+ */
+export function toHandoffPath(path: string, platform: NodeJS.Platform): string {
+	return platform === "win32" ? win32.normalize(path) : path;
+}
 
 /**
  * Finder's new-folder naming for the Nth mkdir attempt: the first free name is
@@ -178,12 +190,13 @@ async function walkForSearch(dir: string, depth: number, context: SearchContext)
 }
 
 export function createFsService(deps: FsServiceDeps): FsCoreBridge {
+	const platform = deps.platform ?? process.platform;
 	const home = deps.homeDir ?? homedir();
 	const recents = deps.recents ?? createRecentsStore({ directory: join(home, "recents") });
 	const osKind: OsKindLookup = deps.osKind ?? createOsKindResolver().kindFor;
 	const finderMetadata = deps.finderMetadata ?? createFinderMetadataResolver();
 	const iconProvider: IconProvider = deps.icons ?? createIconProvider();
-	const places = deps.places ?? createPlaces({ homeDir: home });
+	const places = deps.places ?? createPlaces({ homeDir: home, platform });
 	const recycleBin = deps.recycleBin ?? isRecycleBinDir;
 	// In-app clipboard lives in main-process memory only.
 	let inAppClipboard: FsClipboard | null = null;
@@ -537,15 +550,15 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 		rename,
 		undo,
 		createFolder,
-		trash: (paths) => runBatch(paths, (path) => deps.shell.trashItem(path)),
+		trash: (paths) => runBatch(paths, (path) => deps.shell.trashItem(toHandoffPath(path, platform))),
 		reveal: async (path) => {
-			deps.shell.showItemInFolder(path);
+			deps.shell.showItemInFolder(toHandoffPath(path, platform));
 		},
 		quickLook: async (path) => {
 			await recents.record(path);
 		},
 		open: async (path) => {
-			const message = await deps.shell.openPath(path);
+			const message = await deps.shell.openPath(toHandoffPath(path, platform));
 			// Failures surface verbatim — the operator sees the real message.
 			if (message !== "") {
 				throw new Error(message);

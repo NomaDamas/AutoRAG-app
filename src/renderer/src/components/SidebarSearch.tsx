@@ -1,5 +1,6 @@
 import { useEffect, useState, type KeyboardEvent, type MouseEvent, type ReactElement, type RefObject } from "react";
 import { cn } from "../lib/cn";
+import { formatShortcut } from "../lib/shortcuts";
 import { SearchIcon } from "./icons";
 import { Keycap } from "./primitives/Keycap";
 
@@ -9,7 +10,7 @@ export type SearchMode = "all" | "name" | "content";
 const CHIPS: readonly { readonly mode: SearchMode; readonly label: string; readonly hint: string }[] = [
 	{ mode: "all", label: "전체", hint: "이 Mac 전체에서 파일 이름 검색" },
 	{ mode: "name", label: "파일 이름", hint: "현재 폴더에서 파일 이름 검색" },
-	{ mode: "content", label: "내용", hint: "AI로 파일 내용 검색 (⌥Enter)" },
+	{ mode: "content", label: "내용", hint: `AI로 파일 내용 검색 (${formatShortcut({ key: "Enter", alt: true, primary: false })})` },
 ];
 
 const CHIP_CLASS =
@@ -101,7 +102,7 @@ export function SidebarSearch({
 						✕
 					</button>
 				) : showHotkeys && !focused ? (
-					<Keycap label="⌘F" />
+					<Keycap label={formatShortcut({ key: "F" })} />
 				) : null}
 			</label>
 			{focused ? (

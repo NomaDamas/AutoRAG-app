@@ -1,4 +1,4 @@
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { FsChange, FsDirChange } from "../src/shared/live-contract";
 import { createFsWatchService } from "../src/main/fs-watch-service";
@@ -61,7 +61,7 @@ describe("FsWatchService", () => {
 		vi.useFakeTimers();
 		const fake = fakeBackend();
 		const batches: FsDirChange[] = [];
-		const dir = "/tmp/watch";
+		const dir = resolve("/tmp/watch");
 		const service = createFsWatchService({ backend: fake.backend, onBatch: (batch) => batches.push(batch), canonicalize: identity });
 		await service.setWatchSet([dir]);
 		fake.subscriptions.get(dir)?.emit([
@@ -78,7 +78,7 @@ describe("FsWatchService", () => {
 		vi.useFakeTimers();
 		const fake = fakeBackend();
 		const batches: FsDirChange[] = [];
-		const dir = "/tmp/watch-max";
+		const dir = resolve("/tmp/watch-max");
 		const service = createFsWatchService({
 			backend: fake.backend,
 			onBatch: (batch) => batches.push(batch),
@@ -98,7 +98,7 @@ describe("FsWatchService", () => {
 		vi.useFakeTimers();
 		const fake = fakeBackend();
 		const batches: FsDirChange[] = [];
-		const dir = "/tmp/watch-order";
+		const dir = resolve("/tmp/watch-order");
 		const service = createFsWatchService({ backend: fake.backend, onBatch: (batch) => batches.push(batch), canonicalize: identity });
 		await service.setWatchSet([dir]);
 		fake.subscriptions.get(dir)?.emit([
@@ -120,11 +120,12 @@ describe("FsWatchService", () => {
 		const fake = fakeBackend();
 		const service = createFsWatchService({ backend: fake.backend, onBatch: () => { }, canonicalize: identity });
 		await service.setWatchSet(["relative", "Recents", "/kakao/people", "/tmp/a", "/tmp/a"]);
+		const dir = resolve("/tmp/a");
 		expect(fake.subscribe).toHaveBeenCalledTimes(1);
-		expect(fake.subscribe).toHaveBeenCalledWith("/tmp/a", expect.any(Function), expect.any(Function));
+		expect(fake.subscribe).toHaveBeenCalledWith(dir, expect.any(Function), expect.any(Function));
 		await service.setWatchSet(["/tmp/b"]);
-		expect(fake.subscriptions.has("/tmp/a")).toBe(false);
-		expect(fake.subscriptions.has("/tmp/b")).toBe(true);
+		expect(fake.subscriptions.has(dir)).toBe(false);
+		expect(fake.subscriptions.has(resolve("/tmp/b"))).toBe(true);
 		await service.setWatchSet(["/tmp/b"]);
 		expect(fake.subscribe).toHaveBeenCalledTimes(2);
 	});
@@ -133,8 +134,8 @@ describe("FsWatchService", () => {
 		vi.useFakeTimers();
 		const fake = fakeBackend();
 		const batches: FsDirChange[] = [];
-		const alias = "/tmp/link";
-		const canonical = "/private/tmp/real";
+		const alias = resolve("/tmp/link");
+		const canonical = resolve("/tmp/real");
 		const service = createFsWatchService({
 			backend: fake.backend,
 			onBatch: (batch) => batches.push(batch),
@@ -170,9 +171,11 @@ describe("FsWatchService", () => {
 			return promise;
 		});
 		const fake = fakeBackend();
+		const firstDir = resolve("/tmp/first");
+		const latestDir = resolve("/tmp/latest");
 		const backend: WatchBackend = {
 			subscribe: async (dir, onEvents, onError) => {
-				if (dir === "/tmp/first") return firstSubscribe(dir, onEvents, onError);
+				if (dir === firstDir) return firstSubscribe(dir, onEvents, onError);
 				return fake.backend.subscribe(dir, onEvents, onError);
 			},
 		};
@@ -180,11 +183,11 @@ describe("FsWatchService", () => {
 		const first = service.setWatchSet(["/tmp/first"]);
 		const latest = service.setWatchSet(["/tmp/latest"]);
 		await settle();
-		expect(fake.subscriptions.has("/tmp/latest")).toBe(false);
+		expect(fake.subscriptions.has(latestDir)).toBe(false);
 		release(async () => { });
 		await first;
 		await latest;
-		expect(fake.subscriptions.has("/tmp/latest")).toBe(true);
+		expect(fake.subscriptions.has(latestDir)).toBe(true);
 	});
 
 	it("recovers from rejected subscriptions without wedging later updates", async () => {
@@ -199,15 +202,15 @@ describe("FsWatchService", () => {
 		});
 		await service.setWatchSet(["/tmp/rejected"]);
 		await service.setWatchSet(["/tmp/works"]);
-		expect(batches).toEqual([{ dir: "/tmp/rejected", changes: [], overflow: true, dirGone: false }]);
-		expect(fake.subscriptions.has("/tmp/works")).toBe(true);
+		expect(batches).toEqual([{ dir: resolve("/tmp/rejected"), changes: [], overflow: true, dirGone: false }]);
+		expect(fake.subscriptions.has(resolve("/tmp/works"))).toBe(true);
 	});
 
 	it("emits dirGone and drops the subscription when the watched directory is deleted", async () => {
 		vi.useFakeTimers();
 		const fake = fakeBackend();
 		const batches: FsDirChange[] = [];
-		const dir = "/tmp/gone";
+		const dir = resolve("/tmp/gone");
 		const state = recreatableDir(true);
 		const service = createFsWatchService({
 			backend: fake.backend,
@@ -228,7 +231,7 @@ describe("FsWatchService", () => {
 		vi.useFakeTimers();
 		const fake = fakeBackend();
 		const batches: FsDirChange[] = [];
-		const dir = "/tmp/recreate";
+		const dir = resolve("/tmp/recreate");
 		const state = recreatableDir(true);
 		const service = createFsWatchService({
 			backend: fake.backend,
@@ -257,7 +260,7 @@ describe("FsWatchService", () => {
 		vi.useFakeTimers();
 		const fake = fakeBackend();
 		const batches: FsDirChange[] = [];
-		const dir = "/tmp/focus";
+		const dir = resolve("/tmp/focus");
 		const state = recreatableDir(true);
 		const service = createFsWatchService({
 			backend: fake.backend,
@@ -285,7 +288,7 @@ describe("FsWatchService", () => {
 		vi.useFakeTimers();
 		const fake = fakeBackend();
 		const batches: FsDirChange[] = [];
-		const dir = "/tmp/supersede";
+		const dir = resolve("/tmp/supersede");
 		const state = recreatableDir(true);
 		const service = createFsWatchService({
 			backend: fake.backend,
@@ -311,7 +314,7 @@ describe("FsWatchService", () => {
 		vi.useFakeTimers();
 		const fake = fakeBackend();
 		const batches: FsDirChange[] = [];
-		const dir = "/tmp/gone-retry";
+		const dir = resolve("/tmp/gone-retry");
 		const state = recreatableDir(true);
 		const service = createFsWatchService({
 			backend: fake.backend,
@@ -338,7 +341,7 @@ describe("FsWatchService", () => {
 	it("releases the retry timer on dispose", async () => {
 		vi.useFakeTimers();
 		const fake = fakeBackend();
-		const dir = "/tmp/gone-dispose";
+		const dir = resolve("/tmp/gone-dispose");
 		const state = recreatableDir(true);
 		const service = createFsWatchService({
 			backend: fake.backend,
@@ -361,7 +364,7 @@ describe("FsWatchService", () => {
 		const fake = fakeBackend();
 		const batches: FsDirChange[] = [];
 		const errorSpy = vi.spyOn(console, "error").mockImplementation(() => { });
-		const dir = "/tmp/error";
+		const dir = resolve("/tmp/error");
 		const service = createFsWatchService({
 			backend: fake.backend,
 			onBatch: (batch) => batches.push(batch),
@@ -380,7 +383,7 @@ describe("FsWatchService", () => {
 		const service = createFsWatchService({ backend: fake.backend, onBatch: () => { }, canonicalize: identity });
 		await service.setWatchSet(["/tmp/a", "/tmp/b"]);
 		await service.dispose();
-		expect(fake.unsubscribed.sort()).toEqual(["/tmp/a", "/tmp/b"]);
+		expect(fake.unsubscribed.sort()).toEqual([resolve("/tmp/a"), resolve("/tmp/b")]);
 		await service.setWatchSet(["/tmp/c"]);
 		expect(fake.subscriptions.size).toBe(0);
 	});

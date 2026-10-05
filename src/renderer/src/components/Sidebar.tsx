@@ -3,6 +3,7 @@ import type { ReactElement, RefObject } from "react";
 import type { FsLocationIcon } from "../../../shared/fs-contract";
 import type { NavGroup, NavItem } from "../data/places";
 import { cn } from "../lib/cn";
+import { formatShortcut } from "../lib/shortcuts";
 import { GearIcon } from "./icons";
 import { iconButtonClass } from "./primitives/icon-button";
 import { Keycap } from "./primitives/Keycap";
@@ -166,7 +167,7 @@ export function Sidebar({
 						className={cn("sidebar__item-icon flex-none", settingsActive ? "text-accent-text" : "text-ink-muted")}
 					/>
 					<span className="sidebar__item-label flex-1 min-w-0 truncate">Settings</span>
-					{showHotkeys ? <Keycap label="⌘," /> : null}
+					{showHotkeys ? <Keycap label={formatShortcut({ key: "," })} /> : null}
 				</button>
 			</div>
 		</aside>

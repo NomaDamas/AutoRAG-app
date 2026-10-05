@@ -9,6 +9,8 @@
  * row already lives in the folder it would open.
  */
 
+import { deleteKeyLabel, enterKeyLabel, formatShortcut } from "../lib/shortcuts";
+
 export type FinderMenuAction =
 	| "quickLook"
 	| "open"
@@ -72,7 +74,7 @@ export function buildContextMenu(input: ContextMenuInput): FinderMenuEntry[] {
 	const isFolder = input.target.kind === "folder";
 	const multi = input.selectionCount > 1;
 	const entries: FinderMenuEntry[] = [
-		isFolder ? item("open", "열기", { keycap: "↩" }) : item("quickLook", "Quick Look", { keycap: "space" }),
+		isFolder ? item("open", "열기", { keycap: enterKeyLabel() }) : item("quickLook", "Quick Look", { keycap: "space" }),
 	];
 
 	if (input.inRecents === true) {
@@ -90,15 +92,15 @@ export function buildContextMenu(input: ContextMenuInput): FinderMenuEntry[] {
 
 	entries.push(
 		SEPARATOR,
-		item("copy", "복사", { keycap: "⌘C" }),
-		item("paste", "붙여넣기", { keycap: "⌘V", disabled: input.clipboardCount === 0 }),
-		item("cut", "잘라내기", { keycap: "⌘X" }),
+		item("copy", "복사", { keycap: formatShortcut({ key: "C" }) }),
+		item("paste", "붙여넣기", { keycap: formatShortcut({ key: "V" }), disabled: input.clipboardCount === 0 }),
+		item("cut", "잘라내기", { keycap: formatShortcut({ key: "X" }) }),
 		item("duplicate", "복제"),
 		item("rename", "이름 변경", { disabled: multi }),
 		item("copyPath", "경로 복사"),
 		SEPARATOR,
 		item("trash", multi ? `${input.selectionCount}개 항목 휴지통으로 이동` : "휴지통으로 이동", {
-			keycap: "⌫",
+			keycap: deleteKeyLabel(),
 			tone: "danger",
 		}),
 	);
