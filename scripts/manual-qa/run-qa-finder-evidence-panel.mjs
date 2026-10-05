@@ -292,24 +292,49 @@ check("the active vote keeps the transparent Apple-style control", voteStyle.bg 
 await page.screenshot({ path: join(EVIDENCE, "03-feedback.png") });
 // 5. Title click opens the enclosing folder in a NEW tab and selects the source row.
 const tabsBefore = await page.locator(".tabs .tab").count();
+const targetName = basename(POLICY).normalize("NFC");
+// The flash is a 1.8s transient that can end before a slow listing paints the
+// row selected, so record it with an observer armed before the click.
+await page.evaluate((name) => {
+	window.__qaFlashSeen = false;
+	const seen = () =>
+		[...document.querySelectorAll(".row.bg-accent-flash")].some((row) => row.textContent?.normalize("NFC").includes(name));
+	window.__qaFlashObserver = new MutationObserver(() => {
+		if (seen()) window.__qaFlashSeen = true;
+	});
+	window.__qaFlashObserver.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["class"] });
+}, targetName);
+const clickedAt = Date.now();
 await page.locator(`${EVIDENCE_HALF} button[title="Show in Finder"]`).click();
 await page.waitForFunction((count) => document.querySelectorAll(".tabs .tab").length === count + 1, tabsBefore);
 const newTabTitle = (await page.locator(".tabs .tab--active .tab__title").textContent()) ?? "";
 check("the title opens the source folder in a new tab", newTabTitle === FOLDER, `tab="${newTabTitle}" want="${FOLDER}"`);
-// The new tab lists its folder before the row can be selected; a slow listing
-// (Windows CI) outlasts a fixed sleep, so poll inside the 1.8s flash window.
-const revealed = await page
+const selected = await page
 	.waitForFunction(
 		(name) =>
 			[...document.querySelectorAll('[role="row"]')].some(
 				(row) => row.getAttribute("aria-selected") === "true" && row.textContent?.normalize("NFC").includes(name),
-			) && document.querySelector(".row.bg-accent-flash") !== null,
-		basename(POLICY).normalize("NFC"),
-		{ timeout: 1800, polling: 50 },
+			),
+		targetName,
+		{ timeout: 10_000, polling: 50 },
 	)
 	.then(() => true)
 	.catch(() => false);
-check("the title selects and flashes a Korean filename with spaces and different Unicode normalization", revealed);
+const reveal = await page.evaluate(() => {
+	window.__qaFlashObserver.disconnect();
+	return {
+		flash: window.__qaFlashSeen,
+		rows: [...document.querySelectorAll('[role="row"]')].map((row) => ({
+			text: (row.textContent ?? "").normalize("NFC").slice(0, 40),
+			selected: row.getAttribute("aria-selected"),
+		})),
+	};
+});
+check(
+	"the title selects and flashes a Korean filename with spaces and different Unicode normalization",
+	selected && reveal.flash,
+	`selected=${selected} flash=${reveal.flash} after=${Date.now() - clickedAt}ms rows=${JSON.stringify(reveal.rows)}`,
+);
 check(
 	"the folder tab's inspector is the whole Info view, no Evidence",
 	(await page.locator(INFO_HALF).count()) === 1 && (await page.locator(EVIDENCE_HALF).count()) === 0,
