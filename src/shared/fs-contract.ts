@@ -20,6 +20,9 @@ export const FS_CHANNELS = {
 	exists: "fs:exists",
 	search: "fs:search",
 	locations: "fs:locations",
+	ejectLocation: "fs:ejectLocation",
+	/** Main → renderer: a volume mounted/unmounted or a cloud account connected/disconnected. */
+	locationsChanged: "fs:locationsChanged",
 	copy: "fs:copy",
 	move: "fs:move",
 	duplicate: "fs:duplicate",
@@ -29,6 +32,7 @@ export const FS_CHANNELS = {
 	reveal: "fs:reveal",
 	quickLook: "fs:quickLook",
 	open: "fs:open",
+	openUrl: "fs:openUrl",
 	clipboardSet: "fs:clipboardSet",
 	clipboardGet: "fs:clipboardGet",
 	undo: "fs:undo",
@@ -127,15 +131,59 @@ export interface FsEntryEnrichment {
  */
 export const RECENTS_PATH = "Recents";
 
-/** A browsable top-level location shown in the sidebar. */
+/**
+ * The normalized `http:` / `https:` URL `text` names, or null. Only web pages
+ * may reach `openUrl`: `file:`, `javascript:`, and custom schemes would let
+ * model output launch local programs. Shared so main re-checks what the
+ * renderer sends.
+ */
+export function webUrl(text: string): string | null {
+	const trimmed = text.trim();
+	if (!/^https?:\/\//iu.test(trimmed) || !URL.canParse(trimmed)) return null;
+	const url = new URL(trimmed);
+	return url.hostname === "" ? null : url.href;
+}
+
+/** Sidebar glyph for a location; the renderer maps each to a lucide icon. */
+export type FsLocationIcon =
+	| "recents"
+	| "home"
+	| "applications"
+	| "desktop"
+	| "documents"
+	| "downloads"
+	| "music"
+	| "movies"
+	| "pictures"
+	| "trash"
+	| "qa"
+	| "icloud"
+	| "google-drive"
+	| "onedrive"
+	| "dropbox"
+	| "box"
+	| "cloud"
+	| "disk"
+	| "network";
+
+/**
+ * A browsable top-level location shown in the sidebar. Cloud rows are the
+ * drives connected to the OS (one per account); `locations` rows are the boot
+ * disk plus every mounted volume / drive letter.
+ */
 export interface FsLocation {
-	/** Display name, e.g. "Desktop", "Documents". */
+	/** Display name, e.g. "Desktop", "Google Drive - me@example.com", "Data (D:)". */
 	readonly name: string;
 	readonly path: string;
 	/** Sidebar section for grouping. */
-	readonly section: "favorites" | "cloud";
+	readonly section: "favorites" | "cloud" | "locations";
+	readonly icon: FsLocationIcon;
 	/** True when the path exists and is readable right now. */
 	readonly available: boolean;
+	/** Walked by filename search and the version-family scan (content folders and cloud drives, never whole disks). */
+	readonly scanned: boolean;
+	/** A mounted volume the sidebar offers to unmount (never the boot disk / system drive). */
+	readonly ejectable: boolean;
 }
 
 /** In-app file clipboard (copy/cut + paste between folders). */
@@ -173,6 +221,15 @@ export interface FsSearchResult {
 	readonly entry: FsEntry;
 	/** The location name this hit belongs to, e.g. "Documents". */
 	readonly location: string;
+}
+
+/** Options for {@link FsCoreBridge.search}. */
+export interface FsSearchOptions {
+	/**
+	 * Restrict hits to this folder subtree (an absolute path); absent searches
+	 * the whole file-name index. The "파일 이름" chip passes the folder in view.
+	 */
+	readonly scope?: string;
 }
 
 /** A geographic coordinate read from a photo's EXIF GPS IFD. */
@@ -268,8 +325,12 @@ export interface FsCoreBridge {
 	 */
 	previewIcon(path: string, modifiedAt: string): Promise<string | null>;
 	exists(path: string): Promise<boolean>;
-	search(query: string): Promise<readonly FsSearchResult[]>;
+	search(query: string, options?: FsSearchOptions): Promise<readonly FsSearchResult[]>;
 	locations(): Promise<readonly FsLocation[]>;
+	/** Unmount the ejectable location at `path` (diskutil on macOS, eject / net use on Windows); rejects with the OS reason. */
+	ejectLocation(path: string): Promise<void>;
+	/** Fires when the mounted volumes or connected cloud accounts change; returns the unsubscribe. */
+	onLocationsChanged?(listener: () => void): () => void;
 	/** Copy paths into destDir. Name collisions get a " copy" suffix (Finder-style). */
 	copy(paths: readonly string[], destDir: string): Promise<FsBatchResult>;
 	/** Move paths into destDir (cut + paste). */
@@ -300,6 +361,8 @@ export interface FsCoreBridge {
 	 * Electron `shell.openPath`; a non-empty result message rejects.
 	 */
 	open(path: string): Promise<void>;
+	/** Open an `http(s)` page in the OS default browser (`shell.openExternal`); rejects any other scheme. */
+	openUrl(url: string): Promise<void>;
 	clipboardSet(clipboard: FsClipboard): Promise<void>;
 	clipboardGet(): Promise<FsClipboard | null>;
 	/** Undo the most recent recorded copy/move transfer (⌘Z). The record is consumed. */

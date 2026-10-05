@@ -40,6 +40,31 @@ describe("fileExtension", () => {
 	});
 });
 
+describe("optimize gate follows the platform image backend", () => {
+	// The bridge global decides the platform; absent (unit tests) means macOS.
+	const setPlatform = (platform: string | null): void => {
+		const host: unknown = globalThis;
+		if (typeof host !== "object" || host === null) return;
+		if (platform === null) Reflect.deleteProperty(host, "autorag");
+		else Reflect.set(host, "autorag", { platform });
+	};
+
+	it("offers PNG optimize on the ffmpeg backend, never on sips", () => {
+		const WINDOWS: ActionCapabilities = { ...DARWIN, share: false, imageFormats: ["jpeg", "png", "webp", "tiff"] };
+		try {
+			setPlatform("win32");
+		expect(menuItems(suggestedActions({ name: "photo.png", kind: "file" }, WINDOWS), "imageEdit")).toContainEqual(
+			expect.objectContaining({ id: "image:optimize" }),
+		);
+		} finally {
+			setPlatform("darwin");
+		}
+		expect(
+			menuItems(suggestedActions({ name: "photo.png", kind: "file" }, DARWIN_FFMPEG), "imageEdit"),
+		).not.toContainEqual(expect.objectContaining({ id: "image:optimize" }));
+	});
+});
+
 describe("base action set", () => {
 	it("offers open, open-with, archive, share and AI to a plain file", () => {
 		const actions = suggestedActions({ name: "notes.txt", kind: "file" }, DARWIN);

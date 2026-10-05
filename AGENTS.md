@@ -1,4 +1,12 @@
-# AutoRAG Finder App
+# Dazzi App
+
+**Dazzi is this app's commercial name** (official URL `https://dazziapp.com`).
+Every user-facing surface — the window title, renderer UI copy, README,
+DESIGN, and this document — uses **Dazzi**. "AutoRAG" is the backend only: the
+app still consumes the public AutoRAG librarian/agent (`@autorag/librarian`),
+the shared AutoRAG config, and the `AutoRAGAgent`/`AutoRAGLite` classes, and
+those internal names stay. Never put the word Dazzi on a backend identifier,
+and never put an AutoRAG product name in front of the user.
 
 This repository is the standalone Electron Finder app: one repository, one
 app. It is not a monorepo, and no other package is built or released from
@@ -71,6 +79,25 @@ bun scripts/manual-qa/compare-visual-parity.mjs /tmp/parity/before /tmp/parity/a
 `DESIGN.md` §0 "Styling contract" explains the token bridge, the cascade layers,
 and what the harness has caught. On an unchanged tree the harness is
 byte-identical between runs; anything else is a real difference to explain.
+
+## Windows QA
+
+The manual-QA lanes run on Windows 11 as well as macOS. Build once, then run
+the sweep from PowerShell or cmd:
+
+```sh
+bun run build
+bun scripts/manual-qa/run-all.mjs                  # all lanes
+bun scripts/manual-qa/run-all.mjs live-sync kind   # selected lanes
+```
+
+`scripts/manual-qa/platform.mjs` holds the cross-platform differences: repo
+paths via `fileURLToPath`, a home env with `USERPROFILE`, the `chord()` key
+modifier (`⌘` on macOS, `Ctrl` elsewhere), separator-agnostic basenames, and
+macOS-only process tools that degrade to no-ops on Windows. Prerequisites are
+Node 24+, Bun, `dupey`, and `ffmpeg` on `PATH`. Logs and `summary.json` land in
+`.omo/evidence/win-qa/`; the same sweep runs in
+`.github/workflows/qa-windows.yml`.
 
 ## Workflow
 

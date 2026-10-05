@@ -6,6 +6,7 @@
  */
 
 import { finderWindow, launchFinder } from "./launch-finder.mjs";
+import { baseName, isWindows, rmRetry } from "./platform.mjs";
 import {
 	existsSync,
 	lstatSync,
@@ -34,7 +35,19 @@ const UNWATCHED_DIR = join(DOWNLOADS, "ulw-live-sync-qa-unwatched");
 const FIXTURE_FOLDER = "ulw-live-sync-qa";
 let SNAPSHOT = join(USER_DATA, "dupey-cache", "version-families.json");
 const OVERALL_TIMEOUT_MS = 12 * 60 * 1000;
-const LIVE_BOUND_MS = 1500;
+/**
+ * Per-event responsiveness bound. Windows native file events are measurably
+ * slower than macOS (issue #59: NTFS + Defender), so the macOS bound would
+ * false-fail there; both still catch a real regression.
+ */
+const LIVE_BOUND_MS = isWindows ? 4000 : 1500;
+/**
+ * S7/S8 wait on @parcel/watcher noticing that a watched root disappeared. On
+ * Windows the native backend reports that (and unwinds the subscription)
+ * only after its own settle: CI measured ~5.6s where macOS FSEvents is
+ * immediate (issue #59). Everything else stays on the tight LIVE_BOUND_MS.
+ */
+const FOLDER_GONE_BOUND_MS = isWindows ? 10_000 : LIVE_BOUND_MS;
 const DUPLICATE_BODY = `${"Live sync duplicate fixture. ".repeat(80)}\n`;
 const DUMP_DIAGNOSTICS = process.env.QA_DUMP === "1";
 
@@ -76,7 +89,7 @@ function fail(label, observable) {
 
 function removeFixtures() {
 	for (const path of [FIXTURE_DIR, OTHER_DIR, UNWATCHED_DIR]) {
-		rmSync(path, { recursive: true, force: true });
+		rmRetry(path);
 	}
 }
 
@@ -84,7 +97,7 @@ function cleanupOnExit() {
 	if (cleanupComplete) return;
 	cleanupComplete = true;
 	removeFixtures();
-	rmSync(USER_DATA, { recursive: true, force: true });
+	rmRetry(USER_DATA);
 	try {
 		appendTo(
 			RUN_LOG,
@@ -156,7 +169,7 @@ async function startSession(label) {
 async function finishSession() {
 	await closeApp();
 	removeFixtures();
-	rmSync(USER_DATA, { recursive: true, force: true });
+	rmRetry(USER_DATA);
 	appendLog(`SESSION CLEANUP userData=${existsSync(USER_DATA) ? "present" : "removed"} fixtures=${
 		[FIXTURE_DIR, OTHER_DIR, UNWATCHED_DIR].every((path) => !existsSync(path)) ? "removed" : "present"
 	}`);
@@ -470,7 +483,7 @@ function stackChildRows(page) {
 }
 
 async function openStack(page, family) {
-	const headName = family.head.split("/").pop() ?? family.head;
+	const headName = baseName(family.head);
 	const headRow = rowFor(page, headName);
 	try {
 		await headRow.locator(".row__disclosure").waitFor({ state: "visible", timeout: 10_000 });
@@ -497,7 +510,7 @@ async function runS4(page, family) {
 	appendLog(`S4 DUMP fs.versionFamilies=${JSON.stringify(versionFamilies)}`);
 	appendLog(`S4 DUMP snapshot=${JSON.stringify(snapshot)}`);
 	appendLog(`S4 DUMP snapshot.stamps.keys=${JSON.stringify(Object.keys(snapshot?.stamps ?? {}))}`);
-	const headName = family.head.split("/").pop() ?? family.head;
+	const headName = baseName(family.head);
 	const domProbe = await page.evaluate((name) => {
 		const labels = [...document.querySelectorAll(".row__disclosure")].map((element) => element.getAttribute("aria-label"));
 		const headLabel = [...document.querySelectorAll(".row__label")].find((element) => element.textContent === name);
@@ -519,7 +532,7 @@ async function runS4(page, family) {
 	const started = Date.now();
 	rmSync(victim, { force: true });
 	await waitFor(
-		async () => !(await stack.children()).includes(victim.split("/").pop()),
+		async () => !(await stack.children()).includes(baseName(victim)),
 		{ timeoutMs: LIVE_BOUND_MS, label: "deleted stack child to disappear" },
 	);
 	const after = (await stack.children()).length;
@@ -546,7 +559,7 @@ async function runS5(page, family) {
 	try {
 		await waitFor(
 			async () => {
-				const rows = page.locator('[role="row"]').filter({ has: page.getByText(member.split("/").pop() ?? member, { exact: true }) });
+				const rows = page.locator('[role="row"]').filter({ has: page.getByText(baseName(member), { exact: true }) });
 				const count = await rows.count();
 				for (let index = 0; index < count; index += 1) {
 					const row = rows.nth(index);
@@ -583,7 +596,7 @@ async function runS6(page, family) {
 	const childNames = await stack.children();
 	const member = join(FIXTURE_DIR, "quarterly-report-copy 3.txt");
 	if (!existsSync(member)) throw new Error(`no fixture stack member available for S6: ${member}`);
-	const oldName = member.split("/").pop() ?? member;
+	const oldName = baseName(member);
 	const newName = `${oldName}.renamed`;
 	const stamp = readJson(SNAPSHOT)?.stamps?.[member];
 	if (stamp === undefined || stamp.dev === "" || stamp.ino === "") {
@@ -637,7 +650,7 @@ async function runS7(page) {
 	try {
 		await waitFor(
 			async () => (await page.locator(".tab--active .tab__title").textContent())?.trim() === FIXTURE_FOLDER,
-			{ timeoutMs: LIVE_BOUND_MS, label: "tab to fall back to fixture folder" },
+		{ timeoutMs: FOLDER_GONE_BOUND_MS, label: "tab to fall back to fixture folder" },
 		);
 	} catch (error) {
 		const afterFailure = await page.evaluate(() => ({
@@ -659,9 +672,9 @@ async function runS7(page) {
 	}));
 	appendLog(`S7 after deletion: ${JSON.stringify(after)}`);
 	const elapsedMs = Date.now() - started;
-	if (elapsedMs > LIVE_BOUND_MS) throw new Error(`folder fallback took ${elapsedMs}ms > ${LIVE_BOUND_MS}ms`);
+	if (elapsedMs > FOLDER_GONE_BOUND_MS) throw new Error(`folder fallback took ${elapsedMs}ms > ${FOLDER_GONE_BOUND_MS}ms`);
 	await page.screenshot({ path: join(EVIDENCE, "S7.png") });
-	pass("S7 folder gone", `active tab ${FIXTURE_FOLDER}, toastCount=${toastCount} <= 0, in ${elapsedMs}ms <= ${LIVE_BOUND_MS}ms`);
+	pass("S7 folder gone", `active tab ${FIXTURE_FOLDER}, toastCount=${toastCount} <= 0, in ${elapsedMs}ms <= ${FOLDER_GONE_BOUND_MS}ms`);
 }
 
 async function runS8(page) {
@@ -669,14 +682,14 @@ async function runS8(page) {
 	await page.getByRole("button", { name: "Documents" }).click();
 	await waitForElectronLine(
 		(line) => line.includes(`[fs-watch] unwatch ${FIXTURE_DIR}`),
-		{ timeoutMs: LIVE_BOUND_MS, label: "fixture directory unwatch diagnostic" },
+		{ timeoutMs: FOLDER_GONE_BOUND_MS, label: "fixture directory unwatch diagnostic" },
 	);
 	const errors = electronLines.filter((line) => line.includes("[fs-watch]") && line.includes("Error"));
 	if (errors.length !== 0) throw new Error(`fs-watch errors: ${JSON.stringify(errors)}`);
 	const last = electronLines.find((line) => line.includes(`[fs-watch] unwatch ${FIXTURE_DIR}`));
 	const elapsedMs = Date.now() - started;
-	if (elapsedMs > LIVE_BOUND_MS) throw new Error(`unwatch took ${elapsedMs}ms > ${LIVE_BOUND_MS}ms`);
-	pass("S8 no leak", `unwatch observed=${JSON.stringify(last)} in ${elapsedMs}ms <= ${LIVE_BOUND_MS}ms; fs-watch Error count ${errors.length} <= 0`);
+	if (elapsedMs > FOLDER_GONE_BOUND_MS) throw new Error(`unwatch took ${elapsedMs}ms > ${FOLDER_GONE_BOUND_MS}ms`);
+	pass("S8 no leak", `unwatch observed=${JSON.stringify(last)} in ${elapsedMs}ms <= ${FOLDER_GONE_BOUND_MS}ms; fs-watch Error count ${errors.length} <= 0`);
 }
 
 async function runS9(page, family) {
@@ -684,7 +697,7 @@ async function runS9(page, family) {
 	await page.locator(".sidebar").getByRole("button", { name: "Downloads", exact: true }).click();
 	await openFixtureFolder(page);
 	await rowFor(page, "selected-file.txt").waitFor({ timeout: 10_000 });
-	await page.getByRole("button", { name: "New tab ⌘T" }).click();
+	await page.getByRole("button", { name: /New tab/ }).click();
 	await page.getByRole("button", { name: "Documents" }).click();
 	const started = Date.now();
 	writeFileSync(join(FIXTURE_DIR, "late.txt"), "inactive tab fixture\n", "utf8");
@@ -701,7 +714,7 @@ async function runS9(page, family) {
 	const currentFamily = familyForFixture(readJson(SNAPSHOT)) ?? family;
 	appendLog(`S9 current family=${JSON.stringify(currentFamily)}`);
 	await waitFor(
-		async () => (await rowFor(page, currentFamily.head.split("/").pop() ?? currentFamily.head).locator(".row__disclosure").count()) === 1,
+		async () => (await rowFor(page, baseName(currentFamily.head)).locator(".row__disclosure").count()) === 1,
 		{ timeoutMs: 10_000, label: "S9 current stack badge" },
 	);
 	const stackForListing = await openStack(page, currentFamily);
@@ -709,7 +722,7 @@ async function runS9(page, family) {
 	const externalChildNames = currentFamily.members
 		.map((member) => member.path)
 		.filter((memberPath) => dirname(memberPath) !== FIXTURE_DIR)
-		.map((memberPath) => memberPath.split("/").pop())
+		.map((memberPath) => baseName(memberPath))
 		.filter((name) => name !== undefined);
 	const expectedNames = [...new Set([...beforeNames, ...externalChildNames])];
 	if (JSON.stringify([...new Set(renderedNames)].sort()) !== JSON.stringify([...expectedNames].sort())) {
@@ -935,7 +948,7 @@ async function runS13(page) {
 	await page.locator(".sidebar").getByRole("button", { name: "Downloads", exact: true }).click();
 	await openFixtureFolder(page);
 	await rowFor(page, "selected-file.txt").waitFor({ timeout: 10_000 });
-	await page.getByRole("button", { name: "New tab ⌘T", exact: true }).click();
+	await page.getByRole("button", { name: /New tab/ }).click();
 	const watchStarted = Date.now();
 	await rowFor(page, "sub").dblclick();
 	await page.locator(".tab--active .tab__title").filter({ hasText: "sub" }).waitFor({ timeout: 10_000 });
@@ -946,7 +959,7 @@ async function runS13(page) {
 	const watchElapsedMs = Date.now() - watchStarted;
 	if (watchElapsedMs > LIVE_BOUND_MS) throw new Error(`subfolder watch took ${watchElapsedMs}ms > ${LIVE_BOUND_MS}ms`);
 	const closeStarted = Date.now();
-	await page.locator(".tab--active .tab__close[aria-label='Close tab ⌘W']").click();
+	await page.locator(".tab--active .tab__close[aria-label^='Close tab']").click();
 	await waitForElectronLine(
 		(line) => line.includes(`[fs-watch] unwatch ${join(FIXTURE_DIR, "sub")}`),
 		{ timeoutMs: LIVE_BOUND_MS, label: "subfolder unwatch diagnostic after close" },

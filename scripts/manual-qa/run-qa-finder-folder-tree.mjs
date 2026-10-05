@@ -1,3 +1,5 @@
+import { homedir } from "node:os";
+import { fileURLToPath } from "node:url";
 /**
  * Manual QA — folder disclosure triangles in the list view (Finder "List").
  *
@@ -20,13 +22,13 @@ import { mkdirSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { finderWindow, launchFinder } from "./launch-finder.mjs";
 
-const ROOT = new URL("../../", import.meta.url).pathname.replace(/\/$/, "");
+const ROOT = fileURLToPath(new URL("../../", import.meta.url)).replace(/\/$/, "");
 const EVIDENCE = `${ROOT}/.omo/evidence/ai-finder-app/qa-folder-tree`;
 mkdirSync(EVIDENCE, { recursive: true });
 
 const stamp = Date.now();
 const rootName = `ulw-tree-qa-${stamp}`;
-const tree = `${process.env.HOME}/Documents/${rootName}`;
+const tree = `${homedir()}/Documents/${rootName}`;
 await Bun.write(`${tree}/data_multi_page/partial_results.json`, "{}\n");
 await Bun.write(`${tree}/ko_vlm_benchmark/multi_hop_question/generate.py`, "print('qa')\n");
 await Bun.write(`${tree}/run_multi_hop_generate.py`, "print('qa')\n");
@@ -101,13 +103,16 @@ try {
 	await settle("partial_results.json", false);
 	check("collapsing over a hidden selection selects the collapsed folder", await row(rootName).getAttribute("aria-selected"), "true");
 
-	await page.getByPlaceholder("Instant search").fill("multi_hop");
+	const search = page.locator(".sidebar-search input");
+	await search.fill("multi_hop");
+	await search.press("Enter");
 	await settle("run_multi_hop_generate.py", true);
 	check("search results carry no disclosure triangles", await page.locator(".list .row__disclosure").count(), 0);
 	check("search results use a flat grid", await page.locator('.list [role="treegrid"]').count(), 0);
 	await page.screenshot({ path: `${EVIDENCE}/search-flat.png` });
 
-	await page.getByPlaceholder("Instant search").fill("");
+	await search.fill("");
+	await search.press("Enter");
 	await settle(rootName, true);
 	await page.screenshot({ path: `${EVIDENCE}/after-search.png` });
 	await Bun.write(`${EVIDENCE}/result.json`, JSON.stringify({ platform: process.platform, checks: results }, null, 2));

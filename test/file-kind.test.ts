@@ -1,3 +1,6 @@
+import { mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { createOsKindResolver, kindQueryForPlatform, parseKindStdout } from "../src/main/file-kind";
 
@@ -111,6 +114,58 @@ describe("createOsKindResolver", () => {
 
 		// Then the failure text is visible, never swallowed
 		expect(warnings.join("\n")).toContain("mdls: No such file or directory");
+	});
+
+	it("does not let one failed lookup erase the kind for its whole extension", async () => {
+		// Given a runner that cannot answer for one PDF but can for the next
+		const resolver = createOsKindResolver({
+			platform: "darwin",
+			run: async (query) => {
+				if (query.args.at(-1) === "/tmp/broken.pdf") throw new Error("could not find /tmp/broken.pdf.");
+				return "PDF document";
+			},
+			warn: () => {},
+		});
+
+		// When the broken file resolves first
+		expect(await resolver.kindFor("/tmp/broken.pdf", "pdf")).toBeNull();
+
+		// Then a later PDF still gets its OS kind
+		expect(await resolver.kindFor("/tmp/report.pdf", "pdf")).toBe("PDF document");
+	});
+
+	it("skips a symlink whose target is gone without hiding the kind of its extension", async () => {
+		// Given an alias to an uninstalled app, a real app, and a file the OS fails on
+		const dir = await mkdtemp(join(tmpdir(), "autorag-file-kind-"));
+		const dangling = join(dir, "Gone.app");
+		const app = join(dir, "Real.app");
+		const broken = join(dir, "broken.bin");
+		await symlink(join(dir, "deleted", "Gone.app"), dangling);
+		await writeFile(app, "x");
+		await writeFile(broken, "x");
+		const queried: string[] = [];
+		const warnings: string[] = [];
+		const resolver = createOsKindResolver({
+			platform: "darwin",
+			run: async (query) => {
+				const path = query.args.at(-1) ?? "";
+				queried.push(path);
+				if (path === broken) throw new Error(`${path}: could not find it.`);
+				return "Application";
+			},
+			warn: (message) => warnings.push(message),
+		});
+
+		// When the dangling alias resolves first
+		expect(await resolver.kindFor(dangling, "app")).toBeNull();
+		expect(await resolver.kindFor(app, "app")).toBe("Application");
+		expect(await resolver.kindFor(broken, "bin")).toBeNull();
+
+		// Then the alias spawned no query and logged nothing; only the real failure warns
+		expect(queried).toEqual([app, broken]);
+		expect(warnings).toHaveLength(1);
+		expect(warnings[0]).toContain(broken);
+		await rm(dir, { recursive: true, force: true });
 	});
 
 	it("returns null without querying on an unsupported platform", async () => {

@@ -1,5 +1,5 @@
-import { accessSync, constants, existsSync, readFileSync } from "node:fs";
-import { delimiter, join } from "node:path";
+import { accessSync, constants, existsSync, readFileSync, statSync } from "node:fs";
+import { delimiter, extname, join } from "node:path";
 import {
 	BUILTIN_DATASOURCE_SKILL_NAMES,
 	buildDatasourceSkills,
@@ -57,22 +57,47 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 	return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
+/**
+ * Executable suffixes for CLI lookup. POSIX tries the name itself; Windows
+ * appends PATHEXT unless the name already has a runnable extension. Never try
+ * an extensionless npm/bun POSIX shim as a Windows executable.
+ */
+function executableExtensions(name: string, env: NodeJS.ProcessEnv): readonly string[] {
+	const pathext = env.PATHEXT;
+	if (pathext === undefined || pathext.length === 0) return [""];
+	const extensions = pathext.split(";").map((extension) => extension.trim()).filter((extension) => extension.length > 0);
+	const explicitExtension = extname(name).toLowerCase();
+	return extensions.some((extension) => extension.toLowerCase() === explicitExtension) ? ["", ...extensions] : extensions;
+}
+
+/** `accessSync(X_OK)` on Windows only proves existence, so a directory would pass too. */
+function isExecutableFile(candidate: string): boolean {
+	try {
+		accessSync(candidate, constants.X_OK);
+		return statSync(candidate).isFile();
+	} catch {
+		return false;
+	}
+}
+
 function findExecutable(name: string, env: NodeJS.ProcessEnv): string | null {
-	const candidates = name.includes("/")
-		? [name]
-		: (env.PATH ?? "").split(delimiter).filter(Boolean).map((dir) => join(dir, name));
-	for (const candidate of candidates) {
-		try {
-			accessSync(candidate, constants.X_OK);
-			return candidate;
-		} catch {}
+	if (name.includes("/") || name.includes("\\")) {
+		return isExecutableFile(name) ? name : null;
+	}
+	const extensions = executableExtensions(name, env);
+	const directories = (env.PATH ?? "").split(delimiter).filter(Boolean);
+	for (const directory of directories) {
+		for (const extension of extensions) {
+			const candidate = join(directory, `${name}${extension}`);
+			if (isExecutableFile(candidate)) return candidate;
+		}
 	}
 	return null;
 }
 
 function installState(type: string, entry: DatasourceSkillConfig, env: NodeJS.ProcessEnv): DataSourceRow["install"] {
 	if (!BUILTIN_DATASOURCE_SKILL_NAMES.includes(type)) {
-		return { state: "unsupported", binary: null, path: null, detail: `No built-in AutoRAG datasource named "${type}"` };
+		return { state: "unsupported", binary: null, path: null, detail: `No built-in Dazzi datasource named "${type}"` };
 	}
 	const connector = isRecord(entry.connector) ? entry.connector : {};
 	if (type === "github" || type === "github-gist") {
@@ -81,10 +106,10 @@ function installState(type: string, entry: DatasourceSkillConfig, env: NodeJS.Pr
 		const gh = type === "github-gist" ? findExecutable("gh", env) : null;
 		return hasToken || gh !== null
 			? { state: "builtin", binary: null, path: gh, detail: hasToken ? `Token from ${tokenEnv}` : "Token from gh auth" }
-			: { state: "credential-missing", binary: null, path: null, detail: `Set ${tokenEnv} to let AutoRAG reach GitHub` };
+			: { state: "credential-missing", binary: null, path: null, detail: `Set ${tokenEnv} to let Dazzi reach GitHub` };
 	}
 	const binary = BACKEND_BINARIES[type];
-	if (binary === undefined) return { state: "builtin", binary: null, path: null, detail: "Built into AutoRAG" };
+	if (binary === undefined) return { state: "builtin", binary: null, path: null, detail: "Built into Dazzi" };
 	const configured = typeof connector.binaryPath === "string" ? connector.binaryPath : binary;
 	const path = findExecutable(configured, env);
 	return path === null
@@ -104,7 +129,7 @@ function agentState(
 	allowedTags: readonly string[],
 ): DataSourceRow["agent"] {
 	if (skill === undefined) {
-		return { state: "unsupported", skillName: null, tags: [], detail: "The AutoRAG agent skips unknown datasources" };
+		return { state: "unsupported", skillName: null, tags: [], detail: "The Dazzi agent skips unknown datasources" };
 	}
 	const descriptor = skill.describe();
 	const skillName = skill.skillManifest().name;

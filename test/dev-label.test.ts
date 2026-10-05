@@ -2,8 +2,13 @@ import { describe, expect, it } from "vitest";
 import { readDevLabel, resolveClonePath } from "../src/main/dev-label";
 
 function readerFor(files: Readonly<Record<string, string>>) {
+	// The source joins `.git` subpaths with the host separator, so match on a
+	// separator-normalized key: the fixture spells POSIX paths, Windows asks for `\`.
+	const normalized = new Map(
+		Object.entries(files).map(([path, value]) => [path.replaceAll("\\", "/"), value] as const),
+	);
 	return (path: string): string => {
-		const value = files[path];
+		const value = normalized.get(path.replaceAll("\\", "/"));
 		if (value === undefined) throw new Error(`ENOENT: ${path}`);
 		return value;
 	};

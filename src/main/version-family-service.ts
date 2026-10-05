@@ -24,7 +24,6 @@ import type {
 	FsVersionMember,
 	FsVersionRelation,
 } from "../shared/fs-contract";
-import { RECENTS_PATH } from "../shared/fs-contract";
 import type { FsDirChange } from "../shared/live-contract";
 import { createDupeyProbe, DUPEY_INSTALL_COMMAND, type DupeyProbe } from "./dupey";
 import { DIRTY_STAMP, lstatProbe, remapRenames, sameContent, verifyFamilies, type FileStamp, type Probe } from "./version-family-verify";
@@ -386,9 +385,9 @@ export function createVersionFamilyService(deps: VersionFamilyServiceDeps): Vers
 		const errors: string[] = [];
 		const stamps: Record<string, FileStamp> = {};
 		for (const location of await deps.locations()) {
-			// The virtual Recents location is a listing of recorded paths, not a
-			// directory dupey could scan.
-			if (!location.available || location.path === RECENTS_PATH) continue;
+			// Only content folders and cloud drives: Recents is virtual, and a
+			// home folder or whole disk is far too large for dupey to scan.
+			if (!location.available || !location.scanned) continue;
 			locations.push(location.path);
 			try {
 				const scan = await scanDuplicates(location.path);

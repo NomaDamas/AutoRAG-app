@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+	citedNumbers,
 	parseAnswerBlocks,
 	parseInline,
 	splitAnswerParagraphs,
@@ -41,6 +42,20 @@ describe("parseInline", () => {
 		expect(parseInline("중간에 **닫히지 않은 볼드")).toEqual([
 			{ kind: "text", text: "중간에 **닫히지 않은 볼드" },
 		]);
+	});
+});
+
+describe("citedNumbers", () => {
+	it("collects distinct citation numbers in first-seen order", () => {
+		expect(citedNumbers("9명입니다 [6]. 현재는 [1][2][4][6].")).toEqual([6, 1, 2, 4]);
+	});
+
+	it("ignores non-citation brackets", () => {
+		expect(citedNumbers("0개면 [x] 그대로 [0] 둡니다")).toEqual([]);
+	});
+
+	it("returns an empty list when the answer cites nothing", () => {
+		expect(citedNumbers("근거 없는 문장입니다.")).toEqual([]);
 	});
 });
 

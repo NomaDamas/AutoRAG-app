@@ -1,6 +1,8 @@
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { resolveConfigReadOnly } from "@autorag/librarian";
+import { resolveAgentModelDetailed } from "@autorag/librarian/core";
 import { afterEach, describe, expect, it } from "vitest";
 import { createModelStatusService } from "../src/main/model-status";
 
@@ -43,14 +45,26 @@ describe("createModelStatusService", () => {
 			}, null, 2)}\n`,
 		);
 
+		// The shared resolver labels a catalog model with the catalog's human name
+		// (e.g. "DeepSeek: DeepSeek V4.1 Flash") and falls back to the model id when
+		// the catalog entry is unavailable, so assert against what it actually
+		// labeled instead of pinning one build's catalog text.
+		const { role } = await resolveAgentModelDetailed(
+			resolveConfigReadOnly({ flags: {}, env: fixture.env, cwd: fixture.root }),
+			{ env: fixture.env },
+		);
+
 		const snapshot = await createModelStatusService({ env: fixture.env, cwd: fixture.root }).resolve();
 
 		expect(snapshot.error).toBeNull();
 		expect(snapshot.configPath).toBe(fixture.configPath);
 		expect(snapshot.configExists).toBe(true);
-		expect(snapshot.model).toMatchObject({
+		// displayName is passed through from the librarian's catalog, so its exact
+		// text tracks upstream data; assert the shape, not the catalog wording.
+		expect(snapshot.model).toEqual({
 			provider: "openrouter",
 			modelId: "deepseek/deepseek-v4.1-flash",
+			displayName: role.displayName,
 			api: "openai-completions",
 			baseUrl: "https://openrouter.ai/api/v1",
 			resolutionSource: "config",

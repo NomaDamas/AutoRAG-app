@@ -3,12 +3,12 @@ import { flushSync } from "react-dom";
 import { HardDrive, Home } from "lucide-react";
 import { cn } from "../lib/cn";
 import { fitPathBar, sameFit, type PathFit, type SegmentFit } from "../state/path-fit";
-import type { Crumb } from "../state/paths";
+import { volumeLabel, type Crumb } from "../state/paths";
 import { kindFromExtension } from "../state/kinds";
 import { FileTile } from "./primitives/FileTile";
 
 /**
- * v7 `.pathbar` (proto:.pathbar): macOS path bar docked above the AI dock.
+ * v7 `.pathbar` (proto:.pathbar): macOS path bar at the foot of the Finder column.
  *
  * One line, always. The trail is measured against the bar and `fitPathBar`
  * decides, per segment, whether the label shows in full, is clipped behind a
@@ -18,7 +18,7 @@ import { FileTile } from "./primitives/FileTile";
 interface PathSegment {
 	readonly key: string;
 	readonly label: string;
-	/** Null marks the decorative "Macintosh HD" prefix. */
+	/** Null marks the decorative volume prefix ("Macintosh HD" / "C:"). */
 	readonly path: string | null;
 	readonly icon: ReactNode;
 }
@@ -50,10 +50,13 @@ export function PathBar({
 	readonly selectedName: string | null;
 	readonly onNavigate: (path: string) => void;
 }): ReactElement {
-	const local = crumbs[0]?.label === "Users";
+	const first = crumbs[0];
+	const local = first?.label === "Users";
 	const segments: PathSegment[] = [];
-	if (local) {
-		segments.push({ key: "$disk", label: "Macintosh HD", path: null, icon: <HardDrive size={14} strokeWidth={1.8} /> });
+	if (local && first !== undefined) {
+		// Derive the volume from the path so Windows shows "C:" (or its share),
+		// not the macOS boot-volume label.
+		segments.push({ key: "$disk", label: volumeLabel(first.path), path: null, icon: <HardDrive size={14} strokeWidth={1.8} /> });
 	}
 	crumbs.forEach((crumb, index) => {
 		const home = local && index === 1;

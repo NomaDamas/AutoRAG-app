@@ -1,15 +1,18 @@
 import { useEffect, useState, type KeyboardEvent, type MouseEvent, type ReactElement, type RefObject } from "react";
 import { cn } from "../lib/cn";
+import { formatShortcut, hostPlatform } from "../lib/shortcuts";
 import { SearchIcon } from "./icons";
 import { Keycap } from "./primitives/Keycap";
 
-/** What Enter commits against: the whole Mac, the current folder, or the AI content search. */
-export type SearchMode = "all" | "name" | "content";
+/** What Enter commits against: a filename search over the whole machine, or the AI content search. */
+export type SearchMode = "name" | "content";
+
+/** The whole-machine scope is "This Mac" on macOS, "This Computer" on Windows. */
+const MACHINE = hostPlatform() === "win32" ? "컴퓨터" : "Mac";
 
 const CHIPS: readonly { readonly mode: SearchMode; readonly label: string; readonly hint: string }[] = [
-	{ mode: "all", label: "전체", hint: "이 Mac 전체에서 파일 이름 검색" },
-	{ mode: "name", label: "파일 이름", hint: "현재 폴더에서 파일 이름 검색" },
-	{ mode: "content", label: "내용", hint: "AI로 파일 내용 검색 (⌥Enter)" },
+	{ mode: "name", label: "파일 이름", hint: `이 ${MACHINE} 전체에서 파일 이름 검색` },
+	{ mode: "content", label: "내용", hint: `AI로 파일 내용 검색 (${formatShortcut({ key: "Enter", alt: true, primary: false })})` },
 ];
 
 const CHIP_CLASS =
@@ -17,9 +20,10 @@ const CHIP_CLASS =
 
 /**
  * The sidebar's instant search (mockup: `.side-search`). Sits at the top of the
- * Places list, above the nav groups. Enter commits a filename search with the
- * chosen scope chip; ⌥Enter always runs the AI content search. The chips only
- * appear while the field has focus, so the resting sidebar stays uncluttered.
+ * Places list, above the nav groups. Enter commits a filename search over the
+ * whole machine ("파일 이름"); ⌥Enter — or the 내용 chip — runs the AI content
+ * search. The chips only appear while the field has focus, so the resting
+ * sidebar stays uncluttered.
  */
 export function SidebarSearch({
 	query,
@@ -41,7 +45,7 @@ export function SidebarSearch({
 	readonly onSubmit: (mode: SearchMode, text: string) => void;
 }): ReactElement {
 	const [draft, setDraft] = useState(query);
-	const [mode, setMode] = useState<SearchMode>("all");
+	const [mode, setMode] = useState<SearchMode>("name");
 
 	useEffect(() => {
 		setDraft(query);
@@ -101,7 +105,7 @@ export function SidebarSearch({
 						✕
 					</button>
 				) : showHotkeys && !focused ? (
-					<Keycap label="⌘F" />
+					<Keycap label={formatShortcut({ key: "F" })} />
 				) : null}
 			</label>
 			{focused ? (

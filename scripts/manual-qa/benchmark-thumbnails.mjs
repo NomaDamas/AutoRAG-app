@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 /**
  * Before/after benchmark — thumbnail enrichment cost and qlmanage spawns.
  *
@@ -17,12 +18,12 @@
  *   BENCH_OUT=/tmp/after.json bun scripts/manual-qa/benchmark-thumbnails.mjs
  */
 
-import { execSync } from "node:child_process";
 import { mkdirSync, rmSync } from "node:fs";
 import { deflateSync } from "node:zlib";
 import { finderWindow, launchFinder } from "./launch-finder.mjs";
+import { baseName, qlmanageCount, reapQlmanageOrphans } from "./platform.mjs";
 
-const ROOT = new URL("../../", import.meta.url).pathname.replace(/\/$/, "");
+const ROOT = fileURLToPath(new URL("../../", import.meta.url)).replace(/\/$/, "");
 const OUT = process.env.BENCH_OUT ?? `${ROOT}/.omo/evidence/ai-finder-app/thumbnail-benchmark/result.json`;
 const IMAGES = 24;
 const PDFS = 8;
@@ -94,42 +95,6 @@ function minimalPdf(text) {
 	return Buffer.from(body + tail, "latin1");
 }
 
-function qlmanageCount() {
-	try {
-		return Number(
-			execSync("pgrep -x qlmanage | wc -l", { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim(),
-		);
-	} catch {
-		return 0;
-	}
-}
-
-/**
- * SIGKILL qlmanage processes orphaned to ppid=1 by earlier runs, so a fresh
- * build is measured from a clean slate. Returns how many were reaped; the
- * pre-change build then re-leaks from `before`, the native build stays at 0.
- */
-function reapQlmanageOrphans() {
-	try {
-		const pids = execSync("ps -axo pid=,ppid=,comm= | awk '$2==1 && $3 ~ /qlmanage/ {print $1}'", {
-			encoding: "utf8",
-		})
-			.trim()
-			.split(/\s+/)
-			.filter(Boolean);
-		for (const pid of pids) {
-			try {
-				process.kill(Number(pid), "SIGKILL");
-			} catch {
-				// Already gone.
-			}
-		}
-		return pids.length;
-	} catch {
-		return 0;
-	}
-}
-
 const dirs = [];
 for (let d = 0; d < DIRS; d++) {
 	const dir = `${base}/dir-${d}`;
@@ -137,7 +102,7 @@ for (let d = 0; d < DIRS; d++) {
 	for (let i = 0; i < IMAGES; i++) {
 		await Bun.write(`${dir}/img-${i}.png`, noisyPng(1024, 768, d * 1000 + i + 1));
 	}
-	for (let i = 0; i < PDFS; i++) await Bun.write(`${dir}/doc-${i}.pdf`, minimalPdf(`AutoRAG ${d}-${i}`));
+	for (let i = 0; i < PDFS; i++) await Bun.write(`${dir}/doc-${i}.pdf`, minimalPdf(`Dazzi ${d}-${i}`));
 	dirs.push(dir);
 }
 
@@ -181,7 +146,7 @@ try {
 		report.qlmanage.maxDuringCold = Math.max(report.qlmanage.maxDuringCold, max);
 		report.dirs.push({ dir, cold, warm });
 		console.log(
-			`${dir.split("/").pop()}: cold=${cold.ms}ms warm=${warm.ms}ms icons=${cold.icons}/${cold.total}`,
+			`${baseName(dir)}: cold=${cold.ms}ms warm=${warm.ms}ms icons=${cold.icons}/${cold.total}`,
 		);
 	}
 	report.qlmanage.after = qlmanageCount();

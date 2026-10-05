@@ -1,6 +1,7 @@
 import type { DragEvent, MouseEvent, ReactElement } from "react";
 import { cn } from "../lib/cn";
-import { TabCloseIcon, TabPlusIcon } from "./icons";
+import { formatShortcut } from "../lib/shortcuts";
+import { SparklesIcon, TabCloseIcon, TabPlusIcon } from "./icons";
 import { StatusDot } from "./primitives/StatusDot";
 
 export interface TabView {
@@ -8,6 +9,8 @@ export interface TabView {
 	readonly title: string;
 	readonly active: boolean;
 	readonly flash: boolean;
+	/** The tab shows the AI Search chat: a drop on it attaches instead of moving files. */
+	readonly aiSearch: boolean;
 }
 
 const TAB_GRADIENT = "bg-[linear-gradient(var(--tab-grad-from),var(--tab-grad-to))]";
@@ -46,6 +49,7 @@ export function TabStrip({
 				<div
 					key={tab.id}
 					data-tab-id={tab.id}
+					data-ai-search={tab.aiSearch ? "true" : undefined}
 					className={[
 						`tab group/tab${tab.active ? " tab--active" : ""}`,
 						"relative flex flex-1 min-w-0 items-center justify-center px-24 text-badge font-normal select-none cursor-pointer [-webkit-app-region:no-drag]",
@@ -68,20 +72,21 @@ export function TabStrip({
 					) : null}
 					<button
 						type="button"
-						className="tab__title min-w-0 flex-[0_1_auto] overflow-hidden whitespace-nowrap text-ellipsis p-0 border-0 rounded-none bg-transparent text-inherit appearance-none text-center cursor-pointer"
+						className="tab__title flex min-w-0 flex-[0_1_auto] items-center gap-4 overflow-hidden whitespace-nowrap p-0 border-0 rounded-none bg-transparent text-inherit appearance-none text-center cursor-pointer"
 						onClick={(event: MouseEvent<HTMLButtonElement>) => {
 							event.stopPropagation();
 							onSelect(tab.id);
 						}}
 					>
-						{tab.title}
+						{tab.aiSearch ? <SparklesIcon size={11} className="flex-none text-accent" /> : null}
+						<span className="min-w-0 truncate">{tab.title}</span>
 					</button>
 					{canClose ? (
 						<button
 							type="button"
 							className="tab__close absolute left-5 top-1/2 mt-[-7.5px] flex flex-none items-center justify-center size-15 p-0 border-0 rounded-3 bg-transparent text-ink-muted opacity-0 transition-[background,opacity] duration-(--dur-color) ease-[ease] group-hover/tab:opacity-100 hover:bg-hover-strong hover:text-ink"
-							title="Close tab ⌘W"
-							aria-label="Close tab ⌘W"
+							title={`Close tab ${formatShortcut({ key: "W" })}`}
+							aria-label={`Close tab ${formatShortcut({ key: "W" })}`}
 							onClick={(event: MouseEvent<HTMLButtonElement>) => {
 								event.stopPropagation();
 								onClose(tab.id);
@@ -99,8 +104,8 @@ export function TabStrip({
 					TAB_GRADIENT,
 					TAB_GRADIENT_HOVER,
 				)}
-				title="New tab ⌘T"
-				aria-label="New tab ⌘T"
+				title={`New tab ${formatShortcut({ key: "T" })}`}
+				aria-label={`New tab ${formatShortcut({ key: "T" })}`}
 				onClick={onNewTab}
 			>
 				<TabPlusIcon />

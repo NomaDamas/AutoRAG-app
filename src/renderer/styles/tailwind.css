@@ -23,7 +23,7 @@
  *   --tracking-*, --leading-*                             → --tracking-*, --leading-*
  *   --space-N         → --spacing-N                       p-16, gap-8
  *   --size-*, --knob-*, --tree-indent, --desk-padding,
- *   --app-min-*, --evidence-open-height, --ai-h           → --spacing-<name>
+ *   --app-min-*, --evidence-open-height                  → --spacing-<name>
  *   --w-*, --col-sidebar                                  → --container-<name>  w-settings
  *   --shadow-*        → --shadow-*                        shadow-raised
  *   --radius-*        → --radius-*                        rounded-10
@@ -328,7 +328,6 @@
 	--spacing-app-min-width: var(--app-min-width);
 	--spacing-app-min-height: var(--app-min-height);
 	--spacing-evidence-open-height: var(--evidence-open-height);
-	--spacing-ai-h: var(--ai-h);
 
 	/* --------------------------------------------------- §4 Overlay widths */
 	--container-search-field: var(--w-search-field);

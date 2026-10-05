@@ -1,7 +1,8 @@
+import { fileURLToPath } from "node:url";
 import { launchFinder } from "./launch-finder.mjs";
 import { mkdirSync } from "node:fs";
 
-const EVIDENCE = new URL("../../.omo/evidence/ai-finder-app/shadcn-switch/", import.meta.url).pathname;
+const EVIDENCE = fileURLToPath(new URL("../../.omo/evidence/ai-finder-app/shadcn-switch/", import.meta.url));
 mkdirSync(EVIDENCE, { recursive: true });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 

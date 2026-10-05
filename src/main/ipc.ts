@@ -4,7 +4,13 @@ import {
 	isActionAnchor,
 	isActionRequest,
 } from "../shared/actions-contract";
-import { FS_CHANNELS, type FsClipboard, type FsCoreBridge, type FsIndexBridge } from "../shared/fs-contract";
+import {
+	FS_CHANNELS,
+	type FsClipboard,
+	type FsCoreBridge,
+	type FsIndexBridge,
+	type FsSearchOptions,
+} from "../shared/fs-contract";
 import { SEARCH_CHANNELS, type SearchBridge } from "../shared/search-contract";
 import { SETTINGS_CHANNELS, type JsonValue, type SettingsBridge } from "../shared/settings-contract";
 import { LIVE_CHANNELS } from "../shared/live-contract";
@@ -36,8 +42,11 @@ export function registerFsIpcHandlers(service: FsCoreBridge, hooks: FsIpcHooks =
 		service.previewIcon(path, modifiedAt),
 	);
 	ipcMain.handle(FS_CHANNELS.exists, (_event, path: string) => service.exists(path));
-	ipcMain.handle(FS_CHANNELS.search, (_event, query: string) => service.search(query));
+	ipcMain.handle(FS_CHANNELS.search, (_event, query: string, options: FsSearchOptions | undefined) =>
+		service.search(query, options),
+	);
 	ipcMain.handle(FS_CHANNELS.locations, () => service.locations());
+	ipcMain.handle(FS_CHANNELS.ejectLocation, (_event, path: string) => service.ejectLocation(path));
 	ipcMain.handle(FS_CHANNELS.copy, (_event, paths: readonly string[], destDir: string) => service.copy(paths, destDir));
 	ipcMain.handle(FS_CHANNELS.move, (_event, paths: readonly string[], destDir: string) => service.move(paths, destDir));
 	ipcMain.handle(FS_CHANNELS.duplicate, (_event, paths: readonly string[]) => service.duplicate(paths));
@@ -59,6 +68,10 @@ export function registerFsIpcHandlers(service: FsCoreBridge, hooks: FsIpcHooks =
 	ipcMain.handle(FS_CHANNELS.reveal, (_event, path: string) => service.reveal(path));
 	ipcMain.handle(FS_CHANNELS.quickLook, (_event, path: string) => service.quickLook(path));
 	ipcMain.handle(FS_CHANNELS.open, (_event, path: string) => service.open(path));
+	ipcMain.handle(FS_CHANNELS.openUrl, (_event, url: unknown) => {
+		if (typeof url !== "string") throw new Error("웹 주소가 올바르지 않습니다");
+		return service.openUrl(url);
+	});
 	ipcMain.handle(FS_CHANNELS.clipboardSet, (_event, clipboard: FsClipboard) => service.clipboardSet(clipboard));
 	ipcMain.handle(FS_CHANNELS.undo, () => service.undo());
 	ipcMain.handle(FS_CHANNELS.clipboardGet, () => service.clipboardGet());

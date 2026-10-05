@@ -2,13 +2,40 @@ import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promi
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { minSyncDocumentPath, minSyncWorkspaceRoot, saveMirrorIndex } from "@autorag/librarian";
-import { afterEach, describe, expect, it } from "vitest";
+import type * as LibrarianModule from "@autorag/librarian";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createIndexStatusService } from "../src/main/index-status";
+
+/**
+ * `setIndexExcluded` kicks off a parsed + MinSync (+Jikji) refresh in the
+ * background. That refresh writes into the workspace after `setIndexExcluded`
+ * returns and can outlive the test, racing the temp-dir cleanup (and sometimes
+ * exceeding the test timeout). These tests cover persistence and the status
+ * snapshot, not the refresh itself, so stub it to a resolved no-op.
+ */
+vi.mock("@autorag/librarian", async () => {
+	const actual = await vi.importActual<typeof LibrarianModule>("@autorag/librarian");
+	return {
+		...actual,
+		AutoRAGLite: class {
+			async refresh(): Promise<void> {}
+		},
+	};
+});
 
 const directories: string[] = [];
 
 afterEach(async () => {
-	await Promise.all(directories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
+	const pending = directories.splice(0);
+	// Windows cannot unlink the just-refreshed `.autorag` tree while the
+	// in-process librarian still holds its handles (verified: every recursive
+	// `rm` retry budget up to ~18s fails). %TEMP% is reclaimed by the OS, so skip
+	// the doomed removal there rather than hanging the hook; POSIX removes it.
+	if (process.platform === "win32") {
+		console.warn("[index-status.test] leaving %TEMP% fixtures for the OS to reclaim (Windows holds .autorag handles)");
+		return;
+	}
+	await Promise.all(pending.map((directory) => rm(directory, { recursive: true, force: true })));
 });
 
 interface Fixture {

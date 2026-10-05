@@ -12,8 +12,16 @@ export function createFsBridge(ipcRenderer: IpcRenderer): FsBridge {
 		details: (path) => ipcRenderer.invoke(FS_CHANNELS.details, path),
 		previewIcon: (path, modifiedAt) => ipcRenderer.invoke(FS_CHANNELS.previewIcon, path, modifiedAt),
 		exists: (path) => ipcRenderer.invoke(FS_CHANNELS.exists, path),
-		search: (query) => ipcRenderer.invoke(FS_CHANNELS.search, query),
+		search: (query, options) => ipcRenderer.invoke(FS_CHANNELS.search, query, options),
 		locations: () => ipcRenderer.invoke(FS_CHANNELS.locations),
+		ejectLocation: (path) => ipcRenderer.invoke(FS_CHANNELS.ejectLocation, path),
+		onLocationsChanged: (listener) => {
+			const handler = (): void => listener();
+			ipcRenderer.on(FS_CHANNELS.locationsChanged, handler);
+			return () => {
+				ipcRenderer.removeListener(FS_CHANNELS.locationsChanged, handler);
+			};
+		},
 		copy: (paths, destDir) => ipcRenderer.invoke(FS_CHANNELS.copy, paths, destDir),
 		move: (paths, destDir) => ipcRenderer.invoke(FS_CHANNELS.move, paths, destDir),
 		duplicate: (paths) => ipcRenderer.invoke(FS_CHANNELS.duplicate, paths),
@@ -23,6 +31,7 @@ export function createFsBridge(ipcRenderer: IpcRenderer): FsBridge {
 		reveal: (path) => ipcRenderer.invoke(FS_CHANNELS.reveal, path),
 		quickLook: (path) => ipcRenderer.invoke(FS_CHANNELS.quickLook, path),
 		open: (path) => ipcRenderer.invoke(FS_CHANNELS.open, path),
+		openUrl: (url) => ipcRenderer.invoke(FS_CHANNELS.openUrl, url),
 		clipboardSet: (clipboard) => ipcRenderer.invoke(FS_CHANNELS.clipboardSet, clipboard),
 		undo: () => ipcRenderer.invoke(FS_CHANNELS.undo),
 		clipboardGet: () => ipcRenderer.invoke(FS_CHANNELS.clipboardGet),

@@ -7,6 +7,7 @@ import {
 	isAbsolutePath,
 	joinPath,
 	pathSegments,
+	volumeLabel,
 	whereSegments,
 } from "../src/renderer/src/state/paths";
 
@@ -171,5 +172,21 @@ describe("activeNavPath on Windows paths", () => {
 
 	it("does not match a partial Windows segment", () => {
 		expect(activeNavPath("C:\\Users\\me\\Documents-old", nav)).toBeNull();
+	});
+});
+
+describe("volumeLabel", () => {
+	it("keeps the macOS boot-volume label for POSIX home paths", () => {
+		expect(volumeLabel("/Users/jeffrey/Documents")).toBe("Macintosh HD");
+	});
+
+	it("derives a Windows drive root instead of the macOS label", () => {
+		expect(volumeLabel("C:\\Users\\me")).toBe("C:");
+		expect(volumeLabel("C:/Users/me")).toBe("C:");
+		expect(volumeLabel("d:\\Users\\me")).toBe("D:");
+	});
+
+	it("derives the UNC share prefix for a network path", () => {
+		expect(volumeLabel("\\\\server\\share\\Users\\me")).toBe("\\\\server\\share");
 	});
 });

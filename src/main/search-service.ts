@@ -269,6 +269,7 @@ export function createSearchService(deps: SearchServiceDeps): SearchBridge {
 
 	return {
 		start: async (searchId, chatId, query, attachments) => {
+
 			let resolveFinish = (): void => undefined;
 			const finish = new Promise<void>((resolve) => {
 				resolveFinish = resolve;

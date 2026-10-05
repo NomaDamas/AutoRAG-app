@@ -1,9 +1,10 @@
 import type { Dirent } from "node:fs";
 import { cp, lstat, mkdir, readdir, rename as fsRename, rm } from "node:fs/promises";
 import { homedir } from "node:os";
-import { basename, dirname, extname, isAbsolute, join } from "node:path";
+import { basename, dirname, extname, isAbsolute, join, win32 } from "node:path";
 import {
 	RECENTS_PATH,
+	webUrl,
 	type DirListing,
 	type FsUndoOutcome,
 	type FsBatchResult,
@@ -16,13 +17,17 @@ import {
 	type FsFileDetails,
 	type FsLocation,
 	type FsOpError,
+	type FsSearchOptions,
 	type FsSearchResult,
 } from "../shared/fs-contract";
+import type { FileNameSearchBackend } from "./file-name-search";
 import { createFinderMetadataResolver, type FinderMetadataLookup } from "./finder-metadata";
 import { createIconProvider, type IconProvider } from "./file-icon";
 import { createOsKindResolver } from "./file-kind";
 import { readFileDetails } from "./file-details";
 import { buildFsEntry, errorMessage, hasErrorCode, isAvailable, pathExists, resolveCopyName } from "./fs-entry";
+import { createPlaces, type Places } from "./places";
+import { isRecycleBinDir, readRecycleBinName } from "./recycle-bin";
 import { createRecentsStore, type RecentsStore } from "./recents-store";
 
 /** Subset of Electron's shell used by the service (injected for testability). */
@@ -31,6 +36,8 @@ export interface FsShell {
 	showItemInFolder(fullPath: string): void;
 	/** Electron shell.openPath: resolves with "" on success or a verbatim error message. */
 	openPath(path: string): Promise<string>;
+	/** Electron shell.openExternal: the OS default handler for the URL (a browser for http/https). */
+	openExternal(url: string): Promise<void>;
 }
 
 /** Subset of Electron's clipboard used by the service (injected for testability). */
@@ -44,6 +51,8 @@ export type OsKindLookup = (path: string, ext: string) => Promise<string | null>
 export interface FsServiceDeps {
 	readonly shell: FsShell;
 	readonly clipboard: FsOsClipboard;
+	/** Defaults to process.platform; tests inject one to pin platform-specific behavior. */
+	readonly platform?: NodeJS.Platform;
 	/** Defaults to os.homedir(); tests inject a fixture home. */
 	readonly homeDir?: string;
 	/** Playwright points the first tab here. Absent in normal runs. */
@@ -58,6 +67,15 @@ export interface FsServiceDeps {
 	readonly details?: (path: string) => Promise<FsFileDetails>;
 	/** Defaults to the macOS extended-attribute + Spotlight resolver; tests may inject one. */
 	readonly finderMetadata?: FinderMetadataLookup;
+	/** Defaults to the OS places for `homeDir`; production injects one with Electron's known-folder paths. */
+	readonly places?: Places;
+	/** Defaults to the Windows `$Recycle.Bin\<SID>` shape; tests point it at a fixture folder. */
+	readonly recycleBin?: (dir: string) => boolean;
+	/**
+	 * Fast filename search (fsearch on macOS/Linux, Everything on Windows).
+	 * When absent, or when it reports no index, search walks the disk.
+	 */
+	readonly fileNameSearch?: FileNameSearchBackend;
 }
 
 export type FsRenameErrorCode = "invalid-name" | "name-collision";
@@ -75,6 +93,16 @@ export class FsRenameError extends Error {
 /** Search stays bounded: shallow walk, hard result cap, symlinked dirs not followed. */
 const SEARCH_MAX_DEPTH = 4;
 const SEARCH_MAX_RESULTS = 200;
+
+/**
+ * Normalize a path before handing it to Electron's `shell` (trash/reveal/open).
+ * Windows rejects forward-slash paths in `shell.trashItem` ("Failed to parse
+ * path"), while Node's own fs calls accept them, so only the OS handoff needs
+ * backslashes. POSIX platforms keep the path byte-for-byte.
+ */
+export function toHandoffPath(path: string, platform: NodeJS.Platform): string {
+	return platform === "win32" ? win32.normalize(path) : path;
+}
 
 /**
  * Finder's new-folder naming for the Nth mkdir attempt: the first free name is
@@ -95,6 +123,11 @@ interface SearchContext {
 function compareEntries(a: FsEntry, b: FsEntry): number {
 	if (a.kind !== b.kind) return a.kind === "folder" ? -1 : 1;
 	return a.name.localeCompare(b.name);
+}
+
+/** Compare paths across platforms: the Windows index reports backslash paths. */
+function normalizeSlashes(path: string): string {
+	return path.replace(/\\/g, "/");
 }
 
 /** Attach the OS-reported kind to one entry; a failed lookup keeps the letter/fallback kind. */
@@ -172,11 +205,14 @@ async function walkForSearch(dir: string, depth: number, context: SearchContext)
 }
 
 export function createFsService(deps: FsServiceDeps): FsCoreBridge {
+	const platform = deps.platform ?? process.platform;
 	const home = deps.homeDir ?? homedir();
 	const recents = deps.recents ?? createRecentsStore({ directory: join(home, "recents") });
 	const osKind: OsKindLookup = deps.osKind ?? createOsKindResolver().kindFor;
 	const finderMetadata = deps.finderMetadata ?? createFinderMetadataResolver();
 	const iconProvider: IconProvider = deps.icons ?? createIconProvider();
+	const places = deps.places ?? createPlaces({ homeDir: home, platform });
+	const recycleBin = deps.recycleBin ?? isRecycleBinDir;
 	// In-app clipboard lives in main-process memory only.
 	let inAppClipboard: FsClipboard | null = null;
 	/** Resolve OS metadata and optional thumbnails without blocking listDir. */
@@ -252,9 +288,33 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 			return { path, entries: await recentEntries() };
 		}
 		const dirents = await readdir(path, { withFileTypes: true });
+		if (recycleBin(path)) {
+			return { path, entries: await recycleBinEntries(path, dirents) };
+		}
 		const entries = await buildListingEntries(dirents, path);
 		entries.sort(compareEntries);
 		return { path, entries };
+	}
+
+	/**
+	 * A Windows Recycle Bin folder, as Explorer shows it: one row per `$R`
+	 * payload, named after its `$I` record's original path. The row keeps the
+	 * payload's real path, so open / Quick Look / delete act on the actual file.
+	 */
+	async function recycleBinEntries(path: string, dirents: readonly Dirent[]): Promise<FsEntry[]> {
+		const payloads = dirents.filter((dirent) => dirent.name.startsWith("$R"));
+		const entries = await buildListingEntries(payloads, path);
+		const named = await Promise.all(
+			entries.map(async (entry) => {
+				const record = join(path, `$I${entry.name.slice(2)}`);
+				const original = await readRecycleBinName(record).catch((error: unknown) => {
+					console.warn(`fs:listDir ${record}: ${errorMessage(error)}`);
+					return null;
+				});
+				return original === null ? entry : { ...entry, name: original };
+			}),
+		);
+		return named.sort(compareEntries);
 	}
 
 	/**
@@ -318,58 +378,94 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 
 	async function locations(): Promise<readonly FsLocation[]> {
 		const result: FsLocation[] = [
-			{ name: RECENTS_PATH, path: RECENTS_PATH, section: "favorites", available: true },
+			{
+				name: RECENTS_PATH,
+				path: RECENTS_PATH,
+				section: "favorites",
+				icon: "recents",
+				available: true,
+				scanned: false,
+				ejectable: false,
+			},
 		];
 		if (deps.qaRoot !== undefined) {
 			result.push({
 				name: "QA",
 				path: deps.qaRoot,
 				section: "favorites",
+				icon: "qa",
 				available: await isAvailable(deps.qaRoot),
+				scanned: true,
+				ejectable: false,
 			});
 		}
-		const fixed: readonly { readonly name: string; readonly path: string; readonly section: "favorites" | "cloud" }[] =
-			[
-				{ name: "Desktop", path: join(home, "Desktop"), section: "favorites" },
-				{ name: "Downloads", path: join(home, "Downloads"), section: "favorites" },
-				{ name: "Documents", path: join(home, "Documents"), section: "favorites" },
-				{ name: "iCloud Drive", path: join(home, "Library", "Mobile Documents", "com~apple~CloudDocs"), section: "cloud" },
-			];
-		for (const spec of fixed) {
-			result.push({ name: spec.name, path: spec.path, section: spec.section, available: await isAvailable(spec.path) });
-		}
-		// Third-party cloud drives appear only when their well-known paths exist.
-		const cloudStorage = join(home, "Library", "CloudStorage");
-		const googleDrive = await resolveCloudDrive(cloudStorage, "GoogleDrive-", join(home, "Google Drive"));
-		if (googleDrive !== null) {
-			result.push({ name: "Google Drive", path: googleDrive, section: "cloud", available: true });
-		}
-		const dropbox = await resolveCloudDrive(cloudStorage, "Dropbox", join(home, "Dropbox"));
-		if (dropbox !== null) {
-			result.push({ name: "Dropbox", path: dropbox, section: "cloud", available: true });
-		}
+		result.push(...(await places.list()));
 		return result;
 	}
 
-	async function resolveCloudDrive(cloudStorage: string, prefix: string, legacyPath: string): Promise<string | null> {
-		try {
-			const names = await readdir(cloudStorage);
-			const match = names.find((name) => name.startsWith(prefix));
-			if (match !== undefined) return join(cloudStorage, match);
-		} catch (error) {
-			// No CloudStorage directory means no modern-style drive; fall through to the legacy path.
-			if (!hasErrorCode(error, "ENOENT") && !hasErrorCode(error, "ENOTDIR")) throw error;
-		}
-		return (await pathExists(legacyPath)) ? legacyPath : null;
-	}
-
-	async function search(query: string): Promise<readonly FsSearchResult[]> {
+	/**
+	 * Filename substring search, case-insensitive. The platform index answers
+	 * when it can (fsearch / Everything); otherwise the disk walk runs. `scope`
+	 * restricts both to one folder subtree — the "파일 이름" chip's folder.
+	 */
+	async function search(query: string, options?: FsSearchOptions): Promise<readonly FsSearchResult[]> {
 		const needle = query.trim().toLowerCase();
 		if (needle.length === 0) return [];
+		const rawScope = options?.scope?.trim();
+		const scope = rawScope !== undefined && rawScope.length > 0 ? rawScope : undefined;
+		const backend = deps.fileNameSearch;
+		if (backend !== undefined) {
+			try {
+				const paths = await backend.search(query, scope);
+				if (paths !== null) return indexedHits(paths);
+			} catch (error) {
+				console.warn(`fs:search index failed, walking instead: ${errorMessage(error)}`);
+			}
+		}
+		return walkSearch(needle, scope);
+	}
+
+	/** Turn index paths into rows, attributing each to its location by longest prefix. */
+	async function indexedHits(paths: readonly string[]): Promise<readonly FsSearchResult[]> {
+		const known = (await locations()).filter((location) => location.path !== RECENTS_PATH);
 		const results: FsSearchResult[] = [];
+		for (const path of paths) {
+			if (results.length >= SEARCH_MAX_RESULTS) break;
+			try {
+				results.push({ entry: await buildFsEntry(path), location: searchLocation(path, known) });
+			} catch (error) {
+				// The index can be stale: a path that vanished since indexing is skipped.
+				if (!hasErrorCode(error, "ENOENT") && !hasErrorCode(error, "ENOTDIR")) {
+					console.warn(`fs:search skipping ${path}: ${errorMessage(error)}`);
+				}
+			}
+		}
+		return results;
+	}
+
+	function searchLocation(path: string, known: readonly FsLocation[]): string {
+		const target = normalizeSlashes(path);
+		let match: FsLocation | undefined;
+		for (const location of known) {
+			const root = normalizeSlashes(location.path);
+			if (target !== root && !target.startsWith(`${root}/`)) continue;
+			if (match === undefined || location.path.length > match.path.length) match = location;
+		}
+		return match?.name ?? dirname(path);
+	}
+
+	async function walkSearch(needle: string, scope: string | undefined): Promise<readonly FsSearchResult[]> {
+		const results: FsSearchResult[] = [];
+		if (scope !== undefined) {
+			// The "파일 이름" chip scopes to the folder in view, which may sit
+			// outside the scanned places (e.g. inside a mounted disk).
+			const known = (await locations()).filter((location) => location.path !== RECENTS_PATH);
+			await walkForSearch(scope, 0, { needle, location: searchLocation(scope, known), results });
+			return results;
+		}
 		for (const location of await locations()) {
-			// The virtual Recents location has no path on disk to walk.
-			if (!location.available || location.path === RECENTS_PATH) continue;
+			// Recents is virtual and whole disks are too large to walk; only scanned places count.
+			if (!location.available || !location.scanned) continue;
 			await walkForSearch(location.path, 0, { needle, location: location.name, results });
 			if (results.length >= SEARCH_MAX_RESULTS) break;
 		}
@@ -518,26 +614,32 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 		},
 		search,
 		locations,
+		ejectLocation: (path) => places.eject(path),
 		copy,
 		move,
 		duplicate,
 		rename,
 		undo,
 		createFolder,
-		trash: (paths) => runBatch(paths, (path) => deps.shell.trashItem(path)),
+		trash: (paths) => runBatch(paths, (path) => deps.shell.trashItem(toHandoffPath(path, platform))),
 		reveal: async (path) => {
-			deps.shell.showItemInFolder(path);
+			deps.shell.showItemInFolder(toHandoffPath(path, platform));
 		},
 		quickLook: async (path) => {
 			await recents.record(path);
 		},
 		open: async (path) => {
-			const message = await deps.shell.openPath(path);
+			const message = await deps.shell.openPath(toHandoffPath(path, platform));
 			// Failures surface verbatim — the operator sees the real message.
 			if (message !== "") {
 				throw new Error(message);
 			}
 			await recents.record(path);
+		},
+		openUrl: async (text) => {
+			const url = webUrl(text);
+			if (url === null) throw new Error(`웹 주소가 아닙니다: ${text}`);
+			await deps.shell.openExternal(url);
 		},
 		clipboardSet: async (clipboard) => {
 			inAppClipboard = { op: clipboard.op, paths: [...clipboard.paths] };

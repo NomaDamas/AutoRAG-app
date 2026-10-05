@@ -1,5 +1,7 @@
+import { homedir } from "node:os";
+import { fileURLToPath } from "node:url";
 /**
- * Manual QA — the Recents view of the real AI Finder app.
+ * Manual QA — the Recents view of the real Dazzi app.
  *
  * Proves the user-visible behavior: before anything is opened the view says so,
  * a double-clicked file and a Space-previewed file are both collected, the list
@@ -14,8 +16,9 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, realpathSync, rmSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { finderWindow, launchFinder } from "./launch-finder.mjs";
+import { isMac } from "./platform.mjs";
 
-const ROOT = new URL("../..", import.meta.url).pathname;
+const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const EVIDENCE = join(ROOT, ".omo/evidence/ai-finder-app/qa-recents");
 mkdirSync(EVIDENCE, { recursive: true });
 
@@ -41,12 +44,14 @@ const waitFor = async (probe, timeoutMs = 8000) => {
 
 /** GUI application processes, so a launch from a double-click is observable. */
 const guiProcesses = () =>
-	new Set(
-		sh(`ps -axo pid=,command= | grep -F '.app/Contents/MacOS/' | grep -v -F '/Contents/Frameworks/' | grep -v grep`)
-			.split("\n")
-			.filter(Boolean)
-			.map((line) => line.trim()),
-	);
+	isMac
+		? new Set(
+			sh(`ps -axo pid=,command= | grep -F '.app/Contents/MacOS/' | grep -v -F '/Contents/Frameworks/' | grep -v grep`)
+				.split("\n")
+				.filter(Boolean)
+				.map((line) => line.trim()),
+		)
+		: new Set();
 const appNameOf = (line) => line.match(/([^/]+)\.app\/Contents\/MacOS\//)?.[1] ?? line;
 
 /** Applications that can hold a document open, so the double-click handler is findable. */
@@ -61,9 +66,12 @@ const DOCUMENT_HANDLERS = [
 	"Safari",
 ];
 const frontmostApp = () =>
-	sh(`osascript -e 'tell application "System Events" to get name of first application process whose frontmost is true'`);
+	isMac
+		? sh(`osascript -e 'tell application "System Events" to get name of first application process whose frontmost is true'`)
+		: null;
 /** The handler that actually took the file — marker-matched on the fixture name. */
 const handlerHolding = (needle) => {
+	if (!isMac) return "";
 	for (const app of DOCUMENT_HANDLERS) {
 		if (sh(`pgrep -x "${app}"`) === "") continue;
 		const documents = sh(`osascript -e 'tell application "${app}" to get name of every document'`);
@@ -73,6 +81,7 @@ const handlerHolding = (needle) => {
 };
 /** Close only the fixtures this run handed to a handler, so the next check cannot read a stale document. */
 const closeHandlerDocuments = () => {
+	if (!isMac) return;
 	for (const app of DOCUMENT_HANDLERS) {
 		if (sh(`pgrep -x "${app}"`) === "") continue;
 		sh(`osascript -e 'tell application "${app}" to close (every document whose name contains "${RUN_PREFIX}")'`);
@@ -83,13 +92,13 @@ let swept = false;
 let launchedByDoubleClick = [];
 const RUN_ID = `ulw-recents-qa-${Date.now().toString(36)}`;
 const RUN_PREFIX = "ulw-recents-qa-";
-const textEditWasRunning = sh('pgrep -x "TextEdit"') !== ""; const FIXTURE_OPEN = join(process.env.HOME, "Documents", `${RUN_ID}-opened.txt`);
-const FIXTURE_PREVIEW = join(process.env.HOME, "Documents", `${RUN_ID}-previewed.txt`);
+const textEditWasRunning = isMac && sh('pgrep -x "TextEdit"') !== ""; const FIXTURE_OPEN = join(homedir(), "Documents", `${RUN_ID}-opened.txt`);
+const FIXTURE_PREVIEW = join(homedir(), "Documents", `${RUN_ID}-previewed.txt`);
 const USER_DATA = join(tmpdir(), `${RUN_ID}-userdata`);
 const STORE = join(USER_DATA, "recents", "recents.json");
 
-await Bun.write(FIXTURE_OPEN, "AutoRAG Recents QA fixture (opened with the default app)\n");
-await Bun.write(FIXTURE_PREVIEW, "AutoRAG Recents QA fixture (previewed with Quick Look)\n");
+await Bun.write(FIXTURE_OPEN, "Dazzi Recents QA fixture (opened with the default app)\n");
+await Bun.write(FIXTURE_PREVIEW, "Dazzi Recents QA fixture (previewed with Quick Look)\n");
 mkdirSync(USER_DATA, { recursive: true });
 
 /**
@@ -99,7 +108,7 @@ mkdirSync(USER_DATA, { recursive: true });
 const sweepLeftovers = () => {
 	if (swept) return;
 	swept = true;
-	sh(`pkill -f 'qlmanage -p ${FIXTURE_PREVIEW}'`);
+	if (isMac) sh(`pkill -f 'qlmanage -p ${FIXTURE_PREVIEW}'`);
 	closeHandlerDocuments();
 	for (const line of launchedByDoubleClick) {
 		const name = appNameOf(line);
@@ -107,7 +116,7 @@ const sweepLeftovers = () => {
 			sh(`osascript -e 'tell application "${name}" to quit'`);
 		}
 	}
-	if (!textEditWasRunning && sh('osascript -e \'tell application "TextEdit" to get name of every document\'') === "") {
+	if (isMac && !textEditWasRunning && sh('osascript -e \'tell application "TextEdit" to get name of every document\'') === "") {
 		sh('osascript -e \'tell application "TextEdit" to quit\'');
 	}
 	rmSync(FIXTURE_OPEN, { force: true });
@@ -194,14 +203,18 @@ launchedByDoubleClick = [...guiProcesses()].filter((line) => !guiBefore.has(line
 await page.screenshot({ path: join(EVIDENCE, "after-open-dblclick.png") });
 console.log(`apps newly running: ${launchedByDoubleClick.map(appNameOf).join(", ") || "none"}`);
 console.log(`frontmost after double-click: ${frontmostApp()}`);
-const handlerEvidence = await waitFor(() => handlerHolding(RUN_ID));
-check(
-	"double-click handed the file to an OS application",
-	handlerEvidence.length > 0,
-	handlerEvidence || "no running handler lists the fixture document",
-);
+const handlerEvidence = isMac ? await waitFor(() => handlerHolding(RUN_ID)) : "";
+if (isMac) {
+	check(
+		"double-click handed the file to an OS application",
+		handlerEvidence.length > 0,
+		handlerEvidence || "no running handler lists the fixture document",
+	);
+} else {
+	console.log("SKIP double-click OS-handoff check: macOS-only (osascript observes the handler)");
+}
 closeHandlerDocuments();
-check("the fixture document was closed again", handlerHolding(RUN_ID) === "", handlerHolding(RUN_ID) || "none");
+if (isMac) check("the fixture document was closed again", handlerHolding(RUN_ID) === "", handlerHolding(RUN_ID) || "none");
 
 // 3. Space on a second file → Quick Look previews it and it becomes recent too.
 await page.bringToFront();
@@ -213,7 +226,7 @@ await sleep(4000);
 // qlmanage can exit before ps sees it), so this stays an observation: the deterministic gate is
 // the store record below, which only quickLook() can write.
 const quickLookEvidence = await waitFor(
-	() => sh(`ps -axo command | grep -F 'qlmanage -p ${FIXTURE_PREVIEW}' | grep -v grep`),
+	() => (isMac ? sh(`ps -axo command | grep -F 'qlmanage -p ${FIXTURE_PREVIEW}' | grep -v grep`) : ""),
 );
 console.log(
 	`observation (host-dependent): qlmanage for the previewed fixture = ${quickLookEvidence ? "seen" : "not seen — the preview went to QuickLookUIService"
@@ -259,12 +272,16 @@ await sleep(4000);
 try {
 	const tabAfterRecentOpen = await page.locator(".tab--active .tab__title").innerText({ timeout: 5000 });
 	check("double-clicking a Recents row stays on the Recents view", tabAfterRecentOpen === "Recents", tabAfterRecentOpen);
-	const recentOpenEvidence = await waitFor(() => handlerHolding(RUN_ID));
-	check(
-		"double-clicking a Recents row opens the file with the OS application",
-		recentOpenEvidence.length > 0,
-		recentOpenEvidence || "no handler holds the fixture",
-	);
+	const recentOpenEvidence = isMac ? await waitFor(() => handlerHolding(RUN_ID)) : "";
+	if (isMac) {
+		check(
+			"double-clicking a Recents row opens the file with the OS application",
+			recentOpenEvidence.length > 0,
+			recentOpenEvidence || "no handler holds the fixture",
+		);
+	} else {
+		console.log("SKIP Recents-row OS-handoff check: macOS-only (osascript observes the handler)");
+	}
 	await page.screenshot({ path: join(EVIDENCE, "recents-row-dblclick.png") });
 } catch (error) {
 	check("double-clicking a Recents row stays on the Recents view", false, String(error).slice(0, 300));
@@ -317,7 +334,7 @@ await page.screenshot({ path: join(EVIDENCE, "recents-after-restart.png") });
 // 8. Cleanup — only what this script created.
 await app.close();
 sweepLeftovers();
-console.log(`cleanup: qlmanage alive = ${sh(`pgrep -fl 'qlmanage -p ${FIXTURE_PREVIEW}'`) || "none"}`);
+console.log(`cleanup: qlmanage alive = ${(isMac ? sh(`pgrep -fl 'qlmanage -p ${FIXTURE_PREVIEW}'`) : "") || "none"}`);
 console.log(`cleanup: fixtures alive = ${existsSync(FIXTURE_OPEN) || existsSync(FIXTURE_PREVIEW)}`);
 console.log(`cleanup: document handler still holding the fixture = ${handlerHolding(RUN_ID) || "none"}`);
 console.log(`cleanup: unrelated apps that appeared during the run = ${[...guiProcesses()].filter((line) => !guiBefore.has(line)).map(appNameOf).join(", ") || "none"}`);

@@ -1,4 +1,4 @@
-import { chmod, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
@@ -209,6 +209,27 @@ describe("createFinderMetadataResolver", () => {
 		expect(run).not.toHaveBeenCalled();
 	});
 
+	// POSIX mode bits are the fixture: Windows chmod cannot revoke read access, and
+	// Finder metadata is macOS-only there anyway.
+	it.skipIf(process.platform === "win32")("spawns no helper for a protected folder the user cannot read", async () => {
+		// Given a folder like /Volumes/X/.Trashes: listable from its parent, but not readable
+		const protectedDir = join(root, ".Trashes");
+		await mkdir(protectedDir);
+		await chmod(protectedDir, 0o300);
+		const run = vi.fn(fixtureRunner());
+		const warnings: string[] = [];
+		const resolve = createFinderMetadataResolver({ platform: "darwin", run, warn: (message) => warnings.push(message) });
+
+		// When its metadata is requested
+		const metadata = await resolve(protectedDir);
+		await chmod(protectedDir, 0o700);
+
+		// Then there is none, and no xattr/mdls process was started to fail on it
+		expect(metadata).toBeNull();
+		expect(run).not.toHaveBeenCalled();
+		expect(warnings).toEqual([]);
+	});
+
 	it("leaves every optional value null when the helpers answer nothing", async () => {
 		const run: FinderCommandRunner = async (command) => {
 			if (command === "/usr/bin/mdls") return indexedPlist();
@@ -258,12 +279,20 @@ describe("createFinderMetadataResolver", () => {
 		const resolve = createFinderMetadataResolver({ platform: "darwin", run, now: () => 1000, warn: () => {} });
 
 		expect((await resolve(path))?.addedAt).toBe("2026-09-02T12:00:00.000Z");
-		const before = await stat(path);
 		mdls = indexedPlist("<key>kMDItemDateAdded</key><date>2026-09-05T12:00:00Z</date>");
-		// chmod bumps the inode change time while leaving the modification time untouched.
-		await chmod(path, 0o600);
-		const after = await stat(path);
-		expect(after.mtimeMs).toBe(before.mtimeMs);
+		if (process.platform === "win32") {
+			// NTFS reports ctime as the creation time and chmod cannot advance it, so a
+			// metadata-only change at the same modification time is not observable there.
+			// Force a real write (which advances mtime and size) to still exercise the
+			// recompute path on Windows.
+			await writeFile(path, "xy");
+		} else {
+			const before = await stat(path);
+			// chmod bumps the inode change time while leaving the modification time untouched.
+			await chmod(path, 0o600);
+			const after = await stat(path);
+			expect(after.mtimeMs).toBe(before.mtimeMs);
+		}
 
 		expect((await resolve(path))?.addedAt).toBe("2026-09-05T12:00:00.000Z");
 	});

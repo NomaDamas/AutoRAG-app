@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useRef, useState, type ReactElement } from "react";
-import type { PreviewBridge, QuickLookTarget } from "../../preview/shared/contract";
+import { useCallback, useEffect, useRef, useState, type DragEvent, type ReactElement } from "react";
+import type { QuickLookTarget } from "../../preview/shared/contract";
 import type { Bounds } from "../../preview/shared/fit";
 import type { ActionAnchor } from "../../shared/actions-contract";
-import type { DataSourcesSnapshot, SettingsBridge } from "../../shared/settings-contract";
-import type { CitationEvidence } from "../../shared/search-contract";
+import type { DataSourcesSnapshot } from "../../shared/settings-contract";
+import type { ChatAttachment, CitationEvidence } from "../../shared/search-contract";
 
-const autorag = (window as unknown as { readonly autorag: { readonly settings: SettingsBridge; readonly preview: PreviewBridge } }).autorag;
+const autorag = window.autorag;
 import { AiSearchPanel, type AiDockHandle } from "./components/AiSearchPanel";
 import type { SearchMode } from "./components/SidebarSearch";
 import { ColumnBrowser } from "./components/ColumnBrowser";
@@ -20,11 +20,11 @@ import { ContextMenu } from "./components/primitives/ContextMenu";
 import { Toast } from "./components/primitives/Toast";
 import { Sidebar } from "./components/Sidebar";
 import { SettingsView } from "./components/SettingsView";
-import { RECENTS_PATH } from "../../shared/fs-contract";
-import { SETTINGS_PATH } from "./state/tabs";
-import { isFinderDrag, readFinderDragPaths, writeFinderDrag } from "./state/attachments";
+import { RECENTS_PATH, type FsLocationIcon } from "../../shared/fs-contract";
+import { aiPanelTabs, AI_SEARCH_PATH, SETTINGS_PATH } from "./state/tabs";
+import { attachmentsFromDrop, isAttachmentDrag, isFinderDrag, readFinderDragPaths, writeFinderDrag } from "./state/attachments";
 import { backgroundDropDir } from "./state/file-transfer";
-import type { FileActionTarget } from "./state/file-actions";
+import { toolbarShareControl, type FileActionTarget } from "./state/file-actions";
 import { basename, breadcrumbTrail, dirname } from "./state/paths";
 import {
 	loadListColumns,
@@ -46,8 +46,6 @@ const SHOW_HOTKEYS = true;
 
 const SIDEBAR_KEY = "autorag.shell.sidebar";
 const INSPECTOR_KEY = "autorag.shell.inspector";
-const AI_OPEN_KEY = "autorag.shell.aiOpen";
-const AI_HEIGHT_KEY = "autorag.shell.aiHeight";
 const SIDEBAR_WIDTH_KEY = "autorag.shell.sidebarWidth";
 const INSPECTOR_WIDTH_KEY = "autorag.shell.inspectorWidth";
 
@@ -101,20 +99,21 @@ function saveNumber(key: string, value: number): void {
 	}
 }
 
-/** Sidebar cloud labels → live datasource rows (status dots). */
-const SOURCE_LABEL_MATCH: readonly (readonly [string, RegExp])[] = [
-	["Google Drive", /gdrive|google[- ]?drive/i],
-	["Dropbox", /dropbox/i],
-	["iCloud Drive", /icloud/i],
+/** Sidebar cloud glyphs → live datasource rows (status dots on every account of that provider). */
+const SOURCE_ICON_MATCH: readonly (readonly [FsLocationIcon, RegExp])[] = [
+	["google-drive", /gdrive|google[- ]?drive/i],
+	["dropbox", /dropbox/i],
+	["icloud", /icloud/i],
+	["onedrive", /onedrive/i],
 ];
 
-function mapSourceStatus(snapshot: DataSourcesSnapshot): Record<string, "syncing" | "error"> {
-	const out: Record<string, "syncing" | "error"> = {};
-	for (const [label, needle] of SOURCE_LABEL_MATCH) {
+function mapSourceStatus(snapshot: DataSourcesSnapshot): Partial<Record<FsLocationIcon, "syncing" | "error">> {
+	const out: Partial<Record<FsLocationIcon, "syncing" | "error">> = {};
+	for (const [icon, needle] of SOURCE_ICON_MATCH) {
 		const row = snapshot.sources.find((source) => needle.test(source.id) || needle.test(source.type));
 		if (row === undefined) continue;
-		if (row.status === "syncing") out[label] = "syncing";
-		else if (row.status === "attention") out[label] = "error";
+		if (row.status === "syncing") out[icon] = "syncing";
+		else if (row.status === "attention") out[icon] = "error";
 	}
 	return out;
 }
@@ -197,21 +196,18 @@ export function App(): ReactElement {
 	/* ------------------------------------------------ v7 shell chrome state */
 	const [sidebarVisible, setSidebarVisible] = useState(() => loadFlag(SIDEBAR_KEY, true));
 	const [inspectorVisible, setInspectorVisible] = useState(() => loadFlag(INSPECTOR_KEY, true));
-	const [aiOpen, setAiOpen] = useState(() => loadFlag(AI_OPEN_KEY, true));
-	const [aiHeight, setAiHeight] = useState(() => loadNumber(AI_HEIGHT_KEY, 280));
 	const [sidebarWidth, setSidebarWidth] = useState(() => loadNumber(SIDEBAR_WIDTH_KEY, SIDEBAR_MIN));
 	const [inspectorWidth, setInspectorWidth] = useState(() => loadNumber(INSPECTOR_WIDTH_KEY, INSPECTOR_MIN));
 	const [listColumns, setListColumns] = useState<ListColumnsState>(loadListColumns);
 	const [dropTargetPath, setDropTargetPath] = useState<string | null>(null);
 	const [dropTabId, setDropTabId] = useState<number | null>(null);
 	const [dropBackgroundDir, setDropBackgroundDir] = useState<string | null>(null);
-	const [sourceStatus, setSourceStatus] = useState<Readonly<Record<string, "syncing" | "error">>>({});
-	const aiDockRef = useRef<AiDockHandle | null>(null);
+	const [sourceStatus, setSourceStatus] = useState<Readonly<Partial<Record<FsLocationIcon, "syncing" | "error">>>>({});
+	/** The sidebar AI Search item is under an attachment drag. */
+	const [aiNavDropHover, setAiNavDropHover] = useState(false);
 
 	useEffect(() => saveFlag(SIDEBAR_KEY, sidebarVisible), [sidebarVisible]);
 	useEffect(() => saveFlag(INSPECTOR_KEY, inspectorVisible), [inspectorVisible]);
-	useEffect(() => saveFlag(AI_OPEN_KEY, aiOpen), [aiOpen]);
-	useEffect(() => saveNumber(AI_HEIGHT_KEY, aiHeight), [aiHeight]);
 	useEffect(() => saveNumber(SIDEBAR_WIDTH_KEY, sidebarWidth), [sidebarWidth]);
 	useEffect(() => saveNumber(INSPECTOR_WIDTH_KEY, inspectorWidth), [inspectorWidth]);
 	useEffect(() => saveListColumns(listColumns), [listColumns]);
@@ -230,55 +226,75 @@ export function App(): ReactElement {
 	}, []);
 
 	/* --------------------------------------------------------- evidence state */
+	// The visible AI Search tab publishes its answer's citations; the inspector
+	// shows them as a full-height Evidence view while that tab is focused.
 	const [evidence, setEvidence] = useState<readonly CitationEvidence[]>([]);
 	const [evidenceSession, setEvidenceSession] = useState<string | null>(null);
 	const [selectedEvidence, setSelectedEvidence] = useState<number | null>(null);
-	const [evidenceOpen, setEvidenceOpen] = useState(false);
-	const evidenceSessionRef = useRef<string | null>(null);
 
 	const publishEvidence = useCallback((items: readonly CitationEvidence[], sessionId: string | null) => {
-		const sessionChanged = evidenceSessionRef.current !== sessionId;
-		evidenceSessionRef.current = sessionId;
 		setEvidence(items);
 		setEvidenceSession(sessionId);
-		if (items.length === 0 || sessionChanged) setEvidenceOpen(false);
 		setSelectedEvidence((current) => (current !== null && items.some((item) => item.number === current) ? current : null));
 	}, []);
 
-	const dismissEvidence = useCallback((): boolean => {
-		if (evidence.length > 0 && evidenceOpen) {
-			setEvidenceOpen(false);
-			return true;
-		}
-		return false;
-	}, [evidence.length, evidenceOpen]);
+	/**
+	 * Work for the AI Search tab that is (about to be) visible: the tab switch
+	 * and the panel mount land in the same render, so the request waits here
+	 * until the effect below finds the active tab's panel handle.
+	 */
+	const aiHandlesRef = useRef(new Map<number, AiDockHandle>());
+	const aiPendingRef = useRef<{ readonly attach: readonly ChatAttachment[]; readonly query: string | null } | null>(null);
+	const [aiDelivery, setAiDelivery] = useState(0);
+	const deliverToAi = useCallback((request: { readonly attach?: readonly ChatAttachment[]; readonly query?: string }) => {
+		const pending = aiPendingRef.current;
+		aiPendingRef.current = {
+			attach: [...(pending?.attach ?? []), ...(request.attach ?? [])],
+			query: request.query ?? pending?.query ?? null,
+		};
+		setAiDelivery((tick) => tick + 1);
+	}, []);
 
 	const finder = useFinderController(source, {
 		showHiddenFiles,
 		quickLook: { onQuickLook: openQuickLook, closeQuickLook, isQuickLookOpen },
 		onFocusSearch: () => setSidebarVisible(true),
-		onFocusComposer: () => {
-			if (aiOpen) {
-				setAiOpen(false);
-				return;
-			}
-			setAiOpen(true);
-			aiDockRef.current?.focusComposer();
-		},
-		onDismissEvidence: dismissEvidence,
+		// ⌘K: the controller adopts the nearest AI Search tab (or opens one); focus its composer.
+		onFocusComposer: () => deliverToAi({}),
 	});
 
-	/** ⌥Enter "content search": hand the query to the AI dock (real librarian search). */
-	const contentSearch = useCallback((text: string) => {
-		if (text.trim() === "") return;
-		setAiOpen(true);
-		aiDockRef.current?.sendQuery(text);
-	}, []);
+	const activeTab = finder.tabs.find((tab) => tab.active) ?? null;
+	const activeAiTabId = activeTab?.aiSearch === true ? activeTab.id : null;
+	// Each AI Search tab keeps its own mounted chat, also while the tab shows a folder.
+	const [aiPanelIds, setAiPanelIds] = useState<readonly number[]>([]);
+	const nextAiPanelIds = aiPanelTabs(aiPanelIds, finder.tabs);
+	if (nextAiPanelIds !== aiPanelIds) setAiPanelIds(nextAiPanelIds);
+
+	useEffect(() => {
+		const pending = aiPendingRef.current;
+		if (pending === null) return;
+		aiPendingRef.current = null;
+		const handle = activeAiTabId === null ? undefined : aiHandlesRef.current.get(activeAiTabId);
+		if (handle === undefined) return;
+		if (pending.attach.length > 0) handle.attach(pending.attach);
+		if (pending.query !== null) handle.sendQuery(pending.query);
+		else handle.focusComposer();
+	}, [aiDelivery, activeAiTabId]);
+
+	/** Sidebar 내용 / ⌥Enter "content search": a new AI Search tab runs the query. */
+	const contentSearch = useCallback(
+		(text: string) => {
+			if (text.trim() === "") return;
+			finder.openAiSearch();
+			deliverToAi({ query: text });
+		},
+		[deliverToAi, finder],
+	);
 
 	/**
-	 * Sidebar search commit. Enter runs a filename search in the chip's scope
-	 * (전체 = This Mac, 파일 이름 = current folder); the 내용 chip — or ⌥Enter
-	 * from any chip — hands the query to the AI dock's real content search.
+	 * Sidebar search commit. Enter runs a filename search over the whole machine
+	 * (This Mac / This Computer); the 내용 chip — or ⌥Enter from either chip —
+	 * hands the query to a new AI Search tab.
 	 */
 	const submitSidebarSearch = useCallback(
 		(mode: SearchMode, text: string) => {
@@ -291,17 +307,28 @@ export function App(): ReactElement {
 				contentSearch(value);
 				return;
 			}
-			finder.setSearchScope(mode === "name" ? "current" : "all");
+			// A Settings / AI Search tab lists nothing: the results show in its last folder.
+			finder.leaveVirtualTab();
+			finder.setSearchScope("all");
 			finder.setQuery(value);
 		},
 		[contentSearch, finder],
 	);
 
-	/** Inspector "AI 요약": attach the entry to the composer and focus it. */
-	const askAi = useCallback((entry: { readonly path: string; readonly name: string; readonly kind: "file" | "folder" }) => {
-		setAiOpen(true);
-		aiDockRef.current?.attachFile({ kind: entry.kind, id: entry.path, name: entry.name });
-	}, []);
+	/** Inspector "AI 요약": a new AI Search tab with the entry attached to its composer. */
+	const askAi = useCallback(
+		(entry: { readonly path: string; readonly name: string; readonly kind: "file" | "folder" }) => {
+			finder.openAiSearch();
+			deliverToAi({ attach: [{ kind: entry.kind, id: entry.path, name: entry.name }] });
+		},
+		[deliverToAi, finder],
+	);
+
+	/** Sidebar "AI Search": the focused tab becomes AI Search. */
+	const showAiSearch = useCallback(() => {
+		finder.showAiSearch();
+		deliverToAi({});
+	}, [deliverToAi, finder]);
 
 	/** Inspector action bar: open, share, archive, and edits all run through the controller. */
 	const runInspectorAction = useCallback(
@@ -312,24 +339,19 @@ export function App(): ReactElement {
 		[finder],
 	);
 
-	const selectEvidence = useCallback((number: number) => {
-		setSelectedEvidence(number);
-		setEvidenceOpen(true);
-		setInspectorVisible(true);
-	}, []);
-
-	useEffect(() => {
-		const onKeyDown = (event: globalThis.KeyboardEvent): void => {
-			const target = event.target;
-			if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return;
-			if ((event.metaKey || event.ctrlKey) && !event.shiftKey && !event.altKey && event.key.toLowerCase() === "e") {
-				event.preventDefault();
-				setEvidenceOpen((open) => !open);
+	const selectEvidence = useCallback(
+		(number: number) => {
+			// A citation chip with no evidence entry must never open a different
+			// result: the panel would silently show unrelated evidence.
+			if (!evidence.some((item) => item.number === number)) {
+				finder.showToast(`근거 ${number}에 대한 정보를 찾을 수 없습니다`);
+				return;
 			}
-		};
-		window.addEventListener("keydown", onKeyDown);
-		return () => window.removeEventListener("keydown", onKeyDown);
-	}, []);
+			setSelectedEvidence(number);
+			setInspectorVisible(true);
+		},
+		[evidence, finder.showToast],
+	);
 
 	const evidenceSelectedNumber = evidence.find((item) => item.number === selectedEvidence)?.number ?? evidence[0]?.number ?? 1;
 	const focusPath = finder.selection.focus;
@@ -458,7 +480,7 @@ export function App(): ReactElement {
 			if (entry.kind !== "folder") return;
 			const paths = readFinderDragPaths(event.dataTransfer);
 			if (paths.length === 0) return;
-			// No stopPropagation: the window "drop" listener clears the AI dock's
+			// No stopPropagation: the window "drop" listener clears the AI panel's
 			// drag overlay (and the highlights) once the transfer has started.
 			event.preventDefault();
 			finder.transferDropped(paths, entry.path, event.altKey);
@@ -474,6 +496,8 @@ export function App(): ReactElement {
 	};
 
 	const focused = finder.focusedEntry;
+	/** The toolbar Share item: shown where the OS has a share sheet, enabled with a focused row. */
+	const shareControl = toolbarShareControl(focused !== null, finder.actionCapabilities);
 	const familyEntries = focused !== null ? finder.familyEntriesFor(focused.path) : null;
 	const inspectorFamily: InspectorFamily | null =
 		familyEntries === null
@@ -502,12 +526,37 @@ export function App(): ReactElement {
 		[familyEntries, finder],
 	);
 
+	const aiTabActive = finder.path === AI_SEARCH_PATH;
 	const toolbarTitle =
 		finder.path === SETTINGS_PATH
 			? "Settings"
-			: finder.searching
-				? `Search "${finder.query}"`
-				: basename(finder.path);
+			: aiTabActive
+				? "AI Search"
+				: finder.searching
+					? `Search "${finder.query}"`
+					: basename(finder.path);
+
+	/** The sidebar AI Search item: a drop turns the focused tab into AI Search with the files attached. */
+	const aiSearchDrop = {
+		hovered: aiNavDropHover,
+		onDragOver: (event: DragEvent<HTMLButtonElement>) => {
+			if (!isAttachmentDrag(event.dataTransfer.types)) return;
+			event.preventDefault();
+			event.dataTransfer.dropEffect = "copy";
+			setDropBackgroundDir(null);
+			setAiNavDropHover(true);
+		},
+		onDragLeave: () => setAiNavDropHover(false),
+		onDrop: (event: DragEvent<HTMLButtonElement>) => {
+			setAiNavDropHover(false);
+			if (!isAttachmentDrag(event.dataTransfer.types)) return;
+			event.preventDefault();
+			const dropped = attachmentsFromDrop(event.dataTransfer, autorag.pathForFile);
+			if (dropped.length === 0) return;
+			finder.showAiSearch();
+			deliverToAi({ attach: dropped });
+		},
+	};
 	/** Outer grid: sidebar + the region that holds the full-width toolbar. */
 	const windowColumns = `${sidebarVisible ? `${sidebarWidth}px ` : ""}minmax(0,1fr)`;
 	/** Inner grid under the toolbar: Finder + inspector. */
@@ -521,9 +570,12 @@ export function App(): ReactElement {
 			>
 				{sidebarVisible ? (
 					<Sidebar
-						activeLabel={finder.activeNavLabel}
+						groups={finder.navGroups}
+						activePath={aiTabActive ? AI_SEARCH_PATH : finder.activeNavPath}
+						settingsActive={finder.path === SETTINGS_PATH}
 						showHotkeys={SHOW_HOTKEYS}
-						onNavigate={finder.navigateNav}
+						onNavigate={(item) => (item.view === "aiSearch" ? showAiSearch() : finder.navigateNav(item))}
+						onEject={finder.ejectNav}
 						onOpenSettings={finder.openSettings}
 						onHideSidebar={() => setSidebarVisible(false)}
 						onNewFolder={finder.newFolder}
@@ -534,6 +586,7 @@ export function App(): ReactElement {
 						onSearchFocus={() => finder.setSearchFocused(true)}
 						onSearchBlur={() => finder.setSearchFocused(false)}
 						onSubmitSearch={submitSidebarSearch}
+						aiSearchDrop={aiSearchDrop}
 					/>
 				) : null}
 				<div className="flex min-w-0 min-h-0 flex-col">
@@ -551,11 +604,15 @@ export function App(): ReactElement {
 						onSetGrouping={finder.setGrouping}
 						inspectorVisible={inspectorVisible}
 						onToggleInspector={() => setInspectorVisible((visible) => !visible)}
-						aiOpen={aiOpen}
-						onToggleAi={() => setAiOpen((open) => !open)}
-						canShare={focused !== null}
-						onShare={() => {
-							if (focused !== null) finder.copyEntryPath(focused);
+						aiActive={aiTabActive}
+						onShowAi={() => {
+							finder.focusAiSearch();
+							deliverToAi({});
+						}}
+						shareAvailable={shareControl.shown}
+						canShare={shareControl.enabled}
+						onShare={(anchor) => {
+							if (focused !== null) finder.runEntryAction(focused, { kind: "share" }, anchor);
 						}}
 						sidebarHidden={!sidebarVisible}
 						onShowSidebar={() => setSidebarVisible(true)}
@@ -571,10 +628,11 @@ export function App(): ReactElement {
 						onNewTab={finder.newTab}
 						dropTabId={dropTabId}
 						onTabDragOver={(id, event) => {
-							if (!isFinderDrag(event.dataTransfer.types)) return;
+							const aiTab = finder.tabs.some((tab) => tab.id === id && tab.aiSearch);
+							if (aiTab ? !isAttachmentDrag(event.dataTransfer.types) : !isFinderDrag(event.dataTransfer.types)) return;
 							setDropBackgroundDir(null);
 							event.preventDefault();
-							event.dataTransfer.dropEffect = event.altKey ? "copy" : "move";
+							event.dataTransfer.dropEffect = aiTab ? "copy" : event.altKey ? "copy" : "move";
 							setDropTabId((current) => (current === id ? current : id));
 							if (finder.tabs.some((tab) => tab.id === id && !tab.active)) armSpringTab(id);
 						}}
@@ -586,6 +644,16 @@ export function App(): ReactElement {
 							cancelSpringTab();
 							setDropTabId(null);
 							setDropBackgroundDir(null);
+							if (finder.tabs.some((tab) => tab.id === id && tab.aiSearch)) {
+								// An AI Search tab takes the drop as chat attachments, not a file move.
+								if (!isAttachmentDrag(event.dataTransfer.types)) return;
+								event.preventDefault();
+								const dropped = attachmentsFromDrop(event.dataTransfer, autorag.pathForFile);
+								if (dropped.length === 0) return;
+								finder.selectTabId(id);
+								deliverToAi({ attach: dropped });
+								return;
+							}
 							const paths = readFinderDragPaths(event.dataTransfer);
 							if (paths.length === 0) return;
 							event.preventDefault();
@@ -594,7 +662,7 @@ export function App(): ReactElement {
 					/>
 					{finder.path === SETTINGS_PATH ? (
 						<SettingsView onSettingsChanged={(settings) => setShowHiddenFiles(settings.showHiddenFiles)} />
-					) : (
+					) : aiTabActive ? null : (
 						<>
 							{finder.searching ? (
 								<ScopeBar
@@ -681,16 +749,19 @@ export function App(): ReactElement {
 							/>
 						</>
 					)}
-					<AiSearchPanel
-						ref={aiDockRef}
-						open={aiOpen}
-						height={aiHeight}
-						onToggleOpen={() => setAiOpen((open) => !open)}
-						onHeightChange={setAiHeight}
-						selectedEvidence={evidence.length === 0 ? null : evidenceSelectedNumber}
-						onSelectEvidence={selectEvidence}
-						onPublish={publishEvidence}
-					/>
+					{aiPanelIds.map((id) => (
+						<AiSearchPanel
+							key={id}
+							ref={(handle) => {
+								if (handle === null) aiHandlesRef.current.delete(id);
+								else aiHandlesRef.current.set(id, handle);
+							}}
+							active={id === activeAiTabId}
+							selectedEvidence={evidence.length === 0 ? null : evidenceSelectedNumber}
+							onSelectEvidence={selectEvidence}
+							onPublish={publishEvidence}
+						/>
+					))}
 				</section>
 				{inspectorVisible ? (
 					<Inspector
@@ -705,8 +776,8 @@ export function App(): ReactElement {
 						onAction={runInspectorAction}
 						family={inspectorFamily}
 						onOpenMember={openMemberEntry}
+						view={aiTabActive ? "evidence" : "info"}
 						evidence={evidence}
-						evidenceVisible={evidence.length > 0 && evidenceOpen && selectedEvidence !== null}
 						evidenceSelected={evidenceSelectedNumber}
 						sessionId={evidenceSession}
 						onSelectEvidence={selectEvidence}

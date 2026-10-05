@@ -14,6 +14,7 @@ import { fileURLToPath } from "node:url";
 import { _electron } from "playwright";
 import { AutoRAGAgent, buildAgentOptions, resolveConfigReadOnly } from "@autorag/librarian";
 import { resolveAgentModel } from "@autorag/librarian/core";
+import { AI_PANEL, finderWindow, openAiSearch } from "./launch-finder.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const EVIDENCE = join(ROOT, ".omo", "evidence", "ai-finder-app", "qa-answer-streaming");
@@ -88,7 +89,7 @@ const MISSING_ROOT_CONFIG = writeConfig("config-missing-root.json", [join(WORK, 
 
 async function warmIndex(configPath) {
 	const config = resolveConfigReadOnly({ flags: {}, env: { ...process.env, AUTORAG_CONFIG: configPath }, cwd: WORK });
-	const resolved = resolveAgentModel(config);
+	const resolved = await resolveAgentModel(config);
 	const agent = new AutoRAGAgent({ ...buildAgentOptions(config), model: resolved.model });
 	const result = await agent.refresh(true);
 	log(`warm index: scanned=${result.scanned} minsync=${JSON.stringify(result.minsync)}`);
@@ -102,13 +103,13 @@ async function launch(configPath, label) {
 		cwd: WORK,
 		env,
 	});
-	const page = await app.firstWindow();
+	const page = await finderWindow(app, 30_000);
 	page.on("pageerror", (error) => log(`[${label}:pageerror] ${String(error).slice(0, 300)}`));
 	app.process().stderr?.on("data", (chunk) => {
 		const text = String(chunk).trim();
 		if (text !== "" && !text.includes("Debugger")) log(`[${label}:main:err] ${text.slice(0, 300)}`);
 	});
-	await page.waitForSelector('[aria-label="AI Search"]', { timeout: 30_000 });
+	await openAiSearch(page);
 	return { app, page };
 }
 
@@ -125,7 +126,7 @@ async function installRecorder(page) {
 			const prose = [...document.querySelectorAll(".assistant-msg .assistant-prose")];
 			const quick = prose[0] ?? null;
 			const deep = prose[1] ?? null;
-			const input = document.querySelector('input[aria-label="Ask AutoRAG"]');
+			const input = document.querySelector('input[aria-label="Ask Dazzi"]');
 			const inProgress = input !== null && input.disabled;
 			return {
 				thinking: document.querySelector(".water-wave-thinking") !== null,
@@ -149,7 +150,7 @@ async function installRecorder(page) {
 			timeline.push({ t: Math.round(performance.now() - start), ...state });
 		};
 		window.__qaTimeline = timeline;
-		new MutationObserver(record).observe(document.querySelector('[aria-label="AI Search"]'), {
+		new MutationObserver(record).observe(document.querySelector('section[aria-label="AI Search"]:not([aria-hidden="true"])'), {
 			subtree: true,
 			childList: true,
 			characterData: true,
@@ -160,7 +161,7 @@ async function installRecorder(page) {
 }
 
 const FINISHED = () => {
-	const input = document.querySelector('input[aria-label="Ask AutoRAG"]');
+	const input = document.querySelector('input[aria-label="Ask Dazzi"]');
 	return input !== null && !input.disabled && document.querySelector(".user-msg") !== null;
 };
 
@@ -184,7 +185,7 @@ try {
 	running = await launch(GOOD_CONFIG, "stream");
 	let { page } = running;
 	await installRecorder(page);
-	await page.fill('input[aria-label="Ask AutoRAG"]', QUERY);
+	await page.fill('input[aria-label="Ask Dazzi"]', QUERY);
 	await page.keyboard.press("Enter");
 	log(`submitted: ${QUERY}`);
 	await page.waitForFunction(() => document.querySelector(".water-wave-thinking"), null, { timeout: RUN_TIMEOUT_MS });
@@ -236,12 +237,12 @@ try {
 	// Scenario 2: a config whose search root is gone must fail visibly.
 	running = await launch(MISSING_ROOT_CONFIG, "missing-root");
 	page = running.page;
-	await page.fill('input[aria-label="Ask AutoRAG"]', QUERY);
+	await page.fill('input[aria-label="Ask Dazzi"]', QUERY);
 	const submittedAt = Date.now();
 	await page.keyboard.press("Enter");
 	await page.waitForFunction(() => document.querySelector(".ai .text-danger-text")?.textContent, null, { timeout: 5_000 });
 	await page.waitForFunction(FINISHED, null, { timeout: 5_000 });
-	const errorText = await page.locator(".ai .text-danger-text").textContent();
+	const errorText = await page.locator(`${AI_PANEL} .text-danger-text`).textContent();
 	await page.screenshot({ path: join(EVIDENCE, "4-missing-root-error.png") });
 	check(
 		"broken config shows an error",

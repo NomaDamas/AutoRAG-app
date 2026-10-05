@@ -2,9 +2,11 @@ import { access, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from "
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createFsService, FsRenameError, untitledFolderName, type FsServiceDeps } from "../src/main/fs-service";
+import { createFsService, FsRenameError, toHandoffPath, untitledFolderName, type FsServiceDeps } from "../src/main/fs-service";
+import type { FileNameSearchBackend } from "../src/main/file-name-search";
 import { createRecentsStore, type RecentsStore } from "../src/main/recents-store";
-import { RECENTS_PATH } from "../src/shared/fs-contract";
+import { RECENTS_PATH, type FsLocation } from "../src/shared/fs-contract";
+import { createPlaces, type Places } from "../src/main/places";
 
 const unreadablePaths = vi.hoisted(() => new Set<string>());
 
@@ -19,19 +21,34 @@ vi.mock("../src/main/fs-entry", async () => {
 	};
 });
 
+function fakePlaces(rows: readonly FsLocation[]): Places & { readonly ejected: string[] } {
+	const ejected: string[] = [];
+	return {
+		ejected,
+		list: async () => rows,
+		eject: async (path) => {
+			ejected.push(path);
+		},
+		signature: async () => "",
+		watch: () => () => {},
+	};
+}
+
 interface StubbedDeps {
 	readonly deps: FsServiceDeps;
 	readonly trashed: string[];
 	readonly revealed: string[];
 	readonly opened: string[];
+	readonly openedUrls: string[];
 	readonly clipboardText: string[];
 	readonly recents: RecentsStore;
 }
 
-function makeDeps(homeDir: string): StubbedDeps {
+function makeDeps(homeDir: string, platform: NodeJS.Platform = "darwin"): StubbedDeps {
 	const trashed: string[] = [];
 	const revealed: string[] = [];
 	const opened: string[] = [];
+	const openedUrls: string[] = [];
 	const clipboardText: string[] = [];
 	return {
 		deps: {
@@ -46,6 +63,9 @@ function makeDeps(homeDir: string): StubbedDeps {
 					opened.push(path);
 					return "";
 				},
+				openExternal: async (url: string) => {
+					openedUrls.push(url);
+				},
 			},
 			clipboard: {
 				writeText: (text: string) => {
@@ -53,6 +73,14 @@ function makeDeps(homeDir: string): StubbedDeps {
 				},
 			},
 			homeDir,
+			platform,
+			places: createPlaces({
+				homeDir,
+				platform: "darwin",
+				volumesRoot: join(homeDir, "Volumes"),
+				applicationsDir: join(homeDir, "Applications"),
+				run: async () => "",
+			}),
 			recents: createRecentsStore({ directory: join(homeDir, "recents-store") }),
 			osKind: async () => null,
 			icons: { icons: async () => new Map(), preview: async () => null },
@@ -60,6 +88,7 @@ function makeDeps(homeDir: string): StubbedDeps {
 		trashed,
 		revealed,
 		opened,
+		openedUrls,
 		clipboardText,
 		recents: createRecentsStore({ directory: join(homeDir, "recents-store") }),
 	};
@@ -73,6 +102,7 @@ function makeFailingTrashDeps(homeDir: string, message: string): FsServiceDeps {
 			},
 			showItemInFolder: () => { },
 			openPath: async () => "",
+			openExternal: async () => { },
 		},
 		clipboard: { writeText: () => { } },
 		homeDir,
@@ -596,6 +626,31 @@ describe("trash", () => {
 	});
 });
 
+describe("OS handoff path normalization", () => {
+	it("normalizes forward slashes for Windows and leaves POSIX paths alone", () => {
+		expect(toHandoffPath("C:/Users/me/Documents/a.txt", "win32")).toBe("C:\\Users\\me\\Documents\\a.txt");
+		expect(toHandoffPath("C:\\Users\\me\\a.txt", "win32")).toBe("C:\\Users\\me\\a.txt");
+		expect(toHandoffPath("/Users/me/a.txt", "darwin")).toBe("/Users/me/a.txt");
+		expect(toHandoffPath("/Users/me/a.txt", "linux")).toBe("/Users/me/a.txt");
+	});
+
+	it("hands Windows trash/reveal/open backslash paths even when given slashes", async () => {
+		// Given a win32 service whose shell records what it receives
+		const stubs = makeDeps(root);
+		const service = createFsService({ ...stubs.deps, platform: "win32" });
+
+		// When the caller passes a forward-slash path (clipboard, QA fixture, other OS)
+		const result = await service.trash(["C:/Users/me/Documents/a.txt"]);
+		await service.reveal("C:/Users/me/Documents/b.txt");
+		await service.open("C:/Users/me/Documents/c.txt");
+
+		// Then the batch reports the caller's path but the shell sees backslashes
+		expect(result).toEqual({ ok: ["C:/Users/me/Documents/a.txt"], failed: [] });
+		expect(stubs.trashed).toEqual(["C:\\Users\\me\\Documents\\a.txt"]);
+		expect(stubs.revealed).toEqual(["C:\\Users\\me\\Documents\\b.txt"]);
+		expect(stubs.opened).toEqual(["C:\\Users\\me\\Documents\\c.txt"]);
+	});
+});
 describe("undo", () => {
 	it("removes the copies a copy created, keeping the originals", async () => {
 		// Given a source file copied into another folder
@@ -760,28 +815,169 @@ describe("search", () => {
 		// When searching for a missing substring, Then the result is empty
 		expect(await createFsService(makeDeps(home).deps).search("zzz-nothing")).toEqual([]);
 	});
+
+	it("prefers the file-name index and attributes each hit to its location", async () => {
+		// Given two walkable matches, but an index that returns only the Documents one
+		const home = join(root, "home-index");
+		await mkdir(join(home, "Documents"), { recursive: true });
+		await mkdir(join(home, "Downloads"), { recursive: true });
+		await writeFile(join(home, "Documents", "report-final.txt"), "r");
+		await writeFile(join(home, "Downloads", "report-other.txt"), "u");
+		const calls: { query: string; scope: string | undefined }[] = [];
+		const fileNameSearch: FileNameSearchBackend = {
+			search: async (query, scope) => {
+				calls.push({ query, scope });
+				return [join(home, "Documents", "report-final.txt")];
+			},
+			ensureDaemon: async () => {},
+			stop: async () => {},
+		};
+
+		// When searching
+		const results = await createFsService({ ...makeDeps(home).deps, fileNameSearch }).search("REPORT");
+
+		// Then only the indexed hit comes back, labeled by its location
+		expect(results.map((hit) => [hit.entry.name, hit.location])).toEqual([["report-final.txt", "Documents"]]);
+		expect(calls).toEqual([{ query: "REPORT", scope: undefined }]);
+	});
+
+	it("passes the current-folder scope to the index", async () => {
+		// Given an index that records the scope it was asked for
+		const home = join(root, "home-scope");
+		await mkdir(join(home, "Documents"), { recursive: true });
+		await writeFile(join(home, "Documents", "plan.txt"), "p");
+		const scopes: (string | undefined)[] = [];
+		const fileNameSearch: FileNameSearchBackend = {
+			search: async (_query, scope) => {
+				scopes.push(scope);
+				return [join(home, "Documents", "plan.txt")];
+			},
+			ensureDaemon: async () => {},
+			stop: async () => {},
+		};
+
+		// When searching with the folder in view as scope
+		const results = await createFsService({ ...makeDeps(home).deps, fileNameSearch }).search("plan", {
+			scope: join(home, "Documents"),
+		});
+
+		// Then the scope rode through and the hit is scoped to it
+		expect(scopes).toEqual([join(home, "Documents")]);
+		expect(results.map((hit) => hit.entry.path)).toEqual([join(home, "Documents", "plan.txt")]);
+	});
+
+	it("falls back to the disk walk when the index answers null", async () => {
+		// Given an index with no database to answer from
+		const home = join(root, "home-noindex");
+		await mkdir(join(home, "Documents"), { recursive: true });
+		await writeFile(join(home, "Documents", "report.txt"), "r");
+		const fileNameSearch: FileNameSearchBackend = {
+			search: async () => null,
+			ensureDaemon: async () => {},
+			stop: async () => {},
+		};
+
+		// When searching, Then the walk still finds the file
+		const results = await createFsService({ ...makeDeps(home).deps, fileNameSearch }).search("report");
+
+		expect(results.map((hit) => [hit.entry.name, hit.location])).toEqual([["report.txt", "Documents"]]);
+	});
+
+	it("falls back to the disk walk when the index throws", async () => {
+		// Given an index that fails
+		const home = join(root, "home-broken");
+		await mkdir(join(home, "Documents"), { recursive: true });
+		await writeFile(join(home, "Documents", "report.txt"), "r");
+		const fileNameSearch: FileNameSearchBackend = {
+			search: async () => {
+				throw new Error("fsearch-cli exploded");
+			},
+			ensureDaemon: async () => {},
+			stop: async () => {},
+		};
+
+		// When searching, Then the walk answers instead of surfacing the failure
+		const results = await createFsService({ ...makeDeps(home).deps, fileNameSearch }).search("report");
+
+		expect(results.map((hit) => hit.entry.name)).toEqual(["report.txt"]);
+	});
 });
 
 describe("locations", () => {
-	it("lists existing home dirs as available and missing ones as unavailable", async () => {
-		// Given a home with Desktop and Documents but no Downloads, iCloud, or third-party drives
+	const disk: FsLocation = {
+		name: "SSD1",
+		path: "/Volumes/SSD1",
+		section: "locations",
+		icon: "disk",
+		available: true,
+		scanned: false,
+		ejectable: true,
+	};
+
+	it("leads with Recents and the QA root, then the OS places in order", async () => {
+		// Given OS places and a QA root
 		const home = join(root, "home-locations");
-		await mkdir(join(home, "Desktop"), { recursive: true });
-		await mkdir(join(home, "Documents"), { recursive: true });
+		await mkdir(join(home, "qa"), { recursive: true });
+		const places = fakePlaces([disk]);
+		const service = createFsService({ ...makeDeps(home).deps, places, qaRoot: join(home, "qa") });
 
 		// When listing locations
-		const locations = await createFsService(makeDeps(home).deps).locations();
+		const locations = await service.locations();
 
-		// Then Desktop/Documents are available, Downloads and iCloud are listed but unavailable
-		const byName = new Map(locations.map((location) => [location.name, location]));
-		expect(byName.get("Desktop")).toMatchObject({ path: join(home, "Desktop"), section: "favorites", available: true });
-		expect(byName.get("Documents")).toMatchObject({ available: true });
-		expect(byName.get("Downloads")).toMatchObject({ available: false });
-		expect(byName.get("iCloud Drive")).toMatchObject({ section: "cloud", available: false });
+		// Then the app's own rows come first and the OS places follow untouched
+		expect(locations.map((location) => location.name)).toEqual([RECENTS_PATH, "QA", "SSD1"]);
+		expect(locations[1]).toMatchObject({ section: "favorites", icon: "qa", available: true, scanned: true });
+	});
 
-		// And Google Drive / Dropbox are omitted entirely when their well-known paths do not exist
-		expect(byName.has("Google Drive")).toBe(false);
-		expect(byName.has("Dropbox")).toBe(false);
+	it("searches only the scanned locations, never a whole disk", async () => {
+		// Given a mounted disk and a scanned Documents folder that both hold a match
+		const home = join(root, "home-scan");
+		await mkdir(join(home, "Documents"), { recursive: true });
+		await mkdir(join(home, "disk"), { recursive: true });
+		await writeFile(join(home, "Documents", "plan.txt"), "p");
+		await writeFile(join(home, "disk", "plan-copy.txt"), "p");
+		const places = fakePlaces([
+			{ ...disk, name: "Documents", path: join(home, "Documents"), section: "favorites", icon: "documents", scanned: true, ejectable: false },
+			{ ...disk, path: join(home, "disk") },
+		]);
+
+		// When searching
+		const hits = await createFsService({ ...makeDeps(home).deps, places }).search("plan");
+
+		// Then only the Documents hit comes back
+		expect(hits.map((hit) => [hit.entry.name, hit.location])).toEqual([["plan.txt", "Documents"]]);
+	});
+
+	it("ejects through the places service", async () => {
+		// Given a mounted disk
+		const places = fakePlaces([disk]);
+
+		// When ejecting it from the fs bridge
+		await createFsService({ ...makeDeps(root).deps, places }).ejectLocation("/Volumes/SSD1");
+
+		// Then the places service unmounted exactly that path
+		expect(places.ejected).toEqual(["/Volumes/SSD1"]);
+	});
+});
+
+describe("Windows Recycle Bin listing", () => {
+	it("shows each deleted item under its original name and hides the $I records", async () => {
+		// Given a Recycle Bin folder with one $R payload and its $I record
+		const bin = join(root, "bin");
+		await mkdir(bin);
+		await writeFile(join(bin, "$RAB12CD.txt"), "payload");
+		const original = "C:\\Users\\me\\Documents\\메모.txt";
+		const header = Buffer.alloc(28);
+		header.writeBigInt64LE(2n, 0);
+		header.writeInt32LE(original.length + 1, 24);
+		await writeFile(join(bin, "$IAB12CD.txt"), Buffer.concat([header, Buffer.from(`${original}\0`, "utf16le")]));
+		const service = createFsService({ ...makeDeps(root).deps, recycleBin: (dir) => dir === bin });
+
+		// When listing it
+		const listing = await service.listDir(bin);
+
+		// Then the row keeps its real path but reads like Explorer
+		expect(listing.entries.map((entry) => [entry.name, entry.path])).toEqual([["메모.txt", join(bin, "$RAB12CD.txt")]]);
 	});
 });
 
@@ -833,6 +1029,7 @@ describe("shell and clipboard side effects", () => {
 				trashItem: async () => { },
 				showItemInFolder: () => { },
 				openPath: async () => "The file “deck.key” does not exist.",
+				openExternal: async () => { },
 			},
 			clipboard: { writeText: () => { } },
 			homeDir: root,
@@ -842,6 +1039,20 @@ describe("shell and clipboard side effects", () => {
 		await expect(createFsService(deps).open(join(root, "deck.key"))).rejects.toThrow(
 			"The file “deck.key” does not exist.",
 		);
+	});
+
+	it("openUrl hands an http(s) page to the OS default browser", async () => {
+		const stubs = makeDeps(root);
+		await createFsService(stubs.deps).openUrl("https://v.daum.net/v/20250326175451054");
+		expect(stubs.openedUrls).toEqual(["https://v.daum.net/v/20250326175451054"]);
+	});
+
+	it("openUrl refuses anything but an http(s) page without calling the shell", async () => {
+		const stubs = makeDeps(root);
+		const service = createFsService(stubs.deps);
+		await expect(service.openUrl("file:///etc/passwd")).rejects.toThrow("웹 주소가 아닙니다");
+		await expect(service.openUrl("/Users/me/brief.md")).rejects.toThrow("웹 주소가 아닙니다");
+		expect(stubs.openedUrls).toEqual([]);
 	});
 
 	it("copyPathsToClipboard writes newline-joined paths to the OS clipboard", async () => {
@@ -866,7 +1077,15 @@ describe("recents", () => {
 		const locations = await createFsService(makeDeps(home).deps).locations();
 
 		// Then Recents leads the favorites and is offered even before anything was opened
-		expect(locations[0]).toEqual({ name: RECENTS_PATH, path: RECENTS_PATH, section: "favorites", available: true });
+		expect(locations[0]).toEqual({
+			name: RECENTS_PATH,
+			path: RECENTS_PATH,
+			section: "favorites",
+			icon: "recents",
+			available: true,
+			scanned: false,
+			ejectable: false,
+		});
 	});
 
 	it("lists recorded files most-recent first and drops the ones that no longer exist", async () => {

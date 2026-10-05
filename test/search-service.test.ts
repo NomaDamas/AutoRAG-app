@@ -349,7 +349,8 @@ describe("createSearchService", () => {
 
 		expect(agent.setAttachmentContext).toHaveBeenCalledTimes(1);
 		const context = agent.setAttachmentContext.mock.calls[0]?.[0] ?? "";
-		expect(context).toContain(path);
+		// The block writes paths as JSON strings, so Windows backslashes render escaped.
+		expect(context).toContain(JSON.stringify(path));
 		expect(context).toContain("Refund exceptions over 1M KRW need CFO sign-off.");
 		expect(context).toContain("https://example.com/policy");
 		expect(agent.searchDocumentsStream).toHaveBeenCalledWith("who signs off refund exceptions?");

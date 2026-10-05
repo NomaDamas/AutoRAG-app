@@ -22,7 +22,7 @@ export interface RowCallbacks {
 	readonly onOpen: (entry: FinderEntry) => void;
 	readonly onContextMenu: (entry: FinderEntry, event: MouseEvent<HTMLDivElement>) => void;
 	readonly onToggleIndex: (entry: FinderEntry) => void;
-	/** A row drag began: fills the drag with the rows it carries (the AI dock attaches them). */
+	/** A row drag began: fills the drag with the rows it carries (AI Search attaches them). */
 	readonly onDragStart: (entry: FinderEntry, event: DragEvent<HTMLDivElement>) => void;
 	/** An in-app drag hovers the row; folder rows accept it as a drop target. */
 	readonly onDragOver: (entry: FinderEntry, event: DragEvent<HTMLDivElement>) => void;

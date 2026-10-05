@@ -1,14 +1,16 @@
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildAgentOptions, resolveConfigReadOnly } from "@autorag/librarian";
 import { launchFinder, finderWindow } from "./launch-finder.mjs";
+import { chord, rmRetry } from "./platform.mjs";
 
 // Settings > Data Sources must mirror the shared AutoRAG config (the one the
 // CLI, TUI, serve, and every agent read) in both directions. Runs against a
 // throwaway AUTORAG_HOME so the operator's real config is never touched.
 // Production build first: bun run build
-const EVIDENCE = new URL("../../.omo/evidence/ai-finder-app/datasource-status/", import.meta.url).pathname;
+const EVIDENCE = fileURLToPath(new URL("../../.omo/evidence/ai-finder-app/datasource-status/", import.meta.url));
 mkdirSync(EVIDENCE, { recursive: true });
 
 const root = mkdtempSync(join(tmpdir(), "autorag-qa-datasources-"));
@@ -17,8 +19,13 @@ const bin = join(root, "bin");
 const configPath = join(root, "config.json");
 mkdirSync(join(workspace, "docs"), { recursive: true });
 mkdirSync(bin, { recursive: true });
-writeFileSync(join(bin, "slacrawl"), "#!/bin/sh\nexit 0\n");
-chmodSync(join(bin, "slacrawl"), 0o755);
+const IS_WIN = process.platform === "win32";
+if (IS_WIN) {
+	writeFileSync(join(bin, "slacrawl.cmd"), "@echo off\r\nexit /b 0\r\n");
+} else {
+	writeFileSync(join(bin, "slacrawl"), "#!/bin/sh\nexit 0\n");
+	chmodSync(join(bin, "slacrawl"), 0o755);
+}
 const chunkStore = join(workspace, ".autorag", "datasources", "my-drive", "my-drive");
 mkdirSync(chunkStore, { recursive: true });
 writeFileSync(join(chunkStore, "chunks.json"), JSON.stringify({
@@ -48,7 +55,11 @@ writeConfig({
 	foo: {},
 });
 
-const env = { AUTORAG_CONFIG: configPath, AUTORAG_HOME: root, PATH: `${bin}:/usr/bin:/bin`, GITHUB_TOKEN: "" };
+// Pin the PATH like the POSIX branch: the fake `slacrawl` must be the only
+// datasource CLI visible, or a host-installed rclone/telecrawl flips the
+// "install: missing" assertions. System32 stays for Windows system lookups.
+const windowsPath = `${bin};${process.env.SystemRoot ?? "C:\\Windows"}\\System32;${process.env.SystemRoot ?? "C:\\Windows"}`;
+const env = { AUTORAG_CONFIG: configPath, AUTORAG_HOME: root, PATH: IS_WIN ? windowsPath : `${bin}:/usr/bin:/bin`, GITHUB_TOKEN: "" };
 const agentSkills = () =>
 	(buildAgentOptions(resolveConfigReadOnly({ flags: {}, env: { ...process.env, ...env }, cwd: root })).datasourceSkills ?? [])
 		.map((skill) => skill.describe().name);
@@ -72,7 +83,7 @@ try {
 		await page.waitForSelector('.settings-source[data-source-id="slack"]');
 	};
 	const closeSettings = async () => {
-		await page.keyboard.press("Meta+w");
+		await page.keyboard.press(chord("w"));
 		await page.waitForFunction(() => document.querySelector(".settings-panel") === null);
 	};
 	const row = (id) => page.locator(`.settings-source[data-source-id="${id}"]`);
@@ -155,7 +166,8 @@ try {
 	await page.screenshot({ path: join(EVIDENCE, "03-external-edit.png") });
 } finally {
 	await app.close();
-	rmSync(root, { recursive: true, force: true });
+	// Electron can still hold the temp profile for a moment after close on Windows (EBUSY).
+	rmRetry(root);
 }
 
 if (fails.length > 0) {

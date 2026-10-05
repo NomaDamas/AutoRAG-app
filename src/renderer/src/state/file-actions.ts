@@ -12,6 +12,7 @@
  * and ⌫/⌘⌫ already cover them.
  */
 
+import { hostPlatform } from "../lib/shortcuts";
 import type {
 	ActionCapabilities,
 	ActionRequest,
@@ -59,7 +60,7 @@ export interface ActionSubject {
 
 const IMAGE_EXTENSIONS: readonly string[] = ["png", "jpg", "jpeg", "webp", "heic", "heif", "tif", "tiff", "gif", "bmp", "avif"];
 const VIDEO_EXTENSIONS: readonly string[] = ["mp4", "mov", "m4v", "mkv", "webm", "avi"];
-/** Extensions whose own format the resize/optimize ops can rewrite in place. */
+/** Lossy formats: `optimize` re-encodes them everywhere; PNG's lossless path is ffmpeg-only (below). */
 const LOSSY_IMAGE_FORMATS: readonly ImageFormat[] = ["jpeg", "webp", "heic"];
 /** Resize presets, longest edge in pixels. */
 const RESIZE_PRESETS: readonly number[] = [1920, 1280, 640];
@@ -125,7 +126,12 @@ function imageItems(name: string, capabilities: ActionCapabilities): readonly Fi
 			});
 		}
 	}
-	if (source !== null && LOSSY_IMAGE_FORMATS.includes(source) && capabilities.imageFormats.includes(source)) {
+	// The ffmpeg backend also optimizes PNG losslessly (max deflate); sips cannot.
+	if (
+		source !== null &&
+		(LOSSY_IMAGE_FORMATS.includes(source) || (source === "png" && hostPlatform() !== "darwin")) &&
+		capabilities.imageFormats.includes(source)
+	) {
 		items.push({
 			id: "image:optimize",
 			label: "용량 최적화",
@@ -144,6 +150,22 @@ function videoItems(name: string, capabilities: ActionCapabilities): readonly Fi
 			label: `${CONTAINER_LABELS[container]}로 변환`,
 			target: { kind: "request", request: { kind: "convertVideo", container } } as const,
 		}));
+}
+
+/** Shown/enabled state of the toolbar Share item. */
+export interface ShareControl {
+	readonly shown: boolean;
+	readonly enabled: boolean;
+}
+
+/**
+ * The toolbar Share item. macOS Finder keeps Share in the toolbar, and it is
+ * the same OS share sheet the Inspector's 공유 action opens; where the platform
+ * has no share sheet (Windows) the item is hidden rather than dead. It is
+ * enabled only with a focused row to share.
+ */
+export function toolbarShareControl(hasFocusedEntry: boolean, capabilities: ActionCapabilities): ShareControl {
+	return { shown: capabilities.share, enabled: capabilities.share && hasFocusedEntry };
 }
 
 /**

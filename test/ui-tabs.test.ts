@@ -1,19 +1,50 @@
 import { describe, expect, it } from "vitest";
 import {
 	activeTab,
+	AI_SEARCH_PATH,
+	aiPanelTabs,
 	canCloseTab,
 	closeTab,
 	createTabsState,
+	focusAiSearchTab,
 	goBack,
+	exitVirtualTab,
 	goForward,
+	isVirtualTabPath,
 	navigateTab,
+	openAiSearchTab,
 	openTab,
 	openTabAt,
 	openOrSelectSettingsTab,
 	selectTab,
 	SETTINGS_PATH,
+	showAiSearchInActiveTab,
 	tabTitle,
+	evacuateTabs,
 } from "../src/renderer/src/state/tabs";
+
+describe("evacuateTabs", () => {
+	it("moves every tab inside an unmounted volume to the fallback and drops history into it", () => {
+		// Given one tab deep inside /Volumes/USB with history that also visits it, and one tab elsewhere
+		let state = navigateTab(createTabsState("/Users/me/Documents"), "/Volumes/USB");
+		state = navigateTab(state, "/Volumes/USB/photos");
+		state = openTabAt(state, "/Users/me/Desktop");
+		state = navigateTab(state, "/Volumes/USB-backup");
+
+		// When the volume is ejected
+		const next = evacuateTabs(state, "/Volumes/USB", "/Users/me");
+
+		// Then the inside tab lands on the fallback, keeping only history outside the volume
+		expect(next.tabs[0]).toMatchObject({ path: "/Users/me", back: ["/Users/me/Documents"], fwd: [] });
+		// And a sibling volume whose name merely shares the prefix is untouched
+		expect(next.tabs[1]).toMatchObject({ path: "/Volumes/USB-backup", back: ["/Users/me/Desktop"] });
+	});
+
+	it("is a no-op when no tab is inside the volume", () => {
+		const state = createTabsState("/Users/me");
+		expect(evacuateTabs(state, "/Volumes/USB", "/")).toBe(state);
+	});
+});
 
 describe("tab model", () => {
 	it("starts with one tab on the given path", () => {
@@ -142,5 +173,103 @@ describe("openOrSelectSettingsTab", () => {
 		const reopened = openOrSelectSettingsTab(switchedToFirst);
 		expect(reopened.tabs).toHaveLength(2);
 		expect(reopened.activeId).toBe(withSettings.tabs[1]!.id);
+	});
+});
+
+describe("AI Search tabs", () => {
+	it("titles an AI Search tab and ignores the search query", () => {
+		expect(tabTitle({ path: AI_SEARCH_PATH }, { isActive: true, query: "budget" })).toBe("AI Search");
+	});
+
+	it("treats Settings and AI Search as virtual paths, never folders", () => {
+		expect(isVirtualTabPath(SETTINGS_PATH)).toBe(true);
+		expect(isVirtualTabPath(AI_SEARCH_PATH)).toBe(true);
+		expect(isVirtualTabPath("/Users/me/AI Search")).toBe(false);
+		expect(isVirtualTabPath("Recents")).toBe(false);
+	});
+
+	it("turns the focused tab into AI Search, and Back returns to the folder", () => {
+		const two = openTabAt(createTabsState("/Users/me/Documents"), "/Users/me/Desktop");
+		const shown = showAiSearchInActiveTab(two);
+		expect(shown.tabs).toHaveLength(2);
+		expect(activeTab(shown).id).toBe(two.activeId);
+		expect(activeTab(shown).path).toBe(AI_SEARCH_PATH);
+		expect(shown.tabs[0]?.path).toBe("/Users/me/Documents");
+		expect(activeTab(goBack(shown)).path).toBe("/Users/me/Desktop");
+	});
+
+	it("keeps an AI Search tab as it is when shown again", () => {
+		const shown = showAiSearchInActiveTab(createTabsState("/Users/me/Documents"));
+		expect(showAiSearchInActiveTab(shown)).toBe(shown);
+	});
+
+	it("opens a new AI Search tab even when one exists", () => {
+		const first = openAiSearchTab(createTabsState("/Users/me/Documents"));
+		const second = openAiSearchTab(selectTab(first, first.tabs[0]!.id));
+		expect(second.tabs.map((tab) => tab.path)).toEqual(["/Users/me/Documents", AI_SEARCH_PATH, AI_SEARCH_PATH]);
+		expect(second.activeId).toBe(second.tabs[2]?.id);
+		expect(activeTab(second).back).toEqual([]);
+	});
+
+	it("focuses the active AI Search tab, else the nearest open one, else opens one", () => {
+		const docs = createTabsState("/Users/me/Documents");
+		const opened = focusAiSearchTab(docs);
+		expect(opened.tabs).toHaveLength(2);
+		expect(activeTab(opened).path).toBe(AI_SEARCH_PATH);
+
+		expect(focusAiSearchTab(opened)).toBe(opened);
+
+		const away = openTabAt(opened, "/Users/me/Desktop");
+		const back = focusAiSearchTab(away);
+		expect(back.tabs).toHaveLength(3);
+		expect(back.activeId).toBe(opened.activeId);
+	});
+
+	it("prefers the AI Search tab closest to the focused tab", () => {
+		let state = openAiSearchTab(createTabsState("/a"));
+		const leftAi = state.activeId;
+		state = openTabAt(state, "/b");
+		state = openAiSearchTab(state);
+		const rightAi = state.activeId;
+		state = openTabAt(state, "/c");
+		expect(focusAiSearchTab(state).activeId).toBe(rightAi);
+		expect(focusAiSearchTab(selectTab(state, state.tabs[0]!.id)).activeId).toBe(leftAi);
+	});
+
+	it("keeps a tab's AI Search chat mounted after the tab navigates away, until it closes", () => {
+		const tabs = [
+			{ id: 1, aiSearch: false },
+			{ id: 2, aiSearch: true },
+		];
+		const mounted = aiPanelTabs([], tabs);
+		expect(mounted).toEqual([2]);
+		expect(aiPanelTabs(mounted, tabs)).toBe(mounted);
+		const away = aiPanelTabs(mounted, [
+			{ id: 1, aiSearch: false },
+			{ id: 2, aiSearch: false },
+		]);
+		expect(away).toBe(mounted);
+		expect(aiPanelTabs(away, [{ id: 1, aiSearch: true }])).toEqual([1]);
+	});
+
+	it("opens a new tab from a virtual tab on the last folder the tabs showed", () => {
+		let state = navigateTab(createTabsState("/Users/me/Documents"), "/Users/me/Desktop");
+		state = navigateTab(state, SETTINGS_PATH);
+		state = navigateTab(state, AI_SEARCH_PATH);
+		expect(activeTab(openTab(state)).path).toBe("/Users/me/Desktop");
+		const fresh = openAiSearchTab(createTabsState("/Users/me/Documents"));
+		expect(activeTab(openTab(fresh)).path).toBe("/Users/me/Documents");
+		expect(activeTab(openTab(createTabsState(AI_SEARCH_PATH))).path).toBe(AI_SEARCH_PATH);
+	});
+
+	it("leaves a virtual tab for its last folder, as a navigation Back can undo", () => {
+		const docs = createTabsState("/Users/me/Documents");
+		expect(exitVirtualTab(docs)).toBe(docs);
+		const ai = showAiSearchInActiveTab(docs);
+		const left = exitVirtualTab(ai);
+		expect(activeTab(left).path).toBe("/Users/me/Documents");
+		expect(activeTab(goBack(left)).path).toBe(AI_SEARCH_PATH);
+		const lone = createTabsState(AI_SEARCH_PATH);
+		expect(exitVirtualTab(lone)).toBe(lone);
 	});
 });

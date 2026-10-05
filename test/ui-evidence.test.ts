@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
 	evidenceDetail,
 	evidenceKind,
+	evidenceSourceUrl,
 	findEvidenceSource,
 	feedbackToastText,
 	nextEvidenceFeedback,
+	unresolvedCitationNumbers,
 } from "../src/renderer/src/state/evidence";
 
 describe("findEvidenceSource", () => {
@@ -51,6 +53,27 @@ describe("evidenceKind", () => {
 	});
 });
 
+describe("evidenceSourceUrl", () => {
+	it("recognizes a web page source, including a non-ASCII path", () => {
+		expect(evidenceSourceUrl("https://music.bugs.co.kr/artist/20047596")).toBe("https://music.bugs.co.kr/artist/20047596");
+		expect(evidenceSourceUrl("  http://example.com/위키  ")).toBe("http://example.com/%EC%9C%84%ED%82%A4");
+	});
+
+	it("leaves file paths and datasource ids to the Finder reveal", () => {
+		expect(evidenceSourceUrl("/Users/me/Documents/brief.md")).toBeNull();
+		expect(evidenceSourceUrl("C:\\Users\\me\\brief.md")).toBeNull();
+		expect(evidenceSourceUrl("/kakao/room/42")).toBeNull();
+	});
+
+	it("never treats other schemes or broken text as a web page", () => {
+		expect(evidenceSourceUrl("file:///etc/passwd")).toBeNull();
+		expect(evidenceSourceUrl("javascript:alert(1)")).toBeNull();
+		expect(evidenceSourceUrl("mailto:a@b.c")).toBeNull();
+		expect(evidenceSourceUrl("https://")).toBeNull();
+		expect(evidenceSourceUrl("")).toBeNull();
+	});
+});
+
 describe("nextEvidenceFeedback", () => {
 	it("toggles the same value off and switches between up and down", () => {
 		expect(nextEvidenceFeedback(null, "up")).toBe("up");
@@ -58,6 +81,22 @@ describe("nextEvidenceFeedback", () => {
 		expect(nextEvidenceFeedback("up", "down")).toBe("down");
 		expect(nextEvidenceFeedback("down", "down")).toBeNull();
 		expect(nextEvidenceFeedback(null, "down")).toBe("down");
+	});
+});
+
+describe("unresolvedCitationNumbers", () => {
+	const evidence = [{ number: 1 }, { number: 2 }];
+
+	it("returns cited numbers that have no matching evidence entry", () => {
+		expect(unresolvedCitationNumbers("9명 [6]. 현재 5명 [1][2][4][6].", evidence)).toEqual([6, 4]);
+	});
+
+	it("returns nothing when every citation resolves", () => {
+		expect(unresolvedCitationNumbers("현재 5명 [1][2].", evidence)).toEqual([]);
+	});
+
+	it("returns nothing when the answer cites nothing", () => {
+		expect(unresolvedCitationNumbers("일반 지식으로 답합니다.", evidence)).toEqual([]);
 	});
 });
 
