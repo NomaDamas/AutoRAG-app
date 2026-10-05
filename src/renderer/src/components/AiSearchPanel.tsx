@@ -52,10 +52,12 @@ export interface AiDockHandle {
 
 export interface AiSearchPanelProps {
 	/**
-	 * The panel's tab is the visible one. A hidden panel keeps its chat but
-	 * answers no shortcut, drag, or evidence publication.
+	 * The panel's tab is the focused one: it answers shortcuts and publishes
+	 * its evidence. A hidden panel keeps its chat.
 	 */
 	readonly active: boolean;
+	/** The panel's tab is on screen in some pane (split panes show several). */
+	readonly visible: boolean;
 	readonly selectedEvidence: number | null;
 	readonly onSelectEvidence: (number: number) => void;
 	readonly onPublish: (evidence: readonly CitationEvidence[], sessionId: string | null) => void;
@@ -73,7 +75,7 @@ function formatElapsed(ms: number): string {
 }
 
 export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(function AiSearchPanel(
-	{ active, selectedEvidence, onSelectEvidence, onPublish },
+	{ active, visible, selectedEvidence, onSelectEvidence, onPublish },
 	ref,
 ): ReactElement {
 	const [query, setQuery] = useState("");
@@ -228,7 +230,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	});
 
 	useEffect(() => {
-		if (!active) return;
+		if (!visible) return;
 		const onDragOver = (event: globalThis.DragEvent): void => {
 			if (event.dataTransfer === null || !isAttachmentDrag(event.dataTransfer.types)) return;
 			if (event.clientX <= 0 && event.clientY <= 0) {
@@ -260,7 +262,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 			window.clearInterval(watchdog);
 			reset();
 		};
-	}, [active]);
+	}, [visible]);
 
 	async function runSearch(text: string, sent: readonly ChatAttachment[]): Promise<void> {
 		if (searchIdRef.current !== null) return;
@@ -491,9 +493,10 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 
 	return (
 		<section
-			className={cn("ai relative min-h-0 flex-1 flex-col bg-subtle-alt", active ? "flex" : "hidden")}
+			className={cn("ai relative min-h-0 flex-1 flex-col bg-subtle-alt", visible ? "flex" : "hidden")}
 			aria-label="AI Search"
-			aria-hidden={active ? undefined : true}
+			aria-hidden={visible ? undefined : true}
+			data-focused={active ? "true" : undefined}
 			onDragEnter={onDockDragEnter}
 			onDragOver={onDockDragOver}
 			onDragLeave={onDockDragLeave}
