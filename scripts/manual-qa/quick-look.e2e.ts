@@ -164,7 +164,7 @@ test("Quick Look uses a fast reusable window with Finder navigation", async () =
 		const pdfBounds = await quickLookWindow(app);
 		// The window is the page's width plus the paper margins and the rail.
 		expect(pdfBounds.width).toBe(600 + PDF_CHROME_WIDTH);
-		const scroller = preview.locator(".ql-pdf__scroll");
+		const scroller = preview.locator(".ql-pages__scroll");
 		// Three pages are taller than the screen allows, so the column scrolls.
 		await expect.poll(() => scroller.evaluate((node) => node.scrollHeight - node.clientHeight)).toBeGreaterThan(100);
 		await scroller.evaluate((node) => {
@@ -172,7 +172,7 @@ test("Quick Look uses a fast reusable window with Finder navigation", async () =
 		});
 		await expect.poll(() => preview.locator('[data-page="3"]').evaluate((node) => node.getBoundingClientRect().bottom)).toBeLessThanOrEqual(pdfBounds.height);
 		await expect.poll(() => preview.locator('.ql__rail-item[data-active="true"]').getAttribute("aria-label")).toBe("3페이지로 이동");
-		await expect(preview.locator(".ql-pdf__pill")).toContainText("3 / 3");
+		await expect(preview.locator(".ql-pages__pill")).toContainText("3 / 3");
 		await preview.screenshot({ path: join(evidence, "page.png") });
 		// Toolbar design: close, full screen, then the title; share and "Open with" on the trailing edge; the rail in its own column.
 		const layout = await preview.evaluate(() => {
