@@ -339,10 +339,19 @@ export function App(): ReactElement {
 		[finder],
 	);
 
-	const selectEvidence = useCallback((number: number) => {
-		setSelectedEvidence(number);
-		setInspectorVisible(true);
-	}, []);
+	const selectEvidence = useCallback(
+		(number: number) => {
+			// A citation chip with no evidence entry must never open a different
+			// result: the panel would silently show unrelated evidence.
+			if (!evidence.some((item) => item.number === number)) {
+				finder.showToast(`근거 ${number}에 대한 정보를 찾을 수 없습니다`);
+				return;
+			}
+			setSelectedEvidence(number);
+			setInspectorVisible(true);
+		},
+		[evidence, finder.showToast],
+	);
 
 	const evidenceSelectedNumber = evidence.find((item) => item.number === selectedEvidence)?.number ?? evidence[0]?.number ?? 1;
 	const focusPath = finder.selection.focus;

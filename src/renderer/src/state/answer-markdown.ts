@@ -44,6 +44,19 @@ export function parseInline(text: string): readonly InlineSegment[] {
 	return segments.length === 0 ? [{ kind: "text", text }] : segments;
 }
 
+/**
+ * Distinct citation numbers referenced by answer or excerpt markdown, in
+ * first-seen order. Used to tell which `[n]` chips the Evidence panel can
+ * actually open.
+ */
+export function citedNumbers(markdown: string): readonly number[] {
+	const numbers = new Set<number>();
+	for (const match of markdown.matchAll(/\[([1-9]\d*)\]/gu)) {
+		numbers.add(Number(match[1]));
+	}
+	return [...numbers];
+}
+
 /** Split a complete answer into display paragraphs on blank lines. */
 export function splitAnswerParagraphs(answer: string): readonly string[] {
 	return answer

@@ -19,7 +19,7 @@ import type {
 } from "../../../shared/search-contract";
 import { parseAnswerBlocks, parseInline, type AnswerBlock } from "../state/answer-markdown";
 import { attachmentsFromDrop, isAttachmentDrag, mergeAttachments } from "../state/attachments";
-import { evidenceKind } from "../state/evidence";
+import { evidenceKind, unresolvedCitationNumbers } from "../state/evidence";
 import { groupChatHistory, historyEmptyText } from "../state/history";
 import { cn } from "../lib/cn";
 import { formatShortcut } from "../lib/shortcuts";
@@ -469,6 +469,12 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 
 	const quickText = quick !== null ? quick.answer : quickDraft;
 	const deepText = deep !== null ? deep.answer : deepDraft;
+	// A phase's citations resolve against that phase's own evidence: the
+	// librarian numbers quick and deep independently, and the verification
+	// phase can cite fast-answer units that never reach its `results`, leaving
+	// some chips with nothing to open.
+	const quickUnresolved = useMemo(() => unresolvedCitationNumbers(quickText, quick?.evidence ?? []), [quickText, quick]);
+	const deepUnresolved = useMemo(() => unresolvedCitationNumbers(deepText, deep?.evidence ?? []), [deepText, deep]);
 	const quickReady = quickText !== "";
 	const deepReady = deepText !== "";
 	const thinkingVisible = searchId !== null && quickReady && !deepReady;
@@ -602,7 +608,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 						<div className="message assistant-msg flex flex-col gap-14">
 							{quickReady ? (
 								<div className="assistant-prose flex flex-col gap-8 text-body leading-[1.55] text-ink-body">
-									<ProseBlocks text={quickText} selected={selectedEvidence} onCitation={onSelectEvidence} />
+									<ProseBlocks text={quickText} selected={selectedEvidence} unresolved={quickUnresolved} onCitation={onSelectEvidence} />
 								</div>
 							) : (
 								<div className="flex flex-col gap-8">
@@ -626,7 +632,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 										</div>
 									)}
 									<div className="assistant-prose flex flex-col gap-8 text-body leading-[1.55] text-ink-body">
-										<ProseBlocks text={deepText} selected={selectedEvidence} onCitation={onSelectEvidence} />
+										<ProseBlocks text={deepText} selected={selectedEvidence} unresolved={deepUnresolved} onCitation={onSelectEvidence} />
 									</div>
 								</div>
 							) : null}
@@ -732,16 +738,19 @@ function RefFileChip({ att }: { readonly att: ChatAttachment }): ReactElement {
 function ProseBlocks({
 	text,
 	selected,
+	unresolved,
 	onCitation,
 }: {
 	readonly text: string;
 	readonly selected: number | null;
+	/** Citation numbers with no matching evidence entry; their markers are dropped. */
+	readonly unresolved: readonly number[];
 	readonly onCitation: (number: number) => void;
 }): ReactElement {
 	return (
 		<>
 			{parseAnswerBlocks(text).map((block, index) => (
-				<AnswerBlockView key={`${index}`} block={block} selected={selected} onCitation={onCitation} />
+				<AnswerBlockView key={`${index}`} block={block} selected={selected} unresolved={unresolved} onCitation={onCitation} />
 			))}
 		</>
 	);
@@ -750,10 +759,12 @@ function ProseBlocks({
 function AnswerBlockView({
 	block,
 	selected,
+	unresolved,
 	onCitation,
 }: {
 	readonly block: AnswerBlock;
 	readonly selected: number | null;
+	readonly unresolved: readonly number[];
 	readonly onCitation: (number: number) => void;
 }): ReactElement {
 	const segments = parseInline(block.text).map((segment, index) => {
@@ -771,6 +782,14 @@ function AnswerBlockView({
 					</code>
 				);
 			case "citation":
+				// A citation whose number has no matching evidence entry (a real
+				// library behavior: see Marker-Inc-Korea/AutoRAG#1788) is dropped
+				// from the rendered answer. There is nothing to open, so leaving a
+				// dead marker would only mislead; the run's real evidence list is
+				// unaffected.
+				if (unresolved.includes(segment.number)) {
+					return null;
+				}
 				return (
 					<button
 						type="button"

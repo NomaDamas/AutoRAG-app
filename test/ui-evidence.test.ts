@@ -6,6 +6,7 @@ import {
 	findEvidenceSource,
 	feedbackToastText,
 	nextEvidenceFeedback,
+	unresolvedCitationNumbers,
 } from "../src/renderer/src/state/evidence";
 
 describe("findEvidenceSource", () => {
@@ -80,6 +81,22 @@ describe("nextEvidenceFeedback", () => {
 		expect(nextEvidenceFeedback("up", "down")).toBe("down");
 		expect(nextEvidenceFeedback("down", "down")).toBeNull();
 		expect(nextEvidenceFeedback(null, "down")).toBe("down");
+	});
+});
+
+describe("unresolvedCitationNumbers", () => {
+	const evidence = [{ number: 1 }, { number: 2 }];
+
+	it("returns cited numbers that have no matching evidence entry", () => {
+		expect(unresolvedCitationNumbers("9명 [6]. 현재 5명 [1][2][4][6].", evidence)).toEqual([6, 4]);
+	});
+
+	it("returns nothing when every citation resolves", () => {
+		expect(unresolvedCitationNumbers("현재 5명 [1][2].", evidence)).toEqual([]);
+	});
+
+	it("returns nothing when the answer cites nothing", () => {
+		expect(unresolvedCitationNumbers("일반 지식으로 답합니다.", evidence)).toEqual([]);
 	});
 });
 
