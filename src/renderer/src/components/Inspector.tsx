@@ -721,7 +721,9 @@ function EvidenceHalf({
 	readonly onToast: (msg: string) => void;
 }): ReactElement {
 	const [votes, setVotes] = useState<Readonly<Record<string, EvidenceFeedback>>>({});
-	const item = evidence.find((entry) => entry.number === selected) ?? evidence[0];
+	// Only the selected number renders: falling back to `evidence[0]` here would
+	// silently show unrelated evidence for a citation the run never produced.
+	const item = evidence.find((entry) => entry.number === selected);
 	if (item === undefined) {
 		return <div className="inspector-half is-split h-[50%] max-h-[50%]" aria-label="Evidence" hidden />;
 	}

@@ -4,7 +4,20 @@
  * the evidence title, thumbs-up/down toggle state, and the reference toast copy.
  */
 
+import { citedNumbers } from "./answer-markdown";
 import { type FileKind, kindFromExtension } from "./kinds";
+
+/**
+ * Cited numbers in an answer that have no matching evidence entry. The
+ * librarian's verification phase may cite the fast answer's numbered units, so
+ * an answer can reference `[n]` values absent from its own `results`
+ * (Marker-Inc-Korea/AutoRAG#1788); the renderer drops those markers instead of
+ * leaving a dead citation that could open an unrelated result.
+ */
+export function unresolvedCitationNumbers(answer: string, evidence: readonly { readonly number: number }[]): readonly number[] {
+	const known = new Set(evidence.map((entry) => entry.number));
+	return citedNumbers(answer).filter((number) => !known.has(number));
+}
 
 /** Prefer the exact path; otherwise resolve NFC/NFD spelling to the listing's real identity. */
 export function findEvidenceSource<T extends { readonly path: string }>(entries: readonly T[], source: string): T | undefined {
