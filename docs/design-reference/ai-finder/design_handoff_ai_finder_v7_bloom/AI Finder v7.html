@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>AutoRAG Finder — Bloom Mac Finder reference v7</title>
+<title>Dazzi — Bloom Mac Finder reference v7</title>
 <style>
 :root{--desk:#e9eaee;--window:#fff;--sidebar:rgba(235,236,240,.92);--chrome:#f5f5f7;--chrome2:#fafafa;--line:#d9dadd;--line2:#e7e7ea;--ink:#1d1d1f;--body:#3a3a3c;--muted:#6e6e73;--faint:#a1a1a6;--blue:#0a64d8;--blue2:#007aff;--bluewash:#dbeafe;--sel:#0a64d8;--selmute:#d9d9dc;--green:#34c759;--orange:#ff9500;--red:#ff3b30;--shadow:0 18px 54px rgba(0,0,0,.18);--menu:0 10px 35px rgba(0,0,0,.2);--radius:12px;--font:-apple-system,BlinkMacSystemFont,"SF Pro Text","Apple SD Gothic Neo",Pretendard,system-ui,sans-serif;--mono:ui-monospace,SFMono-Regular,Menlo,monospace}
 *{box-sizing:border-box}html,body{margin:0;height:100%;background:var(--desk);color:var(--ink);font-family:var(--font);font-size:13px;-webkit-font-smoothing:antialiased}button,input,textarea,select{font:inherit}button{color:inherit}button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:2px solid rgba(10,100,216,.55);outline-offset:1px}::-webkit-scrollbar{width:10px;height:10px}::-webkit-scrollbar-thumb{background:#c9c9ce;border:3px solid transparent;background-clip:padding-box;border-radius:9px}::-webkit-scrollbar-track{background:transparent}
@@ -494,7 +494,7 @@ function aiPane(){
   </aside>`;
 }
 function inline(text){return escape(text).replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>').replace(/\[(\d+)\]/g,(m,n)=>`<button class="cite ${S.evidence===+n&&S.inspectorMode==='evidence'?'active':''}" data-evidence="${n}">${n}</button>`)}
-function overlays(){let x='';if(S.quick){x+=`<div class="overlay quick-overlay" onclick="if(event.target===this)this.querySelector('[data-closequick]').click()"><div class="modal quicklook"><div class="modal-head"><div class="quick-controls"><button class="icon-btn" data-closequick title="Close">${icon('close')}</button><button class="quick-max" title="Maximize" aria-label="Maximize"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.35"><path d="M3 5.5V3h2.5M11 5.5V3H8.5M3 8.5V11h2.5M11 8.5V11H8.5"/></svg></button></div><strong>${escape(S.quick.n)}</strong><span class="toolbar-spacer"></span><button class="quick-share" data-share title="Share" aria-label="Share"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3"/><path d="m7 8 5-5 5 5"/><path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg></button><button class="quick-open" data-open-preview>Open with Preview</button></div><div class="quick-body"><div class="quick-paper"><h2>${escape(S.quick.n)}</h2><p>${escape(kind(S.quick.k))} · ${escape(S.quick.s)}</p><hr><p>AutoRAG Finder Quick Look preview</p><p><mark>Q3 마케팅 예산과 관련된 문서 미리보기</mark></p></div></div></div></div>`}if(S.context){x+=`<div class="menu" style="left:${S.context.x}px;top:${S.context.y}px">${S.context.items.map((it,i)=>it==='-'?'<hr>':`<button class="${it.danger?'danger':''}" data-menuaction="${it.action}">${it.label}<span>${it.key||''}</span></button>`).join('')}</div>`}if(S.toast)x+=`<div class="toast">✓ ${escape(S.toast)}</div>`;return x}
+function overlays(){let x='';if(S.quick){x+=`<div class="overlay quick-overlay" onclick="if(event.target===this)this.querySelector('[data-closequick]').click()"><div class="modal quicklook"><div class="modal-head"><div class="quick-controls"><button class="icon-btn" data-closequick title="Close">${icon('close')}</button><button class="quick-max" title="Maximize" aria-label="Maximize"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.35"><path d="M3 5.5V3h2.5M11 5.5V3H8.5M3 8.5V11h2.5M11 8.5V11H8.5"/></svg></button></div><strong>${escape(S.quick.n)}</strong><span class="toolbar-spacer"></span><button class="quick-share" data-share title="Share" aria-label="Share"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3"/><path d="m7 8 5-5 5 5"/><path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg></button><button class="quick-open" data-open-preview>Open with Preview</button></div><div class="quick-body"><div class="quick-paper"><h2>${escape(S.quick.n)}</h2><p>${escape(kind(S.quick.k))} · ${escape(S.quick.s)}</p><hr><p>Dazzi Quick Look preview</p><p><mark>Q3 마케팅 예산과 관련된 문서 미리보기</mark></p></div></div></div></div>`}if(S.context){x+=`<div class="menu" style="left:${S.context.x}px;top:${S.context.y}px">${S.context.items.map((it,i)=>it==='-'?'<hr>':`<button class="${it.danger?'danger':''}" data-menuaction="${it.action}">${it.label}<span>${it.key||''}</span></button>`).join('')}</div>`}if(S.toast)x+=`<div class="toast">✓ ${escape(S.toast)}</div>`;return x}
 function openSettings(){const ex=S.tabs.find(x=>x.path==='Settings');if(ex)return set({active:ex.id,query:""});const id=S.next;set(s=>({tabs:[...s.tabs,{id,path:'Settings',sel:null,back:[],fwd:[],view:'columns'}],active:id,next:id+1,query:""}))}
 
 const SOURCE_META = {
@@ -559,13 +559,13 @@ function settingsView(){
           </div>
           <div class="linear-row">
             <div class="linear-row-label"><span class="linear-row-name">Global shortcut</span>
-              <small>Quickly summon the AutoRAG search interface from any application on your Mac.</small>
+              <small>Quickly summon the Dazzi search interface from any application on your Mac.</small>
             </div>
             <div class="linear-control"><kbd>⌥ Space</kbd></div>
           </div>
           <div class="linear-row">
             <div class="linear-row-label"><span class="linear-row-name">Launch at login</span>
-              <small>Automatically launch AutoRAG Finder silently in the background when logging in.</small>
+              <small>Automatically launch Dazzi silently in the background when logging in.</small>
             </div>
             <div class="linear-control"><button class="switch on"></button></div>
           </div>
@@ -586,7 +586,7 @@ function settingsView(){
 
           <div class="linear-section-title">Software Updates</div>
           <div class="linear-row">
-            <div class="linear-row-label"><span class="linear-row-name">AutoRAG Agent 1.4.2</span>
+            <div class="linear-row-label"><span class="linear-row-name">Dazzi 1.4.2</span>
               <small>You are running the latest production build · Last checked moments ago.</small>
             </div>
             <div class="linear-control"><button class="linear-btn" onclick="showToast('최신 버전입니다')">Check for Updates</button></div>
@@ -607,7 +607,7 @@ function settingsView(){
           </div>
           <div class="linear-row">
             <div class="linear-row-label"><span class="linear-row-name">Share anonymous diagnostics</span>
-              <small>Help improve AutoRAG indexing speed and accuracy with anonymized metrics.</small>
+              <small>Help improve Dazzi indexing speed and accuracy with anonymized metrics.</small>
             </div>
             <div class="linear-control"><button class="switch on"></button></div>
           </div>
@@ -694,7 +694,7 @@ function settingsView(){
           <div class="linear-section-title">Synchronization &amp; Scope</div>
           <div class="linear-row">
             <div class="linear-row-label"><span class="linear-row-name">Index items automatically</span>
-              <small>Allow AutoRAG agent to continuously crawl and vectorize documents from this source.</small>
+              <small>Allow Dazzi agent to continuously crawl and vectorize documents from this source.</small>
             </div>
             <div class="linear-control"><button class="switch on"></button></div>
           </div>

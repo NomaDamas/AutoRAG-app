@@ -233,10 +233,10 @@ export function SettingsView({
 									<option value="zh">简体中文</option>
 								</select>
 							</LinearRow>
-							<LinearRow name="Launch at login" hint="Automatically launch AutoRAG Finder silently in the background when logging in.">
+							<LinearRow name="Launch at login" hint="Automatically launch Dazzi silently in the background when logging in.">
 								<Switch checked={settings.launchAtLogin} onChange={() => void toggleSetting("launchAtLogin")} ariaLabel="Launch at login" />
 							</LinearRow>
-							<LinearRow name="Show in menu bar" hint="Keep the AutoRAG status icon in the macOS menu bar.">
+							<LinearRow name="Show in menu bar" hint="Keep the Dazzi status icon in the macOS menu bar.">
 								<Switch checked={settings.showInMenuBar} onChange={() => void toggleSetting("showInMenuBar")} ariaLabel="Show in menu bar" />
 							</LinearRow>
 							<LinearRow name="Show hidden files" hint="Display files and directories starting with a period (.) in all browsing views.">
@@ -259,8 +259,8 @@ export function SettingsView({
 
 							<div className="linear-section-title">Software Updates</div>
 							<LinearRow
-								name="AutoRAG Agent 1.4.2"
-								hint={updateState === "done" ? "You are running the latest production build · Last checked moments ago." : "Check for new AutoRAG Agent builds and apply them."}
+								name="Dazzi 1.4.2"
+								hint={updateState === "done" ? "You are running the latest production build · Last checked moments ago." : "Check for new Dazzi builds and apply them."}
 							>
 								<button
 									type="button"
@@ -292,7 +292,7 @@ export function SettingsView({
 									{historyCleared ? "Cleared ✓" : "Clear…"}
 								</button>
 							</LinearRow>
-							<LinearRow name="Share anonymous diagnostics" hint="Help improve AutoRAG indexing speed and accuracy with anonymized metrics.">
+							<LinearRow name="Share anonymous diagnostics" hint="Help improve Dazzi indexing speed and accuracy with anonymized metrics.">
 								<Switch checked={settings.telemetry} onChange={() => void toggleSetting("telemetry")} ariaLabel="Share anonymous diagnostics" />
 							</LinearRow>
 						</>
@@ -302,7 +302,7 @@ export function SettingsView({
 						<>
 							<div className="linear-header">
 								<h2 className="linear-title">LLM Models Configuration</h2>
-								<p className="linear-desc">The provider and model the AutoRAG agent resolves from the shared AutoRAG config.</p>
+								<p className="linear-desc">The provider and model the Dazzi agent resolves from the shared AutoRAG config.</p>
 							</div>
 
 							<div className="linear-section-title">Setup Providers</div>
@@ -356,7 +356,7 @@ export function SettingsView({
 						<>
 							<div className="linear-header">
 								<h2 className="linear-title">Data Sources</h2>
-								<p className="linear-desc">Sources the AutoRAG agent can index and query, read from the shared AutoRAG config.</p>
+								<p className="linear-desc">Sources the Dazzi agent can index and query, read from the shared AutoRAG config.</p>
 							</div>
 							{sourcesProblem === null ? null : (
 								<div className="settings-error" role="alert">

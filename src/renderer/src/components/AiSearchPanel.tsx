@@ -664,7 +664,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 							value={query}
 							onChange={(event) => setQuery(event.target.value)}
 							placeholder={COMPOSER_PLACEHOLDER}
-							aria-label="Ask AutoRAG"
+							aria-label="Ask Dazzi"
 							disabled={searchId !== null}
 							className="h-30 min-w-0 flex-1 border-0 bg-transparent text-body text-ink-body outline-none placeholder:text-ink-muted"
 						/>
@@ -672,8 +672,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 							<button
 								type="submit"
 								className="send flex size-32 flex-none items-center justify-center rounded-full border-0 bg-accent text-on-accent cursor-pointer transition-colors duration-(--dur-color) ease-out enabled:hover:bg-accent-hover disabled:cursor-default disabled:bg-border-strong"
-								title="Ask AutoRAG"
-								aria-label="Ask AutoRAG"
+								title="Ask Dazzi"
+								aria-label="Ask Dazzi"
 								disabled={query.trim().length === 0 && attachments.length === 0}
 							>
 								<ArrowUpIcon />

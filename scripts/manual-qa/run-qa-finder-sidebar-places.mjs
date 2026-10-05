@@ -1,5 +1,5 @@
 /**
- * Manual QA — the sidebar's live OS places on the real AI Finder app (macOS).
+ * Manual QA — the sidebar's live OS places on the real Dazzi app (macOS).
  *
  * Proves, against this machine's real HOME and mount table:
  * - Favorites heads with the AI Search app row, then Recents and the OS
@@ -24,7 +24,7 @@ import { finderWindow, launchFinder, ROOT } from "./launch-finder.mjs";
 
 const EVIDENCE = join(ROOT, ".omo/evidence/ai-finder-app/qa-sidebar-places");
 mkdirSync(EVIDENCE, { recursive: true });
-const VOLUME = "AutoRAG QA Disk";
+const VOLUME = "Dazzi QA Disk";
 const MOUNT = join("/Volumes", VOLUME);
 
 const failures = [];
