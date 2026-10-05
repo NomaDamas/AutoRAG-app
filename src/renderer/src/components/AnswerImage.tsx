@@ -39,18 +39,21 @@ export function lineImages(segments: readonly InlineSegment[]): readonly ImageSe
 export function ImageRow({
 	images,
 	folder,
+	captioned,
 	actions,
 }: {
 	readonly images: readonly ImageSegment[];
 	/** Folder of the document the text came from; resolves relative links. */
 	readonly folder: string | null;
+	/** Name the picture under it. Off in answer prose, where the Evidence panel already names each source. */
+	readonly captioned: boolean;
 	readonly actions: ImageActions;
 }): ReactElement | null {
 	if (images.length === 0) return null;
 	return (
 		<div className="answer-images flex flex-wrap items-start gap-8">
 			{images.map((image) => (
-				<AnswerImage key={image.target} reference={image.target} alt={image.alt} folder={folder} actions={actions} />
+				<AnswerImage key={image.target} reference={image.target} alt={image.alt} folder={folder} captioned={captioned} actions={actions} />
 			))}
 		</div>
 	);
@@ -63,11 +66,13 @@ export function AnswerImage({
 	reference,
 	alt,
 	folder,
+	captioned,
 	actions,
 }: {
 	readonly reference: string;
 	readonly alt: string;
 	readonly folder: string | null;
+	readonly captioned: boolean;
 	readonly actions: ImageActions;
 }): ReactElement {
 	const target = imageTarget(reference, folder);
@@ -122,6 +127,7 @@ export function AnswerImage({
 				<button
 					type="button"
 					aria-label={`${target.name} 훑어보기`}
+					title={target.path}
 					className="block w-fit max-w-full cursor-zoom-in overflow-hidden rounded-8 border border-border bg-window p-0"
 					onClick={open}
 				>
@@ -134,11 +140,13 @@ export function AnswerImage({
 						onError={() => setFailed(true)}
 					/>
 				</button>
-				<figcaption className="min-w-0 max-w-[420px] text-badge text-ink-muted">
-					<span className="block truncate" title={target.path}>
-						{alt === "" ? target.name : `${alt} · ${target.name}`}
-					</span>
-				</figcaption>
+				{captioned ? (
+					<figcaption className="min-w-0 max-w-[420px] text-badge text-ink-muted">
+						<span className="block truncate" title={target.path}>
+							{alt === "" ? target.name : `${alt} · ${target.name}`}
+						</span>
+					</figcaption>
+				) : null}
 			</figure>
 		);
 	}

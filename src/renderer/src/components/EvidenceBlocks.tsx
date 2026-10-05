@@ -51,7 +51,7 @@ export function InlineWithImages({
 	return (
 		<>
 			{isImageOnlyLine(segments) ? null : line}
-			<ImageRow images={figures} folder={images.folder} actions={images.actions} />
+			<ImageRow images={figures} folder={images.folder} captioned actions={images.actions} />
 		</>
 	);
 }
@@ -66,7 +66,7 @@ function EvidenceBlock({ block, images }: { readonly block: AnswerBlock; readonl
 						<span className="evidence__block-prefix text-ink-muted font-regular">## </span>
 						{renderInline(segments)}
 					</div>
-					<ImageRow images={lineImages(segments)} folder={images.folder} actions={images.actions} />
+					<ImageRow images={lineImages(segments)} folder={images.folder} captioned actions={images.actions} />
 				</>
 			);
 		}
@@ -78,7 +78,7 @@ function EvidenceBlock({ block, images }: { readonly block: AnswerBlock; readonl
 						<span className="evidence__block-prefix text-ink-muted font-regular [.evidence\_\_block--list_&]:flex-none">–</span>
 						<span>{renderInline(segments)}</span>
 					</div>
-					<ImageRow images={lineImages(segments)} folder={images.folder} actions={images.actions} />
+					<ImageRow images={lineImages(segments)} folder={images.folder} captioned actions={images.actions} />
 				</>
 			);
 		}

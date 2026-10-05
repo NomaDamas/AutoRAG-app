@@ -11,8 +11,9 @@ import { fileURLToPath } from "node:url";
  * relative image link. Loading the chat through the history surface drives
  * only the real render path, then checks:
  *
- *   - local images render as pictures (decoded pixels, not raw text), each
- *     captioned with its file name and full path;
+ *   - local images render as pictures (decoded pixels, not raw text); in the
+ *     answer they carry no caption (the Evidence panel names each source) and
+ *     the full path shows on hover, while excerpt images keep their caption;
  *   - a missing file and an undecodable format fall back to a card that shows
  *     the path instead of a broken image;
  *   - a web image is never fetched (no remote loads from model output); its
@@ -202,10 +203,10 @@ check("a bare absolute image path in a sentence renders the picture", screen?.wi
 check("the sentence text around the bare path stays", quickText.includes("화면 캡처는") && quickText.includes("있습니다."), quickText.replace(/\s+/g, " ").slice(0, 200));
 /** CSS attribute selector for a value that may hold Windows backslashes. */
 const byAttr = (name, value) => `[${name}="${value.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"]`;
-const caption = (await quickProse.locator(byAttr("data-image-path", CHART)).innerText().catch(() => "")) ?? "";
-check("the rendered image is captioned with its file name", caption.includes(basename(CHART)), caption);
-const captionTitle = await quickProse.locator(`${byAttr("data-image-path", CHART)} [title]`).first().getAttribute("title").catch(() => null);
-check("the caption carries the full path", captionTitle === CHART, String(captionTitle));
+const answerCaptions = await quickProse.locator("figcaption").count();
+check("an answer image has no caption under it", answerCaptions === 0, `figcaption=${answerCaptions}`);
+const hoverTitle = await quickProse.locator(`${byAttr("data-image-path", CHART)} button`).first().getAttribute("title").catch(() => null);
+check("the answer image shows its full path on hover", hoverTitle === CHART, String(hoverTitle));
 const cites = await quickProse.locator(".cite").allTextContents();
 check("citation chips keep working next to images", cites.join(",") === "1,2", JSON.stringify(cites));
 
@@ -242,6 +243,8 @@ await page.locator(`${EVIDENCE_HALF} .evidence-tab`, { hasText: /^2$/ }).click()
 await page.waitForFunction((sel) => document.querySelector(sel)?.textContent?.startsWith("2. "), `${EVIDENCE_HALF} .preview-title`);
 const figure = await waitDecoded(page.locator(EVIDENCE_HALF), FIGURE);
 check("a relative image in an excerpt resolves against the source folder", figure?.width === 160, JSON.stringify(figure));
+const excerptCaption = (await page.locator(`${EVIDENCE_HALF} ${byAttr("data-image-path", FIGURE)} figcaption`).innerText().catch(() => "")) ?? "";
+check("an excerpt image keeps its caption", excerptCaption.includes(basename(FIGURE)), excerptCaption);
 await page.screenshot({ path: join(EVIDENCE, "04-evidence-relative.png") });
 
 // Rendered image -> Quick Look.
