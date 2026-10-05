@@ -7,8 +7,9 @@ import { HtmlView, TextView } from "./code";
 import { DocxView, RtfView, SheetView } from "./documents";
 import { FallbackView } from "./fallback";
 import { MarkdownView } from "./markdown";
+import { HwpView } from "./hwp";
 import { FontView, HeicView, ImageView, TiffView } from "./media";
-import { ArchiveView, EpubView, HwpxView, PptxView } from "./packages";
+import { ArchiveView, EpubView, PptxView } from "./packages";
 import { PdfView } from "./pdf";
 import { AudioView, VideoView } from "./player";
 
@@ -52,8 +53,8 @@ export function PreviewBody({ file }: { readonly file: PreviewDocument }): React
 			return <ArchiveView file={file} />;
 		case "epub":
 			return <EpubView file={file} />;
-		case "hwpx":
-			return <HwpxView file={file} />;
+		case "hwp":
+			return <HwpView file={file} />;
 		case "fallback":
 			if (file.bytes !== null && looksLikeText(file.bytes)) return <TextView file={file} />;
 			return <FallbackView file={file} />;

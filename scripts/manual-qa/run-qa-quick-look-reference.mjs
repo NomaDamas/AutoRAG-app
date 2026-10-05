@@ -19,6 +19,7 @@ import { join } from "node:path";
 import { finderWindow, launchFinder } from "./launch-finder.mjs";
 import { isWindows } from "./platform.mjs";
 import { fitQuickLook, QUICK_LOOK_TOOLBAR } from "../../src/preview/shared/fit.ts";
+import { buildHwp } from "../../test/support/hwp-fixture.ts";
 
 const EVIDENCE = process.argv[2] ?? "/tmp/autorag-quicklook-reference";
 mkdirSync(EVIDENCE, { recursive: true });
@@ -155,6 +156,9 @@ ffmpeg(
 );
 rmSync(join(root, ".cover.jpg"));
 pdfFixture(join(root, "guide.pdf"));
+const HWP_PAGES = ["첫 쪽: 2026년 사업계획서 본문", "둘째 쪽: 추진 일정과 예산", "셋째 쪽: 기대 효과"];
+writeFileSync(join(root, "사업계획서.hwp"), buildHwp(HWP_PAGES, "hwp"));
+writeFileSync(join(root, "회의록.hwpx"), buildHwp(HWP_PAGES, "hwpx"));
 writeFileSync(join(root, "landing.html"), HTML);
 writeFileSync(join(root, "build_eval.py"), CODE);
 writeFileSync(join(root, "README.md"), MARKDOWN);
@@ -303,17 +307,58 @@ async function pass(appearance) {
 		check("pdf first page within 1.5s", ms < 1500, `${ms}ms`);
 		check("pdf lays out every page", (await preview.locator(".ql__paper").count()) === 9);
 		check("pdf rail lists every page", (await preview.locator(".ql__rail-item").count()) === 9);
-		check("pdf pill shows page and zoom", ((await preview.locator(".ql-pdf__pill").textContent()) ?? "").includes("1 / 9"));
+		check("pdf pill shows page and zoom", ((await preview.locator(".ql-pages__pill").textContent()) ?? "").includes("1 / 9"));
 		state = await capture("03-pdf");
-		const zoomOf = async () => Number(/(\d+)%/.exec((await preview.locator(".ql-pdf__pill").textContent()) ?? "")?.[1] ?? 0);
+		const zoomOf = async () => Number(/(\d+)%/.exec((await preview.locator(".ql-pages__pill").textContent()) ?? "")?.[1] ?? 0);
 		const fitted = await zoomOf();
-		await preview.locator('.ql-pdf__pill button[aria-label="확대"]').click();
+		await preview.locator('.ql-pages__pill button[aria-label="확대"]').click();
 		const zoomed = await poll(zoomOf, (value) => value > fitted);
 		check("pdf zooms to the next step", zoomed > fitted, `${fitted}% → ${zoomed}%`);
 		await preview.locator(".ql__rail-item").nth(6).click();
-		await poll(() => preview.locator(".ql-pdf__pill").textContent(), (text) => (text ?? "").includes("7 / 9"));
-		check("rail jumps to a page", ((await preview.locator(".ql-pdf__pill").textContent()) ?? "").includes("7 / 9"));
+		await poll(() => preview.locator(".ql-pages__pill").textContent(), (text) => (text ?? "").includes("7 / 9"));
+		check("rail jumps to a page", ((await preview.locator(".ql-pages__pill").textContent()) ?? "").includes("7 / 9"));
 		await close();
+
+		// HWP and HWPX: real rhwp-written documents in the PDF panel's paged layout.
+		for (const [name, slug] of [["사업계획서.hwp", "03b-hwp"], ["회의록.hwpx", "03c-hwpx"]]) {
+			const label = name.endsWith(".hwpx") ? "hwpx" : "hwp";
+			ms = await open(name, () => document.querySelectorAll('.ql__paper img[src^="data:image/svg+xml"]').length > 0);
+			check(`${label} first page within 2s`, ms < (isWindows ? 4000 : 2000), `${ms}ms`);
+			check(`${label} lays out every page`, (await preview.locator(".ql__paper").count()) === HWP_PAGES.length);
+			check(`${label} rail lists every page`, (await preview.locator(".ql__rail-item").count()) === HWP_PAGES.length);
+			check(`${label} pill shows page and zoom`, /\d+%.*1 \/ 3/.test((await preview.locator(".ql-pages__pill").textContent()) ?? ""));
+			const page = await preview.locator(".ql__paper").first().evaluate((node) => {
+				const image = node.querySelector("img");
+				return { ratio: node.clientHeight / node.clientWidth, decoded: image instanceof HTMLImageElement && image.complete && image.naturalWidth > 0, svg: decodeURIComponent(image?.getAttribute("src") ?? "") };
+			});
+			check(`${label} page keeps the A4 shape`, Math.abs(page.ratio - 297 / 210) < 0.01, page.ratio.toFixed(3));
+			check(`${label} page image decodes`, page.decoded);
+			check(`${label} page draws the document's own text`, page.svg.includes(">첫<") && page.svg.includes(">쪽<"));
+			const painted = await preview.locator(".ql__paper img").first().evaluate((image) => {
+				const canvas = document.createElement("canvas");
+				canvas.width = image.naturalWidth;
+				canvas.height = image.naturalHeight;
+				const context = canvas.getContext("2d");
+				context.drawImage(image, 0, 0);
+				const { data } = context.getImageData(0, 0, canvas.width, canvas.height);
+				let dark = 0;
+				for (let index = 0; index < data.length; index += 4) if (data[index + 3] > 0 && data[index] < 128) dark += 1;
+				return dark;
+			});
+			check(`${label} page paints glyphs`, painted > 50, `${painted} dark px`);
+			state = await capture(slug);
+			const expectedHwp = expectedPanel(794 + 56 * 2 + 128, Math.ceil((1123 + 18) * HWP_PAGES.length) + 8 + 70 + QUICK_LOOK_TOOLBAR);
+			check(`${label} panel is the page width plus margins and rail`, state !== null && Math.abs(state.bounds.width - expectedHwp.width) <= 2, JSON.stringify(state?.bounds));
+			await preview.locator(".ql__rail-item").nth(2).click();
+			await poll(() => preview.locator(".ql-pages__pill").textContent(), (text) => (text ?? "").includes("3 / 3"));
+			check(`${label} rail jumps to the last page`, ((await preview.locator(".ql-pages__pill").textContent()) ?? "").includes("3 / 3"));
+			const last = await poll(
+				() => preview.locator('.ql__paper[data-page="3"] img').evaluate((image) => decodeURIComponent(image.getAttribute("src") ?? "")).catch(() => ""),
+				(svg) => svg.includes(">셋<"),
+			);
+			check(`${label} last page draws its own text`, last.includes(">셋<"));
+			await close();
+		}
 
 		// HTML
 		ms = await open("landing.html", () => document.querySelector(".ql-html iframe") !== null);
