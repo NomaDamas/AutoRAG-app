@@ -17,8 +17,10 @@ import {
 	type FsFileDetails,
 	type FsLocation,
 	type FsOpError,
+	type FsSearchOptions,
 	type FsSearchResult,
 } from "../shared/fs-contract";
+import type { FileNameSearchBackend } from "./file-name-search";
 import { createFinderMetadataResolver, type FinderMetadataLookup } from "./finder-metadata";
 import { createIconProvider, type IconProvider } from "./file-icon";
 import { createOsKindResolver } from "./file-kind";
@@ -69,6 +71,11 @@ export interface FsServiceDeps {
 	readonly places?: Places;
 	/** Defaults to the Windows `$Recycle.Bin\<SID>` shape; tests point it at a fixture folder. */
 	readonly recycleBin?: (dir: string) => boolean;
+	/**
+	 * Fast filename search (fsearch on macOS/Linux, Everything on Windows).
+	 * When absent, or when it reports no index, search walks the disk.
+	 */
+	readonly fileNameSearch?: FileNameSearchBackend;
 }
 
 export type FsRenameErrorCode = "invalid-name" | "name-collision";
@@ -116,6 +123,11 @@ interface SearchContext {
 function compareEntries(a: FsEntry, b: FsEntry): number {
 	if (a.kind !== b.kind) return a.kind === "folder" ? -1 : 1;
 	return a.name.localeCompare(b.name);
+}
+
+/** Compare paths across platforms: the Windows index reports backslash paths. */
+function normalizeSlashes(path: string): string {
+	return path.replace(/\\/g, "/");
 }
 
 /** Attach the OS-reported kind to one entry; a failed lookup keeps the letter/fallback kind. */
@@ -391,10 +403,66 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 		return result;
 	}
 
-	async function search(query: string): Promise<readonly FsSearchResult[]> {
+	/**
+	 * Filename substring search, case-insensitive. The platform index answers
+	 * when it can (fsearch / Everything); otherwise the disk walk runs. `scope`
+	 * restricts both to one folder subtree — the "파일 이름" chip's folder.
+	 */
+	async function search(query: string, options?: FsSearchOptions): Promise<readonly FsSearchResult[]> {
 		const needle = query.trim().toLowerCase();
 		if (needle.length === 0) return [];
+		const rawScope = options?.scope?.trim();
+		const scope = rawScope !== undefined && rawScope.length > 0 ? rawScope : undefined;
+		const backend = deps.fileNameSearch;
+		if (backend !== undefined) {
+			try {
+				const paths = await backend.search(query, scope);
+				if (paths !== null) return indexedHits(paths);
+			} catch (error) {
+				console.warn(`fs:search index failed, walking instead: ${errorMessage(error)}`);
+			}
+		}
+		return walkSearch(needle, scope);
+	}
+
+	/** Turn index paths into rows, attributing each to its location by longest prefix. */
+	async function indexedHits(paths: readonly string[]): Promise<readonly FsSearchResult[]> {
+		const known = (await locations()).filter((location) => location.path !== RECENTS_PATH);
 		const results: FsSearchResult[] = [];
+		for (const path of paths) {
+			if (results.length >= SEARCH_MAX_RESULTS) break;
+			try {
+				results.push({ entry: await buildFsEntry(path), location: searchLocation(path, known) });
+			} catch (error) {
+				// The index can be stale: a path that vanished since indexing is skipped.
+				if (!hasErrorCode(error, "ENOENT") && !hasErrorCode(error, "ENOTDIR")) {
+					console.warn(`fs:search skipping ${path}: ${errorMessage(error)}`);
+				}
+			}
+		}
+		return results;
+	}
+
+	function searchLocation(path: string, known: readonly FsLocation[]): string {
+		const target = normalizeSlashes(path);
+		let match: FsLocation | undefined;
+		for (const location of known) {
+			const root = normalizeSlashes(location.path);
+			if (target !== root && !target.startsWith(`${root}/`)) continue;
+			if (match === undefined || location.path.length > match.path.length) match = location;
+		}
+		return match?.name ?? dirname(path);
+	}
+
+	async function walkSearch(needle: string, scope: string | undefined): Promise<readonly FsSearchResult[]> {
+		const results: FsSearchResult[] = [];
+		if (scope !== undefined) {
+			// The "파일 이름" chip scopes to the folder in view, which may sit
+			// outside the scanned places (e.g. inside a mounted disk).
+			const known = (await locations()).filter((location) => location.path !== RECENTS_PATH);
+			await walkForSearch(scope, 0, { needle, location: searchLocation(scope, known), results });
+			return results;
+		}
 		for (const location of await locations()) {
 			// Recents is virtual and whole disks are too large to walk; only scanned places count.
 			if (!location.available || !location.scanned) continue;

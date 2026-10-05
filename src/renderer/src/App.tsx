@@ -292,9 +292,9 @@ export function App(): ReactElement {
 	);
 
 	/**
-	 * Sidebar search commit. Enter runs a filename search in the chip's scope
-	 * (전체 = This Mac, 파일 이름 = current folder); the 내용 chip — or ⌥Enter
-	 * from any chip — hands the query to a new AI Search tab.
+	 * Sidebar search commit. Enter runs a filename search over the whole machine
+	 * (This Mac / This Computer); the 내용 chip — or ⌥Enter from either chip —
+	 * hands the query to a new AI Search tab.
 	 */
 	const submitSidebarSearch = useCallback(
 		(mode: SearchMode, text: string) => {
@@ -309,7 +309,7 @@ export function App(): ReactElement {
 			}
 			// A Settings / AI Search tab lists nothing: the results show in its last folder.
 			finder.leaveVirtualTab();
-			finder.setSearchScope(mode === "name" ? "current" : "all");
+			finder.setSearchScope("all");
 			finder.setQuery(value);
 		},
 		[contentSearch, finder],

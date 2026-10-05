@@ -16,6 +16,7 @@ import { createDataSourceStatusService } from "./datasource-status";
 import { createIndexStatusService } from "./index-status";
 import { readDevLabel, resolveClonePath } from "./dev-label";
 import { buildFsEntry } from "./fs-entry";
+import { createFileNameSearch } from "./file-name-search";
 import { createFsService } from "./fs-service";
 import { createPlaces } from "./places";
 import { createRecentsStore } from "./recents-store";
@@ -165,11 +166,18 @@ app.whenReady().then(async () => {
 				}
 			: {},
 	);
+	// Filename search rides the platform index (fsearch / Everything); the
+	// disk walk stays as the fallback when no index answers.
+	const fileNameSearch = createFileNameSearch({
+		userDataDir: app.getPath("userData"),
+		locations: () => fsService.locations(),
+	});
 	const fsService = createFsService({
 		shell,
 		clipboard,
 		icons: iconProvider,
 		places,
+		fileNameSearch,
 		recents: createRecentsStore({ directory: join(app.getPath("userData"), "recents") }),
 		...(qaRoot !== "" && isAbsolute(qaRoot) ? { qaRoot } : {}),
 	});
@@ -269,6 +277,11 @@ app.whenReady().then(async () => {
 	scanIntervalMinutes = settings.dupeyScanIntervalMinutes;
 	versionFamilyService?.reschedule();
 	void versionFamilyService.start();
+	// Warm the file-name index daemon (fsearch watch / Everything) so the first
+	// search never pays the database cold-load. It is deliberately left running
+	// across quits: restarting a watch over a whole-machine index re-scans every
+	// monitored folder, which is exactly the cost this keep-alive avoids.
+	void fileNameSearch.ensureDaemon();
 	const openMainWindow = (): BrowserWindow => {
 		const window = createMainWindow(devLabel, currentAppearance);
 		const clearWatchSet = (): void => {
