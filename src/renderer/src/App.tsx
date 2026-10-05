@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type DragEvent, type ReactElement } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactElement } from "react";
 import type { QuickLookTarget } from "../../preview/shared/contract";
 import type { Bounds } from "../../preview/shared/fit";
 import type { ActionAnchor } from "../../shared/actions-contract";
@@ -262,6 +262,9 @@ export function App(): ReactElement {
 		// ⌘K: the controller adopts the nearest AI Search tab (or opens one); focus its composer.
 		onFocusComposer: () => deliverToAi({}),
 	});
+	/** Answer and evidence images: a local picture opens in Quick Look; a web image's page (never fetched) in the OS browser. */
+	const revealEvidence = finder.revealEvidence;
+	const imageActions = useMemo(() => ({ onOpenImage: openQuickLook, onOpenUrl: revealEvidence }), [openQuickLook, revealEvidence]);
 
 	const activeTab = finder.tabs.find((tab) => tab.active) ?? null;
 	const activeAiTabId = activeTab?.aiSearch === true ? activeTab.id : null;
@@ -757,6 +760,7 @@ export function App(): ReactElement {
 							selectedEvidence={evidence.length === 0 ? null : evidenceSelectedNumber}
 							onSelectEvidence={selectEvidence}
 							onPublish={publishEvidence}
+							imageActions={imageActions}
 						/>
 					))}
 				</section>
@@ -780,6 +784,7 @@ export function App(): ReactElement {
 						onSelectEvidence={selectEvidence}
 						onRevealPath={finder.revealEvidence}
 						onToast={finder.showToast}
+						imageActions={imageActions}
 					/>
 				) : null}
 					</div>

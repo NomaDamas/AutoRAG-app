@@ -25,6 +25,7 @@
  */
 
 import { useEffect, useState, type MouseEvent as ReactMouseEvent, type ReactElement, type ReactNode } from "react";
+import { previewStreamUrl } from "../../../preview/shared/contract";
 import type { ActionAnchor, ActionCapabilities } from "../../../shared/actions-contract";
 import type { FsFileDetails } from "../../../shared/fs-contract";
 import type { IndexStatus } from "../../../shared/index-contract";
@@ -49,7 +50,10 @@ import {
 } from "../state/file-actions";
 import { basename, dirname } from "../state/paths";
 import { RELATION_LABELS } from "../state/version-family";
-import { EvidenceExcerpt, renderInline } from "./EvidenceBlocks";
+import { imageTarget } from "../state/answer-markdown";
+import type { FileKind } from "../state/kinds";
+import type { ImageActions } from "./AnswerImage";
+import { EvidenceExcerpt, InlineWithImages } from "./EvidenceBlocks";
 import {
 	CheckIcon,
 	CloseIcon,
@@ -110,6 +114,8 @@ export interface InspectorProps {
 	/** Show the source: a file in the Finder, a web page in the OS browser. */
 	readonly onRevealPath: (path: string) => void;
 	readonly onToast: (msg: string) => void;
+	/** Images in evidence: a local picture opens in Quick Look, a web image's page in the OS browser. */
+	readonly imageActions: ImageActions;
 }
 
 const HEAD_BUTTON =
@@ -152,6 +158,7 @@ export function Inspector({
 	onSelectEvidence,
 	onRevealPath,
 	onToast,
+	imageActions,
 }: InspectorProps): ReactElement {
 	return (
 		<aside
@@ -166,6 +173,7 @@ export function Inspector({
 					onSelect={onSelectEvidence}
 					onReveal={onRevealPath}
 					onToast={onToast}
+					imageActions={imageActions}
 				/>
 			) : entries.length > 1 ? (
 				<MultiInfoHalf entries={entries} focusPath={entry?.path ?? null} />
@@ -706,6 +714,7 @@ function EvidencePanel({
 	onSelect,
 	onReveal,
 	onToast,
+	imageActions,
 }: {
 	readonly evidence: readonly CitationEvidence[];
 	readonly selected: number;
@@ -713,6 +722,7 @@ function EvidencePanel({
 	readonly onSelect: (n: number) => void;
 	readonly onReveal: (path: string) => void;
 	readonly onToast: (msg: string) => void;
+	readonly imageActions: ImageActions;
 }): ReactElement {
 	const [votes, setVotes] = useState<Readonly<Record<string, EvidenceFeedback>>>({});
 	// Only the selected number renders: falling back to `evidence[0]` here would
@@ -731,6 +741,11 @@ function EvidencePanel({
 	}
 	const source = item.source;
 	const url = source === null ? null : evidenceSourceUrl(source);
+	// A datasource virtual id is not a folder on disk; only a local file's
+	// folder resolves the relative image links in its excerpts.
+	const local = source !== null && url === null && !source.startsWith("/kakao/");
+	const excerptImages = { folder: local ? dirname(source) : null, actions: imageActions };
+	const sourceImage = local ? imageTarget(source, null) : null;
 	const number = item.number;
 	const voteKey = `${sessionId ?? "paused"}:${number}`;
 	const vote = votes[voteKey] ?? null;
@@ -764,9 +779,13 @@ function EvidencePanel({
 					))}
 				</div>
 
-				<div className="preview-paper flex-none h-152 flex items-center justify-center overflow-hidden rounded-6 border border-border bg-window shadow-raised mb-14">
-					{url === null ? <FileTile kind={evidenceKind(item.title)} large /> : <LinkIcon size={36} className="text-ink-muted" />}
-				</div>
+				{sourceImage?.kind === "local" && sourceImage.renderable ? (
+					<EvidenceImagePaper key={sourceImage.path} path={sourceImage.path} name={sourceImage.name} kind={evidenceKind(item.title)} onOpen={imageActions.onOpenImage} />
+				) : (
+					<div className="preview-paper flex-none h-152 flex items-center justify-center overflow-hidden rounded-6 border border-border bg-window shadow-raised mb-14">
+						{url === null ? <FileTile kind={evidenceKind(item.title)} large /> : <LinkIcon size={36} className="text-ink-muted" />}
+					</div>
+				)}
 				{source === null || source.startsWith("/kakao/") ? (
 					<div className="preview-title text-body font-semibold text-ink leading-[1.3] [overflow-wrap:anywhere]">
 						{item.number}. {item.title}
@@ -818,13 +837,54 @@ function EvidencePanel({
 				<div className="text-badge font-semibold text-ink-muted">근거 내용 발췌</div>
 				<div className="flex flex-col gap-8 mt-4">
 					{item.summary.length === 0 ? null : (
-						<div className="evidence__block evidence__block--paragraph text-caption leading-read text-ink-body text-pretty [&_strong]:text-ink [&_strong]:font-semibold">{renderInline(item.summary)}</div>
+						<InlineWithImages
+							text={item.summary}
+							images={excerptImages}
+							className="evidence__block evidence__block--paragraph text-caption leading-read text-ink-body text-pretty [&_strong]:text-ink [&_strong]:font-semibold"
+						/>
 					)}
 					{item.excerpts.map((excerpt, index) => (
-						<EvidenceExcerpt key={`${index}`} text={excerpt} />
+						<EvidenceExcerpt key={`${index}`} text={excerpt} images={excerptImages} />
 					))}
 				</div>
 			</div>
 		</div>
+	);
+}
+
+/**
+ * An image evidence source shows the picture itself in the paper (streamed
+ * through the preview protocol); clicking it opens Quick Look. A file that
+ * cannot be read falls back to the kind tile.
+ */
+function EvidenceImagePaper({
+	path,
+	name,
+	kind,
+	onOpen,
+}: {
+	readonly path: string;
+	readonly name: string;
+	readonly kind: FileKind;
+	readonly onOpen: ImageActions["onOpenImage"];
+}): ReactElement {
+	const [failed, setFailed] = useState(false);
+	if (failed) {
+		return (
+			<div className="preview-paper flex-none h-152 flex items-center justify-center overflow-hidden rounded-6 border border-border bg-window shadow-raised mb-14">
+				<FileTile kind={kind} large />
+			</div>
+		);
+	}
+	return (
+		<button
+			type="button"
+			data-image-path={path}
+			aria-label={`${name} 훑어보기`}
+			className="preview-paper flex-none flex w-full items-center justify-center overflow-hidden rounded-6 border border-border bg-window shadow-raised mb-14 p-0 cursor-zoom-in max-h-[50vh]"
+			onClick={() => onOpen({ path, name })}
+		>
+			<img className="block max-w-full max-h-[50vh] object-contain" src={previewStreamUrl(path)} alt="" decoding="async" draggable={false} onError={() => setFailed(true)} />
+		</button>
 	);
 }
