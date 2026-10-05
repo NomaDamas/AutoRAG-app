@@ -8,6 +8,7 @@ import {
 	applyOptimisticDeletes,
 	createIncrementalListing,
 	createListingLoader,
+	isFilesystemPath,
 	nearestExistingAncestor,
 	listingSurvivor,
 	pruneSelection,
@@ -102,11 +103,26 @@ describe("live renderer state", () => {
 			watchSetFor([
 				{ path: "" },
 				{ path: "Recents" },
+				{ path: "Settings" },
 				{ path: "/Users/me/Documents" },
 				{ path: "/Users/me/Documents" },
 				{ path: "/Users/me/Desktop" },
 			]),
 		).toEqual(["/Users/me/Documents", "/Users/me/Desktop"]);
+	});
+
+	it("drops the Settings UI location from the watch set but keeps real folders", () => {
+		expect(watchSetFor([{ path: "Settings" }, { path: "/Users/me/Documents" }])).toEqual([
+			"/Users/me/Documents",
+		]);
+	});
+
+	it("treats Settings and the empty path as having no folder to list or watch", () => {
+		// Regression: focus resync listed the literal path "Settings"
+		// (fs:listDir 'Settings' ENOENT) because only the empty path was skipped.
+		expect(isFilesystemPath("Settings")).toBe(false);
+		expect(isFilesystemPath("")).toBe(false);
+		expect(isFilesystemPath("/Users/me/Documents")).toBe(true);
 	});
 
 	it("applies only delete events to the optimistic listing", () => {

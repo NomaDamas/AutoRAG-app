@@ -33,6 +33,7 @@ import {
 	applyOptimisticDeletes,
 	createIncrementalListing,
 	createListingLoader,
+	isFilesystemPath,
 	nearestExistingAncestor,
 	listingSurvivor,
 	pruneSelection,
@@ -520,7 +521,7 @@ export function useFinderController(
 	const layout: ViewMode = viewMode === "columns" && searching ? "list" : viewMode;
 	const chain = tab.chain;
 	const panePaths = useMemo(
-		() => (layout === "columns" && path !== "" ? columnPanes(path, chain) : []),
+		() => (layout === "columns" && isFilesystemPath(path) ? columnPanes(path, chain) : []),
 		[layout, path, chain],
 	);
 
@@ -624,6 +625,10 @@ export function useFinderController(
 			mode: "navigate" | "silent",
 			requestGeneration: number,
 		): void => {
+			// Settings renders its own UI; there is no folder on disk to read.
+			if (!isFilesystemPath(requestedPath)) {
+				return;
+			}
 			// A fresh listing invalidates which identities the viewport has asked
 			// for, so the next mounted rows request their icons again.
 			thumbRequestsRef.current.clear();
@@ -813,7 +818,7 @@ export function useFinderController(
 	}, [path, locations]);
 
 	useEffect(() => {
-		if (path === "" || path === SETTINGS_PATH) {
+		if (!isFilesystemPath(path)) {
 			previousPathRef.current = path;
 			previousTabIdRef.current = tab.id;
 			previousRevisionRef.current = revision;
@@ -1022,7 +1027,8 @@ export function useFinderController(
 	useEffect(() => {
 		let live = true;
 		const resync = (): void => {
-			if (path === "") return;
+			// Settings is a UI location: nothing to relist, watch, or reconcile.
+			if (!isFilesystemPath(path)) return;
 			const scope = beginScope();
 			void source.setWatchSet(watchSetFor(tabsRef.current)).catch((error: unknown) =>
 				console.error("live watch resync failed", error),

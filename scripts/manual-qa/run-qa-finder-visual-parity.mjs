@@ -279,6 +279,7 @@ try {
 		["LLM Models", "15-settings-models"],
 		["Data Sources", "16-settings-sources"],
 	]) {
+		await page.locator(".settings-nav-item", { hasText: tab }).click();
 		await sleep(600);
 		await shot(page, name);
 	}

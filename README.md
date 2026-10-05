@@ -80,6 +80,14 @@ second datasource or model configuration. The categories are:
   Jikji, retrieval limits, FSearch/Everything, web search, parser/OCR, dupey,
   datasource access, P2P, and exclusions.
 
+The parser and OCR language controls are multi-select fields backed by the
+upstream-supported tags (`ko`, `en`, `ja`, `zh-hans`, `zh-hant`, `fr`, `de`,
+`es`, `ru`, `it`, `pt`, `vi`, `th`, `ar`, `hi`). OCR stores the corresponding
+Tesseract traineddata codes while displaying the AutoRAG language tags. The
+Deep, Light, and Other Apps panels use typed controls for every serializable
+field instead of raw JSON textareas; leaf saves preserve unrelated config keys
+and reset removes the edited leaf so AutoRAG defaults apply again.
+
 `workspacePath` and `memoryPath` remain AutoRAG-owned defaults. Automatic code
 folder exclusions default to `.git`, `node_modules`, virtual environments,
 build outputs, coverage, and `__pycache__`; they can be disabled or edited in
@@ -91,6 +99,10 @@ API keys are never written into `config.json`. The app uses Electron's encrypted
 credential store and injects the selected environment variable into the live
 agent process. Remote embedding endpoints and datasource embedding/rerank
 endpoints are rejected; use a loopback service for corpus-bearing requests.
+
+The Settings tab is an app-owned UI location, not a filesystem path; it never
+issues directory listings, incremental reads, or watcher requests. Returning to
+a Finder tab restores its existing folder listing and watch set.
 
 ## Live filesystem sync
 
