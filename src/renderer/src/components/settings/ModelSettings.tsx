@@ -958,6 +958,7 @@ interface RerankDraft {
 	readonly model: string;
 	readonly apiKeyEnv: string;
 	readonly baseUrl: string;
+	readonly topN: string;
 	readonly timeoutMs: string;
 }
 
@@ -965,18 +966,19 @@ function rerankDraftFrom(snapshot: AutoRagConfigSnapshot): { readonly draft: Rer
 	const raw = getAt(snapshot.config, ["rerank"]);
 	if (raw === false || raw === undefined) {
 		return {
-			draft: { enabled: false, model: DEFAULT_RERANK_MODEL, apiKeyEnv: DEFAULT_RERANK_ENV, baseUrl: "", timeoutMs: "" },
+			draft: { enabled: false, model: DEFAULT_RERANK_MODEL, apiKeyEnv: DEFAULT_RERANK_ENV, baseUrl: "", topN: "", timeoutMs: "" },
 			unsupportedProvider: null,
 		};
 	}
 	const record = isJsonObject(raw) ? (raw as JsonObject) : null;
 	if (record === null) {
 		return {
-			draft: { enabled: false, model: DEFAULT_RERANK_MODEL, apiKeyEnv: DEFAULT_RERANK_ENV, baseUrl: "", timeoutMs: "" },
+			draft: { enabled: false, model: DEFAULT_RERANK_MODEL, apiKeyEnv: DEFAULT_RERANK_ENV, baseUrl: "", topN: "", timeoutMs: "" },
 			unsupportedProvider: null,
 		};
 	}
 	const provider = stringOf(record.provider);
+	const topN = numberOf(record.topN);
 	const timeoutMs = numberOf(record.timeoutMs);
 	return {
 		draft: {
@@ -984,6 +986,7 @@ function rerankDraftFrom(snapshot: AutoRagConfigSnapshot): { readonly draft: Rer
 			model: stringOf(record.model).length > 0 ? stringOf(record.model) : DEFAULT_RERANK_MODEL,
 			apiKeyEnv: stringOf(record.apiKeyEnv).length > 0 ? stringOf(record.apiKeyEnv) : DEFAULT_RERANK_ENV,
 			baseUrl: stringOf(record.baseUrl),
+			topN: topN === null ? "" : String(topN),
 			timeoutMs: timeoutMs === null ? "" : String(timeoutMs),
 		},
 		unsupportedProvider: provider.length > 0 && provider !== RERANK_PROVIDER ? provider : null,
@@ -1026,6 +1029,8 @@ function RerankerPanel({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 		if (draft.apiKeyEnv.trim().length > 0 && !ENV_NAME_PATTERN.test(draft.apiKeyEnv.trim())) {
 			problems.push("API key env var must match /^[A-Za-z_][A-Za-z0-9_]*$/.");
 		}
+		const topN = parsePositiveInt(draft.topN);
+		if (draft.topN.trim().length > 0 && topN === null) problems.push("Top N must be a positive integer.");
 		const timeoutMs = parsePositiveInt(draft.timeoutMs);
 		if (draft.timeoutMs.trim().length > 0 && timeoutMs === null) problems.push("Timeout must be a positive integer.");
 		if (problems.length > 0) {
@@ -1035,6 +1040,7 @@ function RerankerPanel({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 		const rerank: Record<string, JsonValue> = { provider: RERANK_PROVIDER, model };
 		if (draft.apiKeyEnv.trim().length > 0) rerank.apiKeyEnv = draft.apiKeyEnv.trim();
 		if (draft.baseUrl.trim().length > 0) rerank.baseUrl = draft.baseUrl.trim();
+		if (topN !== null) rerank.topN = topN;
 		if (timeoutMs !== null) rerank.timeoutMs = timeoutMs;
 		await commit(["rerank"], rerank);
 	}
@@ -1118,6 +1124,9 @@ function RerankerPanel({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 							value={draft.apiKeyEnv}
 							onChange={(value) => setDraft((current) => ({ ...current, apiKeyEnv: value }))}
 						/>
+					</Row>
+					<Row name="Top N" hint="Return only the top N merged results; blank reorders all.">
+						<TextField ariaLabel="Rerank top N" type="number" placeholder="(all results)" value={draft.topN} onChange={(value) => setDraft((current) => ({ ...current, topN: value }))} />
 					</Row>
 					<Row name="Timeout (ms)" hint="Per-request timeout in milliseconds; blank uses the SDK default.">
 						<TextField ariaLabel="Rerank timeout" type="number" placeholder="(default)" value={draft.timeoutMs} onChange={(value) => setDraft((current) => ({ ...current, timeoutMs: value }))} />

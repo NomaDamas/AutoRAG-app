@@ -71,9 +71,9 @@ second datasource or model configuration. The categories are:
   limits come from the provider catalog or model runtime.
 - **Embedding Models** — local MinSync profiles or loopback endpoints, automatic
   model dimensions, request controls, and reindexing warnings.
-- **Reranker Models** — the v2.7 OpenRouter reranker, wire model, timeout, and
-  encrypted credentials. Other reranker providers are not offered because the
-  upstream resolver rejects them; Top N remains at the AutoRAG default.
+- **Reranker Models** — the v2.7 OpenRouter reranker, wire model, Top N,
+  timeout, and encrypted credentials. Other reranker providers are not offered
+  because the upstream resolver rejects them.
 - **Data Sources** — multiple named connections per datasource template,
   instance ids, channel filters, connector-specific fields, tags, access
   policy, and encrypted GitHub credentials. Unknown config fields are retained.
