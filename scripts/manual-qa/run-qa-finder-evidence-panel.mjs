@@ -315,7 +315,9 @@ await page.evaluate((name) => {
 }, targetName);
 const clickedAt = Date.now();
 await page.locator(`${EVIDENCE_HALF} button[title="Show in Finder"]`).click();
-await page.waitForFunction((count) => document.querySelectorAll(".tabs .tab").length === count + 1, tabsBefore);
+// A slow Windows runner paints the folder listing late; the default 8s page
+// timeout is not enough for the new tab to appear (see the 10s/30s waits below).
+await page.waitForFunction((count) => document.querySelectorAll(".tabs .tab").length === count + 1, tabsBefore, { timeout: 20_000, polling: 50 });
 const newTabTitle = (await page.locator(".tabs .tab--active .tab__title").textContent()) ?? "";
 check("the title opens the source folder in a new tab", newTabTitle === FOLDER, `tab="${newTabTitle}" want="${FOLDER}"`);
 const selected = await page
