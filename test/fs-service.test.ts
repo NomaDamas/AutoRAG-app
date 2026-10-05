@@ -24,6 +24,7 @@ interface StubbedDeps {
 	readonly trashed: string[];
 	readonly revealed: string[];
 	readonly opened: string[];
+	readonly openedUrls: string[];
 	readonly clipboardText: string[];
 	readonly recents: RecentsStore;
 }
@@ -32,6 +33,7 @@ function makeDeps(homeDir: string): StubbedDeps {
 	const trashed: string[] = [];
 	const revealed: string[] = [];
 	const opened: string[] = [];
+	const openedUrls: string[] = [];
 	const clipboardText: string[] = [];
 	return {
 		deps: {
@@ -45,6 +47,9 @@ function makeDeps(homeDir: string): StubbedDeps {
 				openPath: async (path: string) => {
 					opened.push(path);
 					return "";
+				},
+				openExternal: async (url: string) => {
+					openedUrls.push(url);
 				},
 			},
 			clipboard: {
@@ -60,6 +65,7 @@ function makeDeps(homeDir: string): StubbedDeps {
 		trashed,
 		revealed,
 		opened,
+		openedUrls,
 		clipboardText,
 		recents: createRecentsStore({ directory: join(homeDir, "recents-store") }),
 	};
@@ -73,6 +79,7 @@ function makeFailingTrashDeps(homeDir: string, message: string): FsServiceDeps {
 			},
 			showItemInFolder: () => { },
 			openPath: async () => "",
+			openExternal: async () => { },
 		},
 		clipboard: { writeText: () => { } },
 		homeDir,
@@ -833,6 +840,7 @@ describe("shell and clipboard side effects", () => {
 				trashItem: async () => { },
 				showItemInFolder: () => { },
 				openPath: async () => "The file “deck.key” does not exist.",
+				openExternal: async () => { },
 			},
 			clipboard: { writeText: () => { } },
 			homeDir: root,
@@ -842,6 +850,20 @@ describe("shell and clipboard side effects", () => {
 		await expect(createFsService(deps).open(join(root, "deck.key"))).rejects.toThrow(
 			"The file “deck.key” does not exist.",
 		);
+	});
+
+	it("openUrl hands an http(s) page to the OS default browser", async () => {
+		const stubs = makeDeps(root);
+		await createFsService(stubs.deps).openUrl("https://v.daum.net/v/20250326175451054");
+		expect(stubs.openedUrls).toEqual(["https://v.daum.net/v/20250326175451054"]);
+	});
+
+	it("openUrl refuses anything but an http(s) page without calling the shell", async () => {
+		const stubs = makeDeps(root);
+		const service = createFsService(stubs.deps);
+		await expect(service.openUrl("file:///etc/passwd")).rejects.toThrow("웹 주소가 아닙니다");
+		await expect(service.openUrl("/Users/me/brief.md")).rejects.toThrow("웹 주소가 아닙니다");
+		expect(stubs.openedUrls).toEqual([]);
 	});
 
 	it("copyPathsToClipboard writes newline-joined paths to the OS clipboard", async () => {

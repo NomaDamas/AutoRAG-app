@@ -77,6 +77,8 @@ export interface FinderSource {
 	quickLook(path: string): Promise<void>;
 	/** Open the file with the OS default application (double-click behavior). */
 	open(path: string): Promise<void>;
+	/** Open an http(s) page (a web evidence source) in the OS default browser. */
+	openUrl(url: string): Promise<void>;
 	reveal(path: string): Promise<void>;
 	trash(paths: readonly string[]): Promise<void>;
 	rename(path: string, name: string): Promise<void>;
@@ -190,6 +192,7 @@ export function createBridgeSource(
 		},
 		quickLook: (path) => fs.quickLook(path),
 		open: (path) => fs.open(path),
+		openUrl: (url) => fs.openUrl(url),
 		reveal: (path) => fs.reveal(path),
 		trash: async (paths) => {
 			await fs.trash(paths);
@@ -347,6 +350,7 @@ export function createFixtureSource(): FinderSource {
 			),
 		quickLook: resolve,
 		open: resolve,
+		openUrl: resolve,
 		reveal: resolve,
 		trash: (paths) => {
 			for (const path of paths) {

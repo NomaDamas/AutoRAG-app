@@ -4,6 +4,7 @@ import { homedir } from "node:os";
 import { basename, dirname, extname, isAbsolute, join } from "node:path";
 import {
 	RECENTS_PATH,
+	webUrl,
 	type DirListing,
 	type FsUndoOutcome,
 	type FsBatchResult,
@@ -31,6 +32,8 @@ export interface FsShell {
 	showItemInFolder(fullPath: string): void;
 	/** Electron shell.openPath: resolves with "" on success or a verbatim error message. */
 	openPath(path: string): Promise<string>;
+	/** Electron shell.openExternal: the OS default handler for the URL (a browser for http/https). */
+	openExternal(url: string): Promise<void>;
 }
 
 /** Subset of Electron's clipboard used by the service (injected for testability). */
@@ -538,6 +541,11 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 				throw new Error(message);
 			}
 			await recents.record(path);
+		},
+		openUrl: async (text) => {
+			const url = webUrl(text);
+			if (url === null) throw new Error(`웹 주소가 아닙니다: ${text}`);
+			await deps.shell.openExternal(url);
 		},
 		clipboardSet: async (clipboard) => {
 			inAppClipboard = { op: clipboard.op, paths: [...clipboard.paths] };

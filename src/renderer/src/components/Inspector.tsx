@@ -1,5 +1,6 @@
 /**
- * Inspector — the right column (v7 Bloom). Two stacked halves:
+ * Inspector — the right column (v7 Bloom). One full-height view at a time,
+ * chosen by the focused tab (a folder tab shows Info, an AI Search tab Evidence):
  *
  *   Info     preview paper, name, kind·size·date, index/trash/copy chips, the
  *            dupey Versions family, the metadata rows, and the suggested-action
@@ -15,8 +16,9 @@
  *            selection's own preview papers (focused file in front, each sheet
  *            dog-eared and shadowed), the count title, the per-kind breakdown
  *            with total size, and created/modified date ranges.
- *   Evidence the citation half shown while a citation is selected: numbered tabs,
- *            preview, title reveal, feedback (real `search.feedback` IPC), and excerpts.
+ *   Evidence the AI Search tab's cited sources: numbered tabs, preview, title
+ *            (a file reveals in the Finder, a web page opens in the OS browser),
+ *            feedback (real `search.feedback` IPC), and excerpts.
  *
  * All callbacks are real IPC-backed actions supplied by App; this component
  * renders no fabricated data. Esc handling stays in App's keymap.
@@ -34,6 +36,7 @@ import { stackCards, summarizeSelection } from "../state/inspector-multi";
 import {
 	evidenceDetail,
 	evidenceKind,
+	evidenceSourceUrl,
 	feedbackToastText,
 	nextEvidenceFeedback,
 	type EvidenceFeedback,
@@ -55,6 +58,7 @@ import {
 	ExtractIcon,
 	EyeIcon,
 	ImageEditIcon,
+	LinkIcon,
 	OpenIcon,
 	OpenWithIcon,
 	ShareIcon,
@@ -97,13 +101,13 @@ export interface InspectorProps {
 	/** Dupey family of `entry`; null when it has no versions. */
 	readonly family: InspectorFamily | null;
 	readonly onOpenMember: (path: string) => void;
+	/** "evidence" while an AI Search tab is focused: the whole panel is the cited sources. */
+	readonly view: "info" | "evidence";
 	readonly evidence: readonly CitationEvidence[];
-	/** True in split mode: the Evidence half takes the lower 50%. */
-	readonly evidenceVisible: boolean;
 	readonly evidenceSelected: number;
 	readonly sessionId: string | null;
 	readonly onSelectEvidence: (n: number) => void;
-	/** Show in Finder. */
+	/** Show the source: a file in the Finder, a web page in the OS browser. */
 	readonly onRevealPath: (path: string) => void;
 	readonly onToast: (msg: string) => void;
 }
@@ -141,27 +145,34 @@ export function Inspector({
 	onAction,
 	family,
 	onOpenMember,
+	view,
 	evidence,
-	evidenceVisible,
 	evidenceSelected,
 	sessionId,
 	onSelectEvidence,
 	onRevealPath,
 	onToast,
 }: InspectorProps): ReactElement {
-	const split = evidenceVisible && evidence.length > 0;
 	return (
 		<aside
 			className="inspector w-full min-w-0 h-full flex flex-col bg-subtle border-l border-border overflow-hidden"
 			aria-label="Inspector"
 		>
-			{entries.length > 1 ? (
-				<MultiInfoHalf entries={entries} focusPath={entry?.path ?? null} split={split} />
+			{view === "evidence" ? (
+				<EvidencePanel
+					evidence={evidence}
+					selected={evidenceSelected}
+					sessionId={sessionId}
+					onSelect={onSelectEvidence}
+					onReveal={onRevealPath}
+					onToast={onToast}
+				/>
+			) : entries.length > 1 ? (
+				<MultiInfoHalf entries={entries} focusPath={entry?.path ?? null} />
 			) : (
 				<InfoHalf
 					entry={entry}
 					indexStatus={indexStatus}
-					split={split}
 					family={family}
 					onOpenMember={onOpenMember}
 					onToggleIndex={onToggleIndex}
@@ -172,16 +183,6 @@ export function Inspector({
 					onAction={onAction}
 				/>
 			)}
-			{split ? (
-				<EvidenceHalf
-					evidence={evidence}
-					selected={evidenceSelected}
-					sessionId={sessionId}
-					onSelect={onSelectEvidence}
-					onReveal={onRevealPath}
-					onToast={onToast}
-				/>
-			) : null}
 		</aside>
 	);
 }
@@ -189,7 +190,6 @@ export function Inspector({
 function InfoHalf({
 	entry,
 	indexStatus,
-	split,
 	family,
 	onOpenMember,
 	onToggleIndex,
@@ -201,7 +201,6 @@ function InfoHalf({
 }: {
 	readonly entry: FinderEntry | null;
 	readonly indexStatus: IndexStatus | null;
-	readonly split: boolean;
 	readonly family: InspectorFamily | null;
 	readonly onOpenMember: (path: string) => void;
 	readonly onToggleIndex: (entry: FinderEntry) => void;
@@ -242,7 +241,7 @@ function InfoHalf({
 	const moreInfo = hasMoreInfoRows(infoRows);
 
 	return (
-		<div className={cn("inspector-half flex-1 min-h-0 flex flex-col overflow-hidden relative", split && "h-[50%] max-h-[50%]")}>
+		<div className="inspector-half flex-1 min-h-0 flex flex-col overflow-hidden relative" aria-label="Info">
 
 			{entry === null ? (
 				<div className="flex-1 flex items-center justify-center px-10 text-center text-sm text-ink-muted leading-body">
@@ -251,8 +250,8 @@ function InfoHalf({
 					미리보기와 정보를 표시합니다.
 				</div>
 			) : (
-				<div className={cn("inspector-body flex-1 min-h-0 overflow-auto", split ? "px-14 pt-12 pb-18" : "px-16 pt-18 pb-24")}>
-					<PreviewPaper entry={entry} split={split} />
+				<div className="inspector-body flex-1 min-h-0 overflow-auto px-16 pt-18 pb-24">
+					<PreviewPaper entry={entry} />
 					<div className="preview-title text-body font-semibold text-ink leading-[1.3] [overflow-wrap:anywhere]">{entry.name}</div>
 					<div className="preview-sub mt-4 text-meta text-ink-muted">
 						{entry.kindLabel} · {entry.sizeLabel} · {entry.dateLabel}
@@ -401,16 +400,11 @@ function usePreviewState(entry: FinderEntry): {
  * settles the height — the compact bordered box only ever appears for
  * folders and files the OS provably has no preview for.
  */
-function PreviewPaper({ entry, split }: { readonly entry: FinderEntry; readonly split: boolean }): ReactElement {
+function PreviewPaper({ entry }: { readonly entry: FinderEntry }): ReactElement {
 	const { state, loaded, onLoad, onError } = usePreviewState(entry);
 	if (entry.kind !== "file" || (state.resolved && state.url === null)) {
 		return (
-			<div
-				className={cn(
-					"preview-paper flex-none flex items-center justify-center overflow-hidden rounded-6 border border-border bg-window shadow-raised",
-					split ? "h-100 mb-10" : "h-152 mb-14",
-				)}
-			>
+			<div className="preview-paper flex-none flex items-center justify-center overflow-hidden rounded-6 border border-border bg-window shadow-raised h-152 mb-14">
 				{entry.iconUrl === null ? (
 					<FileTile kind={entry.fileKind} large />
 				) : (
@@ -421,10 +415,7 @@ function PreviewPaper({ entry, split }: { readonly entry: FinderEntry; readonly 
 	}
 	return (
 		<div
-			className={cn(
-				"preview-paper relative flex-none w-full overflow-hidden rounded-6 border border-border bg-window shadow-raised transition-[aspect-ratio] duration-200 ease-out",
-				split ? "mb-10 max-h-[32vh]" : "mb-14 max-h-[70vh]",
-			)}
+			className="preview-paper relative flex-none w-full overflow-hidden rounded-6 border border-border bg-window shadow-raised transition-[aspect-ratio] duration-200 ease-out mb-14 max-h-[70vh]"
 			style={{ aspectRatio: String(state.aspect ?? DEFAULT_PAPER_ASPECT) }}
 		>
 			{state.url === null ? null : (
@@ -492,20 +483,18 @@ const STACK_POSES: readonly string[] = [
 function MultiInfoHalf({
 	entries,
 	focusPath,
-	split,
 }: {
 	readonly entries: readonly FinderEntry[];
 	readonly focusPath: string | null;
-	readonly split: boolean;
 }): ReactElement {
 	const summary = summarizeSelection(entries);
 	const cards = stackCards(entries, focusPath);
 	// DOM order paints back-to-front so the focused paper lands on top.
 	const staged = [...cards].reverse();
 	return (
-		<div className={cn("inspector-half flex-1 min-h-0 flex flex-col overflow-hidden relative", split && "h-[50%] max-h-[50%]")}>
-			<div className={cn("inspector-body flex-1 min-h-0 overflow-auto", split ? "px-14 pt-12 pb-18" : "px-16 pt-18 pb-24")}>
-				<div className={cn("preview-stack relative flex-none flex items-center justify-center", split ? "h-100 mb-10" : "h-240 mb-14")}>
+		<div className="inspector-half flex-1 min-h-0 flex flex-col overflow-hidden relative" aria-label="Info">
+			<div className="inspector-body flex-1 min-h-0 overflow-auto px-16 pt-18 pb-24">
+				<div className="preview-stack relative flex-none flex items-center justify-center h-240 mb-14">
 					{staged.map((card, index) => {
 						const depth = staged.length - 1 - index;
 						const pose = STACK_POSES[Math.min(depth, STACK_POSES.length - 1)] ?? "";
@@ -705,7 +694,12 @@ function VersionTag({ relation }: { readonly relation: "latest" | "exact" | "nea
 	);
 }
 
-function EvidenceHalf({
+/**
+ * The whole inspector while an AI Search tab is focused: the cited sources of
+ * that tab's answer. A local source's title reveals the file in the Finder; a
+ * web source's title opens the page in the OS browser.
+ */
+function EvidencePanel({
 	evidence,
 	selected,
 	sessionId,
@@ -723,9 +717,18 @@ function EvidenceHalf({
 	const [votes, setVotes] = useState<Readonly<Record<string, EvidenceFeedback>>>({});
 	const item = evidence.find((entry) => entry.number === selected) ?? evidence[0];
 	if (item === undefined) {
-		return <div className="inspector-half is-split h-[50%] max-h-[50%]" aria-label="Evidence" hidden />;
+		return (
+			<div className="inspector-half flex-1 min-h-0 flex flex-col overflow-hidden relative" aria-label="Evidence">
+				<div className="flex-1 flex items-center justify-center px-10 text-center text-sm text-ink-muted leading-body">
+					답변의 근거가
+					<br />
+					여기에 표시됩니다.
+				</div>
+			</div>
+		);
 	}
 	const source = item.source;
+	const url = source === null ? null : evidenceSourceUrl(source);
 	const number = item.number;
 	const voteKey = `${sessionId ?? "paused"}:${number}`;
 	const vote = votes[voteKey] ?? null;
@@ -741,9 +744,9 @@ function EvidenceHalf({
 	}
 
 	return (
-		<div className="inspector-half is-split h-[50%] max-h-[50%] min-h-0 flex flex-col overflow-hidden relative border-t border-border shadow-[0_-2px_8px_rgba(0,0,0,0.04)]" aria-label="Evidence">
-			<div className="inspector-body flex-1 min-h-0 overflow-auto px-14 pt-12 pb-18">
-				<div className="evidence-tabs flex gap-3 overflow-auto mb-10">
+		<div className="inspector-half flex-1 min-h-0 flex flex-col overflow-hidden relative" aria-label="Evidence">
+			<div className="inspector-body flex-1 min-h-0 overflow-auto px-16 pt-18 pb-24">
+				<div className="evidence-tabs flex gap-3 overflow-auto mb-12">
 					{evidence.map((entry) => (
 						<button
 							type="button"
@@ -759,22 +762,27 @@ function EvidenceHalf({
 					))}
 				</div>
 
-				<div className="preview-paper flex-none h-100 flex items-center justify-center overflow-hidden rounded-6 border border-border bg-window shadow-raised mb-10">
-					<FileTile kind={evidenceKind(item.title)} large />
+				<div className="preview-paper flex-none h-152 flex items-center justify-center overflow-hidden rounded-6 border border-border bg-window shadow-raised mb-14">
+					{url === null ? <FileTile kind={evidenceKind(item.title)} large /> : <LinkIcon size={36} className="text-ink-muted" />}
 				</div>
 				{source === null || source.startsWith("/kakao/") ? (
-					<div className="preview-title text-sm font-semibold text-ink leading-[1.3] [overflow-wrap:anywhere]">
+					<div className="preview-title text-body font-semibold text-ink leading-[1.3] [overflow-wrap:anywhere]">
 						{item.number}. {item.title}
 					</div>
 				) : (
 					<button
 						type="button"
-						className="preview-title text-left text-sm font-semibold text-ink leading-[1.3] [overflow-wrap:anywhere] cursor-pointer border-0 bg-transparent p-0 transition-colors duration-(--dur-color) ease-[ease] hover:text-accent-text"
-						title="Show in Finder"
+						className="preview-title text-left text-body font-semibold text-ink leading-[1.3] [overflow-wrap:anywhere] cursor-pointer border-0 bg-transparent p-0 transition-colors duration-(--dur-color) ease-[ease] hover:text-accent-text"
+						title={url === null ? "Show in Finder" : "Open in browser"}
 						onClick={() => onReveal(source)}
 					>
 						{item.number}. {item.title}
 					</button>
+				)}
+				{url === null ? null : (
+					<div className="evidence-url mt-4 text-badge text-accent-text truncate" title={url}>
+						{url}
+					</div>
 				)}
                 <div className="preview-sub mt-4 text-badge text-ink-muted">{evidenceDetail(item.confidence)}</div>
 

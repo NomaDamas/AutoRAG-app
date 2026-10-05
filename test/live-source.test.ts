@@ -68,6 +68,7 @@ function fakeFs(result: FsVersionFamiliesResult): FsBridge {
 		reveal: async () => {},
 		quickLook: async () => {},
 		open: async () => {},
+		openUrl: async () => {},
 		clipboardSet: async () => {},
 		clipboardGet,
 		undo: async () => ({ ok: false, empty: true, failed: [] }),

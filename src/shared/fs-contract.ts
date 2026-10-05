@@ -29,6 +29,7 @@ export const FS_CHANNELS = {
 	reveal: "fs:reveal",
 	quickLook: "fs:quickLook",
 	open: "fs:open",
+	openUrl: "fs:openUrl",
 	clipboardSet: "fs:clipboardSet",
 	clipboardGet: "fs:clipboardGet",
 	undo: "fs:undo",
@@ -126,6 +127,19 @@ export interface FsEntryEnrichment {
  * the app-owned recents store, and search / version-family scans skip it.
  */
 export const RECENTS_PATH = "Recents";
+
+/**
+ * The normalized `http:` / `https:` URL `text` names, or null. Only web pages
+ * may reach `openUrl`: `file:`, `javascript:`, and custom schemes would let
+ * model output launch local programs. Shared so main re-checks what the
+ * renderer sends.
+ */
+export function webUrl(text: string): string | null {
+	const trimmed = text.trim();
+	if (!/^https?:\/\//iu.test(trimmed) || !URL.canParse(trimmed)) return null;
+	const url = new URL(trimmed);
+	return url.hostname === "" ? null : url.href;
+}
 
 /** A browsable top-level location shown in the sidebar. */
 export interface FsLocation {
@@ -300,6 +314,8 @@ export interface FsCoreBridge {
 	 * Electron `shell.openPath`; a non-empty result message rejects.
 	 */
 	open(path: string): Promise<void>;
+	/** Open an `http(s)` page in the OS default browser (`shell.openExternal`); rejects any other scheme. */
+	openUrl(url: string): Promise<void>;
 	clipboardSet(clipboard: FsClipboard): Promise<void>;
 	clipboardGet(): Promise<FsClipboard | null>;
 	/** Undo the most recent recorded copy/move transfer (⌘Z). The record is consumed. */

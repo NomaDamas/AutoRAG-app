@@ -25,7 +25,7 @@ import {
 import { planTransfer } from "../state/file-transfer";
 import type { FileActionTarget } from "../state/file-actions";
 import { emptyStateText, indexToast, trashToast } from "../state/format";
-import { findEvidenceSource } from "../state/evidence";
+import { evidenceSourceUrl, findEvidenceSource } from "../state/evidence";
 import { type FocusZone, type KeyAction, resolveKeyAction } from "../state/keymap";
 import {
 	applyEntryEnrichmentPatch,
@@ -392,7 +392,7 @@ export interface FinderController {
 	quickLookPath(path: string): void;
 	/** Arrow keys pressed inside the Quick Look window move the Finder selection. */
 	moveSelectionBy(delta: 1 | -1): void;
-	/** Open the path's enclosing folder in a NEW tab, revealing the row. */
+	/** Open the path's enclosing folder in a NEW tab, revealing the row; a web source opens in the OS browser. */
 	revealEvidence(path: string): void;
 	focusFinder(): void;
 	clickRow(entry: FinderEntry, event: ReactMouseEvent<HTMLDivElement>): void;
@@ -433,8 +433,6 @@ export function useFinderController(
 		readonly onFocusSearch?: () => void;
 		/** ⌘K: show an AI Search tab and focus its composer (owned by the App shell). */
 		readonly onFocusComposer?: () => void;
-		/** Esc: close the inspector's evidence half; return true when consumed. */
-		readonly onDismissEvidence?: () => boolean;
 	} = {},
 ): FinderController {
 	const showHiddenFiles = options.showHiddenFiles ?? false;
@@ -444,8 +442,6 @@ export function useFinderController(
 	focusSearchRef.current = options.onFocusSearch;
 	const focusComposerRef = useRef(options.onFocusComposer);
 	focusComposerRef.current = options.onFocusComposer;
-	const dismissEvidenceRef = useRef(options.onDismissEvidence);
-	dismissEvidenceRef.current = options.onDismissEvidence;
 	const [tabsState, setTabsState] = useState<TabsState>(() => createTabsState(source.initialPath));
 	const [query, setQueryValue] = useState("");
 	const [searchScope, setSearchScope] = useState<SearchScope>("all");
@@ -1588,9 +1584,15 @@ export function useFinderController(
 		[presentQuickLook],
 	);
 
-	// An evidence title opens the enclosing folder in a NEW tab and selects the source file.
+	// An evidence title opens the enclosing folder in a NEW tab and selects the
+	// source file; a web source (the model cited a page) opens in the OS browser.
 	const revealEvidence = useCallback(
 		(target: string) => {
+			const url = evidenceSourceUrl(target);
+			if (url !== null) {
+				source.openUrl(url).catch(reportError);
+				return;
+			}
 			const folder = dirname(target);
 			source
 				.list(folder)
@@ -1858,9 +1860,6 @@ export function useFinderController(
 		}
 		if (quickLookRef.current?.isQuickLookOpen() === true) {
 			quickLookRef.current.closeQuickLook();
-			return;
-		}
-		if (dismissEvidenceRef.current?.() === true) {
 			return;
 		}
 		if (query !== "") {

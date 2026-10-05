@@ -225,28 +225,17 @@ export function App(): ReactElement {
 	}, []);
 
 	/* --------------------------------------------------------- evidence state */
+	// The visible AI Search tab publishes its answer's citations; the inspector
+	// shows them as a full-height Evidence view while that tab is focused.
 	const [evidence, setEvidence] = useState<readonly CitationEvidence[]>([]);
 	const [evidenceSession, setEvidenceSession] = useState<string | null>(null);
 	const [selectedEvidence, setSelectedEvidence] = useState<number | null>(null);
-	const [evidenceOpen, setEvidenceOpen] = useState(false);
-	const evidenceSessionRef = useRef<string | null>(null);
 
 	const publishEvidence = useCallback((items: readonly CitationEvidence[], sessionId: string | null) => {
-		const sessionChanged = evidenceSessionRef.current !== sessionId;
-		evidenceSessionRef.current = sessionId;
 		setEvidence(items);
 		setEvidenceSession(sessionId);
-		if (items.length === 0 || sessionChanged) setEvidenceOpen(false);
 		setSelectedEvidence((current) => (current !== null && items.some((item) => item.number === current) ? current : null));
 	}, []);
-
-	const dismissEvidence = useCallback((): boolean => {
-		if (evidence.length > 0 && evidenceOpen) {
-			setEvidenceOpen(false);
-			return true;
-		}
-		return false;
-	}, [evidence.length, evidenceOpen]);
 
 	/**
 	 * Work for the AI Search tab that is (about to be) visible: the tab switch
@@ -271,7 +260,6 @@ export function App(): ReactElement {
 		onFocusSearch: () => setSidebarVisible(true),
 		// ⌘K: the controller adopts the nearest AI Search tab (or opens one); focus its composer.
 		onFocusComposer: () => deliverToAi({}),
-		onDismissEvidence: dismissEvidence,
 	});
 
 	const activeTab = finder.tabs.find((tab) => tab.active) ?? null;
@@ -352,21 +340,7 @@ export function App(): ReactElement {
 
 	const selectEvidence = useCallback((number: number) => {
 		setSelectedEvidence(number);
-		setEvidenceOpen(true);
 		setInspectorVisible(true);
-	}, []);
-
-	useEffect(() => {
-		const onKeyDown = (event: globalThis.KeyboardEvent): void => {
-			const target = event.target;
-			if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return;
-			if ((event.metaKey || event.ctrlKey) && !event.shiftKey && !event.altKey && event.key.toLowerCase() === "e") {
-				event.preventDefault();
-				setEvidenceOpen((open) => !open);
-			}
-		};
-		window.addEventListener("keydown", onKeyDown);
-		return () => window.removeEventListener("keydown", onKeyDown);
 	}, []);
 
 	const evidenceSelectedNumber = evidence.find((item) => item.number === selectedEvidence)?.number ?? evidence[0]?.number ?? 1;
@@ -786,8 +760,8 @@ export function App(): ReactElement {
 						onAction={runInspectorAction}
 						family={inspectorFamily}
 						onOpenMember={openMemberEntry}
+						view={aiTabActive ? "evidence" : "info"}
 						evidence={evidence}
-						evidenceVisible={evidence.length > 0 && evidenceOpen && selectedEvidence !== null}
 						evidenceSelected={evidenceSelectedNumber}
 						sessionId={evidenceSession}
 						onSelectEvidence={selectEvidence}

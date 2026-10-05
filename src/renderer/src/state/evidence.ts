@@ -4,7 +4,14 @@
  * the evidence title, thumbs-up/down toggle state, and the reference toast copy.
  */
 
+import { webUrl } from "../../../shared/fs-contract";
 import { type FileKind, kindFromExtension } from "./kinds";
+
+/**
+ * A web evidence source (the model cited a page, not a file): its normalized
+ * http(s) URL, opened in the OS browser instead of revealed in the Finder.
+ */
+export const evidenceSourceUrl = webUrl;
 
 /** Prefer the exact path; otherwise resolve NFC/NFD spelling to the listing's real identity. */
 export function findEvidenceSource<T extends { readonly path: string }>(entries: readonly T[], source: string): T | undefined {
