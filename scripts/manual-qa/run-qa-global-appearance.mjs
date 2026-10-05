@@ -9,6 +9,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { finderWindow, launchFinder } from "./launch-finder.mjs";
+import { chord } from "./platform.mjs";
 
 const evidence = process.argv[2] ?? "/tmp/autorag-global-appearance";
 mkdirSync(evidence, { recursive: true });
@@ -67,7 +68,7 @@ try {
 	check("default appearance is light in Quick Look", initial[1].appearance === "light" && initial[1].ink === "#1d1d1f", JSON.stringify(initial[1]));
 	check("preview is loaded before switching", initial[1].name === "appearance.md", JSON.stringify(initial[1]));
 
-	await main.keyboard.press("Meta+2");
+	await main.keyboard.press(chord("2"));
 	await main.locator(".sidebar__item", { hasText: "Settings" }).click();
 	const appearance = main.locator('select[aria-label="Appearance"]');
 	await appearance.waitFor({ timeout: 15_000 });
@@ -90,7 +91,7 @@ try {
 	check("theme switch does not reload the previewed file", dark[1].ready && dark[1].name === "appearance.md", JSON.stringify(dark[1]));
 	await main.screenshot({ path: join(evidence, "dark-finder-settings.png") });
 
-	await main.keyboard.press("Meta+w");
+	await main.keyboard.press(chord("w"));
 	await poll(() => main.locator(".settings-panel").count(), (count) => count === 0);
 	await preview.screenshot({ path: join(evidence, "dark-open-preview.png") });
 	await app.close();
@@ -105,7 +106,7 @@ try {
 		(value) => value === "dark",
 	);
 	check("dark appearance survives restart", persisted === "dark", String(persisted));
-	await restarted.keyboard.press("Meta+2");
+	await restarted.keyboard.press(chord("2"));
 	await restarted.locator(".sidebar__item", { hasText: "Settings" }).click();
 	const persistedSelect = restarted.locator('select[aria-label="Appearance"]');
 	await persistedSelect.waitFor({ timeout: 15_000 });

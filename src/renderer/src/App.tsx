@@ -559,6 +559,7 @@ export function App(): ReactElement {
 				{sidebarVisible ? (
 					<Sidebar
 						activeLabel={finder.activeNavLabel}
+						locations={finder.locations}
 						showHotkeys={SHOW_HOTKEYS}
 						onNavigate={(item) => (item.view === "aiSearch" ? showAiSearch() : finder.navigateNav(item))}
 						onOpenSettings={finder.openSettings}

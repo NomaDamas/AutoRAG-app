@@ -151,3 +151,23 @@ native drop path, and checks that a live agent answers from the attached
 content. With `QA_REAL_FINDER_DRAG=1` it also drags a file out of a real
 macOS Finder window. That run moves the mouse, and the terminal needs
 Accessibility permission.
+
+### Windows QA
+
+The same lane runs on Windows 11. Build first, then run the whole sweep from
+PowerShell or cmd:
+
+```sh
+bun run build
+bun scripts/manual-qa/run-all.mjs                  # all lanes
+bun scripts/manual-qa/run-all.mjs live-sync kind   # selected lanes
+```
+
+Prerequisites: Node 24+, Bun, `dupey`, and `ffmpeg` on `PATH` (the Inspector's
+Windows image backend; without it the image menu stays hidden). The macOS-only
+tools (`sips`, `mdls`, `qlmanage`, `osascript`, `pgrep`, `screencapture`) are
+never required — `scripts/manual-qa/platform.mjs` swaps in the Windows
+equivalents (the registry for file kinds, `tasklist`/`taskkill`, the Recycle
+Bin) and scripts that genuinely need macOS log a skip instead of failing.
+Lane logs and `summary.json` land in `.omo/evidence/win-qa/`. The sweep also
+runs in CI (`.github/workflows/qa-windows.yml`).

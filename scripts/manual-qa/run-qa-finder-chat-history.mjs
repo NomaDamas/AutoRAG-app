@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 /**
  * Manual QA — the AI Search chat-history popover of the real AI Finder app.
  *
@@ -15,8 +16,9 @@ import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { AI_PANEL, launchFinder, finderWindow, openAiSearch } from "./launch-finder.mjs";
+import { chord } from "./platform.mjs";
 
-const ROOT = new URL("../..", import.meta.url).pathname;
+const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const EVIDENCE = join(ROOT, ".omo/evidence/ai-finder-app/qa-chat-history");
 mkdirSync(EVIDENCE, { recursive: true });
 
@@ -251,10 +253,10 @@ check("the click-catcher swallowed the click", (await page.locator(`${AI_PANEL} 
 await page.screenshot({ path: join(EVIDENCE, "history-backdrop.png") });
 
 // 7. The advertised ⌘⇧H shortcut toggles the popover.
-await page.keyboard.press("Meta+Shift+H");
+await page.keyboard.press(chord("Shift", "H"));
 await page.locator(".history").waitFor({ state: "visible", timeout: 5000 });
 check("⌘⇧H opens the popover", (await page.locator(".history").count()) === 1);
-await page.keyboard.press("Meta+Shift+H");
+await page.keyboard.press(chord("Shift", "H"));
 check("⌘⇧H closes it again", await popoverClosed(page));
 
 // 8. Adjacent Finder surfaces still work after the popover keyboard work.

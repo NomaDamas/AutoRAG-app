@@ -2,7 +2,7 @@ import { access, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from "
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createFsService, FsRenameError, untitledFolderName, type FsServiceDeps } from "../src/main/fs-service";
+import { createFsService, FsRenameError, toHandoffPath, untitledFolderName, type FsServiceDeps } from "../src/main/fs-service";
 import { createRecentsStore, type RecentsStore } from "../src/main/recents-store";
 import { RECENTS_PATH } from "../src/shared/fs-contract";
 
@@ -29,7 +29,7 @@ interface StubbedDeps {
 	readonly recents: RecentsStore;
 }
 
-function makeDeps(homeDir: string): StubbedDeps {
+function makeDeps(homeDir: string, platform: NodeJS.Platform = "darwin"): StubbedDeps {
 	const trashed: string[] = [];
 	const revealed: string[] = [];
 	const opened: string[] = [];
@@ -58,6 +58,7 @@ function makeDeps(homeDir: string): StubbedDeps {
 				},
 			},
 			homeDir,
+			platform,
 			recents: createRecentsStore({ directory: join(homeDir, "recents-store") }),
 			osKind: async () => null,
 			icons: { icons: async () => new Map(), preview: async () => null },
@@ -603,6 +604,31 @@ describe("trash", () => {
 	});
 });
 
+describe("OS handoff path normalization", () => {
+	it("normalizes forward slashes for Windows and leaves POSIX paths alone", () => {
+		expect(toHandoffPath("C:/Users/me/Documents/a.txt", "win32")).toBe("C:\\Users\\me\\Documents\\a.txt");
+		expect(toHandoffPath("C:\\Users\\me\\a.txt", "win32")).toBe("C:\\Users\\me\\a.txt");
+		expect(toHandoffPath("/Users/me/a.txt", "darwin")).toBe("/Users/me/a.txt");
+		expect(toHandoffPath("/Users/me/a.txt", "linux")).toBe("/Users/me/a.txt");
+	});
+
+	it("hands Windows trash/reveal/open backslash paths even when given slashes", async () => {
+		// Given a win32 service whose shell records what it receives
+		const stubs = makeDeps(root);
+		const service = createFsService({ ...stubs.deps, platform: "win32" });
+
+		// When the caller passes a forward-slash path (clipboard, QA fixture, other OS)
+		const result = await service.trash(["C:/Users/me/Documents/a.txt"]);
+		await service.reveal("C:/Users/me/Documents/b.txt");
+		await service.open("C:/Users/me/Documents/c.txt");
+
+		// Then the batch reports the caller's path but the shell sees backslashes
+		expect(result).toEqual({ ok: ["C:/Users/me/Documents/a.txt"], failed: [] });
+		expect(stubs.trashed).toEqual(["C:\\Users\\me\\Documents\\a.txt"]);
+		expect(stubs.revealed).toEqual(["C:\\Users\\me\\Documents\\b.txt"]);
+		expect(stubs.opened).toEqual(["C:\\Users\\me\\Documents\\c.txt"]);
+	});
+});
 describe("undo", () => {
 	it("removes the copies a copy created, keeping the originals", async () => {
 		// Given a source file copied into another folder
@@ -771,7 +797,7 @@ describe("search", () => {
 
 describe("locations", () => {
 	it("lists existing home dirs as available and missing ones as unavailable", async () => {
-		// Given a home with Desktop and Documents but no Downloads, iCloud, or third-party drives
+		// Given a home with Desktop and Documents but no Downloads or cloud drives
 		const home = join(root, "home-locations");
 		await mkdir(join(home, "Desktop"), { recursive: true });
 		await mkdir(join(home, "Documents"), { recursive: true });
@@ -779,16 +805,62 @@ describe("locations", () => {
 		// When listing locations
 		const locations = await createFsService(makeDeps(home).deps).locations();
 
-		// Then Desktop/Documents are available, Downloads and iCloud are listed but unavailable
+		// Then Desktop/Documents are available and Downloads is listed but unavailable
 		const byName = new Map(locations.map((location) => [location.name, location]));
 		expect(byName.get("Desktop")).toMatchObject({ path: join(home, "Desktop"), section: "favorites", available: true });
 		expect(byName.get("Documents")).toMatchObject({ available: true });
 		expect(byName.get("Downloads")).toMatchObject({ available: false });
-		expect(byName.get("iCloud Drive")).toMatchObject({ section: "cloud", available: false });
 
-		// And Google Drive / Dropbox are omitted entirely when their well-known paths do not exist
+		// And no cloud drive appears while none is mounted
+		expect(byName.has("iCloud Drive")).toBe(false);
 		expect(byName.has("Google Drive")).toBe(false);
 		expect(byName.has("Dropbox")).toBe(false);
+	});
+
+	it("lists a mounted iCloud Drive on macOS and drops it when it disconnects", async () => {
+		// Given a macOS home whose iCloud folder exists
+		const home = join(root, "home-icloud");
+		const iCloud = join(home, "Library", "Mobile Documents", "com~apple~CloudDocs");
+		await mkdir(iCloud, { recursive: true });
+
+		// When listing, the drive is offered as connected
+		const connected = await createFsService(makeDeps(home).deps).locations();
+		expect(connected.find((location) => location.name === "iCloud Drive")).toMatchObject({
+			path: iCloud,
+			section: "cloud",
+			available: true,
+		});
+
+		// And once it is unmounted it is gone
+		await rm(join(home, "Library"), { recursive: true, force: true });
+		const disconnected = await createFsService(makeDeps(home).deps).locations();
+		expect(disconnected.some((location) => location.name === "iCloud Drive")).toBe(false);
+	});
+
+	it("never offers iCloud Drive on Windows, even if a same-shaped folder exists", async () => {
+		// Given a Windows home that happens to carry the macOS folder layout
+		const home = join(root, "home-win");
+		await mkdir(join(home, "Library", "Mobile Documents", "com~apple~CloudDocs"), { recursive: true });
+
+		// When listing on win32
+		const locations = await createFsService(makeDeps(home, "win32").deps).locations();
+
+		// Then the macOS-only source is absent
+		expect(locations.some((location) => location.name === "iCloud Drive")).toBe(false);
+	});
+
+	it("offers only the third-party drives that are mounted", async () => {
+		// Given a Windows home with a legacy Google Drive folder but no Dropbox
+		const home = join(root, "home-cloud");
+		await mkdir(join(home, "Google Drive"), { recursive: true });
+
+		// When listing on win32
+		const locations = await createFsService(makeDeps(home, "win32").deps).locations();
+
+		// Then only Google Drive is a cloud location, and it is available
+		const cloud = locations.filter((location) => location.section === "cloud");
+		expect(cloud.map((location) => location.name)).toEqual(["Google Drive"]);
+		expect(cloud[0]).toMatchObject({ available: true });
 	});
 });
 

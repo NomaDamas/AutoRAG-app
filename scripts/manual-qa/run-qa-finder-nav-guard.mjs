@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 /**
  * Manual QA — sidebar items must never crash fs:listDir.
  *
@@ -19,7 +20,7 @@
 import { launchFinder } from "./launch-finder.mjs";
 import { mkdirSync } from "node:fs";
 
-const ROOT = new URL("../../", import.meta.url).pathname.replace(/\/$/, "");
+const ROOT = fileURLToPath(new URL("../../", import.meta.url)).replace(/\/$/, "");
 const EVIDENCE = `${ROOT}/.omo/evidence/ai-finder-app/qa-nav-guard/`;
 mkdirSync(EVIDENCE, { recursive: true });
 
@@ -42,7 +43,9 @@ try {
 		if (/Error occurred in handler/i.test(message.text())) handlerErrors.push(message.text());
 	});
 	const places = page.getByLabel("Places");
-	await page.waitForSelector('[role="row"]', { timeout: 30000 });
+	// Shell-ready, not rows-ready: a home with no files renders the empty state,
+	// and this lane is about the sidebar's navigation behavior, not the listing.
+	await page.waitForSelector(".toolbar-title", { timeout: 30000 });
 
 	// 1. Recents is a real location: it must navigate cleanly, with no toast.
 	await places.getByRole("button", { name: "Recents", exact: true }).click();

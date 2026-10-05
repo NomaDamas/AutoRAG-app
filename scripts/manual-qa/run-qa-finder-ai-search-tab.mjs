@@ -26,6 +26,7 @@ import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { finderWindow, launchFinder, ROOT } from "./launch-finder.mjs";
+import { chord } from "./platform.mjs";
 
 const EVIDENCE = join(ROOT, ".omo/evidence/ai-finder-app/qa-ai-search-tab");
 rmSync(EVIDENCE, { recursive: true, force: true });
@@ -126,7 +127,7 @@ try {
 
 	// 4. Chat state survives tab switches.
 	await page.locator(`${PANEL} input[aria-label="Ask AutoRAG"]`).fill("draft survives tab switch");
-	await page.keyboard.press("Meta+t");
+	await page.keyboard.press(chord("t"));
 	await page.waitForSelector(`[data-path="${BRIEF}"]`);
 	now = await tabs(page);
 	check("⌘T from an AI Search tab opens a folder tab", now.length === 2 && now[1]?.active === true && now[1]?.ai === false, JSON.stringify(now));
@@ -141,7 +142,7 @@ try {
 	await page.locator(".tabs .tab").nth(1).click();
 	await page.waitForSelector(`[data-path="${BRIEF}"]`);
 	await page.locator(`[data-path="${BRIEF}"]`).click();
-	await page.keyboard.press("Meta+k");
+	await page.keyboard.press(chord("k"));
 	await page.waitForSelector(PANEL);
 	now = await tabs(page);
 	check("⌘K adopts the existing AI Search tab", now.length === 2 && now[0]?.active === true, JSON.stringify(now));
@@ -194,7 +195,7 @@ try {
 	await page.screenshot({ path: join(EVIDENCE, "04-sidebar-drop.png") });
 
 	// 9. Dwell on the AI tab with a held row (spring-loaded), then drop it on the panel.
-	await page.keyboard.press("Meta+t");
+	await page.keyboard.press(chord("t"));
 	await page.waitForSelector(`[data-path="${BRIEF}"]`);
 	const rowBox = await page.locator(`[data-path="${NOTES}"]`).boundingBox();
 	const aiTabBox = await page.locator(".tabs .tab").nth(folderTabIndex).boundingBox();

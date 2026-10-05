@@ -27,6 +27,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { deflateSync } from "node:zlib";
 import { launchFinder, openAiSearch } from "./launch-finder.mjs";
+import { chord } from "./platform.mjs";
 
 const outDir = process.argv[2];
 if (outDir === undefined) {
@@ -207,7 +208,7 @@ const finderWindow = async (application) => {
 	return application.waitForEvent("window", { predicate: isFinder, timeout: 60000 });
 };
 
-let app = await launchFinder({ userDataDir, env: { HOME: home } });
+let app = await launchFinder({ userDataDir, env: { HOME: home, USERPROFILE: home } });
 let page;
 try {
 	page = await finderWindow(app);
@@ -253,20 +254,20 @@ try {
 	await page.waitForSelector('[role="menuitem"]', { state: "detached" });
 
 	console.log("icon view");
-	await page.keyboard.press("Meta+1");
+	await page.keyboard.press(chord("1"));
 	await page.waitForSelector(".icon-grid");
 	await sleep(600);
 	await shot(page, "08-icons");
 	await shot(page, "09-icon-tiles", ".icon-grid");
 
 	console.log("column view");
-	await page.keyboard.press("Meta+3");
+	await page.keyboard.press(chord("3"));
 	await page.waitForSelector(".column");
 	await sleep(600);
 	await shot(page, "10-columns");
 
 	console.log("settings");
-	await page.keyboard.press("Meta+2");
+	await page.keyboard.press(chord("2"));
 	await page.waitForSelector('[role="row"]');
 	await page.locator(".sidebar__item", { hasText: "Settings" }).click();
 	await page.waitForSelector(".settings-panel");
@@ -286,7 +287,7 @@ try {
 	await page.locator(".settings-nav-item", { hasText: "General" }).click();
 	await sleep(400);
 	// Settings lives in its own tab in v7; ⌘W closes it back to the finder tab.
-	await page.keyboard.press("Meta+w");
+	await page.keyboard.press(chord("w"));
 	await page.waitForSelector(".settings-panel", { state: "detached" });
 
 	// Interaction states. Static shots cannot see a :hover, :focus, or
@@ -298,7 +299,7 @@ try {
 	// only leftover state.
 	console.log("interaction states (relaunched)");
 	await app.close();
-	app = await launchFinder({ userDataDir, env: { HOME: home } });
+	app = await launchFinder({ userDataDir, env: { HOME: home, USERPROFILE: home } });
 	page = await finderWindow(app);
 	await page.setViewportSize({ width: 1500, height: 900 }).catch(() => {});
 	await page.waitForSelector(".toolbar-title", { timeout: 30000 });
@@ -340,7 +341,7 @@ try {
 	if ((await selectedCount()) !== 1) throw new Error("selection shot needs exactly one selected row");
 	await shot(page, "22-row-selected");
 
-	await page.keyboard.press("Meta+1");
+	await page.keyboard.press(chord("1"));
 	await page.waitForSelector(".icon-grid");
 	await sleep(400);
 	const notesTile = page.locator('.icon-tile[aria-label="notes.md"]');
@@ -350,7 +351,7 @@ try {
 	await notesTile.click();
 	await sleep(700);
 	await shot(page, "24-tile-selected");
-	await page.keyboard.press("Meta+2");
+	await page.keyboard.press(chord("2"));
 	await page.waitForSelector('[role="row"]');
 	await sleep(400);
 
@@ -370,7 +371,7 @@ try {
 	await shot(page, "27-column-header-hover", ".col-header");
 
 	// A single tab has no close button, so open a second one (⌘T) first.
-	await page.keyboard.press("Meta+t");
+	await page.keyboard.press(chord("t"));
 	await page.waitForFunction(() => document.querySelectorAll(".tab").length === 2);
 	await page.locator(".tab__close").first().hover();
 	await sleep(300);

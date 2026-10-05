@@ -12,6 +12,7 @@
  * and ⌫/⌘⌫ already cover them.
  */
 
+import { hostPlatform } from "../lib/shortcuts";
 import type {
 	ActionCapabilities,
 	ActionRequest,
@@ -59,7 +60,7 @@ export interface ActionSubject {
 
 const IMAGE_EXTENSIONS: readonly string[] = ["png", "jpg", "jpeg", "webp", "heic", "heif", "tif", "tiff", "gif", "bmp", "avif"];
 const VIDEO_EXTENSIONS: readonly string[] = ["mp4", "mov", "m4v", "mkv", "webm", "avi"];
-/** Extensions whose own format the resize/optimize ops can rewrite in place. */
+/** Lossy formats: `optimize` re-encodes them everywhere; PNG's lossless path is ffmpeg-only (below). */
 const LOSSY_IMAGE_FORMATS: readonly ImageFormat[] = ["jpeg", "webp", "heic"];
 /** Resize presets, longest edge in pixels. */
 const RESIZE_PRESETS: readonly number[] = [1920, 1280, 640];
@@ -125,7 +126,12 @@ function imageItems(name: string, capabilities: ActionCapabilities): readonly Fi
 			});
 		}
 	}
-	if (source !== null && LOSSY_IMAGE_FORMATS.includes(source) && capabilities.imageFormats.includes(source)) {
+	// The ffmpeg backend also optimizes PNG losslessly (max deflate); sips cannot.
+	if (
+		source !== null &&
+		(LOSSY_IMAGE_FORMATS.includes(source) || (source === "png" && hostPlatform() !== "darwin")) &&
+		capabilities.imageFormats.includes(source)
+	) {
 		items.push({
 			id: "image:optimize",
 			label: "용량 최적화",

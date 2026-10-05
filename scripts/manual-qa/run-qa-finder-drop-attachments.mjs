@@ -21,6 +21,7 @@ import { appendFileSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFile
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { AI_PANEL, finderWindow, launchFinder, openAiSearch, ROOT } from "./launch-finder.mjs";
+import { chord, isMac } from "./platform.mjs";
 
 const EVIDENCE = join(ROOT, ".omo", "evidence", "ai-finder-app", "qa-drop-attachments");
 const RUN_TIMEOUT_MS = 240_000;
@@ -149,7 +150,7 @@ try {
 	const cdp = await page.context().newCDPSession(page);
 	// One AI Search tab beside the folder tab: AI Search, then ⌘T back to rows.
 	await openAiSearch(page);
-	await page.keyboard.press("Meta+t");
+	await page.keyboard.press(chord("t"));
 	await page.waitForSelector(`[data-path="${SECRET}"]`);
 
 	// 1. One Finder row dragged onto the AI Search strip tab.
@@ -209,7 +210,7 @@ try {
 	await page.screenshot({ path: join(EVIDENCE, "3-external-drops.png") });
 
 	// 7. Optional: a real drag out of a macOS Finder.app window.
-	if (REAL_FINDER) {
+	if (REAL_FINDER && isMac) {
 		const bounds = await app.evaluate(({ BrowserWindow }) =>
 			BrowserWindow.getAllWindows()
 				.filter((window) => window.webContents.getURL().endsWith("/index.html"))
@@ -243,6 +244,8 @@ try {
 				log(`INFO could not close the Finder window: ${String(error).slice(0, 200)}`);
 			}
 		}
+	} else if (!isMac) {
+		log("SKIP real Finder.app drag: macOS-only (osascript + os-drag.swift)");
 	} else {
 		log("INFO real Finder.app drag skipped (set QA_REAL_FINDER_DRAG=1)");
 	}

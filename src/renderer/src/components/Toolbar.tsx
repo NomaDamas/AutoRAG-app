@@ -2,6 +2,7 @@ import { useState, type MouseEvent, type ReactElement } from "react";
 import type { GroupKey } from "../state/grouping";
 import type { ViewMode } from "../state/view-mode";
 import type { SortDirection, SortKey, SortState } from "../state/sort";
+import { formatShortcut } from "../lib/shortcuts";
 import {
 	ChevronLeftIcon,
 	ChevronRightIcon,
@@ -18,10 +19,10 @@ import {
 } from "./icons";
 import { ToolbarMenu } from "./ToolbarMenu";
 
-const VIEW_OPTIONS: readonly { readonly mode: ViewMode; readonly label: string; readonly keycap: string; readonly Icon: typeof IconsViewIcon }[] = [
-	{ mode: "icons", label: "Icons", keycap: "⌘1", Icon: IconsViewIcon },
-	{ mode: "list", label: "List", keycap: "⌘2", Icon: ListRowsIcon },
-	{ mode: "columns", label: "Columns", keycap: "⌘3", Icon: ColumnsViewIcon },
+const VIEW_OPTIONS: readonly { readonly mode: ViewMode; readonly label: string; readonly key: string; readonly Icon: typeof IconsViewIcon }[] = [
+	{ mode: "icons", label: "Icons", key: "1", Icon: IconsViewIcon },
+	{ mode: "list", label: "List", key: "2", Icon: ListRowsIcon },
+	{ mode: "columns", label: "Columns", key: "3", Icon: ColumnsViewIcon },
 ];
 
 const NAV_BUTTON =
@@ -141,7 +142,7 @@ export function Toolbar({
 			</strong>
 			<span className="toolbar-spacer flex-1" />
 			<div className="seg flex flex-none items-center p-2 rounded-10 bg-subtle-alt [-webkit-app-region:no-drag]" role="group" aria-label="View">
-				{VIEW_OPTIONS.map(({ mode, label, keycap, Icon }) => (
+				{VIEW_OPTIONS.map(({ mode, label, key, Icon }) => (
 					<button
 						key={mode}
 						type="button"
@@ -150,7 +151,7 @@ export function Toolbar({
 							"flex items-center justify-center size-toolbar-icon p-0 border-0 rounded-7 transition-[background,color] duration-(--dur-color) ease-[ease]",
 							mode === viewMode ? "bg-sel-mute text-ink" : "bg-transparent text-ink-muted hover:text-ink",
 						].join(" ")}
-						title={`as ${label} (${keycap})`}
+						title={`as ${label} (${formatShortcut({ key })})`}
 						aria-label={label}
 						aria-pressed={mode === viewMode}
 						onClick={() => onViewModeChange(mode)}
@@ -195,7 +196,7 @@ export function Toolbar({
 						"flex flex-none items-center justify-center size-toolbar-icon p-0 border-0 rounded-6 cursor-pointer transition-[background,color] duration-(--dur-color) ease-[ease]",
 						aiActive ? "bg-transparent text-accent" : "bg-transparent text-ink-muted hover:bg-hover-icon hover:text-ink",
 					].join(" ")}
-					title="AI Search (⌘K)"
+					title={`AI Search (${formatShortcut({ key: "K" })})`}
 					aria-label="Show AI Search"
 					aria-pressed={aiActive}
 					onClick={onShowAi}

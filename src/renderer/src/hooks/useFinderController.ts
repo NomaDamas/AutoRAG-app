@@ -317,6 +317,8 @@ export interface FinderController {
 	/** Non-null when dupey is missing or a version-family scan failed. */
 	readonly versionFamilyError: VersionFamilyError | null;
 	readonly activeNavLabel: string | null;
+	/** Home and connected cloud drives; cloud entries drive which sidebar items render. */
+	readonly locations: readonly FinderLocation[];
 	readonly contextMenu: { readonly cursor: { readonly x: number; readonly y: number } } | null;
 	readonly contextMenuEntries: readonly FinderMenuEntry[];
 	/** The mode the toolbar toggle shows as chosen. */
@@ -818,7 +820,8 @@ export function useFinderController(
 		return () => {
 			live = false;
 		};
-	}, [source, reportError]);
+		// Refresh recomputes availability, so a drive unplugged mid-session drops out.
+	}, [source, reportError, revision]);
 
 	/** The bridge source starts with no path; the first listing needs one. */
 	useEffect(() => {
@@ -1316,7 +1319,7 @@ export function useFinderController(
 	const navigateNav = useCallback(
 		(item: NavItem) => {
 			const match = locations.find((location) => location.name === item.label);
-			if (match === undefined) {
+			if (match === undefined || !match.available) {
 				showToast(`"${item.label}" 위치는 아직 연결되지 않았습니다.`);
 				return;
 			}
@@ -2107,6 +2110,7 @@ export function useFinderController(
 		indexStatus,
 		versionFamilyError,
 		activeNavLabel,
+		locations,
 		contextMenu: contextMenu === null ? null : { cursor: contextMenu.cursor },
 		contextMenuEntries,
 		viewMode,

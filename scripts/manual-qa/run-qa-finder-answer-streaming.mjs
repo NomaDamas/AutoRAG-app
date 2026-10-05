@@ -89,7 +89,7 @@ const MISSING_ROOT_CONFIG = writeConfig("config-missing-root.json", [join(WORK, 
 
 async function warmIndex(configPath) {
 	const config = resolveConfigReadOnly({ flags: {}, env: { ...process.env, AUTORAG_CONFIG: configPath }, cwd: WORK });
-	const resolved = resolveAgentModel(config);
+	const resolved = await resolveAgentModel(config);
 	const agent = new AutoRAGAgent({ ...buildAgentOptions(config), model: resolved.model });
 	const result = await agent.refresh(true);
 	log(`warm index: scanned=${result.scanned} minsync=${JSON.stringify(result.minsync)}`);

@@ -14,7 +14,11 @@ export async function launchFinder({ userDataDir, env, args: extraArgs = [] } = 
 	if (!existsSync(join(ROOT, "out/main/index.js"))) {
 		throw new Error("out/main/index.js is missing — run `bun run build` first");
 	}
-	const args = [".", ...(userDataDir === undefined ? [] : [`--user-data-dir=${userDataDir}`]), ...extraArgs];
+	// GitHub's Windows runners have no GPU, and Chromium's GPU process dies at
+	// random there mid-session (observed as "Target page, context or browser
+	// has been closed" with nothing in stderr). Software rendering is stable.
+	const gpuArgs = process.platform === "win32" ? ["--disable-gpu"] : [];
+	const args = [".", ...gpuArgs, ...(userDataDir === undefined ? [] : [`--user-data-dir=${userDataDir}`]), ...extraArgs];
 	return _electron.launch({
 		args,
 		cwd: ROOT,

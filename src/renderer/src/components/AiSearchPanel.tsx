@@ -22,6 +22,7 @@ import { attachmentsFromDrop, isAttachmentDrag, mergeAttachments } from "../stat
 import { evidenceKind } from "../state/evidence";
 import { groupChatHistory, historyEmptyText } from "../state/history";
 import { cn } from "../lib/cn";
+import { formatShortcut } from "../lib/shortcuts";
 import { ArrowUpIcon, CloseIcon, HistoryIcon, LinkIcon, PlusIcon, SparklesIcon } from "./icons";
 import { iconButtonClass } from "./primitives/icon-button";
 import { FileTile } from "./primitives/FileTile";
@@ -492,7 +493,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 				<button
 					type="button"
 					className={cn(iconButtonClass({ size: "size-icon-sm", tone: "text-ink-muted" }), historyOpen && "bg-selected-nav text-ink")}
-					title="Chat history ⌘⇧H"
+					title={`Chat history ${formatShortcut({ key: "H", shift: true })}`}
 					aria-label="Chat history"
 					onClick={() => toggleHistory()}
 				>
@@ -501,7 +502,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 				<button
 					type="button"
 					className={iconButtonClass({ size: "size-icon-sm", tone: "text-ink-muted" })}
-					title="New chat ⌘N"
+					title={`New chat ${formatShortcut({ key: "N" })}`}
 					aria-label="New chat"
 					onClick={() => newChat()}
 				>
