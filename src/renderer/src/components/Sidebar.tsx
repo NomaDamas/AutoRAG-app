@@ -124,6 +124,8 @@ export function Sidebar({
 							const status = item.kind === undefined ? undefined : sourceStatus?.[item.kind];
 							const Icon = item.icon;
 							const drop = item.view === "aiSearch" ? aiSearchDrop : null;
+							// The path tooltip disambiguates same-named locations; an app row has no path to show.
+							const pathTitle = item.kind === undefined ? undefined : item.path;
 							return (
 								<div key={item.path} className="relative">
 									<button
@@ -135,7 +137,7 @@ export function Sidebar({
 											active && "sidebar__item--active bg-selected-nav text-ink",
 											drop?.hovered === true && "shadow-[inset_0_0_0_1.5px_var(--accent)]",
 										)}
-										title={item.path}
+										title={pathTitle}
 										aria-current={active ? "true" : undefined}
 										onClick={() => onNavigate(item)}
 										onDragOver={drop?.onDragOver}
