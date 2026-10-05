@@ -18,9 +18,10 @@ import type {
 	SearchStreamEvent,
 } from "../../../shared/search-contract";
 import { isImageOnlyLine, parseAnswerBlocks, parseInline, type AnswerBlock } from "../state/answer-markdown";
+import { summaryRequest, type SummaryLanguage } from "../state/ai-summary";
 import { answerViewState } from "../state/answer-view";
-import { ImageRow, lineImages, type ImageActions } from "./AnswerImage";
 import { attachmentsFromDrop, isAttachmentDrag, mergeAttachments } from "../state/attachments";
+import { ImageRow, lineImages, type ImageActions } from "./AnswerImage";
 import { evidenceKind, unresolvedCitationNumbers } from "../state/evidence";
 import { groupChatHistory, historyEmptyText } from "../state/history";
 import { cn } from "../lib/cn";
@@ -38,15 +39,23 @@ const CENTERED = "mx-auto w-full max-w-[820px]";
 
 /**
  * Imperative surface the shell drives on the active AI Search tab: ⌘K focuses
- * the composer, the sidebar's content search sends a query, and "AI 요약" or a
- * drop on the tab / sidebar item attaches files. Drops on the panel itself
- * (Finder rows, files from other apps, browser links) land here directly.
+ * the composer, the sidebar's content search sends a query, "AI 요약" attaches
+ * and sends in one step, and a drop on the tab / sidebar item attaches files.
+ * Drops on the panel itself (Finder rows, files from other apps, browser links)
+ * land here directly.
  */
 export interface AiDockHandle {
 	/** Seed the composer with `text` and send it at once. */
 	sendQuery(text: string): void;
 	/** Append draft attachments and focus the composer. */
 	attach(atts: readonly ChatAttachment[]): void;
+	/**
+	 * "AI 요약": fold the target into the dock's drafts and send the summary run
+	 * as one step. Sending is a single call because `attach` only reaches
+	 * `attachmentsRef` on the next render, so an attach-then-send pair would
+	 * leave the attachment out of the run.
+	 */
+	summarize(atts: readonly ChatAttachment[]): void;
 	/** Focus the composer (pending until the panel is the visible tab). */
 	focusComposer(): void;
 }
@@ -62,6 +71,8 @@ export interface AiSearchPanelProps {
 	readonly onPublish: (evidence: readonly CitationEvidence[], sessionId: string | null) => void;
 	/** Images in an answer: a local picture opens in Quick Look, a web image's page in the OS browser. */
 	readonly imageActions: ImageActions;
+	/** The Interface language setting: "AI 요약" asks in this language. */
+	readonly language: SummaryLanguage;
 }
 
 /** The parent folder of a local attachment, derived from its absolute path. */
@@ -76,7 +87,7 @@ function formatElapsed(ms: number): string {
 }
 
 export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(function AiSearchPanel(
-	{ active, selectedEvidence, onSelectEvidence, onPublish, imageActions },
+	{ active, selectedEvidence, onSelectEvidence, onPublish, imageActions, language },
 	ref,
 ): ReactElement {
 	const [query, setQuery] = useState("");
@@ -430,6 +441,11 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		attach(atts: readonly ChatAttachment[]): void {
 			setAttachments((current) => mergeAttachments(current, atts));
 			ensureFocus();
+		},
+		summarize(atts: readonly ChatAttachment[]): void {
+			if (searchIdRef.current !== null) return;
+			const request = summaryRequest(language, attachmentsRef.current, atts);
+			void runSearch(request.prompt, request.attachments);
 		},
 		focusComposer(): void {
 			ensureFocus();
