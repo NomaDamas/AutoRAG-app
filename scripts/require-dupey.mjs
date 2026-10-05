@@ -1,5 +1,5 @@
 /**
- * Hard requirement check: the AutoRAG Finder desktop app cannot provide
+ * Hard requirement check: the Dazzi desktop app cannot provide
  * version stacks without the dupey CLI. Runs as `predev`/`prebuild` so a
  * missing dupey fails the run loudly instead of degrading the UI.
  *
@@ -25,7 +25,7 @@ if (probe.status === 0) {
 const detail = (probe.stderr || probe.error?.message || "dupey not found on PATH").trim();
 process.stderr.write(
 	[
-		"[require-dupey] The dupey CLI is required by the AutoRAG Finder desktop app.",
+		"[require-dupey] The dupey CLI is required by the Dazzi desktop app.",
 		`  Reason: ${detail}`,
 		`  Install: ${INSTALL_COMMAND}`,
 		"  (Rust toolchain required: https://rustup.rs)",

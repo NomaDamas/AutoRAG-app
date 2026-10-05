@@ -1,6 +1,8 @@
-# AI Finder v7 Design System
+# Dazzi Design System (v7 Bloom)
 
-Implementation contract and design specification for the **AutoRAG Agent — AI Finder** desktop app (Electron + React + TypeScript, hand-written CSS, macOS Native Finder fidelity).
+Implementation contract and design specification for **Dazzi** — the AI Finder
+desktop app (Electron + React + TypeScript, hand-written CSS, macOS Native
+Finder fidelity) whose backend is the AutoRAG agent.
 
 ---
 
@@ -101,7 +103,7 @@ The main process polls a cheap mount signature (volume names and device ids, clo
 | `⌘F` | Window | Focus Instant Search bar |
 | `⌘K` | Window | Show the nearest AI Search tab (or open one) and focus its composer |
 | `Space` | File List | Quick Look preview of the selected file or folder (`src/preview/DESIGN.md`) |
-| `⌥ Space` | Global | Global AutoRAG Spotlight summon |
+| `⌥ Space` | Global | Global Dazzi Spotlight summon |
 | `Enter` | Search Bar | Commit search with Filenames |
 | `⌥ Enter` | Search Bar | Commit search with Content |
 | `Escape` | Window | Dismiss dropdowns, clear active search focus |

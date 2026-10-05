@@ -102,7 +102,7 @@ for (let d = 0; d < DIRS; d++) {
 	for (let i = 0; i < IMAGES; i++) {
 		await Bun.write(`${dir}/img-${i}.png`, noisyPng(1024, 768, d * 1000 + i + 1));
 	}
-	for (let i = 0; i < PDFS; i++) await Bun.write(`${dir}/doc-${i}.pdf`, minimalPdf(`AutoRAG ${d}-${i}`));
+	for (let i = 0; i < PDFS; i++) await Bun.write(`${dir}/doc-${i}.pdf`, minimalPdf(`Dazzi ${d}-${i}`));
 	dirs.push(dir);
 }
 
