@@ -17,7 +17,7 @@ import { fileURLToPath } from "node:url";
  * Prereq: `bun run build`
  */
 
-import { launchFinder } from "./launch-finder.mjs";
+import { finderWindow, launchFinder } from "./launch-finder.mjs";
 import { mkdirSync } from "node:fs";
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url)).replace(/\/$/, "");
@@ -37,7 +37,7 @@ const check = (label, pass) => {
 	console.log(`${pass ? "PASS" : "FAIL"}  ${label}`);
 };
 try {
-	const page = await app.firstWindow();
+	const page = await finderWindow(app, 30_000);
 	const handlerErrors = [];
 	page.on("console", (message) => {
 		if (/Error occurred in handler/i.test(message.text())) handlerErrors.push(message.text());

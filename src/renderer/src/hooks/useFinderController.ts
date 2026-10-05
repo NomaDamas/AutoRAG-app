@@ -121,6 +121,8 @@ import { needsThumbnail, takeThumbnailBatch, thumbnailKey } from "../state/thumb
 const TOAST_MS = 2400;
 /** --time-flash */
 const FLASH_MS = 1800;
+/** How long a reveal flash waits for its row to be listed before it is dropped. */
+const FLASH_WAIT_MS = 10_000;
 /** Coalescing window for viewport-visible thumbnail requests, so a scroll burst is one batch. */
 const THUMBNAIL_FLUSH_MS = 60;
 /** Shortcuts that act on the window, not on rows: the only ones a Settings or AI Search tab answers. */
@@ -1078,14 +1080,6 @@ export function useFinderController(
 		};
 	}, [beginScope, loadListing, path, source]);
 
-	useEffect(() => {
-		if (flashPath === null) {
-			return;
-		}
-		const timer = setTimeout(() => setFlashPath(null), FLASH_MS);
-		return () => clearTimeout(timer);
-	}, [flashPath]);
-
 	const stackSections = useMemo<readonly GroupSection<TreeRow>[]>(() => {
 		const prepare = (entries: readonly FinderEntry[]): readonly StackRow[] =>
 			applyVersionStacks(sortEntries(visibleEntries(entries, showHiddenFiles), sort), {
@@ -1114,6 +1108,17 @@ export function useFinderController(
 		}));
 	}, [searching, hits, listing, sort, grouping, showHiddenFiles, families, stackPinned, selection.keys, expanded, childListings, searchScope, path]);
 	const stackRows = useMemo(() => stackSections.flatMap((section) => section.rows), [stackSections]);
+	// The reveal flash lasts FLASH_MS from when its row is on screen, not from
+	// the request: a slow first listing (a new tab on Windows) must not use it
+	// up unseen. A row that never shows drops the flash after FLASH_WAIT_MS.
+	const flashShown = flashPath !== null && stackRows.some((row) => row.entry.path === flashPath);
+	useEffect(() => {
+		if (flashPath === null) {
+			return;
+		}
+		const timer = setTimeout(() => setFlashPath(null), flashShown ? FLASH_MS : FLASH_WAIT_MS);
+		return () => clearTimeout(timer);
+	}, [flashPath, flashShown]);
 
 	const paneViews = useMemo<readonly ColumnPaneView[]>(
 		() =>
