@@ -14,6 +14,7 @@ import { fileURLToPath } from "node:url";
 import { _electron } from "playwright";
 import { AutoRAGAgent, buildAgentOptions, resolveConfigReadOnly } from "@autorag/librarian";
 import { resolveAgentModel } from "@autorag/librarian/core";
+import { AI_PANEL, finderWindow, openAiSearch } from "./launch-finder.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const EVIDENCE = join(ROOT, ".omo", "evidence", "ai-finder-app", "qa-answer-streaming");
@@ -102,13 +103,13 @@ async function launch(configPath, label) {
 		cwd: WORK,
 		env,
 	});
-	const page = await app.firstWindow();
+	const page = await finderWindow(app, 30_000);
 	page.on("pageerror", (error) => log(`[${label}:pageerror] ${String(error).slice(0, 300)}`));
 	app.process().stderr?.on("data", (chunk) => {
 		const text = String(chunk).trim();
 		if (text !== "" && !text.includes("Debugger")) log(`[${label}:main:err] ${text.slice(0, 300)}`);
 	});
-	await page.waitForSelector('[aria-label="AI Search"]', { timeout: 30_000 });
+	await openAiSearch(page);
 	return { app, page };
 }
 
@@ -149,7 +150,7 @@ async function installRecorder(page) {
 			timeline.push({ t: Math.round(performance.now() - start), ...state });
 		};
 		window.__qaTimeline = timeline;
-		new MutationObserver(record).observe(document.querySelector('[aria-label="AI Search"]'), {
+		new MutationObserver(record).observe(document.querySelector('section[aria-label="AI Search"]:not([aria-hidden="true"])'), {
 			subtree: true,
 			childList: true,
 			characterData: true,
@@ -241,7 +242,7 @@ try {
 	await page.keyboard.press("Enter");
 	await page.waitForFunction(() => document.querySelector(".ai .text-danger-text")?.textContent, null, { timeout: 5_000 });
 	await page.waitForFunction(FINISHED, null, { timeout: 5_000 });
-	const errorText = await page.locator(".ai .text-danger-text").textContent();
+	const errorText = await page.locator(`${AI_PANEL} .text-danger-text`).textContent();
 	await page.screenshot({ path: join(EVIDENCE, "4-missing-root-error.png") });
 	check(
 		"broken config shows an error",

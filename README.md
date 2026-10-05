@@ -112,7 +112,8 @@ window. Search results are not live.
 
 ## AI Search attachments
 
-Drop files, folders, or links on the AI Search dock to attach them to the next
+Drop files, folders, or links on an AI Search tab's panel, on an AI Search tab
+in the tab strip, or on the sidebar's AI Search item to attach them to the next
 question:
 
 - **Finder rows** from the list, icon, or column view. Dragging a selected row
@@ -123,7 +124,8 @@ question:
 - **Links** (`text/uri-list`) dragged from a browser. A `file://` link becomes
   a file attachment.
 
-A drop on the collapsed bar opens the dock. A bare text drag is not an
+A drop on the sidebar item turns the focused tab into AI Search; a drop on an
+AI Search strip tab switches to it. A bare text drag is not an
 attachment. Attachments are deduplicated by path or URL.
 
 On send, `src/main/attachment-context.ts` builds one context block for the

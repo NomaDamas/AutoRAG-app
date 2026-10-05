@@ -4,8 +4,15 @@
  * the evidence title, thumbs-up/down toggle state, and the reference toast copy.
  */
 
+import { webUrl } from "../../../shared/fs-contract";
 import { citedNumbers } from "./answer-markdown";
 import { type FileKind, kindFromExtension } from "./kinds";
+
+/**
+ * A web evidence source (the model cited a page, not a file): its normalized
+ * http(s) URL, opened in the OS browser instead of revealed in the Finder.
+ */
+export const evidenceSourceUrl = webUrl;
 
 /**
  * Cited numbers in an answer that have no matching evidence entry. The

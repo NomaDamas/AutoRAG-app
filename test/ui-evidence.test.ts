@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
 	evidenceDetail,
 	evidenceKind,
+	evidenceSourceUrl,
 	findEvidenceSource,
 	feedbackToastText,
 	nextEvidenceFeedback,
@@ -49,6 +50,27 @@ describe("evidenceKind", () => {
 
 	it("falls back to the document tile for names without a known extension", () => {
 		expect(evidenceKind("RE: Q3 마케팅 예산 최종 승인 요청")).toBe("md");
+	});
+});
+
+describe("evidenceSourceUrl", () => {
+	it("recognizes a web page source, including a non-ASCII path", () => {
+		expect(evidenceSourceUrl("https://music.bugs.co.kr/artist/20047596")).toBe("https://music.bugs.co.kr/artist/20047596");
+		expect(evidenceSourceUrl("  http://example.com/위키  ")).toBe("http://example.com/%EC%9C%84%ED%82%A4");
+	});
+
+	it("leaves file paths and datasource ids to the Finder reveal", () => {
+		expect(evidenceSourceUrl("/Users/me/Documents/brief.md")).toBeNull();
+		expect(evidenceSourceUrl("C:\\Users\\me\\brief.md")).toBeNull();
+		expect(evidenceSourceUrl("/kakao/room/42")).toBeNull();
+	});
+
+	it("never treats other schemes or broken text as a web page", () => {
+		expect(evidenceSourceUrl("file:///etc/passwd")).toBeNull();
+		expect(evidenceSourceUrl("javascript:alert(1)")).toBeNull();
+		expect(evidenceSourceUrl("mailto:a@b.c")).toBeNull();
+		expect(evidenceSourceUrl("https://")).toBeNull();
+		expect(evidenceSourceUrl("")).toBeNull();
 	});
 });
 

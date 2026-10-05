@@ -25,8 +25,8 @@ import {
 import { planTransfer } from "../state/file-transfer";
 import type { FileActionTarget } from "../state/file-actions";
 import { emptyStateText, indexToast, trashToast } from "../state/format";
-import { findEvidenceSource } from "../state/evidence";
-import { type FocusZone, resolveKeyAction } from "../state/keymap";
+import { evidenceSourceUrl, findEvidenceSource } from "../state/evidence";
+import { type FocusZone, type KeyAction, resolveKeyAction } from "../state/keymap";
 import {
 	applyEntryEnrichmentPatch,
 	applyEntryPatch,
@@ -91,20 +91,25 @@ import {
 } from "../state/version-family";
 import {
 	activeTab,
+	AI_SEARCH_PATH,
 	applyColumnChoice,
 	canCloseTab,
 	closeTab,
 	createTabsState,
 	evacuateTabs,
+	exitVirtualTab,
+	focusAiSearchTab,
 	goBack,
 	goForward,
+	isVirtualTabPath,
 	navigateTab,
+	openAiSearchTab,
 	openOrSelectSettingsTab,
 	openTab,
 	openTabAt,
 	patchActiveTab,
 	selectTab,
-	SETTINGS_PATH,
+	showAiSearchInActiveTab,
 	tabTitle,
 	type TabsState,
 } from "../state/tabs";
@@ -117,8 +122,20 @@ import { needsThumbnail, takeThumbnailBatch, thumbnailKey } from "../state/thumb
 const TOAST_MS = 2400;
 /** --time-flash */
 const FLASH_MS = 1800;
+/** How long a reveal flash waits for its row to be listed before it is dropped. */
+const FLASH_WAIT_MS = 10_000;
 /** Coalescing window for viewport-visible thumbnail requests, so a scroll burst is one batch. */
 const THUMBNAIL_FLUSH_MS = 60;
+/** Shortcuts that act on the window, not on rows: the only ones a Settings or AI Search tab answers. */
+const WINDOW_KEY_ACTIONS: Partial<Record<KeyAction["type"], true>> = {
+	dismiss: true,
+	focusSearch: true,
+	focusComposer: true,
+	newTab: true,
+	closeTab: true,
+	openSettings: true,
+	setViewMode: true,
+};
 
 interface ContextMenuState {
 	readonly cursor: { readonly x: number; readonly y: number };
@@ -361,6 +378,14 @@ export interface FinderController {
 	closeTabId(id: number): void;
 	newTab(): void;
 	openSettings(): void;
+	/** Sidebar "AI Search": the focused tab becomes AI Search. */
+	showAiSearch(): void;
+	/** A new AI Search tab with an empty chat ("AI 요약", content search). */
+	openAiSearch(): void;
+	/** ⌘K: adopt the nearest AI Search tab, or open one. */
+	focusAiSearch(): void;
+	/** A filename search from a Settings / AI Search tab returns that tab to its folder. */
+	leaveVirtualTab(): void;
 	back(): void;
 	forward(): void;
 	setQuery(value: string): void;
@@ -375,7 +400,7 @@ export interface FinderController {
 	quickLookPath(path: string): void;
 	/** Arrow keys pressed inside the Quick Look window move the Finder selection. */
 	moveSelectionBy(delta: 1 | -1): void;
-	/** Open the path's enclosing folder in a NEW tab, revealing the row. */
+	/** Open the path's enclosing folder in a NEW tab, revealing the row; a web source opens in the OS browser. */
 	revealEvidence(path: string): void;
 	focusFinder(): void;
 	clickRow(entry: FinderEntry, event: ReactMouseEvent<HTMLDivElement>): void;
@@ -414,10 +439,8 @@ export function useFinderController(
 		readonly quickLook?: QuickLookBridge;
 		/** ⌘F: reveal the shell that hosts the search field (it lives in the sidebar). */
 		readonly onFocusSearch?: () => void;
-		/** ⌘K: toggle the AI dock; opening also focuses its composer (owned by the App shell). */
+		/** ⌘K: show an AI Search tab and focus its composer (owned by the App shell). */
 		readonly onFocusComposer?: () => void;
-		/** Esc: close the inspector's evidence half; return true when consumed. */
-		readonly onDismissEvidence?: () => boolean;
 	} = {},
 ): FinderController {
 	const showHiddenFiles = options.showHiddenFiles ?? false;
@@ -427,8 +450,6 @@ export function useFinderController(
 	focusSearchRef.current = options.onFocusSearch;
 	const focusComposerRef = useRef(options.onFocusComposer);
 	focusComposerRef.current = options.onFocusComposer;
-	const dismissEvidenceRef = useRef(options.onDismissEvidence);
-	dismissEvidenceRef.current = options.onDismissEvidence;
 	const [tabsState, setTabsState] = useState<TabsState>(() => createTabsState(source.initialPath));
 	const [query, setQueryValue] = useState("");
 	const [searchScope, setSearchScope] = useState<SearchScope>("all");
@@ -526,7 +547,7 @@ export function useFinderController(
 	const layout: ViewMode = viewMode === "columns" && searching ? "list" : viewMode;
 	const chain = tab.chain;
 	const panePaths = useMemo(
-		() => (layout === "columns" && path !== "" ? columnPanes(path, chain) : []),
+		() => (layout === "columns" && path !== "" && !isVirtualTabPath(path) ? columnPanes(path, chain) : []),
 		[layout, path, chain],
 	);
 
@@ -824,7 +845,7 @@ export function useFinderController(
 	}, [path, locations]);
 
 	useEffect(() => {
-		if (path === "" || path === SETTINGS_PATH) {
+		if (path === "" || isVirtualTabPath(path)) {
 			previousPathRef.current = path;
 			previousTabIdRef.current = tab.id;
 			previousRevisionRef.current = revision;
@@ -1033,7 +1054,7 @@ export function useFinderController(
 	useEffect(() => {
 		let live = true;
 		const resync = (): void => {
-			if (path === "") return;
+			if (path === "" || isVirtualTabPath(path)) return;
 			const scope = beginScope();
 			void source.setWatchSet(watchSetFor(tabsRef.current)).catch((error: unknown) =>
 				console.error("live watch resync failed", error),
@@ -1067,14 +1088,6 @@ export function useFinderController(
 		};
 	}, [beginScope, loadListing, path, source]);
 
-	useEffect(() => {
-		if (flashPath === null) {
-			return;
-		}
-		const timer = setTimeout(() => setFlashPath(null), FLASH_MS);
-		return () => clearTimeout(timer);
-	}, [flashPath]);
-
 	const stackSections = useMemo<readonly GroupSection<TreeRow>[]>(() => {
 		const prepare = (entries: readonly FinderEntry[]): readonly StackRow[] =>
 			applyVersionStacks(sortEntries(visibleEntries(entries, showHiddenFiles), sort), {
@@ -1103,6 +1116,17 @@ export function useFinderController(
 		}));
 	}, [searching, hits, listing, sort, grouping, showHiddenFiles, families, stackPinned, selection.keys, expanded, childListings, searchScope, path]);
 	const stackRows = useMemo(() => stackSections.flatMap((section) => section.rows), [stackSections]);
+	// The reveal flash lasts FLASH_MS from when its row is on screen, not from
+	// the request: a slow first listing (a new tab on Windows) must not use it
+	// up unseen. A row that never shows drops the flash after FLASH_WAIT_MS.
+	const flashShown = flashPath !== null && stackRows.some((row) => row.entry.path === flashPath);
+	useEffect(() => {
+		if (flashPath === null) {
+			return;
+		}
+		const timer = setTimeout(() => setFlashPath(null), flashShown ? FLASH_MS : FLASH_WAIT_MS);
+		return () => clearTimeout(timer);
+	}, [flashPath, flashShown]);
 
 	const paneViews = useMemo<readonly ColumnPaneView[]>(
 		() =>
@@ -1473,7 +1497,7 @@ export function useFinderController(
 
 	/** Sidebar "New folder": real mkdir in the current folder, then select the row. */
 	const newFolder = useCallback(() => {
-		if (searching || path === "" || path === RECENTS_PATH || path === SETTINGS_PATH) {
+		if (searching || path === "" || path === RECENTS_PATH || isVirtualTabPath(path)) {
 			return;
 		}
 		source
@@ -1595,9 +1619,15 @@ export function useFinderController(
 		[presentQuickLook],
 	);
 
-	// An evidence title opens the enclosing folder in a NEW tab and selects the source file.
+	// An evidence title opens the enclosing folder in a NEW tab and selects the
+	// source file; a web source (the model cited a page) opens in the OS browser.
 	const revealEvidence = useCallback(
 		(target: string) => {
+			const url = evidenceSourceUrl(target);
+			if (url !== null) {
+				source.openUrl(url).catch(reportError);
+				return;
+			}
 			const folder = dirname(target);
 			source
 				.list(folder)
@@ -1683,7 +1713,7 @@ export function useFinderController(
 	/** ⌘V pastes the clipboard op as-is; ⌥⌘V forces a move. */
 	const pasteClipboard = useCallback(
 		(move: boolean) => {
-			if (path === "" || path === RECENTS_PATH || path === SETTINGS_PATH) return;
+			if (path === "" || path === RECENTS_PATH || isVirtualTabPath(path)) return;
 			source
 				.clipboardGet()
 				.then((clipboard) => {
@@ -1722,7 +1752,7 @@ export function useFinderController(
 	/** An in-app row drop: ⌥ copies, otherwise the rows move into the target folder. */
 	const transferDropped = useCallback(
 		(paths: readonly string[], destDir: string, copy: boolean) => {
-			if (destDir === "" || destDir === RECENTS_PATH || destDir === SETTINGS_PATH) return;
+			if (destDir === "" || destDir === RECENTS_PATH || isVirtualTabPath(destDir)) return;
 			transferInto(paths, destDir, copy ? "copy" : "move");
 		},
 		[transferInto],
@@ -1867,9 +1897,6 @@ export function useFinderController(
 			quickLookRef.current.closeQuickLook();
 			return;
 		}
-		if (dismissEvidenceRef.current?.() === true) {
-			return;
-		}
 		if (query !== "") {
 			setQueryValue("");
 		}
@@ -1903,6 +1930,10 @@ export function useFinderController(
 			if (action === null) {
 				return;
 			}
+			// A Settings or AI Search tab shows no rows: only window-level shortcuts apply.
+			if (isVirtualTabPath(path) && WINDOW_KEY_ACTIONS[action.type] !== true) {
+				return;
+			}
 			switch (action.type) {
 				case "dismiss":
 					dismiss();
@@ -1926,6 +1957,7 @@ export function useFinderController(
 					return;
 				case "focusComposer":
 					event.preventDefault();
+					setTabsState((state) => focusAiSearchTab(state));
 					focusComposerRef.current?.();
 					return;
 				case "quickLook":
@@ -2028,6 +2060,7 @@ export function useFinderController(
 		return () => window.removeEventListener("keydown", onKeyDown);
 	}, [
 		zone,
+		path,
 		layout,
 		stepColumns,
 		setViewMode,
@@ -2056,6 +2089,7 @@ export function useFinderController(
 					title: tabTitle(current, { isActive: active, query }),
 					active,
 					flash: current.flash,
+					aiSearch: current.path === AI_SEARCH_PATH,
 				};
 			}),
 		[tabsState, query],
@@ -2141,6 +2175,10 @@ export function useFinderController(
 		closeTabId: (id) => setTabsState((state) => closeTab(state, id)),
 		newTab: () => setTabsState((state) => openTab(state)),
 		openSettings: () => setTabsState((state) => openOrSelectSettingsTab(state)),
+		showAiSearch: () => setTabsState((state) => showAiSearchInActiveTab(state)),
+		openAiSearch: () => setTabsState((state) => openAiSearchTab(state)),
+		focusAiSearch: () => setTabsState((state) => focusAiSearchTab(state)),
+		leaveVirtualTab: () => setTabsState((state) => exitVirtualTab(state)),
 		back: () => setTabsState((state) => goBack(state)),
 		forward: () => setTabsState((state) => goForward(state)),
 		setQuery: setQueryValue,

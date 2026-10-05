@@ -1,7 +1,7 @@
 // Live QA for AI Search drag-and-drop attachments: drives the built Finder app
 // and proves that
-//   1. Finder rows dragged onto the AI dock attach with their absolute paths
-//      (one row, and a multi-row selection);
+//   1. Finder rows dragged onto the AI Search strip tab attach with their
+//      absolute paths (one row, and a multi-row selection by the sidebar item);
 //   2. files, folders, and links dropped from outside the app attach — sent
 //      through Chromium's native drop path (CDP Input.dispatchDragEvent, the
 //      same browser-side route an OS drag takes), so paths resolve through
@@ -20,8 +20,8 @@ import { execFileSync } from "node:child_process";
 import { appendFileSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { finderWindow, launchFinder, ROOT } from "./launch-finder.mjs";
-import { isMac } from "./platform.mjs";
+import { AI_PANEL, finderWindow, launchFinder, openAiSearch, ROOT } from "./launch-finder.mjs";
+import { chord, isMac } from "./platform.mjs";
 
 const EVIDENCE = join(ROOT, ".omo", "evidence", "ai-finder-app", "qa-drop-attachments");
 const RUN_TIMEOUT_MS = 240_000;
@@ -91,8 +91,10 @@ const check = (name, pass, detail) => {
 	log(`${pass ? "PASS" : "FAIL"} ${name}: ${detail}`);
 };
 
-const DOCK = '[aria-label="AI Search"]';
-const PILL = ".composer-attach-pill";
+const DOCK = AI_PANEL;
+const PILL = `${AI_PANEL} .composer-attach-pill`;
+const AI_TAB = '.tabs .tab[data-ai-search="true"]';
+const FOLDER_TAB = '.tabs .tab:not([data-ai-search="true"])';
 
 async function pills(page) {
 	return page.$$eval(PILL, (elements) =>
@@ -104,13 +106,10 @@ async function pills(page) {
 	);
 }
 
-async function setDockOpen(page, open) {
-	const isOpen = await page.$eval(DOCK, (element) => element.classList.contains("open"));
-	if (isOpen !== open) await page.click(`${DOCK} .ai-head`);
-	await page.waitForFunction(
-		([selector, want]) => document.querySelector(selector)?.classList.contains("open") === want,
-		[DOCK, open],
-	);
+/** Show the folder tab, so the Finder rows are on screen to drag. */
+async function showRows(page) {
+	await page.locator(FOLDER_TAB).first().click();
+	await page.waitForSelector(`[data-path="${SECRET}"]`);
 }
 
 async function clearPills(page) {
@@ -147,42 +146,43 @@ try {
 	});
 	const page = await finderWindow(app, 30_000);
 	page.on("pageerror", (error) => log(`[pageerror] ${String(error).slice(0, 300)}`));
-	await page.waitForSelector(DOCK, { timeout: 30_000 });
 	await page.waitForSelector(`[data-path="${SECRET}"]`, { timeout: 30_000 });
 	const cdp = await page.context().newCDPSession(page);
+	// One AI Search tab beside the folder tab: AI Search, then ⌘T back to rows.
+	await openAiSearch(page);
+	await page.keyboard.press(chord("t"));
+	await page.waitForSelector(`[data-path="${SECRET}"]`);
 
-	// 1. One Finder row dragged onto the open dock.
-	await setDockOpen(page, true);
-	await page.locator(`[data-path="${SECRET}"]`).dragTo(page.locator(`${DOCK} .ai-body`));
+	// 1. One Finder row dragged onto the AI Search strip tab.
+	await page.locator(`[data-path="${SECRET}"]`).dragTo(page.locator(AI_TAB));
 	await waitForPill(page, SECRET).catch(() => undefined);
 	let current = await pills(page);
-	check("finder row drag attaches its path", current.some((pill) => pill.title === SECRET), JSON.stringify(current));
+	check("finder row drag onto the AI Search tab attaches its path", current.some((pill) => pill.title === SECRET), JSON.stringify(current));
 	await page.screenshot({ path: join(EVIDENCE, "1-finder-row.png") });
 
-	// 2. A two-row selection dragged by one of its rows carries both.
+	// 2. A two-row selection dragged by one of its rows onto the sidebar item carries both.
 	await clearPills(page);
+	await showRows(page);
 	await page.click(`[data-path="${SECRET}"]`);
 	await page.click(`[data-path="${NOTES}"]`, { modifiers: ["Meta"] });
-	await page.locator(`[data-path="${NOTES}"]`).dragTo(page.locator(`${DOCK} .ai-body`));
+	await page.locator(`[data-path="${NOTES}"]`).dragTo(page.locator(".sidebar__item", { hasText: "AI Search" }));
 	await waitForPill(page, NOTES).catch(() => undefined);
 	current = await pills(page);
 	check(
-		"multi-row drag attaches the whole selection",
+		"multi-row drag onto the sidebar AI Search item attaches the whole selection",
 		[SECRET, NOTES].every((path) => current.some((pill) => pill.title === path)) && current.length === 2,
 		JSON.stringify(current),
 	);
 	await page.screenshot({ path: join(EVIDENCE, "2-finder-selection.png") });
 
-	// 3. A file from another app, dropped on the collapsed dock bar.
-	await setDockOpen(page, false);
+	// 3. A file from another app, dropped on the AI Search panel.
 	await nativeDrop(page, cdp, { files: [EXTERNAL] });
 	await waitForPill(page, EXTERNAL).catch(() => undefined);
-	const reopened = await page.$eval(DOCK, (element) => element.classList.contains("open"));
 	current = await pills(page);
 	check(
-		"external file drop resolves the absolute path and opens the dock",
-		reopened && current.some((pill) => pill.title === EXTERNAL && pill.name.includes("external-brief.md")),
-		`open=${reopened} ${JSON.stringify(current)}`,
+		"external file drop resolves the absolute path",
+		current.some((pill) => pill.title === EXTERNAL && pill.name.includes("external-brief.md")),
+		JSON.stringify(current),
 	);
 
 	// 4. A folder from another app.
@@ -254,25 +254,25 @@ try {
 	const sent = await pills(page);
 	const question =
 		"첨부한 파일들에 적힌 프로젝트 코드명, 예산 승인자, Finder 드롭 확인 문구를 각각 그대로 알려주고, 첨부한 링크의 도메인도 알려줘.";
-	await page.fill('input[aria-label="Ask AutoRAG"]', question);
+	await page.fill(`${DOCK} input[aria-label="Ask AutoRAG"]`, question);
 	await page.keyboard.press("Enter");
 	log(`submitted with ${sent.length} attachments: ${question}`);
 	await page.waitForFunction(
-		() => {
-			const input = document.querySelector('input[aria-label="Ask AutoRAG"]');
-			return input !== null && !input.disabled && document.querySelector(".user-msg") !== null;
+		(panel) => {
+			const input = document.querySelector(`${panel} input[aria-label="Ask AutoRAG"]`);
+			return input !== null && !input.disabled && document.querySelector(`${panel} .user-msg`) !== null;
 		},
-		null,
+		DOCK,
 		{ timeout: RUN_TIMEOUT_MS },
 	);
 	await page.screenshot({ path: join(EVIDENCE, "5-answer.png") });
-	const chips = await page.$$eval(".ref-file-chip", (elements) => elements.map((element) => element.getAttribute("title")));
+	const chips = await page.$$eval(`${DOCK} .ref-file-chip`, (elements) => elements.map((element) => element.getAttribute("title")));
 	check(
 		"sent message shows every attachment",
 		sent.every((pill) => chips.includes(pill.title)) && chips.length === sent.length,
 		JSON.stringify(chips),
 	);
-	const prose = await page.$$eval(".assistant-msg .assistant-prose", (elements) => elements.map((element) => element.textContent ?? ""));
+	const prose = await page.$$eval(`${DOCK} .assistant-msg .assistant-prose`, (elements) => elements.map((element) => element.textContent ?? ""));
 	const error = await page.$eval(DOCK, (element) => element.querySelector(".text-danger-text")?.textContent ?? "");
 	const answer = prose.join("\n");
 	writeFileSync(join(EVIDENCE, "answer.txt"), `${answer}\n\nerror: ${error}\n`);

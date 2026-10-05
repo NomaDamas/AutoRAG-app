@@ -4,7 +4,7 @@ import { AutoRAGAgent, createDefaultParserRegistry, type ParserRegistry, type Re
 import type { ChatAttachment } from "../shared/search-contract";
 
 /**
- * Attachments dropped on the AI dock reach the agent as one context block.
+ * Attachments dropped on AI Search reach the agent as one context block.
  *
  * The librarian's search API takes only a query string, and that string also
  * drives baseline retrieval and is written to the retrieval memory. So the

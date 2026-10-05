@@ -1,5 +1,5 @@
 import { Eject, FolderPlus, PanelLeft } from "lucide-react";
-import type { ReactElement, RefObject } from "react";
+import type { DragEvent, ReactElement, RefObject } from "react";
 import type { FsLocationIcon } from "../../../shared/fs-contract";
 import type { NavGroup, NavItem } from "../data/places";
 import { cn } from "../lib/cn";
@@ -51,6 +51,7 @@ export function Sidebar({
 	onSearchFocus,
 	onSearchBlur,
 	onSubmitSearch,
+	aiSearchDrop,
 }: {
 	readonly groups: readonly NavGroup[];
 	/** Path of the row that owns the current folder. */
@@ -69,6 +70,13 @@ export function Sidebar({
 	readonly onSearchFocus: () => void;
 	readonly onSearchBlur: () => void;
 	readonly onSubmitSearch: (mode: SearchMode, text: string) => void;
+	/** The AI Search item takes Finder rows and OS files as chat attachments. */
+	readonly aiSearchDrop: {
+		readonly hovered: boolean;
+		readonly onDragOver: (event: DragEvent<HTMLButtonElement>) => void;
+		readonly onDragLeave: () => void;
+		readonly onDrop: (event: DragEvent<HTMLButtonElement>) => void;
+	};
 }): ReactElement {
 	return (
 		<aside
@@ -113,8 +121,11 @@ export function Sidebar({
 						</div>
 						{group.items.map((item) => {
 							const active = item.path === activePath && !settingsActive;
-							const status = sourceStatus?.[item.kind];
+							const status = item.kind === undefined ? undefined : sourceStatus?.[item.kind];
 							const Icon = item.icon;
+							const drop = item.view === "aiSearch" ? aiSearchDrop : null;
+							// The path tooltip disambiguates same-named locations; an app row has no path to show.
+							const pathTitle = item.kind === undefined ? undefined : item.path;
 							return (
 								<div key={item.path} className="relative">
 									<button
@@ -124,10 +135,21 @@ export function Sidebar({
 											item.ejectable && "pr-28",
 											!item.available && "text-ink-faint",
 											active && "sidebar__item--active bg-selected-nav text-ink",
+											drop?.hovered === true && "shadow-[inset_0_0_0_1.5px_var(--accent)]",
 										)}
-										title={item.path}
+										title={pathTitle}
 										aria-current={active ? "true" : undefined}
 										onClick={() => onNavigate(item)}
+										onDragOver={drop?.onDragOver}
+										onDragLeave={
+											drop === null
+												? undefined
+												: (event) => {
+														if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return;
+														drop.onDragLeave();
+													}
+										}
+										onDrop={drop?.onDrop}
 									>
 										<Icon
 											className={cn("sidebar__item-icon flex-none", active ? "text-accent" : "text-ink-muted")}

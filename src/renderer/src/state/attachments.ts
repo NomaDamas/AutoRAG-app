@@ -1,9 +1,10 @@
 /**
- * Drag-and-drop attachments for the AI dock.
+ * Drag-and-drop attachments for AI Search.
  *
- * Three sources land on the dock: the Finder's own rows (written by
- * {@link writeFinderDrag}), files and folders dragged from another app such as
- * macOS Finder, and links dragged from a browser. They all become
+ * Three sources land on an AI Search tab, its strip tab, or the sidebar item:
+ * the Finder's own rows (written by {@link writeFinderDrag}), files and folders
+ * dragged from another app such as macOS Finder, and links dragged from a
+ * browser. They all become
  * {@link ChatAttachment}s the main process hands to the agent.
  *
  * The shapes below are the slices of the DOM DataTransfer API these helpers
@@ -80,11 +81,11 @@ export function finderDragEntries<E extends FinderDragEntry>(
 }
 
 /**
- * Fill a Finder row drag: the rows for the AI dock, plus file URLs and plain
+ * Fill a Finder row drag: the rows for AI Search, plus file URLs and plain
  * paths so text fields and other apps receive something sensible.
  *
  * The drag can both copy and move: an in-app drop onto a folder or tab moves
- * the rows (⌥ copies), while a drop on the AI dock or another app copies.
+ * the rows (⌥ copies), while a drop on AI Search or another app copies.
  */
 export function writeFinderDrag(data: DragDataWriter, entries: readonly FinderDragEntry[]): void {
 	data.effectAllowed = "copyMove";

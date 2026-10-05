@@ -48,8 +48,8 @@ export function Toolbar({
 	onSetGrouping,
 	inspectorVisible,
 	onToggleInspector,
-	aiOpen,
-	onToggleAi,
+	aiActive,
+	onShowAi,
 	canShare,
 	onShare,
 	sidebarHidden,
@@ -71,8 +71,10 @@ export function Toolbar({
 	readonly onSetGrouping: (key: GroupKey) => void;
 	readonly inspectorVisible: boolean;
 	readonly onToggleInspector: () => void;
-	readonly aiOpen: boolean;
-	readonly onToggleAi: () => void;
+	/** The focused tab is AI Search. */
+	readonly aiActive: boolean;
+	/** Show the nearest AI Search tab (⌘K), or open one. */
+	readonly onShowAi: () => void;
 	readonly canShare: boolean;
 	readonly onShare: () => void;
 	readonly sidebarHidden: boolean;
@@ -192,12 +194,12 @@ export function Toolbar({
 					type="button"
 					className={[
 						"flex flex-none items-center justify-center size-toolbar-icon p-0 border-0 rounded-6 cursor-pointer transition-[background,color] duration-(--dur-color) ease-[ease]",
-						aiOpen ? "bg-transparent text-accent" : "bg-transparent text-ink-muted hover:bg-hover-icon hover:text-ink",
+						aiActive ? "bg-transparent text-accent" : "bg-transparent text-ink-muted hover:bg-hover-icon hover:text-ink",
 					].join(" ")}
 					title={`AI Search (${formatShortcut({ key: "K" })})`}
-					aria-label="Toggle AI Search"
-					aria-pressed={aiOpen}
-					onClick={onToggleAi}
+					aria-label="Show AI Search"
+					aria-pressed={aiActive}
+					onClick={onShowAi}
 				>
 					<SparklesIcon size={18} />
 				</button>

@@ -29,7 +29,7 @@ export const SEARCH_CHANNELS = {
 
 /**
  * Something attached to a chat message: a local file or folder, or a web link.
- * Files and folders dropped on the AI dock (from the Finder rows or from
+ * Files and folders dropped on AI Search (from the Finder rows or from
  * another app) and dropped links reach the agent as context: the path or URL
  * always, and file content when it can be read.
  */

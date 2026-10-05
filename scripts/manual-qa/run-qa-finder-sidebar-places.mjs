@@ -2,8 +2,9 @@
  * Manual QA — the sidebar's live OS places on the real AI Finder app (macOS).
  *
  * Proves, against this machine's real HOME and mount table:
- * - Favorites lists home, Applications, Desktop, Documents, Downloads, Music,
- *   Movies, Pictures, and Trash (plus Recents) and each opens its folder;
+ * - Favorites heads with the AI Search app row, then Recents and the OS
+ *   places — home, Applications, Desktop, Documents, Downloads, Music,
+ *   Movies, Pictures, and Trash — and each opens its folder;
  * - Cloud lists exactly the File Provider domains Finder shows — one row per
  *   account — and nothing for a provider that is not connected;
  * - Locations lists the boot disk plus every browsable /Volumes mount;
@@ -85,8 +86,8 @@ try {
 	check("groups are Favorites, Cloud, Locations", JSON.stringify(labels) === JSON.stringify(["Favorites", "Cloud", "Locations"]), JSON.stringify(labels));
 
 	const favorites = (await groupRows(page, "Favorites")).map(([name]) => name);
-	const wantFavorites = ["Recents", basename(home), "Applications", "Desktop", "Documents", "Downloads", "Music", "Movies", "Pictures", "Trash"];
-	check("favorites in Finder order", JSON.stringify(favorites) === JSON.stringify(wantFavorites), JSON.stringify(favorites));
+	const wantFavorites = ["AI Search", "Recents", basename(home), "Applications", "Desktop", "Documents", "Downloads", "Music", "Movies", "Pictures", "Trash"];
+	check("favorites: AI Search then the OS order", JSON.stringify(favorites) === JSON.stringify(wantFavorites), JSON.stringify(favorites));
 
 	const cloud = (await groupRows(page, "Cloud")).map(([name]) => name);
 	const cloudKey = (name) => name.replace(" - ", "-").replace("Google Drive", "GoogleDrive");
