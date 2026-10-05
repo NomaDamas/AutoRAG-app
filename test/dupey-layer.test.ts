@@ -73,7 +73,9 @@ function fixture(options: {
 	let writes = 0;
 	let changed = 0;
 	const timers: { ms: number; handler: () => void }[] = [];
-	const locations: readonly FsLocation[] = [{ name: "Fixture", path: ROOT, section: "favorites", available: true }];
+	const locations: readonly FsLocation[] = [
+		{ name: "Fixture", path: ROOT, section: "favorites", icon: "documents", available: true, scanned: true, ejectable: false },
+	];
 	const deps: VersionFamilyServiceDeps = {
 		locations: async () => locations,
 		store: {

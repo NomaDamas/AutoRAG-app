@@ -8,7 +8,7 @@
  */
 
 import { NO_CAPABILITIES, type ActionsBridge } from "../../../shared/actions-contract";
-import { RECENTS_PATH, type FsBridge, type FsClipboard, type FsEnrichmentTarget, type FsOpError, type FsUndoOutcome, type FsVersionFamiliesResult } from "../../../shared/fs-contract";
+import { RECENTS_PATH, type FsBridge, type FsClipboard, type FsEnrichmentTarget, type FsLocation, type FsLocationIcon, type FsOpError, type FsUndoOutcome, type FsVersionFamiliesResult } from "../../../shared/fs-contract";
 import type { IndexStatus } from "../../../shared/index-contract";
 import {
 	DUPEY_LAYER_ID,
@@ -25,15 +25,11 @@ import {
 	type VersionRelation,
 } from "../state/version-family";
 import { type FinderEntry, applyEntryEnrichment, entryFromFixture, entryFromFs, entryFromSearchHit } from "./entries";
-import { FIXTURE_FAMILIES, FIXTURE_INITIAL_PATH, FIXTURE_ROOTS, FIXTURE_TREE } from "./fixtures";
+import { FIXTURE_FAMILIES, FIXTURE_INITIAL_PATH, FIXTURE_TREE } from "./fixtures";
 import type { FixtureItem } from "./entries";
 
-export interface FinderLocation {
-	readonly name: string;
-	readonly path: string;
-	readonly section: "favorites" | "cloud";
-	readonly available: boolean;
-}
+/** A sidebar location; the shared contract shape, unchanged across the boundary. */
+export type FinderLocation = FsLocation;
 
 export interface SearchHits {
 	readonly entries: readonly FinderEntry[];
@@ -74,6 +70,10 @@ export interface FinderSource {
 	): Promise<{ readonly entries: readonly FinderEntry[]; readonly removed: readonly string[] }>;
 	search(query: string): Promise<readonly FinderEntry[]>;
 	locations(): Promise<readonly FinderLocation[]>;
+	/** Unmount a mounted volume (sidebar eject button); rejects with the OS reason. */
+	ejectLocation(path: string): Promise<void>;
+	/** Fires when a volume mounts/unmounts or a cloud account connects/disconnects. */
+	onLocationsChanged(listener: () => void): () => void;
 	quickLook(path: string): Promise<void>;
 	/** Open the file with the OS default application (double-click behavior). */
 	open(path: string): Promise<void>;
@@ -181,15 +181,9 @@ export function createBridgeSource(
 			const hits = await fs.search(query);
 			return hits.map(entryFromSearchHit);
 		},
-		async locations() {
-			const locations = await fs.locations();
-			return locations.map((location) => ({
-				name: location.name,
-				path: location.path,
-				section: location.section,
-				available: location.available,
-			}));
-		},
+		locations: () => fs.locations(),
+		ejectLocation: (path) => fs.ejectLocation(path),
+		onLocationsChanged: (listener) => fs.onLocationsChanged?.(listener) ?? (() => {}),
 		quickLook: (path) => fs.quickLook(path),
 		open: (path) => fs.open(path),
 		openUrl: (url) => fs.openUrl(url),
@@ -233,14 +227,29 @@ interface FixtureState {
 	clipboard: FsClipboard | null;
 	/** Paths the fixture treats as excluded from indexing. */
 	indexExcluded: Set<string>;
+	/** Fixture volumes the sidebar eject button removed. */
+	ejected: Set<string>;
 }
+
+/** Fixture sidebar rows: the FIXTURE_TREE roots plus two volumes to eject. */
+const FIXTURE_PLACES: readonly (readonly [string, FsLocation["section"], FsLocationIcon])[] = [
+	[RECENTS_PATH, "favorites", "recents"],
+	["Desktop", "favorites", "desktop"],
+	["Documents", "favorites", "documents"],
+	["Downloads", "favorites", "downloads"],
+	["iCloud Drive", "cloud", "icloud"],
+	["Google Drive", "cloud", "google-drive"],
+	["Dropbox", "cloud", "dropbox"],
+	["Macintosh HD", "locations", "disk"],
+	["Backup", "locations", "disk"],
+];
 
 function seedFixtureState(): FixtureState {
 	const tree = new Map<string, FixtureItem[]>();
 	for (const [path, items] of Object.entries(FIXTURE_TREE)) {
 		tree.set(path, [...items]);
 	}
-	return { tree, clipboard: null, indexExcluded: new Set() };
+	return { tree, clipboard: null, indexExcluded: new Set(), ejected: new Set() };
 }
 
 function takenNames(state: FixtureState, dir: string): string[] {
@@ -339,15 +348,21 @@ export function createFixtureSource(): FinderSource {
 		},
 		locations: () =>
 			Promise.resolve(
-				FIXTURE_ROOTS.map((name) => ({
+				FIXTURE_PLACES.filter(([name]) => !state.ejected.has(name)).map(([name, section, icon]) => ({
 					name,
 					path: name,
-					section: name === RECENTS_PATH || name === "Desktop" || name === "Downloads" || name === "Documents"
-						? ("favorites" as const)
-						: ("cloud" as const),
-					available: state.tree.has(name),
+					section,
+					icon,
+					available: section === "locations" || state.tree.has(name),
+					scanned: false,
+					ejectable: section === "locations" && name !== "Macintosh HD",
 				})),
 			),
+		ejectLocation: (path) => {
+			state.ejected.add(path);
+			return Promise.resolve();
+		},
+		onLocationsChanged: () => () => {},
 		quickLook: resolve,
 		open: resolve,
 		openUrl: resolve,

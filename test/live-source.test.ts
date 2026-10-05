@@ -59,6 +59,7 @@ function fakeFs(result: FsVersionFamiliesResult): FsBridge {
 		exists: async () => true,
 		search,
 		locations,
+		ejectLocation: async () => {},
 		copy: batch,
 		move: batch,
 		duplicate: async () => ({ ok: [], failed: [] }),

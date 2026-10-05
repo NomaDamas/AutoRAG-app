@@ -5,7 +5,7 @@ import { RECENTS_PATH } from "../../../shared/fs-contract";
 import type { IndexStatus } from "../../../shared/index-contract";
 import { DUPEY_LAYER_ID, type FsDirChange, type LiveMessage } from "../../../shared/live-contract";
 import type { FinderEntry } from "../data/entries";
-import type { NavItem } from "../data/places";
+import { navGroups, type NavGroup, type NavItem } from "../data/places";
 import { isMissingPathFailure, type FinderLocation, type FinderSource, pickInitialPath } from "../data/source";
 import { finderDragEntries } from "../state/attachments";
 import { validateName } from "../state/collision";
@@ -96,6 +96,7 @@ import {
 	canCloseTab,
 	closeTab,
 	createTabsState,
+	evacuateTabs,
 	exitVirtualTab,
 	focusAiSearchTab,
 	goBack,
@@ -318,9 +319,10 @@ export interface FinderController {
 	readonly indexStatus: Readonly<Record<string, IndexStatus>>;
 	/** Non-null when dupey is missing or a version-family scan failed. */
 	readonly versionFamilyError: VersionFamilyError | null;
-	readonly activeNavLabel: string | null;
-	/** Home and connected cloud drives; cloud entries drive which sidebar items render. */
-	readonly locations: readonly FinderLocation[];
+	/** Path of the sidebar row that owns the current folder (null when none does). */
+	readonly activeNavPath: string | null;
+	/** Sidebar groups built from the live OS locations. */
+	readonly navGroups: readonly NavGroup[];
 	readonly contextMenu: { readonly cursor: { readonly x: number; readonly y: number } } | null;
 	readonly contextMenuEntries: readonly FinderMenuEntry[];
 	/** The mode the toolbar toggle shows as chosen. */
@@ -370,6 +372,8 @@ export interface FinderController {
 	readonly searchRef: RefObject<HTMLInputElement | null>;
 	navigate(path: string): void;
 	navigateNav(item: NavItem): void;
+	/** Unmount the volume behind a sidebar row; tabs inside it move out first. */
+	ejectNav(item: NavItem): void;
 	selectTabId(id: number): void;
 	closeTabId(id: number): void;
 	newTab(): void;
@@ -811,16 +815,20 @@ export function useFinderController(
 
 	useEffect(() => {
 		let live = true;
-		source
-			.locations()
-			.then((next) => {
-				if (live) {
-					setLocations(next);
-				}
-			})
-			.catch(reportError);
+		const load = (): void => {
+			source
+				.locations()
+				.then((next) => {
+					if (live) setLocations(next);
+				})
+				.catch(reportError);
+		};
+		load();
+		// A volume mounting or a cloud account connecting re-reads the sidebar.
+		const off = source.onLocationsChanged(load);
 		return () => {
 			live = false;
+			off();
 		};
 		// Refresh recomputes availability, so a drive unplugged mid-session drops out.
 	}, [source, reportError, revision]);
@@ -1323,14 +1331,33 @@ export function useFinderController(
 
 	const navigateNav = useCallback(
 		(item: NavItem) => {
-			const match = locations.find((location) => location.name === item.label);
-			if (match === undefined || !match.available) {
-				showToast(`"${item.label}" 위치는 아직 연결되지 않았습니다.`);
+			if (!item.available) {
+				showToast(`"${item.label}" 위치를 열 수 없습니다.`);
 				return;
 			}
-			navigate(match.path);
+			navigate(item.path);
 		},
-		[locations, navigate, showToast],
+		[navigate, showToast],
+	);
+
+	const ejectNav = useCallback(
+		(item: NavItem) => {
+			// Leave the volume first: an open listing holds a watcher on it, which would block the unmount.
+			const fallback = locations.find((location) => location.section === "favorites" && location.icon === "home" && location.available);
+			setTabsState((state) => evacuateTabs(state, item.path, fallback?.path ?? RECENTS_PATH));
+			setLocations((current) => current.filter((location) => location.path !== item.path));
+			source
+				.ejectLocation(item.path)
+				.then(() => showToast(`"${item.label}" 을(를) 추출했습니다.`))
+				.catch((error: unknown) => {
+					reportError(new Error(`"${item.label}" 추출 실패: ${error instanceof Error ? error.message : String(error)}`));
+				})
+				.finally(() => {
+					// Success or refusal, the sidebar shows what is actually mounted now.
+					source.locations().then(setLocations).catch(reportError);
+				});
+		},
+		[locations, reportError, showToast, source],
 	);
 
 	const revealEntry = useCallback((entry: FinderEntry) => {
@@ -2087,8 +2114,7 @@ export function useFinderController(
 		[locations, path],
 	);
 	const activeNav = activeNavPath(path, navTargets);
-	const activeNavLabel =
-		navTargets.find((target) => target.path === activeNav)?.name ?? (path === "" ? null : basename(path));
+	const sidebarGroups = useMemo(() => navGroups(locations), [locations]);
 
 	return {
 		tabs: tabViews,
@@ -2114,8 +2140,8 @@ export function useFinderController(
 		renameDraft: rename?.draft ?? "",
 		indexStatus,
 		versionFamilyError,
-		activeNavLabel,
-		locations,
+		activeNavPath: activeNav,
+		navGroups: sidebarGroups,
 		contextMenu: contextMenu === null ? null : { cursor: contextMenu.cursor },
 		contextMenuEntries,
 		viewMode,
@@ -2144,6 +2170,7 @@ export function useFinderController(
 		searchRef,
 		navigate,
 		navigateNav,
+		ejectNav,
 		selectTabId: (id) => setTabsState((state) => selectTab(state, id)),
 		closeTabId: (id) => setTabsState((state) => closeTab(state, id)),
 		newTab: () => setTabsState((state) => openTab(state)),

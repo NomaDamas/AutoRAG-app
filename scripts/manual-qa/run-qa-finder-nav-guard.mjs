@@ -37,7 +37,8 @@ const check = (label, pass) => {
 	console.log(`${pass ? "PASS" : "FAIL"}  ${label}`);
 };
 try {
-	const page = await finderWindow(app, 30_000);
+	// The pre-warmed Quick Look window can register first; firstWindow() would race it.
+	const page = await finderWindow(app, 30000);
 	const handlerErrors = [];
 	page.on("console", (message) => {
 		if (/Error occurred in handler/i.test(message.text())) handlerErrors.push(message.text());

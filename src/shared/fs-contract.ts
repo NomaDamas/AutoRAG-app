@@ -20,6 +20,9 @@ export const FS_CHANNELS = {
 	exists: "fs:exists",
 	search: "fs:search",
 	locations: "fs:locations",
+	ejectLocation: "fs:ejectLocation",
+	/** Main → renderer: a volume mounted/unmounted or a cloud account connected/disconnected. */
+	locationsChanged: "fs:locationsChanged",
 	copy: "fs:copy",
 	move: "fs:move",
 	duplicate: "fs:duplicate",
@@ -141,15 +144,46 @@ export function webUrl(text: string): string | null {
 	return url.hostname === "" ? null : url.href;
 }
 
-/** A browsable top-level location shown in the sidebar. */
+/** Sidebar glyph for a location; the renderer maps each to a lucide icon. */
+export type FsLocationIcon =
+	| "recents"
+	| "home"
+	| "applications"
+	| "desktop"
+	| "documents"
+	| "downloads"
+	| "music"
+	| "movies"
+	| "pictures"
+	| "trash"
+	| "qa"
+	| "icloud"
+	| "google-drive"
+	| "onedrive"
+	| "dropbox"
+	| "box"
+	| "cloud"
+	| "disk"
+	| "network";
+
+/**
+ * A browsable top-level location shown in the sidebar. Cloud rows are the
+ * drives connected to the OS (one per account); `locations` rows are the boot
+ * disk plus every mounted volume / drive letter.
+ */
 export interface FsLocation {
-	/** Display name, e.g. "Desktop", "Documents". */
+	/** Display name, e.g. "Desktop", "Google Drive - me@example.com", "Data (D:)". */
 	readonly name: string;
 	readonly path: string;
 	/** Sidebar section for grouping. */
-	readonly section: "favorites" | "cloud";
+	readonly section: "favorites" | "cloud" | "locations";
+	readonly icon: FsLocationIcon;
 	/** True when the path exists and is readable right now. */
 	readonly available: boolean;
+	/** Walked by filename search and the version-family scan (content folders and cloud drives, never whole disks). */
+	readonly scanned: boolean;
+	/** A mounted volume the sidebar offers to unmount (never the boot disk / system drive). */
+	readonly ejectable: boolean;
 }
 
 /** In-app file clipboard (copy/cut + paste between folders). */
@@ -284,6 +318,10 @@ export interface FsCoreBridge {
 	exists(path: string): Promise<boolean>;
 	search(query: string): Promise<readonly FsSearchResult[]>;
 	locations(): Promise<readonly FsLocation[]>;
+	/** Unmount the ejectable location at `path` (diskutil on macOS, eject / net use on Windows); rejects with the OS reason. */
+	ejectLocation(path: string): Promise<void>;
+	/** Fires when the mounted volumes or connected cloud accounts change; returns the unsubscribe. */
+	onLocationsChanged?(listener: () => void): () => void;
 	/** Copy paths into destDir. Name collisions get a " copy" suffix (Finder-style). */
 	copy(paths: readonly string[], destDir: string): Promise<FsBatchResult>;
 	/** Move paths into destDir (cut + paste). */
