@@ -1,12 +1,10 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { resolveConfigReadOnly } from "@autorag/librarian";
-import { resolveAgentModelDetailed } from "@autorag/librarian/core";
 import { launchFinder, finderWindow } from "./launch-finder.mjs";
 
-// Settings opens as a tab. The LLM panel reads the shared AutoRAG config and
-// shows the resolved provider/model rows after the editable connection fields.
+// Settings opens as a tab. This QA covers the simplified model surface: provider/model
+// connection remains editable while runtime capabilities stay catalog- or model-driven.
 // Production build first: bun run build
 const EVIDENCE = new URL("../../.omo/evidence/ai-finder-app/models-status/", import.meta.url).pathname;
 mkdirSync(EVIDENCE, { recursive: true });
@@ -21,7 +19,7 @@ const writeConfig = (model) => writeFileSync(configPath, `${JSON.stringify({
 
 const MODEL = {
 	provider: "openrouter",
-	id: "deepseek/deepseek-v4.1-flash",
+	id: "qa/custom-model",
 	baseUrl: "https://openrouter.ai/api/v1",
 	api: "openai-completions",
 	apiKeyEnv: "OPENROUTER_API_KEY",
@@ -29,11 +27,6 @@ const MODEL = {
 writeConfig(MODEL);
 
 const env = { AUTORAG_CONFIG: configPath, AUTORAG_HOME: root, OPENROUTER_API_KEY: "qa-key", PATH: "/usr/bin:/bin" };
-const resolvedRole = async () => (await resolveAgentModelDetailed(
-	resolveConfigReadOnly({ flags: {}, env: { ...process.env, ...env }, cwd: root }),
-	{ env: { ...process.env, ...env } },
-)).role;
-
 const fails = [];
 const check = (name, ok, detail) => {
 	console.log(`${ok ? "PASS" : "FAIL"} ${name}${detail === undefined ? "" : ` — ${detail}`}`);
@@ -50,8 +43,7 @@ try {
 		await page.waitForSelector(".settings-panel");
 		await page.locator(".settings-nav-item", { hasText: "LLM Models" }).click();
 		await page.getByText("LLM Models Configuration", { exact: true }).waitFor();
-		await page.locator(".linear-row").filter({ has: page.locator(".linear-row-name", { hasText: /^Model ID$/u }) }).last().waitFor();
-		await page.waitForFunction(() => document.querySelectorAll(".linear-value").length > 0);
+		await page.locator('input[aria-label="Custom model id"]').waitFor();
 	};
 	const closeSettings = async () => {
 		await page.keyboard.press("Meta+w");
@@ -59,29 +51,21 @@ try {
 	};
 
 	await openModels();
-	const resolvedProvider = await page.locator(".linear-row").filter({ has: page.locator(".linear-row-name", { hasText: /^Provider$/u }) }).last().locator(".linear-value").textContent();
-	const resolvedModel = await page.locator(".linear-row").filter({ has: page.locator(".linear-row-name", { hasText: /^Model ID$/u }) }).last().locator(".linear-value").textContent();
-	check("LLM panel names the resolved provider", (resolvedProvider ?? "").trim() === MODEL.provider, resolvedProvider ?? "");
-	check("LLM panel carries the resolved model id", (resolvedModel ?? "").trim() === MODEL.id, resolvedModel ?? "");
+	const modelId = await page.locator('input[aria-label="Custom model id"]').inputValue();
+	check("LLM panel loads the configured custom model", modelId === MODEL.id, modelId);
+	const llmText = await page.locator(".settings-content").innerText();
+	for (const label of ["Reasoning model", "Accepts text input", "Accepts image input", "Context window", "Max output tokens", "Resolved for the agent"]) {
+		check(`LLM panel hides ${label}`, !llmText.includes(label));
+	}
 	await page.screenshot({ path: join(EVIDENCE, "01-models.png") });
 
-	// The card is live: editing the shared config and re-entering the pane shows
-	// the new identity.
-	writeConfig({ ...MODEL, id: "anthropic/claude-sonnet-4.5" });
-	const roleAfterEdit = await resolvedRole();
-	check("a fresh AutoRAG agent resolves the edited model", roleAfterEdit.modelId === "anthropic/claude-sonnet-4.5", roleAfterEdit.modelId);
+	writeConfig({ ...MODEL, id: "qa/edited-model" });
 	await closeSettings();
 	check("⌘W closes the Settings tab", (await settingsOpen()) === 0);
 	await openModels();
-	const editedModel = await page.locator(".linear-row").filter({ has: page.locator(".linear-row-name", { hasText: /^Model ID$/u }) }).last().locator(".linear-value").textContent();
-	check("reopening LLM Models shows the edited model", (editedModel ?? "").trim() === "anthropic/claude-sonnet-4.5", editedModel ?? "");
+	const editedModel = await page.locator('input[aria-label="Custom model id"]').inputValue();
+	check("reopening LLM Models shows the edited model", editedModel === "qa/edited-model", editedModel);
 	await page.screenshot({ path: join(EVIDENCE, "02-models-edited.png") });
-
-	writeConfig(MODEL);
-	await closeSettings();
-	await openModels();
-	check("switching back resolves the original model", (await resolvedRole()).modelId === MODEL.id);
-	check("LLM panel has no stale model card", (await page.locator(".settings-model-card").count()) === 0);
 } finally {
 	await app.close();
 	rmSync(root, { recursive: true, force: true });
@@ -91,5 +75,5 @@ if (fails.length > 0) {
 	console.log("FAIL:", fails);
 	process.exitCode = 1;
 } else {
-	console.log(`PASS: Settings > Models renders the v7 card and opens/closes as a tab — evidence in ${EVIDENCE}`);
+	console.log(`PASS: simplified Settings > Models behavior verified — evidence in ${EVIDENCE}`);
 }

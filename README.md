@@ -67,33 +67,31 @@ second datasource or model configuration. The categories are:
 
 - **General** — document languages and app preferences.
 - **LLM Models** — provider/model catalog selection, provider endpoint, allowed
-  API protocol, model limits/modalities, and encrypted provider credentials.
-- **Embedding Models** — local MinSync profiles or loopback endpoints, vector
-  dimensions, prefixes, request limits, and reindexing.
-- **Reranker Models** — the v2.7 OpenRouter reranker, wire model, limits, and
+  API protocol, and encrypted provider credentials. Runtime capabilities and token
+  limits come from the provider catalog or model runtime.
+- **Embedding Models** — local MinSync profiles or loopback endpoints, automatic
+  model dimensions, request controls, and reindexing warnings.
+- **Reranker Models** — the v2.7 OpenRouter reranker, wire model, timeout, and
   encrypted credentials. Other reranker providers are not offered because the
-  upstream resolver rejects them.
+  upstream resolver rejects them; Top N remains at the AutoRAG default.
 - **Data Sources** — multiple named connections per datasource template,
   instance ids, channel filters, connector-specific fields, tags, access
   policy, and encrypted GitHub credentials. Unknown config fields are retained.
 - **Deep Indexing / Light Indexing / Other Apps** — search paths, MinSync,
-  Jikji, retrieval limits, FSearch/Everything, web search, parser/OCR, dupey,
-  datasource access, P2P, and exclusions.
+  Jikji, platform-detected FSearch/Everything, web search, parser/OCR, dupey,
+  datasource access, and exclusions. Installer paths, retrieval limits, P2P,
+  and code-folder quick exclusions stay on AutoRAG defaults and are not exposed.
 
 The parser and OCR language controls are multi-select fields backed by the
 upstream-supported tags (`ko`, `en`, `ja`, `zh-hans`, `zh-hant`, `fr`, `de`,
 `es`, `ru`, `it`, `pt`, `vi`, `th`, `ar`, `hi`). OCR stores the corresponding
-Tesseract traineddata codes while displaying the AutoRAG language tags. The
-Deep, Light, and Other Apps panels use typed controls for every serializable
-field instead of raw JSON textareas; leaf saves preserve unrelated config keys
-and reset removes the edited leaf so AutoRAG defaults apply again.
-
-`workspacePath` and `memoryPath` remain AutoRAG-owned defaults. Automatic code
-folder exclusions default to `.git`, `node_modules`, virtual environments,
-build outputs, coverage, and `__pycache__`; they can be disabled or edited in
-**Light Indexing**. Parsed/MinSync/Jikji receive these exclusions. The native
-FSearch/Everything clients expose no arbitrary-folder exclusion option, so a
-refresh reports that limitation instead of pretending it was applied.
+Tesseract traineddata codes while displaying the AutoRAG language tags.
+The Deep, Light, and Other Apps panels use typed controls for the supported
+user-adjustable fields instead of raw JSON textareas; leaf saves preserve
+unrelated config keys and reset removes the edited leaf so AutoRAG defaults apply
+again. Installer paths, retrieval limits, P2P, and code-folder quick exclusions
+remain AutoRAG-owned defaults and are not exposed in Settings. The Light Indexing
+panel renders only the backend detected for the current operating system.
 
 API keys are never written into `config.json`. The app uses Electron's encrypted
 credential store and injects the selected environment variable into the live

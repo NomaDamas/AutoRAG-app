@@ -18,7 +18,6 @@ import { useCallback, useEffect, useMemo, useState, type ReactElement, type Reac
 import type {
 	AutoRagConfigSnapshot,
 	ConfigRefreshResult,
-	ConfiguredModelSnapshot,
 	JsonObject,
 	JsonValue,
 	ModelCatalogEntry,
@@ -309,19 +308,10 @@ interface LlmDraft {
 	readonly api: string;
 	readonly baseUrl: string;
 	readonly apiKeyEnv: string;
-	readonly reasoning: boolean;
-	readonly inputText: boolean;
-	readonly inputImage: boolean;
-	readonly contextWindow: string;
-	readonly maxTokens: string;
 }
 
 function llmDraftFrom(snapshot: AutoRagConfigSnapshot): LlmDraft {
 	const model = asRecord(getAt(snapshot.config, ["model"]));
-	const rawInput = model?.input;
-	const inputs = Array.isArray(rawInput) ? rawInput.filter((value): value is string => typeof value === "string") : [];
-	const contextWindow = model ? numberOf(model.contextWindow) : null;
-	const maxTokens = model ? numberOf(model.maxTokens) : null;
 	return {
 		provider: model ? stringOf(model.provider) : "",
 		id: model ? stringOf(model.id) : "",
@@ -329,11 +319,6 @@ function llmDraftFrom(snapshot: AutoRagConfigSnapshot): LlmDraft {
 		api: model ? stringOf(model.api) : "",
 		baseUrl: model ? stringOf(model.baseUrl) : "",
 		apiKeyEnv: model ? stringOf(model.apiKeyEnv) : "",
-		reasoning: model ? boolOf(model.reasoning) === true : false,
-		inputText: inputs.length === 0 ? true : inputs.includes("text"),
-		inputImage: inputs.includes("image"),
-		contextWindow: contextWindow === null ? "" : String(contextWindow),
-		maxTokens: maxTokens === null ? "" : String(maxTokens),
 	};
 }
 
@@ -341,7 +326,6 @@ function LlmPanel({ snapshot, onSaved }: { readonly snapshot: AutoRagConfigSnaps
 	const signature = useMemo(() => JSON.stringify(snapshot.config), [snapshot.config]);
 	const [draft, setDraft] = useState<LlmDraft>(() => llmDraftFrom(snapshot));
 	const [catalog, setCatalog] = useState<ModelCatalogSnapshot | null>(null);
-	const [resolved, setResolved] = useState<ConfiguredModelSnapshot | null>(null);
 	const [credentials, setCredentials] = useState<readonly ProviderCredentialStatus[]>([]);
 	const [saving, setSaving] = useState(false);
 	const [error, setError] = useState<string | null>(null);
@@ -358,21 +342,9 @@ function LlmPanel({ snapshot, onSaved }: { readonly snapshot: AutoRagConfigSnaps
 		}
 	}, []);
 
-	const loadResolved = useCallback(async (): Promise<void> => {
-		try {
-			setResolved(await autorag.settings.modelsResolve());
-		} catch (cause) {
-			setResolved({ configPath: snapshot.configPath, configExists: snapshot.configExists, error: errorMessage(cause), model: null });
-		}
-	}, [snapshot.configExists, snapshot.configPath]);
-
 	useEffect(() => {
 		void loadCatalog();
 	}, [loadCatalog]);
-
-	useEffect(() => {
-		void loadResolved();
-	}, [loadResolved]);
 
 	const providers = catalog?.providers ?? [];
 	const providerEnvNames = useMemo(
@@ -418,7 +390,6 @@ function LlmPanel({ snapshot, onSaved }: { readonly snapshot: AutoRagConfigSnaps
 				: defaultEnvName(draft.provider);
 
 	const catalogError = catalog?.error ?? null;
-	const resolvedError = resolved?.error ?? null;
 
 	const selectedKeyRow =
 		selectedProvider === null ? null : (credentialByEnv[selectedProvider.apiKeyEnv ?? defaultEnvName(selectedProvider.id)] ?? null);
@@ -477,10 +448,6 @@ function LlmPanel({ snapshot, onSaved }: { readonly snapshot: AutoRagConfigSnaps
 		if (draft.apiKeyEnv.trim().length > 0 && !ENV_NAME_PATTERN.test(draft.apiKeyEnv.trim())) {
 			problems.push("API key env var must match /^[A-Za-z_][A-Za-z0-9_]*$/.");
 		}
-		const contextWindow = parsePositiveInt(draft.contextWindow);
-		if (draft.contextWindow.trim().length > 0 && contextWindow === null) problems.push("Context window must be a positive integer.");
-		const maxTokens = parsePositiveInt(draft.maxTokens);
-		if (draft.maxTokens.trim().length > 0 && maxTokens === null) problems.push("Max tokens must be a positive integer.");
 		if (problems.length > 0) {
 			setError(problems.join(" "));
 			return;
@@ -490,22 +457,13 @@ function LlmPanel({ snapshot, onSaved }: { readonly snapshot: AutoRagConfigSnaps
 		if (draft.api.trim().length > 0) model.api = draft.api.trim();
 		if (draft.baseUrl.trim().length > 0) model.baseUrl = draft.baseUrl.trim();
 		if (draft.apiKeyEnv.trim().length > 0) model.apiKeyEnv = draft.apiKeyEnv.trim();
-		if (draft.reasoning) model.reasoning = true;
-		const inputs: string[] = [];
-		if (draft.inputText) inputs.push("text");
-		if (draft.inputImage) inputs.push("image");
-		if (inputs.length > 0) model.input = inputs;
-		if (contextWindow !== null) model.contextWindow = contextWindow;
-		if (maxTokens !== null) model.maxTokens = maxTokens;
-		if (await commit(["model"], model)) void loadResolved();
+		await commit(["model"], model);
 	}
-
 	async function reset(): Promise<void> {
 		setSaving(true);
 		setError(null);
 		try {
 			onSaved(await autorag.settings.configRemove(["model"]));
-			void loadResolved();
 		} catch (cause) {
 			setError(errorMessage(cause));
 		} finally {
@@ -518,8 +476,7 @@ function LlmPanel({ snapshot, onSaved }: { readonly snapshot: AutoRagConfigSnaps
 			<div className="linear-header">
 				<h2 className="linear-title">LLM Models Configuration</h2>
 				<p className="linear-desc">
-					The provider and model the AutoRAG agent resolves. Pick a Pi catalog provider/model, or configure a custom provider id and
-					endpoint. Writes go to the shared AutoRAG config.
+					Choose the provider and model used by AutoRAG. Model capabilities and token limits come from the provider catalog or the model runtime.
 				</p>
 			</div>
 
@@ -648,85 +605,17 @@ function LlmPanel({ snapshot, onSaved }: { readonly snapshot: AutoRagConfigSnaps
 			<Row name="Display name" hint="Human-readable label; defaults to the model id when blank.">
 				<TextField ariaLabel="Display name" placeholder="(defaults to id)" value={draft.name} onChange={(value) => setDraft((current) => ({ ...current, name: value }))} />
 			</Row>
-			<Row name="Reasoning model" hint="Advertise reasoning/thinking support for this model.">
-				<Switch checked={draft.reasoning} onChange={() => setDraft((current) => ({ ...current, reasoning: !current.reasoning }))} ariaLabel="Reasoning model" />
-			</Row>
-			<Row name="Accepts text input" hint="Text modality is available to the agent.">
-				<Switch checked={draft.inputText} onChange={() => setDraft((current) => ({ ...current, inputText: !current.inputText }))} ariaLabel="Accepts text input" />
-			</Row>
-			<Row name="Accepts image input" hint="Image modality is available to the agent.">
-				<Switch checked={draft.inputImage} onChange={() => setDraft((current) => ({ ...current, inputImage: !current.inputImage }))} ariaLabel="Accepts image input" />
-			</Row>
-			<Row name="Context window" hint="Tokens the model can attend to; blank uses the catalog/default value.">
-				<TextField
-					ariaLabel="Context window"
-					type="number"
-					placeholder="e.g. 200000"
-					value={draft.contextWindow}
-					onChange={(value) => setDraft((current) => ({ ...current, contextWindow: value }))}
-				/>
-			</Row>
-			<Row name="Max output tokens" hint="Cap on generated tokens; blank uses the catalog/default value.">
-				<TextField
-					ariaLabel="Max output tokens"
-					type="number"
-					placeholder="e.g. 8192"
-					value={draft.maxTokens}
-					onChange={(value) => setDraft((current) => ({ ...current, maxTokens: value }))}
-				/>
-			</Row>
 
 			<div className="linear-section-title">Credentials</div>
 			<CredentialField
 				envName={effectiveEnv}
 				hint="The secret is stored encrypted and injected as this env var; the config keeps only the env var name. Reused wherever this env var is referenced."
 				onChanged={() => {
-					void loadResolved();
 					void loadCatalog();
 					void loadCredentials();
 				}}
 			/>
 
-			<div className="linear-section-title">Resolved for the agent</div>
-			{resolvedError !== null ? (
-				<div className="settings-error" role="alert">
-					{resolvedError}
-				</div>
-			) : null}
-			{resolved?.model !== null && resolved?.model !== undefined ? (
-				<>
-					<Row name="Status" hint="Live resolution from the shared AutoRAG config.">
-						<span className={`provider-status ${resolved.model.auth.present ? "is-connected" : "is-disconnected"}`}>
-							{resolved.model.auth.present ? "Credentials present" : "No credentials"}
-						</span>
-					</Row>
-					<Row name="Provider" hint="Resolved provider namespace.">
-						<span className="linear-value">{resolved.model.provider}</span>
-					</Row>
-					<Row name="Model ID" hint="The id the agent sends to the provider.">
-						<span className="linear-value">{resolved.model.modelId}</span>
-					</Row>
-					<Row name="Display name" hint="Human-readable label for this model.">
-						<span className="linear-value">{resolved.model.displayName}</span>
-					</Row>
-					<Row name="API" hint="Wire protocol the librarian uses.">
-						<span className="linear-value">{resolved.model.api}</span>
-					</Row>
-					<Row name="Base URL" hint="Endpoint the librarian resolves.">
-						<span className="linear-value">{resolved.model.baseUrl ?? "—"}</span>
-					</Row>
-					<Row name="Resolution source" hint="Where the librarian read this identity from.">
-						<span className="linear-value">{resolved.model.resolutionSource}</span>
-					</Row>
-					<Row name="API key" hint="Credential source the agent authenticates with.">
-						<span className="linear-value">
-							{[resolved.model.auth.source, resolved.model.auth.envName ?? ""].filter((part) => part.length > 0).join(" · ")}
-						</span>
-					</Row>
-				</>
-			) : (
-				<p className="linear-section-desc">No model is resolved from the shared AutoRAG config; the catalog default applies.</p>
-			)}
 
 			<div className="settings-source-desc__actions" style={{ marginTop: 16 }}>
 				<button type="button" className="linear-btn" disabled={saving} onClick={() => void reset()}>
@@ -749,24 +638,18 @@ const EMBED_PROFILES: readonly {
 	readonly provider: string;
 	readonly label: string;
 	readonly dimension: number;
-	readonly queryPrefix: string;
-	readonly passagePrefix: string;
 }[] = [
 	{
 		id: "qwen3-embedding-0.6b",
 		provider: "Qwen",
 		label: "Qwen3-Embedding-0.6B (local runtime)",
 		dimension: 1024,
-		queryPrefix: "",
-		passagePrefix: "",
 	},
 	{
 		id: "embeddinggemma-300m",
 		provider: "Google",
 		label: "EmbeddingGemma-300M (local runtime)",
 		dimension: 768,
-		queryPrefix: "task: search result | query: ",
-		passagePrefix: "title: none | text: ",
 	},
 ];
 
@@ -776,12 +659,8 @@ interface EmbedDraft {
 	readonly id: string;
 	readonly baseUrl: string;
 	readonly apiKeyEnv: string;
-	readonly dimension: string;
-	readonly queryPrefix: string;
-	readonly passagePrefix: string;
 	readonly timeoutMs: string;
 	readonly batchSize: string;
-	readonly maxRetries: string;
 	readonly maxConcurrent: string;
 }
 
@@ -789,13 +668,10 @@ function embedDraftFrom(snapshot: AutoRagConfigSnapshot): EmbedDraft {
 	const embedder = asRecord(getAt(snapshot.config, ["minSync", "embedder"]));
 	const profileRaw = embedder ? stringOf(embedder.profile) : "";
 	const profile = profileRaw === "embeddinggemma-300m" ? "embeddinggemma-300m" : "qwen3-embedding-0.6b";
-	const preset = EMBED_PROFILES.find((item) => item.id === profile) ?? EMBED_PROFILES[0]!;
 	const baseUrl = embedder ? stringOf(embedder.baseUrl) : "";
 	const mode: EmbedMode = baseUrl.trim().length > 0 ? "endpoint" : "profile";
-	const dimension = embedder ? numberOf(embedder.dimension) : null;
 	const timeoutMs = embedder ? numberOf(embedder.timeoutMs) : null;
 	const batchSize = embedder ? numberOf(embedder.batchSize) : null;
-	const maxRetries = embedder ? numberOf(embedder.maxRetries) : null;
 	const maxConcurrent = embedder ? numberOf(embedder.maxConcurrent) : null;
 	return {
 		mode,
@@ -803,12 +679,8 @@ function embedDraftFrom(snapshot: AutoRagConfigSnapshot): EmbedDraft {
 		id: embedder ? stringOf(embedder.id) : "",
 		baseUrl,
 		apiKeyEnv: embedder ? stringOf(embedder.apiKeyEnv) : "",
-		dimension: dimension === null ? String(preset.dimension) : String(dimension),
-		queryPrefix: embedder && stringOf(embedder.queryPrefix).length > 0 ? stringOf(embedder.queryPrefix) : "",
-		passagePrefix: embedder && stringOf(embedder.passagePrefix).length > 0 ? stringOf(embedder.passagePrefix) : "",
 		timeoutMs: timeoutMs === null ? "" : String(timeoutMs),
 		batchSize: batchSize === null ? "" : String(batchSize),
-		maxRetries: maxRetries === null ? "" : String(maxRetries),
 		maxConcurrent: maxConcurrent === null ? "" : String(maxConcurrent),
 	};
 }
@@ -831,8 +703,7 @@ function EmbeddingPanel({ snapshot, onSaved }: { readonly snapshot: AutoRagConfi
 		draft.mode !== saved.mode ||
 		draft.profile !== saved.profile ||
 		draft.id.trim() !== saved.id.trim() ||
-		draft.baseUrl.trim() !== saved.baseUrl.trim() ||
-		draft.dimension !== saved.dimension;
+		draft.baseUrl.trim() !== saved.baseUrl.trim();
 
 	async function commit(path: readonly string[], value: JsonValue): Promise<boolean> {
 		setSaving(true);
@@ -861,13 +732,10 @@ function EmbeddingPanel({ snapshot, onSaved }: { readonly snapshot: AutoRagConfi
 			id: "",
 			baseUrl: "",
 			apiKeyEnv: "",
-			dimension: String(profile.dimension),
-			queryPrefix: profile.queryPrefix,
-			passagePrefix: profile.passagePrefix,
 		}));
 	}
 
-	async function save(): Promise<void> {
+async function save(): Promise<void> {
 		const problems: string[] = [];
 		const id = draft.id.trim();
 		const baseUrl = draft.baseUrl.trim();
@@ -878,12 +746,9 @@ function EmbeddingPanel({ snapshot, onSaved }: { readonly snapshot: AutoRagConfi
 		if (draft.apiKeyEnv.trim().length > 0 && !ENV_NAME_PATTERN.test(draft.apiKeyEnv.trim())) {
 			problems.push("API key env var must match /^[A-Za-z_][A-Za-z0-9_]*$/.");
 		}
-		const dimension = parsePositiveInt(draft.dimension);
-		if (draft.dimension.trim().length > 0 && dimension === null) problems.push("Dimension must be a positive integer.");
-		const numeric: readonly { readonly key: "timeoutMs" | "batchSize" | "maxRetries" | "maxConcurrent"; readonly label: string }[] = [
+		const numeric: readonly { readonly key: "timeoutMs" | "batchSize" | "maxConcurrent"; readonly label: string }[] = [
 			{ key: "timeoutMs", label: "Timeout" },
 			{ key: "batchSize", label: "Batch size" },
-			{ key: "maxRetries", label: "Max retries" },
 			{ key: "maxConcurrent", label: "Max concurrency" },
 		];
 		const parsed: Record<string, number | null> = {};
@@ -897,15 +762,15 @@ function EmbeddingPanel({ snapshot, onSaved }: { readonly snapshot: AutoRagConfi
 			return;
 		}
 		const embedder: Record<string, JsonValue> = {};
-		if (draft.mode === "profile") embedder.profile = draft.profile;
-		else {
+		if (draft.mode === "profile") {
+			const preset = EMBED_PROFILES.find((item) => item.id === draft.profile) ?? EMBED_PROFILES[0]!;
+			embedder.profile = draft.profile;
+			embedder.dimension = preset.dimension;
+		} else {
 			embedder.id = id;
 			embedder.baseUrl = baseUrl;
 		}
 		if (draft.apiKeyEnv.trim().length > 0) embedder.apiKeyEnv = draft.apiKeyEnv.trim();
-		if (dimension !== null) embedder.dimension = dimension;
-		if (draft.queryPrefix.length > 0) embedder.queryPrefix = draft.queryPrefix;
-		if (draft.passagePrefix.length > 0) embedder.passagePrefix = draft.passagePrefix;
 		for (const field of numeric) {
 			const value = parsed[field.key];
 			if (value !== null && value !== undefined) embedder[field.key] = value;
@@ -980,7 +845,7 @@ function EmbeddingPanel({ snapshot, onSaved }: { readonly snapshot: AutoRagConfi
 
 			{identityChanged ? (
 				<div className="settings-error" role="alert" style={{ borderColor: "var(--warn-border, var(--border-strong))", background: "var(--warn-bg-soft, var(--bg-input))", color: "var(--warn-text, var(--text-primary))" }}>
-					Changing the embedding identity (provider/profile, endpoint, id, or dimension) forces a full MinSync reindex before
+					Changing the embedding identity (provider/profile, endpoint, or id) selects its automatic dimension and forces a full MinSync reindex before
 					existing vectors can be reused.
 				</div>
 			) : null}
@@ -988,7 +853,7 @@ function EmbeddingPanel({ snapshot, onSaved }: { readonly snapshot: AutoRagConfi
 			{draft.mode === "profile" ? (
 				<>
 					<div className="linear-section-title">Profile</div>
-					<Row name="Model profile" hint="Embedding identity includes provider, model revision, dimension, prefixes, and runtime build.">
+					<Row name="Model profile" hint="Embedding identity includes provider, model revision, automatic dimension, prefixes, and runtime build.">
 						<span className="linear-value">
 							{selectedPreset.provider} · {selectedPreset.id}
 						</span>
@@ -1015,23 +880,11 @@ function EmbeddingPanel({ snapshot, onSaved }: { readonly snapshot: AutoRagConfi
 			)}
 
 			<div className="linear-section-title">Advanced</div>
-			<Row name="Dimension" hint="Vector dimension; must match the embedder output or reuse is refused.">
-				<TextField ariaLabel="Embedding dimension" type="number" placeholder="1024" value={draft.dimension} onChange={(value) => setDraft((current) => ({ ...current, dimension: value }))} />
-			</Row>
-			<Row name="Query prefix" hint="Prepended to query text; blank uses the profile default.">
-				<TextField ariaLabel="Query prefix" placeholder="(profile default)" value={draft.queryPrefix} onChange={(value) => setDraft((current) => ({ ...current, queryPrefix: value }))} />
-			</Row>
-			<Row name="Passage prefix" hint="Prepended to indexed passages; blank uses the profile default.">
-				<TextField ariaLabel="Passage prefix" placeholder="(profile default)" value={draft.passagePrefix} onChange={(value) => setDraft((current) => ({ ...current, passagePrefix: value }))} />
-			</Row>
 			<Row name="Timeout (ms)" hint="Per-request timeout in milliseconds.">
 				<TextField ariaLabel="Embedding timeout" type="number" placeholder="(default)" value={draft.timeoutMs} onChange={(value) => setDraft((current) => ({ ...current, timeoutMs: value }))} />
 			</Row>
 			<Row name="Batch size" hint="Texts sent per embedding request.">
 				<TextField ariaLabel="Embedding batch size" type="number" placeholder="(default)" value={draft.batchSize} onChange={(value) => setDraft((current) => ({ ...current, batchSize: value }))} />
-			</Row>
-			<Row name="Max retries" hint="Retries per embedding request.">
-				<TextField ariaLabel="Embedding max retries" type="number" placeholder="(default)" value={draft.maxRetries} onChange={(value) => setDraft((current) => ({ ...current, maxRetries: value }))} />
 			</Row>
 			<Row name="Max concurrency" hint="Concurrent embedding requests.">
 				<TextField ariaLabel="Embedding max concurrency" type="number" placeholder="(default)" value={draft.maxConcurrent} onChange={(value) => setDraft((current) => ({ ...current, maxConcurrent: value }))} />
@@ -1105,7 +958,6 @@ interface RerankDraft {
 	readonly model: string;
 	readonly apiKeyEnv: string;
 	readonly baseUrl: string;
-	readonly topN: string;
 	readonly timeoutMs: string;
 }
 
@@ -1113,19 +965,18 @@ function rerankDraftFrom(snapshot: AutoRagConfigSnapshot): { readonly draft: Rer
 	const raw = getAt(snapshot.config, ["rerank"]);
 	if (raw === false || raw === undefined) {
 		return {
-			draft: { enabled: false, model: DEFAULT_RERANK_MODEL, apiKeyEnv: DEFAULT_RERANK_ENV, baseUrl: "", topN: "", timeoutMs: "" },
+			draft: { enabled: false, model: DEFAULT_RERANK_MODEL, apiKeyEnv: DEFAULT_RERANK_ENV, baseUrl: "", timeoutMs: "" },
 			unsupportedProvider: null,
 		};
 	}
 	const record = isJsonObject(raw) ? (raw as JsonObject) : null;
 	if (record === null) {
 		return {
-			draft: { enabled: false, model: DEFAULT_RERANK_MODEL, apiKeyEnv: DEFAULT_RERANK_ENV, baseUrl: "", topN: "", timeoutMs: "" },
+			draft: { enabled: false, model: DEFAULT_RERANK_MODEL, apiKeyEnv: DEFAULT_RERANK_ENV, baseUrl: "", timeoutMs: "" },
 			unsupportedProvider: null,
 		};
 	}
 	const provider = stringOf(record.provider);
-	const topN = numberOf(record.topN);
 	const timeoutMs = numberOf(record.timeoutMs);
 	return {
 		draft: {
@@ -1133,7 +984,6 @@ function rerankDraftFrom(snapshot: AutoRagConfigSnapshot): { readonly draft: Rer
 			model: stringOf(record.model).length > 0 ? stringOf(record.model) : DEFAULT_RERANK_MODEL,
 			apiKeyEnv: stringOf(record.apiKeyEnv).length > 0 ? stringOf(record.apiKeyEnv) : DEFAULT_RERANK_ENV,
 			baseUrl: stringOf(record.baseUrl),
-			topN: topN === null ? "" : String(topN),
 			timeoutMs: timeoutMs === null ? "" : String(timeoutMs),
 		},
 		unsupportedProvider: provider.length > 0 && provider !== RERANK_PROVIDER ? provider : null,
@@ -1176,8 +1026,6 @@ function RerankerPanel({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 		if (draft.apiKeyEnv.trim().length > 0 && !ENV_NAME_PATTERN.test(draft.apiKeyEnv.trim())) {
 			problems.push("API key env var must match /^[A-Za-z_][A-Za-z0-9_]*$/.");
 		}
-		const topN = parsePositiveInt(draft.topN);
-		if (draft.topN.trim().length > 0 && topN === null) problems.push("Top N must be a positive integer.");
 		const timeoutMs = parsePositiveInt(draft.timeoutMs);
 		if (draft.timeoutMs.trim().length > 0 && timeoutMs === null) problems.push("Timeout must be a positive integer.");
 		if (problems.length > 0) {
@@ -1187,7 +1035,6 @@ function RerankerPanel({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 		const rerank: Record<string, JsonValue> = { provider: RERANK_PROVIDER, model };
 		if (draft.apiKeyEnv.trim().length > 0) rerank.apiKeyEnv = draft.apiKeyEnv.trim();
 		if (draft.baseUrl.trim().length > 0) rerank.baseUrl = draft.baseUrl.trim();
-		if (topN !== null) rerank.topN = topN;
 		if (timeoutMs !== null) rerank.timeoutMs = timeoutMs;
 		await commit(["rerank"], rerank);
 	}
@@ -1271,9 +1118,6 @@ function RerankerPanel({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 							value={draft.apiKeyEnv}
 							onChange={(value) => setDraft((current) => ({ ...current, apiKeyEnv: value }))}
 						/>
-					</Row>
-					<Row name="Top N" hint="Return only the top N merged results; blank reorders all.">
-						<TextField ariaLabel="Rerank top N" type="number" placeholder="(all results)" value={draft.topN} onChange={(value) => setDraft((current) => ({ ...current, topN: value }))} />
 					</Row>
 					<Row name="Timeout (ms)" hint="Per-request timeout in milliseconds; blank uses the SDK default.">
 						<TextField ariaLabel="Rerank timeout" type="number" placeholder="(default)" value={draft.timeoutMs} onChange={(value) => setDraft((current) => ({ ...current, timeoutMs: value }))} />

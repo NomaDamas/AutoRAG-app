@@ -15,7 +15,7 @@
  *   .upstream/autorag/src/p2p/policy.ts
  */
 
-import { useCallback, useEffect, useMemo, useState, type ReactElement, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactElement, type ReactNode } from "react";
 import type {
 	AutoRagConfigSnapshot,
 	AutoRagConfigUpdate,
@@ -30,11 +30,6 @@ import { settings } from "../../settings-runtime";
 
 type ConfigPath = readonly string[];
 
-/** Redaction sentinel the main process substitutes for persisted secrets. */
-const REDACTED_SECRET = "__AUTORAG_SECRET_REDACTED__";
-/** Mirrors the main-process secret-key heuristic (env/name suffixes excluded). */
-const SECRET_KEY = /(?:api[-_]?key|token|password|secret|cookie|authorization|private[-_]?key)/iu;
-const SECRET_NAME_SUFFIX = /(?:env|name)$/iu;
 
 /* ------------------------------------------------------------- utilities -- */
 
@@ -443,242 +438,7 @@ function BlockSwitchRow({
 
 /* ------------------------------------------------------------- map rows -- */
 
-interface KeyValueRow {
-	key: string;
-	value: string;
-}
 
-function envRows(value: JsonValue | undefined): KeyValueRow[] {
-	if (!isJsonObject(value)) return [];
-	return Object.entries(value).map(([key, item]) => ({
-		key,
-		value: typeof item === "string" ? item : item === null ? "" : isJsonObject(item) || Array.isArray(item) ? JSON.stringify(item) : String(item),
-	}));
-}
-
-/** Plaintext-secret guard mirroring the main process, for *edited* env values. */
-function envSecretProblem(env: Record<string, string>): string | null {
-	for (const [key, value] of Object.entries(env)) {
-		if (!SECRET_KEY.test(key) || SECRET_NAME_SUFFIX.test(key)) continue;
-		if (value.length > 0 && value !== REDACTED_SECRET) {
-			return `'${key}' 값이 평문 비밀처럼 보입니다. OS 환경 변수로 옮기고 설정에는 남기지 마세요.`;
-		}
-	}
-	return null;
-}
-
-function EnvMapRow({
-	snapshot,
-	path,
-	name,
-	hint,
-	keyPlaceholder,
-	valuePlaceholder,
-	onSaved,
-	disabled = false,
-}: {
-	readonly snapshot: AutoRagConfigSnapshot;
-	readonly path: ConfigPath;
-	readonly name: string;
-	readonly hint: string;
-	readonly keyPlaceholder?: string;
-	readonly valuePlaceholder?: string;
-	readonly onSaved: (next: AutoRagConfigSnapshot) => void;
-	readonly disabled?: boolean;
-}): ReactElement {
-	const stored = readAt(snapshot.config, path);
-	const signature = JSON.stringify(isJsonObject(stored) ? stored : {});
-	const initial = useMemo(() => envRows(stored), [signature]);
-	const [rows, setRows] = useState<KeyValueRow[]>(initial);
-	useEffect(() => setRows(initial), [signature]);
-	const { saving, error, setError, commit } = useFieldCommit(onSaved);
-	function update(index: number, patch: Partial<KeyValueRow>): void {
-		setRows((current) => current.map((row, item) => (item === index ? { ...row, ...patch } : row)));
-	}
-	function save(): void {
-		const out: Record<string, string> = {};
-		for (const row of rows) {
-			const key = row.key.trim();
-			if (key.length === 0) continue;
-			if (Object.hasOwn(out, key)) {
-				setError(`중복된 키: ${key}`);
-				return;
-			}
-			out[key] = row.value;
-		}
-		const problem = envSecretProblem(out);
-		if (problem !== null) {
-			setError(problem);
-			return;
-		}
-		void commit([Object.keys(out).length === 0 ? { path: [...path], remove: true } : { path: [...path], value: out }]);
-	}
-	return (
-		<Row name={name} hint={hint}>
-			<div className="settings-field-stack settings-field-stack--wide">
-				<div className="settings-config__map">
-					{rows.map((row, index) => (
-						<div className="settings-config__map-row" key={index}>
-							<input
-								className="settings-source-desc__input"
-								aria-label={`${name} 키 ${index + 1}`}
-								value={row.key}
-								placeholder={keyPlaceholder}
-								disabled={disabled || saving}
-								onChange={(event) => update(index, { key: event.target.value })}
-							/>
-							<input
-								className="settings-source-desc__input"
-								aria-label={`${name} 값 ${index + 1}`}
-								value={row.value}
-								placeholder={valuePlaceholder}
-								disabled={disabled || saving}
-								onChange={(event) => update(index, { value: event.target.value })}
-							/>
-							<button
-								type="button"
-								className="linear-btn is-danger"
-								disabled={disabled || saving}
-								aria-label={`${name} 항목 삭제`}
-								onClick={() => setRows((current) => current.filter((_, item) => item !== index))}
-							>
-								삭제
-							</button>
-						</div>
-					))}
-				</div>
-				<div className="settings-field-actions">
-					<button type="button" className="linear-btn" disabled={disabled || saving} onClick={() => setRows((current) => [...current, { key: "", value: "" }])}>
-						항목 추가
-					</button>
-					<button type="button" className="linear-btn" disabled={disabled || saving} onClick={save}>
-						{saving ? "저장 중…" : "저장"}
-					</button>
-					{stored !== undefined ? <ResetButton label={name} disabled={disabled || saving} onClick={() => void commit([{ path: [...path], remove: true }])} /> : null}
-					{error ? <span className="settings-inline-error">{error}</span> : null}
-				</div>
-			</div>
-		</Row>
-	);
-}
-
-const POLICY_TIERS = ["private", "never", "always", "peers"] as const;
-
-interface PolicyRow {
-	glob: string;
-	tier: string;
-	peers: string;
-}
-
-function policyRows(value: JsonValue | undefined): PolicyRow[] {
-	if (!isJsonObject(value)) return [];
-	return Object.entries(value).map(([glob, entry]) => {
-		if (typeof entry === "string") return { glob, tier: entry, peers: "" };
-		if (isJsonObject(entry)) {
-			const tier = typeof entry.tier === "string" ? entry.tier : "private";
-			const peers = Array.isArray(entry.peers) ? entry.peers.filter((item): item is string => typeof item === "string").join(", ") : "";
-			return { glob, tier, peers };
-		}
-		return { glob, tier: "private", peers: "" };
-	});
-}
-
-function PolicyMapRow({
-	snapshot,
-	path,
-	name,
-	hint,
-	onSaved,
-}: {
-	readonly snapshot: AutoRagConfigSnapshot;
-	readonly path: ConfigPath;
-	readonly name: string;
-	readonly hint: string;
-	readonly onSaved: (next: AutoRagConfigSnapshot) => void;
-}): ReactElement {
-	const stored = readAt(snapshot.config, path);
-	const signature = JSON.stringify(isJsonObject(stored) ? stored : {});
-	const initial = useMemo(() => policyRows(stored), [signature]);
-	const [rows, setRows] = useState<PolicyRow[]>(initial);
-	useEffect(() => setRows(initial), [signature]);
-	const { saving, error, setError, commit } = useFieldCommit(onSaved);
-	function update(index: number, patch: Partial<PolicyRow>): void {
-		setRows((current) => current.map((row, item) => (item === index ? { ...row, ...patch } : row)));
-	}
-	function save(): void {
-		const out: Record<string, JsonValue> = {};
-		const seen = new Set<string>();
-		for (const row of rows) {
-			const glob = row.glob.trim();
-			if (glob.length === 0) continue;
-			if (seen.has(glob)) {
-				setError(`중복된 glob: ${glob}`);
-				return;
-			}
-			seen.add(glob);
-			const peers = row.peers
-				.split(/[,\n]/u)
-				.map((item) => item.trim())
-				.filter(Boolean);
-			out[glob] = peers.length > 0 ? { tier: row.tier, peers } : { tier: row.tier };
-		}
-		void commit([Object.keys(out).length === 0 ? { path: [...path], remove: true } : { path: [...path], value: out }]);
-	}
-	return (
-		<Row name={name} hint={hint}>
-			<div className="settings-field-stack settings-field-stack--wide">
-				<div className="settings-config__map">
-					{rows.map((row, index) => (
-						<div className="settings-config__policy-row" key={index}>
-							<input
-								className="settings-source-desc__input"
-								aria-label={`${name} glob ${index + 1}`}
-								value={row.glob}
-								placeholder="docs/**"
-								disabled={saving}
-								onChange={(event) => update(index, { glob: event.target.value })}
-							/>
-							<select className="linear-select" aria-label={`${name} tier ${index + 1}`} value={row.tier} disabled={saving} onChange={(event) => update(index, { tier: event.target.value })}>
-								{POLICY_TIERS.map((tier) => (
-									<option key={tier} value={tier}>
-										{tier}
-									</option>
-								))}
-							</select>
-							<input
-								className="settings-source-desc__input"
-								aria-label={`${name} peers ${index + 1}`}
-								value={row.peers}
-								placeholder="peer fingerprints (쉼표 구분)"
-								disabled={saving}
-								onChange={(event) => update(index, { peers: event.target.value })}
-							/>
-							<button
-								type="button"
-								className="linear-btn is-danger"
-								disabled={saving}
-								aria-label={`${name} 항목 삭제`}
-								onClick={() => setRows((current) => current.filter((_, item) => item !== index))}
-							>
-								삭제
-							</button>
-						</div>
-					))}
-				</div>
-				<div className="settings-field-actions">
-					<button type="button" className="linear-btn" disabled={saving} onClick={() => setRows((current) => [...current, { glob: "", tier: "private", peers: "" }])}>
-						항목 추가
-					</button>
-					<button type="button" className="linear-btn" disabled={saving} onClick={save}>
-						{saving ? "저장 중…" : "저장"}
-					</button>
-					{stored !== undefined ? <ResetButton label={name} disabled={saving} onClick={() => void commit([{ path: [...path], remove: true }])} /> : null}
-					{error ? <span className="settings-inline-error">{error}</span> : null}
-				</div>
-			</div>
-		</Row>
-	);
-}
 
 /* ------------------------------------------------------------ descriptors -- */
 
@@ -724,14 +484,10 @@ function renderFields(specs: readonly FieldSpec[], snapshot: AutoRagConfigSnapsh
 /* ----------------------------------------------------------- field specs -- */
 
 const MINSYNC_FIELDS: readonly FieldSpec[] = [
-	{ kind: "bool", path: ["minSync", "autoInstall"], name: "Auto install", hint: "PATH에 없으면 MinSync 바이너리를 자동 설치합니다.", fallback: true },
-	{ kind: "text", path: ["minSync", "workspacePath"], name: "Workspace path", hint: "MinSync 워크스페이스 경로입니다. 비우면 기본값을 사용합니다.", placeholder: "/Users/me/.minsync" },
 	{ kind: "number", path: ["minSync", "maxChunkSize"], name: "Max chunk size", hint: "청크 최대 크기(문자 수)입니다.", min: 1 },
 ];
 
 const JIKJI_FIELDS: readonly FieldSpec[] = [
-	{ kind: "text", path: ["jikji", "binaryPath"], name: "Binary path", hint: "jikji 바이너리 경로입니다. 비우면 PATH를 사용합니다." },
-	{ kind: "bool", path: ["jikji", "autoInstall"], name: "Auto install", hint: "cargo로 jikji-cli를 자동 설치합니다.", fallback: true },
 	{ kind: "number", path: ["jikji", "timeoutMs"], name: "Timeout (ms)", hint: "jikji 실행 제한 시간입니다.", min: 0 },
 	{ kind: "number", path: ["jikji", "maxBufferBytes"], name: "Max buffer bytes", hint: "stdout 버퍼 최대 크기입니다.", min: 0 },
 	{ kind: "bool", path: ["jikji", "includeHidden"], name: "Include hidden", hint: "숨김 파일을 인덱싱합니다.", fallback: false },
@@ -747,17 +503,7 @@ const JIKJI_FIELDS: readonly FieldSpec[] = [
 	{ kind: "number", path: ["jikji", "mediaIndexMaxMb"], name: "Media index max MB", hint: "미디어 인덱싱 최대 크기(MB)입니다.", min: 0 },
 ];
 
-const LIMITS_FIELDS: readonly FieldSpec[] = [
-	{ kind: "number", path: ["limits", "mergedEvidenceCeiling"], name: "Merged evidence ceiling", hint: "병합 증거 상한입니다.", min: 1 },
-	{ kind: "number", path: ["limits", "singleDatasourceTopK"], name: "Single datasource top K", hint: "단일 데이터소스 후보 수입니다.", min: 1 },
-	{ kind: "number", path: ["limits", "minSyncTopK"], name: "MinSync top K", hint: "MinSync 후보 수입니다.", min: 1 },
-	{ kind: "number", path: ["limits", "minSyncScopedQueryTopK"], name: "MinSync scoped query top K", hint: "스코프 쿼리 후보 수입니다.", min: 1 },
-	{ kind: "number", path: ["limits", "toolDescriptionInstanceScopes"], name: "Tool description instance scopes", hint: "도구 설명에 노출할 인스턴스 스코프 수입니다.", min: 1 },
-	{ kind: "number", path: ["limits", "prefetch", "jikjiTopK"], name: "Prefetch Jikji top K", hint: "Jikji 프리페치 후보 수입니다.", min: 1 },
-	{ kind: "number", path: ["limits", "prefetch", "minSyncTopK"], name: "Prefetch MinSync top K", hint: "MinSync 프리페치 후보 수입니다.", min: 1 },
-	{ kind: "number", path: ["limits", "prefetch", "jikjiPathLimit"], name: "Prefetch Jikji path limit", hint: "Jikji 프리페치 경로 제한입니다.", min: 1 },
-	{ kind: "number", path: ["limits", "prefetch", "sectionLimit"], name: "Prefetch section limit", hint: "프리페치 섹션 제한입니다.", min: 1 },
-];
+
 
 const FSEARCH_FIELDS: readonly FieldSpec[] = [
 	{ kind: "text", path: ["fsearch", "binaryPath"], name: "Binary path", hint: "fsearch-cli 바이너리 경로입니다.", placeholder: "/usr/local/bin/fsearch-cli" },
@@ -829,39 +575,10 @@ const PARSER_FIELDS: readonly FieldSpec[] = [
 	},
 ];
 
-const P2P_FIELDS: readonly FieldSpec[] = [
-	{ kind: "text", path: ["p2p", "host"], name: "Host", hint: "P2P 서버 바인딩 호스트입니다.", placeholder: "127.0.0.1" },
-	{ kind: "number", path: ["p2p", "port"], name: "Port", hint: "P2P 서버 포트(1-65535)입니다.", min: 1, max: 65535 },
-	{ kind: "text", path: ["p2p", "simplexDbPrefix"], name: "SimpleX DB prefix", hint: "SimpleX CLI 데이터베이스 접두사입니다." },
-	{ kind: "number", path: ["p2p", "maxBodyBytes"], name: "Max body bytes", hint: "요청 본문 최대 크기입니다.", min: 1 },
-	{ kind: "number", path: ["p2p", "maxFileBytes"], name: "Max file bytes", hint: "공유 파일 최대 크기입니다.", min: 1 },
-	{ kind: "bool", path: ["p2p", "injectionClassifier"], name: "Injection classifier", hint: "프롬프트 주입 분류기를 사용합니다.", fallback: true },
-	{ kind: "bool", path: ["p2p", "piiNer"], name: "PII NER", hint: "PII 인식 필터를 사용합니다.", fallback: false },
-	{ kind: "number", path: ["p2p", "searchTimeoutMs"], name: "Search timeout (ms)", hint: "피어 검색 제한 시간(5000-600000ms)입니다.", min: 5000, max: 600000 },
-	{ kind: "bool", path: ["p2p", "newFilesPublic"], name: "New files public", hint: "새 파일을 기본 공개로 취급합니다.", fallback: false },
-	{ kind: "number", path: ["p2p", "quotas", "queriesPerHour"], name: "Quota queries per hour", hint: "시간당 쿼리 할당량입니다.", min: 1 },
-	{ kind: "number", path: ["p2p", "quotas", "burst"], name: "Quota burst", hint: "버스트 할당량입니다.", min: 1 },
-];
 
 /* -------------------------------------------------------------- sections -- */
 
-function QuickExclusion({ snapshot, label, onSaved }: { readonly snapshot: AutoRagConfigSnapshot; readonly label: string; readonly onSaved: (next: AutoRagConfigSnapshot) => void }): ReactElement {
-	const values = listOf(readAt(snapshot.config, ["excludePaths"]));
-	const checked = values.includes(label);
-	const { saving, error, commit } = useFieldCommit(onSaved);
-	function toggle(): void {
-		const next = checked ? values.filter((item) => item !== label) : [...values, label];
-		void commit([next.length === 0 ? { path: ["excludePaths"], remove: true } : { path: ["excludePaths"], value: next }]);
-	}
-	return (
-		<Row name={label} hint="프로젝트 아래의 동일한 폴더명/경로를 제외합니다.">
-			<div className="settings-field-inline">
-				<Switch checked={checked} disabled={saving} onChange={toggle} ariaLabel={`${label} 자동 제외`} />
-				{error ? <span className="settings-inline-error">{error}</span> : null}
-			</div>
-		</Row>
-	);
-}
+
 
 export function DeepSettings({ snapshot, onSaved }: { readonly snapshot: AutoRagConfigSnapshot; readonly onSaved: (next: AutoRagConfigSnapshot) => void }): ReactElement {
 	const config = snapshot.config;
@@ -870,70 +587,17 @@ export function DeepSettings({ snapshot, onSaved }: { readonly snapshot: AutoRag
 	return (
 		<>
 			{heading("Deep Indexing", "파일 내용과 발견 인덱스를 위한 MinSync·Jikji 설정입니다.")}
-			<Section title="Search paths" description="workspacePath는 수정하지 않고, 실제 검색·인덱싱 루트만 관리합니다.">
+			<Section title="Search paths" description="검색·인덱싱 루트만 관리합니다.">
 				<ListFieldRow snapshot={snapshot} path={["searchPaths"]} name="Search paths" hint="한 줄에 하나의 폴더를 지정합니다." placeholder="/Users/me/Documents" onSaved={onSaved} />
 			</Section>
-			<Section title="MinSync" description="v2.7 기본 임베딩은 로컬 AutoRAG gateway가 관리합니다.">
+			<Section title="MinSync" description="설치 환경과 워크스페이스는 현재 시스템에서 자동 탐지합니다.">
 				<BlockSwitchRow snapshot={snapshot} path={["minSync"]} name="Enable MinSync" hint="증분·벡터 인덱싱을 사용합니다." mode="enabled" defaultEnabled onSaved={onSaved} />
 				{blockDisabled(minSync) ? null : renderFields(MINSYNC_FIELDS, snapshot, onSaved)}
-				<p className="settings-config__note">임베딩 모델(minSync.embedder)은 Embedding Models 카테고리에서 관리합니다.</p>
-				<EnvMapRow
-					snapshot={snapshot}
-					path={["minSync", "installer", "env"]}
-					name="Installer env"
-					hint="MinSync 설치 시 cargo/설치 프로세스에 전달할 환경 변수입니다."
-					keyPlaceholder="CARGO_HOME"
-					valuePlaceholder="/Users/me/.cargo"
-					onSaved={onSaved}
-					disabled={blockDisabled(minSync)}
-				/>
-				<SelectFieldRow
-					snapshot={snapshot}
-					path={["minSync", "installer", "platform"]}
-					name="Installer platform"
-					hint="대상 플랫폼을 재정의합니다(기본: 현재 OS)."
-					options={[
-						{ key: "__inherit__", label: "현재 OS", value: null },
-						{ key: "darwin", label: "darwin", value: "darwin" },
-						{ key: "linux", label: "linux", value: "linux" },
-						{ key: "win32", label: "win32", value: "win32" },
-					]}
-					onSaved={onSaved}
-					disabled={blockDisabled(minSync)}
-				/>
-				<SelectFieldRow
-					snapshot={snapshot}
-					path={["minSync", "installer", "arch"]}
-					name="Installer arch"
-					hint="대상 CPU 아키텍처를 재정의합니다(기본: 현재 arch)."
-					options={[
-						{ key: "__inherit__", label: "현재 arch", value: null },
-						{ key: "x64", label: "x64", value: "x64" },
-						{ key: "arm64", label: "arm64", value: "arm64" },
-						{ key: "ia32", label: "ia32", value: "ia32" },
-						{ key: "arm", label: "arm", value: "arm" },
-					]}
-					onSaved={onSaved}
-					disabled={blockDisabled(minSync)}
-				/>
+				<p className="settings-config__note">임베딩 모델은 Embedding Models 카테고리에서 관리합니다. 바이너리 설치, workspace, installer env/platform/arch는 자동 처리됩니다.</p>
 			</Section>
-			<Section title="Jikji" description="Jikji 인덱스 옵션입니다. 사용 안 함(false)으로 두면 나머지 필드는 무시됩니다.">
+			<Section title="Jikji" description="Jikji 인덱스 옵션입니다. 바이너리 경로·설치와 프로세스 환경은 자동 처리됩니다.">
 				<BlockSwitchRow snapshot={snapshot} path={["jikji"]} name="Enable Jikji" hint="Jikji 인덱스/검색을 사용합니다." mode="false" defaultEnabled enableValue={{}} onSaved={onSaved} />
 				{blockDisabled(jikji) ? null : renderFields(JIKJI_FIELDS, snapshot, onSaved)}
-				{blockDisabled(jikji) ? null : (
-					<EnvMapRow
-						snapshot={snapshot}
-						path={["jikji", "env"]}
-						name="Jikji env"
-						hint="jikji 프로세스에 전달할 환경 변수입니다."
-						keyPlaceholder="JIKJI_HOME"
-						valuePlaceholder="/Users/me/.jikji"
-						onSaved={onSaved}
-					/>
-				)}
-			</Section>
-			<Section title="Retrieval limits" description="검색 상한과 프리페치 후보 수를 설정합니다.">
-				{renderFields(LIMITS_FIELDS, snapshot, onSaved)}
 			</Section>
 		</>
 	);
@@ -942,50 +606,36 @@ export function DeepSettings({ snapshot, onSaved }: { readonly snapshot: AutoRag
 export function LightSettings({ snapshot, onSaved }: { readonly snapshot: AutoRagConfigSnapshot; readonly onSaved: (next: AutoRagConfigSnapshot) => void }): ReactElement {
 	const config = snapshot.config;
 	const platform = typeof navigator !== "undefined" && /Mac|Linux/u.test(navigator.platform) ? "fsearch" : "everything";
-	const fsearch = readAt(config, ["fsearch"]);
-	const everything = readAt(config, ["everything"]);
-	const fsearchHidden = blockDisabled(fsearch) || (fsearch === undefined && platform !== "fsearch");
-	const everythingHidden = blockDisabled(everything) || (everything === undefined && platform !== "everything");
+	const backend = readAt(config, [platform]);
 	return (
 		<>
 			{heading("Light Indexing", "파일명 탐색과 인덱스 제외 정책입니다.")}
-			<Section title="Platform file search" description="현재 플랫폼의 기본 대상이 켜져 있습니다.">
-				<BlockSwitchRow snapshot={snapshot} path={["fsearch"]} name="FSearch (macOS/Linux)" hint="macOS/Linux에서 fsearch-cli 파일명 검색을 사용합니다." mode="enabled" defaultEnabled={platform === "fsearch"} onSaved={onSaved} />
-				{fsearchHidden ? null : renderFields(FSEARCH_FIELDS, snapshot, onSaved)}
-				<BlockSwitchRow snapshot={snapshot} path={["everything"]} name="Everything (Windows)" hint="Windows Everything 파일명 검색을 사용합니다." mode="enabled" defaultEnabled={platform === "everything"} onSaved={onSaved} />
-				{everythingHidden ? null : renderFields(EVERYTHING_FIELDS, snapshot, onSaved)}
-				<p className="linear-section-desc">현재 플랫폼 기본 대상: {platform}</p>
+			<Section title={platform === "fsearch" ? "FSearch (macOS/Linux)" : "Everything (Windows)"} description="현재 운영체제에 맞는 파일 검색 백엔드를 자동 선택합니다.">
+				{blockDisabled(backend) ? <p className="linear-section-desc">현재 플랫폼 파일 검색이 비활성화되어 있습니다.</p> : renderFields(platform === "fsearch" ? FSEARCH_FIELDS : EVERYTHING_FIELDS, snapshot, onSaved)}
+				<p className="linear-section-desc">Detected backend: {platform}</p>
 			</Section>
-			<Section title="Excluded folders" description="제외 설정은 실제 excludePaths에 저장됩니다. 아래 빠른 항목도 같은 배열을 수정합니다.">
+			<Section title="Excluded folders" description="제외 설정은 실제 excludePaths에 저장됩니다.">
 				<ListFieldRow snapshot={snapshot} path={["excludePaths"]} name="Excluded folders and files" hint="한 줄에 하나씩 입력합니다." placeholder="node_modules\n.git\ndist" onSaved={onSaved} />
 			</Section>
-			<Section title="Automatic code-folder exclusions" description="검색 루트 안의 동일한 폴더명을 자동으로 제외합니다. parsed/MinSync/Jikji에 적용되며 FSearch/Everything에는 전달되지 않습니다.">
+			<Section title="Automatic code-folder exclusions" description="검색 루트 안의 코드·의존성 폴더를 자동으로 제외합니다.">
 				<BoolFieldRow snapshot={snapshot} path={["appIndexing", "excludeCodeFolders"]} name="Exclude code and dependency folders" hint="기본값: 켜짐" fallback onSaved={onSaved} />
 				<ListFieldRow snapshot={snapshot} path={["appIndexing", "codeFolderNames"]} name="Folder names" hint="한 줄에 하나씩. 예: .git, node_modules, dist" placeholder="node_modules\n.git" onSaved={onSaved} />
-			</Section>
-			<Section title="Code-folder quick exclusions">
-				{["node_modules", ".git", "dist", "build", "coverage"].map((label) => (
-					<QuickExclusion key={label} snapshot={snapshot} label={label} onSaved={onSaved} />
-				))}
 			</Section>
 		</>
 	);
 }
-
 export function AppsSettings({ snapshot, onSaved }: { readonly snapshot: AutoRagConfigSnapshot; readonly onSaved: (next: AutoRagConfigSnapshot) => void }): ReactElement {
 	const config = snapshot.config;
 	const webSearch = readAt(config, ["webSearch"]);
 	const dupey = readAt(config, ["dupey"]);
-	const p2p = readAt(config, ["p2p"]);
 	const globalLanguages = listOf(readAt(config, ["languages"]));
 	const rootLanguages = listOf(readAt(config, ["parserOptions", "languages"]));
 	const ocrFallback = rootLanguages.length > 0 ? rootLanguages : globalLanguages.length > 0 ? globalLanguages : undefined;
 	const webSearchDisabled = blockDisabled(webSearch);
-	const p2pHidden = blockDisabled(p2p) || p2p === undefined;
 	const fetchDisabled = webSearchDisabled || readAt(config, ["webSearch", "fetch"]) === false || blockDisabled(readAt(config, ["webSearch", "fetch"]));
 	return (
 		<>
-			{heading("Other Apps", "웹 검색, 중복 제거, 파서, P2P와 접근 정책입니다.")}
+			{heading("Other Apps", "웹 검색, 중복 제거, 파서와 데이터소스 접근 정책입니다.")}
 			<BoolFieldRow snapshot={snapshot} path={["excludeExactDuplicates"]} name="Exclude exact duplicates" hint="동일 콘텐츠 중복을 최신 파일 중심으로 줄입니다." fallback onSaved={onSaved} />
 			<Section title="Web search" description="웹 검색·가져오기 도구 설정입니다.">
 				<BlockSwitchRow snapshot={snapshot} path={["webSearch"]} name="Enable web search" hint="web_search/web_fetch 도구를 사용합니다." mode="enabled" defaultEnabled onSaved={onSaved} />
@@ -1002,34 +652,13 @@ export function AppsSettings({ snapshot, onSaved }: { readonly snapshot: AutoRag
 				{blockDisabled(dupey) ? null : renderFields(DUPEY_FIELDS, snapshot, onSaved)}
 			</Section>
 			<Section title="Parser and OCR" description="파서 언어 태그와 OCR/Kordoc 동작을 설정합니다.">
-				<LanguageSettings
-					snapshot={snapshot}
-					path={["parserOptions", "languages"]}
-					name="Parser languages"
-					hint="parserOptions.languages — 설정하지 않으면 전역 languages를 상속합니다."
-					onSaved={onSaved}
-					fallback={globalLanguages.length > 0 ? globalLanguages : []}
-				/>
+				<LanguageSettings snapshot={snapshot} path={["parserOptions", "languages"]} name="Parser languages" hint="parserOptions.languages — 설정하지 않으면 전역 languages를 상속합니다." onSaved={onSaved} fallback={globalLanguages.length > 0 ? globalLanguages : []} />
 				{renderFields(PARSER_FIELDS, snapshot, onSaved)}
-				<LanguageSettings
-					snapshot={snapshot}
-					path={["parserOptions", "ocr", "languages"]}
-					name="OCR languages"
-					hint="parserOptions.ocr.languages — 설정하지 않으면 parserOptions.languages/전역 languages를 상속합니다."
-					onSaved={onSaved}
-					fallback={ocrFallback ?? []}
-				/>
+				<LanguageSettings snapshot={snapshot} path={["parserOptions", "ocr", "languages"]} name="OCR languages" hint="parserOptions.ocr.languages — 설정하지 않으면 parserOptions.languages/전역 languages를 상속합니다." onSaved={onSaved} fallback={ocrFallback ?? []} />
 			</Section>
 			<Section title="Datasource access" description="allowedTags와 allowedScopes는 default-deny 보안 경계입니다.">
 				<ListFieldRow snapshot={snapshot} path={["datasourceAccess", "allowedTags"]} name="Allowed tags" hint="신뢰하는 데이터소스 스킬 태그를 한 줄에 하나씩 입력합니다." placeholder="notes\nwiki" onSaved={onSaved} />
 				<ListFieldRow snapshot={snapshot} path={["datasourceAccess", "allowedScopes"]} name="Allowed scopes" hint="슬래시 계층 경로 또는 글로브를 한 줄에 하나씩 입력합니다." placeholder="team/**\npublic" onSaved={onSaved} />
-			</Section>
-			<Section title="Peer-to-peer" description="기본 비활성. 신뢰 네트워크에서만 사용하세요.">
-				<BlockSwitchRow snapshot={snapshot} path={["p2p"]} name="Enable P2P sharing" hint="피어 검색 서버를 활성화합니다." mode="enabled" defaultEnabled={false} onSaved={onSaved} />
-				{p2pHidden ? null : renderFields(P2P_FIELDS, snapshot, onSaved)}
-				{p2pHidden ? null : (
-					<PolicyMapRow snapshot={snapshot} path={["p2p", "policy"]} name="Policy (glob → tier)" hint="파일 글로브별 공유 정책입니다. tier: private/never/always/peers, peers는 지문 목록입니다." onSaved={onSaved} />
-				)}
 			</Section>
 		</>
 	);
