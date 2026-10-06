@@ -56,6 +56,7 @@ const ARBITRARY_ONLY_TOKENS = [
 	"--grid-source-row",
 	"--grid-sheet",
 	"--h-settings",
+	"--ease-pane",
 ];
 const ARBITRARY_ONLY_PATTERNS = [/^--dur-/, /^--time-/];
 

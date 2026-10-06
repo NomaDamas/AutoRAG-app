@@ -17,9 +17,11 @@ import type {
 	CitationEvidence,
 	SearchStreamEvent,
 } from "../../../shared/search-contract";
-import { parseAnswerBlocks, parseInline, type AnswerBlock } from "../state/answer-markdown";
+import { isImageOnlyLine, parseAnswerBlocks, parseInline, type AnswerBlock } from "../state/answer-markdown";
+import { summaryRequest, type SummaryLanguage } from "../state/ai-summary";
 import { answerViewState } from "../state/answer-view";
 import { attachmentsFromDrop, isAttachmentDrag, mergeAttachments } from "../state/attachments";
+import { ImageRow, lineImages, type ImageActions } from "./AnswerImage";
 import { evidenceKind, unresolvedCitationNumbers } from "../state/evidence";
 import { groupChatHistory, historyEmptyText } from "../state/history";
 import { cn } from "../lib/cn";
@@ -37,28 +39,42 @@ const CENTERED = "mx-auto w-full max-w-[820px]";
 
 /**
  * Imperative surface the shell drives on the active AI Search tab: ⌘K focuses
- * the composer, the sidebar's content search sends a query, and "AI 요약" or a
- * drop on the tab / sidebar item attaches files. Drops on the panel itself
- * (Finder rows, files from other apps, browser links) land here directly.
+ * the composer, the sidebar's content search sends a query, "AI 요약" attaches
+ * and sends in one step, and a drop on the tab / sidebar item attaches files.
+ * Drops on the panel itself (Finder rows, files from other apps, browser links)
+ * land here directly.
  */
 export interface AiDockHandle {
 	/** Seed the composer with `text` and send it at once. */
 	sendQuery(text: string): void;
 	/** Append draft attachments and focus the composer. */
 	attach(atts: readonly ChatAttachment[]): void;
+	/**
+	 * "AI 요약": fold the target into the dock's drafts and send the summary run
+	 * as one step. Sending is a single call because `attach` only reaches
+	 * `attachmentsRef` on the next render, so an attach-then-send pair would
+	 * leave the attachment out of the run.
+	 */
+	summarize(atts: readonly ChatAttachment[]): void;
 	/** Focus the composer (pending until the panel is the visible tab). */
 	focusComposer(): void;
 }
 
 export interface AiSearchPanelProps {
 	/**
-	 * The panel's tab is the visible one. A hidden panel keeps its chat but
-	 * answers no shortcut, drag, or evidence publication.
+	 * The panel's tab is the focused one: it answers shortcuts and publishes
+	 * its evidence. A hidden panel keeps its chat.
 	 */
 	readonly active: boolean;
+	/** The panel's tab is on screen in some pane (split panes show several). */
+	readonly visible: boolean;
 	readonly selectedEvidence: number | null;
 	readonly onSelectEvidence: (number: number) => void;
 	readonly onPublish: (evidence: readonly CitationEvidence[], sessionId: string | null) => void;
+	/** Images in an answer: a local picture opens in Quick Look, a web image's page in the OS browser. */
+	readonly imageActions: ImageActions;
+	/** The Interface language setting: "AI 요약" asks in this language. */
+	readonly language: SummaryLanguage;
 }
 
 /** The parent folder of a local attachment, derived from its absolute path. */
@@ -73,7 +89,7 @@ function formatElapsed(ms: number): string {
 }
 
 export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(function AiSearchPanel(
-	{ active, selectedEvidence, onSelectEvidence, onPublish },
+	{ active, visible, selectedEvidence, onSelectEvidence, onPublish, imageActions, language },
 	ref,
 ): ReactElement {
 	const [query, setQuery] = useState("");
@@ -228,7 +244,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	});
 
 	useEffect(() => {
-		if (!active) return;
+		if (!visible) return;
 		const onDragOver = (event: globalThis.DragEvent): void => {
 			if (event.dataTransfer === null || !isAttachmentDrag(event.dataTransfer.types)) return;
 			if (event.clientX <= 0 && event.clientY <= 0) {
@@ -260,7 +276,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 			window.clearInterval(watchdog);
 			reset();
 		};
-	}, [active]);
+	}, [visible]);
 
 	async function runSearch(text: string, sent: readonly ChatAttachment[]): Promise<void> {
 		if (searchIdRef.current !== null) return;
@@ -428,6 +444,11 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 			setAttachments((current) => mergeAttachments(current, atts));
 			ensureFocus();
 		},
+		summarize(atts: readonly ChatAttachment[]): void {
+			if (searchIdRef.current !== null) return;
+			const request = summaryRequest(language, attachmentsRef.current, atts);
+			void runSearch(request.prompt, request.attachments);
+		},
 		focusComposer(): void {
 			ensureFocus();
 		},
@@ -491,9 +512,10 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 
 	return (
 		<section
-			className={cn("ai relative min-h-0 flex-1 flex-col bg-subtle-alt", active ? "flex" : "hidden")}
+			className={cn("ai relative min-h-0 flex-1 flex-col bg-subtle-alt", visible ? "flex" : "hidden")}
 			aria-label="AI Search"
-			aria-hidden={active ? undefined : true}
+			aria-hidden={visible ? undefined : true}
+			data-focused={active ? "true" : undefined}
 			onDragEnter={onDockDragEnter}
 			onDragOver={onDockDragOver}
 			onDragLeave={onDockDragLeave}
@@ -617,7 +639,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 						<div className="message assistant-msg flex flex-col gap-14">
 							{quickReady ? (
 								<div className="assistant-prose flex flex-col gap-8 text-body leading-[1.55] text-ink-body">
-									<ProseBlocks text={quickText} selected={selectedEvidence} unresolved={quickUnresolved} onCitation={onSelectEvidence} />
+									<ProseBlocks text={quickText} selected={selectedEvidence} unresolved={quickUnresolved} onCitation={onSelectEvidence} imageActions={imageActions} />
 								</div>
 							) : skeleton ? (
 								<div className="flex flex-col gap-8">
@@ -641,7 +663,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 										</div>
 									)}
 									<div className="assistant-prose flex flex-col gap-8 text-body leading-[1.55] text-ink-body">
-										<ProseBlocks text={deepText} selected={selectedEvidence} unresolved={deepUnresolved} onCitation={onSelectEvidence} />
+										<ProseBlocks text={deepText} selected={selectedEvidence} unresolved={deepUnresolved} onCitation={onSelectEvidence} imageActions={imageActions} />
 									</div>
 								</div>
 							) : null}
@@ -749,17 +771,19 @@ function ProseBlocks({
 	selected,
 	unresolved,
 	onCitation,
+	imageActions,
 }: {
 	readonly text: string;
 	readonly selected: number | null;
 	/** Citation numbers with no matching evidence entry; their markers are dropped. */
 	readonly unresolved: readonly number[];
 	readonly onCitation: (number: number) => void;
+	readonly imageActions: ImageActions;
 }): ReactElement {
 	return (
 		<>
 			{parseAnswerBlocks(text).map((block, index) => (
-				<AnswerBlockView key={`${index}`} block={block} selected={selected} unresolved={unresolved} onCitation={onCitation} />
+				<AnswerBlockView key={`${index}`} block={block} selected={selected} unresolved={unresolved} onCitation={onCitation} imageActions={imageActions} />
 			))}
 		</>
 	);
@@ -770,13 +794,19 @@ function AnswerBlockView({
 	selected,
 	unresolved,
 	onCitation,
+	imageActions,
 }: {
 	readonly block: AnswerBlock;
 	readonly selected: number | null;
 	readonly unresolved: readonly number[];
 	readonly onCitation: (number: number) => void;
+	readonly imageActions: ImageActions;
 }): ReactElement {
-	const segments = parseInline(block.text).map((segment, index) => {
+	if (block.kind === "code") {
+		return <pre className="m-0 overflow-auto whitespace-pre rounded-6 border border-border bg-code px-10 py-8 font-mono text-caption text-ink-body">{block.text}</pre>;
+	}
+	const parsed = parseInline(block.text);
+	const segments = parsed.map((segment, index) => {
 		switch (segment.kind) {
 			case "bold":
 				return (
@@ -789,6 +819,19 @@ function AnswerBlockView({
 					<code key={`${index}`} className="rounded-4 bg-code px-4 py-1 font-mono text-caption text-ink-body">
 						{segment.text}
 					</code>
+				);
+			case "image":
+				// A markdown image is the picture below the line; a path the model
+				// wrote in the sentence stays readable where it was written.
+				if (segment.source === "markdown") return null;
+				return segment.source === "code" ? (
+					<code key={`${index}`} className="rounded-4 bg-code px-4 py-1 font-mono text-caption text-ink-body break-all">
+						{segment.target}
+					</code>
+				) : (
+					<span key={`${index}`} className="break-all">
+						{segment.target}
+					</span>
 				);
 			case "citation":
 				// A citation whose number has no matching evidence entry (a real
@@ -816,21 +859,31 @@ function AnswerBlockView({
 				return <span key={`${index}`}>{segment.text}</span>;
 		}
 	});
+	const images = lineImages(parsed);
+	let line: ReactElement;
 	switch (block.kind) {
 		case "heading":
-			return <div className="text-body font-semibold text-ink">{segments}</div>;
+			line = <div className="text-body font-semibold text-ink">{segments}</div>;
+			break;
 		case "list":
-			return (
+			line = (
 				<div className="flex gap-8">
 					<span className="text-ink-muted">–</span>
 					<span>{segments}</span>
 				</div>
 			);
+			break;
 		case "quote":
-			return <div className="pl-10 text-ink-muted shadow-[inset_2px_0_0_var(--border)]">{segments}</div>;
-		case "code":
-			return <pre className="m-0 overflow-auto whitespace-pre rounded-6 border border-border bg-code px-10 py-8 font-mono text-caption text-ink-body">{block.text}</pre>;
+			line = <div className="pl-10 text-ink-muted shadow-[inset_2px_0_0_var(--border)]">{segments}</div>;
+			break;
 		default:
-			return <p className="m-0 whitespace-pre-wrap break-keep">{segments}</p>;
+			line = <p className="m-0 whitespace-pre-wrap break-keep">{segments}</p>;
 	}
+	if (images.length === 0) return line;
+	return (
+		<div className="flex flex-col gap-8">
+			{isImageOnlyLine(parsed) ? null : line}
+			<ImageRow images={images} folder={null} captioned={false} actions={imageActions} />
+		</div>
+	);
 }

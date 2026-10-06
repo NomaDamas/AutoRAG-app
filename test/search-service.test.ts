@@ -394,6 +394,31 @@ describe("createSearchService", () => {
 		expect(events).toEqual([{ type: "cancelled", searchId: "search-slow" }]);
 	});
 
+	it("cancels a run while the async agent factory is still building the agent", async () => {
+		const built = Promise.withResolvers<void>();
+		const agent = createFakeAgent(async function*() {
+			yield { type: "complete", response: createResponse("session-build", "Late answer", 1) };
+		});
+		const { events, send } = collectEvents();
+		const service = createSearchService({
+			agentFactory: async () => {
+				await built.promise;
+				return agent;
+			},
+			chatStore: await createStore(),
+			send,
+			now,
+		});
+
+		const started = service.start("search-build", "chat-build", "refund approval", []);
+		await service.cancel("search-build");
+		built.resolve();
+		await started;
+
+		expect(agent.searchDocumentsStream).not.toHaveBeenCalled();
+		expect(events).toEqual([{ type: "cancelled", searchId: "search-build" }]);
+	});
+
 	it("delegates history reads and clear to the chat store", async () => {
 		const store = await createStore();
 		const record: ChatRecord = {

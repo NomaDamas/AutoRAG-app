@@ -5,36 +5,86 @@
  * answer text as paragraphs whose inline segments are plain text, `**bold**`,
  * and `[n]` citation chips. Evidence chunk bodies additionally render headings,
  * list items, quotes, and fenced code blocks (README §1, `proto:flags`).
+ *
+ * Images: a markdown image (`![alt](ref)`), an inline-code span holding an
+ * image path or URL, and a bare absolute image path in a sentence all parse as
+ * `image` segments. `source` records the spelling so the renderer can keep the
+ * sentence reading as written and show the picture beside it.
  */
+
+import { viewerForExtension } from "../../../preview/shared/registry";
+import { resolveRelative } from "../../../preview/shared/location";
+import { webUrl } from "../../../shared/fs-contract";
+import { basename, isAbsolutePath } from "./paths";
 
 export type InlineSegment =
 	| { readonly kind: "text"; readonly text: string }
 	| { readonly kind: "bold"; readonly text: string }
 	| { readonly kind: "code"; readonly text: string }
-	| { readonly kind: "citation"; readonly number: number };
+	| { readonly kind: "citation"; readonly number: number }
+	| {
+			readonly kind: "image";
+			/** The reference as written: a path, a relative link, or a URL. */
+			readonly target: string;
+			/** Alt text of a markdown image; "" for paths. */
+			readonly alt: string;
+			/** How the answer spelled it: `![alt](ref)`, `` `path` ``, or a bare path. */
+			readonly source: "markdown" | "code" | "bare";
+	  };
 
-/** Split an inline string into text / bold / code / citation segments. */
+/** Extensions that name an image file, decodable by Chromium or not. */
+const IMAGE_EXTENSIONS = "png|jpe?g|jfif|gif|webp|bmp|svg|avif|ico|apng|heic|heif|tiff?";
+const IMAGE_FILE = new RegExp(`\\.(?:${IMAGE_EXTENSIONS})$`, "iu");
+
+/**
+ * One inline token. Alternatives in order: markdown image (`<ref>` form, then
+ * plain), bold, code, citation, and a bare absolute image path. The bare path
+ * must start a word (so the tail of a relative `사진/a.png` never reads as
+ * `/a.png`), may not contain whitespace, and ends at the first image extension
+ * not followed by more name characters, so Korean particles ("…/a.png에") and
+ * a sentence-final period stay outside the path.
+ */
+const INLINE = new RegExp(
+	[
+		String.raw`!\[([^\]]*)\]\(\s*<([^>]+)>\s*\)`,
+		String.raw`!\[([^\]]*)\]\(\s*([^)\s]+(?:\s+[^)\s"]+)*?)(?:\s+"[^"]*")?\s*\)`,
+		String.raw`\*\*([^*]+)\*\*`,
+		"`([^`]+)`",
+		String.raw`\[([1-9]\d*)\]`,
+		String.raw`(?<![\p{L}\p{N}_/.:~\\-])((?:\/|[A-Za-z]:\\)[^\s"'<>()\[\]*` + "`" + String.raw`]*?\.(?:${IMAGE_EXTENSIONS}))(?!\.?[A-Za-z0-9])`,
+	].join("|"),
+	"giu",
+);
+
+/** True when inline code holds an image reference rather than code. */
+function isImageReference(text: string): boolean {
+	const trimmed = text.trim();
+	if (!IMAGE_FILE.test(trimmed.split(/[?#]/u)[0] ?? "")) return false;
+	return webUrl(trimmed) !== null || isAbsolutePath(trimmed) || /^file:\/\//iu.test(trimmed);
+}
+
+/** Split an inline string into text / bold / code / citation / image segments. */
 export function parseInline(text: string): readonly InlineSegment[] {
-	const tokens = [...text.matchAll(/\*\*([^*]+)\*\*|`([^`]+)`|\[([1-9]\d*)\]/gu)];
-	if (tokens.length === 0) {
-		return [{ kind: "text", text }];
-	}
 	const segments: InlineSegment[] = [];
 	let cursor = 0;
-	for (const match of tokens) {
+	for (const match of text.matchAll(INLINE)) {
 		const index = match.index ?? 0;
-		if (match[0] === "**" || (match[1] === undefined && match[2] === undefined && match[3] === undefined)) {
-			continue;
-		}
 		if (index > cursor) {
 			segments.push({ kind: "text", text: text.slice(cursor, index) });
 		}
-		if (match[1] !== undefined) {
-			segments.push({ kind: "bold", text: match[1] });
-		} else if (match[2] !== undefined) {
-			segments.push({ kind: "code", text: match[2] });
-		} else {
-			segments.push({ kind: "citation", number: Number(match[3]) });
+		const [, angleAlt, angleRef, alt, ref, bold, code, citation, bare] = match;
+		if (angleRef !== undefined) {
+			segments.push({ kind: "image", target: angleRef.trim(), alt: angleAlt ?? "", source: "markdown" });
+		} else if (ref !== undefined) {
+			segments.push({ kind: "image", target: ref, alt: alt ?? "", source: "markdown" });
+		} else if (bold !== undefined) {
+			segments.push({ kind: "bold", text: bold });
+		} else if (code !== undefined) {
+			segments.push(isImageReference(code) ? { kind: "image", target: code.trim(), alt: "", source: "code" } : { kind: "code", text: code });
+		} else if (citation !== undefined) {
+			segments.push({ kind: "citation", number: Number(citation) });
+		} else if (bare !== undefined) {
+			segments.push({ kind: "image", target: bare, alt: "", source: "bare" });
 		}
 		cursor = index + match[0].length;
 	}
@@ -42,6 +92,65 @@ export function parseInline(text: string): readonly InlineSegment[] {
 		segments.push({ kind: "text", text: text.slice(cursor) });
 	}
 	return segments.length === 0 ? [{ kind: "text", text }] : segments;
+}
+
+/** A line made only of markdown images (and spacing): it renders as figures alone, without an empty text row. */
+export function isImageOnlyLine(segments: readonly InlineSegment[]): boolean {
+	return (
+		segments.some((segment) => segment.kind === "image") &&
+		segments.every((segment) => (segment.kind === "image" && segment.source === "markdown") || (segment.kind === "text" && segment.text.trim() === ""))
+	);
+}
+
+/** Where an image reference points, and whether `<img>` can draw it. */
+export type ImageTarget =
+	| {
+			readonly kind: "local";
+			readonly path: string;
+			readonly name: string;
+			/** False for formats Chromium cannot decode (HEIC, TIFF): show a card, not a broken image. */
+			readonly renderable: boolean;
+	  }
+	| { readonly kind: "web"; readonly url: string }
+	/** A relative link with no document folder to resolve it against. */
+	| { readonly kind: "unresolved"; readonly text: string };
+
+function decoded(text: string): string {
+	try {
+		return decodeURIComponent(text);
+	} catch (error) {
+		if (error instanceof URIError) return text;
+		throw error;
+	}
+}
+
+/** `file:///C:/a%20b.png` -> `C:/a b.png`; `file:///Users/a.png` -> `/Users/a.png`. */
+function pathFromFileUrl(reference: string): string | null {
+	if (!/^file:\/\//iu.test(reference) || !URL.canParse(reference)) return null;
+	const pathname = decoded(new URL(reference).pathname);
+	return /^\/[A-Za-z]:\//u.test(pathname) ? pathname.slice(1).replaceAll("/", "\\") : pathname;
+}
+
+/**
+ * Resolve an image reference. Absolute paths and `file:` URLs are local; a
+ * relative link resolves against `folder` (the cited document's folder) when
+ * there is one; http(s) is a web image, which the renderer never fetches.
+ */
+export function imageTarget(reference: string, folder: string | null): ImageTarget {
+	const url = webUrl(reference);
+	if (url !== null) return { kind: "web", url };
+	const fromUrl = pathFromFileUrl(reference);
+	const path =
+		fromUrl ??
+		(isAbsolutePath(reference)
+			? decoded(reference)
+			: folder === null || /^[a-z][a-z0-9+.-]*:/iu.test(reference)
+				? null
+				: resolveRelative(folder, reference));
+	if (path === null) return { kind: "unresolved", text: reference };
+	const name = basename(path);
+	const ext = /\.([^.]+)$/u.exec(name)?.[1] ?? "";
+	return { kind: "local", path, name, renderable: viewerForExtension(ext) === "image" };
 }
 
 /**

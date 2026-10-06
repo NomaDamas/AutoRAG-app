@@ -32,11 +32,11 @@ import {
 	applyOptimisticDeletes,
 	createIncrementalListing,
 	createListingLoader,
+	isFilesystemPath,
 	nearestExistingAncestor,
 	listingSurvivor,
 	pruneSelection,
 	reconcileListing,
-	watchSetFor,
 	type IncrementalListing,
 	type ListingScope,
 } from "../state/live";
@@ -92,18 +92,12 @@ import {
 	activeTab,
 	AI_SEARCH_PATH,
 	applyColumnChoice,
-	canCloseTab,
-	closeTab,
-	createTabsState,
-	evacuateTabs,
 	exitVirtualTab,
-	focusAiSearchTab,
 	goBack,
 	goForward,
 	isVirtualTabPath,
 	navigateTab,
 	openAiSearchTab,
-	openOrSelectSettingsTab,
 	openTab,
 	openTabAt,
 	patchActiveTab,
@@ -112,13 +106,27 @@ import {
 	tabTitle,
 	type TabsState,
 } from "../state/tabs";
+import {
+	closeWorkspaceTab,
+	evacuateWorkspace,
+	focusTab,
+	focusAiSearchInWorkspace,
+	openOrSelectSettingsInWorkspace,
+	updatePaneTabs,
+	type Pane,
+	type Workspace,
+} from "../state/workspace";
 import type { TabView } from "../components/TabStrip";
 import type { ColumnPaneView } from "../components/ColumnBrowser";
 import { parseViewMode, VIEW_MODE_STORAGE_KEY, type ViewMode } from "../state/view-mode";
 import { needsThumbnail, takeThumbnailBatch, thumbnailKey } from "../state/thumbnails";
 
-/** --time-toast */
-const TOAST_MS = 2400;
+/** A tab's last adopted folder listing. */
+export interface ListingSnapshot {
+	readonly dir: string;
+	readonly entries: readonly FinderEntry[];
+}
+
 /** --time-flash */
 const FLASH_MS = 1800;
 /** How long a reveal flash waits for its row to be listed before it is dropped. */
@@ -315,6 +323,7 @@ interface ChildListing {
 
 export interface FinderController {
 	readonly tabs: readonly TabView[];
+	/** The window holds more than one tab, so a close can succeed. */
 	readonly canCloseTabs: boolean;
 	readonly path: string;
 	readonly crumbs: readonly Crumb[];
@@ -333,7 +342,6 @@ export interface FinderController {
 	readonly grouping: GroupKey;
 	readonly zone: FocusZone;
 	readonly selection: SelectionState;
-	readonly toast: string | null;
 	readonly flashPath: string | null;
 	readonly renamePath: string | null;
 	readonly renameDraft: string;
@@ -451,11 +459,26 @@ export interface QuickLookBridge {
 	readonly isQuickLookOpen: () => boolean;
 }
 
+/**
+ * The workspace pane a controller drives: its tab strip comes from the pane,
+ * and every tab change is written back through `update` (the App's
+ * workspace state), so tab ids stay unique across panes.
+ */
+export interface PaneBinding {
+	readonly pane: Pane;
+	/** This pane has the window's focus: it alone answers the keyboard. */
+	readonly focused: boolean;
+	/** The window holds more than one tab, so a close can succeed. */
+	readonly canCloseTabs: boolean;
+	readonly update: (change: (workspace: Workspace) => Workspace) => void;
+}
+
 /** v7 search scope bar: the whole Mac or only the current folder subtree. */
 export type SearchScope = "all" | "current";
 
 export function useFinderController(
 	source: FinderSource,
+	binding: PaneBinding,
 	options: {
 		readonly showHiddenFiles?: boolean;
 		readonly quickLook?: QuickLookBridge;
@@ -463,6 +486,10 @@ export function useFinderController(
 		readonly onFocusSearch?: () => void;
 		/** ⌘K: show an AI Search tab and focus its composer (owned by the App shell). */
 		readonly onFocusComposer?: () => void;
+		/** The window's toast: one for every pane. */
+		readonly onToast?: (message: string) => void;
+		/** Tab listing snapshots shared by every pane (the App prunes closed tabs). */
+		readonly listingCache?: Map<number, ListingSnapshot>;
 	} = {},
 ): FinderController {
 	const showHiddenFiles = options.showHiddenFiles ?? false;
@@ -472,7 +499,16 @@ export function useFinderController(
 	focusSearchRef.current = options.onFocusSearch;
 	const focusComposerRef = useRef(options.onFocusComposer);
 	focusComposerRef.current = options.onFocusComposer;
-	const [tabsState, setTabsState] = useState<TabsState>(() => createTabsState(source.initialPath));
+	const toastRef = useRef(options.onToast);
+	toastRef.current = options.onToast;
+	const { pane, focused, update: updateWorkspace } = binding;
+	const paneId = pane.id;
+	const tabsState: TabsState = { tabs: pane.tabs, activeId: pane.activeId, nextId: 0 };
+	/** A `state/tabs.ts` transition on this pane's strip. */
+	const setTabsState = useCallback(
+		(change: (state: TabsState) => TabsState) => updateWorkspace((workspace) => updatePaneTabs(workspace, paneId, change)),
+		[updateWorkspace, paneId],
+	);
 	const [query, setQueryValue] = useState("");
 	const [searchScope, setSearchScope] = useState<SearchScope>("all");
 	const [sort, setSort] = useState<SortState | null>(null);
@@ -480,14 +516,13 @@ export function useFinderController(
 	const [grouping, setGroupingValue] = useState<GroupKey>(readStoredGrouping);
 	const [zone, setZone] = useState<FocusZone>("finder");
 	const [listing, setListing] = useState<readonly FinderEntry[]>([]);
-	/** The tab whose folder `listing` was last switched to; see the swap below. */
-	const [listingTabId, setListingTabId] = useState(tabsState.activeId);
+	/** The tab whose folder `listing` was last switched to; see the swap below. Starts unset so a new pane paints a moved tab's snapshot at once. */
+	const [listingTabId, setListingTabId] = useState<number | null>(null);
 	const [hits, setHits] = useState<readonly FinderEntry[]>([]);
 	const [locations, setLocations] = useState<readonly FinderLocation[]>([]);
 	const [indexStatus, setIndexStatus] = useState<Readonly<Record<string, IndexStatus>>>({});
 	/** Bumped when a background AutoRAG refresh settles, so visible rows re-read their state. */
 	const [indexRevision, setIndexRevision] = useState(0);
-	const [toast, setToast] = useState<string | null>(null);
 	const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
 	const [rename, setRename] = useState<RenameState | null>(null);
 	const [clipboardCount, setClipboardCount] = useState(0);
@@ -516,8 +551,8 @@ export function useFinderController(
 	const listingDirRef = useRef("");
 	const layerStoreRef = useRef<LayerStore>(EMPTY_LAYER_STORE);
 	const staleTabsRef = useRef(new Set<number>());
-	/** Each tab's last adopted listing, so switching back paints it at once. */
-	const tabListingsRef = useRef(new Map<number, { readonly dir: string; readonly entries: readonly FinderEntry[] }>());
+	/** Each tab's last adopted listing, so switching back — or moving the tab to another pane — paints it at once. */
+	const tabListingsRef = useRef(options.listingCache ?? new Map<number, ListingSnapshot>());
 	const previousPathRef = useRef<string | null>(null);
 	const previousTabIdRef = useRef<number | null>(null);
 	const incrementalRef = useRef<{ source: FinderSource; listing: IncrementalListing } | null>(null);
@@ -591,11 +626,11 @@ export function useFinderController(
 		};
 	}, [source]);
 
-	const showToast = useCallback((message: string) => setToast(message), []);
+	const showToast = useCallback((message: string) => toastRef.current?.(message), []);
 
 	/** Failures surface verbatim — the operator sees the real message. */
 	const reportError = useCallback(
-		(error: unknown) => setToast(error instanceof Error ? error.message : String(error)),
+		(error: unknown) => toastRef.current?.(error instanceof Error ? error.message : String(error)),
 		[],
 	);
 
@@ -647,11 +682,7 @@ export function useFinderController(
 	 */
 	const adoptListing = useCallback((dir: string, entries: readonly FinderEntry[]): void => {
 		listingDirRef.current = dir;
-		const snapshots = tabListingsRef.current;
-		snapshots.set(activeTabIdRef.current, { dir, entries });
-		for (const id of snapshots.keys()) {
-			if (!tabsRef.current.some((current) => current.id === id)) snapshots.delete(id);
-		}
+		tabListingsRef.current.set(activeTabIdRef.current, { dir, entries });
 		const previous = listingRef.current;
 		const survives = listingSurvivor(dir, previous, entries);
 		listingRef.current = entries;
@@ -673,6 +704,10 @@ export function useFinderController(
 			mode: "navigate" | "silent",
 			requestGeneration: number,
 		): void => {
+			// Settings renders its own UI; there is no folder on disk to read.
+			if (!isFilesystemPath(requestedPath)) {
+				return;
+			}
 			// A fresh listing invalidates which identities the viewport has asked
 			// for, so the next mounted rows request their icons again.
 			thumbRequestsRef.current.clear();
@@ -894,18 +929,6 @@ export function useFinderController(
 		}
 	}, [beginScope, loadListing, path, revision, searching, source, tab.id]);
 
-	const tabPathsKey = tabsState.tabs.map((current) => current.path).join("\u0000");
-
-	useEffect(() => {
-		void source.setWatchSet(watchSetFor(tabsState.tabs)).catch((error: unknown) => console.error(error));
-	}, [source, tabPathsKey]);
-
-	useEffect(() => {
-		return () => {
-			void source.setWatchSet([]).catch((error: unknown) => console.error(error));
-		};
-	}, [source]);
-
 	useEffect(() => {
 		const unsubscribe = source.onLive((message: LiveMessage) => {
 			setLayerStore((current) => adoptMessage(current, message));
@@ -1030,14 +1053,6 @@ export function useFinderController(
 	}, [source, query, searching, revision, reportError, searchScope, path]);
 
 	useEffect(() => {
-		if (toast === null) {
-			return;
-		}
-		const timer = setTimeout(() => setToast(null), TOAST_MS);
-		return () => clearTimeout(timer);
-	}, [toast]);
-
-	useEffect(() => {
 		let live = true;
 		const versionAtRequest = layerStoreRef.current.versions[DUPEY_LAYER_ID] ?? 0;
 		source
@@ -1080,9 +1095,6 @@ export function useFinderController(
 		const resync = (): void => {
 			if (path === "" || isVirtualTabPath(path)) return;
 			const scope = beginScope();
-			void source.setWatchSet(watchSetFor(tabsRef.current)).catch((error: unknown) =>
-				console.error("live watch resync failed", error),
-			);
 			if (!searchingRef.current) loadListing(path, "silent", scope.generation);
 			void source
 				.liveLayers()
@@ -1378,7 +1390,7 @@ export function useFinderController(
 		(item: NavItem) => {
 			// Leave the volume first: an open listing holds a watcher on it, which would block the unmount.
 			const fallback = locations.find((location) => location.section === "favorites" && location.icon === "home" && location.available);
-			setTabsState((state) => evacuateTabs(state, item.path, fallback?.path ?? RECENTS_PATH));
+			updateWorkspace((workspace) => evacuateWorkspace(workspace, item.path, fallback?.path ?? RECENTS_PATH));
 			setLocations((current) => current.filter((location) => location.path !== item.path));
 			source
 				.ejectLocation(item.path)
@@ -1797,11 +1809,11 @@ export function useFinderController(
 		(tabId: number, paths: readonly string[], copy: boolean) => {
 			const target = tabsRef.current.find((current) => current.id === tabId);
 			if (target === undefined) return;
-			setTabsState((state) => selectTab(state, tabId));
+			updateWorkspace((workspace) => focusTab(workspace, tabId));
 			setQueryValue("");
 			transferDropped(paths, target.path, copy);
 		},
-		[transferDropped],
+		[transferDropped, updateWorkspace],
 	);
 
 	const runMenuAction = useCallback(
@@ -1937,6 +1949,8 @@ export function useFinderController(
 	}, [contextMenu, rename, query]);
 
 	useEffect(() => {
+		// Every pane mounts a controller; only the focused one answers the keyboard.
+		if (!focused) return;
 		const onKeyDown = (event: globalThis.KeyboardEvent): void => {
 			const target = event.target;
 			if (
@@ -1983,15 +1997,18 @@ export function useFinderController(
 					return;
 				case "closeTab":
 					event.preventDefault();
-					setTabsState((state) => closeTab(state, state.activeId));
+					updateWorkspace((workspace) => {
+						const current = workspace.panes.find((candidate) => candidate.id === paneId);
+						return current === undefined ? workspace : closeWorkspaceTab(workspace, current.activeId);
+					});
 					return;
 				case "openSettings":
 					event.preventDefault();
-					setTabsState((state) => openOrSelectSettingsTab(state));
+					updateWorkspace(openOrSelectSettingsInWorkspace);
 					return;
 				case "focusComposer":
 					event.preventDefault();
-					setTabsState((state) => focusAiSearchTab(state));
+					updateWorkspace(focusAiSearchInWorkspace);
 					focusComposerRef.current?.();
 					return;
 				case "quickLook":
@@ -2093,6 +2110,9 @@ export function useFinderController(
 		window.addEventListener("keydown", onKeyDown);
 		return () => window.removeEventListener("keydown", onKeyDown);
 	}, [
+		focused,
+		updateWorkspace,
+		paneId,
 		zone,
 		path,
 		layout,
@@ -2116,8 +2136,8 @@ export function useFinderController(
 
 	const tabViews = useMemo<readonly TabView[]>(
 		() =>
-			tabsState.tabs.map((current) => {
-				const active = current.id === tabsState.activeId;
+			pane.tabs.map((current) => {
+				const active = current.id === pane.activeId;
 				return {
 					id: current.id,
 					title: tabTitle(current, { isActive: active, query }),
@@ -2126,7 +2146,7 @@ export function useFinderController(
 					aiSearch: current.path === AI_SEARCH_PATH,
 				};
 			}),
-		[tabsState, query],
+		[pane, query],
 	);
 
 	const contextMenuEntries = useMemo<readonly FinderMenuEntry[]>(() => {
@@ -2152,7 +2172,7 @@ export function useFinderController(
 
 	return {
 		tabs: tabViews,
-		canCloseTabs: canCloseTab(tabsState),
+		canCloseTabs: binding.canCloseTabs,
 		path,
 		crumbs: breadcrumbTrail(path),
 		canGoBack: tab.back.length > 0,
@@ -2168,7 +2188,6 @@ export function useFinderController(
 		grouping,
 		zone,
 		selection,
-		toast,
 		flashPath,
 		renamePath: rename?.path ?? null,
 		renameDraft: rename?.draft ?? "",
@@ -2205,13 +2224,13 @@ export function useFinderController(
 		navigate,
 		navigateNav,
 		ejectNav,
-		selectTabId: (id) => setTabsState((state) => selectTab(state, id)),
-		closeTabId: (id) => setTabsState((state) => closeTab(state, id)),
+		selectTabId: (id) => updateWorkspace((workspace) => focusTab(workspace, id)),
+		closeTabId: (id) => updateWorkspace((workspace) => closeWorkspaceTab(workspace, id)),
 		newTab: () => setTabsState((state) => openTab(state)),
-		openSettings: () => setTabsState((state) => openOrSelectSettingsTab(state)),
+		openSettings: () => updateWorkspace(openOrSelectSettingsInWorkspace),
 		showAiSearch: () => setTabsState((state) => showAiSearchInActiveTab(state)),
 		openAiSearch: () => setTabsState((state) => openAiSearchTab(state)),
-		focusAiSearch: () => setTabsState((state) => focusAiSearchTab(state)),
+		focusAiSearch: () => updateWorkspace(focusAiSearchInWorkspace),
 		leaveVirtualTab: () => setTabsState((state) => exitVirtualTab(state)),
 		back: () => setTabsState((state) => goBack(state)),
 		forward: () => setTabsState((state) => goForward(state)),

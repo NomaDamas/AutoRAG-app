@@ -381,4 +381,6 @@
 	--animate-spin: spin var(--dur-spin) linear infinite;
 	--animate-rise: rise var(--dur-modal) var(--ease-out);
 	--animate-shimmer: shimmer var(--dur-shimmer) linear infinite;
+	--animate-pane-in: paneIn var(--dur-pane) var(--ease-pane);
+	--animate-drop-in: dropIn var(--dur-menu) var(--ease-out);
 }

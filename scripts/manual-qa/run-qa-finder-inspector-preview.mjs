@@ -359,18 +359,19 @@ try {
 	// ------------------- HWP / HWPX: rhwp draws the real first page in the paper
 	// macOS and Windows have no OS thumbnailer for HWP without Hancom's plug-in,
 	// so the paper must come from rhwp, not the letter tile or the type icon.
-	for (const name of ["사업계획서.hwp", "회의록.hwpx"]) {
+	// rhwp draws one <text> per glyph; each fixture's first glyph tells its paper from the previous file's.
+	for (const [name, glyph] of [["사업계획서.hwp", ">사<"], ["회의록.hwpx", ">회<"]]) {
 		await rowNamed(page, name).click();
 		await page.waitForFunction(
-			() => {
+			(own) => {
 				const img = document.querySelector(".preview-paper img");
 				const paper = document.querySelector(".preview-paper");
-				if (!(img instanceof HTMLImageElement) || paper === null || !img.src.startsWith("data:image/svg+xml") || !img.complete || img.naturalWidth === 0) return false;
+				if (!(img instanceof HTMLImageElement) || paper === null || !decodeURIComponent(img.src).includes(own) || !img.complete || img.naturalWidth === 0) return false;
 				// Faded in, and the paper's aspect transition has reached the page's own shape.
 				const box = paper.getBoundingClientRect();
 				return getComputedStyle(img).opacity === "1" && Math.abs(box.height / box.width - img.naturalHeight / img.naturalWidth) < 0.02;
 			},
-			undefined,
+			glyph,
 			{ timeout: 15000 },
 		);
 		const hwp = await probe(page);
