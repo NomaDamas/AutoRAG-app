@@ -4,8 +4,10 @@ import {
 	attachmentsFromDrop,
 	finderDragEntries,
 	isAttachmentDrag,
+	isFileTransferDrag,
 	isFinderDrag,
 	mergeAttachments,
+	readDropPaths,
 	readFinderDragPaths,
 	writeFinderDrag,
 	type DropData,
@@ -40,6 +42,56 @@ describe("isAttachmentDrag", () => {
 		expect(isAttachmentDrag([FINDER_DRAG_TYPE, "text/plain"])).toBe(true);
 		expect(isAttachmentDrag(["text/plain", "text/html"])).toBe(false);
 		expect(isAttachmentDrag([])).toBe(false);
+	});
+});
+
+describe("isFileTransferDrag", () => {
+	it("accepts OS files, file links, and Finder rows but not bare text", () => {
+		expect(isFileTransferDrag(["Files"])).toBe(true);
+		expect(isFileTransferDrag(["text/uri-list", "text/plain"])).toBe(true);
+		expect(isFileTransferDrag([FINDER_DRAG_TYPE, "text/plain"])).toBe(true);
+		expect(isFileTransferDrag(["text/plain", "text/html"])).toBe(false);
+		expect(isFileTransferDrag([])).toBe(false);
+	});
+});
+
+describe("readDropPaths", () => {
+	it("reads the absolute paths of OS files and folders dropped from another app", () => {
+		expect(
+			readDropPaths(
+				drop({}, [
+					{ name: "report.pdf", path: "/Users/me/Downloads/report.pdf" },
+					{ name: "Q3", path: "/Users/me/Documents/Q3", directory: true },
+				]),
+				pathForFile,
+			),
+		).toEqual(["/Users/me/Downloads/report.pdf", "/Users/me/Documents/Q3"]);
+	});
+
+	it("reads Finder rows and file URLs, ignoring web links", () => {
+		const data: Record<string, string> = {
+			[FINDER_DRAG_TYPE]: JSON.stringify([{ path: "/d/a.txt", name: "a.txt", kind: "file" }]),
+			"text/uri-list": ["file:///Users/me/My%20Notes/plan%20v2.md", "https://example.com/page"].join("\r\n"),
+		};
+		expect(readDropPaths(drop(data), pathForFile)).toEqual(["/d/a.txt", "/Users/me/My Notes/plan v2.md"]);
+	});
+
+	it("lists a path once when the drop carries it as both a file and a file URL", () => {
+		expect(
+			readDropPaths(
+				drop({ "text/uri-list": "file:///Users/me/a.txt" }, [{ name: "a.txt", path: "/Users/me/a.txt" }]),
+				pathForFile,
+			),
+		).toEqual(["/Users/me/a.txt"]);
+	});
+
+	it("ignores a dropped file with no disk path or a non-absolute one", () => {
+		expect(readDropPaths(drop({}, [{ name: "image.png", path: "" }]), pathForFile)).toEqual([]);
+		expect(readDropPaths(drop({}, [{ name: "relative.txt", path: "relative.txt" }]), pathForFile)).toEqual([]);
+	});
+
+	it("returns nothing for a bare text drag", () => {
+		expect(readDropPaths(drop({ "text/plain": "/d/a.txt" }), pathForFile)).toEqual([]);
 	});
 });
 
