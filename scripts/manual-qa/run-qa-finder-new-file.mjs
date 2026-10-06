@@ -13,8 +13,9 @@
  *   4. choosing Word 문서 writes a real OOXML package (docx) that unzips;
  *   5. a second text file collides Finder-style to "untitled 2.txt";
  *   6. ⌘Z removes the file the New menu just created;
- *   7. the sidebar "New file" button and ⌥⌘N create a text file too;
- *   8. ⇧⌘N creates a folder and starts its inline rename.
+ *   7. a file row's own right-click menu still wins over the empty-space menu;
+ *   8. ⌥⌘N creates a text file;
+ *   9. ⇧⌘N creates a folder and starts its inline rename.
  *
  * Run from the repo root after `bun run build`:
  * `bun scripts/manual-qa/run-qa-finder-new-file.mjs`
@@ -171,12 +172,17 @@ try {
 		`disk=${listNames(top)}`,
 	);
 
-	/* ------------------------- 7. sidebar New file button and ⌥⌘N */
-	const before7 = listNames(top);
-	await page.getByRole("button", { name: "New file", exact: true }).first().click();
-	const viaButton = await waitForNewName(before7, "sidebar New file");
+	/* ------------------- 7. a row's own right-click menu still wins */
+	const seed = join(top, "untitled.txt");
+	await page.locator(`[data-path="${seed}"]`).click({ button: "right" });
+	await page.waitForSelector(".menu", { timeout: 5_000 });
+	const rowMenu = await page.getByRole("menu").first().locator('[role="menuitem"]').allInnerTexts();
 	await page.keyboard.press("Escape");
-	check("the sidebar New file button creates a text file", viaButton === "untitled 2.txt", `new=${viaButton} disk=${listNames(top)}`);
+	check(
+		"right-clicking a file row shows the row menu, not the New menu",
+		rowMenu.some((text) => text.startsWith("Quick Look")) && !rowMenu.some((text) => text.includes("새로 만들기")),
+		`items=${JSON.stringify(rowMenu)}`,
+	);
 
 	await page.locator(".list").click({ position: { x: 40, y: 200 } });
 	const before7b = listNames(top);
@@ -186,7 +192,7 @@ try {
 	);
 	const viaChord = await waitForNewName(before7b, "⌥⌘N text file");
 	await page.keyboard.press("Escape");
-	check("⌥⌘N creates the next text file", viaChord === "untitled 3.txt", `new=${viaChord} disk=${listNames(top)}`);
+	check("⌥⌘N creates the next text file", viaChord === "untitled 2.txt", `new=${viaChord} disk=${listNames(top)}`);
 
 	/* ------------------------- 8. ⇧⌘N creates a folder with inline rename */
 	await page.locator(".list").click({ position: { x: 40, y: 200 } });

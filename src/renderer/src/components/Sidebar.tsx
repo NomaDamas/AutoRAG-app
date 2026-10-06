@@ -1,4 +1,4 @@
-import { Eject, FilePlus, FolderPlus, PanelLeft } from "lucide-react";
+import { Eject, PanelLeft } from "lucide-react";
 import type { DragEvent, ReactElement, RefObject } from "react";
 import type { FsLocationIcon } from "../../../shared/fs-contract";
 import type { NavGroup, NavItem } from "../data/places";
@@ -43,8 +43,6 @@ export function Sidebar({
 	onEject,
 	onOpenSettings,
 	onHideSidebar,
-	onNewFolder,
-	onNewFile,
 	sourceStatus,
 	searchQuery,
 	searchRef,
@@ -63,8 +61,6 @@ export function Sidebar({
 	readonly onEject: (item: NavItem) => void;
 	readonly onOpenSettings?: (() => void) | undefined;
 	readonly onHideSidebar: () => void;
-	readonly onNewFolder: () => void;
-	readonly onNewFile: () => void;
 	readonly sourceStatus?: Readonly<Partial<Record<FsLocationIcon, "syncing" | "error">>>;
 	readonly searchQuery: string;
 	readonly searchRef: RefObject<HTMLInputElement | null>;
@@ -95,24 +91,6 @@ export function Sidebar({
 					onClick={onHideSidebar}
 				>
 					<PanelLeft size={18} strokeWidth={1.8} />
-				</button>
-				<button
-					type="button"
-					className={HEAD_BUTTON_CLASS}
-					title="New folder"
-					aria-label="New folder"
-					onClick={onNewFolder}
-				>
-					<FolderPlus size={18} strokeWidth={1.8} />
-				</button>
-				<button
-					type="button"
-					className={HEAD_BUTTON_CLASS}
-					title="New file"
-					aria-label="New file"
-					onClick={onNewFile}
-				>
-					<FilePlus size={18} strokeWidth={1.8} />
 				</button>
 			</div>
 			<SidebarSearch

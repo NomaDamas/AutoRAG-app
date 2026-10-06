@@ -557,8 +557,6 @@ export function App(): ReactElement {
 						onEject={(item) => finder?.ejectNav(item)}
 						onOpenSettings={() => finder?.openSettings()}
 						onHideSidebar={() => setSidebarVisible(false)}
-						onNewFolder={() => finder?.newFolder()}
-						onNewFile={() => finder?.newFile("text")}
 						sourceStatus={sourceStatus}
 						searchQuery={finder?.query ?? ""}
 						searchRef={finder?.searchRef ?? NO_INPUT}
@@ -596,8 +594,6 @@ export function App(): ReactElement {
 						}}
 						sidebarHidden={!sidebarVisible}
 						onShowSidebar={() => setSidebarVisible(true)}
-						onNewFolder={() => finder?.newFolder()}
-						onNewFile={() => finder?.newFile("text")}
 					/>
 					<div className="grid min-h-0 flex-1" style={{ gridTemplateColumns: finderColumns, gridTemplateRows: "minmax(0, 1fr)" }}>
 						<WorkspaceView

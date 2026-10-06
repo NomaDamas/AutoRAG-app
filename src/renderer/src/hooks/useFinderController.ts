@@ -1602,10 +1602,10 @@ export function useFinderController(
 		[source, canCreateIn, showToast, revealCreated, reportError],
 	);
 
-	/** Sidebar / toolbar "New folder", ⇧⌘N, and the New menu: mkdir in view. */
+	/** ⇧⌘N and the New menu: mkdir in the folder in view. */
 	const newFolder = useCallback(() => createFolderIn(path), [createFolderIn, path]);
 
-	/** Toolbar "New file", ⌥⌘N, and the New menu: create a file in view. */
+	/** ⌥⌘N and the New menu: create a file in the folder in view. */
 	const newFile = useCallback((format: NewFileFormatId) => createFileIn(path, format), [createFileIn, path]);
 
 	const trashEntry = useCallback((entry: FinderEntry) => trashPaths([entry.path]), [trashPaths]);

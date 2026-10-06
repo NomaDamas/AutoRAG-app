@@ -26,9 +26,7 @@ import {
 	Database,
 	ExternalLink,
 	Eye,
-	FilePlus,
 	Film,
-	FolderPlus,
 	History,
 	Image as ImageGlyph,
 	Info,
@@ -164,10 +162,6 @@ export const PanelRightIcon = glyph(PanelRight, 16, 1.9);
 
 /** Toolbar inspector toggle — the mockup's info-circle glyph, not the panel glyph. */
 export const InfoIcon = glyph(Info, 16, 1.8);
-
-export const FolderPlusIcon = glyph(FolderPlus, 16, 1.9);
-
-export const FilePlusIcon = glyph(FilePlus, 16, 1.9);
 
 export const SortIcon = glyph(ArrowDownUp, 16, 1.9);
 

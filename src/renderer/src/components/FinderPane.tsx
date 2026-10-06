@@ -148,6 +148,9 @@ export const FinderPane = memo(function FinderPane({
 	const backgroundDrop = useCallback(
 		(dir: string): BackgroundDropHandlers => ({
 			onContextMenu: (event) => {
+				// A row/tile's own context menu owns the event; only the empty
+				// background opens the New / Paste menu.
+				if (event.target instanceof Element && event.target.closest('[role="row"], [role="option"]') !== null) return;
 				event.preventDefault();
 				// Recents (and the virtual tabs) have no folder to create into.
 				if (dir === "" || finder.searching) return;
