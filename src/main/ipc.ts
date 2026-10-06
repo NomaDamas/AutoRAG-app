@@ -1,4 +1,4 @@
-import { BrowserWindow, ipcMain } from "electron";
+import { app, BrowserWindow, ipcMain, nativeImage, type WebContents } from "electron";
 import {
 	ACTIONS_CHANNELS,
 	isActionAnchor,
@@ -16,6 +16,7 @@ import { SETTINGS_CHANNELS, type JsonValue, type SettingsBridge } from "../share
 import { LIVE_CHANNELS } from "../shared/live-contract";
 import type { ActionService } from "./action-service";
 import type { ChangeHub } from "./change-hub";
+import { dragOutPaths } from "./drag-out";
 import type { VersionFamilyService } from "./version-family-service";
 
 /** Extra work a channel runs after the filesystem operation itself succeeded. */
@@ -79,6 +80,34 @@ export function registerFsIpcHandlers(service: FsCoreBridge, hooks: FsIpcHooks =
 	ipcMain.handle(FS_CHANNELS.copyPathsToClipboard, (_event, paths: readonly string[]) =>
 		service.copyPathsToClipboard(paths),
 	);
+}
+
+/**
+ * The row drag-out: the renderer has already cancelled its own drag
+ * (`preventDefault`), so the main process starts the OS file drag here. The
+ * image under the cursor is the first row's OS icon, with a transparent tile as
+ * the fallback — `startDrag` refuses an empty image.
+ */
+async function startNativeDrag(webContents: WebContents, paths: readonly string[]): Promise<void> {
+	let icon = nativeImage.createEmpty();
+	try {
+		icon = await app.getFileIcon(paths[0] as string);
+	} catch (error) {
+		console.error("drag-out icon failed", error);
+	}
+	if (icon.isEmpty()) icon = nativeImage.createFromBitmap(Buffer.alloc(4), { width: 1, height: 1 });
+	if (webContents.isDestroyed()) return;
+	// Electron's type requires `file`; `files` overrides it at runtime for multi-select.
+	webContents.startDrag({ file: paths[0] as string, files: [...paths], icon });
+}
+
+/** One `send` channel: a Finder row drag-out the OS will carry as real files. */
+export function registerDragOutIpcHandlers(): void {
+	ipcMain.on(FS_CHANNELS.startDrag, (event, paths: unknown) => {
+		const valid = dragOutPaths(paths);
+		if (valid === null) return;
+		void startNativeDrag(event.sender, valid);
+	});
 }
 
 /** Inspector file actions: probe once, run one request, or pop the share sheet. */

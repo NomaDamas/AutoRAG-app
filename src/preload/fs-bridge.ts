@@ -37,6 +37,7 @@ export function createFsBridge(ipcRenderer: IpcRenderer): FsBridge {
 		undo: () => ipcRenderer.invoke(FS_CHANNELS.undo),
 		clipboardGet: () => ipcRenderer.invoke(FS_CHANNELS.clipboardGet),
 		copyPathsToClipboard: (paths) => ipcRenderer.invoke(FS_CHANNELS.copyPathsToClipboard, paths),
+		startDrag: (paths) => ipcRenderer.send(FS_CHANNELS.startDrag, paths),
 		versionFamilies: () => ipcRenderer.invoke(FS_CHANNELS.versionFamilies),
 		indexStatus: (paths) => ipcRenderer.invoke(FS_CHANNELS.indexStatus, paths) as Promise<readonly IndexStatus[]>,
 		setIndexExcluded: (path, excluded) => ipcRenderer.invoke(FS_CHANNELS.indexSetExcluded, path, excluded) as Promise<IndexStatus>,

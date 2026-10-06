@@ -38,6 +38,8 @@ export const FS_CHANNELS = {
 	clipboardGet: "fs:clipboardGet",
 	undo: "fs:undo",
 	copyPathsToClipboard: "fs:copyPathsToClipboard",
+	/** Renderer → main: hand a row drag to the OS as real files; fire and forget. */
+	startDrag: "fs:startDrag",
 	versionFamilies: "fs:versionFamilies",
 	versionFamiliesRefresh: "fs:versionFamiliesRefresh",
 	indexStatus: "index:status",
@@ -386,6 +388,21 @@ export interface FsCoreBridge {
 }
 
 /**
+ * The renderer's row drag-out. It is not a filesystem operation — the main
+ * process starts an Electron native drag with the paths — so it sits beside the
+ * filesystem service rather than inside it.
+ */
+export interface FsDragBridge {
+	/**
+	 * Hand a row drag to the OS as real files (`webContents.startDrag`). The
+	 * renderer calls this from `dragstart` after `preventDefault()`; the OS then
+	 * owns the gesture, so the files can land in Finder, Mail, or any other app.
+	 * Fire and forget — there is no reply.
+	 */
+	startDrag(paths: readonly string[]): void;
+}
+
+/**
  * Version-family members of the fs bridge. The main process composes them from
  * the persisted-snapshot service, not from the filesystem service.
  */
@@ -408,7 +425,7 @@ export interface FsIndexBridge {
 	onIndexRefreshed?(listener: (error: string | null) => void): () => void;
 }
 
-export interface FsBridge extends FsCoreBridge, FsVersionFamilyBridge, FsIndexBridge {}
+export interface FsBridge extends FsCoreBridge, FsVersionFamilyBridge, FsIndexBridge, FsDragBridge {}
 
 export type FsVersionRelation = "exact" | "near" | "contains";
 

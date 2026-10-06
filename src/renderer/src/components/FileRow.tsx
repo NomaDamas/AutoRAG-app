@@ -22,13 +22,13 @@ export interface RowCallbacks {
 	readonly onOpen: (entry: FinderEntry) => void;
 	readonly onContextMenu: (entry: FinderEntry, event: MouseEvent<HTMLDivElement>) => void;
 	readonly onToggleIndex: (entry: FinderEntry) => void;
-	/** A row drag began: fills the drag with the rows it carries (AI Search attaches them). */
+	/** A row drag began: the rows it carries leave the app as a native file drag (AI Search attaches them too). */
 	readonly onDragStart: (entry: FinderEntry, event: DragEvent<HTMLDivElement>) => void;
-	/** An in-app drag hovers the row; folder rows accept it as a drop target. */
+	/** The row drag-out hovers the row; folder rows accept it as a drop target. */
 	readonly onDragOver: (entry: FinderEntry, event: DragEvent<HTMLDivElement>) => void;
-	/** An in-app drag was dropped on the row; folder rows receive the dragged rows. */
+	/** The row drag-out was dropped on the row; folder rows receive the dragged rows. */
 	readonly onDrop: (entry: FinderEntry, event: DragEvent<HTMLDivElement>) => void;
-	/** The folder row currently under an in-app drag; null when none. */
+	/** The folder row currently under the row drag-out; null when none. */
 	readonly dropTargetPath: string | null;
 	readonly onToggleStack: (entry: FinderEntry) => void;
 	readonly onToggleFolder: (entry: FinderEntry) => void;
