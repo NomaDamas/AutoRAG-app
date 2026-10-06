@@ -120,6 +120,27 @@ small {
 	}
 }
 
+/* Split panes — a new pane fades and settles in from its split edge. */
+@keyframes paneIn {
+	from {
+		opacity: 0;
+		transform: scale(0.97);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+
+@keyframes dropIn {
+	from {
+		opacity: 0;
+	}
+	to {
+		opacity: 1;
+	}
+}
+
 /* §7 Scrollbars — deliberately unstyled: any ::-webkit-scrollbar rule forces
  * Chromium's classic scrollbars, which consume layout width and shift the
  * Inspector's preview whenever content starts or stops scrolling. Leaving
@@ -170,5 +191,20 @@ small {
 			opacity: 1;
 			transform: none;
 		}
+	}
+
+	@keyframes paneIn {
+		from {
+			opacity: 0;
+		}
+		to {
+			opacity: 1;
+		}
+	}
+
+	/* Panes and the drop preview jump to their place instead of gliding. */
+	.workspace-pane,
+	.workspace-drop-preview {
+		transition-property: opacity, background-color, border-color !important;
 	}
 }

@@ -20,6 +20,9 @@ const TAB_GRADIENT_HOVER = "hover:bg-[linear-gradient(var(--tab-grad-hover-from)
  * Tab strip (v7 handoff, proto:.tabs/.tab): a 25px #D4D4D8 bar of equal-width
  * Safari-style segments with hairline dividers; the active tab is #ECECEE and
  * the close button fades in on hover. A flash dot marks the reveal target.
+ *
+ * Every tab is draggable: the workspace drop layer decides whether it lands in
+ * another strip, merges into a pane, or splits one (state/workspace.ts).
  */
 export function TabStrip({
 	tabs,
@@ -31,6 +34,10 @@ export function TabStrip({
 	onTabDragOver,
 	onTabDragLeave,
 	onTabDrop,
+	focusMark = false,
+	draggingTabId = null,
+	onTabDragStart,
+	onTabDragEnd,
 }: {
 	readonly tabs: readonly TabView[];
 	readonly canClose: boolean;
@@ -42,6 +49,12 @@ export function TabStrip({
 	readonly onTabDragOver: (id: number, event: DragEvent<HTMLDivElement>) => void;
 	readonly onTabDragLeave: (id: number) => void;
 	readonly onTabDrop: (id: number, event: DragEvent<HTMLDivElement>) => void;
+	/** Split panes: this strip's pane has focus, so its active tab carries the accent bar. */
+	readonly focusMark?: boolean;
+	/** The tab being dragged to another place: it dims until dropped. */
+	readonly draggingTabId?: number | null;
+	readonly onTabDragStart?: (id: number, event: DragEvent<HTMLDivElement>) => void;
+	readonly onTabDragEnd?: () => void;
 }): ReactElement {
 	return (
 		<div className="tabs flex h-25 flex-none items-stretch overflow-hidden border-b border-tabstrip-line bg-tabstrip [-webkit-app-region:drag]">
@@ -50,14 +63,19 @@ export function TabStrip({
 					key={tab.id}
 					data-tab-id={tab.id}
 					data-ai-search={tab.aiSearch ? "true" : undefined}
+					draggable={onTabDragStart !== undefined}
 					className={[
 						`tab group/tab${tab.active ? " tab--active" : ""}`,
 						"relative flex flex-1 min-w-0 items-center justify-center px-24 text-badge font-normal select-none cursor-pointer [-webkit-app-region:no-drag]",
 						index > 0 ? "border-l border-tabstrip-line" : "",
 						tab.active ? "bg-tab-active text-ink" : cn(TAB_GRADIENT, TAB_GRADIENT_HOVER, "text-tab-text"),
 						dropTabId === tab.id ? "shadow-[inset_0_0_0_1.5px_var(--accent)]" : "",
+						focusMark && tab.active ? "tab--focused shadow-[inset_0_-2px_0_var(--accent)]" : "",
+						draggingTabId === tab.id ? "opacity-40" : "",
 					].join(" ")}
 					onClick={() => onSelect(tab.id)}
+					onDragStart={(event) => onTabDragStart?.(tab.id, event)}
+					onDragEnd={() => onTabDragEnd?.()}
 					onDragOver={(event) => onTabDragOver(tab.id, event)}
 					onDragLeave={(event) => {
 						if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return;

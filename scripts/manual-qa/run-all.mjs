@@ -44,6 +44,7 @@ const LANES = [
 	{ name: "dupey-cache", script: "run-qa-finder-dupey-cache.mjs", timeout: 600 },
 	{ name: "trash-prune", script: "run-qa-finder-trash-prune.mjs", timeout: 480 },
 	{ name: "evidence-panel", script: "run-qa-finder-evidence-panel.mjs", timeout: 300 },
+	{ name: "split-panes", script: "run-qa-finder-split-panes.mjs", timeout: 300 },
 	{ name: "ai-search-images", script: "run-qa-finder-ai-search-images.mjs", timeout: 300 },
 	{ name: "datasource-status", script: "run-qa-finder-datasource-status.mjs", timeout: 240 },
 	{ name: "models-status", script: "run-qa-finder-models-status.mjs", timeout: 240 },
