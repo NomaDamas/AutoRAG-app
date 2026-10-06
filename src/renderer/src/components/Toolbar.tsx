@@ -9,6 +9,7 @@ import {
 	ChevronLeftIcon,
 	ChevronRightIcon,
 	ColumnsViewIcon,
+	FilePlusIcon,
 	FolderPlusIcon,
 	GroupIcon,
 	IconsViewIcon,
@@ -59,6 +60,7 @@ export function Toolbar({
 	sidebarHidden,
 	onShowSidebar,
 	onNewFolder,
+	onNewFile,
 }: {
 	readonly title: string;
 	readonly canGoBack: boolean;
@@ -88,6 +90,7 @@ export function Toolbar({
 	readonly sidebarHidden: boolean;
 	readonly onShowSidebar: () => void;
 	readonly onNewFolder: () => void;
+	readonly onNewFile: () => void;
 }): ReactElement {
 	const [menu, setMenu] = useState<{
 		readonly kind: "sort" | "group";
@@ -122,6 +125,15 @@ export function Toolbar({
 						onClick={onNewFolder}
 					>
 						<FolderPlusIcon size={18} />
+					</button>
+					<button
+						type="button"
+						className={`${NAV_BUTTON} [-webkit-app-region:no-drag]`}
+						title="New file"
+						aria-label="New file"
+						onClick={onNewFile}
+					>
+						<FilePlusIcon size={18} />
 					</button>
 				</>
 			) : null}

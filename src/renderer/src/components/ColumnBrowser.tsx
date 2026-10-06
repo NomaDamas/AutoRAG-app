@@ -95,6 +95,7 @@ export function ColumnBrowser({
 							onDragOver={background.onDragOver}
 							onDrop={background.onDrop}
 							onDragLeave={background.onDragLeave}
+							onContextMenu={background.onContextMenu}
 						>
 							{pane.sections.map((section, sectionIndex) => (
 								<div key={section.label ?? `section-${sectionIndex}`}>

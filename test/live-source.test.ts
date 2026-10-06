@@ -66,6 +66,7 @@ function fakeFs(result: FsVersionFamiliesResult): FsBridge {
 		duplicate: async () => ({ ok: [], failed: [] }),
 		rename: async (path, name) => fsEntry(`${path}/${name}`),
 		createFolder: async (directory) => ({ path: `${directory}/untitled folder`, name: "untitled folder" }),
+		createFile: async (directory, format) => ({ path: `${directory}/untitled.${format}`, name: `untitled.${format}` }),
 		trash: batch,
 		reveal: async () => {},
 		quickLook: async () => {},

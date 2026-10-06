@@ -1,5 +1,5 @@
 import type { Dirent } from "node:fs";
-import { cp, lstat, mkdir, readdir, rename as fsRename, rm } from "node:fs/promises";
+import { cp, lstat, mkdir, readdir, rename as fsRename, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, dirname, extname, isAbsolute, join, win32 } from "node:path";
 import {
@@ -21,7 +21,9 @@ import {
 	type FsSearchOptions,
 	type FsSearchResult,
 } from "../shared/fs-contract";
+import { newFileFormat, type NewFileFormatId } from "../shared/new-file-contract";
 import type { FileNameSearchBackend } from "./file-name-search";
+import { newFileContents } from "./file-templates";
 import { createFinderMetadataResolver, type FinderMetadataLookup } from "./finder-metadata";
 import { createIconProvider, type IconProvider } from "./file-icon";
 import { createOsKindResolver } from "./file-kind";
@@ -113,6 +115,15 @@ export function toHandoffPath(path: string, platform: NodeJS.Platform): string {
  */
 export function untitledFolderName(attempt: number): string {
 	return attempt === 1 ? "untitled folder" : `untitled folder ${attempt}`;
+}
+
+/**
+ * Finder's new-file naming for the Nth attempt: "untitled.txt", then
+ * "untitled 2.txt", "untitled 3.txt", … The numbering is driven by the `wx`
+ * write failing with EEXIST, so it matches exactly the names already on disk.
+ */
+export function untitledFileName(extension: string, attempt: number): string {
+	return `${attempt === 1 ? "untitled" : `untitled ${attempt}`}.${extension}`;
 }
 
 interface SearchContext {
@@ -466,12 +477,12 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 		return results;
 	}
 
-	/** One undo step of the most recent copy/move transfer, consumed by ⌘Z. */
+	/** One undo step of the most recent copy/move/create operation, consumed by ⌘Z. */
 	interface FsUndoStep {
-		readonly kind: "copy" | "move";
-		/** The row the transfer created (copy) or now occupies (move). */
+		readonly kind: "copy" | "move" | "create";
+		/** The row the transfer created (copy/create) or now occupies (move). */
 		readonly path: string;
-		/** The folder a move took the row from; "" for copy steps. */
+		/** The folder a move took the row from; "" for copy and create steps. */
 		readonly restoreDir: string;
 	}
 
@@ -511,10 +522,10 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 	}
 
 	/**
-	 * Undo the most recent recorded transfer (⌘Z). A copy step deletes the row
-	 * the copy created; a move step puts the row back into the folder it came
-	 * from, with Finder-style collision naming when the original name was
-	 * retaken in the meantime. The record is consumed by the call.
+	 * Undo the most recent recorded operation (⌘Z). A copy or create step
+	 * deletes the row it created; a move step puts the row back into the folder
+	 * it came from, with Finder-style collision naming when the original name
+	 * was retaken in the meantime. The record is consumed by the call.
 	 */
 	async function undo(): Promise<FsUndoOutcome> {
 		const steps = lastUndoSteps;
@@ -525,7 +536,7 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 		const failed: FsOpError[] = [];
 		for (const step of steps) {
 			try {
-				if (step.kind === "copy") {
+				if (step.kind === "copy" || step.kind === "create") {
 					await rm(step.path, { recursive: true });
 				} else {
 					const stepStat = await lstat(step.path);
@@ -582,6 +593,26 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 			const target = join(directory, name);
 			try {
 				await mkdir(target);
+				lastUndoSteps = [{ kind: "create", path: target, restoreDir: "" }];
+				return { path: target, name };
+			} catch (error) {
+				if (!hasErrorCode(error, "EEXIST")) throw error;
+			}
+		}
+	}
+
+	async function createFile(directory: string, format: NewFileFormatId): Promise<{ readonly path: string; readonly name: string }> {
+		const { extension } = newFileFormat(format);
+		const contents = newFileContents(format);
+		// `wx` fails with EEXIST when the name is taken, which drives the
+		// numbering; the exclusive create also avoids clobbering a file that
+		// appears between two attempts.
+		for (let attempt = 1; ; attempt += 1) {
+			const name = untitledFileName(extension, attempt);
+			const target = join(directory, name);
+			try {
+				await writeFile(target, contents, { flag: "wx" });
+				lastUndoSteps = [{ kind: "create", path: target, restoreDir: "" }];
 				return { path: target, name };
 			} catch (error) {
 				if (!hasErrorCode(error, "EEXIST")) throw error;
@@ -616,6 +647,7 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 		rename,
 		undo,
 		createFolder,
+		createFile,
 		trash: (paths) => runBatch(paths, (path) => deps.shell.trashItem(toHandoffPath(path, platform))),
 		reveal: async (path) => {
 			deps.shell.showItemInFolder(toHandoffPath(path, platform));

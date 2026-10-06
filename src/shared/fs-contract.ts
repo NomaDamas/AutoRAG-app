@@ -1,4 +1,5 @@
 import type { IndexStatus } from "./index-contract";
+import type { NewFileFormatId } from "./new-file-contract";
 
 /**
  * Finder contract shared by the Electron main process and the renderer.
@@ -29,6 +30,7 @@ export const FS_CHANNELS = {
 	duplicate: "fs:duplicate",
 	rename: "fs:rename",
 	createFolder: "fs:createFolder",
+	createFile: "fs:createFile",
 	trash: "fs:trash",
 	reveal: "fs:reveal",
 	quickLook: "fs:quickLook",
@@ -216,9 +218,9 @@ export interface FsBatchResult {
 }
 
 /**
- * Outcome of ⌘Z: the main process undoes its most recent recorded copy/move
- * transfer (a copy step deletes the created row, a move step moves the row
- * back to its original folder). The record is consumed by the call.
+ * Outcome of ⌘Z: the main process undoes its most recent recorded
+ * operation (a copy/create step deletes the created row, a move step moves
+ * the row back to its original folder). The record is consumed by the call.
  */
 export interface FsUndoOutcome {
 	/** True when a record existed and every step was applied. */
@@ -360,6 +362,13 @@ export interface FsCoreBridge {
 	 * and name.
 	 */
 	createFolder(directory: string): Promise<{ readonly path: string; readonly name: string }>;
+	/**
+	 * Create a new file inside `directory` from the format's template (Finder
+	 * "New File"). The first one is "untitled.<ext>"; a taken name falls
+	 * through to "untitled 2.<ext>", "untitled 3.<ext>", … Returns the created
+	 * file's absolute path and name.
+	 */
+	createFile(directory: string, format: NewFileFormatId): Promise<{ readonly path: string; readonly name: string }>;
 	/** Move to the macOS Trash (shell.trashItem). */
 	trash(paths: readonly string[]): Promise<FsBatchResult>;
 	/** Reveal in the real Finder (shell.showItemInFolder). */
@@ -379,7 +388,7 @@ export interface FsCoreBridge {
 	openUrl(url: string): Promise<void>;
 	clipboardSet(clipboard: FsClipboard): Promise<void>;
 	clipboardGet(): Promise<FsClipboard | null>;
-	/** Undo the most recent recorded copy/move transfer (⌘Z). The record is consumed. */
+	/** Undo the most recent recorded copy/move/create operation (⌘Z). The record is consumed. */
 	undo(): Promise<FsUndoOutcome>;
 	/** Write the absolute paths as text to the OS clipboard ("Copy Path"). */
 	copyPathsToClipboard(paths: readonly string[]): Promise<void>;

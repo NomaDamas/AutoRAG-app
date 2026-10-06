@@ -28,6 +28,7 @@ export function createFsBridge(ipcRenderer: IpcRenderer): FsBridge {
 		duplicate: (paths) => ipcRenderer.invoke(FS_CHANNELS.duplicate, paths),
 		rename: (path, newName) => ipcRenderer.invoke(FS_CHANNELS.rename, path, newName),
 		createFolder: (directory) => ipcRenderer.invoke(FS_CHANNELS.createFolder, directory),
+		createFile: (directory, format) => ipcRenderer.invoke(FS_CHANNELS.createFile, directory, format),
 		trash: (paths) => ipcRenderer.invoke(FS_CHANNELS.trash, paths),
 		reveal: (path) => ipcRenderer.invoke(FS_CHANNELS.reveal, path),
 		quickLook: (path) => ipcRenderer.invoke(FS_CHANNELS.quickLook, path),

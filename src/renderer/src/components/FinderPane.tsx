@@ -147,6 +147,12 @@ export const FinderPane = memo(function FinderPane({
 
 	const backgroundDrop = useCallback(
 		(dir: string): BackgroundDropHandlers => ({
+			onContextMenu: (event) => {
+				event.preventDefault();
+				// Recents (and the virtual tabs) have no folder to create into.
+				if (dir === "" || finder.searching) return;
+				finder.openBackgroundContextMenu(event, dir);
+			},
 			onDragOver: (event) => {
 				const overRow = event.target instanceof Element && event.target.closest('[role="row"], [role="option"]') !== null;
 				const destination = backgroundDropDir(dir, { searching: finder.searching, overRow });
@@ -172,7 +178,7 @@ export const FinderPane = memo(function FinderPane({
 				setDropBackgroundDir((current) => (current === dir ? null : current));
 			},
 		}),
-		[finder.searching, finder.transferDropped],
+		[finder.searching, finder.transferDropped, finder.openBackgroundContextMenu],
 	);
 
 	const rowCallbacks: RowCallbacks = {

@@ -10,11 +10,12 @@ import { cn } from "../lib/cn";
 import { CheckIcon } from "./icons";
 import { FileTile } from "./primitives/FileTile";
 
-/** Drag handlers for the empty background of a listing. */
+/** Handlers for the empty background of a listing (in-app drags and the New menu). */
 export interface BackgroundDropHandlers {
 	readonly onDragOver: (event: DragEvent<HTMLDivElement>) => void;
 	readonly onDrop: (event: DragEvent<HTMLDivElement>) => void;
 	readonly onDragLeave: (event: DragEvent<HTMLDivElement>) => void;
+	readonly onContextMenu: (event: MouseEvent<HTMLDivElement>) => void;
 }
 
 export interface RowCallbacks {
