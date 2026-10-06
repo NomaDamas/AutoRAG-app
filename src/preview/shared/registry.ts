@@ -15,7 +15,7 @@ export const VIEWER_KINDS = [
 	"text",
 	"archive",
 	"epub",
-	"hwpx",
+	"hwp",
 	"font",
 	"rtf",
 	"fallback",
@@ -51,7 +51,7 @@ assign("text", [
 ]);
 assign("archive", ["zip", "jar", "war", "apk", "ipa", "vsix", "crx", "numbers", "pages", "key", "tar", "gz", "gzip", "tgz"]);
 assign("epub", ["epub"]);
-assign("hwpx", ["hwpx"]);
+assign("hwp", ["hwp", "hwpx"]);
 assign("font", ["ttf", "otf", "woff", "woff2", "eot"]);
 assign("rtf", ["rtf"]);
 
@@ -93,7 +93,7 @@ export function byteNeed(kind: ViewerKind): ByteNeed {
 		case "pptx":
 		case "archive":
 		case "epub":
-		case "hwpx":
+		case "hwp":
 			return "whole";
 		case "fallback":
 			return "sniff";
@@ -167,6 +167,7 @@ const LABELS: Readonly<Record<string, string>> = {
 	json: "JSON",
 	zip: "ZIP archive",
 	epub: "EPUB book",
+	hwp: "HWP document",
 	hwpx: "HWPX document",
 	ttf: "TrueType font",
 	otf: "OpenType font",

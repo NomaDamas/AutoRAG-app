@@ -37,6 +37,7 @@ const SELF_SIZED: Partial<Record<StageKind, true>> = {
 	video: true,
 	audio: true,
 	pdf: true,
+	hwp: true,
 	markdown: true,
 	html: true,
 	text: true,

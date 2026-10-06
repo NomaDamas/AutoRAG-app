@@ -27,6 +27,7 @@ import { mkdirSync, mkdtempSync, rmSync, utimesSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildExifJpeg } from "../../test/support/exif-fixture.ts";
+import { buildHwp } from "../../test/support/hwp-fixture.ts";
 import { finderWindow, launchFinder, ROOT } from "./launch-finder.mjs";
 
 const EVIDENCE = join(ROOT, ".omo/evidence/ai-finder-app/qa-inspector-preview");
@@ -63,10 +64,13 @@ mkdirSync(home, { recursive: true });
 const fixtureName = "ulw-preview-qa";
 const folder = join(home, "Documents", fixtureName);
 mkdirSync(folder, { recursive: true });
-const FIXTURES = ["deck-a.pdf", "deck-b.pdf", "deck-c.pdf", "deck-d.pdf", "notes.txt", "photo.jpg"];
+// The Korean names sort after the Latin ones, so the five-file shift range (deck-a → notes.txt) is unchanged.
+const FIXTURES = ["deck-a.pdf", "deck-b.pdf", "deck-c.pdf", "deck-d.pdf", "notes.txt", "photo.jpg", "사업계획서.hwp", "회의록.hwpx"];
 for (const name of FIXTURES) {
 	if (name.endsWith(".pdf")) await Bun.write(join(folder, name), buildPdf(`Dazzi Meetup ${name}`));
 	else if (name.endsWith(".jpg")) await Bun.write(join(folder, name), buildExifJpeg());
+	else if (name.endsWith(".hwp")) await Bun.write(join(folder, name), buildHwp(["사업계획서 첫 쪽", "둘째 쪽"], "hwp"));
+	else if (name.endsWith(".hwpx")) await Bun.write(join(folder, name), buildHwp(["회의록 첫 쪽"], "hwpx"));
 	else await Bun.write(join(folder, name), "preview qa\n");
 }
 // A stable mtime so the date-range assertion does not depend on run time.
@@ -350,6 +354,47 @@ try {
 		JSON.stringify(immediate),
 	);
 	await page.screenshot({ path: join(EVIDENCE, "05-reselected-instant.png") });
+
+	console.log("phase: hwp");
+	// ------------------- HWP / HWPX: rhwp draws the real first page in the paper
+	// macOS and Windows have no OS thumbnailer for HWP without Hancom's plug-in,
+	// so the paper must come from rhwp, not the letter tile or the type icon.
+	// rhwp draws one <text> per glyph; each fixture's first glyph tells its paper from the previous file's.
+	for (const [name, glyph] of [["사업계획서.hwp", ">사<"], ["회의록.hwpx", ">회<"]]) {
+		await rowNamed(page, name).click();
+		await page.waitForFunction(
+			(own) => {
+				const img = document.querySelector(".preview-paper img");
+				const paper = document.querySelector(".preview-paper");
+				if (!(img instanceof HTMLImageElement) || paper === null || !decodeURIComponent(img.src).includes(own) || !img.complete || img.naturalWidth === 0) return false;
+				// Faded in, and the paper's aspect transition has reached the page's own shape.
+				const box = paper.getBoundingClientRect();
+				return getComputedStyle(img).opacity === "1" && Math.abs(box.height / box.width - img.naturalHeight / img.naturalWidth) < 0.02;
+			},
+			glyph,
+			{ timeout: 15000 },
+		);
+		const hwp = await probe(page);
+		const label = name.endsWith(".hwpx") ? "hwpx" : "hwp";
+		// Every pixel: a one-line test document is too sparse for the probe's sampling stride.
+		const glyphs = await page.evaluate(() => {
+			const img = document.querySelector(".preview-paper img");
+			const canvas = document.createElement("canvas");
+			canvas.width = img.naturalWidth;
+			canvas.height = img.naturalHeight;
+			const context = canvas.getContext("2d");
+			context.drawImage(img, 0, 0);
+			const { data } = context.getImageData(0, 0, canvas.width, canvas.height);
+			let dark = 0;
+			for (let i = 0; i < data.length; i += 4) if (data[i + 3] > 128 && data[i] + data[i + 1] + data[i + 2] < 300) dark += 1;
+			return dark;
+		});
+		check(`${label} paper renders rhwp's first page, not a tile`, hwp.mode === "paper" && hwp.imgSrc?.startsWith("data:image/svg+xml") === true, hwp.imgSrc?.slice(0, 40) ?? "no img");
+		check(`${label} first page carries the document's own text`, decodeURIComponent(hwp.imgSrc ?? "").includes(">첫<"));
+		check(`${label} paper paints the page's glyphs`, glyphs > 50, `${glyphs} dark px`);
+		check(`${label} paper keeps the A4 portrait shape`, hwp.imgBox !== null && Math.abs(hwp.imgBox.height / hwp.imgBox.width - 297 / 210) < 0.02, JSON.stringify(hwp.imgBox));
+		await page.screenshot({ path: join(EVIDENCE, `06-${label}-paper.png`) });
+	}
 
 	await Bun.write(join(EVIDENCE, "manifest.json"), `${JSON.stringify({ results, folder }, null, 2)}\n`);
 } finally {

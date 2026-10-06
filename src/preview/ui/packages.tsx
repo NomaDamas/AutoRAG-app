@@ -101,25 +101,6 @@ export function EpubView({ file }: { readonly file: PreviewDocument }): ReactEle
 	return <pre className="ql__pre box-border self-stretch w-full h-auto m-0 px-24 py-20 bg-window text-ink font-mono text-meta leading-[1.55] whitespace-pre-wrap [word-break:break-word] select-text">{text}</pre>;
 }
 
-export function HwpxView({ file }: { readonly file: PreviewDocument }): ReactElement {
-	const bytes = file.bytes;
-	const text = useMemo(() => {
-		if (bytes === null) return null;
-		try {
-			const files = inflate(bytes, (name) => name.startsWith("Contents/section") && name.endsWith(".xml"));
-			const chunks: string[] = [];
-			for (const body of files.values()) chunks.push(tagged(strFromU8(body), "hp:t"));
-			return chunks.join("\n").slice(0, 20_000);
-		} catch (caught) {
-			if (caught instanceof Error) return "";
-			throw caught;
-		}
-	}, [bytes]);
-	if (text === null) return <FallbackView file={file} note="문서를 읽지 못했습니다" />;
-	if (text.trim() === "") return <FallbackView file={file} note="본문을 찾지 못했습니다" />;
-	return <pre className="ql__pre box-border self-stretch w-full h-auto m-0 px-24 py-20 bg-window text-ink font-mono text-meta leading-[1.55] whitespace-pre-wrap [word-break:break-word] select-text">{text}</pre>;
-}
-
 export function PptxView({ file }: { readonly file: PreviewDocument }): ReactElement {
 	const bytes = file.bytes;
 	const [slides, setSlides] = useState<{

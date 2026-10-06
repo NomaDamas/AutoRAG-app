@@ -53,9 +53,9 @@ video report their decoded size). `clamp` keeps a panel's preferred width and
 caps each side on its own, so a long file opens tall rather than narrow.
 Panel sizes come from the reference: audio 620 × 368, other 620 × 290 (419
 with details), folder 640 wide, code 840 wide, HTML 980 × 720, Markdown 1100
-wide, and PDF the page width plus 56px margins and the 128px rail. Text-like
-panels measure their content, not their scroller, because the window still has
-the previous file's size when they lay out.
+wide, and PDF and HWP the page width plus 56px margins and the 128px rail.
+Text-like panels measure their content, not their scroller, because the window
+still has the previous file's size when they lay out.
 
 ## Viewers
 
@@ -69,10 +69,26 @@ the previous file's size when they lay out.
   facts, speed and repeat chips, a volume pill, and a transport bar whose last
   button continues in the default app. Files over 24MB skip the waveform.
 - **PDF** — paper cards in one scrolling column, a floating pill with zoom
-  steps and the current page, and a page rail. pdf.js streams the file over the
-  range-capable protocol with auto-fetch off, so a large document opens on its
-  first page. Pages keep their slot while released and render within 600px of
-  the viewport; a zoom keeps the old pixels until the new ones are drawn.
+  steps and the current page, and a page rail (`PagedView` in `paged.tsx`).
+  pdf.js streams the file over the range-capable protocol with auto-fetch off,
+  so a large document opens on its first page. Pages keep their slot while
+  released and render within 600px of the viewport; a zoom keeps the old
+  pixels until the new ones are drawn.
+- **HWP / HWPX** — the same `PagedView`, drawn by rhwp (`@rhwp/core`, the
+  Rust + WebAssembly engine alhangeul-macos builds on). rhwp parses HWP 5,
+  HWPX, and some HWP 3 documents, paginates them when the file opens, and
+  renders each page as SVG; a page shows as an `<img>` of that SVG, so the
+  document can neither run script nor fetch anything. Hancom fonts fall back
+  to rhwp's chain (Batang, Malgun Gothic, Apple SD Gothic Neo, Noto, serif /
+  sans-serif). rhwp's glue and its 10MB module are a lazy chunk loaded on the
+  first HWP preview, which is why both renderer CSPs allow
+  `'wasm-unsafe-eval'`. Every rhwp use goes through `shared/hwp.ts`, and the
+  dev server serves `@rhwp/core` unoptimized (`electron.vite.config.ts`): an
+  optimized copy carries a `?v=` hash the long-lived Quick Look window would
+  keep importing after a re-optimize. The Finder Info panel's preview paper
+  shows the same first page (`ui/rhwp.ts`), since the OS thumbnailers draw
+  nothing for HWP without Hancom's plug-in. Encrypted, DRM, and unsupported
+  files fall back to the Other panel with rhwp's message.
 - **HTML** — a sandboxed frame with scripts off, at desktop width, in a 390px
   phone column, or as highlighted source.
 - **Code** — numbered lines on the paper material with the reference's Xcode
@@ -94,7 +110,7 @@ the previous file's size when they lay out.
   (a bounded walk: 200k entries or 2.5s, then a lower bound marked `+`), date,
   and the six most recently modified children.
 
-Images, TIFF, HEIC, fonts, Word, sheets, slides, archives, EPUB, and HWPX keep
+Images, TIFF, HEIC, fonts, Word, sheets, slides, archives, and EPUB keep
 their existing viewers inside the new chrome.
 
 ## Reads
@@ -102,7 +118,8 @@ their existing viewers inside the new chrome.
 The main process reads only what the viewer will use (`byteNeed` in
 `registry.ts`): nothing for media, PDF, images, and fonts, which stream through
 `autorag-preview://` (it answers `Range` with `206`); the first 4MB of text,
-code, Markdown, and HTML; whole documents up to 32MB; and a 64KB sniff of an
+code, Markdown, and HTML; whole documents (HWP included) up to 32MB; and a 64KB
+sniff of an
 unknown file, read on as text only when it looks like text. The detail calls
 (details, SHA-256, folder size, audio tags) answer only for the path the window
 is showing, and the hash and folder walk stop when the preview moves on.

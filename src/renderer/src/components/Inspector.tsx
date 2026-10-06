@@ -26,6 +26,7 @@
 
 import { useEffect, useState, type MouseEvent as ReactMouseEvent, type ReactElement, type ReactNode } from "react";
 import { previewStreamUrl } from "../../../preview/shared/contract";
+import { hwpFirstPageUrl } from "../../../preview/ui/rhwp";
 import type { ActionAnchor, ActionCapabilities } from "../../../shared/actions-contract";
 import type { FsFileDetails } from "../../../shared/fs-contract";
 import type { IndexStatus } from "../../../shared/index-contract";
@@ -336,6 +337,18 @@ interface PreviewState {
  */
 const previewCache = new Map<string, PreviewState>();
 
+/**
+ * HWP/HWPX previews are first-page SVG data URLs (often 100KB+), not short
+ * protocol URLs, so only the most recent ones stay in `previewCache`.
+ */
+const HWP_PREVIEW_KEEP = 24;
+const hwpIdentities: string[] = [];
+
+function rememberHwp(identity: string): void {
+	hwpIdentities.push(identity);
+	while (hwpIdentities.length > HWP_PREVIEW_KEEP) previewCache.delete(hwpIdentities.shift() ?? "");
+}
+
 /** The loading skeleton's aspect before the first decode says otherwise. */
 const DEFAULT_PAPER_ASPECT = 4 / 3;
 
@@ -363,12 +376,15 @@ function usePreviewState(entry: FinderEntry): {
 		setState((prev) => ({ url: null, resolved: false, aspect: prev.aspect }));
 		const modifiedAt = entry.modifiedAt;
 		if (entry.kind !== "file" || modifiedAt === undefined) return;
-		const load = window.autorag?.fs?.previewIcon;
-		if (load === undefined) return;
 		const path = entry.path;
+		// The OS thumbnailers draw nothing for HWP without Hancom's plug-in; rhwp draws the first page here.
+		const hwp = /\.hwpx?$/i.test(path);
+		const load = hwp ? hwpFirstPageUrl : window.autorag?.fs?.previewIcon;
+		if (load === undefined) return;
 		let cancelled = false;
 		const settle = (next: PreviewState): void => {
 			previewCache.set(identity, next);
+			if (hwp) rememberHwp(identity);
 			if (!cancelled) setState(next);
 		};
 		void load(path, modifiedAt)
