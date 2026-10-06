@@ -52,3 +52,37 @@ export async function openAiSearch(page, timeoutMs = 30_000) {
 	await page.locator(".sidebar__item", { hasText: "AI Search" }).click({ timeout: timeoutMs });
 	await page.waitForSelector(`${AI_PANEL} input[aria-label="Ask Dazzi"]`, { timeout: timeoutMs });
 }
+
+/**
+ * A Finder row drag is a native file drag (`fs:startDrag` →
+ * `webContents.startDrag`), so a lane that drives one must first neutralize the
+ * real OS drag: it would otherwise capture the pointer. The contextBridge
+ * object is frozen, so the stub lives in the main process — `startDrag` becomes
+ * a no-op and the channel payloads are recorded. Returns a reader for the
+ * payloads the renderer sent.
+ */
+export async function stubNativeDrag(app) {
+	await app.evaluate(({ BrowserWindow, ipcMain }) => {
+		globalThis.__qaStartDrags = globalThis.__qaStartDrags ?? [];
+		for (const window of BrowserWindow.getAllWindows()) window.webContents.startDrag = () => {};
+		if (globalThis.__qaStartDragsHooked !== true) {
+			globalThis.__qaStartDragsHooked = true;
+			ipcMain.on("fs:startDrag", (_event, paths) => globalThis.__qaStartDrags.push(paths));
+		}
+	});
+	return () => app.evaluate(() => globalThis.__qaStartDrags ?? []);
+}
+
+/**
+ * Start a row drag the way the app does when the user grabs a row: a
+ * `dragstart` the app turns into a native file drag. Requires
+ * {@link stubNativeDrag} first, and a selection when the drag should carry more
+ * than the grabbed row.
+ */
+export async function startRowDrag(page, path) {
+	await page.evaluate((value) => {
+		const row = document.querySelector(`[data-path="${value}"]`);
+		if (row === null) throw new Error(`no row for ${value}`);
+		row.dispatchEvent(new DragEvent("dragstart", { bubbles: true, cancelable: true, dataTransfer: new DataTransfer() }));
+	}, path);
+}

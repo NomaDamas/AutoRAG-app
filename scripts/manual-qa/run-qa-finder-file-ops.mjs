@@ -22,10 +22,12 @@
  *      and a second ⌘Z does nothing once the record is consumed;
  *  10. ⌘C/⌘V while the search field has focus never touches the filesystem.
  *
- * Drags go through Chromium's native drag path (`Input.dispatchDragEvent`, the
- * same route an OS drag takes); the ⌥ variant dispatches the identical
- * `DragEvent` from the page because Chromium aborts a synthesized drop while
- * Alt is held.
+ * Drags drive the app's own row drag-out: `startRowDrag` fires the `dragstart`
+ * that turns into a native file drag (`stubNativeDrag` neutralizes the real OS
+ * drag so the pointer is never captured), and the drops go through Chromium's
+ * native drop path (`Input.dispatchDragEvent` with `files`, the same route an
+ * OS drag takes). The ⌥ variant dispatches the identical `DragEvent` from the
+ * page because Chromium aborts a synthesized drop while Alt is held.
  *
  * Run from the repo root after `bun run build`:
  * `bun scripts/manual-qa/run-qa-finder-file-ops.mjs`
@@ -33,15 +35,14 @@
 
 import { existsSync, mkdirSync, mkdtempSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { finderWindow, launchFinder, openAiSearch } from "./launch-finder.mjs";
+import { finderWindow, launchFinder, openAiSearch, startRowDrag, stubNativeDrag } from "./launch-finder.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const EVIDENCE = join(ROOT, ".omo", "evidence", "ai-finder-app", "qa-file-ops");
 mkdirSync(EVIDENCE, { recursive: true });
 
-const FINDER_DRAG_TYPE = "application/x-autorag-finder-entries";
 /** Copy shown by the AI Search panel's drag overlay. */
 const DOCK_OVERLAY = "여기로 끌어서 AI에게 물어보기";
 
@@ -86,34 +87,49 @@ const row = (page, path) => page.locator(`[data-path="${path}"]`);
 const waitForRow = (page, path, present = true) =>
 	row(page, path).first().waitFor({ state: present ? "visible" : "detached", timeout: 15_000 });
 const listNames = (dir) => readdirSync(dir).sort();
-const dragPayload = (paths) =>
-	paths.map((path) => ({ path, name: basename(path), kind: "file" }));
 const atTitle = (page, name) =>
 	page.waitForFunction((want) => document.querySelector(".toolbar-title")?.textContent === want, name, { timeout: 15_000 });
 
-/** Chromium's native drag-and-drop, dropped at the target's center. */
-async function cdpDrag(page, cdp, paths, target, midCheck) {
+/** The point at the center of a locator's box. */
+async function centerOf(target) {
 	const box = await target.boundingBox();
 	if (box === null) throw new Error("drop target is not visible");
-	const x = box.x + box.width / 2;
-	const y = box.y + box.height / 2;
-	const data = { items: [{ mimeType: FINDER_DRAG_TYPE, data: JSON.stringify(dragPayload(paths)) }], dragOperationsMask: 16 };
-	for (const type of ["dragEnter", "dragOver"]) {
-		await cdp.send("Input.dispatchDragEvent", { type, x, y, data, modifiers: 0 });
-		await page.waitForTimeout(150);
-	}
+	return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+}
+
+/** One native file drag (the row drag-out) entering, hovering, and dropping at a point. */
+async function cdpDropAt(page, cdp, paths, point, midCheck) {
+	const data = { items: [], files: paths, dragOperationsMask: 16 };
+	await cdp.send("Input.dispatchDragEvent", { type: "dragEnter", ...point, data, modifiers: 0 });
+	await cdp.send("Input.dispatchDragEvent", { type: "dragOver", ...point, data, modifiers: 0 });
+	await page.waitForTimeout(150);
 	if (midCheck !== undefined) await midCheck();
-	await cdp.send("Input.dispatchDragEvent", { type: "drop", x, y, data, modifiers: 0 });
+	await cdp.send("Input.dispatchDragEvent", { type: "drop", ...point, data, modifiers: 0 });
 	await page.waitForTimeout(400);
 }
 
+/** Arm the row drag for `paths`, then drop it at the target's center. */
+async function cdpDrag(page, cdp, paths, target, midCheck) {
+	await startRowDrag(page, paths[0]);
+	await cdpDropAt(page, cdp, paths, await centerOf(target), midCheck);
+}
+
+/** A held native drag hovering a point (dragEnter once, then dragOver), for the spring-load dwell. */
+async function cdpHover(page, cdp, paths, point, entered) {
+	const data = { items: [], files: paths, dragOperationsMask: 16 };
+	if (!entered) await cdp.send("Input.dispatchDragEvent", { type: "dragEnter", ...point, data, modifiers: 0 });
+	await cdp.send("Input.dispatchDragEvent", { type: "dragOver", ...point, data, modifiers: 0 });
+}
+
 /** The same DragEvent the browser delivers, with ⌥ — returns whether the target showed the highlight. */
-function domDrag(page, paths, targetPath, alt) {
+async function domDrag(page, paths, targetPath, alt) {
+	await startRowDrag(page, paths[0]);
 	return page.evaluate(
-		([payload, target, altKey]) =>
+		([target, altKey]) =>
 			new Promise((resolve) => {
+				// A synthetic File gives the drag the `Files` type a native drag carries.
 				const data = new DataTransfer();
-				data.setData("application/x-autorag-finder-entries", JSON.stringify(payload));
+				data.items.add(new File(["x"], "x"));
 				const over = document.querySelector(`[data-path="${target}"]`);
 				over?.dispatchEvent(new DragEvent("dragover", { bubbles: true, cancelable: true, dataTransfer: data, altKey }));
 				window.setTimeout(() => {
@@ -125,7 +141,7 @@ function domDrag(page, paths, targetPath, alt) {
 					resolve(highlighted);
 				}, 250);
 			}),
-		[dragPayload(paths), targetPath, alt],
+		[targetPath, alt],
 	);
 }
 
@@ -143,6 +159,9 @@ try {
 	await atTitle(page, "qa-file-ops");
 	await waitForRow(page, COPIES);
 	const cdp = await page.context().newCDPSession(page);
+	// Row drags are native file drags now; neutralize the real OS drag so the
+	// lane can arm one without capturing the pointer.
+	await stubNativeDrag(app);
 
 	/* ------------------------------------------------------ 1. ⌘C / ⌘V copy */
 	await row(page, COPIES).click();
@@ -240,28 +259,23 @@ try {
 	await page.locator(".tab").first().click();
 	await atTitle(page, "qa-file-ops");
 	await waitForRow(page, SPRINGS);
-	const from = await row(page, SPRINGS).boundingBox();
+	await startRowDrag(page, SPRINGS);
 	const tabBox = await page.locator(".tab").nth(1).boundingBox();
-	await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
-	await page.mouse.down();
-	await page.mouse.move(from.x + from.width / 2 + 16, from.y + from.height / 2, { steps: 4 });
-	await page.mouse.move(tabBox.x + tabBox.width / 2, tabBox.y + tabBox.height / 2, { steps: 8 });
 	const tabX = tabBox.x + tabBox.width / 2;
 	const tabY = tabBox.y + tabBox.height / 2;
 	let springSwitched = false;
 	let overlayDuringDwell = 0;
+	let entered = false;
 	for (let tick = 0; tick < 15 && !springSwitched; tick += 1) {
-		await page.mouse.move(tabX + (tick % 2 === 0 ? 3 : -3), tabY, { steps: 1 });
+		await cdpHover(page, cdp, [SPRINGS], { x: tabX + (tick % 2 === 0 ? 3 : -3), y: tabY }, entered);
+		entered = true;
 		await page.waitForTimeout(150);
 		overlayDuringDwell = await page.getByText(DOCK_OVERLAY).count();
 		springSwitched = (await page.locator(".toolbar-title").textContent()) === "B";
 	}
 	// The rows are still held: drop them into a folder inside the tab we adopted.
 	await page.waitForSelector(`[data-path="${sub}"]`, { timeout: 15_000 });
-	const subBox = await row(page, sub).boundingBox();
-	await page.mouse.move(subBox.x + subBox.width / 2, subBox.y + subBox.height / 2, { steps: 8 });
-	await page.mouse.move(subBox.x + subBox.width / 2 + 3, subBox.y + subBox.height / 2, { steps: 1 });
-	await page.mouse.up();
+	await cdpDropAt(page, cdp, [SPRINGS], await centerOf(row(page, sub)));
 	// The file lands inside `sub`, so it is not a row in B's listing — wait on disk.
 	const deadline = Date.now() + 10_000;
 	while (!existsSync(join(sub, "spring-me.txt")) && Date.now() < deadline) await page.waitForTimeout(150);
@@ -282,17 +296,15 @@ try {
 	await page.locator(".tab").first().click();
 	await atTitle(page, "qa-file-ops");
 	await waitForRow(page, BACKGROUNDS);
-	const backgroundSource = await row(page, BACKGROUNDS).boundingBox();
+	await startRowDrag(page, BACKGROUNDS);
 	const backgroundTab = await page.locator(".tab").nth(1).boundingBox();
-	await page.mouse.move(backgroundSource.x + backgroundSource.width / 2, backgroundSource.y + backgroundSource.height / 2);
-	await page.mouse.down();
-	await page.mouse.move(backgroundSource.x + backgroundSource.width / 2 + 16, backgroundSource.y + backgroundSource.height / 2, { steps: 4 });
-	await page.mouse.move(backgroundTab.x + backgroundTab.width / 2, backgroundTab.y + backgroundTab.height / 2, { steps: 8 });
 	const backgroundTabX = backgroundTab.x + backgroundTab.width / 2;
 	const backgroundTabY = backgroundTab.y + backgroundTab.height / 2;
 	let backgroundSwitched = false;
+	let backgroundEntered = false;
 	for (let tick = 0; tick < 15 && !backgroundSwitched; tick += 1) {
-		await page.mouse.move(backgroundTabX + (tick % 2 === 0 ? 3 : -3), backgroundTabY, { steps: 1 });
+		await cdpHover(page, cdp, [BACKGROUNDS], { x: backgroundTabX + (tick % 2 === 0 ? 3 : -3), y: backgroundTabY }, backgroundEntered);
+		backgroundEntered = true;
 		await page.waitForTimeout(150);
 		backgroundSwitched = (await page.locator(".toolbar-title").textContent()) === "B";
 	}
@@ -301,11 +313,7 @@ try {
 	if (listBox === null || lastRowBox === null || listBox.y + listBox.height - 24 <= lastRowBox.y + lastRowBox.height) {
 		throw new Error("fixture has no empty listing background below its rows");
 	}
-	const backgroundX = listBox.x + listBox.width / 2;
-	const backgroundY = listBox.y + listBox.height - 24;
-	await page.mouse.move(backgroundX, backgroundY, { steps: 8 });
-	await page.mouse.move(backgroundX + 3, backgroundY, { steps: 1 });
-	await page.mouse.up();
+	await cdpDropAt(page, cdp, [BACKGROUNDS], { x: listBox.x + listBox.width / 2, y: listBox.y + listBox.height - 24 });
 	const backgroundDeadline = Date.now() + 10_000;
 	while (!existsSync(join(dirB, "background-me.txt")) && Date.now() < backgroundDeadline) await page.waitForTimeout(150);
 	await page.waitForTimeout(400);
@@ -325,9 +333,9 @@ try {
 	// The overlay belongs to the visible AI Search panel: show one in a new tab.
 	await page.keyboard.press("Meta+t");
 	await openAiSearch(page);
-	await page.evaluate((mime) => {
+	await page.evaluate(() => {
 		const data = new DataTransfer();
-		data.setData(mime, JSON.stringify([]));
+		data.setData("text/uri-list", "https://example.com/");
 		window.dispatchEvent(
 			new DragEvent("dragover", {
 				bubbles: true,
@@ -337,7 +345,7 @@ try {
 				dataTransfer: data,
 			}),
 		);
-	}, FINDER_DRAG_TYPE);
+	});
 	await page.waitForTimeout(100);
 	const watchdogShown = (await page.getByText(DOCK_OVERLAY).count()) > 0;
 	await page.waitForTimeout(1_300);
