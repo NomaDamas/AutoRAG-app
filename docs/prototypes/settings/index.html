@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="ko" data-appearance="light">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Dazzi · 설정 프로토타입</title>
+    <link rel="stylesheet" href="../../../src/renderer/styles/tokens.css">
+    <link rel="stylesheet" href="./prototype.css">
+    <script src="./prototype.js" defer></script>
+  </head>
+  <body>
+    <header class="review-bar">
+      <div><strong>Dazzi <span>설정 시안</span></strong><p>예시 데이터 · 실제 설정이나 연결을 변경하지 않습니다.</p></div>
+      <div class="review-actions">
+        <button id="notes-toggle" class="btn" type="button" aria-pressed="false">변경 메모</button>
+        <button id="theme-toggle" class="btn" type="button">다크 모드</button>
+      </div>
+    </header>
+    <div class="stage">
+      <div class="window">
+        <div class="titlebar"><span class="window-dots" aria-hidden="true"><i></i><i></i><i></i></span><span>Dazzi 설정</span><span class="prototype-label">PROTOTYPE</span></div>
+        <div class="settings-shell">
+          <aside class="sidebar" aria-label="설정 탐색">
+            <div class="search-wrap"><span id="search-icon" aria-hidden="true"></span><input id="settings-search" type="search" placeholder="설정 검색" aria-label="설정 검색" autocomplete="off"></div>
+            <nav id="nav" aria-label="설정 메뉴"></nav>
+            <div class="sidebar-footer">시안에서만 변경됩니다.<br>새로고침하면 처음 상태로 돌아갑니다.</div>
+          </aside>
+          <main class="content" id="content" aria-label="설정 내용" tabindex="-1"></main>
+        </div>
+      </div>
+    </div>
+    <div id="modal-root"></div>
+    <dialog id="dialog" aria-labelledby="dialog-title"></dialog>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  </body>
+</html>
