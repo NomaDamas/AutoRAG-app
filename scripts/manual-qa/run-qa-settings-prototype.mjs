@@ -29,18 +29,32 @@ try {
   check("default page is General", (await page.locator("h1").innerText()) === "일반");
 
   const navIds = await page.locator("[data-nav]").evaluateAll((items) => [...new Set(items.map((item) => item.dataset.nav))]);
+  const openPage = async (id) => {
+    const expected = { general: "일반", privacy: "개인정보 및 보안", ai: "AI 모델", quality: "검색 품질", web: "웹 검색", scope: "검색 범위", reading: "문서 읽기", duplicates: "중복 파일 정리", apps: "연결된 앱", advanced: "고급 설정" }[id];
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await page.locator(`[data-nav="${id}"]`).first().click();
+      await page.waitForTimeout(60);
+      const heading = await page.locator("h1").innerText();
+      if (expected === undefined || heading === expected) return;
+    }
+    throw new Error(`navigation to ${id} did not settle on its page`);
+  };
   for (const id of navIds.filter((item) => !item.startsWith("source/"))) {
-    await page.locator(`[data-nav="${id}"]`).first().click();
+    await openPage(id);
     check(`navigation renders ${id}`, await page.locator("h1").count() === 1, await page.locator("h1").innerText());
-    const layout = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth, labels: [...document.querySelectorAll(".label")].map((el) => el.getBoundingClientRect().width) }));
+    const layout = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth, labels: [...document.querySelectorAll(".row-label")].map((el) => el.getBoundingClientRect().width) }));
     check(`${id} has no horizontal overflow`, layout.scroll <= layout.client + 1, `${layout.scroll}/${layout.client}`);
     check(`${id} labels are not crushed`, layout.labels.every((width) => width >= 120), JSON.stringify(layout.labels));
   }
 
   await page.locator('[data-nav="ai"]').first().click();
+  await page.locator('[data-action="combo"]').click();
+  await page.locator("#model-input").fill("GPT");
   check("model picker filters", (await page.locator("#model-list").innerText()).includes("GPT-5"));
+  await page.locator('#model-list [data-model="openai/gpt-5"]').click();
+  check("model selection saves", (await page.locator('[data-action="combo"]').innerText()).includes("GPT-5"));
   await page.locator('[data-nav="quality"]').first().click();
-  await page.locator('[data-embed="light"]').click();
+  await page.locator('[data-select="embed"]').selectOption("가벼움");
   check("embedding change asks for confirmation", await page.getByRole("dialog").count() === 1 && (await page.getByRole("dialog").innerText()).includes("다시 분석"));
   await page.locator('.modal-backdrop').click({ position: { x: 4, y: 4 } });
   await page.locator('[data-nav="apps"]').first().click();
