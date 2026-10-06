@@ -81,9 +81,14 @@ still has the previous file's size when they lay out.
   document can neither run script nor fetch anything. Hancom fonts fall back
   to rhwp's chain (Batang, Malgun Gothic, Apple SD Gothic Neo, Noto, serif /
   sans-serif). rhwp's glue and its 10MB module are a lazy chunk loaded on the
-  first HWP preview, which is why the Quick Look CSP allows
-  `'wasm-unsafe-eval'`. Encrypted, DRM, and unsupported files fall back to the
-  Other panel with rhwp's message.
+  first HWP preview, which is why both renderer CSPs allow
+  `'wasm-unsafe-eval'`. Every rhwp use goes through `shared/hwp.ts`, and the
+  dev server serves `@rhwp/core` unoptimized (`electron.vite.config.ts`): an
+  optimized copy carries a `?v=` hash the long-lived Quick Look window would
+  keep importing after a re-optimize. The Finder Info panel's preview paper
+  shows the same first page (`ui/rhwp.ts`), since the OS thumbnailers draw
+  nothing for HWP without Hancom's plug-in. Encrypted, DRM, and unsupported
+  files fall back to the Other panel with rhwp's message.
 - **HTML** — a sandboxed frame with scripts off, at desktop width, in a 390px
   phone column, or as highlighted source.
 - **Code** — numbered lines on the paper material with the reference's Xcode

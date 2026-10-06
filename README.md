@@ -71,8 +71,8 @@ without reloading the previewed file. The choice is retained after restart.
 Space previews the selected file in its own panel (`src/preview/DESIGN.md`).
 HWP and HWPX documents open like a PDF: page-accurate paper cards, zoom, and a
 page rail, drawn locally by [rhwp](https://github.com/edwardkim/rhwp)
-(`@rhwp/core`, MIT) on macOS and Windows alike. Nothing is uploaded; Hancom
-Office is not required.
+(`@rhwp/core`, MIT) on macOS and Windows alike; the Info panel's preview paper
+shows their first page. Nothing is uploaded; Hancom Office is not required.
 
 ## Live filesystem sync
 
