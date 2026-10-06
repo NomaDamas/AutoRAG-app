@@ -151,11 +151,10 @@ export function ColumnBrowser({
 								aria-label={member.entry.name}
 								data-path={member.entry.path}
 								title={member.entry.name}
-								draggable
+								onPointerDown={(event) => callbacks.onPointerDown(member.entry, event)}
 								onClick={() => onSelectVariant(member.entry)}
 								onDoubleClick={() => callbacks.onOpen(member.entry)}
 								onContextMenu={(event) => callbacks.onContextMenu(member.entry, event)}
-								onDragStart={(event) => callbacks.onDragStart(member.entry, event)}
 								onDragOver={(event) => callbacks.onDragOver(member.entry, event)}
 								onDrop={(event) => callbacks.onDrop(member.entry, event)}
 							>
@@ -218,11 +217,10 @@ function ColumnRow({
 			aria-label={entry.name}
 			data-path={entry.path}
 			title={entry.name}
-			draggable={renameDraft === null}
+			onPointerDown={renameDraft === null ? (event) => callbacks.onPointerDown(entry, event) : undefined}
 			onClick={(event) => columnCallbacks.onClick(pane, entry, event)}
 			onDoubleClick={() => callbacks.onOpen(entry)}
 			onContextMenu={(event) => callbacks.onContextMenu(entry, event)}
-			onDragStart={(event) => callbacks.onDragStart(entry, event)}
 			onDragOver={(event) => callbacks.onDragOver(entry, event)}
 			onDrop={(event) => callbacks.onDrop(entry, event)}
 		>

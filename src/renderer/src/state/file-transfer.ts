@@ -1,10 +1,11 @@
 /**
  * Where an in-app row drag lands, and what it does there.
  *
- * Finder semantics: dragging a row onto a folder (or a tab, or the window
- * background) moves it there and ⌥ copies instead. A drop that would do
- * nothing — the row is already in the target folder, or the target sits inside
- * the dragged folder — is refused here so no filesystem call is made.
+ * Finder semantics: dragging a row onto a folder (or a tab, or anywhere else in
+ * a listing) moves it there and ⌥ copies instead. A drop that would do nothing
+ * — the row is already in the target folder, or the target sits inside the
+ * dragged folder — is refused here so no filesystem call is made; an ⌥-drop
+ * into the rows' own folder duplicates them, as Finder does.
  */
 
 import { dirname } from "./paths";
@@ -16,14 +17,15 @@ export interface TransferPlan {
 }
 
 /**
- * The listing folder that accepts a drop on empty space, or null when the
- * pointer is over a row or the listing is not a real destination.
+ * The listing folder that takes a drop anywhere a folder row did not claim —
+ * empty space and file rows alike — or null when the listing is not a real
+ * destination (no folder, or search results drawn from many folders).
  */
 export function backgroundDropDir(
 	dir: string,
-	state: { readonly searching: boolean; readonly overRow: boolean },
+	state: { readonly searching: boolean; readonly claimed: boolean },
 ): string | null {
-	return dir !== "" && !state.searching && !state.overRow ? dir : null;
+	return dir !== "" && !state.searching && !state.claimed ? dir : null;
 }
 
 /**
@@ -44,20 +46,24 @@ export function isSameOrInside(candidate: string, ancestor: string): boolean {
 /**
  * The paths a transfer should actually touch, or null when it would be a
  * no-op: an empty drag, rows already in the destination folder, or a folder
- * dropped onto itself or one of its descendants.
+ * dropped onto itself or one of its descendants. `duplicate` lets a copy into
+ * the rows' own folder through (Finder's ⌥-drag in place); a paste there stays
+ * a no-op.
  */
 export function planTransfer(input: {
 	readonly paths: readonly string[];
 	readonly destDir: string;
 	readonly op: "copy" | "move";
+	readonly duplicate?: boolean;
 }): TransferPlan | null {
 	if (input.destDir === "") return null;
+	const inPlace = input.op === "copy" && input.duplicate === true;
 	const seen = new Set<string>();
 	const paths: string[] = [];
 	for (const path of input.paths) {
 		if (path === "" || seen.has(path)) continue;
 		if (isSameOrInside(input.destDir, path)) continue;
-		if (dirname(path) === input.destDir) continue;
+		if (!inPlace && dirname(path) === input.destDir) continue;
 		seen.add(path);
 		paths.push(path);
 	}

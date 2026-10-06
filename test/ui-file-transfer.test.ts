@@ -3,11 +3,11 @@ import { backgroundDropDir, dropTransferOp, isSameOrInside, planTransfer } from 
 
 
 describe("backgroundDropDir", () => {
-	it("accepts a real listing folder only when the pointer is on its background", () => {
-		expect(backgroundDropDir("/a", { searching: false, overRow: false })).toBe("/a");
-		expect(backgroundDropDir("", { searching: false, overRow: false })).toBeNull();
-		expect(backgroundDropDir("/a", { searching: true, overRow: false })).toBeNull();
-		expect(backgroundDropDir("/a", { searching: false, overRow: true })).toBeNull();
+	it("takes a drop anywhere in a real listing that a folder row did not claim", () => {
+		expect(backgroundDropDir("/a", { searching: false, claimed: false })).toBe("/a");
+		expect(backgroundDropDir("", { searching: false, claimed: false })).toBeNull();
+		expect(backgroundDropDir("/a", { searching: true, claimed: false })).toBeNull();
+		expect(backgroundDropDir("/a", { searching: false, claimed: true })).toBeNull();
 	});
 });
 describe("isSameOrInside", () => {
@@ -60,5 +60,20 @@ describe("planTransfer", () => {
 		expect(planTransfer({ paths: ["/a/x.txt", "/a/x.txt"], destDir: "/a/b", op: "move" })?.paths).toEqual(["/a/x.txt"]);
 		expect(planTransfer({ paths: [], destDir: "/a/b", op: "move" })).toBeNull();
 		expect(planTransfer({ paths: ["/a/x.txt"], destDir: "", op: "move" })).toBeNull();
+	});
+
+	it("lets an ⌥-drop duplicate rows into their own folder, but never a paste or a move", () => {
+		expect(planTransfer({ paths: ["/a/x.txt"], destDir: "/a", op: "copy", duplicate: true })).toEqual({
+			paths: ["/a/x.txt"],
+			destDir: "/a",
+			op: "copy",
+		});
+		expect(planTransfer({ paths: ["/a/x.txt"], destDir: "/a", op: "copy" })).toBeNull();
+		expect(planTransfer({ paths: ["/a/x.txt"], destDir: "/a", op: "move", duplicate: true })).toBeNull();
+	});
+
+	it("never copies a folder into itself, even as a duplicate", () => {
+		expect(planTransfer({ paths: ["/a/b"], destDir: "/a/b", op: "copy", duplicate: true })).toBeNull();
+		expect(planTransfer({ paths: ["/a/b"], destDir: "/a/b/c", op: "copy", duplicate: true })).toBeNull();
 	});
 });

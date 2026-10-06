@@ -29,6 +29,7 @@ import { createDefaultAgentFactory, createSearchService } from "./search-service
 import { createSettingsService } from "./settings-service";
 import {
 	registerActionsIpcHandlers,
+	registerDragOutIpcHandlers,
 	registerFsIpcHandlers,
 	registerIndexIpcHandlers,
 	registerLiveIpcHandlers,
@@ -294,6 +295,8 @@ app.whenReady().then(async () => {
 			await versionFamilyService?.removePaths(paths);
 		},
 	});
+	// Row drag-out: the renderer hands the gesture to the OS as real files.
+	registerDragOutIpcHandlers();
 	// Inspector actions: a chooser for "Open with" and the macOS share sheet,
 	// anchored to the button that opened it.
 	registerActionsIpcHandlers(
