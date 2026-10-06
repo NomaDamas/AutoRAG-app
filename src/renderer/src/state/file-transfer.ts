@@ -28,6 +28,15 @@ export function backgroundDropDir(
 	return dir !== "" && !state.searching && !state.claimed ? dir : null;
 }
 
+/**
+ * The verb a drop performs. An in-app row drag moves by default (⌥ copies,
+ * Finder's own convention); a drag from another app copies by default (⌥
+ * moves), so pulling a file in from the OS never silently relocates it.
+ */
+export function dropTransferOp(inAppDrag: boolean, altKey: boolean): "copy" | "move" {
+	return inAppDrag === altKey ? "copy" : "move";
+}
+
 /** True when `candidate` is `ancestor` or lives inside it (separator-aware). */
 export function isSameOrInside(candidate: string, ancestor: string): boolean {
 	if (ancestor === "") return false;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { backgroundDropDir, isSameOrInside, planTransfer } from "../src/renderer/src/state/file-transfer";
+import { backgroundDropDir, dropTransferOp, isSameOrInside, planTransfer } from "../src/renderer/src/state/file-transfer";
 
 
 describe("backgroundDropDir", () => {
@@ -17,6 +17,18 @@ describe("isSameOrInside", () => {
 		expect(isSameOrInside("/a/bc", "/a/b")).toBe(false);
 		expect(isSameOrInside("/a/b/c", "/a/b/")).toBe(true);
 		expect(isSameOrInside("/anything", "")).toBe(false);
+	});
+});
+
+describe("dropTransferOp", () => {
+	it("moves an in-app row drag by default and copies with the modifier", () => {
+		expect(dropTransferOp(true, false)).toBe("move");
+		expect(dropTransferOp(true, true)).toBe("copy");
+	});
+
+	it("copies an OS file drag by default and moves with the modifier", () => {
+		expect(dropTransferOp(false, false)).toBe("copy");
+		expect(dropTransferOp(false, true)).toBe("move");
 	});
 });
 
