@@ -1,24 +1,9 @@
 import { useCallback, useEffect, useState, type ReactElement } from "react";
-import wasmUrl from "@rhwp/core/rhwp_bg.wasm?url";
 import type { PreviewDocument } from "../shared/contract";
 import type { HwpPages } from "../shared/hwp";
 import { FallbackView, Status } from "./fallback";
 import { PagedView, type DrawPage } from "./paged";
-
-let rhwp: Promise<(bytes: Uint8Array) => HwpPages> | null = null;
-
-/**
- * rhwp (Rust + WebAssembly, the engine alhangeul-macos ships) loads on the
- * first HWP preview, never with the window: its glue and 10MB module stay out
- * of the Quick Look bundle until a document needs them.
- */
-function loadRhwp(): Promise<(bytes: Uint8Array) => HwpPages> {
-	rhwp ??= Promise.all([import("@rhwp/core"), import("../shared/hwp")]).then(async ([core, hwp]) => {
-		await core.default({ module_or_path: wasmUrl });
-		return hwp.openHwp;
-	});
-	return rhwp;
-}
+import { loadRhwp } from "./rhwp";
 
 /**
  * HWP and HWPX in the PDF panel's paged layout. rhwp paginates the whole

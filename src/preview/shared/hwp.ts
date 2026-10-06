@@ -2,9 +2,16 @@ import { HwpDocument } from "@rhwp/core";
 import type { Size } from "./fit";
 
 /**
+ * rhwp's WebAssembly loader. Every rhwp use goes through this module: in dev,
+ * Vite can stamp two imports of `@rhwp/core` with different `?v=` hashes,
+ * and a second module instance would be uninitialised.
+ */
+export { default as initRhwp } from "@rhwp/core";
+
+/**
  * One open HWP 5 / HWPX / HWP 3 document, paginated by rhwp: the size of
  * every page in CSS pixels and each page as a standalone SVG.
- * The rhwp WebAssembly module must be instantiated before `openHwp` runs.
+ * `initRhwp` must have resolved before `openHwp` runs.
  */
 export interface HwpPages {
 	readonly boxes: readonly Size[];
