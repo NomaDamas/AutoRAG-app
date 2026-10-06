@@ -2,10 +2,18 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import type { AutoRagConfigService } from "../src/main/autorag-config-service";
 import type { DataSourceStatusService } from "../src/main/datasource-status";
 import type { ModelStatusService } from "../src/main/model-status";
+import type { ProviderCredentialService } from "../src/main/provider-credentials";
 import { createSettingsService } from "../src/main/settings-service";
-import type { ConfiguredModelSnapshot, DataSourcesSnapshot } from "../src/shared/settings-contract";
+import type {
+	AutoRagConfigSnapshot,
+	ConfigRefreshResult,
+	ConfiguredModelSnapshot,
+	DataSourcesSnapshot,
+	ProviderCredentialStatus,
+} from "../src/shared/settings-contract";
 
 const directories: string[] = [];
 
@@ -39,17 +47,48 @@ const noModels: ModelStatusService = {
 	resolve: async () => EMPTY_MODEL,
 };
 
+const EMPTY_CONFIG: AutoRagConfigSnapshot = { configPath: "/autorag/config.json", configExists: true, error: null, config: {} };
+
+const noConfig: AutoRagConfigService = {
+	get: async () => EMPTY_CONFIG,
+	set: async () => EMPTY_CONFIG,
+	remove: async () => EMPTY_CONFIG,
+	patch: async () => EMPTY_CONFIG,
+	rename: async () => EMPTY_CONFIG,
+	modelsCatalog: async () => ({ error: null, providers: [] }),
+};
+
+const noRefresh = async (): Promise<ConfigRefreshResult> => ({
+	ok: true,
+	methods: [],
+	scanned: 0,
+	written: 0,
+	deleted: 0,
+	skipped: 0,
+	diagnostics: [],
+	error: null,
+});
+
+const noCredentials: ProviderCredentialService = {
+	list: (): readonly ProviderCredentialStatus[] => [],
+	set: (): readonly ProviderCredentialStatus[] => [],
+	remove: (): readonly ProviderCredentialStatus[] => [],
+	load: (): readonly string[] => [],
+};
+
+const baseDeps = { config: noConfig, refreshConfig: noRefresh, credentials: noCredentials };
+
 describe("createSettingsService", () => {
 	it("persists settings and permissions", async () => {
 		const directory = await mkdtemp(join(tmpdir(), "autorag-settings-"));
 		directories.push(directory);
-		const service = createSettingsService({ directory, dataSources: noDataSources, models: noModels });
+		const service = createSettingsService({ directory, dataSources: noDataSources, models: noModels, ...baseDeps });
 
 		await service.set({ telemetry: true });
 		await service.permSet("/tmp/docs", "allow", "apply-all");
 		expect((await service.permGet("/tmp/docs/readme.md")).value).toBe("allow");
 
-		const reloaded = createSettingsService({ directory, dataSources: noDataSources, models: noModels });
+		const reloaded = createSettingsService({ directory, dataSources: noDataSources, models: noModels, ...baseDeps });
 		expect((await reloaded.get()).telemetry).toBe(true);
 		expect((await reloaded.permGet("/tmp/docs/readme.md")).value).toBe("allow");
 	});
@@ -57,23 +96,23 @@ describe("createSettingsService", () => {
 	it("defaults showHiddenFiles off and persists the toggle", async () => {
 		const directory = await mkdtemp(join(tmpdir(), "autorag-settings-hidden-"));
 		directories.push(directory);
-		const service = createSettingsService({ directory, dataSources: noDataSources, models: noModels });
+		const service = createSettingsService({ directory, dataSources: noDataSources, models: noModels, ...baseDeps });
 
 		expect((await service.get()).showHiddenFiles).toBe(false);
 
 		await service.set({ showHiddenFiles: true });
-		const reloaded = createSettingsService({ directory, dataSources: noDataSources, models: noModels });
+		const reloaded = createSettingsService({ directory, dataSources: noDataSources, models: noModels, ...baseDeps });
 		expect((await reloaded.get()).showHiddenFiles).toBe(true);
 	});
 
 	it("defaults to light appearance and persists the global dark choice", async () => {
 		const directory = await mkdtemp(join(tmpdir(), "autorag-settings-appearance-"));
 		directories.push(directory);
-		const service = createSettingsService({ directory, dataSources: noDataSources, models: noModels });
+		const service = createSettingsService({ directory, dataSources: noDataSources, models: noModels, ...baseDeps });
 
 		expect((await service.get()).appearance).toBe("light");
 		await service.set({ appearance: "dark" });
-		const reloaded = createSettingsService({ directory, dataSources: noDataSources, models: noModels });
+		const reloaded = createSettingsService({ directory, dataSources: noDataSources, models: noModels, ...baseDeps });
 		expect((await reloaded.get()).appearance).toBe("dark");
 	});
 
@@ -85,6 +124,7 @@ describe("createSettingsService", () => {
 			directory,
 			dataSources: noDataSources,
 			models: noModels,
+			...baseDeps,
 			onSettingsChanged: (settings) => seen.push(settings.appearance),
 		});
 
@@ -100,6 +140,7 @@ describe("createSettingsService", () => {
 			directory,
 			dataSources: noDataSources,
 			models: noModels,
+			...baseDeps,
 			onSettingsChanged: (settings) => seen.push(settings.dupeyScanIntervalMinutes),
 		});
 
@@ -107,7 +148,7 @@ describe("createSettingsService", () => {
 
 		await service.set({ dupeyScanIntervalMinutes: 15 });
 		expect(seen).toEqual([15]);
-		const reloaded = createSettingsService({ directory, dataSources: noDataSources, models: noModels });
+		const reloaded = createSettingsService({ directory, dataSources: noDataSources, models: noModels, ...baseDeps });
 		expect((await reloaded.get()).dupeyScanIntervalMinutes).toBe(15);
 	});
 
@@ -126,6 +167,7 @@ describe("createSettingsService", () => {
 				setDescription: async () => undefined,
 			},
 			models: noModels,
+			...baseDeps,
 		});
 
 		expect((await service.sourcesList()).configPath).toBe("/autorag/config-1.json");
@@ -156,6 +198,7 @@ describe("createSettingsService", () => {
 					},
 				}),
 			},
+			...baseDeps,
 		});
 
 		const first = await service.modelsResolve();

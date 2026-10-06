@@ -11,7 +11,9 @@
  * last resort, not the first). Both paths run through
  * a provider-wide bounded pool with a per-file deadline, so two concurrent
  * listings share one budget and one stuck Quick Look extension never stalls
- * the rest. Generation failures degrade to "no icon" (the caller keeps the
+ * the rest. The pool serves the newest listing call first, so on a slow disk
+ * the folder the user just opened never queues behind one they already left.
+ * Generation failures degrade to "no icon" (the caller keeps the
  * letter tile) and are logged verbatim; one failed file never costs the batch.
  *
  * The produced PNG bytes stay in this module's in-process cache, keyed by the
@@ -31,6 +33,7 @@
 
 import { errorMessage } from "./fs-entry";
 import { ICON_SIZE, iconUrl } from "./icon-protocol";
+import { createPriorityGate, type PriorityGate } from "./priority-gate";
 
 /** Tile tier edge in px, defined beside the URL contract; re-exported for the listing code. */
 export { ICON_SIZE } from "./icon-protocol";
@@ -154,30 +157,12 @@ function positive(value: number, fallback: number): number {
 	return Number.isFinite(value) && value >= 1 ? Math.floor(value) : fallback;
 }
 
-/** Counting semaphore; `acquire` resolves when a permit is free. */
-function createSemaphore(permits: number): { acquire(): Promise<void>; release(): void } {
-	let available = permits;
-	const waiters: Array<() => void> = [];
-	return {
-		async acquire(): Promise<void> {
-			if (available > 0) {
-				available -= 1;
-				return;
-			}
-			const { promise, resolve } = Promise.withResolvers<void>();
-			waiters.push(resolve);
-			await promise;
-		},
-		release(): void {
-			const next = waiters.shift();
-			if (next !== undefined) {
-				next();
-				return;
-			}
-			available += 1;
-		},
-	};
-}
+/**
+ * The Inspector preview outranks every listing batch: its own thumbnail lane
+ * is uncontended anyway, and its `getFileIcon` fallback shares the system
+ * lane with listings, where the panel the user is looking at must not queue.
+ */
+const PREVIEW_PRIORITY = Number.POSITIVE_INFINITY;
 
 /** Reject when the underlying promise outlives `timeoutMs` (<= 0 disables). */
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
@@ -270,19 +255,23 @@ export function createIconProvider(deps: IconProviderDeps = {}): IconSource {
 		positive(deps.cacheMaxEntries ?? ICON_CACHE_MAX_ENTRIES, ICON_CACHE_MAX_ENTRIES),
 		Math.max(1, Math.floor(deps.cacheMaxBytes ?? ICON_CACHE_MAX_BYTES)),
 	);
-	// One semaphore per provider (the app has exactly one), so concurrent
-	// listings share the lookup budget rather than each opening its own. The
-	// Inspector preview gets its own lane: the user is staring at the panel
-	// while a listing batch can hold every shared permit until the deadline.
-	const thumbnailSemaphore = createSemaphore(thumbnailConcurrency);
-	const previewSemaphore = createSemaphore(previewConcurrency);
-	const systemSemaphore = createSemaphore(systemConcurrency);
+	// One gate per provider (the app has exactly one), so concurrent listings
+	// share the lookup budget rather than each opening its own. Every listing
+	// call takes a higher priority than the last: the folder the user just
+	// opened, or the rows they just scrolled to, never queue behind a large
+	// folder they already left on a slow disk. The Inspector preview gets its
+	// own lane: the user is staring at the panel while a listing batch can
+	// hold every shared permit until the deadline.
+	const thumbnailGate = createPriorityGate(thumbnailConcurrency);
+	const previewGate = createPriorityGate(previewConcurrency);
+	const systemGate = createPriorityGate(systemConcurrency);
+	let nextBatchPriority = 0;
 	/** key -> the generation currently producing that identity, for single-flight reuse. */
 	const inflight = new Map<string, Promise<Uint8Array | null>>();
 
 	/** One bounded `getFileIcon` lookup; a failure or deadline degrades to "no icon" and is logged. */
-	async function generateSystemIcon(target: IconTarget): Promise<Uint8Array | null> {
-		await systemSemaphore.acquire();
+	async function generateSystemIcon(target: IconTarget, priority: number): Promise<Uint8Array | null> {
+		await systemGate.acquire(priority);
 		try {
 			return await withTimeout(systemIcon(target.path), systemIconTimeoutMs, "getFileIcon");
 		} catch (error) {
@@ -290,7 +279,7 @@ export function createIconProvider(deps: IconProviderDeps = {}): IconSource {
 			warn(`file-icon: system icon for ${target.path} failed: ${errorMessage(error)}`);
 			return null;
 		} finally {
-			systemSemaphore.release();
+			systemGate.release();
 		}
 	}
 
@@ -303,22 +292,23 @@ export function createIconProvider(deps: IconProviderDeps = {}): IconSource {
 	async function runThumbnails(
 		targets: readonly IconTarget[],
 		resolve: (key: string, bytes: Uint8Array | null) => void,
-		semaphore: { acquire(): Promise<void>; release(): void },
+		gate: PriorityGate,
+		priority: number,
 	): Promise<void> {
 		await Promise.all(
 			targets.map(async (target): Promise<void> => {
 				let bytes: Uint8Array | null = null;
-				await semaphore.acquire();
+				await gate.acquire(priority);
 				try {
 					bytes = await withTimeout(thumbnail(target.path, target.size ?? ICON_SIZE), thumbnailTimeoutMs, "thumbnail");
 				} catch (error) {
 					// One unreadable/timed-out file must not cost the rest of the batch.
 					warn(`file-icon: thumbnail for ${target.path} failed: ${errorMessage(error)}`);
 				} finally {
-					semaphore.release();
+					gate.release();
 				}
 				if (bytes === null) {
-					bytes = await generateSystemIcon(target);
+					bytes = await generateSystemIcon(target, priority);
 				}
 				resolve(cacheKey(target), bytes);
 			}),
@@ -329,10 +319,11 @@ export function createIconProvider(deps: IconProviderDeps = {}): IconSource {
 	async function runSystem(
 		targets: readonly IconTarget[],
 		resolve: (key: string, bytes: Uint8Array | null) => void,
+		priority: number,
 	): Promise<void> {
 		await Promise.all(
 			targets.map(async (target): Promise<void> => {
-				resolve(cacheKey(target), await generateSystemIcon(target));
+				resolve(cacheKey(target), await generateSystemIcon(target, priority));
 			}),
 		);
 	}
@@ -340,7 +331,8 @@ export function createIconProvider(deps: IconProviderDeps = {}): IconSource {
 	/** Register single-flight promises for every missing identity, then generate them on the given lane. */
 	function startGeneration(
 		missing: readonly IconTarget[],
-		semaphore: { acquire(): Promise<void>; release(): void },
+		gate: PriorityGate,
+		priority: number,
 	): Array<Promise<Uint8Array | null>> {
 		const resolvers = new Map<string, (bytes: Uint8Array | null) => void>();
 		const promises: Array<Promise<Uint8Array | null>> = [];
@@ -358,7 +350,7 @@ export function createIconProvider(deps: IconProviderDeps = {}): IconSource {
 			cache.set(key, bytes);
 			resolvers.get(key)?.(bytes);
 		};
-		const generation = usesNativeThumbnails ? runThumbnails(missing, resolve, semaphore) : runSystem(missing, resolve);
+		const generation = usesNativeThumbnails ? runThumbnails(missing, resolve, gate, priority) : runSystem(missing, resolve, priority);
 		void generation.catch((error: unknown) => {
 			// Pool-level failure: the whole batch degrades to "no icon".
 			warn(`file-icon: icon generation failed for ${missing.length} file(s): ${errorMessage(error)}`);
@@ -396,7 +388,8 @@ export function createIconProvider(deps: IconProviderDeps = {}): IconSource {
 				missing.push(target);
 			}
 			if (missing.length > 0) {
-				for (const promise of startGeneration(missing, thumbnailSemaphore)) awaited.push(promise);
+				nextBatchPriority += 1;
+				for (const promise of startGeneration(missing, thumbnailGate, nextBatchPriority)) awaited.push(promise);
 			}
 			if (awaited.length > 0) await Promise.all(awaited);
 
@@ -419,7 +412,7 @@ export function createIconProvider(deps: IconProviderDeps = {}): IconSource {
 				if (pending !== undefined) {
 					await pending;
 				} else {
-					await Promise.all(startGeneration([sized], previewSemaphore));
+					await Promise.all(startGeneration([sized], previewGate, PREVIEW_PRIORITY));
 				}
 			}
 			const bytes = cache.get(key);

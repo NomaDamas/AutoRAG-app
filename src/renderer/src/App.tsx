@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type
 import type { QuickLookTarget } from "../../preview/shared/contract";
 import type { Bounds } from "../../preview/shared/fit";
 import { NO_CAPABILITIES, type ActionAnchor } from "../../shared/actions-contract";
-import type { AppSettings, DataSourcesSnapshot } from "../../shared/settings-contract";
+import { DEFAULT_SETTINGS, type AppSettings, type DataSourcesSnapshot } from "../../shared/settings-contract";
 import type { ChatAttachment, CitationEvidence } from "../../shared/search-contract";
 import type { FsLocationIcon } from "../../shared/fs-contract";
 import { AiSearchPanel, type AiDockHandle } from "./components/AiSearchPanel";
@@ -166,6 +166,8 @@ function PaneGrip({
 export function App(): ReactElement {
 	const source = useFinderSource();
 	const [showHiddenFiles, setShowHiddenFiles] = useState(false);
+	/** The Interface language setting; "AI 요약" prompts in this language. */
+	const [language, setLanguage] = useState<AppSettings["language"]>(DEFAULT_SETTINGS.language);
 	const [preview, setPreview] = useState<QuickLookTarget | null>(null);
 	const previewRef = useRef<QuickLookTarget | null>(null);
 	previewRef.current = preview;
@@ -267,16 +269,25 @@ export function App(): ReactElement {
 	 * until the effect below finds the focused tab's panel handle.
 	 */
 	const aiHandlesRef = useRef(new Map<number, AiDockHandle>());
-	const aiPendingRef = useRef<{ readonly attach: readonly ChatAttachment[]; readonly query: string | null } | null>(null);
+	const aiPendingRef = useRef<{
+		readonly attach: readonly ChatAttachment[];
+		readonly query: string | null;
+		/** "AI 요약" targets sent with their own summary run, never as drafts. */
+		readonly summarize: readonly ChatAttachment[];
+	} | null>(null);
 	const [aiDelivery, setAiDelivery] = useState(0);
-	const deliverToAi = useCallback((request: { readonly attach?: readonly ChatAttachment[]; readonly query?: string }) => {
-		const pending = aiPendingRef.current;
-		aiPendingRef.current = {
-			attach: [...(pending?.attach ?? []), ...(request.attach ?? [])],
-			query: request.query ?? pending?.query ?? null,
-		};
-		setAiDelivery((tick) => tick + 1);
-	}, []);
+	const deliverToAi = useCallback(
+		(request: { readonly attach?: readonly ChatAttachment[]; readonly query?: string; readonly summarize?: readonly ChatAttachment[] }) => {
+			const pending = aiPendingRef.current;
+			aiPendingRef.current = {
+				attach: [...(pending?.attach ?? []), ...(request.attach ?? [])],
+				query: request.query ?? pending?.query ?? null,
+				summarize: [...(pending?.summarize ?? []), ...(request.summarize ?? [])],
+			};
+			setAiDelivery((tick) => tick + 1);
+		},
+		[],
+	);
 
 	const focusedPane = workspace.panes.find((pane) => pane.id === focusedPaneId);
 	const focusedTab = focusedPane?.tabs.find((tab) => tab.id === focusedPane.activeId) ?? null;
@@ -301,6 +312,10 @@ export function App(): ReactElement {
 		aiPendingRef.current = null;
 		const handle = activeAiTabId === null ? undefined : aiHandlesRef.current.get(activeAiTabId);
 		if (handle === undefined) return;
+		if (pending.summarize.length > 0) {
+			handle.summarize(pending.summarize);
+			return;
+		}
 		if (pending.attach.length > 0) handle.attach(pending.attach);
 		if (pending.query !== null) handle.sendQuery(pending.query);
 		else handle.focusComposer();
@@ -319,7 +334,10 @@ export function App(): ReactElement {
 			onFocusComposer: () => deliverToAi({}),
 			onToast: setToast,
 			deliverToAi,
-			onSettingsChanged: (settings: AppSettings) => setShowHiddenFiles(settings.showHiddenFiles),
+			onSettingsChanged: (settings: AppSettings) => {
+				setShowHiddenFiles(settings.showHiddenFiles);
+				setLanguage(settings.language);
+			},
 			setListColumns,
 			beginTabDrag: (tabId, event) => {
 				event.dataTransfer.effectAllowed = "move";
@@ -377,13 +395,20 @@ export function App(): ReactElement {
 		[contentSearch, finder],
 	);
 
-	/** Inspector "AI 요약": a new AI Search tab with the entry attached to its composer. */
+	/** Inspector "AI 요약": a new AI Search tab that attaches the entry and sends the summary run. */
 	const askAi = useCallback(
 		(entry: { readonly path: string; readonly name: string; readonly kind: "file" | "folder" }) => {
 			finder?.openAiSearch();
-			deliverToAi({ attach: [{ kind: entry.kind, id: entry.path, name: entry.name }] });
+			deliverToAi({ summarize: [{ kind: entry.kind, id: entry.path, name: entry.name }] });
 		},
 		[deliverToAi, finder],
+	);
+
+	/** Answer and evidence images: a local picture opens in Quick Look; a web image's page (never fetched) in the OS browser. */
+	const revealEvidence = finder?.revealEvidence;
+	const imageActions = useMemo(
+		() => ({ onOpenImage: openQuickLook, onOpenUrl: (target: string) => revealEvidence?.(target) }),
+		[openQuickLook, revealEvidence],
 	);
 
 	/** Sidebar "AI Search": the focused tab becomes AI Search. */
@@ -445,7 +470,10 @@ export function App(): ReactElement {
 	}, [moveSelectionBy]);
 
 	useEffect(() => {
-		void autorag.settings.get().then((settings) => setShowHiddenFiles(settings.showHiddenFiles));
+		void autorag.settings.get().then((settings) => {
+			setShowHiddenFiles(settings.showHiddenFiles);
+			setLanguage(settings.language);
+		});
 	}, []);
 
 	const focused = finder?.focusedEntry ?? null;
@@ -617,6 +645,8 @@ export function App(): ReactElement {
 												selectedEvidence={evidence.length === 0 ? null : evidenceSelectedNumber}
 												onSelectEvidence={selectEvidence}
 												onPublish={publishEvidence}
+												imageActions={imageActions}
+												language={language}
 											/>
 										</div>
 									);
@@ -643,6 +673,7 @@ export function App(): ReactElement {
 								onSelectEvidence={selectEvidence}
 								onRevealPath={(target) => finder?.revealEvidence(target)}
 								onToast={setToast}
+								imageActions={imageActions}
 							/>
 						) : null}
 					</div>

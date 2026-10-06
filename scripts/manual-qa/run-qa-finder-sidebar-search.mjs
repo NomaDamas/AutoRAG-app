@@ -18,7 +18,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { finderWindow, launchFinder } from "./launch-finder.mjs";
-import { chord } from "./platform.mjs";
+import { chord, isMac } from "./platform.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const EVIDENCE = join(ROOT, ".omo/evidence/ai-finder-app/qa-sidebar-search");
@@ -132,15 +132,18 @@ try {
 	await page.locator('[aria-label="Toggle inspector"]').waitFor({ timeout: 5000 });
 	check("the toolbar exposes the inspector toggle", (await page.locator('[aria-label="Toggle inspector"]').count()) === 1);
 	check("the toolbar exposes the AI Search button", (await page.locator('[aria-label="Show AI Search"]').count()) === 1);
+	// The Share item opens the OS share sheet, so it is shown on macOS only.
 	const share = page.locator('.toolbar [aria-label="Share"]');
-	check("the toolbar exposes Share", (await share.count()) === 1);
+	check("the toolbar exposes Share on macOS only", (await share.count()) === (isMac ? 1 : 0), `count=${await share.count()}`);
 	await page.locator(".tabs .tab").first().click();
 	await search.fill("");
 	await search.press("Enter");
 	await page.locator(".scope").waitFor({ state: "detached", timeout: 10000 }).catch(() => undefined);
 	await page.locator('[role="row"]').first().click();
 	await sleep(200);
-	check("Share enables once a row is selected", (await share.isEnabled()), `disabled=${await share.isDisabled()}`);
+	if (isMac) {
+		check("Share enables once a row is selected", (await share.isEnabled()), `disabled=${await share.isDisabled()}`);
+	}
 	await page.screenshot({ path: join(EVIDENCE, "06-toolbar-cluster.png") });
 } catch (error) {
 	console.error(`capture failed: ${String(error).slice(0, 400)}`);

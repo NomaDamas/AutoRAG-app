@@ -24,6 +24,7 @@ import { basename } from "node:path";
 import type { FsFinderMetadata } from "../shared/fs-contract";
 import { errorMessage, extensionOf, hasErrorCode } from "./fs-entry";
 import { readImageMetadata } from "./image-metadata";
+import { createPriorityGate } from "./priority-gate";
 
 /** Runs one native helper with argv (never a shell) and optional stdin. */
 export type FinderCommandRunner = (
@@ -212,37 +213,6 @@ function setBounded<K, V>(map: Map<K, V>, key: K, value: V): void {
 	}
 }
 
-interface Semaphore {
-	run<T>(task: () => Promise<T>): Promise<T>;
-}
-
-/** A small FIFO gate so a large listing cannot spawn helper processes without bound. */
-function createSemaphore(limit: number): Semaphore {
-	let available = limit;
-	const waiters: Array<() => void> = [];
-	const release = (): void => {
-		const next = waiters.shift();
-		if (next !== undefined) next();
-		else available += 1;
-	};
-	return {
-		async run<T>(task: () => Promise<T>): Promise<T> {
-			if (available > 0) {
-				available -= 1;
-			} else {
-				const { promise, resolve } = Promise.withResolvers<void>();
-				waiters.push(resolve);
-				await promise;
-			}
-			try {
-				return await task();
-			} finally {
-				release();
-			}
-		},
-	};
-}
-
 interface Identity {
 	readonly fingerprint: string;
 	readonly isDirectory: boolean;
@@ -282,7 +252,12 @@ export function createFinderMetadataResolver(deps: FinderMetadataDeps = {}): Fin
 	const warn = deps.warn ?? ((message: string) => console.warn(message));
 	const now = deps.now ?? (() => Date.now());
 	const ttlMs = positiveInteger(deps.ttlMs, DEFAULT_TTL_MS);
-	const semaphore = createSemaphore(positiveInteger(deps.concurrency, DEFAULT_CONCURRENCY));
+	// Newest request first: on a slow disk a folder of thousands of photos can
+	// queue minutes of helper work, and the folder the user just opened must
+	// not wait for the one they left. Each call is one path, so every call is
+	// its own (rising) priority.
+	const gate = createPriorityGate(positiveInteger(deps.concurrency, DEFAULT_CONCURRENCY));
+	let nextPriority = 0;
 	const cache = new Map<string, CacheEntry>();
 	const applicationCache = new Map<string, { readonly value: Promise<string | null>; readonly expiresAt: number }>();
 
@@ -385,7 +360,16 @@ export function createFinderMetadataResolver(deps: FinderMetadataDeps = {}): Fin
 		if (cached !== undefined && cached.fingerprint === identity.fingerprint && time < cached.expiresAt) {
 			return cached.value;
 		}
-		const value = semaphore.run(() => resolve(path, identity.isDirectory));
+		nextPriority += 1;
+		const priority = nextPriority;
+		const value = (async () => {
+			await gate.acquire(priority);
+			try {
+				return await resolve(path, identity.isDirectory);
+			} finally {
+				gate.release();
+			}
+		})();
 		setBounded(cache, path, { fingerprint: identity.fingerprint, expiresAt: time + ttlMs, value });
 		return value;
 	};

@@ -3,9 +3,20 @@ import type { FsDirChange } from "../../../shared/live-contract";
 import type { FinderEntry } from "../data/entries";
 import { dirname } from "./paths";
 import type { SelectionState } from "./selection";
+import { SETTINGS_PATH } from "./tabs";
 
 export interface LiveTab {
 	readonly path: string;
+}
+
+/**
+ * True when `path` names a location with a folder on disk to list, read, and
+ * watch. The empty bridge path and app-owned UI locations (the Settings tab)
+ * have none: sending those to the filesystem is the `fs:listDir 'Settings'
+ * ENOENT` bug, so every listing/watch flow consults this predicate first.
+ */
+export function isFilesystemPath(path: string): boolean {
+	return path !== "" && path !== SETTINGS_PATH;
 }
 
 export function watchSetFor(tabs: readonly LiveTab[]): string[] {
@@ -13,7 +24,8 @@ export function watchSetFor(tabs: readonly LiveTab[]): string[] {
 	const dirs: string[] = [];
 	for (const tab of tabs) {
 		const path = tab.path;
-		if (path === "" || path === RECENTS_PATH || seen.has(path)) {
+		// Settings is an app UI location, not a folder: never hand it to the watcher.
+		if (!isFilesystemPath(path) || path === RECENTS_PATH || seen.has(path)) {
 			continue;
 		}
 		seen.add(path);
@@ -224,19 +236,6 @@ export function applyEntryPatch(listing: readonly FinderEntry[], patch: EntryPat
 		changed = true;
 	}
 	return changed ? result : listing;
-}
-
-/** Applies enrichment only while the row still has the requested filesystem mtime. */
-export function applyEntryEnrichmentPatch(
-	listing: readonly FinderEntry[],
-	enriched: readonly FinderEntry[],
-): readonly FinderEntry[] {
-	const currentByPath = new Map(listing.map((entry) => [entry.path, entry]));
-	const fresh = enriched.filter((entry) => {
-		const current = currentByPath.get(entry.path);
-		return current !== undefined && current.modifiedAt === entry.modifiedAt;
-	});
-	return applyEntryPatch(listing, { entries: fresh, removed: [] });
 }
 
 /**

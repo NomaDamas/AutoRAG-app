@@ -30,7 +30,7 @@ export function createModelStatusService(deps: ModelStatusDeps): ModelStatusServ
 			};
 			try {
 				const config = resolveConfigReadOnly({ flags: {}, env: deps.env, cwd: deps.cwd });
-				const { role } = await resolveAgentModelDetailed(config, { env: deps.env });
+				const { role } = await resolveAgentModelDetailed(config, { env: deps.env, cwd: deps.cwd });
 				const model: ConfiguredModel = {
 					provider: role.provider,
 					modelId: role.modelId,

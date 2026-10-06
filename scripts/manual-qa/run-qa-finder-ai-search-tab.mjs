@@ -9,7 +9,8 @@
  *      from an AI Search tab opens a folder tab, not another AI tab;
  *   5. ⌘K from a folder tab adopts the existing AI Search tab instead of
  *      opening another;
- *   6. Inspector "AI 요약" opens a NEW AI Search tab with the file attached;
+ *   6. Inspector "AI 요약" opens a NEW AI Search tab and sends the summary
+ *      query with the file attached (user bubble + answer or inline error);
  *   7. a Finder row dragged onto an AI Search strip tab attaches there (the
  *      file stays put) and switches to that tab;
  *   8. a Finder row dragged onto the sidebar AI Search item attaches to the
@@ -18,7 +19,8 @@
  *      panel attaches;
  *  10. an external file drop on the panel attaches its absolute path;
  *  11. the sidebar 내용 search opens a new AI Search tab and sends the query;
- *  12. a filename search from an AI Search tab lists results in that tab.
+ *  12. a filename search from an AI Search tab lists results in that tab;
+ *  13. "AI 요약" asks in the Interface language setting, not always Korean.
  * No model key is needed: nothing waits on an answer. Run `bun run build`
  * first. Evidence lands in the ignored `.omo/` tree.
  */
@@ -151,21 +153,29 @@ try {
 		await page.evaluate(() => document.activeElement?.getAttribute("aria-label") === "Ask Dazzi"),
 	);
 
-	// 6. Inspector AI 요약 opens a NEW AI tab with the file attached.
+	// 6. Inspector AI 요약 opens a NEW AI tab, attaches the file, and sends the summary run.
+	const SUMMARY_PROMPT = "첨부한 파일을 요약해줘. 핵심 내용 · 주요 수치 · 주의사항 순으로, 근거가 된 파일 경로를 출처로 인용해줘.";
 	await showFolderTab(page);
 	await page.locator(`[data-path="${BRIEF}"]`).click();
 	await page.locator(".inspector-actions button", { hasText: "AI 요약" }).click();
-	await waitForPill(page, BRIEF).catch(() => undefined);
+	await page.locator(`${PANEL} .assistant-msg`).waitFor({ timeout: 10_000 });
 	now = await tabs(page);
 	check(
 		"AI 요약 opens a new AI Search tab",
 		now.length === 3 && now[2]?.active === true && now[2]?.ai === true,
 		JSON.stringify(now),
 	);
-	check("AI 요약 attaches the file to the new tab", JSON.stringify(await pills(page)) === JSON.stringify([BRIEF]), JSON.stringify(await pills(page)));
+	const summaryText = (await page.locator(`${PANEL} .user-msg .bubble`).first().innerText()).trim();
 	check(
-		"the new tab's chat is empty; the first tab keeps its draft",
-		(await page.locator(`${PANEL} input[aria-label="Ask Dazzi"]`).inputValue()) === "",
+		"AI 요약 sends the summary query with the file attached, not a bare draft chip",
+		summaryText === SUMMARY_PROMPT &&
+			(await page.locator(`${PANEL} .ref-file-chip[title="${BRIEF}"]`).count()) === 1 &&
+			(await pills(page)).length === 0,
+		`query="${summaryText}" pills=${JSON.stringify(await pills(page))}`,
+	);
+	check(
+		"AI 요약 renders an answer block or an inline error instead of a silent no-op",
+		(await page.locator(`${PANEL} .assistant-msg`).count()) === 1,
 	);
 	await page.screenshot({ path: join(EVIDENCE, "03-ai-summary-tab.png") });
 
@@ -177,7 +187,7 @@ try {
 	check("a row dropped on an AI Search tab switches to it", now[2]?.active === true, JSON.stringify(now));
 	check(
 		"the dropped row is attached, not moved",
-		JSON.stringify(await pills(page)) === JSON.stringify([BRIEF, NOTES]) && existsSync(NOTES),
+		JSON.stringify(await pills(page)) === JSON.stringify([NOTES]) && existsSync(NOTES),
 		JSON.stringify(await pills(page)),
 	);
 
@@ -276,6 +286,28 @@ try {
 	await search.fill("");
 	await search.press("Enter");
 	await page.locator(".tabs .tab").first().click();
+
+	// 13. "AI 요약" follows the Interface language setting.
+	await page.locator(".sidebar__item", { hasText: "Settings" }).click();
+	await page.waitForSelector(".settings-panel");
+	await page.locator('select[aria-label="Interface language"]').selectOption("en");
+	// The set IPC resolves and App adopts it (onSettingsChanged) before the tab closes.
+	await page.waitForFunction(() => document.querySelector('select[aria-label="Interface language"]')?.value === "en");
+	await sleep(300);
+	await page.keyboard.press(chord("w"));
+	await page.locator(".sidebar__item", { hasText: "QA" }).click();
+	await page.waitForSelector(`[data-path="${NOTES}"]`);
+	await page.locator(`[data-path="${NOTES}"]`).click();
+	await page.locator(".inspector-actions button", { hasText: "AI 요약" }).click();
+	await page.locator(`${PANEL} .assistant-msg`).waitFor({ timeout: 10_000 });
+	const englishText = (await page.locator(`${PANEL} .user-msg .bubble`).first().innerText()).trim();
+	check(
+		"AI 요약 asks in the Interface language setting",
+		englishText ===
+			"Summarize the attached file. Cover the key points, notable figures, and any cautions in that order, and cite the source file paths you relied on.",
+		`query="${englishText}"`,
+	);
+	await page.screenshot({ path: join(EVIDENCE, "08-ai-summary-english.png") });
 } catch (error) {
 	console.error(`harness error: ${String(error).slice(0, 600)}`);
 	failures.push("harness error");

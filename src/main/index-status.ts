@@ -2,6 +2,7 @@ import { existsSync, realpathSync } from "node:fs";
 import { isAbsolute, resolve, sep } from "node:path";
 import { AutoRAGLite, loadMirrorIndex, minSyncDocumentPath, minSyncWorkspaceRoot } from "@autorag/librarian";
 import { readRawConfigObject, resolveConfigPath, resolveConfigReadOnly, writeConfigObject } from "@autorag/librarian/core";
+import { applyAppIndexing } from "./app-indexing";
 import type { IndexStatus } from "../shared/index-contract";
 
 /**
@@ -22,6 +23,8 @@ export interface IndexStatusServiceDeps {
 	readonly cwd: string;
 	/** Called after each background refresh settles, with its error when it failed. */
 	readonly onRefreshed: (error: string | null) => void;
+	/** Test seam; production refreshes the real AutoRAGLite indexes. */
+	readonly refresh?: () => Promise<void>;
 }
 
 /** The mirror records canonical paths (search roots are realpath-pinned); match them. */
@@ -49,8 +52,9 @@ export function createIndexStatusService(deps: IndexStatusServiceDeps): IndexSta
 	}
 
 	function snapshot(paths: readonly string[]): IndexStatus[] {
-		const config = resolveConfigReadOnly(input);
-		const exclusions = configuredExclusions(readRawConfigObject(resolveConfigPath(input).configPath), config.workspacePath);
+		const raw = readRawConfigObject(resolveConfigPath(input).configPath);
+		const config = applyAppIndexing(resolveConfigReadOnly(input), raw);
+		const exclusions = (config.excludePaths ?? []).map(canonical);
 		const roots = config.searchPaths.map(canonical);
 		const index = loadMirrorIndex(config.workspacePath);
 		const entries = new Map(Object.values(index.entries).map((entry) => [entry.sourcePath, entry]));
@@ -92,7 +96,11 @@ export function createIndexStatusService(deps: IndexStatusServiceDeps): IndexSta
 	function scheduleRefresh(): void {
 		refreshTail = refreshTail.then(async () => {
 			try {
-				await new AutoRAGLite(resolveConfigReadOnly(input)).refresh(false, { methods: ["parsed", "minsync"] });
+				if (deps.refresh !== undefined) await deps.refresh();
+				else {
+					const raw = readRawConfigObject(resolveConfigPath(input).configPath);
+					await new AutoRAGLite(applyAppIndexing(resolveConfigReadOnly(input), raw)).refresh(false, { methods: ["parsed", "minsync"] });
+				}
 				deps.onRefreshed(null);
 			} catch (error) {
 				deps.onRefreshed(error instanceof Error ? error.message : String(error));

@@ -1,9 +1,11 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import type { AppSettings, Permission, ResolvedPermission, SettingsBridge } from "../shared/settings-contract";
+import type { AppSettings, ConfigRefreshResult, Permission, ResolvedPermission, SettingsBridge } from "../shared/settings-contract";
 import { DEFAULT_SETTINGS } from "../shared/settings-contract";
+import type { AutoRagConfigService } from "./autorag-config-service";
 import type { DataSourceStatusService } from "./datasource-status";
 import type { ModelStatusService } from "./model-status";
+import type { ProviderCredentialService } from "./provider-credentials";
 
 interface SettingsState {
 	settings: AppSettings;
@@ -16,6 +18,12 @@ export interface SettingsServiceDeps {
 	readonly dataSources: DataSourceStatusService;
 	/** Live view of the shared AutoRAG config's resolved model; the app keeps no copy. */
 	readonly models: ModelStatusService;
+	/** Read/write surface for the shared AutoRAG config file itself. */
+	readonly config: AutoRagConfigService;
+	/** Runs an AutoRAGLite index refresh for the manual refresh action. */
+	readonly refreshConfig: (methods?: readonly string[]) => Promise<ConfigRefreshResult>;
+	/** Encrypted provider credentials, loaded into the environment at startup. */
+	readonly credentials: ProviderCredentialService;
 	/** Fired after every successful set() so live services can adopt the change. */
 	readonly onSettingsChanged?: (settings: AppSettings) => void;
 }
@@ -118,5 +126,15 @@ export function createSettingsService(deps: SettingsServiceDeps): SettingsBridge
 			return deps.dataSources.list();
 		},
 		modelsResolve: () => deps.models.resolve(),
+		configGet: () => deps.config.get(),
+		configSet: (path, value) => deps.config.set(path, value),
+		configRemove: (path) => deps.config.remove(path),
+		configPatch: (updates) => deps.config.patch(updates),
+		configRename: (from, to) => deps.config.rename(from, to),
+		modelsCatalog: () => deps.config.modelsCatalog(),
+		configRefresh: (methods) => deps.refreshConfig(methods),
+		credentialsList: async (envNames) => deps.credentials.list(envNames),
+		credentialsSet: async (envName, secret) => deps.credentials.set(envName, secret),
+		credentialsRemove: async (envName) => deps.credentials.remove(envName),
 	};
 }
