@@ -1,4 +1,4 @@
-import { useEffect, type ChangeEvent, type DragEvent, type KeyboardEvent, type MouseEvent, type ReactElement } from "react";
+import { useEffect, type ChangeEvent, type DragEvent, type KeyboardEvent, type MouseEvent, type PointerEvent, type ReactElement } from "react";
 import type { IndexStatus } from "../../../shared/index-contract";
 import type { FinderEntry } from "../data/entries";
 import type { Disclosure } from "../state/folder-tree";
@@ -22,13 +22,16 @@ export interface RowCallbacks {
 	readonly onOpen: (entry: FinderEntry) => void;
 	readonly onContextMenu: (entry: FinderEntry, event: MouseEvent<HTMLDivElement>) => void;
 	readonly onToggleIndex: (entry: FinderEntry) => void;
-	/** A row drag began: the rows it carries leave the app as a native file drag (AI Search attaches them too). */
-	readonly onDragStart: (entry: FinderEntry, event: DragEvent<HTMLDivElement>) => void;
-	/** The row drag-out hovers the row; folder rows accept it as a drop target. */
+	/**
+	 * A press on a row that may become a row drag (`lib/row-drag.ts`): an
+	 * in-app drag inside the window, the OS's file drag once it leaves.
+	 */
+	readonly onPointerDown: (entry: FinderEntry, event: PointerEvent<HTMLDivElement>) => void;
+	/** An in-app drag hovers the row; folder rows accept it as a drop target. */
 	readonly onDragOver: (entry: FinderEntry, event: DragEvent<HTMLDivElement>) => void;
-	/** The row drag-out was dropped on the row; folder rows receive the dragged rows. */
+	/** An in-app drag was dropped on the row; folder rows receive the dragged rows. */
 	readonly onDrop: (entry: FinderEntry, event: DragEvent<HTMLDivElement>) => void;
-	/** The folder row currently under the row drag-out; null when none. */
+	/** The folder row currently under an in-app drag; null when none. */
 	readonly dropTargetPath: string | null;
 	readonly onToggleStack: (entry: FinderEntry) => void;
 	readonly onToggleFolder: (entry: FinderEntry) => void;
@@ -187,11 +190,10 @@ export function FileRow({
 			aria-level={disclosure === "none" ? undefined : depth + 1}
 			aria-expanded={canOpen ? open : undefined}
 			style={{ gridTemplateColumns: listGridTemplate(columns) }}
-			draggable={renameDraft === null}
+			onPointerDown={renameDraft === null ? (event) => callbacks.onPointerDown(entry, event) : undefined}
 			onClick={(event) => callbacks.onClick(entry, event)}
 			onDoubleClick={() => callbacks.onOpen(entry)}
 			onContextMenu={(event) => callbacks.onContextMenu(entry, event)}
-			onDragStart={(event) => callbacks.onDragStart(entry, event)}
 			onDragOver={(event) => callbacks.onDragOver(entry, event)}
 			onDrop={(event) => callbacks.onDrop(entry, event)}
 		>

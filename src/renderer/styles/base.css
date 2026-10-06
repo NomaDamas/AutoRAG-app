@@ -52,6 +52,23 @@ button {
 	cursor: pointer;
 }
 
+/* A held in-app row drag (lib/row-drag.ts) has no browser drag cursor, so the
+ * document shows the verb the target under the pointer accepted. */
+html[data-row-drag],
+html[data-row-drag] * {
+	cursor: no-drop !important;
+}
+
+html[data-row-drag="move"],
+html[data-row-drag="move"] * {
+	cursor: grabbing !important;
+}
+
+html[data-row-drag="copy"],
+html[data-row-drag="copy"] * {
+	cursor: copy !important;
+}
+
 input::placeholder {
 	color: var(--text-muted);
 }

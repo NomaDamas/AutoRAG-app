@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+	FINDER_DRAG_TYPE,
 	attachmentsFromDrop,
 	finderDragEntries,
 	isAttachmentDrag,
+	isFinderDrag,
 	mergeAttachments,
+	readFinderDragPaths,
+	writeFinderDrag,
 	type DropData,
 } from "../src/renderer/src/state/attachments";
 
@@ -30,9 +34,10 @@ function drop(data: Readonly<Record<string, string>>, files: readonly FakeFile[]
 const pathForFile = (file: FakeFile): string => file.path;
 
 describe("isAttachmentDrag", () => {
-	it("accepts files and links but not bare text", () => {
+	it("accepts files, links, and Finder rows but not bare text", () => {
 		expect(isAttachmentDrag(["Files"])).toBe(true);
 		expect(isAttachmentDrag(["text/uri-list", "text/plain"])).toBe(true);
+		expect(isAttachmentDrag([FINDER_DRAG_TYPE, "text/plain"])).toBe(true);
 		expect(isAttachmentDrag(["text/plain", "text/html"])).toBe(false);
 		expect(isAttachmentDrag([])).toBe(false);
 	});
@@ -54,15 +59,8 @@ describe("attachmentsFromDrop", () => {
 		]);
 	});
 
-	it("skips files that have no absolute path on disk", () => {
-		const attachments = attachmentsFromDrop(
-			drop({}, [
-				{ name: "image.png", path: "" },
-				{ name: "relative.txt", path: "relative.txt" },
-			]),
-			pathForFile,
-		);
-		expect(attachments).toEqual([]);
+	it("skips files that have no path on disk", () => {
+		expect(attachmentsFromDrop(drop({}, [{ name: "image.png", path: "" }]), pathForFile)).toEqual([]);
 	});
 
 	it("turns dropped links into URL attachments and file URLs into files", () => {
@@ -85,6 +83,29 @@ describe("attachmentsFromDrop", () => {
 		]);
 	});
 
+	it("reads the Finder's own row drag with its folder kinds", () => {
+		const data: Record<string, string> = {};
+		writeFinderDrag(
+			{
+				effectAllowed: "uninitialized",
+				setData: (format, value) => {
+					data[format] = value;
+				},
+			},
+			[
+				{ path: "/Users/me/Documents/budget.xlsx", name: "budget.xlsx", kind: "file" },
+				{ path: "/Users/me/Documents/Archive", name: "Archive", kind: "folder" },
+			],
+		);
+
+		const attachments = attachmentsFromDrop(drop(data), pathForFile);
+
+		expect(attachments).toEqual([
+			{ kind: "file", id: "/Users/me/Documents/budget.xlsx", name: "budget.xlsx" },
+			{ kind: "folder", id: "/Users/me/Documents/Archive", name: "Archive" },
+		]);
+	});
+
 	it("lists a file once when the drop carries it as both a file and a file URL", () => {
 		const attachments = attachmentsFromDrop(
 			drop({ "text/uri-list": "file:///Users/me/a.txt" }, [{ name: "a.txt", path: "/Users/me/a.txt" }]),
@@ -92,6 +113,50 @@ describe("attachmentsFromDrop", () => {
 		);
 
 		expect(attachments).toEqual([{ kind: "file", id: "/Users/me/a.txt", name: "a.txt" }]);
+	});
+});
+
+describe("writeFinderDrag", () => {
+	it("offers the rows as a copy-or-move with file URLs and plain paths for other drop targets", () => {
+		const data: Record<string, string> = {};
+		const target = {
+			effectAllowed: "uninitialized",
+			setData: (format: string, value: string) => {
+				data[format] = value;
+			},
+		};
+
+		writeFinderDrag(target, [{ path: "/Users/me/한글 문서.md", name: "한글 문서.md", kind: "file" }]);
+
+		expect(target.effectAllowed).toBe("copyMove");
+		expect(data["text/uri-list"]).toBe("file:///Users/me/%ED%95%9C%EA%B8%80%20%EB%AC%B8%EC%84%9C.md");
+		expect(data["text/plain"]).toBe("/Users/me/한글 문서.md");
+	});
+});
+
+describe("readFinderDragPaths", () => {
+	it("reads the absolute paths an in-app row drag carries", () => {
+		const data: Record<string, string> = {};
+		writeFinderDrag(
+			{
+				effectAllowed: "uninitialized",
+				setData: (format, value) => {
+					data[format] = value;
+				},
+			},
+			[
+				{ path: "/d/a.txt", name: "a.txt", kind: "file" },
+				{ path: "/d/Sub", name: "Sub", kind: "folder" },
+			],
+		);
+		expect(readFinderDragPaths(drop(data))).toEqual(["/d/a.txt", "/d/Sub"]);
+	});
+
+	it("returns nothing for a foreign drag or a malformed payload", () => {
+		expect(readFinderDragPaths(drop({ "text/plain": "/d/a.txt" }))).toEqual([]);
+		expect(readFinderDragPaths(drop({ [FINDER_DRAG_TYPE]: "not json" }))).toEqual([]);
+		expect(isFinderDrag([FINDER_DRAG_TYPE, "text/plain"])).toBe(true);
+		expect(isFinderDrag(["Files", "text/plain"])).toBe(false);
 	});
 });
 

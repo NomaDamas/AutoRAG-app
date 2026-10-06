@@ -20,7 +20,7 @@ import { execFileSync } from "node:child_process";
 import { appendFileSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { AI_PANEL, finderWindow, launchFinder, openAiSearch, ROOT, startRowDrag, stubNativeDrag } from "./launch-finder.mjs";
+import { AI_PANEL, finderWindow, launchFinder, openAiSearch, ROOT } from "./launch-finder.mjs";
 import { chord, isMac } from "./platform.mjs";
 
 const EVIDENCE = join(ROOT, ".omo", "evidence", "ai-finder-app", "qa-drop-attachments");
@@ -118,13 +118,7 @@ async function clearPills(page) {
 
 /** An external drag through the browser process: what an OS drag delivers. */
 async function nativeDrop(page, cdp, data) {
-	await nativeDropAt(page, cdp, data, page.locator(DOCK));
-}
-
-/** The same native drag, dropped at a target's center. */
-async function nativeDropAt(page, cdp, data, target) {
-	const box = await target.boundingBox();
-	if (box === null) throw new Error("drop target is not visible");
+	const box = await page.locator(DOCK).boundingBox();
 	const x = box.x + box.width / 2;
 	const y = box.y + box.height / 2;
 	const payload = { items: [], dragOperationsMask: 1, ...data };
@@ -154,17 +148,13 @@ try {
 	page.on("pageerror", (error) => log(`[pageerror] ${String(error).slice(0, 300)}`));
 	await page.waitForSelector(`[data-path="${SECRET}"]`, { timeout: 30_000 });
 	const cdp = await page.context().newCDPSession(page);
-	// Row drags are native file drags now; neutralize the real OS drag so the
-	// lane can arm one without capturing the pointer.
-	await stubNativeDrag(app);
 	// One AI Search tab beside the folder tab: AI Search, then ⌘T back to rows.
 	await openAiSearch(page);
 	await page.keyboard.press(chord("t"));
 	await page.waitForSelector(`[data-path="${SECRET}"]`);
 
 	// 1. One Finder row dragged onto the AI Search strip tab.
-	await startRowDrag(page, SECRET);
-	await nativeDropAt(page, cdp, { files: [SECRET] }, page.locator(AI_TAB));
+	await page.locator(`[data-path="${SECRET}"]`).dragTo(page.locator(AI_TAB));
 	await waitForPill(page, SECRET).catch(() => undefined);
 	let current = await pills(page);
 	check("finder row drag onto the AI Search tab attaches its path", current.some((pill) => pill.title === SECRET), JSON.stringify(current));
@@ -175,8 +165,7 @@ try {
 	await showRows(page);
 	await page.click(`[data-path="${SECRET}"]`);
 	await page.click(`[data-path="${NOTES}"]`, { modifiers: ["Meta"] });
-	await startRowDrag(page, NOTES);
-	await nativeDropAt(page, cdp, { files: [SECRET, NOTES] }, page.locator(".sidebar__item", { hasText: "AI Search" }));
+	await page.locator(`[data-path="${NOTES}"]`).dragTo(page.locator(".sidebar__item", { hasText: "AI Search" }));
 	await waitForPill(page, NOTES).catch(() => undefined);
 	current = await pills(page);
 	check(

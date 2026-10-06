@@ -1,11 +1,10 @@
 /**
  * Drag-and-drop attachments for AI Search.
  *
- * Two sources land on an AI Search tab, its strip tab, or the sidebar item:
- * files and folders dragged from another app such as macOS Finder, and links
- * dragged from a browser. The Finder's own rows arrive the same way — a row
- * drag is a native file drag (`webContents.startDrag`, see `state/drag-out.ts`),
- * so the OS and the app both receive real files. They all become
+ * Three sources land on an AI Search tab, its strip tab, or the sidebar item:
+ * the Finder's own rows (written by {@link writeFinderDrag}), files and folders
+ * dragged from another app such as macOS Finder, and links dragged from a
+ * browser. They all become
  * {@link ChatAttachment}s the main process hands to the agent.
  *
  * The shapes below are the slices of the DOM DataTransfer API these helpers
@@ -15,16 +14,22 @@
 import type { ChatAttachment } from "../../../shared/search-contract";
 import { basename, isAbsolutePath } from "./paths";
 
-/** The browser's MIME type for a native file drag (OS files, and Finder rows). */
-export const FILES_MIME = "Files";
+/** The Finder's row drag payload: JSON `FinderDragEntry[]`. */
+export const FINDER_DRAG_TYPE = "application/x-autorag-finder-entries";
 
 const URI_LIST = "text/uri-list";
+const FILES = "Files";
 
-/** One row of a Finder row drag, as the selection helpers carry it. */
 export interface FinderDragEntry {
 	readonly path: string;
 	readonly name: string;
 	readonly kind: "file" | "folder";
+}
+
+/** The writable half of a DataTransfer at dragstart. */
+export interface DragDataWriter {
+	effectAllowed: string;
+	setData(format: string, data: string): void;
 }
 
 export interface DropItem<F> {
@@ -46,7 +51,22 @@ export interface DropData<F> {
  * page's default text handling.
  */
 export function isAttachmentDrag(types: ArrayLike<string>): boolean {
-	return Array.from(types).some((type) => type === FILES_MIME || type === URI_LIST);
+	return Array.from(types).some((type) => type === FILES || type === URI_LIST || type === FINDER_DRAG_TYPE);
+}
+
+/**
+ * Whether a drag carries the Finder's own rows, as opposed to OS files or
+ * links. The in-app drop targets (folder rows, tabs) accept only this, so an
+ * OS drag keeps falling through to the default browser handling.
+ */
+export function isFinderDrag(types: ArrayLike<string>): boolean {
+	return Array.from(types).some((type) => type === FINDER_DRAG_TYPE);
+}
+
+/** The absolute paths a Finder row drag carries; [] when the payload is absent or malformed. */
+export function readFinderDragPaths(data: Pick<DropData<unknown>, "types" | "getData">): readonly string[] {
+	if (!isFinderDrag(data.types)) return [];
+	return finderEntries(data.getData(FINDER_DRAG_TYPE)).map((attachment) => attachment.id);
 }
 
 /** The rows a drag carries: the whole selection when the grabbed row is in it, else just that row. */
@@ -58,6 +78,23 @@ export function finderDragEntries<E extends FinderDragEntry>(
 	if (!selectedKeys.includes(entry.path)) return [entry];
 	const selected = visibleEntries.filter((candidate) => selectedKeys.includes(candidate.path));
 	return selected.length === 0 ? [entry] : selected;
+}
+
+/**
+ * Fill a Finder row drag: the rows for AI Search, plus file URLs and plain
+ * paths so text fields and other apps receive something sensible.
+ *
+ * The drag can both copy and move: an in-app drop onto a folder or tab moves
+ * the rows (⌥ copies), while a drop on AI Search or another app copies.
+ */
+export function writeFinderDrag(data: DragDataWriter, entries: readonly FinderDragEntry[]): void {
+	data.effectAllowed = "copyMove";
+	data.setData(
+		FINDER_DRAG_TYPE,
+		JSON.stringify(entries.map(({ path, name, kind }) => ({ path, name, kind }))),
+	);
+	data.setData(URI_LIST, entries.map((entry) => `file://${entry.path.split("/").map(encodeURIComponent).join("/")}`).join("\r\n"));
+	data.setData("text/plain", entries.map((entry) => entry.path).join("\n"));
 }
 
 function decoded(text: string): string {
@@ -83,6 +120,22 @@ function attachmentFromUrl(raw: string): ChatAttachment | null {
 	if (url.protocol !== "http:" && url.protocol !== "https:") return null;
 	const route = decoded(url.pathname).replace(/\/+$/u, "");
 	return { kind: "url", id: url.href, name: `${url.host}${route}` };
+}
+
+function finderEntries(json: string): readonly ChatAttachment[] {
+	let parsed: unknown;
+	try {
+		parsed = JSON.parse(json);
+	} catch {
+		return [];
+	}
+	if (!Array.isArray(parsed)) return [];
+	return parsed.flatMap((value: unknown): ChatAttachment[] => {
+		if (typeof value !== "object" || value === null) return [];
+		const { path, name, kind } = value as Record<string, unknown>;
+		if (typeof path !== "string" || typeof name !== "string" || !isAbsolutePath(path)) return [];
+		return [{ kind: kind === "folder" ? "folder" : "file", id: path, name }];
+	});
 }
 
 /** Append `added` after `current`, keeping the first attachment for each path or URL. */
@@ -112,12 +165,13 @@ export function attachmentsFromDrop<F extends { readonly name: string }>(
 ): readonly ChatAttachment[] {
 	const types = Array.from(data.types);
 	const found: ChatAttachment[] = [];
+	if (types.includes(FINDER_DRAG_TYPE)) found.push(...finderEntries(data.getData(FINDER_DRAG_TYPE)));
 	for (const item of Array.from(data.items)) {
 		if (item.kind !== "file") continue;
 		const file = item.getAsFile();
 		if (file === null) continue;
 		const path = pathForFile(file);
-		if (path === "" || !isAbsolutePath(path)) continue;
+		if (path === "") continue;
 		const folder = item.webkitGetAsEntry?.()?.isDirectory === true;
 		found.push({ kind: folder ? "folder" : "file", id: path, name: file.name === "" ? basename(path) : file.name });
 	}

@@ -54,12 +54,11 @@ export async function openAiSearch(page, timeoutMs = 30_000) {
 }
 
 /**
- * A Finder row drag is a native file drag (`fs:startDrag` →
- * `webContents.startDrag`), so a lane that drives one must first neutralize the
- * real OS drag: it would otherwise capture the pointer. The contextBridge
- * object is frozen, so the stub lives in the main process — `startDrag` becomes
- * a no-op and the channel payloads are recorded. Returns a reader for the
- * payloads the renderer sent.
+ * Once a row drag leaves the window it becomes the OS file drag (`fs:startDrag`
+ * → `webContents.startDrag`), which would capture the real pointer. A lane that
+ * drags a row out must neutralize it first. The contextBridge object is frozen,
+ * so the stub lives in the main process — `startDrag` becomes a no-op and the
+ * channel payloads are recorded. Returns a reader for the payloads sent.
  */
 export async function stubNativeDrag(app) {
 	await app.evaluate(({ BrowserWindow, ipcMain }) => {
@@ -74,15 +73,19 @@ export async function stubNativeDrag(app) {
 }
 
 /**
- * Start a row drag the way the app does when the user grabs a row: a
- * `dragstart` the app turns into a native file drag. Requires
+ * Drag a row out of the window the way a user does: press, pass the drag
+ * threshold, leave through the left edge, release. Playwright's mouse is
+ * synthesized inside the renderer, so the real cursor never moves. Requires
  * {@link stubNativeDrag} first, and a selection when the drag should carry more
  * than the grabbed row.
  */
-export async function startRowDrag(page, path) {
-	await page.evaluate((value) => {
-		const row = document.querySelector(`[data-path="${value}"]`);
-		if (row === null) throw new Error(`no row for ${value}`);
-		row.dispatchEvent(new DragEvent("dragstart", { bubbles: true, cancelable: true, dataTransfer: new DataTransfer() }));
-	}, path);
+export async function dragRowOut(page, path) {
+	const box = await page.locator(`[data-path="${path}"]`).first().boundingBox();
+	if (box === null) throw new Error(`no row for ${path}`);
+	const y = box.y + box.height / 2;
+	await page.mouse.move(box.x + 24, y);
+	await page.mouse.down();
+	await page.mouse.move(box.x + 40, y, { steps: 4 });
+	await page.mouse.move(-20, y, { steps: 6 });
+	await page.mouse.up();
 }
