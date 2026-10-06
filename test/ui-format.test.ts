@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { RECENTS_PATH } from "../src/shared/fs-contract";
 import {
+	batchToast,
 	emptyStateText,
 	formatModified,
 	formatSize,
@@ -57,6 +58,24 @@ describe("toasts", () => {
 	it("names a single trashed item and counts many", () => {
 		expect(trashToast(["Documents/Finance/a.pdf"])).toBe("a.pdf — 휴지통으로 이동했습니다");
 		expect(trashToast(["a.pdf", "b.pdf", "c.pdf"])).toBe("3개 항목을 휴지통으로 이동했습니다");
+	});
+
+	it("never reports a partial batch as done: both counts and the first verbatim reason", () => {
+		const refusal = "you don't have permission to access it.";
+		expect(batchToast("trash", { ok: ["/d/a", "/d/b"], failed: [] })).toBe("2개 항목을 휴지통으로 이동했습니다");
+		expect(
+			batchToast("trash", {
+				ok: ["/d/a", "/d/b"],
+				failed: [
+					{ path: "/d/c.txt", message: refusal },
+					{ path: "/d/e.txt", message: refusal },
+				],
+			}),
+		).toBe(`2개 항목을 휴지통으로 이동했습니다 · 2개 항목을 휴지통으로 이동하지 못했습니다 (c.txt: ${refusal})`);
+		expect(batchToast("move", { ok: [], failed: [{ path: "/d/c.txt", message: "EACCES" }] })).toBe(
+			"c.txt — 옮기지 못했습니다: EACCES",
+		);
+		expect(batchToast("copy", { ok: ["/d/a"], failed: [] })).toBe("1개 항목을 복사했습니다");
 	});
 
 	it("reports index include and exclude", () => {

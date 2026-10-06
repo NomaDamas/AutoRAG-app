@@ -26,7 +26,7 @@ import {
 import type { NewFileFormatId } from "../../../shared/new-file-contract";
 import { planTransfer } from "../state/file-transfer";
 import type { FileActionTarget } from "../state/file-actions";
-import { emptyStateText, indexToast, trashToast } from "../state/format";
+import { batchToast, emptyStateText, indexToast } from "../state/format";
 import { evidenceSourceUrl, findEvidenceSource } from "../state/evidence";
 import { type FocusZone, type KeyAction, resolveKeyAction } from "../state/keymap";
 import {
@@ -41,6 +41,7 @@ import {
 	reconcileListing,
 	type IncrementalListing,
 	type ListingScope,
+	withoutPaths,
 } from "../state/live";
 import {
 	adoptInvoke,
@@ -441,6 +442,11 @@ export interface FinderController {
 	revealEvidence(path: string): void;
 	focusFinder(): void;
 	clickRow(entry: FinderEntry, event: ReactMouseEvent<HTMLDivElement>): void;
+	/**
+	 * A marquee drag in the icon grid: the tiles it covers become the
+	 * selection (`keys` in view order); the last one carries focus.
+	 */
+	marqueeSelect(keys: readonly string[]): void;
 	/** A click in column-view pane `pane`: a folder opens in the next pane. */
 	clickColumnRow(pane: number, entry: FinderEntry, event: ReactMouseEvent<HTMLDivElement>): void;
 	setViewMode(mode: ViewMode): void;
@@ -1453,6 +1459,50 @@ export function useFinderController(
 		[navigate, path, layout, panePaths, openFolders, revealEntry, searching, source, reportError],
 	);
 
+	/**
+	 * A trash or move just took `removed` out of their folders: drop those rows
+	 * everywhere the view holds them, at once, instead of waiting for the
+	 * watcher's relist. Failed items are never in `removed`, so they stay on
+	 * screen and stay selected.
+	 */
+	const dropRemoved = useCallback(
+		(removed: readonly string[]) => {
+			if (removed.length === 0) return;
+			const gone = new Set(removed);
+			const dir = listingDirRef.current;
+			const next = withoutPaths(listingRef.current, removed);
+			if (next !== listingRef.current) adoptListing(dir, next);
+			setPaneListings((current) => {
+				let changed = false;
+				const pruned: Record<string, readonly FinderEntry[]> = {};
+				for (const [key, entries] of Object.entries(current)) {
+					const kept = withoutPaths(entries, removed);
+					changed ||= kept !== entries;
+					pruned[key] = kept;
+				}
+				return changed ? pruned : current;
+			});
+			setChildListings((current) => {
+				let changed = false;
+				const pruned: Record<string, ChildListing> = {};
+				for (const [key, child] of Object.entries(current)) {
+					const kept = withoutPaths(child.entries, removed);
+					changed ||= kept !== child.entries;
+					pruned[key] = kept === child.entries ? child : { ...child, entries: kept };
+				}
+				return changed ? pruned : current;
+			});
+			setHits((current) => withoutPaths(current, removed));
+			setTabsState((state) => {
+				const current = activeTab(state);
+				const selection = pruneSelection(current.selection, (path) => !gone.has(path));
+				return selection === current.selection ? state : patchActiveTab(state, (tab) => ({ ...tab, selection }));
+			});
+			pruneColumns(removed);
+		},
+		[adoptListing, pruneColumns],
+	);
+
 	const trashPaths = useCallback(
 		(paths: readonly string[]) => {
 			if (paths.length === 0) {
@@ -1460,15 +1510,14 @@ export function useFinderController(
 			}
 			source
 				.trash(paths)
-				.then(() => {
-					patchSelection(EMPTY_SELECTION);
-					pruneColumns(paths);
-					showToast(trashToast(paths));
+				.then((result) => {
+					dropRemoved(result.ok);
+					showToast(batchToast("trash", result));
 					refresh();
 				})
 				.catch(reportError);
 		},
-		[source, patchSelection, pruneColumns, showToast, refresh, reportError],
+		[source, dropRemoved, showToast, refresh, reportError],
 	);
 
 	/**
@@ -1770,19 +1819,17 @@ export function useFinderController(
 					? source.copyInto(plan.paths, plan.destDir)
 					: source.moveInto(plan.paths, plan.destDir);
 			run
-				.then(() => {
+				.then((result) => {
 					if (plan.op === "move") {
-						pruneColumns(plan.paths);
-						setClipboardCount(0);
-						showToast(`${plan.paths.length}개 항목을 옮겼습니다`);
-					} else {
-						showToast(`${plan.paths.length}개 항목을 복사했습니다`);
+						dropRemoved(result.ok);
+						if (result.failed.length === 0) setClipboardCount(0);
 					}
+					showToast(batchToast(plan.op, result));
 					refresh();
 				})
 				.catch(reportError);
 		},
-		[source, pruneColumns, showToast, refresh, reportError],
+		[source, dropRemoved, showToast, refresh, reportError],
 	);
 
 	const copyPaths = useCallback(
@@ -1937,7 +1984,10 @@ export function useFinderController(
 				case "duplicate":
 					source
 						.duplicate(targets)
-						.then(refresh)
+						.then((result) => {
+							if (result.failed.length > 0) showToast(batchToast("duplicate", result));
+							refresh();
+						})
 						.catch(reportError);
 					return;
 				case "rename":
@@ -2341,6 +2391,11 @@ export function useFinderController(
 		moveSelectionBy,
 		revealEvidence,
 		focusFinder: () => setZone("finder"),
+		marqueeSelect: (keys) => {
+			setZone("finder");
+			const focus = keys[keys.length - 1] ?? null;
+			patchSelection({ keys, anchor: keys[0] ?? null, focus });
+		},
 		clickRow: (entry, event) => {
 			setZone("finder");
 			patchSelection(
