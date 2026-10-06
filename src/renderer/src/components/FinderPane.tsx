@@ -5,8 +5,9 @@ import { RECENTS_PATH } from "../../../shared/fs-contract";
 import type { FinderSource } from "../data/source";
 import { useFinderController, type ListingSnapshot, type QuickLookBridge } from "../hooks/useFinderController";
 import type { ControllerStore } from "../hooks/usePaneControllers";
-import { attachmentsFromDrop, isAttachmentDrag, isFinderDrag, readFinderDragPaths, writeFinderDrag } from "../state/attachments";
-import { backgroundDropDir } from "../state/file-transfer";
+import { pressRow } from "../lib/row-drag";
+import { attachmentsFromDrop, isAttachmentDrag, isFileTransferDrag, isFinderDrag, readDropPaths } from "../state/attachments";
+import { backgroundDropDir, dropTransferOp } from "../state/file-transfer";
 import { listFixedWidth, resetListColumns, setListColumnWidth, toggleListColumn, type ListColumnKey, type ListColumnsState } from "../state/list-columns";
 import { basename, breadcrumbTrail } from "../state/paths";
 import { AI_SEARCH_PATH, SETTINGS_PATH } from "../state/tabs";
@@ -156,25 +157,26 @@ export const FinderPane = memo(function FinderPane({
 				if (dir === "" || finder.searching) return;
 				finder.openBackgroundContextMenu(event, dir);
 			},
+			// A folder row claims its drop (`preventDefault`); anywhere else in the
+			// listing — empty space or a file row — the drop lands in this folder.
 			onDragOver: (event) => {
-				const overRow = event.target instanceof Element && event.target.closest('[role="row"], [role="option"]') !== null;
-				const destination = backgroundDropDir(dir, { searching: finder.searching, overRow });
-				if (destination === null || !isFinderDrag(event.dataTransfer.types)) return;
+				const destination = backgroundDropDir(dir, { searching: finder.searching, claimed: event.defaultPrevented });
+				if (destination === null || !isFileTransferDrag(event.dataTransfer.types)) return;
 				event.preventDefault();
-				event.dataTransfer.dropEffect = event.altKey ? "copy" : "move";
+				event.dataTransfer.dropEffect = dropTransferOp(isFinderDrag(event.dataTransfer.types), event.altKey);
 				setDropTargetPath(null);
 				setDropTabId(null);
 				setDropBackgroundDir((current) => (current === destination ? current : destination));
 			},
 			onDrop: (event) => {
-				const overRow = event.target instanceof Element && event.target.closest('[role="row"], [role="option"]') !== null;
-				const destination = backgroundDropDir(dir, { searching: finder.searching, overRow });
+				const destination = backgroundDropDir(dir, { searching: finder.searching, claimed: event.defaultPrevented });
 				setDropBackgroundDir(null);
 				if (destination === null) return;
-				const paths = readFinderDragPaths(event.dataTransfer);
+				const paths = readDropPaths(event.dataTransfer, autorag.pathForFile);
 				if (paths.length === 0) return;
 				event.preventDefault();
-				finder.transferDropped(paths, destination, event.altKey);
+				const copy = dropTransferOp(isFinderDrag(event.dataTransfer.types), event.altKey) === "copy";
+				finder.transferDropped(paths, destination, copy);
 			},
 			onDragLeave: (event) => {
 				if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return;
@@ -188,25 +190,29 @@ export const FinderPane = memo(function FinderPane({
 		onClick: finder.clickRow,
 		onOpen: finder.openEntry,
 		onContextMenu: finder.openContextMenu,
-		onDragStart: (entry, event) => writeFinderDrag(event.dataTransfer, finder.dragEntries(entry)),
-		// An in-app row drag lands on folders: the rows move there (⌥ copies).
+		// Inside the window the rows are an in-app drag; past its edge, the OS's file drag.
+		onPointerDown: (entry, event) =>
+			pressRow(event, { entries: () => finder.dragEntries(entry), startNative: autorag.fs.startDrag }),
+		// A folder row claims an in-app drag (the rows move into it, ⌥ copies); the
+		// listing's own handler sees `defaultPrevented` and stays out.
 		onDragOver: (entry, event) => {
-			if (isFinderDrag(event.dataTransfer.types)) setDropBackgroundDir(null);
-			if (entry.kind !== "folder" || !isFinderDrag(event.dataTransfer.types)) return;
+			if (entry.kind !== "folder" || !isFileTransferDrag(event.dataTransfer.types)) return;
 			event.preventDefault();
-			event.dataTransfer.dropEffect = event.altKey ? "copy" : "move";
+			event.dataTransfer.dropEffect = dropTransferOp(isFinderDrag(event.dataTransfer.types), event.altKey);
+			setDropBackgroundDir(null);
 			setDropTargetPath((current) => (current === entry.path ? current : entry.path));
 		},
 		onDrop: (entry, event) => {
 			setDropTargetPath(null);
 			setDropBackgroundDir(null);
 			if (entry.kind !== "folder") return;
-			const paths = readFinderDragPaths(event.dataTransfer);
+			const paths = readDropPaths(event.dataTransfer, autorag.pathForFile);
 			if (paths.length === 0) return;
 			// No stopPropagation: the window "drop" listener clears the AI panel's
 			// drag overlay (and the highlights) once the transfer has started.
 			event.preventDefault();
-			finder.transferDropped(paths, entry.path, event.altKey);
+			const copy = dropTransferOp(isFinderDrag(event.dataTransfer.types), event.altKey) === "copy";
+			finder.transferDropped(paths, entry.path, copy);
 		},
 		dropTargetPath,
 		onToggleIndex: finder.toggleIndex,
@@ -250,10 +256,10 @@ export const FinderPane = memo(function FinderPane({
 				onTabDragEnd={shell.endTabDrag}
 				onTabDragOver={(id, event) => {
 					const aiTab = finder.tabs.some((tab) => tab.id === id && tab.aiSearch);
-					if (aiTab ? !isAttachmentDrag(event.dataTransfer.types) : !isFinderDrag(event.dataTransfer.types)) return;
+					if (aiTab ? !isAttachmentDrag(event.dataTransfer.types) : !isFileTransferDrag(event.dataTransfer.types)) return;
 					setDropBackgroundDir(null);
 					event.preventDefault();
-					event.dataTransfer.dropEffect = aiTab ? "copy" : event.altKey ? "copy" : "move";
+					event.dataTransfer.dropEffect = aiTab ? "copy" : dropTransferOp(isFinderDrag(event.dataTransfer.types), event.altKey);
 					setDropTabId((current) => (current === id ? current : id));
 					if (finder.tabs.some((tab) => tab.id === id && !tab.active)) armSpringTab(id);
 				}}
@@ -275,10 +281,11 @@ export const FinderPane = memo(function FinderPane({
 						shell.deliverToAi({ attach: dropped });
 						return;
 					}
-					const paths = readFinderDragPaths(event.dataTransfer);
+					const paths = readDropPaths(event.dataTransfer, autorag.pathForFile);
 					if (paths.length === 0) return;
 					event.preventDefault();
-					finder.dropOnTab(id, paths, event.altKey);
+					const copy = dropTransferOp(isFinderDrag(event.dataTransfer.types), event.altKey) === "copy";
+					finder.dropOnTab(id, paths, copy);
 				}}
 			/>
 			{finder.path === SETTINGS_PATH ? (

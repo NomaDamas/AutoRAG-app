@@ -55,6 +55,17 @@ export function isAttachmentDrag(types: ArrayLike<string>): boolean {
 }
 
 /**
+ * Whether a Finder drop target (a folder row, a tab, the listing background)
+ * should accept the drag to copy or move local files. A superset of
+ * {@link isFinderDrag}: it also matches OS files and file links, but a web
+ * link rides the same URI list, so the drop handler still reads the paths with
+ * {@link readDropPaths} and does nothing when none resolve to disk.
+ */
+export function isFileTransferDrag(types: ArrayLike<string>): boolean {
+	return Array.from(types).some((type) => type === FILES || type === URI_LIST || type === FINDER_DRAG_TYPE);
+}
+
+/**
  * Whether a drag carries the Finder's own rows, as opposed to OS files or
  * links. The in-app drop targets (folder rows, tabs) accept only this, so an
  * OS drag keeps falling through to the default browser handling.
@@ -105,17 +116,28 @@ function decoded(text: string): string {
 	}
 }
 
-/** A dropped `text/uri-list` line as an attachment: file URLs become files, web links become URLs. */
-function attachmentFromUrl(raw: string): ChatAttachment | null {
+/** The absolute path a `file:` URL names, or null for any other scheme or a relative path. */
+function fileUrlPath(raw: string): string | null {
 	let url: URL;
 	try {
 		url = new URL(raw);
 	} catch {
 		return null;
 	}
-	if (url.protocol === "file:") {
-		const path = decoded(url.pathname);
-		return isAbsolutePath(path) ? { kind: "file", id: path, name: basename(path) } : null;
+	if (url.protocol !== "file:") return null;
+	const path = decoded(url.pathname);
+	return isAbsolutePath(path) ? path : null;
+}
+
+/** A dropped `text/uri-list` line as an attachment: file URLs become files, web links become URLs. */
+function attachmentFromUrl(raw: string): ChatAttachment | null {
+	const path = fileUrlPath(raw);
+	if (path !== null) return { kind: "file", id: path, name: basename(path) };
+	let url: URL;
+	try {
+		url = new URL(raw);
+	} catch {
+		return null;
 	}
 	if (url.protocol !== "http:" && url.protocol !== "https:") return null;
 	const route = decoded(url.pathname).replace(/\/+$/u, "");
@@ -171,7 +193,7 @@ export function attachmentsFromDrop<F extends { readonly name: string }>(
 		const file = item.getAsFile();
 		if (file === null) continue;
 		const path = pathForFile(file);
-		if (path === "") continue;
+		if (path === "" || !isAbsolutePath(path)) continue;
 		const folder = item.webkitGetAsEntry?.()?.isDirectory === true;
 		found.push({ kind: folder ? "folder" : "file", id: path, name: file.name === "" ? basename(path) : file.name });
 	}
@@ -184,4 +206,21 @@ export function attachmentsFromDrop<F extends { readonly name: string }>(
 		}
 	}
 	return mergeAttachments([], found);
+}
+
+/**
+ * The local absolute paths a Finder drop target should copy or move. Rows from
+ * another app arrive as `Files` items resolved through `pathForFile` (Electron's
+ * `webUtils.getPathForFile`), file links through the URI list; both are kept
+ * only when they name a real absolute path (each attachment id is one), so a
+ * web link or a pathless blob never becomes a transfer. Order is the drop's,
+ * first occurrence per path.
+ */
+export function readDropPaths<F extends { readonly name: string }>(
+	data: DropData<F>,
+	pathForFile: (file: F) => string,
+): readonly string[] {
+	return attachmentsFromDrop(data, pathForFile)
+		.filter((attachment) => attachment.kind !== "url")
+		.map((attachment) => attachment.id);
 }

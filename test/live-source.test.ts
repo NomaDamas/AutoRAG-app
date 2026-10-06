@@ -76,6 +76,7 @@ function fakeFs(result: FsVersionFamiliesResult): FsBridge {
 		clipboardGet,
 		undo: async () => ({ ok: false, empty: true, failed: [] }),
 		copyPathsToClipboard: async () => {},
+		startDrag: () => {},
 		versionFamilies: async () => result,
 		refreshVersionFamilies: async () => result,
 		indexStatus: async (paths) =>

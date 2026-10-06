@@ -52,3 +52,40 @@ export async function openAiSearch(page, timeoutMs = 30_000) {
 	await page.locator(".sidebar__item", { hasText: "AI Search" }).click({ timeout: timeoutMs });
 	await page.waitForSelector(`${AI_PANEL} input[aria-label="Ask Dazzi"]`, { timeout: timeoutMs });
 }
+
+/**
+ * Once a row drag leaves the window it becomes the OS file drag (`fs:startDrag`
+ * → `webContents.startDrag`), which would capture the real pointer. A lane that
+ * drags a row out must neutralize it first. The contextBridge object is frozen,
+ * so the stub lives in the main process — `startDrag` becomes a no-op and the
+ * channel payloads are recorded. Returns a reader for the payloads sent.
+ */
+export async function stubNativeDrag(app) {
+	await app.evaluate(({ BrowserWindow, ipcMain }) => {
+		globalThis.__qaStartDrags = globalThis.__qaStartDrags ?? [];
+		for (const window of BrowserWindow.getAllWindows()) window.webContents.startDrag = () => {};
+		if (globalThis.__qaStartDragsHooked !== true) {
+			globalThis.__qaStartDragsHooked = true;
+			ipcMain.on("fs:startDrag", (_event, paths) => globalThis.__qaStartDrags.push(paths));
+		}
+	});
+	return () => app.evaluate(() => globalThis.__qaStartDrags ?? []);
+}
+
+/**
+ * Drag a row out of the window the way a user does: press, pass the drag
+ * threshold, leave through the left edge, release. Playwright's mouse is
+ * synthesized inside the renderer, so the real cursor never moves. Requires
+ * {@link stubNativeDrag} first, and a selection when the drag should carry more
+ * than the grabbed row.
+ */
+export async function dragRowOut(page, path) {
+	const box = await page.locator(`[data-path="${path}"]`).first().boundingBox();
+	if (box === null) throw new Error(`no row for ${path}`);
+	const y = box.y + box.height / 2;
+	await page.mouse.move(box.x + 24, y);
+	await page.mouse.down();
+	await page.mouse.move(box.x + 40, y, { steps: 4 });
+	await page.mouse.move(-20, y, { steps: 6 });
+	await page.mouse.up();
+}
