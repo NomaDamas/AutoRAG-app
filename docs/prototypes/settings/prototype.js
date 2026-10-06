@@ -437,7 +437,7 @@ function pageHead(page) {
 	const notes = state.notes && page.notes?.length
 		? `<div class="notes"><strong>변경 메모</strong><ul>${page.notes.map((note) => `<li>${esc(note)}</li>`).join("")}</ul></div>`
 		: "";
-	return `<div class="page-head"><div><h1>${esc(page.title)}</h1><p>${esc(page.desc)}</p></div><span class="save-state" id="save-state">${svg("check")}자동 저장됨</span></div>${notes}`;
+	return `<div class="page-head"><div><h1>${esc(page.title)}</h1><p>${esc(page.desc)}</p></div></div>${notes}`;
 }
 
 function renderModelOptions(filter = "") {
@@ -498,7 +498,7 @@ function sourcePage(id) {
 	return {
 		group: "연결된 앱", label: connection?.label ?? id, icon: "plug",
 		title: connection?.label ?? id,
-		desc: `${template.desc ?? ""} 변경 사항은 자동으로 저장됩니다.`.trim(),
+		desc: template.desc ?? "",
 		notes: ["Needs attention 같은 영문 배지를 준비 단계로 다시 썼습니다.", "연결 ID·인스턴스 ID·실행 환경은 고급 설정으로 옮겼습니다.", "템플릿(유형) 변경 항목을 제거했습니다. 연결을 새로 만드는 흐름으로 대체합니다."],
 		sections: [
 			{ title: "연결 상태", rows: statusRows },
@@ -595,16 +595,6 @@ function toast(message) {
 	toastTimer = setTimeout(() => element.classList.remove("show"), 2200);
 }
 
-function markSaving() {
-	const element = $("#save-state");
-	if (!element) return;
-	element.innerHTML = "저장 중…";
-	setTimeout(() => {
-		const current = $("#save-state");
-		if (current) current.innerHTML = `${svg("check")}저장됨`;
-	}, 450);
-}
-
 function modal(html) {
 	$("#modal-root").innerHTML = `<div class="modal-backdrop" data-close-modal><div class="modal" role="dialog" aria-modal="true">${html}</div></div>`;
 	$("#modal-root input")?.focus();
@@ -657,7 +647,6 @@ document.addEventListener("click", (event) => {
 			if (connection) connection.enabled = on;
 		}
 		if (["rerank", "ocr", "media"].includes(id)) render({ keepScroll: true });
-		markSaving();
 		return;
 	}
 
@@ -675,7 +664,6 @@ document.addEventListener("click", (event) => {
 		state.model = modelOption.dataset.model;
 		closeCombo();
 		render({ keepScroll: true });
-		markSaving();
 		return;
 	}
 
@@ -706,7 +694,6 @@ document.addEventListener("click", (event) => {
 		const [listId, index] = chipRemove.dataset.chipRemove.split(":");
 		state.chips[listId]?.splice(Number(index), 1);
 		render({ keepScroll: true });
-		markSaving();
 		return;
 	}
 
@@ -726,7 +713,6 @@ document.addEventListener("click", (event) => {
 			state.chips[listId].push(value);
 			closeModal();
 			render({ keepScroll: true });
-			markSaving();
 		}
 		return;
 	}
@@ -761,7 +747,6 @@ document.addEventListener("click", (event) => {
 					connection.hint = `${connection.label} 검색 · 사용 중`;
 				}
 				render({ keepScroll: true });
-				markSaving();
 				toast("동기화를 시작했습니다.");
 				return;
 			}
@@ -783,12 +768,10 @@ document.addEventListener("click", (event) => {
 			case "path-add":
 				state.searchPaths.push(`~/Documents/새 폴더 ${state.searchPaths.length + 1}`);
 				render({ keepScroll: true });
-				markSaving();
 				return;
 			case "path-remove":
 				state.searchPaths.splice(Number(action.dataset.index), 1);
 				render({ keepScroll: true });
-				markSaving();
 				return;
 		}
 	}
@@ -823,7 +806,6 @@ document.addEventListener("change", (event) => {
 		select.value = { balanced: "균형 (권장)", light: "가벼움", local: "직접 연결" }[state.embed];
 		return;
 	}
-	markSaving();
 });
 
 document.addEventListener("click", (event) => {
@@ -834,7 +816,6 @@ document.addEventListener("click", (event) => {
 	closeModal();
 	render({ keepScroll: true });
 	toast("모델을 바꾸고 문서를 다시 분석합니다.");
-	markSaving();
 });
 
 document.addEventListener("input", (event) => {
