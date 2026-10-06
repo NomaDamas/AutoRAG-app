@@ -32,6 +32,7 @@ import {
 	applyOptimisticDeletes,
 	createIncrementalListing,
 	createListingLoader,
+	isFilesystemPath,
 	nearestExistingAncestor,
 	listingSurvivor,
 	pruneSelection,
@@ -673,6 +674,10 @@ export function useFinderController(
 			mode: "navigate" | "silent",
 			requestGeneration: number,
 		): void => {
+			// Settings renders its own UI; there is no folder on disk to read.
+			if (!isFilesystemPath(requestedPath)) {
+				return;
+			}
 			// A fresh listing invalidates which identities the viewport has asked
 			// for, so the next mounted rows request their icons again.
 			thumbRequestsRef.current.clear();

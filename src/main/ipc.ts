@@ -12,7 +12,7 @@ import {
 	type FsSearchOptions,
 } from "../shared/fs-contract";
 import { SEARCH_CHANNELS, type SearchBridge } from "../shared/search-contract";
-import { SETTINGS_CHANNELS, type SettingsBridge } from "../shared/settings-contract";
+import { SETTINGS_CHANNELS, type JsonValue, type SettingsBridge } from "../shared/settings-contract";
 import { LIVE_CHANNELS } from "../shared/live-contract";
 import type { ActionService } from "./action-service";
 import type { ChangeHub } from "./change-hub";
@@ -121,6 +121,21 @@ export function registerSearchIpcHandlers(service: SearchBridge): void {
 	ipcMain.handle(SEARCH_CHANNELS.historyClear, () => service.historyClear());
 }
 
+interface ConfigUpdatePayload {
+	readonly path: readonly string[];
+	readonly value?: unknown;
+	readonly remove?: true;
+}
+
+/** A config:patch item is a set (`value` present) or a removal (`remove: true`). */
+function isConfigUpdatePayload(value: unknown): value is ConfigUpdatePayload {
+	if (value === null || typeof value !== "object" || !("path" in value)) return false;
+	const path = value.path;
+	if (!Array.isArray(path) || path.some((segment) => typeof segment !== "string")) return false;
+	if ("remove" in value) return value.remove === true;
+	return "value" in value;
+}
+
 export function registerSettingsIpcHandlers(service: SettingsBridge): void {
 	ipcMain.handle(SETTINGS_CHANNELS.get, () => service.get());
 	ipcMain.handle(SETTINGS_CHANNELS.set, (_event, patch) => service.set(patch));
@@ -135,6 +150,66 @@ export function registerSettingsIpcHandlers(service: SettingsBridge): void {
 		service.sourcesSetDescription(id, description),
 	);
 	ipcMain.handle(SETTINGS_CHANNELS.modelsResolve, () => service.modelsResolve());
+	ipcMain.handle(SETTINGS_CHANNELS.configGet, () => service.configGet());
+	ipcMain.handle(SETTINGS_CHANNELS.configSet, (_event, path: unknown, value: unknown) => {
+		if (!Array.isArray(path) || path.some((segment) => typeof segment !== "string")) {
+			throw new TypeError("config:set expects a path array of strings");
+		}
+		return service.configSet(path, value as JsonValue);
+	});
+	ipcMain.handle(SETTINGS_CHANNELS.configRemove, (_event, path: unknown) => {
+		if (!Array.isArray(path) || path.some((segment) => typeof segment !== "string")) {
+			throw new TypeError("config:remove expects a path array of strings");
+		}
+		return service.configRemove(path);
+	});
+	ipcMain.handle(SETTINGS_CHANNELS.configPatch, (_event, updates: unknown) => {
+		if (!Array.isArray(updates) || !updates.every(isConfigUpdatePayload)) {
+			throw new TypeError("config:patch expects an array of { path, value } updates");
+		}
+		// The config service re-validates each value as JSON before writing.
+		return service.configPatch(
+			updates.map((update) =>
+				"remove" in update && update.remove === true
+					? { path: update.path, remove: true as const }
+					: { path: update.path, value: update.value as JsonValue },
+			),
+		);
+	});
+	ipcMain.handle(SETTINGS_CHANNELS.configRename, (_event, from: unknown, to: unknown) => {
+		if (!Array.isArray(from) || from.some((segment) => typeof segment !== "string")) {
+			throw new TypeError("config:rename expects a `from` string path array");
+		}
+		if (!Array.isArray(to) || to.some((segment) => typeof segment !== "string")) {
+			throw new TypeError("config:rename expects a `to` string path array");
+		}
+		return service.configRename(from as readonly string[], to as readonly string[]);
+	});
+	ipcMain.handle(SETTINGS_CHANNELS.modelsCatalog, () => service.modelsCatalog());
+	ipcMain.handle(SETTINGS_CHANNELS.configRefresh, (_event, methods: unknown) => {
+		if (methods === undefined) return service.configRefresh();
+		if (!Array.isArray(methods) || methods.some((method) => typeof method !== "string")) {
+			throw new TypeError("config:refresh expects an array of method names");
+		}
+		return service.configRefresh(methods as readonly string[]);
+	});
+	ipcMain.handle(SETTINGS_CHANNELS.credentialsList, (_event, envNames: unknown) => {
+		if (envNames === undefined) return service.credentialsList();
+		if (!Array.isArray(envNames) || envNames.some((name) => typeof name !== "string")) {
+			throw new TypeError("credentials:list expects an array of env var names");
+		}
+		return service.credentialsList(envNames as readonly string[]);
+	});
+	ipcMain.handle(SETTINGS_CHANNELS.credentialsSet, (_event, envName: unknown, secret: unknown) => {
+		if (typeof envName !== "string" || typeof secret !== "string") {
+			throw new TypeError("credentials:set expects an env var name and a secret string");
+		}
+		return service.credentialsSet(envName, secret);
+	});
+	ipcMain.handle(SETTINGS_CHANNELS.credentialsRemove, (_event, envName: unknown) => {
+		if (typeof envName !== "string") throw new TypeError("credentials:remove expects an env var name");
+		return service.credentialsRemove(envName);
+	});
 }
 
 export function registerLiveIpcHandlers(

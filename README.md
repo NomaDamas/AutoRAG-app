@@ -66,6 +66,56 @@ through Electron's native theme; Quick Look has no separate appearance switch.
 The default is Light, and changing it while Quick Look is open updates the panel
 without reloading the previewed file. The choice is retained after restart.
 
+### AutoRAG configuration settings
+
+Settings writes to the shared AutoRAG `config.json`; the Finder does not keep a
+second datasource or model configuration. The categories are:
+
+- **General** — document languages and app preferences.
+- **LLM Models** — provider/model catalog selection, provider endpoint, allowed
+  API protocol, and encrypted provider credentials. Runtime capabilities and token
+  limits come from the provider catalog or model runtime.
+- **Embedding Models** — local MinSync profiles or loopback endpoints, automatic
+  model dimensions, request controls, and reindexing warnings.
+- **Reranker Models** — the v2.7 OpenRouter reranker, wire model, Top N,
+  timeout, and encrypted credentials. Other reranker providers are not offered
+  because the upstream resolver rejects them.
+- **Data Sources** — the management view for adding named connections per
+  datasource template. A separate **Data Sources** sidebar group exposes one
+  direct Settings tab per configured connection (for example Discord, KakaoTalk,
+  iCloud Drive, mailcrawl, Slack, or Spotlight), so connector fields are not
+  nested inside one crowded page.
+- **Deep Indexing / Light Indexing / Other Apps** — search paths, MinSync,
+  Jikji, platform-detected FSearch/Everything, web search, parser/OCR, dupey,
+  datasource access, and exclusions. Installer paths, retrieval limits, P2P,
+  and code-folder quick exclusions stay on AutoRAG defaults and are not exposed.
+
+Ordinary datasource, indexing, model, and app-option edits apply automatically
+after validation. Embedding identity changes remain explicit because they require
+a full MinSync reindex; the identity is saved separately and Settings keeps the
+reindex warning until an explicit refresh succeeds. API credentials remain
+explicit encrypted-store actions.
+
+The parser and OCR language controls are multi-select fields backed by the
+upstream-supported tags (`ko`, `en`, `ja`, `zh-hans`, `zh-hant`, `fr`, `de`,
+`es`, `ru`, `it`, `pt`, `vi`, `th`, `ar`, `hi`). OCR stores the corresponding
+Tesseract traineddata codes while displaying the AutoRAG language tags.
+The Deep, Light, and Other Apps panels use typed controls for the supported
+user-adjustable fields instead of raw JSON textareas; leaf saves preserve
+unrelated config keys and reset removes the edited leaf so AutoRAG defaults apply
+again. Installer paths, retrieval limits, P2P, and code-folder quick exclusions
+remain AutoRAG-owned defaults and are not exposed in Settings. The Light Indexing
+panel renders only the backend detected for the current operating system.
+
+API keys are never written into `config.json`. The app uses Electron's encrypted
+credential store and injects the selected environment variable into the live
+agent process. Remote embedding endpoints and datasource embedding/rerank
+endpoints are rejected; use a loopback service for corpus-bearing requests.
+
+The Settings tab is an app-owned UI location, not a filesystem path; it never
+issues directory listings, incremental reads, or watcher requests. Returning to
+a Finder tab restores its existing folder listing and watch set.
+
 ## Live filesystem sync
 
 Folders shown in open tabs are watched for changes made by other apps. A
