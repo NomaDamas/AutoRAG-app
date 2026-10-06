@@ -182,6 +182,7 @@ export function IconGrid({
 			onDragOver={background.onDragOver}
 			onDrop={background.onDrop}
 			onDragLeave={background.onDragLeave}
+			onContextMenu={background.onContextMenu}
 		>
 			<VersionFamilyBanner error={versionFamilyError} onRetry={onRetryVersionFamilies} />
 			<div

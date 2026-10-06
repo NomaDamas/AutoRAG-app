@@ -96,6 +96,15 @@ describe("resolveKeyAction", () => {
 		expect(resolveKeyAction(key("c", { meta: true }), { zone: "evidence", typing: false })).toBeNull();
 	});
 
+	it("maps ⇧⌘N to a new folder and ⌥⌘N to a new text file", () => {
+		expect(resolveKeyAction(key("n", { meta: true, shift: true }), finder)).toEqual({ type: "newFolder" });
+		expect(resolveKeyAction(key("N", { meta: true, shift: true }), finder)).toEqual({ type: "newFolder" });
+		expect(resolveKeyAction(key("n", { meta: true, alt: true }), finder)).toEqual({ type: "newFile", format: "text" });
+		expect(resolveKeyAction(key("n", { meta: true }), finder)).toBeNull();
+		expect(resolveKeyAction(key("n", { meta: true, shift: true }), { ...finder, typing: true })).toBeNull();
+		expect(resolveKeyAction(key("n", { meta: true, alt: true }), { zone: "evidence", typing: false })).toBeNull();
+	});
+
 	it("ignores unmapped keys", () => {
 		expect(resolveKeyAction(key("x"), finder)).toBeNull();
 		expect(resolveKeyAction(key("t"), finder)).toBeNull();

@@ -18,10 +18,12 @@ import {
 	slideBack,
 } from "../state/columns";
 import {
+	buildBackgroundContextMenu,
 	buildContextMenu,
 	type FinderMenuAction,
 	type FinderMenuEntry,
 } from "../state/context-menu";
+import type { NewFileFormatId } from "../../../shared/new-file-contract";
 import { planTransfer } from "../state/file-transfer";
 import type { FileActionTarget } from "../state/file-actions";
 import { emptyStateText, indexToast, trashToast } from "../state/format";
@@ -169,7 +171,10 @@ const WINDOW_KEY_ACTIONS: Partial<Record<KeyAction["type"], true>> = {
 
 interface ContextMenuState {
 	readonly cursor: { readonly x: number; readonly y: number };
-	readonly entry: FinderEntry;
+	/** The row the menu targets; null for the empty-space menu. */
+	readonly entry: FinderEntry | null;
+	/** The folder a background New / Paste acts on (the pane the menu was opened in). */
+	readonly dir: string;
 }
 
 function single(path: string): SelectionState {
@@ -374,6 +379,8 @@ export interface FinderController {
 	revealEntry(entry: FinderEntry): void;
 	/** Create an "untitled folder" in the current directory and select it. */
 	newFolder(): void;
+	/** Create a new file of `format` in the current directory and select it. */
+	newFile(format: NewFileFormatId): void;
 	/** Trash a single entry (inspector chip). */
 	trashEntry(entry: FinderEntry): void;
 	/** Copy a single entry's path to the system clipboard (inspector chip). */
@@ -439,8 +446,10 @@ export interface FinderController {
 	setViewMode(mode: ViewMode): void;
 	openEntry(entry: FinderEntry): void;
 	openContextMenu(entry: FinderEntry, event: ReactMouseEvent<HTMLDivElement>): void;
+	/** The empty-space menu for `dir` (New / Paste); defaults to the folder in view. */
+	openBackgroundContextMenu(event: ReactMouseEvent<HTMLDivElement>, dir?: string): void;
 	closeContextMenu(): void;
-	runMenuAction(action: FinderMenuAction): void;
+	runMenuAction(action: FinderMenuAction, format?: NewFileFormatId | null): void;
 	toggleIndex(entry: FinderEntry): void;
 	toggleStack(entry: FinderEntry): void;
 	/** Folder disclosure triangle: nest or hide the folder's contents in place. */
@@ -1541,21 +1550,63 @@ export function useFinderController(
 		[families],
 	);
 
-	/** Sidebar "New folder": real mkdir in the current folder, then select the row. */
-	const newFolder = useCallback(() => {
-		if (searching || path === "" || path === RECENTS_PATH || isVirtualTabPath(path)) {
-			return;
-		}
-		source
-			.createFolder(path)
-			.then((created) => {
-				showToast(`${created.name} — 새 폴더를 만들었습니다`);
-				scrollTarget.current = created.path;
-				patchSelection({ keys: [created.path], anchor: created.path, focus: created.path });
-				refresh();
-			})
-			.catch(reportError);
-	}, [source, searching, path, showToast, patchSelection, refresh, reportError]);
+	/**
+	 * After a create, select the new row and start the inline rename, exactly
+	 * like Finder's New Folder / New File: the name is editable at once.
+	 */
+	const revealCreated = useCallback(
+		(created: { readonly path: string; readonly name: string }) => {
+			scrollTarget.current = created.path;
+			patchSelection(single(created.path));
+			setRename({ path: created.path, draft: created.name });
+			refresh();
+		},
+		[patchSelection, refresh],
+	);
+
+	/** Creation targets a real folder, never search results, Recents, or a virtual tab. */
+	const canCreateIn = useCallback(
+		(dir: string): boolean => !searching && dir !== "" && dir !== RECENTS_PATH && !isVirtualTabPath(dir),
+		[searching],
+	);
+
+	const createFolderIn = useCallback(
+		(dir: string) => {
+			if (!canCreateIn(dir)) {
+				return;
+			}
+			source
+				.createFolder(dir)
+				.then((created) => {
+					showToast(`${created.name} — 새 폴더를 만들었습니다`);
+					revealCreated(created);
+				})
+				.catch(reportError);
+		},
+		[source, canCreateIn, showToast, revealCreated, reportError],
+	);
+
+	const createFileIn = useCallback(
+		(dir: string, format: NewFileFormatId) => {
+			if (!canCreateIn(dir)) {
+				return;
+			}
+			source
+				.createFile(dir, format)
+				.then((created) => {
+					showToast(`${created.name} — 새 파일을 만들었습니다`);
+					revealCreated(created);
+				})
+				.catch(reportError);
+		},
+		[source, canCreateIn, showToast, revealCreated, reportError],
+	);
+
+	/** ⇧⌘N and the New menu: mkdir in the folder in view. */
+	const newFolder = useCallback(() => createFolderIn(path), [createFolderIn, path]);
+
+	/** ⌥⌘N and the New menu: create a file in the folder in view. */
+	const newFile = useCallback((format: NewFileFormatId) => createFileIn(path, format), [createFileIn, path]);
 
 	const trashEntry = useCallback((entry: FinderEntry) => trashPaths([entry.path]), [trashPaths]);
 
@@ -1817,16 +1868,41 @@ export function useFinderController(
 	);
 
 	const runMenuAction = useCallback(
-		(action: FinderMenuAction) => {
+		(action: FinderMenuAction, format: NewFileFormatId | null = null) => {
 			const menu = contextMenu;
 			if (menu === null) {
 				return;
 			}
-			const entry = menu.entry;
-			const targets = menuTargets(entry);
-			// The column view pastes into the pane the menu was opened in.
-			const pasteDir = layout === "columns" && panePaths.includes(entry.location) ? entry.location : path;
 			setContextMenu(null);
+			if (action === "newFolder") {
+				createFolderIn(menu.dir);
+				return;
+			}
+			if (action === "newFile") {
+				createFileIn(menu.dir, format ?? "text");
+				return;
+			}
+			if (action === "paste") {
+				// The column view pastes into the pane the menu was opened in.
+				const pasteDir =
+					menu.entry !== null && layout === "columns" && panePaths.includes(menu.entry.location)
+						? menu.entry.location
+						: menu.dir;
+				source
+					.clipboardGet()
+					.then((clipboard) => {
+						if (clipboard === null || clipboard.paths.length === 0) return;
+						transferInto(clipboard.paths, pasteDir, clipboard.op === "cut" ? "move" : "copy");
+					})
+					.catch(reportError);
+				return;
+			}
+			const entry = menu.entry;
+			// Every remaining action needs a row; the empty-space menu never offers them.
+			if (entry === null) {
+				return;
+			}
+			const targets = menuTargets(entry);
 			switch (action) {
 				case "quickLook":
 					presentQuickLook({ path: entry.path, name: entry.name });
@@ -1858,15 +1934,6 @@ export function useFinderController(
 				case "cut":
 					cutPaths(targets);
 					return;
-				case "paste":
-					source
-						.clipboardGet()
-						.then((clipboard) => {
-							if (clipboard === null || clipboard.paths.length === 0) return;
-							transferInto(clipboard.paths, pasteDir, clipboard.op === "cut" ? "move" : "copy");
-						})
-						.catch(reportError);
-					return;
 				case "duplicate":
 					source
 						.duplicate(targets)
@@ -1884,7 +1951,7 @@ export function useFinderController(
 					return;
 			}
 		},
-		[contextMenu, menuTargets, copyPaths, cutPaths, transferInto, navigate, path, layout, panePaths, presentQuickLook, refresh, reportError, source, toggleIndex, trashPaths],
+		[contextMenu, menuTargets, copyPaths, cutPaths, transferInto, navigate, layout, panePaths, presentQuickLook, refresh, reportError, source, toggleIndex, trashPaths, createFolderIn, createFileIn],
 	);
 
 	const commitRename = useCallback(() => {
@@ -1925,9 +1992,24 @@ export function useFinderController(
 				.clipboardGet()
 				.then((clipboard) => setClipboardCount(clipboard?.paths.length ?? 0))
 				.catch(reportError);
-			setContextMenu({ cursor: { x: event.clientX, y: event.clientY }, entry });
+			setContextMenu({ cursor: { x: event.clientX, y: event.clientY }, entry, dir: path });
 		},
-		[selection.keys, patchSelection, source, reportError],
+		[selection.keys, patchSelection, source, reportError, path],
+	);
+
+	/** Right-click on empty space: New / Paste act on the pane's own folder. */
+	const openBackgroundContextMenu = useCallback(
+		(event: ReactMouseEvent<HTMLDivElement>, dir?: string) => {
+			event.preventDefault();
+			setZone("finder");
+			patchSelection(EMPTY_SELECTION);
+			source
+				.clipboardGet()
+				.then((clipboard) => setClipboardCount(clipboard?.paths.length ?? 0))
+				.catch(reportError);
+			setContextMenu({ cursor: { x: event.clientX, y: event.clientY }, entry: null, dir: dir ?? path });
+		},
+		[patchSelection, source, reportError, path],
 	);
 
 	const dismiss = useCallback(() => {
@@ -1994,6 +2076,14 @@ export function useFinderController(
 				case "newTab":
 					event.preventDefault();
 					setTabsState((state) => openTab(state));
+					return;
+				case "newFolder":
+					event.preventDefault();
+					newFolder();
+					return;
+				case "newFile":
+					event.preventDefault();
+					newFile(action.format);
 					return;
 				case "closeTab":
 					event.preventDefault();
@@ -2119,6 +2209,8 @@ export function useFinderController(
 		stepColumns,
 		setViewMode,
 		dismiss,
+		newFolder,
+		newFile,
 		orderedKeys,
 		stackRows,
 		stackSections,
@@ -2150,10 +2242,14 @@ export function useFinderController(
 	);
 
 	const contextMenuEntries = useMemo<readonly FinderMenuEntry[]>(() => {
-		const entry = contextMenu?.entry;
-		if (entry === undefined) {
+		const menu = contextMenu;
+		if (menu === null) {
 			return [];
 		}
+		if (menu.entry === null) {
+			return buildBackgroundContextMenu({ clipboardCount });
+		}
+		const entry = menu.entry;
 		return buildContextMenu({
 			target: { name: entry.name, kind: entry.kind },
 			selectionCount: menuTargets(entry).length,
@@ -2207,6 +2303,7 @@ export function useFinderController(
 		familyEntriesFor,
 		revealEntry,
 		newFolder,
+		newFile,
 		trashEntry,
 		copyEntryPath,
 		actionCapabilities,
@@ -2272,6 +2369,7 @@ export function useFinderController(
 		setViewMode,
 		openEntry,
 		openContextMenu,
+		openBackgroundContextMenu,
 		closeContextMenu: () => setContextMenu(null),
 		runMenuAction,
 		toggleIndex,

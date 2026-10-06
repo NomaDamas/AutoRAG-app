@@ -27,7 +27,6 @@ import {
 	ExternalLink,
 	Eye,
 	Film,
-	FolderPlus,
 	History,
 	Image as ImageGlyph,
 	Info,
@@ -81,6 +80,8 @@ export const SearchIcon = glyph(Search, 14, 2.2);
 export const ChevronLeftIcon = glyph(ChevronLeft, 16, 2.2);
 
 export const ChevronRightIcon = glyph(ChevronRight, 16, 2.2);
+
+export const ChevronRightSmallIcon = glyph(ChevronRight, 12, 2.4);
 
 export const ChevronUpIcon = glyph(ChevronUp, 10, 3);
 
@@ -161,8 +162,6 @@ export const PanelRightIcon = glyph(PanelRight, 16, 1.9);
 
 /** Toolbar inspector toggle — the mockup's info-circle glyph, not the panel glyph. */
 export const InfoIcon = glyph(Info, 16, 1.8);
-
-export const FolderPlusIcon = glyph(FolderPlus, 16, 1.9);
 
 export const SortIcon = glyph(ArrowDownUp, 16, 1.9);
 

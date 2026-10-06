@@ -7,6 +7,7 @@
  */
 
 import { type ViewMode, viewModeForKey } from "./view-mode";
+import type { NewFileFormatId } from "../../../shared/new-file-contract";
 
 export type FocusZone = "finder" | "evidence";
 
@@ -45,6 +46,8 @@ export type KeyAction =
 	| { readonly type: "focusComposer" }
 	| { readonly type: "newTab" }
 	| { readonly type: "closeTab" }
+	| { readonly type: "newFolder" }
+	| { readonly type: "newFile"; readonly format: NewFileFormatId }
 	| { readonly type: "openSettings" };
 export function resolveKeyAction(event: KeyEventLike, context: KeyContext): KeyAction | null {
 	if (event.key === "Escape") {
@@ -62,6 +65,9 @@ export function resolveKeyAction(event: KeyEventLike, context: KeyContext): KeyA
 				return { type: "closeTab" };
 			case ",":
 				return { type: "openSettings" };
+			// ⇧⌘N is Finder's New Folder; ⌥⌘N is this app's New File.
+			case "n":
+				return context.typing || context.zone !== "finder" || !event.shift ? null : { type: "newFolder" };
 			// The file clipboard is the Finder zone's; a text field keeps its own
 			// native copy/cut/paste, so these are never swallowed while typing.
 			case "c":
@@ -83,6 +89,10 @@ export function resolveKeyAction(event: KeyEventLike, context: KeyContext): KeyA
 	// the clipboard was cut or copied with.
 	if ((event.meta || event.ctrl === true) && event.alt && event.key.toLowerCase() === "v") {
 		return context.typing || context.zone !== "finder" ? null : { type: "paste", move: true };
+	}
+	// ⌥⌘N creates a new text file.
+	if ((event.meta || event.ctrl === true) && event.alt && event.key.toLowerCase() === "n") {
+		return context.typing || context.zone !== "finder" ? null : { type: "newFile", format: "text" };
 	}
 	if (context.typing) {
 		return null;

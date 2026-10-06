@@ -9,7 +9,6 @@ import {
 	ChevronLeftIcon,
 	ChevronRightIcon,
 	ColumnsViewIcon,
-	FolderPlusIcon,
 	GroupIcon,
 	IconsViewIcon,
 	InfoIcon,
@@ -58,7 +57,6 @@ export function Toolbar({
 	onShare,
 	sidebarHidden,
 	onShowSidebar,
-	onNewFolder,
 }: {
 	readonly title: string;
 	readonly canGoBack: boolean;
@@ -87,7 +85,6 @@ export function Toolbar({
 	readonly onShare: (anchor: ActionAnchor) => void;
 	readonly sidebarHidden: boolean;
 	readonly onShowSidebar: () => void;
-	readonly onNewFolder: () => void;
 }): ReactElement {
 	const [menu, setMenu] = useState<{
 		readonly kind: "sort" | "group";
@@ -113,15 +110,6 @@ export function Toolbar({
 						onClick={onShowSidebar}
 					>
 						<PanelLeftIcon size={18} />
-					</button>
-					<button
-						type="button"
-						className={`${NAV_BUTTON} [-webkit-app-region:no-drag]`}
-						title="New folder"
-						aria-label="New folder"
-						onClick={onNewFolder}
-					>
-						<FolderPlusIcon size={18} />
 					</button>
 				</>
 			) : null}

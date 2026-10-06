@@ -11,6 +11,7 @@ import {
 	type FsIndexBridge,
 	type FsSearchOptions,
 } from "../shared/fs-contract";
+import { isNewFileFormatId, type NewFileFormatId } from "../shared/new-file-contract";
 import { SEARCH_CHANNELS, type SearchBridge } from "../shared/search-contract";
 import { SETTINGS_CHANNELS, type JsonValue, type SettingsBridge } from "../shared/settings-contract";
 import { LIVE_CHANNELS } from "../shared/live-contract";
@@ -54,6 +55,10 @@ export function registerFsIpcHandlers(service: FsCoreBridge, hooks: FsIpcHooks =
 	ipcMain.handle(FS_CHANNELS.duplicate, (_event, paths: readonly string[]) => service.duplicate(paths));
 	ipcMain.handle(FS_CHANNELS.rename, (_event, path: string, newName: string) => service.rename(path, newName));
 	ipcMain.handle(FS_CHANNELS.createFolder, (_event, directory: string) => service.createFolder(directory));
+	ipcMain.handle(FS_CHANNELS.createFile, (_event, directory: string, format: NewFileFormatId) => {
+		if (!isNewFileFormatId(format)) throw new Error(`알 수 없는 파일 형식입니다: ${String(format)}`);
+		return service.createFile(directory, format);
+	});
 	ipcMain.handle(FS_CHANNELS.trash, async (_event, paths: readonly string[]) => {
 		const result = await service.trash(paths);
 		if (result.ok.length > 0) {

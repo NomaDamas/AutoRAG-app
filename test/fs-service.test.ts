@@ -2,7 +2,9 @@ import { access, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from "
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createFsService, FsRenameError, toHandoffPath, untitledFolderName, type FsServiceDeps } from "../src/main/fs-service";
+import { unzipSync } from "fflate";
+import { createFsService, FsRenameError, toHandoffPath, untitledFileName, untitledFolderName, type FsServiceDeps } from "../src/main/fs-service";
+import type { NewFileFormatId } from "../src/shared/new-file-contract";
 import type { FileNameSearchBackend } from "../src/main/file-name-search";
 import { createRecentsStore, type RecentsStore } from "../src/main/recents-store";
 import { RECENTS_PATH, type FsLocation } from "../src/shared/fs-contract";
@@ -537,6 +539,94 @@ describe("createFolder", () => {
 			"untitled folder 3",
 			"untitled folder 11",
 		]);
+	});
+});
+
+describe("createFile", () => {
+	it("creates 'untitled.txt' and numbers subsequent files on collision", async () => {
+		// Given a fresh service
+		const service = createFsService(makeDeps(root).deps);
+
+		// When creating three text files in a row
+		const first = await service.createFile(root, "text");
+		const second = await service.createFile(root, "text");
+		const third = await service.createFile(root, "text");
+
+		// Then Finder-style names are chosen and the files exist on disk
+		expect(first).toEqual({ path: join(root, "untitled.txt"), name: "untitled.txt" });
+		expect(second.name).toBe("untitled 2.txt");
+		expect(third.name).toBe("untitled 3.txt");
+		expect(await readFile(first.path, "utf8")).toBe("");
+	});
+
+	it("writes the format's template bytes (docx is an OOXML package)", async () => {
+		// Given a fresh service
+		const service = createFsService(makeDeps(root).deps);
+
+		// When creating a Word document
+		const created = await service.createFile(root, "word");
+
+		// Then the file carries the OOXML parts, not an empty placeholder
+		expect(created.name).toBe("untitled.docx");
+		expect(Object.keys(unzipSync(await readFile(created.path)))).toContain("word/document.xml");
+	});
+
+	it("skips over a non-file entry that already owns the name", async () => {
+		// Given a directory occupying "untitled.txt"
+		await mkdir(join(root, "untitled.txt"));
+		const service = createFsService(makeDeps(root).deps);
+
+		// When creating a file, Then it takes the next number
+		expect((await service.createFile(root, "text")).name).toBe("untitled 2.txt");
+	});
+
+	it("names the Nth attempt Finder-style", () => {
+		expect([1, 2, 3, 11].map((attempt) => untitledFileName("txt", attempt))).toEqual([
+			"untitled.txt",
+			"untitled 2.txt",
+			"untitled 3.txt",
+			"untitled 11.txt",
+		]);
+	});
+
+	it("rejects a format outside the catalog", async () => {
+		const service = createFsService(makeDeps(root).deps);
+		await expect(service.createFile(root, "exe" as NewFileFormatId)).rejects.toThrow();
+	});
+});
+
+describe("undo of a create", () => {
+	it("removes the file a create made", async () => {
+		// Given a created file
+		const service = createFsService(makeDeps(root).deps);
+		const created = await service.createFile(root, "text");
+
+		// When undoing
+		const outcome = await service.undo();
+
+		// Then the created file is gone and the undo applied fully
+		expect(outcome).toEqual({ ok: true, empty: false, failed: [] });
+		await expect(access(created.path)).rejects.toThrow();
+	});
+
+	it("removes the folder a create made", async () => {
+		// Given a created folder
+		const service = createFsService(makeDeps(root).deps);
+		const created = await service.createFolder(root);
+
+		// When undoing, Then the folder is gone
+		await service.undo();
+		await expect(access(created.path)).rejects.toThrow();
+	});
+
+	it("consumes the record: a second undo reports empty", async () => {
+		// Given a created file that was undone
+		const service = createFsService(makeDeps(root).deps);
+		await service.createFile(root, "text");
+		await service.undo();
+
+		// When undoing again, Then there is nothing left
+		expect(await service.undo()).toEqual({ ok: false, empty: true, failed: [] });
 	});
 });
 

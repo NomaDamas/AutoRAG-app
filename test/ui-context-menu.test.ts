@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { buildContextMenu, estimateMenuHeight, menuPlacement } from "../src/renderer/src/state/context-menu";
-import type { FinderMenuItem } from "../src/renderer/src/state/context-menu";
+import {
+	buildBackgroundContextMenu,
+	buildContextMenu,
+	estimateMenuHeight,
+	menuPlacement,
+} from "../src/renderer/src/state/context-menu";
+import type { FinderMenuEntry, FinderMenuItem, FinderMenuSubmenu } from "../src/renderer/src/state/context-menu";
+import { NEW_FILE_FORMATS } from "../src/shared/new-file-contract";
 
 const file = {
 	target: { name: "a.pdf", kind: "file" as const },
@@ -120,6 +126,50 @@ describe("buildContextMenu in the Recents view", () => {
 
 	it("adds exactly one item and one separator to the height estimate", () => {
 		expect(estimateMenuHeight(buildContextMenu(recentFile))).toBe(estimateMenuHeight(buildContextMenu(file)) + 28 + 9);
+	});
+});
+
+describe("buildBackgroundContextMenu", () => {
+	const submenuOf = (entries: readonly FinderMenuEntry[]): FinderMenuSubmenu => {
+		const entry = entries.find((candidate): candidate is FinderMenuSubmenu => candidate.kind === "submenu");
+		if (entry === undefined) throw new Error("no submenu entry");
+		return entry;
+	};
+
+	it("offers a New submenu with a folder and every document format", () => {
+		const submenu = submenuOf(buildBackgroundContextMenu({ clipboardCount: 0 }));
+		expect(submenu.label).toBe("새로 만들기");
+		expect(submenu.items.map((entry) => entry.action)).toEqual([
+			"newFolder",
+			...NEW_FILE_FORMATS.map(() => "newFile"),
+		]);
+		expect(submenu.items.map((entry) => entry.label)).toEqual([
+			"새 폴더",
+			...NEW_FILE_FORMATS.map((format) => format.label),
+		]);
+	});
+
+	it("carries each submenu item's file format, and none for the folder", () => {
+		const submenu = submenuOf(buildBackgroundContextMenu({ clipboardCount: 0 }));
+		const [folder, ...files] = submenu.items;
+		expect(folder?.format).toBeNull();
+		expect(files.map((entry) => entry.format)).toEqual(NEW_FILE_FORMATS.map((format) => format.id));
+	});
+
+	it("separates the New submenu from paste and disables paste without clipboard items", () => {
+		const entries = buildBackgroundContextMenu({ clipboardCount: 0 });
+		expect(entries.map((entry) => entry.kind)).toEqual(["submenu", "separator", "item"]);
+		const paste = entries.find((entry): entry is FinderMenuItem => entry.kind === "item");
+		expect(paste?.action).toBe("paste");
+		expect(paste?.keycap).toBe("⌘V");
+		expect(paste?.disabled).toBe(true);
+		expect(
+			buildBackgroundContextMenu({ clipboardCount: 3 }).find((entry) => entry.kind === "item"),
+		).toMatchObject({ disabled: false });
+	});
+
+	it("counts the submenu parent as one row in the height estimate", () => {
+		expect(estimateMenuHeight(buildBackgroundContextMenu({ clipboardCount: 0 }))).toBe(2 * 28 + 1 * 9 + 2 * 5);
 	});
 });
 

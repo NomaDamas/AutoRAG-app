@@ -10,6 +10,7 @@
  */
 
 import { deleteKeyLabel, enterKeyLabel, formatShortcut } from "../lib/shortcuts";
+import { NEW_FILE_FORMATS, type NewFileFormatId } from "../../../shared/new-file-contract";
 
 export type FinderMenuAction =
 	| "quickLook"
@@ -23,7 +24,9 @@ export type FinderMenuAction =
 	| "duplicate"
 	| "rename"
 	| "copyPath"
-	| "trash";
+	| "trash"
+	| "newFolder"
+	| "newFile";
 
 export type MenuTone = "default" | "danger" | "warning";
 
@@ -40,7 +43,23 @@ export interface FinderMenuSeparator {
 	readonly kind: "separator";
 }
 
-export type FinderMenuEntry = FinderMenuItem | FinderMenuSeparator;
+/** One row of the New submenu's popout. */
+export interface FinderMenuSubmenuItem {
+	readonly kind: "submenu-item";
+	readonly action: FinderMenuAction;
+	readonly label: string;
+	/** The document format a `newFile` item creates; null for the folder item. */
+	readonly format: NewFileFormatId | null;
+}
+
+/** A parent row that opens a popout panel on hover (the "새로 만들기" submenu). */
+export interface FinderMenuSubmenu {
+	readonly kind: "submenu";
+	readonly label: string;
+	readonly items: readonly FinderMenuSubmenuItem[];
+}
+
+export type FinderMenuEntry = FinderMenuItem | FinderMenuSeparator | FinderMenuSubmenu;
 
 export interface ContextMenuInput {
 	readonly target: { readonly name: string; readonly kind: "file" | "folder" };
@@ -106,6 +125,39 @@ export function buildContextMenu(input: ContextMenuInput): FinderMenuEntry[] {
 	);
 
 	return entries;
+}
+
+export interface BackgroundMenuInput {
+	/** Items held by the in-app file clipboard; 0 disables 붙여넣기. */
+	readonly clipboardCount: number;
+}
+
+/**
+ * The empty-space (background) context menu. "새로 만들기" opens a submenu with
+ * a folder and every new-file format; 붙여넣기 pastes the in-app file clipboard
+ * into the folder in view. It never carries row actions — those need a target.
+ */
+export function buildBackgroundContextMenu(input: BackgroundMenuInput): FinderMenuEntry[] {
+	const submenu: FinderMenuSubmenu = {
+		kind: "submenu",
+		label: "새로 만들기",
+		items: [
+			{ kind: "submenu-item", action: "newFolder", label: "새 폴더", format: null },
+			...NEW_FILE_FORMATS.map(
+				(format): FinderMenuSubmenuItem => ({
+					kind: "submenu-item",
+					action: "newFile",
+					label: format.label,
+					format: format.id,
+				}),
+			),
+		],
+	};
+	return [
+		submenu,
+		SEPARATOR,
+		item("paste", "붙여넣기", { keycap: formatShortcut({ key: "V" }), disabled: input.clipboardCount === 0 }),
+	];
 }
 
 /* ------------------------------------------------------------- positioning */

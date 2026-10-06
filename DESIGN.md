@@ -134,6 +134,9 @@ Instant Search's filename search ("전체" and "파일 이름") answers from the
 | `⌘W` | Window | Close current Finder tab |
 | `⌘F` | Window | Focus Instant Search bar |
 | `⌘K` | Window | Show the nearest AI Search tab (or open one) and focus its composer |
+| `⌘Z` | Finder | Undo the most recent copy / move / create (the record is consumed) |
+| `⇧⌘N` | Finder | New folder in the folder in view (inline rename starts at once) |
+| `⌥⌘N` | Finder | New text file in the folder in view (inline rename starts at once) |
 | `Space` | File List | Quick Look preview of the selected file or folder (`src/preview/DESIGN.md`) |
 | `⌥ Space` | Global | Global Dazzi Spotlight summon |
 | `Enter` | Search Bar | Commit search with Filenames |

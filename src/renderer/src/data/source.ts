@@ -9,6 +9,7 @@
 
 import { NO_CAPABILITIES, type ActionsBridge } from "../../../shared/actions-contract";
 import { RECENTS_PATH, type FsBridge, type FsClipboard, type FsEnrichmentTarget, type FsEntryEnrichment, type FsFinderEnrichment, type FsLocation, type FsLocationIcon, type FsOpError, type FsSearchOptions, type FsUndoOutcome, type FsVersionFamiliesResult } from "../../../shared/fs-contract";
+import { newFileFormat, type NewFileFormatId } from "../../../shared/new-file-contract";
 import type { IndexStatus } from "../../../shared/index-contract";
 import {
 	DUPEY_LAYER_ID,
@@ -18,6 +19,7 @@ import {
 	type LiveResync,
 } from "../../../shared/live-contract";
 import { copyName } from "../state/collision";
+import { kindFromExtension } from "../state/kinds";
 import { basename, dirname, joinPath } from "../state/paths";
 import {
 	EMPTY_VERSION_FAMILIES_RESULT,
@@ -94,6 +96,8 @@ export interface FinderSource {
 	rename(path: string, name: string): Promise<void>;
 	/** Create a new folder (Finder-style "untitled folder" / "untitled folder 2"). */
 	createFolder(dir: string): Promise<{ readonly path: string; readonly name: string }>;
+	/** Create a new file from a format template (Finder-style "untitled.<ext>" / "untitled 2.<ext>"). */
+	createFile(dir: string, format: NewFileFormatId): Promise<{ readonly path: string; readonly name: string }>;
 	duplicate(paths: readonly string[]): Promise<void>;
 	copyInto(paths: readonly string[], destDir: string): Promise<void>;
 	moveInto(paths: readonly string[], destDir: string): Promise<void>;
@@ -209,6 +213,7 @@ export function createBridgeSource(
 			await fs.rename(path, name);
 		},
 		createFolder: (dir) => fs.createFolder(dir),
+		createFile: (dir, format) => fs.createFile(dir, format),
 		duplicate: async (paths) => {
 			await fs.duplicate(paths);
 		},
@@ -270,6 +275,13 @@ function takenNames(state: FixtureState, dir: string): string[] {
 	return (state.tree.get(dir) ?? []).map((item) => item.name);
 }
 
+/** The seed rows' "Sep 22, 11:40" shape, stamped with the current time. */
+function fixtureNowLabel(): string {
+	const now = new Date();
+	const month = now.toLocaleString("en-US", { month: "short" });
+	return `${month} ${now.getDate()}, ${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+}
+
 function removeItem(state: FixtureState, path: string): FixtureItem | null {
 	const dir = dirname(path);
 	const name = basename(path);
@@ -303,9 +315,9 @@ export function createFixtureSource(): FinderSource {
 	const state = seedFixtureState();
 	const resolve = (): Promise<void> => Promise.resolve();
 
-	/** One fixture undo step: the row the transfer created or moved, and its origin. */
+	/** One fixture undo step: the row the operation created or moved, and its origin. */
 	interface FixtureUndoStep {
-		readonly kind: "copy" | "move";
+		readonly kind: "copy" | "move" | "create";
 		readonly path: string;
 		readonly from: string;
 	}
@@ -404,12 +416,27 @@ export function createFixtureSource(): FinderSource {
 			for (let attempt = 2; taken.includes(name); attempt += 1) {
 				name = `untitled folder ${attempt}`;
 			}
-			// Match the seed rows' "Sep 22, 11:40" shape with the current time.
-			const now = new Date();
-			const month = now.toLocaleString("en-US", { month: "short" });
-			const dateLabel = `${month} ${now.getDate()}, ${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-			insertItem(state, dir, { name, fileKind: "folder", dateLabel, sizeLabel: "—" });
-			return Promise.resolve({ path: joinPath(dir, name), name });
+			const path = joinPath(dir, name);
+			insertItem(state, dir, { name, fileKind: "folder", dateLabel: fixtureNowLabel(), sizeLabel: "—" });
+			lastUndo = [{ kind: "create", path, from: "" }];
+			return Promise.resolve({ path, name });
+		},
+		createFile: (dir, format) => {
+			const { extension } = newFileFormat(format);
+			const taken = takenNames(state, dir);
+			let name = `untitled.${extension}`;
+			for (let attempt = 2; taken.includes(name); attempt += 1) {
+				name = `untitled ${attempt}.${extension}`;
+			}
+			const path = joinPath(dir, name);
+			insertItem(state, dir, {
+				name,
+				fileKind: kindFromExtension(extension),
+				dateLabel: fixtureNowLabel(),
+				sizeLabel: "—",
+			});
+			lastUndo = [{ kind: "create", path, from: "" }];
+			return Promise.resolve({ path, name });
 		},
 		duplicate: (paths) => {
 			for (const path of paths) {
@@ -464,7 +491,7 @@ export function createFixtureSource(): FinderSource {
 					failed.push({ path: step.path, message: "되돌릴 항목이 없습니다" });
 					continue;
 				}
-				if (step.kind === "copy") {
+				if (step.kind === "copy" || step.kind === "create") {
 					removeItem(state, step.path);
 					continue;
 				}

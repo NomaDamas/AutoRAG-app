@@ -110,6 +110,7 @@ export function FileList({
 			onDragOver={background.onDragOver}
 			onDrop={background.onDrop}
 			onDragLeave={background.onDragLeave}
+			onContextMenu={background.onContextMenu}
 		>
 			<VersionFamilyBanner error={versionFamilyError} onRetry={onRetryVersionFamilies} />
 			<div
