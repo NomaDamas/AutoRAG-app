@@ -6,7 +6,8 @@
  *
  *   1. dragged inside the window onto a folder row, a row moves there, with a
  *      visible drop highlight and the move cursor while it hovers;
- *   2. ⌥ held during that drag copies instead, with the copy cursor;
+ *   2. ⌥ held during that drag copies instead, with the copy cursor — also when
+ *      ⌥ is already down before the press;
  *   3. dropped on another folder tab, the row moves into that tab's folder;
  *   4. a multi-row selection dragged onto a folder row moves every row;
  *   5. dragged onto an AI Search tab, the row attaches and stays in place;
@@ -15,6 +16,10 @@
  *      (`fs:startDrag` → `webContents.startDrag`) with every selected path, and
  *      nothing moves inside the app;
  *   8. a plain click still selects (the drag threshold keeps clicks clicks);
+ *  10. in a split window, a row dropped anywhere in the other pane that is not
+ *      a folder row — a file row or the empty listing — moves into the folder
+ *      that pane shows (⌥ copies), and ⌥-dropping in the row's own pane
+ *      duplicates it;
  *   9. (opt-in, macOS, QA_REAL_DRAG_OUT=1) a real pointer drag from a row to a
  *      real Finder window lands the file there — the end-to-end proof that the
  *      OS receives the files. It moves the real cursor and needs Accessibility
@@ -57,7 +62,12 @@ const ATTACHED = join(top, "attached.txt");
 const CANCELLED = join(top, "cancelled.txt");
 const OUTSIDE_1 = join(top, "outside-1.txt");
 const OUTSIDE_2 = join(top, "outside-2.txt");
-for (const path of [MOVED, COPIED, TABBED, MULTI_1, MULTI_2, ATTACHED, CANCELLED, OUTSIDE_1, OUTSIDE_2]) {
+const ONTO_FILE = join(top, "onto-file.txt");
+const ONTO_EMPTY = join(top, "onto-empty.txt");
+const ALT_EMPTY = join(top, "alt-empty.txt");
+const DUPLICATED = join(top, "duplicated.txt");
+const B_RESIDENT = join(dirB, "b-resident.txt");
+for (const path of [MOVED, COPIED, TABBED, MULTI_1, MULTI_2, ATTACHED, CANCELLED, OUTSIDE_1, OUTSIDE_2, ONTO_FILE, ONTO_EMPTY, ALT_EMPTY, DUPLICATED, B_RESIDENT]) {
 	// Distinct bodies: near-identical siblings would stack as one version family.
 	writeFileSync(path, `${path}\n${"#".repeat(path.length * 7)}\n${Math.random()}\n`.repeat(path.length % 5 + 1));
 }
@@ -86,23 +96,25 @@ async function until(page, predicate, timeoutMs = 10_000) {
 }
 
 /**
- * Press a row and carry it onto `target` inside the window. `whileHeld` runs
- * with the drag hovering the target, before the release (or instead of it,
- * when it cancels the drag itself).
+ * Press a row and carry it onto `target` (a locator, or an `{x, y}` point)
+ * inside the window. `alt` holds ⌥ for the whole drag — `"before"` presses it
+ * ahead of the row press. `whileHeld` runs with the drag hovering the target,
+ * before the release (or instead of it, when it cancels the drag itself).
  */
 async function dragRowTo(page, path, target, { alt = false, whileHeld, release = true } = {}) {
 	const from = await row(page, path).boundingBox();
-	const to = await target.boundingBox();
-	if (from === null || to === null) throw new Error("drag source or target is not visible");
+	const box = "x" in target ? { x: target.x, y: target.y, width: 0, height: 0 } : await target.boundingBox();
+	if (from === null || box === null) throw new Error("drag source or target is not visible");
+	if (alt === "before") await page.keyboard.down("Alt");
 	await page.mouse.move(from.x + 24, from.y + from.height / 2);
 	await page.mouse.down();
 	await page.mouse.move(from.x + 40, from.y + from.height / 2, { steps: 4 });
-	if (alt) await page.keyboard.down("Alt");
-	await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 10 });
+	if (alt === true) await page.keyboard.down("Alt");
+	await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 10 });
 	await page.waitForTimeout(200);
 	if (whileHeld !== undefined) await whileHeld();
 	if (release) await page.mouse.up();
-	if (alt) await page.keyboard.up("Alt");
+	if (alt !== false) await page.keyboard.up("Alt");
 	await page.waitForTimeout(400);
 }
 
@@ -235,6 +247,86 @@ try {
 	await row(page, COPIED).click();
 	const selected = await row(page, COPIED).getAttribute("aria-selected");
 	check("a plain click on a row still selects it", selected === "true", `aria-selected=${selected}`);
+
+	/* ------------------------------ 10. the other pane's non-folder area */
+	// Split: a second tab on B, docked to the right edge of the pane.
+	await page.keyboard.press(chord("t"));
+	await page.waitForFunction(() => document.querySelectorAll(".tab").length >= 2);
+	await page.locator(".tab").last().click();
+	await row(page, dirB).dblclick();
+	await atTitle(page, "B");
+	const tab = await page.locator(".tab").last().boundingBox();
+	const area = await page.locator("section.finder").first().boundingBox();
+	await page.mouse.move(tab.x + tab.width / 2, tab.y + tab.height / 2);
+	await page.mouse.down();
+	await page.mouse.move(tab.x + tab.width / 2 + 12, tab.y + tab.height / 2 + 30, { steps: 5 });
+	await page.mouse.move(area.x + area.width * 0.95, area.y + area.height * 0.5, { steps: 10 });
+	await page.waitForTimeout(300);
+	await page.mouse.up();
+	await page.waitForFunction(() => document.querySelectorAll("section.finder[data-pane-id]").length === 2);
+	await page.waitForTimeout(500);
+	const paneOf = (side) =>
+		page.evaluate((which) => {
+			const panes = [...document.querySelectorAll("section.finder[data-pane-id]")].map((node) => ({ node, box: node.getBoundingClientRect() }));
+			panes.sort((a, b) => a.box.x - b.box.x);
+			return panes[which === "left" ? 0 : 1].node.dataset.paneId;
+		}, side);
+	const rightPane = page.locator(`section.finder[data-pane-id="${await paneOf("right")}"]`);
+	const leftPane = page.locator(`section.finder[data-pane-id="${await paneOf("left")}"]`);
+	await leftPane.locator(".tab").first().click();
+	await leftPane.getByText("qa-native-drag-out").first().waitFor({ timeout: 10_000 }).catch(() => undefined);
+	await row(leftPane, ONTO_FILE).waitFor({ state: "visible", timeout: 15_000 });
+	await row(rightPane, B_RESIDENT).waitFor({ state: "visible", timeout: 15_000 });
+	const emptyPoint = async () => {
+		const list = await rightPane.locator(".list").first().boundingBox();
+		return { x: list.x + list.width / 2, y: list.y + list.height - 30 };
+	};
+
+	let fileRowHover = false;
+	await dragRowTo(page, ONTO_FILE, row(rightPane, B_RESIDENT), {
+		whileHeld: async () => {
+			fileRowHover = await rightPane.locator(".list").first().evaluate((node) => node.className.includes("accent-drop-hover"));
+			await page.screenshot({ path: join(EVIDENCE, "3-pane-file-row.png") });
+		},
+	});
+	await until(page, () => existsSync(join(dirB, "onto-file.txt")));
+	check(
+		"a row dropped on a file row of the other pane moves into that pane's folder, with the pane highlighted",
+		fileRowHover && existsSync(join(dirB, "onto-file.txt")) && !existsSync(ONTO_FILE),
+		`highlight=${fileRowHover} B=${listNames(dirB)}`,
+	);
+
+	await dragRowTo(page, ONTO_EMPTY, await emptyPoint());
+	await until(page, () => existsSync(join(dirB, "onto-empty.txt")));
+	check(
+		"a row dropped on the other pane's empty listing moves into that pane's folder",
+		existsSync(join(dirB, "onto-empty.txt")) && !existsSync(ONTO_EMPTY),
+		`B=${listNames(dirB)}`,
+	);
+
+	let altBeforeCursor = null;
+	await dragRowTo(page, ALT_EMPTY, await emptyPoint(), {
+		alt: "before",
+		whileHeld: async () => {
+			altBeforeCursor = await dragCursor(page);
+		},
+	});
+	await until(page, () => existsSync(join(dirB, "alt-empty.txt")));
+	check(
+		"⌥ pressed before the drag copies into the other pane's folder, with the copy cursor",
+		altBeforeCursor === "copy" && existsSync(join(dirB, "alt-empty.txt")) && existsSync(ALT_EMPTY),
+		`cursor=${altBeforeCursor} B=${listNames(dirB)} source=${existsSync(ALT_EMPTY)}`,
+	);
+
+	const leftList = await leftPane.locator(".list").first().boundingBox();
+	await dragRowTo(page, DUPLICATED, { x: leftList.x + leftList.width / 2, y: leftList.y + leftList.height - 30 }, { alt: true });
+	await until(page, () => existsSync(join(top, "duplicated copy.txt")));
+	check(
+		"⌥-dropping a row in its own pane's listing duplicates it",
+		existsSync(join(top, "duplicated copy.txt")) && existsSync(DUPLICATED),
+		`root=${listNames(top)}`,
+	);
+	await page.screenshot({ path: join(EVIDENCE, "4-panes.png") });
 
 	/* ---------------- 9. opt-in: a real pointer drag reaches a Finder window */
 	if (REAL_DRAG) {

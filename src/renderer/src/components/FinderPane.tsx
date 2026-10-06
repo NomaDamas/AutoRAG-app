@@ -148,9 +148,10 @@ export const FinderPane = memo(function FinderPane({
 
 	const backgroundDrop = useCallback(
 		(dir: string): BackgroundDropHandlers => ({
+			// A folder row claims its drop (`preventDefault`); anywhere else in the
+			// listing — empty space or a file row — the drop lands in this folder.
 			onDragOver: (event) => {
-				const overRow = event.target instanceof Element && event.target.closest('[role="row"], [role="option"]') !== null;
-				const destination = backgroundDropDir(dir, { searching: finder.searching, overRow });
+				const destination = backgroundDropDir(dir, { searching: finder.searching, claimed: event.defaultPrevented });
 				if (destination === null || !isFinderDrag(event.dataTransfer.types)) return;
 				event.preventDefault();
 				event.dataTransfer.dropEffect = event.altKey ? "copy" : "move";
@@ -159,8 +160,7 @@ export const FinderPane = memo(function FinderPane({
 				setDropBackgroundDir((current) => (current === destination ? current : destination));
 			},
 			onDrop: (event) => {
-				const overRow = event.target instanceof Element && event.target.closest('[role="row"], [role="option"]') !== null;
-				const destination = backgroundDropDir(dir, { searching: finder.searching, overRow });
+				const destination = backgroundDropDir(dir, { searching: finder.searching, claimed: event.defaultPrevented });
 				setDropBackgroundDir(null);
 				if (destination === null) return;
 				const paths = readFinderDragPaths(event.dataTransfer);
@@ -183,12 +183,13 @@ export const FinderPane = memo(function FinderPane({
 		// Inside the window the rows are an in-app drag; past its edge, the OS's file drag.
 		onPointerDown: (entry, event) =>
 			pressRow(event, { entries: () => finder.dragEntries(entry), startNative: autorag.fs.startDrag }),
-		// An in-app row drag lands on folders: the rows move there (⌥ copies).
+		// A folder row claims an in-app drag (the rows move into it, ⌥ copies); the
+		// listing's own handler sees `defaultPrevented` and stays out.
 		onDragOver: (entry, event) => {
-			if (isFinderDrag(event.dataTransfer.types)) setDropBackgroundDir(null);
 			if (entry.kind !== "folder" || !isFinderDrag(event.dataTransfer.types)) return;
 			event.preventDefault();
 			event.dataTransfer.dropEffect = event.altKey ? "copy" : "move";
+			setDropBackgroundDir(null);
 			setDropTargetPath((current) => (current === entry.path ? current : entry.path));
 		},
 		onDrop: (entry, event) => {

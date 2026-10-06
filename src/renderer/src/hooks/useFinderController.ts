@@ -1709,8 +1709,8 @@ export function useFinderController(
 	 * resolves without touching the filesystem.
 	 */
 	const transferInto = useCallback(
-		(paths: readonly string[], destDir: string, op: "copy" | "move"): void => {
-			const plan = planTransfer({ paths, destDir, op });
+		(paths: readonly string[], destDir: string, op: "copy" | "move", duplicate = false): void => {
+			const plan = planTransfer({ paths, destDir, op, duplicate });
 			if (plan === null) {
 				return;
 			}
@@ -1795,11 +1795,11 @@ export function useFinderController(
 	const copySelection = useCallback(() => copyPaths(selection.keys), [copyPaths, selection.keys]);
 	const cutSelection = useCallback(() => cutPaths(selection.keys), [cutPaths, selection.keys]);
 
-	/** An in-app row drop: ⌥ copies, otherwise the rows move into the target folder. */
+	/** An in-app row drop: ⌥ copies (into the rows' own folder too, as Finder duplicates), otherwise the rows move. */
 	const transferDropped = useCallback(
 		(paths: readonly string[], destDir: string, copy: boolean) => {
 			if (destDir === "" || destDir === RECENTS_PATH || isVirtualTabPath(destDir)) return;
-			transferInto(paths, destDir, copy ? "copy" : "move");
+			transferInto(paths, destDir, copy ? "copy" : "move", copy);
 		},
 		[transferInto],
 	);
