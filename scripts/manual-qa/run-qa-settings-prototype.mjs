@@ -101,7 +101,7 @@ try {
   await page.waitForSelector('[data-provider-row="claude"]');
   await page.locator('[data-menu="picker"][data-role="answer"]').click();
   await page.locator('.menu-sub:has([data-sub="autorag"]) > .menu-item').hover();
-  check("picker marks the AutoRAG default", (await page.locator('[data-choose="answer"][data-provider="autorag"][data-model="autorag/claude-sonnet-4.5"]').innerText()).includes("기본"));
+  check("picker marks the AutoRAG default", (await page.locator('[data-choose="answer"][data-provider="autorag"][data-model="autorag/deepseek-v4.1-flash"]').innerText()).includes("기본"));
   await page.locator('.menu-sub:has([data-sub="claude"]) > .menu-item').hover();
   await page.locator('[data-choose="answer"][data-provider="claude"][data-model="anthropic/claude-opus-4.1"]').click();
   check("picking a model assigns the role", (await roleText("answer")).includes("Claude Opus 4.1"));
@@ -120,7 +120,8 @@ try {
   await page.locator('[data-provider-action="disconnect"]').click();
   check("disconnect says which roles fall back to AutoRAG", (await page.getByRole("dialog").innerText()).includes("질문 나누기") && (await page.getByRole("dialog").innerText()).includes("AutoRAG"));
   await page.locator("[data-confirm-disconnect]").click();
-  check("roles on a removed provider fall back to the AutoRAG default", (await roleText("answer")).includes("Claude Sonnet 4.5") && (await roleText("decomposition")).includes("Qwen3.7 Flash"));
+  check("roles on a removed provider fall back to the AutoRAG default", (await roleText("answer")).includes("DeepSeek V4.1 Flash") && (await roleText("decomposition")).includes("Qwen3.7 Flash"));
+  check("reranking defaults to Cohere Rerank 3.5", (await roleText("rerank")).includes("Cohere Rerank 3.5"));
   check("AutoRAG plan cannot be disconnected", await page.locator('[data-menu="provider-more"][data-provider="autorag"]').count() === 0);
   await page.keyboard.press("Escape");
   await page.locator('[data-nav="apps"]').first().click();

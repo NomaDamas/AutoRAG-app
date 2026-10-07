@@ -120,9 +120,9 @@ const state = {
  */
 const PROVIDERS = {
 	autorag: { label: "AutoRAG", letter: "A", kind: "builtin", models: {
-		llm: [["autorag/claude-sonnet-4.5", "Claude Sonnet 4.5"], ["autorag/gpt-5", "GPT-5"], ["autorag/gemini-2.5-pro", "Gemini 2.5 Pro"], ["autorag/qwen3.7-flash", "Qwen3.7 Flash", "빠름"]],
+		llm: [["autorag/deepseek-v4.1-flash", "DeepSeek V4.1 Flash"], ["autorag/claude-sonnet-4.5", "Claude Sonnet 4.5"], ["autorag/gpt-5", "GPT-5"], ["autorag/gemini-2.5-pro", "Gemini 2.5 Pro"], ["autorag/qwen3.7-flash", "Qwen3.7 Flash", "빠름"]],
 		jev: [["autorag/jev-1.13", "Jev 1.13"]],
-		rerank: [["autorag/rerank-3-lite", "Voyage Rerank 3 Lite"], ["autorag/cohere-rerank-v3.5", "Cohere Rerank 3.5"]],
+		rerank: [["autorag/cohere-rerank-v3.5", "Cohere Rerank 3.5"], ["autorag/cohere-rerank-4-fast", "Cohere Rerank 4 Fast"], ["autorag/voyage-rerank-3-lite", "Voyage Rerank 3 Lite"]],
 		embed: [["qwen3-embedding-0.6b", "Qwen3 Embedding 0.6B"], ["embeddinggemma-300m", "EmbeddingGemma 300M", "가벼움"]],
 	} },
 	chatgpt: { label: "ChatGPT", letter: "C", kind: "subscription", models: {
@@ -202,7 +202,7 @@ const CONNECT_GROUPS = [
 const ROLES = {
 	answer: { label: "답변 모델", short: "답변", capability: "llm", path: "model", thinking: true,
 		hint: "질문에 답하고 문서를 요약합니다.",
-		fallback: { provider: "autorag", model: "autorag/claude-sonnet-4.5" } },
+		fallback: { provider: "autorag", model: "autorag/deepseek-v4.1-flash" } },
 	decomposition: { label: "질문 나누기", short: "질문 나누기", capability: "llm", path: "queryDecomposition.model", thinking: true,
 		hint: "긴 질문을 검색어 여러 개로 나눕니다. 빠르고 저렴한 모델이 잘 맞습니다.",
 		specials: [["same", "답변 모델과 같게"]],
@@ -214,7 +214,7 @@ const ROLES = {
 	rerank: { label: "검색 결과 정렬", short: "정렬", capability: "rerank", path: "rerank",
 		hint: "관련 높은 결과를 위로 올립니다. 답변이 조금 느려질 수 있습니다.",
 		specials: [["off", "사용 안 함"]],
-		fallback: { provider: "autorag", model: "autorag/rerank-3-lite" } },
+		fallback: { provider: "autorag", model: "autorag/cohere-rerank-v3.5" } },
 	embed: { label: "문서 이해 모델", short: "문서 이해", capability: "embed", path: "minSync.embedder", reindex: true,
 		hint: "문서의 의미를 분석합니다. 문서 내용은 이 Mac 밖으로 나가지 않습니다.",
 		fallback: { provider: "autorag", model: "qwen3-embedding-0.6b" } },
