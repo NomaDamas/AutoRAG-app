@@ -121,7 +121,7 @@ export function ModelStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElemen
 									value={model?.modelId ?? ""}
 									onChange={(e) => ctx.patch({ model: { ...(model ?? { provider, baseUrl: "", verified: false }), modelId: e.target.value } })}
 								>
-									<option value="">{t("onboarding.model.recommended")}</option>
+									{/* Verification already chose the recommended id; every option is a real model id. */}
 									{modelOptions.map((option) => (
 										<option key={option.id} value={option.id}>
 											{option.name}

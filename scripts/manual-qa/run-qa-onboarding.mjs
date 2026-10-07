@@ -9,6 +9,7 @@
 // local embedding model and llama runtime are linked in from the real AutoRAG
 // home when cached (otherwise the first index downloads them).
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
+import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { finderWindow, launchFinder, ROOT } from "./launch-finder.mjs";
@@ -42,6 +43,16 @@ const check = (name, ok, detail = "") => {
 	if (!ok) failures.push(name);
 };
 
+// A local OpenAI-compatible endpoint for the BYOK step: records the auth header
+// and lists one model, so verification exercises the real request path offline.
+const stubHits = [];
+const stub = createServer((request, response) => {
+	stubHits.push(request.headers.authorization ?? "");
+	response.writeHead(request.url === "/v1/models" ? 200 : 404, { "content-type": "application/json" });
+	response.end(JSON.stringify({ object: "list", data: [{ id: "qa-stub-model", object: "model" }] }));
+});
+await new Promise((resolve) => stub.listen(0, "127.0.0.1", resolve));
+const stubUrl = `http://127.0.0.1:${stub.address().port}/v1`;
 const env = { AUTORAG_HOME, AUTORAG_CONFIG: CONFIG, AUTORAG_SKIP_DUPEY_CHECK: "1" };
 const userDataDir = join(WORK, "user-data");
 const app = await launchFinder({ userDataDir, env, onboarding: true });
@@ -125,6 +136,13 @@ try {
 	await page.waitForFunction((count) => document.querySelectorAll(".onb .source-row").length === count, ids.length, { timeout: 15_000 });
 	check("sources lists only detected connectors", true, ids.join(", "));
 	await shot("06-sources");
+	// Spotlight indexes up to 300 of the machine's real documents (into the temp
+	// workspace, ~20 min), so the datasources refresh only runs on request.
+	const withSpotlight = process.env.QA_ONBOARDING_SPOTLIGHT === "1" && ids.includes("spotlight");
+	if (withSpotlight) {
+		await page.locator(".onb .source-row").first().locator(".switch").click();
+		await page.waitForFunction(() => document.querySelector(".onb .source-row .switch.on") !== null, null, { timeout: 3000 });
+	}
 	await primary.click();
 
 	// plan: Pro opens the placeholder checkout (no charge); Free keeps the lane offline.
@@ -136,7 +154,19 @@ try {
 	check("paid plan opens the placeholder checkout", true);
 	await shot("07b-plan-pay");
 	await page.keyboard.press("Escape");
-	await page.locator(".onb .plan-card").first().click();
+	// BYOK against the local stub: real verification request, real encrypted
+	// key storage, real config write.
+	await page.locator(".onb .plan-card").nth(3).click();
+	await primary.click();
+	await page.waitForSelector(".onb .provider-chips", { timeout: 5000 });
+	await shot("07c-model");
+	check("model step gates on verification", await primary.isDisabled());
+	await page.locator(".onb .provider-chip").last().click();
+	await page.locator('.onb .key-row input[type="text"]').fill(stubUrl);
+	await page.locator('.onb .key-row input[type="password"]').fill("sk-qa-stub");
+	await page.locator(".onb .key-row button.secondary").click();
+	await page.waitForFunction(() => !document.querySelector(".onb .footer button.primary")?.disabled, null, { timeout: 10_000 });
+	check("stub endpoint verifies with the entered key", stubHits.includes("Bearer sk-qa-stub"), JSON.stringify(stubHits));
 	await primary.click();
 
 	// indexing: real first index; gate opens only on success.
@@ -154,6 +184,22 @@ try {
 	const failed = await page.locator(".onb .ix-notice.warn").count();
 	check("first index succeeds", failed === 0, failed ? await page.locator(".onb .ix-notice.warn").innerText() : "");
 	const raw = JSON.parse(readFileSync(CONFIG, "utf8"));
+	check(
+		"BYOK model written with base URL and key env name (no key in config)",
+		raw.model?.provider === "openai-compatible" &&
+			raw.model?.id === "qa-stub-model" &&
+			raw.model?.baseUrl === stubUrl &&
+			raw.model?.apiKeyEnv === "OPENAI_COMPATIBLE_API_KEY" &&
+			!JSON.stringify(raw).includes("sk-qa-stub"),
+		JSON.stringify(raw.model),
+	);
+	if (withSpotlight) {
+		check(
+			"Spotlight datasource and its access tag written",
+			raw.datasources?.spotlight?.type === "spotlight" && raw.datasourceAccess?.allowedTags?.includes("spotlight") === true,
+			JSON.stringify({ ds: raw.datasources?.spotlight?.type, tags: raw.datasourceAccess?.allowedTags }),
+		);
+	}
 	check("config searchPaths = selected folders", JSON.stringify(raw.searchPaths) === JSON.stringify([DESK, DOCS]), JSON.stringify(raw.searchPaths));
 	check("config local embedder set", raw.minSync?.embedder?.profile === "qwen3-embedding-0.6b", JSON.stringify(raw.minSync?.embedder));
 	check("first index lives in the AutoRAG home, not the app cwd", raw.workspacePath === join(AUTORAG_HOME, "workspace") && !existsSync(join(ROOT, ".autorag")), String(raw.workspacePath));
@@ -180,6 +226,7 @@ try {
 	console.error(error);
 } finally {
 	await app.close().catch(() => {});
+	stub.close();
 	rmRetry(WORK);
 }
 console.log(failures.length === 0 ? "onboarding QA passed" : `onboarding QA FAILED: ${failures.join("; ")}`);

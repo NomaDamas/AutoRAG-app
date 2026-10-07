@@ -624,7 +624,14 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 		setTipIndex,
 		dragApp: () => bridge.dragApp(),
 		relaunch: () => {
-			void bridge.relaunch();
+			// The debounced save may still be pending; persist first so the relaunch
+			// resumes with the latest draft (the step and every toggle).
+			if (saveTimer.current !== null) {
+				window.clearTimeout(saveTimer.current);
+				saveTimer.current = null;
+			}
+			const current = draftRef.current;
+			void (current === null ? Promise.resolve() : bridge.save(current)).then(() => bridge.relaunch());
 		},
 		openFullDiskAccess: () => {
 			void bridge.openFullDiskAccess();
