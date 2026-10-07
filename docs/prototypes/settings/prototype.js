@@ -109,9 +109,9 @@ const state = {
 	},
 	searchPaths: ["~/Documents", "~/Desktop/업무"],
 	connections: [
-		{ id: "slack", type: "slack", label: "Slack", hint: "채널과 메시지 검색 · 도우미 프로그램 미설치", installed: false, access: false, enabled: true, indexed: false, items: 0, lastSynced: null, interval: "15분" },
+		{ id: "slack", type: "slack", label: "Slack", hint: "채널과 메시지 검색 · Slack 앱 필요", installed: false, access: false, enabled: true, indexed: false, items: 0, lastSynced: null, interval: "15분" },
 		{ id: "kakao", type: "kakao", label: "카카오톡", hint: "카카오톡 대화 검색 · AI 접근 허용 필요", installed: true, access: false, enabled: true, indexed: true, items: 812, lastSynced: "어제 18:20", interval: "1시간" },
-		{ id: "drive", type: "cloud-drive", label: "클라우드 드라이브", hint: "Google Drive·OneDrive 파일 검색 · 도우미 프로그램 미설치", installed: false, access: false, enabled: true, indexed: false, items: 0, lastSynced: null, interval: "6시간" },
+		{ id: "drive", type: "cloud-drive", label: "클라우드 드라이브", hint: "Google Drive·OneDrive 파일 검색 · 아직 안 가져옴", installed: true, access: false, enabled: true, indexed: false, items: 0, lastSynced: null, interval: "6시간" },
 		{ id: "spotlight", type: "spotlight", label: "Spotlight", hint: "Mac 파일 이름 검색 · 사용 중", installed: true, access: true, enabled: true, indexed: true, items: 1284, lastSynced: "오늘 09:42", interval: "15분" },
 	],
 };
@@ -265,21 +265,22 @@ const BILLING_PAGES = {
 
 const INTERVALS = ["5분", "15분", "30분", "1시간", "6시간", "하루", "수동"];
 
+/** Connection templates. `app` is the desktop app the connection reads from, with its official download page. */
 const TEMPLATES = {
-	telegram: { label: "Telegram", desc: "Telegram 대화를 검색합니다.", letter: "T" },
-	whatsapp: { label: "WhatsApp", desc: "WhatsApp 대화를 검색합니다.", letter: "W" },
-	slack: { label: "Slack", desc: "채널과 메시지를 검색합니다.", letter: "S" },
-	discord: { label: "Discord", desc: "서버 채널과 메시지를 검색합니다.", letter: "D" },
+	telegram: { label: "Telegram", desc: "Telegram 대화를 검색합니다.", letter: "T", app: { name: "Telegram", url: "https://macos.telegram.org/" } },
+	whatsapp: { label: "WhatsApp", desc: "WhatsApp 대화를 검색합니다.", letter: "W", app: { name: "WhatsApp", url: "https://www.whatsapp.com/download/mac" } },
+	slack: { label: "Slack", desc: "채널과 메시지를 검색합니다.", letter: "S", app: { name: "Slack", url: "https://slack.com/downloads/mac" } },
+	discord: { label: "Discord", desc: "서버 채널과 메시지를 검색합니다.", letter: "D", app: { name: "Discord", url: "https://discord.com/download" } },
 	clawgallery: { label: "ClawGallery", desc: "이미지 보관함을 검색합니다.", letter: "C" },
-	notion: { label: "Notion", desc: "페이지와 데이터베이스를 검색합니다.", letter: "N" },
-	lark: { label: "Lark", desc: "Lark 메시지와 문서를 검색합니다.", letter: "L" },
-	kakao: { label: "카카오톡", desc: "카카오톡 대화를 검색합니다.", letter: "K" },
+	notion: { label: "Notion", desc: "페이지와 데이터베이스를 검색합니다.", letter: "N", app: { name: "Notion", url: "https://www.notion.com/desktop" } },
+	lark: { label: "Lark", desc: "Lark 메시지와 문서를 검색합니다.", letter: "L", app: { name: "Lark", url: "https://www.larksuite.com/download" } },
+	kakao: { label: "카카오톡", desc: "카카오톡 대화를 검색합니다.", letter: "K", app: { name: "카카오톡", url: "https://apps.apple.com/kr/app/kakaotalk/id869223134" } },
 	github: { label: "GitHub", desc: "이슈와 PR을 검색합니다.", letter: "G" },
 	"github-gist": { label: "GitHub Gist", desc: "인증된 계정의 Gist를 검색합니다.", letter: "G" },
 	"cloud-drive": { label: "클라우드 드라이브", desc: "Google Drive·OneDrive 파일을 검색합니다.", letter: "C" },
 	"mail-export": { label: "메일 백업", desc: "eml·mbox 보관 파일을 검색합니다.", letter: "M" },
 	mailcrawl: { label: "메일 (mailcrawl)", desc: "메일함을 검색합니다.", letter: "M" },
-	obsidian: { label: "Obsidian", desc: "노트 보관함을 검색합니다.", letter: "O" },
+	obsidian: { label: "Obsidian", desc: "노트 보관함을 검색합니다.", letter: "O", app: { name: "Obsidian", url: "https://obsidian.md/download" } },
 	rss: { label: "RSS·뉴스", desc: "뉴스와 블로그 피드를 검색합니다.", letter: "R" },
 	spotlight: { label: "Spotlight", desc: "Mac의 파일 이름을 검색합니다.", letter: "S" },
 };
@@ -547,6 +548,9 @@ function usageRows() {
 	];
 }
 
+/** The desktop app a connection reads from, or null when it needs none. */
+const appName = (connection) => TEMPLATES[connection?.type]?.app?.name ?? null;
+
 /** Every refreshable source: local folders first, then each connected app. */
 function syncSources() {
 	return [
@@ -555,7 +559,7 @@ function syncSources() {
 			key: connection.id,
 			label: connection.label,
 			icon: `<span class="app-icon sm">${esc((TEMPLATES[connection.type] ?? {}).letter ?? "·")}</span>`,
-			detail: connection.installed ? `문서 ${credits(connection.items)}개` : "도우미 프로그램 설치 필요",
+			detail: connection.installed ? `문서 ${credits(connection.items)}개` : `${appName(connection)} 컴퓨터 앱 필요`,
 			interval: connection.interval,
 			lastSynced: connection.lastSynced,
 			running: Boolean(connection.running),
@@ -568,7 +572,7 @@ function syncSources() {
 
 function syncStatus(source) {
 	if (source.running) return `<span class="status"><span class="dot run"></span>최신화 중…</span>`;
-	if (!source.installed) return `<span class="status"><span class="dot warn"></span>설치 필요</span>`;
+	if (!source.installed) return `<span class="status"><span class="dot warn"></span>앱 필요</span>`;
 	if (source.enabled === false) return `<span class="status"><span class="dot"></span>꺼짐</span>`;
 	if (!source.lastSynced) return `<span class="status"><span class="dot warn"></span>아직 안 가져옴</span>`;
 	return `<span class="status"><span class="dot ok"></span>${esc(source.lastSynced)}</span>`;
@@ -857,6 +861,16 @@ function chooseRole(roleId, choice) {
 	applyChoice(roleId, choice);
 }
 
+/** "Slack 컴퓨터 앱" row with the official download link; connections without a desktop app skip it. */
+function appRows(connection) {
+	const app = TEMPLATES[connection?.type]?.app;
+	if (!app) return [];
+	const status = connection.installed
+		? `<span class="status"><span class="dot ok"></span>설치됨</span>`
+		: `<span class="status"><span class="dot warn"></span>필요</span><a class="btn quiet" href="${esc(app.url)}" target="_blank" rel="noopener" data-app-download="${esc(connection.type)}">${esc(app.name)} 다운로드${svg("external")}</a>`;
+	return [{ id: "app", label: `${app.name} 컴퓨터 앱`, hint: connection.installed ? `이 Mac의 ${app.name} 앱에서 내용을 가져옵니다.` : `${app.name} 내용을 가져오려면 이 Mac에 ${app.name} 앱이 있어야 합니다.`, control: status, path: `install.${connection.type}` }];
+}
+
 function sourcePage(id) {
 	const connection = state.connections.find((item) => item.id === id);
 	const template = TEMPLATES[connection?.type] ?? {};
@@ -887,7 +901,7 @@ function sourcePage(id) {
 
 	const statusRows = [
 		{ id: "enabled", label: "사용 여부", hint: "끄면 이 연결을 검색에서 잠시 제외합니다.", control: switchControl(`enabled:${id}`, connection?.enabled ?? true), path: `datasources.${id}.enabled` },
-		{ id: "install", label: "도우미 프로그램", hint: connection?.installed ? "설치되어 있습니다." : "이 앱의 내용을 가져오려면 도우미 프로그램이 필요합니다.", control: `<span class="status"><span class="dot ${connection?.installed ? "ok" : "warn"}"></span>${connection?.installed ? "준비됨" : "설치 필요"}</span><button class="btn quiet" data-action="install-help">설치 방법</button>`, path: `install.${connection?.type}` },
+		...appRows(connection),
 		{ id: "agent", label: "AI 검색 허용", hint: connection?.access ? "AI 답변이 이 연결을 참고합니다." : "허용하면 AI 답변이 이 앱의 내용을 참고할 수 있습니다.", control: switchControl(`access:${id}`, connection?.access ?? false), path: "datasourceAccess.allowedTags" },
 		{ id: "index", label: "최신화", hint: connection?.lastSynced ? `문서 ${credits(connection.items)}개 · 마지막 최신화 ${connection.lastSynced}` : "아직 내용을 가져오지 않았습니다.", control: `${syncStatus({ ...connection, installed: connection?.installed })}<button type="button" class="btn quiet" data-sync-now="${esc(id)}"${connection?.installed && !connection?.running ? "" : " disabled"}>지금 최신화</button>`, path: `datasources.${id}.index`, proposal: "제안" },
 		{ id: "poll", label: "최신화 주기", hint: "새 내용을 확인하는 간격입니다. 인덱싱 화면에서도 같은 값을 바꿀 수 있습니다.", control: `<span class="select-wrap">${svg("chevronDown")}<select class="select" data-interval="${esc(id)}">${INTERVALS.map((option) => `<option${option === connection?.interval ? " selected" : ""}>${esc(option)}</option>`).join("")}</select></span>`, path: `datasources.${id}.pollingIntervalMs` },
@@ -897,7 +911,7 @@ function sourcePage(id) {
 		group: "연결된 앱", label: connection?.label ?? id, icon: "plug",
 		title: connection?.label ?? id,
 		desc: template.desc ?? "",
-		notes: ["Needs attention 같은 영문 배지를 준비 단계로 다시 썼습니다.", "연결 ID·인스턴스 ID·태그·실행 파일 경로·환경 변수는 화면에서 뺐습니다(자동 처리).", "템플릿(유형) 변경 항목을 제거했습니다. 연결을 새로 만드는 흐름으로 대체합니다."],
+		notes: ["Needs attention 같은 영문 배지를 준비 단계로 다시 썼습니다.", "연결 ID·인스턴스 ID·태그·실행 파일 경로·환경 변수는 화면에서 뺐습니다(자동 처리).", "템플릿(유형) 변경 항목을 제거했습니다. 연결을 새로 만드는 흐름으로 대체합니다.", "'도우미 프로그램'과 설치 방법 안내 대신 필요한 컴퓨터 앱(예: Slack 앱)과 공식 다운로드 링크만 보여줍니다."],
 		sections: [
 			{ title: "연결 상태", rows: statusRows },
 			...(basic.length ? [{ title: `${template.label} 설정`, rows: basic }] : []),
@@ -1058,7 +1072,8 @@ document.addEventListener("click", (event) => {
 		const type = connect.dataset.connect;
 		const label = $("#new-name").value.trim() || TEMPLATES[type].label;
 		const id = `${type}-${Date.now().toString(36).slice(-3)}`;
-		state.connections.push({ id, type, label, hint: "연결 추가됨 · 도우미 프로그램 확인 필요", installed: false, access: false, enabled: true, indexed: false, meta: "" });
+		const app = TEMPLATES[type].app;
+		state.connections.push({ id, type, label, hint: app ? `연결 추가됨 · ${app.name} 앱 필요` : "연결 추가됨", installed: !app, access: false, enabled: true, indexed: false, meta: "" });
 		closeModal();
 		state.page = `source/${id}`;
 		history.replaceState(null, "", `#${state.page}`);
@@ -1103,9 +1118,6 @@ document.addEventListener("click", (event) => {
 				return;
 			case "keychange":
 				toast("실제 구현에서는 보안 저장소에 저장합니다.");
-				return;
-			case "install-help":
-				modal(`<h2>도우미 프로그램 설치</h2><p>이 연결은 내용을 가져오는 도우미 프로그램이 필요합니다. 설치 안내 문서를 열어 단계를 따라 진행하세요.</p><div class="modal-actions"><button class="btn primary" data-action="close-modal">확인</button></div>`);
 				return;
 			case "delete": {
 				const id = action.dataset.id;
@@ -1174,7 +1186,7 @@ document.addEventListener("keydown", (event) => {
 function runSync(keys) {
 	const sources = syncSources().filter((source) => keys.includes(source.key) && source.installed && source.enabled !== false && !source.running);
 	if (!sources.length) {
-		toast("최신화할 수 있는 항목이 없습니다. 도우미 프로그램 설치를 먼저 확인하세요.");
+		toast("최신화할 수 있는 항목이 없습니다. 필요한 앱이 이 Mac에 설치되어 있는지 확인하세요.");
 		return;
 	}
 	const target = (key) => (key === "local" ? state.sync.local : state.connections.find((item) => item.id === key));
