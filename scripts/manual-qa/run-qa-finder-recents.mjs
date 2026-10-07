@@ -1,7 +1,7 @@
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 /**
- * Manual QA — the Recents view of the real Dazzi app.
+ * Manual QA — the Recents view of the real AutoRAG app.
  *
  * Proves the user-visible behavior: before anything is opened the view says so,
  * a double-clicked file and a Space-previewed file are both collected, the list
@@ -97,8 +97,8 @@ const FIXTURE_PREVIEW = join(homedir(), "Documents", `${RUN_ID}-previewed.txt`);
 const USER_DATA = join(tmpdir(), `${RUN_ID}-userdata`);
 const STORE = join(USER_DATA, "recents", "recents.json");
 
-await Bun.write(FIXTURE_OPEN, "Dazzi Recents QA fixture (opened with the default app)\n");
-await Bun.write(FIXTURE_PREVIEW, "Dazzi Recents QA fixture (previewed with Quick Look)\n");
+await Bun.write(FIXTURE_OPEN, "AutoRAG Recents QA fixture (opened with the default app)\n");
+await Bun.write(FIXTURE_PREVIEW, "AutoRAG Recents QA fixture (previewed with Quick Look)\n");
 mkdirSync(USER_DATA, { recursive: true });
 
 /**

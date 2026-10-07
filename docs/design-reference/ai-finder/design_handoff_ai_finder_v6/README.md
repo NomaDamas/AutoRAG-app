@@ -1,7 +1,7 @@
-# Handoff: Dazzi — AI Finder (main window, v6)
+# Handoff: AutoRAG — AI Finder (main window, v6)
 
 ## Overview
-Dazzi is a **macOS desktop app** that combines a Finder-style file browser with an AI search assistant. It indexes local folders, cloud drives (iCloud, Google Drive, Dropbox), and communication tools (Slack, Gmail, Notion, Discord, Telegram) and shows all of them as one folder tree. The user asks questions in natural language and gets **two answers side by side**:
+AutoRAG is a **macOS desktop app** that combines a Finder-style file browser with an AI search assistant. It indexes local folders, cloud drives (iCloud, Google Drive, Dropbox), and communication tools (Slack, Gmail, Notion, Discord, Telegram) and shows all of them as one folder tree. The user asks questions in natural language and gets **two answers side by side**:
 - **Quick**: about 1 second, few sources.
 - **Deep**: cross-checks many sources, takes tens of seconds.
 
@@ -362,7 +362,7 @@ All overlays (Quick Look, modals, toast, Requests) are positioned absolutely ins
 - Header: "Settings" and a segmented control with **General**, **Models**, **Data Sources**.
 - **General:** sections of 56px rows in bordered cards.
   - 일반: Language select (한국어 / English / 日本語 / 简体中文); Global shortcut, shown as `⌥` `Space` keycaps; Launch at login toggle; plus a menu-bar toggle and a Light/Dark/System theme segmented control (see the truncated lines in the source).
-  - 소프트웨어 업데이트: "Dazzi 1.4.2" with status "마지막 확인: 오늘 09:00". The **Check for Updates** button shows "Checking…" for 1.2 s, then the status reads "최신 버전입니다 · 방금 확인". Also the toggles **Automatically install updates** and **Beta updates**, and a telemetry toggle.
+  - 소프트웨어 업데이트: "AutoRAG 1.4.2" with status "마지막 확인: 오늘 09:00". The **Check for Updates** button shows "Checking…" for 1.2 s, then the status reads "최신 버전입니다 · 방금 확인". Also the toggles **Automatically install updates** and **Beta updates**, and a telemetry toggle.
   - 개인정보: **Clear chat history** with a red "Clear…" button.
   - **Toggle style:** 36 × 22 track, radius 11, `#FF6363` on / `#CFCFD9` off; 16px white knob at left 17px (on) or 3px (off).
 - **Models:** a current-model card (36px tile, name, provider, and a "Quick · Deep 공통" pill). Below it a **config chat**:

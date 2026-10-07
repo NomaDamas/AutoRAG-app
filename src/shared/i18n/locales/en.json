@@ -205,7 +205,7 @@
     "emptyPromptTitle": "What can I find for you?",
     "emptyPromptDesc": "Search across files, emails, and chats for quick and deep answers side by side.",
     "generatingDeep": "Generating deep answer…",
-    "askDazzi": "Ask Dazzi",
+    "askAutoRAG": "Ask AutoRAG",
     "stop": "Stop",
     "thinking": "Thinking…",
     "workedFor": "Worked for {{time}}",

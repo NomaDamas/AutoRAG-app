@@ -1,4 +1,4 @@
-# Dazzi developer entry points.
+# AutoRAG developer entry points.
 
 .PHONY: setup run
 

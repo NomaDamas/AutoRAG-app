@@ -1,4 +1,4 @@
-export const APP_NAME = "Dazzi";
+export const APP_NAME = "AutoRAG";
 export const APP_VERSION = "0.1.0";
 
 /**

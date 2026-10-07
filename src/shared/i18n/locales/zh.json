@@ -205,7 +205,7 @@
     "emptyPromptTitle": "想查找什么内容？",
     "emptyPromptDesc": "在文件、邮件和消息中全局搜索，同时提供快速回答与深度回答。",
     "generatingDeep": "正在撰写深度回答…",
-    "askDazzi": "向 Dazzi 提问",
+    "askAutoRAG": "向 AutoRAG 提问",
     "stop": "停止",
     "thinking": "思考中…",
     "workedFor": "思考耗时 {{time}}",

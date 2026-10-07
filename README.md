@@ -1,12 +1,9 @@
-# Dazzi
+# AutoRAG
 
-Dazzi is a standalone Electron + React desktop app — a Finder-style file
+AutoRAG is a standalone Electron + React desktop app — a Finder-style file
 browser with grounded AI assistance — built on the public AutoRAG librarian.
-`Dazzi` is the product's commercial name; the backend stays the AutoRAG
-agent/librarian, and internal identifiers such as `@autorag/librarian`,
-`@autorag/app`, `AutoRAGAgent`, and the shared AutoRAG config are unchanged.
-
-Official site: <https://dazziapp.com>
+Internal identifiers such as `@autorag/librarian`, `@autorag/app`,
+`AutoRAGAgent`, and the shared AutoRAG config are unchanged.
 
 ## Prerequisites
 
