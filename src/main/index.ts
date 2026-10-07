@@ -422,17 +422,15 @@ app.whenReady().then(async () => {
 	// `FreeEnvironment` throws into a dying env and aborts the process
 	// (`napi_fatal_error`, "Electron quit unexpectedly"). Hold the quit until
 	// the watches are gone, bounded so a stuck watcher never blocks quitting.
-	let watchesReleased = false;
-	app.on("will-quit", (event) => {
-		if (watchesReleased) return;
+	// Every other `will-quit` listener has already run and the windows are
+	// closed by now, so the quit finishes with `app.exit` — re-entering
+	// `app.quit()` from inside its own quit can stall the teardown.
+	app.once("will-quit", (event) => {
 		event.preventDefault();
 		const bound = new Promise<void>((resolve) => setTimeout(resolve, QUIT_WATCH_RELEASE_MS).unref());
 		void Promise.race([watch.dispose(), bound])
 			.catch((error: unknown) => console.error("[fs-watch] dispose on quit failed:", error))
-			.finally(() => {
-				watchesReleased = true;
-				app.quit();
-			});
+			.finally(() => app.exit(0));
 	});
 });
 
