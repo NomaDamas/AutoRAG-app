@@ -153,7 +153,15 @@ try {
   await page.locator('[data-nav="indexing"]').first().click();
   const syncRows = await page.locator("[data-sync-row]").evaluateAll((rows) => rows.map((row) => row.dataset.syncRow));
   check("indexing lists local folders and every connection", JSON.stringify(syncRows) === JSON.stringify(["local", "slack", "kakao", "drive", "spotlight"]), JSON.stringify(syncRows));
-  check("uninstalled source asks for setup first", (await page.locator('[data-sync-row="slack"]').innerText()).includes("설치 필요"));
+  const slackSync = await page.locator('[data-sync-row="slack"]').innerText();
+  check("missing desktop app is named, not a helper program", slackSync.includes("Slack 컴퓨터 앱 필요") && !slackSync.includes("Slack 앱 필요") && !(await page.locator("#content").innerText()).includes("도우미"), slackSync);
+  await page.locator('[data-sync-row="slack"] .sync-name').click();
+  const slackPage = await page.locator("#content").innerText();
+  check("Slack page asks for the Slack desktop app", slackPage.includes("Slack 컴퓨터 앱") && !slackPage.includes("도우미") && !slackPage.includes("설치 방법"));
+  check("Slack page links the official download", (await page.locator('[data-app-download="slack"]').getAttribute("href")) === "https://slack.com/downloads/mac" && (await page.locator('[data-app-download="slack"]').getAttribute("target")) === "_blank");
+  await page.locator('[data-nav="source/drive"]').first().click();
+  check("connections without a desktop app skip the app row", await page.locator('[data-row="app"]').count() === 0);
+  await page.locator('[data-nav="indexing"]').first().click();
   await page.locator('[data-sync-row="kakao"] [data-sync-now]').click();
   await page.waitForTimeout(150);
   check("sync shows an in-progress state", (await page.locator('[data-sync-row="kakao"]').innerText()).includes("최신화 중"));
@@ -167,7 +175,7 @@ try {
   await page.locator('[data-sync-now="all"]').click();
   await page.waitForTimeout(150);
   const runningCount = await page.locator('[data-sync-row]').filter({ hasText: "최신화 중" }).count();
-  check("refresh-all runs every ready source", runningCount === 3, `running: ${runningCount}`);
+  check("refresh-all runs every ready source", runningCount === 4, `running: ${runningCount}`);
   await page.waitForTimeout(900);
   await page.locator('[data-nav="plan"]').first().click();
   check("meter tracks plan usage", (await page.locator(".meter > span").getAttribute("style")).includes("81%"));
