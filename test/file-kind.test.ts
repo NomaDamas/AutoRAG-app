@@ -96,6 +96,31 @@ describe("createOsKindResolver", () => {
 		expect(await resolver.kindFor("/tmp/Makefile", "")).toBe("kind:/tmp/Makefile");
 	});
 
+	it("bounds the cache: a session over many extensionless files re-asks the coldest, never the hot extension", async () => {
+		// Given a resolver that remembers at most three kinds
+		const queried: string[] = [];
+		const resolver = createOsKindResolver({
+			platform: "darwin",
+			cacheLimit: 3,
+			run: async (query) => {
+				queried.push(query.args[query.args.length - 1] ?? "");
+				return "kind";
+			},
+		});
+
+		// When a hot extension stays in use while many extensionless files pass through
+		await resolver.kindFor("/tmp/a.png", "png");
+		for (const name of ["one", "two", "three", "four"]) {
+			await resolver.kindFor(`/tmp/${name}`, "");
+			await resolver.kindFor("/tmp/b.png", "png");
+		}
+		await resolver.kindFor("/tmp/one", "");
+
+		// Then png was asked once, and the evicted /tmp/one is asked again
+		expect(queried.filter((path) => path.endsWith(".png"))).toEqual(["/tmp/a.png"]);
+		expect(queried.filter((path) => path === "/tmp/one")).toHaveLength(2);
+	});
+
 	it("degrades to null and warns verbatim when the OS query fails", async () => {
 		// Given a failing runner
 		const warnings: string[] = [];

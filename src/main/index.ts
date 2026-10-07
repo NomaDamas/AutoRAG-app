@@ -45,6 +45,9 @@ import { createParcelWatchBackend } from "./watch-backend";
 import { createVersionFamilyService, DEFAULT_SCAN_INTERVAL_MINUTES, type VersionFamilyService } from "./version-family-service";
 import { createFileVersionFamilyStore } from "./version-family-store";
 
+/** Longest a quit waits for the folder watches to release before exiting anyway. */
+const QUIT_WATCH_RELEASE_MS = 2000;
+
 /** The one AutoRAG config every surface (CLI, TUI, serve, this app) resolves. */
 function autoragConfigPath(): string {
 	return resolveConfigPath({ flags: {}, env: process.env, cwd: process.cwd() }).configPath;
@@ -101,7 +104,7 @@ async function refreshAutoragIndex(methods?: readonly string[]): Promise<ConfigR
 	const input = { flags: {}, env: process.env, cwd: process.cwd() };
 	const configPath = resolveConfigPath(input).configPath;
 	const raw = existsSync(configPath) ? readRawConfigObject(configPath) : {};
-	const effective = applyAppIndexing(resolveConfigReadOnly(input), raw);
+	const effective = await applyAppIndexing(resolveConfigReadOnly(input), raw);
 	const diagnostics: ConfigRefreshDiagnostic[] = [];
 	try {
 		const lite = new AutoRAGLite(effective);
@@ -414,8 +417,22 @@ app.whenReady().then(async () => {
 			mainWindow = openMainWindow();
 		}
 	});
-	app.once("will-quit", () => {
-		void watch.dispose();
+	// The native watcher must finish unsubscribing before Node tears its
+	// environment down: an unsubscribe still completing inside
+	// `FreeEnvironment` throws into a dying env and aborts the process
+	// (`napi_fatal_error`, "Electron quit unexpectedly"). Hold the quit until
+	// the watches are gone, bounded so a stuck watcher never blocks quitting.
+	let watchesReleased = false;
+	app.on("will-quit", (event) => {
+		if (watchesReleased) return;
+		event.preventDefault();
+		const bound = new Promise<void>((resolve) => setTimeout(resolve, QUIT_WATCH_RELEASE_MS).unref());
+		void Promise.race([watch.dispose(), bound])
+			.catch((error: unknown) => console.error("[fs-watch] dispose on quit failed:", error))
+			.finally(() => {
+				watchesReleased = true;
+				app.quit();
+			});
 	});
 });
 

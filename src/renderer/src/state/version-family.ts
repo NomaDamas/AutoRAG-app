@@ -192,6 +192,20 @@ function stackRow(entry: FinderEntry): StackRow {
 	return { entry, stackCount: 0, stackOpen: false, child: false, relation: null };
 }
 
+/**
+ * The selected paths that can open a stack (a family head or one of its
+ * members), in selection order. Selecting a plain file opens nothing, so the
+ * row pipeline keys its memo on this — not on the whole selection — and a
+ * click on an ordinary row re-sorts nothing.
+ */
+export function stackSelectionKeys(selectedKeys: readonly string[], families: VersionFamilies): readonly string[] {
+	if (families.byHead.size === 0) return NO_KEYS;
+	const keys = selectedKeys.filter((key) => families.byHead.has(key) || families.memberOf.has(key));
+	return keys.length === 0 ? NO_KEYS : keys;
+}
+
+const NO_KEYS: readonly string[] = [];
+
 /** Stack members default to excluded from indexing (handoff README §2). */
 export function defaultIndexIncluded(path: string, families: VersionFamilies): boolean {
 	return !families.memberOf.has(path);

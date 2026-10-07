@@ -27,9 +27,13 @@ export interface OsKindDeps {
 	readonly run?: (query: KindQuery) => Promise<string | null>;
 	/** Defaults to console.warn. */
 	readonly warn?: (message: string) => void;
+	/** Most cached kinds kept; the least recently used drop first. Defaults to 2048. */
+	readonly cacheLimit?: number;
 }
 
 const KIND_TIMEOUT_MS = 5000;
+/** Extensions are few; extensionless files key by path, so this bounds a long session. */
+const KIND_CACHE_LIMIT = 2048;
 const KIND_MAX_BUFFER = 1 << 20;
 
 function windowsKindScript(path: string): string {
@@ -100,6 +104,7 @@ export function createOsKindResolver(deps: OsKindDeps = {}): OsKindResolver {
 	const run = deps.run ?? defaultRun;
 	const warn = deps.warn ?? ((message: string) => console.warn(message));
 	const cache = new Map<string, Promise<string | null>>();
+	const limit = deps.cacheLimit ?? KIND_CACHE_LIMIT;
 
 	/** The OS kind, or a rejection when there is no answer to share with other files of the extension. */
 	async function query(path: string): Promise<string | null> {
@@ -120,13 +125,25 @@ export function createOsKindResolver(deps: OsKindDeps = {}): OsKindResolver {
 		kindFor(path, ext) {
 			const key = ext === "" ? path : ext;
 			const cached = cache.get(key);
-			if (cached !== undefined) return cached;
+			if (cached !== undefined) {
+				// Most recently used last, so eviction drops the coldest key.
+				cache.delete(key);
+				cache.set(key, cached);
+				return cached;
+			}
 			const pending = query(path).catch(() => {
 				// One unanswerable file must not erase the kind of every file sharing its extension.
-				cache.delete(key);
+				if (cache.get(key) === pending) cache.delete(key);
 				return null;
 			});
 			cache.set(key, pending);
+			// Extensionless files key by path, so a long session over many such
+			// files would otherwise grow the map without bound.
+			while (cache.size > limit) {
+				const oldest = cache.keys().next().value;
+				if (oldest === undefined) break;
+				cache.delete(oldest);
+			}
 			return pending;
 		},
 	};

@@ -45,7 +45,7 @@ describe("app indexing", () => {
 	it("adds discovered code folders to excludePaths and Jikji globs, keeping existing values", async () => {
 		const root = await createTree();
 
-		const effective = applyAppIndexing(configFor(root), {});
+		const effective = await applyAppIndexing(configFor(root), {});
 
 		expect(effective.excludePaths).toEqual(
 			expect.arrayContaining([
@@ -64,7 +64,7 @@ describe("app indexing", () => {
 	it("keeps only AutoRAG state exclusions when code-folder exclusion is disabled", async () => {
 		const root = await createTree();
 
-		const effective = applyAppIndexing(configFor(root), { appIndexing: { excludeCodeFolders: false } });
+		const effective = await applyAppIndexing(configFor(root), { appIndexing: { excludeCodeFolders: false } });
 
 		expect(effective.excludePaths).toEqual(expect.arrayContaining([join(root, "keep"), join(root, ".autorag")]));
 		expect(effective.excludePaths).not.toEqual(expect.arrayContaining([join(root, "projectA", "node_modules")]));
