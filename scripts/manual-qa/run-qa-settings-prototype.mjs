@@ -62,6 +62,16 @@ try {
   await page.locator('[data-nav="ai"]').first().click();
   const roleText = (role) => page.locator(`[data-row="role:${role}"] .trigger`).innerText();
   check("roles list all five model roles", await page.locator('[data-row^="role:"]').count() === 5);
+  const reasoningRoles = await page.locator('[data-menu="thinking"]').evaluateAll((buttons) => buttons.map((button) => button.dataset.role));
+  check("only LLM roles offer a reasoning level", JSON.stringify(reasoningRoles) === JSON.stringify(["answer", "decomposition"]), JSON.stringify(reasoningRoles));
+  const pickerEdges = await page.locator('[data-row^="role:"] .split').evaluateAll((splits) => splits.map((split) => Math.round(split.getBoundingClientRect().right)));
+  check("role pickers share one right edge", new Set(pickerEdges).size === 1, JSON.stringify(pickerEdges));
+  await page.locator('[data-menu="thinking"][data-role="answer"]').click();
+  check("reasoning menu lists the levels", (await page.locator("#menu-root").innerText()).includes("생각 안 함") && (await page.locator("#menu-root").innerText()).includes("최대"));
+  await page.locator('[data-thinking="answer"][data-level="medium"]').click();
+  await page.locator('[data-menu="thinking"][data-role="answer"]').click();
+  check("picking a reasoning level sticks", await page.locator('[data-thinking="answer"][data-level="medium"] .icon').count() === 1);
+  await page.keyboard.press("Escape");
   await page.locator('[data-menu="connect"]').click();
   const connectAlign = await page.evaluate(() => {
     const plus = document.querySelector('[data-menu="connect"] .icon').getBoundingClientRect();

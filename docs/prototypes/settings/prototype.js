@@ -75,6 +75,8 @@ const state = {
 		rerank: { special: "off" },
 		embed: { provider: "builtin", model: "qwen3-embedding-0.6b" },
 	},
+	/** Reasoning level per LLM role (`thinking.final` for the answer model; a proposal for decomposition). */
+	thinking: { answer: "high", decomposition: "off" },
 	/** Open floating menu: `{ type, arg, anchor, query }` or null. */
 	menu: null,
 	/** Choice waiting on the reindex confirmation. */
@@ -195,27 +197,33 @@ const CONNECT_GROUPS = [
  * The five model roles the agent splits work into. `capability` filters which
  * providers a role can pick from; `specials` are non-model choices. Embedding
  * only lists builtin/local providers: corpus text never goes to a remote embedder.
+ * Only LLM roles carry `thinking` (the ⋯ reasoning menu); Jev, reranking, and
+ * embedding models have no reasoning step.
  */
 const ROLES = {
-	answer: { label: "답변 모델", short: "답변", capability: "llm", path: "model",
-		hint: "질문에 답하고 문서를 요약합니다.",
-		defaultChoice: { provider: "openrouter", model: "anthropic/claude-sonnet-4.5" } },
-	decomposition: { label: "질문 나누기", short: "질문 나누기", capability: "llm", path: "queryDecomposition.model",
+	answer: { label: "답변 모델", short: "답변", capability: "llm", path: "model", thinking: true,
+		hint: "질문에 답하고 문서를 요약합니다." },
+	decomposition: { label: "질문 나누기", short: "질문 나누기", capability: "llm", path: "queryDecomposition.model", thinking: true,
 		hint: "긴 질문을 검색어 여러 개로 나눕니다. 빠르고 저렴한 모델이 잘 맞습니다.",
-		specials: [["same", "답변 모델과 같게"]],
-		defaultChoice: { provider: "openrouter", model: "qwen/qwen3.7-flash" } },
+		specials: [["same", "답변 모델과 같게"]] },
 	jev: { label: "판단 모델 (Jev)", short: "Jev", capability: "jev", path: "jev.backend · jev.model",
 		hint: "자료를 더 찾을지, 웹을 검색할지 판단합니다.",
-		specials: [["off", "사용 안 함"]],
-		defaultChoice: { provider: "openrouter", model: "typesafe/jev-1.13" } },
+		specials: [["off", "사용 안 함"]] },
 	rerank: { label: "검색 결과 정렬", short: "정렬", capability: "rerank", path: "rerank",
 		hint: "관련 높은 결과를 위로 올립니다. 답변이 조금 느려질 수 있습니다.",
-		specials: [["off", "사용 안 함"]],
-		defaultChoice: { special: "off" } },
+		specials: [["off", "사용 안 함"]] },
 	embed: { label: "문서 이해 모델", short: "문서 이해", capability: "embed", path: "minSync.embedder", reindex: true,
-		hint: "문서의 의미를 분석합니다. 문서 내용은 이 Mac 밖으로 나가지 않습니다.",
-		defaultChoice: { provider: "builtin", model: "qwen3-embedding-0.6b" } },
+		hint: "문서의 의미를 분석합니다. 문서 내용은 이 Mac 밖으로 나가지 않습니다." },
 };
+
+/** pi-ai thinking levels, trimmed to the five an office user can tell apart. */
+const THINKING_LEVELS = [
+	["off", "생각 안 함", "가장 빠름"],
+	["low", "낮음"],
+	["medium", "보통"],
+	["high", "높음", "정확도 우선"],
+	["max", "최대", "가장 느림"],
+];
 
 const ROLE_GROUPS = [
 	{ title: "답변", roles: ["answer"] },
@@ -285,6 +293,8 @@ const data = {
 			"LLM·Embedding·Reranker 탭과 Jev·질문 나누기 설정을 한 화면의 역할 목록으로 합쳤습니다. 검색 품질 메뉴는 없앴습니다.",
 			"서비스마다 다른 연결 방식(구독 로그인·API 키·추가 필드·내 컴퓨터 서버)은 연결 창에서 처리하고, 서버 주소·통신 방식·키 환경 변수는 화면에서 뺐습니다.",
 			"문서 이해 모델은 Dazzi 기본 또는 내 컴퓨터 서버만 고를 수 있습니다(원격 임베딩 금지).",
+			"역할 옆 ⋯는 생각 깊이(reasoning level) 설정입니다. 추론 단계가 있는 답변 모델·질문 나누기에만 둡니다. Jev·검색 결과 정렬·문서 이해 모델에는 없습니다.",
+			"생각 깊이는 아직 config 필드가 없는 제안입니다. 답변 모델은 업스트림 thinking.final(기본 높음)에, 질문 나누기는 현재 off로 고정된 값을 여는 새 옵션에 대응합니다.",
 			"구독 로그인·연결 확인·커스텀 서비스 모델 목록은 현재 브리지에 없는 제안 기능입니다.",
 		],
 		sections: [
@@ -481,7 +491,12 @@ function roleControl(roleId) {
 	if (choice === null) label = `<span class="dot warn"></span><span class="trigger-label">모델 선택 필요</span>`;
 	else if (choice.special) label = `<span class="trigger-label muted">${esc(role.specials.find(([value]) => value === choice.special)[1])}</span>`;
 	else label = `${appIcon(choice.provider, " sm")}<span class="trigger-label">${esc(modelLabel(choice.provider, role.capability, choice.model))}</span>`;
-	return `<span class="split"><button type="button" class="trigger${choice === null ? " needs" : ""}" data-menu="picker" data-role="${esc(roleId)}">${label}${svg("chevronDown")}</button><button type="button" class="icon-btn" data-menu="role-more" data-role="${esc(roleId)}" aria-label="${esc(role.label)} 메뉴">${svg("more")}</button></span>`;
+	const trigger = `<button type="button" class="trigger${choice === null ? " needs" : ""}" data-menu="picker" data-role="${esc(roleId)}">${label}${svg("chevronDown")}</button>`;
+	if (!role.thinking) return `<span class="split solo">${trigger}</span>`;
+	// "답변 모델과 같게" inherits the answer model's level; an unset role has no model to tune.
+	const inherits = choice === null || Boolean(choice.special);
+	const title = choice === null ? "모델을 먼저 고르세요" : inherits ? "답변 모델의 생각 깊이를 따릅니다" : "생각 깊이";
+	return `<span class="split">${trigger}<button type="button" class="icon-btn" data-menu="thinking" data-role="${esc(roleId)}" aria-label="${esc(role.label)} 생각 깊이" title="${esc(title)}"${inherits ? " disabled" : ""}>${svg("more")}</button></span>`;
 }
 
 function roleRows(roleIds) {
@@ -595,7 +610,8 @@ function menuBody() {
 			return `<div class="menu-sub"><button type="button" class="menu-item has-sub" data-sub="${esc(providerId)}">${appIcon(providerId, " sm")}<span>${esc(PROVIDERS[providerId].label)}</span>${current}${svg("chevron")}</button><div class="menu submenu" role="menu">${models.map(([modelId, name, tag]) => `<button type="button" class="menu-item" data-choose="${esc(arg)}" data-provider="${esc(providerId)}" data-model="${esc(modelId)}"><span>${esc(name)}</span>${tag ? `<small>${esc(tag)}</small>` : ""}${choice?.provider === providerId && choice.model === modelId ? svg("check") : ""}</button>`).join("")}</div></div>`;
 		}).join("");
 		const connectable = connectableFor(role.capability);
-		const footer = connectable.length ? `<div class="menu-sep"></div><button type="button" class="menu-item" data-menu-swap="connect">${svg("plus")}<span>다른 서비스 연결</span></button>` : "";
+		const reindex = role.reindex ? `<div class="menu-sep"></div><button type="button" class="menu-item" data-reindex-now>${svg("sparkles")}<span>지금 문서 다시 분석</span></button>` : "";
+		const footer = (connectable.length ? `<div class="menu-sep"></div><button type="button" class="menu-item" data-menu-swap="connect">${svg("plus")}<span>다른 서비스 연결</span></button>` : "") + reindex;
 		const body = providerItems || `<p class="menu-empty">${query ? "일치하는 모델이 없습니다." : "이 역할에 쓸 수 있는 서비스가 아직 연결되지 않았습니다."}</p>`;
 		return menuSearch("모델 검색") + `<div class="menu-list">${special}${special && providerItems ? `<div class="menu-sep"></div>` : ""}${body}</div>${footer}`;
 	}
@@ -608,10 +624,9 @@ function menuBody() {
 		return `<div class="menu-list">${manage}<button type="button" class="menu-item" data-provider-action="test" data-provider="${esc(arg)}">${svg("check")}<span>연결 확인</span></button><div class="menu-sep"></div><button type="button" class="menu-item danger" data-provider-action="disconnect" data-provider="${esc(arg)}">${svg("x")}<span>연결 해제</span></button></div>`;
 	}
 
-	if (type === "role-more") {
-		const role = ROLES[arg];
-		const defaultLabel = role.defaultChoice.special ? role.specials.find(([value]) => value === role.defaultChoice.special)[1] : modelLabel(role.defaultChoice.provider, role.capability, role.defaultChoice.model);
-		return `<div class="menu-list"><button type="button" class="menu-item" data-role-action="reset" data-role="${esc(arg)}"><span>기본값으로 (${esc(defaultLabel)})</span></button>${role.reindex ? `<button type="button" class="menu-item" data-role-action="reindex" data-role="${esc(arg)}">${svg("sparkles")}<span>문서 다시 분석</span></button>` : ""}</div>`;
+	if (type === "thinking") {
+		const current = state.thinking[arg];
+		return `<p class="menu-group">생각 깊이</p><div class="menu-list">${THINKING_LEVELS.map(([value, label, note]) => `<button type="button" class="menu-item" data-thinking="${esc(arg)}" data-level="${esc(value)}"><span>${esc(label)}</span>${note ? `<small>${esc(note)}</small>` : ""}${current === value ? svg("check") : ""}</button>`).join("")}</div>`;
 	}
 	return "";
 }
@@ -1163,19 +1178,17 @@ document.addEventListener("click", (event) => {
 		return;
 	}
 
-	const roleAction = event.target.closest("[data-role-action]");
-	if (roleAction) {
-		const roleId = roleAction.dataset.role;
+	const thinking = event.target.closest("[data-thinking]");
+	if (thinking) {
+		state.thinking[thinking.dataset.thinking] = thinking.dataset.level;
 		closeMenu();
-		if (roleAction.dataset.roleAction === "reindex") toast("문서를 다시 분석합니다. 몇 분 정도 걸릴 수 있습니다.");
-		if (roleAction.dataset.roleAction === "reset") {
-			const fallback = ROLES[roleId].defaultChoice;
-			if (fallback.provider && !state.providers.includes(fallback.provider)) {
-				toast(`기본 모델을 쓰려면 ${PROVIDERS[fallback.provider].label}을(를) 먼저 연결하세요.`);
-				return;
-			}
-			chooseRole(roleId, fallback);
-		}
+		toast(`${ROLES[thinking.dataset.thinking].label} 생각 깊이: ${THINKING_LEVELS.find(([value]) => value === thinking.dataset.level)[1]}`);
+		return;
+	}
+
+	if (event.target.closest('[data-reindex-now]')) {
+		closeMenu();
+		toast("문서를 다시 분석합니다. 몇 분 정도 걸릴 수 있습니다.");
 		return;
 	}
 
