@@ -55,7 +55,9 @@
 
 ### C. 기본값을 쓰고 묻지 않는다 (Settings에서만 변경)
 
-`minSync` 켜짐, `jikji` 켜짐(`writeAgentRules: false`), `dupey` 켜짐 + `excludeExactDuplicates`, OCR 꺼짐, `webSearch` 켜짐, `p2p` 꺼짐, `everything`(Windows에서만 켜짐), 청크 크기, 임베더 batch/timeout/concurrency, `workspacePath`와 `memoryPath`(앱 데이터 폴더로 고정, §6), dupey 스캔 주기, 숨김 파일, 메뉴바, 자동 업데이트, 보기 모드.
+`minSync` 켜짐, `jikji` 켜짐(`writeAgentRules: false`), `dupey` 켜짐 + `excludeExactDuplicates`, OCR 꺼짐, `webSearch` 켜짐, 검색 메모리(retrieval memory) 켜짐, 진단 정보 공유 꺼짐, `p2p` 꺼짐, `everything`(Windows에서만 켜짐), 청크 크기, 임베더 batch/timeout/concurrency, `workspacePath`와 `memoryPath`(앱 데이터 폴더로 고정, §6), dupey 스캔 주기, 숨김 파일, 메뉴바, 자동 업데이트, 보기 모드.
+
+검색 메모리와 진단 정보 공유는 온보딩에서 묻지 않는다. 기본값을 그대로 쓰고 Settings에서만 바꾼다. 메모리의 정의는 §7에서 결정한다.
 
 ### D. 온보딩에서 뺀다 (나중에 맥락 안에서 묻는다)
 
@@ -75,9 +77,8 @@ flowchart TD
   S4 --> S5[S5 임베딩 위치 + 동의<br/>= 인덱싱 시작 커밋]
   S5 -->|백그라운드: 인덱싱| S6[S6 AI 모델]
   S6 --> S7[S7 데이터 소스]
-  S7 --> S8[S8 개인정보 & 메모리]
-  S8 --> S9[S9 첫 질문]
-  S9 --> F[Finder]
+  S7 --> S8[S8 첫 질문]
+  S8 --> F[AutoRAG]
   S2 -. BYOK .-> S6b[S6 키 입력/감지]
   S2 -. Free/Pro .-> S6a[S6 자동 완료, 화면 생략]
 ```
@@ -159,18 +160,7 @@ flowchart TD
 - 켜면 `datasourceAccess.allowedTags`에도 반영한다 (librarian 기본값이 default-deny).
 - 이 단계 전체를 건너뛸 수 있다.
 
-### S8. 개인정보 & 메모리 (토글 한 화면)
-
-| 토글 | 기본 | 설명 문구 |
-|---|---|---|
-| 검색 메모리 | 켜짐 | "검색할수록 더 잘 찾도록 질문과 요약을 이 Mac에 저장합니다" |
-| 진단 정보 공유 | 꺼짐 | opt-in. GDPR 기준 |
-
-- 로그인 시 실행은 S3 권한 단계에서 처리한다. 개인정보 단계에서는 검색 메모리와 진단 정보만 묻는다.
-
-- 메모리 정의는 §7에서 결정한다. 지금 librarian 메모리는 검색 학습용이지 Raycast식 "프로필 메모리"(사용자 사실 기억)가 아니다.
-
-### S9. 첫 질문 (기능 투어 대체)
+### S8. 첫 질문 (기능 투어 대체)
 
 - AI 검색 탭을 열고, 인덱싱된 폴더 이름과 최근 파일로 만든 **추천 질문 3개**를 보여준다. 클릭하면 바로 실행된다.
 - 인덱싱이 아직 진행 중이면: jikji와 파일명 검색은 즉시 동작한다는 점을 알리고, 부분 인덱스로 답하면서 "인덱싱 42% — 결과가 늘어납니다"를 표시한다.
@@ -181,7 +171,7 @@ flowchart TD
 
 - 정적 HTML 목업: [`docs/design-reference/onboarding/onboarding-prototype.html`](design-reference/onboarding/onboarding-prototype.html)
 - 실행: `python3 -m http.server 4177`을 `docs/design-reference/onboarding/`에서 실행한 뒤 브라우저로 `onboarding-prototype.html`을 연다.
-- 포함 상태: Light/Dark, Free/Pro/BYOK 시나리오, 10단계 점프, Full Disk Access System Settings 목업, 재시작 후 권한 복귀, 폴더 선택·ETA, 임베딩 동의·인덱싱 pill, BYOK 검증, 데이터 소스 토글, 메모리 토글, 첫 질문 목업.
+- 포함 상태: Light/Dark, Free/Pro/BYOK 시나리오, 9단계 점프, Full Disk Access System Settings 목업, 재시작 후 권한 복귀, 폴더 선택·ETA, 임베딩 동의·인덱싱 pill, BYOK 검증, 데이터 소스 토글, 첫 질문 목업.
 
 ## 4. 백그라운드 작업 타임라인
 
@@ -192,7 +182,7 @@ gantt
   section 사용자
   S0-S2 소개·계정·플랜 :u1, 0, 60
   S3 권한·S4 폴더 :u2, after u1, 45
-  S5 임베딩·S6 모델·S7 소스·S8 개인정보·S9 첫 질문 :u3, after u2, 90
+  S5 임베딩·S6 모델·S7 소스·S8 첫 질문 :u3, after u2, 90
   section 기계
   바이너리 준비 :m1, 0, 40
   사전 스캔(S3 진입 시) :m2, 60, 20
@@ -212,7 +202,7 @@ gantt
 | 폴더 → 임베딩 | 유지하되 S3에 시간 예상치를 넣고, S4를 커밋 지점으로 만든다 | "신중하게"를 숫자로 보여줘야 신중해진다 |
 | 인덱싱하며 LLM 설정 | 유지. 플랜 사용자는 화면 자체를 생략 | 딸깍조차 없앤다 |
 | 데이터 소스 자동 인식 + 설명 직접 입력 | 준비된 것만 노출 + 설명은 초안 제공, 수정만 | CLI 미설치 소스는 일반 사용자에게 막다른 길이다. 빈칸 작성은 이탈 요인 |
-| 메모리 활성화 단독 질문 | 개인정보 토글 화면에 합침 | 결정 하나에 화면 하나는 과하다 |
+| 메모리·진단 토글 화면 | 온보딩에서 제거. 기본값을 쓰고 Settings에서만 바꾼다 | 실제로 바꾸는 사람이 드물어 화면 하나를 유지할 이유가 없다 |
 | 기능 투어 | 첫 질문 + 코치마크 3개 | 투어는 스킵되고, 첫 답변이 가치를 증명한다 |
 | (없음) | S0 백그라운드 시스템 점검, TCC 처리, 기존 config 감지, 재개 가능한 상태 | 실제로 막히는 지점들 |
 
@@ -255,4 +245,4 @@ gantt
 - 임베딩 선택 분포, 7일 내 임베딩 변경률.
 - 데이터 소스 연결률, 설명 초안 수정률.
 
-텔레메트리는 opt-in이다. 동의하지 않은 사용자는 로컬 집계만 한다.
+진단 정보 공유는 기본 꺼짐이고 온보딩에서 묻지 않는다. 켠 사용자만 집계한다.
