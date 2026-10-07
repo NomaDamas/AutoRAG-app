@@ -1,4 +1,5 @@
-import { type Dirent, realpathSync, readdirSync } from "node:fs";
+import type { Dirent } from "node:fs";
+import { readdir, realpath } from "node:fs/promises";
 import { join } from "node:path";
 import type { CliConfig } from "@autorag/librarian/core";
 import { isJsonObject } from "../shared/settings-contract";
@@ -40,21 +41,25 @@ export function readAppIndexing(raw: Record<string, unknown>): AppIndexingSettin
 	return { excludeCodeFolders, codeFolderNames: names };
 }
 
-/** Bound the walk so a giant tree cannot stall the main process. */
+/** Bound the walk so a giant tree cannot run unbounded. */
 const MAX_SCANNED_ENTRIES = 20_000;
 const MAX_DEPTH = 12;
 
-/** Collect directories whose name is in `names`; never follows symlinks and guards cycles. */
-function discoverNamedDirectories(root: string, names: ReadonlySet<string>, result: Set<string>): void {
+/**
+ * Collect directories whose name is in `names`; never follows symlinks and guards cycles.
+ * Asynchronous: the walk reads up to 20k entries, which must never block the
+ * Electron main thread (every IPC and window event shares it).
+ */
+async function discoverNamedDirectories(root: string, names: ReadonlySet<string>, result: Set<string>): Promise<void> {
 	const queue: Array<{ readonly dir: string; readonly depth: number }> = [{ dir: root, depth: 0 }];
 	const visitedRealPaths = new Set<string>();
 	let scanned = 0;
-	while (queue.length > 0 && scanned < MAX_SCANNED_ENTRIES) {
-		const current = queue.shift();
+	for (let head = 0; head < queue.length && scanned < MAX_SCANNED_ENTRIES; head += 1) {
+		const current = queue[head];
 		if (current === undefined) break;
 		let entries: Dirent[];
 		try {
-			entries = readdirSync(current.dir, { withFileTypes: true });
+			entries = await readdir(current.dir, { withFileTypes: true });
 		} catch {
 			continue;
 		}
@@ -70,7 +75,7 @@ function discoverNamedDirectories(root: string, names: ReadonlySet<string>, resu
 			if (current.depth >= MAX_DEPTH) continue;
 			let real: string;
 			try {
-				real = realpathSync(child);
+				real = await realpath(child);
 			} catch {
 				continue;
 			}
@@ -105,7 +110,7 @@ export const APP_INDEXING_CAPABILITIES: AppIndexingCapabilities = {
  * `excludePaths`, Jikji gets `--exclude` globs. Existing exclusion values are
  * kept, so adding this feature never drops a user's earlier exclusions.
  */
-export function applyAppIndexing(config: CliConfig, raw: Record<string, unknown>): CliConfig {
+export async function applyAppIndexing(config: CliConfig, raw: Record<string, unknown>): Promise<CliConfig> {
 	const settings = readAppIndexing(raw);
 	const excluded = new Set<string>(config.excludePaths ?? []);
 	// AutoRAG's own state directories are product output, never corpus.
@@ -113,7 +118,7 @@ export function applyAppIndexing(config: CliConfig, raw: Record<string, unknown>
 	if (settings.excludeCodeFolders) {
 		const nameSet = new Set(settings.codeFolderNames.map((name) => name.toLowerCase()));
 		const found = new Set<string>();
-		for (const root of config.searchPaths) discoverNamedDirectories(root, nameSet, found);
+		for (const root of config.searchPaths) await discoverNamedDirectories(root, nameSet, found);
 		for (const dir of found) excluded.add(dir);
 	}
 	const excludePaths = [...excluded];

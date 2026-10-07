@@ -217,3 +217,52 @@ zero-padded so the bottom rows are exactly the ones past the 240 cap). Row 300
 is proven unmounted before scrolling, then must show a thumbnail after scrolling
 to the bottom, with qlmanage still at 0. Red on `main` (no thumbnail, qlmanage
 spawned), green here — 3/3.
+
+## Memory soak, per-click IPC, and clean quit (FS roadmap #104, stage 1)
+
+Two lanes measure what a long session accumulates; both run against an
+isolated fixture root and user data:
+
+```sh
+bun run build
+SOAK_ENFORCE=1 bun scripts/manual-qa/run-qa-finder-memory-soak.mjs   # 40 cycles
+QUIT_ROUNDS=30 bun scripts/manual-qa/run-qa-finder-quit-clean.mjs
+```
+
+The soak lane browses three 400-file folders per cycle (row clicks, Quick
+Look, view-mode switches, ⌘T/⌘W) and reads the renderer heap after a forced
+GC (CDP `Runtime.getHeapUsage`), the main-process event-loop delay p99, and
+how many `index:status` IPC calls a row click sends. Without
+`SOAK_ENFORCE=1` it only reports, so a baseline run records its figures.
+
+Production build, macOS, 40 cycles after a 5-cycle warm-up:
+
+| metric | `main` | this change | gate |
+| --- | ---: | ---: | ---: |
+| retained renderer heap growth | 6.74 MB/cycle (46.7 → 316.3 MB) | 0.10 MB/cycle (12.3 → 16.3 MB, plateaus) | ≤ 0.25 |
+| `index:status` IPC per row click | 1 | 0 | 0 |
+| main event-loop delay p99 | 98.5 ms | 14.1 ms | < 100 |
+| quit with live folder watches | 2 of 20 SIGABRT | 0 of 30 | 0 |
+
+What changed:
+
+- **Closure-chain leak.** Every memoized controller handler kept the whole
+  render scope it was created in, and those scopes linked through older
+  handlers still held by rows, the controller store, and event listeners, so
+  every past listing stayed reachable. Handlers now go through
+  `useLatestCallback` (one stable function reading the latest closure through
+  a ref) and `FinderPane` memoizes the row callbacks.
+- **Per-click IPC.** The index-status read keyed on `viewEntries`, which is a
+  new array on every selection change; it now keys on the visible file set.
+  Each read also ran the app-indexing directory walk (up to 20,000 entries)
+  synchronously on the main thread; that walk is asynchronous now.
+- **Selection vs. sorting.** The sort → stack → group → tree pipeline re-ran on
+  every click because version stacks open on selection. It now depends only on
+  the selected stack heads/members (`stackSelectionKeys`).
+- **Unbounded caches.** Column-pane and expanded-folder listings are pruned to
+  what is on screen; the index-status map keeps only visible files; the OS-kind
+  cache (keyed by path for extensionless files) is an LRU capped at 2,048.
+- **Quit.** `will-quit` started the `@parcel/watcher` teardown without waiting,
+  so a native unsubscribe could finish inside Node's environment teardown and
+  abort the process. Quit now waits for the watches to release (bounded at
+  2 s), then exits.

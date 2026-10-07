@@ -186,43 +186,63 @@ export const FinderPane = memo(function FinderPane({
 		[finder.searching, finder.transferDropped, finder.openBackgroundContextMenu],
 	);
 
-	const rowCallbacks: RowCallbacks = {
-		onClick: finder.clickRow,
-		onOpen: finder.openEntry,
-		onContextMenu: finder.openContextMenu,
-		// Inside the window the rows are an in-app drag; past its edge, the OS's file drag.
-		onPointerDown: (entry, event) =>
-			pressRow(event, { entries: () => finder.dragEntries(entry), startNative: autorag.fs.startDrag }),
-		// A folder row claims an in-app drag (the rows move into it, ⌥ copies); the
-		// listing's own handler sees `defaultPrevented` and stays out.
-		onDragOver: (entry, event) => {
-			if (entry.kind !== "folder" || !isFileTransferDrag(event.dataTransfer.types)) return;
-			event.preventDefault();
-			event.dataTransfer.dropEffect = dropTransferOp(isFinderDrag(event.dataTransfer.types), event.altKey);
-			setDropBackgroundDir(null);
-			setDropTargetPath((current) => (current === entry.path ? current : entry.path));
-		},
-		onDrop: (entry, event) => {
-			setDropTargetPath(null);
-			setDropBackgroundDir(null);
-			if (entry.kind !== "folder") return;
-			const paths = readDropPaths(event.dataTransfer, autorag.pathForFile);
-			if (paths.length === 0) return;
-			// No stopPropagation: the window "drop" listener clears the AI panel's
-			// drag overlay (and the highlights) once the transfer has started.
-			event.preventDefault();
-			const copy = dropTransferOp(isFinderDrag(event.dataTransfer.types), event.altKey) === "copy";
-			finder.transferDropped(paths, entry.path, copy);
-		},
-		dropTargetPath,
-		onToggleIndex: finder.toggleIndex,
-		onToggleStack: finder.toggleStack,
-		onToggleFolder: finder.toggleFolder,
-		onRenameChange: finder.setRenameDraft,
-		onRenameCommit: finder.commitRename,
-		onRenameCancel: finder.cancelRename,
-		onVisible: finder.noteVisible,
-	};
+	// One object per drop highlight, not per render: every row and tile gets
+	// it, and the controller's handlers are stable (useLatestCallback).
+	const dragEntries = finder.dragEntries;
+	const transferDropped = finder.transferDropped;
+	const rowCallbacks = useMemo<RowCallbacks>(
+		() => ({
+			onClick: finder.clickRow,
+			onOpen: finder.openEntry,
+			onContextMenu: finder.openContextMenu,
+			// Inside the window the rows are an in-app drag; past its edge, the OS's file drag.
+			onPointerDown: (entry, event) => pressRow(event, { entries: () => dragEntries(entry), startNative: autorag.fs.startDrag }),
+			// A folder row claims an in-app drag (the rows move into it, ⌥ copies); the
+			// listing's own handler sees `defaultPrevented` and stays out.
+			onDragOver: (entry, event) => {
+				if (entry.kind !== "folder" || !isFileTransferDrag(event.dataTransfer.types)) return;
+				event.preventDefault();
+				event.dataTransfer.dropEffect = dropTransferOp(isFinderDrag(event.dataTransfer.types), event.altKey);
+				setDropBackgroundDir(null);
+				setDropTargetPath((current) => (current === entry.path ? current : entry.path));
+			},
+			onDrop: (entry, event) => {
+				setDropTargetPath(null);
+				setDropBackgroundDir(null);
+				if (entry.kind !== "folder") return;
+				const paths = readDropPaths(event.dataTransfer, autorag.pathForFile);
+				if (paths.length === 0) return;
+				// No stopPropagation: the window "drop" listener clears the AI panel's
+				// drag overlay (and the highlights) once the transfer has started.
+				event.preventDefault();
+				const copy = dropTransferOp(isFinderDrag(event.dataTransfer.types), event.altKey) === "copy";
+				transferDropped(paths, entry.path, copy);
+			},
+			dropTargetPath,
+			onToggleIndex: finder.toggleIndex,
+			onToggleStack: finder.toggleStack,
+			onToggleFolder: finder.toggleFolder,
+			onRenameChange: finder.setRenameDraft,
+			onRenameCommit: finder.commitRename,
+			onRenameCancel: finder.cancelRename,
+			onVisible: finder.noteVisible,
+		}),
+		[
+			finder.clickRow,
+			finder.openEntry,
+			finder.openContextMenu,
+			dragEntries,
+			transferDropped,
+			dropTargetPath,
+			finder.toggleIndex,
+			finder.toggleStack,
+			finder.toggleFolder,
+			finder.setRenameDraft,
+			finder.commitRename,
+			finder.cancelRename,
+			finder.noteVisible,
+		],
+	);
 
 	const focusedEntry = finder.focusedEntry;
 	const familyEntries = focusedEntry !== null ? finder.familyEntriesFor(focusedEntry.path) : null;

@@ -51,9 +51,9 @@ export function createIndexStatusService(deps: IndexStatusServiceDeps): IndexSta
 			.map((value) => canonical(isAbsolute(value) ? value : resolve(workspacePath, value)));
 	}
 
-	function snapshot(paths: readonly string[]): IndexStatus[] {
+	async function snapshot(paths: readonly string[]): Promise<IndexStatus[]> {
 		const raw = readRawConfigObject(resolveConfigPath(input).configPath);
-		const config = applyAppIndexing(resolveConfigReadOnly(input), raw);
+		const config = await applyAppIndexing(resolveConfigReadOnly(input), raw);
 		const exclusions = (config.excludePaths ?? []).map(canonical);
 		const roots = config.searchPaths.map(canonical);
 		const index = loadMirrorIndex(config.workspacePath);
@@ -99,7 +99,7 @@ export function createIndexStatusService(deps: IndexStatusServiceDeps): IndexSta
 				if (deps.refresh !== undefined) await deps.refresh();
 				else {
 					const raw = readRawConfigObject(resolveConfigPath(input).configPath);
-					await new AutoRAGLite(applyAppIndexing(resolveConfigReadOnly(input), raw)).refresh(false, { methods: ["parsed", "minsync"] });
+					await new AutoRAGLite(await applyAppIndexing(resolveConfigReadOnly(input), raw)).refresh(false, { methods: ["parsed", "minsync"] });
 				}
 				deps.onRefreshed(null);
 			} catch (error) {
@@ -109,7 +109,7 @@ export function createIndexStatusService(deps: IndexStatusServiceDeps): IndexSta
 	}
 
 	return {
-		indexStatus: async (paths) => snapshot(paths),
+		indexStatus: (paths) => snapshot(paths),
 		setIndexExcluded: async (path, excluded) => {
 			const real = canonical(path);
 			const configPath = resolveConfigPath(input).configPath;
@@ -122,7 +122,7 @@ export function createIndexStatusService(deps: IndexStatusServiceDeps): IndexSta
 			else raw.excludePaths = next;
 			writeConfigObject(configPath, raw);
 			scheduleRefresh();
-			const [status] = snapshot([path]);
+			const [status] = await snapshot([path]);
 			if (status === undefined) throw new Error(`No index status for ${path}`);
 			return status;
 		},
