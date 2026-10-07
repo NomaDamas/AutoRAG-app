@@ -24,7 +24,6 @@ const ICONS = {
 	file: "file-text",
 	copy: "copy",
 	plug: "plug",
-	sliders: "sliders-horizontal",
 	chevron: "chevron-right",
 	chevronDown: "chevron-down",
 	check: "check",
@@ -34,6 +33,9 @@ const ICONS = {
 	alert: "triangle-alert",
 	more: "ellipsis",
 	external: "external-link",
+	user: "user",
+	card: "credit-card",
+	refresh: "refresh-cw",
 };
 
 /** The app's SearchIcon draws lucide `search` at stroke 2.2; every other glyph uses 1.8. */
@@ -76,14 +78,21 @@ const state = {
 	/** Choice waiting on the reindex confirmation. */
 	pendingChoice: null,
 	customCount: 0,
+	/** Signed in during onboarding; the prototype starts on the Free plan. */
+	account: { name: "김다연", email: "dayeon.kim@example.com", signedInWith: "Google" },
+	plan: "free",
+	/** Monthly AI usage in credits; `extra` is the purchased top-up, spent after the plan allowance. */
+	usage: { used: 812, extra: 0, resetsOn: "11월 1일" },
+	/** Per-source refresh state. Local folders refresh on change; others poll on their interval. */
+	sync: {
+		local: { label: "로컬 폴더", detail: "검색할 폴더 2개", interval: "변경 시 바로", lastSynced: "방금", items: 1284, running: false },
+	},
 	values: {
 		appearance: "라이트",
 		language: "한국어",
-		poll: "15분",
 		dupes: "1시간",
 		ocr: false,
 		media: false,
-		ocrmode: "자동 (권장)",
 		ocrlang: "문서 언어와 같게",
 		sync: "자동 선택",
 		cloudprovider: "Google Drive",
@@ -91,9 +100,6 @@ const state = {
 	chips: {
 		langs: ["한국어", "English"],
 		excludes: ["node_modules", ".git", "dist"],
-		devfolders: ["node_modules", ".git", "dist"],
-		order: ["Perplexity", "DuckDuckGo", "Google"],
-		tags: ["문서", "파일"],
 		chatrooms: ["스터디 채팅방"],
 		exts: [".pdf", ".docx", ".md"],
 		repos: ["NomaDamas/AutoRAG-app"],
@@ -101,12 +107,11 @@ const state = {
 	},
 	searchPaths: ["~/Documents", "~/Desktop/업무"],
 	connections: [
-		{ id: "slack", type: "slack", label: "Slack", hint: "채널과 메시지 검색 · 도우미 프로그램 미설치", installed: false, access: false, enabled: true, indexed: false, meta: "1,240개 문서" },
-		{ id: "kakao", type: "kakao", label: "카카오톡", hint: "카카오톡 대화 검색 · AI 접근 허용 필요", installed: false, access: false, enabled: true, indexed: true, meta: "812개 문서" },
-		{ id: "drive", type: "cloud-drive", label: "클라우드 드라이브", hint: "Google Drive·OneDrive 파일 검색 · 동기화 예약", installed: false, access: false, enabled: true, indexed: false, meta: "동기화 예약" },
-		{ id: "spotlight", type: "spotlight", label: "Spotlight", hint: "Mac 파일 이름 검색 · 사용 중", installed: true, access: true, enabled: true, indexed: true, meta: "1,284개 문서 · 오늘 09:42" },
+		{ id: "slack", type: "slack", label: "Slack", hint: "채널과 메시지 검색 · 도우미 프로그램 미설치", installed: false, access: false, enabled: true, indexed: false, items: 0, lastSynced: null, interval: "15분" },
+		{ id: "kakao", type: "kakao", label: "카카오톡", hint: "카카오톡 대화 검색 · AI 접근 허용 필요", installed: true, access: false, enabled: true, indexed: true, items: 812, lastSynced: "어제 18:20", interval: "1시간" },
+		{ id: "drive", type: "cloud-drive", label: "클라우드 드라이브", hint: "Google Drive·OneDrive 파일 검색 · 도우미 프로그램 미설치", installed: false, access: false, enabled: true, indexed: false, items: 0, lastSynced: null, interval: "6시간" },
+		{ id: "spotlight", type: "spotlight", label: "Spotlight", hint: "Mac 파일 이름 검색 · 사용 중", installed: true, access: true, enabled: true, indexed: true, items: 1284, lastSynced: "오늘 09:42", interval: "15분" },
 	],
-	advancedOpen: {},
 };
 
 /* ------------------------------------------------------- AI providers -- */
@@ -238,6 +243,14 @@ const ROLE_GROUPS = [
 	{ title: "문서 이해", roles: ["embed"] },
 ];
 
+/** AutoRAG subscription plans. Credits are the monthly AI allowance on the AutoRAG plan. */
+const PLANS = {
+	free: { label: "Free", price: "무료", credits: 1000, perks: "기본 모델 · 월 1,000 크레딧" },
+	pro: { label: "Pro", price: "월 $20", credits: 20000, perks: "모든 모델 · 월 20,000 크레딧 · 우선 처리" },
+};
+const TOP_UPS = [["5000", "5,000 크레딧", "$5"], ["20000", "20,000 크레딧", "$18"], ["50000", "50,000 크레딧", "$40"]];
+const INTERVALS = ["5분", "15분", "30분", "1시간", "6시간", "하루", "수동"];
+
 const TEMPLATES = {
 	telegram: { label: "Telegram", desc: "Telegram 대화를 검색합니다.", letter: "T" },
 	whatsapp: { label: "WhatsApp", desc: "WhatsApp 대화를 검색합니다.", letter: "W" },
@@ -268,6 +281,30 @@ const GALLERY_GROUPS = [
 /* ------------------------------------------------------------ Row model -- */
 
 const data = {
+	account: {
+		group: "계정", label: "내 계정", icon: "user",
+		title: "내 계정",
+		desc: "온보딩에서 로그인한 AutoRAG 계정입니다.",
+		keywords: "로그인 로그아웃 이메일 이름 탈퇴 계정 삭제",
+		notes: ["온보딩 로그인으로 만들어진 계정 정보를 보여줍니다. 계정 화면은 아직 앱에 없는 신규 설정입니다.", "계정 삭제는 이메일을 다시 입력해야 진행되며, 구독이 있으면 남은 기간 안내를 함께 보여줍니다."],
+		sections: [
+			{ title: "프로필", rows: "accountRows" },
+			{ title: "계정 삭제", rows: [
+				{ id: "delete-account", label: "계정 삭제", hint: "계정과 구독, 사용 기록을 영구히 삭제합니다. 이 Mac에 있는 문서와 검색 색인은 지워지지 않습니다.", control: `<button type="button" class="btn danger" data-account="delete">계정 삭제</button>`, path: "account.delete" },
+			] },
+		],
+	},
+	plan: {
+		group: "계정", label: "구독 및 사용량", icon: "card",
+		title: "구독 및 사용량",
+		desc: "AutoRAG 요금제와 이번 달 AI 사용량을 확인합니다.",
+		keywords: "Free Pro 플랜 요금제 결제 billing 영수증 크레딧 사용량 추가 구매 업그레이드 해지",
+		notes: ["AutoRAG 요금제는 AI 모델 화면의 기본 서비스와 같은 요금제입니다. 사용량은 AutoRAG 요금제 모델을 쓸 때만 차감됩니다.", "결제 수단·영수증·해지는 결제 포털(브라우저)로 보냅니다. 추가 크레딧은 요금제 한도를 다 쓴 뒤 차감됩니다.", "요금제·크레딧 수치는 시안용 예시입니다."],
+		sections: [
+			{ title: "현재 요금제", rows: "planRows" },
+			{ title: "이번 달 사용량", rows: "usageRows" },
+		],
+	},
 	general: {
 		group: "기본", label: "일반", icon: "gear",
 		title: "일반",
@@ -304,35 +341,37 @@ const data = {
 			"역할 옆 ⋯는 생각 깊이(reasoning level) 설정입니다. 추론 단계가 있는 답변 모델·질문 나누기에만 둡니다. Jev·검색 결과 정렬·문서 이해 모델에는 없습니다.",
 			"생각 깊이는 아직 config 필드가 없는 제안입니다. 답변 모델은 업스트림 thinking.final(기본 높음)에, 질문 나누기는 현재 off로 고정된 값을 여는 새 옵션에 대응합니다.",
 			"구독 로그인·연결 확인·커스텀 서비스 모델 목록은 현재 브리지에 없는 제안 기능입니다.",
+			"문서 분석 요청 시간 제한·묶음 크기·동시 처리 수는 자동 값으로 두고 화면에서 뺐습니다.",
 		],
 		sections: [
 			{ title: "연결된 서비스", desc: "기본은 AutoRAG 요금제입니다. 다른 서비스를 연결하면 아래 역할에서 그 서비스의 모델도 고를 수 있습니다.", rows: "providerRows" },
 			{ title: "역할별 모델", desc: "AutoRAG는 일을 역할별로 나눠 처리합니다. 역할마다 맞는 모델을 고르세요.", rows: "taskRows" },
-			{ title: "문서 이해 세부 조정", advanced: true, rows: [
-				{ id: "etime", label: "요청 시간 제한", hint: "문서 분석 요청 하나를 기다리는 최대 시간입니다.", control: fieldControl("etime", "number", "기본값 (초)"), path: "minSync.embedder.timeoutMs" },
-				{ id: "batch", label: "한 번에 분석할 문서 수", hint: "한 요청에 묶는 문서 수입니다.", control: fieldControl("batch", "number", "기본값"), path: "minSync.embedder.batchSize" },
-				{ id: "concurrent", label: "동시 분석 수", hint: "동시에 실행할 분석 개수입니다.", control: fieldControl("concurrent", "number", "기본값"), path: "minSync.embedder.maxConcurrent" },
-			] },
+		],
+	},
+	indexing: {
+		group: "검색", label: "인덱싱", icon: "refresh",
+		title: "인덱싱",
+		desc: "검색할 폴더와 연결된 앱의 내용이 최신인지 확인하고, 바뀐 부분만 다시 가져옵니다.",
+		keywords: "최신화 동기화 증분 색인 갱신 주기 sync refresh",
+		notes: ["로컬 폴더와 연결된 앱의 최신화 상태를 한 화면에 모았습니다. '지금 최신화'는 바뀐 항목만 다시 읽는 증분 인덱싱입니다.", "주기는 여기서 바로 바꿀 수 있고, 각 연결 화면의 '최신화 주기'와 같은 값입니다. 로컬 폴더는 변경 자동 감지로 바로 반영됩니다."],
+		sections: [
+			{ title: "최신화 상태", rows: "indexRows" },
 		],
 	},
 	scope: {
 		group: "검색", label: "검색 범위", icon: "folder",
 		title: "검색 범위",
 		desc: "AutoRAG가 읽고 검색할 폴더와 제외할 항목을 정합니다.",
-		notes: ["검색 폴더와 제외 폴더를 한 화면에 모았습니다.", "textarea로 입력하던 경로 목록을 목록 형태로 바꿨습니다."],
+		notes: ["검색 폴더와 제외 폴더를 한 화면에 모았습니다.", "textarea로 입력하던 경로 목록을 목록 형태로 바꿨습니다.", "제외 목록과 겹치던 '개발용 폴더 자동 제외'·'자동 제외 폴더 이름'은 제외 목록 하나로 합쳤습니다(기본값에 node_modules, .git, dist 포함).", "변경 자동 감지는 기본으로 켜져 있습니다."],
 		sections: [
 			{ title: "검색할 폴더", desc: "이 폴더의 내용을 AI 검색에 포함합니다.", rows: "pathRows" },
 			{ title: "제외할 항목", desc: "검색하지 않을 폴더와 파일입니다.", rows: [
-				{ id: "excludes", label: "제외 목록", hint: "이름이 일치하는 폴더·파일은 건너뜁니다.", control: chipsControl("excludes", state.chips.excludes), stack: true, path: "excludePaths" },
+				{ id: "excludes", label: "제외 목록", hint: "이름이 일치하는 폴더·파일은 건너뜁니다. node_modules, .git 같은 개발용 폴더도 여기서 관리합니다.", control: chipsControl("excludes", state.chips.excludes), stack: true, path: "excludePaths" },
 			] },
 			{ title: "파일 포함 범위", rows: [
-				{ id: "devexclude", label: "개발용 폴더 자동 제외", hint: "node_modules, .git, dist처럼 검색에 불필요한 폴더를 건너뜁니다.", control: switchControl("devexclude", true), path: "appIndexing.excludeCodeFolders" },
 				{ id: "watch", label: "변경 자동 감지", hint: "파일이 바뀌면 검색 목록을 즉시 갱신합니다.", control: switchControl("watch", true), path: "fsearch.watch" },
 				{ id: "media", label: "사진·영상 색인", hint: "미디어 파일의 정보를 검색에 포함합니다.", control: switchControl("media", state.values.media), path: "jikji.enableMediaIndex" },
 				...(state.values.media ? [{ id: "mediasize", label: "미디어 최대 크기", hint: "이 크기를 넘는 파일은 건너뜁니다.", control: selectControl("mediasize", ["10MB", "50MB", "100MB", "제한 없음"], "50MB"), path: "jikji.mediaIndexMaxMb" }] : []),
-			] },
-			{ title: "자동 제외 폴더 이름", desc: "개발용 폴더 자동 제외에 사용하는 이름입니다.", advanced: true, rows: [
-				{ id: "devfolders", label: "폴더 이름", hint: "한 줄에 하나씩 입력합니다.", control: chipsControl("devfolders", state.chips.devfolders), stack: true, path: "appIndexing.codeFolderNames" },
 			] },
 		],
 	},
@@ -340,7 +379,7 @@ const data = {
 		group: "검색", label: "문서 읽기", icon: "file",
 		title: "문서 읽기",
 		desc: "문서와 이미지에서 글자를 읽는 언어와 방식을 설정합니다.",
-		notes: ["OCR·파서 언어 설정을 하나로 합쳤습니다.", "Kordoc OCR 방식의 기술 문구를 정리했습니다."],
+		notes: ["OCR·파서 언어 설정을 하나로 합쳤습니다.", "한글 문서 OCR 방식·OCR 시간 제한·최대 크기는 자동 값으로 두고 화면에서 뺐습니다.", "'문서 언어 (개별 설정)'은 문서 언어와 겹쳐 없앴습니다."],
 		sections: [
 			{ title: "문서 언어", desc: "문서 내용을 읽고 검색할 때 우선 사용할 언어입니다.", rows: [
 				{ id: "langs", label: "문서 언어", hint: "여러 개를 선택할 수 있습니다.", control: chipsControl("langs", state.chips.langs), stack: true, path: "languages" },
@@ -349,28 +388,18 @@ const data = {
 				{ id: "ocr", label: "OCR 사용", hint: "처음 분석할 때 시간이 더 걸립니다.", control: switchControl("ocr", state.values.ocr), path: "parserOptions.ocr.enabled" },
 				...(state.values.ocr ? [{ id: "ocrlang", label: "인식 언어", hint: "기본값은 문서 언어를 따라갑니다.", control: selectControl("ocrlang", ["문서 언어와 같게", "직접 선택"], state.values.ocrlang), path: "parserOptions.ocr.languages" }] : []),
 			] },
-			{ title: "세부 설정", desc: "바꿀 필요가 없는 값들입니다.", advanced: true, rows: [
-				{ id: "ocrmode", label: "한글 문서 처리 방식", hint: "HWP·스캔 문서를 읽는 방법입니다.", control: selectControl("ocrmode", ["자동 (권장)", "내장 방식", "항상 인식", "사용 안 함"], state.values.ocrmode), path: "parserOptions.kordoc.ocr" },
-				{ id: "ocrtime", label: "이미지 인식 시간 제한", hint: "이미지 한 장을 기다리는 최대 시간입니다.", control: fieldControl("ocrtime", "number", "기본값 (초)"), path: "parserOptions.ocr.timeoutMs" },
-				{ id: "ocrsize", label: "이미지 최대 크기", hint: "이 크기를 넘는 이미지는 건너뜁니다.", control: fieldControl("ocrsize", "number", "기본값 (MB)"), path: "parserOptions.ocr.maxBytes" },
-				{ id: "parselangs", label: "문서 언어 (개별 설정)", hint: "비워두면 위의 문서 언어를 따릅니다.", control: chipsControl("parselangs", []), stack: true, path: "parserOptions.languages" },
-			] },
 		],
 	},
 	duplicates: {
 		group: "검색", label: "중복 파일 정리", icon: "copy",
 		title: "중복 파일 정리",
 		desc: "검색 결과에 같은 내용이 반복해서 나타나지 않도록 정리합니다.",
-		notes: ["General·Other Apps에 나뉘어 있던 중복 관련 설정을 한 곳으로 모았습니다.", "dupey 버전 패밀리라는 용어를 비슷한 버전 묶기로 바꿨습니다."],
+		notes: ["General·Other Apps에 나뉘어 있던 중복 관련 설정을 한 곳으로 모았습니다.", "dupey 버전 패밀리라는 용어를 비슷한 버전 묶기로 바꿨습니다.", "검사 도구 위치는 항상 자동으로 찾고, 검사 시간 제한도 자동 값으로 둡니다."],
 		sections: [
 			{ title: "검색 결과 정리", rows: [
 				{ id: "exact", label: "완전히 같은 파일은 하나만", hint: "내용이 같은 파일은 가장 최근 것만 보여줍니다.", control: switchControl("exact", true), path: "excludeExactDuplicates" },
 				{ id: "versions", label: "비슷한 버전 묶기", hint: "보고서_최종, 보고서_최종2처럼 관련 파일을 묶어 보여줍니다.", control: switchControl("versions", true), path: "dupey.enabled" },
 				{ id: "dupes", label: "검사 주기", hint: "파일 변화를 다시 확인하는 주기입니다.", control: selectControl("dupes", ["15분", "30분", "1시간", "3시간", "6시간", "12시간", "하루"], state.values.dupes), path: "app.dupeyScanIntervalMinutes" },
-			] },
-			{ title: "고급", advanced: true, rows: [
-				{ id: "dupepath", label: "검사 도구 위치", hint: "비워두면 자동으로 찾습니다.", control: fieldControl("dupepath", "text", "자동"), path: "dupey.binaryPath" },
-				{ id: "dupetime", label: "검사 시간 제한", hint: "한 번의 중복 검사를 기다리는 최대 시간입니다.", control: fieldControl("dupetime", "number", "기본값 (초)"), path: "dupey.timeoutMs" },
 			] },
 		],
 	},
@@ -378,18 +407,12 @@ const data = {
 		group: "AI", label: "웹 검색", icon: "globe",
 		title: "웹 검색",
 		desc: "최신 정보가 필요한 질문에 인터넷 검색 결과를 답변에 사용합니다.",
-		notes: ["web_search·web_fetch라는 도구 이름 대신 쓰임을 설명하는 문구로 바꿨습니다.", "검색 서비스 목록도 한국어 라벨을 붙였습니다."],
+		notes: ["web_search·web_fetch라는 도구 이름 대신 쓰임을 설명하는 문구로 바꿨습니다.", "검색 서비스 목록도 한국어 라벨을 붙였습니다.", "서비스 우선순위·제외 목록·시간 제한은 자동 선택에 맡기고 화면에서 뺐습니다."],
 		sections: [
 			{ title: "웹 검색 사용", rows: [
 				{ id: "web", label: "웹 검색 사용", hint: "질문이 검색 서비스로 전송될 수 있습니다.", control: switchControl("web", true), path: "webSearch.enabled" },
 				{ id: "sync", label: "검색 서비스", hint: "자동 선택을 권장합니다.", control: selectControl("sync", ["자동 선택", "Google", "DuckDuckGo", "Perplexity", "Startpage", "SearXNG"], state.values.sync), path: "webSearch.provider" },
 				{ id: "fetch", label: "웹페이지 내용 읽기", hint: "검색 결과 링크의 본문을 답변에 참고합니다.", control: switchControl("fetch", true), path: "webSearch.fetch.enabled" },
-			] },
-			{ title: "고급", advanced: true, rows: [
-				{ id: "order", label: "검색 서비스 우선순위", hint: "자동 선택 시 먼저 시도할 순서입니다.", control: chipsControl("order", state.chips.order), stack: true, path: "webSearch.order" },
-				{ id: "excludes", label: "사용하지 않을 서비스", hint: "목록에 있는 서비스는 시도하지 않습니다.", control: chipsControl("webexclude", []), stack: true, path: "webSearch.exclude" },
-				{ id: "timeout", label: "검색 시간 제한", hint: "검색 서비스 응답을 기다리는 최대 시간입니다.", control: fieldControl("timeout", "number", "기본값 (초)"), path: "webSearch.timeoutSeconds" },
-				{ id: "fetchtime", label: "페이지 읽기 시간 제한", hint: "페이지 본문을 기다리는 최대 시간입니다.", control: fieldControl("fetchtime", "number", "기본값 (초)"), path: "webSearch.fetch.timeoutSeconds" },
 			] },
 		],
 	},
@@ -401,44 +424,6 @@ const data = {
 		sections: [
 			{ title: "내 연결", rows: "sourceRows" },
 			{ title: "앱 연결하기", desc: "추가할 앱을 선택하세요.", rows: "galleryRows" },
-		],
-	},
-	advanced: {
-		group: "고급", label: "고급 설정", icon: "sliders",
-		title: "고급 설정",
-		desc: "문제 해결이나 안내를 받을 때만 변경하세요.",
-		notes: ["MinSync·Jikji·FSearch·Dupey의 엔진 이름을 한글 기능명으로 바꿨습니다.", "ms·bytes 단위를 초·MB로 표시합니다.", "AGENTS.md 규칙 쓰기를 개발자 옵션으로 옮겼습니다."],
-		sections: [
-			{ title: "주의", rows: [
-				{ id: "notice", html: `<p class="note warn">${svg("alert")}<span><strong>대부분의 사용자는 바꿀 필요가 없습니다.</strong> 잘못된 값은 검색 속도와 색인 동작에 영향을 줄 수 있습니다.</span></p>` },
-			] },
-			{ title: "문서 내용 색인", rows: [
-				{ id: "minsync", label: "문서 내용 색인 사용", hint: "의미가 비슷한 문서를 찾는 기능입니다.", control: switchControl("minsync", true), path: "minSync.enabled" },
-				{ id: "minchunk", label: "문서 조각 최대 크기", hint: "문서를 나누는 최대 글자 수입니다.", control: fieldControl("minchunk", "number", "기본값"), path: "minSync.maxChunkSize" },
-			] },
-			{ title: "파일 정보 색인", rows: [
-				{ id: "jikji", label: "파일 정보 색인 사용", hint: "파일 이름과 문서 정보를 빠르게 찾습니다.", control: switchControl("jikji", true), path: "jikji" },
-				{ id: "includehidden", label: "숨김 파일 포함", hint: "점(.)으로 시작하는 파일도 색인합니다.", control: switchControl("includehidden", false), path: "jikji.includeHidden" },
-				{ id: "jmax", label: "최대 파일 수", hint: "0이면 제한 없이 처리합니다.", control: fieldControl("jmax", "number", "0 = 제한 없음"), path: "jikji.maxFiles" },
-				{ id: "jtimeout", label: "실행 시간 제한", hint: "파일 정보 색인을 기다리는 최대 시간입니다.", control: fieldControl("jtimeout", "number", "기본값 (초)"), path: "jikji.timeoutMs" },
-				{ id: "parse", label: "문서 읽기 시간 제한", hint: "문서 하나를 분석하는 최대 시간입니다.", control: fieldControl("parse", "number", "기본값 (초)"), path: "jikji.parseTimeout" },
-				{ id: "excludepatterns", label: "제외 패턴", hint: "한 줄에 하나씩 제외할 경로를 입력합니다.", control: chipsControl("jikjiexclude", []), stack: true, path: "jikji.exclude" },
-			] },
-			{ title: "파일 이름 검색", desc: `현재 운영체제에 맞는 검색 방식(FSearch)을 자동으로 사용합니다.`, rows: [
-				{ id: "ftime", label: "검색 시간 제한", hint: "검색을 기다리는 최대 시간입니다.", control: fieldControl("ftime", "number", "기본값 (초)"), path: "fsearch.timeoutMs" },
-				{ id: "fstart", label: "색인 시작 시간 제한", hint: "검색 준비를 기다리는 최대 시간입니다.", control: fieldControl("fstart", "number", "기본값 (초)"), path: "fsearch.startupTimeoutMs" },
-				{ id: "findex", label: "색인 시간 제한", hint: "파일 목록을 만드는 최대 시간입니다.", control: fieldControl("findex", "number", "기본값 (초)"), path: "fsearch.indexTimeoutMs" },
-				{ id: "fpath", label: "검색 도구 위치", hint: "비워두면 자동으로 찾습니다.", control: fieldControl("fpath", "text", "자동"), path: "fsearch.binaryPath" },
-			] },
-			{ title: "개발자 옵션", advanced: true, rows: [
-				{ id: "rules", label: "AI 안내 파일 수정 허용", hint: "AGENTS.md·CLAUDE.md에 AutoRAG 안내 블록을 추가합니다.", control: switchControl("rules", false), path: "jikji.writeAgentRules" },
-				{ id: "buffer", label: "출력 버퍼 크기", hint: "분석 결과를 임시로 담는 최대 크기입니다.", control: fieldControl("buffer", "number", "기본값 (MB)"), path: "jikji.maxBufferBytes" },
-				{ id: "hashbytes", label: "해시 계산 최대 크기", hint: "이 크기까지만 읽어 파일을 비교합니다.", control: fieldControl("hashbytes", "number", "기본값 (MB)"), path: "jikji.maxHashBytes" },
-				{ id: "textmax", label: "문서 텍스트 최대 길이", hint: "문서 하나에서 읽는 최대 글자 수입니다.", control: fieldControl("textmax", "number", "기본값"), path: "jikji.docTextMaxChars" },
-				{ id: "textchunk", label: "문서 텍스트 조각 크기", hint: "텍스트를 나누는 글자 수입니다.", control: fieldControl("textchunk", "number", "기본값"), path: "jikji.docTextChunkChars" },
-				{ id: "tags", label: "허용 태그", hint: "AI가 사용할 수 있는 연결의 분류입니다.", control: chipsControl("tags", state.chips.tags), stack: true, path: "datasourceAccess.allowedTags" },
-				{ id: "scopes", label: "허용 범위", hint: "AI가 접근할 수 있는 경로 목록입니다.", control: chipsControl("scopes", []), stack: true, path: "datasourceAccess.allowedScopes" },
-			] },
 		],
 	},
 };
@@ -509,6 +494,84 @@ function roleRows(roleIds) {
 	return roleIds.map((roleId) => ({ id: `role:${roleId}`, label: ROLES[roleId].label, hint: ROLES[roleId].hint, control: roleControl(roleId), path: ROLES[roleId].path }));
 }
 
+function accountRows() {
+	const { name, email, signedInWith } = state.account;
+	return [
+		{ id: "profile", html: `<div class="list-row profile-row"><span class="avatar">${esc(name.slice(0, 1))}</span><span class="list-body"><span class="list-title">${esc(name)}</span><span class="list-meta">${esc(email)} · ${esc(signedInWith)}로 로그인</span></span><button type="button" class="btn" data-account="signout">로그아웃</button></div>` },
+		{ id: "name", label: "이름", hint: "AutoRAG에 표시되는 이름입니다.", control: fieldControl("account-name", "text", "", name), path: "account.name" },
+		{ id: "email", label: "이메일", hint: `${signedInWith} 계정의 이메일이라 여기서 바꿀 수 없습니다.`, control: `<span class="value">${esc(email)}</span>`, path: "account.email" },
+	];
+}
+
+const credits = (value) => value.toLocaleString("ko-KR");
+
+function planRows() {
+	const plan = PLANS[state.plan];
+	const action = state.plan === "free"
+		? `<button type="button" class="btn primary" data-plan="upgrade">Pro로 업그레이드</button>`
+		: `<span class="status"><span class="dot ok"></span>구독 중</span>`;
+	return [
+		{ id: "plan", label: `AutoRAG ${plan.label}`, hint: `${plan.price} · ${plan.perks}`, control: action, path: "billing.plan" },
+		{ id: "portal", label: "결제 관리", hint: "결제 수단, 영수증, 구독 변경·해지는 결제 포털에서 관리합니다.", control: `<button type="button" class="btn" data-plan="portal">결제 포털 열기${svg("external")}</button>`, path: "billing.portalUrl" },
+	];
+}
+
+function usageRows() {
+	const allowance = PLANS[state.plan].credits;
+	const { used, extra, resetsOn } = state.usage;
+	const fromPlan = Math.min(used, allowance);
+	const left = Math.max(0, allowance - used) + extra;
+	const percent = Math.min(100, Math.round((fromPlan / allowance) * 100));
+	const tone = percent >= 90 ? " warn" : "";
+	const meter = `<div class="meter${tone}" role="meter" aria-valuemin="0" aria-valuemax="${allowance}" aria-valuenow="${fromPlan}" aria-label="요금제 사용량"><span style="width:${percent}%"></span></div>`;
+	return [
+		{ id: "usage", stack: true, label: "AI 사용량", hint: `AutoRAG 요금제 모델을 쓸 때 차감됩니다. ${resetsOn}에 초기화됩니다.`, control: `<div class="usage">${meter}<div class="usage-legend"><span>${credits(fromPlan)} / ${credits(allowance)} 크레딧 사용</span><span>${percent}%</span></div></div>`, path: "billing.usage" },
+		{ id: "left", label: "남은 크레딧", hint: extra ? `요금제 ${credits(Math.max(0, allowance - used))} + 추가 구매 ${credits(extra)}` : "추가 구매한 크레딧이 없습니다.", control: `<span class="value strong">${credits(left)}</span>`, path: "billing.remaining" },
+		{ id: "topup", label: "추가 사용량 구매", hint: "요금제 한도를 다 쓰면 추가 크레딧에서 차감합니다. 남은 추가 크레딧은 다음 달로 넘어갑니다.", control: `<button type="button" class="btn" data-plan="topup">${svg("plus")}추가 구매</button>`, path: "billing.topUp" },
+	];
+}
+
+/** Every refreshable source: local folders first, then each connected app. */
+function syncSources() {
+	return [
+		{ key: "local", ...state.sync.local, icon: svg("folder"), nav: "scope", installed: true },
+		...state.connections.map((connection) => ({
+			key: connection.id,
+			label: connection.label,
+			icon: `<span class="app-icon sm">${esc((TEMPLATES[connection.type] ?? {}).letter ?? "·")}</span>`,
+			detail: connection.installed ? `문서 ${credits(connection.items)}개` : "도우미 프로그램 설치 필요",
+			interval: connection.interval,
+			lastSynced: connection.lastSynced,
+			running: Boolean(connection.running),
+			installed: connection.installed,
+			enabled: connection.enabled,
+			nav: `source/${connection.id}`,
+		})),
+	];
+}
+
+function syncStatus(source) {
+	if (source.running) return `<span class="status"><span class="dot run"></span>최신화 중…</span>`;
+	if (!source.installed) return `<span class="status"><span class="dot warn"></span>설치 필요</span>`;
+	if (source.enabled === false) return `<span class="status"><span class="dot"></span>꺼짐</span>`;
+	if (!source.lastSynced) return `<span class="status"><span class="dot warn"></span>아직 안 가져옴</span>`;
+	return `<span class="status"><span class="dot ok"></span>${esc(source.lastSynced)}</span>`;
+}
+
+function indexRows() {
+	const sources = syncSources();
+	const ready = sources.filter((source) => source.installed && source.enabled !== false && !source.running);
+	const rows = sources.map((source) => {
+		const interval = source.key === "local"
+			? `<span class="sync-interval">변경 시 바로</span>`
+			: `<span class="select-wrap compact">${svg("chevronDown")}<select class="select" data-interval="${esc(source.key)}" aria-label="${esc(source.label)} 최신화 주기">${INTERVALS.map((option) => `<option${option === source.interval ? " selected" : ""}>${esc(option)}</option>`).join("")}</select></span>`;
+		const run = `<button type="button" class="icon-btn" data-sync-now="${esc(source.key)}" aria-label="${esc(source.label)} 지금 최신화" title="지금 최신화"${source.installed && source.enabled !== false && !source.running ? "" : " disabled"}>${svg("refresh")}</button>`;
+		return { id: `sync:${source.key}`, html: `<div class="list-row sync-row" data-sync-row="${esc(source.key)}"><button type="button" class="sync-name" data-nav="${esc(source.nav)}">${source.icon}<span class="list-body"><span class="list-title">${esc(source.label)}</span><span class="list-meta">${esc(source.detail)}</span></span></button>${syncStatus(source)}${interval}${run}</div>` };
+	});
+	rows.push({ id: "sync:all", html: `<div class="sync-footer"><span class="list-meta">바뀐 파일과 메시지만 다시 읽습니다. 처음 연결한 앱은 전체를 가져옵니다.</span><button type="button" class="btn" data-sync-now="all"${ready.length ? "" : " disabled"}>${svg("refresh")}모두 지금 최신화</button></div>` });
+	return rows;
+}
+
 function pathRows() {
 
 	return [
@@ -538,6 +601,10 @@ function galleryRows() {
 }
 
 const DYNAMIC_ROWS = {
+	accountRows,
+	planRows,
+	usageRows,
+	indexRows,
 	providerRows,
 	taskRows: () => ROLE_GROUPS.flatMap((group) => [{ id: `group:${group.title}`, html: `<p class="subsection-title">${esc(group.title)}</p>` }, ...roleRows(group.roles)]),
 	pathRows,
@@ -562,10 +629,6 @@ function sectionHtml(section) {
 	const rows = Array.isArray(section.rows) ? section.rows : (DYNAMIC_ROWS[section.rows] ?? (() => []))();
 	const body = section.desc ? `<p class="section-desc">${esc(section.desc)}</p>` : "";
 	const content = rows.map(rowHtml).join("");
-	if (section.advanced) {
-		const open = state.advancedOpen[section.title] ?? false;
-		return `<details class="disclosure" data-advanced="${esc(section.title)}"${open ? " open" : ""}><summary>${svg("chevron")}${esc(section.title)}</summary><div class="disclosure-body">${content}</div></details>`;
-	}
 	return `<section class="section"><h2 class="section-title">${esc(section.title)}</h2>${body}${content}</section>`;
 }
 
@@ -810,33 +873,22 @@ function sourcePage(id) {
 		{ id: "enabled", label: "사용 여부", hint: "끄면 이 연결을 검색에서 잠시 제외합니다.", control: switchControl(`enabled:${id}`, connection?.enabled ?? true), path: `datasources.${id}.enabled` },
 		{ id: "install", label: "도우미 프로그램", hint: connection?.installed ? "설치되어 있습니다." : "이 앱의 내용을 가져오려면 도우미 프로그램이 필요합니다.", control: `<span class="status"><span class="dot ${connection?.installed ? "ok" : "warn"}"></span>${connection?.installed ? "준비됨" : "설치 필요"}</span><button class="btn quiet" data-action="install-help">설치 방법</button>`, path: `install.${connection?.type}` },
 		{ id: "agent", label: "AI 검색 허용", hint: connection?.access ? "AI 답변이 이 연결을 참고합니다." : "허용하면 AI 답변이 이 앱의 내용을 참고할 수 있습니다.", control: switchControl(`access:${id}`, connection?.access ?? false), path: "datasourceAccess.allowedTags" },
-		{ id: "index", label: "검색 준비", hint: connection?.indexed ? `문서 ${esc(connection.meta ?? "")}` : "지금 동기화를 눌러 내용을 가져오세요.", control: `<span class="status"><span class="dot ${connection?.indexed ? "ok" : "warn"}"></span>${connection?.indexed ? "최신 상태" : "동기화 필요"}</span><button class="btn quiet" data-action="sync" data-id="${esc(id)}">지금 동기화</button>`, path: `datasources.${id}.index`, proposal: "제안" },
-	];
-
-	const advancedRows = [
-		{ id: "alias", label: "연결 ID", hint: "설정 파일에서 이 연결을 구분하는 이름입니다.", control: fieldControl("alias", "text", "", id), path: `datasources.${id}` },
-		{ id: "instance", label: "인스턴스 ID", hint: "내부 경로에 사용되는 값입니다.", control: fieldControl("instance", "text", "기본값"), path: `datasources.${id}.instanceId` },
-		{ id: "tags", label: "분류 태그", hint: "AI 접근 정책을 연결하는 분류입니다.", control: chipsControl("tags", state.chips.tags), stack: true, path: `datasources.${id}.tags` },
-		{ id: "timeout", label: "검색 시간 제한", hint: "도우미 프로그램을 기다리는 최대 시간입니다.", control: fieldControl("timeout", "number", "기본값 (초)"), path: `datasources.${id}.connector.timeoutMs` },
-		{ id: "bin", label: "도우미 프로그램 위치", hint: "비워두면 자동으로 찾습니다.", control: fieldControl("bin", "text", "자동"), path: `datasources.${id}.connector.binaryPath` },
-		{ id: "env", label: "환경 변수", hint: "비밀번호나 토큰은 여기에 넣지 마세요.", control: fieldControl("env", "text", "KEY=value"), path: `datasources.${id}.connector.env` },
-		...(basic.length && connection?.type === "slack" ? [{ id: "channels", label: "채널 목록", hint: "채널 ID로 검색 범위를 좁힙니다.", control: chipsControl("channels", []), stack: true, path: `datasources.${id}.channels.ids` }] : []),
+		{ id: "index", label: "최신화", hint: connection?.lastSynced ? `문서 ${credits(connection.items)}개 · 마지막 최신화 ${connection.lastSynced}` : "아직 내용을 가져오지 않았습니다.", control: `${syncStatus({ ...connection, installed: connection?.installed })}<button type="button" class="btn quiet" data-sync-now="${esc(id)}"${connection?.installed && !connection?.running ? "" : " disabled"}>지금 최신화</button>`, path: `datasources.${id}.index`, proposal: "제안" },
+		{ id: "poll", label: "최신화 주기", hint: "새 내용을 확인하는 간격입니다. 인덱싱 화면에서도 같은 값을 바꿀 수 있습니다.", control: `<span class="select-wrap">${svg("chevronDown")}<select class="select" data-interval="${esc(id)}">${INTERVALS.map((option) => `<option${option === connection?.interval ? " selected" : ""}>${esc(option)}</option>`).join("")}</select></span>`, path: `datasources.${id}.pollingIntervalMs` },
 	];
 
 	return {
 		group: "연결된 앱", label: connection?.label ?? id, icon: "plug",
 		title: connection?.label ?? id,
 		desc: template.desc ?? "",
-		notes: ["Needs attention 같은 영문 배지를 준비 단계로 다시 썼습니다.", "연결 ID·인스턴스 ID·실행 환경은 고급 설정으로 옮겼습니다.", "템플릿(유형) 변경 항목을 제거했습니다. 연결을 새로 만드는 흐름으로 대체합니다."],
+		notes: ["Needs attention 같은 영문 배지를 준비 단계로 다시 썼습니다.", "연결 ID·인스턴스 ID·태그·실행 파일 경로·환경 변수는 화면에서 뺐습니다(자동 처리).", "템플릿(유형) 변경 항목을 제거했습니다. 연결을 새로 만드는 흐름으로 대체합니다."],
 		sections: [
 			{ title: "연결 상태", rows: statusRows },
 			...(basic.length ? [{ title: `${template.label} 설정`, rows: basic }] : []),
 			{ title: "기본 설정", rows: [
 				{ id: "name", label: "연결 이름", hint: "왼쪽 목록에 표시됩니다.", control: fieldControl("name", "text", "", connection?.label ?? ""), path: `datasources.${id}` },
 				{ id: "desc", label: "AI에게 알려줄 설명", hint: "이 연결을 언제 참고하면 좋은지 적어주세요.", control: `<textarea class="field" data-field="desc" placeholder="예: 우리 팀의 업무 대화와 공지입니다."></textarea>`, stack: true, path: `datasources.${id}.description` },
-				{ id: "poll", label: "동기화 주기", hint: "새로운 내용을 확인하는 간격입니다.", control: selectControl("poll", ["5분", "15분", "30분", "1시간", "6시간", "하루", "수동"], state.values.poll), path: `datasources.${id}.pollingIntervalMs` },
 			] },
-			{ title: "고급 설정", advanced: true, rows: advancedRows },
 			{ title: "연결 해제", rows: [
 				{ id: "danger", label: "연결 해제", hint: "AutoRAG 검색에서만 제거되며 원본 앱의 데이터는 지워지지 않습니다.", control: `<button class="btn danger" data-action="delete" data-id="${esc(id)}">연결 해제</button>`, path: `datasources.${id}` },
 			] },
@@ -1039,21 +1091,6 @@ document.addEventListener("click", (event) => {
 			case "install-help":
 				modal(`<h2>도우미 프로그램 설치</h2><p>이 연결은 내용을 가져오는 도우미 프로그램이 필요합니다. 설치 안내 문서를 열어 단계를 따라 진행하세요.</p><div class="modal-actions"><button class="btn primary" data-action="close-modal">확인</button></div>`);
 				return;
-			case "sync": {
-				const connection = state.connections.find((item) => item.id === action.dataset.id);
-				if (connection && !connection.installed) {
-					toast("도우미 프로그램을 먼저 설치해야 합니다.");
-					return;
-				}
-				if (connection) {
-					connection.indexed = true;
-					connection.meta = "방금 동기화됨";
-					connection.hint = `${connection.label} 검색 · 사용 중`;
-				}
-				render({ keepScroll: true });
-				toast("동기화를 시작했습니다.");
-				return;
-			}
 			case "delete": {
 				const id = action.dataset.id;
 				const connection = state.connections.find((item) => item.id === id);
@@ -1104,11 +1141,6 @@ document.addEventListener("input", (event) => {
 	}
 });
 
-document.addEventListener("toggle", (event) => {
-	const details = event.target.closest("[data-advanced]");
-	if (details) state.advancedOpen[details.dataset.advanced] = details.open;
-}, true);
-
 document.addEventListener("keydown", (event) => {
 	if (event.key === "Escape") {
 		closeModal();
@@ -1119,6 +1151,95 @@ document.addEventListener("keydown", (event) => {
 	if (event.key === "Enter" && event.target.id === "new-name") {
 		document.querySelector("[data-connect]")?.click();
 	}
+});
+
+/* ------------------------------------------- Account, plan, indexing -- */
+
+function runSync(keys) {
+	const sources = syncSources().filter((source) => keys.includes(source.key) && source.installed && source.enabled !== false && !source.running);
+	if (!sources.length) {
+		toast("최신화할 수 있는 항목이 없습니다. 도우미 프로그램 설치를 먼저 확인하세요.");
+		return;
+	}
+	const target = (key) => (key === "local" ? state.sync.local : state.connections.find((item) => item.id === key));
+	for (const source of sources) target(source.key).running = true;
+	render({ keepScroll: true });
+	toast(sources.length === 1 ? `${sources[0].label} 최신화를 시작했습니다. 바뀐 내용만 다시 가져옵니다.` : `${sources.length}개 항목의 최신화를 시작했습니다.`);
+	setTimeout(() => {
+		for (const source of sources) {
+			const item = target(source.key);
+			item.running = false;
+			item.lastSynced = "방금";
+			item.indexed = true;
+		}
+		render({ keepScroll: true });
+	}, 700);
+}
+
+function openTopUp() {
+	modal(`<button type="button" class="modal-close" data-action="close-modal" aria-label="닫기">${svg("x")}</button><h2 id="dialog-title">추가 사용량 구매</h2><p>요금제 한도를 다 쓴 뒤 차감됩니다. 결제는 결제 포털에서 진행합니다.</p><div class="choice-list" role="radiogroup">${TOP_UPS.map(([value, label, price], index) => `<label class="choice"><input type="radio" name="topup" value="${value}"${index === 0 ? " checked" : ""}><span>${esc(label)}</span><small>${esc(price)}</small></label>`).join("")}</div><div class="modal-actions"><button type="button" class="btn" data-action="close-modal">취소</button><button type="button" class="btn primary" data-plan="topup-confirm">결제하기${svg("external")}</button></div>`);
+}
+
+function openDeleteAccount() {
+	const subscribed = state.plan !== "free";
+	modal(`<h2 id="dialog-title">계정을 삭제할까요?</h2><p>계정, 구독, 사용 기록이 영구히 삭제되고 되돌릴 수 없습니다.${subscribed ? " Pro 구독은 즉시 해지되며 남은 기간은 환불되지 않습니다." : ""} 이 Mac에 있는 문서와 검색 색인은 그대로 남습니다.</p><label>확인을 위해 이메일을 입력하세요<input class="field" data-delete-confirm placeholder="${esc(state.account.email)}" autocomplete="off"></label><div class="modal-actions"><button type="button" class="btn" data-action="close-modal">취소</button><button type="button" class="btn danger" data-account="delete-confirm" disabled>계정 삭제</button></div>`);
+}
+
+document.addEventListener("click", (event) => {
+	const plan = event.target.closest("[data-plan]");
+	if (plan) {
+		switch (plan.dataset.plan) {
+			case "upgrade":
+				toast("결제 포털에서 Pro 업그레이드를 진행합니다.");
+				state.plan = "pro";
+				render({ keepScroll: true });
+				return;
+			case "portal":
+				toast("브라우저에서 결제 포털을 엽니다.");
+				return;
+			case "topup":
+				openTopUp();
+				return;
+			case "topup-confirm": {
+				const amount = Number($('#modal-root input[name="topup"]:checked').value);
+				state.usage.extra += amount;
+				closeModal();
+				render({ keepScroll: true });
+				toast(`${credits(amount)} 크레딧을 추가했습니다.`);
+				return;
+			}
+		}
+	}
+
+	const account = event.target.closest("[data-account]");
+	if (account) {
+		if (account.dataset.account === "signout") toast("로그아웃하면 온보딩 로그인 화면으로 돌아갑니다.");
+		if (account.dataset.account === "delete") openDeleteAccount();
+		if (account.dataset.account === "delete-confirm") {
+			closeModal();
+			toast("계정 삭제를 요청했습니다. 확인 메일을 보냈습니다.");
+		}
+		return;
+	}
+
+	const syncNow = event.target.closest("[data-sync-now]");
+	if (syncNow) {
+		const key = syncNow.dataset.syncNow;
+		runSync(key === "all" ? syncSources().map((source) => source.key) : [key]);
+	}
+});
+
+document.addEventListener("input", (event) => {
+	if (!event.target.matches("[data-delete-confirm]")) return;
+	$('#modal-root [data-account="delete-confirm"]').disabled = event.target.value.trim() !== state.account.email;
+});
+
+document.addEventListener("change", (event) => {
+	const select = event.target.closest("[data-interval]");
+	if (!select) return;
+	const connection = state.connections.find((item) => item.id === select.dataset.interval);
+	if (connection) connection.interval = select.value;
+	toast(`${connection?.label ?? ""} 최신화 주기: ${select.value}`);
 });
 
 /* ---------------------------------------------------- AI page events -- */

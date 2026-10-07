@@ -30,7 +30,7 @@ try {
 
   const navIds = await page.locator("[data-nav]").evaluateAll((items) => [...new Set(items.map((item) => item.dataset.nav))]);
   const openPage = async (id) => {
-    const expected = { general: "일반", ai: "AI 모델", web: "웹 검색", scope: "검색 범위", reading: "문서 읽기", duplicates: "중복 파일 정리", apps: "연결된 앱", advanced: "고급 설정" }[id];
+    const expected = { account: "내 계정", plan: "구독 및 사용량", general: "일반", ai: "AI 모델", web: "웹 검색", scope: "검색 범위", indexing: "인덱싱", reading: "문서 읽기", duplicates: "중복 파일 정리", apps: "연결된 앱" }[id];
     for (let attempt = 0; attempt < 3; attempt++) {
       await page.locator(`[data-nav="${id}"]`).first().click();
       await page.waitForTimeout(60);
@@ -124,6 +124,65 @@ try {
   check("reranking defaults to Cohere Rerank 3.5", (await roleText("rerank")).includes("Cohere Rerank 3.5"));
   check("AutoRAG plan cannot be disconnected", await page.locator('[data-menu="provider-more"][data-provider="autorag"]').count() === 0);
   await page.keyboard.press("Escape");
+
+  // 내 계정: profile is read from the onboarding login; deletion needs an email match.
+  await page.locator('[data-nav="account"]').first().click();
+  const accountText = await page.locator("#content").innerText();
+  check("account shows the onboarding profile", accountText.includes("dayeon.kim@example.com") && accountText.includes("김다연") && accountText.includes("Google로 로그인"));
+  await page.locator('[data-account="delete"]').click();
+  await page.fill('[data-delete-confirm]', "wrong@example.com");
+  check("account deletion stays locked on a wrong email", await page.locator('[data-account="delete-confirm"]').isDisabled());
+  await page.fill('[data-delete-confirm]', "dayeon.kim@example.com");
+  check("account deletion unlocks on the matching email", await page.locator('[data-account="delete-confirm"]').isEnabled());
+  await page.locator('[data-account="delete-confirm"]').click();
+  check("account deletion confirms with a toast", (await page.locator("#toast").innerText()).includes("계정 삭제"));
+  await page.locator('[data-account="signout"]').click();
+  check("sign out explains where it goes", (await page.locator("#toast").innerText()).includes("온보딩"));
+
+  // 구독 및 사용량: plan, meter, top-up, portal.
+  await page.locator('[data-nav="plan"]').first().click();
+  const planText = await page.locator("#content").innerText();
+  check("Free plan offers an upgrade", planText.includes("AutoRAG Free") && planText.includes("Pro로 업그레이드") && planText.includes("결제 포털 열기"));
+  await page.locator('[data-nav="indexing"]').first().click();
+  const syncRows = await page.locator("[data-sync-row]").evaluateAll((rows) => rows.map((row) => row.dataset.syncRow));
+  check("indexing lists local folders and every connection", JSON.stringify(syncRows) === JSON.stringify(["local", "slack", "kakao", "drive", "spotlight"]), JSON.stringify(syncRows));
+  check("uninstalled source asks for setup first", (await page.locator('[data-sync-row="slack"]').innerText()).includes("설치 필요"));
+  await page.locator('[data-sync-row="kakao"] [data-sync-now]').click();
+  await page.waitForTimeout(150);
+  check("sync shows an in-progress state", (await page.locator('[data-sync-row="kakao"]').innerText()).includes("최신화 중"));
+  await page.waitForTimeout(900);
+  check("sync lands on a fresh state", (await page.locator('[data-sync-row="kakao"]').innerText()).includes("방금"));
+  await page.locator('[data-sync-row="spotlight"] .sync-name').click();
+  check("indexing row opens the source settings", (await page.locator("h1").innerText()) === "카카오톡" || (await page.locator("h1").innerText()) === "Spotlight", await page.locator("h1").innerText());
+  await page.locator('[data-nav="indexing"]').first().click();
+  await page.locator('[data-sync-row="drive"] [data-interval]').selectOption("하루");
+  check("changing the cadence sticks", (await page.locator('[data-sync-row="drive"]').innerText()).includes("하루") || (await page.locator("#toast").innerText()).includes("하루"));
+  await page.locator('[data-sync-now="all"]').click();
+  await page.waitForTimeout(150);
+  const runningCount = await page.locator('[data-sync-row]').filter({ hasText: "최신화 중" }).count();
+  check("refresh-all runs every ready source", runningCount === 3, `running: ${runningCount}`);
+  await page.waitForTimeout(900);
+  await page.locator('[data-nav="plan"]').first().click();
+  const planPage = await page.locator("#content").innerText();
+  check("meter tracks plan usage", (await page.locator(".meter > span").getAttribute("style")).includes("81%"));
+  await page.locator('[data-plan="topup"]').click();
+  await page.locator(".choice", { has: page.locator('input[value="50000"]') }).click();
+  await page.locator('[data-plan="topup-confirm"]').click();
+  check("top-up adds credits", (await page.locator('[data-row="left"]').innerText()).includes("50,000"));
+  await page.locator('[data-plan="upgrade"]').click();
+  check("upgrade moves to Pro with the portal", (await page.locator("#content").innerText()).includes("Pro") && (await page.locator("#content").innerText()).includes("결제 포털"));
+
+  // Trims the prototype deliberately dropped: no devfolder list, no tool paths, no advanced page.
+  await page.locator('[data-nav="scope"]').first().click();
+  const scopeText = await page.locator("#content").innerText();
+  check("scope keeps one exclude list with defaults", scopeText.includes("node_modules") && !scopeText.includes("개발용 폴더 자동 제외"));
+  check("change detection stays on", (await page.locator('[data-toggle="watch"]').getAttribute("aria-checked")) === "true");
+  await page.locator('[data-nav="reading"]').first().click();
+  check("reading drops the per-document language override", !(await page.locator("#content").innerText()).includes("개별 설정"));
+  await page.locator('[data-nav="duplicates"]').first().click();
+  check("duplicates drop the tool location", !(await page.locator("#content").innerText()).includes("검사 도구 위치"));
+  check("no advanced page remains in the sidebar", !(await page.locator("#nav").innerText()).includes("고급"));
+
   await page.locator('[data-nav="apps"]').first().click();
   await page.locator('[data-add="notion"]').click();
   check("add connection modal opens", await page.getByRole("dialog").count() === 1 && (await page.getByRole("dialog").innerText()).includes("Notion"));
@@ -133,7 +192,6 @@ try {
   await page.locator("#settings-search").fill("OCR");
   check("settings search finds OCR", (await page.locator("#nav").innerText()).includes("문서 읽기"));
   await page.locator('[data-nav="reading"]').first().click();
-  check("advanced disclosure exists", await page.locator("details").count() > 0);
   await page.locator("#notes-toggle").click();
   check("change notes toggle works", await page.locator(".notes").count() === 1);
   await page.locator("#theme-toggle").click();

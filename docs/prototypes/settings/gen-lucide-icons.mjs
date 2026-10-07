@@ -20,7 +20,6 @@ const SLUGS = [
 	"file-text",
 	"copy",
 	"plug",
-	"sliders-horizontal",
 	"chevron-right",
 	"chevron-down",
 	"check",
@@ -30,6 +29,9 @@ const SLUGS = [
 	"triangle-alert",
 	"ellipsis",
 	"external-link",
+	"user",
+	"credit-card",
+	"refresh-cw",
 ];
 
 const root = new URL("../../../", import.meta.url);

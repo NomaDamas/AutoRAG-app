@@ -315,24 +315,37 @@ textarea.field { width: 100%; height: 68px; padding: 8px 10px; resize: vertical;
 .note.warn .icon { color: var(--warn-text); }
 .note strong { color: var(--text-body); font-weight: 500; }
 
-/* Advanced disclosure: a text toggle, rows render inline below it. */
-.disclosure { margin-top: 30px; }
-.disclosure summary {
-	display: inline-flex;
-	align-items: center;
-	gap: 4px;
-	color: var(--text-muted);
-	font-size: 12.5px;
-	list-style: none;
-	cursor: pointer;
-	user-select: none;
-}
-.disclosure summary::-webkit-details-marker { display: none; }
-.disclosure summary:hover { color: var(--text-primary); }
-.disclosure summary .icon { width: 14px; height: 14px; transition: transform var(--dur-popover) var(--ease-out); }
-.disclosure[open] summary .icon { transform: rotate(90deg); }
-.disclosure-body { margin-top: 4px; }
-.disclosure-body .section { margin-top: 18px; }
+/* ------------------------------------------------ Account, plan, indexing -- */
+
+.avatar { display: grid; place-items: center; flex: none; width: 40px; height: 40px; border-radius: 50%; background: var(--bg-input); color: var(--text-primary); font-size: 15px; font-weight: 600; }
+.profile-row { padding: 13px 0; }
+.value.strong { color: var(--text-primary); font-weight: 600; }
+.meter { height: 6px; border-radius: 3px; background: var(--bg-input); overflow: hidden; }
+.meter > span { display: block; height: 100%; border-radius: 3px; background: var(--accent); transition: width var(--dur-step) var(--ease-out); }
+.meter.warn > span { background: var(--warn-dot); }
+.usage { display: flex; flex-direction: column; gap: 8px; width: 100%; }
+.usage-legend { display: flex; justify-content: space-between; color: var(--text-muted); font-size: 12px; }
+.choice-list { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
+.choice { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; }
+.choice:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+.choice input { accent-color: var(--accent); }
+.choice span { flex: 1; color: var(--text-primary); font-size: 13px; }
+.choice small { color: var(--text-muted); font-size: 12px; }
+.choice-list input[type=radio] { position: absolute; opacity: 0; pointer-events: none; }
+.modal .field[data-delete-confirm] { width: 100%; }
+.modal .btn.danger:disabled { opacity: 0.5; cursor: default; }
+.sync-row { gap: 12px; }
+.sync-name { display: flex; align-items: center; gap: 0; flex: 1; min-width: 0; border: 0; background: none; text-align: left; cursor: pointer; }
+.sync-name .app-icon.sm, .sync-name .icon { margin-right: 10px; color: var(--text-muted); }
+.sync-row > .select-wrap { flex: none; }
+.select-wrap.compact .select { min-width: 90px; }
+.dot.run { background: var(--accent); animation: pulse 1s ease-in-out infinite; }
+.sync-row .sync-interval { width: 90px; flex: none; text-align: right; color: var(--text-muted); font-size: 12.5px; }
+@keyframes pulse { 50% { opacity: 0.4; } }
+.sync-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-top: 1px solid var(--border-divider); }
+.sync-footer .list-meta { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.icon-btn:disabled { color: var(--text-faint); background: transparent; cursor: default; }
+.icon-btn:disabled:hover { color: var(--text-faint); }
 
 /* App icon for connections — neutral like the shipped provider rows. */
 .app-icon {
