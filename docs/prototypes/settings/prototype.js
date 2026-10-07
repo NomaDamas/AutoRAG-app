@@ -14,8 +14,7 @@ const esc = (value) =>
 /* ------------------------------------------------------------- UI atoms -- */
 
 const ICONS = {
-	gear: '<path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/><path d="M10.6 2.7a1 1 0 0 1 .9-.6h1a1 1 0 0 1 .9.6l.3 1.7 1.7 1 .6.7 1.8-.2a1 1 0 0 1 1 .6l.5.9a1 1 0 0 1 0 1l-1.2 1.4.1 1.9.1 2-1.2 1.4a1 1 0 0 0 0 1l.5.9a1 1 0 0 1-1 1.4l-1.8-.2-.6.7-1.7 1-.3 1.7a1 1 0 0 1-1 .6h-1a1 1 0 0 1-.9-.6l-.3-1.7-1.7-1-.6-.7-1.8.2a1 1 0 0 1-1-.6l-.5-.9a1 1 0 0 1 0-1l1.2-1.4-.1-2 .1-1.9-1.2-1.4a1 1 0 0 1 0-1l.5-.9a1 1 0 0 1 1-.6l1.8.2.6-.7 1.7-1Z" transform="translate(0 1.5)"/>',
-	shield: '<path d="M12 3 5 6v6c0 4 3 7 7 9 4-2 7-5 7-9V6Z"/><path d="m9.2 12 2 2.2 3.6-4"/>',
+	gear: '<path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/>',
 	sparkles: '<path d="M12 4.6c.2 3 2 4.8 5 5-3 .2-4.8 2-5 5-.2-3-2-4.8-5-5 3-.2 4.8-2 5-5Z"/><path d="M19.4 13.4c.1 1.5 1 2.4 2.5 2.5-1.5.1-2.4 1-2.5 2.5-.1-1.5-1-2.4-2.5-2.5 1.5-.1 2.4-1 2.5-2.5Z"/>',
 	search: '<circle cx="11" cy="11" r="7"/><path d="m20.5 20.5-4.5-4.5"/>',
 	globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.9 5.7 3.9 9S14.5 18.4 12 21c-2.5-2.6-3.9-5.7-3.9-9S9.5 5.6 12 3Z"/>',
@@ -146,7 +145,7 @@ const data = {
 		group: "기본", label: "일반", icon: "gear",
 		title: "일반",
 		desc: "Dazzi의 화면과 시작 방식을 설정합니다.",
-		notes: ["Display & General의 영문 라벨을 정리하고 한국어로 다시 썼습니다.", "문서 언어와 중복 검사는 각각 문서 읽기·중복 파일로 옮겼습니다.", "템플릿 안내 문구(workspacePath, memoryPath)를 제거했습니다."],
+		notes: ["Display & General의 영문 라벨을 정리하고 한국어로 다시 썼습니다.", "문서 언어와 중복 검사는 각각 문서 읽기·중복 파일로 옮겼습니다.", "템플릿 안내 문구(workspacePath, memoryPath)를 제거했습니다.", "익명 사용 통계를 일반로 옮겼습니다."],
 		sections: [
 			{ title: "화면", rows: [
 				{ id: "appearance", label: "화면 모드", hint: "전체 화면에 같은 테마를 적용합니다.", control: selectControl("appearance", ["라이트", "다크"], state.values.appearance), path: "app.appearance" },
@@ -159,18 +158,8 @@ const data = {
 				{ id: "launch", label: "로그인할 때 자동 실행", hint: "컴퓨터를 켤 때 Dazzi를 백그라운드에서 시작합니다.", control: switchControl("launch", false), path: "app.launchAtLogin" },
 				{ id: "updates", label: "업데이트 자동 설치", hint: "새 버전을 다음 앱 시작 때 자동으로 적용합니다.", control: switchControl("updates", true), path: "app.autoInstallUpdates" },
 			] },
-		],
-	},
-	privacy: {
-		group: "기본", label: "개인정보 및 보안", icon: "shield",
-		title: "개인정보 및 보안",
-		desc: "Dazzi가 어떤 정보에 접근하고 무엇을 외부로 보내는지 관리합니다.",
-		notes: ["AI 접근 허용과 익명 통계를 한 화면에 모았습니다.", "datasourceAccess.allowedTags·allowedScopes는 고급 설정으로 옮겼습니다."],
-		sections: [
-			{ title: "AI가 읽을 수 있는 연결", desc: "처음 연결한 앱은 기본적으로 AI 답변에 사용하지 않습니다.", rows: "privacyConnections" },
-			{ title: "데이터 처리", rows: [
+			{ title: "개인정보", rows: [
 				{ id: "telemetry", label: "익명 사용 통계 보내기", hint: "문서 내용을 제외한 성능 정보만 전송합니다.", control: switchControl("telemetry", false), path: "app.telemetry" },
-				{ id: "sensitive", label: "민감한 파일 색인", hint: "비밀번호·인증서·개인 키와 같은 파일도 분석합니다. 필요할 때만 사용하세요.", control: switchControl("sensitive", false), path: "jikji.includeSensitive" },
 			] },
 		],
 	},
@@ -343,16 +332,6 @@ const data = {
 
 /* -------------------------------------------------------- Dynamic rows -- */
 
-function privacyConnections() {
-	return state.connections.map((connection) => ({
-		id: `access:${connection.id}`,
-		label: connection.label,
-		hint: connection.access ? "AI 답변에 이 연결의 내용이 사용됩니다." : "허용하기 전에는 AI가 이 앱을 읽지 않습니다.",
-		control: switchControl(`access:${connection.id}`, connection.access),
-		path: `datasourceAccess.allowedTags`,
-	}));
-}
-
 function modelName(id) {
 	const entry = Object.values(PROVIDER_MODELS).flat().find(([modelId]) => modelId === id);
 	return entry ? entry[1] : id;
@@ -407,7 +386,7 @@ function galleryRows() {
 	]);
 }
 
-const DYNAMIC_ROWS = { privacyConnections, aiRows, embedRows, pathRows, sourceRows, galleryRows };
+const DYNAMIC_ROWS = { aiRows, embedRows, pathRows, sourceRows, galleryRows };
 
 
 function rowHtml(row) {

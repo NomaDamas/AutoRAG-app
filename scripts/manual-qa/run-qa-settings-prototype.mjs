@@ -30,7 +30,7 @@ try {
 
   const navIds = await page.locator("[data-nav]").evaluateAll((items) => [...new Set(items.map((item) => item.dataset.nav))]);
   const openPage = async (id) => {
-    const expected = { general: "일반", privacy: "개인정보 및 보안", ai: "AI 모델", quality: "검색 품질", web: "웹 검색", scope: "검색 범위", reading: "문서 읽기", duplicates: "중복 파일 정리", apps: "연결된 앱", advanced: "고급 설정" }[id];
+    const expected = { general: "일반", ai: "AI 모델", quality: "검색 품질", web: "웹 검색", scope: "검색 범위", reading: "문서 읽기", duplicates: "중복 파일 정리", apps: "연결된 앱", advanced: "고급 설정" }[id];
     for (let attempt = 0; attempt < 3; attempt++) {
       await page.locator(`[data-nav="${id}"]`).first().click();
       await page.waitForTimeout(60);
