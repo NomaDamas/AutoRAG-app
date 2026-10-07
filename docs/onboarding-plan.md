@@ -42,6 +42,7 @@
 | 인덱싱 폴더 | AI가 볼 수 있는 범위이자 인덱싱 시간을 정한다 | Documents + Desktop (+ iCloud Drive/Documents) |
 | 임베딩 위치 (로컬 / 클라우드) | 바꾸면 전체 reindex. 클라우드는 본문이 외부로 나감 | 이 Mac(기본). 클라우드는 Pro 자격을 S6에서 확정 |
 | 원격 전송 동의 | 클라우드 임베딩·LLM 사용 시 법적·신뢰 문제 | 명시적 동의 체크 |
+| 권한 (macOS 전체 디스크 접근) | Mail·메시지 보관함·보호 영역을 읽으려면 필요. 허용 전에는 진행 불가 | 필수 |
 
 ### B. 감지해서 확인만 받는다
 
@@ -100,13 +101,15 @@ flowchart TD
 - 슬라이드 여러 장으로 만들지 않는다. 한 화면, 한 번 클릭.
 - **백그라운드**: 시스템 점검. 플랫폼 확인, 디스크 여유 공간, 번들 바이너리(minsync, jikji, dupey, llama-server) 확인과 준비를 시작한다.
 
-### S1. 권한 (macOS)
+### S1. 권한 (macOS / Windows 분기)
 
 - 폴더 사전 스캔 전에 권한 상태를 확인한다. 권한과 인덱싱 범위는 별개이며, AI가 읽는 범위는 다음 단계에서 사용자가 직접 고른다.
-- **전체 디스크 접근**은 Mail, 메시지 보관함, `~/Library`, 보호된 앱 데이터와 외장 디스크를 한 번에 읽는 **강력 권장** 항목이다. 앱에서 직접 허용할 수 없으므로 System Settings로 deep-link하고, 복귀 시 protected-path read probe로 상태를 재확인한다.
-- macOS가 권한 적용을 위해 앱 재시작을 요구하면 현재 onboarding step과 선택값을 저장한 뒤 종료·재실행하고 같은 단계로 복귀한다. prototype은 System Settings 목업, 토글, "종료 후 다시 열기" 시트를 제공한다.
-- 전체 디스크 접근을 건너뛰면 선택한 일반 폴더는 Files & Folders TCC prompt로 개별 허용한다. Mail, 메시지, 일부 `~/Library` 데이터와 외장 볼륨은 연결할 수 없다는 제한을 먼저 보여준다.
-- 알림은 인덱싱 완료·오류 알림용 선택 권한이며, `launchAtLogin`은 백그라운드 인덱스 유지용 토글이다. Accessibility, Screen Recording, Contacts, Calendar, Microphone, Camera 권한은 요청하지 않는다.
+- **플랫폼별로 요청이 다르다.** macOS는 전체 디스크 접근 + 파일 접근 + 알림을, Windows는 알림 + 방화벽만 요청한다. Windows에는 파일 접근 권한 자체가 없어서 같은 화면을 그대로 보여주면 없는 요구를 하게 된다.
+- **전체 디스크 접근은 macOS에서 필수다.** 허용하기 전에는 다음 단계로 갈 수 없다. 앱이 스스로 켤 수 없으므로 System Settings로 deep-link하고, 복귀 시 protected-path read probe로 상태를 재확인한다. 한 번 켜면 이후 모든 폴더와 보관함이 조용히 동작한다는 이득을 먼저 제시한다.
+- macOS가 재시작을 요구하면 현재 step과 선택값을 저장한 뒤 종료·재실행하고 같은 단계로 복귀한다. "나중에"를 고르면 행이 **다시 시작 필요** 상태가 되고 재시작 버튼을 노출한다.
+- 각 행은 현재 상태(허용됨 / 미허용 / 포함됨)를 즉시 보여주고, 없으면 그 자리에서 획득 버튼을 제공한다. 허용·거부 결과는 그 행에 바로 반영한다.
+- 알림은 **권한만 미리 받아 둔다.** 무엇을 언제 보낼지는 약속하지 않고, 문구도 "어떤 알림을 보낼지는 나중에 정합니다"로 둔다.
+- `launchAtLogin`은 권한이 아니라 설정 토글이다. Windows는 알림·방화벽만 있으며 파일 권한은 요청할 것이 없다. Accessibility, Screen Recording, Contacts, Calendar, Microphone, Camera 권한은 요청하지 않는다.
 
 ### S2. 계정
 
@@ -116,7 +119,7 @@ flowchart TD
 
 ### S3. 인덱싱 폴더
 
-- 기본 체크: `~/Documents`, `~/Desktop`, (있으면) `iCloud Drive/Documents`. 기본 해제로 노출: `~/Downloads`(잡음 많음), 연결된 클라우드 드라이브. 후보 목록은 사이드바 places(`src/main/places.ts`)를 재사용한다.
+- 기본 체크: `~/Documents`, `~/Desktop`, (있으면) `iCloud Drive/Documents`. 기본 해제로 노출: `~/Downloads`, 연결된 클라우드 드라이브. Downloads는 설치 파일과 임시 파일이 많아 기본 해제이며, 화면에 "잡음 많음" 같은 라벨은 달지 않는다. 후보 목록은 사이드바 places(`src/main/places.ts`)를 재사용한다.
 - 각 행에 **실시간 예상치**: 인덱싱 대상 파일 수, 용량, 예상 소요 시간(로컬과 클라우드 각각). 빠른 사전 스캔을 쓴다. librarian 스킵 규칙(`node_modules`, `.git`, 50 MiB 초과 등)과 파서 지원 확장자를 그대로 적용해서 실제 대상만 센다.
 - 가드레일: 홈 폴더 전체, 볼륨 루트, `~/Library`를 고르면 경고와 예상치를 강조한다. 예상 시간이 임계치(예: 로컬 2시간)를 넘으면 하위 폴더를 제안하고, 같은 트리가 겹치면 자동으로 합친다.
 - "폴더 추가"는 `dialog.showOpenDialog`로 받는다. macOS TCC prompt가 언제 뜨는지 미리 한 줄로 안내한다.
@@ -127,8 +130,8 @@ flowchart TD
   - **이 Mac에서 (로컬)**: 비공개. 예상 N시간. 모델 다운로드 약 0.6 GB [INFERENCE: Q8_0 0.6B 기준 크기, 실측 필요]. 노트북은 전원 연결 권장.
   - **클라우드에서 (Pro)**: 빠름. 예상 M분. 파일 본문이 처리용으로 전송되고, 저장하지 않는다는 문구와 링크. Pro가 아니면 S6에서 이 Mac으로 되돌리고 재인덱싱을 알린다.
 - 기본값은 이 Mac(로컬)이다. 클라우드는 선택만 받고 자격은 S6에서 확정한다. S3 예상치가 임계치를 넘으면 클라우드를 추천으로 표시한다.
-- "나중에 바꾸면 전체를 다시 인덱싱합니다"를 명시한다.
-- 클라우드를 고르면 원격 전송 동의 체크가 필수다.
+- 되돌리기 비용은 쉬운 말로 적는다: "나중에 바꾸면 처음부터 다시 해야 해서 시간과 비용이 더 듭니다." `incremental sync` 같은 구현 용어는 화면에 쓰지 않는다.
+- 클라우드를 고르면 원격 전송 동의 체크가 필수다. 체크박스는 CTA 버튼 **아래**에 두어, 선택할 때 버튼이 위로 밀려 올라가지 않게 한다.
 - 버튼은 "인덱싱 시작". 누르는 순간 config(`searchPaths`, `workspacePath`, `minSync.embedder`)를 쓰고 refresh를 시작한다. S6에서 플랜이 클라우드를 지원하지 않으면 임베더를 로컬로 다시 쓰고 전체 reindex를 알린다.
 - 로컬 프로필 선택(Qwen3 대 Gemma)은 노출하지 않는다. 저사양(RAM 8 GB 이하)이면 `embeddinggemma-300m`을 자동으로 고른다 [INFERENCE: 임계치는 벤치 필요].
 
@@ -141,6 +144,7 @@ flowchart TD
   - 사용자는 수정만 한다. 빈칸에서 직접 쓰게 하지 않는다.
 - 준비 안 된 소스: "더 연결하기 → Settings"로 보낸다. 온보딩에서 CLI 설치를 안내하지 않는다.
 - 켜면 `datasourceAccess.allowedTags`에도 반영한다 (librarian 기본값이 default-deny).
+- 각 소스는 **공식 로고**로 표시한다(`Simple Icons` 경로, Google 마크는 공식 4색 자산). 연동 대상을 알리는 정당한 사용이며 제휴를 암시하지 않는다.
 - 이 단계 전체를 건너뛸 수 있다.
 
 ### S6. 플랜
@@ -196,6 +200,7 @@ flowchart TD
 - 정적 HTML 목업: [`docs/design-reference/onboarding/onboarding-prototype.html`](design-reference/onboarding/onboarding-prototype.html)
 - 실행: `python3 -m http.server 4177`을 `docs/design-reference/onboarding/`에서 실행한 뒤 브라우저로 `onboarding-prototype.html`을 연다.
 - 단계 순서: 소개 → 권한 → 계정 → 폴더 → 임베딩 → 데이터 소스 → 플랜 → AI 모델 → 첫 질문.
+- 프로토타입 컨트롤 바에서 macOS/Windows, Free/Pro/BYOK, Light/Dark를 바꿔 같은 흐름을 비교할 수 있다. 소스 로고는 `brands.js`(Simple Icons + Google 4색)에서 온다.
 - 포함 상태: Light/Dark, Free/Pro/BYOK 시나리오, 9단계 점프, Full Disk Access System Settings 목업, 재시작 후 권한 복귀, 폴더 선택·ETA, 임베딩 동의·인덱싱 pill, BYOK 검증, 데이터 소스 토글, 첫 질문 목업.
 
 ## 4. 백그라운드 작업 타임라인
@@ -230,6 +235,8 @@ gantt
 | 메모리·진단 토글 화면 | 온보딩에서 제거. 기본값을 쓰고 Settings에서만 바꾼다 | 실제로 바꾸는 사람이 드물어 화면 하나를 유지할 이유가 없다 |
 | 기능 투어 | 첫 질문 + 코치마크 3개 | 투어는 스킵되고, 첫 답변이 가치를 증명한다 |
 | (없음) | 순서 변경: 소개 → 권한 → 계정 → 폴더 → 임베딩 → 데이터 소스 → 플랜 → 모델 → 첫 질문 | 권한을 먼저 받아 스캔과 감지가 끊기지 않게 하고, 인덱싱 커밋(S4)을 앞당겨 뒤 설정과 병렬로 돌린다 |
+| (없음) | 권한 화면을 macOS/Windows로 분기. macOS는 전체 디스크 접근을 필수로, Windows는 알림·방화벽만 | 파일 접근 권한은 OS마다 다르고, 없는 요구를 보여주면 신뢰를 잃는다 |
+| (없음) | 소스 목록에 공식 로고 사용 | 어떤 앱과 연결되는지 즉시 알아본다 |
 | (없음) | S0 백그라운드 시스템 점검, TCC 처리, 기존 config 감지, 재개 가능한 상태 | 실제로 막히는 지점들 |
 
 ## 6. 구현 전에 필요한 것 (갭)
