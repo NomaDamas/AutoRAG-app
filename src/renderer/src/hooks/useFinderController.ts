@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useLatestCallback } from "./useLatestCallback";
 import type { MouseEvent as ReactMouseEvent, RefObject } from "react";
 import { NO_CAPABILITIES, type ActionAnchor, type ActionCapabilities } from "../../../shared/actions-contract";
 import { RECENTS_PATH } from "../../../shared/fs-contract";
@@ -84,6 +85,7 @@ import {
 	buildVersionFamilies,
 	EMPTY_VERSION_FAMILIES,
 	familyViewFor,
+	stackSelectionKeys,
 	type StackRow,
 	type VersionFamilies,
 	type VersionFamiliesResult,
@@ -136,6 +138,13 @@ const FLASH_MS = 1800;
 const FLASH_WAIT_MS = 10_000;
 /** Coalescing window for viewport-visible thumbnail requests, so a scroll burst is one batch. */
 const THUMBNAIL_FLUSH_MS = 60;
+
+/** `record` without the keys outside `keep`; the same object when nothing goes, so state stays put. */
+function withOnlyKeys<T>(record: Readonly<Record<string, T>>, keep: ReadonlySet<string>): Readonly<Record<string, T>> {
+	const keys = Object.keys(record);
+	if (keys.every((key) => keep.has(key))) return record;
+	return Object.fromEntries(keys.filter((key) => keep.has(key)).map((key) => [key, record[key] as T]));
+}
 
 /**
  * Background enrichment for rows already on screen, in two independent
@@ -641,7 +650,7 @@ export function useFinderController(
 		};
 	}, [source]);
 
-	const showToast = useCallback((message: string) => toastRef.current?.(message), []);
+	const showToast = useLatestCallback((message: string) => toastRef.current?.(message));
 
 	/** Failures surface verbatim — the operator sees the real message. */
 	const reportError = useCallback(
@@ -880,9 +889,9 @@ export function useFinderController(
 		incrementalRef.current = { source, listing: incremental };
 	}
 
-	const refresh = useCallback(() => {
+	const refresh = useLatestCallback(() => {
 		setRevision((value) => value + 1);
-	}, []);
+	});
 
 	useEffect(() => {
 		let live = true;
@@ -1139,12 +1148,21 @@ export function useFinderController(
 		};
 	}, [beginScope, loadListing, path, source]);
 
+	// Only selected stack heads/members change the rows; a plain-row click must
+	// not re-run sort → stack → group → tree. The joined key is value-stable
+	// across renders, so the memos below see a change only when it matters.
+	const stackSelection = stackSelectionKeys(selection.keys, families);
+	const stackSelectionKey = stackSelection.join("\u0000");
+	const stackSelected = useMemo(
+		() => (stackSelectionKey === "" ? [] : stackSelectionKey.split("\u0000")),
+		[stackSelectionKey],
+	);
 	const stackSections = useMemo<readonly GroupSection<TreeRow>[]>(() => {
 		const prepare = (entries: readonly FinderEntry[]): readonly StackRow[] =>
 			applyVersionStacks(sortEntries(visibleEntries(entries, showHiddenFiles), sort), {
 				families,
 				manualOpen: stackPinned,
-				selectedKeys: selection.keys,
+				selectedKeys: stackSelected,
 			});
 		// Grouping partitions only the top level: an expanded folder's nested
 		// rows stay with their parent, and an open version stack's members stay
@@ -1172,7 +1190,7 @@ export function useFinderController(
 				},
 			}),
 		}));
-	}, [searching, hits, listing, sort, grouping, showHiddenFiles, families, stackPinned, selection.keys, expanded, childListings, searchScope, path]);
+	}, [searching, hits, listing, sort, grouping, showHiddenFiles, families, stackPinned, stackSelected, expanded, childListings, searchScope, path]);
 	const stackRows = useMemo(() => stackSections.flatMap((section) => section.rows), [stackSections]);
 	// The reveal flash lasts FLASH_MS from when its row is on screen, not from
 	// the request: a slow first listing (a new tab on Windows) must not use it
@@ -1193,7 +1211,7 @@ export function useFinderController(
 				const rows = applyVersionStacks(sortEntries(visibleEntries(entries ?? [], showHiddenFiles), sort), {
 					families,
 					manualOpen: stackPinned,
-					selectedKeys: selection.keys,
+					selectedKeys: stackSelected,
 				});
 				return {
 					path: panePath,
@@ -1202,7 +1220,7 @@ export function useFinderController(
 					sections: groupRows(rows, grouping, Date.now()),
 				};
 			}),
-		[panePaths, paneListings, showHiddenFiles, sort, grouping, families, stackPinned, selection.keys],
+		[panePaths, paneListings, showHiddenFiles, sort, grouping, families, stackPinned, stackSelected],
 	);
 	// Keyboard and shift-range order inside a pane is the visual section order
 	// (each section's rows, sections flattened), not the pre-group sort order.
@@ -1244,28 +1262,52 @@ export function useFinderController(
 				});
 		}
 	}, [openFolders, childListings, revision, source, reportError]);
+	// Drop listings nothing shows any more. Both maps only ever gained keys, so
+	// every folder a pane had listed — every column, every expanded subfolder —
+	// stayed in memory for the life of the pane. A folder shown again re-lists
+	// (the effects above request whatever is missing).
+	useEffect(() => {
+		const keep = new Set([path, ...panePaths]);
+		setPaneListings((current) => withOnlyKeys(current, keep));
+	}, [path, panePaths]);
+	useEffect(() => {
+		const keep = new Set(openFolders);
+		setChildListings((current) => withOnlyKeys(current, keep));
+	}, [openFolders]);
 	const rows = useMemo(() => stackRows.map((row) => row.entry), [stackRows]);
 	/** Every entry on screen: all panes in the column view, the listing otherwise. */
 	const viewEntries = useMemo(() => (layout === "columns" ? paneEntries.flat() : rows), [layout, paneEntries, rows]);
 	const orderedKeys = useMemo(() => viewEntries.map((entry) => entry.path), [viewEntries]);
 
+	/**
+	 * The files on screen, as one value-comparable key: `viewEntries` is a new
+	 * array on every selection change (version stacks open on selection), but
+	 * the set of files only changes when the listing does, so the index-status
+	 * read below must key on this, not on the array.
+	 */
+	const indexStatusKey = useMemo(
+		() =>
+			viewEntries
+				.filter((entry) => entry.kind === "file")
+				.map((entry) => entry.path)
+				.join("\u0000"),
+		[viewEntries],
+	);
+
 	/** Every file on screen shows its real AutoRAG index state; a settled refresh re-reads it. */
 	useEffect(() => {
 		void indexRevision;
-		const paths = viewEntries.filter((entry) => entry.kind === "file").map((entry) => entry.path);
-		if (paths.length === 0) {
+		if (indexStatusKey === "") {
 			return;
 		}
+		const paths = indexStatusKey.split("\u0000");
 		let live = true;
 		source
 			.indexStatus(paths)
 			.then((statuses) => {
-				if (live) {
-					setIndexStatus((current) => ({
-						...current,
-						...Object.fromEntries(statuses.map((status) => [status.path, status])),
-					}));
-				}
+				// Only what is on screen is kept: merging every folder ever shown
+				// would grow this map for the life of the pane.
+				if (live) setIndexStatus(Object.fromEntries(statuses.map((status) => [status.path, status])));
 			})
 			.catch((error: unknown) => {
 				if (live) {
@@ -1275,7 +1317,7 @@ export function useFinderController(
 		return () => {
 			live = false;
 		};
-	}, [source, viewEntries, indexRevision, reportError]);
+	}, [source, indexStatusKey, indexRevision, reportError]);
 
 	/** Keyboard movement keeps the focused item in view (list: row height 32, lead 80). */
 	useEffect(() => {
@@ -1309,9 +1351,9 @@ export function useFinderController(
 	}
 	}, [orderedKeys, layout, selection, path, stackSections]);
 
-	const patchSelection = useCallback((next: SelectionState) => {
+	const patchSelection = useLatestCallback((next: SelectionState) => {
 		setTabsState((state) => patchActiveTab(state, (current) => ({ ...current, selection: next })));
-	}, []);
+	});
 
 	const focusedEntry = useMemo(
 		() => viewEntries.find((entry) => entry.path === selection.focus) ?? null,
@@ -1323,27 +1365,25 @@ export function useFinderController(
 		return viewEntries.filter((entry) => keys.has(entry.path));
 	}, [viewEntries, selection.keys]);
 
-	const pruneColumns = useCallback((removed: readonly string[]) => {
+	const pruneColumns = useLatestCallback((removed: readonly string[]) => {
 		setTabsState((state) =>
 			patchActiveTab(state, (current) => {
 				const pruned = pruneChain(current.chain, removed);
 				return pruned === current.chain ? current : { ...current, chain: pruned };
 			}),
 		);
-	}, []);
+	});
 
-	const chooseColumnEntry = useCallback(
+	const chooseColumnEntry = useLatestCallback(
 		(pane: number, entry: FinderEntry) => {
 			setTabsState((state) => {
 				const current = activeTab(state);
 				return applyColumnChoice(state, chooseInColumn(current.path, current.chain, pane, entry), single(entry.path));
 			});
 			scrollTarget.current = entry.path;
-		},
-		[],
-	);
+		});
 
-	const stepColumns = useCallback(
+	const stepColumns = useLatestCallback(
 		(direction: ColumnDirection) => {
 			const target = columnStep(panePaths, paneEntries, selection.focus, direction);
 			if (target === null) {
@@ -1358,50 +1398,46 @@ export function useFinderController(
 			if (entry !== undefined) {
 				chooseColumnEntry(target.pane, entry);
 			}
-		},
-		[panePaths, paneEntries, selection.focus, path, chain, chooseColumnEntry],
-	);
+		});
 
-	const setViewMode = useCallback((mode: ViewMode) => {
+	const setViewMode = useLatestCallback((mode: ViewMode) => {
 		setViewModeValue(mode);
 		try {
 			globalThis.localStorage?.setItem(VIEW_MODE_STORAGE_KEY, mode);
 		} catch (error) {
 			console.warn("view mode could not be stored", error);
 		}
-	}, []);
+	});
 
-	const setGrouping = useCallback((key: GroupKey) => {
+	const setGrouping = useLatestCallback((key: GroupKey) => {
 		setGroupingValue(key);
 		try {
 			globalThis.localStorage?.setItem(GROUP_STORAGE_KEY, key);
 		} catch (error) {
 			console.warn("grouping could not be stored", error);
 		}
-	}, []);
+	});
 
 	/** The toolbar Sort menu: an explicit key/direction, in the same state the header cycle drives. */
-	const applySort = useCallback((key: SortKey, direction: SortDirection) => {
+	const applySort = useLatestCallback((key: SortKey, direction: SortDirection) => {
 		setSort(explicitSort(key, direction));
-	}, []);
+	});
 
-	const navigate = useCallback((next: string) => {
+	const navigate = useLatestCallback((next: string) => {
 		setTabsState((state) => navigateTab(state, next));
 		setQueryValue("");
-	}, []);
+	});
 
-	const navigateNav = useCallback(
+	const navigateNav = useLatestCallback(
 		(item: NavItem) => {
 			if (!item.available) {
 				showToast(`"${item.label}" 위치를 열 수 없습니다.`);
 				return;
 			}
 			navigate(item.path);
-		},
-		[navigate, showToast],
-	);
+		});
 
-	const ejectNav = useCallback(
+	const ejectNav = useLatestCallback(
 		(item: NavItem) => {
 			// Leave the volume first: an open listing holds a watcher on it, which would block the unmount.
 			const fallback = locations.find((location) => location.section === "favorites" && location.icon === "home" && location.available);
@@ -1417,11 +1453,9 @@ export function useFinderController(
 					// Success or refusal, the sidebar shows what is actually mounted now.
 					source.locations().then(setLocations).catch(reportError);
 				});
-		},
-		[locations, reportError, showToast, source],
-	);
+		});
 
-	const revealEntry = useCallback((entry: FinderEntry) => {
+	const revealEntry = useLatestCallback((entry: FinderEntry) => {
 		setTabsState((state) =>
 			patchActiveTab(navigateTab(state, entry.location), (current) => ({
 				...current,
@@ -1431,9 +1465,9 @@ export function useFinderController(
 		setQueryValue("");
 		setFlashPath(entry.path);
 		scrollTarget.current = entry.path;
-	}, []);
+	});
 
-	const openEntry = useCallback(
+	const openEntry = useLatestCallback(
 		(entry: FinderEntry) => {
 			if (entry.kind === "folder") {
 				// In the column view the click already opened the folder in the next pane.
@@ -1455,9 +1489,7 @@ export function useFinderController(
 			}
 			// Double-click / Enter on a file: the OS default application opens it.
 			source.open(entry.path).catch(reportError);
-		},
-		[navigate, path, layout, panePaths, openFolders, revealEntry, searching, source, reportError],
-	);
+		});
 
 	/**
 	 * A trash or move just took `removed` out of their folders: drop those rows
@@ -1465,45 +1497,42 @@ export function useFinderController(
 	 * watcher's relist. Failed items are never in `removed`, so they stay on
 	 * screen and stay selected.
 	 */
-	const dropRemoved = useCallback(
-		(removed: readonly string[]) => {
-			if (removed.length === 0) return;
-			const gone = new Set(removed);
-			const dir = listingDirRef.current;
-			const next = withoutPaths(listingRef.current, removed);
-			if (next !== listingRef.current) adoptListing(dir, next);
-			setPaneListings((current) => {
-				let changed = false;
-				const pruned: Record<string, readonly FinderEntry[]> = {};
-				for (const [key, entries] of Object.entries(current)) {
-					const kept = withoutPaths(entries, removed);
-					changed ||= kept !== entries;
-					pruned[key] = kept;
-				}
-				return changed ? pruned : current;
-			});
-			setChildListings((current) => {
-				let changed = false;
-				const pruned: Record<string, ChildListing> = {};
-				for (const [key, child] of Object.entries(current)) {
-					const kept = withoutPaths(child.entries, removed);
-					changed ||= kept !== child.entries;
-					pruned[key] = kept === child.entries ? child : { ...child, entries: kept };
-				}
-				return changed ? pruned : current;
-			});
-			setHits((current) => withoutPaths(current, removed));
-			setTabsState((state) => {
-				const current = activeTab(state);
-				const selection = pruneSelection(current.selection, (path) => !gone.has(path));
-				return selection === current.selection ? state : patchActiveTab(state, (tab) => ({ ...tab, selection }));
-			});
-			pruneColumns(removed);
-		},
-		[adoptListing, pruneColumns],
-	);
+	const dropRemoved = useLatestCallback((removed: readonly string[]) => {
+		if (removed.length === 0) return;
+		const gone = new Set(removed);
+		const dir = listingDirRef.current;
+		const next = withoutPaths(listingRef.current, removed);
+		if (next !== listingRef.current) adoptListing(dir, next);
+		setPaneListings((current) => {
+			let changed = false;
+			const pruned: Record<string, readonly FinderEntry[]> = {};
+			for (const [key, entries] of Object.entries(current)) {
+				const kept = withoutPaths(entries, removed);
+				changed ||= kept !== entries;
+				pruned[key] = kept;
+			}
+			return changed ? pruned : current;
+		});
+		setChildListings((current) => {
+			let changed = false;
+			const pruned: Record<string, ChildListing> = {};
+			for (const [key, child] of Object.entries(current)) {
+				const kept = withoutPaths(child.entries, removed);
+				changed ||= kept !== child.entries;
+				pruned[key] = kept === child.entries ? child : { ...child, entries: kept };
+			}
+			return changed ? pruned : current;
+		});
+		setHits((current) => withoutPaths(current, removed));
+		setTabsState((state) => {
+			const current = activeTab(state);
+			const selection = pruneSelection(current.selection, (path) => !gone.has(path));
+			return selection === current.selection ? state : patchActiveTab(state, (tab) => ({ ...tab, selection }));
+		});
+		pruneColumns(removed);
+	});
 
-	const trashPaths = useCallback(
+	const trashPaths = useLatestCallback(
 		(paths: readonly string[]) => {
 			if (paths.length === 0) {
 				return;
@@ -1516,16 +1545,14 @@ export function useFinderController(
 					refresh();
 				})
 				.catch(reportError);
-		},
-		[source, dropRemoved, showToast, refresh, reportError],
-	);
+		});
 
 	/**
 	 * Flips the file's `excludePaths` entry in the shared AutoRAG config. The row
 	 * adopts the returned status at once (pending while the index catches up);
 	 * the parsed + MinSync refresh runs in main and `onIndexRefreshed` re-reads.
 	 */
-	const toggleIndex = useCallback(
+	const toggleIndex = useLatestCallback(
 		(entry: FinderEntry) => {
 			const current = indexStatus[entry.path];
 			if (current === undefined || !current.toggleable) {
@@ -1539,9 +1566,7 @@ export function useFinderController(
 					showToast(indexToast(entry.name, !exclude));
 				})
 				.catch(reportError);
-		},
-		[indexStatus, source, showToast, reportError],
-	);
+		});
 
 	useEffect(
 		() =>
@@ -1554,7 +1579,7 @@ export function useFinderController(
 		[source, reportError],
 	);
 
-	const toggleStack = useCallback((entry: FinderEntry) => {
+	const toggleStack = useLatestCallback((entry: FinderEntry) => {
 		setStackPinned((current) => {
 			const next = new Set(current);
 			if (next.has(entry.path)) {
@@ -1564,23 +1589,19 @@ export function useFinderController(
 			}
 			return next;
 		});
-	}, []);
+	});
 
 	/** Collapsing a folder drops the selection it hides, so no key acts on unseen rows. */
-	const setFolderOpen = useCallback(
+	const setFolderOpen = useLatestCallback(
 		(folder: string, open: boolean) => {
 			setExpanded((current) => (current.has(folder) === open ? current : toggleExpanded(current, folder)));
 			if (!open && selection.keys.some((key) => isInsideFolder(key, folder))) {
 				patchSelection({ keys: [folder], anchor: folder, focus: folder });
 			}
-		},
-		[selection.keys, patchSelection],
-	);
+		});
 
-	const toggleFolder = useCallback(
-		(entry: FinderEntry) => setFolderOpen(entry.path, !expanded.has(entry.path)),
-		[expanded, setFolderOpen],
-	);
+	const toggleFolder = useLatestCallback(
+		(entry: FinderEntry) => setFolderOpen(entry.path, !expanded.has(entry.path)));
 
 	const versionFamilyFor = useCallback((target: string) => familyViewFor(target, families), [families]);
 
@@ -1603,23 +1624,19 @@ export function useFinderController(
 	 * After a create, select the new row and start the inline rename, exactly
 	 * like Finder's New Folder / New File: the name is editable at once.
 	 */
-	const revealCreated = useCallback(
+	const revealCreated = useLatestCallback(
 		(created: { readonly path: string; readonly name: string }) => {
 			scrollTarget.current = created.path;
 			patchSelection(single(created.path));
 			setRename({ path: created.path, draft: created.name });
 			refresh();
-		},
-		[patchSelection, refresh],
-	);
+		});
 
 	/** Creation targets a real folder, never search results, Recents, or a virtual tab. */
-	const canCreateIn = useCallback(
-		(dir: string): boolean => !searching && dir !== "" && dir !== RECENTS_PATH && !isVirtualTabPath(dir),
-		[searching],
-	);
+	const canCreateIn = useLatestCallback(
+		(dir: string): boolean => !searching && dir !== "" && dir !== RECENTS_PATH && !isVirtualTabPath(dir));
 
-	const createFolderIn = useCallback(
+	const createFolderIn = useLatestCallback(
 		(dir: string) => {
 			if (!canCreateIn(dir)) {
 				return;
@@ -1631,11 +1648,9 @@ export function useFinderController(
 					revealCreated(created);
 				})
 				.catch(reportError);
-		},
-		[source, canCreateIn, showToast, revealCreated, reportError],
-	);
+		});
 
-	const createFileIn = useCallback(
+	const createFileIn = useLatestCallback(
 		(dir: string, format: NewFileFormatId) => {
 			if (!canCreateIn(dir)) {
 				return;
@@ -1647,34 +1662,30 @@ export function useFinderController(
 					revealCreated(created);
 				})
 				.catch(reportError);
-		},
-		[source, canCreateIn, showToast, revealCreated, reportError],
-	);
+		});
 
 	/** ⇧⌘N and the New menu: mkdir in the folder in view. */
-	const newFolder = useCallback(() => createFolderIn(path), [createFolderIn, path]);
+	const newFolder = useLatestCallback(() => createFolderIn(path));
 
 	/** ⌥⌘N and the New menu: create a file in the folder in view. */
-	const newFile = useCallback((format: NewFileFormatId) => createFileIn(path, format), [createFileIn, path]);
+	const newFile = useLatestCallback((format: NewFileFormatId) => createFileIn(path, format));
 
-	const trashEntry = useCallback((entry: FinderEntry) => trashPaths([entry.path]), [trashPaths]);
+	const trashEntry = useLatestCallback((entry: FinderEntry) => trashPaths([entry.path]));
 
-	const copyEntryPath = useCallback(
+	const copyEntryPath = useLatestCallback(
 		(entry: FinderEntry) => {
 			source
 				.copyPaths([entry.path])
 				.then(() => showToast("경로를 복사했습니다"))
 				.catch(reportError);
-		},
-		[source, showToast, reportError],
-	);
+		});
 
 	/**
 	 * Run one Inspector action. "AI 요약" never lands here — the App shell owns
 	 * the composer — so this covers only the filesystem and OS actions. A
 	 * successful action relists the folder so the new file appears at once.
 	 */
-	const runEntryAction = useCallback(
+	const runEntryAction = useLatestCallback(
 		(entry: FinderEntry, target: FileActionTarget, anchor: ActionAnchor | null) => {
 			switch (target.kind) {
 				case "open":
@@ -1699,16 +1710,12 @@ export function useFinderController(
 				case "askAi":
 					return;
 			}
-		},
-		[source, showToast, refresh, reportError],
-	);
+		});
 
-	const dragEntries = useCallback(
-		(entry: FinderEntry) => finderDragEntries(entry, selection.keys, viewEntries),
-		[selection.keys, viewEntries],
-	);
+	const dragEntries = useLatestCallback(
+		(entry: FinderEntry) => finderDragEntries(entry, selection.keys, viewEntries));
 
-	const retryVersionFamilies = useCallback(() => {
+	const retryVersionFamilies = useLatestCallback(() => {
 		const versionAtRequest = layerStoreRef.current.versions[DUPEY_LAYER_ID] ?? 0;
 		source
 			.refreshVersionFamilies()
@@ -1728,17 +1735,15 @@ export function useFinderController(
 				};
 				setLayerStore((current) => adoptInvoke(current, DUPEY_LAYER_ID, result, versionAtRequest));
 			});
-	}, [source]);
+	});
 
-	const presentQuickLook = useCallback(
+	const presentQuickLook = useLatestCallback(
 		(target: { readonly path: string; readonly name: string }) => {
 			quickLookRef.current?.onQuickLook(target);
 			source.quickLook(target.path).catch(reportError);
-		},
-		[source, reportError],
-	);
+		});
 
-	const quickLookSelection = useCallback(() => {
+	const quickLookSelection = useLatestCallback(() => {
 		const entry = focusedEntry;
 		if (entry === null) return;
 		// Like Finder, Space previews folders too; only files land in Recents.
@@ -1747,27 +1752,23 @@ export function useFinderController(
 			return;
 		}
 		presentQuickLook({ path: entry.path, name: entry.name });
-	}, [focusedEntry, presentQuickLook]);
+	});
 
-	const moveSelectionBy = useCallback(
+	const moveSelectionBy = useLatestCallback(
 		(delta: 1 | -1) => {
 			const next = moveSelection(orderedKeys, selection, delta);
 			scrollTarget.current = next.focus;
 			patchSelection(next);
-		},
-		[orderedKeys, selection, patchSelection],
-	);
+		});
 
-	const quickLookPath = useCallback(
+	const quickLookPath = useLatestCallback(
 		(target: string) => {
 			presentQuickLook({ path: target, name: basename(target) });
-		},
-		[presentQuickLook],
-	);
+		});
 
 	// An evidence title opens the enclosing folder in a NEW tab and selects the
 	// source file; a web source (the model cited a page) opens in the OS browser.
-	const revealEvidence = useCallback(
+	const revealEvidence = useLatestCallback(
 		(target: string) => {
 			const url = evidenceSourceUrl(target);
 			if (url !== null) {
@@ -1793,9 +1794,7 @@ export function useFinderController(
 					scrollTarget.current = entry.path;
 				})
 				.catch(reportError);
-		},
-		[source, reportError],
-	);
+		});
 
 	const menuTargets = useCallback(
 		(entry: FinderEntry): readonly string[] =>
@@ -1808,8 +1807,8 @@ export function useFinderController(
 	 * rows already live there, or the destination sits inside a dragged folder)
 	 * resolves without touching the filesystem.
 	 */
-	const transferInto = useCallback(
-		(paths: readonly string[], destDir: string, op: "copy" | "move", duplicate = false): void => {
+	const transferInto = useLatestCallback(
+		(paths: readonly string[], destDir: string, op: "copy" | "move", duplicate: boolean = false): void => {
 			const plan = planTransfer({ paths, destDir, op, duplicate });
 			if (plan === null) {
 				return;
@@ -1828,34 +1827,28 @@ export function useFinderController(
 					refresh();
 				})
 				.catch(reportError);
-		},
-		[source, dropRemoved, showToast, refresh, reportError],
-	);
+		});
 
-	const copyPaths = useCallback(
+	const copyPaths = useLatestCallback(
 		(paths: readonly string[]) => {
 			if (paths.length === 0) return;
 			source
 				.clipboardSet({ op: "copy", paths })
 				.then(() => setClipboardCount(paths.length))
 				.catch(reportError);
-		},
-		[source, reportError],
-	);
+		});
 
-	const cutPaths = useCallback(
+	const cutPaths = useLatestCallback(
 		(paths: readonly string[]) => {
 			if (paths.length === 0) return;
 			source
 				.clipboardSet({ op: "cut", paths })
 				.then(() => setClipboardCount(paths.length))
 				.catch(reportError);
-		},
-		[source, reportError],
-	);
+		});
 
 	/** ⌘V pastes the clipboard op as-is; ⌥⌘V forces a move. */
-	const pasteClipboard = useCallback(
+	const pasteClipboard = useLatestCallback(
 		(move: boolean) => {
 			if (path === "" || path === RECENTS_PATH || isVirtualTabPath(path)) return;
 			source
@@ -1865,16 +1858,14 @@ export function useFinderController(
 					transferInto(clipboard.paths, path, move || clipboard.op === "cut" ? "move" : "copy");
 				})
 				.catch(reportError);
-		},
-		[path, source, transferInto, reportError],
-	);
+		});
 
 	/**
 	 * ⌘Z: undo the most recent recorded transfer. An empty record is a no-op
 	 * (Finder does nothing either); a partially-failed undo reports the first
 	 * verbatim reason.
 	 */
-	const undoLastTransfer = useCallback((): void => {
+	const undoLastTransfer = useLatestCallback((): void => {
 		source
 			.undo()
 			.then((outcome) => {
@@ -1888,33 +1879,29 @@ export function useFinderController(
 				refresh();
 			})
 			.catch(reportError);
-	}, [source, showToast, refresh, reportError]);
+	});
 
-	const copySelection = useCallback(() => copyPaths(selection.keys), [copyPaths, selection.keys]);
-	const cutSelection = useCallback(() => cutPaths(selection.keys), [cutPaths, selection.keys]);
+	const copySelection = useLatestCallback(() => copyPaths(selection.keys));
+	const cutSelection = useLatestCallback(() => cutPaths(selection.keys));
 
 	/** An in-app row drop: ⌥ copies (into the rows' own folder too, as Finder duplicates), otherwise the rows move. */
-	const transferDropped = useCallback(
+	const transferDropped = useLatestCallback(
 		(paths: readonly string[], destDir: string, copy: boolean) => {
 			if (destDir === "" || destDir === RECENTS_PATH || isVirtualTabPath(destDir)) return;
 			transferInto(paths, destDir, copy ? "copy" : "move", copy);
-		},
-		[transferInto],
-	);
+		});
 
 	/** A drop on another tab: show that tab, then move/copy the rows into its folder. */
-	const dropOnTab = useCallback(
+	const dropOnTab = useLatestCallback(
 		(tabId: number, paths: readonly string[], copy: boolean) => {
 			const target = tabsRef.current.find((current) => current.id === tabId);
 			if (target === undefined) return;
 			updateWorkspace((workspace) => focusTab(workspace, tabId));
 			setQueryValue("");
 			transferDropped(paths, target.path, copy);
-		},
-		[transferDropped, updateWorkspace],
-	);
+		});
 
-	const runMenuAction = useCallback(
+	const runMenuAction = useLatestCallback(
 		(action: FinderMenuAction, format: NewFileFormatId | null = null) => {
 			const menu = contextMenu;
 			if (menu === null) {
@@ -2000,11 +1987,9 @@ export function useFinderController(
 					trashPaths(targets);
 					return;
 			}
-		},
-		[contextMenu, menuTargets, copyPaths, cutPaths, transferInto, navigate, layout, panePaths, presentQuickLook, refresh, reportError, source, toggleIndex, trashPaths, createFolderIn, createFileIn],
-	);
+		});
 
-	const commitRename = useCallback(() => {
+	const commitRename = useLatestCallback(() => {
 		const editing = rename;
 		if (editing === null) {
 			return;
@@ -2029,9 +2014,9 @@ export function useFinderController(
 				refresh();
 			})
 			.catch(reportError);
-	}, [rename, viewEntries, showToast, source, pruneColumns, refresh, reportError]);
+	});
 
-	const openContextMenu = useCallback(
+	const openContextMenu = useLatestCallback(
 		(entry: FinderEntry, event: ReactMouseEvent<HTMLDivElement>) => {
 			event.preventDefault();
 			setZone("finder");
@@ -2043,12 +2028,10 @@ export function useFinderController(
 				.then((clipboard) => setClipboardCount(clipboard?.paths.length ?? 0))
 				.catch(reportError);
 			setContextMenu({ cursor: { x: event.clientX, y: event.clientY }, entry, dir: path });
-		},
-		[selection.keys, patchSelection, source, reportError, path],
-	);
+		});
 
 	/** Right-click on empty space: New / Paste act on the pane's own folder. */
-	const openBackgroundContextMenu = useCallback(
+	const openBackgroundContextMenu = useLatestCallback(
 		(event: ReactMouseEvent<HTMLDivElement>, dir?: string) => {
 			event.preventDefault();
 			setZone("finder");
@@ -2058,11 +2041,9 @@ export function useFinderController(
 				.then((clipboard) => setClipboardCount(clipboard?.paths.length ?? 0))
 				.catch(reportError);
 			setContextMenu({ cursor: { x: event.clientX, y: event.clientY }, entry: null, dir: dir ?? path });
-		},
-		[patchSelection, source, reportError, path],
-	);
+		});
 
-	const dismiss = useCallback(() => {
+	const dismiss = useLatestCallback(() => {
 		if (contextMenu !== null) {
 			setContextMenu(null);
 			return;
@@ -2078,7 +2059,7 @@ export function useFinderController(
 		if (query !== "") {
 			setQueryValue("");
 		}
-	}, [contextMenu, rename, query]);
+	});
 
 	useEffect(() => {
 		// Every pane mounts a controller; only the focused one answers the keyboard.
@@ -2316,6 +2297,53 @@ export function useFinderController(
 	const activeNav = activeNavPath(path, navTargets);
 	const sidebarGroups = useMemo(() => navGroups(locations), [locations]);
 
+	// Handlers handed to the view: one stable identity each (see useLatestCallback),
+	// so no closure here keeps an earlier render's rows alive.
+	const selectTabId = useLatestCallback((id: number) => updateWorkspace((workspace) => focusTab(workspace, id)));
+	const closeTabId = useLatestCallback((id: number) => updateWorkspace((workspace) => closeWorkspaceTab(workspace, id)));
+	const newTab = useLatestCallback(() => setTabsState((state) => openTab(state)));
+	const openSettings = useLatestCallback(() => updateWorkspace(openOrSelectSettingsInWorkspace));
+	const showAiSearch = useLatestCallback(() => setTabsState((state) => showAiSearchInActiveTab(state)));
+	const openAiSearch = useLatestCallback(() => setTabsState((state) => openAiSearchTab(state)));
+	const focusAiSearch = useLatestCallback(() => updateWorkspace(focusAiSearchInWorkspace));
+	const leaveVirtualTab = useLatestCallback(() => setTabsState((state) => exitVirtualTab(state)));
+	const back = useLatestCallback(() => setTabsState((state) => goBack(state)));
+	const forward = useLatestCallback(() => setTabsState((state) => goForward(state)));
+	const sortBy = useLatestCallback((key: SortKey) => setSort((current) => cycleSort(current, key)));
+	const focusFinder = useLatestCallback(() => setZone("finder"));
+	const clickRow = useLatestCallback((entry: FinderEntry, event: ReactMouseEvent<HTMLDivElement>) => {
+		setZone("finder");
+		patchSelection(
+			applyRowClick(selection, entry.path, orderedKeys, {
+				meta: event.metaKey || event.ctrlKey,
+				shift: event.shiftKey,
+			}),
+		);
+	});
+	const clickColumnRow = useLatestCallback((pane: number, entry: FinderEntry, event: ReactMouseEvent<HTMLDivElement>) => {
+		setZone("finder");
+		if (event.metaKey || event.ctrlKey || event.shiftKey) {
+			// Multi-select stays inside one pane and closes the panes after it.
+			const paneKeys = (paneEntries[pane] ?? []).map((candidate) => candidate.path);
+			const inPane = { ...selection, keys: selection.keys.filter((key) => paneKeys.includes(key)) };
+			const next = applyRowClick(inPane, entry.path, paneKeys, { meta: event.metaKey || event.ctrlKey, shift: event.shiftKey });
+			setTabsState((state) => {
+				const current = activeTab(state);
+				const closed = chooseInColumn(current.path, current.chain, pane, { path: entry.path, kind: "file" });
+				return applyColumnChoice(state, closed, next);
+			});
+			return;
+		}
+		chooseColumnEntry(pane, entry);
+	});
+	const marqueeSelect = useLatestCallback((keys: readonly string[]) => {
+		setZone("finder");
+		patchSelection({ keys, anchor: keys[0] ?? null, focus: keys[keys.length - 1] ?? null });
+	});
+	const closeContextMenu = useLatestCallback(() => setContextMenu(null));
+	const setRenameDraft = useLatestCallback((value: string) => setRename((current) => (current === null ? null : { ...current, draft: value })));
+	const cancelRename = useLatestCallback(() => setRename(null));
+
 	return {
 		tabs: tabViews,
 		canCloseTabs: binding.canCloseTabs,
@@ -2371,69 +2399,42 @@ export function useFinderController(
 		navigate,
 		navigateNav,
 		ejectNav,
-		selectTabId: (id) => updateWorkspace((workspace) => focusTab(workspace, id)),
-		closeTabId: (id) => updateWorkspace((workspace) => closeWorkspaceTab(workspace, id)),
-		newTab: () => setTabsState((state) => openTab(state)),
-		openSettings: () => updateWorkspace(openOrSelectSettingsInWorkspace),
-		showAiSearch: () => setTabsState((state) => showAiSearchInActiveTab(state)),
-		openAiSearch: () => setTabsState((state) => openAiSearchTab(state)),
-		focusAiSearch: () => updateWorkspace(focusAiSearchInWorkspace),
-		leaveVirtualTab: () => setTabsState((state) => exitVirtualTab(state)),
-		back: () => setTabsState((state) => goBack(state)),
-		forward: () => setTabsState((state) => goForward(state)),
+		selectTabId,
+		closeTabId,
+		newTab,
+		openSettings,
+		showAiSearch,
+		openAiSearch,
+		focusAiSearch,
+		leaveVirtualTab,
+		back,
+		forward,
 		setQuery: setQueryValue,
 		setSearchFocused,
-		sortBy: (key) => setSort((current) => cycleSort(current, key)),
+		sortBy,
 		applySort,
 		setGrouping,
 		showToast,
 		quickLookPath,
 		moveSelectionBy,
 		revealEvidence,
-		focusFinder: () => setZone("finder"),
-		marqueeSelect: (keys) => {
-			setZone("finder");
-			const focus = keys[keys.length - 1] ?? null;
-			patchSelection({ keys, anchor: keys[0] ?? null, focus });
-		},
-		clickRow: (entry, event) => {
-			setZone("finder");
-			patchSelection(
-				applyRowClick(selection, entry.path, orderedKeys, {
-					meta: event.metaKey || event.ctrlKey,
-					shift: event.shiftKey,
-				}),
-			);
-		},
-		clickColumnRow: (pane, entry, event) => {
-			setZone("finder");
-			if (event.metaKey || event.ctrlKey || event.shiftKey) {
-				// Multi-select stays inside one pane and closes the panes after it.
-				const paneKeys = (paneEntries[pane] ?? []).map((candidate) => candidate.path);
-				const inPane = { ...selection, keys: selection.keys.filter((key) => paneKeys.includes(key)) };
-				const next = applyRowClick(inPane, entry.path, paneKeys, { meta: event.metaKey || event.ctrlKey, shift: event.shiftKey });
-				setTabsState((state) => {
-					const current = activeTab(state);
-					const closed = chooseInColumn(current.path, current.chain, pane, { path: entry.path, kind: "file" });
-					return applyColumnChoice(state, closed, next);
-				});
-				return;
-			}
-			chooseColumnEntry(pane, entry);
-		},
+		focusFinder,
+		marqueeSelect,
+		clickRow,
+		clickColumnRow,
 		setViewMode,
 		openEntry,
 		openContextMenu,
 		openBackgroundContextMenu,
-		closeContextMenu: () => setContextMenu(null),
+		closeContextMenu,
 		runMenuAction,
 		toggleIndex,
 		toggleStack,
 		toggleFolder,
 		noteVisible,
 		retryVersionFamilies,
-		setRenameDraft: (value) => setRename((current) => (current === null ? null : { ...current, draft: value })),
+		setRenameDraft,
 		commitRename,
-		cancelRename: () => setRename(null),
+		cancelRename,
 	};
 }

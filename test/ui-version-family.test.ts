@@ -6,6 +6,7 @@ import {
 	defaultIndexIncluded,
 	EMPTY_VERSION_FAMILIES,
 	relationLabel,
+	stackSelectionKeys,
 	type VersionFamilyData,
 } from "../src/renderer/src/state/version-family";
 
@@ -187,5 +188,23 @@ describe("defaultIndexIncluded", () => {
 		expect(defaultIndexIncluded(CROSS_FOLDER_MEMBER, built)).toBe(false);
 		expect(defaultIndexIncluded(HEAD, built)).toBe(true);
 		expect(defaultIndexIncluded("Documents/other.txt", built)).toBe(true);
+	});
+});
+describe("stackSelectionKeys", () => {
+	it("keeps only selected heads and members, so selecting a plain row opens and re-sorts nothing", () => {
+		const built = buildVersionFamilies(families());
+		expect(stackSelectionKeys(["Documents/other.txt"], built)).toEqual([]);
+		expect(stackSelectionKeys(["Documents/other.txt", CROSS_FOLDER_MEMBER], built)).toEqual([CROSS_FOLDER_MEMBER]);
+		expect(stackSelectionKeys([HEAD], EMPTY_VERSION_FAMILIES)).toEqual([]);
+	});
+
+	it("opens the same stacks as the full selection", () => {
+		const built = buildVersionFamilies(families());
+		const rows = [entry(HEAD), entry(SAME_FOLDER_MEMBER), entry("Documents/Finance/2026 Q3/other.xlsx")];
+		const selection = ["Documents/Finance/2026 Q3/other.xlsx", SAME_FOLDER_MEMBER];
+		const options = { families: built, manualOpen: new Set<string>() };
+		expect(applyVersionStacks(rows, { ...options, selectedKeys: stackSelectionKeys(selection, built) })).toEqual(
+			applyVersionStacks(rows, { ...options, selectedKeys: selection }),
+		);
 	});
 });

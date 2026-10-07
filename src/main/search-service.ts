@@ -363,7 +363,7 @@ export function createDefaultAgentFactory(): () => Promise<SearchAgent> {
 			raw.webSearch === undefined
 				? config
 				: { ...config, webSearch: raw.webSearch as NonNullable<CliConfig["webSearch"]> };
-		const effective = applyAppIndexing(withWebSearch, raw);
+		const effective = await applyAppIndexing(withWebSearch, raw);
 		const resolved = await resolveAgentModel(effective);
 		const options: AutoRAGAgentOptions = {
 			...buildAgentOptions(effective),
