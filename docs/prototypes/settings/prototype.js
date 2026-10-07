@@ -13,26 +13,33 @@ const esc = (value) =>
 
 /* ------------------------------------------------------------- UI atoms -- */
 
+/* Icon names map to lucide slugs; the markup comes from ./lucide-icons.js,
+ * generated from the same `lucide-react` the app pins. */
 const ICONS = {
-	gear: '<path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/>',
-	sparkles: '<path d="M12 4.6c.2 3 2 4.8 5 5-3 .2-4.8 2-5 5-.2-3-2-4.8-5-5 3-.2 4.8-2 5-5Z"/><path d="M19.4 13.4c.1 1.5 1 2.4 2.5 2.5-1.5.1-2.4 1-2.5 2.5-.1-1.5-1-2.4-2.5-2.5 1.5-.1 2.4-1 2.5-2.5Z"/>',
-	search: '<circle cx="11" cy="11" r="7"/><path d="m20.5 20.5-4.5-4.5"/>',
-	globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.9 5.7 3.9 9S14.5 18.4 12 21c-2.5-2.6-3.9-5.7-3.9-9S9.5 5.6 12 3Z"/>',
-	folder: '<path d="M3.5 7.2c0-1 .8-1.7 1.7-1.7H9c.5 0 1 .2 1.4.6l1.2 1.2h7.2c1 0 1.7.8 1.7 1.7v8.8c0 1-.8 1.7-1.7 1.7H5.2c-1 0-1.7-.8-1.7-1.7Z"/>',
-	file: '<path d="M6 3.5h8L19 8v11.5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-15a1 1 0 0 1 1-1Z"/><path d="M14 3.5V8h5M8.5 13h7M8.5 16.5h4"/>',
-	copy: '<rect x="9" y="9" width="11.5" height="11.5" rx="1.5"/><path d="M5.5 14.5h-1a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v1"/>',
-	plug: '<path d="M9 3v5M15 3v5M7 8h10v3a5 5 0 0 1-5 5 5 5 0 0 1-5-5ZM12 16v5"/>',
-	sliders: '<path d="M5 3.5v6M5 14v6.5M12 3.5v9M12 17.5v3M19 3.5v3M19 10v10.5"/><circle cx="5" cy="12" r="2"/><circle cx="12" cy="15" r="2"/><circle cx="19" cy="8" r="2"/>',
-	chevron: '<path d="m9 6 6 6-6 6"/>',
-	chevronDown: '<path d="m6 9 6 6 6-6"/>',
-	check: '<path d="m5 12.5 4.5 4.5L19 7.5"/>',
-	plus: '<path d="M12 5v14M5 12h14"/>',
-	x: '<path d="M6 6l12 12M18 6 6 18"/>',
-	info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.8v.4"/>',
-	alert: '<path d="M12 4 3 20h18Z"/><path d="M12 10v4.5M12 17.4v.4"/>',
+	gear: "settings",
+	sparkles: "sparkles",
+	search: "search",
+	globe: "globe",
+	folder: "folder",
+	file: "file-text",
+	copy: "copy",
+	plug: "plug",
+	sliders: "sliders-horizontal",
+	chevron: "chevron-right",
+	chevronDown: "chevron-down",
+	check: "check",
+	plus: "plus",
+	x: "x",
+	info: "info",
+	alert: "triangle-alert",
 };
 
-const svg = (name) => `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">${ICONS[name] ?? ""}</svg>`;
+/** The app's SearchIcon draws lucide `search` at stroke 2.2; every other glyph uses 1.8. */
+const svg = (name, extraClass = "") => {
+	const markup = LUCIDE[ICONS[name] ?? ""] ?? "";
+	return `<svg class="icon${extraClass}" viewBox="0 0 24 24" aria-hidden="true">${markup}</svg>`;
+};
+
 
 const switchControl = (id, on) =>
 	`<button class="switch" data-toggle="${esc(id)}" role="switch" aria-checked="${on ? "true" : "false"}" aria-label="${esc(id)}"></button>`;
@@ -839,4 +846,5 @@ window.addEventListener("hashchange", () => {
 state.page = (location.hash.slice(1) || "general") || "general";
 document.documentElement.dataset.appearance = state.appearance;
 $("#theme-toggle").textContent = state.appearance === "dark" ? "라이트 모드" : "다크 모드";
+$("#search-icon").innerHTML = svg("search", " icon-search");
 render();
