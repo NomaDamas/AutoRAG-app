@@ -339,6 +339,7 @@ export const FinderPane = memo(function FinderPane({
 							background={backgroundDrop(listingDir)}
 							dropBackground={dropBackgroundDir === finder.path}
 							callbacks={rowCallbacks}
+							onMarqueeSelect={finder.marqueeSelect}
 						/>
 					) : finder.layout === "columns" ? (
 						<ColumnBrowser

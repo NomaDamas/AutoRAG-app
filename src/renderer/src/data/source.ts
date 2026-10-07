@@ -8,7 +8,7 @@
  */
 
 import { NO_CAPABILITIES, type ActionsBridge } from "../../../shared/actions-contract";
-import { RECENTS_PATH, type FsBridge, type FsClipboard, type FsEnrichmentTarget, type FsEntryEnrichment, type FsFinderEnrichment, type FsLocation, type FsLocationIcon, type FsOpError, type FsSearchOptions, type FsUndoOutcome, type FsVersionFamiliesResult } from "../../../shared/fs-contract";
+import { RECENTS_PATH, type FsBatchResult, type FsBridge, type FsClipboard, type FsEnrichmentTarget, type FsEntryEnrichment, type FsFinderEnrichment, type FsLocation, type FsLocationIcon, type FsOpError, type FsSearchOptions, type FsUndoOutcome, type FsVersionFamiliesResult } from "../../../shared/fs-contract";
 import { newFileFormat, type NewFileFormatId } from "../../../shared/new-file-contract";
 import type { IndexStatus } from "../../../shared/index-contract";
 import {
@@ -92,15 +92,16 @@ export interface FinderSource {
 	/** Open an http(s) page (a web evidence source) in the OS default browser. */
 	openUrl(url: string): Promise<void>;
 	reveal(path: string): Promise<void>;
-	trash(paths: readonly string[]): Promise<void>;
+	/** Move to the Trash; per-path outcome, so a partial batch is never silent. */
+	trash(paths: readonly string[]): Promise<FsBatchResult>;
 	rename(path: string, name: string): Promise<void>;
 	/** Create a new folder (Finder-style "untitled folder" / "untitled folder 2"). */
 	createFolder(dir: string): Promise<{ readonly path: string; readonly name: string }>;
 	/** Create a new file from a format template (Finder-style "untitled.<ext>" / "untitled 2.<ext>"). */
 	createFile(dir: string, format: NewFileFormatId): Promise<{ readonly path: string; readonly name: string }>;
-	duplicate(paths: readonly string[]): Promise<void>;
-	copyInto(paths: readonly string[], destDir: string): Promise<void>;
-	moveInto(paths: readonly string[], destDir: string): Promise<void>;
+	duplicate(paths: readonly string[]): Promise<FsBatchResult>;
+	copyInto(paths: readonly string[], destDir: string): Promise<FsBatchResult>;
+	moveInto(paths: readonly string[], destDir: string): Promise<FsBatchResult>;
 	/** Undo the most recent recorded copy/move transfer (⌘Z); the record is consumed. */
 	undo(): Promise<FsUndoOutcome>;
 	copyPaths(paths: readonly string[]): Promise<void>;
@@ -206,23 +207,15 @@ export function createBridgeSource(
 		open: (path) => fs.open(path),
 		openUrl: (url) => fs.openUrl(url),
 		reveal: (path) => fs.reveal(path),
-		trash: async (paths) => {
-			await fs.trash(paths);
-		},
+		trash: (paths) => fs.trash(paths),
 		rename: async (path, name) => {
 			await fs.rename(path, name);
 		},
 		createFolder: (dir) => fs.createFolder(dir),
 		createFile: (dir, format) => fs.createFile(dir, format),
-		duplicate: async (paths) => {
-			await fs.duplicate(paths);
-		},
-		copyInto: async (paths, destDir) => {
-			await fs.copy(paths, destDir);
-		},
-		moveInto: async (paths, destDir) => {
-			await fs.move(paths, destDir);
-		},
+		duplicate: (paths) => fs.duplicate(paths),
+		copyInto: (paths, destDir) => fs.copy(paths, destDir),
+		moveInto: (paths, destDir) => fs.move(paths, destDir),
 		undo: () => fs.undo(),
 		copyPaths: (paths) => fs.copyPathsToClipboard(paths),
 		clipboardSet: (clipboard) => fs.clipboardSet(clipboard),
@@ -400,7 +393,7 @@ export function createFixtureSource(): FinderSource {
 			for (const path of paths) {
 				removeItem(state, path);
 			}
-			return resolve();
+			return Promise.resolve({ ok: [...paths], failed: [] });
 		},
 		rename: (path, name) => {
 			const item = findItem(state, path);
@@ -439,6 +432,7 @@ export function createFixtureSource(): FinderSource {
 			return Promise.resolve({ path, name });
 		},
 		duplicate: (paths) => {
+			const ok: string[] = [];
 			for (const path of paths) {
 				const item = findItem(state, path);
 				if (item === null) {
@@ -446,8 +440,9 @@ export function createFixtureSource(): FinderSource {
 				}
 				const dir = dirname(path);
 				insertItem(state, dir, { ...item, name: copyName(item.name, [...takenNames(state, dir), item.name]) });
+				ok.push(path);
 			}
-			return resolve();
+			return Promise.resolve({ ok, failed: [] });
 		},
 		copyInto: (paths, destDir) => {
 			const steps: FixtureUndoStep[] = [];
@@ -461,7 +456,7 @@ export function createFixtureSource(): FinderSource {
 				steps.push({ kind: "copy", path: joinPath(destDir, name), from: path });
 			}
 			if (steps.length > 0) lastUndo = steps;
-			return resolve();
+			return Promise.resolve({ ok: steps.map((step) => step.from), failed: [] });
 		},
 		moveInto: (paths, destDir) => {
 			const steps: FixtureUndoStep[] = [];
@@ -476,7 +471,7 @@ export function createFixtureSource(): FinderSource {
 				steps.push({ kind: "move", path: joinPath(destDir, name), from: path });
 			}
 			if (steps.length > 0) lastUndo = steps;
-			return resolve();
+			return Promise.resolve({ ok: steps.map((step) => step.from), failed: [] });
 		},
 		undo: async () => {
 			const steps = lastUndo;

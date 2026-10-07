@@ -46,6 +46,18 @@ export function applyOptimisticDeletes(
 	return deleted.size === 0 ? listing : listing.filter((entry) => !deleted.has(entry.path));
 }
 
+/**
+ * Drops rows a file operation just removed (trashed or moved away), along
+ * with anything nested under a removed folder, so the view reflects the
+ * result before the watcher's relist lands. Unchanged input keeps identity.
+ */
+export function withoutPaths(listing: readonly FinderEntry[], removed: readonly string[]): readonly FinderEntry[] {
+	if (removed.length === 0) return listing;
+	const gone = new Set(removed);
+	const next = listing.filter((entry) => !gone.has(entry.path) && !removed.some((path) => entry.path.startsWith(`${path}/`)));
+	return next.length === listing.length ? listing : next;
+}
+
 export interface EntryPatch {
 	readonly entries: readonly FinderEntry[];
 	readonly removed: readonly string[];
