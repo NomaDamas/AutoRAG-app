@@ -122,12 +122,21 @@ export function indexToast(name: string, included: boolean): string {
 	return included ? `${name} — 인덱싱에 포함했습니다` : `${name} — 인덱싱에서 제외했습니다`;
 }
 
-export function emptyStateText(query: string, path = ""): string {
+export function emptyStateText(
+	query: string,
+	path = "",
+	translate?: (key: string, def: string, opt?: Record<string, unknown>) => string,
+): string {
 	const trimmed = query.trim();
 	if (trimmed !== "") {
-		return `"${trimmed}"와 일치하는 파일이 없습니다`;
+		return translate
+			? translate("finder.emptySearch", `"${trimmed}"와 일치하는 파일이 없습니다`, { query: trimmed })
+			: `"${trimmed}"와 일치하는 파일이 없습니다`;
 	}
-	return path === RECENTS_PATH ? "최근에 연 파일이 없습니다" : "빈 폴더";
+	if (path === RECENTS_PATH) {
+		return translate ? translate("finder.emptyRecents", "최근에 연 파일이 없습니다") : "최근에 연 파일이 없습니다";
+	}
+	return translate ? translate("finder.emptyFolder", "빈 폴더") : "빈 폴더";
 }
 
 /** Display width in Latin-letter units: CJK and other wide scripts count 2. */

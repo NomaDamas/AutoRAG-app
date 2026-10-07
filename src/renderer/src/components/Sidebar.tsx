@@ -1,5 +1,6 @@
 import { Eject, PanelLeft } from "lucide-react";
 import type { DragEvent, ReactElement, RefObject } from "react";
+import { useTranslation } from "react-i18next";
 import type { FsLocationIcon } from "../../../shared/fs-contract";
 import type { NavGroup, NavItem } from "../data/places";
 import { cn } from "../lib/cn";
@@ -76,6 +77,19 @@ export function Sidebar({
 		readonly onDrop: (event: DragEvent<HTMLButtonElement>) => void;
 	};
 }): ReactElement {
+	const { t } = useTranslation();
+	const localizedGroupLabel = (label: string): string => {
+		switch (label) {
+			case "Favorites": return t("places.favorites", label);
+			case "Cloud": return t("places.cloud", label);
+			case "Locations": return t("places.locations", label);
+			default: return label;
+		}
+	};
+	const localizedItemLabel = (item: NavItem): string => {
+		if (item.view === "aiSearch") return t("places.aiSearch", item.label);
+		return item.label;
+	};
 	return (
 		<aside
 			className="sidebar flex w-full flex-none flex-col min-h-0 bg-sidebar border-r border-border backdrop-blur-[18px]"
@@ -86,8 +100,8 @@ export function Sidebar({
 				<button
 					type="button"
 					className={HEAD_BUTTON_CLASS}
-					title="Hide sidebar"
-					aria-label="Hide sidebar"
+					title={t("toolbar.hideSidebar", "Hide sidebar")}
+					aria-label={t("toolbar.hideSidebar", "Hide sidebar")}
 					onClick={onHideSidebar}
 				>
 					<PanelLeft size={18} strokeWidth={1.8} />
@@ -106,7 +120,7 @@ export function Sidebar({
 				{groups.map((group) => (
 					<div key={group.label} className="side-group flex flex-col gap-1">
 						<div className="side-label px-8 pt-4 pb-4 text-ink-muted text-badge font-semibold tracking-label">
-							{group.label}
+							{localizedGroupLabel(group.label)}
 						</div>
 						{group.items.map((item) => {
 							const active = item.path === activePath && !settingsActive;
@@ -177,7 +191,7 @@ export function Sidebar({
 					<GearIcon
 						className={cn("sidebar__item-icon flex-none", settingsActive ? "text-accent-text" : "text-ink-muted")}
 					/>
-					<span className="sidebar__item-label flex-1 min-w-0 truncate">Settings</span>
+					<span className="sidebar__item-label flex-1 min-w-0 truncate">{t("places.settings", "Settings")}</span>
 					{showHotkeys ? <Keycap label={formatShortcut({ key: "," })} /> : null}
 				</button>
 			</div>

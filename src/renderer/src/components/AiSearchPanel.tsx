@@ -9,6 +9,7 @@ import {
 	type FormEvent,
 	type ReactElement,
 } from "react";
+import { useTranslation } from "react-i18next";
 import { Square } from "lucide-react";
 import type {
 	AnswerPhase,
@@ -92,6 +93,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	{ active, visible, selectedEvidence, onSelectEvidence, onPublish, imageActions, language },
 	ref,
 ): ReactElement {
+	const { t } = useTranslation();
 	const [query, setQuery] = useState("");
 	const [quick, setQuick] = useState<AnswerPhase | null>(null);
 	const [deep, setDeep] = useState<AnswerPhase | null>(null);
@@ -530,8 +532,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 				<button
 					type="button"
 					className={cn(iconButtonClass({ size: "size-icon-sm", tone: "text-ink-muted" }), historyOpen && "bg-selected-nav text-ink")}
-					title={`Chat history ${formatShortcut({ key: "H", shift: true })}`}
-					aria-label="Chat history"
+					title={t("aiSearch.historyShortcut", { shortcut: formatShortcut({ key: "H", shift: true }), defaultValue: `Chat history ${formatShortcut({ key: "H", shift: true })}` })}
+					aria-label={t("aiSearch.history", "Chat history")}
 					onClick={() => toggleHistory()}
 				>
 					<HistoryIcon size={15} />
@@ -539,8 +541,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 				<button
 					type="button"
 					className={iconButtonClass({ size: "size-icon-sm", tone: "text-ink-muted" })}
-					title={`New chat ${formatShortcut({ key: "N" })}`}
-					aria-label="New chat"
+					title={t("aiSearch.newChatShortcut", { shortcut: formatShortcut({ key: "N" }), defaultValue: `New chat ${formatShortcut({ key: "N" })}` })}
+					aria-label={t("aiSearch.newChat", "New chat")}
 					onClick={() => newChat()}
 				>
 					<PlusIcon />
@@ -572,17 +574,23 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 									if (first !== undefined) void loadHistory(first.id);
 								});
 							}}
-							placeholder="대화 기록 검색"
-							aria-label="대화 기록 검색"
+							placeholder={t("aiSearch.searchHistory", "대화 기록 검색")}
+							aria-label={t("aiSearch.searchHistory", "대화 기록 검색")}
 							className="h-[38px] w-full flex-none border-x-0 border-t-0 border-b border-divider bg-transparent px-12 text-sm text-ink outline-none placeholder:text-ink-muted"
 						/>
 						<div className="history-list min-h-0 flex-1 overflow-auto p-5">
 							{historyGroups.length === 0 ? (
-								<span className="block px-12 py-28 text-center text-meta text-ink-muted">{historyEmptyText(historyQuery)}</span>
+								<span className="block px-12 py-28 text-center text-meta text-ink-muted">{historyEmptyText(historyQuery, (k, opt) => (opt ? t(k, opt) : t(k)))}</span>
 							) : (
 								historyGroups.map((group) => (
 									<div key={group.label}>
-										<div className="history-group px-8 py-8 text-tile font-bold text-ink-muted">{group.label}</div>
+										<div className="history-group px-8 py-8 text-tile font-bold text-ink-muted">
+											{group.label === "오늘" ? t("aiSearch.historyGroups.today", group.label) :
+											 group.label === "어제" ? t("aiSearch.historyGroups.yesterday", group.label) :
+											 group.label === "지난 7일" ? t("aiSearch.historyGroups.last7Days", group.label) :
+											 group.label === "지난 30일" ? t("aiSearch.historyGroups.last30Days", group.label) :
+											 t("aiSearch.historyGroups.older", group.label)}
+										</div>
 										{group.items.map((item) => (
 											<button
 												type="button"
@@ -613,8 +621,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 				<div className={cn(CENTERED, "flex flex-col space-y-16")}>
 					{showEmpty ? (
 						<div className="ai-empty my-28 text-center">
-							<strong className="block text-title font-semibold text-ink">무엇을 찾아드릴까요?</strong>
-							<p className="mt-8 text-body leading-[1.5] text-ink-muted break-keep">파일, 메일, 메신저 전체에서 찾아 빠른 답변과 정밀한 답변을 함께 드립니다.</p>
+							<strong className="block text-title font-semibold text-ink">{t("aiSearch.emptyPromptTitle", "무엇을 찾아드릴까요?")}</strong>
+							<p className="mt-8 text-body leading-[1.5] text-ink-muted break-keep">{t("aiSearch.emptyPromptDesc", "파일, 메일, 메신저 전체에서 찾아 빠른 답변과 정밀한 답변을 함께 드립니다.")}</p>
 						</div>
 					) : null}
 
@@ -694,7 +702,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 							ref={inputRef}
 							value={query}
 							onChange={(event) => setQuery(event.target.value)}
-							placeholder={COMPOSER_PLACEHOLDER}
+							placeholder={t("aiSearch.askDazzi", COMPOSER_PLACEHOLDER)}
 							aria-label="Ask Dazzi"
 							disabled={searchId !== null}
 							className="h-30 min-w-0 flex-1 border-0 bg-transparent text-body text-ink-body outline-none placeholder:text-ink-muted"

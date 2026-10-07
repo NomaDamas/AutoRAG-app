@@ -3,6 +3,7 @@ import type { QuickLookTarget } from "../../preview/shared/contract";
 import type { Bounds } from "../../preview/shared/fit";
 import { NO_CAPABILITIES, type ActionAnchor } from "../../shared/actions-contract";
 import { DEFAULT_SETTINGS, type AppSettings, type DataSourcesSnapshot } from "../../shared/settings-contract";
+import { setAppLanguage } from "../../shared/i18n";
 import type { ChatAttachment, CitationEvidence } from "../../shared/search-contract";
 import type { FsLocationIcon } from "../../shared/fs-contract";
 import { AiSearchPanel, type AiDockHandle } from "./components/AiSearchPanel";
@@ -337,6 +338,7 @@ export function App(): ReactElement {
 			onSettingsChanged: (settings: AppSettings) => {
 				setShowHiddenFiles(settings.showHiddenFiles);
 				setLanguage(settings.language);
+				void setAppLanguage(settings.language);
 			},
 			setListColumns,
 			beginTabDrag: (tabId, event) => {
@@ -473,6 +475,7 @@ export function App(): ReactElement {
 		void autorag.settings.get().then((settings) => {
 			setShowHiddenFiles(settings.showHiddenFiles);
 			setLanguage(settings.language);
+			void setAppLanguage(settings.language);
 		});
 	}, []);
 

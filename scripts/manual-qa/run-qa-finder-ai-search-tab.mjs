@@ -298,7 +298,7 @@ try {
 	await page.locator(".sidebar__item", { hasText: "QA" }).click();
 	await page.waitForSelector(`[data-path="${NOTES}"]`);
 	await page.locator(`[data-path="${NOTES}"]`).click();
-	await page.locator(".inspector-actions button", { hasText: "AI 요약" }).click();
+	await page.locator('.inspector-actions button[data-action="askAi"], .inspector-actions button:has-text("AI Summary"), .inspector-actions button:has-text("AI 요약")').first().click();
 	await page.locator(`${PANEL} .assistant-msg`).waitFor({ timeout: 10_000 });
 	const englishText = (await page.locator(`${PANEL} .user-msg .bubble`).first().innerText()).trim();
 	check(
