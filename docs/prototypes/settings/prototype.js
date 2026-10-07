@@ -83,6 +83,8 @@ const state = {
 	plan: "free",
 	/** Monthly AI usage in credits; `extra` is the purchased top-up, spent after the plan allowance. */
 	usage: { used: 812, extra: 0, resetsOn: "11월 1일" },
+	/** Last billing web page the prototype "opened" (plan changes, top-ups, portal all leave the app). */
+	lastExternal: null,
 	/** Per-source refresh state. Local folders refresh on change; others poll on their interval. */
 	sync: {
 		local: { label: "로컬 폴더", detail: "검색할 폴더 2개", interval: "변경 시 바로", lastSynced: "방금", items: 1284, running: false },
@@ -243,12 +245,24 @@ const ROLE_GROUPS = [
 	{ title: "문서 이해", roles: ["embed"] },
 ];
 
-/** AutoRAG subscription plans. Credits are the monthly AI allowance on the AutoRAG plan. */
+/**
+ * AutoRAG subscription tiers, cheapest first. Credits are the monthly AI
+ * allowance on the AutoRAG plan. Changing tiers, buying credits, and managing
+ * payment all happen on the AutoRAG billing web page; the app only links there.
+ */
 const PLANS = {
-	free: { label: "Free", price: "무료", credits: 1000, perks: "기본 모델 · 월 1,000 크레딧" },
-	pro: { label: "Pro", price: "월 $20", credits: 20000, perks: "모든 모델 · 월 20,000 크레딧 · 우선 처리" },
+	free: { label: "Free", price: "무료", credits: 1000, perks: ["기본 모델", "월 1,000 크레딧"] },
+	air: { label: "Air", price: "월 $4", credits: 5000, perks: ["모든 기본 모델", "월 5,000 크레딧"] },
+	pro: { label: "Pro", price: "월 $20", credits: 20000, perks: ["모든 모델", "월 20,000 크레딧", "우선 처리"] },
 };
-const TOP_UPS = [["5000", "5,000 크레딧", "$5"], ["20000", "20,000 크레딧", "$18"], ["50000", "50,000 크레딧", "$40"]];
+const PLAN_ORDER = ["free", "air", "pro"];
+const BILLING_URL = "https://autorag.ai/billing";
+const BILLING_PAGES = {
+	plans: { url: `${BILLING_URL}/plans`, label: "요금제 변경 페이지" },
+	credits: { url: `${BILLING_URL}/credits`, label: "추가 사용량 구매 페이지" },
+	portal: { url: `${BILLING_URL}/portal`, label: "결제 포털" },
+};
+
 const INTERVALS = ["5분", "15분", "30분", "1시간", "6시간", "하루", "수동"];
 
 const TEMPLATES = {
@@ -298,8 +312,8 @@ const data = {
 		group: "계정", label: "구독 및 사용량", icon: "card",
 		title: "구독 및 사용량",
 		desc: "AutoRAG 요금제와 이번 달 AI 사용량을 확인합니다.",
-		keywords: "Free Pro 플랜 요금제 결제 billing 영수증 크레딧 사용량 추가 구매 업그레이드 해지",
-		notes: ["AutoRAG 요금제는 AI 모델 화면의 기본 서비스와 같은 요금제입니다. 사용량은 AutoRAG 요금제 모델을 쓸 때만 차감됩니다.", "결제 수단·영수증·해지는 결제 포털(브라우저)로 보냅니다. 추가 크레딧은 요금제 한도를 다 쓴 뒤 차감됩니다.", "요금제·크레딧 수치는 시안용 예시입니다."],
+		keywords: "Free Air Pro 플랜 요금제 결제 billing 영수증 크레딧 사용량 추가 구매 업그레이드 해지",
+		notes: ["AutoRAG 요금제는 AI 모델 화면의 기본 서비스와 같은 요금제입니다. 사용량은 AutoRAG 요금제 모델을 쓸 때만 차감됩니다.", "요금제는 Free·Air($4)·Pro($20) 세 단계입니다. 요금제 변경, 추가 사용량 구매, 결제 관리는 모두 AutoRAG 결제 웹페이지로 이동하며 앱 안에서는 결제하지 않습니다.", "추가 크레딧은 요금제 한도를 다 쓴 뒤 차감됩니다.", "요금제·크레딧 수치는 시안용 예시입니다."],
 		sections: [
 			{ title: "현재 요금제", rows: "planRows" },
 			{ title: "이번 달 사용량", rows: "usageRows" },
@@ -506,14 +520,16 @@ function accountRows() {
 const credits = (value) => value.toLocaleString("ko-KR");
 
 function planRows() {
-	const plan = PLANS[state.plan];
-	const action = state.plan === "free"
-		? `<button type="button" class="btn primary" data-plan="upgrade">Pro로 업그레이드</button>`
-		: `<span class="status"><span class="dot ok"></span>구독 중</span>`;
-	return [
-		{ id: "plan", label: `AutoRAG ${plan.label}`, hint: `${plan.price} · ${plan.perks}`, control: action, path: "billing.plan" },
-		{ id: "portal", label: "결제 관리", hint: "결제 수단, 영수증, 구독 변경·해지는 결제 포털에서 관리합니다.", control: `<button type="button" class="btn" data-plan="portal">결제 포털 열기${svg("external")}</button>`, path: "billing.portalUrl" },
-	];
+	const current = PLAN_ORDER.indexOf(state.plan);
+	const rows = PLAN_ORDER.map((id, index) => {
+		const plan = PLANS[id];
+		const control = index === current
+			? `<span class="status"><span class="dot ok"></span>현재 요금제</span>`
+			: `<button type="button" class="btn${index > current ? " primary" : ""}" data-billing="plans" data-target-plan="${esc(id)}">${index > current ? `${esc(plan.label)}로 업그레이드` : "변경"}${svg("external")}</button>`;
+		return { id: `plan:${id}`, label: `AutoRAG ${plan.label}`, hint: `${plan.price} · ${plan.perks.join(" · ")}`, control, path: "billing.plan" };
+	});
+	rows.push({ id: "portal", label: "결제 관리", hint: "결제 수단, 영수증, 구독 해지는 결제 포털에서 관리합니다.", control: `<button type="button" class="btn" data-billing="portal">결제 포털 열기${svg("external")}</button>`, path: "billing.portalUrl" });
+	return rows;
 }
 
 function usageRows() {
@@ -527,7 +543,7 @@ function usageRows() {
 	return [
 		{ id: "usage", stack: true, label: "AI 사용량", hint: `AutoRAG 요금제 모델을 쓸 때 차감됩니다. ${resetsOn}에 초기화됩니다.`, control: `<div class="usage">${meter}<div class="usage-legend"><span>${credits(fromPlan)} / ${credits(allowance)} 크레딧 사용</span><span>${percent}%</span></div></div>`, path: "billing.usage" },
 		{ id: "left", label: "남은 크레딧", hint: extra ? `요금제 ${credits(Math.max(0, allowance - used))} + 추가 구매 ${credits(extra)}` : "추가 구매한 크레딧이 없습니다.", control: `<span class="value strong">${credits(left)}</span>`, path: "billing.remaining" },
-		{ id: "topup", label: "추가 사용량 구매", hint: "요금제 한도를 다 쓰면 추가 크레딧에서 차감합니다. 남은 추가 크레딧은 다음 달로 넘어갑니다.", control: `<button type="button" class="btn" data-plan="topup">${svg("plus")}추가 구매</button>`, path: "billing.topUp" },
+		{ id: "topup", label: "추가 사용량 구매", hint: "요금제 한도를 다 쓰면 추가 크레딧에서 차감합니다. 남은 추가 크레딧은 다음 달로 넘어갑니다.", control: `<button type="button" class="btn" data-billing="credits">추가 구매${svg("external")}</button>`, path: "billing.topUp" },
 	];
 }
 
@@ -1176,39 +1192,21 @@ function runSync(keys) {
 	}, 700);
 }
 
-function openTopUp() {
-	modal(`<button type="button" class="modal-close" data-action="close-modal" aria-label="닫기">${svg("x")}</button><h2 id="dialog-title">추가 사용량 구매</h2><p>요금제 한도를 다 쓴 뒤 차감됩니다. 결제는 결제 포털에서 진행합니다.</p><div class="choice-list" role="radiogroup">${TOP_UPS.map(([value, label, price], index) => `<label class="choice"><input type="radio" name="topup" value="${value}"${index === 0 ? " checked" : ""}><span>${esc(label)}</span><small>${esc(price)}</small></label>`).join("")}</div><div class="modal-actions"><button type="button" class="btn" data-action="close-modal">취소</button><button type="button" class="btn primary" data-plan="topup-confirm">결제하기${svg("external")}</button></div>`);
-}
-
 function openDeleteAccount() {
 	const subscribed = state.plan !== "free";
-	modal(`<h2 id="dialog-title">계정을 삭제할까요?</h2><p>계정, 구독, 사용 기록이 영구히 삭제되고 되돌릴 수 없습니다.${subscribed ? " Pro 구독은 즉시 해지되며 남은 기간은 환불되지 않습니다." : ""} 이 Mac에 있는 문서와 검색 색인은 그대로 남습니다.</p><label>확인을 위해 이메일을 입력하세요<input class="field" data-delete-confirm placeholder="${esc(state.account.email)}" autocomplete="off"></label><div class="modal-actions"><button type="button" class="btn" data-action="close-modal">취소</button><button type="button" class="btn danger" data-account="delete-confirm" disabled>계정 삭제</button></div>`);
+	modal(`<h2 id="dialog-title">계정을 삭제할까요?</h2><p>계정, 구독, 사용 기록이 영구히 삭제되고 되돌릴 수 없습니다.${subscribed ? ` ${PLANS[state.plan].label} 구독은 즉시 해지되며 남은 기간은 환불되지 않습니다.` : ""} 이 Mac에 있는 문서와 검색 색인은 그대로 남습니다.</p><label>확인을 위해 이메일을 입력하세요<input class="field" data-delete-confirm placeholder="${esc(state.account.email)}" autocomplete="off"></label><div class="modal-actions"><button type="button" class="btn" data-action="close-modal">취소</button><button type="button" class="btn danger" data-account="delete-confirm" disabled>계정 삭제</button></div>`);
 }
 
 document.addEventListener("click", (event) => {
-	const plan = event.target.closest("[data-plan]");
-	if (plan) {
-		switch (plan.dataset.plan) {
-			case "upgrade":
-				toast("결제 포털에서 Pro 업그레이드를 진행합니다.");
-				state.plan = "pro";
-				render({ keepScroll: true });
-				return;
-			case "portal":
-				toast("브라우저에서 결제 포털을 엽니다.");
-				return;
-			case "topup":
-				openTopUp();
-				return;
-			case "topup-confirm": {
-				const amount = Number($('#modal-root input[name="topup"]:checked').value);
-				state.usage.extra += amount;
-				closeModal();
-				render({ keepScroll: true });
-				toast(`${credits(amount)} 크레딧을 추가했습니다.`);
-				return;
-			}
-		}
+	const billing = event.target.closest("[data-billing]");
+	if (billing) {
+		// Every billing action leaves the app for the AutoRAG billing web page.
+		const page = BILLING_PAGES[billing.dataset.billing];
+		const target = billing.dataset.targetPlan;
+		const url = target ? `${page.url}?plan=${target}` : page.url;
+		state.lastExternal = url;
+		toast(`브라우저에서 ${target ? `${PLANS[target].label} ` : ""}${page.label}를 엽니다.`);
+		return;
 	}
 
 	const account = event.target.closest("[data-account]");

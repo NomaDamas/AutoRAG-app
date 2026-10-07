@@ -139,10 +139,17 @@ try {
   await page.locator('[data-account="signout"]').click();
   check("sign out explains where it goes", (await page.locator("#toast").innerText()).includes("온보딩"));
 
-  // 구독 및 사용량: plan, meter, top-up, portal.
+  // 구독 및 사용량: three tiers; every billing action leaves for the web page, never a modal.
   await page.locator('[data-nav="plan"]').first().click();
+  const planRowsOrder = await page.locator('[data-row^="plan:"]').evaluateAll((rows) => rows.map((row) => row.dataset.row));
+  check("plan page compares Free, Air, Pro", JSON.stringify(planRowsOrder) === JSON.stringify(["plan:free", "plan:air", "plan:pro"]), JSON.stringify(planRowsOrder));
   const planText = await page.locator("#content").innerText();
-  check("Free plan offers an upgrade", planText.includes("AutoRAG Free") && planText.includes("Pro로 업그레이드") && planText.includes("결제 포털 열기"));
+  check("tiers show their prices", planText.includes("월 $4") && planText.includes("월 $20") && planText.includes("무료"));
+  check("current tier is marked, others link out", (await page.locator('[data-row="plan:free"]').innerText()).includes("현재 요금제") && await page.locator('[data-billing="plans"]').count() === 2);
+  const external = () => page.evaluate(() => state.lastExternal);
+  await page.locator('[data-billing="plans"][data-target-plan="air"]').click();
+  check("upgrading redirects to the plans web page", (await external()) === "https://autorag.ai/billing/plans?plan=air" && await page.locator("#modal-root .modal").count() === 0, await external());
+  check("plan change waits for the web page", (await page.locator('[data-row="plan:free"]').innerText()).includes("현재 요금제"));
   await page.locator('[data-nav="indexing"]').first().click();
   const syncRows = await page.locator("[data-sync-row]").evaluateAll((rows) => rows.map((row) => row.dataset.syncRow));
   check("indexing lists local folders and every connection", JSON.stringify(syncRows) === JSON.stringify(["local", "slack", "kakao", "drive", "spotlight"]), JSON.stringify(syncRows));
@@ -163,14 +170,11 @@ try {
   check("refresh-all runs every ready source", runningCount === 3, `running: ${runningCount}`);
   await page.waitForTimeout(900);
   await page.locator('[data-nav="plan"]').first().click();
-  const planPage = await page.locator("#content").innerText();
   check("meter tracks plan usage", (await page.locator(".meter > span").getAttribute("style")).includes("81%"));
-  await page.locator('[data-plan="topup"]').click();
-  await page.locator(".choice", { has: page.locator('input[value="50000"]') }).click();
-  await page.locator('[data-plan="topup-confirm"]').click();
-  check("top-up adds credits", (await page.locator('[data-row="left"]').innerText()).includes("50,000"));
-  await page.locator('[data-plan="upgrade"]').click();
-  check("upgrade moves to Pro with the portal", (await page.locator("#content").innerText()).includes("Pro") && (await page.locator("#content").innerText()).includes("결제 포털"));
+  await page.locator('[data-billing="credits"]').click();
+  check("buying credits redirects without a modal", (await external()) === "https://autorag.ai/billing/credits" && await page.locator("#modal-root .modal").count() === 0, await external());
+  await page.locator('[data-billing="portal"]').click();
+  check("portal redirects to the billing portal", (await external()) === "https://autorag.ai/billing/portal", await external());
 
   // Trims the prototype deliberately dropped: no devfolder list, no tool paths, no advanced page.
   await page.locator('[data-nav="scope"]').first().click();

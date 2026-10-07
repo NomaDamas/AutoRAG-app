@@ -325,13 +325,6 @@ textarea.field { width: 100%; height: 68px; padding: 8px 10px; resize: vertical;
 .meter.warn > span { background: var(--warn-dot); }
 .usage { display: flex; flex-direction: column; gap: 8px; width: 100%; }
 .usage-legend { display: flex; justify-content: space-between; color: var(--text-muted); font-size: 12px; }
-.choice-list { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
-.choice { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; }
-.choice:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
-.choice input { accent-color: var(--accent); }
-.choice span { flex: 1; color: var(--text-primary); font-size: 13px; }
-.choice small { color: var(--text-muted); font-size: 12px; }
-.choice-list input[type=radio] { position: absolute; opacity: 0; pointer-events: none; }
 .modal .field[data-delete-confirm] { width: 100%; }
 .modal .btn.danger:disabled { opacity: 0.5; cursor: default; }
 .sync-row { gap: 12px; }
