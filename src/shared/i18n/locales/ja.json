@@ -205,7 +205,7 @@
     "emptyPromptTitle": "何をお探しですか？",
     "emptyPromptDesc": "ファイル、メール、メッセージ全体から素早い回答と詳細な回答を並べて提示します。",
     "generatingDeep": "詳細な回答を生成中…",
-    "askDazzi": "Dazziに質問する",
+    "askAutoRAG": "AutoRAGに質問する",
     "stop": "停止",
     "thinking": "思考中…",
     "workedFor": "{{time}}間回答を生成",

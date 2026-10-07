@@ -3,15 +3,15 @@ import { APP_NAME, APP_VERSION, formatDevLabel, formatWindowTitle } from "../src
 
 describe("formatWindowTitle", () => {
 	it("prefixes a bare semver with v", () => {
-		expect(formatWindowTitle(APP_NAME, "1.2.3")).toBe("Dazzi v1.2.3");
+		expect(formatWindowTitle(APP_NAME, "1.2.3")).toBe("AutoRAG v1.2.3");
 	});
 
 	it("does not double the v prefix", () => {
-		expect(formatWindowTitle(APP_NAME, "v1.2.3")).toBe("Dazzi v1.2.3");
+		expect(formatWindowTitle(APP_NAME, "v1.2.3")).toBe("AutoRAG v1.2.3");
 	});
 
 	it("titles the shipped app version", () => {
-		expect(formatWindowTitle(APP_NAME, APP_VERSION)).toBe("Dazzi v0.1.0");
+		expect(formatWindowTitle(APP_NAME, APP_VERSION)).toBe("AutoRAG v0.1.0");
 	});
 
 	it("appends the clone label for dev runs", () => {
@@ -21,11 +21,11 @@ describe("formatWindowTitle", () => {
 				branch: "feat/x",
 				commit: "612ae5f",
 			}),
-		).toBe("Dazzi v0.1.0 — /clones/autorag (feat/x@612ae5f)");
+		).toBe("AutoRAG v0.1.0 — /clones/autorag (feat/x@612ae5f)");
 	});
 
 	it("treats a null label as a shipped title", () => {
-		expect(formatWindowTitle(APP_NAME, APP_VERSION, null)).toBe("Dazzi v0.1.0");
+		expect(formatWindowTitle(APP_NAME, APP_VERSION, null)).toBe("AutoRAG v0.1.0");
 	});
 });
 

@@ -244,7 +244,7 @@ app.whenReady().then(async () => {
 	registerQuickLookIpc();
 	ensureAutoRAGConfig();
 	const devLabel = resolveDevLabel();
-	console.log(`[dazzi] ${formatWindowTitle(APP_NAME, APP_VERSION, devLabel)}`);
+	console.log(`[autorag] ${formatWindowTitle(APP_NAME, APP_VERSION, devLabel)}`);
 	const qaRoot = process.env.AUTORAG_QA_ROOT?.trim() ?? "";
 	// Windows can redirect the known folders (OneDrive backup moves Desktop/Documents),
 	// so Explorer's real paths come from Electron; on macOS they always live under $HOME.

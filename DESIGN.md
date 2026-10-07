@@ -1,6 +1,6 @@
-# Dazzi Design System (v7 Bloom)
+# AutoRAG Design System (v7 Bloom)
 
-Implementation contract and design specification for **Dazzi** — the AI Finder
+Implementation contract and design specification for **AutoRAG** — the AI Finder
 desktop app (Electron + React + TypeScript, hand-written CSS, macOS Native
 Finder fidelity) whose backend is the AutoRAG agent.
 
@@ -142,7 +142,7 @@ Instant Search's filename search ("전체" and "파일 이름") answers from the
 | `⇧⌘N` | Finder | New folder in the folder in view (inline rename starts at once) |
 | `⌥⌘N` | Finder | New text file in the folder in view (inline rename starts at once) |
 | `Space` | File List | Quick Look preview of the selected file or folder (`src/preview/DESIGN.md`) |
-| `⌥ Space` | Global | Global Dazzi Spotlight summon |
+| `⌥ Space` | Global | Global AutoRAG Spotlight summon |
 | `Enter` | Search Bar | Commit search with Filenames |
 | `⌥ Enter` | Search Bar | Commit search with Content |
 | `Escape` | Window | Dismiss dropdowns, clear active search focus |

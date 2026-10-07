@@ -307,9 +307,11 @@ try {
 		const { usedSize } = await cdp.send("Runtime.getHeapUsage");
 		return usedSize;
 	};
+	// The view toggle's labels are localized; its order is fixed (Toolbar VIEW_OPTIONS).
+	const viewButton = (mode) => page.locator(".seg__button").nth(["icons", "list", "columns"].indexOf(mode));
 	await page.locator(".sidebar__item", { hasText: "QA" }).click();
 	await page.waitForSelector(`[data-path="${join(QA_ROOT, FOLDERS[0])}"]`);
-	await page.locator('.seg__button[aria-label="List"]').click();
+	await viewButton("list").click();
 
 	const rows = page.locator('[role="row"]');
 	const openFolder = async (folder) => {
@@ -333,11 +335,11 @@ try {
 			}
 			for (let step = 0; step < 6; step += 1) await page.keyboard.press("ArrowDown");
 		}
-		await page.locator('.seg__button[aria-label="Icons"]').click();
+		await viewButton("icons").click();
 		await sleep(150);
-		await page.locator('.seg__button[aria-label="Columns"]').click();
+		await viewButton("columns").click();
 		await sleep(150);
-		await page.locator('.seg__button[aria-label="List"]').click();
+		await viewButton("list").click();
 		await page.keyboard.press(chord("t"));
 		await sleep(150);
 		await page.keyboard.press(chord("w"));

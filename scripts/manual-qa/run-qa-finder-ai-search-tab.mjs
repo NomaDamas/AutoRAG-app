@@ -114,7 +114,7 @@ try {
 	);
 	check(
 		"the composer is focused",
-		await page.evaluate(() => document.activeElement?.getAttribute("aria-label") === "Ask Dazzi"),
+		await page.evaluate(() => document.activeElement?.getAttribute("aria-label") === "Ask AutoRAG"),
 	);
 	check(
 		"the sidebar marks AI Search active",
@@ -128,7 +128,7 @@ try {
 	await page.waitForSelector(PANEL);
 
 	// 4. Chat state survives tab switches.
-	await page.locator(`${PANEL} input[aria-label="Ask Dazzi"]`).fill("draft survives tab switch");
+	await page.locator(`${PANEL} input[aria-label="Ask AutoRAG"]`).fill("draft survives tab switch");
 	await page.keyboard.press(chord("t"));
 	await page.waitForSelector(`[data-path="${BRIEF}"]`);
 	now = await tabs(page);
@@ -137,7 +137,7 @@ try {
 	await page.waitForSelector(PANEL);
 	check(
 		"the composer draft survives switching tabs",
-		(await page.locator(`${PANEL} input[aria-label="Ask Dazzi"]`).inputValue()) === "draft survives tab switch",
+		(await page.locator(`${PANEL} input[aria-label="Ask AutoRAG"]`).inputValue()) === "draft survives tab switch",
 	);
 
 	// 5. ⌘K from a folder tab adopts the existing AI tab.
@@ -150,7 +150,7 @@ try {
 	check("⌘K adopts the existing AI Search tab", now.length === 2 && now[0]?.active === true, JSON.stringify(now));
 	check(
 		"⌘K focuses the composer",
-		await page.evaluate(() => document.activeElement?.getAttribute("aria-label") === "Ask Dazzi"),
+		await page.evaluate(() => document.activeElement?.getAttribute("aria-label") === "Ask AutoRAG"),
 	);
 
 	// 6. Inspector AI 요약 opens a NEW AI tab, attaches the file, and sends the summary run.

@@ -67,7 +67,7 @@ mkdirSync(folder, { recursive: true });
 // The Korean names sort after the Latin ones, so the five-file shift range (deck-a → notes.txt) is unchanged.
 const FIXTURES = ["deck-a.pdf", "deck-b.pdf", "deck-c.pdf", "deck-d.pdf", "notes.txt", "photo.jpg", "사업계획서.hwp", "회의록.hwpx"];
 for (const name of FIXTURES) {
-	if (name.endsWith(".pdf")) await Bun.write(join(folder, name), buildPdf(`Dazzi Meetup ${name}`));
+	if (name.endsWith(".pdf")) await Bun.write(join(folder, name), buildPdf(`AutoRAG Meetup ${name}`));
 	else if (name.endsWith(".jpg")) await Bun.write(join(folder, name), buildExifJpeg());
 	else if (name.endsWith(".hwp")) await Bun.write(join(folder, name), buildHwp(["사업계획서 첫 쪽", "둘째 쪽"], "hwp"));
 	else if (name.endsWith(".hwpx")) await Bun.write(join(folder, name), buildHwp(["회의록 첫 쪽"], "hwpx"));
