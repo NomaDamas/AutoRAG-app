@@ -11,7 +11,12 @@
  *   - main event-loop delay p99 (`perf_hooks.monitorEventLoopDelay`) over the soak;
  *   - how many `index:status` IPC calls one selection change triggers (wrapped
  *     inside main through `ipcMain`'s invoke handler, so nothing in the app
- *     changes for the measurement).
+ *     changes for the measurement);
+ *   - renderer script time over the soak (CDP `Performance.getMetrics`);
+ *   - what the renderer still holds at the end, from a heap snapshot: every
+ *     row object (`FinderEntry`: has `path`, `fileKind`, `dateLabel`) and every
+ *     array of them. A path with more than one row object alive is an older
+ *     listing that something still retains (FS roadmap #99 acceptance: 0).
  *
  * A cycle: open each fixture folder through its row, click rows down the list,
  * toggle Quick Look on some, switch view modes list → icons → columns → list,
@@ -26,12 +31,14 @@
  *   bun scripts/manual-qa/run-qa-finder-memory-soak.mjs              # report
  *   SOAK_ENFORCE=1 bun scripts/manual-qa/run-qa-finder-memory-soak.mjs  # gate
  *
- * Knobs: SOAK_CYCLES (default 40), SOAK_WARMUP (default 5).
+ * Knobs: SOAK_CYCLES (default 40), SOAK_WARMUP (default 5), SOAK_SNAPSHOT=0
+ * skips the end-of-soak heap snapshot.
  * Evidence: `.omo/evidence/ai-finder-app/qa-memory-soak/result.json`.
  */
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { deflateSync } from "node:zlib";
 import { finderWindow, launchFinder, ROOT } from "./launch-finder.mjs";
 import { chord, sleep } from "./platform.mjs";
 
@@ -45,6 +52,128 @@ const ENFORCE = process.env.SOAK_ENFORCE === "1";
 const MAX_HEAP_GROWTH_PER_CYCLE_MB = 0.25;
 const MAX_INDEX_STATUS_PER_CLICK = 0;
 const MAX_LOOP_P99_MS = 100;
+/** FS roadmap #99: only the current listing of a folder is alive, no older one. */
+const MAX_LISTING_GENERATIONS = 1;
+const SNAPSHOT = process.env.SOAK_SNAPSHOT !== "0";
+
+/**
+ * Row objects and row arrays alive in a V8 heap snapshot. A row object is a
+ * plain object with `path`, `fileKind`, and `dateLabel` properties; an array
+ * counts when at least 50 of its elements are row objects. `maxGenerations`
+ * is how many listings of one folder are alive at once (1 = only the current).
+ */
+function analyzeSnapshot(snapshot) {
+	const { meta } = snapshot.snapshot;
+	const nodeFields = meta.node_fields.length;
+	const edgeFields = meta.edge_fields.length;
+	const nodeTypes = meta.node_types[0];
+	const edgeTypes = meta.edge_types[0];
+	const typeOf = meta.node_fields.indexOf("type");
+	const nameOf = meta.node_fields.indexOf("name");
+	const edgeCountOf = meta.node_fields.indexOf("edge_count");
+	const edgeTypeOf = meta.edge_fields.indexOf("type");
+	const edgeNameOf = meta.edge_fields.indexOf("name_or_index");
+	const edgeToOf = meta.edge_fields.indexOf("to_node");
+	const { nodes, edges, strings } = snapshot;
+	const firstEdge = new Uint32Array(nodes.length / nodeFields + 1);
+	for (let node = 0, edge = 0; node < nodes.length / nodeFields; node += 1) {
+		firstEdge[node] = edge;
+		edge += nodes[node * nodeFields + edgeCountOf] * edgeFields;
+	}
+	firstEdge[nodes.length / nodeFields] = edges.length;
+	const property = edgeTypes.indexOf("property");
+	const element = edgeTypes.indexOf("element");
+	const objectType = nodeTypes.indexOf("object");
+	const plainString = nodeTypes.indexOf("string");
+	const concatenated = nodeTypes.indexOf("concatenated string");
+	const sliced = nodeTypes.indexOf("sliced string");
+	/** A string node's value; V8 keeps `a + b` as a rope of two child strings. */
+	const stringValue = (node, depth = 0) => {
+		const type = nodes[node * nodeFields + typeOf];
+		if (type === plainString) return strings[nodes[node * nodeFields + nameOf]];
+		if ((type !== concatenated && type !== sliced) || depth > 32) return null;
+		const parts = [];
+		for (let edge = firstEdge[node]; edge < firstEdge[node + 1]; edge += edgeFields) {
+			const label = strings[edges[edge + edgeNameOf]];
+			if (label !== "first" && label !== "second" && label !== "parent") continue;
+			const part = stringValue(edges[edge + edgeToOf] / nodeFields, depth + 1);
+			if (part === null) return null;
+			parts.push(part);
+		}
+		return type === sliced ? null : parts.join("");
+	};
+	const rows = new Map();
+	const count = nodes.length / nodeFields;
+	for (let node = 0; node < count; node += 1) {
+		if (nodes[node * nodeFields + typeOf] !== objectType) continue;
+		let path = null;
+		let location = null;
+		let marks = 0;
+		for (let edge = firstEdge[node]; edge < firstEdge[node + 1]; edge += edgeFields) {
+			if (edges[edge + edgeTypeOf] !== property) continue;
+			const name = strings[edges[edge + edgeNameOf]];
+			if (name === "fileKind" || name === "dateLabel") marks += 1;
+			else if (name === "path" || name === "location") {
+				const value = stringValue(edges[edge + edgeToOf] / nodeFields);
+				if (name === "path") path = value;
+				else location = value;
+			}
+		}
+		if (marks === 2 && path !== null) rows.set(node, { path, location });
+	}
+	// Row arrays: listings and every array derived from one (sorted, stacked,
+	// grouped). A derived array reuses its listing's row objects.
+	const listed = new Set();
+	const arraysByFolder = {};
+	let rowArrays = 0;
+	for (let node = 0; node < count; node += 1) {
+		if (nodes[node * nodeFields + typeOf] !== objectType || strings[nodes[node * nodeFields + nameOf]] !== "Array") continue;
+		const members = [];
+		for (let edge = firstEdge[node]; edge < firstEdge[node + 1]; edge += edgeFields) {
+			if (edges[edge + edgeTypeOf] !== element) continue;
+			const to = edges[edge + edgeToOf] / nodeFields;
+			if (rows.has(to)) members.push(to);
+		}
+		if (members.length < 50) continue;
+		rowArrays += 1;
+		for (const member of members) listed.add(member);
+		const key = (rows.get(members[0]).location ?? "?").split(/[\\/]/).pop();
+		arraysByFolder[key] = (arraysByFolder[key] ?? 0) + 1;
+	}
+	// A folder's listing generations: how many listed row objects one of its
+	// paths has alive, as the most common count over the folder's paths. An
+	// older listing still retained (a rewritten array, a closure holding the
+	// previous render's rows) shows up as every path having one more copy.
+	// Rows outside any listing array (the sidecar's resolved copy of a row,
+	// the Inspector's selection) are not listings and do not count.
+	const copies = new Map();
+	const folderOf = new Map();
+	for (const node of listed) {
+		const { path, location } = rows.get(node);
+		copies.set(path, (copies.get(path) ?? 0) + 1);
+		folderOf.set(path, location);
+	}
+	let staleEntryCopies = 0;
+	const histogram = new Map();
+	for (const [path, total] of copies) {
+		staleEntryCopies += total - 1;
+		const key = (folderOf.get(path) ?? "?").split(/[\\/]/).pop();
+		const counts = histogram.get(key) ?? new Map();
+		counts.set(total, (counts.get(total) ?? 0) + 1);
+		histogram.set(key, counts);
+	}
+	const generationsByFolder = {};
+	for (const [folder, counts] of histogram) {
+		let best = 0;
+		let bestPaths = -1;
+		for (const [total, paths] of counts) {
+			if (paths > bestPaths) [best, bestPaths] = [total, paths];
+		}
+		generationsByFolder[folder] = best;
+	}
+	const maxGenerations = Math.max(0, ...Object.values(generationsByFolder));
+	return { rowObjects: rows.size, listedRowObjects: listed.size, staleEntryCopies, maxGenerations, generationsByFolder, rowArrays, arraysByFolder };
+}
 
 const WORK = realpathSync(mkdtempSync(join(tmpdir(), "autorag-qa-soak-")));
 const USER_DATA = join(WORK, "user-data");
@@ -58,6 +187,52 @@ for (const folder of FOLDERS) {
 		const ext = ["txt", "md", "csv", "json"][index % 4];
 		writeFileSync(join(dir, `${folder}-${String(index).padStart(4, "0")}.${ext}`), `${folder} ${index}\n`);
 	}
+}
+// A folder of real images: every row gets an OS thumbnail and Finder
+// metadata, so the fill phase measures what enrichment costs the renderer.
+const IMAGES = "images";
+const IMAGE_COUNT = 600;
+{
+	const dir = join(QA_ROOT, IMAGES);
+	mkdirSync(dir, { recursive: true });
+	for (let index = 0; index < IMAGE_COUNT; index += 1) {
+		writeFileSync(join(dir, `img-${String(index).padStart(4, "0")}.png`), solidPng(32, 32, [(index * 7) % 255, 90, 200]));
+	}
+}
+
+function crc32(buf) {
+	let crc = 0xffffffff;
+	for (const byte of buf) {
+		crc ^= byte;
+		for (let k = 0; k < 8; k += 1) crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1));
+	}
+	return (crc ^ 0xffffffff) >>> 0;
+}
+function pngChunk(type, data) {
+	const length = Buffer.alloc(4);
+	length.writeUInt32BE(data.length);
+	const body = Buffer.concat([Buffer.from(type, "ascii"), data]);
+	const crc = Buffer.alloc(4);
+	crc.writeUInt32BE(crc32(body));
+	return Buffer.concat([length, body, crc]);
+}
+function solidPng(width, height, [r, g, b]) {
+	const header = Buffer.alloc(13);
+	header.writeUInt32BE(width, 0);
+	header.writeUInt32BE(height, 4);
+	header[8] = 8;
+	header[9] = 2;
+	const raw = Buffer.alloc(height * (1 + width * 3));
+	for (let y = 0; y < height; y += 1) {
+		const offset = y * (1 + width * 3);
+		for (let x = 0; x < width; x += 1) raw.set([r, g, b], offset + 1 + x * 3);
+	}
+	return Buffer.concat([
+		Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+		pngChunk("IHDR", header),
+		pngChunk("IDAT", deflateSync(raw)),
+		pngChunk("IEND", Buffer.alloc(0)),
+	]);
 }
 
 const results = [];
@@ -78,22 +253,26 @@ try {
 		rendererGone = true;
 	});
 
-	// Main-side probes: index:status call counter and event-loop delay histogram.
+	// Main-side probes: invoke counters (index:status and the listing/enrichment
+	// channels) and an event-loop delay histogram.
 	await app.evaluate(({ ipcMain }) => {
 		const handlers = ipcMain._invokeHandlers;
-		const original = handlers.get("index:status");
-		globalThis.__soakIndexStatusCalls = 0;
-		if (original !== undefined) {
-			handlers.set("index:status", (...args) => {
-				globalThis.__soakIndexStatusCalls += 1;
+		globalThis.__soakCalls = {};
+		for (const channel of ["index:status", "fs:listDir", "fs:enrichEntries", "fs:finderMetadata"]) {
+			const original = handlers.get(channel);
+			if (original === undefined) continue;
+			globalThis.__soakCalls[channel] = 0;
+			handlers.set(channel, (...args) => {
+				globalThis.__soakCalls[channel] += 1;
 				return original(...args);
 			});
 		}
-		globalThis.__soakHasIndexProbe = original !== undefined;
+		globalThis.__soakHasIndexProbe = globalThis.__soakCalls["index:status"] !== undefined;
 	});
 	const mainProbe = () =>
 		app.evaluate(() => ({
-			indexStatusCalls: globalThis.__soakIndexStatusCalls,
+			indexStatusCalls: globalThis.__soakCalls["index:status"],
+			calls: { ...globalThis.__soakCalls },
 			hasIndexProbe: globalThis.__soakHasIndexProbe,
 			rss: process.memoryUsage().rss,
 			loopP99: globalThis.__soakLoop === undefined ? null : globalThis.__soakLoop.percentile(99) / 1e6,
@@ -109,6 +288,19 @@ try {
 
 	const cdp = await page.context().newCDPSession(page);
 	await cdp.send("HeapProfiler.enable");
+	await cdp.send("Performance.enable");
+	const scriptSeconds = async () => {
+		const { metrics } = await cdp.send("Performance.getMetrics");
+		return metrics.find((metric) => metric.name === "ScriptDuration")?.value ?? 0;
+	};
+	const heapSnapshot = async () => {
+		const chunks = [];
+		const onChunk = (event) => chunks.push(event.chunk);
+		cdp.on("HeapProfiler.addHeapSnapshotChunk", onChunk);
+		await cdp.send("HeapProfiler.takeHeapSnapshot", { reportProgress: false });
+		cdp.off("HeapProfiler.addHeapSnapshotChunk", onChunk);
+		return analyzeSnapshot(JSON.parse(chunks.join("")));
+	};
 	const retainedHeap = async () => {
 		for (let pass = 0; pass < 3; pass += 1) await cdp.send("HeapProfiler.collectGarbage");
 		// `performance.memory` is bucketed without --enable-precise-memory-info; CDP is exact.
@@ -166,12 +358,49 @@ try {
 	const perClick = (afterClicks.indexStatusCalls - beforeClicks.indexStatusCalls) / CLICKS;
 	check("index:status probe installed", afterClicks.hasIndexProbe === true, String(afterClicks.hasIndexProbe));
 
+	// 1b. Thumbnail fill: scroll a cold 600-image folder top to bottom in the
+	// list until the last row shows its OS thumbnail. Every batch of icons and
+	// Finder metadata lands while the list scrolls; renderer script time and
+	// long tasks over the phase are what that costs.
+	await page.locator(".sidebar__item", { hasText: "QA" }).click();
+	await page.locator(`[data-path="${join(QA_ROOT, IMAGES)}"]`).first().dblclick();
+	const lastImage = page.locator(`[data-path="${join(QA_ROOT, IMAGES, `img-${String(IMAGE_COUNT - 1).padStart(4, "0")}.png`)}"]`).first();
+	await page.locator(`[data-path="${join(QA_ROOT, IMAGES, "img-0000.png")}"]`).first().waitFor();
+	await page.evaluate(() => {
+		globalThis.__soakLongTasks = [];
+		new PerformanceObserver((list) => {
+			for (const task of list.getEntries()) globalThis.__soakLongTasks.push(task.duration);
+		}).observe({ type: "longtask" });
+	});
+	const fillScriptStart = await scriptSeconds();
+	const fillStarted = Date.now();
+	for (let attempt = 0; attempt < 400; attempt += 1) {
+		if ((await lastImage.count()) > 0) break;
+		await page.locator(".list").evaluate((node) => {
+			node.scrollTop += node.clientHeight * 0.5;
+		});
+		await sleep(40);
+	}
+	await lastImage.locator("img.tile--image").waitFor({ timeout: 30_000 });
+	await sleep(1000);
+	const fill = {
+		ms: Date.now() - fillStarted - 1000,
+		scriptMs: Math.round(((await scriptSeconds()) - fillScriptStart) * 1000),
+		...(await page.evaluate(() => {
+			const tasks = globalThis.__soakLongTasks ?? [];
+			return { longTasks: tasks.length, longTaskMs: Math.round(tasks.reduce((sum, value) => sum + value, 0)) };
+		})),
+	};
+	console.log(`INFO  thumbnail fill ${JSON.stringify(fill)}`);
+
 	// 2. Warm-up, then the soak.
 	for (let index = 0; index < WARMUP; index += 1) await cycle();
 	await sleep(1000);
 	const heapStart = await retainedHeap();
-	const rssStart = (await mainProbe()).rss;
+	const probeStart = await mainProbe();
+	const rssStart = probeStart.rss;
 	await startLoopMonitor();
+	const scriptStart = await scriptSeconds();
 	const started = Date.now();
 	const samples = [];
 	for (let index = 0; index < CYCLES; index += 1) {
@@ -184,9 +413,11 @@ try {
 		}
 	}
 	await sleep(1500);
+	const scriptEnd = await scriptSeconds();
 	const heapEnd = await retainedHeap();
 	const end = await mainProbe();
 	const growthPerCycleMB = (heapEnd - heapStart) / 1e6 / CYCLES;
+	const retention = SNAPSHOT ? await heapSnapshot() : null;
 
 	const summary = {
 		cycles: CYCLES,
@@ -194,11 +425,18 @@ try {
 		heapStartMB: +(heapStart / 1e6).toFixed(1),
 		heapEndMB: +(heapEnd / 1e6).toFixed(1),
 		heapGrowthPerCycleMB: +growthPerCycleMB.toFixed(3),
+		heapGrowthMB: +((heapEnd - heapStart) / 1e6).toFixed(1),
+		rendererScriptMsPerCycle: +(((scriptEnd - scriptStart) * 1000) / CYCLES).toFixed(1),
+		retention,
+		thumbnailFill: fill,
 		mainRssStartMB: +(rssStart / 1e6).toFixed(1),
 		mainRssEndMB: +(end.rss / 1e6).toFixed(1),
 		mainLoopP99Ms: end.loopP99 === null ? null : +end.loopP99.toFixed(1),
 		mainLoopMaxMs: end.loopMax === null ? null : +end.loopMax.toFixed(1),
 		indexStatusPerClick: perClick,
+		ipcPerCycle: Object.fromEntries(
+			Object.entries(end.calls).map(([channel, total]) => [channel, +((total - (probeStart.calls[channel] ?? 0)) / CYCLES).toFixed(1)]),
+		),
 		samples,
 		pageErrors,
 	};
@@ -221,6 +459,13 @@ try {
 		summary.mainLoopP99Ms !== null && summary.mainLoopP99Ms < MAX_LOOP_P99_MS,
 		`${summary.mainLoopP99Ms} ms (max ${summary.mainLoopMaxMs} ms)`,
 	);
+	if (retention !== null) {
+		check(
+			`no older listing is retained (generations per folder ≤ ${MAX_LISTING_GENERATIONS})`,
+			retention.maxGenerations <= MAX_LISTING_GENERATIONS,
+			`${retention.maxGenerations} max ${JSON.stringify(retention.generationsByFolder)}; ${retention.staleEntryCopies} duplicate row objects; ${retention.rowArrays} row arrays ${JSON.stringify(retention.arraysByFolder)}`,
+		);
+	}
 	await page.screenshot({ path: join(EVIDENCE, "end.png") });
 	writeFileSync(join(EVIDENCE, "result.json"), `${JSON.stringify({ summary, checks: results }, null, 2)}\n`);
 } finally {
