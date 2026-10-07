@@ -17,7 +17,7 @@ import {
 } from "../state/workspace";
 
 /** The drag payload that marks a strip tab (not a Finder row or an OS file). */
-export const TAB_DRAG_TYPE = "application/x-dazzi-tab";
+export const TAB_DRAG_TYPE = "application/x-autorag-tab";
 
 /** Smallest pane share a split-handle drag leaves, in px of the split's extent. */
 const MIN_PANE_PX = 220;

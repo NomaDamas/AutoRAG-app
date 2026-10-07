@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
 /**
- * Manual QA — the AI Search chat-history popover of the real Dazzi app.
+ * Manual QA — the AI Search chat-history popover of the real AutoRAG app.
  *
  * Proves the user-visible behavior against the v7 Bloom design: a seeded
  * chat store renders the History popover with its day groups (오늘 / 어제 /

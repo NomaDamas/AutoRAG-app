@@ -126,7 +126,7 @@ async function trashOne(path: string, platform: NodeJS.Platform, trashItem: (pat
 	} catch (error) {
 		// A random parked name: POSIX rename replaces an existing target, so a
 		// fixed name could overwrite a real file that happens to carry it.
-		const parked = join(dirname(path), `.${basename(path)}.${randomUUID().slice(0, 8)}.dazzi-trash`);
+		const parked = join(dirname(path), `.${basename(path)}.${randomUUID().slice(0, 8)}.autorag-trash`);
 		try {
 			await fsRename(path, parked);
 		} catch {

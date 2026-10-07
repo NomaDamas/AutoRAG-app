@@ -2,8 +2,7 @@
 	"name": "@autorag/app",
 	"version": "0.1.0",
 	"private": true,
-	"description": "Dazzi — an AI Finder desktop app built on the public AutoRAG librarian.",
-	"homepage": "https://dazziapp.com",
+	"description": "AutoRAG — a Finder-style desktop app built on the public AutoRAG librarian.",
 	"type": "module",
 	"main": "out/main/index.js",
 	"scripts": {

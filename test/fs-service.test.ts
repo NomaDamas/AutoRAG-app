@@ -745,7 +745,7 @@ describe("trash", () => {
 		// parked sibling was left behind
 		expect(result).toEqual({ ok: paths, failed: [] });
 		expect(trashed).toEqual(paths.map((path) => `${path}:body of ${path}`));
-		expect((await readdir(root)).filter((name) => name.includes("dazzi-trash"))).toEqual([]);
+		expect((await readdir(root)).filter((name) => name.includes("autorag-trash"))).toEqual([]);
 	});
 
 	it("reports a refusal that survives the retry and leaves the item in place", async () => {
