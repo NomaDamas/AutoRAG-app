@@ -251,7 +251,12 @@ export function App(): ReactElement {
 			void source.setWatchSet(watchSetFor(allTabs(workspaceRef.current))).catch((error: unknown) => console.error("live watch resync failed", error));
 		};
 		window.addEventListener("focus", resync);
-		return () => window.removeEventListener("focus", resync);
+		// A restarted fs worker holds no watches: hand it the open tabs again.
+		const offReconnect = source.onReconnect(resync);
+		return () => {
+			window.removeEventListener("focus", resync);
+			offReconnect();
+		};
 	}, [source]);
 
 	/* --------------------------------------------------------- evidence state */

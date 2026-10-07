@@ -27,20 +27,11 @@ import { homedir } from "node:os";
 import { setTimeout as sleep } from "node:timers/promises";
 import { basename, join, win32 } from "node:path";
 import type { FsLocation, FsLocationIcon } from "../shared/fs-contract";
+import type { KnownFolders } from "../shared/fs-worker-contract";
 import { errorMessage, hasErrorCode, isAvailable, pathExists } from "./fs-entry";
 
 /** Runs one OS command and resolves its stdout; rejects with stderr (or the spawn error) verbatim. */
 export type PlaceCommandRunner = (command: string, args: readonly string[]) => Promise<string>;
-
-/** Windows known folders, as Electron's `app.getPath` resolves them. */
-export interface KnownFolders {
-	readonly desktop: string;
-	readonly documents: string;
-	readonly downloads: string;
-	readonly music: string;
-	readonly videos: string;
-	readonly pictures: string;
-}
 
 export interface PlacesDeps {
 	/** Defaults to os.homedir(). */

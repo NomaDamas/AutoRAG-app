@@ -39,7 +39,7 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { deflateSync } from "node:zlib";
-import { finderWindow, launchFinder, ROOT } from "./launch-finder.mjs";
+import { finderWindow, fsWorkerDiagnostics, launchFinder, ROOT } from "./launch-finder.mjs";
 import { chord, sleep } from "./platform.mjs";
 
 const EVIDENCE = join(ROOT, ".omo/evidence/ai-finder-app/qa-memory-soak");
@@ -51,7 +51,8 @@ const ENFORCE = process.env.SOAK_ENFORCE === "1";
 /** Stage 1 gates: retained renderer heap per cycle, and index:status calls per click. */
 const MAX_HEAP_GROWTH_PER_CYCLE_MB = 0.25;
 const MAX_INDEX_STATUS_PER_CLICK = 0;
-const MAX_LOOP_P99_MS = 100;
+/** FS roadmap #101: with the filesystem in its own process, main's loop stays inside one 60 Hz frame. */
+const MAX_LOOP_P99_MS = 16;
 /** FS roadmap #99: only the current listing of a folder is alive, no older one. */
 const MAX_LISTING_GENERATIONS = 1;
 const SNAPSHOT = process.env.SOAK_SNAPSHOT !== "0";
@@ -253,31 +254,20 @@ try {
 		rendererGone = true;
 	});
 
-	// Main-side probes: invoke counters (index:status and the listing/enrichment
-	// channels) and an event-loop delay histogram.
-	await app.evaluate(({ ipcMain }) => {
-		const handlers = ipcMain._invokeHandlers;
-		globalThis.__soakCalls = {};
-		for (const channel of ["index:status", "fs:listDir", "fs:enrichEntries", "fs:finderMetadata"]) {
-			const original = handlers.get(channel);
-			if (original === undefined) continue;
-			globalThis.__soakCalls[channel] = 0;
-			handlers.set(channel, (...args) => {
-				globalThis.__soakCalls[channel] += 1;
-				return original(...args);
-			});
-		}
-		globalThis.__soakHasIndexProbe = globalThis.__soakCalls["index:status"] !== undefined;
-	});
-	const mainProbe = () =>
-		app.evaluate(() => ({
-			indexStatusCalls: globalThis.__soakCalls["index:status"],
-			calls: { ...globalThis.__soakCalls },
-			hasIndexProbe: globalThis.__soakHasIndexProbe,
+	// Main-side probes: the fs worker's per-op request counts (index status and
+	// the listing/enrichment ops; they reach the worker over its MessagePort,
+	// not ipcMain) and main's own event-loop delay histogram.
+	const SOAK_OPS = { "index:status": "indexStatus", "fs:listDir": "listDir", "fs:enrichEntries": "enrichEntries", "fs:finderMetadata": "finderMetadata" };
+	const mainProbe = async () => {
+		const worker = await fsWorkerDiagnostics(app);
+		const calls = Object.fromEntries(Object.entries(SOAK_OPS).map(([label, op]) => [label, worker.requests[op] ?? 0]));
+		const main = await app.evaluate(() => ({
 			rss: process.memoryUsage().rss,
 			loopP99: globalThis.__soakLoop === undefined ? null : globalThis.__soakLoop.percentile(99) / 1e6,
 			loopMax: globalThis.__soakLoop === undefined ? null : globalThis.__soakLoop.max / 1e6,
 		}));
+		return { indexStatusCalls: calls["index:status"], calls, hasIndexProbe: true, workerPid: worker.pid, ...main };
+	};
 	const startLoopMonitor = () =>
 		app.evaluate(() => {
 			const { monitorEventLoopDelay } = process.getBuiltinModule("node:perf_hooks");
@@ -445,6 +435,7 @@ try {
 	console.log(`INFO  summary ${JSON.stringify(summary)}`);
 
 	check("renderer stayed alive through the soak", !rendererGone);
+	check("the fs worker never restarted during the soak", end.workerPid === probeStart.workerPid, `pid ${probeStart.workerPid} → ${end.workerPid}`);
 	check("no page errors during the soak", pageErrors.length === 0, pageErrors[0]);
 	check(
 		`retained renderer heap grows ≤ ${MAX_HEAP_GROWTH_PER_CYCLE_MB} MB/cycle`,

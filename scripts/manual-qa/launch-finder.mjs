@@ -60,6 +60,19 @@ export async function finderWindow(app, timeoutMs = 6000) {
 	}
 }
 
+/**
+ * The fs worker's diagnostics (pid, restarts, per-op request counts, recent
+ * requests), read in main through the handler the app registers for it.
+ * Listings no longer pass through `ipcMain`, so lanes count them here.
+ */
+export function fsWorkerDiagnostics(app) {
+	return app.evaluate(async ({ ipcMain }) => {
+		const handler = ipcMain._invokeHandlers.get("fs-worker:diagnostics");
+		if (handler === undefined) throw new Error("fs-worker:diagnostics is not registered");
+		return handler({});
+	});
+}
+
 /** The visible AI Search panel (hidden AI tabs keep theirs mounted with aria-hidden). */
 export const AI_PANEL = 'section[aria-label="AI Search"]:not([aria-hidden="true"])';
 

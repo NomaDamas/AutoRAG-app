@@ -124,8 +124,12 @@ switch branches in place.
 
 ## Source map
 
-- `src/main/` — Electron main process and filesystem/search services.
-- `src/preload/` — typed renderer bridge.
+- `src/main/` — Electron main process: windows, menus, IPC, thumbnails, and
+  the fs worker's lifecycle (`fs-worker-host.ts`). Its filesystem services
+  (listing, watch, places, dupey, index status) run inside the fs worker.
+- `src/fs-worker/` — the "AutoRAG File System" utility process entry.
+- `src/preload/` — typed renderer bridge; FS calls go straight to the worker
+  over a MessagePort (`worker-link.ts`).
 - `src/renderer/` — React Finder UI and state. Styled with Tailwind 4
   utilities: `styles/tokens.css` holds every design value, `styles/tailwind.css`
   bridges those tokens into Tailwind theme namespaces (`@theme inline`), and

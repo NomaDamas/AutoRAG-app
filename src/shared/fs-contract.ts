@@ -2,55 +2,22 @@ import type { IndexStatus } from "./index-contract";
 import type { NewFileFormatId } from "./new-file-contract";
 
 /**
- * Finder contract shared by the Electron main process and the renderer.
+ * Finder contract shared by the filesystem worker, the main process, and the
+ * renderer.
  *
- * The main process implements every channel; the preload exposes typed
- * wrappers on `window.autorag.fs`. All paths crossing this boundary are
- * absolute OS paths. Datasource virtual identifiers (`/kakao/...`) never
- * appear here — they belong to the search bridge, not the filesystem.
+ * The fs worker (`src/fs-worker`, an Electron utility process) implements
+ * every member; the preload exposes typed wrappers on `window.autorag.fs` that
+ * talk to it over a MessagePort (`fs-worker-protocol.ts`). All paths crossing
+ * this boundary are absolute OS paths. Datasource virtual identifiers
+ * (`/kakao/...`) never appear here — they belong to the search bridge, not the
+ * filesystem.
  */
 
-/** IPC channel names. Keep in 1:1 sync with the main-process handlers. */
+/** IPC channels the main process still owns for the Finder. */
 export const FS_CHANNELS = {
-	listDir: "fs:listDir",
-	readEntries: "fs:readEntries",
-	enrichEntries: "fs:enrichEntries",
-	finderMetadata: "fs:finderMetadata",
-	stat: "fs:stat",
-	details: "fs:details",
-	previewIcon: "fs:previewIcon",
-	exists: "fs:exists",
-	search: "fs:search",
-	locations: "fs:locations",
-	ejectLocation: "fs:ejectLocation",
-	/** Main → renderer: a volume mounted/unmounted or a cloud account connected/disconnected. */
-	locationsChanged: "fs:locationsChanged",
-	copy: "fs:copy",
-	move: "fs:move",
-	duplicate: "fs:duplicate",
-	rename: "fs:rename",
-	createFolder: "fs:createFolder",
-	createFile: "fs:createFile",
-	trash: "fs:trash",
-	reveal: "fs:reveal",
-	quickLook: "fs:quickLook",
-	open: "fs:open",
-	openUrl: "fs:openUrl",
-	clipboardSet: "fs:clipboardSet",
-	clipboardGet: "fs:clipboardGet",
-	undo: "fs:undo",
-	copyPathsToClipboard: "fs:copyPathsToClipboard",
 	/** Renderer → main: hand a row drag to the OS as real files; fire and forget. */
 	startDrag: "fs:startDrag",
-	versionFamilies: "fs:versionFamilies",
-	versionFamiliesRefresh: "fs:versionFamiliesRefresh",
-	indexStatus: "index:status",
-	indexSetExcluded: "index:setExcluded",
-	/** Main → renderer: a background parsed + MinSync refresh settled (payload: error or null). */
-	indexRefreshed: "index:refreshed",
 } as const;
-
-export type FsChannel = (typeof FS_CHANNELS)[keyof typeof FS_CHANNELS];
 
 /** Finder/Spotlight metadata used by Sort By and Group By. */
 export interface FsFinderMetadata {

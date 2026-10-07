@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, rm, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { createDefaultAppCache } from "../src/preview/node/default-app";
 import { measureFolder, summarizeFolder } from "../src/preview/node/folder";
 import { describeBinary } from "../src/preview/shared/binary-kind";
 import { isQuickLookReady } from "../src/preview/shared/contract";
@@ -200,5 +201,34 @@ describe("folder summary", () => {
 		} finally {
 			await rm(dir, { recursive: true, force: true });
 		}
+	});
+});
+
+describe("default app cache", () => {
+	it("answers every file of a found type at once and asks again for a type it could not name", async () => {
+		const asked: string[] = [];
+		const cache = createDefaultAppCache(async (path) => {
+			asked.push(path);
+			return path.endsWith(".bin") ? null : "TextEdit";
+		});
+		expect(cache.known("/a/one.TXT", false)).toBeNull();
+		expect(await cache.resolve("/a/one.TXT", false)).toBe("TextEdit");
+		expect(cache.known("/b/two.txt", false)).toBe("TextEdit");
+		// A folder with the same suffix is its own type.
+		expect(cache.known("/b/two.txt", true)).toBeNull();
+		expect(await cache.resolve("/a/blob.bin", false)).toBeNull();
+		expect(cache.known("/a/blob.bin", false)).toBeNull();
+		await cache.resolve("/a/blob.bin", false);
+		expect(asked).toEqual(["/a/one.TXT", "/a/blob.bin", "/a/blob.bin"]);
+	});
+
+	it("keys extensionless files by path and degrades a failed lookup to no name", async () => {
+		const cache = createDefaultAppCache(async (path) => {
+			if (path === "/x/broken") throw new Error("worker gone");
+			return "Xcode";
+		});
+		expect(await cache.resolve("/x/Makefile", false)).toBe("Xcode");
+		expect(cache.known("/y/Makefile", false)).toBeNull();
+		expect(await cache.resolve("/x/broken", false)).toBeNull();
 	});
 });

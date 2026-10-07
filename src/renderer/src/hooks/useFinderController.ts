@@ -507,6 +507,18 @@ export function useFinderController(
 		() => source.onLive((message: LiveMessage) => setLayerStore((current) => adoptMessage(current, message))),
 		[source],
 	);
+	// A restarted fs worker numbers its layer versions and messages from zero
+	// again: drop what the old one published and adopt the new one's snapshot.
+	useEffect(
+		() =>
+			source.onReconnect(() => {
+				void source
+					.liveLayers()
+					.then((result) => setLayerStore(adoptResync(EMPTY_LAYER_STORE, result)))
+					.catch((error: unknown) => console.error("live layer resync failed", error));
+			}),
+		[source],
+	);
 
 	useEffect(() => {
 		if (!searching) {

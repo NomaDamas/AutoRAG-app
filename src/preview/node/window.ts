@@ -36,7 +36,7 @@ import { quickLookKeyAction } from "../shared/keys";
 import { byteNeed, viewerForExtension } from "../shared/registry";
 import { fallbackOrigin, screenOrigin, ZOOM_DONE_TIMEOUT_MS, zoomGeometry } from "../shared/zoom";
 import { readAudioMetadata } from "./audio-metadata";
-import { knownDefaultApp, lookupDefaultApp } from "./default-app";
+import { createDefaultAppCache, type DefaultAppCache } from "./default-app";
 import { fileDetails, sha256File } from "./details";
 import { measureFolder, summarizeFolder } from "./folder";
 import { PREVIEW_BYTE_CAP, PreviewReadError, readPreviewFile, SNIFF_BYTES, TEXT_BYTE_CAP } from "./read-file";
@@ -66,6 +66,8 @@ export interface QuickLookWindowOptions {
 	readonly preload: string;
 	readonly appearance: AppAppearance;
 	readonly loadPage: (window: BrowserWindow) => void;
+	/** The app that opens `path`, or null; main hands this to the fs worker so no child spawns here. */
+	readonly defaultApp: (path: string) => Promise<string | null>;
 }
 
 interface Session {
@@ -85,6 +87,7 @@ interface Session {
 	/** A close zoom is running: the content must stay until the panel has shrunk away. */
 	closing: boolean;
 	readonly waiters: Map<string, () => void>;
+	readonly defaultApps: DefaultAppCache;
 	detach: () => void;
 }
 
@@ -332,12 +335,12 @@ async function show(state: Session, target: QuickLookTarget, origin: Bounds | nu
 	const [content] = await Promise.all([readTarget(target), state.loaded]);
 	if (seq !== state.seq || !live(state.window)) return;
 	const folder = content.folder !== null;
-	const known = knownDefaultApp(target.path, folder);
+	const known = state.defaultApps.known(target.path, folder);
 	const load: QuickLookLoad = { seq, name: target.name, path: target.path, ...content, app: known };
 	state.window.setTitle(target.name);
 	state.window.webContents.send(PREVIEW_CHANNELS.load, load);
 	if (known === null && content.error === null) {
-		void lookupDefaultApp(target.path, folder).then((name) => {
+		void state.defaultApps.resolve(target.path, folder).then((name) => {
 			if (seq !== state.seq || !live(state.window)) return;
 			const update: QuickLookApp = { seq, name };
 			state.window.webContents.send(PREVIEW_CHANNELS.app, update);
@@ -464,6 +467,7 @@ export function attachQuickLook(owner: BrowserWindow, options: QuickLookWindowOp
 		opening: null,
 		closing: false,
 		waiters: new Map(),
+		defaultApps: createDefaultAppCache(options.defaultApp),
 		detach: () => undefined,
 	};
 

@@ -106,6 +106,7 @@ describe("live Finder source adapters", () => {
 				listener(message);
 				return liveUnsubscribe;
 			}),
+			onReconnect: () => () => {},
 		};
 		const source = createBridgeSource(fakeFs(familyResult()), "", live);
 		await source.setWatchSet(["/tmp"]);
