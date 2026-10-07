@@ -47,6 +47,17 @@ try {
     check(`${id} labels are not crushed`, layout.labels.every((width) => width >= 120), JSON.stringify(layout.labels));
   }
 
+  const alignment = await page.evaluate(() => {
+    const center = (el) => { const box = el.getBoundingClientRect(); return (box.top + box.bottom) / 2; };
+    return [...document.querySelectorAll(".nav-item")].map((item) => {
+      const icon = item.querySelector("svg.icon");
+      const label = item.querySelector(".nav-label");
+      if (icon === null || label === null) return 0;
+      return Math.abs(center(icon) - center(label));
+    });
+  });
+  check("sidebar icons share the label's vertical center", alignment.every((delta) => delta <= 1), `max delta ${Math.max(...alignment).toFixed(2)}px`);
+
   await page.locator('[data-nav="ai"]').first().click();
   await page.locator('[data-action="combo"]').click();
   await page.locator("#model-input").fill("GPT");

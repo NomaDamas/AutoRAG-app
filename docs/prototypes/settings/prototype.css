@@ -116,6 +116,7 @@ svg.icon-search { stroke-width: 2.2; }
 	text-align: left;
 	transition: background var(--dur-menu) var(--ease-out);
 }
+.nav-item .icon-slot { display: grid; place-items: center; flex: none; width: 16px; height: 16px; color: var(--text-muted); }
 .nav-item .icon { color: var(--text-muted); }
 .nav-item:hover { background: var(--bg-hover); color: var(--text-primary); }
 .nav-item.active { background: var(--accent); color: var(--text-on-accent); font-weight: 500; }
@@ -186,7 +187,7 @@ svg.icon-search { stroke-width: 2.2; }
 .switch[aria-checked="true"]::after { transform: translateX(14px); }
 
 .select-wrap { position: relative; display: inline-flex; }
-.select-wrap .icon { position: absolute; right: 8px; top: 7px; width: 14px; height: 14px; color: var(--text-muted); pointer-events: none; }
+.select-wrap .icon { position: absolute; right: 8px; top: 8px; width: 14px; height: 14px; color: var(--text-muted); pointer-events: none; }
 .select, .field, .trigger {
 	height: 30px;
 	border: 1px solid var(--border);
@@ -230,6 +231,7 @@ textarea.field { width: 100%; height: 68px; padding: 8px 10px; resize: vertical;
 .value { color: var(--text-muted); font-size: 12.5px; }
 
 .status { display: inline-flex; align-items: center; gap: 6px; color: var(--text-muted); font-size: 12.5px; white-space: nowrap; }
+.status .icon { width: 14px; height: 14px; }
 .dot { width: 7px; height: 7px; flex: none; border-radius: 50%; background: var(--text-faint); }
 .dot.ok { background: var(--ok-dot); }
 .dot.warn { background: var(--warn-dot); }
@@ -280,7 +282,7 @@ textarea.field { width: 100%; height: 68px; padding: 8px 10px; resize: vertical;
 .option-empty { padding: 10px 8px; color: var(--text-muted); font-size: 12px; }
 
 /* Inline notes replace callout boxes: icon + muted sentence, no frame. */
-.note { display: flex; gap: 8px; margin: 10px 0 0; color: var(--text-muted); font-size: 12.5px; line-height: 1.5; }
+.note { display: flex; align-items: flex-start; gap: 8px; margin: 10px 0 0; color: var(--text-muted); font-size: 12.5px; line-height: 1.5; }
 .note .icon { width: 15px; height: 15px; margin-top: 2px; color: var(--accent-text); }
 .note.warn .icon { color: var(--warn-text); }
 .note strong { color: var(--text-body); font-weight: 500; }
@@ -327,7 +329,7 @@ button.list-row:hover .list-title { color: var(--accent-text); }
 
 .path-list { display: flex; flex-direction: column; width: 100%; }
 .path-line { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--border-divider); color: var(--text-primary); font-size: 12.5px; }
-.path-line .icon { color: var(--text-muted); }
+.path-line .icon { width: 14px; height: 14px; color: var(--text-muted); }
 .path-line span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .path-list .btn { align-self: flex-start; margin-top: 10px; }
 
