@@ -30,7 +30,7 @@ describe("createProviderCredentialService", () => {
 		const fixture = await createFixture();
 		const service = createProviderCredentialService(fixture);
 
-		const status = service.set("OPENROUTER_API_KEY", "top-secret");
+		const status = await service.set("OPENROUTER_API_KEY", "top-secret");
 
 		expect(status).toEqual([{ envName: "OPENROUTER_API_KEY", stored: true, source: "stored" }]);
 		expect(fixture.env.OPENROUTER_API_KEY).toBe("top-secret");
@@ -38,13 +38,22 @@ describe("createProviderCredentialService", () => {
 		expect(JSON.stringify(status)).not.toContain("top-secret");
 	});
 
+	it("keeps every key when saves overlap", async () => {
+		const fixture = await createFixture();
+		const service = createProviderCredentialService(fixture);
+
+		await Promise.all([service.set("OPENROUTER_API_KEY", "one"), service.set("OPENAI_API_KEY", "two"), service.set("ANTHROPIC_API_KEY", "three")]);
+
+		expect((await service.list()).map((row) => row.envName)).toEqual(["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "OPENROUTER_API_KEY"]);
+	});
+
 	it("loads stored credentials into a fresh environment", async () => {
 		const fixture = await createFixture();
-		createProviderCredentialService(fixture).set("OPENROUTER_API_KEY", "top-secret");
+		await createProviderCredentialService(fixture).set("OPENROUTER_API_KEY", "top-secret");
 
 		const freshEnv: NodeJS.ProcessEnv = {};
 		const reloaded = createProviderCredentialService({ ...fixture, env: freshEnv });
-		const applied = reloaded.load();
+		const applied = await reloaded.load();
 
 		expect(applied).toEqual(["OPENROUTER_API_KEY"]);
 		expect(freshEnv.OPENROUTER_API_KEY).toBe("top-secret");
@@ -52,10 +61,10 @@ describe("createProviderCredentialService", () => {
 
 	it("load never overrides an ambient env value", async () => {
 		const fixture = await createFixture();
-		createProviderCredentialService(fixture).set("ANTHROPIC_API_KEY", "stored");
+		await createProviderCredentialService(fixture).set("ANTHROPIC_API_KEY", "stored");
 		const external: NodeJS.ProcessEnv = { OPENAI_API_KEY: "external", ANTHROPIC_API_KEY: "external-anthropic" };
 
-		const applied = createProviderCredentialService({ ...fixture, env: external }).load();
+		const applied = await createProviderCredentialService({ ...fixture, env: external }).load();
 
 		expect(applied).toEqual([]);
 		expect(external.OPENAI_API_KEY).toBe("external");
@@ -66,10 +75,10 @@ describe("createProviderCredentialService", () => {
 		const fixture = await createFixture();
 		const env: NodeJS.ProcessEnv = { OPENAI_API_KEY: "external", UNRELATED_KEY: "keep" };
 		const service = createProviderCredentialService({ ...fixture, env });
-		service.set("OPENAI_API_KEY", "stored");
+		await service.set("OPENAI_API_KEY", "stored");
 		expect(env.OPENAI_API_KEY).toBe("stored");
 
-		const status = service.remove("OPENAI_API_KEY");
+		const status = await service.remove("OPENAI_API_KEY");
 
 		expect(status).toEqual([{ envName: "OPENAI_API_KEY", stored: false, source: "env" }]);
 		expect(env.OPENAI_API_KEY).toBe("external");
@@ -80,7 +89,7 @@ describe("createProviderCredentialService", () => {
 		const fixture = await createFixture(true, "basic_text");
 		const service = createProviderCredentialService(fixture);
 
-		expect(() => service.set("OPENROUTER_API_KEY", "top-secret")).toThrow(/secure keyring/);
+		await expect(service.set("OPENROUTER_API_KEY", "top-secret")).rejects.toThrow(/secure keyring/);
 	});
 
 	it("refuses to touch a malformed credential store", async () => {
@@ -88,16 +97,17 @@ describe("createProviderCredentialService", () => {
 		await writeFile(fixture.filePath, "{not json");
 		const service = createProviderCredentialService(fixture);
 
-		expect(() => service.list()).toThrow(/refusing to overwrite/);
-		expect(() => service.set("OPENROUTER_API_KEY", "top-secret")).toThrow(/refusing to overwrite/);
+		await expect(service.list()).rejects.toThrow(/refusing to overwrite/);
+		await expect(service.set("OPENROUTER_API_KEY", "top-secret")).rejects.toThrow(/refusing to overwrite/);
 		expect(await readFile(fixture.filePath, "utf8")).toBe("{not json");
+		expect(fixture.env.OPENROUTER_API_KEY).toBeUndefined();
 	});
 
 	it("refuses to store when OS encryption is unavailable", async () => {
 		const fixture = await createFixture(false);
 		const service = createProviderCredentialService(fixture);
 
-		expect(() => service.set("OPENROUTER_API_KEY", "top-secret")).toThrow(/encryption is unavailable/);
+		await expect(service.set("OPENROUTER_API_KEY", "top-secret")).rejects.toThrow(/encryption is unavailable/);
 		expect(fixture.env.OPENROUTER_API_KEY).toBeUndefined();
 	});
 
@@ -105,18 +115,18 @@ describe("createProviderCredentialService", () => {
 		const fixture = await createFixture();
 		const service = createProviderCredentialService(fixture);
 
-		expect(() => service.set("not a name", "x")).toThrow(/Invalid environment variable name/);
-		expect(() => service.set("OPENROUTER_API_KEY", "")).toThrow(/must not be empty/);
+		await expect(service.set("not a name", "x")).rejects.toThrow(/Invalid environment variable name/);
+		await expect(service.set("OPENROUTER_API_KEY", "")).rejects.toThrow(/must not be empty/);
 	});
 
 	it("reports the ambient env source when a stored value is never applied", async () => {
 		const fixture = await createFixture();
-		createProviderCredentialService(fixture).set("OPENROUTER_API_KEY", "stored");
+		await createProviderCredentialService(fixture).set("OPENROUTER_API_KEY", "stored");
 		const env: NodeJS.ProcessEnv = { OPENROUTER_API_KEY: "ambient" };
 		const service = createProviderCredentialService({ ...fixture, env });
 
-		expect(service.load()).toEqual([]);
-		expect(service.list(["OPENROUTER_API_KEY"])).toEqual([{ envName: "OPENROUTER_API_KEY", stored: true, source: "env" }]);
+		expect(await service.load()).toEqual([]);
+		expect(await service.list(["OPENROUTER_API_KEY"])).toEqual([{ envName: "OPENROUTER_API_KEY", stored: true, source: "env" }]);
 		expect(env.OPENROUTER_API_KEY).toBe("ambient");
 	});
 
@@ -136,8 +146,8 @@ describe("createProviderCredentialService", () => {
 			},
 		});
 
-		expect(service.load()).toEqual([]);
-		expect(service.list(["OPENROUTER_API_KEY"])).toEqual([{ envName: "OPENROUTER_API_KEY", stored: true, source: "none" }]);
+		expect(await service.load()).toEqual([]);
+		expect(await service.list(["OPENROUTER_API_KEY"])).toEqual([{ envName: "OPENROUTER_API_KEY", stored: true, source: "none" }]);
 	});
 
 	it("refuses an unsupported credential store version instead of silently accepting it", async () => {
@@ -145,7 +155,7 @@ describe("createProviderCredentialService", () => {
 		await writeFile(fixture.filePath, `${JSON.stringify({ version: 2, entries: {} }, null, 2)}\n`);
 		const service = createProviderCredentialService(fixture);
 
-		expect(() => service.list()).toThrow(/version is not supported/);
+		await expect(service.list()).rejects.toThrow(/version is not supported/);
 		expect(await readFile(fixture.filePath, "utf8")).toContain('"version": 2');
 	});
 });

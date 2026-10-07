@@ -1,4 +1,4 @@
-import { existsSync, realpathSync } from "node:fs";
+import { access, realpath } from "node:fs/promises";
 import { isAbsolute, resolve, sep } from "node:path";
 import { AutoRAGLite, loadMirrorIndex, minSyncDocumentPath, minSyncWorkspaceRoot } from "@autorag/librarian";
 import { readRawConfigObject, resolveConfigPath, resolveConfigReadOnly, writeConfigObject } from "@autorag/librarian/core";
@@ -28,12 +28,8 @@ export interface IndexStatusServiceDeps {
 }
 
 /** The mirror records canonical paths (search roots are realpath-pinned); match them. */
-function canonical(path: string): string {
-	try {
-		return realpathSync(path);
-	} catch {
-		return resolve(path);
-	}
+function canonical(path: string): Promise<string> {
+	return realpath(path).catch(() => resolve(path));
 }
 
 function isUnder(path: string, root: string): boolean {
@@ -44,25 +40,29 @@ export function createIndexStatusService(deps: IndexStatusServiceDeps): IndexSta
 	const input = { flags: {}, env: deps.env, cwd: deps.cwd };
 	let refreshTail: Promise<void> = Promise.resolve();
 
-	function configuredExclusions(raw: Record<string, unknown>, workspacePath: string): string[] {
-		if (!Array.isArray(raw.excludePaths)) return [];
-		return raw.excludePaths
-			.filter((value): value is string => typeof value === "string" && value.length > 0)
-			.map((value) => canonical(isAbsolute(value) ? value : resolve(workspacePath, value)));
+	function configuredExclusions(raw: Record<string, unknown>, workspacePath: string): Promise<string[]> {
+		if (!Array.isArray(raw.excludePaths)) return Promise.resolve([]);
+		return Promise.all(
+			raw.excludePaths
+				.filter((value): value is string => typeof value === "string" && value.length > 0)
+				.map((value) => canonical(isAbsolute(value) ? value : resolve(workspacePath, value))),
+		);
 	}
 
 	async function snapshot(paths: readonly string[]): Promise<IndexStatus[]> {
 		const raw = readRawConfigObject(resolveConfigPath(input).configPath);
 		const config = await applyAppIndexing(resolveConfigReadOnly(input), raw);
-		const exclusions = (config.excludePaths ?? []).map(canonical);
-		const roots = config.searchPaths.map(canonical);
+		const [exclusions, roots] = await Promise.all([
+			Promise.all((config.excludePaths ?? []).map(canonical)),
+			Promise.all(config.searchPaths.map(canonical)),
+		]);
 		const index = loadMirrorIndex(config.workspacePath);
 		const entries = new Map(Object.values(index.entries).map((entry) => [entry.sourcePath, entry]));
 		const skips = new Map(Object.values(index.skipped ?? {}).map((entry) => [entry.sourcePath, entry]));
 		const minSyncRoot =
 			config.minSync?.enabled === false ? null : (config.minSync?.workspacePath ?? minSyncWorkspaceRoot(config.workspacePath));
-		return paths.map((path): IndexStatus => {
-			const real = canonical(path);
+		return Promise.all(paths.map(async (path): Promise<IndexStatus> => {
+			const real = await canonical(path);
 			if (!roots.some((root) => isUnder(real, root))) {
 				return { path, kind: "outside", excluded: false, toggleable: false, detail: "AutoRAG 검색 경로 밖의 파일" };
 			}
@@ -70,7 +70,9 @@ export function createIndexStatusService(deps: IndexStatusServiceDeps): IndexSta
 			const excluded = exclusion !== undefined;
 			const toggleable = exclusion === undefined || exclusion === real;
 			const entry = entries.get(real);
-			const staged = entry !== undefined && (minSyncRoot === null || existsSync(minSyncDocumentPath(minSyncRoot, entry.virtualPath)));
+			const staged =
+				entry !== undefined &&
+				(minSyncRoot === null || (await access(minSyncDocumentPath(minSyncRoot, entry.virtualPath)).then(() => true, () => false)));
 			if (excluded) {
 				return entry === undefined
 					? { path, kind: "excluded", excluded, toggleable, detail: toggleable ? "인덱싱에서 제외됨" : "상위 폴더가 인덱싱에서 제외됨" }
@@ -89,7 +91,7 @@ export function createIndexStatusService(deps: IndexStatusServiceDeps): IndexSta
 				return { path, kind: "skipped", excluded, toggleable, detail: `새로고침에서 건너뜀 (${skipReason})` };
 			}
 			return { path, kind: "pending", excluded, toggleable, detail: "아직 인덱싱되지 않음" };
-		});
+		}));
 	}
 
 	/** One refresh at a time; toggles made during a run coalesce into the next one. */
@@ -111,10 +113,10 @@ export function createIndexStatusService(deps: IndexStatusServiceDeps): IndexSta
 	return {
 		indexStatus: (paths) => snapshot(paths),
 		setIndexExcluded: async (path, excluded) => {
-			const real = canonical(path);
+			const real = await canonical(path);
 			const configPath = resolveConfigPath(input).configPath;
 			const raw = readRawConfigObject(configPath);
-			const current = configuredExclusions(raw, resolveConfigReadOnly(input).workspacePath);
+			const current = await configuredExclusions(raw, resolveConfigReadOnly(input).workspacePath);
 			const next = excluded
 				? [...new Set([...current, real])]
 				: current.filter((candidate) => candidate !== real);

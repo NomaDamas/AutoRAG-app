@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { access } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
 import { app, BrowserWindow, clipboard, dialog, nativeTheme, protocol, safeStorage, ShareMenu, shell, type OpenDialogOptions } from "electron";
 import { APPEARANCE_CHANNELS } from "../shared/appearance-contract";
@@ -67,9 +67,9 @@ function ensureAppIndexingMetadata(configPath: string): void {
 	}
 }
 
-function ensureAutoRAGConfig(): void {
+async function ensureAutoRAGConfig(): Promise<void> {
 	const configPath = autoragConfigPath();
-	if (existsSync(configPath)) {
+	if (await access(configPath).then(() => true, () => false)) {
 		ensureAppIndexingMetadata(configPath);
 		return;
 	}
@@ -103,7 +103,7 @@ async function refreshAutoragIndex(methods?: readonly string[]): Promise<ConfigR
 	if (selected.length === 0) throw new Error("At least one refresh method is required");
 	const input = { flags: {}, env: process.env, cwd: process.cwd() };
 	const configPath = resolveConfigPath(input).configPath;
-	const raw = existsSync(configPath) ? readRawConfigObject(configPath) : {};
+	const raw = (await access(configPath).then(() => true, () => false)) ? readRawConfigObject(configPath) : {};
 	const effective = await applyAppIndexing(resolveConfigReadOnly(input), raw);
 	const diagnostics: ConfigRefreshDiagnostic[] = [];
 	try {
@@ -242,7 +242,7 @@ app.whenReady().then(async () => {
 	const iconProvider = createIconProvider();
 	registerIconProtocol(iconProvider);
 	registerQuickLookIpc();
-	ensureAutoRAGConfig();
+	await ensureAutoRAGConfig();
 	const devLabel = resolveDevLabel();
 	console.log(`[autorag] ${formatWindowTitle(APP_NAME, APP_VERSION, devLabel)}`);
 	const qaRoot = process.env.AUTORAG_QA_ROOT?.trim() ?? "";
@@ -377,7 +377,7 @@ app.whenReady().then(async () => {
 		safeStorage,
 		env: process.env,
 	});
-	credentials.load();
+	await credentials.load();
 	const settingsService = createSettingsService({
 		directory: join(app.getPath("userData"), "settings"),
 		dataSources: createDataSourceStatusService({ env: process.env, cwd: process.cwd() }),
