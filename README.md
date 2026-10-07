@@ -141,6 +141,42 @@ never re-sent and fails with a message asking the user to check the result.
 Quitting asks the worker to release its watches and waits up to 2 s before
 exiting. QA lane: `scripts/manual-qa/run-qa-finder-fs-worker-crash.mjs`
 (SIGKILLs the worker twice and checks the tabs recover within 5 s).
+## First-run onboarding
+
+A fresh install opens onboarding instead of the Finder: welcome, permissions,
+account, folders, embedding, data sources, plan, the model step (BYOK only), and
+the first index. The screens port
+`docs/design-reference/onboarding/onboarding-prototype.html`; the draft is saved
+after every change, so a relaunch (for example after granting Full Disk Access)
+resumes at the same step.
+
+- **Permissions** probe Full Disk Access for real (macOS) and re-check every two
+  seconds; notifications post a real system notification; launch at login is the
+  same setting as Settings › General and registers the OS login item in
+  packaged builds.
+- **Folders** are pre-scanned with the indexer's own rules (supported
+  extensions, size cap, skipped dependency/code folders) to show real file
+  counts and an ETA.
+- **Embedding** is local (`qwen3-embedding-0.6b`); cloud embedding is shown but
+  unavailable, since corpus text is never sent to remote embedders.
+- **Data sources** list only connectors that are installed and authenticated
+  (Spotlight, GitHub, Obsidian, Apple Mail, Slack), each with a drafted
+  description.
+- **Model** (BYOK) verifies the provider key against the provider's API and
+  stores it in the encrypted credential store, never in `config.json`.
+- **Indexing** writes `searchPaths`, the embedder (only when none is set), the
+  enabled datasources and their access tags, and the BYOK model into the shared
+  config, then runs the same refresh as Settings. A config still pointing its
+  `workspacePath` at the app's cwd seed is moved to `<AutoRAG home>/workspace`.
+  The Finder opens only after the first index succeeds.
+
+Account sign-in and plan checkout are placeholders: they record the choice in
+the onboarding draft so QA can walk the full flow, but no account is created,
+no card data is stored or sent, and nothing is charged.
+
+Onboarding state lives in `<userData>/onboarding/state.json`. Set
+`AUTORAG_SKIP_ONBOARDING=1` to open the Finder directly; the manual-QA launcher
+does this for every lane except `run-qa-onboarding.mjs`.
 
 ## Live filesystem sync
 

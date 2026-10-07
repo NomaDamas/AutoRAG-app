@@ -1,16 +1,43 @@
-import { access } from "node:fs/promises";
-import { isAbsolute, join } from "node:path";
-import { app, BrowserWindow, clipboard, dialog, ipcMain, nativeTheme, protocol, safeStorage, ShareMenu, shell, type OpenDialogOptions } from "electron";
+import { access, open, readdir, readFile } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { existsSync } from "node:fs";
+import { isAbsolute, join, sep } from "node:path";
+import {
+	app,
+	BrowserWindow,
+	clipboard,
+	dialog,
+	ipcMain,
+	nativeImage,
+	nativeTheme,
+	Notification,
+	powerSaveBlocker,
+	protocol,
+	safeStorage,
+	ShareMenu,
+	screen,
+	shell,
+	type OpenDialogOptions,
+} from "electron";
 import { APPEARANCE_CHANNELS } from "../shared/appearance-contract";
-import type { AppAppearance, ConfigRefreshDiagnostic, ConfigRefreshResult } from "../shared/settings-contract";
+import { ONBOARDING_CHANNELS, ONBOARDING_PENDING_FLAG, type NetworkCheck } from "../shared/onboarding-contract";
+import type { AppAppearance, ConfigRefreshResult } from "../shared/settings-contract";
 import { attachQuickLook, PREVIEW_PRIVILEGED_SCHEME, registerPreviewProtocol, registerQuickLookIpc } from "../preview/node/register";
-import { AutoRAGLite, writeDefaultConfig, type RefreshMethod } from "@autorag/librarian";
-import { readRawConfigObject, resolveConfigPath, resolveConfigReadOnly, writeConfigObject } from "@autorag/librarian/core";
-import { APP_INDEXING_CAPABILITIES, applyAppIndexing, DEFAULT_CODE_FOLDER_NAMES, readAppIndexing } from "./app-indexing";
+import { createDefaultParserRegistry, DEFAULT_MAX_SOURCE_BYTES, writeDefaultConfig } from "@autorag/librarian";
+import { readRawConfigObject, resolveConfigPath, writeConfigObject } from "@autorag/librarian/core";
+import { DEFAULT_CODE_FOLDER_NAMES } from "./app-indexing";
 import { isJsonObject } from "../shared/settings-contract";
 import { createIconProvider } from "./file-icon";
 import { registerIconProtocol, THUMB_PRIVILEGED_SCHEME } from "./icon-register";
 import type { KnownFolders } from "../shared/fs-worker-contract";
+import { hasErrorCode, pathExists } from "./fs-entry";
+import { refreshAutoragIndex, resolveEffectiveConfig } from "./index-refresh";
+import { createFolderScanCoordinator, supportedExtensionsFromRegistry } from "./onboarding-scan";
+import { createOnboardingService, type OnboardingService } from "./onboarding-service";
+import { detectSources } from "./onboarding-sources";
+import { detectModelProviders, verifyModel as verifyModelRequest } from "./onboarding-models";
+import { FS_CHANNELS } from "../shared/fs-contract";
+import { DUPEY_LAYER_ID, LIVE_CHANNELS } from "../shared/live-contract";
 import { APP_NAME, APP_VERSION, formatWindowTitle, type DevLabel } from "../shared/app-info";
 import { createChatStore } from "./chat-store";
 import { createDataSourceStatusService } from "./datasource-status";
@@ -24,6 +51,10 @@ import { createSettingsService } from "./settings-service";
 import {
 	registerActionsIpcHandlers,
 	registerDragOutIpcHandlers,
+	registerFsIpcHandlers,
+	registerIndexIpcHandlers,
+	registerLiveIpcHandlers,
+	registerOnboardingIpcHandlers,
 	registerSearchIpcHandlers,
 	registerSettingsIpcHandlers,
 } from "./ipc";
@@ -67,85 +98,9 @@ async function ensureAutoRAGConfig(): Promise<void> {
 	}
 }
 
-const REFRESH_METHODS: Record<RefreshMethod, true> = {
-	parsed: true,
-	minsync: true,
-	datasources: true,
-	jikji: true,
-	everything: true,
-	fsearch: true,
-};
-
-/** Manual index refresh from Settings; returns diagnostics instead of throwing for known failures. */
-async function refreshAutoragIndex(methods?: readonly string[]): Promise<ConfigRefreshResult> {
-	const requested = methods ?? ["parsed", "minsync"];
-	const invalid = requested.filter((method) => REFRESH_METHODS[method as RefreshMethod] !== true);
-	if (invalid.length > 0) throw new Error(`Unknown refresh method(s): ${invalid.join(", ")}`);
-	const selected = requested as readonly RefreshMethod[];
-	if (selected.length === 0) throw new Error("At least one refresh method is required");
-	const input = { flags: {}, env: process.env, cwd: process.cwd() };
-	const configPath = resolveConfigPath(input).configPath;
-	const raw = (await access(configPath).then(() => true, () => false)) ? readRawConfigObject(configPath) : {};
-	const effective = await applyAppIndexing(resolveConfigReadOnly(input), raw);
-	const diagnostics: ConfigRefreshDiagnostic[] = [];
-	try {
-		const lite = new AutoRAGLite(effective);
-		const result = await lite.refresh(false, { methods: selected });
-		diagnostics.push(
-			...result.diagnostics.map((diagnostic) => ({
-				code: String(diagnostic.code),
-				severity: diagnostic.severity,
-				message: diagnostic.message,
-			})),
-		);
-		const failures: string[] = [];
-		if (result.minsync !== undefined && result.minsync.ok === false) failures.push(`minsync: ${result.minsync.reason ?? "failed"}`);
-		if (result.everything !== undefined && result.everything.ok === false) failures.push(`everything: ${result.everything.reason ?? "failed"}`);
-		if (result.fsearch !== undefined && result.fsearch.ok === false) {
-			failures.push(`fsearch: ${result.fsearch.message ?? result.fsearch.reason ?? "failed"}`);
-		}
-		for (const datasource of result.datasources ?? []) {
-			if (datasource.ok === false) failures.push(`datasources ${datasource.skill}: ${datasource.message ?? datasource.error ?? "failed"}`);
-		}
-		for (const diagnostic of diagnostics) {
-			if (diagnostic.severity === "error") failures.push(diagnostic.message);
-		}
-		const settings = readAppIndexing(raw);
-		if (settings.excludeCodeFolders) {
-			const unsupported = selected
-				.filter((method): method is "everything" | "fsearch" => method === "everything" || method === "fsearch")
-				.filter((method) => APP_INDEXING_CAPABILITIES[method] !== true);
-			if (unsupported.length > 0) {
-				diagnostics.push({
-					code: "code-folder-exclusions-unsupported",
-					severity: "warning",
-					message: `Automatic code-folder exclusions are not forwarded to ${unsupported.join(", ")} (its native client has no exclusion option).`,
-				});
-			}
-		}
-		const error = failures.length > 0 ? failures.join("; ") : null;
-		return {
-			ok: error === null,
-			methods: selected,
-			scanned: result.scanned,
-			written: result.written,
-			deleted: result.deleted,
-			skipped: result.skipped,
-			diagnostics,
-			error,
-		};
-	} catch (error) {
-		return {
-			ok: false,
-			methods: selected,
-			scanned: 0,
-			written: 0,
-			deleted: 0,
-			skipped: 0,
-			diagnostics,
-			error: error instanceof Error ? error.message : String(error),
-		};
-	}
+/** Manual index refresh from Settings (shared with onboarding's first run). */
+function refreshConfig(methods?: readonly string[]): Promise<ConfigRefreshResult> {
+	return refreshAutoragIndex({ env: process.env, cwd: process.cwd() }, methods);
 }
 
 /** Unpackaged runs (and AUTORAG_DEV_LABEL=1) carry the clone label. */
@@ -163,12 +118,12 @@ function loadRendererPage(window: BrowserWindow, page: string): void {
 	}
 }
 
-function createMainWindow(devLabel: DevLabel | null, appearance: AppAppearance): BrowserWindow {
+function createMainWindow(devLabel: DevLabel | null, appearance: AppAppearance, pending: boolean): BrowserWindow {
 	const window = new BrowserWindow({
-		width: 1440,
-		height: 900,
-		minWidth: 1360,
-		minHeight: 820,
+		// Onboarding uses the prototype's 1120×720 canvas; the Finder keeps its own size.
+		...(pending
+			? { width: 1120, height: 720, minWidth: 960, minHeight: 680, center: true }
+			: { width: 1440, height: 900, minWidth: 1360, minHeight: 820 }),
 		title: formatWindowTitle(APP_NAME, APP_VERSION, devLabel),
 		// v7: traffic lights overlay the sidebar header / toolbar (macOS-native chrome).
 		titleBarStyle: "hiddenInset",
@@ -180,6 +135,7 @@ function createMainWindow(devLabel: DevLabel | null, appearance: AppAppearance):
 			additionalArguments: [
 				...(devLabel === null ? [] : [`--autorag-dev-label=${JSON.stringify(devLabel)}`]),
 				`--autorag-appearance=${appearance}`,
+				...(pending ? [ONBOARDING_PENDING_FLAG] : []),
 			],
 		},
 	});
@@ -212,6 +168,101 @@ function sendToMainWindow(channel: string, payload: unknown): void {
 function sendAppearance(appearance: AppAppearance): void {
 	for (const window of BrowserWindow.getAllWindows()) {
 		if (!window.isDestroyed()) window.webContents.send(APPEARANCE_CHANNELS.changed, appearance);
+	}
+}
+
+/** The `.app` bundle to drag into Full Disk Access: the packaged app, else the Electron bundle. */
+function resolveAppBundlePath(): string {
+	const marker = `${sep}Contents${sep}MacOS${sep}`;
+	const executable = app.isPackaged ? app.getPath("exe") : process.execPath;
+	const at = executable.indexOf(marker);
+	return at >= 0 ? executable.slice(0, at) : executable;
+}
+
+/** macOS Full Disk Access probe: open (never read) a TCC-protected path. */
+async function probeFullDiskAccess(home: string): Promise<boolean> {
+	const candidates = [
+		join(home, "Library", "Application Support", "com.apple.TCC", "TCC.db"),
+		join(home, "Library", "Safari"),
+	];
+	for (const path of candidates) {
+		try {
+			const handle = await open(path, "r");
+			await handle.close();
+			return true;
+		} catch (error) {
+			if (hasErrorCode(error, "EACCES") || hasErrorCode(error, "EPERM")) continue;
+		}
+	}
+	return false;
+}
+
+/** Windows firewall/network gate: a plain request to a public 204 endpoint. */
+async function checkNetworkReachability(): Promise<NetworkCheck> {
+	const controller = new AbortController();
+	const timer = setTimeout(() => controller.abort(), 5000).unref();
+	try {
+		const response = await fetch("https://www.gstatic.com/generate_204", { signal: controller.signal });
+		return { ok: response.ok || response.status === 204, error: response.ok || response.status === 204 ? null : `HTTP ${response.status}` };
+	} catch (error) {
+		return { ok: false, error: error instanceof Error ? error.message : String(error) };
+	} finally {
+		clearTimeout(timer);
+	}
+}
+
+/** Runs one OS command with a 5s deadline; rejects with stderr (or the spawn error). */
+function runCommand(command: string, args: readonly string[]): Promise<string> {
+	const { promise, resolve, reject } = Promise.withResolvers<string>();
+	execFile(command, [...args], { timeout: 5000, windowsHide: true }, (error, stdout, stderr) => {
+		if (error !== null) {
+			const detail = stderr.trim();
+			reject(new Error(detail.length > 0 ? detail : error.message));
+			return;
+		}
+		resolve(stdout);
+	});
+	return promise;
+}
+
+/** Real system notification; resolves whether the OS displayed it. */
+function showSystemNotification(): Promise<boolean> {
+	if (!Notification.isSupported()) return Promise.resolve(false);
+	return new Promise<boolean>((resolve) => {
+		const notification = new Notification({ title: "AutoRAG", body: "알림이 켜졌습니다." });
+		let settled = false;
+		const done = (value: boolean): void => {
+			if (settled) return;
+			settled = true;
+			clearTimeout(timer);
+			resolve(value);
+		};
+		const timer = setTimeout(() => done(false), 5000);
+		notification.on("show", () => done(true));
+		notification.on("failed", () => done(false));
+		try {
+			notification.show();
+		} catch {
+			done(false);
+		}
+	});
+}
+
+/** macOS cloud placeholders under a root, batched into one `find`; local roots short-circuit. */
+async function listMacDatalessPaths(root: string): Promise<ReadonlySet<string>> {
+	if (!/Library\/(CloudStorage|Mobile Documents)|CloudDocs/u.test(root)) return new Set();
+	try {
+		const stdout = await new Promise<string>((resolve, reject) => {
+			execFile(
+				"/usr/bin/find",
+				[root, "-flags", "+dataless"],
+				{ timeout: 10_000, maxBuffer: 16 * 1024 * 1024, windowsHide: true },
+				(error, out) => (error !== null ? reject(error) : resolve(out)),
+			);
+		});
+		return new Set(stdout.split("\n").filter((line: string) => line.length > 0));
+	} catch {
+		return new Set();
 	}
 }
 
@@ -328,23 +379,196 @@ app.whenReady().then(async () => {
 		env: process.env,
 	});
 	await credentials.load();
+	const autoRagConfig = createAutoRagConfigService({ env: process.env, cwd: process.cwd() });
+	const applyLoginItem = (enabled: boolean): void => {
+		// Unpackaged, this would register the Electron binary itself, not AutoRAG.
+		if (!app.isPackaged) return;
+		app.setLoginItemSettings({ openAtLogin: enabled });
+	};
+	let appliedLaunchAtLogin: boolean | null = null;
 	const settingsService = createSettingsService({
 		directory: join(app.getPath("userData"), "settings"),
 		dataSources: createDataSourceStatusService({ env: process.env, cwd: process.cwd() }),
 		models: createModelStatusService({ env: process.env, cwd: process.cwd() }),
-		config: createAutoRagConfigService({ env: process.env, cwd: process.cwd() }),
-		refreshConfig: refreshAutoragIndex,
+		config: autoRagConfig,
+		refreshConfig,
 		credentials,
 		onSettingsChanged: (settings) => {
 			applyAppearance(settings.appearance);
 			applyScanInterval(settings.dupeyScanIntervalMinutes);
+			if (appliedLaunchAtLogin !== settings.launchAtLogin) {
+				appliedLaunchAtLogin = settings.launchAtLogin;
+				applyLoginItem(settings.launchAtLogin);
+			}
 		},
 	});
 	registerSettingsIpcHandlers(settingsService);
 	const settings = await settingsService.get();
+	appliedLaunchAtLogin = settings.launchAtLogin;
 	applyAppearance(settings.appearance);
 	if (settings.dupeyScanIntervalMinutes !== DEFAULT_SCAN_INTERVAL_MINUTES) applyScanInterval(settings.dupeyScanIntervalMinutes);
-	mainWindow = createMainWindow(devLabel, currentAppearance);
+	const userDataDir = app.getPath("userData");
+	const supportedExtensions = supportedExtensionsFromRegistry(createDefaultParserRegistry());
+	const scanCoordinator = createFolderScanCoordinator({
+		options: { supportedExtensions, maxSourceBytes: DEFAULT_MAX_SOURCE_BYTES },
+		...(process.platform === "darwin" ? { listDatalessPaths: listMacDatalessPaths } : {}),
+		emit: (scan) => sendToMainWindow(ONBOARDING_CHANNELS.scanProgress, scan),
+	});
+	const onboardingService: OnboardingService = createOnboardingService({
+		userDataDir,
+		env: process.env,
+		cwd: process.cwd(),
+		platform: process.platform,
+		home,
+		knownFolders: {
+			desktop: knownFolder("desktop", join(home, "Desktop")),
+			documents: knownFolder("documents", join(home, "Documents")),
+			downloads: knownFolder("downloads", join(home, "Downloads")),
+			pictures: knownFolder("pictures", join(home, "Pictures")),
+		},
+		iCloudDrivePath:
+			process.platform === "darwin" ? join(home, "Library", "Mobile Documents", "com~apple~CloudDocs") : null,
+		cloudDrives: async () => {
+			if (process.platform === "darwin") {
+				const root = join(home, "Library", "CloudStorage");
+				const names = await readdir(root).catch(() => [] as string[]);
+				// File Provider folders are `<Provider>-<account>`; accounts may contain `-`.
+				return names
+					.filter((name) => !name.startsWith("."))
+					.map((name) => {
+						const dash = name.indexOf("-");
+						return { path: join(root, name), name: dash < 0 ? name : `${name.slice(0, dash)} · ${name.slice(dash + 1)}` };
+					});
+			}
+			if (process.platform === "win32") {
+				const locations = await workerHost.client.call<readonly { readonly section: string; readonly available: boolean; readonly path: string; readonly name: string }[]>("locations");
+				return locations
+					.filter((location) => location.section === "cloud" && location.available)
+					.map((location) => ({ path: location.path, name: location.name }));
+			}
+			return [];
+		},
+		ocrEnabled: async () => {
+			try {
+				const raw = readRawConfigObject(autoragConfigPath());
+				const parserOptions = isJsonObject(raw.parserOptions) ? raw.parserOptions : {};
+				const ocr = isJsonObject(parserOptions.ocr) ? parserOptions.ocr : {};
+				return ocr.enabled === true;
+			} catch {
+				return false;
+			}
+		},
+		configPath: autoragConfigPath(),
+		resolveWorkspacePath: async () => (await resolveEffectiveConfig({ env: process.env, cwd: process.cwd() })).config.workspacePath,
+		refresh: refreshConfig,
+		credentials,
+		settings: settingsService,
+		detectSources: () =>
+			detectSources({
+				platform: process.platform,
+				home,
+				env: process.env,
+				run: runCommand,
+				pathExists,
+				readDirNames: (path) => readdir(path).catch(() => [] as string[]),
+				readFileText: (path) => readFile(path, "utf8"),
+			}),
+		gitToken: async () => {
+			try {
+				const token = (await runCommand("gh", ["auth", "token"])).trim();
+				return token.length > 0 ? token : null;
+			} catch {
+				return null;
+			}
+		},
+		detectModels: () =>
+			detectModelProviders({ env: process.env, credentials, fetchFn: fetch, modelsCatalog: () => autoRagConfig.modelsCatalog() }),
+		verifyModel: (request) =>
+			verifyModelRequest(
+				{ env: process.env, credentials, fetchFn: fetch, modelsCatalog: () => autoRagConfig.modelsCatalog() },
+				request,
+			),
+		send: sendToMainWindow,
+		openExternal: (url) => shell.openExternal(url),
+		relaunch: () => {
+			app.relaunch();
+			app.exit(0);
+		},
+		appBundlePath: resolveAppBundlePath,
+		startDrag: (path) => {
+			const target = mainWindow;
+			if (target === null || target.isDestroyed()) return;
+			void app.getFileIcon(path).then(
+				(icon) => {
+					if (target.isDestroyed()) return;
+					const image = icon.isEmpty() ? nativeImage.createFromBitmap(Buffer.alloc(4), { width: 1, height: 1 }) : icon;
+					target.webContents.startDrag({ file: path, icon: image });
+				},
+				() => undefined,
+			);
+		},
+		pickFolders: async () => {
+			const options: OpenDialogOptions = {
+				title: "폴더 선택",
+				buttonLabel: "추가",
+				properties: ["openDirectory", "multiSelections", "createDirectory"],
+			};
+			const result = mainWindow === null ? await dialog.showOpenDialog(options) : await dialog.showOpenDialog(mainWindow, options);
+			return result.canceled ? [] : result.filePaths;
+		},
+		showNotification: showSystemNotification,
+		notificationsSupported: () => Notification.isSupported(),
+		applyLoginItem,
+		startPowerSaveBlocker: () => powerSaveBlocker.start("prevent-app-suspension"),
+		stopPowerSaveBlocker: (id) => powerSaveBlocker.stop(id),
+		probeFullDiskAccess: () => probeFullDiskAccess(home),
+		checkNetwork: checkNetworkReachability,
+		startScans: (paths) => scanCoordinator.start(paths),
+		folderTotals: (paths) => scanCoordinator.totalFiles(paths),
+		onComplete: () => {
+			const window = mainWindow;
+			if (window === null || window.isDestroyed()) return;
+			// Centering can move a border-spanning window onto another display.
+			// Apply the target size both before and after centering so the Finder
+			// hand-off uses the display where the window actually ended up.
+			const resizeToWorkArea = (): void => {
+				const work = screen.getDisplayMatching(window.getBounds()).workAreaSize;
+				window.setMinimumSize(Math.min(1360, work.width), Math.min(820, work.height));
+				window.setSize(Math.min(1440, work.width), Math.min(900, work.height));
+			};
+			resizeToWorkArea();
+			window.center();
+			resizeToWorkArea();
+			window.center();
+		},
+	});
+	registerOnboardingIpcHandlers(onboardingService);
+	const openMainWindow = (): BrowserWindow => {
+		const window = createMainWindow(devLabel, currentAppearance, onboardingService.pending());
+		const clearWatchSet = (): void => {
+			void workerHost.client.call("setWatchSet", [[]]);
+		};
+		window.webContents.on("render-process-gone", clearWatchSet);
+		window.webContents.on("destroyed", clearWatchSet);
+		window.on("close", (event) => {
+			if (!onboardingService.pending() || !onboardingService.isIndexing()) return;
+			event.preventDefault();
+			void dialog
+				.showMessageBox(window, {
+					type: "warning",
+					buttons: ["종료", "계속"],
+					defaultId: 1,
+					cancelId: 1,
+					message: "인덱싱이 진행 중입니다.",
+					detail: "종료하면 진행이 멈춥니다.",
+				})
+				.then((result) => {
+					if (result.response === 0 && !window.isDestroyed()) window.destroy();
+				});
+		});
+		return window;
+	};
+	mainWindow = openMainWindow();
 	app.on("activate", () => {
 		if (mainWindow === null || mainWindow.isDestroyed()) {
 			mainWindow = createMainWindow(devLabel, currentAppearance);

@@ -1,0 +1,648 @@
+import { existsSync, readFileSync, realpathSync } from "node:fs";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { basename, join, sep } from "node:path";
+import { readRawConfigObject, writeConfigObject } from "@autorag/librarian/core";
+import {
+	ONBOARDING_CHANNELS,
+	type ByokProviderId,
+	type DetectedModelProvider,
+	type EmbeddingInfo,
+	type FolderCandidate,
+	type FolderScan,
+	type IndexingPhase,
+	type IndexingRequest,
+	type IndexingStatus,
+	type NetworkCheck,
+	type OnboardingDraft,
+	type OnboardingModelChoice,
+	type OnboardingSnapshot,
+	type OnboardingSourceChoice,
+	type PermissionStatus,
+	type PlanId,
+	type SourceDetection,
+	type SourceFacts,
+	type SourceId,
+	type ModelVerifyRequest,
+	type ModelVerifyResult,
+} from "../shared/onboarding-contract";
+import type { AppSettings, ConfigRefreshResult } from "../shared/settings-contract";
+import { isJsonObject } from "../shared/settings-contract";
+import { applyIndexingConfig } from "./onboarding-config";
+import { PROVIDER_ENV_NAME } from "./onboarding-models";
+import { computeIndexingProgress } from "./onboarding-progress";
+import type { ProviderCredentialService } from "./provider-credentials";
+
+/**
+ * The main-process half of onboarding: everything that touches the OS or the
+ * shared AutoRAG config. The renderer owns the draft and persists it through
+ * `save`; this service owns permission probes, folder pre-scans, connector
+ * detection, key verification (secrets never cross back), and the first index.
+ * Account sign-in and checkout are placeholders — the choice is recorded, never
+ * sent anywhere.
+ */
+
+const EMBEDDER_PROFILE = "qwen3-embedding-0.6b";
+const EMBEDDER_DIMENSION = 1024;
+const EMBEDDER_MODEL_BYTES = 639_150_592;
+const EMBEDDER_MODEL_FILE = "Qwen3-Embedding-0.6B-Q8_0.gguf";
+const POLL_INTERVAL_MS = 1000;
+const SOURCE_LABELS: Readonly<Record<SourceId, string>> = {
+	spotlight: "Spotlight",
+	github: "GitHub",
+	obsidian: "Obsidian",
+	mail: "Mail",
+	slack: "Slack",
+};
+
+export interface OnboardingServiceDeps {
+	readonly userDataDir: string;
+	readonly env: NodeJS.ProcessEnv;
+	/** The process cwd the app seeds a fresh config's `workspacePath` with. */
+	readonly cwd: string;
+	readonly platform: NodeJS.Platform;
+	readonly home: string;
+	readonly knownFolders: {
+		readonly desktop: string;
+		readonly documents: string;
+		readonly downloads: string;
+		readonly pictures: string;
+	};
+	readonly iCloudDrivePath: string | null;
+	readonly cloudDrives: () => Promise<readonly { readonly path: string; readonly name: string }[]>;
+	readonly ocrEnabled: () => Promise<boolean>;
+	readonly configPath: string;
+	readonly resolveWorkspacePath: () => Promise<string>;
+	readonly refresh: (methods?: readonly string[]) => Promise<ConfigRefreshResult>;
+	readonly credentials: ProviderCredentialService;
+	readonly settings: {
+		get(): Promise<AppSettings>;
+		set(patch: Partial<AppSettings>): Promise<AppSettings>;
+	};
+	readonly detectSources: () => Promise<SourceDetection>;
+	readonly gitToken: () => Promise<string | null>;
+	readonly detectModels: () => Promise<readonly DetectedModelProvider[]>;
+	readonly verifyModel: (request: ModelVerifyRequest) => Promise<ModelVerifyResult>;
+	readonly send: (channel: string, payload: unknown) => void;
+	readonly openExternal: (url: string) => Promise<void>;
+	readonly relaunch: () => void;
+	readonly appBundlePath: () => string;
+	readonly startDrag: (path: string) => void;
+	readonly pickFolders: () => Promise<readonly string[]>;
+	readonly showNotification: () => Promise<boolean>;
+	readonly notificationsSupported: () => boolean;
+	readonly applyLoginItem: (enabled: boolean) => void;
+	readonly startPowerSaveBlocker: () => number;
+	readonly stopPowerSaveBlocker: (id: number) => void;
+	readonly probeFullDiskAccess: () => Promise<boolean>;
+	readonly checkNetwork: () => Promise<NetworkCheck>;
+	/** Starts (or re-emits) a pre-scan per path; totals stream through `send`. */
+	readonly startScans: (paths: readonly string[]) => Promise<void>;
+	readonly listDatalessPaths?: (root: string) => Promise<ReadonlySet<string>>;
+	/** Sum of the given folders' finished pre-scans, for the ETA denominator. */
+	readonly folderTotals: (paths: readonly string[]) => number;
+	readonly onComplete: () => void;
+	readonly now?: () => number;
+}
+
+export interface OnboardingService {
+	pending(): boolean;
+	load(): Promise<OnboardingSnapshot>;
+	save(draft: unknown): Promise<void>;
+	permissions(): Promise<PermissionStatus>;
+	openFullDiskAccess(): Promise<void>;
+	dragApp(): void;
+	relaunch(): Promise<void>;
+	requestNotifications(): Promise<boolean>;
+	openNotificationSettings(): Promise<void>;
+	checkNetwork(): Promise<NetworkCheck>;
+	setLaunchAtLogin(enabled: boolean): Promise<boolean>;
+	folderCandidates(): Promise<readonly FolderCandidate[]>;
+	pickFolders(): Promise<readonly FolderCandidate[]>;
+	scanFolders(paths: readonly unknown[]): Promise<void>;
+	embedding(): Promise<EmbeddingInfo>;
+	detectSources(): Promise<SourceDetection>;
+	detectModels(): Promise<readonly DetectedModelProvider[]>;
+	verifyModel(request: unknown): Promise<ModelVerifyResult>;
+	startIndexing(request: unknown): Promise<IndexingStatus>;
+	indexStatus(): Promise<IndexingStatus>;
+	/** Sync: is a first index running right now (quit-confirmation gate). */
+	isIndexing(): boolean;
+	complete(): Promise<void>;
+	dispose(): void;
+}
+
+interface PersistedIndexingState {
+	readonly startedAt: string;
+	readonly finishedAt: string | null;
+}
+
+interface PersistedOnboardingState {
+	readonly completed: boolean;
+	readonly draft: OnboardingDraft | null;
+	readonly indexing?: PersistedIndexingState;
+}
+
+const STEP_IDS: Readonly<Record<string, true>> = {
+	welcome: true,
+	permissions: true,
+	account: true,
+	folders: true,
+	embedding: true,
+	sources: true,
+	plan: true,
+	model: true,
+	indexing: true,
+};
+const PLAN_IDS: Readonly<Record<string, true>> = { free: true, air: true, pro: true, byok: true };
+const BYOK_PROVIDERS: Readonly<Record<string, true>> = {
+	anthropic: true,
+	openai: true,
+	openrouter: true,
+	google: true,
+	ollama: true,
+	"openai-compatible": true,
+};
+const SOURCE_IDS: Readonly<Record<string, true>> = {
+	spotlight: true,
+	github: true,
+	obsidian: true,
+	mail: true,
+	slack: true,
+};
+const ACCOUNT_METHODS: Readonly<Record<string, true>> = { apple: true, google: true, email: true };
+
+function onboardingStatePath(userDataDir: string): string {
+	return join(userDataDir, "onboarding", "state.json");
+}
+
+function readOnboardingState(userDataDir: string): PersistedOnboardingState | null {
+	const path = onboardingStatePath(userDataDir);
+	if (!existsSync(path)) return null;
+	try {
+		const parsed: unknown = JSON.parse(readFileSync(path, "utf8"));
+		if (!isJsonObject(parsed) || typeof parsed.completed !== "boolean") return null;
+		return parsed as unknown as PersistedOnboardingState;
+	} catch {
+		return null;
+	}
+}
+
+/** Pending when no state file exists and the QA skip flag is unset; otherwise the stored flag. */
+export function readOnboardingPending(userDataDir: string, env: NodeJS.ProcessEnv): boolean {
+	const state = readOnboardingState(userDataDir);
+	if (state !== null) return !state.completed;
+	return env.AUTORAG_SKIP_ONBOARDING !== "1";
+}
+
+function isAbsoluteString(value: unknown): value is string {
+	return typeof value === "string" && value.length > 0 && (value.startsWith("/") || /^[A-Za-z]:[\\/]/u.test(value));
+}
+
+function isFolderChoice(value: unknown): boolean {
+	return isJsonObject(value) && isAbsoluteString(value.path) && typeof value.selected === "boolean";
+}
+
+function isSourceChoice(value: unknown): boolean {
+	return isJsonObject(value) && typeof value.id === "string" && SOURCE_IDS[value.id] === true && typeof value.on === "boolean" && typeof value.description === "string";
+}
+
+function isModelChoice(value: unknown): value is OnboardingModelChoice {
+	return (
+		isJsonObject(value) &&
+		typeof value.provider === "string" &&
+		BYOK_PROVIDERS[value.provider] === true &&
+		typeof value.baseUrl === "string" &&
+		typeof value.modelId === "string" &&
+		typeof value.verified === "boolean"
+	);
+}
+
+function isOnboardingDraft(value: unknown): value is OnboardingDraft {
+	if (!isJsonObject(value)) return false;
+	if (value.version !== 1) return false;
+	if (typeof value.stepId !== "string" || STEP_IDS[value.stepId] !== true) return false;
+	const account = value.account;
+	if (account !== null) {
+		if (!isJsonObject(account) || typeof account.method !== "string" || ACCOUNT_METHODS[account.method] !== true) return false;
+		if (account.email !== null && typeof account.email !== "string") return false;
+	}
+	if (typeof value.notifications !== "boolean") return false;
+	if (typeof value.network !== "boolean") return false;
+	if (typeof value.launchAtLogin !== "boolean") return false;
+	if (!Array.isArray(value.folders) || !value.folders.every(isFolderChoice)) return false;
+	if (!Array.isArray(value.sources) || !value.sources.every(isSourceChoice)) return false;
+	if (typeof value.plan !== "string" || PLAN_IDS[value.plan] !== true) return false;
+	if (typeof value.planConfirmed !== "boolean") return false;
+	if (value.paid !== null && (typeof value.paid !== "string" || PLAN_IDS[value.paid] !== true)) return false;
+	if (value.model !== null && !isModelChoice(value.model)) return false;
+	return true;
+}
+
+function isIndexingRequest(value: unknown): value is IndexingRequest {
+	if (!isJsonObject(value)) return false;
+	if (!Array.isArray(value.folders) || !value.folders.every(isAbsoluteString)) return false;
+	if (value.folders.length === 0) return false;
+	if (!Array.isArray(value.sources)) return false;
+	for (const source of value.sources) {
+		if (!isJsonObject(source) || typeof source.id !== "string" || SOURCE_IDS[source.id] !== true) return false;
+		if (typeof source.description !== "string") return false;
+	}
+	if (typeof value.plan !== "string" || PLAN_IDS[value.plan] !== true) return false;
+	const model = value.model;
+	if (model !== null) {
+		if (!isJsonObject(model) || typeof model.provider !== "string" || BYOK_PROVIDERS[model.provider] !== true) return false;
+		if (typeof model.modelId !== "string") return false;
+		if (model.baseUrl !== null && typeof model.baseUrl !== "string") return false;
+	}
+	return true;
+}
+
+function isModelVerifyRequest(value: unknown): value is ModelVerifyRequest {
+	if (!isJsonObject(value)) return false;
+	if (typeof value.provider !== "string" || BYOK_PROVIDERS[value.provider] !== true) return false;
+	if (value.apiKey !== null && typeof value.apiKey !== "string") return false;
+	if (value.baseUrl !== null && typeof value.baseUrl !== "string") return false;
+	return true;
+}
+
+function abbreviateHome(path: string, home: string): string {
+	if (path === home) return "~";
+	if (path.startsWith(`${home}${sep}`)) return `~${path.slice(home.length)}`;
+	return path;
+}
+
+function displayNameFromPath(path: string): string {
+	const name = basename(path);
+	return name.length > 0 ? name : path;
+}
+
+const IDLE_STATUS: IndexingStatus = {
+	state: "idle",
+	phase: null,
+	progress: 0,
+	remainingMinutes: null,
+	totalFiles: 0,
+	processedFiles: 0,
+	recentFile: null,
+	recentFolder: null,
+	sources: [],
+	startedAt: null,
+	finishedAt: null,
+	error: null,
+};
+
+/** Map a librarian refresh phase to a contract phase (`jikji`/search phases fold into finalizing). */
+function toIndexingPhase(value: unknown): IndexingPhase | null {
+	if (value === "parsed" || value === "minsync" || value === "datasources" || value === "finalizing") return value;
+	if (value === "jikji" || value === "everything" || value === "fsearch") return "finalizing";
+	return null;
+}
+
+interface ParsedMirrorSnapshot {
+	readonly processedFiles: number;
+	readonly recentFile: string | null;
+	readonly recentSourcePath: string | null;
+}
+
+/** Count what the parsed mirror actually handled, and find the newest entry. */
+function readParsedMirror(text: string): ParsedMirrorSnapshot {
+	let parsed: unknown;
+	try {
+		parsed = JSON.parse(text);
+	} catch {
+		return { processedFiles: 0, recentFile: null, recentSourcePath: null };
+	}
+	if (!isJsonObject(parsed)) return { processedFiles: 0, recentFile: null, recentSourcePath: null };
+	const entries = isJsonObject(parsed.entries) ? parsed.entries : {};
+	const skipped = isJsonObject(parsed.skipped) ? parsed.skipped : {};
+	let recentFile: string | null = null;
+	let recentSourcePath: string | null = null;
+	let newest = "";
+	for (const entry of Object.values(entries)) {
+		if (!isJsonObject(entry) || typeof entry.sourcePath !== "string") continue;
+		const updatedAt = typeof entry.updatedAt === "string" ? entry.updatedAt : "";
+		if (updatedAt >= newest) {
+			newest = updatedAt;
+			recentSourcePath = entry.sourcePath;
+			recentFile = basename(entry.sourcePath);
+		}
+	}
+	return { processedFiles: Object.keys(entries).length + Object.keys(skipped).length, recentFile, recentSourcePath };
+}
+
+export function createOnboardingService(deps: OnboardingServiceDeps): OnboardingService {
+	const now = deps.now ?? Date.now;
+	const existing = readOnboardingState(deps.userDataDir);
+	let stateFile: PersistedOnboardingState = existing ?? { completed: false, draft: null };
+	// A draft written by an older/corrupt build must never reach the renderer.
+	if (!isOnboardingDraft(stateFile.draft)) stateFile = { ...stateFile, draft: null };
+	let pending = existing !== null ? !existing.completed : deps.env.AUTORAG_SKIP_ONBOARDING !== "1";
+
+	let status: IndexingStatus = IDLE_STATUS;
+	let refreshPromise: Promise<void> | null = null;
+	let pollTimer: ReturnType<typeof setInterval> | null = null;
+	let powerBlockerId: number | null = null;
+	let workspacePath: string | null = null;
+	let phase: IndexingPhase | null = null;
+	let phaseStartedAt = 0;
+	let selectedFolders: readonly string[] = [];
+	let sourceNames: readonly string[] = [];
+	let parsedSnapshot: ParsedMirrorSnapshot = { processedFiles: 0, recentFile: null, recentSourcePath: null };
+	let progressSignature = "";
+	let parsedSignature = "";
+
+	const persist = async (): Promise<void> => {
+		const path = onboardingStatePath(deps.userDataDir);
+		await mkdir(join(deps.userDataDir, "onboarding"), { recursive: true });
+		await writeFile(path, `${JSON.stringify(stateFile, null, 2)}\n`, "utf8");
+	};
+
+	const emitStatus = (): void => {
+		deps.send(ONBOARDING_CHANNELS.indexProgress, status);
+	};
+
+	// The parsed mirror records realpaths (macOS `/var` → `/private/var`, symlinked
+	// folders), so match against both the selected path and its realpath.
+	let folderRoots: ReadonlyArray<{ readonly root: string; readonly name: string }> = [];
+	const folderNameFor = (sourcePath: string): string | null =>
+		folderRoots.find(({ root }) => sourcePath === root || sourcePath.startsWith(`${root}${sep}`))?.name ?? null;
+
+	async function readIfChanged(path: string, previousSignature: string): Promise<{ text: string | null; signature: string }> {
+		try {
+			const info = await stat(path);
+			const signature = `${info.mtimeMs}:${info.size}`;
+			if (signature === previousSignature) return { text: null, signature };
+			return { text: await readFile(path, "utf8"), signature };
+		} catch {
+			return { text: null, signature: previousSignature };
+		}
+	}
+
+	async function tick(): Promise<void> {
+		if (workspacePath === null) return;
+		const progressPath = join(workspacePath, ".autorag", "refresh-progress.json");
+		const progressRead = await readIfChanged(progressPath, progressSignature);
+		if (progressRead.text !== null) {
+			progressSignature = progressRead.signature;
+			let parsed: unknown;
+			try {
+				parsed = JSON.parse(progressRead.text);
+			} catch {
+				parsed = null;
+			}
+			if (isJsonObject(parsed)) {
+				const nextPhase = toIndexingPhase(parsed.phase);
+				if (nextPhase !== null && nextPhase !== phase) {
+					phase = nextPhase;
+					phaseStartedAt = now();
+				}
+			}
+		}
+		const parsedPath = join(workspacePath, ".autorag", "parsed", "index.json");
+		const parsedRead = await readIfChanged(parsedPath, parsedSignature);
+		if (parsedRead.text !== null) {
+			parsedSignature = parsedRead.signature;
+			parsedSnapshot = readParsedMirror(parsedRead.text);
+		}
+		const totalFiles = deps.folderTotals(selectedFolders);
+		const { progress, remainingMinutes } = computeIndexingProgress({
+			state: "running",
+			phase,
+			processedFiles: parsedSnapshot.processedFiles,
+			totalFiles,
+			phaseElapsedMs: phase === null ? 0 : now() - phaseStartedAt,
+		});
+		status = {
+			...status,
+			state: "running",
+			phase,
+			progress,
+			remainingMinutes,
+			processedFiles: parsedSnapshot.processedFiles,
+			totalFiles,
+			recentFile: parsedSnapshot.recentFile,
+			recentFolder: parsedSnapshot.recentSourcePath === null ? null : folderNameFor(parsedSnapshot.recentSourcePath),
+			sources: sourceNames,
+		};
+		emitStatus();
+	}
+
+	function stopPolling(): void {
+		clearInterval(pollTimer ?? undefined);
+		pollTimer = null;
+		if (powerBlockerId !== null) deps.stopPowerSaveBlocker(powerBlockerId);
+		powerBlockerId = null;
+	}
+
+	function finish(ok: boolean, error: string | null): void {
+		stopPolling();
+		refreshPromise = null;
+		const finishedAt = new Date(now()).toISOString();
+		const indexing = stateFile.indexing;
+		if (indexing !== undefined) stateFile = { ...stateFile, indexing: { ...indexing, finishedAt } };
+		void persist();
+		status = ok
+			? { ...status, state: "success", progress: 100, remainingMinutes: null, finishedAt, error: null }
+			: { ...status, state: "failed", remainingMinutes: null, finishedAt, error: error ?? "인덱싱에 실패했습니다." };
+		emitStatus();
+	}
+
+	return {
+		pending: () => pending,
+		load: async () => ({ pending, draft: stateFile.draft }),
+		save: async (draft) => {
+			if (!isOnboardingDraft(draft)) throw new TypeError("onboarding:save expects a valid draft");
+			stateFile = { ...stateFile, draft };
+			await persist();
+		},
+		permissions: async () => {
+			const settings = await deps.settings.get();
+			return {
+				platform: deps.platform,
+				fullDiskAccess: deps.platform === "darwin" ? await deps.probeFullDiskAccess() : null,
+				launchAtLogin: settings.launchAtLogin,
+				notificationsSupported: deps.notificationsSupported(),
+			};
+		},
+		openFullDiskAccess: () => deps.openExternal("x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles"),
+		dragApp: () => deps.startDrag(deps.appBundlePath()),
+		relaunch: async () => deps.relaunch(),
+		requestNotifications: () => deps.showNotification(),
+		openNotificationSettings: () =>
+			deps.openExternal(deps.platform === "win32" ? "ms-settings:notifications" : "x-apple.systempreferences:com.apple.preference.notifications"),
+		checkNetwork: () => deps.checkNetwork(),
+		setLaunchAtLogin: async (enabled) => {
+			const settings = await deps.settings.set({ launchAtLogin: enabled });
+			deps.applyLoginItem(settings.launchAtLogin);
+			return settings.launchAtLogin;
+		},
+		folderCandidates: async () => {
+			const ocrOff = !(await deps.ocrEnabled());
+			const candidates: FolderCandidate[] = [];
+			const add = (
+				path: string,
+				name: string,
+				kind: FolderCandidate["kind"],
+				defaultSelected: boolean,
+				ocr: boolean,
+			): void => {
+				if (!existsSync(path)) return;
+				candidates.push({
+					path,
+					name,
+					displayPath: abbreviateHome(path, deps.home),
+					kind,
+					defaultSelected,
+					ocrOff: ocr,
+				});
+			};
+			add(deps.knownFolders.desktop, "Desktop", "desktop", true, false);
+			add(deps.knownFolders.documents, "Documents", "documents", true, false);
+			if (deps.iCloudDrivePath !== null) add(deps.iCloudDrivePath, "iCloud Drive", "icloud", true, false);
+			add(deps.knownFolders.downloads, "Downloads", "downloads", false, ocrOff);
+			add(deps.knownFolders.pictures, "Pictures", "pictures", false, ocrOff);
+			for (const drive of await deps.cloudDrives().catch(() => [])) {
+				add(drive.path, drive.name, "cloud", false, false);
+			}
+			return candidates;
+		},
+		pickFolders: async () => {
+			const paths = await deps.pickFolders();
+			return paths
+				.filter((path) => isAbsoluteString(path) && existsSync(path))
+				.map((path): FolderCandidate => ({
+					path,
+					name: displayNameFromPath(path),
+					displayPath: abbreviateHome(path, deps.home),
+					kind: "custom",
+					defaultSelected: true,
+					ocrOff: false,
+				}));
+		},
+		scanFolders: async (paths) => {
+			const valid = paths.filter(isAbsoluteString);
+			await deps.startScans(valid);
+		},
+		embedding: async () => {
+			const raw = existsSync(deps.configPath) ? readRawConfigObject(deps.configPath) : {};
+			const minSync = isJsonObject(raw.minSync) ? raw.minSync : {};
+			const embedder = isJsonObject(minSync.embedder) ? minSync.embedder : {};
+			const autoragHome = deps.env.AUTORAG_HOME ?? join(deps.home, ".autorag");
+			return {
+				profile: EMBEDDER_PROFILE,
+				modelBytes: EMBEDDER_MODEL_BYTES,
+				cached: existsSync(join(autoragHome, "models", EMBEDDER_MODEL_FILE)),
+				configured: Object.keys(embedder).length > 0,
+			};
+		},
+		detectSources: () => deps.detectSources(),
+		detectModels: () => deps.detectModels(),
+		verifyModel: async (request) => {
+			if (!isModelVerifyRequest(request)) throw new TypeError("onboarding:verifyModel expects a valid request");
+			return deps.verifyModel(request);
+		},
+		startIndexing: async (request) => {
+			if (!isIndexingRequest(request)) throw new TypeError("onboarding:startIndexing expects a valid request");
+			if (refreshPromise !== null) return status;
+			const detection = await deps.detectSources().catch((): SourceDetection => ({ sources: [] }));
+			const factsById = new Map<SourceId, SourceFacts>(detection.sources.map((source) => [source.id, source.facts]));
+			const datasources = request.sources.map((source) => ({
+				id: source.id,
+				description: source.description,
+				facts: factsById.get(source.id) ?? {},
+			}));
+			const raw = existsSync(deps.configPath) ? readRawConfigObject(deps.configPath) : {};
+			const minSync = isJsonObject(raw.minSync) ? raw.minSync : {};
+			const configured = isJsonObject(minSync.embedder) && Object.keys(minSync.embedder).length > 0;
+			const modelProvider = request.model === null ? null : (request.model.provider as ByokProviderId);
+			const next = applyIndexingConfig({
+				raw,
+				folders: request.folders,
+				datasources,
+				mailDir: join(deps.home, "Library", "Mail"),
+				embedder: configured ? null : { profile: EMBEDDER_PROFILE, dimension: EMBEDDER_DIMENSION },
+				// The app seeds `workspacePath = cwd` (the repo in dev, `/` when packaged);
+				// the first index belongs in the AutoRAG home instead. A workspace the
+				// user set explicitly stays.
+				workspacePath:
+					typeof raw.workspacePath !== "string" || raw.workspacePath === deps.cwd
+						? join(deps.env.AUTORAG_HOME?.trim() || join(deps.home, ".autorag"), "workspace")
+						: null,
+				model:
+					request.model === null
+						? null
+						: {
+								provider: request.model.provider,
+								modelId: request.model.modelId,
+								// pi's catalog carries no Ollama models, so the agent reaches it as an
+								// OpenAI-compatible endpoint; without a base URL it could not resolve.
+								baseUrl:
+									modelProvider === "ollama" && (request.model.baseUrl ?? "") === ""
+										? "http://127.0.0.1:11434/v1"
+										: request.model.baseUrl,
+								envName: modelProvider === null ? null : PROVIDER_ENV_NAME[modelProvider],
+							},
+			});
+			writeConfigObject(deps.configPath, next);
+			await maybeStoreGitToken(request.sources.map((source) => source.id));
+			const methods = ["parsed", "minsync", ...(request.sources.length > 0 ? ["datasources"] : [])];
+			workspacePath = await deps.resolveWorkspacePath();
+			selectedFolders = request.folders;
+			folderRoots = request.folders.flatMap((folder) => {
+				const name = displayNameFromPath(folder);
+				let real = folder;
+				try {
+					real = realpathSync(folder);
+				} catch {
+					// A folder that vanished since the pre-scan simply never matches.
+				}
+				return real === folder ? [{ root: folder, name }] : [{ root: folder, name }, { root: real, name }];
+			});
+			sourceNames = request.sources.map((source) => SOURCE_LABELS[source.id]);
+			phase = null;
+			phaseStartedAt = now();
+			progressSignature = "";
+			parsedSignature = "";
+			parsedSnapshot = { processedFiles: 0, recentFile: null, recentSourcePath: null };
+			const startedAt = new Date(now()).toISOString();
+			stateFile = { ...stateFile, indexing: { startedAt, finishedAt: null } };
+			void persist();
+			status = {
+				...IDLE_STATUS,
+				state: "running",
+				sources: sourceNames,
+				startedAt,
+				totalFiles: deps.folderTotals(request.folders),
+			};
+			emitStatus();
+			powerBlockerId = deps.startPowerSaveBlocker();
+			pollTimer = setInterval(() => void tick().catch(() => undefined), POLL_INTERVAL_MS);
+			refreshPromise = deps
+				.refresh(methods)
+				.then((result) => finish(result.ok, result.error))
+				.catch((error: unknown) => finish(false, error instanceof Error ? error.message : String(error)));
+			return status;
+		},
+		indexStatus: async () => status,
+		isIndexing: () => refreshPromise !== null,
+		complete: async () => {
+			stateFile = { ...stateFile, completed: true };
+			pending = false;
+			await persist();
+			deps.onComplete();
+		},
+		dispose: () => stopPolling(),
+	};
+
+	async function maybeStoreGitToken(sourceIds: readonly SourceId[]): Promise<void> {
+		if (!sourceIds.includes("github")) return;
+		if (typeof deps.env.GITHUB_TOKEN === "string" && deps.env.GITHUB_TOKEN.length > 0) return;
+		const token = await deps.gitToken().catch(() => null);
+		if (token === null || token.length === 0) return;
+		try {
+			deps.credentials.set("GITHUB_TOKEN", token);
+		} catch (error) {
+			console.warn("[onboarding] could not store the GitHub token:", error);
+		}
+	}
+}

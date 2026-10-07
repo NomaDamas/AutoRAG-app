@@ -28,6 +28,7 @@ export async function launchFinder({ repoRoot, userDataDir, qaRoot, rendererUrl,
 		...process.env,
 		AUTORAG_QA_ROOT: qaRoot,
 		AUTORAG_SKIP_DUPEY_CHECK: "1",
+		AUTORAG_SKIP_ONBOARDING: "1",
 		...extraEnv,
 	};
 	if (rendererUrl !== undefined) env.ELECTRON_RENDERER_URL = rendererUrl;
