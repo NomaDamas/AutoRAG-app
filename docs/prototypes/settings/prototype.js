@@ -470,7 +470,7 @@ function providerRows() {
 			: `<button type="button" class="icon-btn" data-menu="provider-more" data-provider="${esc(id)}" aria-label="${esc(provider.label)} 메뉴">${svg("more")}</button>`;
 		return { id: `provider:${id}`, html: `<div class="list-row provider-row" data-provider-row="${esc(id)}">${appIcon(id)}<span class="list-body"><span class="list-title">${esc(provider.label)}</span><span class="list-meta">${esc(meta)}</span></span>${trailing}</div>` };
 	});
-	rows.push({ id: "provider:add", html: `<button type="button" class="list-row add-row" data-menu="connect">${svg("plus")}<span>서비스 연결</span></button>` });
+	rows.push({ id: "provider:add", html: `<button type="button" class="list-row add-row" data-menu="connect" data-menu-align="start">${svg("plus")}<span>서비스 연결</span></button>` });
 	return rows;
 }
 
@@ -631,7 +631,12 @@ function positionMenu() {
 	const width = menu.offsetWidth;
 	const height = menu.offsetHeight;
 	const below = anchor.bottom + 6;
-	menu.style.left = `${Math.max(12, Math.min(anchor.right - width, window.innerWidth - width - 12))}px`;
+	// A left-anchored trigger (e.g. the full-width "서비스 연결" row) opens from its visible
+	// content's left edge; right-side controls (role pickers, ⋯) open aligned to their right edge.
+	const leftAnchored = anchorEl.dataset.menuAlign === "start";
+	const content = leftAnchored ? (anchorEl.querySelector(".icon") ?? anchorEl).getBoundingClientRect() : anchor;
+	const preferred = leftAnchored ? content.left - 8 : anchor.right - width;
+	menu.style.left = `${Math.max(12, Math.min(preferred, window.innerWidth - width - 12))}px`;
 	menu.style.top = `${below + height > window.innerHeight - 12 ? Math.max(12, anchor.top - 6 - height) : below}px`;
 }
 

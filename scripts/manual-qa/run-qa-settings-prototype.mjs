@@ -63,6 +63,12 @@ try {
   const roleText = (role) => page.locator(`[data-row="role:${role}"] .trigger`).innerText();
   check("roles list all five model roles", await page.locator('[data-row^="role:"]').count() === 5);
   await page.locator('[data-menu="connect"]').click();
+  const connectAlign = await page.evaluate(() => {
+    const plus = document.querySelector('[data-menu="connect"] .icon').getBoundingClientRect();
+    const menu = document.querySelector("#menu-root .menu").getBoundingClientRect();
+    return { delta: Math.round(menu.left - plus.left), below: menu.top >= plus.bottom };
+  });
+  check("connect menu opens under the 서비스 연결 row, left-aligned", Math.abs(connectAlign.delta + 8) <= 1 && connectAlign.below, JSON.stringify(connectAlign));
   await page.locator("[data-menu-search]").fill("Cloud");
   check("connect menu filters providers", (await page.locator("#menu-root").innerText()).includes("Cloudflare AI Gateway") && !(await page.locator("#menu-root").innerText()).includes("ChatGPT"));
   await page.locator('[data-connect-provider="cloudflare"]').click();
