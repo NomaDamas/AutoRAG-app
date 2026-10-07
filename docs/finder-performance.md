@@ -327,3 +327,42 @@ reachable); now one is. Revisiting a folder no longer re-asks the OS for kinds,
 icons, or metadata it already answered for the same file version, which is
 where the IPC drop comes from. The ~1 MB higher baseline is the sidecar's
 records and the cached folders, both bounded.
+
+## 10,000-file folder lane (FS roadmap #100, stage 3)
+
+```sh
+bun run build
+bun scripts/manual-qa/run-qa-finder-large-folder.mjs     # LARGE_RUNS=5, LARGE_FILES=10000
+```
+
+Each run starts the built app on fresh user data and opens a 10,000-file
+fixture folder from the QA root. It reports the median, min, and max over the
+runs for:
+
+- first paint: double-click to the first rAF frame showing a row of the folder;
+- listing heap: renderer heap after a forced GC with the folder shown, minus
+  the same reading at the QA root;
+- row bytes: from a heap snapshot, the bytes only the folder's row objects
+  hold (the rows, their own strings and property stores), plus the row fields;
+- Name ↓ and Date Modified ↓ sort: column click to the frame with the expected
+  first row;
+- the `fs:listDir` answer: round trip, JSON bytes, and fields.
+
+The lane holds the folder's OS kind/icon pass in main until the listing
+readings are taken, so they never race enrichment. It then releases that pass
+and reads the heap again. The Finder metadata pass is never released, because
+10,000 files would keep helper processes busy for minutes.
+
+Baseline, `main` 5dbdd0f, production build, macOS, 5 runs:
+
+| metric | median (min–max) |
+| --- | ---: |
+| first paint | 194.5 ms (171.9–354.7) |
+| renderer script time, open → settled | 20 ms (19–23) |
+| listing heap | 9.42 MB (8.77–9.47) |
+| listing heap after the kind/icon pass | 11.90 MB (11.21–11.94) |
+| row bytes (heap snapshot) | 1,587,520 B, 159 B/row, 14 fields |
+| Name ↓ sort | 113.3 ms (32.9–156.0) |
+| Date Modified ↓ sort | 40.6 ms (34.1–67.2) |
+| `fs:listDir` round trip | 80.0 ms (64.9–131.6) |
+| `fs:listDir` JSON | 3,000,112 B, 10 fields |

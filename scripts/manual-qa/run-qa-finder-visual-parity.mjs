@@ -322,7 +322,8 @@ try {
 	await sleep(700);
 	await shot(page, "17-row-hover");
 
-	await page.locator('.toolbar button[aria-label="Back"]').hover();
+	// Toolbar labels are localized (Korean by default); match either language.
+	await page.locator('.toolbar button[aria-label="Back"], .toolbar button[aria-label="뒤로"]').first().hover();
 	await sleep(400);
 	await shot(page, "18-toolbar-icon-hover");
 
