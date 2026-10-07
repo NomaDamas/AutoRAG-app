@@ -60,7 +60,7 @@ try {
 	);
 	check(
 		isMac ? "the new-tab label is ⌘T" : "the new-tab label is Ctrl+T",
-		observed.newTab === (isMac ? "New tab ⌘T" : "New tab Ctrl+T"),
+		observed.newTab === (isMac ? "New tab (⌘T)" : "New tab (Ctrl+T)"),
 		observed.newTab,
 	);
 	// A single tab has no close affordance, so open a second one first.
@@ -71,7 +71,7 @@ try {
 	);
 	check(
 		isMac ? "the close-tab label is ⌘W" : "the close-tab label is Ctrl+W",
-		closeTab === (isMac ? "Close tab ⌘W" : "Close tab Ctrl+W"),
+		closeTab === (isMac ? "Close tab (⌘W)" : "Close tab (Ctrl+W)"),
 		closeTab,
 	);
 	allText.push(closeTab);

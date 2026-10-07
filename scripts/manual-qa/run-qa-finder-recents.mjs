@@ -166,7 +166,7 @@ check(
 await clickNav(page, "Recents");
 const emptyText = await page.locator(".list__empty").innerText();
 check("Recents starts empty", (await rowNames(page)).length === 0, JSON.stringify(await rowNames(page)));
-check("empty state names the Recents view", emptyText === "최근에 연 파일이 없습니다", emptyText);
+check("empty state names the Recents view", emptyText === "No recently opened files", emptyText);
 const emptyNav = await page.locator('.sidebar__item[aria-current="true"] .sidebar__item-label').innerText();
 const emptyTab = await page.locator(".tab--active .tab__title").innerText();
 check("the Recents place is the active sidebar item", emptyNav === "Recents", emptyNav);

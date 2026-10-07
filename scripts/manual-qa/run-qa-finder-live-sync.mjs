@@ -915,7 +915,7 @@ async function runS12(page) {
 	await rowFor(page, "selected-file.txt").waitFor({ timeout: 10_000 });
 	const renameTarget = join(FIXTURE_DIR, "rename-before.txt");
 	await rowFor(page, "rename-before.txt").click({ button: "right" });
-	await page.getByRole("menuitem", { name: "이름 변경", exact: true }).click();
+	await page.getByRole("menuitem", { name: "Rename", exact: true }).click();
 	const renameInput = page.getByRole("textbox", { name: "새 이름", exact: true });
 	await renameInput.waitFor({ state: "visible", timeout: 10_000 });
 	const createdDuringRename = join(FIXTURE_DIR, "created-during-rename.txt");

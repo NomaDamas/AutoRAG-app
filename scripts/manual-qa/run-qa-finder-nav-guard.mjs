@@ -85,8 +85,8 @@ try {
 	const rows = await page.locator('[role="row"]').count();
 	const emptyState =
 		(await page.locator(`text=${NOT_LINKED}`).count()) +
-		(await page.locator("text=빈 폴더").count()) +
-		(await page.locator("text=최근에 연 파일이 없습니다").count());
+		(await page.locator("text=Empty folder").count()) +
+		(await page.locator("text=No recently opened files").count());
 	check(`view still renders a list or empty state (rows ${rows}, empty ${emptyState})`, rows > 0 || emptyState > 0);
 
 	await page.screenshot({ path: `${EVIDENCE}/after-nav-clicks.png` });

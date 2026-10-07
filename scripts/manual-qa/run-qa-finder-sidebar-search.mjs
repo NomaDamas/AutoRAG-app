@@ -73,12 +73,12 @@ try {
 	);
 	await page.screenshot({ path: join(EVIDENCE, "01-sidebar-resting.png") });
 
-	// 3. Focus reveals the chips, 파일 이름 active by default.
+	// 3. Focus reveals the chips, File Name active by default.
 	await search.click();
-	await chip("파일 이름").waitFor({ timeout: 5000 });
+	await chip("File Name").waitFor({ timeout: 5000 });
 	const chipLabels = await page.locator(".scope-chip").allInnerTexts();
-	check("focusing shows the two scope chips", JSON.stringify(chipLabels) === JSON.stringify(["파일 이름", "내용"]), JSON.stringify(chipLabels));
-	check("파일 이름 is the default active chip", (await chip("파일 이름").getAttribute("aria-pressed")) === "true");
+	check("focusing shows the two scope chips", JSON.stringify(chipLabels) === JSON.stringify(["File Name", "Content"]), JSON.stringify(chipLabels));
+	check("File Name is the default active chip", (await chip("File Name").getAttribute("aria-pressed")) === "true");
 	await page.screenshot({ path: join(EVIDENCE, "02-chips-focused.png") });
 	await page.locator(".side-search").screenshot({ path: join(EVIDENCE, "02-chips-element.png") });
 
@@ -112,12 +112,12 @@ try {
 	// Clicking the scope bar's folder pill blurred the field, which hides the
 	// chips; refocus it the way a user would before picking the 내용 chip.
 	await search.click();
-	await chip("내용").click();
+	await chip("Content").click();
 	await search.fill("approval notes");
 	await search.press("Enter");
 	await page.locator(".user-msg .user-bubble-wrap").first().waitFor({ timeout: 10000 });
 	const bubble = await page.locator(".user-msg .bubble").first().innerText();
-	check("내용 opens an AI Search tab and sends the query as a user message", bubble.trim() === "approval notes", bubble.trim());
+	check("Content opens an AI Search tab and sends the query as a user message", bubble.trim() === "approval notes", bubble.trim());
 	await sleep(400);
 	await page.screenshot({ path: join(EVIDENCE, "05-content-search.png") });
 
