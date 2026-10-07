@@ -1,5 +1,6 @@
 import type { MouseEvent, ReactElement, RefObject } from "react";
 import type { FinderEntry } from "../data/entries";
+import { useDirectoryData, useEntrySidecar } from "../hooks/useDirectoryData";
 import { cn } from "../lib/cn";
 import type { GroupSection } from "../state/grouping";
 import { basename } from "../state/paths";
@@ -159,7 +160,7 @@ export function ColumnBrowser({
 								onDragOver={(event) => callbacks.onDragOver(member.entry, event)}
 								onDrop={(event) => callbacks.onDrop(member.entry, event)}
 							>
-								<FileTile kind={member.entry.fileKind} iconUrl={member.entry.iconUrl} size={16} />
+								<SidecarTile entry={member.entry} size={16} />
 								<span className="col-name flex-1 min-w-0 overflow-hidden whitespace-nowrap text-ellipsis text-sm">
 									{member.entry.name}
 								</span>
@@ -194,7 +195,8 @@ function ColumnRow({
 	readonly columnCallbacks: ColumnCallbacks;
 	readonly callbacks: RowCallbacks;
 }): ReactElement {
-	const { entry } = row;
+	// Icon and OS kind come from the sidecar: only this row re-renders when they land.
+	const { entry } = useEntrySidecar(useDirectoryData().sidecar, row.entry);
 	const isHead = row.stackCount > 0;
 	const canOpen = entry.kind === "folder" || isHead;
 	return (
@@ -240,4 +242,10 @@ function ColumnRow({
 			{canOpen ? <ChevronRightIcon size={12} className="col-arrow flex-none ml-auto text-ink-faint" /> : null}
 		</div>
 	);
+}
+
+/** A row's tile with the icon the sidecar holds for it. */
+function SidecarTile({ entry, size }: { readonly entry: FinderEntry; readonly size: 16 | 18 | 22 }): ReactElement {
+	const resolved = useEntrySidecar(useDirectoryData().sidecar, entry).entry;
+	return <FileTile kind={resolved.fileKind} iconUrl={resolved.iconUrl} size={size} />;
 }

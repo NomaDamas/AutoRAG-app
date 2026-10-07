@@ -59,15 +59,15 @@ export interface FinderSource {
 	exists(path: string): Promise<boolean>;
 	list(path: string): Promise<readonly FinderEntry[]>;
 	/**
-	 * OS kind and icon URLs for rows already on screen. The caller applies the
-	 * patches to whatever rows it holds when they land (`applyEntryEnrichment`),
-	 * so an icon another pass filled in meanwhile is never overwritten.
+	 * OS kind and icon URLs for rows already on screen. The results go to the
+	 * entry sidecar keyed by file version, never into a listing, so an icon
+	 * another pass filled in meanwhile is never overwritten.
 	 */
 	enrich(entries: readonly FinderEntry[]): Promise<readonly FsEntryEnrichment[]>;
 	/**
 	 * Finder metadata (tags, dates, dimensions, default app) for the same rows,
-	 * applied with `applyFinderEnrichment`. Separate from `enrich` because it is
-	 * far slower on a slow disk, and icons must never wait for it.
+	 * also kept in the sidecar. Separate from `enrich` because it is far slower
+	 * on a slow disk, and icons must never wait for it.
 	 */
 	finderMetadata(entries: readonly FinderEntry[]): Promise<readonly FsFinderEnrichment[]>;
 	/**

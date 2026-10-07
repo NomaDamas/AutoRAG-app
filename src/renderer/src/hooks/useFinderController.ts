@@ -1,13 +1,18 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useLatestCallback } from "./useLatestCallback";
+import { useFolderListings } from "./useFolderListings";
+import { useRowPipeline } from "./useRowPipeline";
+import { itemElement, useFinderKeyboard } from "./useFinderKeyboard";
 import type { MouseEvent as ReactMouseEvent, RefObject } from "react";
 import { NO_CAPABILITIES, type ActionAnchor, type ActionCapabilities } from "../../../shared/actions-contract";
 import { RECENTS_PATH } from "../../../shared/fs-contract";
 import type { IndexStatus } from "../../../shared/index-contract";
-import { DUPEY_LAYER_ID, type FsDirChange, type LiveMessage } from "../../../shared/live-contract";
-import { applyEntryEnrichment, applyFinderEnrichment, type FinderEntry } from "../data/entries";
+import { DUPEY_LAYER_ID, type LiveMessage } from "../../../shared/live-contract";
+import type { DirectoryStore } from "../data/directory-store";
+import type { FinderEntry } from "../data/entries";
+import type { EntrySidecar } from "../data/entry-sidecar";
 import { navGroups, type NavGroup, type NavItem } from "../data/places";
-import { isMissingPathFailure, type FinderLocation, type FinderSource, pickInitialPath } from "../data/source";
+import { type FinderLocation, type FinderSource, pickInitialPath } from "../data/source";
 import { finderDragEntries } from "../state/attachments";
 import { validateName } from "../state/collision";
 import {
@@ -29,20 +34,8 @@ import { planTransfer } from "../state/file-transfer";
 import type { FileActionTarget } from "../state/file-actions";
 import { emptyStateText, indexToast, trashToast } from "../state/format";
 import { evidenceSourceUrl, findEvidenceSource } from "../state/evidence";
-import { type FocusZone, type KeyAction, resolveKeyAction } from "../state/keymap";
-import {
-	applyEntryPatch,
-	applyOptimisticDeletes,
-	createIncrementalListing,
-	createListingLoader,
-	isFilesystemPath,
-	nearestExistingAncestor,
-	listingSurvivor,
-	pruneSelection,
-	reconcileListing,
-	type IncrementalListing,
-	type ListingScope,
-} from "../state/live";
+import type { FocusZone } from "../state/keymap";
+import { nearestExistingAncestor, pruneSelection } from "../state/live";
 import {
 	adoptInvoke,
 	adoptMessage,
@@ -62,30 +55,22 @@ import {
 import {
 	GROUP_STORAGE_KEY,
 	groupedRowTop,
-	groupRows,
 	parseGroupKey,
 	type GroupKey,
 	type GroupSection,
 } from "../state/grouping";
-import { type SortDirection, type SortKey, type SortState, cycleSort, explicitSort, sortEntries } from "../state/sort";
-import { visibleEntries } from "../state/visibility";
-import { columnsForWidth, gridColumnCount } from "../state/virtual";
+import { type SortDirection, type SortKey, type SortState, cycleSort, explicitSort } from "../state/sort";
 import {
-	buildFolderTree,
-	discloseStep,
 	expandedFolders,
-	flatTreeRows,
 	isInsideFolder,
 	toggleExpanded,
 	type TreeRow,
 } from "../state/folder-tree";
 import {
-	applyVersionStacks,
 	buildVersionFamilies,
 	EMPTY_VERSION_FAMILIES,
 	familyViewFor,
 	stackSelectionKeys,
-	type StackRow,
 	type VersionFamilies,
 	type VersionFamiliesResult,
 	type VersionFamilyError,
@@ -123,60 +108,11 @@ import {
 import type { TabView } from "../components/TabStrip";
 import type { ColumnPaneView } from "../components/ColumnBrowser";
 import { parseViewMode, VIEW_MODE_STORAGE_KEY, type ViewMode } from "../state/view-mode";
-import { needsThumbnail, takeThumbnailBatch, thumbnailKey } from "../state/thumbnails";
-
-/** A tab's last adopted folder listing. */
-export interface ListingSnapshot {
-	readonly dir: string;
-	readonly entries: readonly FinderEntry[];
-}
 
 /** --time-flash */
 const FLASH_MS = 1800;
 /** How long a reveal flash waits for its row to be listed before it is dropped. */
 const FLASH_WAIT_MS = 10_000;
-/** Coalescing window for viewport-visible thumbnail requests, so a scroll burst is one batch. */
-const THUMBNAIL_FLUSH_MS = 60;
-
-/** `record` without the keys outside `keep`; the same object when nothing goes, so state stays put. */
-function withOnlyKeys<T>(record: Readonly<Record<string, T>>, keep: ReadonlySet<string>): Readonly<Record<string, T>> {
-	const keys = Object.keys(record);
-	if (keys.every((key) => keep.has(key))) return record;
-	return Object.fromEntries(keys.filter((key) => keep.has(key)).map((key) => [key, record[key] as T]));
-}
-
-/**
- * Background enrichment for rows already on screen, in two independent
- * passes: OS kind + icon, then Finder metadata. Each pass patches whatever
- * rows `apply` holds when it lands, so icons never wait for the much slower
- * metadata helpers and neither pass overwrites what the other filled in.
- */
-function enrichInBackground(
-	source: FinderSource,
-	entries: readonly FinderEntry[],
-	label: string,
-	apply: (patch: (rows: readonly FinderEntry[]) => readonly FinderEntry[]) => void,
-): void {
-	void source
-		.enrich(entries)
-		.then((enriched) => apply((rows) => applyEntryEnrichment(rows, enriched)))
-		.catch((error: unknown) => console.error(`background ${label} enrichment failed`, error));
-	void source
-		.finderMetadata(entries)
-		.then((enriched) => apply((rows) => applyFinderEnrichment(rows, enriched)))
-		.catch((error: unknown) => console.error(`background ${label} metadata failed`, error));
-}
-
-/** Shortcuts that act on the window, not on rows: the only ones a Settings or AI Search tab answers. */
-const WINDOW_KEY_ACTIONS: Partial<Record<KeyAction["type"], true>> = {
-	dismiss: true,
-	focusSearch: true,
-	focusComposer: true,
-	newTab: true,
-	closeTab: true,
-	openSettings: true,
-	setViewMode: true,
-};
 
 interface ContextMenuState {
 	readonly cursor: { readonly x: number; readonly y: number };
@@ -208,131 +144,9 @@ function readStoredGrouping(): GroupKey {
 	}
 }
 
-/** The tile or column row that renders `path` (the list view scrolls by row index instead). */
-function itemElement(root: HTMLElement | null, path: string): HTMLElement | null {
-	const selector = `[data-path="${CSS.escape(path)}"]`;
-	return root?.querySelector<HTMLElement>(`.icon-tile${selector}, .column-row${selector}`) ?? null;
-}
-
-/**
- * Tiles per row in the icon grid. The resolved `grid-template-columns` is the
- * real track count and is shared by every section's grid block; the first
- * DOM row is only a fallback because grouping can leave the first rendered row
- * short (a small section), which would undercount the tracks.
- */
-function gridColumns(root: HTMLElement | null): number {
-	if (root === null) {
-		return 1;
-	}
-	const grid = root.querySelector<HTMLElement>(".icon-grid");
-	if (grid !== null) {
-		const styles = getComputedStyle(grid);
-		const tracks = gridColumnCount(styles.gridTemplateColumns);
-		if (tracks > 0) {
-			return tracks;
-		}
-		// Computed style still symbolic: width math on the tracked template.
-		const minTrack = Number.parseFloat(styles.getPropertyValue("--tile-min")) || 96;
-		const columnGap = Number.parseFloat(styles.columnGap) || 8;
-		const byWidth = columnsForWidth(grid.clientWidth, minTrack, columnGap);
-		if (byWidth > 0) {
-			return byWidth;
-		}
-	}
-	const counts = new Map<number, number>();
-	let most = 0;
-	for (const tile of root.querySelectorAll<HTMLElement>(".icon-tile")) {
-		const count = (counts.get(tile.offsetTop) ?? 0) + 1;
-		counts.set(tile.offsetTop, count);
-		if (count > most) {
-			most = count;
-		}
-	}
-	return Math.max(1, most);
-}
-
-/**
- * Arrow target in the grouped icon grid. Every section lays its rows out in
- * `columns` tracks and a group restarts the tracks, so up/down move by a whole
- * tile-row inside the focused section and step to the adjacent section at its
- * edge, keeping the column when that section's row is long enough (a short
- * final row clamps to its last tile). Left/right walk the section's flattened
- * rows; a header separates sections, so they do not cross one. Returns the path
- * to focus, or null when the grid is empty.
- */
-function groupedGridTarget(
-	sections: readonly GroupSection<StackRow>[],
-	columns: number,
-	focus: string | null,
-	step: { readonly dx: -1 | 0 | 1; readonly dy: -1 | 0 | 1 },
-): string | null {
-	const width = Math.max(1, Math.floor(columns));
-	// One pass locates the focused path's section, its start, and the total.
-	let total = 0;
-	let index = -1;
-	let section = 0;
-	let sectionStart = 0;
-	for (let i = 0; i < sections.length; i += 1) {
-		const rows = sections[i]?.rows ?? [];
-		if (index < 0 && focus !== null) {
-			const at = rows.findIndex((row) => row.entry.path === focus);
-			if (at >= 0) {
-				index = total + at;
-				section = i;
-				sectionStart = total;
-			}
-		}
-		total += rows.length;
-	}
-	if (total === 0) {
-		return null;
-	}
-	if (index < 0) {
-		index = 0;
-		section = 0;
-		sectionStart = 0;
-	}
-	const rowsHere = sections[section]?.rows.length ?? 0;
-	let local = index - sectionStart;
-	if (step.dy !== 0) {
-		const row = Math.floor(local / width);
-		const lastRow = Math.floor((rowsHere - 1) / width);
-		const column = local % width;
-		const nextRow = row + step.dy;
-		if (nextRow >= 0 && nextRow <= lastRow) {
-			// Same section: clamp to a short final row.
-			local = Math.min(nextRow * width + column, rowsHere - 1);
-		} else if (nextRow < 0) {
-			const previousRows = sections[section - 1]?.rows.length ?? 0;
-			if (previousRows > 0) {
-				section -= 1;
-				local = Math.min(column, previousRows - 1);
-			}
-		} else {
-			const nextRows = sections[section + 1]?.rows.length ?? 0;
-			if (nextRows > 0) {
-				section += 1;
-				local = Math.min(column, nextRows - 1);
-			}
-		}
-	} else if (step.dx !== 0) {
-		const candidate = local + step.dx;
-		if (candidate >= 0 && candidate < rowsHere) {
-			local = candidate;
-		}
-	}
-	return sections[section]?.rows[local]?.entry.path ?? focus;
-}
-
 interface RenameState {
 	readonly path: string;
 	readonly draft: string;
-}
-
-/** An expanded folder's listing, tagged with the refresh revision it was read at. */
-interface ChildListing {
-	readonly revision: number;
-	readonly entries: readonly FinderEntry[];
 }
 
 export interface FinderController {
@@ -359,8 +173,8 @@ export interface FinderController {
 	readonly flashPath: string | null;
 	readonly renamePath: string | null;
 	readonly renameDraft: string;
-	/** AutoRAG local-index state per file path, read from the parsed mirror and MinSync staging. */
-	readonly indexStatus: Readonly<Record<string, IndexStatus>>;
+	/** AutoRAG local-index state for a file path; rows read it from the sidecar directly. */
+	indexStatusFor(path: string): IndexStatus | null;
 	/** Non-null when dupey is missing or a version-family scan failed. */
 	readonly versionFamilyError: VersionFamilyError | null;
 	/** Path of the sidebar row that owns the current folder (null when none does). */
@@ -496,6 +310,7 @@ export type SearchScope = "all" | "current";
 
 export function useFinderController(
 	source: FinderSource,
+	data: { readonly store: DirectoryStore; readonly sidecar: EntrySidecar },
 	binding: PaneBinding,
 	options: {
 		readonly showHiddenFiles?: boolean;
@@ -506,10 +321,9 @@ export function useFinderController(
 		readonly onFocusComposer?: () => void;
 		/** The window's toast: one for every pane. */
 		readonly onToast?: (message: string) => void;
-		/** Tab listing snapshots shared by every pane (the App prunes closed tabs). */
-		readonly listingCache?: Map<number, ListingSnapshot>;
 	} = {},
 ): FinderController {
+	const { store, sidecar } = data;
 	const showHiddenFiles = options.showHiddenFiles ?? false;
 	const quickLookRef = useRef(options.quickLook);
 	quickLookRef.current = options.quickLook;
@@ -533,12 +347,8 @@ export function useFinderController(
 	/** The toolbar Group control's criterion; the views render section headers for it. */
 	const [grouping, setGroupingValue] = useState<GroupKey>(readStoredGrouping);
 	const [zone, setZone] = useState<FocusZone>("finder");
-	const [listing, setListing] = useState<readonly FinderEntry[]>([]);
-	/** The tab whose folder `listing` was last switched to; see the swap below. Starts unset so a new pane paints a moved tab's snapshot at once. */
-	const [listingTabId, setListingTabId] = useState<number | null>(null);
 	const [hits, setHits] = useState<readonly FinderEntry[]>([]);
 	const [locations, setLocations] = useState<readonly FinderLocation[]>([]);
-	const [indexStatus, setIndexStatus] = useState<Readonly<Record<string, IndexStatus>>>({});
 	/** Bumped when a background AutoRAG refresh settles, so visible rows re-read their state. */
 	const [indexRevision, setIndexRevision] = useState(0);
 	const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
@@ -551,61 +361,22 @@ export function useFinderController(
 	const [layerStore, setLayerStore] = useState<LayerStore>(EMPTY_LAYER_STORE);
 	const [stackPinned, setStackPinned] = useState<ReadonlySet<string>>(new Set());
 	const [viewMode, setViewModeValue] = useState<ViewMode>(readStoredViewMode);
-	/** Column view: listings by folder path, for every pane. */
-	const [paneListings, setPaneListings] = useState<Readonly<Record<string, readonly FinderEntry[]>>>({});
 	const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
-	const [childListings, setChildListings] = useState<Readonly<Record<string, ChildListing>>>({});
+	/** The expanded folders the tree shows open, joined; set after each render from the rows. */
+	const [openFoldersKey, setOpenFoldersKey] = useState("");
 
 	const listRef = useRef<HTMLDivElement | null>(null);
 	const searchRef = useRef<HTMLInputElement | null>(null);
 	const scrollTarget = useRef<string | null>(null);
-	const generationRef = useRef(0);
 	const pathRef = useRef("");
-	const activeTabIdRef = useRef(0);
 	const tabsRef = useRef(tabsState.tabs);
 	const searchingRef = useRef(false);
-	const listingRef = useRef<readonly FinderEntry[]>([]);
-	/** The folder whose rows `listing` currently holds; gates scroll-to-target. */
-	const listingDirRef = useRef("");
 	const layerStoreRef = useRef<LayerStore>(EMPTY_LAYER_STORE);
-	const staleTabsRef = useRef(new Set<number>());
-	/** Each tab's last adopted listing, so switching back — or moving the tab to another pane — paints it at once. */
-	const tabListingsRef = useRef(options.listingCache ?? new Map<number, ListingSnapshot>());
-	const previousPathRef = useRef<string | null>(null);
-	const previousTabIdRef = useRef<number | null>(null);
-	const incrementalRef = useRef<{ source: FinderSource; listing: IncrementalListing } | null>(null);
 	const resyncTimerRef = useRef<number | null>(null);
-	const previousRevisionRef = useRef(revision);
-	const previousSourceRef = useRef(source);
-	/**
-	 * Viewport-driven thumbnail requests. Both views are virtualized, so a row
-	 * only calls `noteVisible` while it is near the viewport; requests coalesce
-	 * here and drain through `source.enrich`, so a folder larger than the
-	 * provider's per-call icon cap fills in as the user scrolls instead of
-	 * going iconless past the first batch. Keyed by `(path, modifiedAt)`.
-	 */
-	const thumbRequestsRef = useRef(new Set<string>());
-	const thumbQueueRef = useRef(new Map<string, FinderEntry>());
-	const thumbTimerRef = useRef<number | null>(null);
 
 	const tab = activeTab(tabsState);
 	const path = tab.path;
 	const selection = tab.selection;
-	// A tab switch shows that tab's last listing in the same render that
-	// switches tabs, so the first frame after the click is already the target
-	// folder — not the previous tab's rows, then bare rows, then icons. The
-	// reload the switch starts revalidates it underneath (`reconcileListing`).
-	if (listingTabId !== tab.id) {
-		setListingTabId(tab.id);
-		const snapshot = tabListingsRef.current.get(tab.id);
-		if (snapshot !== undefined && snapshot.dir === path) {
-			listingDirRef.current = snapshot.dir;
-			setListing(snapshot.entries);
-			setPaneListings((current) =>
-				current[path] === snapshot.entries ? current : { ...current, [path]: snapshot.entries },
-			);
-		}
-	}
 	const searching = query.trim() !== "";
 	const dupey = selectDupey(layerStore);
 	layerStoreRef.current = layerStore;
@@ -615,16 +386,15 @@ export function useFinderController(
 	);
 	const versionFamilyError = dupey.result.error;
 	pathRef.current = path;
-	activeTabIdRef.current = tab.id;
 	tabsRef.current = tabsState.tabs;
 	searchingRef.current = searching;
-	listingRef.current = listing;
 	const layout: ViewMode = viewMode === "columns" && searching ? "list" : viewMode;
 	const chain = tab.chain;
 	const panePaths = useMemo(
 		() => (layout === "columns" && path !== "" && !isVirtualTabPath(path) ? columnPanes(path, chain) : []),
 		[layout, path, chain],
 	);
+	const openFolders = useMemo(() => (openFoldersKey === "" ? [] : openFoldersKey.split("\u0000")), [openFoldersKey]);
 
 	// One probe per session: main answers with the engines it actually has, so
 	// the action bar can omit anything the machine cannot run.
@@ -652,236 +422,42 @@ export function useFinderController(
 		[],
 	);
 
-	const listingLoader = useMemo(
-		() =>
-			createListingLoader<FinderEntry>(
-				(nextPath) => source.list(nextPath),
-				(request) =>
-					request.path === pathRef.current && request.generation === generationRef.current,
-			),
-		[source],
-	);
-
-	/**
-	 * Start a navigation scope: bump the generation and tell the incremental
-	 * coordinator its baseline full listing is pending. Old work is orphaned.
-	 */
-	const beginScope = useCallback((): ListingScope => {
-		generationRef.current += 1;
-		const scope: ListingScope = {
-			generation: generationRef.current,
-			path: pathRef.current,
-			tabId: activeTabIdRef.current,
-		};
-		incrementalRef.current?.listing.begin(scope);
-		return scope;
-	}, []);
-
-	const navigateToExistingAncestor = useCallback(
-		async (missingPath: string, requestGeneration: number): Promise<void> => {
-			try {
-				const ancestor = await nearestExistingAncestor(missingPath, (candidate) => source.exists(candidate));
-				if (pathRef.current !== missingPath || generationRef.current !== requestGeneration || ancestor === null) {
-					return;
-				}
-				beginScope();
+	/** The folder in view is gone from disk: move the tab to its nearest existing ancestor. */
+	const navigateToExistingAncestor = useLatestCallback((missingPath: string) => {
+		nearestExistingAncestor(missingPath, (candidate) => source.exists(candidate))
+			.then((ancestor) => {
+				if (pathRef.current !== missingPath || ancestor === null || ancestor === missingPath) return;
 				setTabsState((state) => navigateTab(state, ancestor));
 				setQueryValue("");
-			} catch (error: unknown) {
-				console.error(error);
-			}
-		},
-		[beginScope, source],
-	);
+			})
+			.catch((error: unknown) => console.error(error));
+	});
 
-	/**
-	 * The listing for `dir` (the tab's folder) lands: it also feeds the first
-	 * column pane, and drops selection and rename targets it no longer holds.
-	 */
-	const adoptListing = useCallback((dir: string, entries: readonly FinderEntry[]): void => {
-		listingDirRef.current = dir;
-		tabListingsRef.current.set(activeTabIdRef.current, { dir, entries });
-		const previous = listingRef.current;
-		const survives = listingSurvivor(dir, previous, entries);
-		listingRef.current = entries;
-		if (previous !== entries) {
-			setListing(entries);
-		}
-		setPaneListings((current) => (current[dir] === entries ? current : { ...current, [dir]: entries }));
+	/** The folder in view relisted: selection and rename targets it no longer holds drop out. */
+	const pruneToListing = useLatestCallback((survives: (path: string) => boolean) => {
 		setTabsState((state) => {
 			const current = activeTab(state);
-			const selection = pruneSelection(current.selection, survives);
-			return selection === current.selection ? state : patchActiveTab(state, (tab) => ({ ...tab, selection }));
+			const pruned = pruneSelection(current.selection, survives);
+			return pruned === current.selection ? state : patchActiveTab(state, (active) => ({ ...active, selection: pruned }));
 		});
 		setRename((current) => (current !== null && !survives(current.path) ? null : current));
-	}, []);
+	});
 
-	const loadListing = useCallback(
-		(
-			requestedPath: string,
-			mode: "navigate" | "silent",
-			requestGeneration: number,
-		): void => {
-			// Settings renders its own UI; there is no folder on disk to read.
-			if (!isFilesystemPath(requestedPath)) {
-				return;
-			}
-			// A fresh listing invalidates which identities the viewport has asked
-			// for, so the next mounted rows request their icons again.
-			thumbRequestsRef.current.clear();
-			thumbQueueRef.current.clear();
-			if (thumbTimerRef.current !== null) {
-				window.clearTimeout(thumbTimerRef.current);
-				thumbTimerRef.current = null;
-			}
-			const scope: ListingScope = {
-				generation: requestGeneration,
-				path: requestedPath,
-				tabId: activeTabIdRef.current,
-			};
-			// A full load is in flight: live patches wait for its baseline.
-			incrementalRef.current?.listing.fullStarted(scope);
-			const request = {
-				path: requestedPath,
-				generation: requestGeneration,
-				mode,
-				previous: listingRef.current,
-			} as const;
-			void listingLoader(request).then(async (result) => {
-				if (result.kind === "stale" || result.kind === "superseded") {
-					// A newer scope or request owns the baseline now.
-					return;
-				}
-				if (result.kind === "error") {
-					if (mode === "silent") {
-						let missing = false;
-						try {
-							missing = await isMissingPathFailure(source, requestedPath);
-						} catch (error: unknown) {
-							console.error(error);
-						}
-						if (missing) {
-							await navigateToExistingAncestor(requestedPath, requestGeneration);
-						} else {
-							console.error(result.error);
-						}
-						incrementalRef.current?.listing.fullAdopted(scope);
-						return;
-					}
-					adoptListing(requestedPath, []);
-					incrementalRef.current?.listing.fullAdopted(scope);
-					reportError(result.error);
-					return;
-				}
-				// Rows unchanged on disk keep their icons and identity: a tab
-				// switch or focus resync that finds nothing new paints nothing.
-				const entries = reconcileListing(listingRef.current, result.entries);
-				adoptListing(requestedPath, entries);
-				enrichInBackground(source, entries, "listing", (patch) => {
-					if (pathRef.current === requestedPath && generationRef.current === requestGeneration) {
-						adoptListing(requestedPath, patch(listingRef.current));
-						return;
-					}
-					// The user switched tabs before the patch landed: finish that
-					// tab's snapshot anyway while it still shows this folder. Each
-					// patch is mtime-gated, so a newer listing of it is safe too.
-					const snapshot = tabListingsRef.current.get(scope.tabId);
-					if (snapshot?.dir === requestedPath) {
-						tabListingsRef.current.set(scope.tabId, { dir: requestedPath, entries: patch(snapshot.entries) });
-					}
-				});
-				incrementalRef.current?.listing.fullAdopted(scope);
-			});
-		},
-		[adoptListing, listingLoader, navigateToExistingAncestor, reportError, source],
-	);
+	const { listing, listingDir, panes, children } = useFolderListings({
+		store,
+		source,
+		path,
+		tabId: tab.id,
+		panePaths,
+		openFolders,
+		revision,
+		searching,
+		reportError,
+		onMissing: navigateToExistingAncestor,
+		onRelisted: pruneToListing,
+	});
 
-	/**
-	 * Drain the coalesced viewport requests as one enrichment batch, then patch
-	 * the visible entries so their tiles pick up the icon. Mirrors the background
-	 * enrichment guards: search hits patch `hits`, a folder listing patches the
-	 * current listing only while that scope is still active.
-	 */
-	const flushThumbnails = useCallback((): void => {
-		thumbTimerRef.current = null;
-		if (thumbQueueRef.current.size === 0) {
-			return;
-		}
-		const searchingNow = searchingRef.current;
-		const dir = pathRef.current;
-		const generation = generationRef.current;
-		const batch = takeThumbnailBatch(
-			thumbQueueRef.current,
-			thumbRequestsRef.current,
-			(location) => searchingNow || location === dir,
-		);
-		if (batch.length === 0) {
-			return;
-		}
-		// Icons only: the background pass already asked for these rows' Finder metadata.
-		void source
-			.enrich(batch)
-			.then((enriched) => {
-				if (searchingNow) {
-					if (searchingRef.current) setHits((current) => applyEntryEnrichment(current, enriched));
-					return;
-				}
-				if (pathRef.current !== dir || generationRef.current !== generation || searchingRef.current) return;
-				adoptListing(dir, applyEntryEnrichment(listingRef.current, enriched));
-			})
-			.catch((error: unknown) => console.error("viewport thumbnail enrichment failed", error));
-	}, [adoptListing, source]);
-
-	/**
-	 * One row/tile reported itself as mounted without an OS icon. Coalesce it
-	 * with the other visible requests, then drain a batch through the same
-	 * `source.enrich` the background pass uses and patch the icon in place.
-	 */
-	const noteVisible = useCallback(
-		(entry: FinderEntry): void => {
-			if (!needsThumbnail(entry)) {
-				return;
-			}
-			const key = thumbnailKey(entry);
-			if (thumbRequestsRef.current.has(key) || thumbQueueRef.current.has(key)) {
-				return;
-			}
-			thumbQueueRef.current.set(key, entry);
-			if (thumbTimerRef.current === null) {
-				thumbTimerRef.current = window.setTimeout(flushThumbnails, THUMBNAIL_FLUSH_MS);
-			}
-		},
-		[flushThumbnails],
-	);
-
-	const currentIncremental = incrementalRef.current;
-	let incremental: IncrementalListing;
-	if (currentIncremental !== null && currentIncremental.source === source) {
-		incremental = currentIncremental.listing;
-	} else {
-		currentIncremental?.listing.cancel();
-		incremental = createIncrementalListing({
-			read: (dir, paths) => source.readEntries(dir, paths),
-			apply: (dir, patch) => {
-				adoptListing(dir, applyEntryPatch(listingRef.current, patch));
-				const generation = generationRef.current;
-				enrichInBackground(source, patch.entries, "live", (apply) => {
-					if (pathRef.current !== dir || generationRef.current !== generation || searchingRef.current) return;
-					adoptListing(dir, apply(listingRef.current));
-				});
-			},
-			isCurrent: (scope) =>
-				scope.path === pathRef.current &&
-				scope.generation === generationRef.current &&
-				scope.tabId === activeTabIdRef.current &&
-				!searchingRef.current,
-			onError: (error) => {
-				console.error("live incremental listing failed", error);
-				loadListing(pathRef.current, "silent", generationRef.current);
-			},
-		});
-		incrementalRef.current = { source, listing: incremental };
-	}
+	useEffect(() => store.onGone((dir) => dir === pathRef.current && navigateToExistingAncestor(dir)), [store, navigateToExistingAncestor]);
 
 	const refresh = useLatestCallback(() => {
 		setRevision((value) => value + 1);
@@ -918,134 +494,18 @@ export function useFinderController(
 		}
 	}, [path, locations]);
 
-	useEffect(() => {
-		if (path === "" || isVirtualTabPath(path)) {
-			previousPathRef.current = path;
-			previousTabIdRef.current = tab.id;
-			previousRevisionRef.current = revision;
-			return;
-		}
-		const pathChanged = previousPathRef.current !== path;
-		const tabChanged = previousTabIdRef.current !== tab.id;
-		const revisionChanged = previousRevisionRef.current !== revision;
-		const sourceChanged = previousSourceRef.current !== source;
-		if (pathChanged || tabChanged || revisionChanged || sourceChanged) {
-			beginScope();
-		}
-		previousPathRef.current = path;
-		previousTabIdRef.current = tab.id;
-		previousRevisionRef.current = revision;
-		previousSourceRef.current = source;
-		if (searching && !pathChanged && !tabChanged) {
-			return;
-		}
-		const stale = staleTabsRef.current.has(tab.id);
-		const mode = pathChanged && !stale ? "navigate" : "silent";
-		loadListing(path, mode, generationRef.current);
-		if (stale) {
-			staleTabsRef.current.delete(tab.id);
-		}
-	}, [beginScope, loadListing, path, revision, searching, source, tab.id]);
-
-	useEffect(() => {
-		const unsubscribe = source.onLive((message: LiveMessage) => {
-			setLayerStore((current) => adoptMessage(current, message));
-			const activeTabId = activeTabIdRef.current;
-			const activePath = pathRef.current;
-			const activeChanges: FsDirChange[] = [];
-			for (const dirChange of message.dirs) {
-				const tabsForDir = tabsRef.current.filter((current) => current.path === dirChange.dir);
-				if (tabsForDir.length === 0) {
-					continue;
-				}
-				for (const current of tabsForDir) {
-					if (current.id === activeTabId) {
-						activeChanges.push(dirChange);
-					} else {
-						staleTabsRef.current.add(current.id);
-					}
-				}
-			}
-			if (activeChanges.length === 0) {
-				return;
-			}
-			if (searchingRef.current) {
-				staleTabsRef.current.add(activeTabId);
-				return;
-			}
-			if (activeChanges.some((change) => change.dirGone || change.overflow)) {
-				const scope = beginScope();
-				let optimistic = listingRef.current;
-				for (const change of activeChanges) optimistic = applyOptimisticDeletes(optimistic, change);
-				adoptListing(activePath, optimistic);
-				if (activeChanges.some((change) => change.dirGone)) {
-					const { generation } = scope;
-					void navigateToExistingAncestor(activePath, generation).then(() => {
-						// The folder never moved (no existing ancestor): relist so the
-						// scope settles and patches stop waiting on a missing baseline.
-						if (pathRef.current === activePath && generationRef.current === generation) {
-							loadListing(activePath, "silent", generation);
-						}
-					});
-					return;
-				}
-				loadListing(activePath, "silent", scope.generation);
-				return;
-			}
-			const changedPaths = [...new Set(activeChanges.flatMap((change) => change.changes.map(({ path }) => path)))];
-			if (changedPaths.length === 0) return;
-			incremental.changed(changedPaths);
-		});
-		return () => {
-			unsubscribe();
-			incremental.cancel();
-		};
-	}, [adoptListing, beginScope, incremental, loadListing, navigateToExistingAncestor, source]);
-
-	/** Column view: the panes after the first list the folders chosen along the chain. */
-	useEffect(() => {
-		const targets = panePaths.filter((target) => target !== path);
-		if (targets.length === 0) {
-			return;
-		}
-		let live = true;
-		for (const target of targets) {
-			source
-				.list(target)
-				.then((entries) => {
-					if (!live) return;
-					setPaneListings((current) => {
-						const reconciled = reconcileListing(current[target] ?? [], entries);
-						return reconciled === current[target] ? current : { ...current, [target]: reconciled };
-					});
-					enrichInBackground(source, entries, "pane", (patch) => {
-						if (!live) return;
-						setPaneListings((current) => {
-							const patched = patch(current[target] ?? []);
-							return patched === current[target] ? current : { ...current, [target]: patched };
-						});
-					});
-				})
-				.catch((error: unknown) => {
-					if (live) {
-						setPaneListings((current) => ({ ...current, [target]: [] }));
-						reportError(error);
-					}
-				});
-		}
-		return () => {
-			live = false;
-		};
-	}, [source, path, panePaths, revision, reportError]);
+	// Folder changes are applied by the directory store; a pane follows only the
+	// live layers (version families) here.
+	useEffect(
+		() => source.onLive((message: LiveMessage) => setLayerStore((current) => adoptMessage(current, message))),
+		[source],
+	);
 
 	useEffect(() => {
 		if (!searching) {
 			setHits([]);
 			return;
 		}
-		// Search results are a new viewport; let their visible rows ask fresh.
-		thumbRequestsRef.current.clear();
-		thumbQueueRef.current.clear();
 		let live = true;
 		// A filename search defaults to the whole file-name index; the scope bar's
 		// folder pill narrows it to the folder in view. The scope rides to the main
@@ -1055,9 +515,7 @@ export function useFinderController(
 			.then((entries) => {
 				if (!live) return;
 				setHits(entries);
-				enrichInBackground(source, entries, "search", (patch) => {
-					if (live) setHits(patch);
-				});
+				store.enrich(entries);
 			})
 			.catch((error: unknown) => {
 				if (live) {
@@ -1068,7 +526,7 @@ export function useFinderController(
 		return () => {
 			live = false;
 		};
-	}, [source, query, searching, revision, reportError, searchScope, path]);
+	}, [source, store, query, searching, revision, reportError, searchScope, path]);
 
 	useEffect(() => {
 		let live = true;
@@ -1112,8 +570,7 @@ export function useFinderController(
 		let live = true;
 		const resync = (): void => {
 			if (path === "" || isVirtualTabPath(path)) return;
-			const scope = beginScope();
-			if (!searchingRef.current) loadListing(path, "silent", scope.generation);
+			if (!searchingRef.current) void store.load(path, "silent");
 			void source
 				.liveLayers()
 				.then((result) => {
@@ -1140,7 +597,7 @@ export function useFinderController(
 			window.removeEventListener("focus", queueResync);
 			document.removeEventListener("visibilitychange", onVisibilityChange);
 		};
-	}, [beginScope, loadListing, path, source]);
+	}, [store, path, source]);
 
 	// Only selected stack heads/members change the rows; a plain-row click must
 	// not re-run sort → stack → group → tree. The joined key is value-stable
@@ -1151,41 +608,28 @@ export function useFinderController(
 		() => (stackSelectionKey === "" ? [] : stackSelectionKey.split("\u0000")),
 		[stackSelectionKey],
 	);
-	const stackSections = useMemo<readonly GroupSection<TreeRow>[]>(() => {
-		const prepare = (entries: readonly FinderEntry[]): readonly StackRow[] =>
-			applyVersionStacks(sortEntries(visibleEntries(entries, showHiddenFiles), sort), {
-				families,
-				manualOpen: stackPinned,
-				selectedKeys: stackSelected,
-			});
-		// Grouping partitions only the top level: an expanded folder's nested
-		// rows stay with their parent, and an open version stack's members stay
-		// with their head (`groupRows` carries child rows along).
-		const grouped = (rows: readonly StackRow[]): readonly GroupSection<StackRow>[] => groupRows(rows, grouping, Date.now());
-		if (searching) {
-			// The main process already narrows "current" to the folder in view;
-			// this keeps the same guarantee for the fixture source. Both
-			// separators match so a Windows path still scopes correctly.
-			const scoped =
-				searchScope === "current"
-					? hits.filter(
-							(hit) => hit.path === path || hit.path.startsWith(`${path}/`) || hit.path.startsWith(`${path}\\`),
-						)
-					: hits;
-			return grouped(prepare(scoped)).map((section) => ({ ...section, rows: flatTreeRows(section.rows) }));
-		}
-		return grouped(prepare(listing)).map((section) => ({
-			...section,
-			rows: buildFolderTree(section.rows, {
-				expanded,
-				childrenOf: (folder) => {
-					const loaded = childListings[folder];
-					return loaded === undefined ? undefined : prepare(loaded.entries);
-				},
-			}),
-		}));
-	}, [searching, hits, listing, sort, grouping, showHiddenFiles, families, stackPinned, stackSelected, expanded, childListings, searchScope, path]);
-	const stackRows = useMemo(() => stackSections.flatMap((section) => section.rows), [stackSections]);
+	const { stackSections, stackRows, rows, paneViews, paneEntries, viewEntries, orderedKeys } = useRowPipeline({
+		sidecar,
+		path,
+		layout,
+		searching,
+		searchScope,
+		hits,
+		listing,
+		panePaths,
+		panes,
+		children,
+		expanded,
+		sort,
+		grouping,
+		showHiddenFiles,
+		families,
+		stackPinned,
+		stackSelected,
+	});
+	/** Every folder shown open needs its listing; the tree rows say which ones are. */
+	const shownOpenKey = useMemo(() => expandedFolders(stackRows).join("\u0000"), [stackRows]);
+	if (shownOpenKey !== openFoldersKey) setOpenFoldersKey(shownOpenKey);
 	// The reveal flash lasts FLASH_MS from when its row is on screen, not from
 	// the request: a slow first listing (a new tab on Windows) must not use it
 	// up unseen. A row that never shows drops the flash after FLASH_WAIT_MS.
@@ -1197,81 +641,6 @@ export function useFinderController(
 		const timer = setTimeout(() => setFlashPath(null), flashShown ? FLASH_MS : FLASH_WAIT_MS);
 		return () => clearTimeout(timer);
 	}, [flashPath, flashShown]);
-
-	const paneViews = useMemo<readonly ColumnPaneView[]>(
-		() =>
-			panePaths.map((panePath) => {
-				const entries = paneListings[panePath];
-				const rows = applyVersionStacks(sortEntries(visibleEntries(entries ?? [], showHiddenFiles), sort), {
-					families,
-					manualOpen: stackPinned,
-					selectedKeys: stackSelected,
-				});
-				return {
-					path: panePath,
-					loaded: entries !== undefined,
-					rows,
-					sections: groupRows(rows, grouping, Date.now()),
-				};
-			}),
-		[panePaths, paneListings, showHiddenFiles, sort, grouping, families, stackPinned, stackSelected],
-	);
-	// Keyboard and shift-range order inside a pane is the visual section order
-	// (each section's rows, sections flattened), not the pre-group sort order.
-	const paneEntries = useMemo(
-		() => paneViews.map((pane) => pane.sections.flatMap((section) => section.rows.map((row) => row.entry))),
-		[paneViews],
-	);
-
-	/** Every folder shown open needs its listing; stale ones re-read after a refresh. */
-	const openFolders = useMemo(() => expandedFolders(stackRows), [stackRows]);
-	const requestedListings = useRef(new Set<string>());
-	useEffect(() => {
-		for (const folder of openFolders) {
-			const request = `${revision}\u0000${folder}`;
-			if (childListings[folder]?.revision === revision || requestedListings.current.has(request)) {
-				continue;
-			}
-			requestedListings.current.add(request);
-			const settle = (entries: readonly FinderEntry[]): void => {
-				requestedListings.current.delete(request);
-				setChildListings((current) =>
-					(current[folder]?.revision ?? -1) > revision ? current : { ...current, [folder]: { revision, entries } },
-				);
-				enrichInBackground(source, entries, "child", (patch) => {
-					setChildListings((current) => {
-						const shown = current[folder];
-						if (shown === undefined || shown.revision > revision) return current;
-						const patched = patch(shown.entries);
-						return patched === shown.entries ? current : { ...current, [folder]: { revision: shown.revision, entries: patched } };
-					});
-				});
-			};
-			source
-				.list(folder)
-				.then(settle)
-				.catch((error: unknown) => {
-					settle([]);
-					reportError(error);
-				});
-		}
-	}, [openFolders, childListings, revision, source, reportError]);
-	// Drop listings nothing shows any more. Both maps only ever gained keys, so
-	// every folder a pane had listed — every column, every expanded subfolder —
-	// stayed in memory for the life of the pane. A folder shown again re-lists
-	// (the effects above request whatever is missing).
-	useEffect(() => {
-		const keep = new Set([path, ...panePaths]);
-		setPaneListings((current) => withOnlyKeys(current, keep));
-	}, [path, panePaths]);
-	useEffect(() => {
-		const keep = new Set(openFolders);
-		setChildListings((current) => withOnlyKeys(current, keep));
-	}, [openFolders]);
-	const rows = useMemo(() => stackRows.map((row) => row.entry), [stackRows]);
-	/** Every entry on screen: all panes in the column view, the listing otherwise. */
-	const viewEntries = useMemo(() => (layout === "columns" ? paneEntries.flat() : rows), [layout, paneEntries, rows]);
-	const orderedKeys = useMemo(() => viewEntries.map((entry) => entry.path), [viewEntries]);
 
 	/**
 	 * The files on screen, as one value-comparable key: `viewEntries` is a new
@@ -1299,9 +668,8 @@ export function useFinderController(
 		source
 			.indexStatus(paths)
 			.then((statuses) => {
-				// Only what is on screen is kept: merging every folder ever shown
-				// would grow this map for the life of the pane.
-				if (live) setIndexStatus(Object.fromEntries(statuses.map((status) => [status.path, status])));
+				// Each row re-renders only if its own status moved.
+				if (live) sidecar.setIndexStatuses(statuses);
 			})
 			.catch((error: unknown) => {
 				if (live) {
@@ -1311,7 +679,7 @@ export function useFinderController(
 		return () => {
 			live = false;
 		};
-	}, [source, indexStatusKey, indexRevision, reportError]);
+	}, [source, sidecar, indexStatusKey, indexRevision, reportError]);
 
 	/** Keyboard movement keeps the focused item in view (list: row height 32, lead 80). */
 	useEffect(() => {
@@ -1328,36 +696,54 @@ export function useFinderController(
 			}
 			return;
 		}
-	// The previous tab's rows can still be on screen while a revealed folder
-	// loads; the target must only be consumed by the current folder's rows (a
-	// search list may come from many folders, so it is exempt).
-	const index = orderedKeys.indexOf(target);
-	if (index < 0 || (!searchingRef.current && listingDirRef.current !== path)) {
-		// The target's listing has not landed yet (a revealed folder still
-		// loading); keep the target so the next row set scrolls to it.
-		return;
-	}
-	scrollTarget.current = null;
-	if (listRef.current !== null) {
-		// Group headers add height above a row, so the top comes from the
-		// grouped layout (identical to index * ROW_HEIGHT when ungrouped).
-		listRef.current.scrollTop = Math.max(0, groupedRowTop(stackSections, index) - SCROLL_LEAD);
-	}
-	}, [orderedKeys, layout, selection, path, stackSections]);
+		// The previous folder's rows can still be on screen while a revealed folder
+		// loads; the target must only be consumed by the current folder's rows (a
+		// search list may come from many folders, so it is exempt).
+		const index = orderedKeys.indexOf(target);
+		if (index < 0 || (!searchingRef.current && listingDir !== path)) {
+			// The target's listing has not landed yet (a revealed folder still
+			// loading); keep the target so the next row set scrolls to it.
+			return;
+		}
+		scrollTarget.current = null;
+		if (listRef.current !== null) {
+			// Group headers add height above a row, so the top comes from the
+			// grouped layout (identical to index * ROW_HEIGHT when ungrouped).
+			listRef.current.scrollTop = Math.max(0, groupedRowTop(stackSections, index) - SCROLL_LEAD);
+		}
+	}, [orderedKeys, layout, selection, path, listingDir, stackSections]);
 
 	const patchSelection = useLatestCallback((next: SelectionState) => {
 		setTabsState((state) => patchActiveTab(state, (current) => ({ ...current, selection: next })));
 	});
 
-	const focusedEntry = useMemo(
-		() => viewEntries.find((entry) => entry.path === selection.focus) ?? null,
-		[viewEntries, selection.focus],
+	// The Inspector shows the selection with its icon, OS kind, and metadata:
+	// resolve those rows through the sidecar, and re-render when one of them
+	// (or its index state) changes — only these rows, not the listing.
+	const selectionKey = selection.keys.join("\u0000");
+	const subscribeSelection = useCallback(
+		(listener: () => void) => {
+			const offs = selectionKey === "" ? [] : selectionKey.split("\u0000").map((key) => sidecar.subscribe(key, listener));
+			return () => {
+				for (const off of offs) off();
+			};
+		},
+		[sidecar, selectionKey],
 	);
+	const selectionRevision = useSyncExternalStore(subscribeSelection, () =>
+		selectionKey === "" ? "" : selectionKey.split("\u0000").map((key) => sidecar.revision(key)).join(","),
+	);
+	const focusedEntry = useMemo(() => {
+		void selectionRevision;
+		const entry = viewEntries.find((candidate) => candidate.path === selection.focus);
+		return entry === undefined ? null : sidecar.resolve(entry);
+	}, [viewEntries, selection.focus, sidecar, selectionRevision]);
 	const selectedEntries = useMemo(() => {
+		void selectionRevision;
 		if (selection.keys.length === 0) return [];
 		const keys = new Set(selection.keys);
-		return viewEntries.filter((entry) => keys.has(entry.path));
-	}, [viewEntries, selection.keys]);
+		return viewEntries.filter((entry) => keys.has(entry.path)).map((entry) => sidecar.resolve(entry));
+	}, [viewEntries, selection.keys, sidecar, selectionRevision]);
 
 	const pruneColumns = useLatestCallback((removed: readonly string[]) => {
 		setTabsState((state) =>
@@ -1508,15 +894,15 @@ export function useFinderController(
 	 */
 	const toggleIndex = useLatestCallback(
 		(entry: FinderEntry) => {
-			const current = indexStatus[entry.path];
-			if (current === undefined || !current.toggleable) {
+			const current = sidecar.indexStatus(entry.path);
+			if (current === null || !current.toggleable) {
 				return;
 			}
 			const exclude = !current.excluded;
 			source
 				.setIndexExcluded(entry.path, exclude)
 				.then((status) => {
-					setIndexStatus((statuses) => ({ ...statuses, [status.path]: status }));
+					sidecar.setIndexStatuses([status]);
 					showToast(indexToast(entry.name, !exclude));
 				})
 				.catch(reportError);
@@ -2014,201 +1400,90 @@ export function useFinderController(
 		}
 	});
 
-	useEffect(() => {
-		// Every pane mounts a controller; only the focused one answers the keyboard.
-		if (!focused) return;
-		const onKeyDown = (event: globalThis.KeyboardEvent): void => {
-			const target = event.target;
-			if (
-				target instanceof HTMLElement &&
-				target.tagName === "BUTTON" &&
-				(event.key === "Enter" || event.key === " ") &&
-				!event.metaKey &&
-				!event.ctrlKey &&
-				!event.altKey
-			) {
-				return;
-			}
-			const typing =
-				target instanceof HTMLElement &&
-				(target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable || target.closest('[role="menu"]') !== null);
-			const action = resolveKeyAction(
-				{
-					key: event.key,
-					meta: event.metaKey || event.ctrlKey,
-					shift: event.shiftKey,
-					alt: event.altKey,
-				},
-				{ zone, typing, viewMode: layout },
-			);
-			if (action === null) {
-				return;
-			}
-			// A Settings or AI Search tab shows no rows: only window-level shortcuts apply.
-			if (isVirtualTabPath(path) && WINDOW_KEY_ACTIONS[action.type] !== true) {
-				return;
-			}
-			switch (action.type) {
-				case "dismiss":
-					dismiss();
-					return;
-				case "focusSearch":
-					event.preventDefault();
-					focusSearchRef.current?.();
-					searchRef.current?.focus();
-					return;
-				case "newTab":
-					event.preventDefault();
-					setTabsState((state) => openTab(state));
-					return;
-				case "newFolder":
-					event.preventDefault();
-					newFolder();
-					return;
-				case "newFile":
-					event.preventDefault();
-					newFile(action.format);
-					return;
-				case "closeTab":
-					event.preventDefault();
-					updateWorkspace((workspace) => {
-						const current = workspace.panes.find((candidate) => candidate.id === paneId);
-						return current === undefined ? workspace : closeWorkspaceTab(workspace, current.activeId);
-					});
-					return;
-				case "openSettings":
-					event.preventDefault();
-					updateWorkspace(openOrSelectSettingsInWorkspace);
-					return;
-				case "focusComposer":
-					event.preventDefault();
-					updateWorkspace(focusAiSearchInWorkspace);
-					focusComposerRef.current?.();
-					return;
-				case "quickLook":
-					event.preventDefault();
-					quickLookSelection();
-					return;
-				case "moveSelection": {
-					event.preventDefault();
-					if (layout === "columns") {
-						stepColumns(action.delta === 1 ? "down" : "up");
-						return;
-					}
-					if (layout === "icons") {
-						const path = groupedGridTarget(stackSections, gridColumns(listRef.current), selection.focus, {
-							dx: 0,
-							dy: action.delta,
-						});
-						if (path === null) {
-							return;
-						}
-						scrollTarget.current = path;
-						patchSelection(single(path));
-						return;
-					}
-					const next = moveSelection(orderedKeys, selection, action.delta);
-					scrollTarget.current = next.focus;
-					patchSelection(next);
-					return;
-				}
-				case "moveSelectionSideways": {
-					event.preventDefault();
-					if (layout === "columns") {
-						stepColumns(action.delta === 1 ? "right" : "left");
-						return;
-					}
-					const path = groupedGridTarget(stackSections, gridColumns(listRef.current), selection.focus, {
-						dx: action.delta,
-						dy: 0,
-					});
-					if (path === null) {
-						return;
-					}
-					scrollTarget.current = path;
-					patchSelection(single(path));
-					return;
-				}
-				case "setViewMode":
-					event.preventDefault();
-					setViewMode(action.mode);
-					return;
-				case "moveEvidence":
-					return;
-				case "disclose": {
-					const step = discloseStep(stackRows, selection.focus, action.direction);
-					if (step === null) {
-						return;
-					}
-					event.preventDefault();
-					if (step.type === "select") {
-						scrollTarget.current = step.path;
-						patchSelection({ keys: [step.path], anchor: step.path, focus: step.path });
-						return;
-					}
-					setFolderOpen(step.path, step.type === "expand");
-					return;
-				}
-				case "open":
-					event.preventDefault();
-					if (layout === "columns" && focusedEntry?.kind === "folder") {
-						stepColumns("right");
-						return;
-					}
-					if (focusedEntry !== null) {
-						openEntry(focusedEntry);
-					}
-					return;
-				case "trash":
-					event.preventDefault();
-					trashPaths(selection.keys);
-					return;
-				case "copy":
-					event.preventDefault();
-					copySelection();
-					return;
-				case "cut":
-					event.preventDefault();
-					cutSelection();
-					return;
-				case "paste":
-					event.preventDefault();
-					pasteClipboard(action.move);
-					return;
-				case "undo":
-					event.preventDefault();
-					undoLastTransfer();
-					return;
-			}
-		};
-		window.addEventListener("keydown", onKeyDown);
-		return () => window.removeEventListener("keydown", onKeyDown);
-	}, [
+	const focusPath = useLatestCallback((target: string) => {
+		scrollTarget.current = target;
+		patchSelection(single(target));
+	});
+	const moveTo = useLatestCallback((next: SelectionState) => {
+		scrollTarget.current = next.focus;
+		patchSelection(next);
+	});
+	const focusSearch = useLatestCallback(() => {
+		focusSearchRef.current?.();
+		searchRef.current?.focus();
+	});
+	const closeActiveTab = useLatestCallback(() =>
+		updateWorkspace((workspace) => {
+			const current = workspace.panes.find((candidate) => candidate.id === paneId);
+			return current === undefined ? workspace : closeWorkspaceTab(workspace, current.activeId);
+		}),
+	);
+	const focusComposer = useLatestCallback(() => {
+		updateWorkspace(focusAiSearchInWorkspace);
+		focusComposerRef.current?.();
+	});
+	const newTab = useLatestCallback(() => setTabsState((state) => openTab(state)));
+	const openSettings = useLatestCallback(() => updateWorkspace(openOrSelectSettingsInWorkspace));
+	// Every member is a stable useLatestCallback, so this object is created once.
+	const keyActions = useMemo(
+		() => ({
+			dismiss,
+			focusSearch,
+			newTab,
+			newFolder,
+			newFile,
+			closeTab: closeActiveTab,
+			openSettings,
+			focusComposer,
+			quickLookSelection,
+			stepColumns,
+			focusPath,
+			moveTo,
+			setViewMode,
+			setFolderOpen,
+			openEntry,
+			trash: trashPaths,
+			copySelection,
+			cutSelection,
+			pasteClipboard,
+			undoLastTransfer,
+		}),
+		[
+			dismiss,
+			focusSearch,
+			newTab,
+			newFolder,
+			newFile,
+			closeActiveTab,
+			openSettings,
+			focusComposer,
+			quickLookSelection,
+			stepColumns,
+			focusPath,
+			moveTo,
+			setViewMode,
+			setFolderOpen,
+			openEntry,
+			trashPaths,
+			copySelection,
+			cutSelection,
+			pasteClipboard,
+			undoLastTransfer,
+		],
+	);
+	useFinderKeyboard({
 		focused,
-		updateWorkspace,
-		paneId,
 		zone,
 		path,
 		layout,
-		stepColumns,
-		setViewMode,
-		dismiss,
-		newFolder,
-		newFile,
+		selection,
 		orderedKeys,
 		stackRows,
 		stackSections,
-		setFolderOpen,
-		selection,
-		quickLookSelection,
 		focusedEntry,
-		openEntry,
-		trashPaths,
-		copySelection,
-		cutSelection,
-		pasteClipboard,
-		undoLastTransfer,
-	]);
+		listRef,
+		actions: keyActions,
+	});
 
 	const tabViews = useMemo<readonly TabView[]>(
 		() =>
@@ -2237,11 +1512,11 @@ export function useFinderController(
 		return buildContextMenu({
 			target: { name: entry.name, kind: entry.kind },
 			selectionCount: menuTargets(entry).length,
-			indexIncluded: indexStatus[entry.path]?.excluded !== true,
+			indexIncluded: sidecar.indexStatus(entry.path)?.excluded !== true,
 			clipboardCount,
 			inRecents: path === RECENTS_PATH,
 		});
-	}, [contextMenu, menuTargets, indexStatus, clipboardCount, path]);
+	}, [contextMenu, menuTargets, sidecar, clipboardCount, path]);
 
 	const navTargets = useMemo(
 		() => (locations.length > 0 ? locations : [{ name: basename(path), path }]),
@@ -2254,8 +1529,6 @@ export function useFinderController(
 	// so no closure here keeps an earlier render's rows alive.
 	const selectTabId = useLatestCallback((id: number) => updateWorkspace((workspace) => focusTab(workspace, id)));
 	const closeTabId = useLatestCallback((id: number) => updateWorkspace((workspace) => closeWorkspaceTab(workspace, id)));
-	const newTab = useLatestCallback(() => setTabsState((state) => openTab(state)));
-	const openSettings = useLatestCallback(() => updateWorkspace(openOrSelectSettingsInWorkspace));
 	const showAiSearch = useLatestCallback(() => setTabsState((state) => showAiSearchInActiveTab(state)));
 	const openAiSearch = useLatestCallback(() => setTabsState((state) => openAiSearchTab(state)));
 	const focusAiSearch = useLatestCallback(() => updateWorkspace(focusAiSearchInWorkspace));
@@ -2292,6 +1565,8 @@ export function useFinderController(
 	const closeContextMenu = useLatestCallback(() => setContextMenu(null));
 	const setRenameDraft = useLatestCallback((value: string) => setRename((current) => (current === null ? null : { ...current, draft: value })));
 	const cancelRename = useLatestCallback(() => setRename(null));
+	const indexStatusFor = useCallback((target: string) => sidecar.indexStatus(target), [sidecar]);
+	const noteVisible = useCallback((entry: FinderEntry) => store.requestIcon(entry), [store]);
 
 	return {
 		tabs: tabViews,
@@ -2314,7 +1589,7 @@ export function useFinderController(
 		flashPath,
 		renamePath: rename?.path ?? null,
 		renameDraft: rename?.draft ?? "",
-		indexStatus,
+		indexStatusFor,
 		versionFamilyError,
 		activeNavPath: activeNav,
 		navGroups: sidebarGroups,

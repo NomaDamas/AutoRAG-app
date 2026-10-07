@@ -1,5 +1,4 @@
 import { useRef, type ReactElement, type RefObject } from "react";
-import type { IndexStatus } from "../../../shared/index-contract";
 import { FileRow, type BackgroundDropHandlers, type RowCallbacks } from "./FileRow";
 import { GroupHeader } from "./GroupHeader";
 import { cn } from "../lib/cn";
@@ -33,7 +32,6 @@ export function FileList({
 	flashPath,
 	renamePath,
 	renameDraft,
-	indexStatus,
 	listPath,
 	columns,
 	minWidth,
@@ -53,7 +51,6 @@ export function FileList({
 	readonly flashPath: string | null;
 	readonly renamePath: string | null;
 	readonly renameDraft: string;
-	readonly indexStatus: Readonly<Record<string, IndexStatus>>;
 	readonly listPath: string;
 	readonly columns: ListColumnsState;
 	/** Fixed total track width once the name column is user-resized (x-scroll). */
@@ -88,7 +85,6 @@ export function FileList({
 			zoneFocused={focusedZone}
 			flash={flashPath === row_.entry.path}
 			searching={searching}
-			indexStatus={indexStatus[row_.entry.path] ?? null}
 			renameDraft={renamePath === row_.entry.path ? renameDraft : null}
 			stackCount={row_.stackCount}
 			stackOpen={row_.stackOpen}

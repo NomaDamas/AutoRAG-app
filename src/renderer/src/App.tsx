@@ -14,7 +14,9 @@ import { Sidebar } from "./components/Sidebar";
 import type { SearchMode } from "./components/SidebarSearch";
 import { Toolbar } from "./components/Toolbar";
 import { percentPlacement, TAB_DRAG_TYPE, WorkspaceView } from "./components/Workspace";
-import type { ListingSnapshot } from "./hooks/useFinderController";
+import { createDirectoryStore } from "./data/directory-store";
+import { createEntrySidecar } from "./data/entry-sidecar";
+import type { DirectoryData } from "./hooks/useDirectoryData";
 import { useFinderSource } from "./hooks/useFinderSource";
 import { createControllerStore, usePaneController } from "./hooks/usePaneControllers";
 import { attachmentsFromDrop, isAttachmentDrag } from "./state/attachments";
@@ -225,14 +227,19 @@ export function App(): ReactElement {
 	const workspaceRef = useRef(workspace);
 	workspaceRef.current = workspace;
 	const [store] = useState(createControllerStore);
-	const [listingCache] = useState(() => new Map<number, ListingSnapshot>());
+	/** Every pane's folders and their enrichment, owned outside React (FS roadmap #99). */
+	const [directoryData] = useState<DirectoryData>(() => {
+		const sidecar = createEntrySidecar();
+		return { sidecar, store: createDirectoryStore({ source, sidecar }) };
+	});
+	useEffect(() => directoryData.store.connect(), [directoryData]);
 	const [draggingTabId, setDraggingTabId] = useState<number | null>(null);
 
 	const focusedPaneId = workspace.focusedPaneId;
 	const finder = usePaneController(store, focusedPaneId);
 	const tabs = useMemo(() => allTabs(workspace), [workspace]);
 
-	// Every pane's folders are watched; closed tabs drop their listing snapshots.
+	// Every pane's folders are watched.
 	const tabPathsKey = tabs.map((tab) => tab.path).join("\u0000");
 	useEffect(() => {
 		void source.setWatchSet(watchSetFor(allTabs(workspaceRef.current))).catch((error: unknown) => console.error(error));
@@ -245,10 +252,6 @@ export function App(): ReactElement {
 		window.addEventListener("focus", resync);
 		return () => window.removeEventListener("focus", resync);
 	}, [source]);
-	useEffect(() => {
-		const open = new Set(tabs.map((tab) => tab.id));
-		for (const id of listingCache.keys()) if (!open.has(id)) listingCache.delete(id);
-	}, [tabs, listingCache]);
 
 	/* --------------------------------------------------------- evidence state */
 	// The focused AI Search tab publishes its answer's citations; the inspector
@@ -326,7 +329,7 @@ export function App(): ReactElement {
 		() => ({
 			source,
 			store,
-			listingCache,
+			directoryData,
 			quickLook: { onQuickLook: openQuickLook, closeQuickLook, isQuickLookOpen },
 			update: (change) => setWorkspace((current) => change(current)),
 			onFocusSearch: () => setSidebarVisible(true),
@@ -347,7 +350,7 @@ export function App(): ReactElement {
 			},
 			endTabDrag: () => setDraggingTabId(null),
 		}),
-		[source, store, listingCache, openQuickLook, closeQuickLook, isQuickLookOpen, deliverToAi],
+		[source, store, directoryData, openQuickLook, closeQuickLook, isQuickLookOpen, deliverToAi],
 	);
 	useEffect(() => {
 		if (draggingTabId === null) return;
@@ -655,7 +658,7 @@ export function App(): ReactElement {
 							<Inspector
 								entry={focused}
 								entries={finder?.selectedEntries ?? []}
-								indexStatus={focused !== null ? (finder?.indexStatus[focused.path] ?? null) : null}
+								indexStatus={focused !== null ? (finder?.indexStatusFor(focused.path) ?? null) : null}
 								onToggleIndex={(entry) => finder?.toggleIndex(entry)}
 								onTrash={(entry) => finder?.trashEntry(entry)}
 								onCopyPath={(entry) => finder?.copyEntryPath(entry)}

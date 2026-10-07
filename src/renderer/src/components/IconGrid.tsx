@@ -6,6 +6,7 @@ import { GROUP_HEADER_HEIGHT, groupedLayout, groupedWindow, type GroupSection } 
 import type { StackRow, VersionFamilyError } from "../state/version-family";
 import { GRID_OVERSCAN, columnsForWidth, gridColumnCount } from "../state/virtual";
 import { isHiddenName } from "../state/visibility";
+import { useDirectoryData, useEntrySidecar } from "../hooks/useDirectoryData";
 import { useScrollWindow } from "../hooks/useScrollWindow";
 import { GroupHeader } from "./GroupHeader";
 import { type BackgroundDropHandlers, type RowCallbacks } from "./FileRow";
@@ -230,7 +231,7 @@ export function IconGrid({
 }
 
 function IconTile({
-	entry,
+	entry: listed,
 	selected,
 	focusedZone,
 	flash,
@@ -250,6 +251,8 @@ function IconTile({
 	readonly renameDraft: string | null;
 	readonly callbacks: RowCallbacks;
 }): ReactElement {
+	// Icon and OS kind come from the sidecar: only this tile re-renders when they land.
+	const { entry } = useEntrySidecar(useDirectoryData().sidecar, listed);
 	// Virtualized: only tiles near the viewport mount, so reporting them fills
 	// thumbnails in on scroll for folders larger than the per-call icon cap.
 	useEffect(() => {
