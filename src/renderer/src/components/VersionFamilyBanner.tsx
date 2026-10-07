@@ -1,4 +1,5 @@
 import type { ReactElement } from "react";
+import { useTranslation } from "react-i18next";
 import type { VersionFamilyError } from "../state/version-family";
 
 /** The explicit dupey error above every Finder view (missing CLI or failed scan). */
@@ -9,6 +10,7 @@ export function VersionFamilyBanner({
 	readonly error: VersionFamilyError | null;
 	readonly onRetry: () => void;
 }): ReactElement | null {
+	const { t } = useTranslation();
 	if (error === null) {
 		return null;
 	}
@@ -28,7 +30,7 @@ export function VersionFamilyBanner({
 				className="list__error-retry h-pill px-10 border border-danger-border rounded-6 bg-window text-danger-text text-meta cursor-pointer"
 				onClick={onRetry}
 			>
-				다시 확인
+				{t("finder.versionBanner.retry", "다시 확인")}
 			</button>
 		</div>
 	);

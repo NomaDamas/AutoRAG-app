@@ -84,7 +84,15 @@ export function groupChatHistory(summaries: readonly ChatSummary[], now: Date): 
 	}));
 }
 
-export function historyEmptyText(query: string): string {
+export function historyEmptyText(
+	query: string,
+	translate?: (key: "aiSearch.emptyHistory" | "aiSearch.emptyHistorySearch", options?: { query: string }) => string,
+): string {
 	const trimmed = query.trim();
-	return trimmed === "" ? "저장된 대화가 없습니다." : `"${trimmed}"에 해당하는 대화가 없습니다`;
+	if (trimmed === "") {
+		return translate ? translate("aiSearch.emptyHistory") : "저장된 대화가 없습니다.";
+	}
+	return translate
+		? translate("aiSearch.emptyHistorySearch", { query: trimmed })
+		: `"${trimmed}"에 해당하는 대화가 없습니다`;
 }

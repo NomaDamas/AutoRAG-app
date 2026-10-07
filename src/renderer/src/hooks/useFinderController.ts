@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useLatestCallback } from "./useLatestCallback";
 import type { MouseEvent as ReactMouseEvent, RefObject } from "react";
 import { NO_CAPABILITIES, type ActionAnchor, type ActionCapabilities } from "../../../shared/actions-contract";
@@ -516,6 +517,7 @@ export function useFinderController(
 		readonly listingCache?: Map<number, ListingSnapshot>;
 	} = {},
 ): FinderController {
+	const { t } = useTranslation();
 	const showHiddenFiles = options.showHiddenFiles ?? false;
 	const quickLookRef = useRef(options.quickLook);
 	quickLookRef.current = options.quickLook;
@@ -2278,17 +2280,20 @@ export function useFinderController(
 			return [];
 		}
 		if (menu.entry === null) {
-			return buildBackgroundContextMenu({ clipboardCount });
+			return buildBackgroundContextMenu({ clipboardCount }, (k, def) => t(k, { defaultValue: def }));
 		}
 		const entry = menu.entry;
-		return buildContextMenu({
-			target: { name: entry.name, kind: entry.kind },
-			selectionCount: menuTargets(entry).length,
-			indexIncluded: indexStatus[entry.path]?.excluded !== true,
-			clipboardCount,
-			inRecents: path === RECENTS_PATH,
-		});
-	}, [contextMenu, menuTargets, indexStatus, clipboardCount, path]);
+		return buildContextMenu(
+			{
+				target: { name: entry.name, kind: entry.kind },
+				selectionCount: menuTargets(entry).length,
+				indexIncluded: indexStatus[entry.path]?.excluded !== true,
+				clipboardCount,
+				inRecents: path === RECENTS_PATH,
+			},
+			(k, def, opt) => t(k, { defaultValue: def, ...(opt as Record<string, unknown> | undefined) }),
+		);
+	}, [contextMenu, menuTargets, indexStatus, clipboardCount, path, t]);
 
 	const navTargets = useMemo(
 		() => (locations.length > 0 ? locations : [{ name: basename(path), path }]),
@@ -2354,7 +2359,7 @@ export function useFinderController(
 		query,
 		searchFocused,
 		searching,
-		emptyText: emptyStateText(query, path),
+		emptyText: emptyStateText(query, path, (k, def, opt) => t(k, { defaultValue: def, ...(opt as Record<string, unknown> | undefined) })),
 		rows,
 		stackRows,
 		stackSections,

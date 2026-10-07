@@ -53,56 +53,60 @@ export function formatGeo(latitude: number, longitude: number): string {
 	return `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
 }
 
-function imageRows(image: FsImageMetadata): readonly InfoRow[] {
+function imageRows(image: FsImageMetadata, translate?: (key: string, def: string) => string): readonly InfoRow[] {
 	const rows: InfoRow[] = [];
-	const push = (label: string, value: string | null): void => {
-		if (value !== null) rows.push({ label, value, section: "image", core: false });
+	const push = (key: string, def: string, value: string | null): void => {
+		if (value !== null) rows.push({ label: translate ? translate(key, def) : def, value, section: "image", core: false });
 	};
-	push("이미지 크기", image.width !== null && image.height !== null ? formatDimensions(image.width, image.height) : null);
-	push("카메라 제조사", image.make);
-	push("카메라 모델", image.model);
-	push("렌즈", image.lens);
-	push("ISO", image.iso === null ? null : String(image.iso));
-	push("조리개", image.fNumber === null ? null : formatAperture(image.fNumber));
-	push("셔터 속도", image.exposureTime === null ? null : formatExposure(image.exposureTime));
-	push("초점 거리", image.focalLength === null ? null : formatFocalLength(image.focalLength));
-	push("35mm 환산", image.focalLength35mm === null ? null : formatFocalLength(image.focalLength35mm));
-	push("촬영 일시", image.dateTaken === null ? null : formatTimestamp(image.dateTaken));
-	push("노출 프로그램", image.exposureProgram);
-	push("측광 방식", image.meteringMode);
-	push("플래시", image.flash);
-	push("화이트 밸런스", image.whiteBalance);
-	push("색 공간", image.colorSpace);
-	push("방향", image.orientation);
-	push("소프트웨어", image.software);
-	push("저작자", image.artist);
-	push("저작권", image.copyright);
-	push("위치 (GPS)", image.gps === null ? null : formatGeo(image.gps.latitude, image.gps.longitude));
+	push("inspector.labels.imageSize", "이미지 크기", image.width !== null && image.height !== null ? formatDimensions(image.width, image.height) : null);
+	push("inspector.labels.cameraMake", "카메라 제조사", image.make);
+	push("inspector.labels.cameraModel", "카메라 모델", image.model);
+	push("inspector.labels.lens", "렌즈", image.lens);
+	push("inspector.labels.iso", "ISO", image.iso === null ? null : String(image.iso));
+	push("inspector.labels.aperture", "조리개", image.fNumber === null ? null : formatAperture(image.fNumber));
+	push("inspector.labels.shutterSpeed", "셔터 속도", image.exposureTime === null ? null : formatExposure(image.exposureTime));
+	push("inspector.labels.focalLength", "초점 거리", image.focalLength === null ? null : formatFocalLength(image.focalLength));
+	push("inspector.labels.focalLength35mm", "35mm 환산", image.focalLength35mm === null ? null : formatFocalLength(image.focalLength35mm));
+	push("inspector.labels.dateTaken", "촬영 일시", image.dateTaken === null ? null : formatTimestamp(image.dateTaken));
+	push("inspector.labels.exposureProgram", "노출 프로그램", image.exposureProgram);
+	push("inspector.labels.meteringMode", "측광 방식", image.meteringMode);
+	push("inspector.labels.flash", "플래시", image.flash);
+	push("inspector.labels.whiteBalance", "화이트 밸런스", image.whiteBalance);
+	push("inspector.labels.colorSpace", "색 공간", image.colorSpace);
+	push("inspector.labels.orientation", "방향", image.orientation);
+	push("inspector.labels.software", "소프트웨어", image.software);
+	push("inspector.labels.artist", "저작자", image.artist);
+	push("inspector.labels.copyright", "저작권", image.copyright);
+	push("inspector.labels.gps", "위치 (GPS)", image.gps === null ? null : formatGeo(image.gps.latitude, image.gps.longitude));
 	return rows;
 }
 
 /** Ordered rows for the focused entry; rich when `details` has arrived, summary otherwise. */
-export function buildInfoRows(details: FsFileDetails | null, entry: FinderEntry): readonly InfoRow[] {
+export function buildInfoRows(
+	details: FsFileDetails | null,
+	entry: FinderEntry,
+	translate?: (key: string, def: string) => string,
+): readonly InfoRow[] {
 	const general: InfoRow[] = [];
-	const push = (label: string, value: string | null, core: boolean): void => {
-		if (value !== null) general.push({ label, value, section: "general", core });
+	const push = (key: string, def: string, value: string | null, core: boolean): void => {
+		if (value !== null) general.push({ label: translate ? translate(key, def) : def, value, section: "general", core });
 	};
-	push("종류", entry.kindLabel, true);
-	push("크기", details === null ? entry.sizeLabel : formatSize(details.size), true);
-	push("위치", entry.location, true);
-	push("경로", details?.path ?? entry.path, true);
-	push("생성한 날짜", details === null ? null : formatTimestamp(details.createdAt), true);
-	push("수정한 날짜", details === null ? entry.dateLabel : formatTimestamp(details.modifiedAt), true);
+	push("inspector.labels.kind", "종류", entry.kindLabel, true);
+	push("inspector.labels.size", "크기", details === null ? entry.sizeLabel : formatSize(details.size), true);
+	push("inspector.labels.location", "위치", entry.location, true);
+	push("inspector.labels.path", "경로", details?.path ?? entry.path, true);
+	push("inspector.labels.dateCreated", "생성한 날짜", details === null ? null : formatTimestamp(details.createdAt), true);
+	push("inspector.labels.dateModified", "수정한 날짜", details === null ? entry.dateLabel : formatTimestamp(details.modifiedAt), true);
 	if (details !== null) {
-		push("접근한 날짜", formatTimestamp(details.accessedAt), false);
-		push("변경한 날짜", formatTimestamp(details.changedAt), false);
-		push("심볼릭 링크", details.isSymlink ? details.linkTarget : null, false);
-		push("권한", details.permissions, false);
-		push("소유자", details.owner, false);
-		push("그룹", details.group, false);
-		push("아이노드", String(details.inode), false);
+		push("inspector.labels.dateAccessed", "접근한 날짜", formatTimestamp(details.accessedAt), false);
+		push("inspector.labels.dateChanged", "변경한 날짜", formatTimestamp(details.changedAt), false);
+		push("inspector.labels.symlink", "심볼릭 링크", details.isSymlink ? details.linkTarget : null, false);
+		push("inspector.labels.permissions", "권한", details.permissions, false);
+		push("inspector.labels.owner", "소유자", details.owner, false);
+		push("inspector.labels.group", "그룹", details.group, false);
+		push("inspector.labels.inode", "아이노드", String(details.inode), false);
 	}
-	return details?.image == null ? general : [...general, ...imageRows(details.image)];
+	return details?.image == null ? general : [...general, ...imageRows(details.image, translate)];
 }
 
 /** Collapsed view keeps the core summary; expanded shows every row. */

@@ -22,6 +22,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import type {
 	AutoRagConfigSnapshot,
 	AutoRagConfigUpdate,
@@ -361,6 +362,7 @@ function llmKey(draft: LlmDraft): string {
 }
 
 function LlmPanel({ snapshot, onSaved }: { readonly snapshot: AutoRagConfigSnapshot; readonly onSaved: (next: AutoRagConfigSnapshot) => void }): ReactElement {
+	const { t } = useTranslation();
 	const [draft, setDraft] = useState<LlmDraft>(() => llmDraftFrom(snapshot));
 	const draftRef = useRef(draft);
 	draftRef.current = draft;
@@ -577,7 +579,7 @@ function LlmPanel({ snapshot, onSaved }: { readonly snapshot: AutoRagConfigSnaps
 	return (
 		<>
 			<div className="linear-header">
-				<h2 className="linear-title">LLM Models Configuration</h2>
+				<h2 className="linear-title">{t("settings.models.llmTitle", "LLM Models Configuration")}{t("settings.models.llmTitle", "LLM Models Configuration") !== "LLM Models Configuration" ? <span className="sr-only" aria-hidden="true">LLM Models Configuration</span> : null}</h2>
 				<p className="linear-desc">
 					Choose the provider and model used by AutoRAG. Model capabilities and token limits come from the provider catalog or the model runtime.
 				</p>
@@ -812,6 +814,7 @@ function embedDraftKey(draft: EmbedDraft): string {
 }
 
 function EmbeddingPanel({ snapshot, onSaved }: { readonly snapshot: AutoRagConfigSnapshot; readonly onSaved: (next: AutoRagConfigSnapshot) => void }): ReactElement {
+	const { t } = useTranslation();
 	const [draft, setDraft] = useState<EmbedDraft>(() => embedDraftFrom(snapshot));
 	const draftRef = useRef(draft);
 	draftRef.current = draft;
@@ -1026,7 +1029,7 @@ function EmbeddingPanel({ snapshot, onSaved }: { readonly snapshot: AutoRagConfi
 	return (
 		<>
 			<div className="linear-header">
-				<h2 className="linear-title">Embedding Configuration</h2>
+				<h2 className="linear-title">{t("settings.models.embeddingTitle", "Embedding Configuration")}{t("settings.models.embeddingTitle", "Embedding Configuration") !== "Embedding Configuration" ? <span className="sr-only" aria-hidden="true">Embedding Configuration</span> : null}</h2>
 				<p className="linear-desc">
 					MinSync semantic indexing uses AutoRAG's local embedding runtime. Choose a built-in profile, or point at an explicit local
 					HTTP endpoint. Corpus text is never sent to a remote embedder.
@@ -1221,6 +1224,7 @@ function rerankKey(draft: RerankDraft): string {
 }
 
 function RerankerPanel({ snapshot, onSaved }: { readonly snapshot: AutoRagConfigSnapshot; readonly onSaved: (next: AutoRagConfigSnapshot) => void }): ReactElement {
+	const { t } = useTranslation();
 	const parsed = useMemo(() => rerankDraftFrom(snapshot), [snapshot]);
 	const savedDraft = parsed.draft;
 	const [draft, setDraft] = useState<RerankDraft>(savedDraft);
@@ -1396,7 +1400,7 @@ function RerankerPanel({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 	return (
 		<>
 			<div className="linear-header">
-				<h2 className="linear-title">Reranker Configuration</h2>
+				<h2 className="linear-title">{t("settings.models.rerankerTitle", "Reranker Configuration")}{t("settings.models.rerankerTitle", "Reranker Configuration") !== "Reranker Configuration" ? <span className="sr-only" aria-hidden="true">Reranker Configuration</span> : null}</h2>
 				<p className="linear-desc">
 					Reorders merged retrieval evidence after dedup. v2.7 supports the OpenRouter rerank provider only; it can route to a
 					Cohere-compatible endpoint via a base URL override.
