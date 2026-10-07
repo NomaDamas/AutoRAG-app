@@ -1,4 +1,5 @@
-import { useEffect, useState, type KeyboardEvent, type MouseEvent, type ReactElement, type RefObject } from "react";
+import { useEffect, useMemo, useState, type KeyboardEvent, type MouseEvent, type ReactElement, type RefObject } from "react";
+import { useTranslation } from "react-i18next";
 import { cn } from "../lib/cn";
 import { formatShortcut, hostPlatform } from "../lib/shortcuts";
 import { SearchIcon } from "./icons";
@@ -6,14 +7,6 @@ import { Keycap } from "./primitives/Keycap";
 
 /** What Enter commits against: a filename search over the whole machine, or the AI content search. */
 export type SearchMode = "name" | "content";
-
-/** The whole-machine scope is "This Mac" on macOS, "This Computer" on Windows. */
-const MACHINE = hostPlatform() === "win32" ? "컴퓨터" : "Mac";
-
-const CHIPS: readonly { readonly mode: SearchMode; readonly label: string; readonly hint: string }[] = [
-	{ mode: "name", label: "파일 이름", hint: `이 ${MACHINE} 전체에서 파일 이름 검색` },
-	{ mode: "content", label: "내용", hint: `AI로 파일 내용 검색 (${formatShortcut({ key: "Enter", alt: true, primary: false })})` },
-];
 
 const CHIP_CLASS =
 	"flex-1 min-w-0 h-pill px-8 border border-transparent rounded-11 text-badge whitespace-nowrap cursor-default transition-[background,color,border-color] duration-(--dur-color) ease-[ease]";
@@ -44,8 +37,28 @@ export function SidebarSearch({
 	/** mode + raw text; an empty text clears the committed search. */
 	readonly onSubmit: (mode: SearchMode, text: string) => void;
 }): ReactElement {
+	const { t } = useTranslation();
 	const [draft, setDraft] = useState(query);
 	const [mode, setMode] = useState<SearchMode>("name");
+	const machine = hostPlatform() === "win32" ? t("scopeBar.thisComputer", "컴퓨터") : t("scopeBar.thisMac", "Mac");
+	const chips: readonly { readonly mode: SearchMode; readonly label: string; readonly hint: string }[] = useMemo(
+		() => [
+			{
+				mode: "name",
+				label: t("sidebarSearch.fileName", "파일 이름"),
+				hint: t("sidebarSearch.fileNameHint", { machine, defaultValue: `이 ${machine} 전체에서 파일 이름 검색` }),
+			},
+			{
+				mode: "content",
+				label: t("sidebarSearch.content", "내용"),
+				hint: t("sidebarSearch.contentHint", {
+					shortcut: formatShortcut({ key: "Enter", alt: true, primary: false }),
+					defaultValue: `AI로 파일 내용 검색 (${formatShortcut({ key: "Enter", alt: true, primary: false })})`,
+				}),
+			},
+		],
+		[t, machine],
+	);
 
 	useEffect(() => {
 		setDraft(query);
@@ -86,8 +99,8 @@ export function SidebarSearch({
 					className="flex-1 min-w-0 h-full border-0 outline-none bg-transparent text-ink text-meta"
 					type="text"
 					value={draft}
-					placeholder="검색"
-					aria-label="파일, 내용, 메시지 검색"
+					placeholder={t("sidebarSearch.placeholder", "검색")}
+					aria-label={t("sidebarSearch.placeholder", "검색")}
 					onChange={(event) => setDraft(event.target.value)}
 					onKeyDown={onKeyDown}
 					onFocus={onFocus}
@@ -97,8 +110,8 @@ export function SidebarSearch({
 					<button
 						type="button"
 						className="flex-none flex items-center justify-center size-16 p-0 border-0 rounded-full bg-border-strong text-on-accent text-[9px] leading-none cursor-default hover:bg-ink-muted"
-						title="검색어 지우기"
-						aria-label="검색어 지우기"
+						title={t("sidebarSearch.clearSearch", "검색어 지우기")}
+						aria-label={t("sidebarSearch.clearSearch", "검색어 지우기")}
 						onMouseDown={keepFocus}
 						onClick={clear}
 					>
@@ -110,7 +123,7 @@ export function SidebarSearch({
 			</label>
 			{focused ? (
 				<div className="search-scopes flex gap-2 mt-6 p-2 rounded-12 bg-hover" role="group" aria-label="검색 범위">
-					{CHIPS.map((chip) => (
+					{chips.map((chip) => (
 						<button
 							key={chip.mode}
 							type="button"

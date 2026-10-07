@@ -100,11 +100,11 @@ try {
 
 	// 2. Sidebar: AI Search heads Favorites, above Recents.
 	const favorites = await page.locator(".side-group").first().locator(".sidebar__item-label").allInnerTexts();
-	check("Favorites starts with AI Search above Recents", favorites[0] === "AI Search" && favorites[1] === "Recents", JSON.stringify(favorites));
+	check("Favorites starts with AI Search above Recents", (favorites[0] === "AI Search" || favorites[0] === "AI 검색") && (favorites[1] === "Recents" || favorites[1] === "최근 항목"), JSON.stringify(favorites));
 
 	// 3. Sidebar AI Search converts the focused tab; Back returns to the folder.
 	const before = await tabs(page);
-	await page.locator(".sidebar__item", { hasText: "AI Search" }).click();
+	await page.locator('.sidebar__item:has-text("AI Search"), .sidebar__item:has-text("AI 검색")').first().click();
 	await page.waitForSelector(PANEL);
 	let now = await tabs(page);
 	check(
@@ -118,13 +118,13 @@ try {
 	);
 	check(
 		"the sidebar marks AI Search active",
-		(await page.locator(".sidebar__item", { hasText: "AI Search" }).getAttribute("aria-current")) === "true",
+		(await page.locator('.sidebar__item:has-text("AI Search"), .sidebar__item:has-text("AI 검색")').first().getAttribute("aria-current")) === "true",
 	);
 	await page.screenshot({ path: join(EVIDENCE, "02-ai-tab.png") });
-	await page.locator('[aria-label="Back"], [title^="Back"]').first().click();
+	await page.locator('[aria-label="Back"], [title^="Back"], [aria-label="뒤로"], [title^="뒤로"]').first().click();
 	await page.waitForSelector(`[data-path="${BRIEF}"]`);
 	check("Back returns the tab to its folder", (await page.locator(PANEL).count()) === 0);
-	await page.locator('[aria-label="Forward"], [title^="Forward"]').first().click();
+	await page.locator('[aria-label="Forward"], [title^="Forward"], [aria-label="앞으로"], [title^="앞으로"]').first().click();
 	await page.waitForSelector(PANEL);
 
 	// 4. Chat state survives tab switches.
@@ -194,7 +194,7 @@ try {
 	// 8. A row dragged onto the sidebar AI Search item.
 	await showFolderTab(page);
 	const folderTabIndex = (await tabs(page)).findIndex((tab) => tab.active);
-	await page.locator(`[data-path="${BUDGET}"]`).dragTo(page.locator(".sidebar__item", { hasText: "AI Search" }));
+	await page.locator(`[data-path="${BUDGET}"]`).dragTo(page.locator('.sidebar__item:has-text("AI Search"), .sidebar__item:has-text("AI 검색")').first());
 	await waitForPill(page, BUDGET).catch(() => undefined);
 	now = await tabs(page);
 	check(
@@ -298,7 +298,7 @@ try {
 	await page.locator(".sidebar__item", { hasText: "QA" }).click();
 	await page.waitForSelector(`[data-path="${NOTES}"]`);
 	await page.locator(`[data-path="${NOTES}"]`).click();
-	await page.locator(".inspector-actions button", { hasText: "AI 요약" }).click();
+	await page.locator('.inspector-actions button[data-action="askAi"], .inspector-actions button:has-text("AI Summary"), .inspector-actions button:has-text("AI 요약")').first().click();
 	await page.locator(`${PANEL} .assistant-msg`).waitFor({ timeout: 10_000 });
 	const englishText = (await page.locator(`${PANEL} .user-msg .bubble`).first().innerText()).trim();
 	check(

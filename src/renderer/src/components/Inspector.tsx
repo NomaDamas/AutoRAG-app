@@ -25,6 +25,7 @@
  */
 
 import { useEffect, useState, type MouseEvent as ReactMouseEvent, type ReactElement, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { previewStreamUrl } from "../../../preview/shared/contract";
 import { hwpFirstPageUrl } from "../../../preview/ui/rhwp";
 import type { ActionAnchor, ActionCapabilities } from "../../../shared/actions-contract";
@@ -237,8 +238,9 @@ function InfoHalf({
 			cancelled = true;
 		};
 	}, [focusedPath]);
+	const { t } = useTranslation();
 	const included = indexStatus === null || !indexStatus.excluded;
-	const infoRows = entry === null ? [] : buildInfoRows(details, entry);
+	const infoRows = entry === null ? [] : buildInfoRows(details, entry, (k, def) => t(k, def));
 	const shownRows = visibleInfoRows(infoRows, brief);
 	const generalRows = shownRows.filter((row) => row.section === "general");
 	const imageRows = shownRows.filter((row) => row.section === "image");
@@ -248,10 +250,8 @@ function InfoHalf({
 		<div className="inspector-half flex-1 min-h-0 flex flex-col overflow-hidden relative" aria-label="Info">
 
 			{entry === null ? (
-				<div className="flex-1 flex items-center justify-center px-10 text-center text-sm text-ink-muted leading-body">
-					파일을 선택하면
-					<br />
-					미리보기와 정보를 표시합니다.
+				<div className="flex-1 flex items-center justify-center px-10 text-center text-sm text-ink-muted leading-body whitespace-pre-line">
+					{t("inspector.evidencePanel.emptyTitle", "파일을 선택하면\n미리보기와 정보를 표시합니다.")}
 				</div>
 			) : (
 				<div className="inspector-body flex-1 min-h-0 overflow-auto px-16 pt-18 pb-24">
@@ -265,14 +265,14 @@ function InfoHalf({
 						{entry.kind === "file" ? (
 							<Chip onClick={() => onToggleIndex(entry)}>
 								<CheckIcon size={12} />
-								{included ? "인덱스 포함" : "인덱스 제외"}
+								{included ? t("contextMenu.includeInIndex", "인덱스 포함") : t("contextMenu.excludeFromIndex", "인덱스 제외")}
 							</Chip>
 						) : null}
 						<Chip onClick={() => onTrash(entry)}>
-							<TrashIcon size={12} />휴지통
+							<TrashIcon size={12} />{t("contextMenu.trashShort", "휴지통")}
 						</Chip>
 						<Chip onClick={() => onCopyPath(entry)}>
-							<CopyIcon size={12} />경로 복사
+							<CopyIcon size={12} />{t("contextMenu.copyPath", "경로 복사")}
 						</Chip>
 					</div>
 
@@ -280,14 +280,14 @@ function InfoHalf({
 
 					<div className="info-section border-t border-border pt-12 mt-12">
 						<div className="section-title flex items-center justify-between mb-6">
-							<span className="text-meta font-semibold text-ink">일반 정보</span>
+							<span className="text-meta font-semibold text-ink">{t("inspector.generalInfo", "일반 정보")}</span>
 							{moreInfo ? (
 								<button
 									type="button"
 									className="p-0 border-0 bg-transparent text-accent-text text-badge cursor-pointer"
 									onClick={() => setBrief((current) => !current)}
 								>
-									{brief ? "전체 정보" : "간략히"}
+									{brief ? t("inspector.showMore", "전체 정보") : t("inspector.showLess", "간략히")}
 								</button>
 							) : null}
 						</div>
@@ -301,7 +301,7 @@ function InfoHalf({
 					{imageRows.length === 0 ? null : (
 						<div className="info-section border-t border-border pt-12 mt-12">
 							<div className="section-title mb-6">
-								<span className="text-meta font-semibold text-ink">사진 정보</span>
+								<span className="text-meta font-semibold text-ink">{t("inspector.imageInfo", "사진 정보")}</span>
 							</div>
 							<dl className="m-0">
 								{imageRows.map((row) => (
@@ -506,6 +506,7 @@ function MultiInfoHalf({
 	readonly entries: readonly FinderEntry[];
 	readonly focusPath: string | null;
 }): ReactElement {
+	const { t } = useTranslation();
 	const summary = summarizeSelection(entries);
 	const cards = stackCards(entries, focusPath);
 	// DOM order paints back-to-front so the focused paper lands on top.
@@ -542,12 +543,12 @@ function MultiInfoHalf({
 				</div>
 				<div className="info-section border-t border-border pt-12 mt-12">
 					<div className="section-title mb-6">
-						<span className="text-meta font-semibold text-ink">일반 정보</span>
+						<span className="text-meta font-semibold text-ink">{t("inspector.generalInfo", "일반 정보")}</span>
 					</div>
 					<dl className="m-0">
-						{summary.sizeLabel === null ? null : <InfoRow label="총 크기" value={summary.sizeLabel} />}
-						{summary.createdRange === null ? null : <InfoRow label="생성한 날짜" value={summary.createdRange} />}
-						{summary.modifiedRange === null ? null : <InfoRow label="수정한 날짜" value={summary.modifiedRange} />}
+						{summary.sizeLabel === null ? null : <InfoRow label={t("inspector.totalSize", "총 크기")} value={summary.sizeLabel} />}
+						{summary.createdRange === null ? null : <InfoRow label={t("inspector.labels.dateCreated", "생성한 날짜")} value={summary.createdRange} />}
+						{summary.modifiedRange === null ? null : <InfoRow label={t("inspector.labels.dateModified", "수정한 날짜")} value={summary.modifiedRange} />}
 					</dl>
 				</div>
 			</div>
@@ -571,9 +572,9 @@ function ActionBar({
 	readonly onAction: (target: FileActionTarget, anchor: ActionAnchor | null) => void;
 	readonly onAskAi: (entry: FinderEntry) => void;
 }): ReactElement {
+	const { t } = useTranslation();
 	const actions = suggestedActions(entry, capabilities);
 	const [menu, setMenu] = useState<{ readonly items: readonly FileActionItem[]; readonly anchor: ActionAnchor } | null>(null);
-
 	function run(target: FileActionTarget, anchor: ActionAnchor): void {
 		// "AI 요약" is the App shell's concern (it owns the composer), not IPC.
 		if (target.kind === "askAi") onAskAi(entry);
@@ -585,11 +586,25 @@ function ActionBar({
 			<div className="grid grid-cols-4 gap-2 max-h-[45vh] overflow-y-auto">
 				{actions.map((action) => {
 					const Icon = ACTION_ICONS[action.icon];
+					const localizedLabel = (id: string, def: string): string => {
+						switch (id) {
+							case "open": return t("inspector.actions.open", def);
+							case "openWith": return t("inspector.actions.openWith", def);
+							case "compress": return t("inspector.actions.compress", def);
+							case "extract": return t("inspector.actions.extract", def);
+							case "share": return t("inspector.actions.share", def);
+							case "askAi": return t("inspector.actions.askAi", def);
+							case "imageEdit": return t("inspector.actions.imageEdit", def);
+							case "videoConvert": return t("inspector.actions.videoConvert", def);
+							default: return def;
+						}
+					};
 					return (
 						<ActionButton
 							key={action.id}
+							actionId={action.id}
 							icon={<Icon size={18} />}
-							label={action.label}
+							label={localizedLabel(action.id, action.label)}
 							onClick={(event) => {
 								const anchor = anchorOf(event.currentTarget);
 								if (action.kind === "action") run(action.target, anchor);
@@ -639,15 +654,18 @@ function InfoRow({ label, value }: { readonly label: string; readonly value: str
 function ActionButton({
 	icon,
 	label,
+	actionId,
 	onClick,
 }: {
 	readonly icon: ReactElement;
 	readonly label: string;
+	readonly actionId?: string;
 	readonly onClick: (event: ReactMouseEvent<HTMLButtonElement>) => void;
 }): ReactElement {
 	return (
 		<button
 			type="button"
+			data-action={actionId}
 			className="inspector-action min-w-0 flex flex-col items-center gap-6 px-2 py-6 rounded-8 border-0 bg-transparent text-ink-muted text-tile leading-[1.25] text-center cursor-pointer transition-[background,color] duration-(--dur-color) ease-[ease] hover:bg-hover hover:text-ink"
 			onClick={onClick}
 		>
@@ -698,6 +716,7 @@ function VersionsSection({
 }
 
 function VersionTag({ relation }: { readonly relation: "latest" | "exact" | "near" | "contains" }): ReactElement {
+	const { t } = useTranslation();
 	const tone =
 		relation === "latest"
 			? "bg-vtag-latest-bg text-vtag-latest-text"
@@ -708,7 +727,7 @@ function VersionTag({ relation }: { readonly relation: "latest" | "exact" | "nea
 					: "bg-input text-ink-muted";
 	return (
 		<span className={cn("vtag flex-none inline-flex items-center h-16 px-6 rounded-4 text-tile font-semibold whitespace-nowrap leading-none", tone)}>
-			{relation === "latest" ? "최신본" : RELATION_LABELS[relation]}
+			{relation === "latest" ? t("inspector.latestVersion", "최신본") : t(`inspector.versionRelations.${relation}`, RELATION_LABELS[relation])}
 		</span>
 	);
 }
@@ -735,6 +754,7 @@ function EvidencePanel({
 	readonly onToast: (msg: string) => void;
 	readonly imageActions: ImageActions;
 }): ReactElement {
+	const { t } = useTranslation();
 	const [votes, setVotes] = useState<Readonly<Record<string, EvidenceFeedback>>>({});
 	// Only the selected number renders: falling back to `evidence[0]` here would
 	// silently show unrelated evidence for a citation the run never produced.
@@ -742,10 +762,8 @@ function EvidencePanel({
 	if (item === undefined) {
 		return (
 			<div className="inspector-half flex-1 min-h-0 flex flex-col overflow-hidden relative" aria-label="Evidence">
-				<div className="flex-1 flex items-center justify-center px-10 text-center text-sm text-ink-muted leading-body">
-					답변의 근거가
-					<br />
-					여기에 표시됩니다.
+				<div className="flex-1 flex items-center justify-center px-10 text-center text-sm text-ink-muted leading-body whitespace-pre-line">
+					{t("inspector.evidencePanel.emptyTitle", "답변의 근거가\n여기에 표시됩니다.")}
 				</div>
 			</div>
 		);
@@ -805,7 +823,7 @@ function EvidencePanel({
 					<button
 						type="button"
 						className="preview-title text-left text-body font-semibold text-ink leading-[1.3] [overflow-wrap:anywhere] cursor-pointer border-0 bg-transparent p-0 transition-colors duration-(--dur-color) ease-[ease] hover:text-accent-text"
-						title={url === null ? "Show in Finder" : "Open in browser"}
+						title={url === null ? t("inspector.evidencePanel.showInFinder", "Show in Finder") : t("inspector.evidencePanel.openInBrowser", "Open in browser")}
 						onClick={() => onReveal(source)}
 					>
 						{item.number}. {item.title}
@@ -820,9 +838,8 @@ function EvidencePanel({
 
 				<div className="feedback flex items-center gap-10 my-8">
 					<button
-						type="button"
-						title="이 근거가 도움이 됨"
-						aria-label="이 근거가 도움이 됨"
+						title={t("inspector.evidencePanel.helpful", "이 근거가 도움이 됨")}
+						aria-label={t("inspector.evidencePanel.helpful", "이 근거가 도움이 됨")}
 						className={cn(
 							"border-0 bg-transparent p-0 text-caption cursor-pointer transition-colors duration-(--dur-color) ease-[ease]",
 							vote === "up" ? "text-ok-text" : "text-ink-muted hover:text-ink",
@@ -833,8 +850,8 @@ function EvidencePanel({
 					</button>
 					<button
 						type="button"
-						title="이 근거는 도움이 안 됨"
-						aria-label="이 근거는 도움이 안 됨"
+						title={t("inspector.evidencePanel.notHelpful", "이 근거는 도움이 안 됨")}
+						aria-label={t("inspector.evidencePanel.notHelpful", "이 근거는 도움이 안 됨")}
 						className={cn(
 							"border-0 bg-transparent p-0 text-caption cursor-pointer transition-colors duration-(--dur-color) ease-[ease]",
 							vote === "down" ? "text-danger-text" : "text-ink-muted hover:text-ink",
@@ -845,7 +862,7 @@ function EvidencePanel({
 					</button>
 				</div>
 
-				<div className="text-badge font-semibold text-ink-muted">근거 내용 발췌</div>
+				<div className="text-badge font-semibold text-ink-muted">{t("inspector.evidencePanel.excerpts", "근거 내용 발췌")}</div>
 				<div className="flex flex-col gap-8 mt-4">
 					{item.summary.length === 0 ? null : (
 						<InlineWithImages

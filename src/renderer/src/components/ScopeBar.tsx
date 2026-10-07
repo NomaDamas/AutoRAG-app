@@ -1,4 +1,5 @@
 import type { ReactElement } from "react";
+import { useTranslation } from "react-i18next";
 import { hostPlatform } from "../lib/shortcuts";
 
 export type SearchScope = "all" | "current";
@@ -29,18 +30,19 @@ export function ScopeBar({
 	readonly resultCount: number;
 	readonly onScopeChange: (scope: SearchScope) => void;
 }): ReactElement {
+	const { t } = useTranslation();
 	const allButtonClass = scope === "all" ? ACTIVE_BUTTON_CLASS : INACTIVE_BUTTON_CLASS;
 	const currentButtonClass = scope === "current" ? ACTIVE_BUTTON_CLASS : INACTIVE_BUTTON_CLASS;
 	return (
 		<div className="scope flex flex-none items-center gap-8 h-[27px] px-15 border-b border-divider text-ink-muted text-badge">
-			<span className="scope__label">Search:</span>
+			<span className="scope__label">{t("scopeBar.search", "Search:")}</span>
 			<button
 				type="button"
 				className={allButtonClass}
 				aria-pressed={scope === "all"}
 				onClick={() => onScopeChange("all")}
 			>
-				{allScopeLabel()}
+				{hostPlatform() === "win32" ? t("scopeBar.thisComputer", "This Computer") : t("scopeBar.thisMac", "This Mac")}
 			</button>
 			<button
 				type="button"
@@ -53,7 +55,7 @@ export function ScopeBar({
 			</button>
 			<span className="scope__spacer flex-1" />
 			<span className="scope__count">
-				<b className="font-semibold text-ink">{resultCount}</b> items found
+				<b className="font-semibold text-ink">{resultCount}</b> {t("scopeBar.itemsFound", "items found")}
 			</span>
 		</div>
 	);

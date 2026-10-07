@@ -1,4 +1,5 @@
 import { useState, type MouseEvent, type ReactElement } from "react";
+import { useTranslation } from "react-i18next";
 import type { ActionAnchor } from "../../../shared/actions-contract";
 import type { GroupKey } from "../state/grouping";
 import type { ViewMode } from "../state/view-mode";
@@ -86,6 +87,14 @@ export function Toolbar({
 	readonly sidebarHidden: boolean;
 	readonly onShowSidebar: () => void;
 }): ReactElement {
+	const { t } = useTranslation();
+	const viewLabel = (mode: ViewMode, def: string): string => {
+		switch (mode) {
+			case "icons": return t("toolbar.viewIcons", def);
+			case "list": return t("toolbar.viewList", def);
+			case "columns": return t("toolbar.viewColumns", def);
+		}
+	};
 	const [menu, setMenu] = useState<{
 		readonly kind: "sort" | "group";
 		readonly x: number;
@@ -105,8 +114,8 @@ export function Toolbar({
 					<button
 						type="button"
 						className={`${NAV_BUTTON} [-webkit-app-region:no-drag]`}
-						title="Show sidebar"
-						aria-label="Show sidebar"
+						title={t("toolbar.showSidebar", "Show sidebar")}
+						aria-label={t("toolbar.showSidebar", "Show sidebar")}
 						onClick={onShowSidebar}
 					>
 						<PanelLeftIcon size={18} />
@@ -116,8 +125,8 @@ export function Toolbar({
 			<button
 				type="button"
 				className={`${NAV_BUTTON} [-webkit-app-region:no-drag]`}
-				title="Back"
-				aria-label="Back"
+				title={t("toolbar.back", "Back")}
+				aria-label={t("toolbar.back", "Back")}
 				disabled={!canGoBack}
 				onClick={onBack}
 			>
@@ -126,8 +135,8 @@ export function Toolbar({
 			<button
 				type="button"
 				className={`${NAV_BUTTON} [-webkit-app-region:no-drag]`}
-				title="Forward"
-				aria-label="Forward"
+				title={t("toolbar.forward", "Forward")}
+				aria-label={t("toolbar.forward", "Forward")}
 				disabled={!canGoForward}
 				onClick={onForward}
 			>
@@ -137,7 +146,7 @@ export function Toolbar({
 				{title}
 			</strong>
 			<span className="toolbar-spacer flex-1" />
-			<div className="seg flex flex-none items-center p-2 rounded-10 bg-subtle-alt [-webkit-app-region:no-drag]" role="group" aria-label="View">
+			<div className="seg flex flex-none items-center p-2 rounded-10 bg-subtle-alt [-webkit-app-region:no-drag]" role="group" aria-label={t("toolbar.view", "View")}>
 				{VIEW_OPTIONS.map(({ mode, label, key, Icon }) => (
 					<button
 						key={mode}
@@ -147,8 +156,8 @@ export function Toolbar({
 							"flex items-center justify-center size-toolbar-icon p-0 border-0 rounded-7 transition-[background,color] duration-(--dur-color) ease-[ease]",
 							mode === viewMode ? "bg-sel-mute text-ink" : "bg-transparent text-ink-muted hover:text-ink",
 						].join(" ")}
-						title={`as ${label} (${formatShortcut({ key })})`}
-						aria-label={label}
+						title={t("toolbar.viewAs", { label: viewLabel(mode, label), shortcut: formatShortcut({ key }), defaultValue: `as ${label} (${formatShortcut({ key })})` })}
+						aria-label={viewLabel(mode, label)}
 						aria-pressed={mode === viewMode}
 						onClick={() => onViewModeChange(mode)}
 					>
@@ -157,14 +166,14 @@ export function Toolbar({
 				))}
 			</div>
 			<ToolbarControl
-				label="Sort"
+				label={t("toolbar.sort", "Sort")}
 				active={sort !== null}
 				open={menu?.kind === "sort"}
 				icon={<SortIcon size={14} />}
 				onClick={(event) => openMenu("sort", event)}
 			/>
 			<ToolbarControl
-				label="Group"
+				label={t("toolbar.group", "Group")}
 				active={grouping !== "none"}
 				open={menu?.kind === "group"}
 				icon={<GroupIcon size={14} />}
@@ -179,8 +188,8 @@ export function Toolbar({
 							? "bg-transparent text-accent"
 							: "bg-transparent text-ink-muted hover:bg-hover-icon hover:text-ink",
 					].join(" ")}
-					title={inspectorVisible ? "Hide inspector" : "Show inspector"}
-					aria-label="Toggle inspector"
+					title={inspectorVisible ? t("toolbar.hideInspector", "Hide inspector") : t("toolbar.showInspector", "Show inspector")}
+					aria-label={t("toolbar.toggleInspector", "Toggle inspector")}
 					aria-pressed={inspectorVisible}
 					onClick={onToggleInspector}
 				>
@@ -192,8 +201,8 @@ export function Toolbar({
 						"flex flex-none items-center justify-center size-toolbar-icon p-0 border-0 rounded-6 cursor-pointer transition-[background,color] duration-(--dur-color) ease-[ease]",
 						aiActive ? "bg-transparent text-accent" : "bg-transparent text-ink-muted hover:bg-hover-icon hover:text-ink",
 					].join(" ")}
-					title={`AI Search (${formatShortcut({ key: "K" })})`}
-					aria-label="Show AI Search"
+					title={t("toolbar.aiSearchShortcut", { shortcut: formatShortcut({ key: "K" }), defaultValue: `AI Search (${formatShortcut({ key: "K" })})` })}
+					aria-label={t("toolbar.showAiSearch", "Show AI Search")}
 					aria-pressed={aiActive}
 					onClick={onShowAi}
 				>
@@ -203,8 +212,8 @@ export function Toolbar({
 					<button
 						type="button"
 						className={NAV_BUTTON}
-						title="Share"
-						aria-label="Share"
+						title={t("toolbar.share", "Share")}
+						aria-label={t("toolbar.share", "Share")}
 						disabled={!canShare}
 						onClick={(event) => onShare(anchorOf(event.currentTarget))}
 					>

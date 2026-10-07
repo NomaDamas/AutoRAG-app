@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, ReactElement } from "react";
 import {
 	LIST_COLUMN_OPTIONS,
@@ -37,6 +38,19 @@ export function ColumnHeader({
 	readonly onResetColumns: () => void;
 	readonly onResizeColumn: (key: string, px: number) => void;
 }): ReactElement {
+	const { t } = useTranslation();
+	const getColumnLabel = (key: string, def: string): string => {
+		switch (key) {
+			case "name": return t("finder.columns.name", def);
+			case "date": return t("finder.columns.date", def);
+			case "size": return t("finder.columns.size", def);
+			case "kind": return t("finder.columns.kind", def);
+			case "extension": return t("sort.extension", def);
+			case "relativePath": return t("sort.where", def);
+			case "index": return t("finder.columns.index", def);
+			default: return def;
+		}
+	};
 	const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
 	const menuRef = useRef<HTMLDivElement | null>(null);
 	const drag = useRef<{ key: string; startX: number; startWidth: number } | null>(null);
@@ -122,11 +136,11 @@ export function ColumnHeader({
 										"col-header__sort flex items-center gap-4 w-full min-w-0 h-full p-0 pr-10 border-0 bg-transparent text-badge font-medium text-left whitespace-nowrap",
 										active ? "text-ink font-semibold" : "text-inherit hover:text-ink",
 									].join(" ")}
-									title={`Sort by ${option.label}`}
+									title={`Sort by ${getColumnLabel(option.key, option.label)}`}
 									aria-sort={active ? (descending ? "descending" : "ascending") : "none"}
 									onClick={() => onSort(sortKey)}
 								>
-									<span className="col-header__label overflow-hidden text-ellipsis">{option.label}</span>
+									<span className="col-header__label overflow-hidden text-ellipsis">{getColumnLabel(option.key, option.label)}</span>
 									{active ? (
 										<ChevronUpIcon
 											size={12}
@@ -138,13 +152,13 @@ export function ColumnHeader({
 									) : null}
 								</button>
 							) : (
-								<span className="col-header__label min-w-0 overflow-hidden text-ellipsis">{option.label}</span>
+								<span className="col-header__label min-w-0 overflow-hidden text-ellipsis">{getColumnLabel(option.key, option.label)}</span>
 							)}
 							{RESIZABLE[option.key] ? (
 								<span
 									className="col-grip absolute -right-4 top-0 w-8 h-full cursor-col-resize"
 									role="separator"
-									aria-label={`Resize ${option.label}`}
+									aria-label={`Resize ${getColumnLabel(option.key, option.label)}`}
 									onPointerDown={startResize(option.key)}
 									onPointerMove={moveResize}
 									onPointerUp={endResize}
@@ -190,7 +204,7 @@ export function ColumnHeader({
 								>
 									✓
 								</span>
-								<span className="col-menu__label">{option.label}</span>
+								<span className="col-menu__label">{getColumnLabel(option.key, option.label)}</span>
 							</button>
 						);
 					})}
@@ -204,7 +218,7 @@ export function ColumnHeader({
 							setMenu(null);
 						}}
 					>
-						Use Default Columns
+						{t("finder.columns.reset", "Use Default Columns")}
 					</button>
 				</div>
 			) : null}
