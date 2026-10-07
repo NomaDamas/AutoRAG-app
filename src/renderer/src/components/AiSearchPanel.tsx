@@ -533,7 +533,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 					type="button"
 					className={cn(iconButtonClass({ size: "size-icon-sm", tone: "text-ink-muted" }), historyOpen && "bg-selected-nav text-ink")}
 					title={t("aiSearch.historyShortcut", { shortcut: formatShortcut({ key: "H", shift: true }), defaultValue: `Chat history ${formatShortcut({ key: "H", shift: true })}` })}
-					aria-label={t("aiSearch.history", "Chat history")}
+					aria-label="Chat history"
 					onClick={() => toggleHistory()}
 				>
 					<HistoryIcon size={15} />
@@ -542,7 +542,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 					type="button"
 					className={iconButtonClass({ size: "size-icon-sm", tone: "text-ink-muted" })}
 					title={t("aiSearch.newChatShortcut", { shortcut: formatShortcut({ key: "N" }), defaultValue: `New chat ${formatShortcut({ key: "N" })}` })}
-					aria-label={t("aiSearch.newChat", "New chat")}
+					aria-label="New chat"
 					onClick={() => newChat()}
 				>
 					<PlusIcon />
@@ -659,7 +659,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 							{thinking ? (
 								<div className="water-wave-thinking my-6 flex items-center gap-8 text-meta text-ink-muted">
 									<span className="size-7 flex-none rounded-full bg-info-dot animate-[pulseDot_1.4s_ease-in-out_infinite]" />
-									<span className="min-w-0 truncate">Thinking…{progress === "" ? "" : ` ${progress}`}</span>
+									<span className="min-w-0 truncate">{t("aiSearch.thinking", "Thinking…")}{progress === "" ? "" : ` ${progress}`}</span>
 								</div>
 							) : null}
 
@@ -667,7 +667,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 								<div className="flex flex-col gap-6">
 									{deepElapsed === null ? null : (
 										<div className="thinking-header flex items-center gap-5 text-meta font-medium text-ink-muted">
-											<span>Worked for {formatElapsed(deepElapsed)}</span>
+											<span>{t("aiSearch.workedFor", { time: formatElapsed(deepElapsed), defaultValue: `Worked for ${formatElapsed(deepElapsed)}` })}</span>
 										</div>
 									)}
 									<div className="assistant-prose flex flex-col gap-8 text-body leading-[1.55] text-ink-body">
@@ -678,7 +678,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 						</div>
 					)}
 
-					{stopped ? <div className="text-body text-ink-muted">응답 생성을 중단했습니다.</div> : null}
+					{stopped ? <div className="text-body text-ink-muted">{t("aiSearch.stopped", "응답 생성을 중단했습니다.")}</div> : null}
 				</div>
 			</div>
 
@@ -721,8 +721,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 							<button
 								type="button"
 								className="send flex size-32 flex-none items-center justify-center rounded-full border-0 bg-ink text-on-accent cursor-pointer"
-								title="중단"
-								aria-label="Stop search"
+								title={t("aiSearch.stop", "중단")}
+								aria-label={t("aiSearch.stop", "중단")}
 								onClick={() => void stop()}
 							>
 								<Square size={10} strokeWidth={3} fill="currentColor" />
@@ -738,7 +738,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 						<SparklesIcon size={28} />
 						<span className="absolute -bottom-4 -right-4 flex size-22 items-center justify-center rounded-full bg-accent text-badge font-bold text-on-accent">+</span>
 					</span>
-					<span className="text-body font-medium text-ink">{dragOver ? "놓으면 대화에 첨부됩니다" : "여기로 끌어서 AI에게 물어보기"}</span>
+					<span className="text-body font-medium text-ink">{dragOver ? t("aiSearch.dropAttach", "놓으면 대화에 첨부됩니다") : t("aiSearch.dropPrompt", "여기로 끌어서 AI에게 물어보기")}</span>
 					{dragName === null ? null : <span className="text-meta text-ink-muted">{dragName}</span>}
 				</div>
 			) : null}

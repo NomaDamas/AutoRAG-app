@@ -13,7 +13,7 @@
     "favorites": "个人收藏",
     "cloud": "云端",
     "locations": "位置",
-    "aiSearch": "AI Search",
+    "aiSearch": "AI 搜索",
     "settings": "设置",
     "recents": "最近使用",
     "home": "个人主页",
@@ -24,7 +24,8 @@
     "music": "音乐",
     "movies": "影片",
     "pictures": "图像",
-    "trash": "废纸篓"
+    "trash": "废纸篓",
+    "eject": "推出的“{{name}}”"
   },
   "toolbar": {
     "back": "返回",
@@ -33,13 +34,16 @@
     "hideSidebar": "隐藏边栏",
     "viewAs": "以{{label}}显示 ({{shortcut}})",
     "view": "显示方式",
+    "viewIcons": "图标",
+    "viewList": "列表",
+    "viewColumns": "分栏",
     "sort": "排序",
     "group": "分组",
     "showInspector": "显示检查器",
     "hideInspector": "隐藏检查器",
     "toggleInspector": "切换检查器",
-    "showAiSearch": "显示 AI Search",
-    "aiSearchShortcut": "AI Search ({{shortcut}})",
+    "showAiSearch": "显示 AI 搜索",
+    "aiSearchShortcut": "AI 搜索 ({{shortcut}})",
     "share": "共享"
   },
   "sort": {
@@ -90,7 +94,9 @@
       "name": "名称",
       "date": "修改日期",
       "size": "大小",
-      "kind": "种类"
+      "kind": "种类",
+      "index": "索引",
+      "reset": "重置列"
     },
     "versionBanner": {
       "retry": "重新检查"
@@ -98,7 +104,7 @@
   },
   "contextMenu": {
     "open": "打开",
-    "quickLook": "快速查看",
+    "quickLook": "快速查看 (Quick Look)",
     "showInEnclosingFolder": "在外层文件夹中显示",
     "retryIndex": "重试建立索引",
     "excludeFromIndex": "从索引中排除",
@@ -112,7 +118,8 @@
     "moveToTrash": "移到废纸篓",
     "moveToTrashCount": "将 {{count}} 个项目移到废纸篓",
     "newFolder": "新建文件夹",
-    "new": "新建"
+    "new": "新建",
+    "trashShort": "废纸篓"
   },
   "inspector": {
     "title": "简介",
@@ -187,7 +194,7 @@
     }
   },
   "aiSearch": {
-    "title": "AI Search",
+    "title": "AI 搜索",
     "history": "对话记录",
     "historyShortcut": "对话记录 {{shortcut}}",
     "newChat": "新建对话",
@@ -200,6 +207,12 @@
     "generatingDeep": "正在撰写深度回答…",
     "askDazzi": "向 Dazzi 提问",
     "stop": "停止",
+    "thinking": "思考中…",
+    "workedFor": "思考耗时 {{time}}",
+    "reviewing": "正在核对提问…",
+    "stopped": "已停止生成回答。",
+    "dropAttach": "松开即可添加到对话",
+    "dropPrompt": "拖动到此处以提问 AI",
     "historyGroups": {
       "today": "今天",
       "yesterday": "昨天",
@@ -221,13 +234,18 @@
     "loading": "正在加载设置…",
     "categories": {
       "general": "通用",
-      "llm": "LLM Models",
-      "embedding": "Embedding Models",
-      "reranker": "Reranker Models",
-      "sources": "Data Sources",
-      "deep": "Deep Indexing",
-      "light": "Light Indexing",
-      "apps": "Other Apps"
+      "llm": "LLM 模型",
+      "embedding": "嵌入模型",
+      "reranker": "重排模型",
+      "sources": "数据源",
+      "deep": "深度索引",
+      "light": "快速索引",
+      "apps": "其他应用"
+    },
+    "models": {
+      "llmTitle": "LLM 模型设置",
+      "embeddingTitle": "嵌入模型设置",
+      "rerankerTitle": "重排模型设置"
     },
     "general": {
       "title": "显示与通用",

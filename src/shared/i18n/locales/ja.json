@@ -13,7 +13,7 @@
     "favorites": "お気に入り",
     "cloud": "クラウド",
     "locations": "場所",
-    "aiSearch": "AI Search",
+    "aiSearch": "AI 検索",
     "settings": "設定",
     "recents": "最近使った項目",
     "home": "ホーム",
@@ -24,7 +24,8 @@
     "music": "ミュージック",
     "movies": "ムービー",
     "pictures": "ピクチャ",
-    "trash": "ゴミ箱"
+    "trash": "ゴミ箱",
+    "eject": "\"{{name}}\"を取り出す"
   },
   "toolbar": {
     "back": "戻る",
@@ -33,13 +34,16 @@
     "hideSidebar": "サイドバーを非表示",
     "viewAs": "{{label}}で表示 ({{shortcut}})",
     "view": "表示",
+    "viewIcons": "アイコン",
+    "viewList": "リスト",
+    "viewColumns": "カラム",
     "sort": "並び替え",
     "group": "グループ",
     "showInspector": "情報パネルを表示",
     "hideInspector": "情報パネルを非表示",
     "toggleInspector": "情報パネルの切り替え",
-    "showAiSearch": "AI Searchを表示",
-    "aiSearchShortcut": "AI Search ({{shortcut}})",
+    "showAiSearch": "AI 検索を表示",
+    "aiSearchShortcut": "AI 検索 ({{shortcut}})",
     "share": "共有"
   },
   "sort": {
@@ -90,7 +94,9 @@
       "name": "名前",
       "date": "変更日",
       "size": "サイズ",
-      "kind": "種類"
+      "kind": "種類",
+      "index": "インデックス",
+      "reset": "列を初期化"
     },
     "versionBanner": {
       "retry": "再確認"
@@ -98,7 +104,7 @@
   },
   "contextMenu": {
     "open": "開く",
-    "quickLook": "Quick Look",
+    "quickLook": "クイックルック (Quick Look)",
     "showInEnclosingFolder": "親フォルダーを表示",
     "retryIndex": "インデックスを再試行",
     "excludeFromIndex": "インデックスから除外",
@@ -112,7 +118,8 @@
     "moveToTrash": "ゴミ箱に入れる",
     "moveToTrashCount": "{{count}}個の項目をゴミ箱に入れる",
     "newFolder": "新規フォルダー",
-    "new": "新規作成"
+    "new": "新規作成",
+    "trashShort": "ゴミ箱"
   },
   "inspector": {
     "title": "情報",
@@ -187,7 +194,7 @@
     }
   },
   "aiSearch": {
-    "title": "AI Search",
+    "title": "AI 検索",
     "history": "チャット履歴",
     "historyShortcut": "チャット履歴 {{shortcut}}",
     "newChat": "新規チャット",
@@ -200,6 +207,12 @@
     "generatingDeep": "詳細な回答を生成中…",
     "askDazzi": "Dazziに質問する",
     "stop": "停止",
+    "thinking": "思考中…",
+    "workedFor": "{{time}}間回答を生成",
+    "reviewing": "質問を確認中…",
+    "stopped": "回答の生成を中止しました。",
+    "dropAttach": "ドロップしてチャットに添付",
+    "dropPrompt": "ここにドラッグしてAIに質問",
     "historyGroups": {
       "today": "今日",
       "yesterday": "昨日",
@@ -221,13 +234,18 @@
     "loading": "設定を読み込み中…",
     "categories": {
       "general": "一般",
-      "llm": "LLM Models",
-      "embedding": "Embedding Models",
-      "reranker": "Reranker Models",
-      "sources": "Data Sources",
-      "deep": "Deep Indexing",
-      "light": "Light Indexing",
-      "apps": "Other Apps"
+      "llm": "LLM モデル",
+      "embedding": "埋め込みモデル",
+      "reranker": "リランカーモデル",
+      "sources": "データソース",
+      "deep": "詳細インデックス",
+      "light": "簡易インデックス",
+      "apps": "その他のアプリ"
+    },
+    "models": {
+      "llmTitle": "LLM モデル設定",
+      "embeddingTitle": "埋め込みモデル設定",
+      "rerankerTitle": "リランカーモデル設定"
     },
     "general": {
       "title": "画面表示と一般",

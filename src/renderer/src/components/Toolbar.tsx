@@ -88,6 +88,13 @@ export function Toolbar({
 	readonly onShowSidebar: () => void;
 }): ReactElement {
 	const { t } = useTranslation();
+	const viewLabel = (mode: ViewMode, def: string): string => {
+		switch (mode) {
+			case "icons": return t("toolbar.viewIcons", def);
+			case "list": return t("toolbar.viewList", def);
+			case "columns": return t("toolbar.viewColumns", def);
+		}
+	};
 	const [menu, setMenu] = useState<{
 		readonly kind: "sort" | "group";
 		readonly x: number;
@@ -149,8 +156,8 @@ export function Toolbar({
 							"flex items-center justify-center size-toolbar-icon p-0 border-0 rounded-7 transition-[background,color] duration-(--dur-color) ease-[ease]",
 							mode === viewMode ? "bg-sel-mute text-ink" : "bg-transparent text-ink-muted hover:text-ink",
 						].join(" ")}
-						title={t("toolbar.viewAs", { label, shortcut: formatShortcut({ key }), defaultValue: `as ${label} (${formatShortcut({ key })})` })}
-						aria-label={label}
+						title={t("toolbar.viewAs", { label: viewLabel(mode, label), shortcut: formatShortcut({ key }), defaultValue: `as ${label} (${formatShortcut({ key })})` })}
+						aria-label={viewLabel(mode, label)}
 						aria-pressed={mode === viewMode}
 						onClick={() => onViewModeChange(mode)}
 					>

@@ -24,7 +24,8 @@
     "music": "Music",
     "movies": "Movies",
     "pictures": "Pictures",
-    "trash": "Trash"
+    "trash": "Trash",
+    "eject": "Eject \"{{name}}\""
   },
   "toolbar": {
     "back": "Back",
@@ -33,6 +34,9 @@
     "hideSidebar": "Hide sidebar",
     "viewAs": "as {{label}} ({{shortcut}})",
     "view": "View",
+    "viewIcons": "Icons",
+    "viewList": "List",
+    "viewColumns": "Columns",
     "sort": "Sort",
     "group": "Group",
     "showInspector": "Show inspector",
@@ -90,7 +94,9 @@
       "name": "Name",
       "date": "Date Modified",
       "size": "Size",
-      "kind": "Kind"
+      "kind": "Kind",
+      "index": "Index",
+      "reset": "Reset Columns"
     },
     "versionBanner": {
       "retry": "Check again"
@@ -112,7 +118,8 @@
     "moveToTrash": "Move to Trash",
     "moveToTrashCount": "Move {{count}} items to Trash",
     "newFolder": "New Folder",
-    "new": "New"
+    "new": "New",
+    "trashShort": "Trash"
   },
   "inspector": {
     "title": "Info",
@@ -200,6 +207,12 @@
     "generatingDeep": "Generating deep answer…",
     "askDazzi": "Ask Dazzi",
     "stop": "Stop",
+    "thinking": "Thinking…",
+    "workedFor": "Worked for {{time}}",
+    "reviewing": "Reviewing the query.",
+    "stopped": "Generation stopped.",
+    "dropAttach": "Drop to attach to chat",
+    "dropPrompt": "Drag here to ask AI",
     "historyGroups": {
       "today": "Today",
       "yesterday": "Yesterday",
@@ -228,6 +241,11 @@
       "deep": "Deep Indexing",
       "light": "Light Indexing",
       "apps": "Other Apps"
+    },
+    "models": {
+      "llmTitle": "LLM Models Configuration",
+      "embeddingTitle": "Embedding Configuration",
+      "rerankerTitle": "Reranker Configuration"
     },
     "general": {
       "title": "Display & General",

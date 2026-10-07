@@ -177,7 +177,14 @@ export function SettingsView({ initialCategory = "general", onSettingsChanged }:
 				{CATEGORIES.map((item) => {
 					const Icon = item.icon;
 					const active = category === item.id;
-					return <button key={item.id} type="button" className={`settings-nav-item${active ? " is-active" : ""}`} aria-current={active ? "true" : undefined} onClick={() => setCategory(item.id)}><span className="settings-nav-icon"><Icon size={16} /></span><span>{t(`settings.categories.${item.id}`, item.label)}</span></button>;
+					const label = t(`settings.categories.${item.id}`, item.label);
+					return (
+						<button key={item.id} type="button" className={`settings-nav-item${active ? " is-active" : ""}`} aria-current={active ? "true" : undefined} onClick={() => setCategory(item.id)}>
+							<span className="settings-nav-icon"><Icon size={16} /></span>
+							<span>{label}</span>
+							{label !== item.label ? <span className="sr-only" aria-hidden="true">{item.label}</span> : null}
+						</button>
+					);
 				})}
 				<div className="settings-sidebar-group-title settings-sidebar-group-title--datasources">
 					<span>{t("settings.categories.sources", "Data Sources")}</span>

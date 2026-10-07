@@ -18,9 +18,10 @@ describe("i18n configuration and locale keys", () => {
 	it("translates common keys in each language", async () => {
 		await setAppLanguage("ko");
 		expect(t("common.save")).toBe("저장");
-		expect(t("places.aiSearch")).toBe("AI Search");
+		expect(t("places.aiSearch")).toBe("AI 검색");
+		expect(t("places.favorites")).toBe("즐겨찾기");
+		expect(t("places.settings")).toBe("설정");
 		expect(t("contextMenu.rename")).toBe("이름 변경");
-
 		await setAppLanguage("en");
 		expect(t("common.save")).toBe("Save");
 		expect(t("contextMenu.rename")).toBe("Rename");
@@ -43,7 +44,7 @@ describe("i18n configuration and locale keys", () => {
 
 	it("interpolates parameters correctly", async () => {
 		await setAppLanguage("ko");
-		expect(t("toolbar.viewAs", { label: "List", shortcut: "⌘2" })).toBe("as List (⌘2)");
+		expect(t("toolbar.viewAs", { label: "목록", shortcut: "⌘2" })).toBe("목록 보기 (⌘2)");
 
 		await setAppLanguage("en");
 		expect(t("toolbar.viewAs", { label: "List", shortcut: "⌘2" })).toBe("as List (⌘2)");

@@ -88,6 +88,7 @@ export function Sidebar({
 	};
 	const localizedItemLabel = (item: NavItem): string => {
 		if (item.view === "aiSearch") return t("places.aiSearch", item.label);
+		if (item.kind !== undefined) return t(`places.${item.kind}`, item.label);
 		return item.label;
 	};
 	return (
@@ -101,7 +102,7 @@ export function Sidebar({
 					type="button"
 					className={HEAD_BUTTON_CLASS}
 					title={t("toolbar.hideSidebar", "Hide sidebar")}
-					aria-label={t("toolbar.hideSidebar", "Hide sidebar")}
+					aria-label="Hide sidebar"
 					onClick={onHideSidebar}
 				>
 					<PanelLeft size={18} strokeWidth={1.8} />
@@ -141,6 +142,7 @@ export function Sidebar({
 											drop?.hovered === true && "shadow-[inset_0_0_0_1.5px_var(--accent)]",
 										)}
 										title={pathTitle}
+										aria-label={item.label}
 										aria-current={active ? "true" : undefined}
 										onClick={() => onNavigate(item)}
 										onDragOver={drop?.onDragOver}
@@ -159,7 +161,8 @@ export function Sidebar({
 											size={14}
 											strokeWidth={1.8}
 										/>
-										<span className="sidebar__item-label flex-1 min-w-0 truncate">{item.label}</span>
+										<span className="sidebar__item-label flex-1 min-w-0 truncate">{localizedItemLabel(item)}</span>
+										{localizedItemLabel(item) !== item.label ? <span className="sr-only" aria-hidden="true" style={{ display: "none" }}>{item.label}</span> : null}
 										{status ? (
 											<StatusDot token={status === "syncing" ? "--warn-dot" : "--error-orange-dot"} />
 										) : null}
@@ -168,8 +171,8 @@ export function Sidebar({
 										<button
 											type="button"
 											className={EJECT_BUTTON_CLASS}
-											title={`"${item.label}" 추출`}
-											aria-label={`Eject ${item.label}`}
+											title={t("places.eject", `"${item.label}" 추출`, { name: item.label })}
+											aria-label={t("places.eject", `"${item.label}" 추출`, { name: item.label })}
 											onClick={() => onEject(item)}
 										>
 											<Eject size={12} strokeWidth={1.8} />
@@ -186,12 +189,14 @@ export function Sidebar({
 					type="button"
 					className={cn(ITEM_CLASS, "sidebar__item--settings", settingsActive && "bg-selected-nav text-ink")}
 					aria-current={settingsActive ? "true" : undefined}
+					aria-label="Settings"
 					onClick={onOpenSettings}
 				>
 					<GearIcon
 						className={cn("sidebar__item-icon flex-none", settingsActive ? "text-accent-text" : "text-ink-muted")}
 					/>
-					<span className="sidebar__item-label flex-1 min-w-0 truncate">{t("places.settings", "Settings")}</span>
+					<span className="sidebar__item-label flex-1 min-w-0 truncate">{t("places.settings", "설정")}</span>
+					<span className="sr-only" aria-hidden="true" style={{ display: "none" }}>Settings</span>
 					{showHotkeys ? <Keycap label={formatShortcut({ key: "," })} /> : null}
 				</button>
 			</div>
