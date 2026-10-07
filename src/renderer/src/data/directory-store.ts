@@ -33,7 +33,7 @@ import {
 	withoutPaths,
 } from "../state/live";
 import { needsThumbnail, thumbnailKey } from "../state/thumbnails";
-import type { FinderEntry } from "./entries";
+import { type FinderEntry, hasFileVersion } from "./entries";
 import type { EntrySidecar } from "./entry-sidecar";
 
 /** Released folders kept for an instant repaint. */
@@ -167,8 +167,8 @@ export function createDirectoryStore(options: {
 
 	/** Both background passes for rows the sidecar has not heard about yet. */
 	const enrich = (entries: readonly FinderEntry[]): void => {
-		const needKind = entries.filter((entry) => entry.modifiedAt !== undefined && !sidecar.hasKind(entry));
-		const needMetadata = entries.filter((entry) => entry.modifiedAt !== undefined && !sidecar.hasMetadata(entry));
+		const needKind = entries.filter((entry) => hasFileVersion(entry) && !sidecar.hasKind(entry));
+		const needMetadata = entries.filter((entry) => hasFileVersion(entry) && !sidecar.hasMetadata(entry));
 		if (needKind.length > 0) {
 			source
 				.enrich(needKind)

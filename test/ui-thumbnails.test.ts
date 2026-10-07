@@ -7,15 +7,10 @@ function entry(overrides: Partial<FinderEntry> = {}): FinderEntry {
 		name: "a.png",
 		path: "/docs/a.png",
 		kind: "file",
-		fileKind: "png",
-		iconUrl: null,
-		modifiedAt: "2026-10-01T00:00:00.000Z",
-		dateLabel: "",
-		sizeLabel: "",
-		modifiedValue: 0,
-		sizeValue: 0,
-		kindLabel: "",
-		location: "/docs",
+		ext: "png",
+		size: 0,
+		mtimeMs: Date.parse("2026-10-01T00:00:00.000Z"),
+		birthtimeMs: 0,
 		...overrides,
 	};
 }
@@ -26,19 +21,17 @@ describe("needsThumbnail", () => {
 	});
 
 	it("is false once the OS produced an icon", () => {
-		expect(needsThumbnail(entry({ iconUrl: "autorag-thumb://local/?path=%2Fdocs%2Fa.png&mtime=x" }))).toBe(false);
+		expect(needsThumbnail(entry({ iconUrl: "autorag-thumb://local/?path=%2Fdocs%2Fa.png&mtime=1759276800000" }))).toBe(false);
 	});
 
-	it("is false for folders and entries without a modification stamp", () => {
+	it("is false for folders", () => {
 		expect(needsThumbnail(entry({ kind: "folder" }))).toBe(false);
-		const { modifiedAt: _dropped, ...withoutMtime } = entry();
-		expect(needsThumbnail(withoutMtime)).toBe(false);
 	});
 });
 
 describe("thumbnailKey", () => {
 	it("separates the same path at different mtimes", () => {
-		expect(thumbnailKey(entry({ modifiedAt: "t1" }))).not.toBe(thumbnailKey(entry({ modifiedAt: "t2" })));
+		expect(thumbnailKey(entry({ mtimeMs: 1 }))).not.toBe(thumbnailKey(entry({ mtimeMs: 2 })));
 	});
 
 	it("is stable for the same identity", () => {

@@ -10,10 +10,10 @@ import {
 import { iconUrl, handleIconRequest } from "../src/main/icon-protocol";
 
 const BYTES = new Uint8Array([1, 2, 3, 4]);
-const MTIME = "2026-09-29T00:00:00.000Z";
-const target = (path: string, modifiedAt = MTIME): IconTarget => ({
+const MTIME = Date.parse("2026-09-29T00:00:00.000Z");
+const target = (path: string, mtimeMs = MTIME): IconTarget => ({
 	path,
-	modifiedAt,
+	mtimeMs,
 	ext: path.slice(path.lastIndexOf(".") + 1).toLowerCase(),
 });
 
@@ -34,9 +34,7 @@ describe("createIconProvider", () => {
 
 		// Then the OS was asked per file and each URL carries its own cache identity
 		expect([...generated].sort()).toEqual(["/docs/a.png", "/docs/b.mp4"]);
-		expect(icons.get("/docs/a.png")).toBe(
-			"autorag-thumb://local/?path=%2Fdocs%2Fa.png&mtime=2026-09-29T00%3A00%3A00.000Z",
-		);
+		expect(icons.get("/docs/a.png")).toBe(iconUrl("/docs/a.png", MTIME));
 		expect(icons.get("/docs/b.mp4")).toBe(iconUrl("/docs/b.mp4", MTIME));
 	});
 
@@ -68,12 +66,12 @@ describe("createIconProvider", () => {
 		});
 
 		// When it is listed
-		await provider.icons([target("/docs/a.png", "t1")]);
+		await provider.icons([target("/docs/a.png", 1)]);
 
 		// Then the exact bytes are readable under the same identity, and absent elsewhere
-		expect(provider.read("/docs/a.png", "t1")).toEqual(BYTES);
-		expect(provider.read("/docs/a.png", "t2")).toBeNull();
-		expect(provider.read("/docs/missing.png", "t1")).toBeNull();
+		expect(provider.read("/docs/a.png", 1)).toEqual(BYTES);
+		expect(provider.read("/docs/a.png", 2)).toBeNull();
+		expect(provider.read("/docs/missing.png", 1)).toBeNull();
 	});
 
 	it("serves a produced icon through the protocol handler from the same cache", async () => {
@@ -105,10 +103,10 @@ describe("createIconProvider", () => {
 		});
 
 		// When the same file is listed twice unchanged, then changes
-		await provider.icons([target("/docs/a.png", "t1")]);
-		await provider.icons([target("/docs/a.png", "t1")]);
+		await provider.icons([target("/docs/a.png", 1)]);
+		await provider.icons([target("/docs/a.png", 1)]);
 		expect(runs).toBe(1);
-		await provider.icons([target("/docs/a.png", "t2")]);
+		await provider.icons([target("/docs/a.png", 2)]);
 
 		// Then only the changed file triggered a new run
 		expect(runs).toBe(2);

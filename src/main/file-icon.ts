@@ -17,7 +17,7 @@
  * letter tile) and are logged verbatim; one failed file never costs the batch.
  *
  * The produced PNG bytes stay in this module's in-process cache, keyed by the
- * same `(path, modifiedAt)` identity the caller passes in plus the tier edge,
+ * same `(path, mtimeMs)` identity the caller passes in plus the tier edge,
  * and bounded both by entry count and total bytes (least-recently-used
  * eviction). Callers receive a stable `autorag-thumb://` URL (never a base64
  * data URL); the protocol handler in `icon-protocol.ts` serves the cached
@@ -82,7 +82,7 @@ export interface IconTarget {
 	/** Lowercase file extension without the dot; folders are never targets. */
 	readonly ext: string;
 	/** Cache identity: a changed file must not reuse a stale thumbnail. */
-	readonly modifiedAt: string;
+	readonly mtimeMs: number;
 	/** Tier edge in px; the listing's tile tier when omitted. */
 	readonly size?: number;
 }
@@ -109,13 +109,13 @@ export interface IconProvider {
 
 /**
  * Read side of the provider cache: the `autorag-thumb://` protocol handler
- * serves exactly these bytes. Keyed by the same `(path, modifiedAt)` identity
+ * serves exactly these bytes. Keyed by the same `(path, mtimeMs)` identity
  * the URL encodes, so it is safe to hold only while the enrichment result is
  * live.
  */
 export interface IconStore {
 	/** PNG bytes for one cache identity and tier, or null when the OS produced none. */
-	read(path: string, modifiedAt: string, size?: number): Uint8Array | null;
+	read(path: string, mtimeMs: number, size?: number): Uint8Array | null;
 }
 
 /** The provider the fs service consumes, plus the byte cache the protocol serves. */
@@ -148,8 +148,8 @@ export interface IconProviderDeps {
 	readonly warn?: (message: string) => void;
 }
 
-function cacheKey(target: Pick<IconTarget, "path" | "modifiedAt"> & { readonly size?: number }): string {
-	return `${target.path}\u0000${target.modifiedAt}\u0000${target.size ?? ICON_SIZE}`;
+function cacheKey(target: Pick<IconTarget, "path" | "mtimeMs"> & { readonly size?: number }): string {
+	return `${target.path}\u0000${target.mtimeMs}\u0000${target.size ?? ICON_SIZE}`;
 }
 
 /** Positive integer with a floor of one, so a zero/negative option still makes progress. */
@@ -396,7 +396,7 @@ export function createIconProvider(deps: IconProviderDeps = {}): IconSource {
 			const found = new Map<string, string>();
 			for (const target of selected) {
 				const bytes = cache.get(cacheKey(target));
-				if (bytes !== null && bytes !== undefined) found.set(target.path, iconUrl(target.path, target.modifiedAt));
+				if (bytes !== null && bytes !== undefined) found.set(target.path, iconUrl(target.path, target.mtimeMs));
 			}
 			return found;
 		},
@@ -418,10 +418,10 @@ export function createIconProvider(deps: IconProviderDeps = {}): IconSource {
 			const bytes = cache.get(key);
 			return bytes === null || bytes === undefined
 				? null
-				: iconUrl(target.path, target.modifiedAt, PREVIEW_ICON_SIZE);
+				: iconUrl(target.path, target.mtimeMs, PREVIEW_ICON_SIZE);
 		},
-		read(path, modifiedAt, size) {
-			const key = cacheKey(size === undefined ? { path, modifiedAt } : { path, modifiedAt, size });
+		read(path, mtimeMs, size) {
+			const key = cacheKey(size === undefined ? { path, mtimeMs } : { path, mtimeMs, size });
 			return cache.get(key) ?? null;
 		},
 	};

@@ -65,36 +65,31 @@ export interface FsFinderMetadata {
 	readonly application: string | null;
 }
 
+/** `FsEntry.flags` bit: the path is a symbolic link (the other fields describe its target when it resolves). */
+export const FS_ENTRY_SYMLINK = 1;
+
+/**
+ * One directory child as the filesystem reports it: plain values only, no
+ * display strings and nothing the renderer can derive. Labels (date, size,
+ * kind) are computed when a cell renders; the OS kind, tile icon, and Finder
+ * metadata arrive later through `enrichEntries` / `finderMetadata`.
+ */
 export interface FsEntry {
 	/** File or folder name (last path segment). */
 	readonly name: string;
-	/** Absolute OS path. */
+	/** Absolute OS path. Kept beside `name`: search hits, Recents, and version families mix folders. */
 	readonly path: string;
 	readonly kind: "folder" | "file";
 	/** Lowercase extension without the dot; "" for folders and extensionless files. */
 	readonly ext: string;
 	/** Bytes; null for folders. */
 	readonly size: number | null;
-	/** ISO 8601 modification time. */
-	readonly modifiedAt: string;
-	readonly isSymlink: boolean;
-	/** ISO 8601 creation time, when the filesystem exposes one. */
-	readonly createdAt?: string;
-	/** Spotlight/Finder metadata; absent when the platform has no equivalent. */
-	readonly finder?: FsFinderMetadata;
-	/**
-	 * The kind the OS itself reports — Finder's Kind / Explorer's Type, e.g.
-	 * "MPEG-4 movie". Null for folders and whenever the OS answers nothing; the
-	 * renderer then falls back to the extension map.
-	 */
-	readonly osKind: string | null;
-	/**
-	 * `autorag-thumb://` URL for the OS-provided tile icon — a Finder thumbnail
-	 * on macOS. Null when the OS produced none; the tile then renders its
-	 * letter. The PNG bytes stay in the main-process icon cache and load
-	 * lazily through the protocol, so this field never carries base64.
-	 */
-	readonly iconUrl: string | null;
+	/** Modification time in epoch ms (`fs.Stats.mtimeMs`); also the file-version identity for enrichment. */
+	readonly mtimeMs: number;
+	/** Creation time in epoch ms, only when the filesystem exposes a real birth time. */
+	readonly birthtimeMs?: number;
+	/** Bit set of `FS_ENTRY_*` flags. */
+	readonly flags: number;
 }
 
 export interface DirListing {
@@ -116,8 +111,7 @@ export interface FsEnrichmentTarget {
 	readonly path: string;
 	readonly kind: "folder" | "file";
 	readonly ext: string;
-	readonly modifiedAt: string;
-	readonly createdAt?: string;
+	readonly mtimeMs: number;
 }
 
 /**
@@ -128,7 +122,7 @@ export interface FsEnrichmentTarget {
  */
 export interface FsEntryEnrichment {
 	readonly path: string;
-	readonly modifiedAt: string;
+	readonly mtimeMs: number;
 	readonly osKind: string | null;
 	readonly iconUrl: string | null;
 }
@@ -136,7 +130,7 @@ export interface FsEntryEnrichment {
 /** Finder/Spotlight metadata for one requested entry; identity fields echo the request. */
 export interface FsFinderEnrichment {
 	readonly path: string;
-	readonly modifiedAt: string;
+	readonly mtimeMs: number;
 	readonly finder: FsFinderMetadata;
 }
 
@@ -341,7 +335,7 @@ export interface FsCoreBridge {
 	 * the panel keeps its letter tile. On demand per inspected file — never
 	 * part of listings.
 	 */
-	previewIcon(path: string, modifiedAt: string): Promise<string | null>;
+	previewIcon(path: string, mtimeMs: number): Promise<string | null>;
 	exists(path: string): Promise<boolean>;
 	search(query: string, options?: FsSearchOptions): Promise<readonly FsSearchResult[]>;
 	locations(): Promise<readonly FsLocation[]>;

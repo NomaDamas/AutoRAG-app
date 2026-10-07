@@ -366,3 +366,59 @@ Baseline, `main` 5dbdd0f, production build, macOS, 5 runs:
 | Date Modified ↓ sort | 40.6 ms (34.1–67.2) |
 | `fs:listDir` round trip | 80.0 ms (64.9–131.6) |
 | `fs:listDir` JSON | 3,000,112 B, 10 fields |
+
+## Lightweight entry records, labels at render time (FS roadmap #100, stage 3)
+
+`FsEntry` crosses IPC as plain filesystem values: `{ name, path, kind, ext,
+size, mtimeMs, birthtimeMs?, flags }` (`FS_ENTRY_SYMLINK` is bit 1). The ISO
+`modifiedAt`/`createdAt` strings, `isSymlink`, and the always-null `osKind`
+and `iconUrl` placeholders are gone. Enrichment targets and answers carry
+`mtimeMs` as the file-version identity, and so do the icon cache and the
+`autorag-thumb://` URL (`mtime=<epoch ms>`). The version-family snapshot moved
+to format 2. A version 1 file reads as missing, and the service rescans.
+
+The renderer row (`FinderEntry`) holds those values and nothing derived from
+them: 7 fields instead of 14 on a 10k listing. `path` stays on the row because
+search hits, Recents, and version families mix folders, and every
+selection/clipboard/IPC call keys on it. The parent folder is `dirname(path)`
+(`locationOf`), not a copy per row. The date, size, and kind labels, the
+Finder-metadata sort and group values, and the Inspector summaries all come
+from `state/entry-values.ts` at the moment a cell renders or a sort runs.
+`formatModified` (keyed by epoch second) and `formatSize` (keyed by bytes) each
+memoize at most 4,096 inputs. The sidecar still merges the OS kind, icon, and
+Finder metadata onto a resolved row (`osKind`, `iconUrl`, `finder`), as raw
+values.
+
+Sorting precomputes each row's key once (a `Float64Array` for numeric keys, a
+string array for collator keys) and sorts indices. Measured on 10,000 rows:
+the comparator alone and the decorated sort cost the same for Name (20.2 vs
+20.3 ms) and Kind (22.3 vs 21.7 ms). For Where, the decorated sort avoids
+re-deriving the folder in every comparison (73.9 → 27.3 ms). A rank cache over
+unique keys was no faster than `collator.compare` (20.2 vs 19.5 ms on ASCII
+names), so it was not adopted.
+
+`run-qa-finder-large-folder.mjs`, production build, macOS, 8 rounds per build
+interleaved (main launch, branch launch, alternating), median (min–max):
+
+| metric | `main` | this change |
+| --- | ---: | ---: |
+| first paint | 195.9 ms (162.8–286.5) | 173.5 ms (139.6–375.5) |
+| renderer script time, open → settled | 23.5 ms | 21.5 ms |
+| listing heap | 9.41 MB (9.37–9.45) | 7.56 MB (6.18–7.65) |
+| listing heap after the kind/icon pass | 11.56 MB | 10.19 MB |
+| row bytes (heap snapshot) | 159 B/row, 14 fields | 91 B/row, 7 fields |
+| Name ↓ sort | 53.7 ms | 41.2 ms |
+| Date Modified ↓ sort | 53.3 ms | 56.0 ms |
+| `fs:listDir` round trip | 88.2 ms | 64.9 ms |
+| `fs:listDir` JSON | 3,000,112 B | 2,360,112 B |
+
+Memory soak (`SOAK_CYCLES=40`), same machine. `main` was run twice:
+
+| metric | `main` (2 runs) | this change |
+| --- | ---: | ---: |
+| retained heap, start → end | 13.1 → 21.0, 13.2 → 18.6 MB | 12.8 → 16.3 MB |
+| growth per cycle (gate ≤ 0.25) | 0.198, 0.135 MB | 0.089 MB |
+| renderer script time per cycle | 238.6, 242.0 ms | 242.7 ms |
+| 600-image thumbnail fill, script time | 64, 66 ms | 66 ms |
+| listing generations / duplicate rows | 1 / 4 | 1 / 4 |
+| `fs:enrichEntries` / `fs:finderMetadata` per cycle | 0.2 / 0 | 0.2 / 0 |

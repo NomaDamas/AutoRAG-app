@@ -60,6 +60,7 @@ import {
 	type GroupKey,
 	type GroupSection,
 } from "../state/grouping";
+import { locationOf } from "../state/entry-values";
 import { type SortDirection, type SortKey, type SortState, cycleSort, explicitSort } from "../state/sort";
 import {
 	expandedFolders,
@@ -844,7 +845,7 @@ export function useFinderController(
 
 	const revealEntry = useLatestCallback((entry: FinderEntry) => {
 		setTabsState((state) =>
-			patchActiveTab(navigateTab(state, entry.location), (current) => ({
+			patchActiveTab(navigateTab(state, locationOf(entry)), (current) => ({
 				...current,
 				selection: { keys: [entry.path], anchor: entry.path, focus: entry.path },
 			})),
@@ -856,9 +857,10 @@ export function useFinderController(
 
 	const openEntry = useLatestCallback(
 		(entry: FinderEntry) => {
+			const location = locationOf(entry);
 			if (entry.kind === "folder") {
 				// In the column view the click already opened the folder in the next pane.
-				if (layout === "columns" && panePaths.includes(entry.location)) {
+				if (layout === "columns" && panePaths.includes(location)) {
 					return;
 				}
 				navigate(entry.path);
@@ -867,9 +869,9 @@ export function useFinderController(
 			// A Recents row always opens: the view is a history, not a folder to reveal into.
 			// Rows nested under an open folder are in view already, so they open too.
 			const inView =
-				entry.location === path ||
-				openFolders.includes(entry.location) ||
-				(layout === "columns" && panePaths.includes(entry.location));
+				location === path ||
+				openFolders.includes(location) ||
+				(layout === "columns" && panePaths.includes(location));
 			if (searching || (!inView && path !== RECENTS_PATH)) {
 				revealEntry(entry);
 				return;
@@ -1284,8 +1286,8 @@ export function useFinderController(
 			if (action === "paste") {
 				// The column view pastes into the pane the menu was opened in.
 				const pasteDir =
-					menu.entry !== null && layout === "columns" && panePaths.includes(menu.entry.location)
-						? menu.entry.location
+					menu.entry !== null && layout === "columns" && panePaths.includes(locationOf(menu.entry))
+						? locationOf(menu.entry)
 						: menu.dir;
 				source
 					.clipboardGet()

@@ -14,6 +14,7 @@ import {
 	createFixtureSource,
 	isMissingPathFailure,
 } from "../src/renderer/src/data/source";
+import { locationOf } from "../src/renderer/src/state/entry-values";
 
 function fsEntry(path: string): FsEntry {
 	return {
@@ -22,10 +23,8 @@ function fsEntry(path: string): FsEntry {
 		kind: "file",
 		ext: "txt",
 		size: 1,
-		modifiedAt: "2026-09-30T00:00:00.000Z",
-		isSymlink: false,
-		osKind: null,
-		iconUrl: null,
+		mtimeMs: Date.parse("2026-09-30T00:00:00.000Z"),
+		flags: 0,
 	};
 }
 
@@ -186,7 +185,7 @@ describe("live Finder source adapters", () => {
 
 		expect(fs.readEntries).toHaveBeenCalledWith("/tmp/dir", ["/tmp/dir/added.txt", "/tmp/dir/gone.txt"]);
 		expect(patch.entries.map((entry) => entry.path)).toEqual(["/tmp/dir/added.txt"]);
-		expect(patch.entries[0]?.location).toBe("/tmp/dir");
+		expect(locationOf(patch.entries[0]!)).toBe("/tmp/dir");
 		expect(patch.removed).toEqual(["/tmp/dir/gone.txt"]);
 	});
 
@@ -214,7 +213,7 @@ describe("live Finder source adapters", () => {
 		]);
 
 		expect(patch.entries.map((entry) => entry.name)).toEqual(["Q3_마케팅예산_v3.xlsx"]);
-		expect(patch.entries[0]?.location).toBe(dir);
+		expect(locationOf(patch.entries[0]!)).toBe(dir);
 		expect(patch.removed).toEqual([`${dir}/missing.xlsx`]);
 	});
 

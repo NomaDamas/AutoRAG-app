@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactElement, type RefObject } from "react";
 import type { FinderEntry } from "../data/entries";
 import { cn } from "../lib/cn";
+import { fileKindOf } from "../state/entry-values";
 import { tileLabel } from "../state/format";
 import { GROUP_HEADER_HEIGHT, groupedLayout, groupedWindow, type GroupSection } from "../state/grouping";
 import type { StackRow, VersionFamilyError } from "../state/version-family";
@@ -282,7 +283,7 @@ function IconTile({
 	// Virtualized: only tiles near the viewport mount, so reporting them fills
 	// thumbnails in on scroll for folders larger than the per-call icon cap.
 	useEffect(() => {
-		if (entry.kind === "file" && (entry.iconUrl === null || entry.iconUrl === undefined)) {
+		if (entry.kind === "file" && entry.iconUrl === undefined) {
 			callbacks.onVisible(entry);
 		}
 	}, [callbacks.onVisible, entry]);
@@ -318,7 +319,7 @@ function IconTile({
 					child && "rounded-8 shadow-[inset_0_0_0_1px_var(--border-strong)]",
 				)}
 			>
-				<FileTile kind={entry.fileKind} iconUrl={entry.iconUrl} large />
+				<FileTile kind={fileKindOf(entry)} iconUrl={entry.iconUrl} large />
 				{stackCount > 0 ? (
 					<button
 						type="button"

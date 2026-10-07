@@ -219,7 +219,7 @@ try {
 		const listing = await window.autorag.fs.listDir(target);
 		const targets = listing.entries
 			.filter((entry) => entry.kind === "file")
-			.map((entry) => ({ path: entry.path, kind: entry.kind, ext: entry.ext, modifiedAt: entry.modifiedAt }));
+			.map((entry) => ({ path: entry.path, kind: entry.kind, ext: entry.ext, mtimeMs: entry.mtimeMs }));
 		const enriched = await window.autorag.fs.enrichEntries(targets, true);
 		return enriched.filter((entry) => entry.iconUrl !== null && entry.iconUrl !== undefined).length;
 	}, qlDir);

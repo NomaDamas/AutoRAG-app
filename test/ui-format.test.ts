@@ -13,12 +13,20 @@ import {
 
 describe("formatModified", () => {
 	it("renders the reference date format", () => {
-		expect(formatModified("2026-09-13T16:48:00")).toBe("Sep 13, 16:48");
-		expect(formatModified("2026-01-02T09:05:00")).toBe("Jan 2, 09:05");
+		expect(formatModified(new Date(2026, 8, 13, 16, 48).getTime())).toBe("Sep 13, 16:48");
+		expect(formatModified(new Date(2026, 0, 2, 9, 5).getTime())).toBe("Jan 2, 09:05");
 	});
 
 	it("falls back to an em dash for an unreadable timestamp", () => {
-		expect(formatModified("not-a-date")).toBe("—");
+		expect(formatModified(Number.NaN)).toBe("—");
+	});
+
+	it("labels a fractional pre-1970 stamp as its whole-ms Date does", () => {
+		// mtimeMs carries microseconds; Date truncates toward zero, so a stamp just
+		// after a minute boundary before 1970 stays in that minute.
+		const minute = new Date(1950, 3, 20, 15, 15).getTime();
+		expect(formatModified(minute - 0.25)).toBe("Apr 20, 15:15");
+		expect(formatModified(minute - 1)).toBe("Apr 20, 15:14");
 	});
 
 	it("round-trips into a sortable value", () => {

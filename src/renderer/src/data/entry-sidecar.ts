@@ -15,7 +15,7 @@
 
 import type { FsEntryEnrichment, FsFinderEnrichment, FsFinderMetadata } from "../../../shared/fs-contract";
 import type { IndexStatus } from "../../../shared/index-contract";
-import { type FinderEntry, METADATA_KEYS, metadataFields } from "./entries";
+import { type FinderEntry, hasFileVersion } from "./entries";
 
 /** Records kept per kind (icons, metadata, index states) before the oldest go. */
 const DEFAULT_CAPACITY = 20_000;
@@ -58,8 +58,12 @@ export interface EntrySidecar {
 }
 
 /** Cache identity of one file version. */
-function versionKey(path: string, modifiedAt: string): string {
-	return `${path}\u0000${modifiedAt}`;
+function versionKey(path: string, mtimeMs: number): string {
+	return `${path}\u0000${mtimeMs}`;
+}
+
+function entryKey(entry: FinderEntry): string | null {
+	return hasFileVersion(entry) ? versionKey(entry.path, entry.mtimeMs) : null;
 }
 
 /** Map with insertion-order eviction past `capacity`; `set` refreshes recency. */
@@ -126,40 +130,25 @@ export function createEntrySidecar(options: { readonly capacity?: number } = {})
 		if (rowData) for (const listener of allListeners) listener();
 	};
 
+	/** The listed row plus what the OS answered; labels derive from these when a cell renders. */
 	const merge = (entry: FinderEntry, kind: KindRecord | undefined, meta: MetadataRecord | undefined): FinderEntry => {
-		let row: FinderEntry = entry;
-		if (kind !== undefined) {
-			const kindLabel = kind.osKind ?? entry.kindLabel;
-			const iconUrl = kind.iconUrl ?? entry.iconUrl;
-			if (kindLabel !== entry.kindLabel || iconUrl !== entry.iconUrl) row = { ...row, kindLabel, iconUrl };
-		}
-		if (meta?.finder != null) {
-			const fields = metadataFields(meta.finder, entry.createdAt);
-			if (METADATA_KEYS.some((key) => fields[key] !== entry[key])) {
-				// Replace the metadata fields wholesale: a tag removed on disk must disappear.
-				const {
-					createdValue: _created,
-					addedValue: _added,
-					lastOpenedValue: _opened,
-					tagsLabel: _tags,
-					commentsLabel: _comments,
-					dimensionsLabel: _dimensions,
-					dimensionsValue: _area,
-					ratingValue: _rating,
-					applicationLabel: _application,
-					...base
-				} = row;
-				row = { ...base, ...fields };
-			}
-		}
-		return row;
+		const osKind = kind?.osKind ?? undefined;
+		const iconUrl = kind?.iconUrl ?? undefined;
+		const finder = meta?.finder ?? undefined;
+		if (osKind === undefined && iconUrl === undefined && finder === undefined) return entry;
+		return {
+			...entry,
+			...(osKind === undefined ? {} : { osKind }),
+			...(iconUrl === undefined ? {} : { iconUrl }),
+			...(finder === undefined ? {} : { finder }),
+		};
 	};
 
 	return {
 		resolve(input) {
 			const entry = baseOf.get(input) ?? input;
-			if (entry.modifiedAt === undefined) return entry;
-			const key = versionKey(entry.path, entry.modifiedAt);
+			const key = entryKey(entry);
+			if (key === null) return entry;
 			const kind = kinds.get(key);
 			const meta = metadata.get(key);
 			if (kind === undefined && meta === undefined) return entry;
@@ -171,15 +160,17 @@ export function createEntrySidecar(options: { readonly capacity?: number } = {})
 			return row;
 		},
 		hasKind(entry) {
-			return entry.modifiedAt !== undefined && kinds.has(versionKey(entry.path, entry.modifiedAt));
+			const key = entryKey(entry);
+			return key !== null && kinds.has(key);
 		},
 		hasMetadata(entry) {
-			return entry.modifiedAt !== undefined && metadata.has(versionKey(entry.path, entry.modifiedAt));
+			const key = entryKey(entry);
+			return key !== null && metadata.has(key);
 		},
 		applyEnrichment(enriched) {
 			const changed = new Set<string>();
 			for (const patch of enriched) {
-				const key = versionKey(patch.path, patch.modifiedAt);
+				const key = versionKey(patch.path, patch.mtimeMs);
 				const current = kinds.get(key);
 				// A capped background pass answers null icons for rows it did not
 				// render; an icon the viewport pass already loaded stays.
@@ -197,7 +188,7 @@ export function createEntrySidecar(options: { readonly capacity?: number } = {})
 			const changed = new Set<string>();
 			const answered = new Set<string>();
 			for (const patch of enriched) {
-				const key = versionKey(patch.path, patch.modifiedAt);
+				const key = versionKey(patch.path, patch.mtimeMs);
 				answered.add(key);
 				const current = metadata.get(key);
 				if (current !== undefined && sameFinder(current.finder, patch.finder)) continue;
@@ -205,8 +196,8 @@ export function createEntrySidecar(options: { readonly capacity?: number } = {})
 				touch(changed, patch.path);
 			}
 			for (const entry of requested) {
-				if (entry.modifiedAt === undefined) continue;
-				const key = versionKey(entry.path, entry.modifiedAt);
+				const key = entryKey(entry);
+				if (key === null) continue;
 				// Asked and nothing came back: remembered, so it is not asked again.
 				if (!answered.has(key) && !metadata.has(key)) remember(metadata, key, { finder: null }, capacity);
 			}

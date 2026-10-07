@@ -176,22 +176,11 @@ function normalizeSlashes(path: string): string {
 	return path.replace(/\\/g, "/");
 }
 
-/** Attach the OS-reported kind to one entry; a failed lookup keeps the letter/fallback kind. */
-async function applyOsKind(entry: FsEntry, lookup: OsKindLookup): Promise<FsEntry> {
-	if (entry.kind !== "file") return entry;
-	try {
-		return { ...entry, osKind: await lookup(entry.path, entry.ext) };
-	} catch (error) {
-		console.warn(`fs:osKind failed for ${entry.path}: ${errorMessage(error)}`);
-		return entry;
-	}
-}
-
 /** OS tile icons for a batch's files; the provider batches one call per listing. */
 async function resolveIcons(targets: readonly FsEnrichmentTarget[], provider: IconProvider): Promise<ReadonlyMap<string, string>> {
 	const files = targets
 		.filter((target) => target.kind === "file")
-		.map((target) => ({ path: target.path, ext: target.ext, modifiedAt: target.modifiedAt }));
+		.map((target) => ({ path: target.path, ext: target.ext, mtimeMs: target.mtimeMs }));
 	if (files.length === 0) return new Map();
 	return provider.icons(files);
 }
@@ -276,7 +265,7 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 		]);
 		return targets.map((target, index) => ({
 			path: target.path,
-			modifiedAt: target.modifiedAt,
+			mtimeMs: target.mtimeMs,
 			osKind: kinds[index] ?? null,
 			iconUrl: icons.get(target.path) ?? null,
 		}));
@@ -287,11 +276,8 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 			targets.map(async (target): Promise<FsFinderEnrichment | null> => {
 				const finder = await finderMetadata(target.path);
 				if (finder === null) return null;
-				return {
-					path: target.path,
-					modifiedAt: target.modifiedAt,
-					finder: { ...finder, createdAt: finder.createdAt ?? target.createdAt ?? null },
-				};
+				// A missing Spotlight creation date falls back to the listing's birth time in the renderer.
+				return { path: target.path, mtimeMs: target.mtimeMs, finder };
 			}),
 		);
 		return results.filter((result) => result !== null);
@@ -616,7 +602,7 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 			throw new FsRenameError("name-collision", `A file or folder named "${newName}" already exists`);
 		}
 		await fsRename(path, target);
-		return applyOsKind(await buildFsEntry(target), osKind);
+		return buildFsEntry(target);
 	}
 
 	async function createFolder(directory: string): Promise<{ readonly path: string; readonly name: string }> {
@@ -659,10 +645,10 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 		finderMetadata: finderMetadataFor,
 		listDir,
 		readEntries,
-		stat: async (path) => applyOsKind(await buildFsEntry(path), osKind),
+		stat: buildFsEntry,
 		details: deps.details ?? readFileDetails,
-		previewIcon: (path, modifiedAt) =>
-			iconProvider.preview({ path, ext: extname(path).slice(1).toLowerCase(), modifiedAt }),
+		previewIcon: (path, mtimeMs) =>
+			iconProvider.preview({ path, ext: extname(path).slice(1).toLowerCase(), mtimeMs }),
 		exists: async (path) => {
 			try {
 				await lstat(path);
