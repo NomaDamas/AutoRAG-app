@@ -30,7 +30,7 @@ try {
 
   const navIds = await page.locator("[data-nav]").evaluateAll((items) => [...new Set(items.map((item) => item.dataset.nav))]);
   const openPage = async (id) => {
-    const expected = { general: "일반", ai: "AI 모델", quality: "검색 품질", web: "웹 검색", scope: "검색 범위", reading: "문서 읽기", duplicates: "중복 파일 정리", apps: "연결된 앱", advanced: "고급 설정" }[id];
+    const expected = { general: "일반", ai: "AI 모델", web: "웹 검색", scope: "검색 범위", reading: "문서 읽기", duplicates: "중복 파일 정리", apps: "연결된 앱", advanced: "고급 설정" }[id];
     for (let attempt = 0; attempt < 3; attempt++) {
       await page.locator(`[data-nav="${id}"]`).first().click();
       await page.waitForTimeout(60);
@@ -58,16 +58,47 @@ try {
   });
   check("sidebar icons share the label's vertical center", alignment.every((delta) => delta <= 1), `max delta ${Math.max(...alignment).toFixed(2)}px`);
 
+  // AI 모델: connect a provider from the dropdown, then assign it to a role.
   await page.locator('[data-nav="ai"]').first().click();
-  await page.locator('[data-action="combo"]').click();
-  await page.locator("#model-input").fill("GPT");
-  check("model picker filters", (await page.locator("#model-list").innerText()).includes("GPT-5"));
-  await page.locator('#model-list [data-model="openai/gpt-5"]').click();
-  check("model selection saves", (await page.locator('[data-action="combo"]').innerText()).includes("GPT-5"));
-  await page.locator('[data-nav="quality"]').first().click();
-  await page.locator('[data-select="embed"]').selectOption("가벼움");
+  const roleText = (role) => page.locator(`[data-row="role:${role}"] .trigger`).innerText();
+  check("roles list all five model roles", await page.locator('[data-row^="role:"]').count() === 5);
+  await page.locator('[data-menu="connect"]').click();
+  await page.locator("[data-menu-search]").fill("Cloud");
+  check("connect menu filters providers", (await page.locator("#menu-root").innerText()).includes("Cloudflare AI Gateway") && !(await page.locator("#menu-root").innerText()).includes("ChatGPT"));
+  await page.locator('[data-connect-provider="cloudflare"]').click();
+  check("provider modal asks for every field", await page.locator("#modal-root [data-connect-field]").count() === 3);
+  await page.locator("#modal-root [data-submit-connect]").click();
+  check("empty required fields are rejected", await page.locator("#modal-root .modal-error:not([hidden])").count() === 1);
+  await page.locator('#modal-root [data-connect-field="token"]').fill("cf_test");
+  await page.locator('#modal-root [data-connect-field="account"]').fill("023e");
+  await page.locator("#modal-root [data-submit-connect]").click();
+  await page.waitForSelector('[data-provider-row="cloudflare"]');
+  check("connected provider joins the list", await page.locator('[data-provider-row="cloudflare"]').count() === 1);
+  await page.locator('[data-menu="connect"]').click();
+  await page.locator('[data-connect-provider="claude"]').click();
+  check("subscription provider uses browser sign-in", (await page.getByRole("dialog").innerText()).includes("브라우저"));
+  await page.locator("#modal-root [data-submit-connect]").click();
+  await page.waitForSelector('[data-provider-row="claude"]');
+  await page.locator('[data-menu="picker"][data-role="answer"]').click();
+  await page.locator('.menu-sub:has([data-sub="claude"]) > .menu-item').hover();
+  await page.locator('[data-choose="answer"][data-provider="claude"][data-model="anthropic/claude-opus-4.1"]').click();
+  check("picking a model assigns the role", (await roleText("answer")).includes("Claude Opus 4.1"));
+  await page.locator('[data-menu="picker"][data-role="embed"]').click();
+  const embedMenu = await page.locator("#menu-root").innerText();
+  check("embedding role offers only local providers", embedMenu.includes("Dazzi 기본") && !embedMenu.includes("OpenRouter") && !embedMenu.includes("Claude"), JSON.stringify(embedMenu));
+  await page.locator('.menu-sub:has([data-sub="builtin"]) > .menu-item').hover();
+  await page.locator('[data-choose="embed"][data-model="embeddinggemma-300m"]').click();
   check("embedding change asks for confirmation", await page.getByRole("dialog").count() === 1 && (await page.getByRole("dialog").innerText()).includes("다시 분석"));
-  await page.locator('.modal-backdrop').click({ position: { x: 4, y: 4 } });
+  await page.locator("[data-confirm-choice]").click();
+  check("confirmed embedding change applies", (await roleText("embed")).includes("EmbeddingGemma"));
+  await page.locator('[data-menu="provider-more"][data-provider="openrouter"]').click();
+  await page.locator('[data-provider-action="disconnect"]').click();
+  check("disconnect warns about affected roles", (await page.getByRole("dialog").innerText()).includes("질문 나누기"));
+  await page.locator("[data-confirm-disconnect]").click();
+  check("roles on a removed provider need a new choice", (await roleText("decomposition")).includes("모델 선택 필요") && (await roleText("answer")).includes("Claude Opus 4.1"));
+  await page.locator('[data-menu="picker"][data-role="rerank"]').click();
+  check("unavailable capability offers to connect", (await page.locator("#menu-root").innerText()).includes("다른 서비스 연결"));
+  await page.keyboard.press("Escape");
   await page.locator('[data-nav="apps"]').first().click();
   await page.locator('[data-add="notion"]').click();
   check("add connection modal opens", await page.getByRole("dialog").count() === 1 && (await page.getByRole("dialog").innerText()).includes("Notion"));

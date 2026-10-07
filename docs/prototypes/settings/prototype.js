@@ -32,6 +32,8 @@ const ICONS = {
 	x: "x",
 	info: "info",
 	alert: "triangle-alert",
+	more: "ellipsis",
+	external: "external-link",
 };
 
 /** The app's SearchIcon draws lucide `search` at stroke 2.2; every other glyph uses 1.8. */
@@ -63,24 +65,31 @@ const state = {
 	page: "general",
 	appearance: "light",
 	notes: false,
-	embed: "balanced",
-	rerank: false,
-	provider: "openrouter",
-	model: "anthropic/claude-sonnet-4.5",
-	modelQuery: "",
+	/** Connected provider ids in connection order. `builtin` is always present. */
+	providers: ["builtin", "openrouter"],
+	/** Role → `{ provider, model }`, `{ special }`, or `null` when a choice is needed. */
+	roles: {
+		answer: { provider: "openrouter", model: "anthropic/claude-sonnet-4.5" },
+		decomposition: { provider: "openrouter", model: "qwen/qwen3.7-flash" },
+		jev: { provider: "openrouter", model: "typesafe/jev-1.13" },
+		rerank: { special: "off" },
+		embed: { provider: "builtin", model: "qwen3-embedding-0.6b" },
+	},
+	/** Open floating menu: `{ type, arg, anchor, query }` or null. */
+	menu: null,
+	/** Choice waiting on the reindex confirmation. */
+	pendingChoice: null,
+	customCount: 0,
 	values: {
 		appearance: "라이트",
 		language: "한국어",
 		poll: "15분",
 		dupes: "1시간",
-		provider: "OpenRouter",
-		embed: "균형",
 		ocr: false,
 		media: false,
 		ocrmode: "자동 (권장)",
 		ocrlang: "문서 언어와 같게",
 		sync: "자동 선택",
-		rerankmodel: "voyageai / rerank-3-lite",
 		cloudprovider: "Google Drive",
 	},
 	chips: {
@@ -104,19 +113,115 @@ const state = {
 	advancedOpen: {},
 };
 
-const PROVIDER_MODELS = {
-	openrouter: [
-		["anthropic/claude-sonnet-4.5", "Claude Sonnet 4.5", "추천"],
-		["openai/gpt-5", "GPT-5", "추천"],
-		["google/gemini-2.5-pro", "Gemini 2.5 Pro"],
-		["deepseek/deepseek-v3.2", "DeepSeek V3.2"],
-		["qwen/qwen3-max", "Qwen3 Max"],
-	],
-	openai: [["openai/gpt-5", "GPT-5", "추천"], ["openai/gpt-5-mini", "GPT-5 Mini"], ["openai/o3", "o3"]],
-	anthropic: [["anthropic/claude-sonnet-4.5", "Claude Sonnet 4.5", "추천"], ["anthropic/claude-opus-4", "Claude Opus 4"], ["anthropic/claude-haiku-4.5", "Claude Haiku 4.5"]],
-	google: [["google/gemini-2.5-pro", "Gemini 2.5 Pro", "추천"], ["google/gemini-2.5-flash", "Gemini 2.5 Flash"]],
-	custom: [],
+/* ------------------------------------------------------- AI providers -- */
+
+/**
+ * Provider catalog. `kind` picks the connect flow: builtin (always on, local
+ * runtime), subscription (browser sign-in), api (key plus optional fields),
+ * local (loopback server), custom (OpenAI-compatible endpoint). `models` lists
+ * what each provider offers per capability; a role only offers providers that
+ * have models for its capability.
+ */
+const PROVIDERS = {
+	builtin: { label: "Dazzi 기본", letter: "D", kind: "builtin", models: {
+		embed: [["qwen3-embedding-0.6b", "Qwen3 Embedding 0.6B", "권장"], ["embeddinggemma-300m", "EmbeddingGemma 300M", "가벼움"]],
+	} },
+	chatgpt: { label: "ChatGPT", letter: "C", kind: "subscription", models: {
+		llm: [["openai-codex/gpt-5", "GPT-5"], ["openai-codex/gpt-5-mini", "GPT-5 Mini"], ["openai-codex/o3", "o3"]],
+	} },
+	claude: { label: "Claude", letter: "C", kind: "subscription", models: {
+		llm: [["anthropic/claude-sonnet-4.5", "Claude Sonnet 4.5"], ["anthropic/claude-opus-4.1", "Claude Opus 4.1"], ["anthropic/claude-haiku-4.5", "Claude Haiku 4.5"]],
+	} },
+	copilot: { label: "GitHub Copilot", letter: "G", kind: "subscription", models: {
+		llm: [["github-copilot/gpt-5", "GPT-5"], ["github-copilot/claude-sonnet-4.5", "Claude Sonnet 4.5"]],
+	} },
+	openrouter: { label: "OpenRouter", letter: "O", kind: "api", placeholder: "sk-or-…", keyHint: "openrouter.ai의 Keys 메뉴에서 만든 키를 붙여 넣으세요.", models: {
+		llm: [["anthropic/claude-sonnet-4.5", "Claude Sonnet 4.5", "추천"], ["openai/gpt-5", "GPT-5", "추천"], ["google/gemini-2.5-pro", "Gemini 2.5 Pro"], ["deepseek/deepseek-v3.2", "DeepSeek V3.2"], ["qwen/qwen3.7-flash", "Qwen3.7 Flash", "빠름"], ["qwen/qwen3-max", "Qwen3 Max"]],
+		jev: [["typesafe/jev-1.13", "Jev 1.13", "권장"]],
+		rerank: [["voyageai/rerank-3-lite", "Voyage Rerank 3 Lite", "권장"], ["voyageai/rerank-3", "Voyage Rerank 3"], ["cohere/rerank-v3.5", "Cohere Rerank 3.5"], ["cohere/rerank-4-fast", "Cohere Rerank 4 Fast"]],
+	} },
+	openai: { label: "OpenAI", letter: "O", kind: "api", placeholder: "sk-…", models: {
+		llm: [["openai/gpt-5", "GPT-5"], ["openai/gpt-5-mini", "GPT-5 Mini"], ["openai/o3", "o3"]],
+	} },
+	anthropic: { label: "Anthropic", letter: "A", kind: "api", placeholder: "sk-ant-…", models: {
+		llm: [["anthropic/claude-sonnet-4.5", "Claude Sonnet 4.5"], ["anthropic/claude-opus-4.1", "Claude Opus 4.1"], ["anthropic/claude-haiku-4.5", "Claude Haiku 4.5"]],
+	} },
+	google: { label: "Google Gemini", letter: "G", kind: "api", placeholder: "AIza…", models: {
+		llm: [["google/gemini-2.5-pro", "Gemini 2.5 Pro"], ["google/gemini-2.5-flash", "Gemini 2.5 Flash"]],
+	} },
+	fireworks: { label: "Fireworks", letter: "F", kind: "api", placeholder: "fw_…", models: {
+		llm: [["fireworks/kimi-k2", "Kimi K2"], ["fireworks/glm-4.6", "GLM 4.6"]],
+	} },
+	groq: { label: "Groq", letter: "G", kind: "api", placeholder: "gsk_…", models: {
+		llm: [["groq/llama-3.3-70b", "Llama 3.3 70B"], ["groq/qwen3-32b", "Qwen3 32B"]],
+	} },
+	deepseek: { label: "DeepSeek", letter: "D", kind: "api", placeholder: "sk-…", models: {
+		llm: [["deepseek/deepseek-chat", "DeepSeek V3.2"], ["deepseek/deepseek-reasoner", "DeepSeek R1"]],
+	} },
+	mistral: { label: "Mistral", letter: "M", kind: "api", placeholder: "키 붙여 넣기", models: {
+		llm: [["mistral/mistral-large", "Mistral Large"], ["mistral/mistral-small", "Mistral Small"]],
+	} },
+	xai: { label: "xAI Grok", letter: "X", kind: "api", placeholder: "xai-…", models: {
+		llm: [["xai/grok-4", "Grok 4"], ["xai/grok-4-fast", "Grok 4 Fast"]],
+	} },
+	typesafe: { label: "TypeSafe", letter: "T", kind: "api", placeholder: "ts_…", keyHint: "Jev 판단 모델 전용 키입니다.", models: {
+		jev: [["jev-latest", "Jev (최신)", "권장"]],
+	} },
+	vercel: { label: "Vercel AI Gateway", letter: "V", kind: "api", placeholder: "vck_…", models: {
+		llm: [["vercel/anthropic/claude-sonnet-4.5", "Claude Sonnet 4.5"], ["vercel/openai/gpt-5", "GPT-5"]],
+		jev: [["typesafe/jev-latest", "Jev (최신)"]],
+	} },
+	cloudflare: { label: "Cloudflare AI Gateway", letter: "C", kind: "api",
+		intro: "AI Gateway 권한이 있는 Cloudflare API 토큰을 만든 뒤, 계정 ID와 게이트웨이 이름을 입력하세요.",
+		fields: [
+			{ name: "token", label: "API 토큰", placeholder: "예: cf_…", type: "password", required: true },
+			{ name: "account", label: "계정 ID", placeholder: "예: 023e…", required: true },
+			{ name: "gateway", label: "게이트웨이 ID", placeholder: "default", value: "default", required: true },
+		],
+		models: { llm: [["cloudflare/llama-3.3-70b", "Llama 3.3 70B"], ["cloudflare/qwen3-30b", "Qwen3 30B"]] } },
+	local: { label: "내 컴퓨터 서버", letter: "L", kind: "local", url: "http://127.0.0.1:11434", models: {
+		llm: [["local/llama3.1", "Llama 3.1"], ["local/qwen3", "Qwen3"]],
+		embed: [["native:Qwen/Qwen3-Embedding-0.6B", "Qwen3 Embedding (내 서버)"]],
+	} },
 };
+
+const CONNECT_GROUPS = [
+	{ title: "구독 계정", ids: ["chatgpt", "claude", "copilot"] },
+	{ title: "API 키", ids: ["openrouter", "openai", "anthropic", "google", "fireworks", "groq", "deepseek", "mistral", "xai", "typesafe", "vercel", "cloudflare"] },
+	{ title: "내 컴퓨터", ids: ["local"] },
+];
+
+/**
+ * The five model roles the agent splits work into. `capability` filters which
+ * providers a role can pick from; `specials` are non-model choices. Embedding
+ * only lists builtin/local providers: corpus text never goes to a remote embedder.
+ */
+const ROLES = {
+	answer: { label: "답변 모델", short: "답변", capability: "llm", path: "model",
+		hint: "질문에 답하고 문서를 요약합니다.",
+		defaultChoice: { provider: "openrouter", model: "anthropic/claude-sonnet-4.5" } },
+	decomposition: { label: "질문 나누기", short: "질문 나누기", capability: "llm", path: "queryDecomposition.model",
+		hint: "긴 질문을 검색어 여러 개로 나눕니다. 빠르고 저렴한 모델이 잘 맞습니다.",
+		specials: [["same", "답변 모델과 같게"]],
+		defaultChoice: { provider: "openrouter", model: "qwen/qwen3.7-flash" } },
+	jev: { label: "판단 모델 (Jev)", short: "Jev", capability: "jev", path: "jev.backend · jev.model",
+		hint: "자료를 더 찾을지, 웹을 검색할지 판단합니다.",
+		specials: [["off", "사용 안 함"]],
+		defaultChoice: { provider: "openrouter", model: "typesafe/jev-1.13" } },
+	rerank: { label: "검색 결과 정렬", short: "정렬", capability: "rerank", path: "rerank",
+		hint: "관련 높은 결과를 위로 올립니다. 답변이 조금 느려질 수 있습니다.",
+		specials: [["off", "사용 안 함"]],
+		defaultChoice: { special: "off" } },
+	embed: { label: "문서 이해 모델", short: "문서 이해", capability: "embed", path: "minSync.embedder", reindex: true,
+		hint: "문서의 의미를 분석합니다. 문서 내용은 이 Mac 밖으로 나가지 않습니다.",
+		defaultChoice: { provider: "builtin", model: "qwen3-embedding-0.6b" } },
+};
+
+const ROLE_GROUPS = [
+	{ title: "답변", roles: ["answer"] },
+	{ title: "검색 보조", roles: ["decomposition", "jev", "rerank"] },
+	{ title: "문서 이해", roles: ["embed"] },
+];
 
 const TEMPLATES = {
 	telegram: { label: "Telegram", desc: "Telegram 대화를 검색합니다.", letter: "T" },
@@ -173,39 +278,22 @@ const data = {
 	ai: {
 		group: "AI", label: "AI 모델", icon: "sparkles",
 		title: "AI 모델",
-		desc: "질문에 답하고 문서를 요약할 AI 서비스를 설정합니다.",
-		notes: ["Provider Connection의 영문 설명을 줄이고 자주 쓰는 서비스만 먼저 보여줍니다.", "416개 모델 select는 검색 가능한 목록으로 바꿨습니다.", "API 키·서버 주소·통신 방식은 고급 연결 설정으로 접었습니다.", "연결 확인은 현재 브리지에 없는 제안 기능입니다."],
-		sections: [
-			{ title: "답변 AI", rows: "aiRows" },
-			{ title: "고급 연결 설정", desc: "회사 게이트웨이나 자체 서버를 사용할 때만 바꿉니다.", advanced: true, rows: [
-				{ id: "base", label: "서버 주소", hint: "비워두면 선택한 서비스의 기본 주소를 사용합니다.", control: fieldControl("base", "text", "https://…"), path: "model.baseUrl" },
-				{ id: "protocol", label: "통신 방식", hint: "비워두면 서비스의 기본 방식을 따릅니다.", control: selectControl("protocol", ["자동 (권장)", "OpenAI 호환", "Anthropic 호환"], "자동 (권장)"), path: "model.api" },
-				{ id: "keyenv", label: "API 키 환경 변수", hint: "키를 읽어올 환경 변수 이름입니다.", control: fieldControl("keyenv", "text", "OPENROUTER_API_KEY"), path: "model.apiKeyEnv" },
-				{ id: "displayname", label: "표시 이름", hint: "모델 목록에 표시할 이름입니다.", control: fieldControl("displayname", "text", "기본값은 모델 이름"), path: "model.name" },
-			] },
+		desc: "AI 서비스를 연결하고, 역할마다 쓸 모델을 고릅니다.",
+		keywords: "LLM 임베딩 embedding 리랭커 reranker rerank Jev 질문 나누기 decomposition provider API 키 구독",
+		notes: [
+			"공급자 select 하나에 모델·키·주소를 몰아넣던 구조를 '연결된 서비스'와 '역할별 모델'로 나눴습니다.",
+			"LLM·Embedding·Reranker 탭과 Jev·질문 나누기 설정을 한 화면의 역할 목록으로 합쳤습니다. 검색 품질 메뉴는 없앴습니다.",
+			"서비스마다 다른 연결 방식(구독 로그인·API 키·추가 필드·내 컴퓨터 서버)은 연결 창에서 처리하고, 서버 주소·통신 방식·키 환경 변수는 화면에서 뺐습니다.",
+			"문서 이해 모델은 Dazzi 기본 또는 내 컴퓨터 서버만 고를 수 있습니다(원격 임베딩 금지).",
+			"구독 로그인·연결 확인·커스텀 서비스 모델 목록은 현재 브리지에 없는 제안 기능입니다.",
 		],
-	},
-	quality: {
-		group: "AI", label: "검색 품질", icon: "search",
-		title: "검색 품질",
-		desc: "문서의 의미를 이해하고 검색 결과를 정돈하는 방식을 설정합니다.",
-		notes: ["Embedding·Reranker 두 탭을 검색 품질 한 화면으로 합쳤습니다.", "모델 저장과 재색인 버튼을 확인 창 하나로 합쳤습니다.", "문서 분석은 이 컴퓨터에서만 이루어진다는 안내를 항상 표시합니다."],
 		sections: [
-			{ title: "문서 이해 모델", desc: "문서 내용은 이 Mac 안에서만 분석되며 외부로 전송되지 않습니다.", rows: "embedRows" },
-			{ title: "검색 결과 다듬기", desc: "가장 관련 있는 결과를 위로 재정렬합니다. 설정 시 일부 검색 결과가 OpenRouter로 전송됩니다.", rows: [
-				{ id: "rerank", label: "검색 결과 다듬기", hint: "정확도가 올라가는 대신 답변이 조금 느려집니다.", control: switchControl("rerank", state.rerank), path: "rerank" },
-				...(state.rerank
-					? [
-						{ id: "rerankmodel", label: "모델", hint: "재정렬에 사용할 모델입니다.", control: selectControl("rerankmodel", ["voyageai / rerank-3-lite", "cohere / rerank-v3.5", "voyageai / rerank-3"], state.values.rerankmodel), path: "rerank.model" },
-						{ id: "rerankkey", label: "API 키", hint: "OpenRouter 키를 함께 사용합니다.", control: `<span class="status">${svg("check")}저장됨</span>`, path: "credentials.openrouter" },
-					]
-					: []),
-			] },
-			{ title: "고급 조정", desc: "바꿀 필요가 없는 성능 값들입니다.", advanced: true, rows: [
+			{ title: "연결된 서비스", desc: "모델을 제공하는 서비스입니다. 연결하면 아래 역할에서 그 서비스의 모델을 고를 수 있습니다.", rows: "providerRows" },
+			{ title: "역할별 모델", desc: "Dazzi는 일을 역할별로 나눠 처리합니다. 역할마다 맞는 모델을 고르세요.", rows: "taskRows" },
+			{ title: "문서 이해 세부 조정", advanced: true, rows: [
 				{ id: "etime", label: "요청 시간 제한", hint: "문서 분석 요청 하나를 기다리는 최대 시간입니다.", control: fieldControl("etime", "number", "기본값 (초)"), path: "minSync.embedder.timeoutMs" },
 				{ id: "batch", label: "한 번에 분석할 문서 수", hint: "한 요청에 묶는 문서 수입니다.", control: fieldControl("batch", "number", "기본값"), path: "minSync.embedder.batchSize" },
 				{ id: "concurrent", label: "동시 분석 수", hint: "동시에 실행할 분석 개수입니다.", control: fieldControl("concurrent", "number", "기본값"), path: "minSync.embedder.maxConcurrent" },
-				{ id: "chunk", label: "문서 조각 크기", hint: "긴 문서를 나누는 글자 수입니다.", control: fieldControl("chunk", "number", "기본값"), path: "minSync.maxChunkSize" },
 			] },
 		],
 	},
@@ -339,34 +427,69 @@ const data = {
 
 /* -------------------------------------------------------- Dynamic rows -- */
 
-function modelName(id) {
-	const entry = Object.values(PROVIDER_MODELS).flat().find(([modelId]) => modelId === id);
-	return entry ? entry[1] : id;
+const KIND_META = {
+	builtin: "기본 제공 · 이 Mac에서 실행",
+	subscription: "구독 계정",
+	api: "API 키",
+	local: "내 컴퓨터",
+	custom: "직접 추가",
+};
+
+const appIcon = (providerId, size = "") => `<span class="app-icon${size}">${esc(PROVIDERS[providerId]?.letter ?? "·")}</span>`;
+
+function modelLabel(providerId, capability, modelId) {
+	const entry = (PROVIDERS[providerId]?.models[capability] ?? []).find(([id]) => id === modelId);
+	return entry ? entry[1] : modelId;
 }
 
-function aiRows() {
-	const custom = state.provider === "custom";
-	return [
-		{ id: "provider", label: "AI 서비스", hint: "키를 붙여 넣으면 안전한 저장소에 보관합니다.", control: selectControl("provider", ["OpenRouter", "OpenAI", "Anthropic", "Google", "직접 입력", "— 그 외 사전 등록 서비스"], state.values.provider), path: "model.provider" },
-		...(custom ? [{ id: "customid", label: "서비스 ID", hint: "직접 연결하는 서비스의 영문 ID입니다.", control: fieldControl("customid", "text", "예: ollama"), path: "model.provider" }] : []),
-		{ id: "model", label: "모델", hint: "자주 쓰는 모델을 먼저 보여줍니다.", control: `<span class="combo"><button type="button" class="trigger" data-action="combo"><span>${esc(modelName(state.model))}</span>${svg("chevronDown")}</button><div class="popover" id="model-list" hidden><input id="model-input" type="text" placeholder="모델 이름 검색" autocomplete="off"><div class="option-list" id="model-options"></div></div></span>`, path: "model.id", proposal: "제안" },
-		{ id: "apikey", label: "API 키", hint: "운영체제의 보안 저장소에 암호화하여 보관합니다.", control: `<span class="status">${svg("check")}저장됨</span><button class="btn quiet" data-action="keychange">키 변경</button><button class="btn quiet" data-action="test">연결 확인</button>`, path: "credentials.openrouter", proposal: "제안" },
-	];
+/** Roles currently served by `providerId`, as short labels. */
+function rolesUsing(providerId) {
+	return Object.entries(state.roles)
+		.filter(([, choice]) => choice?.provider === providerId)
+		.map(([role]) => ROLES[role].short);
 }
 
-function embedRows() {
-	const endpoint = state.embed === "local";
-	return [
-		{ id: "embed", label: "문서 분석 모델", hint: "균형은 정확도를, 가벼움은 속도를 우선합니다.", control: selectControl("embed", ["균형 (권장)", "가벼움", "직접 연결"], { balanced: "균형 (권장)", light: "가벼움", local: "직접 연결" }[state.embed]), path: "minSync.embedder" },
-		...(endpoint ? [
-			{ id: "embedbase", label: "서버 주소", hint: "이 컴퓨터에서 실행 중인 서버만 연결할 수 있습니다.", control: fieldControl("embedbase", "text", "http://127.0.0.1:…"), path: "minSync.embedder.baseUrl" },
-			{ id: "embedid", label: "모델 ID", hint: "서버가 안내하는 모델 ID입니다.", control: fieldControl("embedid", "text", "native:Model/id"), path: "minSync.embedder.id" },
-		] : []),
-		{ id: "embedstatus", label: "분석 상태", hint: "마지막 분석: 오늘 09:42 · 1,284개 문서", control: `<button class="btn" data-action="reindex">${svg("sparkles")}다시 분석</button>`, path: "configRefresh(minsync)" },
-	];
+/** Connected providers offering at least one model for `capability`. */
+function providersFor(capability) {
+	return state.providers.filter((id) => (PROVIDERS[id]?.models[capability] ?? []).length > 0);
+}
+
+/** Catalog providers that could serve `capability` but are not connected yet. */
+function connectableFor(capability) {
+	return CONNECT_GROUPS.flatMap((group) => group.ids).filter((id) => !state.providers.includes(id) && (PROVIDERS[id].models[capability] ?? []).length > 0);
+}
+
+function providerRows() {
+	const rows = state.providers.map((id) => {
+		const provider = PROVIDERS[id];
+		const used = rolesUsing(id);
+		const detail = provider.url ? `${KIND_META[provider.kind]} · ${provider.url}` : KIND_META[provider.kind];
+		const meta = used.length ? `${detail} · ${used.join(", ")}에 사용 중` : detail;
+		const trailing = provider.kind === "builtin"
+			? `<span class="status">${svg("check")}항상 사용 가능</span>`
+			: `<button type="button" class="icon-btn" data-menu="provider-more" data-provider="${esc(id)}" aria-label="${esc(provider.label)} 메뉴">${svg("more")}</button>`;
+		return { id: `provider:${id}`, html: `<div class="list-row provider-row" data-provider-row="${esc(id)}">${appIcon(id)}<span class="list-body"><span class="list-title">${esc(provider.label)}</span><span class="list-meta">${esc(meta)}</span></span>${trailing}</div>` };
+	});
+	rows.push({ id: "provider:add", html: `<button type="button" class="list-row add-row" data-menu="connect">${svg("plus")}<span>서비스 연결</span></button>` });
+	return rows;
+}
+
+function roleControl(roleId) {
+	const role = ROLES[roleId];
+	const choice = state.roles[roleId];
+	let label;
+	if (choice === null) label = `<span class="dot warn"></span><span class="trigger-label">모델 선택 필요</span>`;
+	else if (choice.special) label = `<span class="trigger-label muted">${esc(role.specials.find(([value]) => value === choice.special)[1])}</span>`;
+	else label = `${appIcon(choice.provider, " sm")}<span class="trigger-label">${esc(modelLabel(choice.provider, role.capability, choice.model))}</span>`;
+	return `<span class="split"><button type="button" class="trigger${choice === null ? " needs" : ""}" data-menu="picker" data-role="${esc(roleId)}">${label}${svg("chevronDown")}</button><button type="button" class="icon-btn" data-menu="role-more" data-role="${esc(roleId)}" aria-label="${esc(role.label)} 메뉴">${svg("more")}</button></span>`;
+}
+
+function roleRows(roleIds) {
+	return roleIds.map((roleId) => ({ id: `role:${roleId}`, label: ROLES[roleId].label, hint: ROLES[roleId].hint, control: roleControl(roleId), path: ROLES[roleId].path }));
 }
 
 function pathRows() {
+
 	return [
 		{ id: "paths", stack: true, control: `<div class="path-list">${state.searchPaths.map((path, index) => `<div class="path-line">${svg("folder")}<span>${esc(path)}</span><button class="btn quiet" data-action="path-remove" data-index="${index}">삭제</button></div>`).join("")}<button class="btn quiet" data-action="path-add">${svg("plus")}폴더 추가</button></div>`, path: "searchPaths" },
 	];
@@ -393,7 +516,13 @@ function galleryRows() {
 	]);
 }
 
-const DYNAMIC_ROWS = { aiRows, embedRows, pathRows, sourceRows, galleryRows };
+const DYNAMIC_ROWS = {
+	providerRows,
+	taskRows: () => ROLE_GROUPS.flatMap((group) => [{ id: `group:${group.title}`, html: `<p class="subsection-title">${esc(group.title)}</p>` }, ...roleRows(group.roles)]),
+	pathRows,
+	sourceRows,
+	galleryRows,
+};
 
 
 function rowHtml(row) {
@@ -426,14 +555,195 @@ function pageHead(page) {
 	return `<div class="page-head"><div><h1>${esc(page.title)}</h1><p>${esc(page.desc)}</p></div></div>${notes}`;
 }
 
-function renderModelOptions(filter = "") {
-	const query = filter.trim().toLowerCase();
-	const pool = state.provider === "custom" ? PROVIDER_MODELS.openrouter : PROVIDER_MODELS[state.provider] ?? [];
-	const matches = pool.filter(([id, name]) => !query || id.toLowerCase().includes(query) || name.toLowerCase().includes(query));
-	const options = matches.length
-		? matches.map(([id, name, tag]) => `<button type="button" class="option" data-model="${esc(id)}"><span>${esc(name)}</span>${tag ? `<small>${esc(tag)}</small>` : ""}</button>`).join("")
-		: `<p class="option-empty">일치하는 모델이 없습니다. 아래에 직접 입력할 수도 있습니다.</p>`;
-	$("#model-options").innerHTML = options;
+/* --------------------------------------------------------- Floating menus -- */
+
+function openMenu(type, anchor, arg = null) {
+	state.menu = { type, arg, anchor, query: "" };
+	renderMenu();
+}
+
+function closeMenu() {
+	state.menu = null;
+	$("#menu-root").innerHTML = "";
+}
+
+const menuSearch = (placeholder) =>
+	`<label class="menu-search">${svg("search", " icon-search")}<input type="text" data-menu-search placeholder="${esc(placeholder)}" value="${esc(state.menu?.query ?? "")}" autocomplete="off"></label>`;
+
+function menuBody() {
+	const { type, arg } = state.menu;
+	const query = state.menu.query.trim().toLowerCase();
+	const match = (text) => !query || text.toLowerCase().includes(query);
+
+	if (type === "connect") {
+		const groups = CONNECT_GROUPS.map((group) => {
+			const items = group.ids.filter((id) => !state.providers.includes(id) && match(PROVIDERS[id].label));
+			if (!items.length) return "";
+			return `<p class="menu-group">${esc(group.title)}</p>` + items.map((id) => `<button type="button" class="menu-item" data-connect-provider="${esc(id)}">${appIcon(id, " sm")}<span>${esc(PROVIDERS[id].label)}</span></button>`).join("");
+		}).join("");
+		return menuSearch("서비스 검색") + `<div class="menu-list">${groups || `<p class="menu-empty">일치하는 서비스가 없습니다.</p>`}</div><div class="menu-sep"></div><button type="button" class="menu-item" data-connect-provider="custom">${svg("plus")}<span>직접 추가 (OpenAI 호환)</span></button>`;
+	}
+
+	if (type === "picker") {
+		const role = ROLES[arg];
+		const choice = state.roles[arg];
+		const special = (role.specials ?? []).map(([value, label]) => `<button type="button" class="menu-item" data-choose="${esc(arg)}" data-special="${esc(value)}"><span>${esc(label)}</span>${choice?.special === value ? svg("check") : ""}</button>`).join("");
+		const providerItems = providersFor(role.capability).map((providerId) => {
+			const models = PROVIDERS[providerId].models[role.capability].filter(([, name]) => match(name) || match(PROVIDERS[providerId].label));
+			if (!models.length) return "";
+			const current = choice?.provider === providerId ? `<small>${esc(modelLabel(providerId, role.capability, choice.model))}</small>` : "";
+			return `<div class="menu-sub"><button type="button" class="menu-item has-sub" data-sub="${esc(providerId)}">${appIcon(providerId, " sm")}<span>${esc(PROVIDERS[providerId].label)}</span>${current}${svg("chevron")}</button><div class="menu submenu" role="menu">${models.map(([modelId, name, tag]) => `<button type="button" class="menu-item" data-choose="${esc(arg)}" data-provider="${esc(providerId)}" data-model="${esc(modelId)}"><span>${esc(name)}</span>${tag ? `<small>${esc(tag)}</small>` : ""}${choice?.provider === providerId && choice.model === modelId ? svg("check") : ""}</button>`).join("")}</div></div>`;
+		}).join("");
+		const connectable = connectableFor(role.capability);
+		const footer = connectable.length ? `<div class="menu-sep"></div><button type="button" class="menu-item" data-menu-swap="connect">${svg("plus")}<span>다른 서비스 연결</span></button>` : "";
+		const body = providerItems || `<p class="menu-empty">${query ? "일치하는 모델이 없습니다." : "이 역할에 쓸 수 있는 서비스가 아직 연결되지 않았습니다."}</p>`;
+		return menuSearch("모델 검색") + `<div class="menu-list">${special}${special && providerItems ? `<div class="menu-sep"></div>` : ""}${body}</div>${footer}`;
+	}
+
+	if (type === "provider-more") {
+		const provider = PROVIDERS[arg];
+		const manage = provider.kind === "subscription"
+			? `<button type="button" class="menu-item" data-provider-action="reauth" data-provider="${esc(arg)}">${svg("external")}<span>다시 로그인</span></button>`
+			: `<button type="button" class="menu-item" data-provider-action="edit" data-provider="${esc(arg)}">${svg("gear")}<span>연결 정보 수정</span></button>`;
+		return `<div class="menu-list">${manage}<button type="button" class="menu-item" data-provider-action="test" data-provider="${esc(arg)}">${svg("check")}<span>연결 확인</span></button><div class="menu-sep"></div><button type="button" class="menu-item danger" data-provider-action="disconnect" data-provider="${esc(arg)}">${svg("x")}<span>연결 해제</span></button></div>`;
+	}
+
+	if (type === "role-more") {
+		const role = ROLES[arg];
+		const defaultLabel = role.defaultChoice.special ? role.specials.find(([value]) => value === role.defaultChoice.special)[1] : modelLabel(role.defaultChoice.provider, role.capability, role.defaultChoice.model);
+		return `<div class="menu-list"><button type="button" class="menu-item" data-role-action="reset" data-role="${esc(arg)}"><span>기본값으로 (${esc(defaultLabel)})</span></button>${role.reindex ? `<button type="button" class="menu-item" data-role-action="reindex" data-role="${esc(arg)}">${svg("sparkles")}<span>문서 다시 분석</span></button>` : ""}</div>`;
+	}
+	return "";
+}
+
+/** Pin the open menu to its anchor: below it, flipped above when it would overflow. */
+function positionMenu() {
+	const menu = $("#menu-root .menu");
+	if (!state.menu || !menu) return;
+	const anchorEl = state.menu.anchor;
+	const pane = $("#content").getBoundingClientRect();
+	const anchor = anchorEl.getBoundingClientRect();
+	// Close once the anchor is gone or scrolled out of the settings pane.
+	if (!anchorEl.isConnected || (anchorEl.closest("#content") && (anchor.bottom < pane.top || anchor.top > pane.bottom))) {
+		closeMenu();
+		return;
+	}
+	const width = menu.offsetWidth;
+	const height = menu.offsetHeight;
+	const below = anchor.bottom + 6;
+	menu.style.left = `${Math.max(12, Math.min(anchor.right - width, window.innerWidth - width - 12))}px`;
+	menu.style.top = `${below + height > window.innerHeight - 12 ? Math.max(12, anchor.top - 6 - height) : below}px`;
+}
+
+function renderMenu() {
+	if (!state.menu) return;
+	const width = state.menu.type === "connect" || state.menu.type === "picker" ? 280 : 200;
+	$("#menu-root").innerHTML = `<div class="menu" role="menu" data-menu-type="${esc(state.menu.type)}" style="width:${width}px;visibility:hidden">${menuBody()}</div>`;
+	positionMenu();
+	const menu = $("#menu-root .menu");
+	if (!menu) return;
+	menu.style.visibility = "";
+	const input = $("#menu-root [data-menu-search]");
+	if (input) {
+		input.focus({ preventScroll: true });
+		input.setSelectionRange(input.value.length, input.value.length);
+	}
+}
+
+/* ----------------------------------------------------------- Connect flow -- */
+
+function connectForm(providerId) {
+	if (providerId === "custom") {
+		return {
+			title: "OpenAI 호환 서비스 추가",
+			intro: "회사 게이트웨이나 OpenAI 호환 서버를 연결합니다. 키는 운영체제의 보안 저장소에 암호화해 보관합니다.",
+			fields: [
+				{ name: "label", label: "이름", placeholder: "예: 사내 게이트웨이", required: true },
+				{ name: "url", label: "서버 주소", placeholder: "https://…/v1", required: true },
+				{ name: "key", label: "API 키", placeholder: "선택 사항", type: "password" },
+			],
+			submit: "추가",
+		};
+	}
+	const provider = PROVIDERS[providerId];
+	if (provider.kind === "subscription") {
+		return { title: `${provider.label}로 연결`, intro: `Dazzi가 ${provider.label} 구독으로 지원 모델을 사용합니다. 브라우저에서 ${provider.label}에 로그인해 계정을 연결하세요.`, fields: [], submit: "브라우저에서 연결", external: true };
+	}
+	if (provider.kind === "local") {
+		return { title: "내 컴퓨터 서버 연결", intro: "Ollama, LM Studio처럼 이 Mac에서 실행 중인 서버만 연결할 수 있습니다.", fields: [{ name: "url", label: "서버 주소", placeholder: "http://127.0.0.1:11434", value: provider.url, required: true }], submit: "연결" };
+	}
+	return {
+		title: `${provider.label} 연결`,
+		intro: provider.intro ?? `${provider.keyHint ?? `${provider.label}에서 발급한 API 키를 붙여 넣으세요.`} 키는 운영체제의 보안 저장소에 암호화해 보관하며 다시 표시하지 않습니다.`,
+		fields: provider.fields ?? [{ name: "key", label: "API 키", placeholder: `예: ${provider.placeholder}`, type: "password", required: true }],
+		submit: "연결",
+	};
+}
+
+function openConnect(providerId, { editing = false } = {}) {
+	const form = connectForm(providerId);
+	const fields = form.fields.map((field, index) => `<label>${esc(field.label)}<input class="field" data-connect-field="${esc(field.name)}"${field.required ? " required" : ""} type="${field.type ?? "text"}" placeholder="${esc(field.placeholder)}" value="${esc(editing && field.type === "password" ? "" : field.value ?? "")}"${index === 0 ? " autofocus" : ""}></label>`).join("");
+	const icon = providerId === "custom" ? `<span class="app-icon">+</span>` : appIcon(providerId);
+	modal(`<button type="button" class="modal-close" data-action="close-modal" aria-label="닫기">${svg("x")}</button>${icon}<h2 id="dialog-title">${esc(editing ? `${PROVIDERS[providerId].label} 연결 정보 수정` : form.title)}</h2><p>${esc(form.intro)}</p>${fields}<p class="modal-error" hidden></p><div class="modal-actions"><button type="button" class="btn" data-action="close-modal">취소</button><button type="button" class="btn primary" data-submit-connect="${esc(providerId)}"${editing ? ' data-editing="true"' : ""}>${esc(editing ? "저장" : form.submit)}${form.external ? svg("external") : ""}</button></div>`);
+	$("#modal-root input")?.focus();
+}
+
+function submitConnect(button) {
+	const providerId = button.dataset.submitConnect;
+	const missing = [...document.querySelectorAll("#modal-root [data-connect-field][required]")].filter((input) => !input.value.trim());
+	if (missing.length) {
+		const error = $("#modal-root .modal-error");
+		error.textContent = `${missing.map((input) => input.closest("label").firstChild.textContent).join(", ")}을(를) 입력하세요.`;
+		error.hidden = false;
+		missing[0].focus();
+		return;
+	}
+	if (button.dataset.editing) {
+		closeModal();
+		toast(`${PROVIDERS[providerId].label} 연결 정보를 저장했습니다.`);
+		return;
+	}
+	let id = providerId;
+	if (providerId === "custom") {
+		state.customCount += 1;
+		id = `custom-${state.customCount}`;
+		const value = (name) => $(`#modal-root [data-connect-field="${name}"]`).value.trim();
+		PROVIDERS[id] = { label: value("label"), letter: value("label").slice(0, 1).toUpperCase(), kind: "custom", url: value("url"), models: { llm: [[`${id}/default`, "기본 모델"]] } };
+	}
+	const external = PROVIDERS[id].kind === "subscription";
+	button.disabled = true;
+	button.textContent = external ? "브라우저에서 로그인 중…" : "연결 확인 중…";
+	setTimeout(() => {
+		state.providers.push(id);
+		closeModal();
+		render({ keepScroll: true });
+		const used = Object.keys(ROLES).filter((role) => state.roles[role] === null && (PROVIDERS[id].models[ROLES[role].capability] ?? []).length);
+		toast(`${PROVIDERS[id].label}을(를) 연결했습니다.${used.length ? " 비어 있던 역할에서 모델을 고르세요." : ""}`);
+	}, external ? 900 : 500);
+}
+
+function disconnectProvider(providerId) {
+	const affected = Object.entries(state.roles).filter(([, choice]) => choice?.provider === providerId).map(([role]) => role);
+	const detail = affected.length ? `${affected.map((role) => ROLES[role].label).join(", ")}이(가) 이 서비스를 쓰고 있어 다시 골라야 합니다.` : "이 서비스를 쓰는 역할은 없습니다.";
+	modal(`<h2 id="dialog-title">${esc(PROVIDERS[providerId].label)} 연결을 해제할까요?</h2><p>저장된 키를 지우고 목록에서 제거합니다. ${esc(detail)}</p><div class="modal-actions"><button type="button" class="btn" data-action="close-modal">취소</button><button type="button" class="btn danger" data-confirm-disconnect="${esc(providerId)}">연결 해제</button></div>`);
+}
+
+function applyChoice(roleId, choice) {
+	state.roles[roleId] = choice;
+	render({ keepScroll: true });
+}
+
+function chooseRole(roleId, choice) {
+	const current = state.roles[roleId];
+	const same = current && choice && current.provider === choice.provider && current.model === choice.model && current.special === choice.special;
+	closeMenu();
+	if (same) return;
+	if (ROLES[roleId].reindex && current !== null) {
+		state.pendingChoice = { roleId, choice };
+		modal(`<h2 id="dialog-title">문서를 다시 분석해야 합니다</h2><p>문서 이해 모델이 바뀌면 기존 분석 결과를 새 모델로 다시 만들어야 합니다. 문서 수에 따라 시간이 걸리고, 끝나기 전에는 의미 검색 결과가 비어 있을 수 있습니다.</p><div class="modal-actions"><button type="button" class="btn" data-action="close-modal">취소</button><button type="button" class="btn primary" data-confirm-choice>변경하고 다시 분석</button></div>`);
+		return;
+	}
+	applyChoice(roleId, choice);
 }
 
 function sourcePage(id) {
@@ -515,7 +825,7 @@ function navItems() {
 }
 
 function pageSearchText(page) {
-	const parts = [page.label, page.title, page.desc];
+	const parts = [page.label, page.title, page.desc, page.keywords ?? ""];
 	for (const section of page.sections ?? []) {
 		parts.push(section.title, section.desc);
 		const rows = Array.isArray(section.rows) ? section.rows : (DYNAMIC_ROWS[section.rows] ?? (() => []))();
@@ -621,7 +931,6 @@ document.addEventListener("click", (event) => {
 		const id = switchButton.dataset.toggle;
 		const on = switchButton.getAttribute("aria-checked") !== "true";
 		switchButton.setAttribute("aria-checked", String(on));
-		if (id === "rerank") state.rerank = on;
 		if (id === "ocr") state.values.ocr = on;
 		if (id === "media") state.values.media = on;
 		if (id.startsWith("access:")) {
@@ -632,24 +941,7 @@ document.addEventListener("click", (event) => {
 			const connection = state.connections.find((item) => item.id === id.slice(8));
 			if (connection) connection.enabled = on;
 		}
-		if (["rerank", "ocr", "media"].includes(id)) render({ keepScroll: true });
-		return;
-	}
-
-	const comboTrigger = event.target.closest('[data-action="combo"]');
-	if (comboTrigger) {
-		const popover = $("#model-list");
-		popover.hidden = false;
-		renderModelOptions($("#model-input").value);
-		$("#model-input").focus();
-		return;
-	}
-
-	const modelOption = event.target.closest("[data-model]");
-	if (modelOption) {
-		state.model = modelOption.dataset.model;
-		closeCombo();
-		render({ keepScroll: true });
+		if (["ocr", "media"].includes(id)) render({ keepScroll: true });
 		return;
 	}
 
@@ -712,12 +1004,6 @@ document.addEventListener("click", (event) => {
 			case "keychange":
 				toast("실제 구현에서는 보안 저장소에 저장합니다.");
 				return;
-			case "test":
-				toast("연결 확인: 정상 (0.4초)");
-				return;
-			case "reindex":
-				toast("문서를 다시 분석합니다. 몇 분 정도 걸릴 수 있습니다.");
-				return;
 			case "install-help":
 				modal(`<h2>도우미 프로그램 설치</h2><p>이 연결은 내용을 가져오는 도우미 프로그램이 필요합니다. 설치 안내 문서를 열어 단계를 따라 진행하세요.</p><div class="modal-actions"><button class="btn primary" data-action="close-modal">확인</button></div>`);
 				return;
@@ -765,11 +1051,6 @@ document.addEventListener("click", (event) => {
 	if (event.target.matches("[data-close-modal]")) closeModal();
 });
 
-function closeCombo() {
-	const popover = $("#model-list");
-	if (popover) popover.hidden = true;
-}
-
 document.addEventListener("change", (event) => {
 	const select = event.target.closest("[data-select]");
 	if (!select) return;
@@ -782,35 +1063,12 @@ document.addEventListener("change", (event) => {
 		document.documentElement.dataset.appearance = state.appearance;
 		$("#theme-toggle").textContent = state.appearance === "dark" ? "라이트 모드" : "다크 모드";
 	}
-	if (id === "provider") {
-		state.provider = { "OpenRouter": "openrouter", "OpenAI": "openai", "Anthropic": "anthropic", "Google": "google", "직접 입력": "custom" }[value] ?? "openrouter";
-		state.values.provider = value;
-		render({ keepScroll: true });
-	}
-	if (id === "embed" && value !== { balanced: "균형 (권장)", light: "가벼움", local: "직접 연결" }[state.embed]) {
-		modal(`<h2>모델을 바꾸면 문서를 다시 분석합니다</h2><p>문서 이해 모델이 바뀌면 기존 분석 결과를 새 모델로 다시 만들어야 합니다. 문서 수에 따라 시간이 걸릴 수 있고, 완료 전까지는 의미 검색 결과가 비어 있을 수 있습니다.</p><div class="modal-actions"><button class="btn" data-action="close-modal">취소</button><button class="btn primary" data-action="embed-confirm" data-value="${esc(value)}">변경하고 다시 분석</button></div>`);
-		select.value = { balanced: "균형 (권장)", light: "가벼움", local: "직접 연결" }[state.embed];
-		return;
-	}
-});
-
-document.addEventListener("click", (event) => {
-	const embedConfirm = event.target.closest('[data-action="embed-confirm"]');
-	if (!embedConfirm) return;
-	state.embed = { "균형 (권장)": "balanced", "가벼움": "light", "직접 연결": "local" }[embedConfirm.dataset.value] ?? "balanced";
-	state.values.embed = embedConfirm.dataset.value;
-	closeModal();
-	render({ keepScroll: true });
-	toast("모델을 바꾸고 문서를 다시 분석합니다.");
 });
 
 document.addEventListener("input", (event) => {
 	if (event.target.id === "settings-search") {
 		renderNav();
 		return;
-	}
-	if (event.target.id === "model-input") {
-		renderModelOptions(event.target.value);
 	}
 });
 
@@ -822,7 +1080,6 @@ document.addEventListener("toggle", (event) => {
 document.addEventListener("keydown", (event) => {
 	if (event.key === "Escape") {
 		closeModal();
-		closeCombo();
 	}
 	if (event.key === "Enter" && event.target.id === "chip-value") {
 		document.querySelector('[data-action="chip-save"]')?.click();
@@ -832,9 +1089,108 @@ document.addEventListener("keydown", (event) => {
 	}
 });
 
+/* ---------------------------------------------------- AI page events -- */
+
 document.addEventListener("click", (event) => {
-	if (!event.target.closest(".combo") && !event.target.closest("[data-model]")) closeCombo();
-}, true);
+	const menuTrigger = event.target.closest("[data-menu]");
+	if (menuTrigger) {
+		const type = menuTrigger.dataset.menu;
+		const arg = menuTrigger.dataset.role ?? menuTrigger.dataset.provider ?? null;
+		if (state.menu && state.menu.type === type && state.menu.arg === arg) closeMenu();
+		else openMenu(type, menuTrigger, arg);
+		return;
+	}
+
+	const swap = event.target.closest("[data-menu-swap]");
+	if (swap) {
+		openMenu(swap.dataset.menuSwap, state.menu.anchor);
+		return;
+	}
+
+	const connectProvider = event.target.closest("[data-connect-provider]");
+	if (connectProvider) {
+		closeMenu();
+		openConnect(connectProvider.dataset.connectProvider);
+		return;
+	}
+
+	const submit = event.target.closest("[data-submit-connect]");
+	if (submit) {
+		submitConnect(submit);
+		return;
+	}
+
+	const choose = event.target.closest("[data-choose]");
+	if (choose) {
+		const choice = choose.dataset.special ? { special: choose.dataset.special } : { provider: choose.dataset.provider, model: choose.dataset.model };
+		chooseRole(choose.dataset.choose, choice);
+		return;
+	}
+
+	if (event.target.closest("[data-confirm-choice]")) {
+		const { roleId, choice } = state.pendingChoice;
+		state.pendingChoice = null;
+		closeModal();
+		applyChoice(roleId, choice);
+		toast("모델을 바꾸고 문서를 다시 분석합니다.");
+		return;
+	}
+
+	const providerAction = event.target.closest("[data-provider-action]");
+	if (providerAction) {
+		const id = providerAction.dataset.provider;
+		closeMenu();
+		if (providerAction.dataset.providerAction === "edit") openConnect(id, { editing: true });
+		if (providerAction.dataset.providerAction === "reauth") openConnect(id);
+		if (providerAction.dataset.providerAction === "test") toast(`${PROVIDERS[id].label}: 연결 정상`);
+		if (providerAction.dataset.providerAction === "disconnect") disconnectProvider(id);
+		return;
+	}
+
+	const confirmDisconnect = event.target.closest("[data-confirm-disconnect]");
+	if (confirmDisconnect) {
+		const id = confirmDisconnect.dataset.confirmDisconnect;
+		state.providers = state.providers.filter((item) => item !== id);
+		for (const [role, choice] of Object.entries(state.roles)) if (choice?.provider === id) state.roles[role] = null;
+		closeModal();
+		render({ keepScroll: true });
+		toast(`${PROVIDERS[id].label} 연결을 해제했습니다.`);
+		return;
+	}
+
+	const roleAction = event.target.closest("[data-role-action]");
+	if (roleAction) {
+		const roleId = roleAction.dataset.role;
+		closeMenu();
+		if (roleAction.dataset.roleAction === "reindex") toast("문서를 다시 분석합니다. 몇 분 정도 걸릴 수 있습니다.");
+		if (roleAction.dataset.roleAction === "reset") {
+			const fallback = ROLES[roleId].defaultChoice;
+			if (fallback.provider && !state.providers.includes(fallback.provider)) {
+				toast(`기본 모델을 쓰려면 ${PROVIDERS[fallback.provider].label}을(를) 먼저 연결하세요.`);
+				return;
+			}
+			chooseRole(roleId, fallback);
+		}
+		return;
+	}
+
+	if (state.menu && !event.target.closest("#menu-root")) closeMenu();
+});
+
+document.addEventListener("input", (event) => {
+	if (!event.target.matches("[data-menu-search]") || !state.menu) return;
+	state.menu.query = event.target.value;
+	renderMenu();
+});
+
+document.addEventListener("keydown", (event) => {
+	if (event.key === "Escape" && state.menu) closeMenu();
+	if (event.key === "Enter" && event.target.matches("[data-connect-field]")) $("#modal-root [data-submit-connect]")?.click();
+});
+
+// The menu is fixed-positioned, so it follows its anchor when the pane scrolls or the window resizes.
+window.addEventListener("resize", positionMenu);
+document.addEventListener("scroll", (event) => { if (!event.target.closest?.(".menu")) positionMenu(); }, true);
 
 /* ------------------------------------------------------------------ Init -- */
 

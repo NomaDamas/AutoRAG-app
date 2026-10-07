@@ -2,9 +2,8 @@
  * lucide glyphs for the settings prototype.
  *
  * Generated from `lucide-react@1.49.0` — the same library the app pins in
- * `src/renderer/src/components/icons.tsx` — by reading each icon's node data and
- * emitting its 24 × 24 stroke markup. Do not hand-edit: the paths are upstream
- * lucide geometry, and the app draws them with the reference's 1.8 stroke.
+ * `src/renderer/src/components/icons.tsx` — by ./gen-lucide-icons.mjs. Do not
+ * hand-edit; add a slug to that script and rerun it.
  */
 "use strict";
 
@@ -25,4 +24,7 @@ const LUCIDE = {
 	"x": "<path d=\"M18 6 6 18\"/><path d=\"m6 6 12 12\"/>",
 	"info": "<circle cx=\"12\" cy=\"12\" r=\"10\"/><path d=\"M12 16v-4\"/><path d=\"M12 8h.01\"/>",
 	"triangle-alert": "<path d=\"m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3\"/><path d=\"M12 9v4\"/><path d=\"M12 17h.01\"/>",
+	"ellipsis": "<circle cx=\"12\" cy=\"12\" r=\"1\"/><circle cx=\"19\" cy=\"12\" r=\"1\"/><circle cx=\"5\" cy=\"12\" r=\"1\"/>",
+	"external-link": "<path d=\"M15 3h6v6\"/><path d=\"M10 14 21 3\"/><path d=\"M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6\"/>",
+	"laptop": "<path d=\"M18 5a2 2 0 0 1 2 2v8.526a2 2 0 0 0 .212.897l1.068 2.127a1 1 0 0 1-.9 1.45H3.62a1 1 0 0 1-.9-1.45l1.068-2.127A2 2 0 0 0 4 15.526V7a2 2 0 0 1 2-2z\"/><path d=\"M20.054 15.987H3.946\"/>",
 };
