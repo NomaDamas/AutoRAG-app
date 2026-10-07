@@ -109,12 +109,14 @@ Before, a switch only moved `activeId`. The controller holds one listing, so
 the first frame put the new title over the previous tab's rows; the effect then
 relisted the folder over IPC and painted bare rows (letter tiles, no OS icons),
 and the enrichment pass painted the icons again: three pictures per switch.
-Now each tab keeps the last listing it adopted and the render that switches
-tabs adopts it, so the first frame is the target folder with its icons. The
-reload the switch starts is a revalidation: `reconcileListing` keeps rows that
-are unchanged on disk (same path and mtime) with their enrichment and object
-identity, so an unchanged folder paints nothing more, and a folder that changed
-while its tab was in the background updates in place.
+Now the directory store (`src/renderer/src/data/directory-store.ts`) keeps the
+last listing of every folder a pane showed recently, so the render that switches
+tabs reads the target folder's snapshot and the first frame is that folder with
+its icons (icons live in the entry sidecar, keyed by path + mtime, and survive
+the switch). The reload the switch starts is a revalidation: `reconcileListing`
+keeps rows that are unchanged on disk (same path and mtime) with their object
+identity, so an unchanged folder keeps the same array and paints nothing more,
+and a folder that changed while its tab was in the background updates in place.
 
 ### Tab hit area and background refresh safety
 
@@ -122,20 +124,21 @@ The entire `.tab` segment is now the activation target, not only the title
 button. The close button stops propagation, so clicking it never switches tabs.
 The title remains a real button for keyboard activation and accessibility.
 
-The per-tab snapshot does not suppress filesystem changes. The native watcher
-keeps every open real directory in its watch set; a change in an inactive tab
-marks that tab stale. Returning to it paints the cached snapshot first and then
-performs a silent full listing. The generation and tab/path guards discard old
-list, live-patch, and enrichment completions, so an earlier request cannot
-resurrect a deleted or renamed row. Reconciliation only carries icon/OS-kind
-metadata when path and mtime still match; new, deleted, or modified entries
-remain eligible for fresh data.
+The snapshot does not suppress filesystem changes. The native watcher keeps
+every open real directory in its watch set; the store applies live patches to
+the folders a view currently shows and revalidates a cached folder the moment
+a tab shows it again. Each folder's reads carry a request sequence, so an
+earlier answer can never overwrite a newer one or resurrect a deleted or
+renamed row, and a folder evicted from the cache drops a listing that lands
+late instead of re-creating it. Enrichment is keyed by file version, so new,
+deleted, or modified entries never pick up a stale icon or OS kind.
 
-One cache edge was fixed during this follow-up: late enrichment for a tab used
-to update only its per-tab snapshot, leaving the shared first column-pane cache
-stale in Columns view. A tab switch now swaps both caches together. Electron
-smoke coverage verified that an inactive-tab create and delete both appear on
-return, and that the first frame contains only the selected tab's folder.
+Every pane reads the same snapshot for a folder, so a tab's listing, the first
+column pane, and an expanded subfolder showing the same folder can no longer
+drift apart (the follow-up that used to swap two caches on every tab switch is
+gone with the caches). Electron smoke coverage verifies that an inactive-tab
+create and delete both appear on return, and that the first frame contains
+only the selected tab's folder.
 
 Dev renderer (macOS, 2026-10-03), p50 / p90 ms:
 
@@ -207,10 +210,10 @@ the single background pass that follows a listing only covered the first 240
 files of a folder; rows past that kept their letter tile and scrolling never
 asked again. Both views are virtualized, so a mounted row *is* a near-viewport
 row: `FileRow`/`IconTile` report themselves through `RowCallbacks.onVisible`,
-and the controller coalesces those requests (`state/thumbnails.ts`) into one
-`fs.enrichEntries` batch every 60 ms and patches the icons in place. A folder
-larger than the cap now fills in as the user scrolls, in both the list and the
-icon grid.
+and the directory store coalesces those requests (keyed by `thumbnailKey`, path
+\+ mtime) into one `fs.enrichEntries` batch every 60 ms. The icons land in the
+entry sidecar, and only the rows that got one re-render. A folder larger than
+the cap now fills in as the user scrolls, in both the list and the icon grid.
 
 `run-qa-finder-thumbnail-scroll.mjs` is the gate: a 300-image folder (names
 zero-padded so the bottom rows are exactly the ones past the 240 cap). Row 300
@@ -266,3 +269,61 @@ What changed:
   so a native unsubscribe could finish inside Node's environment teardown and
   abort the process. Quit now waits for the watches to release (bounded at
   2 s), then exits.
+
+## Directory store and entry sidecar (FS roadmap #99, stage 2)
+
+Folder listings moved out of React. `src/renderer/src/data/directory-store.ts`
+holds one snapshot per folder (`{ dir, version, entries, loaded, loading,
+error }`), shared by every pane, tab, column pane, and expanded subfolder.
+Views retain the folders they show; released folders stay in a 32-entry LRU
+so a tab switched back to paints at once. The store owns the listing reads
+(one in-flight silent read per folder, newest answer wins), live incremental
+patches, and the background enrichment that follows a listing.
+`src/renderer/src/data/entry-sidecar.ts` keeps the OS kind, tile icon, and
+Finder metadata keyed by path + mtime, and the AutoRAG index state by path.
+Rows subscribe to their own path (`useEntrySidecar`), so an icon batch
+re-renders only the rows it touched; the listing array and the sorted rows
+stay as they were. The sort pipeline (`useRowPipeline`) reads the sidecar only
+when the chosen sort or group uses enrichment (Kind, Tags, Date Added, …).
+`useFinderController` is split into the data hook (`useFolderListings`), the
+view pipeline (`useRowPipeline`), and keyboard input (`useFinderKeyboard`).
+`listingCache`, `tabListingsRef`, `paneListings`, and `childListings` are gone.
+
+```sh
+bun run build
+SOAK_CYCLES=100 bun scripts/manual-qa/run-qa-finder-memory-soak.mjs
+```
+
+The soak lane now also counts listing and enrichment IPC per cycle, renderer
+script time, a 600-image thumbnail fill (scroll to the last row until its
+thumbnail shows), and takes a heap snapshot at the end. "Listing generations"
+is the number of row objects alive for one path across all row arrays (the
+listing and the arrays derived from it); 1 means only the current listing is
+alive.
+
+Production build, macOS, 100 cycles after a 5-cycle warm-up, same machine:
+
+| metric | `main` | this change |
+| --- | ---: | ---: |
+| listing generations alive per folder (end snapshot) | 5 | 1 (gate) |
+| duplicate listed row objects (end snapshot) | 1,356 | 0 |
+| retained renderer heap growth, 100 cycles | +5.0 MB (11.7 → 16.6, flat after cycle 20) | +5.3 MB (12.4 → 17.7, flat after cycle 20) |
+| `fs:enrichEntries` calls per cycle | 15.7 | 0.1 |
+| `fs:finderMetadata` calls per cycle | 8 | 0 |
+| renderer script time per cycle | 194.2 ms | 185.5 ms |
+| 600-image thumbnail fill: renderer script time | 77 ms | 64 ms |
+| `index:status` IPC per row click | 0 | 0 |
+| main event-loop delay p99 | 16.6 ms | 15.4 ms |
+
+Tab switching (`finder-tab-switch.mjs --view list`) is unchanged at about one
+frame: first correct frame p50/p90 Downloads 15.5 / 16.0 → 15.2 / 15.8 ms,
+Desktop 15.6 / 16.6 → 15.7 / 16.0 ms, zero stale frames and no follow-up
+repaint in both.
+
+The heap does not grow after warm-up in either build; what changed is what it
+holds. On `main` five generations of the last folder's listing were alive at
+the end (each enrichment batch rewrote the array, and older copies stayed
+reachable); now one is. Revisiting a folder no longer re-asks the OS for kinds,
+icons, or metadata it already answered for the same file version, which is
+where the IPC drop comes from. The ~1 MB higher baseline is the sidecar's
+records and the cached folders, both bounded.

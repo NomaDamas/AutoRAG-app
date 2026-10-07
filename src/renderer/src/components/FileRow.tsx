@@ -1,6 +1,6 @@
 import { useEffect, type ChangeEvent, type DragEvent, type KeyboardEvent, type MouseEvent, type PointerEvent, type ReactElement } from "react";
-import type { IndexStatus } from "../../../shared/index-contract";
 import type { FinderEntry } from "../data/entries";
+import { useDirectoryData, useEntrySidecar } from "../hooks/useDirectoryData";
 import type { Disclosure } from "../state/folder-tree";
 import { LIST_COLUMN_OPTIONS, type ListColumnKey, type ListColumnsState, listGridTemplate } from "../state/list-columns";
 import { basename, dirname } from "../state/paths";
@@ -85,13 +85,12 @@ function LocationChip({ location }: { readonly location: string }): ReactElement
  * owns focus it is the solid accent with white text, otherwise muted gray.
  */
 export function FileRow({
-	entry,
+	entry: listed,
 	zebra,
 	selected,
 	zoneFocused,
 	flash,
 	searching,
-	indexStatus,
 	renameDraft,
 	stackCount,
 	stackOpen,
@@ -108,8 +107,6 @@ export function FileRow({
 	readonly zoneFocused: boolean;
 	readonly flash: boolean;
 	readonly searching: boolean;
-	/** Real AutoRAG index state; null until the first status read returns. */
-	readonly indexStatus: IndexStatus | null;
 	readonly renameDraft: string | null;
 	readonly stackCount: number;
 	readonly stackOpen: boolean;
@@ -122,6 +119,9 @@ export function FileRow({
 	readonly columns: ListColumnsState;
 	readonly callbacks: RowCallbacks;
 }): ReactElement {
+	// The listing row stays as read; its icon, OS kind, metadata, and index
+	// state come from the sidecar, and only this row re-renders when they land.
+	const { entry, indexStatus } = useEntrySidecar(useDirectoryData().sidecar, listed);
 	// Virtualized: only rows near the viewport mount, so reporting them fills
 	// thumbnails in on scroll for folders larger than the per-call icon cap.
 	useEffect(() => {

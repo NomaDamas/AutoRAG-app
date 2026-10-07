@@ -3,7 +3,8 @@ import type { AppSettings } from "../../../shared/settings-contract";
 import type { ChatAttachment } from "../../../shared/search-contract";
 import { RECENTS_PATH } from "../../../shared/fs-contract";
 import type { FinderSource } from "../data/source";
-import { useFinderController, type ListingSnapshot, type QuickLookBridge } from "../hooks/useFinderController";
+import { DirectoryDataContext, type DirectoryData } from "../hooks/useDirectoryData";
+import { useFinderController, type QuickLookBridge } from "../hooks/useFinderController";
 import type { ControllerStore } from "../hooks/usePaneControllers";
 import { pressRow } from "../lib/row-drag";
 import { attachmentsFromDrop, isAttachmentDrag, isFileTransferDrag, isFinderDrag, readDropPaths } from "../state/attachments";
@@ -38,7 +39,8 @@ const TAB_SPRING_LOAD_MS = 1500;
 export interface PaneShell {
 	readonly source: FinderSource;
 	readonly store: ControllerStore;
-	readonly listingCache: Map<number, ListingSnapshot>;
+	/** The window's directory store and entry sidecar, shared by every pane. */
+	readonly directoryData: DirectoryData;
 	readonly quickLook: QuickLookBridge;
 	update(change: (workspace: Workspace) => Workspace): void;
 	onFocusSearch(): void;
@@ -81,13 +83,12 @@ export const FinderPane = memo(function FinderPane({
 	shell,
 }: FinderPaneProps): ReactElement {
 	const binding = useMemo(() => ({ pane, focused, canCloseTabs, update: shell.update }), [pane, focused, canCloseTabs, shell]);
-	const finder = useFinderController(shell.source, binding, {
+	const finder = useFinderController(shell.source, shell.directoryData, binding, {
 		showHiddenFiles,
 		quickLook: shell.quickLook,
 		onFocusSearch: shell.onFocusSearch,
 		onFocusComposer: shell.onFocusComposer,
 		onToast: shell.onToast,
-		listingCache: shell.listingCache,
 	});
 	const finderRef = useRef(finder);
 	finderRef.current = finder;
@@ -253,132 +254,80 @@ export const FinderPane = memo(function FinderPane({
 	const listingDir = finder.path === RECENTS_PATH || finder.path === SETTINGS_PATH ? "" : finder.path;
 
 	return (
-		<section
-			className="finder flex h-full flex-col min-w-0 min-h-0"
-			aria-label="Finder"
-			data-pane-id={pane.id}
-			data-focused={focused ? "true" : undefined}
-			onMouseDownCapture={() => {
-				shell.update((workspace) => focusPane(workspace, pane.id));
-				finder.focusFinder();
-			}}
-		>
-			<TabStrip
-				tabs={finder.tabs}
-				canClose={finder.canCloseTabs}
-				onSelect={finder.selectTabId}
-				onClose={finder.closeTabId}
-				onNewTab={finder.newTab}
-				dropTabId={dropTabId}
-				focusMark={split && focused}
-				draggingTabId={draggingTabId}
-				onTabDragStart={shell.beginTabDrag}
-				onTabDragEnd={shell.endTabDrag}
-				onTabDragOver={(id, event) => {
-					const aiTab = finder.tabs.some((tab) => tab.id === id && tab.aiSearch);
-					if (aiTab ? !isAttachmentDrag(event.dataTransfer.types) : !isFileTransferDrag(event.dataTransfer.types)) return;
-					setDropBackgroundDir(null);
-					event.preventDefault();
-					event.dataTransfer.dropEffect = aiTab ? "copy" : dropTransferOp(isFinderDrag(event.dataTransfer.types), event.altKey);
-					setDropTabId((current) => (current === id ? current : id));
-					if (finder.tabs.some((tab) => tab.id === id && !tab.active)) armSpringTab(id);
+		<DirectoryDataContext value={shell.directoryData}>
+			<section
+				className="finder flex h-full flex-col min-w-0 min-h-0"
+				aria-label="Finder"
+				data-pane-id={pane.id}
+				data-focused={focused ? "true" : undefined}
+				onMouseDownCapture={() => {
+					shell.update((workspace) => focusPane(workspace, pane.id));
+					finder.focusFinder();
 				}}
-				onTabDragLeave={(id) => {
-					cancelSpringTab();
-					setDropTabId((current) => (current === id ? null : current));
-				}}
-				onTabDrop={(id, event) => {
-					cancelSpringTab();
-					setDropTabId(null);
-					setDropBackgroundDir(null);
-					if (finder.tabs.some((tab) => tab.id === id && tab.aiSearch)) {
-						// An AI Search tab takes the drop as chat attachments, not a file move.
-						if (!isAttachmentDrag(event.dataTransfer.types)) return;
+			>
+				<TabStrip
+					tabs={finder.tabs}
+					canClose={finder.canCloseTabs}
+					onSelect={finder.selectTabId}
+					onClose={finder.closeTabId}
+					onNewTab={finder.newTab}
+					dropTabId={dropTabId}
+					focusMark={split && focused}
+					draggingTabId={draggingTabId}
+					onTabDragStart={shell.beginTabDrag}
+					onTabDragEnd={shell.endTabDrag}
+					onTabDragOver={(id, event) => {
+						const aiTab = finder.tabs.some((tab) => tab.id === id && tab.aiSearch);
+						if (aiTab ? !isAttachmentDrag(event.dataTransfer.types) : !isFileTransferDrag(event.dataTransfer.types)) return;
+						setDropBackgroundDir(null);
 						event.preventDefault();
-						const dropped = attachmentsFromDrop(event.dataTransfer, autorag.pathForFile);
-						if (dropped.length === 0) return;
-						finder.selectTabId(id);
-						shell.deliverToAi({ attach: dropped });
-						return;
-					}
-					const paths = readDropPaths(event.dataTransfer, autorag.pathForFile);
-					if (paths.length === 0) return;
-					event.preventDefault();
-					const copy = dropTransferOp(isFinderDrag(event.dataTransfer.types), event.altKey) === "copy";
-					finder.dropOnTab(id, paths, copy);
-				}}
-			/>
-			{finder.path === SETTINGS_PATH ? (
-				<SettingsView onSettingsChanged={shell.onSettingsChanged} />
-			) : finder.path === AI_SEARCH_PATH ? (
-				// The tab's chat is mounted by the workspace over this body, so it survives moving panes.
-				<div className="min-h-0 flex-1 bg-subtle-alt" />
-			) : (
-				<>
-					{finder.searching ? (
-						<ScopeBar
-							scope={finder.searchScope}
-							folderName={basename(finder.path)}
-							resultCount={finder.rows.length}
-							onScopeChange={finder.setSearchScope}
-						/>
-					) : null}
-					{finder.layout === "icons" ? (
-						<IconGrid
-							sections={finder.stackSections}
-							listRef={finder.listRef}
-							searching={finder.searching}
-							emptyText={finder.emptyText}
-							selectedKeys={finder.selection.keys}
-							focusedZone={focused && finder.zone === "finder"}
-							flashPath={finder.flashPath}
-							renamePath={finder.renamePath}
-							renameDraft={finder.renameDraft}
-							versionFamilyError={finder.versionFamilyError}
-							onRetryVersionFamilies={finder.retryVersionFamilies}
-							background={backgroundDrop(listingDir)}
-							dropBackground={dropBackgroundDir === finder.path}
-							callbacks={rowCallbacks}
-							onMarqueeSelect={finder.marqueeSelect}
-						/>
-					) : finder.layout === "columns" ? (
-						<ColumnBrowser
-							panes={finder.columnPanes}
-							listRef={finder.listRef}
-							emptyText={finder.emptyText}
-							selectedKeys={finder.selection.keys}
-							focusedZone={focused && finder.zone === "finder"}
-							flashPath={finder.flashPath}
-							renamePath={finder.renamePath}
-							renameDraft={finder.renameDraft}
-							versionFamilyError={finder.versionFamilyError}
-							onRetryVersionFamilies={finder.retryVersionFamilies}
-							variantColumn={variantColumn}
-							onSelectVariant={finder.revealEntry}
-							columnCallbacks={{ onClick: finder.clickColumnRow }}
-							paneBackground={backgroundDrop}
-							dropBackgroundDir={dropBackgroundDir}
-							callbacks={rowCallbacks}
-						/>
-					) : (
-						<div className="flex min-h-0 flex-1 flex-col overflow-x-auto">
-							<ColumnHeader
-								sort={finder.sort}
-								searching={finder.searching}
-								onSort={finder.sortBy}
-								columns={listColumns}
-								minWidth={listFixedWidth(listColumns)}
-								onToggleColumn={(key: ListColumnKey) => shell.setListColumns((current) => toggleListColumn(current, key))}
-								onResetColumns={() => shell.setListColumns(() => resetListColumns())}
-								onResizeColumn={(key: string, px: number) => shell.setListColumns((current) => setListColumnWidth(current, key, px))}
+						event.dataTransfer.dropEffect = aiTab ? "copy" : dropTransferOp(isFinderDrag(event.dataTransfer.types), event.altKey);
+						setDropTabId((current) => (current === id ? current : id));
+						if (finder.tabs.some((tab) => tab.id === id && !tab.active)) armSpringTab(id);
+					}}
+					onTabDragLeave={(id) => {
+						cancelSpringTab();
+						setDropTabId((current) => (current === id ? null : current));
+					}}
+					onTabDrop={(id, event) => {
+						cancelSpringTab();
+						setDropTabId(null);
+						setDropBackgroundDir(null);
+						if (finder.tabs.some((tab) => tab.id === id && tab.aiSearch)) {
+							// An AI Search tab takes the drop as chat attachments, not a file move.
+							if (!isAttachmentDrag(event.dataTransfer.types)) return;
+							event.preventDefault();
+							const dropped = attachmentsFromDrop(event.dataTransfer, autorag.pathForFile);
+							if (dropped.length === 0) return;
+							finder.selectTabId(id);
+							shell.deliverToAi({ attach: dropped });
+							return;
+						}
+						const paths = readDropPaths(event.dataTransfer, autorag.pathForFile);
+						if (paths.length === 0) return;
+						event.preventDefault();
+						const copy = dropTransferOp(isFinderDrag(event.dataTransfer.types), event.altKey) === "copy";
+						finder.dropOnTab(id, paths, copy);
+					}}
+				/>
+				{finder.path === SETTINGS_PATH ? (
+					<SettingsView onSettingsChanged={shell.onSettingsChanged} />
+				) : finder.path === AI_SEARCH_PATH ? (
+					// The tab's chat is mounted by the workspace over this body, so it survives moving panes.
+					<div className="min-h-0 flex-1 bg-subtle-alt" />
+				) : (
+					<>
+						{finder.searching ? (
+							<ScopeBar
+								scope={finder.searchScope}
+								folderName={basename(finder.path)}
+								resultCount={finder.rows.length}
+								onScopeChange={finder.setSearchScope}
 							/>
-							<FileList
+						) : null}
+						{finder.layout === "icons" ? (
+							<IconGrid
 								sections={finder.stackSections}
-								listPath={finder.path}
-								columns={listColumns}
-								minWidth={listFixedWidth(listColumns)}
-								versionFamilyError={finder.versionFamilyError}
-								onRetryVersionFamilies={finder.retryVersionFamilies}
 								listRef={finder.listRef}
 								searching={finder.searching}
 								emptyText={finder.emptyText}
@@ -387,20 +336,73 @@ export const FinderPane = memo(function FinderPane({
 								flashPath={finder.flashPath}
 								renamePath={finder.renamePath}
 								renameDraft={finder.renameDraft}
-								indexStatus={finder.indexStatus}
+								versionFamilyError={finder.versionFamilyError}
+								onRetryVersionFamilies={finder.retryVersionFamilies}
 								background={backgroundDrop(listingDir)}
 								dropBackground={dropBackgroundDir === finder.path}
 								callbacks={rowCallbacks}
+								onMarqueeSelect={finder.marqueeSelect}
 							/>
-						</div>
-					)}
-					<PathBar
-						crumbs={breadcrumbTrail(finder.path, Number.MAX_SAFE_INTEGER)}
-						selectedName={focusedEntry !== null && focusedEntry.kind === "file" ? focusedEntry.name : null}
-						onNavigate={finder.navigate}
-					/>
-				</>
-			)}
-		</section>
+						) : finder.layout === "columns" ? (
+							<ColumnBrowser
+								panes={finder.columnPanes}
+								listRef={finder.listRef}
+								emptyText={finder.emptyText}
+								selectedKeys={finder.selection.keys}
+								focusedZone={focused && finder.zone === "finder"}
+								flashPath={finder.flashPath}
+								renamePath={finder.renamePath}
+								renameDraft={finder.renameDraft}
+								versionFamilyError={finder.versionFamilyError}
+								onRetryVersionFamilies={finder.retryVersionFamilies}
+								variantColumn={variantColumn}
+								onSelectVariant={finder.revealEntry}
+								columnCallbacks={{ onClick: finder.clickColumnRow }}
+								paneBackground={backgroundDrop}
+								dropBackgroundDir={dropBackgroundDir}
+								callbacks={rowCallbacks}
+							/>
+						) : (
+							<div className="flex min-h-0 flex-1 flex-col overflow-x-auto">
+								<ColumnHeader
+									sort={finder.sort}
+									searching={finder.searching}
+									onSort={finder.sortBy}
+									columns={listColumns}
+									minWidth={listFixedWidth(listColumns)}
+									onToggleColumn={(key: ListColumnKey) => shell.setListColumns((current) => toggleListColumn(current, key))}
+									onResetColumns={() => shell.setListColumns(() => resetListColumns())}
+									onResizeColumn={(key: string, px: number) => shell.setListColumns((current) => setListColumnWidth(current, key, px))}
+								/>
+								<FileList
+									sections={finder.stackSections}
+									listPath={finder.path}
+									columns={listColumns}
+									minWidth={listFixedWidth(listColumns)}
+									versionFamilyError={finder.versionFamilyError}
+									onRetryVersionFamilies={finder.retryVersionFamilies}
+									listRef={finder.listRef}
+									searching={finder.searching}
+									emptyText={finder.emptyText}
+									selectedKeys={finder.selection.keys}
+									focusedZone={focused && finder.zone === "finder"}
+									flashPath={finder.flashPath}
+									renamePath={finder.renamePath}
+									renameDraft={finder.renameDraft}
+									background={backgroundDrop(listingDir)}
+									dropBackground={dropBackgroundDir === finder.path}
+									callbacks={rowCallbacks}
+								/>
+							</div>
+						)}
+						<PathBar
+							crumbs={breadcrumbTrail(finder.path, Number.MAX_SAFE_INTEGER)}
+							selectedName={focusedEntry !== null && focusedEntry.kind === "file" ? focusedEntry.name : null}
+							onNavigate={finder.navigate}
+						/>
+					</>
+				)}
+			</section>
+		</DirectoryDataContext>
 	);
 });
