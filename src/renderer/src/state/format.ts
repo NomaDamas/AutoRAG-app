@@ -82,16 +82,61 @@ export function trashToast(paths: readonly string[]): string {
 	return `${paths.length}개 항목을 휴지통으로 이동했습니다`;
 }
 
+/** A batch file operation's verb, as the toast names it. */
+export type BatchVerb = "trash" | "move" | "copy" | "duplicate";
+
+const BATCH_DONE: Record<BatchVerb, string> = {
+	trash: "휴지통으로 이동했습니다",
+	move: "옮겼습니다",
+	copy: "복사했습니다",
+	duplicate: "복제했습니다",
+};
+
+const BATCH_FAILED: Record<BatchVerb, string> = {
+	trash: "휴지통으로 이동하지 못했습니다",
+	move: "옮기지 못했습니다",
+	copy: "복사하지 못했습니다",
+	duplicate: "복제하지 못했습니다",
+};
+
+/**
+ * The toast for a finished batch. A partial batch names both counts and the
+ * first failure's verbatim reason, so items that stayed put never look done.
+ */
+export function batchToast(
+	verb: BatchVerb,
+	result: { readonly ok: readonly string[]; readonly failed: readonly { readonly path: string; readonly message: string }[] },
+): string {
+	const first = result.failed[0];
+	if (first === undefined) {
+		return verb === "trash" ? trashToast(result.ok) : `${result.ok.length}개 항목을 ${BATCH_DONE[verb]}`;
+	}
+	const failedPart =
+		result.failed.length === 1
+			? `${basename(first.path)} — ${BATCH_FAILED[verb]}: ${first.message}`
+			: `${result.failed.length}개 항목을 ${BATCH_FAILED[verb]} (${basename(first.path)}: ${first.message})`;
+	return result.ok.length === 0 ? failedPart : `${result.ok.length}개 항목을 ${BATCH_DONE[verb]} · ${failedPart}`;
+}
+
 export function indexToast(name: string, included: boolean): string {
 	return included ? `${name} — 인덱싱에 포함했습니다` : `${name} — 인덱싱에서 제외했습니다`;
 }
 
-export function emptyStateText(query: string, path = ""): string {
+export function emptyStateText(
+	query: string,
+	path = "",
+	translate?: (key: string, def: string, opt?: Record<string, unknown>) => string,
+): string {
 	const trimmed = query.trim();
 	if (trimmed !== "") {
-		return `"${trimmed}"와 일치하는 파일이 없습니다`;
+		return translate
+			? translate("finder.emptySearch", `"${trimmed}"와 일치하는 파일이 없습니다`, { query: trimmed })
+			: `"${trimmed}"와 일치하는 파일이 없습니다`;
 	}
-	return path === RECENTS_PATH ? "최근에 연 파일이 없습니다" : "빈 폴더";
+	if (path === RECENTS_PATH) {
+		return translate ? translate("finder.emptyRecents", "최근에 연 파일이 없습니다") : "최근에 연 파일이 없습니다";
+	}
+	return translate ? translate("finder.emptyFolder", "빈 폴더") : "빈 폴더";
 }
 
 /** Display width in Latin-letter units: CJK and other wide scripts count 2. */

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useTranslation } from "react-i18next";
 import { useLatestCallback } from "./useLatestCallback";
 import { useFolderListings } from "./useFolderListings";
 import { useRowPipeline } from "./useRowPipeline";
@@ -32,10 +33,10 @@ import {
 import type { NewFileFormatId } from "../../../shared/new-file-contract";
 import { planTransfer } from "../state/file-transfer";
 import type { FileActionTarget } from "../state/file-actions";
-import { emptyStateText, indexToast, trashToast } from "../state/format";
+import { batchToast, emptyStateText, indexToast } from "../state/format";
 import { evidenceSourceUrl, findEvidenceSource } from "../state/evidence";
 import type { FocusZone } from "../state/keymap";
-import { nearestExistingAncestor, pruneSelection } from "../state/live";
+import { nearestExistingAncestor, pruneSelection, withoutPaths } from "../state/live";
 import {
 	adoptInvoke,
 	adoptMessage,
@@ -264,6 +265,11 @@ export interface FinderController {
 	revealEvidence(path: string): void;
 	focusFinder(): void;
 	clickRow(entry: FinderEntry, event: ReactMouseEvent<HTMLDivElement>): void;
+	/**
+	 * A marquee drag in the icon grid: the tiles it covers become the
+	 * selection (`keys` in view order); the last one carries focus.
+	 */
+	marqueeSelect(keys: readonly string[]): void;
 	/** A click in column-view pane `pane`: a folder opens in the next pane. */
 	clickColumnRow(pane: number, entry: FinderEntry, event: ReactMouseEvent<HTMLDivElement>): void;
 	setViewMode(mode: ViewMode): void;
@@ -324,6 +330,7 @@ export function useFinderController(
 	} = {},
 ): FinderController {
 	const { store, sidecar } = data;
+	const { t } = useTranslation();
 	const showHiddenFiles = options.showHiddenFiles ?? false;
 	const quickLookRef = useRef(options.quickLook);
 	quickLookRef.current = options.quickLook;
@@ -871,6 +878,25 @@ export function useFinderController(
 			source.open(entry.path).catch(reportError);
 		});
 
+	/**
+	 * A trash or move just took `removed` out of their folders: drop those rows
+	 * everywhere the view holds them, at once, instead of waiting for the
+	 * watcher's relist. Failed items are never in `removed`, so they stay on
+	 * screen and stay selected.
+	 */
+	const dropRemoved = useLatestCallback((removed: readonly string[]) => {
+		if (removed.length === 0) return;
+		const gone = new Set(removed);
+		store.drop(removed);
+		setHits((current) => withoutPaths(current, removed));
+		setTabsState((state) => {
+			const current = activeTab(state);
+			const selection = pruneSelection(current.selection, (path) => !gone.has(path));
+			return selection === current.selection ? state : patchActiveTab(state, (tab) => ({ ...tab, selection }));
+		});
+		pruneColumns(removed);
+	});
+
 	const trashPaths = useLatestCallback(
 		(paths: readonly string[]) => {
 			if (paths.length === 0) {
@@ -878,10 +904,9 @@ export function useFinderController(
 			}
 			source
 				.trash(paths)
-				.then(() => {
-					patchSelection(EMPTY_SELECTION);
-					pruneColumns(paths);
-					showToast(trashToast(paths));
+				.then((result) => {
+					dropRemoved(result.ok);
+					showToast(batchToast("trash", result));
 					refresh();
 				})
 				.catch(reportError);
@@ -1158,14 +1183,12 @@ export function useFinderController(
 					? source.copyInto(plan.paths, plan.destDir)
 					: source.moveInto(plan.paths, plan.destDir);
 			run
-				.then(() => {
+				.then((result) => {
 					if (plan.op === "move") {
-						pruneColumns(plan.paths);
-						setClipboardCount(0);
-						showToast(`${plan.paths.length}개 항목을 옮겼습니다`);
-					} else {
-						showToast(`${plan.paths.length}개 항목을 복사했습니다`);
+						dropRemoved(result.ok);
+						if (result.failed.length === 0) setClipboardCount(0);
 					}
+					showToast(batchToast(plan.op, result));
 					refresh();
 				})
 				.catch(reportError);
@@ -1313,7 +1336,10 @@ export function useFinderController(
 				case "duplicate":
 					source
 						.duplicate(targets)
-						.then(refresh)
+						.then((result) => {
+							if (result.failed.length > 0) showToast(batchToast("duplicate", result));
+							refresh();
+						})
 						.catch(reportError);
 					return;
 				case "rename":
@@ -1506,17 +1532,20 @@ export function useFinderController(
 			return [];
 		}
 		if (menu.entry === null) {
-			return buildBackgroundContextMenu({ clipboardCount });
+			return buildBackgroundContextMenu({ clipboardCount }, (k, def) => t(k, { defaultValue: def }));
 		}
 		const entry = menu.entry;
-		return buildContextMenu({
-			target: { name: entry.name, kind: entry.kind },
-			selectionCount: menuTargets(entry).length,
-			indexIncluded: sidecar.indexStatus(entry.path)?.excluded !== true,
-			clipboardCount,
-			inRecents: path === RECENTS_PATH,
-		});
-	}, [contextMenu, menuTargets, sidecar, clipboardCount, path]);
+		return buildContextMenu(
+			{
+				target: { name: entry.name, kind: entry.kind },
+				selectionCount: menuTargets(entry).length,
+				indexIncluded: sidecar.indexStatus(entry.path)?.excluded !== true,
+				clipboardCount,
+				inRecents: path === RECENTS_PATH,
+			},
+			(k, def, opt) => t(k, { defaultValue: def, ...(opt as Record<string, unknown> | undefined) }),
+		);
+	}, [contextMenu, menuTargets, sidecar, clipboardCount, path, t]);
 
 	const navTargets = useMemo(
 		() => (locations.length > 0 ? locations : [{ name: basename(path), path }]),
@@ -1562,6 +1591,10 @@ export function useFinderController(
 		}
 		chooseColumnEntry(pane, entry);
 	});
+	const marqueeSelect = useLatestCallback((keys: readonly string[]) => {
+		setZone("finder");
+		patchSelection({ keys, anchor: keys[0] ?? null, focus: keys[keys.length - 1] ?? null });
+	});
 	const closeContextMenu = useLatestCallback(() => setContextMenu(null));
 	const setRenameDraft = useLatestCallback((value: string) => setRename((current) => (current === null ? null : { ...current, draft: value })));
 	const cancelRename = useLatestCallback(() => setRename(null));
@@ -1578,7 +1611,7 @@ export function useFinderController(
 		query,
 		searchFocused,
 		searching,
-		emptyText: emptyStateText(query, path),
+		emptyText: emptyStateText(query, path, (k, def, opt) => t(k, { defaultValue: def, ...(opt as Record<string, unknown> | undefined) })),
 		rows,
 		stackRows,
 		stackSections,
@@ -1643,6 +1676,7 @@ export function useFinderController(
 		moveSelectionBy,
 		revealEvidence,
 		focusFinder,
+		marqueeSelect,
 		clickRow,
 		clickColumnRow,
 		setViewMode,

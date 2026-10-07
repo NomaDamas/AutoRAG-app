@@ -8,6 +8,7 @@ import { GRID_OVERSCAN, columnsForWidth, gridColumnCount } from "../state/virtua
 import { isHiddenName } from "../state/visibility";
 import { useDirectoryData, useEntrySidecar } from "../hooks/useDirectoryData";
 import { useScrollWindow } from "../hooks/useScrollWindow";
+import { useMarquee } from "../hooks/useMarquee";
 import { GroupHeader } from "./GroupHeader";
 import { type BackgroundDropHandlers, type RowCallbacks } from "./FileRow";
 import { FileTile } from "./primitives/FileTile";
@@ -49,6 +50,7 @@ export function IconGrid({
 	background,
 	dropBackground,
 	callbacks,
+	onMarqueeSelect,
 }: {
 	/** The rows split into the toolbar Group control's sections (one when off). */
 	readonly sections: readonly GroupSection<StackRow>[];
@@ -65,6 +67,8 @@ export function IconGrid({
 	readonly background: BackgroundDropHandlers;
 	readonly dropBackground: boolean;
 	readonly callbacks: RowCallbacks;
+	/** A rubber-band drag on empty space: the covered tiles, in view order. */
+	readonly onMarqueeSelect: (keys: readonly string[]) => void;
 }): ReactElement {
 	const contentRef = useRef<HTMLDivElement | null>(null);
 	const scroll = useScrollWindow(listRef, contentRef);
@@ -149,6 +153,15 @@ export function IconGrid({
 		};
 	}, []);
 
+	const rowPaths = useMemo(() => rows.map((row) => row.entry.path), [rows]);
+	const marquee = useMarquee(listRef, contentRef, {
+		layout,
+		geometry: { columns: metrics.columns, rowHeight: metrics.stride - metrics.gap, columnGap: metrics.gap },
+		paths: rowPaths,
+		selectedKeys,
+		onSelect: onMarqueeSelect,
+	});
+
 	const padTop = window.start < layout.items.length ? (layout.offsets[window.start] ?? layout.total) : layout.total;
 	const padBottom = layout.total - (window.end < layout.items.length ? (layout.offsets[window.end] ?? layout.total) : layout.total);
 
@@ -178,12 +191,13 @@ export function IconGrid({
 	// content height stays stable while scrolling.
 	return (
 		<div
-			className={cn("list list--icons flex-1 min-h-0 overflow-auto p-16", dropBackground && "bg-accent-drop-hover")}
+			className={cn("list list--icons relative flex-1 min-h-0 overflow-auto p-16", dropBackground && "bg-accent-drop-hover")}
 			ref={listRef}
 			onDragOver={background.onDragOver}
 			onDrop={background.onDrop}
 			onDragLeave={background.onDragLeave}
 			onContextMenu={background.onContextMenu}
+			onPointerDown={marquee.onPointerDown}
 		>
 			<VersionFamilyBanner error={versionFamilyError} onRetry={onRetryVersionFamilies} />
 			<div
@@ -226,6 +240,18 @@ export function IconGrid({
 			{rows.length === 0 ? (
 				<div className="list__empty py-40 px-12 text-ink-muted text-body text-center">{emptyText}</div>
 			) : null}
+			{marquee.rect === null ? null : (
+				<div
+					className="icon-marquee absolute pointer-events-none z-10 border border-accent bg-accent-soft"
+					aria-hidden="true"
+					style={{
+						left: marquee.rect.left,
+						top: marquee.rect.top,
+						width: marquee.rect.right - marquee.rect.left,
+						height: marquee.rect.bottom - marquee.rect.top,
+					}}
+				/>
+			)}
 		</div>
 	);
 }

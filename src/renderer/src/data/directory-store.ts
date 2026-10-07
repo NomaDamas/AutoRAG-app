@@ -30,6 +30,7 @@ import {
 	type IncrementalListing,
 	type ListingLoadMode,
 	reconcileListing,
+	withoutPaths,
 } from "../state/live";
 import { needsThumbnail, thumbnailKey } from "../state/thumbnails";
 import type { FinderEntry } from "./entries";
@@ -85,6 +86,12 @@ export interface DirectoryStore {
 	enrich(entries: readonly FinderEntry[]): void;
 	/** A mounted row still has no icon: coalesce it into the next viewport batch. */
 	requestIcon(entry: FinderEntry): void;
+	/**
+	 * A trash or move just took `removed` out of their folders: drop those rows
+	 * (and anything nested under a removed folder) from every cached folder at
+	 * once, instead of waiting for the watcher's relist.
+	 */
+	drop(removed: readonly string[]): void;
 	/** A retained folder vanished on disk. */
 	onGone(listener: (dir: string) => void): () => void;
 	/** Start applying live filesystem changes to retained folders. */
@@ -304,6 +311,13 @@ export function createDirectoryStore(options: {
 		},
 		load,
 		enrich,
+		drop(removed) {
+			if (removed.length === 0) return;
+			for (const [dir, record] of records) {
+				const entries = withoutPaths(record.snapshot.entries, removed);
+				if (entries !== record.snapshot.entries) publish(dir, record, { ...record.snapshot, entries });
+			}
+		},
 		requestIcon(entry) {
 			if (!needsThumbnail(entry)) return;
 			const key = thumbnailKey(entry);

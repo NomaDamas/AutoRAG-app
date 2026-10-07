@@ -1,4 +1,5 @@
 import { useEffect, useRef, type ReactElement } from "react";
+import { useTranslation } from "react-i18next";
 import { CONTEXT_MENU_WIDTH, menuHeightForItems, menuPlacement } from "../state/context-menu";
 import { GROUP_OPTIONS, type GroupKey } from "../state/grouping";
 import { SORT_OPTIONS, cycleSort, type SortDirection, type SortKey, type SortState } from "../state/sort";
@@ -24,6 +25,7 @@ export function ToolbarMenu({
 	readonly onGroup: (key: GroupKey) => void;
 	readonly onClose: () => void;
 }): ReactElement {
+	const { t } = useTranslation();
 	const ref = useRef<HTMLDivElement>(null);
 	const closeAndFocus = (): void => {
 		onClose();
@@ -73,7 +75,7 @@ export function ToolbarMenu({
 			ref={ref}
 			className="menu fixed z-60 flex flex-col w-context-menu p-4 border border-border rounded-10 bg-window shadow-menu overflow-y-auto animate-[rise_var(--dur-menu)_var(--ease-out)] [-webkit-app-region:no-drag]"
 			role="menu"
-			aria-label={kind === "sort" ? "Sort" : "Group"}
+			aria-label={kind === "sort" ? t("toolbar.sort", "Sort") : t("toolbar.group", "Group")}
 			style={{ left: placement.left, top: placement.top, maxHeight: window.innerHeight - 16 }}
 			onContextMenu={(event) => event.preventDefault()}
 			onKeyDown={(event) => {
@@ -94,20 +96,20 @@ export function ToolbarMenu({
 		>
 			{kind === "sort" ? (
 				<>
-					{SORT_OPTIONS.map((option) => row(option.label, sort?.key === option.key, () => {
+					{SORT_OPTIONS.map((option) => row(t(`sort.${option.key}`, option.label), sort?.key === option.key, () => {
 						const direction = sort?.key === option.key ? sort.dir : cycleSort(null, option.key)?.dir ?? 1;
 						onSort(option.key, direction);
 						closeAndFocus();
 					}))}
 					<div className="flex-none h-px mx-6 my-4 bg-border" role="separator" />
-					{row("Ascending", sort?.dir === 1, () => { onSort(sort?.key ?? "name", 1); closeAndFocus(); })}
-					{row("Descending", sort?.dir === -1, () => { onSort(sort?.key ?? "name", -1); closeAndFocus(); })}
+					{row(t("sort.ascending", "Ascending"), sort?.dir === 1, () => { onSort(sort?.key ?? "name", 1); closeAndFocus(); })}
+					{row(t("sort.descending", "Descending"), sort?.dir === -1, () => { onSort(sort?.key ?? "name", -1); closeAndFocus(); })}
 				</>
 			) : (
 				GROUP_OPTIONS.map((option, index) => (
 					<div key={option.key} className="flex-none">
 						{index === 1 ? <div className="h-px mx-6 my-4 bg-border" role="separator" /> : null}
-						{row(option.label, grouping === option.key, () => { onGroup(option.key); closeAndFocus(); })}
+						{row(t(`sort.${option.key}`, option.label), grouping === option.key, () => { onGroup(option.key); closeAndFocus(); })}
 					</div>
 				))
 			)}

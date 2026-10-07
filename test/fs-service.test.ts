@@ -1,4 +1,4 @@
-import { access, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readdir, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -713,6 +713,53 @@ describe("trash", () => {
 		// Then the failure carries the path and the verbatim shell message
 		expect(result.ok).toEqual([]);
 		expect(result.failed).toEqual([{ path: filePath, message: "trash boom" }]);
+	});
+
+	it("retries a refused item once after a rename round trip, keeping its name", async () => {
+		// Given three files and a shell that, like the iCloud Drive provider
+		// partway through a batch, refuses the first attempt on every item after
+		// the first
+		const paths = ["a.txt", "b.txt", "c.txt"].map((name) => join(root, name));
+		for (const path of paths) await writeFile(path, `body of ${path}`);
+		const refuseOnce = new Set(paths.slice(1));
+		const trashed: string[] = [];
+		const stubs = makeDeps(root);
+		const service = createFsService({
+			...stubs.deps,
+			shell: {
+				...stubs.deps.shell,
+				trashItem: async (path) => {
+					if (refuseOnce.delete(path)) {
+						throw new Error(`"${path}" couldn't be moved to the trash because you don't have permission to access it.`);
+					}
+					// The retry still finds the item under its own name and content.
+					trashed.push(`${path}:${await readFile(path, "utf8")}`);
+				},
+			},
+		});
+
+		// When trashing all three in one batch
+		const result = await service.trash(paths);
+
+		// Then every item reached the Trash under its original name, and no
+		// parked sibling was left behind
+		expect(result).toEqual({ ok: paths, failed: [] });
+		expect(trashed).toEqual(paths.map((path) => `${path}:body of ${path}`));
+		expect((await readdir(root)).filter((name) => name.includes("dazzi-trash"))).toEqual([]);
+	});
+
+	it("reports a refusal that survives the retry and leaves the item in place", async () => {
+		// Given a file the shell refuses on every attempt
+		const filePath = join(root, "stuck.txt");
+		await writeFile(filePath, "stuck");
+
+		// When trashing it
+		const result = await createFsService(makeFailingTrashDeps(root, "no permission")).trash([filePath]);
+
+		// Then the verbatim refusal is reported and the file is untouched
+		expect(result).toEqual({ ok: [], failed: [{ path: filePath, message: "no permission" }] });
+		expect(await readFile(filePath, "utf8")).toBe("stuck");
+		expect(await readdir(root)).toEqual(["stuck.txt"]);
 	});
 });
 

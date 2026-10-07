@@ -1,4 +1,5 @@
 import type { DragEvent, MouseEvent, ReactElement } from "react";
+import { useTranslation } from "react-i18next";
 import { cn } from "../lib/cn";
 import { formatShortcut } from "../lib/shortcuts";
 import { SparklesIcon, TabCloseIcon, TabPlusIcon } from "./icons";
@@ -56,6 +57,7 @@ export function TabStrip({
 	readonly onTabDragStart?: (id: number, event: DragEvent<HTMLDivElement>) => void;
 	readonly onTabDragEnd?: () => void;
 }): ReactElement {
+	const { t } = useTranslation();
 	return (
 		<div className="tabs flex h-25 flex-none items-stretch overflow-hidden border-b border-tabstrip-line bg-tabstrip [-webkit-app-region:drag]">
 			{tabs.map((tab, index) => (
@@ -103,8 +105,8 @@ export function TabStrip({
 						<button
 							type="button"
 							className="tab__close absolute left-5 top-1/2 mt-[-7.5px] flex flex-none items-center justify-center size-15 p-0 border-0 rounded-3 bg-transparent text-ink-muted opacity-0 transition-[background,opacity] duration-(--dur-color) ease-[ease] group-hover/tab:opacity-100 hover:bg-hover-strong hover:text-ink"
-							title={`Close tab ${formatShortcut({ key: "W" })}`}
-							aria-label={`Close tab ${formatShortcut({ key: "W" })}`}
+							title={t("tabs.close", { shortcut: formatShortcut({ key: "W" }), defaultValue: `Close tab ${formatShortcut({ key: "W" })}` })}
+							aria-label={t("tabs.close", { shortcut: formatShortcut({ key: "W" }), defaultValue: `Close tab ${formatShortcut({ key: "W" })}` })}
 							onClick={(event: MouseEvent<HTMLButtonElement>) => {
 								event.stopPropagation();
 								onClose(tab.id);
@@ -122,8 +124,8 @@ export function TabStrip({
 					TAB_GRADIENT,
 					TAB_GRADIENT_HOVER,
 				)}
-				title={`New tab ${formatShortcut({ key: "T" })}`}
-				aria-label={`New tab ${formatShortcut({ key: "T" })}`}
+				title={t("tabs.new", { shortcut: formatShortcut({ key: "T" }), defaultValue: `New tab ${formatShortcut({ key: "T" })}` })}
+				aria-label={t("tabs.new", { shortcut: formatShortcut({ key: "T" }), defaultValue: `New tab ${formatShortcut({ key: "T" })}` })}
 				onClick={onNewTab}
 			>
 				<TabPlusIcon />

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactElement, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import type { AppSettings, AutoRagConfigSnapshot } from "../../../shared/settings-contract";
 import { isJsonObject } from "../../../shared/settings-contract";
 import { DatabaseIcon, GearIcon, GroupIcon, PencilIcon, SearchIcon, SparklesIcon } from "./icons";
@@ -106,28 +107,30 @@ function Row({ name, hint, children }: { readonly name: string; readonly hint: s
 
 
 function GeneralSettings({ appSettings, onAppSettingsChanged, snapshot, onSaved }: { readonly appSettings: AppSettings | null; readonly onAppSettingsChanged: (settings: AppSettings) => void; readonly snapshot: AutoRagConfigSnapshot | null; readonly onSaved: (next: AutoRagConfigSnapshot) => void }): ReactElement {
-	if (appSettings === null || snapshot === null) return <p className="linear-section-desc">설정을 불러오는 중…</p>;
+	const { t } = useTranslation();
+	if (appSettings === null || snapshot === null) return <p className="linear-section-desc">{t("settings.loading", "설정을 불러오는 중…")}</p>;
 	async function setApp(patch: Partial<AppSettings>): Promise<void> {
 		const next = await autorag.settings.set(patch);
 		onAppSettingsChanged(next);
 	}
 	return (
 		<>
-			{heading("Display & General", "앱 화면과 AutoRAG 일반 언어 설정입니다. workspacePath와 memoryPath는 기본값으로 유지합니다.")}
-			<Row name="Appearance" hint="Finder, Settings, Quick Look에 같은 테마를 적용합니다."><select className="linear-select" value={appSettings.appearance} onChange={(event) => void setApp({ appearance: event.target.value as AppSettings["appearance"] })}><option value="light">Light</option><option value="dark">Dark</option></select></Row>
-			<Row name="Interface language" hint="앱 메뉴 언어입니다."><select className="linear-select" value={appSettings.language} onChange={(event) => void setApp({ language: event.target.value as AppSettings["language"] })}><option value="ko">한국어</option><option value="en">English</option><option value="ja">日本語</option><option value="zh">简体中文</option></select></Row>
-			<LanguageSettings snapshot={snapshot} path={["languages"]} name="Document languages" hint="OCR·파서가 사용할 지원 언어를 선택합니다." onSaved={onSaved} fallback={["ko", "en"]} />
-			<Row name="Launch at login" hint="로그인할 때 백그라운드로 실행합니다."><Switch checked={appSettings.launchAtLogin} onChange={() => void setApp({ launchAtLogin: !appSettings.launchAtLogin })} ariaLabel="Launch at login" /></Row>
-			<Row name="Show hidden files" hint="점(.)으로 시작하는 파일을 표시합니다."><Switch checked={appSettings.showHiddenFiles} onChange={() => void setApp({ showHiddenFiles: !appSettings.showHiddenFiles })} ariaLabel="Show hidden files" /></Row>
-			<Row name="Deduplication interval" hint="dupey 버전 패밀리 스캔 주기입니다."><select className="linear-select" value={String(appSettings.dupeyScanIntervalMinutes)} onChange={(event) => void setApp({ dupeyScanIntervalMinutes: Number(event.target.value) })}>{DUPEY_INTERVALS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></Row>
-			<Row name="Automatically install updates" hint="다음 앱 재시작 시 업데이트를 적용합니다."><Switch checked={appSettings.autoInstallUpdates} onChange={() => void setApp({ autoInstallUpdates: !appSettings.autoInstallUpdates })} ariaLabel="Automatically install updates" /></Row>
-			<Row name="Share anonymous diagnostics" hint="익명화된 성능 지표를 공유합니다."><Switch checked={appSettings.telemetry} onChange={() => void setApp({ telemetry: !appSettings.telemetry })} ariaLabel="Share anonymous diagnostics" /></Row>
+			{heading(t("settings.general.title", "Display & General"), t("settings.general.desc", "앱 화면과 AutoRAG 일반 언어 설정입니다. workspacePath와 memoryPath는 기본값으로 유지합니다."))}
+			<Row name={t("settings.general.appearance", "Appearance")} hint={t("settings.general.appearanceHint", "Finder, Settings, Quick Look에 같은 테마를 적용합니다.")}><select className="linear-select" aria-label="Appearance" value={appSettings.appearance} onChange={(event) => void setApp({ appearance: event.target.value as AppSettings["appearance"] })}><option value="light">Light</option><option value="dark">Dark</option></select></Row>
+			<Row name={t("settings.general.language", "Interface language")} hint={t("settings.general.languageHint", "앱 메뉴 언어입니다.")}><select className="linear-select" aria-label="Interface language" value={appSettings.language} onChange={(event) => void setApp({ language: event.target.value as AppSettings["language"] })}><option value="ko">한국어</option><option value="en">English</option><option value="ja">日本語</option><option value="zh">简体中文</option></select></Row>
+			<LanguageSettings snapshot={snapshot} path={["languages"]} name={t("settings.general.docLanguages", "Document languages")} hint={t("settings.general.docLanguagesHint", "OCR·파서가 사용할 지원 언어를 선택합니다.")} onSaved={onSaved} fallback={["ko", "en"]} />
+			<Row name={t("settings.general.launchAtLogin", "Launch at login")} hint={t("settings.general.launchAtLoginHint", "로그인할 때 백그라운드로 실행합니다.")}><Switch checked={appSettings.launchAtLogin} onChange={() => void setApp({ launchAtLogin: !appSettings.launchAtLogin })} ariaLabel="Launch at login" /></Row>
+			<Row name={t("settings.general.showHiddenFiles", "Show hidden files")} hint={t("settings.general.showHiddenFilesHint", "점(.)으로 시작하는 파일을 표시합니다.")}><Switch checked={appSettings.showHiddenFiles} onChange={() => void setApp({ showHiddenFiles: !appSettings.showHiddenFiles })} ariaLabel="Show hidden files" /></Row>
+			<Row name={t("settings.general.dedupInterval", "Deduplication interval")} hint={t("settings.general.dedupIntervalHint", "dupey 버전 패밀리 스캔 주기입니다.")}><select className="linear-select" aria-label="Deduplication interval" value={String(appSettings.dupeyScanIntervalMinutes)} onChange={(event) => void setApp({ dupeyScanIntervalMinutes: Number(event.target.value) })}>{DUPEY_INTERVALS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></Row>
+			<Row name={t("settings.general.autoUpdates", "Automatically install updates")} hint={t("settings.general.autoUpdatesHint", "다음 앱 재시작 시 업데이트를 적용합니다.")}><Switch checked={appSettings.autoInstallUpdates} onChange={() => void setApp({ autoInstallUpdates: !appSettings.autoInstallUpdates })} ariaLabel="Automatically install updates" /></Row>
+			<Row name={t("settings.general.telemetry", "Share anonymous diagnostics")} hint={t("settings.general.telemetryHint", "익명화된 성능 지표를 공유합니다.")}><Switch checked={appSettings.telemetry} onChange={() => void setApp({ telemetry: !appSettings.telemetry })} ariaLabel="Share anonymous diagnostics" /></Row>
 		</>
 	);
 }
 
 
 export function SettingsView({ initialCategory = "general", onSettingsChanged }: { readonly initialCategory?: SettingsCategory; readonly onSettingsChanged?: (settings: AppSettings) => void }): ReactElement {
+	const { t } = useTranslation();
 	const [category, setCategory] = useState<SettingsCategory>(initialCategory);
 	const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
 	const [snapshot, setSnapshot] = useState<AutoRagConfigSnapshot | null>(null);
@@ -158,7 +161,7 @@ export function SettingsView({ initialCategory = "general", onSettingsChanged }:
 	}, []);
 	const source = sourceAlias(category);
 	const content = useMemo(() => {
-		if (loading || appSettings === null || snapshot === null) return <p className="linear-section-desc">설정을 불러오는 중…</p>;
+		if (loading || appSettings === null || snapshot === null) return <p className="linear-section-desc">{t("settings.loading", "설정을 불러오는 중…")}</p>;
 		if (category === "general") return <GeneralSettings appSettings={appSettings} onAppSettingsChanged={(next) => { setAppSettings(next); onSettingsChanged?.(next); }} snapshot={snapshot} onSaved={saveSnapshot} />;
 		if (category === "llm" || category === "embedding" || category === "reranker") return <ModelSettings kind={category as ModelSettingsKind} snapshot={snapshot} onSaved={saveSnapshot} />;
 		if (category === "sources") return <DatasourceSettings key="sources" snapshot={snapshot} onSaved={saveSnapshot} overviewOnly />;
@@ -170,14 +173,21 @@ export function SettingsView({ initialCategory = "general", onSettingsChanged }:
 	return (
 		<div className="settings-view settings-panel" role="region" aria-label="Settings">
 			<aside className="settings-sidebar" aria-label="Settings Categories">
-				<div className="settings-sidebar-group-title">Settings</div>
+				<div className="settings-sidebar-group-title">{t("settings.title", "Settings")}</div>
 				{CATEGORIES.map((item) => {
 					const Icon = item.icon;
 					const active = category === item.id;
-					return <button key={item.id} type="button" className={`settings-nav-item${active ? " is-active" : ""}`} aria-current={active ? "true" : undefined} onClick={() => setCategory(item.id)}><span className="settings-nav-icon"><Icon size={16} /></span><span>{item.label}</span></button>;
+					const label = t(`settings.categories.${item.id}`, item.label);
+					return (
+						<button key={item.id} type="button" className={`settings-nav-item${active ? " is-active" : ""}`} aria-current={active ? "true" : undefined} onClick={() => setCategory(item.id)}>
+							<span className="settings-nav-icon"><Icon size={16} /></span>
+							<span>{label}</span>
+							{label !== item.label ? <span className="sr-only" aria-hidden="true">{item.label}</span> : null}
+						</button>
+					);
 				})}
 				<div className="settings-sidebar-group-title settings-sidebar-group-title--datasources">
-					<span>Data Sources</span>
+					<span>{t("settings.categories.sources", "Data Sources")}</span>
 					<button type="button" className="settings-sidebar-add" aria-label="Add data source" title="Add data source" onClick={() => setCategory("sources")}>+</button>
 				</div>
 				{sources.map((item) => {

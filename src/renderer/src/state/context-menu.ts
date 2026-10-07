@@ -89,41 +89,51 @@ function item(
 
 const SEPARATOR: FinderMenuSeparator = { kind: "separator" };
 
-export function buildContextMenu(input: ContextMenuInput): FinderMenuEntry[] {
+export function buildContextMenu(
+	input: ContextMenuInput,
+	translate?: (key: string, def: string, opt?: Record<string, unknown>) => string,
+): FinderMenuEntry[] {
 	const isFolder = input.target.kind === "folder";
 	const multi = input.selectionCount > 1;
+	const tr = (key: string, def: string, opt?: Record<string, unknown>): string => (translate ? translate(key, def, opt) : def);
 	const entries: FinderMenuEntry[] = [
-		isFolder ? item("open", "열기", { keycap: enterKeyLabel() }) : item("quickLook", "Quick Look", { keycap: "space" }),
+		isFolder
+			? item("open", tr("contextMenu.open", "열기"), { keycap: enterKeyLabel() })
+			: item("quickLook", tr("contextMenu.quickLook", "Quick Look"), { keycap: "space" }),
 	];
-
 	if (input.inRecents === true) {
-		entries.push(SEPARATOR, item("showInEnclosingFolder", "Show in Enclosing Folder"));
+		entries.push(SEPARATOR, item("showInEnclosingFolder", tr("contextMenu.showInEnclosingFolder", "Show in Enclosing Folder")));
 	}
 
 	if (!isFolder) {
 		entries.push(SEPARATOR);
 		entries.push(
 			input.indexFailed === true
-				? item("retryIndex", "인덱싱 다시 시도", { tone: "warning" })
-				: item("toggleIndex", input.indexIncluded ? "인덱싱에서 제외" : "인덱싱에 포함"),
+				? item("retryIndex", tr("contextMenu.retryIndex", "인덱싱 다시 시도"), { tone: "warning" })
+				: item("toggleIndex", input.indexIncluded ? tr("contextMenu.excludeFromIndex", "인덱싱에서 제외") : tr("contextMenu.includeInIndex", "인덱싱에 포함")),
 		);
 	}
 
 	entries.push(
 		SEPARATOR,
-		item("copy", "복사", { keycap: formatShortcut({ key: "C" }) }),
-		item("paste", "붙여넣기", { keycap: formatShortcut({ key: "V" }), disabled: input.clipboardCount === 0 }),
-		item("cut", "잘라내기", { keycap: formatShortcut({ key: "X" }) }),
-		item("duplicate", "복제"),
-		item("rename", "이름 변경", { disabled: multi }),
-		item("copyPath", "경로 복사"),
+		item("copy", tr("contextMenu.copy", "복사"), { keycap: formatShortcut({ key: "C" }) }),
+		item("paste", tr("contextMenu.paste", "붙여넣기"), { keycap: formatShortcut({ key: "V" }), disabled: input.clipboardCount === 0 }),
+		item("cut", tr("contextMenu.cut", "잘라내기"), { keycap: formatShortcut({ key: "X" }) }),
+		item("duplicate", tr("contextMenu.duplicate", "복제")),
+		item("rename", tr("contextMenu.rename", "이름 변경"), { disabled: multi }),
+		item("copyPath", tr("contextMenu.copyPath", "경로 복사")),
 		SEPARATOR,
-		item("trash", multi ? `${input.selectionCount}개 항목 휴지통으로 이동` : "휴지통으로 이동", {
-			keycap: deleteKeyLabel(),
-			tone: "danger",
-		}),
+		item(
+			"trash",
+			multi
+				? tr("contextMenu.moveToTrashCount", `${input.selectionCount}개 항목 휴지통으로 이동`, { count: input.selectionCount })
+				: tr("contextMenu.moveToTrash", "휴지통으로 이동"),
+			{
+				keycap: deleteKeyLabel(),
+				tone: "danger",
+			},
+		),
 	);
-
 	return entries;
 }
 
@@ -137,12 +147,16 @@ export interface BackgroundMenuInput {
  * a folder and every new-file format; 붙여넣기 pastes the in-app file clipboard
  * into the folder in view. It never carries row actions — those need a target.
  */
-export function buildBackgroundContextMenu(input: BackgroundMenuInput): FinderMenuEntry[] {
+export function buildBackgroundContextMenu(
+	input: BackgroundMenuInput,
+	translate?: (key: string, def: string, opt?: Record<string, unknown>) => string,
+): FinderMenuEntry[] {
+	const tr = (key: string, def: string, opt?: Record<string, unknown>): string => (translate ? translate(key, def, opt) : def);
 	const submenu: FinderMenuSubmenu = {
 		kind: "submenu",
-		label: "새로 만들기",
+		label: tr("contextMenu.new", "새로 만들기"),
 		items: [
-			{ kind: "submenu-item", action: "newFolder", label: "새 폴더", format: null },
+			{ kind: "submenu-item", action: "newFolder", label: tr("contextMenu.newFolder", "새 폴더"), format: null },
 			...NEW_FILE_FORMATS.map(
 				(format): FinderMenuSubmenuItem => ({
 					kind: "submenu-item",
@@ -156,7 +170,7 @@ export function buildBackgroundContextMenu(input: BackgroundMenuInput): FinderMe
 	return [
 		submenu,
 		SEPARATOR,
-		item("paste", "붙여넣기", { keycap: formatShortcut({ key: "V" }), disabled: input.clipboardCount === 0 }),
+		item("paste", tr("contextMenu.paste", "붙여넣기"), { keycap: formatShortcut({ key: "V" }), disabled: input.clipboardCount === 0 }),
 	];
 }
 

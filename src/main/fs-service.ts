@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { Dirent } from "node:fs";
 import { cp, lstat, mkdir, readdir, rename as fsRename, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
@@ -105,6 +106,39 @@ const SEARCH_MAX_RESULTS = 200;
  */
 export function toHandoffPath(path: string, platform: NodeJS.Platform): string {
 	return platform === "win32" ? win32.normalize(path) : path;
+}
+
+/**
+ * Move one item to the Trash. The iCloud Drive file provider (`~/Documents`,
+ * `~/Desktop` with Desktop & Documents sync) sometimes refuses a batch partway
+ * through: after one or two items land in the Trash, every later
+ * `trashItem` call fails with "you don't have permission to access it". The
+ * refusal sticks to the file for 10–50 seconds, and plain retries do not clear
+ * it. Renaming the item to a hidden sibling and straight back clears it at
+ * once, so after a refusal we do that round trip and try once more. The item
+ * keeps its own name, so the Trash entry and Put Back stay as Finder makes
+ * them. A second refusal is a real failure and goes back to the caller as-is.
+ */
+async function trashOne(path: string, platform: NodeJS.Platform, trashItem: (path: string) => Promise<void>): Promise<void> {
+	try {
+		await trashItem(toHandoffPath(path, platform));
+		return;
+	} catch (error) {
+		// A random parked name: POSIX rename replaces an existing target, so a
+		// fixed name could overwrite a real file that happens to carry it.
+		const parked = join(dirname(path), `.${basename(path)}.${randomUUID().slice(0, 8)}.dazzi-trash`);
+		try {
+			await fsRename(path, parked);
+		} catch {
+			throw error;
+		}
+		try {
+			await fsRename(parked, path);
+		} catch (restoreError) {
+			throw new Error(`${errorMessage(error)} (임시 이름 ${basename(parked)}에서 되돌리지 못했습니다: ${errorMessage(restoreError)})`);
+		}
+	}
+	await trashItem(toHandoffPath(path, platform));
 }
 
 /**
@@ -648,7 +682,7 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 		undo,
 		createFolder,
 		createFile,
-		trash: (paths) => runBatch(paths, (path) => deps.shell.trashItem(toHandoffPath(path, platform))),
+		trash: (paths) => runBatch(paths, (path) => trashOne(path, platform, (target) => deps.shell.trashItem(target))),
 		reveal: async (path) => {
 			deps.shell.showItemInFolder(toHandoffPath(path, platform));
 		},

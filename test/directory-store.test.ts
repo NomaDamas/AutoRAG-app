@@ -348,6 +348,24 @@ describe("directory store", () => {
 		expect(h.lists).toHaveLength(2);
 	});
 
+	it("drops trashed or moved rows from every folder that shows them at once, nested rows included", async () => {
+		const h = harness();
+		const store = createDirectoryStore({ source: h.source, sidecar: h.sidecar });
+		void store.load("/d", "navigate");
+		h.lists[0]?.answer.resolve([entry("/d/a.md"), entry("/d/sub"), entry("/d/keep.md")]);
+		void store.load("/d/sub", "navigate");
+		h.lists[1]?.answer.resolve([entry("/d/sub/x.md")]);
+		void store.load("/e", "navigate");
+		const untouched = [entry("/e/b.md")];
+		h.lists[2]?.answer.resolve(untouched);
+		await settle();
+
+		store.drop(["/d/a.md", "/d/sub"]);
+		expect(store.get("/d")?.entries.map((row) => row.path)).toEqual(["/d/keep.md"]);
+		expect(store.get("/d/sub")?.entries).toEqual([]);
+		expect(store.get("/e")?.entries).toBe(untouched);
+	});
+
 	it("leaves folders nobody listed alone", async () => {
 		const h = harness();
 		const store = createDirectoryStore({ source: h.source, sidecar: h.sidecar });
