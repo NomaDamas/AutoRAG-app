@@ -1,4 +1,4 @@
-/* Dazzi settings prototype — pure front-end demo.
+/* AutoRAG settings prototype — pure front-end demo.
  *
  * Structure keeps the polished IA (기본/AI/검색/연결된 앱/고급) and the
  * plain-language copy, but the visual language now follows the shipped
@@ -65,16 +65,10 @@ const state = {
 	page: "general",
 	appearance: "light",
 	notes: false,
-	/** Connected provider ids in connection order. `builtin` is always present. */
-	providers: ["builtin", "openrouter"],
-	/** Role → `{ provider, model }`, `{ special }`, or `null` when a choice is needed. */
-	roles: {
-		answer: { provider: "openrouter", model: "anthropic/claude-sonnet-4.5" },
-		decomposition: { provider: "openrouter", model: "qwen/qwen3.7-flash" },
-		jev: { provider: "openrouter", model: "typesafe/jev-1.13" },
-		rerank: { special: "off" },
-		embed: { provider: "builtin", model: "qwen3-embedding-0.6b" },
-	},
+	/** Connected provider ids in connection order. The AutoRAG plan is always present. */
+	providers: ["autorag"],
+	/** Role → `{ provider, model }` or `{ special }`; filled from each role's AutoRAG default below. */
+	roles: {},
 	/** Reasoning level per LLM role (`thinking.final` for the answer model; a proposal for decomposition). */
 	thinking: { answer: "high", decomposition: "off" },
 	/** Open floating menu: `{ type, arg, anchor, query }` or null. */
@@ -118,15 +112,18 @@ const state = {
 /* ------------------------------------------------------- AI providers -- */
 
 /**
- * Provider catalog. `kind` picks the connect flow: builtin (always on, local
- * runtime), subscription (browser sign-in), api (key plus optional fields),
+ * Provider catalog. `kind` picks the connect flow: builtin (the AutoRAG plan,
+ * always connected, the default for every role), subscription (browser sign-in), api (key plus optional fields),
  * local (loopback server), custom (OpenAI-compatible endpoint). `models` lists
  * what each provider offers per capability; a role only offers providers that
  * have models for its capability.
  */
 const PROVIDERS = {
-	builtin: { label: "Dazzi 기본", letter: "D", kind: "builtin", models: {
-		embed: [["qwen3-embedding-0.6b", "Qwen3 Embedding 0.6B", "권장"], ["embeddinggemma-300m", "EmbeddingGemma 300M", "가벼움"]],
+	autorag: { label: "AutoRAG", letter: "A", kind: "builtin", models: {
+		llm: [["autorag/claude-sonnet-4.5", "Claude Sonnet 4.5"], ["autorag/gpt-5", "GPT-5"], ["autorag/gemini-2.5-pro", "Gemini 2.5 Pro"], ["autorag/qwen3.7-flash", "Qwen3.7 Flash", "빠름"]],
+		jev: [["autorag/jev-1.13", "Jev 1.13"]],
+		rerank: [["autorag/rerank-3-lite", "Voyage Rerank 3 Lite"], ["autorag/cohere-rerank-v3.5", "Cohere Rerank 3.5"]],
+		embed: [["qwen3-embedding-0.6b", "Qwen3 Embedding 0.6B"], ["embeddinggemma-300m", "EmbeddingGemma 300M", "가벼움"]],
 	} },
 	chatgpt: { label: "ChatGPT", letter: "C", kind: "subscription", models: {
 		llm: [["openai-codex/gpt-5", "GPT-5"], ["openai-codex/gpt-5-mini", "GPT-5 Mini"], ["openai-codex/o3", "o3"]],
@@ -195,26 +192,36 @@ const CONNECT_GROUPS = [
 
 /**
  * The five model roles the agent splits work into. `capability` filters which
- * providers a role can pick from; `specials` are non-model choices. Embedding
- * only lists builtin/local providers: corpus text never goes to a remote embedder.
+ * providers a role can pick from; `specials` are non-model choices. Every role
+ * defaults to the AutoRAG plan (`fallback`), and returns there when the provider
+ * it used is disconnected. Embedding only lists the AutoRAG plan and local
+ * servers, and both run on this Mac: corpus text never goes to a remote embedder.
  * Only LLM roles carry `thinking` (the ⋯ reasoning menu); Jev, reranking, and
  * embedding models have no reasoning step.
  */
 const ROLES = {
 	answer: { label: "답변 모델", short: "답변", capability: "llm", path: "model", thinking: true,
-		hint: "질문에 답하고 문서를 요약합니다." },
+		hint: "질문에 답하고 문서를 요약합니다.",
+		fallback: { provider: "autorag", model: "autorag/claude-sonnet-4.5" } },
 	decomposition: { label: "질문 나누기", short: "질문 나누기", capability: "llm", path: "queryDecomposition.model", thinking: true,
 		hint: "긴 질문을 검색어 여러 개로 나눕니다. 빠르고 저렴한 모델이 잘 맞습니다.",
-		specials: [["same", "답변 모델과 같게"]] },
+		specials: [["same", "답변 모델과 같게"]],
+		fallback: { provider: "autorag", model: "autorag/qwen3.7-flash" } },
 	jev: { label: "판단 모델 (Jev)", short: "Jev", capability: "jev", path: "jev.backend · jev.model",
 		hint: "자료를 더 찾을지, 웹을 검색할지 판단합니다.",
-		specials: [["off", "사용 안 함"]] },
+		specials: [["off", "사용 안 함"]],
+		fallback: { provider: "autorag", model: "autorag/jev-1.13" } },
 	rerank: { label: "검색 결과 정렬", short: "정렬", capability: "rerank", path: "rerank",
 		hint: "관련 높은 결과를 위로 올립니다. 답변이 조금 느려질 수 있습니다.",
-		specials: [["off", "사용 안 함"]] },
+		specials: [["off", "사용 안 함"]],
+		fallback: { provider: "autorag", model: "autorag/rerank-3-lite" } },
 	embed: { label: "문서 이해 모델", short: "문서 이해", capability: "embed", path: "minSync.embedder", reindex: true,
-		hint: "문서의 의미를 분석합니다. 문서 내용은 이 Mac 밖으로 나가지 않습니다." },
+		hint: "문서의 의미를 분석합니다. 문서 내용은 이 Mac 밖으로 나가지 않습니다.",
+		fallback: { provider: "autorag", model: "qwen3-embedding-0.6b" } },
 };
+
+// Every role starts on the AutoRAG plan.
+for (const [roleId, role] of Object.entries(ROLES)) state.roles[roleId] = { ...role.fallback };
 
 /** pi-ai thinking levels, trimmed to the five an office user can tell apart. */
 const THINKING_LEVELS = [
@@ -264,7 +271,7 @@ const data = {
 	general: {
 		group: "기본", label: "일반", icon: "gear",
 		title: "일반",
-		desc: "Dazzi의 화면과 시작 방식을 설정합니다.",
+		desc: "AutoRAG의 화면과 시작 방식을 설정합니다.",
 		notes: ["Display & General의 영문 라벨을 정리하고 한국어로 다시 썼습니다.", "문서 언어와 중복 검사는 각각 문서 읽기·중복 파일로 옮겼습니다.", "템플릿 안내 문구(workspacePath, memoryPath)를 제거했습니다.", "익명 사용 통계를 일반로 옮겼습니다."],
 		sections: [
 			{ title: "화면", rows: [
@@ -275,7 +282,7 @@ const data = {
 				{ id: "hidden", label: "숨김 파일 보기", hint: "점(.)으로 시작하는 시스템 파일을 Finder에 표시합니다.", control: switchControl("hidden", false), path: "app.showHiddenFiles" },
 			] },
 			{ title: "시작 및 업데이트", rows: [
-				{ id: "launch", label: "로그인할 때 자동 실행", hint: "컴퓨터를 켤 때 Dazzi를 백그라운드에서 시작합니다.", control: switchControl("launch", false), path: "app.launchAtLogin" },
+				{ id: "launch", label: "로그인할 때 자동 실행", hint: "컴퓨터를 켤 때 AutoRAG를 백그라운드에서 시작합니다.", control: switchControl("launch", false), path: "app.launchAtLogin" },
 				{ id: "updates", label: "업데이트 자동 설치", hint: "새 버전을 다음 앱 시작 때 자동으로 적용합니다.", control: switchControl("updates", true), path: "app.autoInstallUpdates" },
 			] },
 			{ title: "개인정보", rows: [
@@ -292,14 +299,15 @@ const data = {
 			"공급자 select 하나에 모델·키·주소를 몰아넣던 구조를 '연결된 서비스'와 '역할별 모델'로 나눴습니다.",
 			"LLM·Embedding·Reranker 탭과 Jev·질문 나누기 설정을 한 화면의 역할 목록으로 합쳤습니다. 검색 품질 메뉴는 없앴습니다.",
 			"서비스마다 다른 연결 방식(구독 로그인·API 키·추가 필드·내 컴퓨터 서버)은 연결 창에서 처리하고, 서버 주소·통신 방식·키 환경 변수는 화면에서 뺐습니다.",
-			"문서 이해 모델은 Dazzi 기본 또는 내 컴퓨터 서버만 고를 수 있습니다(원격 임베딩 금지).",
+			"모든 역할의 기본값은 AutoRAG 요금제입니다. 다른 서비스를 해제하면 그 서비스를 쓰던 역할은 AutoRAG 기본 모델로 돌아가므로 '모델 선택 필요' 상태가 없습니다.",
+			"문서 이해 모델은 AutoRAG 요금제 또는 내 컴퓨터 서버만 고를 수 있고, 둘 다 이 Mac에서 실행합니다(원격 임베딩 금지).",
 			"역할 옆 ⋯는 생각 깊이(reasoning level) 설정입니다. 추론 단계가 있는 답변 모델·질문 나누기에만 둡니다. Jev·검색 결과 정렬·문서 이해 모델에는 없습니다.",
 			"생각 깊이는 아직 config 필드가 없는 제안입니다. 답변 모델은 업스트림 thinking.final(기본 높음)에, 질문 나누기는 현재 off로 고정된 값을 여는 새 옵션에 대응합니다.",
 			"구독 로그인·연결 확인·커스텀 서비스 모델 목록은 현재 브리지에 없는 제안 기능입니다.",
 		],
 		sections: [
-			{ title: "연결된 서비스", desc: "모델을 제공하는 서비스입니다. 연결하면 아래 역할에서 그 서비스의 모델을 고를 수 있습니다.", rows: "providerRows" },
-			{ title: "역할별 모델", desc: "Dazzi는 일을 역할별로 나눠 처리합니다. 역할마다 맞는 모델을 고르세요.", rows: "taskRows" },
+			{ title: "연결된 서비스", desc: "기본은 AutoRAG 요금제입니다. 다른 서비스를 연결하면 아래 역할에서 그 서비스의 모델도 고를 수 있습니다.", rows: "providerRows" },
+			{ title: "역할별 모델", desc: "AutoRAG는 일을 역할별로 나눠 처리합니다. 역할마다 맞는 모델을 고르세요.", rows: "taskRows" },
 			{ title: "문서 이해 세부 조정", advanced: true, rows: [
 				{ id: "etime", label: "요청 시간 제한", hint: "문서 분석 요청 하나를 기다리는 최대 시간입니다.", control: fieldControl("etime", "number", "기본값 (초)"), path: "minSync.embedder.timeoutMs" },
 				{ id: "batch", label: "한 번에 분석할 문서 수", hint: "한 요청에 묶는 문서 수입니다.", control: fieldControl("batch", "number", "기본값"), path: "minSync.embedder.batchSize" },
@@ -310,7 +318,7 @@ const data = {
 	scope: {
 		group: "검색", label: "검색 범위", icon: "folder",
 		title: "검색 범위",
-		desc: "Dazzi가 읽고 검색할 폴더와 제외할 항목을 정합니다.",
+		desc: "AutoRAG가 읽고 검색할 폴더와 제외할 항목을 정합니다.",
 		notes: ["검색 폴더와 제외 폴더를 한 화면에 모았습니다.", "textarea로 입력하던 경로 목록을 목록 형태로 바꿨습니다."],
 		sections: [
 			{ title: "검색할 폴더", desc: "이 폴더의 내용을 AI 검색에 포함합니다.", rows: "pathRows" },
@@ -388,7 +396,7 @@ const data = {
 	apps: {
 		group: "연결된 앱", label: "모든 연결", icon: "plug",
 		title: "연결된 앱",
-		desc: "메신저, 메일, 클라우드의 자료를 Dazzi에서 함께 검색합니다.",
+		desc: "메신저, 메일, 클라우드의 자료를 AutoRAG에서 함께 검색합니다.",
 		notes: ["템플릿 카드의 CLI 이름·연결 수 배지를 제거했습니다.", "16개 템플릿을 쓰임별로 묶어 배치했습니다."],
 		sections: [
 			{ title: "내 연결", rows: "sourceRows" },
@@ -423,7 +431,7 @@ const data = {
 				{ id: "fpath", label: "검색 도구 위치", hint: "비워두면 자동으로 찾습니다.", control: fieldControl("fpath", "text", "자동"), path: "fsearch.binaryPath" },
 			] },
 			{ title: "개발자 옵션", advanced: true, rows: [
-				{ id: "rules", label: "AI 안내 파일 수정 허용", hint: "AGENTS.md·CLAUDE.md에 Dazzi 안내 블록을 추가합니다.", control: switchControl("rules", false), path: "jikji.writeAgentRules" },
+				{ id: "rules", label: "AI 안내 파일 수정 허용", hint: "AGENTS.md·CLAUDE.md에 AutoRAG 안내 블록을 추가합니다.", control: switchControl("rules", false), path: "jikji.writeAgentRules" },
 				{ id: "buffer", label: "출력 버퍼 크기", hint: "분석 결과를 임시로 담는 최대 크기입니다.", control: fieldControl("buffer", "number", "기본값 (MB)"), path: "jikji.maxBufferBytes" },
 				{ id: "hashbytes", label: "해시 계산 최대 크기", hint: "이 크기까지만 읽어 파일을 비교합니다.", control: fieldControl("hashbytes", "number", "기본값 (MB)"), path: "jikji.maxHashBytes" },
 				{ id: "textmax", label: "문서 텍스트 최대 길이", hint: "문서 하나에서 읽는 최대 글자 수입니다.", control: fieldControl("textmax", "number", "기본값"), path: "jikji.docTextMaxChars" },
@@ -438,7 +446,7 @@ const data = {
 /* -------------------------------------------------------- Dynamic rows -- */
 
 const KIND_META = {
-	builtin: "기본 제공 · 이 Mac에서 실행",
+	builtin: "요금제 · 기본 제공",
 	subscription: "구독 계정",
 	api: "API 키",
 	local: "내 컴퓨터",
@@ -487,16 +495,14 @@ function providerRows() {
 function roleControl(roleId) {
 	const role = ROLES[roleId];
 	const choice = state.roles[roleId];
-	let label;
-	if (choice === null) label = `<span class="dot warn"></span><span class="trigger-label">모델 선택 필요</span>`;
-	else if (choice.special) label = `<span class="trigger-label muted">${esc(role.specials.find(([value]) => value === choice.special)[1])}</span>`;
-	else label = `${appIcon(choice.provider, " sm")}<span class="trigger-label">${esc(modelLabel(choice.provider, role.capability, choice.model))}</span>`;
-	const trigger = `<button type="button" class="trigger${choice === null ? " needs" : ""}" data-menu="picker" data-role="${esc(roleId)}">${label}${svg("chevronDown")}</button>`;
+	const label = choice.special
+		? `<span class="trigger-label muted">${esc(role.specials.find(([value]) => value === choice.special)[1])}</span>`
+		: `${appIcon(choice.provider, " sm")}<span class="trigger-label">${esc(modelLabel(choice.provider, role.capability, choice.model))}</span>`;
+	const trigger = `<button type="button" class="trigger" data-menu="picker" data-role="${esc(roleId)}">${label}${svg("chevronDown")}</button>`;
 	if (!role.thinking) return `<span class="split solo">${trigger}</span>`;
-	// "답변 모델과 같게" inherits the answer model's level; an unset role has no model to tune.
-	const inherits = choice === null || Boolean(choice.special);
-	const title = choice === null ? "모델을 먼저 고르세요" : inherits ? "답변 모델의 생각 깊이를 따릅니다" : "생각 깊이";
-	return `<span class="split">${trigger}<button type="button" class="icon-btn" data-menu="thinking" data-role="${esc(roleId)}" aria-label="${esc(role.label)} 생각 깊이" title="${esc(title)}"${inherits ? " disabled" : ""}>${svg("more")}</button></span>`;
+	// "답변 모델과 같게" inherits the answer model's level.
+	const inherits = Boolean(choice.special);
+	return `<span class="split">${trigger}<button type="button" class="icon-btn" data-menu="thinking" data-role="${esc(roleId)}" aria-label="${esc(role.label)} 생각 깊이" title="${inherits ? "답변 모델의 생각 깊이를 따릅니다" : "생각 깊이"}"${inherits ? " disabled" : ""}>${svg("more")}</button></span>`;
 }
 
 function roleRows(roleIds) {
@@ -607,7 +613,12 @@ function menuBody() {
 			const models = PROVIDERS[providerId].models[role.capability].filter(([, name]) => match(name) || match(PROVIDERS[providerId].label));
 			if (!models.length) return "";
 			const current = choice?.provider === providerId ? `<small>${esc(modelLabel(providerId, role.capability, choice.model))}</small>` : "";
-			return `<div class="menu-sub"><button type="button" class="menu-item has-sub" data-sub="${esc(providerId)}">${appIcon(providerId, " sm")}<span>${esc(PROVIDERS[providerId].label)}</span>${current}${svg("chevron")}</button><div class="menu submenu" role="menu">${models.map(([modelId, name, tag]) => `<button type="button" class="menu-item" data-choose="${esc(arg)}" data-provider="${esc(providerId)}" data-model="${esc(modelId)}"><span>${esc(name)}</span>${tag ? `<small>${esc(tag)}</small>` : ""}${choice?.provider === providerId && choice.model === modelId ? svg("check") : ""}</button>`).join("")}</div></div>`;
+			const items = models.map(([modelId, name, tag]) => {
+				const badge = providerId === role.fallback.provider && modelId === role.fallback.model ? "기본" : tag;
+				const selected = choice?.provider === providerId && choice.model === modelId;
+				return `<button type="button" class="menu-item" data-choose="${esc(arg)}" data-provider="${esc(providerId)}" data-model="${esc(modelId)}"><span>${esc(name)}</span>${badge ? `<small>${esc(badge)}</small>` : ""}${selected ? svg("check") : ""}</button>`;
+			}).join("");
+			return `<div class="menu-sub"><button type="button" class="menu-item has-sub" data-sub="${esc(providerId)}">${appIcon(providerId, " sm")}<span>${esc(PROVIDERS[providerId].label)}</span>${current}${svg("chevron")}</button><div class="menu submenu" role="menu">${items}</div></div>`;
 		}).join("");
 		const connectable = connectableFor(role.capability);
 		const reindex = role.reindex ? `<div class="menu-sep"></div><button type="button" class="menu-item" data-reindex-now>${svg("sparkles")}<span>지금 문서 다시 분석</span></button>` : "";
@@ -687,7 +698,7 @@ function connectForm(providerId) {
 	}
 	const provider = PROVIDERS[providerId];
 	if (provider.kind === "subscription") {
-		return { title: `${provider.label}로 연결`, intro: `Dazzi가 ${provider.label} 구독으로 지원 모델을 사용합니다. 브라우저에서 ${provider.label}에 로그인해 계정을 연결하세요.`, fields: [], submit: "브라우저에서 연결", external: true };
+		return { title: `${provider.label}로 연결`, intro: `AutoRAG가 ${provider.label} 구독으로 지원 모델을 사용합니다. 브라우저에서 ${provider.label}에 로그인해 계정을 연결하세요.`, fields: [], submit: "브라우저에서 연결", external: true };
 	}
 	if (provider.kind === "local") {
 		return { title: "내 컴퓨터 서버 연결", intro: "Ollama, LM Studio처럼 이 Mac에서 실행 중인 서버만 연결할 수 있습니다.", fields: [{ name: "url", label: "서버 주소", placeholder: "http://127.0.0.1:11434", value: provider.url, required: true }], submit: "연결" };
@@ -737,14 +748,15 @@ function submitConnect(button) {
 		state.providers.push(id);
 		closeModal();
 		render({ keepScroll: true });
-		const used = Object.keys(ROLES).filter((role) => state.roles[role] === null && (PROVIDERS[id].models[ROLES[role].capability] ?? []).length);
-		toast(`${PROVIDERS[id].label}을(를) 연결했습니다.${used.length ? " 비어 있던 역할에서 모델을 고르세요." : ""}`);
+		toast(`${PROVIDERS[id].label}을(를) 연결했습니다. 역할별 모델에서 고를 수 있습니다.`);
 	}, external ? 900 : 500);
 }
 
 function disconnectProvider(providerId) {
-	const affected = Object.entries(state.roles).filter(([, choice]) => choice?.provider === providerId).map(([role]) => role);
-	const detail = affected.length ? `${affected.map((role) => ROLES[role].label).join(", ")}이(가) 이 서비스를 쓰고 있어 다시 골라야 합니다.` : "이 서비스를 쓰는 역할은 없습니다.";
+	const affected = Object.entries(state.roles).filter(([, choice]) => choice.provider === providerId).map(([role]) => role);
+	const detail = affected.length
+		? `${affected.map((role) => ROLES[role].label).join(", ")}은(는) AutoRAG 요금제의 기본 모델로 돌아갑니다.${affected.includes("embed") ? " 문서 이해 모델이 바뀌므로 문서를 다시 분석합니다." : ""}`
+		: "이 서비스를 쓰는 역할은 없습니다.";
 	modal(`<h2 id="dialog-title">${esc(PROVIDERS[providerId].label)} 연결을 해제할까요?</h2><p>저장된 키를 지우고 목록에서 제거합니다. ${esc(detail)}</p><div class="modal-actions"><button type="button" class="btn" data-action="close-modal">취소</button><button type="button" class="btn danger" data-confirm-disconnect="${esc(providerId)}">연결 해제</button></div>`);
 }
 
@@ -758,7 +770,7 @@ function chooseRole(roleId, choice) {
 	const same = current && choice && current.provider === choice.provider && current.model === choice.model && current.special === choice.special;
 	closeMenu();
 	if (same) return;
-	if (ROLES[roleId].reindex && current !== null) {
+	if (ROLES[roleId].reindex) {
 		state.pendingChoice = { roleId, choice };
 		modal(`<h2 id="dialog-title">문서를 다시 분석해야 합니다</h2><p>문서 이해 모델이 바뀌면 기존 분석 결과를 새 모델로 다시 만들어야 합니다. 문서 수에 따라 시간이 걸리고, 끝나기 전에는 의미 검색 결과가 비어 있을 수 있습니다.</p><div class="modal-actions"><button type="button" class="btn" data-action="close-modal">취소</button><button type="button" class="btn primary" data-confirm-choice>변경하고 다시 분석</button></div>`);
 		return;
@@ -826,7 +838,7 @@ function sourcePage(id) {
 			] },
 			{ title: "고급 설정", advanced: true, rows: advancedRows },
 			{ title: "연결 해제", rows: [
-				{ id: "danger", label: "연결 해제", hint: "Dazzi 검색에서만 제거되며 원본 앱의 데이터는 지워지지 않습니다.", control: `<button class="btn danger" data-action="delete" data-id="${esc(id)}">연결 해제</button>`, path: `datasources.${id}` },
+				{ id: "danger", label: "연결 해제", hint: "AutoRAG 검색에서만 제거되며 원본 앱의 데이터는 지워지지 않습니다.", control: `<button class="btn danger" data-action="delete" data-id="${esc(id)}">연결 해제</button>`, path: `datasources.${id}` },
 			] },
 		],
 	};
@@ -1045,7 +1057,7 @@ document.addEventListener("click", (event) => {
 			case "delete": {
 				const id = action.dataset.id;
 				const connection = state.connections.find((item) => item.id === id);
-				modal(`<h2>연결을 해제할까요?</h2><p>${esc(connection?.label ?? "")} 연결이 Dazzi 검색에서 제거됩니다. 원본 앱의 데이터는 지워지지 않습니다.</p><div class="modal-actions"><button class="btn" data-action="close-modal">취소</button><button class="btn danger" data-action="delete-confirm" data-id="${esc(id)}">연결 해제</button></div>`);
+				modal(`<h2>연결을 해제할까요?</h2><p>${esc(connection?.label ?? "")} 연결이 AutoRAG 검색에서 제거됩니다. 원본 앱의 데이터는 지워지지 않습니다.</p><div class="modal-actions"><button class="btn" data-action="close-modal">취소</button><button class="btn danger" data-action="delete-confirm" data-id="${esc(id)}">연결 해제</button></div>`);
 				return;
 			}
 			case "delete-confirm": {
@@ -1171,7 +1183,7 @@ document.addEventListener("click", (event) => {
 	if (confirmDisconnect) {
 		const id = confirmDisconnect.dataset.confirmDisconnect;
 		state.providers = state.providers.filter((item) => item !== id);
-		for (const [role, choice] of Object.entries(state.roles)) if (choice?.provider === id) state.roles[role] = null;
+		for (const [role, choice] of Object.entries(state.roles)) if (choice.provider === id) state.roles[role] = { ...ROLES[role].fallback };
 		closeModal();
 		render({ keepScroll: true });
 		toast(`${PROVIDERS[id].label} 연결을 해제했습니다.`);
