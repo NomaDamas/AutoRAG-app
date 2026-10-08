@@ -190,7 +190,8 @@ if (isWindows) {
 	await dialog.waitFor({ timeout: 30_000 });
 	await dialog.getByRole("button", { name: "Empty", exact: true }).click();
 	await dialog.waitFor({ state: "hidden", timeout: 30_000 });
-	await waitFor(async () => !existsSync(join(THROWAWAY_TRASH, "empty-me-a.txt")), {
+	// The empty removes the payloads one by one: wait for every one before reading any.
+	await waitFor(async () => !existsSync(join(THROWAWAY_TRASH, "empty-me-a.txt")) && !existsSync(join(THROWAWAY_TRASH, "empty-me-b.txt")), {
 		timeoutMs: 30_000,
 		label: "confirmed empty deleted the payloads",
 	});

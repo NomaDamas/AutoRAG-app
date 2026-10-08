@@ -165,12 +165,12 @@ function ipcCost({ target }) {
 		let startedAt = performance.now();
 		const listing = await fs.listDir(target);
 		const listMs = round(performance.now() - startedAt);
-		const files = listing.entries.filter((entry) => entry.kind === "file" && typeof entry.modifiedAt === "string");
+		const files = listing.entries.filter((entry) => entry.kind === "file" && typeof entry.mtimeMs === "number");
 		const targets = files.map((entry) => ({
 			path: entry.path,
 			kind: entry.kind,
 			ext: entry.name.includes(".") ? entry.name.split(".").pop().toLowerCase() : "",
-			modifiedAt: entry.modifiedAt,
+			mtimeMs: entry.mtimeMs,
 		}));
 		startedAt = performance.now();
 		await fs.enrichEntries(targets, true);

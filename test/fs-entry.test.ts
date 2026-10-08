@@ -31,8 +31,9 @@ describe("buildFsEntry application bundles", () => {
 
 		// Then it is a file carrying its .app extension, so the OS opens it …
 		expect(entry).toMatchObject({ name: "Hello.app", kind: "file", ext: "app" });
-		// … and the tile shows an OS icon rather than a folder glyph
-		expect(entry.iconUrl).toBeNull();
+		// … and nothing but plain filesystem values rides along: the tile's OS icon
+		// arrives later through enrichment, not on the listing
+		expect(Object.keys(entry)).not.toContain("iconUrl");
 	});
 
 	it("keeps a bundle's size null, exactly like the folder it is on disk", async () => {

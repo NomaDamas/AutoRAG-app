@@ -12,7 +12,19 @@
  */
 
 import { ROW_HEIGHT } from "./selection";
-import type { SortableEntry } from "./sort";
+import {
+	addedMsOf,
+	applicationOf,
+	commentsTextOf,
+	createdMsOf,
+	dimensionsTextOf,
+	kindLabelOf,
+	lastOpenedMsOf,
+	ratingOf,
+	type SortableEntry,
+	sizeOf,
+	tagsTextOf,
+} from "./entry-values";
 import type { StackRow } from "./version-family";
 
 /** Finder grouping criteria exposed by the toolbar Group menu. */
@@ -141,29 +153,29 @@ function groupValue(entry: SortableEntry, key: Exclude<GroupKey, "none">, now: n
 			return textValue(label);
 		}
 		case "kind":
-			return textValue(entry.kindLabel);
+			return textValue(kindLabelOf(entry));
 		case "extension":
 			return textValue(extensionLabel(entry));
 		case "application":
-			return textValue(entry.applicationLabel ?? "No Application");
+			return textValue(applicationOf(entry) ?? "No Application");
 		case "dateCreated":
-			return dateGroupValue(entry.createdValue ?? 0, now);
+			return dateGroupValue(createdMsOf(entry) ?? 0, now);
 		case "date":
-			return dateGroupValue(entry.modifiedValue, now);
+			return dateGroupValue(entry.mtimeMs, now);
 		case "dateAdded":
-			return dateGroupValue(entry.addedValue ?? 0, now);
+			return dateGroupValue(addedMsOf(entry) ?? 0, now);
 		case "dateLastOpened":
-			return dateGroupValue(entry.lastOpenedValue ?? 0, now);
+			return dateGroupValue(lastOpenedMsOf(entry) ?? 0, now);
 		case "size":
-			return sizeGroupValue(entry.sizeValue);
+			return sizeGroupValue(sizeOf(entry));
 		case "tags":
-			return textValue(entry.tagsLabel ?? "No Tags");
+			return textValue(tagsTextOf(entry) ?? "No Tags");
 		case "comments":
-			return textValue(entry.commentsLabel ?? "No Comments");
+			return textValue(commentsTextOf(entry) ?? "No Comments");
 		case "dimensions":
-			return textValue(entry.dimensionsLabel ?? "No Dimensions");
+			return textValue(dimensionsTextOf(entry) ?? "No Dimensions");
 		case "rating":
-			return ratingValue(entry.ratingValue);
+			return ratingValue(ratingOf(entry));
 	}
 }
 

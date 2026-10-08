@@ -27,7 +27,7 @@ import type {
 import type { FsDirChange } from "../shared/live-contract";
 import { createDupeyProbe, DUPEY_INSTALL_COMMAND, type DupeyProbe } from "./dupey";
 import { DIRTY_STAMP, lstatProbe, remapRenames, sameContent, verifyFamilies, type FileStamp, type Probe } from "./version-family-verify";
-import type { StoredVersionFamilies, VersionFamilyStore } from "./version-family-store";
+import { type StoredVersionFamilies, VERSION_FAMILY_STORE_VERSION, type VersionFamilyStore } from "./version-family-store";
 
 export const DEFAULT_SCAN_INTERVAL_MINUTES = 60;
 
@@ -56,9 +56,9 @@ export function pruneVersionFamilies(
 	for (const family of families) {
 		const entries = family.entries.filter((entry) => !removed.has(entry.path));
 		if (entries.length === 0) continue;
-		const modifiedAt = new Map(family.entries.map((entry) => [entry.path, entry.modifiedAt]));
+		const mtimes = new Map(family.entries.map((entry) => [entry.path, entry.mtimeMs]));
 		const members = family.members.filter((member) => !removed.has(member.path));
-		const head = removed.has(family.head) ? newestPath(members, modifiedAt) : family.head;
+		const head = removed.has(family.head) ? newestPath(members, mtimes) : family.head;
 		if (head === null) continue;
 		const rest = members.filter((member) => member.path !== head);
 		if (rest.length === 0) continue;
@@ -70,12 +70,12 @@ export function pruneVersionFamilies(
 /** The member with the newest mtime, path as the deterministic tie-break. */
 function newestPath(
 	members: readonly FsVersionMember[],
-	modifiedAt: ReadonlyMap<string, string>,
+	mtimes: ReadonlyMap<string, number>,
 ): string | null {
 	let best: string | null = null;
-	let bestAt = "";
+	let bestAt = Number.NEGATIVE_INFINITY;
 	for (const member of members) {
-		const at = modifiedAt.get(member.path) ?? "";
+		const at = mtimes.get(member.path) ?? Number.NEGATIVE_INFINITY;
 		if (best === null || at > bestAt || (at === bestAt && member.path < best)) {
 			best = member.path;
 			bestAt = at;
@@ -463,7 +463,7 @@ export function createVersionFamilyService(deps: VersionFamilyServiceDeps): Vers
 				);
 				for (const path of fencedPaths) scannedStamps[path] = DIRTY_STAMP;
 				const stored: StoredVersionFamilies = {
-					version: 1,
+					version: VERSION_FAMILY_STORE_VERSION,
 					scannedAt: now().toISOString(),
 					locations,
 					families: pruneVersionFamilies(scanned, honored),

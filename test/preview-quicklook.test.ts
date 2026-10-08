@@ -155,7 +155,7 @@ describe("application bundle summary", () => {
 
 	it("summarizes a macOS .app as the app itself, asking for its own icon", async () => {
 		const path = await bundleFixture();
-		const asked: Array<{ readonly path: string; readonly ext: string; readonly modifiedAt: string }> = [];
+		const asked: Array<{ readonly path: string; readonly ext: string; readonly mtimeMs: number }> = [];
 		try {
 			const bundle = await summarizeBundle(path, {
 				preview: async (target) => {
@@ -168,7 +168,10 @@ describe("application bundle summary", () => {
 			expect(bundle.path).toBe(path);
 			expect(bundle.iconUrl).toBe("autorag-thumb://local/?path=Hello.app&mtime=t&size=640");
 			// The icon identity is the bundle's own, keyed by its extension at the preview tier.
-			expect(asked).toEqual([{ path, ext: "app", modifiedAt: bundle.modifiedAt }]);
+			// Keyed by the bundle's own mtime, to the same millisecond its summary reports.
+			expect(asked).toHaveLength(1);
+			expect(asked[0]).toMatchObject({ path, ext: "app" });
+			expect(Math.trunc(asked[0]?.mtimeMs ?? Number.NaN)).toBe(Date.parse(bundle.modifiedAt));
 		} finally {
 			await rm(dirname(path), { recursive: true, force: true });
 		}

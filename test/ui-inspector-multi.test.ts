@@ -1,20 +1,33 @@
 import { describe, expect, it } from "vitest";
 import type { FinderEntry } from "../src/renderer/src/data/entries";
+import type { FsFinderMetadata } from "../src/shared/fs-contract";
 import { stackCards, summarizeSelection } from "../src/renderer/src/state/inspector-multi";
+
+function finder(overrides: Partial<FsFinderMetadata> = {}): FsFinderMetadata {
+	return {
+		createdAt: null,
+		addedAt: null,
+		lastOpenedAt: null,
+		tags: [],
+		comments: null,
+		width: null,
+		height: null,
+		rating: null,
+		application: null,
+		...overrides,
+	};
+}
 
 function entry(overrides: Partial<FinderEntry> = {}): FinderEntry {
 	return {
 		name: "a.pdf",
 		path: "/Users/me/Documents/a.pdf",
 		kind: "file",
-		fileKind: "pdf",
-		iconUrl: null,
-		dateLabel: "Sep 30, 12:00",
-		sizeLabel: "1.4 MB",
-		kindLabel: "PDF document",
-		location: "/Users/me/Documents",
-		modifiedValue: new Date(2026, 8, 30, 12, 0, 0).getTime(),
-		sizeValue: 1_468_006,
+		ext: "pdf",
+		size: 1_468_006,
+		mtimeMs: new Date(2026, 8, 30, 12, 0, 0).getTime(),
+		birthtimeMs: 0,
+		osKind: "PDF document",
 		...overrides,
 	};
 }
@@ -28,8 +41,8 @@ describe("summarizeSelection", () => {
 
 	it("sums file sizes into one total", () => {
 		const summary = summarizeSelection([
-			entry({ sizeValue: 1_000_000 }),
-			entry({ path: "/b.pdf", sizeValue: 2_000_000 }),
+			entry({ size: 1_000_000 }),
+			entry({ path: "/b.pdf", size: 2_000_000 }),
 		]);
 		expect(summary.totalBytes).toBe(3_000_000);
 		expect(summary.sizeLabel).toBe("2.9 MB");
@@ -44,7 +57,7 @@ describe("summarizeSelection", () => {
 		const summary = summarizeSelection([
 			entry(),
 			entry({ path: "/b.pdf" }),
-			entry({ path: "/c.jpg", fileKind: "png", kindLabel: "JPEG image" }),
+			entry({ path: "/c.jpg", ext: "jpg", osKind: "JPEG image" }),
 		]);
 		expect(summary.kindSummary).toBe("PDF document 2개, JPEG image 1개");
 	});
@@ -52,16 +65,16 @@ describe("summarizeSelection", () => {
 	it("caps a long kind list with 외 N종", () => {
 		const summary = summarizeSelection([
 			entry(),
-			entry({ path: "/b.jpg", fileKind: "png", kindLabel: "JPEG image" }),
-			entry({ path: "/c.zip", fileKind: "zip", kindLabel: "ZIP archive" }),
-			entry({ path: "/d.md", fileKind: "md", kindLabel: "Markdown" }),
+			entry({ path: "/b.jpg", ext: "jpg", osKind: "JPEG image" }),
+			entry({ path: "/c.zip", ext: "zip", osKind: "ZIP archive" }),
+			entry({ path: "/d.md", ext: "md", osKind: "Markdown" }),
 		]);
 		expect(summary.kindSummary).toBe("JPEG image 1개, Markdown 1개, 외 2종");
 	});
 
 	it("excludes folders from the byte total and drops the size when nothing is measurable", () => {
-		const folder = entry({ kind: "folder", fileKind: "folder", kindLabel: "Folder", sizeValue: 0 });
-		const mixed = summarizeSelection([folder, entry({ path: "/b.pdf", sizeValue: 500_000 })]);
+		const folder = entry({ kind: "folder", ext: "", osKind: "Folder", size: null });
+		const mixed = summarizeSelection([folder, entry({ path: "/b.pdf", size: 500_000 })]);
 		expect(mixed.totalBytes).toBe(500_000);
 		expect(mixed.sizeLabel).toBe("488 KB");
 		const foldersOnly = summarizeSelection([folder, { ...folder, path: "/other" }]);
@@ -71,29 +84,29 @@ describe("summarizeSelection", () => {
 	it("ranges dates across the selection and collapses a shared day", () => {
 		const summary = summarizeSelection([
 			entry({
-				modifiedValue: new Date(2026, 8, 30, 12).getTime(),
-				createdValue: new Date(2026, 8, 28, 9).getTime(),
+				mtimeMs: new Date(2026, 8, 30, 12).getTime(),
+				finder: finder({ createdAt: new Date(2026, 8, 28, 9).toISOString() }),
 			}),
 			entry({
 				path: "/b.pdf",
-				modifiedValue: new Date(2026, 9, 3, 21, 16).getTime(),
-				createdValue: new Date(2026, 9, 3, 21, 16).getTime(),
+				mtimeMs: new Date(2026, 9, 3, 21, 16).getTime(),
+				finder: finder({ createdAt: new Date(2026, 9, 3, 21, 16).toISOString() }),
 			}),
 		]);
 		expect(summary.modifiedRange).toBe("2026-09-30 – 2026-10-03");
 		expect(summary.createdRange).toBe("2026-09-28 – 2026-10-03");
 
 		const sameDay = summarizeSelection([
-			entry({ modifiedValue: new Date(2026, 9, 3, 9).getTime() }),
-			entry({ path: "/b.pdf", modifiedValue: new Date(2026, 9, 3, 21).getTime() }),
+			entry({ mtimeMs: new Date(2026, 9, 3, 9).getTime() }),
+			entry({ path: "/b.pdf", mtimeMs: new Date(2026, 9, 3, 21).getTime() }),
 		]);
 		expect(sameDay.modifiedRange).toBe("2026-10-03");
 	});
 
 	it("ignores unparseable zero stamps and reports null when no stamp survives", () => {
 		const summary = summarizeSelection([
-			entry({ modifiedValue: 0 }),
-			entry({ path: "/b.pdf", modifiedValue: 0 }),
+			entry({ mtimeMs: 0 }),
+			entry({ path: "/b.pdf", mtimeMs: 0 }),
 		]);
 		expect(summary.modifiedRange).toBeNull();
 		expect(summary.createdRange).toBeNull();
