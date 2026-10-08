@@ -27,7 +27,7 @@ afterEach(async () => {
 interface Harness {
 	readonly service: ActionService;
 	readonly commands: { readonly command: string; readonly args: readonly string[] }[];
-	readonly shares: { readonly path: string; readonly anchor: ActionAnchor }[];
+	readonly shares: { readonly paths: readonly string[]; readonly anchor: ActionAnchor }[];
 }
 
 /**
@@ -61,7 +61,7 @@ function makeService(
 	} = {},
 ): Harness {
 	const commands: { command: string; args: string[] }[] = [];
-	const shares: { path: string; anchor: ActionAnchor }[] = [];
+	const shares: { paths: string[]; anchor: ActionAnchor }[] = [];
 	const imageOutput = options.imageOutput ?? "encoded";
 	const run: CommandRunner = async (command, args) => {
 		commands.push({ command, args: [...args] });
@@ -89,8 +89,8 @@ function makeService(
 			applications: { pick: async () => options.picked ?? null },
 			applicationIcon: async (path) => `data:image/png;base64,${basename(path)}`,
 			share: {
-				present: (path, anchor) => {
-					shares.push({ path, anchor });
+				present: (paths, anchor) => {
+					shares.push({ paths: [...paths], anchor });
 				},
 			},
 			run,
@@ -137,11 +137,11 @@ describe("archive round-trip", () => {
 		await writeFile(join(source, "readme.md"), "hello");
 		await writeFile(join(source, "empty", "keep.txt"), "keep");
 
-		const packed = await service.run(source, { kind: "compress" }, null);
+		const packed = await service.run([source], { kind: "compress" }, null);
 		expect(packed.output).toBe(join(root, "docs.zip"));
 		expect((await readFile(packed.output ?? "", "utf8")).slice(0, 2)).toBe("PK");
 
-		const unpacked = await service.run(packed.output ?? "", { kind: "extract" }, null);
+		const unpacked = await service.run([packed.output ?? ""], { kind: "extract" }, null);
 		expect(unpacked.output).toBe(join(root, "docs 2"));
 		expect(await readFile(join(unpacked.output ?? "", "readme.md"), "utf8")).toBe("hello");
 		expect(await readFile(join(unpacked.output ?? "", "empty", "keep.txt"), "utf8")).toBe("keep");
@@ -152,7 +152,7 @@ describe("archive round-trip", () => {
 		const { service } = makeService();
 		const file = join(root, "note.txt");
 		await writeFile(file, "note");
-		const packed = await service.run(file, { kind: "compress" }, null);
+		const packed = await service.run([file], { kind: "compress" }, null);
 		expect(packed.output).toBe(join(root, "note.txt.zip"));
 		expect(stemOf(file)).toBe("note");
 	});
@@ -168,7 +168,7 @@ describe("archive round-trip", () => {
 				"packed/deep/two.txt": new Uint8Array(Buffer.from("two")),
 			}),
 		);
-		const unpacked = await service.run(archive, { kind: "extract" }, null);
+		const unpacked = await service.run([archive], { kind: "extract" }, null);
 		expect(unpacked.output).toBe(join(root, "packed"));
 		expect(await readFile(join(unpacked.output ?? "", "one.txt"), "utf8")).toBe("one");
 		expect(await readFile(join(unpacked.output ?? "", "deep", "two.txt"), "utf8")).toBe("two");
@@ -185,7 +185,7 @@ describe("archive round-trip", () => {
 				"beta/b.txt": new Uint8Array(Buffer.from("b")),
 			}),
 		);
-		const unpacked = await service.run(archive, { kind: "extract" }, null);
+		const unpacked = await service.run([archive], { kind: "extract" }, null);
 		expect(await readFile(join(unpacked.output ?? "", "alpha", "a.txt"), "utf8")).toBe("a");
 		expect(await readFile(join(unpacked.output ?? "", "beta", "b.txt"), "utf8")).toBe("b");
 	});
@@ -196,7 +196,7 @@ describe("archive round-trip", () => {
 		const bytes = zipSync({ "../escape.txt": new Uint8Array(Buffer.from("pwned")) });
 		await writeFile(hostile, bytes);
 
-		await expect(service.run(hostile, { kind: "extract" }, null)).rejects.toThrow(/벗어납니다/);
+		await expect(service.run([hostile], { kind: "extract" }, null)).rejects.toThrow(/벗어납니다/);
 		await expect(readFile(join(root, "escape.txt"))).rejects.toThrow();
 		// The destination folder itself is created, but stays empty.
 		expect(await readdir(join(root, "hostile"))).toEqual([]);
@@ -209,7 +209,7 @@ describe("image actions", () => {
 		const source = join(root, "photo.png");
 		await writeFile(source, "png");
 
-		const outcome = await service.run(source, { kind: "convertImage", format: "jpeg" }, null);
+		const outcome = await service.run([source], { kind: "convertImage", format: "jpeg" }, null);
 		expect(outcome.output).toBe(join(root, "photo.jpg"));
 		expect(commands.at(-1)).toEqual({
 			command: "sips",
@@ -221,12 +221,12 @@ describe("image actions", () => {
 		const without = makeService({ ffmpeg: false });
 		const source = join(root, "photo.png");
 		await writeFile(source, "png");
-		await expect(without.service.run(source, { kind: "convertImage", format: "webp" }, null)).rejects.toThrow(
+		await expect(without.service.run([source], { kind: "convertImage", format: "webp" }, null)).rejects.toThrow(
 			/WEBP/,
 		);
 
 		const withFfmpeg = makeService({ ffmpeg: true });
-		const outcome = await withFfmpeg.service.run(source, { kind: "convertImage", format: "webp" }, null);
+		const outcome = await withFfmpeg.service.run([source], { kind: "convertImage", format: "webp" }, null);
 		expect(outcome.output).toBe(join(root, "photo.webp"));
 		expect(withFfmpeg.commands.at(-1)?.command).toBe("ffmpeg");
 		expect(withFfmpeg.commands.at(-1)?.args).toEqual([
@@ -249,25 +249,25 @@ describe("image actions", () => {
 		const { service, commands } = makeService();
 		const source = join(root, "photo.jpeg");
 		await writeFile(source, "jpg");
-		const outcome = await service.run(source, { kind: "resizeImage", maxEdge: 1920 }, null);
+		const outcome = await service.run([source], { kind: "resizeImage", maxEdge: 1920 }, null);
 		expect(outcome.output).toBe(join(root, "photo-1920.jpeg"));
 		expect(commands.at(-1)?.args).toEqual(["-Z", "1920", "--out", join(root, "photo-1920.jpeg"), source]);
 
 		const webp = join(root, "vector.webp");
 		await writeFile(webp, "webp");
-		await expect(service.run(webp, { kind: "resizeImage", maxEdge: 1920 }, null)).rejects.toThrow(/지원하지 않습니다/);
+		await expect(service.run([webp], { kind: "resizeImage", maxEdge: 1920 }, null)).rejects.toThrow(/지원하지 않습니다/);
 	});
 
 	it("optimizes only lossy formats", async () => {
 		const { service } = makeService();
 		const photo = join(root, "photo.jpeg");
 		await writeFile(photo, "jpg");
-		const outcome = await service.run(photo, { kind: "optimizeImage" }, null);
+		const outcome = await service.run([photo], { kind: "optimizeImage" }, null);
 		expect(outcome.output).toBe(join(root, "photo-optimized.jpeg"));
 
 		const png = join(root, "flat.png");
 		await writeFile(png, "png");
-		await expect(service.run(png, { kind: "optimizeImage" }, null)).rejects.toThrow(/지원하지 않습니다/);
+		await expect(service.run([png], { kind: "optimizeImage" }, null)).rejects.toThrow(/지원하지 않습니다/);
 	});
 });
 
@@ -277,7 +277,7 @@ describe("image actions on Windows (ffmpeg backend)", () => {
 		const source = join(root, "shot.png");
 		await writeFile(source, "png");
 
-		const outcome = await service.run(source, { kind: "convertImage", format: "jpeg" }, null);
+		const outcome = await service.run([source], { kind: "convertImage", format: "jpeg" }, null);
 		expect(outcome.output).toBe(join(root, "shot.jpg"));
 		const last = commands.at(-1);
 		expect(last?.command).toBe("ffmpeg");
@@ -291,7 +291,7 @@ describe("image actions on Windows (ffmpeg backend)", () => {
 		const source = join(root, "shot.png");
 		await writeFile(source, "png");
 
-		const outcome = await service.run(source, { kind: "resizeImage", maxEdge: 800 }, null);
+		const outcome = await service.run([source], { kind: "resizeImage", maxEdge: 800 }, null);
 		expect(outcome.output).toBe(join(root, "shot-800.png"));
 		const args = commands.at(-1)?.args ?? [];
 		expect(args).toContain("-vf");
@@ -304,7 +304,7 @@ describe("image actions on Windows (ffmpeg backend)", () => {
 		const source = join(root, "big.jpeg");
 		await writeFile(source, "jpeg-bytes");
 
-		const outcome = await service.run(source, { kind: "optimizeImage" }, null);
+		const outcome = await service.run([source], { kind: "optimizeImage" }, null);
 		expect(outcome.output).toBe(join(root, "big-optimized.jpeg"));
 		expect(commands.at(-1)?.command).toBe("ffmpeg");
 	});
@@ -313,13 +313,13 @@ describe("image actions on Windows (ffmpeg backend)", () => {
 		const shrink = makeService({ platform: "win32", imageOutput: "s" });
 		const png = join(root, "flat.png");
 		await writeFile(png, "png-bytes");
-		await shrink.service.run(png, { kind: "optimizeImage" }, null);
+		await shrink.service.run([png], { kind: "optimizeImage" }, null);
 		expect((shrink.commands.at(-1)?.args ?? []).join(" ")).toContain("-compression_level 9");
 
 		const bigger = makeService({ platform: "win32", imageOutput: "much-larger-than-source" });
 		const other = join(root, "flat2.png");
 		await writeFile(other, "png");
-		await expect(bigger.service.run(other, { kind: "optimizeImage" }, null)).rejects.toThrow(/최적화/);
+		await expect(bigger.service.run([other], { kind: "optimizeImage" }, null)).rejects.toThrow(/최적화/);
 	});
 
 	it("hides formats the ffmpeg build cannot encode", async () => {
@@ -327,7 +327,7 @@ describe("image actions on Windows (ffmpeg backend)", () => {
 		const source = join(root, "shot.png");
 		await writeFile(source, "png");
 		// No heif muxer is listed, so HEIC is not a capability and cannot be run.
-		await expect(service.run(source, { kind: "convertImage", format: "heic" }, null)).rejects.toThrow(/HEIC/);
+		await expect(service.run([source], { kind: "convertImage", format: "heic" }, null)).rejects.toThrow(/HEIC/);
 	});
 
 	it("pins literal filenames against image2's %d pattern expansion", async () => {
@@ -335,7 +335,7 @@ describe("image actions on Windows (ffmpeg backend)", () => {
 		const source = join(root, "report%20draft.png");
 		await writeFile(source, "png");
 
-		const outcome = await service.run(source, { kind: "convertImage", format: "jpeg" }, null);
+		const outcome = await service.run([source], { kind: "convertImage", format: "jpeg" }, null);
 		expect(outcome.output).toBe(join(root, "report%20draft.jpg"));
 		const args = commands.at(-1)?.args ?? [];
 		// Pattern matching off before the input; literal single-file output.
@@ -350,7 +350,7 @@ describe("image actions on Windows (ffmpeg backend)", () => {
 		const source = join(root, `photo.${extension}`);
 		await writeFile(source, extension);
 
-		await service.run(source, { kind: "convertImage", format: "jpeg" }, null);
+		await service.run([source], { kind: "convertImage", format: "jpeg" }, null);
 		const args = commands.at(-1)?.args ?? [];
 		expect(args).not.toContain("image2");
 		expect(args).not.toContain("-pattern_type");
@@ -361,7 +361,7 @@ describe("image actions on Windows (ffmpeg backend)", () => {
 		const { service, commands } = makeService({ platform: "win32" });
 		const source = join(root, "shot.png");
 		await writeFile(source, "png");
-		await service.run(source, { kind: "convertImage", format: "jpeg" }, null);
+		await service.run([source], { kind: "convertImage", format: "jpeg" }, null);
 		const args = commands.at(-1)?.args ?? [];
 		expect(args.join(" ")).toContain("-q:v 4");
 		expect(args).not.toContain("70");
@@ -371,7 +371,7 @@ describe("image actions on Windows (ffmpeg backend)", () => {
 		const { service, commands } = makeService({ platform: "win32" });
 		const source = join(root, "shot.png");
 		await writeFile(source, "png");
-		await service.run(source, { kind: "convertImage", format: "webp" }, null);
+		await service.run([source], { kind: "convertImage", format: "webp" }, null);
 		expect((commands.at(-1)?.args ?? []).join(" ")).not.toContain("-update");
 	});
 
@@ -382,7 +382,7 @@ describe("image actions on Windows (ffmpeg backend)", () => {
 		});
 		const source = join(root, "shot.png");
 		await writeFile(source, "png");
-		const outcome = await service.run(source, { kind: "convertImage", format: "heic" }, null);
+		const outcome = await service.run([source], { kind: "convertImage", format: "heic" }, null);
 		expect(outcome.output).toBe(join(root, "shot.heic"));
 		const args = commands.at(-1)?.args ?? [];
 		expect(args.join(" ")).toContain("-crf 23");
@@ -395,7 +395,7 @@ describe("video actions", () => {
 		const { service, commands } = makeService({ ffmpeg: true });
 		const source = join(root, "clip.mov");
 		await writeFile(source, "mov");
-		const outcome = await service.run(source, { kind: "convertVideo", container: "mp4" }, null);
+		const outcome = await service.run([source], { kind: "convertVideo", container: "mp4" }, null);
 		expect(outcome.output).toBe(join(root, "clip.mp4"));
 		expect(commands.at(-1)).toEqual({
 			command: "ffmpeg",
@@ -407,7 +407,7 @@ describe("video actions", () => {
 		const { service } = makeService({ ffmpeg: false });
 		const source = join(root, "clip.mov");
 		await writeFile(source, "mov");
-		await expect(service.run(source, { kind: "convertVideo", container: "mp4" }, null)).rejects.toThrow(/ffmpeg/);
+		await expect(service.run([source], { kind: "convertVideo", container: "mp4" }, null)).rejects.toThrow(/ffmpeg/);
 	});
 });
 
@@ -442,7 +442,7 @@ describe("open with", () => {
 		const { service, commands } = makeService({ registered: [IINA, VLC] });
 		const source = join(root, "clip.mkv");
 		await writeFile(source, "mkv");
-		const outcome = await service.run(source, { kind: "openWith", application: VLC }, null);
+		const outcome = await service.run([source], { kind: "openWith", application: VLC }, null);
 		expect(outcome.note).toBe("clip.mkv — VLC로 열었습니다");
 		expect(commands.at(-1)).toEqual({ command: "open", args: ["-a", VLC, source] });
 	});
@@ -451,7 +451,9 @@ describe("open with", () => {
 		const { service, commands } = makeService({ registered: [IINA] });
 		const source = join(root, "clip.mkv");
 		await writeFile(source, "mkv");
-		await expect(service.run(source, { kind: "openWith", application: "/bin/sh" }, null)).rejects.toThrow(/열 수 있는 앱/);
+		await expect(service.run([source], { kind: "openWith", application: "/bin/sh" }, null)).rejects.toThrow(
+			/열 수 있는 앱/,
+		);
 		expect(commands.some((command) => command.command === "open")).toBe(false);
 	});
 
@@ -459,7 +461,7 @@ describe("open with", () => {
 		const { service, commands } = makeService({ picked: "/Applications/Obscure.app", registered: [IINA] });
 		const source = join(root, "clip.mkv");
 		await writeFile(source, "mkv");
-		const outcome = await service.run(source, { kind: "openWith", application: null }, null);
+		const outcome = await service.run([source], { kind: "openWith", application: null }, null);
 		expect(outcome.note).toContain("Obscure");
 		expect(commands.at(-1)).toEqual({ command: "open", args: ["-a", "/Applications/Obscure.app", source] });
 	});
@@ -468,9 +470,61 @@ describe("open with", () => {
 		const { service, commands } = makeService({ picked: null });
 		const source = join(root, "clip.mkv");
 		await writeFile(source, "mkv");
-		const outcome = await service.run(source, { kind: "openWith", application: null }, null);
+		const outcome = await service.run([source], { kind: "openWith", application: null }, null);
 		expect(outcome.output).toBeNull();
 		expect(commands).toEqual([]);
+	});
+});
+
+describe("batch targets", () => {
+	it("compresses a multi-selection into one Archive.zip", async () => {
+		const { service } = makeService();
+		await mkdir(join(root, "docs"));
+		await writeFile(join(root, "docs", "readme.md"), "hello");
+		await writeFile(join(root, "note.txt"), "note");
+		const packed = await service.run([join(root, "docs"), join(root, "note.txt")], { kind: "compress" }, null);
+		expect(packed.output).toBe(join(root, "Archive.zip"));
+		expect(packed.note).toBe("Archive.zip — 압축했습니다");
+
+		const unpacked = await service.run([packed.output ?? ""], { kind: "extract" }, null);
+		expect(unpacked.output).toBe(join(root, "Archive"));
+		expect(await readFile(join(root, "Archive", "docs", "readme.md"), "utf8")).toBe("hello");
+		expect(await readFile(join(root, "Archive", "note.txt"), "utf8")).toBe("note");
+	});
+
+	it("numbers Archive.zip when one already exists", async () => {
+		const { service } = makeService();
+		await writeFile(join(root, "Archive.zip"), "old");
+		await writeFile(join(root, "note.txt"), "note");
+		await writeFile(join(root, "photo.png"), "png");
+		const packed = await service.run([join(root, "note.txt"), join(root, "photo.png")], { kind: "compress" }, null);
+		expect(packed.output).toBe(join(root, "Archive 2.zip"));
+	});
+
+	it("opens every target with one chosen application", async () => {
+		const { service, commands } = makeService({ picked: "/Applications/IINA.app" });
+		const one = join(root, "a.mkv");
+		const two = join(root, "b.mkv");
+		await writeFile(one, "x");
+		await writeFile(two, "y");
+		const outcome = await service.run([one, two], { kind: "openWith", application: null }, null);
+		expect(commands.at(-1)).toEqual({ command: "open", args: ["-a", "/Applications/IINA.app", one, two] });
+		expect(outcome.note).toContain("2개");
+	});
+
+	it("shares the whole selection through one sheet", async () => {
+		const { service, shares } = makeService();
+		const anchor = { x: 1, y: 2, width: 3, height: 4 };
+		await service.share([join(root, "a.txt"), join(root, "b.txt")], anchor, null);
+		expect(shares).toEqual([{ paths: [join(root, "a.txt"), join(root, "b.txt")], anchor }]);
+	});
+
+	it("extracts and edits exactly one target", async () => {
+		const { service } = makeService();
+		const one = join(root, "a.zip");
+		const two = join(root, "b.zip");
+		await expect(service.run([one, two], { kind: "extract" }, null)).rejects.toThrow(/하나의/);
+		await expect(service.run([one, two], { kind: "convertImage", format: "jpeg" }, null)).rejects.toThrow(/하나의/);
 	});
 });
 
@@ -502,7 +556,7 @@ describe("capabilities", () => {
 		// The probe lists mjpeg/png/libwebp/tiff and no heif muxer.
 		expect(capabilities.imageFormats).toEqual(["jpeg", "png", "webp", "tiff"]);
 		expect(capabilities.share).toBe(false);
-		await expect(service.share(join(root, "a.txt"), { x: 0, y: 0, width: 10, height: 10 }, null)).rejects.toThrow(
+		await expect(service.share([join(root, "a.txt")], { x: 0, y: 0, width: 10, height: 10 }, null)).rejects.toThrow(
 			/지원하지 않습니다/,
 		);
 	});
@@ -517,8 +571,8 @@ describe("capabilities", () => {
 	it("pops the share sheet with the anchored rect on macOS", async () => {
 		const { service, shares } = makeService();
 		const anchor = { x: 10, y: 20, width: 30, height: 40 };
-		await service.share("/tmp/a.txt", anchor, null);
-		expect(shares).toEqual([{ path: "/tmp/a.txt", anchor }]);
+		await service.share(["/tmp/a.txt"], anchor, null);
+		expect(shares).toEqual([{ paths: ["/tmp/a.txt"], anchor }]);
 	});
 });
 
@@ -537,9 +591,9 @@ describe("extract into an existing name", () => {
 		await mkdir(join(root, "docs"), { recursive: true });
 		const file = join(root, "note.txt");
 		await writeFile(file, "note");
-		const packed = await service.run(file, { kind: "compress" }, null);
+		const packed = await service.run([file], { kind: "compress" }, null);
 		// "note.txt.zip" extracts to "note.txt", which is taken by the source file.
-		const unpacked = await service.run(packed.output ?? "", { kind: "extract" }, null);
+		const unpacked = await service.run([packed.output ?? ""], { kind: "extract" }, null);
 		expect(unpacked.output).toBe(join(root, "note 2.txt"));
 		expect((await stat(join(unpacked.output ?? "", "note.txt"))).isFile()).toBe(true);
 	});

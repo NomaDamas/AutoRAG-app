@@ -301,9 +301,9 @@ app.whenReady().then(async () => {
 			share:
 				process.platform === "darwin"
 					? {
-							present(path, anchor, window) {
+							present(paths, anchor, window) {
 								if (window === null) return;
-								new ShareMenu({ filePaths: [path] }).popup({
+								new ShareMenu({ filePaths: [...paths] }).popup({
 									window,
 									x: Math.round(anchor.x),
 									y: Math.round(anchor.y + anchor.height + 4),

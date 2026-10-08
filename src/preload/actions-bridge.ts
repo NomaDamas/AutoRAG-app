@@ -5,8 +5,8 @@ import { ACTIONS_CHANNELS, type ActionsBridge } from "../shared/actions-contract
 export function createActionsBridge(ipcRenderer: IpcRenderer): ActionsBridge {
 	return {
 		capabilities: () => ipcRenderer.invoke(ACTIONS_CHANNELS.capabilities),
-		run: (path, request) => ipcRenderer.invoke(ACTIONS_CHANNELS.run, path, request),
+		run: (paths, request) => ipcRenderer.invoke(ACTIONS_CHANNELS.run, paths, request),
 		openWithApplications: (path) => ipcRenderer.invoke(ACTIONS_CHANNELS.openWithApplications, path),
-		share: (path, anchor) => ipcRenderer.invoke(ACTIONS_CHANNELS.share, path, anchor),
+		share: (paths, anchor) => ipcRenderer.invoke(ACTIONS_CHANNELS.share, paths, anchor),
 	};
 }

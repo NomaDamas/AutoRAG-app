@@ -40,6 +40,7 @@ const LANES = [
 	{ name: "app-bundles", script: "run-qa-finder-app-bundles.mjs", timeout: 300 },
 	{ name: "info-metadata", script: "run-qa-finder-info-metadata.mjs", timeout: 240 },
 	{ name: "file-actions", script: "run-qa-finder-file-actions.mjs", timeout: 300 },
+	{ name: "context-menu", script: "run-qa-finder-context-menu.mjs", timeout: 300 },
 	{ name: "new-file", script: "run-qa-finder-new-file.mjs", timeout: 300 },
 	{ name: "native-drag-out", script: "run-qa-finder-drag-out.mjs", timeout: 300 },
 	{ name: "external-drop", script: "run-qa-finder-external-drop.mjs", timeout: 300 },

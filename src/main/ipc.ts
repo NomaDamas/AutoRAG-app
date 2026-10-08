@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain, nativeImage, type WebContents } from "elec
 import {
 	ACTIONS_CHANNELS,
 	isActionAnchor,
+	isActionPaths,
 	isActionRequest,
 } from "../shared/actions-contract";
 import { FS_CHANNELS } from "../shared/fs-contract";
@@ -41,19 +42,19 @@ export function registerDragOutIpcHandlers(): void {
 /** Inspector file actions: probe once, run one request, or pop the share sheet. */
 export function registerActionsIpcHandlers(service: ActionService): void {
 	ipcMain.handle(ACTIONS_CHANNELS.capabilities, () => service.capabilities());
-	ipcMain.handle(ACTIONS_CHANNELS.run, (event, path: unknown, request: unknown) => {
-		if (typeof path !== "string" || path.length === 0) throw new Error("파일 경로가 올바르지 않습니다");
+	ipcMain.handle(ACTIONS_CHANNELS.run, (event, paths: unknown, request: unknown) => {
+		if (!isActionPaths(paths)) throw new Error("파일 경로가 올바르지 않습니다");
 		if (!isActionRequest(request)) throw new Error("알 수 없는 파일 작업입니다");
-		return service.run(path, request, BrowserWindow.fromWebContents(event.sender));
+		return service.run(paths, request, BrowserWindow.fromWebContents(event.sender));
 	});
 	ipcMain.handle(ACTIONS_CHANNELS.openWithApplications, (_event, path: unknown) => {
 		if (typeof path !== "string" || path.length === 0) throw new Error("파일 경로가 올바르지 않습니다");
 		return service.openWithApplications(path);
 	});
-	ipcMain.handle(ACTIONS_CHANNELS.share, (event, path: unknown, anchor: unknown) => {
-		if (typeof path !== "string" || path.length === 0) throw new Error("파일 경로가 올바르지 않습니다");
+	ipcMain.handle(ACTIONS_CHANNELS.share, (event, paths: unknown, anchor: unknown) => {
+		if (!isActionPaths(paths)) throw new Error("파일 경로가 올바르지 않습니다");
 		if (!isActionAnchor(anchor)) throw new Error("공유 위치가 올바르지 않습니다");
-		return service.share(path, anchor, BrowserWindow.fromWebContents(event.sender));
+		return service.share(paths, anchor, BrowserWindow.fromWebContents(event.sender));
 	});
 }
 
