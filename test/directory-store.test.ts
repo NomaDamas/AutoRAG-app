@@ -37,6 +37,7 @@ function harness() {
 	const enrich: { entries: readonly FinderEntry[]; answer: Deferred<readonly FsEntryEnrichment[]> }[] = [];
 	const metadata: { entries: readonly FinderEntry[]; answer: Deferred<readonly FsFinderEnrichment[]> }[] = [];
 	let live: ((message: LiveMessage) => void) | null = null;
+	let reconnect: (() => void) | null = null;
 	const source: DirectorySource = {
 		list: (dir) => {
 			const answer = Promise.withResolvers<readonly FinderEntry[]>();
@@ -64,6 +65,12 @@ function harness() {
 				live = null;
 			};
 		},
+		onReconnect: (listener) => {
+			reconnect = listener;
+			return () => {
+				reconnect = null;
+			};
+		},
 	};
 	const sidecar = createEntrySidecar();
 	return {
@@ -74,6 +81,7 @@ function harness() {
 		enrich,
 		metadata,
 		emit: (message: LiveMessage) => live?.(message),
+		reconnect: () => reconnect?.(),
 	};
 }
 
@@ -375,5 +383,29 @@ describe("directory store", () => {
 		expect(h.lists).toHaveLength(0);
 		expect(h.reads).toHaveLength(0);
 		expect(store.get("/never")).toBeUndefined();
+	});
+
+	it("after the fs worker restarts, relists the folders on screen and keeps their rows until the answer lands", async () => {
+		const h = harness();
+		const store = createDirectoryStore({ source: h.source, sidecar: h.sidecar });
+		store.connect();
+		store.retain("/shown");
+		const release = store.retain("/left");
+		void store.load("/shown", "navigate");
+		void store.load("/left", "navigate");
+		const shown = [entry("/shown/a.md")];
+		h.lists[0]?.answer.resolve(shown);
+		h.lists[1]?.answer.resolve([entry("/left/b.md")]);
+		await settle();
+		release();
+
+		h.reconnect();
+		await settle();
+		expect(h.lists.slice(2).map((call) => call.dir)).toEqual(["/shown"]);
+		// The relist is silent: the folder keeps painting its rows meanwhile.
+		expect(store.get("/shown")).toMatchObject({ loaded: true, loading: false, entries: shown });
+		h.lists[2]?.answer.resolve([entry("/shown/a.md"), entry("/shown/c.md")]);
+		await settle();
+		expect(store.get("/shown")?.entries.map((row) => row.path)).toEqual(["/shown/a.md", "/shown/c.md"]);
 	});
 });

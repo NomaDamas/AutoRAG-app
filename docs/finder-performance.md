@@ -327,3 +327,61 @@ reachable); now one is. Revisiting a folder no longer re-asks the OS for kinds,
 icons, or metadata it already answered for the same file version, which is
 where the IPC drop comes from. The ~1 MB higher baseline is the sidecar's
 records and the cached folders, both bounded.
+
+## Filesystem worker (FS roadmap #101, stage 4)
+
+Listings, watches, Finder metadata, OS kinds, places, the dupey scan, and the
+index badges moved off the main process into one Electron utility process,
+"AutoRAG File System" (`src/fs-worker/`). The renderer reaches it over a
+`MessagePort` (`{ id, op, args }` → `{ id, ok, value | error }`, cancel →
+`AbortController` in the worker); main only brokers ports, restarts the worker
+when it dies, and serves the Electron-only ops it asks for (thumbnails, file
+icons, Trash, open, clipboard). Quick Look's "Open with …" lookup spawns
+`osascript`, and a child spawn blocks its caller for the fork, so it also runs
+in the worker now.
+
+```sh
+bun run build
+SOAK_CYCLES=100 SOAK_ENFORCE=1 bun scripts/manual-qa/run-qa-finder-memory-soak.mjs
+bun scripts/manual-qa/run-qa-finder-fs-worker-crash.mjs
+QUIT_ROUNDS=50 bun scripts/manual-qa/run-qa-finder-quit-clean.mjs
+```
+
+The soak gate on main's event-loop delay p99 tightened from 100 ms to 16 ms
+(one frame), and it now also fails when the worker restarted mid-soak. The
+worker counts its own requests per op; the soak reads those counts instead of
+wrapping `ipcMain` handlers, since FS calls no longer pass through main.
+
+Production build, macOS, 100 cycles after a 5-cycle warm-up, same machine:
+
+| metric | `main` | this change | gate |
+| --- | ---: | ---: | ---: |
+| main event-loop delay p99 (two runs) | 15.4 ms | 15.0 / 12.8 ms | < 16 |
+| main event-loop delay max | 2,244 ms | 35.6 / 37.8 ms | |
+| main RSS, start → end | 658 → 512 MB | 415 → 373 / 412 → 432 MB | |
+| retained renderer heap growth | 0.052 MB/cycle | 0.053 / 0.052 MB/cycle | ≤ 0.25 |
+| listing generations alive per folder | 1 | 1 | ≤ 1 |
+| renderer script time per cycle | 239.6 ms | 251.4 / 252.2 ms | |
+| 600-image thumbnail fill | 2,331 ms | 2,187 / 2,071 ms | |
+| fs worker SIGKILL → open tab relisted | main dies with it | 1.26 / 1.46 s (2 kills each) | < 5 s |
+| quit, 50 rounds: signal exits / crash reports | 0 / 0 | 0 / 0 | 0 |
+
+p99 on `main` sat right at the line (15.4 ms here, 16.6 ms in the stage-2
+run), so one soak is noisy around 16 ms. Three 30-cycle A/B pairs before the
+Quick Look fix put both builds at 16.7–19.3 ms; attributing each stall over
+12 ms to the soak step it happened in showed listing, view switches, and tabs
+all under 16 ms, and every frame-length stall on Quick Look open — 20–37 ms
+spent in `child_process.spawn` for the default-app lookup. With the same soak
+minus Quick Look, the worker build was 13.0 ms against 16.7 ms on `main`.
+After moving the lookup into the worker, the Quick Look steps' worst stall
+dropped from ~30 ms to ~13–18 ms.
+
+What a worker crash costs: about 1.3 s, almost all of it the new worker
+booting (bundle and librarian load) before its first answer. Unanswered reads
+are re-sent to the new worker; writes (copy, move, duplicate, rename, trash,
+create, undo, eject) are not, and fail with a message asking the user to check
+the result, because the first attempt may already have changed the disk.
+
+Not moved: thumbnails and file icons stay on main (`nativeImage` and
+`app.getFileIcon` do not exist in a utility process). Their encode cost on main
+is small: `toPNG` of a 640 px Quick Look thumbnail measured 2.5 ms at most.

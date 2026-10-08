@@ -3,7 +3,18 @@ import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "electron-vite";
 
 export default defineConfig({
-	main: {},
+	main: {
+		build: {
+			rollupOptions: {
+				// The fs worker is a second Node entry: an Electron utility process
+				// the main process forks (`src/main/fs-worker-host.ts`).
+				input: {
+					index: resolve(import.meta.dirname, "src/main/index.ts"),
+					"fs-worker": resolve(import.meta.dirname, "src/fs-worker/index.ts"),
+				},
+			},
+		},
+	},
 	preload: {
 		build: {
 			rollupOptions: {

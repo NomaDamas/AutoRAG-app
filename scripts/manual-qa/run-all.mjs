@@ -53,6 +53,8 @@ const LANES = [
 	{ name: "models-status", script: "run-qa-finder-models-status.mjs", timeout: 240 },
 	{ name: "global-appearance", script: "run-qa-global-appearance.mjs", timeout: 300 },
 	{ name: "quick-look-reference", script: "run-qa-quick-look-reference.mjs", timeout: 420 },
+	{ name: "fs-worker-crash", script: "run-qa-finder-fs-worker-crash.mjs", timeout: 180 },
+	{ name: "quit-clean", script: "run-qa-finder-quit-clean.mjs", timeout: 600 },
 ];
 
 /**

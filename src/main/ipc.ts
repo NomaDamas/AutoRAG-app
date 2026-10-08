@@ -4,88 +4,11 @@ import {
 	isActionAnchor,
 	isActionRequest,
 } from "../shared/actions-contract";
-import {
-	FS_CHANNELS,
-	type FsClipboard,
-	type FsCoreBridge,
-	type FsIndexBridge,
-	type FsSearchOptions,
-} from "../shared/fs-contract";
-import { isNewFileFormatId, type NewFileFormatId } from "../shared/new-file-contract";
+import { FS_CHANNELS } from "../shared/fs-contract";
 import { SEARCH_CHANNELS, type SearchBridge } from "../shared/search-contract";
 import { SETTINGS_CHANNELS, type JsonValue, type SettingsBridge } from "../shared/settings-contract";
-import { LIVE_CHANNELS } from "../shared/live-contract";
 import type { ActionService } from "./action-service";
-import type { ChangeHub } from "./change-hub";
 import { dragOutPaths } from "./drag-out";
-import type { VersionFamilyService } from "./version-family-service";
-
-/** Extra work a channel runs after the filesystem operation itself succeeded. */
-export interface FsIpcHooks {
-	/**
-	 * Paths that actually reached the Trash. A deleted duplicate must leave the
-	 * version-family snapshot at once, so the user can see it is gone.
-	 */
-	readonly onTrashed?: (paths: readonly string[]) => void | Promise<void>;
-}
-
-/** Register one ipcMain.handle per FS_CHANNELS channel, in contract order. */
-export function registerFsIpcHandlers(service: FsCoreBridge, hooks: FsIpcHooks = {}): void {
-	ipcMain.handle(FS_CHANNELS.listDir, (_event, path: string) => service.listDir(path));
-	ipcMain.handle(FS_CHANNELS.enrichEntries, (_event, targets, thumbnails: boolean) =>
-		service.enrichEntries(targets, thumbnails),
-	);
-	ipcMain.handle(FS_CHANNELS.finderMetadata, (_event, targets) => service.finderMetadata(targets));
-	ipcMain.handle(FS_CHANNELS.readEntries, (_event, dir: string, paths: readonly string[]) =>
-		service.readEntries(dir, paths),
-	);
-	ipcMain.handle(FS_CHANNELS.stat, (_event, path: string) => service.stat(path));
-	ipcMain.handle(FS_CHANNELS.details, (_event, path: string) => service.details(path));
-	ipcMain.handle(FS_CHANNELS.previewIcon, (_event, path: string, modifiedAt: string) =>
-		service.previewIcon(path, modifiedAt),
-	);
-	ipcMain.handle(FS_CHANNELS.exists, (_event, path: string) => service.exists(path));
-	ipcMain.handle(FS_CHANNELS.search, (_event, query: string, options: FsSearchOptions | undefined) =>
-		service.search(query, options),
-	);
-	ipcMain.handle(FS_CHANNELS.locations, () => service.locations());
-	ipcMain.handle(FS_CHANNELS.ejectLocation, (_event, path: string) => service.ejectLocation(path));
-	ipcMain.handle(FS_CHANNELS.copy, (_event, paths: readonly string[], destDir: string) => service.copy(paths, destDir));
-	ipcMain.handle(FS_CHANNELS.move, (_event, paths: readonly string[], destDir: string) => service.move(paths, destDir));
-	ipcMain.handle(FS_CHANNELS.duplicate, (_event, paths: readonly string[]) => service.duplicate(paths));
-	ipcMain.handle(FS_CHANNELS.rename, (_event, path: string, newName: string) => service.rename(path, newName));
-	ipcMain.handle(FS_CHANNELS.createFolder, (_event, directory: string) => service.createFolder(directory));
-	ipcMain.handle(FS_CHANNELS.createFile, (_event, directory: string, format: NewFileFormatId) => {
-		if (!isNewFileFormatId(format)) throw new Error(`알 수 없는 파일 형식입니다: ${String(format)}`);
-		return service.createFile(directory, format);
-	});
-	ipcMain.handle(FS_CHANNELS.trash, async (_event, paths: readonly string[]) => {
-		const result = await service.trash(paths);
-		if (result.ok.length > 0) {
-			try {
-				await hooks.onTrashed?.(result.ok);
-			} catch (error) {
-				// The move to the Trash already happened; a stale snapshot must not
-				// turn into a failed delete for the caller.
-				console.error("trash follow-up failed", error);
-			}
-		}
-		return result;
-	});
-	ipcMain.handle(FS_CHANNELS.reveal, (_event, path: string) => service.reveal(path));
-	ipcMain.handle(FS_CHANNELS.quickLook, (_event, path: string) => service.quickLook(path));
-	ipcMain.handle(FS_CHANNELS.open, (_event, path: string) => service.open(path));
-	ipcMain.handle(FS_CHANNELS.openUrl, (_event, url: unknown) => {
-		if (typeof url !== "string") throw new Error("웹 주소가 올바르지 않습니다");
-		return service.openUrl(url);
-	});
-	ipcMain.handle(FS_CHANNELS.clipboardSet, (_event, clipboard: FsClipboard) => service.clipboardSet(clipboard));
-	ipcMain.handle(FS_CHANNELS.undo, () => service.undo());
-	ipcMain.handle(FS_CHANNELS.clipboardGet, () => service.clipboardGet());
-	ipcMain.handle(FS_CHANNELS.copyPathsToClipboard, (_event, paths: readonly string[]) =>
-		service.copyPathsToClipboard(paths),
-	);
-}
 
 /**
  * The row drag-out: the renderer has already cancelled its own drag
@@ -128,17 +51,6 @@ export function registerActionsIpcHandlers(service: ActionService): void {
 		if (!isActionAnchor(anchor)) throw new Error("공유 위치가 올바르지 않습니다");
 		return service.share(path, anchor, BrowserWindow.fromWebContents(event.sender));
 	});
-}
-
-/** The persisted-snapshot version-family service owns its own two channels. */
-export function registerVersionFamilyIpcHandlers(service: VersionFamilyService): void {
-	ipcMain.handle(FS_CHANNELS.versionFamilies, () => service.result());
-	ipcMain.handle(FS_CHANNELS.versionFamiliesRefresh, () => service.refresh());
-}
-
-export function registerIndexIpcHandlers(service: FsIndexBridge): void {
-	ipcMain.handle(FS_CHANNELS.indexStatus, (_event, paths: readonly string[]) => service.indexStatus(paths));
-	ipcMain.handle(FS_CHANNELS.indexSetExcluded, (_event, path: string, excluded: boolean) => service.setIndexExcluded(path, excluded));
 }
 
 export function registerSearchIpcHandlers(service: SearchBridge): void {
@@ -246,22 +158,3 @@ export function registerSettingsIpcHandlers(service: SettingsBridge): void {
 	});
 }
 
-export function registerLiveIpcHandlers(
-	watch: { setWatchSet(dirs: readonly string[]): Promise<void> },
-	hub: ChangeHub,
-): void {
-	ipcMain.handle(LIVE_CHANNELS.setWatchSet, (_event, dirs: unknown) => {
-		if (!Array.isArray(dirs) || dirs.some((dir) => typeof dir !== "string")) {
-			const error = new TypeError("live:setWatchSet expects an array of strings");
-			console.error("[live] malformed watch set", error);
-			throw error;
-		}
-		return watch.setWatchSet(dirs);
-	});
-	ipcMain.handle(LIVE_CHANNELS.layers, () => {
-		if (process.env.AUTORAG_FS_WATCH_DIAG === "1") {
-			console.info("[live] layers requested");
-		}
-		return hub.resync();
-	});
-}

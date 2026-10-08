@@ -18,7 +18,7 @@
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
-import { finderWindow, launchFinder, ROOT } from "./launch-finder.mjs";
+import { finderWindow, fsWorkerDiagnostics, launchFinder, ROOT } from "./launch-finder.mjs";
 import { isMac, sleep } from "./platform.mjs";
 
 const EVIDENCE = join(ROOT, ".omo/evidence/ai-finder-app/qa-quit-clean");
@@ -33,7 +33,8 @@ for (const folder of ["one", "two", "three"]) {
 }
 
 const REPORTS = join(homedir(), "Library", "Logs", "DiagnosticReports");
-const crashReports = () => (isMac && existsSync(REPORTS) ? readdirSync(REPORTS).filter((name) => /^Electron-.*\.ips$/.test(name)) : []);
+// The fs worker is an `Electron Helper` process: its crash reports carry that name.
+const crashReports = () => (isMac && existsSync(REPORTS) ? readdirSync(REPORTS).filter((name) => /^Electron.*\.ips$/.test(name)) : []);
 const reportsBefore = new Set(crashReports());
 
 const results = [];
@@ -60,14 +61,25 @@ try {
 		} catch (error) {
 			console.log(`INFO  round ${round} setup: ${String(error).slice(0, 200)}`);
 		}
+		// The worker must release its watches and exit with the app, never outlive it.
+		const workerPid = await fsWorkerDiagnostics(app).then((diagnostics) => diagnostics.pid).catch(() => null);
 		await app.evaluate(({ app: electronApp }) => {
 			setTimeout(() => electronApp.quit(), 0);
 		}).catch(() => undefined);
 		const timeout = sleep(20_000).then(() => ({ code: null, signal: "timeout" }));
 		const outcome = await Promise.race([exited, timeout]);
 		if (outcome.signal === "timeout") child.kill("SIGKILL");
-		rounds.push({ round, ...outcome });
-		console.log(`INFO  round ${round}: code=${outcome.code} signal=${outcome.signal}`);
+		let workerAlive = false;
+		if (workerPid !== null) {
+			try {
+				process.kill(workerPid, 0);
+				workerAlive = true;
+			} catch {
+				workerAlive = false;
+			}
+		}
+		rounds.push({ round, workerPid, workerAlive, ...outcome });
+		console.log(`INFO  round ${round}: code=${outcome.code} signal=${outcome.signal} worker=${workerPid} alive=${workerAlive}`);
 	}
 } finally {
 	rmSync(WORK, { recursive: true, force: true });
@@ -75,6 +87,8 @@ try {
 
 const unclean = rounds.filter((round) => round.code !== 0 || round.signal !== null);
 check(`all ${ROUNDS} quits exit 0 without a signal`, unclean.length === 0, JSON.stringify(unclean));
+const orphans = rounds.filter((round) => round.workerPid === null || round.workerAlive);
+check(`every round had an fs worker and none outlived the app`, orphans.length === 0, JSON.stringify(orphans));
 await sleep(3000);
 const newReports = crashReports().filter((name) => !reportsBefore.has(name));
 if (isMac) check("no new Electron crash report during the lane", newReports.length === 0, newReports.join(", "));

@@ -1,6 +1,6 @@
 import { access } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
-import { app, BrowserWindow, clipboard, dialog, nativeTheme, protocol, safeStorage, ShareMenu, shell, type OpenDialogOptions } from "electron";
+import { app, BrowserWindow, clipboard, dialog, ipcMain, nativeTheme, protocol, safeStorage, ShareMenu, shell, type OpenDialogOptions } from "electron";
 import { APPEARANCE_CHANNELS } from "../shared/appearance-contract";
 import type { AppAppearance, ConfigRefreshDiagnostic, ConfigRefreshResult } from "../shared/settings-contract";
 import { attachQuickLook, PREVIEW_PRIVILEGED_SCHEME, registerPreviewProtocol, registerQuickLookIpc } from "../preview/node/register";
@@ -10,18 +10,12 @@ import { APP_INDEXING_CAPABILITIES, applyAppIndexing, DEFAULT_CODE_FOLDER_NAMES,
 import { isJsonObject } from "../shared/settings-contract";
 import { createIconProvider } from "./file-icon";
 import { registerIconProtocol, THUMB_PRIVILEGED_SCHEME } from "./icon-register";
-import { FS_CHANNELS } from "../shared/fs-contract";
-import { DUPEY_LAYER_ID, LIVE_CHANNELS } from "../shared/live-contract";
+import type { KnownFolders } from "../shared/fs-worker-contract";
 import { APP_NAME, APP_VERSION, formatWindowTitle, type DevLabel } from "../shared/app-info";
 import { createChatStore } from "./chat-store";
 import { createDataSourceStatusService } from "./datasource-status";
-import { createIndexStatusService } from "./index-status";
 import { readDevLabel, resolveClonePath } from "./dev-label";
-import { buildFsEntry } from "./fs-entry";
-import { createFileNameSearch } from "./file-name-search";
-import { createFsService } from "./fs-service";
-import { createPlaces } from "./places";
-import { createRecentsStore } from "./recents-store";
+import { createFsWorkerHost, registerFsWorkerIpc, type FsWorkerHost } from "./fs-worker-host";
 import { createAutoRagConfigService } from "./autorag-config-service";
 import { createModelStatusService } from "./model-status";
 import { createProviderCredentialService } from "./provider-credentials";
@@ -30,23 +24,11 @@ import { createSettingsService } from "./settings-service";
 import {
 	registerActionsIpcHandlers,
 	registerDragOutIpcHandlers,
-	registerFsIpcHandlers,
-	registerIndexIpcHandlers,
-	registerLiveIpcHandlers,
 	registerSearchIpcHandlers,
 	registerSettingsIpcHandlers,
-	registerVersionFamilyIpcHandlers,
 } from "./ipc";
 import { createActionService } from "./action-service";
-import { createChangeHub } from "./change-hub";
-import { createDupeyLayer } from "./dupey-layer";
-import { createFsWatchService } from "./fs-watch-service";
-import { createParcelWatchBackend } from "./watch-backend";
-import { createVersionFamilyService, DEFAULT_SCAN_INTERVAL_MINUTES, type VersionFamilyService } from "./version-family-service";
-import { createFileVersionFamilyStore } from "./version-family-store";
-
-/** Longest a quit waits for the folder watches to release before exiting anyway. */
-const QUIT_WATCH_RELEASE_MS = 2000;
+import { DEFAULT_SCAN_INTERVAL_MINUTES } from "./version-family-service";
 
 /** The one AutoRAG config every surface (CLI, TUI, serve, this app) resolves. */
 function autoragConfigPath(): string {
@@ -213,11 +195,13 @@ function createMainWindow(devLabel: DevLabel | null, appearance: AppAppearance):
 		preload: join(import.meta.dirname, "../preload/quick-look.mjs"),
 		appearance,
 		loadPage: (preview) => loadRendererPage(preview, "quick-look.html"),
+		// Spawning osascript blocks the caller for the fork; the worker pays it.
+		defaultApp: (path) => (fsWorker === null ? Promise.resolve(null) : fsWorker.client.call<string | null>("defaultApp", [path])),
 	});
 	return window;
 }
 
-let versionFamilyService: VersionFamilyService | null = null;
+let fsWorker: FsWorkerHost | null = null;
 let mainWindow: BrowserWindow | null = null;
 let currentAppearance: AppAppearance = "light";
 function sendToMainWindow(channel: string, payload: unknown): void {
@@ -259,45 +243,33 @@ app.whenReady().then(async () => {
 		}
 	};
 	const home = app.getPath("home");
-	const places = createPlaces(
+	const knownFolders: KnownFolders | undefined =
 		process.platform === "win32"
 			? {
-					knownFolders: {
-						desktop: knownFolder("desktop", join(home, "Desktop")),
-						documents: knownFolder("documents", join(home, "Documents")),
-						downloads: knownFolder("downloads", join(home, "Downloads")),
-						music: knownFolder("music", join(home, "Music")),
-						videos: knownFolder("videos", join(home, "Videos")),
-						pictures: knownFolder("pictures", join(home, "Pictures")),
-					},
+					desktop: knownFolder("desktop", join(home, "Desktop")),
+					documents: knownFolder("documents", join(home, "Documents")),
+					downloads: knownFolder("downloads", join(home, "Downloads")),
+					music: knownFolder("music", join(home, "Music")),
+					videos: knownFolder("videos", join(home, "Videos")),
+					pictures: knownFolder("pictures", join(home, "Pictures")),
 				}
-			: {},
-	);
-	// Filename search rides the platform index (fsearch / Everything); the
-	// disk walk stays as the fallback when no index answers.
-	const fileNameSearch = createFileNameSearch({
-		userDataDir: app.getPath("userData"),
-		locations: () => fsService.locations(),
-	});
-	const fsService = createFsService({
+			: undefined;
+	// Listings, watches, Finder metadata, places, dupey scans, and the index
+	// badges run in the fs worker, off this event loop; a native fault there
+	// ends only that process (FS roadmap #101). Main keeps the Electron-only
+	// pieces it lends the worker: thumbnails, the shell, the clipboard.
+	const workerHost = createFsWorkerHost({
+		config: {
+			userDataDir: app.getPath("userData"),
+			...(qaRoot !== "" && isAbsolute(qaRoot) ? { qaRoot } : {}),
+			...(knownFolders === undefined ? {} : { knownFolders }),
+		},
 		shell,
 		clipboard,
 		icons: iconProvider,
-		places,
-		fileNameSearch,
-		recents: createRecentsStore({ directory: join(app.getPath("userData"), "recents") }),
-		...(qaRoot !== "" && isAbsolute(qaRoot) ? { qaRoot } : {}),
 	});
-	// A volume mounting or a cloud account connecting re-renders the sidebar.
-	const stopPlacesWatch = places.watch(() => sendToMainWindow(FS_CHANNELS.locationsChanged, null));
-	app.once("will-quit", stopPlacesWatch);
-	// Both delete surfaces (context menu, ⌘⌫) land on this channel, so the
-	// version-family snapshot learns about the Trash here.
-	registerFsIpcHandlers(fsService, {
-		onTrashed: async (paths) => {
-			await versionFamilyService?.removePaths(paths);
-		},
-	});
+	fsWorker = workerHost;
+	registerFsWorkerIpc(workerHost, ipcMain);
 	// Row drag-out: the renderer hands the gesture to the OS as real files.
 	registerDragOutIpcHandlers();
 	// Inspector actions: a chooser for "Open with" and the macOS share sheet,
@@ -334,31 +306,9 @@ app.whenReady().then(async () => {
 					: null,
 		}),
 	);
-	let scanIntervalMinutes = DEFAULT_SCAN_INTERVAL_MINUTES;
-	const hub = createChangeHub({
-		send: (message) => sendToMainWindow(LIVE_CHANNELS.message, message),
-	});
-	versionFamilyService = createVersionFamilyService({
-		locations: () => fsService.locations(),
-		store: createFileVersionFamilyStore(join(app.getPath("userData"), "dupey-cache")),
-		buildEntry: buildFsEntry,
-		intervalMinutes: () => scanIntervalMinutes,
-		onChanged: () => hub.publish(DUPEY_LAYER_ID),
-	});
-	hub.register(createDupeyLayer(versionFamilyService));
-	const watch = createFsWatchService({
-		backend: createParcelWatchBackend(),
-		onBatch: (batch) => hub.ingest(batch),
-	});
-	registerLiveIpcHandlers(watch, hub);
-	registerVersionFamilyIpcHandlers(versionFamilyService);
-	registerIndexIpcHandlers(
-		createIndexStatusService({
-			env: process.env,
-			cwd: process.cwd(),
-			onRefreshed: (error) => sendToMainWindow(FS_CHANNELS.indexRefreshed, error),
-		}),
-	);
+	const applyScanInterval = (minutes: number): void => {
+		void workerHost.client.call("setScanInterval", [minutes]).catch((error: unknown) => console.error("[fs-worker] scan interval:", error));
+	};
 	const searchService = createSearchService({
 		agentFactory: createDefaultAgentFactory(),
 		chatStore: createChatStore({ directory: join(app.getPath("userData"), "chat-history") }),
@@ -387,49 +337,31 @@ app.whenReady().then(async () => {
 		credentials,
 		onSettingsChanged: (settings) => {
 			applyAppearance(settings.appearance);
-			scanIntervalMinutes = settings.dupeyScanIntervalMinutes;
-			versionFamilyService?.reschedule();
+			applyScanInterval(settings.dupeyScanIntervalMinutes);
 		},
 	});
 	registerSettingsIpcHandlers(settingsService);
 	const settings = await settingsService.get();
 	applyAppearance(settings.appearance);
-	scanIntervalMinutes = settings.dupeyScanIntervalMinutes;
-	versionFamilyService?.reschedule();
-	void versionFamilyService.start();
-	// Warm the file-name index daemon (fsearch watch / Everything) so the first
-	// search never pays the database cold-load. It is deliberately left running
-	// across quits: restarting a watch over a whole-machine index re-scans every
-	// monitored folder, which is exactly the cost this keep-alive avoids.
-	void fileNameSearch.ensureDaemon();
-	const openMainWindow = (): BrowserWindow => {
-		const window = createMainWindow(devLabel, currentAppearance);
-		const clearWatchSet = (): void => {
-			void watch.setWatchSet([]);
-		};
-		window.webContents.on("render-process-gone", clearWatchSet);
-		window.webContents.on("destroyed", clearWatchSet);
-		return window;
-	};
-	mainWindow = openMainWindow();
+	if (settings.dupeyScanIntervalMinutes !== DEFAULT_SCAN_INTERVAL_MINUTES) applyScanInterval(settings.dupeyScanIntervalMinutes);
+	mainWindow = createMainWindow(devLabel, currentAppearance);
 	app.on("activate", () => {
 		if (mainWindow === null || mainWindow.isDestroyed()) {
-			mainWindow = openMainWindow();
+			mainWindow = createMainWindow(devLabel, currentAppearance);
 		}
 	});
-	// The native watcher must finish unsubscribing before Node tears its
-	// environment down: an unsubscribe still completing inside
-	// `FreeEnvironment` throws into a dying env and aborts the process
-	// (`napi_fatal_error`, "Electron quit unexpectedly"). Hold the quit until
-	// the watches are gone, bounded so a stuck watcher never blocks quitting.
-	// Every other `will-quit` listener has already run and the windows are
-	// closed by now, so the quit finishes with `app.exit` — re-entering
-	// `app.quit()` from inside its own quit can stall the teardown.
+	// The worker's native watcher must finish unsubscribing before its Node
+	// environment is torn down (an unsubscribe completing inside
+	// `FreeEnvironment` aborts that process). Hold the quit until the worker
+	// has released its watches, bounded so a stuck worker never blocks
+	// quitting. Every other `will-quit` listener has already run and the
+	// windows are closed by now, so the quit finishes with `app.exit` —
+	// re-entering `app.quit()` from inside its own quit can stall the teardown.
 	app.once("will-quit", (event) => {
 		event.preventDefault();
-		const bound = new Promise<void>((resolve) => setTimeout(resolve, QUIT_WATCH_RELEASE_MS).unref());
-		void Promise.race([watch.dispose(), bound])
-			.catch((error: unknown) => console.error("[fs-watch] dispose on quit failed:", error))
+		void workerHost
+			.dispose()
+			.catch((error: unknown) => console.error("[fs-worker] dispose on quit failed:", error))
 			.finally(() => app.exit(0));
 	});
 });
@@ -440,6 +372,3 @@ app.on("window-all-closed", () => {
 	}
 });
 
-app.on("will-quit", () => {
-	versionFamilyService?.stop();
-});

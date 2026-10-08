@@ -164,6 +164,7 @@ interface SearchContext {
 	readonly needle: string;
 	readonly location: string;
 	readonly results: FsSearchResult[];
+	readonly signal: AbortSignal | undefined;
 }
 
 function compareEntries(a: FsEntry, b: FsEntry): number {
@@ -211,6 +212,7 @@ async function runBatch(paths: readonly string[], operation: (path: string) => P
 }
 
 async function walkForSearch(dir: string, depth: number, context: SearchContext): Promise<void> {
+	context.signal?.throwIfAborted();
 	if (depth > SEARCH_MAX_DEPTH || context.results.length >= SEARCH_MAX_RESULTS) return;
 	let dirents: Dirent[];
 	try {
@@ -239,7 +241,17 @@ async function walkForSearch(dir: string, depth: number, context: SearchContext)
 	}
 }
 
-export function createFsService(deps: FsServiceDeps): FsCoreBridge {
+/**
+ * The filesystem service as the worker serves it: the bridge contract, plus an
+ * AbortSignal on the two ops that walk a folder, so a listing or search the
+ * user already left stops instead of finishing for nobody.
+ */
+export interface FsService extends FsCoreBridge {
+	listDir(path: string, signal?: AbortSignal): Promise<DirListing>;
+	search(query: string, options?: FsSearchOptions, signal?: AbortSignal): Promise<readonly FsSearchResult[]>;
+}
+
+export function createFsService(deps: FsServiceDeps): FsService {
 	const platform = deps.platform ?? process.platform;
 	const home = deps.homeDir ?? homedir();
 	const recents = deps.recents ?? createRecentsStore({ directory: join(home, "recents") });
@@ -248,7 +260,7 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 	const iconProvider: IconProvider = deps.icons ?? createIconProvider();
 	const places = deps.places ?? createPlaces({ homeDir: home, platform });
 	const recycleBin = deps.recycleBin ?? isRecycleBinDir;
-	// In-app clipboard lives in main-process memory only.
+	// In-app clipboard lives in this process's memory only (the fs worker in the app).
 	let inAppClipboard: FsClipboard | null = null;
 	/**
 	 * OS kind and tile icon only. Finder metadata is a separate call: its
@@ -297,9 +309,11 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 		return results.filter((result) => result !== null);
 	}
 
-	async function buildListingEntries(dirents: readonly Dirent[], path: string): Promise<FsEntry[]> {
+	async function buildListingEntries(dirents: readonly Dirent[], path: string, signal?: AbortSignal): Promise<FsEntry[]> {
 		const entries: FsEntry[] = [];
 		for (let index = 0; index < dirents.length; index += 64) {
+			// A folder the user already left stops here instead of stat-ing every remaining child.
+			signal?.throwIfAborted();
 			const batch = dirents.slice(index, index + 64);
 			const built = await Promise.all(
 				batch.map(async (dirent) => {
@@ -320,7 +334,7 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 		return entries;
 	}
 
-	async function listDir(path: string): Promise<DirListing> {
+	async function listDir(path: string, signal?: AbortSignal): Promise<DirListing> {
 		if (path === RECENTS_PATH) {
 			// The recents store already lists most-recent first; sorting by
 			// name would destroy that order.
@@ -330,7 +344,7 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 		if (recycleBin(path)) {
 			return { path, entries: await recycleBinEntries(path, dirents) };
 		}
-		const entries = await buildListingEntries(dirents, path);
+		const entries = await buildListingEntries(dirents, path, signal);
 		entries.sort(compareEntries);
 		return { path, entries };
 	}
@@ -447,7 +461,7 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 	 * when it can (fsearch / Everything); otherwise the disk walk runs. `scope`
 	 * restricts both to one folder subtree — the "파일 이름" chip's folder.
 	 */
-	async function search(query: string, options?: FsSearchOptions): Promise<readonly FsSearchResult[]> {
+	async function search(query: string, options?: FsSearchOptions, signal?: AbortSignal): Promise<readonly FsSearchResult[]> {
 		const needle = query.trim().toLowerCase();
 		if (needle.length === 0) return [];
 		const rawScope = options?.scope?.trim();
@@ -461,7 +475,7 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 				console.warn(`fs:search index failed, walking instead: ${errorMessage(error)}`);
 			}
 		}
-		return walkSearch(needle, scope);
+		return walkSearch(needle, scope, signal);
 	}
 
 	/** Turn index paths into rows, attributing each to its location by longest prefix. */
@@ -493,19 +507,19 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 		return match?.name ?? dirname(path);
 	}
 
-	async function walkSearch(needle: string, scope: string | undefined): Promise<readonly FsSearchResult[]> {
+	async function walkSearch(needle: string, scope: string | undefined, signal: AbortSignal | undefined): Promise<readonly FsSearchResult[]> {
 		const results: FsSearchResult[] = [];
 		if (scope !== undefined) {
 			// The "파일 이름" chip scopes to the folder in view, which may sit
 			// outside the scanned places (e.g. inside a mounted disk).
 			const known = (await locations()).filter((location) => location.path !== RECENTS_PATH);
-			await walkForSearch(scope, 0, { needle, location: searchLocation(scope, known), results });
+			await walkForSearch(scope, 0, { needle, location: searchLocation(scope, known), results, signal });
 			return results;
 		}
 		for (const location of await locations()) {
 			// Recents is virtual and whole disks are too large to walk; only scanned places count.
 			if (!location.available || !location.scanned) continue;
-			await walkForSearch(location.path, 0, { needle, location: location.name, results });
+			await walkForSearch(location.path, 0, { needle, location: location.name, results, signal });
 			if (results.length >= SEARCH_MAX_RESULTS) break;
 		}
 		return results;

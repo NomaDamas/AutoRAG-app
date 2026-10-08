@@ -49,6 +49,7 @@ export interface DirectorySource {
 	enrich(entries: readonly FinderEntry[]): Promise<readonly FsEntryEnrichment[]>;
 	finderMetadata(entries: readonly FinderEntry[]): Promise<readonly FsFinderEnrichment[]>;
 	onLive(listener: (message: LiveMessage) => void): () => void;
+	onReconnect(listener: () => void): () => void;
 }
 
 export interface DirectorySnapshot {
@@ -333,6 +334,17 @@ export function createDirectoryStore(options: {
 				goneListeners.delete(listener);
 			};
 		},
-		connect: () => source.onLive(onLive),
+		connect: () => {
+			const offLive = source.onLive(onLive);
+			// A restarted worker lost every watch and every event since: what is on
+			// screen re-reads, keeping its rows (and icons) until the answer lands.
+			const offReconnect = source.onReconnect(() => {
+				for (const [dir, record] of records) if (record.refs > 0) void load(dir, "silent");
+			});
+			return () => {
+				offLive();
+				offReconnect();
+			};
+		},
 	};
 }

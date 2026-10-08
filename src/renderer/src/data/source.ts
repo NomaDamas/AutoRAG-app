@@ -55,6 +55,11 @@ export interface FinderSource {
 	readonly actions: ActionsBridge;
 	setWatchSet(dirs: readonly string[]): Promise<void>;
 	onLive(listener: (message: LiveMessage) => void): () => void;
+	/**
+	 * The filesystem worker restarted and kept nothing: re-send the watch set
+	 * and re-read every folder on screen. Never fires in the fixture source.
+	 */
+	onReconnect(listener: () => void): () => void;
 	liveLayers(): Promise<LiveResync>;
 	exists(path: string): Promise<boolean>;
 	list(path: string): Promise<readonly FinderEntry[]>;
@@ -176,6 +181,7 @@ export function createBridgeSource(
 				layers: message.layers.map(mapLayerPublication),
 			})) ?? (() => {});
 		},
+		onReconnect: (listener) => live?.onReconnect(listener) ?? (() => {}),
 		async liveLayers() {
 			if (live === undefined) {
 				return { seq: 0, layers: [], reconciled: [] };
@@ -326,6 +332,7 @@ export function createFixtureSource(): FinderSource {
 		actions: UNAVAILABLE_ACTIONS,
 		setWatchSet: resolve,
 		onLive: () => () => {},
+		onReconnect: () => () => {},
 		liveLayers: () => Promise.resolve({ seq: 0, layers: [], reconciled: [] }),
 		enrich: async () => [],
 		finderMetadata: async () => [],

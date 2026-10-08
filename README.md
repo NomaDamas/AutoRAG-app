@@ -121,12 +121,33 @@ The Settings tab is an app-owned UI location, not a filesystem path; it never
 issues directory listings, incremental reads, or watcher requests. Returning to
 a Finder tab restores its existing folder listing and watch set.
 
+## Filesystem worker
+
+Folder listings, incremental reads, Finder metadata, OS kinds, the sidebar
+places, the dupey scan, the index badges, and the native watcher run in one
+Electron utility process, "AutoRAG File System" (`src/fs-worker/`), not on the
+main process. The renderer talks to it over a `MessagePort` the main process
+hands the preload (`src/preload/worker-link.ts`); main only brokers ports and
+owns the process lifecycle (`src/main/fs-worker-host.ts`). Main keeps what
+only Electron's main process can do and the worker asks for over its host
+port: thumbnails and file icons (`nativeImage`, `app.getFileIcon`), the Trash,
+opening files and URLs, and the clipboard.
+
+If the worker dies, main forks a new one at once (repeated crashes within 10 s
+back off, up to 5 s), the window stays, and every open tab relists and
+re-watches its folders. Unanswered reads are re-sent to the new worker; a
+request that changes files (copy, move, rename, trash, create, undo, eject) is
+never re-sent and fails with a message asking the user to check the result.
+Quitting asks the worker to release its watches and waits up to 2 s before
+exiting. QA lane: `scripts/manual-qa/run-qa-finder-fs-worker-crash.mjs`
+(SIGKILLs the worker twice and checks the tabs recover within 5 s).
+
 ## Live filesystem sync
 
 Folders shown in open tabs are watched for changes made by other apps. A
 created, deleted, renamed, or edited file appears in the tab without clicking
-anything. Ordinary direct-child changes are applied incrementally: the main
-process re-reads only the changed paths and the renderer patches those rows.
+anything. Ordinary direct-child changes are applied incrementally: the fs
+worker re-reads only the changed paths and the renderer patches those rows.
 An event overflow, a recreated watched root, or a missing-path recovery falls
 back to a full relist. Only real folders in open tabs are watched: Recents and
 datasource virtual paths never are. Watching uses
@@ -136,7 +157,7 @@ with a 150 ms trailing debounce and a 1 s maximum wait. Closing a tab,
 navigating away, reloading the window, or quitting releases the watches. Set
 `AUTORAG_FS_WATCH_DIAG=1` to log watch, unwatch, and batch diagnostics.
 
-All live traffic flows through one serial `ChangeHub` queue in the main
+All live traffic flows through one serial `ChangeHub` queue in the fs worker
 process. For each batch, every registered derived layer reconciles first, with
 a 750 ms per-layer timeout, and only then does the hub send a single ordered
 `live:message` push. Layers are always reconciled before the view updates. The
@@ -146,7 +167,7 @@ never disagree. Focusing the window or making it visible re-syncs the listing
 and layers through `live:layers`.
 
 Adding a derived layer needs no new IPC channel. Implement `DerivedLayer` in
-the main process:
+the fs worker:
 
 ```ts
 import type { DerivedLayer } from "./change-hub";
@@ -160,7 +181,7 @@ const myLayer: DerivedLayer<MyData> = {
 };
 ```
 
-Register it in `src/main/index.ts` where the hub is created
+Register it in `src/fs-worker/service.ts` where the hub is created
 (`hub.register(myLayer)`), and add a selector in
 `src/renderer/src/state/layers.ts`. Publications ride the existing
 `live:message` push and the `live:layers` resync.
