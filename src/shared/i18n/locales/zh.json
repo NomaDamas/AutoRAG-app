@@ -122,6 +122,7 @@
     "compressCount": "压缩 {{count}} 个项目",
     "extract": "解压",
     "share": "共享",
+    "services": "服务",
     "moveToTrash": "移到废纸篓",
     "moveToTrashCount": "将 {{count}} 个项目移到废纸篓",
     "putBack": "放回原处",

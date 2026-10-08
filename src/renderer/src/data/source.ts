@@ -8,6 +8,7 @@
  */
 
 import { NO_CAPABILITIES, type ActionsBridge } from "../../../shared/actions-contract";
+import { NO_SERVICES, type ServicesBridge } from "../../../shared/services-contract";
 import { RECENTS_PATH, type FsBatchResult, type FsBridge, type FsClipboard, type FsEnrichmentTarget, type FsEntryEnrichment, type FsFinderEnrichment, type FsLocation, type FsLocationIcon, type FsOpError, type FsSearchOptions, type FsUndoOutcome, type FsVersionFamiliesResult } from "../../../shared/fs-contract";
 import { newFileFormat, type NewFileFormatId } from "../../../shared/new-file-contract";
 import type { IndexStatus } from "../../../shared/index-contract";
@@ -54,6 +55,8 @@ export interface FinderSource {
 	readonly initialPath: string;
 	/** Inspection actions (open with, archive, share, simple edits). */
 	readonly actions: ActionsBridge;
+	/** The OS services (macOS right-click → 서비스) for a selection; empty off macOS and in fixtures. */
+	readonly services: ServicesBridge;
 	setWatchSet(dirs: readonly string[]): Promise<void>;
 	onLive(listener: (message: LiveMessage) => void): () => void;
 	/**
@@ -149,6 +152,7 @@ export function createBridgeSource(
 	initialPath: string,
 	live?: LiveBridge,
 	actions: ActionsBridge = UNAVAILABLE_ACTIONS,
+	services: ServicesBridge = NO_SERVICES,
 ): FinderSource {
 	const mapVersionFamiliesResult = (result: FsVersionFamiliesResult): VersionFamiliesResult => ({
 		families: result.families.map((family) => ({
@@ -171,6 +175,7 @@ export function createBridgeSource(
 		native: true,
 		initialPath,
 		actions,
+		services,
 		setWatchSet: (dirs) => live?.setWatchSet(dirs) ?? Promise.resolve(),
 		onLive: (listener) => {
 			return live?.onMessage((message) => listener({
@@ -330,6 +335,7 @@ export function createFixtureSource(): FinderSource {
 		native: false,
 		initialPath: FIXTURE_INITIAL_PATH,
 		actions: UNAVAILABLE_ACTIONS,
+		services: NO_SERVICES,
 		setWatchSet: resolve,
 		onLive: () => () => {},
 		onReconnect: () => () => {},

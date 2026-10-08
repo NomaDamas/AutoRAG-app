@@ -122,6 +122,7 @@
     "compressCount": "Compress {{count}} Items",
     "extract": "Extract",
     "share": "Share",
+    "services": "Services",
     "moveToTrash": "Move to Trash",
     "moveToTrashCount": "Move {{count}} items to Trash",
     "putBack": "Put Back",

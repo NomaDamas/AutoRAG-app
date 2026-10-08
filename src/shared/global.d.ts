@@ -6,6 +6,7 @@ import type { LiveBridge } from "./live-contract";
 import type { OsRequestBridge } from "./os-request-contract";
 import type { SearchBridge } from "./search-contract";
 import type { SettingsBridge } from "./settings-contract";
+import type { ServicesBridge } from "./services-contract";
 
 declare global {
 	interface Window {
@@ -17,6 +18,7 @@ declare global {
 			readonly preview: PreviewBridge;
 			readonly search: SearchBridge;
 			readonly settings: SettingsBridge;
+			readonly services: ServicesBridge;
 			/** Absolute path of a dropped File (Electron `webUtils.getPathForFile`); "" when it has none on disk. */
 			readonly pathForFile: (file: File) => string;
 		};

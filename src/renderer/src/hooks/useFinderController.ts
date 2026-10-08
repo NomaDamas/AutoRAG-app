@@ -9,6 +9,7 @@ import { NO_CAPABILITIES, type ActionAnchor, type ActionCapabilities, type OpenW
 import { RECENTS_PATH } from "../../../shared/fs-contract";
 import type { IndexStatus } from "../../../shared/index-contract";
 import { DUPEY_LAYER_ID, type LiveMessage } from "../../../shared/live-contract";
+import type { ServiceEntry } from "../../../shared/services-contract";
 import type { DirectoryStore } from "../data/directory-store";
 import type { FinderEntry } from "../data/entries";
 import type { EntrySidecar } from "../data/entry-sidecar";
@@ -293,7 +294,7 @@ export interface FinderController {
 	/** The empty-space menu for `dir` (New / Paste); defaults to the folder in view. */
 	openBackgroundContextMenu(event: ReactMouseEvent<HTMLDivElement>, dir?: string): void;
 	closeContextMenu(): void;
-	runMenuAction(action: FinderMenuAction, format?: NewFileFormatId | null): void;
+	runMenuAction(action: FinderMenuAction, format?: NewFileFormatId | null, serviceId?: string | null): void;
 	toggleIndex(entry: FinderEntry): void;
 	toggleStack(entry: FinderEntry): void;
 	/** Folder disclosure triangle: nest or hide the folder's contents in place. */
@@ -376,6 +377,9 @@ export function useFinderController(
 	const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
 	const [rename, setRename] = useState<RenameState | null>(null);
 	const [clipboardCount, setClipboardCount] = useState(0);
+	/** The OS services offered for the open context menu's target; refilled on every right-click. */
+	const [menuServices, setMenuServices] = useState<readonly ServiceEntry[]>([]);
+	const menuServicesToken = useRef(0);
 	/** The 휴지통 비우기 confirm: destructive, so it never runs without an explicit click. */
 	const [emptyTrashConfirm, setEmptyTrashConfirm] = useState(false);
 	const [flashPath, setFlashPath] = useState<string | null>(null);
@@ -1352,7 +1356,7 @@ export function useFinderController(
 	);
 
 	const runMenuAction = useLatestCallback(
-		(action: FinderMenuAction, format: NewFileFormatId | null = null) => {
+		(action: FinderMenuAction, format: NewFileFormatId | null = null, serviceId: string | null = null) => {
 			const menu = contextMenu;
 			if (menu === null) {
 				return;
@@ -1376,6 +1380,13 @@ export function useFinderController(
 						transferInto(clipboard.paths, pasteDir, clipboard.op === "cut" ? "move" : "copy");
 					})
 					.catch(reportError);
+				return;
+			}
+			if (action === "service") {
+				// The row menu acts on the whole selection, the empty-space menu on the folder in view.
+				if (serviceId === null) return;
+				const targets = menu.entry === null ? [menu.dir] : menuTargets(menu.entry);
+				source.services.run(serviceId, targets).catch(reportError);
 				return;
 			}
 			const entry = menu.entry;
@@ -1499,6 +1510,22 @@ export function useFinderController(
 			.catch(reportError);
 	});
 
+	/**
+	 * Ask the OS which services it offers for `paths` and show them in the open
+	 * menu. The menu opens at once without them; a slow answer for a menu that
+	 * has since closed or moved on (a newer right-click) is dropped.
+	 */
+	const loadMenuServices = useLatestCallback((paths: readonly string[]): void => {
+		const token = ++menuServicesToken.current;
+		setMenuServices([]);
+		source.services
+			.list(paths)
+			.then((entries) => {
+				if (token === menuServicesToken.current) setMenuServices(entries);
+			})
+			.catch(() => undefined);
+	});
+
 	const openContextMenu = useLatestCallback(
 		(entry: FinderEntry, event: ReactMouseEvent<HTMLDivElement>) => {
 			event.preventDefault();
@@ -1510,6 +1537,7 @@ export function useFinderController(
 				.clipboardGet()
 				.then((clipboard) => setClipboardCount(clipboard?.paths.length ?? 0))
 				.catch(reportError);
+			loadMenuServices(menuTargets(entry));
 			setContextMenu({ cursor: { x: event.clientX, y: event.clientY }, entry, dir: path });
 		});
 
@@ -1523,6 +1551,7 @@ export function useFinderController(
 				.clipboardGet()
 				.then((clipboard) => setClipboardCount(clipboard?.paths.length ?? 0))
 				.catch(reportError);
+			loadMenuServices([dir ?? path]);
 			setContextMenu({ cursor: { x: event.clientX, y: event.clientY }, entry: null, dir: dir ?? path });
 		});
 
@@ -1654,7 +1683,7 @@ export function useFinderController(
 			return [];
 		}
 		if (menu.entry === null) {
-			return buildBackgroundContextMenu({ clipboardCount, inTrash: inTrashLocation }, (k, def) => t(k, { defaultValue: def }));
+			return buildBackgroundContextMenu({ clipboardCount, inTrash: inTrashLocation, services: menuServices }, (k, def) => t(k, { defaultValue: def }));
 		}
 		const entry = menu.entry;
 		return buildContextMenu(
@@ -1667,10 +1696,11 @@ export function useFinderController(
 				inTrash: inTrashLocation,
 				capabilities: actionCapabilities,
 				canCreateFolder: canCreateIn(menuCreateDir(menu)),
+				services: menuServices,
 			},
 			(k, def, opt) => t(k, { defaultValue: def, ...(opt as Record<string, unknown> | undefined) }),
 		);
-	}, [contextMenu, menuTargets, sidecar, clipboardCount, path, t, inTrashLocation, actionCapabilities, canCreateIn, menuCreateDir, layout, panePaths]);
+	}, [contextMenu, menuTargets, sidecar, clipboardCount, path, t, inTrashLocation, actionCapabilities, canCreateIn, menuCreateDir, layout, panePaths, menuServices]);
 
 	const navTargets = useMemo(
 		() => (locations.length > 0 ? locations : [{ name: basename(path), path }]),
