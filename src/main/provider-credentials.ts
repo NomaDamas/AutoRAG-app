@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { ProviderCredentialStatus } from "../shared/settings-contract";
+import { hasErrorCode } from "./fs-entry";
 import { isJsonObject } from "../shared/settings-contract";
 
 /**
@@ -28,11 +29,11 @@ export interface ProviderCredentialServiceDeps {
 }
 
 export interface ProviderCredentialService {
-	list(envNames?: readonly string[]): readonly ProviderCredentialStatus[];
-	set(envName: string, secret: string): readonly ProviderCredentialStatus[];
-	remove(envName: string): readonly ProviderCredentialStatus[];
+	list(envNames?: readonly string[]): Promise<readonly ProviderCredentialStatus[]>;
+	set(envName: string, secret: string): Promise<readonly ProviderCredentialStatus[]>;
+	remove(envName: string): Promise<readonly ProviderCredentialStatus[]>;
 	/** Apply stored values into the environment; returns the env names applied. */
-	load(): readonly string[];
+	load(): Promise<readonly string[]>;
 }
 
 const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/u;
@@ -65,12 +66,12 @@ export function createProviderCredentialService(deps: ProviderCredentialServiceD
 	}
 
 	/** A malformed store throws instead of being silently replaced (which would destroy keys). */
-	function readStore(): CredentialStore {
-		if (!existsSync(deps.filePath)) return { version: STORE_VERSION, entries: {} };
+	async function readStore(): Promise<CredentialStore> {
 		let parsed: unknown;
 		try {
-			parsed = JSON.parse(readFileSync(deps.filePath, "utf8"));
+			parsed = JSON.parse(await readFile(deps.filePath, "utf8"));
 		} catch (error) {
+			if (hasErrorCode(error, "ENOENT")) return { version: STORE_VERSION, entries: {} };
 			throw new Error(`Credential store is unreadable; refusing to overwrite it (${String(error)})`);
 		}
 		if (!isJsonObject(parsed) || parsed.version !== STORE_VERSION) {
@@ -86,11 +87,19 @@ export function createProviderCredentialService(deps: ProviderCredentialServiceD
 		return { version: STORE_VERSION, entries: cleaned };
 	}
 
-	function writeStore(store: CredentialStore): void {
-		mkdirSync(dirname(deps.filePath), { recursive: true });
+	async function writeStore(store: CredentialStore): Promise<void> {
+		await mkdir(dirname(deps.filePath), { recursive: true });
 		const temporary = join(dirname(deps.filePath), `.${process.pid}.${randomUUID()}.credentials.tmp`);
-		writeFileSync(temporary, `${JSON.stringify(store, null, 2)}\n`, { encoding: "utf8", mode: 0o600, flag: "wx" });
-		renameSync(temporary, deps.filePath);
+		await writeFile(temporary, `${JSON.stringify(store, null, 2)}\n`, { encoding: "utf8", mode: 0o600, flag: "wx" });
+		await rename(temporary, deps.filePath);
+	}
+
+	/** Read-modify-write runs one at a time, so two saves never drop each other's key. */
+	let queue: Promise<unknown> = Promise.resolve();
+	function serialized<T>(operation: () => Promise<T>): Promise<T> {
+		const result = queue.then(operation, operation);
+		queue = result.catch(() => undefined);
+		return result;
 	}
 
 	function status(store: CredentialStore, envNames?: readonly string[]): readonly ProviderCredentialStatus[] {
@@ -108,37 +117,41 @@ export function createProviderCredentialService(deps: ProviderCredentialServiceD
 	}
 
 	return {
-		list: (envNames) => status(readStore(), envNames),
+		list: async (envNames) => status(await readStore(), envNames),
 		set: (envName, secret) => {
-			if (!ENV_NAME.test(envName)) throw new Error(`Invalid environment variable name: ${envName}`);
-			if (typeof secret !== "string" || secret.length === 0) throw new Error("API key must not be empty");
+			if (!ENV_NAME.test(envName)) return Promise.reject(new Error(`Invalid environment variable name: ${envName}`));
+			if (typeof secret !== "string" || secret.length === 0) return Promise.reject(new Error("API key must not be empty"));
 			if (!encryptionAvailable()) {
-				throw new Error("OS encryption is unavailable (no secure keyring), so the API key cannot be stored securely");
+				return Promise.reject(new Error("OS encryption is unavailable (no secure keyring), so the API key cannot be stored securely"));
 			}
-			const store = readStore();
-			if (!originals.has(envName)) originals.set(envName, deps.env[envName]);
-			store.entries[envName] = deps.safeStorage.encryptString(secret).toString("base64");
-			writeStore(store);
-			deps.env[envName] = secret;
-			appliedFromStore.add(envName);
-			return status(store, [envName]);
+			return serialized(async () => {
+				const store = await readStore();
+				store.entries[envName] = deps.safeStorage.encryptString(secret).toString("base64");
+				await writeStore(store);
+				if (!originals.has(envName)) originals.set(envName, deps.env[envName]);
+				deps.env[envName] = secret;
+				appliedFromStore.add(envName);
+				return status(store, [envName]);
+			});
 		},
 		remove: (envName) => {
-			if (!ENV_NAME.test(envName)) throw new Error(`Invalid environment variable name: ${envName}`);
-			const store = readStore();
-			delete store.entries[envName];
-			writeStore(store);
-			appliedFromStore.delete(envName);
-			if (originals.has(envName)) {
-				const previous = originals.get(envName);
-				if (previous === undefined || previous.length === 0) delete deps.env[envName];
-				else deps.env[envName] = previous;
-				originals.delete(envName);
-			}
-			return status(store, [envName]);
+			if (!ENV_NAME.test(envName)) return Promise.reject(new Error(`Invalid environment variable name: ${envName}`));
+			return serialized(async () => {
+				const store = await readStore();
+				delete store.entries[envName];
+				await writeStore(store);
+				appliedFromStore.delete(envName);
+				if (originals.has(envName)) {
+					const previous = originals.get(envName);
+					if (previous === undefined || previous.length === 0) delete deps.env[envName];
+					else deps.env[envName] = previous;
+					originals.delete(envName);
+				}
+				return status(store, [envName]);
+			});
 		},
-		load: () => {
-			const store = readStore();
+		load: async () => {
+			const store = await readStore();
 			const loaded: string[] = [];
 			const skipped: string[] = [];
 			for (const [envName, encrypted] of Object.entries(store.entries)) {

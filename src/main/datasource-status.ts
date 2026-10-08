@@ -1,4 +1,5 @@
-import { accessSync, constants, existsSync, readFileSync, statSync } from "node:fs";
+import { constants } from "node:fs";
+import { access, readFile, stat } from "node:fs/promises";
 import { delimiter, extname, join } from "node:path";
 import {
 	BUILTIN_DATASOURCE_SKILL_NAMES,
@@ -70,32 +71,32 @@ function executableExtensions(name: string, env: NodeJS.ProcessEnv): readonly st
 	return extensions.some((extension) => extension.toLowerCase() === explicitExtension) ? ["", ...extensions] : extensions;
 }
 
-/** `accessSync(X_OK)` on Windows only proves existence, so a directory would pass too. */
-function isExecutableFile(candidate: string): boolean {
+/** `access(X_OK)` on Windows only proves existence, so a directory would pass too. */
+async function isExecutableFile(candidate: string): Promise<boolean> {
 	try {
-		accessSync(candidate, constants.X_OK);
-		return statSync(candidate).isFile();
+		await access(candidate, constants.X_OK);
+		return (await stat(candidate)).isFile();
 	} catch {
 		return false;
 	}
 }
 
-function findExecutable(name: string, env: NodeJS.ProcessEnv): string | null {
+async function findExecutable(name: string, env: NodeJS.ProcessEnv): Promise<string | null> {
 	if (name.includes("/") || name.includes("\\")) {
-		return isExecutableFile(name) ? name : null;
+		return (await isExecutableFile(name)) ? name : null;
 	}
 	const extensions = executableExtensions(name, env);
 	const directories = (env.PATH ?? "").split(delimiter).filter(Boolean);
 	for (const directory of directories) {
 		for (const extension of extensions) {
 			const candidate = join(directory, `${name}${extension}`);
-			if (isExecutableFile(candidate)) return candidate;
+			if (await isExecutableFile(candidate)) return candidate;
 		}
 	}
 	return null;
 }
 
-function installState(type: string, entry: DatasourceSkillConfig, env: NodeJS.ProcessEnv): DataSourceRow["install"] {
+async function installState(type: string, entry: DatasourceSkillConfig, env: NodeJS.ProcessEnv): Promise<DataSourceRow["install"]> {
 	if (!BUILTIN_DATASOURCE_SKILL_NAMES.includes(type)) {
 		return { state: "unsupported", binary: null, path: null, detail: `No built-in AutoRAG datasource named "${type}"` };
 	}
@@ -103,7 +104,7 @@ function installState(type: string, entry: DatasourceSkillConfig, env: NodeJS.Pr
 	if (type === "github" || type === "github-gist") {
 		const tokenEnv = typeof connector.tokenEnv === "string" ? connector.tokenEnv : DEFAULT_TOKEN_ENV;
 		const hasToken = typeof connector.token === "string" || Boolean(env[tokenEnv]);
-		const gh = type === "github-gist" ? findExecutable("gh", env) : null;
+		const gh = type === "github-gist" ? await findExecutable("gh", env) : null;
 		return hasToken || gh !== null
 			? { state: "builtin", binary: null, path: gh, detail: hasToken ? `Token from ${tokenEnv}` : "Token from gh auth" }
 			: { state: "credential-missing", binary: null, path: null, detail: `Set ${tokenEnv} to let AutoRAG reach GitHub` };
@@ -111,7 +112,7 @@ function installState(type: string, entry: DatasourceSkillConfig, env: NodeJS.Pr
 	const binary = BACKEND_BINARIES[type];
 	if (binary === undefined) return { state: "builtin", binary: null, path: null, detail: "Built into AutoRAG" };
 	const configured = typeof connector.binaryPath === "string" ? connector.binaryPath : binary;
-	const path = findExecutable(configured, env);
+	const path = await findExecutable(configured, env);
 	return path === null
 		? { state: "missing", binary, path: null, detail: `${configured} was not found on PATH` }
 		: { state: "installed", binary, path, detail: `${binary} at ${path}` };
@@ -147,7 +148,7 @@ function agentState(
 	return { state: "connected", skillName, tags: descriptor.tags, detail: `Agents load ${skillName}` };
 }
 
-function indexState(type: string, skill: DatasourceSkill | undefined, workspacePath: string): DataSourceRow["index"] {
+async function indexState(type: string, skill: DatasourceSkill | undefined, workspacePath: string): Promise<DataSourceRow["index"]> {
 	if (skill === undefined) return { state: "not-indexed", chunkCount: null, indexedAt: null, detail: "Not indexed" };
 	if (!CHUNK_STORE_TEMPLATES.has(type)) {
 		const binary = BACKEND_BINARIES[type] ?? type;
@@ -156,7 +157,7 @@ function indexState(type: string, skill: DatasourceSkill | undefined, workspaceP
 	const descriptor = skill.describe();
 	const storePath = datasourceChunkStorePath(workspacePath, descriptor.name, descriptor.instanceId ?? "default");
 	try {
-		const parsed: unknown = JSON.parse(readFileSync(storePath, "utf8"));
+		const parsed: unknown = JSON.parse(await readFile(storePath, "utf8"));
 		const chunks = isRecord(parsed) && Array.isArray(parsed.chunks) ? parsed.chunks.length : 0;
 		const indexedAt = isRecord(parsed) && typeof parsed.updatedAt === "number" ? new Date(parsed.updatedAt).toISOString() : null;
 		return chunks === 0
@@ -177,9 +178,9 @@ function processAlive(pid: unknown): boolean {
 	}
 }
 
-function refreshState(workspacePath: string): DataSourcesSnapshot["refresh"] {
+async function refreshState(workspacePath: string): Promise<DataSourcesSnapshot["refresh"]> {
 	try {
-		const parsed: unknown = JSON.parse(readFileSync(join(workspacePath, ".autorag", "refresh-progress.json"), "utf8"));
+		const parsed: unknown = JSON.parse(await readFile(join(workspacePath, ".autorag", "refresh-progress.json"), "utf8"));
 		if (!isRecord(parsed)) return { state: "idle", phase: null, finishedAt: null };
 		const phase = typeof parsed.phase === "string" ? parsed.phase : null;
 		const finishedAt = typeof parsed.finishedAt === "string" ? parsed.finishedAt : null;
@@ -221,7 +222,7 @@ export function createDataSourceStatusService(deps: DataSourceStatusDeps): DataS
 			const path = configPath();
 			const empty: DataSourcesSnapshot = {
 				configPath: path,
-				configExists: existsSync(path),
+				configExists: await stat(path).then(() => true, () => false),
 				error: null,
 				accessTags: [],
 				refresh: { state: "idle", phase: null, finishedAt: null },
@@ -239,13 +240,13 @@ export function createDataSourceStatusService(deps: DataSourceStatusDeps): DataS
 				allowedTags,
 				...(config.datasourceAccess?.allowedScopes === undefined ? {} : { allowedScopes: config.datasourceAccess.allowedScopes }),
 			});
-			const refresh = refreshState(config.workspacePath);
-			const sources = Object.entries(config.datasources ?? {}).map(([id, raw]): DataSourceRow => {
+			const refresh = await refreshState(config.workspacePath);
+			const sources = await Promise.all(Object.entries(config.datasources ?? {}).map(async ([id, raw]): Promise<DataSourceRow> => {
 				const entry: DatasourceSkillConfig = isRecord(raw) ? raw : {};
 				const enabled = raw !== false && entry.enabled !== false;
 				const type = entry.type ?? id;
 				const skill = BUILTIN_DATASOURCE_SKILL_NAMES.includes(type) ? buildSkill(id, entry, config.workspacePath) : undefined;
-				const install = installState(type, entry, deps.env);
+				const [install, index] = await Promise.all([installState(type, entry, deps.env), indexState(type, skill, config.workspacePath)]);
 				const agent = agentState(skill, enabled, access, allowedTags);
 				return {
 					id,
@@ -255,9 +256,9 @@ export function createDataSourceStatusService(deps: DataSourceStatusDeps): DataS
 					status: overallStatus({ enabled, install, agent }, refresh),
 					install,
 					agent,
-					index: indexState(type, skill, config.workspacePath),
+					index,
 				};
-			});
+			}));
 			return { ...empty, accessTags: allowedTags, refresh, sources };
 		},
 		setEnabled: async (id, enabled) => {
