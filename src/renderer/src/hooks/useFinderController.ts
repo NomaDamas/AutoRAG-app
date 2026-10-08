@@ -5,7 +5,7 @@ import { useFolderListings } from "./useFolderListings";
 import { useRowPipeline } from "./useRowPipeline";
 import { itemElement, useFinderKeyboard } from "./useFinderKeyboard";
 import type { MouseEvent as ReactMouseEvent, RefObject } from "react";
-import { NO_CAPABILITIES, type ActionAnchor, type ActionCapabilities } from "../../../shared/actions-contract";
+import { NO_CAPABILITIES, type ActionAnchor, type ActionCapabilities, type OpenWithApplication } from "../../../shared/actions-contract";
 import { RECENTS_PATH } from "../../../shared/fs-contract";
 import type { IndexStatus } from "../../../shared/index-contract";
 import { DUPEY_LAYER_ID, type LiveMessage } from "../../../shared/live-contract";
@@ -214,6 +214,8 @@ export interface FinderController {
 	readonly actionCapabilities: ActionCapabilities;
 	/** Run one Inspector action (open, share, or an action request). */
 	runEntryAction(entry: FinderEntry, target: FileActionTarget, anchor: ActionAnchor | null): void;
+	/** The applications the OS registers for `entry`'s type, default first (the "다른 앱으로 열기" menu). */
+	loadOpenWithApplications(entry: FinderEntry): Promise<readonly OpenWithApplication[]>;
 	/** The rows a drag of `entry` carries: the whole selection when it is selected, else just `entry`. */
 	dragEntries(entry: FinderEntry): readonly FinderEntry[];
 	/** Copy the current selection to the in-app file clipboard (⌘C). */
@@ -1142,10 +1144,15 @@ export function useFinderController(
 						})
 						.catch(reportError);
 					return;
+				case "openWith":
 				case "askAi":
+					// Both open UI the caller owns (the application menu, the composer).
 					return;
 			}
 		});
+
+	const loadOpenWithApplications = useLatestCallback((entry: FinderEntry) =>
+		source.actions.openWithApplications(entry.path));
 
 	const dragEntries = useLatestCallback(
 		(entry: FinderEntry) => finderDragEntries(entry, selection.keys, viewEntries));
@@ -1727,6 +1734,7 @@ export function useFinderController(
 		copyEntryPath,
 		actionCapabilities,
 		runEntryAction,
+		loadOpenWithApplications,
 		dragEntries,
 		copySelection,
 		cutSelection,

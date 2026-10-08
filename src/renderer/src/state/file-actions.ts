@@ -17,6 +17,7 @@ import type {
 	ActionCapabilities,
 	ActionRequest,
 	ImageFormat,
+	OpenWithApplication,
 	VideoContainer,
 } from "../../../shared/actions-contract";
 
@@ -25,6 +26,7 @@ export type FileActionIcon = "open" | "openWith" | "compress" | "extract" | "sha
 /** Where a click leads. `request` is the work main performs. */
 export type FileActionTarget =
 	| { readonly kind: "open" }
+	| { readonly kind: "openWith" }
 	| { readonly kind: "share" }
 	| { readonly kind: "askAi" }
 	| { readonly kind: "request"; readonly request: ActionRequest };
@@ -33,6 +35,10 @@ export interface FileActionItem {
 	readonly id: string;
 	readonly label: string;
 	readonly target: FileActionTarget;
+	/** An image (data URL) drawn before the label, e.g. an application icon. */
+	readonly icon?: string | null;
+	/** Draw a divider above this item. */
+	readonly separated?: boolean;
 }
 
 /** A flat action button, or one that opens a variant menu. */
@@ -169,6 +175,32 @@ export function toolbarShareControl(hasFocusedEntry: boolean, capabilities: Acti
 }
 
 /**
+ * The "다른 앱으로 열기" menu: the applications the OS registers for the file's
+ * type first (default marked, in the order the OS reports), then "기타…" — the
+ * only entry that reaches the full application chooser.
+ */
+export function openWithItems(applications: readonly OpenWithApplication[]): readonly FileActionItem[] {
+	return [
+		...applications.map(
+			(application): FileActionItem => ({
+				id: `app:${application.path}`,
+				label: application.isDefault ? `${application.name} (기본)` : application.name,
+				icon: application.icon,
+				target: { kind: "request", request: { kind: "openWith", application: application.path } },
+			}),
+		),
+		{
+			id: "other",
+			label: "기타…",
+			// An icon-width spacer keeps the label aligned with the application rows.
+			...(applications.length > 0 ? { icon: null } : {}),
+			separated: applications.length > 0,
+			target: { kind: "request", request: { kind: "openWith", application: null } },
+		},
+	];
+}
+
+/**
  * The Inspector action bar for `subject`. Capability-gated: an action whose
  * backing engine is missing never renders, so the bar never lies about the
  * machine.
@@ -201,7 +233,7 @@ export function suggestedActions(subject: ActionSubject, capabilities: ActionCap
 			id: "openWith",
 			label: "다른 앱으로 열기",
 			icon: "openWith",
-			target: { kind: "request", request: { kind: "openWith" } },
+			target: { kind: "openWith" },
 		});
 	}
 	if (fileExtension(subject.name) === "zip") {

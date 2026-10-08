@@ -28,6 +28,7 @@ import {
 	type ActionOutcome,
 	type ActionRequest,
 	type ImageFormat,
+	type OpenWithApplication,
 	type VideoContainer,
 } from "../shared/actions-contract";
 import { errorMessage, pathExists } from "./fs-entry";
@@ -45,7 +46,7 @@ export type CommandRunner = (
 	options?: { readonly timeoutMs?: number },
 ) => Promise<CommandResult>;
 
-/** The "Open with" chooser; injected so the service never imports `dialog`. */
+/** The "Open with" chooser for applications outside the OS's suggestions; injected so the service never imports `dialog`. */
 export interface ApplicationPicker {
 	/** The chosen application path, or null when the user cancelled. */
 	pick(window: BrowserWindow | null): Promise<string | null>;
@@ -60,6 +61,8 @@ export interface ActionServiceDeps {
 	/** Defaults to process.platform. */
 	readonly platform?: NodeJS.Platform;
 	readonly applications: ApplicationPicker;
+	/** The application's icon as an image URL the renderer can load; absent or null → the menu shows no icon. */
+	readonly applicationIcon?: (applicationPath: string) => Promise<string | null>;
 	/** Absent when the platform has no share sheet. */
 	readonly share?: SharePresenter | null;
 	/** Defaults to spawning the command with execFile. */
@@ -70,7 +73,48 @@ export interface ActionServiceDeps {
 export interface ActionService {
 	capabilities(): Promise<ActionCapabilities>;
 	run(path: string, request: ActionRequest, window: BrowserWindow | null): Promise<ActionOutcome>;
+	/** Applications the OS registers for `path`'s type, default first (macOS; empty elsewhere). */
+	openWithApplications(path: string): Promise<readonly OpenWithApplication[]>;
 	share(path: string, anchor: ActionAnchor, window: BrowserWindow | null): Promise<void>;
+}
+
+/**
+ * Launch Services' view of a file: the handlers the OS registers for its type
+ * (`URLsForApplicationsToOpenURL`, the list Finder's own "Open With" shows) and
+ * the default one. The path arrives as `argv[0]`, never interpolated, so no
+ * file name can alter the script.
+ */
+const OPEN_WITH_SCRIPT = `
+ObjC.import("AppKit");
+function run(argv) {
+	const workspace = $.NSWorkspace.sharedWorkspace;
+	const url = $.NSURL.fileURLWithPath(argv[0]);
+	const fallback = workspace.URLForApplicationToOpenURL(url);
+	const urls = workspace.URLsForApplicationsToOpenURL(url);
+	const paths = [];
+	for (let i = 0; i < urls.count; i++) paths.push(ObjC.unwrap(urls.objectAtIndex(i).path));
+	return JSON.stringify({ defaultPath: fallback.isNil() ? null : ObjC.unwrap(fallback.path), paths: paths });
+}
+`;
+const OPEN_WITH_TIMEOUT_MS = 10_000;
+
+/** `Numbers.app` → `Numbers`. */
+function applicationName(path: string): string {
+	const name = basename(path);
+	return name.toLowerCase().endsWith(".app") ? name.slice(0, -4) : name;
+}
+
+/** The `{ defaultPath, paths }` document the script prints, or null when it is malformed. */
+function parseOpenWithListing(stdout: string): { readonly defaultPath: string | null; readonly paths: readonly string[] } | null {
+	try {
+		const parsed: unknown = JSON.parse(stdout);
+		if (typeof parsed !== "object" || parsed === null) return null;
+		const { defaultPath, paths } = parsed as { defaultPath?: unknown; paths?: unknown };
+		if (!Array.isArray(paths) || !paths.every((entry): entry is string => typeof entry === "string")) return null;
+		return { defaultPath: typeof defaultPath === "string" ? defaultPath : null, paths };
+	} catch {
+		return null;
+	}
 }
 
 const COMMAND_TIMEOUT_MS = 10 * 60 * 1000;
@@ -521,6 +565,39 @@ export function createActionService(deps: ActionServiceDeps): ActionService {
 		return target;
 	}
 
+	/**
+	 * The registered handlers for `path`, default first, each application once.
+	 * Only macOS exposes this; a failed lookup degrades to "no suggestions" so
+	 * the chooser stays reachable.
+	 */
+	async function registeredApplications(path: string): Promise<readonly { readonly path: string; readonly isDefault: boolean }[]> {
+		if (platform !== "darwin") return [];
+		let stdout: string;
+		try {
+			({ stdout } = await run("osascript", ["-l", "JavaScript", "-e", OPEN_WITH_SCRIPT, path], {
+				timeoutMs: OPEN_WITH_TIMEOUT_MS,
+			}));
+		} catch {
+			return [];
+		}
+		const listing = parseOpenWithListing(stdout);
+		if (listing === null) return [];
+		const ordered = listing.defaultPath === null ? listing.paths : [listing.defaultPath, ...listing.paths];
+		return [...new Set(ordered)].map((application) => ({ path: application, isDefault: application === listing.defaultPath }));
+	}
+
+	const iconCache = new Map<string, Promise<string | null>>();
+	function iconFor(applicationPath: string): Promise<string | null> {
+		const read = deps.applicationIcon;
+		if (read === undefined) return Promise.resolve(null);
+		let icon = iconCache.get(applicationPath);
+		if (icon === undefined) {
+			icon = read(applicationPath).catch(() => null);
+			iconCache.set(applicationPath, icon);
+		}
+		return icon;
+	}
+
 	return {
 		async capabilities(): Promise<ActionCapabilities> {
 			const ffmpegPresent = await hasFfmpeg();
@@ -533,14 +610,38 @@ export function createActionService(deps: ActionServiceDeps): ActionService {
 			};
 		},
 
+		async openWithApplications(path: string): Promise<readonly OpenWithApplication[]> {
+			const registered = await registeredApplications(path);
+			return Promise.all(
+				registered.map(
+					async (application): Promise<OpenWithApplication> => ({
+						path: application.path,
+						name: applicationName(application.path),
+						isDefault: application.isDefault,
+						icon: await iconFor(application.path),
+					}),
+				),
+			);
+		},
+
 		async run(path: string, request: ActionRequest, window: BrowserWindow | null): Promise<ActionOutcome> {
 			switch (request.kind) {
 				case "openWith": {
-					const application = await deps.applications.pick(window);
-					if (application === null) return { output: null, note: "열기를 취소했습니다" };
+					let application: string | null;
+					if (request.application === null) {
+						application = await deps.applications.pick(window);
+						if (application === null) return { output: null, note: "열기를 취소했습니다" };
+					} else {
+						// A named application must be one the OS offered for this file;
+						// anything else goes through the chooser, never straight to exec.
+						application = request.application;
+						if (!(await registeredApplications(path)).some((candidate) => candidate.path === application)) {
+							throw new Error("이 파일을 열 수 있는 앱이 아닙니다");
+						}
+					}
 					if (platform === "darwin") await run("open", ["-a", application, path]);
 					else await run(application, [path]);
-					return { output: null, note: `${basename(path)} — ${basename(application)}로 열었습니다` };
+					return { output: null, note: `${basename(path)} — ${applicationName(application)}로 열었습니다` };
 				}
 				case "compress": {
 					const stat = await lstat(path);

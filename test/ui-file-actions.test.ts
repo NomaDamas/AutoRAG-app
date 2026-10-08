@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { NO_CAPABILITIES, type ActionCapabilities } from "../src/shared/actions-contract";
 import {
 	fileExtension,
+	openWithItems,
 	suggestedActions,
 	type FileAction,
 	type FileActionItem,
@@ -37,6 +38,30 @@ describe("fileExtension", () => {
 		expect(fileExtension(".gitignore")).toBe("");
 		expect(fileExtension("README")).toBe("");
 		expect(fileExtension("trailing.")).toBe("");
+	});
+});
+
+describe("openWithItems", () => {
+	it("lists the OS-registered applications first, marks the default, and ends with 기타…", () => {
+		const items = openWithItems([
+			{ path: "/Applications/IINA.app", name: "IINA", isDefault: true, icon: "data:image/png;base64,AA" },
+			{ path: "/Applications/VLC.app", name: "VLC", isDefault: false, icon: null },
+		]);
+		expect(items.map((item) => item.label)).toEqual(["IINA (기본)", "VLC", "기타…"]);
+		expect(items[0]?.target).toEqual({
+			kind: "request",
+			request: { kind: "openWith", application: "/Applications/IINA.app" },
+		});
+		expect(items[2]).toMatchObject({
+			separated: true,
+			target: { kind: "request", request: { kind: "openWith", application: null } },
+		});
+	});
+
+	it("offers only 기타… when the OS suggests nothing", () => {
+		const items = openWithItems([]);
+		expect(items).toHaveLength(1);
+		expect(items[0]).toMatchObject({ label: "기타…", separated: false });
 	});
 });
 

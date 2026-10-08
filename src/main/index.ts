@@ -1,4 +1,4 @@
-import { access } from "node:fs/promises";
+import { access, stat } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
 import { app, BrowserWindow, clipboard, dialog, ipcMain, nativeTheme, protocol, safeStorage, ShareMenu, shell, type OpenDialogOptions } from "electron";
 import { APPEARANCE_CHANNELS } from "../shared/appearance-contract";
@@ -290,6 +290,13 @@ app.whenReady().then(async () => {
 							: await dialog.showOpenDialog(window, options);
 					return result.canceled ? null : (result.filePaths[0] ?? null);
 				},
+			},
+			async applicationIcon(applicationPath) {
+				// The provider's listing tier renders the app's own icon (Quick Look
+				// thumbnail) and caches it; `getFileIcon` would return the generic bundle glyph.
+				const { mtimeMs } = await stat(applicationPath);
+				const icons = await iconProvider.icons([{ path: applicationPath, ext: "app", mtimeMs }]);
+				return icons.get(applicationPath) ?? null;
 			},
 			share:
 				process.platform === "darwin"

@@ -207,11 +207,24 @@ try {
 		check("share button is absent without a share sheet", (await actionLabels(page)).includes("Share"), false);
 	}
 
-	// 7. 다른 앱으로 열기 opens the native application chooser. The sheet is a
-	// native modal, so the assertion is that the renderer survives it — the
-	// sheet itself goes away with the process when the run ends.
+	// 7. 다른 앱으로 열기 opens an in-app menu of the applications the OS
+	// registers for the file's type, with 기타… last. Only 기타… reaches the
+	// native chooser — a native modal, so the assertion is that the renderer
+	// survives it; the sheet goes away with the process when the run ends.
 	await selectFile(page, "photo.png");
 	await page.getByRole("button", { name: "Open With", exact: true }).click();
+	const menu = page.getByRole("menu", { name: "세부 작업" });
+	await menu.waitFor({ state: "visible", timeout: 10_000 });
+	const labels = await menu.getByRole("menuitem").allInnerTexts();
+	console.log(`open-with menu: ${labels.join(" | ")}`);
+	check("open-with menu ends with 기타…", labels.at(-1)?.trim(), "기타…");
+	if (process.platform === "darwin") {
+		check("open-with menu suggests the OS's applications before 기타…", labels.length > 1, true);
+	}
+	check("open-with 기타… is visible without scrolling", await menu.getByRole("menuitem", { name: "기타…" }).isVisible() && (await menu.getByRole("menuitem", { name: "기타…" }).evaluate((node) => { const box = node.getBoundingClientRect(); return box.bottom <= window.innerHeight && box.top >= 0; })), true);
+	await sleep(600);
+	await page.screenshot({ path: join(EVIDENCE, "6-open-with-menu.png") });
+	await menu.getByRole("menuitem", { name: "기타…" }).click();
 	await sleep(1500);
 	const responsive = await page.evaluate(() => document.querySelectorAll(".inspector-actions").length === 1);
 	check("open-with chooser leaves the window responsive", responsive, true);

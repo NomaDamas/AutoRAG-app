@@ -6,6 +6,7 @@ export function createActionsBridge(ipcRenderer: IpcRenderer): ActionsBridge {
 	return {
 		capabilities: () => ipcRenderer.invoke(ACTIONS_CHANNELS.capabilities),
 		run: (path, request) => ipcRenderer.invoke(ACTIONS_CHANNELS.run, path, request),
+		openWithApplications: (path) => ipcRenderer.invoke(ACTIONS_CHANNELS.openWithApplications, path),
 		share: (path, anchor) => ipcRenderer.invoke(ACTIONS_CHANNELS.share, path, anchor),
 	};
 }

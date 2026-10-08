@@ -28,7 +28,7 @@ import { useEffect, useState, type MouseEvent as ReactMouseEvent, type ReactElem
 import { useTranslation } from "react-i18next";
 import { previewStreamUrl } from "../../../preview/shared/contract";
 import { hwpFirstPageUrl } from "../../../preview/ui/rhwp";
-import type { ActionAnchor, ActionCapabilities } from "../../../shared/actions-contract";
+import type { ActionAnchor, ActionCapabilities, OpenWithApplication } from "../../../shared/actions-contract";
 import type { FsFileDetails } from "../../../shared/fs-contract";
 import type { IndexStatus } from "../../../shared/index-contract";
 import type { CitationEvidence } from "../../../shared/search-contract";
@@ -47,6 +47,7 @@ import {
 	type EvidenceFeedback,
 } from "../state/evidence";
 import {
+	openWithItems,
 	suggestedActions,
 	type FileActionIcon,
 	type FileActionItem,
@@ -106,6 +107,8 @@ export interface InspectorProps {
 	readonly actionCapabilities: ActionCapabilities;
 	/** Run a suggested action; `anchor` is the clicked button's rect (share sheet). */
 	readonly onAction: (target: FileActionTarget, anchor: ActionAnchor | null) => void;
+	/** The applications the OS registers for `entry`'s type, default first. */
+	readonly loadOpenWithApplications: (entry: FinderEntry) => Promise<readonly OpenWithApplication[]>;
 	/** Dupey family of `entry`; null when it has no versions. */
 	readonly family: InspectorFamily | null;
 	readonly onOpenMember: (path: string) => void;
@@ -147,6 +150,7 @@ export function Inspector({
 	onAskAi,
 	actionCapabilities,
 	onAction,
+	loadOpenWithApplications,
 	family,
 	onOpenMember,
 	view,
@@ -187,6 +191,7 @@ export function Inspector({
 					onAskAi={onAskAi}
 					actionCapabilities={actionCapabilities}
 					onAction={onAction}
+					loadOpenWithApplications={loadOpenWithApplications}
 				/>
 			)}
 		</aside>
@@ -204,6 +209,7 @@ function InfoHalf({
 	onAskAi,
 	actionCapabilities,
 	onAction,
+	loadOpenWithApplications,
 }: {
 	readonly entry: FinderEntry | null;
 	readonly indexStatus: IndexStatus | null;
@@ -215,6 +221,7 @@ function InfoHalf({
 	readonly onAskAi: (entry: FinderEntry) => void;
 	readonly actionCapabilities: ActionCapabilities;
 	readonly onAction: (target: FileActionTarget, anchor: ActionAnchor | null) => void;
+	readonly loadOpenWithApplications: (entry: FinderEntry) => Promise<readonly OpenWithApplication[]>;
 }): ReactElement {
 	const [brief, setBrief] = useState(false);
 	const [details, setDetails] = useState<FsFileDetails | null>(null);
@@ -315,7 +322,7 @@ function InfoHalf({
 			)}
 
 			{entry === null ? null : (
-				<ActionBar entry={entry} capabilities={actionCapabilities} onAction={onAction} onAskAi={onAskAi} />
+				<ActionBar entry={entry} capabilities={actionCapabilities} onAction={onAction} onAskAi={onAskAi} loadOpenWithApplications={loadOpenWithApplications} />
 			)}
 		</div>
 	);
@@ -567,11 +574,13 @@ function ActionBar({
 	capabilities,
 	onAction,
 	onAskAi,
+	loadOpenWithApplications,
 }: {
 	readonly entry: FinderEntry;
 	readonly capabilities: ActionCapabilities;
 	readonly onAction: (target: FileActionTarget, anchor: ActionAnchor | null) => void;
 	readonly onAskAi: (entry: FinderEntry) => void;
+	readonly loadOpenWithApplications: (entry: FinderEntry) => Promise<readonly OpenWithApplication[]>;
 }): ReactElement {
 	const { t } = useTranslation();
 	const actions = suggestedActions(entry, capabilities);
@@ -579,7 +588,13 @@ function ActionBar({
 	function run(target: FileActionTarget, anchor: ActionAnchor): void {
 		// "AI 요약" is the App shell's concern (it owns the composer), not IPC.
 		if (target.kind === "askAi") onAskAi(entry);
-		else onAction(target, anchor);
+		else if (target.kind === "openWith") {
+			// The OS's handlers for this file's type come first; "기타…" opens the full chooser.
+			// A failed lookup still leaves "기타…" reachable.
+			loadOpenWithApplications(entry)
+				.catch((): readonly OpenWithApplication[] => [])
+				.then((applications) => setMenu({ items: openWithItems(applications), anchor }));
+		} else onAction(target, anchor);
 	}
 
 	return (
