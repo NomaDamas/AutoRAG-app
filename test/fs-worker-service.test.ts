@@ -124,10 +124,11 @@ describe("fs worker service", () => {
 	});
 
 	it("restores from and empties the Trash through the trash location's folder", async () => {
-		// Given a Trash folder holding one payload
+		// Given a Trash folder holding one payload (Windows only treats `$R…`/`$I…` names as payloads)
+		const payload = process.platform === "win32" ? "$Ra.txt" : "a.txt";
 		const trashDir = join(root, "trash");
 		await mkdir(trashDir);
-		await writeFile(join(trashDir, "a.txt"), "x");
+		await writeFile(join(trashDir, payload), "x");
 		const worker = start(fakeWatcher(), undefined, trashDir);
 		const signal = new AbortController().signal;
 
@@ -135,9 +136,9 @@ describe("fs worker service", () => {
 		const emptied = (await worker.handlers.emptyTrash([], signal)) as FsBatchResult;
 
 		// Then the payload was deleted for good, and restoring a payload with no origin reports why
-		expect(emptied.ok).toEqual([join(trashDir, "a.txt")]);
+		expect(emptied.ok).toEqual([join(trashDir, payload)]);
 		expect(emptied.failed).toEqual([]);
-		await expect(worker.handlers.restoreFromTrash([[join(trashDir, "a.txt")]], signal)).resolves.toMatchObject({
+		await expect(worker.handlers.restoreFromTrash([[join(trashDir, payload)]], signal)).resolves.toMatchObject({
 			ok: [],
 			failed: [{ message: expect.stringContaining("원래 위치를 알 수 없습니다") }],
 		});
