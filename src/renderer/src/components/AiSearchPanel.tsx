@@ -690,8 +690,14 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 								<span key={`${att.id}:${att.name}`} className="composer-attach-pill inline-flex h-chip-draft items-center gap-5 rounded-5 bg-selected-nav px-8 text-badge text-ink" title={att.id}>
 									<AttachmentGlyph att={att} />
 									<span className="max-w-[180px] truncate">{att.name}</span>
-									<button type="button" className="cursor-pointer text-ink-muted hover:text-danger-text" aria-label="첨부 제거" onClick={() => removeAttachment(index)}>
-										<CloseIcon size={9} />
+									<button
+										type="button"
+										className="flex size-16 flex-none cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 text-ink-muted transition-[background,color] duration-(--dur-color) ease-out hover:bg-hover-strong hover:text-danger-text"
+										aria-label="첨부 제거"
+										title="첨부 제거"
+										onClick={() => removeAttachment(index)}
+									>
+										<CloseIcon size={10} />
 									</button>
 								</span>
 							))}
