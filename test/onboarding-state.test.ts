@@ -64,7 +64,7 @@ function makeDeps(userDataDir: string, env: NodeJS.ProcessEnv = {}): OnboardingS
 		configPath: join(userDataDir, "config.json"),
 		resolveWorkspacePath: async () => userDataDir,
 		refresh: async () => ({ ok: true, methods: [], scanned: 0, written: 0, deleted: 0, skipped: 0, diagnostics: [], error: null }),
-		credentials: { list: () => [], set: () => [], remove: () => [], load: () => [] },
+		credentials: { list: async () => [], set: async () => [], remove: async () => [], load: async () => [] },
 		settings: { get: async () => DEFAULT_SETTINGS, set: async (patch) => ({ ...DEFAULT_SETTINGS, ...patch }) },
 		detectSources: async () => ({ sources: [] }),
 		gitToken: async () => null,

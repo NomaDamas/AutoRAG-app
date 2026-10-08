@@ -113,7 +113,7 @@ export async function detectModelProviders(deps: ModelDetectionDeps): Promise<re
 			detected.push({ provider, origin: "env", envName });
 			continue;
 		}
-		const stored = deps.credentials.list([envName]).some((status) => status.stored);
+		const stored = (await deps.credentials.list([envName])).some((status) => status.stored);
 		if (stored) detected.push({ provider, origin: "stored", envName });
 	}
 	return detected;

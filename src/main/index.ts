@@ -37,7 +37,6 @@ import { createOnboardingService, type OnboardingService } from "./onboarding-se
 import { detectSources } from "./onboarding-sources";
 import { detectModelProviders, verifyModel as verifyModelRequest } from "./onboarding-models";
 import { FS_CHANNELS } from "../shared/fs-contract";
-import { DUPEY_LAYER_ID, LIVE_CHANNELS } from "../shared/live-contract";
 import { APP_NAME, APP_VERSION, formatWindowTitle, type DevLabel } from "../shared/app-info";
 import { createChatStore } from "./chat-store";
 import { createDataSourceStatusService } from "./datasource-status";
@@ -51,9 +50,6 @@ import { createSettingsService } from "./settings-service";
 import {
 	registerActionsIpcHandlers,
 	registerDragOutIpcHandlers,
-	registerFsIpcHandlers,
-	registerIndexIpcHandlers,
-	registerLiveIpcHandlers,
 	registerOnboardingIpcHandlers,
 	registerSearchIpcHandlers,
 	registerSettingsIpcHandlers,
@@ -571,7 +567,7 @@ app.whenReady().then(async () => {
 	mainWindow = openMainWindow();
 	app.on("activate", () => {
 		if (mainWindow === null || mainWindow.isDestroyed()) {
-			mainWindow = createMainWindow(devLabel, currentAppearance);
+			mainWindow = openMainWindow();
 		}
 	});
 	// The worker's native watcher must finish unsubscribing before its Node
