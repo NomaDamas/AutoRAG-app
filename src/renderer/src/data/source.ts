@@ -44,6 +44,7 @@ export interface SearchHits {
 const UNAVAILABLE_ACTIONS: ActionsBridge = {
 	capabilities: () => Promise.resolve(NO_CAPABILITIES),
 	run: () => Promise.reject(new Error("이 환경에서는 파일 작업을 실행할 수 없습니다")),
+	openWithApplications: () => Promise.resolve([]),
 	share: () => Promise.reject(new Error("이 환경에서는 공유를 실행할 수 없습니다")),
 };
 

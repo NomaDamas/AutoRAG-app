@@ -165,6 +165,14 @@ The Info half's bottom bar is data-driven, not a fixed four buttons.
   for `.zip`, an 이미지 편집 menu for images, and a 동영상 변환 menu for video.
   Quick Look, 경로 복사, and 휴지통 are deliberately absent — Space, the row
   context menu, ⌘⌫, and the Info chips already cover them.
+- **다른 앱으로 열기** opens an in-app menu, not the native chooser. The first
+  rows are the applications the OS itself registers for the file's type
+  (Launch Services `URLsForApplicationsToOpenURL`, via
+  `actions:open-with-applications`), default first and marked `(기본)`, each with
+  its own icon. `기타…` is pinned last and is the only entry that opens the
+  full application chooser. A named application must be one the OS offered for
+  that file; main refuses anything else. Off macOS the OS list cannot be read,
+  so the menu is just `기타…`.
 - **Whether an action is real** comes from `actions:capabilities` in main: the
   macOS share sheet, the image engine (`sips`, plus WebP through `ffmpeg`), and
   video container conversion (`ffmpeg`) are probed once per session. A missing
