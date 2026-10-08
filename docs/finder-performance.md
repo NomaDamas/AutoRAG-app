@@ -385,3 +385,43 @@ the result, because the first attempt may already have changed the disk.
 Not moved: thumbnails and file icons stay on main (`nativeImage` and
 `app.getFileIcon` do not exist in a utility process). Their encode cost on main
 is small: `toPNG` of a 640 px Quick Look thumbnail measured 2.5 ms at most.
+
+## 10,000-file folder lane (FS roadmap #100, stage 3)
+
+```sh
+bun run build
+bun scripts/manual-qa/run-qa-finder-large-folder.mjs     # LARGE_RUNS=5, LARGE_FILES=10000
+```
+
+Each run starts the built app on fresh user data and opens a 10,000-file
+fixture folder from the QA root. It reports the median, min, and max over the
+runs for:
+
+- first paint: double-click to the first rAF frame showing a row of the folder;
+- listing heap: renderer heap after a forced GC with the folder shown, minus
+  the same reading at the QA root;
+- row bytes: from a heap snapshot, the bytes only the folder's row objects
+  hold (the rows, their own strings and property stores), plus the row fields;
+- Name ↓ and Date Modified ↓ sort: column click to the frame with the expected
+  first row;
+- the `fs:listDir` answer: round trip, JSON bytes, and fields.
+
+The lane holds the folder's enrichment inside the filesystem worker
+(`AUTORAG_FS_WORKER_QA=1` registers `fs-worker:qaHoldEnrichment`), so the
+listing readings never race the OS kind pass. It releases that pass before the
+second heap reading; the Finder metadata pass stays held, because 10,000 files
+would keep helper processes busy for minutes and the run quits first.
+
+Baseline, `main` 5d10783, production build, macOS, 5 runs:
+
+| metric | median (min–max) |
+| --- | ---: |
+| first paint | 260.6 ms (171.1–360.1) |
+| renderer script time, open → settled | 29 ms (26–33) |
+| listing heap | 9.41 MB (8.10–9.45) |
+| listing heap after the kind/icon pass | 10.11 MB (10.09–10.22) |
+| row bytes (heap snapshot) | 1,587,520 B, 159 B/row, 14 fields |
+| Name ↓ sort | 62.3 ms (40.0–131.8) |
+| Date Modified ↓ sort | 58.5 ms (37.7–149.0) |
+| `fs:listDir` round trip | 99.7 ms (73.6–218.8) |
+| `fs:listDir` JSON | 3,000,112 B, 10 fields |

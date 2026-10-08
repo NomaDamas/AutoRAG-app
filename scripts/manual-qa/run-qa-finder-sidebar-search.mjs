@@ -86,7 +86,10 @@ try {
 	await search.fill("notes");
 	await search.press("Enter");
 	await page.waitForSelector(".scope", { timeout: 10000 });
-	await sleep(500);
+	// A filename search walks the disk: the scope bar appears at once and the
+	// count climbs as results land, so wait for the rows instead of a fixed
+	// delay (a cold walk takes about a second).
+	await page.waitForFunction(() => document.querySelectorAll('[role="row"] .row__label').length > 0, null, { timeout: 15000 }).catch(() => undefined);
 	const scopeCount = await page.locator(".scope__count").innerText();
 	const rowNames = await page.locator('[role="row"] .row__label').allInnerTexts();
 	check("a filename search shows the scope bar with a count", /\d+\s*items found/.test(scopeCount), scopeCount);
