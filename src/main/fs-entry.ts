@@ -1,7 +1,7 @@
 import { constants } from "node:fs";
 import { access, lstat, stat } from "node:fs/promises";
 import { basename, join } from "node:path";
-import type { FsEntry } from "../shared/fs-contract";
+import { FS_ENTRY_SYMLINK, type FsEntry } from "../shared/fs-contract";
 
 /** True when the error carries the given Node errno code. */
 export function hasErrorCode(error: unknown, code: string): boolean {
@@ -104,18 +104,16 @@ export async function buildFsEntry(path: string, platform: NodeJS.Platform = pro
 	const name = basename(path);
 	const isBundle = isAppBundle(name, isDirectory, platform);
 	const isFolder = isDirectory && !isBundle;
-	return {
+	const entry = {
 		name,
 		path,
 		kind: isFolder ? "folder" : "file",
 		ext: isFolder ? "" : extensionOf(name),
+		// A bundle is a directory on disk: its byte count would be the folder's own, not the app's.
 		size: isDirectory ? null : effective.size,
-		modifiedAt: effective.mtime.toISOString(),
-		// Only a real birth time is a creation time; never substitute mtime/ctime.
-		...(effective.birthtimeMs > 0 ? { createdAt: effective.birthtime.toISOString() } : {}),
-		isSymlink,
-		// The OS metadata lookup lands in fs-service, which owns process spawning.
-		osKind: null,
-		iconUrl: null,
-	};
+		mtimeMs: effective.mtimeMs,
+		flags: isSymlink ? FS_ENTRY_SYMLINK : 0,
+	} as const;
+	// Only a real birth time is a creation time; never substitute mtime/ctime.
+	return effective.birthtimeMs > 0 ? { ...entry, birthtimeMs: effective.birthtimeMs } : entry;
 }

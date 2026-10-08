@@ -5,7 +5,7 @@ import { useFolderListings } from "./useFolderListings";
 import { useRowPipeline } from "./useRowPipeline";
 import { itemElement, useFinderKeyboard } from "./useFinderKeyboard";
 import type { MouseEvent as ReactMouseEvent, RefObject } from "react";
-import { NO_CAPABILITIES, type ActionAnchor, type ActionCapabilities } from "../../../shared/actions-contract";
+import { NO_CAPABILITIES, type ActionAnchor, type ActionCapabilities, type OpenWithApplication } from "../../../shared/actions-contract";
 import { RECENTS_PATH } from "../../../shared/fs-contract";
 import type { IndexStatus } from "../../../shared/index-contract";
 import { DUPEY_LAYER_ID, type LiveMessage } from "../../../shared/live-contract";
@@ -60,6 +60,7 @@ import {
 	type GroupKey,
 	type GroupSection,
 } from "../state/grouping";
+import { locationOf } from "../state/entry-values";
 import { type SortDirection, type SortKey, type SortState, cycleSort, explicitSort } from "../state/sort";
 import {
 	expandedFolders,
@@ -213,6 +214,8 @@ export interface FinderController {
 	readonly actionCapabilities: ActionCapabilities;
 	/** Run one Inspector action (open, share, or an action request). */
 	runEntryAction(entry: FinderEntry, target: FileActionTarget, anchor: ActionAnchor | null): void;
+	/** The applications the OS registers for `entry`'s type, default first (the "다른 앱으로 열기" menu). */
+	loadOpenWithApplications(entry: FinderEntry): Promise<readonly OpenWithApplication[]>;
 	/** The rows a drag of `entry` carries: the whole selection when it is selected, else just `entry`. */
 	dragEntries(entry: FinderEntry): readonly FinderEntry[];
 	/** Copy the current selection to the in-app file clipboard (⌘C). */
@@ -870,7 +873,7 @@ export function useFinderController(
 
 	const revealEntry = useLatestCallback((entry: FinderEntry) => {
 		setTabsState((state) =>
-			patchActiveTab(navigateTab(state, entry.location), (current) => ({
+			patchActiveTab(navigateTab(state, locationOf(entry)), (current) => ({
 				...current,
 				selection: { keys: [entry.path], anchor: entry.path, focus: entry.path },
 			})),
@@ -882,9 +885,10 @@ export function useFinderController(
 
 	const openEntry = useLatestCallback(
 		(entry: FinderEntry) => {
+			const location = locationOf(entry);
 			if (entry.kind === "folder") {
 				// In the column view the click already opened the folder in the next pane.
-				if (layout === "columns" && panePaths.includes(entry.location)) {
+				if (layout === "columns" && panePaths.includes(location)) {
 					return;
 				}
 				navigate(entry.path);
@@ -893,9 +897,9 @@ export function useFinderController(
 			// A Recents row always opens: the view is a history, not a folder to reveal into.
 			// Rows nested under an open folder are in view already, so they open too.
 			const inView =
-				entry.location === path ||
-				openFolders.includes(entry.location) ||
-				(layout === "columns" && panePaths.includes(entry.location));
+				location === path ||
+				openFolders.includes(location) ||
+				(layout === "columns" && panePaths.includes(location));
 			if (searching || (!inView && path !== RECENTS_PATH)) {
 				revealEntry(entry);
 				return;
@@ -1140,10 +1144,15 @@ export function useFinderController(
 						})
 						.catch(reportError);
 					return;
+				case "openWith":
 				case "askAi":
+					// Both open UI the caller owns (the application menu, the composer).
 					return;
 			}
 		});
+
+	const loadOpenWithApplications = useLatestCallback((entry: FinderEntry) =>
+		source.actions.openWithApplications(entry.path));
 
 	const dragEntries = useLatestCallback(
 		(entry: FinderEntry) => finderDragEntries(entry, selection.keys, viewEntries));
@@ -1337,8 +1346,8 @@ export function useFinderController(
 	/** The folder a row-menu create lands in: the pane the menu opened in (column view), else the folder in view. */
 	const menuCreateDir = useLatestCallback(
 		(menu: ContextMenuState): string =>
-			menu.entry !== null && layout === "columns" && panePaths.includes(menu.entry.location)
-				? menu.entry.location
+			menu.entry !== null && layout === "columns" && panePaths.includes(locationOf(menu.entry))
+				? locationOf(menu.entry)
 				: menu.dir,
 	);
 
@@ -1428,11 +1437,17 @@ export function useFinderController(
 					source.copyPaths(targets).catch(reportError);
 					return;
 				case "openWith":
+					// The menu's item is the Inspector's "기타…": the OS application
+					// chooser, then one launch for the whole selection.
+					source.actions
+						.run(targets, { kind: "openWith", application: null })
+						.then((outcome) => showToast(outcome.note))
+						.catch(reportError);
+					return;
 				case "compress":
 				case "extract":
-					// One request for the whole selection: the chooser opens every file
-					// with the one application, compress writes one archive, and the menu
-					// offers extract for a single .zip row only.
+					// One request for the whole selection: compress writes one archive,
+					// and the menu offers extract for a single .zip row only.
 					source.actions
 						.run(targets, { kind: action })
 						.then((outcome) => {
@@ -1753,6 +1768,7 @@ export function useFinderController(
 		copyEntryPath,
 		actionCapabilities,
 		runEntryAction,
+		loadOpenWithApplications,
 		dragEntries,
 		copySelection,
 		cutSelection,

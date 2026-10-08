@@ -17,20 +17,17 @@ import {
 	type IncrementalListing,
 	type ListingScope,
 } from "../src/renderer/src/state/live";
+import { sizeLabelOf } from "../src/renderer/src/state/entry-values";
 
 function entry(path: string): FinderEntry {
 	return {
 		name: path.split("/").pop() ?? path,
 		path,
 		kind: "file",
-		fileKind: "md",
-		iconUrl: null,
-		dateLabel: "Sep 30, 00:00",
-		sizeLabel: "1 B",
-		kindLabel: "Plain Text",
-		location: path.slice(0, path.lastIndexOf("/")) || path,
-		modifiedValue: 0,
-		sizeValue: 1,
+		ext: "md",
+		size: 1,
+		mtimeMs: Date.parse("2026-09-30T00:00:00.000Z"),
+		birthtimeMs: 0,
 	};
 }
 
@@ -139,9 +136,9 @@ describe("live renderer state", () => {
 
 	it("patches only changed rows and appends newly created rows", () => {
 		const rows = [entry("/d/a"), entry("/d/b")];
-		const updated = { ...entry("/d/b"), sizeLabel: "2 B", sizeValue: 2 };
+		const updated = { ...entry("/d/b"), size: 2 };
 		const next = applyEntryPatch(rows, { entries: [updated, entry("/d/c")], removed: ["/d/a"] });
-		expect(next.map((row) => [row.path, row.sizeLabel])).toEqual([
+		expect(next.map((row) => [row.path, sizeLabelOf(row)])).toEqual([
 			["/d/b", "2 B"],
 			["/d/c", "1 B"],
 		]);
@@ -351,37 +348,27 @@ describe("live renderer state", () => {
 		expect(same).toBe(rows);
 		expect(same[0]).toBe(rows[0]);
 
-		const changed = applyEntryPatch(rows, { entries: [{ ...entry("/d/a"), sizeLabel: "2 B", sizeValue: 2 }], removed: [] });
+		const changed = applyEntryPatch(rows, { entries: [{ ...entry("/d/a"), size: 2 }], removed: [] });
 		expect(changed).not.toBe(rows);
 		expect(changed[0]).not.toBe(rows[0]);
 		expect(changed[1]).toBe(rows[1]);
-		expect(changed[0]?.sizeLabel).toBe("2 B");
+		const first = changed[0];
+		expect(first === undefined ? undefined : sizeLabelOf(first)).toBe("2 B");
 	});
 
-	it("revalidating an unchanged folder keeps the enriched listing itself", () => {
-		const stamp = "2026-09-30T00:00:00.000Z";
-		const bare = (path: string): FinderEntry => ({ ...entry(path), modifiedAt: stamp });
-		const shown = [
-			{ ...bare("/d/a.md"), iconUrl: "thumb://a", kindLabel: "Markdown Document" },
-			{ ...bare("/d/b.md"), iconUrl: null, kindLabel: "Markdown Document" },
-		];
-		expect(reconcileListing(shown, [bare("/d/a.md"), bare("/d/b.md")])).toBe(shown);
+	it("revalidating an unchanged folder keeps the listing array itself", () => {
+		const shown = [entry("/d/a.md"), entry("/d/b.md")];
+		expect(reconcileListing(shown, [entry("/d/a.md"), entry("/d/b.md")])).toBe(shown);
 	});
 
-	it("a relist carries enrichment only for rows unchanged on disk", () => {
-		const stamp = "2026-09-30T00:00:00.000Z";
-		const bare = (path: string, modifiedAt = stamp): FinderEntry => ({ ...entry(path), modifiedAt });
-		const shown = [
-			{ ...bare("/d/keep.md"), iconUrl: "thumb://keep", kindLabel: "Markdown Document" },
-			{ ...bare("/d/edited.md"), iconUrl: "thumb://edited-old", kindLabel: "Markdown Document" },
-			{ ...bare("/d/gone.md"), iconUrl: "thumb://gone", kindLabel: "Markdown Document" },
-		];
-		const edited = bare("/d/edited.md", "2026-10-01T00:00:00.000Z");
-		const created = bare("/d/new.md");
-		const next = reconcileListing(shown, [bare("/d/keep.md"), edited, created]);
+	it("a relist keeps unchanged row objects and replaces edited and created ones", () => {
+		const shown = [entry("/d/keep.md"), entry("/d/edited.md"), entry("/d/gone.md")];
+		const edited = { ...entry("/d/edited.md"), mtimeMs: Date.parse("2026-10-01T00:00:00.000Z") };
+		const created = entry("/d/new.md");
+		const next = reconcileListing(shown, [entry("/d/keep.md"), edited, created]);
 		expect(next.map((row) => row.path)).toEqual(["/d/keep.md", "/d/edited.md", "/d/new.md"]);
+		// A row unchanged on disk keeps its object; a newer mtime is a new row.
 		expect(next[0]).toBe(shown[0]);
-		// A newer mtime means the old thumbnail and OS kind may be wrong: bare until re-enriched.
 		expect(next[1]).toBe(edited);
 		expect(next[2]).toBe(created);
 	});

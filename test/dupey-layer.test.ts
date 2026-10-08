@@ -23,10 +23,8 @@ function entry(path: string): FsEntry {
 		kind: "file",
 		ext: "txt",
 		size: 4,
-		modifiedAt: "2026-09-29T00:00:00.000Z",
-		isSymlink: false,
-		osKind: null,
-		iconUrl: null,
+		mtimeMs: Date.parse("2026-09-29T00:00:00.000Z"),
+		flags: 0,
 	};
 }
 
@@ -337,7 +335,7 @@ describe("dupey live reconciliation", () => {
 
 	it("loads snapshots without stamps and does not resurrect missing paths", async () => {
 		const seed: StoredVersionFamilies = {
-			version: 1,
+			version: 2,
 			scannedAt: "2026-09-29T00:00:00.000Z",
 			locations: [ROOT],
 			families: [{

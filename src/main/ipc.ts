@@ -47,6 +47,10 @@ export function registerActionsIpcHandlers(service: ActionService): void {
 		if (!isActionRequest(request)) throw new Error("알 수 없는 파일 작업입니다");
 		return service.run(paths, request, BrowserWindow.fromWebContents(event.sender));
 	});
+	ipcMain.handle(ACTIONS_CHANNELS.openWithApplications, (_event, path: unknown) => {
+		if (typeof path !== "string" || path.length === 0) throw new Error("파일 경로가 올바르지 않습니다");
+		return service.openWithApplications(path);
+	});
 	ipcMain.handle(ACTIONS_CHANNELS.share, (event, paths: unknown, anchor: unknown) => {
 		if (!isActionPaths(paths)) throw new Error("파일 경로가 올바르지 않습니다");
 		if (!isActionAnchor(anchor)) throw new Error("공유 위치가 올바르지 않습니다");

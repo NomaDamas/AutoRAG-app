@@ -59,11 +59,26 @@ export interface FsWorkerService {
 	dispose(): Promise<void>;
 	/** QA only: ingest an overflow batch for `dir`, as if the watcher had lost its events. */
 	readonly qaOverflow: WorkerHandler;
+	/**
+	 * QA only: hold the named enrichment ops (`enrichEntries`,
+	 * `finderMetadata`) for targets under `prefix`, so a lane can read a
+	 * listing's heap without those passes racing it. Returns how many requests
+	 * already wait.
+	 */
+	readonly qaHoldEnrichment: WorkerHandler;
+	/** QA only: answer the held ops (all of them when none is named); returns how many were waiting. */
+	readonly qaReleaseEnrichment: WorkerHandler;
 }
 
 function stringArg(args: readonly unknown[], index: number, label: string): string {
 	const value = args[index];
 	if (typeof value !== "string") throw new TypeError(`${label} must be a string`);
+	return value;
+}
+
+function numberArg(args: readonly unknown[], index: number, label: string): number {
+	const value = args[index];
+	if (typeof value !== "number" || !Number.isFinite(value)) throw new TypeError(`${label} must be a finite number`);
 	return value;
 }
 
@@ -83,8 +98,9 @@ function isEnrichmentTarget(value: unknown): value is FsEnrichmentTarget {
 		(value.kind === "file" || value.kind === "folder") &&
 		"ext" in value &&
 		typeof value.ext === "string" &&
-		"modifiedAt" in value &&
-		typeof value.modifiedAt === "string"
+		"mtimeMs" in value &&
+		typeof value.mtimeMs === "number" &&
+		Number.isFinite(value.mtimeMs)
 	);
 }
 
@@ -166,14 +182,35 @@ export function createFsWorkerService(deps: FsWorkerServiceDeps): FsWorkerServic
 	// monitored folder, which is exactly the cost this keep-alive avoids.
 	void fileNameSearch.ensureDaemon();
 
+	/**
+	 * QA lanes only: the enrichment ops a lane is holding, the path prefix they
+	 * are held for, and the requests already waiting. A held op that has not
+	 * been released simply never answers (the lane quits first), which is how
+	 * the 10k-file lane keeps the Finder metadata pass from spawning helpers
+	 * for minutes.
+	 */
+	let heldPrefix: string | null = null;
+	const heldOps = new Set<string>();
+	const heldReleases: Array<{ readonly op: string; readonly release: () => void }> = [];
+	const holdWhileTesting = (op: string, run: WorkerHandler): WorkerHandler => async (args, signal) => {
+		if (heldPrefix !== null && heldOps.has(op)) {
+			const prefix = heldPrefix;
+			const targets = targetsArg(args);
+			if (targets.some((target) => target.path.startsWith(prefix))) {
+				await new Promise<void>((release) => heldReleases.push({ op, release }));
+			}
+		}
+		return run(args, signal);
+	};
+
 	const handlers: Record<Exclude<FsWorkerOp, "diagnostics" | "qaOverflow">, WorkerHandler> = {
 		listDir: (args, signal) => fsService.listDir(stringArg(args, 0, "path"), signal),
 		readEntries: (args) => fsService.readEntries(stringArg(args, 0, "dir"), stringsArg(args, 1, "paths")),
-		enrichEntries: (args) => fsService.enrichEntries(targetsArg(args), args[1] === true),
-		finderMetadata: (args) => fsService.finderMetadata(targetsArg(args)),
+		enrichEntries: holdWhileTesting("enrichEntries", (args) => fsService.enrichEntries(targetsArg(args), args[1] === true)),
+		finderMetadata: holdWhileTesting("finderMetadata", (args) => fsService.finderMetadata(targetsArg(args))),
 		stat: (args) => fsService.stat(stringArg(args, 0, "path")),
 		details: (args) => fsService.details(stringArg(args, 0, "path")),
-		previewIcon: (args) => fsService.previewIcon(stringArg(args, 0, "path"), stringArg(args, 1, "modifiedAt")),
+		previewIcon: (args) => fsService.previewIcon(stringArg(args, 0, "path"), numberArg(args, 1, "mtimeMs")),
 		exists: (args) => fsService.exists(stringArg(args, 0, "path")),
 		search: (args, signal) => fsService.search(stringArg(args, 0, "query"), searchOptionsArg(args[1]), signal),
 		locations: () => fsService.locations(),
@@ -234,6 +271,28 @@ export function createFsWorkerService(deps: FsWorkerServiceDeps): FsWorkerServic
 	return {
 		handlers,
 		qaOverflow: (args) => liveHub.ingest({ dir: stringArg(args, 0, "dir"), changes: [], overflow: true, dirGone: false }),
+		qaHoldEnrichment: (args) => {
+			heldPrefix = stringArg(args, 0, "prefix");
+			const ops = Array.isArray(args[1]) ? args[1].filter((op): op is string => typeof op === "string") : [];
+			heldOps.clear();
+			for (const op of ops.length > 0 ? ops : ["enrichEntries", "finderMetadata"]) heldOps.add(op);
+			return heldReleases.length;
+		},
+		qaReleaseEnrichment: (args) => {
+			const named = Array.isArray(args[0]) ? new Set(args[0].filter((op): op is string => typeof op === "string")) : new Set<string>();
+			const releasing = named.size > 0 ? named : new Set(heldOps);
+			for (const op of releasing) heldOps.delete(op);
+			// Keep the prefix while another op stays held; a later hold sets it again.
+			if (heldOps.size === 0) heldPrefix = null;
+			let released = 0;
+			for (const waiting of [...heldReleases]) {
+				if (!releasing.has(waiting.op)) continue;
+				heldReleases.splice(heldReleases.indexOf(waiting), 1);
+				waiting.release();
+				released += 1;
+			}
+			return released;
+		},
 		async dispose() {
 			stopPlacesWatch();
 			versionFamilies.stop();

@@ -67,7 +67,7 @@ export function FileTile({
 	large = false,
 }: {
 	readonly kind: FileKind;
-	readonly iconUrl?: string | null;
+	readonly iconUrl?: string | null | undefined;
 	readonly size?: 16 | 18 | 22;
 	readonly large?: boolean;
 }): ReactElement {

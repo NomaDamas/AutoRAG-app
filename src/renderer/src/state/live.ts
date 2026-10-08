@@ -196,29 +196,25 @@ export function createIncrementalListing(options: IncrementalListingOptions): In
 	};
 }
 
-/** Every field a row renders: entries equal on all of them need no re-render. */
-const ENTRY_KEYS: readonly (keyof FinderEntry)[] = [
-	"name",
-	"path",
-	"kind",
-	"fileKind",
-	"iconUrl",
-	"modifiedAt",
-	"dateLabel",
-	"sizeLabel",
-	"kindLabel",
-	"location",
-	"modifiedValue",
-	"sizeValue",
-	"createdValue",
-	"addedValue",
-	"lastOpenedValue",
-	"tagsLabel",
-	"commentsLabel",
-	"dimensionsLabel",
-	"dimensionsValue",
-	"applicationLabel",
-];
+/**
+ * A listed row's fields, as read from disk; entries equal on all of them need
+ * no re-render. Enrichment (kind, icon, Finder metadata) lives in the entry
+ * sidecar keyed by path + mtime, never in a listing, so it is not compared here.
+ */
+function sameListedEntry(a: FinderEntry, b: FinderEntry): boolean {
+	return (
+		a.name === b.name &&
+		a.path === b.path &&
+		a.kind === b.kind &&
+		a.ext === b.ext &&
+		a.size === b.size &&
+		a.mtimeMs === b.mtimeMs &&
+		a.birthtimeMs === b.birthtimeMs &&
+		a.fixture?.dateLabel === b.fixture?.dateLabel &&
+		a.fixture?.sizeLabel === b.fixture?.sizeLabel &&
+		a.fixture?.fileKind === b.fixture?.fileKind
+	);
+}
 
 /** Applies current filesystem state for only the changed direct children. */
 export function applyEntryPatch(listing: readonly FinderEntry[], patch: EntryPatch): readonly FinderEntry[] {
@@ -236,7 +232,7 @@ export function applyEntryPatch(listing: readonly FinderEntry[], patch: EntryPat
 		}
 		const next = updates.get(entry.path);
 		updates.delete(entry.path);
-		if (next === undefined || next === entry || ENTRY_KEYS.every((key) => next[key] === entry[key])) {
+		if (next === undefined || next === entry || sameListedEntry(next, entry)) {
 			result.push(entry);
 			continue;
 		}
@@ -251,10 +247,9 @@ export function applyEntryPatch(listing: readonly FinderEntry[], patch: EntryPat
 }
 
 /**
- * A fresh full listing of a folder whose rows are already known. `list`
- * returns bare rows — the OS kind and icon arrive later from `enrich` — so a
- * row whose file is unchanged on disk (same path and mtime) keeps what
- * enrichment already learned, and keeps its object when nothing else moved.
+ * A fresh full listing of a folder whose rows are already known. A row whose
+ * listed fields are unchanged keeps its object (what enrichment learned lives
+ * in the sidecar under the same path + mtime, so it carries over by itself).
  * Returns `previous` itself when the folder is unchanged, so revalidating a
  * folder that is on screen paints nothing and never blanks its icons.
  */
@@ -273,28 +268,12 @@ export function reconcileListing(
 			changed = true;
 			return entry;
 		}
-		const unchangedOnDisk = entry.modifiedAt !== undefined && entry.modifiedAt === before.modifiedAt;
-		const carried: FinderEntry = unchangedOnDisk
-			? {
-					...entry,
-					iconUrl: entry.iconUrl ?? before.iconUrl,
-					kindLabel: before.kindLabel,
-					...(before.createdValue === undefined ? {} : { createdValue: before.createdValue }),
-					...(before.addedValue === undefined ? {} : { addedValue: before.addedValue }),
-					...(before.lastOpenedValue === undefined ? {} : { lastOpenedValue: before.lastOpenedValue }),
-					...(before.tagsLabel === undefined ? {} : { tagsLabel: before.tagsLabel }),
-					...(before.commentsLabel === undefined ? {} : { commentsLabel: before.commentsLabel }),
-					...(before.dimensionsLabel === undefined ? {} : { dimensionsLabel: before.dimensionsLabel }),
-					...(before.dimensionsValue === undefined ? {} : { dimensionsValue: before.dimensionsValue }),
-					...(before.ratingValue === undefined ? {} : { ratingValue: before.ratingValue }),
-				}
-			: entry;
-		if (ENTRY_KEYS.every((key) => carried[key] === before[key])) {
+		if (sameListedEntry(entry, before)) {
 			if (previous[index] !== before) changed = true;
 			return before;
 		}
 		changed = true;
-		return carried;
+		return entry;
 	});
 	return changed ? result : previous;
 }

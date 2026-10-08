@@ -170,7 +170,16 @@ The Info half's bottom bar is data-driven, not a fixed four buttons.
   공유 in a group above 휴지통으로 이동. The same capability gates apply, the Trash
   offers none of them, and a multi-selection keeps only the batch-meaningful
   items — 압축 packs the whole selection into one `Archive.zip`, 공유 opens one
-  sheet, and 압축 해제 disappears.
+  sheet, and 압축 해제 disappears. The menu's 다른 앱으로 열기 is the Inspector's
+  `기타…`: the full application chooser, one launch for the whole selection.
+- **다른 앱으로 열기** opens an in-app menu, not the native chooser. The first
+  rows are the applications the OS itself registers for the file's type
+  (Launch Services `URLsForApplicationsToOpenURL`, via
+  `actions:open-with-applications`), default first and marked `(기본)`, each with
+  its own icon. `기타…` is pinned last and is the only entry that opens the
+  full application chooser. A named application must be one the OS offered for
+  that file; main refuses anything else. Off macOS the OS list cannot be read,
+  so the menu is just `기타…`.
 - **Whether an action is real** comes from `actions:capabilities` in main: the
   macOS share sheet, the image engine (`sips`, plus WebP through `ffmpeg`), and
   video container conversion (`ffmpeg`) are probed once per session. A missing

@@ -15,12 +15,23 @@ import {
 
 describe("formatModified", () => {
 	it("renders the reference date format", () => {
-		expect(formatModified("2026-09-13T16:48:00")).toBe("Sep 13, 16:48");
-		expect(formatModified("2026-01-02T09:05:00")).toBe("Jan 2, 09:05");
+		expect(formatModified(new Date(2026, 8, 13, 16, 48).getTime())).toBe("Sep 13, 16:48");
+		expect(formatModified(new Date(2026, 0, 2, 9, 5).getTime())).toBe("Jan 2, 09:05");
 	});
 
 	it("falls back to an em dash for an unreadable timestamp", () => {
-		expect(formatModified("not-a-date")).toBe("—");
+		expect(formatModified(Number.NaN)).toBe("—");
+	});
+
+	it("rounds a fractional stamp to the millisecond the way Node's stats.mtime does", () => {
+		// mtimeMs carries sub-millisecond digits (1700000000000.731 -> mtime 1700000000001),
+		// so a stamp within half a millisecond below a minute boundary is already in that minute.
+		for (const minute of [new Date(2026, 8, 13, 16, 48).getTime(), new Date(1950, 3, 20, 15, 15).getTime()]) {
+			const label = formatModified(minute);
+			expect(formatModified(minute - 0.4)).toBe(label);
+			expect(formatModified(minute + 0.4)).toBe(label);
+			expect(formatModified(minute - 0.6)).not.toBe(label);
+		}
 	});
 
 	it("round-trips into a sortable value", () => {

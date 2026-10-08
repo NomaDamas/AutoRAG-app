@@ -680,6 +680,7 @@ export function App(): ReactElement {
 								onAskAi={askAi}
 								actionCapabilities={finder?.actionCapabilities ?? NO_CAPABILITIES}
 								onAction={runInspectorAction}
+								loadOpenWithApplications={(entry) => finder?.loadOpenWithApplications(entry) ?? Promise.resolve([])}
 								family={inspectorFamily}
 								onOpenMember={openMemberEntry}
 								view={aiTabActive ? "evidence" : "info"}

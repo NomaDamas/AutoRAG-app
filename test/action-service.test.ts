@@ -1,6 +1,6 @@
 import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { isAbsolute, join, resolve } from "node:path";
+import { basename, isAbsolute, join, resolve } from "node:path";
 import { zipSync } from "fflate";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { ActionAnchor } from "../src/shared/actions-contract";
@@ -54,6 +54,10 @@ function makeService(
 		readonly imageOutput?: string;
 		/** Overrides the fake `ffmpeg -muxers` body (default: no heif muxer). */
 		readonly muxers?: string;
+		/** Applications the fake Launch Services reports for any file, default first. */
+		readonly registered?: readonly string[];
+		/** Make the Launch Services lookup fail. */
+		readonly lookupFails?: boolean;
 	} = {},
 ): Harness {
 	const commands: { command: string; args: string[] }[] = [];
@@ -67,6 +71,11 @@ function makeService(
 		}
 		if (command === "ffmpeg" && args.includes("-encoders")) return { stdout: FFMPEG_ENCODERS, stderr: "" };
 		if (command === "ffmpeg" && args.includes("-muxers")) return { stdout: options.muxers ?? FFMPEG_MUXERS, stderr: "" };
+		if (command === "osascript") {
+			if (options.lookupFails === true) throw new Error("osascript failed");
+			const [defaultPath = null, ...rest] = options.registered ?? [];
+			return { stdout: JSON.stringify({ defaultPath, paths: [...rest, ...(defaultPath === null ? [] : [defaultPath])] }), stderr: "" };
+		}
 		const outIndex = args.indexOf("--out");
 		const target = outIndex >= 0 ? args[outIndex + 1] : args[args.length - 1];
 		if (target !== undefined && isAbsolute(target)) {
@@ -78,6 +87,7 @@ function makeService(
 		service: createActionService({
 			platform: options.platform ?? "darwin",
 			applications: { pick: async () => options.picked ?? null },
+			applicationIcon: async (path) => `data:image/png;base64,${basename(path)}`,
 			share: {
 				present: (paths, anchor) => {
 					shares.push({ paths: [...paths], anchor });
@@ -402,23 +412,65 @@ describe("video actions", () => {
 });
 
 describe("open with", () => {
-	it("launches the chosen application through Launch Services", async () => {
-		const { service, commands } = makeService({ picked: "/Applications/IINA.app" });
+	const IINA = "/Applications/IINA.app";
+	const VLC = "/Applications/VLC.app";
+
+	it("lists the OS-registered applications default first, each once, with icons", async () => {
+		const { service, commands } = makeService({ registered: [IINA, VLC] });
+		const applications = await service.openWithApplications(join(root, "clip.mkv"));
+		expect(applications).toEqual([
+			{ path: IINA, name: "IINA", isDefault: true, icon: "data:image/png;base64,IINA.app" },
+			{ path: VLC, name: "VLC", isDefault: false, icon: "data:image/png;base64,VLC.app" },
+		]);
+		// The file path is a script argument, never part of the script text.
+		const lookup = commands.find((command) => command.command === "osascript");
+		expect(lookup?.args.at(-1)).toBe(join(root, "clip.mkv"));
+	});
+
+	it("offers nothing off macOS, where the OS list cannot be read", async () => {
+		const { service, commands } = makeService({ platform: "win32", registered: [IINA] });
+		expect(await service.openWithApplications(join(root, "clip.mkv"))).toEqual([]);
+		expect(commands).toEqual([]);
+	});
+
+	it("degrades a failed lookup to no suggestions", async () => {
+		const { service } = makeService({ lookupFails: true });
+		expect(await service.openWithApplications(join(root, "clip.mkv"))).toEqual([]);
+	});
+
+	it("launches an application the OS offered for the file", async () => {
+		const { service, commands } = makeService({ registered: [IINA, VLC] });
 		const source = join(root, "clip.mkv");
 		await writeFile(source, "mkv");
-		const outcome = await service.run([source], { kind: "openWith" }, null);
-		expect(outcome.note).toContain("IINA.app");
-		expect(commands.at(-1)).toEqual({
-			command: "open",
-			args: ["-a", "/Applications/IINA.app", source],
-		});
+		const outcome = await service.run([source], { kind: "openWith", application: VLC }, null);
+		expect(outcome.note).toBe("clip.mkv — VLC로 열었습니다");
+		expect(commands.at(-1)).toEqual({ command: "open", args: ["-a", VLC, source] });
+	});
+
+	it("refuses a named application the OS did not offer, without launching it", async () => {
+		const { service, commands } = makeService({ registered: [IINA] });
+		const source = join(root, "clip.mkv");
+		await writeFile(source, "mkv");
+		await expect(service.run([source], { kind: "openWith", application: "/bin/sh" }, null)).rejects.toThrow(
+			/열 수 있는 앱/,
+		);
+		expect(commands.some((command) => command.command === "open")).toBe(false);
+	});
+
+	it("opens the full chooser for 기타… and launches what was picked", async () => {
+		const { service, commands } = makeService({ picked: "/Applications/Obscure.app", registered: [IINA] });
+		const source = join(root, "clip.mkv");
+		await writeFile(source, "mkv");
+		const outcome = await service.run([source], { kind: "openWith", application: null }, null);
+		expect(outcome.note).toContain("Obscure");
+		expect(commands.at(-1)).toEqual({ command: "open", args: ["-a", "/Applications/Obscure.app", source] });
 	});
 
 	it("reports a cancelled chooser without launching anything", async () => {
 		const { service, commands } = makeService({ picked: null });
 		const source = join(root, "clip.mkv");
 		await writeFile(source, "mkv");
-		const outcome = await service.run([source], { kind: "openWith" }, null);
+		const outcome = await service.run([source], { kind: "openWith", application: null }, null);
 		expect(outcome.output).toBeNull();
 		expect(commands).toEqual([]);
 	});
@@ -455,7 +507,7 @@ describe("batch targets", () => {
 		const two = join(root, "b.mkv");
 		await writeFile(one, "x");
 		await writeFile(two, "y");
-		const outcome = await service.run([one, two], { kind: "openWith" }, null);
+		const outcome = await service.run([one, two], { kind: "openWith", application: null }, null);
 		expect(commands.at(-1)).toEqual({ command: "open", args: ["-a", "/Applications/IINA.app", one, two] });
 		expect(outcome.note).toContain("2개");
 	});

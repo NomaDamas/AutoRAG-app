@@ -18,12 +18,48 @@ function pad(value: number): string {
 	return String(value).padStart(2, "0");
 }
 
-export function formatModified(iso: string): string {
-	const date = new Date(iso);
-	if (Number.isNaN(date.getTime())) {
+/**
+ * Cell labels are computed when a row renders, so the same few thousand
+ * values are formatted again on every scroll. Memoized by input with a hard
+ * cap: past it the map is dropped and refills from what is on screen.
+ */
+const LABEL_CACHE_LIMIT = 4096;
+
+function memoize<K, V>(compute: (key: K) => V): (key: K) => V {
+	const cache = new Map<K, V>();
+	return (key) => {
+		const hit = cache.get(key);
+		if (hit !== undefined) return hit;
+		const value = compute(key);
+		if (cache.size >= LABEL_CACHE_LIMIT) cache.clear();
+		cache.set(key, value);
+		return value;
+	};
+}
+
+const SECOND_MS = 1000;
+
+/**
+ * "Sep 13, 16:48" for one epoch second. Keyed by the second, not the minute:
+ * time zone offsets are whole seconds (historical LMT offsets are not whole
+ * minutes), so every stamp inside one second shares a local wall minute.
+ */
+const modifiedLabelForSecond = memoize((second: number): string => {
+	const date = new Date(second * SECOND_MS);
+	return `${MONTHS[date.getMonth()] ?? NO_VALUE} ${date.getDate()}, ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+});
+
+/** The Date Modified label for an epoch-ms stamp; an unusable stamp renders as an em dash. */
+export function formatModified(ms: number): string {
+	// `mtimeMs` carries sub-millisecond digits. Node builds `stats.mtime` (what the label
+	// showed when the listing sent an ISO string) with `Math.round`, so a stamp half a
+	// millisecond below a minute boundary belongs to the next minute; truncating or
+	// flooring would put it in the previous one.
+	const whole = Math.round(ms);
+	if (!Number.isFinite(whole) || Number.isNaN(new Date(whole).getTime())) {
 		return NO_VALUE;
 	}
-	return `${MONTHS[date.getMonth()] ?? NO_VALUE} ${date.getDate()}, ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+	return modifiedLabelForSecond(Math.floor(whole / SECOND_MS));
 }
 
 /** Full local date and time for the Info panel, e.g. "2026-01-02 03:04:05". */
@@ -49,9 +85,10 @@ export function parseModifiedLabel(label: string): number {
 }
 
 export function formatSize(bytes: number | null): string {
-	if (bytes === null) {
-		return NO_VALUE;
-	}
+	return bytes === null ? NO_VALUE : sizeLabel(bytes);
+}
+
+const sizeLabel = memoize((bytes: number): string => {
 	if (bytes < 1024) {
 		return `${bytes} B`;
 	}
@@ -63,7 +100,7 @@ export function formatSize(bytes: number | null): string {
 	}
 	const label = unit >= 1 && value < 10 ? value.toFixed(1) : String(Math.round(value));
 	return `${label} ${UNITS[unit] ?? "KB"}`;
-}
+});
 
 /** Sortable byte count for a "84 KB" label. */
 export function parseSizeLabel(label: string): number {

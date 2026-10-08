@@ -135,9 +135,11 @@ try {
 		await page.waitForTimeout(20);
 	}
 	await rowFor(LAST).waitFor({ timeout: 30000 });
+	// The OS thumbnailer is shared and can be slow while other lanes run, so the
+	// tail row (past the per-call cap) gets a generous bound; it must still fill.
 	const lastHasImage = await rowFor(LAST)
 		.locator("img.tile--image")
-		.waitFor({ timeout: 30000 })
+		.waitFor({ timeout: 60000 })
 		.then(() => true)
 		.catch(() => false);
 	clearInterval(sampler);

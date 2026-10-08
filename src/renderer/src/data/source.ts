@@ -26,7 +26,7 @@ import {
 	type VersionFamiliesResult,
 	type VersionRelation,
 } from "../state/version-family";
-import { type FinderEntry, entryFromFixture, entryFromFs, entryFromSearchHit } from "./entries";
+import { type FinderEntry, entryFromFixture, entryFromFs, entryFromSearchHit, hasFileVersion } from "./entries";
 import { FIXTURE_FAMILIES, FIXTURE_INITIAL_PATH, FIXTURE_TREE } from "./fixtures";
 import type { FixtureItem } from "./entries";
 
@@ -44,6 +44,7 @@ export interface SearchHits {
 const UNAVAILABLE_ACTIONS: ActionsBridge = {
 	capabilities: () => Promise.resolve(NO_CAPABILITIES),
 	run: () => Promise.reject(new Error("이 환경에서는 파일 작업을 실행할 수 없습니다")),
+	openWithApplications: () => Promise.resolve([]),
 	share: () => Promise.reject(new Error("이 환경에서는 공유를 실행할 수 없습니다")),
 };
 
@@ -134,18 +135,10 @@ export async function isMissingPathFailure(
 	return !(await source.exists(path));
 }
 
-/** Main-process identity for each row that knows its mtime; the mtime gates every patch. */
+/** Main-process identity for each row backed by a file version; the mtime gates every patch. */
 function enrichmentTargets(entries: readonly FinderEntry[]): FsEnrichmentTarget[] {
 	return entries.flatMap((entry) =>
-		entry.modifiedAt === undefined
-			? []
-			: [{
-					path: entry.path,
-					kind: entry.kind,
-					ext: entry.kind === "folder" ? "" : entry.name.includes(".") ? entry.name.split(".").pop()?.toLowerCase() ?? "" : "",
-					modifiedAt: entry.modifiedAt,
-					...(entry.createdAt === undefined ? {} : { createdAt: entry.createdAt }),
-				}],
+		hasFileVersion(entry) ? [{ path: entry.path, kind: entry.kind, ext: entry.ext, mtimeMs: entry.mtimeMs }] : [],
 	);
 }
 
@@ -196,15 +189,14 @@ export function createBridgeSource(
 		exists: (path) => fs.exists(path),
 		async list(path) {
 			const listing = await fs.listDir(path);
-			// Recents is virtual: a row's location is the real folder that holds the file.
-			return listing.entries.map((entry) => entryFromFs(entry, path === RECENTS_PATH ? undefined : path));
+			// A row's folder is derived from its path, so Recents rows point at the real folder.
+			return listing.entries.map(entryFromFs);
 		},
 		enrich: (entries) => fs.enrichEntries(enrichmentTargets(entries), true),
 		finderMetadata: (entries) => fs.finderMetadata(enrichmentTargets(entries)),
 		async readEntries(dir, paths) {
 			const patch = await fs.readEntries(dir, paths);
-			// Rows belong to the requested dir, not the child's own parent lookup.
-			return { entries: patch.entries.map((entry) => entryFromFs(entry, dir)), removed: patch.removed };
+			return { entries: patch.entries.map(entryFromFs), removed: patch.removed };
 		},
 		async search(query, options) {
 			const hits = await fs.search(query, options);
