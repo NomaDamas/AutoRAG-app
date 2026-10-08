@@ -322,13 +322,14 @@ async function readDocument(path: string): Promise<PreviewDocument> {
 		case "whole":
 			return readPreviewFile(path, PREVIEW_BYTE_CAP, true);
 		case "extract": {
-			// The file's own metadata, with the page image Apple stored inside it as the bytes.
+			// The file's own metadata, the page image Apple stored inside it, and
+			// (for a Keynote deck) every slide image in show order.
 			const document = await readPreviewFile(path, 0);
 			const preview = await readIworkPreview(path).catch((error: unknown) => {
 				console.warn(`quick-look: iWork preview for ${path} failed: ${error instanceof Error ? error.message : String(error)}`);
 				return null;
 			});
-			return { ...document, bytes: preview };
+			return { ...document, bytes: preview?.firstPage ?? null, pages: preview?.pages ?? null };
 		}
 		case "sniff": {
 			const sniffed = await readPreviewFile(path, SNIFF_BYTES);

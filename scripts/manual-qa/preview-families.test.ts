@@ -41,6 +41,7 @@ function documentFor(ext: string, bytes: Uint8Array): PreviewDocument {
 		mime: "application/octet-stream",
 		truncated: false,
 		bytes,
+		pages: null,
 	};
 }
 

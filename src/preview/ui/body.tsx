@@ -11,7 +11,8 @@ import { MarkdownView } from "./markdown";
 import { HwpView } from "./hwp";
 import { FontView, HeicView, ImageView, TiffView } from "./media";
 import { IworkView } from "./iwork";
-import { EpubView, PptxView } from "./packages";
+import { EpubView } from "./packages";
+import { PptxView } from "./pptx";
 import { PdfView } from "./pdf";
 import { AudioView, VideoView } from "./player";
 

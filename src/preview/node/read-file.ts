@@ -66,5 +66,6 @@ export async function readPreviewFile(filePath: string, limit: number, whole = f
 		mime: mimeForExtension(ext),
 		truncated,
 		bytes,
+		pages: null,
 	};
 }

@@ -40,6 +40,7 @@ const SELF_SIZED: Partial<Record<StageKind, true>> = {
 	audio: true,
 	pdf: true,
 	hwp: true,
+	pptx: true,
 	markdown: true,
 	html: true,
 	text: true,

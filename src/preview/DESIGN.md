@@ -126,13 +126,49 @@ still has the previous file's size when they lay out.
   with `ui/contents.tsx`, so they stay identical. A gzip of one text file shows
   the text instead.
 - **iWork** — `.numbers`, `.pages`, and `.key` are ZIPs whose `preview.jpg` is
-  the first sheet, page, or slide as the app drew it. `byteNeed` is `extract`:
-  the main process reads only the central directory and that one entry
-  (`node/iwork.ts`), so a large deck costs the same as a small one, and the
-  panel shows the image. A package without one (older directory-form files)
-  gets the "Other" panel. The Finder's tile and Inspector thumbnails ask macOS
-  Quick Look for the same extensions (`file-icon.ts`); Windows has no
-  thumbnailer for them and shows the type icon.
+  the first sheet, page, or slide as the app drew it. Numbers and Pages show
+  that image. A Keynote deck shows every slide in the PDF panel's `PagedView`:
+  the show's slide order is recovered from the IWA container (snappy +
+  protobuf) in `Index/Document.iwa` (`shared/iwork-slides.ts`), and each
+  following slide is the app's own 356px `Data/st-*` render — the first slide
+  keeps the full-quality `preview.jpg`, so the other cards are visibly lower
+  resolution than the first. A deck whose order cannot be read (an older or
+  newer format, or a corrupt file) falls back to the single first-page image
+  with a warning. `byteNeed` is `extract`: the main process reads only the
+  central directory, `Index/Document.iwa`, and the slide images
+  (`node/iwork.ts`), so a large deck costs the same as a small one. A package
+  without a page image (older directory-form files) gets the "Other" panel. The
+  Finder's tile and Inspector thumbnails ask macOS Quick Look for the same
+  extensions (`file-icon.ts`); Windows has no thumbnailer for them and shows
+  the type icon.
+
+- **PowerPoint** — `.pptx`, `.pptm`, and `.ppsx` share the PDF panel's paged
+  layout: every slide is a paper card in one scrolling column with the page
+  rail, the `1 / N` pill, and zoom. `shared/pptx-model.ts` reads the OOXML
+  from the whole-file bytes — slide order from `p:sldIdLst` through the
+  presentation relationships (never a filename sort), each slide's background,
+  and its shapes in z-order: `p:sp` (geometry, solid fill, line, and text with
+  per-run size, bold, italic, underline, colour, alignment, and basic bullets),
+  `p:pic` (image plus `a:srcRect` crop), `p:grpSp` (child-coordinate
+  transforms), and `p:graphicFrame` tables. Position and text defaults for
+  placeholder shapes inherit from the slide layout, then the slide master
+  (`p:txStyles`); colours resolve through the theme (`srgbClr`, `schemeClr`
+  with basic `lumMod`/`lumOff`/`tint`/`shade`, `sysClr`). `shared/pptx-render.ts`
+  draws the model as an absolutely positioned DOM tree at the slide's natural
+  pixel size (EMU ÷ 9525) — real selectable text, never a canvas — and
+  `ui/pptx.tsx` CSS-scales it per slot, inflating a slide's pictures from the
+  zip only when that page or thumbnail is drawn and revoking their blob URLs
+  when it is released. Charts, SmartArt, media, and unsupported picture formats
+  (SVG, EMF, WMF) draw a labelled placeholder instead of crashing; a malformed
+  slide draws an error card while the rest of the deck still renders, and a
+  package whose presentation cannot be read falls back to the Other panel.
+  Known fidelity gaps: no gradients, pictures, patterns, or theme-fill
+  backgrounds (a solid colour is used instead); autofit, line spacing, and
+  exact bullet indents are approximated; 3D, shadows, soft edges, and
+  connectors with arrowheads are ignored; embedded fonts are not loaded, so
+  text uses the run's typeface with an Apple SD Gothic Neo / Malgun Gothic /
+  Noto Sans KR fallback (Korean renders through that chain); SmartArt and
+  charts are labelled boxes rather than their rendered previews.
 
 Images, TIFF, HEIC, fonts, Word, sheets, slides, and EPUB keep their existing
 viewers inside the new chrome.
@@ -142,12 +178,12 @@ viewers inside the new chrome.
 The main process reads only what the viewer will use (`byteNeed` in
 `registry.ts`): nothing for media, PDF, images, and fonts, which stream through
 `autorag-preview://` (it answers `Range` with `206`); the first 4MB of text,
-code, Markdown, and HTML; whole documents (HWP included) up to 32MB; for iWork packages the
-directory and the one page image inside; and a 64KB
-sniff of an
-unknown file, read on as text only when it looks like text. The detail calls
-(details, SHA-256, folder size, audio tags) answer only for the path the window
-is showing, and the hash and folder walk stop when the preview moves on.
+code, Markdown, and HTML; whole documents (HWP included) up to 32MB; for iWork
+packages the directory, the Keynote slide tree, and the page images inside; and
+a 64KB sniff of an unknown file, read on as text only when it looks like text.
+The detail calls (details, SHA-256, folder size, audio tags) answer only for the
+path the window is showing, and the hash and folder walk stop when the preview
+moves on.
 
 Electron honours only one `registerSchemesAsPrivileged` call, so the preview
 and thumbnail schemes register together in `src/main/index.ts`.

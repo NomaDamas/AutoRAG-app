@@ -5,11 +5,20 @@ import { strToU8, zipSync } from "fflate";
 import { describe, expect, it } from "vitest";
 import { readIworkPreview } from "../src/preview/node/iwork";
 import { summarizeArchive } from "../src/preview/shared/archive-items";
+import { isPreviewDocument } from "../src/preview/shared/contract";
 import { byteNeed, describeExtension, viewerForExtension } from "../src/preview/shared/registry";
 import { listTarEntries } from "../src/preview/shared/tar-list";
 import { listZipEntries } from "../src/preview/shared/zip-list";
+import { buildIwa, concat, pbBytes, pbVarint } from "./iwa-fixture";
 
 const JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4, 0xff, 0xd9]);
+
+/** A minimal `Index/Document.iwa`: a show object listing these slide nodes in order. */
+function keyDocument(slides: readonly { readonly nodeId: number; readonly dataId: number }[]): Uint8Array {
+	const nodes = slides.map(({ nodeId, dataId }) => ({ identifier: nodeId, type: 4, payload: pbBytes(16, pbVarint(1, dataId)) }));
+	const references = slides.map(({ nodeId }) => pbBytes(2, pbVarint(1, nodeId)));
+	return buildIwa([{ identifier: 1, type: 2, payload: pbBytes(3, concat(references)) }, ...nodes]);
+}
 
 async function packageFile(name: string, files: Parameters<typeof zipSync>[0], level: 0 | 6 = 0): Promise<{ readonly dir: string; readonly path: string }> {
 	const dir = await mkdtemp(join(tmpdir(), "autorag-iwork-"));
@@ -30,7 +39,7 @@ describe("iWork packages", () => {
 	it("reads the stored first-page image without the rest of the package", async () => {
 		const { dir, path } = await packageFile("deck.key", { "Index/Document.iwa": new Uint8Array(70_000), "preview.jpg": JPEG, "preview-web.jpg": new Uint8Array([9]) });
 		try {
-			expect(await readIworkPreview(path)).toEqual(JPEG);
+			expect(await readIworkPreview(path)).toEqual({ firstPage: JPEG, pages: null });
 		} finally {
 			await rm(dir, { recursive: true, force: true });
 		}
@@ -40,9 +49,75 @@ describe("iWork packages", () => {
 		const big = new Uint8Array(4096).fill(7);
 		const { dir, path } = await packageFile("sheet.numbers", { "Index/x.iwa": strToU8("x"), "preview-web.jpg": big }, 6);
 		try {
-			expect(await readIworkPreview(path)).toEqual(big);
+			expect(await readIworkPreview(path)).toEqual({ firstPage: big, pages: null });
 		} finally {
 			await rm(dir, { recursive: true, force: true });
+		}
+	});
+
+	it("reads every Keynote slide in show order, the quality first page first", async () => {
+		const quality = Uint8Array.from([0xff, 0xd8, 9, 0xff, 0xd9]);
+		const slideA = Uint8Array.from([0xff, 0xd8, 1, 0xff, 0xd9]);
+		const slideB = Uint8Array.from([0xff, 0xd8, 2, 0xff, 0xd9]);
+		const slideC = Uint8Array.from([0xff, 0xd8, 3, 0xff, 0xd9]);
+		const { dir, path } = await packageFile("show.key", {
+			"preview.jpg": quality,
+			"Data/st-AAA-100.jpg": slideA,
+			"Data/st-BBB-300.jpg": slideB,
+			"Data/st-CCC-200.jpg": slideC,
+			"Data/st-ZZZ-999.jpg": new Uint8Array([0]),
+			"Index/Document.iwa": keyDocument([
+				{ nodeId: 11, dataId: 200 },
+				{ nodeId: 12, dataId: 300 },
+				{ nodeId: 13, dataId: 100 },
+			]),
+		});
+		try {
+			const preview = await readIworkPreview(path);
+			expect(preview).toEqual({ firstPage: quality, pages: [quality, slideB, slideA] });
+			expect(preview?.pages).not.toContain(slideC);
+		} finally {
+			await rm(dir, { recursive: true, force: true });
+		}
+	});
+
+	it("degrades to the first page when the slide tree is unreadable", async () => {
+		const { dir, path } = await packageFile("broken.key", { "preview.jpg": JPEG, "Data/st-AAA-100.jpg": new Uint8Array([1]), "Index/Document.iwa": new Uint8Array(64) });
+		try {
+			expect(await readIworkPreview(path)).toEqual({ firstPage: JPEG, pages: null });
+		} finally {
+			await rm(dir, { recursive: true, force: true });
+		}
+	});
+
+	it("keeps Numbers and Pages single-page even with slide renders present", async () => {
+		const { dir, path } = await packageFile("book.pages", {
+			"preview.jpg": JPEG,
+			"Data/st-AAA-100.jpg": new Uint8Array([1]),
+			"Index/Document.iwa": keyDocument([{ nodeId: 11, dataId: 100 }]),
+		});
+		try {
+			expect(await readIworkPreview(path)).toEqual({ firstPage: JPEG, pages: null });
+		} finally {
+			await rm(dir, { recursive: true, force: true });
+		}
+	});
+
+	it("caps a Keynote deck at 500 slides", async () => {
+		const files: Record<string, Uint8Array> = { "preview.jpg": JPEG, "Index/Document.iwa": keyDocument(Array.from({ length: 501 }, (_, index) => ({ nodeId: 1000 + index, dataId: 2000 + index }))) };
+		for (let index = 0; index < 501; index += 1) files[`Data/st-S-${2000 + index}.jpg`] = new Uint8Array([index & 0xff]);
+		const over = await packageFile("long.key", files);
+		try {
+			expect(await readIworkPreview(over.path)).toEqual({ firstPage: JPEG, pages: null });
+		} finally {
+			await rm(over.dir, { recursive: true, force: true });
+		}
+		const exact = await packageFile("max.key", { ...files, "Index/Document.iwa": keyDocument(Array.from({ length: 500 }, (_, index) => ({ nodeId: 1000 + index, dataId: 2000 + index }))) });
+		try {
+			const preview = await readIworkPreview(exact.path);
+			expect(preview?.pages?.length).toBe(500);
+		} finally {
+			await rm(exact.dir, { recursive: true, force: true });
 		}
 	});
 
@@ -57,6 +132,23 @@ describe("iWork packages", () => {
 			await rm(empty.dir, { recursive: true, force: true });
 			await rm(plain, { recursive: true, force: true });
 		}
+	});
+});
+
+describe("PreviewDocument with pages", () => {
+	function documentWith(pages: unknown): Record<string, unknown> {
+		return { name: "a.key", path: "/tmp/a.key", ext: "key", size: 1, modifiedAt: "2026-01-01T00:00:00.000Z", mime: "application/octet-stream", truncated: false, bytes: JPEG, pages };
+	}
+
+	it("accepts null pages and an array of byte arrays", () => {
+		expect(isPreviewDocument(documentWith(null))).toBe(true);
+		expect(isPreviewDocument(documentWith([JPEG, new Uint8Array([1])]))).toBe(true);
+	});
+
+	it("rejects non-arrays and non-byte elements", () => {
+		expect(isPreviewDocument(documentWith("slides"))).toBe(false);
+		expect(isPreviewDocument(documentWith([1, 2]))).toBe(false);
+		expect(isPreviewDocument(documentWith(undefined))).toBe(false);
 	});
 });
 
