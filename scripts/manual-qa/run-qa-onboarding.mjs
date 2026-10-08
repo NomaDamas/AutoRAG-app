@@ -8,7 +8,7 @@
 // candidates and adds two fixture folders through a stubbed folder dialog. The
 // local embedding model and llama runtime are linked in from the real AutoRAG
 // home when cached (otherwise the first index downloads them).
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -225,6 +225,11 @@ try {
 	failures.push(String(error));
 	console.error(error);
 } finally {
+	// The first index leaves two daemons pointing into WORK (llama-server,
+	// fsearch-cli watch); kill them by their command line before deleting it.
+	if (process.platform !== "win32") {
+		spawnSync("pkill", ["-9", "-f", WORK]);
+	}
 	await app.close().catch(() => {});
 	stub.close();
 	rmRetry(WORK);

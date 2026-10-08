@@ -61,6 +61,28 @@ function sweepStaleSandboxes() {
 	}
 }
 
+// A leaked daemon (llama-server, fsearch-cli) carries its DEAD sandbox's path
+// on its command line, so no dir-based sweep can find it once the dir is gone.
+// Scan the process table and kill only rows whose sandbox no longer exists;
+// live runs (dirs present) are never touched. Not on Windows: no `ps`, and the
+// `make` target is a macOS/Linux path anyway.
+function reapOrphanSandboxProcesses() {
+	if (process.platform === "win32") return;
+	for (const row of listProcessRows()) {
+		if (row.pid === process.pid) continue;
+		for (const match of row.args.matchAll(/\S*autorag-onboarding-[A-Za-z0-9]+/g)) {
+			const sandbox = match[0];
+			if (existsSync(sandbox)) continue; // a live run (this one, or a concurrent one)
+			try {
+				process.kill(row.pid, "SIGKILL");
+			} catch {
+				// Already gone.
+			}
+			break;
+		}
+	}
+}
+
 function isManagedSandbox(sandbox) {
 	try {
 		return existsSync(join(sandbox, ".onboarding-sandbox.json"));
@@ -150,6 +172,7 @@ function copyDirInto(source, destination) {
 
 async function main() {
 	sweepStaleSandboxes();
+	reapOrphanSandboxProcesses();
 
 	const realHome = process.env.AUTORAG_HOME?.trim() || join(homedir(), ".autorag");
 	const sandbox = mkdtempSync(join(tmpdir(), PREFIX));
@@ -214,11 +237,14 @@ async function main() {
 	async function teardown(summary) {
 		if (finished) return;
 		finished = true;
-		killWatchdog();
 		killPathProcesses(sandbox, "SIGTERM");
 		await delayMs(1200);
 		killPathProcesses(sandbox, "SIGKILL"); // anything that ignored SIGTERM
 		rmManaged(sandbox);
+		// The watchdog dies LAST: if this wrapper itself is SIGKILLed during the
+		// 1200ms settle above (exactly what a 300s tool timeout does), a live
+		// watchdog still sees this wrapper gone and finishes the cleanup itself.
+		killWatchdog();
 		console.log(`[onboarding] ${summary}`);
 	}
 

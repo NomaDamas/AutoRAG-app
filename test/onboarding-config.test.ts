@@ -72,8 +72,13 @@ describe("applyIndexingConfig", () => {
 			model: null,
 		});
 		const access = isJsonObject(next.datasourceAccess) ? next.datasourceAccess : {};
-		expect(access.allowedTags).toEqual(["existing", "spotlight", "slack"]);
-		expect(access.allowedScopes).toEqual(["x"]);
+		const slack = isJsonObject(next.datasources) && isJsonObject(next.datasources.slack) ? next.datasources.slack : {};
+		const slackConnector = isJsonObject(slack.connector) ? slack.connector : {};
+		expect(slack.type).toBe("slack");
+		// slacrawl's default sync is the API source, which exits nonzero without
+		// SLACK_BOT_TOKEN and fails the whole first index; the wiretap source
+		// reads the local Slack Desktop cache and needs no token.
+		expect(slackConnector.syncSource).toBe("wiretap");
 	});
 
 	it("writes one obsidian alias per vault and maps mail to a Spotlight query", () => {

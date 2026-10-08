@@ -110,7 +110,20 @@ function entriesFor(datasource: IndexingDatasource, mailDir: string): Record<str
 				},
 			};
 		case "slack":
-			return { slack: { type: "slack", description } };
+			return {
+				slack: {
+					type: "slack",
+					description,
+					connector: {
+						// Detection counted the local mirror's rows (`~/.slacrawl`), so the
+						// first index must sync the same way: `--source wiretap` reads the
+						// Slack Desktop cache and needs no token. slacrawl's default sync
+						// is the API source, which exits nonzero without SLACK_BOT_TOKEN
+						// and fails the whole refresh.
+						syncSource: "wiretap",
+					},
+				},
+			};
 	}
 }
 
