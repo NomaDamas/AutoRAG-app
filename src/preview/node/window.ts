@@ -42,6 +42,7 @@ import { type BundleIconSource, summarizeBundle } from "./bundle";
 import { createDefaultAppCache, type DefaultAppCache } from "./default-app";
 import { fileDetails, sha256File } from "./details";
 import { measureFolder, summarizeFolder } from "./folder";
+import { readIworkPreview } from "./iwork";
 import { PREVIEW_BYTE_CAP, PreviewReadError, readPreviewFile, SNIFF_BYTES, TEXT_BYTE_CAP } from "./read-file";
 
 /** Media reports its size once decoded; anything slower still shows by then. */
@@ -320,6 +321,15 @@ async function readDocument(path: string): Promise<PreviewDocument> {
 			return readPreviewFile(path, TEXT_BYTE_CAP);
 		case "whole":
 			return readPreviewFile(path, PREVIEW_BYTE_CAP, true);
+		case "extract": {
+			// The file's own metadata, with the page image Apple stored inside it as the bytes.
+			const document = await readPreviewFile(path, 0);
+			const preview = await readIworkPreview(path).catch((error: unknown) => {
+				console.warn(`quick-look: iWork preview for ${path} failed: ${error instanceof Error ? error.message : String(error)}`);
+				return null;
+			});
+			return { ...document, bytes: preview };
+		}
 		case "sniff": {
 			const sniffed = await readPreviewFile(path, SNIFF_BYTES);
 			if (!sniffed.truncated || sniffed.bytes === null || !looksLikeText(sniffed.bytes)) return sniffed;

@@ -118,15 +118,32 @@ still has the previous file's size when they lay out.
   opens. The classification lives in `node/bundle.ts` + `node/window.ts`; the
   panel is `ui/bundle.tsx`.
 
-Images, TIFF, HEIC, fonts, Word, sheets, slides, archives, and EPUB keep
-their existing viewers inside the new chrome.
+- **Archive** — ZIP, tar, and gzip files read like a folder: the same header
+  (page glyph, name, kind, "N items, size", date) and the same "포함된 항목"
+  strip, built from the archive's top level (`shared/archive-items.ts`): entries
+  group under their first path segment, dot entries and `__MACOSX` are hidden,
+  and each child is as new as its newest member. Both panels draw the strip
+  with `ui/contents.tsx`, so they stay identical. A gzip of one text file shows
+  the text instead.
+- **iWork** — `.numbers`, `.pages`, and `.key` are ZIPs whose `preview.jpg` is
+  the first sheet, page, or slide as the app drew it. `byteNeed` is `extract`:
+  the main process reads only the central directory and that one entry
+  (`node/iwork.ts`), so a large deck costs the same as a small one, and the
+  panel shows the image. A package without one (older directory-form files)
+  gets the "Other" panel. The Finder's tile and Inspector thumbnails ask macOS
+  Quick Look for the same extensions (`file-icon.ts`); Windows has no
+  thumbnailer for them and shows the type icon.
+
+Images, TIFF, HEIC, fonts, Word, sheets, slides, and EPUB keep their existing
+viewers inside the new chrome.
 
 ## Reads
 
 The main process reads only what the viewer will use (`byteNeed` in
 `registry.ts`): nothing for media, PDF, images, and fonts, which stream through
 `autorag-preview://` (it answers `Range` with `206`); the first 4MB of text,
-code, Markdown, and HTML; whole documents (HWP included) up to 32MB; and a 64KB
+code, Markdown, and HTML; whole documents (HWP included) up to 32MB; for iWork packages the
+directory and the one page image inside; and a 64KB
 sniff of an
 unknown file, read on as text only when it looks like text. The detail calls
 (details, SHA-256, folder size, audio tags) answer only for the path the window

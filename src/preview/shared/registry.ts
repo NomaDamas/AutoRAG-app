@@ -14,6 +14,7 @@ export const VIEWER_KINDS = [
 	"html",
 	"text",
 	"archive",
+	"iwork",
 	"epub",
 	"hwp",
 	"font",
@@ -49,7 +50,10 @@ assign("text", [
 	"clj", "cljs", "vim", "cmake", "gradle", "properties", "graphql", "gql", "proto",
 	"diff", "patch", "rst", "tex", "lock",
 ]);
-assign("archive", ["zip", "jar", "war", "apk", "ipa", "vsix", "crx", "numbers", "pages", "key", "tar", "gz", "gzip", "tgz"]);
+assign("archive", ["zip", "jar", "war", "apk", "ipa", "vsix", "crx", "tar", "gz", "gzip", "tgz"]);
+// Apple's iWork packages are ZIPs whose `preview.jpg` is the first page, sheet,
+// or slide; the listing of their `Index/*.iwa` protobufs would say nothing.
+assign("iwork", ["numbers", "pages", "key"]);
 assign("epub", ["epub"]);
 assign("hwp", ["hwp", "hwpx"]);
 assign("font", ["ttf", "otf", "woff", "woff2", "eot"]);
@@ -71,7 +75,7 @@ export function claimedViewerExtensions(): readonly { readonly ext: string; read
  * `whole` viewers parse the entire file; `sniff` reads enough to tell text
  * from binary.
  */
-export type ByteNeed = "stream" | "prefix" | "whole" | "sniff";
+export type ByteNeed = "stream" | "prefix" | "whole" | "sniff" | "extract";
 
 export function byteNeed(kind: ViewerKind): ByteNeed {
 	switch (kind) {
@@ -95,6 +99,8 @@ export function byteNeed(kind: ViewerKind): ByteNeed {
 		case "epub":
 		case "hwp":
 			return "whole";
+		case "iwork":
+			return "extract";
 		case "fallback":
 			return "sniff";
 		default:
@@ -166,6 +172,12 @@ const LABELS: Readonly<Record<string, string>> = {
 	txt: "Plain text",
 	json: "JSON",
 	zip: "ZIP archive",
+	tar: "TAR archive",
+	gz: "GZIP archive",
+	tgz: "GZIP archive",
+	numbers: "Numbers spreadsheet",
+	pages: "Pages document",
+	key: "Keynote presentation",
 	epub: "EPUB book",
 	hwp: "HWP document",
 	hwpx: "HWPX document",

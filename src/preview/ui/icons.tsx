@@ -173,10 +173,13 @@ export function ChevronIcon({ open }: { readonly open: boolean }): ReactElement 
 	);
 }
 
-/** The large page glyph of the "Other" panel, labelled with the file's extension. */
-export function FileGlyph({ label }: { readonly label: string }): ReactElement {
+/**
+ * The large page glyph of the "Other" panel, labelled with the file's extension.
+ * `scale` shrinks it for panels with a shorter header than the "Other" panel's.
+ */
+export function FileGlyph({ label, scale = 1 }: { readonly label: string; readonly scale?: number }): ReactElement {
 	return (
-		<svg width="176" height="214" viewBox="0 0 176 214" aria-hidden="true" className="flex-none [filter:drop-shadow(0_3px_6px_rgba(0,0,0,0.18))]">
+		<svg width={176 * scale} height={214 * scale} viewBox="0 0 176 214" aria-hidden="true" className="flex-none [filter:drop-shadow(0_3px_6px_rgba(0,0,0,0.18))]">
 			<path d="M12 4h108l52 52v148a6 6 0 0 1-6 6H12a6 6 0 0 1-6-6V10a6 6 0 0 1 6-6z" fill="#fbfbfb" stroke="#d5d5d8" strokeWidth="1" />
 			<path d="M120 4v44a8 8 0 0 0 8 8h44" fill="#ececee" stroke="#d5d5d8" strokeWidth="1" />
 			<path d="M30 130c30-40 70-48 120-30M30 150c34-34 74-36 120-14M30 170c40-26 78-22 120 0" fill="none" stroke="#e6e6e9" strokeWidth="2" />
