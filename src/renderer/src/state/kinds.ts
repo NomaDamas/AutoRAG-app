@@ -7,6 +7,7 @@
 
 export type FileKind =
 	| "folder"
+	| "app"
 	| "xlsx"
 	| "csv"
 	| "pdf"
@@ -31,6 +32,10 @@ export interface KindMeta {
 
 export const KIND_ORDER: readonly FileKind[] = [
 	"folder",
+	// Not in the reference KD map: macOS application bundles behave as files
+	// (open with the OS, OS icon), so they need their own tile for the case
+	// where Quick Look has not produced the app's icon yet.
+	"app",
 	"xlsx",
 	"csv",
 	"pdf",
@@ -50,6 +55,7 @@ const ON_TILE = "--text-on-tile";
 
 export const KIND_META: Readonly<Record<FileKind, KindMeta>> = {
 	folder: { letter: "", tileToken: "--folder", foregroundToken: ON_TILE, label: "Folder" },
+	app: { letter: "A", tileToken: "--tile-app", foregroundToken: ON_TILE, label: "Application" },
 	xlsx: { letter: "X", tileToken: "--tile-xlsx", foregroundToken: ON_TILE, label: "Excel Spreadsheet" },
 	csv: { letter: "C", tileToken: "--tile-csv", foregroundToken: ON_TILE, label: "CSV Document" },
 	pdf: { letter: "P", tileToken: "--tile-pdf", foregroundToken: ON_TILE, label: "PDF Document" },
@@ -71,6 +77,7 @@ export function kindMeta(kind: string): KindMeta {
 }
 
 const EXTENSION_KINDS: Readonly<Record<string, FileKind>> = {
+	app: "app",
 	xlsx: "xlsx",
 	xlsm: "xlsx",
 	xls: "xlsx",

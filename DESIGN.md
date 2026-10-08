@@ -127,6 +127,11 @@ The fs worker (`src/fs-worker/`, see README "Filesystem worker") polls a cheap m
 
 Instant Search's filename search ("전체" and "파일 이름") answers from the platform name index first, through `src/main/file-name-search.ts`: the user's `fsearch-cli` database on macOS/Linux (the same default database the FSearch app shares) and the bundled voidtools Everything on Windows. "파일 이름" narrows the index request to the folder in view before its result cap. When no index is installed or no database answers, the search falls back to the bounded disk walk over the `scanned` places. The app warms the index at launch — a `fsearch-cli watch` daemon on macOS/Linux, the Everything instance on Windows — and deliberately leaves it running across quits, because restarting a watch over a whole-machine database re-scans every monitored folder. Automated checks: `test/file-name-search.test.ts`, `test/fs-service.test.ts`; on-device check: `scripts/manual-qa/run-qa-finder-fsearch-search.mjs`.
 
+### 1.6 macOS application bundles
+A `.app` is a directory on disk, but macOS treats it as one launchable item, and so does the app. `buildFsEntry` reports such a directory as `kind: "file"` with ext `app` — on darwin only (`src/main/fs-entry.ts`). Everything keyed on the kind then follows: the row gets an OS-provided tile icon and the OS kind ("Application", Finder's own answer), where a folder gets neither; Enter and double-click launch the bundle through `shell.openPath` instead of navigating into its `Contents/`; and the Size cell keeps "—", because the entry is still a directory whose byte count would be the folder's own rather than the app's. Off macOS the same directory stays a folder.
+
+The app's own icon comes from the native thumbnail lane, which renders a bundle exactly like a document (`"app"` in `NATIVE_THUMBNAIL_EXTENSIONS`, `src/main/file-icon.ts`) — at the 128px listing tier and at the Inspector's 640px preview tier. Should generation produce nothing, the tile falls back to the `app` kind's letter tile (`--tile-app`); it is the one entry in `KIND_ORDER` that is not part of the reference KD map. Automated checks: `test/fs-entry.test.ts`, `test/file-icon.test.ts`, `test/entries.test.ts`; on-device check (lists and launches a real hand-built bundle): `scripts/manual-qa/run-qa-finder-app-bundles.mjs`.
+
 ---
 
 ## 2. Keyboard Shortcuts

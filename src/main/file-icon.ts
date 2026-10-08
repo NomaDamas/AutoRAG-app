@@ -71,6 +71,10 @@ const NATIVE_THUMBNAIL_EXTENSIONS = new Set([
 	"tif", "tiff", "heic", "heif",
 	"mp4", "m4v", "webm", "ogv", "mov", "mkv", "avi", "mpeg", "mpg", "mpe", "3gp", "3gpp",
 	"pdf", "md", "markdown", "mdx", "csv", "tsv",
+	// A macOS application bundle is a directory on disk, but Quick Look renders
+	// the app's own icon for it — at the listing tier and at the Inspector's
+	// 640px tier — so it takes this lane exactly like a document does.
+	"app",
 ]);
 export function isNativeThumbnailExtension(ext: string): boolean {
 	return NATIVE_THUMBNAIL_EXTENSIONS.has(ext.toLowerCase().replace(/^\./, ""));
@@ -79,7 +83,7 @@ export function isNativeThumbnailExtension(ext: string): boolean {
 export interface IconTarget {
 	/** Absolute OS path. */
 	readonly path: string;
-	/** Lowercase file extension without the dot; folders are never targets. */
+	/** Lowercase file extension without the dot; plain folders are never targets (a macOS `.app` bundle is, with ext "app"). */
 	readonly ext: string;
 	/** Cache identity: a changed file must not reuse a stale thumbnail. */
 	readonly modifiedAt: string;

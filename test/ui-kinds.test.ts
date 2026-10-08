@@ -23,6 +23,15 @@ describe("kindMeta", () => {
 		expect(kindMeta("folder").label).toBe("Folder");
 	});
 
+	it("gives a macOS app bundle its own tile and label", () => {
+		expect(kindMeta("app")).toEqual({
+			letter: "A",
+			tileToken: "--tile-app",
+			foregroundToken: "--text-on-tile",
+			label: "Application",
+		});
+	});
+
 	it("falls back to the md entry for an unknown kind", () => {
 		expect(kindMeta("wat")).toEqual(kindMeta("md"));
 	});
@@ -30,6 +39,7 @@ describe("kindMeta", () => {
 	it("covers every kind in the reference KD map", () => {
 		expect(KIND_ORDER).toEqual([
 			"folder",
+			"app",
 			"xlsx",
 			"csv",
 			"pdf",
@@ -59,6 +69,11 @@ describe("kindFromExtension", () => {
 	it("maps images to the png tile", () => {
 		expect(kindFromExtension("jpeg")).toBe("png");
 		expect(kindFromExtension("heic")).toBe("png");
+	});
+
+	it("maps an app bundle to the app tile", () => {
+		expect(kindFromExtension("app")).toBe("app");
+		expect(kindFromExtension("APP")).toBe("app");
 	});
 
 	it("falls back to md for anything else", () => {

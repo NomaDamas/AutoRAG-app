@@ -16,9 +16,9 @@ vi.mock("../src/main/fs-entry", async () => {
 	const actual = await vi.importActual<typeof import("../src/main/fs-entry")>("../src/main/fs-entry");
 	return {
 		...actual,
-		buildFsEntry: async (path: string) => {
+		buildFsEntry: async (path: string, platform?: NodeJS.Platform) => {
 			if (unreadablePaths.has(path)) throw new Error("simulated lstat failure");
-			return actual.buildFsEntry(path);
+			return actual.buildFsEntry(path, platform);
 		},
 	};
 });
@@ -1441,6 +1441,93 @@ describe("icons", () => {
 			{ path: targets[0]?.path, modifiedAt: targets[0]?.modifiedAt, finder: expect.objectContaining({ tags: ["Red"], width: 4, height: 3 }) },
 		]);
 		await rm(dir, { recursive: true, force: true });
+	});
+});
+
+describe("application bundles", () => {
+	let dir: string;
+
+	beforeEach(async () => {
+		dir = await mkdtemp(join(tmpdir(), "fs-appbundle-"));
+	});
+
+	afterEach(async () => {
+		await rm(dir, { recursive: true, force: true });
+	});
+
+	/** A `.app` on disk is a directory; only its name and the host platform mark it. */
+	const makeBundle = async (name: string): Promise<string> => {
+		const path = join(dir, name);
+		await mkdir(join(path, "Contents", "MacOS"), { recursive: true });
+		return path;
+	};
+
+	it("lists a macOS .app as a file, not a folder to browse into", async () => {
+		// Given an app bundle and a real folder beside it
+		await makeBundle("Hello.app");
+		await mkdir(join(dir, "Docs"));
+
+		// When listing the folder
+		const listing = await createFsService(makeDeps(dir).deps).listDir(dir);
+
+		// Then the bundle is a file carrying its extension, so opening it can only launch the app
+		expect(listing.entries.find((entry) => entry.name === "Hello.app")).toMatchObject({
+			kind: "file",
+			ext: "app",
+			size: null,
+		});
+		expect(listing.entries.find((entry) => entry.name === "Docs")).toMatchObject({ kind: "folder", ext: "" });
+	});
+
+	it("annotates a bundle with the OS kind and the OS icon", async () => {
+		// Given a bundle and the OS's own answers for it
+		const path = await makeBundle("Hello.app");
+		const iconTargets: string[] = [];
+		const deps: FsServiceDeps = {
+			...makeDeps(dir).deps,
+			osKind: async (candidate) => (candidate === path ? "Application" : null),
+			icons: {
+				icons: async (targets) => {
+					for (const target of targets) iconTargets.push(target.path);
+					return new Map(targets.map((target) => [target.path, "autorag-thumb://local/?path=Hello.app&mtime=t"]));
+				},
+				preview: async () => null,
+			},
+		};
+		const service = createFsService(deps);
+		const listing = await service.listDir(dir);
+		const targets = listing.entries.map(({ path: entryPath, kind, ext, modifiedAt }) => ({
+			path: entryPath,
+			kind,
+			ext,
+			modifiedAt,
+		}));
+
+		// When the listing's rows are enriched
+		const enriched = await service.enrichEntries(targets, true);
+
+		// Then the bundle was asked for like a file, and the tile carries the app's own icon
+		expect(iconTargets).toEqual([path]);
+		expect(enriched[0]).toMatchObject({ path, osKind: "Application", iconUrl: "autorag-thumb://local/?path=Hello.app&mtime=t" });
+	});
+
+	it("reports a bundle's kind through stat, where the Inspector reads it", async () => {
+		const path = await makeBundle("Hello.app");
+		const deps: FsServiceDeps = { ...makeDeps(dir).deps, osKind: async () => "Application" };
+
+		expect(await createFsService(deps).stat(path)).toMatchObject({ kind: "file", ext: "app", osKind: "Application" });
+	});
+
+	it("keeps an .app directory a folder on Windows, whose OS has no notion of a bundle", async () => {
+		await makeBundle("Hello.app");
+
+		const listing = await createFsService(makeDeps(dir, "win32").deps).listDir(dir);
+
+		expect(listing.entries.find((entry) => entry.name === "Hello.app")).toMatchObject({
+			kind: "folder",
+			ext: "",
+			size: null,
+		});
 	});
 });
 

@@ -725,6 +725,38 @@ describe("preview tier", () => {
 	});
 });
 
+describe("macOS application bundles", () => {
+	it("renders the bundle's own icon through the native thumbnail path, not a letter tile", async () => {
+		// Given a macOS provider whose thumbnail generator records its calls
+		const generated: string[] = [];
+		const provider = createIconProvider({
+			platform: "darwin",
+			thumbnail: async (path) => {
+				generated.push(path);
+				return BYTES;
+			},
+		});
+
+		// When the Applications folder is listed
+		const icons = await provider.icons([target("/Applications/Hello.app")]);
+
+		// Then Quick Look was asked for the bundle and the tile carries its icon
+		expect(generated).toEqual(["/Applications/Hello.app"]);
+		expect(icons.get("/Applications/Hello.app")).toBe(iconUrl("/Applications/Hello.app", MTIME));
+	});
+
+	it("serves a 640px preview for a bundle, so the Info panel shows the app rather than a letter", async () => {
+		const provider = createIconProvider({
+			platform: "darwin",
+			thumbnail: async (_path, size) => (size === PREVIEW_ICON_SIZE ? BYTES : null),
+		});
+
+		expect(await provider.preview(target("/Applications/Hello.app"))).toBe(
+			iconUrl("/Applications/Hello.app", MTIME, PREVIEW_ICON_SIZE),
+		);
+	});
+});
+
 describe("preview lane", () => {
 	it("never queues the Inspector preview behind a stuck listing batch", async () => {
 		// Given a one-permit listing pool fully occupied by a stalled batch
