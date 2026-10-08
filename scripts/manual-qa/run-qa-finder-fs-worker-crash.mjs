@@ -22,7 +22,7 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { finderWindow, fsWorkerDiagnostics, launchFinder, ROOT } from "./launch-finder.mjs";
-import { chord, sleep } from "./platform.mjs";
+import { chord, cssAttr, sleep } from "./platform.mjs";
 
 const EVIDENCE = join(ROOT, ".omo/evidence/ai-finder-app/qa-fs-worker-crash");
 mkdirSync(EVIDENCE, { recursive: true });
@@ -77,7 +77,7 @@ try {
 	page.on("crash", () => {
 		rendererGone = true;
 	});
-	const row = (path) => page.locator(`[data-path="${path}"]`).first();
+	const row = (path) => page.locator(`[data-path="${cssAttr(path)}"]`).first();
 	await page.locator(".sidebar__item", { hasText: "QA" }).click();
 	await row(FOLDER).dblclick();
 	await row(join(FOLDER, "file-00.txt")).waitFor();

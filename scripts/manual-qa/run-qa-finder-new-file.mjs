@@ -27,6 +27,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { unzipSync } from "fflate";
 import { finderWindow, launchFinder } from "./launch-finder.mjs";
+import { cssAttr } from "./platform.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const EVIDENCE = join(ROOT, ".omo", "evidence", "ai-finder-app", "qa-new-file");
@@ -174,7 +175,7 @@ try {
 
 	/* ------------------- 7. a row's own right-click menu still wins */
 	const seed = join(top, "untitled.txt");
-	await page.locator(`[data-path="${seed}"]`).click({ button: "right" });
+	await page.locator(`[data-path="${cssAttr(seed)}"]`).click({ button: "right" });
 	await page.waitForSelector(".menu", { timeout: 5_000 });
 	const rowMenu = await page.getByRole("menu").first().locator('[role="menuitem"]').allInnerTexts();
 	await page.keyboard.press("Escape");

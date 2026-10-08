@@ -25,6 +25,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { AI_PANEL, finderWindow, launchFinder, openAiSearch } from "./launch-finder.mjs";
+import { cssAttr } from "./platform.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const EVIDENCE = join(ROOT, ".omo", "evidence", "ai-finder-app", "qa-external-drop");
@@ -64,7 +65,7 @@ const check = (name, pass, detail) => {
 	console.log(`${pass ? "PASS" : "FAIL"} ${name}: ${detail}`);
 };
 
-const row = (page, path) => page.locator(`[data-path="${path}"]`);
+const row = (page, path) => page.locator(`[data-path="${cssAttr(path)}"]`);
 const listNames = (dir) => readdirSync(dir).sort();
 const atTitle = (page, name) =>
 	page.waitForFunction((want) => document.querySelector(".toolbar-title")?.textContent === want, name, { timeout: 15_000 });
