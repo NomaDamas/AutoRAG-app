@@ -1,6 +1,6 @@
 # AutoRAG developer entry points.
 
-.PHONY: setup run
+.PHONY: setup run onboarding
 
 # Prepare a fresh clone for development: verify the toolchain (bun, Node 24+,
 # dupey), install dependencies (which clones and builds .upstream/autorag and
@@ -18,3 +18,12 @@ setup:
 run:
 	bun scripts/setup.mjs --ensure
 	bun scripts/run-dev-debug.mjs
+
+# Walk the first-run onboarding on a disposable profile: every run starts from
+# scratch in a temp sandbox (userData, AutoRAG config/home/workspace), the real
+# `~/.autorag` and the app's support dir stay untouched, and the sandbox is
+# removed when the app exits — Ctrl+C, SIGKILL of this make, or the next run's
+# sweep if both the wrapper and its watchdog died.
+onboarding:
+	bun scripts/setup.mjs --ensure
+	bun scripts/run-dev-onboarding.mjs

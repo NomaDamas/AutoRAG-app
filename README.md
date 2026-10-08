@@ -178,6 +178,16 @@ Onboarding state lives in `<userData>/onboarding/state.json`. Set
 `AUTORAG_SKIP_ONBOARDING=1` to open the Finder directly; the manual-QA launcher
 does this for every lane except `run-qa-onboarding.mjs`.
 
+`make onboarding` walks the flow on a disposable profile: every run starts from
+scratch in a temp sandbox holding its own `userData` (via `--user-data-dir`),
+AutoRAG config, home, and workspace, so the real `~/.autorag` and the app's
+support directory are never read or written. The cached embedding model and
+llama runtime are copied in so the first index runs offline. When the app exits
+the wrapper kills the run's processes and removes the sandbox; a SIGKILL of
+the wrapper is covered by a detached watchdog, and the next `make onboarding`
+sweeps any sandbox whose owner and watchdog both died. The QA lane covers the
+same flow end to end in CI settings (`bun scripts/manual-qa/run-qa-onboarding.mjs`).
+
 ## Live filesystem sync
 
 Folders shown in open tabs are watched for changes made by other apps. A
