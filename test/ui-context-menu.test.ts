@@ -175,9 +175,11 @@ describe("buildContextMenu row actions", () => {
 		expect(actionsOf({ target: { name: "Finance", kind: "folder" } })).toContain("newFolder");
 	});
 
-	it("offers Extract for one .zip only", () => {
+	it("offers Extract for one archive, never a non-archive", () => {
 		expect(actionsOf({ target: { name: "bundle.zip", kind: "file" } })).toContain("extract");
-		expect(actionsOf({ target: { name: "bundle.tar", kind: "file" } })).not.toContain("extract");
+		expect(actionsOf({ target: { name: "bundle.tar", kind: "file" } })).toContain("extract");
+		expect(actionsOf({ target: { name: "bundle.tar.gz", kind: "file" } })).toContain("extract");
+		expect(actionsOf({ target: { name: "notes.txt", kind: "file" } })).not.toContain("extract");
 		expect(actionsOf({ target: { name: "bundle.zip", kind: "file" }, selectionCount: 2 })).not.toContain("extract");
 	});
 

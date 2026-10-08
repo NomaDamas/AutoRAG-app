@@ -1447,7 +1447,7 @@ export function useFinderController(
 				case "compress":
 				case "extract":
 					// One request for the whole selection: compress writes one archive,
-					// and the menu offers extract for a single .zip row only.
+					// and extraction is offered for a single archive row only.
 					source.actions
 						.run(targets, { kind: action })
 						.then((outcome) => {

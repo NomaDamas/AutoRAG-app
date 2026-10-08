@@ -9,10 +9,10 @@ import {
 	imageFormatOf,
 	stemOf,
 	uniqueChild,
-	zipEntryPath,
 	type ActionService,
 	type CommandRunner,
 } from "../src/main/action-service";
+import { archiveEntryPath } from "../src/main/archive-guard.mjs";
 
 let root: string;
 
@@ -100,21 +100,21 @@ function makeService(
 	};
 }
 
-describe("zipEntryPath", () => {
+describe("archiveEntryPath", () => {
 	it("keeps ordinary and nested entries inside the destination", () => {
-		expect(zipEntryPath("/tmp/out", "docs/readme.md")).toEqual({
+		expect(archiveEntryPath("/tmp/out", "docs/readme.md")).toEqual({
 			path: resolve("/tmp/out", "docs/readme.md"),
 			directory: false,
 		});
-		expect(zipEntryPath("/tmp/out", "docs/")).toEqual({ path: resolve("/tmp/out", "docs"), directory: true });
+		expect(archiveEntryPath("/tmp/out", "docs/")).toEqual({ path: resolve("/tmp/out", "docs"), directory: true });
 	});
 
 	it("refuses zip-slip and absolute entries", () => {
-		expect(() => zipEntryPath("/tmp/out", "../evil.txt")).toThrow(/벗어납니다/);
-		expect(() => zipEntryPath("/tmp/out", "docs/../../evil.txt")).toThrow(/벗어납니다/);
-		expect(() => zipEntryPath("/tmp/out", "/etc/passwd")).toThrow(/절대 경로/);
-		expect(() => zipEntryPath("/tmp/out", "C:/Windows/evil.dll")).toThrow(/절대 경로/);
-		expect(() => zipEntryPath("/tmp/out", "docs/bad\0.txt")).toThrow(/올바르지 않습니다/);
+		expect(() => archiveEntryPath("/tmp/out", "../evil.txt")).toThrow(/벗어납니다/);
+		expect(() => archiveEntryPath("/tmp/out", "docs/../../evil.txt")).toThrow(/벗어납니다/);
+		expect(() => archiveEntryPath("/tmp/out", "/etc/passwd")).toThrow(/절대 경로/);
+		expect(() => archiveEntryPath("/tmp/out", "C:/Windows/evil.dll")).toThrow(/절대 경로/);
+		expect(() => archiveEntryPath("/tmp/out", "docs/bad\0.txt")).toThrow(/올바르지 않습니다/);
 	});
 });
 
@@ -198,8 +198,8 @@ describe("archive round-trip", () => {
 
 		await expect(service.run([hostile], { kind: "extract" }, null)).rejects.toThrow(/벗어납니다/);
 		await expect(readFile(join(root, "escape.txt"))).rejects.toThrow();
-		// The destination folder itself is created, but stays empty.
-		expect(await readdir(join(root, "hostile"))).toEqual([]);
+		// The failed run cleans up its staging: only the archive itself is left.
+		expect(await readdir(root)).toEqual(["hostile.zip"]);
 	});
 });
 
