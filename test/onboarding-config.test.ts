@@ -1,3 +1,4 @@
+import { buildDatasourceSkills, DatasourceAccessContext, type DatasourcesConfig } from "@autorag/librarian";
 import { describe, expect, it } from "vitest";
 import { applyIndexingConfig } from "../src/main/onboarding-config";
 import { isJsonObject } from "../src/shared/settings-contract";
@@ -57,13 +58,18 @@ describe("applyIndexingConfig", () => {
 		expect(isJsonObject(github.connector) && github.connector.repos).toEqual(["me/one", "me/two"]);
 	});
 
-	it("unions allowedTags with each enabled source's default tag", () => {
-		const raw = { datasourceAccess: { allowedTags: ["existing"], allowedScopes: ["x"] } };
+	it("authorizes selected sources without discarding existing access or widening scopes", () => {
 		const next = applyIndexingConfig({
-			raw,
+			raw: {
+				datasourceAccess: { allowedTags: ["existing"], allowedScopes: ["/github/github"] },
+				datasources: { archive: { type: "rss", tags: ["existing"] } },
+			},
 			folders: ["/a"],
 			datasources: [
 				{ id: "spotlight", description: "s", facts: {} },
+				{ id: "github", description: "g", facts: { repos: ["me/repo"] } },
+				{ id: "obsidian", description: "o", facts: { vaults: ["/v1", "/v2"] } },
+				{ id: "mail", description: "m", facts: {} },
 				{ id: "slack", description: "k", facts: {} },
 			],
 			mailDir: MAIL_DIR,
@@ -71,14 +77,17 @@ describe("applyIndexingConfig", () => {
 			workspacePath: null,
 			model: null,
 		});
-		const access = isJsonObject(next.datasourceAccess) ? next.datasourceAccess : {};
-		const slack = isJsonObject(next.datasources) && isJsonObject(next.datasources.slack) ? next.datasources.slack : {};
-		const slackConnector = isJsonObject(slack.connector) ? slack.connector : {};
-		expect(slack.type).toBe("slack");
-		// slacrawl's default sync is the API source, which exits nonzero without
-		// SLACK_BOT_TOKEN and fails the whole first index; the wiretap source
-		// reads the local Slack Desktop cache and needs no token.
-		expect(slackConnector.syncSource).toBe("wiretap");
+		const access = new DatasourceAccessContext(next.datasourceAccess as { allowedTags: string[]; allowedScopes: string[] });
+		const { skills } = buildDatasourceSkills({ ...(next.datasources as DatasourcesConfig), excluded: { type: "discord" } });
+		for (const name of ["archive", "spotlight", "github", "obsidian", "obsidian-2", "mail", "slack", "excluded"]) {
+			const descriptor = skills.find((skill) => skill.describe().name === name)?.describe();
+			if (descriptor === undefined) throw new Error(`missing datasource: ${name}`);
+			expect(access.isAccessible(descriptor), name).toBe(name !== "excluded");
+		}
+		const allowed = access.allowedSourcesPredicate();
+		expect(allowed("/github/github/issues/1")).toBe(true);
+		expect(allowed("/github/other/issues/1")).toBe(false);
+		expect(allowed("/slack/slack/messages/1")).toBe(false);
 	});
 
 	it("writes one obsidian alias per vault and maps mail to a Spotlight query", () => {

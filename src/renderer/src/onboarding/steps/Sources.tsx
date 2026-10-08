@@ -33,7 +33,7 @@ export function SourcesStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElem
 					const on = choice?.on === true;
 					const needsPermission = source.id === "mail" && !fda;
 					return (
-						<div key={source.id} className="source-row">
+						<div key={source.id} className="source-row" data-source-id={source.id}>
 							<SourceIcon id={source.id} />
 							<div className="source-main">
 								<div className="source-name">

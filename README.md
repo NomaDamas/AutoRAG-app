@@ -159,9 +159,10 @@ resumes at the same step.
   counts and an ETA.
 - **Embedding** is local (`qwen3-embedding-0.6b`); cloud embedding is shown but
   unavailable, since corpus text is never sent to remote embedders.
-- **Data sources** list only connectors that are installed and authenticated
-  (Spotlight, GitHub, Obsidian, Apple Mail, Slack), each with a drafted
-  description.
+- **Data sources** list only usable connectors (Spotlight, GitHub, Obsidian,
+  Apple Mail, Slack), each with a drafted description. GitHub requires
+  authentication and at least one discovered repository; empty or failed repo
+  discovery does not offer a source that would fail its first sync.
 - **Model** (BYOK) verifies the provider key against the provider's API and
   stores it in the encrypted credential store, never in `config.json`.
 - **Indexing** writes `searchPaths`, the embedder (only when none is set), the
@@ -187,6 +188,11 @@ the wrapper kills the run's processes and removes the sandbox; a SIGKILL of
 the wrapper is covered by a detached watchdog, and the next `make onboarding`
 sweeps any sandbox whose owner and watchdog both died. The QA lane covers the
 same flow end to end in CI settings (`bun scripts/manual-qa/run-qa-onboarding.mjs`).
+For a detected datasource regression, set `QA_ONBOARDING_SOURCE=github`,
+`mail`, `spotlight`, or `slack` before that command; it enables only that row
+and asserts its written connector config and access tag. The run uses temporary
+AutoRAG state but the selected external crawler uses its real store, as noted
+below.
 
 Scope of that isolation: the sandbox holds AutoRAG's own state (userData,
 config, home, workspace, index). External datasource crawlers are CLIs with

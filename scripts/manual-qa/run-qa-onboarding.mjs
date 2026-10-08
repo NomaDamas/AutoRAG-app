@@ -1,13 +1,14 @@
 // Drives first-run onboarding end to end in the built app: every step, the real
 // Full Disk Access probe, folder pre-scan, the shared-config write, a real first
 // index (local embedder), and the hand-off to the Finder.
-//
+
 // AUTORAG_HOME and AUTORAG_CONFIG point inside a temp dir, so the user's own
 // config and index are never touched. Electron resolves the home folder from
 // the OS (not $HOME), so the lane deselects the real Desktop/Documents
 // candidates and adds two fixture folders through a stubbed folder dialog. The
 // local embedding model and llama runtime are linked in from the real AutoRAG
 // home when cached (otherwise the first index downloads them).
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
@@ -136,12 +137,20 @@ try {
 	await page.waitForFunction((count) => document.querySelectorAll(".onb .source-row").length === count, ids.length, { timeout: 15_000 });
 	check("sources lists only detected connectors", true, ids.join(", "));
 	await shot("06-sources");
-	// Spotlight indexes up to 300 of the machine's real documents (into the temp
-	// workspace, ~20 min), so the datasources refresh only runs on request.
-	const withSpotlight = process.env.QA_ONBOARDING_SPOTLIGHT === "1" && ids.includes("spotlight");
-	if (withSpotlight) {
-		await page.locator(".onb .source-row").first().locator(".switch").click();
-		await page.waitForFunction(() => document.querySelector(".onb .source-row .switch.on") !== null, null, { timeout: 3000 });
+	// Optional source-specific regression lane: enable exactly the requested
+	// detected connector. The default lane keeps datasources off.
+	const requestedSource = process.env.QA_ONBOARDING_SOURCE?.trim() ?? "";
+	if (requestedSource.length > 0) {
+		if (!ids.includes(requestedSource)) throw new Error(`requested datasource is not detected: ${requestedSource}`);
+		const sourceRow = page.locator(`.onb .source-row[data-source-id="${requestedSource}"]`);
+		await sourceRow.locator(".switch").click();
+		await page.waitForFunction(
+			(sourceId) => document.querySelector(`.onb .source-row[data-source-id="${sourceId}"] .switch.on`) !== null,
+			requestedSource,
+			{ timeout: 3000 },
+		);
+		check(`${requestedSource} source is enabled`, await sourceRow.locator(".switch.on").count() === 1);
+		if (requestedSource === "mail") check("mail source is selectable after FDA", await sourceRow.locator(".switch").isEnabled());
 	}
 	await primary.click();
 
@@ -193,11 +202,13 @@ try {
 			!JSON.stringify(raw).includes("sk-qa-stub"),
 		JSON.stringify(raw.model),
 	);
-	if (withSpotlight) {
+	if (requestedSource.length > 0) {
+		const configuredSource = raw.datasources?.[requestedSource];
+		const requiredTag = requestedSource === "mail" ? "spotlight" : requestedSource;
 		check(
-			"Spotlight datasource and its access tag written",
-			raw.datasources?.spotlight?.type === "spotlight" && raw.datasourceAccess?.allowedTags?.includes("spotlight") === true,
-			JSON.stringify({ ds: raw.datasources?.spotlight?.type, tags: raw.datasourceAccess?.allowedTags }),
+			`${requestedSource} datasource config written and access tag allowed`,
+			configuredSource !== undefined && raw.datasourceAccess?.allowedTags?.includes(requiredTag) === true,
+			JSON.stringify({ source: configuredSource, tags: raw.datasourceAccess?.allowedTags }),
 		);
 	}
 	check("config searchPaths = selected folders", JSON.stringify(raw.searchPaths) === JSON.stringify([DESK, DOCS]), JSON.stringify(raw.searchPaths));

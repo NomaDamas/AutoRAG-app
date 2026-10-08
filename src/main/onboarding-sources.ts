@@ -100,7 +100,10 @@ async function detectGithub(deps: SourceDetectionDeps): Promise<DetectedSource |
 	} catch {
 		repos = [];
 	}
-	return { id: "github", needsFullDiskAccess: false, facts: repos.length > 0 ? { repos } : {} };
+	// The GitHub skill cannot index without a repository target, even when
+	// authentication succeeds. Do not offer a source that fails its first sync.
+	if (repos.length === 0) return null;
+	return { id: "github", needsFullDiskAccess: false, facts: { repos } };
 }
 
 async function detectObsidian(deps: SourceDetectionDeps): Promise<DetectedSource | null> {
