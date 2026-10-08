@@ -23,12 +23,15 @@ describe("formatModified", () => {
 		expect(formatModified(Number.NaN)).toBe("—");
 	});
 
-	it("labels a fractional pre-1970 stamp as its whole-ms Date does", () => {
-		// mtimeMs carries microseconds; Date truncates toward zero, so a stamp just
-		// after a minute boundary before 1970 stays in that minute.
-		const minute = new Date(1950, 3, 20, 15, 15).getTime();
-		expect(formatModified(minute - 0.25)).toBe("Apr 20, 15:15");
-		expect(formatModified(minute - 1)).toBe("Apr 20, 15:14");
+	it("rounds a fractional stamp to the millisecond the way Node's stats.mtime does", () => {
+		// mtimeMs carries sub-millisecond digits (1700000000000.731 -> mtime 1700000000001),
+		// so a stamp within half a millisecond below a minute boundary is already in that minute.
+		for (const minute of [new Date(2026, 8, 13, 16, 48).getTime(), new Date(1950, 3, 20, 15, 15).getTime()]) {
+			const label = formatModified(minute);
+			expect(formatModified(minute - 0.4)).toBe(label);
+			expect(formatModified(minute + 0.4)).toBe(label);
+			expect(formatModified(minute - 0.6)).not.toBe(label);
+		}
 	});
 
 	it("round-trips into a sortable value", () => {
