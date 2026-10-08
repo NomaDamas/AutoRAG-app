@@ -193,8 +193,12 @@ export function registerFsWorkerIpc(host: FsWorkerHost, ipcMain: IpcMain): void 
 		...(await host.client.call<object>("diagnostics")),
 		restarts: host.status().restarts,
 	}));
-	// The worker only answers this op under the same flag.
+	// The worker only answers these ops under the same flag.
 	if (process.env.AUTORAG_FS_WORKER_QA === "1") {
 		ipcMain.handle(FS_WORKER_CHANNELS.qaOverflow, (_event, dir: unknown) => host.client.call("qaOverflow", [dir]));
+		// A QA lane names the ops to hold (`enrichEntries`, `finderMetadata`) and,
+		// on release, the subset to answer now; the rest stay held.
+		ipcMain.handle(FS_WORKER_CHANNELS.qaHoldEnrichment, (_event, prefix: unknown, ops: unknown) => host.client.call("qaHoldEnrichment", [prefix, ops]));
+		ipcMain.handle(FS_WORKER_CHANNELS.qaReleaseEnrichment, (_event, ops: unknown) => host.client.call("qaReleaseEnrichment", [ops]));
 	}
 }
