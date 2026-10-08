@@ -171,7 +171,8 @@ describe("application bundle summary", () => {
 			// Keyed by the bundle's own mtime, to the same millisecond its summary reports.
 			expect(asked).toHaveLength(1);
 			expect(asked[0]).toMatchObject({ path, ext: "app" });
-			expect(Math.trunc(asked[0]?.mtimeMs ?? Number.NaN)).toBe(Date.parse(bundle.modifiedAt));
+			// (Node rounds the stat's mtime, so the summary's ISO date is the rounded stamp.)
+			expect(Math.round(asked[0]?.mtimeMs ?? Number.NaN)).toBe(Date.parse(bundle.modifiedAt));
 		} finally {
 			await rm(dirname(path), { recursive: true, force: true });
 		}

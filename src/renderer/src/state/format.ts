@@ -51,9 +51,11 @@ const modifiedLabelForSecond = memoize((second: number): string => {
 
 /** The Date Modified label for an epoch-ms stamp; an unusable stamp renders as an em dash. */
 export function formatModified(ms: number): string {
-	// `Date` truncates a fractional stamp toward zero (`mtimeMs` carries microseconds),
-	// so the whole-ms value is what the label shows; flooring would move pre-1970 stamps.
-	const whole = Math.trunc(ms);
+	// `mtimeMs` carries sub-millisecond digits. Node builds `stats.mtime` (what the label
+	// showed when the listing sent an ISO string) with `Math.round`, so a stamp half a
+	// millisecond below a minute boundary belongs to the next minute; truncating or
+	// flooring would put it in the previous one.
+	const whole = Math.round(ms);
 	if (!Number.isFinite(whole) || Number.isNaN(new Date(whole).getTime())) {
 		return NO_VALUE;
 	}
