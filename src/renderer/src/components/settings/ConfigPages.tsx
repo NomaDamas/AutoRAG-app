@@ -4,7 +4,7 @@
  * Config-backed pages of the prototype IA. Every toggle/select writes a leaf
  * through the serialized `useConfigWriter` (webSearch/dupey/`fetch` keep the
  * upstream `false`/`enabled:true` block semantics), lists write their whole
- * array (arrays are replaced, never merged), and the document/OCR languages
+ * array (arrays are replaced, never merged), and the document languages
  * reuse `LanguageSettings`.
  */
 
@@ -196,30 +196,13 @@ export function ScopePage({ snapshot, onSaved }: { readonly snapshot: AutoRagCon
 /* ============================================================= Reading == */
 
 export function ReadingPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfigSnapshot; readonly onSaved: (next: AutoRagConfigSnapshot) => void }): ReactElement {
-	const { run, error } = useConfigWriter(onSaved);
-	const ocrEnabled = boolOf(getAt(snapshot.config, ["parserOptions", "ocr", "enabled"])) ?? false;
-	const globalLanguages = listOf(getAt(snapshot.config, ["languages"]));
+	const { error } = useConfigWriter(onSaved);
 	return (
 		<>
-			<SettingsPageHead title="문서 읽기" description="문서와 이미지에서 글자를 읽는 언어와 방식을 설정합니다." />
+			<SettingsPageHead title="문서 읽기" description="문서를 읽고 검색할 때 우선 사용할 언어를 설정합니다." />
 			{error !== null ? <div className="settings-error" role="alert">{error}</div> : null}
 			<Section title="문서 언어" description="문서 내용을 읽고 검색할 때 우선 사용할 언어입니다.">
 				<LanguageSettings snapshot={snapshot} path={["languages"]} name="문서 언어" hint="여러 개를 선택할 수 있습니다." onSaved={onSaved} fallback={["ko", "en"]} />
-			</Section>
-			<Section title="이미지 속 글자 읽기" description="사진이나 스캔 PDF 안의 글자도 검색할 수 있게 합니다.">
-				<Row name="OCR 사용" hint="처음 분석할 때 시간이 더 걸립니다.">
-					<Switch checked={ocrEnabled} ariaLabel="OCR 사용" onChange={() => void run([{ path: ["parserOptions", "ocr", "enabled"], value: !ocrEnabled }])} />
-				</Row>
-				{ocrEnabled ? (
-					<LanguageSettings
-						snapshot={snapshot}
-						path={["parserOptions", "ocr", "languages"]}
-						name="인식 언어"
-						hint="설정하지 않으면 문서 언어를 따라갑니다."
-						onSaved={onSaved}
-						fallback={globalLanguages.length > 0 ? globalLanguages : ["ko", "en"]}
-					/>
-				) : null}
 			</Section>
 		</>
 	);

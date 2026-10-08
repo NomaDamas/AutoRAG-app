@@ -293,13 +293,9 @@ export const TEMPLATES: readonly TemplateMeta[] = [
 				],
 			},
 			{
-				title: "파서 (OCR · 문서 언어)",
+				title: "파서 (문서 언어)",
 				fields: [
 					{ key: "parserOptions.languages", label: "문서 언어", kind: "stringList", placeholder: "ko" },
-					{ key: "parserOptions.ocr.enabled", label: "OCR 사용", kind: "boolean", defaultValue: false, hint: "기본값: 꺼짐." },
-					{ key: "parserOptions.ocr.languages", label: "OCR 언어", kind: "stringList", placeholder: "eng" },
-					{ key: "parserOptions.ocr.timeoutMs", label: "OCR 타임아웃 (ms)", kind: "number" },
-					{ key: "parserOptions.ocr.maxBytes", label: "OCR 최대 바이트", kind: "number" },
 					{ key: "parserOptions.kordoc.ocr", label: "kordoc OCR", kind: "select", options: ["off", "force"], optionValues: { off: false, force: "force" } },
 				],
 			},

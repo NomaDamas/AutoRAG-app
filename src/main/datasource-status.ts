@@ -15,6 +15,7 @@ import {
 } from "@autorag/librarian";
 import { readRawConfigObject, resolveConfigPath, type CliConfig } from "@autorag/librarian/core";
 import { backendIndexUnit, LIVE_QUERY_TEMPLATES, probeBackendIndex } from "./datasource-index-probe";
+import { withConnectorOcrDisabled } from "./ocr-policy";
 import type { DiscrawlEmbeddingRuntime } from "./embedding-settings-service";
 import type {
 	ConfigRefreshDiagnostic,
@@ -177,7 +178,7 @@ function buildSkill(
 	workspacePath: string,
 	embeddingRuntime?: DiscrawlEmbeddingRuntime,
 ): DatasourceSkill | undefined {
-	return buildDatasourceSkills({ [id]: { ...entry, enabled: true } }, workspacePath, embeddingRuntime).skills[0];
+	return buildDatasourceSkills({ [id]: withConnectorOcrDisabled({ ...entry, enabled: true }) }, workspacePath, embeddingRuntime).skills[0];
 }
 
 function agentState(

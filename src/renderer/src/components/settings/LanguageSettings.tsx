@@ -28,24 +28,6 @@ type ConfigPath = readonly string[];
 const LANGUAGE_ITEMS: LanguageValue[] = SUPPORTED_LANGUAGES.map((language) => language.value);
 const SUPPORTED_VALUES = new Set<string>(LANGUAGE_ITEMS);
 const LABELS = new Map<string, string>(SUPPORTED_LANGUAGES.map((language) => [language.value, language.label]));
-const OCR_CODES: Record<LanguageValue, string> = {
-	ko: "kor",
-	en: "eng",
-	ja: "jpn",
-	"zh-hans": "chi_sim",
-	"zh-hant": "chi_tra",
-	fr: "fra",
-	de: "deu",
-	es: "spa",
-	ru: "rus",
-	it: "ita",
-	pt: "por",
-	vi: "vie",
-	th: "tha",
-	ar: "ara",
-	hi: "hin",
-};
-const OCR_TAGS = new Map<string, LanguageValue>(Object.entries(OCR_CODES).map(([tag, code]) => [code, tag as LanguageValue]));
 
 function readAt(root: JsonObject, path: ConfigPath): JsonValue | undefined {
 	let current: JsonValue = root;
@@ -56,13 +38,9 @@ function readAt(root: JsonObject, path: ConfigPath): JsonValue | undefined {
 	return current;
 }
 
-function stringList(value: JsonValue | undefined, ocr: boolean): string[] {
+function stringList(value: JsonValue | undefined): string[] {
 	if (!Array.isArray(value)) return [];
-	return value.flatMap((item) => {
-		if (typeof item !== "string") return [];
-		const tag = ocr ? (OCR_TAGS.get(item) ?? item) : item;
-		return SUPPORTED_VALUES.has(tag) ? [tag] : [];
-	});
+	return value.flatMap((item) => (typeof item === "string" && SUPPORTED_VALUES.has(item) ? [item] : []));
 }
 
 function errorMessage(error: unknown): string {
@@ -85,10 +63,9 @@ export function LanguageSettings({
 	readonly fallback?: readonly string[];
 }): ReactElement {
 	const stored = readAt(snapshot.config, path);
-	const isOcrLanguagePath = path.length >= 2 && path[path.length - 2] === "ocr" && path[path.length - 1] === "languages";
 	const configured = Array.isArray(stored);
 	const inherited = fallback.filter((value) => SUPPORTED_VALUES.has(value));
-	const effective = configured ? stringList(stored, isOcrLanguagePath) : inherited;
+	const effective = configured ? stringList(stored) : inherited;
 	const signature = JSON.stringify({ configured, effective });
 	const [selected, setSelected] = useState<string[]>(effective);
 	const [saving, setSaving] = useState(false);
@@ -99,8 +76,7 @@ export function LanguageSettings({
 	const selectedSet = useMemo(() => new Set(selected), [selected]);
 
 	async function save(next: readonly string[]): Promise<void> {
-		const values = [...new Set(next)].filter((value): value is LanguageValue => SUPPORTED_VALUES.has(value));
-		const storedValues = isOcrLanguagePath ? values.map((value) => OCR_CODES[value]) : values;
+		const storedValues = [...new Set(next)].filter((value): value is LanguageValue => SUPPORTED_VALUES.has(value));
 		setSaving(true);
 		setError(null);
 		try {

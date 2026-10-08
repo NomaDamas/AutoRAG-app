@@ -97,7 +97,7 @@ second datasource or model configuration. The sidebar is searchable and grouped:
 - **AI → 웹 검색** — `webSearch` on/off, provider, and page fetch.
 - **검색** — 인덱싱 (per-source status, polling interval, sync now, index
   refresh), 검색 범위 (search paths, exclusions, watch, media index), 문서 읽기
-  (languages, OCR), and 중복 파일 정리 (exact duplicates, dupey, scan interval).
+  (document languages), and 중복 파일 정리 (exact duplicates, dupey, scan interval).
 - **연결된 앱** — all connections plus a gallery of the 16 datasource templates;
   each configured connection gets its own page with enable, desktop-app
   requirement and download link, per-source AI access, sync, polling interval,
