@@ -180,7 +180,7 @@ await page.screenshot({ path: join(EVIDENCE, "1-stack-open.png") });
 // 3. Trash the duplicate through the real context menu.
 const victimRow = childRows(page).filter({ hasText: VICTIM });
 await victimRow.click({ button: "right" });
-await page.getByRole("menuitem", { name: "휴지통으로 이동" }).click();
+await page.getByRole("menuitem", { name: "Move to Trash" }).click();
 
 // The row must be gone the moment the trash lands — not after the next scan.
 const vanished = await waitFor(async () => !(await childRows(page).locator(".row__label").allInnerTexts()).includes(VICTIM), {

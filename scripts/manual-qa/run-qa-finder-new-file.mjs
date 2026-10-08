@@ -67,7 +67,7 @@ async function openBackgroundMenu(page) {
 
 /** Open the New submenu and click one of its items by label. */
 async function chooseNew(page, label) {
-	await page.getByRole("menuitem", { name: "새로 만들기" }).hover();
+	await page.getByRole("menuitem", { name: "New", exact: true }).hover();
 	await page.getByRole("menuitem", { name: label }).click();
 }
 
@@ -86,12 +86,12 @@ try {
 
 	/* ------------------------------- 1. background menu + New submenu contents */
 	await openBackgroundMenu(page);
-	await page.getByRole("menuitem", { name: "새로 만들기" }).hover();
+	await page.getByRole("menuitem", { name: "New", exact: true }).hover();
 	const submenuLabels = await page.locator('[role="menu"]').last().getByRole("menuitem").allInnerTexts();
 	await page.screenshot({ path: join(EVIDENCE, "1-new-submenu.png") });
 	check(
 		"the empty-space menu's New submenu lists a folder and every document format",
-		submenuLabels.includes("새 폴더") &&
+		submenuLabels.includes("New Folder") &&
 			["텍스트 파일", "Markdown 문서", "서식 있는 텍스트", "Word 문서", "Excel 스프레드시트", "PowerPoint 프레젠테이션"].every((label) =>
 				submenuLabels.includes(label),
 			),
@@ -180,7 +180,7 @@ try {
 	await page.keyboard.press("Escape");
 	check(
 		"right-clicking a file row shows the row menu, not the New menu",
-		rowMenu.some((text) => text.startsWith("Quick Look")) && !rowMenu.some((text) => text.includes("새로 만들기")),
+		rowMenu.some((text) => text.startsWith("Quick Look")) && !rowMenu.some((text) => text.includes("New")),
 		`items=${JSON.stringify(rowMenu)}`,
 	);
 

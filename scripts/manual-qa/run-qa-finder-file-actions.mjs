@@ -140,14 +140,14 @@ try {
 	await selectFile(page, "notes.txt");
 	const textActions = await actionLabels(page);
 	const expectedTextActions = canShare
-		? ["열기", "다른 앱으로 열기", "압축", "공유", "AI 요약"]
-		: ["열기", "다른 앱으로 열기", "압축", "AI 요약"];
+		? ["Open", "Open With", "Compress", "Share", "AI Summary"]
+		: ["Open", "Open With", "Compress", "AI Summary"];
 	check("text actions", JSON.stringify(textActions), JSON.stringify(expectedTextActions));
 	check("no Quick Look button", textActions.includes("Quick Look"), false);
 	await page.screenshot({ path: join(EVIDENCE, "1-text-actions.png") });
 
 	// 2. 압축 writes a real zip.
-	await page.getByRole("button", { name: "압축", exact: true }).click();
+	await page.getByRole("button", { name: "Compress", exact: true }).click();
 	const zipPath = join(QA_ROOT, "notes.txt.zip");
 	await waitFor(() => existsSync(zipPath), { label: "notes.txt.zip to appear" });
 	check("compress wrote a zip", existsSync(zipPath), true);
@@ -156,16 +156,16 @@ try {
 
 	// 3. A zip extracts in place.
 	await selectFile(page, "bundle.zip");
-	check("zip offers extraction", (await actionLabels(page)).includes("압축 해제"), true);
-	await page.getByRole("button", { name: "압축 해제", exact: true }).click();
+	check("zip offers extraction", (await actionLabels(page)).includes("Extract"), true);
+	await page.getByRole("button", { name: "Extract", exact: true }).click();
 	await waitFor(() => existsSync(join(QA_ROOT, "bundle", "inside.txt")), { label: "the extracted folder" });
 	check("extract restored the folder", existsSync(join(QA_ROOT, "bundle", "inside.txt")), true);
 
 	// 4. PNG -> image menu -> JPEG (sips on macOS, ffmpeg on Windows).
 	if (expectsImage) {
 		await selectFile(page, "photo.png");
-		check("png offers the image menu", (await actionLabels(page)).includes("이미지 편집"), true);
-		await page.getByRole("button", { name: "이미지 편집", exact: true }).click();
+		check("png offers the image menu", (await actionLabels(page)).includes("Edit Image"), true);
+		await page.getByRole("button", { name: "Edit Image", exact: true }).click();
 		const imageItems = await page.locator('[role="menu"][aria-label="세부 작업"] [role="menuitem"] span').allInnerTexts();
 		check("image menu has a JPEG target", imageItems.includes("JPEG로 변환"), true);
 		check("image menu resizes", imageItems.some((label) => label.startsWith("최대 ")), true);
@@ -176,15 +176,15 @@ try {
 		await waitFor(() => existsSync(join(QA_ROOT, "photo.jpg")), { label: "photo.jpg" });
 		check("convert wrote a JPEG", existsSync(join(QA_ROOT, "photo.jpg")), true);
 	} else {
-		check("png hides the image menu without an image engine", (await actionLabels(page)).includes("이미지 편집"), false);
+		check("png hides the image menu without an image engine", (await actionLabels(page)).includes("Edit Image"), false);
 		console.log("SKIP image convert checks: no sips or ffmpeg image engine");
 	}
 
 	// 5. MOV -> MP4 through ffmpeg.
 	if (ffmpeg) {
 		await selectFile(page, "clip.mov");
-		check("mov offers container conversion", (await actionLabels(page)).includes("동영상 변환"), true);
-		await page.getByRole("button", { name: "동영상 변환", exact: true }).click();
+		check("mov offers container conversion", (await actionLabels(page)).includes("Convert Video"), true);
+		await page.getByRole("button", { name: "Convert Video", exact: true }).click();
 		const videoItems = await page.locator('[role="menu"][aria-label="세부 작업"] [role="menuitem"] span').allInnerTexts();
 		check("video menu drops the current container", videoItems.includes("MP4로 변환") && !videoItems.includes("MOV로 변환"), true);
 		await page.getByRole("menuitem", { name: "MP4로 변환", exact: true }).click();
@@ -198,20 +198,20 @@ try {
 	// 6. 공유 opens the sheet on macOS; elsewhere the capability hides the button.
 	await selectFile(page, "notes.txt");
 	if (canShare) {
-		await page.getByRole("button", { name: "공유", exact: true }).first().click();
+		await page.locator(".inspector-actions").getByRole("button", { name: "Share", exact: true }).click();
 		await sleep(800);
 		const toast = await page.locator(".toast").allInnerTexts();
 		check("share did not error", toast.some((text) => text.includes("지원하지 않") || text.includes("Error")), false);
 		await page.screenshot({ path: join(EVIDENCE, "5-share.png") });
 	} else {
-		check("share button is absent without a share sheet", (await actionLabels(page)).includes("공유"), false);
+		check("share button is absent without a share sheet", (await actionLabels(page)).includes("Share"), false);
 	}
 
 	// 7. 다른 앱으로 열기 opens the native application chooser. The sheet is a
 	// native modal, so the assertion is that the renderer survives it — the
 	// sheet itself goes away with the process when the run ends.
 	await selectFile(page, "photo.png");
-	await page.getByRole("button", { name: "다른 앱으로 열기", exact: true }).click();
+	await page.getByRole("button", { name: "Open With", exact: true }).click();
 	await sleep(1500);
 	const responsive = await page.evaluate(() => document.querySelectorAll(".inspector-actions").length === 1);
 	check("open-with chooser leaves the window responsive", responsive, true);

@@ -1,4 +1,5 @@
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 import { _electron } from "playwright";
@@ -6,19 +7,37 @@ import { _electron } from "playwright";
 export const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 
 /**
- * Launch the built Finder app for QA. Requires `bun run build` from the repo
- * root first; userDataDir and env pass through to the Electron process, and
- * `args` appends Chromium switches (e.g. `--force-device-scale-factor=2`).
+ * Seed the Interface language into a fresh profile, so lanes assert one known
+ * copy instead of whatever the shared dev profile last chose. An existing
+ * settings file is left alone: a lane that relaunches on the same profile must
+ * see what the previous launch persisted.
  */
-export async function launchFinder({ userDataDir, env, args: extraArgs = [] } = {}) {
+function seedLanguage(userDataDir, language) {
+	const settings = join(userDataDir, "settings", "settings-state.json");
+	if (existsSync(settings)) return;
+	mkdirSync(join(userDataDir, "settings"), { recursive: true });
+	writeFileSync(settings, `${JSON.stringify({ settings: { language }, permissions: {} }, null, 2)}\n`);
+}
+
+/**
+ * Launch the built Finder app for QA. Requires `bun run build` from the repo
+ * root first; env passes through to the Electron process, and `args` appends
+ * Chromium switches (e.g. `--force-device-scale-factor=2`). Without a
+ * `userDataDir` the lane gets a throwaway profile, never the developer's own.
+ * `language` is the Interface language a fresh profile starts in ("en": the
+ * lanes assert the English copy).
+ */
+export async function launchFinder({ userDataDir, env, args: extraArgs = [], language = "en" } = {}) {
 	if (!existsSync(join(ROOT, "out/main/index.js"))) {
 		throw new Error("out/main/index.js is missing — run `bun run build` first");
 	}
+	const profile = userDataDir ?? mkdtempSync(join(tmpdir(), "autorag-qa-profile-"));
+	seedLanguage(profile, language);
 	// GitHub's Windows runners have no GPU, and Chromium's GPU process dies at
 	// random there mid-session (observed as "Target page, context or browser
 	// has been closed" with nothing in stderr). Software rendering is stable.
 	const gpuArgs = process.platform === "win32" ? ["--disable-gpu"] : [];
-	const args = [".", ...gpuArgs, ...(userDataDir === undefined ? [] : [`--user-data-dir=${userDataDir}`]), ...extraArgs];
+	const args = [".", ...gpuArgs, `--user-data-dir=${profile}`, ...extraArgs];
 	return _electron.launch({
 		args,
 		cwd: ROOT,
