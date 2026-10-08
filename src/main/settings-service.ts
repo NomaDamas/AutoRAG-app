@@ -26,6 +26,8 @@ export interface SettingsServiceDeps {
 	readonly credentials: ProviderCredentialService;
 	/** Fired after every successful set() so live services can adopt the change. */
 	readonly onSettingsChanged?: (settings: AppSettings) => void;
+	/** Installs or removes the OS file-menu entries for a settings change; throwing rejects the change. */
+	readonly applyOsMenu?: (next: AppSettings, previous: AppSettings) => Promise<void>;
 }
 
 const emptyState = (): SettingsState => ({
@@ -86,6 +88,11 @@ export function createSettingsService(deps: SettingsServiceDeps): SettingsBridge
 	return {
 		get: async () => (await statePromise).settings,
 		set: async (patch) => {
+			if (deps.applyOsMenu !== undefined) {
+				// Before the write: a failed install rejects the toggle rather than saving "on" with no menu entries.
+				const previous = (await statePromise).settings;
+				await deps.applyOsMenu({ ...previous, ...patch }, previous);
+			}
 			const state = await mutate((current) => {
 				const appearance = patch.appearance === "dark" || patch.appearance === "light" ? patch.appearance : current.settings.appearance;
 				current.settings = { ...current.settings, ...patch, appearance };

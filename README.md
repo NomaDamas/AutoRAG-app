@@ -222,6 +222,36 @@ the run's first model prompt. The query string, which the librarian uses for
 baseline retrieval and records in its retrieval memory, stays the user's own
 words.
 
+## Right-click menu in Finder and Explorer
+
+Settings → General → **Add to the file right-click menu** (off by default)
+adds two entries to the OS file menu, the way Keka or Skim do:
+
+- **Ask AutoRAG** attaches the selected files and folders to AI Search as
+  drafts, so you type the question.
+- **Show in AutoRAG** opens the file's folder with the file selected.
+
+Captions follow the interface language, and the install is per-user with no
+elevation.
+
+| OS | Where it appears | How it is installed |
+| --- | --- | --- |
+| macOS | Finder right-click → **Quick Actions** (and Services) | Two Automator workflows written to `~/Library/Services`, limited to Finder selections. Each runs a shell script that launches the app's own executable with `--autorag-request=<ask\|reveal>` and one `--autorag-path=` per item. |
+| Windows | Explorer right-click on a file or folder | Shell verbs under `HKCU\Software\Classes\{*,Directory}\shell\AutoRAG.*`, written with `reg.exe`. On Windows 11 they sit under "Show more options"; the top-level menu needs a packaged COM `IExplorerCommand`, which an unpackaged Electron app cannot register. |
+| Linux | Not offered | There is no common file-manager extension point. |
+
+The launched process does not open a second window. `src/main/os-request-channel.ts`
+tries a per-profile local socket (a unix socket in the temp dir, a named pipe
+on Windows) first; a running app acknowledges the request and the launcher
+exits. With no app running the launcher becomes the app and reads the request
+from its own argv. Every path is checked on disk in
+`src/main/os-request-service.ts` before the renderer sees it. The profile's
+`--user-data-dir` is baked into each entry, so a development or QA profile
+only receives its own requests. The app refreshes the entries on every start
+while the setting is on, and switching it off removes exactly the entries it
+wrote (macOS workflows are recognized by their `com.autorag.app.service.`
+bundle identifier). A failed install rejects the toggle instead of saving it.
+
 ## Manual QA
 
 The Finder QA scripts are under `scripts/manual-qa/`. Build first, then run a
@@ -234,6 +264,11 @@ native drop path, and checks that a live agent answers from the attached
 content. With `QA_REAL_FINDER_DRAG=1` it also drags a file out of a real
 macOS Finder window. That run moves the mouse, and the terminal needs
 Accessibility permission.
+
+`run-qa-finder-os-menu.mjs` is macOS-only. It switches the right-click menu on
+against a throwaway home, runs the installed workflows through the real
+`automator` runtime, and checks that the running app attaches the files, that
+Show in AutoRAG selects the file, and that a cold start attaches from argv.
 
 ### Windows QA
 
