@@ -75,6 +75,26 @@ interface Session {
 
 const DEFAULT_CUSTOM_API = "openai-completions";
 const DEFAULT_TIMEOUT_MS = 8000;
+/** Cheapest models tried per connection check, and the budget for all of them together. */
+const CONNECTION_PROBE_ATTEMPTS = 4;
+const CONNECTION_TEST_TIMEOUT_MS = 30_000;
+/** opencode-style gateways refuse a request that carries no session id. */
+const CONNECTION_PROBE_SESSION_ID = "autorag-connection-check";
+
+/**
+ * Catalog models in the order a connection check should try them: paid models
+ * by ascending price, then unpriced ones. Free-tier models go last because they
+ * can be restricted to their own client or rate-limited while the connection works.
+ */
+export function rankConnectionProbeModels<T extends { readonly cost: { readonly input: number; readonly output: number } }>(models: readonly T[]): T[] {
+	const price = (model: T): number => {
+		const total = model.cost.input + model.cost.output;
+		return Number.isFinite(total) && total > 0 ? total : 0;
+	};
+	const paid = models.filter((model) => price(model) > 0).sort((a, b) => price(a) - price(b));
+	return [...paid, ...models.filter((model) => price(model) === 0)];
+}
+
 /** Hosts that mean "this device" for local-server validation. */
 const LOOPBACK_HOSTS: Record<string, true> = { localhost: true, "127.0.0.1": true, "::1": true, "[::1]": true };
 
@@ -491,24 +511,49 @@ export function createProviderAuthService(deps: ProviderAuthServiceDeps): Provid
 	}
 
 	/**
-	 * Pass/fail for a saved provider. Built-in providers are judged by the Pi
-	 * runtime itself: `getAuth` resolves the stored key or env var and refreshes
-	 * an OAuth token, and it rejects when that fails. No model is called, because
-	 * the first catalog model can be deprecated, unfunded, or plan-restricted and
-	 * would fail a working connection. Local/custom servers have no Pi credential
-	 * to resolve, so they pass when the server answers its model listing.
-	 * Why a check failed stays in Pi; the UI only shows the result.
+	 * Pass/fail for a saved provider; why a check failed stays in Pi, the UI
+	 * only shows the result.
+	 *
+	 * Built-in providers: the Pi runtime must resolve the credential (`getAuth`,
+	 * which also refreshes OAuth), then a tiny completion goes to the cheapest
+	 * catalog models first. A provider's `/models` is no health check (most
+	 * built-ins answer 404/403 there, OpenRouter answers 200 without a key), and
+	 * one model can be deprecated, plan-restricted, or free-tier-only while the
+	 * connection is fine, so a few models are tried and any answer passes.
+	 *
+	 * Local/custom servers have no Pi credential or price list and loading a
+	 * model just to check a connection is heavy, so they pass when the server
+	 * answers its model listing.
 	 */
 	async function test(id: string): Promise<ProviderConnectionResult> {
 		try {
 			const summary = (await list()).find((provider) => provider.id === id);
 			if (summary === undefined) return { ok: false };
-			if (summary.kind === "runtime") {
-				return { ok: (await (await runtimePromise).getAuth(id)) !== undefined };
+			if (summary.kind !== "runtime") {
+				if (summary.baseUrl === null) return { ok: false };
+				const stored = summary.apiKeyEnv === null ? undefined : deps.env[summary.apiKeyEnv];
+				return { ok: (await probe(summary.baseUrl, stored === undefined || stored.length === 0 ? undefined : stored)).ok };
 			}
-			if (summary.baseUrl === null) return { ok: false };
-			const stored = summary.apiKeyEnv === null ? undefined : deps.env[summary.apiKeyEnv];
-			return { ok: (await probe(summary.baseUrl, stored === undefined || stored.length === 0 ? undefined : stored)).ok };
+			const runtime = await runtimePromise;
+			if ((await runtime.getAuth(id)) === undefined) return { ok: false };
+			const models = rankConnectionProbeModels(runtime.getModels(id)).slice(0, CONNECTION_PROBE_ATTEMPTS);
+			if (models.length === 0) return { ok: true };
+			const signal = AbortSignal.timeout(deps.timeoutMs ?? CONNECTION_TEST_TIMEOUT_MS);
+			for (const model of models) {
+				try {
+					const result = await runtime.completeSimple(
+						model,
+						{ messages: [{ role: "user", content: "Reply with OK.", timestamp: Date.now() }] },
+						{ maxTokens: 16, sessionId: CONNECTION_PROBE_SESSION_ID, signal },
+					);
+					// `length` is an answer: reasoning models spend the whole 16-token budget thinking.
+					if (result.stopReason !== "error" && result.stopReason !== "aborted") return { ok: true };
+				} catch {
+					// A model-level failure; try the next one.
+				}
+				if (signal.aborted) break;
+			}
+			return { ok: false };
 		} catch {
 			return { ok: false };
 		}

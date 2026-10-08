@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { createProviderAuthService, type ProviderAuthService } from "../src/main/provider-auth-service";
+import { createProviderAuthService, rankConnectionProbeModels, type ProviderAuthService } from "../src/main/provider-auth-service";
 import type { ProviderCredentialService } from "../src/main/provider-credentials";
 import type { ProviderCredentialStatus } from "../src/shared/settings-contract";
 
@@ -175,20 +175,29 @@ describe("createProviderAuthService", () => {
 		expect(await service.test("not-a-provider")).toEqual({ ok: false });
 	});
 
-	it("passes a built-in provider on its resolved Pi credential, not on a model call", async () => {
+	it("fails a built-in provider with no credential without sending any request", async () => {
 		const previous = process.env.OPENROUTER_API_KEY;
-		// A fetch that rejects everything proves no request is made for a built-in provider.
 		const { service } = await fixture((async () => {
 			throw new Error("no network expected");
 		}) as unknown as typeof fetch);
 		try {
 			delete process.env.OPENROUTER_API_KEY;
 			expect(await service.test("openrouter")).toEqual({ ok: false });
-			process.env.OPENROUTER_API_KEY = "sk-test";
-			expect(await service.test("openrouter")).toEqual({ ok: true });
 		} finally {
-			if (previous === undefined) delete process.env.OPENROUTER_API_KEY;
-			else process.env.OPENROUTER_API_KEY = previous;
+			if (previous !== undefined) process.env.OPENROUTER_API_KEY = previous;
 		}
+	});
+
+	it("tries the cheapest paid models first and free or unpriced ones last", () => {
+		const model = (id: string, input: number, output: number): { id: string; cost: { input: number; output: number } } => ({ id, cost: { input, output } });
+		const ranked = rankConnectionProbeModels([
+			model("free", 0, 0),
+			model("pricey", 15, 75),
+			model("nan", Number.NaN, 1),
+			model("cheap", 0.05, 0.1),
+			model("mid", 1, 3),
+		]);
+
+		expect(ranked.map((entry) => entry.id)).toEqual(["cheap", "mid", "pricey", "free", "nan"]);
 	});
 });
