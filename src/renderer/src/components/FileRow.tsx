@@ -138,8 +138,12 @@ export function FileRow({
 	const open = folderDisclosure ? disclosure === "expanded" : stackOpen;
 
 	const state = indexStatus?.kind ?? "pending";
+	// The box shows the user's intent: a file that is wanted but still syncing is checked (dimmed), not blank.
 	const included = state === "included";
-	const outside = state === "outside";
+	const syncing = state === "pending" && indexStatus?.excluded === false;
+	const checked = included || syncing;
+	// No refresh can ever index these; a checkbox would promise something the librarian will not do.
+	const inert = state === "outside" || state === "unsupported" || state === "skipped";
 
 	const rowTone = selected ? (zoneFocused ? "text-on-accent" : "text-ink") : "text-ink";
 	const metaTone = selected ? (zoneFocused ? "text-on-accent/80" : "text-ink-muted") : "text-ink-muted";
@@ -279,29 +283,30 @@ export function FileRow({
 			{visibleColumns.map((column) =>
 				column.key === "index" ? (
 					<div key="index" className="ix-cell flex min-w-0 justify-center" role="gridcell">
-						{entry.kind === "folder" ? null : outside ? (
-							<span className={cn("text-meta", metaTone)}>—</span>
+						{entry.kind === "folder" ? null : inert ? (
+							<span className={cn("text-meta", metaTone)} title={indexStatus?.detail}>—</span>
 						) : (
 							<button
 								type="button"
 								role="checkbox"
-								aria-checked={included}
+								aria-checked={checked}
 								className={cn(
-									"chk inline-grid flex-none place-items-center size-14 rounded-4 border cursor-default",
-									included
+									"chk inline-grid flex-none place-items-center size-14 p-0 rounded-4 border cursor-default",
+									checked
 										? selected
 											? "bg-window border-window text-accent"
 											: "bg-accent border-accent text-on-accent"
 										: cn("bg-window text-accent", selected ? "border-on-accent/90" : "border-border-strong"),
+									syncing && "opacity-60",
 								)}
-								title={included ? "AI 검색 인덱스에 포함됨" : "AI 검색 인덱스에서 제외됨"}
-								aria-label={included ? "AI 검색 인덱스에 포함됨" : "AI 검색 인덱스에서 제외됨"}
+								title={indexStatus?.detail ?? (checked ? "AI 검색 인덱스에 포함됨" : "AI 검색 인덱스에서 제외됨")}
+								aria-label={checked ? "AI 검색 인덱스에 포함됨" : "AI 검색 인덱스에서 제외됨"}
 								onClick={(event) => {
 									event.stopPropagation();
 									callbacks.onToggleIndex(entry);
 								}}
 							>
-								<CheckIcon size={10} className={included ? undefined : "opacity-0"} />
+								<CheckIcon size={10} className={checked ? undefined : "opacity-0"} />
 							</button>
 						)}
 					</div>
