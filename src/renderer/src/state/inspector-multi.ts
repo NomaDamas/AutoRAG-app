@@ -8,6 +8,7 @@
  */
 
 import type { FinderEntry } from "../data/entries";
+import { createdMsOf, kindLabelOf, sizeOf } from "./entry-values";
 import { formatSize } from "./format";
 
 /** The fan shows at most this many papers; the rest of the selection is implied. */
@@ -54,7 +55,8 @@ export function dateRangeLabel(values: readonly number[]): string | null {
 function kindSummary(entries: readonly FinderEntry[]): string {
 	const counts = new Map<string, number>();
 	for (const entry of entries) {
-		counts.set(entry.kindLabel, (counts.get(entry.kindLabel) ?? 0) + 1);
+		const label = kindLabelOf(entry);
+		counts.set(label, (counts.get(label) ?? 0) + 1);
 	}
 	const groups = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "ko"));
 	const shown = groups.slice(0, KIND_GROUP_MAX).map(([label, count]) => `${label} ${count}개`);
@@ -63,7 +65,7 @@ function kindSummary(entries: readonly FinderEntry[]): string {
 }
 
 export function summarizeSelection(entries: readonly FinderEntry[]): SelectionSummary {
-	const totalBytes = entries.reduce((sum, entry) => sum + (entry.kind === "file" ? entry.sizeValue : 0), 0);
+	const totalBytes = entries.reduce((sum, entry) => sum + (entry.kind === "file" ? sizeOf(entry) : 0), 0);
 	const hasFile = entries.some((entry) => entry.kind === "file");
 	return {
 		count: entries.length,
@@ -71,8 +73,11 @@ export function summarizeSelection(entries: readonly FinderEntry[]): SelectionSu
 		kindSummary: kindSummary(entries),
 		totalBytes,
 		sizeLabel: hasFile ? formatSize(totalBytes) : null,
-		createdRange: dateRangeLabel(entries.flatMap((entry) => (entry.createdValue === undefined ? [] : [entry.createdValue]))),
-		modifiedRange: dateRangeLabel(entries.map((entry) => entry.modifiedValue)),
+		createdRange: dateRangeLabel(entries.flatMap((entry) => {
+			const created = createdMsOf(entry);
+			return created === undefined ? [] : [created];
+		})),
+		modifiedRange: dateRangeLabel(entries.map((entry) => entry.mtimeMs)),
 	};
 }
 

@@ -70,13 +70,14 @@ function iconTargetArg(value: unknown): IconTarget {
 		typeof value.path === "string" &&
 		"ext" in value &&
 		typeof value.ext === "string" &&
-		"modifiedAt" in value &&
-		typeof value.modifiedAt === "string"
+		"mtimeMs" in value &&
+		typeof value.mtimeMs === "number" &&
+		Number.isFinite(value.mtimeMs)
 	) {
 		const size = "size" in value && typeof value.size === "number" ? value.size : undefined;
-		return { path: value.path, ext: value.ext, modifiedAt: value.modifiedAt, ...(size === undefined ? {} : { size }) };
+		return { path: value.path, ext: value.ext, mtimeMs: value.mtimeMs, ...(size === undefined ? {} : { size }) };
 	}
-	throw new TypeError("icon target must be { path, ext, modifiedAt }");
+	throw new TypeError("icon target must be { path, ext, mtimeMs }");
 }
 
 export function createFsWorkerHost(deps: FsWorkerHostDeps): FsWorkerHost {

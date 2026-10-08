@@ -1,111 +1,64 @@
 /**
  * The row model the Finder renders, plus adapters for its two sources: the
- * Electron fs bridge (OS-absolute paths, ISO stamps, byte sizes) and the
+ * Electron fs bridge (OS-absolute paths, epoch-ms stamps, byte sizes) and the
  * prototype fixtures (display-domain labels such as "14 msgs").
+ *
+ * A row holds raw filesystem values only. Every label (date, size, kind,
+ * location) is derived when a cell renders or a sort runs
+ * (`state/entry-values`), so ingesting a 10,000-file folder formats nothing
+ * and stores no string the listing did not already carry.
  */
 
 import type { FsEntry, FsSearchResult } from "../../../shared/fs-contract";
-import { formatModified, formatSize, parseModifiedLabel, parseSizeLabel } from "../state/format";
-import { type FileKind, kindFromExtension, kindMeta } from "../state/kinds";
-import { basename, dirname, joinPath } from "../state/paths";
-import type { SortableEntry } from "../state/sort";
+import type { SortableEntry } from "../state/entry-values";
+import { parseModifiedLabel, parseSizeLabel } from "../state/format";
+import type { FileKind } from "../state/kinds";
+import { joinPath } from "../state/paths";
 
 export interface FinderEntry extends SortableEntry {
-	readonly name: string;
-	/** Full path; the selection, clipboard, and fs calls all key on this. */
-	readonly path: string;
-	readonly kind: "folder" | "file";
-	readonly fileKind: FileKind;
-	/** OS tile icon URL; null renders the extension letter tile. */
-	readonly iconUrl: string | null;
-	/** Exact filesystem mtime used to reject stale background enrichment. */
-	readonly modifiedAt?: string;
-	readonly createdAt?: string;
-	readonly dateLabel: string;
-	readonly sizeLabel: string;
+	/** OS tile icon URL, once the entry sidecar resolved the row; absent renders the letter tile. */
+	readonly iconUrl?: string;
 }
 
-function timestamp(value: string | null | undefined): number | undefined {
-	if (value === null || value === undefined) return undefined;
-	const parsed = Date.parse(value);
-	return Number.isFinite(parsed) ? parsed : undefined;
+/** Extensions are few; one shared string per distinct value instead of one per row. */
+const EXTENSIONS = new Map<string, string>();
+
+function internExtension(ext: string): string {
+	if (ext === "") return "";
+	const known = EXTENSIONS.get(ext);
+	if (known !== undefined) return known;
+	if (EXTENSIONS.size < 4096) EXTENSIONS.set(ext, ext);
+	return ext;
 }
 
-type MetadataFields = {
-	createdValue?: number;
-	addedValue?: number;
-	lastOpenedValue?: number;
-	tagsLabel?: string;
-	commentsLabel?: string;
-	dimensionsLabel?: string;
-	dimensionsValue?: number;
-	ratingValue?: number;
-	applicationLabel?: string;
-};
-
-export function metadataFields(
-	finder: FsEntry["finder"],
-	fallbackCreated: string | undefined,
-): MetadataFields {
-	const fields: MetadataFields = {};
-	const createdValue = timestamp(finder?.createdAt ?? fallbackCreated);
-	if (createdValue !== undefined) fields.createdValue = createdValue;
-	const addedValue = timestamp(finder?.addedAt);
-	if (addedValue !== undefined) fields.addedValue = addedValue;
-	const lastOpenedValue = timestamp(finder?.lastOpenedAt);
-	if (lastOpenedValue !== undefined) fields.lastOpenedValue = lastOpenedValue;
-	if (finder?.tags.length) fields.tagsLabel = finder.tags.join(", ");
-	if (finder?.comments !== null && finder?.comments !== undefined) fields.commentsLabel = finder.comments;
-	if (finder?.width !== null && finder?.height !== null && finder?.width !== undefined && finder?.height !== undefined) {
-		fields.dimensionsLabel = `${finder.width} × ${finder.height}`;
-		fields.dimensionsValue = finder.width * finder.height;
-	}
-	if (finder?.rating !== null && finder?.rating !== undefined) fields.ratingValue = finder.rating;
-	if (finder?.application !== null && finder?.application !== undefined) fields.applicationLabel = finder.application;
-	return fields;
-}
-
-function finderFields(entry: FsEntry): MetadataFields {
-	return metadataFields(entry.finder, entry.createdAt);
-}
-
-export function entryFromFs(entry: FsEntry, location?: string): FinderEntry {
-	const fileKind: FileKind = entry.kind === "folder" ? "folder" : kindFromExtension(entry.ext);
+/**
+ * The bridge's record as a row. A fresh object with one fixed shape (the IPC
+ * copy is garbage right after): `kind` and `ext` point at shared strings, and
+ * `flags` stays behind because no view reads it.
+ */
+export function entryFromFs(entry: FsEntry): FinderEntry {
 	return {
 		name: entry.name,
 		path: entry.path,
-		kind: entry.kind,
-		fileKind,
-		iconUrl: entry.iconUrl,
-		modifiedAt: entry.modifiedAt,
-		...(entry.createdAt === undefined ? {} : { createdAt: entry.createdAt }),
-		dateLabel: formatModified(entry.modifiedAt),
-		sizeLabel: formatSize(entry.kind === "folder" ? null : entry.size),
-		// The OS-reported kind wins; the extension map is the fallback.
-		kindLabel: entry.osKind ?? kindMeta(fileKind).label,
-		location: location ?? dirname(entry.path),
-		modifiedValue: Date.parse(entry.modifiedAt) || 0,
-		sizeValue: entry.size ?? 0,
-		...finderFields(entry),
+		kind: entry.kind === "folder" ? "folder" : "file",
+		ext: internExtension(entry.ext),
+		size: entry.size,
+		mtimeMs: entry.mtimeMs,
+		birthtimeMs: entry.birthtimeMs ?? 0,
 	};
 }
 
 export function entryFromSearchHit(hit: FsSearchResult): FinderEntry {
-	return { ...entryFromFs(hit.entry), location: dirname(hit.entry.path) };
+	return entryFromFs(hit.entry);
 }
 
-/** Every field the Finder metadata pass fills in. */
-export const METADATA_KEYS = [
-	"createdValue",
-	"addedValue",
-	"lastOpenedValue",
-	"tagsLabel",
-	"commentsLabel",
-	"dimensionsLabel",
-	"dimensionsValue",
-	"ratingValue",
-	"applicationLabel",
-] as const satisfies readonly (keyof MetadataFields)[];
+/**
+ * True for a row backed by a real file version the OS can enrich (kind, icon,
+ * metadata, preview); prototype fixture rows have none.
+ */
+export function hasFileVersion(entry: FinderEntry): boolean {
+	return entry.fixture === undefined;
+}
 
 /** A prototype fixture row: the reference's `F()` / `D()` shape. */
 export interface FixtureItem {
@@ -115,35 +68,23 @@ export interface FixtureItem {
 	readonly sizeLabel: string;
 }
 
+function fixtureExtension(item: FixtureItem): string {
+	if (item.fileKind === "folder") return "";
+	const dot = item.name.lastIndexOf(".");
+	return dot <= 0 ? "" : item.name.slice(dot + 1).toLowerCase();
+}
+
 export function entryFromFixture(item: FixtureItem, location: string): FinderEntry {
+	const folder = item.fileKind === "folder";
 	return {
 		name: item.name,
 		path: joinPath(location, item.name),
-		kind: item.fileKind === "folder" ? "folder" : "file",
-		fileKind: item.fileKind,
-		iconUrl: null,
-		dateLabel: item.dateLabel,
-		sizeLabel: item.sizeLabel,
-		kindLabel: kindMeta(item.fileKind).label,
-		location,
-		modifiedValue: parseModifiedLabel(item.dateLabel),
-		sizeValue: parseSizeLabel(item.sizeLabel),
+		kind: folder ? "folder" : "file",
+		ext: fixtureExtension(item),
+		// The labels are the display truth; these only order and total the rows.
+		size: folder ? null : parseSizeLabel(item.sizeLabel),
+		mtimeMs: parseModifiedLabel(item.dateLabel),
+		birthtimeMs: 0,
+		fixture: { fileKind: item.fileKind, dateLabel: item.dateLabel, sizeLabel: item.sizeLabel },
 	};
-}
-
-export function fixtureFromEntry(entry: FinderEntry): FixtureItem {
-	return {
-		name: entry.name,
-		fileKind: entry.fileKind,
-		dateLabel: entry.dateLabel,
-		sizeLabel: entry.sizeLabel,
-	};
-}
-
-export function renameEntry(entry: FinderEntry, name: string): FinderEntry {
-	return { ...entry, name, path: joinPath(entry.location, name) };
-}
-
-export function displayName(path: string): string {
-	return basename(path);
 }

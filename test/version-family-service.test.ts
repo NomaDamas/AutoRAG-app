@@ -33,10 +33,8 @@ function fsEntry(path: string): FsEntry {
 		kind: "file",
 		ext: "txt",
 		size: 4,
-		modifiedAt: "2026-09-29T00:00:00.000Z",
-		isSymlink: false,
-		osKind: null,
-		iconUrl: null,
+		mtimeMs: Date.parse("2026-09-29T00:00:00.000Z"),
+		flags: 0,
 	};
 }
 
@@ -186,7 +184,7 @@ describe("version-family service — SSOT", () => {
 		const h = harness({
 			store: {
 				read: async () => ({
-					version: 1 as const,
+					version: 2 as const,
 					scannedAt: "2026-09-28T00:00:00.000Z",
 					locations: ["/home/Desktop"],
 					families: [{ head: "/home/Desktop/a.txt", members: [{ path: "/home/Desktop/b.txt", relation: "exact" as const }], entries: [] }],
@@ -238,7 +236,7 @@ describe("version-family service — SSOT", () => {
 		const h = harness({
 			store: {
 				read: async () => ({
-					version: 1 as const,
+					version: 2 as const,
 					scannedAt: "2026-09-28T00:00:00.000Z",
 					locations: ["/home/Desktop"],
 					families: [{ head: "/home/Desktop/old.txt", members: [{ path: "/home/Desktop/old2.txt", relation: "near" as const }], entries: [] }],
@@ -327,8 +325,8 @@ describe("version-family service — location scope", () => {
 });
 
 describe("version-family service — trash prune", () => {
-	function entryAt(path: string, modifiedAt: string): FsEntry {
-		return { ...fsEntry(path), modifiedAt };
+	function entryAt(path: string, mtimeMs: number): FsEntry {
+		return { ...fsEntry(path), mtimeMs };
 	}
 
 	function threeFileFamily(): FsVersionFamily {
@@ -339,15 +337,15 @@ describe("version-family service — trash prune", () => {
 				{ path: "/home/Desktop/c.txt", relation: "near" },
 			],
 			entries: [
-				entryAt("/home/Desktop/a.txt", "2026-09-29T03:00:00.000Z"),
-				entryAt("/home/Desktop/b.txt", "2026-09-29T01:00:00.000Z"),
-				entryAt("/home/Desktop/c.txt", "2026-09-29T02:00:00.000Z"),
+				entryAt("/home/Desktop/a.txt", Date.parse("2026-09-29T03:00:00.000Z")),
+				entryAt("/home/Desktop/b.txt", Date.parse("2026-09-29T01:00:00.000Z")),
+				entryAt("/home/Desktop/c.txt", Date.parse("2026-09-29T02:00:00.000Z")),
 			],
 		};
 	}
 
 	function seeded(families: readonly FsVersionFamily[]): StoredVersionFamilies {
-		return { version: 1, scannedAt: "2026-09-29T09:00:00.000Z", locations: ["/home/Desktop"], families };
+		return { version: 2, scannedAt: "2026-09-29T09:00:00.000Z", locations: ["/home/Desktop"], families };
 	}
 
 	it("drops a trashed duplicate from the snapshot without scanning", async () => {
@@ -649,8 +647,8 @@ describe("pruneVersionFamilies", () => {
 				],
 				entries: [
 					{ ...fsEntry("/x/z.txt") },
-					{ ...fsEntry("/x/b.txt"), modifiedAt: "2026-09-29T00:00:00.000Z" },
-					{ ...fsEntry("/x/a.txt"), modifiedAt: "2026-09-29T00:00:00.000Z" },
+					{ ...fsEntry("/x/b.txt"), mtimeMs: Date.parse("2026-09-29T00:00:00.000Z") },
+					{ ...fsEntry("/x/a.txt"), mtimeMs: Date.parse("2026-09-29T00:00:00.000Z") },
 				],
 			},
 		];
@@ -670,7 +668,7 @@ describe("file version-family store", () => {
 		const store = createFileVersionFamilyStore(dir);
 		expect(await store.read()).toBeNull();
 		const snapshot = {
-			version: 1 as const,
+			version: 2 as const,
 			scannedAt: "2026-09-29T10:00:00.000Z",
 			locations: ["/home/Desktop"],
 			families: [

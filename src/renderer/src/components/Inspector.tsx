@@ -32,9 +32,10 @@ import type { ActionAnchor, ActionCapabilities, OpenWithApplication } from "../.
 import type { FsFileDetails } from "../../../shared/fs-contract";
 import type { IndexStatus } from "../../../shared/index-contract";
 import type { CitationEvidence } from "../../../shared/search-contract";
-import type { FinderEntry } from "../data/entries";
+import { type FinderEntry, hasFileVersion } from "../data/entries";
 import { cn } from "../lib/cn";
 import { anchorOf } from "../lib/anchor";
+import { dateLabelOf, fileKindOf, kindLabelOf, sizeLabelOf } from "../state/entry-values";
 import { buildInfoRows, hasMoreInfoRows, visibleInfoRows } from "../state/inspector-info";
 import { stackCards, summarizeSelection } from "../state/inspector-multi";
 import {
@@ -265,7 +266,7 @@ function InfoHalf({
 					<PreviewPaper entry={entry} />
 					<div className="preview-title text-body font-semibold text-ink leading-[1.3] [overflow-wrap:anywhere]">{entry.name}</div>
 					<div className="preview-sub mt-4 text-meta text-ink-muted">
-						{entry.kindLabel} · {entry.sizeLabel} · {entry.dateLabel}
+						{kindLabelOf(entry)} · {sizeLabelOf(entry)} · {dateLabelOf(entry)}
 					</div>
 
 					<div className="chip-row flex flex-wrap gap-6 mt-12 mb-16">
@@ -365,12 +366,12 @@ function usePreviewState(entry: FinderEntry): {
 	readonly onLoad: (img: HTMLImageElement) => void;
 	readonly onError: () => void;
 } {
-	const identity = `${entry.path} ${entry.modifiedAt ?? ""}`;
+	const identity = `${entry.path} ${hasFileVersion(entry) ? entry.mtimeMs : ""}`;
 	const [state, setState] = useState<PreviewState>(
 		() => previewCache.get(identity) ?? { url: null, aspect: null, resolved: false },
 	);
 	const [loaded, setLoaded] = useState(false);
-	const fetchable = entry.kind === "file" && entry.modifiedAt !== undefined;
+	const fetchable = entry.kind === "file" && hasFileVersion(entry);
 	useEffect(() => {
 		setLoaded(false);
 		const cached = previewCache.get(identity);
@@ -381,8 +382,8 @@ function usePreviewState(entry: FinderEntry): {
 		// Keep the previous paper's aspect while the next file loads, so
 		// file-to-file navigation never snaps the height twice.
 		setState((prev) => ({ url: null, resolved: false, aspect: prev.aspect }));
-		const modifiedAt = entry.modifiedAt;
-		if (entry.kind !== "file" || modifiedAt === undefined) return;
+		const mtimeMs = entry.mtimeMs;
+		if (!fetchable) return;
 		const path = entry.path;
 		// The OS thumbnailers draw nothing for HWP without Hancom's plug-in; rhwp draws the first page here.
 		const hwp = /\.hwpx?$/i.test(path);
@@ -394,13 +395,13 @@ function usePreviewState(entry: FinderEntry): {
 			if (hwp) rememberHwp(identity);
 			if (!cancelled) setState(next);
 		};
-		void load(path, modifiedAt)
+		void load(path, mtimeMs)
 			.then((url) => settle({ url, aspect: null, resolved: true }))
 			.catch(() => settle({ url: null, aspect: null, resolved: true }));
 		return () => {
 			cancelled = true;
 		};
-	}, [identity, fetchable, entry.path, entry.modifiedAt]);
+	}, [identity, fetchable, entry.path, entry.mtimeMs]);
 	return {
 		state,
 		loaded,
@@ -431,8 +432,8 @@ function PreviewPaper({ entry }: { readonly entry: FinderEntry }): ReactElement 
 	if (entry.kind !== "file" || (state.resolved && state.url === null)) {
 		return (
 			<div className="preview-paper flex-none flex items-center justify-center overflow-hidden rounded-6 border border-border bg-window shadow-raised h-152 mb-14">
-				{entry.iconUrl === null ? (
-					<FileTile kind={entry.fileKind} large />
+				{entry.iconUrl === undefined ? (
+					<FileTile kind={fileKindOf(entry)} large />
 				) : (
 					<img className="max-w-full max-h-full object-contain" src={entry.iconUrl} alt="" aria-hidden="true" draggable={false} />
 				)}
@@ -468,7 +469,7 @@ function PreviewPaper({ entry }: { readonly entry: FinderEntry }): ReactElement 
 /** One paper in the stack: the file's preview cropped to fill the sheet, or the letter tile while it loads. */
 function PreviewCardImage({ entry }: { readonly entry: FinderEntry }): ReactElement {
 	const { state, loaded, onLoad, onError } = usePreviewState(entry);
-	if (state.url === null) return <FileTile kind={entry.fileKind} large />;
+	if (state.url === null) return <FileTile kind={fileKindOf(entry)} large />;
 	return (
 		<img
 			className={cn(

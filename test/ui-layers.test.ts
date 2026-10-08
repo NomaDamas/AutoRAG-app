@@ -9,6 +9,7 @@ import {
 	type LayerStore,
 } from "../src/renderer/src/state/layers";
 import { createFixtureSource } from "../src/renderer/src/data/source";
+import { locationOf } from "../src/renderer/src/state/entry-values";
 import {
 	applyVersionStacks,
 	buildVersionFamilies,
@@ -126,7 +127,7 @@ describe("renderer layer adoption", () => {
 		expect(render(adopted)[0]?.stackCount).toBeGreaterThan(0);
 		const fenced = adoptMessage(adopted, message({
 			seq: 4,
-			dirs: [{ dir: head.location, changes: [{ path: head.path, type: "delete" }], overflow: false, dirGone: false }],
+			dirs: [{ dir: locationOf(head), changes: [{ path: head.path, type: "delete" }], overflow: false, dirGone: false }],
 		}));
 		expect(selectDupey(fenced).result).toBe(result);
 		expect(render(fenced).every((row) => row.stackCount === 0 && !row.child)).toBe(true);

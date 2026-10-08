@@ -16,14 +16,10 @@ function entry(path: string, kind: "folder" | "file" = "file"): FinderEntry {
 		name: path.split("/").pop() ?? "",
 		path,
 		kind,
-		fileKind: kind === "folder" ? "folder" : "md",
-		iconUrl: null,
-		dateLabel: "Sep 13, 16:48",
-		sizeLabel: kind === "folder" ? "—" : "6 KB",
-		kindLabel: kind === "folder" ? "Folder" : "Markdown",
-		location: path.slice(0, path.lastIndexOf("/")),
-		modifiedValue: 0,
-		sizeValue: 0,
+		ext: kind === "folder" ? "" : "md",
+		size: kind === "folder" ? null : 6144,
+		mtimeMs: 0,
+		birthtimeMs: 0,
 	};
 }
 

@@ -15,14 +15,11 @@ function entry(path: string, name = path.split("/").pop() ?? ""): FinderEntry {
 		name,
 		path,
 		kind: "file",
-		fileKind: "xlsx",
-		iconUrl: null,
-		dateLabel: "Sep 13, 16:48",
-		sizeLabel: "84 KB",
-		kindLabel: "Excel Spreadsheet",
-		location: path.slice(0, path.lastIndexOf("/")) || path,
-		modifiedValue: 0,
-		sizeValue: 0,
+		ext: "xlsx",
+		size: 86016,
+		mtimeMs: 0,
+		birthtimeMs: 0,
+		osKind: "Excel Spreadsheet",
 	};
 }
 

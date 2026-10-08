@@ -1,16 +1,26 @@
 import { describe, expect, it } from "vitest";
 import { SORT_KEY_BY_COLUMN, SORT_OPTIONS, cycleSort, explicitSort, sortEntries } from "../src/renderer/src/state/sort";
-import type { SortableEntry } from "../src/renderer/src/state/sort";
+import { locationOf, type SortableEntry } from "../src/renderer/src/state/entry-values";
 
 function e(
 	name: string,
 	kind: "folder" | "file",
-	modifiedValue: number,
-	sizeValue: number,
-	kindLabel: string,
+	mtimeMs: number,
+	size: number,
+	osKind: string,
 	location = "Documents",
 ): SortableEntry {
-	return { name, kind, modifiedValue, sizeValue, kindLabel, location };
+	const ext = name.includes(".") ? name.slice(name.lastIndexOf(".") + 1) : "";
+	return {
+		name,
+		path: `${location}/${name}`,
+		kind,
+		ext,
+		size: kind === "folder" ? null : size,
+		mtimeMs,
+		birthtimeMs: 0,
+		osKind,
+	};
 }
 
 describe("cycleSort", () => {
@@ -170,7 +180,7 @@ describe("sortEntries", () => {
 			e("a.pdf", "file", 1, 1, "PDF Document", "Downloads"),
 			e("b.pdf", "file", 2, 2, "PDF Document", "Desktop"),
 		];
-		expect(sortEntries(hits, { key: "where", dir: 1, flipped: false }).map((r) => r.location)).toEqual([
+		expect(sortEntries(hits, { key: "where", dir: 1, flipped: false }).map((r) => locationOf(r))).toEqual([
 			"Desktop",
 			"Downloads",
 		]);

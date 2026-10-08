@@ -1,6 +1,7 @@
 import { useEffect, type ChangeEvent, type DragEvent, type KeyboardEvent, type MouseEvent, type PointerEvent, type ReactElement } from "react";
 import type { FinderEntry } from "../data/entries";
 import { useDirectoryData, useEntrySidecar } from "../hooks/useDirectoryData";
+import { dateLabelOf, fileKindOf, kindLabelOf, locationOf, sizeLabelOf } from "../state/entry-values";
 import type { Disclosure } from "../state/folder-tree";
 import { LIST_COLUMN_OPTIONS, type ListColumnKey, type ListColumnsState, listGridTemplate } from "../state/list-columns";
 import { basename, dirname } from "../state/paths";
@@ -125,7 +126,7 @@ export function FileRow({
 	// Virtualized: only rows near the viewport mount, so reporting them fills
 	// thumbnails in on scroll for folders larger than the per-call icon cap.
 	useEffect(() => {
-		if (entry.kind === "file" && (entry.iconUrl === null || entry.iconUrl === undefined)) {
+		if (entry.kind === "file" && entry.iconUrl === undefined) {
 			callbacks.onVisible(entry);
 		}
 	}, [callbacks.onVisible, entry]);
@@ -151,11 +152,11 @@ export function FileRow({
 				return dot > 0 ? entry.name.slice(dot + 1).toUpperCase() : "—";
 			}
 			case "date":
-				return entry.dateLabel;
+				return dateLabelOf(entry);
 			case "size":
-				return entry.sizeLabel;
+				return sizeLabelOf(entry);
 			case "kind":
-				return entry.kindLabel;
+				return kindLabelOf(entry);
 			case "relativePath":
 				return dirname(entry.path);
 			case "index":
@@ -228,7 +229,7 @@ export function FileRow({
 				) : (
 					<span className="flex-none w-[13px]" aria-hidden="true" />
 				)}
-				<FileTile kind={entry.fileKind} iconUrl={entry.iconUrl} />
+				<FileTile kind={fileKindOf(entry)} iconUrl={entry.iconUrl} />
 				{renameDraft === null ? (
 					<span
 						className={cn(
@@ -271,7 +272,7 @@ export function FileRow({
 				) : relation !== null ? (
 					<>
 						<VersionTag tone={relation} label={RELATION_LABELS[relation]} />
-						{entry.location !== listPath ? <LocationChip location={entry.location} /> : null}
+						{locationOf(entry) !== listPath ? <LocationChip location={locationOf(entry)} /> : null}
 					</>
 				) : null}
 			</div>

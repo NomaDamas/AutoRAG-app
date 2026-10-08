@@ -76,6 +76,12 @@ function stringArg(args: readonly unknown[], index: number, label: string): stri
 	return value;
 }
 
+function numberArg(args: readonly unknown[], index: number, label: string): number {
+	const value = args[index];
+	if (typeof value !== "number" || !Number.isFinite(value)) throw new TypeError(`${label} must be a finite number`);
+	return value;
+}
+
 function stringsArg(args: readonly unknown[], index: number, label: string): readonly string[] {
 	const value = args[index];
 	if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) throw new TypeError(`${label} must be an array of strings`);
@@ -92,8 +98,9 @@ function isEnrichmentTarget(value: unknown): value is FsEnrichmentTarget {
 		(value.kind === "file" || value.kind === "folder") &&
 		"ext" in value &&
 		typeof value.ext === "string" &&
-		"modifiedAt" in value &&
-		typeof value.modifiedAt === "string"
+		"mtimeMs" in value &&
+		typeof value.mtimeMs === "number" &&
+		Number.isFinite(value.mtimeMs)
 	);
 }
 
@@ -203,7 +210,7 @@ export function createFsWorkerService(deps: FsWorkerServiceDeps): FsWorkerServic
 		finderMetadata: holdWhileTesting("finderMetadata", (args) => fsService.finderMetadata(targetsArg(args))),
 		stat: (args) => fsService.stat(stringArg(args, 0, "path")),
 		details: (args) => fsService.details(stringArg(args, 0, "path")),
-		previewIcon: (args) => fsService.previewIcon(stringArg(args, 0, "path"), stringArg(args, 1, "modifiedAt")),
+		previewIcon: (args) => fsService.previewIcon(stringArg(args, 0, "path"), numberArg(args, 1, "mtimeMs")),
 		exists: (args) => fsService.exists(stringArg(args, 0, "path")),
 		search: (args, signal) => fsService.search(stringArg(args, 0, "query"), searchOptionsArg(args[1]), signal),
 		locations: () => fsService.locations(),
