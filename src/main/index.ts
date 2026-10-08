@@ -294,8 +294,8 @@ app.whenReady().then(async () => {
 			async applicationIcon(applicationPath) {
 				// The provider's listing tier renders the app's own icon (Quick Look
 				// thumbnail) and caches it; `getFileIcon` would return the generic bundle glyph.
-				const modifiedAt = (await stat(applicationPath)).mtime.toISOString();
-				const icons = await iconProvider.icons([{ path: applicationPath, ext: "app", modifiedAt }]);
+				const { mtimeMs } = await stat(applicationPath);
+				const icons = await iconProvider.icons([{ path: applicationPath, ext: "app", mtimeMs }]);
 				return icons.get(applicationPath) ?? null;
 			},
 			share:
