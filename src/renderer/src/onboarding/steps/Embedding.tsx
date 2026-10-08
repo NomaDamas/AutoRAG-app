@@ -97,11 +97,6 @@ export function EmbeddingStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactEl
 						</ul>
 					</div>
 				</div>
-				<div className="action-row">
-					<button type="button" className="primary" onClick={ctx.next}>
-						<Icon name="play" size={13} /> {t("onboarding.embedding.start")}
-					</button>
-				</div>
 			</div>
 		</SplitScreen>
 	);

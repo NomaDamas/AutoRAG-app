@@ -350,15 +350,13 @@
       "restartNeeded": "需要重启",
       "restartNow": "立即重启",
       "openSettings": "打开系统设置",
-      "footnote": "完全磁盘访问权限为必需项。开启前无法进入下一步。没有此权限，将无法读取 Mail、通讯应用归档以及部分外置宗卷。",
-      "whyLink": "为什么需要完全磁盘访问权限？",
+      "footnote": "开启后才能继续。",
       "fda": {
         "name": "完全磁盘访问权限",
-        "desc": "可一次性读取 Desktop · Documents · Downloads、Mail、~/Library 以及外置磁盘。我们不再单独获取每个文件夹的权限，而是统一为这一项。macOS 不允许应用自行开启，需要你在系统设置中手动开启。"
+        "desc": "需要此权限才能正常工作。"
       },
       "notifications": {
         "name": "通知",
-        "desc": "预先只获取通知权限。要发送哪些通知稍后决定。",
         "allow": "允许通知",
         "openWindows": "打开 Windows 设置"
       },
@@ -415,8 +413,7 @@
       "cloudTitle": "在云端",
       "cloudLead": "处理更快，但你选择的文档正文会被发送。",
       "cloudBulletPerf": "对 Mac 性能影响较小",
-      "cloudBulletNoStore": "处理后不保留正文",
-      "start": "开始索引"
+      "cloudBulletNoStore": "处理后不保留正文"
     },
     "sources": {
       "eyebrow": "数据源",
@@ -658,11 +655,6 @@
         "lead": "完全磁盘访问权限需要退出并重新打开应用后才能生效。引导会从当前步骤继续。",
         "action": "退出并重新打开"
       },
-      "why": {
-        "title": "为什么需要完全磁盘访问权限",
-        "lead": "Mail 归档、信息归档、~/Library 和外置宗卷默认受 macOS 保护。由于我们不再逐一获取文件夹权限，而是统一为这一项，引导中只要求此权限。",
-        "ok": "明白了"
-      },
       "pay": {
         "proTitle": "开始 Pro 7 天免费试用",
         "airTitle": "订阅 Air 套餐",
@@ -685,7 +677,8 @@
     "toast": {
       "signedIn": "已登录。",
       "notificationsOn": "已获得通知权限。",
-      "notificationsOff": "无法显示通知。",
+      "notificationsOff": "请在系统设置中允许通知。",
+      "loginFailed": "无法添加到登录项。",
       "networkOk": "已确认网络连接。",
       "networkFail": "无法连接到网络。",
       "fdaPending": "重新打开应用后权限将生效。",

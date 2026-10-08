@@ -151,9 +151,13 @@ after every change, so a relaunch (for example after granting Full Disk Access)
 resumes at the same step.
 
 - **Permissions** probe Full Disk Access for real (macOS) and re-check every two
-  seconds; notifications post a real system notification; launch at login is the
-  same setting as Settings › General and registers the OS login item in
-  packaged builds.
+  seconds. Notifications post a real system notification; if macOS reports the
+  app is not allowed, the step says so and opens the system notification
+  settings (the unsigned dev binary is never allowed, so this only works in a
+  signed build). Launch at login is the same setting as Settings › General and
+  registers the OS login item in packaged builds only (registering the dev
+  binary would add bare "Electron" to Login Items); the switch is read back from
+  the OS and flips off with a message if the OS refused.
 - **Folders** are pre-scanned with the indexer's own rules (supported
   extensions, size cap, skipped dependency/code folders) to show real file
   counts and an ETA.

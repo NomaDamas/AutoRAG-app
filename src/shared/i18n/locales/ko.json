@@ -350,15 +350,13 @@
       "restartNeeded": "다시 시작 필요",
       "restartNow": "지금 다시 시작",
       "openSettings": "시스템 설정 열기",
-      "footnote": "전체 디스크 접근은 필수입니다. 켜기 전에는 다음 단계로 갈 수 없습니다. 이 권한이 없으면 Mail·메신저 보관함과 일부 외장 볼륨을 읽지 못합니다.",
-      "whyLink": "왜 전체 디스크 접근이 필요한가요?",
+      "footnote": "켜야 다음 단계로 갈 수 있습니다.",
       "fda": {
         "name": "전체 디스크 접근",
-        "desc": "Desktop · Documents · Downloads, Mail, ~/Library와 외장 디스크를 모두 읽습니다. 폴더별 권한을 따로 받지 않고 이 하나로 통일합니다. macOS는 앱이 스스로 켤 수 없어 System Settings에서 직접 켜야 합니다."
+        "desc": "제대로 동작하려면 필요합니다."
       },
       "notifications": {
         "name": "알림",
-        "desc": "알림 권한만 미리 받아 둡니다. 어떤 알림을 보낼지는 나중에 정합니다.",
         "allow": "알림 허용",
         "openWindows": "Windows 설정 열기"
       },
@@ -415,8 +413,7 @@
       "cloudTitle": "클라우드에서",
       "cloudLead": "더 빠르게 처리하지만 선택한 문서 본문이 전송됩니다.",
       "cloudBulletPerf": "Mac 성능에 영향이 적음",
-      "cloudBulletNoStore": "처리 후 본문을 보관하지 않음",
-      "start": "인덱싱 시작"
+      "cloudBulletNoStore": "처리 후 본문을 보관하지 않음"
     },
     "sources": {
       "eyebrow": "데이터 소스",
@@ -658,11 +655,6 @@
         "lead": "전체 디스크 접근 권한을 적용하려면 앱을 종료하고 다시 열어야 합니다. 온보딩은 현재 단계에서 이어집니다.",
         "action": "종료 후 다시 열기"
       },
-      "why": {
-        "title": "전체 디스크 접근이 필요한 이유",
-        "lead": "Mail 보관함, 메시지 보관함, ~/Library와 외장 볼륨은 macOS가 기본적으로 보호합니다. 폴더별 권한을 따로 받지 않고 이 권한 하나로 통일했기 때문에, 온보딩에서는 이 항목만 요구합니다.",
-        "ok": "알겠어요"
-      },
       "pay": {
         "proTitle": "Pro 7일 무료 체험 시작",
         "airTitle": "Air 플랜 구독",
@@ -685,7 +677,8 @@
     "toast": {
       "signedIn": "로그인되었습니다.",
       "notificationsOn": "알림 권한을 받았습니다.",
-      "notificationsOff": "알림을 표시할 수 없습니다.",
+      "notificationsOff": "시스템 설정에서 알림을 허용해 주세요.",
+      "loginFailed": "로그인 항목에 등록하지 못했습니다.",
       "networkOk": "네트워크 연결을 확인했습니다.",
       "networkFail": "네트워크에 연결할 수 없습니다.",
       "fdaPending": "앱을 다시 열면 권한이 적용됩니다.",

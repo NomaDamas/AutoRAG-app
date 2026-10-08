@@ -228,7 +228,12 @@ function runCommand(command: string, args: readonly string[], timeoutMs = 5000):
 	return promise;
 }
 
-/** Real system notification; resolves whether the OS displayed it. */
+/**
+ * Real system notification. `failed` is what macOS reports when this app has no
+ * notification permission (UNErrorDomain 1 / "not allowed"), which is always the
+ * case for the unsigned dev Electron binary and for a build the user denied, so it
+ * is the signal to send the user to System Settings.
+ */
 function showSystemNotification(): Promise<boolean> {
 	if (!Notification.isSupported()) return Promise.resolve(false);
 	return new Promise<boolean>((resolve) => {
@@ -383,10 +388,22 @@ app.whenReady().then(async () => {
 	});
 	await credentials.load();
 	const autoRagConfig = createAutoRagConfigService({ env: process.env, cwd: process.cwd() });
+	// Unpackaged, registering would add the bare Electron binary to Login Items
+	// rather than AutoRAG, so only a packaged build touches the OS login item.
 	const applyLoginItem = (enabled: boolean): void => {
-		// Unpackaged, this would register the Electron binary itself, not AutoRAG.
 		if (!app.isPackaged) return;
 		app.setLoginItemSettings({ openAtLogin: enabled });
+	};
+	/**
+	 * Reads the OS back: true when the login item is in the state the stored setting
+	 * claims. `requires-approval` is a registered item the user still has to allow in
+	 * Login Items, so it counts. An unpackaged build has no OS item to manage.
+	 */
+	const loginItemApplied = (enabled: boolean): boolean => {
+		if (!app.isPackaged) return true;
+		const { status, openAtLogin } = app.getLoginItemSettings();
+		const registered = openAtLogin || status === "enabled" || status === "requires-approval";
+		return registered === enabled;
 	};
 	let appliedLaunchAtLogin: boolean | null = null;
 	const settingsService = createSettingsService({
@@ -524,7 +541,7 @@ app.whenReady().then(async () => {
 		},
 		showNotification: showSystemNotification,
 		notificationsSupported: () => Notification.isSupported(),
-		applyLoginItem,
+		loginItemApplied,
 		startPowerSaveBlocker: () => powerSaveBlocker.start("prevent-app-suspension"),
 		stopPowerSaveBlocker: (id) => powerSaveBlocker.stop(id),
 		probeFullDiskAccess: () => probeFullDiskAccess(home),

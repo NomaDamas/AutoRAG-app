@@ -1258,15 +1258,6 @@ html[data-appearance="dark"] .onb .source-icon.brand {
 	background: linear-gradient(145deg,#4aa3ff,#0f6cbd 70%);
 }
 
-.onb .guide-link {
-	margin-top: 10px;
-	color: var(--onb-blue);
-	font-size: 10.5px;
-	background: none;
-	border: 0;
-	padding: 0;
-}
-
 .onb .folder-head {
 	display: flex;
 	align-items: center;

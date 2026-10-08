@@ -94,7 +94,7 @@ export interface OnboardingServiceDeps {
 	readonly pickFolders: () => Promise<readonly string[]>;
 	readonly showNotification: () => Promise<boolean>;
 	readonly notificationsSupported: () => boolean;
-	readonly applyLoginItem: (enabled: boolean) => void;
+	readonly loginItemApplied: (enabled: boolean) => boolean;
 	readonly startPowerSaveBlocker: () => number;
 	readonly stopPowerSaveBlocker: (id: number) => void;
 	readonly probeFullDiskAccess: () => Promise<boolean>;
@@ -482,9 +482,12 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 			deps.openExternal(deps.platform === "win32" ? "ms-settings:notifications" : "x-apple.systempreferences:com.apple.preference.notifications"),
 		checkNetwork: () => deps.checkNetwork(),
 		setLaunchAtLogin: async (enabled) => {
+			// The settings hook applies the OS login item; read it back instead of
+			// trusting that it took, and never leave the setting claiming "on" when the
+			// OS refused.
 			const settings = await deps.settings.set({ launchAtLogin: enabled });
-			deps.applyLoginItem(settings.launchAtLogin);
-			return settings.launchAtLogin;
+			if (deps.loginItemApplied(settings.launchAtLogin)) return settings.launchAtLogin;
+			return (await deps.settings.set({ launchAtLogin: !settings.launchAtLogin })).launchAtLogin;
 		},
 		folderCandidates: async () => {
 			const ocrOff = !(await deps.ocrEnabled());

@@ -46,7 +46,6 @@ function MacPermissions({ ctx }: { readonly ctx: OnboardingCtx }): ReactElement 
 					tone="orange"
 					name={t("onboarding.permissions.notifications.name")}
 					tag={t("onboarding.permissions.optional")}
-					desc={t("onboarding.permissions.notifications.desc")}
 					action={
 						draft.notifications ? (
 							<span className="state ok">✓ {t("onboarding.permissions.granted")}</span>
@@ -77,9 +76,6 @@ function MacPermissions({ ctx }: { readonly ctx: OnboardingCtx }): ReactElement 
 					<span>{t("onboarding.permissions.footnote")}</span>
 				</div>
 			)}
-			<button type="button" className="guide-link" onClick={() => ctx.openOverlay("why")}>
-				{t("onboarding.permissions.whyLink")}
-			</button>
 		</>
 	);
 }
@@ -93,7 +89,6 @@ function WindowsPermissions({ ctx }: { readonly ctx: OnboardingCtx }): ReactElem
 				tone="orange"
 				name={t("onboarding.permissions.notifications.name")}
 				tag={t("onboarding.permissions.optional")}
-				desc={t("onboarding.permissions.notifications.desc")}
 				action={
 					draft.notifications ? (
 						<span className="state ok">✓ {t("onboarding.permissions.granted")}</span>

@@ -121,7 +121,7 @@ interface PermissionRowProps {
 	readonly name: string;
 	readonly tag?: string;
 	readonly tagTone?: string;
-	readonly desc: string;
+	readonly desc?: string;
 	readonly action: ReactNode;
 }
 
@@ -137,7 +137,7 @@ export function PermissionRow({ icon, tone, name, tag, tagTone, desc, action }: 
 					{name}
 					{tag !== undefined ? <span className={cn("tag", tagTone ?? "opt")}>{tag}</span> : null}
 				</div>
-				<div className="permission-desc">{desc}</div>
+				{desc !== undefined ? <div className="permission-desc">{desc}</div> : null}
 			</div>
 			<div className="row-action">{action}</div>
 		</div>

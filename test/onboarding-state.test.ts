@@ -78,7 +78,7 @@ function makeDeps(userDataDir: string, env: NodeJS.ProcessEnv = {}): OnboardingS
 		pickFolders: async () => [],
 		showNotification: async () => true,
 		notificationsSupported: () => true,
-		applyLoginItem: () => undefined,
+		loginItemApplied: () => true,
 		startPowerSaveBlocker: () => 1,
 		stopPowerSaveBlocker: () => undefined,
 		probeFullDiskAccess: async () => false,
@@ -234,5 +234,45 @@ describe("createOnboardingService source detection", () => {
 		const written = JSON.parse(await readFile(join(directory, "config.json"), "utf8")) as { datasources: Record<string, unknown> };
 		expect(Object.keys(written.datasources)).toEqual(["whatsapp"]);
 		expect(written.datasources.whatsapp).not.toHaveProperty("description");
+	});
+});
+
+describe("createOnboardingService launch at login", () => {
+	it("keeps the setting on, with no correction write, when the OS login item took", async () => {
+		const directory = await workDir();
+		const stored: boolean[] = [];
+		const service = createOnboardingService({
+			...makeDeps(directory),
+			settings: {
+				get: async () => DEFAULT_SETTINGS,
+				set: async (patch) => {
+					stored.push(patch.launchAtLogin === true);
+					return { ...DEFAULT_SETTINGS, ...patch };
+				},
+			},
+			loginItemApplied: () => true,
+		});
+
+		expect(await service.setLaunchAtLogin(true)).toBe(true);
+		expect(stored).toEqual([true]);
+	});
+
+	it("does not leave the setting claiming on when the OS refused, and persists the correction", async () => {
+		const directory = await workDir();
+		const stored: boolean[] = [];
+		const service = createOnboardingService({
+			...makeDeps(directory),
+			settings: {
+				get: async () => DEFAULT_SETTINGS,
+				set: async (patch) => {
+					stored.push(patch.launchAtLogin === true);
+					return { ...DEFAULT_SETTINGS, ...patch };
+				},
+			},
+			loginItemApplied: () => false,
+		});
+
+		expect(await service.setLaunchAtLogin(true)).toBe(false);
+		expect(stored).toEqual([true, false]);
 	});
 });

@@ -513,7 +513,14 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 		signOut: () => patch({ account: null }),
 		setLaunchAtLogin: (enabled) => {
 			patch({ launchAtLogin: enabled });
-			void bridge.setLaunchAtLogin(enabled).then((stored) => patch({ launchAtLogin: stored }));
+			void bridge.setLaunchAtLogin(enabled).then((stored) => {
+				patch({ launchAtLogin: stored });
+				// The OS can refuse (or the user can remove the item in Login Items); say so
+				// instead of leaving the switch looking like it took.
+				if (stored !== enabled) {
+					showToast(t("onboarding.toast.loginFailed"));
+				}
+			});
 		},
 		requestNotifications: () => {
 			void bridge.requestNotifications().then((shown) => {
@@ -521,7 +528,10 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 					patch({ notifications: true });
 					showToast(t("onboarding.toast.notificationsOn"));
 				} else {
+					// A refused or never-granted permission can only be fixed in System
+					// Settings, so open it rather than only saying no.
 					showToast(t("onboarding.toast.notificationsOff"));
+					void bridge.openNotificationSettings();
 				}
 			});
 		},
@@ -832,21 +842,6 @@ function renderOverlay(kind: OverlayKind | null, h: OverlayHandlers): ReactEleme
 						</button>
 						<button type="button" className="primary" onClick={() => void h.ctx.relaunch()}>
 							{t("onboarding.overlay.restart.action")}
-						</button>
-					</div>
-				</div>
-			);
-		case "why":
-			return (
-				<div className="modal system-alert">
-					<div className="app-mark" style={{ margin: "0 auto 10px" }}>
-						<Icon name="shield-check" size={28} />
-					</div>
-					<h3>{t("onboarding.overlay.why.title")}</h3>
-					<p>{t("onboarding.overlay.why.lead")}</p>
-					<div className="modal-actions">
-						<button type="button" className="primary" onClick={h.onClose}>
-							{t("onboarding.overlay.why.ok")}
 						</button>
 					</div>
 				</div>

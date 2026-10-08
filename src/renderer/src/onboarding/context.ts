@@ -22,7 +22,7 @@ import type {
 } from "../../../shared/onboarding-contract";
 import type { Translate } from "./flow";
 
-export type OverlayKind = "fda" | "restart" | "why" | "notifications" | "winfw" | "win" | "pay";
+export type OverlayKind = "fda" | "restart" | "notifications" | "winfw" | "win" | "pay";
 
 export interface OnboardingCtx {
 	readonly draft: OnboardingDraft;

@@ -350,15 +350,13 @@
       "restartNeeded": "Restart needed",
       "restartNow": "Restart now",
       "openSettings": "Open System Settings",
-      "footnote": "Full Disk Access is required. You can't go to the next step until you turn it on. Without this permission, Mail and messenger archives and some external volumes can't be read.",
-      "whyLink": "Why is Full Disk Access needed?",
+      "footnote": "Turn it on to continue.",
       "fda": {
         "name": "Full Disk Access",
-        "desc": "Reads Desktop · Documents · Downloads, Mail, ~/Library, and external disks all at once. Instead of per-folder permissions, we consolidated everything into this single one. macOS won't let an app enable it itself, so you must turn it on in System Settings."
+        "desc": "Needed for AutoRAG to work properly."
       },
       "notifications": {
         "name": "Notifications",
-        "desc": "We only request the notification permission up front. Which notifications to send is decided later.",
         "allow": "Allow notifications",
         "openWindows": "Open Windows Settings"
       },
@@ -415,8 +413,7 @@
       "cloudTitle": "In the cloud",
       "cloudLead": "Processes faster, but the contents of the documents you select are sent.",
       "cloudBulletPerf": "Little impact on Mac performance",
-      "cloudBulletNoStore": "Content not stored after processing",
-      "start": "Start indexing"
+      "cloudBulletNoStore": "Content not stored after processing"
     },
     "sources": {
       "eyebrow": "Data sources",
@@ -658,11 +655,6 @@
         "lead": "Full Disk Access takes effect after you quit and reopen the app. Onboarding continues from the current step.",
         "action": "Quit and reopen"
       },
-      "why": {
-        "title": "Why Full Disk Access is needed",
-        "lead": "Mail archives, message archives, ~/Library, and external volumes are protected by macOS by default. Because we consolidated per-folder permissions into this single one, onboarding only asks for this item.",
-        "ok": "Got it"
-      },
       "pay": {
         "proTitle": "Start Pro 7-day free trial",
         "airTitle": "Subscribe to the Air plan",
@@ -685,7 +677,8 @@
     "toast": {
       "signedIn": "Signed in.",
       "notificationsOn": "Notification permission granted.",
-      "notificationsOff": "Notifications can't be shown.",
+      "notificationsOff": "Allow notifications in System Settings.",
+      "loginFailed": "Couldn't add AutoRAG to login items.",
       "networkOk": "Network connection verified.",
       "networkFail": "Can't connect to the network.",
       "fdaPending": "The permission applies once you reopen the app.",
