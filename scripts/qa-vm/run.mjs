@@ -12,10 +12,9 @@
  * except when the pool is full: that is announced, then it runs.
  */
 
-import { spawn } from "node:child_process";
-import { execFileSync } from "node:child_process";
-import { mkdirSync } from "node:fs";
-import { join } from "node:path";
+import { execFileSync, spawn } from "node:child_process";
+import { existsSync, mkdirSync } from "node:fs";
+import { join, resolve, sep } from "node:path";
 import { GOLDEN, GUEST_REPO, MAX_VMS, RUNS_DIR, RUN_PREFIX, SLOTS_DIR, VM_CPU, VM_DISPLAY, VM_MEMORY_MB } from "./config.mjs";
 import { GUEST_ENV, pullTree, pushTree, shellQuote, sshRun, waitForReady, waitForSsh } from "./guest.mjs";
 import { orphanVmNames, runVmName, vmCapacity } from "./plan.mjs";
@@ -83,16 +82,27 @@ function assertBuildFresh(root) {
 	if (stale !== "") throw new Error(`out/ is older than ${stale}; run \`bun run build\` (or drop --skip-build)`);
 }
 
-/** Run the sweep on this machine. */
-export function runOnHost({ root, lanes }) {
+/** Run a job on this machine: the sweep, or one agent-written script with `QA_OUT` as its artifact directory. */
+export function runOnHost({ root, job, artifactDir }) {
+	const { command, args } = hostCommand(job);
+	mkdirSync(artifactDir, { recursive: true });
 	return new Promise((resolve) => {
-		const child = spawn("bun", [join("scripts", "manual-qa", "run-all.mjs"), ...lanes], { cwd: root, stdio: "inherit" });
+		const child = spawn(command, args, { cwd: root, stdio: "inherit", env: { ...process.env, QA_OUT: artifactDir } });
 		child.once("close", (code) => resolve(code ?? 1));
 	});
 }
 
-/** Run the sweep in a fresh VM. Resolves with the sweep's exit code. */
-export async function runInVm({ root, lanes, slot, vmName, runDir }) {
+const hostCommand = (job) =>
+	job.kind === "script"
+		? { command: "bun", args: [job.file, ...job.args] }
+		: { command: "bun", args: [join("scripts", "manual-qa", "run-all.mjs"), ...job.lanes] };
+
+/**
+ * Run a job in a fresh VM. Resolves with its exit code. The sweep's evidence
+ * lives under `.omo/evidence`; a script's artifacts land in `QA_OUT` (`~/qa-out`
+ * in the guest), and either way they are pulled to `<runDir>/evidence`.
+ */
+export async function runInVm({ root, job, slot, vmName, runDir }) {
 	const abort = new AbortController();
 	const onSignal = (signal) => abort.abort(new Error(`interrupted by ${signal}`));
 	process.once("SIGINT", onSignal);
@@ -114,20 +124,24 @@ export async function runInVm({ root, lanes, slot, vmName, runDir }) {
 		await pushTree(ip, root, GUEST_REPO, { excludes: [".upstream", ".omo/evidence", ".autorag", ".DS_Store"] });
 		await waitForReady(ip, log);
 
-		const laneArgs = lanes.map(shellQuote).join(" ");
-		log(`running lanes${lanes.length > 0 ? `: ${lanes.join(", ")}` : " (all)"}`);
-		const sweep = await sshRun(ip, `${GUEST_ENV}; cd ${GUEST_REPO} && bun scripts/manual-qa/run-all.mjs ${laneArgs}`, {
+		log(job.kind === "script" ? `running ${job.file}` : `running lanes${job.lanes.length > 0 ? `: ${job.lanes.join(", ")}` : " (all)"}`);
+		const command =
+			job.kind === "script"
+				? `mkdir -p "$HOME/qa-out" && cd ${GUEST_REPO} && QA_OUT="$HOME/qa-out" bun ${[job.file, ...job.args].map(shellQuote).join(" ")}`
+				: `cd ${GUEST_REPO} && bun scripts/manual-qa/run-all.mjs ${job.lanes.map(shellQuote).join(" ")}`;
+		const result = await sshRun(ip, `${GUEST_ENV}; ${command}`, {
 			onData: (text) => process.stdout.write(text),
 			signal: abort.signal,
 		});
 		interrupted();
-		if (sweep.code === 255) throw new Error("lost the ssh connection to the VM mid-run");
+		if (result.code === 255) throw new Error("lost the ssh connection to the VM mid-run");
 
 		const evidence = join(runDir, "evidence");
 		mkdirSync(evidence, { recursive: true });
-		await pullTree(ip, `${GUEST_REPO}/.omo/evidence`, evidence).catch((error) => log(`could not pull evidence: ${error.message}`));
-		log(`evidence: ${evidence}`);
-		return sweep.code ?? 1;
+		const remote = job.kind === "script" ? "qa-out" : `${GUEST_REPO}/.omo/evidence`;
+		await pullTree(ip, remote, evidence).catch((error) => log(`could not pull artifacts: ${error.message}`));
+		log(`artifacts: ${evidence}`);
+		return result.code ?? 1;
 	} finally {
 		process.off("SIGINT", onSignal);
 		process.off("SIGTERM", onSignal);
@@ -137,14 +151,23 @@ export async function runInVm({ root, lanes, slot, vmName, runDir }) {
 }
 
 /**
- * Decide the path and run. Exit codes: the sweep's own on success/failure, 2
- * when `--vm` was demanded and cannot be served.
+ * Decide the path and run. Exit codes: the job's own, or 2 when `--vm` was
+ * demanded and cannot be served.
  */
 export async function run({ root, options }) {
+	const job =
+		options.command === "script"
+			? { kind: "script", file: options.script, args: options.scriptArgs }
+			: { kind: "sweep", lanes: options.lanes };
+	if (job.kind === "script") assertScriptExists(root, job.file);
 	const reason = options.mode === "host" ? "--host" : vmUnavailableReason();
 	const branch = git(root, "rev-parse", "--abbrev-ref", "HEAD");
 	if (!options.skipBuild) buildApp(root);
 	else assertBuildFresh(root);
+
+	const vmName = runVmName({ prefix: RUN_PREFIX, branch, suffix: `${Date.now().toString(36)}-${process.pid}` });
+	const runDir = join(RUNS_DIR, vmName);
+	const onHost = () => runOnHost({ root, job, artifactDir: join(runDir, "evidence") });
 
 	if (reason !== null) {
 		if (options.mode === "vm") {
@@ -152,10 +175,9 @@ export async function run({ root, options }) {
 			return 2;
 		}
 		log(reason === "--host" ? "running on this machine (--host); a window will take focus" : `running on this machine: ${reason}`);
-		return runOnHost({ root, lanes: options.lanes });
+		return onHost();
 	}
 
-	const vmName = runVmName({ prefix: RUN_PREFIX, branch, suffix: `${Date.now().toString(36)}-${process.pid}` });
 	const handle = openPool();
 	const { pool } = handle;
 	const slot = await takeSlot(handle, vmName);
@@ -169,11 +191,17 @@ export async function run({ root, options }) {
 			return 2;
 		}
 		log(`all ${MAX_VMS} VM slots are busy (${holders}); running on this machine instead. A window will take focus; avoid the keyboard and mouse until it finishes, or retry later for a VM.`);
-		return runOnHost({ root, lanes: options.lanes });
+		return onHost();
 	}
 
-	const runDir = join(RUNS_DIR, vmName);
-	return runInVm({ root, lanes: options.lanes, slot, vmName, runDir });
+	return runInVm({ root, job, slot, vmName, runDir });
+}
+
+/** A script path must exist and sit inside the checkout, since only the checkout is synced to the VM. */
+function assertScriptExists(root, file) {
+	const absolute = resolve(root, file);
+	if (!absolute.startsWith(`${root}${sep}`)) throw new Error(`${file} is outside the checkout; the VM only receives the checkout`);
+	if (!existsSync(absolute)) throw new Error(`${file} does not exist`);
 }
 
 /** Print the golden image, the VMs, and who holds each slot. */

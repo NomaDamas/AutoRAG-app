@@ -150,6 +150,53 @@ whose it is. Evidence is pulled to `~/.autorag-qa/runs/<vm-name>/evidence/`
 a run, including after a failed lane, Ctrl-C, or `SIGTERM` (the sweep is
 aborted at once and the evidence of lanes already finished is not pulled).
 
+### Manual QA by an agent (Playwright scripts)
+
+When asked to manually QA the app, drive the real built app with a Playwright
+script and run it through the runner, not with `node`/`bun` directly:
+
+```sh
+bun run qa script tmp-qa.mjs                       # VM if a slot is free, else this machine
+bun run qa script --vm --skip-build tmp-qa.mjs     # VM only; exit 2 if no slot (never takes focus)
+bun run qa script tmp-qa.mjs --my-flag value       # everything after the file goes to the script
+```
+
+The runner builds, takes a slot, boots a fresh VM, syncs the checkout, runs the
+script there with `bun`, pulls the artifacts back, and destroys the VM. The
+script is plain ESM that uses the helpers lanes already use
+(`scripts/manual-qa/launch-finder.mjs`: `launchFinder`, `finderWindow`;
+`platform.mjs`: `chord`). It writes screenshots and notes to `process.env.QA_OUT`
+and prints its findings to stdout; both come back under
+`~/.autorag-qa/runs/<vm-name>/evidence/` (the same directory on the host path).
+
+- **Look at the screenshots.** A passing script proves nothing about what the
+  UI shows. Read the PNGs (copy them into the working tree first if your file
+  reader cannot open `~/.autorag-qa`), and report what you saw, not what the
+  script asserted.
+- Use real Playwright input (`click`, `keyboard.press`, `type`), not DOM calls
+  or evaluated JS, wherever a user would use the mouse or keyboard.
+- The script must live inside the checkout (only the checkout is synced). Use a
+  throwaway name such as `tmp-qa.mjs`, and delete it before committing.
+- Each run starts from a fresh VM, so there is no state to clean up and no
+  state to carry over: a script that needs fixtures creates them itself, in the
+  guest's home. For several independent scenarios, run several scripts at once
+  (two VMs at most; extra runs take the host path unless `--vm` is given).
+- Expect roughly 70-95 seconds of fixed cost per run (clone, boot, sync,
+  teardown) on top of the script; measured 68-93 s wall for a script that
+  itself takes a few seconds.
+- On the host path (`--host`, or when the slots are full and `--vm` was not
+  given) the script drives the real desktop: its window takes focus and the
+  fixtures it creates land in the developer's real home. Prefer `--vm`; when you
+  must use the host path, point the script at a temporary home and user-data
+  directory (`launchFinder({ userDataDir, env: { HOME: tmp } })`).
+
+Measured on the developer's Mac (an otherwise busy machine whose other
+checkouts were running their own lanes): during one `--vm` script run the
+frontmost application stayed the same in all 29 samples taken every 2 s, the
+pointer never moved, and no new Electron process appeared on the host. In a
+control window of the same length without a VM run, other checkouts' Electron
+lanes took the frontmost application in 27 of 43 samples.
+
 ### One-time setup
 
 Prerequisites on the host: Apple Silicon Mac, [`tart`](https://tart.run)

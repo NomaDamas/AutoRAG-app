@@ -4,17 +4,27 @@
  * rules that choose between the VM path and the host path are unit-testable.
  */
 
-const COMMANDS = new Set(["setup", "status", "gc"]);
+const COMMANDS = new Set(["setup", "status", "gc", "script"]);
 
 /**
+ * `qa script <file> [args...]` runs one agent-written script; everything after
+ * the file belongs to that script, so its own flags are never read as qa options.
+ * Options for qa itself (`--vm`, `--host`, `--skip-build`) go before the file.
+ *
  * @param {string[]} argv Arguments after the script name.
- * @returns {{ command: "run" | "setup" | "status" | "gc", mode: "auto" | "vm" | "host", skipBuild: boolean, rebuild: boolean, lanes: string[] }}
+ * @returns {{ command: "run" | "setup" | "status" | "gc" | "script", mode: "auto" | "vm" | "host", skipBuild: boolean, rebuild: boolean, lanes: string[], script: string | null, scriptArgs: string[] }}
  */
 export function parseArgs(argv) {
 	const rest = [...argv];
-	const options = { command: "run", mode: "auto", skipBuild: false, rebuild: false, lanes: [] };
+	const options = { command: "run", mode: "auto", skipBuild: false, rebuild: false, lanes: [], script: null, scriptArgs: [] };
 	if (rest[0] !== undefined && COMMANDS.has(rest[0])) options.command = rest.shift();
-	for (const arg of rest) {
+	while (rest.length > 0) {
+		const arg = rest.shift();
+		if (options.command === "script" && !arg.startsWith("--")) {
+			options.script = arg;
+			options.scriptArgs = rest.splice(0);
+			break;
+		}
 		if (arg === "--vm" || arg === "--host") {
 			const mode = arg.slice(2);
 			if (options.mode !== "auto" && options.mode !== mode) throw new Error("--vm and --host are mutually exclusive");
@@ -24,6 +34,7 @@ export function parseArgs(argv) {
 		else if (arg.startsWith("--")) throw new Error(`unknown option ${arg}`);
 		else options.lanes.push(arg);
 	}
+	if (options.command === "script" && options.script === null) throw new Error("usage: qa script [--vm|--host] [--skip-build] <file> [script args...]");
 	return options;
 }
 

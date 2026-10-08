@@ -18,6 +18,18 @@ describe("qa-vm argument parsing", () => {
 		expect(() => parseArgs(["--vm", "--host"])).toThrow(/mutually exclusive/);
 		expect(() => parseArgs(["--turbo"])).toThrow(/unknown option/);
 	});
+
+	it("hands everything after a script file to the script, even words that look like qa options", () => {
+		const options = parseArgs(["script", "--vm", "--skip-build", "tmp/check.mjs", "--host", "--vm", "kind", "--", "x"]);
+		expect(options).toMatchObject({ command: "script", mode: "vm", skipBuild: true, script: "tmp/check.mjs", scriptArgs: ["--host", "--vm", "kind", "--", "x"] });
+		expect(options.lanes).toEqual([]);
+	});
+
+	it("needs a script file, and still rejects unknown qa options placed before it", () => {
+		expect(() => parseArgs(["script"])).toThrow(/usage: qa script/);
+		expect(() => parseArgs(["script", "--vm"])).toThrow(/usage: qa script/);
+		expect(() => parseArgs(["script", "--turbo", "x.mjs"])).toThrow(/unknown option/);
+	});
 });
 
 describe("qa-vm VM naming", () => {

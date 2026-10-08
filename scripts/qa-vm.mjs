@@ -24,7 +24,9 @@ applyConfig();
 
 let options;
 try {
-	options = parseArgs(process.argv.slice(2).filter((arg) => arg !== "--"));
+	// `bun run qa -- --vm` hands us a leading `--`; a later one belongs to a script's own arguments.
+	const argv = process.argv.slice(2);
+	options = parseArgs(argv[0] === "--" ? argv.slice(1) : argv);
 } catch (error) {
 	process.stderr.write(`[qa:vm] ${error.message}\n`);
 	process.exit(64);
@@ -46,6 +48,7 @@ switch (options.command) {
 		await gc();
 		break;
 	}
+	case "script":
 	default: {
 		const { run } = await import("./qa-vm/run.mjs");
 		try {
