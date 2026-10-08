@@ -207,10 +207,17 @@ async function checkNetworkReachability(): Promise<NetworkCheck> {
 	}
 }
 
-/** Runs one OS command with a 5s deadline; rejects with stderr (or the spawn error). */
-function runCommand(command: string, args: readonly string[]): Promise<string> {
+/**
+ * Source probes log in to IMAP (himalaya) and walk app containers (telecrawl); run
+ * together they were measured at 1-6s, so the default 5s deadline silently dropped
+ * signed-in accounts. A hung probe still costs at most this long.
+ */
+const SOURCE_PROBE_TIMEOUT_MS = 15_000;
+
+/** Runs one OS command with a deadline (5s by default); rejects with stderr (or the spawn error). */
+function runCommand(command: string, args: readonly string[], timeoutMs = 5000): Promise<string> {
 	const { promise, resolve, reject } = Promise.withResolvers<string>();
-	execFile(command, [...args], { timeout: 5000, windowsHide: true }, (error, stdout, stderr) => {
+	execFile(command, [...args], { timeout: timeoutMs, windowsHide: true }, (error, stdout, stderr) => {
 		if (error !== null) {
 			const detail = stderr.trim();
 			reject(new Error(detail.length > 0 ? detail : error.message));
@@ -464,7 +471,7 @@ app.whenReady().then(async () => {
 				platform: process.platform,
 				home,
 				env: process.env,
-				run: runCommand,
+				run: (command, args) => runCommand(command, args, SOURCE_PROBE_TIMEOUT_MS),
 				pathExists,
 				readDirNames: (path) => readdir(path).catch(() => [] as string[]),
 				readFileText: (path) => readFile(path, "utf8"),

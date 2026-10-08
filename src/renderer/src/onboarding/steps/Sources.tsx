@@ -1,15 +1,13 @@
 /** Step 6 — detected connectors, with metadata-drafted descriptions. */
 
 import type { ReactElement } from "react";
-import { cn } from "../../lib/cn";
 import { Icon } from "../marks";
 import { BrandChip, Eyebrow, Multiline, SourceIcon, SplitScreen, Switch } from "../parts";
 import { EXTRA_BRANDS, sourceDetail } from "../flow";
 import type { OnboardingCtx } from "../context";
 
 export function SourcesStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElement {
-	const { t, sources, draft, permissions } = ctx;
-	const fda = permissions?.fullDiskAccess === true;
+	const { t, sources, draft } = ctx;
 
 	return (
 		<SplitScreen
@@ -31,18 +29,14 @@ export function SourcesStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElem
 				{sources.map((source) => {
 					const choice = draft.sources.find((s) => s.id === source.id);
 					const on = choice?.on === true;
-					const needsPermission = source.id === "mail" && !fda;
 					return (
 						<div key={source.id} className="source-row" data-source-id={source.id}>
 							<SourceIcon id={source.id} />
 							<div className="source-main">
 								<div className="source-name">
-									{t(`onboarding.sources.name.${source.id}`)}{" "}
-									<span className={cn("tag", needsPermission && "req")}>
-										{needsPermission ? t("onboarding.sources.needsPermission") : t("onboarding.sources.detected")}
-									</span>
+									{t(`onboarding.sources.name.${source.id}`)} <span className="tag">{t("onboarding.sources.detected")}</span>
 								</div>
-								<div className="source-detail">{sourceDetail(source.id, source.facts, source.needsFullDiskAccess, t)}</div>
+								<div className="source-detail">{sourceDetail(source.id, source.facts, t)}</div>
 								{on ? (
 									<div className="source-description">
 										<textarea
@@ -60,7 +54,6 @@ export function SourcesStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElem
 							</div>
 							<Switch
 								on={on}
-								disabled={needsPermission}
 								label={t(`onboarding.sources.name.${source.id}`)}
 								onClick={() => ctx.setSourceOn(source.id, !on)}
 							/>

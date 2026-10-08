@@ -159,10 +159,20 @@ resumes at the same step.
   counts and an ETA.
 - **Embedding** is local (`qwen3-embedding-0.6b`); cloud embedding is shown but
   unavailable, since corpus text is never sent to remote embedders.
-- **Data sources** list only usable connectors (Spotlight, GitHub, Obsidian,
-  Apple Mail, Slack), each with a drafted description. GitHub requires
-  authentication and at least one discovered repository; empty or failed repo
-  discovery does not offer a source that would fail its first sync.
+- **Data sources** list only usable connectors, each with a drafted description,
+  and every one starts off. Local files are covered by the folders step, so
+  Spotlight and Apple Mail are not offered. Each row appears only when the
+  connector's own health probe says its data is reachable: KakaoTalk
+  (`lazykatok doctor --macos-probe`: app, container, cached login, readable
+  database files), Slack (`slacrawl`, at least one workspace), Discord
+  (`discrawl` ready database plus a dry-run `wiretap` that finds messages),
+  Telegram (`telecrawl doctor`), WhatsApp (`wacrawl doctor`, read-only, with
+  messages), mail (`mailcrawl` installed and a `himalaya` account whose login
+  succeeds), GitHub, and Obsidian. Mail writes one `mailcrawl-<account>` archive
+  per verified account under `~/.mailcrawl/<account>`; accounts that cannot log
+  in are skipped. GitHub requires authentication and at least one discovered
+  repository; empty or failed repo discovery does not offer a source that would
+  fail its first sync.
 - **Model** (BYOK) verifies the provider key against the provider's API and
   stores it in the encrypted credential store, never in `config.json`.
 - **Indexing** writes `searchPaths`, the embedder (only when none is set), the
@@ -198,8 +208,9 @@ Scope of that isolation: the sandbox holds AutoRAG's own state (userData,
 config, home, workspace, index). External datasource crawlers are CLIs with
 their own stores in the real home, and the librarian passes `HOME` through to
 them, so enabling a source in onboarding syncs the real store — `slacrawl` reads
-and writes `~/.slacrawl` (Slack's local mirror), Spotlight queries the machine's
-index, Obsidian reads the real vaults. Detection and the first sync are real by
+and writes `~/.slacrawl` (Slack's local mirror), the other messenger crawlers
+import into their own stores the same way, and Obsidian reads the real vaults.
+Detection and the first sync are real by
 design; they never touch other apps' data beyond their own store.
 
 ## Live filesystem sync

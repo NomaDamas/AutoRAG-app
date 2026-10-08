@@ -424,30 +424,59 @@
       "lead": "只先显示已安装并通过认证的数据源。无需全部选择。",
       "note": "无需自己撰写说明。开启后会根据元数据生成草稿。",
       "detected": "已检测",
-      "needsPermission": "需要权限",
       "draftNote": "基于元数据的草稿 · 不使用正文",
       "rewrite": "重写",
       "connectMore": "需要准备的数据源可稍后在设置中连接。",
       "name": {
-        "spotlight": "Spotlight",
+        "kakao": "KakaoTalk",
+        "slack": "Slack",
+        "discord": "Discord",
+        "telegram": "Telegram",
+        "whatsapp": "WhatsApp",
+        "mailcrawl": "邮件 (mailcrawl)",
         "github": "GitHub",
-        "obsidian": "Obsidian",
-        "mail": "Apple Mail",
-        "slack": "Slack"
+        "obsidian": "Obsidian"
       },
       "detail": {
-        "spotlight": "macOS 内置 · 文件名与元数据",
+        "kakao": "lazykatok · 检测到 KakaoTalk 应用数据",
+        "slack": "已安装 slacrawl · {{workspaces}} 个工作区",
+        "discord": "discrawl · 检测到 Discord 应用消息 {{messages}} 条",
+        "telegram": "telecrawl · 检测到 Telegram 应用数据",
+        "whatsapp": "wacrawl · 对话 {{chats}} 个 · 消息 {{messages}} 条",
+        "mailcrawl": "已确认登录 himalaya 账户 {{accounts}} 个",
         "github": "已登录 gh · Issues 与 Pull Requests",
-        "obsidian": "发现 {{vaults}} 个 Vault · qmd 可用",
-        "mail": "Apple Mail 归档 · emlx 邮件",
-        "mailNeedsFda": "需要完全磁盘访问权限",
-        "slack": "已安装 slacrawl · {{workspaces}} 个工作区"
+        "obsidian": "发现 {{vaults}} 个 Vault · qmd 可用"
       },
       "desc": {
-        "spotlight": {
-          "0": "用于在这台 Mac 上快速查找文件名和基本元数据。",
-          "1": "即使不记得保存位置，也能快速找到最近更改过的文件。",
-          "2": "无需打开应用，即可在系统范围搜索文档。"
+        "kakao": {
+          "0": "用于在 KakaoTalk 对话中查找约定、决定和分享的链接。",
+          "1": "用于在 KakaoTalk 聊天记录中查找谁说了什么。",
+          "2": "用于查找熟人和群聊中往来的地点与日程话题。"
+        },
+        "slack": {
+          "0": "用于查找包含团队项目讨论和发布决策的对话。",
+          "1": "用于从 {{workspaces}} 个工作区的频道对话中查找决策背景。",
+          "2": "用于查找发生产品讨论和公告的 Slack 话题串。"
+        },
+        "discord": {
+          "0": "用于查找 Discord 服务器和私信中往来的讨论与决定。",
+          "1": "用于查找社区频道中分享的公告和链接。",
+          "2": "用于在 Discord 对话中查找谁说了什么。"
+        },
+        "telegram": {
+          "0": "用于查找 Telegram 聊天和群组中往来的对话。",
+          "1": "用于重新查找 Telegram 上分享的链接和公告。",
+          "2": "用于在 Telegram 对话中查找决定和日程。"
+        },
+        "whatsapp": {
+          "0": "用于查找 {{chats}} 个 WhatsApp 对话中往来的内容。",
+          "1": "用于查找 WhatsApp 群组中分享的日程和公告。",
+          "2": "用于在 WhatsApp 消息中查找谁说了什么。"
+        },
+        "mailcrawl": {
+          "0": "用于查找合同、收据和工作邮件。",
+          "1": "用于查找 {{firstAccount}} 等已连接邮件账户的往来邮件和附件背景。",
+          "2": "用于查找以往往来的批准与约定内容。"
         },
         "github": {
           "0": "用于查找 {{firstRepo}} 等项目的 Issue、PR 和实现讨论。",
@@ -458,16 +487,6 @@
           "0": "用于查找含有个人笔记、会议记录和想法的 Obsidian vault。",
           "1": "用于从 {{vaults}} 个 vault 的笔记中查找决策和草稿。",
           "2": "用于从已连接的 Obsidian 笔记中查找过往会议和想法。"
-        },
-        "mail": {
-          "0": "用于查找合同、收据和工作邮件。",
-          "1": "用于查找项目往来邮件和附件的背景。",
-          "2": "用于查找以往往来的批准与约定内容。"
-        },
-        "slack": {
-          "0": "用于查找包含团队项目讨论和发布决策的对话。",
-          "1": "用于从 {{workspaces}} 个工作区的频道对话中查找决策背景。",
-          "2": "用于查找发生产品讨论和公告的 Slack 话题串。"
         }
       }
     },

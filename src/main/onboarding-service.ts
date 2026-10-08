@@ -47,11 +47,14 @@ const EMBEDDER_MODEL_BYTES = 639_150_592;
 const EMBEDDER_MODEL_FILE = "Qwen3-Embedding-0.6B-Q8_0.gguf";
 const POLL_INTERVAL_MS = 1000;
 const SOURCE_LABELS: Readonly<Record<SourceId, string>> = {
-	spotlight: "Spotlight",
+	kakao: "KakaoTalk",
+	slack: "Slack",
+	discord: "Discord",
+	telegram: "Telegram",
+	whatsapp: "WhatsApp",
+	mailcrawl: "Mail",
 	github: "GitHub",
 	obsidian: "Obsidian",
-	mail: "Mail",
-	slack: "Slack",
 };
 
 export interface OnboardingServiceDeps {
@@ -163,11 +166,14 @@ const BYOK_PROVIDERS: Readonly<Record<string, true>> = {
 	"openai-compatible": true,
 };
 const SOURCE_IDS: Readonly<Record<string, true>> = {
-	spotlight: true,
+	kakao: true,
+	slack: true,
+	discord: true,
+	telegram: true,
+	whatsapp: true,
+	mailcrawl: true,
 	github: true,
 	obsidian: true,
-	mail: true,
-	slack: true,
 };
 const ACCOUNT_METHODS: Readonly<Record<string, true>> = { apple: true, google: true, email: true };
 
@@ -559,7 +565,7 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 				raw,
 				folders: request.folders,
 				datasources,
-				mailDir: join(deps.home, "Library", "Mail"),
+				home: deps.home,
 				embedder: configured ? null : { profile: EMBEDDER_PROFILE, dimension: EMBEDDER_DIMENSION },
 				// The app seeds `workspacePath = cwd` (the repo in dev, `/` when packaged);
 				// the first index belongs in the AutoRAG home instead. A workspace the

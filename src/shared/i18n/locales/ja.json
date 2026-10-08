@@ -424,30 +424,59 @@
       "lead": "すでにインストールされ認証済みのソースだけを先に表示します。すべてを選択する必要はありません。",
       "note": "説明を自分で書く必要はありません。オンにするとメタデータから下書きを作成します。",
       "detected": "検出済み",
-      "needsPermission": "権限が必要",
       "draftNote": "メタデータによる下書き · 本文は未使用",
       "rewrite": "書き直す",
       "connectMore": "準備が必要なソースは後で設定から接続できます。",
       "name": {
-        "spotlight": "Spotlight",
+        "kakao": "KakaoTalk",
+        "slack": "Slack",
+        "discord": "Discord",
+        "telegram": "Telegram",
+        "whatsapp": "WhatsApp",
+        "mailcrawl": "メール (mailcrawl)",
         "github": "GitHub",
-        "obsidian": "Obsidian",
-        "mail": "Apple Mail",
-        "slack": "Slack"
+        "obsidian": "Obsidian"
       },
       "detail": {
-        "spotlight": "macOS標準 · ファイル名とメタデータ",
+        "kakao": "lazykatok · KakaoTalkアプリのデータを検出",
+        "slack": "slacrawlインストール済み · workspace {{workspaces}}件",
+        "discord": "discrawl · Discordアプリのメッセージ {{messages}}件を検出",
+        "telegram": "telecrawl · Telegramアプリのデータを検出",
+        "whatsapp": "wacrawl · 会話 {{chats}}件 · メッセージ {{messages}}件",
+        "mailcrawl": "himalayaアカウント {{accounts}}件のログインを確認",
         "github": "ghにログイン済み · IssuesとPull Requests",
-        "obsidian": "Vault {{vaults}}件を検出 · qmdが利用可能",
-        "mail": "Apple Mailアーカイブ · emlxメッセージ",
-        "mailNeedsFda": "フルディスクアクセス権限が必要",
-        "slack": "slacrawlインストール済み · workspace {{workspaces}}件"
+        "obsidian": "Vault {{vaults}}件を検出 · qmdが利用可能"
       },
       "desc": {
-        "spotlight": {
-          "0": "このMacでファイル名と基本メタデータをすばやく探すときに使います。",
-          "1": "保存場所を覚えていなくても、最近変更したファイルをすばやく探すときに使います。",
-          "2": "アプリを開かずに、システム全体から文書を検索するときに使います。"
+        "kakao": {
+          "0": "KakaoTalkの会話から約束や決定、共有されたリンクを探すときに使います。",
+          "1": "KakaoTalkのチャット履歴で誰が何を言ったかを探すときに使います。",
+          "2": "知人やグループチャットで交わされた場所や日程の話を探すときに使います。"
+        },
+        "slack": {
+          "0": "チームのプロジェクト議論やリリース決定が含まれる会話を探すときに使います。",
+          "1": "{{workspaces}}個のworkspaceのチャンネル会話から決定の文脈を探すときに使います。",
+          "2": "製品の議論やお知らせが交わされたSlackスレッドを探すときに使います。"
+        },
+        "discord": {
+          "0": "DiscordのサーバーやDMで交わされた議論と決定を探すときに使います。",
+          "1": "コミュニティチャンネルで共有された案内とリンクを探すときに使います。",
+          "2": "Discordの会話で誰が何を言ったかを探すときに使います。"
+        },
+        "telegram": {
+          "0": "Telegramのチャットやグループで交わされた会話を探すときに使います。",
+          "1": "Telegramで共有されたリンクや案内をもう一度探すときに使います。",
+          "2": "Telegramの会話から決定と日程を探すときに使います。"
+        },
+        "whatsapp": {
+          "0": "WhatsAppの会話 {{chats}}件で交わされたやり取りを探すときに使います。",
+          "1": "WhatsAppグループで共有された日程や案内を探すときに使います。",
+          "2": "WhatsAppのメッセージで誰が何を言ったかを探すときに使います。"
+        },
+        "mailcrawl": {
+          "0": "契約書、領収書、業務メールを探すときに使います。",
+          "1": "{{firstAccount}} など接続されたメールアカウントのやり取りや添付ファイルの文脈を探すときに使います。",
+          "2": "過去に交わした承認と合意の内容を探すときに使います。"
         },
         "github": {
           "0": "{{firstRepo}}リポジトリをはじめ、プロジェクトのIssueやPR、実装の議論を探すときに使います。",
@@ -458,16 +487,6 @@
           "0": "個人のノートや会議の記録、アイデアがあるObsidian vaultを探すときに使います。",
           "1": "{{vaults}}個のvaultのメモから決定と下書きを探すときに使います。",
           "2": "接続されたObsidianノートから過去の会議とアイデアを探すときに使います。"
-        },
-        "mail": {
-          "0": "契約書、領収書、業務メールを探すときに使います。",
-          "1": "プロジェクト関連のやり取りや添付ファイルの文脈を探すときに使います。",
-          "2": "過去に交わした承認と合意の内容を探すときに使います。"
-        },
-        "slack": {
-          "0": "チームのプロジェクト議論やリリース決定が含まれる会話を探すときに使います。",
-          "1": "{{workspaces}}個のworkspaceのチャンネル会話から決定の文脈を探すときに使います。",
-          "2": "製品の議論やお知らせが交わされたSlackスレッドを探すときに使います。"
         }
       }
     },

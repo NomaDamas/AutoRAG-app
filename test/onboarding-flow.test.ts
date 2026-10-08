@@ -8,7 +8,7 @@ import {
 	phaseIndex,
 	primaryLabelKey,
 	scanTotals,
-	sourceTag,
+	sourceDetail,
 	type Translate,
 } from "../src/renderer/src/onboarding/flow";
 import type { FolderScan, SourceFacts } from "../src/shared/onboarding-contract";
@@ -142,13 +142,10 @@ describe("source description drafting", () => {
 		expect(draftDescription("slack", {}, -1, stubTranslate)).toContain("onboarding.sources.desc.slack.2");
 	});
 
-	it("maps connectors to their default access tag", () => {
-		expect(sourceTag("spotlight")).toBe("spotlight");
-		expect(sourceTag("github")).toBe("github");
-		expect(sourceTag("obsidian")).toBe("obsidian");
-		expect(sourceTag("slack")).toBe("slack");
-		// Apple Mail indexes through Spotlight, so it inherits that tag.
-		expect(sourceTag("mail")).toBe("mail");
+	it("interpolates detected facts into the connector's detail line", () => {
+		expect(sourceDetail("whatsapp", { chats: 24, messages: 16591 }, stubTranslate)).toContain('"chats":24');
+		expect(sourceDetail("mailcrawl", { accounts: ["gmail", "khu"] }, stubTranslate)).toContain('"accounts":2');
+		expect(sourceDetail("kakao", {}, stubTranslate)).toContain("onboarding.sources.detail.kakao");
 	});
 });
 

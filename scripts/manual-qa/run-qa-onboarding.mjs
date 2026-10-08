@@ -130,10 +130,10 @@ try {
 	await shot("05-embedding");
 	await primary.click();
 
-	// sources: exactly the connectors main detects (Spotlight always on macOS).
+	// sources: exactly the connectors main detects (each CLI's own health probe).
 	const detection = await page.evaluate(() => window.autorag.onboarding.detectSources());
 	const ids = detection.sources.map((source) => source.id);
-	if (process.platform === "darwin") check("Spotlight is detected on macOS", ids.includes("spotlight"), JSON.stringify(ids));
+	check("Spotlight and Apple Mail are never offered", !ids.includes("spotlight") && !ids.includes("mail"), ids.join(", "));
 	await page.waitForFunction((count) => document.querySelectorAll(".onb .source-row").length === count, ids.length, { timeout: 15_000 });
 	check("sources lists only detected connectors", true, ids.join(", "));
 	await shot("06-sources");
@@ -150,7 +150,7 @@ try {
 			{ timeout: 3000 },
 		);
 		check(`${requestedSource} source is enabled`, await sourceRow.locator(".switch.on").count() === 1);
-		if (requestedSource === "mail") check("mail source is selectable after FDA", await sourceRow.locator(".switch").isEnabled());
+		check(`${requestedSource} switch is enabled`, await sourceRow.locator(".switch").isEnabled());
 	}
 	await primary.click();
 
@@ -203,12 +203,15 @@ try {
 		JSON.stringify(raw.model),
 	);
 	if (requestedSource.length > 0) {
-		const configuredSource = raw.datasources?.[requestedSource];
-		const requiredTag = requestedSource === "mail" ? "spotlight" : requestedSource;
+		const configured = Object.entries(raw.datasources ?? {}).filter(
+			([alias, entry]) => alias === requestedSource || entry?.type === requestedSource || alias.startsWith(`${requestedSource}-`),
+		);
+		const tags = raw.datasourceAccess?.allowedTags ?? [];
+		const requiredTag = requestedSource === "kakao" ? "kakaotalk" : requestedSource;
 		check(
 			`${requestedSource} datasource config written and access tag allowed`,
-			configuredSource !== undefined && raw.datasourceAccess?.allowedTags?.includes(requiredTag) === true,
-			JSON.stringify({ source: configuredSource, tags: raw.datasourceAccess?.allowedTags }),
+			configured.length > 0 && tags.includes(requiredTag),
+			JSON.stringify({ source: configured, tags }),
 		);
 	}
 	check("config searchPaths = selected folders", JSON.stringify(raw.searchPaths) === JSON.stringify([DESK, DOCS]), JSON.stringify(raw.searchPaths));

@@ -70,8 +70,12 @@ export type PlanId = "free" | "air" | "pro" | "byok";
 
 export type ByokProviderId = "anthropic" | "openai" | "openrouter" | "google" | "ollama" | "openai-compatible";
 
-/** Connectors the sources step can detect as already installed and authenticated. */
-export type SourceId = "spotlight" | "github" | "obsidian" | "mail" | "slack";
+/**
+ * Connectors the sources step can detect as installed, signed in, and holding data.
+ * Local files are indexed through the folders step, so Spotlight/Apple Mail are
+ * deliberately not offered here.
+ */
+export type SourceId = "kakao" | "slack" | "discord" | "telegram" | "whatsapp" | "mailcrawl" | "github" | "obsidian";
 
 export type AccountMethod = "apple" | "google" | "email";
 
@@ -179,16 +183,16 @@ export interface EmbeddingInfo {
 export interface SourceFacts {
 	readonly repos?: readonly string[];
 	readonly vaults?: readonly string[];
+	/** himalaya accounts whose login was verified; one mailcrawl archive each. */
+	readonly accounts?: readonly string[];
 	readonly workspaces?: number;
 	readonly channels?: number;
+	readonly chats?: number;
 	readonly messages?: number;
-	readonly mailboxes?: number;
 }
 
 export interface DetectedSource {
 	readonly id: SourceId;
-	/** macOS only: reading it needs Full Disk Access. */
-	readonly needsFullDiskAccess: boolean;
 	readonly facts: SourceFacts;
 }
 

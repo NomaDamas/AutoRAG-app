@@ -123,40 +123,35 @@ export function formatSize(bytes: number): string {
 /** Icon name and colour for a connector's tile (prototype `sources[]`). */
 export function sourceTile(id: SourceId): { readonly brand?: string; readonly icon: string; readonly color: string } {
 	switch (id) {
-		case "spotlight":
-			return { icon: "search", color: "blue" };
+		case "kakao":
+			return { brand: "kakaotalk", icon: "message-circle", color: "orange" };
+		case "slack":
+			return { brand: "slack", icon: "message-circle", color: "purple" };
+		case "discord":
+			return { brand: "discord", icon: "message-circle", color: "purple" };
+		case "telegram":
+			return { brand: "telegram", icon: "message-circle", color: "blue" };
+		case "whatsapp":
+			return { brand: "whatsapp", icon: "message-circle", color: "green" };
+		case "mailcrawl":
+			return { icon: "mail", color: "red" };
 		case "github":
 			return { brand: "github", icon: "git-branch", color: "green" };
 		case "obsidian":
 			return { brand: "obsidian", icon: "notebook-pen", color: "purple" };
-		case "mail":
-			return { brand: "apple", icon: "mail", color: "red" };
-		case "slack":
-			return { brand: "slack", icon: "message-circle", color: "purple" };
 	}
-}
-
-/** The default datasource access tag each enabled connector grants. */
-export function sourceTag(id: SourceId): string {
-	return id === "mail" ? "mail" : id;
 }
 
 /** A connector's second line, built from its detected facts. */
-export function sourceDetail(id: SourceId, facts: SourceFacts, needsFullDiskAccess: boolean, translate: Translate): string {
-	switch (id) {
-		case "spotlight":
-			return translate("onboarding.sources.detail.spotlight");
-		case "github":
-			return translate("onboarding.sources.detail.github", { repos: facts.repos?.length ?? 0 });
-		case "obsidian":
-			return translate("onboarding.sources.detail.obsidian", { vaults: facts.vaults?.length ?? 0 });
-		case "mail":
-			return needsFullDiskAccess
-				? translate("onboarding.sources.detail.mailNeedsFda")
-				: translate("onboarding.sources.detail.mail");
-		case "slack":
-			return translate("onboarding.sources.detail.slack", { workspaces: facts.workspaces ?? 0 });
-	}
+export function sourceDetail(id: SourceId, facts: SourceFacts, translate: Translate): string {
+	return translate(`onboarding.sources.detail.${id}`, {
+		repos: facts.repos?.length ?? 0,
+		vaults: facts.vaults?.length ?? 0,
+		accounts: facts.accounts?.length ?? 0,
+		workspaces: facts.workspaces ?? 0,
+		chats: facts.chats ?? 0,
+		messages: facts.messages ?? 0,
+	});
 }
 
 /** How many description templates each connector offers (the "다시 쓰기" cycle). */
@@ -177,8 +172,11 @@ export function draftDescription(
 		repos: facts.repos?.length ?? 0,
 		firstRepo: facts.repos?.[0] ?? "",
 		vaults: facts.vaults?.length ?? 0,
+		accounts: facts.accounts?.length ?? 0,
+		firstAccount: facts.accounts?.[0] ?? "",
 		workspaces: facts.workspaces ?? 0,
-		mailboxes: facts.mailboxes ?? 0,
+		chats: facts.chats ?? 0,
+		messages: facts.messages ?? 0,
 	});
 }
 

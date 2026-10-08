@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { applyIndexingConfig } from "../src/main/onboarding-config";
 import { isJsonObject } from "../src/shared/settings-contract";
 
-const MAIL_DIR = "/Users/me/Library/Mail";
+const HOME = "/Users/me";
 
 describe("applyIndexingConfig", () => {
 	it("replaces searchPaths and leaves an existing embedder untouched", () => {
@@ -12,7 +12,7 @@ describe("applyIndexingConfig", () => {
 			raw,
 			folders: ["/a", "/b"],
 			datasources: [],
-			mailDir: MAIL_DIR,
+			home: HOME,
 			embedder: null,
 			workspacePath: null,
 			model: null,
@@ -23,7 +23,7 @@ describe("applyIndexingConfig", () => {
 	});
 
 	it("replaces workspacePath only when one is given", () => {
-		const base = { raw: { workspacePath: "/keep" }, folders: ["/a"], datasources: [], mailDir: MAIL_DIR, embedder: null, model: null };
+		const base = { raw: { workspacePath: "/keep" }, folders: ["/a"], datasources: [], home: HOME, embedder: null, model: null };
 		expect(applyIndexingConfig({ ...base, workspacePath: null }).workspacePath).toBe("/keep");
 		expect(applyIndexingConfig({ ...base, workspacePath: "/home/.autorag/workspace" }).workspacePath).toBe("/home/.autorag/workspace");
 	});
@@ -33,7 +33,7 @@ describe("applyIndexingConfig", () => {
 			raw: {},
 			folders: ["/a"],
 			datasources: [],
-			mailDir: MAIL_DIR,
+			home: HOME,
 			embedder: { profile: "qwen3-embedding-0.6b", dimension: 1024 },
 			workspacePath: null,
 			model: null,
@@ -47,7 +47,7 @@ describe("applyIndexingConfig", () => {
 			raw,
 			folders: ["/a"],
 			datasources: [{ id: "github", description: "new", facts: { repos: ["me/one", "me/two"] } }],
-			mailDir: MAIL_DIR,
+			home: HOME,
 			embedder: null,
 			workspacePath: null,
 			model: null,
@@ -66,39 +66,41 @@ describe("applyIndexingConfig", () => {
 			},
 			folders: ["/a"],
 			datasources: [
-				{ id: "spotlight", description: "s", facts: {} },
+				{ id: "kakao", description: "k", facts: {} },
+				{ id: "slack", description: "s", facts: {} },
+				{ id: "discord", description: "d", facts: {} },
+				{ id: "telegram", description: "t", facts: {} },
+				{ id: "whatsapp", description: "w", facts: {} },
+				{ id: "mailcrawl", description: "m", facts: { accounts: ["gmail", "work"] } },
 				{ id: "github", description: "g", facts: { repos: ["me/repo"] } },
 				{ id: "obsidian", description: "o", facts: { vaults: ["/v1", "/v2"] } },
-				{ id: "mail", description: "m", facts: {} },
-				{ id: "slack", description: "k", facts: {} },
 			],
-			mailDir: MAIL_DIR,
+			home: HOME,
 			embedder: null,
 			workspacePath: null,
 			model: null,
 		});
 		const access = new DatasourceAccessContext(next.datasourceAccess as { allowedTags: string[]; allowedScopes: string[] });
-		const { skills } = buildDatasourceSkills({ ...(next.datasources as DatasourcesConfig), excluded: { type: "discord" } });
-		for (const name of ["archive", "spotlight", "github", "obsidian", "obsidian-2", "mail", "slack", "excluded"]) {
+		const { skills, unknown } = buildDatasourceSkills({ ...(next.datasources as DatasourcesConfig), excluded: { type: "whatsapp", instanceId: "x" } });
+		expect(unknown).toEqual([]);
+		const names = ["archive", "kakao", "slack", "discord", "telegram", "whatsapp", "mailcrawl-gmail", "mailcrawl-work", "github", "obsidian", "obsidian-2"];
+		for (const name of names) {
 			const descriptor = skills.find((skill) => skill.describe().name === name)?.describe();
 			if (descriptor === undefined) throw new Error(`missing datasource: ${name}`);
-			expect(access.isAccessible(descriptor), name).toBe(name !== "excluded");
+			expect(access.isAccessible(descriptor), name).toBe(true);
 		}
 		const allowed = access.allowedSourcesPredicate();
 		expect(allowed("/github/github/issues/1")).toBe(true);
 		expect(allowed("/github/other/issues/1")).toBe(false);
-		expect(allowed("/slack/slack/messages/1")).toBe(false);
+		expect(allowed("/slack/default/messages/1")).toBe(false);
 	});
 
-	it("writes one obsidian alias per vault and maps mail to a Spotlight query", () => {
+	it("writes one obsidian alias per vault", () => {
 		const next = applyIndexingConfig({
 			raw: {},
 			folders: ["/a"],
-			datasources: [
-				{ id: "obsidian", description: "o", facts: { vaults: ["/v1", "/v2"] } },
-				{ id: "mail", description: "m", facts: {} },
-			],
-			mailDir: MAIL_DIR,
+			datasources: [{ id: "obsidian", description: "o", facts: { vaults: ["/v1", "/v2"] } }],
+			home: HOME,
 			embedder: null,
 			workspacePath: null,
 			model: null,
@@ -108,9 +110,26 @@ describe("applyIndexingConfig", () => {
 		const second = isJsonObject(datasources["obsidian-2"]) ? datasources["obsidian-2"] : {};
 		expect(isJsonObject(first.connector) && first.connector.vaultPath).toBe("/v1");
 		expect(isJsonObject(second.connector) && second.connector.vaultPath).toBe("/v2");
-		const mail = isJsonObject(datasources.mail) ? datasources.mail : {};
-		expect(mail.type).toBe("spotlight");
-		expect(isJsonObject(mail.connector) && mail.connector.onlyIn).toBe(MAIL_DIR);
+	});
+
+	it("gives every verified mail account its own mailcrawl archive under the home directory", () => {
+		const next = applyIndexingConfig({
+			raw: { datasources: { "mailcrawl-gmail": { connector: { timeoutMs: 60 } } } },
+			folders: ["/a"],
+			datasources: [{ id: "mailcrawl", description: "m", facts: { accounts: ["gmail", "work.kr"] } }],
+			home: HOME,
+			embedder: null,
+			workspacePath: null,
+			model: null,
+		});
+		const datasources = isJsonObject(next.datasources) ? next.datasources : {};
+		const gmail = isJsonObject(datasources["mailcrawl-gmail"]) ? datasources["mailcrawl-gmail"] : {};
+		const work = isJsonObject(datasources["mailcrawl-work.kr"]) ? datasources["mailcrawl-work.kr"] : {};
+		expect(gmail.type).toBe("mailcrawl");
+		expect(gmail.instanceId).toBe("gmail");
+		expect(gmail.connector).toEqual({ account: "gmail", mailbox: "INBOX", dataDir: "/Users/me/.mailcrawl/gmail" });
+		expect(isJsonObject(work.connector) && work.connector.dataDir).toBe("/Users/me/.mailcrawl/work.kr");
+		expect(isJsonObject(next.datasourceAccess) && next.datasourceAccess.allowedTags).toEqual(["mailcrawl"]);
 	});
 
 	it("writes the BYOK model block and leaves managed plans alone", () => {
@@ -118,7 +137,7 @@ describe("applyIndexingConfig", () => {
 			raw: { model: { provider: "old", id: "old" } },
 			folders: ["/a"],
 			datasources: [],
-			mailDir: MAIL_DIR,
+			home: HOME,
 			embedder: null,
 			workspacePath: null,
 			model: { provider: "openai-compatible", modelId: "my-model", baseUrl: "http://127.0.0.1:8080", envName: "OPENAI_COMPATIBLE_API_KEY" },
@@ -134,7 +153,7 @@ describe("applyIndexingConfig", () => {
 			raw: { model: { provider: "old", id: "old" } },
 			folders: ["/a"],
 			datasources: [],
-			mailDir: MAIL_DIR,
+			home: HOME,
 			embedder: null,
 			workspacePath: null,
 			model: null,
