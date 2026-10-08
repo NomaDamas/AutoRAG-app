@@ -8,7 +8,7 @@
  */
 
 import type { ReactElement } from "react";
-import { Cloud, Images, Mail, Search, type LucideIcon } from "lucide-react";
+import { Cloud, Folder, Images, Mail, Search, type LucideIcon } from "lucide-react";
 import {
 	siDiscord,
 	siGithub,
@@ -40,6 +40,7 @@ const GLYPH_BY_TEMPLATE: Readonly<Record<string, LucideIcon>> = {
 	"cloud-drive": Cloud,
 	mailcrawl: Mail,
 	"mail-export": Mail,
+	local: Folder,
 	spotlight: Search,
 };
 

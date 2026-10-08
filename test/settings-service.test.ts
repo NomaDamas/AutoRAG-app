@@ -28,6 +28,7 @@ const EMPTY_SNAPSHOT: DataSourcesSnapshot = {
 	error: null,
 	accessTags: [],
 	refresh: { state: "idle", phase: null, finishedAt: null },
+	local: { documentCount: null, updatedAt: null },
 	sources: [],
 };
 

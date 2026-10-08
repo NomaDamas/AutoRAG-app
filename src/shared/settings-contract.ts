@@ -155,6 +155,12 @@ export interface DataSourcesSnapshot {
 		readonly phase: string | null;
 		readonly finishedAt: string | null;
 	};
+	/** The local-folder index: documents the last refresh parsed into the shared workspace. */
+	readonly local: {
+		readonly documentCount: number | null;
+		/** Newest parse time recorded in the index. */
+		readonly updatedAt: string | null;
+	};
 	readonly sources: readonly DataSourceRow[];
 }
 

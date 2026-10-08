@@ -10,7 +10,7 @@
  */
 
 import { useState, type ReactElement } from "react";
-import { ChevronRight, ExternalLink, Folder, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { ChevronRight, ExternalLink, Plus, RefreshCw, Trash2 } from "lucide-react";
 import type { AutoRagConfigSnapshot, ConfigRefreshResult, DataSourceRow, DataSourcesSnapshot, JsonValue } from "../../../../shared/settings-contract";
 import { ConnectorFieldInput, TEMPLATE_BY_ID, type FieldSpec } from "./datasourceTemplates";
 import { ModalShell, ModalActions, Note, PromptModal, Row, Section, SettingsPageHead, StatusDot } from "./SettingsKit";
@@ -71,6 +71,14 @@ const UNIT_LABEL: Readonly<Record<NonNullable<DataSourceRow["index"]["unit"]>, s
 	image: "이미지",
 };
 
+/** The local-folder row's meta line: what the last refresh actually parsed. */
+function localMeta(local: DataSourcesSnapshot["local"] | null, folderCount: number): string {
+	const folders = `폴더 ${folderCount}개`;
+	if (local === null || local.documentCount === null) return folders;
+	if (local.documentCount === 0) return `아직 읽은 문서 없음 · ${folders}`;
+	return `문서 ${local.documentCount.toLocaleString()}개 · ${folders}`;
+}
+
 function sourceMeta(row: DataSourceRow): string {
 	if (!row.enabled) return "꺼짐";
 	if (row.status === "syncing") return "최신화 중…";
@@ -106,6 +114,7 @@ export function IndexingPage({
 	const [refreshResult, setRefreshResult] = useState<ConfigRefreshResult | null>(null);
 	const rows = sources?.sources ?? [];
 	const localCount = listOf(getAt(snapshot.config, ["searchPaths"])).length;
+	const local = sources?.local ?? null;
 
 	async function refreshIndex(): Promise<void> {
 		setBusy("refresh");
@@ -161,17 +170,29 @@ export function IndexingPage({
 				<div className="settings-list">
 					<div className="settings-list-row settings-sync-row">
 						<button type="button" className="settings-sync-name" onClick={() => onOpenSource("")}>
-							<Folder size={18} aria-hidden="true" focusable="false" />
+							<SourceIcon small type="local" label="로컬 폴더" />
 							<span className="settings-list-body">
 								<span className="settings-list-title">로컬 폴더</span>
-								<span className="settings-list-meta">검색할 폴더 {localCount}개 · 변경 자동 감지</span>
+								<span className="settings-list-meta">{localMeta(local, localCount)}</span>
 							</span>
 						</button>
 						<span className="settings-status">
-							<StatusDot tone="ok" />
-							변경 시 바로
+							<StatusDot tone={busy === "refresh" ? "run" : local !== null && (local.documentCount ?? 0) > 0 ? "ok" : "warn"} />
+							{busy === "refresh" ? "새로 고치는 중…" : "사용 중"}
 						</span>
-						<span className="settings-sync-interval">변경 시 바로</span>
+						<select className="settings-select-compact" aria-label="로컬 폴더 최신화 방식" value="manual" disabled>
+							<option value="manual">직접</option>
+						</select>
+						<button
+							type="button"
+							className="settings-icon-btn"
+							aria-label="로컬 폴더 지금 새로 고침"
+							title="지금 새로 고침"
+							disabled={busy !== null}
+							onClick={() => void refreshIndex()}
+						>
+							<RefreshCw size={16} aria-hidden="true" focusable="false" />
+						</button>
 					</div>
 					{rows.map((row) => (
 						<div className="settings-list-row settings-sync-row" key={row.id}>
@@ -215,14 +236,10 @@ export function IndexingPage({
 				{rows.length === 0 ? <Note>연결된 데이터소스가 없습니다. 연결된 앱에서 앱을 추가하세요.</Note> : null}
 				<div className="settings-sync-footer">
 					<span className="settings-list-meta">바뀐 파일과 메시지만 다시 읽습니다. 처음 연결한 앱은 전체를 가져옵니다.</span>
-					<button type="button" className="linear-btn" disabled={busy !== null || rows.length === 0} onClick={() => void syncAll()}>
-						<RefreshCw size={14} aria-hidden="true" focusable="false" />모두 지금 최신화
-					</button>
+					<button type="button" className="linear-btn" disabled={busy !== null || rows.length === 0} onClick={() => void syncAll()}>모두 지금 최신화</button>
 				</div>
-				<Row name="인덱스 새로 고침" hint="AutoRAGLite가 파싱된 문서를 다시 읽어 검색 색인을 갱신합니다.">
-					<button type="button" className="linear-btn" disabled={busy !== null} onClick={() => void refreshIndex()}>
-						<RefreshCw size={14} aria-hidden="true" focusable="false" />지금 새로 고침
-					</button>
+				<Row name="로컬 폴더 새로 고침" hint="검색 폴더의 문서를 다시 읽어 검색 색인을 갱신합니다. 바뀐 문서만 처리합니다.">
+					<button type="button" className="linear-btn" disabled={busy !== null} onClick={() => void refreshIndex()}>지금 새로 고침</button>
 				</Row>
 				{refreshResult !== null ? (
 					<Note>

@@ -9,6 +9,7 @@ import {
 	type DatasourceSkill,
 	type DatasourceSkillConfig,
 	datasourceChunkStorePath,
+	loadMirrorIndex,
 	resolveConfigReadOnly,
 	writeConfigObject,
 } from "@autorag/librarian";
@@ -265,6 +266,17 @@ async function indexState(
 	}
 }
 
+/** Documents the last local-folder refresh parsed into the shared workspace mirror. */
+function localIndexState(workspacePath: string): DataSourcesSnapshot["local"] {
+	try {
+		const entries = Object.values(loadMirrorIndex(workspacePath).entries);
+		const updatedAt = entries.map((entry) => entry.updatedAt).sort().at(-1) ?? null;
+		return { documentCount: entries.length, updatedAt };
+	} catch {
+		return { documentCount: null, updatedAt: null };
+	}
+}
+
 function processAlive(pid: unknown): boolean {
 	if (typeof pid !== "number") return false;
 	try {
@@ -361,6 +373,7 @@ export function createDataSourceStatusService(deps: DataSourceStatusDeps): DataS
 			error: null,
 			accessTags: [],
 			refresh: { state: "idle", phase: null, finishedAt: null },
+			local: { documentCount: null, updatedAt: null },
 			sources: [],
 		};
 		if (!empty.configExists) return empty;
@@ -396,7 +409,7 @@ export function createDataSourceStatusService(deps: DataSourceStatusDeps): DataS
 				};
 			}),
 		);
-		return { ...empty, accessTags: allowedTags, refresh, sources };
+		return { ...empty, accessTags: allowedTags, refresh, local: localIndexState(config.workspacePath), sources };
 	};
 
 	const inFlight = new Map<string, Promise<DataSourceSyncResult>>();

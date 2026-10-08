@@ -235,7 +235,6 @@ export function SettingsView({ initialCategory = "general", onSettingsChanged }:
 					) : null}
 				</nav>
 				{query.trim().length > 0 && groups.length === 0 && filteredSources.length === 0 ? <p className="settings-nav-empty">일치하는 설정이 없습니다.</p> : null}
-				<div className="settings-sidebar-footer">설정은 AutoRAG config.json과 앱 설정에 바로 반영됩니다.</div>
 			</aside>
 			<main className="settings-content" aria-label={`${sourceAlias ?? normalizeCategory(category)} settings`}>
 				<div className="settings-content-wrap">

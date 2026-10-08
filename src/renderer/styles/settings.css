@@ -562,14 +562,6 @@
 	font-size: var(--font-size-meta);
 }
 
-.settings-view .settings-sidebar-footer {
-	margin-top: auto;
-	padding: 18px var(--space-10) 0;
-	color: var(--text-faint);
-	font-size: 10.5px;
-	line-height: 1.5;
-}
-
 /* -------------------------------------------------------------- Sections -- */
 
 .settings-view .settings-page-head {

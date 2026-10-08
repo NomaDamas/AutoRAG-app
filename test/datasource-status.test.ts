@@ -1,7 +1,7 @@
 import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { buildAgentOptions, resolveConfigReadOnly } from "@autorag/librarian";
+import { buildAgentOptions, resolveConfigReadOnly, saveMirrorIndex, type ParsedMirrorEntry as MirrorEntry } from "@autorag/librarian";
 import { afterEach, describe, expect, it } from "vitest";
 import { createDataSourceStatusService } from "../src/main/datasource-status";
 import type { DataSourceRow } from "../src/shared/settings-contract";
@@ -425,5 +425,23 @@ describe("backend-owned index counts", () => {
 		const lists = await Promise.all([service.list(), service.list(), service.list()]);
 
 		for (const snapshot of lists) expect(snapshot.sources[0]?.index).toMatchObject({ state: "indexed", chunkCount: 5 });
+	});
+
+	it("counts the documents the last local refresh parsed, and says nothing before one has run", async () => {
+		const fixture = await createFixtureWithOnlySlacrawlOnPath();
+		await writeConfig(fixture, {}, []);
+		const service = createDataSourceStatusService({ env: fixture.env, cwd: fixture.root });
+		expect((await service.list()).local).toEqual({ documentCount: 0, updatedAt: null });
+
+		const entry = (name: string, updatedAt: string): [string, MirrorEntry] => {
+			const virtualPath = `/files/${name}.md`;
+			return [virtualPath, { virtualPath, sourcePath: join(fixture.workspace, "docs", `${name}.md`), outputPath: `/out/${name}.md`, parserName: "plain-text", sourceMtimeNs: 1, sourceSizeBytes: 1, updatedAt }];
+		};
+		saveMirrorIndex(fixture.workspace, {
+			version: 1,
+			entries: Object.fromEntries([entry("a", "2026-10-01T00:00:00.000Z"), entry("b", "2026-10-03T00:00:00.000Z"), entry("c", "2026-10-02T00:00:00.000Z")]),
+		});
+
+		expect((await service.list()).local).toEqual({ documentCount: 3, updatedAt: "2026-10-03T00:00:00.000Z" });
 	});
 });
