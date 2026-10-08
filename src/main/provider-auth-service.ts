@@ -75,9 +75,6 @@ interface Session {
 
 const DEFAULT_CUSTOM_API = "openai-completions";
 const DEFAULT_TIMEOUT_MS = 8000;
-const CONNECTION_TEST_TIMEOUT_MS = 20_000;
-/** OpenAI-compatible servers need some bearer value even when they ignore it. */
-const KEYLESS_SERVER_API_KEY = "local";
 /** Hosts that mean "this device" for local-server validation. */
 const LOOPBACK_HOSTS: Record<string, true> = { localhost: true, "127.0.0.1": true, "::1": true, "[::1]": true };
 
@@ -494,29 +491,24 @@ export function createProviderAuthService(deps: ProviderAuthServiceDeps): Provid
 	}
 
 	/**
-	 * Pass/fail comes from the Pi runtime itself: one tiny completion through
-	 * the same `ModelRuntime` (auth, models.json, OAuth refresh) the agent uses,
-	 * like `autorag health`. Why it failed stays in Pi; the UI only shows the result.
-	 * A keyless local/custom server has no Pi credential, so the request carries
-	 * a placeholder bearer value (OpenAI-compatible clients refuse to send none);
-	 * a keyless built-in provider is genuinely not connected and fails.
+	 * Pass/fail for a saved provider. Built-in providers are judged by the Pi
+	 * runtime itself: `getAuth` resolves the stored key or env var and refreshes
+	 * an OAuth token, and it rejects when that fails. No model is called, because
+	 * the first catalog model can be deprecated, unfunded, or plan-restricted and
+	 * would fail a working connection. Local/custom servers have no Pi credential
+	 * to resolve, so they pass when the server answers its model listing.
+	 * Why a check failed stays in Pi; the UI only shows the result.
 	 */
 	async function test(id: string): Promise<ProviderConnectionResult> {
 		try {
 			const summary = (await list()).find((provider) => provider.id === id);
-			const model = (await runtimePromise).getModels(id)[0];
-			if (summary === undefined || model === undefined) return { ok: false };
-			const keylessServer = summary.kind !== "runtime" && !summary.authConfigured;
-			const result = await (await runtimePromise).completeSimple(
-				model,
-				{ messages: [{ role: "user", content: "Reply with OK.", timestamp: Date.now() }] },
-				{
-					maxTokens: 16,
-					signal: AbortSignal.timeout(deps.timeoutMs ?? CONNECTION_TEST_TIMEOUT_MS),
-					...(keylessServer ? { apiKey: KEYLESS_SERVER_API_KEY } : {}),
-				},
-			);
-			return { ok: result.stopReason !== "error" && result.stopReason !== "aborted" };
+			if (summary === undefined) return { ok: false };
+			if (summary.kind === "runtime") {
+				return { ok: (await (await runtimePromise).getAuth(id)) !== undefined };
+			}
+			if (summary.baseUrl === null) return { ok: false };
+			const stored = summary.apiKeyEnv === null ? undefined : deps.env[summary.apiKeyEnv];
+			return { ok: (await probe(summary.baseUrl, stored === undefined || stored.length === 0 ? undefined : stored)).ok };
 		} catch {
 			return { ok: false };
 		}

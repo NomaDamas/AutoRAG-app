@@ -1,5 +1,3 @@
-import { createServer } from "node:http";
-import type { AddressInfo } from "node:net";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -165,45 +163,32 @@ describe("createProviderAuthService", () => {
 		await expect(service.respond("missing-session", "x")).rejects.toThrow(/not waiting for input/);
 	});
 
-	it("reports pass/fail from a real completion through the Pi runtime", async () => {
-		let failCompletions = false;
-		const server = createServer((request, response) => {
-			response.setHeader("content-type", "application/json");
-			if (request.url?.endsWith("/models") === true) {
-				response.end(JSON.stringify({ data: [{ id: "tiny" }] }));
-				return;
-			}
-			if (request.url?.endsWith("/chat/completions") === true) {
-				if (failCompletions) {
-					response.statusCode = 500;
-					response.end(JSON.stringify({ error: { message: "boom" } }));
-					return;
-				}
-				// The Pi client streams, so answer in SSE.
-				response.setHeader("content-type", "text/event-stream");
-				const chunk = (delta: object, finish: string | null): string =>
-					`data: ${JSON.stringify({ id: "x", object: "chat.completion.chunk", created: 0, model: "tiny", choices: [{ index: 0, delta, finish_reason: finish }] })}\n\n`;
-				response.write(chunk({ role: "assistant", content: "OK" }, null));
-				response.write(chunk({}, "stop"));
-				response.end("data: [DONE]\n\n");
-				return;
-			}
-			response.statusCode = 404;
-			response.end("{}");
-		});
-		await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-		try {
-			const { port } = server.address() as AddressInfo;
-			const { service } = await fixture(fetch);
-			const providers = await service.upsert({ kind: "local", label: "Local", baseUrl: `http://127.0.0.1:${port}/v1` });
-			const id = providers.find((provider) => provider.name === "Local")?.id ?? "";
+	it("passes a local server only while it answers its model list", async () => {
+		let up = true;
+		const { service } = await fixture(((input: string | URL | Request) => (up ? openAiFetch(input) : Promise.reject(new Error("ECONNREFUSED")))) as unknown as typeof fetch);
+		const providers = await service.upsert({ kind: "local", label: "Local", baseUrl: "http://127.0.0.1:11434/v1" });
+		const id = providers.find((provider) => provider.name === "Local")?.id ?? "";
 
-			expect(await service.test(id)).toEqual({ ok: true });
-			failCompletions = true;
-			expect(await service.test(id)).toEqual({ ok: false });
-			expect(await service.test("not-a-provider")).toEqual({ ok: false });
+		expect(await service.test(id)).toEqual({ ok: true });
+		up = false;
+		expect(await service.test(id)).toEqual({ ok: false });
+		expect(await service.test("not-a-provider")).toEqual({ ok: false });
+	});
+
+	it("passes a built-in provider on its resolved Pi credential, not on a model call", async () => {
+		const previous = process.env.OPENROUTER_API_KEY;
+		// A fetch that rejects everything proves no request is made for a built-in provider.
+		const { service } = await fixture((async () => {
+			throw new Error("no network expected");
+		}) as unknown as typeof fetch);
+		try {
+			delete process.env.OPENROUTER_API_KEY;
+			expect(await service.test("openrouter")).toEqual({ ok: false });
+			process.env.OPENROUTER_API_KEY = "sk-test";
+			expect(await service.test("openrouter")).toEqual({ ok: true });
 		} finally {
-			await new Promise<void>((resolve) => server.close(() => resolve()));
+			if (previous === undefined) delete process.env.OPENROUTER_API_KEY;
+			else process.env.OPENROUTER_API_KEY = previous;
 		}
 	});
 });
