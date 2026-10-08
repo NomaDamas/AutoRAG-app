@@ -43,7 +43,7 @@ const PAGES: readonly PageMeta[] = [
 	{ id: "ai", label: "AI 모델", icon: Sparkles, group: "AI", keywords: "LLM 모델 공급자 서비스 API 키 구독 임베딩 Jev 질문 나누기 정렬" },
 	{ id: "web", label: "웹 검색", icon: Globe, group: "AI", keywords: "웹 검색 인터넷 검색 서비스 페이지 읽기" },
 	{ id: "indexing", label: "인덱싱", icon: RefreshCw, group: "검색", keywords: "최신화 동기화 증분 색인 갱신 주기 sync" },
-	{ id: "scope", label: "검색 범위", icon: Folder, group: "검색", keywords: "검색 범위 폴더 제외 경로 미디어" },
+	{ id: "scope", label: "검색 범위", icon: Folder, group: "검색", keywords: "검색 범위 폴더 제외 경로" },
 	{ id: "reading", label: "문서 읽기", icon: FileText, group: "검색", keywords: "문서 읽기 언어 파서" },
 	{ id: "duplicates", label: "중복 파일 정리", icon: Copy, group: "검색", keywords: "중복 파일 버전 정리 dupey" },
 	{ id: "apps", label: "모든 연결", icon: Plug, group: "연결된 앱", keywords: "연결 앱 데이터소스 메신저 메일 클라우드" },

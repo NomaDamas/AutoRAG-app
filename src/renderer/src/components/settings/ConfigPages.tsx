@@ -102,9 +102,6 @@ export function ScopePage({ snapshot, onSaved }: { readonly snapshot: AutoRagCon
 	const excludePaths = listOf(getAt(snapshot.config, ["excludePaths"]));
 	const fsearch = getAt(snapshot.config, ["fsearch"]);
 	const watch = boolOf(getAt(snapshot.config, ["fsearch", "watch"])) ?? true;
-	const jikji = asRecord(getAt(snapshot.config, ["jikji"])) ?? {};
-	const mediaEnabled = boolOf(jikji.enableMediaIndex) === true;
-	const mediaMaxMb = typeof jikji.mediaIndexMaxMb === "number" ? jikji.mediaIndexMaxMb : null;
 
 	function writeList(path: "searchPaths" | "excludePaths", next: readonly string[]): void {
 		void run([next.length === 0 ? { path: [path], remove: true } : { path: [path], value: [...next] }]);
@@ -132,7 +129,8 @@ export function ScopePage({ snapshot, onSaved }: { readonly snapshot: AutoRagCon
 				{searchPaths.length === 0 ? <Note>아직 검색 폴더가 없습니다. 추가하지 않으면 기본 검색 범위를 사용합니다.</Note> : null}
 			</Section>
 			<Section title="제외할 항목" description="검색하지 않을 폴더와 파일입니다.">
-				<Row name="제외 목록" hint="이름이 일치하는 폴더·파일은 건너뜁니다. node_modules, .git 같은 개발용 폴더도 여기서 관리합니다." stack>
+				<Note>개발용 폴더(node_modules, .git, .venv, venv, target, dist, build, coverage, __pycache__)와 .cache, .Trash 같은 시스템 폴더는 자동으로 제외되어 있습니다. 그 밖에 .으로 시작하는 폴더(예: .idea, .vscode)는 자동으로 제외되지 않으니 필요하면 아래에 추가하세요.</Note>
+				<Row name="제외 목록" hint="이름이 일치하는 폴더·파일을 더 제외합니다." stack>
 					<Chips
 						items={excludePaths}
 						onRemove={(index) => writeList("excludePaths", excludePaths.filter((_, i) => i !== index))}
@@ -141,7 +139,7 @@ export function ScopePage({ snapshot, onSaved }: { readonly snapshot: AutoRagCon
 				</Row>
 			</Section>
 			<Section title="파일 포함 범위">
-				<Row name="변경 자동 감지" hint={fsearch === false ? "파일 검색이 꺼져 있어 사용할 수 없습니다." : "파일이 바뀌면 검색 목록을 즉시 갱신합니다."}>
+				<Row name="변경 자동 감지" hint={fsearch === false ? "파일 검색이 꺼져 있어 사용할 수 없습니다." : "파일 이름 검색 목록을 파일이 바뀔 때 갱신합니다. 문서 내용 색인은 인덱싱 화면에서 직접 새로 고칩니다."}>
 					<Switch
 						checked={watch}
 						disabled={fsearch === false}
@@ -149,31 +147,6 @@ export function ScopePage({ snapshot, onSaved }: { readonly snapshot: AutoRagCon
 						onChange={() => void run([{ path: ["fsearch", "watch"], value: !watch }])}
 					/>
 				</Row>
-				<Row name="사진·영상 색인" hint="미디어 파일의 정보를 검색에 포함합니다.">
-					<Switch
-						checked={mediaEnabled}
-						ariaLabel="사진·영상 색인"
-						onChange={() => void run([{ path: ["jikji"], value: { ...jikji, enableMediaIndex: !mediaEnabled } }])}
-					/>
-				</Row>
-				{mediaEnabled ? (
-					<Row name="미디어 최대 크기" hint="이 크기를 넘는 파일은 건너뜁니다.">
-						<select
-							className="linear-select"
-							aria-label="미디어 최대 크기"
-							value={mediaMaxMb === null ? "" : String(mediaMaxMb)}
-							onChange={(event) => {
-								const value = event.target.value;
-								void run([value.length === 0 ? { path: ["jikji", "mediaIndexMaxMb"], remove: true } : { path: ["jikji", "mediaIndexMaxMb"], value: Number(value) }]);
-							}}
-						>
-							<option value="">기본값</option>
-							<option value="10">10MB</option>
-							<option value="50">50MB</option>
-							<option value="100">100MB</option>
-						</select>
-					</Row>
-				) : null}
 			</Section>
 			{addTarget !== null ? (
 				<PromptModal

@@ -15,7 +15,7 @@ import {
 } from "@autorag/librarian";
 import { readRawConfigObject, resolveConfigPath, type CliConfig } from "@autorag/librarian/core";
 import { backendIndexUnit, LIVE_QUERY_TEMPLATES, probeBackendIndex } from "./datasource-index-probe";
-import { withConnectorOcrDisabled } from "./ocr-policy";
+import { withConnectorOcrDisabled } from "./indexing-policy";
 import type { DiscrawlEmbeddingRuntime } from "./embedding-settings-service";
 import type {
 	ConfigRefreshDiagnostic,

@@ -3,7 +3,7 @@ import { readdir, realpath } from "node:fs/promises";
 import { join } from "node:path";
 import type { CliConfig } from "@autorag/librarian/core";
 import { isJsonObject } from "../shared/settings-contract";
-import { withOcrDisabled } from "./ocr-policy";
+import { withIndexingPoliciesApplied } from "./indexing-policy";
 
 /**
  * App-owned indexing policy: automatically omit code/dependency directories
@@ -108,11 +108,13 @@ export const APP_INDEXING_CAPABILITIES: AppIndexingCapabilities = {
 
 /**
  * Resolve the config the app actually runs with: parsed/MinSync get absolute
- * `excludePaths`, Jikji gets `--exclude` globs, and Tesseract OCR is pinned off
- * (see `ocr-policy`). Existing exclusion values are kept, so adding this
- * feature never drops a user's earlier exclusions.
+ * `excludePaths`, Jikji gets `--exclude` globs, and the features the app never
+ * runs (Tesseract OCR, Jikji's media index) are pinned off, see `indexing-policy`.
+ * Existing exclusion values are kept, so adding this feature never drops a
+ * user's earlier exclusions.
  */
-export async function applyAppIndexing(config: CliConfig, raw: Record<string, unknown>): Promise<CliConfig> {
+export async function applyAppIndexing(input: CliConfig, raw: Record<string, unknown>): Promise<CliConfig> {
+	const config = withIndexingPoliciesApplied(input);
 	const settings = readAppIndexing(raw);
 	const excluded = new Set<string>(config.excludePaths ?? []);
 	// AutoRAG's own state directories are product output, never corpus.
@@ -131,6 +133,5 @@ export async function applyAppIndexing(config: CliConfig, raw: Record<string, un
 		const existing = Array.isArray(jikji.exclude) ? jikji.exclude.filter((value): value is string => typeof value === "string") : [];
 		jikji = { ...jikji, exclude: [...new Set([...existing, ...globs])] };
 	}
-	const withPolicies = withOcrDisabled(config);
-	return jikji === undefined ? { ...withPolicies, excludePaths } : { ...withPolicies, excludePaths, jikji };
+	return jikji === undefined ? { ...config, excludePaths } : { ...config, excludePaths, jikji };
 }

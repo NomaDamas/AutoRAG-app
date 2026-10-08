@@ -2,14 +2,17 @@ import type { CliConfig } from "@autorag/librarian/core";
 import { isJsonObject } from "../shared/settings-contract";
 
 /**
- * The app never runs the librarian's Tesseract OCR. `parserOptions.ocr.enabled`
- * is what registers the image OCR parser (png/jpg/...) and swaps kordoc's own
- * OCR for Tesseract, so it is pinned off in every config the app hands to the
- * librarian, whatever the shared config file says. The file itself is left
- * alone: the CLI and TUI keep reading their own setting.
+ * Indexing features the app never runs, pinned off in every config it hands to
+ * the librarian, whatever the shared config file says. The file itself is left
+ * alone: the CLI and TUI keep reading their own settings.
  *
- * Only Tesseract is switched off. kordoc's built-in PP-OCRv5, which reads scan
- * pages when its model is cached, is a separate engine and stays as configured.
+ * - Tesseract OCR. `parserOptions.ocr.enabled` registers the image OCR parser
+ *   (png/jpg/...) and swaps kordoc's own OCR for Tesseract. kordoc's built-in
+ *   PP-OCRv5, which reads scan pages when its model is cached, is a separate
+ *   engine and stays as configured.
+ * - Jikji's media index. `jikji.enableMediaIndex` only records file facts
+ *   (pixel size, bytes, format) for photos and videos, nothing about their
+ *   content, so it adds cost without making any media searchable.
  */
 
 /** `parserOptions` with `ocr.enabled` pinned to false and every other option kept. */
@@ -29,15 +32,23 @@ export function withConnectorOcrDisabled<T>(entry: T): T {
 	return { ...entry, connector: { ...entry.connector, parserOptions: parserOptionsWithoutOcr(entry.connector.parserOptions) } };
 }
 
-/** The same config with Tesseract off for local files and for every datasource connector. */
-export function withOcrDisabled(config: CliConfig): CliConfig {
+/** The Jikji block with the media index pinned off; `false` (Jikji disabled) and an absent block stay as they are. */
+export function withMediaIndexDisabled(jikji: CliConfig["jikji"]): CliConfig["jikji"] {
+	if (jikji === false || jikji === undefined) return jikji;
+	return { ...jikji, enableMediaIndex: false };
+}
+
+/** The same config with Tesseract off for local files and every datasource connector, and Jikji's media index off. */
+export function withIndexingPoliciesApplied(config: CliConfig): CliConfig {
 	const datasources =
 		config.datasources === undefined
 			? undefined
 			: Object.fromEntries(Object.entries(config.datasources).map(([id, entry]) => [id, withConnectorOcrDisabled(entry)]));
+	const jikji = withMediaIndexDisabled(config.jikji);
 	return {
 		...config,
 		parserOptions: parserOptionsWithoutOcr(config.parserOptions),
 		...(datasources === undefined ? {} : { datasources }),
+		...(jikji === undefined ? {} : { jikji }),
 	};
 }

@@ -68,6 +68,7 @@ describe("app indexing", () => {
 
 		expect(effective.excludePaths).toEqual(expect.arrayContaining([join(root, "keep"), join(root, ".autorag")]));
 		expect(effective.excludePaths).not.toEqual(expect.arrayContaining([join(root, "projectA", "node_modules")]));
-		expect(effective.jikji).toEqual({});
+		// No code-folder globs are added, but the media index stays pinned off (indexing-policy).
+		expect(effective.jikji).toEqual({ enableMediaIndex: false });
 	});
 });
