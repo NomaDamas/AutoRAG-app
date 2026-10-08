@@ -2,6 +2,7 @@ import type { MouseEvent, ReactElement, RefObject } from "react";
 import type { FinderEntry } from "../data/entries";
 import { useDirectoryData, useEntrySidecar } from "../hooks/useDirectoryData";
 import { cn } from "../lib/cn";
+import { fileKindOf } from "../state/entry-values";
 import type { GroupSection } from "../state/grouping";
 import { basename } from "../state/paths";
 import { RELATION_LABELS, type StackRow, type VersionFamilyError } from "../state/version-family";
@@ -227,7 +228,7 @@ function ColumnRow({
 			onDragOver={(event) => callbacks.onDragOver(entry, event)}
 			onDrop={(event) => callbacks.onDrop(entry, event)}
 		>
-			<FileTile kind={entry.fileKind} iconUrl={entry.iconUrl} size={16} />
+			<FileTile kind={fileKindOf(entry)} iconUrl={entry.iconUrl} size={16} />
 			{renameDraft === null ? (
 				<span className="col-name flex-1 min-w-0 overflow-hidden whitespace-nowrap text-ellipsis text-sm">
 					{entry.name}
@@ -247,5 +248,5 @@ function ColumnRow({
 /** A row's tile with the icon the sidecar holds for it. */
 function SidecarTile({ entry, size }: { readonly entry: FinderEntry; readonly size: 16 | 18 | 22 }): ReactElement {
 	const resolved = useEntrySidecar(useDirectoryData().sidecar, entry).entry;
-	return <FileTile kind={resolved.fileKind} iconUrl={resolved.iconUrl} size={size} />;
+	return <FileTile kind={fileKindOf(resolved)} iconUrl={resolved.iconUrl} size={size} />;
 }

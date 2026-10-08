@@ -8,6 +8,7 @@
  */
 
 import type { FinderEntry } from "../data/entries";
+import { locationOf } from "./entry-values";
 import { basename, dirname } from "./paths";
 
 export type VersionRelation = "exact" | "near" | "contains";
@@ -155,7 +156,7 @@ export function applyVersionStacks(
 		const membership = families.memberOf.get(entry.path);
 		if (membership !== undefined) {
 			const headDir = dirname(membership.family.head);
-			if (headDir === entry.location && pathsInRows.has(membership.family.head)) continue;
+			if (headDir === locationOf(entry) && pathsInRows.has(membership.family.head)) continue;
 		}
 		const family = families.byHead.get(entry.path);
 		if (family === undefined) {

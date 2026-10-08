@@ -11,24 +11,43 @@ import {
 	groupRows,
 	parseGroupKey,
 } from "../src/renderer/src/state/grouping";
-import type { SortableEntry } from "../src/renderer/src/state/sort";
+import type { SortableEntry } from "../src/renderer/src/state/entry-values";
 import type { StackRow } from "../src/renderer/src/state/version-family";
+import type { FsFinderMetadata } from "../src/shared/fs-contract";
+
+function finder(overrides: Partial<FsFinderMetadata> = {}): FsFinderMetadata {
+	return {
+		createdAt: null,
+		addedAt: null,
+		lastOpenedAt: null,
+		tags: [],
+		comments: null,
+		width: null,
+		height: null,
+		rating: null,
+		application: null,
+		...overrides,
+	};
+}
 
 function e(
 	name: string,
 	kind: "folder" | "file",
-	modifiedValue: number,
-	sizeValue: number,
-	kindLabel: string,
+	mtimeMs: number,
+	size: number,
+	osKind: string,
 	extra: Partial<SortableEntry> = {},
 ): SortableEntry {
+	const ext = name.includes(".") ? name.slice(name.lastIndexOf(".") + 1) : "";
 	return {
 		name,
+		path: `Documents/${name}`,
 		kind,
-		modifiedValue,
-		sizeValue,
-		kindLabel,
-		location: "Documents",
+		ext,
+		size: kind === "folder" ? null : size,
+		mtimeMs,
+		birthtimeMs: 0,
+		osKind,
 		...extra,
 	};
 }
@@ -42,19 +61,7 @@ const NOW = new Date(2026, 8, 15, 12).getTime();
 const august = (day: number): number => new Date(2026, 7, day, 10).getTime();
 
 function fe(entry: SortableEntry): FinderEntry {
-	return {
-		name: entry.name,
-		path: `Documents/${entry.name}`,
-		kind: entry.kind,
-		fileKind: entry.kind === "folder" ? "folder" : "md",
-		iconUrl: null,
-		dateLabel: "Sep 1, 12:00",
-		sizeLabel: "1 KB",
-		kindLabel: entry.kindLabel,
-		location: "Documents",
-		modifiedValue: entry.modifiedValue,
-		sizeValue: entry.sizeValue,
-	};
+	return { ...entry };
 }
 
 function labels<T>(sections: readonly GroupSection<T>[]): (string | null)[] {
@@ -163,10 +170,10 @@ describe("groupEntries", () => {
 	it("prefers the dedicated date values when present", () => {
 		const rows = [
 			e("created-later.txt", "file", stamp(10), 1, "Markdown", {
-				createdValue: stamp(15, 9),
+				finder: finder({ createdAt: new Date(stamp(15, 9)).toISOString() }),
 			}),
 			e("created-earlier.txt", "file", stamp(10), 1, "Markdown", {
-				createdValue: stamp(14),
+				finder: finder({ createdAt: new Date(stamp(14)).toISOString() }),
 			}),
 		];
 		expect(labels(groupEntries(rows, "dateCreated", NOW))).toEqual([
@@ -199,7 +206,7 @@ describe("groupEntries", () => {
 
 	it("groups tags, comments, and dimensions with explicit empty buckets", () => {
 		const rows = [
-			e("tagged.txt", "file", 1, 1, "Markdown", { tagsLabel: "urgent" }),
+			e("tagged.txt", "file", 1, 1, "Markdown", { finder: finder({ tags: ["urgent"] }) }),
 			e("plain.txt", "file", 2, 2, "Markdown"),
 		];
 		expect(labels(groupEntries(rows, "tags"))).toEqual(["No Tags", "urgent"]);
@@ -209,8 +216,8 @@ describe("groupEntries", () => {
 
 	it("groups ratings numerically with unrated first", () => {
 		const rows = [
-			e("best.txt", "file", 1, 1, "Markdown", { ratingValue: 5 }),
-			e("meh.txt", "file", 2, 2, "Markdown", { ratingValue: 2 }),
+			e("best.txt", "file", 1, 1, "Markdown", { finder: finder({ rating: 5 }) }),
+			e("meh.txt", "file", 2, 2, "Markdown", { finder: finder({ rating: 2 }) }),
 			e("unrated.txt", "file", 3, 3, "Markdown"),
 		];
 		expect(labels(groupEntries(rows, "rating"))).toEqual([

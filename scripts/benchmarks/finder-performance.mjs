@@ -117,12 +117,12 @@ function ipcMeasurement({ target, enrich }) {
 		const hasEnrich = typeof fs.enrichEntries === "function";
 		if (!enrich || !hasEnrich) return { base, enrichment: null, hasEnrich };
 		const targets = listing.entries
-			.filter((entry) => entry.kind === "file" && typeof entry.modifiedAt === "string")
+			.filter((entry) => entry.kind === "file" && typeof entry.mtimeMs === "number")
 			.map((entry) => ({
 				path: entry.path,
 				kind: entry.kind,
 				ext: typeof entry.name === "string" && entry.name.includes(".") ? entry.name.split(".").pop().toLowerCase() : "",
-				modifiedAt: entry.modifiedAt,
+				mtimeMs: entry.mtimeMs,
 			}));
 		const enrichStartedAt = performance.now();
 		const enriched = await fs.enrichEntries(targets, true);

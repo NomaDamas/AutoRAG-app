@@ -7,7 +7,7 @@ import { createFsService, FsRenameError, toHandoffPath, untitledFileName, untitl
 import type { NewFileFormatId } from "../src/shared/new-file-contract";
 import type { FileNameSearchBackend } from "../src/main/file-name-search";
 import { createRecentsStore, type RecentsStore } from "../src/main/recents-store";
-import { RECENTS_PATH, type FsLocation } from "../src/shared/fs-contract";
+import { FS_ENTRY_SYMLINK, RECENTS_PATH, type FsLocation } from "../src/shared/fs-contract";
 import { createPlaces, type Places } from "../src/main/places";
 
 const unreadablePaths = vi.hoisted(() => new Set<string>());
@@ -140,8 +140,8 @@ describe("listDir", () => {
 		expect(file?.kind).toBe("file");
 		expect(file?.ext).toBe("txt");
 		expect(file?.size).toBe(5);
-		expect(file?.isSymlink).toBe(false);
-		expect(Number.isNaN(Date.parse(file?.modifiedAt ?? ""))).toBe(false);
+		expect(file?.flags).toBe(0);
+		expect(Number.isFinite(file?.mtimeMs)).toBe(true);
 		expect(folder).toBeDefined();
 		expect(folder?.kind).toBe("folder");
 		expect(folder?.ext).toBe("");
@@ -159,8 +159,12 @@ describe("listDir", () => {
 		const listing = await createFsService(makeDeps(root).deps).listDir(dir);
 
 		// Then the symlink entry is flagged and the real file is not
-		expect(listing.entries.find((entry) => entry.name === "link.txt")?.isSymlink).toBe(true);
-		expect(listing.entries.find((entry) => entry.name === "target.txt")?.isSymlink).toBe(false);
+		expect((listing.entries.find((entry) => entry.name === "link.txt")?.flags ?? 0) & FS_ENTRY_SYMLINK).toBe(
+			FS_ENTRY_SYMLINK,
+		);
+		expect((listing.entries.find((entry) => entry.name === "target.txt")?.flags ?? FS_ENTRY_SYMLINK) & FS_ENTRY_SYMLINK).toBe(
+			0,
+		);
 	});
 
 	it("skips one unreadable entry, keeps the others, and warns verbatim", async () => {
@@ -215,7 +219,7 @@ describe("stat", () => {
 			kind: "file",
 			ext: "md",
 			size: 3,
-			isSymlink: false,
+			flags: 0,
 		});
 	});
 });
@@ -255,7 +259,7 @@ describe("readEntries", () => {
 		expect(iconTargets).toEqual([]);
 		expect(osKindPaths).toEqual([]);
 		await service.enrichEntries(
-			patch.entries.map(({ path, kind, ext, modifiedAt }) => ({ path, kind, ext, modifiedAt })),
+			patch.entries.map(({ path, kind, ext, mtimeMs }) => ({ path, kind, ext, mtimeMs })),
 			true,
 		);
 		expect(iconTargets).toEqual(requested);
@@ -1332,10 +1336,14 @@ describe("osKind", () => {
 
 		const service = createFsService(deps);
 		const listing = await service.listDir(dir);
-		// The basic listing is immediately usable and carries no blocking OS metadata.
-		expect(listing.entries.find((entry) => entry.name === "clip.mp4")?.osKind).toBeNull();
+		// The basic listing is immediately usable: a lean record with no blocking OS metadata.
+		expect(listing.entries.find((entry) => entry.name === "clip.mp4")).toMatchObject({
+			kind: "file",
+			ext: "mp4",
+			flags: 0,
+		});
 		const enriched = await service.enrichEntries(
-			listing.entries.map(({ path, kind, ext, modifiedAt }) => ({ path, kind, ext, modifiedAt })),
+			listing.entries.map(({ path, kind, ext, mtimeMs }) => ({ path, kind, ext, mtimeMs })),
 			false,
 		);
 		expect(enriched.find((entry) => entry.path.endsWith("clip.mp4"))?.osKind).toBe("MPEG-4 movie");
@@ -1348,11 +1356,18 @@ describe("osKind", () => {
 		const dir = await mkdtemp(join(tmpdir(), "fs-oskind-folder-"));
 		await mkdir(join(dir, "sub"));
 
-		// When listing it
-		const listing = await createFsService(makeDeps(dir).deps).listDir(dir);
+		// When listing and enriching it
+		const service = createFsService(makeDeps(dir).deps);
+		const listing = await service.listDir(dir);
+		const sub = listing.entries.find((entry) => entry.name === "sub");
+		expect(sub).toBeDefined();
 
-		// Then the subfolder has no OS kind
-		expect(listing.entries.find((entry) => entry.name === "sub")?.osKind).toBeNull();
+		// Then enriching the subfolder yields no OS kind
+		const enriched = await service.enrichEntries(
+			[{ path: sub!.path, kind: sub!.kind, ext: sub!.ext, mtimeMs: sub!.mtimeMs }],
+			false,
+		);
+		expect(enriched[0]?.osKind).toBeNull();
 		await rm(dir, { recursive: true, force: true });
 	});
 
@@ -1367,13 +1382,18 @@ describe("osKind", () => {
 			},
 		};
 
-		// When listing it
-		const listing = await createFsService(deps).listDir(dir);
-
-		// Then the entry survives with no OS kind
+		// When listing and enriching it
+		const service = createFsService(deps);
+		const listing = await service.listDir(dir);
 		const entry = listing.entries.find((candidate) => candidate.name === "clip.mp4");
-		expect(entry?.osKind).toBeNull();
 		expect(entry?.ext).toBe("mp4");
+
+		// Then the entry survives the failed lookup with no OS kind
+		const enriched = await service.enrichEntries(
+			[{ path: entry!.path, kind: entry!.kind, ext: entry!.ext, mtimeMs: entry!.mtimeMs }],
+			false,
+		);
+		expect(enriched[0]?.osKind).toBeNull();
 		await rm(dir, { recursive: true, force: true });
 	});
 });
@@ -1399,9 +1419,8 @@ describe("icons", () => {
 
 		const service = createFsService(deps);
 		const listing = await service.listDir(dir);
-		expect(listing.entries.find((entry) => entry.name === "clip.mp4")?.iconUrl).toBeNull();
 		const enriched = await service.enrichEntries(
-			listing.entries.map(({ path, kind, ext, modifiedAt }) => ({ path, kind, ext, modifiedAt })),
+			listing.entries.map(({ path, kind, ext, mtimeMs }) => ({ path, kind, ext, mtimeMs })),
 			true,
 		);
 		expect(enriched.find((entry) => entry.path.endsWith("clip.mp4"))?.iconUrl).toBe(
@@ -1429,7 +1448,7 @@ describe("icons", () => {
 		};
 		const service = createFsService(deps);
 		const listing = await service.listDir(dir);
-		const targets = listing.entries.map(({ path, kind, ext, modifiedAt }) => ({ path, kind, ext, modifiedAt }));
+		const targets = listing.entries.map(({ path, kind, ext, mtimeMs }) => ({ path, kind, ext, mtimeMs }));
 
 		// When both passes start, the icon pass settles while metadata is still pending
 		const metadata = service.finderMetadata(targets);
@@ -1439,7 +1458,7 @@ describe("icons", () => {
 		// Then the metadata lands separately, echoing the requested identity
 		release.resolve();
 		expect(await metadata).toEqual([
-			{ path: targets[0]?.path, modifiedAt: targets[0]?.modifiedAt, finder: expect.objectContaining({ tags: ["Red"], width: 4, height: 3 }) },
+			{ path: targets[0]?.path, mtimeMs: targets[0]?.mtimeMs, finder: expect.objectContaining({ tags: ["Red"], width: 4, height: 3 }) },
 		]);
 		await rm(dir, { recursive: true, force: true });
 	});
@@ -1497,11 +1516,11 @@ describe("application bundles", () => {
 		};
 		const service = createFsService(deps);
 		const listing = await service.listDir(dir);
-		const targets = listing.entries.map(({ path: entryPath, kind, ext, modifiedAt }) => ({
+		const targets = listing.entries.map(({ path: entryPath, kind, ext, mtimeMs }) => ({
 			path: entryPath,
 			kind,
 			ext,
-			modifiedAt,
+			mtimeMs,
 		}));
 
 		// When the listing's rows are enriched
@@ -1512,11 +1531,18 @@ describe("application bundles", () => {
 		expect(enriched[0]).toMatchObject({ path, osKind: "Application", iconUrl: "autorag-thumb://local/?path=Hello.app&mtime=t" });
 	});
 
-	it("reports a bundle's kind through stat, where the Inspector reads it", async () => {
+	it("reports a bundle as a file through stat and its OS kind through enrichment", async () => {
 		const path = await makeBundle("Hello.app");
 		const deps: FsServiceDeps = { ...makeDeps(dir).deps, osKind: async () => "Application" };
+		const service = createFsService(deps);
 
-		expect(await createFsService(deps).stat(path)).toMatchObject({ kind: "file", ext: "app", osKind: "Application" });
+		// The Inspector's record is the lean one: a launchable file, no kind on it …
+		const entry = await service.stat(path);
+		expect(entry).toMatchObject({ kind: "file", ext: "app" });
+		expect(Object.keys(entry)).not.toContain("osKind");
+		// … and the OS kind is what the enrichment pass answers for it.
+		const [enriched] = await service.enrichEntries([{ path, kind: entry.kind, ext: entry.ext, mtimeMs: entry.mtimeMs }], false);
+		expect(enriched).toMatchObject({ path, osKind: "Application" });
 	});
 
 	it("keeps an .app directory a folder on Windows, whose OS has no notion of a bundle", async () => {
@@ -1537,13 +1563,13 @@ describe("previewIcon", () => {
 		// Given a provider whose preview tier answers a 640px URL for the file
 		const dir = await mkdtemp(join(tmpdir(), "fs-preview-"));
 		await writeFile(join(dir, "deck.pdf"), "x");
-		const seen: Array<{ readonly path: string; readonly ext: string; readonly modifiedAt: string }> = [];
+		const seen: Array<{ readonly path: string; readonly ext: string; readonly mtimeMs: number }> = [];
 		const deps: FsServiceDeps = {
 			...makeDeps(dir).deps,
 			icons: {
 				icons: async () => new Map(),
 				preview: async (target) => {
-					seen.push({ path: target.path, ext: target.ext, modifiedAt: target.modifiedAt });
+					seen.push({ path: target.path, ext: target.ext, mtimeMs: target.mtimeMs });
 					return "autorag-thumb://local/?path=deck.pdf&mtime=t&size=640";
 				},
 			},
@@ -1551,11 +1577,11 @@ describe("previewIcon", () => {
 
 		// When the inspector asks for the file's preview
 		const service = createFsService(deps);
-		const url = await service.previewIcon(join(dir, "deck.pdf"), "2026-09-29T00:00:00.000Z");
+		const url = await service.previewIcon(join(dir, "deck.pdf"), Date.parse("2026-09-29T00:00:00.000Z"));
 
 		// Then the provider answered for exactly that identity, extension included for the visual-types gate
 		expect(url).toBe("autorag-thumb://local/?path=deck.pdf&mtime=t&size=640");
-		expect(seen).toEqual([{ path: join(dir, "deck.pdf"), ext: "pdf", modifiedAt: "2026-09-29T00:00:00.000Z" }]);
+		expect(seen).toEqual([{ path: join(dir, "deck.pdf"), ext: "pdf", mtimeMs: Date.parse("2026-09-29T00:00:00.000Z") }]);
 		await rm(dir, { recursive: true, force: true });
 	});
 
@@ -1568,7 +1594,7 @@ describe("previewIcon", () => {
 
 		const service = createFsService(deps);
 
-		expect(await service.previewIcon(join(dir, "a.bin"), "2026-09-29T00:00:00.000Z")).toBeNull();
+		expect(await service.previewIcon(join(dir, "a.bin"), Date.parse("2026-09-29T00:00:00.000Z"))).toBeNull();
 		await rm(dir, { recursive: true, force: true });
 	});
 });

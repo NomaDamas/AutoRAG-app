@@ -12,6 +12,7 @@
 
 import type { FsFileDetails, FsImageMetadata } from "../../../shared/fs-contract";
 import type { FinderEntry } from "../data/entries";
+import { dateLabelOf, kindLabelOf, locationOf, sizeLabelOf } from "./entry-values";
 import { formatSize, formatTimestamp } from "./format";
 
 export type InfoSection = "general" | "image";
@@ -91,12 +92,12 @@ export function buildInfoRows(
 	const push = (key: string, def: string, value: string | null, core: boolean): void => {
 		if (value !== null) general.push({ label: translate ? translate(key, def) : def, value, section: "general", core });
 	};
-	push("inspector.labels.kind", "종류", entry.kindLabel, true);
-	push("inspector.labels.size", "크기", details === null ? entry.sizeLabel : formatSize(details.size), true);
-	push("inspector.labels.location", "위치", entry.location, true);
+	push("inspector.labels.kind", "종류", kindLabelOf(entry), true);
+	push("inspector.labels.size", "크기", details === null ? sizeLabelOf(entry) : formatSize(details.size), true);
+	push("inspector.labels.location", "위치", locationOf(entry), true);
 	push("inspector.labels.path", "경로", details?.path ?? entry.path, true);
 	push("inspector.labels.dateCreated", "생성한 날짜", details === null ? null : formatTimestamp(details.createdAt), true);
-	push("inspector.labels.dateModified", "수정한 날짜", details === null ? entry.dateLabel : formatTimestamp(details.modifiedAt), true);
+	push("inspector.labels.dateModified", "수정한 날짜", details === null ? dateLabelOf(entry) : formatTimestamp(details.modifiedAt), true);
 	if (details !== null) {
 		push("inspector.labels.dateAccessed", "접근한 날짜", formatTimestamp(details.accessedAt), false);
 		push("inspector.labels.dateChanged", "변경한 날짜", formatTimestamp(details.changedAt), false);

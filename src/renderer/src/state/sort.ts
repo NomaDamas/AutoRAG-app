@@ -8,6 +8,21 @@
  * as 0 (the minimum), and Name compares with the Korean locale.
  */
 
+import {
+	addedMsOf,
+	applicationOf,
+	commentsTextOf,
+	createdMsOf,
+	dimensionsAreaOf,
+	kindLabelOf,
+	lastOpenedMsOf,
+	locationOf,
+	ratingOf,
+	type SortableEntry,
+	sizeOf,
+	tagsTextOf,
+} from "./entry-values";
+
 export type SortKey =
 	| "name"
 	| "kind"
@@ -77,28 +92,6 @@ export function explicitSort(key: SortKey, dir: SortDirection): SortState {
 	return { key, dir, flipped: dir === (DESCENDING_FIRST.includes(key) ? 1 : -1) };
 }
 
-export interface SortableEntry {
-	readonly name: string;
-	readonly kind: "folder" | "file";
-	/** Sortable modification stamp; see state/format.parseModifiedLabel. */
-	readonly modifiedValue: number;
-	/** Sortable size in bytes; folders and unstatable entries are 0. */
-	readonly sizeValue: number;
-	readonly kindLabel: string;
-	/** Parent location, shown in the "Where" column while searching. */
-	readonly location: string;
-	/** Finder metadata populated by the native enrichment pass. */
-	readonly createdValue?: number;
-	readonly addedValue?: number;
-	readonly lastOpenedValue?: number;
-	readonly tagsLabel?: string;
-	readonly commentsLabel?: string;
-	readonly dimensionsLabel?: string;
-	readonly dimensionsValue?: number;
-	readonly ratingValue?: number;
-	readonly applicationLabel?: string;
-}
-
 const collator = new Intl.Collator("ko", { numeric: true });
 
 /** An unparseable stamp or size (NaN) ranks as 0, the minimum of its column. */
@@ -106,41 +99,70 @@ function orZero(value: number | undefined): number {
 	return value !== undefined && Number.isFinite(value) ? value : 0;
 }
 
-function extensionOf(entry: SortableEntry): string {
+/** The name's own suffix, case kept, so "a.TXT" and "a.txt" order the way Finder does. */
+function extensionText(entry: SortableEntry): string {
 	if (entry.kind === "folder") return "";
 	const dot = entry.name.lastIndexOf(".");
 	return dot > 0 ? entry.name.slice(dot + 1) : "";
 }
 
-function textOf(value: string | undefined): string {
-	return value ?? "";
-}
+/**
+ * How one criterion orders rows: the key each row sorts by, whether it is
+ * text (collator) or a number, and whether equal keys fall back to the name.
+ */
+type SortSpec =
+	| { readonly text: true; readonly key: (entry: SortableEntry) => string; readonly thenByName: boolean }
+	| { readonly text: false; readonly key: (entry: SortableEntry) => number; readonly thenByName: false };
 
-function byName(a: SortableEntry, b: SortableEntry): number {
-	return collator.compare(a.name, b.name);
-}
+const text = (key: (entry: SortableEntry) => string | undefined, thenByName = false): SortSpec => ({
+	text: true,
+	key: (entry) => key(entry) ?? "",
+	thenByName,
+});
+const numeric = (key: (entry: SortableEntry) => number | undefined): SortSpec => ({
+	text: false,
+	key: (entry) => orZero(key(entry)),
+	thenByName: false,
+});
 
-const COMPARATORS: Record<SortKey, (a: SortableEntry, b: SortableEntry) => number> = {
-	name: byName,
-	kind: (a, b) => collator.compare(a.kindLabel, b.kindLabel) || byName(a, b),
-	application: (a, b) => collator.compare(textOf(a.applicationLabel), textOf(b.applicationLabel)) || byName(a, b),
-	extension: (a, b) => collator.compare(extensionOf(a), extensionOf(b)),
-	dateCreated: (a, b) => orZero(a.createdValue) - orZero(b.createdValue),
-	date: (a, b) => orZero(a.modifiedValue) - orZero(b.modifiedValue),
-	dateAdded: (a, b) => orZero(a.addedValue) - orZero(b.addedValue),
-	dateLastOpened: (a, b) => orZero(a.lastOpenedValue) - orZero(b.lastOpenedValue),
-	size: (a, b) => orZero(a.sizeValue) - orZero(b.sizeValue),
-	tags: (a, b) => collator.compare(textOf(a.tagsLabel), textOf(b.tagsLabel)),
-	comments: (a, b) => collator.compare(textOf(a.commentsLabel), textOf(b.commentsLabel)),
-	dimensions: (a, b) => orZero(a.dimensionsValue) - orZero(b.dimensionsValue),
-	rating: (a, b) => orZero(a.ratingValue) - orZero(b.ratingValue),
-	where: (a, b) => collator.compare(a.location, b.location) || byName(a, b),
+const SPECS: Record<SortKey, SortSpec> = {
+	name: text((entry) => entry.name),
+	kind: text(kindLabelOf, true),
+	application: text(applicationOf, true),
+	extension: text(extensionText),
+	dateCreated: numeric(createdMsOf),
+	date: numeric((entry) => entry.mtimeMs),
+	dateAdded: numeric(addedMsOf),
+	dateLastOpened: numeric(lastOpenedMsOf),
+	size: numeric(sizeOf),
+	tags: text(tagsTextOf),
+	comments: text(commentsTextOf),
+	dimensions: numeric(dimensionsAreaOf),
+	rating: numeric(ratingOf),
+	where: text(locationOf, true),
 };
 
+/**
+ * Rows ordered by `sort`, stable for equal keys. Labels are derived, not
+ * stored, so each row's key is computed once up front and the comparator only
+ * compares (10,000 rows: one derivation each instead of one per comparison).
+ */
 export function sortEntries<T extends SortableEntry>(entries: readonly T[], sort: SortState | null): T[] {
 	if (sort === null) {
 		return [...entries];
 	}
-	const compare = COMPARATORS[sort.key];
-	return [...entries].sort((a, b) => compare(a, b) * sort.dir);
+	const spec = SPECS[sort.key];
+	const dir = sort.dir;
+	const order = entries.map((_, index) => index);
+	if (spec.text) {
+		const keys = entries.map(spec.key);
+		order.sort((a, b) => {
+			const compared = collator.compare(keys[a] ?? "", keys[b] ?? "") || (spec.thenByName ? collator.compare(entries[a]?.name ?? "", entries[b]?.name ?? "") : 0);
+			return compared * dir;
+		});
+	} else {
+		const keys = Float64Array.from(entries, spec.key);
+		order.sort((a, b) => ((keys[a] ?? 0) - (keys[b] ?? 0)) * dir);
+	}
+	return order.map((index) => entries[index] as T);
 }

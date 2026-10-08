@@ -9,8 +9,14 @@ import { join } from "node:path";
 import type { FsVersionFamily } from "../shared/fs-contract";
 import type { FileStamp } from "./version-family-verify";
 
+/**
+ * Snapshot format. 2: family entries carry `mtimeMs` / `flags` (FS roadmap #100);
+ * an older snapshot reads as missing, so the service rescans and rewrites it.
+ */
+export const VERSION_FAMILY_STORE_VERSION = 2;
+
 export interface StoredVersionFamilies {
-	readonly version: 1;
+	readonly version: typeof VERSION_FAMILY_STORE_VERSION;
 	/** ISO timestamp of the scan that produced this snapshot. */
 	readonly scannedAt: string;
 	/** Location roots the snapshot covers. */
@@ -28,7 +34,7 @@ function isStored(value: unknown): value is StoredVersionFamilies {
 	if (typeof value !== "object" || value === null) return false;
 	const candidate = value as Partial<StoredVersionFamilies>;
 	return (
-		candidate.version === 1 &&
+		candidate.version === VERSION_FAMILY_STORE_VERSION &&
 		typeof candidate.scannedAt === "string" &&
 		Array.isArray(candidate.locations) &&
 		Array.isArray(candidate.families)
