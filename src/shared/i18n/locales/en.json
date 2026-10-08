@@ -107,6 +107,7 @@
   "contextMenu": {
     "open": "Open",
     "quickLook": "Quick Look",
+    "openWith": "Open With",
     "showInEnclosingFolder": "Show in Enclosing Folder",
     "retryIndex": "Retry indexing",
     "excludeFromIndex": "Exclude from indexing",
@@ -117,6 +118,10 @@
     "duplicate": "Duplicate",
     "rename": "Rename",
     "copyPath": "Copy Path",
+    "compress": "Compress",
+    "compressCount": "Compress {{count}} Items",
+    "extract": "Extract",
+    "share": "Share",
     "moveToTrash": "Move to Trash",
     "moveToTrashCount": "Move {{count}} items to Trash",
     "putBack": "Put Back",

@@ -7,14 +7,23 @@
  * duplicate / rename / copy path. "Show in Enclosing Folder" is a product
  * addition too, and only the virtual Recents view offers it — elsewhere the
  * row already lives in the folder it would open.
+ *
+ * The row-action group mirrors the Inspector's headline actions — new folder,
+ * open with, compress, extract, share — so the representative jobs are one
+ * right-click away. It is capability-gated (`ActionCapabilities`): an item
+ * whose engine is missing never renders, and the multi-selection keeps only
+ * the batch-meaningful items.
  */
 
 import { deleteKeyLabel, enterKeyLabel, formatShortcut } from "../lib/shortcuts";
 import { NEW_FILE_FORMATS, type NewFileFormatId } from "../../../shared/new-file-contract";
+import type { ActionCapabilities } from "../../../shared/actions-contract";
+import { fileExtension } from "./file-actions";
 
 export type FinderMenuAction =
 	| "quickLook"
 	| "open"
+	| "openWith"
 	| "showInEnclosingFolder"
 	| "toggleIndex"
 	| "retryIndex"
@@ -24,6 +33,9 @@ export type FinderMenuAction =
 	| "duplicate"
 	| "rename"
 	| "copyPath"
+	| "share"
+	| "compress"
+	| "extract"
 	| "putBack"
 	| "trash"
 	| "emptyTrash"
@@ -74,6 +86,10 @@ export interface ContextMenuInput {
 	readonly inRecents?: boolean;
 	/** True while the listing is the Trash location: rows go back (Put Back) instead of to the Trash. */
 	readonly inTrash?: boolean;
+	/** What this machine can run; a missing engine removes its row action. */
+	readonly capabilities: ActionCapabilities;
+	/** Whether 새 폴더 can create in the folder the menu acts on. */
+	readonly canCreateFolder: boolean;
 }
 
 function item(
@@ -105,6 +121,11 @@ export function buildContextMenu(
 			? item("open", tr("contextMenu.open", "열기"), { keycap: enterKeyLabel() })
 			: item("quickLook", tr("contextMenu.quickLook", "Quick Look"), { keycap: "space" }),
 	];
+	// The open group, Finder-style: 다른 앱으로 열기 sits directly under 열기.
+	// Like the row-action group below, it never appears inside the Trash.
+	if (!isFolder && input.inTrash !== true && input.capabilities.openWith) {
+		entries.push(item("openWith", tr("contextMenu.openWith", "다른 앱으로 열기")));
+	}
 	if (input.inRecents === true) {
 		entries.push(SEPARATOR, item("showInEnclosingFolder", tr("contextMenu.showInEnclosingFolder", "Show in Enclosing Folder")));
 	}
@@ -126,6 +147,39 @@ export function buildContextMenu(
 		item("duplicate", tr("contextMenu.duplicate", "복제")),
 		item("rename", tr("contextMenu.rename", "이름 변경"), { disabled: multi }),
 		item("copyPath", tr("contextMenu.copyPath", "경로 복사")),
+	);
+
+	// The row-action group: the Inspector's headline actions, run on the whole
+	// selection. Capability-gated, and never offered inside the Trash — a
+	// trashed row goes back (Put Back) or away, not into an archive or a sheet.
+	const rowActions: FinderMenuItem[] = [];
+	if (input.inTrash !== true) {
+		if (input.canCreateFolder) {
+			rowActions.push(item("newFolder", tr("contextMenu.newFolder", "새 폴더")));
+		}
+		if (input.capabilities.archive) {
+			// Extraction is single-target: one .zip row on its own.
+			if (!multi && fileExtension(input.target.name) === "zip") {
+				rowActions.push(item("extract", tr("contextMenu.extract", "압축 해제")));
+			}
+			rowActions.push(
+				item(
+					"compress",
+					multi
+						? tr("contextMenu.compressCount", `${input.selectionCount}개 항목 압축`, { count: input.selectionCount })
+						: tr("contextMenu.compress", "압축"),
+				),
+			);
+		}
+		if (input.capabilities.share) {
+			rowActions.push(item("share", tr("contextMenu.share", "공유")));
+		}
+	}
+	if (rowActions.length > 0) {
+		entries.push(SEPARATOR, ...rowActions);
+	}
+
+	entries.push(
 		SEPARATOR,
 		input.inTrash === true
 			? item(
@@ -144,7 +198,7 @@ export function buildContextMenu(
 						tone: "danger",
 					},
 				),
-		);
+	);
 	return entries;
 }
 

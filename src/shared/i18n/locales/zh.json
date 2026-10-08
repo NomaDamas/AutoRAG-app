@@ -107,6 +107,7 @@
   "contextMenu": {
     "open": "打开",
     "quickLook": "快速查看 (Quick Look)",
+    "openWith": "打开方式",
     "showInEnclosingFolder": "在外层文件夹中显示",
     "retryIndex": "重试建立索引",
     "excludeFromIndex": "从索引中排除",
@@ -117,6 +118,10 @@
     "duplicate": "复制",
     "rename": "重命名",
     "copyPath": "拷贝路径",
+    "compress": "压缩",
+    "compressCount": "压缩 {{count}} 个项目",
+    "extract": "解压",
+    "share": "共享",
     "moveToTrash": "移到废纸篓",
     "moveToTrashCount": "将 {{count}} 个项目移到废纸篓",
     "putBack": "放回原处",

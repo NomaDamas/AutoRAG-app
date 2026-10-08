@@ -165,6 +165,12 @@ The Info half's bottom bar is data-driven, not a fixed four buttons.
   for `.zip`, an 이미지 편집 menu for images, and a 동영상 변환 menu for video.
   Quick Look, 경로 복사, and 휴지통 are deliberately absent — Space, the row
   context menu, ⌘⌫, and the Info chips already cover them.
+- The same headline actions sit in the row context menu (`state/context-menu.ts`):
+  다른 앱으로 열기 in the open group, and 새 폴더 · 압축 해제(`.zip` only) · 압축 ·
+  공유 in a group above 휴지통으로 이동. The same capability gates apply, the Trash
+  offers none of them, and a multi-selection keeps only the batch-meaningful
+  items — 압축 packs the whole selection into one `Archive.zip`, 공유 opens one
+  sheet, and 압축 해제 disappears.
 - **Whether an action is real** comes from `actions:capabilities` in main: the
   macOS share sheet, the image engine (`sips`, plus WebP through `ffmpeg`), and
   video container conversion (`ffmpeg`) are probed once per session. A missing

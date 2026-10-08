@@ -107,6 +107,7 @@
   "contextMenu": {
     "open": "열기",
     "quickLook": "훑어보기 (Quick Look)",
+    "openWith": "다른 앱으로 열기",
     "showInEnclosingFolder": "상위 폴더에서 보기",
     "retryIndex": "인덱싱 다시 시도",
     "excludeFromIndex": "인덱싱에서 제외",
@@ -117,6 +118,10 @@
     "duplicate": "복제",
     "rename": "이름 변경",
     "copyPath": "경로 복사",
+    "compress": "압축",
+    "compressCount": "{{count}}개 항목 압축",
+    "extract": "압축 해제",
+    "share": "공유",
     "moveToTrash": "휴지통으로 이동",
     "moveToTrashCount": "{{count}}개 항목 휴지통으로 이동",
     "putBack": "원래 위치로 복원",

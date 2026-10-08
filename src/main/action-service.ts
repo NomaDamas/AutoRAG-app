@@ -53,7 +53,7 @@ export interface ApplicationPicker {
 
 /** The OS share sheet; injected so the service never imports `ShareMenu`. */
 export interface SharePresenter {
-	present(path: string, anchor: ActionAnchor, window: BrowserWindow | null): void;
+	present(paths: readonly string[], anchor: ActionAnchor, window: BrowserWindow | null): void;
 }
 
 export interface ActionServiceDeps {
@@ -69,8 +69,8 @@ export interface ActionServiceDeps {
 /** The Inspector action surface the IPC layer registers. */
 export interface ActionService {
 	capabilities(): Promise<ActionCapabilities>;
-	run(path: string, request: ActionRequest, window: BrowserWindow | null): Promise<ActionOutcome>;
-	share(path: string, anchor: ActionAnchor, window: BrowserWindow | null): Promise<void>;
+	run(paths: readonly string[], request: ActionRequest, window: BrowserWindow | null): Promise<ActionOutcome>;
+	share(paths: readonly string[], anchor: ActionAnchor, window: BrowserWindow | null): Promise<void>;
 }
 
 const COMMAND_TIMEOUT_MS = 10 * 60 * 1000;
@@ -533,22 +533,45 @@ export function createActionService(deps: ActionServiceDeps): ActionService {
 			};
 		},
 
-		async run(path: string, request: ActionRequest, window: BrowserWindow | null): Promise<ActionOutcome> {
+		async run(paths: readonly string[], request: ActionRequest, window: BrowserWindow | null): Promise<ActionOutcome> {
+			const [first] = paths;
+			if (first === undefined) throw new Error("작업 대상이 비어 있습니다");
+			// The edit conversions and extraction are single-target; the menu and
+			// the Inspector only ever send them one path, and the archive keeps
+			// that promise at the boundary too.
+			const sole = (): string => {
+				if (paths.length !== 1) throw new Error("이 작업은 한 번에 하나의 항목만 지원합니다");
+				return first;
+			};
 			switch (request.kind) {
 				case "openWith": {
 					const application = await deps.applications.pick(window);
 					if (application === null) return { output: null, note: "열기를 취소했습니다" };
-					if (platform === "darwin") await run("open", ["-a", application, path]);
-					else await run(application, [path]);
-					return { output: null, note: `${basename(path)} — ${basename(application)}로 열었습니다` };
+					if (platform === "darwin") await run("open", ["-a", application, ...paths]);
+					else await run(application, [...paths]);
+					return {
+						output: null,
+						note:
+							paths.length === 1
+								? `${basename(first)} — ${basename(application)}로 열었습니다`
+								: `파일 ${paths.length}개 — ${basename(application)}로 열었습니다`,
+					};
 				}
 				case "compress": {
-					const stat = await lstat(path);
-					const target = await uniqueChild(dirname(path), `${basename(path)}.zip`);
-					await writeZip(target, await archiveMembers(path, stat.isDirectory()));
+					// Finder's rule: one archive per Compress — named after the sole
+					// target, or "Archive" when the selection spans several.
+					const name = paths.length === 1 ? `${basename(first)}.zip` : "Archive.zip";
+					const target = await uniqueChild(dirname(first), name);
+					const members: ArchiveMember[] = [];
+					for (const path of paths) {
+						const stat = await lstat(path);
+						members.push(...(await archiveMembers(path, stat.isDirectory())));
+					}
+					await writeZip(target, members);
 					return { output: target, note: `${basename(target)} — 압축했습니다` };
 				}
 				case "extract": {
+					const path = sole();
 					const stem = stemOf(path);
 					const target = await uniqueChild(dirname(path), stem);
 					await readZip(path, target, stem);
@@ -558,19 +581,20 @@ export function createActionService(deps: ActionServiceDeps): ActionService {
 					if (!(await imageTargets()).includes(request.format)) {
 						throw new Error(`${request.format.toUpperCase()} 변환을 지원하지 않습니다`);
 					}
-					const output = await convertImage(path, request.format);
+					const output = await convertImage(sole(), request.format);
 					return { output, note: `${basename(output)} — 변환했습니다` };
 				}
 				case "resizeImage": {
-					const output = await resizeImage(path, request.maxEdge);
+					const output = await resizeImage(sole(), request.maxEdge);
 					return { output, note: `${basename(output)} — 크기를 조절했습니다` };
 				}
 				case "optimizeImage": {
-					const output = await optimizeImage(path);
+					const output = await optimizeImage(sole());
 					return { output, note: `${basename(output)} — 용량을 최적화했습니다` };
 				}
 				case "convertVideo": {
 					if (!(await hasFfmpeg())) throw new Error("동영상 변환에는 ffmpeg가 필요합니다");
+					const path = sole();
 					const target = await uniqueChild(dirname(path), `${stemOf(path)}.${request.container}`);
 					await run("ffmpeg", ffmpegRemuxArgs(path, target));
 					return { output: target, note: `${basename(target)} — 컨테이너를 변환했습니다` };
@@ -578,11 +602,12 @@ export function createActionService(deps: ActionServiceDeps): ActionService {
 			}
 		},
 
-		async share(path: string, anchor: ActionAnchor, window: BrowserWindow | null): Promise<void> {
+		async share(paths: readonly string[], anchor: ActionAnchor, window: BrowserWindow | null): Promise<void> {
+			if (paths.length === 0) throw new Error("작업 대상이 비어 있습니다");
 			if (platform !== "darwin" || share === null) {
 				throw new Error("이 플랫폼은 시스템 공유를 지원하지 않습니다");
 			}
-			share.present(path, anchor, window);
+			share.present(paths, anchor, window);
 		},
 	};
 }

@@ -27,8 +27,10 @@ export type ImageFormat = "jpeg" | "png" | "webp" | "tiff" | "heic";
 export type VideoContainer = "mp4" | "mov" | "mkv";
 
 /**
- * One unit of work. `openWith` and `compress` need nothing beyond the target
- * path; the rest carry their parameter in the discriminant.
+ * One unit of work. `openWith`, `compress`, and the share sheet act on the
+ * whole target list (one chooser, one archive, one sheet); `extract` and the
+ * edit conversions take exactly one target, and the rest carry their
+ * parameter in the discriminant.
  */
 export type ActionRequest =
 	| { readonly kind: "openWith" }
@@ -71,12 +73,15 @@ export interface ActionAnchor {
 	readonly height: number;
 }
 
-/** Exposed to the Finder window as `window.autorag.actions`. */
+/**
+ * Exposed to the Finder window as `window.autorag.actions`. `run` and `share`
+ * carry the whole selection; a single row arrives as a one-path list.
+ */
 export interface ActionsBridge {
 	capabilities(): Promise<ActionCapabilities>;
-	run(path: string, request: ActionRequest): Promise<ActionOutcome>;
+	run(paths: readonly string[], request: ActionRequest): Promise<ActionOutcome>;
 	/** macOS only; rejects elsewhere and when `capabilities().share` is false. */
-	share(path: string, anchor: ActionAnchor): Promise<void>;
+	share(paths: readonly string[], anchor: ActionAnchor): Promise<void>;
 }
 
 const IMAGE_FORMATS: readonly string[] = ["jpeg", "png", "webp", "tiff", "heic"];
@@ -113,6 +118,15 @@ export function isActionAnchor(value: unknown): value is ActionAnchor {
 	if (typeof value !== "object" || value === null) return false;
 	const { x, y, width, height } = value as { x?: unknown; y?: unknown; width?: unknown; height?: unknown };
 	return [x, y, width, height].every((part) => typeof part === "number" && Number.isFinite(part));
+}
+
+/** Every target list crossing the boundary: a non-empty array of non-empty paths. */
+export function isActionPaths(value: unknown): value is readonly string[] {
+	return (
+		Array.isArray(value) &&
+		value.length > 0 &&
+		value.every((path): path is string => typeof path === "string" && path.length > 0)
+	);
 }
 
 /**

@@ -107,6 +107,7 @@
   "contextMenu": {
     "open": "開く",
     "quickLook": "クイックルック (Quick Look)",
+    "openWith": "このアプリケーションで開く",
     "showInEnclosingFolder": "親フォルダーを表示",
     "retryIndex": "インデックスを再試行",
     "excludeFromIndex": "インデックスから除外",
@@ -117,6 +118,10 @@
     "duplicate": "複製",
     "rename": "名前の変更",
     "copyPath": "パスをコピー",
+    "compress": "圧縮",
+    "compressCount": "{{count}}個の項目を圧縮",
+    "extract": "展開",
+    "share": "共有",
     "moveToTrash": "ゴミ箱に入れる",
     "moveToTrashCount": "{{count}}個の項目をゴミ箱に入れる",
     "putBack": "元に戻す",

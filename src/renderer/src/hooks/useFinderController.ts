@@ -1129,11 +1129,11 @@ export function useFinderController(
 						showToast("공유 위치를 찾지 못했습니다");
 						return;
 					}
-					source.actions.share(entry.path, anchor).catch(reportError);
+					source.actions.share([entry.path], anchor).catch(reportError);
 					return;
 				case "request":
 					source.actions
-						.run(entry.path, target.request)
+						.run([entry.path], target.request)
 						.then((outcome) => {
 							showToast(outcome.note);
 							if (outcome.output !== null) refresh();
@@ -1334,6 +1334,14 @@ export function useFinderController(
 			transferDropped(paths, target.path, copy);
 		});
 
+	/** The folder a row-menu create lands in: the pane the menu opened in (column view), else the folder in view. */
+	const menuCreateDir = useLatestCallback(
+		(menu: ContextMenuState): string =>
+			menu.entry !== null && layout === "columns" && panePaths.includes(menu.entry.location)
+				? menu.entry.location
+				: menu.dir,
+	);
+
 	const runMenuAction = useLatestCallback(
 		(action: FinderMenuAction, format: NewFileFormatId | null = null) => {
 			const menu = contextMenu;
@@ -1342,7 +1350,7 @@ export function useFinderController(
 			}
 			setContextMenu(null);
 			if (action === "newFolder") {
-				createFolderIn(menu.dir);
+				createFolderIn(menuCreateDir(menu));
 				return;
 			}
 			if (action === "newFile") {
@@ -1351,10 +1359,7 @@ export function useFinderController(
 			}
 			if (action === "paste") {
 				// The column view pastes into the pane the menu was opened in.
-				const pasteDir =
-					menu.entry !== null && layout === "columns" && panePaths.includes(menu.entry.location)
-						? menu.entry.location
-						: menu.dir;
+				const pasteDir = menuCreateDir(menu);
 				source
 					.clipboardGet()
 					.then((clipboard) => {
@@ -1421,6 +1426,27 @@ export function useFinderController(
 					return;
 				case "copyPath":
 					source.copyPaths(targets).catch(reportError);
+					return;
+				case "openWith":
+				case "compress":
+				case "extract":
+					// One request for the whole selection: the chooser opens every file
+					// with the one application, compress writes one archive, and the menu
+					// offers extract for a single .zip row only.
+					source.actions
+						.run(targets, { kind: action })
+						.then((outcome) => {
+							showToast(outcome.note);
+							if (outcome.output !== null) refresh();
+						})
+						.catch(reportError);
+					return;
+				case "share":
+					// The sheet anchors at the cursor: the menu just closed there, and
+					// that is where the user's attention is.
+					source.actions
+						.share(targets, { x: menu.cursor.x, y: menu.cursor.y, width: 0, height: 0 })
+						.catch(reportError);
 					return;
 				case "trash":
 					trashPaths(targets);
@@ -1624,10 +1650,12 @@ export function useFinderController(
 				clipboardCount,
 				inRecents: path === RECENTS_PATH,
 				inTrash: inTrashLocation,
+				capabilities: actionCapabilities,
+				canCreateFolder: canCreateIn(menuCreateDir(menu)),
 			},
 			(k, def, opt) => t(k, { defaultValue: def, ...(opt as Record<string, unknown> | undefined) }),
 		);
-	}, [contextMenu, menuTargets, sidecar, clipboardCount, path, t, inTrashLocation]);
+	}, [contextMenu, menuTargets, sidecar, clipboardCount, path, t, inTrashLocation, actionCapabilities, canCreateIn, menuCreateDir, layout, panePaths]);
 
 	const navTargets = useMemo(
 		() => (locations.length > 0 ? locations : [{ name: basename(path), path }]),
