@@ -186,6 +186,7 @@ llama runtime are copied in so the first index runs offline. When the app exits
 the wrapper kills the run's processes and removes the sandbox; a SIGKILL of
 the wrapper is covered by a detached watchdog, and the next `make onboarding`
 sweeps any sandbox whose owner and watchdog both died. The QA lane covers the
+same flow end to end in CI settings (`bun scripts/manual-qa/run-qa-onboarding.mjs`).
 
 Scope of that isolation: the sandbox holds AutoRAG's own state (userData,
 config, home, workspace, index). External datasource crawlers are CLIs with
@@ -194,6 +195,7 @@ them, so enabling a source in onboarding syncs the real store — `slacrawl` rea
 and writes `~/.slacrawl` (Slack's local mirror), Spotlight queries the machine's
 index, Obsidian reads the real vaults. Detection and the first sync are real by
 design; they never touch other apps' data beyond their own store.
+
 ## Live filesystem sync
 
 Folders shown in open tabs are watched for changes made by other apps. A
