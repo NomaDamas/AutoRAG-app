@@ -27,6 +27,21 @@ export const SETTINGS_CHANNELS = {
 	credentialsList: "credentials:list",
 	credentialsSet: "credentials:set",
 	credentialsRemove: "credentials:remove",
+	providersList: "providers:list",
+	providerLoginStart: "provider:loginStart",
+	providerLoginRespond: "provider:loginRespond",
+	providerLoginCancel: "provider:loginCancel",
+	providerLogout: "provider:logout",
+	providerLoginEvent: "provider:loginEvent",
+	providersDiscover: "providers:discover",
+	providersUpsert: "providers:upsert",
+	providersRemove: "providers:remove",
+	providersTest: "providers:test",
+	embeddingGet: "embedding:get",
+	embeddingPlan: "embedding:plan",
+	embeddingApply: "embedding:apply",
+	sourcesSync: "sources:sync",
+	sourcesSetAccess: "sources:setAccess",
 } as const;
 
 export type Permission = "ask" | "allow" | "deny";
@@ -70,6 +85,15 @@ export const DEFAULT_SETTINGS: AppSettings = {
 /** Whether the backend a datasource needs is present on this machine. */
 export type DataSourceInstallState = "installed" | "missing" | "builtin" | "credential-missing" | "unsupported";
 
+/** Whether the desktop source app a datasource reads from is present. Detected separately from the CLI. */
+export interface DataSourceAppRequirement {
+	/** True when this datasource reads from a desktop app (Slack, Discord, KakaoTalk, …). */
+	readonly required: boolean;
+	/** App bundle present. `null` = cannot detect on this platform. */
+	readonly installed: boolean | null;
+	readonly name: string;
+}
+
 /** How the AutoRAG agent sees the datasource, per the shared config and datasourceAccess. */
 export type DataSourceAgentState = "connected" | "blocked" | "disabled" | "unsupported";
 
@@ -91,6 +115,8 @@ export interface DataSourceRow {
 		readonly binary: string | null;
 		readonly path: string | null;
 		readonly detail: string;
+		/** Desktop source app presence, detected separately from the CLI binary. */
+		readonly app: DataSourceAppRequirement;
 	};
 	readonly agent: {
 		readonly state: DataSourceAgentState;
@@ -186,6 +212,10 @@ export interface ModelCatalogEntry {
 	readonly name: string;
 	readonly api: string;
 	readonly available: boolean;
+	/** OpenAI-compatible base URL for this model's provider, when one is configured. */
+	readonly baseUrl: string | null;
+	/** Env var holding this provider's API key, when one is known (never the secret). */
+	readonly apiKeyEnv: string | null;
 }
 
 export interface ModelCatalogProvider {
@@ -203,6 +233,69 @@ export interface ModelCatalogSnapshot {
 	readonly providers: readonly ModelCatalogProvider[];
 }
 
+export type ProviderAuthKind = "api_key" | "oauth";
+
+/** How a provider connects: Pi runtime provider, loopback local server, or user-added OpenAI-compatible server. */
+export type ProviderKind = "runtime" | "local" | "custom";
+
+export interface ProviderSummary {
+	readonly id: string;
+	readonly name: string;
+	readonly baseUrl: string | null;
+	readonly kind: ProviderKind;
+	readonly authKinds: readonly ProviderAuthKind[];
+	readonly subscription: boolean;
+	readonly authConfigured: boolean;
+	readonly authSource: "stored" | "environment" | "none" | "runtime";
+	readonly apiKeyEnv: string | null;
+	readonly models: readonly ModelCatalogEntry[];
+}
+
+/** A local loopback or custom OpenAI-compatible server the renderer adds/edits. */
+export interface ProviderServerInput {
+	/** Present when editing an existing local/custom provider. */
+	readonly id?: string;
+	/** `local` is loopback-only; `custom` accepts any http(s) OpenAI-compatible server. */
+	readonly kind: "local" | "custom";
+	readonly label: string;
+	readonly baseUrl: string;
+	/** Optional API key; stored encrypted, never written to models.json in plaintext. */
+	readonly apiKey?: string;
+}
+
+export interface DiscoveredModel {
+	readonly id: string;
+	readonly name: string;
+	readonly api: string;
+}
+
+export interface ProviderDiscoveryResult {
+	readonly ok: boolean;
+	readonly error: string | null;
+	/** Which discovery endpoint answered: OpenAI `/v1/models` or Ollama `/api/tags`. */
+	readonly protocol: "openai" | "ollama" | null;
+	readonly models: readonly DiscoveredModel[];
+}
+
+export interface ProviderConnectionResult {
+	readonly ok: boolean;
+	readonly error: string | null;
+	readonly latencyMs: number | null;
+	readonly modelCount: number | null;
+}
+
+export type ProviderLoginPrompt =
+	| { readonly type: "text" | "secret" | "manual_code"; readonly message: string; readonly placeholder?: string }
+	| { readonly type: "select"; readonly message: string; readonly options: readonly { readonly id: string; readonly label: string; readonly description?: string }[] };
+export type ProviderLoginEvent =
+	| { readonly type: "prompt"; readonly sessionId: string; readonly prompt: ProviderLoginPrompt }
+	| { readonly type: "info" | "progress"; readonly sessionId: string; readonly message: string; readonly links?: readonly { readonly url: string; readonly label?: string }[] }
+	| { readonly type: "auth_url"; readonly sessionId: string; readonly url: string; readonly instructions?: string }
+	| { readonly type: "device_code"; readonly sessionId: string; readonly userCode: string; readonly verificationUri: string; readonly intervalSeconds?: number; readonly expiresInSeconds?: number }
+	| { readonly type: "done"; readonly sessionId: string }
+	| { readonly type: "error"; readonly sessionId: string; readonly message: string };
+export interface ProviderLoginStartResult { readonly sessionId: string; }
+
 /** One encrypted credential the app stores for a provider API-key env var. */
 export interface ProviderCredentialStatus {
 	readonly envName: string;
@@ -210,6 +303,80 @@ export interface ProviderCredentialStatus {
 	readonly stored: boolean;
 	/** The value the agent will use: stored > env > none. */
 	readonly source: "stored" | "env" | "none";
+}
+
+export type EmbeddingProfileKind = "native" | "profile" | "local-server";
+
+/** One selectable embedding runtime profile, in the order the settings screen offers them. */
+export interface EmbeddingProfile {
+	readonly id: string;
+	readonly kind: EmbeddingProfileKind;
+	readonly label: string;
+	readonly description: string;
+	readonly model: string;
+	readonly dimension: number;
+	readonly queryPrefix: string;
+	readonly passagePrefix: string;
+	readonly baseUrl: string | null;
+	readonly requiresLocalServer: boolean;
+}
+
+/** How one configured datasource adopts the selected global embedding profile. */
+export type EmbeddingAdoption = "native" | "propagated" | "incompatible" | "not-applicable" | "not-configured";
+
+export interface EmbeddingSourceStatus {
+	readonly id: string;
+	readonly type: string;
+	readonly adoption: EmbeddingAdoption;
+	readonly reason: string;
+	readonly action: string | null;
+}
+
+export interface EmbeddingSettingsSnapshot {
+	readonly configPath: string;
+	readonly configExists: boolean;
+	readonly error: string | null;
+	readonly current: {
+		readonly profileId: string | null;
+		readonly embedder: JsonObject;
+	};
+	readonly profiles: readonly EmbeddingProfile[];
+	readonly sources: readonly EmbeddingSourceStatus[];
+}
+
+export interface EmbeddingChangeRequest {
+	readonly profileId: string;
+	readonly localServer?: {
+		readonly id: string;
+		readonly baseUrl: string;
+		readonly dimension: number;
+		readonly queryPrefix?: string;
+		readonly passagePrefix?: string;
+	};
+	readonly acknowledgeIncompatible?: boolean;
+}
+
+export interface EmbeddingChangeResult {
+	readonly ok: boolean;
+	readonly applied: boolean;
+	readonly profileId: string;
+	readonly plan: readonly EmbeddingSourceStatus[];
+	readonly incompatibilities: readonly EmbeddingSourceStatus[];
+	readonly written: readonly (readonly string[])[];
+	readonly rebuilds: readonly DataSourceSyncResult[];
+	readonly error: string | null;
+}
+
+/** Outcome of syncing one datasource against its own index. */
+export interface DataSourceSyncResult {
+	readonly id: string;
+	readonly ok: boolean;
+	readonly state: "indexed" | "empty" | "external" | "unsupported" | "unavailable" | "not-configured" | "failed";
+	readonly chunkCount: number | null;
+	readonly indexedAt: string | null;
+	readonly durationMs: number;
+	readonly diagnostics: readonly ConfigRefreshDiagnostic[];
+	readonly error: string | null;
 }
 
 export interface ConfigRefreshDiagnostic {
@@ -266,4 +433,31 @@ export interface SettingsBridge {
 	/** Encrypts and persists a provider key under `envName`; never returns the secret. */
 	credentialsSet(envName: string, secret: string): Promise<readonly ProviderCredentialStatus[]>;
 	credentialsRemove(envName: string): Promise<readonly ProviderCredentialStatus[]>;
-}
+	providersList(): Promise<readonly ProviderSummary[]>;
+	providerLoginStart(providerId: string, authType: ProviderAuthKind): Promise<ProviderLoginStartResult>;
+	providerLoginRespond(sessionId: string, value: string): Promise<void>;
+	providerLoginCancel(sessionId: string): Promise<void>;
+	providerLogout(providerId: string): Promise<void>;
+	onProviderLoginEvent(listener: (event: ProviderLoginEvent) => void): () => void;
+
+	/** Probes a local/custom OpenAI-compatible server (or Ollama) and returns only the models it actually reports. */
+	providersDiscover(input: ProviderServerInput): Promise<ProviderDiscoveryResult>;
+	/** Adds or edits a local/custom provider in models.json (key encrypted in the credential store) and returns the fresh list. */
+	providersUpsert(input: ProviderServerInput): Promise<readonly ProviderSummary[]>;
+	/** Removes a local/custom provider and its stored key; returns the fresh list. */
+	providersRemove(id: string): Promise<readonly ProviderSummary[]>;
+	/** Re-probes a saved provider's server for a connection check. */
+	providersTest(id: string): Promise<ProviderConnectionResult>;
+
+	/** Current embedding profile plus how each configured datasource adopts it. */
+	embeddingGet(): Promise<EmbeddingSettingsSnapshot>;
+	/** Dry-run the adoption plan for a profile change (no writes, no reindex). */
+	embeddingPlan(request: EmbeddingChangeRequest): Promise<EmbeddingSettingsSnapshot>;
+	/** Applies a profile change to the shared config, then syncs/reindexes affected sources. */
+	embeddingApply(request: EmbeddingChangeRequest): Promise<EmbeddingChangeResult>;
+
+	/** Syncs one datasource against its own index. */
+	sourcesSync(id: string): Promise<DataSourceSyncResult>;
+	/** Grants or revokes agent access to one datasource; returns the fresh snapshot. */
+	sourcesSetAccess(id: string, allowed: boolean): Promise<DataSourcesSnapshot>;
+ }

@@ -275,4 +275,54 @@ describe("createDataSourceStatusService", () => {
 		expect(snapshot.sources).toEqual([]);
 		expect(snapshot.error).toMatch(/parse/i);
 	});
+
+	it("syncs one source through its skill and explains unavailable/unknown sources", async () => {
+		const fixture = await createFixtureWithOnlySlacrawlOnPath();
+		await writeConfig(fixture, { vault: { type: "obsidian", connector: { vaultPath: join(fixture.workspace, "vault") } } }, []);
+		const service = createDataSourceStatusService({ env: fixture.env, cwd: fixture.root });
+
+		const unavailable = await service.sync("vault");
+		expect(unavailable).toMatchObject({ id: "vault", ok: false, state: "unavailable" });
+		expect(unavailable.error).toContain("qmd");
+		expect(typeof unavailable.durationMs).toBe("number");
+
+		const unknown = await service.sync("nope");
+		expect(unknown).toMatchObject({ id: "nope", ok: false, state: "not-configured" });
+		expect(unknown.error).toContain("Unknown datasource");
+	});
+
+	it("grants and revokes one source's access without changing another's", async () => {
+		const fixture = await createFixtureWithOnlySlacrawlOnPath();
+		await writeConfig(
+			fixture,
+			{ slack: {}, feed: { type: "rss", connector: { feeds: [{ url: "https://example.com/feed.xml" }] } } },
+			[],
+		);
+		const service = createDataSourceStatusService({ env: fixture.env, cwd: fixture.root });
+
+		await service.setAccess("slack", true);
+		const granted = await service.list();
+		expect(byId(granted.sources, "slack").agent.state).toBe("connected");
+		expect(byId(granted.sources, "feed").agent.state).toBe("blocked");
+
+		await service.setAccess("slack", false);
+		const revoked = await service.list();
+		expect(revoked.accessTags).toEqual([]);
+		expect(byId(revoked.sources, "slack").agent.state).toBe("blocked");
+		expect(byId(revoked.sources, "feed").agent.state).toBe("blocked");
+	});
+
+	it("detects the desktop source app separately from the CLI", async () => {
+		const fixture = await createFixtureWithOnlySlacrawlOnPath();
+		await writeConfig(
+			fixture,
+			{ slack: {}, feed: { type: "rss", connector: { feeds: [{ url: "https://example.com/feed.xml" }] } } },
+			[],
+		);
+
+		const snapshot = await createDataSourceStatusService({ env: fixture.env, cwd: fixture.root }).list();
+
+		expect(byId(snapshot.sources, "slack").install.app).toMatchObject({ required: true, name: "Slack" });
+		expect(byId(snapshot.sources, "feed").install.app).toMatchObject({ required: false, name: "" });
+	});
 });

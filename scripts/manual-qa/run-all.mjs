@@ -51,6 +51,7 @@ const LANES = [
 	{ name: "ai-search-images", script: "run-qa-finder-ai-search-images.mjs", timeout: 300 },
 	{ name: "datasource-status", script: "run-qa-finder-datasource-status.mjs", timeout: 240 },
 	{ name: "models-status", script: "run-qa-finder-models-status.mjs", timeout: 240 },
+	{ name: "settings-redesign", script: "run-qa-settings-redesign.mjs", timeout: 300 },
 	{ name: "global-appearance", script: "run-qa-global-appearance.mjs", timeout: 300 },
 	{ name: "quick-look-reference", script: "run-qa-quick-look-reference.mjs", timeout: 420 },
 ];

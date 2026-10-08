@@ -11,10 +11,12 @@ import { isJsonObject } from "../shared/settings-contract";
 import { createIconProvider } from "./file-icon";
 import { registerIconProtocol, THUMB_PRIVILEGED_SCHEME } from "./icon-register";
 import { FS_CHANNELS } from "../shared/fs-contract";
+import { SETTINGS_CHANNELS } from "../shared/settings-contract";
 import { DUPEY_LAYER_ID, LIVE_CHANNELS } from "../shared/live-contract";
 import { APP_NAME, APP_VERSION, formatWindowTitle, type DevLabel } from "../shared/app-info";
 import { createChatStore } from "./chat-store";
 import { createDataSourceStatusService } from "./datasource-status";
+import { createEmbeddingSettingsService, type EmbeddingSettingsRuntime } from "./embedding-settings-service";
 import { createIndexStatusService } from "./index-status";
 import { readDevLabel, resolveClonePath } from "./dev-label";
 import { buildFsEntry } from "./fs-entry";
@@ -24,6 +26,7 @@ import { createPlaces } from "./places";
 import { createRecentsStore } from "./recents-store";
 import { createAutoRagConfigService } from "./autorag-config-service";
 import { createModelStatusService } from "./model-status";
+import { createProviderAuthService, type ProviderAuthService } from "./provider-auth-service";
 import { createProviderCredentialService } from "./provider-credentials";
 import { createDefaultAgentFactory, createSearchService } from "./search-service";
 import { createSettingsService } from "./settings-service";
@@ -218,6 +221,7 @@ function createMainWindow(devLabel: DevLabel | null, appearance: AppAppearance):
 }
 
 let versionFamilyService: VersionFamilyService | null = null;
+let providerAuthService: ProviderAuthService | null = null;
 let mainWindow: BrowserWindow | null = null;
 let currentAppearance: AppAppearance = "light";
 function sendToMainWindow(channel: string, payload: unknown): void {
@@ -229,6 +233,16 @@ function sendAppearance(appearance: AppAppearance): void {
 	for (const window of BrowserWindow.getAllWindows()) {
 		if (!window.isDestroyed()) window.webContents.send(APPEARANCE_CHANNELS.changed, appearance);
 	}
+}
+
+/** Last value handed to the OS, so a settings read that did not change it never re-registers. */
+let launchAtLoginApplied: boolean | null = null;
+/** Mirror the general setting onto the OS login item (macOS/Windows own this; Linux ignores it). */
+function applyLaunchAtLogin(launchAtLogin: boolean): void {
+	if (process.platform !== "darwin" && process.platform !== "win32") return;
+	if (launchAtLoginApplied === launchAtLogin) return;
+	launchAtLoginApplied = launchAtLogin;
+	app.setLoginItemSettings({ openAtLogin: launchAtLogin });
 }
 
 // Electron keeps only the last `registerSchemesAsPrivileged` call: every scheme registers here, together.
@@ -378,17 +392,53 @@ app.whenReady().then(async () => {
 		env: process.env,
 	});
 	credentials.load();
+	const providerAuth = createProviderAuthService({
+		send: (event) => sendToMainWindow(SETTINGS_CHANNELS.providerLoginEvent, event),
+		env: process.env,
+		credentials,
+	});
+	providerAuthService = providerAuth;
+	// auth.json-stored OpenRouter/Vercel keys reach process.env so the env-driven
+	// Jev/rerank backends resolve the same credential.
+	void providerAuth.warmEnv();
+	const configService = createAutoRagConfigService({ env: process.env, cwd: process.cwd() });
+	// The datasource service hands its discrawl skill the embedding service's
+	// current loopback runtime; the embedding service needs the datasource service
+	// for adoption planning, so the holder is filled right after.
+	let embeddingSettings: EmbeddingSettingsRuntime | null = null;
+	const dataSources = createDataSourceStatusService({
+		env: process.env,
+		cwd: process.cwd(),
+		discrawlEmbeddingRuntime: () => embeddingSettings?.discrawlRuntime(),
+	});
+	const embeddingService = createEmbeddingSettingsService({
+		env: process.env,
+		cwd: process.cwd(),
+		config: configService,
+		dataSources,
+	});
+	embeddingSettings = embeddingService;
+	// A persisted local-server embedder points mailcrawl at the app's ephemeral
+	// adapter port; refresh re-probes and rewrites it before any agent runs.
+	await embeddingService.refresh();
+	embeddingService.applyProcessEnv();
+	app.once("will-quit", () => {
+		void embeddingService.dispose();
+	});
 	const settingsService = createSettingsService({
 		directory: join(app.getPath("userData"), "settings"),
-		dataSources: createDataSourceStatusService({ env: process.env, cwd: process.cwd() }),
+		dataSources,
 		models: createModelStatusService({ env: process.env, cwd: process.cwd() }),
-		config: createAutoRagConfigService({ env: process.env, cwd: process.cwd() }),
+		config: configService,
 		refreshConfig: refreshAutoragIndex,
 		credentials,
+		providers: providerAuth,
+		embedding: embeddingService,
 		onSettingsChanged: (settings) => {
 			applyAppearance(settings.appearance);
 			scanIntervalMinutes = settings.dupeyScanIntervalMinutes;
 			versionFamilyService?.reschedule();
+			applyLaunchAtLogin(settings.launchAtLogin);
 		},
 	});
 	registerSettingsIpcHandlers(settingsService);
@@ -396,6 +446,7 @@ app.whenReady().then(async () => {
 	applyAppearance(settings.appearance);
 	scanIntervalMinutes = settings.dupeyScanIntervalMinutes;
 	versionFamilyService?.reschedule();
+	applyLaunchAtLogin(settings.launchAtLogin);
 	void versionFamilyService.start();
 	// Warm the file-name index daemon (fsearch watch / Everything) so the first
 	// search never pays the database cold-load. It is deliberately left running
@@ -442,4 +493,5 @@ app.on("window-all-closed", () => {
 
 app.on("will-quit", () => {
 	versionFamilyService?.stop();
+	void providerAuthService?.dispose();
 });

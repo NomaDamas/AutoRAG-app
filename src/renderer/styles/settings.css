@@ -5,8 +5,8 @@
  * Styling" block (`docs/design-reference/ai-finder/
  * design_handoff_ai_finder_v7_bloom/AI Finder v7.html`): a two-column shell
  * (settings-sidebar + settings-content) whose content is borderless Linear
- * rows (`linear-*`) and provider/data-source cards (`provider-*`). Class names
- * match the reference so the two files can be diffed rule for rule.
+ * rows (`linear-*`) plus data-source detail cards (`settings-source`). Class
+ * names match the reference so the two files can be diffed rule for rule.
  *
  * The reference hard-codes a few colors that the token set covers
  * (`#0a64d8`, `#28c840`, `#e3f6e8`, …); every one is expressed through
@@ -79,8 +79,19 @@
 }
 
 .settings-nav-item--source {
-	padding-left: 28px;
+	justify-content: space-between;
 	font-size: var(--font-size-meta);
+}
+
+.settings-nav-item--source .settings-nav-label {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.settings-nav-item--source.is-active .settings-dot {
+	background: var(--text-on-accent);
 }
 
 .settings-nav-item--manage {
@@ -260,6 +271,42 @@
 	cursor: pointer;
 }
 
+/* Prototype select: native popup, custom chrome — flat field + chevron, 180px floor. */
+.settings-view .linear-select,
+.settings-view .settings-select-compact {
+	min-width: 180px;
+	padding: 0 28px 0 var(--space-10);
+	background-color: var(--bg-window);
+	font-size: 12.5px;
+	appearance: none;
+	background-image: linear-gradient(45deg, transparent 50%, var(--text-muted) 50%), linear-gradient(135deg, var(--text-muted) 50%, transparent 50%);
+	background-position: calc(100% - 15px) 50%, calc(100% - 11px) 50%;
+	background-size: 4px 4px;
+	background-repeat: no-repeat;
+}
+
+.settings-view .settings-select-compact {
+	min-width: 90px;
+	height: 30px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-6);
+	color: var(--text-primary);
+}
+
+.settings-view .linear-select:focus,
+.settings-view .settings-select-compact:focus {
+	border-color: var(--accent);
+	box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* Role group heading inside a section (prototype `.subsection-title`). */
+.settings-view .settings-subsection-title {
+	margin: 18px 0 2px;
+	color: var(--text-muted);
+	font-size: 11.5px;
+	font-weight: var(--weight-medium);
+}
+
 .linear-btn {
 	height: 30px;
 	padding: 0 var(--space-12);
@@ -315,119 +362,6 @@
 	background: var(--bg-window);
 }
 
-/* --------------------------------------------------- Provider / source rows -- */
-
-.provider-list {
-	display: flex;
-	flex-direction: column;
-	gap: var(--space-8);
-	margin-top: var(--space-8);
-}
-
-.provider-row {
-	display: flex;
-	align-items: center;
-	gap: var(--space-14);
-	padding: 12px var(--space-16);
-	border: 1px solid var(--border-divider);
-	border-radius: var(--radius-10);
-	background: var(--bg-window);
-	transition:
-		border-color var(--dur-popover) var(--ease-out),
-		box-shadow var(--dur-popover) var(--ease-out);
-}
-
-.provider-row:hover {
-	border-color: var(--border-strong);
-	box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
-}
-
-.provider-icon {
-	display: grid;
-	place-items: center;
-	flex: none;
-	width: 34px;
-	height: 34px;
-	border-radius: var(--radius-8);
-	background: var(--bg-input);
-	font-size: var(--font-size-sm);
-	font-weight: var(--weight-medium);
-	color: var(--text-primary);
-}
-
-.provider-body {
-	flex: 1;
-	min-width: 0;
-}
-
-.provider-name {
-	display: flex;
-	align-items: center;
-	gap: var(--space-6);
-	font-size: 13.5px;
-	font-weight: var(--weight-regular);
-	color: var(--text-primary);
-}
-
-.provider-models {
-	margin-top: var(--space-2);
-	font-size: var(--font-size-meta);
-	font-weight: var(--weight-regular);
-	color: var(--text-muted);
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
-}
-
-.provider-tag {
-	padding: 1px var(--space-6);
-	border-radius: var(--radius-4);
-	background: var(--bg-input);
-	font-size: var(--font-size-badge);
-	font-weight: var(--weight-medium);
-	color: var(--text-muted);
-}
-
-.provider-status {
-	display: inline-flex;
-	align-items: center;
-	flex: none;
-	gap: var(--space-6);
-	padding: var(--space-4) 11px;
-	border: 1px solid transparent;
-	border-radius: var(--radius-12);
-	font-size: 11.5px;
-	font-weight: var(--weight-regular);
-	user-select: none;
-}
-
-.provider-status::before {
-	content: "";
-	width: var(--size-dot);
-	height: var(--size-dot);
-	border-radius: var(--radius-full);
-}
-
-.provider-status.is-connected {
-	background: var(--ok-bg);
-	color: var(--ok-text);
-	border-color: var(--ok-border);
-}
-
-.provider-status.is-connected::before {
-	background: var(--traffic-max);
-}
-
-.provider-status.is-disconnected {
-	background: var(--bg-input);
-	color: var(--text-muted);
-	border-color: var(--border);
-}
-
-.provider-status.is-disconnected::before {
-	background: var(--text-faint);
-}
-
 /* ------------------------------------------------------- Source detail -- */
 
 .settings-source {
@@ -435,144 +369,6 @@
 	border-radius: var(--radius-10);
 	background: var(--bg-window);
 	overflow: hidden;
-}
-
-.settings-source__row {
-	display: flex;
-	align-items: center;
-	gap: var(--space-14);
-	padding: 12px var(--space-16);
-	transition: background var(--dur-popover) var(--ease-out);
-}
-
-.settings-source__row:hover {
-	background: var(--bg-hover-row);
-}
-
-.settings-source__row.is-disabled {
-	opacity: 0.6;
-	/* The reference gives a disabled source row no pointer target, so a QA
-	 * click on the chevron must be dispatched rather than hit-tested. */
-	pointer-events: none;
-}
-
-.settings-source__body {
-	flex: 1;
-	min-width: 0;
-	cursor: pointer;
-}
-
-.settings-source__name {
-	display: flex;
-	align-items: center;
-	gap: var(--space-6);
-	font-size: 13.5px;
-	color: var(--text-primary);
-}
-
-.settings-source__detail {
-	display: block;
-	margin-top: var(--space-2);
-	font-size: var(--font-size-meta);
-	color: var(--text-muted);
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
-}
-
-.settings-source__track {
-	display: flex;
-	align-items: center;
-	gap: var(--space-10);
-	flex: none;
-}
-
-.settings-source__pct {
-	font-size: var(--font-size-meta);
-	color: var(--text-muted);
-	white-space: nowrap;
-}
-
-.settings-source__chevron {
-	display: grid;
-	place-items: center;
-	flex: none;
-	width: var(--size-icon-sm);
-	height: var(--size-icon-sm);
-	padding: 0;
-	border: 0;
-	border-radius: var(--radius-6);
-	background: transparent;
-	color: var(--text-muted);
-	cursor: pointer;
-}
-
-.settings-source__chevron:hover {
-	background: var(--bg-hover);
-	color: var(--text-primary);
-}
-
-.settings-source__chevron svg {
-	transition: transform var(--dur-popover) var(--ease-out);
-}
-
-.settings-source__chevron.is-open svg {
-	transform: rotate(180deg);
-}
-
-.settings-source-facts {
-	margin: 0;
-	padding: 0 var(--space-16);
-	border-top: 1px solid var(--border-divider);
-}
-
-.settings-source-fact {
-	display: flex;
-	align-items: flex-start;
-	justify-content: space-between;
-	gap: var(--space-24);
-	padding: 12px 0;
-	border-bottom: 1px solid var(--border-divider);
-}
-
-.settings-source-fact:last-child {
-	border-bottom: 0;
-}
-
-.settings-source-fact dt {
-	flex: none;
-	font-size: 12.5px;
-	color: var(--text-muted);
-}
-
-.settings-source-fact dd {
-	margin: 0;
-	text-align: right;
-}
-
-.settings-source-fact dd strong {
-	display: block;
-	font-size: var(--font-size-sm);
-	font-weight: var(--weight-regular);
-	color: var(--text-primary);
-}
-
-.settings-source-fact dd span {
-	display: block;
-	margin-top: var(--space-2);
-	font-size: var(--font-size-meta);
-	color: var(--text-muted);
-}
-
-.settings-source-fact[data-state="missing"] dd strong,
-.settings-source-fact[data-state="credential-missing"] dd strong,
-.settings-source-fact[data-state="blocked"] dd strong,
-.settings-source-fact[data-state="unsupported"] dd strong {
-	color: var(--warn-text);
-}
-
-.settings-source-fact[data-state="attention"] dd strong {
-	color: var(--danger-text);
 }
 
 .settings-source-desc {
@@ -727,4 +523,839 @@
 	background: var(--danger-bg-soft);
 	color: var(--danger-text);
 	font-size: 12.5px;
+}
+
+/* ============================================================================
+ * Prototype-aligned settings page (`docs/prototypes/settings`).
+ *
+ * Same visual language as the `linear-*` rows above, plus the pieces the
+ * prototype adds: sidebar search, chips, path lists, list rows, app icons,
+ * floating menus, connect/login modals and the account/plan/indexing blocks.
+ * Everything is scoped under `.settings-view` so these generic names never
+ * leak into the rest of the app.
+ * ========================================================================== */
+
+/* ------------------------------------------------------- Sidebar search -- */
+
+.settings-view .settings-search {
+	position: relative;
+	margin-bottom: var(--space-6);
+}
+
+.settings-view .settings-search__icon {
+	position: absolute;
+	left: 9px;
+	top: 7px;
+	color: var(--text-muted);
+	pointer-events: none;
+}
+
+.settings-view .settings-search input {
+	width: 100%;
+	height: 28px;
+	padding: 0 10px 0 29px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-7);
+	background: var(--bg-window);
+	color: var(--text-primary);
+	font-size: 12.5px;
+	outline: none;
+}
+
+.settings-view .settings-search input::placeholder {
+	color: var(--text-faint);
+}
+
+.settings-view .settings-search input:focus {
+	border-color: var(--accent);
+	box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.settings-view .settings-nav-empty {
+	padding: 14px var(--space-10);
+	color: var(--text-muted);
+	font-size: var(--font-size-meta);
+}
+
+.settings-view .settings-sidebar-footer {
+	margin-top: auto;
+	padding: 18px var(--space-10) 0;
+	color: var(--text-faint);
+	font-size: 10.5px;
+	line-height: 1.5;
+}
+
+/* -------------------------------------------------------------- Sections -- */
+
+.settings-view .settings-page-head {
+	margin-bottom: var(--space-8);
+}
+
+.settings-view .linear-row.is-stack {
+	display: block;
+}
+
+.settings-view .linear-row.is-stack .linear-control {
+	justify-content: flex-start;
+	margin-top: var(--space-10);
+	max-width: none;
+}
+
+.settings-view .settings-page-head .linear-title {
+	margin: 0 0 var(--space-6);
+}
+
+.settings-view .settings-page-head .linear-desc {
+	margin: 0;
+}
+
+/* ---------------------------------------------------------- List groups -- */
+
+.settings-view .settings-list {
+	display: flex;
+	flex-direction: column;
+}
+
+.settings-view .settings-list-row {
+	display: flex;
+	align-items: center;
+	gap: var(--space-12);
+	width: 100%;
+	padding: 12px 0;
+	border: 0;
+	border-bottom: 1px solid var(--border-divider);
+	background: none;
+	color: var(--text-primary);
+	text-align: left;
+}
+
+.settings-view .settings-list-row:last-child {
+	border-bottom: 0;
+}
+
+.settings-view button.settings-list-row {
+	cursor: pointer;
+}
+
+.settings-view button.settings-list-row:hover .settings-list-title {
+	color: var(--accent-text);
+}
+
+.settings-view .settings-list-body {
+	flex: 1;
+	min-width: 0;
+}
+
+.settings-view .settings-list-title {
+	display: block;
+	color: var(--text-primary);
+	font-size: 13.5px;
+	font-weight: var(--weight-regular);
+}
+
+.settings-view .settings-list-meta {
+	display: block;
+	margin-top: 1px;
+	color: var(--text-muted);
+	font-size: var(--font-size-meta);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.settings-view .settings-app-icon {
+	display: grid;
+	place-items: center;
+	flex: none;
+	width: 28px;
+	height: 28px;
+	border-radius: var(--radius-7);
+	background: var(--bg-input);
+	color: var(--text-primary);
+	font-size: var(--font-size-meta);
+	font-weight: var(--weight-semibold);
+}
+
+.settings-view .settings-app-icon.is-sm {
+	width: 18px;
+	height: 18px;
+	border-radius: var(--radius-5);
+	font-size: 10px;
+}
+
+.settings-view .settings-list-chevron {
+	flex: none;
+	color: var(--text-faint);
+}
+
+.settings-view .settings-add-row {
+	gap: var(--space-10);
+	padding: 12px 0 12px 7px;
+	color: var(--text-muted);
+	font-size: var(--font-size-sm);
+	cursor: pointer;
+}
+
+.settings-view .settings-add-row:hover {
+	color: var(--accent-text);
+}
+
+/* ----------------------------------------------------------- Status dot -- */
+
+.settings-view .settings-status {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-6);
+	flex: none;
+	color: var(--text-muted);
+	font-size: 12.5px;
+	white-space: nowrap;
+}
+
+.settings-view .settings-dot {
+	width: 7px;
+	height: 7px;
+	flex: none;
+	border-radius: var(--radius-full);
+	background: var(--text-faint);
+}
+
+.settings-view .settings-dot.is-ok {
+	background: var(--traffic-max);
+}
+
+.settings-view .settings-dot.is-warn {
+	background: var(--warn-dot);
+}
+
+.settings-view .settings-dot.is-run {
+	background: var(--accent);
+	animation: settings-pulse 1s ease-in-out infinite;
+}
+
+@keyframes settings-pulse {
+	50% {
+		opacity: 0.4;
+	}
+}
+
+/* ----------------------------------------------------------------- Chips -- */
+
+.settings-view .settings-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-6);
+}
+
+.settings-view .settings-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-4);
+	height: var(--size-chip);
+	padding: 0 var(--space-4) 0 9px;
+	border-radius: var(--radius-6);
+	background: var(--bg-input);
+	color: var(--text-primary);
+	font-size: var(--font-size-meta);
+}
+
+.settings-view .settings-chip button {
+	display: grid;
+	place-items: center;
+	width: 16px;
+	height: 16px;
+	padding: 0;
+	border: 0;
+	border-radius: var(--radius-4);
+	background: none;
+	color: var(--text-muted);
+	cursor: pointer;
+}
+
+.settings-view .settings-chip button:hover {
+	background: var(--bg-hover-strong);
+	color: var(--text-primary);
+}
+
+.settings-view .settings-chip-add {
+	height: var(--size-chip);
+	padding: 0 var(--space-8);
+	border: 0;
+	border-radius: var(--radius-6);
+	background: none;
+	color: var(--accent-text);
+	font-size: var(--font-size-meta);
+	cursor: pointer;
+}
+
+.settings-view .settings-chip-add:hover {
+	background: var(--accent-soft);
+}
+
+/* ------------------------------------------------------------- Path list -- */
+
+.settings-view .settings-path-list {
+	display: flex;
+	flex-direction: column;
+	width: 100%;
+}
+
+.settings-view .settings-path-line {
+	display: flex;
+	align-items: center;
+	gap: var(--space-10);
+	padding: 7px 0;
+	border-bottom: 1px solid var(--border-divider);
+	color: var(--text-primary);
+	font-size: 12.5px;
+}
+
+.settings-view .settings-path-line > span {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* --------------------------------------------------------------- Buttons -- */
+
+.settings-view .settings-btn-primary {
+	border-color: var(--accent);
+	background: var(--accent);
+	color: var(--text-on-accent);
+}
+
+.settings-view .settings-btn-primary:hover {
+	border-color: var(--accent-hover);
+	background: var(--accent-hover);
+}
+
+.settings-view .settings-btn-quiet {
+	height: auto;
+	padding: 0 var(--space-4);
+	border-color: transparent;
+	background: transparent;
+	color: var(--accent-text);
+}
+
+.settings-view .settings-btn-quiet:hover {
+	background: transparent;
+	text-decoration: underline;
+}
+
+.settings-view .settings-value {
+	color: var(--text-muted);
+	font-size: 12.5px;
+}
+
+.settings-view .settings-value.is-strong {
+	color: var(--text-primary);
+	font-weight: var(--weight-semibold);
+}
+
+.settings-view .settings-badge {
+	padding: 1px var(--space-6);
+	border-radius: var(--radius-4);
+	background: var(--bg-input);
+	color: var(--text-muted);
+	font-size: var(--font-size-badge);
+	font-weight: var(--weight-medium);
+	white-space: nowrap;
+}
+
+.settings-view .settings-note {
+	display: flex;
+	align-items: flex-start;
+	gap: var(--space-8);
+	margin: var(--space-10) 0 0;
+	color: var(--text-muted);
+	font-size: 12.5px;
+	line-height: 1.5;
+}
+
+.settings-view .settings-note svg {
+	flex: none;
+	margin-top: 2px;
+	color: var(--accent-text);
+}
+
+/* --------------------------------------------------- Role picker trigger -- */
+
+.settings-view .settings-split {
+	display: inline-flex;
+	align-items: stretch;
+	height: 30px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-6);
+	background: var(--bg-window);
+}
+
+.settings-view .settings-trigger {
+	display: inline-flex;
+	align-items: center;
+	gap: 7px;
+	min-width: 210px;
+	max-width: 320px;
+	padding: 0 var(--space-8) 0 9px;
+	border: 0;
+	border-radius: var(--radius-6) 0 0 var(--radius-6);
+	background: transparent;
+	color: var(--text-primary);
+	font-size: 12.5px;
+	text-align: left;
+	cursor: pointer;
+}
+
+.settings-view .settings-split.is-solo .settings-trigger {
+	border-radius: var(--radius-6);
+}
+
+.settings-view .settings-trigger:hover {
+	background: var(--bg-hover);
+}
+
+.settings-view .settings-trigger-label {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.settings-view .settings-trigger-label.is-muted {
+	color: var(--text-muted);
+}
+
+.settings-view .settings-icon-btn {
+	display: grid;
+	place-items: center;
+	flex: none;
+	width: 28px;
+	height: 28px;
+	padding: 0;
+	border: 0;
+	border-radius: var(--radius-6);
+	background: transparent;
+	color: var(--text-muted);
+	cursor: pointer;
+}
+
+.settings-view .settings-icon-btn:hover {
+	background: var(--bg-hover);
+	color: var(--text-primary);
+}
+
+.settings-view .settings-split .settings-icon-btn {
+	width: 30px;
+	height: auto;
+	border-left: 1px solid var(--border);
+	border-radius: 0 var(--radius-6) var(--radius-6) 0;
+}
+
+.settings-view .settings-icon-btn:disabled {
+	color: var(--text-faint);
+	background: transparent;
+	cursor: default;
+}
+
+/* ------------------------------------------------------ Floating menu --- */
+
+.settings-view .settings-menu {
+	position: fixed;
+	z-index: 15;
+	width: 280px;
+	max-height: min(420px, calc(100vh - 24px));
+	overflow-y: auto;
+	padding: var(--space-5);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-10);
+	background: var(--bg-window);
+	box-shadow: var(--shadow-menu);
+	font-size: 12.5px;
+}
+
+.settings-view .settings-menu.is-compact {
+	width: 210px;
+}
+
+.settings-view .settings-menu-search {
+	position: relative;
+	display: block;
+	margin-bottom: var(--space-4);
+}
+
+.settings-view .settings-menu-search svg {
+	position: absolute;
+	left: 9px;
+	top: 7px;
+	color: var(--text-muted);
+}
+
+.settings-view .settings-menu-search input {
+	width: 100%;
+	height: 28px;
+	padding: 0 9px 0 28px;
+	border: 0;
+	border-bottom: 1px solid var(--border-divider);
+	border-radius: 0;
+	background: none;
+	color: var(--text-primary);
+	font-size: 12.5px;
+	outline: none;
+}
+
+.settings-view .settings-menu-group {
+	margin: var(--space-6) 0 var(--space-2);
+	padding: 0 var(--space-8);
+	color: var(--text-muted);
+	font-size: var(--font-size-badge);
+	font-weight: var(--weight-medium);
+}
+
+.settings-view .settings-menu-item {
+	display: flex;
+	align-items: center;
+	gap: var(--space-8);
+	width: 100%;
+	min-height: 30px;
+	padding: 0 var(--space-8);
+	border: 0;
+	border-radius: var(--radius-6);
+	background: none;
+	color: var(--text-primary);
+	text-align: left;
+	cursor: pointer;
+}
+
+.settings-view .settings-menu-item > span:not(.settings-app-icon) {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.settings-view .settings-menu-item small {
+	flex: none;
+	max-width: 96px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--text-muted);
+	font-size: var(--font-size-badge);
+}
+
+.settings-view .settings-menu-item:hover {
+	background: var(--bg-hover-strong);
+}
+
+.settings-view .settings-menu-item.is-danger {
+	color: var(--danger-text);
+}
+
+.settings-view .settings-menu-sep {
+	height: 1px;
+	margin: var(--space-4) var(--space-2);
+	background: var(--border-divider);
+}
+
+.settings-view .settings-menu-empty {
+	margin: 0;
+	padding: var(--space-10) var(--space-8);
+	color: var(--text-muted);
+	font-size: var(--font-size-meta);
+	line-height: 1.5;
+}
+
+/* ----------------------------------------------------------------- Modal -- */
+
+.settings-view .settings-modal-backdrop {
+	position: fixed;
+	inset: 0;
+	z-index: 20;
+	display: grid;
+	place-items: center;
+	background: var(--scrim-modal);
+}
+
+.settings-view .settings-modal {
+	position: relative;
+	width: min(440px, calc(100% - 32px));
+	max-height: calc(100vh - 48px);
+	overflow-y: auto;
+	padding: 22px 22px 18px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-12);
+	background: var(--bg-window);
+	box-shadow: var(--shadow-menu);
+}
+
+.settings-view .settings-modal h2 {
+	margin: 0 0 var(--space-6);
+	color: var(--text-primary);
+	font-size: 15px;
+	font-weight: var(--weight-semibold);
+}
+
+.settings-view .settings-modal p {
+	margin: 0;
+	color: var(--text-muted);
+	font-size: 12.5px;
+	line-height: 1.55;
+}
+
+.settings-view .settings-modal .settings-note {
+	margin-top: var(--space-12);
+}
+
+.settings-view .settings-modal label {
+	display: block;
+	margin-top: var(--space-16);
+	color: var(--text-primary);
+	font-size: 12.5px;
+}
+
+.settings-view .settings-modal input:not([type="radio"], [type="checkbox"]),
+.settings-view .settings-modal select,
+.settings-view .settings-modal textarea {
+	display: block;
+	width: 100%;
+	height: 30px;
+	margin-top: var(--space-6);
+	padding: 0 var(--space-10);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-6);
+	background: var(--bg-window);
+	color: var(--text-primary);
+	font-size: 12.5px;
+	outline: none;
+}
+
+.settings-view .settings-modal textarea {
+	height: 68px;
+	padding: var(--space-8) var(--space-10);
+	resize: vertical;
+	line-height: 1.5;
+}
+
+/* Choice rows (embedding profiles): radio inline with its label, like the prototype list rows. */
+.settings-view .settings-modal label.settings-list-row {
+	display: flex;
+	align-items: center;
+	gap: var(--space-12);
+	margin-top: 0;
+}
+
+.settings-view .settings-modal input[type="radio"],
+.settings-view .settings-modal input[type="checkbox"] {
+	flex: none;
+	margin: 0;
+	accent-color: var(--accent);
+}
+
+/* A datasource detail page is a plain page, not the legacy expandable card. */
+.settings-view .settings-source.is-open {
+	border: 0;
+	border-radius: 0;
+	background: transparent;
+	padding: 0;
+	overflow: visible;
+}
+
+.settings-view .settings-modal input:focus,
+.settings-view .settings-modal select:focus,
+.settings-view .settings-modal textarea:focus {
+	border-color: var(--accent);
+	box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.settings-view .settings-modal-close {
+	position: absolute;
+	top: var(--space-12);
+	right: var(--space-12);
+	display: grid;
+	place-items: center;
+	width: 24px;
+	height: 24px;
+	padding: 0;
+	border: 0;
+	border-radius: var(--radius-full);
+	background: transparent;
+	color: var(--text-faint);
+	cursor: pointer;
+}
+
+.settings-view .settings-modal-close:hover {
+	background: var(--bg-hover);
+	color: var(--text-primary);
+}
+
+.settings-view .settings-modal-error {
+	margin-top: var(--space-12);
+	color: var(--danger-text);
+}
+
+.settings-view .settings-modal-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: var(--space-8);
+	margin-top: var(--space-20);
+}
+
+.settings-view .settings-modal-actions .linear-btn:disabled {
+	opacity: 0.6;
+	cursor: progress;
+}
+
+.settings-view .settings-code {
+	display: block;
+	margin-top: var(--space-8);
+	padding: var(--space-8) var(--space-10);
+	border: 1px solid var(--border-divider);
+	border-radius: var(--radius-6);
+	background: var(--bg-subtle);
+	color: var(--text-primary);
+	font-size: 12.5px;
+	overflow-wrap: anywhere;
+	user-select: text;
+}
+
+/* ------------------------------------------------------ Account & plan --- */
+
+.settings-view .settings-avatar {
+	display: grid;
+	place-items: center;
+	flex: none;
+	width: 40px;
+	height: 40px;
+	border-radius: var(--radius-full);
+	background: var(--bg-input);
+	color: var(--text-primary);
+	font-size: 15px;
+	font-weight: var(--weight-semibold);
+}
+
+.settings-view .settings-profile-row {
+	padding: 13px 0;
+}
+
+.settings-view .settings-meter {
+	height: 6px;
+	border-radius: var(--radius-3);
+	background: var(--bg-input);
+	overflow: hidden;
+}
+
+.settings-view .settings-meter > span {
+	display: block;
+	height: 100%;
+	border-radius: var(--radius-3);
+	background: var(--accent);
+}
+
+.settings-view .settings-usage {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-8);
+	width: 100%;
+}
+
+.settings-view .settings-usage-legend {
+	display: flex;
+	justify-content: space-between;
+	color: var(--text-muted);
+	font-size: var(--font-size-meta);
+}
+
+/* ---------------------------------------------------- Indexing / sync ---- */
+
+.settings-view .settings-sync-row {
+	gap: var(--space-12);
+}
+
+.settings-view .settings-sync-name {
+	display: flex;
+	align-items: center;
+	flex: 1;
+	min-width: 0;
+	padding: 0;
+	border: 0;
+	background: none;
+	text-align: left;
+	cursor: pointer;
+}
+
+.settings-view .settings-sync-name .settings-app-icon {
+	margin-right: var(--space-10);
+}
+
+.settings-view .settings-sync-interval {
+	width: 90px;
+	flex: none;
+	text-align: right;
+	color: var(--text-muted);
+	font-size: 12.5px;
+}
+
+.settings-view .settings-sync-footer {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-12);
+	padding: var(--space-12) 0;
+	border-top: 1px solid var(--border-divider);
+}
+
+.settings-view .settings-sync-footer .settings-list-meta {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.settings-view .settings-select-compact {
+	height: 30px;
+	min-width: 90px;
+	padding: 0 var(--space-8);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-6);
+	background: var(--bg-subtle-alt);
+	color: var(--text-primary);
+	font-size: 12.5px;
+	cursor: pointer;
+}
+
+/* ------------------------------------------------------------- Responsive -- */
+
+@media (max-width: 720px) {
+	.settings-view {
+		flex-direction: column;
+	}
+
+	.settings-view .settings-sidebar {
+		width: auto;
+		max-height: 220px;
+		border-right: 0;
+		border-bottom: 1px solid var(--border);
+	}
+
+	.settings-view .settings-content {
+		padding: 24px 20px 48px;
+	}
+
+	.settings-view .linear-row {
+		flex-direction: column;
+		align-items: stretch;
+		gap: var(--space-10);
+	}
+
+	.settings-view .linear-control {
+		max-width: none;
+	}
+
+	.settings-view .settings-sync-row {
+		flex-wrap: wrap;
+	}
 }

@@ -9,6 +9,7 @@ import {
 	type SearchDocumentsStreamEvent,
 } from "@autorag/librarian";
 import { readRawConfigObject, resolveAgentModel, resolveConfigPath, type CliConfig } from "@autorag/librarian/core";
+import { isJsonObject } from "../shared/settings-contract";
 import { applyAppIndexing } from "./app-indexing";
 import type {
 	AnswerPhase,
@@ -351,6 +352,50 @@ export function createSearchService(deps: SearchServiceDeps): SearchBridge {
 	};
 }
 
+/** Thinking levels pi accepts; the config-service validator keeps the same list. */
+const THINKING_LEVELS: readonly string[] = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
+
+/** Upstream `DEFAULT_QUERY_DECOMPOSITION_MODEL`; `queryDecomposition` absent means this default. */
+const DEFAULT_QUERY_DECOMPOSITION: { readonly provider: string; readonly id: string } = {
+	provider: "openrouter",
+	id: "qwen/qwen3.7-flash",
+};
+
+type AgentThinking = NonNullable<AutoRAGAgentOptions["thinking"]>;
+type AgentThinkingLevel = NonNullable<AgentThinking["final"]>;
+type AgentQueryDecomposition = AutoRAGAgentOptions["queryDecomposition"];
+
+function readThinking(raw: Record<string, unknown>): AgentThinking | undefined {
+	const value = raw.thinking;
+	if (!isJsonObject(value)) return undefined;
+	const pick = (key: "fast" | "final"): AgentThinkingLevel | undefined => {
+		const level = value[key];
+		return typeof level === "string" && THINKING_LEVELS.includes(level) ? (level as AgentThinkingLevel) : undefined;
+	};
+	const fast = pick("fast");
+	const final = pick("final");
+	if (fast === undefined && final === undefined) return undefined;
+	return { ...(fast === undefined ? {} : { fast }), ...(final === undefined ? {} : { final }) };
+}
+
+/**
+ * Resolve the question-decomposition model through the librarian's own resolver
+ * (the public `resolveQueryDecompositionModel` is not exported from the package
+ * entry, so this mirrors it exactly): `false` disables it, an absent section
+ * uses the upstream default, an explicit section uses its model.
+ */
+async function resolveDecomposition(
+	config: CliConfig,
+	env: NodeJS.ProcessEnv,
+	cwd: string,
+): Promise<AgentQueryDecomposition> {
+	if (config.queryDecomposition === false) return undefined;
+	const reference = config.queryDecomposition?.model ?? DEFAULT_QUERY_DECOMPOSITION;
+	const resolved = await resolveAgentModel({ ...config, model: reference }, { env, cwd });
+	const apiKey = resolved.apiKey ?? resolved.providerApiKeys?.[resolved.model.provider];
+	return { model: resolved.model, ...(apiKey === undefined ? {} : { apiKey }) };
+}
+
 export function createDefaultAgentFactory(): () => Promise<SearchAgent> {
 	return async () => {
 		const input = { flags: {}, env: process.env, cwd: process.cwd() };
@@ -364,12 +409,20 @@ export function createDefaultAgentFactory(): () => Promise<SearchAgent> {
 				? config
 				: { ...config, webSearch: raw.webSearch as NonNullable<CliConfig["webSearch"]> };
 		const effective = await applyAppIndexing(withWebSearch, raw);
-		const resolved = await resolveAgentModel(effective);
+		// Credentials resolve fresh from auth.json/process.env on every agent build,
+		// so a login or key change reaches the next search without a restart.
+		const resolved = await resolveAgentModel(effective, { env: input.env, cwd: input.cwd });
+		const decomposition = await resolveDecomposition(effective, input.env, input.cwd);
+		// The decomposition model's thinking is upstream-fixed off; only the
+		// two-phase answer model takes config thinking.fast/final.
+		const thinking = readThinking(raw);
 		const options: AutoRAGAgentOptions = {
 			...buildAgentOptions(effective),
 			model: resolved.model,
 			...(resolved.apiKey !== undefined ? { apiKey: resolved.apiKey } : {}),
 			...(resolved.providerApiKeys !== undefined ? { providerApiKeys: resolved.providerApiKeys } : {}),
+			...(decomposition !== undefined ? { queryDecomposition: decomposition } : {}),
+			...(thinking !== undefined ? { thinking } : {}),
 		};
 		return new AttachmentContextAgent(options) as SearchAgent;
 	};
