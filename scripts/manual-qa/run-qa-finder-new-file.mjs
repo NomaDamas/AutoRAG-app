@@ -21,7 +21,7 @@
  * `bun scripts/manual-qa/run-qa-finder-new-file.mjs`
  */
 
-import { existsSync, mkdirSync, mkdtempSync, readdirSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -122,8 +122,17 @@ try {
 	/* ------------------------------------ 4. Word document is a real package */
 	await openBackgroundMenu(page);
 	await chooseNew(page, "Word 문서");
-	await waitForDisk(() => existsSync(join(top, "untitled.docx")), "untitled.docx");
-	const parts = Object.keys(unzipSync(new Uint8Array(await Bun.file(join(top, "untitled.docx")).arrayBuffer())));
+	// The file appears before its bytes are fully written (create, then write):
+	// wait until the package actually unzips instead of reading it on first sight.
+	let parts = [];
+	await waitForDisk(() => {
+		try {
+			parts = Object.keys(unzipSync(readFileSync(join(top, "untitled.docx"))));
+			return true;
+		} catch {
+			return false;
+		}
+	}, "untitled.docx to be a readable zip");
 	check(
 		"Word 문서 writes an OOXML docx package, not an empty stub",
 		parts.includes("[Content_Types].xml") && parts.includes("word/document.xml"),
@@ -181,7 +190,8 @@ try {
 	await page.keyboard.press("Escape");
 	check(
 		"right-clicking a file row shows the row menu, not the New menu",
-		rowMenu.some((text) => text.startsWith("Quick Look")) && !rowMenu.some((text) => text.includes("New")),
+		// The row menu carries a direct "New Folder" action (a row-action) but never the background menu's "New" submenu.
+		rowMenu.some((text) => text.startsWith("Quick Look")) && !rowMenu.some((text) => text.trim() === "New"),
 		`items=${JSON.stringify(rowMenu)}`,
 	);
 

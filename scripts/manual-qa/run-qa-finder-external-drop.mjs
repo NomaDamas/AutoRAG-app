@@ -23,7 +23,7 @@
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { AI_PANEL, finderWindow, launchFinder, openAiSearch } from "./launch-finder.mjs";
 import { cssAttr } from "./platform.mjs";
 
@@ -167,7 +167,8 @@ try {
 					resolve();
 				}, 250);
 			}),
-		`file://${ALT_MOVE}`,
+		// What an OS drag carries: `file:///C:/...` on Windows, `file:///Users/...` elsewhere.
+		pathToFileURL(ALT_MOVE).href,
 	);
 	await until(page, () => existsSync(join(dirA, "alt-move.txt")) || !existsSync(ALT_MOVE));
 	check(

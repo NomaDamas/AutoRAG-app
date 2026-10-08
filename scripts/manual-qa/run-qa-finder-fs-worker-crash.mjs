@@ -73,6 +73,9 @@ try {
 	});
 	const page = await finderWindow(app, 30_000);
 	page.setDefaultTimeout(15_000);
+	// The list virtualizes rows: a Windows window opens shorter than macOS's, so size it
+	// to mount the 30-file fixture plus the rows this lane adds (the probes read the DOM).
+	await page.setViewportSize({ width: 1500, height: 1100 }).catch(() => {});
 	let rendererGone = false;
 	page.on("crash", () => {
 		rendererGone = true;
