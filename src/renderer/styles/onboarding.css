@@ -1757,45 +1757,19 @@ html[data-appearance="dark"] .onb .source-icon.brand {
 	margin-top: 3px;
 }
 
-.onb .source-description {
-	margin-top: 10px;
-	padding-top: 10px;
-	border-top: 1px solid var(--onb-divider);
-}
-
-.onb .source-description textarea {
-	width: 100%;
-	min-height: 53px;
-	padding: 8px;
-	border: 1px solid var(--onb-border);
-	border-radius: 6px;
-	resize: vertical;
-	background: var(--onb-bg-input);
-	color: var(--onb-ink);
-	font-size: 10px;
-	line-height: 1.45;
-}
-
-.onb .source-description footer {
+.onb .sources-checking {
 	display: flex;
-	justify-content: space-between;
 	align-items: center;
-	margin-top: 6px;
-}
-
-.onb .draft {
+	gap: 7px;
+	margin-top: 10px;
 	color: var(--onb-muted);
-	font-size: 9px;
+	font-size: 10px;
 }
 
-.onb .source-description button {
-	height: 25px;
-	padding: 0 8px;
-	border: 1px solid var(--onb-border);
-	border-radius: 5px;
-	background: var(--onb-bg-card);
+.onb .sources-empty {
+	margin-bottom: 8px;
 	color: var(--onb-body);
-	font-size: 9px;
+	font-size: 11px;
 }
 
 .onb .connect-more {

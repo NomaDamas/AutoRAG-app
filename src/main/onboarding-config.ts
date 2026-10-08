@@ -34,9 +34,13 @@ const SOURCE_TAGS: Readonly<Record<SourceId, readonly string[]>> = {
 	obsidian: ["obsidian"],
 };
 
+/**
+ * A source the user switched on. No `description` is written: an existing one in
+ * the config survives the alias merge, and a missing one is filled in later from
+ * the indexed content, not typed during onboarding.
+ */
 export interface IndexingDatasource {
 	readonly id: SourceId;
-	readonly description: string;
 	readonly facts: SourceFacts;
 }
 
@@ -63,15 +67,13 @@ function obsidianAlias(index: number): string {
 }
 
 function entriesFor(datasource: IndexingDatasource, home: string): Record<string, Record<string, unknown>> {
-	const description = datasource.description;
 	switch (datasource.id) {
 		case "kakao":
-			return { kakao: { instanceId: "default", description, connector: {} } };
+			return { kakao: { instanceId: "default", connector: {} } };
 		case "github":
 			return {
 				github: {
 					type: "github",
-					description,
 					connector: { repos: [...(datasource.facts.repos ?? [])], tokenEnv: "GITHUB_TOKEN" },
 				},
 			};
@@ -79,7 +81,7 @@ function entriesFor(datasource: IndexingDatasource, home: string): Record<string
 			const entries: Record<string, Record<string, unknown>> = {};
 			const vaults = datasource.facts.vaults ?? [];
 			vaults.forEach((vaultPath, index) => {
-				entries[obsidianAlias(index)] = { type: "obsidian", description, connector: { vaultPath } };
+				entries[obsidianAlias(index)] = { type: "obsidian", connector: { vaultPath } };
 			});
 			return entries;
 		}
@@ -91,23 +93,21 @@ function entriesFor(datasource: IndexingDatasource, home: string): Record<string
 				entries[`mailcrawl-${account}`] = {
 					type: "mailcrawl",
 					instanceId: account,
-					description,
 					connector: { account, mailbox: "INBOX", dataDir: join(home, ".mailcrawl", account) },
 				};
 			}
 			return entries;
 		}
 		case "discord":
-			return { discord: { instanceId: "default", description, connector: {} } };
+			return { discord: { instanceId: "default", connector: {} } };
 		case "telegram":
-			return { telegram: { instanceId: "default", description, connector: {} } };
+			return { telegram: { instanceId: "default", connector: {} } };
 		case "whatsapp":
-			return { whatsapp: { instanceId: "default", description, connector: {} } };
+			return { whatsapp: { instanceId: "default", connector: {} } };
 		case "slack":
 			return {
 				slack: {
 					type: "slack",
-					description,
 					connector: {
 						// Detection counted the local mirror's rows (`~/.slacrawl`), so the
 						// first index must sync the same way: `--source wiretap` reads the

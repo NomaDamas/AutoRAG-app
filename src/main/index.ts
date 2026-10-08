@@ -466,16 +466,19 @@ app.whenReady().then(async () => {
 		refresh: refreshConfig,
 		credentials,
 		settings: settingsService,
-		detectSources: () =>
-			detectSources({
-				platform: process.platform,
-				home,
-				env: process.env,
-				run: (command, args) => runCommand(command, args, SOURCE_PROBE_TIMEOUT_MS),
-				pathExists,
-				readDirNames: (path) => readdir(path).catch(() => [] as string[]),
-				readFileText: (path) => readFile(path, "utf8"),
-			}),
+		detectSources: (onFound) =>
+			detectSources(
+				{
+					platform: process.platform,
+					home,
+					env: process.env,
+					run: (command, args) => runCommand(command, args, SOURCE_PROBE_TIMEOUT_MS),
+					pathExists,
+					readDirNames: (path) => readdir(path).catch(() => [] as string[]),
+					readFileText: (path) => readFile(path, "utf8"),
+				},
+				onFound,
+			),
 		gitToken: async () => {
 			try {
 				const token = (await runCommand("gh", ["auth", "token"])).trim();

@@ -157,4 +157,29 @@ describe("onboarding datasource detection", () => {
 
 		expect(ids(result)).toEqual(["telegram"]);
 	});
+
+	it("reports each source as soon as its own probe finishes, not when the slowest does", async () => {
+		const slowMail = Promise.withResolvers<string>();
+		const found: string[] = [];
+		const run = script({
+			which: () => "/opt/homebrew/bin/mailcrawl",
+			wacrawl: () => ok({ desktop: { available: true, message_rows: 5, chat_rows: 1 } }),
+			himalaya: (args) => (args[0] === "account" ? ok({ accounts: [{ name: "gmail" }] }) : ""),
+		});
+		const pending = detectSources(
+			{
+				...deps(async (command, args) => (command === "himalaya" && args[0] === "mailbox" ? slowMail.promise : run(command, args))),
+				...noGithub,
+			},
+			(source) => found.push(source.id),
+		);
+		for (let tick = 0; tick < 20; tick += 1) await Promise.resolve();
+
+		// WhatsApp has already been reported while the IMAP login is still in flight.
+		expect(found).toEqual(["whatsapp"]);
+		slowMail.resolve("[]");
+		const result = await pending;
+		expect(found).toEqual(["whatsapp", "mailcrawl"]);
+		expect(ids(result)).toEqual(["whatsapp", "mailcrawl"]);
+	});
 });

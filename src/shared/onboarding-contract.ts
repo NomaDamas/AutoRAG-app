@@ -36,7 +36,15 @@ export const ONBOARDING_CHANNELS = {
 	/** main → renderer event carrying one {@link FolderScan}. */
 	scanProgress: "onboarding:scanProgress",
 	embedding: "onboarding:embedding",
+	/**
+	 * Starts a streamed probe of every connector: each usable one arrives as a
+	 * {@link DetectedSource} on `sourceDetected`, then `sourcesDone` closes the run.
+	 */
 	detectSources: "onboarding:detectSources",
+	/** main → renderer event carrying one {@link DetectedSource}, as soon as its probe finishes. */
+	sourceDetected: "onboarding:sourceDetected",
+	/** main → renderer event (no payload) once every probe has finished. */
+	sourcesDone: "onboarding:sourcesDone",
 	detectModels: "onboarding:detectModels",
 	verifyModel: "onboarding:verifyModel",
 	startIndexing: "onboarding:startIndexing",
@@ -87,8 +95,6 @@ export interface OnboardingFolderChoice {
 export interface OnboardingSourceChoice {
 	readonly id: SourceId;
 	readonly on: boolean;
-	/** The description the agent reads; drafted from metadata, editable. */
-	readonly description: string;
 }
 
 export interface OnboardingModelChoice {
@@ -179,7 +185,7 @@ export interface EmbeddingInfo {
 	readonly configured: boolean;
 }
 
-/** Metadata a detected connector exposes; the renderer drafts descriptions from it. */
+/** Metadata a detected connector exposes, shown as its second line. */
 export interface SourceFacts {
 	readonly repos?: readonly string[];
 	readonly vaults?: readonly string[];
@@ -196,10 +202,13 @@ export interface DetectedSource {
 	readonly facts: SourceFacts;
 }
 
-/** Only connectors that are installed, authenticated, and have data are listed. */
+/** Every usable connector from one probe run; `startIndexing` re-reads it for the facts. */
 export interface SourceDetection {
 	readonly sources: readonly DetectedSource[];
 }
+
+/** Listener for one connector that finished probing as usable. */
+export type DetectedSourceListener = (source: DetectedSource) => void;
 
 export interface DetectedModelProvider {
 	readonly provider: ByokProviderId;
@@ -233,7 +242,7 @@ export type ModelVerifyResult =
 
 export interface IndexingRequest {
 	readonly folders: readonly string[];
-	readonly sources: readonly { readonly id: SourceId; readonly description: string }[];
+	readonly sources: readonly { readonly id: SourceId }[];
 	readonly plan: PlanId;
 	/** BYOK only. */
 	readonly model: { readonly provider: ByokProviderId; readonly modelId: string; readonly baseUrl: string | null } | null;
@@ -288,7 +297,10 @@ export interface OnboardingBridge {
 	scanFolders(paths: readonly string[]): Promise<void>;
 	onScanProgress(listener: (scan: FolderScan) => void): () => void;
 	embedding(): Promise<EmbeddingInfo>;
-	detectSources(): Promise<SourceDetection>;
+	/** Starts a probe run (restarting one in flight); results arrive through the two listeners below. */
+	detectSources(): Promise<void>;
+	onSourceDetected(listener: DetectedSourceListener): () => void;
+	onSourcesDone(listener: () => void): () => void;
 	detectModels(): Promise<readonly DetectedModelProvider[]>;
 	/** Calls the provider; on success an entered key is stored encrypted, never in config. */
 	verifyModel(request: ModelVerifyRequest): Promise<ModelVerifyResult>;

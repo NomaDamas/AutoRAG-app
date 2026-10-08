@@ -422,10 +422,9 @@
       "eyebrow": "Data sources",
       "title": "Also search\nconnected sources?",
       "lead": "We only show sources that are already installed and authenticated. You don't have to select them all.",
-      "note": "You don't need to write descriptions yourself. Turn one on and we'll draft one from metadata.",
       "detected": "Detected",
-      "draftNote": "Metadata-based draft · content not used",
-      "rewrite": "Rewrite",
+      "checking": "Checking which other sources can be added…",
+      "empty": "No connected sources found. You can connect some later in Settings.",
       "connectMore": "Sources that need setup can be connected later in Settings.",
       "name": {
         "kakao": "KakaoTalk",
@@ -446,48 +445,6 @@
         "mailcrawl": "Signed in to {{accounts}} himalaya accounts",
         "github": "Logged in to gh · Issues and Pull Requests",
         "obsidian": "{{vaults}} vaults found · qmd available"
-      },
-      "desc": {
-        "kakao": {
-          "0": "Use it to find appointments, decisions, and shared links in KakaoTalk conversations.",
-          "1": "Use it to find who said what in KakaoTalk chat history.",
-          "2": "Use it to find places and schedule talk exchanged in personal and group chats."
-        },
-        "slack": {
-          "0": "Use it to find team conversations with project discussions and launch decisions.",
-          "1": "Use it to find decision context in channel conversations across {{workspaces}} workspaces.",
-          "2": "Use it to find Slack threads where product discussions and announcements happened."
-        },
-        "discord": {
-          "0": "Use it to find discussions and decisions from Discord servers and DMs.",
-          "1": "Use it to find announcements and links shared in community channels.",
-          "2": "Use it to find who said what in Discord conversations."
-        },
-        "telegram": {
-          "0": "Use it to find conversations exchanged in Telegram chats and groups.",
-          "1": "Use it to find links and announcements shared on Telegram again.",
-          "2": "Use it to find decisions and schedules in Telegram conversations."
-        },
-        "whatsapp": {
-          "0": "Use it to find talk exchanged across {{chats}} WhatsApp conversations.",
-          "1": "Use it to find schedules and announcements shared in WhatsApp groups.",
-          "2": "Use it to find who said what in WhatsApp messages."
-        },
-        "mailcrawl": {
-          "0": "Use it to find contracts, receipts, and work emails.",
-          "1": "Use it to find correspondence and attachment context from connected mail accounts like {{firstAccount}}.",
-          "2": "Use it to find past approvals and agreements exchanged."
-        },
-        "github": {
-          "0": "Use it to find issues, PRs, and implementation discussions for projects like {{firstRepo}}.",
-          "1": "Use it to find GitHub history with code reviews and release decisions.",
-          "2": "Use it to find technical decisions and bug-fix context across {{repos}} repositories."
-        },
-        "obsidian": {
-          "0": "Use it to find Obsidian vaults with personal notes, meeting records, and ideas.",
-          "1": "Use it to find decisions and drafts in notes across {{vaults}} vaults.",
-          "2": "Use it to find past meetings and ideas in connected Obsidian notes."
-        }
       }
     },
     "plan": {

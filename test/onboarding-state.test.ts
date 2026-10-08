@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import type { OnboardingDraft } from "../src/shared/onboarding-contract";
+import { ONBOARDING_CHANNELS, type DetectedSource, type OnboardingDraft, type SourceDetection } from "../src/shared/onboarding-contract";
 import type { AppSettings, ConfigRefreshResult } from "../src/shared/settings-contract";
 import type { OnboardingServiceDeps } from "../src/main/onboarding-service";
 import { createOnboardingService, readOnboardingPending } from "../src/main/onboarding-service";
@@ -150,5 +150,89 @@ describe("createOnboardingService persistence", () => {
 		for (let tick = 0; tick < 20 && service.isIndexing(); tick += 1) await Promise.resolve();
 		expect((await service.indexStatus()).state).toBe("success");
 		expect(service.isIndexing()).toBe(false);
+	});
+});
+
+describe("createOnboardingService source detection", () => {
+	const kakao: DetectedSource = { id: "kakao", facts: {} };
+	const whatsapp: DetectedSource = { id: "whatsapp", facts: { chats: 2, messages: 9 } };
+
+	it("pushes each find as it lands and closes the run with sourcesDone", async () => {
+		const directory = await workDir();
+		const sent: Array<{ channel: string; payload: unknown }> = [];
+		const gate = Promise.withResolvers<void>();
+		const service = createOnboardingService({
+			...makeDeps(directory),
+			send: (channel, payload) => sent.push({ channel, payload }),
+			detectSources: async (onFound) => {
+				onFound?.(kakao);
+				await gate.promise;
+				onFound?.(whatsapp);
+				return { sources: [kakao, whatsapp] };
+			},
+		});
+
+		await service.detectSources();
+		expect(sent).toEqual([{ channel: ONBOARDING_CHANNELS.sourceDetected, payload: kakao }]);
+
+		gate.resolve();
+		for (let tick = 0; tick < 20; tick += 1) await Promise.resolve();
+		expect(sent.map((event) => event.channel)).toEqual([
+			ONBOARDING_CHANNELS.sourceDetected,
+			ONBOARDING_CHANNELS.sourceDetected,
+			ONBOARDING_CHANNELS.sourcesDone,
+		]);
+	});
+
+	it("silences a superseded run so its late finds never reach a reset list", async () => {
+		const directory = await workDir();
+		const sent: string[] = [];
+		const first = Promise.withResolvers<void>();
+		let call = 0;
+		const service = createOnboardingService({
+			...makeDeps(directory),
+			send: (channel, payload) => sent.push(`${channel}:${(payload as DetectedSource | null)?.id ?? "-"}`),
+			detectSources: async (onFound) => {
+				call += 1;
+				if (call === 1) {
+					await first.promise;
+					onFound?.(kakao);
+					return { sources: [kakao] };
+				}
+				onFound?.(whatsapp);
+				return { sources: [whatsapp] };
+			},
+		});
+
+		await service.detectSources();
+		await service.detectSources();
+		first.resolve();
+		for (let tick = 0; tick < 20; tick += 1) await Promise.resolve();
+
+		expect(sent).toEqual([
+			`${ONBOARDING_CHANNELS.sourceDetected}:whatsapp`,
+			`${ONBOARDING_CHANNELS.sourcesDone}:-`,
+		]);
+	});
+
+	it("starts the first index from the probe run the sources step already made", async () => {
+		const directory = await workDir();
+		let probes = 0;
+		const service = createOnboardingService({
+			...makeDeps(directory),
+			detectSources: async (onFound): Promise<SourceDetection> => {
+				probes += 1;
+				onFound?.(whatsapp);
+				return { sources: [whatsapp] };
+			},
+		});
+
+		await service.detectSources();
+		await service.startIndexing({ folders: ["/Users/me/Documents"], sources: [{ id: "whatsapp" }], plan: "free", model: null });
+
+		expect(probes).toBe(1);
+		const written = JSON.parse(await readFile(join(directory, "config.json"), "utf8")) as { datasources: Record<string, unknown> };
+		expect(Object.keys(written.datasources)).toEqual(["whatsapp"]);
+		expect(written.datasources.whatsapp).not.toHaveProperty("description");
 	});
 });

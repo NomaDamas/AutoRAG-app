@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
 	buildFlow,
+	bySourceOrder,
 	canAdvance,
-	draftDescription,
+	connectableLater,
 	etaMinutes,
 	formatSize,
 	phaseIndex,
@@ -11,7 +12,7 @@ import {
 	sourceDetail,
 	type Translate,
 } from "../src/renderer/src/onboarding/flow";
-import type { FolderScan, SourceFacts } from "../src/shared/onboarding-contract";
+import type { FolderScan } from "../src/shared/onboarding-contract";
 
 const stubTranslate: Translate = (key, options) => (options === undefined ? key : `${key}:${JSON.stringify(options)}`);
 
@@ -125,21 +126,18 @@ describe("onboarding ETA and formatting", () => {
 	});
 });
 
-describe("source description drafting", () => {
-	it("cycles through the three templates", () => {
-		const facts: SourceFacts = { repos: ["acme/app", "acme/lib"] };
-		const first = draftDescription("github", facts, 0, stubTranslate);
-		const second = draftDescription("github", facts, 1, stubTranslate);
-		const third = draftDescription("github", facts, 2, stubTranslate);
-		expect(first).toContain("onboarding.sources.desc.github.0");
-		expect(first).toContain('"firstRepo":"acme/app"');
-		expect(second).toContain("onboarding.sources.desc.github.1");
-		expect(third).toContain('"repos":2');
+describe("detected sources list", () => {
+	it("keeps a stable order however the probes finish", () => {
+		const arrival = [{ id: "github" }, { id: "mailcrawl" }, { id: "kakao" }, { id: "whatsapp" }] as const;
+		expect([...arrival].sort(bySourceOrder).map((source) => source.id)).toEqual(["kakao", "whatsapp", "mailcrawl", "github"]);
 	});
 
-	it("wraps the variant index", () => {
-		expect(draftDescription("slack", {}, 3, stubTranslate)).toContain("onboarding.sources.desc.slack.0");
-		expect(draftDescription("slack", {}, -1, stubTranslate)).toContain("onboarding.sources.desc.slack.2");
+	it("offers later only what was not found, plus brands that cannot be probed", () => {
+		const labels = (found: readonly { readonly id: "kakao" | "slack" }[]): string[] => connectableLater(found).map((chip) => chip.label);
+		expect(labels([])).toContain("KakaoTalk");
+		expect(labels([{ id: "kakao" }])).not.toContain("KakaoTalk");
+		expect(labels([{ id: "kakao" }, { id: "slack" }])).toEqual(expect.arrayContaining(["Notion", "Google Drive"]));
+		expect(labels([{ id: "slack" }])).not.toContain("Slack");
 	});
 
 	it("interpolates detected facts into the connector's detail line", () => {

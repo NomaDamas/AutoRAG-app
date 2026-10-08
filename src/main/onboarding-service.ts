@@ -6,6 +6,7 @@ import {
 	ONBOARDING_CHANNELS,
 	type ByokProviderId,
 	type DetectedModelProvider,
+	type DetectedSource,
 	type EmbeddingInfo,
 	type FolderCandidate,
 	type FolderScan,
@@ -81,7 +82,7 @@ export interface OnboardingServiceDeps {
 		get(): Promise<AppSettings>;
 		set(patch: Partial<AppSettings>): Promise<AppSettings>;
 	};
-	readonly detectSources: () => Promise<SourceDetection>;
+	readonly detectSources: (onFound?: (source: DetectedSource) => void) => Promise<SourceDetection>;
 	readonly gitToken: () => Promise<string | null>;
 	readonly detectModels: () => Promise<readonly DetectedModelProvider[]>;
 	readonly verifyModel: (request: ModelVerifyRequest) => Promise<ModelVerifyResult>;
@@ -123,7 +124,8 @@ export interface OnboardingService {
 	pickFolders(): Promise<readonly FolderCandidate[]>;
 	scanFolders(paths: readonly unknown[]): Promise<void>;
 	embedding(): Promise<EmbeddingInfo>;
-	detectSources(): Promise<SourceDetection>;
+	/** Starts a streamed probe (restarting any in flight); finds are pushed as `sourceDetected`, then `sourcesDone`. */
+	detectSources(): Promise<void>;
 	detectModels(): Promise<readonly DetectedModelProvider[]>;
 	verifyModel(request: unknown): Promise<ModelVerifyResult>;
 	startIndexing(request: unknown): Promise<IndexingStatus>;
@@ -209,7 +211,7 @@ function isFolderChoice(value: unknown): boolean {
 }
 
 function isSourceChoice(value: unknown): boolean {
-	return isJsonObject(value) && typeof value.id === "string" && SOURCE_IDS[value.id] === true && typeof value.on === "boolean" && typeof value.description === "string";
+	return isJsonObject(value) && typeof value.id === "string" && SOURCE_IDS[value.id] === true && typeof value.on === "boolean";
 }
 
 function isModelChoice(value: unknown): value is OnboardingModelChoice {
@@ -251,7 +253,6 @@ function isIndexingRequest(value: unknown): value is IndexingRequest {
 	if (!Array.isArray(value.sources)) return false;
 	for (const source of value.sources) {
 		if (!isJsonObject(source) || typeof source.id !== "string" || SOURCE_IDS[source.id] !== true) return false;
-		if (typeof source.description !== "string") return false;
 	}
 	if (typeof value.plan !== "string" || PLAN_IDS[value.plan] !== true) return false;
 	const model = value.model;
@@ -346,6 +347,9 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 
 	let status: IndexingStatus = IDLE_STATUS;
 	let refreshPromise: Promise<void> | null = null;
+	/** The latest source probe run; `startIndexing` reuses it instead of probing twice. */
+	let detection: Promise<SourceDetection> | null = null;
+	let detectionRun = 0;
 	let pollTimer: ReturnType<typeof setInterval> | null = null;
 	let powerBlockerId: number | null = null;
 	let workspacePath: string | null = null;
@@ -541,7 +545,19 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 				configured: Object.keys(embedder).length > 0,
 			};
 		},
-		detectSources: () => deps.detectSources(),
+		detectSources: async () => {
+			// A newer run supersedes an older one: its late finds must not reach the
+			// renderer, which already reset its list for the new run.
+			const run = ++detectionRun;
+			const promise = deps.detectSources((source) => {
+				if (run === detectionRun) deps.send(ONBOARDING_CHANNELS.sourceDetected, source);
+			});
+			detection = promise;
+			const done = (): void => {
+				if (run === detectionRun) deps.send(ONBOARDING_CHANNELS.sourcesDone, null);
+			};
+			void promise.then(done, done);
+		},
 		detectModels: () => deps.detectModels(),
 		verifyModel: async (request) => {
 			if (!isModelVerifyRequest(request)) throw new TypeError("onboarding:verifyModel expects a valid request");
@@ -550,11 +566,12 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 		startIndexing: async (request) => {
 			if (!isIndexingRequest(request)) throw new TypeError("onboarding:startIndexing expects a valid request");
 			if (refreshPromise !== null) return status;
-			const detection = await deps.detectSources().catch((): SourceDetection => ({ sources: [] }));
-			const factsById = new Map<SourceId, SourceFacts>(detection.sources.map((source) => [source.id, source.facts]));
+			// The sources step already ran the probes; reuse that run (waiting for it if it
+			// is still going) so the first index never pays for detection twice.
+			const found = await (detection ?? deps.detectSources()).catch((): SourceDetection => ({ sources: [] }));
+			const factsById = new Map<SourceId, SourceFacts>(found.sources.map((source) => [source.id, source.facts]));
 			const datasources = request.sources.map((source) => ({
 				id: source.id,
-				description: source.description,
 				facts: factsById.get(source.id) ?? {},
 			}));
 			const raw = existsSync(deps.configPath) ? readRawConfigObject(deps.configPath) : {};

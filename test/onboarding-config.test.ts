@@ -46,14 +46,15 @@ describe("applyIndexingConfig", () => {
 		const next = applyIndexingConfig({
 			raw,
 			folders: ["/a"],
-			datasources: [{ id: "github", description: "new", facts: { repos: ["me/one", "me/two"] } }],
+			datasources: [{ id: "github", facts: { repos: ["me/one", "me/two"] } }],
 			home: HOME,
 			embedder: null,
 			workspacePath: null,
 			model: null,
 		});
 		const github = isJsonObject(next.datasources) && isJsonObject(next.datasources.github) ? next.datasources.github : {};
-		expect(github.description).toBe("new");
+		// Onboarding writes no description, and an existing one is kept.
+		expect(github.description).toBe("old");
 		expect(github.pollingIntervalMs).toBe(60);
 		expect(isJsonObject(github.connector) && github.connector.repos).toEqual(["me/one", "me/two"]);
 	});
@@ -66,14 +67,14 @@ describe("applyIndexingConfig", () => {
 			},
 			folders: ["/a"],
 			datasources: [
-				{ id: "kakao", description: "k", facts: {} },
-				{ id: "slack", description: "s", facts: {} },
-				{ id: "discord", description: "d", facts: {} },
-				{ id: "telegram", description: "t", facts: {} },
-				{ id: "whatsapp", description: "w", facts: {} },
-				{ id: "mailcrawl", description: "m", facts: { accounts: ["gmail", "work"] } },
-				{ id: "github", description: "g", facts: { repos: ["me/repo"] } },
-				{ id: "obsidian", description: "o", facts: { vaults: ["/v1", "/v2"] } },
+				{ id: "kakao", facts: {} },
+				{ id: "slack", facts: {} },
+				{ id: "discord", facts: {} },
+				{ id: "telegram", facts: {} },
+				{ id: "whatsapp", facts: {} },
+				{ id: "mailcrawl", facts: { accounts: ["gmail", "work"] } },
+				{ id: "github", facts: { repos: ["me/repo"] } },
+				{ id: "obsidian", facts: { vaults: ["/v1", "/v2"] } },
 			],
 			home: HOME,
 			embedder: null,
@@ -99,7 +100,7 @@ describe("applyIndexingConfig", () => {
 		const next = applyIndexingConfig({
 			raw: {},
 			folders: ["/a"],
-			datasources: [{ id: "obsidian", description: "o", facts: { vaults: ["/v1", "/v2"] } }],
+			datasources: [{ id: "obsidian", facts: { vaults: ["/v1", "/v2"] } }],
 			home: HOME,
 			embedder: null,
 			workspacePath: null,
@@ -116,7 +117,7 @@ describe("applyIndexingConfig", () => {
 		const next = applyIndexingConfig({
 			raw: { datasources: { "mailcrawl-gmail": { connector: { timeoutMs: 60 } } } },
 			folders: ["/a"],
-			datasources: [{ id: "mailcrawl", description: "m", facts: { accounts: ["gmail", "work.kr"] } }],
+			datasources: [{ id: "mailcrawl", facts: { accounts: ["gmail", "work.kr"] } }],
 			home: HOME,
 			embedder: null,
 			workspacePath: null,

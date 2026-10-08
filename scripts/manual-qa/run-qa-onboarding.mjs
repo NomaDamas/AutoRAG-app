@@ -130,12 +130,33 @@ try {
 	await shot("05-embedding");
 	await primary.click();
 
-	// sources: exactly the connectors main detects (each CLI's own health probe).
-	const detection = await page.evaluate(() => window.autorag.onboarding.detectSources());
-	const ids = detection.sources.map((source) => source.id);
+	// sources: rows stream in as each probe finishes; a spinner line holds the
+	// "connect later" row back until every probe is done.
+	const sourcesShownAt = Date.now();
+	const sawChecking = await page
+		.waitForSelector(".onb [data-sources-checking]", { timeout: 4000 })
+		.then(() => true, () => false);
+	check("a checking line shows while probes run", sawChecking);
+	const earlyRows = await page.locator(".onb .source-row").count();
+	const firstRowMs = await page
+		.waitForSelector(".onb .source-row", { timeout: 20_000 })
+		.then(() => Date.now() - sourcesShownAt, () => null);
+	check("connect-later row is hidden while probing", !sawChecking || (await page.locator(".onb .connect-more").count()) === 0);
+	await page.waitForSelector(".onb [data-sources-done]", { timeout: 60_000 });
+	const allDoneMs = Date.now() - sourcesShownAt;
+	console.log(`INFO sources: first row after ${firstRowMs ?? "never"}ms, all probes done after ${allDoneMs}ms`);
+	const ids = await page.locator(".onb .source-row").evaluateAll((rows) => rows.map((row) => row.dataset.sourceId));
 	check("Spotlight and Apple Mail are never offered", !ids.includes("spotlight") && !ids.includes("mail"), ids.join(", "));
-	await page.waitForFunction((count) => document.querySelectorAll(".onb .source-row").length === count, ids.length, { timeout: 15_000 });
-	check("sources lists only detected connectors", true, ids.join(", "));
+	check("rows only ever grow while probing", ids.length >= earlyRows, `${earlyRows} → ${ids.length}`);
+	const doneSnapshot = await page.evaluate(() => window.autorag.onboarding.indexStatus());
+	check("detection did not start indexing", doneSnapshot.state === "idle", doneSnapshot.state);
+	check("no description editor exists", (await page.locator(".onb .source-description, .onb .source-row textarea").count()) === 0);
+	const chips = await page.locator(".onb .more-chips .brand-chip").allInnerTexts();
+	check(
+		"connect-later chips exclude the detected sources",
+		!ids.includes("kakao") || !chips.some((label) => label.includes("KakaoTalk")),
+		chips.join(", "),
+	);
 	await shot("06-sources");
 	// Optional source-specific regression lane: enable exactly the requested
 	// detected connector. The default lane keeps datasources off.

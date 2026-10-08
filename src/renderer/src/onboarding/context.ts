@@ -36,6 +36,8 @@ export interface OnboardingCtx {
 	readonly candidates: readonly FolderCandidate[];
 	readonly embedding: EmbeddingInfo | null;
 	readonly sources: readonly DetectedSource[];
+	/** Source probes are still running; more rows may arrive. */
+	readonly sourcesChecking: boolean;
 	readonly models: readonly DetectedModelProvider[];
 	readonly modelKey: string;
 	readonly modelBaseUrl: string;
@@ -63,8 +65,6 @@ export interface OnboardingCtx {
 	addFolders(): void;
 
 	setSourceOn(id: SourceId, on: boolean): void;
-	setSourceDescription(id: SourceId, description: string): void;
-	rewriteSource(id: SourceId): void;
 
 	choosePlan(plan: PlanId): void;
 	signIn(method: AccountMethod, email?: string): void;

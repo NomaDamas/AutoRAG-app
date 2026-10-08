@@ -1,6 +1,6 @@
 /**
  * Pure onboarding logic: the step flow, advance gates, ETA math, folder and
- * source formatting, and the source-description drafter.
+ * source formatting, and the order detected sources are listed in.
  *
  * Everything here is a plain function of its arguments so the flow can be
  * tested without React, Electron, or the bridge. i18n is injected as a
@@ -154,30 +154,15 @@ export function sourceDetail(id: SourceId, facts: SourceFacts, translate: Transl
 	});
 }
 
-/** How many description templates each connector offers (the "다시 쓰기" cycle). */
-export const DESCRIPTION_VARIANTS = 3;
-
 /**
- * Drafts the agent-facing description from detected metadata. `variant` cycles
- * through the templates so "다시 쓰기" offers a different wording.
+ * The order connectors are listed in: messengers first, then mail, then work tools.
+ * Probes finish in whatever order they like, so the list sorts on arrival and a
+ * row never jumps because a slower probe landed later.
  */
-export function draftDescription(
-	id: SourceId,
-	facts: SourceFacts,
-	variant: number,
-	translate: Translate,
-): string {
-	const index = ((variant % DESCRIPTION_VARIANTS) + DESCRIPTION_VARIANTS) % DESCRIPTION_VARIANTS;
-	return translate(`onboarding.sources.desc.${id}.${index}`, {
-		repos: facts.repos?.length ?? 0,
-		firstRepo: facts.repos?.[0] ?? "",
-		vaults: facts.vaults?.length ?? 0,
-		accounts: facts.accounts?.length ?? 0,
-		firstAccount: facts.accounts?.[0] ?? "",
-		workspaces: facts.workspaces ?? 0,
-		chats: facts.chats ?? 0,
-		messages: facts.messages ?? 0,
-	});
+const SOURCE_LIST_ORDER: readonly SourceId[] = ["kakao", "slack", "discord", "telegram", "whatsapp", "mailcrawl", "github", "obsidian"];
+
+export function bySourceOrder(a: { readonly id: SourceId }, b: { readonly id: SourceId }): number {
+	return SOURCE_LIST_ORDER.indexOf(a.id) - SOURCE_LIST_ORDER.indexOf(b.id);
 }
 
 /** Phase → position in the indexing phase strip. */
@@ -215,14 +200,28 @@ export const TIPS: readonly TipArt[] = [
 	{ kind: "shortcut", mod: true, key: "," },
 ];
 
-/** The chips shown in the "connect more" row and the tip-8 brand strip. */
-export const EXTRA_BRANDS: readonly { readonly brand: string; readonly label: string }[] = [
-	{ brand: "kakaotalk", label: "KakaoTalk" },
+/**
+ * Brands the "connect later" row can offer. `sourceId` ties a chip to a detectable
+ * connector so it disappears once that connector is found; the rest (Notion, Google
+ * Drive) cannot be detected here and are always offered for Settings.
+ */
+const CONNECTABLE_BRANDS: readonly { readonly brand: string; readonly label: string; readonly sourceId?: SourceId }[] = [
+	{ brand: "kakaotalk", label: "KakaoTalk", sourceId: "kakao" },
+	{ brand: "slack", label: "Slack", sourceId: "slack" },
+	{ brand: "discord", label: "Discord", sourceId: "discord" },
+	{ brand: "telegram", label: "Telegram", sourceId: "telegram" },
+	{ brand: "whatsapp", label: "WhatsApp", sourceId: "whatsapp" },
+	{ brand: "github", label: "GitHub", sourceId: "github" },
+	{ brand: "obsidian", label: "Obsidian", sourceId: "obsidian" },
 	{ brand: "notion", label: "Notion" },
-	{ brand: "discord", label: "Discord" },
-	{ brand: "telegram", label: "Telegram" },
 	{ brand: "googledrive", label: "Google Drive" },
 ];
+
+/** "Connect later" chips: every connectable brand the probes did not already find. */
+export function connectableLater(detected: readonly { readonly id: SourceId }[]): readonly { readonly brand: string; readonly label: string }[] {
+	const found = new Set<SourceId>(detected.map((source) => source.id));
+	return CONNECTABLE_BRANDS.filter((entry) => entry.sourceId === undefined || !found.has(entry.sourceId));
+}
 
 /** The welcome feature card's source-token grid order. */
 export const WELCOME_BRANDS: readonly string[] = [

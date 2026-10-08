@@ -28,11 +28,10 @@ import type {
 	OnboardingStepId,
 	PermissionStatus,
 	PlanId,
-	SourceId,
 } from "../../../shared/onboarding-contract";
 import { useTranslation } from "../../../shared/i18n";
 import { cn } from "../lib/cn";
-import { buildFlow, canAdvance, draftDescription, primaryLabelKey, type Translate } from "./flow";
+import { buildFlow, bySourceOrder, canAdvance, primaryLabelKey, type Translate } from "./flow";
 import { Icon } from "./marks";
 import type { OnboardingCtx, OverlayKind } from "./context";
 import { IndexingScreen } from "./IndexingScreen";
@@ -87,6 +86,7 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 	const [scans, setScans] = useState<ReadonlyMap<string, FolderScan>>(new Map());
 	const [embedding, setEmbedding] = useState<EmbeddingInfo | null>(null);
 	const [detectedSources, setDetectedSources] = useState<readonly DetectedSource[]>([]);
+	const [sourcesChecking, setSourcesChecking] = useState(false);
 	const [models, setModels] = useState<readonly DetectedModelProvider[]>([]);
 	const [modelKey, setModelKey] = useState("");
 	const [modelOptions, setModelOptions] = useState<readonly ModelOption[]>([]);
@@ -111,7 +111,6 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 	const embeddingRef = useRef(false);
 	const modelsRef = useRef(false);
 	const indexingRef = useRef(false);
-	const variantRef = useRef(new Map<SourceId, number>());
 
 	// Synced during render, not in an effect: deferred callbacks (the sign-in
 	// auto-advance, keyboard handler) must see the state of the latest render.
@@ -232,7 +231,7 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 		}
 		const request: IndexingRequest = {
 			folders: current.folders.filter((folder) => folder.selected).map((folder) => folder.path),
-			sources: current.sources.filter((source) => source.on).map((source) => ({ id: source.id, description: source.description })),
+			sources: current.sources.filter((source) => source.on).map((source) => ({ id: source.id })),
 			plan: current.plan,
 			model:
 				current.plan === "byok" && current.model !== null
@@ -328,27 +327,32 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 		void bridge.scanFolders(missing);
 	}, [stepId, candidates]);
 
+	// The sources step probes every connector in main; each usable one streams in
+	// as soon as its own probe finishes, so the list fills row by row.
 	useEffect(() => {
 		if (stepId !== "sources" || sourcesRef.current) {
 			return;
 		}
 		sourcesRef.current = true;
-		void bridge.detectSources().then((detection) => {
-			setDetectedSources(detection.sources);
+		setSourcesChecking(true);
+		const offFound = bridge.onSourceDetected((source) => {
+			setDetectedSources((previous) =>
+				previous.some((known) => known.id === source.id) ? previous : previous.concat(source).sort(bySourceOrder),
+			);
 			setDraft((current) => {
-				if (current === null) {
+				if (current === null || current.sources.some((choice) => choice.id === source.id)) {
 					return current;
 				}
-				const merged = detection.sources.map((detected) => {
-					const existing = current.sources.find((source) => source.id === detected.id);
-					return (
-						existing ?? { id: detected.id, on: false, description: draftDescription(detected.id, detected.facts, 0, t) }
-					);
-				});
-				return { ...current, sources: merged };
+				return { ...current, sources: current.sources.concat({ id: source.id, on: false }) };
 			});
 		});
-	}, [stepId, t]);
+		const offDone = bridge.onSourcesDone(() => setSourcesChecking(false));
+		void bridge.detectSources().catch(() => setSourcesChecking(false));
+		return () => {
+			offFound();
+			offDone();
+		};
+	}, [stepId]);
 
 	useEffect(() => {
 		if (stepId !== "embedding" || embeddingRef.current) {
@@ -408,8 +412,6 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 		return () => window.removeEventListener("keydown", onKeyDown);
 	}, []);
 
-	const sourceFacts = useCallback((id: SourceId) => detectedSources.find((source) => source.id === id)?.facts ?? {}, [detectedSources]);
-
 	const signIn = useCallback(
 		(method: AccountMethod, email?: string): void => {
 			setAuthBusy(true);
@@ -441,6 +443,7 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 		candidates,
 		embedding,
 		sources: detectedSources,
+		sourcesChecking,
 		models,
 		modelKey,
 		modelBaseUrl: draft?.model?.baseUrl ?? "",
@@ -503,30 +506,8 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 		},
 		setSourceOn: (id, on) =>
 			patch({
-				sources: (draftRef.current?.sources ?? []).map((source) =>
-					source.id === id
-						? {
-								...source,
-								on,
-								description:
-									on && source.description === "" ? draftDescription(id, sourceFacts(id), 0, t) : source.description,
-							}
-						: source,
-				),
+				sources: (draftRef.current?.sources ?? []).map((source) => (source.id === id ? { ...source, on } : source)),
 			}),
-		setSourceDescription: (id, description) =>
-			patch({
-				sources: (draftRef.current?.sources ?? []).map((source) => (source.id === id ? { ...source, description } : source)),
-			}),
-		rewriteSource: (id) => {
-			const variant = ((variantRef.current.get(id) ?? 0) + 1) % 3;
-			variantRef.current.set(id, variant);
-			patch({
-				sources: (draftRef.current?.sources ?? []).map((source) =>
-					source.id === id ? { ...source, description: draftDescription(id, sourceFacts(id), variant, t) } : source,
-				),
-			});
-		},
 		choosePlan: (plan: PlanId) => patch({ plan }),
 		signIn,
 		signOut: () => patch({ account: null }),

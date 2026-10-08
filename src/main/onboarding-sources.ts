@@ -225,7 +225,17 @@ async function detectObsidian(deps: SourceDetectionDeps): Promise<DetectedSource
 	return vaults.length > 0 ? { id: "obsidian", facts: { vaults } } : null;
 }
 
-export async function detectSources(deps: SourceDetectionDeps): Promise<SourceDetection> {
+/**
+ * Probes every connector concurrently and reports each usable one through
+ * `onFound` the moment its own probe finishes, so a fast probe (KakaoTalk,
+ * WhatsApp: ~0.2s) is never held back by a slow one (IMAP login: seconds). The
+ * resolved value is the full list in `SOURCE_ORDER`, for callers that need all
+ * the facts at once (the indexing handoff).
+ */
+export async function detectSources(
+	deps: SourceDetectionDeps,
+	onFound?: (source: DetectedSource) => void,
+): Promise<SourceDetection> {
 	const detectors: Record<SourceId, (deps: SourceDetectionDeps) => Promise<DetectedSource | null>> = {
 		kakao: detectKakao,
 		slack: detectSlack,
@@ -236,8 +246,12 @@ export async function detectSources(deps: SourceDetectionDeps): Promise<SourceDe
 		github: detectGithub,
 		obsidian: detectObsidian,
 	};
-	// Probes are independent and each is bounded by `run`'s deadline, so the whole
-	// step costs the slowest probe rather than their sum.
-	const results = await Promise.all(SOURCE_ORDER.map((id) => detectors[id](deps).catch(() => null)));
+	const results = await Promise.all(
+		SOURCE_ORDER.map(async (id) => {
+			const source = await detectors[id](deps).catch(() => null);
+			if (source !== null) onFound?.(source);
+			return source;
+		}),
+	);
 	return { sources: results.filter((source): source is DetectedSource => source !== null) };
 }

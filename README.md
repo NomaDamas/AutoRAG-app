@@ -159,8 +159,13 @@ resumes at the same step.
   counts and an ETA.
 - **Embedding** is local (`qwen3-embedding-0.6b`); cloud embedding is shown but
   unavailable, since corpus text is never sent to remote embedders.
-- **Data sources** list only usable connectors, each with a drafted description,
-  and every one starts off. Local files are covered by the folders step, so
+- **Data sources** list only usable connectors, and every one starts off. The
+  probes run in parallel and each row appears the moment its own probe finishes
+  (fast ones first); a "checking" line stays under the list until all of them are
+  done, and only then does the "connect later" row appear, minus whatever was
+  found. There is no description to write: onboarding stores none, and the
+  agent-facing description is meant to be generated from the indexed content.
+  Local files are covered by the folders step, so
   Spotlight and Apple Mail are not offered. Each row appears only when the
   connector's own health probe says its data is reachable: KakaoTalk
   (`lazykatok doctor --macos-probe`: app, container, cached login, readable

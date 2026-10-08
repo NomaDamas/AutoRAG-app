@@ -1,13 +1,15 @@
-/** Step 6 — detected connectors, with metadata-drafted descriptions. */
+/** Step 6 — connectors the app found usable, streamed in as each probe finishes. */
 
 import type { ReactElement } from "react";
 import { Icon } from "../marks";
 import { BrandChip, Eyebrow, Multiline, SourceIcon, SplitScreen, Switch } from "../parts";
-import { EXTRA_BRANDS, sourceDetail } from "../flow";
+import { connectableLater, sourceDetail } from "../flow";
 import type { OnboardingCtx } from "../context";
 
 export function SourcesStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElement {
-	const { t, sources, draft } = ctx;
+	const { t, sources, sourcesChecking, draft } = ctx;
+	// Brands the user can still connect later: everything the probes did not find.
+	const more = connectableLater(sources);
 
 	return (
 		<SplitScreen
@@ -18,17 +20,12 @@ export function SourcesStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElem
 						<Multiline text={t("onboarding.sources.title")} />
 					</h1>
 					<p>{t("onboarding.sources.lead")}</p>
-					<div className="micro-note">
-						<Icon name="info" size={14} />
-						<span>{t("onboarding.sources.note")}</span>
-					</div>
 				</>
 			}
 		>
 			<div className="source-list">
 				{sources.map((source) => {
-					const choice = draft.sources.find((s) => s.id === source.id);
-					const on = choice?.on === true;
+					const on = draft.sources.find((s) => s.id === source.id)?.on === true;
 					return (
 						<div key={source.id} className="source-row" data-source-id={source.id}>
 							<SourceIcon id={source.id} />
@@ -37,20 +34,6 @@ export function SourcesStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElem
 									{t(`onboarding.sources.name.${source.id}`)} <span className="tag">{t("onboarding.sources.detected")}</span>
 								</div>
 								<div className="source-detail">{sourceDetail(source.id, source.facts, t)}</div>
-								{on ? (
-									<div className="source-description">
-										<textarea
-											value={choice?.description ?? ""}
-											onChange={(e) => ctx.setSourceDescription(source.id, e.target.value)}
-										/>
-										<footer>
-											<span className="draft">✦ {t("onboarding.sources.draftNote")}</span>
-											<button type="button" onClick={() => ctx.rewriteSource(source.id)}>
-												<Icon name="wand-sparkles" size={11} /> {t("onboarding.sources.rewrite")}
-											</button>
-										</footer>
-									</div>
-								) : null}
 							</div>
 							<Switch
 								on={on}
@@ -61,14 +44,26 @@ export function SourcesStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElem
 					);
 				})}
 			</div>
-			<div className="connect-more">
-				{t("onboarding.sources.connectMore")}
-				<div className="more-chips">
-					{EXTRA_BRANDS.map((brand) => (
-						<BrandChip key={brand.brand} brand={brand.brand} label={brand.label} />
-					))}
+			{sourcesChecking ? (
+				<div className="sources-checking" role="status" data-sources-checking>
+					<Icon name="loader-circle" size={13} className="spin" />
+					<span>{t("onboarding.sources.checking")}</span>
 				</div>
-			</div>
+			) : (
+				<div className="connect-more" data-sources-done>
+					{sources.length === 0 ? <div className="sources-empty">{t("onboarding.sources.empty")}</div> : null}
+					{more.length > 0 ? (
+						<>
+							{t("onboarding.sources.connectMore")}
+							<div className="more-chips">
+								{more.map((brand) => (
+									<BrandChip key={brand.brand} brand={brand.brand} label={brand.label} />
+								))}
+							</div>
+						</>
+					) : null}
+				</div>
+			)}
 		</SplitScreen>
 	);
 }
