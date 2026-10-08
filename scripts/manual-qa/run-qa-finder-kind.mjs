@@ -156,12 +156,21 @@ try {
 		if (fixture.skip === true) continue;
 		check(fixture.name, kind, fixture.expected);
 	}
-	const fallbackKind = await kindCell(fallbackName);
+	/** Read a Kind cell once the row is mounted and its cell has text. */
+	const kindCellFilled = async (name, timeoutMs = 15000) => {
+		const deadline = Date.now() + timeoutMs;
+		for (;;) {
+			const value = await kindCell(name);
+			if (value !== "" || Date.now() >= deadline) return value;
+			await page.waitForTimeout(100);
+		}
+	};
+	const fallbackKind = await kindCellFilled(fallbackName);
 	observed.push({ name: fallbackName, kind: fallbackKind });
 	results.push({ label: fallbackName, actual: fallbackKind, expected: "non-empty fallback", pass: fallbackKind !== "" });
 	console.log(`${fallbackKind !== "" ? "PASS" : "FAIL"}  ${fallbackName}: app=${JSON.stringify(fallbackKind)} (fallback row, non-empty)`);
 
-	const folderKind = await kindCell(folderName);
+	const folderKind = await kindCellFilled(folderName);
 	observed.push({ name: folderName, kind: folderKind });
 	check(folderName, folderKind, "Folder");
 

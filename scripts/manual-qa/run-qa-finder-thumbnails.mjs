@@ -166,20 +166,29 @@ try {
 
 	const dominant = (avg) => (avg[0] > avg[1] && avg[0] > avg[2] ? "red" : avg[2] > avg[1] ? "blue" : "other");
 	const observed = [];
-	const sampleMounted = async (name, expectIcon) => {
-		for (let attempt = 0; attempt < 30; attempt += 1) {
+	/**
+	 * The tile's own pixels, sampled until they settle: the OS thumbnail is
+	 * generated and decoded asynchronously, and a tile can briefly show the
+	 * letter/generic icon (or the previous frame of the same video) first. The
+	 * sample is retried until the expected colour dominates; the last sample is
+	 * returned, so a tile that never settles still fails its check.
+	 */
+	const sampleMounted = async (name, expectIcon, expectColor) => {
+		let sample = await sampleTile(name);
+		for (let attempt = 0; attempt < 40; attempt += 1) {
 			await mountRow(name);
-			const sample = await sampleTile(name);
-			if (sample.error !== undefined && expectIcon) {
-				await page.waitForTimeout(100);
-				continue;
+			sample = await sampleTile(name);
+			if (sample.error !== undefined) {
+				if (!expectIcon) return sample;
+			} else if (expectColor === undefined || dominant(sample.avg) === expectColor) {
+				return sample;
 			}
-			return sample;
+			await page.waitForTimeout(150);
 		}
-		return sampleTile(name);
+		return sample;
 	};
 	for (const fixture of fixtures) {
-		const sample = await sampleMounted(fixture.name, true);
+		const sample = await sampleMounted(fixture.name, true, fixture.expect);
 		observed.push({ name: fixture.name, sample });
 		if (sample.error !== undefined) {
 			check(fixture.name, sample.error, fixture.expect);
