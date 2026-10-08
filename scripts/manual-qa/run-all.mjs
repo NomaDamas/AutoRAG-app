@@ -37,6 +37,7 @@ const LANES = [
 	{ name: "sidebar-search", script: "run-qa-finder-sidebar-search.mjs", timeout: 240 },
 	{ name: "path-bar", script: "run-qa-finder-path-bar.mjs", timeout: 300 },
 	{ name: "kind", script: "run-qa-finder-kind.mjs", timeout: 240 },
+	{ name: "app-bundles", script: "run-qa-finder-app-bundles.mjs", timeout: 300 },
 	{ name: "info-metadata", script: "run-qa-finder-info-metadata.mjs", timeout: 240 },
 	{ name: "file-actions", script: "run-qa-finder-file-actions.mjs", timeout: 300 },
 	{ name: "new-file", script: "run-qa-finder-new-file.mjs", timeout: 300 },
