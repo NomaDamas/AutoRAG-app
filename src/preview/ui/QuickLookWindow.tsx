@@ -6,6 +6,7 @@ import { extensionOf, formatBytes } from "../shared/format";
 import { describeExtension, viewerForExtension, type ViewerKind } from "../shared/registry";
 import { ZOOM_IDENTITY, zoomTransform, type ZoomDirection } from "../shared/zoom";
 import { PreviewBody } from "./body";
+import { BundleView } from "./bundle";
 import { ChromeProvider, TOOL_BUTTON, type QuickLookChrome } from "./chrome";
 import { ErrorView } from "./fallback";
 import { FolderView } from "./folder";
@@ -19,7 +20,7 @@ declare global {
 	}
 }
 
-type StageKind = ViewerKind | "folder" | "error";
+type StageKind = ViewerKind | "folder" | "bundle" | "error";
 
 const NO_INTRINSIC_SIZE: Size = { width: 0, height: 0 };
 /** Frames a measured viewer gets to lay out before the window falls back to a page shape. */
@@ -43,6 +44,7 @@ const SELF_SIZED: Partial<Record<StageKind, true>> = {
 	text: true,
 	fallback: true,
 	folder: true,
+	bundle: true,
 	error: true,
 };
 
@@ -203,7 +205,7 @@ function QuickLookWindow({ bridge }: { readonly bridge: QuickLookWindowBridge })
 	);
 	const chrome = useMemo<QuickLookChrome>(() => ({ bridge, toolbar, report, resize, hideTitle: setTitleHidden, app }), [bridge, toolbar, report, resize, app]);
 
-	const kind: StageKind = load === null ? "fallback" : load.folder !== null ? "folder" : load.document === null ? "error" : viewerForExtension(extensionOf(load.name));
+	const kind: StageKind = load === null ? "fallback" : load.bundle !== null ? "bundle" : load.folder !== null ? "folder" : load.document === null ? "error" : viewerForExtension(extensionOf(load.name));
 	const measured = load !== null && SELF_SIZED[kind] !== true;
 
 	useEffect(() => {
@@ -229,7 +231,7 @@ function QuickLookWindow({ bridge }: { readonly bridge: QuickLookWindowBridge })
 
 	const material = bridge.platform === "darwin" ? "glass" : "solid";
 	if (load === null) return <div className={PANEL} data-material={material} data-quicklook-state="idle" />;
-	const { document, folder } = load;
+	const { document, folder, bundle } = load;
 	const meta = document === null ? describeExtension(extensionOf(load.name)) : `${describeExtension(document.ext)} · ${formatBytes(document.size)}`;
 
 	function onMediaEvent(event: SyntheticEvent<HTMLElement>): void {
@@ -280,7 +282,9 @@ function QuickLookWindow({ bridge }: { readonly bridge: QuickLookWindowBridge })
 					onLoadCapture={onMediaEvent}
 					onLoadedMetadataCapture={onMediaEvent}
 				>
-					{folder !== null ? (
+					{bundle !== null ? (
+						<BundleView bundle={bundle} />
+					) : folder !== null ? (
 						<FolderView folder={folder} />
 					) : document === null ? (
 						<ErrorView message={load.error ?? "파일을 열 수 없습니다"} />
