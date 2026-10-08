@@ -65,11 +65,30 @@ export async function resolveCopyName(destDir: string, name: string, isFolder: b
 	}
 }
 
+/** The `.app` extension that marks a macOS application bundle. */
+const APP_BUNDLE_EXTENSION = ".app";
+
+/**
+ * True when `path`'s name marks a macOS application bundle: a directory the OS
+ * treats as one launchable item, not a folder to browse into. Finder shows the
+ * app's own icon and launches it on double-click, and so must we. No other
+ * platform has the concept, so the same directory stays a folder there.
+ */
+export function isAppBundle(name: string, isDirectory: boolean, platform: NodeJS.Platform): boolean {
+	if (!isDirectory || platform !== "darwin") return false;
+	const lower = name.toLowerCase();
+	// A directory named exactly ".app" has no bundle name to launch.
+	return lower.length > APP_BUNDLE_EXTENSION.length && lower.endsWith(APP_BUNDLE_EXTENSION);
+}
+
 /**
  * Build the contract entry for one on-disk path. Symlinks are reported with
  * the target's metadata when resolvable, else with the link's own metadata.
+ * A macOS application bundle reports `kind: "file"` (see {@link isAppBundle});
+ * its size stays null because the entry is still a directory on disk, whose
+ * byte count would be the folder's own, not the app's.
  */
-export async function buildFsEntry(path: string): Promise<FsEntry> {
+export async function buildFsEntry(path: string, platform: NodeJS.Platform = process.platform): Promise<FsEntry> {
 	const linkStat = await lstat(path);
 	const isSymlink = linkStat.isSymbolicLink();
 	let effective = linkStat;
@@ -81,14 +100,16 @@ export async function buildFsEntry(path: string): Promise<FsEntry> {
 			if (!hasErrorCode(error, "ENOENT")) throw error;
 		}
 	}
-	const isFolder = effective.isDirectory();
+	const isDirectory = effective.isDirectory();
 	const name = basename(path);
+	const isBundle = isAppBundle(name, isDirectory, platform);
+	const isFolder = isDirectory && !isBundle;
 	return {
 		name,
 		path,
 		kind: isFolder ? "folder" : "file",
 		ext: isFolder ? "" : extensionOf(name),
-		size: isFolder ? null : effective.size,
+		size: isDirectory ? null : effective.size,
 		modifiedAt: effective.mtime.toISOString(),
 		// Only a real birth time is a creation time; never substitute mtime/ctime.
 		...(effective.birthtimeMs > 0 ? { createdAt: effective.birthtime.toISOString() } : {}),

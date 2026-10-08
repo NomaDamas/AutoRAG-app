@@ -163,6 +163,7 @@ export function untitledFileName(extension: string, attempt: number): string {
 interface SearchContext {
 	readonly needle: string;
 	readonly location: string;
+	readonly platform: NodeJS.Platform;
 	readonly results: FsSearchResult[];
 	readonly signal: AbortSignal | undefined;
 }
@@ -228,7 +229,7 @@ async function walkForSearch(dir: string, depth: number, context: SearchContext)
 		if (dirent.name.toLowerCase().includes(context.needle)) {
 			try {
 				context.results.push({
-					entry: await buildFsEntry(fullPath),
+					entry: await buildFsEntry(fullPath, context.platform),
 					location: context.location,
 				});
 			} catch (error) {
@@ -319,7 +320,7 @@ export function createFsService(deps: FsServiceDeps): FsService {
 				batch.map(async (dirent) => {
 					const fullPath = join(path, dirent.name);
 					try {
-						return await buildFsEntry(fullPath);
+						return await buildFsEntry(fullPath, platform);
 					} catch (error) {
 						// Unreadable entry: skip it, keep the verbatim reason visible.
 						console.warn(`fs:listDir skipping ${fullPath}: ${errorMessage(error)}`);
@@ -393,7 +394,7 @@ export function createFsService(deps: FsServiceDeps): FsService {
 			const resolved = await Promise.all(
 				batch.map(async (path) => {
 					try {
-						return { path, entry: await buildFsEntry(path) };
+						return { path, entry: await buildFsEntry(path, platform) };
 					} catch (error) {
 						if (hasErrorCode(error, "ENOENT") || hasErrorCode(error, "ENOTDIR")) {
 							return { path, entry: null };
@@ -419,7 +420,7 @@ export function createFsService(deps: FsServiceDeps): FsService {
 		const entries: FsEntry[] = [];
 		for (const stored of await recents.list()) {
 			try {
-				entries.push(await buildFsEntry(stored));
+				entries.push(await buildFsEntry(stored, platform));
 			} catch (error) {
 				if (!hasErrorCode(error, "ENOENT") && !hasErrorCode(error, "ENOTDIR")) {
 					console.warn(`fs:listDir ${RECENTS_PATH} skipping ${stored}: ${errorMessage(error)}`);
@@ -485,7 +486,7 @@ export function createFsService(deps: FsServiceDeps): FsService {
 		for (const path of paths) {
 			if (results.length >= SEARCH_MAX_RESULTS) break;
 			try {
-				results.push({ entry: await buildFsEntry(path), location: searchLocation(path, known) });
+				results.push({ entry: await buildFsEntry(path, platform), location: searchLocation(path, known) });
 			} catch (error) {
 				// The index can be stale: a path that vanished since indexing is skipped.
 				if (!hasErrorCode(error, "ENOENT") && !hasErrorCode(error, "ENOTDIR")) {
@@ -513,13 +514,13 @@ export function createFsService(deps: FsServiceDeps): FsService {
 			// The "파일 이름" chip scopes to the folder in view, which may sit
 			// outside the scanned places (e.g. inside a mounted disk).
 			const known = (await locations()).filter((location) => location.path !== RECENTS_PATH);
-			await walkForSearch(scope, 0, { needle, location: searchLocation(scope, known), results, signal });
+			await walkForSearch(scope, 0, { needle, location: searchLocation(scope, known), platform, results, signal });
 			return results;
 		}
 		for (const location of await locations()) {
 			// Recents is virtual and whole disks are too large to walk; only scanned places count.
 			if (!location.available || !location.scanned) continue;
-			await walkForSearch(location.path, 0, { needle, location: location.name, results, signal });
+			await walkForSearch(location.path, 0, { needle, location: location.name, platform, results, signal });
 			if (results.length >= SEARCH_MAX_RESULTS) break;
 		}
 		return results;
@@ -630,7 +631,7 @@ export function createFsService(deps: FsServiceDeps): FsService {
 			throw new FsRenameError("name-collision", `A file or folder named "${newName}" already exists`);
 		}
 		await fsRename(path, target);
-		return applyOsKind(await buildFsEntry(target), osKind);
+		return applyOsKind(await buildFsEntry(target, platform), osKind);
 	}
 
 	async function createFolder(directory: string): Promise<{ readonly path: string; readonly name: string }> {
@@ -673,7 +674,7 @@ export function createFsService(deps: FsServiceDeps): FsService {
 		finderMetadata: finderMetadataFor,
 		listDir,
 		readEntries,
-		stat: async (path) => applyOsKind(await buildFsEntry(path), osKind),
+		stat: async (path) => applyOsKind(await buildFsEntry(path, platform), osKind),
 		details: deps.details ?? readFileDetails,
 		previewIcon: (path, modifiedAt) =>
 			iconProvider.preview({ path, ext: extname(path).slice(1).toLowerCase(), modifiedAt }),

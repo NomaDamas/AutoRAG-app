@@ -84,13 +84,26 @@ export interface FolderSummary {
 	readonly recent: readonly FolderItem[];
 }
 
-/** `seq` orders loads; the main process ignores `ready` for a stale seq. Exactly one of `document`, `folder`, `error` is set. */
+/**
+ * A macOS application bundle: a directory the OS opens as one app, so the
+ * preview shows the app itself rather than its contents.
+ */
+export interface BundleSummary {
+	readonly name: string;
+	readonly path: string;
+	readonly modifiedAt: string;
+	/** `autorag-thumb://` URL for the app's own icon; null keeps the app glyph. */
+	readonly iconUrl: string | null;
+}
+
+/** `seq` orders loads; the main process ignores `ready` for a stale seq. Exactly one of `document`, `folder`, `bundle`, `error` is set. */
 export interface QuickLookLoad {
 	readonly seq: number;
 	readonly name: string;
 	readonly path: string;
 	readonly document: PreviewDocument | null;
 	readonly folder: FolderSummary | null;
+	readonly bundle: BundleSummary | null;
 	readonly error: string | null;
 	/** Default app name when already known; otherwise it follows on the `app` channel. */
 	readonly app: string | null;
@@ -234,11 +247,18 @@ export function isFolderSummary(value: unknown): value is FolderSummary {
 	return typeof value.itemCount === "number" && Array.isArray(value.recent) && value.recent.every(isFolderItem);
 }
 
+function isBundleSummary(value: unknown): value is BundleSummary {
+	if (!isRecord(value)) return false;
+	if (typeof value.name !== "string" || typeof value.path !== "string" || typeof value.modifiedAt !== "string") return false;
+	return value.iconUrl === null || typeof value.iconUrl === "string";
+}
+
 export function isQuickLookLoad(value: unknown): value is QuickLookLoad {
 	if (!isRecord(value)) return false;
 	if (typeof value.seq !== "number" || typeof value.name !== "string" || typeof value.path !== "string") return false;
 	if (value.document !== null && !isPreviewDocument(value.document)) return false;
 	if (value.folder !== null && !isFolderSummary(value.folder)) return false;
+	if (value.bundle !== null && !isBundleSummary(value.bundle)) return false;
 	if (value.app !== null && typeof value.app !== "string") return false;
 	return value.error === null || typeof value.error === "string";
 }

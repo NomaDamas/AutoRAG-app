@@ -39,6 +39,20 @@ describe("entryFromFs kind label", () => {
 		expect(entryFromFs(fsEntry({ ext: "xlsx", osKind: "Excel spreadsheet" })).fileKind).toBe("xlsx");
 	});
 
+	it("maps a macOS app bundle to the app tile and the OS's Application label", () => {
+		// Given a .app row whose bundle Quick Look has not answered for yet
+		const entry = fsEntry({ name: "Hello.app", path: "/Applications/Hello.app", ext: "app", size: null, osKind: null });
+
+		// When the row is built
+		const row = entryFromFs(entry);
+
+		// Then it renders the app tile with the Application label and no folder size
+		expect(row.kind).toBe("file");
+		expect(row.fileKind).toBe("app");
+		expect(row.kindLabel).toBe("Application");
+		expect(row.sizeLabel).toBe("—");
+	});
+
 	it("carries the OS tile icon through to the row", () => {
 		// Given a file the OS produced an icon for
 		const icon = "autorag-thumb://local/?path=%2Fdocs%2Fa.mp4&mtime=2026-09-29T00%3A00%3A00.000Z";

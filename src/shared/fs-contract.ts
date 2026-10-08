@@ -37,10 +37,15 @@ export interface FsEntry {
 	readonly name: string;
 	/** Absolute OS path. */
 	readonly path: string;
+	/**
+	 * "folder" for a browsable directory, "file" for everything the OS opens as
+	 * one item. A macOS application bundle (`.app`, a directory on disk) reports
+	 * "file": the OS launches it instead of listing its contents.
+	 */
 	readonly kind: "folder" | "file";
-	/** Lowercase extension without the dot; "" for folders and extensionless files. */
+	/** Lowercase extension without the dot; "" for folders and extensionless files. An app bundle carries "app". */
 	readonly ext: string;
-	/** Bytes; null for folders. */
+	/** Bytes; null for folders and app bundles (both are directories on disk). */
 	readonly size: number | null;
 	/** ISO 8601 modification time. */
 	readonly modifiedAt: string;

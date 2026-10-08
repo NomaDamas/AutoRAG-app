@@ -109,6 +109,14 @@ still has the previous file's size when they lay out.
 - **Folder** — Space previews folders too. The folder glyph, item count, size
   (a bounded walk: 200k entries or 2.5s, then a lower bound marked `+`), date,
   and the six most recently modified children.
+- **Application bundle** — a macOS `.app` is a directory but the OS opens it as
+  one app, so Space previews the app, not its contents: the app's own icon
+  (the provider's 640px preview tier — the same `autorag-thumb://` lane the
+  Inspector paper uses), the name, "Application", the bundle's total size (the
+  same bounded walk the folder panel runs), and the date. `Contents/` is never
+  listed, and the toolbar button stays "Open" because the bundle itself is what
+  opens. The classification lives in `node/bundle.ts` + `node/window.ts`; the
+  panel is `ui/bundle.tsx`.
 
 Images, TIFF, HEIC, fonts, Word, sheets, slides, archives, and EPUB keep
 their existing viewers inside the new chrome.

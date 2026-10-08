@@ -1,5 +1,6 @@
-import { extname } from "node:path";
+import { basename, extname } from "node:path";
 import type { AppAppearance } from "../../shared/settings-contract";
+import { isAppBundle } from "../../main/fs-entry";
 import {
 	app,
 	BrowserWindow,
@@ -20,6 +21,7 @@ import {
 	isQuickLookTarget,
 	isQuickLookZoomed,
 	PREVIEW_CHANNELS,
+	type BundleSummary,
 	type FolderSummary,
 	type NavigateDelta,
 	type PreviewDocument,
@@ -36,6 +38,7 @@ import { quickLookKeyAction } from "../shared/keys";
 import { byteNeed, viewerForExtension } from "../shared/registry";
 import { fallbackOrigin, screenOrigin, ZOOM_DONE_TIMEOUT_MS, zoomGeometry } from "../shared/zoom";
 import { readAudioMetadata } from "./audio-metadata";
+import { type BundleIconSource, summarizeBundle } from "./bundle";
 import { createDefaultAppCache, type DefaultAppCache } from "./default-app";
 import { fileDetails, sha256File } from "./details";
 import { measureFolder, summarizeFolder } from "./folder";
@@ -93,6 +96,13 @@ interface Session {
 
 let session: Session | null = null;
 let quitting = false;
+/**
+ * The main process's icon provider, for the one target the preview draws an
+ * OS icon for: a macOS application bundle (see {@link summarizeBundle}).
+ * Null in unit tests and before `registerQuickLookIpc` runs; the panel keeps
+ * its glyph then.
+ */
+let iconSource: BundleIconSource | null = null;
 
 function live(window: BrowserWindow): boolean {
 	return !window.isDestroyed();
@@ -280,6 +290,7 @@ function hide(state: Session, notifyOwner: boolean, origin: Bounds | null = stat
 interface TargetContent {
 	readonly document: PreviewDocument | null;
 	readonly folder: FolderSummary | null;
+	readonly bundle: BundleSummary | null;
 	readonly error: string | null;
 }
 
@@ -289,9 +300,9 @@ function isUnreadableFolder(error: unknown): boolean {
 
 async function readFolder(path: string): Promise<TargetContent> {
 	try {
-		return { document: null, folder: await summarizeFolder(path, FOLDER_PREVIEW_ITEMS), error: null };
+		return { document: null, folder: await summarizeFolder(path, FOLDER_PREVIEW_ITEMS), bundle: null, error: null };
 	} catch (error) {
-		if (isUnreadableFolder(error)) return { document: null, folder: null, error: "이 폴더를 읽을 권한이 없습니다" };
+		if (isUnreadableFolder(error)) return { document: null, folder: null, bundle: null, error: "이 폴더를 읽을 권한이 없습니다" };
 		throw error;
 	}
 }
@@ -319,10 +330,17 @@ async function readDocument(path: string): Promise<PreviewDocument> {
 
 async function readTarget(target: QuickLookTarget): Promise<TargetContent> {
 	try {
-		return { document: await readDocument(target.path), folder: null, error: null };
+		return { document: await readDocument(target.path), folder: null, bundle: null, error: null };
 	} catch (error) {
-		if (error instanceof PreviewReadError && error.code === "not-file") return readFolder(target.path);
-		if (error instanceof PreviewReadError) return { document: null, folder: null, error: error.message };
+		if (error instanceof PreviewReadError && error.code === "not-file") {
+			// A macOS application bundle is a directory, but the OS opens it as
+			// one app: the panel shows the app, never its `Contents/`.
+			if (isAppBundle(basename(target.path), true, process.platform)) {
+				return { document: null, folder: null, bundle: await summarizeBundle(target.path, iconSource), error: null };
+			}
+			return readFolder(target.path);
+		}
+		if (error instanceof PreviewReadError) return { document: null, folder: null, bundle: null, error: error.message };
 		throw error;
 	}
 }
@@ -335,11 +353,14 @@ async function show(state: Session, target: QuickLookTarget, origin: Bounds | nu
 	const [content] = await Promise.all([readTarget(target), state.loaded]);
 	if (seq !== state.seq || !live(state.window)) return;
 	const folder = content.folder !== null;
-	const known = state.defaultApps.known(target.path, folder);
+	// An app bundle is launched by the Open button itself, so there is no
+	// "Open with" app to name: the button stays "Open".
+	const launched = content.bundle !== null;
+	const known = launched ? null : state.defaultApps.known(target.path, folder);
 	const load: QuickLookLoad = { seq, name: target.name, path: target.path, ...content, app: known };
 	state.window.setTitle(target.name);
 	state.window.webContents.send(PREVIEW_CHANNELS.load, load);
-	if (known === null && content.error === null) {
+	if (known === null && !launched && content.error === null) {
 		void state.defaultApps.resolve(target.path, folder).then((name) => {
 			if (seq !== state.seq || !live(state.window)) return;
 			const update: QuickLookApp = { seq, name };
@@ -519,7 +540,8 @@ export function attachQuickLook(owner: BrowserWindow, options: QuickLookWindowOp
 	options.loadPage(window);
 }
 
-export function registerQuickLookIpc(ipc: IpcMain = ipcMain): void {
+export function registerQuickLookIpc(icons: BundleIconSource | null = null, ipc: IpcMain = ipcMain): void {
+	iconSource = icons;
 	app.on("before-quit", () => {
 		quitting = true;
 	});

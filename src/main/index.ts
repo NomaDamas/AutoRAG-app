@@ -225,7 +225,7 @@ app.whenReady().then(async () => {
 	registerPreviewProtocol();
 	const iconProvider = createIconProvider();
 	registerIconProtocol(iconProvider);
-	registerQuickLookIpc();
+	registerQuickLookIpc(iconProvider);
 	await ensureAutoRAGConfig();
 	const devLabel = resolveDevLabel();
 	console.log(`[autorag] ${formatWindowTitle(APP_NAME, APP_VERSION, devLabel)}`);
