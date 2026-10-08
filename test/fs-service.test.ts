@@ -1,6 +1,6 @@
-import { access, mkdir, mkdtemp, readdir, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readdir, readFile, rename, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, extname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { unzipSync } from "fflate";
 import { createFsService, FsRenameError, toHandoffPath, untitledFileName, untitledFolderName, type FsServiceDeps } from "../src/main/fs-service";
@@ -33,6 +33,7 @@ function fakePlaces(rows: readonly FsLocation[]): Places & { readonly ejected: s
 		},
 		signature: async () => "",
 		watch: () => () => {},
+		trashDir: async () => null,
 	};
 }
 
@@ -1569,5 +1570,332 @@ describe("previewIcon", () => {
 
 		expect(await service.previewIcon(join(dir, "a.bin"), "2026-09-29T00:00:00.000Z")).toBeNull();
 		await rm(dir, { recursive: true, force: true });
+	});
+});
+
+describe("restore from the Trash (Put Back)", () => {
+	/** A shell that really moves the item into the fixture Trash under its own name, like the OS does. */
+	function movingTrashDeps(homeDir: string): FsServiceDeps {
+		const base = makeDeps(homeDir).deps;
+		return {
+			...base,
+			shell: {
+				...base.shell,
+				trashItem: async (path: string) => {
+					await mkdir(join(homeDir, ".Trash"), { recursive: true });
+					await rename(path, join(homeDir, ".Trash", basename(path)));
+				},
+			},
+		};
+	}
+
+	it("puts an app-trashed item back at its original folder and forgets the origin", async () => {
+		// Given a Documents folder whose file was trashed from the app
+		const documents = join(root, "Documents");
+		await mkdir(documents);
+		const file = join(documents, "notes.md");
+		await writeFile(file, "put back");
+		const service = createFsService(movingTrashDeps(root));
+		await service.trash([file]);
+		const trashPath = join(root, ".Trash", "notes.md");
+		await expect(access(file)).rejects.toThrow();
+
+		// When restoring the payload from the Trash view
+		const result = await service.restoreFromTrash([trashPath]);
+
+		// Then the file is back where it came from, under its own name, and the payload is gone
+		expect(result).toEqual({ ok: [trashPath], failed: [] });
+		expect(await readFile(file, "utf8")).toBe("put back");
+		await expect(access(trashPath)).rejects.toThrow();
+
+		// And the record is consumed: a second restore says why it cannot
+		const again = await service.restoreFromTrash([trashPath]);
+		expect(again.ok).toEqual([]);
+		expect(again.failed[0]?.message).toContain("원래 위치를 알 수 없습니다");
+	});
+
+	it("undoes a trash (⌘Z): the item moves straight back to its folder", async () => {
+		// Given a trashed file
+		const documents = join(root, "Documents");
+		await mkdir(documents);
+		const file = join(documents, "undo.md");
+		await writeFile(file, "⌘Z");
+		const service = createFsService(movingTrashDeps(root));
+		await service.trash([file]);
+
+		// When undoing
+		const outcome = await service.undo();
+
+		// Then the file is back and the Trash is empty
+		expect(outcome).toEqual({ ok: true, empty: false, failed: [] });
+		expect(await readFile(file, "utf8")).toBe("⌘Z");
+		expect(await readdir(join(root, ".Trash"))).toEqual([]);
+	});
+
+	it("undoes a restore (⌘Z): the item goes back into the Trash", async () => {
+		// Given a trashed file that was put back
+		const documents = join(root, "Documents");
+		await mkdir(documents);
+		const file = join(documents, "roundtrip.md");
+		await writeFile(file, "round trip");
+		const service = createFsService(movingTrashDeps(root));
+		await service.trash([file]);
+		await service.restoreFromTrash([join(root, ".Trash", "roundtrip.md")]);
+
+		// When undoing the restore
+		const outcome = await service.undo();
+
+		// Then the payload is back in the Trash and restorable again
+		expect(outcome).toEqual({ ok: true, empty: false, failed: [] });
+		const trashPath = join(root, ".Trash", "roundtrip.md");
+		await expect(access(trashPath)).resolves.toBeUndefined();
+		const restored = await service.restoreFromTrash([trashPath]);
+		expect(restored).toEqual({ ok: [trashPath], failed: [] });
+	});
+
+	it("names a restored item Finder-style when its old name was retaken", async () => {
+		// Given a trashed file whose original folder now holds another file with that name
+		const documents = join(root, "Documents");
+		await mkdir(documents);
+		const file = join(documents, "same.txt");
+		await writeFile(file, "incoming");
+		const service = createFsService(movingTrashDeps(root));
+		await service.trash([file]);
+		await writeFile(join(documents, "same.txt"), "existing");
+
+		// When restoring
+		await service.restoreFromTrash([join(root, ".Trash", "same.txt")]);
+
+		// Then it lands as "same copy.txt", keeping both files
+		expect(await readFile(join(documents, "same.txt"), "utf8")).toBe("existing");
+		expect(await readFile(join(documents, "same copy.txt"), "utf8")).toBe("incoming");
+	});
+
+	it("reports a foreign payload (trashed outside the app) instead of guessing an origin", async () => {
+		// Given a Trash holding a file the app never trashed
+		await mkdir(join(root, ".Trash"), { recursive: true });
+		const foreign = join(root, ".Trash", "foreign.txt");
+		await writeFile(foreign, "x");
+		const service = createFsService(movingTrashDeps(root));
+
+		// When restoring it
+		const result = await service.restoreFromTrash([foreign]);
+
+		// Then the failure names the path and reason, and the file stays put
+		expect(result).toEqual({ ok: [], failed: [{ path: foreign, message: expect.stringContaining("원래 위치를 알 수 없습니다") }] });
+		expect(await readFile(foreign, "utf8")).toBe("x");
+	});
+
+	it("a fully refused trash records nothing: ⌘Z reports an empty record", async () => {
+		// Given a shell that refuses every trash
+		const file = join(root, "stuck.txt");
+		await writeFile(file, "x");
+		const service = createFsService(makeFailingTrashDeps(root, "no permission"));
+
+		// When trashing it
+		const result = await service.trash([file]);
+
+		// Then the failure is verbatim and the undo record stays empty
+		expect(result.ok).toEqual([]);
+		expect(result.failed[0]?.message).toBe("no permission");
+		expect(await service.undo()).toEqual({ ok: false, empty: true, failed: [] });
+	});
+});
+
+describe("empty the Trash", () => {
+	/** A shell that really moves the item into the fixture Trash under its own name, like the OS does. */
+	function movingTrashDeps(homeDir: string): FsServiceDeps {
+		const base = makeDeps(homeDir).deps;
+		return {
+			...base,
+			shell: {
+				...base.shell,
+				trashItem: async (path: string) => {
+					await mkdir(join(homeDir, ".Trash"), { recursive: true });
+					await rename(path, join(homeDir, ".Trash", basename(path)));
+				},
+			},
+		};
+	}
+
+	it("permanently deletes every payload, keeping Finder's own metadata files", async () => {
+		// Given a Trash holding an app-trashed file, a foreign file, and .DS_Store
+		const documents = join(root, "Documents");
+		await mkdir(documents);
+		const file = join(documents, "orphan.md");
+		await writeFile(file, "gone");
+		const service = createFsService(movingTrashDeps(root));
+		await service.trash([file]);
+		await writeFile(join(root, ".Trash", "foreign.txt"), "x");
+		await writeFile(join(root, ".Trash", ".DS_Store"), "x");
+
+		// When emptying the Trash
+		const result = await service.emptyTrash();
+
+		// Then both payloads are deleted, .DS_Store survives, and the batch names what went
+		expect([...result.ok].sort()).toEqual([join(root, ".Trash", "foreign.txt"), join(root, ".Trash", "orphan.md")]);
+		expect(result.failed).toEqual([]);
+		expect(await readdir(join(root, ".Trash"))).toEqual([".DS_Store"]);
+
+		// And the consumed record cannot restore anything anymore
+		const restore = await service.restoreFromTrash([join(root, ".Trash", "orphan.md")]);
+		expect(restore.failed[0]?.message).toContain("원래 위치를 알 수 없습니다");
+	});
+
+	it("clears the trash undo record so ⌘Z after an empty reports nothing", async () => {
+		// Given a trashed file and an emptied Trash
+		const documents = join(root, "Documents");
+		await mkdir(documents);
+		const file = join(documents, "done.md");
+		await writeFile(file, "x");
+		const service = createFsService(movingTrashDeps(root));
+		await service.trash([file]);
+		await service.emptyTrash();
+
+		// When undoing
+		const outcome = await service.undo();
+
+		// Then there is nothing to undo: the payload is gone for good
+		expect(outcome).toEqual({ ok: false, empty: true, failed: [] });
+	});
+
+	it("answers an already-empty Trash with an empty batch", async () => {
+		// Given no Trash folder at all
+		const service = createFsService(movingTrashDeps(root));
+
+		// When emptying
+		const result = await service.emptyTrash();
+
+		// Then nothing was deleted and nothing failed
+		expect(result).toEqual({ ok: [], failed: [] });
+	});
+});
+
+describe("Recycle Bin restore and empty (Windows)", () => {
+	/**
+	 * Deps for the Windows shape on any host: a fixture SID folder stands in for
+	 * `<systemDrive>\$Recycle.Bin\<SID>`, and the injected `recycleBin` predicate
+	 * answers for it, so the record/payload pairing runs for real.
+	 */
+	function winTrashDeps(): { readonly deps: FsServiceDeps; readonly sidDir: string } {
+		const sidDir = join(root, "recycle");
+		let sequence = 0;
+		const base = makeDeps(root, "win32").deps;
+		return {
+			sidDir,
+			deps: {
+				...base,
+				places: {
+					list: async () => [],
+					eject: async () => {},
+					signature: async () => "",
+					watch: () => () => {},
+					trashDir: async () => sidDir,
+				},
+				recycleBin: (dir: string) => dir === sidDir,
+				shell: {
+					...base.shell,
+					// Mimics the OS: the item leaves for a `$R<id>` payload plus a `$I` record naming where it came from.
+					// The service hands the path off normalized for Windows, so the stub receives it that way too.
+					trashItem: async (handed: string) => {
+						const path = handed.replaceAll("\\", "/");
+						await mkdir(sidDir, { recursive: true });
+						const id = `T${++sequence}`;
+						const payload = join(sidDir, `$R${id}${extname(path)}`);
+						await rename(path, payload);
+						await writeFile(join(sidDir, `$I${id}${extname(path)}`), recycleRecord(path, BigInt(Date.now())));
+					},
+				},
+			},
+		};
+	}
+
+	/** A version-2 `$I` record: int64 version, int64 size, FILETIME deletedAt, int32 chars, UTF-16 path. */
+	function recycleRecord(original: string, deletedAt: bigint): Buffer {
+		const header = Buffer.alloc(28);
+		header.writeBigInt64LE(2n, 0);
+		header.writeBigInt64LE(1n, 8);
+		header.writeBigInt64LE(deletedAt, 16);
+		header.writeInt32LE(original.length + 1, 24);
+		return Buffer.concat([header, Buffer.from(`${original}\0`, "utf16le")]);
+	}
+
+	/** Write a `$R` payload + `$I` record pair naming `original`, the way Windows trashing does. */
+	async function recyclePair(sidDir: string, id: string, original: string, deletedAt: bigint): Promise<string> {
+		const payload = join(sidDir, `$R${id}${extname(original)}`);
+		await mkdir(sidDir, { recursive: true });
+		await writeFile(payload, "bin payload");
+		await writeFile(join(sidDir, `$I${id}${extname(original)}`), recycleRecord(original, deletedAt));
+		return payload;
+	}
+
+	it("restores a payload to the original path its $I record names, then deletes the record", async () => {
+		// Given a Recycle Bin pair for a file that came from the fixture Documents folder
+		const documents = join(root, "Documents");
+		await mkdir(documents);
+		const original = join(documents, "보고서.docx");
+		const { deps, sidDir } = winTrashDeps();
+		const payload = await recyclePair(sidDir, "T1", original, BigInt(Date.now()));
+
+		// When restoring the payload
+		const result = await createFsService(deps).restoreFromTrash([payload]);
+
+		// Then the file is back at the original path, and both payload and record are gone
+		expect(result).toEqual({ ok: [payload], failed: [] });
+		expect(await readFile(original, "utf8")).toBe("bin payload");
+		expect(await readdir(sidDir)).toEqual([]);
+	});
+
+	it("reports a payload without a readable $I record instead of guessing an origin", async () => {
+		// Given a lone payload with no record
+		const { deps, sidDir } = winTrashDeps();
+		await mkdir(sidDir, { recursive: true });
+		const payload = join(sidDir, "$RTX.bin");
+		await writeFile(payload, "x");
+
+		// When restoring it
+		const result = await createFsService(deps).restoreFromTrash([payload]);
+
+		// Then the failure names the reason and the payload stays put
+		expect(result).toEqual({ ok: [], failed: [{ path: payload, message: expect.stringContaining("원래 위치를 알 수 없습니다") }] });
+		expect(await readFile(payload, "utf8")).toBe("x");
+	});
+
+	it("undoes a trash (⌘Z) via the newest $I record naming the source, skipping orphans", async () => {
+		// Given an app-trashed file plus an orphaned older record naming the same source
+		const documents = join(root, "Documents");
+		await mkdir(documents);
+		const file = join(documents, "notes.md");
+		await writeFile(file, "undo me");
+		const { deps, sidDir } = winTrashDeps();
+		const service = createFsService(deps);
+		await service.trash([file]);
+		await writeFile(join(sidDir, "$IOLD.md"), recycleRecord(file, 100n));
+
+		// When undoing the trash
+		const outcome = await service.undo();
+
+		// Then the payload moved back to its folder and only its record was consumed
+		expect(outcome).toEqual({ ok: true, empty: false, failed: [] });
+		expect(await readFile(file, "utf8")).toBe("undo me");
+		expect(await readdir(sidDir)).toEqual(["$IOLD.md"]);
+	});
+
+	it("empties the Recycle Bin folder: payloads and records go, other files stay", async () => {
+		// Given a SID folder holding two pairs and Windows' own desktop.ini
+		const { deps, sidDir } = winTrashDeps();
+		const first = await recyclePair(sidDir, "T1", join(root, "docs", "a.txt"), BigInt(Date.now()));
+		const second = await recyclePair(sidDir, "T2", join(root, "docs", "b.txt"), BigInt(Date.now()));
+		await writeFile(join(sidDir, "desktop.ini"), "[.ShellClassInfo]");
+
+		// When emptying
+		const result = await createFsService(deps).emptyTrash();
+
+		// Then every payload and record went, the ini stayed, and the batch names them
+		expect([...result.ok].sort()).toEqual(
+			[first, join(sidDir, "$IT1.txt"), second, join(sidDir, "$IT2.txt")].sort(),
+		);
+		expect(result.failed).toEqual([]);
+		expect(await readdir(sidDir)).toEqual(["desktop.ini"]);
 	});
 });

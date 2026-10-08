@@ -61,6 +61,13 @@ export interface Places {
 	signature(): Promise<string>;
 	/** Poll `signature` and call `listener` whenever it moves. Returns the stop function. */
 	watch(listener: () => void, intervalMs?: number): () => void;
+
+	/**
+	 * The user's Trash folder: `~/.Trash` on macOS/Linux, the boot drive's
+	 * `<systemDrive>\$Recycle.Bin\<SID>` on Windows. Null when the SID is
+	 * unknown. Restoring and emptying act on this folder.
+	 */
+	trashDir(): Promise<string | null>;
 }
 
 const COMMAND_TIMEOUT_MS = 15_000;
@@ -466,6 +473,13 @@ export function createPlaces(deps: PlacesDeps = {}): Places {
 		}
 	}
 
+	/** The Trash folder the sidebar's Trash row shows. */
+	async function trashDir(): Promise<string | null> {
+		if (!windows) return join(home, ".Trash");
+		const userSid = await sid();
+		return userSid === null ? null : `${systemDrive}\\$Recycle.Bin\\${userSid}`;
+	}
+
 	function watch(listener: () => void, intervalMs = WATCH_INTERVAL_MS): () => void {
 		let last: string | null = null;
 		let busy = true;
@@ -492,5 +506,5 @@ export function createPlaces(deps: PlacesDeps = {}): Places {
 		return () => clearInterval(timer);
 	}
 
-	return { list, eject, signature, watch };
+	return { list, eject, signature, watch, trashDir };
 }

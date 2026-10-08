@@ -136,8 +136,9 @@ opening files and URLs, and the clipboard.
 If the worker dies, main forks a new one at once (repeated crashes within 10 s
 back off, up to 5 s), the window stays, and every open tab relists and
 re-watches its folders. Unanswered reads are re-sent to the new worker; a
-request that changes files (copy, move, rename, trash, create, undo, eject) is
-never re-sent and fails with a message asking the user to check the result.
+request that changes files (copy, move, rename, trash, restore from the Trash,
+emptying the Trash, create, undo, eject) is never re-sent and fails with a
+message asking the user to check the result.
 Quitting asks the worker to release its watches and waits up to 2 s before
 exiting. QA lane: `scripts/manual-qa/run-qa-finder-fs-worker-crash.mjs`
 (SIGKILLs the worker twice and checks the tabs recover within 5 s).

@@ -18,6 +18,8 @@ import {
 	ShareIcon,
 	SparklesIcon,
 	SortIcon,
+	PutBackIcon,
+	EmptyTrashIcon,
 } from "./icons";
 import { ToolbarMenu } from "./ToolbarMenu";
 
@@ -33,8 +35,9 @@ const NAV_BUTTON =
 /**
  * Toolbar (v7 handoff): back/forward, the folder title, the view segmented
  * control, the Sort and Group pop-ups (issue #47), and the top-right cluster —
- * the inspector toggle, the AI Search toggle, and Share (the OS share sheet for
- * the focused row; hidden where the platform has none). Instant search lives in
+ * Put Back and 휴지통 비우기 while the folder is the Trash (issue #86), the
+ * inspector toggle, the AI Search toggle, and Share (the OS share sheet for the
+ * focused row; hidden where the platform has none). Instant search lives in
  * the sidebar now (`SidebarSearch`), so this bar holds no search field.
  */
 export function Toolbar({
@@ -56,6 +59,10 @@ export function Toolbar({
 	shareAvailable,
 	canShare,
 	onShare,
+	trashActive,
+	canPutBack,
+	onPutBack,
+	onEmptyTrash,
 	sidebarHidden,
 	onShowSidebar,
 }: {
@@ -84,6 +91,14 @@ export function Toolbar({
 	readonly canShare: boolean;
 	/** Open the OS share sheet for the focused row, anchored to the button. */
 	readonly onShare: (anchor: ActionAnchor) => void;
+	/** The folder in view is the Trash, so the Trash controls are shown. */
+	readonly trashActive: boolean;
+	/** A trashed row is selected, so the shown Put Back is enabled. */
+	readonly canPutBack: boolean;
+	/** Put the selected rows back where they came from. */
+	readonly onPutBack: () => void;
+	/** Open the destructive confirm for emptying the Trash. */
+	readonly onEmptyTrash: () => void;
 	readonly sidebarHidden: boolean;
 	readonly onShowSidebar: () => void;
 }): ReactElement {
@@ -180,6 +195,29 @@ export function Toolbar({
 				onClick={(event) => openMenu("group", event)}
 			/>
 			<div className="tgroup flex flex-none items-center gap-2 [-webkit-app-region:no-drag]">
+				{trashActive ? (
+					<>
+						<button
+							type="button"
+							className={NAV_BUTTON}
+							title={t("toolbar.putBack", "원래 위치로 복원")}
+							aria-label={t("toolbar.putBack", "원래 위치로 복원")}
+							disabled={!canPutBack}
+							onClick={onPutBack}
+						>
+							<PutBackIcon size={18} />
+						</button>
+						<button
+							type="button"
+							className={NAV_BUTTON}
+							title={t("toolbar.emptyTrash", "휴지통 비우기")}
+							aria-label={t("toolbar.emptyTrash", "휴지통 비우기")}
+							onClick={onEmptyTrash}
+						>
+							<EmptyTrashIcon size={18} />
+						</button>
+					</>
+				) : null}
 				<button
 					type="button"
 					className={[

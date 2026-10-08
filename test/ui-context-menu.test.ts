@@ -129,6 +129,27 @@ describe("buildContextMenu in the Recents view", () => {
 	});
 });
 
+describe("buildContextMenu in the Trash view", () => {
+	it("offers Put Back instead of Move to Trash", () => {
+		const menu = items(buildContextMenu({ ...file, inTrash: true }));
+		expect(menu.map((i) => i.action)).toContain("putBack");
+		expect(menu.map((i) => i.action)).not.toContain("trash");
+		expect(menu.at(-1)?.label).toBe("원래 위치로 복원");
+		expect(menu.at(-1)?.keycap).toBeNull();
+	});
+
+	it("counts a multi-selection in the Put Back item", () => {
+		const menu = items(buildContextMenu({ ...file, inTrash: true, selectionCount: 4 }));
+		expect(menu.at(-1)?.label).toBe("4개 항목 원래 위치로 복원");
+	});
+
+	it("keeps Move to Trash in ordinary folder listings", () => {
+		const menu = items(buildContextMenu(file));
+		expect(menu.map((i) => i.action)).toContain("trash");
+		expect(menu.map((i) => i.action)).not.toContain("putBack");
+	});
+});
+
 describe("buildBackgroundContextMenu", () => {
 	const submenuOf = (entries: readonly FinderMenuEntry[]): FinderMenuSubmenu => {
 		const entry = entries.find((candidate): candidate is FinderMenuSubmenu => candidate.kind === "submenu");
@@ -166,6 +187,17 @@ describe("buildBackgroundContextMenu", () => {
 		expect(
 			buildBackgroundContextMenu({ clipboardCount: 3 }).find((entry) => entry.kind === "item"),
 		).toMatchObject({ disabled: false });
+	});
+
+	it("offers 휴지통 비우기 in the Trash view, destructive", () => {
+		const menu = items(buildBackgroundContextMenu({ clipboardCount: 0, inTrash: true }));
+		const emptyTrash = menu.find((i) => i.action === "emptyTrash");
+		expect(emptyTrash?.label).toBe("휴지통 비우기");
+		expect(emptyTrash?.tone).toBe("danger");
+	});
+
+	it("keeps the ordinary folder menu without the Trash", () => {
+		expect(items(buildBackgroundContextMenu({ clipboardCount: 0 })).map((i) => i.action)).not.toContain("emptyTrash");
 	});
 
 	it("counts the submenu parent as one row in the height estimate", () => {

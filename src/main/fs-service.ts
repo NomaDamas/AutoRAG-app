@@ -31,8 +31,9 @@ import { createOsKindResolver } from "./file-kind";
 import { readFileDetails } from "./file-details";
 import { buildFsEntry, errorMessage, hasErrorCode, isAvailable, pathExists, resolveCopyName } from "./fs-entry";
 import { createPlaces, type Places } from "./places";
-import { isRecycleBinDir, readRecycleBinName } from "./recycle-bin";
+import { isRecycleBinDir, readRecycleBinName, readRecycleBinRecord } from "./recycle-bin";
 import { createRecentsStore, type RecentsStore } from "./recents-store";
+import { createTrashStore, type TrashStore } from "./trash-store";
 
 /** Subset of Electron's shell used by the service (injected for testability). */
 export interface FsShell {
@@ -63,6 +64,8 @@ export interface FsServiceDeps {
 	readonly qaRoot?: string;
 	/** Recently opened/previewed files. Defaults to `<homeDir>/recents`; production injects the userData store. */
 	readonly recents?: RecentsStore;
+	/** Put-Back origins for payloads the app trashed. Defaults to `<homeDir>/trash-store`; production injects the userData store. */
+	readonly trashStore?: TrashStore;
 	/** Defaults to the platform resolver (mdls on macOS, the registry on Windows). */
 	readonly osKind?: OsKindLookup;
 	/** Defaults to the platform icon provider (native Quick Look thumbnails on macOS/Windows). */
@@ -212,6 +215,25 @@ async function runBatch(paths: readonly string[], operation: (path: string) => P
 	return { ok, failed };
 }
 
+/** Rename across folders, falling back to copy+delete across devices. */
+async function movePath(source: string, target: string): Promise<void> {
+	try {
+		await fsRename(source, target);
+	} catch (error) {
+		// Cross-device move: copy the tree, then remove the source.
+		if (!hasErrorCode(error, "EXDEV")) throw error;
+		await cp(source, target, { recursive: true });
+		await rm(source, { recursive: true, force: true });
+	}
+}
+
+/** Move a row back into `restoreDir`, Finder-style collision naming included. */
+async function moveBack(path: string, restoreDir: string): Promise<void> {
+	const stepStat = await lstat(path);
+	const back = join(restoreDir, await resolveCopyName(restoreDir, basename(path), stepStat.isDirectory()));
+	await movePath(path, back);
+}
+
 async function walkForSearch(dir: string, depth: number, context: SearchContext): Promise<void> {
 	context.signal?.throwIfAborted();
 	if (depth > SEARCH_MAX_DEPTH || context.results.length >= SEARCH_MAX_RESULTS) return;
@@ -261,6 +283,7 @@ export function createFsService(deps: FsServiceDeps): FsService {
 	const iconProvider: IconProvider = deps.icons ?? createIconProvider();
 	const places = deps.places ?? createPlaces({ homeDir: home, platform });
 	const recycleBin = deps.recycleBin ?? isRecycleBinDir;
+	const trashStore = deps.trashStore ?? createTrashStore({ directory: join(home, "trash-store") });
 	// In-app clipboard lives in this process's memory only (the fs worker in the app).
 	let inAppClipboard: FsClipboard | null = null;
 	/**
@@ -526,17 +549,164 @@ export function createFsService(deps: FsServiceDeps): FsService {
 		return results;
 	}
 
-	/** One undo step of the most recent copy/move/create operation, consumed by ⌘Z. */
+	/** One undo step of the most recent copy/move/create/trash operation, consumed by ⌘Z. */
 	interface FsUndoStep {
-		readonly kind: "copy" | "move" | "create";
-		/** The row the transfer created (copy/create) or now occupies (move). */
+		readonly kind: "copy" | "move" | "create" | "trash" | "restore";
+		/**
+		 * The row the transfer created (copy/create) or now occupies (move/
+		 * restore). A trash step keeps the path the item was trashed from; undo
+		 * finds the payload in the Trash from it.
+		 */
 		readonly path: string;
-		/** The folder a move took the row from; "" for copy and create steps. */
+		/**
+		 * The folder a move took the row from; "" for copy, create, and
+		 * restore steps. A trash step names the folder the item came from.
+		 */
 		readonly restoreDir: string;
 	}
 
 	/** Undo record of the most recent successful copy/move transfer. */
 	let lastUndoSteps: readonly FsUndoStep[] | null = null;
+
+	/** Move one item to the Trash and remember where it came from (Put Back, ⌘Z). */
+	async function trashOneAndRecord(path: string): Promise<void> {
+		await trashOne(path, platform, (target) => deps.shell.trashItem(target));
+		// Windows keeps the origin in the `$I` record itself; macOS keeps none,
+		// so the app owns it. A record that fails to persist only costs that
+		// one item's Put Back from the view, never the trashing itself.
+		if (platform === "darwin") {
+			const dir = await places.trashDir();
+			if (dir !== null) {
+				await trashStore
+					.record([{ sourcePath: path, trashPath: join(dir, basename(path)) }])
+					.catch((error: unknown) => console.warn(`fs:trash origin not kept for ${path}: ${errorMessage(error)}`));
+			}
+		}
+	}
+
+	/**
+	 * The original location a Trash payload should go back to: the `$I`
+	 * record's path on Windows, the app-kept origin on macOS. Null when
+	 * neither knows — the payload stays put and the caller reports why.
+	 */
+	async function trashOrigin(payloadPath: string): Promise<string | null> {
+		if (recycleBin(dirname(payloadPath))) {
+			const record = await readRecycleBinRecord(join(dirname(payloadPath), `$I${basename(payloadPath).slice(2)}`)).catch(
+				() => null,
+			);
+			return record?.originalPath ?? null;
+		}
+		if (platform === "win32") return null;
+		return (await trashStore.find(payloadPath))?.sourcePath ?? null;
+	}
+
+	/** Finder "Put Back" for one payload: move it to `origin`, named the way the folder left it. */
+	async function putBackPayload(payloadPath: string, origin: string): Promise<string> {
+		const originDir = dirname(origin);
+		const target = join(originDir, await resolveCopyName(originDir, basename(origin), (await lstat(payloadPath)).isDirectory()));
+		await movePath(payloadPath, target);
+		if (recycleBin(dirname(payloadPath))) {
+			// Windows: a record must not outlive its payload.
+			await rm(join(dirname(payloadPath), `$I${basename(payloadPath).slice(2)}`), { force: true });
+		} else if (platform === "darwin") {
+			await trashStore.forget([payloadPath]);
+		}
+		return target;
+	}
+
+	/**
+	 * The Trash payload `sourcePath` became when it was trashed (⌘Z after a
+	 * trash). Windows finds it by scanning the records naming the source and
+	 * keeping the newest whose payload still exists; macOS expects it in
+	 * `~/.Trash` under the item's own name.
+	 */
+	async function payloadForSource(sourcePath: string): Promise<string> {
+		if (platform === "win32") {
+			const dir = await places.trashDir();
+			if (dir === null) {
+				throw new Error("휴지통 위치를 알 수 없습니다");
+			}
+			let found: { readonly payload: string; readonly deletedAt: bigint } | null = null;
+			for (const name of await readdir(dir).catch(() => [] as string[])) {
+				if (!name.startsWith("$I")) continue;
+				const record = await readRecycleBinRecord(join(dir, name)).catch(() => null);
+				if (record === null || normalizeSlashes(record.originalPath) !== normalizeSlashes(sourcePath)) continue;
+				const payload = join(dir, `$R${name.slice(2)}`);
+				if (!(await pathExists(payload))) continue;
+				if (found === null || record.deletedAt > found.deletedAt) found = { payload, deletedAt: record.deletedAt };
+			}
+			if (found === null) {
+				throw new Error(`휴지통에서 항목을 찾을 수 없습니다: ${basename(sourcePath)}`);
+			}
+			return found.payload;
+		}
+		const dir = await places.trashDir();
+		if (dir === null) {
+			throw new Error("휴지통 위치를 알 수 없습니다");
+		}
+		const expected = join(dir, basename(sourcePath));
+		if (!(await pathExists(expected))) {
+			throw new Error(`휴지통에서 항목을 찾을 수 없습니다: ${basename(sourcePath)}`);
+		}
+		return expected;
+	}
+
+	/** Restore trashed payloads back to the folders they came from (Finder "Put Back"). */
+	async function restoreFromTrash(paths: readonly string[]): Promise<FsBatchResult> {
+		const steps: FsUndoStep[] = [];
+		const result = await runBatch(paths, async (payloadPath) => {
+			const origin = await trashOrigin(payloadPath);
+			if (origin === null) {
+				throw new Error(`원래 위치를 알 수 없습니다: ${basename(payloadPath)}`);
+			}
+			// ⌘Z moves the row back into the Trash, like undoing any other move.
+			steps.push({ kind: "restore", path: await putBackPayload(payloadPath, origin), restoreDir: "" });
+		});
+		if (steps.length > 0) lastUndoSteps = steps;
+		return result;
+	}
+
+	/**
+	 * Permanently delete everything in the Trash: the payloads the view shows
+	 * plus Windows' `$I` records, keeping the OS's own metadata files
+	 * (.DS_Store, desktop.ini). Origins are forgotten and a trash-kind undo
+	 * record is dropped, so ⌘Z cannot resurrect what an empty removed.
+	 */
+	async function emptyTrash(): Promise<FsBatchResult> {
+		const dir = await places.trashDir();
+		if (dir === null) {
+			return { ok: [], failed: [{ path: "", message: "휴지통 위치를 알 수 없습니다" }] };
+		}
+		let names: string[];
+		try {
+			names = await readdir(dir);
+		} catch (error) {
+			// A Trash folder that does not exist is already empty.
+			if (!hasErrorCode(error, "ENOENT") && !hasErrorCode(error, "ENOTDIR")) throw error;
+			return { ok: [], failed: [] };
+		}
+		const deletable =
+			platform === "win32"
+				? (name: string) => name.startsWith("$R") || name.startsWith("$I")
+				: (name: string) => !name.startsWith(".");
+		const result = await runBatch(
+			names.filter(deletable).map((name) => join(dir, name)),
+			async (path) => {
+				await rm(path, { recursive: true, force: true });
+			},
+		);
+		if (result.ok.length === 0) return result;
+		if (platform === "darwin") {
+			// Every origin record points inside the emptied Trash folder.
+			await trashStore
+				.forget((await trashStore.list()).map((record) => record.trashPath))
+				.catch((error: unknown) => console.warn(`fs:emptyTrash origins not cleared: ${errorMessage(error)}`));
+		}
+		if (lastUndoSteps?.some((step) => step.kind === "trash") === true) {
+			lastUndoSteps = null;
+		}
+		return result;
+	}
 
 	async function copy(paths: readonly string[], destDir: string): Promise<FsBatchResult> {
 		const steps: FsUndoStep[] = [];
@@ -556,14 +726,7 @@ export function createFsService(deps: FsServiceDeps): FsService {
 		const result = await runBatch(paths, async (source) => {
 			const sourceStat = await lstat(source);
 			const target = join(destDir, await resolveCopyName(destDir, basename(source), sourceStat.isDirectory()));
-			try {
-				await fsRename(source, target);
-			} catch (error) {
-				// Cross-device move: copy the tree, then remove the source.
-				if (!hasErrorCode(error, "EXDEV")) throw error;
-				await cp(source, target, { recursive: true });
-				await rm(source, { recursive: true, force: true });
-			}
+			await movePath(source, target);
 			steps.push({ kind: "move", path: target, restoreDir: dirname(source) });
 		});
 		if (steps.length > 0) lastUndoSteps = steps;
@@ -574,7 +737,9 @@ export function createFsService(deps: FsServiceDeps): FsService {
 	 * Undo the most recent recorded operation (⌘Z). A copy or create step
 	 * deletes the row it created; a move step puts the row back into the folder
 	 * it came from, with Finder-style collision naming when the original name
-	 * was retaken in the meantime. The record is consumed by the call.
+	 * was retaken in the meantime; a trash step puts the item back where it was
+	 * trashed from (Finder "Put Back"); a restore step moves the row back into
+	 * the Trash. The record is consumed by the call.
 	 */
 	async function undo(): Promise<FsUndoOutcome> {
 		const steps = lastUndoSteps;
@@ -587,16 +752,12 @@ export function createFsService(deps: FsServiceDeps): FsService {
 			try {
 				if (step.kind === "copy" || step.kind === "create") {
 					await rm(step.path, { recursive: true });
+				} else if (step.kind === "trash") {
+					await putBackPayload(await payloadForSource(step.path), step.path);
+				} else if (step.kind === "restore") {
+					await trashOneAndRecord(step.path);
 				} else {
-					const stepStat = await lstat(step.path);
-					const back = join(step.restoreDir, await resolveCopyName(step.restoreDir, basename(step.path), stepStat.isDirectory()));
-					try {
-						await fsRename(step.path, back);
-					} catch (error) {
-						if (!hasErrorCode(error, "EXDEV")) throw error;
-						await cp(step.path, back, { recursive: true });
-						await rm(step.path, { recursive: true, force: true });
-					}
+					await moveBack(step.path, step.restoreDir);
 				}
 			} catch (error) {
 				failed.push({ path: step.path, message: errorMessage(error) });
@@ -697,7 +858,25 @@ export function createFsService(deps: FsServiceDeps): FsService {
 		undo,
 		createFolder,
 		createFile,
-		trash: (paths) => runBatch(paths, (path) => trashOne(path, platform, (target) => deps.shell.trashItem(target))),
+		trash: async (paths) => {
+			if (paths.length === 0) {
+				return { ok: [], failed: [] };
+			}
+			// Record before the first item leaves: a step names where the item
+			// came from, which is known before the move, so a ⌘Z landing while
+			// the batch is still moving already finds the record instead of a
+			// silent no-op. A batch that moves nothing takes the record back.
+			lastUndoSteps = paths.map((path) => ({ kind: "trash", path, restoreDir: dirname(path) }));
+			const result = await runBatch(paths, async (path) => {
+				await trashOneAndRecord(path);
+			});
+			if (result.ok.length === 0) {
+				lastUndoSteps = null;
+			}
+			return result;
+		},
+		restoreFromTrash,
+		emptyTrash,
 		reveal: async (path) => {
 			deps.shell.showItemInFolder(toHandoffPath(path, platform));
 		},

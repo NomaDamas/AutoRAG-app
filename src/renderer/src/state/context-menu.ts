@@ -24,7 +24,9 @@ export type FinderMenuAction =
 	| "duplicate"
 	| "rename"
 	| "copyPath"
+	| "putBack"
 	| "trash"
+	| "emptyTrash"
 	| "newFolder"
 	| "newFile";
 
@@ -70,6 +72,8 @@ export interface ContextMenuInput {
 	readonly clipboardCount: number;
 	/** True while the listing is the virtual Recents location. */
 	readonly inRecents?: boolean;
+	/** True while the listing is the Trash location: rows go back (Put Back) instead of to the Trash. */
+	readonly inTrash?: boolean;
 }
 
 function item(
@@ -123,23 +127,32 @@ export function buildContextMenu(
 		item("rename", tr("contextMenu.rename", "이름 변경"), { disabled: multi }),
 		item("copyPath", tr("contextMenu.copyPath", "경로 복사")),
 		SEPARATOR,
-		item(
-			"trash",
-			multi
-				? tr("contextMenu.moveToTrashCount", `${input.selectionCount}개 항목 휴지통으로 이동`, { count: input.selectionCount })
-				: tr("contextMenu.moveToTrash", "휴지통으로 이동"),
-			{
-				keycap: deleteKeyLabel(),
-				tone: "danger",
-			},
-		),
-	);
+		input.inTrash === true
+			? item(
+					"putBack",
+					multi
+						? tr("contextMenu.putBackCount", `${input.selectionCount}개 항목 원래 위치로 복원`, { count: input.selectionCount })
+						: tr("contextMenu.putBack", "원래 위치로 복원"),
+				)
+			: item(
+					"trash",
+					multi
+						? tr("contextMenu.moveToTrashCount", `${input.selectionCount}개 항목 휴지통으로 이동`, { count: input.selectionCount })
+						: tr("contextMenu.moveToTrash", "휴지통으로 이동"),
+					{
+						keycap: deleteKeyLabel(),
+						tone: "danger",
+					},
+				),
+		);
 	return entries;
 }
 
 export interface BackgroundMenuInput {
 	/** Items held by the in-app file clipboard; 0 disables 붙여넣기. */
 	readonly clipboardCount: number;
+	/** True while the listing is the Trash location: the menu offers 휴지통 비우기. */
+	readonly inTrash?: boolean;
 }
 
 /**
@@ -171,6 +184,9 @@ export function buildBackgroundContextMenu(
 		submenu,
 		SEPARATOR,
 		item("paste", tr("contextMenu.paste", "붙여넣기"), { keycap: formatShortcut({ key: "V" }), disabled: input.clipboardCount === 0 }),
+		...(input.inTrash === true
+			? [SEPARATOR, item("emptyTrash", tr("contextMenu.emptyTrash", "휴지통 비우기"), { tone: "danger" })]
+			: []),
 	];
 }
 

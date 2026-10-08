@@ -82,11 +82,33 @@ export function trashToast(paths: readonly string[]): string {
 	return `${paths.length}개 항목을 휴지통으로 이동했습니다`;
 }
 
+export function putBackToast(paths: readonly string[]): string {
+	if (paths.length === 1) {
+		return `${basename(paths[0] ?? "")} — 원래 위치로 복원했습니다`;
+	}
+	return `${paths.length}개 항목을 원래 위치로 복원했습니다`;
+}
+
+/** The toast for an emptied Trash: what went, and the first verbatim refusal. */
+export function emptyTrashToast(result: {
+	readonly ok: readonly string[];
+	readonly failed: readonly { readonly path: string; readonly message: string }[];
+}): string {
+	const first = result.failed[0];
+	if (first === undefined) {
+		return "휴지통을 비웠습니다";
+	}
+	return result.ok.length === 0
+		? `휴지통 비우기 실패: ${first.message}`
+		: `${result.ok.length}개 항목을 삭제했습니다 · ${basename(first.path)} — 삭제하지 못했습니다: ${first.message}`;
+}
+
 /** A batch file operation's verb, as the toast names it. */
-export type BatchVerb = "trash" | "move" | "copy" | "duplicate";
+export type BatchVerb = "trash" | "putBack" | "move" | "copy" | "duplicate";
 
 const BATCH_DONE: Record<BatchVerb, string> = {
 	trash: "휴지통으로 이동했습니다",
+	putBack: "원래 위치로 복원했습니다",
 	move: "옮겼습니다",
 	copy: "복사했습니다",
 	duplicate: "복제했습니다",
@@ -94,6 +116,7 @@ const BATCH_DONE: Record<BatchVerb, string> = {
 
 const BATCH_FAILED: Record<BatchVerb, string> = {
 	trash: "휴지통으로 이동하지 못했습니다",
+	putBack: "원래 위치로 복원하지 못했습니다",
 	move: "옮기지 못했습니다",
 	copy: "복사하지 못했습니다",
 	duplicate: "복제하지 못했습니다",
@@ -109,7 +132,9 @@ export function batchToast(
 ): string {
 	const first = result.failed[0];
 	if (first === undefined) {
-		return verb === "trash" ? trashToast(result.ok) : `${result.ok.length}개 항목을 ${BATCH_DONE[verb]}`;
+		if (verb === "trash") return trashToast(result.ok);
+		if (verb === "putBack") return putBackToast(result.ok);
+		return `${result.ok.length}개 항목을 ${BATCH_DONE[verb]}`;
 	}
 	const failedPart =
 		result.failed.length === 1
