@@ -47,7 +47,10 @@ and applies in icon, list, column, and search layouts. Grouping is visual only:
 `state/grouping.ts` splits the same rows into section headers without creating
 folders or changing entry identity; the virtualized list and icon views account
 for header height in their window geometry, and column panes render the same
-sections inline. Native Finder criteria are populated by a background
+sections inline, each pane windowed on its own scroller (27px rows; issue #103,
+`ColumnPane` in `components/ColumnBrowser.tsx`) — a 5,000-file pane keeps tens of
+rows mounted, and a keyboard/reveal target outside the window is mounted for one
+commit so `scrollIntoView` finds it; check: `scripts/manual-qa/run-qa-finder-column-large.mjs`. Native Finder criteria are populated by a background
 `fs:finderMetadata` call, separate from the `fs:enrichEntries` call that fills
 OS kinds and tile icons: creation time comes from the real filesystem birth
 time, tags and comments use Finder extended attributes with Spotlight fallback,
