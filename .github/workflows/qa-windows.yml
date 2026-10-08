@@ -10,29 +10,30 @@ name: QA (Windows)
 # outbound HTTPS connections to GitHub; no SSH endpoint or credential is
 # exposed to workflows. See docs/windows-runner.md.
 
+# Runs only after a push to `main` or `dev` (or by hand via workflow_dispatch),
+# never per pull request: a sweep takes ~30 minutes of the one runner PC.
 on:
   push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+    branches: [main, dev]
   workflow_dispatch:
 
-# One sweep at a time per ref; a newer push to the same PR supersedes the old run.
+# One sweep at a time per ref; the runner is a single machine, so sweeps queue
+# rather than cancel each other (a cancelled sweep loses its evidence).
 concurrency:
   group: qa-windows-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
 
 jobs:
   qa-windows:
-    # A self-hosted runner executes workflow code on a personal machine, so
-    # never run it for code from forks.
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    # The runner executes workflow code on a personal machine; only run it for
+    # this repository's own refs, never for code from forks.
+    if: github.repository == 'NomaDamas/AutoRAG-app'
     runs-on: [self-hosted, Windows, X64, autorag-qa]
     # The sweep's per-lane budgets sum past an hour in the worst case; a healthy
-    # run finishes in ~25 minutes. 90 keeps a few slow lanes from cancelling the
+    # run finishes in ~30 minutes. 90 keeps a few slow lanes from cancelling the
     # job (and losing the uploaded evidence) while still bounding a hang.
     timeout-minutes: 90
     steps:

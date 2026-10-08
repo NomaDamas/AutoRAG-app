@@ -12,13 +12,20 @@ Workflows never SSH into the PC, so no host, user, or key is stored in GitHub
 secrets or in the repository. The SSH endpoint stays a maintainer-only door.
 Only jobs that name the `autorag-qa` label can execute on the PC.
 
+## When it runs
+
+Only on a push to `main` or `dev`, or by hand (Actions → QA (Windows) → Run
+workflow, or `gh workflow run qa-windows.yml --ref <branch>`). Pull requests do
+not trigger it. A sweep takes about 30 minutes of the one runner PC, and
+sweeps queue rather than cancel each other.
+
 ## Safety rules
 
 - The repository is private. Keep it that way, or restrict fork-PR workflows
-  (Settings → Actions → General). The workflow also skips pull requests whose
-  head repository is not this repository.
-- Never add `pull_request_target`, or any untrusted-input trigger, to a job that
-  uses `runs-on: [self-hosted, ...]`.
+  (Settings → Actions → General). The job also only runs when
+  `github.repository` is `NomaDamas/AutoRAG-app`.
+- Never add `pull_request`, `pull_request_target`, or any untrusted-input
+  trigger to a job that uses `runs-on: [self-hosted, ...]`.
 - The job runs as the PC's regular user, not as a service account with
   privileges. Do not store tokens in the runner's environment.
 - `permissions: contents: read` and `persist-credentials: false` keep the job's
