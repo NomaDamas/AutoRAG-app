@@ -125,10 +125,12 @@ try {
 		}
 		throw new Error(`row ${name} never mounted`);
 	};
-	// Enrichment lands asynchronously now; mount each row and wait for its icon.
+	// Enrichment lands asynchronously now; mount each row and give its icon a
+	// generous first window. A tile that never arrives is reported by the
+	// per-fixture checks below (with the observed tile), not as an exception.
 	for (const fixture of fixtures) {
 		const row = await mountRow(fixture.name);
-		await row.locator("img.tile--image").waitFor({ timeout: 30000 });
+		await row.locator("img.tile--image").waitFor({ timeout: 45000 }).catch(() => undefined);
 	}
 
 	const sampleTile = (rowName) =>
@@ -174,8 +176,11 @@ try {
 	 * returned, so a tile that never settles still fails its check.
 	 */
 	const sampleMounted = async (name, expectIcon, expectColor) => {
+		// Time-bounded, not attempt-bounded: the OS thumbnailer is shared and can
+		// take tens of seconds for one file while other work runs.
+		const deadline = Date.now() + 45_000;
 		let sample = await sampleTile(name);
-		for (let attempt = 0; attempt < 40; attempt += 1) {
+		for (;;) {
 			await mountRow(name);
 			sample = await sampleTile(name);
 			if (sample.error !== undefined) {
@@ -183,9 +188,9 @@ try {
 			} else if (expectColor === undefined || dominant(sample.avg) === expectColor) {
 				return sample;
 			}
-			await page.waitForTimeout(150);
+			if (Date.now() >= deadline) return sample;
+			await page.waitForTimeout(250);
 		}
-		return sample;
 	};
 	for (const fixture of fixtures) {
 		const sample = await sampleMounted(fixture.name, true, fixture.expect);
