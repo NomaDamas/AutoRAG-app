@@ -32,6 +32,8 @@ export type FsWorkerOp =
 	| "createFolder"
 	| "createFile"
 	| "trash"
+	| "restoreFromTrash"
+	| "emptyTrash"
 	| "reveal"
 	| "quickLook"
 	| "open"

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactElement } from "react";
+import { useTranslation } from "react-i18next";
 import type { QuickLookTarget } from "../../preview/shared/contract";
 import type { Bounds } from "../../preview/shared/fit";
 import { NO_CAPABILITIES, type ActionAnchor } from "../../shared/actions-contract";
@@ -11,6 +12,7 @@ import { FinderPane, type PaneShell } from "./components/FinderPane";
 import { Inspector, type InspectorFamily } from "./components/Inspector";
 import { ContextMenu } from "./components/primitives/ContextMenu";
 import { Toast } from "./components/primitives/Toast";
+import { ConfirmDialog } from "./components/primitives/ConfirmDialog";
 import { Sidebar } from "./components/Sidebar";
 import type { SearchMode } from "./components/SidebarSearch";
 import { Toolbar } from "./components/Toolbar";
@@ -167,6 +169,7 @@ function PaneGrip({
 }
 
 export function App(): ReactElement {
+	const { t } = useTranslation();
 	const source = useFinderSource();
 	const [showHiddenFiles, setShowHiddenFiles] = useState(false);
 	/** The Interface language setting; "AI 요약" prompts in this language. */
@@ -603,6 +606,10 @@ export function App(): ReactElement {
 						onShare={(anchor) => {
 							if (focused !== null) finder?.runEntryAction(focused, { kind: "share" }, anchor);
 						}}
+						trashActive={finder?.inTrashLocation === true}
+						canPutBack={(finder?.selection.keys.length ?? 0) > 0}
+						onPutBack={() => finder?.putBackSelection()}
+						onEmptyTrash={() => finder?.requestEmptyTrash()}
 						sidebarHidden={!sidebarVisible}
 						onShowSidebar={() => setSidebarVisible(true)}
 					/>
@@ -711,6 +718,17 @@ export function App(): ReactElement {
 					onClose={finder.closeContextMenu}
 				/>
 			)}
+			{finder?.emptyTrashConfirm === true ? (
+				<ConfirmDialog
+					title={t("confirm.emptyTrashTitle", "휴지통 비우기")}
+					message={t("confirm.emptyTrashMessage", "휴지통의 모든 항목이 영구 삭제됩니다. 이 작업은 되돌릴 수 없습니다.")}
+					confirmLabel={t("confirm.emptyTrashAction", "비우기")}
+					cancelLabel={t("common.cancel", "취소")}
+					danger
+					onConfirm={() => finder?.confirmEmptyTrash()}
+					onCancel={() => finder?.cancelEmptyTrash()}
+				/>
+			) : null}
 		</div>
 	);
 }

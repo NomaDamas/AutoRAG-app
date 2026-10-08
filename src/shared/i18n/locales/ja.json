@@ -44,7 +44,9 @@
     "toggleInspector": "情報パネルの切り替え",
     "showAiSearch": "AI 検索を表示",
     "aiSearchShortcut": "AI 検索 ({{shortcut}})",
-    "share": "共有"
+    "share": "共有",
+    "putBack": "元に戻す",
+    "emptyTrash": "ゴミ箱を空にする"
   },
   "sort": {
     "none": "なし",
@@ -117,6 +119,9 @@
     "copyPath": "パスをコピー",
     "moveToTrash": "ゴミ箱に入れる",
     "moveToTrashCount": "{{count}}個の項目をゴミ箱に入れる",
+    "putBack": "元に戻す",
+    "putBackCount": "{{count}}個の項目を元に戻す",
+    "emptyTrash": "ゴミ箱を空にする",
     "newFolder": "新規フォルダー",
     "new": "新規作成",
     "trashShort": "ゴミ箱"
@@ -228,6 +233,11 @@
     "indexExcluded": "{{name}} — インデックスから除外しました",
     "copiedPath": "パスをコピーしました",
     "feedbackSent": "フィードバックを送信しました"
+  },
+  "confirm": {
+    "emptyTrashTitle": "ゴミ箱を空にする",
+    "emptyTrashMessage": "ゴミ箱内のすべての項目が完全に削除されます。この操作は取り消せません。",
+    "emptyTrashAction": "空にする"
   },
   "settings": {
     "title": "設定",

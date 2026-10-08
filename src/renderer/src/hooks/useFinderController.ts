@@ -33,7 +33,7 @@ import {
 import type { NewFileFormatId } from "../../../shared/new-file-contract";
 import { planTransfer } from "../state/file-transfer";
 import type { FileActionTarget } from "../state/file-actions";
-import { batchToast, emptyStateText, indexToast } from "../state/format";
+import { batchToast, emptyStateText, emptyTrashToast, indexToast } from "../state/format";
 import { evidenceSourceUrl, findEvidenceSource } from "../state/evidence";
 import type { FocusZone } from "../state/keymap";
 import { nearestExistingAncestor, pruneSelection, withoutPaths } from "../state/live";
@@ -223,6 +223,18 @@ export interface FinderController {
 	pasteClipboard(move: boolean): void;
 	/** Undo the most recent recorded copy/move transfer (⌘Z). */
 	undoLastTransfer(): void;
+	/** True while the focused tab lists the Trash location itself. */
+	readonly inTrashLocation: boolean;
+	/** Put the selected trashed rows back where they came from (Trash view). */
+	putBackSelection(): void;
+	/** Open the destructive confirm for 휴지통 비우기. */
+	requestEmptyTrash(): void;
+	/** Run the confirmed 휴지통 비우기. */
+	confirmEmptyTrash(): void;
+	/** Close the 휴지통 비우기 confirm without deleting. */
+	cancelEmptyTrash(): void;
+	/** Whether the 휴지통 비우기 confirm is showing. */
+	readonly emptyTrashConfirm: boolean;
 	/** An in-app row drop: ⌥ copies, otherwise the rows move into the target folder. */
 	transferDropped(paths: readonly string[], destDir: string, copy: boolean): void;
 	/** A drop on another tab: switch to it, then move/copy the rows into its folder. */
@@ -361,6 +373,8 @@ export function useFinderController(
 	const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
 	const [rename, setRename] = useState<RenameState | null>(null);
 	const [clipboardCount, setClipboardCount] = useState(0);
+	/** The 휴지통 비우기 confirm: destructive, so it never runs without an explicit click. */
+	const [emptyTrashConfirm, setEmptyTrashConfirm] = useState(false);
 	const [flashPath, setFlashPath] = useState<string | null>(null);
 	const [searchFocused, setSearchFocused] = useState(false);
 	const [revision, setRevision] = useState(0);
@@ -924,6 +938,48 @@ export function useFinderController(
 				.catch(reportError);
 		});
 
+	/** The sidebar's Trash location, the only folder whose rows restore instead of trash. */
+	const trashLocationPath = useMemo(
+		() => locations.find((location) => location.icon === "trash")?.path ?? null,
+		[locations],
+	);
+	const inTrashLocation = trashLocationPath !== null && path === trashLocationPath;
+
+	/**
+	 * Put trashed rows back where they came from (Trash view "Put Back").
+	 * ⌘Z afterwards moves them back into the Trash.
+	 */
+	const restoreFromTrash = useLatestCallback(
+		(paths: readonly string[]) => {
+			if (paths.length === 0) {
+				return;
+			}
+			source
+				.restoreFromTrash(paths)
+				.then((result) => {
+					dropRemoved(result.ok);
+					showToast(batchToast("putBack", result));
+					refresh();
+				})
+				.catch(reportError);
+		});
+
+	const putBackSelection = useLatestCallback(() => restoreFromTrash(selection.keys));
+
+	const requestEmptyTrash = useLatestCallback(() => setEmptyTrashConfirm(true));
+	const cancelEmptyTrash = useLatestCallback(() => setEmptyTrashConfirm(false));
+	const confirmEmptyTrash = useLatestCallback(() => {
+		setEmptyTrashConfirm(false);
+		source
+			.emptyTrash()
+			.then((result) => {
+				dropRemoved(result.ok);
+				showToast(emptyTrashToast(result));
+				refresh();
+			})
+			.catch(reportError);
+	});
+
 	/**
 	 * Flips the file's `excludePaths` entry in the shared AutoRAG config. The row
 	 * adopts the returned status at once (pending while the index catches up);
@@ -1309,6 +1365,12 @@ export function useFinderController(
 				return;
 			}
 			const entry = menu.entry;
+
+			if (action === "emptyTrash") {
+				// The background menu's 휴지통 비우기: destructive, so the confirm opens first.
+				requestEmptyTrash();
+				return;
+			}
 			// Every remaining action needs a row; the empty-space menu never offers them.
 			if (entry === null) {
 				return;
@@ -1362,6 +1424,9 @@ export function useFinderController(
 					return;
 				case "trash":
 					trashPaths(targets);
+					return;
+				case "putBack":
+					restoreFromTrash(targets);
 					return;
 			}
 		});
@@ -1421,6 +1486,10 @@ export function useFinderController(
 		});
 
 	const dismiss = useLatestCallback(() => {
+		if (emptyTrashConfirm) {
+			setEmptyTrashConfirm(false);
+			return;
+		}
 		if (contextMenu !== null) {
 			setContextMenu(null);
 			return;
@@ -1544,7 +1613,7 @@ export function useFinderController(
 			return [];
 		}
 		if (menu.entry === null) {
-			return buildBackgroundContextMenu({ clipboardCount }, (k, def) => t(k, { defaultValue: def }));
+			return buildBackgroundContextMenu({ clipboardCount, inTrash: inTrashLocation }, (k, def) => t(k, { defaultValue: def }));
 		}
 		const entry = menu.entry;
 		return buildContextMenu(
@@ -1554,10 +1623,11 @@ export function useFinderController(
 				indexIncluded: sidecar.indexStatus(entry.path)?.excluded !== true,
 				clipboardCount,
 				inRecents: path === RECENTS_PATH,
+				inTrash: inTrashLocation,
 			},
 			(k, def, opt) => t(k, { defaultValue: def, ...(opt as Record<string, unknown> | undefined) }),
 		);
-	}, [contextMenu, menuTargets, sidecar, clipboardCount, path, t]);
+	}, [contextMenu, menuTargets, sidecar, clipboardCount, path, t, inTrashLocation]);
 
 	const navTargets = useMemo(
 		() => (locations.length > 0 ? locations : [{ name: basename(path), path }]),
@@ -1660,6 +1730,12 @@ export function useFinderController(
 		cutSelection,
 		pasteClipboard,
 		undoLastTransfer,
+		inTrashLocation,
+		putBackSelection,
+		requestEmptyTrash,
+		confirmEmptyTrash,
+		cancelEmptyTrash,
+		emptyTrashConfirm,
 		transferDropped,
 		dropOnTab,
 		columnPanes: paneViews,

@@ -44,7 +44,9 @@
     "toggleInspector": "Toggle inspector",
     "showAiSearch": "Show AI Search",
     "aiSearchShortcut": "AI Search ({{shortcut}})",
-    "share": "Share"
+    "share": "Share",
+    "putBack": "Put Back",
+    "emptyTrash": "Empty Trash"
   },
   "sort": {
     "none": "None",
@@ -117,6 +119,9 @@
     "copyPath": "Copy Path",
     "moveToTrash": "Move to Trash",
     "moveToTrashCount": "Move {{count}} items to Trash",
+    "putBack": "Put Back",
+    "putBackCount": "Put Back {{count}} items",
+    "emptyTrash": "Empty Trash",
     "newFolder": "New Folder",
     "new": "New",
     "trashShort": "Trash"
@@ -228,6 +233,11 @@
     "indexExcluded": "{{name}} — excluded from indexing",
     "copiedPath": "Copied path",
     "feedbackSent": "Feedback sent"
+  },
+  "confirm": {
+    "emptyTrashTitle": "Empty Trash",
+    "emptyTrashMessage": "All items in the Trash will be permanently deleted. This cannot be undone.",
+    "emptyTrashAction": "Empty"
   },
   "settings": {
     "title": "Settings",

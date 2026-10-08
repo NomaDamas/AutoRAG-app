@@ -99,6 +99,10 @@ export interface FinderSource {
 	reveal(path: string): Promise<void>;
 	/** Move to the Trash; per-path outcome, so a partial batch is never silent. */
 	trash(paths: readonly string[]): Promise<FsBatchResult>;
+	/** Restore trashed payloads back to the folders they came from (Trash view "Put Back"). */
+	restoreFromTrash(paths: readonly string[]): Promise<FsBatchResult>;
+	/** Permanently delete everything in the Trash. */
+	emptyTrash(): Promise<FsBatchResult>;
 	rename(path: string, name: string): Promise<void>;
 	/** Create a new folder (Finder-style "untitled folder" / "untitled folder 2"). */
 	createFolder(dir: string): Promise<{ readonly path: string; readonly name: string }>;
@@ -214,6 +218,8 @@ export function createBridgeSource(
 		openUrl: (url) => fs.openUrl(url),
 		reveal: (path) => fs.reveal(path),
 		trash: (paths) => fs.trash(paths),
+		restoreFromTrash: (paths) => fs.restoreFromTrash(paths),
+		emptyTrash: () => fs.emptyTrash(),
 		rename: async (path, name) => {
 			await fs.rename(path, name);
 		},
@@ -247,6 +253,8 @@ interface FixtureState {
 	indexExcluded: Set<string>;
 	/** Fixture volumes the sidebar eject button removed. */
 	ejected: Set<string>;
+	/** Fixture Trash origins: payload path → the folder the item came from. */
+	trash: Map<string, string>;
 }
 
 /** Fixture sidebar rows: the FIXTURE_TREE roots plus two volumes to eject. */
@@ -267,7 +275,7 @@ function seedFixtureState(): FixtureState {
 	for (const [path, items] of Object.entries(FIXTURE_TREE)) {
 		tree.set(path, [...items]);
 	}
-	return { tree, clipboard: null, indexExcluded: new Set(), ejected: new Set() };
+	return { tree, clipboard: null, indexExcluded: new Set(), ejected: new Set(), trash: new Map() };
 }
 
 function takenNames(state: FixtureState, dir: string): string[] {
@@ -314,9 +322,9 @@ export function createFixtureSource(): FinderSource {
 	const state = seedFixtureState();
 	const resolve = (): Promise<void> => Promise.resolve();
 
-	/** One fixture undo step: the row the operation created or moved, and its origin. */
+	/** One fixture undo step: the row the operation created or moved, and its origin. A trash step keeps the source path and its folder; a restore step keeps the restored row and its payload path. */
 	interface FixtureUndoStep {
-		readonly kind: "copy" | "move" | "create";
+		readonly kind: "copy" | "move" | "create" | "trash" | "restore";
 		readonly path: string;
 		readonly from: string;
 	}
@@ -397,10 +405,51 @@ export function createFixtureSource(): FinderSource {
 		openUrl: resolve,
 		reveal: resolve,
 		trash: (paths) => {
+			const steps: FixtureUndoStep[] = [];
+			const ok: string[] = [];
+			const failed: FsOpError[] = [];
 			for (const path of paths) {
-				removeItem(state, path);
+				const item = removeItem(state, path);
+				if (item === null) {
+					failed.push({ path, message: "항목을 찾을 수 없습니다" });
+					continue;
+				}
+				// The fixture Trash is a plain folder: the item moves there and its origin is remembered.
+				const name = copyName(item.name, takenNames(state, "Trash"));
+				insertItem(state, "Trash", { ...item, name });
+				state.trash.set(joinPath("Trash", name), dirname(path));
+				ok.push(path);
+				steps.push({ kind: "trash", path, from: dirname(path) });
 			}
-			return Promise.resolve({ ok: [...paths], failed: [] });
+			if (steps.length > 0) lastUndo = steps;
+			return Promise.resolve({ ok, failed });
+		},
+		restoreFromTrash: (paths) => {
+			const steps: FixtureUndoStep[] = [];
+			const ok: string[] = [];
+			const failed: FsOpError[] = [];
+			for (const trashPath of paths) {
+				const originalDir = state.trash.get(trashPath);
+				const item = originalDir === undefined ? null : removeItem(state, trashPath);
+				if (originalDir === undefined || item === null) {
+					failed.push({ path: trashPath, message: "원래 위치를 알 수 없습니다" });
+					continue;
+				}
+				state.trash.delete(trashPath);
+				const name = copyName(item.name, takenNames(state, originalDir));
+				insertItem(state, originalDir, { ...item, name });
+				ok.push(trashPath);
+				steps.push({ kind: "restore", path: joinPath(originalDir, name), from: trashPath });
+			}
+			if (steps.length > 0) lastUndo = steps;
+			return Promise.resolve({ ok, failed });
+		},
+		emptyTrash: () => {
+			const ok = (state.tree.get("Trash") ?? []).map((item) => joinPath("Trash", item.name));
+			state.tree.set("Trash", []);
+			state.trash.clear();
+			if (lastUndo?.some((step) => step.kind === "trash") === true) lastUndo = null;
+			return Promise.resolve({ ok, failed: [] });
 		},
 		rename: (path, name) => {
 			const item = findItem(state, path);
@@ -488,6 +537,35 @@ export function createFixtureSource(): FinderSource {
 			}
 			const failed: FsOpError[] = [];
 			for (const step of steps) {
+				if (step.kind === "trash") {
+					// The item sits in the fixture Trash; move it straight back to its folder.
+					const trashItems = state.tree.get("Trash") ?? [];
+					const index = trashItems.findIndex((item) => item.name === basename(step.path));
+					if (index < 0) {
+						failed.push({ path: step.path, message: "휴지통에서 항목을 찾을 수 없습니다" });
+						continue;
+					}
+					const [moved] = trashItems.splice(index, 1);
+					if (moved === undefined) {
+						failed.push({ path: step.path, message: "휴지통에서 항목을 찾을 수 없습니다" });
+						continue;
+					}
+					state.trash.delete(joinPath("Trash", moved.name));
+					insertItem(state, step.from, { ...moved, name: copyName(moved.name, takenNames(state, step.from)) });
+					continue;
+				}
+				if (step.kind === "restore") {
+					// Undoing a Put Back moves the row back into the fixture Trash.
+					const item = removeItem(state, step.path);
+					if (item === null) {
+						failed.push({ path: step.path, message: "되돌릴 항목이 없습니다" });
+						continue;
+					}
+					const name = copyName(item.name, takenNames(state, "Trash"));
+					insertItem(state, "Trash", { ...item, name });
+					state.trash.set(joinPath("Trash", name), dirname(step.path));
+					continue;
+				}
 				const item = findItem(state, step.path);
 				if (item === null) {
 					failed.push({ path: step.path, message: "되돌릴 항목이 없습니다" });

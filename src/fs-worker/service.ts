@@ -25,6 +25,7 @@ import { createFsWatchService } from "../main/fs-watch-service";
 import { createIndexStatusService } from "../main/index-status";
 import { createPlaces, type Places } from "../main/places";
 import { createRecentsStore } from "../main/recents-store";
+import { createTrashStore } from "../main/trash-store";
 import { createVersionFamilyService, DEFAULT_SCAN_INTERVAL_MINUTES, type VersionFamilyService } from "../main/version-family-service";
 import { createFileVersionFamilyStore } from "../main/version-family-store";
 import type { WatchBackend } from "../main/watch-backend";
@@ -130,6 +131,7 @@ export function createFsWorkerService(deps: FsWorkerServiceDeps): FsWorkerServic
 		places,
 		fileNameSearch,
 		recents: createRecentsStore({ directory: join(config.userDataDir, "recents") }),
+		trashStore: createTrashStore({ directory: join(config.userDataDir, "trash") }),
 		...(config.qaRoot === undefined ? {} : { qaRoot: config.qaRoot }),
 	});
 	let scanIntervalMinutes = DEFAULT_SCAN_INTERVAL_MINUTES;
@@ -196,6 +198,8 @@ export function createFsWorkerService(deps: FsWorkerServiceDeps): FsWorkerServic
 			}
 			return result;
 		},
+		restoreFromTrash: (args) => fsService.restoreFromTrash(stringsArg(args, 0, "paths")),
+		emptyTrash: () => fsService.emptyTrash(),
 		reveal: (args) => fsService.reveal(stringArg(args, 0, "path")),
 		quickLook: (args) => fsService.quickLook(stringArg(args, 0, "path")),
 		open: (args) => fsService.open(stringArg(args, 0, "path")),

@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createFsWorkerService, type FsWorkerService } from "../src/fs-worker/service";
-import type { DirListing, FsLocation } from "../src/shared/fs-contract";
+import type { DirListing, FsBatchResult, FsLocation } from "../src/shared/fs-contract";
 import { FS_WORKER_PUSH } from "../src/shared/fs-worker-protocol";
 import type { FsChange, LiveMessage } from "../src/shared/live-contract";
 import type { Places } from "../src/main/places";
@@ -15,6 +15,7 @@ const places: Places = {
 	eject: async () => {},
 	signature: async () => "",
 	watch: () => () => {},
+	trashDir: async () => null,
 };
 
 /** A dupey service that never scans: the worker only wires it into the hub here. */
@@ -60,7 +61,7 @@ afterEach(async () => {
 	await rm(root, { recursive: true, force: true });
 });
 
-function start(watcher: WatchBackend, onPush: (name: string, payload: unknown) => void = () => {}): FsWorkerService {
+function start(watcher: WatchBackend, onPush: (name: string, payload: unknown) => void = () => {}, trashDir?: string): FsWorkerService {
 	service = createFsWorkerService({
 		config: { userDataDir: join(root, "user-data") },
 		host: {
@@ -70,7 +71,7 @@ function start(watcher: WatchBackend, onPush: (name: string, payload: unknown) =
 		},
 		broadcast: onPush,
 		watchBackend: watcher,
-		places,
+		places: trashDir === undefined ? places : { ...places, trashDir: async () => trashDir },
 		fileNameSearch: { search: async () => null, ensureDaemon: async () => {}, stop: async () => {} },
 		versionFamilies: () => noFamilies,
 	});
@@ -120,5 +121,25 @@ describe("fs worker service", () => {
 		expect(() => worker.handlers.listDir([42], signal)).toThrow("path must be a string");
 		expect(() => worker.handlers.setWatchSet([["/ok", 3]], signal)).toThrow("dirs must be an array of strings");
 		expect(() => worker.handlers.createFile(["/d", "exe"], signal)).toThrow("알 수 없는 파일 형식입니다: exe");
+	});
+
+	it("restores from and empties the Trash through the trash location's folder", async () => {
+		// Given a Trash folder holding one payload
+		const trashDir = join(root, "trash");
+		await mkdir(trashDir);
+		await writeFile(join(trashDir, "a.txt"), "x");
+		const worker = start(fakeWatcher(), undefined, trashDir);
+		const signal = new AbortController().signal;
+
+		// When emptying
+		const emptied = (await worker.handlers.emptyTrash([], signal)) as FsBatchResult;
+
+		// Then the payload was deleted for good, and restoring a payload with no origin reports why
+		expect(emptied.ok).toEqual([join(trashDir, "a.txt")]);
+		expect(emptied.failed).toEqual([]);
+		await expect(worker.handlers.restoreFromTrash([[join(trashDir, "a.txt")]], signal)).resolves.toMatchObject({
+			ok: [],
+			failed: [{ message: expect.stringContaining("원래 위치를 알 수 없습니다") }],
+		});
 	});
 });
