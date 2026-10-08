@@ -98,6 +98,115 @@ Node 24+, Bun, `dupey`, and `ffmpeg` on `PATH`. Logs and `summary.json` land in
 `.omo/evidence/win-qa/`; the same sweep runs in
 `.github/workflows/qa-windows.yml`.
 
+## Running the QA lanes in a macOS VM
+
+The lanes drive a real Electron window, so on the developer's own Mac every run
+takes over the mouse, keyboard, and focus. `bun run qa` avoids that by running
+the sweep in a throwaway macOS VM (Tart, Apple Virtualization.framework) with
+its own display, input session, home directory, and Trash. Use it instead of
+calling `run-all.mjs` directly whenever the machine is a developer's Mac.
+
+```sh
+bun run qa                       # all lanes: a VM if a slot is free, else this machine
+bun run qa kind live-sync        # selected lanes (names from run-all.mjs)
+bun run qa -- --vm               # VM only: exit 2 instead of using this machine
+bun run qa -- --host             # this machine only (a window WILL take focus)
+bun run qa -- --skip-build       # reuse out/; refused when src/ is newer than out/
+bun run qa:vm:setup              # build the golden image (once per machine)
+bun run qa:vm:status             # golden image, running VMs, who holds each slot
+bun run qa:vm:gc                 # destroy VMs left behind by a crashed run
+```
+
+### Which path a run takes
+
+| Situation | What happens |
+| --- | --- |
+| A slot is free and the golden image exists | VM path: clone, boot headless, sync, run, pull evidence, destroy. |
+| Both VM slots are busy | The run prints which VMs hold the slots, then the sweep runs on this machine and takes focus. Do not touch the keyboard or mouse until it ends, or retry later for a VM. |
+| Not Apple Silicon macOS, `tart` missing, or no golden image | Same fallback, with the reason printed. |
+| `--vm` and none of the above can be served | Exit code `2`; nothing runs. Use this in automation that must never take focus. |
+| `--host` | Host path unconditionally. |
+
+A VM run exits with the sweep's own code, so `0` means every lane passed. The
+host path is the unchanged `scripts/manual-qa/run-all.mjs`.
+
+### Parallel branches and the two-VM limit
+
+Apple's license allows two macOS VMs per host. Every checkout shares one slot
+pool under `~/.autorag-qa/slots` (`AUTORAG_QA_HOME` moves it), built on atomic
+`mkdir`, so any number of clones (one per branch) can call `bun run qa` at the
+same time: at most two get a VM and the rest take the host path above. A run
+does not queue or wait for a slot; waiting would stall an agent for the length
+of someone else's sweep. A slot whose owning process died (including `kill -9`,
+or a killed process its parent has not collected yet) is reclaimed by the next
+`bun run qa` or `bun run qa:vm:gc`, which also destroys that run's VM; until
+then the dead run's VM keeps running and holds one of the two macOS VMs. A
+macOS VM running outside the pool (a hand-started one) counts against the
+allowance of two.
+
+Each run's VM is named `autorag-qa-run-<branch>-<id>`, so `tart list` shows
+whose it is. Evidence is pulled to `~/.autorag-qa/runs/<vm-name>/evidence/`
+(the VM's own `.omo/evidence`); the VM and its disk are deleted at the end of
+a run, including after a failed lane, Ctrl-C, or `SIGTERM` (the sweep is
+aborted at once and the evidence of lanes already finished is not pulled).
+
+### One-time setup
+
+Prerequisites on the host: Apple Silicon Mac, [`tart`](https://tart.run)
+(`brew install cirruslabs/cli/tart`, or the release tarball), `sshpass`
+(`brew install sshpass`; the bootstrap login only), `rsync`, `python3`, and
+about 60 GB of free disk. Then:
+
+```sh
+bun run qa:vm:setup              # about 30 minutes; --rebuild replaces the image
+```
+
+Setup pulls Cirrus Labs' `macos-tahoe-vanilla` image (about 25 GB, once),
+boots Recovery and drives it over VNC (`vncdotool` in a private venv) to run
+`csrutil disable`, then provisions the guest with
+`scripts/qa-vm/provision-guest.sh` and renames the verified result to
+`autorag-qa-golden`. A failed setup leaves `autorag-qa-golden-build` for
+inspection and never touches an existing golden image. The VM image lives in
+tart's storage (`TART_HOME`, default `~/.tart`); put it on a large disk by
+writing `{ "tartHome": "/path" }` to `~/.autorag-qa/config.json`.
+
+Each run authenticates with an ed25519 key generated into
+`~/.autorag-qa/id_ed25519` and baked into the image. The image's `admin` /
+`admin` login is Cirrus Labs' published default and exists only inside the VM,
+on a NAT network no other machine can reach; do not reuse it anywhere else.
+
+### Why the golden image looks the way it does
+
+Each setting fixes a failure seen in the lanes, not a preference:
+
+- **SIP off, system TCC grants for Screen Recording.** Without the grant
+  `screencapture` fails with `could not create image from display` and the
+  `quick-look-reference` lane cannot run. The system TCC database is only
+  writable with SIP off, and grants written to the user database are ignored.
+- **Rosetta.** Without it LaunchServices rejects a `.app` whose executable is
+  not Mach-O (`open` fails with error `-10669`), which fails `app-bundles`.
+- **Spotlight off.** With indexing on, `mdls` answers `(null)` for new files in
+  `~/Documents` for minutes after a large sync, and the Kind column then shows
+  the extension fallback (`Markdown` for `.mp4`) instead of the OS kind.
+- **Dock auto-hide.** The work area changes by 1 px when the Dock first draws,
+  which fails the Quick Look lane's exact-size assertion.
+- **No sleep**, `ffmpeg`, Command Line Tools (git, swift for `os-drag.swift`),
+  Node 24, bun, and `dupey` (built for the host and copied; `dupey` has to be
+  on the host's `PATH` at setup).
+
+### Pitfalls
+
+- `out/` is built on the host and synced; the guest never builds. A stale
+  `out/` tests old code, which is why `--skip-build` refuses when `src/` is
+  newer. `node_modules` and `out/` are Apple Silicon builds, so the host and
+  the VM must both be arm64.
+- A lane that passes in a VM has not proven real-hardware behavior for things
+  a VM cannot show (GPU rendering, a physical display, real Finder.app state).
+  Run `--host` for those before release.
+- Never run `qa:vm:setup` while a run is active; setup needs both VM slots.
+- Do not copy `~/.autorag-qa`, the golden image, or `evidence` into a
+  repository. They are machine-local.
+
 ## Workflow
 
 Feature work and fixes never land straight on `main`. Start from the latest
@@ -140,6 +249,8 @@ switch branches in place.
 - `test/` — Vitest unit tests.
 - `scripts/` — dev tooling (`make run`, librarian sync, dupey check).
 - `scripts/manual-qa/` — real Electron QA scripts.
+- `scripts/qa-vm.mjs`, `scripts/qa-vm/` — the `bun run qa` runner: golden
+  macOS VM image setup, the two-slot VM pool, and the VM/host path choice.
 
 Keep bridge contract changes synchronized across the shared contract, IPC
 registration, preload bridge, and both Finder source adapters.
