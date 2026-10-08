@@ -143,4 +143,34 @@ describe("fs worker service", () => {
 			failed: [{ message: expect.stringContaining("원래 위치를 알 수 없습니다") }],
 		});
 	});
+
+	it("stops the filename-index daemon on dispose so it cannot outlive the app", async () => {
+		// Given a worker whose index daemon is running
+		let stops = 0;
+		const worker = createFsWorkerService({
+			config: { userDataDir: join(root, "user-data") },
+			host: {
+				shell: { trashItem: async () => {}, showItemInFolder: () => {}, openPath: async () => "", openExternal: async () => {} },
+				clipboard: { writeText: () => {} },
+				icons: { icons: async () => new Map(), preview: async () => null },
+			},
+			broadcast: () => {},
+			watchBackend: fakeWatcher(),
+			places,
+			fileNameSearch: {
+				search: async () => null,
+				ensureDaemon: async () => {},
+				stop: async () => {
+					stops += 1;
+				},
+			},
+			versionFamilies: () => noFamilies,
+		});
+
+		// When the app quits
+		await worker.dispose();
+
+		// Then the daemon was asked to exit
+		expect(stops).toBe(1);
+	});
 });
