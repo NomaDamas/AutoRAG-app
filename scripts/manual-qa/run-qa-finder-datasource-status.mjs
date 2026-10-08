@@ -85,8 +85,8 @@ try {
 		await page.waitForFunction(() => document.querySelector(".settings-panel") === null);
 	};
 	const row = (id) => page.locator(`.settings-source[data-source-id="${id}"]`);
-	// Nav labels are "<Template> · <alias>" (or the bare alias for unknown templates).
-	const sourceTab = (id) => page.locator(".settings-nav-item--source").filter({ hasText: new RegExp(`(^|· )${id}$`) });
+	// Nav items carry the connection alias; their label is the kind ("Slack"), not the alias.
+	const sourceTab = (id) => page.locator(`.settings-nav-item--source[data-source-alias="${id}"]`);
 	const openConnection = async (id) => {
 		if ((await page.locator(".settings-panel").count()) === 0) await openSources();
 		await sourceTab(id).click();
@@ -102,7 +102,8 @@ try {
 	check("direct datasource tab opens only the selected connection", (await page.locator(".settings-source").count()) === 1 && (await row("slack").count()) === 1);
 
 	const expected = {
-		slack: { install: "installed", agent: "connected", index: "external", status: "ready" },
+		// The fake slacrawl prints nothing parseable, so its archive is unreadable — not "empty".
+		slack: { install: "installed", agent: "connected", index: "not-indexed", status: "ready" },
 		"my-drive": { install: "missing", agent: "connected", index: "indexed", status: "attention" },
 		github: { install: "credential-missing", agent: "blocked", index: "not-indexed", status: "attention" },
 		telegram: { install: "missing", agent: "disabled", status: "paused" },

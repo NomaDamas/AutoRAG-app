@@ -226,7 +226,7 @@ try {
 	await page.locator(".settings-modal button", { hasText: "닫기" }).click();
 
 	// --- Datasource detail writes ----------------------------------------
-	await page.locator(".settings-nav-item--source", { hasText: "slack" }).click();
+	await page.locator('.settings-nav-item--source[data-source-alias="slack"]').click();
 	await page.waitForSelector('.settings-source[data-source-id="slack"]');
 	await page.locator('select[aria-label="최신화 주기"]').selectOption({ label: "1시간" });
 	check("polling interval writes pollingIntervalMs", Boolean(await waitFor(() => readConfig().datasources.slack.pollingIntervalMs === 3_600_000)));

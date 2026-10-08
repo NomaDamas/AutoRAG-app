@@ -18,6 +18,7 @@ import { AppsPage, IndexingPage, SourceDetailPage } from "./settings/AppsPages";
 import { DuplicatesPage, ReadingPage, ScopePage, WebPage } from "./settings/ConfigPages";
 import { GeneralPage } from "./settings/GeneralPage";
 import { TEMPLATE_BY_ID } from "./settings/datasourceTemplates";
+import { SourceIcon } from "./settings/SourceIcon";
 import { settings } from "../settings-runtime";
 
 const autorag = { settings };
@@ -76,7 +77,8 @@ function datasourceEntries(snapshot: AutoRagConfigSnapshot | null): readonly Sou
 		.map((alias) => {
 			const type = sourceType((snapshot.config.datasources as Record<string, unknown>)[alias], alias);
 			const template = TEMPLATE_BY_ID[type];
-			return { alias, type, label: template === undefined ? alias : `${template.label} · ${alias}` };
+			const kind = template?.label ?? type;
+			return { alias, type, label: alias === type ? kind : `${kind} · ${alias}` };
 		});
 }
 
@@ -189,12 +191,10 @@ export function SettingsView({ initialCategory = "general", onSettingsChanged }:
 
 	const sourceButtons = filteredSources.map((entry) => {
 		const active = sourceAlias === entry.alias;
-		const row = sources?.sources.find((source) => source.id === entry.alias);
-		const tone = row === undefined || !row.enabled ? "" : row.status === "ready" ? " is-ok" : " is-warn";
 		return (
-			<button key={entry.alias} type="button" className={`settings-nav-item settings-nav-item--source${active ? " is-active" : ""}`} aria-current={active ? "true" : undefined} onClick={() => setCategory(`source:${entry.alias}`)}>
+			<button key={entry.alias} type="button" data-source-alias={entry.alias} className={`settings-nav-item settings-nav-item--source${active ? " is-active" : ""}`} aria-current={active ? "true" : undefined} onClick={() => setCategory(`source:${entry.alias}`)}>
+				<SourceIcon small type={entry.type} label={entry.label} />
 				<span className="settings-nav-label">{entry.label}</span>
-				<span className={`settings-dot${tone}`} aria-hidden="true" />
 			</button>
 		);
 	});

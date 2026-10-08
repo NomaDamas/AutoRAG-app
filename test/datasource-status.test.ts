@@ -87,7 +87,8 @@ describe("createDataSourceStatusService", () => {
 		const slack = byId(snapshot.sources, "slack");
 		expect(slack.install).toMatchObject({ state: "installed", binary: "slacrawl" });
 		expect(slack.agent).toMatchObject({ state: "connected", skillName: "datasource-slack" });
-		expect(slack.index.state).toBe("external");
+		// The fake slacrawl prints nothing parseable: that is "unreadable", never "empty".
+		expect(slack.index).toMatchObject({ state: "not-indexed", chunkCount: null, unit: "message" });
 		expect(slack.status).toBe("ready");
 
 		const drive = byId(snapshot.sources, "my-drive");
@@ -324,5 +325,105 @@ describe("createDataSourceStatusService", () => {
 
 		expect(byId(snapshot.sources, "slack").install.app).toMatchObject({ required: true, name: "Slack" });
 		expect(byId(snapshot.sources, "feed").install.app).toMatchObject({ required: false, name: "" });
+	});
+});
+
+/** Installs a fake backend CLI on PATH (which holds only the fixture bin, so shell builtins only) that prints `output` and records its argv. */
+async function installFakeCli(fixture: Fixture, binary: string, output: string): Promise<string> {
+	const argvLog = join(fixture.root, `${binary}.argv`);
+	const quoted = `'${output.replaceAll("'", "'\\''")}'`;
+	await writeFile(join(fixture.root, "bin", binary), `#!/bin/sh\necho "$@" >> '${argvLog}'\nprintf '%s\\n' ${quoted}\n`);
+	await chmod(join(fixture.root, "bin", binary), 0o755);
+	return argvLog;
+}
+
+describe("backend-owned index counts", () => {
+	it("reads what each backend CLI reports instead of showing a placeholder", async () => {
+		const fixture = await createFixtureWithOnlySlacrawlOnPath();
+		await installFakeCli(fixture, "slacrawl", JSON.stringify({ messages: 179, last_sync_at: "2026-10-08T04:52:09Z" }));
+		await installFakeCli(
+			fixture,
+			"discrawl",
+			JSON.stringify({ last_sync_at: "2026-08-16T09:12:29Z", counts: [{ id: "channels", value: 179 }, { id: "messages", value: 3536 }] }),
+		);
+		await installFakeCli(fixture, "telecrawl", JSON.stringify({ messages: 976, last_import_at: "2026-09-22T01:04:28Z" }));
+		await installFakeCli(fixture, "notcrawl", JSON.stringify({ pages: 12, last_sync_at: 1_790_000_000 }));
+		await installFakeCli(fixture, "clawgallery", "config_dir: /x\nfolders: 1\nimages: 13635\ncaptions: 48");
+		await installFakeCli(
+			fixture,
+			"lazykatok",
+			JSON.stringify({ freshness: { last_sync: { total_messages: 50632, completed_at: "2026-09-23T06:07:17Z" } } }),
+		);
+		await writeConfig(fixture, { slack: {}, discord: {}, telegram: {}, notion: {}, clawgallery: {}, kakao: {} }, ["chat", "documents", "screenshots"]);
+
+		const rows = (await createDataSourceStatusService({ env: fixture.env, cwd: fixture.root }).list()).sources;
+
+		expect(byId(rows, "slack").index).toMatchObject({ state: "indexed", chunkCount: 179, unit: "message", indexedAt: "2026-10-08T04:52:09.000Z" });
+		expect(byId(rows, "discord").index).toMatchObject({ state: "indexed", chunkCount: 3536, unit: "message", indexedAt: "2026-08-16T09:12:29.000Z" });
+		expect(byId(rows, "telegram").index).toMatchObject({ state: "indexed", chunkCount: 976, unit: "message" });
+		expect(byId(rows, "notion").index).toMatchObject({ state: "indexed", chunkCount: 12, unit: "document", indexedAt: "2026-09-21T14:13:20.000Z" });
+		expect(byId(rows, "clawgallery").index).toMatchObject({ state: "indexed", chunkCount: 13635, unit: "image" });
+		expect(byId(rows, "kakao").index).toMatchObject({ state: "indexed", chunkCount: 50632, unit: "message" });
+	});
+
+	it("reports an empty archive as empty and an unreadable one as not-indexed", async () => {
+		const fixture = await createFixtureWithOnlySlacrawlOnPath();
+		await installFakeCli(fixture, "slacrawl", JSON.stringify({ messages: 0, last_sync_at: "" }));
+		await installFakeCli(fixture, "telecrawl", "not json at all");
+		await writeConfig(fixture, { slack: {}, telegram: {} }, ["chat"]);
+
+		const rows = (await createDataSourceStatusService({ env: fixture.env, cwd: fixture.root }).list()).sources;
+
+		expect(byId(rows, "slack").index).toMatchObject({ state: "empty", chunkCount: 0, indexedAt: null });
+		expect(byId(rows, "telegram").index).toMatchObject({ state: "not-indexed", chunkCount: null });
+	});
+
+	it("never runs a status command that would import: WhatsApp is asked with --sync never", async () => {
+		const fixture = await createFixtureWithOnlySlacrawlOnPath();
+		const argv = await installFakeCli(fixture, "wacrawl", JSON.stringify({ messages: 16591, last_import_at: "2026-10-08T06:42:37Z" }));
+		await writeConfig(fixture, { whatsapp: {} }, ["chat"]);
+
+		const [row] = (await createDataSourceStatusService({ env: fixture.env, cwd: fixture.root }).list()).sources;
+
+		expect(row?.index).toMatchObject({ state: "indexed", chunkCount: 16591 });
+		expect(await readFile(argv, "utf8")).toBe("--json --sync never status\n");
+	});
+
+	it("passes the connector's own database and config flags to the backend", async () => {
+		const fixture = await createFixtureWithOnlySlacrawlOnPath();
+		const argv = await installFakeCli(fixture, "telecrawl", JSON.stringify({ messages: 1 }));
+		await writeConfig(fixture, { telegram: { connector: { databasePath: "/data/tg.db" } } }, ["chat"]);
+
+		await createDataSourceStatusService({ env: fixture.env, cwd: fixture.root }).list();
+
+		expect(await readFile(argv, "utf8")).toBe("--json --db /data/tg.db status\n");
+	});
+
+	it("does not claim a count for Lark, which answers each search live", async () => {
+		const fixture = await createFixtureWithOnlySlacrawlOnPath();
+		await installFakeCli(fixture, "lark-cli", "{}");
+		await writeConfig(fixture, { lark: {} }, ["chat"]);
+
+		const [row] = (await createDataSourceStatusService({ env: fixture.env, cwd: fixture.root }).list()).sources;
+
+		expect(row?.index).toMatchObject({ state: "live", chunkCount: null });
+	});
+
+	it("never runs one backend CLI twice at once, so overlapping lists cannot trip its database lock", async () => {
+		const fixture = await createFixtureWithOnlySlacrawlOnPath();
+		const lock = join(fixture.root, "wacrawl.lock");
+		// Fails the way wacrawl does when two status runs overlap: a held lock means SQLITE_BUSY.
+		await writeFile(
+			join(fixture.root, "bin", "wacrawl"),
+			`#!/bin/sh\nif ! mkdir '${lock}' 2>/dev/null; then exit 1; fi\nsleep 0.2\nprintf '%s\\n' '{"messages":5}'\nrmdir '${lock}'\n`,
+		);
+		await chmod(join(fixture.root, "bin", "wacrawl"), 0o755);
+		await writeConfig(fixture, { whatsapp: {} }, ["chat"]);
+		const env = { ...fixture.env, PATH: `${join(fixture.root, "bin")}:/usr/bin:/bin` };
+		const service = createDataSourceStatusService({ env, cwd: fixture.root });
+
+		const lists = await Promise.all([service.list(), service.list(), service.list()]);
+
+		for (const snapshot of lists) expect(snapshot.sources[0]?.index).toMatchObject({ state: "indexed", chunkCount: 5 });
 	});
 });

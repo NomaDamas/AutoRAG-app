@@ -332,14 +332,14 @@ export const TEMPLATES: readonly TemplateMeta[] = [
 	},
 	{
 		id: "mailcrawl",
-		label: "Mail (mailcrawl)",
+		label: "Mail",
 		binary: "mailcrawl",
 		summary: "mailcrawl 보관함에서 메일을 검색합니다.",
 		channels: "both",
 		polling: true,
 		groups: [
 			{
-				title: "Mail (mailcrawl)",
+				title: "Mail",
 				fields: [
 					{ key: "account", label: "계정", kind: "text", placeholder: "gmail" },
 					{ key: "mailbox", label: "메일함", kind: "text", placeholder: "INBOX" },

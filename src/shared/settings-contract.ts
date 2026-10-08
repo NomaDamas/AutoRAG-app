@@ -97,8 +97,15 @@ export interface DataSourceAppRequirement {
 /** How the AutoRAG agent sees the datasource, per the shared config and datasourceAccess. */
 export type DataSourceAgentState = "connected" | "blocked" | "disabled" | "unsupported";
 
-/** `external` means the backend CLI owns the index; AutoRAG queries it live. */
-export type DataSourceIndexState = "indexed" | "empty" | "not-indexed" | "external";
+/**
+ * `live` means the backend answers on demand and keeps no countable index the
+ * app can read (Lark); every other state is judged from a count the backend
+ * or AutoRAG's own chunk store reports.
+ */
+export type DataSourceIndexState = "indexed" | "empty" | "not-indexed" | "live";
+
+/** What `index.chunkCount` counts, so the UI can say "메시지 3,536개" instead of a bare number. */
+export type DataSourceIndexUnit = "message" | "document" | "image";
 
 export type DataSourceStatus = "ready" | "syncing" | "paused" | "attention";
 
@@ -127,7 +134,10 @@ export interface DataSourceRow {
 	};
 	readonly index: {
 		readonly state: DataSourceIndexState;
+		/** Items the backend reports (messages, documents, images). `null` when it cannot be read. */
 		readonly chunkCount: number | null;
+		readonly unit: DataSourceIndexUnit | null;
+		/** Last sync time as the backend itself reports it. */
 		readonly indexedAt: string | null;
 		readonly detail: string;
 	};
@@ -277,11 +287,9 @@ export interface ProviderDiscoveryResult {
 	readonly models: readonly DiscoveredModel[];
 }
 
+/** Connection check outcome: the UI shows pass/fail only; the Pi runtime owns the reason. */
 export interface ProviderConnectionResult {
 	readonly ok: boolean;
-	readonly error: string | null;
-	readonly latencyMs: number | null;
-	readonly modelCount: number | null;
 }
 
 export type ProviderLoginPrompt =
@@ -371,7 +379,7 @@ export interface EmbeddingChangeResult {
 export interface DataSourceSyncResult {
 	readonly id: string;
 	readonly ok: boolean;
-	readonly state: "indexed" | "empty" | "external" | "unsupported" | "unavailable" | "not-configured" | "failed";
+	readonly state: "indexed" | "empty" | "unsupported" | "unavailable" | "not-configured" | "failed";
 	readonly chunkCount: number | null;
 	readonly indexedAt: string | null;
 	readonly durationMs: number;

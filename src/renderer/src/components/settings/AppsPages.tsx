@@ -13,7 +13,8 @@ import { useState, type ReactElement } from "react";
 import { ChevronRight, ExternalLink, Folder, Plus, RefreshCw, Trash2 } from "lucide-react";
 import type { AutoRagConfigSnapshot, ConfigRefreshResult, DataSourceRow, DataSourcesSnapshot, JsonValue } from "../../../../shared/settings-contract";
 import { ConnectorFieldInput, TEMPLATE_BY_ID, type FieldSpec } from "./datasourceTemplates";
-import { AppIcon, ModalShell, ModalActions, Note, PromptModal, Row, Section, SettingsPageHead, StatusDot } from "./SettingsKit";
+import { ModalShell, ModalActions, Note, PromptModal, Row, Section, SettingsPageHead, StatusDot } from "./SettingsKit";
+import { SourceIcon } from "./SourceIcon";
 import { asRecord, getAt, listOf, stringOf, useConfigWriter } from "./configSupport";
 import { Switch } from "../primitives/Switch";
 
@@ -50,22 +51,38 @@ function sourceAliases(snapshot: AutoRagConfigSnapshot): readonly { readonly ali
 	});
 }
 
+/** The connection's kind ("Slack"); the alias only joins it when it tells two connections of one kind apart. */
+function sourceTitle(row: Pick<DataSourceRow, "id" | "type">): string {
+	const label = templateLabel(row.type);
+	return row.id === row.type ? label : `${label} · ${row.id}`;
+}
+
 /** A dot tone for a datasource row: syncing, blocked, paused, or healthy. */
 function sourceTone(row: DataSourceRow): "ok" | "warn" | "run" | "off" {
 	if (row.status === "syncing") return "run";
 	if (!row.enabled || row.status === "paused") return "off";
-	if (row.install.app.required && row.install.app.installed === false) return "warn";
-	if (row.index.state === "indexed" || row.index.state === "external") return "ok";
+	if (row.index.state === "indexed" || row.index.state === "live") return "ok";
 	return "warn";
 }
+
+const UNIT_LABEL: Readonly<Record<NonNullable<DataSourceRow["index"]["unit"]>, string>> = {
+	message: "메시지",
+	document: "문서",
+	image: "이미지",
+};
 
 function sourceMeta(row: DataSourceRow): string {
 	if (!row.enabled) return "꺼짐";
 	if (row.status === "syncing") return "최신화 중…";
+	const { state, chunkCount, unit } = row.index;
+	const noun = unit === null ? "항목" : UNIT_LABEL[unit];
+	// Content the backend already holds outranks "the desktop app is missing".
+	if (state === "indexed" && chunkCount !== null) return `${noun} ${chunkCount.toLocaleString()}개`;
 	if (row.install.app.required && row.install.app.installed === false) return `${row.install.app.name} 컴퓨터 앱 필요`;
-	if (row.index.state === "indexed" && row.index.chunkCount !== null) return `문서 ${row.index.chunkCount.toLocaleString()}개`;
-	if (row.index.state === "external") return "외부 인덱스 사용";
-	return row.description.length > 0 ? row.description : "아직 내용을 가져오지 않았습니다";
+	if (state === "empty") return `가져온 ${noun} 없음`;
+	if (state === "live") return "검색할 때 바로 조회";
+	if (row.install.state === "missing") return row.install.detail;
+	return "아직 내용을 가져오지 않았습니다";
 }
 
 /* ============================================================== Indexing == */
@@ -159,9 +176,9 @@ export function IndexingPage({
 					{rows.map((row) => (
 						<div className="settings-list-row settings-sync-row" key={row.id}>
 							<button type="button" className="settings-sync-name" onClick={() => onOpenSource(row.id)}>
-								<AppIcon small label={templateLabel(row.type)} />
+								<SourceIcon small type={row.type} label={templateLabel(row.type)} />
 								<span className="settings-list-body">
-									<span className="settings-list-title">{row.description.length > 0 ? row.description : row.id}</span>
+									<span className="settings-list-title">{sourceTitle(row)}</span>
 									<span className="settings-list-meta">{sourceMeta(row)}</span>
 								</span>
 							</button>
@@ -265,9 +282,9 @@ export function AppsPage({
 				<div className="settings-list">
 					{rows.map((row) => (
 						<button type="button" className="settings-list-row" key={row.id} onClick={() => onOpenSource(row.id)}>
-							<AppIcon label={templateLabel(row.type)} />
+							<SourceIcon type={row.type} label={templateLabel(row.type)} />
 							<span className="settings-list-body">
-								<span className="settings-list-title">{row.description.length > 0 ? row.description : row.id}</span>
+								<span className="settings-list-title">{sourceTitle(row)}</span>
 								<span className="settings-list-meta">{sourceMeta(row)}</span>
 							</span>
 							<StatusDot tone={sourceTone(row)} />
@@ -286,7 +303,7 @@ export function AppsPage({
 								if (template === undefined) return null;
 								return (
 									<div className="settings-list-row" key={templateId}>
-										<AppIcon label={template.label} />
+										<SourceIcon type={templateId} label={template.label} />
 										<span className="settings-list-body">
 											<span className="settings-list-title">{template.label}</span>
 											<span className="settings-list-meta">{template.summary}</span>
@@ -399,7 +416,7 @@ export function SourceDetailPage({
 
 	return (
 		<div className="settings-source is-open" data-source-id={alias}>
-			<SettingsPageHead title={`${template?.label ?? type} · ${alias}`} description={template?.summary ?? "이 연결의 설정을 관리합니다."} />
+			<SettingsPageHead title={sourceTitle({ id: alias, type })} description={template?.summary ?? "이 연결의 설정을 관리합니다."} />
 			{problem !== null ? <div className="settings-error" role="alert">{problem}</div> : null}
 			<Section title="연결 상태">
 				<Row name="사용 여부" hint="끄면 이 연결을 검색에서 잠시 제외합니다.">

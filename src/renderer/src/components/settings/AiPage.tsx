@@ -356,11 +356,12 @@ export function AiPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 	}
 
 	async function test(provider: ProviderSummary): Promise<void> {
+		setNotice(`${provider.name}: 확인 중…`);
 		try {
 			const result = await settings.providersTest(provider.id);
-			setNotice(result.ok ? `${provider.name}: 연결 정상${result.latencyMs === null ? "" : ` · ${result.latencyMs}ms`}${result.modelCount === null ? "" : ` · 모델 ${result.modelCount}개`}` : `${provider.name}: ${result.error ?? "연결 실패"}`);
-		} catch (cause) {
-			setNotice(errorText(cause));
+			setNotice(`${provider.name}: ${result.ok ? "연결 성공" : "연결 실패"}`);
+		} catch {
+			setNotice(`${provider.name}: 연결 실패`);
 		}
 	}
 

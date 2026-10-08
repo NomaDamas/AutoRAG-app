@@ -75,6 +75,9 @@ interface Session {
 
 const DEFAULT_CUSTOM_API = "openai-completions";
 const DEFAULT_TIMEOUT_MS = 8000;
+const CONNECTION_TEST_TIMEOUT_MS = 20_000;
+/** OpenAI-compatible servers need some bearer value even when they ignore it. */
+const KEYLESS_SERVER_API_KEY = "local";
 /** Hosts that mean "this device" for local-server validation. */
 const LOOPBACK_HOSTS: Record<string, true> = { localhost: true, "127.0.0.1": true, "::1": true, "[::1]": true };
 
@@ -434,22 +437,6 @@ export function createProviderAuthService(deps: ProviderAuthServiceDeps): Provid
 		return probe(normalized.baseUrl, input.apiKey);
 	}
 
-	/** Resolve the key a saved provider uses for probing (stored env var, else runtime auth). */
-	async function providerKey(summary: ProviderSummary): Promise<string | undefined> {
-		if (summary.apiKeyEnv !== null) {
-			const stored = deps.env[summary.apiKeyEnv];
-			if (typeof stored === "string" && stored.length > 0) return stored;
-		}
-		if (summary.kind === "runtime") {
-			try {
-				return (await (await runtimePromise).getAuth(summary.id))?.auth.apiKey;
-			} catch {
-				return undefined;
-			}
-		}
-		return undefined;
-	}
-
 	async function upsert(input: ProviderServerInput): Promise<readonly ProviderSummary[]> {
 		const normalized = normalizeServerUrl(input); // throws on invalid
 		const label = input.label.trim();
@@ -506,19 +493,33 @@ export function createProviderAuthService(deps: ProviderAuthServiceDeps): Provid
 		return list();
 	}
 
+	/**
+	 * Pass/fail comes from the Pi runtime itself: one tiny completion through
+	 * the same `ModelRuntime` (auth, models.json, OAuth refresh) the agent uses,
+	 * like `autorag health`. Why it failed stays in Pi; the UI only shows the result.
+	 * A keyless local/custom server has no Pi credential, so the request carries
+	 * a placeholder bearer value (OpenAI-compatible clients refuse to send none);
+	 * a keyless built-in provider is genuinely not connected and fails.
+	 */
 	async function test(id: string): Promise<ProviderConnectionResult> {
-		const summary = (await list()).find((provider) => provider.id === id);
-		if (summary === undefined) return { ok: false, error: `Unknown provider: ${id}`, latencyMs: null, modelCount: null };
-		if (summary.baseUrl === null) return { ok: false, error: "This provider has no server address to probe", latencyMs: null, modelCount: null };
-		const key = await providerKey(summary);
-		const startedAt = Date.now();
-		const result = await probe(summary.baseUrl, key);
-		return {
-			ok: result.ok,
-			error: result.error,
-			latencyMs: Date.now() - startedAt,
-			modelCount: result.ok ? result.models.length : null,
-		};
+		try {
+			const summary = (await list()).find((provider) => provider.id === id);
+			const model = (await runtimePromise).getModels(id)[0];
+			if (summary === undefined || model === undefined) return { ok: false };
+			const keylessServer = summary.kind !== "runtime" && !summary.authConfigured;
+			const result = await (await runtimePromise).completeSimple(
+				model,
+				{ messages: [{ role: "user", content: "Reply with OK.", timestamp: Date.now() }] },
+				{
+					maxTokens: 16,
+					signal: AbortSignal.timeout(deps.timeoutMs ?? CONNECTION_TEST_TIMEOUT_MS),
+					...(keylessServer ? { apiKey: KEYLESS_SERVER_API_KEY } : {}),
+				},
+			);
+			return { ok: result.stopReason !== "error" && result.stopReason !== "aborted" };
+		} catch {
+			return { ok: false };
+		}
 	}
 
 	return {
