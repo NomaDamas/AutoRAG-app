@@ -8,6 +8,7 @@ import { AppsSettings, DeepSettings, LightSettings } from "./settings/ConfigSect
 import { LanguageSettings } from "./settings/LanguageSettings";
 import { ModelSettings, type ModelSettingsKind } from "./settings/ModelSettings";
 import { Switch } from "./primitives/Switch";
+import { hostPlatform } from "../lib/shortcuts";
 import { settings } from "../settings-runtime";
 
 const autorag = { settings };
@@ -106,12 +107,17 @@ function Row({ name, hint, children }: { readonly name: string; readonly hint: s
 }
 
 
-function GeneralSettings({ appSettings, onAppSettingsChanged, snapshot, onSaved }: { readonly appSettings: AppSettings | null; readonly onAppSettingsChanged: (settings: AppSettings) => void; readonly snapshot: AutoRagConfigSnapshot | null; readonly onSaved: (next: AutoRagConfigSnapshot) => void }): ReactElement {
+function GeneralSettings({ appSettings, onAppSettingsChanged, onSettingsError, snapshot, onSaved }: { readonly appSettings: AppSettings | null; readonly onAppSettingsChanged: (settings: AppSettings) => void; readonly onSettingsError: (message: string) => void; readonly snapshot: AutoRagConfigSnapshot | null; readonly onSaved: (next: AutoRagConfigSnapshot) => void }): ReactElement {
 	const { t } = useTranslation();
 	if (appSettings === null || snapshot === null) return <p className="linear-section-desc">{t("settings.loading", "설정을 불러오는 중…")}</p>;
 	async function setApp(patch: Partial<AppSettings>): Promise<void> {
-		const next = await autorag.settings.set(patch);
-		onAppSettingsChanged(next);
+		try {
+			const next = await autorag.settings.set(patch);
+			onAppSettingsChanged(next);
+		} catch (cause) {
+			// A rejected change (the right-click menu could not be written) leaves the stored setting as it was.
+			onSettingsError(`${t("settings.general.osMenuIntegrationError", "Could not set up the right-click menu")}: ${errorMessage(cause)}`);
+		}
 	}
 	return (
 		<>
@@ -121,6 +127,9 @@ function GeneralSettings({ appSettings, onAppSettingsChanged, snapshot, onSaved 
 			<LanguageSettings snapshot={snapshot} path={["languages"]} name={t("settings.general.docLanguages", "Document languages")} hint={t("settings.general.docLanguagesHint", "OCR·파서가 사용할 지원 언어를 선택합니다.")} onSaved={onSaved} fallback={["ko", "en"]} />
 			<Row name={t("settings.general.launchAtLogin", "Launch at login")} hint={t("settings.general.launchAtLoginHint", "로그인할 때 백그라운드로 실행합니다.")}><Switch checked={appSettings.launchAtLogin} onChange={() => void setApp({ launchAtLogin: !appSettings.launchAtLogin })} ariaLabel="Launch at login" /></Row>
 			<Row name={t("settings.general.showHiddenFiles", "Show hidden files")} hint={t("settings.general.showHiddenFilesHint", "점(.)으로 시작하는 파일을 표시합니다.")}><Switch checked={appSettings.showHiddenFiles} onChange={() => void setApp({ showHiddenFiles: !appSettings.showHiddenFiles })} ariaLabel="Show hidden files" /></Row>
+			{hostPlatform() === "darwin" || hostPlatform() === "win32" ? (
+				<Row name={t("settings.general.osMenuIntegration", "Add to the file right-click menu")} hint={t("settings.general.osMenuIntegrationHint", "Right-click a file in Finder or Explorer to get 'Ask AutoRAG' and 'Show in AutoRAG'.")}><Switch checked={appSettings.osMenuIntegration} onChange={() => void setApp({ osMenuIntegration: !appSettings.osMenuIntegration })} ariaLabel="Add to the file right-click menu" /></Row>
+			) : null}
 			<Row name={t("settings.general.dedupInterval", "Deduplication interval")} hint={t("settings.general.dedupIntervalHint", "dupey 버전 패밀리 스캔 주기입니다.")}><select className="linear-select" aria-label="Deduplication interval" value={String(appSettings.dupeyScanIntervalMinutes)} onChange={(event) => void setApp({ dupeyScanIntervalMinutes: Number(event.target.value) })}>{DUPEY_INTERVALS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></Row>
 			<Row name={t("settings.general.autoUpdates", "Automatically install updates")} hint={t("settings.general.autoUpdatesHint", "다음 앱 재시작 시 업데이트를 적용합니다.")}><Switch checked={appSettings.autoInstallUpdates} onChange={() => void setApp({ autoInstallUpdates: !appSettings.autoInstallUpdates })} ariaLabel="Automatically install updates" /></Row>
 			<Row name={t("settings.general.telemetry", "Share anonymous diagnostics")} hint={t("settings.general.telemetryHint", "익명화된 성능 지표를 공유합니다.")}><Switch checked={appSettings.telemetry} onChange={() => void setApp({ telemetry: !appSettings.telemetry })} ariaLabel="Share anonymous diagnostics" /></Row>
@@ -162,7 +171,7 @@ export function SettingsView({ initialCategory = "general", onSettingsChanged }:
 	const source = sourceAlias(category);
 	const content = useMemo(() => {
 		if (loading || appSettings === null || snapshot === null) return <p className="linear-section-desc">{t("settings.loading", "설정을 불러오는 중…")}</p>;
-		if (category === "general") return <GeneralSettings appSettings={appSettings} onAppSettingsChanged={(next) => { setAppSettings(next); onSettingsChanged?.(next); }} snapshot={snapshot} onSaved={saveSnapshot} />;
+		if (category === "general") return <GeneralSettings appSettings={appSettings} onAppSettingsChanged={(next) => { setAppSettings(next); onSettingsChanged?.(next); }} onSettingsError={setError} snapshot={snapshot} onSaved={saveSnapshot} />;
 		if (category === "llm" || category === "embedding" || category === "reranker") return <ModelSettings kind={category as ModelSettingsKind} snapshot={snapshot} onSaved={saveSnapshot} />;
 		if (category === "sources") return <DatasourceSettings key="sources" snapshot={snapshot} onSaved={saveSnapshot} overviewOnly />;
 		if (source !== null) return <DatasourceSettings key={source} snapshot={snapshot} onSaved={saveSnapshot} initialAlias={source} singleConnection />;

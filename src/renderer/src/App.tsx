@@ -6,6 +6,7 @@ import { NO_CAPABILITIES, type ActionAnchor } from "../../shared/actions-contrac
 import { DEFAULT_SETTINGS, type AppSettings, type DataSourcesSnapshot } from "../../shared/settings-contract";
 import { setAppLanguage } from "../../shared/i18n";
 import type { ChatAttachment, CitationEvidence } from "../../shared/search-contract";
+import type { OsRendererRequest } from "../../shared/os-request-contract";
 import type { FsLocationIcon } from "../../shared/fs-contract";
 import { AiSearchPanel, type AiDockHandle } from "./components/AiSearchPanel";
 import { FinderPane, type PaneShell } from "./components/FinderPane";
@@ -416,6 +417,40 @@ export function App(): ReactElement {
 		},
 		[deliverToAi, finder],
 	);
+
+	/**
+	 * Requests from the OS file menu ("Ask AutoRAG", "Show in AutoRAG"). They are
+	 * drained into a ref first: a cold start delivers one before the first pane
+	 * has published its controller, and the effect below runs them once it has.
+	 */
+	const osQueueRef = useRef<OsRendererRequest[]>([]);
+	const [osQueueTick, setOsQueueTick] = useState(0);
+	useEffect(() => {
+		const drain = (): void => {
+			autorag.osRequests
+				.take()
+				.then((requests) => {
+					if (requests.length === 0) return;
+					osQueueRef.current.push(...requests);
+					setOsQueueTick((tick) => tick + 1);
+				})
+				.catch((error: unknown) => console.error("os request take failed", error));
+		};
+		drain();
+		return autorag.osRequests.onAvailable(drain);
+	}, []);
+	useEffect(() => {
+		if (finder === undefined) return;
+		for (const request of osQueueRef.current.splice(0)) {
+			if (request.action === "reveal") {
+				finder.revealEvidence(request.path);
+			} else {
+				// Attached as drafts on the nearest AI Search tab: the user types the question.
+				finder.focusAiSearch();
+				deliverToAi({ attach: request.attachments });
+			}
+		}
+	}, [osQueueTick, finder, deliverToAi]);
 
 	/** Answer and evidence images: a local picture opens in Quick Look; a web image's page (never fetched) in the OS browser. */
 	const revealEvidence = finder?.revealEvidence;

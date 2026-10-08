@@ -7,9 +7,11 @@ import {
 } from "../shared/actions-contract";
 import { FS_CHANNELS } from "../shared/fs-contract";
 import { SEARCH_CHANNELS, type SearchBridge } from "../shared/search-contract";
+import { OS_REQUEST_CHANNELS } from "../shared/os-request-contract";
 import { SETTINGS_CHANNELS, type JsonValue, type SettingsBridge } from "../shared/settings-contract";
 import type { ActionService } from "./action-service";
 import { dragOutPaths } from "./drag-out";
+import type { OsRequestService } from "./os-request-service";
 
 /**
  * The row drag-out: the renderer has already cancelled its own drag
@@ -163,3 +165,7 @@ export function registerSettingsIpcHandlers(service: SettingsBridge): void {
 	});
 }
 
+/** The renderer drains requests that came from the OS file menu. */
+export function registerOsRequestIpcHandlers(service: OsRequestService): void {
+	ipcMain.handle(OS_REQUEST_CHANNELS.take, () => service.take());
+}
