@@ -163,10 +163,6 @@ export function createSettingsService(deps: SettingsServiceDeps): SettingsBridge
 			return deps.dataSources.list();
 		},
 		sourcesSync: (id) => deps.dataSources.sync(id),
-		sourcesSetAccess: async (id, allowed) => {
-			await deps.dataSources.setAccess(id, allowed);
-			return deps.dataSources.list();
-		},
 		refreshScheduleGet: () => requireScheduler().status(),
 		refreshScheduleApply: () => requireScheduler().reconcile(),
 		modelsResolve: () => deps.models.resolve(),

@@ -1,4 +1,4 @@
-import { buildDatasourceSkills, DatasourceAccessContext, type DatasourcesConfig } from "@autorag/librarian";
+import { buildDatasourceSkills, type DatasourcesConfig } from "@autorag/librarian";
 import { describe, expect, it } from "vitest";
 import { applyIndexingConfig } from "../src/main/onboarding-config";
 import { isJsonObject } from "../src/shared/settings-contract";
@@ -59,12 +59,9 @@ describe("applyIndexingConfig", () => {
 		expect(isJsonObject(github.connector) && github.connector.repos).toEqual(["me/one", "me/two"]);
 	});
 
-	it("authorizes selected sources without discarding existing access or widening scopes", () => {
+	it("writes datasource entries the librarian builds into skills, keeping existing entries", () => {
 		const next = applyIndexingConfig({
-			raw: {
-				datasourceAccess: { allowedTags: ["existing"], allowedScopes: ["/github/github"] },
-				datasources: { archive: { type: "rss", tags: ["existing"] } },
-			},
+			raw: { datasources: { archive: { type: "rss", tags: ["existing"] } } },
 			folders: ["/a"],
 			datasources: [
 				{ id: "kakao", facts: {} },
@@ -81,19 +78,13 @@ describe("applyIndexingConfig", () => {
 			workspacePath: null,
 			model: null,
 		});
-		const access = new DatasourceAccessContext(next.datasourceAccess as { allowedTags: string[]; allowedScopes: string[] });
+		expect(next.datasourceAccess).toBeUndefined();
 		const { skills, unknown } = buildDatasourceSkills({ ...(next.datasources as DatasourcesConfig), excluded: { type: "whatsapp", instanceId: "x" } });
 		expect(unknown).toEqual([]);
 		const names = ["archive", "kakao", "slack", "discord", "telegram", "whatsapp", "mailcrawl-gmail", "mailcrawl-work", "github", "obsidian", "obsidian-2"];
 		for (const name of names) {
-			const descriptor = skills.find((skill) => skill.describe().name === name)?.describe();
-			if (descriptor === undefined) throw new Error(`missing datasource: ${name}`);
-			expect(access.isAccessible(descriptor), name).toBe(true);
+			expect(skills.some((skill) => skill.describe().name === name), name).toBe(true);
 		}
-		const allowed = access.allowedSourcesPredicate();
-		expect(allowed("/github/github/issues/1")).toBe(true);
-		expect(allowed("/github/other/issues/1")).toBe(false);
-		expect(allowed("/slack/default/messages/1")).toBe(false);
 	});
 
 	it("writes one obsidian alias per vault", () => {
@@ -130,7 +121,6 @@ describe("applyIndexingConfig", () => {
 		expect(gmail.instanceId).toBe("gmail");
 		expect(gmail.connector).toEqual({ account: "gmail", mailbox: "INBOX", dataDir: "/Users/me/.mailcrawl/gmail" });
 		expect(isJsonObject(work.connector) && work.connector.dataDir).toBe("/Users/me/.mailcrawl/work.kr");
-		expect(isJsonObject(next.datasourceAccess) && next.datasourceAccess.allowedTags).toEqual(["mailcrawl"]);
 	});
 
 	it("writes the BYOK model block and leaves managed plans alone", () => {

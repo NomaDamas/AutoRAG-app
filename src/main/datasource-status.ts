@@ -4,7 +4,6 @@ import { delimiter, extname, join } from "node:path";
 import {
 	BUILTIN_DATASOURCE_SKILL_NAMES,
 	buildDatasourceSkills,
-	DatasourceAccessContext,
 	type DatasourceDiagnostic,
 	type DatasourceIndexResult,
 	type DatasourceSkill,
@@ -30,7 +29,7 @@ import { isJsonObject } from "../shared/settings-contract";
 /**
  * Settings > Data Sources reads the shared AutoRAG config — the same file the
  * CLI, TUI, serve, and every app agent resolve — on each call, and judges agent
- * reachability with the librarian's own skill factory and access context. The
+ * reachability with the librarian's own skill factory. The
  * app never keeps a copy, so an edit from any AutoRAG surface shows up here and
  * a toggle here reaches every agent.
  */
@@ -45,13 +44,6 @@ export interface DataSourceStatusService {
 	 * Concurrent calls for one id share a single in-flight run.
 	 */
 	sync(id: string): Promise<DataSourceSyncResult>;
-	/**
-	 * Grant or revoke agent access for one source by editing
-	 * `datasourceAccess.allowedTags` only when no other configured source sharing
-	 * its tags changes accessibility. Refuses (throws) rather than silently
-	 * granting or revoking a different source.
-	 */
-	setAccess(id: string, allowed: boolean): Promise<void>;
 }
 
 export interface DataSourceStatusDeps {
@@ -183,28 +175,13 @@ function buildSkill(
 	return buildDatasourceSkills({ [id]: withConnectorOcrDisabled({ ...entry, enabled: true }) }, workspacePath, embeddingRuntime).skills[0];
 }
 
-function agentState(
-	skill: DatasourceSkill | undefined,
-	enabled: boolean,
-	access: DatasourceAccessContext,
-	allowedTags: readonly string[],
-): DataSourceRow["agent"] {
+function agentState(skill: DatasourceSkill | undefined, enabled: boolean): DataSourceRow["agent"] {
 	if (skill === undefined) {
 		return { state: "unsupported", skillName: null, tags: [], detail: "The AutoRAG agent skips unknown datasources" };
 	}
 	const descriptor = skill.describe();
 	const skillName = skill.skillManifest().name;
 	if (!enabled) return { state: "disabled", skillName, tags: descriptor.tags, detail: "Turned off in the AutoRAG config" };
-	if (!access.isAccessible(descriptor)) {
-		return {
-			state: "blocked",
-			skillName,
-			tags: descriptor.tags,
-			detail: allowedTags.length === 0
-				? "datasourceAccess.allowedTags is empty, so every datasource is denied"
-				: `None of its tags (${descriptor.tags.join(", ")}) is in datasourceAccess.allowedTags`,
-		};
-	}
 	return { state: "connected", skillName, tags: descriptor.tags, detail: `Agents load ${skillName}` };
 }
 
@@ -318,41 +295,6 @@ function overallStatus(
 	return refresh.state === "running" && refresh.phase === "datasources" ? "syncing" : "ready";
 }
 
-/**
- * Compute the `allowedTags` set that grants/revokes exactly one source without
- * changing any other configured source's accessibility.
- *
- * Sources are gated by tag intersection, so a tag shared with another source
- * cannot be added or removed freely. When the request cannot be met without
- * affecting another source the helper returns `null` and the caller refuses.
- */
-export function computeAccessTags(
-	sources: readonly { readonly id: string; readonly tags: readonly string[] }[],
-	current: readonly string[],
-	targetId: string,
-	allowed: boolean,
-): string[] | null {
-	const target = sources.find((source) => source.id === targetId);
-	if (target === undefined) return null;
-	const accessible = (tags: readonly string[], set: ReadonlySet<string>): boolean => tags.some((tag) => set.has(tag));
-	const currentSet = new Set(current);
-	const candidate = new Set(current);
-	if (allowed) {
-		for (const tag of target.tags) {
-			// A tag shared with another source would grant that source too.
-			if (!sources.some((other) => other.id !== targetId && other.tags.includes(tag))) candidate.add(tag);
-		}
-	} else {
-		for (const tag of target.tags) candidate.delete(tag);
-	}
-	for (const other of sources) {
-		if (other.id === targetId) continue;
-		if (accessible(other.tags, currentSet) !== accessible(other.tags, candidate)) return null;
-	}
-	if (accessible(target.tags, candidate) !== allowed) return null;
-	return [...candidate].sort();
-}
-
 function toDiagnostic(diagnostic: DatasourceDiagnostic): ConfigRefreshDiagnostic {
 	return { code: String(diagnostic.code), severity: diagnostic.severity, message: diagnostic.message };
 }
@@ -374,7 +316,6 @@ export function createDataSourceStatusService(deps: DataSourceStatusDeps): DataS
 			configPath: path,
 			configExists: await stat(path).then(() => true, () => false),
 			error: null,
-			accessTags: [],
 			refresh: { state: "idle", phase: null, finishedAt: null },
 			local: { documentCount: null, updatedAt: null },
 			sources: [],
@@ -386,11 +327,6 @@ export function createDataSourceStatusService(deps: DataSourceStatusDeps): DataS
 		} catch (error) {
 			return { ...empty, error: error instanceof Error ? error.message : String(error) };
 		}
-		const allowedTags = config.datasourceAccess?.allowedTags ?? [];
-		const access = new DatasourceAccessContext({
-			allowedTags,
-			...(config.datasourceAccess?.allowedScopes === undefined ? {} : { allowedScopes: config.datasourceAccess.allowedScopes }),
-		});
 		const refresh = await refreshState(config.workspacePath);
 		const sources = await Promise.all(
 			Object.entries(config.datasources ?? {}).map(async ([id, raw]): Promise<DataSourceRow> => {
@@ -400,7 +336,7 @@ export function createDataSourceStatusService(deps: DataSourceStatusDeps): DataS
 				const skill = BUILTIN_DATASOURCE_SKILL_NAMES.includes(type) ? buildSkill(id, entry, config.workspacePath) : undefined;
 				const install = await installState(type, entry, deps.env);
 				const index = await indexState(id, type, entry, skill, install, config.workspacePath, deps.env);
-				const agent = agentState(skill, enabled, access, allowedTags);
+				const agent = agentState(skill, enabled);
 				return {
 					id,
 					type,
@@ -413,7 +349,7 @@ export function createDataSourceStatusService(deps: DataSourceStatusDeps): DataS
 				};
 			}),
 		);
-		return { ...empty, accessTags: allowedTags, refresh, local: localIndexState(config.workspacePath), sources };
+		return { ...empty, refresh, local: localIndexState(config.workspacePath), sources };
 	};
 
 	const inFlight = new Map<string, Promise<DataSourceSyncResult>>();
@@ -498,22 +434,6 @@ export function createDataSourceStatusService(deps: DataSourceStatusDeps): DataS
 			const run = runSync(id).finally(() => inFlight.delete(id));
 			inFlight.set(id, run);
 			return run;
-		},
-		setAccess: async (id, allowed) => {
-			const snapshot = await listSnapshot();
-			if (snapshot.error !== null) throw new Error(snapshot.error);
-			const sources = snapshot.sources.map((row) => ({ id: row.id, tags: row.agent.tags }));
-			const next = computeAccessTags(sources, snapshot.accessTags, id, allowed);
-			if (next === null) {
-				throw new Error(
-					`Cannot ${allowed ? "grant" : "revoke"} access for "${id}" without changing another datasource that shares its tags`,
-				);
-			}
-			const path = configPath();
-			const raw = readRawConfigObject(path);
-			const access = isJsonObject(raw.datasourceAccess) ? raw.datasourceAccess : {};
-			raw.datasourceAccess = { ...access, allowedTags: next };
-			writeConfigObject(path, raw);
 		},
 		setEnabled: async (id, enabled) => {
 			updateEntry(id, (entry) => (isJsonObject(entry) ? { ...entry, enabled } : enabled));

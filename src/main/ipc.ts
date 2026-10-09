@@ -234,10 +234,6 @@ export function registerSettingsIpcHandlers(service: SettingsBridge): void {
 	ipcMain.handle(SETTINGS_CHANNELS.providersRemove, (_event, id: unknown) => service.providersRemove(requireNonEmptyString(id, "provider id")));
 	ipcMain.handle(SETTINGS_CHANNELS.providersTest, (_event, id: unknown) => service.providersTest(requireNonEmptyString(id, "provider id")));
 	ipcMain.handle(SETTINGS_CHANNELS.sourcesSync, (_event, id: unknown) => service.sourcesSync(requireNonEmptyString(id, "datasource id")));
-	ipcMain.handle(SETTINGS_CHANNELS.sourcesSetAccess, (_event, id: unknown, allowed: unknown) => {
-		if (typeof allowed !== "boolean") throw new TypeError("sources:setAccess expects a boolean");
-		return service.sourcesSetAccess(requireNonEmptyString(id, "datasource id"), allowed);
-	});
 	ipcMain.handle(SETTINGS_CHANNELS.refreshScheduleGet, () => service.refreshScheduleGet());
 	ipcMain.handle(SETTINGS_CHANNELS.refreshScheduleApply, () => service.refreshScheduleApply());
 	ipcMain.handle(SETTINGS_CHANNELS.embeddingGet, () => service.embeddingGet());
