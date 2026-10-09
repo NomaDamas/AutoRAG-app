@@ -8,7 +8,7 @@ import {
 import { FS_CHANNELS } from "../shared/fs-contract";
 import { SEARCH_CHANNELS, type SearchBridge } from "../shared/search-contract";
 import { OS_REQUEST_CHANNELS } from "../shared/os-request-contract";
-import { SETTINGS_CHANNELS, type JsonValue, type SettingsBridge } from "../shared/settings-contract";
+import { SETTINGS_CHANNELS, type EmbeddingChangeRequest, type JsonValue, type ProviderAuthKind, type ProviderServerInput, type SettingsBridge } from "../shared/settings-contract";
 import { ONBOARDING_CHANNELS } from "../shared/onboarding-contract";
 import { isServiceRunRequest, SERVICES_CHANNELS } from "../shared/services-contract";
 import type { ActionService } from "./action-service";
@@ -105,6 +105,42 @@ function isConfigUpdatePayload(value: unknown): value is ConfigUpdatePayload {
 	return "value" in value;
 }
 
+function requireNonEmptyString(value: unknown, label: string): string {
+	if (typeof value !== "string" || value.length === 0) throw new TypeError(`${label} must be a non-empty string`);
+	return value;
+}
+
+function requireProviderAuthKind(value: unknown): ProviderAuthKind {
+	if (value !== "api_key" && value !== "oauth") throw new TypeError("authType must be 'api_key' or 'oauth'");
+	return value;
+}
+
+/** Validate a local/custom server payload the renderer sends to discover/upsert. */
+function requireProviderServerInput(value: unknown): ProviderServerInput {
+	if (value === null || typeof value !== "object") throw new TypeError("provider server input must be an object");
+	const input = value as Record<string, unknown>;
+	if (input.kind !== "local" && input.kind !== "custom") throw new TypeError("provider kind must be 'local' or 'custom'");
+	const label = requireNonEmptyString(input.label, "provider label");
+	const baseUrl = requireNonEmptyString(input.baseUrl, "provider baseUrl");
+	if (input.id !== undefined && typeof input.id !== "string") throw new TypeError("provider id must be a string");
+	if (input.apiKey !== undefined && typeof input.apiKey !== "string") throw new TypeError("provider apiKey must be a string");
+	return {
+		kind: input.kind,
+		label,
+		baseUrl,
+		...(typeof input.id === "string" ? { id: input.id } : {}),
+		...(typeof input.apiKey === "string" ? { apiKey: input.apiKey } : {}),
+	};
+}
+
+/** Validate the shape of an embedding change request. */
+function requireEmbeddingChangeRequest(value: unknown): EmbeddingChangeRequest {
+	if (value === null || typeof value !== "object") throw new TypeError("embedding request must be an object");
+	const request = value as Record<string, unknown>;
+	requireNonEmptyString(request.profileId, "embedding profileId");
+	return value as EmbeddingChangeRequest;
+}
+
 export function registerSettingsIpcHandlers(service: SettingsBridge): void {
 	ipcMain.handle(SETTINGS_CHANNELS.get, () => service.get());
 	ipcMain.handle(SETTINGS_CHANNELS.set, (_event, patch) => service.set(patch));
@@ -179,6 +215,34 @@ export function registerSettingsIpcHandlers(service: SettingsBridge): void {
 		if (typeof envName !== "string") throw new TypeError("credentials:remove expects an env var name");
 		return service.credentialsRemove(envName);
 	});
+	ipcMain.handle(SETTINGS_CHANNELS.providersList, () => service.providersList());
+	ipcMain.handle(SETTINGS_CHANNELS.providerLoginStart, (_event, providerId: unknown, authType: unknown) =>
+		service.providerLoginStart(requireNonEmptyString(providerId, "providerId"), requireProviderAuthKind(authType)),
+	);
+	ipcMain.handle(SETTINGS_CHANNELS.providerLoginRespond, (_event, sessionId: unknown, value: unknown) => {
+		if (typeof value !== "string") throw new TypeError("provider:loginRespond expects a string value");
+		return service.providerLoginRespond(requireNonEmptyString(sessionId, "sessionId"), value);
+	});
+	ipcMain.handle(SETTINGS_CHANNELS.providerLoginCancel, (_event, sessionId: unknown) =>
+		service.providerLoginCancel(requireNonEmptyString(sessionId, "sessionId")),
+	);
+	ipcMain.handle(SETTINGS_CHANNELS.providerLogout, (_event, providerId: unknown) =>
+		service.providerLogout(requireNonEmptyString(providerId, "providerId")),
+	);
+	ipcMain.handle(SETTINGS_CHANNELS.providersDiscover, (_event, input: unknown) => service.providersDiscover(requireProviderServerInput(input)));
+	ipcMain.handle(SETTINGS_CHANNELS.providersUpsert, (_event, input: unknown) => service.providersUpsert(requireProviderServerInput(input)));
+	ipcMain.handle(SETTINGS_CHANNELS.providersRemove, (_event, id: unknown) => service.providersRemove(requireNonEmptyString(id, "provider id")));
+	ipcMain.handle(SETTINGS_CHANNELS.providersTest, (_event, id: unknown) => service.providersTest(requireNonEmptyString(id, "provider id")));
+	ipcMain.handle(SETTINGS_CHANNELS.sourcesSync, (_event, id: unknown) => service.sourcesSync(requireNonEmptyString(id, "datasource id")));
+	ipcMain.handle(SETTINGS_CHANNELS.refreshScheduleGet, () => service.refreshScheduleGet());
+	ipcMain.handle(SETTINGS_CHANNELS.refreshScheduleApply, () => service.refreshScheduleApply());
+	ipcMain.handle(SETTINGS_CHANNELS.embeddingGet, () => service.embeddingGet());
+	ipcMain.handle(SETTINGS_CHANNELS.embeddingPlan, (_event, request: unknown) =>
+		service.embeddingPlan(requireEmbeddingChangeRequest(request)),
+	);
+	ipcMain.handle(SETTINGS_CHANNELS.embeddingApply, (_event, request: unknown) =>
+		service.embeddingApply(requireEmbeddingChangeRequest(request)),
+	);
 }
 
 /** First-run onboarding: every payload is validated inside the service. */

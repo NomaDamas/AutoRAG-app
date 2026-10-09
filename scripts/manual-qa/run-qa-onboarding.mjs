@@ -227,13 +227,7 @@ try {
 		const configured = Object.entries(raw.datasources ?? {}).filter(
 			([alias, entry]) => alias === requestedSource || entry?.type === requestedSource || alias.startsWith(`${requestedSource}-`),
 		);
-		const tags = raw.datasourceAccess?.allowedTags ?? [];
-		const requiredTag = requestedSource === "kakao" ? "kakaotalk" : requestedSource;
-		check(
-			`${requestedSource} datasource config written and access tag allowed`,
-			configured.length > 0 && tags.includes(requiredTag),
-			JSON.stringify({ source: configured, tags }),
-		);
+		check(`${requestedSource} datasource config written`, configured.length > 0, JSON.stringify(configured));
 	}
 	check("config searchPaths = selected folders", JSON.stringify(raw.searchPaths) === JSON.stringify([DESK, DOCS]), JSON.stringify(raw.searchPaths));
 	check("config local embedder set", raw.minSync?.embedder?.profile === "qwen3-embedding-0.6b", JSON.stringify(raw.minSync?.embedder));

@@ -1,9 +1,9 @@
 /**
  * Settings > Deep / Light / Other Apps control layout.
  *
- * Companion to settings.css; scoped to the typed config sections
- * (ConfigSections.tsx). Only layout primitives live here — inputs, selects and
- * buttons keep their `linear-*` / `settings-source-desc__input` styling.
+ * Companion to settings.css; scoped to the typed config pages. Only layout
+ * primitives live here — inputs, selects and buttons keep their `linear-*` /
+ * `settings-source-desc__input` styling.
  */
 
 /* --------------------------------------------------------------- stacks -- */

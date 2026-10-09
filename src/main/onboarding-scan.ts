@@ -3,7 +3,7 @@ import { opendir, stat } from "node:fs/promises";
 import { extname, join } from "node:path";
 import type { ParserRegistry } from "@autorag/librarian";
 import type { FolderScan } from "../shared/onboarding-contract";
-import { DEFAULT_CODE_FOLDER_NAMES } from "./app-indexing";
+import { DEFAULT_CODE_FOLDER_NAMES } from "../shared/settings-contract";
 
 /**
  * The folder pre-scan behind the folders step. It walks each candidate the same
@@ -115,7 +115,8 @@ export async function scanFolder(
 				scanned += 1;
 				const full = join(dir, entry.name);
 				if (entry.isDirectory()) {
-					if (skip[entry.name.toLowerCase()] === true) continue;
+					// Matches the refresh, which excludes every dot-folder (app-indexing).
+					if (entry.name.startsWith(".") || skip[entry.name.toLowerCase()] === true) continue;
 					queue.push(full);
 					continue;
 				}

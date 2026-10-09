@@ -25,8 +25,11 @@ import type { AppAppearance, ConfigRefreshResult } from "../shared/settings-cont
 import { attachQuickLook, PREVIEW_PRIVILEGED_SCHEME, registerPreviewProtocol, registerQuickLookIpc } from "../preview/node/register";
 import { createDefaultParserRegistry, DEFAULT_MAX_SOURCE_BYTES, writeDefaultConfig } from "@autorag/librarian";
 import { readRawConfigObject, resolveConfigPath, writeConfigObject } from "@autorag/librarian/core";
-import { DEFAULT_CODE_FOLDER_NAMES } from "./app-indexing";
-import { isJsonObject } from "../shared/settings-contract";
+import { DEFAULT_CODE_FOLDER_NAMES, isJsonObject, SETTINGS_CHANNELS } from "../shared/settings-contract";
+import { LOCAL_REFRESH_METHODS } from "./index-refresh";
+import type { RefreshLockHolder } from "./refresh-lock";
+import { schedulePaths, withRefreshLock } from "./refresh-schedule";
+import { createRefreshScheduler } from "./refresh-scheduler";
 import { createIconProvider } from "./file-icon";
 import { registerIconProtocol, THUMB_PRIVILEGED_SCHEME } from "./icon-register";
 import type { KnownFolders } from "../shared/fs-worker-contract";
@@ -44,7 +47,9 @@ import { readDevLabel, resolveClonePath } from "./dev-label";
 import { createFsWorkerHost, registerFsWorkerIpc, type FsWorkerHost } from "./fs-worker-host";
 import { createAutoRagConfigService } from "./autorag-config-service";
 import { createModelStatusService } from "./model-status";
+import { createProviderAuthService, type ProviderAuthService } from "./provider-auth-service";
 import { createProviderCredentialService } from "./provider-credentials";
+import { createEmbeddingSettingsService, type EmbeddingSettingsRuntime } from "./embedding-settings-service";
 import { createDefaultAgentFactory, createSearchService } from "./search-service";
 import { createSettingsService } from "./settings-service";
 import {
@@ -165,6 +170,7 @@ function createMainWindow(devLabel: DevLabel | null, appearance: AppAppearance, 
 }
 
 let fsWorker: FsWorkerHost | null = null;
+let providerAuthService: ProviderAuthService | null = null;
 let mainWindow: BrowserWindow | null = null;
 let currentAppearance: AppAppearance = "light";
 function sendToMainWindow(channel: string, payload: unknown): void {
@@ -436,6 +442,38 @@ app.whenReady().then(async () => {
 	});
 	await credentials.load();
 	const autoRagConfig = createAutoRagConfigService({ env: process.env, cwd: process.cwd() });
+	const providerAuth = createProviderAuthService({
+		send: (event) => sendToMainWindow(SETTINGS_CHANNELS.providerLoginEvent, event),
+		env: process.env,
+		credentials,
+	});
+	providerAuthService = providerAuth;
+	// auth.json-stored OpenRouter/Vercel keys reach process.env so the env-driven
+	// Jev/rerank backends resolve the same credential.
+	void providerAuth.warmEnv();
+	// The datasource service hands its discrawl skill the embedding service's
+	// current loopback runtime; the embedding service needs the datasource service
+	// for adoption planning, so the holder is filled right after.
+	let embeddingSettings: EmbeddingSettingsRuntime | null = null;
+	const dataSources = createDataSourceStatusService({
+		env: process.env,
+		cwd: process.cwd(),
+		discrawlEmbeddingRuntime: () => embeddingSettings?.discrawlRuntime(),
+	});
+	const embeddingService = createEmbeddingSettingsService({
+		env: process.env,
+		cwd: process.cwd(),
+		config: autoRagConfig,
+		dataSources,
+	});
+	embeddingSettings = embeddingService;
+	// A persisted local-server embedder points mailcrawl at the app's ephemeral
+	// adapter port; refresh re-probes and rewrites it before any agent runs.
+	await embeddingService.refresh();
+	embeddingService.applyProcessEnv();
+	app.once("will-quit", () => {
+		void embeddingService.dispose();
+	});
 	// Unpackaged, registering would add the bare Electron binary to Login Items
 	// rather than AutoRAG, so only a packaged build touches the OS login item.
 	const applyLoginItem = (enabled: boolean): void => {
@@ -454,13 +492,42 @@ app.whenReady().then(async () => {
 		return registered === enabled;
 	};
 	let appliedLaunchAtLogin: boolean | null = null;
+	const schedulePath = schedulePaths(autoragConfigPath());
+	const refreshScheduler = createRefreshScheduler({
+		platform: process.platform,
+		execPath: process.execPath,
+		jobPath: join(import.meta.dirname, "refresh-job.js"),
+		configPath: autoragConfigPath,
+	});
+	// A manual refresh or sync takes the same lock as the scheduled job, so the two never run at once.
+	const busyMessage = (holder: RefreshLockHolder): string =>
+		holder.owner === "scheduled-job" ? "백그라운드 새로 고침이 실행 중입니다. 끝난 뒤 다시 시도하세요." : "다른 새로 고침이 실행 중입니다. 끝난 뒤 다시 시도하세요.";
+	const lockedDataSources: typeof dataSources = {
+		...dataSources,
+		sync: (id) =>
+			withRefreshLock(
+				schedulePath.lock,
+				"manual-sync",
+				() => dataSources.sync(id),
+				(holder) => ({ id, ok: false, state: "failed", chunkCount: null, indexedAt: null, durationMs: 0, diagnostics: [], error: busyMessage(holder) }),
+			),
+	};
 	const settingsService = createSettingsService({
 		directory: join(app.getPath("userData"), "settings"),
-		dataSources: createDataSourceStatusService({ env: process.env, cwd: process.cwd() }),
+		dataSources: lockedDataSources,
 		models: createModelStatusService({ env: process.env, cwd: process.cwd() }),
 		config: autoRagConfig,
-		refreshConfig,
+		refreshConfig: (methods) =>
+			withRefreshLock(
+				schedulePath.lock,
+				"manual-refresh",
+				() => refreshConfig(methods),
+				(holder) => ({ ok: false, methods: methods ?? LOCAL_REFRESH_METHODS, scanned: 0, written: 0, deleted: 0, skipped: 0, diagnostics: [], error: busyMessage(holder) }),
+			),
+		refreshScheduler,
 		credentials,
+		providers: providerAuth,
+		embedding: embeddingService,
 		applyOsMenu: async (next, previous) => {
 			if (next.osMenuIntegration) {
 				if (!previous.osMenuIntegration || next.language !== previous.language) await osMenu.install(menuLabels(next.language));
@@ -673,6 +740,14 @@ app.whenReady().then(async () => {
 		// Refresh on every start: the executable path or interface language may have changed.
 		osMenu.install(menuLabels(settings.language)).catch((error: unknown) => console.error("[os-menu] refresh failed:", error));
 	}
+	app.once("will-quit", () => void providerAuthService?.dispose());
+	// Re-time or remove an OS refresh job the user already enabled. Installing one is only ever the result of the user choosing a cadence.
+	void refreshScheduler
+		.status()
+		.then((status) => (status.installed ? refreshScheduler.reconcile() : status))
+		.then((status) => {
+			if (status.error !== null) console.error("AutoRAG background refresh scheduling failed", status.error);
+		});
 	app.once("will-quit", () => void listener?.close());
 	// The worker's native watcher must finish unsubscribing before its Node
 	// environment is torn down (an unsubscribe completing inside

@@ -1,7 +1,7 @@
 import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { buildAgentOptions, resolveConfigReadOnly } from "@autorag/librarian";
+import { buildAgentOptions, resolveConfigReadOnly, saveMirrorIndex, type ParsedMirrorEntry as MirrorEntry } from "@autorag/librarian";
 import { afterEach, describe, expect, it } from "vitest";
 import { createDataSourceStatusService } from "../src/main/datasource-status";
 import type { DataSourceRow } from "../src/shared/settings-contract";
@@ -32,14 +32,13 @@ async function createFixtureWithOnlySlacrawlOnPath(): Promise<Fixture> {
 	return { root, workspace, configPath, env: { HOME: root, PATH: bin, AUTORAG_CONFIG: configPath } };
 }
 
-async function writeConfig(fixture: Fixture, datasources: Record<string, unknown>, allowedTags: readonly string[]): Promise<void> {
+async function writeConfig(fixture: Fixture, datasources: Record<string, unknown>): Promise<void> {
 	await writeFile(
 		fixture.configPath,
 		`${JSON.stringify({
 			searchPaths: [join(fixture.workspace, "docs")],
 			workspacePath: fixture.workspace,
 			datasources,
-			datasourceAccess: { allowedTags },
 		}, null, 2)}\n`,
 	);
 }
@@ -62,7 +61,7 @@ function byId(rows: readonly DataSourceRow[], id: string): DataSourceRow {
 describe("createDataSourceStatusService", () => {
 	it("reports install, agent connection, and index state for every configured datasource", async () => {
 		const fixture = await createFixtureWithOnlySlacrawlOnPath();
-		await writeConfig(fixture, MIXED_DATASOURCES, ["chat", "documents"]);
+		await writeConfig(fixture, MIXED_DATASOURCES);
 		const chunkStore = join(fixture.workspace, ".autorag", "datasources", "my-drive", "my-drive", "chunks.json");
 		await mkdir(join(chunkStore, ".."), { recursive: true });
 		await writeFile(chunkStore, JSON.stringify({
@@ -81,13 +80,13 @@ describe("createDataSourceStatusService", () => {
 		expect(snapshot.error).toBeNull();
 		expect(snapshot.configPath).toBe(fixture.configPath);
 		expect(snapshot.configExists).toBe(true);
-		expect(snapshot.accessTags).toEqual(["chat", "documents"]);
 		expect(snapshot.sources.map((row) => row.id)).toEqual(["slack", "my-drive", "github", "telegram", "team", "foo"]);
 
 		const slack = byId(snapshot.sources, "slack");
 		expect(slack.install).toMatchObject({ state: "installed", binary: "slacrawl" });
 		expect(slack.agent).toMatchObject({ state: "connected", skillName: "datasource-slack" });
-		expect(slack.index.state).toBe("external");
+		// The fake slacrawl prints nothing parseable: that is "unreadable", never "empty".
+		expect(slack.index).toMatchObject({ state: "not-indexed", chunkCount: null, unit: "message" });
 		expect(slack.status).toBe("ready");
 
 		const drive = byId(snapshot.sources, "my-drive");
@@ -99,7 +98,7 @@ describe("createDataSourceStatusService", () => {
 
 		const github = byId(snapshot.sources, "github");
 		expect(github.install).toMatchObject({ state: "credential-missing", binary: null });
-		expect(github.agent.state).toBe("blocked");
+		expect(github.agent.state).toBe("connected");
 		expect(github.agent.tags).toEqual(["github", "issues"]);
 		expect(github.index.state).toBe("not-indexed");
 		expect(github.status).toBe("attention");
@@ -138,7 +137,7 @@ describe("createDataSourceStatusService", () => {
 			configPath,
 			env: { HOME: root, PATH: bin, PATHEXT: ".COM;.EXE;.BAT;.CMD", AUTORAG_CONFIG: configPath },
 		};
-		await writeConfig(fixture, { slack: {} }, ["chat"]);
+		await writeConfig(fixture, { slack: {} });
 
 		// When the status is listed
 		const [slack] = (await createDataSourceStatusService({ env: fixture.env, cwd: fixture.root }).list()).sources;
@@ -159,7 +158,7 @@ describe("createDataSourceStatusService", () => {
 			...fixture,
 			env: { ...fixture.env, PATHEXT: ".COM;.EXE;.BAT;.CMD" },
 		};
-		await writeConfig(windowsFixture, { slack: { connector: { binaryPath: "slacrawl.cmd" } } }, ["chat"]);
+		await writeConfig(windowsFixture, { slack: { connector: { binaryPath: "slacrawl.cmd" } } });
 
 		const [slack] = (await createDataSourceStatusService({ env: windowsFixture.env, cwd: windowsFixture.root }).list()).sources;
 
@@ -169,7 +168,7 @@ describe("createDataSourceStatusService", () => {
 	it("still treats an exact CLI name as executable on POSIX", async () => {
 		// Given the existing extensionless script on PATH
 		const fixture = await createFixtureWithOnlySlacrawlOnPath();
-		await writeConfig(fixture, { slack: {} }, ["chat"]);
+		await writeConfig(fixture, { slack: {} });
 
 		// When the status is listed
 		const [slack] = (await createDataSourceStatusService({ env: fixture.env, cwd: fixture.root }).list()).sources;
@@ -178,23 +177,23 @@ describe("createDataSourceStatusService", () => {
 		expect(slack?.install).toMatchObject({ state: "installed", path: join(fixture.root, "bin", "slacrawl") });
 	});
 
-	it("reports default-deny when datasourceAccess has no allowed tags", async () => {
+	it("treats every enabled datasource as connected without any access list", async () => {
 		const fixture = await createFixtureWithOnlySlacrawlOnPath();
-		await writeConfig(fixture, { slack: {} }, []);
+		await writeConfig(fixture, { slack: {} });
 
-		const [slack] = (await createDataSourceStatusService({ env: fixture.env, cwd: fixture.root }).list()).sources;
+		const snapshot = await createDataSourceStatusService({ env: fixture.env, cwd: fixture.root }).list();
 
-		expect(slack?.agent.state).toBe("blocked");
-		expect(slack?.status).toBe("attention");
+		expect(snapshot.sources[0]?.agent.state).toBe("connected");
+		expect(snapshot.sources[0]?.status).toBe("ready");
 	});
 
 	it("re-reads the shared config on every list so edits from any AutoRAG surface show up", async () => {
 		const fixture = await createFixtureWithOnlySlacrawlOnPath();
-		await writeConfig(fixture, { slack: {} }, ["chat"]);
+		await writeConfig(fixture, { slack: {} });
 		const service = createDataSourceStatusService({ env: fixture.env, cwd: fixture.root });
 		expect((await service.list()).sources.map((row) => row.id)).toEqual(["slack"]);
 
-		await writeConfig(fixture, { slack: { enabled: false }, rss: { connector: { feeds: [] } } }, ["chat"]);
+		await writeConfig(fixture, { slack: { enabled: false }, rss: { connector: { feeds: [] } } });
 
 		const rows = (await service.list()).sources;
 		expect(rows.map((row) => row.id)).toEqual(["slack", "rss"]);
@@ -204,7 +203,7 @@ describe("createDataSourceStatusService", () => {
 
 	it("writes the toggle into the shared config so every AutoRAG agent sees it", async () => {
 		const fixture = await createFixtureWithOnlySlacrawlOnPath();
-		await writeConfig(fixture, { slack: { description: "Team" }, telegram: false }, ["chat"]);
+		await writeConfig(fixture, { slack: { description: "Team" }, telegram: false });
 		const service = createDataSourceStatusService({ env: fixture.env, cwd: fixture.root });
 
 		await service.setEnabled("slack", false);
@@ -212,7 +211,6 @@ describe("createDataSourceStatusService", () => {
 
 		const onDisk = JSON.parse(await readFile(fixture.configPath, "utf8")) as Record<string, any>;
 		expect(onDisk.datasources).toEqual({ slack: { description: "Team", enabled: false }, telegram: true });
-		expect(onDisk.datasourceAccess).toEqual({ allowedTags: ["chat"] });
 		const agentSkills = buildAgentOptions(resolveConfigReadOnly({ flags: {}, env: fixture.env, cwd: fixture.root }))
 			.datasourceSkills?.map((skill) => skill.describe().name);
 		expect(agentSkills).toEqual(["telegram"]);
@@ -221,7 +219,7 @@ describe("createDataSourceStatusService", () => {
 
 	it("saves an edited description into the shared config that the agent reads", async () => {
 		const fixture = await createFixtureWithOnlySlacrawlOnPath();
-		await writeConfig(fixture, { slack: { description: "Old", tags: ["chat"] }, telegram: false, whatsapp: true }, ["chat"]);
+		await writeConfig(fixture, { slack: { description: "Old", tags: ["chat"] }, telegram: false, whatsapp: true });
 		const service = createDataSourceStatusService({ env: fixture.env, cwd: fixture.root });
 
 		await service.setDescription("slack", "  Team Slack for release talk  ");
@@ -247,7 +245,7 @@ describe("createDataSourceStatusService", () => {
 
 	it("marks connected sources as syncing while a datasource refresh is running", async () => {
 		const fixture = await createFixtureWithOnlySlacrawlOnPath();
-		await writeConfig(fixture, { slack: {}, telegram: false }, ["chat"]);
+		await writeConfig(fixture, { slack: {}, telegram: false });
 		await mkdir(join(fixture.workspace, ".autorag"), { recursive: true });
 		await writeFile(join(fixture.workspace, ".autorag", "refresh-progress.json"), JSON.stringify({
 			version: 1,
@@ -274,5 +272,151 @@ describe("createDataSourceStatusService", () => {
 
 		expect(snapshot.sources).toEqual([]);
 		expect(snapshot.error).toMatch(/parse/i);
+	});
+
+	it("syncs one source through its skill and explains unavailable/unknown sources", async () => {
+		const fixture = await createFixtureWithOnlySlacrawlOnPath();
+		await writeConfig(fixture, { vault: { type: "obsidian", connector: { vaultPath: join(fixture.workspace, "vault") } } });
+		const service = createDataSourceStatusService({ env: fixture.env, cwd: fixture.root });
+
+		const unavailable = await service.sync("vault");
+		expect(unavailable).toMatchObject({ id: "vault", ok: false, state: "unavailable" });
+		expect(unavailable.error).toContain("qmd");
+		expect(typeof unavailable.durationMs).toBe("number");
+
+		const unknown = await service.sync("nope");
+		expect(unknown).toMatchObject({ id: "nope", ok: false, state: "not-configured" });
+		expect(unknown.error).toContain("Unknown datasource");
+	});
+
+	it("detects the desktop source app separately from the CLI", async () => {
+		const fixture = await createFixtureWithOnlySlacrawlOnPath();
+		await writeConfig(
+			fixture,
+			{ slack: {}, feed: { type: "rss", connector: { feeds: [{ url: "https://example.com/feed.xml" }] } } },
+		);
+
+		const snapshot = await createDataSourceStatusService({ env: fixture.env, cwd: fixture.root }).list();
+
+		expect(byId(snapshot.sources, "slack").install.app).toMatchObject({ required: true, name: "Slack" });
+		expect(byId(snapshot.sources, "feed").install.app).toMatchObject({ required: false, name: "" });
+	});
+});
+
+/** Installs a fake backend CLI on PATH (which holds only the fixture bin, so shell builtins only) that prints `output` and records its argv. */
+async function installFakeCli(fixture: Fixture, binary: string, output: string): Promise<string> {
+	const argvLog = join(fixture.root, `${binary}.argv`);
+	const quoted = `'${output.replaceAll("'", "'\\''")}'`;
+	await writeFile(join(fixture.root, "bin", binary), `#!/bin/sh\necho "$@" >> '${argvLog}'\nprintf '%s\\n' ${quoted}\n`);
+	await chmod(join(fixture.root, "bin", binary), 0o755);
+	return argvLog;
+}
+
+describe("backend-owned index counts", () => {
+	it("reads what each backend CLI reports instead of showing a placeholder", async () => {
+		const fixture = await createFixtureWithOnlySlacrawlOnPath();
+		await installFakeCli(fixture, "slacrawl", JSON.stringify({ messages: 179, last_sync_at: "2026-10-08T04:52:09Z" }));
+		await installFakeCli(
+			fixture,
+			"discrawl",
+			JSON.stringify({ last_sync_at: "2026-08-16T09:12:29Z", counts: [{ id: "channels", value: 179 }, { id: "messages", value: 3536 }] }),
+		);
+		await installFakeCli(fixture, "telecrawl", JSON.stringify({ messages: 976, last_import_at: "2026-09-22T01:04:28Z" }));
+		await installFakeCli(fixture, "notcrawl", JSON.stringify({ pages: 12, last_sync_at: 1_790_000_000 }));
+		await installFakeCli(fixture, "clawgallery", "config_dir: /x\nfolders: 1\nimages: 13635\ncaptions: 48");
+		await installFakeCli(
+			fixture,
+			"lazykatok",
+			JSON.stringify({ freshness: { last_sync: { total_messages: 50632, completed_at: "2026-09-23T06:07:17Z" } } }),
+		);
+		await writeConfig(fixture, { slack: {}, discord: {}, telegram: {}, notion: {}, clawgallery: {}, kakao: {} });
+
+		const rows = (await createDataSourceStatusService({ env: fixture.env, cwd: fixture.root }).list()).sources;
+
+		expect(byId(rows, "slack").index).toMatchObject({ state: "indexed", chunkCount: 179, unit: "message", indexedAt: "2026-10-08T04:52:09.000Z" });
+		expect(byId(rows, "discord").index).toMatchObject({ state: "indexed", chunkCount: 3536, unit: "message", indexedAt: "2026-08-16T09:12:29.000Z" });
+		expect(byId(rows, "telegram").index).toMatchObject({ state: "indexed", chunkCount: 976, unit: "message" });
+		expect(byId(rows, "notion").index).toMatchObject({ state: "indexed", chunkCount: 12, unit: "document", indexedAt: "2026-09-21T14:13:20.000Z" });
+		expect(byId(rows, "clawgallery").index).toMatchObject({ state: "indexed", chunkCount: 13635, unit: "image" });
+		expect(byId(rows, "kakao").index).toMatchObject({ state: "indexed", chunkCount: 50632, unit: "message" });
+	});
+
+	it("reports an empty archive as empty and an unreadable one as not-indexed", async () => {
+		const fixture = await createFixtureWithOnlySlacrawlOnPath();
+		await installFakeCli(fixture, "slacrawl", JSON.stringify({ messages: 0, last_sync_at: "" }));
+		await installFakeCli(fixture, "telecrawl", "not json at all");
+		await writeConfig(fixture, { slack: {}, telegram: {} });
+
+		const rows = (await createDataSourceStatusService({ env: fixture.env, cwd: fixture.root }).list()).sources;
+
+		expect(byId(rows, "slack").index).toMatchObject({ state: "empty", chunkCount: 0, indexedAt: null });
+		expect(byId(rows, "telegram").index).toMatchObject({ state: "not-indexed", chunkCount: null });
+	});
+
+	it("never runs a status command that would import: WhatsApp is asked with --sync never", async () => {
+		const fixture = await createFixtureWithOnlySlacrawlOnPath();
+		const argv = await installFakeCli(fixture, "wacrawl", JSON.stringify({ messages: 16591, last_import_at: "2026-10-08T06:42:37Z" }));
+		await writeConfig(fixture, { whatsapp: {} });
+
+		const [row] = (await createDataSourceStatusService({ env: fixture.env, cwd: fixture.root }).list()).sources;
+
+		expect(row?.index).toMatchObject({ state: "indexed", chunkCount: 16591 });
+		expect(await readFile(argv, "utf8")).toBe("--json --sync never status\n");
+	});
+
+	it("passes the connector's own database and config flags to the backend", async () => {
+		const fixture = await createFixtureWithOnlySlacrawlOnPath();
+		const argv = await installFakeCli(fixture, "telecrawl", JSON.stringify({ messages: 1 }));
+		await writeConfig(fixture, { telegram: { connector: { databasePath: "/data/tg.db" } } });
+
+		await createDataSourceStatusService({ env: fixture.env, cwd: fixture.root }).list();
+
+		expect(await readFile(argv, "utf8")).toBe("--json --db /data/tg.db status\n");
+	});
+
+	it("does not claim a count for Lark, which answers each search live", async () => {
+		const fixture = await createFixtureWithOnlySlacrawlOnPath();
+		await installFakeCli(fixture, "lark-cli", "{}");
+		await writeConfig(fixture, { lark: {} });
+
+		const [row] = (await createDataSourceStatusService({ env: fixture.env, cwd: fixture.root }).list()).sources;
+
+		expect(row?.index).toMatchObject({ state: "live", chunkCount: null });
+	});
+
+	it("never runs one backend CLI twice at once, so overlapping lists cannot trip its database lock", async () => {
+		const fixture = await createFixtureWithOnlySlacrawlOnPath();
+		const lock = join(fixture.root, "wacrawl.lock");
+		// Fails the way wacrawl does when two status runs overlap: a held lock means SQLITE_BUSY.
+		await writeFile(
+			join(fixture.root, "bin", "wacrawl"),
+			`#!/bin/sh\nif ! mkdir '${lock}' 2>/dev/null; then exit 1; fi\nsleep 0.2\nprintf '%s\\n' '{"messages":5}'\nrmdir '${lock}'\n`,
+		);
+		await chmod(join(fixture.root, "bin", "wacrawl"), 0o755);
+		await writeConfig(fixture, { whatsapp: {} });
+		const env = { ...fixture.env, PATH: `${join(fixture.root, "bin")}:/usr/bin:/bin` };
+		const service = createDataSourceStatusService({ env, cwd: fixture.root });
+
+		const lists = await Promise.all([service.list(), service.list(), service.list()]);
+
+		for (const snapshot of lists) expect(snapshot.sources[0]?.index).toMatchObject({ state: "indexed", chunkCount: 5 });
+	});
+
+	it("counts the documents the last local refresh parsed, and says nothing before one has run", async () => {
+		const fixture = await createFixtureWithOnlySlacrawlOnPath();
+		await writeConfig(fixture, {});
+		const service = createDataSourceStatusService({ env: fixture.env, cwd: fixture.root });
+		expect((await service.list()).local).toEqual({ documentCount: 0, updatedAt: null });
+
+		const entry = (name: string, updatedAt: string): [string, MirrorEntry] => {
+			const virtualPath = `/files/${name}.md`;
+			return [virtualPath, { virtualPath, sourcePath: join(fixture.workspace, "docs", `${name}.md`), outputPath: `/out/${name}.md`, parserName: "plain-text", sourceMtimeNs: 1, sourceSizeBytes: 1, updatedAt }];
+		};
+		saveMirrorIndex(fixture.workspace, {
+			version: 1,
+			entries: Object.fromEntries([entry("a", "2026-10-01T00:00:00.000Z"), entry("b", "2026-10-03T00:00:00.000Z"), entry("c", "2026-10-02T00:00:00.000Z")]),
+		});
+
+		expect((await service.list()).local).toEqual({ documentCount: 3, updatedAt: "2026-10-03T00:00:00.000Z" });
 	});
 });
