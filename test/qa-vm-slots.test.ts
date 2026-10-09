@@ -70,6 +70,22 @@ describe("qa-vm slot pool", () => {
 		expect(pool.holders()).toHaveLength(1);
 	});
 
+	it("puts a slot back when it comes back to life between the staleness check and the reclaim", () => {
+		// The staleness decision spans a `ps` call, so another process can re-take
+		// the slot in that window. The reclaim re-verifies after the rename and
+		// must restore a live run's slot, not delete it and report its VM.
+		const reaped: unknown[] = [];
+		mkdirSync(join(dir, "slot-0"));
+		writeFileSync(join(dir, "slot-0", "owner.json"), JSON.stringify({ pid: 42, vm: "live-vm" }));
+		let checks = 0;
+		const pool = createSlotPool({ dir, isAlive: () => ++checks > 1, onReap: (owner) => reaped.push(owner) });
+
+		pool.reapStale();
+
+		expect(reaped).toEqual([]);
+		expect(pool.holders().map((holder) => holder.owner?.vm)).toEqual(["live-vm"]);
+	});
+
 	it("gives a slot that is still being created a grace period, then treats it as abandoned", () => {
 		let clock = Date.now();
 		const pool = createSlotPool({ dir, isAlive: () => true, now: () => clock, graceMs: 10_000 });

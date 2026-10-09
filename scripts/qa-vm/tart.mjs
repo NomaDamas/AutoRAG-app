@@ -23,6 +23,8 @@ export function listVms() {
 
 export const vmExists = (name) => listVms().some((vm) => vm.Name === name && vm.Source === "local");
 export const vmRunning = (name) => listVms().some((vm) => vm.Name === name && vm.Running);
+/** Name match across every source: a pulled OCI image is listed by its full reference, not as "local". */
+export const anyVmExists = (name) => listVms().some((vm) => vm.Name === name);
 
 export const pullImage = (image) => execFileSync("tart", ["pull", image], { stdio: "inherit" });
 export const cloneVm = (from, to) => tart(["clone", from, to]);
@@ -49,7 +51,7 @@ export function startVm(name, { logFile, args = ["--no-graphics"] }) {
 
 /** Boot into macOS Recovery with the VNC server on; resolves with the endpoint tart prints. */
 export function startRecovery(name) {
-	const child = spawn("tart", ["run", name, "--recovery", "--vnc-experimental", "--no-clipboard"], { stdio: ["ignore", "pipe", "pipe"] });
+	const child = spawn("tart", ["run", name, "--recovery", "--vnc-experimental", "--no-clipboard", "--no-graphics"], { stdio: ["ignore", "pipe", "pipe"] });
 	const endpoint = new Promise((resolve, reject) => {
 		let seen = "";
 		const onData = (chunk) => {
@@ -85,7 +87,11 @@ export async function waitUntilStopped(name, timeoutMs = 90_000) {
 	}
 }
 
-/** Stop and delete a VM. Safe on one that is missing, half-created, or already stopped. */
+/**
+ * Stop and delete a VM. Safe on one that is missing, half-created, or already
+ * stopped. A VM that is still listed after the delete failed is rethrown:
+ * callers must not release their slot (or report success) around an orphan.
+ */
 export async function destroyVm(name) {
 	if (!listVms().some((vm) => vm.Name === name)) return;
 	stopVm(name);
@@ -94,6 +100,8 @@ export async function destroyVm(name) {
 		tart(["delete", name]);
 	} catch (error) {
 		// A concurrent destroy of the same VM may have won; that is success.
-		if (listVms().some((vm) => vm.Name === name)) process.stderr.write(`[qa:vm] could not delete ${name}: ${error.message}\n`);
+		if (!listVms().some((vm) => vm.Name === name)) return;
+		process.stderr.write(`[qa:vm] could not delete ${name}: ${error.message}\n`);
+		throw error;
 	}
 }

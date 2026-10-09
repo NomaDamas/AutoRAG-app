@@ -50,28 +50,33 @@ export async function sshOk(ip, command, options) {
 	return result.output;
 }
 
-export async function waitForSsh(ip, timeoutMs = 180_000) {
+export async function waitForSsh(ip, timeoutMs = 180_000, { signal } = {}) {
 	const deadline = Date.now() + timeoutMs;
 	for (;;) {
-		const { code } = await sshRun(ip, "true");
+		const { code } = await sshRun(ip, "true", { signal });
 		if (code === 0) return;
+		// Aborted: the caller is unwinding and checks its own abort reason.
+		if (signal?.aborted) return;
 		if (Date.now() > deadline) throw new Error(`ssh to ${ip} did not come up within ${timeoutMs / 1000}s`);
 		await sleep(2000);
 	}
 }
 
-function rsync(args) {
+function rsync(args, { signal } = {}) {
 	return new Promise((resolve, reject) => {
 		const rsh = `ssh ${SSH_OPTIONS.map(shellQuote).join(" ")}`;
-		const child = spawn("rsync", ["-a", "-e", rsh, ...args], { stdio: ["ignore", "inherit", "inherit"] });
+		const child = spawn("rsync", ["-a", "-e", rsh, ...args], { stdio: ["ignore", "inherit", "inherit"], signal });
 		child.once("error", reject);
-		child.once("close", (code) => (code === 0 ? resolve() : reject(new Error(`rsync exited with ${code}`))));
+		child.once("close", (code) => {
+			if (code === 0) resolve();
+			else reject(new Error(signal?.aborted ? "interrupted" : `rsync exited with ${code}`));
+		});
 	});
 }
 
 /** Mirror a local directory into the guest (relative paths are under the guest home). */
-export function pushTree(ip, source, destination, { excludes = [] } = {}) {
-	return rsync(["--delete", ...excludes.flatMap((pattern) => ["--exclude", pattern]), `${source}/`, `${target(ip)}:${destination}/`]);
+export function pushTree(ip, source, destination, { excludes = [], signal } = {}) {
+	return rsync(["--delete", ...excludes.flatMap((pattern) => ["--exclude", pattern]), `${source}/`, `${target(ip)}:${destination}/`], { signal });
 }
 
 export function pushFile(ip, source, destination) {
@@ -89,7 +94,7 @@ export function pullTree(ip, source, destination) {
  * Kind lane reads it, and `mds` is busy for a while after a boot or a sync).
  * Spotlight is reported but never fatal: its answer is slow, not wrong.
  */
-export async function waitForReady(ip, log) {
+export async function waitForReady(ip, log, signal) {
 	const script = `
 		for i in $(seq 1 90); do pgrep -x Finder >/dev/null && pgrep -x Dock >/dev/null && break; sleep 1; done
 		pgrep -x Finder >/dev/null || { echo "GUI session never came up (no Finder)"; exit 10; }
@@ -102,7 +107,9 @@ export async function waitForReady(ip, log) {
 			sleep 0.5
 		done
 		rm -f "$probe"; echo "Spotlight did not answer within 120s"; exit 12`;
-	const { code, output } = await sshRun(ip, script);
+	const { code, output } = await sshRun(ip, script, { signal });
+	// Aborted: the caller is unwinding and checks its own abort reason.
+	if (signal?.aborted) return;
 	if (code === 12) log(`warning: ${output.trim()}; the Kind lane may flake`);
 	else if (code !== 0) throw new Error(`guest is not ready: ${output.trim() || `exit ${code}`}`);
 }

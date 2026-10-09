@@ -1,5 +1,6 @@
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { orphanVmNames, parseArgs, runVmName, vmCapacity } from "../scripts/qa-vm/plan.mjs";
+import { guestScriptPath, orphanVmNames, parseArgs, runVmName, vmCapacity, vmExitCode } from "../scripts/qa-vm/plan.mjs";
 
 const PREFIX = "autorag-qa-run-";
 const vm = (Name: string, Running: boolean) => ({ Name, Running });
@@ -29,6 +30,32 @@ describe("qa-vm argument parsing", () => {
 		expect(() => parseArgs(["script"])).toThrow(/usage: qa script/);
 		expect(() => parseArgs(["script", "--vm"])).toThrow(/usage: qa script/);
 		expect(() => parseArgs(["script", "--turbo", "x.mjs"])).toThrow(/unknown option/);
+	});
+});
+
+describe("qa-vm script path as the guest sees it", () => {
+	it("runs a host-absolute in-checkout script as a path relative to the synced checkout", () => {
+		const root = "/Volumes/SSD1/7/AutoRAG-app";
+		expect(guestScriptPath(root, `${root}/tmp-qa.mjs`)).toBe("tmp-qa.mjs");
+		expect(guestScriptPath(root, `${root}/scripts/manual-qa/launch-finder.mjs`)).toBe(join("scripts", "manual-qa", "launch-finder.mjs"));
+	});
+
+	it("normalizes a user-typed relative path to the same form", () => {
+		expect(guestScriptPath("/repo", "./tmp/deep/check.mjs")).toBe(join("tmp", "deep", "check.mjs"));
+	});
+});
+
+describe("qa-vm VM job exit code", () => {
+	it("passes the job's own code through when the artifacts came back", () => {
+		expect(vmExitCode(0, true)).toBe(0);
+		expect(vmExitCode(1, true)).toBe(1);
+		expect(vmExitCode(null, true)).toBe(1);
+	});
+
+	it("reports 75 when the job passed but its artifacts could not be pulled before the VM was destroyed", () => {
+		expect(vmExitCode(0, false)).toBe(75);
+		// A job that already failed keeps its own failure code.
+		expect(vmExitCode(1, false)).toBe(1);
 	});
 });
 

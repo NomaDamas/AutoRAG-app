@@ -34,6 +34,7 @@ import {
 } from "./config.mjs";
 import { pushFile, sshOk, sshRun, waitForSsh } from "./guest.mjs";
 import {
+	anyVmExists,
 	cloneVm,
 	configureVm,
 	destroyVm,
@@ -123,6 +124,24 @@ async function disableSip(name) {
 	await waitUntilStopped(name);
 }
 
+/** Ctrl-C must not leave the build VM running headless: it holds a macOS VM slot. */
+function stopOnSignal(signal) {
+	log(`${signal}: stopping ${BUILD} and exiting; it is kept for inspection (remove it with: tart delete ${BUILD})`);
+	stopVm(BUILD);
+	process.exit(130);
+}
+
+/** Setup needs host tools that brew installs; a missing one must fail up front, not an hour in. */
+function assertHostTools() {
+	for (const tool of ["tart", "sshpass", "rsync", "python3", "dupey"]) {
+		try {
+			execFileSync("which", [tool], { stdio: "ignore" });
+		} catch {
+			throw new Error(`${tool} is not installed (see "One-time setup" in AGENTS.md)`);
+		}
+	}
+}
+
 export async function setup({ rebuild }) {
 	if (vmExists(GOLDEN) && !rebuild) {
 		log(`${GOLDEN} already exists (use --rebuild to replace it)`);
@@ -131,64 +150,72 @@ export async function setup({ rebuild }) {
 	for (const vm of listVms()) {
 		if (vm.Running) throw new Error(`${vm.Name} is running; stop it first (setup needs both VM slots)`);
 	}
+	assertHostTools();
 	const publicKey = ensureKey();
 	await destroyVm(BUILD);
 
-	if (!vmExists(VANILLA_IMAGE)) {
-		log(`pulling ${VANILLA_IMAGE} (about 25 GB, once)`);
-		pullImage(VANILLA_IMAGE);
-	}
-	cloneVm(VANILLA_IMAGE, BUILD);
-	configureVm(BUILD, { cpu: VM_CPU, memoryMb: VM_MEMORY_MB, display: VM_DISPLAY });
-
+	process.once("SIGINT", stopOnSignal);
+	process.once("SIGTERM", stopOnSignal);
 	try {
-		log("step 1/3: disabling SIP in Recovery");
-		await disableSip(BUILD);
+		if (!anyVmExists(VANILLA_IMAGE)) {
+			log(`pulling ${VANILLA_IMAGE} (about 25 GB, once)`);
+			pullImage(VANILLA_IMAGE);
+		}
+		cloneVm(VANILLA_IMAGE, BUILD);
+		configureVm(BUILD, { cpu: VM_CPU, memoryMb: VM_MEMORY_MB, display: VM_DISPLAY });
 
-		log("step 2/3: provisioning");
-		const logFile = join(QA_HOME, "setup-vm.log");
-		rmSync(logFile, { force: true });
-		startVm(BUILD, { logFile });
-		const ip = await waitForIp(BUILD);
-		for (let attempt = 0; ; attempt++) {
-			try {
-				passwordSsh(ip, "true");
-				break;
-			} catch (error) {
-				if (attempt > 60) throw error;
-				await sleep(3000);
+		try {
+			log("step 1/3: disabling SIP in Recovery");
+			await disableSip(BUILD);
+
+			log("step 2/3: provisioning");
+			const logFile = join(QA_HOME, "setup-vm.log");
+			rmSync(logFile, { force: true });
+			startVm(BUILD, { logFile });
+			const ip = await waitForIp(BUILD);
+			for (let attempt = 0; ; attempt++) {
+				try {
+					passwordSsh(ip, "true");
+					break;
+				} catch (error) {
+					if (attempt > 60) throw error;
+					await sleep(3000);
+				}
 			}
-		}
-		passwordSsh(ip, "mkdir -p ~/.ssh && chmod 700 ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys", `${publicKey}\n`);
-		await waitForSsh(ip);
-		// A file, not `bash -s`: brew reads stdin, which would swallow the rest of a piped script.
-		await pushFile(ip, join(HERE, "provision-guest.sh"), "provision-guest.sh");
-		await sshOk(ip, "bash ~/provision-guest.sh < /dev/null && rm -f ~/provision-guest.sh", { onData: (text) => process.stdout.write(text) });
+			passwordSsh(ip, "mkdir -p ~/.ssh && chmod 700 ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys", `${publicKey}\n`);
+			await waitForSsh(ip);
+			// A file, not `bash -s`: brew reads stdin, which would swallow the rest of a piped script.
+			await pushFile(ip, join(HERE, "provision-guest.sh"), "provision-guest.sh");
+			await sshOk(ip, "bash ~/provision-guest.sh < /dev/null && rm -f ~/provision-guest.sh", { onData: (text) => process.stdout.write(text) });
 
-		// dupey is a Rust CLI the app shells out to; the host's arm64 build is
-		// copied rather than compiling Rust in the guest.
-		const dupey = execFileSync("which", ["dupey"], { encoding: "utf8" }).trim();
-		await pushFile(ip, dupey, "bin/dupey");
-		await sshOk(ip, "chmod 755 ~/bin/dupey && ~/bin/dupey --version");
+			// dupey is a Rust CLI the app shells out to; the host's arm64 build is
+			// copied rather than compiling Rust in the guest.
+			const dupey = execFileSync("which", ["dupey"], { encoding: "utf8" }).trim();
+			await pushFile(ip, dupey, "bin/dupey");
+			await sshOk(ip, "chmod 755 ~/bin/dupey && ~/bin/dupey --version");
 
-		log("step 3/3: verifying");
-		const verify = await sshRun(
-			ip,
-			`${"export PATH=/opt/homebrew/bin:$HOME/bin:$HOME/tools/node/bin:$PATH"}; csrutil status; screencapture -x /tmp/verify.png && test -s /tmp/verify.png && echo capture-ok; test -d /Library/Apple/usr/share/rosetta && echo rosetta-ok; node --version; bun --version; dupey --version; ffmpeg -version | head -1; git --version`,
-		);
-		log(`\n${verify.output}`);
-		for (const needle of ["System Integrity Protection status: disabled", "capture-ok", "rosetta-ok"]) {
-			if (!verify.output.includes(needle)) throw new Error(`verification failed: "${needle}" missing`);
+			log("step 3/3: verifying");
+			const verify = await sshRun(
+				ip,
+				`${"export PATH=/opt/homebrew/bin:$HOME/bin:$HOME/tools/node/bin:$PATH"}; csrutil status; screencapture -x /tmp/verify.png && test -s /tmp/verify.png && echo capture-ok; test -d /Library/Apple/usr/share/rosetta && echo rosetta-ok; node --version; bun --version; dupey --version; ffmpeg -version | head -1; git --version`,
+			);
+			log(`\n${verify.output}`);
+			for (const needle of ["System Integrity Protection status: disabled", "capture-ok", "rosetta-ok"]) {
+				if (!verify.output.includes(needle)) throw new Error(`verification failed: "${needle}" missing`);
+			}
+			await sshRun(ip, "sudo shutdown -h now");
+			await waitUntilStopped(BUILD, 120_000);
+		} catch (error) {
+			stopVm(BUILD);
+			log(`failed; ${BUILD} is kept for inspection (tart run ${BUILD}). Remove it with: tart delete ${BUILD}`);
+			throw error;
 		}
-		await sshRun(ip, "sudo shutdown -h now");
-		await waitUntilStopped(BUILD, 120_000);
-	} catch (error) {
-		stopVm(BUILD);
-		log(`failed; ${BUILD} is kept for inspection (tart run ${BUILD}). Remove it with: tart delete ${BUILD}`);
-		throw error;
+
+		if (vmExists(GOLDEN)) await destroyVm(GOLDEN);
+		renameVm(BUILD, GOLDEN);
+	} finally {
+		process.off("SIGINT", stopOnSignal);
+		process.off("SIGTERM", stopOnSignal);
 	}
-
-	if (vmExists(GOLDEN)) await destroyVm(GOLDEN);
-	renameVm(BUILD, GOLDEN);
 	log(`${GOLDEN} is ready`);
 }

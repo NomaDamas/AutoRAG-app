@@ -79,12 +79,28 @@ export function createSlotPool({ dir, isAlive = ownerAlive, onReap = () => {}, p
 		}
 	}
 
-	/** Move a stale slot aside (atomic, so one caller wins), then delete it. */
+	/**
+	 * Move a stale slot aside (atomic, so one caller wins), then delete it. The
+	 * staleness decision spans a `ps` call, so between it and the rename another
+	 * process can re-take the slot; the re-verify below therefore checks the
+	 * renamed slot again and puts a slot that came back to life (or was
+	 * re-created) back, instead of deleting a live run's slot and reporting its
+	 * VM for destruction.
+	 */
 	function reclaim(path) {
 		const aside = `${path}.stale-${pid}-${now()}`;
 		try {
 			renameSync(path, aside);
 		} catch {
+			return;
+		}
+		if (!isStale(aside)) {
+			try {
+				renameSync(aside, path);
+			} catch {
+				// Someone re-created the slot while we held it aside; the aside
+				// copy is unclaimed garbage, invisible to the pool.
+			}
 			return;
 		}
 		const owner = readOwner(aside);
@@ -94,6 +110,9 @@ export function createSlotPool({ dir, isAlive = ownerAlive, onReap = () => {}, p
 
 	function tryTake(index, owner) {
 		const path = slotPath(index);
+		// Read before mkdir: the `ps` call must not open a window between taking
+		// the slot and recording its owner, or a racing reclaim can delete it.
+		const procStart = processStart(pid);
 		for (let attempt = 0; attempt < 3; attempt++) {
 			try {
 				mkdirSync(path);
@@ -106,8 +125,14 @@ export function createSlotPool({ dir, isAlive = ownerAlive, onReap = () => {}, p
 				if (existsSync(path)) return null;
 				continue;
 			}
-			const record = { ...owner, pid, procStart: processStart(pid), acquiredAt: now() };
-			writeFileSync(join(path, OWNER_FILE), JSON.stringify(record));
+			const record = { ...owner, pid, procStart, acquiredAt: now() };
+			try {
+				writeFileSync(join(path, OWNER_FILE), JSON.stringify(record));
+			} catch (error) {
+				// The slot was reclaimed between the mkdir and the write.
+				if (error.code === "ENOENT") continue;
+				throw error;
+			}
 			return { index, path, owner: record, release: () => release(path, record) };
 		}
 		return null;

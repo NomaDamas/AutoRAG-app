@@ -39,15 +39,13 @@ export const VM_DISPLAY = "1440x900";
 export const VM_CPU = Number(process.env.AUTORAG_QA_VM_CPU ?? 6);
 export const VM_MEMORY_MB = Number(process.env.AUTORAG_QA_VM_MEMORY_MB ?? 12288);
 
-/** Read `config.json` and apply the tart storage location it recorded (an explicit `TART_HOME` wins). */
+/**
+ * Read `config.json` and apply the tart storage location it recorded (an explicit `TART_HOME` wins).
+ * The file is written by hand, per AGENTS.md; nothing in the tooling writes it.
+ */
 export function applyConfig() {
 	let config = {};
 	if (existsSync(CONFIG_FILE)) config = JSON.parse(readFileSync(CONFIG_FILE, "utf8"));
 	if (config.tartHome && !process.env.TART_HOME) process.env.TART_HOME = config.tartHome;
 	return config;
-}
-
-export function saveConfig(config) {
-	mkdirSync(QA_HOME, { recursive: true });
-	writeFileSync(CONFIG_FILE, `${JSON.stringify(config, null, 2)}\n`);
 }

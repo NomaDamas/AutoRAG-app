@@ -11,6 +11,9 @@
  *   bun run qa:vm:status            golden image, running VMs, slot holders
  *   bun run qa:vm:gc                destroy VMs left behind by a crashed run
  *
+ * Exit codes: the job's own; 2 when --vm was demanded and cannot be served;
+ * 75 when a VM job passed but its artifacts could not be pulled back.
+ *
  * See "Running the QA lanes in a VM" in AGENTS.md.
  */
 

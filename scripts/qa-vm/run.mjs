@@ -17,7 +17,7 @@ import { existsSync, mkdirSync } from "node:fs";
 import { join, resolve, sep } from "node:path";
 import { GOLDEN, GUEST_REPO, MAX_VMS, RUNS_DIR, RUN_PREFIX, SLOTS_DIR, VM_CPU, VM_DISPLAY, VM_MEMORY_MB } from "./config.mjs";
 import { GUEST_ENV, pullTree, pushTree, shellQuote, sshRun, waitForReady, waitForSsh } from "./guest.mjs";
-import { orphanVmNames, runVmName, vmCapacity } from "./plan.mjs";
+import { guestScriptPath, orphanVmNames, runVmName, vmCapacity, vmExitCode } from "./plan.mjs";
 import { createSlotPool } from "./slots.mjs";
 import { cloneVm, configureVm, destroyVm, listVms, startVm, tartAvailable, vmExists, waitForIp } from "./tart.mjs";
 
@@ -117,12 +117,13 @@ export async function runInVm({ root, job, slot, vmName, runDir }) {
 		configureVm(vmName, { cpu: VM_CPU, memoryMb: VM_MEMORY_MB, display: VM_DISPLAY });
 		startVm(vmName, { logFile: join(runDir, "tart.log") });
 		const ip = await waitForIp(vmName);
-		await waitForSsh(ip);
+		await waitForSsh(ip, 180_000, { signal: abort.signal });
 		log(`${vmName} is up at ${ip}`);
 		interrupted();
 		log("syncing the checkout (node_modules and out/ included; .upstream and evidence excluded)");
-		await pushTree(ip, root, GUEST_REPO, { excludes: [".upstream", ".omo/evidence", ".autorag", ".DS_Store"] });
-		await waitForReady(ip, log);
+		await pushTree(ip, root, GUEST_REPO, { excludes: [".upstream", ".omo/evidence", ".autorag", ".DS_Store"], signal: abort.signal });
+		await waitForReady(ip, log, abort.signal);
+		interrupted();
 
 		log(job.kind === "script" ? `running ${job.file}` : `running lanes${job.lanes.length > 0 ? `: ${job.lanes.join(", ")}` : " (all)"}`);
 		const command =
@@ -139,28 +140,48 @@ export async function runInVm({ root, job, slot, vmName, runDir }) {
 		const evidence = join(runDir, "evidence");
 		mkdirSync(evidence, { recursive: true });
 		const remote = job.kind === "script" ? "qa-out" : `${GUEST_REPO}/.omo/evidence`;
-		await pullTree(ip, remote, evidence).catch((error) => log(`could not pull artifacts: ${error.message}`));
-		log(`artifacts: ${evidence}`);
-		return result.code ?? 1;
+		const pulled = await pullTree(ip, remote, evidence).then(
+			() => true,
+			(error) => {
+				log(`could not pull artifacts: ${error.message}`);
+				return false;
+			},
+		);
+		log(`artifacts: ${evidence}${pulled ? "" : " (INCOMPLETE)"}`);
+		// The VM is destroyed in the finally below, so a pull that failed must
+		// not be reported as success: the evidence is otherwise gone for good.
+		return vmExitCode(result.code, pulled);
 	} finally {
 		process.off("SIGINT", onSignal);
 		process.off("SIGTERM", onSignal);
-		await destroyVm(vmName);
-		slot.release();
+		// The slot is released even when the VM could not be destroyed, so the
+		// failure surfaces instead of an orphan that later runs oversubscribe.
+		try {
+			await destroyVm(vmName);
+		} finally {
+			slot.release();
+		}
 	}
 }
 
 /**
- * Decide the path and run. Exit codes: the job's own, or 2 when `--vm` was
- * demanded and cannot be served.
+ * Decide the path and run. Exit codes: the job's own; 2 when `--vm` was
+ * demanded and cannot be served; 75 when a VM job passed but its artifacts
+ * could not be pulled back before the VM was destroyed.
  */
 export async function run({ root, options }) {
+	if (options.command === "script") assertScriptExists(root, options.script);
 	const job =
 		options.command === "script"
-			? { kind: "script", file: options.script, args: options.scriptArgs }
+			? { kind: "script", file: guestScriptPath(root, options.script), args: options.scriptArgs }
 			: { kind: "sweep", lanes: options.lanes };
-	if (job.kind === "script") assertScriptExists(root, job.file);
 	const reason = options.mode === "host" ? "--host" : vmUnavailableReason();
+	// `--vm` promises that nothing runs on this machine, so refuse before the
+	// build instead of spending minutes building for an exit code.
+	if (reason !== null && options.mode === "vm") {
+		process.stderr.write(`[qa:vm] cannot use a VM: ${reason}\n`);
+		return 2;
+	}
 	const branch = git(root, "rev-parse", "--abbrev-ref", "HEAD");
 	if (!options.skipBuild) buildApp(root);
 	else assertBuildFresh(root);
@@ -170,10 +191,6 @@ export async function run({ root, options }) {
 	const onHost = () => runOnHost({ root, job, artifactDir: join(runDir, "evidence") });
 
 	if (reason !== null) {
-		if (options.mode === "vm") {
-			process.stderr.write(`[qa:vm] cannot use a VM: ${reason}\n`);
-			return 2;
-		}
 		log(reason === "--host" ? "running on this machine (--host); a window will take focus" : `running on this machine: ${reason}`);
 		return onHost();
 	}

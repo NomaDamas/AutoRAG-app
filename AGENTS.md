@@ -127,8 +127,10 @@ bun run qa:vm:gc                 # destroy VMs left behind by a crashed run
 | `--vm` and none of the above can be served | Exit code `2`; nothing runs. Use this in automation that must never take focus. |
 | `--host` | Host path unconditionally. |
 
-A VM run exits with the sweep's own code, so `0` means every lane passed. The
-host path is the unchanged `scripts/manual-qa/run-all.mjs`.
+A VM run exits with the job's own code, so `0` means every lane passed; `75`
+means the job passed inside the VM but its artifacts could not be pulled back
+before the VM was destroyed, and `2` means `--vm` was demanded and no VM could
+serve it. The host path is the unchanged `scripts/manual-qa/run-all.mjs`.
 
 ### Parallel branches and the two-VM limit
 

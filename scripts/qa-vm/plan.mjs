@@ -4,6 +4,8 @@
  * rules that choose between the VM path and the host path are unit-testable.
  */
 
+import { relative, resolve } from "node:path";
+
 const COMMANDS = new Set(["setup", "status", "gc", "script"]);
 
 /**
@@ -36,6 +38,26 @@ export function parseArgs(argv) {
 	}
 	if (options.command === "script" && options.script === null) throw new Error("usage: qa script [--vm|--host] [--skip-build] <file> [script args...]");
 	return options;
+}
+
+/**
+ * The script path as the guest runs it. Only the checkout is synced (to
+ * `~/<repo>` in the guest's home), so a host-absolute path would not exist
+ * there; the path the user typed becomes one relative to the checkout root.
+ * `assertScriptExists` has already rejected paths outside the checkout.
+ */
+export function guestScriptPath(root, file) {
+	return relative(root, resolve(root, file));
+}
+
+/**
+ * A VM job's exit code: the job's own, except 75 when the job passed but its
+ * artifacts could not be pulled back before the VM was destroyed (they are
+ * unrecoverable then, so success must not be reported).
+ */
+export function vmExitCode(code, pulled) {
+	if (code === 0 && !pulled) return 75;
+	return code ?? 1;
 }
 
 /** A VM name for one run: the branch is in the name so `tart list` shows whose VM it is. */
