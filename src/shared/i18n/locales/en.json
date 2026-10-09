@@ -122,6 +122,7 @@
     "compressCount": "Compress {{count}} Items",
     "extract": "Extract",
     "share": "Share",
+    "services": "Services",
     "moveToTrash": "Move to Trash",
     "moveToTrashCount": "Move {{count}} items to Trash",
     "putBack": "Put Back",
@@ -231,6 +232,10 @@
       "older": "Earlier"
     }
   },
+  "osMenu": {
+    "ask": "Ask AutoRAG",
+    "reveal": "Show in AutoRAG"
+  },
   "toasts": {
     "trashSingle": "Moved {{name}} to Trash",
     "trashCount": "Moved {{count}} items to Trash",
@@ -280,7 +285,10 @@
       "autoUpdates": "Automatically install updates",
       "autoUpdatesHint": "Apply updates on next app restart.",
       "telemetry": "Share anonymous diagnostics",
-      "telemetryHint": "Share anonymized performance diagnostics."
+      "telemetryHint": "Share anonymized performance diagnostics.",
+      "osMenuIntegration": "Add to the file right-click menu",
+      "osMenuIntegrationHint": "Right-click a file in Finder (macOS) or Explorer (Windows) to get 'Ask AutoRAG' and 'Show in AutoRAG'.",
+      "osMenuIntegrationError": "Could not set up the right-click menu"
     }
   }
 }

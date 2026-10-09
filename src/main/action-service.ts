@@ -174,7 +174,7 @@ const EXTENSION_FORMATS: Readonly<Record<string, ImageFormat>> = {
 /** Lossy formats, where "optimize" actually saves bytes. */
 const LOSSY_FORMATS: readonly ImageFormat[] = ["jpeg", "webp", "heic"];
 
-function defaultRun(
+export function defaultRun(
 	command: string,
 	args: readonly string[],
 	options?: { readonly timeoutMs?: number },

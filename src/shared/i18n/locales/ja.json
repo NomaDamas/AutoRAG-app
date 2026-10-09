@@ -122,6 +122,7 @@
     "compressCount": "{{count}}個の項目を圧縮",
     "extract": "展開",
     "share": "共有",
+    "services": "サービス",
     "moveToTrash": "ゴミ箱に入れる",
     "moveToTrashCount": "{{count}}個の項目をゴミ箱に入れる",
     "putBack": "元に戻す",
@@ -231,6 +232,10 @@
       "older": "それ以前"
     }
   },
+  "osMenu": {
+    "ask": "AutoRAGに質問",
+    "reveal": "AutoRAGで表示"
+  },
   "toasts": {
     "trashSingle": "{{name}}をゴミ箱に移動しました",
     "trashCount": "{{count}}個の項目をゴミ箱に移動しました",
@@ -280,7 +285,10 @@
       "autoUpdates": "自動更新",
       "autoUpdatesHint": "次回のアプリアプリ再起動時にアップデートを適用します。",
       "telemetry": "匿名の診断情報を共有",
-      "telemetryHint": "匿名化されたパフォーマンス指標を共有します。"
+      "telemetryHint": "匿名化されたパフォーマンス指標を共有します。",
+      "osMenuIntegration": "ファイルの右クリックメニューに追加",
+      "osMenuIntegrationHint": "Finder(macOS)またはエクスプローラー(Windows)でファイルを右クリックすると「AutoRAGに質問」「AutoRAGで表示」が表示されます。",
+      "osMenuIntegrationError": "右クリックメニューを設定できませんでした"
     }
   }
 }

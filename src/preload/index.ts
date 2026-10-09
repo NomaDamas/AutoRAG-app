@@ -5,8 +5,10 @@ import { createPreviewBridge } from "../preview/node/bridge";
 import { createActionsBridge } from "./actions-bridge";
 import { createFsBridge } from "./fs-bridge";
 import { createLiveBridge } from "./live-bridge";
+import { createOsRequestBridge } from "./os-request-bridge";
 import { createSearchBridge } from "./search-bridge";
 import { createSettingsBridge } from "./settings-bridge";
+import { createServicesBridge } from "./services-bridge";
 import { installAppearancePreload } from "./appearance";
 import { connectFsWorker } from "./worker-link";
 
@@ -29,9 +31,11 @@ contextBridge.exposeInMainWorld("autorag", {
 	fs: createFsBridge(ipcRenderer, fsWorker),
 	actions: createActionsBridge(ipcRenderer),
 	live: createLiveBridge(fsWorker),
+	osRequests: createOsRequestBridge(ipcRenderer),
 	preview: createPreviewBridge(ipcRenderer),
 	search: createSearchBridge(ipcRenderer),
 	settings: createSettingsBridge(ipcRenderer),
+	services: createServicesBridge(ipcRenderer),
 	// Electron dropped `File.path`; only the preload can map a dropped file to its disk path.
 	pathForFile: (file: File) => webUtils.getPathForFile(file),
 });

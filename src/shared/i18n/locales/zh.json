@@ -122,6 +122,7 @@
     "compressCount": "压缩 {{count}} 个项目",
     "extract": "解压",
     "share": "共享",
+    "services": "服务",
     "moveToTrash": "移到废纸篓",
     "moveToTrashCount": "将 {{count}} 个项目移到废纸篓",
     "putBack": "放回原处",
@@ -231,6 +232,10 @@
       "older": "更早"
     }
   },
+  "osMenu": {
+    "ask": "向 AutoRAG 提问",
+    "reveal": "在 AutoRAG 中显示"
+  },
   "toasts": {
     "trashSingle": "已将 {{name}} 移到废纸篓",
     "trashCount": "已将 {{count}} 个项目移到废纸篓",
@@ -280,7 +285,10 @@
       "autoUpdates": "自动安装更新",
       "autoUpdatesHint": "在下次应用重启时应用更新。",
       "telemetry": "分享匿名诊断数据",
-      "telemetryHint": "分享匿名化性能指标。"
+      "telemetryHint": "分享匿名化性能指标。",
+      "osMenuIntegration": "添加到文件右键菜单",
+      "osMenuIntegrationHint": "在访达(macOS)或资源管理器(Windows)中右键点击文件,即可使用“向 AutoRAG 提问”和“在 AutoRAG 中显示”。",
+      "osMenuIntegrationError": "无法设置右键菜单"
     }
   }
 }

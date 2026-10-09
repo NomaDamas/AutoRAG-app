@@ -19,6 +19,7 @@ import { deleteKeyLabel, enterKeyLabel, formatShortcut } from "../lib/shortcuts"
 import { NEW_FILE_FORMATS, type NewFileFormatId } from "../../../shared/new-file-contract";
 import type { ActionCapabilities } from "../../../shared/actions-contract";
 import { archiveFormatOf } from "../../../shared/archive-formats";
+import type { ServiceEntry } from "../../../shared/services-contract";
 
 export type FinderMenuAction =
 	| "quickLook"
@@ -40,7 +41,8 @@ export type FinderMenuAction =
 	| "trash"
 	| "emptyTrash"
 	| "newFolder"
-	| "newFile";
+	| "newFile"
+	| "service";
 
 export type MenuTone = "default" | "danger" | "warning";
 
@@ -57,21 +59,26 @@ export interface FinderMenuSeparator {
 	readonly kind: "separator";
 }
 
-/** One row of the New submenu's popout. */
+/** One leaf of a popout. */
 export interface FinderMenuSubmenuItem {
 	readonly kind: "submenu-item";
 	readonly action: FinderMenuAction;
 	readonly label: string;
-	/** The document format a `newFile` item creates; null for the folder item. */
+	/** The document format a `newFile` item creates; null otherwise. */
 	readonly format: NewFileFormatId | null;
+	/** The OS service a `service` leaf performs; absent on every other leaf. */
+	readonly serviceId?: string;
 }
 
-/** A parent row that opens a popout panel on hover (the "새로 만들기" submenu). */
+/** A parent row that opens a popout panel on hover (the "새로 만들기" and "서비스" submenus). */
 export interface FinderMenuSubmenu {
 	readonly kind: "submenu";
 	readonly label: string;
-	readonly items: readonly FinderMenuSubmenuItem[];
+	readonly items: readonly FinderMenuSubmenuEntry[];
 }
+
+/** A popout row: a leaf, or (for 서비스) one more parent for an application's services. */
+export type FinderMenuSubmenuEntry = FinderMenuSubmenuItem | FinderMenuSubmenu;
 
 export type FinderMenuEntry = FinderMenuItem | FinderMenuSeparator | FinderMenuSubmenu;
 
@@ -90,6 +97,8 @@ export interface ContextMenuInput {
 	readonly capabilities: ActionCapabilities;
 	/** Whether 새 폴더 can create in the folder the menu acts on. */
 	readonly canCreateFolder: boolean;
+	/** The OS services offered for the selection; absent or empty hides 서비스. */
+	readonly services?: readonly ServiceEntry[];
 }
 
 function item(
@@ -108,6 +117,35 @@ function item(
 }
 
 const SEPARATOR: FinderMenuSeparator = { kind: "separator" };
+
+/**
+ * The 서비스 parent: services without a group sit directly in it, and each
+ * application's services open under one row named for the application. Null
+ * when there is nothing to offer, and always inside the Trash, where a row goes
+ * back or away rather than to another app.
+ */
+function servicesSubmenu(
+	services: readonly ServiceEntry[] | undefined,
+	inTrash: boolean,
+	tr: (key: string, def: string, opt?: Record<string, unknown>) => string,
+): FinderMenuSubmenu | null {
+	if (inTrash || services === undefined || services.length === 0) return null;
+	const leaf = (service: ServiceEntry): FinderMenuSubmenuItem => ({
+		kind: "submenu-item",
+		action: "service",
+		label: service.name,
+		format: null,
+		serviceId: service.id,
+	});
+	const items: FinderMenuSubmenuEntry[] = services.filter((service) => service.group === null).map(leaf);
+	const groups = new Map<string, FinderMenuSubmenuItem[]>();
+	for (const service of services) {
+		if (service.group === null) continue;
+		groups.set(service.group, [...(groups.get(service.group) ?? []), leaf(service)]);
+	}
+	for (const [group, children] of groups) items.push({ kind: "submenu", label: group, items: children });
+	return { kind: "submenu", label: tr("contextMenu.services", "서비스"), items };
+}
 
 export function buildContextMenu(
 	input: ContextMenuInput,
@@ -178,6 +216,8 @@ export function buildContextMenu(
 	if (rowActions.length > 0) {
 		entries.push(SEPARATOR, ...rowActions);
 	}
+	const services = servicesSubmenu(input.services, input.inTrash === true, tr);
+	if (services !== null) entries.push(SEPARATOR, services);
 
 	entries.push(
 		SEPARATOR,
@@ -207,6 +247,8 @@ export interface BackgroundMenuInput {
 	readonly clipboardCount: number;
 	/** True while the listing is the Trash location: the menu offers 휴지통 비우기. */
 	readonly inTrash?: boolean;
+	/** The OS services offered for the folder in view; absent or empty hides 서비스. */
+	readonly services?: readonly ServiceEntry[];
 }
 
 /**
@@ -234,10 +276,12 @@ export function buildBackgroundContextMenu(
 			),
 		],
 	};
+	const services = servicesSubmenu(input.services, input.inTrash === true, tr);
 	return [
 		submenu,
 		SEPARATOR,
 		item("paste", tr("contextMenu.paste", "붙여넣기"), { keycap: formatShortcut({ key: "V" }), disabled: input.clipboardCount === 0 }),
+		...(services === null ? [] : [SEPARATOR, services]),
 		...(input.inTrash === true
 			? [SEPARATOR, item("emptyTrash", tr("contextMenu.emptyTrash", "휴지통 비우기"), { tone: "danger" })]
 			: []),

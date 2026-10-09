@@ -1,3 +1,4 @@
+import { homedir } from "node:os";
 import { access, stat } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
 import { app, BrowserWindow, clipboard, dialog, ipcMain, nativeTheme, protocol, safeStorage, ShareMenu, shell, type OpenDialogOptions } from "electron";
@@ -24,11 +25,22 @@ import { createSettingsService } from "./settings-service";
 import {
 	registerActionsIpcHandlers,
 	registerDragOutIpcHandlers,
+	registerOsRequestIpcHandlers,
 	registerSearchIpcHandlers,
+	registerServicesIpcHandlers,
 	registerSettingsIpcHandlers,
 } from "./ipc";
 import { createActionService } from "./action-service";
+import { createServicesService } from "./services-service";
 import { DEFAULT_SCAN_INTERVAL_MINUTES } from "./version-family-service";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import { OS_REQUEST_CHANNELS, parseOsRequestArgv } from "../shared/os-request-contract";
+import { listenForOsRequests, osRequestEndpoint, sendOsRequest } from "./os-request-channel";
+import { createOsRequestService, diskKindOf } from "./os-request-service";
+import { createOsMenuIntegration, menuLabels } from "./os-menu-integration";
+
+const execFileAsync = promisify(execFile);
 
 /** The one AutoRAG config every surface (CLI, TUI, serve, this app) resolves. */
 function autoragConfigPath(): string {
@@ -217,11 +229,29 @@ function sendAppearance(appearance: AppAppearance): void {
 
 // Electron keeps only the last `registerSchemesAsPrivileged` call: every scheme registers here, together.
 protocol.registerSchemesAsPrivileged([PREVIEW_PRIVILEGED_SCHEME, THUMB_PRIVILEGED_SCHEME]);
+// A menu request that finds a running app only hands over and exits; keep it out of the Dock meanwhile.
+if (parseOsRequestArgv(process.argv) !== null) app.dock?.hide();
+let onOsRequestQueued: () => void = () => undefined;
 
 app.whenReady().then(async () => {
 	nativeTheme.on("updated", () => {
 		sendAppearance(nativeTheme.shouldUseDarkColors ? "dark" : "light");
 	});
+	// A menu request goes to the app that is already running: the request process hands it over and exits.
+	const launchRequest = parseOsRequestArgv(process.argv);
+	const endpoint = osRequestEndpoint(app.getPath("userData"));
+	if (launchRequest !== null && (await sendOsRequest(endpoint, launchRequest))) {
+		app.exit(0);
+		return;
+	}
+	const osRequests = createOsRequestService({ kindOf: diskKindOf, onQueued: () => onOsRequestQueued() });
+	const listener = await listenForOsRequests(endpoint, (request) => void osRequests.push(request));
+	// Explorer starts one process per selected file; the ones that lost the race for the socket hand over to the winner.
+	if (listener === null && launchRequest !== null && (await sendOsRequest(endpoint, launchRequest))) {
+		app.exit(0);
+		return;
+	}
+	void app.dock?.show();
 	registerPreviewProtocol();
 	const iconProvider = createIconProvider();
 	registerIconProtocol(iconProvider);
@@ -334,6 +364,18 @@ app.whenReady().then(async () => {
 		safeStorage,
 		env: process.env,
 	});
+	const osMenu = createOsMenuIntegration({
+		platform: process.platform,
+		// os.homedir() honors $HOME (and USERPROFILE), so QA and tests can aim the install at a throwaway home.
+		homeDir: homedir(),
+		execPath: process.execPath,
+		// Unpackaged, Electron needs the app directory to know what to run. The profile always rides along,
+		// so a custom --user-data-dir run (dev, QA) is the one its own menu entries reach.
+		appArgs: [...(app.isPackaged ? [] : [app.getAppPath()]), `--user-data-dir=${app.getPath("userData")}`],
+		run: async (command, args) => {
+			await execFileAsync(command, [...args]);
+		},
+	});
 	await credentials.load();
 	const settingsService = createSettingsService({
 		directory: join(app.getPath("userData"), "settings"),
@@ -342,12 +384,22 @@ app.whenReady().then(async () => {
 		config: createAutoRagConfigService({ env: process.env, cwd: process.cwd() }),
 		refreshConfig: refreshAutoragIndex,
 		credentials,
+		applyOsMenu: async (next, previous) => {
+			if (next.osMenuIntegration) {
+				if (!previous.osMenuIntegration || next.language !== previous.language) await osMenu.install(menuLabels(next.language));
+			} else if (previous.osMenuIntegration) {
+				await osMenu.uninstall();
+			}
+		},
 		onSettingsChanged: (settings) => {
 			applyAppearance(settings.appearance);
 			applyScanInterval(settings.dupeyScanIntervalMinutes);
 		},
 	});
 	registerSettingsIpcHandlers(settingsService);
+	registerOsRequestIpcHandlers(osRequests);
+	// The in-app right-click → 서비스 submenu: what macOS offers for the selection, and performing one.
+	registerServicesIpcHandlers(createServicesService());
 	const settings = await settingsService.get();
 	applyAppearance(settings.appearance);
 	if (settings.dupeyScanIntervalMinutes !== DEFAULT_SCAN_INTERVAL_MINUTES) applyScanInterval(settings.dupeyScanIntervalMinutes);
@@ -357,6 +409,25 @@ app.whenReady().then(async () => {
 			mainWindow = createMainWindow(devLabel, currentAppearance);
 		}
 	});
+	// Menu requests: queue the cold-start request, then serve the ones the running app receives.
+	onOsRequestQueued = () => {
+		if (mainWindow === null || mainWindow.isDestroyed()) {
+			mainWindow = createMainWindow(devLabel, currentAppearance);
+		} else {
+			if (mainWindow.isMinimized()) mainWindow.restore();
+			mainWindow.show();
+			mainWindow.focus();
+		}
+		// The request came from another app (Finder / Explorer), which owns the foreground.
+		app.focus({ steal: true });
+		sendToMainWindow(OS_REQUEST_CHANNELS.available, null);
+	};
+	if (launchRequest !== null) void osRequests.push(launchRequest);
+	if (settings.osMenuIntegration) {
+		// Refresh on every start: the executable path or interface language may have changed.
+		osMenu.install(menuLabels(settings.language)).catch((error: unknown) => console.error("[os-menu] refresh failed:", error));
+	}
+	app.once("will-quit", () => void listener?.close());
 	// The worker's native watcher must finish unsubscribing before its Node
 	// environment is torn down (an unsubscribe completing inside
 	// `FreeEnvironment` aborts that process). Hold the quit until the worker
