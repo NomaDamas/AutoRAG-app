@@ -74,7 +74,7 @@ try {
 
 	// 1. The Settings switch writes the workflows.
 	await page.locator(".sidebar__item", { hasText: "Settings" }).click();
-	const toggle = page.getByRole("switch", { name: "Add to the file right-click menu" });
+	const toggle = page.getByRole("switch", { name: "파일 우클릭 메뉴에 추가" });
 	await toggle.waitFor({ timeout: 20_000 });
 	check("switch starts off, nothing installed", (await toggle.getAttribute("aria-checked")) === "false" && !existsSync(SERVICES));
 	await toggle.click();

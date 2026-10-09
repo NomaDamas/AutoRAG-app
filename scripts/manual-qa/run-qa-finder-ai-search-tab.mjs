@@ -290,9 +290,9 @@ try {
 	// 13. "AI 요약" follows the Interface language setting.
 	await page.locator(".sidebar__item", { hasText: "Settings" }).click();
 	await page.waitForSelector(".settings-panel");
-	await page.locator('select[aria-label="Interface language"]').selectOption("en");
+	await page.locator('select[aria-label="앱 언어"]').selectOption("en");
 	// The set IPC resolves and App adopts it (onSettingsChanged) before the tab closes.
-	await page.waitForFunction(() => document.querySelector('select[aria-label="Interface language"]')?.value === "en");
+	await page.waitForFunction(() => document.querySelector('select[aria-label="앱 언어"]')?.value === "en");
 	await sleep(300);
 	await page.keyboard.press(chord("w"));
 	await page.locator(".sidebar__item", { hasText: "QA" }).click();
