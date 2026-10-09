@@ -57,7 +57,6 @@ writeFileSync(configPath, `${JSON.stringify({
 		mail: { type: "mailcrawl", connector: { account: "qa", dataDir: join(root, "mailcrawl"), env: { MAILCRAWL_KIWI_MODEL: "/keep/me" } } },
 		slack: { description: "Team Slack", connector: { workspace: "T0QA" } },
 	},
-	datasourceAccess: { allowedTags: ["chat"] },
 }, null, 2)}\n`);
 const readConfig = () => JSON.parse(readFileSync(configPath, "utf8"));
 
