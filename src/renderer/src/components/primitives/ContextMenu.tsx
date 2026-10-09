@@ -12,6 +12,10 @@ import {
 } from "../../state/context-menu";
 import type { NewFileFormatId } from "../../../../shared/new-file-contract";
 import { ChevronRightSmallIcon } from "../icons";
+import { TagDotMark } from "./TagDot";
+
+/** What a menu choice carries beyond its action: a new-file format, a service, or a Finder tag name. */
+export type MenuSelect = (action: FinderMenuAction, format: NewFileFormatId | null, serviceId: string | null, tagName: string | null) => void;
 
 /** Shared row styling for a menu item and a submenu parent. */
 const ITEM_CLASS =
@@ -32,7 +36,7 @@ export function ContextMenu({
 }: {
 	readonly cursor: { readonly x: number; readonly y: number };
 	readonly entries: readonly FinderMenuEntry[];
-	readonly onSelect: (action: FinderMenuAction, format: NewFileFormatId | null, serviceId: string | null) => void;
+	readonly onSelect: MenuSelect;
 	readonly onClose: () => void;
 }): ReactElement {
 	const ref = useRef<HTMLDivElement>(null);
@@ -68,6 +72,32 @@ export function ContextMenu({
 				if (entry.kind === "separator") {
 					// biome-ignore lint/suspicious/noArrayIndexKey: separators carry no identity
 					return <div key={`sep-${index}`} className="menu__separator h-px my-4 mx-6 bg-divider" role="separator" />;
+				}
+				if (entry.kind === "tags") {
+					return (
+						<div key="tags" className="menu__tags flex flex-col gap-4 px-10 py-4" role="group" aria-label={entry.label}>
+							<span className="text-badge text-ink-muted">{entry.label}</span>
+							<div className="flex items-center gap-8">
+								{entry.swatches.map((swatch) => (
+									<button
+										key={swatch.color}
+										type="button"
+										role="menuitemcheckbox"
+										aria-checked={swatch.checked}
+										aria-label={swatch.name}
+										title={swatch.name}
+										className={cn(
+											"menu__swatch flex items-center justify-center size-16 p-0 border-0 rounded-full bg-transparent cursor-default",
+											swatch.checked && "shadow-[0_0_0_2px_var(--bg-window),0_0_0_3.5px_var(--accent)]",
+										)}
+										onClick={() => onSelect("toggleTag", null, null, swatch.name)}
+									>
+										<TagDotMark color={swatch.color} size={14} />
+									</button>
+								))}
+							</div>
+						</div>
+					);
 				}
 				if (entry.kind === "submenu") {
 					const open = openSubmenu?.label === entry.label;
@@ -126,7 +156,7 @@ export function ContextMenu({
 							entry.tone === "warning" && "text-error-orange-text",
 						)}
 						disabled={entry.disabled}
-						onClick={() => onSelect(entry.action, null, null)}
+						onClick={() => onSelect(entry.action, null, null, null)}
 					>
 						<span className="menu__label flex-1">{entry.label}</span>
 						{entry.keycap === null ? null : (
@@ -175,7 +205,7 @@ function SubmenuPanel({
 	readonly depth: number;
 	/** The parent row's rect when this panel is nested; absent for a first-level panel. */
 	readonly fixedAt?: AnchorRect;
-	readonly onSelect: (action: FinderMenuAction, format: NewFileFormatId | null, serviceId: string | null) => void;
+	readonly onSelect: MenuSelect;
 }): ReactElement {
 	const [openChild, setOpenChild] = useState<{ readonly label: string; readonly rect: AnchorRect } | null>(null);
 	const wanted = menuHeightForItems(submenu.items.length);
@@ -254,13 +284,15 @@ function SubmenuPanel({
 					</div>
 				) : (
 					<button
-						key={`${entry.action}-${entry.serviceId ?? entry.format ?? "folder"}`}
+						key={`${entry.action}-${entry.serviceId ?? entry.format ?? entry.tagName ?? "folder"}`}
 						type="button"
-						role="menuitem"
+						role={entry.action === "toggleTag" ? "menuitemcheckbox" : "menuitem"}
+						aria-checked={entry.action === "toggleTag" ? entry.checked === true : undefined}
 						className={ITEM_CLASS}
-						onClick={() => onSelect(entry.action, entry.format, entry.serviceId ?? null)}
+						onClick={() => onSelect(entry.action, entry.format, entry.serviceId ?? null, entry.tagName ?? null)}
 					>
-						<span className="menu__label flex-1">{entry.label}</span>
+						<span className="menu__label flex-1 truncate">{entry.label}</span>
+						{entry.checked === true ? <span className="menu__check flex-none ml-auto text-ink-muted">✓</span> : null}
 					</button>
 				),
 			)}

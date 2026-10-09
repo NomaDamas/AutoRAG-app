@@ -2,7 +2,8 @@ import { Eject, PanelLeft } from "lucide-react";
 import type { DragEvent, ReactElement, RefObject } from "react";
 import { useTranslation } from "react-i18next";
 import type { FsLocationIcon } from "../../../shared/fs-contract";
-import type { NavGroup, NavItem } from "../data/places";
+import { TAGS_GROUP_LABEL, type NavGroup, type NavItem } from "../data/places";
+import { TagDotMark } from "./primitives/TagDot";
 import { cn } from "../lib/cn";
 import { formatShortcut } from "../lib/shortcuts";
 import { GearIcon } from "./icons";
@@ -83,6 +84,7 @@ export function Sidebar({
 			case "Favorites": return t("places.favorites", label);
 			case "Cloud": return t("places.cloud", label);
 			case "Locations": return t("places.locations", label);
+			case TAGS_GROUP_LABEL: return t("places.tags", label);
 			default: return label;
 		}
 	};
@@ -156,11 +158,17 @@ export function Sidebar({
 										}
 										onDrop={drop?.onDrop}
 									>
-										<Icon
-											className={cn("sidebar__item-icon flex-none", active ? "text-accent" : "text-ink-muted")}
-											size={14}
-											strokeWidth={1.8}
-										/>
+										{item.tag === undefined ? (
+											<Icon
+												className={cn("sidebar__item-icon flex-none", active ? "text-accent" : "text-ink-muted")}
+												size={14}
+												strokeWidth={1.8}
+											/>
+										) : (
+											<span className="sidebar__item-icon flex flex-none items-center justify-center size-14">
+												<TagDotMark color={item.tag.color} size={10} />
+											</span>
+										)}
 										<span className="sidebar__item-label flex-1 min-w-0 truncate">{localizedItemLabel(item)}</span>
 										{localizedItemLabel(item) !== item.label ? <span className="sr-only" aria-hidden="true" style={{ display: "none" }}>{item.label}</span> : null}
 										{status ? (

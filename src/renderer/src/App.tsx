@@ -21,7 +21,9 @@ import { percentPlacement, TAB_DRAG_TYPE, WorkspaceView } from "./components/Wor
 import { createDirectoryStore } from "./data/directory-store";
 import { createEntrySidecar } from "./data/entry-sidecar";
 import type { DirectoryData } from "./hooks/useDirectoryData";
+import { isTagPath, tagNameOf } from "../../shared/fs-contract";
 import { useFinderSource } from "./hooks/useFinderSource";
+import { TagCatalogContext, useTagCatalogLoader } from "./hooks/useTagCatalog";
 import { createControllerStore, usePaneController } from "./hooks/usePaneControllers";
 import { attachmentsFromDrop, isAttachmentDrag } from "./state/attachments";
 import { toolbarShareControl, type FileActionTarget } from "./state/file-actions";
@@ -202,6 +204,8 @@ export function App(): ReactElement {
 	/** The sidebar AI Search item is under an attachment drag. */
 	const [aiNavDropHover, setAiNavDropHover] = useState(false);
 	const [toast, setToast] = useState<string | null>(null);
+	const reportTagError = useCallback((error: unknown) => setToast(error instanceof Error ? error.message : String(error)), []);
+	const tagCatalog = useTagCatalogLoader(source, reportTagError);
 
 	useEffect(() => saveFlag(SIDEBAR_KEY, sidebarVisible), [sidebarVisible]);
 	useEffect(() => saveFlag(INSPECTOR_KEY, inspectorVisible), [inspectorVisible]);
@@ -561,7 +565,7 @@ export function App(): ReactElement {
 				? "AI Search"
 				: finder?.searching === true
 					? `Search "${finder.query}"`
-					: basename(path);
+					: isTagPath(path) ? tagNameOf(path) : basename(path);
 
 	/** The sidebar AI Search item: a drop turns the focused tab into AI Search with the files attached. */
 	const aiSearchDrop = {
@@ -591,6 +595,7 @@ export function App(): ReactElement {
 	const split = workspace.panes.length > 1;
 
 	return (
+		<TagCatalogContext value={tagCatalog}>
 		<div className="desk flex h-full bg-window">
 			<div
 				className="window relative grid flex-1 min-w-0 bg-window overflow-hidden"
@@ -766,5 +771,6 @@ export function App(): ReactElement {
 				/>
 			) : null}
 		</div>
+		</TagCatalogContext>
 	);
 }

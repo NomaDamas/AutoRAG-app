@@ -6,7 +6,7 @@
  * "4.8 MB" — KB is whole, MB and above carry one decimal below 10.
  */
 
-import { RECENTS_PATH } from "../../../shared/fs-contract";
+import { isTagPath, RECENTS_PATH, tagNameOf } from "../../../shared/fs-contract";
 import { basename } from "./paths";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"] as const;
@@ -197,6 +197,10 @@ export function emptyStateText(
 	}
 	if (path === RECENTS_PATH) {
 		return translate ? translate("finder.emptyRecents", "최근에 연 파일이 없습니다") : "최근에 연 파일이 없습니다";
+	}
+	if (isTagPath(path)) {
+		const name = tagNameOf(path);
+		return translate ? translate("finder.emptyTag", `"${name}" 태그가 붙은 항목이 없습니다`, { name }) : `"${name}" 태그가 붙은 항목이 없습니다`;
 	}
 	return translate ? translate("finder.emptyFolder", "빈 폴더") : "빈 폴더";
 }

@@ -90,7 +90,8 @@ function sameFinder(a: FsFinderMetadata | null, b: FsFinderMetadata | null): boo
 		a.rating === b.rating &&
 		a.application === b.application &&
 		a.tags.length === b.tags.length &&
-		a.tags.every((tag, index) => tag === b.tags[index])
+		a.tags.every((tag, index) => tag === b.tags[index]) &&
+		(a.tagColors ?? []).join() === (b.tagColors ?? []).join()
 	);
 }
 

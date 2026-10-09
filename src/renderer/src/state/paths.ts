@@ -7,6 +7,8 @@
  * ("Documents/Finance") from the fixtures.
  */
 
+import { isTagPath, tagNameOf } from "../../../shared/fs-contract";
+
 interface PathRoot {
 	readonly prefix: string;
 	readonly separator: "/" | "\\";
@@ -111,6 +113,8 @@ export interface Crumb {
  * navigates one level above the visible window (handoff README §2 Toolbar).
  */
 export function breadcrumbTrail(path: string, maxSegments = 2): Crumb[] {
+	// A tag is one place, not a folder path: "tag://Green" must not read as "tag:" › "Green".
+	if (isTagPath(path)) return [{ label: tagNameOf(path), path, separator: false, isLast: true }];
 	const segments = pathSegments(path);
 	if (segments.length === 0) {
 		return [];

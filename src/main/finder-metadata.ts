@@ -21,8 +21,9 @@ import { execFile } from "node:child_process";
 import { constants } from "node:fs";
 import { access, stat } from "node:fs/promises";
 import { basename } from "node:path";
-import type { FsFinderMetadata } from "../shared/fs-contract";
+import type { FsFinderMetadata, FsTagColor } from "../shared/fs-contract";
 import { errorMessage, extensionOf, hasErrorCode } from "./fs-entry";
+import { storedColor, tagNameOfStored } from "./finder-tags";
 import { readImageMetadata } from "./image-metadata";
 import { createPriorityGate } from "./priority-gate";
 
@@ -153,7 +154,11 @@ function starRating(xml: string): number | null {
 
 /** Finder appends the tag's colour index to its name: "Urgent\n6". */
 function stripTagColor(tag: string): string {
-	return tag.replace(/\n\d+$/, "");
+	return tagNameOfStored(tag);
+}
+
+function storedTagColors(tags: readonly string[]): readonly FsTagColor[] {
+	return tags.map(storedColor);
 }
 
 /**
@@ -330,7 +335,9 @@ export function createFinderMetadataResolver(deps: FinderMetadataDeps = {}): Fin
 		]);
 		const tagValues = await decodeXattr(path, TAGS_XATTR, tagsHex);
 		const commentValues = await decodeXattr(path, COMMENT_XATTR, commentHex);
-		const tags = tagValues === null ? indexed?.tags ?? [] : tagValues.map(stripTagColor);
+		const stored = tagValues === null ? indexed?.tags ?? [] : tagValues;
+		const tags = tagValues === null ? stored : stored.map(stripTagColor);
+		const tagColors = tagValues === null ? [] : storedTagColors(stored);
 		const commentValue = commentValues?.[0];
 		const comments =
 			commentValues === null
@@ -343,6 +350,7 @@ export function createFinderMetadataResolver(deps: FinderMetadataDeps = {}): Fin
 			addedAt: indexed?.addedAt ?? null,
 			lastOpenedAt: indexed?.lastOpenedAt ?? null,
 			tags,
+			...(tagColors.length === 0 ? {} : { tagColors }),
 			comments,
 			width: image?.width ?? indexed?.width ?? null,
 			height: image?.height ?? indexed?.height ?? null,

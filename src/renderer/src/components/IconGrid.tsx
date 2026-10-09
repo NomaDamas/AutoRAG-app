@@ -13,6 +13,9 @@ import { useMarquee } from "../hooks/useMarquee";
 import { GroupHeader } from "./GroupHeader";
 import { type BackgroundDropHandlers, type RowCallbacks } from "./FileRow";
 import { FileTile } from "./primitives/FileTile";
+import { TagDots } from "./primitives/TagDot";
+import { useTagCatalog } from "../hooks/useTagCatalog";
+import { tagDotsOf } from "../state/tags";
 import { RenameInput } from "./RenameInput";
 import { VersionFamilyBanner } from "./VersionFamilyBanner";
 
@@ -280,6 +283,7 @@ function IconTile({
 }): ReactElement {
 	// Icon and OS kind come from the sidecar: only this tile re-renders when they land.
 	const { entry } = useEntrySidecar(useDirectoryData().sidecar, listed);
+	const { colors: tagColors } = useTagCatalog();
 	// Virtualized: only tiles near the viewport mount, so reporting them fills
 	// thumbnails in on scroll for folders larger than the per-call icon cap.
 	useEffect(() => {
@@ -342,9 +346,12 @@ function IconTile({
 				) : null}
 			</div>
 			{renameDraft === null ? (
-				<span className="icon-tile__label line-clamp-2 max-w-[90px] py-px px-4 rounded-4 text-meta leading-[1.25] text-center break-words">
-					{tileLabel(entry.name)}
-				</span>
+				<div className="flex max-w-[96px] items-start justify-center gap-4">
+					<TagDots dots={tagDotsOf(entry.finder, tagColors)} size={9} className="mt-3" />
+					<span className="icon-tile__label line-clamp-2 min-w-0 py-px px-4 rounded-4 text-meta leading-[1.25] text-center break-words">
+						{tileLabel(entry.name)}
+					</span>
+				</div>
 			) : (
 				<RenameInput
 					className="row__rename w-full min-w-0 h-pill px-5 border border-accent rounded-5 outline-none bg-window text-ink text-sm"
