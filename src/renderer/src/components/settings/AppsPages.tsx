@@ -9,9 +9,17 @@
  * options its factory reads.
  */
 
-import { useState, type ReactElement } from "react";
+import { useEffect, useState, type ReactElement } from "react";
 import { ChevronRight, ExternalLink, Plus, RefreshCw, Trash2 } from "lucide-react";
-import type { AutoRagConfigSnapshot, ConfigRefreshResult, DataSourceRow, DataSourcesSnapshot, JsonValue } from "../../../../shared/settings-contract";
+import type {
+	AutoRagConfigSnapshot,
+	ConfigRefreshResult,
+	DataSourceRow,
+	DataSourcesSnapshot,
+	JsonValue,
+	RefreshScheduleStatus,
+	ScheduledRunRecord,
+} from "../../../../shared/settings-contract";
 import { ConnectorFieldInput, TEMPLATE_BY_ID, type FieldSpec } from "./datasourceTemplates";
 import { ModalShell, ModalActions, Note, PromptModal, Row, Section, SettingsPageHead, StatusDot } from "./SettingsKit";
 import { SourceIcon } from "./SourceIcon";
@@ -115,6 +123,35 @@ export function IndexingPage({
 	const rows = sources?.sources ?? [];
 	const localCount = listOf(getAt(snapshot.config, ["searchPaths"])).length;
 	const local = sources?.local ?? null;
+	const [schedule, setSchedule] = useState<RefreshScheduleStatus | null>(null);
+	const now = Date.now();
+	const localInterval = ((): number => {
+		const value = asRecord(getAt(snapshot.config, ["appIndexing"]))?.refreshIntervalMs;
+		return typeof value === "number" ? value : 0;
+	})();
+
+	useEffect(() => {
+		let live = true;
+		void settings
+			.refreshScheduleGet()
+			.then((status) => {
+				if (live) setSchedule(status);
+			})
+			.catch(() => undefined);
+		return () => {
+			live = false;
+		};
+	}, [sources]);
+
+	/** Write one cadence, then make the OS job match the config and show what it now looks like. */
+	async function changeInterval(path: readonly string[], ms: number): Promise<void> {
+		await run([{ path, value: ms }]);
+		try {
+			setSchedule(await settings.refreshScheduleApply());
+		} catch (cause) {
+			setLocalError(cause instanceof Error ? cause.message : String(cause));
+		}
+	}
 
 	async function refreshIndex(): Promise<void> {
 		setBusy("refresh");
@@ -173,15 +210,25 @@ export function IndexingPage({
 							<SourceIcon small type="local" label="로컬 폴더" />
 							<span className="settings-list-body">
 								<span className="settings-list-title">로컬 폴더</span>
-								<span className="settings-list-meta">{localMeta(local, localCount)}</span>
+								<span className="settings-list-meta" title={schedule?.local?.error ?? undefined}>
+									{[localMeta(local, localCount), lastAutoText(schedule?.local, now)].filter((part) => part !== null).join(" · ")}
+								</span>
 							</span>
 						</button>
 						<span className="settings-status">
 							<StatusDot tone={busy === "refresh" ? "run" : local !== null && (local.documentCount ?? 0) > 0 ? "ok" : "warn"} />
 							{busy === "refresh" ? "새로 고치는 중…" : "사용 중"}
 						</span>
-						<select className="settings-select-compact" aria-label="로컬 폴더 최신화 방식" value="manual" disabled>
-							<option value="manual">직접</option>
+						<select
+							className="settings-select-compact"
+							aria-label="로컬 폴더 최신화 주기"
+							value={String(localInterval)}
+							onChange={(event) => void changeInterval(["appIndexing", "refreshIntervalMs"], Number(event.target.value))}
+						>
+							<option value="0">직접</option>
+							{INTERVAL_OPTIONS.map((option) => (
+								<option key={option.ms} value={option.ms}>{option.label}</option>
+							))}
 						</select>
 						<button
 							type="button"
@@ -200,7 +247,9 @@ export function IndexingPage({
 								<SourceIcon small type={row.type} label={templateLabel(row.type)} />
 								<span className="settings-list-body">
 									<span className="settings-list-title">{sourceTitle(row)}</span>
-									<span className="settings-list-meta">{sourceMeta(row)}</span>
+									<span className="settings-list-meta" title={schedule?.sources[row.id]?.error ?? undefined}>
+										{[sourceMeta(row), lastAutoText(schedule?.sources[row.id], now)].filter((part) => part !== null).join(" · ")}
+									</span>
 								</span>
 							</button>
 							<span className="settings-status">
@@ -211,11 +260,9 @@ export function IndexingPage({
 								className="settings-select-compact"
 								aria-label={`${row.id} 최신화 주기`}
 								value={String(intervalOf(row, snapshot))}
-								onChange={(event) => {
-									const value = Number(event.target.value);
-									void run([{ path: ["datasources", row.id, "pollingIntervalMs"], value }]);
-								}}
+								onChange={(event) => void changeInterval(["datasources", row.id, "pollingIntervalMs"], Number(event.target.value))}
 							>
+								<option value="0">직접</option>
 								{INTERVAL_OPTIONS.map((option) => (
 									<option key={option.ms} value={option.ms}>{option.label}</option>
 								))}
@@ -234,6 +281,7 @@ export function IndexingPage({
 					))}
 				</div>
 				{rows.length === 0 ? <Note>연결된 데이터소스가 없습니다. 연결된 앱에서 앱을 추가하세요.</Note> : null}
+				<ScheduleNote status={schedule} />
 				<div className="settings-sync-footer">
 					<span className="settings-list-meta">바뀐 파일과 메시지만 다시 읽습니다. 처음 연결한 앱은 전체를 가져옵니다.</span>
 					<button type="button" className="linear-btn" disabled={busy !== null || rows.length === 0} onClick={() => void syncAll()}>모두 지금 최신화</button>
@@ -252,11 +300,61 @@ export function IndexingPage({
 	);
 }
 
-/** The polling interval currently stored for a datasource (falls back to default). */
+/** The polling interval stored for a datasource; 0 = manual (the app schedules nothing). */
 function intervalOf(row: DataSourceRow, snapshot: AutoRagConfigSnapshot): number {
 	const stored = asRecord(asRecord(snapshot.config.datasources)?.[row.id]);
 	const value = stored?.pollingIntervalMs;
-	return typeof value === "number" ? value : 15 * 60_000;
+	return typeof value === "number" ? value : 0;
+}
+
+/** "방금 / 5분 전 / 3시간 전 / 2일 전" for the last automatic run. */
+function agoText(iso: string, now: number): string {
+	const at = Date.parse(iso);
+	if (Number.isNaN(at)) return "";
+	const minutes = Math.max(0, Math.round((now - at) / 60_000));
+	if (minutes < 1) return "방금";
+	if (minutes < 60) return `${minutes}분 전`;
+	if (minutes < 24 * 60) return `${Math.round(minutes / 60)}시간 전`;
+	return `${Math.round(minutes / (24 * 60))}일 전`;
+}
+
+function lastAutoText(record: ScheduledRunRecord | null | undefined, now: number): string | null {
+	if (record === null || record === undefined) return null;
+	return `자동 ${agoText(record.at, now)} ${record.ok ? "성공" : "실패"}`;
+}
+
+/**
+ * One line about the background job, shown only when it matters: a problem
+ * (unsupported, install failed, another job also refreshes AutoRAG) or the
+ * cadence while something is scheduled. Silent when everything is manual.
+ */
+function ScheduleNote({ status }: { readonly status: RefreshScheduleStatus | null }): ReactElement | null {
+	if (status === null) return null;
+	if (!status.supported) {
+		return status.wanted ? <Note>이 컴퓨터에서는 앱이 닫혀 있을 때의 자동 새로 고침을 지원하지 않습니다.</Note> : null;
+	}
+	const parts: ReactElement[] = [];
+	if (status.error !== null) parts.push(<Note key="error">자동 새로 고침을 등록하지 못했습니다: {status.error}</Note>);
+	if (status.wanted && !status.installed && status.error === null) {
+		parts.push(<Note key="missing">자동 새로 고침이 아직 등록되지 않았습니다. 주기를 다시 선택하면 등록합니다.</Note>);
+	}
+	if (status.conflicts.length > 0) {
+		parts.push(
+			<Note key="conflicts">
+				이 컴퓨터에는 AutoRAG를 따로 새로 고치는 예약 작업이 이미 있습니다({status.conflicts.join(" · ")}). 같은 폴더를 두 번 처리하지 않도록 한쪽만 쓰는 것을 권장합니다.
+			</Note>,
+		);
+	}
+	if (status.installed && status.wanted && status.intervalMs !== null) {
+		const minutes = Math.round(status.intervalMs / 60_000);
+		parts.push(
+			<Note key="active">
+				앱이 꺼져 있어도 {minutes}분마다 확인해, 주기가 된 항목만 새로 고칩니다.
+				{status.lastTickAt !== null ? ` 마지막 확인 ${agoText(status.lastTickAt, Date.now())}.` : " 아직 실행된 적이 없습니다."}
+			</Note>,
+		);
+	}
+	return parts.length === 0 ? null : <>{parts}</>;
 }
 
 /* ================================================================== Apps == */
@@ -378,7 +476,16 @@ export function SourceDetailPage({
 	const enabled = entry !== null ? entry.enabled !== false : true;
 	const description = entry !== null ? stringOf(entry.description) : "";
 	const pollingRaw = entry === null ? undefined : entry.pollingIntervalMs;
-	const polling = typeof pollingRaw === "number" ? pollingRaw : 15 * 60_000;
+	const polling = typeof pollingRaw === "number" ? pollingRaw : 0;
+
+	async function changeInterval(path: readonly string[], ms: number): Promise<void> {
+		await run([{ path, value: ms }]);
+		try {
+			await settings.refreshScheduleApply();
+		} catch (cause) {
+			setLocalError(cause instanceof Error ? cause.message : String(cause));
+		}
+	}
 	const allowed = row !== null && row.agent.state === "connected";
 	const problem = localError ?? error;
 
@@ -478,13 +585,14 @@ export function SourceDetailPage({
 					</span>
 					<button type="button" className="linear-btn settings-btn-quiet" disabled={busy || row === null} onClick={() => void syncNow()}>지금 최신화</button>
 				</Row>
-				<Row name="최신화 주기" hint="새 내용을 확인하는 간격입니다. 인덱싱 화면에서도 같은 값을 바꿀 수 있습니다.">
+				<Row name="최신화 주기" hint="이 앱이 닫혀 있어도 컴퓨터가 정해진 간격으로 새 내용을 가져옵니다. 직접으로 두면 직접 누를 때만 가져옵니다.">
 					<select
 						className="linear-select"
 						aria-label="최신화 주기"
 						value={String(polling)}
-						onChange={(event) => void run([{ path: ["datasources", alias, "pollingIntervalMs"], value: Number(event.target.value) }])}
+						onChange={(event) => void changeInterval(["datasources", alias, "pollingIntervalMs"], Number(event.target.value))}
 					>
+						<option value="0">직접</option>
 						{INTERVAL_OPTIONS.map((option) => (
 							<option key={option.ms} value={option.ms}>{option.label}</option>
 						))}

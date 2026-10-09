@@ -303,6 +303,8 @@ export function registerSettingsIpcHandlers(service: SettingsBridge): void {
 		if (typeof allowed !== "boolean") throw new TypeError("sources:setAccess expects a boolean");
 		return service.sourcesSetAccess(requireNonEmptyString(id, "datasource id"), allowed);
 	});
+	ipcMain.handle(SETTINGS_CHANNELS.refreshScheduleGet, () => service.refreshScheduleGet());
+	ipcMain.handle(SETTINGS_CHANNELS.refreshScheduleApply, () => service.refreshScheduleApply());
 	ipcMain.handle(SETTINGS_CHANNELS.embeddingGet, () => service.embeddingGet());
 	ipcMain.handle(SETTINGS_CHANNELS.embeddingPlan, (_event, request: unknown) =>
 		service.embeddingPlan(requireEmbeddingChangeRequest(request)),

@@ -2,12 +2,15 @@ import { existsSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import { app, BrowserWindow, clipboard, dialog, nativeTheme, protocol, safeStorage, ShareMenu, shell, type OpenDialogOptions } from "electron";
 import { APPEARANCE_CHANNELS } from "../shared/appearance-contract";
-import type { AppAppearance, ConfigRefreshDiagnostic, ConfigRefreshResult } from "../shared/settings-contract";
+import type { AppAppearance } from "../shared/settings-contract";
 import { attachQuickLook, PREVIEW_PRIVILEGED_SCHEME, registerPreviewProtocol, registerQuickLookIpc } from "../preview/node/register";
-import { AutoRAGLite, writeDefaultConfig, type RefreshMethod } from "@autorag/librarian";
-import { readRawConfigObject, resolveConfigPath, resolveConfigReadOnly, writeConfigObject } from "@autorag/librarian/core";
-import { APP_INDEXING_CAPABILITIES, applyAppIndexing, DEFAULT_CODE_FOLDER_NAMES, readAppIndexing } from "./app-indexing";
-import { isJsonObject } from "../shared/settings-contract";
+import { writeDefaultConfig } from "@autorag/librarian";
+import { readRawConfigObject, resolveConfigPath, writeConfigObject } from "@autorag/librarian/core";
+import { LOCAL_REFRESH_METHODS, refreshAutoragIndex } from "./refresh-runner";
+import type { RefreshLockHolder } from "./refresh-lock";
+import { schedulePaths, withRefreshLock } from "./refresh-schedule";
+import { createRefreshScheduler } from "./refresh-scheduler";
+import { DEFAULT_CODE_FOLDER_NAMES, isJsonObject } from "../shared/settings-contract";
 import { createIconProvider } from "./file-icon";
 import { registerIconProtocol, THUMB_PRIVILEGED_SCHEME } from "./icon-register";
 import { FS_CHANNELS } from "../shared/fs-contract";
@@ -63,7 +66,7 @@ function ensureAppIndexingMetadata(configPath: string): void {
 		if (isJsonObject(raw.appIndexing)) return;
 		writeConfigObject(configPath, {
 			...raw,
-			appIndexing: { excludeCodeFolders: true, codeFolderNames: [...DEFAULT_CODE_FOLDER_NAMES] },
+			appIndexing: { excludeCodeFolders: true, excludeDotFolders: true, codeFolderNames: [...DEFAULT_CODE_FOLDER_NAMES] },
 		});
 	} catch (error) {
 		console.error("AutoRAG appIndexing metadata initialization failed", error);
@@ -85,87 +88,6 @@ function ensureAutoRAGConfig(): void {
 		ensureAppIndexingMetadata(configPath);
 	} catch (error) {
 		console.error("AutoRAG config initialization failed", error);
-	}
-}
-
-const REFRESH_METHODS: Record<RefreshMethod, true> = {
-	parsed: true,
-	minsync: true,
-	datasources: true,
-	jikji: true,
-	everything: true,
-	fsearch: true,
-};
-
-/** Manual index refresh from Settings; returns diagnostics instead of throwing for known failures. */
-async function refreshAutoragIndex(methods?: readonly string[]): Promise<ConfigRefreshResult> {
-	const requested = methods ?? ["parsed", "minsync"];
-	const invalid = requested.filter((method) => REFRESH_METHODS[method as RefreshMethod] !== true);
-	if (invalid.length > 0) throw new Error(`Unknown refresh method(s): ${invalid.join(", ")}`);
-	const selected = requested as readonly RefreshMethod[];
-	if (selected.length === 0) throw new Error("At least one refresh method is required");
-	const input = { flags: {}, env: process.env, cwd: process.cwd() };
-	const configPath = resolveConfigPath(input).configPath;
-	const raw = existsSync(configPath) ? readRawConfigObject(configPath) : {};
-	const effective = await applyAppIndexing(resolveConfigReadOnly(input), raw);
-	const diagnostics: ConfigRefreshDiagnostic[] = [];
-	try {
-		const lite = new AutoRAGLite(effective);
-		const result = await lite.refresh(false, { methods: selected });
-		diagnostics.push(
-			...result.diagnostics.map((diagnostic) => ({
-				code: String(diagnostic.code),
-				severity: diagnostic.severity,
-				message: diagnostic.message,
-			})),
-		);
-		const failures: string[] = [];
-		if (result.minsync !== undefined && result.minsync.ok === false) failures.push(`minsync: ${result.minsync.reason ?? "failed"}`);
-		if (result.everything !== undefined && result.everything.ok === false) failures.push(`everything: ${result.everything.reason ?? "failed"}`);
-		if (result.fsearch !== undefined && result.fsearch.ok === false) {
-			failures.push(`fsearch: ${result.fsearch.message ?? result.fsearch.reason ?? "failed"}`);
-		}
-		for (const datasource of result.datasources ?? []) {
-			if (datasource.ok === false) failures.push(`datasources ${datasource.skill}: ${datasource.message ?? datasource.error ?? "failed"}`);
-		}
-		for (const diagnostic of diagnostics) {
-			if (diagnostic.severity === "error") failures.push(diagnostic.message);
-		}
-		const settings = readAppIndexing(raw);
-		if (settings.excludeCodeFolders) {
-			const unsupported = selected
-				.filter((method): method is "everything" | "fsearch" => method === "everything" || method === "fsearch")
-				.filter((method) => APP_INDEXING_CAPABILITIES[method] !== true);
-			if (unsupported.length > 0) {
-				diagnostics.push({
-					code: "code-folder-exclusions-unsupported",
-					severity: "warning",
-					message: `Automatic code-folder exclusions are not forwarded to ${unsupported.join(", ")} (its native client has no exclusion option).`,
-				});
-			}
-		}
-		const error = failures.length > 0 ? failures.join("; ") : null;
-		return {
-			ok: error === null,
-			methods: selected,
-			scanned: result.scanned,
-			written: result.written,
-			deleted: result.deleted,
-			skipped: result.skipped,
-			diagnostics,
-			error,
-		};
-	} catch (error) {
-		return {
-			ok: false,
-			methods: selected,
-			scanned: 0,
-			written: 0,
-			deleted: 0,
-			skipped: 0,
-			diagnostics,
-			error: error instanceof Error ? error.message : String(error),
-		};
 	}
 }
 
@@ -425,12 +347,39 @@ app.whenReady().then(async () => {
 	app.once("will-quit", () => {
 		void embeddingService.dispose();
 	});
+	const schedulePath = schedulePaths(autoragConfigPath());
+	const refreshScheduler = createRefreshScheduler({
+		platform: process.platform,
+		execPath: process.execPath,
+		jobPath: join(import.meta.dirname, "refresh-job.js"),
+		configPath: autoragConfigPath,
+	});
+	// A manual refresh or sync takes the same lock as the scheduled job, so the two never run at once.
+	const busyMessage = (holder: RefreshLockHolder): string =>
+		holder.owner === "scheduled-job" ? "백그라운드 새로 고침이 실행 중입니다. 끝난 뒤 다시 시도하세요." : "다른 새로 고침이 실행 중입니다. 끝난 뒤 다시 시도하세요.";
+	const lockedDataSources: typeof dataSources = {
+		...dataSources,
+		sync: (id) =>
+			withRefreshLock(
+				schedulePath.lock,
+				"manual-sync",
+				() => dataSources.sync(id),
+				(holder) => ({ id, ok: false, state: "failed", chunkCount: null, indexedAt: null, durationMs: 0, diagnostics: [], error: busyMessage(holder) }),
+			),
+	};
 	const settingsService = createSettingsService({
 		directory: join(app.getPath("userData"), "settings"),
-		dataSources,
+		dataSources: lockedDataSources,
 		models: createModelStatusService({ env: process.env, cwd: process.cwd() }),
 		config: configService,
-		refreshConfig: refreshAutoragIndex,
+		refreshConfig: (methods) =>
+			withRefreshLock(
+				schedulePath.lock,
+				"manual-refresh",
+				() => refreshAutoragIndex(methods),
+				(holder) => ({ ok: false, methods: methods ?? LOCAL_REFRESH_METHODS, scanned: 0, written: 0, deleted: 0, skipped: 0, diagnostics: [], error: busyMessage(holder) }),
+			),
+		refreshScheduler,
 		credentials,
 		providers: providerAuth,
 		embedding: embeddingService,
@@ -448,6 +397,13 @@ app.whenReady().then(async () => {
 	versionFamilyService?.reschedule();
 	applyLaunchAtLogin(settings.launchAtLogin);
 	void versionFamilyService.start();
+	// Re-time or remove an OS refresh job the user already enabled. Installing one is only ever the result of the user choosing a cadence.
+	void refreshScheduler
+		.status()
+		.then((status) => (status.installed ? refreshScheduler.reconcile() : status))
+		.then((status) => {
+			if (status.error !== null) console.error("AutoRAG background refresh scheduling failed", status.error);
+		});
 	// Warm the file-name index daemon (fsearch watch / Everything) so the first
 	// search never pays the database cold-load. It is deliberately left running
 	// across quits: restarting a watch over a whole-machine index re-scans every

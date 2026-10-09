@@ -42,6 +42,8 @@ export const SETTINGS_CHANNELS = {
 	embeddingApply: "embedding:apply",
 	sourcesSync: "sources:sync",
 	sourcesSetAccess: "sources:setAccess",
+	refreshScheduleGet: "refreshSchedule:get",
+	refreshScheduleApply: "refreshSchedule:apply",
 } as const;
 
 export type Permission = "ask" | "allow" | "deny";
@@ -204,6 +206,19 @@ export interface JsonObject {
 export function isJsonObject(value: unknown): value is Record<string, unknown> {
 	return value !== null && typeof value === "object" && !Array.isArray(value);
 }
+
+/** Directories that are almost never corpus, only code/dependency noise: excluded from indexing by default. */
+export const DEFAULT_CODE_FOLDER_NAMES: readonly string[] = [
+	".git",
+	"node_modules",
+	".venv",
+	"venv",
+	"target",
+	"dist",
+	"build",
+	"coverage",
+	"__pycache__",
+];
 
 /**
  * One leaf write in an all-or-nothing `configPatch`. Either a set (`value`) or a
@@ -411,6 +426,39 @@ export interface ConfigRefreshResult {
 	readonly error: string | null;
 }
 
+/** Outcome of the newest scheduled run of one unit of work (the local folders or one datasource). */
+export interface ScheduledRunRecord {
+	readonly at: string;
+	readonly ok: boolean;
+	readonly error: string | null;
+	readonly durationMs: number;
+	/** One short human line, e.g. "문서 12개 기록" (scanned/written counts) or the datasource state. */
+	readonly detail: string | null;
+}
+
+/**
+ * The OS-level background job that refreshes the index on a schedule, derived
+ * from the shared config (`appIndexing.refreshIntervalMs`, each datasource's
+ * `pollingIntervalMs`). `intervalMs` is how often the job wakes up; what is
+ * actually due is decided per item each time it wakes.
+ */
+export interface RefreshScheduleStatus {
+	/** False on platforms with no supported scheduler. */
+	readonly supported: boolean;
+	readonly mechanism: "launchd" | "cron" | "schtasks" | null;
+	/** A job is registered with the OS right now. */
+	readonly installed: boolean;
+	/** The config asks for at least one automatic refresh. */
+	readonly wanted: boolean;
+	readonly intervalMs: number | null;
+	readonly lastTickAt: string | null;
+	readonly local: ScheduledRunRecord | null;
+	readonly sources: Readonly<Record<string, ScheduledRunRecord>>;
+	/** Other scheduled jobs on this machine that also refresh AutoRAG (a hand-made cron line, another launch agent). */
+	readonly conflicts: readonly string[];
+	readonly error: string | null;
+}
+
 export interface SettingsBridge {
 	get(): Promise<AppSettings>;
 	set(patch: Partial<AppSettings>): Promise<AppSettings>;
@@ -474,4 +522,8 @@ export interface SettingsBridge {
 	sourcesSync(id: string): Promise<DataSourceSyncResult>;
 	/** Grants or revokes agent access to one datasource; returns the fresh snapshot. */
 	sourcesSetAccess(id: string, allowed: boolean): Promise<DataSourcesSnapshot>;
+	/** The background refresh job as the OS sees it, plus the newest result of each scheduled item. */
+	refreshScheduleGet(): Promise<RefreshScheduleStatus>;
+	/** Make the OS job match the config (install, re-time, or remove) and return the fresh status. */
+	refreshScheduleApply(): Promise<RefreshScheduleStatus>;
  }

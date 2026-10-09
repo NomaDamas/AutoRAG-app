@@ -3,7 +3,16 @@ import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "electron-vite";
 
 export default defineConfig({
-	main: {},
+	main: {
+		build: {
+			rollupOptions: {
+				input: {
+					index: resolve(import.meta.dirname, "src/main/index.ts"),
+					"refresh-job": resolve(import.meta.dirname, "src/main/refresh-job.ts"),
+				},
+			},
+		},
+	},
 	preload: {
 		build: {
 			rollupOptions: {

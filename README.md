@@ -95,9 +95,24 @@ second datasource or model configuration. The sidebar is searchable and grouped:
   while an enabled source is incompatible unless acknowledged, and runs the real
   per-source rebuilds.
 - **AI → 웹 검색** — `webSearch` on/off, provider, and page fetch.
-- **검색** — 인덱싱 (per-source status, polling interval, sync now, index
-  refresh), 검색 범위 (search paths, exclusions, watch, media index), 문서 읽기
+- **검색** — 인덱싱 (per-source status, refresh cadence, sync now, index
+  refresh), 검색 범위 (search paths, exclusions, watch), 문서 읽기
   (document languages), and 중복 파일 정리 (exact duplicates, dupey, scan interval).
+  Folders named in `appIndexing.codeFolderNames` (`node_modules`, `.git`, …) and
+  every folder whose name starts with `.` (switch: `appIndexing.excludeDotFolders`)
+  are left out of indexing; the app finds them itself and passes them as
+  `excludePaths`. Tesseract OCR and Jikji's media index are pinned off in every
+  config the app hands to the librarian.
+- **Automatic refresh** — a cadence is `직접` (manual, the default) or 5 min to a
+  day, for the local folders (`appIndexing.refreshIntervalMs`) and for each
+  datasource (`pollingIntervalMs`). Choosing one registers an OS job that runs
+  without the app open: a LaunchAgent (`com.autorag.app.refresh`) on macOS, a
+  marked crontab line on Linux, a Task Scheduler task on Windows. It wakes at
+  most every 30 minutes and refreshes only what is due, through the same code as
+  the Settings buttons (`refresh-runner`), under one lock so a button press and
+  a tick never overlap. Results land in `app-refresh/state.json` beside the
+  config. The app never edits a crontab line or LaunchAgent it did not create and
+  only warns when another job already refreshes AutoRAG.
 - **연결된 앱** — all connections plus a gallery of the 16 datasource templates;
   each configured connection gets its own page with enable, desktop-app
   requirement and download link, per-source AI access, sync, polling interval,

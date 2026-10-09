@@ -20,6 +20,7 @@ import type { DataSourceStatusService } from "./datasource-status";
 import type { DiscrawlEmbeddingRuntime } from "./embedding-settings-service";
 import type { ModelStatusService } from "./model-status";
 import type { ProviderCredentialService } from "./provider-credentials";
+import type { RefreshScheduler } from "./refresh-scheduler";
 import type { ProviderAuthService } from "./provider-auth-service";
 
 interface SettingsState {
@@ -51,6 +52,7 @@ export interface SettingsServiceDeps {
 	readonly credentials: ProviderCredentialService;
 	readonly providers?: ProviderAuthService;
 	readonly embedding?: EmbeddingSettingsService;
+	readonly refreshScheduler?: RefreshScheduler;
 	readonly onProviderLoginEvent?: (event: ProviderLoginEvent) => void;
 	readonly onSettingsChanged?: (settings: AppSettings) => void;
 }
@@ -110,6 +112,10 @@ export function createSettingsService(deps: SettingsServiceDeps): SettingsBridge
 		if (deps.embedding === undefined) throw new Error("Embedding settings are unavailable");
 		return deps.embedding;
 	};
+	const requireScheduler = (): RefreshScheduler => {
+		if (deps.refreshScheduler === undefined) throw new Error("Background refresh scheduling is unavailable");
+		return deps.refreshScheduler;
+	};
 
 	return {
 		get: async () => (await statePromise).settings,
@@ -154,6 +160,8 @@ export function createSettingsService(deps: SettingsServiceDeps): SettingsBridge
 			await deps.dataSources.setAccess(id, allowed);
 			return deps.dataSources.list();
 		},
+		refreshScheduleGet: () => requireScheduler().status(),
+		refreshScheduleApply: () => requireScheduler().reconcile(),
 		modelsResolve: () => deps.models.resolve(),
 		configGet: () => deps.config.get(),
 		configSet: (configPath, value) => deps.config.set(configPath, value),

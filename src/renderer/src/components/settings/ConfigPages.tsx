@@ -10,7 +10,7 @@
 
 import { useState, type ReactElement } from "react";
 import { Folder, Plus } from "lucide-react";
-import type { AutoRagConfigSnapshot } from "../../../../shared/settings-contract";
+import { DEFAULT_CODE_FOLDER_NAMES, type AutoRagConfigSnapshot } from "../../../../shared/settings-contract";
 import { LanguageSettings } from "./LanguageSettings";
 import { Chips, Note, PromptModal, Row, Section, SettingsPageHead } from "./SettingsKit";
 import { asRecord, boolOf, getAt, listOf, stringOf, useConfigWriter } from "./configSupport";
@@ -102,6 +102,10 @@ export function ScopePage({ snapshot, onSaved }: { readonly snapshot: AutoRagCon
 	const excludePaths = listOf(getAt(snapshot.config, ["excludePaths"]));
 	const fsearch = getAt(snapshot.config, ["fsearch"]);
 	const watch = boolOf(getAt(snapshot.config, ["fsearch", "watch"])) ?? true;
+	const appIndexing = asRecord(getAt(snapshot.config, ["appIndexing"])) ?? {};
+	const excludeDotFolders = boolOf(appIndexing.excludeDotFolders) ?? true;
+	const storedCodeFolders = listOf(appIndexing.codeFolderNames);
+	const codeFolderNames = (storedCodeFolders.length > 0 ? storedCodeFolders : DEFAULT_CODE_FOLDER_NAMES).filter((name) => !name.startsWith("."));
 
 	function writeList(path: "searchPaths" | "excludePaths", next: readonly string[]): void {
 		void run([next.length === 0 ? { path: [path], remove: true } : { path: [path], value: [...next] }]);
@@ -129,7 +133,10 @@ export function ScopePage({ snapshot, onSaved }: { readonly snapshot: AutoRagCon
 				{searchPaths.length === 0 ? <Note>아직 검색 폴더가 없습니다. 추가하지 않으면 기본 검색 범위를 사용합니다.</Note> : null}
 			</Section>
 			<Section title="제외할 항목" description="검색하지 않을 폴더와 파일입니다.">
-				<Note>개발용 폴더(node_modules, .git, .venv, venv, target, dist, build, coverage, __pycache__)와 .cache, .Trash 같은 시스템 폴더는 자동으로 제외되어 있습니다. 그 밖에 .으로 시작하는 폴더(예: .idea, .vscode)는 자동으로 제외되지 않으니 필요하면 아래에 추가하세요.</Note>
+				<Note>개발용 폴더({codeFolderNames.join(", ")})와 .으로 시작하는 모든 폴더(.idea, .vscode, .cache 등)는 자동으로 제외되어 있습니다.</Note>
+				<Row name=".으로 시작하는 폴더 제외" hint="끄면 .idea, .vscode 같은 폴더의 문서도 색인합니다. 시스템·캐시 폴더(.Trash, .cache 등)는 계속 제외됩니다.">
+					<Switch checked={excludeDotFolders} ariaLabel=".으로 시작하는 폴더 제외" onChange={() => void run([{ path: ["appIndexing", "excludeDotFolders"], value: !excludeDotFolders }])} />
+				</Row>
 				<Row name="제외 목록" hint="이름이 일치하는 폴더·파일을 더 제외합니다." stack>
 					<Chips
 						items={excludePaths}
