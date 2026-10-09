@@ -328,6 +328,12 @@ function checkKnownBlock(path: string, value: unknown): void {
 			fail("appIndexing.excludeCodeFolders must be a boolean");
 		}
 		if (
+			value.refreshIntervalMs !== undefined &&
+			!(typeof value.refreshIntervalMs === "number" && Number.isInteger(value.refreshIntervalMs) && value.refreshIntervalMs >= 0)
+		) {
+			fail("appIndexing.refreshIntervalMs must be a non-negative integer");
+		}
+		if (
 			value.codeFolderNames !== undefined &&
 			(!Array.isArray(value.codeFolderNames) || value.codeFolderNames.some((name) => typeof name !== "string" || name.length === 0))
 		) {
@@ -357,6 +363,56 @@ function checkKnownBlock(path: string, value: unknown): void {
 		if (value.timeoutMs !== undefined && !(typeof value.timeoutMs === "number" && Number.isInteger(value.timeoutMs) && value.timeoutMs > 0)) fail("dupey.timeoutMs must be a positive integer");
 		return;
 	}
+	if (path === "thinking") {
+		// App-owned extension key: upstream config ignores `thinking`, so the app
+		// validates it and hands it to the agent's per-phase options.
+		if (!isJsonObject(value)) return fail("thinking must be an object");
+		const levels: readonly string[] = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
+		for (const key of Object.keys(value)) {
+			if (key !== "fast" && key !== "final") fail(`thinking.${key} is not a recognized field`);
+			const level = value[key];
+			if (typeof level !== "string" || !levels.includes(level)) fail(`thinking.${key} must be one of: ${levels.join(", ")}`);
+		}
+		return;
+	}
+	if (path === "minSync") {
+		if (value === false) return;
+		if (!isJsonObject(value)) return fail("minSync must be an object or false");
+		if (value.enabled !== undefined && typeof value.enabled !== "boolean") fail("minSync.enabled must be a boolean");
+		if (value.workspacePath !== undefined && typeof value.workspacePath !== "string") fail("minSync.workspacePath must be a string");
+		if (value.binaryPath !== undefined && typeof value.binaryPath !== "string") fail("minSync.binaryPath must be a string");
+		if (value.autoInstall !== undefined && typeof value.autoInstall !== "boolean") fail("minSync.autoInstall must be a boolean");
+		if (value.maxChunkSize !== undefined && !(typeof value.maxChunkSize === "number" && Number.isInteger(value.maxChunkSize) && value.maxChunkSize > 0)) {
+			fail("minSync.maxChunkSize must be a positive integer");
+		}
+		if (value.embedder !== undefined) {
+			const embedder = value.embedder;
+			if (!isJsonObject(embedder)) return fail("minSync.embedder must be an object");
+			if (embedder.profile !== undefined && embedder.profile !== "qwen3-embedding-0.6b" && embedder.profile !== "embeddinggemma-300m") {
+				fail("minSync.embedder.profile must be qwen3-embedding-0.6b or embeddinggemma-300m");
+			}
+			for (const key of ["id", "baseUrl"] as const) {
+				if (embedder[key] !== undefined && !(typeof embedder[key] === "string" && (embedder[key] as string).length > 0)) {
+					fail(`minSync.embedder.${key} must be a non-empty string`);
+				}
+			}
+			if (embedder.apiKeyEnv !== undefined && !(typeof embedder.apiKeyEnv === "string" && /^[A-Za-z_][A-Za-z0-9_]*$/u.test(embedder.apiKeyEnv))) {
+				fail("minSync.embedder.apiKeyEnv must be a valid environment variable name");
+			}
+			for (const key of ["queryPrefix", "passagePrefix"] as const) {
+				if (embedder[key] !== undefined && typeof embedder[key] !== "string") fail(`minSync.embedder.${key} must be a string`);
+			}
+			if (embedder.dimension !== undefined && !(typeof embedder.dimension === "number" && Number.isInteger(embedder.dimension) && embedder.dimension > 0)) {
+				fail("minSync.embedder.dimension must be a positive integer");
+			}
+			for (const key of ["timeoutMs", "batchSize", "maxRetries", "maxConcurrent"] as const) {
+				if (embedder[key] !== undefined && !(typeof embedder[key] === "number" && Number.isInteger(embedder[key]) && embedder[key] > 0)) {
+					fail(`minSync.embedder.${key} must be a positive integer`);
+				}
+			}
+		}
+		return;
+	}
 	if (path === "datasourceAccess") {
 		if (!isJsonObject(value)) return fail("datasourceAccess must be an object");
 		for (const key of ["allowedTags", "allowedScopes"] as const) {
@@ -374,8 +430,10 @@ function checkKnownBlock(path: string, value: unknown): void {
 			if (entry.type !== undefined && typeof entry.type !== "string") fail(`datasources.${id}.type must be a string`);
 			if (entry.description !== undefined && typeof entry.description !== "string") fail(`datasources.${id}.description must be a string`);
 			if (entry.instanceId !== undefined && typeof entry.instanceId !== "string") fail(`datasources.${id}.instanceId must be a string`);
-			if (entry.pollingIntervalMs !== undefined && !(typeof entry.pollingIntervalMs === "number" && Number.isInteger(entry.pollingIntervalMs) && entry.pollingIntervalMs > 0)) {
-				fail(`datasources.${id}.pollingIntervalMs must be a positive integer`);
+			// 0 is a valid "manual refresh only" interval (the librarian maps it to
+			// `polling().mode = "none"`); only negatives and non-integers are invalid.
+			if (entry.pollingIntervalMs !== undefined && !(typeof entry.pollingIntervalMs === "number" && Number.isInteger(entry.pollingIntervalMs) && entry.pollingIntervalMs >= 0)) {
+				fail(`datasources.${id}.pollingIntervalMs must be a non-negative integer`);
 			}
 			if (entry.tags !== undefined && (!Array.isArray(entry.tags) || entry.tags.some((tag) => typeof tag !== "string" || tag.length === 0))) {
 				fail(`datasources.${id}.tags must be a non-empty string array`);
@@ -404,6 +462,8 @@ function validateKnownBlocks(candidate: Record<string, unknown>): void {
 		"everything",
 		"fsearch",
 		"dupey",
+		"minSync",
+		"thinking",
 		"datasourceAccess",
 		"datasources",
 		"appIndexing",
@@ -625,16 +685,18 @@ export function createAutoRagConfigService(deps: AutoRagConfigServiceDeps): Auto
 					} catch {
 						authConfigured = false;
 					}
+					// Pi's canonical env lookup handles aliases (azure, google, …)
+					// the way the model runtime itself resolves credentials.
+					const envKeys = findEnvKeys(provider.id);
 					const models: ModelCatalogEntry[] = runtime.getModels(provider.id).map((model) => ({
 						provider: model.provider,
 						id: model.id,
 						name: model.name,
 						api: model.api,
 						available: available.has(`${model.provider}/${model.id}`),
+						baseUrl: model.baseUrl ?? provider.baseUrl ?? null,
+						apiKeyEnv: envKeys?.[0] ?? null,
 					}));
-					// Pi's canonical env lookup handles aliases (azure, google, …)
-					// the way the model runtime itself resolves credentials.
-					const envKeys = findEnvKeys(provider.id);
 					return {
 						id: provider.id,
 						name: provider.name,

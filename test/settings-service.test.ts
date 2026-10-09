@@ -12,6 +12,7 @@ import type {
 	ConfigRefreshResult,
 	ConfiguredModelSnapshot,
 	DataSourcesSnapshot,
+	DataSourceSyncResult,
 	ProviderCredentialStatus,
 } from "../src/shared/settings-contract";
 
@@ -27,13 +28,27 @@ const EMPTY_SNAPSHOT: DataSourcesSnapshot = {
 	error: null,
 	accessTags: [],
 	refresh: { state: "idle", phase: null, finishedAt: null },
+	local: { documentCount: null, updatedAt: null },
 	sources: [],
+};
+
+const EMPTY_SYNC: DataSourceSyncResult = {
+	id: "team-slack",
+	ok: true,
+	state: "indexed",
+	chunkCount: 0,
+	indexedAt: null,
+	durationMs: 0,
+	diagnostics: [],
+	error: null,
 };
 
 const noDataSources: DataSourceStatusService = {
 	list: async () => EMPTY_SNAPSHOT,
 	setEnabled: async () => undefined,
 	setDescription: async () => undefined,
+	sync: async () => EMPTY_SYNC,
+	setAccess: async () => undefined,
 };
 
 const EMPTY_MODEL: ConfiguredModelSnapshot = {
@@ -165,6 +180,8 @@ describe("createSettingsService", () => {
 					toggles.push({ id, enabled });
 				},
 				setDescription: async () => undefined,
+				sync: async () => EMPTY_SYNC,
+				setAccess: async () => undefined,
 			},
 			models: noModels,
 			...baseDeps,

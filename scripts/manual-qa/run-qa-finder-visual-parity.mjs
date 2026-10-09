@@ -274,17 +274,17 @@ try {
 	await sleep(600);
 	await shot(page, "11-settings-general");
 	await shot(page, "12-settings-panel", ".settings-panel");
-	await shot(page, "13-settings-section", ".linear-header");
-	await shot(page, "14-settings-switch-row", ".linear-row:has(.settings-switch) >> nth=0");
+	await shot(page, "13-settings-section", ".settings-page-head");
+	await shot(page, "14-settings-switch-row", ".linear-row:has([role=\"switch\"]) >> nth=0");
 	for (const [tab, name] of [
-		["LLM Models", "15-settings-models"],
-		["Data Sources", "16-settings-sources"],
+		["AI 모델", "15-settings-models"],
+		["모든 연결", "16-settings-sources"],
 	]) {
 		await page.locator(".settings-nav-item", { hasText: tab }).click();
 		await sleep(600);
 		await shot(page, name);
 	}
-	await page.locator(".settings-nav-item", { hasText: "General" }).click();
+	await page.locator(".settings-nav-item", { hasText: "일반" }).click();
 	await sleep(400);
 	// Settings lives in its own tab in v7; ⌘W closes it back to the finder tab.
 	await page.keyboard.press(chord("w"));
@@ -322,7 +322,8 @@ try {
 	await sleep(700);
 	await shot(page, "17-row-hover");
 
-	await page.locator('.toolbar button[aria-label="Back"]').hover();
+	// The Back label is localized ("뒤로" in the default Korean UI); target it by its glyph.
+	await page.locator(".toolbar button:has(.lucide-chevron-left)").first().hover();
 	await sleep(400);
 	await shot(page, "18-toolbar-icon-hover");
 

@@ -1,39 +1,65 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import type { AppSettings, ConfigRefreshResult, Permission, ResolvedPermission, SettingsBridge } from "../shared/settings-contract";
+import type {
+	AppSettings,
+	ConfigRefreshResult,
+	EmbeddingChangeRequest,
+	EmbeddingChangeResult,
+	EmbeddingSettingsSnapshot,
+	Permission,
+	ProviderAuthKind,
+	ProviderDiscoveryResult,
+	ProviderLoginEvent,
+	ProviderServerInput,
+	ResolvedPermission,
+	SettingsBridge,
+} from "../shared/settings-contract";
 import { DEFAULT_SETTINGS } from "../shared/settings-contract";
 import type { AutoRagConfigService } from "./autorag-config-service";
 import type { DataSourceStatusService } from "./datasource-status";
+import type { DiscrawlEmbeddingRuntime } from "./embedding-settings-service";
 import type { ModelStatusService } from "./model-status";
 import type { ProviderCredentialService } from "./provider-credentials";
+import type { RefreshScheduler } from "./refresh-scheduler";
+import type { ProviderAuthService } from "./provider-auth-service";
 
 interface SettingsState {
 	settings: AppSettings;
 	permissions: Record<string, Permission>;
 }
 
+/** The embedding settings surface the renderer drives (implemented by the embedding service). */
+export interface EmbeddingSettingsService {
+	/** Current global embedder plus the profile catalog and per-source compatibility. */
+	get(): Promise<EmbeddingSettingsSnapshot>;
+	/** Dry run: what a change would write and which sources could not follow. */
+	plan(request: EmbeddingChangeRequest): Promise<EmbeddingSettingsSnapshot>;
+	/** Validate, write `minSync.embedder` + reachable per-CLI overrides, then rebuild. */
+	apply(request: EmbeddingChangeRequest): Promise<EmbeddingChangeResult>;
+	/** The discrawl runtime the app should hand its skill for the current config. */
+	discrawlRuntime(): DiscrawlEmbeddingRuntime | undefined;
+	/** Push derived child-process env (qmd model) from the current config; call at startup. */
+	applyProcessEnv(): void;
+	dispose(): Promise<void>;
+}
+
 export interface SettingsServiceDeps {
 	readonly directory: string;
-	/** Live view of the shared AutoRAG config's datasources; the app keeps no copy. */
 	readonly dataSources: DataSourceStatusService;
-	/** Live view of the shared AutoRAG config's resolved model; the app keeps no copy. */
 	readonly models: ModelStatusService;
-	/** Read/write surface for the shared AutoRAG config file itself. */
 	readonly config: AutoRagConfigService;
-	/** Runs an AutoRAGLite index refresh for the manual refresh action. */
 	readonly refreshConfig: (methods?: readonly string[]) => Promise<ConfigRefreshResult>;
-	/** Encrypted provider credentials, loaded into the environment at startup. */
 	readonly credentials: ProviderCredentialService;
-	/** Fired after every successful set() so live services can adopt the change. */
+	readonly providers?: ProviderAuthService;
+	readonly embedding?: EmbeddingSettingsService;
+	readonly refreshScheduler?: RefreshScheduler;
+	readonly onProviderLoginEvent?: (event: ProviderLoginEvent) => void;
 	readonly onSettingsChanged?: (settings: AppSettings) => void;
 	/** Installs or removes the OS file-menu entries for a settings change; throwing rejects the change. */
 	readonly applyOsMenu?: (next: AppSettings, previous: AppSettings) => Promise<void>;
 }
 
-const emptyState = (): SettingsState => ({
-	settings: DEFAULT_SETTINGS,
-	permissions: {},
-});
+const emptyState = (): SettingsState => ({ settings: DEFAULT_SETTINGS, permissions: {} });
 
 async function loadState(path: string): Promise<SettingsState> {
 	try {
@@ -42,11 +68,7 @@ async function loadState(path: string): Promise<SettingsState> {
 		const state = parsed as Partial<SettingsState>;
 		const persisted: Partial<AppSettings> = state.settings ?? {};
 		return {
-			settings: {
-				...DEFAULT_SETTINGS,
-				...persisted,
-				appearance: persisted.appearance === "dark" ? "dark" : "light",
-			},
+			settings: { ...DEFAULT_SETTINGS, ...persisted, appearance: persisted.appearance === "dark" ? "dark" : "light" },
 			permissions: state.permissions ?? {},
 		};
 	} catch {
@@ -74,15 +96,27 @@ export function createSettingsService(deps: SettingsServiceDeps): SettingsBridge
 			.filter(([source]) => pathName === source || pathName.startsWith(`${source}/`))
 			.sort(([a], [b]) => b.length - a.length);
 		const [sourcePath, value] = candidates[0] ?? [];
-		const explicitDescendants = Object.keys(state.permissions).some(
-			(source) => source !== pathName && source.startsWith(`${pathName}/`),
-		);
+		const explicitDescendants = Object.keys(state.permissions).some((source) => source !== pathName && source.startsWith(`${pathName}/`));
 		return {
 			value: value ?? "ask",
 			origin: sourcePath === undefined ? "default" : sourcePath === pathName ? "explicit" : "inherited",
 			sourcePath: sourcePath ?? null,
 			mixed: explicitDescendants,
 		};
+	};
+	const providerListeners = new Set<(event: ProviderLoginEvent) => void>();
+	deps.onProviderLoginEvent && providerListeners.add(deps.onProviderLoginEvent);
+	const requireProviders = (): ProviderAuthService => {
+		if (deps.providers === undefined) throw new Error("Provider authentication is unavailable");
+		return deps.providers;
+	};
+	const requireEmbedding = (): EmbeddingSettingsService => {
+		if (deps.embedding === undefined) throw new Error("Embedding settings are unavailable");
+		return deps.embedding;
+	};
+	const requireScheduler = (): RefreshScheduler => {
+		if (deps.refreshScheduler === undefined) throw new Error("Background refresh scheduling is unavailable");
+		return deps.refreshScheduler;
 	};
 
 	return {
@@ -105,11 +139,7 @@ export function createSettingsService(deps: SettingsServiceDeps): SettingsBridge
 		permSet: async (pathName, value, cascade) => {
 			await mutate((current) => {
 				current.permissions[pathName] = value;
-				if (cascade === "apply-all") {
-					for (const child of Object.keys(current.permissions)) {
-						if (child.startsWith(`${pathName}/`)) current.permissions[child] = value;
-					}
-				}
+				if (cascade === "apply-all") for (const child of Object.keys(current.permissions)) if (child.startsWith(`${pathName}/`)) current.permissions[child] = value;
 			});
 		},
 		permClear: async (pathName) => {
@@ -132,10 +162,17 @@ export function createSettingsService(deps: SettingsServiceDeps): SettingsBridge
 			await deps.dataSources.setDescription(id, description);
 			return deps.dataSources.list();
 		},
+		sourcesSync: (id) => deps.dataSources.sync(id),
+		sourcesSetAccess: async (id, allowed) => {
+			await deps.dataSources.setAccess(id, allowed);
+			return deps.dataSources.list();
+		},
+		refreshScheduleGet: () => requireScheduler().status(),
+		refreshScheduleApply: () => requireScheduler().reconcile(),
 		modelsResolve: () => deps.models.resolve(),
 		configGet: () => deps.config.get(),
-		configSet: (path, value) => deps.config.set(path, value),
-		configRemove: (path) => deps.config.remove(path),
+		configSet: (configPath, value) => deps.config.set(configPath, value),
+		configRemove: (configPath) => deps.config.remove(configPath),
 		configPatch: (updates) => deps.config.patch(updates),
 		configRename: (from, to) => deps.config.rename(from, to),
 		modelsCatalog: () => deps.config.modelsCatalog(),
@@ -143,5 +180,25 @@ export function createSettingsService(deps: SettingsServiceDeps): SettingsBridge
 		credentialsList: async (envNames) => deps.credentials.list(envNames),
 		credentialsSet: async (envName, secret) => deps.credentials.set(envName, secret),
 		credentialsRemove: async (envName) => deps.credentials.remove(envName),
+		providersList: async () => deps.providers?.list() ?? [],
+		providerLoginStart: async (providerId, authType: ProviderAuthKind) => requireProviders().start(providerId, authType),
+		providerLoginRespond: async (sessionId, value) => requireProviders().respond(sessionId, value),
+		providerLoginCancel: async (sessionId) => {
+			await deps.providers?.cancel(sessionId);
+		},
+		providerLogout: async (providerId) => {
+			await requireProviders().logout(providerId);
+		},
+		onProviderLoginEvent: (listener) => {
+			providerListeners.add(listener);
+			return () => providerListeners.delete(listener);
+		},
+		providersDiscover: (input: ProviderServerInput): Promise<ProviderDiscoveryResult> => requireProviders().discover(input),
+		providersUpsert: (input: ProviderServerInput) => requireProviders().upsert(input),
+		providersRemove: (id: string) => requireProviders().remove(id),
+		providersTest: (id: string) => requireProviders().test(id),
+		embeddingGet: () => requireEmbedding().get(),
+		embeddingPlan: (request: EmbeddingChangeRequest) => requireEmbedding().plan(request),
+		embeddingApply: (request: EmbeddingChangeRequest) => requireEmbedding().apply(request),
 	};
 }

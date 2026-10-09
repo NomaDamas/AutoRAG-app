@@ -45,12 +45,15 @@ export async function resolveEffectiveConfig(
 	return { configPath, raw, config };
 }
 
+/** What a plain "refresh my folders" run covers: the parsed mirror and its vector index. */
+export const LOCAL_REFRESH_METHODS: readonly RefreshMethod[] = ["parsed", "minsync"];
+
 /** Manual index refresh from Settings; returns diagnostics instead of throwing for known failures. */
 export async function refreshAutoragIndex(
 	deps: AutoragRefreshDeps,
 	methods?: readonly string[],
 ): Promise<ConfigRefreshResult> {
-	const requested = methods ?? ["parsed", "minsync"];
+	const requested = methods ?? LOCAL_REFRESH_METHODS;
 	const invalid = requested.filter((method) => REFRESH_METHODS[method as RefreshMethod] !== true);
 	if (invalid.length > 0) throw new Error(`Unknown refresh method(s): ${invalid.join(", ")}`);
 	const selected = requested as readonly RefreshMethod[];
@@ -58,7 +61,8 @@ export async function refreshAutoragIndex(
 	const input = configInput(deps);
 	const configPath = resolveConfigPath(input).configPath;
 	const raw = existsSync(configPath) ? readRawConfigObject(configPath) : {};
-	const effective = await applyAppIndexing(resolveConfigReadOnly(input), raw);
+	// A refresh re-walks the folders, so a dot-folder created minutes ago is excluded too.
+	const effective = await applyAppIndexing(resolveConfigReadOnly(input), raw, { fresh: true });
 	const diagnostics: ConfigRefreshDiagnostic[] = [];
 	try {
 		const lite = new AutoRAGLite(effective);
