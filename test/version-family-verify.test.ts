@@ -23,17 +23,15 @@ const stamp = (overrides: Partial<FileStamp> = {}): FileStamp => ({
 	...overrides,
 });
 
-function entry(path: string, modifiedAt = "2026-09-29T00:00:00.000Z"): FsEntry {
+function entry(path: string, mtimeMs = Date.parse("2026-09-29T00:00:00.000Z")): FsEntry {
 	return {
 		name: path.split("/").pop() ?? path,
 		path,
 		kind: "file",
 		ext: "txt",
 		size: 10,
-		modifiedAt,
-		isSymlink: false,
-		osKind: null,
-		iconUrl: null,
+		mtimeMs,
+		flags: 0,
 	};
 }
 
@@ -41,7 +39,7 @@ function family(head = "/x/head.txt", member = "/x/member.txt"): FsVersionFamily
 	return {
 		head,
 		members: [{ path: member, relation: "exact" }],
-		entries: [entry(head, "2026-09-29T02:00:00.000Z"), entry(member)],
+		entries: [entry(head, Date.parse("2026-09-29T02:00:00.000Z")), entry(member)],
 	};
 }
 
@@ -80,7 +78,7 @@ describe("version-family verification primitives", () => {
 				{ path: "/x/older.txt", relation: "exact" as const },
 				{ path: "/x/newer.txt", relation: "near" as const },
 			],
-			entries: [entry("/x/head.txt"), entry("/x/older.txt", "2026-09-29T01:00:00.000Z"), entry("/x/newer.txt", "2026-09-29T03:00:00.000Z")],
+			entries: [entry("/x/head.txt"), entry("/x/older.txt", Date.parse("2026-09-29T01:00:00.000Z")), entry("/x/newer.txt", Date.parse("2026-09-29T03:00:00.000Z"))],
 		};
 		const result = await verifyFamilies(
 			[original],
@@ -288,7 +286,7 @@ describe("version-family verification primitives", () => {
 		const dir = await mkdtemp(join(tmpdir(), "vf-verify-"));
 		const store = createFileVersionFamilyStore(dir);
 		const snapshot = {
-			version: 1 as const,
+			version: 2 as const,
 			scannedAt: "2026-09-29T10:00:00.000Z",
 			locations: ["/x"],
 			families: [family()],

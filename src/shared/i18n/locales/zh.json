@@ -44,7 +44,9 @@
     "toggleInspector": "切换检查器",
     "showAiSearch": "显示 AI 搜索",
     "aiSearchShortcut": "AI 搜索 ({{shortcut}})",
-    "share": "共享"
+    "share": "共享",
+    "putBack": "放回原处",
+    "emptyTrash": "清倒废纸篓"
   },
   "sort": {
     "none": "无",
@@ -105,6 +107,7 @@
   "contextMenu": {
     "open": "打开",
     "quickLook": "快速查看 (Quick Look)",
+    "openWith": "打开方式",
     "showInEnclosingFolder": "在外层文件夹中显示",
     "retryIndex": "重试建立索引",
     "excludeFromIndex": "从索引中排除",
@@ -115,8 +118,16 @@
     "duplicate": "复制",
     "rename": "重命名",
     "copyPath": "拷贝路径",
+    "compress": "压缩",
+    "compressCount": "压缩 {{count}} 个项目",
+    "extract": "解压",
+    "share": "共享",
+    "services": "服务",
     "moveToTrash": "移到废纸篓",
     "moveToTrashCount": "将 {{count}} 个项目移到废纸篓",
+    "putBack": "放回原处",
+    "putBackCount": "将 {{count}} 个项目放回原处",
+    "emptyTrash": "清倒废纸篓",
     "newFolder": "新建文件夹",
     "new": "新建",
     "trashShort": "废纸篓"
@@ -221,6 +232,10 @@
       "older": "更早"
     }
   },
+  "osMenu": {
+    "ask": "向 AutoRAG 提问",
+    "reveal": "在 AutoRAG 中显示"
+  },
   "toasts": {
     "trashSingle": "已将 {{name}} 移到废纸篓",
     "trashCount": "已将 {{count}} 个项目移到废纸篓",
@@ -228,6 +243,11 @@
     "indexExcluded": "{{name}} — 已从索引中排除",
     "copiedPath": "已拷贝路径",
     "feedbackSent": "已发送反馈"
+  },
+  "confirm": {
+    "emptyTrashTitle": "清倒废纸篓",
+    "emptyTrashMessage": "废纸篓中的所有项目将被永久删除。此操作无法撤销。",
+    "emptyTrashAction": "清倒"
   },
   "settings": {
     "title": "设置",
@@ -265,7 +285,10 @@
       "autoUpdates": "自动安装更新",
       "autoUpdatesHint": "在下次应用重启时应用更新。",
       "telemetry": "分享匿名诊断数据",
-      "telemetryHint": "分享匿名化性能指标。"
+      "telemetryHint": "分享匿名化性能指标。",
+      "osMenuIntegration": "添加到文件右键菜单",
+      "osMenuIntegrationHint": "在访达(macOS)或资源管理器(Windows)中右键点击文件,即可使用“向 AutoRAG 提问”和“在 AutoRAG 中显示”。",
+      "osMenuIntegrationError": "无法设置右键菜单"
     }
   },
   "onboarding": {

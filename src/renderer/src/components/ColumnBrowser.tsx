@@ -1,9 +1,14 @@
+import { useLayoutEffect, useMemo, useRef } from "react";
 import type { MouseEvent, ReactElement, RefObject } from "react";
 import type { FinderEntry } from "../data/entries";
+import { useScrollWindow } from "../hooks/useScrollWindow";
 import { useDirectoryData, useEntrySidecar } from "../hooks/useDirectoryData";
 import { cn } from "../lib/cn";
-import type { GroupSection } from "../state/grouping";
+import { COLUMN_ROW_HEIGHT } from "../state/columns";
+import { fileKindOf } from "../state/entry-values";
+import { GROUP_HEADER_HEIGHT, groupedLayout, groupedWindow, type GroupSection } from "../state/grouping";
 import { basename } from "../state/paths";
+import { LIST_OVERSCAN } from "../state/virtual";
 import { RELATION_LABELS, type StackRow, type VersionFamilyError } from "../state/version-family";
 import { isHiddenName } from "../state/visibility";
 import { ChevronRightIcon } from "./icons";
@@ -82,47 +87,24 @@ export function ColumnBrowser({
 		<div className="columns flex flex-1 flex-col min-h-0" ref={listRef}>
 			<VersionFamilyBanner error={versionFamilyError} onRetry={onRetryVersionFamilies} />
 			<div className="columns__panes flex flex-1 min-h-0">
-				{panes.map((pane, index) => {
-					const opened = panes[index + 1]?.path ?? null;
-					const background = paneBackground(pane.path);
-					return (
-						<div
-							key={pane.path}
-							data-path={pane.path}
-							className={cn(
-								"column flex-1 basis-0 min-w-0 min-h-0 p-6 overflow-auto border-r border-border",
-								dropBackgroundDir === pane.path && "bg-accent-drop-hover",
-							)}
-							onDragOver={background.onDragOver}
-							onDrop={background.onDrop}
-							onDragLeave={background.onDragLeave}
-							onContextMenu={background.onContextMenu}
-						>
-							{pane.sections.map((section, sectionIndex) => (
-								<div key={section.label ?? `section-${sectionIndex}`}>
-									{section.label === null ? null : <GroupHeader label={section.label} />}
-									{section.rows.map((row) => (
-										<ColumnRow
-											key={row.entry.path}
-											pane={index}
-											row={row}
-											selected={selectedKeys.includes(row.entry.path)}
-											focusedZone={focusedZone}
-											opened={opened === row.entry.path}
-											flash={flashPath === row.entry.path}
-											renameDraft={renamePath === row.entry.path ? renameDraft : null}
-											columnCallbacks={columnCallbacks}
-											callbacks={callbacks}
-										/>
-									))}
-								</div>
-							))}
-							{pane.loaded && pane.rows.length === 0 ? (
-								<div className="column-pane__empty px-8 py-24 text-ink-muted text-meta text-center">{emptyText}</div>
-							) : null}
-						</div>
-					);
-				})}
+				{panes.map((pane, index) => (
+					<ColumnPane
+						key={pane.path}
+						pane={pane}
+						index={index}
+						opened={panes[index + 1]?.path ?? null}
+						background={paneBackground(pane.path)}
+						dropBackground={dropBackgroundDir === pane.path}
+						emptyText={emptyText}
+						selectedKeys={selectedKeys}
+						focusedZone={focusedZone}
+						flashPath={flashPath}
+						renamePath={renamePath}
+						renameDraft={renameDraft}
+						columnCallbacks={columnCallbacks}
+						callbacks={callbacks}
+					/>
+				))}
 				{variantColumn === null ? null : (
 					<div
 						className="column column--variants flex-1 basis-0 min-w-0 min-h-0 p-6 overflow-auto"
@@ -174,6 +156,130 @@ export function ColumnBrowser({
 	);
 }
 
+/**
+ * One column pane: its own scroller, virtualized like the list view. The pane
+ * is sized to the full row count and only the window around its viewport is
+ * mounted, so a 5,000-file folder keeps a few dozen rows in the DOM. A
+ * keyboard or reveal target outside the window is pulled into the DOM for one
+ * commit (see `state/grouping.groupedWindow`) so the controller's
+ * `scrollIntoView` still finds its row.
+ */
+function ColumnPane({
+	pane,
+	index,
+	opened,
+	background,
+	dropBackground,
+	emptyText,
+	selectedKeys,
+	focusedZone,
+	flashPath,
+	renamePath,
+	renameDraft,
+	columnCallbacks,
+	callbacks,
+}: {
+	readonly pane: ColumnPaneView;
+	readonly index: number;
+	readonly opened: string | null;
+	readonly background: BackgroundDropHandlers;
+	readonly dropBackground: boolean;
+	readonly emptyText: string;
+	readonly selectedKeys: readonly string[];
+	readonly focusedZone: boolean;
+	readonly flashPath: string | null;
+	readonly renamePath: string | null;
+	readonly renameDraft: string;
+	readonly columnCallbacks: ColumnCallbacks;
+	readonly callbacks: RowCallbacks;
+}): ReactElement {
+	const scrollerRef = useRef<HTMLDivElement | null>(null);
+	const contentRef = useRef<HTMLDivElement | null>(null);
+	const scroll = useScrollWindow(scrollerRef, contentRef);
+	const layout = useMemo(
+		() =>
+			groupedLayout(
+				pane.sections.map((section) => ({ label: section.label, rows: section.rows.length })),
+				{ columns: 1, rowStride: COLUMN_ROW_HEIGHT, headerStride: GROUP_HEADER_HEIGHT },
+			),
+		[pane.sections],
+	);
+
+	// A selection that just landed on one of this pane's rows is mounted for the
+	// commit that scrolls to it. `seen` is the last committed single selection;
+	// `pending` keeps a target whose row has not been listed yet (a pane still
+	// loading) until it appears, then is cleared.
+	const single = selectedKeys.length === 1 ? (selectedKeys[0] ?? null) : null;
+	const seen = useRef<string | null>(null);
+	const pending = useRef<string | null>(null);
+	const revealIndex = useMemo(() => {
+		if (single === null) return -1;
+		let base = 0;
+		for (const section of pane.sections) {
+			const at = section.rows.findIndex((row) => row.entry.path === single);
+			if (at >= 0) return base + at;
+			base += section.rows.length;
+		}
+		return -1;
+	}, [pane.sections, single]);
+	const reveal = single !== null && (single !== seen.current || pending.current === single);
+	useLayoutEffect(() => {
+		seen.current = single;
+		pending.current = single !== null && revealIndex < 0 ? single : null;
+	});
+
+	const window = groupedWindow(layout, {
+		offset: scroll.offset,
+		viewport: scroll.viewport,
+		overscan: LIST_OVERSCAN,
+		includeRow: reveal && revealIndex >= 0 ? revealIndex : undefined,
+	});
+	const padTop = window.start < layout.items.length ? (layout.offsets[window.start] ?? layout.total) : layout.total;
+	const padBottom = layout.total - (window.end < layout.items.length ? (layout.offsets[window.end] ?? layout.total) : layout.total);
+
+	return (
+		<div
+			ref={scrollerRef}
+			data-path={pane.path}
+			className={cn(
+				"column flex-1 basis-0 min-w-0 min-h-0 p-6 overflow-auto border-r border-border",
+				dropBackground && "bg-accent-drop-hover",
+			)}
+			onDragOver={background.onDragOver}
+			onDrop={background.onDrop}
+			onDragLeave={background.onDragLeave}
+			onContextMenu={background.onContextMenu}
+		>
+			<div ref={contentRef} style={{ paddingTop: padTop, paddingBottom: padBottom }}>
+				{layout.items.slice(window.start, window.end).map((item) =>
+					item.kind === "header" ? (
+						<GroupHeader key={`group-${item.section}`} label={pane.sections[item.section]?.label ?? ""} />
+					) : (
+						pane.sections[item.section]?.rows.slice(item.start, item.start + item.count).map((row) => (
+							<ColumnRow
+								key={row.entry.path}
+								pane={index}
+								row={row}
+								selected={selectedKeys.includes(row.entry.path)}
+								focusedZone={focusedZone}
+								opened={opened === row.entry.path}
+								flash={flashPath === row.entry.path}
+								renameDraft={renamePath === row.entry.path ? renameDraft : null}
+								columnCallbacks={columnCallbacks}
+								callbacks={callbacks}
+							/>
+						))
+					),
+				)}
+			</div>
+			{pane.loaded && pane.rows.length === 0 ? (
+				<div className="column-pane__empty px-8 py-24 text-ink-muted text-meta text-center">{emptyText}</div>
+			) : null}
+		</div>
+	);
+}
+
+/** Height is `h-[27px]` = `COLUMN_ROW_HEIGHT`: the pane's virtual window runs on that stride. */
 function ColumnRow({
 	pane,
 	row,
@@ -227,7 +333,7 @@ function ColumnRow({
 			onDragOver={(event) => callbacks.onDragOver(entry, event)}
 			onDrop={(event) => callbacks.onDrop(entry, event)}
 		>
-			<FileTile kind={entry.fileKind} iconUrl={entry.iconUrl} size={16} />
+			<FileTile kind={fileKindOf(entry)} iconUrl={entry.iconUrl} size={16} />
 			{renameDraft === null ? (
 				<span className="col-name flex-1 min-w-0 overflow-hidden whitespace-nowrap text-ellipsis text-sm">
 					{entry.name}
@@ -247,5 +353,5 @@ function ColumnRow({
 /** A row's tile with the icon the sidecar holds for it. */
 function SidecarTile({ entry, size }: { readonly entry: FinderEntry; readonly size: 16 | 18 | 22 }): ReactElement {
 	const resolved = useEntrySidecar(useDirectoryData().sidecar, entry).entry;
-	return <FileTile kind={resolved.fileKind} iconUrl={resolved.iconUrl} size={size} />;
+	return <FileTile kind={fileKindOf(resolved)} iconUrl={resolved.iconUrl} size={size} />;
 }

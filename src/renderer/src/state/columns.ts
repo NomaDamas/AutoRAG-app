@@ -11,6 +11,8 @@
  */
 
 export const MAX_COLUMNS = 3;
+/** One column row's height in px (`h-[27px]` on `ColumnRow`): the stride the pane's virtual window runs on. */
+export const COLUMN_ROW_HEIGHT = 27;
 
 export interface ColumnItem {
 	readonly path: string;

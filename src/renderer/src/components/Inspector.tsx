@@ -28,13 +28,14 @@ import { useEffect, useState, type MouseEvent as ReactMouseEvent, type ReactElem
 import { useTranslation } from "react-i18next";
 import { previewStreamUrl } from "../../../preview/shared/contract";
 import { hwpFirstPageUrl } from "../../../preview/ui/rhwp";
-import type { ActionAnchor, ActionCapabilities } from "../../../shared/actions-contract";
+import type { ActionAnchor, ActionCapabilities, OpenWithApplication } from "../../../shared/actions-contract";
 import type { FsFileDetails } from "../../../shared/fs-contract";
 import type { IndexStatus } from "../../../shared/index-contract";
 import type { CitationEvidence } from "../../../shared/search-contract";
-import type { FinderEntry } from "../data/entries";
+import { type FinderEntry, hasFileVersion } from "../data/entries";
 import { cn } from "../lib/cn";
 import { anchorOf } from "../lib/anchor";
+import { dateLabelOf, fileKindOf, kindLabelOf, sizeLabelOf } from "../state/entry-values";
 import { buildInfoRows, hasMoreInfoRows, visibleInfoRows } from "../state/inspector-info";
 import { stackCards, summarizeSelection } from "../state/inspector-multi";
 import {
@@ -46,6 +47,7 @@ import {
 	type EvidenceFeedback,
 } from "../state/evidence";
 import {
+	openWithItems,
 	suggestedActions,
 	type FileActionIcon,
 	type FileActionItem,
@@ -105,6 +107,8 @@ export interface InspectorProps {
 	readonly actionCapabilities: ActionCapabilities;
 	/** Run a suggested action; `anchor` is the clicked button's rect (share sheet). */
 	readonly onAction: (target: FileActionTarget, anchor: ActionAnchor | null) => void;
+	/** The applications the OS registers for `entry`'s type, default first. */
+	readonly loadOpenWithApplications: (entry: FinderEntry) => Promise<readonly OpenWithApplication[]>;
 	/** Dupey family of `entry`; null when it has no versions. */
 	readonly family: InspectorFamily | null;
 	readonly onOpenMember: (path: string) => void;
@@ -146,6 +150,7 @@ export function Inspector({
 	onAskAi,
 	actionCapabilities,
 	onAction,
+	loadOpenWithApplications,
 	family,
 	onOpenMember,
 	view,
@@ -186,6 +191,7 @@ export function Inspector({
 					onAskAi={onAskAi}
 					actionCapabilities={actionCapabilities}
 					onAction={onAction}
+					loadOpenWithApplications={loadOpenWithApplications}
 				/>
 			)}
 		</aside>
@@ -203,6 +209,7 @@ function InfoHalf({
 	onAskAi,
 	actionCapabilities,
 	onAction,
+	loadOpenWithApplications,
 }: {
 	readonly entry: FinderEntry | null;
 	readonly indexStatus: IndexStatus | null;
@@ -214,6 +221,7 @@ function InfoHalf({
 	readonly onAskAi: (entry: FinderEntry) => void;
 	readonly actionCapabilities: ActionCapabilities;
 	readonly onAction: (target: FileActionTarget, anchor: ActionAnchor | null) => void;
+	readonly loadOpenWithApplications: (entry: FinderEntry) => Promise<readonly OpenWithApplication[]>;
 }): ReactElement {
 	const [brief, setBrief] = useState(false);
 	const [details, setDetails] = useState<FsFileDetails | null>(null);
@@ -258,7 +266,7 @@ function InfoHalf({
 					<PreviewPaper entry={entry} />
 					<div className="preview-title text-body font-semibold text-ink leading-[1.3] [overflow-wrap:anywhere]">{entry.name}</div>
 					<div className="preview-sub mt-4 text-meta text-ink-muted">
-						{entry.kindLabel} · {entry.sizeLabel} · {entry.dateLabel}
+						{kindLabelOf(entry)} · {sizeLabelOf(entry)} · {dateLabelOf(entry)}
 					</div>
 
 					<div className="chip-row flex flex-wrap gap-6 mt-12 mb-16">
@@ -314,7 +322,7 @@ function InfoHalf({
 			)}
 
 			{entry === null ? null : (
-				<ActionBar entry={entry} capabilities={actionCapabilities} onAction={onAction} onAskAi={onAskAi} />
+				<ActionBar entry={entry} capabilities={actionCapabilities} onAction={onAction} onAskAi={onAskAi} loadOpenWithApplications={loadOpenWithApplications} />
 			)}
 		</div>
 	);
@@ -358,12 +366,12 @@ function usePreviewState(entry: FinderEntry): {
 	readonly onLoad: (img: HTMLImageElement) => void;
 	readonly onError: () => void;
 } {
-	const identity = `${entry.path} ${entry.modifiedAt ?? ""}`;
+	const identity = `${entry.path} ${hasFileVersion(entry) ? entry.mtimeMs : ""}`;
 	const [state, setState] = useState<PreviewState>(
 		() => previewCache.get(identity) ?? { url: null, aspect: null, resolved: false },
 	);
 	const [loaded, setLoaded] = useState(false);
-	const fetchable = entry.kind === "file" && entry.modifiedAt !== undefined;
+	const fetchable = entry.kind === "file" && hasFileVersion(entry);
 	useEffect(() => {
 		setLoaded(false);
 		const cached = previewCache.get(identity);
@@ -374,8 +382,8 @@ function usePreviewState(entry: FinderEntry): {
 		// Keep the previous paper's aspect while the next file loads, so
 		// file-to-file navigation never snaps the height twice.
 		setState((prev) => ({ url: null, resolved: false, aspect: prev.aspect }));
-		const modifiedAt = entry.modifiedAt;
-		if (entry.kind !== "file" || modifiedAt === undefined) return;
+		const mtimeMs = entry.mtimeMs;
+		if (!fetchable) return;
 		const path = entry.path;
 		// The OS thumbnailers draw nothing for HWP without Hancom's plug-in; rhwp draws the first page here.
 		const hwp = /\.hwpx?$/i.test(path);
@@ -387,13 +395,13 @@ function usePreviewState(entry: FinderEntry): {
 			if (hwp) rememberHwp(identity);
 			if (!cancelled) setState(next);
 		};
-		void load(path, modifiedAt)
+		void load(path, mtimeMs)
 			.then((url) => settle({ url, aspect: null, resolved: true }))
 			.catch(() => settle({ url: null, aspect: null, resolved: true }));
 		return () => {
 			cancelled = true;
 		};
-	}, [identity, fetchable, entry.path, entry.modifiedAt]);
+	}, [identity, fetchable, entry.path, entry.mtimeMs]);
 	return {
 		state,
 		loaded,
@@ -424,8 +432,8 @@ function PreviewPaper({ entry }: { readonly entry: FinderEntry }): ReactElement 
 	if (entry.kind !== "file" || (state.resolved && state.url === null)) {
 		return (
 			<div className="preview-paper flex-none flex items-center justify-center overflow-hidden rounded-6 border border-border bg-window shadow-raised h-152 mb-14">
-				{entry.iconUrl === null ? (
-					<FileTile kind={entry.fileKind} large />
+				{entry.iconUrl === undefined ? (
+					<FileTile kind={fileKindOf(entry)} large />
 				) : (
 					<img className="max-w-full max-h-full object-contain" src={entry.iconUrl} alt="" aria-hidden="true" draggable={false} />
 				)}
@@ -461,7 +469,7 @@ function PreviewPaper({ entry }: { readonly entry: FinderEntry }): ReactElement 
 /** One paper in the stack: the file's preview cropped to fill the sheet, or the letter tile while it loads. */
 function PreviewCardImage({ entry }: { readonly entry: FinderEntry }): ReactElement {
 	const { state, loaded, onLoad, onError } = usePreviewState(entry);
-	if (state.url === null) return <FileTile kind={entry.fileKind} large />;
+	if (state.url === null) return <FileTile kind={fileKindOf(entry)} large />;
 	return (
 		<img
 			className={cn(
@@ -566,11 +574,13 @@ function ActionBar({
 	capabilities,
 	onAction,
 	onAskAi,
+	loadOpenWithApplications,
 }: {
 	readonly entry: FinderEntry;
 	readonly capabilities: ActionCapabilities;
 	readonly onAction: (target: FileActionTarget, anchor: ActionAnchor | null) => void;
 	readonly onAskAi: (entry: FinderEntry) => void;
+	readonly loadOpenWithApplications: (entry: FinderEntry) => Promise<readonly OpenWithApplication[]>;
 }): ReactElement {
 	const { t } = useTranslation();
 	const actions = suggestedActions(entry, capabilities);
@@ -578,7 +588,13 @@ function ActionBar({
 	function run(target: FileActionTarget, anchor: ActionAnchor): void {
 		// "AI 요약" is the App shell's concern (it owns the composer), not IPC.
 		if (target.kind === "askAi") onAskAi(entry);
-		else onAction(target, anchor);
+		else if (target.kind === "openWith") {
+			// The OS's handlers for this file's type come first; "기타…" opens the full chooser.
+			// A failed lookup still leaves "기타…" reachable.
+			loadOpenWithApplications(entry)
+				.catch((): readonly OpenWithApplication[] => [])
+				.then((applications) => setMenu({ items: openWithItems(applications), anchor }));
+		} else onAction(target, anchor);
 	}
 
 	return (

@@ -44,7 +44,9 @@
     "toggleInspector": "정보 창 토글",
     "showAiSearch": "AI 검색 보기",
     "aiSearchShortcut": "AI 검색 ({{shortcut}})",
-    "share": "공유"
+    "share": "공유",
+    "putBack": "원래 위치로 복원",
+    "emptyTrash": "휴지통 비우기"
   },
   "sort": {
     "none": "없음",
@@ -105,6 +107,7 @@
   "contextMenu": {
     "open": "열기",
     "quickLook": "훑어보기 (Quick Look)",
+    "openWith": "다른 앱으로 열기",
     "showInEnclosingFolder": "상위 폴더에서 보기",
     "retryIndex": "인덱싱 다시 시도",
     "excludeFromIndex": "인덱싱에서 제외",
@@ -115,8 +118,16 @@
     "duplicate": "복제",
     "rename": "이름 변경",
     "copyPath": "경로 복사",
+    "compress": "압축",
+    "compressCount": "{{count}}개 항목 압축",
+    "extract": "압축 해제",
+    "share": "공유",
+    "services": "서비스",
     "moveToTrash": "휴지통으로 이동",
     "moveToTrashCount": "{{count}}개 항목 휴지통으로 이동",
+    "putBack": "원래 위치로 복원",
+    "putBackCount": "{{count}}개 항목 원래 위치로 복원",
+    "emptyTrash": "휴지통 비우기",
     "newFolder": "새 폴더",
     "new": "새로 만들기",
     "trashShort": "휴지통"
@@ -221,6 +232,10 @@
       "older": "그 이전"
     }
   },
+  "osMenu": {
+    "ask": "AutoRAG에게 물어보기",
+    "reveal": "AutoRAG에서 보기"
+  },
   "toasts": {
     "trashSingle": "{{name}}을(를) 휴지통으로 이동했습니다",
     "trashCount": "{{count}}개 항목을 휴지통으로 이동했습니다",
@@ -228,6 +243,11 @@
     "indexExcluded": "{{name}} — 인덱싱에서 제외했습니다",
     "copiedPath": "경로를 복사했습니다",
     "feedbackSent": "피드백을 보냈습니다"
+  },
+  "confirm": {
+    "emptyTrashTitle": "휴지통 비우기",
+    "emptyTrashMessage": "휴지통의 모든 항목이 영구 삭제됩니다. 이 작업은 되돌릴 수 없습니다.",
+    "emptyTrashAction": "비우기"
   },
   "settings": {
     "title": "설정",
@@ -265,7 +285,10 @@
       "autoUpdates": "업데이트 자동 설치",
       "autoUpdatesHint": "다음 앱 재시작 시 업데이트를 적용합니다.",
       "telemetry": "익명 진단 데이터 공유",
-      "telemetryHint": "익명화된 성능 지표를 공유합니다."
+      "telemetryHint": "익명화된 성능 지표를 공유합니다.",
+      "osMenuIntegration": "Finder 우클릭 메뉴에 추가",
+      "osMenuIntegrationHint": "Finder(macOS) 또는 탐색기(Windows)에서 파일을 우클릭하면 'AutoRAG에게 물어보기'와 'AutoRAG에서 보기' 항목이 나타납니다.",
+      "osMenuIntegrationError": "우클릭 메뉴를 설정하지 못했습니다"
     }
   },
   "onboarding": {

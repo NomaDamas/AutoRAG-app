@@ -136,8 +136,9 @@ opening files and URLs, and the clipboard.
 If the worker dies, main forks a new one at once (repeated crashes within 10 s
 back off, up to 5 s), the window stays, and every open tab relists and
 re-watches its folders. Unanswered reads are re-sent to the new worker; a
-request that changes files (copy, move, rename, trash, create, undo, eject) is
-never re-sent and fails with a message asking the user to check the result.
+request that changes files (copy, move, rename, trash, restore from the Trash,
+emptying the Trash, create, undo, eject) is never re-sent and fails with a
+message asking the user to check the result.
 Quitting asks the worker to release its watches and waits up to 2 s before
 exiting. QA lane: `scripts/manual-qa/run-qa-finder-fs-worker-crash.mjs`
 (SIGKILLs the worker twice and checks the tabs recover within 5 s).
@@ -301,6 +302,76 @@ the run's first model prompt. The query string, which the librarian uses for
 baseline retrieval and records in its retrieval memory, stays the user's own
 words.
 
+## Right-click menu in Finder and Explorer
+
+Settings → General → **Add to the file right-click menu** (off by default)
+adds two entries to the OS file menu, the way Keka or Skim do:
+
+- **Ask AutoRAG** attaches the selected files and folders to AI Search as
+  drafts, so you type the question.
+- **Show in AutoRAG** opens the file's folder with the file selected.
+
+Captions follow the interface language, and the install is per-user with no
+elevation.
+
+| OS | Where it appears | How it is installed |
+| --- | --- | --- |
+| macOS | Finder right-click → **Quick Actions** (and Services) | Two Automator workflows written to `~/Library/Services`, limited to Finder selections. Each runs a shell script that launches the app's own executable with `--autorag-request=<ask\|reveal>` and one `--autorag-path=` per item. |
+| Windows | Explorer right-click on a file or folder | Shell verbs under `HKCU\Software\Classes\{*,Directory}\shell\AutoRAG.*`, written with `reg.exe`. On Windows 11 they sit under "Show more options"; the top-level menu needs a packaged COM `IExplorerCommand`, which an unpackaged Electron app cannot register. |
+| Linux | Not offered | There is no common file-manager extension point. |
+
+The launched process does not open a second window. `src/main/os-request-channel.ts`
+tries a per-profile local socket (a unix socket in the temp dir, a named pipe
+on Windows) first; a running app acknowledges the request and the launcher
+exits. With no app running the launcher becomes the app and reads the request
+from its own argv. Every path is checked on disk in
+`src/main/os-request-service.ts` before the renderer sees it. The profile's
+`--user-data-dir` is baked into each entry, so a development or QA profile
+only receives its own requests. The app refreshes the entries on every start
+while the setting is on, and switching it off removes exactly the entries it
+wrote (macOS workflows are recognized by their `com.autorag.app.service.`
+bundle identifier). A failed install rejects the toggle instead of saving it.
+
+## Services in AutoRAG's own right-click menu (macOS)
+
+The reverse direction: right-click a row (or the empty space of a folder) in
+AutoRAG and the **Services** submenu lists what other apps register with macOS
+for those files, the same entries Finder shows under right-click → Services:
+Keka's *Send to Keka* / *Extract using Keka* / *Compress using Keka*, a
+Terminal's *New Terminal at Folder*, QSpace, Quick Action workflows, and so on.
+Clicking one performs it on the selection (the whole multi-selection for a row;
+the folder in view for empty space), and the target app receives the files just
+as it would from Finder. An application's services sit under one row named for
+it; services without an application prefix sit directly in the submenu.
+
+- **How it is discovered.** `src/main/services-service.ts` reads the system's
+  service registry (`pbs -dump_pboard`, the data behind Finder's Services menu)
+  plus the user's per-service switches from System Settings, and asks Launch
+  Services which file types each selected path conforms to. Finder's rules are
+  plain TypeScript (`selectServices`): the service must take files (or text that
+  is declared a file path), must not be bound to another application, must
+  accept every selected path's type, must not be restricted or switched off for
+  the context menu, and this app's own Finder Quick Actions are left out.
+- **How it runs.** `NSPerformService` through `osascript`, with the file URLs,
+  the filename list, and the path text on a private pasteboard. The service id
+  and paths are `argv`, never script text. The service is performed only if the
+  system still offers it for exactly that selection, so a stale or forged id from
+  the renderer cannot run anything.
+- **Quiet degrade.** The menu opens at once; the Services row appears when the
+  lookup answers (a stale answer for an earlier right-click is dropped). A failed
+  lookup is an empty menu. The row is absent in the Trash, and off macOS.
+- **Windows.** Not offered. Explorer's verbs are COM `IContextMenu` handlers and
+  registry entries with no public API for an unpackaged app to enumerate and run
+  against a selection, so the submenu stays macOS-only rather than guess.
+
+`run-qa-finder-services.mjs` (macOS) registers a temporary Quick Action with
+the real system, then right-clicks in the built app and checks: the service is
+listed, it receives the exact path (spaces, quotes, and Hangul included), a
+two-row selection hands both paths over, the empty-space menu acts on the
+folder in view, a folder-only service is offered for a folder and not a file,
+and (when Keka is installed) Keka's group opens a visible second-level popout
+whose *Send to Keka* launches Keka. The probe is removed afterwards.
+
 ## Manual QA
 
 The Finder QA scripts are under `scripts/manual-qa/`. Build first, then run a
@@ -313,6 +384,11 @@ native drop path, and checks that a live agent answers from the attached
 content. With `QA_REAL_FINDER_DRAG=1` it also drags a file out of a real
 macOS Finder window. That run moves the mouse, and the terminal needs
 Accessibility permission.
+
+`run-qa-finder-os-menu.mjs` is macOS-only. It switches the right-click menu on
+against a throwaway home, runs the installed workflows through the real
+`automator` runtime, and checks that the running app attaches the files, that
+Show in AutoRAG selects the file, and that a cold start attaches from argv.
 
 ### Windows QA
 

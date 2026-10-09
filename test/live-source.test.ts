@@ -14,6 +14,7 @@ import {
 	createFixtureSource,
 	isMissingPathFailure,
 } from "../src/renderer/src/data/source";
+import { locationOf } from "../src/renderer/src/state/entry-values";
 
 function fsEntry(path: string): FsEntry {
 	return {
@@ -22,10 +23,8 @@ function fsEntry(path: string): FsEntry {
 		kind: "file",
 		ext: "txt",
 		size: 1,
-		modifiedAt: "2026-09-30T00:00:00.000Z",
-		isSymlink: false,
-		osKind: null,
-		iconUrl: null,
+		mtimeMs: Date.parse("2026-09-30T00:00:00.000Z"),
+		flags: 0,
 	};
 }
 
@@ -68,6 +67,8 @@ function fakeFs(result: FsVersionFamiliesResult): FsBridge {
 		createFolder: async (directory) => ({ path: `${directory}/untitled folder`, name: "untitled folder" }),
 		createFile: async (directory, format) => ({ path: `${directory}/untitled.${format}`, name: `untitled.${format}` }),
 		trash: batch,
+		restoreFromTrash: batch,
+		emptyTrash: batch,
 		reveal: async () => {},
 		quickLook: async () => {},
 		open: async () => {},
@@ -187,7 +188,7 @@ describe("live Finder source adapters", () => {
 
 		expect(fs.readEntries).toHaveBeenCalledWith("/tmp/dir", ["/tmp/dir/added.txt", "/tmp/dir/gone.txt"]);
 		expect(patch.entries.map((entry) => entry.path)).toEqual(["/tmp/dir/added.txt"]);
-		expect(patch.entries[0]?.location).toBe("/tmp/dir");
+		expect(locationOf(patch.entries[0]!)).toBe("/tmp/dir");
 		expect(patch.removed).toEqual(["/tmp/dir/gone.txt"]);
 	});
 
@@ -215,7 +216,7 @@ describe("live Finder source adapters", () => {
 		]);
 
 		expect(patch.entries.map((entry) => entry.name)).toEqual(["Q3_마케팅예산_v3.xlsx"]);
-		expect(patch.entries[0]?.location).toBe(dir);
+		expect(locationOf(patch.entries[0]!)).toBe(dir);
 		expect(patch.removed).toEqual([`${dir}/missing.xlsx`]);
 	});
 
@@ -269,5 +270,95 @@ describe("live Finder source adapters", () => {
 
 		await expect(source.undo()).resolves.toEqual({ ok: true, empty: false, failed: [] });
 		expect(undoCalls).toHaveLength(1);
+	});
+
+	it("fixture trash keeps a row restorable: ⌘Z moves it straight back", async () => {
+		// Given a Desktop file trashed through the source
+		const source = createFixtureSource();
+		await source.trash(["Desktop/회의록_0922.md"]);
+		expect(await source.exists("Desktop/회의록_0922.md")).toBe(false);
+
+		// When undoing the trash
+		expect(await source.undo()).toEqual({ ok: true, empty: false, failed: [] });
+
+		// Then the row is back in its folder
+		expect(await source.exists("Desktop/회의록_0922.md")).toBe(true);
+	});
+
+	it("fixture restores from the Trash view, and undo moves the row back in", async () => {
+		// Given a trashed file the Trash view lists
+		const source = createFixtureSource();
+		await source.trash(["Desktop/회의록_0922.md"]);
+		const listing = await source.list("Trash");
+		const trashPath = listing.find((entry) => entry.name === "회의록_0922.md")?.path;
+		expect(trashPath).toBe("Trash/회의록_0922.md");
+
+		// When putting the payload back
+		const result = await source.restoreFromTrash([trashPath ?? ""]);
+
+		// Then it returns to the original folder under its own name
+		expect(result).toEqual({ ok: [trashPath], failed: [] });
+		expect(await source.exists("Desktop/회의록_0922.md")).toBe(true);
+		expect(await source.exists("Trash/회의록_0922.md")).toBe(false);
+
+		// When undoing the restore
+		expect(await source.undo()).toEqual({ ok: true, empty: false, failed: [] });
+
+		// Then the payload is back in the Trash and restorable again
+		expect(await source.exists("Desktop/회의록_0922.md")).toBe(false);
+		expect(await source.exists("Trash/회의록_0922.md")).toBe(true);
+	});
+
+	it("fixture emptyTrash clears the Trash and consumes the trash undo record", async () => {
+		// Given two trashed files
+		const source = createFixtureSource();
+		await source.trash(["Desktop/회의록_0922.md", "Desktop/주간보고_0919.pptx"]);
+
+		// When emptying
+		const result = await source.emptyTrash();
+
+		// Then both payloads went, the Trash view is empty, and ⌘Z has nothing left
+		expect([...result.ok].sort()).toEqual(["Trash/회의록_0922.md", "Trash/주간보고_0919.pptx"].sort());
+		expect(result.failed).toEqual([]);
+		expect(await source.list("Trash")).toEqual([]);
+		expect(await source.exists("Trash/회의록_0922.md")).toBe(false);
+		expect(await source.undo()).toEqual({ ok: false, empty: true, failed: [] });
+	});
+
+	it("fixture refuses restoring a payload the app never trashed", async () => {
+		// Given a Trash path with no record
+		const source = createFixtureSource();
+
+		// When restoring it, Then the failure names the reason
+		expect(await source.restoreFromTrash(["Trash/never-trashed.txt"])).toEqual({
+			ok: [],
+			failed: [{ path: "Trash/never-trashed.txt", message: expect.stringContaining("원래 위치를 알 수 없습니다") }],
+		});
+	});
+
+	it("bridge source restore and empty forward to the fs bridge", async () => {
+		// Given a bridge whose trash ops record their calls
+		const restorePaths: string[][] = [];
+		const emptied: number[] = [];
+		const fs = {
+			...fakeFs(familyResult()),
+			restoreFromTrash: async (paths: readonly string[]) => {
+				restorePaths.push([...paths]);
+				return { ok: [...paths], failed: [] };
+			},
+			emptyTrash: async () => {
+				emptied.push(1);
+				return { ok: ["/.Trash/a.md"], failed: [] };
+			},
+		};
+		const source = createBridgeSource(fs, "");
+
+		// When restoring and emptying
+		await expect(source.restoreFromTrash(["/.Trash/a.md"])).resolves.toEqual({ ok: ["/.Trash/a.md"], failed: [] });
+		await expect(source.emptyTrash()).resolves.toEqual({ ok: ["/.Trash/a.md"], failed: [] });
+
+		// Then both reached the bridge with their arguments
+		expect(restorePaths).toEqual([["/.Trash/a.md"]]);
+		expect(emptied).toHaveLength(1);
 	});
 });

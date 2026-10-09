@@ -18,12 +18,48 @@ function pad(value: number): string {
 	return String(value).padStart(2, "0");
 }
 
-export function formatModified(iso: string): string {
-	const date = new Date(iso);
-	if (Number.isNaN(date.getTime())) {
+/**
+ * Cell labels are computed when a row renders, so the same few thousand
+ * values are formatted again on every scroll. Memoized by input with a hard
+ * cap: past it the map is dropped and refills from what is on screen.
+ */
+const LABEL_CACHE_LIMIT = 4096;
+
+function memoize<K, V>(compute: (key: K) => V): (key: K) => V {
+	const cache = new Map<K, V>();
+	return (key) => {
+		const hit = cache.get(key);
+		if (hit !== undefined) return hit;
+		const value = compute(key);
+		if (cache.size >= LABEL_CACHE_LIMIT) cache.clear();
+		cache.set(key, value);
+		return value;
+	};
+}
+
+const SECOND_MS = 1000;
+
+/**
+ * "Sep 13, 16:48" for one epoch second. Keyed by the second, not the minute:
+ * time zone offsets are whole seconds (historical LMT offsets are not whole
+ * minutes), so every stamp inside one second shares a local wall minute.
+ */
+const modifiedLabelForSecond = memoize((second: number): string => {
+	const date = new Date(second * SECOND_MS);
+	return `${MONTHS[date.getMonth()] ?? NO_VALUE} ${date.getDate()}, ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+});
+
+/** The Date Modified label for an epoch-ms stamp; an unusable stamp renders as an em dash. */
+export function formatModified(ms: number): string {
+	// `mtimeMs` carries sub-millisecond digits. Node builds `stats.mtime` (what the label
+	// showed when the listing sent an ISO string) with `Math.round`, so a stamp half a
+	// millisecond below a minute boundary belongs to the next minute; truncating or
+	// flooring would put it in the previous one.
+	const whole = Math.round(ms);
+	if (!Number.isFinite(whole) || Number.isNaN(new Date(whole).getTime())) {
 		return NO_VALUE;
 	}
-	return `${MONTHS[date.getMonth()] ?? NO_VALUE} ${date.getDate()}, ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+	return modifiedLabelForSecond(Math.floor(whole / SECOND_MS));
 }
 
 /** Full local date and time for the Info panel, e.g. "2026-01-02 03:04:05". */
@@ -49,9 +85,10 @@ export function parseModifiedLabel(label: string): number {
 }
 
 export function formatSize(bytes: number | null): string {
-	if (bytes === null) {
-		return NO_VALUE;
-	}
+	return bytes === null ? NO_VALUE : sizeLabel(bytes);
+}
+
+const sizeLabel = memoize((bytes: number): string => {
 	if (bytes < 1024) {
 		return `${bytes} B`;
 	}
@@ -63,7 +100,7 @@ export function formatSize(bytes: number | null): string {
 	}
 	const label = unit >= 1 && value < 10 ? value.toFixed(1) : String(Math.round(value));
 	return `${label} ${UNITS[unit] ?? "KB"}`;
-}
+});
 
 /** Sortable byte count for a "84 KB" label. */
 export function parseSizeLabel(label: string): number {
@@ -82,11 +119,33 @@ export function trashToast(paths: readonly string[]): string {
 	return `${paths.length}개 항목을 휴지통으로 이동했습니다`;
 }
 
+export function putBackToast(paths: readonly string[]): string {
+	if (paths.length === 1) {
+		return `${basename(paths[0] ?? "")} — 원래 위치로 복원했습니다`;
+	}
+	return `${paths.length}개 항목을 원래 위치로 복원했습니다`;
+}
+
+/** The toast for an emptied Trash: what went, and the first verbatim refusal. */
+export function emptyTrashToast(result: {
+	readonly ok: readonly string[];
+	readonly failed: readonly { readonly path: string; readonly message: string }[];
+}): string {
+	const first = result.failed[0];
+	if (first === undefined) {
+		return "휴지통을 비웠습니다";
+	}
+	return result.ok.length === 0
+		? `휴지통 비우기 실패: ${first.message}`
+		: `${result.ok.length}개 항목을 삭제했습니다 · ${basename(first.path)} — 삭제하지 못했습니다: ${first.message}`;
+}
+
 /** A batch file operation's verb, as the toast names it. */
-export type BatchVerb = "trash" | "move" | "copy" | "duplicate";
+export type BatchVerb = "trash" | "putBack" | "move" | "copy" | "duplicate";
 
 const BATCH_DONE: Record<BatchVerb, string> = {
 	trash: "휴지통으로 이동했습니다",
+	putBack: "원래 위치로 복원했습니다",
 	move: "옮겼습니다",
 	copy: "복사했습니다",
 	duplicate: "복제했습니다",
@@ -94,6 +153,7 @@ const BATCH_DONE: Record<BatchVerb, string> = {
 
 const BATCH_FAILED: Record<BatchVerb, string> = {
 	trash: "휴지통으로 이동하지 못했습니다",
+	putBack: "원래 위치로 복원하지 못했습니다",
 	move: "옮기지 못했습니다",
 	copy: "복사하지 못했습니다",
 	duplicate: "복제하지 못했습니다",
@@ -109,7 +169,9 @@ export function batchToast(
 ): string {
 	const first = result.failed[0];
 	if (first === undefined) {
-		return verb === "trash" ? trashToast(result.ok) : `${result.ok.length}개 항목을 ${BATCH_DONE[verb]}`;
+		if (verb === "trash") return trashToast(result.ok);
+		if (verb === "putBack") return putBackToast(result.ok);
+		return `${result.ok.length}개 항목을 ${BATCH_DONE[verb]}`;
 	}
 	const failedPart =
 		result.failed.length === 1

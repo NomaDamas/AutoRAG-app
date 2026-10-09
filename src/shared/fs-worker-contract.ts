@@ -32,6 +32,8 @@ export type FsWorkerOp =
 	| "createFolder"
 	| "createFile"
 	| "trash"
+	| "restoreFromTrash"
+	| "emptyTrash"
 	| "reveal"
 	| "quickLook"
 	| "open"
@@ -72,6 +74,10 @@ export const FS_WORKER_CHANNELS = {
 	diagnostics: "fs-worker:diagnostics",
 	/** Main-only handle, registered only with AUTORAG_FS_WORKER_QA=1: a synthetic watcher overflow for a folder. */
 	qaOverflow: "fs-worker:qaOverflow",
+	/** Main-only handle, registered only with AUTORAG_FS_WORKER_QA=1: hold enrichment answers for a path prefix. */
+	qaHoldEnrichment: "fs-worker:qaHoldEnrichment",
+	/** Main-only handle, registered only with AUTORAG_FS_WORKER_QA=1: answer every held enrichment request. */
+	qaReleaseEnrichment: "fs-worker:qaReleaseEnrichment",
 } as const;
 
 /** argv flag carrying the JSON {@link FsWorkerConfig}. */

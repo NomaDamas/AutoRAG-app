@@ -79,6 +79,10 @@ export const REPLAY_UNSAFE_OPS: Readonly<Record<string, true>> = {
 	createFolder: true,
 	// Re-sent, the items that already reached the Trash would come back as failures.
 	trash: true,
+	// Re-sent, a payload that already went back would fail instead of duplicating work.
+	restoreFromTrash: true,
+	// Re-sent, items already permanently deleted would come back as failures.
+	emptyTrash: true,
 	createFile: true,
 	undo: true,
 	ejectLocation: true,

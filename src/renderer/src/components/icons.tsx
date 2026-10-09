@@ -49,6 +49,7 @@ import {
 	ThumbsDown,
 	ThumbsUp,
 	Trash2,
+	Undo2,
 	Users,
 	X,
 	createLucideIcon,
@@ -101,6 +102,11 @@ export const CopyIcon = glyph(Copy, 12, 2);
 export const TrashIcon = glyph(Trash2, 12, 2);
 
 export const ShareIcon = glyph(Share, 14, 2);
+
+/** Toolbar (Trash view): Finder's put-back arrow and the empty-trash can, 18px like the bar's other glyphs. */
+export const PutBackIcon = glyph(Undo2, 18, 2);
+
+export const EmptyTrashIcon = glyph(Trash2, 18, 2);
 
 /** Inspector action bar (18px call size is passed by the bar itself). */
 export const OpenIcon = glyph(ExternalLink, 16, 2);

@@ -70,13 +70,14 @@ function iconTargetArg(value: unknown): IconTarget {
 		typeof value.path === "string" &&
 		"ext" in value &&
 		typeof value.ext === "string" &&
-		"modifiedAt" in value &&
-		typeof value.modifiedAt === "string"
+		"mtimeMs" in value &&
+		typeof value.mtimeMs === "number" &&
+		Number.isFinite(value.mtimeMs)
 	) {
 		const size = "size" in value && typeof value.size === "number" ? value.size : undefined;
-		return { path: value.path, ext: value.ext, modifiedAt: value.modifiedAt, ...(size === undefined ? {} : { size }) };
+		return { path: value.path, ext: value.ext, mtimeMs: value.mtimeMs, ...(size === undefined ? {} : { size }) };
 	}
-	throw new TypeError("icon target must be { path, ext, modifiedAt }");
+	throw new TypeError("icon target must be { path, ext, mtimeMs }");
 }
 
 export function createFsWorkerHost(deps: FsWorkerHostDeps): FsWorkerHost {
@@ -193,8 +194,12 @@ export function registerFsWorkerIpc(host: FsWorkerHost, ipcMain: IpcMain): void 
 		...(await host.client.call<object>("diagnostics")),
 		restarts: host.status().restarts,
 	}));
-	// The worker only answers this op under the same flag.
+	// The worker only answers these ops under the same flag.
 	if (process.env.AUTORAG_FS_WORKER_QA === "1") {
 		ipcMain.handle(FS_WORKER_CHANNELS.qaOverflow, (_event, dir: unknown) => host.client.call("qaOverflow", [dir]));
+		// A QA lane names the ops to hold (`enrichEntries`, `finderMetadata`) and,
+		// on release, the subset to answer now; the rest stay held.
+		ipcMain.handle(FS_WORKER_CHANNELS.qaHoldEnrichment, (_event, prefix: unknown, ops: unknown) => host.client.call("qaHoldEnrichment", [prefix, ops]));
+		ipcMain.handle(FS_WORKER_CHANNELS.qaReleaseEnrichment, (_event, ops: unknown) => host.client.call("qaReleaseEnrichment", [ops]));
 	}
 }

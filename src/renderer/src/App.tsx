@@ -1,16 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactElement } from "react";
+import { useTranslation } from "react-i18next";
 import type { QuickLookTarget } from "../../preview/shared/contract";
 import type { Bounds } from "../../preview/shared/fit";
 import { NO_CAPABILITIES, type ActionAnchor } from "../../shared/actions-contract";
 import { DEFAULT_SETTINGS, type AppSettings, type DataSourcesSnapshot } from "../../shared/settings-contract";
 import { setAppLanguage } from "../../shared/i18n";
 import type { ChatAttachment, CitationEvidence } from "../../shared/search-contract";
+import type { OsRendererRequest } from "../../shared/os-request-contract";
 import type { FsLocationIcon } from "../../shared/fs-contract";
 import { AiSearchPanel, type AiDockHandle } from "./components/AiSearchPanel";
 import { FinderPane, type PaneShell } from "./components/FinderPane";
 import { Inspector, type InspectorFamily } from "./components/Inspector";
 import { ContextMenu } from "./components/primitives/ContextMenu";
 import { Toast } from "./components/primitives/Toast";
+import { ConfirmDialog } from "./components/primitives/ConfirmDialog";
 import { Sidebar } from "./components/Sidebar";
 import type { SearchMode } from "./components/SidebarSearch";
 import { Toolbar } from "./components/Toolbar";
@@ -167,6 +170,7 @@ function PaneGrip({
 }
 
 export function App(): ReactElement {
+	const { t } = useTranslation();
 	const source = useFinderSource();
 	const [showHiddenFiles, setShowHiddenFiles] = useState(false);
 	/** The Interface language setting; "AI 요약" prompts in this language. */
@@ -414,6 +418,40 @@ export function App(): ReactElement {
 		[deliverToAi, finder],
 	);
 
+	/**
+	 * Requests from the OS file menu ("Ask AutoRAG", "Show in AutoRAG"). They are
+	 * drained into a ref first: a cold start delivers one before the first pane
+	 * has published its controller, and the effect below runs them once it has.
+	 */
+	const osQueueRef = useRef<OsRendererRequest[]>([]);
+	const [osQueueTick, setOsQueueTick] = useState(0);
+	useEffect(() => {
+		const drain = (): void => {
+			autorag.osRequests
+				.take()
+				.then((requests) => {
+					if (requests.length === 0) return;
+					osQueueRef.current.push(...requests);
+					setOsQueueTick((tick) => tick + 1);
+				})
+				.catch((error: unknown) => console.error("os request take failed", error));
+		};
+		drain();
+		return autorag.osRequests.onAvailable(drain);
+	}, []);
+	useEffect(() => {
+		if (finder === undefined) return;
+		for (const request of osQueueRef.current.splice(0)) {
+			if (request.action === "reveal") {
+				finder.revealEvidence(request.path);
+			} else {
+				// Attached as drafts on the nearest AI Search tab: the user types the question.
+				finder.focusAiSearch();
+				deliverToAi({ attach: request.attachments });
+			}
+		}
+	}, [osQueueTick, finder, deliverToAi]);
+
 	/** Answer and evidence images: a local picture opens in Quick Look; a web image's page (never fetched) in the OS browser. */
 	const revealEvidence = finder?.revealEvidence;
 	const imageActions = useMemo(
@@ -603,6 +641,10 @@ export function App(): ReactElement {
 						onShare={(anchor) => {
 							if (focused !== null) finder?.runEntryAction(focused, { kind: "share" }, anchor);
 						}}
+						trashActive={finder?.inTrashLocation === true}
+						canPutBack={(finder?.selection.keys.length ?? 0) > 0}
+						onPutBack={() => finder?.putBackSelection()}
+						onEmptyTrash={() => finder?.requestEmptyTrash()}
 						sidebarHidden={!sidebarVisible}
 						onShowSidebar={() => setSidebarVisible(true)}
 					/>
@@ -673,6 +715,7 @@ export function App(): ReactElement {
 								onAskAi={askAi}
 								actionCapabilities={finder?.actionCapabilities ?? NO_CAPABILITIES}
 								onAction={runInspectorAction}
+								loadOpenWithApplications={(entry) => finder?.loadOpenWithApplications(entry) ?? Promise.resolve([])}
 								family={inspectorFamily}
 								onOpenMember={openMemberEntry}
 								view={aiTabActive ? "evidence" : "info"}
@@ -711,6 +754,17 @@ export function App(): ReactElement {
 					onClose={finder.closeContextMenu}
 				/>
 			)}
+			{finder?.emptyTrashConfirm === true ? (
+				<ConfirmDialog
+					title={t("confirm.emptyTrashTitle", "휴지통 비우기")}
+					message={t("confirm.emptyTrashMessage", "휴지통의 모든 항목이 영구 삭제됩니다. 이 작업은 되돌릴 수 없습니다.")}
+					confirmLabel={t("confirm.emptyTrashAction", "비우기")}
+					cancelLabel={t("common.cancel", "취소")}
+					danger
+					onConfirm={() => finder?.confirmEmptyTrash()}
+					onCancel={() => finder?.cancelEmptyTrash()}
+				/>
+			) : null}
 		</div>
 	);
 }

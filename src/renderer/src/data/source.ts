@@ -8,6 +8,7 @@
  */
 
 import { NO_CAPABILITIES, type ActionsBridge } from "../../../shared/actions-contract";
+import { NO_SERVICES, type ServicesBridge } from "../../../shared/services-contract";
 import { RECENTS_PATH, type FsBatchResult, type FsBridge, type FsClipboard, type FsEnrichmentTarget, type FsEntryEnrichment, type FsFinderEnrichment, type FsLocation, type FsLocationIcon, type FsOpError, type FsSearchOptions, type FsUndoOutcome, type FsVersionFamiliesResult } from "../../../shared/fs-contract";
 import { newFileFormat, type NewFileFormatId } from "../../../shared/new-file-contract";
 import type { IndexStatus } from "../../../shared/index-contract";
@@ -26,7 +27,7 @@ import {
 	type VersionFamiliesResult,
 	type VersionRelation,
 } from "../state/version-family";
-import { type FinderEntry, entryFromFixture, entryFromFs, entryFromSearchHit } from "./entries";
+import { type FinderEntry, entryFromFixture, entryFromFs, entryFromSearchHit, hasFileVersion } from "./entries";
 import { FIXTURE_FAMILIES, FIXTURE_INITIAL_PATH, FIXTURE_TREE } from "./fixtures";
 import type { FixtureItem } from "./entries";
 
@@ -44,6 +45,7 @@ export interface SearchHits {
 const UNAVAILABLE_ACTIONS: ActionsBridge = {
 	capabilities: () => Promise.resolve(NO_CAPABILITIES),
 	run: () => Promise.reject(new Error("이 환경에서는 파일 작업을 실행할 수 없습니다")),
+	openWithApplications: () => Promise.resolve([]),
 	share: () => Promise.reject(new Error("이 환경에서는 공유를 실행할 수 없습니다")),
 };
 
@@ -53,6 +55,8 @@ export interface FinderSource {
 	readonly initialPath: string;
 	/** Inspection actions (open with, archive, share, simple edits). */
 	readonly actions: ActionsBridge;
+	/** The OS services (macOS right-click → 서비스) for a selection; empty off macOS and in fixtures. */
+	readonly services: ServicesBridge;
 	setWatchSet(dirs: readonly string[]): Promise<void>;
 	onLive(listener: (message: LiveMessage) => void): () => void;
 	/**
@@ -99,6 +103,10 @@ export interface FinderSource {
 	reveal(path: string): Promise<void>;
 	/** Move to the Trash; per-path outcome, so a partial batch is never silent. */
 	trash(paths: readonly string[]): Promise<FsBatchResult>;
+	/** Restore trashed payloads back to the folders they came from (Trash view "Put Back"). */
+	restoreFromTrash(paths: readonly string[]): Promise<FsBatchResult>;
+	/** Permanently delete everything in the Trash. */
+	emptyTrash(): Promise<FsBatchResult>;
 	rename(path: string, name: string): Promise<void>;
 	/** Create a new folder (Finder-style "untitled folder" / "untitled folder 2"). */
 	createFolder(dir: string): Promise<{ readonly path: string; readonly name: string }>;
@@ -130,18 +138,10 @@ export async function isMissingPathFailure(
 	return !(await source.exists(path));
 }
 
-/** Main-process identity for each row that knows its mtime; the mtime gates every patch. */
+/** Main-process identity for each row backed by a file version; the mtime gates every patch. */
 function enrichmentTargets(entries: readonly FinderEntry[]): FsEnrichmentTarget[] {
 	return entries.flatMap((entry) =>
-		entry.modifiedAt === undefined
-			? []
-			: [{
-					path: entry.path,
-					kind: entry.kind,
-					ext: entry.kind === "folder" ? "" : entry.name.includes(".") ? entry.name.split(".").pop()?.toLowerCase() ?? "" : "",
-					modifiedAt: entry.modifiedAt,
-					...(entry.createdAt === undefined ? {} : { createdAt: entry.createdAt }),
-				}],
+		hasFileVersion(entry) ? [{ path: entry.path, kind: entry.kind, ext: entry.ext, mtimeMs: entry.mtimeMs }] : [],
 	);
 }
 
@@ -152,6 +152,7 @@ export function createBridgeSource(
 	initialPath: string,
 	live?: LiveBridge,
 	actions: ActionsBridge = UNAVAILABLE_ACTIONS,
+	services: ServicesBridge = NO_SERVICES,
 ): FinderSource {
 	const mapVersionFamiliesResult = (result: FsVersionFamiliesResult): VersionFamiliesResult => ({
 		families: result.families.map((family) => ({
@@ -174,6 +175,7 @@ export function createBridgeSource(
 		native: true,
 		initialPath,
 		actions,
+		services,
 		setWatchSet: (dirs) => live?.setWatchSet(dirs) ?? Promise.resolve(),
 		onLive: (listener) => {
 			return live?.onMessage((message) => listener({
@@ -192,15 +194,14 @@ export function createBridgeSource(
 		exists: (path) => fs.exists(path),
 		async list(path) {
 			const listing = await fs.listDir(path);
-			// Recents is virtual: a row's location is the real folder that holds the file.
-			return listing.entries.map((entry) => entryFromFs(entry, path === RECENTS_PATH ? undefined : path));
+			// A row's folder is derived from its path, so Recents rows point at the real folder.
+			return listing.entries.map(entryFromFs);
 		},
 		enrich: (entries) => fs.enrichEntries(enrichmentTargets(entries), true),
 		finderMetadata: (entries) => fs.finderMetadata(enrichmentTargets(entries)),
 		async readEntries(dir, paths) {
 			const patch = await fs.readEntries(dir, paths);
-			// Rows belong to the requested dir, not the child's own parent lookup.
-			return { entries: patch.entries.map((entry) => entryFromFs(entry, dir)), removed: patch.removed };
+			return { entries: patch.entries.map(entryFromFs), removed: patch.removed };
 		},
 		async search(query, options) {
 			const hits = await fs.search(query, options);
@@ -214,6 +215,8 @@ export function createBridgeSource(
 		openUrl: (url) => fs.openUrl(url),
 		reveal: (path) => fs.reveal(path),
 		trash: (paths) => fs.trash(paths),
+		restoreFromTrash: (paths) => fs.restoreFromTrash(paths),
+		emptyTrash: () => fs.emptyTrash(),
 		rename: async (path, name) => {
 			await fs.rename(path, name);
 		},
@@ -247,6 +250,8 @@ interface FixtureState {
 	indexExcluded: Set<string>;
 	/** Fixture volumes the sidebar eject button removed. */
 	ejected: Set<string>;
+	/** Fixture Trash origins: payload path → the folder the item came from. */
+	trash: Map<string, string>;
 }
 
 /** Fixture sidebar rows: the FIXTURE_TREE roots plus two volumes to eject. */
@@ -267,7 +272,7 @@ function seedFixtureState(): FixtureState {
 	for (const [path, items] of Object.entries(FIXTURE_TREE)) {
 		tree.set(path, [...items]);
 	}
-	return { tree, clipboard: null, indexExcluded: new Set(), ejected: new Set() };
+	return { tree, clipboard: null, indexExcluded: new Set(), ejected: new Set(), trash: new Map() };
 }
 
 function takenNames(state: FixtureState, dir: string): string[] {
@@ -314,9 +319,9 @@ export function createFixtureSource(): FinderSource {
 	const state = seedFixtureState();
 	const resolve = (): Promise<void> => Promise.resolve();
 
-	/** One fixture undo step: the row the operation created or moved, and its origin. */
+	/** One fixture undo step: the row the operation created or moved, and its origin. A trash step keeps the source path and its folder; a restore step keeps the restored row and its payload path. */
 	interface FixtureUndoStep {
-		readonly kind: "copy" | "move" | "create";
+		readonly kind: "copy" | "move" | "create" | "trash" | "restore";
 		readonly path: string;
 		readonly from: string;
 	}
@@ -330,6 +335,7 @@ export function createFixtureSource(): FinderSource {
 		native: false,
 		initialPath: FIXTURE_INITIAL_PATH,
 		actions: UNAVAILABLE_ACTIONS,
+		services: NO_SERVICES,
 		setWatchSet: resolve,
 		onLive: () => () => {},
 		onReconnect: () => () => {},
@@ -397,10 +403,51 @@ export function createFixtureSource(): FinderSource {
 		openUrl: resolve,
 		reveal: resolve,
 		trash: (paths) => {
+			const steps: FixtureUndoStep[] = [];
+			const ok: string[] = [];
+			const failed: FsOpError[] = [];
 			for (const path of paths) {
-				removeItem(state, path);
+				const item = removeItem(state, path);
+				if (item === null) {
+					failed.push({ path, message: "항목을 찾을 수 없습니다" });
+					continue;
+				}
+				// The fixture Trash is a plain folder: the item moves there and its origin is remembered.
+				const name = copyName(item.name, takenNames(state, "Trash"));
+				insertItem(state, "Trash", { ...item, name });
+				state.trash.set(joinPath("Trash", name), dirname(path));
+				ok.push(path);
+				steps.push({ kind: "trash", path, from: dirname(path) });
 			}
-			return Promise.resolve({ ok: [...paths], failed: [] });
+			if (steps.length > 0) lastUndo = steps;
+			return Promise.resolve({ ok, failed });
+		},
+		restoreFromTrash: (paths) => {
+			const steps: FixtureUndoStep[] = [];
+			const ok: string[] = [];
+			const failed: FsOpError[] = [];
+			for (const trashPath of paths) {
+				const originalDir = state.trash.get(trashPath);
+				const item = originalDir === undefined ? null : removeItem(state, trashPath);
+				if (originalDir === undefined || item === null) {
+					failed.push({ path: trashPath, message: "원래 위치를 알 수 없습니다" });
+					continue;
+				}
+				state.trash.delete(trashPath);
+				const name = copyName(item.name, takenNames(state, originalDir));
+				insertItem(state, originalDir, { ...item, name });
+				ok.push(trashPath);
+				steps.push({ kind: "restore", path: joinPath(originalDir, name), from: trashPath });
+			}
+			if (steps.length > 0) lastUndo = steps;
+			return Promise.resolve({ ok, failed });
+		},
+		emptyTrash: () => {
+			const ok = (state.tree.get("Trash") ?? []).map((item) => joinPath("Trash", item.name));
+			state.tree.set("Trash", []);
+			state.trash.clear();
+			if (lastUndo?.some((step) => step.kind === "trash") === true) lastUndo = null;
+			return Promise.resolve({ ok, failed: [] });
 		},
 		rename: (path, name) => {
 			const item = findItem(state, path);
@@ -488,6 +535,35 @@ export function createFixtureSource(): FinderSource {
 			}
 			const failed: FsOpError[] = [];
 			for (const step of steps) {
+				if (step.kind === "trash") {
+					// The item sits in the fixture Trash; move it straight back to its folder.
+					const trashItems = state.tree.get("Trash") ?? [];
+					const index = trashItems.findIndex((item) => item.name === basename(step.path));
+					if (index < 0) {
+						failed.push({ path: step.path, message: "휴지통에서 항목을 찾을 수 없습니다" });
+						continue;
+					}
+					const [moved] = trashItems.splice(index, 1);
+					if (moved === undefined) {
+						failed.push({ path: step.path, message: "휴지통에서 항목을 찾을 수 없습니다" });
+						continue;
+					}
+					state.trash.delete(joinPath("Trash", moved.name));
+					insertItem(state, step.from, { ...moved, name: copyName(moved.name, takenNames(state, step.from)) });
+					continue;
+				}
+				if (step.kind === "restore") {
+					// Undoing a Put Back moves the row back into the fixture Trash.
+					const item = removeItem(state, step.path);
+					if (item === null) {
+						failed.push({ path: step.path, message: "되돌릴 항목이 없습니다" });
+						continue;
+					}
+					const name = copyName(item.name, takenNames(state, "Trash"));
+					insertItem(state, "Trash", { ...item, name });
+					state.trash.set(joinPath("Trash", name), dirname(step.path));
+					continue;
+				}
 				const item = findItem(state, step.path);
 				if (item === null) {
 					failed.push({ path: step.path, message: "되돌릴 항목이 없습니다" });

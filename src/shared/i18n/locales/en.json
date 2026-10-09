@@ -44,7 +44,9 @@
     "toggleInspector": "Toggle inspector",
     "showAiSearch": "Show AI Search",
     "aiSearchShortcut": "AI Search ({{shortcut}})",
-    "share": "Share"
+    "share": "Share",
+    "putBack": "Put Back",
+    "emptyTrash": "Empty Trash"
   },
   "sort": {
     "none": "None",
@@ -105,6 +107,7 @@
   "contextMenu": {
     "open": "Open",
     "quickLook": "Quick Look",
+    "openWith": "Open With",
     "showInEnclosingFolder": "Show in Enclosing Folder",
     "retryIndex": "Retry indexing",
     "excludeFromIndex": "Exclude from indexing",
@@ -115,8 +118,16 @@
     "duplicate": "Duplicate",
     "rename": "Rename",
     "copyPath": "Copy Path",
+    "compress": "Compress",
+    "compressCount": "Compress {{count}} Items",
+    "extract": "Extract",
+    "share": "Share",
+    "services": "Services",
     "moveToTrash": "Move to Trash",
     "moveToTrashCount": "Move {{count}} items to Trash",
+    "putBack": "Put Back",
+    "putBackCount": "Put Back {{count}} items",
+    "emptyTrash": "Empty Trash",
     "newFolder": "New Folder",
     "new": "New",
     "trashShort": "Trash"
@@ -221,6 +232,10 @@
       "older": "Earlier"
     }
   },
+  "osMenu": {
+    "ask": "Ask AutoRAG",
+    "reveal": "Show in AutoRAG"
+  },
   "toasts": {
     "trashSingle": "Moved {{name}} to Trash",
     "trashCount": "Moved {{count}} items to Trash",
@@ -228,6 +243,11 @@
     "indexExcluded": "{{name}} — excluded from indexing",
     "copiedPath": "Copied path",
     "feedbackSent": "Feedback sent"
+  },
+  "confirm": {
+    "emptyTrashTitle": "Empty Trash",
+    "emptyTrashMessage": "All items in the Trash will be permanently deleted. This cannot be undone.",
+    "emptyTrashAction": "Empty"
   },
   "settings": {
     "title": "Settings",
@@ -265,7 +285,10 @@
       "autoUpdates": "Automatically install updates",
       "autoUpdatesHint": "Apply updates on next app restart.",
       "telemetry": "Share anonymous diagnostics",
-      "telemetryHint": "Share anonymized performance diagnostics."
+      "telemetryHint": "Share anonymized performance diagnostics.",
+      "osMenuIntegration": "Add to the file right-click menu",
+      "osMenuIntegrationHint": "Right-click a file in Finder (macOS) or Explorer (Windows) to get 'Ask AutoRAG' and 'Show in AutoRAG'.",
+      "osMenuIntegrationError": "Could not set up the right-click menu"
     }
   },
   "onboarding": {

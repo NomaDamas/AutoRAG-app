@@ -2,15 +2,20 @@ import { app, BrowserWindow, ipcMain, nativeImage, type WebContents } from "elec
 import {
 	ACTIONS_CHANNELS,
 	isActionAnchor,
+	isActionPaths,
 	isActionRequest,
 } from "../shared/actions-contract";
 import { FS_CHANNELS } from "../shared/fs-contract";
 import { SEARCH_CHANNELS, type SearchBridge } from "../shared/search-contract";
+import { OS_REQUEST_CHANNELS } from "../shared/os-request-contract";
 import { SETTINGS_CHANNELS, type JsonValue, type SettingsBridge } from "../shared/settings-contract";
 import { ONBOARDING_CHANNELS } from "../shared/onboarding-contract";
+import { isServiceRunRequest, SERVICES_CHANNELS } from "../shared/services-contract";
 import type { ActionService } from "./action-service";
 import { dragOutPaths } from "./drag-out";
 import type { OnboardingService } from "./onboarding-service";
+import type { OsRequestService } from "./os-request-service";
+import type { ServicesService } from "./services-service";
 
 /**
  * The row drag-out: the renderer has already cancelled its own drag
@@ -43,15 +48,31 @@ export function registerDragOutIpcHandlers(): void {
 /** Inspector file actions: probe once, run one request, or pop the share sheet. */
 export function registerActionsIpcHandlers(service: ActionService): void {
 	ipcMain.handle(ACTIONS_CHANNELS.capabilities, () => service.capabilities());
-	ipcMain.handle(ACTIONS_CHANNELS.run, (event, path: unknown, request: unknown) => {
-		if (typeof path !== "string" || path.length === 0) throw new Error("파일 경로가 올바르지 않습니다");
+	ipcMain.handle(ACTIONS_CHANNELS.run, (event, paths: unknown, request: unknown) => {
+		if (!isActionPaths(paths)) throw new Error("파일 경로가 올바르지 않습니다");
 		if (!isActionRequest(request)) throw new Error("알 수 없는 파일 작업입니다");
-		return service.run(path, request, BrowserWindow.fromWebContents(event.sender));
+		return service.run(paths, request, BrowserWindow.fromWebContents(event.sender));
 	});
-	ipcMain.handle(ACTIONS_CHANNELS.share, (event, path: unknown, anchor: unknown) => {
+	ipcMain.handle(ACTIONS_CHANNELS.openWithApplications, (_event, path: unknown) => {
 		if (typeof path !== "string" || path.length === 0) throw new Error("파일 경로가 올바르지 않습니다");
+		return service.openWithApplications(path);
+	});
+	ipcMain.handle(ACTIONS_CHANNELS.share, (event, paths: unknown, anchor: unknown) => {
+		if (!isActionPaths(paths)) throw new Error("파일 경로가 올바르지 않습니다");
 		if (!isActionAnchor(anchor)) throw new Error("공유 위치가 올바르지 않습니다");
-		return service.share(path, anchor, BrowserWindow.fromWebContents(event.sender));
+		return service.share(paths, anchor, BrowserWindow.fromWebContents(event.sender));
+	});
+}
+
+/** The OS Services submenu: list what the system offers for a selection, and perform one. */
+export function registerServicesIpcHandlers(service: ServicesService): void {
+	ipcMain.handle(SERVICES_CHANNELS.list, (_event, paths: unknown) => {
+		if (!isActionPaths(paths)) throw new Error("파일 경로가 올바르지 않습니다");
+		return service.list(paths);
+	});
+	ipcMain.handle(SERVICES_CHANNELS.run, (_event, id: unknown, paths: unknown) => {
+		if (typeof id !== "string" || !isServiceRunRequest(id, paths)) throw new Error("서비스 요청이 올바르지 않습니다");
+		return service.run(id, paths);
 	});
 }
 
@@ -188,4 +209,9 @@ export function registerOnboardingIpcHandlers(service: OnboardingService): void 
 	ipcMain.handle(ONBOARDING_CHANNELS.startIndexing, (_event, request: unknown) => service.startIndexing(request));
 	ipcMain.handle(ONBOARDING_CHANNELS.indexStatus, () => service.indexStatus());
 	ipcMain.handle(ONBOARDING_CHANNELS.complete, () => service.complete());
+}
+
+/** The renderer drains requests that came from the OS file menu. */
+export function registerOsRequestIpcHandlers(service: OsRequestService): void {
+	ipcMain.handle(OS_REQUEST_CHANNELS.take, () => service.take());
 }

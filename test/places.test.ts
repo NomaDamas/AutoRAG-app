@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join, win32 } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createPlaces, type PlaceCommandRunner, type PlacesDeps } from "../src/main/places";
-import { readRecycleBinName } from "../src/main/recycle-bin";
+import { readRecycleBinName, readRecycleBinRecord } from "../src/main/recycle-bin";
 import type { FsLocation } from "../src/shared/fs-contract";
 
 let root: string;
@@ -84,6 +84,21 @@ describe("macOS places", () => {
 			"Downloads",
 		]);
 		expect(favorites.every((location) => !location.ejectable)).toBe(true);
+	});
+
+	it("answers ~/.Trash as the Trash location", async () => {
+		// Given a macOS home with the standard folders
+		const home = await macHome();
+		const places = createPlaces({
+			homeDir: home,
+			platform: "darwin",
+			volumesRoot: join(root, "Volumes"),
+			applicationsDir: join(root, "Applications"),
+			run: runner({ mount: "" }).run,
+		});
+
+		// When asking for the Trash, Then it is the home's .Trash
+		await expect(places.trashDir()).resolves.toBe(join(home, ".Trash"));
 	});
 
 	it("marks a missing favorite folder unavailable instead of dropping its slot", async () => {
@@ -415,6 +430,22 @@ describe("Windows places", () => {
 		expect(bySection(locations, "locations").map((location) => location.name)).toEqual(["Local Disk (C:)"]);
 	});
 
+	it("answers the boot drive's Recycle Bin folder for the user SID", async () => {
+		// Given a Windows profile with a readable SID
+		const { deps } = winDeps({}, { reg: NO_SYNC_ROOTS, "powershell.exe": C_ONLY });
+
+		// When asking for the Trash, Then it is the per-user SID folder on the system drive
+		await expect(createPlaces(deps).trashDir()).resolves.toBe(`C:\\$Recycle.Bin\\${SID}`);
+	});
+
+	it("answers null for the Trash when the user SID cannot be read", async () => {
+		// Given a machine where whoami is unavailable
+		const { deps } = winDeps({}, { whoami: new Error("spawn whoami ENOENT"), reg: NO_SYNC_ROOTS, "powershell.exe": C_ONLY });
+
+		// When asking for the Trash, Then there is no Recycle Bin folder to answer
+		await expect(createPlaces(deps).trashDir()).resolves.toBeNull();
+	});
+
 	it("lists the cloud sync roots registered with the OS, one per account", async () => {
 		// Given two OneDrive accounts and Google Drive registered as sync roots
 		const base = "HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\SyncRootManager";
@@ -552,5 +583,32 @@ describe("Recycle Bin $I records", () => {
 
 		// When reading it, Then there is no name
 		expect(await readRecycleBinName(path)).toBeNull();
+	});
+
+	it("reads the full original path and deleted-at FILETIME a record carries", async () => {
+		// Given a version-2 record with a stamped delete time
+		const original = "C:\\Users\\me\\Documents\\보고서.docx";
+		const header = Buffer.alloc(28);
+		header.writeBigInt64LE(2n, 0);
+		header.writeBigInt64LE(1234n, 8);
+		header.writeBigInt64LE(132_000_000_000_000_000n, 16);
+		header.writeInt32LE(original.length + 1, 24);
+		const path = join(root, "$IWHEN.docx");
+		await writeFile(path, Buffer.concat([header, utf16(original)]));
+
+		// When reading it as a record, Then both fields come back
+		expect(await readRecycleBinRecord(path)).toEqual({
+			originalPath: original,
+			deletedAt: 132_000_000_000_000_000n,
+		});
+	});
+
+	it("answers no record for a file that is not one", async () => {
+		// Given an unrelated short file
+		const path = join(root, "notes.txt");
+		await writeFile(path, "x");
+
+		// When reading it as a record, Then there is none
+		expect(await readRecycleBinRecord(path)).toBeNull();
 	});
 });

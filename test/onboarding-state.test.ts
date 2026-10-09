@@ -48,6 +48,7 @@ const DEFAULT_SETTINGS: AppSettings = {
 	telemetry: false,
 	showHiddenFiles: false,
 	dupeyScanIntervalMinutes: 60,
+	osMenuIntegration: false,
 };
 
 function makeDeps(userDataDir: string, env: NodeJS.ProcessEnv = {}): OnboardingServiceDeps {

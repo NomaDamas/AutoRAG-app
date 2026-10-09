@@ -5,10 +5,11 @@ import { useFolderListings } from "./useFolderListings";
 import { useRowPipeline } from "./useRowPipeline";
 import { itemElement, useFinderKeyboard } from "./useFinderKeyboard";
 import type { MouseEvent as ReactMouseEvent, RefObject } from "react";
-import { NO_CAPABILITIES, type ActionAnchor, type ActionCapabilities } from "../../../shared/actions-contract";
+import { NO_CAPABILITIES, type ActionAnchor, type ActionCapabilities, type OpenWithApplication } from "../../../shared/actions-contract";
 import { RECENTS_PATH } from "../../../shared/fs-contract";
 import type { IndexStatus } from "../../../shared/index-contract";
 import { DUPEY_LAYER_ID, type LiveMessage } from "../../../shared/live-contract";
+import type { ServiceEntry } from "../../../shared/services-contract";
 import type { DirectoryStore } from "../data/directory-store";
 import type { FinderEntry } from "../data/entries";
 import type { EntrySidecar } from "../data/entry-sidecar";
@@ -33,7 +34,7 @@ import {
 import type { NewFileFormatId } from "../../../shared/new-file-contract";
 import { planTransfer } from "../state/file-transfer";
 import type { FileActionTarget } from "../state/file-actions";
-import { batchToast, emptyStateText, indexToast } from "../state/format";
+import { batchToast, emptyStateText, emptyTrashToast, indexToast } from "../state/format";
 import { evidenceSourceUrl, findEvidenceSource } from "../state/evidence";
 import type { FocusZone } from "../state/keymap";
 import { nearestExistingAncestor, pruneSelection, withoutPaths } from "../state/live";
@@ -60,6 +61,7 @@ import {
 	type GroupKey,
 	type GroupSection,
 } from "../state/grouping";
+import { locationOf } from "../state/entry-values";
 import { type SortDirection, type SortKey, type SortState, cycleSort, explicitSort } from "../state/sort";
 import {
 	expandedFolders,
@@ -213,6 +215,8 @@ export interface FinderController {
 	readonly actionCapabilities: ActionCapabilities;
 	/** Run one Inspector action (open, share, or an action request). */
 	runEntryAction(entry: FinderEntry, target: FileActionTarget, anchor: ActionAnchor | null): void;
+	/** The applications the OS registers for `entry`'s type, default first (the "다른 앱으로 열기" menu). */
+	loadOpenWithApplications(entry: FinderEntry): Promise<readonly OpenWithApplication[]>;
 	/** The rows a drag of `entry` carries: the whole selection when it is selected, else just `entry`. */
 	dragEntries(entry: FinderEntry): readonly FinderEntry[];
 	/** Copy the current selection to the in-app file clipboard (⌘C). */
@@ -223,6 +227,18 @@ export interface FinderController {
 	pasteClipboard(move: boolean): void;
 	/** Undo the most recent recorded copy/move transfer (⌘Z). */
 	undoLastTransfer(): void;
+	/** True while the focused tab lists the Trash location itself. */
+	readonly inTrashLocation: boolean;
+	/** Put the selected trashed rows back where they came from (Trash view). */
+	putBackSelection(): void;
+	/** Open the destructive confirm for 휴지통 비우기. */
+	requestEmptyTrash(): void;
+	/** Run the confirmed 휴지통 비우기. */
+	confirmEmptyTrash(): void;
+	/** Close the 휴지통 비우기 confirm without deleting. */
+	cancelEmptyTrash(): void;
+	/** Whether the 휴지통 비우기 confirm is showing. */
+	readonly emptyTrashConfirm: boolean;
 	/** An in-app row drop: ⌥ copies, otherwise the rows move into the target folder. */
 	transferDropped(paths: readonly string[], destDir: string, copy: boolean): void;
 	/** A drop on another tab: switch to it, then move/copy the rows into its folder. */
@@ -278,7 +294,7 @@ export interface FinderController {
 	/** The empty-space menu for `dir` (New / Paste); defaults to the folder in view. */
 	openBackgroundContextMenu(event: ReactMouseEvent<HTMLDivElement>, dir?: string): void;
 	closeContextMenu(): void;
-	runMenuAction(action: FinderMenuAction, format?: NewFileFormatId | null): void;
+	runMenuAction(action: FinderMenuAction, format?: NewFileFormatId | null, serviceId?: string | null): void;
 	toggleIndex(entry: FinderEntry): void;
 	toggleStack(entry: FinderEntry): void;
 	/** Folder disclosure triangle: nest or hide the folder's contents in place. */
@@ -361,6 +377,11 @@ export function useFinderController(
 	const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
 	const [rename, setRename] = useState<RenameState | null>(null);
 	const [clipboardCount, setClipboardCount] = useState(0);
+	/** The OS services offered for the open context menu's target; refilled on every right-click. */
+	const [menuServices, setMenuServices] = useState<readonly ServiceEntry[]>([]);
+	const menuServicesToken = useRef(0);
+	/** The 휴지통 비우기 confirm: destructive, so it never runs without an explicit click. */
+	const [emptyTrashConfirm, setEmptyTrashConfirm] = useState(false);
 	const [flashPath, setFlashPath] = useState<string | null>(null);
 	const [searchFocused, setSearchFocused] = useState(false);
 	const [revision, setRevision] = useState(0);
@@ -856,7 +877,7 @@ export function useFinderController(
 
 	const revealEntry = useLatestCallback((entry: FinderEntry) => {
 		setTabsState((state) =>
-			patchActiveTab(navigateTab(state, entry.location), (current) => ({
+			patchActiveTab(navigateTab(state, locationOf(entry)), (current) => ({
 				...current,
 				selection: { keys: [entry.path], anchor: entry.path, focus: entry.path },
 			})),
@@ -868,9 +889,10 @@ export function useFinderController(
 
 	const openEntry = useLatestCallback(
 		(entry: FinderEntry) => {
+			const location = locationOf(entry);
 			if (entry.kind === "folder") {
 				// In the column view the click already opened the folder in the next pane.
-				if (layout === "columns" && panePaths.includes(entry.location)) {
+				if (layout === "columns" && panePaths.includes(location)) {
 					return;
 				}
 				navigate(entry.path);
@@ -879,9 +901,9 @@ export function useFinderController(
 			// A Recents row always opens: the view is a history, not a folder to reveal into.
 			// Rows nested under an open folder are in view already, so they open too.
 			const inView =
-				entry.location === path ||
-				openFolders.includes(entry.location) ||
-				(layout === "columns" && panePaths.includes(entry.location));
+				location === path ||
+				openFolders.includes(location) ||
+				(layout === "columns" && panePaths.includes(location));
 			if (searching || (!inView && path !== RECENTS_PATH)) {
 				revealEntry(entry);
 				return;
@@ -923,6 +945,48 @@ export function useFinderController(
 				})
 				.catch(reportError);
 		});
+
+	/** The sidebar's Trash location, the only folder whose rows restore instead of trash. */
+	const trashLocationPath = useMemo(
+		() => locations.find((location) => location.icon === "trash")?.path ?? null,
+		[locations],
+	);
+	const inTrashLocation = trashLocationPath !== null && path === trashLocationPath;
+
+	/**
+	 * Put trashed rows back where they came from (Trash view "Put Back").
+	 * ⌘Z afterwards moves them back into the Trash.
+	 */
+	const restoreFromTrash = useLatestCallback(
+		(paths: readonly string[]) => {
+			if (paths.length === 0) {
+				return;
+			}
+			source
+				.restoreFromTrash(paths)
+				.then((result) => {
+					dropRemoved(result.ok);
+					showToast(batchToast("putBack", result));
+					refresh();
+				})
+				.catch(reportError);
+		});
+
+	const putBackSelection = useLatestCallback(() => restoreFromTrash(selection.keys));
+
+	const requestEmptyTrash = useLatestCallback(() => setEmptyTrashConfirm(true));
+	const cancelEmptyTrash = useLatestCallback(() => setEmptyTrashConfirm(false));
+	const confirmEmptyTrash = useLatestCallback(() => {
+		setEmptyTrashConfirm(false);
+		source
+			.emptyTrash()
+			.then((result) => {
+				dropRemoved(result.ok);
+				showToast(emptyTrashToast(result));
+				refresh();
+			})
+			.catch(reportError);
+	});
 
 	/**
 	 * Flips the file's `excludePaths` entry in the shared AutoRAG config. The row
@@ -1073,21 +1137,26 @@ export function useFinderController(
 						showToast("공유 위치를 찾지 못했습니다");
 						return;
 					}
-					source.actions.share(entry.path, anchor).catch(reportError);
+					source.actions.share([entry.path], anchor).catch(reportError);
 					return;
 				case "request":
 					source.actions
-						.run(entry.path, target.request)
+						.run([entry.path], target.request)
 						.then((outcome) => {
 							showToast(outcome.note);
 							if (outcome.output !== null) refresh();
 						})
 						.catch(reportError);
 					return;
+				case "openWith":
 				case "askAi":
+					// Both open UI the caller owns (the application menu, the composer).
 					return;
 			}
 		});
+
+	const loadOpenWithApplications = useLatestCallback((entry: FinderEntry) =>
+		source.actions.openWithApplications(entry.path));
 
 	const dragEntries = useLatestCallback(
 		(entry: FinderEntry) => finderDragEntries(entry, selection.keys, viewEntries));
@@ -1278,15 +1347,23 @@ export function useFinderController(
 			transferDropped(paths, target.path, copy);
 		});
 
+	/** The folder a row-menu create lands in: the pane the menu opened in (column view), else the folder in view. */
+	const menuCreateDir = useLatestCallback(
+		(menu: ContextMenuState): string =>
+			menu.entry !== null && layout === "columns" && panePaths.includes(locationOf(menu.entry))
+				? locationOf(menu.entry)
+				: menu.dir,
+	);
+
 	const runMenuAction = useLatestCallback(
-		(action: FinderMenuAction, format: NewFileFormatId | null = null) => {
+		(action: FinderMenuAction, format: NewFileFormatId | null = null, serviceId: string | null = null) => {
 			const menu = contextMenu;
 			if (menu === null) {
 				return;
 			}
 			setContextMenu(null);
 			if (action === "newFolder") {
-				createFolderIn(menu.dir);
+				createFolderIn(menuCreateDir(menu));
 				return;
 			}
 			if (action === "newFile") {
@@ -1295,10 +1372,7 @@ export function useFinderController(
 			}
 			if (action === "paste") {
 				// The column view pastes into the pane the menu was opened in.
-				const pasteDir =
-					menu.entry !== null && layout === "columns" && panePaths.includes(menu.entry.location)
-						? menu.entry.location
-						: menu.dir;
+				const pasteDir = menuCreateDir(menu);
 				source
 					.clipboardGet()
 					.then((clipboard) => {
@@ -1308,7 +1382,20 @@ export function useFinderController(
 					.catch(reportError);
 				return;
 			}
+			if (action === "service") {
+				// The row menu acts on the whole selection, the empty-space menu on the folder in view.
+				if (serviceId === null) return;
+				const targets = menu.entry === null ? [menu.dir] : menuTargets(menu.entry);
+				source.services.run(serviceId, targets).catch(reportError);
+				return;
+			}
 			const entry = menu.entry;
+
+			if (action === "emptyTrash") {
+				// The background menu's 휴지통 비우기: destructive, so the confirm opens first.
+				requestEmptyTrash();
+				return;
+			}
 			// Every remaining action needs a row; the empty-space menu never offers them.
 			if (entry === null) {
 				return;
@@ -1360,8 +1447,38 @@ export function useFinderController(
 				case "copyPath":
 					source.copyPaths(targets).catch(reportError);
 					return;
+				case "openWith":
+					// The menu's item is the Inspector's "기타…": the OS application
+					// chooser, then one launch for the whole selection.
+					source.actions
+						.run(targets, { kind: "openWith", application: null })
+						.then((outcome) => showToast(outcome.note))
+						.catch(reportError);
+					return;
+				case "compress":
+				case "extract":
+					// One request for the whole selection: compress writes one archive,
+					// and the menu offers extract for a single .zip row only.
+					source.actions
+						.run(targets, { kind: action })
+						.then((outcome) => {
+							showToast(outcome.note);
+							if (outcome.output !== null) refresh();
+						})
+						.catch(reportError);
+					return;
+				case "share":
+					// The sheet anchors at the cursor: the menu just closed there, and
+					// that is where the user's attention is.
+					source.actions
+						.share(targets, { x: menu.cursor.x, y: menu.cursor.y, width: 0, height: 0 })
+						.catch(reportError);
+					return;
 				case "trash":
 					trashPaths(targets);
+					return;
+				case "putBack":
+					restoreFromTrash(targets);
 					return;
 			}
 		});
@@ -1393,6 +1510,22 @@ export function useFinderController(
 			.catch(reportError);
 	});
 
+	/**
+	 * Ask the OS which services it offers for `paths` and show them in the open
+	 * menu. The menu opens at once without them; a slow answer for a menu that
+	 * has since closed or moved on (a newer right-click) is dropped.
+	 */
+	const loadMenuServices = useLatestCallback((paths: readonly string[]): void => {
+		const token = ++menuServicesToken.current;
+		setMenuServices([]);
+		source.services
+			.list(paths)
+			.then((entries) => {
+				if (token === menuServicesToken.current) setMenuServices(entries);
+			})
+			.catch(() => undefined);
+	});
+
 	const openContextMenu = useLatestCallback(
 		(entry: FinderEntry, event: ReactMouseEvent<HTMLDivElement>) => {
 			event.preventDefault();
@@ -1404,6 +1537,7 @@ export function useFinderController(
 				.clipboardGet()
 				.then((clipboard) => setClipboardCount(clipboard?.paths.length ?? 0))
 				.catch(reportError);
+			loadMenuServices(menuTargets(entry));
 			setContextMenu({ cursor: { x: event.clientX, y: event.clientY }, entry, dir: path });
 		});
 
@@ -1417,10 +1551,15 @@ export function useFinderController(
 				.clipboardGet()
 				.then((clipboard) => setClipboardCount(clipboard?.paths.length ?? 0))
 				.catch(reportError);
+			loadMenuServices([dir ?? path]);
 			setContextMenu({ cursor: { x: event.clientX, y: event.clientY }, entry: null, dir: dir ?? path });
 		});
 
 	const dismiss = useLatestCallback(() => {
+		if (emptyTrashConfirm) {
+			setEmptyTrashConfirm(false);
+			return;
+		}
 		if (contextMenu !== null) {
 			setContextMenu(null);
 			return;
@@ -1544,7 +1683,7 @@ export function useFinderController(
 			return [];
 		}
 		if (menu.entry === null) {
-			return buildBackgroundContextMenu({ clipboardCount }, (k, def) => t(k, { defaultValue: def }));
+			return buildBackgroundContextMenu({ clipboardCount, inTrash: inTrashLocation, services: menuServices }, (k, def) => t(k, { defaultValue: def }));
 		}
 		const entry = menu.entry;
 		return buildContextMenu(
@@ -1554,10 +1693,14 @@ export function useFinderController(
 				indexIncluded: sidecar.indexStatus(entry.path)?.excluded !== true,
 				clipboardCount,
 				inRecents: path === RECENTS_PATH,
+				inTrash: inTrashLocation,
+				capabilities: actionCapabilities,
+				canCreateFolder: canCreateIn(menuCreateDir(menu)),
+				services: menuServices,
 			},
 			(k, def, opt) => t(k, { defaultValue: def, ...(opt as Record<string, unknown> | undefined) }),
 		);
-	}, [contextMenu, menuTargets, sidecar, clipboardCount, path, t]);
+	}, [contextMenu, menuTargets, sidecar, clipboardCount, path, t, inTrashLocation, actionCapabilities, canCreateIn, menuCreateDir, layout, panePaths, menuServices]);
 
 	const navTargets = useMemo(
 		() => (locations.length > 0 ? locations : [{ name: basename(path), path }]),
@@ -1655,11 +1798,18 @@ export function useFinderController(
 		copyEntryPath,
 		actionCapabilities,
 		runEntryAction,
+		loadOpenWithApplications,
 		dragEntries,
 		copySelection,
 		cutSelection,
 		pasteClipboard,
 		undoLastTransfer,
+		inTrashLocation,
+		putBackSelection,
+		requestEmptyTrash,
+		confirmEmptyTrash,
+		cancelEmptyTrash,
+		emptyTrashConfirm,
 		transferDropped,
 		dropOnTab,
 		columnPanes: paneViews,

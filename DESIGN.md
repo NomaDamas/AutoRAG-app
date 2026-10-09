@@ -47,7 +47,10 @@ and applies in icon, list, column, and search layouts. Grouping is visual only:
 `state/grouping.ts` splits the same rows into section headers without creating
 folders or changing entry identity; the virtualized list and icon views account
 for header height in their window geometry, and column panes render the same
-sections inline. Native Finder criteria are populated by a background
+sections inline, each pane windowed on its own scroller (27px rows; issue #103,
+`ColumnPane` in `components/ColumnBrowser.tsx`) — a 5,000-file pane keeps tens of
+rows mounted, and a keyboard/reveal target outside the window is mounted for one
+commit so `scrollIntoView` finds it; check: `scripts/manual-qa/run-qa-finder-column-large.mjs`. Native Finder criteria are populated by a background
 `fs:finderMetadata` call, separate from the `fs:enrichEntries` call that fills
 OS kinds and tile icons: creation time comes from the real filesystem birth
 time, tags and comments use Finder extended attributes with Spotlight fallback,
@@ -69,6 +72,8 @@ Fresh windows start with the sidebar at its minimum 180px width and the inspecto
 **Icon view marquee.** A drag that starts on empty space in the icon view draws a rubber-band rectangle (`--accent` 1px border over `--accent-soft`) and selects every tile it touches, as Finder does: a plain drag replaces the selection, ⌘ toggles the touched tiles, ⇧ adds them, and holding past the top or bottom edge scrolls and keeps extending. A press that never moves clears the selection. Hits come from the virtualized layout math, not the mounted tiles, so a rectangle that scrolls past the window still selects what it covers. A drag that starts on a tile stays the row drag. Geometry: `src/renderer/src/state/marquee.ts` (`test/ui-marquee.test.ts`); pointer handling: `src/renderer/src/hooks/useMarquee.ts`.
 
 **Batch file operations.** Trash, move, copy, and duplicate report a per-path outcome (`FsBatchResult`). Rows that went away (trashed, moved out) leave the listing, the column panes, expanded folders, search hits, and the selection right away instead of waiting for the watcher. A partial batch never looks done: the toast names both counts and the first failure's verbatim reason, and the failed rows stay on screen and stay selected. On macOS the iCloud Drive file provider (`~/Documents` and `~/Desktop` with Desktop & Documents sync) sometimes refuses the rest of a batch after the first one or two items with "you don't have permission to access it", and the refusal sticks to each file for 10–50 s. `fs:trash` clears it by renaming the item to a hidden sibling and straight back, then retries once (`trashOne` in `src/main/fs-service.ts`). The item keeps its name, so the Trash entry and Put Back look the same as Finder's.
+
+**Trash restore and empty (issue #86).** The Trash location behaves like Finder's: its rows carry the items' original names (Windows reads them from the `$I` records in `src/main/recycle-bin.ts`; macOS lists `~/.Trash` directly), and Put Back — the toolbar button, the row menu, or ⌘Z right after a trash — moves the payload back to the folder it came from. macOS keeps no per-item origin on disk, so `fs:trash` records one in an app-owned store (`src/main/trash-store.ts`, `trash.json` under userData); Windows needs none because the `$I` record is the origin. A payload nobody can place fails with its verbatim reason instead of a guess. A restore is itself undoable: ⌘Z re-trashes the row. 휴지통 비우기 permanently deletes every payload (on Windows its `$I` record goes with it; Finder's `.DS_Store` stays) only after a confirm dialog (`ConfirmDialog`), which Escape and the cancel button both dismiss, and the batch result names what went and each refusal. Automated checks: `test/fs-service.test.ts`, `test/trash-store.test.ts`; on-device lane: `scripts/manual-qa/run-qa-finder-trash-restore.mjs`.
 
 ### 1.3a AI Search tabs
 AI Search is a tab view like Settings (`AI_SEARCH_PATH`, `src/renderer/src/state/tabs.ts`). Each AI Search tab owns its chat; the panel stays mounted while its tab is in the background or browses a folder, and unmounts when the tab closes. Entry points:
@@ -119,7 +124,7 @@ The list is expanded by default and the "간략히 / 전체 정보" button colla
 
 ### 1.5 Sidebar places
 Every sidebar row comes from the OS, through `fs:locations` (`src/main/places.ts`); nothing is a fixed provider or drive list, and a group with no rows is not rendered.
-- **Favorites** — the **AI Search** app row (§1.3a), then Recents, then Finder's standard places: the home folder, Applications, Desktop, Documents, Downloads, Music, Movies, Pictures, Trash (`~/.Trash`). On Windows the same slots use Explorer's names and the real known-folder paths (OneDrive folder redirection honored), Program Files, and the user's `$Recycle.Bin\<SID>`, whose `$R` payloads are listed under their original names (`src/main/recycle-bin.ts`). A missing folder stays in its slot, dimmed.
+- **Favorites** — the **AI Search** app row (§1.3a), then Recents, then Finder's standard places: the home folder, Applications, Desktop, Documents, Downloads, Music, Movies, Pictures, Trash (`~/.Trash`). On Windows the same slots use Explorer's names and the real known-folder paths (OneDrive folder redirection honored), Program Files, and the user's `$Recycle.Bin\<SID>`, whose `$R` payloads are listed under their original names (`src/main/recycle-bin.ts`); the Trash row restores and empties its contents (§ "Batch file operations"). A missing folder stays in its slot, dimmed.
 - **Cloud** — exactly the drives connected to the OS, one row per account: iCloud Drive plus every `~/Library/CloudStorage/<Provider>-<account>` File Provider domain on macOS (e.g. `Google Drive - me@example.com`, `OneDrive - Personal`); the `SyncRootManager` roots registered for the user's SID and a Google Drive virtual drive letter on Windows.
 - **Locations** — the boot disk (`/`, or the system drive) plus every browsable mounted volume: `/Volumes/*` mount points without `nobrowse`, or every other drive letter. Each carries an eject button flush right; ejecting moves tabs out of the volume first (so no watcher holds it), then runs `diskutil unmount` (macOS), `net use X: /delete` for network drives, or the shell Eject verb (Windows). A refusal surfaces verbatim in the toast.
 
@@ -163,6 +168,21 @@ The Info half's bottom bar is data-driven, not a fixed four buttons.
   for `.zip`, an 이미지 편집 menu for images, and a 동영상 변환 menu for video.
   Quick Look, 경로 복사, and 휴지통 are deliberately absent — Space, the row
   context menu, ⌘⌫, and the Info chips already cover them.
+- The same headline actions sit in the row context menu (`state/context-menu.ts`):
+  다른 앱으로 열기 in the open group, and 새 폴더 · 압축 해제(`.zip` only) · 압축 ·
+  공유 in a group above 휴지통으로 이동. The same capability gates apply, the Trash
+  offers none of them, and a multi-selection keeps only the batch-meaningful
+  items — 압축 packs the whole selection into one `Archive.zip`, 공유 opens one
+  sheet, and 압축 해제 disappears. The menu's 다른 앱으로 열기 is the Inspector's
+  `기타…`: the full application chooser, one launch for the whole selection.
+- **다른 앱으로 열기** opens an in-app menu, not the native chooser. The first
+  rows are the applications the OS itself registers for the file's type
+  (Launch Services `URLsForApplicationsToOpenURL`, via
+  `actions:open-with-applications`), default first and marked `(기본)`, each with
+  its own icon. `기타…` is pinned last and is the only entry that opens the
+  full application chooser. A named application must be one the OS offered for
+  that file; main refuses anything else. Off macOS the OS list cannot be read,
+  so the menu is just `기타…`.
 - **Whether an action is real** comes from `actions:capabilities` in main: the
   macOS share sheet, the image engine (`sips`, plus WebP through `ffmpeg`), and
   video container conversion (`ffmpeg`) are probed once per session. A missing

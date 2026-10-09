@@ -54,6 +54,8 @@ export interface AppSettings {
 	readonly showHiddenFiles: boolean;
 	/** How often the app re-runs the dupey version-family scan, in minutes. */
 	readonly dupeyScanIntervalMinutes: number;
+	/** The OS file-menu entries ("Ask AutoRAG", "Show in AutoRAG") are installed: macOS Quick Actions, Windows Explorer verbs. */
+	readonly osMenuIntegration: boolean;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -65,6 +67,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
 	telemetry: false,
 	showHiddenFiles: false,
 	dupeyScanIntervalMinutes: 60,
+	osMenuIntegration: false,
 };
 
 /** Whether the backend a datasource needs is present on this machine. */

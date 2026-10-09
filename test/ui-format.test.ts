@@ -9,16 +9,29 @@ import {
 	parseModifiedLabel,
 	tileLabel,
 	trashToast,
+	putBackToast,
+	emptyTrashToast,
 } from "../src/renderer/src/state/format";
 
 describe("formatModified", () => {
 	it("renders the reference date format", () => {
-		expect(formatModified("2026-09-13T16:48:00")).toBe("Sep 13, 16:48");
-		expect(formatModified("2026-01-02T09:05:00")).toBe("Jan 2, 09:05");
+		expect(formatModified(new Date(2026, 8, 13, 16, 48).getTime())).toBe("Sep 13, 16:48");
+		expect(formatModified(new Date(2026, 0, 2, 9, 5).getTime())).toBe("Jan 2, 09:05");
 	});
 
 	it("falls back to an em dash for an unreadable timestamp", () => {
-		expect(formatModified("not-a-date")).toBe("—");
+		expect(formatModified(Number.NaN)).toBe("—");
+	});
+
+	it("rounds a fractional stamp to the millisecond the way Node's stats.mtime does", () => {
+		// mtimeMs carries sub-millisecond digits (1700000000000.731 -> mtime 1700000000001),
+		// so a stamp within half a millisecond below a minute boundary is already in that minute.
+		for (const minute of [new Date(2026, 8, 13, 16, 48).getTime(), new Date(1950, 3, 20, 15, 15).getTime()]) {
+			const label = formatModified(minute);
+			expect(formatModified(minute - 0.4)).toBe(label);
+			expect(formatModified(minute + 0.4)).toBe(label);
+			expect(formatModified(minute - 0.6)).not.toBe(label);
+		}
 	});
 
 	it("round-trips into a sortable value", () => {
@@ -76,6 +89,28 @@ describe("toasts", () => {
 			"c.txt — 옮기지 못했습니다: EACCES",
 		);
 		expect(batchToast("copy", { ok: ["/d/a"], failed: [] })).toBe("1개 항목을 복사했습니다");
+	});
+
+	it("names a single restored item and counts many, like the trash toast", () => {
+		expect(putBackToast(["Trash/a.pdf"])).toBe("a.pdf — 원래 위치로 복원했습니다");
+		expect(putBackToast(["Trash/a.pdf", "Trash/b.pdf"])).toBe("2개 항목을 원래 위치로 복원했습니다");
+		expect(batchToast("putBack", { ok: ["/t/a", "/t/b"], failed: [] })).toBe("2개 항목을 원래 위치로 복원했습니다");
+	});
+
+	it("reports a partial restore with the first verbatim reason", () => {
+		expect(
+			batchToast("putBack", {
+				ok: ["/t/a"],
+				failed: [{ path: "/t/b.txt", message: "원래 위치를 알 수 없습니다" }],
+			}),
+		).toBe("1개 항목을 원래 위치로 복원했습니다 · b.txt — 원래 위치로 복원하지 못했습니다: 원래 위치를 알 수 없습니다");
+	});
+
+	it("names an emptied Trash and its failures", () => {
+		expect(emptyTrashToast({ ok: ["/.Trash/a"], failed: [] })).toBe("휴지통을 비웠습니다");
+		expect(emptyTrashToast({ ok: ["/.Trash/a"], failed: [{ path: "/.Trash/b", message: "EACCES" }] })).toBe(
+			"1개 항목을 삭제했습니다 · b — 삭제하지 못했습니다: EACCES",
+		);
 	});
 
 	it("reports index include and exclude", () => {

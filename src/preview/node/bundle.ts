@@ -8,7 +8,7 @@ import type { BundleSummary } from "../shared/contract";
  * demand by the main process's provider (`src/main/file-icon.ts`).
  */
 export interface BundleIconSource {
-	preview(target: { readonly path: string; readonly ext: string; readonly modifiedAt: string }): Promise<string | null>;
+	preview(target: { readonly path: string; readonly ext: string; readonly mtimeMs: number }): Promise<string | null>;
 }
 
 /**
@@ -29,7 +29,7 @@ export async function summarizeBundle(
 	let iconUrl: string | null = null;
 	if (icons !== null) {
 		try {
-			iconUrl = await icons.preview({ path, ext: "app", modifiedAt });
+			iconUrl = await icons.preview({ path, ext: "app", mtimeMs: info.mtimeMs });
 		} catch (error) {
 			warn(`quick-look: icon for ${path} failed: ${error instanceof Error ? error.message : String(error)}`);
 		}

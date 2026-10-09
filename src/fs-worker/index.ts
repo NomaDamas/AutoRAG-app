@@ -106,8 +106,11 @@ const handlers = {
 	...service.handlers,
 	diagnostics: (): Omit<FsWorkerDiagnostics, "restarts"> => ({ pid: process.pid, requests: { ...requests }, recent: [...recent] }),
 	// QA lanes only (AUTORAG_FS_WORKER_QA=1): push a synthetic "events were lost"
-	// batch for `dir`, the way the watcher reports an overflow.
-	...(process.env.AUTORAG_FS_WORKER_QA === "1" ? { qaOverflow: service.qaOverflow } : {}),
+	// batch for `dir` (the watcher's overflow), and hold/release the enrichment
+	// passes so a lane can read a listing's heap without them racing it.
+	...(process.env.AUTORAG_FS_WORKER_QA === "1"
+		? { qaOverflow: service.qaOverflow, qaHoldEnrichment: service.qaHoldEnrichment, qaReleaseEnrichment: service.qaReleaseEnrichment }
+		: {}),
 };
 
 parentPort.on("message", (event) => {
