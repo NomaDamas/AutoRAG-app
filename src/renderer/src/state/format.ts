@@ -6,7 +6,7 @@
  * "4.8 MB" — KB is whole, MB and above carry one decimal below 10.
  */
 
-import { RECENTS_PATH } from "../../../shared/fs-contract";
+import { RECENTS_PATH, type FsHistoryOperation, type FsUndoOutcome } from "../../../shared/fs-contract";
 import { basename } from "./paths";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"] as const;
@@ -178,6 +178,34 @@ export function batchToast(
 			? `${basename(first.path)} — ${BATCH_FAILED[verb]}: ${first.message}`
 			: `${result.failed.length}개 항목을 ${BATCH_FAILED[verb]} (${basename(first.path)}: ${first.message})`;
 	return result.ok.length === 0 ? failedPart : `${result.ok.length}개 항목을 ${BATCH_DONE[verb]} · ${failedPart}`;
+}
+
+/** How each recorded operation is named in the "…취소" / "…다시 실행" toast. */
+const HISTORY_LABEL: Record<FsHistoryOperation, string> = {
+	copy: "복사",
+	move: "이동",
+	duplicate: "복제",
+	rename: "이름 변경",
+	createFolder: "새 폴더",
+	createFile: "새 파일",
+	trash: "휴지통으로 이동",
+	restore: "원래 위치로 복원",
+	extract: "압축 해제",
+	compress: "압축",
+};
+
+/**
+ * The toast for a ⌘Z / ⇧⌘Z: the operation it undid or redid ("이름 변경 취소"),
+ * or the first failed step's verbatim reason. Null when the history was empty —
+ * Finder does nothing then either.
+ */
+export function historyToast(direction: "undo" | "redo", outcome: FsUndoOutcome): string | null {
+	if (outcome.empty) return null;
+	const label = `${outcome.operation === undefined ? "파일 작업" : HISTORY_LABEL[outcome.operation]} ${direction === "undo" ? "취소" : "다시 실행"}`;
+	const first = outcome.failed[0];
+	if (first === undefined) return label;
+	const more = outcome.failed.length > 1 ? ` (외 ${outcome.failed.length - 1}개 항목)` : "";
+	return `${label} 실패: ${basename(first.path)} — ${first.message}${more}`;
 }
 
 export function indexToast(name: string, included: boolean): string {

@@ -9,7 +9,7 @@
 
 import { NO_CAPABILITIES, type ActionsBridge } from "../../../shared/actions-contract";
 import { NO_SERVICES, type ServicesBridge } from "../../../shared/services-contract";
-import { RECENTS_PATH, type FsBatchResult, type FsBridge, type FsClipboard, type FsEnrichmentTarget, type FsEntryEnrichment, type FsFinderEnrichment, type FsLocation, type FsLocationIcon, type FsOpError, type FsSearchOptions, type FsUndoOutcome, type FsVersionFamiliesResult } from "../../../shared/fs-contract";
+import { RECENTS_PATH, type FsBatchResult, type FsBridge, type FsClipboard, type FsEnrichmentTarget, type FsEntryEnrichment, type FsFinderEnrichment, type FsHistoryOperation, type FsLocation, type FsLocationIcon, type FsOpError, type FsRecordedOperation, type FsSearchOptions, type FsUndoOutcome, type FsVersionFamiliesResult } from "../../../shared/fs-contract";
 import { newFileFormat, type NewFileFormatId } from "../../../shared/new-file-contract";
 import type { IndexStatus } from "../../../shared/index-contract";
 import {
@@ -115,8 +115,12 @@ export interface FinderSource {
 	duplicate(paths: readonly string[]): Promise<FsBatchResult>;
 	copyInto(paths: readonly string[], destDir: string): Promise<FsBatchResult>;
 	moveInto(paths: readonly string[], destDir: string): Promise<FsBatchResult>;
-	/** Undo the most recent recorded copy/move transfer (⌘Z); the record is consumed. */
+	/** Undo the newest operation of the history (⌘Z); the record is consumed and can be redone. */
 	undo(): Promise<FsUndoOutcome>;
+	/** Redo the operation the last undo took back (⇧⌘Z). */
+	redo(): Promise<FsUndoOutcome>;
+	/** Remember an output an Action (extract, compress) created, so ⌘Z can move it to the Trash. */
+	recordCreated(path: string, operation: FsRecordedOperation): Promise<void>;
 	copyPaths(paths: readonly string[]): Promise<void>;
 	clipboardSet(clipboard: FsClipboard): Promise<void>;
 	clipboardGet(): Promise<FsClipboard | null>;
@@ -226,6 +230,8 @@ export function createBridgeSource(
 		copyInto: (paths, destDir) => fs.copy(paths, destDir),
 		moveInto: (paths, destDir) => fs.move(paths, destDir),
 		undo: () => fs.undo(),
+		redo: () => fs.redo(),
+		recordCreated: (path, operation) => fs.recordCreated(path, operation),
 		copyPaths: (paths) => fs.copyPathsToClipboard(paths),
 		clipboardSet: (clipboard) => fs.clipboardSet(clipboard),
 		clipboardGet: () => fs.clipboardGet(),
@@ -319,13 +325,114 @@ export function createFixtureSource(): FinderSource {
 	const state = seedFixtureState();
 	const resolve = (): Promise<void> => Promise.resolve();
 
-	/** One fixture undo step: the row the operation created or moved, and its origin. A trash step keeps the source path and its folder; a restore step keeps the restored row and its payload path. */
-	interface FixtureUndoStep {
-		readonly kind: "copy" | "move" | "create" | "trash" | "restore";
+	/**
+	 * One reversible fixture step. `apply` performs it and returns its inverse,
+	 * so undo and redo are the same walk over two stacks (the real service
+	 * works the same way); a step that cannot apply throws its verbatim reason.
+	 */
+	interface FixtureStep {
 		readonly path: string;
-		readonly from: string;
+		/** True when applying takes the item out of the Trash (it has nothing to act on once the Trash is emptied). */
+		readonly fromTrash?: true;
+		apply(): FixtureStep;
 	}
-	let lastUndo: readonly FixtureUndoStep[] | null = null;
+	interface FixtureRecord {
+		readonly operation: FsHistoryOperation;
+		steps: FixtureStep[];
+	}
+	const undoStack: FixtureRecord[] = [];
+	const redoStack: FixtureRecord[] = [];
+	const record = (operation: FsHistoryOperation, steps: readonly FixtureStep[]): FixtureRecord => {
+		const entry: FixtureRecord = { operation, steps: [...steps] };
+		undoStack.push(entry);
+		redoStack.length = 0;
+		return entry;
+	};
+	const replay = (from: FixtureRecord[], to: FixtureRecord[]): FsUndoOutcome => {
+		const entry = from.pop();
+		if (entry === undefined) return { ok: false, empty: true, failed: [] };
+		const inverse: FixtureStep[] = [];
+		const failed: FsOpError[] = [];
+		for (const step of entry.steps) {
+			try {
+				inverse.push(step.apply());
+			} catch (error) {
+				failed.push({ path: step.path, message: error instanceof Error ? error.message : String(error) });
+			}
+		}
+		if (inverse.length > 0) to.push({ operation: entry.operation, steps: inverse });
+		return { ok: failed.length === 0, empty: false, failed, operation: entry.operation };
+	};
+	/** The row at `path` exists because of the operation; applying removes it. */
+	const createdStep = (path: string, item: FixtureItem): FixtureStep => ({
+		path,
+		apply: () => {
+			if (removeItem(state, path) === null) throw new Error("되돌릴 항목이 없습니다");
+			return removedStep(path, item);
+		},
+	});
+	/** The row at `path` was removed by an undo; applying makes it again. */
+	const removedStep = (path: string, item: FixtureItem): FixtureStep => ({
+		path,
+		apply: () => {
+			if (findItem(state, path) !== null) throw new Error(`A file or folder named "${basename(path)}" already exists`);
+			insertItem(state, dirname(path), item);
+			return createdStep(path, item);
+		},
+	});
+	/** The row at `path` goes back into `restoreDir`, Finder-style collision naming included. */
+	const moveStep = (path: string, restoreDir: string): FixtureStep => ({
+		path,
+		apply: () => {
+			const item = removeItem(state, path);
+			if (item === null) throw new Error("되돌릴 항목이 없습니다");
+			const name = copyName(item.name, takenNames(state, restoreDir));
+			insertItem(state, restoreDir, { ...item, name });
+			return moveStep(joinPath(restoreDir, name), dirname(path));
+		},
+	});
+	/** The row at `path` takes `name` back unless somebody retook it. */
+	const renameStep = (path: string, name: string): FixtureStep => ({
+		path,
+		apply: () => {
+			const item = findItem(state, path);
+			if (item === null) throw new Error("되돌릴 항목이 없습니다");
+			if (name.toLowerCase() !== basename(path).toLowerCase() && takenNames(state, dirname(path)).includes(name)) {
+				throw new Error(`A file or folder named "${name}" already exists`);
+			}
+			removeItem(state, path);
+			insertItem(state, dirname(path), { ...item, name });
+			return renameStep(joinPath(dirname(path), name), basename(path));
+		},
+	});
+	/** The item sits in the fixture Trash; applying moves it straight back to `path`'s folder. */
+	const trashedStep = (path: string): FixtureStep => ({
+		path,
+		fromTrash: true,
+		apply: () => {
+			const trashItems = state.tree.get("Trash") ?? [];
+			const index = trashItems.findIndex((item) => item.name === basename(path));
+			const [moved] = index < 0 ? [] : trashItems.splice(index, 1);
+			if (moved === undefined) throw new Error("휴지통에서 항목을 찾을 수 없습니다");
+			state.trash.delete(joinPath("Trash", moved.name));
+			const dir = dirname(path);
+			const name = copyName(moved.name, takenNames(state, dir));
+			insertItem(state, dir, { ...moved, name });
+			return restoredStep(joinPath(dir, name));
+		},
+	});
+	/** The item sits at `path`; applying moves it into the fixture Trash. */
+	const restoredStep = (path: string): FixtureStep => ({
+		path,
+		apply: () => {
+			const item = removeItem(state, path);
+			if (item === null) throw new Error("되돌릴 항목이 없습니다");
+			const name = copyName(item.name, takenNames(state, "Trash"));
+			insertItem(state, "Trash", { ...item, name });
+			state.trash.set(joinPath("Trash", name), dirname(path));
+			return trashedStep(path);
+		},
+	});
 	const fixtureIndexStatus = (path: string): IndexStatus =>
 		state.indexExcluded.has(path)
 			? { path, kind: "excluded", excluded: true, toggleable: true, detail: "인덱싱에서 제외됨" }
@@ -403,7 +510,7 @@ export function createFixtureSource(): FinderSource {
 		openUrl: resolve,
 		reveal: resolve,
 		trash: (paths) => {
-			const steps: FixtureUndoStep[] = [];
+			const steps: FixtureStep[] = [];
 			const ok: string[] = [];
 			const failed: FsOpError[] = [];
 			for (const path of paths) {
@@ -417,13 +524,13 @@ export function createFixtureSource(): FinderSource {
 				insertItem(state, "Trash", { ...item, name });
 				state.trash.set(joinPath("Trash", name), dirname(path));
 				ok.push(path);
-				steps.push({ kind: "trash", path, from: dirname(path) });
+				steps.push(trashedStep(path));
 			}
-			if (steps.length > 0) lastUndo = steps;
+			if (steps.length > 0) record("trash", steps);
 			return Promise.resolve({ ok, failed });
 		},
 		restoreFromTrash: (paths) => {
-			const steps: FixtureUndoStep[] = [];
+			const steps: FixtureStep[] = [];
 			const ok: string[] = [];
 			const failed: FsOpError[] = [];
 			for (const trashPath of paths) {
@@ -437,16 +544,24 @@ export function createFixtureSource(): FinderSource {
 				const name = copyName(item.name, takenNames(state, originalDir));
 				insertItem(state, originalDir, { ...item, name });
 				ok.push(trashPath);
-				steps.push({ kind: "restore", path: joinPath(originalDir, name), from: trashPath });
+				steps.push(restoredStep(joinPath(originalDir, name)));
 			}
-			if (steps.length > 0) lastUndo = steps;
+			if (steps.length > 0) record("restore", steps);
 			return Promise.resolve({ ok, failed });
 		},
 		emptyTrash: () => {
 			const ok = (state.tree.get("Trash") ?? []).map((item) => joinPath("Trash", item.name));
 			state.tree.set("Trash", []);
 			state.trash.clear();
-			if (lastUndo?.some((step) => step.kind === "trash") === true) lastUndo = null;
+			// Steps that act on a Trash payload have nothing left to act on.
+			for (const stack of [undoStack, redoStack]) {
+				for (let index = stack.length - 1; index >= 0; index -= 1) {
+					const entry = stack[index];
+					if (entry === undefined) continue;
+					entry.steps = entry.steps.filter((step) => step.fromTrash !== true);
+					if (entry.steps.length === 0) stack.splice(index, 1);
+				}
+			}
 			return Promise.resolve({ ok, failed: [] });
 		},
 		rename: (path, name) => {
@@ -454,6 +569,7 @@ export function createFixtureSource(): FinderSource {
 			if (item !== null) {
 				removeItem(state, path);
 				insertItem(state, dirname(path), { ...item, name });
+				record("rename", [renameStep(joinPath(dirname(path), name), basename(path))]);
 			}
 			return resolve();
 		},
@@ -464,8 +580,9 @@ export function createFixtureSource(): FinderSource {
 				name = `untitled folder ${attempt}`;
 			}
 			const path = joinPath(dir, name);
-			insertItem(state, dir, { name, fileKind: "folder", dateLabel: fixtureNowLabel(), sizeLabel: "—" });
-			lastUndo = [{ kind: "create", path, from: "" }];
+			const item: FixtureItem = { name, fileKind: "folder", dateLabel: fixtureNowLabel(), sizeLabel: "—" };
+			insertItem(state, dir, item);
+			record("createFolder", [createdStep(path, item)]);
 			return Promise.resolve({ path, name });
 		},
 		createFile: (dir, format) => {
@@ -476,44 +593,52 @@ export function createFixtureSource(): FinderSource {
 				name = `untitled ${attempt}.${extension}`;
 			}
 			const path = joinPath(dir, name);
-			insertItem(state, dir, {
+			const item: FixtureItem = {
 				name,
 				fileKind: kindFromExtension(extension),
 				dateLabel: fixtureNowLabel(),
 				sizeLabel: "—",
-			});
-			lastUndo = [{ kind: "create", path, from: "" }];
+			};
+			insertItem(state, dir, item);
+			record("createFile", [createdStep(path, item)]);
 			return Promise.resolve({ path, name });
 		},
 		duplicate: (paths) => {
 			const ok: string[] = [];
+			const steps: FixtureStep[] = [];
 			for (const path of paths) {
 				const item = findItem(state, path);
 				if (item === null) {
 					continue;
 				}
 				const dir = dirname(path);
-				insertItem(state, dir, { ...item, name: copyName(item.name, [...takenNames(state, dir), item.name]) });
+				const copy = { ...item, name: copyName(item.name, [...takenNames(state, dir), item.name]) };
+				insertItem(state, dir, copy);
+				steps.push(createdStep(joinPath(dir, copy.name), copy));
 				ok.push(path);
 			}
+			if (steps.length > 0) record("duplicate", steps);
 			return Promise.resolve({ ok, failed: [] });
 		},
 		copyInto: (paths, destDir) => {
-			const steps: FixtureUndoStep[] = [];
+			const steps: FixtureStep[] = [];
+			const ok: string[] = [];
 			for (const path of paths) {
 				const item = findItem(state, path);
 				if (item === null) {
 					continue;
 				}
-				const name = copyName(item.name, takenNames(state, destDir));
-				insertItem(state, destDir, { ...item, name });
-				steps.push({ kind: "copy", path: joinPath(destDir, name), from: path });
+				const copy = { ...item, name: copyName(item.name, takenNames(state, destDir)) };
+				insertItem(state, destDir, copy);
+				steps.push(createdStep(joinPath(destDir, copy.name), copy));
+				ok.push(path);
 			}
-			if (steps.length > 0) lastUndo = steps;
-			return Promise.resolve({ ok: steps.map((step) => step.from), failed: [] });
+			if (steps.length > 0) record("copy", steps);
+			return Promise.resolve({ ok, failed: [] });
 		},
 		moveInto: (paths, destDir) => {
-			const steps: FixtureUndoStep[] = [];
+			const steps: FixtureStep[] = [];
+			const ok: string[] = [];
 			for (const path of paths) {
 				const item = findItem(state, path);
 				if (item === null || dirname(path) === destDir) {
@@ -522,63 +647,18 @@ export function createFixtureSource(): FinderSource {
 				const name = copyName(item.name, takenNames(state, destDir));
 				removeItem(state, path);
 				insertItem(state, destDir, { ...item, name });
-				steps.push({ kind: "move", path: joinPath(destDir, name), from: path });
+				steps.push(moveStep(joinPath(destDir, name), dirname(path)));
+				ok.push(path);
 			}
-			if (steps.length > 0) lastUndo = steps;
-			return Promise.resolve({ ok: steps.map((step) => step.from), failed: [] });
+			if (steps.length > 0) record("move", steps);
+			return Promise.resolve({ ok, failed: [] });
 		},
-		undo: async () => {
-			const steps = lastUndo;
-			lastUndo = null;
-			if (steps === null || steps.length === 0) {
-				return { ok: false, empty: true, failed: [] };
-			}
-			const failed: FsOpError[] = [];
-			for (const step of steps) {
-				if (step.kind === "trash") {
-					// The item sits in the fixture Trash; move it straight back to its folder.
-					const trashItems = state.tree.get("Trash") ?? [];
-					const index = trashItems.findIndex((item) => item.name === basename(step.path));
-					if (index < 0) {
-						failed.push({ path: step.path, message: "휴지통에서 항목을 찾을 수 없습니다" });
-						continue;
-					}
-					const [moved] = trashItems.splice(index, 1);
-					if (moved === undefined) {
-						failed.push({ path: step.path, message: "휴지통에서 항목을 찾을 수 없습니다" });
-						continue;
-					}
-					state.trash.delete(joinPath("Trash", moved.name));
-					insertItem(state, step.from, { ...moved, name: copyName(moved.name, takenNames(state, step.from)) });
-					continue;
-				}
-				if (step.kind === "restore") {
-					// Undoing a Put Back moves the row back into the fixture Trash.
-					const item = removeItem(state, step.path);
-					if (item === null) {
-						failed.push({ path: step.path, message: "되돌릴 항목이 없습니다" });
-						continue;
-					}
-					const name = copyName(item.name, takenNames(state, "Trash"));
-					insertItem(state, "Trash", { ...item, name });
-					state.trash.set(joinPath("Trash", name), dirname(step.path));
-					continue;
-				}
-				const item = findItem(state, step.path);
-				if (item === null) {
-					failed.push({ path: step.path, message: "되돌릴 항목이 없습니다" });
-					continue;
-				}
-				if (step.kind === "copy" || step.kind === "create") {
-					removeItem(state, step.path);
-					continue;
-				}
-				const restoreDir = dirname(step.from);
-				const name = copyName(item.name, takenNames(state, restoreDir));
-				removeItem(state, step.path);
-				insertItem(state, restoreDir, { ...item, name });
-			}
-			return { ok: failed.length === 0, empty: false, failed };
+		undo: () => Promise.resolve(replay(undoStack, redoStack)),
+		redo: () => Promise.resolve(replay(redoStack, undoStack)),
+		recordCreated: (path, operation) => {
+			if (findItem(state, path) === null) return Promise.reject(new Error("항목을 찾을 수 없습니다"));
+			record(operation, [restoredStep(path)]);
+			return Promise.resolve();
 		},
 		copyPaths: resolve,
 		clipboardSet: (clipboard) => {

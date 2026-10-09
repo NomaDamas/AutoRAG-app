@@ -7,6 +7,8 @@ import {
 	RECENTS_PATH,
 	webUrl,
 	type DirListing,
+	type FsHistoryOperation,
+	type FsRecordedOperation,
 	type FsUndoOutcome,
 	type FsBatchResult,
 	type FsCoreBridge,
@@ -100,6 +102,8 @@ export class FsRenameError extends Error {
 /** Search stays bounded: shallow walk, hard result cap, symlinked dirs not followed. */
 const SEARCH_MAX_DEPTH = 4;
 const SEARCH_MAX_RESULTS = 200;
+/** How many operations ⌘Z can walk back; the oldest falls off. */
+const HISTORY_LIMIT = 100;
 
 /**
  * Normalize a path before handing it to Electron's `shell` (trash/reveal/open).
@@ -216,11 +220,12 @@ async function movePath(source: string, target: string): Promise<void> {
 	}
 }
 
-/** Move a row back into `restoreDir`, Finder-style collision naming included. */
-async function moveBack(path: string, restoreDir: string): Promise<void> {
+/** Move a row back into `restoreDir`, Finder-style collision naming included. Returns where it landed. */
+async function moveBack(path: string, restoreDir: string): Promise<string> {
 	const stepStat = await lstat(path);
 	const back = join(restoreDir, await resolveCopyName(restoreDir, basename(path), stepStat.isDirectory()));
 	await movePath(path, back);
+	return back;
 }
 
 async function walkForSearch(dir: string, depth: number, context: SearchContext): Promise<void> {
@@ -535,24 +540,71 @@ export function createFsService(deps: FsServiceDeps): FsService {
 		return results;
 	}
 
-	/** One undo step of the most recent copy/move/create/trash operation, consumed by ⌘Z. */
-	interface FsUndoStep {
-		readonly kind: "copy" | "move" | "create" | "trash" | "restore";
-		/**
-		 * The row the transfer created (copy/create) or now occupies (move/
-		 * restore). A trash step keeps the path the item was trashed from; undo
-		 * finds the payload in the Trash from it.
-		 */
-		readonly path: string;
-		/**
-		 * The folder a move took the row from; "" for copy, create, and
-		 * restore steps. A trash step names the folder the item came from.
-		 */
-		readonly restoreDir: string;
+	/** How a created row came to be, so redo can make it again. */
+	type FsUndoMake =
+		| { readonly kind: "copy"; readonly from: string }
+		| { readonly kind: "folder" }
+		| { readonly kind: "file"; readonly format: NewFileFormatId };
+
+	/**
+	 * One reversible step. Applying a step (undo or redo alike) returns its
+	 * inverse, which is what the opposite history stack stores — so a record
+	 * only ever needs one `applyStep`.
+	 */
+	type FsUndoStep =
+		/** `path` exists because of the operation; applying removes it. */
+		| { readonly kind: "created"; readonly path: string; readonly make: FsUndoMake }
+		/** `path` was removed by an undo; applying makes it again. */
+		| { readonly kind: "removed"; readonly path: string; readonly make: FsUndoMake }
+		/** The row at `path` goes back into `restoreDir` (Finder-style collision naming). */
+		| { readonly kind: "move"; readonly path: string; readonly restoreDir: string }
+		/** The row at `path` takes the name `name` back; a retaken name fails. */
+		| { readonly kind: "rename"; readonly path: string; readonly name: string }
+		/** The item sits in the Trash; applying puts it back at `path` (Finder "Put Back"). */
+		| { readonly kind: "trash"; readonly path: string }
+		/** The item sits at `path`; applying moves it into the Trash. */
+		| { readonly kind: "restore"; readonly path: string };
+
+	/** One user-visible operation: all its steps undo (and redo) together. */
+	interface FsHistoryRecord {
+		readonly operation: FsHistoryOperation;
+		steps: FsUndoStep[];
 	}
 
-	/** Undo record of the most recent successful copy/move transfer. */
-	let lastUndoSteps: readonly FsUndoStep[] | null = null;
+	/** Operations ⌘Z can walk back, newest last; a new operation clears what ⇧⌘Z could redo. */
+	const undoStack: FsHistoryRecord[] = [];
+	const redoStack: FsHistoryRecord[] = [];
+
+	function pushBounded(stack: FsHistoryRecord[], entry: FsHistoryRecord): void {
+		stack.push(entry);
+		if (stack.length > HISTORY_LIMIT) stack.shift();
+	}
+
+	/** Record a fresh operation: it becomes the next ⌘Z and the redo history is forgotten. */
+	function record(operation: FsHistoryOperation, steps: readonly FsUndoStep[]): FsHistoryRecord {
+		const entry: FsHistoryRecord = { operation, steps: [...steps] };
+		pushBounded(undoStack, entry);
+		redoStack.length = 0;
+		return entry;
+	}
+
+	/** Take a record back when none of its steps took effect. */
+	function discard(entry: FsHistoryRecord): void {
+		const index = undoStack.lastIndexOf(entry);
+		if (index >= 0) undoStack.splice(index, 1);
+	}
+
+	/** The Trash was emptied: steps that put a payload back have nothing left to act on. */
+	function forgetTrashedSteps(): void {
+		for (const stack of [undoStack, redoStack]) {
+			for (let index = stack.length - 1; index >= 0; index -= 1) {
+				const entry = stack[index];
+				if (entry === undefined) continue;
+				entry.steps = entry.steps.filter((step) => step.kind !== "trash");
+				if (entry.steps.length === 0) stack.splice(index, 1);
+			}
+		}
+	}
 
 	/** Move one item to the Trash and remember where it came from (Put Back, ⌘Z). */
 	async function trashOneAndRecord(path: string): Promise<void> {
@@ -646,9 +698,9 @@ export function createFsService(deps: FsServiceDeps): FsService {
 				throw new Error(`원래 위치를 알 수 없습니다: ${basename(payloadPath)}`);
 			}
 			// ⌘Z moves the row back into the Trash, like undoing any other move.
-			steps.push({ kind: "restore", path: await putBackPayload(payloadPath, origin), restoreDir: "" });
+			steps.push({ kind: "restore", path: await putBackPayload(payloadPath, origin) });
 		});
-		if (steps.length > 0) lastUndoSteps = steps;
+		if (steps.length > 0) record("restore", steps);
 		return result;
 	}
 
@@ -688,9 +740,7 @@ export function createFsService(deps: FsServiceDeps): FsService {
 				.forget((await trashStore.list()).map((record) => record.trashPath))
 				.catch((error: unknown) => console.warn(`fs:emptyTrash origins not cleared: ${errorMessage(error)}`));
 		}
-		if (lastUndoSteps?.some((step) => step.kind === "trash") === true) {
-			lastUndoSteps = null;
-		}
+		forgetTrashedSteps();
 		return result;
 	}
 
@@ -701,9 +751,9 @@ export function createFsService(deps: FsServiceDeps): FsService {
 			const targetName = await resolveCopyName(destDir, basename(source), sourceStat.isDirectory());
 			const target = join(destDir, targetName);
 			await cp(source, target, { recursive: true });
-			steps.push({ kind: "copy", path: target, restoreDir: "" });
+			steps.push({ kind: "created", path: target, make: { kind: "copy", from: source } });
 		});
-		if (steps.length > 0) lastUndoSteps = steps;
+		if (steps.length > 0) record("copy", steps);
 		return result;
 	}
 
@@ -715,50 +765,113 @@ export function createFsService(deps: FsServiceDeps): FsService {
 			await movePath(source, target);
 			steps.push({ kind: "move", path: target, restoreDir: dirname(source) });
 		});
-		if (steps.length > 0) lastUndoSteps = steps;
+		if (steps.length > 0) record("move", steps);
 		return result;
 	}
 
+	/** Make a row that an undo removed, at exactly its old path; a retaken path fails. */
+	async function recreate(path: string, make: FsUndoMake): Promise<void> {
+		if (make.kind === "folder") {
+			await mkdir(path);
+		} else if (make.kind === "file") {
+			await writeFile(path, newFileContents(make.format), { flag: "wx" });
+		} else {
+			if (await pathExists(path)) {
+				throw new Error(`A file or folder named "${basename(path)}" already exists`);
+			}
+			await cp(make.from, path, { recursive: true });
+		}
+	}
+
+	/** Apply one step in its own direction and return the inverse step. */
+	async function applyStep(step: FsUndoStep): Promise<FsUndoStep> {
+		switch (step.kind) {
+			case "created":
+				await rm(step.path, { recursive: true });
+				return { kind: "removed", path: step.path, make: step.make };
+			case "removed":
+				await recreate(step.path, step.make);
+				return { kind: "created", path: step.path, make: step.make };
+			case "move":
+				return { kind: "move", path: await moveBack(step.path, step.restoreDir), restoreDir: dirname(step.path) };
+			case "rename":
+				return { kind: "rename", path: await renameTo(step.path, step.name), name: basename(step.path) };
+			case "trash":
+				return { kind: "restore", path: await putBackPayload(await payloadForSource(step.path), step.path) };
+			case "restore":
+				await trashOneAndRecord(step.path);
+				return { kind: "trash", path: step.path };
+		}
+	}
+
 	/**
-	 * Undo the most recent recorded operation (⌘Z). A copy or create step
-	 * deletes the row it created; a move step puts the row back into the folder
-	 * it came from, with Finder-style collision naming when the original name
-	 * was retaken in the meantime; a trash step puts the item back where it was
-	 * trashed from (Finder "Put Back"); a restore step moves the row back into
-	 * the Trash. The record is consumed by the call.
+	 * Walk one record from `source` to `target`: undo moves the newest record
+	 * from the undo stack to the redo stack, redo the other way. A step that
+	 * cannot be applied reports its path and verbatim reason; the steps that
+	 * did apply stay reversible through the other stack. The record is consumed
+	 * either way.
 	 */
-	async function undo(): Promise<FsUndoOutcome> {
-		const steps = lastUndoSteps;
-		lastUndoSteps = null;
-		if (steps === null || steps.length === 0) {
+	async function replay(source: FsHistoryRecord[], target: FsHistoryRecord[]): Promise<FsUndoOutcome> {
+		const entry = source.pop();
+		if (entry === undefined) {
 			return { ok: false, empty: true, failed: [] };
 		}
+		const inverse: FsUndoStep[] = [];
 		const failed: FsOpError[] = [];
-		for (const step of steps) {
+		for (const step of entry.steps) {
 			try {
-				if (step.kind === "copy" || step.kind === "create") {
-					await rm(step.path, { recursive: true });
-				} else if (step.kind === "trash") {
-					await putBackPayload(await payloadForSource(step.path), step.path);
-				} else if (step.kind === "restore") {
-					await trashOneAndRecord(step.path);
-				} else {
-					await moveBack(step.path, step.restoreDir);
-				}
+				inverse.push(await applyStep(step));
 			} catch (error) {
 				failed.push({ path: step.path, message: errorMessage(error) });
 			}
 		}
-		return { ok: failed.length === 0, empty: false, failed };
+		if (inverse.length > 0) pushBounded(target, { operation: entry.operation, steps: inverse });
+		return { ok: failed.length === 0, empty: false, failed, operation: entry.operation };
+	}
+
+	/**
+	 * ⌘Z: undo the newest recorded operation. A created row is deleted; a
+	 * move goes back to the folder it came from with Finder-style collision
+	 * naming; a rename takes the old name back unless somebody retook it; a
+	 * trash puts the item back where it was (Finder "Put Back"); a Put Back
+	 * moves the row into the Trash again.
+	 */
+	const undo = (): Promise<FsUndoOutcome> => replay(undoStack, redoStack);
+
+	/** ⇧⌘Z: apply the operation the last ⌘Z took back. */
+	const redo = (): Promise<FsUndoOutcome> => replay(redoStack, undoStack);
+
+	/** Record an output the renderer observed an Action produce (extract, compress): undo moves it to the Trash. */
+	async function recordCreated(path: string, operation: FsRecordedOperation): Promise<void> {
+		if (!isAbsolute(path)) {
+			throw new Error(`Invalid path "${path}": expected an absolute path`);
+		}
+		await lstat(path);
+		record(operation, [{ kind: "restore", path }]);
 	}
 
 	async function duplicate(paths: readonly string[]): Promise<FsBatchResult> {
-		return runBatch(paths, async (source) => {
+		const steps: FsUndoStep[] = [];
+		const result = await runBatch(paths, async (source) => {
 			const sourceStat = await lstat(source);
 			const dir = dirname(source);
 			const targetName = await resolveCopyName(dir, basename(source), sourceStat.isDirectory());
-			await cp(source, join(dir, targetName), { recursive: true });
+			const target = join(dir, targetName);
+			await cp(source, target, { recursive: true });
+			steps.push({ kind: "created", path: target, make: { kind: "copy", from: source } });
 		});
+		if (steps.length > 0) record("duplicate", steps);
+		return result;
+	}
+
+	/** Rename `path` to `newName` in its folder; a taken name (other than a case-only change) fails. Returns the new path. */
+	async function renameTo(path: string, newName: string): Promise<string> {
+		const target = join(dirname(path), newName);
+		if (newName.toLowerCase() !== basename(path).toLowerCase() && (await pathExists(target))) {
+			throw new FsRenameError("name-collision", `A file or folder named "${newName}" already exists`);
+		}
+		await fsRename(path, target);
+		return target;
 	}
 
 	async function rename(path: string, newName: string): Promise<FsEntry> {
@@ -768,16 +881,12 @@ export function createFsService(deps: FsServiceDeps): FsService {
 		if (newName.includes("/") || newName.includes("\\") || newName === "." || newName === "..") {
 			throw new FsRenameError("invalid-name", `Invalid name "${newName}": path separators are not allowed`);
 		}
-		const dir = dirname(path);
 		const currentName = basename(path);
 		if (newName === currentName) {
 			throw new FsRenameError("name-collision", `A file or folder named "${newName}" already exists`);
 		}
-		const target = join(dir, newName);
-		if (newName.toLowerCase() !== currentName.toLowerCase() && (await pathExists(target))) {
-			throw new FsRenameError("name-collision", `A file or folder named "${newName}" already exists`);
-		}
-		await fsRename(path, target);
+		const target = await renameTo(path, newName);
+		record("rename", [{ kind: "rename", path: target, name: currentName }]);
 		return buildFsEntry(target, platform);
 	}
 
@@ -789,7 +898,7 @@ export function createFsService(deps: FsServiceDeps): FsService {
 			const target = join(directory, name);
 			try {
 				await mkdir(target);
-				lastUndoSteps = [{ kind: "create", path: target, restoreDir: "" }];
+				record("createFolder", [{ kind: "created", path: target, make: { kind: "folder" } }]);
 				return { path: target, name };
 			} catch (error) {
 				if (!hasErrorCode(error, "EEXIST")) throw error;
@@ -808,7 +917,7 @@ export function createFsService(deps: FsServiceDeps): FsService {
 			const target = join(directory, name);
 			try {
 				await writeFile(target, contents, { flag: "wx" });
-				lastUndoSteps = [{ kind: "create", path: target, restoreDir: "" }];
+				record("createFile", [{ kind: "created", path: target, make: { kind: "file", format } }]);
 				return { path: target, name };
 			} catch (error) {
 				if (!hasErrorCode(error, "EEXIST")) throw error;
@@ -842,6 +951,8 @@ export function createFsService(deps: FsServiceDeps): FsService {
 		duplicate,
 		rename,
 		undo,
+		redo,
+		recordCreated,
 		createFolder,
 		createFile,
 		trash: async (paths) => {
@@ -851,14 +962,18 @@ export function createFsService(deps: FsServiceDeps): FsService {
 			// Record before the first item leaves: a step names where the item
 			// came from, which is known before the move, so a ⌘Z landing while
 			// the batch is still moving already finds the record instead of a
-			// silent no-op. A batch that moves nothing takes the record back.
-			lastUndoSteps = paths.map((path) => ({ kind: "trash", path, restoreDir: dirname(path) }));
+			// silent no-op. Items that fail drop out of the record afterwards,
+			// and a batch that moves nothing takes the record back.
+			const entry = record(
+				"trash",
+				paths.map((path): FsUndoStep => ({ kind: "trash", path })),
+			);
 			const result = await runBatch(paths, async (path) => {
 				await trashOneAndRecord(path);
 			});
-			if (result.ok.length === 0) {
-				lastUndoSteps = null;
-			}
+			const moved = new Set(result.ok);
+			entry.steps = entry.steps.filter((step) => moved.has(step.path));
+			if (entry.steps.length === 0) discard(entry);
 			return result;
 		},
 		restoreFromTrash,

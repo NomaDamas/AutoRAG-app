@@ -41,6 +41,8 @@ export type FsWorkerOp =
 	| "clipboardSet"
 	| "clipboardGet"
 	| "undo"
+	| "redo"
+	| "recordCreated"
 	| "copyPathsToClipboard"
 	| "versionFamilies"
 	| "refreshVersionFamilies"

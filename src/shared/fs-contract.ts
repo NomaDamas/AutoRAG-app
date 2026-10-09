@@ -186,18 +186,38 @@ export interface FsBatchResult {
 }
 
 /**
- * Outcome of ⌘Z: the main process undoes its most recent recorded
- * operation (a copy/create step deletes the created row, a move step moves
- * the row back to its original folder, a trash step puts the item back, a
- * restore step re-trashes it). The record is consumed by the call.
+ * The operations the undo history records, named so the UI can say what a
+ * ⌘Z / ⇧⌘Z just took back or applied again.
+ */
+export type FsHistoryOperation =
+	| "copy"
+	| "move"
+	| "duplicate"
+	| "rename"
+	| "createFolder"
+	| "createFile"
+	| "trash"
+	| "restore"
+	| "extract"
+	| "compress";
+
+/** The operations an Action output can be recorded as ({@link FsCoreBridge.recordCreated}). */
+export type FsRecordedOperation = Extract<FsHistoryOperation, "extract" | "compress">;
+
+/**
+ * Outcome of ⌘Z / ⇧⌘Z: the main process undoes (or redoes) the newest
+ * operation of its bounded history. A step that cannot apply reports its
+ * path with the verbatim reason in `failed`; the record is consumed either way.
  */
 export interface FsUndoOutcome {
 	/** True when a record existed and every step was applied. */
 	readonly ok: boolean;
-	/** True when no transfer was recorded to undo. */
+	/** True when the history held nothing to undo (or redo). */
 	readonly empty: boolean;
 	/** Per-step failures with the verbatim reason. */
 	readonly failed: readonly FsOpError[];
+	/** The operation that was undone or redone; absent when `empty`. */
+	readonly operation?: FsHistoryOperation;
 }
 /** Substring filename search over every available location (except Recents). */
 export interface FsSearchResult {
@@ -370,8 +390,15 @@ export interface FsCoreBridge {
 	openUrl(url: string): Promise<void>;
 	clipboardSet(clipboard: FsClipboard): Promise<void>;
 	clipboardGet(): Promise<FsClipboard | null>;
-	/** Undo the most recent recorded copy/move/create/trash operation (⌘Z). The record is consumed. */
+	/** Undo the newest operation of the history (⌘Z): copy, move, duplicate, rename, create, trash, Put Back, extract, compress. */
 	undo(): Promise<FsUndoOutcome>;
+	/** Redo the operation the last undo took back (⇧⌘Z); a new operation clears the redo history. */
+	redo(): Promise<FsUndoOutcome>;
+	/**
+	 * Record an output an Action (extract, compress) created at the absolute
+	 * `path`, so ⌘Z can move it to the Trash. Rejects a relative or missing path.
+	 */
+	recordCreated(path: string, operation: FsRecordedOperation): Promise<void>;
 	/** Write the absolute paths as text to the OS clipboard ("Copy Path"). */
 	copyPathsToClipboard(paths: readonly string[]): Promise<void>;
 }

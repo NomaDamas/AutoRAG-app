@@ -41,6 +41,8 @@ export function createFsBridge(ipcRenderer: IpcRenderer, worker: WorkerClient): 
 		openUrl: (url) => call<void>("openUrl", url),
 		clipboardSet: (clipboard) => call<void>("clipboardSet", clipboard),
 		undo: () => call<FsUndoOutcome>("undo"),
+		redo: () => call<FsUndoOutcome>("redo"),
+		recordCreated: (path, operation) => call<void>("recordCreated", path, operation),
 		clipboardGet: () => call<FsClipboard | null>("clipboardGet"),
 		copyPathsToClipboard: (paths) => call<void>("copyPathsToClipboard", paths),
 		startDrag: (paths) => ipcRenderer.send(FS_CHANNELS.startDrag, paths),

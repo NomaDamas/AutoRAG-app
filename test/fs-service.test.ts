@@ -610,7 +610,7 @@ describe("undo of a create", () => {
 		const outcome = await service.undo();
 
 		// Then the created file is gone and the undo applied fully
-		expect(outcome).toEqual({ ok: true, empty: false, failed: [] });
+		expect(outcome).toEqual({ ok: true, empty: false, failed: [], operation: "createFile" });
 		await expect(access(created.path)).rejects.toThrow();
 	});
 
@@ -809,7 +809,7 @@ describe("undo", () => {
 		const outcome = await service.undo();
 
 		// Then the copy is gone, the original stays, and the undo applied fully
-		expect(outcome).toEqual({ ok: true, empty: false, failed: [] });
+		expect(outcome).toEqual({ ok: true, empty: false, failed: [], operation: "copy" });
 		expect(await readFile(source, "utf8")).toBe("payload");
 		await expect(access(join(destDir, "undo-me.txt"))).rejects.toThrow();
 	});
@@ -830,7 +830,7 @@ describe("undo", () => {
 		const outcome = await service.undo();
 
 		// Then only the created copy is removed
-		expect(outcome).toEqual({ ok: true, empty: false, failed: [] });
+		expect(outcome).toEqual({ ok: true, empty: false, failed: [], operation: "copy" });
 		expect(await readFile(join(destDir, "same.txt"), "utf8")).toBe("existing");
 		await expect(access(join(destDir, "same copy.txt"))).rejects.toThrow();
 		expect(await readFile(source, "utf8")).toBe("incoming");
@@ -851,7 +851,7 @@ describe("undo", () => {
 		const outcome = await service.undo();
 
 		// Then the file is back in its original folder with its content
-		expect(outcome).toEqual({ ok: true, empty: false, failed: [] });
+		expect(outcome).toEqual({ ok: true, empty: false, failed: [], operation: "move" });
 		expect(await readFile(join(srcDir, "move-back.txt"), "utf8")).toBe("payload");
 		await expect(access(join(destDir, "move-back.txt"))).rejects.toThrow();
 	});
@@ -872,7 +872,7 @@ describe("undo", () => {
 		const outcome = await service.undo();
 
 		// Then the moved file returns under a " copy" name and both survive
-		expect(outcome).toEqual({ ok: true, empty: false, failed: [] });
+		expect(outcome).toEqual({ ok: true, empty: false, failed: [], operation: "move" });
 		expect(await readFile(join(srcDir, "retake copy.txt"), "utf8")).toBe("moved");
 		expect(await readFile(join(srcDir, "retake.txt"), "utf8")).toBe("new occupant");
 	});
@@ -926,6 +926,277 @@ describe("undo", () => {
 		expect(outcome.failed).toHaveLength(1);
 		expect(outcome.failed[0]?.path).toBe(join(destDir, "gone.txt"));
 		expect(outcome.failed[0]?.message.length).toBeGreaterThan(0);
+	});
+});
+
+/** A shell that really moves the item into the fixture Trash under its own name, like the OS does. */
+function trashMovingDeps(homeDir: string): FsServiceDeps {
+	const base = makeDeps(homeDir).deps;
+	return {
+		...base,
+		shell: {
+			...base.shell,
+			trashItem: async (path: string) => {
+				await mkdir(join(homeDir, ".Trash"), { recursive: true });
+				await rename(path, join(homeDir, ".Trash", basename(path)));
+			},
+		},
+	};
+}
+
+describe("undo history (issue #89)", () => {
+	it("undoes rename and puts the old name back, and redo applies the new name again", async () => {
+		// Given a renamed file
+		const file = join(root, "old.txt");
+		await writeFile(file, "body");
+		const service = createFsService(makeDeps(root).deps);
+		await service.rename(file, "new.txt");
+
+		// When undoing
+		const undone = await service.undo();
+
+		// Then the old name is back and the outcome names the operation
+		expect(undone).toEqual({ ok: true, empty: false, failed: [], operation: "rename" });
+		expect(await readFile(file, "utf8")).toBe("body");
+		await expect(access(join(root, "new.txt"))).rejects.toThrow();
+
+		// When redoing
+		const redone = await service.redo();
+
+		// Then the new name is back
+		expect(redone).toEqual({ ok: true, empty: false, failed: [], operation: "rename" });
+		expect(await readFile(join(root, "new.txt"), "utf8")).toBe("body");
+		await expect(access(file)).rejects.toThrow();
+	});
+
+	it("undoes a case-only rename", async () => {
+		// Given a file renamed only by case
+		const file = join(root, "case.txt");
+		await writeFile(file, "x");
+		const service = createFsService(makeDeps(root).deps);
+		await service.rename(file, "CASE.txt");
+
+		// When undoing, Then the lower-case name is back
+		expect((await service.undo()).ok).toBe(true);
+		expect(await readdir(root)).toEqual(["case.txt"]);
+	});
+
+	it("refuses to undo a rename onto a name somebody retook, with the verbatim reason", async () => {
+		// Given a renamed file whose old name was taken by another file
+		const file = join(root, "a.txt");
+		await writeFile(file, "renamed one");
+		const service = createFsService(makeDeps(root).deps);
+		await service.rename(file, "b.txt");
+		await writeFile(file, "intruder");
+
+		// When undoing
+		const outcome = await service.undo();
+
+		// Then nothing is overwritten and the failure names the path and the reason
+		expect(outcome.ok).toBe(false);
+		expect(outcome.failed).toEqual([{ path: join(root, "b.txt"), message: expect.stringContaining("a.txt") }]);
+		expect(await readFile(file, "utf8")).toBe("intruder");
+		expect(await readFile(join(root, "b.txt"), "utf8")).toBe("renamed one");
+	});
+
+	it("undoes a duplicate by removing the copy, and redo recreates it", async () => {
+		// Given a duplicated file
+		const file = join(root, "doc.txt");
+		await writeFile(file, "v1");
+		const service = createFsService(makeDeps(root).deps);
+		await service.duplicate([file]);
+
+		// When undoing
+		const undone = await service.undo();
+
+		// Then the copy is gone and the original stays
+		expect(undone).toEqual({ ok: true, empty: false, failed: [], operation: "duplicate" });
+		await expect(access(join(root, "doc copy.txt"))).rejects.toThrow();
+		expect(await readFile(file, "utf8")).toBe("v1");
+
+		// When redoing, Then the copy is back
+		expect((await service.redo()).ok).toBe(true);
+		expect(await readFile(join(root, "doc copy.txt"), "utf8")).toBe("v1");
+	});
+
+	it("walks several operations back in reverse order and forward again", async () => {
+		// Given a folder created, a file renamed inside it, then the file duplicated
+		const service = createFsService(makeDeps(root).deps);
+		const folder = await service.createFolder(root);
+		const file = join(folder.path, "a.txt");
+		await writeFile(file, "a");
+		await service.rename(file, "b.txt");
+		await service.duplicate([join(folder.path, "b.txt")]);
+
+		// When undoing three times
+		const operations = [(await service.undo()).operation, (await service.undo()).operation];
+
+		// Then the duplicate and the rename went in reverse order
+		expect(operations).toEqual(["duplicate", "rename"]);
+		expect(await readdir(folder.path)).toEqual(["a.txt"]);
+
+		// When redoing the rename
+		expect((await service.redo()).operation).toBe("rename");
+		expect(await readdir(folder.path)).toEqual(["b.txt"]);
+
+		// When undoing past the folder creation, Then the folder is removed and history is empty
+		await service.undo();
+		expect((await service.undo()).operation).toBe("createFolder");
+		await expect(access(folder.path)).rejects.toThrow();
+		expect(await service.undo()).toEqual({ ok: false, empty: true, failed: [] });
+	});
+
+	it("a new operation clears the redo history", async () => {
+		// Given an undone rename
+		const file = join(root, "a.txt");
+		await writeFile(file, "a");
+		const service = createFsService(makeDeps(root).deps);
+		await service.rename(file, "b.txt");
+		await service.undo();
+
+		// When another operation is recorded
+		await service.createFolder(root);
+
+		// Then there is nothing to redo
+		expect(await service.redo()).toEqual({ ok: false, empty: true, failed: [] });
+	});
+
+	it("reports empty for redo when nothing was undone", async () => {
+		expect(await createFsService(makeDeps(root).deps).redo()).toEqual({ ok: false, empty: true, failed: [] });
+	});
+
+	it("redoes a copy and a move", async () => {
+		// Given a copied file and a moved file
+		const srcDir = join(root, "redo-src");
+		const destDir = join(root, "redo-dest");
+		await mkdir(srcDir);
+		await mkdir(destDir);
+		await writeFile(join(srcDir, "c.txt"), "copy me");
+		await writeFile(join(srcDir, "m.txt"), "move me");
+		const service = createFsService(makeDeps(root).deps);
+		await service.copy([join(srcDir, "c.txt")], destDir);
+		await service.move([join(srcDir, "m.txt")], destDir);
+
+		// When undoing both and redoing both
+		await service.undo();
+		await service.undo();
+		expect(await readdir(destDir)).toEqual([]);
+		expect((await service.redo()).operation).toBe("copy");
+		expect((await service.redo()).operation).toBe("move");
+
+		// Then the copy and the move are applied again
+		expect(await readFile(join(destDir, "c.txt"), "utf8")).toBe("copy me");
+		expect(await readFile(join(destDir, "m.txt"), "utf8")).toBe("move me");
+		await expect(access(join(srcDir, "m.txt"))).rejects.toThrow();
+		expect(await readFile(join(srcDir, "c.txt"), "utf8")).toBe("copy me");
+	});
+
+	it("redoes a created file with its template contents", async () => {
+		// Given a created markdown file that was undone
+		const service = createFsService(makeDeps(root).deps);
+		const created = await service.createFile(root, "markdown" satisfies NewFileFormatId);
+		const contents = await readFile(created.path, "utf8");
+		await service.undo();
+		await expect(access(created.path)).rejects.toThrow();
+
+		// When redoing
+		const outcome = await service.redo();
+
+		// Then the same file is back
+		expect(outcome).toEqual({ ok: true, empty: false, failed: [], operation: "createFile" });
+		expect(await readFile(created.path, "utf8")).toBe(contents);
+	});
+
+	it("redoes a trash: the item goes back to the Trash after an undo", async () => {
+		// Given a trashed file that was undone
+		const file = join(root, "trashed.txt");
+		await writeFile(file, "t");
+		const service = createFsService(trashMovingDeps(root));
+		await service.trash([file]);
+		await service.undo();
+		expect(await readFile(file, "utf8")).toBe("t");
+
+		// When redoing
+		const outcome = await service.redo();
+
+		// Then it sits in the Trash again
+		expect(outcome).toEqual({ ok: true, empty: false, failed: [], operation: "trash" });
+		await expect(access(file)).rejects.toThrow();
+		expect(await readdir(join(root, ".Trash"))).toEqual(["trashed.txt"]);
+	});
+
+	it("trashes only the items that moved, so a partial batch undoes cleanly", async () => {
+		// Given a batch where one path does not exist
+		const good = join(root, "good.txt");
+		await writeFile(good, "g");
+		const service = createFsService(trashMovingDeps(root));
+		const result = await service.trash([good, join(root, "missing.txt")]);
+		expect(result.failed).toHaveLength(1);
+
+		// When undoing
+		const outcome = await service.undo();
+
+		// Then only the real item is restored and nothing fails
+		expect(outcome).toEqual({ ok: true, empty: false, failed: [], operation: "trash" });
+		expect(await readFile(good, "utf8")).toBe("g");
+	});
+
+	it("undoes a recorded extraction by trashing the output folder, and redo puts it back", async () => {
+		// Given an extracted folder recorded by the renderer
+		const output = join(root, "archive");
+		await mkdir(output);
+		await writeFile(join(output, "inner.txt"), "inner");
+		const service = createFsService(trashMovingDeps(root));
+		await service.recordCreated(output, "extract");
+
+		// When undoing
+		const undone = await service.undo();
+
+		// Then the folder is in the Trash (recoverable), not deleted
+		expect(undone).toEqual({ ok: true, empty: false, failed: [], operation: "extract" });
+		await expect(access(output)).rejects.toThrow();
+		expect(await readFile(join(root, ".Trash", "archive", "inner.txt"), "utf8")).toBe("inner");
+
+		// When redoing, Then the folder is back with its contents
+		expect((await service.redo()).ok).toBe(true);
+		expect(await readFile(join(output, "inner.txt"), "utf8")).toBe("inner");
+	});
+
+	it("rejects recording a path that does not exist or is relative", async () => {
+		const service = createFsService(makeDeps(root).deps);
+		await expect(service.recordCreated(join(root, "nope"), "compress")).rejects.toThrow();
+		await expect(service.recordCreated("relative.zip", "compress")).rejects.toThrow("absolute");
+		expect(await service.undo()).toEqual({ ok: false, empty: true, failed: [] });
+	});
+
+	it("an emptied Trash cannot be resurrected by redo", async () => {
+		// Given a trashed-then-undone item whose redo would re-trash, and a put-back undone (redo = put back)
+		const file = join(root, "gone.txt");
+		await writeFile(file, "g");
+		const service = createFsService(trashMovingDeps(root));
+		await service.trash([file]);
+		await service.restoreFromTrash([join(root, ".Trash", "gone.txt")]);
+		await service.undo();
+		expect(await readdir(join(root, ".Trash"))).toEqual(["gone.txt"]);
+
+		// When the Trash is emptied
+		await service.emptyTrash();
+
+		// Then redoing the put back has nothing to put back
+		expect((await service.redo()).empty).toBe(true);
+	});
+
+	it("keeps only the newest 100 operations", async () => {
+		// Given 105 created folders
+		const service = createFsService(makeDeps(root).deps);
+		for (let index = 0; index < 105; index += 1) await service.createFolder(root);
+
+		// When undoing until empty
+		let undone = 0;
+		while (!(await service.undo()).empty) undone += 1;
+
+		// Then the oldest five could not be undone
+		expect(undone).toBe(100);
 	});
 });
 
@@ -1653,7 +1924,7 @@ describe("restore from the Trash (Put Back)", () => {
 		const outcome = await service.undo();
 
 		// Then the file is back and the Trash is empty
-		expect(outcome).toEqual({ ok: true, empty: false, failed: [] });
+		expect(outcome).toEqual({ ok: true, empty: false, failed: [], operation: "trash" });
 		expect(await readFile(file, "utf8")).toBe("⌘Z");
 		expect(await readdir(join(root, ".Trash"))).toEqual([]);
 	});
@@ -1672,7 +1943,7 @@ describe("restore from the Trash (Put Back)", () => {
 		const outcome = await service.undo();
 
 		// Then the payload is back in the Trash and restorable again
-		expect(outcome).toEqual({ ok: true, empty: false, failed: [] });
+		expect(outcome).toEqual({ ok: true, empty: false, failed: [], operation: "restore" });
 		const trashPath = join(root, ".Trash", "roundtrip.md");
 		await expect(access(trashPath)).resolves.toBeUndefined();
 		const restored = await service.restoreFromTrash([trashPath]);
@@ -1902,7 +2173,7 @@ describe("Recycle Bin restore and empty (Windows)", () => {
 		const outcome = await service.undo();
 
 		// Then the payload moved back to its folder and only its record was consumed
-		expect(outcome).toEqual({ ok: true, empty: false, failed: [] });
+		expect(outcome).toEqual({ ok: true, empty: false, failed: [], operation: "trash" });
 		expect(await readFile(file, "utf8")).toBe("undo me");
 		expect(await readdir(sidDir)).toEqual(["$IOLD.md"]);
 	});

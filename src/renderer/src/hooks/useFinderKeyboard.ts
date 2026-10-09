@@ -173,7 +173,8 @@ export interface FinderKeyboardInput {
 		copySelection(): void;
 		cutSelection(): void;
 		pasteClipboard(move: boolean): void;
-		undoLastTransfer(): void;
+		undoLastOperation(): void;
+		redoLastOperation(): void;
 	};
 }
 
@@ -327,7 +328,11 @@ export function useFinderKeyboard(input: FinderKeyboardInput): void {
 					return;
 				case "undo":
 					event.preventDefault();
-					actions.undoLastTransfer();
+					actions.undoLastOperation();
+					return;
+				case "redo":
+					event.preventDefault();
+					actions.redoLastOperation();
 					return;
 			}
 		};

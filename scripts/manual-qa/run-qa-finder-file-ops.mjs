@@ -18,8 +18,8 @@
  *      the rows can then be dropped into a folder inside it;
  *   8. dwelling on a tab and dropping on its listing background moves the row
  *      into that tab's folder;
- *   9. ⌘Z undoes the most recent ⌘C/⌘V copy and the most recent ⌘X/⌘V move,
- *      and a second ⌘Z does nothing once the record is consumed;
+ *  9. ⌘Z undoes the most recent ⌘C/⌘V copy and the most recent ⌘X/⌘V move,
+ *      and a second ⌘Z steps further back through the history;
  *  10. ⌘C/⌘V while the search field has focus never touches the filesystem.
  *
  * Drags go through Chromium's native drag path (`Input.dispatchDragEvent`, the
@@ -387,14 +387,18 @@ try {
 		`root=${listNames(top)} B=${listNames(dirB)}`,
 	);
 
-	const afterUndo = listNames(top).length + listNames(dirA).length + listNames(dirB).length + listNames(sub).length;
+	// The history is multi-step (issue #89): a second ⌘Z undoes the operation
+	// before the one just undone, so the folders change again.
+	const snapshot = () => JSON.stringify([top, dirA, dirB, sub].map((dir) => listNames(dir)));
+	const afterUndo = snapshot();
 	await page.waitForTimeout(800);
 	await page.keyboard.press("Meta+z");
-	await page.waitForTimeout(600);
+	const secondDeadline = Date.now() + 10_000;
+	while (snapshot() === afterUndo && Date.now() < secondDeadline) await page.waitForTimeout(150);
 	check(
-		"a second ⌘Z does nothing once the record is consumed",
-		listNames(top).length + listNames(dirA).length + listNames(dirB).length + listNames(sub).length === afterUndo,
-		`entries=${listNames(top).length + listNames(dirA).length + listNames(dirB).length + listNames(sub).length} (was ${afterUndo})`,
+		"a second ⌘Z undoes the operation before the last one",
+		snapshot() !== afterUndo,
+		`before=${afterUndo} after=${snapshot()}`,
 	);
 	/* --------------------------------------- 12. ⌘V/⌘Z while typing stay text */
 	const count = () => listNames(top).length + listNames(dirA).length + listNames(dirB).length + listNames(sub).length;
