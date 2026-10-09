@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 import { _electron } from "playwright";
+import { cssAttr } from "./platform.mjs";
 
 export const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 
@@ -122,7 +123,7 @@ export async function stubNativeDrag(app) {
  * than the grabbed row.
  */
 export async function dragRowOut(page, path) {
-	const box = await page.locator(`[data-path="${path}"]`).first().boundingBox();
+	const box = await page.locator(`[data-path="${cssAttr(path)}"]`).first().boundingBox();
 	if (box === null) throw new Error(`no row for ${path}`);
 	const y = box.y + box.height / 2;
 	await page.mouse.move(box.x + 24, y);

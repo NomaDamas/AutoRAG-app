@@ -20,7 +20,7 @@ import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { finderWindow, launchFinder } from "./launch-finder.mjs";
-import { baseName, chord, homeEnv, isWindows, rmRetry, sleep } from "./platform.mjs";
+import { baseName, chord, cssAttr, homeEnv, isWindows, rmRetry, sleep } from "./platform.mjs";
 const HERE = dirname(fileURLToPath(import.meta.url));
 
 const REPO = join(HERE, "..", "..");
@@ -66,6 +66,27 @@ function fixture() {
 	writeFileSync(FILE_PATH, `restore me ${new Date().toISOString()}\n`, "utf8");
 }
 
+/** Payload paths of every same-named item already in the Trash, read through the fs bridge. */
+async function trashedPaths(page) {
+	return page.evaluate(async (name) => {
+		const trash = (await window.autorag.fs.locations()).find((location) => location.icon === "trash");
+		if (trash === undefined) return [];
+		return (await window.autorag.fs.listDir(trash.path)).entries.filter((entry) => entry.name === name).map((entry) => entry.path);
+	}, FILE);
+}
+
+/**
+ * The payload this run just trashed: the same-named Trash row that was not
+ * there before. The Windows Recycle Bin is machine-global, so a leftover with
+ * the same name from an earlier run lists beside it. Null when nothing new
+ * is identifiable.
+ */
+async function newTrashPayload(page, knownBefore) {
+	const paths = await page.locator('[role="row"]', { hasText: FILE }).evaluateAll((rows) => rows.map((row) => row.getAttribute("data-path")));
+	const fresh = paths.filter((path) => path !== null && !knownBefore.has(path));
+	return fresh.length === 1 ? fresh[0] : null;
+}
+
 async function openFixtureFolder(page) {
 	await page.getByRole("button", { name: "Downloads" }).click();
 	await waitFor(async () => (await page.locator('[role="row"]', { hasText: FOLDER }).count()) > 0, {
@@ -105,11 +126,17 @@ check("⌘Z after trash restored the file", existsSync(FILE_PATH), true);
 await page.screenshot({ path: join(EVIDENCE, "1-after-cmd-z-trash.png") });
 
 // 2. The Trash view lists the payload under its original name.
+const knownBefore = new Set(await trashedPaths(page));
 await page.locator('[role="row"]', { hasText: FILE }).first().click({ button: "right" });
 await page.getByRole("menuitem", { name: "Move to Trash" }).click();
 await waitFor(async () => !existsSync(FILE_PATH), { timeoutMs: 30_000, label: "file left for the OS Trash" });
 await page.getByLabel("Places").getByRole("button", { name: TRASH_LABEL, exact: true }).click();
-const trashRow = page.locator('[role="row"]', { hasText: FILE });
+// Track this run's payload by path: a same-name leftover in the machine-global
+// Windows Recycle Bin would otherwise keep the text match above zero after Put Back.
+const sameName = page.locator('[role="row"]', { hasText: FILE });
+await sameName.first().waitFor({ timeout: 30_000 });
+const runPayloadPath = await newTrashPayload(page, knownBefore);
+const trashRow = runPayloadPath === null ? sameName : page.locator(`[role="row"][data-path="${cssAttr(runPayloadPath)}"]`);
 await trashRow.first().waitFor({ timeout: 30_000 });
 check("trash controls shown in the Trash view", await page.getByRole("button", { name: "Put Back" }).isVisible(), true);
 check("put back disabled without a selection", await page.getByRole("button", { name: "Put Back" }).isDisabled(), true);
@@ -128,8 +155,12 @@ await waitFor(async () => !existsSync(FILE_PATH), { timeoutMs: 30_000, label: "�
 check("⌘Z after restore re-trashed the file", existsSync(FILE_PATH), false);
 
 // 5. The toolbar button puts it back, leaving the real Trash clean of this run's item.
-await trashRow.first().waitFor({ timeout: 30_000 });
-await trashRow.first().click();
+// The Windows bin gives the re-trashed payload a new `$R` name, so find it again by what is new.
+await sameName.first().waitFor({ timeout: 30_000 });
+const secondPayloadPath = await newTrashPayload(page, knownBefore);
+const secondRow = secondPayloadPath === null ? sameName : page.locator(`[role="row"][data-path="${cssAttr(secondPayloadPath)}"]`);
+await secondRow.first().waitFor({ timeout: 30_000 });
+await secondRow.first().click();
 await page.getByRole("button", { name: "Put Back" }).click();
 await waitFor(async () => existsSync(FILE_PATH), { timeoutMs: 30_000, label: "toolbar Put Back restored the file" });
 check("toolbar Put Back restored the file", existsSync(FILE_PATH), true);

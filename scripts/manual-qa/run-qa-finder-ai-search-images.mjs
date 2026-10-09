@@ -229,8 +229,14 @@ await page.screenshot({ path: join(EVIDENCE, "02-deep-fallbacks.png") });
 
 // Web image card -> OS browser.
 await webCard.click().catch(() => undefined);
-await sleep(400);
-const opened = await app.evaluate(() => globalThis.__qaOpenedUrls);
+// The URL travels renderer -> fs worker -> main (shell.openExternal); a slow host
+// needs more than a fixed beat, so poll for it, bounded.
+let opened = [];
+for (let waited = 0; waited < 10_000; waited += 250) {
+	opened = await app.evaluate(() => globalThis.__qaOpenedUrls);
+	if (opened.length > 0) break;
+	await sleep(250);
+}
 check("the web image card opens the page in the OS browser", JSON.stringify(opened) === JSON.stringify([WEB_IMAGE]), JSON.stringify(opened));
 
 // Evidence half: image source and a relative image in an excerpt.

@@ -18,7 +18,7 @@ import { tmpdir } from "node:os";
 import { join, sep } from "node:path";
 import { deflateSync } from "node:zlib";
 import { AI_PANEL, launchFinder, finderWindow } from "./launch-finder.mjs";
-import { chord } from "./platform.mjs";
+import { chord, cssAttr } from "./platform.mjs";
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url)).replace(/[\\/]$/, "");
 const EVIDENCE = join(ROOT, ".omo", "evidence", "ai-finder-app", "qa-view-modes");
@@ -41,10 +41,6 @@ const tree = {
 	[betaPath]: ["gamma/", "beta-1.md"],
 	[gammaPath]: ["delta.txt"],
 };
-
-/** Playwright's CSS engine eats a lone backslash in an attribute value (measured:
- * `[data-path="C:\Users"]` matches nothing), so Windows paths need `\\`. */
-const cssAttr = (value) => value.replace(/\\/g, "\\\\");
 
 function crc32(buf) {
 	let crc = 0xffffffff;

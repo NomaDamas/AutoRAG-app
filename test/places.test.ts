@@ -147,15 +147,22 @@ describe("macOS places", () => {
 		const cloud = bySection(await places.list(), "cloud");
 
 		// Then iCloud leads and every account is its own row with the provider glyph
-		expect(cloud.map((location) => [location.name, location.icon])).toEqual([
+		// (accounts sharing a provider sort by the host locale, so the two OneDrive rows are compared order-free)
+		const rows = cloud.map((location) => [location.name, location.icon]);
+		expect(rows.slice(0, 5)).toEqual([
 			["iCloud Drive", "icloud"],
 			["Dropbox", "dropbox"],
 			["Google Drive - jeffrey@markr.ai", "google-drive"],
 			["Google Drive - vkehfdl1@gmail.com", "google-drive"],
 			["MacDroid - samsungSM-F711N", "cloud"],
-			["OneDrive - Personal", "onedrive"],
-			["OneDrive - 경희대학교", "onedrive"],
 		]);
+		expect(rows.slice(5)).toHaveLength(2);
+		expect(rows.slice(5)).toEqual(
+			expect.arrayContaining([
+				["OneDrive - Personal", "onedrive"],
+				["OneDrive - 경희대학교", "onedrive"],
+			]),
+		);
 		expect(cloud.find((location) => location.name === "OneDrive - Personal")?.path).toBe(
 			join(storage, "OneDrive-Personal"),
 		);

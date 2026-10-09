@@ -112,11 +112,29 @@ export function createFsWorkerHost(deps: FsWorkerHostDeps): FsWorkerHost {
 		contents.postMessage(FS_WORKER_CHANNELS.port, null, [port2]);
 	};
 
+	/**
+	 * `stdio: "inherit"` does not carry the worker's output to a parent whose
+	 * stdout is a pipe on Windows (a GUI process has no console to inherit), so
+	 * the worker's logs and the `[fs-watch]` diagnostics QA reads would vanish.
+	 * Pipe them and write them on main's own streams instead. A closed parent
+	 * pipe must not take main down, so a stream error is swallowed.
+	 */
+	const swallowStreamError = (): void => {};
+	process.stdout.on("error", swallowStreamError);
+	process.stderr.on("error", swallowStreamError);
+	const forward = (from: NodeJS.ReadableStream | null | undefined, to: NodeJS.WriteStream): void => {
+		from?.on("data", (chunk: Buffer | string) => {
+			to.write(chunk);
+		});
+	};
+
 	const fork = (): void => {
 		const child = utilityProcess.fork(entry, [`${FS_WORKER_CONFIG_FLAG}${JSON.stringify(deps.config)}`], {
 			serviceName: FS_WORKER_SERVICE_NAME,
-			stdio: "inherit",
+			stdio: "pipe",
 		});
+		forward(child.stdout, process.stdout);
+		forward(child.stderr, process.stderr);
 		worker = child;
 		const host = new MessageChannelMain();
 		child.postMessage({ type: "host" }, [host.port1]);
