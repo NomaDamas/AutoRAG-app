@@ -32,7 +32,7 @@ export function ContextMenu({
 }: {
 	readonly cursor: { readonly x: number; readonly y: number };
 	readonly entries: readonly FinderMenuEntry[];
-	readonly onSelect: (action: FinderMenuAction, format: NewFileFormatId | null) => void;
+	readonly onSelect: (action: FinderMenuAction, format: NewFileFormatId | null, serviceId: string | null) => void;
 	readonly onClose: () => void;
 }): ReactElement {
 	const ref = useRef<HTMLDivElement>(null);
@@ -55,37 +55,6 @@ export function ContextMenu({
 		{ width: CONTEXT_MENU_WIDTH, height: estimateMenuHeight(entries) },
 		{ width: window.innerWidth, height: window.innerHeight },
 	);
-	// A popout at the right of the menu would leave the window: flip it left.
-	const flipSubmenu = placement.left + CONTEXT_MENU_WIDTH * 2 > window.innerWidth;
-
-	const submenuPanel = (submenu: FinderMenuSubmenu, anchorTop: number): ReactElement => {
-		const height = menuHeightForItems(submenu.items.length);
-		// Keep the popout inside the window: shift it up when its bottom would clip.
-		const top = Math.max(8, Math.min(anchorTop, window.innerHeight - 8 - height)) - anchorTop;
-		return (
-			<div
-				className={cn(
-					"menu absolute z-70 flex flex-col w-context-menu p-4 border border-border rounded-10 bg-window shadow-menu animate-[rise_var(--dur-menu)_var(--ease-out)]",
-					flipSubmenu ? "right-full" : "left-full",
-				)}
-				role="menu"
-				aria-label={submenu.label}
-				style={{ top, maxHeight: height }}
-			>
-				{submenu.items.map((entry) => (
-					<button
-						key={`${entry.action}-${entry.format ?? "folder"}`}
-						type="button"
-						role="menuitem"
-						className={ITEM_CLASS}
-						onClick={() => onSelect(entry.action, entry.format)}
-					>
-						<span className="menu__label flex-1">{entry.label}</span>
-					</button>
-				))}
-			</div>
-		);
-	};
 
 	return (
 		<div
@@ -139,7 +108,7 @@ export function ContextMenu({
 									<ChevronRightSmallIcon />
 								</span>
 							</button>
-							{open ? submenuPanel(entry, openSubmenu.anchorTop) : null}
+							{open ? <SubmenuPanel submenu={entry} anchorTop={openSubmenu.anchorTop} rootLeft={placement.left} depth={0} onSelect={onSelect} /> : null}
 						</div>
 					);
 				}
@@ -157,7 +126,7 @@ export function ContextMenu({
 							entry.tone === "warning" && "text-error-orange-text",
 						)}
 						disabled={entry.disabled}
-						onClick={() => onSelect(entry.action, null)}
+						onClick={() => onSelect(entry.action, null, null)}
 					>
 						<span className="menu__label flex-1">{entry.label}</span>
 						{entry.keycap === null ? null : (
@@ -168,4 +137,138 @@ export function ContextMenu({
 			})}
 		</div>
 	);
+}
+
+/** A row's box in viewport pixels: where a nested panel anchors. */
+interface AnchorRect {
+	readonly top: number;
+	readonly left: number;
+	readonly right: number;
+}
+
+function anchorRectOf(element: HTMLElement): AnchorRect {
+	const { top, left, right } = element.getBoundingClientRect();
+	return { top, left, right };
+}
+
+/**
+ * One popout panel. A leaf runs its action; a nested parent (an application's
+ * group under 서비스) opens one more panel beside this one.
+ *
+ * A first-level panel hangs off the root menu (`absolute`, flipping left when
+ * the window's right edge would clip it). A nested panel is `fixed` at its
+ * row's viewport rect instead: its parent may scroll (`overflow-y: auto` for a
+ * long service list), and a scroll container clips absolutely positioned
+ * descendants. `depth` counts panels already open to the right of the root.
+ */
+function SubmenuPanel({
+	submenu,
+	anchorTop,
+	rootLeft,
+	depth,
+	fixedAt,
+	onSelect,
+}: {
+	readonly submenu: FinderMenuSubmenu;
+	readonly anchorTop: number;
+	readonly rootLeft: number;
+	readonly depth: number;
+	/** The parent row's rect when this panel is nested; absent for a first-level panel. */
+	readonly fixedAt?: AnchorRect;
+	readonly onSelect: (action: FinderMenuAction, format: NewFileFormatId | null, serviceId: string | null) => void;
+}): ReactElement {
+	const [openChild, setOpenChild] = useState<{ readonly label: string; readonly rect: AnchorRect } | null>(null);
+	const wanted = menuHeightForItems(submenu.items.length);
+	const available = window.innerHeight - 16;
+	// A list taller than the window scrolls; one that fits never grows a scrollbar.
+	const height = Math.min(wanted, available);
+	const scrolls = wanted > available;
+	// Keep the popout inside the window: shift it up when its bottom would clip.
+	const top = Math.max(8, Math.min(anchorTop, window.innerHeight - 8 - height));
+	const nested =
+		fixedAt === undefined
+			? {
+					className: popoutFlipsLeft(rootLeft, depth) ? "absolute right-full" : "absolute left-full",
+					style: { top: top - anchorTop, maxHeight: height, ...(scrolls ? { overflowY: "auto" as const } : {}) },
+				}
+			: {
+					className: "fixed",
+					style: {
+						top,
+						left: fixedAt.right + CONTEXT_MENU_WIDTH > window.innerWidth - 8 ? fixedAt.left - CONTEXT_MENU_WIDTH : fixedAt.right,
+						maxHeight: height,
+						...(scrolls ? { overflowY: "auto" as const } : {}),
+					},
+				};
+	return (
+		<div
+			className={cn(
+				"menu z-70 flex flex-col w-context-menu p-4 border border-border rounded-10 bg-window shadow-menu animate-[rise_var(--dur-menu)_var(--ease-out)]",
+				nested.className,
+			)}
+			role="menu"
+			aria-label={submenu.label}
+			style={nested.style}
+		>
+			{submenu.items.map((entry) =>
+				entry.kind === "submenu" ? (
+					<div
+						key={`group-${entry.label}`}
+						className="relative"
+						onMouseEnter={(event) => setOpenChild({ label: entry.label, rect: anchorRectOf(event.currentTarget) })}
+						onMouseLeave={() => setOpenChild(null)}
+					>
+						<button
+							type="button"
+							role="menuitem"
+							aria-haspopup="menu"
+							aria-expanded={openChild?.label === entry.label}
+							className={cn(ITEM_CLASS, openChild?.label === entry.label && "bg-hover")}
+							onClick={(event) =>
+								setOpenChild((current) =>
+									current?.label === entry.label ? null : { label: entry.label, rect: anchorRectOf(event.currentTarget) },
+								)
+							}
+							onKeyDown={(event) => {
+								if (event.key === "ArrowRight") {
+									event.preventDefault();
+									setOpenChild({ label: entry.label, rect: anchorRectOf(event.currentTarget) });
+								}
+							}}
+						>
+							<span className="menu__label flex-1">{entry.label}</span>
+							<span className="menu__chevron flex-none ml-auto text-ink-faint">
+								<ChevronRightSmallIcon />
+							</span>
+						</button>
+						{openChild?.label === entry.label ? (
+							<SubmenuPanel
+								submenu={entry}
+								anchorTop={openChild.rect.top}
+								rootLeft={rootLeft}
+								depth={depth + 1}
+								fixedAt={openChild.rect}
+								onSelect={onSelect}
+							/>
+						) : null}
+					</div>
+				) : (
+					<button
+						key={`${entry.action}-${entry.serviceId ?? entry.format ?? "folder"}`}
+						type="button"
+						role="menuitem"
+						className={ITEM_CLASS}
+						onClick={() => onSelect(entry.action, entry.format, entry.serviceId ?? null)}
+					>
+						<span className="menu__label flex-1">{entry.label}</span>
+					</button>
+				),
+			)}
+		</div>
+	);
+}
+
+/** A first-level popout flips left when the window's right edge would clip it. */
+function popoutFlipsLeft(rootLeft: number, depth: number): boolean {
+	return rootLeft + CONTEXT_MENU_WIDTH * (depth + 2) > window.innerWidth;
 }

@@ -27,9 +27,11 @@ import {
 	registerDragOutIpcHandlers,
 	registerOsRequestIpcHandlers,
 	registerSearchIpcHandlers,
+	registerServicesIpcHandlers,
 	registerSettingsIpcHandlers,
 } from "./ipc";
 import { createActionService } from "./action-service";
+import { createServicesService } from "./services-service";
 import { DEFAULT_SCAN_INTERVAL_MINUTES } from "./version-family-service";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -396,6 +398,8 @@ app.whenReady().then(async () => {
 	});
 	registerSettingsIpcHandlers(settingsService);
 	registerOsRequestIpcHandlers(osRequests);
+	// The in-app right-click → 서비스 submenu: what macOS offers for the selection, and performing one.
+	registerServicesIpcHandlers(createServicesService());
 	const settings = await settingsService.get();
 	applyAppearance(settings.appearance);
 	if (settings.dupeyScanIntervalMinutes !== DEFAULT_SCAN_INTERVAL_MINUTES) applyScanInterval(settings.dupeyScanIntervalMinutes);

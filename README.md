@@ -252,6 +252,46 @@ while the setting is on, and switching it off removes exactly the entries it
 wrote (macOS workflows are recognized by their `com.autorag.app.service.`
 bundle identifier). A failed install rejects the toggle instead of saving it.
 
+## Services in AutoRAG's own right-click menu (macOS)
+
+The reverse direction: right-click a row (or the empty space of a folder) in
+AutoRAG and the **Services** submenu lists what other apps register with macOS
+for those files, the same entries Finder shows under right-click → Services:
+Keka's *Send to Keka* / *Extract using Keka* / *Compress using Keka*, a
+Terminal's *New Terminal at Folder*, QSpace, Quick Action workflows, and so on.
+Clicking one performs it on the selection (the whole multi-selection for a row;
+the folder in view for empty space), and the target app receives the files just
+as it would from Finder. An application's services sit under one row named for
+it; services without an application prefix sit directly in the submenu.
+
+- **How it is discovered.** `src/main/services-service.ts` reads the system's
+  service registry (`pbs -dump_pboard`, the data behind Finder's Services menu)
+  plus the user's per-service switches from System Settings, and asks Launch
+  Services which file types each selected path conforms to. Finder's rules are
+  plain TypeScript (`selectServices`): the service must take files (or text that
+  is declared a file path), must not be bound to another application, must
+  accept every selected path's type, must not be restricted or switched off for
+  the context menu, and this app's own Finder Quick Actions are left out.
+- **How it runs.** `NSPerformService` through `osascript`, with the file URLs,
+  the filename list, and the path text on a private pasteboard. The service id
+  and paths are `argv`, never script text. The service is performed only if the
+  system still offers it for exactly that selection, so a stale or forged id from
+  the renderer cannot run anything.
+- **Quiet degrade.** The menu opens at once; the Services row appears when the
+  lookup answers (a stale answer for an earlier right-click is dropped). A failed
+  lookup is an empty menu. The row is absent in the Trash, and off macOS.
+- **Windows.** Not offered. Explorer's verbs are COM `IContextMenu` handlers and
+  registry entries with no public API for an unpackaged app to enumerate and run
+  against a selection, so the submenu stays macOS-only rather than guess.
+
+`run-qa-finder-services.mjs` (macOS) registers a temporary Quick Action with
+the real system, then right-clicks in the built app and checks: the service is
+listed, it receives the exact path (spaces, quotes, and Hangul included), a
+two-row selection hands both paths over, the empty-space menu acts on the
+folder in view, a folder-only service is offered for a folder and not a file,
+and (when Keka is installed) Keka's group opens a visible second-level popout
+whose *Send to Keka* launches Keka. The probe is removed afterwards.
+
 ## Manual QA
 
 The Finder QA scripts are under `scripts/manual-qa/`. Build first, then run a

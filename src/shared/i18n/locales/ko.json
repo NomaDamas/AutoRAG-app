@@ -122,6 +122,7 @@
     "compressCount": "{{count}}개 항목 압축",
     "extract": "압축 해제",
     "share": "공유",
+    "services": "서비스",
     "moveToTrash": "휴지통으로 이동",
     "moveToTrashCount": "{{count}}개 항목 휴지통으로 이동",
     "putBack": "원래 위치로 복원",

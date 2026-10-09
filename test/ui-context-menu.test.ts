@@ -5,7 +5,7 @@ import {
 	estimateMenuHeight,
 	menuPlacement,
 } from "../src/renderer/src/state/context-menu";
-import type { ContextMenuInput, FinderMenuEntry, FinderMenuItem, FinderMenuSubmenu } from "../src/renderer/src/state/context-menu";
+import type { ContextMenuInput, FinderMenuEntry, FinderMenuItem, FinderMenuSubmenu, FinderMenuSubmenuItem } from "../src/renderer/src/state/context-menu";
 import { NEW_FILE_FORMATS } from "../src/shared/new-file-contract";
 import { NO_CAPABILITIES, type ActionCapabilities } from "../src/shared/actions-contract";
 
@@ -252,7 +252,7 @@ describe("buildContextMenu in the Trash view", () => {
 
 describe("buildBackgroundContextMenu", () => {
 	const submenuOf = (entries: readonly FinderMenuEntry[]): FinderMenuSubmenu => {
-		const entry = entries.find((candidate): candidate is FinderMenuSubmenu => candidate.kind === "submenu");
+		const entry = entries.find((candidate): candidate is FinderMenuSubmenu => candidate.kind === "submenu" && candidate.label === "새로 만들기");
 		if (entry === undefined) throw new Error("no submenu entry");
 		return entry;
 	};
@@ -260,7 +260,7 @@ describe("buildBackgroundContextMenu", () => {
 	it("offers a New submenu with a folder and every document format", () => {
 		const submenu = submenuOf(buildBackgroundContextMenu({ clipboardCount: 0 }));
 		expect(submenu.label).toBe("새로 만들기");
-		expect(submenu.items.map((entry) => entry.action)).toEqual([
+		expect(submenu.items.map((entry) => (entry.kind === "submenu-item" ? entry.action : entry.kind))).toEqual([
 			"newFolder",
 			...NEW_FILE_FORMATS.map(() => "newFile"),
 		]);
@@ -272,7 +272,8 @@ describe("buildBackgroundContextMenu", () => {
 
 	it("carries each submenu item's file format, and none for the folder", () => {
 		const submenu = submenuOf(buildBackgroundContextMenu({ clipboardCount: 0 }));
-		const [folder, ...files] = submenu.items;
+		const leaves = submenu.items.filter((entry): entry is FinderMenuSubmenuItem => entry.kind === "submenu-item");
+		const [folder, ...files] = leaves;
 		expect(folder?.format).toBeNull();
 		expect(files.map((entry) => entry.format)).toEqual(NEW_FILE_FORMATS.map((format) => format.id));
 	});
@@ -333,5 +334,54 @@ describe("menuPlacement", () => {
 describe("estimateMenuHeight", () => {
 	it("measures items, separators, and the menu padding", () => {
 		expect(estimateMenuHeight(buildContextMenu(file))).toBe(13 * 28 + 4 * 9 + 2 * 5);
+	});
+});
+
+describe("Services submenu", () => {
+	const KEKA = [
+		{ id: "Keka/Compress using Keka", group: "Keka", name: "Compress using Keka" },
+		{ id: "Keka/Send to Keka", group: "Keka", name: "Send to Keka" },
+	] as const;
+	const BLOOM = { id: "Reveal in Bloom", group: null, name: "Reveal in Bloom" } as const;
+
+	function servicesEntry(entries: readonly FinderMenuEntry[]): FinderMenuSubmenu | undefined {
+		return entries.find((entry): entry is FinderMenuSubmenu => entry.kind === "submenu" && entry.label === "서비스");
+	}
+
+	it("sits in its own group just above Move to Trash, and only for a row with services", () => {
+		const withServices = buildContextMenu({ ...file, services: [BLOOM] });
+		expect(withServices.slice(-4).map((entry) => entry.kind)).toEqual(["separator", "submenu", "separator", "item"]);
+		expect(withServices.at(-1)).toMatchObject({ action: "trash" });
+		expect(servicesEntry(buildContextMenu({ ...file, services: [] }))).toBeUndefined();
+		expect(servicesEntry(buildContextMenu(file))).toBeUndefined();
+	});
+
+	it("adds one row and one separator to the height estimate", () => {
+		expect(estimateMenuHeight(buildContextMenu({ ...file, services: [BLOOM] }))).toBe(estimateMenuHeight(buildContextMenu(file)) + 28 + 9);
+	});
+
+	it("lists ungrouped services directly and each application's services under one parent", () => {
+		const submenu = servicesEntry(buildContextMenu({ ...file, services: [BLOOM, ...KEKA] }));
+		expect(submenu?.items.map((item) => item.label)).toEqual(["Reveal in Bloom", "Keka"]);
+		const keka = submenu?.items.find((item) => item.kind === "submenu");
+		expect(keka?.kind === "submenu" && keka.items.map((item) => item.label)).toEqual(["Compress using Keka", "Send to Keka"]);
+	});
+
+	it("carries the service id on the leaf that runs it", () => {
+		const submenu = servicesEntry(buildContextMenu({ ...file, services: [...KEKA] }));
+		const group = submenu?.items[0];
+		const leaf = group?.kind === "submenu" ? group.items[1] : undefined;
+		expect(leaf).toMatchObject({ kind: "submenu-item", action: "service", serviceId: "Keka/Send to Keka", label: "Send to Keka" });
+	});
+
+	it("is not offered in the Trash, where a row goes back or away", () => {
+		expect(servicesEntry(buildContextMenu({ ...file, inTrash: true, services: [BLOOM] }))).toBeUndefined();
+	});
+
+	it("gives the empty-space menu the services of the folder in view", () => {
+		const withServices = buildBackgroundContextMenu({ clipboardCount: 0, services: [BLOOM] });
+		expect(servicesEntry(withServices)?.items.map((item) => item.label)).toEqual(["Reveal in Bloom"]);
+		expect(servicesEntry(buildBackgroundContextMenu({ clipboardCount: 0 }))).toBeUndefined();
+		expect(servicesEntry(buildBackgroundContextMenu({ clipboardCount: 0, inTrash: true, services: [BLOOM] }))).toBeUndefined();
 	});
 });
