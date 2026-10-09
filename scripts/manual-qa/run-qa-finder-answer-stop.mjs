@@ -115,7 +115,7 @@ try {
 	log(`work dir: ${WORK}`);
 	await warmIndex();
 
-	const env = { ...process.env, AUTORAG_CONFIG: CONFIG };
+	const env = { ...process.env, AUTORAG_CONFIG: CONFIG, AUTORAG_SKIP_ONBOARDING: "1" };
 	delete env.ELECTRON_RENDERER_URL;
 	app = await _electron.launch({ args: [ROOT, `--user-data-dir=${join(WORK, "user-data")}`], cwd: WORK, env });
 	page = await finderWindow(app, 30_000);

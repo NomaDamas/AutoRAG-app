@@ -31,8 +31,9 @@ import { createOsKindResolver } from "./file-kind";
 import { readFileDetails } from "./file-details";
 import { buildFsEntry, errorMessage, hasErrorCode, isAvailable, pathExists, resolveCopyName } from "./fs-entry";
 import { createPlaces, type Places } from "./places";
-import { isRecycleBinDir, readRecycleBinName } from "./recycle-bin";
+import { isRecycleBinDir, readRecycleBinName, readRecycleBinRecord } from "./recycle-bin";
 import { createRecentsStore, type RecentsStore } from "./recents-store";
+import { createTrashStore, type TrashStore } from "./trash-store";
 
 /** Subset of Electron's shell used by the service (injected for testability). */
 export interface FsShell {
@@ -63,6 +64,8 @@ export interface FsServiceDeps {
 	readonly qaRoot?: string;
 	/** Recently opened/previewed files. Defaults to `<homeDir>/recents`; production injects the userData store. */
 	readonly recents?: RecentsStore;
+	/** Put-Back origins for payloads the app trashed. Defaults to `<homeDir>/trash-store`; production injects the userData store. */
+	readonly trashStore?: TrashStore;
 	/** Defaults to the platform resolver (mdls on macOS, the registry on Windows). */
 	readonly osKind?: OsKindLookup;
 	/** Defaults to the platform icon provider (native Quick Look thumbnails on macOS/Windows). */
@@ -163,7 +166,9 @@ export function untitledFileName(extension: string, attempt: number): string {
 interface SearchContext {
 	readonly needle: string;
 	readonly location: string;
+	readonly platform: NodeJS.Platform;
 	readonly results: FsSearchResult[];
+	readonly signal: AbortSignal | undefined;
 }
 
 function compareEntries(a: FsEntry, b: FsEntry): number {
@@ -176,22 +181,11 @@ function normalizeSlashes(path: string): string {
 	return path.replace(/\\/g, "/");
 }
 
-/** Attach the OS-reported kind to one entry; a failed lookup keeps the letter/fallback kind. */
-async function applyOsKind(entry: FsEntry, lookup: OsKindLookup): Promise<FsEntry> {
-	if (entry.kind !== "file") return entry;
-	try {
-		return { ...entry, osKind: await lookup(entry.path, entry.ext) };
-	} catch (error) {
-		console.warn(`fs:osKind failed for ${entry.path}: ${errorMessage(error)}`);
-		return entry;
-	}
-}
-
 /** OS tile icons for a batch's files; the provider batches one call per listing. */
 async function resolveIcons(targets: readonly FsEnrichmentTarget[], provider: IconProvider): Promise<ReadonlyMap<string, string>> {
 	const files = targets
 		.filter((target) => target.kind === "file")
-		.map((target) => ({ path: target.path, ext: target.ext, modifiedAt: target.modifiedAt }));
+		.map((target) => ({ path: target.path, ext: target.ext, mtimeMs: target.mtimeMs }));
 	if (files.length === 0) return new Map();
 	return provider.icons(files);
 }
@@ -210,7 +204,27 @@ async function runBatch(paths: readonly string[], operation: (path: string) => P
 	return { ok, failed };
 }
 
+/** Rename across folders, falling back to copy+delete across devices. */
+async function movePath(source: string, target: string): Promise<void> {
+	try {
+		await fsRename(source, target);
+	} catch (error) {
+		// Cross-device move: copy the tree, then remove the source.
+		if (!hasErrorCode(error, "EXDEV")) throw error;
+		await cp(source, target, { recursive: true });
+		await rm(source, { recursive: true, force: true });
+	}
+}
+
+/** Move a row back into `restoreDir`, Finder-style collision naming included. */
+async function moveBack(path: string, restoreDir: string): Promise<void> {
+	const stepStat = await lstat(path);
+	const back = join(restoreDir, await resolveCopyName(restoreDir, basename(path), stepStat.isDirectory()));
+	await movePath(path, back);
+}
+
 async function walkForSearch(dir: string, depth: number, context: SearchContext): Promise<void> {
+	context.signal?.throwIfAborted();
 	if (depth > SEARCH_MAX_DEPTH || context.results.length >= SEARCH_MAX_RESULTS) return;
 	let dirents: Dirent[];
 	try {
@@ -226,7 +240,7 @@ async function walkForSearch(dir: string, depth: number, context: SearchContext)
 		if (dirent.name.toLowerCase().includes(context.needle)) {
 			try {
 				context.results.push({
-					entry: await buildFsEntry(fullPath),
+					entry: await buildFsEntry(fullPath, context.platform),
 					location: context.location,
 				});
 			} catch (error) {
@@ -239,7 +253,17 @@ async function walkForSearch(dir: string, depth: number, context: SearchContext)
 	}
 }
 
-export function createFsService(deps: FsServiceDeps): FsCoreBridge {
+/**
+ * The filesystem service as the worker serves it: the bridge contract, plus an
+ * AbortSignal on the two ops that walk a folder, so a listing or search the
+ * user already left stops instead of finishing for nobody.
+ */
+export interface FsService extends FsCoreBridge {
+	listDir(path: string, signal?: AbortSignal): Promise<DirListing>;
+	search(query: string, options?: FsSearchOptions, signal?: AbortSignal): Promise<readonly FsSearchResult[]>;
+}
+
+export function createFsService(deps: FsServiceDeps): FsService {
 	const platform = deps.platform ?? process.platform;
 	const home = deps.homeDir ?? homedir();
 	const recents = deps.recents ?? createRecentsStore({ directory: join(home, "recents") });
@@ -248,7 +272,8 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 	const iconProvider: IconProvider = deps.icons ?? createIconProvider();
 	const places = deps.places ?? createPlaces({ homeDir: home, platform });
 	const recycleBin = deps.recycleBin ?? isRecycleBinDir;
-	// In-app clipboard lives in main-process memory only.
+	const trashStore = deps.trashStore ?? createTrashStore({ directory: join(home, "trash-store") });
+	// In-app clipboard lives in this process's memory only (the fs worker in the app).
 	let inAppClipboard: FsClipboard | null = null;
 	/**
 	 * OS kind and tile icon only. Finder metadata is a separate call: its
@@ -276,7 +301,7 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 		]);
 		return targets.map((target, index) => ({
 			path: target.path,
-			modifiedAt: target.modifiedAt,
+			mtimeMs: target.mtimeMs,
 			osKind: kinds[index] ?? null,
 			iconUrl: icons.get(target.path) ?? null,
 		}));
@@ -287,25 +312,24 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 			targets.map(async (target): Promise<FsFinderEnrichment | null> => {
 				const finder = await finderMetadata(target.path);
 				if (finder === null) return null;
-				return {
-					path: target.path,
-					modifiedAt: target.modifiedAt,
-					finder: { ...finder, createdAt: finder.createdAt ?? target.createdAt ?? null },
-				};
+				// A missing Spotlight creation date falls back to the listing's birth time in the renderer.
+				return { path: target.path, mtimeMs: target.mtimeMs, finder };
 			}),
 		);
 		return results.filter((result) => result !== null);
 	}
 
-	async function buildListingEntries(dirents: readonly Dirent[], path: string): Promise<FsEntry[]> {
+	async function buildListingEntries(dirents: readonly Dirent[], path: string, signal?: AbortSignal): Promise<FsEntry[]> {
 		const entries: FsEntry[] = [];
 		for (let index = 0; index < dirents.length; index += 64) {
+			// A folder the user already left stops here instead of stat-ing every remaining child.
+			signal?.throwIfAborted();
 			const batch = dirents.slice(index, index + 64);
 			const built = await Promise.all(
 				batch.map(async (dirent) => {
 					const fullPath = join(path, dirent.name);
 					try {
-						return await buildFsEntry(fullPath);
+						return await buildFsEntry(fullPath, platform);
 					} catch (error) {
 						// Unreadable entry: skip it, keep the verbatim reason visible.
 						console.warn(`fs:listDir skipping ${fullPath}: ${errorMessage(error)}`);
@@ -320,7 +344,7 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 		return entries;
 	}
 
-	async function listDir(path: string): Promise<DirListing> {
+	async function listDir(path: string, signal?: AbortSignal): Promise<DirListing> {
 		if (path === RECENTS_PATH) {
 			// The recents store already lists most-recent first; sorting by
 			// name would destroy that order.
@@ -330,7 +354,7 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 		if (recycleBin(path)) {
 			return { path, entries: await recycleBinEntries(path, dirents) };
 		}
-		const entries = await buildListingEntries(dirents, path);
+		const entries = await buildListingEntries(dirents, path, signal);
 		entries.sort(compareEntries);
 		return { path, entries };
 	}
@@ -379,7 +403,7 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 			const resolved = await Promise.all(
 				batch.map(async (path) => {
 					try {
-						return { path, entry: await buildFsEntry(path) };
+						return { path, entry: await buildFsEntry(path, platform) };
 					} catch (error) {
 						if (hasErrorCode(error, "ENOENT") || hasErrorCode(error, "ENOTDIR")) {
 							return { path, entry: null };
@@ -405,7 +429,7 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 		const entries: FsEntry[] = [];
 		for (const stored of await recents.list()) {
 			try {
-				entries.push(await buildFsEntry(stored));
+				entries.push(await buildFsEntry(stored, platform));
 			} catch (error) {
 				if (!hasErrorCode(error, "ENOENT") && !hasErrorCode(error, "ENOTDIR")) {
 					console.warn(`fs:listDir ${RECENTS_PATH} skipping ${stored}: ${errorMessage(error)}`);
@@ -447,7 +471,7 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 	 * when it can (fsearch / Everything); otherwise the disk walk runs. `scope`
 	 * restricts both to one folder subtree — the "파일 이름" chip's folder.
 	 */
-	async function search(query: string, options?: FsSearchOptions): Promise<readonly FsSearchResult[]> {
+	async function search(query: string, options?: FsSearchOptions, signal?: AbortSignal): Promise<readonly FsSearchResult[]> {
 		const needle = query.trim().toLowerCase();
 		if (needle.length === 0) return [];
 		const rawScope = options?.scope?.trim();
@@ -461,7 +485,7 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 				console.warn(`fs:search index failed, walking instead: ${errorMessage(error)}`);
 			}
 		}
-		return walkSearch(needle, scope);
+		return walkSearch(needle, scope, signal);
 	}
 
 	/** Turn index paths into rows, attributing each to its location by longest prefix. */
@@ -471,7 +495,7 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 		for (const path of paths) {
 			if (results.length >= SEARCH_MAX_RESULTS) break;
 			try {
-				results.push({ entry: await buildFsEntry(path), location: searchLocation(path, known) });
+				results.push({ entry: await buildFsEntry(path, platform), location: searchLocation(path, known) });
 			} catch (error) {
 				// The index can be stale: a path that vanished since indexing is skipped.
 				if (!hasErrorCode(error, "ENOENT") && !hasErrorCode(error, "ENOTDIR")) {
@@ -493,35 +517,182 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 		return match?.name ?? dirname(path);
 	}
 
-	async function walkSearch(needle: string, scope: string | undefined): Promise<readonly FsSearchResult[]> {
+	async function walkSearch(needle: string, scope: string | undefined, signal: AbortSignal | undefined): Promise<readonly FsSearchResult[]> {
 		const results: FsSearchResult[] = [];
 		if (scope !== undefined) {
 			// The "파일 이름" chip scopes to the folder in view, which may sit
 			// outside the scanned places (e.g. inside a mounted disk).
 			const known = (await locations()).filter((location) => location.path !== RECENTS_PATH);
-			await walkForSearch(scope, 0, { needle, location: searchLocation(scope, known), results });
+			await walkForSearch(scope, 0, { needle, location: searchLocation(scope, known), platform, results, signal });
 			return results;
 		}
 		for (const location of await locations()) {
 			// Recents is virtual and whole disks are too large to walk; only scanned places count.
 			if (!location.available || !location.scanned) continue;
-			await walkForSearch(location.path, 0, { needle, location: location.name, results });
+			await walkForSearch(location.path, 0, { needle, location: location.name, platform, results, signal });
 			if (results.length >= SEARCH_MAX_RESULTS) break;
 		}
 		return results;
 	}
 
-	/** One undo step of the most recent copy/move/create operation, consumed by ⌘Z. */
+	/** One undo step of the most recent copy/move/create/trash operation, consumed by ⌘Z. */
 	interface FsUndoStep {
-		readonly kind: "copy" | "move" | "create";
-		/** The row the transfer created (copy/create) or now occupies (move). */
+		readonly kind: "copy" | "move" | "create" | "trash" | "restore";
+		/**
+		 * The row the transfer created (copy/create) or now occupies (move/
+		 * restore). A trash step keeps the path the item was trashed from; undo
+		 * finds the payload in the Trash from it.
+		 */
 		readonly path: string;
-		/** The folder a move took the row from; "" for copy and create steps. */
+		/**
+		 * The folder a move took the row from; "" for copy, create, and
+		 * restore steps. A trash step names the folder the item came from.
+		 */
 		readonly restoreDir: string;
 	}
 
 	/** Undo record of the most recent successful copy/move transfer. */
 	let lastUndoSteps: readonly FsUndoStep[] | null = null;
+
+	/** Move one item to the Trash and remember where it came from (Put Back, ⌘Z). */
+	async function trashOneAndRecord(path: string): Promise<void> {
+		await trashOne(path, platform, (target) => deps.shell.trashItem(target));
+		// Windows keeps the origin in the `$I` record itself; macOS keeps none,
+		// so the app owns it. A record that fails to persist only costs that
+		// one item's Put Back from the view, never the trashing itself.
+		if (platform === "darwin") {
+			const dir = await places.trashDir();
+			if (dir !== null) {
+				await trashStore
+					.record([{ sourcePath: path, trashPath: join(dir, basename(path)) }])
+					.catch((error: unknown) => console.warn(`fs:trash origin not kept for ${path}: ${errorMessage(error)}`));
+			}
+		}
+	}
+
+	/**
+	 * The original location a Trash payload should go back to: the `$I`
+	 * record's path on Windows, the app-kept origin on macOS. Null when
+	 * neither knows — the payload stays put and the caller reports why.
+	 */
+	async function trashOrigin(payloadPath: string): Promise<string | null> {
+		if (recycleBin(dirname(payloadPath))) {
+			const record = await readRecycleBinRecord(join(dirname(payloadPath), `$I${basename(payloadPath).slice(2)}`)).catch(
+				() => null,
+			);
+			return record?.originalPath ?? null;
+		}
+		if (platform === "win32") return null;
+		return (await trashStore.find(payloadPath))?.sourcePath ?? null;
+	}
+
+	/** Finder "Put Back" for one payload: move it to `origin`, named the way the folder left it. */
+	async function putBackPayload(payloadPath: string, origin: string): Promise<string> {
+		const originDir = dirname(origin);
+		const target = join(originDir, await resolveCopyName(originDir, basename(origin), (await lstat(payloadPath)).isDirectory()));
+		await movePath(payloadPath, target);
+		if (recycleBin(dirname(payloadPath))) {
+			// Windows: a record must not outlive its payload.
+			await rm(join(dirname(payloadPath), `$I${basename(payloadPath).slice(2)}`), { force: true });
+		} else if (platform === "darwin") {
+			await trashStore.forget([payloadPath]);
+		}
+		return target;
+	}
+
+	/**
+	 * The Trash payload `sourcePath` became when it was trashed (⌘Z after a
+	 * trash). Windows finds it by scanning the records naming the source and
+	 * keeping the newest whose payload still exists; macOS expects it in
+	 * `~/.Trash` under the item's own name.
+	 */
+	async function payloadForSource(sourcePath: string): Promise<string> {
+		if (platform === "win32") {
+			const dir = await places.trashDir();
+			if (dir === null) {
+				throw new Error("휴지통 위치를 알 수 없습니다");
+			}
+			let found: { readonly payload: string; readonly deletedAt: bigint } | null = null;
+			for (const name of await readdir(dir).catch(() => [] as string[])) {
+				if (!name.startsWith("$I")) continue;
+				const record = await readRecycleBinRecord(join(dir, name)).catch(() => null);
+				if (record === null || normalizeSlashes(record.originalPath) !== normalizeSlashes(sourcePath)) continue;
+				const payload = join(dir, `$R${name.slice(2)}`);
+				if (!(await pathExists(payload))) continue;
+				if (found === null || record.deletedAt > found.deletedAt) found = { payload, deletedAt: record.deletedAt };
+			}
+			if (found === null) {
+				throw new Error(`휴지통에서 항목을 찾을 수 없습니다: ${basename(sourcePath)}`);
+			}
+			return found.payload;
+		}
+		const dir = await places.trashDir();
+		if (dir === null) {
+			throw new Error("휴지통 위치를 알 수 없습니다");
+		}
+		const expected = join(dir, basename(sourcePath));
+		if (!(await pathExists(expected))) {
+			throw new Error(`휴지통에서 항목을 찾을 수 없습니다: ${basename(sourcePath)}`);
+		}
+		return expected;
+	}
+
+	/** Restore trashed payloads back to the folders they came from (Finder "Put Back"). */
+	async function restoreFromTrash(paths: readonly string[]): Promise<FsBatchResult> {
+		const steps: FsUndoStep[] = [];
+		const result = await runBatch(paths, async (payloadPath) => {
+			const origin = await trashOrigin(payloadPath);
+			if (origin === null) {
+				throw new Error(`원래 위치를 알 수 없습니다: ${basename(payloadPath)}`);
+			}
+			// ⌘Z moves the row back into the Trash, like undoing any other move.
+			steps.push({ kind: "restore", path: await putBackPayload(payloadPath, origin), restoreDir: "" });
+		});
+		if (steps.length > 0) lastUndoSteps = steps;
+		return result;
+	}
+
+	/**
+	 * Permanently delete everything in the Trash: the payloads the view shows
+	 * plus Windows' `$I` records, keeping the OS's own metadata files
+	 * (.DS_Store, desktop.ini). Origins are forgotten and a trash-kind undo
+	 * record is dropped, so ⌘Z cannot resurrect what an empty removed.
+	 */
+	async function emptyTrash(): Promise<FsBatchResult> {
+		const dir = await places.trashDir();
+		if (dir === null) {
+			return { ok: [], failed: [{ path: "", message: "휴지통 위치를 알 수 없습니다" }] };
+		}
+		let names: string[];
+		try {
+			names = await readdir(dir);
+		} catch (error) {
+			// A Trash folder that does not exist is already empty.
+			if (!hasErrorCode(error, "ENOENT") && !hasErrorCode(error, "ENOTDIR")) throw error;
+			return { ok: [], failed: [] };
+		}
+		const deletable =
+			platform === "win32"
+				? (name: string) => name.startsWith("$R") || name.startsWith("$I")
+				: (name: string) => !name.startsWith(".");
+		const result = await runBatch(
+			names.filter(deletable).map((name) => join(dir, name)),
+			async (path) => {
+				await rm(path, { recursive: true, force: true });
+			},
+		);
+		if (result.ok.length === 0) return result;
+		if (platform === "darwin") {
+			// Every origin record points inside the emptied Trash folder.
+			await trashStore
+				.forget((await trashStore.list()).map((record) => record.trashPath))
+				.catch((error: unknown) => console.warn(`fs:emptyTrash origins not cleared: ${errorMessage(error)}`));
+		}
+		if (lastUndoSteps?.some((step) => step.kind === "trash") === true) {
+			lastUndoSteps = null;
+		}
+		return result;
+	}
 
 	async function copy(paths: readonly string[], destDir: string): Promise<FsBatchResult> {
 		const steps: FsUndoStep[] = [];
@@ -541,14 +712,7 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 		const result = await runBatch(paths, async (source) => {
 			const sourceStat = await lstat(source);
 			const target = join(destDir, await resolveCopyName(destDir, basename(source), sourceStat.isDirectory()));
-			try {
-				await fsRename(source, target);
-			} catch (error) {
-				// Cross-device move: copy the tree, then remove the source.
-				if (!hasErrorCode(error, "EXDEV")) throw error;
-				await cp(source, target, { recursive: true });
-				await rm(source, { recursive: true, force: true });
-			}
+			await movePath(source, target);
 			steps.push({ kind: "move", path: target, restoreDir: dirname(source) });
 		});
 		if (steps.length > 0) lastUndoSteps = steps;
@@ -559,7 +723,9 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 	 * Undo the most recent recorded operation (⌘Z). A copy or create step
 	 * deletes the row it created; a move step puts the row back into the folder
 	 * it came from, with Finder-style collision naming when the original name
-	 * was retaken in the meantime. The record is consumed by the call.
+	 * was retaken in the meantime; a trash step puts the item back where it was
+	 * trashed from (Finder "Put Back"); a restore step moves the row back into
+	 * the Trash. The record is consumed by the call.
 	 */
 	async function undo(): Promise<FsUndoOutcome> {
 		const steps = lastUndoSteps;
@@ -572,16 +738,12 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 			try {
 				if (step.kind === "copy" || step.kind === "create") {
 					await rm(step.path, { recursive: true });
+				} else if (step.kind === "trash") {
+					await putBackPayload(await payloadForSource(step.path), step.path);
+				} else if (step.kind === "restore") {
+					await trashOneAndRecord(step.path);
 				} else {
-					const stepStat = await lstat(step.path);
-					const back = join(step.restoreDir, await resolveCopyName(step.restoreDir, basename(step.path), stepStat.isDirectory()));
-					try {
-						await fsRename(step.path, back);
-					} catch (error) {
-						if (!hasErrorCode(error, "EXDEV")) throw error;
-						await cp(step.path, back, { recursive: true });
-						await rm(step.path, { recursive: true, force: true });
-					}
+					await moveBack(step.path, step.restoreDir);
 				}
 			} catch (error) {
 				failed.push({ path: step.path, message: errorMessage(error) });
@@ -616,7 +778,7 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 			throw new FsRenameError("name-collision", `A file or folder named "${newName}" already exists`);
 		}
 		await fsRename(path, target);
-		return applyOsKind(await buildFsEntry(target), osKind);
+		return buildFsEntry(target, platform);
 	}
 
 	async function createFolder(directory: string): Promise<{ readonly path: string; readonly name: string }> {
@@ -659,10 +821,10 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 		finderMetadata: finderMetadataFor,
 		listDir,
 		readEntries,
-		stat: async (path) => applyOsKind(await buildFsEntry(path), osKind),
+		stat: (path) => buildFsEntry(path, platform),
 		details: deps.details ?? readFileDetails,
-		previewIcon: (path, modifiedAt) =>
-			iconProvider.preview({ path, ext: extname(path).slice(1).toLowerCase(), modifiedAt }),
+		previewIcon: (path, mtimeMs) =>
+			iconProvider.preview({ path, ext: extname(path).slice(1).toLowerCase(), mtimeMs }),
 		exists: async (path) => {
 			try {
 				await lstat(path);
@@ -682,7 +844,25 @@ export function createFsService(deps: FsServiceDeps): FsCoreBridge {
 		undo,
 		createFolder,
 		createFile,
-		trash: (paths) => runBatch(paths, (path) => trashOne(path, platform, (target) => deps.shell.trashItem(target))),
+		trash: async (paths) => {
+			if (paths.length === 0) {
+				return { ok: [], failed: [] };
+			}
+			// Record before the first item leaves: a step names where the item
+			// came from, which is known before the move, so a ⌘Z landing while
+			// the batch is still moving already finds the record instead of a
+			// silent no-op. A batch that moves nothing takes the record back.
+			lastUndoSteps = paths.map((path) => ({ kind: "trash", path, restoreDir: dirname(path) }));
+			const result = await runBatch(paths, async (path) => {
+				await trashOneAndRecord(path);
+			});
+			if (result.ok.length === 0) {
+				lastUndoSteps = null;
+			}
+			return result;
+		},
+		restoreFromTrash,
+		emptyTrash,
 		reveal: async (path) => {
 			deps.shell.showItemInFolder(toHandoffPath(path, platform));
 		},

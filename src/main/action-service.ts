@@ -16,18 +16,23 @@
  */
 
 import { execFile } from "node:child_process";
-import { createReadStream, createWriteStream } from "node:fs";
-import { lstat, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
-import { basename, dirname, extname, join, resolve, sep } from "node:path";
+import { createWriteStream } from "node:fs";
+import { lstat, mkdtemp, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
+import { basename, dirname, extname, join } from "node:path";
 import { finished } from "node:stream/promises";
-import { Unzip, UnzipInflate, Zip, ZipDeflate, ZipPassThrough } from "fflate";
+import { Zip, ZipDeflate, ZipPassThrough } from "fflate";
 import type { BrowserWindow } from "electron";
+import { archiveFormatOf } from "../shared/archive-formats";
+import { ArchiveError } from "./archive-guard.mjs";
+import { DEFAULT_ARCHIVE_LIMITS, type ArchiveLimits } from "./archive-common";
+import { extractGzipInto, extractIntoFolder, flattenWrapper } from "./archive-extract";
 import {
 	type ActionAnchor,
 	type ActionCapabilities,
 	type ActionOutcome,
 	type ActionRequest,
 	type ImageFormat,
+	type OpenWithApplication,
 	type VideoContainer,
 } from "../shared/actions-contract";
 import { errorMessage, pathExists } from "./fs-entry";
@@ -45,7 +50,7 @@ export type CommandRunner = (
 	options?: { readonly timeoutMs?: number },
 ) => Promise<CommandResult>;
 
-/** The "Open with" chooser; injected so the service never imports `dialog`. */
+/** The "Open with" chooser for applications outside the OS's suggestions; injected so the service never imports `dialog`. */
 export interface ApplicationPicker {
 	/** The chosen application path, or null when the user cancelled. */
 	pick(window: BrowserWindow | null): Promise<string | null>;
@@ -53,24 +58,69 @@ export interface ApplicationPicker {
 
 /** The OS share sheet; injected so the service never imports `ShareMenu`. */
 export interface SharePresenter {
-	present(path: string, anchor: ActionAnchor, window: BrowserWindow | null): void;
+	present(paths: readonly string[], anchor: ActionAnchor, window: BrowserWindow | null): void;
 }
 
 export interface ActionServiceDeps {
 	/** Defaults to process.platform. */
 	readonly platform?: NodeJS.Platform;
 	readonly applications: ApplicationPicker;
+	/** The application's icon as an image URL the renderer can load; absent or null → the menu shows no icon. */
+	readonly applicationIcon?: (applicationPath: string) => Promise<string | null>;
 	/** Absent when the platform has no share sheet. */
 	readonly share?: SharePresenter | null;
 	/** Defaults to spawning the command with execFile. */
 	readonly run?: CommandRunner;
+	/** Extraction caps; tests inject small values to exercise the refusals. */
+	readonly archiveLimits?: ArchiveLimits;
 }
 
 /** The Inspector action surface the IPC layer registers. */
 export interface ActionService {
 	capabilities(): Promise<ActionCapabilities>;
-	run(path: string, request: ActionRequest, window: BrowserWindow | null): Promise<ActionOutcome>;
-	share(path: string, anchor: ActionAnchor, window: BrowserWindow | null): Promise<void>;
+	run(paths: readonly string[], request: ActionRequest, window: BrowserWindow | null): Promise<ActionOutcome>;
+	/** Applications the OS registers for `path`'s type, default first (macOS; empty elsewhere). */
+	openWithApplications(path: string): Promise<readonly OpenWithApplication[]>;
+	share(paths: readonly string[], anchor: ActionAnchor, window: BrowserWindow | null): Promise<void>;
+}
+
+/**
+ * Launch Services' view of a file: the handlers the OS registers for its type
+ * (`URLsForApplicationsToOpenURL`, the list Finder's own "Open With" shows) and
+ * the default one. The path arrives as `argv[0]`, never interpolated, so no
+ * file name can alter the script.
+ */
+const OPEN_WITH_SCRIPT = `
+ObjC.import("AppKit");
+function run(argv) {
+	const workspace = $.NSWorkspace.sharedWorkspace;
+	const url = $.NSURL.fileURLWithPath(argv[0]);
+	const fallback = workspace.URLForApplicationToOpenURL(url);
+	const urls = workspace.URLsForApplicationsToOpenURL(url);
+	const paths = [];
+	for (let i = 0; i < urls.count; i++) paths.push(ObjC.unwrap(urls.objectAtIndex(i).path));
+	return JSON.stringify({ defaultPath: fallback.isNil() ? null : ObjC.unwrap(fallback.path), paths: paths });
+}
+`;
+const OPEN_WITH_TIMEOUT_MS = 10_000;
+
+/** `Numbers.app` → `Numbers`. */
+function applicationName(path: string): string {
+	const name = basename(path);
+	return name.toLowerCase().endsWith(".app") ? name.slice(0, -4) : name;
+}
+
+/** The `{ defaultPath, paths }` document the script prints, or null when it is malformed. */
+function parseOpenWithListing(stdout: string): { readonly defaultPath: string | null; readonly paths: readonly string[] } | null {
+	try {
+		const parsed: unknown = JSON.parse(stdout);
+		if (typeof parsed !== "object" || parsed === null) return null;
+		const { defaultPath, paths } = parsed as { defaultPath?: unknown; paths?: unknown };
+		if (!Array.isArray(paths) || !paths.every((entry): entry is string => typeof entry === "string")) return null;
+		return { defaultPath: typeof defaultPath === "string" ? defaultPath : null, paths };
+	} catch {
+		return null;
+	}
 }
 
 const COMMAND_TIMEOUT_MS = 10 * 60 * 1000;
@@ -124,7 +174,7 @@ const EXTENSION_FORMATS: Readonly<Record<string, ImageFormat>> = {
 /** Lossy formats, where "optimize" actually saves bytes. */
 const LOSSY_FORMATS: readonly ImageFormat[] = ["jpeg", "webp", "heic"];
 
-function defaultRun(
+export function defaultRun(
 	command: string,
 	args: readonly string[],
 	options?: { readonly timeoutMs?: number },
@@ -172,29 +222,6 @@ export async function uniqueChild(dir: string, name: string): Promise<string> {
 		const candidate = join(dir, `${stem} ${n}${ext}`);
 		if (!(await pathExists(candidate))) return candidate;
 	}
-}
-
-/**
- * The absolute path a zip entry extracts to, and whether it is a directory.
- * Rejects absolute entries and any entry escaping `destDir` (zip-slip), so a
- * hostile archive can never write outside the chosen folder.
- */
-export function zipEntryPath(destDir: string, name: string): { readonly path: string; readonly directory: boolean } {
-	if (name.includes("\0")) {
-		throw new Error(`압축 파일 항목 이름이 올바르지 않습니다: ${JSON.stringify(name)}`);
-	}
-	const normalized = name.replace(/\\/g, "/");
-	if (normalized.startsWith("/") || /^[A-Za-z]:/.test(normalized)) {
-		throw new Error(`압축 파일에 절대 경로 항목이 있습니다: ${name}`);
-	}
-	const directory = normalized.endsWith("/");
-	const trimmed = directory ? normalized.slice(0, -1) : normalized;
-	const root = resolve(destDir);
-	const target = resolve(root, trimmed);
-	if (target !== root && !target.startsWith(root + sep)) {
-		throw new Error(`압축 파일 항목이 대상 폴더를 벗어납니다: ${name}`);
-	}
-	return { path: target, directory };
 }
 
 /** One file or directory to write into an archive, with its in-archive path. */
@@ -264,68 +291,6 @@ async function writeZip(target: string, members: readonly ArchiveMember[]): Prom
 	}
 	archive.end();
 	await drained;
-}
-
-/**
- * Stream `source` into `destDir`. Entries arrive one at a time and are written
- * as they complete, so peak memory tracks the largest member; anything that
- * escapes `destDir` is refused (zip-slip) and sinks the whole extraction.
- */
-async function readZip(source: string, destDir: string, stem: string): Promise<void> {
-	await mkdir(destDir, { recursive: true });
-	const writes: Promise<void>[] = [];
-	let failure: Error | null = null;
-	/** Resolve one entry, recording the first refusal instead of throwing out of the parser. */
-	function resolveEntry(name: string): { readonly path: string; readonly directory: boolean } | null {
-		if (failure !== null) return null;
-		try {
-			return zipEntryPath(destDir, name);
-		} catch (error) {
-			failure = error instanceof Error ? error : new Error(String(error));
-			return null;
-		}
-	}
-
-	/**
-	 * A "Compress" archive wraps everything in one folder named after the
-	 * source, which is also the destination folder's name. Stripping exactly
-	 * that entry avoids double-nesting while leaving an archive with several
-	 * top-level folders intact.
-	 */
-	const rootEntry = `${stem}/`;
-	let strip: string | null = null;
-	const unzipper = new Unzip((file) => {
-		if (strip === null && file.name === rootEntry) strip = rootEntry;
-		const name = strip !== null && file.name.startsWith(strip) ? file.name.slice(strip.length) : file.name;
-		const target = name.length === 0 ? null : resolveEntry(name);
-		// A refused (or root) entry is still drained, so the parser stays in sync.
-		if (target === null || target.directory) {
-			if (target !== null) writes.push(mkdir(target.path, { recursive: true }).then(() => undefined));
-			file.ondata = () => {};
-			file.start();
-			return;
-		}
-		const chunks: Uint8Array[] = [];
-		file.ondata = (error, chunk, final) => {
-			if (error !== null) {
-				failure = error;
-				return;
-			}
-			chunks.push(chunk);
-			if (!final) return;
-			const body = Buffer.concat(chunks.map((part) => Buffer.from(part.buffer, part.byteOffset, part.byteLength)));
-			writes.push(mkdir(dirname(target.path), { recursive: true }).then(() => writeFile(target.path, body)));
-			chunks.length = 0;
-		};
-		file.start();
-	});
-	unzipper.register(UnzipInflate);
-	for await (const chunk of createReadStream(source)) {
-		unzipper.push(new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength), false);
-	}
-	unzipper.push(new Uint8Array(0), true);
-	await Promise.all(writes);
-	if (failure !== null) throw failure;
 }
 
 /** Encoder names from `ffmpeg -encoders`: six flag characters, then the name. */
@@ -432,6 +397,7 @@ export function createActionService(deps: ActionServiceDeps): ActionService {
 	const platform = deps.platform ?? process.platform;
 	const run = deps.run ?? defaultRun;
 	const share = deps.share ?? null;
+	const archiveLimits = deps.archiveLimits ?? DEFAULT_ARCHIVE_LIMITS;
 	/** Memoized ffmpeg probe: one `ffmpeg -version` per session, at most. */
 	let ffmpeg: Promise<boolean> | null = null;
 	/** Memoized image-encoder probe: one `-encoders` / `-muxers` pass per session. */
@@ -521,6 +487,73 @@ export function createActionService(deps: ActionServiceDeps): ActionService {
 		return target;
 	}
 
+	/**
+	 * The registered handlers for `path`, default first, each application once.
+	 * Only macOS exposes this; a failed lookup degrades to "no suggestions" so
+	 * the chooser stays reachable.
+	 */
+	async function registeredApplications(path: string): Promise<readonly { readonly path: string; readonly isDefault: boolean }[]> {
+		if (platform !== "darwin") return [];
+		let stdout: string;
+		try {
+			({ stdout } = await run("osascript", ["-l", "JavaScript", "-e", OPEN_WITH_SCRIPT, path], {
+				timeoutMs: OPEN_WITH_TIMEOUT_MS,
+			}));
+		} catch {
+			return [];
+		}
+		const listing = parseOpenWithListing(stdout);
+		if (listing === null) return [];
+		const ordered = listing.defaultPath === null ? listing.paths : [listing.defaultPath, ...listing.paths];
+		return [...new Set(ordered)].map((application) => ({ path: application, isDefault: application === listing.defaultPath }));
+	}
+
+	const iconCache = new Map<string, Promise<string | null>>();
+	function iconFor(applicationPath: string): Promise<string | null> {
+		const read = deps.applicationIcon;
+		if (read === undefined) return Promise.resolve(null);
+		let icon = iconCache.get(applicationPath);
+		if (icon === undefined) {
+			icon = read(applicationPath).catch(() => null);
+			iconCache.set(applicationPath, icon);
+		}
+		return icon;
+	}
+
+	/**
+	 * Extract `source` into a new Finder-style item next to it. The archive
+	 * writes into a hidden staging directory beside the destination, so a failed
+	 * run (hostile entry, corruption, bomb) removes the staging and leaves no
+	 * half-written folder behind; a successful one is flattened and renamed into
+	 * place. A bare `.gz` may hold a tar (a folder) or a single file (the file
+	 * itself, named after the archive without `.gz`).
+	 */
+	async function extractArchive(source: string): Promise<string> {
+		const match = archiveFormatOf(basename(source));
+		if (match === null) throw new ArchiveError("압축을 풀 수 없는 파일 형식입니다");
+		const directory = dirname(source);
+		const staging = await mkdtemp(join(directory, `.${match.stem}-`));
+		try {
+			if (match.format === "gz") {
+				const kind = await extractGzipInto(source, staging, match.stem, archiveLimits);
+				if (kind === "file") {
+					const target = await uniqueChild(directory, match.stem);
+					await rename(join(staging, match.stem), target);
+					return target;
+				}
+			} else {
+				await extractIntoFolder(source, match.format, staging, archiveLimits);
+			}
+			await flattenWrapper(staging, match.stem);
+			const target = await uniqueChild(directory, match.stem);
+			await rename(staging, target);
+			return target;
+		} catch (error) {
+			await rm(staging, { recursive: true, force: true });
+			throw error;
+		}
+	}
+
 	return {
 		async capabilities(): Promise<ActionCapabilities> {
 			const ffmpegPresent = await hasFfmpeg();
@@ -533,44 +566,89 @@ export function createActionService(deps: ActionServiceDeps): ActionService {
 			};
 		},
 
-		async run(path: string, request: ActionRequest, window: BrowserWindow | null): Promise<ActionOutcome> {
+		async openWithApplications(path: string): Promise<readonly OpenWithApplication[]> {
+			const registered = await registeredApplications(path);
+			return Promise.all(
+				registered.map(
+					async (application): Promise<OpenWithApplication> => ({
+						path: application.path,
+						name: applicationName(application.path),
+						isDefault: application.isDefault,
+						icon: await iconFor(application.path),
+					}),
+				),
+			);
+		},
+
+		async run(paths: readonly string[], request: ActionRequest, window: BrowserWindow | null): Promise<ActionOutcome> {
+			const [first] = paths;
+			if (first === undefined) throw new Error("작업 대상이 비어 있습니다");
+			// The edit conversions and extraction are single-target; the menu and
+			// the Inspector only ever send them one path, and the archive keeps
+			// that promise at the boundary too.
+			const sole = (): string => {
+				if (paths.length !== 1) throw new Error("이 작업은 한 번에 하나의 항목만 지원합니다");
+				return first;
+			};
 			switch (request.kind) {
 				case "openWith": {
-					const application = await deps.applications.pick(window);
-					if (application === null) return { output: null, note: "열기를 취소했습니다" };
-					if (platform === "darwin") await run("open", ["-a", application, path]);
-					else await run(application, [path]);
-					return { output: null, note: `${basename(path)} — ${basename(application)}로 열었습니다` };
+					let application: string | null;
+					if (request.application === null) {
+						application = await deps.applications.pick(window);
+						if (application === null) return { output: null, note: "열기를 취소했습니다" };
+					} else {
+						// A named application must be one the OS offered for this file;
+						// anything else goes through the chooser, never straight to exec.
+						application = request.application;
+						if (!(await registeredApplications(first)).some((candidate) => candidate.path === application)) {
+							throw new Error("이 파일을 열 수 있는 앱이 아닙니다");
+						}
+					}
+					if (platform === "darwin") await run("open", ["-a", application, ...paths]);
+					else await run(application, [...paths]);
+					return {
+						output: null,
+						note:
+							paths.length === 1
+								? `${basename(first)} — ${applicationName(application)}로 열었습니다`
+								: `파일 ${paths.length}개 — ${applicationName(application)}로 열었습니다`,
+					};
 				}
 				case "compress": {
-					const stat = await lstat(path);
-					const target = await uniqueChild(dirname(path), `${basename(path)}.zip`);
-					await writeZip(target, await archiveMembers(path, stat.isDirectory()));
+					// Finder's rule: one archive per Compress — named after the sole
+					// target, or "Archive" when the selection spans several.
+					const name = paths.length === 1 ? `${basename(first)}.zip` : "Archive.zip";
+					const target = await uniqueChild(dirname(first), name);
+					const members: ArchiveMember[] = [];
+					for (const path of paths) {
+						const stat = await lstat(path);
+						members.push(...(await archiveMembers(path, stat.isDirectory())));
+					}
+					await writeZip(target, members);
 					return { output: target, note: `${basename(target)} — 압축했습니다` };
 				}
 				case "extract": {
-					const stem = stemOf(path);
-					const target = await uniqueChild(dirname(path), stem);
-					await readZip(path, target, stem);
-					return { output: target, note: `${basename(target)} — 압축을 풀었습니다` };
+					const output = await extractArchive(sole());
+					return { output, note: `${basename(output)} — 압축을 풀었습니다` };
 				}
 				case "convertImage": {
 					if (!(await imageTargets()).includes(request.format)) {
 						throw new Error(`${request.format.toUpperCase()} 변환을 지원하지 않습니다`);
 					}
-					const output = await convertImage(path, request.format);
+					const output = await convertImage(sole(), request.format);
 					return { output, note: `${basename(output)} — 변환했습니다` };
 				}
 				case "resizeImage": {
-					const output = await resizeImage(path, request.maxEdge);
+					const output = await resizeImage(sole(), request.maxEdge);
 					return { output, note: `${basename(output)} — 크기를 조절했습니다` };
 				}
 				case "optimizeImage": {
-					const output = await optimizeImage(path);
+					const output = await optimizeImage(sole());
 					return { output, note: `${basename(output)} — 용량을 최적화했습니다` };
 				}
 				case "convertVideo": {
 					if (!(await hasFfmpeg())) throw new Error("동영상 변환에는 ffmpeg가 필요합니다");
+					const path = sole();
 					const target = await uniqueChild(dirname(path), `${stemOf(path)}.${request.container}`);
 					await run("ffmpeg", ffmpegRemuxArgs(path, target));
 					return { output: target, note: `${basename(target)} — 컨테이너를 변환했습니다` };
@@ -578,11 +656,12 @@ export function createActionService(deps: ActionServiceDeps): ActionService {
 			}
 		},
 
-		async share(path: string, anchor: ActionAnchor, window: BrowserWindow | null): Promise<void> {
+		async share(paths: readonly string[], anchor: ActionAnchor, window: BrowserWindow | null): Promise<void> {
+			if (paths.length === 0) throw new Error("작업 대상이 비어 있습니다");
 			if (platform !== "darwin" || share === null) {
 				throw new Error("이 플랫폼은 시스템 공유를 지원하지 않습니다");
 			}
-			share.present(path, anchor, window);
+			share.present(paths, anchor, window);
 		},
 	};
 }

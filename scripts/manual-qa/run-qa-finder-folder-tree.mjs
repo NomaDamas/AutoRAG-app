@@ -82,7 +82,10 @@ try {
 	check("collapsing the root hides every descendant", [await level("data_multi_page"), await level("generate.py"), await level("partial_results.json")], [null, null, null]);
 
 	await toggle(rootName, "펼치기");
+	// Both nested rows must be mounted before their levels are read: the list is
+	// virtualized, so the deeper row can land a frame later.
 	await settle("generate.py", true);
+	await settle("partial_results.json", true);
 	check("re-expanding restores nested expansion", [await level("generate.py"), await level("partial_results.json")], ["4", "3"]);
 
 	await row("multi_hop_question").click();

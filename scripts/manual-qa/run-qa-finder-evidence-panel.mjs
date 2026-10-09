@@ -288,12 +288,12 @@ const evBold = await page.locator(`${EVIDENCE_HALF} .inspector-body strong`).cou
 check("chunk text bold renders as emphasized strong", evBold >= 1, `strong=${evBold}`);
 
 // 4. Thumbs-up feedback records through the real bridge and toasts.
-await page.locator(`${EVIDENCE_HALF} button[title="이 근거가 도움이 됨"]`).click();
+await page.locator(`${EVIDENCE_HALF} button[title="This evidence was helpful"]`).click();
 await page.waitForSelector(".toast", { timeout: isWindows ? 20_000 : 8_000 });
 const toastText = (await page.locator(".toast").textContent()) ?? "";
 check("thumbs-up toast follows the reference copy", toastText.includes("근거 1 — 도움이 됨으로 기록했습니다"), toastText.trim());
 await sleep(300);
-const voteStyle = await page.locator(`${EVIDENCE_HALF} button[title="이 근거가 도움이 됨"]`).evaluate((el) => {
+const voteStyle = await page.locator(`${EVIDENCE_HALF} button[title="This evidence was helpful"]`).evaluate((el) => {
     const s = getComputedStyle(el);
     return { bg: s.backgroundColor, borderTopWidth: s.borderTopWidth, borderLeftWidth: s.borderLeftWidth, color: s.color };
 });

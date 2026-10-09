@@ -9,6 +9,7 @@
 
 import { launchFinder, finderWindow } from "./launch-finder.mjs";
 import { mkdirSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -17,8 +18,9 @@ const REPO = join(HERE, "..", "..");
 const EVIDENCE = join(REPO, ".omo", "evidence", "ai-finder-app", "dev-label");
 mkdirSync(EVIDENCE, { recursive: true });
 
-const app = await launchFinder({ userDataDir: `/tmp/pw-electron-qa-dev-label-${Date.now()}` });
-const page = await finderWindow(app);
+const app = await launchFinder({ userDataDir: join(tmpdir(), `pw-electron-qa-dev-label-${Date.now()}`) });
+// A cold first launch on a busy host can take longer than the 6 s default.
+const page = await finderWindow(app, 30_000);
 await page.waitForSelector('[role="row"]');
 
 const windowTitle = await app.evaluate(({ BrowserWindow }) => {

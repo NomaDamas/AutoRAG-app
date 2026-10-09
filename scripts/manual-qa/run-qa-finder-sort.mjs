@@ -67,6 +67,13 @@ try {
 	await folderRow.dblclick();
 	await page.waitForFunction((name) => document.querySelector(".toolbar-title")?.textContent === name, folderName);
 	await page.waitForSelector(".col-header");
+	// The title flips before the new listing paints; wait for the folder's own rows
+	// (a fixed beat read the parent's single row on a slow host).
+	await page.waitForFunction(
+		(first) => [...document.querySelectorAll('[role="row"] .row__label')].some((label) => label.textContent?.trim() === first),
+		namesAsc[0],
+		{ timeout: 30000 },
+	);
 	await page.waitForTimeout(300);
 
 const rows = () =>

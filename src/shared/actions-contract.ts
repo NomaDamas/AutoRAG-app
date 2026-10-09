@@ -16,6 +16,7 @@ export const ACTIONS_CHANNELS = {
 	capabilities: "actions:capabilities",
 	run: "actions:run",
 	share: "actions:share",
+	openWithApplications: "actions:open-with-applications",
 } as const;
 
 export type ActionsChannel = (typeof ACTIONS_CHANNELS)[keyof typeof ACTIONS_CHANNELS];
@@ -27,11 +28,15 @@ export type ImageFormat = "jpeg" | "png" | "webp" | "tiff" | "heic";
 export type VideoContainer = "mp4" | "mov" | "mkv";
 
 /**
- * One unit of work. `openWith` and `compress` need nothing beyond the target
- * path; the rest carry their parameter in the discriminant.
+ * One unit of work. `openWith`, `compress`, and the share sheet act on the
+ * whole target list (one chooser, one archive, one sheet); `extract` and the
+ * edit conversions take exactly one target, and the rest carry their
+ * parameter in the discriminant. `openWith` names the application to launch
+ * (one of `openWithApplications`), or `null` to let the user choose any
+ * application from the system chooser ("기타…").
  */
 export type ActionRequest =
-	| { readonly kind: "openWith" }
+	| { readonly kind: "openWith"; readonly application: string | null }
 	| { readonly kind: "compress" }
 	| { readonly kind: "extract" }
 	| { readonly kind: "convertImage"; readonly format: ImageFormat }
@@ -56,6 +61,20 @@ export interface ActionCapabilities {
 	readonly videoContainers: readonly VideoContainer[];
 }
 
+/**
+ * An application the OS registers for a file's type, as offered by the
+ * "다른 앱으로 열기" menu. `path` is what `openWith` launches with.
+ */
+export interface OpenWithApplication {
+	readonly path: string;
+	/** Display name without the `.app` suffix. */
+	readonly name: string;
+	/** The OS's default handler for this file. */
+	readonly isDefault: boolean;
+	/** The application's icon as an image URL the renderer can load, or null when none could be read. */
+	readonly icon: string | null;
+}
+
 /** Result of a successful action; `output` is the created file or folder. */
 export interface ActionOutcome {
 	readonly output: string | null;
@@ -71,12 +90,20 @@ export interface ActionAnchor {
 	readonly height: number;
 }
 
-/** Exposed to the Finder window as `window.autorag.actions`. */
+/**
+ * Exposed to the Finder window as `window.autorag.actions`. `run` and `share`
+ * carry the whole selection; a single row arrives as a one-path list.
+ */
 export interface ActionsBridge {
 	capabilities(): Promise<ActionCapabilities>;
-	run(path: string, request: ActionRequest): Promise<ActionOutcome>;
+	run(paths: readonly string[], request: ActionRequest): Promise<ActionOutcome>;
+	/**
+	 * Applications the OS registers for `path`'s type, default first. Empty
+	 * where the platform cannot enumerate them (the chooser is then the only way).
+	 */
+	openWithApplications(path: string): Promise<readonly OpenWithApplication[]>;
 	/** macOS only; rejects elsewhere and when `capabilities().share` is false. */
-	share(path: string, anchor: ActionAnchor): Promise<void>;
+	share(paths: readonly string[], anchor: ActionAnchor): Promise<void>;
 }
 
 const IMAGE_FORMATS: readonly string[] = ["jpeg", "png", "webp", "tiff", "heic"];
@@ -86,6 +113,10 @@ export function isActionRequest(value: unknown): value is ActionRequest {
 	if (typeof value !== "object" || value === null || !("kind" in value)) return false;
 	switch (value.kind) {
 		case "openWith":
+			return (
+				"application" in value &&
+				(value.application === null || (typeof value.application === "string" && value.application.length > 0))
+			);
 		case "compress":
 		case "extract":
 		case "optimizeImage":
@@ -113,6 +144,15 @@ export function isActionAnchor(value: unknown): value is ActionAnchor {
 	if (typeof value !== "object" || value === null) return false;
 	const { x, y, width, height } = value as { x?: unknown; y?: unknown; width?: unknown; height?: unknown };
 	return [x, y, width, height].every((part) => typeof part === "number" && Number.isFinite(part));
+}
+
+/** Every target list crossing the boundary: a non-empty array of non-empty paths. */
+export function isActionPaths(value: unknown): value is readonly string[] {
+	return (
+		Array.isArray(value) &&
+		value.length > 0 &&
+		value.every((path): path is string => typeof path === "string" && path.length > 0)
+	);
 }
 
 /**

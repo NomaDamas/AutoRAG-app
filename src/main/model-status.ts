@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { access } from "node:fs/promises";
 import { resolveConfigReadOnly } from "@autorag/librarian";
 import { resolveAgentModelDetailed, resolveConfigPath } from "@autorag/librarian/core";
 import type { ConfiguredModel, ConfiguredModelSnapshot, ModelResolutionSource } from "../shared/settings-contract";
@@ -24,7 +24,7 @@ export function createModelStatusService(deps: ModelStatusDeps): ModelStatusServ
 			const configPath = resolveConfigPath({ flags: {}, env: deps.env, cwd: deps.cwd }).configPath;
 			const snapshot: ConfiguredModelSnapshot = {
 				configPath,
-				configExists: existsSync(configPath),
+				configExists: await access(configPath).then(() => true, () => false),
 				error: null,
 				model: null,
 			};

@@ -109,7 +109,7 @@ second datasource or model configuration. The sidebar is searchable and grouped:
   without the app open: a LaunchAgent (`com.autorag.app.refresh`) on macOS, a
   marked crontab line on Linux, a Task Scheduler task on Windows. It wakes at
   most every 30 minutes and refreshes only what is due, through the same code as
-  the Settings buttons (`refresh-runner`), under one lock so a button press and
+  the Settings buttons (`index-refresh`), under one lock so a button press and
   a tick never overlap. Results land in `app-refresh/state.json` beside the
   config. The app never edits a crontab line or LaunchAgent it did not create and
   only warns when another job already refreshes AutoRAG.
@@ -128,12 +128,114 @@ The Settings tab is an app-owned UI location, not a filesystem path; it never
 issues directory listings, incremental reads, or watcher requests. Returning to
 a Finder tab restores its existing folder listing and watch set.
 
+## Filesystem worker
+
+Folder listings, incremental reads, Finder metadata, OS kinds, the sidebar
+places, the dupey scan, the index badges, and the native watcher run in one
+Electron utility process, "AutoRAG File System" (`src/fs-worker/`), not on the
+main process. The renderer talks to it over a `MessagePort` the main process
+hands the preload (`src/preload/worker-link.ts`); main only brokers ports and
+owns the process lifecycle (`src/main/fs-worker-host.ts`). Main keeps what
+only Electron's main process can do and the worker asks for over its host
+port: thumbnails and file icons (`nativeImage`, `app.getFileIcon`), the Trash,
+opening files and URLs, and the clipboard.
+
+If the worker dies, main forks a new one at once (repeated crashes within 10 s
+back off, up to 5 s), the window stays, and every open tab relists and
+re-watches its folders. Unanswered reads are re-sent to the new worker; a
+request that changes files (copy, move, rename, trash, restore from the Trash,
+emptying the Trash, create, undo, eject) is never re-sent and fails with a
+message asking the user to check the result.
+Quitting asks the worker to release its watches and waits up to 2 s before
+exiting. QA lane: `scripts/manual-qa/run-qa-finder-fs-worker-crash.mjs`
+(SIGKILLs the worker twice and checks the tabs recover within 5 s).
+## First-run onboarding
+
+A fresh install opens onboarding instead of the Finder: welcome, permissions,
+account, folders, embedding, data sources, plan, the model step (BYOK only), and
+the first index. The screens port
+`docs/design-reference/onboarding/onboarding-prototype.html`; the draft is saved
+after every change, so a relaunch (for example after granting Full Disk Access)
+resumes at the same step.
+
+- **Permissions** probe Full Disk Access for real (macOS) and re-check every two
+  seconds. Notifications post a real system notification; if macOS reports the
+  app is not allowed, the step says so and opens the system notification
+  settings (the unsigned dev binary is never allowed, so this only works in a
+  signed build). Launch at login is the same setting as Settings › General and
+  registers the OS login item in packaged builds only (registering the dev
+  binary would add bare "Electron" to Login Items); the switch is read back from
+  the OS and flips off with a message if the OS refused.
+- **Folders** are pre-scanned with the indexer's own rules (supported
+  extensions, size cap, skipped dependency/code folders) to show real file
+  counts and an ETA.
+- **Embedding** is local (`qwen3-embedding-0.6b`); cloud embedding is shown but
+  unavailable, since corpus text is never sent to remote embedders.
+- **Data sources** list only usable connectors, and every one starts off. The
+  probes run in parallel and each row appears the moment its own probe finishes
+  (fast ones first); a "checking" line stays under the list until all of them are
+  done, and only then does the "connect later" row appear, minus whatever was
+  found. There is no description to write: onboarding stores none, and the
+  agent-facing description is meant to be generated from the indexed content.
+  Local files are covered by the folders step, so
+  Spotlight and Apple Mail are not offered. Each row appears only when the
+  connector's own health probe says its data is reachable: KakaoTalk
+  (`lazykatok doctor --macos-probe`: app, container, cached login, readable
+  database files), Slack (`slacrawl`, at least one workspace), Discord
+  (`discrawl` ready database plus a dry-run `wiretap` that finds messages),
+  Telegram (`telecrawl doctor`), WhatsApp (`wacrawl doctor`, read-only, with
+  messages), mail (`mailcrawl` installed and a `himalaya` account whose login
+  succeeds), GitHub, and Obsidian. Mail writes one `mailcrawl-<account>` archive
+  per verified account under `~/.mailcrawl/<account>`; accounts that cannot log
+  in are skipped. GitHub requires authentication and at least one discovered
+  repository; empty or failed repo discovery does not offer a source that would
+  fail its first sync.
+- **Model** (BYOK) verifies the provider key against the provider's API and
+  stores it in the encrypted credential store, never in `config.json`.
+- **Indexing** writes `searchPaths`, the embedder (only when none is set), the
+  enabled datasources and their access tags, and the BYOK model into the shared
+  config, then runs the same refresh as Settings. A config still pointing its
+  `workspacePath` at the app's cwd seed is moved to `<AutoRAG home>/workspace`.
+  The Finder opens only after the first index succeeds.
+
+Account sign-in and plan checkout are placeholders: they record the choice in
+the onboarding draft so QA can walk the full flow, but no account is created,
+no card data is stored or sent, and nothing is charged.
+
+Onboarding state lives in `<userData>/onboarding/state.json`. Set
+`AUTORAG_SKIP_ONBOARDING=1` to open the Finder directly; the manual-QA launcher
+does this for every lane except `run-qa-onboarding.mjs`.
+
+`make onboarding` walks the flow on a disposable profile: every run starts from
+scratch in a temp sandbox holding its own `userData` (via `--user-data-dir`),
+AutoRAG config, home, and workspace, so the real `~/.autorag` and the app's
+support directory are never read or written. The cached embedding model and
+llama runtime are copied in so the first index runs offline. When the app exits
+the wrapper kills the run's processes and removes the sandbox; a SIGKILL of
+the wrapper is covered by a detached watchdog, and the next `make onboarding`
+sweeps any sandbox whose owner and watchdog both died. The QA lane covers the
+same flow end to end in CI settings (`bun scripts/manual-qa/run-qa-onboarding.mjs`).
+For a detected datasource regression, set `QA_ONBOARDING_SOURCE=github`,
+`mail`, `spotlight`, or `slack` before that command; it enables only that row
+and asserts its written connector config and access tag. The run uses temporary
+AutoRAG state but the selected external crawler uses its real store, as noted
+below.
+
+Scope of that isolation: the sandbox holds AutoRAG's own state (userData,
+config, home, workspace, index). External datasource crawlers are CLIs with
+their own stores in the real home, and the librarian passes `HOME` through to
+them, so enabling a source in onboarding syncs the real store — `slacrawl` reads
+and writes `~/.slacrawl` (Slack's local mirror), the other messenger crawlers
+import into their own stores the same way, and Obsidian reads the real vaults.
+Detection and the first sync are real by
+design; they never touch other apps' data beyond their own store.
+
 ## Live filesystem sync
 
 Folders shown in open tabs are watched for changes made by other apps. A
 created, deleted, renamed, or edited file appears in the tab without clicking
-anything. Ordinary direct-child changes are applied incrementally: the main
-process re-reads only the changed paths and the renderer patches those rows.
+anything. Ordinary direct-child changes are applied incrementally: the fs
+worker re-reads only the changed paths and the renderer patches those rows.
 An event overflow, a recreated watched root, or a missing-path recovery falls
 back to a full relist. Only real folders in open tabs are watched: Recents and
 datasource virtual paths never are. Watching uses
@@ -143,7 +245,7 @@ with a 150 ms trailing debounce and a 1 s maximum wait. Closing a tab,
 navigating away, reloading the window, or quitting releases the watches. Set
 `AUTORAG_FS_WATCH_DIAG=1` to log watch, unwatch, and batch diagnostics.
 
-All live traffic flows through one serial `ChangeHub` queue in the main
+All live traffic flows through one serial `ChangeHub` queue in the fs worker
 process. For each batch, every registered derived layer reconciles first, with
 a 750 ms per-layer timeout, and only then does the hub send a single ordered
 `live:message` push. Layers are always reconciled before the view updates. The
@@ -153,7 +255,7 @@ never disagree. Focusing the window or making it visible re-syncs the listing
 and layers through `live:layers`.
 
 Adding a derived layer needs no new IPC channel. Implement `DerivedLayer` in
-the main process:
+the fs worker:
 
 ```ts
 import type { DerivedLayer } from "./change-hub";
@@ -167,7 +269,7 @@ const myLayer: DerivedLayer<MyData> = {
 };
 ```
 
-Register it in `src/main/index.ts` where the hub is created
+Register it in `src/fs-worker/service.ts` where the hub is created
 (`hub.register(myLayer)`), and add a selector in
 `src/renderer/src/state/layers.ts`. Publications ride the existing
 `live:message` push and the `live:layers` resync.
@@ -207,6 +309,76 @@ the run's first model prompt. The query string, which the librarian uses for
 baseline retrieval and records in its retrieval memory, stays the user's own
 words.
 
+## Right-click menu in Finder and Explorer
+
+Settings → General → **Add to the file right-click menu** (off by default)
+adds two entries to the OS file menu, the way Keka or Skim do:
+
+- **Ask AutoRAG** attaches the selected files and folders to AI Search as
+  drafts, so you type the question.
+- **Show in AutoRAG** opens the file's folder with the file selected.
+
+Captions follow the interface language, and the install is per-user with no
+elevation.
+
+| OS | Where it appears | How it is installed |
+| --- | --- | --- |
+| macOS | Finder right-click → **Quick Actions** (and Services) | Two Automator workflows written to `~/Library/Services`, limited to Finder selections. Each runs a shell script that launches the app's own executable with `--autorag-request=<ask\|reveal>` and one `--autorag-path=` per item. |
+| Windows | Explorer right-click on a file or folder | Shell verbs under `HKCU\Software\Classes\{*,Directory}\shell\AutoRAG.*`, written with `reg.exe`. On Windows 11 they sit under "Show more options"; the top-level menu needs a packaged COM `IExplorerCommand`, which an unpackaged Electron app cannot register. |
+| Linux | Not offered | There is no common file-manager extension point. |
+
+The launched process does not open a second window. `src/main/os-request-channel.ts`
+tries a per-profile local socket (a unix socket in the temp dir, a named pipe
+on Windows) first; a running app acknowledges the request and the launcher
+exits. With no app running the launcher becomes the app and reads the request
+from its own argv. Every path is checked on disk in
+`src/main/os-request-service.ts` before the renderer sees it. The profile's
+`--user-data-dir` is baked into each entry, so a development or QA profile
+only receives its own requests. The app refreshes the entries on every start
+while the setting is on, and switching it off removes exactly the entries it
+wrote (macOS workflows are recognized by their `com.autorag.app.service.`
+bundle identifier). A failed install rejects the toggle instead of saving it.
+
+## Services in AutoRAG's own right-click menu (macOS)
+
+The reverse direction: right-click a row (or the empty space of a folder) in
+AutoRAG and the **Services** submenu lists what other apps register with macOS
+for those files, the same entries Finder shows under right-click → Services:
+Keka's *Send to Keka* / *Extract using Keka* / *Compress using Keka*, a
+Terminal's *New Terminal at Folder*, QSpace, Quick Action workflows, and so on.
+Clicking one performs it on the selection (the whole multi-selection for a row;
+the folder in view for empty space), and the target app receives the files just
+as it would from Finder. An application's services sit under one row named for
+it; services without an application prefix sit directly in the submenu.
+
+- **How it is discovered.** `src/main/services-service.ts` reads the system's
+  service registry (`pbs -dump_pboard`, the data behind Finder's Services menu)
+  plus the user's per-service switches from System Settings, and asks Launch
+  Services which file types each selected path conforms to. Finder's rules are
+  plain TypeScript (`selectServices`): the service must take files (or text that
+  is declared a file path), must not be bound to another application, must
+  accept every selected path's type, must not be restricted or switched off for
+  the context menu, and this app's own Finder Quick Actions are left out.
+- **How it runs.** `NSPerformService` through `osascript`, with the file URLs,
+  the filename list, and the path text on a private pasteboard. The service id
+  and paths are `argv`, never script text. The service is performed only if the
+  system still offers it for exactly that selection, so a stale or forged id from
+  the renderer cannot run anything.
+- **Quiet degrade.** The menu opens at once; the Services row appears when the
+  lookup answers (a stale answer for an earlier right-click is dropped). A failed
+  lookup is an empty menu. The row is absent in the Trash, and off macOS.
+- **Windows.** Not offered. Explorer's verbs are COM `IContextMenu` handlers and
+  registry entries with no public API for an unpackaged app to enumerate and run
+  against a selection, so the submenu stays macOS-only rather than guess.
+
+`run-qa-finder-services.mjs` (macOS) registers a temporary Quick Action with
+the real system, then right-clicks in the built app and checks: the service is
+listed, it receives the exact path (spaces, quotes, and Hangul included), a
+two-row selection hands both paths over, the empty-space menu acts on the
+folder in view, a folder-only service is offered for a folder and not a file,
+and (when Keka is installed) Keka's group opens a visible second-level popout
+whose *Send to Keka* launches Keka. The probe is removed afterwards.
+
 ## Manual QA
 
 The Finder QA scripts are under `scripts/manual-qa/`. Build first, then run a
@@ -219,6 +391,11 @@ native drop path, and checks that a live agent answers from the attached
 content. With `QA_REAL_FINDER_DRAG=1` it also drags a file out of a real
 macOS Finder window. That run moves the mouse, and the terminal needs
 Accessibility permission.
+
+`run-qa-finder-os-menu.mjs` is macOS-only. It switches the right-click menu on
+against a throwaway home, runs the installed workflows through the real
+`automator` runtime, and checks that the running app attaches the files, that
+Show in AutoRAG selects the file, and that a cold start attaches from argv.
 
 ### Windows QA
 

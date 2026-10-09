@@ -91,7 +91,7 @@ if (isMac) {
 	sh(`printf '%s' '${SENTINEL}' | pbcopy`);
 }
 
-const shareButton = (page) => page.getByRole("button", { name: "Share", exact: true });
+const shareButton = (page) => page.locator(".toolbar").getByRole("button", { name: "Share", exact: true });
 
 const app = await launchFinder({
 	userDataDir: USER_DATA,

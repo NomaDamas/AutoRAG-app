@@ -4,23 +4,42 @@ name: QA (Windows)
 # Windows regressions are caught automatically. The lanes share one helper
 # (`scripts/manual-qa/platform.mjs`) and one entry point
 # (`scripts/manual-qa/run-all.mjs`).
+#
+# Runs on the repository's self-hosted Windows runner (label `autorag-qa`)
+# because GitHub-hosted runner minutes are exhausted. The runner only makes
+# outbound HTTPS connections to GitHub; no SSH endpoint or credential is
+# exposed to workflows. See docs/windows-runner.md.
 
+# Runs only after a push to `main` or `dev` (or by hand via workflow_dispatch),
+# never per pull request: a sweep takes ~30 minutes of the one runner PC.
 on:
   push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+    branches: [main, dev]
   workflow_dispatch:
+
+# One sweep at a time per ref; the runner is a single machine, so sweeps queue
+# rather than cancel each other (a cancelled sweep loses its evidence).
+concurrency:
+  group: qa-windows-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
 
 jobs:
   qa-windows:
-    runs-on: windows-latest
+    # The runner executes workflow code on a personal machine; only run it for
+    # this repository's own refs, never for code from forks.
+    if: github.repository == 'NomaDamas/AutoRAG-app'
+    runs-on: [self-hosted, Windows, X64, autorag-qa]
     # The sweep's per-lane budgets sum past an hour in the worst case; a healthy
-    # run finishes in ~25 minutes. 90 keeps a few slow lanes from cancelling the
+    # run finishes in ~30 minutes. 90 keeps a few slow lanes from cancelling the
     # job (and losing the uploaded evidence) while still bounding a hang.
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -31,18 +50,17 @@ jobs:
           node-version: 24
 
       # `bun install` resolves the `file:./.upstream/autorag` dependency before
-      # its `preinstall` hook runs, so a fresh runner must clone and build the
-      # librarian first. This is the same script the preinstall hook calls; on
-      # CI there is no cached `.upstream`, so run it explicitly before install.
+      # its `preinstall` hook runs, so a fresh checkout must clone and build the
+      # librarian first. This is the same script the preinstall hook calls.
       - name: Sync librarian
         run: node scripts/sync-librarian.mjs
 
-      - name: Install ffmpeg
-        run: choco install ffmpeg -y --no-progress
-
-      # The production build's prebuild requires the dupey CLI (version families).
-      - name: Install dupey
-        run: cargo install dupey --locked
+      # ffmpeg and the dupey CLI (needed by the production build's prebuild) are
+      # preinstalled on the runner host; fail early and clearly if they vanish.
+      - name: Check host tools
+        run: |
+          ffmpeg -version | Select-Object -First 1
+          dupey --version
 
       - name: Install dependencies
         run: bun install --frozen-lockfile

@@ -5,14 +5,26 @@ import {
 	estimateMenuHeight,
 	menuPlacement,
 } from "../src/renderer/src/state/context-menu";
-import type { FinderMenuEntry, FinderMenuItem, FinderMenuSubmenu } from "../src/renderer/src/state/context-menu";
+import type { ContextMenuInput, FinderMenuEntry, FinderMenuItem, FinderMenuSubmenu, FinderMenuSubmenuItem } from "../src/renderer/src/state/context-menu";
 import { NEW_FILE_FORMATS } from "../src/shared/new-file-contract";
+import { NO_CAPABILITIES, type ActionCapabilities } from "../src/shared/actions-contract";
+
+/** Every engine present, so the row menu's full action set is reachable. */
+const MAC: ActionCapabilities = {
+	openWith: true,
+	share: true,
+	archive: true,
+	imageFormats: [],
+	videoContainers: [],
+};
 
 const file = {
 	target: { name: "a.pdf", kind: "file" as const },
 	selectionCount: 1,
 	indexIncluded: true,
 	clipboardCount: 0,
+	capabilities: MAC,
+	canCreateFolder: true,
 };
 
 function items(entries: ReturnType<typeof buildContextMenu>): FinderMenuItem[] {
@@ -42,16 +54,21 @@ describe("buildContextMenu", () => {
 		expect(folder.map((i) => i.action)).not.toContain("toggleIndex");
 	});
 
-	it("lists the standard file operations in Finder order", () => {
-		const ops = items(buildContextMenu(file)).map((i) => i.label);
-		expect(ops.slice(2)).toEqual([
-			"복사",
-			"붙여넣기",
-			"잘라내기",
-			"복제",
-			"이름 변경",
-			"경로 복사",
-			"휴지통으로 이동",
+	it("lists the row actions in Finder order", () => {
+		expect(items(buildContextMenu(file)).map((i) => i.action)).toEqual([
+			"quickLook",
+			"openWith",
+			"toggleIndex",
+			"copy",
+			"paste",
+			"cut",
+			"duplicate",
+			"rename",
+			"copyPath",
+			"newFolder",
+			"compress",
+			"share",
+			"trash",
 		]);
 	});
 
@@ -88,18 +105,103 @@ describe("buildContextMenu", () => {
 	it("separates the groups exactly like the reference", () => {
 		expect(buildContextMenu(file).map((e) => e.kind)).toEqual([
 			"item",
-			"separator",
 			"item",
 			"separator",
 			"item",
+			"separator",
 			"item",
 			"item",
+			"item",
+			"item",
+			"item",
+			"item",
+			"separator",
 			"item",
 			"item",
 			"item",
 			"separator",
 			"item",
 		]);
+	});
+});
+
+describe("buildContextMenu row actions", () => {
+	const zip = { ...file, target: { name: "bundle.zip", kind: "file" as const } };
+	const actionsOf = (input: Partial<ContextMenuInput>) => items(buildContextMenu({ ...file, ...input })).map((i) => i.action);
+
+	it("offers the headline actions right where the row is", () => {
+		expect(items(buildContextMenu(zip)).map((i) => i.action)).toEqual([
+			"quickLook",
+			"openWith",
+			"toggleIndex",
+			"copy",
+			"paste",
+			"cut",
+			"duplicate",
+			"rename",
+			"copyPath",
+			"newFolder",
+			"extract",
+			"compress",
+			"share",
+			"trash",
+		]);
+		expect(items(buildContextMenu(file)).find((i) => i.action === "openWith")?.label).toBe("다른 앱으로 열기");
+		expect(items(buildContextMenu(file)).find((i) => i.action === "compress")?.label).toBe("압축");
+		expect(items(buildContextMenu(file)).find((i) => i.action === "share")?.label).toBe("공유");
+		expect(items(buildContextMenu(file)).find((i) => i.action === "newFolder")?.label).toBe("새 폴더");
+		expect(items(buildContextMenu(zip)).find((i) => i.action === "extract")?.label).toBe("압축 해제");
+	});
+
+	it("hides every engine-gated item when the machine has no engines", () => {
+		expect(actionsOf({ target: { name: "bundle.zip", kind: "file" }, capabilities: NO_CAPABILITIES })).toEqual([
+			"quickLook",
+			"toggleIndex",
+			"copy",
+			"paste",
+			"cut",
+			"duplicate",
+			"rename",
+			"copyPath",
+			"newFolder",
+			"trash",
+		]);
+	});
+
+	it("keeps Open With off folders and the other row actions on them", () => {
+		expect(actionsOf({ target: { name: "Finance", kind: "folder" } })).not.toContain("openWith");
+		expect(actionsOf({ target: { name: "Finance", kind: "folder" } })).toContain("compress");
+		expect(actionsOf({ target: { name: "Finance", kind: "folder" } })).toContain("share");
+		expect(actionsOf({ target: { name: "Finance", kind: "folder" } })).toContain("newFolder");
+	});
+
+	it("offers Extract for one archive, never a non-archive", () => {
+		expect(actionsOf({ target: { name: "bundle.zip", kind: "file" } })).toContain("extract");
+		expect(actionsOf({ target: { name: "bundle.tar", kind: "file" } })).toContain("extract");
+		expect(actionsOf({ target: { name: "bundle.tar.gz", kind: "file" } })).toContain("extract");
+		expect(actionsOf({ target: { name: "notes.txt", kind: "file" } })).not.toContain("extract");
+		expect(actionsOf({ target: { name: "bundle.zip", kind: "file" }, selectionCount: 2 })).not.toContain("extract");
+	});
+
+	it("keeps the batch actions and drops the single-target ones on a multi-selection", () => {
+		const many = items(buildContextMenu({ ...zip, selectionCount: 3 }));
+		expect(many.find((i) => i.action === "compress")?.label).toBe("3개 항목 압축");
+		expect(many.find((i) => i.action === "share")?.label).toBe("공유");
+		expect(many.map((i) => i.action)).toContain("openWith");
+		expect(many.map((i) => i.action)).not.toContain("extract");
+	});
+
+	it("keeps the row actions out of the Trash", () => {
+		const trashed = actionsOf({ inTrash: true });
+		expect(trashed).not.toContain("openWith");
+		expect(trashed).not.toContain("extract");
+		expect(trashed).not.toContain("compress");
+		expect(trashed).not.toContain("share");
+		expect(trashed).not.toContain("newFolder");
+	});
+
+	it("hides 새 폴더 where a folder cannot be created", () => {
+		expect(actionsOf({ canCreateFolder: false })).not.toContain("newFolder");
 	});
 });
 
@@ -118,10 +220,10 @@ describe("buildContextMenu in the Recents view", () => {
 		expect(items(buildContextMenu(file)).map((i) => i.action)).not.toContain("showInEnclosingFolder");
 	});
 
-	it("places it in its own group right after the Quick Look item", () => {
+	it("places it in its own group right after the open group", () => {
 		const entries = buildContextMenu(recentFile);
-		expect(entries.slice(0, 4).map((e) => e.kind)).toEqual(["item", "separator", "item", "separator"]);
-		expect(items(entries)[1]?.action).toBe("showInEnclosingFolder");
+		expect(entries.slice(0, 5).map((e) => e.kind)).toEqual(["item", "item", "separator", "item", "separator"]);
+		expect(items(entries)[2]?.action).toBe("showInEnclosingFolder");
 	});
 
 	it("adds exactly one item and one separator to the height estimate", () => {
@@ -129,9 +231,30 @@ describe("buildContextMenu in the Recents view", () => {
 	});
 });
 
+describe("buildContextMenu in the Trash view", () => {
+	it("offers Put Back instead of Move to Trash", () => {
+		const menu = items(buildContextMenu({ ...file, inTrash: true }));
+		expect(menu.map((i) => i.action)).toContain("putBack");
+		expect(menu.map((i) => i.action)).not.toContain("trash");
+		expect(menu.at(-1)?.label).toBe("원래 위치로 복원");
+		expect(menu.at(-1)?.keycap).toBeNull();
+	});
+
+	it("counts a multi-selection in the Put Back item", () => {
+		const menu = items(buildContextMenu({ ...file, inTrash: true, selectionCount: 4 }));
+		expect(menu.at(-1)?.label).toBe("4개 항목 원래 위치로 복원");
+	});
+
+	it("keeps Move to Trash in ordinary folder listings", () => {
+		const menu = items(buildContextMenu(file));
+		expect(menu.map((i) => i.action)).toContain("trash");
+		expect(menu.map((i) => i.action)).not.toContain("putBack");
+	});
+});
+
 describe("buildBackgroundContextMenu", () => {
 	const submenuOf = (entries: readonly FinderMenuEntry[]): FinderMenuSubmenu => {
-		const entry = entries.find((candidate): candidate is FinderMenuSubmenu => candidate.kind === "submenu");
+		const entry = entries.find((candidate): candidate is FinderMenuSubmenu => candidate.kind === "submenu" && candidate.label === "새로 만들기");
 		if (entry === undefined) throw new Error("no submenu entry");
 		return entry;
 	};
@@ -139,7 +262,7 @@ describe("buildBackgroundContextMenu", () => {
 	it("offers a New submenu with a folder and every document format", () => {
 		const submenu = submenuOf(buildBackgroundContextMenu({ clipboardCount: 0 }));
 		expect(submenu.label).toBe("새로 만들기");
-		expect(submenu.items.map((entry) => entry.action)).toEqual([
+		expect(submenu.items.map((entry) => (entry.kind === "submenu-item" ? entry.action : entry.kind))).toEqual([
 			"newFolder",
 			...NEW_FILE_FORMATS.map(() => "newFile"),
 		]);
@@ -151,7 +274,8 @@ describe("buildBackgroundContextMenu", () => {
 
 	it("carries each submenu item's file format, and none for the folder", () => {
 		const submenu = submenuOf(buildBackgroundContextMenu({ clipboardCount: 0 }));
-		const [folder, ...files] = submenu.items;
+		const leaves = submenu.items.filter((entry): entry is FinderMenuSubmenuItem => entry.kind === "submenu-item");
+		const [folder, ...files] = leaves;
 		expect(folder?.format).toBeNull();
 		expect(files.map((entry) => entry.format)).toEqual(NEW_FILE_FORMATS.map((format) => format.id));
 	});
@@ -166,6 +290,17 @@ describe("buildBackgroundContextMenu", () => {
 		expect(
 			buildBackgroundContextMenu({ clipboardCount: 3 }).find((entry) => entry.kind === "item"),
 		).toMatchObject({ disabled: false });
+	});
+
+	it("offers 휴지통 비우기 in the Trash view, destructive", () => {
+		const menu = items(buildBackgroundContextMenu({ clipboardCount: 0, inTrash: true }));
+		const emptyTrash = menu.find((i) => i.action === "emptyTrash");
+		expect(emptyTrash?.label).toBe("휴지통 비우기");
+		expect(emptyTrash?.tone).toBe("danger");
+	});
+
+	it("keeps the ordinary folder menu without the Trash", () => {
+		expect(items(buildBackgroundContextMenu({ clipboardCount: 0 })).map((i) => i.action)).not.toContain("emptyTrash");
 	});
 
 	it("counts the submenu parent as one row in the height estimate", () => {
@@ -200,6 +335,55 @@ describe("menuPlacement", () => {
 
 describe("estimateMenuHeight", () => {
 	it("measures items, separators, and the menu padding", () => {
-		expect(estimateMenuHeight(buildContextMenu(file))).toBe(9 * 28 + 3 * 9 + 2 * 5);
+		expect(estimateMenuHeight(buildContextMenu(file))).toBe(13 * 28 + 4 * 9 + 2 * 5);
+	});
+});
+
+describe("Services submenu", () => {
+	const KEKA = [
+		{ id: "Keka/Compress using Keka", group: "Keka", name: "Compress using Keka" },
+		{ id: "Keka/Send to Keka", group: "Keka", name: "Send to Keka" },
+	] as const;
+	const BLOOM = { id: "Reveal in Bloom", group: null, name: "Reveal in Bloom" } as const;
+
+	function servicesEntry(entries: readonly FinderMenuEntry[]): FinderMenuSubmenu | undefined {
+		return entries.find((entry): entry is FinderMenuSubmenu => entry.kind === "submenu" && entry.label === "서비스");
+	}
+
+	it("sits in its own group just above Move to Trash, and only for a row with services", () => {
+		const withServices = buildContextMenu({ ...file, services: [BLOOM] });
+		expect(withServices.slice(-4).map((entry) => entry.kind)).toEqual(["separator", "submenu", "separator", "item"]);
+		expect(withServices.at(-1)).toMatchObject({ action: "trash" });
+		expect(servicesEntry(buildContextMenu({ ...file, services: [] }))).toBeUndefined();
+		expect(servicesEntry(buildContextMenu(file))).toBeUndefined();
+	});
+
+	it("adds one row and one separator to the height estimate", () => {
+		expect(estimateMenuHeight(buildContextMenu({ ...file, services: [BLOOM] }))).toBe(estimateMenuHeight(buildContextMenu(file)) + 28 + 9);
+	});
+
+	it("lists ungrouped services directly and each application's services under one parent", () => {
+		const submenu = servicesEntry(buildContextMenu({ ...file, services: [BLOOM, ...KEKA] }));
+		expect(submenu?.items.map((item) => item.label)).toEqual(["Reveal in Bloom", "Keka"]);
+		const keka = submenu?.items.find((item) => item.kind === "submenu");
+		expect(keka?.kind === "submenu" && keka.items.map((item) => item.label)).toEqual(["Compress using Keka", "Send to Keka"]);
+	});
+
+	it("carries the service id on the leaf that runs it", () => {
+		const submenu = servicesEntry(buildContextMenu({ ...file, services: [...KEKA] }));
+		const group = submenu?.items[0];
+		const leaf = group?.kind === "submenu" ? group.items[1] : undefined;
+		expect(leaf).toMatchObject({ kind: "submenu-item", action: "service", serviceId: "Keka/Send to Keka", label: "Send to Keka" });
+	});
+
+	it("is not offered in the Trash, where a row goes back or away", () => {
+		expect(servicesEntry(buildContextMenu({ ...file, inTrash: true, services: [BLOOM] }))).toBeUndefined();
+	});
+
+	it("gives the empty-space menu the services of the folder in view", () => {
+		const withServices = buildBackgroundContextMenu({ clipboardCount: 0, services: [BLOOM] });
+		expect(servicesEntry(withServices)?.items.map((item) => item.label)).toEqual(["Reveal in Bloom"]);
+		expect(servicesEntry(buildBackgroundContextMenu({ clipboardCount: 0 }))).toBeUndefined();
+		expect(servicesEntry(buildBackgroundContextMenu({ clipboardCount: 0, inTrash: true, services: [BLOOM] }))).toBeUndefined();
 	});
 });

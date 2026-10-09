@@ -101,25 +101,36 @@ try {
 	await page.waitForSelector('[role="row"]', { timeout: 30000 });
 	await page.getByLabel("Places").getByRole("button", { name: "Documents", exact: true }).click();
 	const rowFor = (name) => page.locator(`[role="row"]:has-text("${name}")`).first();
+	// The folder's listing can land after the sidebar click, replacing whatever
+	// the list showed: sweep it top to bottom, and sweep again until the row
+	// mounts. One sweep that ends on the previous folder would otherwise leave
+	// the list scrolled past a folder row sorted to the top.
 	const mountRow = async (name) => {
-		await page.locator(".list").evaluate((node) => {
-			node.scrollTop = 0;
-		});
-		for (let attempt = 0; attempt < 160; attempt += 1) {
-			if ((await rowFor(name).count()) > 0) return rowFor(name);
-			const atEnd = await page.locator(".list").evaluate((node) => {
-				node.scrollTop = node.scrollTop + node.clientHeight * 0.9;
-				return node.scrollTop + node.clientHeight >= node.scrollHeight - 1;
+		const deadline = Date.now() + 30_000;
+		while (Date.now() < deadline) {
+			await page.locator(".list").evaluate((node) => {
+				node.scrollTop = 0;
 			});
-			if (atEnd) break;
-			await page.waitForTimeout(25);
+			for (let attempt = 0; attempt < 160; attempt += 1) {
+				if ((await rowFor(name).count()) > 0) return rowFor(name);
+				const atEnd = await page.locator(".list").evaluate((node) => {
+					node.scrollTop = node.scrollTop + node.clientHeight * 0.9;
+					return node.scrollTop + node.clientHeight >= node.scrollHeight - 1;
+				});
+				await page.waitForTimeout(25);
+				if ((await rowFor(name).count()) > 0) return rowFor(name);
+				if (atEnd) break;
+			}
+			await page.waitForTimeout(250);
 		}
-		return rowFor(name).waitFor({ timeout: 30000 }).then(() => rowFor(name));
+		throw new Error(`row ${name} never mounted`);
 	};
-	// Enrichment lands asynchronously now; mount each row and wait for its icon.
+	// Enrichment lands asynchronously now; mount each row and give its icon a
+	// generous first window. A tile that never arrives is reported by the
+	// per-fixture checks below (with the observed tile), not as an exception.
 	for (const fixture of fixtures) {
 		const row = await mountRow(fixture.name);
-		await row.locator("img.tile--image").waitFor({ timeout: 30000 });
+		await row.locator("img.tile--image").waitFor({ timeout: 45000 }).catch(() => undefined);
 	}
 
 	const sampleTile = (rowName) =>
@@ -157,20 +168,32 @@ try {
 
 	const dominant = (avg) => (avg[0] > avg[1] && avg[0] > avg[2] ? "red" : avg[2] > avg[1] ? "blue" : "other");
 	const observed = [];
-	const sampleMounted = async (name, expectIcon) => {
-		for (let attempt = 0; attempt < 30; attempt += 1) {
+	/**
+	 * The tile's own pixels, sampled until they settle: the OS thumbnail is
+	 * generated and decoded asynchronously, and a tile can briefly show the
+	 * letter/generic icon (or the previous frame of the same video) first. The
+	 * sample is retried until the expected colour dominates; the last sample is
+	 * returned, so a tile that never settles still fails its check.
+	 */
+	const sampleMounted = async (name, expectIcon, expectColor) => {
+		// Time-bounded, not attempt-bounded: the OS thumbnailer is shared and can
+		// take tens of seconds for one file while other work runs.
+		const deadline = Date.now() + 45_000;
+		let sample = await sampleTile(name);
+		for (;;) {
 			await mountRow(name);
-			const sample = await sampleTile(name);
-			if (sample.error !== undefined && expectIcon) {
-				await page.waitForTimeout(100);
-				continue;
+			sample = await sampleTile(name);
+			if (sample.error !== undefined) {
+				if (!expectIcon) return sample;
+			} else if (expectColor === undefined || dominant(sample.avg) === expectColor) {
+				return sample;
 			}
-			return sample;
+			if (Date.now() >= deadline) return sample;
+			await page.waitForTimeout(250);
 		}
-		return sampleTile(name);
 	};
 	for (const fixture of fixtures) {
-		const sample = await sampleMounted(fixture.name, true);
+		const sample = await sampleMounted(fixture.name, true, fixture.expect);
 		observed.push({ name: fixture.name, sample });
 		if (sample.error !== undefined) {
 			check(fixture.name, sample.error, fixture.expect);
@@ -219,7 +242,7 @@ try {
 		const listing = await window.autorag.fs.listDir(target);
 		const targets = listing.entries
 			.filter((entry) => entry.kind === "file")
-			.map((entry) => ({ path: entry.path, kind: entry.kind, ext: entry.ext, modifiedAt: entry.modifiedAt }));
+			.map((entry) => ({ path: entry.path, kind: entry.kind, ext: entry.ext, mtimeMs: entry.mtimeMs }));
 		const enriched = await window.autorag.fs.enrichEntries(targets, true);
 		return enriched.filter((entry) => entry.iconUrl !== null && entry.iconUrl !== undefined).length;
 	}, qlDir);

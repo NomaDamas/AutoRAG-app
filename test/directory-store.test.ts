@@ -4,23 +4,19 @@ import type { LiveMessage } from "../src/shared/live-contract";
 import type { FinderEntry } from "../src/renderer/src/data/entries";
 import { createDirectoryStore, type DirectorySource } from "../src/renderer/src/data/directory-store";
 import { createEntrySidecar } from "../src/renderer/src/data/entry-sidecar";
+import { kindLabelOf, tagsTextOf } from "../src/renderer/src/state/entry-values";
 
-const STAMP = "2026-09-30T00:00:00.000Z";
+const STAMP = Date.parse("2026-09-30T00:00:00.000Z");
 
-function entry(path: string, modifiedAt: string = STAMP): FinderEntry {
+function entry(path: string, mtimeMs: number = STAMP): FinderEntry {
 	return {
 		name: path.split("/").pop() ?? path,
 		path,
 		kind: "file",
-		fileKind: "md",
-		iconUrl: null,
-		modifiedAt,
-		dateLabel: "Sep 30, 00:00",
-		sizeLabel: "1 B",
-		kindLabel: "Markdown",
-		location: path.slice(0, path.lastIndexOf("/")),
-		modifiedValue: 0,
-		sizeValue: 1,
+		ext: "md",
+		size: 1,
+		mtimeMs,
+		birthtimeMs: 0,
 	};
 }
 
@@ -37,6 +33,7 @@ function harness() {
 	const enrich: { entries: readonly FinderEntry[]; answer: Deferred<readonly FsEntryEnrichment[]> }[] = [];
 	const metadata: { entries: readonly FinderEntry[]; answer: Deferred<readonly FsFinderEnrichment[]> }[] = [];
 	let live: ((message: LiveMessage) => void) | null = null;
+	let reconnect: (() => void) | null = null;
 	const source: DirectorySource = {
 		list: (dir) => {
 			const answer = Promise.withResolvers<readonly FinderEntry[]>();
@@ -64,6 +61,12 @@ function harness() {
 				live = null;
 			};
 		},
+		onReconnect: (listener) => {
+			reconnect = listener;
+			return () => {
+				reconnect = null;
+			};
+		},
 	};
 	const sidecar = createEntrySidecar();
 	return {
@@ -74,6 +77,7 @@ function harness() {
 		enrich,
 		metadata,
 		emit: (message: LiveMessage) => live?.(message),
+		reconnect: () => reconnect?.(),
 	};
 }
 
@@ -148,7 +152,7 @@ describe("directory store", () => {
 		expect(listener).not.toHaveBeenCalled();
 
 		void store.load("/d", "silent");
-		h.lists[2]?.answer.resolve([entry("/d/a.md"), entry("/d/b.md", "2026-10-01T00:00:00.000Z")]);
+		h.lists[2]?.answer.resolve([entry("/d/a.md"), entry("/d/b.md", Date.parse("2026-10-01T00:00:00.000Z"))]);
 		await settle();
 		const next = store.get("/d")?.entries ?? [];
 		expect(next[0]).toBe(shown?.entries[0]);
@@ -168,15 +172,18 @@ describe("directory store", () => {
 
 		expect(h.enrich).toHaveLength(1);
 		expect(h.metadata).toHaveLength(1);
-		h.enrich[0]?.answer.resolve(rows.map((row) => ({ path: row.path, modifiedAt: STAMP, osKind: "PNG image", iconUrl: `thumb://${row.name}` })));
-		h.metadata[0]?.answer.resolve([{ path: "/d/a.png", modifiedAt: STAMP, finder: { createdAt: null, addedAt: null, lastOpenedAt: null, tags: ["Red"], comments: null, width: 4, height: 3, rating: null, application: null } }]);
+		h.enrich[0]?.answer.resolve(rows.map((row) => ({ path: row.path, mtimeMs: STAMP, osKind: "PNG image", iconUrl: `thumb://${row.name}` })));
+		h.metadata[0]?.answer.resolve([{ path: "/d/a.png", mtimeMs: STAMP, finder: { createdAt: null, addedAt: null, lastOpenedAt: null, tags: ["Red"], comments: null, width: 4, height: 3, rating: null, application: null } }]);
 		store.requestIcon(entry("/d/b.png"));
 		await settle();
 
 		expect(store.get("/d")).toBe(snapshot);
 		expect(store.get("/d")?.entries).toBe(rows);
 		expect(listener).not.toHaveBeenCalled();
-		expect(h.sidecar.resolve(rows[0] as FinderEntry)).toMatchObject({ iconUrl: "thumb://a.png", kindLabel: "PNG image", tagsLabel: "Red" });
+		const resolved = h.sidecar.resolve(rows[0] as FinderEntry);
+		expect(resolved).toMatchObject({ iconUrl: "thumb://a.png", osKind: "PNG image" });
+		expect(kindLabelOf(resolved)).toBe("PNG image");
+		expect(tagsTextOf(resolved)).toBe("Red");
 	});
 
 	it("does not ask again for rows whose kind and metadata it already has", async () => {
@@ -186,11 +193,11 @@ describe("directory store", () => {
 		void store.load("/d", "navigate");
 		h.lists[0]?.answer.resolve(rows);
 		await settle();
-		h.enrich[0]?.answer.resolve(rows.map((row) => ({ path: row.path, modifiedAt: STAMP, osKind: "Markdown", iconUrl: null })));
+		h.enrich[0]?.answer.resolve(rows.map((row) => ({ path: row.path, mtimeMs: STAMP, osKind: "Markdown", iconUrl: null })));
 		h.metadata[0]?.answer.resolve([]);
 		await settle();
 
-		const edited = entry("/d/b.md", "2026-10-01T00:00:00.000Z");
+		const edited = entry("/d/b.md", Date.parse("2026-10-01T00:00:00.000Z"));
 		void store.load("/d", "silent");
 		h.lists[1]?.answer.resolve([rows[0] as FinderEntry, edited]);
 		await settle();
@@ -214,9 +221,9 @@ describe("directory store", () => {
 			await vi.advanceTimersByTimeAsync(0);
 
 			store.requestIcon(entry("/d/a.png"));
-			store.requestIcon(entry("/d/a.png", "2026-10-01T00:00:00.000Z"));
+			store.requestIcon(entry("/d/a.png", Date.parse("2026-10-01T00:00:00.000Z")));
 			await vi.advanceTimersByTimeAsync(60);
-			expect(h.enrich[1]?.entries.map((row) => row.modifiedAt)).toEqual(["2026-10-01T00:00:00.000Z"]);
+			expect(h.enrich[1]?.entries.map((row) => row.mtimeMs)).toEqual([Date.parse("2026-10-01T00:00:00.000Z")]);
 		} finally {
 			vi.useRealTimers();
 		}
@@ -375,5 +382,29 @@ describe("directory store", () => {
 		expect(h.lists).toHaveLength(0);
 		expect(h.reads).toHaveLength(0);
 		expect(store.get("/never")).toBeUndefined();
+	});
+
+	it("after the fs worker restarts, relists the folders on screen and keeps their rows until the answer lands", async () => {
+		const h = harness();
+		const store = createDirectoryStore({ source: h.source, sidecar: h.sidecar });
+		store.connect();
+		store.retain("/shown");
+		const release = store.retain("/left");
+		void store.load("/shown", "navigate");
+		void store.load("/left", "navigate");
+		const shown = [entry("/shown/a.md")];
+		h.lists[0]?.answer.resolve(shown);
+		h.lists[1]?.answer.resolve([entry("/left/b.md")]);
+		await settle();
+		release();
+
+		h.reconnect();
+		await settle();
+		expect(h.lists.slice(2).map((call) => call.dir)).toEqual(["/shown"]);
+		// The relist is silent: the folder keeps painting its rows meanwhile.
+		expect(store.get("/shown")).toMatchObject({ loaded: true, loading: false, entries: shown });
+		h.lists[2]?.answer.resolve([entry("/shown/a.md"), entry("/shown/c.md")]);
+		await settle();
+		expect(store.get("/shown")?.entries.map((row) => row.path)).toEqual(["/shown/a.md", "/shown/c.md"]);
 	});
 });

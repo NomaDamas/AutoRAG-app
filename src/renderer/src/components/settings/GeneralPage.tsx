@@ -12,22 +12,30 @@ import type { AppSettings, AutoRagConfigSnapshot } from "../../../../shared/sett
 import { LanguageSettings } from "./LanguageSettings";
 import { Row, Section, SettingsPageHead } from "./SettingsKit";
 import { Switch } from "../primitives/Switch";
+import { hostPlatform } from "../../lib/shortcuts";
 
 const autorag = window.autorag;
 
 export function GeneralPage({
 	appSettings,
 	onAppSettingsChanged,
+	onSettingsError,
 	snapshot,
 	onSaved,
 }: {
 	readonly appSettings: AppSettings;
 	readonly onAppSettingsChanged: (settings: AppSettings) => void;
+	readonly onSettingsError: (message: string) => void;
 	readonly snapshot: AutoRagConfigSnapshot;
 	readonly onSaved: (snapshot: AutoRagConfigSnapshot) => void;
 }): ReactElement {
 	async function setApp(patch: Partial<AppSettings>): Promise<void> {
-		onAppSettingsChanged(await autorag.settings.set(patch));
+		try {
+			onAppSettingsChanged(await autorag.settings.set(patch));
+		} catch (cause) {
+			// A rejected change (the right-click menu could not be written) leaves the stored setting as it was.
+			onSettingsError(`우클릭 메뉴를 설정하지 못했습니다: ${cause instanceof Error ? cause.message : String(cause)}`);
+		}
 	}
 	return (
 		<>
@@ -57,6 +65,11 @@ export function GeneralPage({
 				<Row name="로그인할 때 자동 실행" hint="컴퓨터를 켤 때 AutoRAG를 백그라운드에서 시작합니다.">
 					<Switch checked={appSettings.launchAtLogin} onChange={() => void setApp({ launchAtLogin: !appSettings.launchAtLogin })} ariaLabel="로그인할 때 자동 실행" />
 				</Row>
+				{hostPlatform() === "darwin" || hostPlatform() === "win32" ? (
+					<Row name="파일 우클릭 메뉴에 추가" hint="Finder(macOS)나 탐색기(Windows)에서 파일을 우클릭하면 'AutoRAG에게 물어보기'와 'AutoRAG에서 보기'가 나옵니다.">
+						<Switch checked={appSettings.osMenuIntegration} onChange={() => void setApp({ osMenuIntegration: !appSettings.osMenuIntegration })} ariaLabel="파일 우클릭 메뉴에 추가" />
+					</Row>
+				) : null}
 				<Row name="업데이트 자동 설치" hint="새 버전을 다음 앱 시작 때 자동으로 적용합니다.">
 					<Switch checked={appSettings.autoInstallUpdates} onChange={() => void setApp({ autoInstallUpdates: !appSettings.autoInstallUpdates })} ariaLabel="업데이트 자동 설치" />
 				</Row>

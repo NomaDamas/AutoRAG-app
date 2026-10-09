@@ -79,7 +79,7 @@ test("Quick Look uses a fast reusable window with Finder navigation", async () =
 	await writeFile(join(dir, "long.txt"), Array.from({ length: 200 }, (_unused, line) => `line ${line}`).join("\n"));
 	await writeFile(join(dir, "page.pdf"), minimalPdf(3));
 	await writeClip(join(dir, "clip.mp4"));
-	const app = await electron.launch({ args: ["."], cwd: process.cwd(), env: { ...process.env, AUTORAG_QA_ROOT: dir, AUTORAG_SKIP_DUPEY_CHECK: "1" } });
+	const app = await electron.launch({ args: ["."], cwd: process.cwd(), env: { ...process.env, AUTORAG_QA_ROOT: dir, AUTORAG_SKIP_DUPEY_CHECK: "1", AUTORAG_SKIP_ONBOARDING: "1" } });
 	try {
 		const main =
 			app.windows().find((page) => page.url().endsWith("/index.html")) ??

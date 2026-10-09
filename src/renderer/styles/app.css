@@ -19,3 +19,7 @@
  * with base so Tailwind utilities still win, same as base.css. */
 @import "./settings.css" layer(base);
 @import "./settings-controls.css" layer(base);
+
+/* Onboarding - first-run flow, a scoped port of the onboarding reference
+ * (DESIGN.md §3a). Every rule sits under `.onb`. */
+@import "./onboarding.css" layer(base);

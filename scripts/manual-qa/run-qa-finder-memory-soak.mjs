@@ -14,9 +14,10 @@
  *     changes for the measurement);
  *   - renderer script time over the soak (CDP `Performance.getMetrics`);
  *   - what the renderer still holds at the end, from a heap snapshot: every
- *     row object (`FinderEntry`: has `path`, `fileKind`, `dateLabel`) and every
- *     array of them. A path with more than one row object alive is an older
- *     listing that something still retains (FS roadmap #99 acceptance: 0).
+ *     row object (a plain object with `path`, `name`, and `kind`, plus the
+ *     row's mtime as `mtimeMs` or the older `modifiedAt`) and every array of
+ *     them. A path with more than one row object alive is an older listing that
+ *     something still retains (FS roadmap #99 acceptance: 0).
  *
  * A cycle: open each fixture folder through its row, click rows down the list,
  * toggle Quick Look on some, switch view modes list → icons → columns → list,
@@ -39,7 +40,7 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { deflateSync } from "node:zlib";
-import { finderWindow, launchFinder, ROOT } from "./launch-finder.mjs";
+import { finderWindow, fsWorkerDiagnostics, launchFinder, ROOT } from "./launch-finder.mjs";
 import { chord, sleep } from "./platform.mjs";
 
 const EVIDENCE = join(ROOT, ".omo/evidence/ai-finder-app/qa-memory-soak");
@@ -51,16 +52,19 @@ const ENFORCE = process.env.SOAK_ENFORCE === "1";
 /** Stage 1 gates: retained renderer heap per cycle, and index:status calls per click. */
 const MAX_HEAP_GROWTH_PER_CYCLE_MB = 0.25;
 const MAX_INDEX_STATUS_PER_CLICK = 0;
-const MAX_LOOP_P99_MS = 100;
+/** FS roadmap #101: with the filesystem in its own process, main's loop stays inside one 60 Hz frame. */
+const MAX_LOOP_P99_MS = 16;
 /** FS roadmap #99: only the current listing of a folder is alive, no older one. */
 const MAX_LISTING_GENERATIONS = 1;
 const SNAPSHOT = process.env.SOAK_SNAPSHOT !== "0";
 
 /**
  * Row objects and row arrays alive in a V8 heap snapshot. A row object is a
- * plain object with `path`, `fileKind`, and `dateLabel` properties; an array
- * counts when at least 50 of its elements are row objects. `maxGenerations`
- * is how many listings of one folder are alive at once (1 = only the current).
+ * plain object with `path`, `name`, `kind`, and an mtime (`mtimeMs`, or
+ * `modifiedAt` before FS roadmap #100), so the count reads the same on both
+ * row shapes; its folder is the path's parent. An array counts when at least
+ * 50 of its elements are row objects. `maxGenerations` is how many listings
+ * of one folder are alive at once (1 = only the current).
  */
 function analyzeSnapshot(snapshot) {
 	const { meta } = snapshot.snapshot;
@@ -107,19 +111,14 @@ function analyzeSnapshot(snapshot) {
 	for (let node = 0; node < count; node += 1) {
 		if (nodes[node * nodeFields + typeOf] !== objectType) continue;
 		let path = null;
-		let location = null;
 		let marks = 0;
 		for (let edge = firstEdge[node]; edge < firstEdge[node + 1]; edge += edgeFields) {
 			if (edges[edge + edgeTypeOf] !== property) continue;
 			const name = strings[edges[edge + edgeNameOf]];
-			if (name === "fileKind" || name === "dateLabel") marks += 1;
-			else if (name === "path" || name === "location") {
-				const value = stringValue(edges[edge + edgeToOf] / nodeFields);
-				if (name === "path") path = value;
-				else location = value;
-			}
+			if (name === "name" || name === "kind" || name === "mtimeMs" || name === "modifiedAt") marks += 1;
+			else if (name === "path") path = stringValue(edges[edge + edgeToOf] / nodeFields);
 		}
-		if (marks === 2 && path !== null) rows.set(node, { path, location });
+		if (marks === 3 && path !== null) rows.set(node, { path, location: path.replace(/[\\/][^\\/]*$/, "") });
 	}
 	// Row arrays: listings and every array derived from one (sorted, stacked,
 	// grouped). A derived array reuses its listing's row objects.
@@ -253,31 +252,20 @@ try {
 		rendererGone = true;
 	});
 
-	// Main-side probes: invoke counters (index:status and the listing/enrichment
-	// channels) and an event-loop delay histogram.
-	await app.evaluate(({ ipcMain }) => {
-		const handlers = ipcMain._invokeHandlers;
-		globalThis.__soakCalls = {};
-		for (const channel of ["index:status", "fs:listDir", "fs:enrichEntries", "fs:finderMetadata"]) {
-			const original = handlers.get(channel);
-			if (original === undefined) continue;
-			globalThis.__soakCalls[channel] = 0;
-			handlers.set(channel, (...args) => {
-				globalThis.__soakCalls[channel] += 1;
-				return original(...args);
-			});
-		}
-		globalThis.__soakHasIndexProbe = globalThis.__soakCalls["index:status"] !== undefined;
-	});
-	const mainProbe = () =>
-		app.evaluate(() => ({
-			indexStatusCalls: globalThis.__soakCalls["index:status"],
-			calls: { ...globalThis.__soakCalls },
-			hasIndexProbe: globalThis.__soakHasIndexProbe,
+	// Main-side probes: the fs worker's per-op request counts (index status and
+	// the listing/enrichment ops; they reach the worker over its MessagePort,
+	// not ipcMain) and main's own event-loop delay histogram.
+	const SOAK_OPS = { "index:status": "indexStatus", "fs:listDir": "listDir", "fs:enrichEntries": "enrichEntries", "fs:finderMetadata": "finderMetadata" };
+	const mainProbe = async () => {
+		const worker = await fsWorkerDiagnostics(app);
+		const calls = Object.fromEntries(Object.entries(SOAK_OPS).map(([label, op]) => [label, worker.requests[op] ?? 0]));
+		const main = await app.evaluate(() => ({
 			rss: process.memoryUsage().rss,
 			loopP99: globalThis.__soakLoop === undefined ? null : globalThis.__soakLoop.percentile(99) / 1e6,
 			loopMax: globalThis.__soakLoop === undefined ? null : globalThis.__soakLoop.max / 1e6,
 		}));
+		return { indexStatusCalls: calls["index:status"], calls, hasIndexProbe: true, workerPid: worker.pid, ...main };
+	};
 	const startLoopMonitor = () =>
 		app.evaluate(() => {
 			const { monitorEventLoopDelay } = process.getBuiltinModule("node:perf_hooks");
@@ -445,6 +433,7 @@ try {
 	console.log(`INFO  summary ${JSON.stringify(summary)}`);
 
 	check("renderer stayed alive through the soak", !rendererGone);
+	check("the fs worker never restarted during the soak", end.workerPid === probeStart.workerPid, `pid ${probeStart.workerPid} → ${end.workerPid}`);
 	check("no page errors during the soak", pageErrors.length === 0, pageErrors[0]);
 	check(
 		`retained renderer heap grows ≤ ${MAX_HEAP_GROWTH_PER_CYCLE_MB} MB/cycle`,

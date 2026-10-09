@@ -10,10 +10,10 @@ import {
 import { iconUrl, handleIconRequest } from "../src/main/icon-protocol";
 
 const BYTES = new Uint8Array([1, 2, 3, 4]);
-const MTIME = "2026-09-29T00:00:00.000Z";
-const target = (path: string, modifiedAt = MTIME): IconTarget => ({
+const MTIME = Date.parse("2026-09-29T00:00:00.000Z");
+const target = (path: string, mtimeMs = MTIME): IconTarget => ({
 	path,
-	modifiedAt,
+	mtimeMs,
 	ext: path.slice(path.lastIndexOf(".") + 1).toLowerCase(),
 });
 
@@ -34,9 +34,7 @@ describe("createIconProvider", () => {
 
 		// Then the OS was asked per file and each URL carries its own cache identity
 		expect([...generated].sort()).toEqual(["/docs/a.png", "/docs/b.mp4"]);
-		expect(icons.get("/docs/a.png")).toBe(
-			"autorag-thumb://local/?path=%2Fdocs%2Fa.png&mtime=2026-09-29T00%3A00%3A00.000Z",
-		);
+		expect(icons.get("/docs/a.png")).toBe(iconUrl("/docs/a.png", MTIME));
 		expect(icons.get("/docs/b.mp4")).toBe(iconUrl("/docs/b.mp4", MTIME));
 	});
 
@@ -68,12 +66,12 @@ describe("createIconProvider", () => {
 		});
 
 		// When it is listed
-		await provider.icons([target("/docs/a.png", "t1")]);
+		await provider.icons([target("/docs/a.png", 1)]);
 
 		// Then the exact bytes are readable under the same identity, and absent elsewhere
-		expect(provider.read("/docs/a.png", "t1")).toEqual(BYTES);
-		expect(provider.read("/docs/a.png", "t2")).toBeNull();
-		expect(provider.read("/docs/missing.png", "t1")).toBeNull();
+		expect(provider.read("/docs/a.png", 1)).toEqual(BYTES);
+		expect(provider.read("/docs/a.png", 2)).toBeNull();
+		expect(provider.read("/docs/missing.png", 1)).toBeNull();
 	});
 
 	it("serves a produced icon through the protocol handler from the same cache", async () => {
@@ -105,10 +103,10 @@ describe("createIconProvider", () => {
 		});
 
 		// When the same file is listed twice unchanged, then changes
-		await provider.icons([target("/docs/a.png", "t1")]);
-		await provider.icons([target("/docs/a.png", "t1")]);
+		await provider.icons([target("/docs/a.png", 1)]);
+		await provider.icons([target("/docs/a.png", 1)]);
 		expect(runs).toBe(1);
-		await provider.icons([target("/docs/a.png", "t2")]);
+		await provider.icons([target("/docs/a.png", 2)]);
 
 		// Then only the changed file triggered a new run
 		expect(runs).toBe(2);
@@ -381,6 +379,28 @@ describe("createIconProvider", () => {
 		} finally {
 			vi.useRealTimers();
 		}
+	});
+
+	it("asks Quick Look for iWork packages at both tiers, but not for other unknown extensions", async () => {
+		// Given a macOS provider that records which paths reach the native thumbnailer
+		const asked: string[] = [];
+		const provider = createIconProvider({
+			platform: "darwin",
+			thumbnail: async (path) => {
+				asked.push(path);
+				return BYTES;
+			},
+			systemIcon: async () => null,
+		});
+
+		// When a listing and the Inspector ask for Numbers, Pages, Keynote, and an unrelated file
+		const icons = await provider.icons(["a.numbers", "b.pages", "c.key", "d.xyz"].map((name) => target(`/docs/${name}`)));
+		const preview = await provider.preview(target("/docs/e.key"));
+
+		// Then only the iWork packages were rendered, in the listing and the preview tier
+		expect([...icons.keys()].sort()).toEqual(["/docs/a.numbers", "/docs/b.pages", "/docs/c.key"]);
+		expect(preview).not.toBeNull();
+		expect(asked.sort()).toEqual(["/docs/a.numbers", "/docs/b.pages", "/docs/c.key", "/docs/e.key"]);
 	});
 
 	it("uses the native thumbnail API on macOS and Windows but the type icon on Linux", async () => {
@@ -722,6 +742,38 @@ describe("preview tier", () => {
 		expect(warnings.join("\n")).toContain("QLThumbnailGenerationError: cancelled");
 		const icons = await provider.icons([target("/docs/a.pdf")]);
 		expect(icons.get("/docs/a.pdf")).toBe(iconUrl("/docs/a.pdf", MTIME));
+	});
+});
+
+describe("macOS application bundles", () => {
+	it("renders the bundle's own icon through the native thumbnail path, not a letter tile", async () => {
+		// Given a macOS provider whose thumbnail generator records its calls
+		const generated: string[] = [];
+		const provider = createIconProvider({
+			platform: "darwin",
+			thumbnail: async (path) => {
+				generated.push(path);
+				return BYTES;
+			},
+		});
+
+		// When the Applications folder is listed
+		const icons = await provider.icons([target("/Applications/Hello.app")]);
+
+		// Then Quick Look was asked for the bundle and the tile carries its icon
+		expect(generated).toEqual(["/Applications/Hello.app"]);
+		expect(icons.get("/Applications/Hello.app")).toBe(iconUrl("/Applications/Hello.app", MTIME));
+	});
+
+	it("serves a 640px preview for a bundle, so the Info panel shows the app rather than a letter", async () => {
+		const provider = createIconProvider({
+			platform: "darwin",
+			thumbnail: async (_path, size) => (size === PREVIEW_ICON_SIZE ? BYTES : null),
+		});
+
+		expect(await provider.preview(target("/Applications/Hello.app"))).toBe(
+			iconUrl("/Applications/Hello.app", MTIME, PREVIEW_ICON_SIZE),
+		);
 	});
 });
 

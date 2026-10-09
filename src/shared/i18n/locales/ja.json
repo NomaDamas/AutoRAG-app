@@ -44,7 +44,9 @@
     "toggleInspector": "情報パネルの切り替え",
     "showAiSearch": "AI 検索を表示",
     "aiSearchShortcut": "AI 検索 ({{shortcut}})",
-    "share": "共有"
+    "share": "共有",
+    "putBack": "元に戻す",
+    "emptyTrash": "ゴミ箱を空にする"
   },
   "sort": {
     "none": "なし",
@@ -105,6 +107,7 @@
   "contextMenu": {
     "open": "開く",
     "quickLook": "クイックルック (Quick Look)",
+    "openWith": "このアプリケーションで開く",
     "showInEnclosingFolder": "親フォルダーを表示",
     "retryIndex": "インデックスを再試行",
     "excludeFromIndex": "インデックスから除外",
@@ -115,8 +118,16 @@
     "duplicate": "複製",
     "rename": "名前の変更",
     "copyPath": "パスをコピー",
+    "compress": "圧縮",
+    "compressCount": "{{count}}個の項目を圧縮",
+    "extract": "展開",
+    "share": "共有",
+    "services": "サービス",
     "moveToTrash": "ゴミ箱に入れる",
     "moveToTrashCount": "{{count}}個の項目をゴミ箱に入れる",
+    "putBack": "元に戻す",
+    "putBackCount": "{{count}}個の項目を元に戻す",
+    "emptyTrash": "ゴミ箱を空にする",
     "newFolder": "新規フォルダー",
     "new": "新規作成",
     "trashShort": "ゴミ箱"
@@ -221,6 +232,10 @@
       "older": "それ以前"
     }
   },
+  "osMenu": {
+    "ask": "AutoRAGに質問",
+    "reveal": "AutoRAGで表示"
+  },
   "toasts": {
     "trashSingle": "{{name}}をゴミ箱に移動しました",
     "trashCount": "{{count}}個の項目をゴミ箱に移動しました",
@@ -228,6 +243,11 @@
     "indexExcluded": "{{name}} — インデックスから除外しました",
     "copiedPath": "パスをコピーしました",
     "feedbackSent": "フィードバックを送信しました"
+  },
+  "confirm": {
+    "emptyTrashTitle": "ゴミ箱を空にする",
+    "emptyTrashMessage": "ゴミ箱内のすべての項目が完全に削除されます。この操作は取り消せません。",
+    "emptyTrashAction": "空にする"
   },
   "settings": {
     "title": "設定",
@@ -265,7 +285,431 @@
       "autoUpdates": "自動更新",
       "autoUpdatesHint": "次回のアプリアプリ再起動時にアップデートを適用します。",
       "telemetry": "匿名の診断情報を共有",
-      "telemetryHint": "匿名化されたパフォーマンス指標を共有します。"
+      "telemetryHint": "匿名化されたパフォーマンス指標を共有します。",
+      "osMenuIntegration": "ファイルの右クリックメニューに追加",
+      "osMenuIntegrationHint": "Finder(macOS)またはエクスプローラー(Windows)でファイルを右クリックすると「AutoRAGに質問」「AutoRAGで表示」が表示されます。",
+      "osMenuIntegrationError": "右クリックメニューを設定できませんでした"
+    }
+  },
+  "onboarding": {
+    "step": {
+      "welcome": "はじめに",
+      "permissions": "権限",
+      "account": "アカウント",
+      "folders": "フォルダ",
+      "embedding": "埋め込み",
+      "sources": "データソース",
+      "plan": "プラン",
+      "model": "AIモデル",
+      "indexing": "インデックス作成"
+    },
+    "stepLabel": {
+      "welcome": "開始する",
+      "permissions": "続ける",
+      "account": "続ける",
+      "folders": "フォルダを選んで続ける",
+      "embedding": "続ける",
+      "sources": "続ける",
+      "model": "続ける",
+      "indexing": "続ける"
+    },
+    "welcome": {
+      "eyebrow": "Pro 7日間無料トライアル",
+      "title": "ファイルに\n聞いてみましょう",
+      "lead": "フォルダを開いて探し回る必要はありません。AutoRAGが文書の中身を読み、根拠とともに答えます。",
+      "note": "既定ではローカル処理です。リモート処理が必要なときは、何が送信されるかを先に表示します。",
+      "chat": {
+        "user": "前四半期のコストはなぜ減ったの？",
+        "replyLead": "マーケティング費用は前四半期より",
+        "replyTail": "減りました。"
+      },
+      "evidence": {
+        "revenue": "売上レポート",
+        "revenueQuote": "“前年比18%増…”",
+        "budget": "Budget summary",
+        "budgetQuote": "“Q3 operating cost…”"
+      }
+    },
+    "feature": {
+      "ai": { "title": "AI検索", "sub": "回答と根拠を一度に" },
+      "citation": { "title": "根拠の引用", "sub": "回答の出典を確認" },
+      "versions": { "title": "バージョンのまとめ", "sub": "重複した文書を整理" },
+      "quicklook": { "title": "Quick Look", "sub": "開く前にプレビュー" },
+      "sources": { "title": "データソース", "sub": "接続先もまとめて検索" },
+      "hybrid": { "title": "ハイブリッド検索", "sub": "キーワードと意味を併用し、リランキングで並べ替え" }
+    },
+    "hybrid": { "keyword": "キーワード", "semantic": "意味", "rerank": "リランキング" },
+    "versions": { "latest": "最新版", "near": "類似版", "exact": "同一版" },
+    "account": {
+      "eyebrow": "アカウント",
+      "title": "アカウントで\n始める",
+      "lead": "プランとトライアルだけがアカウントに紐づきます。ファイルとインデックスはこのMacに残ります。",
+      "note": "ブラウザでログインすると、自動的にこのアプリに戻ります。パスワードをこのアプリに入力することはありません。",
+      "signedIn": "ログインしました",
+      "signedInNote": "次のステップに進みます",
+      "otherAccount": "別のアカウント",
+      "cardTitle": "AutoRAGアカウント",
+      "cardSub": "トライアルと設定を管理します",
+      "busy": "ブラウザでログイン中…",
+      "busyNote": "認証が完了すると自動的に戻ります。",
+      "apple": "Appleで続ける",
+      "google": "Googleで続ける",
+      "or": "または",
+      "emailPlaceholder": "メールアドレス",
+      "magicLink": "リンクを受け取る",
+      "authNote": "ログインリンクをメールでお送りします。アカウントにファイルの内容は保存されません。",
+      "sampleEmail": "hello@autorag.example"
+    },
+    "permissions": {
+      "eyebrow": "権限",
+      "title": "正しく読み取れるように\n許可してください",
+      "leadMac": "macOSは、アプリが文書や保護されたアプリデータにアクセスする前に許可を求めます。権限とインデックス作成の範囲は別ものです。",
+      "leadWindows": "通知とネットワークだけ確認すればすぐに始められます。残りは後で設定から変更できます。",
+      "note": "AutoRAGはファイルを変更しません。実際にインデックスするフォルダは次のステップでご自身で選びます。",
+      "required": "必須",
+      "optional": "任意",
+      "setting": "設定",
+      "granted": "許可済み",
+      "restartNeeded": "再起動が必要",
+      "restartNow": "今すぐ再起動",
+      "openSettings": "システム設定を開く",
+      "footnote": "オンにすると次へ進めます。",
+      "fda": {
+        "name": "フルディスクアクセス",
+        "desc": "正しく動作するために必要です。"
+      },
+      "notifications": {
+        "name": "通知",
+        "allow": "通知を許可",
+        "openWindows": "Windowsの設定を開く"
+      },
+      "login": {
+        "name": "ログイン時に起動",
+        "desc": "ファイルが変更されると、バックグラウンドでインデックスを最新に保ちます。"
+      },
+      "network": {
+        "name": "ネットワーク（ファイアウォール）",
+        "desc": "クラウド埋め込みとモデル呼び出しに必要です。初回起動時にWindowsのセキュリティ警告が出たら許可します。",
+        "allow": "許可"
+      }
+    },
+    "folders": {
+      "eyebrow": "インデックス作成の範囲",
+      "title": "AIが読むフォルダを選んでください",
+      "lead": "ここで選んだフォルダだけがAI検索に含まれます。範囲は後から追加したり減らしたりできます。",
+      "suggested": "おすすめの場所",
+      "selectAll": "すべて選択",
+      "add": "別のフォルダを追加",
+      "stats": "{{files}}件 · {{size}} · 約{{minutes}}分",
+      "scanning": "集計中…",
+      "scanError": "読み取れません",
+      "summary": "{{folders}}フォルダ · {{files}}ファイル · {{size}}",
+      "summaryNote": "node_modules · .git · 50 MiBを超えるファイルは自動的に除外されます。",
+      "localEta": "ローカル約{{minutes}}分",
+      "cloudEta": "クラウド約{{minutes}}分",
+      "warning": "範囲が広すぎます。サブフォルダを選ぶか、クラウド埋め込みを選ぶと最初の結果をより早く確認できます。"
+    },
+    "embedding": {
+      "eyebrow": "重要な選択",
+      "title": "どこで\n埋め込みますか？",
+      "lead": "文書を検索可能なベクトルに変換する処理をどこで行うか決めます。後から変更すると最初からやり直すため、時間とコストが余分にかかります。",
+      "files": "{{count}}件",
+      "selectedFiles": "選択したファイル",
+      "reindexNote": "埋め込みモデルや処理場所を変更すると、現在作成したインデックスを破棄して最初から作り直す必要があります。",
+      "localTitle": "このMacで",
+      "localLead": "ファイルの本文はMacの外に出ません。",
+      "metricTime": "予想時間",
+      "metricDownload": "ダウンロード",
+      "metricPrivacy": "プライバシー",
+      "metricStorage": "保存",
+      "metricPlan": "プラン",
+      "minutes": "約{{minutes}}分",
+      "cached": "準備完了",
+      "downloadUnknown": "確認中",
+      "privacyLocal": "ローカル",
+      "storageNone": "なし",
+      "planPro": "Pro限定",
+      "bulletGpuMac": "Apple Silicon GPUを使用",
+      "bulletGpuWindows": "GPUアクセラレーションを使用（可能な場合）",
+      "bulletPower": "ノートPCは電源接続を推奨",
+      "cloudBadge": "準備中",
+      "cloudTitle": "クラウドで",
+      "cloudLead": "より速く処理できますが、選択した文書の本文が送信されます。",
+      "cloudBulletPerf": "Macの性能への影響が少ない",
+      "cloudBulletNoStore": "処理後に本文を保存しない"
+    },
+    "sources": {
+      "eyebrow": "データソース",
+      "title": "接続先も\n一緒に検索しますか？",
+      "lead": "すでにインストールされ認証済みのソースだけを先に表示します。すべてを選択する必要はありません。",
+      "detected": "検出済み",
+      "checking": "追加できるソースを確認しています…",
+      "empty": "接続済みのソースが見つかりませんでした。後で設定から接続できます。",
+      "connectMore": "準備が必要なソースは後で設定から接続できます。",
+      "name": {
+        "kakao": "KakaoTalk",
+        "slack": "Slack",
+        "discord": "Discord",
+        "telegram": "Telegram",
+        "whatsapp": "WhatsApp",
+        "mailcrawl": "メール (mailcrawl)",
+        "github": "GitHub",
+        "obsidian": "Obsidian"
+      },
+      "detail": {
+        "kakao": "KakaoTalkアプリのデータを検出",
+        "slack": "workspace {{workspaces}}件に接続済み",
+        "discord": "Discordアプリのメッセージ {{messages}}件を検出",
+        "telegram": "Telegramアプリのデータを検出",
+        "whatsapp": "会話 {{chats}}件 · メッセージ {{messages}}件",
+        "mailcrawl": "メールアカウント {{accounts}}件のログインを確認",
+        "github": "ログイン済み · IssuesとPull Requests",
+        "obsidian": "Vault {{vaults}}件を検出"
+      }
+    },
+    "plan": {
+      "eyebrow": "プラン",
+      "title": "どのように使いますか？",
+      "titleReady": "プランの準備ができました",
+      "lead": "プランによってAIの利用量と埋め込みの場所が決まります。後で設定から変更できます。",
+      "badgeRecommended": "おすすめ",
+      "badgeTrial": "トライアル中",
+      "badgeSubscribed": "購読中",
+      "perMonth": "/ 月",
+      "continue": "このプランで続ける",
+      "startTrial": "7日間無料トライアルを開始",
+      "subscribeAir": "Airを購読する",
+      "notePaid": "支払い方法の登録完了",
+      "noteProTrialActive": "トライアル中 · 7日後に月額$20",
+      "plan": {
+        "free": {
+          "name": "Free",
+          "price": "無料",
+          "note": "カードなしですぐ開始",
+          "tag": "気軽に始める",
+          "chip": "質問はAutoRAGモデルに送信",
+          "feature": {
+            "a": "このMacでローカル埋め込み",
+            "b": "マネージドAIモデル · 基本利用量",
+            "c": "Finderと検索機能をすべて利用"
+          }
+        },
+        "air": {
+          "name": "Air",
+          "price": "$4",
+          "note": "トライアルなしですぐ開始",
+          "tag": "毎日気軽に使う",
+          "chip": "質問はAutoRAGモデルに送信",
+          "feature": {
+            "a": "このMacでローカル埋め込み",
+            "b": "マネージドAIモデル · 十分な利用量",
+            "c": "Freeの機能をすべて含む"
+          }
+        },
+        "pro": {
+          "name": "Pro",
+          "price": "$20",
+          "note": "7日間無料トライアル後に課金",
+          "tag": "最速の初回インデックス作成",
+          "chip": "ファイル本文の送信前に同意が必要",
+          "feature": {
+            "a": "クラウド埋め込みでより速く",
+            "b": "マネージドAIモデル · 最大の利用量",
+            "c": "Airの機能をすべて含む"
+          }
+        },
+        "byok": {
+          "name": "BYOK",
+          "price": "API費用のみ",
+          "note": "providerに直接支払い",
+          "tag": "自分のキーで直接接続",
+          "chip": "APIキーの入力が必要",
+          "feature": {
+            "a": "このMacでローカル埋め込み",
+            "b": "providerとモデルを直接選択",
+            "c": "選択したproviderにのみリクエストを送信"
+          }
+        }
+      }
+    },
+    "model": {
+      "eyebrow": "AIモデル",
+      "title": "使用するモデルを接続してください",
+      "lead": "検出された接続を使うか、providerとAPIキーを選択してください。",
+      "note": "キーは暗号化して保存され、設定ファイルには記録されません。",
+      "detectedTitle": "検出された接続",
+      "localRuntime": "ローカルruntime",
+      "storedCredential": "保存済みの資格情報",
+      "use": "使用",
+      "provider": {
+        "anthropic": "Anthropic",
+        "openai": "OpenAI",
+        "openrouter": "OpenRouter",
+        "google": "Google",
+        "ollama": "Ollama",
+        "openai-compatible": "OpenAI互換"
+      },
+      "baseUrlPlaceholder": "https://example.com/v1",
+      "keyPlaceholder": "APIキーを入力",
+      "verify": "接続を確認",
+      "verifying": "確認中…",
+      "verified": "✓ 接続完了 · おすすめのモデルが選択されました。",
+      "unverified": "キーは暗号化して保存され、設定ファイルには記録されません。",
+      "error": "接続に失敗: {{error}}",
+      "advanced": "詳細設定",
+      "modelRow": "モデル",
+      "recommended": "providerおすすめモデル",
+      "reasoningRow": "推論レベル（生成モデルのみ）",
+      "reasoningValue": "モデルの既定値"
+    },
+    "indexing": {
+      "tip": "ヒント",
+      "prevTip": "前のヒント",
+      "nextTip": "次のヒント",
+      "tipDot": "ヒント {{index}}",
+      "done": "インデックス作成完了",
+      "doneDetail": "{{files}}ファイル · データソース{{sources}}件",
+      "failedTitle": "インデックス作成が中断",
+      "failedDetail": "インデックス作成を完了できませんでした。",
+      "waiting": "開始待ち",
+      "waitingNote": "最初のインデックス作成を準備しています。",
+      "running": "{{phase}}…",
+      "detailParsing": "文書を読み込み中",
+      "detailSources": "{{sources}} · メタデータを同期中",
+      "detailNoSources": "接続したデータソースなし · スキップ",
+      "detailFinalizing": "検索インデックスを最適化中",
+      "phaseLabel": {
+        "parsed": "文書を読み込み中",
+        "minsync": "埋め込み中",
+        "datasources": "データソースを確認中",
+        "finalizing": "整理中"
+      },
+      "phase": {
+        "parsed": "文書の読み込み",
+        "minsync": "埋め込み",
+        "datasources": "データソース",
+        "finalizing": "整理"
+      },
+      "title": "AutoRAGがファイルを読み込んでいます",
+      "titleDone": "すべての準備が整いました",
+      "metaDone": "合計所要時間を確認中",
+      "metaTotal": "合計{{minutes}}分",
+      "metaFiles": "{{count}}ファイル",
+      "metaEstimating": "残り時間を計算中",
+      "metaUnderMinute": "残り1分未満",
+      "metaRemaining": "残り約{{minutes}}分",
+      "metaProgress": "{{processed}} / {{total}}ファイル",
+      "gateOkTitle": "もう終了しても大丈夫です",
+      "gateOkDetail": "{{files}}ファイルをすべて読み込みました。新しく変更されたファイルはバックグラウンドで続けて読み込みます。",
+      "gateFailTitle": "インデックス作成を完了できませんでした",
+      "gateFailDetail": "再試行すると続きから進みます。",
+      "gateTitle": "AutoRAGを終了したり{{machine}}の電源を切らないでください",
+      "gateDetailMac": "最初のインデックス作成は時間がかかります。終了すると進行が止まります。電源アダプターを接続し、フタを開けたままにしてください。",
+      "gateDetailWindows": "最初のインデックス作成は時間がかかります。終了すると進行が止まります。電源に接続したままにしてください。",
+      "gateLocked": "完了すると開けます",
+      "open": "AutoRAGを開く",
+      "retry": "再試行"
+    },
+    "tips": {
+      "1": {
+        "title": "{{shortcut}}一回ですぐに質問",
+        "body": "どの画面からでもAI検索の入力欄に移動します。フォルダを開かずに文書の内容を尋ね、根拠とともに答えを得られます。"
+      },
+      "2": {
+        "title": "回答の番号を押すと根拠をプレビュー",
+        "body": "回答に付いた番号は実際に読んだ文書の位置です。押すと根拠のファイルの内容をその場でプレビューできます。",
+        "bubble": "マーケティング費用は前四半期より18%減りました。"
+      },
+      "3": {
+        "title": "Spaceで開かずにざっと見る",
+        "body": "ファイルを選んでSpaceを押すと、Quick Lookでプレビューします。アプリを切り替えずに内容を確認できます。"
+      },
+      "4": {
+        "title": "ファイルをドラッグして質問に添付",
+        "body": "Finderの行や他のアプリのファイル、フォルダをAI検索にドラッグすると、その範囲を基準に質問します。",
+        "pill": "このファイルを要約して"
+      },
+      "5": {
+        "title": "似たファイルは一つにまとめる",
+        "body": "proposal-finalとproposal-v3のように似たファイルは、まとめて最新版・類似版・同一版として表示します。紛らわしいバージョンを選ばずに済みます。",
+        "latest": "最新版",
+        "near": "類似版",
+        "exact": "同一版"
+      },
+      "6": {
+        "title": "{{shortcut}}でファイル検索",
+        "body": "検索欄に直接移動します。キーワードと意味を併せて見て、リランキングで順番を付けます。"
+      },
+      "7": {
+        "title": "{{shortcut}} · 2 · 3で表示を切り替え",
+        "body": "アイコン、リスト、カラム表示をキーボードで切り替えます。最後に選んだ表示は次回の起動でも保持されます。"
+      },
+      "8": {
+        "title": "SlackとGitHubも同じ質問で",
+        "body": "接続したデータソースはファイルと一緒に検索されます。ソースは設定からいつでも追加・無効化できます。"
+      },
+      "9": {
+        "title": "{{shortcut}}でいつでも再設定",
+        "body": "フォルダの範囲、AIモデル、データソースは設定から変更できます。埋め込みの場所だけは変更すると最初からインデックスを作り直します。"
+      }
+    },
+    "overlay": {
+      "later": "後で",
+      "fda": {
+        "title": "フルディスクアクセス権限",
+        "heading": "システム設定でオンにする",
+        "lead": "macOSの保護領域を読み取るには一度許可するだけで済みます。アプリを終了してもオンボーディングはこのステップから続きます。",
+        "step1": "プライバシーとセキュリティ → フルディスクアクセスを開きます。",
+        "step2": "AutoRAGをリストに追加し、トグルをオンにします。",
+        "step3": "macOSが要求したら、終了して再度開きます。",
+        "drag": "リストにない場合は、このアイコンをリストにドラッグ",
+        "allowed": "許可しました",
+        "mock": {
+          "navTitle": "プライバシーとセキュリティ",
+          "notifications": "通知",
+          "files": "ファイルとフォルダ",
+          "fda": "フルディスクアクセス",
+          "automation": "オートメーション",
+          "paneLead": "以下のアプリはディスク全体のファイルにアクセスできます。"
+        }
+      },
+      "restart": {
+        "title": "AutoRAGを再度開きますか？",
+        "lead": "フルディスクアクセスの権限を適用するには、アプリを終了して再度開く必要があります。オンボーディングは現在のステップから続きます。",
+        "action": "終了して再度開く"
+      },
+      "pay": {
+        "proTitle": "Pro 7日間無料トライアルを開始",
+        "airTitle": "Airプランを購読",
+        "proLead": "7日間無料です。トライアル期間中は課金されず、終了前に通知します。クラウド埋め込みはトライアルを開始するとすぐに使えます。",
+        "airLead": "本日から毎月$4が請求されます。マネージドAIモデルをFreeより多く使えます。",
+        "today": "本日支払い",
+        "afterPro": "7日後から",
+        "fromNext": "次回の支払いから",
+        "monthly": "毎月{{price}}",
+        "cardNumber": "カード番号",
+        "expiry": "有効期限",
+        "cvc": "CVC",
+        "proConsent": "7日間無料トライアル終了後に毎月$20が自動で請求されることに同意します。いつでも設定から解約できます。",
+        "airConsent": "毎月$4が自動で請求されることに同意します。いつでも設定から解約できます。",
+        "demo": "実際の支払いは発生しません。このステップはQA用のプレースホルダーであり、カード情報は保存も送信もされません。",
+        "startTrial": "トライアルを開始",
+        "payAir": "$4を支払って続ける"
+      }
+    },
+    "toast": {
+      "signedIn": "ログインしました。",
+      "notificationsOn": "通知権限を取得しました。",
+      "notificationsOff": "システム設定で通知を許可してください。",
+      "loginFailed": "ログイン項目に追加できませんでした。",
+      "networkOk": "ネットワーク接続を確認しました。",
+      "networkFail": "ネットワークに接続できません。",
+      "fdaPending": "アプリを再度開くと権限が適用されます。",
+      "verified": "接続を確認しました。",
+      "payMissing": "カード情報と同意が必要です。（デモ）",
+      "trialStarted": "Pro 7日間無料トライアルを開始しました。（デモ · 実際の支払いなし）",
+      "subscribed": "プランを購読しました。（デモ · 実際の支払いなし）",
+      "notIndexed": "インデックス作成が終わらないとAutoRAGを開けません。"
     }
   }
 }

@@ -2,55 +2,22 @@ import type { IndexStatus } from "./index-contract";
 import type { NewFileFormatId } from "./new-file-contract";
 
 /**
- * Finder contract shared by the Electron main process and the renderer.
+ * Finder contract shared by the filesystem worker, the main process, and the
+ * renderer.
  *
- * The main process implements every channel; the preload exposes typed
- * wrappers on `window.autorag.fs`. All paths crossing this boundary are
- * absolute OS paths. Datasource virtual identifiers (`/kakao/...`) never
- * appear here — they belong to the search bridge, not the filesystem.
+ * The fs worker (`src/fs-worker`, an Electron utility process) implements
+ * every member; the preload exposes typed wrappers on `window.autorag.fs` that
+ * talk to it over a MessagePort (`fs-worker-protocol.ts`). All paths crossing
+ * this boundary are absolute OS paths. Datasource virtual identifiers
+ * (`/kakao/...`) never appear here — they belong to the search bridge, not the
+ * filesystem.
  */
 
-/** IPC channel names. Keep in 1:1 sync with the main-process handlers. */
+/** IPC channels the main process still owns for the Finder. */
 export const FS_CHANNELS = {
-	listDir: "fs:listDir",
-	readEntries: "fs:readEntries",
-	enrichEntries: "fs:enrichEntries",
-	finderMetadata: "fs:finderMetadata",
-	stat: "fs:stat",
-	details: "fs:details",
-	previewIcon: "fs:previewIcon",
-	exists: "fs:exists",
-	search: "fs:search",
-	locations: "fs:locations",
-	ejectLocation: "fs:ejectLocation",
-	/** Main → renderer: a volume mounted/unmounted or a cloud account connected/disconnected. */
-	locationsChanged: "fs:locationsChanged",
-	copy: "fs:copy",
-	move: "fs:move",
-	duplicate: "fs:duplicate",
-	rename: "fs:rename",
-	createFolder: "fs:createFolder",
-	createFile: "fs:createFile",
-	trash: "fs:trash",
-	reveal: "fs:reveal",
-	quickLook: "fs:quickLook",
-	open: "fs:open",
-	openUrl: "fs:openUrl",
-	clipboardSet: "fs:clipboardSet",
-	clipboardGet: "fs:clipboardGet",
-	undo: "fs:undo",
-	copyPathsToClipboard: "fs:copyPathsToClipboard",
 	/** Renderer → main: hand a row drag to the OS as real files; fire and forget. */
 	startDrag: "fs:startDrag",
-	versionFamilies: "fs:versionFamilies",
-	versionFamiliesRefresh: "fs:versionFamiliesRefresh",
-	indexStatus: "index:status",
-	indexSetExcluded: "index:setExcluded",
-	/** Main → renderer: a background parsed + MinSync refresh settled (payload: error or null). */
-	indexRefreshed: "index:refreshed",
 } as const;
-
-export type FsChannel = (typeof FS_CHANNELS)[keyof typeof FS_CHANNELS];
 
 /** Finder/Spotlight metadata used by Sort By and Group By. */
 export interface FsFinderMetadata {
@@ -65,36 +32,36 @@ export interface FsFinderMetadata {
 	readonly application: string | null;
 }
 
+/** `FsEntry.flags` bit: the path is a symbolic link (the other fields describe its target when it resolves). */
+export const FS_ENTRY_SYMLINK = 1;
+
+/**
+ * One directory child as the filesystem reports it: plain values only, no
+ * display strings and nothing the renderer can derive. Labels (date, size,
+ * kind) are computed when a cell renders; the OS kind, tile icon, and Finder
+ * metadata arrive later through `enrichEntries` / `finderMetadata`.
+ */
 export interface FsEntry {
 	/** File or folder name (last path segment). */
 	readonly name: string;
-	/** Absolute OS path. */
+	/** Absolute OS path. Kept beside `name`: search hits, Recents, and version families mix folders. */
 	readonly path: string;
+	/**
+	 * "folder" for a browsable directory, "file" for everything the OS opens as
+	 * one item. A macOS application bundle (`.app`, a directory on disk) reports
+	 * "file": the OS launches it instead of listing its contents.
+	 */
 	readonly kind: "folder" | "file";
-	/** Lowercase extension without the dot; "" for folders and extensionless files. */
+	/** Lowercase extension without the dot; "" for folders and extensionless files. An app bundle carries "app". */
 	readonly ext: string;
-	/** Bytes; null for folders. */
+	/** Bytes; null for folders and app bundles (both are directories on disk). */
 	readonly size: number | null;
-	/** ISO 8601 modification time. */
-	readonly modifiedAt: string;
-	readonly isSymlink: boolean;
-	/** ISO 8601 creation time, when the filesystem exposes one. */
-	readonly createdAt?: string;
-	/** Spotlight/Finder metadata; absent when the platform has no equivalent. */
-	readonly finder?: FsFinderMetadata;
-	/**
-	 * The kind the OS itself reports — Finder's Kind / Explorer's Type, e.g.
-	 * "MPEG-4 movie". Null for folders and whenever the OS answers nothing; the
-	 * renderer then falls back to the extension map.
-	 */
-	readonly osKind: string | null;
-	/**
-	 * `autorag-thumb://` URL for the OS-provided tile icon — a Finder thumbnail
-	 * on macOS. Null when the OS produced none; the tile then renders its
-	 * letter. The PNG bytes stay in the main-process icon cache and load
-	 * lazily through the protocol, so this field never carries base64.
-	 */
-	readonly iconUrl: string | null;
+	/** Modification time in epoch ms (`fs.Stats.mtimeMs`); also the file-version identity for enrichment. */
+	readonly mtimeMs: number;
+	/** Creation time in epoch ms, only when the filesystem exposes a real birth time. */
+	readonly birthtimeMs?: number;
+	/** Bit set of `FS_ENTRY_*` flags. */
+	readonly flags: number;
 }
 
 export interface DirListing {
@@ -116,8 +83,7 @@ export interface FsEnrichmentTarget {
 	readonly path: string;
 	readonly kind: "folder" | "file";
 	readonly ext: string;
-	readonly modifiedAt: string;
-	readonly createdAt?: string;
+	readonly mtimeMs: number;
 }
 
 /**
@@ -128,7 +94,7 @@ export interface FsEnrichmentTarget {
  */
 export interface FsEntryEnrichment {
 	readonly path: string;
-	readonly modifiedAt: string;
+	readonly mtimeMs: number;
 	readonly osKind: string | null;
 	readonly iconUrl: string | null;
 }
@@ -136,7 +102,7 @@ export interface FsEntryEnrichment {
 /** Finder/Spotlight metadata for one requested entry; identity fields echo the request. */
 export interface FsFinderEnrichment {
 	readonly path: string;
-	readonly modifiedAt: string;
+	readonly mtimeMs: number;
 	readonly finder: FsFinderMetadata;
 }
 
@@ -222,7 +188,8 @@ export interface FsBatchResult {
 /**
  * Outcome of ⌘Z: the main process undoes its most recent recorded
  * operation (a copy/create step deletes the created row, a move step moves
- * the row back to its original folder). The record is consumed by the call.
+ * the row back to its original folder, a trash step puts the item back, a
+ * restore step re-trashes it). The record is consumed by the call.
  */
 export interface FsUndoOutcome {
 	/** True when a record existed and every step was applied. */
@@ -341,7 +308,7 @@ export interface FsCoreBridge {
 	 * the panel keeps its letter tile. On demand per inspected file — never
 	 * part of listings.
 	 */
-	previewIcon(path: string, modifiedAt: string): Promise<string | null>;
+	previewIcon(path: string, mtimeMs: number): Promise<string | null>;
 	exists(path: string): Promise<boolean>;
 	search(query: string, options?: FsSearchOptions): Promise<readonly FsSearchResult[]>;
 	locations(): Promise<readonly FsLocation[]>;
@@ -373,6 +340,19 @@ export interface FsCoreBridge {
 	createFile(directory: string, format: NewFileFormatId): Promise<{ readonly path: string; readonly name: string }>;
 	/** Move to the macOS Trash (shell.trashItem). */
 	trash(paths: readonly string[]): Promise<FsBatchResult>;
+	/**
+	 * Restore trashed payloads back to the folders they came from (Finder
+	 * "Put Back"). `ok` lists the trash paths that went back; a payload whose
+	 * origin nobody knows fails with its verbatim reason and stays put. Undoing
+	 * this operation (⌘Z) moves the rows back into the Trash.
+	 */
+	restoreFromTrash(paths: readonly string[]): Promise<FsBatchResult>;
+	/**
+	 * Permanently delete everything in the Trash. `ok` lists the trash paths
+	 * deleted; each path that could not be deleted fails with its verbatim
+	 * reason. Windows' `$I` records go with their payloads.
+	 */
+	emptyTrash(): Promise<FsBatchResult>;
 	/** Reveal in the real Finder (shell.showItemInFolder). */
 	reveal(path: string): Promise<void>;
 	/**
@@ -390,7 +370,7 @@ export interface FsCoreBridge {
 	openUrl(url: string): Promise<void>;
 	clipboardSet(clipboard: FsClipboard): Promise<void>;
 	clipboardGet(): Promise<FsClipboard | null>;
-	/** Undo the most recent recorded copy/move/create operation (⌘Z). The record is consumed. */
+	/** Undo the most recent recorded copy/move/create/trash operation (⌘Z). The record is consumed. */
 	undo(): Promise<FsUndoOutcome>;
 	/** Write the absolute paths as text to the OS clipboard ("Copy Path"). */
 	copyPathsToClipboard(paths: readonly string[]): Promise<void>;

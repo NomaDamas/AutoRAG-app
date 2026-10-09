@@ -2,90 +2,20 @@ import { app, BrowserWindow, ipcMain, nativeImage, type WebContents } from "elec
 import {
 	ACTIONS_CHANNELS,
 	isActionAnchor,
+	isActionPaths,
 	isActionRequest,
 } from "../shared/actions-contract";
-import {
-	FS_CHANNELS,
-	type FsClipboard,
-	type FsCoreBridge,
-	type FsIndexBridge,
-	type FsSearchOptions,
-} from "../shared/fs-contract";
-import { isNewFileFormatId, type NewFileFormatId } from "../shared/new-file-contract";
+import { FS_CHANNELS } from "../shared/fs-contract";
 import { SEARCH_CHANNELS, type SearchBridge } from "../shared/search-contract";
+import { OS_REQUEST_CHANNELS } from "../shared/os-request-contract";
 import { SETTINGS_CHANNELS, type EmbeddingChangeRequest, type JsonValue, type ProviderAuthKind, type ProviderServerInput, type SettingsBridge } from "../shared/settings-contract";
-import { LIVE_CHANNELS } from "../shared/live-contract";
+import { ONBOARDING_CHANNELS } from "../shared/onboarding-contract";
+import { isServiceRunRequest, SERVICES_CHANNELS } from "../shared/services-contract";
 import type { ActionService } from "./action-service";
-import type { ChangeHub } from "./change-hub";
 import { dragOutPaths } from "./drag-out";
-import type { VersionFamilyService } from "./version-family-service";
-
-/** Extra work a channel runs after the filesystem operation itself succeeded. */
-export interface FsIpcHooks {
-	/**
-	 * Paths that actually reached the Trash. A deleted duplicate must leave the
-	 * version-family snapshot at once, so the user can see it is gone.
-	 */
-	readonly onTrashed?: (paths: readonly string[]) => void | Promise<void>;
-}
-
-/** Register one ipcMain.handle per FS_CHANNELS channel, in contract order. */
-export function registerFsIpcHandlers(service: FsCoreBridge, hooks: FsIpcHooks = {}): void {
-	ipcMain.handle(FS_CHANNELS.listDir, (_event, path: string) => service.listDir(path));
-	ipcMain.handle(FS_CHANNELS.enrichEntries, (_event, targets, thumbnails: boolean) =>
-		service.enrichEntries(targets, thumbnails),
-	);
-	ipcMain.handle(FS_CHANNELS.finderMetadata, (_event, targets) => service.finderMetadata(targets));
-	ipcMain.handle(FS_CHANNELS.readEntries, (_event, dir: string, paths: readonly string[]) =>
-		service.readEntries(dir, paths),
-	);
-	ipcMain.handle(FS_CHANNELS.stat, (_event, path: string) => service.stat(path));
-	ipcMain.handle(FS_CHANNELS.details, (_event, path: string) => service.details(path));
-	ipcMain.handle(FS_CHANNELS.previewIcon, (_event, path: string, modifiedAt: string) =>
-		service.previewIcon(path, modifiedAt),
-	);
-	ipcMain.handle(FS_CHANNELS.exists, (_event, path: string) => service.exists(path));
-	ipcMain.handle(FS_CHANNELS.search, (_event, query: string, options: FsSearchOptions | undefined) =>
-		service.search(query, options),
-	);
-	ipcMain.handle(FS_CHANNELS.locations, () => service.locations());
-	ipcMain.handle(FS_CHANNELS.ejectLocation, (_event, path: string) => service.ejectLocation(path));
-	ipcMain.handle(FS_CHANNELS.copy, (_event, paths: readonly string[], destDir: string) => service.copy(paths, destDir));
-	ipcMain.handle(FS_CHANNELS.move, (_event, paths: readonly string[], destDir: string) => service.move(paths, destDir));
-	ipcMain.handle(FS_CHANNELS.duplicate, (_event, paths: readonly string[]) => service.duplicate(paths));
-	ipcMain.handle(FS_CHANNELS.rename, (_event, path: string, newName: string) => service.rename(path, newName));
-	ipcMain.handle(FS_CHANNELS.createFolder, (_event, directory: string) => service.createFolder(directory));
-	ipcMain.handle(FS_CHANNELS.createFile, (_event, directory: string, format: NewFileFormatId) => {
-		if (!isNewFileFormatId(format)) throw new Error(`알 수 없는 파일 형식입니다: ${String(format)}`);
-		return service.createFile(directory, format);
-	});
-	ipcMain.handle(FS_CHANNELS.trash, async (_event, paths: readonly string[]) => {
-		const result = await service.trash(paths);
-		if (result.ok.length > 0) {
-			try {
-				await hooks.onTrashed?.(result.ok);
-			} catch (error) {
-				// The move to the Trash already happened; a stale snapshot must not
-				// turn into a failed delete for the caller.
-				console.error("trash follow-up failed", error);
-			}
-		}
-		return result;
-	});
-	ipcMain.handle(FS_CHANNELS.reveal, (_event, path: string) => service.reveal(path));
-	ipcMain.handle(FS_CHANNELS.quickLook, (_event, path: string) => service.quickLook(path));
-	ipcMain.handle(FS_CHANNELS.open, (_event, path: string) => service.open(path));
-	ipcMain.handle(FS_CHANNELS.openUrl, (_event, url: unknown) => {
-		if (typeof url !== "string") throw new Error("웹 주소가 올바르지 않습니다");
-		return service.openUrl(url);
-	});
-	ipcMain.handle(FS_CHANNELS.clipboardSet, (_event, clipboard: FsClipboard) => service.clipboardSet(clipboard));
-	ipcMain.handle(FS_CHANNELS.undo, () => service.undo());
-	ipcMain.handle(FS_CHANNELS.clipboardGet, () => service.clipboardGet());
-	ipcMain.handle(FS_CHANNELS.copyPathsToClipboard, (_event, paths: readonly string[]) =>
-		service.copyPathsToClipboard(paths),
-	);
-}
+import type { OnboardingService } from "./onboarding-service";
+import type { OsRequestService } from "./os-request-service";
+import type { ServicesService } from "./services-service";
 
 /**
  * The row drag-out: the renderer has already cancelled its own drag
@@ -118,27 +48,32 @@ export function registerDragOutIpcHandlers(): void {
 /** Inspector file actions: probe once, run one request, or pop the share sheet. */
 export function registerActionsIpcHandlers(service: ActionService): void {
 	ipcMain.handle(ACTIONS_CHANNELS.capabilities, () => service.capabilities());
-	ipcMain.handle(ACTIONS_CHANNELS.run, (event, path: unknown, request: unknown) => {
-		if (typeof path !== "string" || path.length === 0) throw new Error("파일 경로가 올바르지 않습니다");
+	ipcMain.handle(ACTIONS_CHANNELS.run, (event, paths: unknown, request: unknown) => {
+		if (!isActionPaths(paths)) throw new Error("파일 경로가 올바르지 않습니다");
 		if (!isActionRequest(request)) throw new Error("알 수 없는 파일 작업입니다");
-		return service.run(path, request, BrowserWindow.fromWebContents(event.sender));
+		return service.run(paths, request, BrowserWindow.fromWebContents(event.sender));
 	});
-	ipcMain.handle(ACTIONS_CHANNELS.share, (event, path: unknown, anchor: unknown) => {
+	ipcMain.handle(ACTIONS_CHANNELS.openWithApplications, (_event, path: unknown) => {
 		if (typeof path !== "string" || path.length === 0) throw new Error("파일 경로가 올바르지 않습니다");
+		return service.openWithApplications(path);
+	});
+	ipcMain.handle(ACTIONS_CHANNELS.share, (event, paths: unknown, anchor: unknown) => {
+		if (!isActionPaths(paths)) throw new Error("파일 경로가 올바르지 않습니다");
 		if (!isActionAnchor(anchor)) throw new Error("공유 위치가 올바르지 않습니다");
-		return service.share(path, anchor, BrowserWindow.fromWebContents(event.sender));
+		return service.share(paths, anchor, BrowserWindow.fromWebContents(event.sender));
 	});
 }
 
-/** The persisted-snapshot version-family service owns its own two channels. */
-export function registerVersionFamilyIpcHandlers(service: VersionFamilyService): void {
-	ipcMain.handle(FS_CHANNELS.versionFamilies, () => service.result());
-	ipcMain.handle(FS_CHANNELS.versionFamiliesRefresh, () => service.refresh());
-}
-
-export function registerIndexIpcHandlers(service: FsIndexBridge): void {
-	ipcMain.handle(FS_CHANNELS.indexStatus, (_event, paths: readonly string[]) => service.indexStatus(paths));
-	ipcMain.handle(FS_CHANNELS.indexSetExcluded, (_event, path: string, excluded: boolean) => service.setIndexExcluded(path, excluded));
+/** The OS Services submenu: list what the system offers for a selection, and perform one. */
+export function registerServicesIpcHandlers(service: ServicesService): void {
+	ipcMain.handle(SERVICES_CHANNELS.list, (_event, paths: unknown) => {
+		if (!isActionPaths(paths)) throw new Error("파일 경로가 올바르지 않습니다");
+		return service.list(paths);
+	});
+	ipcMain.handle(SERVICES_CHANNELS.run, (_event, id: unknown, paths: unknown) => {
+		if (typeof id !== "string" || !isServiceRunRequest(id, paths)) throw new Error("서비스 요청이 올바르지 않습니다");
+		return service.run(id, paths);
+	});
 }
 
 export function registerSearchIpcHandlers(service: SearchBridge): void {
@@ -314,22 +249,37 @@ export function registerSettingsIpcHandlers(service: SettingsBridge): void {
 	);
 }
 
-export function registerLiveIpcHandlers(
-	watch: { setWatchSet(dirs: readonly string[]): Promise<void> },
-	hub: ChangeHub,
-): void {
-	ipcMain.handle(LIVE_CHANNELS.setWatchSet, (_event, dirs: unknown) => {
-		if (!Array.isArray(dirs) || dirs.some((dir) => typeof dir !== "string")) {
-			const error = new TypeError("live:setWatchSet expects an array of strings");
-			console.error("[live] malformed watch set", error);
-			throw error;
-		}
-		return watch.setWatchSet(dirs);
+/** First-run onboarding: every payload is validated inside the service. */
+export function registerOnboardingIpcHandlers(service: OnboardingService): void {
+	ipcMain.handle(ONBOARDING_CHANNELS.load, () => service.load());
+	ipcMain.handle(ONBOARDING_CHANNELS.save, (_event, draft: unknown) => service.save(draft));
+	ipcMain.handle(ONBOARDING_CHANNELS.permissions, () => service.permissions());
+	ipcMain.handle(ONBOARDING_CHANNELS.openFullDiskAccess, () => service.openFullDiskAccess());
+	ipcMain.on(ONBOARDING_CHANNELS.dragApp, () => service.dragApp());
+	ipcMain.handle(ONBOARDING_CHANNELS.relaunch, () => service.relaunch());
+	ipcMain.handle(ONBOARDING_CHANNELS.requestNotifications, () => service.requestNotifications());
+	ipcMain.handle(ONBOARDING_CHANNELS.openNotificationSettings, () => service.openNotificationSettings());
+	ipcMain.handle(ONBOARDING_CHANNELS.checkNetwork, () => service.checkNetwork());
+	ipcMain.handle(ONBOARDING_CHANNELS.setLaunchAtLogin, (_event, enabled: unknown) => {
+		if (typeof enabled !== "boolean") throw new TypeError("onboarding:setLaunchAtLogin expects a boolean");
+		return service.setLaunchAtLogin(enabled);
 	});
-	ipcMain.handle(LIVE_CHANNELS.layers, () => {
-		if (process.env.AUTORAG_FS_WATCH_DIAG === "1") {
-			console.info("[live] layers requested");
-		}
-		return hub.resync();
+	ipcMain.handle(ONBOARDING_CHANNELS.folderCandidates, () => service.folderCandidates());
+	ipcMain.handle(ONBOARDING_CHANNELS.pickFolders, () => service.pickFolders());
+	ipcMain.handle(ONBOARDING_CHANNELS.scanFolders, (_event, paths: unknown) => {
+		if (!Array.isArray(paths)) throw new TypeError("onboarding:scanFolders expects an array of paths");
+		return service.scanFolders(paths);
 	});
+	ipcMain.handle(ONBOARDING_CHANNELS.embedding, () => service.embedding());
+	ipcMain.handle(ONBOARDING_CHANNELS.detectSources, () => service.detectSources());
+	ipcMain.handle(ONBOARDING_CHANNELS.detectModels, () => service.detectModels());
+	ipcMain.handle(ONBOARDING_CHANNELS.verifyModel, (_event, request: unknown) => service.verifyModel(request));
+	ipcMain.handle(ONBOARDING_CHANNELS.startIndexing, (_event, request: unknown) => service.startIndexing(request));
+	ipcMain.handle(ONBOARDING_CHANNELS.indexStatus, () => service.indexStatus());
+	ipcMain.handle(ONBOARDING_CHANNELS.complete, () => service.complete());
+}
+
+/** The renderer drains requests that came from the OS file menu. */
+export function registerOsRequestIpcHandlers(service: OsRequestService): void {
+	ipcMain.handle(OS_REQUEST_CHANNELS.take, () => service.take());
 }

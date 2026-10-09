@@ -27,20 +27,11 @@ import { homedir } from "node:os";
 import { setTimeout as sleep } from "node:timers/promises";
 import { basename, join, win32 } from "node:path";
 import type { FsLocation, FsLocationIcon } from "../shared/fs-contract";
+import type { KnownFolders } from "../shared/fs-worker-contract";
 import { errorMessage, hasErrorCode, isAvailable, pathExists } from "./fs-entry";
 
 /** Runs one OS command and resolves its stdout; rejects with stderr (or the spawn error) verbatim. */
 export type PlaceCommandRunner = (command: string, args: readonly string[]) => Promise<string>;
-
-/** Windows known folders, as Electron's `app.getPath` resolves them. */
-export interface KnownFolders {
-	readonly desktop: string;
-	readonly documents: string;
-	readonly downloads: string;
-	readonly music: string;
-	readonly videos: string;
-	readonly pictures: string;
-}
 
 export interface PlacesDeps {
 	/** Defaults to os.homedir(). */
@@ -70,6 +61,13 @@ export interface Places {
 	signature(): Promise<string>;
 	/** Poll `signature` and call `listener` whenever it moves. Returns the stop function. */
 	watch(listener: () => void, intervalMs?: number): () => void;
+
+	/**
+	 * The user's Trash folder: `~/.Trash` on macOS/Linux, the boot drive's
+	 * `<systemDrive>\$Recycle.Bin\<SID>` on Windows. Null when the SID is
+	 * unknown. Restoring and emptying act on this folder.
+	 */
+	trashDir(): Promise<string | null>;
 }
 
 const COMMAND_TIMEOUT_MS = 15_000;
@@ -475,6 +473,13 @@ export function createPlaces(deps: PlacesDeps = {}): Places {
 		}
 	}
 
+	/** The Trash folder the sidebar's Trash row shows. */
+	async function trashDir(): Promise<string | null> {
+		if (!windows) return join(home, ".Trash");
+		const userSid = await sid();
+		return userSid === null ? null : `${systemDrive}\\$Recycle.Bin\\${userSid}`;
+	}
+
 	function watch(listener: () => void, intervalMs = WATCH_INTERVAL_MS): () => void {
 		let last: string | null = null;
 		let busy = true;
@@ -501,5 +506,5 @@ export function createPlaces(deps: PlacesDeps = {}): Places {
 		return () => clearInterval(timer);
 	}
 
-	return { list, eject, signature, watch };
+	return { list, eject, signature, watch, trashDir };
 }

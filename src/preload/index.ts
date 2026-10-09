@@ -5,9 +5,13 @@ import { createPreviewBridge } from "../preview/node/bridge";
 import { createActionsBridge } from "./actions-bridge";
 import { createFsBridge } from "./fs-bridge";
 import { createLiveBridge } from "./live-bridge";
+import { createOnboardingBridge } from "./onboarding-bridge";
+import { createOsRequestBridge } from "./os-request-bridge";
 import { createSearchBridge } from "./search-bridge";
 import { createSettingsBridge } from "./settings-bridge";
+import { createServicesBridge } from "./services-bridge";
 import { installAppearancePreload } from "./appearance";
+import { connectFsWorker } from "./worker-link";
 
 const DEV_LABEL_FLAG = "--autorag-dev-label=";
 
@@ -22,14 +26,18 @@ function readDevLabelArg(): DevLabel | null {
 }
 
 installAppearancePreload(ipcRenderer);
+const fsWorker = connectFsWorker(ipcRenderer);
 contextBridge.exposeInMainWorld("autorag", {
 	...createBridge(readDevLabelArg(), process.platform),
-	fs: createFsBridge(ipcRenderer),
+	fs: createFsBridge(ipcRenderer, fsWorker),
 	actions: createActionsBridge(ipcRenderer),
-	live: createLiveBridge(ipcRenderer),
+	live: createLiveBridge(fsWorker),
+	onboarding: createOnboardingBridge(ipcRenderer),
+	osRequests: createOsRequestBridge(ipcRenderer),
 	preview: createPreviewBridge(ipcRenderer),
 	search: createSearchBridge(ipcRenderer),
 	settings: createSettingsBridge(ipcRenderer),
+	services: createServicesBridge(ipcRenderer),
 	// Electron dropped `File.path`; only the preload can map a dropped file to its disk path.
 	pathForFile: (file: File) => webUtils.getPathForFile(file),
 });

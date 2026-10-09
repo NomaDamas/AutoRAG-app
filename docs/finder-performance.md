@@ -327,3 +327,169 @@ reachable); now one is. Revisiting a folder no longer re-asks the OS for kinds,
 icons, or metadata it already answered for the same file version, which is
 where the IPC drop comes from. The ~1 MB higher baseline is the sidecar's
 records and the cached folders, both bounded.
+
+## Filesystem worker (FS roadmap #101, stage 4)
+
+Listings, watches, Finder metadata, OS kinds, places, the dupey scan, and the
+index badges moved off the main process into one Electron utility process,
+"AutoRAG File System" (`src/fs-worker/`). The renderer reaches it over a
+`MessagePort` (`{ id, op, args }` → `{ id, ok, value | error }`, cancel →
+`AbortController` in the worker); main only brokers ports, restarts the worker
+when it dies, and serves the Electron-only ops it asks for (thumbnails, file
+icons, Trash, open, clipboard). Quick Look's "Open with …" lookup spawns
+`osascript`, and a child spawn blocks its caller for the fork, so it also runs
+in the worker now.
+
+```sh
+bun run build
+SOAK_CYCLES=100 SOAK_ENFORCE=1 bun scripts/manual-qa/run-qa-finder-memory-soak.mjs
+bun scripts/manual-qa/run-qa-finder-fs-worker-crash.mjs
+QUIT_ROUNDS=50 bun scripts/manual-qa/run-qa-finder-quit-clean.mjs
+```
+
+The soak gate on main's event-loop delay p99 tightened from 100 ms to 16 ms
+(one frame), and it now also fails when the worker restarted mid-soak. The
+worker counts its own requests per op; the soak reads those counts instead of
+wrapping `ipcMain` handlers, since FS calls no longer pass through main.
+
+Production build, macOS, 100 cycles after a 5-cycle warm-up, same machine:
+
+| metric | `main` | this change | gate |
+| --- | ---: | ---: | ---: |
+| main event-loop delay p99 (two runs) | 15.4 ms | 15.0 / 12.8 ms | < 16 |
+| main event-loop delay max | 2,244 ms | 35.6 / 37.8 ms | |
+| main RSS, start → end | 658 → 512 MB | 415 → 373 / 412 → 432 MB | |
+| retained renderer heap growth | 0.052 MB/cycle | 0.053 / 0.052 MB/cycle | ≤ 0.25 |
+| listing generations alive per folder | 1 | 1 | ≤ 1 |
+| renderer script time per cycle | 239.6 ms | 251.4 / 252.2 ms | |
+| 600-image thumbnail fill | 2,331 ms | 2,187 / 2,071 ms | |
+| fs worker SIGKILL → open tab relisted | main dies with it | 1.26 / 1.46 s (2 kills each) | < 5 s |
+| quit, 50 rounds: signal exits / crash reports | 0 / 0 | 0 / 0 | 0 |
+
+p99 on `main` sat right at the line (15.4 ms here, 16.6 ms in the stage-2
+run), so one soak is noisy around 16 ms. Three 30-cycle A/B pairs before the
+Quick Look fix put both builds at 16.7–19.3 ms; attributing each stall over
+12 ms to the soak step it happened in showed listing, view switches, and tabs
+all under 16 ms, and every frame-length stall on Quick Look open — 20–37 ms
+spent in `child_process.spawn` for the default-app lookup. With the same soak
+minus Quick Look, the worker build was 13.0 ms against 16.7 ms on `main`.
+After moving the lookup into the worker, the Quick Look steps' worst stall
+dropped from ~30 ms to ~13–18 ms.
+
+What a worker crash costs: about 1.3 s, almost all of it the new worker
+booting (bundle and librarian load) before its first answer. Unanswered reads
+are re-sent to the new worker; writes (copy, move, duplicate, rename, trash,
+create, undo, eject) are not, and fail with a message asking the user to check
+the result, because the first attempt may already have changed the disk.
+
+Not moved: thumbnails and file icons stay on main (`nativeImage` and
+`app.getFileIcon` do not exist in a utility process). Their encode cost on main
+is small: `toPNG` of a 640 px Quick Look thumbnail measured 2.5 ms at most.
+
+## 10,000-file folder lane (FS roadmap #100, stage 3)
+
+```sh
+bun run build
+bun scripts/manual-qa/run-qa-finder-large-folder.mjs     # LARGE_RUNS=5, LARGE_FILES=10000
+```
+
+Each run starts the built app on fresh user data and opens a 10,000-file
+fixture folder from the QA root. It reports the median, min, and max over the
+runs for:
+
+- first paint: double-click to the first rAF frame showing a row of the folder;
+- listing heap: renderer heap after a forced GC with the folder shown, minus
+  the same reading at the QA root;
+- row bytes: from a heap snapshot, the bytes only the folder's row objects
+  hold (the rows, their own strings and property stores), plus the row fields;
+- Name ↓ and Date Modified ↓ sort: column click to the frame with the expected
+  first row;
+- the `fs:listDir` answer: round trip, JSON bytes, and fields.
+
+The lane holds the folder's enrichment inside the filesystem worker
+(`AUTORAG_FS_WORKER_QA=1` registers `fs-worker:qaHoldEnrichment`), so the
+listing readings never race the OS kind pass. It releases that pass before the
+second heap reading; the Finder metadata pass stays held, because 10,000 files
+would keep helper processes busy for minutes and the run quits first.
+
+Baseline, `main` 5d10783, production build, macOS, 5 runs:
+
+| metric | median (min–max) |
+| --- | ---: |
+| first paint | 260.6 ms (171.1–360.1) |
+| renderer script time, open → settled | 29 ms (26–33) |
+| listing heap | 9.41 MB (8.10–9.45) |
+| listing heap after the kind/icon pass | 10.11 MB (10.09–10.22) |
+| row bytes (heap snapshot) | 1,587,520 B, 159 B/row, 14 fields |
+| Name ↓ sort | 62.3 ms (40.0–131.8) |
+| Date Modified ↓ sort | 58.5 ms (37.7–149.0) |
+| `fs:listDir` round trip | 99.7 ms (73.6–218.8) |
+| `fs:listDir` JSON | 3,000,112 B, 10 fields |
+
+## Lightweight entry records, labels at render time (FS roadmap #100, stage 3)
+
+`FsEntry` crosses the worker port as plain filesystem values: `{ name, path, kind, ext,
+size, mtimeMs, birthtimeMs?, flags }` (`FS_ENTRY_SYMLINK` is bit 1). The ISO
+`modifiedAt`/`createdAt` strings, `isSymlink`, and the always-null `osKind`
+and `iconUrl` placeholders are gone. Enrichment targets and answers carry
+`mtimeMs` as the file-version identity, and so do the icon cache and the
+`autorag-thumb://` URL (`mtime=<epoch ms>`); the worker validates it as a
+finite number, and main's icon-target parser accepts the same shape. The version-family snapshot moved
+to format 2. A version 1 file reads as missing, and the service rescans.
+
+The renderer row (`FinderEntry`) holds those values and nothing derived from
+them: 7 fields instead of 14 on a 10k listing. `path` stays on the row because
+search hits, Recents, and version families mix folders, and every
+selection/clipboard/IPC call keys on it. The parent folder is `dirname(path)`
+(`locationOf`), not a copy per row. The date, size, and kind labels, the
+Finder-metadata sort and group values, and the Inspector summaries all come
+from `state/entry-values.ts` at the moment a cell renders or a sort runs.
+`formatModified` (keyed by epoch second) and `formatSize` (keyed by bytes) each
+memoize at most 4,096 inputs. The sidecar still merges the OS kind, icon, and
+Finder metadata onto a resolved row (`osKind`, `iconUrl`, `finder`), as raw
+values.
+
+Sorting precomputes each row's key once (a `Float64Array` for numeric keys, a
+string array for collator keys) and sorts indices. Measured on 10,000 rows:
+the comparator alone and the decorated sort cost the same for Name (20.2 vs
+20.3 ms) and Kind (22.3 vs 21.7 ms). For Where, the decorated sort avoids
+re-deriving the folder in every comparison (73.9 → 27.3 ms). A rank cache over
+unique keys was no faster than `collator.compare` (20.2 vs 19.5 ms on ASCII
+names), so it was not adopted.
+
+`run-qa-finder-large-folder.mjs`, production build, macOS, 20 rounds per build
+interleaved (main launch, then this change, alternating; both sides built from
+current `main`), median (min–max):
+
+| metric | `main` | this change |
+| --- | ---: | ---: |
+| first paint | 239.6 ms (150.0–295.9) | 161.1 ms (135.8–393.9) |
+| renderer script time, open → settled | 29.5 ms (23–42) | 27 ms (25–31) |
+| listing heap | 9.40 MB (8.10–9.47) | 7.53 MB (6.18–7.63) |
+| listing heap after the kind/icon pass | 10.11 MB | 8.27 MB |
+| row bytes (heap snapshot) | 159 B/row, 14 fields | 91 B/row, 7 fields |
+| Name ↓ sort | 46.3 ms (29.3–128.4) | 36.1 ms (29.1–104.5) |
+| Date Modified ↓ sort | 39.2 ms | 38.9 ms |
+| `fs:listDir` round trip | 92.6 ms (55.3–442.2) | 72.9 ms (64.0–1,175.2) |
+| `fs:listDir` JSON | 3,000,112 B | 2,360,112 B |
+
+Paired by round, first paint is faster with this change in 15 of 20 rounds (median
+−19.6 ms); the ranges overlap, so read it as "no regression, modestly faster".
+Date Modified ↓ and the open script time do not move beyond noise. What the change
+reliably cuts is memory (listing heap −1.9 MB, 159 → 91 B per row) and the payload
+(−21%). A listing now crosses the worker port instead of `ipcMain`, so the round trip
+is a port hop either way; what shrank is the payload and the renderer's work
+per row.
+
+Memory soak (`SOAK_CYCLES=40`), same machine, both builds:
+
+| metric | `main` | this change |
+| --- | ---: | ---: |
+| retained heap, start → end | 13.3 → 18.6 MB | 12.8 → 16.4 MB |
+| growth per cycle (gate ≤ 0.25) | 0.134 MB | 0.089 MB |
+| renderer script time per cycle | 267.8 ms | 260.8 ms |
+| 600-image thumbnail fill | 1,946 ms, 68 ms script | 2,183 ms, 71 ms script |
+| listing generations / duplicate rows | 1 / 0 | 1 / 4 |
+| `fs:enrichEntries` per cycle | 0.3 | 0.3 |
+| main event-loop p99 (gate < 16) | 13.8 ms | 14.2 ms |
+| fs worker restarted | no | no |

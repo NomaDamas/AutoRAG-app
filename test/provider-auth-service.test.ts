@@ -25,19 +25,19 @@ async function createAgentDir(): Promise<string> {
 function fakeCredentials(env: NodeJS.ProcessEnv): ProviderCredentialService {
 	const entries = new Map<string, string>();
 	return {
-		list: (envNames?: readonly string[]): readonly ProviderCredentialStatus[] =>
+		list: async (envNames?: readonly string[]): Promise<readonly ProviderCredentialStatus[]> =>
 			[...(envNames ?? entries.keys())].map((envName) => ({ envName, stored: entries.has(envName), source: entries.has(envName) ? "stored" : "none" })),
-		set: (envName, secret) => {
+		set: async (envName, secret) => {
 			entries.set(envName, secret);
 			env[envName] = secret;
 			return [{ envName, stored: true, source: "stored" }];
 		},
-		remove: (envName) => {
+		remove: async (envName) => {
 			entries.delete(envName);
 			delete env[envName];
 			return [{ envName, stored: false, source: "none" }];
 		},
-		load: () => [],
+		load: async () => [],
 	};
 }
 

@@ -16,7 +16,11 @@
 		"test": "vitest run --exclude '**/.upstream/**'",
 		"pretypecheck": "node scripts/sync-librarian.mjs",
 		"typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
-		"test:e2e": "electron-vite build && playwright test"
+		"test:e2e": "electron-vite build && playwright test",
+		"qa": "node scripts/qa-vm.mjs",
+		"qa:vm:setup": "node scripts/qa-vm.mjs setup",
+		"qa:vm:status": "node scripts/qa-vm.mjs status",
+		"qa:vm:gc": "node scripts/qa-vm.mjs gc"
 	},
 	"dependencies": {
 		"@autorag/librarian": "file:./.upstream/autorag",
@@ -32,6 +36,7 @@
 		"heic2any": "^0.0.4",
 		"highlight.js": "^11.12.0",
 		"i18next": "^26.4.2",
+		"libarchive-wasm": "1.2.0",
 		"lucide-react": "^1.49.0",
 		"marked": "^18.0.14",
 		"music-metadata": "^11.16.1",

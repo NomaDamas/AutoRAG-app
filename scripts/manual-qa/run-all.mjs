@@ -33,12 +33,14 @@ const LANES = [
 	{ name: "recents", script: "run-qa-finder-recents.mjs", timeout: 300 },
 	{ name: "thumbnails", script: "run-qa-finder-thumbnails.mjs", timeout: 240 },
 	{ name: "thumbnail-scroll", script: "run-qa-finder-thumbnail-scroll.mjs", timeout: 300 },
-	{ name: "live-sync", script: "run-qa-finder-live-sync.mjs", timeout: 480 },
+	{ name: "live-sync", script: "run-qa-finder-live-sync.mjs", timeout: 900 },
 	{ name: "sidebar-search", script: "run-qa-finder-sidebar-search.mjs", timeout: 240 },
 	{ name: "path-bar", script: "run-qa-finder-path-bar.mjs", timeout: 300 },
 	{ name: "kind", script: "run-qa-finder-kind.mjs", timeout: 240 },
+	{ name: "app-bundles", script: "run-qa-finder-app-bundles.mjs", timeout: 300 },
 	{ name: "info-metadata", script: "run-qa-finder-info-metadata.mjs", timeout: 240 },
 	{ name: "file-actions", script: "run-qa-finder-file-actions.mjs", timeout: 300 },
+	{ name: "context-menu", script: "run-qa-finder-context-menu.mjs", timeout: 300 },
 	{ name: "new-file", script: "run-qa-finder-new-file.mjs", timeout: 300 },
 	{ name: "native-drag-out", script: "run-qa-finder-drag-out.mjs", timeout: 300 },
 	{ name: "external-drop", script: "run-qa-finder-external-drop.mjs", timeout: 300 },
@@ -46,6 +48,7 @@ const LANES = [
 	{ name: "nav-guard", script: "run-qa-finder-nav-guard.mjs", timeout: 240 },
 	{ name: "dupey-cache", script: "run-qa-finder-dupey-cache.mjs", timeout: 600 },
 	{ name: "trash-prune", script: "run-qa-finder-trash-prune.mjs", timeout: 480 },
+	{ name: "trash-restore", script: "run-qa-finder-trash-restore.mjs", timeout: 480 },
 	{ name: "evidence-panel", script: "run-qa-finder-evidence-panel.mjs", timeout: 300 },
 	{ name: "split-panes", script: "run-qa-finder-split-panes.mjs", timeout: 300 },
 	{ name: "ai-search-images", script: "run-qa-finder-ai-search-images.mjs", timeout: 300 },
@@ -54,6 +57,9 @@ const LANES = [
 	{ name: "settings-redesign", script: "run-qa-settings-redesign.mjs", timeout: 300 },
 	{ name: "global-appearance", script: "run-qa-global-appearance.mjs", timeout: 300 },
 	{ name: "quick-look-reference", script: "run-qa-quick-look-reference.mjs", timeout: 420 },
+	{ name: "fs-worker-crash", script: "run-qa-finder-fs-worker-crash.mjs", timeout: 180 },
+	{ name: "quit-clean", script: "run-qa-finder-quit-clean.mjs", timeout: 600 },
+	{ name: "onboarding", script: "run-qa-onboarding.mjs", timeout: 900 }
 ];
 
 /**

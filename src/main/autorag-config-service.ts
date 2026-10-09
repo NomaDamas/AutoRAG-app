@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { existsSync, rmSync, writeFileSync } from "node:fs";
+import { access, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { getAgentDir, ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { findEnvKeys } from "@earendil-works/pi-ai/compat";
@@ -529,10 +529,10 @@ function assertNoRemoteEgress(candidate: Record<string, unknown>): void {
 }
 
 /** Validate the candidate exactly as the agent and AutoRAGLite will resolve it. */
-function validateCandidate(path: string, candidate: Record<string, unknown>, env: NodeJS.ProcessEnv, cwd: string): void {
+async function validateCandidate(path: string, candidate: Record<string, unknown>, env: NodeJS.ProcessEnv, cwd: string): Promise<void> {
 	const temporary = join(dirname(path), `.${basename(path)}.${process.pid}.${randomUUID()}.tmp`);
 	try {
-		writeFileSync(temporary, `${JSON.stringify(candidate, null, 2)}\n`, { encoding: "utf8", mode: 0o600, flag: "wx" });
+		await writeFile(temporary, `${JSON.stringify(candidate, null, 2)}\n`, { encoding: "utf8", mode: 0o600, flag: "wx" });
 		validateKnownBlocks(candidate);
 		assertNoRemoteEgress(candidate);
 		const resolved = resolveConfigReadOnly({ flags: { config: temporary }, env, cwd });
@@ -545,7 +545,7 @@ function validateCandidate(path: string, candidate: Record<string, unknown>, env
 				: { ...withoutDatasources, webSearch: candidate.webSearch as NonNullable<CliConfig["webSearch"]> };
 		buildAgentOptions(effective as CliConfig);
 	} finally {
-		rmSync(temporary, { force: true });
+		await rm(temporary, { force: true });
 	}
 }
 
@@ -570,7 +570,7 @@ export function createAutoRagConfigService(deps: AutoRagConfigServiceDeps): Auto
 
 	async function snapshot(): Promise<AutoRagConfigSnapshot> {
 		const path = currentPath();
-		if (!existsSync(path)) return { configPath: path, configExists: false, error: null, config: {} };
+		if (!(await access(path).then(() => true, () => false))) return { configPath: path, configExists: false, error: null, config: {} };
 		let raw: Record<string, unknown>;
 		try {
 			raw = readRawConfigObject(path);
@@ -592,11 +592,11 @@ export function createAutoRagConfigService(deps: AutoRagConfigServiceDeps): Auto
 		apply: (candidate: Record<string, unknown>, previous: Record<string, unknown>) => void,
 	): Promise<AutoRagConfigSnapshot> {
 		const path = currentPath();
-		const previous: Record<string, unknown> = existsSync(path) ? readRawConfigObject(path) : {};
+		const previous: Record<string, unknown> = (await access(path).then(() => true, () => false)) ? readRawConfigObject(path) : {};
 		const candidate = structuredClone(previous);
 		apply(candidate, previous);
 		// Validation runs before the write: a rejected edit never touches disk.
-		validateCandidate(path, candidate, deps.env, deps.cwd);
+		await validateCandidate(path, candidate, deps.env, deps.cwd);
 		writeConfigObject(path, candidate);
 		return snapshot();
 	}

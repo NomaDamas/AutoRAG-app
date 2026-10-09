@@ -1,0 +1,157 @@
+import { describe, expect, it } from "vitest";
+import {
+	buildFlow,
+	bySourceOrder,
+	canAdvance,
+	connectableLater,
+	etaMinutes,
+	formatSize,
+	phaseIndex,
+	primaryLabelKey,
+	scanTotals,
+	sourceDetail,
+	type Translate,
+} from "../src/renderer/src/onboarding/flow";
+import type { FolderScan } from "../src/shared/onboarding-contract";
+
+const stubTranslate: Translate = (key, options) => (options === undefined ? key : `${key}:${JSON.stringify(options)}`);
+
+describe("onboarding flow", () => {
+	it("orders steps for a local, unconfirmed plan", () => {
+		expect(buildFlow("pro", false, "local")).toEqual([
+			"welcome",
+			"permissions",
+			"account",
+			"folders",
+			"embedding",
+			"sources",
+			"plan",
+			"indexing",
+		]);
+	});
+
+	it("drops the plan once confirmed and puts the plan before sources for cloud", () => {
+		expect(buildFlow("pro", true, "local")).toEqual([
+			"welcome",
+			"permissions",
+			"account",
+			"folders",
+			"embedding",
+			"sources",
+			"indexing",
+		]);
+		expect(buildFlow("pro", false, "cloud")).toEqual([
+			"welcome",
+			"permissions",
+			"account",
+			"folders",
+			"embedding",
+			"plan",
+			"sources",
+			"indexing",
+		]);
+	});
+
+	it("adds the model step only for BYOK", () => {
+		expect(buildFlow("byok", true, "local")).toEqual([
+			"welcome",
+			"permissions",
+			"account",
+			"folders",
+			"embedding",
+			"sources",
+			"model",
+			"indexing",
+		]);
+	});
+
+	it("gates the advance per step", () => {
+		const base = {
+			stepId: "welcome",
+			platform: "darwin",
+			fullDiskAccess: false,
+			signedIn: false,
+			selectedFolders: 0,
+			embed: "local",
+			cloudConsent: false,
+			plan: "pro",
+			modelVerified: false,
+		} as const;
+		expect(canAdvance(base)).toBe(true);
+		expect(canAdvance({ ...base, stepId: "permissions" })).toBe(false);
+		expect(canAdvance({ ...base, stepId: "permissions", fullDiskAccess: true })).toBe(true);
+		expect(canAdvance({ ...base, stepId: "permissions", platform: "win32" })).toBe(true);
+		expect(canAdvance({ ...base, stepId: "account" })).toBe(false);
+		expect(canAdvance({ ...base, stepId: "account", signedIn: true })).toBe(true);
+		expect(canAdvance({ ...base, stepId: "folders" })).toBe(false);
+		expect(canAdvance({ ...base, stepId: "folders", selectedFolders: 2 })).toBe(true);
+		expect(canAdvance({ ...base, stepId: "embedding" })).toBe(true);
+		expect(canAdvance({ ...base, stepId: "embedding", embed: "cloud", cloudConsent: false })).toBe(false);
+		expect(canAdvance({ ...base, stepId: "embedding", embed: "cloud", cloudConsent: true })).toBe(true);
+		expect(canAdvance({ ...base, stepId: "model", plan: "byok" })).toBe(false);
+		expect(canAdvance({ ...base, stepId: "model", plan: "byok", modelVerified: true })).toBe(true);
+	});
+
+	it("labels the plan primary button", () => {
+		expect(primaryLabelKey("welcome", "pro", null)).toBe("onboarding.stepLabel.welcome");
+		expect(primaryLabelKey("plan", "free", null)).toBe("onboarding.plan.continue");
+		expect(primaryLabelKey("plan", "byok", null)).toBe("onboarding.plan.continue");
+		expect(primaryLabelKey("plan", "pro", "pro")).toBe("onboarding.plan.continue");
+		expect(primaryLabelKey("plan", "pro", null)).toBe("onboarding.plan.startTrial");
+		expect(primaryLabelKey("plan", "air", null)).toBe("onboarding.plan.subscribeAir");
+	});
+});
+
+describe("onboarding ETA and formatting", () => {
+	it("uses the two files-per-minute constants and never returns less than 1", () => {
+		expect(etaMinutes(0, "local")).toBe(1);
+		expect(etaMinutes(85, "local")).toBe(1);
+		expect(etaMinutes(86, "local")).toBe(2);
+		expect(etaMinutes(900, "cloud")).toBe(1);
+		expect(etaMinutes(12_600, "cloud")).toBe(14);
+	});
+
+	it("formats bytes with decimal units", () => {
+		expect(formatSize(0)).toBe("0 KB");
+		expect(formatSize(1_500_000)).toBe("2 MB");
+		expect(formatSize(2_900_000_000)).toBe("2.9 GB");
+	});
+
+	it("sums only the scans it has", () => {
+		const scans = new Map<string, FolderScan>([
+			["/a", { path: "/a", files: 3, bytes: 300, onlineOnly: 1, done: false, error: null }],
+			["/b", { path: "/b", files: 5, bytes: 500, onlineOnly: 0, done: true, error: null }],
+		]);
+		expect(scanTotals(["/a", "/b", "/missing"], scans)).toEqual({ files: 8, bytes: 800, onlineOnly: 1 });
+	});
+});
+
+describe("detected sources list", () => {
+	it("keeps a stable order however the probes finish", () => {
+		const arrival = [{ id: "github" }, { id: "mailcrawl" }, { id: "kakao" }, { id: "whatsapp" }] as const;
+		expect([...arrival].sort(bySourceOrder).map((source) => source.id)).toEqual(["kakao", "whatsapp", "mailcrawl", "github"]);
+	});
+
+	it("offers later only what was not found, plus brands that cannot be probed", () => {
+		const labels = (found: readonly { readonly id: "kakao" | "slack" }[]): string[] => connectableLater(found).map((chip) => chip.label);
+		expect(labels([])).toContain("KakaoTalk");
+		expect(labels([{ id: "kakao" }])).not.toContain("KakaoTalk");
+		expect(labels([{ id: "kakao" }, { id: "slack" }])).toEqual(expect.arrayContaining(["Notion", "Google Drive"]));
+		expect(labels([{ id: "slack" }])).not.toContain("Slack");
+	});
+
+	it("interpolates detected facts into the connector's detail line", () => {
+		expect(sourceDetail("whatsapp", { chats: 24, messages: 16591 }, stubTranslate)).toContain('"chats":24');
+		expect(sourceDetail("mailcrawl", { accounts: ["gmail", "khu"] }, stubTranslate)).toContain('"accounts":2');
+		expect(sourceDetail("kakao", {}, stubTranslate)).toContain("onboarding.sources.detail.kakao");
+	});
+});
+
+describe("indexing phases", () => {
+	it("maps a phase to its strip position", () => {
+		expect(phaseIndex("parsed")).toBe(0);
+		expect(phaseIndex("minsync")).toBe(1);
+		expect(phaseIndex("datasources")).toBe(2);
+		expect(phaseIndex("finalizing")).toBe(3);
+	});
+});

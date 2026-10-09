@@ -164,7 +164,7 @@ export function SettingsView({ initialCategory = "general", onSettingsChanged }:
 			case "plan":
 				return <PlanPage />;
 			case "general":
-				return <GeneralPage appSettings={appSettings} onAppSettingsChanged={(next) => { setAppSettings(next); onSettingsChanged?.(next); }} snapshot={snapshot} onSaved={saveSnapshot} />;
+				return <GeneralPage appSettings={appSettings} onAppSettingsChanged={(next) => { setAppSettings(next); onSettingsChanged?.(next); }} onSettingsError={setError} snapshot={snapshot} onSaved={saveSnapshot} />;
 			case "ai":
 				return <AiPage snapshot={snapshot} onSaved={saveSnapshot} />;
 			case "web":

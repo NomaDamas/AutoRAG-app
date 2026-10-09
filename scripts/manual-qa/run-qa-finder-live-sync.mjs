@@ -5,7 +5,7 @@
  *   timeout 300 bun scripts/manual-qa/run-qa-finder-live-sync.mjs
  */
 
-import { finderWindow, launchFinder } from "./launch-finder.mjs";
+import { finderWindow, fsWorkerDiagnostics, launchFinder } from "./launch-finder.mjs";
 import { baseName, isWindows, rmRetry } from "./platform.mjs";
 import {
 	existsSync,
@@ -141,7 +141,7 @@ async function startSession(label) {
 	setupFixtures();
 	app = await launchFinder({
 		userDataDir: USER_DATA,
-		env: { AUTORAG_FS_WATCH_DIAG: "1" },
+		env: { AUTORAG_FS_WATCH_DIAG: "1", AUTORAG_FS_WORKER_QA: "1" },
 	});
 	const stdout = app.process().stdout;
 	if (stdout !== null) {
@@ -218,20 +218,24 @@ function rowFor(page, name) {
 
 /**
  * v7 virtualizes the listing, so a fixture folder buried in ~/Downloads is not
- * mounted until scrolled into the window: page it in, then open it.
+ * mounted until scrolled into the window: page it in, then open it. The
+ * Downloads listing can land after the first pages were scrolled (and reset
+ * the scroll), so keep paging, wrapping to the top, until the row mounts.
  */
 async function openFixtureFolder(page) {
 	const row = () => page.locator('[role="row"]').filter({ has: page.getByText(FIXTURE_FOLDER, { exact: true }) });
-	if ((await row().count()) === 0) {
-		const list = page.locator(".list").first();
-		for (let step = 0; step < 80 && (await row().count()) === 0; step += 1) {
-			await list
-				.evaluate((element) => {
-					element.scrollTop = Math.min(element.scrollHeight, element.scrollTop + Math.max(200, element.clientHeight - 80));
-				})
-				.catch(() => undefined);
-			await new Promise((resolve) => setTimeout(resolve, 60));
-		}
+	const deadline = Date.now() + 30_000;
+	while ((await row().count()) === 0) {
+		if (Date.now() > deadline) throw new Error(`${FIXTURE_FOLDER} never mounted in the Downloads listing`);
+		await page
+			.locator(".list")
+			.first()
+			.evaluate((element) => {
+				const atBottom = element.scrollTop + element.clientHeight >= element.scrollHeight - 2;
+				element.scrollTop = atBottom ? 0 : element.scrollTop + Math.max(200, element.clientHeight - 80);
+			})
+			.catch(() => undefined);
+		await new Promise((resolve) => setTimeout(resolve, 60));
 	}
 	await row().first().dblclick();
 }
@@ -325,61 +329,10 @@ async function finishLiveRefreshProbe(page, label, observationDeadlineMs) {
 	}, label);
 }
 
-async function installS14ListCallRecorder() {
-	return app.evaluate(({ BrowserWindow, ipcMain }) => {
-		globalThis.__qaListCalls = [];
-		const invokeHandlers = ipcMain?._invokeHandlers;
-		if (invokeHandlers instanceof Map) {
-			const original = invokeHandlers.get("fs:listDir");
-			if (typeof original !== "function") {
-				throw new Error("ipcMain._invokeHandlers has no fs:listDir handler");
-			}
-			const wrapped = (...args) => {
-				const path = args[1];
-				if (typeof path === "string") {
-					globalThis.__qaListCalls.push({ path, timestampMs: Date.now() });
-				}
-				return original(...args);
-			};
-			invokeHandlers.set("fs:listDir", wrapped);
-			globalThis.__qaS14Hook = { kind: "ipcMain._invokeHandlers", original };
-			return "ipcMain._invokeHandlers";
-		}
-		const window = BrowserWindow.getAllWindows().find((item) => item.webContents.getURL().includes("index.html"));
-		if (window === undefined) {
-			throw new Error("no BrowserWindow available for S14 fallback hook");
-		}
-		const listener = (_event, channel, ...args) => {
-			const path = args[0];
-			if (channel === "fs:listDir" && typeof path === "string") {
-				globalThis.__qaListCalls.push({ path, timestampMs: Date.now() });
-			}
-		};
-		window.webContents.on("ipc-message", listener);
-		globalThis.__qaS14Hook = { kind: "webContents.on('ipc-message')", listener, webContents: window.webContents };
-		return "webContents.on('ipc-message')";
-	});
-}
-
-async function removeS14ListCallRecorder() {
-	if (app === null) return;
-	await app.evaluate(({ ipcMain }) => {
-		const hook = globalThis.__qaS14Hook;
-		if (hook?.kind === "ipcMain._invokeHandlers") {
-			const invokeHandlers = ipcMain?._invokeHandlers;
-			if (invokeHandlers instanceof Map) {
-				invokeHandlers.set("fs:listDir", hook.original);
-			}
-		} else if (hook?.kind === "webContents.on('ipc-message')") {
-			hook.webContents.removeListener("ipc-message", hook.listener);
-		}
-		delete globalThis.__qaS14Hook;
-		delete globalThis.__qaListCalls;
-	});
-}
-
+/** The fs worker records every request with its path argument; S14 reads its `listDir` calls. */
 async function readS14ListCalls() {
-	return app.evaluate(() => globalThis.__qaListCalls ?? []);
+	const { recent } = await fsWorkerDiagnostics(app);
+	return recent.filter((call) => call.op === "listDir" && call.path !== null).map((call) => ({ path: call.path, timestampMs: call.at }));
 }
 
 async function activeTabPath(page) {
@@ -915,7 +868,7 @@ async function runS12(page) {
 	await rowFor(page, "selected-file.txt").waitFor({ timeout: 10_000 });
 	const renameTarget = join(FIXTURE_DIR, "rename-before.txt");
 	await rowFor(page, "rename-before.txt").click({ button: "right" });
-	await page.getByRole("menuitem", { name: "이름 변경", exact: true }).click();
+	await page.getByRole("menuitem", { name: "Rename", exact: true }).click();
 	const renameInput = page.getByRole("textbox", { name: "새 이름", exact: true });
 	await renameInput.waitFor({ state: "visible", timeout: 10_000 });
 	const createdDuringRename = join(FIXTURE_DIR, "created-during-rename.txt");
@@ -981,24 +934,15 @@ async function runS14(page) {
 	const rowsBefore = await page.locator('[role="row"]').count();
 	if (rowsBefore < 1) throw new Error(`S14 requires an initial non-empty listing, got ${rowsBefore} rows`);
 
-	const hookKind = await installS14ListCallRecorder();
-	appendLog(`INFO S14 list-call hook=${hookKind}`);
 	await installLiveRefreshProbe(page, "S14");
-	const seq = (await page.evaluate(async () => (await window.autorag.live.layers()).seq)) + 1;
-	const sentAt = await app.evaluate(({ BrowserWindow }, payload) => {
-		const window = BrowserWindow.getAllWindows().find((item) => item.webContents.getURL().includes("index.html"));
-		if (window === undefined) {
-			throw new Error("no BrowserWindow available for S14 live message");
-		}
-		const timestampMs = Date.now();
-		window.webContents.send("live:message", {
-			seq: payload.seq,
-			dirs: [{ dir: payload.fixtureDir, changes: [], overflow: true, dirGone: false }],
-			layers: [],
-			reconciled: ["dupey"],
-		});
-		return timestampMs;
-	}, { fixtureDir: FIXTURE_DIR, seq });
+	// The change hub lives in the fs worker: ask it for a real overflow batch,
+	// which reaches the page with the next `seq` like any watcher batch.
+	const sentAt = Date.now();
+	await app.evaluate(async ({ ipcMain }, dir) => {
+		const handler = ipcMain._invokeHandlers.get("fs-worker:qaOverflow");
+		if (handler === undefined) throw new Error("fs-worker:qaOverflow is not registered (AUTORAG_FS_WORKER_QA=1)");
+		await handler({}, dir);
+	}, FIXTURE_DIR);
 	let probe = null;
 	try {
 		const listCall = await waitFor(
@@ -1037,7 +981,6 @@ async function runS14(page) {
 				appendLog(`INFO S14 probe cleanup: ${error instanceof Error ? error.message : String(error)}`);
 			}
 		}
-		await removeS14ListCallRecorder();
 	}
 }
 

@@ -474,7 +474,7 @@ export function createProviderAuthService(deps: ProviderAuthServiceDeps): Provid
 		const envName = existing?.apiKey !== undefined ? configValueEnvName(typeof existing.apiKey === "string" ? existing.apiKey : undefined) : null;
 		const resolvedEnvName = envName ?? providerEnvName(id);
 		if (typeof input.apiKey === "string" && input.apiKey.length > 0) {
-			deps.credentials.set(resolvedEnvName, input.apiKey);
+			await deps.credentials.set(resolvedEnvName, input.apiKey);
 		}
 		const storedKey = deps.env[resolvedEnvName];
 		const hasKey = typeof storedKey === "string" && storedKey.length > 0;
@@ -502,7 +502,7 @@ export function createProviderAuthService(deps: ProviderAuthServiceDeps): Provid
 		await writeModelsJson(modelsPath, { ...raw, providers });
 		const removal = envName ?? providerEnvName(id);
 		try {
-			deps.credentials.remove(removal);
+			await deps.credentials.remove(removal);
 		} catch (error) {
 			console.warn(`[providers] could not clear stored key ${removal}: ${error instanceof Error ? error.message : String(error)}`);
 		}

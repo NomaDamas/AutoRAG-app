@@ -1,10 +1,12 @@
 import { mkdir, mkdtemp, rm, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { summarizeBundle } from "../src/preview/node/bundle";
+import { createDefaultAppCache } from "../src/preview/node/default-app";
 import { measureFolder, summarizeFolder } from "../src/preview/node/folder";
 import { describeBinary } from "../src/preview/shared/binary-kind";
-import { isQuickLookReady } from "../src/preview/shared/contract";
+import { isQuickLookLoad, isQuickLookReady } from "../src/preview/shared/contract";
 import { fitQuickLook, QUICK_LOOK_TOOLBAR } from "../src/preview/shared/fit";
 import { formatClock, formatFinderDate, formatFinderSize, formatItemCount } from "../src/preview/shared/format";
 import { locationCrumbs } from "../src/preview/shared/location";
@@ -144,6 +146,85 @@ describe("binary sniffing", () => {
 	});
 });
 
+describe("application bundle summary", () => {
+	async function bundleFixture(): Promise<string> {
+		const dir = await mkdtemp(join(tmpdir(), "autorag-ql-bundle-"));
+		await mkdir(join(dir, "Hello.app", "Contents", "MacOS"), { recursive: true });
+		return join(dir, "Hello.app");
+	}
+
+	it("summarizes a macOS .app as the app itself, asking for its own icon", async () => {
+		const path = await bundleFixture();
+		const asked: Array<{ readonly path: string; readonly ext: string; readonly mtimeMs: number }> = [];
+		try {
+			const bundle = await summarizeBundle(path, {
+				preview: async (target) => {
+					asked.push(target);
+					return "autorag-thumb://local/?path=Hello.app&mtime=t&size=640";
+				},
+			});
+
+			expect(bundle.name).toBe("Hello.app");
+			expect(bundle.path).toBe(path);
+			expect(bundle.iconUrl).toBe("autorag-thumb://local/?path=Hello.app&mtime=t&size=640");
+			// The icon identity is the bundle's own, keyed by its extension at the preview tier.
+			// Keyed by the bundle's own mtime, to the same millisecond its summary reports.
+			expect(asked).toHaveLength(1);
+			expect(asked[0]).toMatchObject({ path, ext: "app" });
+			// (Node rounds the stat's mtime, so the summary's ISO date is the rounded stamp.)
+			expect(Math.round(asked[0]?.mtimeMs ?? Number.NaN)).toBe(Date.parse(bundle.modifiedAt));
+		} finally {
+			await rm(dirname(path), { recursive: true, force: true });
+		}
+	});
+
+	it("keeps the app glyph when the OS produced no icon", async () => {
+		const path = await bundleFixture();
+		try {
+			expect((await summarizeBundle(path, { preview: async () => null })).iconUrl).toBeNull();
+			expect((await summarizeBundle(path, null)).iconUrl).toBeNull();
+		} finally {
+			await rm(dirname(path), { recursive: true, force: true });
+		}
+	});
+
+	it("never fails the preview when the icon lookup fails", async () => {
+		const path = await bundleFixture();
+		const warnings: string[] = [];
+		try {
+			const bundle = await summarizeBundle(
+				path,
+				{
+					preview: async () => {
+						throw new Error("Unable to retrieve thumbnail preview image");
+					},
+				},
+				(message) => warnings.push(message),
+			);
+			expect(bundle.iconUrl).toBeNull();
+			expect(warnings.join("\n")).toContain("Unable to retrieve thumbnail preview image");
+		} finally {
+			await rm(dirname(path), { recursive: true, force: true });
+		}
+	});
+
+	it("accepts a bundle payload on the load channel and rejects a malformed one", () => {
+		const load = {
+			seq: 1,
+			name: "Hello.app",
+			path: "/Applications/Hello.app",
+			document: null,
+			folder: null,
+			bundle: { name: "Hello.app", path: "/Applications/Hello.app", modifiedAt: "2026-01-01T00:00:00.000Z", iconUrl: null },
+			error: null,
+			app: null,
+		};
+		expect(isQuickLookLoad(load)).toBe(true);
+		expect(isQuickLookLoad({ ...load, bundle: { name: "Hello.app" } })).toBe(false);
+		expect(isQuickLookLoad({ ...load, bundle: null, folder: null })).toBe(true);
+	});
+});
+
 describe("folder summary", () => {
 	async function fixture(): Promise<string> {
 		const dir = await mkdtemp(join(tmpdir(), "autorag-ql-folder-"));
@@ -200,5 +281,34 @@ describe("folder summary", () => {
 		} finally {
 			await rm(dir, { recursive: true, force: true });
 		}
+	});
+});
+
+describe("default app cache", () => {
+	it("answers every file of a found type at once and asks again for a type it could not name", async () => {
+		const asked: string[] = [];
+		const cache = createDefaultAppCache(async (path) => {
+			asked.push(path);
+			return path.endsWith(".bin") ? null : "TextEdit";
+		});
+		expect(cache.known("/a/one.TXT", false)).toBeNull();
+		expect(await cache.resolve("/a/one.TXT", false)).toBe("TextEdit");
+		expect(cache.known("/b/two.txt", false)).toBe("TextEdit");
+		// A folder with the same suffix is its own type.
+		expect(cache.known("/b/two.txt", true)).toBeNull();
+		expect(await cache.resolve("/a/blob.bin", false)).toBeNull();
+		expect(cache.known("/a/blob.bin", false)).toBeNull();
+		await cache.resolve("/a/blob.bin", false);
+		expect(asked).toEqual(["/a/one.TXT", "/a/blob.bin", "/a/blob.bin"]);
+	});
+
+	it("keys extensionless files by path and degrades a failed lookup to no name", async () => {
+		const cache = createDefaultAppCache(async (path) => {
+			if (path === "/x/broken") throw new Error("worker gone");
+			return "Xcode";
+		});
+		expect(await cache.resolve("/x/Makefile", false)).toBe("Xcode");
+		expect(cache.known("/y/Makefile", false)).toBeNull();
+		expect(await cache.resolve("/x/broken", false)).toBeNull();
 	});
 });

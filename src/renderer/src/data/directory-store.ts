@@ -33,7 +33,7 @@ import {
 	withoutPaths,
 } from "../state/live";
 import { needsThumbnail, thumbnailKey } from "../state/thumbnails";
-import type { FinderEntry } from "./entries";
+import { type FinderEntry, hasFileVersion } from "./entries";
 import type { EntrySidecar } from "./entry-sidecar";
 
 /** Released folders kept for an instant repaint. */
@@ -49,6 +49,7 @@ export interface DirectorySource {
 	enrich(entries: readonly FinderEntry[]): Promise<readonly FsEntryEnrichment[]>;
 	finderMetadata(entries: readonly FinderEntry[]): Promise<readonly FsFinderEnrichment[]>;
 	onLive(listener: (message: LiveMessage) => void): () => void;
+	onReconnect(listener: () => void): () => void;
 }
 
 export interface DirectorySnapshot {
@@ -167,8 +168,8 @@ export function createDirectoryStore(options: {
 
 	/** Both background passes for rows the sidecar has not heard about yet. */
 	const enrich = (entries: readonly FinderEntry[]): void => {
-		const needKind = entries.filter((entry) => entry.modifiedAt !== undefined && !sidecar.hasKind(entry));
-		const needMetadata = entries.filter((entry) => entry.modifiedAt !== undefined && !sidecar.hasMetadata(entry));
+		const needKind = entries.filter((entry) => hasFileVersion(entry) && !sidecar.hasKind(entry));
+		const needMetadata = entries.filter((entry) => hasFileVersion(entry) && !sidecar.hasMetadata(entry));
 		if (needKind.length > 0) {
 			source
 				.enrich(needKind)
@@ -333,6 +334,17 @@ export function createDirectoryStore(options: {
 				goneListeners.delete(listener);
 			};
 		},
-		connect: () => source.onLive(onLive),
+		connect: () => {
+			const offLive = source.onLive(onLive);
+			// A restarted worker lost every watch and every event since: what is on
+			// screen re-reads, keeping its rows (and icons) until the answer lands.
+			const offReconnect = source.onReconnect(() => {
+				for (const [dir, record] of records) if (record.refs > 0) void load(dir, "silent");
+			});
+			return () => {
+				offLive();
+				offReconnect();
+			};
+		},
 	};
 }

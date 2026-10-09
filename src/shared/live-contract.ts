@@ -1,9 +1,3 @@
-export const LIVE_CHANNELS = {
-	setWatchSet: "live:setWatchSet",
-	message: "live:message",
-	layers: "live:layers",
-} as const;
-
 export type FsChangeType = "create" | "update" | "delete";
 
 export interface FsChange {
@@ -44,6 +38,12 @@ export interface LiveBridge {
 	setWatchSet(dirs: readonly string[]): Promise<void>;
 	layers(): Promise<LiveResync>;
 	onMessage(listener: (message: LiveMessage) => void): () => void;
+	/**
+	 * The filesystem worker restarted (it crashed or was killed) and kept
+	 * nothing: no watches, and message `seq` starts over. Re-send the watch
+	 * set and re-read what is on screen.
+	 */
+	onReconnect(listener: () => void): () => void;
 }
 
 export const DUPEY_LAYER_ID = "dupey";

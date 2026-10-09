@@ -7,7 +7,7 @@ import { appendFileSync, existsSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { readRawConfigObject, resolveConfigPath } from "@autorag/librarian/core";
 import { createDataSourceStatusService } from "./datasource-status";
-import { refreshAutoragIndex } from "./refresh-runner";
+import { refreshAutoragIndex } from "./index-refresh";
 import { runScheduledRefresh, schedulePaths } from "./refresh-schedule";
 
 /** A tick that has not finished by then is abandoned: the lock must not outlive a hung child CLI. */
@@ -36,7 +36,7 @@ async function main(): Promise<number> {
 			paths,
 			log,
 			readRaw: () => readRawConfigObject(configPath),
-			refreshLocal: () => refreshAutoragIndex(undefined, env, cwd),
+			refreshLocal: () => refreshAutoragIndex({ env, cwd }),
 			syncSource: (id) => dataSources.sync(id),
 		});
 		if (outcome.kind === "ran") log(`done: local=${outcome.local} sources=${outcome.sourceIds.join(",") || "-"} failures=${outcome.failures}`);

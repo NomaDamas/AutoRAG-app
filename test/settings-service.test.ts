@@ -85,10 +85,10 @@ const noRefresh = async (): Promise<ConfigRefreshResult> => ({
 });
 
 const noCredentials: ProviderCredentialService = {
-	list: (): readonly ProviderCredentialStatus[] => [],
-	set: (): readonly ProviderCredentialStatus[] => [],
-	remove: (): readonly ProviderCredentialStatus[] => [],
-	load: (): readonly string[] => [],
+	list: async (): Promise<readonly ProviderCredentialStatus[]> => [],
+	set: async (): Promise<readonly ProviderCredentialStatus[]> => [],
+	remove: async (): Promise<readonly ProviderCredentialStatus[]> => [],
+	load: async (): Promise<readonly string[]> => [],
 };
 
 const baseDeps = { config: noConfig, refreshConfig: noRefresh, credentials: noCredentials };

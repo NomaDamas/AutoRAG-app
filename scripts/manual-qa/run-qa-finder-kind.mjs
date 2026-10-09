@@ -100,23 +100,31 @@ try {
 	await page.waitForSelector('[role="row"]', { timeout: 30000 });
 	await page.getByLabel("Places").getByRole("button", { name: "Documents", exact: true }).click();
 	const rowFor = (name) => page.locator('[role="row"]').filter({ hasText: name }).first();
+	// The folder's listing can land after the sidebar click, replacing whatever
+	// the list showed: sweep it top to bottom, and sweep again until the row
+	// mounts. One sweep that ends on the previous folder would otherwise leave
+	// the list scrolled past a folder row sorted to the top.
 	const mountRow = async (name) => {
-		await page.locator(".list").evaluate((node) => {
-			node.scrollTop = 0;
-		});
-		for (let attempt = 0; attempt < 160; attempt += 1) {
-			if ((await rowFor(name).count()) > 0) return rowFor(name);
-			const atEnd = await page.locator(".list").evaluate((node) => {
-				node.scrollTop = node.scrollTop + node.clientHeight * 0.9;
-				return node.scrollTop + node.clientHeight >= node.scrollHeight - 1;
+		const deadline = Date.now() + 30_000;
+		while (Date.now() < deadline) {
+			await page.locator(".list").evaluate((node) => {
+				node.scrollTop = 0;
 			});
-			await page.waitForTimeout(25);
-			// The target can sit in the last window: check after scrolling, before
-			// the loop stops on `atEnd`.
-			if ((await rowFor(name).count()) > 0) return rowFor(name);
-			if (atEnd) break;
+			for (let attempt = 0; attempt < 160; attempt += 1) {
+				if ((await rowFor(name).count()) > 0) return rowFor(name);
+				const atEnd = await page.locator(".list").evaluate((node) => {
+					node.scrollTop = node.scrollTop + node.clientHeight * 0.9;
+					return node.scrollTop + node.clientHeight >= node.scrollHeight - 1;
+				});
+				await page.waitForTimeout(25);
+				// The target can sit in the last window: check after scrolling, before
+				// the loop stops on `atEnd`.
+				if ((await rowFor(name).count()) > 0) return rowFor(name);
+				if (atEnd) break;
+			}
+			await page.waitForTimeout(250);
 		}
-		return rowFor(name).waitFor({ timeout: 30000 }).then(() => rowFor(name));
+		throw new Error(`row ${name} never mounted`);
 	};
 	await mountRow(fixtures[0].name);
 	// The OS kind now lands through background enrichment, and rows mount
@@ -148,12 +156,21 @@ try {
 		if (fixture.skip === true) continue;
 		check(fixture.name, kind, fixture.expected);
 	}
-	const fallbackKind = await kindCell(fallbackName);
+	/** Read a Kind cell once the row is mounted and its cell has text. */
+	const kindCellFilled = async (name, timeoutMs = 15000) => {
+		const deadline = Date.now() + timeoutMs;
+		for (;;) {
+			const value = await kindCell(name);
+			if (value !== "" || Date.now() >= deadline) return value;
+			await page.waitForTimeout(100);
+		}
+	};
+	const fallbackKind = await kindCellFilled(fallbackName);
 	observed.push({ name: fallbackName, kind: fallbackKind });
 	results.push({ label: fallbackName, actual: fallbackKind, expected: "non-empty fallback", pass: fallbackKind !== "" });
 	console.log(`${fallbackKind !== "" ? "PASS" : "FAIL"}  ${fallbackName}: app=${JSON.stringify(fallbackKind)} (fallback row, non-empty)`);
 
-	const folderKind = await kindCell(folderName);
+	const folderKind = await kindCellFilled(folderName);
 	observed.push({ name: folderName, kind: folderKind });
 	check(folderName, folderKind, "Folder");
 

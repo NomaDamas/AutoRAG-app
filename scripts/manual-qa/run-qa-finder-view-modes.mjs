@@ -18,7 +18,7 @@ import { tmpdir } from "node:os";
 import { join, sep } from "node:path";
 import { deflateSync } from "node:zlib";
 import { AI_PANEL, launchFinder, finderWindow } from "./launch-finder.mjs";
-import { chord } from "./platform.mjs";
+import { chord, cssAttr } from "./platform.mjs";
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url)).replace(/[\\/]$/, "");
 const EVIDENCE = join(ROOT, ".omo", "evidence", "ai-finder-app", "qa-view-modes");
@@ -41,10 +41,6 @@ const tree = {
 	[betaPath]: ["gamma/", "beta-1.md"],
 	[gammaPath]: ["delta.txt"],
 };
-
-/** Playwright's CSS engine eats a lone backslash in an attribute value (measured:
- * `[data-path="C:\Users"]` matches nothing), so Windows paths need `\\`. */
-const cssAttr = (value) => value.replace(/\\/g, "\\\\");
 
 function crc32(buf) {
 	let crc = 0xffffffff;
@@ -109,7 +105,7 @@ try {
 	const inspectorBox = await page.locator(".inspector").boundingBox();
 	check("C1 sidebar defaults to minimum width", Math.round(sidebarBox.width), 180);
 	check("C1 inspector defaults to minimum width", Math.round(inspectorBox.width), 300);
-	const composer = page.locator(`${AI_PANEL} input[placeholder*="파일, 메일"]`);
+	const composer = page.locator(`${AI_PANEL} input[placeholder*="Ask AutoRAG"]`);
 	const tabCount = () => page.locator(".tabs .tab").count();
 	check("C1 there is no AI Search dock under the Finder", await page.locator(AI_PANEL).count(), 0);
 	await page.keyboard.press(chord("k"));
@@ -283,7 +279,7 @@ try {
 	await page.locator(`.column[data-path="${cssAttr(topPath)}"] .column-row[aria-label="alpha"]`).click();
 	await page.waitForSelector(`.column[data-path="${cssAttr(alphaPath)}"] .column-row[aria-label="alpha-1.md"]`);
 	await page.locator(`.column[data-path="${cssAttr(alphaPath)}"] .column-row[aria-label="alpha-1.md"]`).click({ button: "right" });
-	await page.getByRole("menuitem", { name: /이름 변경/ }).click();
+	await page.getByRole("menuitem", { name: /Rename/ }).click();
 	await page.keyboard.press(chord("a"));
 	await page.keyboard.type("alpha-renamed.md");
 	await page.keyboard.press("Enter");

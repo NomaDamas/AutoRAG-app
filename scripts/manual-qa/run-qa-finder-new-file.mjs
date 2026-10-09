@@ -21,12 +21,13 @@
  * `bun scripts/manual-qa/run-qa-finder-new-file.mjs`
  */
 
-import { existsSync, mkdirSync, mkdtempSync, readdirSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { unzipSync } from "fflate";
 import { finderWindow, launchFinder } from "./launch-finder.mjs";
+import { cssAttr } from "./platform.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const EVIDENCE = join(ROOT, ".omo", "evidence", "ai-finder-app", "qa-new-file");
@@ -67,7 +68,7 @@ async function openBackgroundMenu(page) {
 
 /** Open the New submenu and click one of its items by label. */
 async function chooseNew(page, label) {
-	await page.getByRole("menuitem", { name: "새로 만들기" }).hover();
+	await page.getByRole("menuitem", { name: "New", exact: true }).hover();
 	await page.getByRole("menuitem", { name: label }).click();
 }
 
@@ -86,12 +87,12 @@ try {
 
 	/* ------------------------------- 1. background menu + New submenu contents */
 	await openBackgroundMenu(page);
-	await page.getByRole("menuitem", { name: "새로 만들기" }).hover();
+	await page.getByRole("menuitem", { name: "New", exact: true }).hover();
 	const submenuLabels = await page.locator('[role="menu"]').last().getByRole("menuitem").allInnerTexts();
 	await page.screenshot({ path: join(EVIDENCE, "1-new-submenu.png") });
 	check(
 		"the empty-space menu's New submenu lists a folder and every document format",
-		submenuLabels.includes("새 폴더") &&
+		submenuLabels.includes("New Folder") &&
 			["텍스트 파일", "Markdown 문서", "서식 있는 텍스트", "Word 문서", "Excel 스프레드시트", "PowerPoint 프레젠테이션"].every((label) =>
 				submenuLabels.includes(label),
 			),
@@ -121,8 +122,17 @@ try {
 	/* ------------------------------------ 4. Word document is a real package */
 	await openBackgroundMenu(page);
 	await chooseNew(page, "Word 문서");
-	await waitForDisk(() => existsSync(join(top, "untitled.docx")), "untitled.docx");
-	const parts = Object.keys(unzipSync(new Uint8Array(await Bun.file(join(top, "untitled.docx")).arrayBuffer())));
+	// The file appears before its bytes are fully written (create, then write):
+	// wait until the package actually unzips instead of reading it on first sight.
+	let parts = [];
+	await waitForDisk(() => {
+		try {
+			parts = Object.keys(unzipSync(readFileSync(join(top, "untitled.docx"))));
+			return true;
+		} catch {
+			return false;
+		}
+	}, "untitled.docx to be a readable zip");
 	check(
 		"Word 문서 writes an OOXML docx package, not an empty stub",
 		parts.includes("[Content_Types].xml") && parts.includes("word/document.xml"),
@@ -174,13 +184,14 @@ try {
 
 	/* ------------------- 7. a row's own right-click menu still wins */
 	const seed = join(top, "untitled.txt");
-	await page.locator(`[data-path="${seed}"]`).click({ button: "right" });
+	await page.locator(`[data-path="${cssAttr(seed)}"]`).click({ button: "right" });
 	await page.waitForSelector(".menu", { timeout: 5_000 });
 	const rowMenu = await page.getByRole("menu").first().locator('[role="menuitem"]').allInnerTexts();
 	await page.keyboard.press("Escape");
 	check(
 		"right-clicking a file row shows the row menu, not the New menu",
-		rowMenu.some((text) => text.startsWith("Quick Look")) && !rowMenu.some((text) => text.includes("새로 만들기")),
+		// The row menu carries a direct "New Folder" action (a row-action) but never the background menu's "New" submenu.
+		rowMenu.some((text) => text.startsWith("Quick Look")) && !rowMenu.some((text) => text.trim() === "New"),
 		`items=${JSON.stringify(rowMenu)}`,
 	);
 

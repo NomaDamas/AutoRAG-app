@@ -104,8 +104,22 @@ export function writeFinderDrag(data: DragDataWriter, entries: readonly FinderDr
 		FINDER_DRAG_TYPE,
 		JSON.stringify(entries.map(({ path, name, kind }) => ({ path, name, kind }))),
 	);
-	data.setData(URI_LIST, entries.map((entry) => `file://${entry.path.split("/").map(encodeURIComponent).join("/")}`).join("\r\n"));
+	data.setData(URI_LIST, entries.map((entry) => fileUrlFromPath(entry.path)).join("\r\n"));
 	data.setData("text/plain", entries.map((entry) => entry.path).join("\n"));
+}
+
+/**
+ * The `file:` URL for an absolute path: `/Users/a b` -> `file:///Users/a%20b`,
+ * `C:\a b` -> `file:///C:/a%20b`, `\\srv\share\a` -> `file://srv/share/a`.
+ */
+export function fileUrlFromPath(path: string): string {
+	const unc = /^(?:\\\\|\/\/)([^\\/]+)(.*)$/u.exec(path);
+	const rest = (unc === null ? path : (unc[2] ?? "")).replaceAll("\\", "/");
+	const encoded = rest.split("/").map(encodeURIComponent).join("/");
+	if (unc !== null) return `file://${unc[1]}${encoded}`;
+	// A drive path has no leading slash: `C:/a` -> `/C:/a`, with the colon kept literal.
+	if (/^[A-Za-z]:\//u.test(rest)) return `file:///${rest.slice(0, 2)}${rest.slice(2).split("/").map(encodeURIComponent).join("/")}`;
+	return `file://${encoded}`;
 }
 
 function decoded(text: string): string {
@@ -116,7 +130,11 @@ function decoded(text: string): string {
 	}
 }
 
-/** The absolute path a `file:` URL names, or null for any other scheme or a relative path. */
+/**
+ * The absolute path a `file:` URL names, or null for any other scheme or a
+ * relative path. `file:///C:/a%20b` -> `C:\a b`; `file://srv/share/a` ->
+ * `\\srv\share\a`; `file:///Users/a` -> `/Users/a`.
+ */
 function fileUrlPath(raw: string): string | null {
 	let url: URL;
 	try {
@@ -125,7 +143,10 @@ function fileUrlPath(raw: string): string | null {
 		return null;
 	}
 	if (url.protocol !== "file:") return null;
-	const path = decoded(url.pathname);
+	const pathname = decoded(url.pathname);
+	let path = pathname;
+	if (/^\/[A-Za-z]:\//u.test(pathname)) path = pathname.slice(1).replaceAll("/", "\\");
+	else if (url.host !== "") path = `\\\\${url.host}${pathname.replaceAll("/", "\\")}`;
 	return isAbsolutePath(path) ? path : null;
 }
 

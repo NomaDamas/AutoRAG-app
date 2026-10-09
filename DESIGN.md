@@ -47,7 +47,10 @@ and applies in icon, list, column, and search layouts. Grouping is visual only:
 `state/grouping.ts` splits the same rows into section headers without creating
 folders or changing entry identity; the virtualized list and icon views account
 for header height in their window geometry, and column panes render the same
-sections inline. Native Finder criteria are populated by a background
+sections inline, each pane windowed on its own scroller (27px rows; issue #103,
+`ColumnPane` in `components/ColumnBrowser.tsx`) — a 5,000-file pane keeps tens of
+rows mounted, and a keyboard/reveal target outside the window is mounted for one
+commit so `scrollIntoView` finds it; check: `scripts/manual-qa/run-qa-finder-column-large.mjs`. Native Finder criteria are populated by a background
 `fs:finderMetadata` call, separate from the `fs:enrichEntries` call that fills
 OS kinds and tile icons: creation time comes from the real filesystem birth
 time, tags and comments use Finder extended attributes with Spotlight fallback,
@@ -69,6 +72,8 @@ Fresh windows start with the sidebar at its minimum 180px width and the inspecto
 **Icon view marquee.** A drag that starts on empty space in the icon view draws a rubber-band rectangle (`--accent` 1px border over `--accent-soft`) and selects every tile it touches, as Finder does: a plain drag replaces the selection, ⌘ toggles the touched tiles, ⇧ adds them, and holding past the top or bottom edge scrolls and keeps extending. A press that never moves clears the selection. Hits come from the virtualized layout math, not the mounted tiles, so a rectangle that scrolls past the window still selects what it covers. A drag that starts on a tile stays the row drag. Geometry: `src/renderer/src/state/marquee.ts` (`test/ui-marquee.test.ts`); pointer handling: `src/renderer/src/hooks/useMarquee.ts`.
 
 **Batch file operations.** Trash, move, copy, and duplicate report a per-path outcome (`FsBatchResult`). Rows that went away (trashed, moved out) leave the listing, the column panes, expanded folders, search hits, and the selection right away instead of waiting for the watcher. A partial batch never looks done: the toast names both counts and the first failure's verbatim reason, and the failed rows stay on screen and stay selected. On macOS the iCloud Drive file provider (`~/Documents` and `~/Desktop` with Desktop & Documents sync) sometimes refuses the rest of a batch after the first one or two items with "you don't have permission to access it", and the refusal sticks to each file for 10–50 s. `fs:trash` clears it by renaming the item to a hidden sibling and straight back, then retries once (`trashOne` in `src/main/fs-service.ts`). The item keeps its name, so the Trash entry and Put Back look the same as Finder's.
+
+**Trash restore and empty (issue #86).** The Trash location behaves like Finder's: its rows carry the items' original names (Windows reads them from the `$I` records in `src/main/recycle-bin.ts`; macOS lists `~/.Trash` directly), and Put Back — the toolbar button, the row menu, or ⌘Z right after a trash — moves the payload back to the folder it came from. macOS keeps no per-item origin on disk, so `fs:trash` records one in an app-owned store (`src/main/trash-store.ts`, `trash.json` under userData); Windows needs none because the `$I` record is the origin. A payload nobody can place fails with its verbatim reason instead of a guess. A restore is itself undoable: ⌘Z re-trashes the row. 휴지통 비우기 permanently deletes every payload (on Windows its `$I` record goes with it; Finder's `.DS_Store` stays) only after a confirm dialog (`ConfirmDialog`), which Escape and the cancel button both dismiss, and the batch result names what went and each refusal. Automated checks: `test/fs-service.test.ts`, `test/trash-store.test.ts`; on-device lane: `scripts/manual-qa/run-qa-finder-trash-restore.mjs`.
 
 ### 1.3a AI Search tabs
 AI Search is a tab view like Settings (`AI_SEARCH_PATH`, `src/renderer/src/state/tabs.ts`). Each AI Search tab owns its chat; the panel stays mounted while its tab is in the background or browses a folder, and unmounts when the tab closes. Entry points:
@@ -119,13 +124,18 @@ The list is expanded by default and the "간략히 / 전체 정보" button colla
 
 ### 1.5 Sidebar places
 Every sidebar row comes from the OS, through `fs:locations` (`src/main/places.ts`); nothing is a fixed provider or drive list, and a group with no rows is not rendered.
-- **Favorites** — the **AI Search** app row (§1.3a), then Recents, then Finder's standard places: the home folder, Applications, Desktop, Documents, Downloads, Music, Movies, Pictures, Trash (`~/.Trash`). On Windows the same slots use Explorer's names and the real known-folder paths (OneDrive folder redirection honored), Program Files, and the user's `$Recycle.Bin\<SID>`, whose `$R` payloads are listed under their original names (`src/main/recycle-bin.ts`). A missing folder stays in its slot, dimmed.
+- **Favorites** — the **AI Search** app row (§1.3a), then Recents, then Finder's standard places: the home folder, Applications, Desktop, Documents, Downloads, Music, Movies, Pictures, Trash (`~/.Trash`). On Windows the same slots use Explorer's names and the real known-folder paths (OneDrive folder redirection honored), Program Files, and the user's `$Recycle.Bin\<SID>`, whose `$R` payloads are listed under their original names (`src/main/recycle-bin.ts`); the Trash row restores and empties its contents (§ "Batch file operations"). A missing folder stays in its slot, dimmed.
 - **Cloud** — exactly the drives connected to the OS, one row per account: iCloud Drive plus every `~/Library/CloudStorage/<Provider>-<account>` File Provider domain on macOS (e.g. `Google Drive - me@example.com`, `OneDrive - Personal`); the `SyncRootManager` roots registered for the user's SID and a Google Drive virtual drive letter on Windows.
 - **Locations** — the boot disk (`/`, or the system drive) plus every browsable mounted volume: `/Volumes/*` mount points without `nobrowse`, or every other drive letter. Each carries an eject button flush right; ejecting moves tabs out of the volume first (so no watcher holds it), then runs `diskutil unmount` (macOS), `net use X: /delete` for network drives, or the shell Eject verb (Windows). A refusal surfaces verbatim in the toast.
 
-The main process polls a cheap mount signature (volume names and device ids, cloud domains) every 2s and pushes `fs:locationsChanged`, so a volume or cloud account that comes or goes updates the sidebar without a restart. The dupey scan walks only `scanned` places (Desktop, Documents, Downloads, cloud drives) — never the home folder or a whole disk. Rows are 28px with 12px labels and 14px glyphs. Automated checks: `test/places.test.ts`, `test/ui-places.test.ts`; on-device check (attaches and ejects a real disk image): `scripts/manual-qa/run-qa-finder-sidebar-places.mjs`.
+The fs worker (`src/fs-worker/`, see README "Filesystem worker") polls a cheap mount signature (volume names and device ids, cloud domains) every 2s and pushes `fs:locationsChanged`, so a volume or cloud account that comes or goes updates the sidebar without a restart. The dupey scan walks only `scanned` places (Desktop, Documents, Downloads, cloud drives) — never the home folder or a whole disk. Rows are 28px with 12px labels and 14px glyphs. Automated checks: `test/places.test.ts`, `test/ui-places.test.ts`; on-device check (attaches and ejects a real disk image): `scripts/manual-qa/run-qa-finder-sidebar-places.mjs`.
 
 Instant Search's filename search ("전체" and "파일 이름") answers from the platform name index first, through `src/main/file-name-search.ts`: the user's `fsearch-cli` database on macOS/Linux (the same default database the FSearch app shares) and the bundled voidtools Everything on Windows. "파일 이름" narrows the index request to the folder in view before its result cap. When no index is installed or no database answers, the search falls back to the bounded disk walk over the `scanned` places. The app warms the index at launch — a `fsearch-cli watch` daemon on macOS/Linux, the Everything instance on Windows — and deliberately leaves it running across quits, because restarting a watch over a whole-machine database re-scans every monitored folder. Automated checks: `test/file-name-search.test.ts`, `test/fs-service.test.ts`; on-device check: `scripts/manual-qa/run-qa-finder-fsearch-search.mjs`.
+
+### 1.6 macOS application bundles
+A `.app` is a directory on disk, but macOS treats it as one launchable item, and so does the app. `buildFsEntry` reports such a directory as `kind: "file"` with ext `app` — on darwin only (`src/main/fs-entry.ts`). Everything keyed on the kind then follows: the row gets an OS-provided tile icon and the OS kind ("Application", Finder's own answer), where a folder gets neither; Enter and double-click launch the bundle through `shell.openPath` instead of navigating into its `Contents/`; and the Size cell keeps "—", because the entry is still a directory whose byte count would be the folder's own rather than the app's. Off macOS the same directory stays a folder.
+
+The app's own icon comes from the native thumbnail lane, which renders a bundle exactly like a document (`"app"` in `NATIVE_THUMBNAIL_EXTENSIONS`, `src/main/file-icon.ts`) — at the 128px listing tier and at the Inspector's 640px preview tier. Should generation produce nothing, the tile falls back to the `app` kind's letter tile (`--tile-app`); it is the one entry in `KIND_ORDER` that is not part of the reference KD map. Automated checks: `test/fs-entry.test.ts`, `test/file-icon.test.ts`, `test/entries.test.ts`; on-device check (lists and launches a real hand-built bundle): `scripts/manual-qa/run-qa-finder-app-bundles.mjs`.
 
 ---
 
@@ -158,6 +168,21 @@ The Info half's bottom bar is data-driven, not a fixed four buttons.
   for `.zip`, an 이미지 편집 menu for images, and a 동영상 변환 menu for video.
   Quick Look, 경로 복사, and 휴지통 are deliberately absent — Space, the row
   context menu, ⌘⌫, and the Info chips already cover them.
+- The same headline actions sit in the row context menu (`state/context-menu.ts`):
+  다른 앱으로 열기 in the open group, and 새 폴더 · 압축 해제(`.zip` only) · 압축 ·
+  공유 in a group above 휴지통으로 이동. The same capability gates apply, the Trash
+  offers none of them, and a multi-selection keeps only the batch-meaningful
+  items — 압축 packs the whole selection into one `Archive.zip`, 공유 opens one
+  sheet, and 압축 해제 disappears. The menu's 다른 앱으로 열기 is the Inspector's
+  `기타…`: the full application chooser, one launch for the whole selection.
+- **다른 앱으로 열기** opens an in-app menu, not the native chooser. The first
+  rows are the applications the OS itself registers for the file's type
+  (Launch Services `URLsForApplicationsToOpenURL`, via
+  `actions:open-with-applications`), default first and marked `(기본)`, each with
+  its own icon. `기타…` is pinned last and is the only entry that opens the
+  full application chooser. A named application must be one the OS offered for
+  that file; main refuses anything else. Off macOS the OS list cannot be read,
+  so the menu is just `기타…`.
 - **Whether an action is real** comes from `actions:capabilities` in main: the
   macOS share sheet, the image engine (`sips`, plus WebP through `ffmpeg`), and
   video container conversion (`ffmpeg`) are probed once per session. A missing
@@ -167,8 +192,35 @@ The Info half's bottom bar is data-driven, not a fixed four buttons.
   `createActionService.run` (`src/main/action-service.ts`). The bar, the menu,
   the IPC channels, and the capability gating need no change.
 - Action outputs never overwrite: `uniqueChild` numbers them Finder-style
-  (`photo.jpeg`, `photo 2.jpeg`), and extraction strips a wrapper folder that
-  matches the archive name so `docs.zip` restores `docs/`'s contents directly.
+  (`photo.jpeg`, `photo 2.jpeg`). Extraction offers every format the shared
+  `archiveFormatOf` predicate recognizes — zip, tar, tar.gz/tgz, gz, 7z, and
+  tar.bz2/tar.xz — writing into a hidden staging folder beside the destination
+  (removed on any failure) and then renaming it into place, flattening a single
+  wrapper folder that matches the archive stem. The wasm engine's licenses are
+  recorded in `THIRD_PARTY_NOTICES.md`.
+
+---
+
+## 3a. First-run onboarding
+
+- The reference is `docs/design-reference/onboarding/onboarding-prototype.html`.
+  `src/renderer/styles/onboarding.css` ports its stylesheet rule for rule, with
+  every selector scoped under `.onb` (the prototype's `.app-window`) and its
+  keyframes renamed `onb-*`. Palette values the app already defines map onto
+  app tokens (`--bg-window`, `--border`, `--text-*`, `--accent`), so appearance
+  follows the app; the rest stay as `--onb-*` literals from the prototype.
+- The React screens in `src/renderer/src/onboarding/` emit the prototype's DOM
+  and class names, so the port needs no restyling. The prototype's drawn
+  traffic lights are omitted: the real window's native ones sit over the 42px
+  drag bar.
+- The window opens at the prototype's 1120×720 canvas (min 960×680) and grows
+  to the Finder size when onboarding completes.
+- Prototype simulations are replaced by real state: the indexing screen shows
+  real progress (no 30-minute minimum), folder cards show "세는 중…" until their
+  pre-scan finishes, and a failed index shows a warning notice with retry.
+- Changes to these screens are checked against the prototype with
+  `scripts/manual-qa/run-qa-onboarding.mjs`, which also writes per-step
+  screenshots to `.omo/evidence/onboarding/`.
 
 ---
 

@@ -47,6 +47,15 @@ export function homeEnv(home) {
 	return { HOME: home, USERPROFILE: home };
 }
 
+/**
+ * Escape a path for a CSS attribute value. Playwright's CSS engine eats a lone
+ * backslash (`[data-path="C:\Users"]` matches nothing), so Windows separators
+ * need `\\`. POSIX paths pass through unchanged.
+ */
+export function cssAttr(value) {
+	return value.replace(/\\/g, "\\\\");
+}
+
 /** Cross-platform file/folder name: handles `/` and `\`. */
 export function baseName(path) {
 	return path.split(/[\\/]/).pop() ?? path;

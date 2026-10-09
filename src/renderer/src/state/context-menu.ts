@@ -7,14 +7,24 @@
  * duplicate / rename / copy path. "Show in Enclosing Folder" is a product
  * addition too, and only the virtual Recents view offers it — elsewhere the
  * row already lives in the folder it would open.
+ *
+ * The row-action group mirrors the Inspector's headline actions — new folder,
+ * open with, compress, extract, share — so the representative jobs are one
+ * right-click away. It is capability-gated (`ActionCapabilities`): an item
+ * whose engine is missing never renders, and the multi-selection keeps only
+ * the batch-meaningful items.
  */
 
 import { deleteKeyLabel, enterKeyLabel, formatShortcut } from "../lib/shortcuts";
 import { NEW_FILE_FORMATS, type NewFileFormatId } from "../../../shared/new-file-contract";
+import type { ActionCapabilities } from "../../../shared/actions-contract";
+import { archiveFormatOf } from "../../../shared/archive-formats";
+import type { ServiceEntry } from "../../../shared/services-contract";
 
 export type FinderMenuAction =
 	| "quickLook"
 	| "open"
+	| "openWith"
 	| "showInEnclosingFolder"
 	| "toggleIndex"
 	| "retryIndex"
@@ -24,9 +34,15 @@ export type FinderMenuAction =
 	| "duplicate"
 	| "rename"
 	| "copyPath"
+	| "share"
+	| "compress"
+	| "extract"
+	| "putBack"
 	| "trash"
+	| "emptyTrash"
 	| "newFolder"
-	| "newFile";
+	| "newFile"
+	| "service";
 
 export type MenuTone = "default" | "danger" | "warning";
 
@@ -43,21 +59,26 @@ export interface FinderMenuSeparator {
 	readonly kind: "separator";
 }
 
-/** One row of the New submenu's popout. */
+/** One leaf of a popout. */
 export interface FinderMenuSubmenuItem {
 	readonly kind: "submenu-item";
 	readonly action: FinderMenuAction;
 	readonly label: string;
-	/** The document format a `newFile` item creates; null for the folder item. */
+	/** The document format a `newFile` item creates; null otherwise. */
 	readonly format: NewFileFormatId | null;
+	/** The OS service a `service` leaf performs; absent on every other leaf. */
+	readonly serviceId?: string;
 }
 
-/** A parent row that opens a popout panel on hover (the "새로 만들기" submenu). */
+/** A parent row that opens a popout panel on hover (the "새로 만들기" and "서비스" submenus). */
 export interface FinderMenuSubmenu {
 	readonly kind: "submenu";
 	readonly label: string;
-	readonly items: readonly FinderMenuSubmenuItem[];
+	readonly items: readonly FinderMenuSubmenuEntry[];
 }
+
+/** A popout row: a leaf, or (for 서비스) one more parent for an application's services. */
+export type FinderMenuSubmenuEntry = FinderMenuSubmenuItem | FinderMenuSubmenu;
 
 export type FinderMenuEntry = FinderMenuItem | FinderMenuSeparator | FinderMenuSubmenu;
 
@@ -70,6 +91,14 @@ export interface ContextMenuInput {
 	readonly clipboardCount: number;
 	/** True while the listing is the virtual Recents location. */
 	readonly inRecents?: boolean;
+	/** True while the listing is the Trash location: rows go back (Put Back) instead of to the Trash. */
+	readonly inTrash?: boolean;
+	/** What this machine can run; a missing engine removes its row action. */
+	readonly capabilities: ActionCapabilities;
+	/** Whether 새 폴더 can create in the folder the menu acts on. */
+	readonly canCreateFolder: boolean;
+	/** The OS services offered for the selection; absent or empty hides 서비스. */
+	readonly services?: readonly ServiceEntry[];
 }
 
 function item(
@@ -89,6 +118,35 @@ function item(
 
 const SEPARATOR: FinderMenuSeparator = { kind: "separator" };
 
+/**
+ * The 서비스 parent: services without a group sit directly in it, and each
+ * application's services open under one row named for the application. Null
+ * when there is nothing to offer, and always inside the Trash, where a row goes
+ * back or away rather than to another app.
+ */
+function servicesSubmenu(
+	services: readonly ServiceEntry[] | undefined,
+	inTrash: boolean,
+	tr: (key: string, def: string, opt?: Record<string, unknown>) => string,
+): FinderMenuSubmenu | null {
+	if (inTrash || services === undefined || services.length === 0) return null;
+	const leaf = (service: ServiceEntry): FinderMenuSubmenuItem => ({
+		kind: "submenu-item",
+		action: "service",
+		label: service.name,
+		format: null,
+		serviceId: service.id,
+	});
+	const items: FinderMenuSubmenuEntry[] = services.filter((service) => service.group === null).map(leaf);
+	const groups = new Map<string, FinderMenuSubmenuItem[]>();
+	for (const service of services) {
+		if (service.group === null) continue;
+		groups.set(service.group, [...(groups.get(service.group) ?? []), leaf(service)]);
+	}
+	for (const [group, children] of groups) items.push({ kind: "submenu", label: group, items: children });
+	return { kind: "submenu", label: tr("contextMenu.services", "서비스"), items };
+}
+
 export function buildContextMenu(
 	input: ContextMenuInput,
 	translate?: (key: string, def: string, opt?: Record<string, unknown>) => string,
@@ -101,6 +159,11 @@ export function buildContextMenu(
 			? item("open", tr("contextMenu.open", "열기"), { keycap: enterKeyLabel() })
 			: item("quickLook", tr("contextMenu.quickLook", "Quick Look"), { keycap: "space" }),
 	];
+	// The open group, Finder-style: 다른 앱으로 열기 sits directly under 열기.
+	// Like the row-action group below, it never appears inside the Trash.
+	if (!isFolder && input.inTrash !== true && input.capabilities.openWith) {
+		entries.push(item("openWith", tr("contextMenu.openWith", "다른 앱으로 열기")));
+	}
 	if (input.inRecents === true) {
 		entries.push(SEPARATOR, item("showInEnclosingFolder", tr("contextMenu.showInEnclosingFolder", "Show in Enclosing Folder")));
 	}
@@ -122,17 +185,59 @@ export function buildContextMenu(
 		item("duplicate", tr("contextMenu.duplicate", "복제")),
 		item("rename", tr("contextMenu.rename", "이름 변경"), { disabled: multi }),
 		item("copyPath", tr("contextMenu.copyPath", "경로 복사")),
+	);
+
+	// The row-action group: the Inspector's headline actions, run on the whole
+	// selection. Capability-gated, and never offered inside the Trash — a
+	// trashed row goes back (Put Back) or away, not into an archive or a sheet.
+	const rowActions: FinderMenuItem[] = [];
+	if (input.inTrash !== true) {
+		if (input.canCreateFolder) {
+			rowActions.push(item("newFolder", tr("contextMenu.newFolder", "새 폴더")));
+		}
+		if (input.capabilities.archive) {
+			// Extraction is single-target: one archive row on its own.
+			if (!multi && archiveFormatOf(input.target.name) !== null) {
+				rowActions.push(item("extract", tr("contextMenu.extract", "압축 해제")));
+			}
+			rowActions.push(
+				item(
+					"compress",
+					multi
+						? tr("contextMenu.compressCount", `${input.selectionCount}개 항목 압축`, { count: input.selectionCount })
+						: tr("contextMenu.compress", "압축"),
+				),
+			);
+		}
+		if (input.capabilities.share) {
+			rowActions.push(item("share", tr("contextMenu.share", "공유")));
+		}
+	}
+	if (rowActions.length > 0) {
+		entries.push(SEPARATOR, ...rowActions);
+	}
+	const services = servicesSubmenu(input.services, input.inTrash === true, tr);
+	if (services !== null) entries.push(SEPARATOR, services);
+
+	entries.push(
 		SEPARATOR,
-		item(
-			"trash",
-			multi
-				? tr("contextMenu.moveToTrashCount", `${input.selectionCount}개 항목 휴지통으로 이동`, { count: input.selectionCount })
-				: tr("contextMenu.moveToTrash", "휴지통으로 이동"),
-			{
-				keycap: deleteKeyLabel(),
-				tone: "danger",
-			},
-		),
+		input.inTrash === true
+			? item(
+					"putBack",
+					multi
+						? tr("contextMenu.putBackCount", `${input.selectionCount}개 항목 원래 위치로 복원`, { count: input.selectionCount })
+						: tr("contextMenu.putBack", "원래 위치로 복원"),
+				)
+			: item(
+					"trash",
+					multi
+						? tr("contextMenu.moveToTrashCount", `${input.selectionCount}개 항목 휴지통으로 이동`, { count: input.selectionCount })
+						: tr("contextMenu.moveToTrash", "휴지통으로 이동"),
+					{
+						keycap: deleteKeyLabel(),
+						tone: "danger",
+					},
+				),
 	);
 	return entries;
 }
@@ -140,6 +245,10 @@ export function buildContextMenu(
 export interface BackgroundMenuInput {
 	/** Items held by the in-app file clipboard; 0 disables 붙여넣기. */
 	readonly clipboardCount: number;
+	/** True while the listing is the Trash location: the menu offers 휴지통 비우기. */
+	readonly inTrash?: boolean;
+	/** The OS services offered for the folder in view; absent or empty hides 서비스. */
+	readonly services?: readonly ServiceEntry[];
 }
 
 /**
@@ -167,10 +276,15 @@ export function buildBackgroundContextMenu(
 			),
 		],
 	};
+	const services = servicesSubmenu(input.services, input.inTrash === true, tr);
 	return [
 		submenu,
 		SEPARATOR,
 		item("paste", tr("contextMenu.paste", "붙여넣기"), { keycap: formatShortcut({ key: "V" }), disabled: input.clipboardCount === 0 }),
+		...(services === null ? [] : [SEPARATOR, services]),
+		...(input.inTrash === true
+			? [SEPARATOR, item("emptyTrash", tr("contextMenu.emptyTrash", "휴지통 비우기"), { tone: "danger" })]
+			: []),
 	];
 }
 

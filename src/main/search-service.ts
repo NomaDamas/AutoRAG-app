@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { access } from "node:fs/promises";
 import {
 	buildAgentOptions,
 	EMIT_AUTORAG_RESULTS_TOOL_NAME,
@@ -401,7 +401,7 @@ export function createDefaultAgentFactory(): () => Promise<SearchAgent> {
 		const input = { flags: {}, env: process.env, cwd: process.cwd() };
 		const config = resolveConfigReadOnly(input);
 		const configPath = resolveConfigPath(input).configPath;
-		const raw = existsSync(configPath) ? readRawConfigObject(configPath) : {};
+		const raw = (await access(configPath).then(() => true, () => false)) ? readRawConfigObject(configPath) : {};
 		// librarian's resolveConfig drops `webSearch`; re-attach the raw block so
 		// buildAgentOptions applies it, then layer the app's code-folder exclusions.
 		const withWebSearch: CliConfig =

@@ -38,7 +38,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { AI_PANEL, dragRowOut, finderWindow, launchFinder, openAiSearch, stubNativeDrag } from "./launch-finder.mjs";
-import { chord, isMac, sleep } from "./platform.mjs";
+import { chord, cssAttr, isMac, sleep } from "./platform.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const EVIDENCE = join(ROOT, ".omo", "evidence", "ai-finder-app", "qa-native-drag-out");
@@ -79,7 +79,7 @@ const check = (name, pass, detail) => {
 	console.log(`${pass ? "PASS" : "FAIL"} ${name}: ${detail}`);
 };
 
-const row = (page, path) => page.locator(`[data-path="${path}"]`).first();
+const row = (page, path) => page.locator(`[data-path="${cssAttr(path)}"]`).first();
 const listNames = (dir) => readdirSync(dir).sort();
 const atTitle = (page, name) =>
 	page.waitForFunction((want) => document.querySelector(".toolbar-title")?.textContent === want, name, { timeout: 15_000 });

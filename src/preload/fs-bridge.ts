@@ -1,54 +1,54 @@
 import type { IpcRenderer } from "electron";
+import type { DirListing, FsBatchResult, FsBridge, FsClipboard, FsEntriesPatch, FsEntry, FsEntryEnrichment, FsFileDetails, FsFinderEnrichment, FsLocation, FsSearchResult, FsUndoOutcome, FsVersionFamiliesResult } from "../shared/fs-contract";
+import { FS_CHANNELS } from "../shared/fs-contract";
+import type { FsWorkerOp } from "../shared/fs-worker-contract";
+import { FS_WORKER_PUSH, type WorkerClient } from "../shared/fs-worker-protocol";
 import type { IndexStatus } from "../shared/index-contract";
-import { FS_CHANNELS, type FsBridge } from "../shared/fs-contract";
 
-/** Typed window.autorag.fs wrappers over ipcRenderer.invoke on the contract channels. */
-export function createFsBridge(ipcRenderer: IpcRenderer): FsBridge {
+/**
+ * Typed `window.autorag.fs`. Every filesystem call goes straight to the fs
+ * worker over its MessagePort; only the row drag-out (a main-process
+ * `webContents.startDrag`) still rides IPC.
+ */
+export function createFsBridge(ipcRenderer: IpcRenderer, worker: WorkerClient): FsBridge {
+	const call = <T>(op: FsWorkerOp, ...args: unknown[]): Promise<T> => worker.call<T>(op, args);
 	return {
-		listDir: (path) => ipcRenderer.invoke(FS_CHANNELS.listDir, path),
-		enrichEntries: (targets, thumbnails) => ipcRenderer.invoke(FS_CHANNELS.enrichEntries, targets, thumbnails),
-		finderMetadata: (targets) => ipcRenderer.invoke(FS_CHANNELS.finderMetadata, targets),
-		readEntries: (dir, paths) => ipcRenderer.invoke(FS_CHANNELS.readEntries, dir, paths),
-		stat: (path) => ipcRenderer.invoke(FS_CHANNELS.stat, path),
-		details: (path) => ipcRenderer.invoke(FS_CHANNELS.details, path),
-		previewIcon: (path, modifiedAt) => ipcRenderer.invoke(FS_CHANNELS.previewIcon, path, modifiedAt),
-		exists: (path) => ipcRenderer.invoke(FS_CHANNELS.exists, path),
-		search: (query, options) => ipcRenderer.invoke(FS_CHANNELS.search, query, options),
-		locations: () => ipcRenderer.invoke(FS_CHANNELS.locations),
-		ejectLocation: (path) => ipcRenderer.invoke(FS_CHANNELS.ejectLocation, path),
-		onLocationsChanged: (listener) => {
-			const handler = (): void => listener();
-			ipcRenderer.on(FS_CHANNELS.locationsChanged, handler);
-			return () => {
-				ipcRenderer.removeListener(FS_CHANNELS.locationsChanged, handler);
-			};
-		},
-		copy: (paths, destDir) => ipcRenderer.invoke(FS_CHANNELS.copy, paths, destDir),
-		move: (paths, destDir) => ipcRenderer.invoke(FS_CHANNELS.move, paths, destDir),
-		duplicate: (paths) => ipcRenderer.invoke(FS_CHANNELS.duplicate, paths),
-		rename: (path, newName) => ipcRenderer.invoke(FS_CHANNELS.rename, path, newName),
-		createFolder: (directory) => ipcRenderer.invoke(FS_CHANNELS.createFolder, directory),
-		createFile: (directory, format) => ipcRenderer.invoke(FS_CHANNELS.createFile, directory, format),
-		trash: (paths) => ipcRenderer.invoke(FS_CHANNELS.trash, paths),
-		reveal: (path) => ipcRenderer.invoke(FS_CHANNELS.reveal, path),
-		quickLook: (path) => ipcRenderer.invoke(FS_CHANNELS.quickLook, path),
-		open: (path) => ipcRenderer.invoke(FS_CHANNELS.open, path),
-		openUrl: (url) => ipcRenderer.invoke(FS_CHANNELS.openUrl, url),
-		clipboardSet: (clipboard) => ipcRenderer.invoke(FS_CHANNELS.clipboardSet, clipboard),
-		undo: () => ipcRenderer.invoke(FS_CHANNELS.undo),
-		clipboardGet: () => ipcRenderer.invoke(FS_CHANNELS.clipboardGet),
-		copyPathsToClipboard: (paths) => ipcRenderer.invoke(FS_CHANNELS.copyPathsToClipboard, paths),
+
+		listDir: (path) => call<DirListing>("listDir", path),
+		enrichEntries: (targets, thumbnails) => call<readonly FsEntryEnrichment[]>("enrichEntries", targets, thumbnails),
+		finderMetadata: (targets) => call<readonly FsFinderEnrichment[]>("finderMetadata", targets),
+		readEntries: (dir, paths) => call<FsEntriesPatch>("readEntries", dir, paths),
+		stat: (path) => call<FsEntry>("stat", path),
+		details: (path) => call<FsFileDetails>("details", path),
+		previewIcon: (path, mtimeMs) => call<string | null>("previewIcon", path, mtimeMs),
+		exists: (path) => call<boolean>("exists", path),
+		search: (query, options) => call<readonly FsSearchResult[]>("search", query, options),
+		locations: () => call<readonly FsLocation[]>("locations"),
+		ejectLocation: (path) => call<void>("ejectLocation", path),
+		onLocationsChanged: (listener) => worker.onPush(FS_WORKER_PUSH.locationsChanged, () => listener()),
+		copy: (paths, destDir) => call<FsBatchResult>("copy", paths, destDir),
+		move: (paths, destDir) => call<FsBatchResult>("move", paths, destDir),
+		duplicate: (paths) => call<FsBatchResult>("duplicate", paths),
+		rename: (path, newName) => call<FsEntry>("rename", path, newName),
+		createFolder: (directory) => call<{ readonly path: string; readonly name: string }>("createFolder", directory),
+		createFile: (directory, format) => call<{ readonly path: string; readonly name: string }>("createFile", directory, format),
+		trash: (paths) => call<FsBatchResult>("trash", paths),
+		restoreFromTrash: (paths) => call<FsBatchResult>("restoreFromTrash", paths),
+		emptyTrash: () => call<FsBatchResult>("emptyTrash"),
+		reveal: (path) => call<void>("reveal", path),
+		quickLook: (path) => call<void>("quickLook", path),
+		open: (path) => call<void>("open", path),
+		openUrl: (url) => call<void>("openUrl", url),
+		clipboardSet: (clipboard) => call<void>("clipboardSet", clipboard),
+		undo: () => call<FsUndoOutcome>("undo"),
+		clipboardGet: () => call<FsClipboard | null>("clipboardGet"),
+		copyPathsToClipboard: (paths) => call<void>("copyPathsToClipboard", paths),
 		startDrag: (paths) => ipcRenderer.send(FS_CHANNELS.startDrag, paths),
-		versionFamilies: () => ipcRenderer.invoke(FS_CHANNELS.versionFamilies),
-		indexStatus: (paths) => ipcRenderer.invoke(FS_CHANNELS.indexStatus, paths) as Promise<readonly IndexStatus[]>,
-		setIndexExcluded: (path, excluded) => ipcRenderer.invoke(FS_CHANNELS.indexSetExcluded, path, excluded) as Promise<IndexStatus>,
-		onIndexRefreshed: (listener) => {
-			const handler = (_event: unknown, error: string | null): void => listener(error);
-			ipcRenderer.on(FS_CHANNELS.indexRefreshed, handler);
-			return () => {
-				ipcRenderer.removeListener(FS_CHANNELS.indexRefreshed, handler);
-			};
-		},
-		refreshVersionFamilies: () => ipcRenderer.invoke(FS_CHANNELS.versionFamiliesRefresh),
+		versionFamilies: () => call<FsVersionFamiliesResult>("versionFamilies"),
+		indexStatus: (paths) => call<readonly IndexStatus[]>("indexStatus", paths),
+		setIndexExcluded: (path, excluded) => call<IndexStatus>("setIndexExcluded", path, excluded),
+		onIndexRefreshed: (listener) =>
+			worker.onPush(FS_WORKER_PUSH.indexRefreshed, (error) => listener(typeof error === "string" ? error : null)),
+		refreshVersionFamilies: () => call<FsVersionFamiliesResult>("refreshVersionFamilies"),
 	};
 }

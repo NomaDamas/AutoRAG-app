@@ -44,7 +44,9 @@
     "toggleInspector": "切换检查器",
     "showAiSearch": "显示 AI 搜索",
     "aiSearchShortcut": "AI 搜索 ({{shortcut}})",
-    "share": "共享"
+    "share": "共享",
+    "putBack": "放回原处",
+    "emptyTrash": "清倒废纸篓"
   },
   "sort": {
     "none": "无",
@@ -105,6 +107,7 @@
   "contextMenu": {
     "open": "打开",
     "quickLook": "快速查看 (Quick Look)",
+    "openWith": "打开方式",
     "showInEnclosingFolder": "在外层文件夹中显示",
     "retryIndex": "重试建立索引",
     "excludeFromIndex": "从索引中排除",
@@ -115,8 +118,16 @@
     "duplicate": "复制",
     "rename": "重命名",
     "copyPath": "拷贝路径",
+    "compress": "压缩",
+    "compressCount": "压缩 {{count}} 个项目",
+    "extract": "解压",
+    "share": "共享",
+    "services": "服务",
     "moveToTrash": "移到废纸篓",
     "moveToTrashCount": "将 {{count}} 个项目移到废纸篓",
+    "putBack": "放回原处",
+    "putBackCount": "将 {{count}} 个项目放回原处",
+    "emptyTrash": "清倒废纸篓",
     "newFolder": "新建文件夹",
     "new": "新建",
     "trashShort": "废纸篓"
@@ -221,6 +232,10 @@
       "older": "更早"
     }
   },
+  "osMenu": {
+    "ask": "向 AutoRAG 提问",
+    "reveal": "在 AutoRAG 中显示"
+  },
   "toasts": {
     "trashSingle": "已将 {{name}} 移到废纸篓",
     "trashCount": "已将 {{count}} 个项目移到废纸篓",
@@ -228,6 +243,11 @@
     "indexExcluded": "{{name}} — 已从索引中排除",
     "copiedPath": "已拷贝路径",
     "feedbackSent": "已发送反馈"
+  },
+  "confirm": {
+    "emptyTrashTitle": "清倒废纸篓",
+    "emptyTrashMessage": "废纸篓中的所有项目将被永久删除。此操作无法撤销。",
+    "emptyTrashAction": "清倒"
   },
   "settings": {
     "title": "设置",
@@ -265,7 +285,431 @@
       "autoUpdates": "自动安装更新",
       "autoUpdatesHint": "在下次应用重启时应用更新。",
       "telemetry": "分享匿名诊断数据",
-      "telemetryHint": "分享匿名化性能指标。"
+      "telemetryHint": "分享匿名化性能指标。",
+      "osMenuIntegration": "添加到文件右键菜单",
+      "osMenuIntegrationHint": "在访达(macOS)或资源管理器(Windows)中右键点击文件,即可使用“向 AutoRAG 提问”和“在 AutoRAG 中显示”。",
+      "osMenuIntegrationError": "无法设置右键菜单"
+    }
+  },
+  "onboarding": {
+    "step": {
+      "welcome": "介绍",
+      "permissions": "权限",
+      "account": "账户",
+      "folders": "文件夹",
+      "embedding": "嵌入",
+      "sources": "数据源",
+      "plan": "套餐",
+      "model": "AI 模型",
+      "indexing": "索引"
+    },
+    "stepLabel": {
+      "welcome": "开始使用",
+      "permissions": "继续",
+      "account": "继续",
+      "folders": "选择文件夹并继续",
+      "embedding": "继续",
+      "sources": "继续",
+      "model": "继续",
+      "indexing": "继续"
+    },
+    "welcome": {
+      "eyebrow": "Pro 7 天免费试用",
+      "title": "直接向\n文件提问",
+      "lead": "无需打开文件夹翻找。AutoRAG 会阅读文档中的内容，并附上依据作答。",
+      "note": "默认在本地处理。需要远程处理时，我们会先显示哪些内容将被发送。",
+      "chat": {
+        "user": "上一季度的成本为什么下降了？",
+        "replyLead": "营销成本比上季度下降了",
+        "replyTail": "。"
+      },
+      "evidence": {
+        "revenue": "营收报告",
+        "revenueQuote": "“同比增长 18%…”",
+        "budget": "Budget summary",
+        "budgetQuote": "“Q3 operating cost…”"
+      }
+    },
+    "feature": {
+      "ai": { "title": "AI 搜索", "sub": "答案与依据一并呈现" },
+      "citation": { "title": "引用依据", "sub": "查看答案的来源" },
+      "versions": { "title": "版本归组", "sub": "整理重复文档" },
+      "quicklook": { "title": "Quick Look", "sub": "打开前预览" },
+      "sources": { "title": "数据源", "sub": "连同已连接的位置一起搜索" },
+      "hybrid": { "title": "混合搜索", "sub": "关键词与语义并用，按重排排序" }
+    },
+    "hybrid": { "keyword": "关键词", "semantic": "语义", "rerank": "重排" },
+    "versions": { "latest": "最新版", "near": "相似版", "exact": "相同版" },
+    "account": {
+      "eyebrow": "账户",
+      "title": "用账户\n开始使用",
+      "lead": "只有套餐和试用版与账户关联。文件和索引保留在这台 Mac 上。",
+      "note": "在浏览器中登录后会自动返回此应用。你无需在此应用中输入密码。",
+      "signedIn": "已登录",
+      "signedInNote": "正在进入下一步",
+      "otherAccount": "其他账户",
+      "cardTitle": "AutoRAG 账户",
+      "cardSub": "管理试用版与设置",
+      "busy": "正在浏览器中登录…",
+      "busyNote": "认证完成后会自动返回。",
+      "apple": "使用 Apple 继续",
+      "google": "使用 Google 继续",
+      "or": "或",
+      "emailPlaceholder": "电子邮箱地址",
+      "magicLink": "获取链接",
+      "authNote": "我们会将登录链接发送到你的邮箱。账户中不会存储文件内容。",
+      "sampleEmail": "hello@autorag.example"
+    },
+    "permissions": {
+      "eyebrow": "权限",
+      "title": "请允许访问\n以便正确读取",
+      "leadMac": "macOS 会在应用访问文档和受保护的应用数据前征求许可。权限与索引范围是两回事。",
+      "leadWindows": "只需确认通知和网络即可开始。其余可稍后在设置中更改。",
+      "note": "AutoRAG 不会修改你的文件。实际要索引的文件夹由你在下一步自行选择。",
+      "required": "必需",
+      "optional": "可选",
+      "setting": "设置",
+      "granted": "已允许",
+      "restartNeeded": "需要重启",
+      "restartNow": "立即重启",
+      "openSettings": "打开系统设置",
+      "footnote": "开启后才能继续。",
+      "fda": {
+        "name": "完全磁盘访问权限",
+        "desc": "需要此权限才能正常工作。"
+      },
+      "notifications": {
+        "name": "通知",
+        "allow": "允许通知",
+        "openWindows": "打开 Windows 设置"
+      },
+      "login": {
+        "name": "登录时启动",
+        "desc": "文件发生变化时，在后台保持索引最新。"
+      },
+      "network": {
+        "name": "网络（防火墙）",
+        "desc": "云端嵌入和模型调用需要。首次启动时若出现 Windows 安全警告，请选择允许。",
+        "allow": "允许"
+      }
+    },
+    "folders": {
+      "eyebrow": "索引范围",
+      "title": "选择 AI 可读取的文件夹",
+      "lead": "只有此处选择的文件夹会纳入 AI 搜索。范围可稍后扩大或缩小。",
+      "suggested": "推荐位置",
+      "selectAll": "全选",
+      "add": "添加其他文件夹",
+      "stats": "{{files}} 个 · {{size}} · 约 {{minutes}} 分钟",
+      "scanning": "统计中…",
+      "scanError": "无法读取",
+      "summary": "{{folders}} 个文件夹 · {{files}} 个文件 · {{size}}",
+      "summaryNote": "node_modules · .git · 超过 50 MiB 的文件会自动排除。",
+      "localEta": "本地约 {{minutes}} 分钟",
+      "cloudEta": "云端约 {{minutes}} 分钟",
+      "warning": "范围较广。选择子文件夹或云端嵌入可以更快看到首个结果。"
+    },
+    "embedding": {
+      "eyebrow": "重要选择",
+      "title": "在哪里\n进行嵌入？",
+      "lead": "决定将文档转换为可搜索向量的处理在哪里进行。之后更改需要从头再来，会额外花费时间和成本。",
+      "files": "{{count}} 个",
+      "selectedFiles": "已选文件",
+      "reindexNote": "更改嵌入模型或处理位置会丢弃当前已构建的索引，必须从头重新创建。",
+      "localTitle": "在这台 Mac 上",
+      "localLead": "文件正文不会离开这台 Mac。",
+      "metricTime": "预计用时",
+      "metricDownload": "下载",
+      "metricPrivacy": "隐私",
+      "metricStorage": "存储",
+      "metricPlan": "套餐",
+      "minutes": "约 {{minutes}} 分钟",
+      "cached": "已就绪",
+      "downloadUnknown": "检查中",
+      "privacyLocal": "本地",
+      "storageNone": "不存储",
+      "planPro": "仅限 Pro",
+      "bulletGpuMac": "使用 Apple Silicon GPU",
+      "bulletGpuWindows": "使用 GPU 加速（如可用）",
+      "bulletPower": "笔记本电脑建议连接电源",
+      "cloudBadge": "准备中",
+      "cloudTitle": "在云端",
+      "cloudLead": "处理更快，但你选择的文档正文会被发送。",
+      "cloudBulletPerf": "对 Mac 性能影响较小",
+      "cloudBulletNoStore": "处理后不保留正文"
+    },
+    "sources": {
+      "eyebrow": "数据源",
+      "title": "连已连接的位置\n也一起搜索？",
+      "lead": "只先显示已安装并通过认证的数据源。无需全部选择。",
+      "detected": "已检测",
+      "checking": "正在检查可添加的其他来源…",
+      "empty": "未找到已连接的来源。您可以稍后在设置中连接。",
+      "connectMore": "需要准备的数据源可稍后在设置中连接。",
+      "name": {
+        "kakao": "KakaoTalk",
+        "slack": "Slack",
+        "discord": "Discord",
+        "telegram": "Telegram",
+        "whatsapp": "WhatsApp",
+        "mailcrawl": "邮件 (mailcrawl)",
+        "github": "GitHub",
+        "obsidian": "Obsidian"
+      },
+      "detail": {
+        "kakao": "检测到 KakaoTalk 应用数据",
+        "slack": "已连接 {{workspaces}} 个工作区",
+        "discord": "检测到 Discord 应用消息 {{messages}} 条",
+        "telegram": "检测到 Telegram 应用数据",
+        "whatsapp": "对话 {{chats}} 个 · 消息 {{messages}} 条",
+        "mailcrawl": "已确认登录邮箱账户 {{accounts}} 个",
+        "github": "已登录 · Issues 与 Pull Requests",
+        "obsidian": "发现 {{vaults}} 个 Vault"
+      }
+    },
+    "plan": {
+      "eyebrow": "套餐",
+      "title": "你打算如何使用？",
+      "titleReady": "套餐已就绪",
+      "lead": "套餐决定 AI 用量和嵌入位置。可稍后在设置中更改。",
+      "badgeRecommended": "推荐",
+      "badgeTrial": "试用进行中",
+      "badgeSubscribed": "已订阅",
+      "perMonth": "/ 月",
+      "continue": "使用此套餐继续",
+      "startTrial": "开始 7 天免费试用",
+      "subscribeAir": "订阅 Air",
+      "notePaid": "已完成支付方式绑定",
+      "noteProTrialActive": "试用中 · 7 天后每月 $20",
+      "plan": {
+        "free": {
+          "name": "Free",
+          "price": "免费",
+          "note": "无需银行卡即可开始",
+          "tag": "轻松上手",
+          "chip": "提问会发送至 AutoRAG 模型",
+          "feature": {
+            "a": "在这台 Mac 上本地嵌入",
+            "b": "托管 AI 模型 · 基础用量",
+            "c": "完整使用 Finder 和搜索功能"
+          }
+        },
+        "air": {
+          "name": "Air",
+          "price": "$4",
+          "note": "无需试用即可开始",
+          "tag": "每天轻松使用",
+          "chip": "提问会发送至 AutoRAG 模型",
+          "feature": {
+            "a": "在这台 Mac 上本地嵌入",
+            "b": "托管 AI 模型 · 充足用量",
+            "c": "包含 Free 的全部功能"
+          }
+        },
+        "pro": {
+          "name": "Pro",
+          "price": "$20",
+          "note": "7 天免费试用后计费",
+          "tag": "最快的首次索引",
+          "chip": "发送文件正文前需同意",
+          "feature": {
+            "a": "云端嵌入，速度更快",
+            "b": "托管 AI 模型 · 最高用量",
+            "c": "包含 Air 的全部功能"
+          }
+        },
+        "byok": {
+          "name": "BYOK",
+          "price": "仅 API 费用",
+          "note": "直接向 provider 付费",
+          "tag": "用自己的密钥直接连接",
+          "chip": "需要输入 API 密钥",
+          "feature": {
+            "a": "在这台 Mac 上本地嵌入",
+            "b": "自行选择 provider 和模型",
+            "c": "仅向所选 provider 发送请求"
+          }
+        }
+      }
+    },
+    "model": {
+      "eyebrow": "AI 模型",
+      "title": "连接要使用的模型",
+      "lead": "使用检测到的连接，或选择 provider 和 API 密钥。",
+      "note": "密钥会加密存储，不会写入配置文件。",
+      "detectedTitle": "检测到的连接",
+      "localRuntime": "本地 runtime",
+      "storedCredential": "已保存的凭据",
+      "use": "使用",
+      "provider": {
+        "anthropic": "Anthropic",
+        "openai": "OpenAI",
+        "openrouter": "OpenRouter",
+        "google": "Google",
+        "ollama": "Ollama",
+        "openai-compatible": "OpenAI 兼容"
+      },
+      "baseUrlPlaceholder": "https://example.com/v1",
+      "keyPlaceholder": "输入 API 密钥",
+      "verify": "测试连接",
+      "verifying": "检查中…",
+      "verified": "✓ 连接完成 · 已选择推荐模型。",
+      "unverified": "密钥会加密存储，不会写入配置文件。",
+      "error": "连接失败：{{error}}",
+      "advanced": "高级设置",
+      "modelRow": "模型",
+      "recommended": "provider 推荐模型",
+      "reasoningRow": "推理级别（仅生成模型）",
+      "reasoningValue": "模型默认值"
+    },
+    "indexing": {
+      "tip": "小技巧",
+      "prevTip": "上一条技巧",
+      "nextTip": "下一条技巧",
+      "tipDot": "技巧 {{index}}",
+      "done": "索引完成",
+      "doneDetail": "{{files}} 个文件 · {{sources}} 个数据源",
+      "failedTitle": "索引中断",
+      "failedDetail": "未能完成索引。",
+      "waiting": "等待开始",
+      "waitingNote": "正在准备首次索引。",
+      "running": "{{phase}}…",
+      "detailParsing": "正在读取文档",
+      "detailSources": "{{sources}} · 正在同步元数据",
+      "detailNoSources": "未连接数据源 · 已跳过",
+      "detailFinalizing": "正在优化搜索索引",
+      "phaseLabel": {
+        "parsed": "正在读取文档",
+        "minsync": "正在嵌入",
+        "datasources": "正在检查数据源",
+        "finalizing": "正在整理"
+      },
+      "phase": {
+        "parsed": "读取文档",
+        "minsync": "嵌入",
+        "datasources": "数据源",
+        "finalizing": "整理"
+      },
+      "title": "AutoRAG 正在读取你的文件",
+      "titleDone": "一切就绪",
+      "metaDone": "正在确认总用时",
+      "metaTotal": "总计 {{minutes}} 分钟",
+      "metaFiles": "{{count}} 个文件",
+      "metaEstimating": "正在计算剩余时间",
+      "metaUnderMinute": "剩余不到 1 分钟",
+      "metaRemaining": "剩余约 {{minutes}} 分钟",
+      "metaProgress": "{{processed}} / {{total}} 个文件",
+      "gateOkTitle": "现在可以退出了",
+      "gateOkDetail": "已读取全部 {{files}} 个文件。新更改的文件会在后台继续读取。",
+      "gateFailTitle": "未能完成索引",
+      "gateFailDetail": "重试后将从断点继续。",
+      "gateTitle": "请勿退出 AutoRAG 或关闭 {{machine}}",
+      "gateDetailMac": "首次索引耗时较长。退出会中断进度。请连接电源适配器并保持屏幕开启。",
+      "gateDetailWindows": "首次索引耗时较长。退出会中断进度。请保持连接电源。",
+      "gateLocked": "完成后即可打开",
+      "open": "打开 AutoRAG",
+      "retry": "重试"
+    },
+    "tips": {
+      "1": {
+        "title": "一次 {{shortcut}} 即可提问",
+        "body": "从任何界面都能跳转到 AI Search 输入框。无需打开文件夹，就能就文档内容提问，并获得带依据的答案。"
+      },
+      "2": {
+        "title": "点击答案中的编号即可预览依据",
+        "body": "答案中附带的编号是实际读取的文档位置。点击即可直接预览依据文件的内容。",
+        "bubble": "营销成本比上季度下降了 18%。"
+      },
+      "3": {
+        "title": "用 Space 不打开也能浏览",
+        "body": "选中文件后按 Space 即可用 Quick Look 预览。无需切换应用即可查看内容。"
+      },
+      "4": {
+        "title": "把文件拖入提问",
+        "body": "将 Finder 中的条目或其他应用的文件、文件夹拖入 AI Search，即以该范围为基准提问。",
+        "pill": "概括这个文件"
+      },
+      "5": {
+        "title": "相似文件归为一组",
+        "body": "像 proposal-final 和 proposal-v3 这样的相似文件会归组，并标记为最新版、相似版、相同版。不必再纠结选哪个版本。",
+        "latest": "最新版",
+        "near": "相似版",
+        "exact": "相同版"
+      },
+      "6": {
+        "title": "用 {{shortcut}} 搜索文件",
+        "body": "直接跳转到搜索框。同时查看关键词和语义，并按重排排列顺序。"
+      },
+      "7": {
+        "title": "用 {{shortcut}} · 2 · 3 切换视图",
+        "body": "用键盘在图标、列表和分栏视图之间切换。最后选择的视图在下次启动时仍会保留。"
+      },
+      "8": {
+        "title": "Slack 和 GitHub 也能用同样的问题",
+        "body": "已连接的数据源会与文件一同搜索。可随时在设置中添加或关闭数据源。"
+      },
+      "9": {
+        "title": "随时用 {{shortcut}} 重新配置",
+        "body": "文件夹范围、AI 模型和数据源可在设置中更改。只有嵌入位置一旦更改就会从头重新索引。"
+      }
+    },
+    "overlay": {
+      "later": "稍后",
+      "fda": {
+        "title": "完全磁盘访问权限",
+        "heading": "在系统设置中开启",
+        "lead": "只需允许一次即可读取 macOS 受保护的区域。即使退出应用，引导也会从此步骤继续。",
+        "step1": "打开 隐私与安全性 → 完全磁盘访问权限。",
+        "step2": "将 AutoRAG 添加到列表并打开开关。",
+        "step3": "如果 macOS 提示，请退出后重新打开。",
+        "drag": "如果不在列表中，请将此图标拖到列表中",
+        "allowed": "我已允许",
+        "mock": {
+          "navTitle": "隐私与安全性",
+          "notifications": "通知",
+          "files": "文件和文件夹",
+          "fda": "完全磁盘访问权限",
+          "automation": "自动化",
+          "paneLead": "以下应用可以访问整个磁盘上的文件。"
+        }
+      },
+      "restart": {
+        "title": "要重新打开 AutoRAG 吗？",
+        "lead": "完全磁盘访问权限需要退出并重新打开应用后才能生效。引导会从当前步骤继续。",
+        "action": "退出并重新打开"
+      },
+      "pay": {
+        "proTitle": "开始 Pro 7 天免费试用",
+        "airTitle": "订阅 Air 套餐",
+        "proLead": "前 7 天免费。试用期间不会扣费，并会在结束前通知你。开始试用后即可立即使用云端嵌入。",
+        "airLead": "从今天起每月收取 $4。可比 Free 更充裕地使用托管 AI 模型。",
+        "today": "今天支付",
+        "afterPro": "7 天后开始",
+        "fromNext": "从下次账单起",
+        "monthly": "每月 {{price}}",
+        "cardNumber": "卡号",
+        "expiry": "有效期",
+        "cvc": "CVC",
+        "proConsent": "我同意在 7 天免费试用结束后每月自动扣款 $20。可随时在设置中取消。",
+        "airConsent": "我同意每月自动扣款 $4。可随时在设置中取消。",
+        "demo": "不会发生实际支付。此步骤仅为 QA 占位符，卡信息不会被存储或发送。",
+        "startTrial": "开始试用",
+        "payAir": "支付 $4 并继续"
+      }
+    },
+    "toast": {
+      "signedIn": "已登录。",
+      "notificationsOn": "已获得通知权限。",
+      "notificationsOff": "请在系统设置中允许通知。",
+      "loginFailed": "无法添加到登录项。",
+      "networkOk": "已确认网络连接。",
+      "networkFail": "无法连接到网络。",
+      "fdaPending": "重新打开应用后权限将生效。",
+      "verified": "已确认连接。",
+      "payMissing": "需要卡信息和同意。（演示）",
+      "trialStarted": "已开始 Pro 7 天免费试用。（演示 · 无实际支付）",
+      "subscribed": "已订阅套餐。（演示 · 无实际支付）",
+      "notIndexed": "索引完成后才能打开 AutoRAG。"
     }
   }
 }
