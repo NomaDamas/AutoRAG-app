@@ -416,3 +416,9 @@ equivalents (the registry for file kinds, `tasklist`/`taskkill`, the Recycle
 Bin) and scripts that genuinely need macOS log a skip instead of failing.
 Lane logs and `summary.json` land in `.omo/evidence/win-qa/`. The sweep also
 runs in CI (`.github/workflows/qa-windows.yml`).
+
+## License
+
+AutoRAG is licensed under the GNU Affero General Public License v3.0
+(`AGPL-3.0-only`); see [`LICENSE`](LICENSE). Bundled third-party components
+and their licenses are listed in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
