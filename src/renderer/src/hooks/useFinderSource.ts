@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import type { ActionsBridge } from "../../../shared/actions-contract";
 import type { FsBridge } from "../../../shared/fs-contract";
 import type { LiveBridge } from "../../../shared/live-contract";
+import type { ServicesBridge } from "../../../shared/services-contract";
 import { createBridgeSource, createFixtureSource, type FinderSource } from "../data/source";
 
 /**
@@ -14,6 +15,7 @@ interface PreloadGlobals {
 		readonly fs?: FsBridge;
 		readonly live?: LiveBridge;
 		readonly actions?: ActionsBridge;
+		readonly services?: ServicesBridge;
 	};
 }
 
@@ -29,6 +31,6 @@ export function useFinderSource(): FinderSource {
 		const autorag = globals.autorag;
 		return autorag?.fs === undefined || autorag.live === undefined
 			? createFixtureSource()
-			: createBridgeSource(autorag.fs, "", autorag.live, autorag.actions);
+			: createBridgeSource(autorag.fs, "", autorag.live, autorag.actions, autorag.services);
 	}, []);
 }

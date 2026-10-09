@@ -122,6 +122,7 @@
     "compressCount": "Compress {{count}} Items",
     "extract": "Extract",
     "share": "Share",
+    "services": "Services",
     "moveToTrash": "Move to Trash",
     "moveToTrashCount": "Move {{count}} items to Trash",
     "putBack": "Put Back",
@@ -231,6 +232,10 @@
       "older": "Earlier"
     }
   },
+  "osMenu": {
+    "ask": "Ask AutoRAG",
+    "reveal": "Show in AutoRAG"
+  },
   "toasts": {
     "trashSingle": "Moved {{name}} to Trash",
     "trashCount": "Moved {{count}} items to Trash",
@@ -280,7 +285,431 @@
       "autoUpdates": "Automatically install updates",
       "autoUpdatesHint": "Apply updates on next app restart.",
       "telemetry": "Share anonymous diagnostics",
-      "telemetryHint": "Share anonymized performance diagnostics."
+      "telemetryHint": "Share anonymized performance diagnostics.",
+      "osMenuIntegration": "Add to the file right-click menu",
+      "osMenuIntegrationHint": "Right-click a file in Finder (macOS) or Explorer (Windows) to get 'Ask AutoRAG' and 'Show in AutoRAG'.",
+      "osMenuIntegrationError": "Could not set up the right-click menu"
+    }
+  },
+  "onboarding": {
+    "step": {
+      "welcome": "Intro",
+      "permissions": "Permissions",
+      "account": "Account",
+      "folders": "Folders",
+      "embedding": "Embedding",
+      "sources": "Data sources",
+      "plan": "Plan",
+      "model": "AI model",
+      "indexing": "Indexing"
+    },
+    "stepLabel": {
+      "welcome": "Get started",
+      "permissions": "Continue",
+      "account": "Continue",
+      "folders": "Continue with folders",
+      "embedding": "Continue",
+      "sources": "Continue",
+      "model": "Continue",
+      "indexing": "Continue"
+    },
+    "welcome": {
+      "eyebrow": "Pro 7-day free trial",
+      "title": "Ask your\nfiles",
+      "lead": "You don't have to dig through folders. AutoRAG reads what's inside your documents and answers with sources.",
+      "note": "Local by default. When remote processing is needed, we show you exactly what will be sent first.",
+      "chat": {
+        "user": "Why did last quarter's costs go down?",
+        "replyLead": "Marketing costs fell ",
+        "replyTail": " from the previous quarter."
+      },
+      "evidence": {
+        "revenue": "Revenue report",
+        "revenueQuote": "“Up 18% year over year…”",
+        "budget": "Budget summary",
+        "budgetQuote": "“Q3 operating cost…”"
+      }
+    },
+    "feature": {
+      "ai": { "title": "AI Search", "sub": "Answers and sources at once" },
+      "citation": { "title": "Citations", "sub": "Check where answers come from" },
+      "versions": { "title": "Version grouping", "sub": "Tidy up duplicate documents" },
+      "quicklook": { "title": "Quick Look", "sub": "Preview before opening" },
+      "sources": { "title": "Data sources", "sub": "Search connected sources too" },
+      "hybrid": { "title": "Hybrid search", "sub": "Keywords and meaning together, ordered by reranking" }
+    },
+    "hybrid": { "keyword": "Keyword", "semantic": "Meaning", "rerank": "Reranking" },
+    "versions": { "latest": "Latest", "near": "Similar", "exact": "Identical" },
+    "account": {
+      "eyebrow": "Account",
+      "title": "Start with\nyour account",
+      "lead": "Only your plan and trial are tied to your account. Your files and index stay on this Mac.",
+      "note": "You sign in in your browser and come back to this app automatically. You never enter your password in the app.",
+      "signedIn": "Signed in",
+      "signedInNote": "Moving to the next step",
+      "otherAccount": "Another account",
+      "cardTitle": "AutoRAG account",
+      "cardSub": "Manage your trial and settings",
+      "busy": "Signing in in your browser…",
+      "busyNote": "You'll return here automatically once authentication finishes.",
+      "apple": "Continue with Apple",
+      "google": "Continue with Google",
+      "or": "or",
+      "emailPlaceholder": "Email address",
+      "magicLink": "Send link",
+      "authNote": "We'll email you a sign-in link. No file contents are stored in your account.",
+      "sampleEmail": "hello@autorag.example"
+    },
+    "permissions": {
+      "eyebrow": "Permissions",
+      "title": "Allow access so we\ncan read properly",
+      "leadMac": "macOS asks for your permission before an app can access documents and protected app data. Permissions and indexing scope are different things.",
+      "leadWindows": "Just confirm notifications and network and you can start right away. You can change the rest later in Settings.",
+      "note": "AutoRAG never modifies your files. You pick exactly which folders to index in the next step.",
+      "required": "Required",
+      "optional": "Optional",
+      "setting": "Setting",
+      "granted": "Granted",
+      "restartNeeded": "Restart needed",
+      "restartNow": "Restart now",
+      "openSettings": "Open System Settings",
+      "footnote": "Turn it on to continue.",
+      "fda": {
+        "name": "Full Disk Access",
+        "desc": "Needed for AutoRAG to work properly."
+      },
+      "notifications": {
+        "name": "Notifications",
+        "allow": "Allow notifications",
+        "openWindows": "Open Windows Settings"
+      },
+      "login": {
+        "name": "Launch at login",
+        "desc": "Keeps the index up to date in the background when files change."
+      },
+      "network": {
+        "name": "Network (firewall)",
+        "desc": "Needed for cloud embedding and model calls. If the Windows security warning appears on first launch, allow it.",
+        "allow": "Allow"
+      }
+    },
+    "folders": {
+      "eyebrow": "Indexing scope",
+      "title": "Choose the folders AI can read",
+      "lead": "Only the folders selected here are included in AI search. You can expand or shrink the scope later.",
+      "suggested": "Suggested locations",
+      "selectAll": "Select all",
+      "add": "Add another folder",
+      "stats": "{{files}} · {{size}} · ~{{minutes}} min",
+      "scanning": "Counting…",
+      "scanError": "Can't read",
+      "summary": "{{folders}} folders · {{files}} files · {{size}}",
+      "summaryNote": "node_modules · .git · files over 50 MiB are excluded automatically.",
+      "localEta": "~{{minutes}} min locally",
+      "cloudEta": "~{{minutes}} min in the cloud",
+      "warning": "This scope is broad. Choosing a subfolder or cloud embedding shows your first results sooner."
+    },
+    "embedding": {
+      "eyebrow": "Important choice",
+      "title": "Where should we\nembed?",
+      "lead": "Decide where the work of turning your documents into searchable vectors happens. Changing it later means starting over, which costs more time and money.",
+      "files": "{{count}}",
+      "selectedFiles": "Selected files",
+      "reindexNote": "Changing the embedding model or processing location discards the index you've built and starts over from scratch.",
+      "localTitle": "On this Mac",
+      "localLead": "Your file contents never leave the Mac.",
+      "metricTime": "Estimated time",
+      "metricDownload": "Download",
+      "metricPrivacy": "Privacy",
+      "metricStorage": "Storage",
+      "metricPlan": "Plan",
+      "minutes": "~{{minutes}} min",
+      "cached": "Ready",
+      "downloadUnknown": "Checking",
+      "privacyLocal": "Local",
+      "storageNone": "None",
+      "planPro": "Pro only",
+      "bulletGpuMac": "Uses Apple Silicon GPU",
+      "bulletGpuWindows": "Uses GPU acceleration (when available)",
+      "bulletPower": "Recommended to plug in on laptops",
+      "cloudBadge": "Preparing",
+      "cloudTitle": "In the cloud",
+      "cloudLead": "Processes faster, but the contents of the documents you select are sent.",
+      "cloudBulletPerf": "Little impact on Mac performance",
+      "cloudBulletNoStore": "Content not stored after processing"
+    },
+    "sources": {
+      "eyebrow": "Data sources",
+      "title": "Also search\nconnected sources?",
+      "lead": "We only show sources that are already installed and authenticated. You don't have to select them all.",
+      "detected": "Detected",
+      "checking": "Checking which other sources can be added…",
+      "empty": "No connected sources found. You can connect some later in Settings.",
+      "connectMore": "Sources that need setup can be connected later in Settings.",
+      "name": {
+        "kakao": "KakaoTalk",
+        "slack": "Slack",
+        "discord": "Discord",
+        "telegram": "Telegram",
+        "whatsapp": "WhatsApp",
+        "mailcrawl": "Mail (mailcrawl)",
+        "github": "GitHub",
+        "obsidian": "Obsidian"
+      },
+      "detail": {
+        "kakao": "KakaoTalk app data detected",
+        "slack": "{{workspaces}} workspaces connected",
+        "discord": "{{messages}} messages detected in Discord app",
+        "telegram": "Telegram app data detected",
+        "whatsapp": "{{chats}} chats · {{messages}} messages",
+        "mailcrawl": "Signed in to {{accounts}} mail accounts",
+        "github": "Signed in · Issues and Pull Requests",
+        "obsidian": "{{vaults}} vaults found"
+      }
+    },
+    "plan": {
+      "eyebrow": "Plan",
+      "title": "How will you use it?",
+      "titleReady": "Your plan is ready",
+      "lead": "Your plan determines AI usage and where embedding happens. You can change it later in Settings.",
+      "badgeRecommended": "Recommended",
+      "badgeTrial": "Trial in progress",
+      "badgeSubscribed": "Subscribed",
+      "perMonth": "/ mo",
+      "continue": "Continue with this plan",
+      "startTrial": "Start 7-day free trial",
+      "subscribeAir": "Subscribe to Air",
+      "notePaid": "Payment method added",
+      "noteProTrialActive": "Trial · $20/mo after 7 days",
+      "plan": {
+        "free": {
+          "name": "Free",
+          "price": "Free",
+          "note": "Start right away, no card",
+          "tag": "Start light",
+          "chip": "Questions are sent to AutoRAG models",
+          "feature": {
+            "a": "Local embedding on this Mac",
+            "b": "Managed AI models · basic usage",
+            "c": "Full use of Finder and search"
+          }
+        },
+        "air": {
+          "name": "Air",
+          "price": "$4",
+          "note": "Start right away, no trial",
+          "tag": "Light everyday use",
+          "chip": "Questions are sent to AutoRAG models",
+          "feature": {
+            "a": "Local embedding on this Mac",
+            "b": "Managed AI models · generous usage",
+            "c": "Everything in Free"
+          }
+        },
+        "pro": {
+          "name": "Pro",
+          "price": "$20",
+          "note": "Billed after a 7-day free trial",
+          "tag": "Fastest first indexing",
+          "chip": "Consent required before file contents are sent",
+          "feature": {
+            "a": "Faster with cloud embedding",
+            "b": "Managed AI models · highest usage",
+            "c": "Everything in Air"
+          }
+        },
+        "byok": {
+          "name": "BYOK",
+          "price": "API costs only",
+          "note": "Pay the provider directly",
+          "tag": "Connect directly with your own key",
+          "chip": "API key required",
+          "feature": {
+            "a": "Local embedding on this Mac",
+            "b": "Choose the provider and model yourself",
+            "c": "Requests sent only to your chosen provider"
+          }
+        }
+      }
+    },
+    "model": {
+      "eyebrow": "AI model",
+      "title": "Connect the model you'll use",
+      "lead": "Use a detected connection, or choose a provider and API key.",
+      "note": "Keys are stored encrypted and never written to config files.",
+      "detectedTitle": "Detected connections",
+      "localRuntime": "Local runtime",
+      "storedCredential": "Stored credential",
+      "use": "Use",
+      "provider": {
+        "anthropic": "Anthropic",
+        "openai": "OpenAI",
+        "openrouter": "OpenRouter",
+        "google": "Google",
+        "ollama": "Ollama",
+        "openai-compatible": "OpenAI-compatible"
+      },
+      "baseUrlPlaceholder": "https://example.com/v1",
+      "keyPlaceholder": "Enter API key",
+      "verify": "Test connection",
+      "verifying": "Checking…",
+      "verified": "✓ Connected · the recommended model has been selected.",
+      "unverified": "Keys are stored encrypted and never written to config files.",
+      "error": "Connection failed: {{error}}",
+      "advanced": "Advanced settings",
+      "modelRow": "Model",
+      "recommended": "Provider-recommended model",
+      "reasoningRow": "Reasoning level (generation models only)",
+      "reasoningValue": "Model default"
+    },
+    "indexing": {
+      "tip": "Tip",
+      "prevTip": "Previous tip",
+      "nextTip": "Next tip",
+      "tipDot": "Tip {{index}}",
+      "done": "Indexing complete",
+      "doneDetail": "{{files}} files · {{sources}} data sources",
+      "failedTitle": "Indexing stopped",
+      "failedDetail": "Indexing couldn't be completed.",
+      "waiting": "Waiting to start",
+      "waitingNote": "Preparing the first index.",
+      "running": "{{phase}}…",
+      "detailParsing": "Reading documents",
+      "detailSources": "{{sources}} · syncing metadata",
+      "detailNoSources": "No connected data sources · skipped",
+      "detailFinalizing": "Optimizing the search index",
+      "phaseLabel": {
+        "parsed": "Reading documents",
+        "minsync": "Embedding",
+        "datasources": "Checking data sources",
+        "finalizing": "Tidying up"
+      },
+      "phase": {
+        "parsed": "Reading documents",
+        "minsync": "Embedding",
+        "datasources": "Data sources",
+        "finalizing": "Tidying up"
+      },
+      "title": "AutoRAG is reading your files",
+      "titleDone": "Everything's ready",
+      "metaDone": "Checking total time",
+      "metaTotal": "{{minutes}} min total",
+      "metaFiles": "{{count}} files",
+      "metaEstimating": "Calculating time remaining",
+      "metaUnderMinute": "Less than a minute left",
+      "metaRemaining": "~{{minutes}} min left",
+      "metaProgress": "{{processed}} / {{total}} files",
+      "gateOkTitle": "You can quit now",
+      "gateOkDetail": "We've read all {{files}} files. Newly changed files continue to be read in the background.",
+      "gateFailTitle": "Indexing couldn't be completed",
+      "gateFailDetail": "Try again and it'll continue where it left off.",
+      "gateTitle": "Don't quit AutoRAG or turn off {{machine}}",
+      "gateDetailMac": "The first index takes a while. Quitting stops progress. Plug in the power adapter and keep the lid open.",
+      "gateDetailWindows": "The first index takes a while. Quitting stops progress. Keep it plugged in.",
+      "gateLocked": "Opens once it's done",
+      "open": "Open AutoRAG",
+      "retry": "Try again"
+    },
+    "tips": {
+      "1": {
+        "title": "One {{shortcut}} to ask right away",
+        "body": "Jumps to the AI Search field from any screen. Ask about what's inside your documents without opening folders, and get answers with sources."
+      },
+      "2": {
+        "title": "Tap a number in the answer to preview the source",
+        "body": "The numbers attached to answers are the actual document locations that were read. Tap one to preview the evidence file right there.",
+        "bubble": "Marketing costs fell 18% from the previous quarter."
+      },
+      "3": {
+        "title": "Space to skim without opening",
+        "body": "Select a file and press Space to preview it with Quick Look. Check contents without switching apps."
+      },
+      "4": {
+        "title": "Drag files into your question",
+        "body": "Drag Finder rows, files from other apps, or folders into AI Search to ask questions scoped to them.",
+        "pill": "Summarize this file"
+      },
+      "5": {
+        "title": "Group similar files into one",
+        "body": "Similar files like proposal-final and proposal-v3 are grouped and shown as latest, similar, and identical. No more picking the wrong version.",
+        "latest": "Latest",
+        "near": "Similar",
+        "exact": "Identical"
+      },
+      "6": {
+        "title": "Find files with {{shortcut}}",
+        "body": "Jumps straight to the search field. Looks at keywords and meaning together and orders them by reranking."
+      },
+      "7": {
+        "title": "Switch views with {{shortcut}} · 2 · 3",
+        "body": "Switch between icon, list, and column views by keyboard. The last view you chose is kept on the next launch."
+      },
+      "8": {
+        "title": "Slack and GitHub with the same question",
+        "body": "Connected data sources are searched alongside files. You can add or turn off sources anytime in Settings."
+      },
+      "9": {
+        "title": "Reconfigure anytime with {{shortcut}}",
+        "body": "Change folder scope, AI model, and data sources in Settings. Changing the embedding location will re-index from scratch."
+      }
+    },
+    "overlay": {
+      "later": "Later",
+      "fda": {
+        "title": "Full Disk Access",
+        "heading": "Turn it on in System Settings",
+        "lead": "You only need to allow it once to read macOS protected areas. Onboarding continues from this step even if you quit the app.",
+        "step1": "Open Privacy & Security → Full Disk Access.",
+        "step2": "Add AutoRAG to the list and turn on the toggle.",
+        "step3": "If macOS asks, quit and reopen.",
+        "drag": "If it's not in the list, drag this icon onto the list",
+        "allowed": "I've allowed it",
+        "mock": {
+          "navTitle": "Privacy & Security",
+          "notifications": "Notifications",
+          "files": "Files & Folders",
+          "fda": "Full Disk Access",
+          "automation": "Automation",
+          "paneLead": "The apps below can access files on your entire disk."
+        }
+      },
+      "restart": {
+        "title": "Reopen AutoRAG?",
+        "lead": "Full Disk Access takes effect after you quit and reopen the app. Onboarding continues from the current step.",
+        "action": "Quit and reopen"
+      },
+      "pay": {
+        "proTitle": "Start Pro 7-day free trial",
+        "airTitle": "Subscribe to the Air plan",
+        "proLead": "It's free for 7 days. You won't be billed during the trial and we'll let you know before it ends. Cloud embedding is available as soon as you start the trial.",
+        "airLead": "You'll be billed $4/mo starting today. You can use managed AI models more generously than Free.",
+        "today": "Billed today",
+        "afterPro": "Starting after 7 days",
+        "fromNext": "From the next billing",
+        "monthly": "{{price}} / mo",
+        "cardNumber": "Card number",
+        "expiry": "Expiry",
+        "cvc": "CVC",
+        "proConsent": "I agree to an automatic $20/mo charge when the 7-day free trial ends. I can cancel anytime in Settings.",
+        "airConsent": "I agree to an automatic $4/mo charge. I can cancel anytime in Settings.",
+        "demo": "No real payment will occur. This step is a placeholder for QA, and card details are neither stored nor sent.",
+        "startTrial": "Start trial",
+        "payAir": "Pay $4 and continue"
+      }
+    },
+    "toast": {
+      "signedIn": "Signed in.",
+      "notificationsOn": "Notification permission granted.",
+      "notificationsOff": "Allow notifications in System Settings.",
+      "loginFailed": "Couldn't add AutoRAG to login items.",
+      "networkOk": "Network connection verified.",
+      "networkFail": "Can't connect to the network.",
+      "fdaPending": "The permission applies once you reopen the app.",
+      "verified": "Connection verified.",
+      "payMissing": "Card details and consent are required. (Demo)",
+      "trialStarted": "Started the Pro 7-day free trial. (Demo · no real payment)",
+      "subscribed": "Subscribed to the plan. (Demo · no real payment)",
+      "notIndexed": "Finish indexing to open AutoRAG."
     }
   }
 }

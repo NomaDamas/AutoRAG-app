@@ -197,6 +197,29 @@ The Info half's bottom bar is data-driven, not a fixed four buttons.
 
 ---
 
+## 3a. First-run onboarding
+
+- The reference is `docs/design-reference/onboarding/onboarding-prototype.html`.
+  `src/renderer/styles/onboarding.css` ports its stylesheet rule for rule, with
+  every selector scoped under `.onb` (the prototype's `.app-window`) and its
+  keyframes renamed `onb-*`. Palette values the app already defines map onto
+  app tokens (`--bg-window`, `--border`, `--text-*`, `--accent`), so appearance
+  follows the app; the rest stay as `--onb-*` literals from the prototype.
+- The React screens in `src/renderer/src/onboarding/` emit the prototype's DOM
+  and class names, so the port needs no restyling. The prototype's drawn
+  traffic lights are omitted: the real window's native ones sit over the 42px
+  drag bar.
+- The window opens at the prototype's 1120×720 canvas (min 960×680) and grows
+  to the Finder size when onboarding completes.
+- Prototype simulations are replaced by real state: the indexing screen shows
+  real progress (no 30-minute minimum), folder cards show "세는 중…" until their
+  pre-scan finishes, and a failed index shows a warning notice with retry.
+- Changes to these screens are checked against the prototype with
+  `scripts/manual-qa/run-qa-onboarding.mjs`, which also writes per-step
+  screenshots to `.omo/evidence/onboarding/`.
+
+---
+
 ## 4. Verification & Testing Guardrails
 
 - All UI components and behaviors are backed by automated tests:

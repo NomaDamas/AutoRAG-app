@@ -96,7 +96,7 @@ async function warmIndex(configPath) {
 }
 
 async function launch(configPath, label) {
-	const env = { ...process.env, AUTORAG_CONFIG: configPath };
+	const env = { ...process.env, AUTORAG_CONFIG: configPath, AUTORAG_SKIP_ONBOARDING: "1" };
 	delete env.ELECTRON_RENDERER_URL;
 	const app = await _electron.launch({
 		args: [ROOT, `--user-data-dir=${join(WORK, `user-data-${label}`)}`],

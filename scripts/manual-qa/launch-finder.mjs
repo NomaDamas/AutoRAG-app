@@ -22,13 +22,19 @@ function seedLanguage(userDataDir, language) {
 
 /**
  * Launch the built Finder app for QA. Requires `bun run build` from the repo
- * root first; env passes through to the Electron process, and `args` appends
- * Chromium switches (e.g. `--force-device-scale-factor=2`). Without a
- * `userDataDir` the lane gets a throwaway profile, never the developer's own.
- * `language` is the Interface language a fresh profile starts in ("en": the
- * lanes assert the English copy).
+ * root first; userDataDir and env pass through to the Electron process, and
+ * `args` appends Chromium switches (e.g. `--force-device-scale-factor=2`).
+ * Without a `userDataDir` the lane gets a throwaway profile, never the
+ * developer's own. Existing lanes start in a known Interface language; an
+ * onboarding lane opts out of the Finder bypass.
  */
-export async function launchFinder({ userDataDir, env, args: extraArgs = [], language = "en" } = {}) {
+export async function launchFinder({
+	userDataDir,
+	env,
+	args: extraArgs = [],
+	language = "en",
+	onboarding = false,
+} = {}) {
 	if (!existsSync(join(ROOT, "out/main/index.js"))) {
 		throw new Error("out/main/index.js is missing — run `bun run build` first");
 	}
@@ -42,7 +48,11 @@ export async function launchFinder({ userDataDir, env, args: extraArgs = [], lan
 	return _electron.launch({
 		args,
 		cwd: ROOT,
-		env: env === undefined ? undefined : { ...process.env, ...env },
+		env: {
+			...process.env,
+			...(onboarding ? {} : { AUTORAG_SKIP_ONBOARDING: "1" }),
+			...env,
+		},
 	});
 }
 

@@ -7,9 +7,15 @@ import {
 } from "../shared/actions-contract";
 import { FS_CHANNELS } from "../shared/fs-contract";
 import { SEARCH_CHANNELS, type SearchBridge } from "../shared/search-contract";
+import { OS_REQUEST_CHANNELS } from "../shared/os-request-contract";
 import { SETTINGS_CHANNELS, type JsonValue, type SettingsBridge } from "../shared/settings-contract";
+import { ONBOARDING_CHANNELS } from "../shared/onboarding-contract";
+import { isServiceRunRequest, SERVICES_CHANNELS } from "../shared/services-contract";
 import type { ActionService } from "./action-service";
 import { dragOutPaths } from "./drag-out";
+import type { OnboardingService } from "./onboarding-service";
+import type { OsRequestService } from "./os-request-service";
+import type { ServicesService } from "./services-service";
 
 /**
  * The row drag-out: the renderer has already cancelled its own drag
@@ -55,6 +61,18 @@ export function registerActionsIpcHandlers(service: ActionService): void {
 		if (!isActionPaths(paths)) throw new Error("파일 경로가 올바르지 않습니다");
 		if (!isActionAnchor(anchor)) throw new Error("공유 위치가 올바르지 않습니다");
 		return service.share(paths, anchor, BrowserWindow.fromWebContents(event.sender));
+	});
+}
+
+/** The OS Services submenu: list what the system offers for a selection, and perform one. */
+export function registerServicesIpcHandlers(service: ServicesService): void {
+	ipcMain.handle(SERVICES_CHANNELS.list, (_event, paths: unknown) => {
+		if (!isActionPaths(paths)) throw new Error("파일 경로가 올바르지 않습니다");
+		return service.list(paths);
+	});
+	ipcMain.handle(SERVICES_CHANNELS.run, (_event, id: unknown, paths: unknown) => {
+		if (typeof id !== "string" || !isServiceRunRequest(id, paths)) throw new Error("서비스 요청이 올바르지 않습니다");
+		return service.run(id, paths);
 	});
 }
 
@@ -163,3 +181,37 @@ export function registerSettingsIpcHandlers(service: SettingsBridge): void {
 	});
 }
 
+/** First-run onboarding: every payload is validated inside the service. */
+export function registerOnboardingIpcHandlers(service: OnboardingService): void {
+	ipcMain.handle(ONBOARDING_CHANNELS.load, () => service.load());
+	ipcMain.handle(ONBOARDING_CHANNELS.save, (_event, draft: unknown) => service.save(draft));
+	ipcMain.handle(ONBOARDING_CHANNELS.permissions, () => service.permissions());
+	ipcMain.handle(ONBOARDING_CHANNELS.openFullDiskAccess, () => service.openFullDiskAccess());
+	ipcMain.on(ONBOARDING_CHANNELS.dragApp, () => service.dragApp());
+	ipcMain.handle(ONBOARDING_CHANNELS.relaunch, () => service.relaunch());
+	ipcMain.handle(ONBOARDING_CHANNELS.requestNotifications, () => service.requestNotifications());
+	ipcMain.handle(ONBOARDING_CHANNELS.openNotificationSettings, () => service.openNotificationSettings());
+	ipcMain.handle(ONBOARDING_CHANNELS.checkNetwork, () => service.checkNetwork());
+	ipcMain.handle(ONBOARDING_CHANNELS.setLaunchAtLogin, (_event, enabled: unknown) => {
+		if (typeof enabled !== "boolean") throw new TypeError("onboarding:setLaunchAtLogin expects a boolean");
+		return service.setLaunchAtLogin(enabled);
+	});
+	ipcMain.handle(ONBOARDING_CHANNELS.folderCandidates, () => service.folderCandidates());
+	ipcMain.handle(ONBOARDING_CHANNELS.pickFolders, () => service.pickFolders());
+	ipcMain.handle(ONBOARDING_CHANNELS.scanFolders, (_event, paths: unknown) => {
+		if (!Array.isArray(paths)) throw new TypeError("onboarding:scanFolders expects an array of paths");
+		return service.scanFolders(paths);
+	});
+	ipcMain.handle(ONBOARDING_CHANNELS.embedding, () => service.embedding());
+	ipcMain.handle(ONBOARDING_CHANNELS.detectSources, () => service.detectSources());
+	ipcMain.handle(ONBOARDING_CHANNELS.detectModels, () => service.detectModels());
+	ipcMain.handle(ONBOARDING_CHANNELS.verifyModel, (_event, request: unknown) => service.verifyModel(request));
+	ipcMain.handle(ONBOARDING_CHANNELS.startIndexing, (_event, request: unknown) => service.startIndexing(request));
+	ipcMain.handle(ONBOARDING_CHANNELS.indexStatus, () => service.indexStatus());
+	ipcMain.handle(ONBOARDING_CHANNELS.complete, () => service.complete());
+}
+
+/** The renderer drains requests that came from the OS file menu. */
+export function registerOsRequestIpcHandlers(service: OsRequestService): void {
+	ipcMain.handle(OS_REQUEST_CHANNELS.take, () => service.take());
+}
