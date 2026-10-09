@@ -142,6 +142,86 @@ message asking the user to check the result.
 Quitting asks the worker to release its watches and waits up to 2 s before
 exiting. QA lane: `scripts/manual-qa/run-qa-finder-fs-worker-crash.mjs`
 (SIGKILLs the worker twice and checks the tabs recover within 5 s).
+## First-run onboarding
+
+A fresh install opens onboarding instead of the Finder: welcome, permissions,
+account, folders, embedding, data sources, plan, the model step (BYOK only), and
+the first index. The screens port
+`docs/design-reference/onboarding/onboarding-prototype.html`; the draft is saved
+after every change, so a relaunch (for example after granting Full Disk Access)
+resumes at the same step.
+
+- **Permissions** probe Full Disk Access for real (macOS) and re-check every two
+  seconds. Notifications post a real system notification; if macOS reports the
+  app is not allowed, the step says so and opens the system notification
+  settings (the unsigned dev binary is never allowed, so this only works in a
+  signed build). Launch at login is the same setting as Settings › General and
+  registers the OS login item in packaged builds only (registering the dev
+  binary would add bare "Electron" to Login Items); the switch is read back from
+  the OS and flips off with a message if the OS refused.
+- **Folders** are pre-scanned with the indexer's own rules (supported
+  extensions, size cap, skipped dependency/code folders) to show real file
+  counts and an ETA.
+- **Embedding** is local (`qwen3-embedding-0.6b`); cloud embedding is shown but
+  unavailable, since corpus text is never sent to remote embedders.
+- **Data sources** list only usable connectors, and every one starts off. The
+  probes run in parallel and each row appears the moment its own probe finishes
+  (fast ones first); a "checking" line stays under the list until all of them are
+  done, and only then does the "connect later" row appear, minus whatever was
+  found. There is no description to write: onboarding stores none, and the
+  agent-facing description is meant to be generated from the indexed content.
+  Local files are covered by the folders step, so
+  Spotlight and Apple Mail are not offered. Each row appears only when the
+  connector's own health probe says its data is reachable: KakaoTalk
+  (`lazykatok doctor --macos-probe`: app, container, cached login, readable
+  database files), Slack (`slacrawl`, at least one workspace), Discord
+  (`discrawl` ready database plus a dry-run `wiretap` that finds messages),
+  Telegram (`telecrawl doctor`), WhatsApp (`wacrawl doctor`, read-only, with
+  messages), mail (`mailcrawl` installed and a `himalaya` account whose login
+  succeeds), GitHub, and Obsidian. Mail writes one `mailcrawl-<account>` archive
+  per verified account under `~/.mailcrawl/<account>`; accounts that cannot log
+  in are skipped. GitHub requires authentication and at least one discovered
+  repository; empty or failed repo discovery does not offer a source that would
+  fail its first sync.
+- **Model** (BYOK) verifies the provider key against the provider's API and
+  stores it in the encrypted credential store, never in `config.json`.
+- **Indexing** writes `searchPaths`, the embedder (only when none is set), the
+  enabled datasources and their access tags, and the BYOK model into the shared
+  config, then runs the same refresh as Settings. A config still pointing its
+  `workspacePath` at the app's cwd seed is moved to `<AutoRAG home>/workspace`.
+  The Finder opens only after the first index succeeds.
+
+Account sign-in and plan checkout are placeholders: they record the choice in
+the onboarding draft so QA can walk the full flow, but no account is created,
+no card data is stored or sent, and nothing is charged.
+
+Onboarding state lives in `<userData>/onboarding/state.json`. Set
+`AUTORAG_SKIP_ONBOARDING=1` to open the Finder directly; the manual-QA launcher
+does this for every lane except `run-qa-onboarding.mjs`.
+
+`make onboarding` walks the flow on a disposable profile: every run starts from
+scratch in a temp sandbox holding its own `userData` (via `--user-data-dir`),
+AutoRAG config, home, and workspace, so the real `~/.autorag` and the app's
+support directory are never read or written. The cached embedding model and
+llama runtime are copied in so the first index runs offline. When the app exits
+the wrapper kills the run's processes and removes the sandbox; a SIGKILL of
+the wrapper is covered by a detached watchdog, and the next `make onboarding`
+sweeps any sandbox whose owner and watchdog both died. The QA lane covers the
+same flow end to end in CI settings (`bun scripts/manual-qa/run-qa-onboarding.mjs`).
+For a detected datasource regression, set `QA_ONBOARDING_SOURCE=github`,
+`mail`, `spotlight`, or `slack` before that command; it enables only that row
+and asserts its written connector config and access tag. The run uses temporary
+AutoRAG state but the selected external crawler uses its real store, as noted
+below.
+
+Scope of that isolation: the sandbox holds AutoRAG's own state (userData,
+config, home, workspace, index). External datasource crawlers are CLIs with
+their own stores in the real home, and the librarian passes `HOME` through to
+them, so enabling a source in onboarding syncs the real store — `slacrawl` reads
+and writes `~/.slacrawl` (Slack's local mirror), the other messenger crawlers
+import into their own stores the same way, and Obsidian reads the real vaults.
+Detection and the first sync are real by
+design; they never touch other apps' data beyond their own store.
 
 ## Live filesystem sync
 

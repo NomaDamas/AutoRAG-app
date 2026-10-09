@@ -5,6 +5,7 @@ import { createPreviewBridge } from "../preview/node/bridge";
 import { createActionsBridge } from "./actions-bridge";
 import { createFsBridge } from "./fs-bridge";
 import { createLiveBridge } from "./live-bridge";
+import { createOnboardingBridge } from "./onboarding-bridge";
 import { createOsRequestBridge } from "./os-request-bridge";
 import { createSearchBridge } from "./search-bridge";
 import { createSettingsBridge } from "./settings-bridge";
@@ -31,6 +32,7 @@ contextBridge.exposeInMainWorld("autorag", {
 	fs: createFsBridge(ipcRenderer, fsWorker),
 	actions: createActionsBridge(ipcRenderer),
 	live: createLiveBridge(fsWorker),
+	onboarding: createOnboardingBridge(ipcRenderer),
 	osRequests: createOsRequestBridge(ipcRenderer),
 	preview: createPreviewBridge(ipcRenderer),
 	search: createSearchBridge(ipcRenderer),
