@@ -58,6 +58,11 @@ export interface PreviewDocument {
 	readonly mime: string;
 	readonly truncated: boolean;
 	readonly bytes: Uint8Array | null;
+	/**
+	 * Every slide/page JPEG in order for a Keynote deck (the quality first-page
+	 * image first); null for every other document, whose viewer uses `bytes`.
+	 */
+	readonly pages: readonly Uint8Array[] | null;
 }
 
 export interface QuickLookTarget {
@@ -210,7 +215,8 @@ export function isPreviewDocument(value: unknown): value is PreviewDocument {
 	if (typeof value.name !== "string" || typeof value.path !== "string" || typeof value.ext !== "string") return false;
 	if (typeof value.size !== "number" || typeof value.modifiedAt !== "string" || typeof value.mime !== "string") return false;
 	if (typeof value.truncated !== "boolean") return false;
-	return value.bytes === null || value.bytes instanceof Uint8Array;
+	if (value.bytes !== null && !(value.bytes instanceof Uint8Array)) return false;
+	return value.pages === null || (Array.isArray(value.pages) && value.pages.every((page) => page instanceof Uint8Array));
 }
 
 export function isQuickLookTarget(value: unknown): value is QuickLookTarget {

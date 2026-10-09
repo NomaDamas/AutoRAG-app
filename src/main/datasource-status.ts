@@ -4,20 +4,32 @@ import { delimiter, extname, join } from "node:path";
 import {
 	BUILTIN_DATASOURCE_SKILL_NAMES,
 	buildDatasourceSkills,
-	DatasourceAccessContext,
+	type DatasourceDiagnostic,
+	type DatasourceIndexResult,
 	type DatasourceSkill,
 	type DatasourceSkillConfig,
 	datasourceChunkStorePath,
+	loadMirrorIndex,
 	resolveConfigReadOnly,
 	writeConfigObject,
 } from "@autorag/librarian";
-import { readRawConfigObject, resolveConfigPath } from "@autorag/librarian/core";
-import type { DataSourceRow, DataSourcesSnapshot } from "../shared/settings-contract";
+import { readRawConfigObject, resolveConfigPath, type CliConfig } from "@autorag/librarian/core";
+import { backendIndexUnit, LIVE_QUERY_TEMPLATES, probeBackendIndex } from "./datasource-index-probe";
+import { withConnectorOcrDisabled } from "./indexing-policy";
+import type { DiscrawlEmbeddingRuntime } from "./embedding-settings-service";
+import type {
+	ConfigRefreshDiagnostic,
+	DataSourceAppRequirement,
+	DataSourceRow,
+	DataSourcesSnapshot,
+	DataSourceSyncResult,
+} from "../shared/settings-contract";
+import { isJsonObject } from "../shared/settings-contract";
 
 /**
  * Settings > Data Sources reads the shared AutoRAG config — the same file the
  * CLI, TUI, serve, and every app agent resolve — on each call, and judges agent
- * reachability with the librarian's own skill factory and access context. The
+ * reachability with the librarian's own skill factory. The
  * app never keeps a copy, so an edit from any AutoRAG surface shows up here and
  * a toggle here reaches every agent.
  */
@@ -26,11 +38,23 @@ export interface DataSourceStatusService {
 	setEnabled(id: string, enabled: boolean): Promise<void>;
 	/** Blank text removes the override so the built-in description applies again. */
 	setDescription(id: string, description: string): Promise<void>;
+	/**
+	 * Index/refresh one configured source through its own librarian skill (the
+	 * same CLI pipeline an AutoRAG refresh runs) and report the real outcome.
+	 * Concurrent calls for one id share a single in-flight run.
+	 */
+	sync(id: string): Promise<DataSourceSyncResult>;
 }
 
 export interface DataSourceStatusDeps {
 	readonly env: NodeJS.ProcessEnv;
 	readonly cwd: string;
+	/**
+	 * The discrawl embedding runtime the app should hand its skill so an index
+	 * run rewrites the managed config and rebuilds embeddings. `undefined` when
+	 * the selected global embedder cannot be served over loopback.
+	 */
+	readonly discrawlEmbeddingRuntime?: () => DiscrawlEmbeddingRuntime | undefined;
 }
 
 /** Backend CLI each built-in template shells out to (mirrors the librarian's `autorag setup` probe). */
@@ -52,11 +76,33 @@ const BACKEND_BINARIES: Readonly<Record<string, string>> = {
 /** Templates whose chunks AutoRAG itself persists under `.autorag/datasources/<id>/<instance>/chunks.json`. */
 const CHUNK_STORE_TEMPLATES = new Set(["cloud-drive", "mail-export", "spotlight", "rss", "github", "github-gist"]);
 
-const DEFAULT_TOKEN_ENV = "GITHUB_TOKEN";
+/**
+ * Desktop source app each template reads from, detected separately from the
+ * CLI. A datasource can have its CLI installed but no app to import yet (or the
+ * reverse); the renderer owns the official download URLs.
+ */
+const DESKTOP_APPS: Readonly<Record<string, string>> = {
+	slack: "Slack",
+	discord: "Discord",
+	kakao: "KakaoTalk",
+	whatsapp: "WhatsApp",
+	telegram: "Telegram",
+	notion: "Notion",
+	obsidian: "Obsidian",
+};
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return value !== null && typeof value === "object" && !Array.isArray(value);
+/** macOS-only bundle probe; other platforms report `installed: null` rather than a wrong "missing". */
+async function desktopAppRequirement(type: string, env: NodeJS.ProcessEnv): Promise<DataSourceAppRequirement> {
+	const name = DESKTOP_APPS[type];
+	if (name === undefined) return { required: false, installed: null, name: "" };
+	if (process.platform !== "darwin") return { required: true, installed: null, name };
+	const home = env.HOME ?? "";
+	const candidates = [`/Applications/${name}.app`, home.length === 0 ? "" : join(home, "Applications", `${name}.app`)];
+	const present = await Promise.all(candidates.map((candidate) => (candidate.length > 0 ? stat(candidate).then(() => true, () => false) : false)));
+	return { required: true, installed: present.some(Boolean), name };
 }
+
+const DEFAULT_TOKEN_ENV = "GITHUB_TOKEN";
 
 /**
  * Executable suffixes for CLI lookup. POSIX tries the name itself; Windows
@@ -97,74 +143,117 @@ async function findExecutable(name: string, env: NodeJS.ProcessEnv): Promise<str
 }
 
 async function installState(type: string, entry: DatasourceSkillConfig, env: NodeJS.ProcessEnv): Promise<DataSourceRow["install"]> {
+	const app = await desktopAppRequirement(type, env);
 	if (!BUILTIN_DATASOURCE_SKILL_NAMES.includes(type)) {
-		return { state: "unsupported", binary: null, path: null, detail: `No built-in AutoRAG datasource named "${type}"` };
+		return { state: "unsupported", binary: null, path: null, detail: `No built-in AutoRAG datasource named "${type}"`, app };
 	}
-	const connector = isRecord(entry.connector) ? entry.connector : {};
+	const connector = isJsonObject(entry.connector) ? entry.connector : {};
 	if (type === "github" || type === "github-gist") {
 		const tokenEnv = typeof connector.tokenEnv === "string" ? connector.tokenEnv : DEFAULT_TOKEN_ENV;
 		const hasToken = typeof connector.token === "string" || Boolean(env[tokenEnv]);
 		const gh = type === "github-gist" ? await findExecutable("gh", env) : null;
 		return hasToken || gh !== null
-			? { state: "builtin", binary: null, path: gh, detail: hasToken ? `Token from ${tokenEnv}` : "Token from gh auth" }
-			: { state: "credential-missing", binary: null, path: null, detail: `Set ${tokenEnv} to let AutoRAG reach GitHub` };
+			? { state: "builtin", binary: null, path: gh, detail: hasToken ? `Token from ${tokenEnv}` : "Token from gh auth", app }
+			: { state: "credential-missing", binary: null, path: null, detail: `Set ${tokenEnv} to let AutoRAG reach GitHub`, app };
 	}
 	const binary = BACKEND_BINARIES[type];
-	if (binary === undefined) return { state: "builtin", binary: null, path: null, detail: "Built into AutoRAG" };
+	if (binary === undefined) return { state: "builtin", binary: null, path: null, detail: "Built into AutoRAG", app };
 	const configured = typeof connector.binaryPath === "string" ? connector.binaryPath : binary;
 	const path = await findExecutable(configured, env);
 	return path === null
-		? { state: "missing", binary, path: null, detail: `${configured} was not found on PATH` }
-		: { state: "installed", binary, path, detail: `${binary} at ${path}` };
+		? { state: "missing", binary, path: null, detail: `${configured} was not found on PATH`, app }
+		: { state: "installed", binary, path, detail: `${binary} at ${path}`, app };
 }
 
 /** Build the librarian skill for one entry; disabled entries are built as if enabled to learn their descriptor. */
-function buildSkill(id: string, entry: DatasourceSkillConfig, workspacePath: string): DatasourceSkill | undefined {
-	return buildDatasourceSkills({ [id]: { ...entry, enabled: true } }, workspacePath).skills[0];
+function buildSkill(
+	id: string,
+	entry: DatasourceSkillConfig,
+	workspacePath: string,
+	embeddingRuntime?: DiscrawlEmbeddingRuntime,
+): DatasourceSkill | undefined {
+	return buildDatasourceSkills({ [id]: withConnectorOcrDisabled({ ...entry, enabled: true }) }, workspacePath, embeddingRuntime).skills[0];
 }
 
-function agentState(
-	skill: DatasourceSkill | undefined,
-	enabled: boolean,
-	access: DatasourceAccessContext,
-	allowedTags: readonly string[],
-): DataSourceRow["agent"] {
+function agentState(skill: DatasourceSkill | undefined, enabled: boolean): DataSourceRow["agent"] {
 	if (skill === undefined) {
 		return { state: "unsupported", skillName: null, tags: [], detail: "The AutoRAG agent skips unknown datasources" };
 	}
 	const descriptor = skill.describe();
 	const skillName = skill.skillManifest().name;
 	if (!enabled) return { state: "disabled", skillName, tags: descriptor.tags, detail: "Turned off in the AutoRAG config" };
-	if (!access.isAccessible(descriptor)) {
-		return {
-			state: "blocked",
-			skillName,
-			tags: descriptor.tags,
-			detail: allowedTags.length === 0
-				? "datasourceAccess.allowedTags is empty, so every datasource is denied"
-				: `None of its tags (${descriptor.tags.join(", ")}) is in datasourceAccess.allowedTags`,
-		};
-	}
 	return { state: "connected", skillName, tags: descriptor.tags, detail: `Agents load ${skillName}` };
 }
 
-async function indexState(type: string, skill: DatasourceSkill | undefined, workspacePath: string): Promise<DataSourceRow["index"]> {
-	if (skill === undefined) return { state: "not-indexed", chunkCount: null, indexedAt: null, detail: "Not indexed" };
-	if (!CHUNK_STORE_TEMPLATES.has(type)) {
-		const binary = BACKEND_BINARIES[type] ?? type;
-		return { state: "external", chunkCount: null, indexedAt: null, detail: `${binary} keeps its own index` };
+/** Count what a backend-owned archive holds by asking its own CLI (read-only status command). */
+async function backendIndexState(
+	id: string,
+	type: string,
+	entry: DatasourceSkillConfig,
+	install: DataSourceRow["install"],
+	workspacePath: string,
+	env: NodeJS.ProcessEnv,
+): Promise<DataSourceRow["index"]> {
+	const unit = backendIndexUnit(type);
+	if (install.state !== "installed" || install.path === null) {
+		return { state: "not-indexed", chunkCount: null, unit, indexedAt: null, detail: install.detail };
 	}
+	const binary = BACKEND_BINARIES[type] ?? type;
+	const reading = await probeBackendIndex(
+		type,
+		{
+			id,
+			connector: isJsonObject(entry.connector) ? entry.connector : {},
+			instanceId: entry.instanceId ?? "default",
+			workspacePath,
+		},
+		install.path,
+		env,
+	);
+	if (reading === null) {
+		return { state: "not-indexed", chunkCount: null, unit, indexedAt: null, detail: `Could not read ${binary} status` };
+	}
+	return reading.count === 0
+		? { state: "empty", chunkCount: 0, unit, indexedAt: reading.at, detail: `${binary} holds nothing yet` }
+		: { state: "indexed", chunkCount: reading.count, unit, indexedAt: reading.at, detail: `${reading.count} items in ${binary}` };
+}
+
+async function indexState(
+	id: string,
+	type: string,
+	entry: DatasourceSkillConfig,
+	skill: DatasourceSkill | undefined,
+	install: DataSourceRow["install"],
+	workspacePath: string,
+	env: NodeJS.ProcessEnv,
+): Promise<DataSourceRow["index"]> {
+	if (skill === undefined) return { state: "not-indexed", chunkCount: null, unit: null, indexedAt: null, detail: "Not indexed" };
+	if (LIVE_QUERY_TEMPLATES.has(type)) {
+		return { state: "live", chunkCount: null, unit: null, indexedAt: null, detail: "Searched live through its own CLI" };
+	}
+	if (!CHUNK_STORE_TEMPLATES.has(type)) return backendIndexState(id, type, entry, install, workspacePath, env);
 	const descriptor = skill.describe();
 	const storePath = datasourceChunkStorePath(workspacePath, descriptor.name, descriptor.instanceId ?? "default");
 	try {
 		const parsed: unknown = JSON.parse(await readFile(storePath, "utf8"));
-		const chunks = isRecord(parsed) && Array.isArray(parsed.chunks) ? parsed.chunks.length : 0;
-		const indexedAt = isRecord(parsed) && typeof parsed.updatedAt === "number" ? new Date(parsed.updatedAt).toISOString() : null;
+		const chunks = isJsonObject(parsed) && Array.isArray(parsed.chunks) ? parsed.chunks.length : 0;
+		const indexedAt = isJsonObject(parsed) && typeof parsed.updatedAt === "number" ? new Date(parsed.updatedAt).toISOString() : null;
 		return chunks === 0
-			? { state: "empty", chunkCount: 0, indexedAt, detail: "The last refresh found nothing to index" }
-			: { state: "indexed", chunkCount: chunks, indexedAt, detail: `${chunks} chunks` };
+			? { state: "empty", chunkCount: 0, unit: "document", indexedAt, detail: "The last refresh found nothing to index" }
+			: { state: "indexed", chunkCount: chunks, unit: "document", indexedAt, detail: `${chunks} chunks` };
 	} catch {
-		return { state: "not-indexed", chunkCount: null, indexedAt: null, detail: "Run `autorag refresh` to index it" };
+		return { state: "not-indexed", chunkCount: null, unit: "document", indexedAt: null, detail: "Run `autorag refresh` to index it" };
+	}
+}
+
+/** Documents the last local-folder refresh parsed into the shared workspace mirror. */
+function localIndexState(workspacePath: string): DataSourcesSnapshot["local"] {
+	try {
+		const entries = Object.values(loadMirrorIndex(workspacePath).entries);
+		const updatedAt = entries.map((entry) => entry.updatedAt).sort().at(-1) ?? null;
+		return { documentCount: entries.length, updatedAt };
+	} catch {
+		return { documentCount: null, updatedAt: null };
 	}
 }
 
@@ -181,7 +270,7 @@ function processAlive(pid: unknown): boolean {
 async function refreshState(workspacePath: string): Promise<DataSourcesSnapshot["refresh"]> {
 	try {
 		const parsed: unknown = JSON.parse(await readFile(join(workspacePath, ".autorag", "refresh-progress.json"), "utf8"));
-		if (!isRecord(parsed)) return { state: "idle", phase: null, finishedAt: null };
+		if (!isJsonObject(parsed)) return { state: "idle", phase: null, finishedAt: null };
 		const phase = typeof parsed.phase === "string" ? parsed.phase : null;
 		const finishedAt = typeof parsed.finishedAt === "string" ? parsed.finishedAt : null;
 		if (parsed.state === "running") {
@@ -206,48 +295,48 @@ function overallStatus(
 	return refresh.state === "running" && refresh.phase === "datasources" ? "syncing" : "ready";
 }
 
+function toDiagnostic(diagnostic: DatasourceDiagnostic): ConfigRefreshDiagnostic {
+	return { code: String(diagnostic.code), severity: diagnostic.severity, message: diagnostic.message };
+}
+
 export function createDataSourceStatusService(deps: DataSourceStatusDeps): DataSourceStatusService {
 	const configPath = (): string => resolveConfigPath({ flags: {}, env: deps.env, cwd: deps.cwd }).configPath;
 	const updateEntry = (id: string, update: (entry: unknown) => unknown): void => {
 		const path = configPath();
 		const raw = readRawConfigObject(path);
 		const datasources = raw.datasources;
-		if (!isRecord(datasources) || !Object.hasOwn(datasources, id)) throw new Error(`Unknown datasource: ${id}`);
+		if (!isJsonObject(datasources) || !Object.hasOwn(datasources, id)) throw new Error(`Unknown datasource: ${id}`);
 		datasources[id] = update(datasources[id]);
 		writeConfigObject(path, raw);
 	};
 
-	return {
-		list: async () => {
-			const path = configPath();
-			const empty: DataSourcesSnapshot = {
-				configPath: path,
-				configExists: await stat(path).then(() => true, () => false),
-				error: null,
-				accessTags: [],
-				refresh: { state: "idle", phase: null, finishedAt: null },
-				sources: [],
-			};
-			if (!empty.configExists) return empty;
-			let config: ReturnType<typeof resolveConfigReadOnly>;
-			try {
-				config = resolveConfigReadOnly({ flags: {}, env: deps.env, cwd: deps.cwd });
-			} catch (error) {
-				return { ...empty, error: error instanceof Error ? error.message : String(error) };
-			}
-			const allowedTags = config.datasourceAccess?.allowedTags ?? [];
-			const access = new DatasourceAccessContext({
-				allowedTags,
-				...(config.datasourceAccess?.allowedScopes === undefined ? {} : { allowedScopes: config.datasourceAccess.allowedScopes }),
-			});
-			const refresh = await refreshState(config.workspacePath);
-			const sources = await Promise.all(Object.entries(config.datasources ?? {}).map(async ([id, raw]): Promise<DataSourceRow> => {
-				const entry: DatasourceSkillConfig = isRecord(raw) ? raw : {};
+	const listSnapshot = async (): Promise<DataSourcesSnapshot> => {
+		const path = configPath();
+		const empty: DataSourcesSnapshot = {
+			configPath: path,
+			configExists: await stat(path).then(() => true, () => false),
+			error: null,
+			refresh: { state: "idle", phase: null, finishedAt: null },
+			local: { documentCount: null, updatedAt: null },
+			sources: [],
+		};
+		if (!empty.configExists) return empty;
+		let config: CliConfig;
+		try {
+			config = resolveConfigReadOnly({ flags: {}, env: deps.env, cwd: deps.cwd });
+		} catch (error) {
+			return { ...empty, error: error instanceof Error ? error.message : String(error) };
+		}
+		const refresh = await refreshState(config.workspacePath);
+		const sources = await Promise.all(
+			Object.entries(config.datasources ?? {}).map(async ([id, raw]): Promise<DataSourceRow> => {
+				const entry: DatasourceSkillConfig = isJsonObject(raw) ? raw : {};
 				const enabled = raw !== false && entry.enabled !== false;
 				const type = entry.type ?? id;
 				const skill = BUILTIN_DATASOURCE_SKILL_NAMES.includes(type) ? buildSkill(id, entry, config.workspacePath) : undefined;
-				const [install, index] = await Promise.all([installState(type, entry, deps.env), indexState(type, skill, config.workspacePath)]);
-				const agent = agentState(skill, enabled, access, allowedTags);
+				const install = await installState(type, entry, deps.env);
+				const index = await indexState(id, type, entry, skill, install, config.workspacePath, deps.env);
+				const agent = agentState(skill, enabled);
 				return {
 					id,
 					type,
@@ -258,16 +347,101 @@ export function createDataSourceStatusService(deps: DataSourceStatusDeps): DataS
 					agent,
 					index,
 				};
-			}));
-			return { ...empty, accessTags: allowedTags, refresh, sources };
+			}),
+		);
+		return { ...empty, refresh, local: localIndexState(config.workspacePath), sources };
+	};
+
+	const inFlight = new Map<string, Promise<DataSourceSyncResult>>();
+
+	const runSync = async (id: string): Promise<DataSourceSyncResult> => {
+		const startedAt = Date.now();
+		const base: DataSourceSyncResult = {
+			id,
+			ok: false,
+			state: "not-configured",
+			chunkCount: null,
+			indexedAt: null,
+			durationMs: 0,
+			diagnostics: [],
+			error: null,
+		};
+		const path = configPath();
+		if (!(await stat(path).then(() => true, () => false))) return { ...base, error: "AutoRAG config not found" };
+		let config: CliConfig;
+		try {
+			config = resolveConfigReadOnly({ flags: {}, env: deps.env, cwd: deps.cwd });
+		} catch (error) {
+			return { ...base, error: error instanceof Error ? error.message : String(error) };
+		}
+		const rawEntry: unknown = config.datasources?.[id];
+		if (rawEntry === undefined) return { ...base, error: `Unknown datasource: ${id}` };
+		const entry: DatasourceSkillConfig = isJsonObject(rawEntry) ? rawEntry : {};
+		if (rawEntry === false || entry.enabled === false) {
+			return { ...base, error: "This datasource is turned off" };
+		}
+		const type = entry.type ?? id;
+		if (!BUILTIN_DATASOURCE_SKILL_NAMES.includes(type)) {
+			return { ...base, state: "unsupported", error: `No built-in AutoRAG datasource named "${type}"` };
+		}
+		const install = await installState(type, entry, deps.env);
+		if (install.state === "missing" || install.state === "credential-missing") {
+			return { ...base, state: "unavailable", error: install.detail, durationMs: Date.now() - startedAt };
+		}
+		let skill: DatasourceSkill | undefined;
+		try {
+			skill = buildSkill(id, entry, config.workspacePath, deps.discrawlEmbeddingRuntime?.());
+		} catch (error) {
+			return { ...base, state: "failed", error: error instanceof Error ? error.message : String(error), durationMs: Date.now() - startedAt };
+		}
+		if (skill === undefined) {
+			return { ...base, state: "unsupported", error: `No built-in AutoRAG datasource named "${type}"` };
+		}
+		let result: DatasourceIndexResult;
+		try {
+			result = await skill.index();
+		} catch (error) {
+			return { ...base, state: "failed", error: error instanceof Error ? error.message : String(error), durationMs: Date.now() - startedAt };
+		}
+		const diagnostics = result.diagnostics.map(toDiagnostic);
+		const durationMs = Date.now() - startedAt;
+		if (result.ok) {
+			return {
+				id,
+				ok: true,
+				state: result.chunkCount > 0 ? "indexed" : "empty",
+				chunkCount: result.chunkCount,
+				indexedAt: new Date(result.indexedAt).toISOString(),
+				durationMs,
+				diagnostics,
+				error: null,
+			};
+		}
+		return {
+			...base,
+			state: "failed",
+			durationMs,
+			diagnostics,
+			error: result.error ?? result.message ?? "The datasource CLI reported a failure",
+		};
+	};
+
+	return {
+		list: listSnapshot,
+		sync: (id) => {
+			const existing = inFlight.get(id);
+			if (existing !== undefined) return existing;
+			const run = runSync(id).finally(() => inFlight.delete(id));
+			inFlight.set(id, run);
+			return run;
 		},
 		setEnabled: async (id, enabled) => {
-			updateEntry(id, (entry) => (isRecord(entry) ? { ...entry, enabled } : enabled));
+			updateEntry(id, (entry) => (isJsonObject(entry) ? { ...entry, enabled } : enabled));
 		},
 		setDescription: async (id, description) => {
 			const text = description.trim();
 			updateEntry(id, (entry) => {
-				const { description: _previous, ...rest } = isRecord(entry) ? entry : entry === false ? { enabled: false } : {};
+				const { description: _previous, ...rest } = isJsonObject(entry) ? entry : entry === false ? { enabled: false } : {};
 				return text.length === 0 ? rest : { ...rest, description: text };
 			});
 		},

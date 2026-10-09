@@ -109,6 +109,19 @@ describe("createIndexStatusService", () => {
 		expect(status).toMatchObject({ kind: "outside", toggleable: false });
 	});
 
+	it("reports types no parser handles as unsupported and not toggleable, and supported unindexed files as pending", async () => {
+		const fixture = await createFixture();
+		const service = createIndexStatusService({ env: fixture.env, cwd: fixture.workspace, onRefreshed: () => {} });
+		const image = join(fixture.docs, "photo.png");
+		const note = join(fixture.docs, "fresh.txt");
+		await writeFile(image, "x");
+		await writeFile(note, "x");
+
+		const [unsupported, fresh] = await service.indexStatus([image, note]);
+		expect(unsupported).toMatchObject({ kind: "unsupported", toggleable: false });
+		expect(fresh).toMatchObject({ kind: "pending", excluded: false, toggleable: true });
+	});
+
 	it("persists an exclusion to the shared config and reports it pending while the file is still indexed", async () => {
 		const fixture = await createFixture();
 		const staged = await indexFile(fixture, "staged.txt", true);

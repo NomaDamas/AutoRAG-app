@@ -124,6 +124,36 @@ describe("createAutoRagConfigService", () => {
 		expect(await readFile(fixture.configPath, "utf8")).toBe(before);
 	});
 
+	it("accepts a zero polling interval but rejects negatives and non-integers", async () => {
+		const root = await mkdtemp(join(tmpdir(), "autorag-config-polling-"));
+		const fixture = await createFixture(baseConfig(root), "autorag-config-polling-");
+		const service = createAutoRagConfigService({ env: fixture.env, cwd: fixture.root });
+
+		await service.set(["datasources", "notes", "type"], "obsidian");
+		const snapshot = await service.set(["datasources", "notes", "pollingIntervalMs"], 0);
+		expect(snapshot.error).toBeNull();
+		expect((snapshot.config.datasources as Record<string, Record<string, unknown>>).notes?.pollingIntervalMs).toBe(0);
+
+		await expect(service.set(["datasources", "notes", "pollingIntervalMs"], -1)).rejects.toThrow(/non-negative integer/);
+		await expect(service.set(["datasources", "notes", "pollingIntervalMs"], 1.5)).rejects.toThrow(/non-negative integer/);
+	});
+
+	it("validates minSync.embedder fields and the loopback rule", async () => {
+		const root = await mkdtemp(join(tmpdir(), "autorag-config-embedder-"));
+		const fixture = await createFixture(baseConfig(root), "autorag-config-embedder-");
+		const service = createAutoRagConfigService({ env: fixture.env, cwd: fixture.root });
+
+		await expect(service.set(["minSync", "embedder", "profile"], "not-a-profile")).rejects.toThrow(/profile must be/);
+		await expect(service.set(["minSync", "embedder", "dimension"], 0)).rejects.toThrow(/dimension must be a positive integer/);
+		await expect(
+			service.set(["minSync", "embedder"], { id: "bge-m3", baseUrl: "https://api.example.com", dimension: 1024 }),
+		).rejects.toThrow(/loopback/);
+
+		const ok = await service.set(["minSync", "embedder"], { id: "bge-m3", baseUrl: "http://127.0.0.1:11434", dimension: 1024 });
+		expect(ok.error).toBeNull();
+		expect(ok.config.minSync).toMatchObject({ embedder: { id: "bge-m3", dimension: 1024 } });
+	});
+
 	it("validates webSearch through the effective loader (librarian drops it)", async () => {
 		const root = await mkdtemp(join(tmpdir(), "autorag-config-websearch-"));
 		const fixture = await createFixture(baseConfig(root), "autorag-config-websearch-");
@@ -348,5 +378,21 @@ describe("createAutoRagConfigService", () => {
 			parserOptions: { languages: ["ko"], ocr: { enabled: true, timeoutMs: 1000 }, kordoc: { ocr: "force" } },
 		});
 		expect(ok.error).toBeNull();
+	});
+
+	it("validates the app-owned thinking levels and rejects unknown fields", async () => {
+		const root = await mkdtemp(join(tmpdir(), "autorag-config-thinking-"));
+		const fixture = await createFixture(baseConfig(root), "autorag-config-thinking-");
+		const service = createAutoRagConfigService({ env: fixture.env, cwd: fixture.root });
+		const before = await readFile(fixture.configPath, "utf8");
+
+		await expect(service.set(["thinking", "final"], "extreme")).rejects.toThrow(/thinking\.final must be one of/);
+		await expect(service.set(["thinking", "medium"], "high")).rejects.toThrow(/not a recognized field/);
+		await expect(service.set(["thinking"], [])).rejects.toThrow(/thinking must be an object/);
+		expect(await readFile(fixture.configPath, "utf8")).toBe(before);
+
+		const written = await service.set(["thinking"], { fast: "off", final: "xhigh" });
+		expect(written.error).toBeNull();
+		expect(written.config.thinking).toEqual({ fast: "off", final: "xhigh" });
 	});
 });

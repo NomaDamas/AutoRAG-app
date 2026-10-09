@@ -76,6 +76,27 @@ describe("readDropPaths", () => {
 		expect(readDropPaths(drop(data), pathForFile)).toEqual(["/d/a.txt", "/Users/me/My Notes/plan v2.md"]);
 	});
 
+	it("reads Windows drive and UNC file URLs back to native paths", () => {
+		const data = { "text/uri-list": ["file:///C:/Users/me/My%20Notes/plan.md", "file://srv/share/dir/a.txt"].join("\r\n") };
+		expect(readDropPaths(drop(data), pathForFile)).toEqual(["C:\\Users\\me\\My Notes\\plan.md", "\\\\srv\\share\\dir\\a.txt"]);
+	});
+
+	it("round-trips a Windows path through the URI list an in-app drag writes", () => {
+		const data: Record<string, string> = {};
+		writeFinderDrag(
+			{ effectAllowed: "none", setData: (format: string, value: string) => void (data[format] = value) },
+			[
+				{ path: "C:\\Users\\me\\한글 문서.md", name: "한글 문서.md", kind: "file" },
+				{ path: "\\\\srv\\share\\a b.txt", name: "a b.txt", kind: "file" },
+			],
+		);
+		expect(data["text/uri-list"]).toBe("file:///C:/Users/me/%ED%95%9C%EA%B8%80%20%EB%AC%B8%EC%84%9C.md\r\nfile://srv/share/a%20b.txt");
+		expect(readDropPaths(drop({ "text/uri-list": data["text/uri-list"]! }), pathForFile)).toEqual([
+			"C:\\Users\\me\\한글 문서.md",
+			"\\\\srv\\share\\a b.txt",
+		]);
+	});
+
 	it("lists a path once when the drop carries it as both a file and a file URL", () => {
 		expect(
 			readDropPaths(

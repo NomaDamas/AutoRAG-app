@@ -290,5 +290,426 @@
       "osMenuIntegrationHint": "Finder(macOS) 또는 탐색기(Windows)에서 파일을 우클릭하면 'AutoRAG에게 물어보기'와 'AutoRAG에서 보기' 항목이 나타납니다.",
       "osMenuIntegrationError": "우클릭 메뉴를 설정하지 못했습니다"
     }
+  },
+  "onboarding": {
+    "step": {
+      "welcome": "소개",
+      "permissions": "권한",
+      "account": "계정",
+      "folders": "폴더",
+      "embedding": "임베딩",
+      "sources": "데이터 소스",
+      "plan": "플랜",
+      "model": "AI 모델",
+      "indexing": "인덱싱"
+    },
+    "stepLabel": {
+      "welcome": "시작하기",
+      "permissions": "계속",
+      "account": "계속",
+      "folders": "폴더로 계속",
+      "embedding": "계속",
+      "sources": "계속",
+      "model": "계속",
+      "indexing": "계속"
+    },
+    "welcome": {
+      "eyebrow": "Pro 7일 무료 체험",
+      "title": "파일에게\n물어보세요",
+      "lead": "폴더를 열어 뒤지지 않아도 됩니다. AutoRAG가 문서 안의 내용을 읽고, 근거와 함께 답합니다.",
+      "note": "기본값은 로컬 처리입니다. 원격 처리가 필요한 순간에는 무엇이 전송되는지 먼저 보여드립니다.",
+      "chat": {
+        "user": "지난 분기 비용이 왜 줄었어?",
+        "replyLead": "마케팅 비용은 전분기보다 ",
+        "replyTail": " 줄었습니다."
+      },
+      "evidence": {
+        "revenue": "매출 보고서",
+        "revenueQuote": "“전년 대비 18% 증가…”",
+        "budget": "Budget summary",
+        "budgetQuote": "“Q3 operating cost…”"
+      }
+    },
+    "feature": {
+      "ai": { "title": "AI 검색", "sub": "답변과 근거를 한 번에" },
+      "citation": { "title": "근거 인용", "sub": "답변의 출처를 확인" },
+      "versions": { "title": "버전 묶기", "sub": "중복 문서를 정리" },
+      "quicklook": { "title": "Quick Look", "sub": "열기 전 미리보기" },
+      "sources": { "title": "데이터 소스", "sub": "연결된 곳까지 함께 검색" },
+      "hybrid": { "title": "하이브리드 검색", "sub": "키워드와 의미를 함께, 리랭킹으로 정렬" }
+    },
+    "hybrid": { "keyword": "키워드", "semantic": "의미", "rerank": "리랭킹" },
+    "versions": { "latest": "최신본", "near": "유사본", "exact": "동일본" },
+    "account": {
+      "eyebrow": "계정",
+      "title": "계정으로\n시작하기",
+      "lead": "플랜과 체험판만 계정에 연결됩니다. 파일과 인덱스는 이 Mac에 남습니다.",
+      "note": "브라우저에서 로그인한 뒤 이 앱으로 자동으로 돌아옵니다. 비밀번호는 이 앱에 입력하지 않습니다.",
+      "signedIn": "로그인되었습니다",
+      "signedInNote": "다음 단계로 이동합니다",
+      "otherAccount": "다른 계정",
+      "cardTitle": "AutoRAG 계정",
+      "cardSub": "체험판과 설정을 관리합니다",
+      "busy": "브라우저에서 로그인 중…",
+      "busyNote": "인증이 끝나면 자동으로 돌아옵니다.",
+      "apple": "Apple로 계속",
+      "google": "Google로 계속",
+      "or": "또는",
+      "emailPlaceholder": "이메일 주소",
+      "magicLink": "링크 받기",
+      "authNote": "로그인 링크를 이메일로 보내드립니다. 계정에는 파일 내용이 저장되지 않습니다.",
+      "sampleEmail": "hello@autorag.example"
+    },
+    "permissions": {
+      "eyebrow": "권한",
+      "title": "제대로 읽을 수 있게\n허용해주세요",
+      "leadMac": "macOS는 앱이 문서와 보호된 앱 데이터에 접근하기 전에 허락을 받습니다. 권한과 인덱싱 범위는 서로 다릅니다.",
+      "leadWindows": "알림과 네트워크만 확인하면 바로 시작할 수 있습니다. 나머지는 나중에 Settings에서 바꿀 수 있습니다.",
+      "note": "AutoRAG는 파일을 수정하지 않습니다. 실제로 인덱싱할 폴더는 다음 단계에서 직접 고릅니다.",
+      "required": "필수",
+      "optional": "선택",
+      "setting": "설정",
+      "granted": "허용됨",
+      "restartNeeded": "다시 시작 필요",
+      "restartNow": "지금 다시 시작",
+      "openSettings": "시스템 설정 열기",
+      "footnote": "켜야 다음 단계로 갈 수 있습니다.",
+      "fda": {
+        "name": "전체 디스크 접근",
+        "desc": "제대로 동작하려면 필요합니다."
+      },
+      "notifications": {
+        "name": "알림",
+        "allow": "알림 허용",
+        "openWindows": "Windows 설정 열기"
+      },
+      "login": {
+        "name": "로그인 시 실행",
+        "desc": "파일이 바뀌면 백그라운드에서 인덱스를 최신으로 유지합니다."
+      },
+      "network": {
+        "name": "네트워크 (방화벽)",
+        "desc": "클라우드 임베딩과 모델 호출에 필요합니다. 첫 실행 때 Windows 보안 경고가 뜨면 허용합니다.",
+        "allow": "허용"
+      }
+    },
+    "folders": {
+      "eyebrow": "인덱싱 범위",
+      "title": "AI가 읽을 폴더를 고르세요",
+      "lead": "여기 선택한 폴더만 AI 검색에 포함됩니다. 범위는 나중에 추가하거나 줄일 수 있습니다.",
+      "suggested": "추천 위치",
+      "selectAll": "모두 선택",
+      "add": "다른 폴더 추가",
+      "stats": "{{files}}개 · {{size}} · 약 {{minutes}}분",
+      "scanning": "세는 중…",
+      "scanError": "읽을 수 없음",
+      "summary": "{{folders}}개 폴더 · {{files}}개 파일 · {{size}}",
+      "summaryNote": "node_modules · .git · 50 MiB 초과 파일은 자동으로 제외합니다.",
+      "localEta": "로컬 약 {{minutes}}분",
+      "cloudEta": "클라우드 약 {{minutes}}분",
+      "warning": "범위가 넓습니다. 하위 폴더를 고르거나 클라우드 임베딩을 선택하면 첫 결과를 더 빨리 볼 수 있습니다."
+    },
+    "embedding": {
+      "eyebrow": "중요한 선택",
+      "title": "어디서\n임베딩할까요?",
+      "lead": "문서를 검색할 수 있게 벡터로 바꾸는 작업을 어디서 할지 정합니다. 나중에 바꾸면 처음부터 다시 해야 해서 시간과 비용이 더 듭니다.",
+      "files": "{{count}}개",
+      "selectedFiles": "선택한 파일",
+      "reindexNote": "임베딩 모델이나 처리 위치를 바꾸면 지금 만든 인덱스를 버리고 처음부터 다시 만들어야 합니다.",
+      "localTitle": "이 Mac에서",
+      "localLead": "파일 본문이 Mac 밖으로 나가지 않습니다.",
+      "metricTime": "예상 시간",
+      "metricDownload": "다운로드",
+      "metricPrivacy": "프라이버시",
+      "metricStorage": "저장",
+      "metricPlan": "플랜",
+      "minutes": "약 {{minutes}}분",
+      "cached": "준비됨",
+      "downloadUnknown": "확인 중",
+      "privacyLocal": "로컬",
+      "storageNone": "하지 않음",
+      "planPro": "Pro 전용",
+      "bulletGpuMac": "Apple Silicon GPU 사용",
+      "bulletGpuWindows": "GPU 가속 사용 (가능한 경우)",
+      "bulletPower": "노트북은 전원 연결 권장",
+      "cloudBadge": "준비 중",
+      "cloudTitle": "클라우드에서",
+      "cloudLead": "더 빠르게 처리하지만 선택한 문서 본문이 전송됩니다.",
+      "cloudBulletPerf": "Mac 성능에 영향이 적음",
+      "cloudBulletNoStore": "처리 후 본문을 보관하지 않음"
+    },
+    "sources": {
+      "eyebrow": "데이터 소스",
+      "title": "연결된 곳도\n함께 찾을까요?",
+      "lead": "이미 설치되고 인증된 소스만 먼저 보여드립니다. 모두 선택하지 않아도 됩니다.",
+      "detected": "감지됨",
+      "checking": "추가할 수 있는 소스를 확인하는 중…",
+      "empty": "연결된 소스를 찾지 못했어요. 나중에 Settings에서 연결할 수 있습니다.",
+      "connectMore": "준비가 필요한 소스는 나중에 Settings에서 연결할 수 있습니다.",
+      "name": {
+        "kakao": "KakaoTalk",
+        "slack": "Slack",
+        "discord": "Discord",
+        "telegram": "Telegram",
+        "whatsapp": "WhatsApp",
+        "mailcrawl": "메일 (mailcrawl)",
+        "github": "GitHub",
+        "obsidian": "Obsidian"
+      },
+      "detail": {
+        "kakao": "KakaoTalk 앱 데이터 감지됨",
+        "slack": "workspace {{workspaces}}개 연결됨",
+        "discord": "Discord 앱 메시지 {{messages}}개 감지됨",
+        "telegram": "Telegram 앱 데이터 감지됨",
+        "whatsapp": "대화 {{chats}}개 · 메시지 {{messages}}개",
+        "mailcrawl": "메일 계정 {{accounts}}개 로그인 확인됨",
+        "github": "로그인됨 · Issues와 Pull Requests",
+        "obsidian": "Vault {{vaults}}개 발견"
+      }
+    },
+    "plan": {
+      "eyebrow": "플랜",
+      "title": "어떻게 사용할까요?",
+      "titleReady": "플랜이 준비됐어요",
+      "lead": "플랜에 따라 AI 사용량과 임베딩 위치가 정해집니다. 나중에 Settings에서 바꿀 수 있습니다.",
+      "badgeRecommended": "추천",
+      "badgeTrial": "체험 진행 중",
+      "badgeSubscribed": "구독 중",
+      "perMonth": "/ 월",
+      "continue": "이 플랜으로 계속",
+      "startTrial": "7일 무료 체험 시작",
+      "subscribeAir": "Air 구독하기",
+      "notePaid": "결제 등록 완료",
+      "noteProTrialActive": "체험 중 · 7일 후 월 $20",
+      "plan": {
+        "free": {
+          "name": "Free",
+          "price": "무료",
+          "note": "카드 없이 바로 시작",
+          "tag": "가볍게 시작하기",
+          "chip": "질문은 AutoRAG 모델로 전송",
+          "feature": {
+            "a": "이 Mac에서 로컬 임베딩",
+            "b": "관리형 AI 모델 · 기본 사용량",
+            "c": "Finder와 검색 기능 모두 사용"
+          }
+        },
+        "air": {
+          "name": "Air",
+          "price": "$4",
+          "note": "체험 없이 바로 시작",
+          "tag": "매일 가볍게 쓰기",
+          "chip": "질문은 AutoRAG 모델로 전송",
+          "feature": {
+            "a": "이 Mac에서 로컬 임베딩",
+            "b": "관리형 AI 모델 · 넉넉한 사용량",
+            "c": "Free 기능 모두 포함"
+          }
+        },
+        "pro": {
+          "name": "Pro",
+          "price": "$20",
+          "note": "7일 무료 체험 후 결제",
+          "tag": "가장 빠른 첫 인덱싱",
+          "chip": "파일 본문 전송 전 동의 필요",
+          "feature": {
+            "a": "클라우드 임베딩으로 더 빠르게",
+            "b": "관리형 AI 모델 · 가장 많은 사용량",
+            "c": "Air 기능 모두 포함"
+          }
+        },
+        "byok": {
+          "name": "BYOK",
+          "price": "API 비용만",
+          "note": "provider에 직접 지불",
+          "tag": "내 키로 직접 연결",
+          "chip": "API 키 입력 필요",
+          "feature": {
+            "a": "이 Mac에서 로컬 임베딩",
+            "b": "provider와 모델 직접 선택",
+            "c": "선택한 provider에만 요청 전송"
+          }
+        }
+      }
+    },
+    "model": {
+      "eyebrow": "AI 모델",
+      "title": "사용할 모델을 연결하세요",
+      "lead": "감지된 연결을 사용하거나 provider와 API 키를 선택하세요.",
+      "note": "키는 암호화되어 저장되며 설정 파일에는 기록되지 않습니다.",
+      "detectedTitle": "감지된 연결",
+      "localRuntime": "로컬 runtime",
+      "storedCredential": "저장된 자격 증명",
+      "use": "사용",
+      "provider": {
+        "anthropic": "Anthropic",
+        "openai": "OpenAI",
+        "openrouter": "OpenRouter",
+        "google": "Google",
+        "ollama": "Ollama",
+        "openai-compatible": "OpenAI 호환"
+      },
+      "baseUrlPlaceholder": "https://example.com/v1",
+      "keyPlaceholder": "API 키 입력",
+      "verify": "연결 확인",
+      "verifying": "확인 중…",
+      "verified": "✓ 연결 완료 · 추천 모델이 선택되었습니다.",
+      "unverified": "키는 암호화되어 저장되고 설정 파일에는 기록되지 않습니다.",
+      "error": "연결 실패: {{error}}",
+      "advanced": "고급 설정",
+      "modelRow": "모델",
+      "recommended": "provider 추천 모델",
+      "reasoningRow": "추론 레벨 (생성 모델만)",
+      "reasoningValue": "모델 기본값"
+    },
+    "indexing": {
+      "tip": "꿀팁",
+      "prevTip": "이전 팁",
+      "nextTip": "다음 팁",
+      "tipDot": "팁 {{index}}",
+      "done": "인덱싱 완료",
+      "doneDetail": "{{files}}개 파일 · 데이터 소스 {{sources}}개",
+      "failedTitle": "인덱싱 중단",
+      "failedDetail": "인덱싱을 완료하지 못했습니다.",
+      "waiting": "시작 대기 중",
+      "waitingNote": "첫 인덱싱을 준비하고 있습니다.",
+      "running": "{{phase}}…",
+      "detailParsing": "문서 읽는 중",
+      "detailSources": "{{sources}} · 메타데이터 동기화",
+      "detailNoSources": "연결한 데이터 소스 없음 · 건너뜀",
+      "detailFinalizing": "검색 인덱스 최적화",
+      "phaseLabel": {
+        "parsed": "문서 읽는 중",
+        "minsync": "임베딩 중",
+        "datasources": "데이터 소스 확인 중",
+        "finalizing": "정리 중"
+      },
+      "phase": {
+        "parsed": "문서 읽기",
+        "minsync": "임베딩",
+        "datasources": "데이터 소스",
+        "finalizing": "정리"
+      },
+      "title": "AutoRAG가 파일을 읽고 있어요",
+      "titleDone": "모든 준비가 끝났어요",
+      "metaDone": "총 소요 시간 확인 중",
+      "metaTotal": "총 {{minutes}}분",
+      "metaFiles": "{{count}}개 파일",
+      "metaEstimating": "남은 시간 계산 중",
+      "metaUnderMinute": "1분 미만 남음",
+      "metaRemaining": "약 {{minutes}}분 남음",
+      "metaProgress": "{{processed}} / {{total}}개 파일",
+      "gateOkTitle": "이제 종료해도 괜찮아요",
+      "gateOkDetail": "{{files}}개 파일을 모두 읽었어요. 새로 바뀐 파일은 백그라운드에서 이어서 읽습니다.",
+      "gateFailTitle": "인덱싱을 완료하지 못했습니다",
+      "gateFailDetail": "다시 시도하면 이어서 진행합니다.",
+      "gateTitle": "AutoRAG를 종료하거나 {{machine}} 끄지 마세요",
+      "gateDetailMac": "첫 인덱싱은 오래 걸립니다. 종료하면 진행이 멈춰요. 전원 어댑터를 연결하고 덮개를 열어 두세요.",
+      "gateDetailWindows": "첫 인덱싱은 오래 걸립니다. 종료하면 진행이 멈춰요. 전원을 연결해 두세요.",
+      "gateLocked": "완료되면 열 수 있어요",
+      "open": "AutoRAG 열기",
+      "retry": "다시 시도"
+    },
+    "tips": {
+      "1": {
+        "title": "{{shortcut}} 한 번이면 바로 질문",
+        "body": "어느 화면에서든 AI Search 입력창으로 이동합니다. 폴더를 열지 않고 문서 내용을 묻고, 근거와 함께 답을 받으세요."
+      },
+      "2": {
+        "title": "답변의 번호를 누르면 근거를 미리보기로",
+        "body": "답변에 붙은 번호는 실제로 읽은 문서 위치입니다. 누르면 근거 파일의 내용을 바로 미리 볼 수 있습니다.",
+        "bubble": "마케팅 비용은 전분기보다 18% 줄었습니다."
+      },
+      "3": {
+        "title": "Space로 열지 않고 훑어보기",
+        "body": "파일을 고르고 Space를 누르면 Quick Look으로 미리 봅니다. 앱을 바꾸지 않고 내용을 확인하세요."
+      },
+      "4": {
+        "title": "파일을 끌어다 질문에 붙이기",
+        "body": "Finder 행이나 다른 앱의 파일, 폴더를 AI Search로 끌어오면 그 범위를 기준으로 질문합니다.",
+        "pill": "이 파일 요약해줘"
+      },
+      "5": {
+        "title": "비슷한 파일은 한 묶음으로",
+        "body": "proposal-final과 proposal-v3처럼 비슷한 파일은 묶어서 최신본·유사본·동일본으로 표시합니다. 헷갈리는 버전을 고르지 않아도 됩니다.",
+        "latest": "최신본",
+        "near": "유사본",
+        "exact": "동일본"
+      },
+      "6": {
+        "title": "{{shortcut}}로 파일 검색",
+        "body": "검색창으로 바로 이동합니다. 키워드와 의미를 함께 보고 리랭킹으로 순서를 매깁니다."
+      },
+      "7": {
+        "title": "{{shortcut}} · 2 · 3으로 보기 전환",
+        "body": "아이콘, 목록, 칼럼 보기를 키보드로 바꿉니다. 마지막으로 고른 보기는 다음 실행에도 유지됩니다."
+      },
+      "8": {
+        "title": "Slack과 GitHub도 같은 질문으로",
+        "body": "연결한 데이터 소스는 파일과 함께 검색됩니다. 소스는 Settings에서 언제든 추가하거나 끌 수 있습니다."
+      },
+      "9": {
+        "title": "{{shortcut}}로 언제든 다시 설정",
+        "body": "폴더 범위, AI 모델, 데이터 소스는 Settings에서 바꿀 수 있습니다. 임베딩 위치만은 바꾸면 처음부터 다시 인덱싱합니다."
+      }
+    },
+    "overlay": {
+      "later": "나중에",
+      "fda": {
+        "title": "전체 디스크 접근 권한",
+        "heading": "System Settings에서 켜기",
+        "lead": "macOS 보호 영역을 읽으려면 한 번만 허용하면 됩니다. 앱을 종료해도 온보딩은 이 단계에서 이어집니다.",
+        "step1": "Privacy & Security → Full Disk Access를 엽니다.",
+        "step2": "AutoRAG를 목록에 추가하고 토글을 켭니다.",
+        "step3": "macOS가 요청하면 종료 후 다시 엽니다.",
+        "drag": "목록에 없으면 이 아이콘을 목록으로 드래그",
+        "allowed": "허용했어요",
+        "mock": {
+          "navTitle": "Privacy & Security",
+          "notifications": "Notifications",
+          "files": "Files & Folders",
+          "fda": "Full Disk Access",
+          "automation": "Automation",
+          "paneLead": "아래 앱이 전체 디스크의 파일에 접근할 수 있습니다."
+        }
+      },
+      "restart": {
+        "title": "AutoRAG를 다시 열까요?",
+        "lead": "전체 디스크 접근 권한을 적용하려면 앱을 종료하고 다시 열어야 합니다. 온보딩은 현재 단계에서 이어집니다.",
+        "action": "종료 후 다시 열기"
+      },
+      "pay": {
+        "proTitle": "Pro 7일 무료 체험 시작",
+        "airTitle": "Air 플랜 구독",
+        "proLead": "7일 동안 무료입니다. 체험 기간에는 청구되지 않고, 끝나기 전에 알려드립니다. 클라우드 임베딩은 체험을 시작하면 바로 쓸 수 있습니다.",
+        "airLead": "오늘부터 매월 $4가 청구됩니다. 관리형 AI 모델을 Free보다 넉넉하게 쓸 수 있습니다.",
+        "today": "오늘 결제",
+        "afterPro": "7일 후부터",
+        "fromNext": "다음 결제부터",
+        "monthly": "매월 {{price}}",
+        "cardNumber": "카드 번호",
+        "expiry": "만료",
+        "cvc": "CVC",
+        "proConsent": "7일 무료 체험이 끝나면 매월 $20 자동 결제에 동의합니다. 언제든 Settings에서 해지할 수 있습니다.",
+        "airConsent": "매월 $4 자동 결제에 동의합니다. 언제든 Settings에서 해지할 수 있습니다.",
+        "demo": "실제 결제는 발생하지 않습니다. 이 단계는 QA용 자리표시자이며 카드 정보는 저장되거나 전송되지 않습니다.",
+        "startTrial": "체험 시작",
+        "payAir": "$4 결제하고 계속"
+      }
+    },
+    "toast": {
+      "signedIn": "로그인되었습니다.",
+      "notificationsOn": "알림 권한을 받았습니다.",
+      "notificationsOff": "시스템 설정에서 알림을 허용해 주세요.",
+      "loginFailed": "로그인 항목에 등록하지 못했습니다.",
+      "networkOk": "네트워크 연결을 확인했습니다.",
+      "networkFail": "네트워크에 연결할 수 없습니다.",
+      "fdaPending": "앱을 다시 열면 권한이 적용됩니다.",
+      "verified": "연결을 확인했습니다.",
+      "payMissing": "카드 정보와 동의가 필요합니다. (데모)",
+      "trialStarted": "Pro 7일 무료 체험을 시작했습니다. (데모 · 실제 결제 없음)",
+      "subscribed": "플랜을 구독했습니다. (데모 · 실제 결제 없음)",
+      "notIndexed": "인덱싱이 끝나야 AutoRAG를 열 수 있어요."
+    }
   }
 }

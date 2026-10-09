@@ -19,7 +19,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, 
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { finderWindow, fsWorkerDiagnostics, launchFinder, ROOT } from "./launch-finder.mjs";
-import { isMac, sleep } from "./platform.mjs";
+import { cssAttr, isMac, sleep } from "./platform.mjs";
 
 const EVIDENCE = join(ROOT, ".omo/evidence/ai-finder-app/qa-quit-clean");
 mkdirSync(EVIDENCE, { recursive: true });
@@ -52,12 +52,12 @@ try {
 		try {
 			const page = await finderWindow(app, 30_000);
 			await page.locator(".sidebar__item", { hasText: "QA" }).click();
-			await page.locator(`[data-path="${join(QA_ROOT, "one")}"]`).first().dblclick();
-			await page.locator(`[data-path="${join(QA_ROOT, "one", "one-0.txt")}"]`).first().waitFor({ timeout: 15_000 });
+			await page.locator(`[data-path="${cssAttr(join(QA_ROOT, "one"))}"]`).first().dblclick();
+			await page.locator(`[data-path="${cssAttr(join(QA_ROOT, "one", "one-0.txt"))}"]`).first().waitFor({ timeout: 15_000 });
 			await sleep(300 + (round % 5) * 150);
 			// Switch folders and quit at once: the old watch's unsubscribe is in flight.
 			await page.locator(".sidebar__item", { hasText: "QA" }).click();
-			await page.locator(`[data-path="${join(QA_ROOT, "two")}"]`).first().dblclick();
+			await page.locator(`[data-path="${cssAttr(join(QA_ROOT, "two"))}"]`).first().dblclick();
 		} catch (error) {
 			console.log(`INFO  round ${round} setup: ${String(error).slice(0, 200)}`);
 		}

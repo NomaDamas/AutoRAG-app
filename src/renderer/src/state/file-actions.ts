@@ -20,6 +20,7 @@ import type {
 	OpenWithApplication,
 	VideoContainer,
 } from "../../../shared/actions-contract";
+import { archiveFormatOf } from "../../../shared/archive-formats";
 
 export type FileActionIcon = "open" | "openWith" | "compress" | "extract" | "share" | "askAi" | "image" | "video";
 
@@ -236,7 +237,7 @@ export function suggestedActions(subject: ActionSubject, capabilities: ActionCap
 			target: { kind: "openWith" },
 		});
 	}
-	if (fileExtension(subject.name) === "zip") {
+	if (capabilities.archive && archiveFormatOf(subject.name) !== null) {
 		actions.push({
 			kind: "action",
 			id: "extract",

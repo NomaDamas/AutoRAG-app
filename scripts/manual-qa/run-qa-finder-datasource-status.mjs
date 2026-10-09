@@ -45,7 +45,6 @@ const writeConfig = (datasources) => writeFileSync(configPath, `${JSON.stringify
 	minSync: { enabled: false },
 	jikji: false,
 	datasources,
-	datasourceAccess: { allowedTags: ["chat", "documents"] },
 }, null, 2)}\n`);
 writeConfig({
 	slack: { description: "Team Slack" },
@@ -59,7 +58,7 @@ writeConfig({
 // datasource CLI visible, or a host-installed rclone/telecrawl flips the
 // "install: missing" assertions. System32 stays for Windows system lookups.
 const windowsPath = `${bin};${process.env.SystemRoot ?? "C:\\Windows"}\\System32;${process.env.SystemRoot ?? "C:\\Windows"}`;
-const env = { AUTORAG_CONFIG: configPath, AUTORAG_HOME: root, PATH: IS_WIN ? windowsPath : `${bin}:/usr/bin:/bin`, GITHUB_TOKEN: "" };
+const env = { AUTORAG_CONFIG: configPath, AUTORAG_HOME: root, PATH: IS_WIN ? windowsPath : `${bin}:/usr/bin:/bin`, GITHUB_TOKEN: "", AUTORAG_SKIP_DUPEY_CHECK: "1" };
 const agentSkills = () =>
 	(buildAgentOptions(resolveConfigReadOnly({ flags: {}, env: { ...process.env, ...env }, cwd: root })).datasourceSkills ?? [])
 		.map((skill) => skill.describe().name);
@@ -77,60 +76,56 @@ try {
 	const openSources = async () => {
 		await page.locator(".sidebar__item", { hasText: "Settings" }).click();
 		await page.waitForSelector(".settings-panel");
-		await page.locator(".settings-sidebar-add").click();
-		await page.waitForSelector(".settings-datasources");
+		await page.locator(".settings-nav-item", { hasText: "모든 연결" }).click();
+		await page.locator(".settings-content .linear-title", { hasText: "연결된 앱" }).waitFor();
 	};
 	const closeSettings = async () => {
 		await page.keyboard.press(chord("w"));
 		await page.waitForFunction(() => document.querySelector(".settings-panel") === null);
 	};
 	const row = (id) => page.locator(`.settings-source[data-source-id="${id}"]`);
+	// Nav items carry the connection alias; their label is the kind ("Slack"), not the alias.
+	const sourceTab = (id) => page.locator(`.settings-nav-item--source[data-source-alias="${id}"]`);
 	const openConnection = async (id) => {
 		if ((await page.locator(".settings-panel").count()) === 0) await openSources();
-		await page.locator(".settings-nav-item--source").filter({ hasText: id }).click();
+		await sourceTab(id).click();
 		await page.waitForSelector(`.settings-source[data-source-id="${id}"]`);
 	};
-	const fact = async (id, key) => {
-		const source = row(id);
-		// v7 gives a disabled source row `pointer-events: none`, so expand it via a
-		// dispatched click rather than a hit-tested one.
-		if ((await source.locator(".settings-source-facts").count()) === 0) await source.locator(".settings-source__chevron").dispatchEvent("click");
-		return source.locator(`.settings-source-fact[data-fact="${key}"]`).getAttribute("data-state");
-	};
+	const stateOf = async (id) => (await page.evaluate(() => window.autorag.settings.sourcesList())).sources.find((source) => source.id === id);
 
 	await openSources();
-	check("Data Sources overview hides nested connection editors", (await page.locator(".settings-source").count()) === 0);
+	check("Data Sources overview hides connection editors", (await page.locator(".settings-source").count()) === 0);
 	const directTabs = await page.locator(".settings-nav-item--source").allTextContents();
 	check("exposes one direct Settings tab per configured datasource", directTabs.length === 5, JSON.stringify(directTabs));
 	await openConnection("slack");
-	check("direct datasource tab opens only the selected connection", (await page.locator(".settings-source").count()) === 1 && (await row("slack").count()) === 1, JSON.stringify(await page.locator(".settings-source").evaluateAll((els) => els.map((el) => el.dataset.sourceId))));
+	check("direct datasource tab opens only the selected connection", (await page.locator(".settings-source").count()) === 1 && (await row("slack").count()) === 1);
 
 	const expected = {
-		slack: { install: "installed", agent: "connected", index: "external", status: "Ready" },
-		"my-drive": { install: "missing", agent: "connected", index: "indexed", status: "Needs attention" },
-		github: { install: "credential-missing", agent: "blocked", index: "not-indexed", status: "Needs attention" },
-		telegram: { install: "missing", agent: "disabled", status: "Paused" },
-		foo: { install: "unsupported", agent: "unsupported", status: "Needs attention" },
+		// The fake slacrawl prints nothing parseable, so its archive is unreadable — not "empty".
+		slack: { install: "installed", agent: "connected", index: "not-indexed", status: "ready" },
+		"my-drive": { install: "missing", agent: "connected", index: "indexed", status: "attention" },
+		github: { install: "credential-missing", agent: "connected", index: "not-indexed", status: "attention" },
+		telegram: { install: "missing", agent: "disabled", status: "paused" },
+		foo: { install: "unsupported", agent: "unsupported", status: "attention" },
 	};
 	for (const [id, want] of Object.entries(expected)) {
 		await openConnection(id);
+		const source = await stateOf(id);
 		const got = {
-			install: await fact(id, "install"),
-			agent: await fact(id, "agent"),
-			...(want.index === undefined ? {} : { index: await fact(id, "index") }),
-			status: await row(id).locator(".provider-status").textContent(),
+			install: source?.install.state,
+			agent: source?.agent.state,
+			...(want.index === undefined ? {} : { index: source?.index.state }),
+			status: source?.status,
 		};
 		check(`${id} states`, JSON.stringify(got) === JSON.stringify(want), JSON.stringify(got));
 	}
 	await openConnection("my-drive");
-	const driveCount = await row("my-drive").locator(".settings-source__pct").textContent();
-	check("my-drive shows its chunk count", driveCount === "3 chunks", driveCount ?? "");
+	const driveText = await row("my-drive").innerText();
+	check("my-drive shows its chunk count", driveText.includes("문서 3개"), driveText.slice(0, 200));
 	await page.screenshot({ path: join(EVIDENCE, "01-sources-expanded.png") });
 
 	await openConnection("slack");
-	await fact("slack", "agent");
-	const slackDesc = row("slack").locator(".settings-source-desc");
-	const description = slackDesc.locator('textarea[aria-label="설명"]');
+	const description = row("slack").locator('textarea[aria-label="설명"]');
 	await description.fill("Release and incident chatter");
 	await description.press("Tab");
 	await page.waitForTimeout(900);
@@ -142,13 +137,13 @@ try {
 	await page.screenshot({ path: join(EVIDENCE, "01b-description-autosaved.png") });
 
 	check("agent sees slack before the toggle", agentSkills().includes("slack"), JSON.stringify(agentSkills()));
-	await row("slack").locator(".settings-switch").click();
-	await page.waitForFunction(() => document.querySelector('.settings-source[data-source-id="slack"] .provider-status')?.textContent === "Paused");
+	await row("slack").locator('[role="switch"][aria-label="사용 여부"]').click();
+	await page.waitForFunction(() => window.autorag.settings.sourcesList().then((s) => s.sources.find((x) => x.id === "slack")?.status === "paused"));
 	const onDisk = JSON.parse(readFileSync(configPath, "utf8"));
 	check("toggle wrote enabled:false into the shared config", onDisk.datasources.slack.enabled === false && onDisk.datasources.slack.description === "Release and incident chatter", JSON.stringify(onDisk.datasources.slack));
-	check("toggle preserved datasourceAccess", JSON.stringify(onDisk.datasourceAccess) === JSON.stringify({ allowedTags: ["chat", "documents"] }));
+	check("toggle left no datasourceAccess behind", onDisk.datasourceAccess === undefined);
 	check("a fresh AutoRAG agent no longer loads slack", !agentSkills().includes("slack"), JSON.stringify(agentSkills()));
-	check("slack agent fact now reads disabled", (await fact("slack", "agent")) === "disabled");
+	check("slack agent state now reads disabled", (await stateOf("slack"))?.agent.state === "disabled");
 	await page.screenshot({ path: join(EVIDENCE, "02-slack-toggled-off.png") });
 
 	writeConfig({ ...onDisk.datasources, rss: { connector: { feeds: [{ url: "https://example.com/feed.xml" }] } } });
@@ -157,11 +152,11 @@ try {
 	await closeSettings();
 	await openSources();
 	await openConnection("rss");
-	check("an external config edit appears after reopening Settings", (await fact("rss", "install")) === "builtin");
+	check("an external config edit appears after reopening Settings", (await stateOf("rss"))?.install.state === "builtin");
 	writeConfig({ ...onDisk.datasources, notion: {} });
 	await closeSettings();
 	await openSources();
-	check("reopening Settings re-reads the config (no app-side copy)", (await page.locator(".settings-nav-item--source").filter({ hasText: "notion" }).count()) === 1 && (await page.locator(".settings-nav-item--source").filter({ hasText: "rss" }).count()) === 0);
+	check("reopening Settings re-reads the config (no app-side copy)", (await sourceTab("notion").count()) === 1 && (await sourceTab("rss").count()) === 0);
 	await page.screenshot({ path: join(EVIDENCE, "03-external-edit.png") });
 } finally {
 	await app.close();

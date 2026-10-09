@@ -302,7 +302,10 @@ export function createFsWorkerService(deps: FsWorkerServiceDeps): FsWorkerServic
 		async dispose() {
 			stopPlacesWatch();
 			versionFamilies.stop();
-			await watch.dispose();
+			// The index daemon (Everything / fsearch) is a separate OS process that
+			// outlives the app unless asked to exit; left running it pins userData.
+			// `stop()` reports its own failures, so it cannot block the watch release.
+			await Promise.all([watch.dispose(), fileNameSearch.stop()]);
 		},
 	};
 }

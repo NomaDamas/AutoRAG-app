@@ -18,8 +18,8 @@
 import { deleteKeyLabel, enterKeyLabel, formatShortcut } from "../lib/shortcuts";
 import { NEW_FILE_FORMATS, type NewFileFormatId } from "../../../shared/new-file-contract";
 import type { ActionCapabilities } from "../../../shared/actions-contract";
+import { archiveFormatOf } from "../../../shared/archive-formats";
 import type { ServiceEntry } from "../../../shared/services-contract";
-import { fileExtension } from "./file-actions";
 
 export type FinderMenuAction =
 	| "quickLook"
@@ -196,8 +196,8 @@ export function buildContextMenu(
 			rowActions.push(item("newFolder", tr("contextMenu.newFolder", "새 폴더")));
 		}
 		if (input.capabilities.archive) {
-			// Extraction is single-target: one .zip row on its own.
-			if (!multi && fileExtension(input.target.name) === "zip") {
+			// Extraction is single-target: one archive row on its own.
+			if (!multi && archiveFormatOf(input.target.name) !== null) {
 				rowActions.push(item("extract", tr("contextMenu.extract", "압축 해제")));
 			}
 			rowActions.push(

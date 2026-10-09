@@ -381,6 +381,28 @@ describe("createIconProvider", () => {
 		}
 	});
 
+	it("asks Quick Look for iWork packages at both tiers, but not for other unknown extensions", async () => {
+		// Given a macOS provider that records which paths reach the native thumbnailer
+		const asked: string[] = [];
+		const provider = createIconProvider({
+			platform: "darwin",
+			thumbnail: async (path) => {
+				asked.push(path);
+				return BYTES;
+			},
+			systemIcon: async () => null,
+		});
+
+		// When a listing and the Inspector ask for Numbers, Pages, Keynote, and an unrelated file
+		const icons = await provider.icons(["a.numbers", "b.pages", "c.key", "d.xyz"].map((name) => target(`/docs/${name}`)));
+		const preview = await provider.preview(target("/docs/e.key"));
+
+		// Then only the iWork packages were rendered, in the listing and the preview tier
+		expect([...icons.keys()].sort()).toEqual(["/docs/a.numbers", "/docs/b.pages", "/docs/c.key"]);
+		expect(preview).not.toBeNull();
+		expect(asked.sort()).toEqual(["/docs/a.numbers", "/docs/b.pages", "/docs/c.key", "/docs/e.key"]);
+	});
+
 	it("uses the native thumbnail API on macOS and Windows but the type icon on Linux", async () => {
 		// Given generators that record which path the platform took
 		const native: string[] = [];

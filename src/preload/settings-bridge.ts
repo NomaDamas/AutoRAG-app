@@ -1,5 +1,5 @@
-import type { IpcRenderer } from "electron";
-import { SETTINGS_CHANNELS, type SettingsBridge } from "../shared/settings-contract";
+import type { IpcRenderer, IpcRendererEvent } from "electron";
+import { SETTINGS_CHANNELS, type ProviderLoginEvent, type SettingsBridge } from "../shared/settings-contract";
 
 export function createSettingsBridge(ipcRenderer: IpcRenderer): SettingsBridge {
 	return {
@@ -13,6 +13,9 @@ export function createSettingsBridge(ipcRenderer: IpcRenderer): SettingsBridge {
 		sourcesList: () => ipcRenderer.invoke(SETTINGS_CHANNELS.sourcesList),
 		sourcesSetEnabled: (id, enabled) => ipcRenderer.invoke(SETTINGS_CHANNELS.sourcesSetEnabled, id, enabled),
 		sourcesSetDescription: (id, description) => ipcRenderer.invoke(SETTINGS_CHANNELS.sourcesSetDescription, id, description),
+		sourcesSync: (id) => ipcRenderer.invoke(SETTINGS_CHANNELS.sourcesSync, id),
+		refreshScheduleGet: () => ipcRenderer.invoke(SETTINGS_CHANNELS.refreshScheduleGet),
+		refreshScheduleApply: () => ipcRenderer.invoke(SETTINGS_CHANNELS.refreshScheduleApply),
 		modelsResolve: () => ipcRenderer.invoke(SETTINGS_CHANNELS.modelsResolve),
 		configGet: () => ipcRenderer.invoke(SETTINGS_CHANNELS.configGet),
 		configSet: (path, value) => ipcRenderer.invoke(SETTINGS_CHANNELS.configSet, path, value),
@@ -24,5 +27,24 @@ export function createSettingsBridge(ipcRenderer: IpcRenderer): SettingsBridge {
 		credentialsList: (envNames) => ipcRenderer.invoke(SETTINGS_CHANNELS.credentialsList, envNames),
 		credentialsSet: (envName, secret) => ipcRenderer.invoke(SETTINGS_CHANNELS.credentialsSet, envName, secret),
 		credentialsRemove: (envName) => ipcRenderer.invoke(SETTINGS_CHANNELS.credentialsRemove, envName),
+		providersList: () => ipcRenderer.invoke(SETTINGS_CHANNELS.providersList),
+		providerLoginStart: (providerId, authType) => ipcRenderer.invoke(SETTINGS_CHANNELS.providerLoginStart, providerId, authType),
+		providerLoginRespond: (sessionId, value) => ipcRenderer.invoke(SETTINGS_CHANNELS.providerLoginRespond, sessionId, value),
+		providerLoginCancel: (sessionId) => ipcRenderer.invoke(SETTINGS_CHANNELS.providerLoginCancel, sessionId),
+		providerLogout: (providerId) => ipcRenderer.invoke(SETTINGS_CHANNELS.providerLogout, providerId),
+		onProviderLoginEvent: (listener) => {
+			const handler = (_event: IpcRendererEvent, event: ProviderLoginEvent): void => listener(event);
+			ipcRenderer.on(SETTINGS_CHANNELS.providerLoginEvent, handler);
+			return () => {
+				ipcRenderer.removeListener(SETTINGS_CHANNELS.providerLoginEvent, handler);
+			};
+		},
+		providersDiscover: (input) => ipcRenderer.invoke(SETTINGS_CHANNELS.providersDiscover, input),
+		providersUpsert: (input) => ipcRenderer.invoke(SETTINGS_CHANNELS.providersUpsert, input),
+		providersRemove: (id) => ipcRenderer.invoke(SETTINGS_CHANNELS.providersRemove, id),
+		providersTest: (id) => ipcRenderer.invoke(SETTINGS_CHANNELS.providersTest, id),
+		embeddingGet: () => ipcRenderer.invoke(SETTINGS_CHANNELS.embeddingGet),
+		embeddingPlan: (request) => ipcRenderer.invoke(SETTINGS_CHANNELS.embeddingPlan, request),
+		embeddingApply: (request) => ipcRenderer.invoke(SETTINGS_CHANNELS.embeddingApply, request),
 	};
 }

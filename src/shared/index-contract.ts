@@ -12,8 +12,10 @@ export type IndexStatusKind =
 	| "excluded"
 	/** Index and config disagree until the next refresh lands. */
 	| "pending"
-	/** Refresh deliberately left it out (duplicate, unparseable, oversize). */
+	/** Refresh deliberately left it out (duplicate, oversize, parse failure). Not toggleable. */
 	| "skipped"
+	/** No parser handles this file type, so no refresh can ever index it. Not toggleable. */
+	| "unsupported"
 	/** Not under any configured AutoRAG search path. */
 	| "outside";
 

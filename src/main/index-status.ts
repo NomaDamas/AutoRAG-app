@@ -1,6 +1,6 @@
 import { access, realpath } from "node:fs/promises";
-import { isAbsolute, resolve, sep } from "node:path";
-import { AutoRAGLite, loadMirrorIndex, minSyncDocumentPath, minSyncWorkspaceRoot } from "@autorag/librarian";
+import { basename, isAbsolute, resolve, sep } from "node:path";
+import { AutoRAGLite, createDefaultParserRegistry, loadMirrorIndex, minSyncDocumentPath, minSyncWorkspaceRoot, type DefaultParserRegistryOptions } from "@autorag/librarian";
 import { readRawConfigObject, resolveConfigPath, resolveConfigReadOnly, writeConfigObject } from "@autorag/librarian/core";
 import { applyAppIndexing } from "./app-indexing";
 import type { IndexStatus } from "../shared/index-contract";
@@ -36,6 +36,9 @@ function isUnder(path: string, root: string): boolean {
 	return path === root || path.startsWith(root.endsWith(sep) ? root : `${root}${sep}`);
 }
 
+/** Jikji's own agent map; the librarian never treats it as a corpus source (mirror/sync.ts). */
+const PRODUCT_ARTIFACT_FILE_NAMES = new Set([".jikji_agent_map.md"]);
+
 export function createIndexStatusService(deps: IndexStatusServiceDeps): IndexStatusService {
 	const input = { flags: {}, env: deps.env, cwd: deps.cwd };
 	let refreshTail: Promise<void> = Promise.resolve();
@@ -57,6 +60,7 @@ export function createIndexStatusService(deps: IndexStatusServiceDeps): IndexSta
 			Promise.all(config.searchPaths.map(canonical)),
 		]);
 		const index = loadMirrorIndex(config.workspacePath);
+		const registry = createDefaultParserRegistry((config.parserOptions ?? {}) as DefaultParserRegistryOptions);
 		const entries = new Map(Object.values(index.entries).map((entry) => [entry.sourcePath, entry]));
 		const skips = new Map(Object.values(index.skipped ?? {}).map((entry) => [entry.sourcePath, entry]));
 		const minSyncRoot =
@@ -78,6 +82,9 @@ export function createIndexStatusService(deps: IndexStatusServiceDeps): IndexSta
 					? { path, kind: "excluded", excluded, toggleable, detail: toggleable ? "인덱싱에서 제외됨" : "상위 폴더가 인덱싱에서 제외됨" }
 					: { path, kind: "pending", excluded, toggleable, detail: "제외 저장됨 · 다음 새로고침에서 인덱스에서 빠짐" };
 			}
+			if (registry.getForVirtualPath(real) === undefined || PRODUCT_ARTIFACT_FILE_NAMES.has(basename(real))) {
+				return { path, kind: "unsupported", excluded, toggleable: false, detail: "인덱싱을 지원하지 않는 파일 형식" };
+			}
 			if (staged) {
 				return { path, kind: "included", excluded, toggleable, detail: "MinSync 인덱스에 포함됨" };
 			}
@@ -88,7 +95,7 @@ export function createIndexStatusService(deps: IndexStatusServiceDeps): IndexSta
 			// `user-excluded` arrives with Marker-Inc-Korea/AutoRAG#1750; a just-cleared exclusion is pending, not skipped.
 			const skipReason: string | undefined = skip?.reason;
 			if (skipReason !== undefined && skipReason !== "user-excluded") {
-				return { path, kind: "skipped", excluded, toggleable, detail: `새로고침에서 건너뜀 (${skipReason})` };
+				return { path, kind: "skipped", excluded, toggleable: false, detail: `새로고침에서 건너뜀 (${skipReason})` };
 			}
 			return { path, kind: "pending", excluded, toggleable, detail: "아직 인덱싱되지 않음" };
 		}));

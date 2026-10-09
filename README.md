@@ -57,7 +57,7 @@ version-family support. Use `PORT=9234 bun run dev` to select the Vite port.
 
 ### Appearance
 
-Settings → General → Appearance controls the entire app with `Light` or `Dark`.
+Settings → 일반 → 화면 모드 controls the entire app with `Light` or `Dark`.
 The same persisted choice drives Finder, Settings, AI surfaces, and Quick Look
 through Electron's native theme; Quick Look has no separate appearance switch.
 The default is Light, and changing it while Quick Look is open updates the panel
@@ -73,49 +73,56 @@ shows their first page. Nothing is uploaded; Hancom Office is not required.
 
 ### AutoRAG configuration settings
 
-Settings writes to the shared AutoRAG `config.json`; the Finder does not keep a
-second datasource or model configuration. The categories are:
+Settings follows `docs/prototypes/settings` and writes to the shared AutoRAG
+`config.json` and the Pi agent's `auth.json`/`models.json`; the Finder keeps no
+second datasource or model configuration. The sidebar is searchable and grouped:
 
-- **General** — document languages and app preferences.
-- **LLM Models** — provider/model catalog selection, provider endpoint, allowed
-  API protocol, and encrypted provider credentials. Runtime capabilities and token
-  limits come from the provider catalog or model runtime.
-- **Embedding Models** — local MinSync profiles or loopback endpoints, automatic
-  model dimensions, request controls, and reindexing warnings.
-- **Reranker Models** — the v2.7 OpenRouter reranker, wire model, Top N,
-  timeout, and encrypted credentials. Other reranker providers are not offered
-  because the upstream resolver rejects them.
-- **Data Sources** — the management view for adding named connections per
-  datasource template. A separate **Data Sources** sidebar group exposes one
-  direct Settings tab per configured connection (for example Discord, KakaoTalk,
-  iCloud Drive, mailcrawl, Slack, or Spotlight), so connector fields are not
-  nested inside one crowded page.
-- **Deep Indexing / Light Indexing / Other Apps** — search paths, MinSync,
-  Jikji, platform-detected FSearch/Everything, web search, parser/OCR, dupey,
-  datasource access, and exclusions. Installer paths, retrieval limits, P2P,
-  and code-folder quick exclusions stay on AutoRAG defaults and are not exposed.
+- **계정** — 내 계정 and 구독 및 사용량. AutoRAG has no account or billing
+  backend yet, so these pages show no account data; billing actions open the
+  AutoRAG billing web pages.
+- **기본 → 일반** — appearance, app language, hidden files, launch at login,
+  automatic updates, telemetry, and document languages.
+- **AI → AI 모델** — connect services through the same Pi `/login` the AutoRAG
+  agent uses: subscription sign-in (Claude Pro/Max, ChatGPT Plus/Pro, GitHub
+  Copilot, …) opens the browser or shows a device code; API-key providers prompt
+  for the key; local (loopback) and OpenAI-compatible servers are discovered and
+  saved to `models.json`. Role pickers only list models the catalog returns and
+  write `model`, `queryDecomposition`, `jev`, `rerank`, and `thinking.final`.
+  The 문서 이해 모델 picker changes `minSync.embedder` through a plan → apply
+  flow that propagates the embedder to every datasource CLI that can adopt it
+  (mailcrawl env, qmd `QMD_EMBED_MODEL`, discrawl managed config), reports the
+  ones that cannot (lazykatok, GitHub Gist, Lark, ClawGallery), refuses to write
+  while an enabled source is incompatible unless acknowledged, and runs the real
+  per-source rebuilds.
+- **AI → 웹 검색** — `webSearch` on/off, provider, and page fetch.
+- **검색** — 인덱싱 (per-source status, refresh cadence, sync now, index
+  refresh), 검색 범위 (search paths, exclusions, watch), 문서 읽기
+  (document languages), and 중복 파일 정리 (exact duplicates, dupey, scan interval).
+  Folders named in `appIndexing.codeFolderNames` (`node_modules`, `.git`, …) and
+  every folder whose name starts with `.` (always, no setting)
+  are left out of indexing; the app finds them itself and passes them as
+  `excludePaths`. Tesseract OCR and Jikji's media index are pinned off in every
+  config the app hands to the librarian.
+- **Automatic refresh** — a cadence is `직접` (manual, the default) or 5 min to a
+  day, for the local folders (`appIndexing.refreshIntervalMs`) and for each
+  datasource (`pollingIntervalMs`). Choosing one registers an OS job that runs
+  without the app open: a LaunchAgent (`com.autorag.app.refresh`) on macOS, a
+  marked crontab line on Linux, a Task Scheduler task on Windows. It wakes at
+  most every 30 minutes and refreshes only what is due, through the same code as
+  the Settings buttons (`index-refresh`), under one lock so a button press and
+  a tick never overlap. Results land in `app-refresh/state.json` beside the
+  config. The app never edits a crontab line or LaunchAgent it did not create and
+  only warns when another job already refreshes AutoRAG.
+- **연결된 앱** — all connections plus a gallery of the 16 datasource templates;
+  each configured connection gets its own page with enable, desktop-app
+  requirement and download link, per-source AI access, sync, polling interval,
+  description, and the template's connector fields.
 
-Ordinary datasource, indexing, model, and app-option edits apply automatically
-after validation. Embedding identity changes remain explicit because they require
-a full MinSync reindex; the identity is saved separately and Settings keeps the
-reindex warning until an explicit refresh succeeds. API credentials remain
-explicit encrypted-store actions.
-
-The parser and OCR language controls are multi-select fields backed by the
-upstream-supported tags (`ko`, `en`, `ja`, `zh-hans`, `zh-hant`, `fr`, `de`,
-`es`, `ru`, `it`, `pt`, `vi`, `th`, `ar`, `hi`). OCR stores the corresponding
-Tesseract traineddata codes while displaying the AutoRAG language tags.
-The Deep, Light, and Other Apps panels use typed controls for the supported
-user-adjustable fields instead of raw JSON textareas; leaf saves preserve
-unrelated config keys and reset removes the edited leaf so AutoRAG defaults apply
-again. Installer paths, retrieval limits, P2P, and code-folder quick exclusions
-remain AutoRAG-owned defaults and are not exposed in Settings. The Light Indexing
-panel renders only the backend detected for the current operating system.
-
-API keys are never written into `config.json`. The app uses Electron's encrypted
-credential store and injects the selected environment variable into the live
-agent process. Remote embedding endpoints and datasource embedding/rerank
-endpoints are rejected; use a loopback service for corpus-bearing requests.
+Every edit is a validated leaf write that preserves unrelated and unknown
+config keys. Secrets never enter `config.json`: `/login` stores keys and OAuth
+tokens in Pi's `auth.json`, and credential-only keys (for example
+`TYPESAFE_API_KEY`) use Electron's encrypted store. Remote embedding endpoints
+are rejected; corpus-bearing requests stay on loopback.
 
 The Settings tab is an app-owned UI location, not a filesystem path; it never
 issues directory listings, incremental reads, or watcher requests. Returning to
@@ -142,6 +149,86 @@ message asking the user to check the result.
 Quitting asks the worker to release its watches and waits up to 2 s before
 exiting. QA lane: `scripts/manual-qa/run-qa-finder-fs-worker-crash.mjs`
 (SIGKILLs the worker twice and checks the tabs recover within 5 s).
+## First-run onboarding
+
+A fresh install opens onboarding instead of the Finder: welcome, permissions,
+account, folders, embedding, data sources, plan, the model step (BYOK only), and
+the first index. The screens port
+`docs/design-reference/onboarding/onboarding-prototype.html`; the draft is saved
+after every change, so a relaunch (for example after granting Full Disk Access)
+resumes at the same step.
+
+- **Permissions** probe Full Disk Access for real (macOS) and re-check every two
+  seconds. Notifications post a real system notification; if macOS reports the
+  app is not allowed, the step says so and opens the system notification
+  settings (the unsigned dev binary is never allowed, so this only works in a
+  signed build). Launch at login is the same setting as Settings › General and
+  registers the OS login item in packaged builds only (registering the dev
+  binary would add bare "Electron" to Login Items); the switch is read back from
+  the OS and flips off with a message if the OS refused.
+- **Folders** are pre-scanned with the indexer's own rules (supported
+  extensions, size cap, skipped dependency/code folders) to show real file
+  counts and an ETA.
+- **Embedding** is local (`qwen3-embedding-0.6b`); cloud embedding is shown but
+  unavailable, since corpus text is never sent to remote embedders.
+- **Data sources** list only usable connectors, and every one starts off. The
+  probes run in parallel and each row appears the moment its own probe finishes
+  (fast ones first); a "checking" line stays under the list until all of them are
+  done, and only then does the "connect later" row appear, minus whatever was
+  found. There is no description to write: onboarding stores none, and the
+  agent-facing description is meant to be generated from the indexed content.
+  Local files are covered by the folders step, so
+  Spotlight and Apple Mail are not offered. Each row appears only when the
+  connector's own health probe says its data is reachable: KakaoTalk
+  (`lazykatok doctor --macos-probe`: app, container, cached login, readable
+  database files), Slack (`slacrawl`, at least one workspace), Discord
+  (`discrawl` ready database plus a dry-run `wiretap` that finds messages),
+  Telegram (`telecrawl doctor`), WhatsApp (`wacrawl doctor`, read-only, with
+  messages), mail (`mailcrawl` installed and a `himalaya` account whose login
+  succeeds), GitHub, and Obsidian. Mail writes one `mailcrawl-<account>` archive
+  per verified account under `~/.mailcrawl/<account>`; accounts that cannot log
+  in are skipped. GitHub requires authentication and at least one discovered
+  repository; empty or failed repo discovery does not offer a source that would
+  fail its first sync.
+- **Model** (BYOK) verifies the provider key against the provider's API and
+  stores it in the encrypted credential store, never in `config.json`.
+- **Indexing** writes `searchPaths`, the embedder (only when none is set), the
+  enabled datasources and their access tags, and the BYOK model into the shared
+  config, then runs the same refresh as Settings. A config still pointing its
+  `workspacePath` at the app's cwd seed is moved to `<AutoRAG home>/workspace`.
+  The Finder opens only after the first index succeeds.
+
+Account sign-in and plan checkout are placeholders: they record the choice in
+the onboarding draft so QA can walk the full flow, but no account is created,
+no card data is stored or sent, and nothing is charged.
+
+Onboarding state lives in `<userData>/onboarding/state.json`. Set
+`AUTORAG_SKIP_ONBOARDING=1` to open the Finder directly; the manual-QA launcher
+does this for every lane except `run-qa-onboarding.mjs`.
+
+`make onboarding` walks the flow on a disposable profile: every run starts from
+scratch in a temp sandbox holding its own `userData` (via `--user-data-dir`),
+AutoRAG config, home, and workspace, so the real `~/.autorag` and the app's
+support directory are never read or written. The cached embedding model and
+llama runtime are copied in so the first index runs offline. When the app exits
+the wrapper kills the run's processes and removes the sandbox; a SIGKILL of
+the wrapper is covered by a detached watchdog, and the next `make onboarding`
+sweeps any sandbox whose owner and watchdog both died. The QA lane covers the
+same flow end to end in CI settings (`bun scripts/manual-qa/run-qa-onboarding.mjs`).
+For a detected datasource regression, set `QA_ONBOARDING_SOURCE=github`,
+`mail`, `spotlight`, or `slack` before that command; it enables only that row
+and asserts its written connector config and access tag. The run uses temporary
+AutoRAG state but the selected external crawler uses its real store, as noted
+below.
+
+Scope of that isolation: the sandbox holds AutoRAG's own state (userData,
+config, home, workspace, index). External datasource crawlers are CLIs with
+their own stores in the real home, and the librarian passes `HOME` through to
+them, so enabling a source in onboarding syncs the real store — `slacrawl` reads
+and writes `~/.slacrawl` (Slack's local mirror), the other messenger crawlers
+import into their own stores the same way, and Obsidian reads the real vaults.
+Detection and the first sync are real by
+design; they never touch other apps' data beyond their own store.
 
 ## Live filesystem sync
 
@@ -329,3 +416,9 @@ equivalents (the registry for file kinds, `tasklist`/`taskkill`, the Recycle
 Bin) and scripts that genuinely need macOS log a skip instead of failing.
 Lane logs and `summary.json` land in `.omo/evidence/win-qa/`. The sweep also
 runs in CI (`.github/workflows/qa-windows.yml`).
+
+## License
+
+AutoRAG is licensed under the GNU Affero General Public License v3.0
+(`AGPL-3.0-only`); see [`LICENSE`](LICENSE). Bundled third-party components
+and their licenses are listed in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).

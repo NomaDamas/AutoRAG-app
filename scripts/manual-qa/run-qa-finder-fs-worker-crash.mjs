@@ -22,7 +22,7 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { finderWindow, fsWorkerDiagnostics, launchFinder, ROOT } from "./launch-finder.mjs";
-import { chord, sleep } from "./platform.mjs";
+import { chord, cssAttr, sleep } from "./platform.mjs";
 
 const EVIDENCE = join(ROOT, ".omo/evidence/ai-finder-app/qa-fs-worker-crash");
 mkdirSync(EVIDENCE, { recursive: true });
@@ -73,11 +73,14 @@ try {
 	});
 	const page = await finderWindow(app, 30_000);
 	page.setDefaultTimeout(15_000);
+	// The list virtualizes rows: a Windows window opens shorter than macOS's, so size it
+	// to mount the 30-file fixture plus the rows this lane adds (the probes read the DOM).
+	await page.setViewportSize({ width: 1500, height: 1100 }).catch(() => {});
 	let rendererGone = false;
 	page.on("crash", () => {
 		rendererGone = true;
 	});
-	const row = (path) => page.locator(`[data-path="${path}"]`).first();
+	const row = (path) => page.locator(`[data-path="${cssAttr(path)}"]`).first();
 	await page.locator(".sidebar__item", { hasText: "QA" }).click();
 	await row(FOLDER).dblclick();
 	await row(join(FOLDER, "file-00.txt")).waitFor();

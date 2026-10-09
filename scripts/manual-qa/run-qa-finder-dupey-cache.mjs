@@ -131,7 +131,8 @@ const report = {};
 	// opens as a tab from the sidebar (the v7 Settings is not a button).
 	await page.locator(".sidebar__item", { hasText: "Settings" }).click();
 	await page.waitForSelector(".settings-panel");
-	const interval = page.locator('.settings-panel select[aria-label="Deduplication interval"]');
+	await page.locator(".settings-nav-item", { hasText: "중복 파일 정리" }).first().click();
+	const interval = page.locator('.settings-panel select[aria-label="검사 주기"]');
 	await interval.waitFor({ timeout: 15_000 });
 	await interval.selectOption("15");
 	await sleep(1500);
