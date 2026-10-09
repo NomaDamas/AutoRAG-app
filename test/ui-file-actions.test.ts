@@ -115,14 +115,18 @@ describe("base action set", () => {
 	});
 });
 
-describe("zip", () => {
+describe("archives", () => {
 	it("extracts in place, before compressing", () => {
 		const actions = suggestedActions({ name: "docs.zip", kind: "file" }, DARWIN);
 		expect(ids(actions)).toEqual(["open", "openWith", "extract", "compress", "share", "askAi"]);
 	});
 
-	it("only offers extraction for zip archives", () => {
-		expect(ids(suggestedActions({ name: "docs.tar", kind: "file" }, DARWIN))).not.toContain("extract");
+	it("offers extraction for every archive format, but never a plain file", () => {
+		expect(ids(suggestedActions({ name: "docs.tar", kind: "file" }, DARWIN))).toContain("extract");
+		expect(ids(suggestedActions({ name: "docs.tar.gz", kind: "file" }, DARWIN))).toContain("extract");
+		expect(ids(suggestedActions({ name: "docs.7z", kind: "file" }, DARWIN))).toContain("extract");
+		expect(ids(suggestedActions({ name: "notes.txt", kind: "file" }, DARWIN))).not.toContain("extract");
+		expect(ids(suggestedActions({ name: "docs.zip", kind: "file" }, NO_CAPABILITIES))).not.toContain("extract");
 	});
 });
 

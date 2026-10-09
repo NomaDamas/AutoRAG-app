@@ -18,6 +18,7 @@
         "heic2any": "^0.0.4",
         "highlight.js": "^11.12.0",
         "i18next": "^26.4.2",
+        "libarchive-wasm": "1.2.0",
         "lucide-react": "^1.49.0",
         "marked": "^18.0.14",
         "music-metadata": "^11.16.1",
@@ -1127,6 +1128,8 @@
     "kordoc": ["kordoc@4.17.1", "", { "dependencies": { "@modelcontextprotocol/sdk": "^1.29.0", "@xmldom/xmldom": "^0.9.10", "cfb": "1.2.2", "commander": "^13.0.0", "jszip": "^3.10.1", "markdown-it": "^14.3.0", "zod": "^3.23.0" }, "optionalDependencies": { "@huggingface/transformers": "^4.1.0", "@hyzyla/pdfium": "^2.1.0", "onnxruntime-node": "^1.24.0", "pdfjs-dist": "^4.10.38", "sharp": "^0.35.0" }, "peerDependencies": { "puppeteer-core": ">=22.0.0" }, "optionalPeers": ["puppeteer-core"], "bin": { "kordoc": "dist/cli.js", "kordoc-mcp": "dist/mcp.js" } }, "sha512-wn4kYJXoaWbOAWG6jQPiTK4pN9uGdY+D6UgNUB/7iOABqOZ7oQVhzVgnJA+sSznFUz7qkDPopNk1NcPoLTv+og=="],
 
     "leac": ["leac@0.7.0", "", {}, "sha512-qMrZeyEekgdRQ9o6a4NAB2EQZrv827GJdn1vnapwSJ90hWRB4TzUSunvacPkxQ2TnNqHNI1/zSt0hlo0crG8Jw=="],
+
+    "libarchive-wasm": ["libarchive-wasm@1.2.0", "", {}, "sha512-aunFn8oL9VwGRj+brRvdOv8BRUD4Ea1WxJW45IdiuXE2Vp/m/X+M1UxSU+yPzXfc1mPPC8AARaflg/CtF11u8g=="],
 
     "libbase64": ["libbase64@1.3.1", "", {}, "sha512-1b9LXEjEtXj35YKOR9RqNKBootlb37qbIzmqiw4MsP52cjOsfR6i/AYU1Y8qN4kV2TJQmLJ5aiXn45qI6h+Szw=="],
 

@@ -71,6 +71,10 @@ const NATIVE_THUMBNAIL_EXTENSIONS = new Set([
 	"tif", "tiff", "heic", "heif",
 	"mp4", "m4v", "webm", "ogv", "mov", "mkv", "avi", "mpeg", "mpg", "mpe", "3gp", "3gpp",
 	"pdf", "md", "markdown", "mdx", "csv", "tsv",
+	// Apple's iWork packages: Quick Look draws the first sheet, page, or slide
+	// (Numbers, Pages, Keynote). Windows has no thumbnailer for them and falls
+	// through to the type icon.
+	"numbers", "pages", "key",
 	// A macOS application bundle is a directory on disk, but Quick Look renders
 	// the app's own icon for it — at the listing tier and at the Inspector's
 	// 640px tier — so it takes this lane exactly like a document does.

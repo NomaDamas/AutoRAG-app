@@ -192,8 +192,12 @@ The Info half's bottom bar is data-driven, not a fixed four buttons.
   `createActionService.run` (`src/main/action-service.ts`). The bar, the menu,
   the IPC channels, and the capability gating need no change.
 - Action outputs never overwrite: `uniqueChild` numbers them Finder-style
-  (`photo.jpeg`, `photo 2.jpeg`), and extraction strips a wrapper folder that
-  matches the archive name so `docs.zip` restores `docs/`'s contents directly.
+  (`photo.jpeg`, `photo 2.jpeg`). Extraction offers every format the shared
+  `archiveFormatOf` predicate recognizes — zip, tar, tar.gz/tgz, gz, 7z, and
+  tar.bz2/tar.xz — writing into a hidden staging folder beside the destination
+  (removed on any failure) and then renaming it into place, flattening a single
+  wrapper folder that matches the archive stem. The wasm engine's licenses are
+  recorded in `THIRD_PARTY_NOTICES.md`.
 
 ---
 

@@ -1,11 +1,7 @@
-import { useEffect, useMemo, useState, type ReactElement } from "react";
-import { gunzipSync, strFromU8, unzipSync } from "fflate";
+import { useMemo, type ReactElement } from "react";
+import { strFromU8, unzipSync } from "fflate";
 import type { PreviewDocument } from "../shared/contract";
-import { formatBytes } from "../shared/format";
-import { listTarEntries } from "../shared/tar-list";
-import { looksLikeText, decodeUtf8 } from "../shared/text-sample";
-import { listZipEntries } from "../shared/zip-list";
-import { FallbackView, Status } from "./fallback";
+import { FallbackView } from "./fallback";
 
 function inflate(bytes: Uint8Array, accept: (name: string) => boolean): ReadonlyMap<string, Uint8Array> {
 	const out = unzipSync(bytes, {
@@ -31,53 +27,6 @@ function stripTags(source: string): string {
 		.trim();
 }
 
-function tagged(source: string, tag: string): string {
-	const parts: string[] = [];
-	const pattern = new RegExp(`<${tag}[^>]*>([^<]*)</${tag}>`, "g");
-	for (const match of source.matchAll(pattern)) {
-		const text = match[1];
-		if (text !== undefined && text.trim() !== "") parts.push(text);
-	}
-	return parts.join("");
-}
-
-export function ArchiveView({ file }: { readonly file: PreviewDocument }): ReactElement {
-	const bytes = file.bytes;
-	if (bytes === null) return <FallbackView file={file} note="압축 파일을 읽지 못했습니다" />;
-	if (file.ext === "gz" || file.ext === "gzip" || file.ext === "tgz") {
-		try {
-			const inflated = gunzipSync(bytes);
-			const tar = listTarEntries(inflated);
-			if (tar !== null) return <EntryList rows={tar.map((entry) => ({ name: entry.name, detail: formatBytes(entry.size) }))} />;
-			if (looksLikeText(inflated)) return <pre className="ql__pre box-border self-stretch w-full h-auto m-0 px-24 py-20 bg-window text-ink font-mono text-meta leading-[1.55] whitespace-pre-wrap [word-break:break-word] select-text">{decodeUtf8(inflated)}</pre>;
-		} catch (caught) {
-			const message = caught instanceof Error ? caught.message : "압축을 풀지 못했습니다";
-			return <FallbackView file={file} note={message} />;
-		}
-	}
-	if (file.ext === "tar") {
-		const tar = listTarEntries(bytes);
-		if (tar === null) return <FallbackView file={file} note="tar 목록을 읽지 못했습니다" />;
-		return <EntryList rows={tar.map((entry) => ({ name: entry.name, detail: formatBytes(entry.size) }))} />;
-	}
-	const zip = listZipEntries(bytes);
-	if (zip === null) return <FallbackView file={file} note="압축 목록을 읽지 못했습니다" />;
-	return <EntryList rows={zip.map((entry) => ({ name: entry.name, detail: formatBytes(entry.uncompressedSize) }))} />;
-}
-
-function EntryList({ rows }: { readonly rows: readonly { readonly name: string; readonly detail: string }[] }): ReactElement {
-	return (
-		<div className="ql__list box-border self-stretch w-full h-auto m-0 p-16">
-			{rows.map((row) => (
-				<div className="ql__row flex justify-between gap-16 py-8 border-b border-divider text-sm [&_span:last-child]:text-ink-muted" key={row.name}>
-					<span>{row.name}</span>
-					<span>{row.detail}</span>
-				</div>
-			))}
-		</div>
-	);
-}
-
 export function EpubView({ file }: { readonly file: PreviewDocument }): ReactElement {
 	const bytes = file.bytes;
 	const text = useMemo(() => {
@@ -101,53 +50,4 @@ export function EpubView({ file }: { readonly file: PreviewDocument }): ReactEle
 	return <pre className="ql__pre box-border self-stretch w-full h-auto m-0 px-24 py-20 bg-window text-ink font-mono text-meta leading-[1.55] whitespace-pre-wrap [word-break:break-word] select-text">{text}</pre>;
 }
 
-export function PptxView({ file }: { readonly file: PreviewDocument }): ReactElement {
-	const bytes = file.bytes;
-	const [slides, setSlides] = useState<{
-		readonly pages: readonly { readonly name: string; readonly text: string }[];
-		readonly images: readonly { readonly name: string; readonly url: string }[];
-	} | null>(null);
-	useEffect(() => {
-		if (bytes === null) return;
-		const images: { name: string; url: string }[] = [];
-		try {
-			const files = inflate(bytes, (name) => name.startsWith("ppt/slides/slide") || name.startsWith("ppt/media/"));
-			const pages: { name: string; text: string }[] = [];
-			for (const [name, body] of files) {
-				if (name.endsWith(".xml")) pages.push({ name, text: tagged(strFromU8(body), "a:t") });
-				if (/\.(png|jpe?g|gif|webp)$/i.test(name)) {
-					const copy = new Uint8Array(body.byteLength);
-					copy.set(body);
-					images.push({ name, url: URL.createObjectURL(new Blob([copy])) });
-				}
-			}
-			pages.sort((left, right) => left.name.localeCompare(right.name, undefined, { numeric: true }));
-			setSlides({ pages, images });
-		} catch (caught) {
-			if (!(caught instanceof Error)) throw caught;
-			setSlides({ pages: [], images: [] });
-		}
-		return () => {
-			for (const image of images) URL.revokeObjectURL(image.url);
-		};
-	}, [bytes]);
-	if (bytes === null) return <FallbackView file={file} note="프레젠테이션을 읽지 못했습니다" />;
-	if (slides === null) return <Status>불러오는 중</Status>;
-	return (
-		<div className="ql__slides box-border self-stretch w-full h-auto m-0 p-16">
-			{slides.pages.map((page, index) => (
-				<section className="ql__slide m-0 mb-16 px-18 py-16 rounded-8 bg-window shadow-raised [&_h2]:m-0 [&_h2]:mb-8 [&_h2]:text-sm [&_p]:m-0 [&_p]:text-sm [&_p]:leading-body" key={page.name}>
-					<h2>슬라이드 {index + 1}</h2>
-					<p>{page.text === "" ? "텍스트 없음" : page.text}</p>
-				</section>
-			))}
-			{slides.images.length === 0 ? null : (
-				<div className="ql__thumbs flex flex-wrap gap-8 mt-12 [&_img]:max-w-[180px] [&_img]:max-h-[120px] [&_img]:object-contain [&_img]:bg-subtle">
-					{slides.images.map((image) => (
-						<img key={image.name} alt="" src={image.url} />
-					))}
-				</div>
-			)}
-		</div>
-	);
-}
+

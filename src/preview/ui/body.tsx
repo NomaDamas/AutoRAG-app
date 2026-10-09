@@ -3,13 +3,16 @@ import { assertNever } from "../shared/assert";
 import type { PreviewDocument } from "../shared/contract";
 import { viewerForExtension } from "../shared/registry";
 import { looksLikeText } from "../shared/text-sample";
+import { ArchiveView } from "./archive";
 import { HtmlView, TextView } from "./code";
 import { DocxView, RtfView, SheetView } from "./documents";
 import { FallbackView } from "./fallback";
 import { MarkdownView } from "./markdown";
 import { HwpView } from "./hwp";
 import { FontView, HeicView, ImageView, TiffView } from "./media";
-import { ArchiveView, EpubView, PptxView } from "./packages";
+import { IworkView } from "./iwork";
+import { EpubView } from "./packages";
+import { PptxView } from "./pptx";
 import { PdfView } from "./pdf";
 import { AudioView, VideoView } from "./player";
 
@@ -51,6 +54,8 @@ export function PreviewBody({ file }: { readonly file: PreviewDocument }): React
 			return <RtfView file={file} />;
 		case "archive":
 			return <ArchiveView file={file} />;
+		case "iwork":
+			return <IworkView file={file} />;
 		case "epub":
 			return <EpubView file={file} />;
 		case "hwp":

@@ -16,12 +16,16 @@
  */
 
 import { execFile } from "node:child_process";
-import { createReadStream, createWriteStream } from "node:fs";
-import { lstat, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
-import { basename, dirname, extname, join, resolve, sep } from "node:path";
+import { createWriteStream } from "node:fs";
+import { lstat, mkdtemp, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
+import { basename, dirname, extname, join } from "node:path";
 import { finished } from "node:stream/promises";
-import { Unzip, UnzipInflate, Zip, ZipDeflate, ZipPassThrough } from "fflate";
+import { Zip, ZipDeflate, ZipPassThrough } from "fflate";
 import type { BrowserWindow } from "electron";
+import { archiveFormatOf } from "../shared/archive-formats";
+import { ArchiveError } from "./archive-guard.mjs";
+import { DEFAULT_ARCHIVE_LIMITS, type ArchiveLimits } from "./archive-common";
+import { extractGzipInto, extractIntoFolder, flattenWrapper } from "./archive-extract";
 import {
 	type ActionAnchor,
 	type ActionCapabilities,
@@ -67,6 +71,8 @@ export interface ActionServiceDeps {
 	readonly share?: SharePresenter | null;
 	/** Defaults to spawning the command with execFile. */
 	readonly run?: CommandRunner;
+	/** Extraction caps; tests inject small values to exercise the refusals. */
+	readonly archiveLimits?: ArchiveLimits;
 }
 
 /** The Inspector action surface the IPC layer registers. */
@@ -218,29 +224,6 @@ export async function uniqueChild(dir: string, name: string): Promise<string> {
 	}
 }
 
-/**
- * The absolute path a zip entry extracts to, and whether it is a directory.
- * Rejects absolute entries and any entry escaping `destDir` (zip-slip), so a
- * hostile archive can never write outside the chosen folder.
- */
-export function zipEntryPath(destDir: string, name: string): { readonly path: string; readonly directory: boolean } {
-	if (name.includes("\0")) {
-		throw new Error(`압축 파일 항목 이름이 올바르지 않습니다: ${JSON.stringify(name)}`);
-	}
-	const normalized = name.replace(/\\/g, "/");
-	if (normalized.startsWith("/") || /^[A-Za-z]:/.test(normalized)) {
-		throw new Error(`압축 파일에 절대 경로 항목이 있습니다: ${name}`);
-	}
-	const directory = normalized.endsWith("/");
-	const trimmed = directory ? normalized.slice(0, -1) : normalized;
-	const root = resolve(destDir);
-	const target = resolve(root, trimmed);
-	if (target !== root && !target.startsWith(root + sep)) {
-		throw new Error(`압축 파일 항목이 대상 폴더를 벗어납니다: ${name}`);
-	}
-	return { path: target, directory };
-}
-
 /** One file or directory to write into an archive, with its in-archive path. */
 interface ArchiveMember {
 	readonly source: string;
@@ -308,68 +291,6 @@ async function writeZip(target: string, members: readonly ArchiveMember[]): Prom
 	}
 	archive.end();
 	await drained;
-}
-
-/**
- * Stream `source` into `destDir`. Entries arrive one at a time and are written
- * as they complete, so peak memory tracks the largest member; anything that
- * escapes `destDir` is refused (zip-slip) and sinks the whole extraction.
- */
-async function readZip(source: string, destDir: string, stem: string): Promise<void> {
-	await mkdir(destDir, { recursive: true });
-	const writes: Promise<void>[] = [];
-	let failure: Error | null = null;
-	/** Resolve one entry, recording the first refusal instead of throwing out of the parser. */
-	function resolveEntry(name: string): { readonly path: string; readonly directory: boolean } | null {
-		if (failure !== null) return null;
-		try {
-			return zipEntryPath(destDir, name);
-		} catch (error) {
-			failure = error instanceof Error ? error : new Error(String(error));
-			return null;
-		}
-	}
-
-	/**
-	 * A "Compress" archive wraps everything in one folder named after the
-	 * source, which is also the destination folder's name. Stripping exactly
-	 * that entry avoids double-nesting while leaving an archive with several
-	 * top-level folders intact.
-	 */
-	const rootEntry = `${stem}/`;
-	let strip: string | null = null;
-	const unzipper = new Unzip((file) => {
-		if (strip === null && file.name === rootEntry) strip = rootEntry;
-		const name = strip !== null && file.name.startsWith(strip) ? file.name.slice(strip.length) : file.name;
-		const target = name.length === 0 ? null : resolveEntry(name);
-		// A refused (or root) entry is still drained, so the parser stays in sync.
-		if (target === null || target.directory) {
-			if (target !== null) writes.push(mkdir(target.path, { recursive: true }).then(() => undefined));
-			file.ondata = () => {};
-			file.start();
-			return;
-		}
-		const chunks: Uint8Array[] = [];
-		file.ondata = (error, chunk, final) => {
-			if (error !== null) {
-				failure = error;
-				return;
-			}
-			chunks.push(chunk);
-			if (!final) return;
-			const body = Buffer.concat(chunks.map((part) => Buffer.from(part.buffer, part.byteOffset, part.byteLength)));
-			writes.push(mkdir(dirname(target.path), { recursive: true }).then(() => writeFile(target.path, body)));
-			chunks.length = 0;
-		};
-		file.start();
-	});
-	unzipper.register(UnzipInflate);
-	for await (const chunk of createReadStream(source)) {
-		unzipper.push(new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength), false);
-	}
-	unzipper.push(new Uint8Array(0), true);
-	await Promise.all(writes);
-	if (failure !== null) throw failure;
 }
 
 /** Encoder names from `ffmpeg -encoders`: six flag characters, then the name. */
@@ -476,6 +397,7 @@ export function createActionService(deps: ActionServiceDeps): ActionService {
 	const platform = deps.platform ?? process.platform;
 	const run = deps.run ?? defaultRun;
 	const share = deps.share ?? null;
+	const archiveLimits = deps.archiveLimits ?? DEFAULT_ARCHIVE_LIMITS;
 	/** Memoized ffmpeg probe: one `ffmpeg -version` per session, at most. */
 	let ffmpeg: Promise<boolean> | null = null;
 	/** Memoized image-encoder probe: one `-encoders` / `-muxers` pass per session. */
@@ -598,6 +520,40 @@ export function createActionService(deps: ActionServiceDeps): ActionService {
 		return icon;
 	}
 
+	/**
+	 * Extract `source` into a new Finder-style item next to it. The archive
+	 * writes into a hidden staging directory beside the destination, so a failed
+	 * run (hostile entry, corruption, bomb) removes the staging and leaves no
+	 * half-written folder behind; a successful one is flattened and renamed into
+	 * place. A bare `.gz` may hold a tar (a folder) or a single file (the file
+	 * itself, named after the archive without `.gz`).
+	 */
+	async function extractArchive(source: string): Promise<string> {
+		const match = archiveFormatOf(basename(source));
+		if (match === null) throw new ArchiveError("압축을 풀 수 없는 파일 형식입니다");
+		const directory = dirname(source);
+		const staging = await mkdtemp(join(directory, `.${match.stem}-`));
+		try {
+			if (match.format === "gz") {
+				const kind = await extractGzipInto(source, staging, match.stem, archiveLimits);
+				if (kind === "file") {
+					const target = await uniqueChild(directory, match.stem);
+					await rename(join(staging, match.stem), target);
+					return target;
+				}
+			} else {
+				await extractIntoFolder(source, match.format, staging, archiveLimits);
+			}
+			await flattenWrapper(staging, match.stem);
+			const target = await uniqueChild(directory, match.stem);
+			await rename(staging, target);
+			return target;
+		} catch (error) {
+			await rm(staging, { recursive: true, force: true });
+			throw error;
+		}
+	}
+
 	return {
 		async capabilities(): Promise<ActionCapabilities> {
 			const ffmpegPresent = await hasFfmpeg();
@@ -672,11 +628,8 @@ export function createActionService(deps: ActionServiceDeps): ActionService {
 					return { output: target, note: `${basename(target)} — 압축했습니다` };
 				}
 				case "extract": {
-					const path = sole();
-					const stem = stemOf(path);
-					const target = await uniqueChild(dirname(path), stem);
-					await readZip(path, target, stem);
-					return { output: target, note: `${basename(target)} — 압축을 풀었습니다` };
+					const output = await extractArchive(sole());
+					return { output, note: `${basename(output)} — 압축을 풀었습니다` };
 				}
 				case "convertImage": {
 					if (!(await imageTargets()).includes(request.format)) {

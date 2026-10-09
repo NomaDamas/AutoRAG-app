@@ -7,10 +7,17 @@ export default defineConfig({
 		build: {
 			rollupOptions: {
 				// The fs worker is a second Node entry: an Electron utility process
-				// the main process forks (`src/main/fs-worker-host.ts`).
+				// the main process forks (`src/main/fs-worker-host.ts`). The archive
+				// worker is a Node worker_thread the extractor spawns for the wasm
+				// engine; it keeps the `.mjs` name so the source and the build share
+				// one spawn URL.
 				input: {
 					index: resolve(import.meta.dirname, "src/main/index.ts"),
 					"fs-worker": resolve(import.meta.dirname, "src/fs-worker/index.ts"),
+					"archive-worker": resolve(import.meta.dirname, "src/main/archive-worker.mjs"),
+				},
+				output: {
+					entryFileNames: (chunk) => (chunk.name === "archive-worker" ? "archive-worker.mjs" : "[name].js"),
 				},
 			},
 		},
