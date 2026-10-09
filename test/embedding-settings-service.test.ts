@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createAutoRagConfigService } from "../src/main/autorag-config-service";
-import { computeAccessTags, createDataSourceStatusService } from "../src/main/datasource-status";
+import { createDataSourceStatusService } from "../src/main/datasource-status";
 import { createEmbeddingSettingsService } from "../src/main/embedding-settings-service";
 import type { DataSourceSyncResult } from "../src/shared/settings-contract";
 
@@ -226,35 +226,3 @@ describe("createEmbeddingSettingsService", () => {
 function fixtureRootPlaceholder(): string {
 	return join(tmpdir(), "autorag-embedding-vault");
 }
-
-describe("computeAccessTags", () => {
-	const sources = [
-		{ id: "a", tags: ["alpha", "shared"] },
-		{ id: "b", tags: ["shared"] },
-		{ id: "c", tags: ["gamma"] },
-	];
-
-	it("grants only tags unique to the target source", () => {
-		expect(computeAccessTags(sources, [], "a", true)).toEqual(["alpha"]);
-		expect(computeAccessTags(sources, ["gamma"], "c", true)).toEqual(["gamma"]);
-	});
-
-	it("refuses to grant when every tag is shared with another source", () => {
-		expect(computeAccessTags(sources, [], "b", true)).toBeNull();
-	});
-
-	it("revokes one source without revoking another that shares a tag", () => {
-		const pair = [
-			{ id: "a", tags: ["alpha", "shared"] },
-			{ id: "b", tags: ["beta", "shared"] },
-		];
-		// b keeps `beta`, so removing a's tags (alpha + shared) leaves b accessible.
-		expect(computeAccessTags(pair, ["alpha", "shared", "beta"], "a", false)).toEqual(["beta"]);
-		// With only the shared tag allowed, revoking a would revoke b too.
-		expect(computeAccessTags(pair, ["shared"], "a", false)).toBeNull();
-	});
-
-	it("leaves unrelated sources untouched", () => {
-		expect(computeAccessTags(sources, ["gamma"], "a", true)).toEqual(["alpha", "gamma"]);
-	});
-});

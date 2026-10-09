@@ -26,7 +26,6 @@ const EMPTY_SNAPSHOT: DataSourcesSnapshot = {
 	configPath: "/autorag/config.json",
 	configExists: true,
 	error: null,
-	accessTags: [],
 	refresh: { state: "idle", phase: null, finishedAt: null },
 	local: { documentCount: null, updatedAt: null },
 	sources: [],
@@ -48,7 +47,6 @@ const noDataSources: DataSourceStatusService = {
 	setEnabled: async () => undefined,
 	setDescription: async () => undefined,
 	sync: async () => EMPTY_SYNC,
-	setAccess: async () => undefined,
 };
 
 const EMPTY_MODEL: ConfiguredModelSnapshot = {
@@ -181,7 +179,6 @@ describe("createSettingsService", () => {
 				},
 				setDescription: async () => undefined,
 				sync: async () => EMPTY_SYNC,
-				setAccess: async () => undefined,
 			},
 			models: noModels,
 			...baseDeps,

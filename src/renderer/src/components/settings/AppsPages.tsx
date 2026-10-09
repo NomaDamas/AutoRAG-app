@@ -3,7 +3,7 @@
  *
  * Read live datasource state from `sourcesList` (install / agent / index), and
  * write through the real bridge: `sourcesSetEnabled`, `sourcesSetDescription`,
- * `sourcesSetAccess`, `sourcesSync` and `configPatch`/`configSet`/`configRemove`
+ * `sourcesSync` and `configPatch`/`configSet`/`configRemove`
  * for the config leaves. Connector fields come from each template's own field
  * schema (shared with `datasourceTemplates`), so a template only ever shows the
  * options its factory reads.
@@ -487,7 +487,6 @@ export function SourceDetailPage({
 			setLocalError(cause instanceof Error ? cause.message : String(cause));
 		}
 	}
-	const allowed = row !== null && row.agent.state === "connected";
 	const problem = localError ?? error;
 
 	async function refresh(): Promise<void> {
@@ -495,18 +494,6 @@ export function SourceDetailPage({
 			setSources(await settings.sourcesList());
 		} catch {
 			/* keep the last snapshot */
-		}
-	}
-
-	async function setAccess(next: boolean): Promise<void> {
-		setBusy(true);
-		setLocalError(null);
-		try {
-			setSources(await settings.sourcesSetAccess(alias, next));
-		} catch (cause) {
-			setLocalError(cause instanceof Error ? cause.message : String(cause));
-		} finally {
-			setBusy(false);
 		}
 	}
 
@@ -576,9 +563,6 @@ export function SourceDetailPage({
 						</span>
 					</Row>
 				) : null}
-				<Row name="AI 검색 허용" hint={allowed ? "AI 답변이 이 연결을 참고합니다." : "허용하면 AI 답변이 이 앱의 내용을 참고할 수 있습니다."}>
-					<Switch checked={allowed} disabled={busy || row === null} ariaLabel="AI 검색 허용" onChange={() => void setAccess(!allowed)} />
-				</Row>
 				<Row name="최신화" hint={row !== null && row.index.indexedAt !== null ? `마지막 최신화 ${new Date(row.index.indexedAt).toLocaleString()}` : "아직 내용을 가져오지 않았습니다."}>
 					<span className="settings-status">
 						<StatusDot tone={row === null ? "off" : sourceTone(row)} />

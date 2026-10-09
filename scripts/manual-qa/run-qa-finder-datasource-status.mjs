@@ -45,7 +45,6 @@ const writeConfig = (datasources) => writeFileSync(configPath, `${JSON.stringify
 	minSync: { enabled: false },
 	jikji: false,
 	datasources,
-	datasourceAccess: { allowedTags: ["chat", "documents"] },
 }, null, 2)}\n`);
 writeConfig({
 	slack: { description: "Team Slack" },
@@ -105,7 +104,7 @@ try {
 		// The fake slacrawl prints nothing parseable, so its archive is unreadable — not "empty".
 		slack: { install: "installed", agent: "connected", index: "not-indexed", status: "ready" },
 		"my-drive": { install: "missing", agent: "connected", index: "indexed", status: "attention" },
-		github: { install: "credential-missing", agent: "blocked", index: "not-indexed", status: "attention" },
+		github: { install: "credential-missing", agent: "connected", index: "not-indexed", status: "attention" },
 		telegram: { install: "missing", agent: "disabled", status: "paused" },
 		foo: { install: "unsupported", agent: "unsupported", status: "attention" },
 	};
@@ -142,7 +141,7 @@ try {
 	await page.waitForFunction(() => window.autorag.settings.sourcesList().then((s) => s.sources.find((x) => x.id === "slack")?.status === "paused"));
 	const onDisk = JSON.parse(readFileSync(configPath, "utf8"));
 	check("toggle wrote enabled:false into the shared config", onDisk.datasources.slack.enabled === false && onDisk.datasources.slack.description === "Release and incident chatter", JSON.stringify(onDisk.datasources.slack));
-	check("toggle preserved datasourceAccess", JSON.stringify(onDisk.datasourceAccess) === JSON.stringify({ allowedTags: ["chat", "documents"] }));
+	check("toggle left no datasourceAccess behind", onDisk.datasourceAccess === undefined);
 	check("a fresh AutoRAG agent no longer loads slack", !agentSkills().includes("slack"), JSON.stringify(agentSkills()));
 	check("slack agent state now reads disabled", (await stateOf("slack"))?.agent.state === "disabled");
 	await page.screenshot({ path: join(EVIDENCE, "02-slack-toggled-off.png") });

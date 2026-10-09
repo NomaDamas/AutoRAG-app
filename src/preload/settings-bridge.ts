@@ -14,7 +14,6 @@ export function createSettingsBridge(ipcRenderer: IpcRenderer): SettingsBridge {
 		sourcesSetEnabled: (id, enabled) => ipcRenderer.invoke(SETTINGS_CHANNELS.sourcesSetEnabled, id, enabled),
 		sourcesSetDescription: (id, description) => ipcRenderer.invoke(SETTINGS_CHANNELS.sourcesSetDescription, id, description),
 		sourcesSync: (id) => ipcRenderer.invoke(SETTINGS_CHANNELS.sourcesSync, id),
-		sourcesSetAccess: (id, allowed) => ipcRenderer.invoke(SETTINGS_CHANNELS.sourcesSetAccess, id, allowed),
 		refreshScheduleGet: () => ipcRenderer.invoke(SETTINGS_CHANNELS.refreshScheduleGet),
 		refreshScheduleApply: () => ipcRenderer.invoke(SETTINGS_CHANNELS.refreshScheduleApply),
 		modelsResolve: () => ipcRenderer.invoke(SETTINGS_CHANNELS.modelsResolve),

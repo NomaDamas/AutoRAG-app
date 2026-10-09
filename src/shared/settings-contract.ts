@@ -41,7 +41,6 @@ export const SETTINGS_CHANNELS = {
 	embeddingPlan: "embedding:plan",
 	embeddingApply: "embedding:apply",
 	sourcesSync: "sources:sync",
-	sourcesSetAccess: "sources:setAccess",
 	refreshScheduleGet: "refreshSchedule:get",
 	refreshScheduleApply: "refreshSchedule:apply",
 } as const;
@@ -99,8 +98,8 @@ export interface DataSourceAppRequirement {
 	readonly name: string;
 }
 
-/** How the AutoRAG agent sees the datasource, per the shared config and datasourceAccess. */
-export type DataSourceAgentState = "connected" | "blocked" | "disabled" | "unsupported";
+/** How the AutoRAG agent sees the datasource, per the shared config. */
+export type DataSourceAgentState = "connected" | "disabled" | "unsupported";
 
 /**
  * `live` means the backend answers on demand and keeps no countable index the
@@ -154,7 +153,6 @@ export interface DataSourcesSnapshot {
 	readonly configExists: boolean;
 	/** Config could not be read; `sources` is empty. */
 	readonly error: string | null;
-	readonly accessTags: readonly string[];
 	readonly refresh: {
 		readonly state: "idle" | "running" | "success" | "failed";
 		readonly phase: string | null;
@@ -523,8 +521,6 @@ export interface SettingsBridge {
 
 	/** Syncs one datasource against its own index. */
 	sourcesSync(id: string): Promise<DataSourceSyncResult>;
-	/** Grants or revokes agent access to one datasource; returns the fresh snapshot. */
-	sourcesSetAccess(id: string, allowed: boolean): Promise<DataSourcesSnapshot>;
 	/** The background refresh job as the OS sees it, plus the newest result of each scheduled item. */
 	refreshScheduleGet(): Promise<RefreshScheduleStatus>;
 	/** Make the OS job match the config (install, re-time, or remove) and return the fresh status. */

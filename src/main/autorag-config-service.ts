@@ -413,14 +413,6 @@ function checkKnownBlock(path: string, value: unknown): void {
 		}
 		return;
 	}
-	if (path === "datasourceAccess") {
-		if (!isJsonObject(value)) return fail("datasourceAccess must be an object");
-		for (const key of ["allowedTags", "allowedScopes"] as const) {
-			const list = value[key];
-			if (list !== undefined && (!Array.isArray(list) || list.some((item) => typeof item !== "string" || item.length === 0))) fail(`datasourceAccess.${key} must be a non-empty string array`);
-		}
-		return;
-	}
 	if (path === "datasources") {
 		if (!isJsonObject(value)) return fail("datasources must be an object");
 		for (const [id, entry] of Object.entries(value)) {
@@ -464,7 +456,6 @@ function validateKnownBlocks(candidate: Record<string, unknown>): void {
 		"dupey",
 		"minSync",
 		"thinking",
-		"datasourceAccess",
 		"datasources",
 		"appIndexing",
 	] as const) {
