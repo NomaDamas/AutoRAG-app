@@ -327,9 +327,6 @@ function checkKnownBlock(path: string, value: unknown): void {
 		if (value.excludeCodeFolders !== undefined && typeof value.excludeCodeFolders !== "boolean") {
 			fail("appIndexing.excludeCodeFolders must be a boolean");
 		}
-		if (value.excludeDotFolders !== undefined && typeof value.excludeDotFolders !== "boolean") {
-			fail("appIndexing.excludeDotFolders must be a boolean");
-		}
 		if (
 			value.refreshIntervalMs !== undefined &&
 			!(typeof value.refreshIntervalMs === "number" && Number.isInteger(value.refreshIntervalMs) && value.refreshIntervalMs >= 0)

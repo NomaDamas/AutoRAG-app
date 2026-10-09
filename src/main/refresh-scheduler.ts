@@ -134,13 +134,23 @@ export function stripOwnedCronLines(crontab: string): string {
 		.join("\n");
 }
 
-/** Lines of a crontab that refresh AutoRAG by other means (not ours). */
+/** The command of a crontab line: the five schedule fields and leading `VAR=value` words removed. */
+function cronCommand(line: string): string {
+	const words = line.split(/\s+/).slice(5);
+	while (words.length > 1 && /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[0] ?? "")) words.shift();
+	return words.join(" ");
+}
+
+/** Commands of crontab lines that refresh AutoRAG by other means (not ours). */
 export function foreignCronLines(crontab: string): string[] {
 	return crontab
 		.split("\n")
 		.map((line) => line.trim())
 		.filter((line) => line.length > 0 && !line.startsWith("#") && !line.includes(CRON_MARKER) && /autorag/i.test(line))
-		.map((line) => (line.length > 160 ? `${line.slice(0, 157)}...` : line));
+		.map((line) => {
+			const command = cronCommand(line);
+			return command.length > 120 ? `${command.slice(0, 117)}...` : command;
+		});
 }
 
 export function createRefreshScheduler(deps: RefreshSchedulerDeps): RefreshScheduler {

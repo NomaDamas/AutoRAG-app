@@ -8,17 +8,16 @@ import { withIndexingPoliciesApplied } from "./indexing-policy";
 /**
  * App-owned indexing policy: automatically omit code/dependency directories
  * (node_modules, .git, build output, virtualenvs, caches) and every dot-folder
- * from each retrieval method the app triggers. The user config carries the
- * opt-outs and the folder list so it survives across surfaces; the librarian
- * itself never sees these keys. The librarian only skips a short built-in list
- * of directory names and matches excluded paths by exact directory, so the app
- * finds the directories itself and hands them over as `excludePaths`.
+ * from each retrieval method the app triggers. Dot-folders are always omitted,
+ * with no setting; the code-folder opt-out and folder list live in the user
+ * config so they survive across surfaces, and the librarian itself never sees
+ * these keys. The librarian only skips a short built-in list of directory names
+ * and matches excluded paths by exact directory, so the app finds the
+ * directories itself and hands them over as `excludePaths`.
  */
 
 export interface AppIndexingSettings {
 	readonly excludeCodeFolders: boolean;
-	/** Every directory whose name starts with "." (.idea, .vscode, .omx, ...). */
-	readonly excludeDotFolders: boolean;
 	readonly codeFolderNames: readonly string[];
 }
 
@@ -26,12 +25,11 @@ export interface AppIndexingSettings {
 export function readAppIndexing(raw: Record<string, unknown>): AppIndexingSettings {
 	const block = isJsonObject(raw.appIndexing) ? raw.appIndexing : {};
 	const excludeCodeFolders = typeof block.excludeCodeFolders === "boolean" ? block.excludeCodeFolders : true;
-	const excludeDotFolders = typeof block.excludeDotFolders === "boolean" ? block.excludeDotFolders : true;
 	const names =
 		Array.isArray(block.codeFolderNames) && block.codeFolderNames.every((name) => typeof name === "string" && name.length > 0)
 			? (block.codeFolderNames as string[])
 			: [...DEFAULT_CODE_FOLDER_NAMES];
-	return { excludeCodeFolders, excludeDotFolders, codeFolderNames: names };
+	return { excludeCodeFolders, codeFolderNames: names };
 }
 
 /**
@@ -46,19 +44,12 @@ const MAX_DEPTH = 64;
 /** How long a finished walk is reused by callers that are not a refresh (every search and index badge asks). */
 const DISCOVERY_TTL_MS = 5 * 60_000;
 
-interface DiscoveryTargets {
-	/** Lower-cased directory names to exclude wherever they appear. */
-	readonly names: ReadonlySet<string>;
-	/** Also exclude every directory whose name starts with ".". */
-	readonly dotFolders: boolean;
-}
-
 /**
  * Collect directories to exclude; never follows symlinks and guards cycles.
  * Asynchronous: the walk reads every directory entry, which must never block the
  * Electron main thread (every IPC and window event shares it).
  */
-async function discoverExcludedDirectories(root: string, targets: DiscoveryTargets, result: Set<string>): Promise<void> {
+async function discoverExcludedDirectories(root: string, names: ReadonlySet<string>, result: Set<string>): Promise<void> {
 	const queue: Array<{ readonly dir: string; readonly depth: number }> = [{ dir: root, depth: 0 }];
 	const visitedRealPaths = new Set<string>();
 	let scanned = 0;
@@ -76,7 +67,7 @@ async function discoverExcludedDirectories(root: string, targets: DiscoveryTarge
 			scanned += 1;
 			if (!entry.isDirectory()) continue;
 			const child = join(current.dir, entry.name);
-			if (targets.names.has(entry.name.toLowerCase()) || (targets.dotFolders && entry.name.startsWith("."))) {
+			if (names.has(entry.name.toLowerCase()) || entry.name.startsWith(".")) {
 				result.add(child);
 				continue;
 			}
@@ -106,13 +97,13 @@ export function clearDiscoveryCache(): void {
  * caller reuses a recent walk of the same roots and rules, and concurrent
  * callers share the one walk in flight.
  */
-function discoverExcluded(roots: readonly string[], targets: DiscoveryTargets, fresh: boolean): Promise<readonly string[]> {
-	const key = JSON.stringify([[...roots].sort(), [...targets.names].sort(), targets.dotFolders]);
+function discoverExcluded(roots: readonly string[], names: ReadonlySet<string>, fresh: boolean): Promise<readonly string[]> {
+	const key = JSON.stringify([[...roots].sort(), [...names].sort()]);
 	const cached = discoveryCache.get(key);
 	if (!fresh && cached !== undefined && Date.now() - cached.at < DISCOVERY_TTL_MS) return cached.found;
 	const found = (async (): Promise<readonly string[]> => {
 		const result = new Set<string>();
-		for (const root of roots) await discoverExcludedDirectories(root, targets, result);
+		for (const root of roots) await discoverExcludedDirectories(root, names, result);
 		return [...result];
 	})();
 	discoveryCache.set(key, { at: Date.now(), found });
@@ -164,11 +155,9 @@ export async function applyAppIndexing(
 	const excluded = new Set<string>(config.excludePaths ?? []);
 	// AutoRAG's own state directories are product output, never corpus.
 	for (const root of [...config.searchPaths, config.workspacePath]) excluded.add(join(root, ".autorag"));
-	if (settings.excludeCodeFolders || settings.excludeDotFolders) {
-		const names = settings.excludeCodeFolders ? settings.codeFolderNames.map((name) => name.toLowerCase()) : [];
-		const found = await discoverExcluded(config.searchPaths, { names: new Set(names), dotFolders: settings.excludeDotFolders }, options.fresh === true);
-		for (const dir of found) excluded.add(dir);
-	}
+	const names = settings.excludeCodeFolders ? settings.codeFolderNames.map((name) => name.toLowerCase()) : [];
+	const found = await discoverExcluded(config.searchPaths, new Set(names), options.fresh === true);
+	for (const dir of found) excluded.add(dir);
 	const excludePaths = [...excluded];
 
 	let jikji = config.jikji;

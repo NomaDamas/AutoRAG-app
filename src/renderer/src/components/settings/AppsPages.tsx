@@ -338,7 +338,8 @@ function ScheduleNote({ status }: { readonly status: RefreshScheduleStatus | nul
 	if (status.wanted && !status.installed && status.error === null) {
 		parts.push(<Note key="missing">자동 새로 고침이 아직 등록되지 않았습니다. 주기를 다시 선택하면 등록합니다.</Note>);
 	}
-	if (status.conflicts.length > 0) {
+	// Two jobs only double-process the folders when this app's job is also active.
+	if (status.conflicts.length > 0 && (status.wanted || status.installed)) {
 		parts.push(
 			<Note key="conflicts">
 				이 컴퓨터에는 AutoRAG를 따로 새로 고치는 예약 작업이 이미 있습니다({status.conflicts.join(" · ")}). 같은 폴더를 두 번 처리하지 않도록 한쪽만 쓰는 것을 권장합니다.

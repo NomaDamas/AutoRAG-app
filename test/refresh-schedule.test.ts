@@ -263,7 +263,7 @@ describe("launchd / cron output", () => {
 	it("keeps the user's own crontab lines byte-for-byte when removing ours, and reports hand-made autorag lines as conflicts", () => {
 		const table = ["MAILTO=me", "*/30 * * * * /usr/bin/true", `*/15 * * * * x ${CRON_MARKER}`, "0 3 * * * /opt/homebrew/bin/autorag refresh >> /tmp/x 2>&1", "# autorag commented out"].join("\n");
 		expect(stripOwnedCronLines(table)).toBe(["MAILTO=me", "*/30 * * * * /usr/bin/true", "0 3 * * * /opt/homebrew/bin/autorag refresh >> /tmp/x 2>&1", "# autorag commented out"].join("\n"));
-		expect(foreignCronLines(table)).toEqual(["0 3 * * * /opt/homebrew/bin/autorag refresh >> /tmp/x 2>&1"]);
+		expect(foreignCronLines(table)).toEqual(["/opt/homebrew/bin/autorag refresh >> /tmp/x 2>&1"]);
 	});
 });
 
@@ -326,10 +326,10 @@ describe("scheduler service", () => {
 
 	it("flags a hand-made autorag cron line as a conflict instead of touching it", async () => {
 		const h = harness("linux", {});
-		h.setCrontab("*/30 * * * * /opt/homebrew/bin/autorag watch --once\n");
+		h.setCrontab("*/30 * * * * PATH=/opt/homebrew/bin:$PATH /Users/u/.autorag/bin/watch-once.sh\n");
 		const status = await h.scheduler.status();
-		expect(status.conflicts).toEqual(["cron: */30 * * * * /opt/homebrew/bin/autorag watch --once"]);
-		expect(h.getCrontab()).toBe("*/30 * * * * /opt/homebrew/bin/autorag watch --once\n");
+		expect(status.conflicts).toEqual(["cron: /Users/u/.autorag/bin/watch-once.sh"]);
+		expect(h.getCrontab()).toBe("*/30 * * * * PATH=/opt/homebrew/bin:$PATH /Users/u/.autorag/bin/watch-once.sh\n");
 	});
 
 	it("is unsupported (not an error) on a platform with no scheduler", async () => {

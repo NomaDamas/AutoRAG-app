@@ -103,7 +103,6 @@ export function ScopePage({ snapshot, onSaved }: { readonly snapshot: AutoRagCon
 	const fsearch = getAt(snapshot.config, ["fsearch"]);
 	const watch = boolOf(getAt(snapshot.config, ["fsearch", "watch"])) ?? true;
 	const appIndexing = asRecord(getAt(snapshot.config, ["appIndexing"])) ?? {};
-	const excludeDotFolders = boolOf(appIndexing.excludeDotFolders) ?? true;
 	const storedCodeFolders = listOf(appIndexing.codeFolderNames);
 	const codeFolderNames = (storedCodeFolders.length > 0 ? storedCodeFolders : DEFAULT_CODE_FOLDER_NAMES).filter((name) => !name.startsWith("."));
 
@@ -134,9 +133,6 @@ export function ScopePage({ snapshot, onSaved }: { readonly snapshot: AutoRagCon
 			</Section>
 			<Section title="제외할 항목" description="검색하지 않을 폴더와 파일입니다.">
 				<Note>개발용 폴더({codeFolderNames.join(", ")})와 .으로 시작하는 모든 폴더(.idea, .vscode, .cache 등)는 자동으로 제외되어 있습니다.</Note>
-				<Row name=".으로 시작하는 폴더 제외" hint="끄면 .idea, .vscode 같은 폴더의 문서도 색인합니다. 시스템·캐시 폴더(.Trash, .cache 등)는 계속 제외됩니다.">
-					<Switch checked={excludeDotFolders} ariaLabel=".으로 시작하는 폴더 제외" onChange={() => void run([{ path: ["appIndexing", "excludeDotFolders"], value: !excludeDotFolders }])} />
-				</Row>
 				<Row name="제외 목록" hint="이름이 일치하는 폴더·파일을 더 제외합니다." stack>
 					<Chips
 						items={excludePaths}

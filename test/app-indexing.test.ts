@@ -34,14 +34,13 @@ function configFor(root: string): CliConfig {
 }
 
 describe("app indexing", () => {
-	it("defaults to excluding the built-in code folders and every dot-folder", () => {
-		expect(readAppIndexing({})).toEqual({ excludeCodeFolders: true, excludeDotFolders: true, codeFolderNames: DEFAULT_CODE_FOLDER_NAMES });
+	it("defaults to excluding the built-in code folders", () => {
+		expect(readAppIndexing({})).toEqual({ excludeCodeFolders: true, codeFolderNames: DEFAULT_CODE_FOLDER_NAMES });
 	});
 
 	it("honors explicit appIndexing overrides", () => {
-		expect(readAppIndexing({ appIndexing: { excludeCodeFolders: false, excludeDotFolders: false, codeFolderNames: ["custom"] } })).toEqual({
+		expect(readAppIndexing({ appIndexing: { excludeCodeFolders: false, codeFolderNames: ["custom"] } })).toEqual({
 			excludeCodeFolders: false,
-			excludeDotFolders: false,
 			codeFolderNames: ["custom"],
 		});
 	});
@@ -90,28 +89,15 @@ describe("app indexing", () => {
 		expect(effective.excludePaths).toContain(join(root, "zzz-last", ".hidden"));
 	}, 60_000);
 
-	it("keeps only AutoRAG state exclusions when both automatic exclusions are disabled", async () => {
+	it("keeps dot-folders excluded even when code-folder exclusion is turned off", async () => {
 		const root = await createTree([".idea"]);
 
-		const effective = await applyAppIndexing(configFor(root), { appIndexing: { excludeCodeFolders: false, excludeDotFolders: false } });
+		const effective = await applyAppIndexing(configFor(root), { appIndexing: { excludeCodeFolders: false } });
 
-		expect(effective.excludePaths).toEqual(expect.arrayContaining([join(root, "keep"), join(root, ".autorag")]));
-		expect(effective.excludePaths).not.toEqual(expect.arrayContaining([join(root, "projectA", "node_modules"), join(root, ".idea")]));
+		expect(effective.excludePaths).toEqual(expect.arrayContaining([join(root, "keep"), join(root, ".autorag"), join(root, ".idea")]));
+		expect(effective.excludePaths).not.toContain(join(root, "projectA", "node_modules"));
 		// No code-folder globs are added, but the media index stays pinned off (indexing-policy).
 		expect(effective.jikji).toEqual({ enableMediaIndex: false });
-	});
-
-	it("turns the two automatic exclusions on and off independently", async () => {
-		const root = await createTree([".idea"]);
-
-		const dotsOnly = await applyAppIndexing(configFor(root), { appIndexing: { excludeCodeFolders: false } });
-		clearDiscoveryCache();
-		const codeOnly = await applyAppIndexing(configFor(root), { appIndexing: { excludeDotFolders: false } });
-
-		expect(dotsOnly.excludePaths).toContain(join(root, ".idea"));
-		expect(dotsOnly.excludePaths).not.toContain(join(root, "projectA", "node_modules"));
-		expect(codeOnly.excludePaths).toContain(join(root, "projectA", "node_modules"));
-		expect(codeOnly.excludePaths).not.toContain(join(root, ".idea"));
 	});
 
 	it("reuses a recent walk for ordinary callers but walks again when asked to (a refresh)", async () => {

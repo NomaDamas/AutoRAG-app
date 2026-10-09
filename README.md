@@ -99,7 +99,7 @@ second datasource or model configuration. The sidebar is searchable and grouped:
   refresh), 검색 범위 (search paths, exclusions, watch), 문서 읽기
   (document languages), and 중복 파일 정리 (exact duplicates, dupey, scan interval).
   Folders named in `appIndexing.codeFolderNames` (`node_modules`, `.git`, …) and
-  every folder whose name starts with `.` (switch: `appIndexing.excludeDotFolders`)
+  every folder whose name starts with `.` (always, no setting)
   are left out of indexing; the app finds them itself and passes them as
   `excludePaths`. Tesseract OCR and Jikji's media index are pinned off in every
   config the app hands to the librarian.

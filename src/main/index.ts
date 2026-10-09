@@ -66,7 +66,7 @@ function ensureAppIndexingMetadata(configPath: string): void {
 		if (isJsonObject(raw.appIndexing)) return;
 		writeConfigObject(configPath, {
 			...raw,
-			appIndexing: { excludeCodeFolders: true, excludeDotFolders: true, codeFolderNames: [...DEFAULT_CODE_FOLDER_NAMES] },
+			appIndexing: { excludeCodeFolders: true, codeFolderNames: [...DEFAULT_CODE_FOLDER_NAMES] },
 		});
 	} catch (error) {
 		console.error("AutoRAG appIndexing metadata initialization failed", error);
