@@ -434,14 +434,14 @@
         "obsidian": "Obsidian"
       },
       "detail": {
-        "kakao": "lazykatok · KakaoTalkアプリのデータを検出",
-        "slack": "slacrawlインストール済み · workspace {{workspaces}}件",
-        "discord": "discrawl · Discordアプリのメッセージ {{messages}}件を検出",
-        "telegram": "telecrawl · Telegramアプリのデータを検出",
-        "whatsapp": "wacrawl · 会話 {{chats}}件 · メッセージ {{messages}}件",
-        "mailcrawl": "himalayaアカウント {{accounts}}件のログインを確認",
-        "github": "ghにログイン済み · IssuesとPull Requests",
-        "obsidian": "Vault {{vaults}}件を検出 · qmdが利用可能"
+        "kakao": "KakaoTalkアプリのデータを検出",
+        "slack": "workspace {{workspaces}}件に接続済み",
+        "discord": "Discordアプリのメッセージ {{messages}}件を検出",
+        "telegram": "Telegramアプリのデータを検出",
+        "whatsapp": "会話 {{chats}}件 · メッセージ {{messages}}件",
+        "mailcrawl": "メールアカウント {{accounts}}件のログインを確認",
+        "github": "ログイン済み · IssuesとPull Requests",
+        "obsidian": "Vault {{vaults}}件を検出"
       }
     },
     "plan": {
@@ -593,8 +593,8 @@
         "body": "どの画面からでもAI検索の入力欄に移動します。フォルダを開かずに文書の内容を尋ね、根拠とともに答えを得られます。"
       },
       "2": {
-        "title": "回答の番号を押すと原文へ",
-        "body": "回答に付いた番号は実際に読んだ文書の位置です。押すと根拠の文書がすぐに開きます。",
+        "title": "回答の番号を押すと根拠をプレビュー",
+        "body": "回答に付いた番号は実際に読んだ文書の位置です。押すと根拠のファイルの内容をその場でプレビューできます。",
         "bubble": "マーケティング費用は前四半期より18%減りました。"
       },
       "3": {

@@ -434,14 +434,14 @@
         "obsidian": "Obsidian"
       },
       "detail": {
-        "kakao": "lazykatok · KakaoTalk app data detected",
-        "slack": "slacrawl installed · {{workspaces}} workspaces",
-        "discord": "discrawl · {{messages}} messages detected in Discord app",
-        "telegram": "telecrawl · Telegram app data detected",
-        "whatsapp": "wacrawl · {{chats}} chats · {{messages}} messages",
-        "mailcrawl": "Signed in to {{accounts}} himalaya accounts",
-        "github": "Logged in to gh · Issues and Pull Requests",
-        "obsidian": "{{vaults}} vaults found · qmd available"
+        "kakao": "KakaoTalk app data detected",
+        "slack": "{{workspaces}} workspaces connected",
+        "discord": "{{messages}} messages detected in Discord app",
+        "telegram": "Telegram app data detected",
+        "whatsapp": "{{chats}} chats · {{messages}} messages",
+        "mailcrawl": "Signed in to {{accounts}} mail accounts",
+        "github": "Signed in · Issues and Pull Requests",
+        "obsidian": "{{vaults}} vaults found"
       }
     },
     "plan": {
@@ -593,8 +593,8 @@
         "body": "Jumps to the AI Search field from any screen. Ask about what's inside your documents without opening folders, and get answers with sources."
       },
       "2": {
-        "title": "Tap a number in the answer to see the source",
-        "body": "The numbers attached to answers are the actual document locations that were read. Tap one to open the source document right away.",
+        "title": "Tap a number in the answer to preview the source",
+        "body": "The numbers attached to answers are the actual document locations that were read. Tap one to preview the evidence file right there.",
         "bubble": "Marketing costs fell 18% from the previous quarter."
       },
       "3": {

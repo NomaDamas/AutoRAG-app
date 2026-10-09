@@ -434,14 +434,14 @@
         "obsidian": "Obsidian"
       },
       "detail": {
-        "kakao": "lazykatok · 检测到 KakaoTalk 应用数据",
-        "slack": "已安装 slacrawl · {{workspaces}} 个工作区",
-        "discord": "discrawl · 检测到 Discord 应用消息 {{messages}} 条",
-        "telegram": "telecrawl · 检测到 Telegram 应用数据",
-        "whatsapp": "wacrawl · 对话 {{chats}} 个 · 消息 {{messages}} 条",
-        "mailcrawl": "已确认登录 himalaya 账户 {{accounts}} 个",
-        "github": "已登录 gh · Issues 与 Pull Requests",
-        "obsidian": "发现 {{vaults}} 个 Vault · qmd 可用"
+        "kakao": "检测到 KakaoTalk 应用数据",
+        "slack": "已连接 {{workspaces}} 个工作区",
+        "discord": "检测到 Discord 应用消息 {{messages}} 条",
+        "telegram": "检测到 Telegram 应用数据",
+        "whatsapp": "对话 {{chats}} 个 · 消息 {{messages}} 条",
+        "mailcrawl": "已确认登录邮箱账户 {{accounts}} 个",
+        "github": "已登录 · Issues 与 Pull Requests",
+        "obsidian": "发现 {{vaults}} 个 Vault"
       }
     },
     "plan": {
@@ -593,8 +593,8 @@
         "body": "从任何界面都能跳转到 AI Search 输入框。无需打开文件夹，就能就文档内容提问，并获得带依据的答案。"
       },
       "2": {
-        "title": "点击答案中的编号即可查看原文",
-        "body": "答案中附带的编号是实际读取的文档位置。点击即可直接打开依据文档。",
+        "title": "点击答案中的编号即可预览依据",
+        "body": "答案中附带的编号是实际读取的文档位置。点击即可直接预览依据文件的内容。",
         "bubble": "营销成本比上季度下降了 18%。"
       },
       "3": {

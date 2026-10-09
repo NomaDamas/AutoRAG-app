@@ -195,7 +195,7 @@ export const TIPS: readonly TipArt[] = [
 	{ kind: "drag" },
 	{ kind: "versions" },
 	{ kind: "shortcut", mod: true, key: "F" },
-	{ kind: "shortcut", mod: true, key: "2" },
+	{ kind: "shortcut", mod: true, key: "1" },
 	{ kind: "brands" },
 	{ kind: "shortcut", mod: true, key: "," },
 ];

@@ -434,14 +434,14 @@
         "obsidian": "Obsidian"
       },
       "detail": {
-        "kakao": "lazykatok · KakaoTalk 앱 데이터 감지됨",
-        "slack": "slacrawl 설치됨 · workspace {{workspaces}}개",
-        "discord": "discrawl · Discord 앱 메시지 {{messages}}개 감지됨",
-        "telegram": "telecrawl · Telegram 앱 데이터 감지됨",
-        "whatsapp": "wacrawl · 대화 {{chats}}개 · 메시지 {{messages}}개",
-        "mailcrawl": "himalaya 계정 {{accounts}}개 로그인 확인됨",
-        "github": "gh 로그인됨 · Issues와 Pull Requests",
-        "obsidian": "Vault {{vaults}}개 발견 · qmd 사용 가능"
+        "kakao": "KakaoTalk 앱 데이터 감지됨",
+        "slack": "workspace {{workspaces}}개 연결됨",
+        "discord": "Discord 앱 메시지 {{messages}}개 감지됨",
+        "telegram": "Telegram 앱 데이터 감지됨",
+        "whatsapp": "대화 {{chats}}개 · 메시지 {{messages}}개",
+        "mailcrawl": "메일 계정 {{accounts}}개 로그인 확인됨",
+        "github": "로그인됨 · Issues와 Pull Requests",
+        "obsidian": "Vault {{vaults}}개 발견"
       }
     },
     "plan": {
@@ -593,8 +593,8 @@
         "body": "어느 화면에서든 AI Search 입력창으로 이동합니다. 폴더를 열지 않고 문서 내용을 묻고, 근거와 함께 답을 받으세요."
       },
       "2": {
-        "title": "답변의 번호를 누르면 원문으로",
-        "body": "답변에 붙은 번호는 실제로 읽은 문서 위치입니다. 누르면 근거 문서가 바로 열립니다.",
+        "title": "답변의 번호를 누르면 근거를 미리보기로",
+        "body": "답변에 붙은 번호는 실제로 읽은 문서 위치입니다. 누르면 근거 파일의 내용을 바로 미리 볼 수 있습니다.",
         "bubble": "마케팅 비용은 전분기보다 18% 줄었습니다."
       },
       "3": {
