@@ -12,14 +12,16 @@ import {
 	type FinderMenuTagRow,
 } from "../../state/context-menu";
 import type { NewFileFormatId } from "../../../../shared/new-file-contract";
+import { Check, Minus, Plus } from "lucide-react";
 import { ChevronRightSmallIcon } from "../icons";
 import { TagDotMark } from "./TagDot";
 
 /**
- * Finder's colour-dot row. Hovering a dot prints what a click does under the
- * row — Add "Research" or Remove "Research" — and one click toggles that tag
- * on the whole selection, so no trip into a submenu is needed. At rest the
- * caption names the first dot's tag, as Finder's does.
+ * Finder's colour-dot row. The dot under the pointer grows and shows what a
+ * click does: + to add the tag, − to remove it (a dot the selection already
+ * carries rests as a check). The caption under the row spells it out — Add
+ * "Research" or Remove "Research" — and one click toggles that tag on the
+ * whole selection, so no trip into a submenu is needed.
  */
 function TagSwatchRow({ row, onSelect }: { readonly row: FinderMenuTagRow; readonly onSelect: MenuSelect }): ReactElement {
 	const [hovered, setHovered] = useState<string | null>(null);
@@ -27,26 +29,35 @@ function TagSwatchRow({ row, onSelect }: { readonly row: FinderMenuTagRow; reado
 	return (
 		<div className="menu__tags flex flex-col gap-4 px-10 py-6" role="group" aria-label={row.label}>
 			<div className="flex items-center gap-8" onMouseLeave={() => setHovered(null)}>
-				{row.swatches.map((swatch) => (
-					<button
-						key={swatch.color}
-						type="button"
-						role="menuitemcheckbox"
-						aria-checked={swatch.checked}
-						aria-label={swatch.hint}
-						title={swatch.hint}
-						className={cn(
-							"menu__swatch relative flex items-center justify-center size-16 p-0 border-0 rounded-full bg-transparent cursor-default",
-							swatch.checked && "shadow-[0_0_0_2px_var(--bg-window),0_0_0_3.5px_var(--accent)]",
-						)}
-						onMouseEnter={() => setHovered(swatch.name)}
-						onFocus={() => setHovered(swatch.name)}
-						onClick={() => onSelect("toggleTag", null, null, swatch.name)}
-					>
-						<TagDotMark color={swatch.color} size={14} />
-						{swatch.checked ? <span className="absolute size-4 rounded-full bg-on-accent" aria-hidden="true" /> : null}
-					</button>
-				))}
+				{row.swatches.map((swatch) => {
+					const active = hovered === swatch.name;
+					// Finder's rule: the dot under the pointer grows and shows what a click does
+					// (+ adds, − removes); a dot the selection already carries rests as a check.
+					const Glyph = active ? (swatch.checked ? Minus : Plus) : swatch.checked ? Check : null;
+					return (
+						<button
+							key={swatch.color}
+							type="button"
+							role="menuitemcheckbox"
+							aria-checked={swatch.checked}
+							aria-label={swatch.hint}
+							title={swatch.hint}
+							className="menu__swatch relative flex items-center justify-center size-16 p-0 border-0 rounded-full bg-transparent cursor-default"
+							data-active={active ? "true" : undefined}
+							onMouseEnter={() => setHovered(swatch.name)}
+							onFocus={() => setHovered(swatch.name)}
+							onBlur={() => setHovered((current) => (current === swatch.name ? null : current))}
+							onClick={() => onSelect("toggleTag", null, null, swatch.name)}
+						>
+							<span className={cn("flex transition-transform duration-(--dur-color) ease-[ease]", active ? "scale-125" : "scale-100")}>
+								<TagDotMark color={swatch.color} size={14} />
+							</span>
+							{Glyph === null ? null : (
+								<Glyph className="menu__swatch-glyph pointer-events-none absolute text-on-accent drop-shadow-[0_0_1px_rgba(0,0,0,0.35)]" size={9} strokeWidth={3} aria-hidden="true" />
+							)}
+						</button>
+					);
+				})}
 			</div>
 			<span className="menu__tag-hint truncate text-sm text-ink-muted" aria-live="polite">
 				{shown?.hint ?? row.label}
