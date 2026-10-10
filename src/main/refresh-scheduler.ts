@@ -37,6 +37,8 @@ export interface RefreshSchedulerDeps {
 	/** The built `refresh-job.js`. */
 	readonly jobPath: string;
 	readonly configPath: () => string;
+	/** The installer's bundled `tools/bin`; the OS job does not inherit the app's PATH, so it is handed over explicitly. */
+	readonly toolsBin?: string;
 	readonly env?: NodeJS.ProcessEnv;
 	readonly run?: CommandRunner;
 }
@@ -61,8 +63,8 @@ function xmlEscape(text: string): string {
 }
 
 /** PATH the job needs to find the datasource CLIs (discrawl, rclone, ...) that launchd's minimal PATH would hide. */
-export function jobPath(home: string, current: string | undefined): string {
-	const base = [join(home, ".cargo", "bin"), join(home, ".local", "bin"), "/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"];
+export function jobPath(home: string, current: string | undefined, toolsBin?: string): string {
+	const base = [...(toolsBin === undefined ? [] : [toolsBin]), join(home, ".cargo", "bin"), join(home, ".local", "bin"), "/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"];
 	const extra = (current ?? "").split(":").filter((entry) => entry.length > 0 && !base.includes(entry));
 	return [...base, ...extra].join(":");
 }
@@ -202,7 +204,7 @@ export function createRefreshScheduler(deps: RefreshSchedulerDeps): RefreshSched
 	const install = async (intervalMs: number): Promise<void> => {
 		const paths = schedulePaths(deps.configPath());
 		mkdirSync(paths.dir, { recursive: true });
-		const path = jobPath(home, env.PATH);
+		const path = jobPath(home, env.PATH, deps.toolsBin);
 		if (mechanism === "launchd") {
 			mkdirSync(dirname(plistPath), { recursive: true });
 			writeFileSync(
@@ -239,7 +241,8 @@ export function createRefreshScheduler(deps: RefreshSchedulerDeps): RefreshSched
 		}
 		if (mechanism === "schtasks") {
 			const minutes = Math.max(1, Math.min(30, Math.round(intervalMs / 60_000)));
-			const command = `cmd /c "set ELECTRON_RUN_AS_NODE=1&& "${deps.execPath}" "${deps.jobPath}" >> "${paths.log}" 2>&1"`;
+			const toolsPath = deps.toolsBin === undefined ? "" : `set "PATH=${deps.toolsBin};%PATH%"&& `;
+			const command = `cmd /c "${toolsPath}set ELECTRON_RUN_AS_NODE=1&& "${deps.execPath}" "${deps.jobPath}" >> "${paths.log}" 2>&1"`;
 			const result = await run("schtasks", ["/Create", "/F", "/SC", "MINUTE", "/MO", String(minutes), "/TN", WINDOWS_TASK_NAME, "/TR", command]);
 			if (result.code !== 0) throw new Error(`schtasks failed: ${result.stderr.trim() || `exit ${result.code}`}`);
 			return;
