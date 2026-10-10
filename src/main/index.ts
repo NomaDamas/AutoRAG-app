@@ -27,6 +27,9 @@ import { createDefaultParserRegistry, DEFAULT_MAX_SOURCE_BYTES, writeDefaultConf
 import { readRawConfigObject, resolveConfigPath, writeConfigObject } from "@autorag/librarian/core";
 import { DEFAULT_CODE_FOLDER_NAMES, isJsonObject, SETTINGS_CHANNELS } from "../shared/settings-contract";
 import { LOCAL_REFRESH_METHODS } from "./index-refresh";
+import { INDEX_ACTIVITY_CHANNELS } from "../shared/index-activity-contract";
+import { createIndexActivityService } from "./index-activity";
+import { createActivityJournal, journalSingleRun, LOCAL_ITEM, sourceItem } from "./index-activity-journal";
 import type { RefreshLockHolder } from "./refresh-lock";
 import { schedulePaths, withRefreshLock } from "./refresh-schedule";
 import { createRefreshScheduler } from "./refresh-scheduler";
@@ -55,6 +58,7 @@ import { createSettingsService } from "./settings-service";
 import {
 	registerActionsIpcHandlers,
 	registerDragOutIpcHandlers,
+	registerIndexActivityIpcHandlers,
 	registerOnboardingIpcHandlers,
 	registerOsRequestIpcHandlers,
 	registerSearchIpcHandlers,
@@ -508,7 +512,7 @@ app.whenReady().then(async () => {
 			withRefreshLock(
 				schedulePath.lock,
 				"manual-sync",
-				() => dataSources.sync(id),
+				() => journalSingleRun(createActivityJournal(schedulePath.activity, { owner: "manual-sync" }), sourceItem(id), () => dataSources.sync(id)),
 				(holder) => ({ id, ok: false, state: "failed", chunkCount: null, indexedAt: null, durationMs: 0, diagnostics: [], error: busyMessage(holder) }),
 			),
 	};
@@ -521,7 +525,7 @@ app.whenReady().then(async () => {
 			withRefreshLock(
 				schedulePath.lock,
 				"manual-refresh",
-				() => refreshConfig(methods),
+				() => journalSingleRun(createActivityJournal(schedulePath.activity, { owner: "manual-refresh" }), LOCAL_ITEM, () => refreshConfig(methods)),
 				(holder) => ({ ok: false, methods: methods ?? LOCAL_REFRESH_METHODS, scanned: 0, written: 0, deleted: 0, skipped: 0, diagnostics: [], error: busyMessage(holder) }),
 			),
 		refreshScheduler,
@@ -545,6 +549,16 @@ app.whenReady().then(async () => {
 		},
 	});
 	registerSettingsIpcHandlers(settingsService);
+	const indexActivity = createIndexActivityService({
+		configPath: autoragConfigPath,
+		resolveWorkspacePath: async () => (await resolveEffectiveConfig({ env: process.env, cwd: process.cwd() })).config.workspacePath,
+		journalPath: () => schedulePath.activity,
+		// The fs worker runs the checkbox-toggle refresh, so its pid marks that run as this app's own.
+		ownPids: () => [workerHost.status().pid],
+	});
+	registerIndexActivityIpcHandlers(indexActivity);
+	const stopIndexActivity = indexActivity.start((snapshot) => sendToMainWindow(INDEX_ACTIVITY_CHANNELS.changed, snapshot));
+	app.once("will-quit", stopIndexActivity);
 	registerOsRequestIpcHandlers(osRequests);
 	// The in-app right-click → 서비스 submenu: what macOS offers for the selection, and performing one.
 	registerServicesIpcHandlers(createServicesService());

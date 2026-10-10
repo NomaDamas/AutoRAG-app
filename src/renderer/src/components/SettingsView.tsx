@@ -20,6 +20,7 @@ import { GeneralPage } from "./settings/GeneralPage";
 import { TEMPLATE_BY_ID } from "./settings/datasourceTemplates";
 import { SourceIcon } from "./settings/SourceIcon";
 import { settings } from "../settings-runtime";
+import { attachSettingsNavigation } from "../state/settings-navigation";
 
 const autorag = { settings };
 
@@ -94,6 +95,13 @@ export function SettingsView({ initialCategory = "general", onSettingsChanged }:
 	const [sources, setSources] = useState<DataSourcesSnapshot | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [loading, setLoading] = useState(true);
+
+	// The sidebar's indexing block asks for a page from outside; honour a request made before this view mounted.
+	useEffect(() => {
+		const { initial, detach } = attachSettingsNavigation((next) => setCategory(normalizeCategory(next)));
+		if (initial !== null) setCategory(normalizeCategory(initial));
+		return detach;
+	}, []);
 
 	const load = useCallback(async (): Promise<void> => {
 		setLoading(true);

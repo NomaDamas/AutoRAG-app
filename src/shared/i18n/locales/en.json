@@ -248,6 +248,34 @@
     "copiedPath": "Copied path",
     "feedbackSent": "Feedback sent"
   },
+  "indexActivity": {
+    "title": "Indexing",
+    "queued": "Waiting",
+    "idle": "Nothing is indexing right now.",
+    "counts": "Scanned {{scanned}} · written {{written}} · deleted {{deleted}} · skipped {{skipped}}",
+    "local": "Local folders",
+    "source": "Data source",
+    "running": "Indexing",
+    "runningCount": "Indexing {{done}}/{{total}}",
+    "done": "Indexing complete",
+    "failed": "Indexing failed",
+    "syncing": "Syncing {{name}}",
+    "andMore": "{{text}} and {{count}} more",
+    "open": "Show indexing status",
+    "origin": {
+      "scheduled": "Automatic refresh",
+      "external": "Started outside the app"
+    },
+    "phases": {
+      "parsed": "Reading documents",
+      "minsync": "Building the search index",
+      "datasources": "Syncing data sources",
+      "jikji": "Building the folder map",
+      "everything": "Indexing file names",
+      "fsearch": "Indexing file names",
+      "finalizing": "Finishing up"
+    }
+  },
   "confirm": {
     "emptyTrashTitle": "Empty Trash",
     "emptyTrashMessage": "All items in the Trash will be permanently deleted. This cannot be undone.",

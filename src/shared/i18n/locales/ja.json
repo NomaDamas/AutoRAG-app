@@ -248,6 +248,34 @@
     "copiedPath": "パスをコピーしました",
     "feedbackSent": "フィードバックを送信しました"
   },
+  "indexActivity": {
+    "title": "インデックス",
+    "queued": "待機中",
+    "idle": "現在インデックス作成中のものはありません。",
+    "counts": "スキャン {{scanned}} · 書き込み {{written}} · 削除 {{deleted}} · スキップ {{skipped}}",
+    "local": "ローカルフォルダ",
+    "source": "データソース",
+    "running": "インデックス作成中",
+    "runningCount": "インデックス作成中 {{done}}/{{total}}",
+    "done": "インデックス作成完了",
+    "failed": "インデックス作成に失敗",
+    "syncing": "{{name}} を同期中",
+    "andMore": "{{text}} ほか {{count}} 件",
+    "open": "インデックスの状況を表示",
+    "origin": {
+      "scheduled": "自動更新",
+      "external": "アプリ外から実行"
+    },
+    "phases": {
+      "parsed": "書類を読み込み中",
+      "minsync": "検索インデックスを作成中",
+      "datasources": "データソースを同期中",
+      "jikji": "フォルダマップを作成中",
+      "everything": "ファイル名をインデックス中",
+      "fsearch": "ファイル名をインデックス中",
+      "finalizing": "仕上げ中"
+    }
+  },
   "confirm": {
     "emptyTrashTitle": "ゴミ箱を空にする",
     "emptyTrashMessage": "ゴミ箱内のすべての項目が完全に削除されます。この操作は取り消せません。",

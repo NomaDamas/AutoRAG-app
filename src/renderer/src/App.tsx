@@ -30,6 +30,7 @@ import { toolbarShareControl, type FileActionTarget } from "./state/file-actions
 import { watchSetFor } from "./state/live";
 import { loadListColumns, saveListColumns, type ListColumnsState } from "./state/list-columns";
 import { basename, dirname } from "./state/paths";
+import { requestSettingsCategory } from "./state/settings-navigation";
 import { aiPanelTabs, AI_SEARCH_PATH, SETTINGS_PATH } from "./state/tabs";
 import { allTabs, canCloseWorkspaceTab, createWorkspace, focusPane, moveTab, resizeSplit, type Workspace } from "./state/workspace";
 import { cn } from "./lib/cn";
@@ -609,6 +610,10 @@ export function App(): ReactElement {
 						onEject={(item) => finder?.ejectNav(item)}
 						onOpenSettings={() => finder?.openSettings()}
 						onHideSidebar={() => setSidebarVisible(false)}
+						onOpenIndexing={() => {
+							requestSettingsCategory("indexing");
+							finder?.openSettings();
+						}}
 						sourceStatus={sourceStatus}
 						searchQuery={finder?.query ?? ""}
 						searchRef={finder?.searchRef ?? NO_INPUT}

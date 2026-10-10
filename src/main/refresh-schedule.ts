@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import type { ConfigRefreshResult, DataSourceSyncResult, ScheduledRunRecord } from "../shared/settings-contract";
 import { isJsonObject } from "../shared/settings-contract";
 import { LIVE_QUERY_TEMPLATES } from "./datasource-index-probe";
+import { createActivityJournal, LOCAL_ITEM, sourceItem, type ActivityItemSeed } from "./index-activity-journal";
 import { acquireRefreshLock, isLockHeld, type RefreshLockHolder } from "./refresh-lock";
 
 /** The shortest cadence the UI offers; also the floor for a hand-edited config. */
@@ -28,12 +29,14 @@ export interface SchedulePaths {
 	readonly lock: string;
 	readonly state: string;
 	readonly log: string;
+	/** Which items the lock holder is working on right now (see index-activity-journal). */
+	readonly activity: string;
 }
 
 /** Everything the app and the background job persist lives beside the shared config, so both resolve the same files. */
 export function schedulePaths(configPath: string): SchedulePaths {
 	const dir = join(dirname(configPath), "app-refresh");
-	return { dir, lock: join(dir, "refresh.lock"), state: join(dir, "state.json"), log: join(dir, "job.log") };
+	return { dir, lock: join(dir, "refresh.lock"), state: join(dir, "state.json"), log: join(dir, "job.log"), activity: join(dir, "activity.json") };
 }
 
 function positiveInterval(value: unknown): number | null {
@@ -193,9 +196,13 @@ export async function runScheduledRefresh(deps: ScheduledRunDeps): Promise<Sched
 		state = next;
 		writeScheduleState(deps.paths.state, state);
 	};
+	const journal = createActivityJournal(deps.paths.activity, { owner: deps.owner ?? "scheduled-job", now });
+	const planned: ActivityItemSeed[] = [...(due.local ? [LOCAL_ITEM] : []), ...due.sourceIds.map(sourceItem)];
+	journal.begin(planned);
 	try {
 		save({ ...state, lastTickAt: new Date(now()).toISOString() });
 		if (due.local) {
+			journal.start(LOCAL_ITEM.key);
 			const startedAt = now();
 			let record: ScheduledRunRecord;
 			try {
@@ -205,10 +212,12 @@ export async function runScheduledRefresh(deps: ScheduledRunDeps): Promise<Sched
 				record = { at: new Date(now()).toISOString(), ok: false, error: message(error), durationMs: now() - startedAt, detail: null };
 			}
 			if (!record.ok) failures += 1;
+			journal.finish(LOCAL_ITEM.key, record.ok, record.error);
 			log(`local ${record.ok ? "ok" : "fail"} ${record.detail ?? ""} ${record.error ?? ""}`.trim());
 			save({ ...state, local: record });
 		}
 		for (const id of due.sourceIds) {
+			journal.start(sourceItem(id).key);
 			const startedAt = now();
 			let record: ScheduledRunRecord;
 			try {
@@ -218,10 +227,12 @@ export async function runScheduledRefresh(deps: ScheduledRunDeps): Promise<Sched
 				record = { at: new Date(now()).toISOString(), ok: false, error: message(error), durationMs: now() - startedAt, detail: null };
 			}
 			if (!record.ok) failures += 1;
+			journal.finish(sourceItem(id).key, record.ok, record.error);
 			log(`source ${id} ${record.ok ? "ok" : "fail"} ${record.detail ?? ""} ${record.error ?? ""}`.trim());
 			save({ ...state, sources: { ...state.sources, [id]: record } });
 		}
 	} finally {
+		journal.end();
 		lock.release();
 	}
 	return { kind: "ran", local: due.local, sourceIds: due.sourceIds, failures };

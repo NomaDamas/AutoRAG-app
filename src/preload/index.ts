@@ -4,6 +4,7 @@ import type { DevLabel } from "../shared/app-info";
 import { createPreviewBridge } from "../preview/node/bridge";
 import { createActionsBridge } from "./actions-bridge";
 import { createFsBridge } from "./fs-bridge";
+import { createIndexActivityBridge } from "./index-activity-bridge";
 import { createLiveBridge } from "./live-bridge";
 import { createOnboardingBridge } from "./onboarding-bridge";
 import { createOsRequestBridge } from "./os-request-bridge";
@@ -31,6 +32,7 @@ contextBridge.exposeInMainWorld("autorag", {
 	...createBridge(readDevLabelArg(), process.platform),
 	fs: createFsBridge(ipcRenderer, fsWorker),
 	actions: createActionsBridge(ipcRenderer),
+	indexActivity: createIndexActivityBridge(ipcRenderer),
 	live: createLiveBridge(fsWorker),
 	onboarding: createOnboardingBridge(ipcRenderer),
 	osRequests: createOsRequestBridge(ipcRenderer),

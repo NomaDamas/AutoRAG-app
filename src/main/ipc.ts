@@ -11,7 +11,9 @@ import { OS_REQUEST_CHANNELS } from "../shared/os-request-contract";
 import { SETTINGS_CHANNELS, type EmbeddingChangeRequest, type JsonValue, type ProviderAuthKind, type ProviderServerInput, type SettingsBridge } from "../shared/settings-contract";
 import { ONBOARDING_CHANNELS } from "../shared/onboarding-contract";
 import { isServiceRunRequest, SERVICES_CHANNELS } from "../shared/services-contract";
+import { INDEX_ACTIVITY_CHANNELS } from "../shared/index-activity-contract";
 import type { ActionService } from "./action-service";
+import type { IndexActivityService } from "./index-activity";
 import { dragOutPaths } from "./drag-out";
 import type { OnboardingService } from "./onboarding-service";
 import type { OsRequestService } from "./os-request-service";
@@ -275,4 +277,9 @@ export function registerOnboardingIpcHandlers(service: OnboardingService): void 
 /** The renderer drains requests that came from the OS file menu. */
 export function registerOsRequestIpcHandlers(service: OsRequestService): void {
 	ipcMain.handle(OS_REQUEST_CHANNELS.take, () => service.take());
+}
+
+/** The renderer's one read of what is indexing right now; changes are pushed by the main process. */
+export function registerIndexActivityIpcHandlers(service: IndexActivityService): void {
+	ipcMain.handle(INDEX_ACTIVITY_CHANNELS.get, () => service.snapshot());
 }

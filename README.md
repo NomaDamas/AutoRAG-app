@@ -113,6 +113,22 @@ second datasource or model configuration. The sidebar is searchable and grouped:
   a tick never overlap. Results land in `app-refresh/state.json` beside the
   config. The app never edits a crontab line or LaunchAgent it did not create and
   only warns when another job already refreshes AutoRAG.
+- **Indexing progress** — a block above 설정 in the sidebar shows what is
+  indexing right now, with a progress bar: the local folders and every
+  datasource, whether the run came from a Settings button, the OS job, or an
+  `autorag watch` outside the app. It names the running phase or datasource,
+  shows `done/total` for a multi-item run, turns green for "완료" (or orange with
+  the reason on a failure) and disappears a few seconds later (15 s after a
+  failure). Clicking it opens 설정 > 인덱싱, whose top section (진행 상황) lists
+  every item of the run. Sources: the librarian's
+  `<workspace>/.autorag/refresh-progress.json` (phase, parsed counts; a run is
+  live while its `pid` is, never judged by `updatedAt`, which only moves between
+  phases) and `app-refresh/activity.json`, the plan of whoever holds the refresh
+  lock (manual buttons and the OS job). The bar is a position, not a percent of
+  work: the librarian reports phases, not per-file totals, and a datasource sync
+  reports nothing while it runs, so the bar steps per finished item and is a
+  shimmer while a lone datasource syncs. Per-file and per-source progress is
+  requested upstream in Marker-Inc-Korea/AutoRAG#1840.
 - **연결된 앱** — all connections plus a gallery of the 16 datasource templates;
   each configured connection gets its own page with enable, desktop-app
   requirement and download link, per-source AI access, sync, polling interval,
