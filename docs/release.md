@@ -1,0 +1,181 @@
+# Releasing AutoRAG
+
+Publishing a GitHub release builds two installers and attaches them to it:
+
+| Platform | File | Install |
+|---|---|---|
+| macOS (Apple Silicon) | `AutoRAG-<version>-arm64.dmg` | open, drag AutoRAG to Applications |
+| Windows (x64) | `AutoRAG-Setup-<version>-x64.exe` | double-click; per-user, no admin prompt |
+
+```sh
+gh release create v1.2.3 --generate-notes      # builds and attaches both installers
+gh workflow run release.yml -f version=v1.2.3-rc.1   # rehearsal: artifacts only, nothing published
+```
+
+The tag is the version. CI rewrites `package.json` and `APP_VERSION` from it
+(`scripts/release/set-version.mjs`); nothing needs bumping by hand. A tag that
+is not `vX.Y.Z` or `vX.Y.Z-suffix` fails the run before any build starts.
+
+## What one installer contains
+
+Everything the app needs, so a user installs one file and nothing else:
+
+| Component | Source | Notes |
+|---|---|---|
+| AutoRAG app | this repo | Electron, unpacked (the bundled CLIs run under plain Node) |
+| `autorag` (agent/CLI) | `@autorag/librarian`, public `origin/main` | built by `scripts/sync-librarian.mjs` |
+| Node 24 LTS + npm | nodejs.org | runtime of the npm-based CLIs, checked against nodejs.org's SHASUMS |
+| `minsync`, `rhwp`, `himalaya`, `rclone`, `lark-cli`, `discrawl`, `telecrawl`, `wacrawl` | newest GitHub release, per platform | download verified against the sha256 GitHub publishes for the asset |
+| `slacrawl`, `notcrawl` | newest GitHub release (macOS); built from the newest tag with Go (Windows, no archive published) | |
+| `dupey`, `jikji`, `clawgallery` | newest crates.io release, compiled on the build machine | |
+| `lazykatok` | `changeroa/lazykatok` HEAD (macOS only: KakaoTalk for macOS) | no crates.io or release build exists |
+| `mailcrawl`, `qmd`, `kordoc` | newest npm release, installed with the bundled Node | native add-ons are fetched for the bundled Node's ABI |
+| Qwen3-Embedding-0.6B (Q8_0) + llama.cpp runtime | the librarian's own pinned manifest | hash-checked at build time |
+
+"Newest" is resolved at build time, so each release ships current dependencies.
+`components-<platform>.json` on the release lists exactly what shipped (name,
+version, source, sha256), and the build fails rather than ship a download that
+does not match its published digest.
+
+### How the app uses them
+
+* `resources/tools/bin` is put first on `PATH` at startup (`src/main/bundled-tools.ts`)
+  and handed to the background refresh job (launchd / Task Scheduler), so a tool
+  the user already has never shadows the version that was tested with the app.
+* npm CLIs (`mailcrawl`, `qmd`, `kordoc`) and `autorag` are launched through a tiny
+  native launcher (`scripts/release/shim`) that runs the bundled Node. Windows
+  cannot spawn a script by name; this makes them real executables on both platforms.
+* On first launch the embedding model and llama.cpp runtime are copied from
+  `resources/seed` into `~/.autorag/{models,runtime}` (`src/main/seed-assets.ts`),
+  verified by SHA-256, never overwriting an existing file. A fresh install indexes
+  offline; there is no 650 MB download step. If seeding fails the librarian
+  downloads the same pinned files on first use, as before.
+
+### Deliberately not bundled
+
+* `fsearch-cli`: GPL-2.0-or-later and linked against GTK; the librarian already treats it
+  as an optional separate install and falls back to a filesystem walk.
+* CUDA builds of `node-llama-cpp` (500 MB, needs an NVIDIA toolkit); CPU and Vulkan are kept.
+* Other platforms' native add-ons. Intel Macs, Windows on ARM and Linux are not shipped.
+
+### Known limitation
+
+`createEmbeddingRuntime` in the librarian defaults its platform to
+`darwin-arm64-metal` unless a caller passes `platform`. On Windows the shipped
+runtime is `win-x64-cpu`, which is what gets seeded; the model path is
+platform-independent, but the librarian should select the platform from
+`process.platform` itself. Verify on a Windows install that the first index
+starts the embedder; if it asks for a macOS runtime, that is an upstream fix in
+`src/embedding-runtime/index.ts`.
+
+## Runners
+
+GitHub-hosted runners are currently refused for this repository ("recent account
+payments have failed or your spending limit needs to be increased"), so the
+workflow reads its runners from repository **variables** (Settings → Secrets and
+variables → Actions → Variables), as JSON:
+
+| Variable | Hosted (default) | Own machine |
+|---|---|---|
+| `RELEASE_RUNNER_MAC` | `"macos-15"` | `["self-hosted","macOS","ARM64"]` |
+| `RELEASE_RUNNER_WIN` | `"windows-2022"` | `["self-hosted","Windows","X64","autorag-qa"]` |
+
+Fix billing and leave both unset, or register your own machines. A Mac runner:
+
+```sh
+mkdir ~/actions-runner && cd ~/actions-runner
+# download the macOS ARM64 runner from Settings → Actions → Runners → New self-hosted runner
+./config.sh --url https://github.com/NomaDamas/AutoRAG-app --token <TOKEN> --labels macOS,ARM64
+./svc.sh install && ./svc.sh start
+```
+
+The existing Windows runner (`win-ssh-pc`) already carries the `autorag-qa` label.
+Release runs only on `release: published` and manual dispatch, both of which need
+repository write access, so the safety rules in `docs/windows-runner.md` still hold.
+Never add `pull_request` to this workflow.
+
+A runner needs about 20 GB free and Rust, Go, Node 24, and Bun reachable (the
+workflow installs them with `setup-*` actions where it can). A Mac runner that is
+your daily machine will be busy for roughly 20 minutes per release.
+
+## Signing (you have to do this once)
+
+Without signing, both installers still work, but the OS warns:
+macOS says the app "cannot be verified" (right-click → Open gets past it) and
+Windows SmartScreen shows "Windows protected your PC". Signing removes both.
+The workflow signs automatically when the secrets below exist; nothing in the
+repository ever holds a credential.
+
+### macOS: Developer ID signing and notarization
+
+You already have a **Developer ID Application** certificate
+(`Developer ID Application: Dongkyu Kim (M23FFWRBMY)`) in your login keychain.
+
+1. Export it: Keychain Access → My Certificates → right-click the certificate →
+   Export → `.p12`, with a password.
+2. Create an App Store Connect API key (notarization): App Store Connect → Users
+   and Access → Integrations → Team Keys → "+" with role *Developer*. Download
+   `AuthKey_XXXXXXXXXX.p8` (downloadable once). Note the **Key ID** and **Issuer ID**.
+3. Store the secrets (repository → Settings → Secrets and variables → Actions):
+
+```sh
+gh secret set MAC_CERTIFICATE_P12      --repo NomaDamas/AutoRAG-app < <(base64 -i Certificate.p12)
+gh secret set MAC_CERTIFICATE_PASSWORD --repo NomaDamas/AutoRAG-app          # the .p12 password
+gh secret set APPLE_API_KEY_P8         --repo NomaDamas/AutoRAG-app < <(base64 -i AuthKey_XXXXXXXXXX.p8)
+gh secret set APPLE_API_KEY_ID         --repo NomaDamas/AutoRAG-app          # e.g. ABC123DEFG
+gh secret set APPLE_API_ISSUER         --repo NomaDamas/AutoRAG-app          # UUID from the Keys page
+```
+
+With the certificate alone the app is signed (no "unidentified developer" prompt on
+most Macs); with the API key as well it is also notarized and stapled, which is
+what makes it open with no prompt at all. Notarization of a 2.8 GB app takes
+several minutes.
+
+### Windows: code signing
+
+Windows has no equivalent of a free certificate. Options, cheapest first:
+
+1. **Azure Trusted Signing** (about $10/month, supported by the workflow). Create a
+   Trusted Signing account and a certificate profile in Azure, complete identity
+   validation (an organization with 3+ years of history, or an individual), create
+   an app registration with the *Trusted Signing Certificate Profile Signer* role, then:
+
+```sh
+gh secret set AZURE_TENANT_ID     --repo NomaDamas/AutoRAG-app
+gh secret set AZURE_CLIENT_ID     --repo NomaDamas/AutoRAG-app
+gh secret set AZURE_CLIENT_SECRET --repo NomaDamas/AutoRAG-app
+gh variable set AZURE_CODESIGN_ENDPOINT --repo NomaDamas/AutoRAG-app --body https://eus.codesigning.azure.net
+gh variable set AZURE_CODESIGN_ACCOUNT  --repo NomaDamas/AutoRAG-app --body <account name>
+gh variable set AZURE_CODESIGN_PROFILE  --repo NomaDamas/AutoRAG-app --body <certificate profile name>
+```
+
+2. A traditional OV/EV code-signing certificate from a CA. EV removes the SmartScreen
+   warning immediately; OV and Azure builds earn reputation over some downloads.
+   Since 2023 these private keys live on hardware tokens or cloud HSMs, so a plain
+   `.pfx` secret is usually not possible; tell me which CA and the config is a small change.
+
+3. Ship unsigned and document the SmartScreen "More info → Run anyway" step.
+
+## Before the first release
+
+1. Set the runner variables above (or fix billing).
+2. Add the signing secrets you want.
+3. Run the rehearsal: `gh workflow run release.yml -f version=v0.1.0-rc.1`, download the
+   artifacts, and install them on a clean machine.
+4. `gh release create v0.1.0 --generate-notes`.
+
+## Local build
+
+```sh
+bun install --frozen-lockfile
+bun run build
+node scripts/release/stage-tools.mjs            # ~15 min first time; cached under build/.cache
+node scripts/release/verify-bundle.mjs build/stage/darwin-arm64/tools
+bun run release:pack:mac                        # or release:pack:win on Windows
+node scripts/release/smoke-installed.mjs        # installs dist/*.dmg|exe in a temp dir and launches it
+```
+
+Each platform is staged on a matching host: crates and npm add-ons are compiled
+or fetched for the machine they run on. Needs Rust, Go (Windows only), and Node 24.
+
+`scripts/release/stage-tools.mjs --only minsync,rhwp` re-stages just those tools.

@@ -21,14 +21,15 @@ describe("bundled tools on PATH", () => {
 		const resources = temp();
 		mkdirSync(join(resources, "tools", "bin"), { recursive: true });
 		const bin = join(resources, "tools", "bin");
-		const env: NodeJS.ProcessEnv = { PATH: ["/usr/bin", bin, "/opt/homebrew/bin"].join(delimiter) };
-		expect(applyBundledTools({ resourcesPath: resources, env, platform: "darwin" })).toBe(join(resources, "tools"));
-		expect(env.PATH?.split(delimiter)).toEqual([bin, "/usr/bin", "/opt/homebrew/bin"]);
+		// Host platform and delimiter: a Windows temp directory contains `:`, so a fixed `:` separator would split it.
+		const env: NodeJS.ProcessEnv = { PATH: [join(tmpdir(), "a"), bin, join(tmpdir(), "b")].join(delimiter) };
+		expect(applyBundledTools({ resourcesPath: resources, env })).toBe(join(resources, "tools"));
+		expect(env.PATH?.split(delimiter)).toEqual([bin, join(tmpdir(), "a"), join(tmpdir(), "b")]);
 	});
 
 	it("does nothing when the build carries no tools (development)", () => {
 		const env: NodeJS.ProcessEnv = { PATH: "/usr/bin" };
-		expect(applyBundledTools({ resourcesPath: temp(), env, platform: "darwin" })).toBeNull();
+		expect(applyBundledTools({ resourcesPath: temp(), env })).toBeNull();
 		expect(env.PATH).toBe("/usr/bin");
 	});
 
