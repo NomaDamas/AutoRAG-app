@@ -86,7 +86,11 @@ describe("resolveKeyAction", () => {
 		expect(resolveKeyAction(key("z", { ctrl: true }), finder)).toEqual({ type: "undo" });
 		expect(resolveKeyAction(key("z", { meta: true }), { ...finder, typing: true })).toBeNull();
 		expect(resolveKeyAction(key("z", { meta: true }), { zone: "evidence", typing: false })).toBeNull();
-		expect(resolveKeyAction(key("z", { meta: true, shift: true }), finder)).toBeNull();
+		expect(resolveKeyAction(key("z", { meta: true, shift: true }), finder)).toEqual({ type: "redo" });
+		expect(resolveKeyAction(key("Z", { meta: true, shift: true }), finder)).toEqual({ type: "redo" });
+		expect(resolveKeyAction(key("z", { ctrl: true, shift: true }), finder)).toEqual({ type: "redo" });
+		expect(resolveKeyAction(key("z", { meta: true, shift: true }), { ...finder, typing: true })).toBeNull();
+		expect(resolveKeyAction(key("z", { meta: true, shift: true }), { zone: "evidence", typing: false })).toBeNull();
 	});
 
 	it("leaves text copy/cut/paste to the focused field and never hijacks the evidence zone", () => {

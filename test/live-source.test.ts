@@ -78,6 +78,8 @@ function fakeFs(result: FsVersionFamiliesResult): FsBridge {
 		clipboardSet: async () => {},
 		clipboardGet,
 		undo: async () => ({ ok: false, empty: true, failed: [] }),
+		redo: async () => ({ ok: false, empty: true, failed: [] }),
+		recordCreated: async () => {},
 		copyPathsToClipboard: async () => {},
 		startDrag: () => {},
 		versionFamilies: async () => result,
@@ -236,7 +238,7 @@ describe("live Finder source adapters", () => {
 		expect(await source.exists("Documents/회의록_0922.md")).toBe(true);
 
 		// When undoing the copy
-		expect(await source.undo()).toEqual({ ok: true, empty: false, failed: [] });
+		expect(await source.undo()).toEqual({ ok: true, empty: false, failed: [], operation: "copy" });
 
 		// Then the copy is gone and the original stays
 		expect(await source.exists("Documents/회의록_0922.md")).toBe(false);
@@ -247,7 +249,7 @@ describe("live Finder source adapters", () => {
 		expect(await source.exists("Desktop/Q3_캠페인_브리프_초안.docx")).toBe(false);
 
 		// When undoing the move
-		expect(await source.undo()).toEqual({ ok: true, empty: false, failed: [] });
+		expect(await source.undo()).toEqual({ ok: true, empty: false, failed: [], operation: "move" });
 
 		// Then the file is back in its original folder
 		expect(await source.exists("Desktop/Q3_캠페인_브리프_초안.docx")).toBe(true);
@@ -257,6 +259,58 @@ describe("live Finder source adapters", () => {
 	it("fixture undo reports empty when nothing was transferred", async () => {
 		const source = createFixtureSource();
 		await expect(source.undo()).resolves.toEqual({ ok: false, empty: true, failed: [] });
+	});
+
+	it("fixture history walks rename, duplicate, createFolder, and trash back and forward", async () => {
+		const source = createFixtureSource();
+
+		// Given a rename, a duplicate, a new folder, and a trash, in that order
+		await source.rename("Desktop/회의록_0922.md", "renamed.md");
+		await source.duplicate(["Desktop/renamed.md"]);
+		const folder = await source.createFolder("Desktop");
+		await source.trash(["Desktop/주간보고_0919.pptx"]);
+
+		// When undoing all four
+		const operations = [];
+		for (let step = 0; step < 4; step += 1) operations.push((await source.undo()).operation);
+
+		// Then they came back newest first, and every effect is reversed
+		expect(operations).toEqual(["trash", "createFolder", "duplicate", "rename"]);
+		expect(await source.exists("Desktop/주간보고_0919.pptx")).toBe(true);
+		expect(await source.exists(folder.path)).toBe(false);
+		expect(await source.exists("Desktop/renamed copy.md")).toBe(false);
+		expect(await source.exists("Desktop/회의록_0922.md")).toBe(true);
+		expect(await source.undo()).toEqual({ ok: false, empty: true, failed: [] });
+
+		// When redoing the rename and the duplicate
+		expect((await source.redo()).operation).toBe("rename");
+		expect((await source.redo()).operation).toBe("duplicate");
+
+		// Then both are applied again
+		expect(await source.exists("Desktop/renamed.md")).toBe(true);
+		expect(await source.exists("Desktop/renamed copy.md")).toBe(true);
+	});
+
+	it("fixture: a new operation clears the redo history", async () => {
+		const source = createFixtureSource();
+		await source.rename("Desktop/회의록_0922.md", "b.md");
+		await source.undo();
+		await source.createFolder("Desktop");
+		await expect(source.redo()).resolves.toEqual({ ok: false, empty: true, failed: [] });
+	});
+
+	it("fixture records an extracted folder: ⌘Z trashes it, redo puts it back", async () => {
+		const source = createFixtureSource();
+		await source.createFolder("Desktop");
+		await source.recordCreated("Desktop/untitled folder", "extract");
+
+		expect((await source.undo()).operation).toBe("extract");
+		expect(await source.exists("Desktop/untitled folder")).toBe(false);
+		expect(await source.exists("Trash/untitled folder")).toBe(true);
+
+		expect((await source.redo()).operation).toBe("extract");
+		expect(await source.exists("Desktop/untitled folder")).toBe(true);
+		await expect(source.recordCreated("Desktop/nope", "compress")).rejects.toThrow();
 	});
 
 	it("bridge source undo forwards to the fs bridge", async () => {
@@ -281,7 +335,7 @@ describe("live Finder source adapters", () => {
 		expect(await source.exists("Desktop/회의록_0922.md")).toBe(false);
 
 		// When undoing the trash
-		expect(await source.undo()).toEqual({ ok: true, empty: false, failed: [] });
+		expect(await source.undo()).toEqual({ ok: true, empty: false, failed: [], operation: "trash" });
 
 		// Then the row is back in its folder
 		expect(await source.exists("Desktop/회의록_0922.md")).toBe(true);
@@ -304,7 +358,7 @@ describe("live Finder source adapters", () => {
 		expect(await source.exists("Trash/회의록_0922.md")).toBe(false);
 
 		// When undoing the restore
-		expect(await source.undo()).toEqual({ ok: true, empty: false, failed: [] });
+		expect(await source.undo()).toEqual({ ok: true, empty: false, failed: [], operation: "restore" });
 
 		// Then the payload is back in the Trash and restorable again
 		expect(await source.exists("Desktop/회의록_0922.md")).toBe(false);

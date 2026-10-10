@@ -36,7 +36,7 @@ import {
 import type { NewFileFormatId } from "../../../shared/new-file-contract";
 import { planTransfer } from "../state/file-transfer";
 import type { FileActionTarget } from "../state/file-actions";
-import { batchToast, emptyStateText, emptyTrashToast, indexToast } from "../state/format";
+import { batchToast, emptyStateText, emptyTrashToast, historyToast, indexToast } from "../state/format";
 import { evidenceSourceUrl, findEvidenceSource } from "../state/evidence";
 import type { FocusZone } from "../state/keymap";
 import { nearestExistingAncestor, pruneSelection, withoutPaths } from "../state/live";
@@ -227,8 +227,10 @@ export interface FinderController {
 	cutSelection(): void;
 	/** Paste the file clipboard into the current folder (⌘V; `move` is ⌥⌘V). */
 	pasteClipboard(move: boolean): void;
-	/** Undo the most recent recorded copy/move transfer (⌘Z). */
-	undoLastTransfer(): void;
+	/** Undo the newest recorded file operation (⌘Z). */
+	undoLastOperation(): void;
+	/** Redo the operation the last undo took back (⇧⌘Z). */
+	redoLastOperation(): void;
 	/** True while the focused tab lists the Trash location itself. */
 	readonly inTrashLocation: boolean;
 	/** Put the selected trashed rows back where they came from (Trash view). */
@@ -1147,7 +1149,10 @@ export function useFinderController(
 						.run([entry.path], target.request)
 						.then((outcome) => {
 							showToast(outcome.note);
-							if (outcome.output !== null) refresh();
+							if (outcome.output !== null) {
+								recordActionOutput(target.request.kind, outcome.output);
+								refresh();
+							}
 						})
 						.catch(reportError);
 					return;
@@ -1310,25 +1315,33 @@ export function useFinderController(
 		});
 
 	/**
-	 * ⌘Z: undo the most recent recorded transfer. An empty record is a no-op
-	 * (Finder does nothing either); a partially-failed undo reports the first
-	 * verbatim reason.
+	 * Keep an Action's output in the undo history: ⌘Z moves a freshly extracted
+	 * folder or compressed archive to the Trash. Other Actions are not recorded.
 	 */
-	const undoLastTransfer = useLatestCallback((): void => {
-		source
-			.undo()
+	const recordActionOutput = useLatestCallback((kind: string, output: string): void => {
+		if (kind !== "extract" && kind !== "compress") return;
+		source.recordCreated(output, kind).catch((error: unknown) => {
+			console.warn(`undo history: ${kind} output not recorded`, error);
+		});
+	});
+
+	/**
+	 * ⌘Z / ⇧⌘Z: walk the file-operation history. An empty history is a no-op
+	 * (Finder does nothing either); otherwise the toast names the operation
+	 * ("이름 변경 취소") or the first failed step's verbatim reason.
+	 */
+	const stepHistory = useLatestCallback((direction: "undo" | "redo"): void => {
+		(direction === "undo" ? source.undo() : source.redo())
 			.then((outcome) => {
-				if (outcome.empty) return;
-				if (outcome.failed.length > 0) {
-					showToast(`되돌리기 실패: ${outcome.failed[0]?.message ?? "알 수 없는 오류"}`);
-					refresh();
-					return;
-				}
-				showToast("마지막 파일 작업을 되돌렸습니다");
+				const message = historyToast(direction, outcome);
+				if (message === null) return;
+				showToast(message);
 				refresh();
 			})
 			.catch(reportError);
 	});
+	const undoLastOperation = useLatestCallback((): void => stepHistory("undo"));
+	const redoLastOperation = useLatestCallback((): void => stepHistory("redo"));
 
 	const copySelection = useLatestCallback(() => copyPaths(selection.keys));
 	const cutSelection = useLatestCallback(() => cutPaths(selection.keys));
@@ -1501,7 +1514,10 @@ export function useFinderController(
 						.run(targets, { kind: action })
 						.then((outcome) => {
 							showToast(outcome.note);
-							if (outcome.output !== null) refresh();
+							if (outcome.output !== null) {
+								recordActionOutput(action, outcome.output);
+								refresh();
+							}
 						})
 						.catch(reportError);
 					return;
@@ -1664,7 +1680,8 @@ export function useFinderController(
 			copySelection,
 			cutSelection,
 			pasteClipboard,
-			undoLastTransfer,
+			undoLastOperation,
+			redoLastOperation,
 		}),
 		[
 			dismiss,
@@ -1686,7 +1703,8 @@ export function useFinderController(
 			copySelection,
 			cutSelection,
 			pasteClipboard,
-			undoLastTransfer,
+			undoLastOperation,
+			redoLastOperation,
 		],
 	);
 	useFinderKeyboard({
@@ -1848,7 +1866,8 @@ export function useFinderController(
 		copySelection,
 		cutSelection,
 		pasteClipboard,
-		undoLastTransfer,
+		undoLastOperation,
+		redoLastOperation,
 		inTrashLocation,
 		putBackSelection,
 		requestEmptyTrash,

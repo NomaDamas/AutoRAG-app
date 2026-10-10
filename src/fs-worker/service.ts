@@ -265,6 +265,12 @@ export function createFsWorkerService(deps: FsWorkerServiceDeps): FsWorkerServic
 		clipboardSet: (args) => fsService.clipboardSet(clipboardArg(args[0])),
 		clipboardGet: () => fsService.clipboardGet(),
 		undo: () => fsService.undo(),
+		redo: () => fsService.redo(),
+		recordCreated: (args) => {
+			const operation = args[1];
+			if (operation !== "extract" && operation !== "compress") throw new TypeError("operation must be extract or compress");
+			return fsService.recordCreated(stringArg(args, 0, "path"), operation);
+		},
 		copyPathsToClipboard: (args) => fsService.copyPathsToClipboard(stringsArg(args, 0, "paths")),
 		versionFamilies: () => versionFamilies.result(),
 		refreshVersionFamilies: () => versionFamilies.refresh(),

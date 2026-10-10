@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { RECENTS_PATH } from "../src/shared/fs-contract";
 import {
 	batchToast,
+	historyToast,
 	emptyStateText,
 	formatModified,
 	formatSize,
@@ -116,6 +117,39 @@ describe("toasts", () => {
 	it("reports index include and exclude", () => {
 		expect(indexToast("a.pdf", false)).toBe("a.pdf — 인덱싱에서 제외했습니다");
 		expect(indexToast("a.pdf", true)).toBe("a.pdf — 인덱싱에 포함했습니다");
+	});
+
+	it("names the operation ⌘Z undid and ⇧⌘Z redid", () => {
+		expect(historyToast("undo", { ok: true, empty: false, failed: [], operation: "rename" })).toBe("이름 변경 취소");
+		expect(historyToast("undo", { ok: true, empty: false, failed: [], operation: "copy" })).toBe("복사 취소");
+		expect(historyToast("redo", { ok: true, empty: false, failed: [], operation: "trash" })).toBe("휴지통으로 이동 다시 실행");
+		expect(historyToast("undo", { ok: true, empty: false, failed: [], operation: "extract" })).toBe("압축 해제 취소");
+	});
+
+	it("shows the first verbatim reason of a failed undo, naming the operation and the item", () => {
+		expect(
+			historyToast("undo", {
+				ok: false,
+				empty: false,
+				failed: [{ path: "/d/b.txt", message: 'A file or folder named "a.txt" already exists' }],
+				operation: "rename",
+			}),
+		).toBe('이름 변경 취소 실패: b.txt — A file or folder named "a.txt" already exists');
+		expect(
+			historyToast("redo", {
+				ok: false,
+				empty: false,
+				failed: [
+					{ path: "/d/x", message: "EACCES" },
+					{ path: "/d/y", message: "EACCES" },
+				],
+				operation: "move",
+			}),
+		).toBe("이동 다시 실행 실패: x — EACCES (외 1개 항목)");
+	});
+
+	it("says nothing when the history is empty", () => {
+		expect(historyToast("undo", { ok: false, empty: true, failed: [] })).toBeNull();
 	});
 });
 

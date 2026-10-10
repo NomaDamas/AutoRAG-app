@@ -18,8 +18,8 @@
  *      the rows can then be dropped into a folder inside it;
  *   8. dwelling on a tab and dropping on its listing background moves the row
  *      into that tab's folder;
- *   9. ⌘Z undoes the most recent ⌘C/⌘V copy and the most recent ⌘X/⌘V move,
- *      and a second ⌘Z does nothing once the record is consumed;
+ *  9. ⌘Z undoes the most recent ⌘C/⌘V copy and the most recent ⌘X/⌘V move,
+ *      and a second ⌘Z steps further back through the history;
  *  10. ⌘C/⌘V while the search field has focus never touches the filesystem.
  *
  * Drags go through Chromium's native drag path (`Input.dispatchDragEvent`, the
@@ -31,7 +31,7 @@
  * `bun scripts/manual-qa/run-qa-finder-file-ops.mjs`
  */
 
-import { existsSync, mkdirSync, mkdtempSync, readdirSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -42,8 +42,13 @@ const EVIDENCE = join(ROOT, ".omo", "evidence", "ai-finder-app", "qa-file-ops");
 mkdirSync(EVIDENCE, { recursive: true });
 
 const FINDER_DRAG_TYPE = "application/x-autorag-finder-entries";
-/** Copy shown by the AI Search panel's drag overlay. */
-const DOCK_OVERLAY = "여기로 끌어서 AI에게 물어보기";
+/**
+ * Copy shown by the AI Search panel's drag overlay. The lane runs in English
+ * (`launchFinder` seeds `en`), so read the real string from the locale file —
+ * a hard-coded Korean literal never matches and makes "no overlay lingers"
+ * checks pass vacuously.
+ */
+const DOCK_OVERLAY = JSON.parse(readFileSync(join(ROOT, "src", "shared", "i18n", "locales", "en.json"), "utf8")).aiSearch.dropPrompt;
 
 const home = mkdtempSync(join(tmpdir(), "ulw-fileops-home-"));
 const top = join(home, "Documents", "qa-file-ops");
@@ -305,6 +310,9 @@ try {
 	const backgroundY = listBox.y + listBox.height - 24;
 	await page.mouse.move(backgroundX, backgroundY, { steps: 8 });
 	await page.mouse.move(backgroundX + 3, backgroundY, { steps: 1 });
+	// Release only once the listing background accepted the drag (its drop
+	// highlight is on); releasing on the same tick races the new tab's listing.
+	await page.waitForFunction(() => document.querySelector(".list")?.className.includes("accent-drop-hover") ?? false, undefined, { timeout: 5_000 });
 	await page.mouse.up();
 	const backgroundDeadline = Date.now() + 10_000;
 	while (!existsSync(join(dirB, "background-me.txt")) && Date.now() < backgroundDeadline) await page.waitForTimeout(150);
@@ -387,14 +395,18 @@ try {
 		`root=${listNames(top)} B=${listNames(dirB)}`,
 	);
 
-	const afterUndo = listNames(top).length + listNames(dirA).length + listNames(dirB).length + listNames(sub).length;
+	// The history is multi-step (issue #89): a second ⌘Z undoes the operation
+	// before the one just undone, so the folders change again.
+	const snapshot = () => JSON.stringify([top, dirA, dirB, sub].map((dir) => listNames(dir)));
+	const afterUndo = snapshot();
 	await page.waitForTimeout(800);
 	await page.keyboard.press("Meta+z");
-	await page.waitForTimeout(600);
+	const secondDeadline = Date.now() + 10_000;
+	while (snapshot() === afterUndo && Date.now() < secondDeadline) await page.waitForTimeout(150);
 	check(
-		"a second ⌘Z does nothing once the record is consumed",
-		listNames(top).length + listNames(dirA).length + listNames(dirB).length + listNames(sub).length === afterUndo,
-		`entries=${listNames(top).length + listNames(dirA).length + listNames(dirB).length + listNames(sub).length} (was ${afterUndo})`,
+		"a second ⌘Z undoes the operation before the last one",
+		snapshot() !== afterUndo,
+		`before=${afterUndo} after=${snapshot()}`,
 	);
 	/* --------------------------------------- 12. ⌘V/⌘Z while typing stay text */
 	const count = () => listNames(top).length + listNames(dirA).length + listNames(dirB).length + listNames(sub).length;
