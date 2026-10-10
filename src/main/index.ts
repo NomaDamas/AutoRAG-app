@@ -29,8 +29,8 @@ import { DEFAULT_CODE_FOLDER_NAMES, isJsonObject, SETTINGS_CHANNELS } from "../s
 import { LOCAL_REFRESH_METHODS } from "./index-refresh";
 import { INDEX_ACTIVITY_CHANNELS } from "../shared/index-activity-contract";
 import { createIndexActivityService } from "./index-activity";
-import { createActivityJournal, journalSingleRun, LOCAL_ITEM, sourceItem } from "./index-activity-journal";
-import type { RefreshLockHolder } from "./refresh-lock";
+import { createActivityJournal, journalSingleRun, LOCAL_ITEM } from "./index-activity-journal";
+import { busyMessage, lockDataSources } from "./locked-datasources";
 import { schedulePaths, withRefreshLock } from "./refresh-schedule";
 import { createRefreshScheduler } from "./refresh-scheduler";
 import { createIconProvider } from "./file-icon";
@@ -464,11 +464,15 @@ app.whenReady().then(async () => {
 		cwd: process.cwd(),
 		discrawlEmbeddingRuntime: () => embeddingSettings?.discrawlRuntime(),
 	});
+	// Every datasource sync the app starts (Settings buttons, embedding rebuild) goes through this one wrapper:
+	// it takes the shared refresh lock and is journaled, so it shows in the indexing progress.
+	const schedulePath = schedulePaths(autoragConfigPath());
+	const lockedDataSources = lockDataSources(dataSources, schedulePath);
 	const embeddingService = createEmbeddingSettingsService({
 		env: process.env,
 		cwd: process.cwd(),
 		config: autoRagConfig,
-		dataSources,
+		dataSources: lockedDataSources,
 	});
 	embeddingSettings = embeddingService;
 	// A persisted local-server embedder points mailcrawl at the app's ephemeral
@@ -496,26 +500,12 @@ app.whenReady().then(async () => {
 		return registered === enabled;
 	};
 	let appliedLaunchAtLogin: boolean | null = null;
-	const schedulePath = schedulePaths(autoragConfigPath());
 	const refreshScheduler = createRefreshScheduler({
 		platform: process.platform,
 		execPath: process.execPath,
 		jobPath: join(import.meta.dirname, "refresh-job.js"),
 		configPath: autoragConfigPath,
 	});
-	// A manual refresh or sync takes the same lock as the scheduled job, so the two never run at once.
-	const busyMessage = (holder: RefreshLockHolder): string =>
-		holder.owner === "scheduled-job" ? "백그라운드 새로 고침이 실행 중입니다. 끝난 뒤 다시 시도하세요." : "다른 새로 고침이 실행 중입니다. 끝난 뒤 다시 시도하세요.";
-	const lockedDataSources: typeof dataSources = {
-		...dataSources,
-		sync: (id) =>
-			withRefreshLock(
-				schedulePath.lock,
-				"manual-sync",
-				() => journalSingleRun(createActivityJournal(schedulePath.activity, { owner: "manual-sync" }), sourceItem(id), () => dataSources.sync(id)),
-				(holder) => ({ id, ok: false, state: "failed", chunkCount: null, indexedAt: null, durationMs: 0, diagnostics: [], error: busyMessage(holder) }),
-			),
-	};
 	const settingsService = createSettingsService({
 		directory: join(app.getPath("userData"), "settings"),
 		dataSources: lockedDataSources,
