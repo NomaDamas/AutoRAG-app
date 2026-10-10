@@ -214,9 +214,21 @@ resumes at the same step.
   `workspacePath` at the app's cwd seed is moved to `<AutoRAG home>/workspace`.
   The Finder opens only after the first index succeeds.
 
-Account sign-in and plan checkout are placeholders: they record the choice in
-the onboarding draft so QA can walk the full flow, but no account is created,
-no card data is stored or sent, and nothing is charged.
+Account and plan are real. The account step signs in through the system
+browser (OAuth 2.0 authorization code + PKCE over a loopback redirect, RFC 8252)
+against the hosted AutoRAG service (`AUTORAG_BASE_URL`, default
+`https://api.dazziapp.com`); no password and no card number is typed into the
+app. The returned API key (`AUTORAG_API_KEY`) lives only in the encrypted
+credential store and `process.env`, exactly like a BYOK key; the renderer sees
+an `AccountStatus` (email, plan, subscription state, weekly credits), never the
+key. Air and Pro open the service's hosted checkout in the browser, and the plan
+step continues once the server reports that plan; cancel, refund, and the
+payment method live in the hosted billing portal (Settings › 구독 및 사용량).
+Skipping the account is the BYOK path. For a managed plan the first index also
+points `model` (and question decomposition) at the account's models, through
+the librarian's `autorag` provider (the config carries an explicit
+`baseUrl` and `apiKeyEnv`, never the key). The corpus-text rule is unchanged:
+embeddings stay on this Mac.
 
 Onboarding state lives in `<userData>/onboarding/state.json`. Set
 `AUTORAG_SKIP_ONBOARDING=1` to open the Finder directly; the manual-QA launcher

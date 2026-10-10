@@ -102,13 +102,15 @@ try {
 	await shot("02-permissions");
 	await primary.click();
 
-	// account (placeholder sign-in)
+	// account: signing in is real (system browser); the lane takes the no-account
+	// BYOK path, which must not need a server. The real sign-in is run-qa-account.mjs.
 	await page.waitForSelector(".onb .auth-card");
 	check("account step", (await heading()).includes("계정"));
+	check("signing in is gated until an account exists", await primary.isDisabled());
 	await shot("03-account");
-	await page.locator(".onb .auth-btn.google").click();
+	await page.locator(".onb .auth-card .action-row button.secondary").click();
 	await page.waitForSelector(".onb .folder-grid", { timeout: 6000 });
-	check("placeholder sign-in advances to folders", true);
+	check("skipping the account (BYOK) advances to folders", true);
 
 	// folders: swap the real candidates for fixtures picked through the dialog.
 	await app.evaluate(({ dialog }, paths) => {
@@ -175,15 +177,14 @@ try {
 	}
 	await primary.click();
 
-	// plan: Pro opens the placeholder checkout (no charge); Free keeps the lane offline.
+	// plan: with no account, a paid plan stays gated behind sign-in (no checkout,
+	// no charge); BYOK needs no account and keeps the lane offline.
 	await page.waitForSelector(".onb .plan-card");
 	await shot("07-plan");
 	await page.locator(".onb .plan-card").nth(2).click();
-	await primary.click();
-	await page.waitForSelector(".onb .scrim .pay-grid", { timeout: 3000 });
-	check("paid plan opens the placeholder checkout", true);
-	await shot("07b-plan-pay");
-	await page.keyboard.press("Escape");
+	check("a paid plan without an account cannot continue", await primary.isDisabled());
+	check("the plan step says to sign in first", (await page.locator(".onb .screen-copy .auth-note").count()) === 1);
+	await shot("07b-plan-needs-account");
 	// BYOK against the local stub: real verification request, real encrypted
 	// key storage, real config write.
 	await page.locator(".onb .plan-card").nth(3).click();

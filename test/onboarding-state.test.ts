@@ -27,7 +27,6 @@ async function writeState(directory: string, state: unknown): Promise<void> {
 const DRAFT: OnboardingDraft = {
 	version: 1,
 	stepId: "folders",
-	account: null,
 	notifications: false,
 	network: false,
 	launchAtLogin: false,
@@ -35,7 +34,6 @@ const DRAFT: OnboardingDraft = {
 	sources: [],
 	plan: "free",
 	planConfirmed: false,
-	paid: null,
 	model: null,
 };
 
@@ -69,6 +67,7 @@ function makeDeps(userDataDir: string, env: NodeJS.ProcessEnv = {}): OnboardingS
 		settings: { get: async () => DEFAULT_SETTINGS, set: async (patch) => ({ ...DEFAULT_SETTINGS, ...patch }) },
 		detectSources: async () => ({ sources: [] }),
 		gitToken: async () => null,
+		useManagedModel: async () => undefined,
 		detectModels: async () => [],
 		verifyModel: async () => ({ ok: false, error: "unused" }),
 		send: () => undefined,
@@ -151,6 +150,35 @@ describe("createOnboardingService persistence", () => {
 		for (let tick = 0; tick < 20 && service.isIndexing(); tick += 1) await Promise.resolve();
 		expect((await service.indexStatus()).state).toBe("success");
 		expect(service.isIndexing()).toBe(false);
+	});
+
+	it("points the agent at the account's models on a managed plan, and leaves BYOK alone", async () => {
+		const managedCalls: string[] = [];
+		const run = async (plan: "free" | "air" | "pro" | "byok", useManagedModel: () => Promise<unknown>): Promise<void> => {
+			const directory = await workDir();
+			const service = createOnboardingService({ ...makeDeps(directory), useManagedModel });
+			await service.startIndexing({ folders: ["/Users/me/Documents"], sources: [], plan, model: null });
+			service.dispose();
+		};
+		for (const plan of ["free", "air", "pro"] as const) await run(plan, async () => managedCalls.push(plan));
+		await run("byok", async () => managedCalls.push("byok"));
+
+		expect(managedCalls).toEqual(["free", "air", "pro"]);
+	});
+
+	it("still indexes when the account's models cannot be reached", async () => {
+		const directory = await workDir();
+		const service = createOnboardingService({
+			...makeDeps(directory),
+			useManagedModel: async () => {
+				throw new Error("offline");
+			},
+		});
+
+		const status = await service.startIndexing({ folders: ["/Users/me/Documents"], sources: [], plan: "pro", model: null });
+
+		expect(status.state).toBe("running");
+		service.dispose();
 	});
 });
 

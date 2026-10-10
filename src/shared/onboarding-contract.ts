@@ -10,13 +10,12 @@
  * permission probes, folder pre-scans, connector detection, key verification
  * (secrets never cross back to the renderer), and the first index run.
  *
- * Deliberately not implemented (the account and billing backends do not exist
- * yet, so onboarding QA can still walk the whole flow):
- * - signing in only records the chosen method in the draft;
- * - checkout only records the chosen paid plan; card fields are never stored
- *   or sent anywhere;
- * - cloud embedding stays unavailable: corpus text never goes to a remote
- *   embedder (AGENTS.md), so the first index always embeds on this machine.
+ * Account and plan are real: the account step signs in through the system
+ * browser (account-contract.ts) and the plan step reads the entitlement the
+ * hosted service reports and opens its hosted checkout. The draft keeps no
+ * account or payment state; both come from `window.autorag.account`.
+ * Cloud embedding stays unavailable: corpus text never goes to a remote
+ * embedder (AGENTS.md), so the first index always embeds on this machine.
  */
 
 export const ONBOARDING_CHANNELS = {
@@ -85,8 +84,6 @@ export type ByokProviderId = "anthropic" | "openai" | "openrouter" | "google" | 
  */
 export type SourceId = "kakao" | "slack" | "discord" | "telegram" | "whatsapp" | "mailcrawl" | "github" | "obsidian";
 
-export type AccountMethod = "apple" | "google" | "email";
-
 export interface OnboardingFolderChoice {
 	readonly path: string;
 	readonly selected: boolean;
@@ -110,8 +107,6 @@ export interface OnboardingModelChoice {
 export interface OnboardingDraft {
 	readonly version: 1;
 	readonly stepId: OnboardingStepId;
-	/** Placeholder sign-in: the chosen method only (no account backend yet). */
-	readonly account: { readonly method: AccountMethod; readonly email: string | null } | null;
 	readonly notifications: boolean;
 	/** Windows: outbound network reachability was confirmed. */
 	readonly network: boolean;
@@ -122,8 +117,6 @@ export interface OnboardingDraft {
 	readonly plan: PlanId;
 	/** The plan step was passed once; it then leaves the step list (back skips it). */
 	readonly planConfirmed: boolean;
-	/** Placeholder checkout: the paid plan recorded without a billing backend. */
-	readonly paid: PlanId | null;
 	readonly model: OnboardingModelChoice | null;
 }
 
