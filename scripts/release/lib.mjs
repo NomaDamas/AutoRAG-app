@@ -170,6 +170,13 @@ export function pruneNativeForPlatform(root, target) {
 	};
 	walk(root);
 	rmSync(join(root, "onnxruntime-web"), { recursive: true, force: true });
+	// node-llama-cpp ships one package per backend. Keep the portable ones for this target:
+	// Metal on macOS; CPU plus Vulkan on Windows (CUDA needs an NVIDIA toolkit and is 500 MB more).
+	const llama = join(root, "@node-llama-cpp");
+	if (existsSync(llama)) {
+		const keep = target.os === "darwin" ? [`mac-${target.arch}-metal`] : ["win-x64", "win-x64-vulkan"];
+		for (const entry of readdirSync(llama)) if (!keep.includes(entry)) rmSync(join(llama, entry), { recursive: true, force: true });
+	}
 }
 
 export function dirSizeBytes(root) {

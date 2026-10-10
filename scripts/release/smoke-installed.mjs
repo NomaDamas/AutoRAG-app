@@ -1,0 +1,144 @@
+/**
+ * Install the built installer the way a user would, then prove the install works.
+ *
+ *   node scripts/release/smoke-installed.mjs [path/to/AutoRAG.dmg|AutoRAG-Setup.exe]
+ *
+ * Without an argument the newest installer in dist/ is used. Steps:
+ *   1. install: mount the .dmg and copy the app, or run the NSIS installer silently
+ *   2. run scripts/release/verify-bundle.mjs against the INSTALLED tools directory
+ *   3. launch the installed app on a throwaway profile and check, from inside
+ *      its main process, that the bundled tools lead PATH and that the embedding
+ *      model was seeded into the AutoRAG home
+ *   4. uninstall
+ * The profile, HOME and AUTORAG_HOME are temporary; nothing of the real user is read.
+ */
+
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+import { _electron } from "playwright";
+import { ROOT, log, run } from "./lib.mjs";
+
+const win = process.platform === "win32";
+const work = mkdtempSync(join(tmpdir(), "autorag-smoke-"));
+const outDir = process.env.QA_OUT ?? join(ROOT, ".omo", "evidence", "release-smoke");
+mkdirSync(outDir, { recursive: true });
+
+function newestInstaller() {
+	const dist = join(ROOT, "dist");
+	const wanted = win ? /\.exe$/ : /\.dmg$/;
+	const files = readdirSync(dist).filter((name) => wanted.test(name) && !/blockmap/.test(name)).map((name) => join(dist, name));
+	if (files.length === 0) throw new Error(`No installer in ${dist}; run the pack step first`);
+	return files.sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs)[0];
+}
+
+const installer = resolve(process.argv[2] ?? newestInstaller());
+log(`installer ${installer}`);
+
+let appRoot; // directory holding the executable
+let resources; // <resources>
+let executable;
+let uninstall = () => undefined;
+
+if (!win) {
+	const mount = join(work, "mount");
+	mkdirSync(mount);
+	run("hdiutil", ["attach", installer, "-nobrowse", "-readonly", "-mountpoint", mount]);
+	const destination = join(work, "Applications");
+	mkdirSync(destination);
+	run("ditto", [join(mount, "AutoRAG.app"), join(destination, "AutoRAG.app")]);
+	run("hdiutil", ["detach", mount, "-force"], { allowFailure: true });
+	appRoot = join(destination, "AutoRAG.app");
+	resources = join(appRoot, "Contents", "Resources");
+	executable = join(appRoot, "Contents", "MacOS", "AutoRAG");
+	uninstall = () => rmSync(appRoot, { recursive: true, force: true });
+} else {
+	// One-click per-user NSIS: /S is silent, /D sets the install directory (must be last, unquoted).
+	appRoot = join(work, "AutoRAG");
+	const result = spawnSync(installer, ["/S", `/D=${appRoot}`], { stdio: "inherit", windowsHide: true });
+	if (result.status !== 0) throw new Error(`installer exited ${result.status}`);
+	resources = join(appRoot, "resources");
+	executable = join(appRoot, "AutoRAG.exe");
+	uninstall = () => {
+		const uninstaller = join(appRoot, "Uninstall AutoRAG.exe");
+		if (existsSync(uninstaller)) spawnSync(uninstaller, ["/S", `_?=${appRoot}`], { stdio: "inherit", windowsHide: true });
+		rmSync(appRoot, { recursive: true, force: true });
+	};
+}
+
+const failures = [];
+const expect = (ok, label, detail = "") => {
+	process.stdout.write(`${ok ? "ok  " : "FAIL"} ${label}${ok ? "" : ` ${detail}`}\n`);
+	if (!ok) failures.push(label);
+};
+
+try {
+	expect(existsSync(executable), "installed executable exists", executable);
+	expect(existsSync(join(resources, "tools", "bin")), "tools/bin installed");
+	expect(existsSync(join(resources, "seed", "manifest.json")), "seed installed");
+
+	// 2. The installed tools, on a bare PATH.
+	const verify = spawnSync(process.execPath, [join(ROOT, "scripts", "release", "verify-bundle.mjs"), join(resources, "tools"), "--seed", join(resources, "seed")], { stdio: "inherit" });
+	expect(verify.status === 0, "installed tools pass verify-bundle");
+
+	// 3. Launch the installed app on a throwaway profile.
+	const home = join(work, "home");
+	const autoragHome = join(home, ".autorag");
+	const profile = join(work, "profile");
+	mkdirSync(home, { recursive: true });
+	const app = await _electron.launch({
+		executablePath: executable,
+		args: [`--user-data-dir=${profile}`, ...(win ? ["--disable-gpu"] : [])],
+		env: {
+			...process.env,
+			HOME: home,
+			USERPROFILE: home,
+			AUTORAG_HOME: autoragHome,
+			AUTORAG_SKIP_ONBOARDING: "1",
+			// A PATH without the developer's toolchain: the bundled tools must be what the app finds.
+			PATH: win ? `${process.env.SystemRoot}\\System32;${process.env.SystemRoot}` : "/usr/bin:/bin:/usr/sbin:/sbin",
+		},
+	});
+	try {
+		// The pre-warmed Quick Look window can register before the Finder one, so wait for the Finder page itself.
+		await app.firstWindow({ timeout: 90_000 });
+		let window;
+		for (const deadline = Date.now() + 90_000; window === undefined && Date.now() < deadline; ) {
+			window = app.windows().find((candidate) => candidate.url().endsWith("/index.html"));
+			if (window === undefined) await new Promise((r) => setTimeout(r, 200));
+		}
+		expect(window !== undefined, "Finder window opened");
+		if (window === undefined) throw new Error("Finder window did not open");
+		const sidebar = await window.waitForSelector(".sidebar__item", { timeout: 60_000 }).then(() => true, () => false);
+		expect(sidebar, "Finder UI rendered (sidebar present)");
+		await window.screenshot({ path: join(outDir, "installed-app.png") });
+		const inside = await app.evaluate(({ app: electronApp }) => ({
+			packaged: electronApp.isPackaged,
+			path: process.env.PATH ?? process.env.Path ?? "",
+			resources: process.resourcesPath,
+			version: electronApp.getVersion(),
+		}));
+		expect(inside.packaged, "app runs packaged");
+		const first = inside.path.split(win ? ";" : ":")[0] ?? "";
+		// macOS reports the /private/var form of a /var temp directory.
+		const real = (path) => realpathSync(path).toLowerCase();
+		expect(existsSync(first) && real(first) === real(join(resources, "tools", "bin")), "bundled tools lead PATH", first);
+
+		// The seed copy runs in the background after launch.
+		const model = join(autoragHome, "models", "Qwen3-Embedding-0.6B-Q8_0.gguf");
+		const deadline = Date.now() + 180_000;
+		while (!existsSync(model) && Date.now() < deadline) await new Promise((r) => setTimeout(r, 1000));
+		expect(existsSync(model), "embedding model seeded into the AutoRAG home", model);
+		expect(readdirSync(join(autoragHome, "runtime")).some((name) => name.startsWith("llama-")), "llama.cpp runtime seeded");
+		writeFileSync(join(outDir, "installed-app.json"), `${JSON.stringify(inside, null, 2)}\n`);
+	} finally {
+		await app.close().catch(() => undefined);
+	}
+} finally {
+	uninstall();
+	rmSync(work, { recursive: true, force: true });
+}
+
+process.stdout.write(failures.length === 0 ? "\ninstalled app OK\n" : `\n${failures.length} check(s) FAILED: ${failures.join("; ")}\n`);
+process.exit(failures.length === 0 ? 0 : 1);
