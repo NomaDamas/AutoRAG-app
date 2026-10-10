@@ -6,7 +6,6 @@ export function createSearchBridge(ipcRenderer: IpcRenderer): SearchBridge {
 		start: (searchId, chatId, query, attachments) =>
 			ipcRenderer.invoke(SEARCH_CHANNELS.start, searchId, chatId, query, attachments),
 		cancel: (searchId) => ipcRenderer.invoke(SEARCH_CHANNELS.cancel, searchId),
-		feedback: (sessionId, useful, notUseful) => ipcRenderer.invoke(SEARCH_CHANNELS.feedback, sessionId, useful, notUseful),
 		historyList: () => ipcRenderer.invoke(SEARCH_CHANNELS.historyList),
 		historyGet: (chatId) => ipcRenderer.invoke(SEARCH_CHANNELS.historyGet, chatId),
 		historySearch: (query) => ipcRenderer.invoke(SEARCH_CHANNELS.historySearch, query),

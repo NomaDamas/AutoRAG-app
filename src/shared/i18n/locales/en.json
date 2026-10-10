@@ -203,8 +203,6 @@
     },
     "evidencePanel": {
       "emptyTitle": "Answer evidence\nwill appear here.",
-      "helpful": "This evidence was helpful",
-      "notHelpful": "This evidence was not helpful",
       "excerpts": "Evidence excerpts",
       "showInFinder": "Show in Finder",
       "openInBrowser": "Open in browser"

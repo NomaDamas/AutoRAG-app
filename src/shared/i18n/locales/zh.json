@@ -203,8 +203,6 @@
     },
     "evidencePanel": {
       "emptyTitle": "回答的依据\n将显示在此处。",
-      "helpful": "此依据有帮助",
-      "notHelpful": "此依据无帮助",
       "excerpts": "依据摘录",
       "showInFinder": "在访达中显示",
       "openInBrowser": "在浏览器中打开"

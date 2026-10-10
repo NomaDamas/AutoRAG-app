@@ -100,7 +100,6 @@ const evidence = [
 		source: EVIDENCE_IMAGE,
 		excerpts: ["합계 ₩48,000"],
 		confidence: 0.88,
-		feedbackId: "fb-img-1",
 	},
 	{
 		number: 2,
@@ -109,7 +108,6 @@ const evidence = [
 		source: NOTE,
 		excerpts: ["도식은 아래 그림을 참고합니다.\n![도식 1](images/fig%201.png)"],
 		confidence: 0.74,
-		feedbackId: "fb-img-2",
 	},
 ];
 const quickAnswer = [

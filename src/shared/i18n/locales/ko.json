@@ -203,8 +203,6 @@
     },
     "evidencePanel": {
       "emptyTitle": "답변의 근거가\n여기에 표시됩니다.",
-      "helpful": "이 근거가 도움이 됨",
-      "notHelpful": "이 근거는 도움이 안 됨",
       "excerpts": "근거 내용 발췌",
       "showInFinder": "Finder에서 보기",
       "openInBrowser": "브라우저에서 열기"

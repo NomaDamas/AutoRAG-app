@@ -55,7 +55,7 @@ writeFileSync(POLICY, "## 승인 규칙\n예외는 임원 승인이 필요합니
 mkdirSync(join(USER_DATA, "chat-history"), { recursive: true });
 const now = new Date().toISOString();
 const evidence = [
-	{ number: 1, title: basename(POLICY), summary: "승인 규칙", source: POLICY, excerpts: ["예외는 임원 승인이 필요합니다."], confidence: 0.9, feedbackId: "fb-1" },
+	{ number: 1, title: basename(POLICY), summary: "승인 규칙", source: POLICY, excerpts: ["예외는 임원 승인이 필요합니다."], confidence: 0.9 },
 ];
 writeFileSync(
 	join(USER_DATA, "chat-history", "chats.json"),

@@ -203,8 +203,6 @@
     },
     "evidencePanel": {
       "emptyTitle": "回答の根拠が\nここに表示されます。",
-      "helpful": "この根拠は役に立った",
-      "notHelpful": "この根拠は役に立たなかった",
       "excerpts": "根拠の抜粋",
       "showInFinder": "Finderで表示",
       "openInBrowser": "ブラウザーで開く"

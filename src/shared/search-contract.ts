@@ -19,7 +19,6 @@
 export const SEARCH_CHANNELS = {
 	start: "search:start",
 	cancel: "search:cancel",
-	feedback: "search:feedback",
 	event: "search:event",
 	historyList: "search:historyList",
 	historyGet: "search:historyGet",
@@ -49,7 +48,6 @@ export interface CitationEvidence {
 	readonly source: string | null;
 	readonly excerpts: readonly string[];
 	readonly confidence: number;
-	readonly feedbackId: string;
 }
 
 /** One assistant answer phase mapped for the UI. */
@@ -105,8 +103,6 @@ export interface SearchBridge {
 	/** Start a Quick+Deep search. Events stream to the sender via SEARCH_CHANNELS.event. */
 	start(searchId: string, chatId: string, query: string, attachments: readonly ChatAttachment[]): Promise<void>;
 	cancel(searchId: string): Promise<void>;
-	/** Evidence thumbs feedback; delegates to agent.recordFeedbackByNumbers. */
-	feedback(sessionId: string, useful: readonly number[], notUseful: readonly number[]): Promise<void>;
 	historyList(): Promise<readonly ChatSummary[]>;
 	historyGet(chatId: string): Promise<ChatRecord | null>;
 	historySearch(query: string): Promise<readonly ChatSummary[]>;

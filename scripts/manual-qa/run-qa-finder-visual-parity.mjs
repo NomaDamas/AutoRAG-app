@@ -112,7 +112,6 @@ const seedChatHistory = (documents) => {
 			source: source("notes.md"),
 			excerpts: ["## 승인 규칙\n1. 일반 환불은 5영업일 내 처리합니다.\n2. 예외는 **임원 승인**이 필요합니다.\n> 인용: 긴급 예외도 승인 생략 불가\n```\nif (!director) reject()\n```"],
 			confidence: 0.92,
-			feedbackId: "fb-1",
 		},
 		{
 			number: 2,
@@ -121,7 +120,6 @@ const seedChatHistory = (documents) => {
 			source: source("alpha/alpha-1.md"),
 			excerpts: ["승인 체인 원본 첨부 필수."],
 			confidence: 0.81,
-			feedbackId: "fb-2",
 		},
 	];
 	const at = "2026-01-02T09:05:00.000Z";

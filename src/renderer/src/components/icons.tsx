@@ -46,8 +46,6 @@ import {
 	Settings,
 	Share,
 	Sparkles,
-	ThumbsDown,
-	ThumbsUp,
 	Trash2,
 	Undo2,
 	Users,
@@ -89,10 +87,6 @@ export const ChevronUpIcon = glyph(ChevronUp, 10, 3);
 export const ChevronsUpIcon = glyph(ChevronsUp, 16, 2.2);
 
 export const EyeIcon = glyph(Eye, 14, 2);
-
-export const ThumbsUpIcon = glyph(ThumbsUp, 14, 2);
-
-export const ThumbsDownIcon = glyph(ThumbsDown, 14, 2);
 
 /** Inspector badges: 12px check / copy / trash, matching the reference's `icon(...,12)`. */
 export const CheckIcon = glyph(Check, 12, 2.4);

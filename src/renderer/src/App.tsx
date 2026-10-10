@@ -271,12 +271,10 @@ export function App(): ReactElement {
 	// The focused AI Search tab publishes its answer's citations; the inspector
 	// shows them as a full-height Evidence view while that tab is focused.
 	const [evidence, setEvidence] = useState<readonly CitationEvidence[]>([]);
-	const [evidenceSession, setEvidenceSession] = useState<string | null>(null);
 	const [selectedEvidence, setSelectedEvidence] = useState<number | null>(null);
 
-	const publishEvidence = useCallback((items: readonly CitationEvidence[], sessionId: string | null) => {
+	const publishEvidence = useCallback((items: readonly CitationEvidence[]) => {
 		setEvidence(items);
-		setEvidenceSession(sessionId);
 		setSelectedEvidence((current) => (current !== null && items.some((item) => item.number === current) ? current : null));
 	}, []);
 
@@ -726,7 +724,6 @@ export function App(): ReactElement {
 								view={aiTabActive ? "evidence" : "info"}
 								evidence={evidence}
 								evidenceSelected={evidenceSelectedNumber}
-								sessionId={evidenceSession}
 								onSelectEvidence={selectEvidence}
 								onRevealPath={(target) => finder?.revealEvidence(target)}
 								onToast={setToast}

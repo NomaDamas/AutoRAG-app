@@ -71,7 +71,7 @@ export interface AiSearchPanelProps {
 	readonly visible: boolean;
 	readonly selectedEvidence: number | null;
 	readonly onSelectEvidence: (number: number) => void;
-	readonly onPublish: (evidence: readonly CitationEvidence[], sessionId: string | null) => void;
+	readonly onPublish: (evidence: readonly CitationEvidence[]) => void;
 	/** Images in an answer: a local picture opens in Quick Look, a web image's page in the OS browser. */
 	readonly imageActions: ImageActions;
 	/** The Interface language setting: "AI 요약" asks in this language. */
@@ -109,7 +109,6 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		searchIdRef.current = value;
 		setSearchIdState(value);
 	};
-	const [sessionId, setSessionId] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [stopped, setStopped] = useState(false);
 	const [submittedQuery, setSubmittedQuery] = useState<string | null>(null);
@@ -170,13 +169,11 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 					setDeepDraft(event.text);
 					break;
 				case "quick":
-					setSessionId(event.sessionId);
 					setQuick(event.phase);
 					setQuickDraft(event.phase.answer);
 					setProgress("");
 					break;
 				case "deep":
-					setSessionId(event.sessionId);
 					setDeep(event.phase);
 					setDeepDraft(event.phase.answer);
 					setDeepElapsed(startedAtRef.current === 0 ? null : Date.now() - startedAtRef.current);
@@ -206,8 +203,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	// Only the visible tab's chat feeds the inspector; it keeps that evidence
 	// while the user browses folders in other tabs.
 	useEffect(() => {
-		if (active) onPublish(evidence, sessionId);
-	}, [active, evidence, sessionId, onPublish]);
+		if (active) onPublish(evidence);
+	}, [active, evidence, onPublish]);
 
 	const historyGroups = useMemo(() => groupChatHistory(history, new Date()), [history]);
 
@@ -289,7 +286,6 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		setDeep(null);
 		setQuickDraft("");
 		setDeepDraft("");
-		setSessionId(null);
 		setError(null);
 		setStopped(false);
 		setSubmittedQuery(text);
@@ -397,7 +393,6 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		setDeep(assistant.deep);
 		setQuickDraft(assistant.quick?.answer ?? "");
 		setDeepDraft(assistant.deep?.answer ?? "");
-		setSessionId(assistant.sessionId);
 		setSubmittedQuery(user?.role === "user" ? user.text : null);
 		setSubmittedAttachments(user?.role === "user" ? user.attachments : []);
 		setStopped(assistant.stopped);

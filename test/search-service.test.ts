@@ -16,7 +16,6 @@ interface TestResponse {
 		readonly summary: string;
 		readonly evidence: readonly { readonly excerpt: string; readonly lineNumber?: number }[];
 		readonly confidence: number;
-		readonly feedbackId: string;
 		readonly source?: string;
 	}[];
 	readonly answer: string;
@@ -58,7 +57,6 @@ function createResponse(sessionId: string, answer: string, searched: number): Te
 				summary: "Director approval is required before payout.",
 				evidence: [{ excerpt: "Refund exceptions require director approval before payout.", lineNumber: 3 }],
 				confidence: 0.92,
-				feedbackId: `${sessionId}:1`,
 				source: "/Users/jeff/Documents/refund-policy.md",
 			},
 		],
@@ -71,13 +69,11 @@ function createResponse(sessionId: string, answer: string, searched: number): Te
 }
 
 function createFakeAgent(stream: (live: (event: LiveAgentEvent) => void) => AsyncGenerator<TestStreamEvent, void, void>) {
-	const feedbackCalls: { sessionId: string; useful: readonly number[]; notUseful: readonly number[] }[] = [];
 	const listeners = new Set<(event: LiveAgentEvent) => void>();
 	const live = (event: LiveAgentEvent): void => {
 		for (const listener of listeners) listener(event);
 	};
 	return {
-		feedbackCalls,
 		listeners,
 		searchDocumentsStream: vi.fn(() => stream(live)),
 		subscribe: (listener: (event: LiveAgentEvent) => void) => {
@@ -86,11 +82,6 @@ function createFakeAgent(stream: (live: (event: LiveAgentEvent) => void) => Asyn
 				listeners.delete(listener);
 			};
 		},
-		recordFeedbackByNumbers: vi.fn(
-			(sessionId: string, useful: readonly number[], notUseful: readonly number[] = []) => {
-				feedbackCalls.push({ sessionId, useful, notUseful });
-			},
-		),
 		abort: vi.fn(),
 		setAttachmentContext: vi.fn((_context: string) => undefined),
 	};
@@ -140,7 +131,6 @@ describe("createSearchService", () => {
 				source: "/Users/jeff/Documents/refund-policy.md",
 				excerpts: ["Refund exceptions require director approval before payout."],
 				confidence: 0.92,
-				feedbackId: "session-quick:1",
 			},
 		]);
 	});
@@ -253,7 +243,6 @@ describe("createSearchService", () => {
 		expect(deep.searchId).toBe("search-2");
 		expect(deep.sessionId).toBe("session-deep");
 		expect(deep.phase.answer).toBe("Deep answer");
-		expect(deep.phase.evidence[0]?.feedbackId).toBe("session-deep:1");
 	});
 
 	it("cancels an in-flight stream, emits cancelled once, and stops iteration", async () => {
@@ -313,21 +302,6 @@ describe("createSearchService", () => {
 			{ type: "error", searchId: "search-4", message: "Error: provider exploded" },
 			{ type: "done", searchId: "search-4" },
 		]);
-	});
-
-	it("delegates numbered feedback without changing the arrays", async () => {
-		const agent = createFakeAgent(async function*() { });
-		const service = createSearchService({
-			agentFactory: () => agent,
-			chatStore: await createStore(),
-			send: () => undefined,
-			now,
-		});
-
-		await service.feedback("session-1", [1, 3], [2]);
-
-		expect(agent.recordFeedbackByNumbers).toHaveBeenCalledWith("session-1", [1, 3], [2]);
-		expect(agent.feedbackCalls).toEqual([{ sessionId: "session-1", useful: [1, 3], notUseful: [2] }]);
 	});
 
 	it("hands the attachment context to the agent before the run and keeps the query plain", async () => {

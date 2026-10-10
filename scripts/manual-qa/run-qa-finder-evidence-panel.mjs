@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
  * point at REAL fixture files on disk. Loading the chat exercises only the
  * real render path (loadHistory -> publish -> Inspector Evidence view), then
  * drives: the full-height Evidence view on an AI Search tab and Info on a
- * folder tab, citation chips, evidence tabs, background-free feedback (toast),
+ * folder tab, citation chips, evidence tabs (no thumbs controls: the librarian dropped feedback),
  * title -> new-tab reveal with file selection, the datasource virtual-source
  * title guard, and a web-page source opening in the OS browser (main's
  * shell.openExternal is stubbed to record the URL, so no browser launches).
@@ -82,7 +82,6 @@ const evidenceAll = [
 			"## 승인 규칙\n1. 일반 환불은 5영업일 내 처리합니다.\n2. 예외는 **임원 승인**이 필요합니다.\n> 비고 인용: 긴급 예외도 승인 생략 불가\n```\nif (!director) reject()\n```",
 		],
 		confidence: 0.92,
-		feedbackId: "fb-1",
 	},
 	{
 		number: 2,
@@ -91,7 +90,6 @@ const evidenceAll = [
 		source: MEMO,
 		excerpts: ["승인 체인 원본 첨부 필수."],
 		confidence: 0.81,
-		feedbackId: "fb-2",
 	},
 	{
 		number: 3,
@@ -100,7 +98,6 @@ const evidenceAll = [
 		source: "/kakao/ulw-qa/chunks/7",
 		excerpts: ["스레드에서 합의된 내용 요약."],
 		confidence: 0.44,
-		feedbackId: "fb-3",
 	},
 	{
 		number: 4,
@@ -109,7 +106,6 @@ const evidenceAll = [
 		source: WEB_SOURCE,
 		excerpts: ["프로미스나인은 2018년 1월 24일 9인조로 데뷔."],
 		confidence: 0.9,
-		feedbackId: "fb-4",
 	},
 ];
 const record = {
@@ -139,26 +135,7 @@ const record = {
 };
 writeFileSync(join(USER_DATA, "chat-history", "chats.json"), `${JSON.stringify([record], null, 2)}\n`);
 
-// The feedback lane builds the real main-process agent; point it at a throwaway
-// config so the construction succeeds and no workspace state leaks into the repo.
-mkdirSync(join(USER_DATA, "workspace"), { recursive: true });
-const QA_CONFIG = join(USER_DATA, "qa-config.json");
-writeFileSync(QA_CONFIG, JSON.stringify({
-	searchPaths: [DOCS],
-	workspacePath: join(USER_DATA, "workspace"),
-	memoryPath: join(USER_DATA, "workspace", "memory.json"),
-	minSync: { enabled: false },
-	jikji: false,
-	model: {
-		provider: "openrouter",
-		id: "deepseek/deepseek-v4.1-flash",
-		baseUrl: "https://openrouter.ai/api/v1",
-		api: "openai-completions",
-		apiKeyEnv: "OPENROUTER_API_KEY",
-	},
-}, null, 2));
-
-app = await launchFinder({ userDataDir: USER_DATA, env: { AUTORAG_CONFIG: QA_CONFIG } });
+app = await launchFinder({ userDataDir: USER_DATA });
 const page = await finderWindow(app);
 page.setDefaultTimeout(8000);
 page.on("pageerror", (error) => log(`[pageerror] ${String(error).slice(0, 300)}`));
@@ -250,7 +227,7 @@ check("the Evidence header, eye, and close controls are removed", (await page.lo
 await page.screenshot({ path: join(EVIDENCE, "02-evidence-panel.png") });
 
 // 2b. Layout geometry (Evidence fills the whole inspector column, numbered
-// tabs first, transparent feedback controls, subtle inspector surface).
+// tabs first, subtle inspector surface).
 const geometry = await page.evaluate((half) => {
     const box = (sel) => { const e = document.querySelector(sel); return e ? JSON.parse(JSON.stringify(e.getBoundingClientRect())) : null; };
     const style = (sel, props) => {
@@ -264,15 +241,14 @@ const geometry = await page.evaluate((half) => {
         inspector: box(".inspector"),
         tabs: box(`${half} .evidence-tabs`),
         tab: box(`${half} .evidence-tab`),
-        vote: box(`${half} .feedback button`),
-        voteStyle: style(`${half} .feedback button`, ["backgroundColor", "borderTopWidth", "borderLeftWidth"]),
+        votes: document.querySelectorAll(`${half} .feedback`).length,
         inspectorBg: style(".inspector", ["backgroundColor"]),
     };
 }, EVIDENCE_HALF);
 const ratio = geometry.panel.height / geometry.inspector.height;
 check("the Evidence view fills the whole inspector column", ratio > 0.99 && Math.abs(geometry.panel.top - geometry.inspector.top) < 1, `ratio=${ratio.toFixed(3)} top=${geometry.panel.top}/${geometry.inspector.top}`);
 check("evidence tabs are the first content row", geometry.tabs !== null && geometry.tab !== null && geometry.tabs.top <= geometry.tab.top + 1, JSON.stringify({ tabs: geometry.tabs, tab: geometry.tab }));
-check("feedback votes have no box background or border", geometry.voteStyle.backgroundColor === "rgba(0, 0, 0, 0)" && geometry.voteStyle.borderTopWidth === "0px" && geometry.voteStyle.borderLeftWidth === "0px", JSON.stringify(geometry.voteStyle));
+check("the Evidence view offers no thumbs-up/down controls", geometry.votes === 0, `feedback nodes=${geometry.votes}`);
 check("the inspector sits on the subtle surface", geometry.inspectorBg.backgroundColor === "rgb(250, 250, 250)", JSON.stringify(geometry.inspectorBg));
 
 // 3. Tabs switch; the excerpt renders the reference block types.
@@ -287,18 +263,6 @@ check(
 const evBold = await page.locator(`${EVIDENCE_HALF} .inspector-body strong`).count();
 check("chunk text bold renders as emphasized strong", evBold >= 1, `strong=${evBold}`);
 
-// 4. Thumbs-up feedback records through the real bridge and toasts.
-await page.locator(`${EVIDENCE_HALF} button[title="This evidence was helpful"]`).click();
-await page.waitForSelector(".toast", { timeout: isWindows ? 20_000 : 8_000 });
-const toastText = (await page.locator(".toast").textContent()) ?? "";
-check("thumbs-up toast follows the reference copy", toastText.includes("근거 1 — 도움이 됨으로 기록했습니다"), toastText.trim());
-await sleep(300);
-const voteStyle = await page.locator(`${EVIDENCE_HALF} button[title="This evidence was helpful"]`).evaluate((el) => {
-    const s = getComputedStyle(el);
-    return { bg: s.backgroundColor, borderTopWidth: s.borderTopWidth, borderLeftWidth: s.borderLeftWidth, color: s.color };
-});
-check("the active vote keeps the transparent Apple-style control", voteStyle.bg === "rgba(0, 0, 0, 0)" && voteStyle.borderTopWidth === "0px" && voteStyle.borderLeftWidth === "0px", JSON.stringify(voteStyle));
-await page.screenshot({ path: join(EVIDENCE, "03-feedback.png") });
 // 5. Title click opens the enclosing folder in a NEW tab and selects the source row.
 const tabsBefore = await page.locator(".tabs .tab").count();
 const targetName = basename(POLICY).normalize("NFC");
@@ -376,7 +340,7 @@ await page.waitForFunction((sel) => document.querySelector(sel)?.textContent?.st
 const urlLine = (await page.locator(`${EVIDENCE_HALF} .evidence-url`).textContent()) ?? "";
 check("a web source shows its URL under the title", urlLine === WEB_SOURCE, urlLine);
 const tabsBeforeUrl = await page.locator(".tabs .tab").count();
-// Let any earlier toast (the feedback one) expire, so a new toast would be this click's.
+// Let any earlier toast expire, so a new toast would be this click's.
 await page.locator(".toast").waitFor({ state: "detached", timeout: 8000 }).catch(() => undefined);
 await page.locator(`${EVIDENCE_HALF} button[title="Open in browser"]`).click();
 await sleep(600);
