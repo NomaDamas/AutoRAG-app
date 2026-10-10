@@ -6,7 +6,7 @@ import { useRowPipeline } from "./useRowPipeline";
 import { itemElement, useFinderKeyboard } from "./useFinderKeyboard";
 import type { MouseEvent as ReactMouseEvent, RefObject } from "react";
 import { NO_CAPABILITIES, type ActionAnchor, type ActionCapabilities, type OpenWithApplication } from "../../../shared/actions-contract";
-import { RECENTS_PATH } from "../../../shared/fs-contract";
+import { isTagPath, isVirtualListing, RECENTS_PATH, tagPath } from "../../../shared/fs-contract";
 import type { IndexStatus } from "../../../shared/index-contract";
 import { DUPEY_LAYER_ID, type LiveMessage } from "../../../shared/live-contract";
 import type { ServiceEntry } from "../../../shared/services-contract";
@@ -15,6 +15,8 @@ import type { FinderEntry } from "../data/entries";
 import type { EntrySidecar } from "../data/entry-sidecar";
 import { navGroups, type NavGroup, type NavItem } from "../data/places";
 import { type FinderLocation, type FinderSource, pickInitialPath } from "../data/source";
+import { useTagCatalog } from "./useTagCatalog";
+import { sharedTags, sidebarTags, tagKey } from "../state/tags";
 import { finderDragEntries } from "../state/attachments";
 import { validateName } from "../state/collision";
 import {
@@ -296,7 +298,7 @@ export interface FinderController {
 	/** The empty-space menu for `dir` (New / Paste); defaults to the folder in view. */
 	openBackgroundContextMenu(event: ReactMouseEvent<HTMLDivElement>, dir?: string): void;
 	closeContextMenu(): void;
-	runMenuAction(action: FinderMenuAction, format?: NewFileFormatId | null, serviceId?: string | null): void;
+	runMenuAction(action: FinderMenuAction, format?: NewFileFormatId | null, serviceId?: string | null, tagName?: string | null): void;
 	toggleIndex(entry: FinderEntry): void;
 	toggleStack(entry: FinderEntry): void;
 	/** Folder disclosure triangle: nest or hide the folder's contents in place. */
@@ -374,6 +376,7 @@ export function useFinderController(
 	const [zone, setZone] = useState<FocusZone>("finder");
 	const [hits, setHits] = useState<readonly FinderEntry[]>([]);
 	const [locations, setLocations] = useState<readonly FinderLocation[]>([]);
+	const tagCatalog = useTagCatalog();
 	/** Bumped when a background AutoRAG refresh settles, so visible rows re-read their state. */
 	const [indexRevision, setIndexRevision] = useState(0);
 	const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
@@ -906,7 +909,7 @@ export function useFinderController(
 				location === path ||
 				openFolders.includes(location) ||
 				(layout === "columns" && panePaths.includes(location));
-			if (searching || (!inView && path !== RECENTS_PATH)) {
+			if (searching || (!inView && path !== RECENTS_PATH && !isTagPath(path))) {
 				revealEntry(entry);
 				return;
 			}
@@ -1077,7 +1080,7 @@ export function useFinderController(
 
 	/** Creation targets a real folder, never search results, Recents, or a virtual tab. */
 	const canCreateIn = useLatestCallback(
-		(dir: string): boolean => !searching && dir !== "" && dir !== RECENTS_PATH && !isVirtualTabPath(dir));
+		(dir: string): boolean => !searching && dir !== "" && !isVirtualListing(dir) && !isVirtualTabPath(dir));
 
 	const createFolderIn = useLatestCallback(
 		(dir: string) => {
@@ -1301,7 +1304,7 @@ export function useFinderController(
 	/** ⌘V pastes the clipboard op as-is; ⌥⌘V forces a move. */
 	const pasteClipboard = useLatestCallback(
 		(move: boolean) => {
-			if (path === "" || path === RECENTS_PATH || isVirtualTabPath(path)) return;
+			if (path === "" || isVirtualListing(path) || isVirtualTabPath(path)) return;
 			source
 				.clipboardGet()
 				.then((clipboard) => {
@@ -1346,7 +1349,7 @@ export function useFinderController(
 	/** An in-app row drop: ⌥ copies (into the rows' own folder too, as Finder duplicates), otherwise the rows move. */
 	const transferDropped = useLatestCallback(
 		(paths: readonly string[], destDir: string, copy: boolean) => {
-			if (destDir === "" || destDir === RECENTS_PATH || isVirtualTabPath(destDir)) return;
+			if (destDir === "" || isVirtualListing(destDir) || isVirtualTabPath(destDir)) return;
 			transferInto(paths, destDir, copy ? "copy" : "move", copy);
 		});
 
@@ -1368,8 +1371,43 @@ export function useFinderController(
 				: menu.dir,
 	);
 
+	/** A shown row's Finder metadata (undefined until the metadata pass answered for it). */
+	const tagsOf = useLatestCallback(
+		(target: string) => {
+			const row = viewEntries.find((candidate) => candidate.path === target);
+			return row === undefined ? undefined : sidecar.resolve(row).finder;
+		});
+
+	/**
+	 * Tag or untag `targets` with `name`: a tag every target already carries is
+	 * removed, any other state adds it to all of them (Finder's own rule). The
+	 * rows re-read their Finder metadata right after the write, so the dots move
+	 * at once; a tag view relists, because the row may no longer belong to it.
+	 */
+	const toggleTag = useLatestCallback(
+		(targets: readonly string[], name: string) => {
+			const key = tagKey(name);
+			const allCarry = targets.every((target) => tagsOf(target)?.tags.some((tag) => tagKey(tag) === key) === true);
+			const change = allCarry ? { add: [], remove: [name] } : { add: [name], remove: [] };
+			source
+				.setTags(targets, change)
+				.then((result) => {
+					const first = result.failed[0];
+					if (first !== undefined) showToast(`${basename(first.path)} — 태그를 바꾸지 못했습니다: ${first.message}`);
+					const changed = viewEntries.filter((row) => result.ok.includes(row.path));
+					if (changed.length > 0) {
+						source
+							.finderMetadata(changed)
+							.then((enriched) => sidecar.applyMetadata(enriched, changed))
+							.catch(reportError);
+					}
+					if (isTagPath(path)) refresh();
+				})
+				.catch(reportError);
+		});
+
 	const runMenuAction = useLatestCallback(
-		(action: FinderMenuAction, format: NewFileFormatId | null = null, serviceId: string | null = null) => {
+		(action: FinderMenuAction, format: NewFileFormatId | null = null, serviceId: string | null = null, tagName: string | null = null) => {
 			const menu = contextMenu;
 			if (menu === null) {
 				return;
@@ -1495,6 +1533,9 @@ export function useFinderController(
 					return;
 				case "putBack":
 					restoreFromTrash(targets);
+					return;
+				case "toggleTag":
+					if (tagName !== null) toggleTag(targets, tagName);
 					return;
 			}
 		});
@@ -1710,22 +1751,26 @@ export function useFinderController(
 				selectionCount: menuTargets(entry).length,
 				indexIncluded: sidecar.indexStatus(entry.path)?.excluded !== true,
 				clipboardCount,
-				inRecents: path === RECENTS_PATH,
+				inRecents: path === RECENTS_PATH || isTagPath(path),
 				inTrash: inTrashLocation,
 				capabilities: actionCapabilities,
 				canCreateFolder: canCreateIn(menuCreateDir(menu)),
 				services: menuServices,
+				tags: { catalog: tagCatalog.catalog, shared: sharedTags(menuTargets(entry).map((target) => tagsOf(target))) },
 			},
 			(k, def, opt) => t(k, { defaultValue: def, ...(opt as Record<string, unknown> | undefined) }),
 		);
-	}, [contextMenu, menuTargets, sidecar, clipboardCount, path, t, inTrashLocation, actionCapabilities, canCreateIn, menuCreateDir, layout, panePaths, menuServices]);
+	}, [contextMenu, menuTargets, sidecar, clipboardCount, path, t, inTrashLocation, actionCapabilities, canCreateIn, menuCreateDir, layout, panePaths, menuServices, tagCatalog, tagsOf]);
 
 	const navTargets = useMemo(
-		() => (locations.length > 0 ? locations : [{ name: basename(path), path }]),
-		[locations, path],
+		() => [
+			...(locations.length > 0 ? locations : [{ name: basename(path), path }]),
+			...sidebarTags(tagCatalog.catalog).map((tag) => ({ name: tag.name, path: tagPath(tag.name) })),
+		],
+		[locations, path, tagCatalog],
 	);
 	const activeNav = activeNavPath(path, navTargets);
-	const sidebarGroups = useMemo(() => navGroups(locations), [locations]);
+	const sidebarGroups = useMemo(() => navGroups(locations, sidebarTags(tagCatalog.catalog)), [locations, tagCatalog]);
 
 	// Handlers handed to the view: one stable identity each (see useLatestCallback),
 	// so no closure here keeps an earlier render's rows alive.

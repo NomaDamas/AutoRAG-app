@@ -25,6 +25,8 @@ export interface FsFinderMetadata {
 	readonly addedAt: string | null;
 	readonly lastOpenedAt: string | null;
 	readonly tags: readonly string[];
+	/** Each tag's colour as the file stored it (parallel to `tags`); the registry's colour wins when it knows the tag. */
+	readonly tagColors?: readonly FsTagColor[];
 	readonly comments: string | null;
 	readonly width: number | null;
 	readonly height: number | null;
@@ -166,6 +168,63 @@ export interface FsLocation {
 	readonly scanned: boolean;
 	/** A mounted volume the sidebar offers to unmount (never the boot disk / system drive). */
 	readonly ejectable: boolean;
+}
+
+/**
+ * Finder tags (macOS only). A tag's colour is the Finder label index: 0 none,
+ * then 1 gray, 2 green, 3 purple, 4 blue, 5 yellow, 6 red, 7 orange.
+ */
+export type FsTagColor = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
+
+/** One tag in Finder's tag registry. */
+export interface FsTag {
+	readonly name: string;
+	readonly color: FsTagColor;
+	/** Finder lists it in its sidebar (the registry's `p` flag). */
+	readonly sidebar: boolean;
+}
+
+/**
+ * The tags this Mac knows. `supported` is false off macOS, where the sidebar
+ * has no Tags section and the row menu no tag items. `colorNames` is the OS's
+ * localized name per colour index (`NSWorkspace.fileLabels`): the names the
+ * seven colour dots tag a file with.
+ */
+export interface FsTagCatalog {
+	readonly supported: boolean;
+	readonly tags: readonly FsTag[];
+	readonly colorNames: readonly string[];
+}
+
+/** Tags to add to and to remove from every requested path; names match case-insensitively. */
+export interface FsTagChange {
+	readonly add: readonly string[];
+	readonly remove: readonly string[];
+}
+
+/**
+ * The virtual location listing every file and folder that carries one tag. Like
+ * Recents it is not a directory on disk: the listing's rows keep their real
+ * paths, and nothing is created, pasted, or watched there.
+ */
+export const TAG_PATH_PREFIX = "tag://";
+
+export function tagPath(name: string): string {
+	return `${TAG_PATH_PREFIX}${name}`;
+}
+
+export function isTagPath(path: string): boolean {
+	return path.startsWith(TAG_PATH_PREFIX) && path.length > TAG_PATH_PREFIX.length;
+}
+
+/** The tag `path` lists; "" when `path` is not a tag location. */
+export function tagNameOf(path: string): string {
+	return isTagPath(path) ? path.slice(TAG_PATH_PREFIX.length) : "";
+}
+
+/** True for the locations that list real files without being their folder: Recents and a tag. */
+export function isVirtualListing(path: string): boolean {
+	return path === RECENTS_PATH || isTagPath(path);
 }
 
 /** In-app file clipboard (copy/cut + paste between folders). */
@@ -332,6 +391,14 @@ export interface FsCoreBridge {
 	exists(path: string): Promise<boolean>;
 	search(query: string, options?: FsSearchOptions): Promise<readonly FsSearchResult[]>;
 	locations(): Promise<readonly FsLocation[]>;
+	/** Finder's tag registry; `supported` is false off macOS. */
+	tags(): Promise<FsTagCatalog>;
+	/**
+	 * Add and remove Finder tags on every path (macOS). Each path reports on its
+	 * own: one that cannot be tagged fails with the verbatim reason and the rest
+	 * still change. Existing tags a path carries and are not named stay as they are.
+	 */
+	setTags(paths: readonly string[], change: FsTagChange): Promise<FsBatchResult>;
 	/** Unmount the ejectable location at `path` (diskutil on macOS, eject / net use on Windows); rejects with the OS reason. */
 	ejectLocation(path: string): Promise<void>;
 	/** Fires when the mounted volumes or connected cloud accounts change; returns the unsubscribe. */

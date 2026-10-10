@@ -25,6 +25,8 @@ export type FsWorkerOp =
 	| "search"
 	| "locations"
 	| "ejectLocation"
+	| "tags"
+	| "setTags"
 	| "copy"
 	| "move"
 	| "duplicate"

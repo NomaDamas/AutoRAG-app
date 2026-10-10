@@ -29,10 +29,11 @@ import {
 	Package,
 	Server,
 	Sparkles,
+	Tag,
 	Trash2,
 	type LucideIcon,
 } from "lucide-react";
-import type { FsLocation, FsLocationIcon } from "../../../shared/fs-contract";
+import { tagPath, type FsLocation, type FsLocationIcon, type FsTag, type FsTagColor } from "../../../shared/fs-contract";
 import { AI_SEARCH_PATH } from "../state/tabs";
 
 export interface NavItem {
@@ -47,6 +48,8 @@ export interface NavItem {
 	readonly ejectable: boolean;
 	/** An app view instead of a folder: "aiSearch" turns the focused tab into AI Search. */
 	readonly view?: "aiSearch";
+	/** A Finder tag's virtual folder: the row draws this colour as its dot (0 = a tag with no colour). */
+	readonly tag?: { readonly name: string; readonly color: FsTagColor };
 }
 
 export interface NavGroup {
@@ -97,8 +100,11 @@ const SECTIONS: readonly (readonly [FsLocation["section"], string])[] = [
 	["locations", "Locations"],
 ];
 
-/** The sidebar groups for `locations`, each section in the order the OS reported. */
-export function navGroups(locations: readonly FsLocation[]): readonly NavGroup[] {
+/** The Tags group heading, kept apart from the OS-reported sections. */
+export const TAGS_GROUP_LABEL = "Tags";
+
+/** The sidebar groups for `locations`, each section in the order the OS reported, then Finder's tags. */
+export function navGroups(locations: readonly FsLocation[], tags: readonly FsTag[] = []): readonly NavGroup[] {
 	const groups: NavGroup[] = [];
 	for (const [section, label] of SECTIONS) {
 		const items: NavItem[] = locations
@@ -113,6 +119,19 @@ export function navGroups(locations: readonly FsLocation[]): readonly NavGroup[]
 			}));
 		if (section === "favorites") items.unshift(AI_SEARCH_ITEM);
 		if (items.length > 0) groups.push({ label, items });
+	}
+	if (tags.length > 0) {
+		groups.push({
+			label: TAGS_GROUP_LABEL,
+			items: tags.map((tag) => ({
+				label: tag.name,
+				path: tagPath(tag.name),
+				icon: Tag,
+				available: true,
+				ejectable: false,
+				tag: { name: tag.name, color: tag.color },
+			})),
+		});
 	}
 	return groups;
 }

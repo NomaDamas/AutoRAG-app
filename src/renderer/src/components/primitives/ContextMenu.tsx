@@ -9,9 +9,65 @@ import {
 	type FinderMenuAction,
 	type FinderMenuEntry,
 	type FinderMenuSubmenu,
+	type FinderMenuTagRow,
 } from "../../state/context-menu";
 import type { NewFileFormatId } from "../../../../shared/new-file-contract";
+import { Check, Minus, Plus } from "lucide-react";
 import { ChevronRightSmallIcon } from "../icons";
+import { TagDotMark } from "./TagDot";
+
+/**
+ * Finder's colour-dot row. The dot under the pointer grows and shows what a
+ * click does: + to add the tag, − to remove it (a dot the selection already
+ * carries rests as a check). The caption under the row spells it out — Add
+ * "Research" or Remove "Research" — and one click toggles that tag on the
+ * whole selection, so no trip into a submenu is needed.
+ */
+function TagSwatchRow({ row, onSelect }: { readonly row: FinderMenuTagRow; readonly onSelect: MenuSelect }): ReactElement {
+	const [hovered, setHovered] = useState<string | null>(null);
+	const shown = row.swatches.find((swatch) => swatch.name === hovered) ?? null;
+	return (
+		<div className="menu__tags flex flex-col gap-4 px-10 py-6" role="group" aria-label={row.label}>
+			<div className="flex items-center gap-8" onMouseLeave={() => setHovered(null)}>
+				{row.swatches.map((swatch) => {
+					const active = hovered === swatch.name;
+					// Finder's rule: the dot under the pointer grows and shows what a click does
+					// (+ adds, − removes); a dot the selection already carries rests as a check.
+					const Glyph = active ? (swatch.checked ? Minus : Plus) : swatch.checked ? Check : null;
+					return (
+						<button
+							key={swatch.color}
+							type="button"
+							role="menuitemcheckbox"
+							aria-checked={swatch.checked}
+							aria-label={swatch.hint}
+							title={swatch.hint}
+							className="menu__swatch relative flex items-center justify-center size-16 p-0 border-0 rounded-full bg-transparent cursor-default"
+							data-active={active ? "true" : undefined}
+							onMouseEnter={() => setHovered(swatch.name)}
+							onFocus={() => setHovered(swatch.name)}
+							onBlur={() => setHovered((current) => (current === swatch.name ? null : current))}
+							onClick={() => onSelect("toggleTag", null, null, swatch.name)}
+						>
+							<span className={cn("flex transition-transform duration-(--dur-color) ease-[ease]", active ? "scale-125" : "scale-100")}>
+								<TagDotMark color={swatch.color} size={14} />
+							</span>
+							{Glyph === null ? null : (
+								<Glyph className="menu__swatch-glyph pointer-events-none absolute text-on-accent drop-shadow-[0_0_1px_rgba(0,0,0,0.35)]" size={9} strokeWidth={3} aria-hidden="true" />
+							)}
+						</button>
+					);
+				})}
+			</div>
+			<span className="menu__tag-hint truncate text-sm text-ink-muted" aria-live="polite">
+				{shown?.hint ?? row.label}
+			</span>
+		</div>
+	);
+}
+
+/** What a menu choice carries beyond its action: a new-file format, a service, or a Finder tag name. */
+export type MenuSelect = (action: FinderMenuAction, format: NewFileFormatId | null, serviceId: string | null, tagName: string | null) => void;
 
 /** Shared row styling for a menu item and a submenu parent. */
 const ITEM_CLASS =
@@ -32,7 +88,7 @@ export function ContextMenu({
 }: {
 	readonly cursor: { readonly x: number; readonly y: number };
 	readonly entries: readonly FinderMenuEntry[];
-	readonly onSelect: (action: FinderMenuAction, format: NewFileFormatId | null, serviceId: string | null) => void;
+	readonly onSelect: MenuSelect;
 	readonly onClose: () => void;
 }): ReactElement {
 	const ref = useRef<HTMLDivElement>(null);
@@ -69,6 +125,7 @@ export function ContextMenu({
 					// biome-ignore lint/suspicious/noArrayIndexKey: separators carry no identity
 					return <div key={`sep-${index}`} className="menu__separator h-px my-4 mx-6 bg-divider" role="separator" />;
 				}
+				if (entry.kind === "tags") return <TagSwatchRow key="tags" row={entry} onSelect={onSelect} />;
 				if (entry.kind === "submenu") {
 					const open = openSubmenu?.label === entry.label;
 					return (
@@ -126,7 +183,7 @@ export function ContextMenu({
 							entry.tone === "warning" && "text-error-orange-text",
 						)}
 						disabled={entry.disabled}
-						onClick={() => onSelect(entry.action, null, null)}
+						onClick={() => onSelect(entry.action, null, null, null)}
 					>
 						<span className="menu__label flex-1">{entry.label}</span>
 						{entry.keycap === null ? null : (
@@ -175,7 +232,7 @@ function SubmenuPanel({
 	readonly depth: number;
 	/** The parent row's rect when this panel is nested; absent for a first-level panel. */
 	readonly fixedAt?: AnchorRect;
-	readonly onSelect: (action: FinderMenuAction, format: NewFileFormatId | null, serviceId: string | null) => void;
+	readonly onSelect: MenuSelect;
 }): ReactElement {
 	const [openChild, setOpenChild] = useState<{ readonly label: string; readonly rect: AnchorRect } | null>(null);
 	const wanted = menuHeightForItems(submenu.items.length);
@@ -254,13 +311,15 @@ function SubmenuPanel({
 					</div>
 				) : (
 					<button
-						key={`${entry.action}-${entry.serviceId ?? entry.format ?? "folder"}`}
+						key={`${entry.action}-${entry.serviceId ?? entry.format ?? entry.tagName ?? "folder"}`}
 						type="button"
-						role="menuitem"
+						role={entry.action === "toggleTag" ? "menuitemcheckbox" : "menuitem"}
+						aria-checked={entry.action === "toggleTag" ? entry.checked === true : undefined}
 						className={ITEM_CLASS}
-						onClick={() => onSelect(entry.action, entry.format, entry.serviceId ?? null)}
+						onClick={() => onSelect(entry.action, entry.format, entry.serviceId ?? null, entry.tagName ?? null)}
 					>
-						<span className="menu__label flex-1">{entry.label}</span>
+						<span className="menu__label flex-1 truncate">{entry.label}</span>
+						{entry.checked === true ? <span className="menu__check flex-none ml-auto text-ink-muted">✓</span> : null}
 					</button>
 				),
 			)}

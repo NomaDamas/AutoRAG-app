@@ -9,7 +9,7 @@
 
 import { NO_CAPABILITIES, type ActionsBridge } from "../../../shared/actions-contract";
 import { NO_SERVICES, type ServicesBridge } from "../../../shared/services-contract";
-import { RECENTS_PATH, type FsBatchResult, type FsBridge, type FsClipboard, type FsEnrichmentTarget, type FsEntryEnrichment, type FsFinderEnrichment, type FsHistoryOperation, type FsLocation, type FsLocationIcon, type FsOpError, type FsRecordedOperation, type FsSearchOptions, type FsUndoOutcome, type FsVersionFamiliesResult } from "../../../shared/fs-contract";
+import { RECENTS_PATH, type FsBatchResult, type FsBridge, type FsClipboard, type FsEnrichmentTarget, type FsEntryEnrichment, type FsFinderEnrichment, type FsHistoryOperation, type FsLocation, type FsLocationIcon, type FsOpError, type FsRecordedOperation, type FsSearchOptions, type FsTagCatalog, type FsTagChange, type FsUndoOutcome, type FsVersionFamiliesResult } from "../../../shared/fs-contract";
 import { newFileFormat, type NewFileFormatId } from "../../../shared/new-file-contract";
 import type { IndexStatus } from "../../../shared/index-contract";
 import {
@@ -91,6 +91,10 @@ export interface FinderSource {
 	): Promise<{ readonly entries: readonly FinderEntry[]; readonly removed: readonly string[] }>;
 	search(query: string, options?: FsSearchOptions): Promise<readonly FinderEntry[]>;
 	locations(): Promise<readonly FinderLocation[]>;
+	/** Finder's tag registry; `supported` is false off macOS and in fixtures. */
+	tags(): Promise<FsTagCatalog>;
+	/** Add and remove Finder tags on every path; per-path outcome. */
+	setTags(paths: readonly string[], change: FsTagChange): Promise<FsBatchResult>;
 	/** Unmount a mounted volume (sidebar eject button); rejects with the OS reason. */
 	ejectLocation(path: string): Promise<void>;
 	/** Fires when a volume mounts/unmounts or a cloud account connects/disconnects. */
@@ -212,6 +216,8 @@ export function createBridgeSource(
 			return hits.map(entryFromSearchHit);
 		},
 		locations: () => fs.locations(),
+		tags: () => fs.tags(),
+		setTags: (paths, change) => fs.setTags(paths, change),
 		ejectLocation: (path) => fs.ejectLocation(path),
 		onLocationsChanged: (listener) => fs.onLocationsChanged?.(listener) ?? (() => {}),
 		quickLook: (path) => fs.quickLook(path),
@@ -488,6 +494,8 @@ export function createFixtureSource(): FinderSource {
 			}
 			return Promise.resolve(hits);
 		},
+		tags: () => Promise.resolve({ supported: false, tags: [], colorNames: [] }),
+		setTags: (paths) => Promise.resolve({ ok: [], failed: paths.map((path) => ({ path, message: "이 환경에서는 태그를 바꿀 수 없습니다" })) }),
 		locations: () =>
 			Promise.resolve(
 				FIXTURE_PLACES.filter(([name]) => !state.ejected.has(name)).map(([name, section, icon]) => ({

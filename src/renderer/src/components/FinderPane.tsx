@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent, type ReactElement } from "react";
 import type { AppSettings } from "../../../shared/settings-contract";
 import type { ChatAttachment } from "../../../shared/search-contract";
-import { RECENTS_PATH } from "../../../shared/fs-contract";
+import { isTagPath, RECENTS_PATH, tagNameOf } from "../../../shared/fs-contract";
 import type { FinderSource } from "../data/source";
 import { DirectoryDataContext, type DirectoryData } from "../hooks/useDirectoryData";
 import { useFinderController, type QuickLookBridge } from "../hooks/useFinderController";
@@ -320,7 +320,7 @@ export const FinderPane = memo(function FinderPane({
 						{finder.searching ? (
 							<ScopeBar
 								scope={finder.searchScope}
-								folderName={basename(finder.path)}
+								folderName={isTagPath(finder.path) ? tagNameOf(finder.path) : basename(finder.path)}
 								resultCount={finder.rows.length}
 								onScopeChange={finder.setSearchScope}
 							/>

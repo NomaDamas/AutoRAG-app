@@ -5,6 +5,8 @@ import { homedir } from "node:os";
 import { basename, dirname, extname, isAbsolute, join, win32 } from "node:path";
 import {
 	RECENTS_PATH,
+	isTagPath,
+	tagNameOf,
 	webUrl,
 	type DirListing,
 	type FsHistoryOperation,
@@ -28,6 +30,7 @@ import { newFileFormat, type NewFileFormatId } from "../shared/new-file-contract
 import type { FileNameSearchBackend } from "./file-name-search";
 import { newFileContents } from "./file-templates";
 import { createFinderMetadataResolver, type FinderMetadataLookup } from "./finder-metadata";
+import { createFinderTags, type FinderTags } from "./finder-tags";
 import { createIconProvider, type IconProvider } from "./file-icon";
 import { createOsKindResolver } from "./file-kind";
 import { readFileDetails } from "./file-details";
@@ -76,6 +79,8 @@ export interface FsServiceDeps {
 	readonly details?: (path: string) => Promise<FsFileDetails>;
 	/** Defaults to the macOS extended-attribute + Spotlight resolver; tests may inject one. */
 	readonly finderMetadata?: FinderMetadataLookup;
+	/** Finder tags (macOS); defaults to the real Spotlight + extended-attribute implementation. */
+	readonly tags?: FinderTags;
 	/** Defaults to the OS places for `homeDir`; production injects one with Electron's known-folder paths. */
 	readonly places?: Places;
 	/** Defaults to the Windows `$Recycle.Bin\<SID>` shape; tests point it at a fixture folder. */
@@ -274,6 +279,7 @@ export function createFsService(deps: FsServiceDeps): FsService {
 	const recents = deps.recents ?? createRecentsStore({ directory: join(home, "recents") });
 	const osKind: OsKindLookup = deps.osKind ?? createOsKindResolver().kindFor;
 	const finderMetadata = deps.finderMetadata ?? createFinderMetadataResolver();
+	const finderTags = deps.tags ?? createFinderTags({ platform, homeDir: home });
 	const iconProvider: IconProvider = deps.icons ?? createIconProvider();
 	const places = deps.places ?? createPlaces({ homeDir: home, platform });
 	const recycleBin = deps.recycleBin ?? isRecycleBinDir;
@@ -355,6 +361,7 @@ export function createFsService(deps: FsServiceDeps): FsService {
 			// name would destroy that order.
 			return { path, entries: await recentEntries() };
 		}
+		if (isTagPath(path)) return { path, entries: await taggedEntries(tagNameOf(path), signal) };
 		const dirents = await readdir(path, { withFileTypes: true });
 		if (recycleBin(path)) {
 			return { path, entries: await recycleBinEntries(path, dirents) };
@@ -442,6 +449,30 @@ export function createFsService(deps: FsServiceDeps): FsService {
 			}
 		}
 		return entries;
+	}
+
+	/**
+	 * The virtual tag listing: every indexed path carrying the tag, as real
+	 * entries. A hit that vanished since the index last ran drops out; any other
+	 * failure keeps its verbatim reason visible.
+	 */
+	async function taggedEntries(name: string, signal?: AbortSignal): Promise<FsEntry[]> {
+		const entries: FsEntry[] = [];
+		const paths = await finderTags.search(name);
+		const hits = await Promise.all(
+			paths.map(async (hit) => {
+				signal?.throwIfAborted();
+				try {
+					return await buildFsEntry(hit, platform);
+				} catch (error) {
+					const gone = ["ENOENT", "ENOTDIR", "EACCES", "EPERM"].some((code) => hasErrorCode(error, code));
+					if (!gone) console.warn(`fs:listDir tag ${name} skipping ${hit}: ${errorMessage(error)}`);
+					return null;
+				}
+			}),
+		);
+		for (const hit of hits) if (hit !== null) entries.push(hit);
+		return entries.sort(compareEntries);
 	}
 
 	async function locations(): Promise<readonly FsLocation[]> {
@@ -945,6 +976,8 @@ export function createFsService(deps: FsServiceDeps): FsService {
 		},
 		search,
 		locations,
+		tags: () => finderTags.catalog(),
+		setTags: (paths, change) => finderTags.set(paths, change),
 		ejectLocation: (path) => places.eject(path),
 		copy,
 		move,

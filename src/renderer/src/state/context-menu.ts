@@ -20,6 +20,8 @@ import { NEW_FILE_FORMATS, type NewFileFormatId } from "../../../shared/new-file
 import type { ActionCapabilities } from "../../../shared/actions-contract";
 import { archiveFormatOf } from "../../../shared/archive-formats";
 import type { ServiceEntry } from "../../../shared/services-contract";
+import type { FsTagCatalog, FsTagColor } from "../../../shared/fs-contract";
+import { TAG_MENU_COLORS, tagKey } from "./tags";
 
 export type FinderMenuAction =
 	| "quickLook"
@@ -42,7 +44,8 @@ export type FinderMenuAction =
 	| "emptyTrash"
 	| "newFolder"
 	| "newFile"
-	| "service";
+	| "service"
+	| "toggleTag";
 
 export type MenuTone = "default" | "danger" | "warning";
 
@@ -68,6 +71,10 @@ export interface FinderMenuSubmenuItem {
 	readonly format: NewFileFormatId | null;
 	/** The OS service a `service` leaf performs; absent on every other leaf. */
 	readonly serviceId?: string;
+	/** The Finder tag a `toggleTag` leaf adds or removes. */
+	readonly tagName?: string;
+	/** The whole selection carries this tag; choosing it removes the tag. */
+	readonly checked?: boolean;
 }
 
 /** A parent row that opens a popout panel on hover (the "새로 만들기" and "서비스" submenus). */
@@ -80,7 +87,24 @@ export interface FinderMenuSubmenu {
 /** A popout row: a leaf, or (for 서비스) one more parent for an application's services. */
 export type FinderMenuSubmenuEntry = FinderMenuSubmenuItem | FinderMenuSubmenu;
 
-export type FinderMenuEntry = FinderMenuItem | FinderMenuSeparator | FinderMenuSubmenu;
+export type FinderMenuEntry = FinderMenuItem | FinderMenuSeparator | FinderMenuSubmenu | FinderMenuTagRow;
+
+/**
+ * Finder's row of colour dots: each dot is the tag Finder gives that colour
+ * (a Mac that renamed Red to "Research" shows Research under the red dot), and
+ * one click tags or untags the selection with it. `hint` is the line Finder
+ * prints while the pointer is on the dot: Add "X" or Remove "X".
+ */
+export interface FinderMenuTagRow {
+	readonly kind: "tags";
+	readonly label: string;
+	readonly swatches: readonly {
+		readonly name: string;
+		readonly color: FsTagColor;
+		readonly checked: boolean;
+		readonly hint: string;
+	}[];
+}
 
 export interface ContextMenuInput {
 	readonly target: { readonly name: string; readonly kind: "file" | "folder" };
@@ -99,6 +123,8 @@ export interface ContextMenuInput {
 	readonly canCreateFolder: boolean;
 	/** The OS services offered for the selection; absent or empty hides 서비스. */
 	readonly services?: readonly ServiceEntry[];
+	/** Finder's tags and the tags (lower-case) every selected row carries; absent or unsupported hides the tag items. */
+	readonly tags?: { readonly catalog: FsTagCatalog; readonly shared: ReadonlySet<string> };
 }
 
 function item(
@@ -145,6 +171,43 @@ function servicesSubmenu(
 	}
 	for (const [group, children] of groups) items.push({ kind: "submenu", label: group, items: children });
 	return { kind: "submenu", label: tr("contextMenu.services", "서비스"), items };
+}
+
+/**
+ * Finder's tag block: the seven colour dots as one row, then a "Tags" submenu
+ * listing every tag Finder knows (ticked when the whole selection carries it).
+ * Empty off macOS, in the Trash, and when the registry has nothing to offer.
+ */
+function tagMenuEntries(
+	input: ContextMenuInput,
+	tr: (key: string, def: string, opt?: Record<string, unknown>) => string,
+): FinderMenuEntry[] {
+	const tags = input.tags;
+	if (tags === undefined || !tags.catalog.supported || input.inTrash === true) return [];
+	const names = tags.catalog.colorNames;
+	const swatches = TAG_MENU_COLORS.flatMap((color) => {
+		// The tag Finder pins for this colour, else the OS's own colour name.
+		const pinned = tags.catalog.tags.find((tag) => tag.color === color && tag.sidebar);
+		const name = pinned?.name ?? names[color] ?? "";
+		if (name === "") return [];
+		const checked = tags.shared.has(tagKey(name));
+		const hint = checked
+			? tr("contextMenu.removeTag", `Remove “${name}”`, { name })
+			: tr("contextMenu.addTag", `Add “${name}”`, { name });
+		return [{ name, color, checked, hint }];
+	});
+	const leaves: FinderMenuSubmenuItem[] = tags.catalog.tags.map((tag) => ({
+		kind: "submenu-item",
+		action: "toggleTag",
+		label: tag.name,
+		format: null,
+		tagName: tag.name,
+		checked: tags.shared.has(tagKey(tag.name)),
+	}));
+	const entries: FinderMenuEntry[] = [];
+	if (swatches.length > 0) entries.push({ kind: "tags", label: tr("contextMenu.tags", "태그"), swatches });
+	if (leaves.length > 0) entries.push({ kind: "submenu", label: tr("contextMenu.tagsMenu", "태그…"), items: leaves });
+	return entries;
 }
 
 export function buildContextMenu(
@@ -218,6 +281,9 @@ export function buildContextMenu(
 	}
 	const services = servicesSubmenu(input.services, input.inTrash === true, tr);
 	if (services !== null) entries.push(SEPARATOR, services);
+
+	const tagItems = tagMenuEntries(input, tr);
+	if (tagItems.length > 0) entries.push(SEPARATOR, ...tagItems);
 
 	entries.push(
 		SEPARATOR,
@@ -311,6 +377,8 @@ export interface MenuPlacement {
 export const CONTEXT_MENU_WIDTH = 220;
 const MENU_MARGIN = 8;
 const MENU_ITEM_HEIGHT = 28;
+/** The colour-dot row: 16px swatches over a one-line hover caption, plus padding. */
+const MENU_TAG_ROW_HEIGHT = 52;
 /** 1px rule plus its 4px margins. */
 const MENU_SEPARATOR_HEIGHT = 9;
 /** --space-5 padding, top and bottom. */
@@ -319,7 +387,7 @@ const MENU_PADDING = 5;
 export function estimateMenuHeight(entries: readonly FinderMenuEntry[]): number {
 	let height = MENU_PADDING * 2;
 	for (const entry of entries) {
-		height += entry.kind === "separator" ? MENU_SEPARATOR_HEIGHT : MENU_ITEM_HEIGHT;
+		height += entry.kind === "separator" ? MENU_SEPARATOR_HEIGHT : entry.kind === "tags" ? MENU_TAG_ROW_HEIGHT : MENU_ITEM_HEIGHT;
 	}
 	return height;
 }

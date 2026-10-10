@@ -16,7 +16,7 @@
  *   --border*         → --color-border* / --color-divider border-border, border-divider
  *   --accent*, --ok-*, --warn-*, --info-*, --danger-*,
  *   --error-orange-*, --tile-*, --traffic-*, --scrim-*, --vtag-*,
- *   --folder, --folder-stroke, --folder-front, --switch-off,
+ *   --folder, --folder-stroke, --folder-front, --tag-*, --switch-off,
  *   --index-dot-included                                  → --color-<same>
  *   --font-size-*     → --text-*                          text-title, text-meta
  *   --weight-*        → --font-weight-*                   font-semibold
@@ -181,6 +181,13 @@
 	--color-folder: var(--folder);
 	--color-folder-stroke: var(--folder-stroke);
 	--color-folder-front: var(--folder-front);
+	--color-tag-gray: var(--tag-gray);
+	--color-tag-green: var(--tag-green);
+	--color-tag-purple: var(--tag-purple);
+	--color-tag-blue: var(--tag-blue);
+	--color-tag-yellow: var(--tag-yellow);
+	--color-tag-red: var(--tag-red);
+	--color-tag-orange: var(--tag-orange);
 	--color-switch-off: var(--switch-off);
 	--color-traffic-close: var(--traffic-close);
 	--color-traffic-min: var(--traffic-min);

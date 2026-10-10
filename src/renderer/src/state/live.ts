@@ -1,4 +1,4 @@
-import { RECENTS_PATH } from "../../../shared/fs-contract";
+import { isVirtualListing } from "../../../shared/fs-contract";
 import type { FsDirChange } from "../../../shared/live-contract";
 import type { FinderEntry } from "../data/entries";
 import { dirname } from "./paths";
@@ -25,7 +25,7 @@ export function watchSetFor(tabs: readonly LiveTab[]): string[] {
 	for (const tab of tabs) {
 		const path = tab.path;
 		// Settings is an app UI location, not a folder: never hand it to the watcher.
-		if (!isFilesystemPath(path) || path === RECENTS_PATH || seen.has(path)) {
+		if (!isFilesystemPath(path) || isVirtualListing(path) || seen.has(path)) {
 			continue;
 		}
 		seen.add(path);

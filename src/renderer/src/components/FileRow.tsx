@@ -10,6 +10,9 @@ import { isHiddenName } from "../state/visibility";
 import { cn } from "../lib/cn";
 import { CheckIcon } from "./icons";
 import { FileTile } from "./primitives/FileTile";
+import { TagDots } from "./primitives/TagDot";
+import { useTagCatalog } from "../hooks/useTagCatalog";
+import { tagDotsOf } from "../state/tags";
 
 /** Handlers for the empty background of a listing (in-app drags and the New menu). */
 export interface BackgroundDropHandlers {
@@ -123,6 +126,7 @@ export function FileRow({
 	// The listing row stays as read; its icon, OS kind, metadata, and index
 	// state come from the sidecar, and only this row re-renders when they land.
 	const { entry, indexStatus } = useEntrySidecar(useDirectoryData().sidecar, listed);
+	const { colors: tagColors } = useTagCatalog();
 	// Virtualized: only rows near the viewport mount, so reporting them fills
 	// thumbnails in on scroll for folders larger than the per-call icon cap.
 	useEffect(() => {
@@ -266,6 +270,7 @@ export function FileRow({
 						onBlur={callbacks.onRenameCancel}
 					/>
 				)}
+				<TagDots dots={tagDotsOf(entry.finder, tagColors)} className="ml-auto pl-6" />
 				{isHead ? (
 					<>
 						<VersionTag tone="latest" label="최신본" />

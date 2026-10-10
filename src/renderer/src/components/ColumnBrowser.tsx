@@ -15,6 +15,9 @@ import { ChevronRightIcon } from "./icons";
 import { GroupHeader } from "./GroupHeader";
 import { type BackgroundDropHandlers, type RowCallbacks, VersionTag } from "./FileRow";
 import { FileTile } from "./primitives/FileTile";
+import { TagDots } from "./primitives/TagDot";
+import { useTagCatalog } from "../hooks/useTagCatalog";
+import { tagDotsOf } from "../state/tags";
 import { RenameInput } from "./RenameInput";
 import { VersionFamilyBanner } from "./VersionFamilyBanner";
 
@@ -303,6 +306,7 @@ function ColumnRow({
 }): ReactElement {
 	// Icon and OS kind come from the sidecar: only this row re-renders when they land.
 	const { entry } = useEntrySidecar(useDirectoryData().sidecar, row.entry);
+	const { colors: tagColors } = useTagCatalog();
 	const isHead = row.stackCount > 0;
 	const canOpen = entry.kind === "folder" || isHead;
 	return (
@@ -345,7 +349,8 @@ function ColumnRow({
 					callbacks={callbacks}
 				/>
 			)}
-			{canOpen ? <ChevronRightIcon size={12} className="col-arrow flex-none ml-auto text-ink-faint" /> : null}
+			<TagDots dots={tagDotsOf(entry.finder, tagColors)} size={8} className="ml-auto pl-4" />
+			{canOpen ? <ChevronRightIcon size={12} className="col-arrow flex-none ml-2 text-ink-faint" /> : null}
 		</div>
 	);
 }
