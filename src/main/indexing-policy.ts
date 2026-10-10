@@ -6,10 +6,11 @@ import { isJsonObject } from "../shared/settings-contract";
  * the librarian, whatever the shared config file says. The file itself is left
  * alone: the CLI and TUI keep reading their own settings.
  *
- * - Tesseract OCR. `parserOptions.ocr.enabled` registers the image OCR parser
- *   (png/jpg/...) and swaps kordoc's own OCR for Tesseract. kordoc's built-in
- *   PP-OCRv5, which reads scan pages when its model is cached, is a separate
- *   engine and stays as configured.
+ * - OCR. `parserOptions.ocr.enabled` is the librarian's single OCR opt-in: on,
+ *   kordoc claims image files (png/jpg/jpeg/webp) and OCRs scanned pages, with
+ *   Tesseract injected for languages kordoc's built-in PP-OCRv5 cannot read.
+ *   Pinned off, no image is parsed and scanned pages are left unrecognized. An
+ *   explicit `parserOptions.kordoc.ocr` still applies to scanned pages.
  * - Jikji's media index. `jikji.enableMediaIndex` only records file facts
  *   (pixel size, bytes, format) for photos and videos, nothing about their
  *   content, so it adds cost without making any media searchable.

@@ -219,9 +219,9 @@ describe("AttachmentContextAgent", () => {
 									summary: "Project codename",
 									evidence: [{ excerpt: "Project codename: BLUEHERON-4827." }],
 									confidence: 1,
+									refs: [attached],
 								},
 							],
-							mapping: [{ number: 1, source: attached, method: "attachment", content: "Project codename: BLUEHERON-4827." }],
 						}),
 					],
 					{ stopReason: "toolUse" },
@@ -229,13 +229,20 @@ describe("AttachmentContextAgent", () => {
 			},
 		]);
 		try {
+			const minsync = join(directory, "minsync");
+			await writeFile(
+				minsync,
+				`#!/usr/bin/env node\nconst c = process.argv[2];\nconsole.log(JSON.stringify(c === "query" ? { results: [] } : c === "check" ? { vectorstore_ok: true, embedder_ok: true } : c === "sync" ? { files_processed: 0 } : { initialized: true }));\n`,
+				{ mode: 0o755 },
+			);
 			const agent = new AttachmentContextAgent({
 				model: registration.getModel() as never,
 				searchPaths: [corpus],
 				workspacePath: directory,
 				memoryPath: join(directory, "memory.json"),
 				jikji: false,
-				minSync: false,
+				// MinSync is required: an inert binary stands in so the run never depends on a real install.
+				minSync: { binaryPath: minsync, autoInstall: false },
 				webSearch: false,
 				dupey: false,
 			});
