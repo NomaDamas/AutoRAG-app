@@ -113,6 +113,8 @@
     "showInEnclosingFolder": "상위 폴더에서 보기",
     "tags": "태그",
     "tagsMenu": "태그…",
+    "addTag": "“{{name}}” 추가",
+    "removeTag": "“{{name}}” 제거",
     "retryIndex": "인덱싱 다시 시도",
     "excludeFromIndex": "인덱싱에서 제외",
     "includeInIndex": "인덱싱에 포함",

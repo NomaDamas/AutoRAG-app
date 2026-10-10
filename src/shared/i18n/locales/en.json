@@ -113,6 +113,8 @@
     "showInEnclosingFolder": "Show in Enclosing Folder",
     "tags": "Tags",
     "tagsMenu": "Tags…",
+    "addTag": "Add “{{name}}”",
+    "removeTag": "Remove “{{name}}”",
     "retryIndex": "Retry indexing",
     "excludeFromIndex": "Exclude from indexing",
     "includeInIndex": "Include in indexing",

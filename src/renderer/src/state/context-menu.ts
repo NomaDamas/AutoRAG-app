@@ -89,11 +89,21 @@ export type FinderMenuSubmenuEntry = FinderMenuSubmenuItem | FinderMenuSubmenu;
 
 export type FinderMenuEntry = FinderMenuItem | FinderMenuSeparator | FinderMenuSubmenu | FinderMenuTagRow;
 
-/** The row of Finder colour dots; one click tags or untags the selection with that colour's tag. */
+/**
+ * Finder's row of colour dots: each dot is the tag Finder gives that colour
+ * (a Mac that renamed Red to "Research" shows Research under the red dot), and
+ * one click tags or untags the selection with it. `hint` is the line Finder
+ * prints while the pointer is on the dot: Add "X" or Remove "X".
+ */
 export interface FinderMenuTagRow {
 	readonly kind: "tags";
 	readonly label: string;
-	readonly swatches: readonly { readonly name: string; readonly color: FsTagColor; readonly checked: boolean }[];
+	readonly swatches: readonly {
+		readonly name: string;
+		readonly color: FsTagColor;
+		readonly checked: boolean;
+		readonly hint: string;
+	}[];
 }
 
 export interface ContextMenuInput {
@@ -175,10 +185,17 @@ function tagMenuEntries(
 	const tags = input.tags;
 	if (tags === undefined || !tags.catalog.supported || input.inTrash === true) return [];
 	const names = tags.catalog.colorNames;
-	const swatches = TAG_MENU_COLORS.map((color) => {
-		const name = names[color] ?? "";
-		return { name, color, checked: tags.shared.has(tagKey(name)) };
-	}).filter((swatch) => swatch.name !== "");
+	const swatches = TAG_MENU_COLORS.flatMap((color) => {
+		// The tag Finder pins for this colour, else the OS's own colour name.
+		const pinned = tags.catalog.tags.find((tag) => tag.color === color && tag.sidebar);
+		const name = pinned?.name ?? names[color] ?? "";
+		if (name === "") return [];
+		const checked = tags.shared.has(tagKey(name));
+		const hint = checked
+			? tr("contextMenu.removeTag", `Remove “${name}”`, { name })
+			: tr("contextMenu.addTag", `Add “${name}”`, { name });
+		return [{ name, color, checked, hint }];
+	});
 	const leaves: FinderMenuSubmenuItem[] = tags.catalog.tags.map((tag) => ({
 		kind: "submenu-item",
 		action: "toggleTag",
@@ -360,8 +377,8 @@ export interface MenuPlacement {
 export const CONTEXT_MENU_WIDTH = 220;
 const MENU_MARGIN = 8;
 const MENU_ITEM_HEIGHT = 28;
-/** The colour-dot row: a 12px caption over 16px swatches, plus padding. */
-const MENU_TAG_ROW_HEIGHT = 48;
+/** The colour-dot row: 16px swatches over a one-line hover caption, plus padding. */
+const MENU_TAG_ROW_HEIGHT = 52;
 /** 1px rule plus its 4px margins. */
 const MENU_SEPARATOR_HEIGHT = 9;
 /** --space-5 padding, top and bottom. */

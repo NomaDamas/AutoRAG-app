@@ -137,10 +137,26 @@ describe("the row context menu's tag block", () => {
 	const withTags = (shared: string[], extra: Partial<ContextMenuInput> = {}) =>
 		buildContextMenu({ ...file, tags: { catalog: CATALOG, shared: new Set(shared) }, ...extra });
 
-	it("offers the seven colour dots in Finder's order, ticking the ones the whole selection carries", () => {
-		const row = withTags(["red"]).find((entry) => entry.kind === "tags");
-		expect(row?.kind === "tags" && row.swatches.map((swatch) => swatch.name)).toEqual(["Red", "Orange", "Yellow", "Green", "Blue", "Purple", "Gray"]);
-		expect(row?.kind === "tags" && row.swatches.filter((swatch) => swatch.checked).map((swatch) => swatch.name)).toEqual(["Red"]);
+	it("puts the tag Finder pins for each colour under that colour's dot, in Finder's order", () => {
+		// Research is pinned red and Career orange in this catalog; the rest fall back to the OS colour names.
+		const row = withTags([]).find((entry) => entry.kind === "tags");
+		expect(row?.kind === "tags" && row.swatches.map((swatch) => [swatch.color, swatch.name])).toEqual([
+			[6, "Research"],
+			[7, "Career"],
+			[5, "Yellow"],
+			[2, "Green"],
+			[4, "Blue"],
+			[3, "Purple"],
+			[1, "Gray"],
+		]);
+	});
+
+	it("words each dot as Add or Remove, and ticks the dots the whole selection carries", () => {
+		const row = withTags(["research"]).find((entry) => entry.kind === "tags");
+		const swatches = row?.kind === "tags" ? row.swatches : [];
+		expect(swatches.find((swatch) => swatch.name === "Research")).toMatchObject({ checked: true, hint: "Remove “Research”" });
+		expect(swatches.find((swatch) => swatch.name === "Career")).toMatchObject({ checked: false, hint: "Add “Career”" });
+		expect(swatches.filter((swatch) => swatch.checked)).toHaveLength(1);
 	});
 
 	it("lists every Finder tag in a submenu, ticked when shared", () => {

@@ -9,10 +9,51 @@ import {
 	type FinderMenuAction,
 	type FinderMenuEntry,
 	type FinderMenuSubmenu,
+	type FinderMenuTagRow,
 } from "../../state/context-menu";
 import type { NewFileFormatId } from "../../../../shared/new-file-contract";
 import { ChevronRightSmallIcon } from "../icons";
 import { TagDotMark } from "./TagDot";
+
+/**
+ * Finder's colour-dot row. Hovering a dot prints what a click does under the
+ * row — Add "Research" or Remove "Research" — and one click toggles that tag
+ * on the whole selection, so no trip into a submenu is needed. At rest the
+ * caption names the first dot's tag, as Finder's does.
+ */
+function TagSwatchRow({ row, onSelect }: { readonly row: FinderMenuTagRow; readonly onSelect: MenuSelect }): ReactElement {
+	const [hovered, setHovered] = useState<string | null>(null);
+	const shown = row.swatches.find((swatch) => swatch.name === hovered) ?? null;
+	return (
+		<div className="menu__tags flex flex-col gap-4 px-10 py-6" role="group" aria-label={row.label}>
+			<div className="flex items-center gap-8" onMouseLeave={() => setHovered(null)}>
+				{row.swatches.map((swatch) => (
+					<button
+						key={swatch.color}
+						type="button"
+						role="menuitemcheckbox"
+						aria-checked={swatch.checked}
+						aria-label={swatch.hint}
+						title={swatch.hint}
+						className={cn(
+							"menu__swatch relative flex items-center justify-center size-16 p-0 border-0 rounded-full bg-transparent cursor-default",
+							swatch.checked && "shadow-[0_0_0_2px_var(--bg-window),0_0_0_3.5px_var(--accent)]",
+						)}
+						onMouseEnter={() => setHovered(swatch.name)}
+						onFocus={() => setHovered(swatch.name)}
+						onClick={() => onSelect("toggleTag", null, null, swatch.name)}
+					>
+						<TagDotMark color={swatch.color} size={14} />
+						{swatch.checked ? <span className="absolute size-4 rounded-full bg-on-accent" aria-hidden="true" /> : null}
+					</button>
+				))}
+			</div>
+			<span className="menu__tag-hint truncate text-sm text-ink-muted" aria-live="polite">
+				{shown?.hint ?? row.label}
+			</span>
+		</div>
+	);
+}
 
 /** What a menu choice carries beyond its action: a new-file format, a service, or a Finder tag name. */
 export type MenuSelect = (action: FinderMenuAction, format: NewFileFormatId | null, serviceId: string | null, tagName: string | null) => void;
@@ -73,32 +114,7 @@ export function ContextMenu({
 					// biome-ignore lint/suspicious/noArrayIndexKey: separators carry no identity
 					return <div key={`sep-${index}`} className="menu__separator h-px my-4 mx-6 bg-divider" role="separator" />;
 				}
-				if (entry.kind === "tags") {
-					return (
-						<div key="tags" className="menu__tags flex flex-col gap-4 px-10 py-4" role="group" aria-label={entry.label}>
-							<span className="text-badge text-ink-muted">{entry.label}</span>
-							<div className="flex items-center gap-8">
-								{entry.swatches.map((swatch) => (
-									<button
-										key={swatch.color}
-										type="button"
-										role="menuitemcheckbox"
-										aria-checked={swatch.checked}
-										aria-label={swatch.name}
-										title={swatch.name}
-										className={cn(
-											"menu__swatch flex items-center justify-center size-16 p-0 border-0 rounded-full bg-transparent cursor-default",
-											swatch.checked && "shadow-[0_0_0_2px_var(--bg-window),0_0_0_3.5px_var(--accent)]",
-										)}
-										onClick={() => onSelect("toggleTag", null, null, swatch.name)}
-									>
-										<TagDotMark color={swatch.color} size={14} />
-									</button>
-								))}
-							</div>
-						</div>
-					);
-				}
+				if (entry.kind === "tags") return <TagSwatchRow key="tags" row={entry} onSelect={onSelect} />;
 				if (entry.kind === "submenu") {
 					const open = openSubmenu?.label === entry.label;
 					return (

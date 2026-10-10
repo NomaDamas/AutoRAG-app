@@ -113,6 +113,8 @@
     "showInEnclosingFolder": "親フォルダーを表示",
     "tags": "タグ",
     "tagsMenu": "タグ…",
+    "addTag": "「{{name}}」を追加",
+    "removeTag": "「{{name}}」を削除",
     "retryIndex": "インデックスを再試行",
     "excludeFromIndex": "インデックスから除外",
     "includeInIndex": "インデックスに含める",
