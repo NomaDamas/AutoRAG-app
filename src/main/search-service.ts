@@ -54,7 +54,7 @@ type ChatSession = {
 	dispose(): void;
 };
 
-type SearchAgent = Pick<AutoRAGAgent, "recordFeedbackByNumbers"> & {
+type SearchAgent = {
 	readonly searchDocumentsStream: (query: string) => AsyncGenerator<SearchDocumentsStreamEvent, void, void>;
 	/** The attachment block the next run puts in front of the model ("" for none). */
 	readonly setAttachmentContext: (context: string) => void;
@@ -175,7 +175,6 @@ function mapPhase(response: SearchDocumentsResponse): AnswerPhase {
 			source: result.source ?? null,
 			excerpts: result.evidence.map((evidence) => evidence.excerpt),
 			confidence: result.confidence,
-			feedbackId: result.feedbackId,
 		})),
 	};
 }
@@ -194,8 +193,6 @@ function assistantMessage(run: SearchRun, stopped: boolean, now: () => Date): Ch
 export function createSearchService(deps: SearchServiceDeps): SearchBridge {
 	const now = deps.now ?? (() => new Date());
 	const active = new Map<string, SearchRun>();
-	/** Most recently built agent, reused to record feedback without a rebuild. */
-	let lastAgent: SearchAgent | null = null;
 
 	const emit = (event: SearchStreamEvent): void => deps.send(SEARCH_CHANNELS.event, event);
 
@@ -324,7 +321,6 @@ export function createSearchService(deps: SearchServiceDeps): SearchBridge {
 				return;
 			}
 			run.agent = agent;
-			lastAgent = agent;
 			void consume(run, agent, query, attachments);
 			await finish;
 		},
@@ -337,12 +333,6 @@ export function createSearchService(deps: SearchServiceDeps): SearchBridge {
 			await saveRunMessage(run, true);
 			active.delete(searchId);
 			run.resolveFinish();
-		},
-		feedback: async (sessionId, useful, notUseful) => {
-			// Reuse the agent that produced the session; only build one when no
-			// search has run yet in this process.
-			const agent = lastAgent ?? (await deps.agentFactory());
-			await agent.recordFeedbackByNumbers(sessionId, [...useful], [...notUseful]);
 		},
 		historyList: () => deps.chatStore.list(),
 		historyGet: (chatId) => deps.chatStore.get(chatId),

@@ -4,8 +4,6 @@ import {
 	evidenceKind,
 	evidenceSourceUrl,
 	findEvidenceSource,
-	feedbackToastText,
-	nextEvidenceFeedback,
 	unresolvedCitationNumbers,
 } from "../src/renderer/src/state/evidence";
 
@@ -74,16 +72,6 @@ describe("evidenceSourceUrl", () => {
 	});
 });
 
-describe("nextEvidenceFeedback", () => {
-	it("toggles the same value off and switches between up and down", () => {
-		expect(nextEvidenceFeedback(null, "up")).toBe("up");
-		expect(nextEvidenceFeedback("up", "up")).toBeNull();
-		expect(nextEvidenceFeedback("up", "down")).toBe("down");
-		expect(nextEvidenceFeedback("down", "down")).toBeNull();
-		expect(nextEvidenceFeedback(null, "down")).toBe("down");
-	});
-});
-
 describe("unresolvedCitationNumbers", () => {
 	const evidence = [{ number: 1 }, { number: 2 }];
 
@@ -97,12 +85,5 @@ describe("unresolvedCitationNumbers", () => {
 
 	it("returns nothing when the answer cites nothing", () => {
 		expect(unresolvedCitationNumbers("일반 지식으로 답합니다.", evidence)).toEqual([]);
-	});
-});
-
-describe("feedbackToastText", () => {
-	it("matches the reference toasts by number and value", () => {
-		expect(feedbackToastText(3, "up")).toBe("근거 3 — 도움이 됨으로 기록했습니다");
-		expect(feedbackToastText(3, "down")).toBe("근거 3 — 다음 검색부터 우선순위를 낮춥니다");
 	});
 });

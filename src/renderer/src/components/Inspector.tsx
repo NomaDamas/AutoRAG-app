@@ -18,7 +18,7 @@
  *            with total size, and created/modified date ranges.
  *   Evidence the AI Search tab's cited sources: numbered tabs, preview, title
  *            (a file reveals in the Finder, a web page opens in the OS browser),
- *            feedback (real `search.feedback` IPC), and excerpts.
+ *            and excerpts.
  *
  * All callbacks are real IPC-backed actions supplied by App; this component
  * renders no fabricated data. Esc handling stays in App's keymap.
@@ -38,14 +38,7 @@ import { anchorOf } from "../lib/anchor";
 import { dateLabelOf, fileKindOf, kindLabelOf, sizeLabelOf } from "../state/entry-values";
 import { buildInfoRows, hasMoreInfoRows, visibleInfoRows } from "../state/inspector-info";
 import { stackCards, summarizeSelection } from "../state/inspector-multi";
-import {
-	evidenceDetail,
-	evidenceKind,
-	evidenceSourceUrl,
-	feedbackToastText,
-	nextEvidenceFeedback,
-	type EvidenceFeedback,
-} from "../state/evidence";
+import { evidenceDetail, evidenceKind, evidenceSourceUrl } from "../state/evidence";
 import {
 	openWithItems,
 	suggestedActions,
@@ -72,8 +65,6 @@ import {
 	OpenWithIcon,
 	ShareIcon,
 	SparklesIcon,
-	ThumbsDownIcon,
-	ThumbsUpIcon,
 	TrashIcon,
 	VideoConvertIcon,
 } from "./icons";
@@ -116,7 +107,6 @@ export interface InspectorProps {
 	readonly view: "info" | "evidence";
 	readonly evidence: readonly CitationEvidence[];
 	readonly evidenceSelected: number;
-	readonly sessionId: string | null;
 	readonly onSelectEvidence: (n: number) => void;
 	/** Show the source: a file in the Finder, a web page in the OS browser. */
 	readonly onRevealPath: (path: string) => void;
@@ -156,7 +146,6 @@ export function Inspector({
 	view,
 	evidence,
 	evidenceSelected,
-	sessionId,
 	onSelectEvidence,
 	onRevealPath,
 	onToast,
@@ -171,7 +160,6 @@ export function Inspector({
 				<EvidencePanel
 					evidence={evidence}
 					selected={evidenceSelected}
-					sessionId={sessionId}
 					onSelect={onSelectEvidence}
 					onReveal={onRevealPath}
 					onToast={onToast}
@@ -756,7 +744,6 @@ function VersionTag({ relation }: { readonly relation: "latest" | "exact" | "nea
 function EvidencePanel({
 	evidence,
 	selected,
-	sessionId,
 	onSelect,
 	onReveal,
 	onToast,
@@ -764,14 +751,12 @@ function EvidencePanel({
 }: {
 	readonly evidence: readonly CitationEvidence[];
 	readonly selected: number;
-	readonly sessionId: string | null;
 	readonly onSelect: (n: number) => void;
 	readonly onReveal: (path: string) => void;
 	readonly onToast: (msg: string) => void;
 	readonly imageActions: ImageActions;
 }): ReactElement {
 	const { t } = useTranslation();
-	const [votes, setVotes] = useState<Readonly<Record<string, EvidenceFeedback>>>({});
 	// Only the selected number renders: falling back to `evidence[0]` here would
 	// silently show unrelated evidence for a citation the run never produced.
 	const item = evidence.find((entry) => entry.number === selected);
@@ -791,20 +776,6 @@ function EvidencePanel({
 	const local = source !== null && url === null && !source.startsWith("/kakao/");
 	const excerptImages = { folder: local ? dirname(source) : null, actions: imageActions };
 	const sourceImage = local ? imageTarget(source, null) : null;
-	const number = item.number;
-	const voteKey = `${sessionId ?? "paused"}:${number}`;
-	const vote = votes[voteKey] ?? null;
-
-	function sendVote(pick: "up" | "down"): void {
-		const next = nextEvidenceFeedback(vote, pick);
-		setVotes((current) => ({ ...current, [voteKey]: next }));
-		if (next === null || sessionId === null) return;
-		void window.autorag.search
-			.feedback(sessionId, next === "up" ? [number] : [], next === "down" ? [number] : [])
-			.then(() => onToast(feedbackToastText(number, pick)))
-			.catch((error: unknown) => onToast(error instanceof Error ? error.message : String(error)));
-	}
-
 	return (
 		<div className="inspector-half flex-1 min-h-0 flex flex-col overflow-hidden relative" aria-label="Evidence">
 			<div className="inspector-body flex-1 min-h-0 overflow-auto px-16 pt-18 pb-24">
@@ -851,32 +822,6 @@ function EvidencePanel({
 					</div>
 				)}
                 <div className="preview-sub mt-4 text-badge text-ink-muted">{evidenceDetail(item.confidence)}</div>
-
-				<div className="feedback flex items-center gap-10 my-8">
-					<button
-						title={t("inspector.evidencePanel.helpful", "이 근거가 도움이 됨")}
-						aria-label={t("inspector.evidencePanel.helpful", "이 근거가 도움이 됨")}
-						className={cn(
-							"border-0 bg-transparent p-0 text-caption cursor-pointer transition-colors duration-(--dur-color) ease-[ease]",
-							vote === "up" ? "text-ok-text" : "text-ink-muted hover:text-ink",
-						)}
-						onClick={() => sendVote("up")}
-					>
-						<ThumbsUpIcon />
-					</button>
-					<button
-						type="button"
-						title={t("inspector.evidencePanel.notHelpful", "이 근거는 도움이 안 됨")}
-						aria-label={t("inspector.evidencePanel.notHelpful", "이 근거는 도움이 안 됨")}
-						className={cn(
-							"border-0 bg-transparent p-0 text-caption cursor-pointer transition-colors duration-(--dur-color) ease-[ease]",
-							vote === "down" ? "text-danger-text" : "text-ink-muted hover:text-ink",
-						)}
-						onClick={() => sendVote("down")}
-					>
-						<ThumbsDownIcon />
-					</button>
-				</div>
 
 				<div className="text-badge font-semibold text-ink-muted">{t("inspector.evidencePanel.excerpts", "근거 내용 발췌")}</div>
 				<div className="flex flex-col gap-8 mt-4">

@@ -50,17 +50,3 @@ export function evidenceKind(title: string): FileKind {
 	const match = EXTENSION.exec(title.trim());
 	return match === null ? "md" : kindFromExtension(match[1]?.toLowerCase() ?? "");
 }
-
-export type EvidenceFeedback = "up" | "down" | null;
-
-/** Toggle per the reference: same vote clears it; the opposite side replaces it. */
-export function nextEvidenceFeedback(current: EvidenceFeedback, pick: "up" | "down"): EvidenceFeedback {
-	return current === pick ? null : pick;
-}
-
-/** Reference toast copy (`proto:1197`, strip when the vote clears). */
-export function feedbackToastText(number: number, value: "up" | "down"): string {
-	return value === "up"
-		? `근거 ${number} — 도움이 됨으로 기록했습니다`
-		: `근거 ${number} — 다음 검색부터 우선순위를 낮춥니다`;
-}
