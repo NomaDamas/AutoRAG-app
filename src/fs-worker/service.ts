@@ -10,7 +10,7 @@
  */
 
 import { join } from "node:path";
-import type { FsClipboard, FsEnrichmentTarget, FsSearchOptions } from "../shared/fs-contract";
+import type { FsClipboard, FsEnrichmentTarget, FsSearchOptions, FsTagChange } from "../shared/fs-contract";
 import type { FsWorkerConfig, FsWorkerOp } from "../shared/fs-worker-contract";
 import { FS_WORKER_PUSH, type WorkerHandler } from "../shared/fs-worker-protocol";
 import { DUPEY_LAYER_ID, type LiveMessage } from "../shared/live-contract";
@@ -131,6 +131,22 @@ function clipboardArg(value: unknown): FsClipboard {
 	throw new TypeError("clipboard must be { op, paths }");
 }
 
+function tagChangeArg(value: unknown): FsTagChange {
+	if (
+		typeof value === "object" &&
+		value !== null &&
+		"add" in value &&
+		Array.isArray(value.add) &&
+		value.add.every((name) => typeof name === "string") &&
+		"remove" in value &&
+		Array.isArray(value.remove) &&
+		value.remove.every((name) => typeof name === "string")
+	) {
+		return { add: value.add, remove: value.remove };
+	}
+	throw new TypeError("tag change must be { add, remove }");
+}
+
 export function createFsWorkerService(deps: FsWorkerServiceDeps): FsWorkerService {
 	const { config, host } = deps;
 	const places =
@@ -214,6 +230,8 @@ export function createFsWorkerService(deps: FsWorkerServiceDeps): FsWorkerServic
 		exists: (args) => fsService.exists(stringArg(args, 0, "path")),
 		search: (args, signal) => fsService.search(stringArg(args, 0, "query"), searchOptionsArg(args[1]), signal),
 		locations: () => fsService.locations(),
+		tags: () => fsService.tags(),
+		setTags: (args) => fsService.setTags(stringsArg(args, 0, "paths"), tagChangeArg(args[1])),
 		ejectLocation: (args) => fsService.ejectLocation(stringArg(args, 0, "path")),
 		copy: (args) => fsService.copy(stringsArg(args, 0, "paths"), stringArg(args, 1, "destDir")),
 		move: (args) => fsService.move(stringsArg(args, 0, "paths"), stringArg(args, 1, "destDir")),

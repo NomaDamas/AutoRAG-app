@@ -1,5 +1,5 @@
 import type { IpcRenderer } from "electron";
-import type { DirListing, FsBatchResult, FsBridge, FsClipboard, FsEntriesPatch, FsEntry, FsEntryEnrichment, FsFileDetails, FsFinderEnrichment, FsLocation, FsSearchResult, FsUndoOutcome, FsVersionFamiliesResult } from "../shared/fs-contract";
+import type { DirListing, FsBatchResult, FsBridge, FsClipboard, FsEntriesPatch, FsEntry, FsEntryEnrichment, FsFileDetails, FsFinderEnrichment, FsLocation, FsSearchResult, FsTagCatalog, FsUndoOutcome, FsVersionFamiliesResult } from "../shared/fs-contract";
 import { FS_CHANNELS } from "../shared/fs-contract";
 import type { FsWorkerOp } from "../shared/fs-worker-contract";
 import { FS_WORKER_PUSH, type WorkerClient } from "../shared/fs-worker-protocol";
@@ -24,6 +24,8 @@ export function createFsBridge(ipcRenderer: IpcRenderer, worker: WorkerClient): 
 		exists: (path) => call<boolean>("exists", path),
 		search: (query, options) => call<readonly FsSearchResult[]>("search", query, options),
 		locations: () => call<readonly FsLocation[]>("locations"),
+		tags: () => call<FsTagCatalog>("tags"),
+		setTags: (paths, change) => call<FsBatchResult>("setTags", paths, change),
 		ejectLocation: (path) => call<void>("ejectLocation", path),
 		onLocationsChanged: (listener) => worker.onPush(FS_WORKER_PUSH.locationsChanged, () => listener()),
 		copy: (paths, destDir) => call<FsBatchResult>("copy", paths, destDir),

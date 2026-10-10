@@ -153,6 +153,14 @@
   --folder: #70A8F5;
   --folder-stroke: #4C89DC;
   --folder-front: #8CB9F7;
+  /* Finder tag colours: NSWorkspace.fileLabelColors, one per label index. */
+  --tag-gray: #A7A7A7;
+  --tag-green: #B2D544;
+  --tag-purple: #BE8CD7;
+  --tag-blue: #57A0FE;
+  --tag-yellow: #EED944;
+  --tag-red: #FA6159;
+  --tag-orange: #F5A841;
   --switch-off: #C9C9CE;
   --highlight-marker: linear-gradient(transparent 55%, rgba(255,214,10,0.55) 55%);
   --traffic-close: #FF5F57;

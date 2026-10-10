@@ -59,6 +59,8 @@ function fakeFs(result: FsVersionFamiliesResult): FsBridge {
 		exists: async () => true,
 		search,
 		locations,
+		tags: async () => ({ supported: false, tags: [], colorNames: [] }),
+		setTags: batch,
 		ejectLocation: async () => {},
 		copy: batch,
 		move: batch,

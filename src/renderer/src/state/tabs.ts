@@ -4,6 +4,7 @@
  * Reference: handoff README §2 "Tab strip" and the state sketch's `Tab`.
  */
 
+import { isTagPath, tagNameOf } from "../../../shared/fs-contract";
 import { EMPTY_SELECTION, type SelectionState } from "./selection";
 import { basename, parentPrefix } from "./paths";
 
@@ -269,5 +270,5 @@ export function tabTitle(tab: { readonly path: string }, view: { readonly isActi
 	if (view.isActive && query !== "") {
 		return `Search "${query}"`;
 	}
-	return basename(tab.path) || tab.path;
+	return isTagPath(tab.path) ? tagNameOf(tab.path) : basename(tab.path) || tab.path;
 }
