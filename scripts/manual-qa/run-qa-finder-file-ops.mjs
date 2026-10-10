@@ -31,7 +31,7 @@
  * `bun scripts/manual-qa/run-qa-finder-file-ops.mjs`
  */
 
-import { existsSync, mkdirSync, mkdtempSync, readdirSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -42,8 +42,13 @@ const EVIDENCE = join(ROOT, ".omo", "evidence", "ai-finder-app", "qa-file-ops");
 mkdirSync(EVIDENCE, { recursive: true });
 
 const FINDER_DRAG_TYPE = "application/x-autorag-finder-entries";
-/** Copy shown by the AI Search panel's drag overlay. */
-const DOCK_OVERLAY = "여기로 끌어서 AI에게 물어보기";
+/**
+ * Copy shown by the AI Search panel's drag overlay. The lane runs in English
+ * (`launchFinder` seeds `en`), so read the real string from the locale file —
+ * a hard-coded Korean literal never matches and makes "no overlay lingers"
+ * checks pass vacuously.
+ */
+const DOCK_OVERLAY = JSON.parse(readFileSync(join(ROOT, "src", "shared", "i18n", "locales", "en.json"), "utf8")).aiSearch.dropPrompt;
 
 const home = mkdtempSync(join(tmpdir(), "ulw-fileops-home-"));
 const top = join(home, "Documents", "qa-file-ops");
@@ -305,6 +310,9 @@ try {
 	const backgroundY = listBox.y + listBox.height - 24;
 	await page.mouse.move(backgroundX, backgroundY, { steps: 8 });
 	await page.mouse.move(backgroundX + 3, backgroundY, { steps: 1 });
+	// Release only once the listing background accepted the drag (its drop
+	// highlight is on); releasing on the same tick races the new tab's listing.
+	await page.waitForFunction(() => document.querySelector(".list")?.className.includes("accent-drop-hover") ?? false, undefined, { timeout: 5_000 });
 	await page.mouse.up();
 	const backgroundDeadline = Date.now() + 10_000;
 	while (!existsSync(join(dirB, "background-me.txt")) && Date.now() < backgroundDeadline) await page.waitForTimeout(150);
