@@ -248,6 +248,34 @@
     "copiedPath": "已拷贝路径",
     "feedbackSent": "已发送反馈"
   },
+  "indexActivity": {
+    "title": "索引",
+    "queued": "等待中",
+    "idle": "当前没有正在建立的索引。",
+    "counts": "扫描 {{scanned}} · 写入 {{written}} · 删除 {{deleted}} · 跳过 {{skipped}}",
+    "local": "本地文件夹",
+    "source": "数据源",
+    "running": "正在建立索引",
+    "runningCount": "正在建立索引 {{done}}/{{total}}",
+    "done": "索引已完成",
+    "failed": "索引失败",
+    "syncing": "正在同步 {{name}}",
+    "andMore": "{{text}} 等 {{count}} 项",
+    "open": "查看索引状态",
+    "origin": {
+      "scheduled": "自动刷新",
+      "external": "由应用外部启动"
+    },
+    "phases": {
+      "parsed": "正在读取文档",
+      "minsync": "正在建立搜索索引",
+      "datasources": "正在同步数据源",
+      "jikji": "正在建立文件夹地图",
+      "everything": "正在为文件名建立索引",
+      "fsearch": "正在为文件名建立索引",
+      "finalizing": "即将完成"
+    }
+  },
   "confirm": {
     "emptyTrashTitle": "清倒废纸篓",
     "emptyTrashMessage": "废纸篓中的所有项目将被永久删除。此操作无法撤销。",

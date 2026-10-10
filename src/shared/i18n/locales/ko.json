@@ -248,6 +248,34 @@
     "copiedPath": "경로를 복사했습니다",
     "feedbackSent": "피드백을 보냈습니다"
   },
+  "indexActivity": {
+    "title": "인덱싱",
+    "queued": "대기 중",
+    "idle": "진행 중인 인덱싱이 없습니다.",
+    "counts": "스캔 {{scanned}} · 기록 {{written}} · 삭제 {{deleted}} · 건너뜀 {{skipped}}",
+    "local": "로컬 폴더",
+    "source": "데이터소스",
+    "running": "인덱싱 중",
+    "runningCount": "인덱싱 중 {{done}}/{{total}}",
+    "done": "인덱싱 완료",
+    "failed": "인덱싱 실패",
+    "syncing": "{{name}} 가져오는 중",
+    "andMore": "{{text}} 외 {{count}}개",
+    "open": "인덱싱 상태 보기",
+    "origin": {
+      "scheduled": "자동 새로 고침",
+      "external": "앱 밖에서 실행"
+    },
+    "phases": {
+      "parsed": "문서 읽는 중",
+      "minsync": "검색 색인 만드는 중",
+      "datasources": "데이터소스 가져오는 중",
+      "jikji": "탐색 지도 만드는 중",
+      "everything": "파일 이름 색인 중",
+      "fsearch": "파일 이름 색인 중",
+      "finalizing": "마무리하는 중"
+    }
+  },
   "confirm": {
     "emptyTrashTitle": "휴지통 비우기",
     "emptyTrashMessage": "휴지통의 모든 항목이 영구 삭제됩니다. 이 작업은 되돌릴 수 없습니다.",

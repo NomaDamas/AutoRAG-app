@@ -9,7 +9,7 @@
  * options its factory reads.
  */
 
-import { useEffect, useState, type ReactElement } from "react";
+import { useEffect, useRef, useState, type ReactElement } from "react";
 import { ChevronRight, ExternalLink, Plus, RefreshCw, Trash2 } from "lucide-react";
 import type {
 	AutoRagConfigSnapshot,
@@ -25,6 +25,9 @@ import { ModalShell, ModalActions, Note, PromptModal, Row, Section, SettingsPage
 import { SourceIcon } from "./SourceIcon";
 import { asRecord, getAt, listOf, stringOf, useConfigWriter } from "./configSupport";
 import { Switch } from "../primitives/Switch";
+import { useIndexActivity } from "../../hooks/useIndexActivity";
+import { activityItem } from "../../state/index-activity";
+import { IndexActivityCard } from "./IndexActivityCard";
 
 const settings = window.autorag.settings;
 
@@ -124,6 +127,16 @@ export function IndexingPage({
 	const localCount = listOf(getAt(snapshot.config, ["searchPaths"])).length;
 	const local = sources?.local ?? null;
 	const [schedule, setSchedule] = useState<RefreshScheduleStatus | null>(null);
+	const activity = useIndexActivity();
+	const localRunning = busy === "refresh" || activityItem(activity, "local")?.state === "running";
+	const syncingOf = (row: DataSourceRow): boolean => row.status === "syncing" || activityItem(activity, `source:${row.id}`)?.state === "running";
+	// A run that ends, whoever started it, changes counts and timestamps: re-read them once.
+	const wasRunning = useRef(false);
+	useEffect(() => {
+		const running = activity.state === "running";
+		if (wasRunning.current && !running) void settings.sourcesList().then(setSources, () => undefined);
+		wasRunning.current = running;
+	}, [activity.state, setSources]);
 	const now = Date.now();
 	const localInterval = ((): number => {
 		const value = asRecord(getAt(snapshot.config, ["appIndexing"]))?.refreshIntervalMs;
@@ -203,6 +216,9 @@ export function IndexingPage({
 		<>
 			<SettingsPageHead title="인덱싱" description="검색할 폴더와 연결된 앱의 내용이 최신인지 확인하고, 바뀐 부분만 다시 가져옵니다." />
 			{problem !== null ? <div className="settings-error" role="alert">{problem}</div> : null}
+			<Section title="진행 상황">
+				<IndexActivityCard snapshot={activity} />
+			</Section>
 			<Section title="최신화 상태">
 				<div className="settings-list">
 					<div className="settings-list-row settings-sync-row">
@@ -216,8 +232,8 @@ export function IndexingPage({
 							</span>
 						</button>
 						<span className="settings-status">
-							<StatusDot tone={busy === "refresh" ? "run" : local !== null && (local.documentCount ?? 0) > 0 ? "ok" : "warn"} />
-							{busy === "refresh" ? "새로 고치는 중…" : "사용 중"}
+							<StatusDot tone={localRunning ? "run" : local !== null && (local.documentCount ?? 0) > 0 ? "ok" : "warn"} />
+							{localRunning ? "새로 고치는 중…" : "사용 중"}
 						</span>
 						<select
 							className="settings-select-compact"
@@ -248,13 +264,13 @@ export function IndexingPage({
 								<span className="settings-list-body">
 									<span className="settings-list-title">{sourceTitle(row)}</span>
 									<span className="settings-list-meta" title={schedule?.sources[row.id]?.error ?? undefined}>
-										{[sourceMeta(row), lastAutoText(schedule?.sources[row.id], now)].filter((part) => part !== null).join(" · ")}
+										{[syncingOf(row) ? "최신화 중…" : sourceMeta(row), lastAutoText(schedule?.sources[row.id], now)].filter((part) => part !== null).join(" · ")}
 									</span>
 								</span>
 							</button>
 							<span className="settings-status">
-								<StatusDot tone={sourceTone(row)} />
-								{row.status === "syncing" ? "최신화 중…" : row.enabled ? "사용 중" : "꺼짐"}
+								<StatusDot tone={syncingOf(row) ? "run" : sourceTone(row)} />
+								{syncingOf(row) ? "최신화 중…" : row.enabled ? "사용 중" : "꺼짐"}
 							</span>
 							<select
 								className="settings-select-compact"
