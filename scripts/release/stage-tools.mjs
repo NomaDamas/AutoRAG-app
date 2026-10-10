@@ -31,6 +31,7 @@ import {
 	PLATFORMS,
 	ROOT,
 	dirSizeBytes,
+	pruneNativeForPlatform,
 	download,
 	extract,
 	findFile,
@@ -179,7 +180,12 @@ async function stageNpmCli(nodePath, packages) {
 	// better-sqlite3 fetches its prebuilt addon in an install script; every other install script is left blocked.
 	run(nodePath, [npmCli, "install", "--prefix", prefix, "--omit=dev", "--no-package-lock", ...packages], { env });
 	const nodeModules = join(prefix, "node_modules");
-	pruneForPlatform(nodeModules);
+	pruneNativeForPlatform(nodeModules, target);
+	// lancedb nests its own onnxruntime/transformers for embedding functions none of these CLIs call;
+	// verify-bundle proves lancedb and transformers.js still load without them.
+	for (const nested of ["onnxruntime-node", "onnxruntime-web", "@huggingface"]) {
+		rmSync(join(nodeModules, "@lancedb", "lancedb", "node_modules", nested), { recursive: true, force: true });
+	}
 	const shim = await buildShim();
 	for (const pkg of packages.map((spec) => spec.replace(/@latest$/, ""))) {
 		const manifest = JSON.parse(readFileSync(join(nodeModules, pkg, "package.json"), "utf8"));
@@ -192,46 +198,6 @@ async function stageNpmCli(nodePath, packages) {
 		}
 		record({ name: pkg, version: manifest.version, source: `npm ${pkg}` });
 	}
-}
-
-/**
- * npm installs every platform's prebuilt add-ons for packages that ship them in-tree. Drop the
- * ones for other targets; the three layouts seen in this dependency set are
- *   prebuilds/<os>-<arch>[.node]      (tree-sitter-*, better-sqlite3)
- *   bin/napi-v<n>/<os>/<arch>         (onnxruntime-node)
- *   <name>-<os>-<arch> sibling pkgs   (already limited to the host by npm's optional-dependency rules)
- */
-function pruneForPlatform(root) {
-	const here = `${target.os}-${target.arch}`;
-	const otherOs = ["darwin", "linux", "win32", "android", "freebsd"].filter((os) => os !== target.os);
-	const walk = (directory) => {
-		for (const entry of readdirSync(directory, { withFileTypes: true })) {
-			const full = join(directory, entry.name);
-			if (!entry.isDirectory() || entry.isSymbolicLink()) continue;
-			if (entry.name === "prebuilds") {
-				for (const child of readdirSync(full)) {
-					const stem = child.replace(/\.node$/, "");
-					if (/^(darwin|linux|win32|android|freebsd)-/.test(stem) && stem !== here) rmSync(join(full, child), { recursive: true, force: true });
-				}
-				continue;
-			}
-			if (/^napi-v\d+$/.test(entry.name)) {
-				for (const os of otherOs) rmSync(join(full, os), { recursive: true, force: true });
-				const own = join(full, target.os);
-				if (existsSync(own)) for (const arch of readdirSync(own)) if (arch !== target.arch) rmSync(join(own, arch), { recursive: true, force: true });
-				continue;
-			}
-			walk(full);
-		}
-	};
-	walk(root);
-	// lancedb nests its own onnxruntime/transformers for embedding functions none of these CLIs call.
-	for (const nested of ["onnxruntime-node", "onnxruntime-web", "@huggingface"]) {
-		rmSync(join(root, "@lancedb", "lancedb", "node_modules", nested), { recursive: true, force: true });
-	}
-	// onnxruntime-web is the browser/WASM backend; transformers.node never imports it.
-	// verify-bundle proves lancedb and transformers.js still load without these.
-	rmSync(join(root, "onnxruntime-web"), { recursive: true, force: true });
 }
 
 let shimPath;
@@ -302,7 +268,8 @@ const CARGO_BINARIES = [
 
 const NPM_PACKAGES = ["@nomadamas/mailcrawl", "@tobilu/qmd", "kordoc"];
 
-rmSync(TOOLS, { recursive: true, force: true });
+// A full run starts clean; a partial run (--only) touches just the tools it names and keeps the rest.
+if (only === undefined) rmSync(TOOLS, { recursive: true, force: true });
 mkdirSync(BIN, { recursive: true });
 
 if (wanted("node") || wanted("npm")) {
@@ -319,5 +286,7 @@ for (const item of GO_CRAWLERS) {
 for (const item of CARGO_BINARIES) if (wanted(item.name)) await stageCargoBinary(item);
 if (!flag("--skip-seed") && wanted("seed")) await stageSeed();
 
-writeFileSync(join(TOOLS, "manifest.json"), `${JSON.stringify({ schema: 1, platform: platformId, generatedAt: new Date().toISOString(), tools: staged }, null, 2)}\n`);
+const manifestPath = join(TOOLS, "manifest.json");
+const kept = only !== undefined && existsSync(manifestPath) ? JSON.parse(readFileSync(manifestPath, "utf8")).tools.filter((tool) => !staged.some((entry) => entry.name === tool.name)) : [];
+writeFileSync(manifestPath, `${JSON.stringify({ schema: 1, platform: platformId, generatedAt: new Date().toISOString(), tools: [...kept, ...staged] }, null, 2)}\n`);
 log(`tools ${mb(dirSizeBytes(TOOLS))}, seed ${existsSync(SEED) ? mb(dirSizeBytes(SEED)) : "skipped"} -> ${STAGE}`);

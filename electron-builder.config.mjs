@@ -16,6 +16,7 @@
  */
 
 import { existsSync } from "node:fs";
+import { pruneNativeForPlatform, PLATFORMS } from "./scripts/release/lib.mjs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -106,6 +107,12 @@ const config = {
 		artifactName: "AutoRAG-Setup-${version}-${arch}.${ext}",
 		// Windows long paths: node_modules trees under resources/ nest deeply.
 		warningsAsErrors: false,
+	},
+
+	// The app's own node_modules (librarian + its dependency tree) carries every platform's native add-ons.
+	afterPack: async (context) => {
+		const resources = context.electronPlatformName === "darwin" ? join(context.appOutDir, `${context.packager.appInfo.productFilename}.app`, "Contents", "Resources") : join(context.appOutDir, "resources");
+		pruneNativeForPlatform(join(resources, "app", "node_modules"), PLATFORMS[platformId]);
 	},
 
 	publish: null,

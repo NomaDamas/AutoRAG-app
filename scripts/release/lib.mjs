@@ -138,6 +138,40 @@ export function findFile(root, names) {
 	return null;
 }
 
+/**
+ * npm installs every platform's prebuilt add-ons for packages that ship them in-tree. Drop the
+ * ones for other targets; the layouts seen in this dependency set are
+ *   prebuilds/<os>-<arch>[.node]      (tree-sitter-*, better-sqlite3)
+ *   bin/napi-v<n>/<os>/<arch>         (onnxruntime-node)
+ * `onnxruntime-web` is the browser/WASM backend; nothing that runs under Node imports it.
+ */
+export function pruneNativeForPlatform(root, target) {
+	const here = `${target.os}-${target.arch}`;
+	const otherOs = ["darwin", "linux", "win32", "android", "freebsd"].filter((os) => os !== target.os);
+	const walk = (directory) => {
+		for (const entry of readdirSync(directory, { withFileTypes: true })) {
+			const full = join(directory, entry.name);
+			if (!entry.isDirectory() || entry.isSymbolicLink()) continue;
+			if (entry.name === "prebuilds") {
+				for (const child of readdirSync(full)) {
+					const stem = child.replace(/\.node$/, "");
+					if (/^(darwin|linux|win32|android|freebsd)-/.test(stem) && stem !== here) rmSync(join(full, child), { recursive: true, force: true });
+				}
+				continue;
+			}
+			if (/^napi-v\d+$/.test(entry.name)) {
+				for (const os of otherOs) rmSync(join(full, os), { recursive: true, force: true });
+				const own = join(full, target.os);
+				if (existsSync(own)) for (const arch of readdirSync(own)) if (arch !== target.arch) rmSync(join(own, arch), { recursive: true, force: true });
+				continue;
+			}
+			walk(full);
+		}
+	};
+	walk(root);
+	rmSync(join(root, "onnxruntime-web"), { recursive: true, force: true });
+}
+
 export function dirSizeBytes(root) {
 	let total = 0;
 	const stack = [root];
