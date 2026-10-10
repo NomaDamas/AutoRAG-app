@@ -433,6 +433,16 @@ Bin) and scripts that genuinely need macOS log a skip instead of failing.
 Lane logs and `summary.json` land in `.omo/evidence/win-qa/`. The sweep also
 runs in CI (`.github/workflows/qa-windows.yml`).
 
+## Releases and installers
+
+Publishing a GitHub release builds `AutoRAG-<version>-arm64.dmg` and
+`AutoRAG-Setup-<version>-x64.exe` and attaches them to it. Each installer carries
+the app plus every program it drives (the `autorag` agent, minsync, jikji, dupey,
+the datasource crawlers, rhwp, kordoc, Node and npm-based CLIs) and the local
+Qwen3 embedding model, so one download is the whole install. See
+[`docs/release.md`](docs/release.md) for the contents, the signing secrets to
+configure, and how to rehearse a release.
+
 ## License
 
 AutoRAG is licensed under the GNU Affero General Public License v3.0

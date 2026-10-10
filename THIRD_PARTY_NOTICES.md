@@ -44,3 +44,23 @@ Notes on what was verified:
 - `libarchive-wasm` replaces `libarchive.js`: the shipped `libarchive.js` wasm
   did contain OpenSSL 1.0.2/`libcrypto` code (its OpenSSL/SSLeay dual license is
   not AGPL-3.0 compatible), so it was removed.
+
+## Programs and models bundled in the installers
+
+The macOS and Windows installers ship these programs unmodified, as separate
+executables the app starts as child processes (no linking). Exact versions for a
+given release are in the `components-<platform>.json` file attached to it.
+
+| Component | License |
+|---|---|
+| Node.js | MIT |
+| npm | Artistic-2.0 |
+| minsync, jikji, dupey, kordoc, mailcrawl, rhwp, rclone, lark-cli, qmd | MIT |
+| discrawl, telecrawl, wacrawl, slacrawl, notcrawl | MIT |
+| himalaya, clawgallery | Apache-2.0 |
+| lazykatok (macOS only) | MIT |
+| llama.cpp (`llama-server` runtime) | MIT |
+| Qwen3-Embedding-0.6B (GGUF Q8_0 weights) | Apache-2.0 |
+
+`fsearch-cli` (GPL-2.0-or-later) is **not** bundled; the app uses it only when
+the user installs it separately.

@@ -58,15 +58,17 @@ does not match its published digest.
 * CUDA builds of `node-llama-cpp` (500 MB, needs an NVIDIA toolkit); CPU and Vulkan are kept.
 * Other platforms' native add-ons. Intel Macs, Windows on ARM and Linux are not shipped.
 
-### Known limitation
+### Known limitation: embedder on Windows (upstream)
 
-`createEmbeddingRuntime` in the librarian defaults its platform to
-`darwin-arm64-metal` unless a caller passes `platform`. On Windows the shipped
-runtime is `win-x64-cpu`, which is what gets seeded; the model path is
-platform-independent, but the librarian should select the platform from
-`process.platform` itself. Verify on a Windows install that the first index
-starts the embedder; if it asks for a macOS runtime, that is an upstream fix in
-`src/embedding-runtime/index.ts`.
+`ensureRuntime` in the librarian (`src/embedding-runtime/index.ts`) defaults its
+platform to `darwin-arm64-metal` and never looks at `process.platform`. Measured
+on the Windows installer's seeded files: `createEmbeddingRuntime({ platform: "win-x64-cpu" })`
+starts llama-server and returns 1024-dimension Qwen3 vectors, but the default call
+that MinSync makes fails with "Embedding runtime assets are unavailable". The
+installer ships the correct Windows runtime and model, so the fix is one line
+upstream (`platform ?? <derived from process.platform>`); until it lands, semantic
+indexing on Windows reports the embedder as unavailable and falls back to BM25.
+macOS is unaffected.
 
 ## Runners
 
