@@ -79,7 +79,7 @@ embedding model to be in place, and fails above `AUTORAG_INSTALL_BUDGET_SECONDS`
 | | installer | launch to model seeded | total |
 |---|---|---|---|
 | macOS (Apple Silicon, this Mac) | 20 s | 3 s | 22 s |
-| Windows 11, Defender real-time protection on (12 cores, NVMe) | 63-68 s (six more bare installs: 66-67 s) | 13-15 s | 77-82 s; one first run took 240 s |
+| Windows 11, Defender real-time protection on (12 cores, NVMe) | 63-68 s (six more bare installs: 66-67 s) | 13-15 s | 77-82 s; one run took 240 s (cause unknown) |
 
 What made the Windows installer slow, measured on that PC: the installer wrote each of ~46,000 small
 files twice (electron-builder's NSIS template extracts to a temp folder, then `CopyFiles` into the
@@ -97,6 +97,10 @@ The fix is in two parts:
   `electron-builder.config.mjs` drop the same kinds from the app. That glob also used to drop every
   `*.md`, including the librarian's four `SKILL.md` agent skills, which were missing from the
   packaged app; they are now included.
+
+That 240 s run (installer 226 s) came right after the installer was built on the same PC and has not
+reproduced in nine other installs (63-68 s), including a freshly copied installer file, so it is not a
+first-scan effect. It is still under the 300 s budget; if CI sees it, suspect other load on the machine.
 
 A new `AutoRAG-Setup` is also smaller (1.17 GB) and the app no longer contains the renderer-only
 libraries Vite already bundles.
