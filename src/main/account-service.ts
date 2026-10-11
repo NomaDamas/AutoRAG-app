@@ -18,6 +18,7 @@ import {
 	type PaidPlanId,
 } from "../shared/account-contract";
 import { isJsonObject } from "../shared/settings-contract";
+import { managedRoleUpdates, shouldAdoptManagedRoles } from "../shared/ai-roles";
 import type { ProviderCredentialService } from "./provider-credentials";
 
 /**
@@ -389,6 +390,15 @@ export function createAccountService(deps: AccountServiceDeps): AccountService {
 		return refresh();
 	}
 
+	/** Model ids the server lists for a non-chat operation (`jev`, `rerank`); empty when unavailable. */
+	async function operationModelIds(operation: "jev" | "rerank"): Promise<readonly { readonly id: string }[]> {
+		try {
+			return parseCatalog(await callSignedIn(`/v1/models?operation=${operation}`, {}));
+		} catch {
+			return [];
+		}
+	}
+
 	/**
 	 * Points the shared config at the signed-in account's models. The server
 	 * decides the catalog and its order, so the first entry is the recommended
@@ -421,6 +431,12 @@ export function createAccountService(deps: AccountServiceDeps): AccountService {
 		if (decomposition === undefined || (decomposition !== false && (decompositionModel === null || decompositionModel.provider === "openrouter" || decompositionModel.provider === AUTORAG_PROVIDER_ID))) {
 			next.queryDecomposition = { model: reference(cheapest) };
 		}
+		// Jev and rerank are served by the same account. Each is adopted only when
+		// the config names nothing for it (or the librarian's untouched OpenRouter
+		// default, which an account holder has no key for); a list the server cannot
+		// give leaves the role alone and never fails the chat model.
+		const [jevIds, rerankIds] = await Promise.all([operationModelIds("jev"), operationModelIds("rerank")]);
+		Object.assign(next, managedRoleUpdates(shouldAdoptManagedRoles(raw), jevIds, rerankIds));
 		writeConfigObject(deps.configPath, next);
 		return { modelId: main.id, modelName: main.name };
 	}

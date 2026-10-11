@@ -98,7 +98,17 @@ async function startFakeServer(): Promise<FakeServer> {
 				return;
 			}
 			if (path === "/v1/account" && request.method === "GET") return reply(response, 200, fake.account);
-			if (path === "/v1/models" && request.method === "GET") return reply(response, 200, CATALOG);
+			if (path === "/v1/models" && request.method === "GET") {
+				const operation = new URL(request.url ?? "/", "http://fake").searchParams.get("operation");
+				if (operation === null) return reply(response, 200, CATALOG);
+				const failure = fake.failNext.get(`/v1/models?operation=${operation}`);
+				if (failure !== undefined) {
+					fake.failNext.delete(`/v1/models?operation=${operation}`);
+					return reply(response, failure.status, failure.body);
+				}
+				const ids = operation === "jev" ? ["jev-1.13"] : operation === "rerank" ? ["vendor/rerank-a", "vendor/rerank-b"] : [];
+				return reply(response, 200, { object: "list", data: ids.map((id) => ({ id, object: "model" })) });
+			}
 			if (path === "/v1/account/checkout" && request.method === "POST") {
 				const body = await readBody(request);
 				return reply(response, 200, { url: `https://checkout.example/${String(body.plan)}` });
@@ -427,6 +437,56 @@ describe("model catalog sync hook", () => {
 		await service.refresh();
 
 		expect(synced).toEqual([]);
+	});
+});
+
+describe("Jev and rerank after sign-in", () => {
+	const readConfig = async (): Promise<Record<string, unknown>> => JSON.parse(await readFile(join(root, "config.json"), "utf8")) as Record<string, unknown>;
+
+	it("points Jev and rerank at the plan when the config names neither", async () => {
+		await writeFile(join(root, "config.json"), JSON.stringify({ searchPaths: ["/docs"] }), "utf8");
+
+		await service.signIn();
+
+		const config = await readConfig();
+		expect(config.jev).toEqual({ backend: "autorag", model: "jev-1.13" });
+		expect(config.rerank).toEqual({ enabled: true, provider: "autorag", model: "vendor/rerank-a" });
+	});
+
+	it("replaces the librarian's untouched OpenRouter defaults, which an account holder has no key for", async () => {
+		await writeFile(
+			join(root, "config.json"),
+			JSON.stringify({ jev: { backend: "openrouter" }, rerank: { provider: "openrouter", model: "voyageai/rerank-3-lite", apiKeyEnv: "OPENROUTER_API_KEY", topN: 25 } }),
+			"utf8",
+		);
+
+		await service.signIn();
+
+		const config = await readConfig();
+		expect(config.jev).toMatchObject({ backend: "autorag" });
+		expect(config.rerank).toMatchObject({ provider: "autorag" });
+	});
+
+	it("keeps a role the user turned off or pointed at another provider", async () => {
+		await writeFile(join(root, "config.json"), JSON.stringify({ jev: false, rerank: { provider: "openrouter", model: "voyageai/rerank-3" } }), "utf8");
+
+		await service.signIn();
+
+		const config = await readConfig();
+		expect(config.jev).toBe(false);
+		expect(config.rerank).toEqual({ provider: "openrouter", model: "voyageai/rerank-3" });
+	});
+
+	it("still adopts the chat model when the Jev and rerank lists cannot be read", async () => {
+		fake.failNext.set("/v1/models?operation=jev", { status: 500, body: { error: { message: "boom", type: "server_error", code: "internal" } } });
+		fake.failNext.set("/v1/models?operation=rerank", { status: 500, body: { error: { message: "boom", type: "server_error", code: "internal" } } });
+
+		await service.signIn();
+
+		const config = await readConfig();
+		expect(config.model).toMatchObject({ provider: "autorag" });
+		expect(config.jev).toBeUndefined();
+		expect(config.rerank).toBeUndefined();
 	});
 });
 
