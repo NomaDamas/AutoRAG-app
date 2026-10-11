@@ -214,6 +214,12 @@ The Info half's bottom bar is data-driven, not a fixed four buttons.
   (removed on any failure) and then renaming it into place, flattening a single
   wrapper folder that matches the archive stem. The wasm engine's licenses are
   recorded in `THIRD_PARTY_NOTICES.md`.
+- Compression writes zip (default) or 7z — "7z로 압축" is a second row beside "압축"
+  in the Inspector and context menu, a `compress` request with `format: "7z"`.
+  The 7z writer (`src/main/sevenzip-writer.ts`) is in-process, uses Deflate from
+  `node:zlib` (one folder per file, so it streams like the zip writer), and links
+  no archive library. RAR is extract-only: the format is proprietary and
+  RARLAB's license forbids building a compressor.
 
 ---
 
