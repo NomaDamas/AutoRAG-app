@@ -5,8 +5,7 @@
 //
 // Prerequisites: `bun run build`, OPENROUTER_API_KEY in the environment.
 // Run: node scripts/manual-qa/run-qa-finder-answer-streaming.mjs
-// Set QA_REQUIRE_DEEP_STREAM=1 to also require a streamed Deep draft (needs a
-// librarian whose model can call emit_autorag_results).
+// Set QA_REQUIRE_DEEP_STREAM=1 to also require a streamed Deep draft.
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync, appendFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";

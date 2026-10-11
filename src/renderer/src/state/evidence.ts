@@ -34,9 +34,24 @@ export function findEvidenceSource<T extends { readonly path: string }>(entries:
 	return entries.find((entry) => entry.path.normalize("NFC") === normalized);
 }
 
-/** Confidence as a percentage, shown right of the source line. */
-export function evidenceDetail(confidence: number): string {
-	return `관련도 ${Math.round(confidence * 100)}%`;
+/**
+ * Heading for an evidence entry. A local file's title is its file name, which
+ * is what the user knows. A datasource result's derived title is the last path
+ * segment of its virtual id (`/kakao/work/chunks/msg-1` -> `msg-1`), an opaque
+ * chunk id that says nothing, so label it by where it came from instead:
+ * `kakao · work`. Anything that is not a datasource virtual id keeps its title.
+ */
+export function evidenceHeading(title: string, source: string | null): string {
+	if (source === null || !source.startsWith("/") || webUrl(source) !== null) return title;
+	const [datasource, instance, surface] = source.split("/").filter((part) => part.length > 0);
+	const opaque = surface === "chunks" || surface === "messages" || surface === "images";
+	if (datasource === undefined || instance === undefined || !opaque) return title;
+	return `${datasource} · ${instance}`;
+}
+
+/** Confidence as a percentage, shown right of the source line; `null` when the librarian measured none. */
+export function evidenceDetail(confidence: number | undefined): string | null {
+	return confidence === undefined ? null : `관련도 ${Math.round(confidence * 100)}%`;
 }
 
 const EXTENSION = /\.([A-Za-z0-9]{1,6})$/u;

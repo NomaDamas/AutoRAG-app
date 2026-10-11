@@ -208,24 +208,8 @@ describe("AttachmentContextAgent", () => {
 			},
 			(context: { readonly messages: unknown }) => {
 				requests.push(JSON.stringify(context.messages));
-				return pi.fauxAssistantMessage(
-					[
-						pi.fauxToolCall("emit_autorag_results", {
-							answer: "The codename is BLUEHERON-4827 [1].",
-							results: [
-								{
-									number: 1,
-									title: "secret-brief.md",
-									summary: "Project codename",
-									evidence: [{ excerpt: "Project codename: BLUEHERON-4827." }],
-									confidence: 1,
-									refs: [attached],
-								},
-							],
-						}),
-					],
-					{ stopReason: "toolUse" },
-				);
+				// The model cites the file it was handed; the librarian derives the result.
+				return pi.fauxAssistantMessage(`The codename is BLUEHERON-4827. [file:${attached}]`, { stopReason: "stop" });
 			},
 		]);
 		try {
@@ -255,6 +239,9 @@ describe("AttachmentContextAgent", () => {
 			expect(requests[0]).toContain("Project codename: BLUEHERON-4827.");
 			expect(requests[0]).toContain("What is the project codename?");
 			expect(response.query).toBe("What is the project codename?");
+			// The answer's citation became a numbered result backed by the attached file.
+			expect(response.answer).toBe("The codename is BLUEHERON-4827. [1]");
+			expect(response.results.map((result) => result.source)).toEqual([attached]);
 		} finally {
 			registration.unregister();
 		}
