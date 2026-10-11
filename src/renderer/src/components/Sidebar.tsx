@@ -51,6 +51,8 @@ export function Sidebar({
 	searchQuery,
 	searchRef,
 	searchFocused,
+	searchFolderName,
+	folderFilterRequest,
 	onSearchFocus,
 	onSearchBlur,
 	onSubmitSearch,
@@ -71,6 +73,9 @@ export function Sidebar({
 	readonly searchQuery: string;
 	readonly searchRef: RefObject<HTMLInputElement | null>;
 	readonly searchFocused: boolean;
+	/** The folder the search can be limited to (null when the view is not a folder). */
+	readonly searchFolderName: string | null;
+	readonly folderFilterRequest: number;
 	readonly onSearchFocus: () => void;
 	readonly onSearchBlur: () => void;
 	readonly onSubmitSearch: (mode: SearchMode, text: string) => void;
@@ -118,6 +123,8 @@ export function Sidebar({
 				query={searchQuery}
 				inputRef={searchRef}
 				focused={searchFocused}
+				folderName={searchFolderName}
+				folderFilterRequest={folderFilterRequest}
 				showHotkeys={showHotkeys}
 				onFocus={onSearchFocus}
 				onBlur={onSearchBlur}

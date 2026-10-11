@@ -399,6 +399,11 @@ export const FinderPane = memo(function FinderPane({
 							crumbs={breadcrumbTrail(finder.path, Number.MAX_SAFE_INTEGER)}
 							selectedName={focusedEntry !== null && focusedEntry.kind === "file" ? focusedEntry.name : null}
 							onNavigate={finder.navigate}
+							editing={finder.pathEditing}
+							editText={finder.pathEditText}
+							onCommit={finder.commitPath}
+							onCancel={finder.cancelPathEdit}
+							onStartEdit={finder.editPath}
 						/>
 					</>
 				)}

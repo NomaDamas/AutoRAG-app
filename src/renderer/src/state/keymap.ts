@@ -46,6 +46,9 @@ export type KeyAction =
 	| { readonly type: "disclose"; readonly direction: "expand" | "collapse" }
 	| { readonly type: "dismiss" }
 	| { readonly type: "focusSearch" }
+	| { readonly type: "focusFolderFilter" }
+	| { readonly type: "editPath" }
+	| { readonly type: "duplicate" }
 	| { readonly type: "focusComposer" }
 	| { readonly type: "newTab" }
 	| { readonly type: "reopenTab" }
@@ -59,8 +62,15 @@ export function resolveKeyAction(event: KeyEventLike, context: KeyContext): KeyA
 	}
 	if ((event.meta || event.ctrl === true) && !event.alt) {
 		switch (event.key.toLowerCase()) {
+			// ⌘F searches the whole machine; ⇧⌘F filters only the folder in view.
 			case "f":
-				return { type: "focusSearch" };
+				return event.shift ? { type: "focusFolderFilter" } : { type: "focusSearch" };
+			// ⌘L types a path into the path bar, as in a browser's address bar.
+			case "l":
+				return { type: "editPath" };
+			// ⌘D duplicates the selection, as in Finder.
+			case "d":
+				return context.typing || context.zone !== "finder" ? null : { type: "duplicate" };
 			case "k":
 				return { type: "focusComposer" };
 			// ⇧⌘T brings back the tab ⌘W closed, as in a browser.

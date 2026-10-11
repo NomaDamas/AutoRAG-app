@@ -155,6 +155,12 @@ export interface FinderKeyboardInput {
 	readonly actions: {
 		dismiss(): void;
 		focusSearch(): void;
+		/** ⇧⌘F: focus the sidebar search scoped to the folder in view. */
+		focusFolderFilter(): void;
+		/** ⌘L: turn the path bar into a text field holding the current path. */
+		editPath(): void;
+		/** ⌘D: duplicate the selected rows next to themselves. */
+		duplicateSelection(): void;
 		newTab(): void;
 		newFolder(): void;
 		newFile(format: NewFileFormatId): void;
@@ -228,6 +234,18 @@ export function useFinderKeyboard(input: FinderKeyboardInput): void {
 				case "focusSearch":
 					event.preventDefault();
 					actions.focusSearch();
+					return;
+				case "focusFolderFilter":
+					event.preventDefault();
+					actions.focusFolderFilter();
+					return;
+				case "editPath":
+					event.preventDefault();
+					actions.editPath();
+					return;
+				case "duplicate":
+					event.preventDefault();
+					actions.duplicateSelection();
 					return;
 				case "newTab":
 					event.preventDefault();

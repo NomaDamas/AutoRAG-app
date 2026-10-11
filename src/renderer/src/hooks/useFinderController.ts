@@ -48,7 +48,7 @@ import {
 	selectDupey,
 	type LayerStore,
 } from "../state/layers";
-import { activeNavPath, basename, breadcrumbTrail, dirname, type Crumb } from "../state/paths";
+import { activeNavPath, basename, breadcrumbTrail, dirname, isAbsolutePath, normalizeTypedPath, type Crumb } from "../state/paths";
 import {
 	applyRowClick,
 	EMPTY_SELECTION,
@@ -165,6 +165,17 @@ export interface FinderController {
 	readonly canGoForward: boolean;
 	readonly query: string;
 	readonly searchFocused: boolean;
+	/** ⌘L: the path bar is a text field. */
+	readonly pathEditing: boolean;
+	/** What the path field starts with: the folder in view (empty for Recents and tags, which have no path). */
+	readonly pathEditText: string;
+	/** Go to the typed path: a folder opens, a file's folder opens with the file selected. */
+	commitPath(text: string): void;
+	/** Turn the path bar into a text field (⌘L, or a double-click on its empty part). */
+	editPath(): void;
+	cancelPathEdit(): void;
+	/** Bumped by ⇧⌘F: the sidebar search focuses and switches to "this folder". */
+	readonly folderFilterRequest: number;
 	readonly searching: boolean;
 	readonly emptyText: string;
 	readonly rows: readonly FinderEntry[];
@@ -390,6 +401,8 @@ export function useFinderController(
 	const [emptyTrashConfirm, setEmptyTrashConfirm] = useState(false);
 	const [flashPath, setFlashPath] = useState<string | null>(null);
 	const [searchFocused, setSearchFocused] = useState(false);
+	const [pathEditing, setPathEditing] = useState(false);
+	const [folderFilterRequest, setFolderFilterRequest] = useState(0);
 	const [revision, setRevision] = useState(0);
 	const [actionCapabilities, setActionCapabilities] = useState<ActionCapabilities>(NO_CAPABILITIES);
 	const [layerStore, setLayerStore] = useState<LayerStore>(EMPTY_LAYER_STORE);
@@ -952,6 +965,19 @@ export function useFinderController(
 				.catch(reportError);
 		});
 
+	/** Duplicate rows next to themselves (⌘D and the row menu). */
+	const duplicatePaths = useLatestCallback(
+		(paths: readonly string[]) => {
+			if (paths.length === 0) return;
+			source
+				.duplicate(paths)
+				.then((result) => {
+					if (result.failed.length > 0) showToast(batchToast("duplicate", result));
+					refresh();
+				})
+				.catch(reportError);
+		});
+
 	/** The sidebar's Trash location, the only folder whose rows restore instead of trash. */
 	const trashLocationPath = useMemo(
 		() => locations.find((location) => location.icon === "trash")?.path ?? null,
@@ -1485,13 +1511,7 @@ export function useFinderController(
 					cutPaths(targets);
 					return;
 				case "duplicate":
-					source
-						.duplicate(targets)
-						.then((result) => {
-							if (result.failed.length > 0) showToast(batchToast("duplicate", result));
-							refresh();
-						})
-						.catch(reportError);
+					duplicatePaths(targets);
 					return;
 				case "rename":
 					setRename({ path: entry.path, draft: entry.name });
@@ -1633,6 +1653,10 @@ export function useFinderController(
 		});
 
 	const dismiss = useLatestCallback(() => {
+		if (pathEditing) {
+			setPathEditing(false);
+			return;
+		}
 		if (emptyTrashConfirm) {
 			setEmptyTrashConfirm(false);
 			return;
@@ -1665,6 +1689,45 @@ export function useFinderController(
 	const focusSearch = useLatestCallback(() => {
 		focusSearchRef.current?.();
 		searchRef.current?.focus();
+	});
+	const focusFolderFilter = useLatestCallback(() => {
+		setFolderFilterRequest((count) => count + 1);
+		focusSearchRef.current?.();
+		searchRef.current?.focus();
+	});
+	const editPath = useLatestCallback(() => setPathEditing(true));
+	const duplicateSelection = useLatestCallback(() => duplicatePaths(selection.keys));
+	const cancelPathEdit = useLatestCallback(() => setPathEditing(false));
+	/** Resolve typed text to a place: `~` and quotes are tolerated; a file opens its folder with the file selected. */
+	const commitPath = useLatestCallback((text: string) => {
+		setPathEditing(false);
+		const home = locations.find((location) => location.icon === "home")?.path ?? null;
+		const target = normalizeTypedPath(text, home);
+		if (target === "" || target === path) return;
+		const missing = (): void =>
+			showToast(t("pathBar.notFound", { path: target, defaultValue: `"${target}" 경로를 찾을 수 없습니다.` }));
+		if (source.native && !isAbsolutePath(target)) {
+			missing();
+			return;
+		}
+		const parent = dirname(target);
+		if (parent === target) {
+			// A root has no parent to ask: it is a folder when it exists.
+			source
+				.exists(target)
+				.then((exists) => (exists ? navigate(target) : missing()))
+				.catch(reportError);
+			return;
+		}
+		source
+			.readEntries(parent, [target])
+			.then((patch) => {
+				const entry = patch.entries[0];
+				if (entry === undefined) missing();
+				else if (entry.kind === "folder") navigate(entry.path);
+				else revealEntry(entry);
+			})
+			.catch(reportError);
 	});
 	const closeActiveTab = useLatestCallback(() =>
 		updateWorkspace((workspace) => {
@@ -1699,6 +1762,9 @@ export function useFinderController(
 		() => ({
 			dismiss,
 			focusSearch,
+			focusFolderFilter,
+			editPath,
+			duplicateSelection,
 			newTab,
 			reopenClosedTab,
 			newFolder,
@@ -1725,6 +1791,9 @@ export function useFinderController(
 		[
 			dismiss,
 			focusSearch,
+			focusFolderFilter,
+			editPath,
+			duplicateSelection,
 			newTab,
 			newFolder,
 			newFile,
@@ -1936,6 +2005,12 @@ export function useFinderController(
 		forward,
 		setQuery: setQueryValue,
 		setSearchFocused,
+		pathEditing,
+		editPath,
+		pathEditText: isVirtualListing(path) ? "" : path,
+		commitPath,
+		cancelPathEdit,
+		folderFilterRequest,
 		sortBy,
 		applySort,
 		setGrouping,

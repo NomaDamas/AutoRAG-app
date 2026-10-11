@@ -75,7 +75,11 @@
     "fileNameHint": "この{{machine}}全体でファイル名を検索",
     "contentHint": "AIでファイル内容を検索 ({{shortcut}})",
     "placeholder": "検索…",
-    "clearSearch": "検索をクリア"
+    "clearSearch": "検索をクリア",
+    "folderHint": "\"{{folder}}\" の中だけでファイル名を検索 ({{shortcut}})"
+  },
+  "pathBar": {
+    "notFound": "\"{{path}}\" が見つかりません。"
   },
   "scopeBar": {
     "search": "検索:",

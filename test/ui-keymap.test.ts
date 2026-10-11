@@ -130,6 +130,25 @@ describe("resolveKeyAction", () => {
 		expect(resolveKeyAction(key("ArrowUp"), finder)).toEqual({ type: "moveSelection", delta: -1 });
 	});
 
+	it("maps ⌘D to duplicate in the Finder zone only, leaving a text field its own ⌘D", () => {
+		expect(resolveKeyAction(key("d", { meta: true }), finder)).toEqual({ type: "duplicate" });
+		expect(resolveKeyAction(key("D", { ctrl: true }), finder)).toEqual({ type: "duplicate" });
+		expect(resolveKeyAction(key("d", { meta: true }), { ...finder, typing: true })).toBeNull();
+		expect(resolveKeyAction(key("d", { meta: true }), { zone: "evidence", typing: false })).toBeNull();
+	});
+
+	it("maps ⌘L to the path field, even from a text field, as a browser's address bar does", () => {
+		expect(resolveKeyAction(key("l", { meta: true }), finder)).toEqual({ type: "editPath" });
+		expect(resolveKeyAction(key("L", { ctrl: true }), finder)).toEqual({ type: "editPath" });
+		expect(resolveKeyAction(key("l", { meta: true }), { ...finder, typing: true })).toEqual({ type: "editPath" });
+	});
+
+	it("splits ⌘F (whole machine) from ⇧⌘F (this folder)", () => {
+		expect(resolveKeyAction(key("f", { meta: true }), finder)).toEqual({ type: "focusSearch" });
+		expect(resolveKeyAction(key("F", { meta: true, shift: true }), finder)).toEqual({ type: "focusFolderFilter" });
+		expect(resolveKeyAction(key("f", { ctrl: true, shift: true }), { ...finder, typing: true })).toEqual({ type: "focusFolderFilter" });
+	});
+
 	it("ignores unmapped keys", () => {
 		expect(resolveKeyAction(key("x"), finder)).toBeNull();
 		expect(resolveKeyAction(key("t"), finder)).toBeNull();

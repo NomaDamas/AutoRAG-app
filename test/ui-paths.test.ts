@@ -6,6 +6,7 @@ import {
 	dirname,
 	isAbsolutePath,
 	joinPath,
+	normalizeTypedPath,
 	pathSegments,
 	volumeLabel,
 	whereSegments,
@@ -188,5 +189,37 @@ describe("volumeLabel", () => {
 
 	it("derives the UNC share prefix for a network path", () => {
 		expect(volumeLabel("\\\\server\\share\\Users\\me")).toBe("\\\\server\\share");
+	});
+});
+
+describe("normalizeTypedPath", () => {
+	const home = "/Users/me";
+
+	it("expands ~ to the home folder", () => {
+		expect(normalizeTypedPath("~", home)).toBe("/Users/me");
+		expect(normalizeTypedPath("~/Documents/Projects", home)).toBe("/Users/me/Documents/Projects");
+		expect(normalizeTypedPath("~\\Documents", "C:\\Users\\me")).toBe("C:\\Users\\me\\Documents");
+	});
+
+	it("leaves ~ alone when the home folder is unknown, and never expands ~name", () => {
+		expect(normalizeTypedPath("~/x", null)).toBe("~/x");
+		expect(normalizeTypedPath("~other/x", home)).toBe("~other/x");
+	});
+
+	it("strips pasted quotes, whitespace and trailing separators", () => {
+		expect(normalizeTypedPath("  '/Users/me/My Files'  ", home)).toBe("/Users/me/My Files");
+		expect(normalizeTypedPath('"/Users/me/Docs/"', home)).toBe("/Users/me/Docs");
+		expect(normalizeTypedPath("/Users/me/Docs///", home)).toBe("/Users/me/Docs");
+	});
+
+	it("keeps a root a root", () => {
+		expect(normalizeTypedPath("/", home)).toBe("/");
+		expect(normalizeTypedPath("C:\\", home)).toBe("C:\\");
+		expect(normalizeTypedPath("C:\\Users\\", home)).toBe("C:\\Users");
+	});
+
+	it("returns empty for blank input", () => {
+		expect(normalizeTypedPath("   ", home)).toBe("");
+		expect(normalizeTypedPath("''", home)).toBe("");
 	});
 });

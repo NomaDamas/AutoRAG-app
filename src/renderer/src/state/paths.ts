@@ -153,6 +153,26 @@ export function parentPrefix(path: string): string {
 	return path.endsWith("/") || path.endsWith("\\") ? path : path + separatorOf(path);
 }
 
+/**
+ * A path typed or pasted into the path bar, made ready to look up: surrounding
+ * quotes (a path copied from a shell) and whitespace go, `~` expands to `home`,
+ * and trailing separators drop, except on a root (`/`, `C:\`), which stays
+ * itself. Empty when nothing usable remains.
+ */
+export function normalizeTypedPath(text: string, home: string | null): string {
+	let value = text.trim();
+	const quoted = /^(["'])(.*)\1$/u.exec(value);
+	if (quoted !== null) value = (quoted[2] ?? "").trim();
+	if (value === "") return "";
+	if (home !== null && (value === "~" || value.startsWith("~/") || value.startsWith("~\\"))) {
+		value = home + value.slice(1);
+	}
+	const floor = Math.max(pathRoot(value)?.prefix.length ?? 0, 1);
+	let end = value.length;
+	while (end > floor && (value[end - 1] === "/" || value[end - 1] === "\\")) end -= 1;
+	return value.slice(0, end);
+}
+
 /** The sidebar entry that owns `path` — the longest matching nav path. */
 export function activeNavPath(path: string, targets: readonly NavTarget[]): string | null {
 	let best: string | null = null;
