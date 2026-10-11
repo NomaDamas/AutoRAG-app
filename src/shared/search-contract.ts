@@ -3,7 +3,7 @@
  *
  * The main process owns one AutoRAGAgent instance (the "main search agent")
  * and streams `searchDocumentsStream` events to the renderer over IPC.
- * Quick = the stream's `preliminary` event (emit_fast_answer fast phase);
+ * Quick = the stream's `preliminary` event (the fast phase's plain-text answer);
  * Deep = the stream's `complete` event (full SearchDocumentsResponse).
  * While a phase runs, the main process also forwards the agent's live model
  * stream: `thinking` signals (once per phase) that the model started
@@ -47,7 +47,8 @@ export interface CitationEvidence {
 	/** Real source path (local files) or datasource virtual id. */
 	readonly source: string | null;
 	readonly excerpts: readonly string[];
-	readonly confidence: number;
+	/** Relevance 0..1 when the librarian measured one; absent for results derived from the answer's citations. */
+	readonly confidence?: number;
 }
 
 /** One assistant answer phase mapped for the UI. */

@@ -135,31 +135,33 @@ describe("createSearchService", () => {
 		]);
 	});
 
-	it("signals thinking once per phase without its text and streams the emit tool-call answers as drafts", async () => {
+	it("signals thinking once per phase without its text and streams each plain-text answer as that phase's draft", async () => {
 		const update = (assistantMessageEvent: NonNullable<LiveAgentEvent["assistantMessageEvent"]>): LiveAgentEvent => ({
 			type: "message_update",
 			assistantMessageEvent,
 		});
-		const toolDelta = (name: string, answer: string): LiveAgentEvent =>
-			update({
-				type: "toolcall_delta",
-				delta: "…",
-				contentIndex: 1,
-				partial: { content: [{ type: "thinking" }, { type: "toolCall", name, arguments: { answer } }] },
-			});
+		const assistant = (type: "message_start" | "message_end", stopReason?: string): LiveAgentEvent => ({
+			type,
+			message: { role: "assistant", ...(stopReason === undefined ? {} : { stopReason }) },
+		});
+		const text = (delta: string): LiveAgentEvent => update({ type: "text_delta", delta });
 		const agent = createFakeAgent(async function*(live) {
 			live({ type: "agent_start" });
+			live(assistant("message_start"));
 			live(update({ type: "thinking_delta", delta: "Check the " }));
 			live(update({ type: "thinking_delta", delta: "policy." }));
-			live(toolDelta("emit_fast_answer", "Quick"));
-			live(toolDelta("emit_fast_answer", "Quick answer"));
-			live({ type: "tool_execution_end", toolName: "emit_fast_answer" });
+			live(text("Quick"));
+			live(text(" answer"));
+			live(assistant("message_end", "stop"));
+			live({ type: "agent_end" });
 			yield { type: "preliminary", response: createResponse("session-1", "Quick answer", 1) };
 			live({ type: "agent_start" });
+			live(assistant("message_start"));
 			live(update({ type: "thinking_delta", delta: "Verify." }));
-			live(update({ type: "text_delta", delta: "Plan note." }));
-			live(toolDelta("emit_autorag_results", "Deep"));
-			live(toolDelta("emit_autorag_results", "Deep answer"));
+			live(text("Deep"));
+			live(text(" answer"));
+			live(assistant("message_end", "stop"));
+			live({ type: "agent_end" });
 			yield { type: "complete", response: createResponse("session-1", "Deep answer", 1) };
 		});
 		const { events, send } = collectEvents();
@@ -186,11 +188,96 @@ describe("createSearchService", () => {
 		expect(agent.listeners.size).toBe(0);
 	});
 
+	it("withdraws the draft of a message that turns out to end on a tool call", async () => {
+		// A message that ends on a tool call is a progress note ("checking X next"),
+		// not the answer. It streams like one, so it is only known afterwards.
+		const update = (delta: string): LiveAgentEvent => ({
+			type: "message_update",
+			assistantMessageEvent: { type: "text_delta", delta },
+		});
+		const agent = createFakeAgent(async function*(live) {
+			live({ type: "agent_start" });
+			live({ type: "agent_start" });
+			live({ type: "message_start", message: { role: "assistant" } });
+			live(update("Checking the July review."));
+			live({ type: "message_end", message: { role: "assistant", stopReason: "toolUse" } });
+			live({ type: "message_start", message: { role: "assistant" } });
+			live(update("Final answer."));
+			live({ type: "message_end", message: { role: "assistant", stopReason: "stop" } });
+			yield { type: "complete", response: createResponse("session-note", "Final answer.", 1) };
+		});
+		const { events, send } = collectEvents();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send, now });
+
+		await service.start("search-note", "chat-note", "refund approval", []);
+
+		expect(events.filter((event) => event.type === "deep-draft")).toEqual([
+			{ type: "deep-draft", searchId: "search-note", text: "Checking the July review." },
+			{ type: "deep-draft", searchId: "search-note", text: "" },
+			{ type: "deep-draft", searchId: "search-note", text: "Final answer." },
+		]);
+	});
+
+	it("withdraws a progress note's draft as soon as the tool call starts, not when the message ends", async () => {
+		// The tool runs after message_end, which can be seconds away; the note must
+		// not sit in the answer area for that long.
+		const { events, send } = collectEvents();
+		let eventsAtToolStart = -1;
+		const agent = createFakeAgent(async function*(live) {
+			live({ type: "agent_start" });
+			live({ type: "agent_start" });
+			live({ type: "message_start", message: { role: "assistant" } });
+			live({ type: "message_update", assistantMessageEvent: { type: "text_delta", delta: "Checking the July review." } });
+			live({ type: "message_update", assistantMessageEvent: { type: "toolcall_start" } });
+			// Everything the mapper emitted up to this point, before message_end is sent.
+			eventsAtToolStart = events.filter((event) => event.type === "deep-draft").length;
+			live({ type: "message_end", message: { role: "assistant", stopReason: "toolUse" } });
+			yield { type: "complete", response: createResponse("session-tool", "Final answer.", 1) };
+		});
+		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send, now });
+
+		await service.start("search-tool", "chat-tool", "refund approval", []);
+
+		// The note, then its withdrawal, were both out before message_end was sent.
+		expect(eventsAtToolStart).toBe(2);
+		const drafts = events.filter((event) => event.type === "deep-draft");
+		expect(drafts).toEqual([
+			{ type: "deep-draft", searchId: "search-tool", text: "Checking the July review." },
+			{ type: "deep-draft", searchId: "search-tool", text: "" },
+		]);
+	});
+
+	it("hides the librarian's citation markers in drafts, including a marker still being typed", async () => {
+		const text = (delta: string): LiveAgentEvent => ({
+			type: "message_update",
+			assistantMessageEvent: { type: "text_delta", delta },
+		});
+		const agent = createFakeAgent(async function*(live) {
+			live({ type: "agent_start" });
+			live({ type: "message_start", message: { role: "assistant" } });
+			live(text("The cap is 28% [e"));
+			live(text("3, e7]. Renews yearly [file:/Users/jeff/a"));
+			live(text(".pdf] done."));
+			live({ type: "message_end", message: { role: "assistant", stopReason: "stop" } });
+			yield { type: "preliminary", response: createResponse("session-cite", "The cap is 28% [1].", 1) };
+		});
+		const { events, send } = collectEvents();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send, now });
+
+		await service.start("search-cite", "chat-cite", "cap", []);
+
+		const drafts = events.flatMap((event) => (event.type === "quick-draft" ? [event.text] : []));
+		expect(drafts).toEqual(["The cap is 28%", "The cap is 28%. Renews yearly", "The cap is 28%. Renews yearly done."]);
+		expect(drafts.some((draft) => /\[(?:e|file)/.test(draft))).toBe(false);
+	});
+
 	it("streams a plain-text fast phase as the Quick draft", async () => {
 		const agent = createFakeAgent(async function*(live) {
 			live({ type: "agent_start" });
+			live({ type: "message_start", message: { role: "assistant" } });
 			live({ type: "message_update", assistantMessageEvent: { type: "text_delta", delta: "Director " } });
 			live({ type: "message_update", assistantMessageEvent: { type: "text_delta", delta: "approval." } });
+			live({ type: "message_end", message: { role: "assistant", stopReason: "stop" } });
 			yield { type: "preliminary", response: createResponse("session-text", "Director approval.", 1) };
 		});
 		const { events, send } = collectEvents();
