@@ -17,6 +17,7 @@ const WINDOW_KEY_ACTIONS: Partial<Record<KeyAction["type"], true>> = {
 	focusSearch: true,
 	focusComposer: true,
 	newTab: true,
+	reopenTab: true,
 	closeTab: true,
 	openSettings: true,
 	setViewMode: true,
@@ -157,6 +158,7 @@ export interface FinderKeyboardInput {
 		newTab(): void;
 		newFolder(): void;
 		newFile(format: NewFileFormatId): void;
+		reopenClosedTab(): void;
 		closeTab(): void;
 		openSettings(): void;
 		focusComposer(): void;
@@ -226,6 +228,10 @@ export function useFinderKeyboard(input: FinderKeyboardInput): void {
 				case "newTab":
 					event.preventDefault();
 					actions.newTab();
+					return;
+				case "reopenTab":
+					event.preventDefault();
+					actions.reopenClosedTab();
 					return;
 				case "newFolder":
 					event.preventDefault();

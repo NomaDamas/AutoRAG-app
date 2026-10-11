@@ -13,13 +13,36 @@
  * opens in the pane of the last focused folder tab.
  */
 
-import { AI_SEARCH_PATH, createTabsState, evacuateTabs, focusAiSearchTab, openAiSearchTab, openTabAt, SETTINGS_PATH, type FinderTab, type TabsState } from "./tabs";
+import {
+	AI_SEARCH_PATH,
+	createTabsState,
+	evacuateTabs,
+	focusAiSearchTab,
+	isVirtualTabPath,
+	openAiSearchTab,
+	openTabAt,
+	SETTINGS_PATH,
+	type FinderTab,
+	type TabsState,
+} from "./tabs";
 
 export interface Pane {
 	readonly id: number;
 	readonly tabs: readonly FinderTab[];
 	readonly activeId: number;
 }
+
+/** A folder tab that was closed, kept so ⇧⌘T can bring it back. */
+export interface ClosedTab {
+	/** The tab as it was: path, back/forward history, selection, column chain. Its id is not reused. */
+	readonly tab: FinderTab;
+	/** The pane and strip slot it left, so a restore into that same pane lands where it was. */
+	readonly paneId: number;
+	readonly index: number;
+}
+
+/** How many closed tabs ⇧⌘T can walk back through. */
+export const CLOSED_TAB_LIMIT = 20;
 
 /** "row" lays children left to right, "column" top to bottom. */
 export type SplitDirection = "row" | "column";
@@ -44,6 +67,8 @@ export interface Workspace {
 	readonly nextTabId: number;
 	readonly nextPaneId: number;
 	readonly nextSplitId: number;
+	/** Closed folder tabs, newest first, at most `CLOSED_TAB_LIMIT`. */
+	readonly closedTabs: readonly ClosedTab[];
 }
 
 export type PaneEdge = "left" | "right" | "top" | "bottom";
@@ -88,6 +113,7 @@ export function createWorkspace(path: string): Workspace {
 		nextTabId: nextId,
 		nextPaneId: 2,
 		nextSplitId: 1,
+		closedTabs: [],
 	};
 }
 
@@ -216,13 +242,39 @@ function recentPane(ws: Workspace, accept: (tab: FinderTab) => boolean = () => t
 export function closeWorkspaceTab(ws: Workspace, tabId: number): Workspace {
 	if (!canCloseWorkspaceTab(ws)) return ws;
 	const from = paneHolding(ws, tabId);
+	const closing = from?.tabs.find((tab) => tab.id === tabId);
 	const detached = detachTab(ws, tabId);
-	if (from === undefined || detached === null) return ws;
+	if (from === undefined || closing === undefined || detached === null) return ws;
 	const next = detached.ws;
 	const recentTabs = next.recentTabs.filter((id) => id !== tabId);
 	const paneGone = !next.panes.some((pane) => pane.id === from.id);
 	const focusedPaneId = paneGone && next.focusedPaneId === from.id ? recentPane({ ...next, recentTabs }) : next.focusedPaneId;
-	return remember({ ...next, recentTabs, focusedPaneId });
+	// Settings and AI Search show no folder, and an AI Search chat does not outlive its tab: nothing to bring back.
+	const closedTabs = isVirtualTabPath(closing.path)
+		? next.closedTabs
+		: [{ tab: closing, paneId: from.id, index: from.tabs.indexOf(closing) }, ...next.closedTabs].slice(0, CLOSED_TAB_LIMIT);
+	return remember({ ...next, recentTabs, focusedPaneId, closedTabs });
+}
+
+/**
+ * ⇧⌘T: reopen the most recently closed folder tab in the focused pane, active,
+ * with its folder, history, selection and column chain. It takes its old strip
+ * slot when that pane is the one it was closed in, else it goes last. Unchanged
+ * when nothing was closed.
+ */
+export function reopenClosedTab(ws: Workspace): Workspace {
+	const [closed, ...rest] = ws.closedTabs;
+	if (closed === undefined) return ws;
+	const pane = paneOf(ws, ws.focusedPaneId);
+	const id = ws.nextTabId;
+	const index = closed.paneId === pane.id ? Math.min(closed.index, pane.tabs.length) : pane.tabs.length;
+	const tab: FinderTab = { ...closed.tab, id, flash: false };
+	const tabs = [...pane.tabs.slice(0, index), tab, ...pane.tabs.slice(index)];
+	return remember({
+		...replacePane(ws, { id: pane.id, tabs, activeId: id }),
+		nextTabId: id + 1,
+		closedTabs: rest,
+	});
 }
 
 /** Whether dropping `tabId` on `target` is a real move that leaves no pane empty-handed. */
