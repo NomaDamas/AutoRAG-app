@@ -15,8 +15,9 @@
  * contains a credential: electron-builder reads them from the environment.
  */
 
-import { existsSync } from "node:fs";
-import { pruneNativeForPlatform, PLATFORMS } from "./scripts/release/lib.mjs";
+import { spawnSync } from "node:child_process";
+import { existsSync, rmSync } from "node:fs";
+import { PLATFORMS, pruneNativeForPlatform, systemTar } from "./scripts/release/lib.mjs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -48,8 +49,10 @@ const config = {
 		"out/**",
 		"package.json",
 		"!**/*.map",
-		"!**/{test,tests,__tests__,docs,example,examples,.github}/**",
-		"!**/node_modules/**/{*.md,*.markdown,CHANGELOG*,README*,*.d.ts,*.ts.map,*.tsbuildinfo}",
+		"!**/{test,tests,__tests__,example,examples,.github}/**",
+		// Prose and type declarations are never read at run time. SKILL.md files are (the librarian loads
+		// them as agent skills), so only README/CHANGELOG-style names go, not *.md in general.
+		"!**/node_modules/**/{README*,readme*,CHANGELOG*,HISTORY*,CONTRIBUTING*,*.markdown,*.d.ts,*.d.mts,*.d.cts,*.tsbuildinfo}",
 		"!node_modules/@autorag/librarian/{src,test,legacy,docs,assets,scripts,skills-src}/**",
 	],
 	extraResources: [
@@ -111,8 +114,15 @@ const config = {
 
 	// The app's own node_modules (librarian + its dependency tree) carries every platform's native add-ons.
 	afterPack: async (context) => {
-		const resources = context.electronPlatformName === "darwin" ? join(context.appOutDir, `${context.packager.appInfo.productFilename}.app`, "Contents", "Resources") : join(context.appOutDir, "resources");
+		const windows = context.electronPlatformName !== "darwin";
+		const resources = windows ? join(context.appOutDir, "resources") : join(context.appOutDir, `${context.packager.appInfo.productFilename}.app`, "Contents", "Resources");
 		pruneNativeForPlatform(join(resources, "app", "node_modules"), PLATFORMS[platformId]);
+		if (!windows) return;
+		// Windows: the small-file trees ship as one tar that build/installer.nsh unpacks (see the notes there).
+		const trees = ["app/node_modules", "tools/npm", "tools/node"];
+		const tar = spawnSync(systemTar(), ["-cf", join(resources, "payload.tar"), "-C", resources, ...trees], { stdio: "inherit" });
+		if (tar.status !== 0) throw new Error(`creating payload.tar failed (tar exit ${tar.status})`);
+		for (const tree of trees) rmSync(join(resources, tree), { recursive: true, force: true });
 	},
 
 	publish: null,

@@ -117,7 +117,7 @@ export async function download(url, filename, expected) {
 export function extract(archive, destination) {
 	rmSync(destination, { recursive: true, force: true });
 	mkdirSync(destination, { recursive: true });
-	run("tar", ["-xf", archive, "-C", destination]);
+	run(systemTar(), ["-xf", archive, "-C", destination]);
 }
 
 /** Breadth-first search for a file named `name`; the shallowest match wins. */
@@ -177,6 +177,38 @@ export function pruneNativeForPlatform(root, target) {
 		const keep = target.os === "darwin" ? [`mac-${target.arch}-metal`] : ["win-x64", "win-x64-vulkan"];
 		for (const entry of readdirSync(llama)) if (!keep.includes(entry)) rmSync(join(llama, entry), { recursive: true, force: true });
 	}
+}
+
+/**
+ * Delete files that are never read at run time from an installed node_modules tree: source maps,
+ * TypeScript declarations and prose docs. They are ~half of the files in these trees, and on
+ * Windows the per-file cost is what makes installs slow. LICENSE files stay (MIT/BSD need the notice).
+ * Returns the number of files removed.
+ */
+export function pruneDeadWeight(root) {
+	let removed = 0;
+	const dead = /(\.map|\.d\.(ts|mts|cts)|\.tsbuildinfo|\.markdown)$|^(readme|changelog|history|contributing|authors)(\.md|\.txt)?$/i;
+	const walk = (directory) => {
+		for (const entry of readdirSync(directory, { withFileTypes: true })) {
+			const full = join(directory, entry.name);
+			if (entry.isDirectory()) walk(full);
+			else if (entry.isFile() && dead.test(entry.name)) {
+				rmSync(full, { force: true });
+				removed += 1;
+			}
+		}
+	};
+	walk(root);
+	return removed;
+}
+
+/**
+ * The system bsdtar. Windows ships it as System32\\tar.exe, which is also what the installer
+ * calls, so building and unpacking use the same tool; a Git-for-Windows `tar` on PATH is GNU tar
+ * and cannot read the same flags.
+ */
+export function systemTar() {
+	return process.platform === "win32" ? join(process.env.SystemRoot ?? "C:\\Windows", "System32", "tar.exe") : "tar";
 }
 
 export function dirSizeBytes(root) {

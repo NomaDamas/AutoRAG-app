@@ -32,6 +32,7 @@ import {
 	ROOT,
 	dirSizeBytes,
 	pruneNativeForPlatform,
+	pruneDeadWeight,
 	download,
 	extract,
 	findFile,
@@ -251,6 +252,8 @@ async function stageNpmCli(nodePath, packages) {
 	run(nodePath, [npmCli, "install", "--prefix", prefix, "--omit=dev", "--no-package-lock", ...packages], { env });
 	const nodeModules = join(prefix, "node_modules");
 	pruneNativeForPlatform(nodeModules, target);
+	const pruned = pruneDeadWeight(nodeModules);
+	log(`removed ${pruned} map/declaration/doc files from the npm tree`);
 	// lancedb nests its own onnxruntime/transformers for embedding functions none of these CLIs call;
 	// verify-bundle proves lancedb and transformers.js still load without them.
 	for (const nested of ["onnxruntime-node", "onnxruntime-web", "@huggingface"]) {
