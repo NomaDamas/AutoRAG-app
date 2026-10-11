@@ -7,6 +7,9 @@
  *  2. 압축 really writes a zip next to the source
  *  3. a zip offers 압축 해제, which restores the folder
  *  4. a PNG offers 이미지 편집 -> JPEG로 변환, which writes a JPEG (real sips)
+ *  4b. an iPhone-style IMG_0001.HEIC (macOS only: sips writes the fixture)
+ *     offers JPEG first plus PNG/AVIF/GIF/TIFF/BMP, never HEIC itself, and
+ *     JPEG로 변환 / GIF로 변환 write real JPEG / GIF bytes
  *  5. a MOV offers 동영상 변환 -> MP4로 변환, which writes an MP4 (real ffmpeg)
  *  6. 공유 opens the sheet without erroring (macOS only; button hidden elsewhere)
  *
@@ -18,7 +21,7 @@
  *   bun scripts/manual-qa/run-qa-finder-file-actions.mjs
  */
 
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -61,6 +64,12 @@ function fixture() {
 	writeFileSync(join(QA_ROOT, "notes.txt"), "hello action\n");
 	writeFileSync(join(QA_ROOT, "photo.png"), PNG_1X1);
 	writeFileSync(join(QA_ROOT, "docs", "readme.md"), "# docs\n");
+	// An iPhone-style photo: sips encodes the HEIC (Windows ffmpeg rarely has a heif muxer).
+	if (isMac) {
+		execFileSync("sips", ["-z", "64", "64", join(QA_ROOT, "photo.png"), "--out", join(QA_ROOT, "seed.png")], { stdio: "ignore" });
+		execFileSync("sips", ["-s", "format", "heic", join(QA_ROOT, "seed.png"), "--out", join(QA_ROOT, "IMG_0001.HEIC")], { stdio: "ignore" });
+		rmSync(join(QA_ROOT, "seed.png"));
+	}
 	writeFileSync(
 		join(QA_ROOT, "bundle.zip"),
 		zipSync({
@@ -178,6 +187,40 @@ try {
 	} else {
 		check("png hides the image menu without an image engine", (await actionLabels(page)).includes("Edit Image"), false);
 		console.log("SKIP image convert checks: no sips or ffmpeg image engine");
+	}
+
+	// 4b. HEIC -> JPEG / GIF through sips, checked by the bytes actually written.
+	if (isMac) {
+		const imageMenuItems = async () => {
+			await selectFile(page, "IMG_0001.HEIC");
+			await page.getByRole("button", { name: "Edit Image", exact: true }).click();
+			return page.locator('[role="menu"][aria-label="세부 작업"] [role="menuitem"] span').allInnerTexts();
+		};
+		const heicItems = await imageMenuItems();
+		console.log(`heic menu: ${heicItems.join(" | ")}`);
+		check("heic menu leads with JPEG", heicItems[0], "JPEG로 변환");
+		for (const label of ["PNG로 변환", "AVIF로 변환", "GIF로 변환", "TIFF로 변환", "BMP로 변환"]) {
+			check(`heic menu offers ${label}`, heicItems.includes(label), true);
+		}
+		check("heic menu omits its own format", heicItems.includes("HEIC로 변환"), false);
+		await sleep(400);
+		await page.screenshot({ path: join(EVIDENCE, "3b-heic-menu.png") });
+		await page.getByRole("menuitem", { name: "JPEG로 변환", exact: true }).click();
+		const heicJpeg = join(QA_ROOT, "IMG_0001.jpg");
+		await waitFor(() => existsSync(heicJpeg), { label: "IMG_0001.jpg" });
+		await sleep(300);
+		check("heic -> jpg wrote JPEG bytes", readFileSync(heicJpeg).subarray(0, 3).toString("hex"), "ffd8ff");
+		await page.waitForSelector(".toast", { timeout: 5000 }).catch(() => {});
+		await page.screenshot({ path: join(EVIDENCE, "3c-heic-converted.png") });
+
+		await imageMenuItems();
+		await page.getByRole("menuitem", { name: "GIF로 변환", exact: true }).click();
+		const heicGif = join(QA_ROOT, "IMG_0001.gif");
+		await waitFor(() => existsSync(heicGif), { label: "IMG_0001.gif" });
+		await sleep(300);
+		check("heic -> gif wrote GIF bytes", readFileSync(heicGif).subarray(0, 3).toString("latin1"), "GIF");
+	} else {
+		console.log("SKIP heic checks: the HEIC fixture needs macOS sips");
 	}
 
 	// 5. MOV -> MP4 through ffmpeg.

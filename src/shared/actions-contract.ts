@@ -22,7 +22,7 @@ export const ACTIONS_CHANNELS = {
 export type ActionsChannel = (typeof ACTIONS_CHANNELS)[keyof typeof ACTIONS_CHANNELS];
 
 /** Image formats the conversion action can write. */
-export type ImageFormat = "jpeg" | "png" | "webp" | "tiff" | "heic";
+export type ImageFormat = "jpeg" | "png" | "webp" | "heic" | "avif" | "gif" | "tiff" | "bmp";
 
 /** Video containers the container-conversion action can remux into. */
 export type VideoContainer = "mp4" | "mov" | "mkv";
@@ -106,7 +106,7 @@ export interface ActionsBridge {
 	share(paths: readonly string[], anchor: ActionAnchor): Promise<void>;
 }
 
-const IMAGE_FORMATS: readonly string[] = ["jpeg", "png", "webp", "tiff", "heic"];
+const IMAGE_FORMATS: readonly string[] = ["jpeg", "png", "webp", "heic", "avif", "gif", "tiff", "bmp"];
 const VIDEO_CONTAINERS: readonly string[] = ["mp4", "mov", "mkv"];
 
 export function isActionRequest(value: unknown): value is ActionRequest {

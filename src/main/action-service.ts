@@ -137,8 +137,16 @@ const JPEG_QUALITY = "70";
 const FFMPEG_JPEG_QSCALE = "4";
 /** libx265 (HEIC) is rate-controlled by `-crf`, not `-q:v`. */
 const FFMPEG_HEIC_CRF = "23";
-/** sips writes these; `webp` arrives only when ffmpeg can encode it. */
-const SIPS_FORMATS: readonly ImageFormat[] = ["jpeg", "png", "tiff", "heic"];
+/** AV1 (AVIF) quality: both libsvtav1 and libaom-av1 read `-crf` on a 0–63 scale. */
+const FFMPEG_AVIF_CRF = "30";
+/** One palette per image keeps GIF banding down; the default fixed palette posterizes photos. */
+const GIF_PALETTE_FILTER = "split[a][b];[a]palettegen[p];[b][p]paletteuse";
+/** Every format the conversion menu can offer, in the order it lists them: most common first. */
+const IMAGE_FORMAT_ORDER: readonly ImageFormat[] = ["jpeg", "png", "webp", "heic", "avif", "gif", "tiff", "bmp"];
+/** Formats sips may write; `sips --formats` decides which this macOS actually can (AVIF arrived later). */
+const SIPS_CANDIDATES: readonly ImageFormat[] = ["jpeg", "png", "heic", "avif", "gif", "tiff", "bmp"];
+/** What every supported macOS sips writes, used when `sips --formats` cannot be read. */
+const SIPS_BASELINE: readonly ImageFormat[] = ["jpeg", "png", "heic", "gif", "tiff", "bmp"];
 /**
  * ffmpeg image encoders that satisfy each format on the non-macOS backend. The
  * session probe keeps only the formats whose encoder is actually listed, so the
@@ -148,28 +156,40 @@ const FFMPEG_IMAGE_ENCODERS: readonly { readonly format: ImageFormat; readonly e
 	{ format: "jpeg", encoders: ["mjpeg"] },
 	{ format: "png", encoders: ["png"] },
 	{ format: "webp", encoders: ["libwebp", "webp"] },
+	{ format: "gif", encoders: ["gif"] },
 	{ format: "tiff", encoders: ["tiff"] },
+	{ format: "bmp", encoders: ["bmp"] },
 ];
 /** HEIC needs a HEVC encoder and the heif muxer; both must be present. */
 const HEIC_ENCODER = "libx265";
 const HEIC_MUXER = "heif";
+/** AVIF needs an AV1 encoder (first listed wins) and the avif muxer. */
+const AVIF_ENCODERS: readonly string[] = ["libsvtav1", "libaom-av1"];
+const AVIF_MUXER = "avif";
 const VIDEO_CONTAINERS: readonly VideoContainer[] = ["mp4", "mov", "mkv"];
 /** The extension written for each image format. */
 const FORMAT_EXTENSIONS: Readonly<Record<ImageFormat, string>> = {
 	jpeg: "jpg",
 	png: "png",
 	webp: "webp",
-	tiff: "tiff",
 	heic: "heic",
+	avif: "avif",
+	gif: "gif",
+	tiff: "tiff",
+	bmp: "bmp",
 };
 const EXTENSION_FORMATS: Readonly<Record<string, ImageFormat>> = {
 	jpg: "jpeg",
 	jpeg: "jpeg",
 	png: "png",
 	webp: "webp",
+	heic: "heic",
+	heif: "heic",
+	avif: "avif",
+	gif: "gif",
 	tif: "tiff",
 	tiff: "tiff",
-	heic: "heic",
+	bmp: "bmp",
 };
 /** Lossy formats, where "optimize" actually saves bytes. */
 const LOSSY_FORMATS: readonly ImageFormat[] = ["jpeg", "webp", "heic"];
@@ -317,6 +337,19 @@ function parseMuxerNames(listing: string): ReadonlySet<string> {
 	return names;
 }
 
+/**
+ * The image formats a `sips --formats` listing marks Writable, by the extension
+ * column (`public.avif  avif  Writable`).
+ */
+function parseSipsWritable(listing: string): ReadonlySet<string> {
+	const names = new Set<string>();
+	for (const line of listing.split("\n")) {
+		const name = /^\S+\s+(\S+)\s+Writable\s*$/.exec(line)?.[1];
+		if (name !== undefined) names.add(name);
+	}
+	return names;
+}
+
 /** External-tool argv, one function per command shape. */
 function sipsConvertArgs(source: string, target: string, format: ImageFormat): readonly string[] {
 	return ["-s", "format", format, "--out", target, source];
@@ -341,16 +374,20 @@ const IMAGE2_INPUT_EXTENSIONS = new Set(["bmp", "jpeg", "jpg", "png", "tif", "ti
 const ffmpegImageInput = (source: string): readonly string[] =>
 	IMAGE2_INPUT_EXTENSIONS.has(extname(source).slice(1).toLowerCase()) ? ["-f", "image2", "-pattern_type", "none"] : [];
 
-/** image2 (the muxer for jpg/png/tiff) also expands output patterns; the webp muxer writes literal names and rejects the flag. */
+/** image2 (the muxer for jpg/png/tiff/bmp) also expands output patterns; the webp/gif/avif muxers write literal names and reject the flag. */
 const ffmpegImageOutput = (format: ImageFormat): readonly string[] =>
-	format === "jpeg" || format === "png" || format === "tiff" ? ["-update", "1"] : [];
+	format === "jpeg" || format === "png" || format === "tiff" || format === "bmp" ? ["-update", "1"] : [];
 
 function ffmpegWebpArgs(source: string, target: string): readonly string[] {
 	return ["-y", ...ffmpegImageInput(source), "-i", source, "-c:v", "libwebp", "-quality", String(LOSSY_QUALITY), target];
 }
 
-/** Lossy quality flags for the ffmpeg image backend; lossless formats add none. */
-function ffmpegQualityArgs(format: ImageFormat): readonly string[] {
+/**
+ * Encoder flags for the ffmpeg image backend: quality for lossy formats, and
+ * for AVIF the AV1 encoder the probe found (the avif muxer has no default that
+ * is guaranteed to exist) in the 4:2:0 layout AVIF decoders expect.
+ */
+function ffmpegQualityArgs(format: ImageFormat, avifEncoder: string | null): readonly string[] {
 	switch (format) {
 		case "jpeg":
 			return ["-q:v", FFMPEG_JPEG_QSCALE];
@@ -358,35 +395,50 @@ function ffmpegQualityArgs(format: ImageFormat): readonly string[] {
 			return ["-crf", FFMPEG_HEIC_CRF];
 		case "webp":
 			return ["-quality", String(LOSSY_QUALITY)];
+		case "avif":
+			return avifEncoder === null ? [] : ["-c:v", avifEncoder, "-pix_fmt", "yuv420p", "-crf", FFMPEG_AVIF_CRF];
 		default:
 			return [];
 	}
 }
 
 /** Decode one frame and re-encode to `format`, keeping alpha where the target supports it. */
-function ffmpegConvertArgs(source: string, target: string, format: ImageFormat): readonly string[] {
+function ffmpegConvertArgs(source: string, target: string, format: ImageFormat, avifEncoder: string | null): readonly string[] {
 	const args = ["-y", ...ffmpegImageInput(source), "-i", source, "-frames:v", "1"];
 	if (format === "jpeg") args.push("-pix_fmt", "yuvj420p");
 	else if (format === "png" || format === "webp") args.push("-pix_fmt", "rgba");
-	args.push(...ffmpegQualityArgs(format), ...ffmpegImageOutput(format), target);
+	else if (format === "gif") args.push("-vf", GIF_PALETTE_FILTER);
+	args.push(...ffmpegQualityArgs(format, avifEncoder), ...ffmpegImageOutput(format), target);
 	return args;
 }
 
 /** Fit inside a `maxEdge` box without enlarging, preserving aspect ratio. */
-function ffmpegResizeArgs(source: string, target: string, maxEdge: number, format: ImageFormat): readonly string[] {
+function ffmpegResizeArgs(
+	source: string,
+	target: string,
+	maxEdge: number,
+	format: ImageFormat,
+	avifEncoder: string | null,
+): readonly string[] {
 	const filter = `scale='min(iw,${maxEdge})':'min(ih,${maxEdge})':force_original_aspect_ratio=decrease`;
 	const args = ["-y", ...ffmpegImageInput(source), "-i", source, "-frames:v", "1", "-vf", filter];
-	args.push(...ffmpegQualityArgs(format), ...ffmpegImageOutput(format), target);
+	args.push(...ffmpegQualityArgs(format, avifEncoder), ...ffmpegImageOutput(format), target);
 	return args;
 }
 
 /** Re-encode for size: PNG uses maximum deflate, lossy formats re-encode at the tuning quality. */
-function ffmpegOptimizeArgs(source: string, target: string, format: ImageFormat): readonly string[] {
+function ffmpegOptimizeArgs(source: string, target: string, format: ImageFormat, avifEncoder: string | null): readonly string[] {
 	const args = ["-y", ...ffmpegImageInput(source), "-i", source, "-frames:v", "1"];
 	if (format === "png") args.push("-compression_level", "9", "-pred", "mixed");
-	else args.push(...ffmpegQualityArgs(format));
+	else args.push(...ffmpegQualityArgs(format, avifEncoder));
 	args.push(...ffmpegImageOutput(format), target);
 	return args;
+}
+
+/** What the ffmpeg image backend can write, and the AV1 encoder AVIF uses when it can. */
+interface FfmpegImageProbe {
+	readonly formats: readonly ImageFormat[];
+	readonly avifEncoder: string | null;
 }
 
 function ffmpegRemuxArgs(source: string, target: string): readonly string[] {
@@ -401,7 +453,9 @@ export function createActionService(deps: ActionServiceDeps): ActionService {
 	/** Memoized ffmpeg probe: one `ffmpeg -version` per session, at most. */
 	let ffmpeg: Promise<boolean> | null = null;
 	/** Memoized image-encoder probe: one `-encoders` / `-muxers` pass per session. */
-	let ffmpegImageFormats: Promise<readonly ImageFormat[]> | null = null;
+	let ffmpegImageProbe: Promise<FfmpegImageProbe> | null = null;
+	/** Memoized `sips --formats` probe: one listing per session. */
+	let sipsWritable: Promise<readonly ImageFormat[]> | null = null;
 
 	function hasFfmpeg(): Promise<boolean> {
 		ffmpeg ??= run("ffmpeg", ["-version"], { timeoutMs: 5000 }).then(
@@ -413,71 +467,93 @@ export function createActionService(deps: ActionServiceDeps): ActionService {
 
 	/**
 	 * The image formats this machine's ffmpeg can write, read once from its
-	 * encoder list (and the heif muxer for HEIC). A machine without ffmpeg — or a
-	 * build missing an encoder — simply does not expose that format.
+	 * encoder list (and the heif/avif muxers for HEIC/AVIF). A machine without
+	 * ffmpeg — or a build missing an encoder — simply does not expose that format.
 	 */
-	function probeImageFormats(): Promise<readonly ImageFormat[]> {
-		ffmpegImageFormats ??= (async () => {
+	function probeFfmpegImages(): Promise<FfmpegImageProbe> {
+		ffmpegImageProbe ??= (async () => {
 			try {
 				const [encoders, muxers] = await Promise.all([
 					run("ffmpeg", ["-hide_banner", "-encoders"], { timeoutMs: 5000 }),
 					run("ffmpeg", ["-hide_banner", "-muxers"], { timeoutMs: 5000 }),
 				]);
 				const encoderNames = parseEncoderNames(encoders.stdout);
-				const formats = FFMPEG_IMAGE_ENCODERS.filter((spec) =>
-					spec.encoders.some((name) => encoderNames.has(name)),
-				).map((spec) => spec.format);
-				if (encoderNames.has(HEIC_ENCODER) && parseMuxerNames(muxers.stdout).has(HEIC_MUXER)) formats.push("heic");
-				return formats;
+				const muxerNames = parseMuxerNames(muxers.stdout);
+				const formats = new Set(
+					FFMPEG_IMAGE_ENCODERS.filter((spec) => spec.encoders.some((name) => encoderNames.has(name))).map(
+						(spec) => spec.format,
+					),
+				);
+				if (encoderNames.has(HEIC_ENCODER) && muxerNames.has(HEIC_MUXER)) formats.add("heic");
+				const avifEncoder = muxerNames.has(AVIF_MUXER)
+					? (AVIF_ENCODERS.find((name) => encoderNames.has(name)) ?? null)
+					: null;
+				if (avifEncoder !== null) formats.add("avif");
+				return { formats: IMAGE_FORMAT_ORDER.filter((format) => formats.has(format)), avifEncoder };
 			} catch {
-				return [];
+				return { formats: [], avifEncoder: null };
 			}
 		})();
-		return ffmpegImageFormats;
+		return ffmpegImageProbe;
+	}
+
+	/** The formats this macOS's sips writes; an unreadable listing falls back to the long-standing set. */
+	function probeSips(): Promise<readonly ImageFormat[]> {
+		sipsWritable ??= run("sips", ["--formats"], { timeoutMs: 5000 }).then(
+			({ stdout }) => {
+				const writable = parseSipsWritable(stdout);
+				return SIPS_CANDIDATES.filter((format) => writable.has(format));
+			},
+			() => SIPS_BASELINE,
+		);
+		return sipsWritable;
 	}
 
 	async function imageTargets(): Promise<readonly ImageFormat[]> {
-		if (platform !== "darwin") return probeImageFormats();
-		return (await hasFfmpeg()) ? [...SIPS_FORMATS, "webp"] : SIPS_FORMATS;
+		if (platform !== "darwin") return (await probeFfmpegImages()).formats;
+		// sips writes everything but WebP; WebP needs an ffmpeg build that lists a WebP encoder.
+		const [native, ffmpegFormats] = await Promise.all([probeSips(), probeFfmpegImages()]);
+		const formats = new Set(native);
+		if (ffmpegFormats.formats.includes("webp")) formats.add("webp");
+		return IMAGE_FORMAT_ORDER.filter((format) => formats.has(format));
 	}
 
 	async function convertImage(source: string, format: ImageFormat): Promise<string> {
 		const target = await uniqueChild(dirname(source), `${stemOf(source)}.${FORMAT_EXTENSIONS[format]}`);
 		if (platform === "darwin" && format !== "webp") await run("sips", sipsConvertArgs(source, target, format));
 		else if (platform === "darwin") await run("ffmpeg", ffmpegWebpArgs(source, target));
-		else await run("ffmpeg", ffmpegConvertArgs(source, target, format));
+		else await run("ffmpeg", ffmpegConvertArgs(source, target, format, (await probeFfmpegImages()).avifEncoder));
 		return target;
 	}
 
 	async function resizeImage(source: string, maxEdge: number): Promise<string> {
 		const format = imageFormatOf(source);
-		if (format === null) throw new Error("이 형식은 크기 조절을 지원하지 않습니다");
-		if (platform === "darwin" && format === "webp") {
-			throw new Error("이 형식은 크기 조절을 지원하지 않습니다");
-		}
-		if (platform !== "darwin" && !(await probeImageFormats()).includes(format)) {
-			throw new Error("이 형식은 크기 조절을 지원하지 않습니다");
-		}
+		// Both engines decode one frame, so resizing a GIF would drop its animation.
+		if (format === null || format === "gif") throw new Error("이 형식은 크기 조절을 지원하지 않습니다");
+		const probe = platform === "darwin" ? null : await probeFfmpegImages();
+		const encodable = probe === null ? await probeSips() : probe.formats;
+		if (!encodable.includes(format)) throw new Error("이 형식은 크기 조절을 지원하지 않습니다");
 		const target = await uniqueChild(dirname(source), `${stemOf(source)}-${maxEdge}${extname(source)}`);
-		if (platform === "darwin") await run("sips", sipsResizeArgs(source, target, maxEdge));
-		else await run("ffmpeg", ffmpegResizeArgs(source, target, maxEdge, format));
+		if (probe === null) await run("sips", sipsResizeArgs(source, target, maxEdge));
+		else await run("ffmpeg", ffmpegResizeArgs(source, target, maxEdge, format, probe.avifEncoder));
 		return target;
 	}
 
 	async function optimizeImage(source: string): Promise<string> {
 		const format = imageFormatOf(source);
 		if (format === null) throw new Error("이 형식은 용량 최적화를 지원하지 않습니다");
-		if (platform === "darwin" && !LOSSY_FORMATS.includes(format)) {
-			throw new Error("이 형식은 용량 최적화를 지원하지 않습니다");
-		}
-		if (platform !== "darwin" && !(await probeImageFormats()).includes(format)) {
+		// Optimize re-encodes lossy formats; the ffmpeg backend also deflates PNG losslessly.
+		const optimizable = LOSSY_FORMATS.includes(format) || (platform !== "darwin" && format === "png");
+		if (!optimizable) throw new Error("이 형식은 용량 최적화를 지원하지 않습니다");
+		const probe = platform === "darwin" ? null : await probeFfmpegImages();
+		if (probe !== null && !probe.formats.includes(format)) {
 			throw new Error("이 형식은 용량 최적화를 지원하지 않습니다");
 		}
 		const target = await uniqueChild(dirname(source), `${stemOf(source)}-optimized${extname(source)}`);
 		if (platform === "darwin" && format === "webp") await run("ffmpeg", ffmpegWebpArgs(source, target));
 		else if (platform === "darwin") await run("sips", sipsOptimizeArgs(source, target, format));
 		else {
-			await run("ffmpeg", ffmpegOptimizeArgs(source, target, format));
+			await run("ffmpeg", ffmpegOptimizeArgs(source, target, format, probe?.avifEncoder ?? null));
 			// Keep the output only when it actually shrank; ffmpeg may re-encode larger.
 			if ((await lstat(target)).size >= (await lstat(source)).size) {
 				await rm(target, { force: true });

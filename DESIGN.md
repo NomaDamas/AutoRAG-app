@@ -198,9 +198,19 @@ The Info half's bottom bar is data-driven, not a fixed four buttons.
   that file; main refuses anything else. Off macOS the OS list cannot be read,
   so the menu is just `기타…`.
 - **Whether an action is real** comes from `actions:capabilities` in main: the
-  macOS share sheet, the image engine (`sips`, plus WebP through `ffmpeg`), and
-  video container conversion (`ffmpeg`) are probed once per session. A missing
-  engine removes the button instead of failing on click.
+  macOS share sheet, the image engine, and video container conversion
+  (`ffmpeg`) are probed once per session. A missing engine removes the button
+  instead of failing on click.
+- **이미지 편집 → ○○로 변환** converts any image (HEIC/HEIF, JPEG, PNG, WebP,
+  AVIF, GIF, TIFF, BMP) into every other format the machine can write, listed
+  most common first: JPEG · PNG · WebP · HEIC · AVIF · GIF · TIFF · BMP, minus
+  the source's own format. On macOS `sips` writes everything except WebP, and
+  `sips --formats` decides which of them this macOS can write (AVIF is newer);
+  WebP needs an `ffmpeg` that lists a WebP encoder. Elsewhere `ffmpeg` is the
+  whole engine: its `-encoders`/`-muxers` lists gate each format (HEIC needs
+  `libx265` + `heif`, AVIF an AV1 encoder + `avif`), and GIF gets a per-image
+  palette. Resizing (최대 ○px) keeps the source format and is not offered for
+  GIF, because both engines resize one frame and would drop an animation.
 - **Adding an action** is two edits: one entry in `suggestedActions` (label,
   icon, and the `ActionRequest` it runs) and one `case` in
   `createActionService.run` (`src/main/action-service.ts`). The bar, the menu,
