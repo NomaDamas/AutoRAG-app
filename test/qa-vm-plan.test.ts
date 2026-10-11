@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { guestScriptPath, orphanVmNames, parseArgs, runVmName, vmCapacity, vmExitCode } from "../scripts/qa-vm/plan.mjs";
+import { guestScriptPath, needsEmbeddingAssets, orphanVmNames, parseArgs, runVmName, vmCapacity, vmExitCode } from "../scripts/qa-vm/plan.mjs";
 
 const PREFIX = "autorag-qa-run-";
 const vm = (Name: string, Running: boolean) => ({ Name, Running });
@@ -101,5 +101,14 @@ describe("qa-vm orphan detection", () => {
 	it("names nothing while a slot is mid-creation, since its VM name is not recorded yet", () => {
 		const vms = [vm(`${PREFIX}starting`, true)];
 		expect(orphanVmNames(vms, [{ index: 1, owner: null }], PREFIX)).toEqual([]);
+	});
+});
+
+describe("qa-vm embedding assets", () => {
+	it("copies the host's model into the guest only for jobs that index for real", () => {
+		expect(needsEmbeddingAssets({ kind: "sweep", lanes: ["onboarding"] })).toBe(true);
+		expect(needsEmbeddingAssets({ kind: "sweep", lanes: [] })).toBe(true);
+		expect(needsEmbeddingAssets({ kind: "script" })).toBe(true);
+		expect(needsEmbeddingAssets({ kind: "sweep", lanes: ["kind", "split-panes"] })).toBe(false);
 	});
 });

@@ -14,10 +14,11 @@
 
 import { execFileSync, spawn } from "node:child_process";
 import { existsSync, mkdirSync } from "node:fs";
+import { homedir } from "node:os";
 import { join, resolve, sep } from "node:path";
 import { GOLDEN, GUEST_REPO, MAX_VMS, RUNS_DIR, RUN_PREFIX, SLOTS_DIR, VM_CPU, VM_DISPLAY, VM_MEMORY_MB } from "./config.mjs";
-import { GUEST_ENV, pullTree, pushTree, shellQuote, sshRun, waitForReady, waitForSsh } from "./guest.mjs";
-import { guestScriptPath, orphanVmNames, runVmName, vmCapacity, vmExitCode } from "./plan.mjs";
+import { GUEST_ENV, pullTree, pushTree, shellQuote, sshOk, sshRun, waitForReady, waitForSsh } from "./guest.mjs";
+import { guestScriptPath, needsEmbeddingAssets, orphanVmNames, runVmName, vmCapacity, vmExitCode } from "./plan.mjs";
 import { createSlotPool } from "./slots.mjs";
 import { cloneVm, configureVm, destroyVm, listVms, startVm, tartAvailable, vmExists, waitForIp } from "./tart.mjs";
 
@@ -98,6 +99,23 @@ const hostCommand = (job) =>
 		: { command: "bun", args: [join("scripts", "manual-qa", "run-all.mjs"), ...job.lanes] };
 
 /**
+ * Copy the host's embedding model and runtime into the guest's `~/.autorag`.
+ * Without them a real first index fails ("Embedding runtime assets are
+ * unavailable"). Absent on the host, nothing is copied and the lane reports it.
+ */
+async function pushEmbeddingAssets(ip, signal) {
+	const home = process.env.AUTORAG_HOME?.trim() || join(homedir(), ".autorag");
+	const present = ["models", "runtime"].filter((name) => existsSync(join(home, name)));
+	if (present.length === 0) {
+		log(`no embedding assets under ${home}; a lane that indexes for real will fail in the guest`);
+		return;
+	}
+	log(`copying embedding assets (${present.join(", ")}) into the guest`);
+	await sshOk(ip, "mkdir -p \"$HOME/.autorag\"");
+	for (const name of present) await pushTree(ip, join(home, name), `.autorag/${name}`, { signal });
+}
+
+/**
  * Run a job in a fresh VM. Resolves with its exit code. The sweep's evidence
  * lives under `.omo/evidence`; a script's artifacts land in `QA_OUT` (`~/qa-out`
  * in the guest), and either way they are pulled to `<runDir>/evidence`.
@@ -123,6 +141,8 @@ export async function runInVm({ root, job, slot, vmName, runDir }) {
 		log("syncing the checkout (node_modules and out/ included; .upstream and evidence excluded)");
 		await pushTree(ip, root, GUEST_REPO, { excludes: [".upstream", ".omo/evidence", ".autorag", ".DS_Store"], signal: abort.signal });
 		await waitForReady(ip, log, abort.signal);
+		interrupted();
+		if (needsEmbeddingAssets(job)) await pushEmbeddingAssets(ip, abort.signal);
 		interrupted();
 
 		log(job.kind === "script" ? `running ${job.file}` : `running lanes${job.lanes.length > 0 ? `: ${job.lanes.join(", ")}` : " (all)"}`);
