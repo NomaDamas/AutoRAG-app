@@ -31,7 +31,7 @@ const configPath = join(root, "config.json");
 writeFileSync(configPath, `${JSON.stringify({
 	searchPaths: [join(workspace, "docs")],
 	workspacePath: workspace,
-	minSync: { enabled: false },
+	minSync: { enabled: true },
 	jikji: false,
 	datasources: { slack: { description: "Team Slack", connector: { workspace: "T0QA" } } },
 }, null, 2)}\n`);

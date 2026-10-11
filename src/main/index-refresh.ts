@@ -77,7 +77,9 @@ export async function refreshAutoragIndex(
 		const failures: string[] = [];
 		if (result.minsync !== undefined && result.minsync.ok === false) failures.push(`minsync: ${result.minsync.reason ?? "failed"}`);
 		if (result.everything !== undefined && result.everything.ok === false) failures.push(`everything: ${result.everything.reason ?? "failed"}`);
-		if (result.fsearch !== undefined && result.fsearch.ok === false) {
+		// fsearch-cli is an optional user install: without it file-name search falls
+		// back to a filesystem walk, so a missing binary must not fail the refresh.
+		if (result.fsearch !== undefined && result.fsearch.ok === false && result.fsearch.reason !== "binary-missing") {
 			failures.push(`fsearch: ${result.fsearch.message ?? result.fsearch.reason ?? "failed"}`);
 		}
 		for (const datasource of result.datasources ?? []) {

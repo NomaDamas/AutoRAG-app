@@ -154,6 +154,17 @@ describe("createAutoRagConfigService", () => {
 		expect(ok.config.minSync).toMatchObject({ embedder: { id: "bge-m3", dimension: 1024 } });
 	});
 
+	it("refuses to disable MinSync, which the librarian requires", async () => {
+		const root = await mkdtemp(join(tmpdir(), "autorag-config-minsync-"));
+		const fixture = await createFixture(baseConfig(root), "autorag-config-minsync-");
+		const service = createAutoRagConfigService({ env: fixture.env, cwd: fixture.root });
+
+		await expect(service.set(["minSync"], false)).rejects.toThrow(/MinSync is required/);
+		await expect(service.set(["minSync", "enabled"], false)).rejects.toThrow(/MinSync is required/);
+		const ok = await service.set(["minSync", "enabled"], true);
+		expect(ok.error).toBeNull();
+	});
+
 	it("validates webSearch through the effective loader (librarian drops it)", async () => {
 		const root = await mkdtemp(join(tmpdir(), "autorag-config-websearch-"));
 		const fixture = await createFixture(baseConfig(root), "autorag-config-websearch-");

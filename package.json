@@ -26,8 +26,8 @@
 	"dependencies": {
 		"@autorag/librarian": "file:./.upstream/autorag",
 		"@base-ui/react": "^1.8.0",
-		"@earendil-works/pi-ai": "0.86.1",
-		"@earendil-works/pi-coding-agent": "0.86.1",
+		"@earendil-works/pi-ai": "1.1.0",
+		"@earendil-works/pi-coding-agent": "1.1.0",
 		"@parcel/watcher": "^2.6.0",
 		"@rhwp/core": "0.8.6",
 		"clsx": "^2.1.1",

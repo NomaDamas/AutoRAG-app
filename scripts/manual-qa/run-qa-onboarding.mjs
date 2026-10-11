@@ -130,26 +130,34 @@ try {
 	await page.waitForSelector(".onb .embed-card");
 	check("cloud embedding is offered as unavailable", (await page.locator(".onb .embed-card.disabled").count()) === 1);
 	await shot("05-embedding");
+	// Record the checking line from before the step opens: a machine with no
+	// connectors installed (a fresh QA VM) finishes every probe in milliseconds,
+	// so polling for the line afterwards races its removal.
+	await page.evaluate(() => {
+		window.__sources = { sawChecking: false, overlap: false, shrank: false, rows: 0 };
+		new MutationObserver(() => {
+			const checking = document.querySelector(".onb [data-sources-checking]") !== null;
+			if (checking) window.__sources.sawChecking = true;
+			if (checking && document.querySelector(".onb .connect-more") !== null) window.__sources.overlap = true;
+			const rows = document.querySelectorAll(".onb .source-row").length;
+			if (rows < window.__sources.rows) window.__sources.shrank = true;
+			window.__sources.rows = rows;
+		}).observe(document.body, { childList: true, subtree: true });
+	});
 	await primary.click();
 
 	// sources: rows stream in as each probe finishes; a spinner line holds the
 	// "connect later" row back until every probe is done.
 	const sourcesShownAt = Date.now();
-	const sawChecking = await page
-		.waitForSelector(".onb [data-sources-checking]", { timeout: 4000 })
-		.then(() => true, () => false);
-	check("a checking line shows while probes run", sawChecking);
-	const earlyRows = await page.locator(".onb .source-row").count();
-	const firstRowMs = await page
-		.waitForSelector(".onb .source-row", { timeout: 20_000 })
-		.then(() => Date.now() - sourcesShownAt, () => null);
-	check("connect-later row is hidden while probing", !sawChecking || (await page.locator(".onb .connect-more").count()) === 0);
 	await page.waitForSelector(".onb [data-sources-done]", { timeout: 60_000 });
 	const allDoneMs = Date.now() - sourcesShownAt;
-	console.log(`INFO sources: first row after ${firstRowMs ?? "never"}ms, all probes done after ${allDoneMs}ms`);
+	const sourcesSeen = await page.evaluate(() => window.__sources);
+	check("a checking line shows while probes run", sourcesSeen.sawChecking);
+	check("connect-later row is hidden while probing", !sourcesSeen.overlap);
+	console.log(`INFO sources: all probes done after ${allDoneMs}ms`);
 	const ids = await page.locator(".onb .source-row").evaluateAll((rows) => rows.map((row) => row.dataset.sourceId));
 	check("Spotlight and Apple Mail are never offered", !ids.includes("spotlight") && !ids.includes("mail"), ids.join(", "));
-	check("rows only ever grow while probing", ids.length >= earlyRows, `${earlyRows} → ${ids.length}`);
+	check("rows only ever grow while probing", !sourcesSeen.shrank, `${ids.length} rows`);
 	const doneSnapshot = await page.evaluate(() => window.autorag.onboarding.indexStatus());
 	check("detection did not start indexing", doneSnapshot.state === "idle", doneSnapshot.state);
 	check("no description editor exists", (await page.locator(".onb .source-description, .onb .source-row textarea").count()) === 0);

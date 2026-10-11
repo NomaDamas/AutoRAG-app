@@ -101,7 +101,7 @@ second datasource or model configuration. The sidebar is searchable and grouped:
   Folders named in `appIndexing.codeFolderNames` (`node_modules`, `.git`, …) and
   every folder whose name starts with `.` (always, no setting)
   are left out of indexing; the app finds them itself and passes them as
-  `excludePaths`. Tesseract OCR and Jikji's media index are pinned off in every
+  `excludePaths`. OCR (`parserOptions.ocr.enabled`, which makes the librarian parse image files) and Jikji's media index are pinned off in every
   config the app hands to the librarian.
 - **Automatic refresh** — a cadence is `직접` (manual, the default) or 5 min to a
   day, for the local folders (`appIndexing.refreshIntervalMs`) and for each

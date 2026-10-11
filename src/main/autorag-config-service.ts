@@ -376,9 +376,10 @@ function checkKnownBlock(path: string, value: unknown): void {
 		return;
 	}
 	if (path === "minSync") {
-		if (value === false) return;
-		if (!isJsonObject(value)) return fail("minSync must be an object or false");
+		if (value === false) return fail("MinSync is required and cannot be disabled");
+		if (!isJsonObject(value)) return fail("minSync must be an object");
 		if (value.enabled !== undefined && typeof value.enabled !== "boolean") fail("minSync.enabled must be a boolean");
+		if (value.enabled === false) fail("MinSync is required and cannot be disabled");
 		if (value.workspacePath !== undefined && typeof value.workspacePath !== "string") fail("minSync.workspacePath must be a string");
 		if (value.binaryPath !== undefined && typeof value.binaryPath !== "string") fail("minSync.binaryPath must be a string");
 		if (value.autoInstall !== undefined && typeof value.autoInstall !== "boolean") fail("minSync.autoInstall must be a boolean");
