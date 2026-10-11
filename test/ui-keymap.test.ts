@@ -109,6 +109,20 @@ describe("resolveKeyAction", () => {
 		expect(resolveKeyAction(key("n", { meta: true, alt: true }), { zone: "evidence", typing: false })).toBeNull();
 	});
 
+	it("maps ⌘R to rename, never while typing or outside the Finder zone", () => {
+		expect(resolveKeyAction(key("r", { meta: true }), finder)).toEqual({ type: "rename" });
+		expect(resolveKeyAction(key("R", { ctrl: true }), finder)).toEqual({ type: "rename" });
+		expect(resolveKeyAction(key("r", { meta: true }), { ...finder, typing: true })).toBeNull();
+		expect(resolveKeyAction(key("r", { meta: true }), { zone: "evidence", typing: false })).toBeNull();
+	});
+
+	it("maps ⌥↑ to the parent folder instead of moving the selection", () => {
+		expect(resolveKeyAction(key("ArrowUp", { alt: true }), finder)).toEqual({ type: "parentFolder" });
+		expect(resolveKeyAction(key("ArrowUp", { alt: true }), { ...finder, typing: true })).toBeNull();
+		expect(resolveKeyAction(key("ArrowUp", { alt: true }), { zone: "evidence", typing: false })).toBeNull();
+		expect(resolveKeyAction(key("ArrowUp"), finder)).toEqual({ type: "moveSelection", delta: -1 });
+	});
+
 	it("ignores unmapped keys", () => {
 		expect(resolveKeyAction(key("x"), finder)).toBeNull();
 		expect(resolveKeyAction(key("t"), finder)).toBeNull();

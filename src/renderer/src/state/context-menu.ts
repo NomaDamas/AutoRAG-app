@@ -246,7 +246,7 @@ export function buildContextMenu(
 		item("paste", tr("contextMenu.paste", "붙여넣기"), { keycap: formatShortcut({ key: "V" }), disabled: input.clipboardCount === 0 }),
 		item("cut", tr("contextMenu.cut", "잘라내기"), { keycap: formatShortcut({ key: "X" }) }),
 		item("duplicate", tr("contextMenu.duplicate", "복제")),
-		item("rename", tr("contextMenu.rename", "이름 변경"), { disabled: multi }),
+		item("rename", tr("contextMenu.rename", "이름 변경"), { keycap: formatShortcut({ key: "R" }), disabled: multi }),
 		item("copyPath", tr("contextMenu.copyPath", "경로 복사")),
 	);
 

@@ -170,6 +170,10 @@ export interface FinderKeyboardInput {
 		setFolderOpen(folder: string, open: boolean): void;
 		openEntry(entry: FinderEntry): void;
 		trash(paths: readonly string[]): void;
+		/** Start the inline rename of the focused row (⌘R). */
+		renameFocused(): void;
+		/** Go up to the enclosing folder and select the folder just left (⌥↑). */
+		goToParentFolder(): void;
 		copySelection(): void;
 		cutSelection(): void;
 		pasteClipboard(move: boolean): void;
@@ -313,6 +317,14 @@ export function useFinderKeyboard(input: FinderKeyboardInput): void {
 				case "trash":
 					event.preventDefault();
 					actions.trash(selection.keys);
+					return;
+				case "rename":
+					event.preventDefault();
+					actions.renameFocused();
+					return;
+				case "parentFolder":
+					event.preventDefault();
+					actions.goToParentFolder();
 					return;
 				case "copy":
 					event.preventDefault();

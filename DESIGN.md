@@ -167,6 +167,8 @@ The app's own icon comes from the native thumbnail lane, which renders a bundle 
 | `⇧⌘Z` | Finder | Redo the operation the last ⌘Z took back |
 | `⇧⌘N` | Finder | New folder in the folder in view (inline rename starts at once) |
 | `⌥⌘N` | Finder | New text file in the folder in view (inline rename starts at once) |
+| `⌘R` | Finder | Inline rename of the single selected row (same state as the row menu's Rename) |
+| `⌥↑` | Finder | Go up to the enclosing folder; the folder just left is selected and scrolled into view |
 | `Space` | File List | Quick Look preview of the selected file or folder (`src/preview/DESIGN.md`) |
 | `⌥ Space` | Global | Global AutoRAG Spotlight summon |
 | `Enter` | Search Bar | Commit search with Filenames |

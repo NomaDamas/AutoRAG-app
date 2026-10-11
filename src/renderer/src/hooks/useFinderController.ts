@@ -1567,6 +1567,25 @@ export function useFinderController(
 			.catch(reportError);
 	});
 
+	/** ⌘R: inline rename of the single focused row, the same state the context menu's 이름 변경 starts. */
+	const renameFocused = useLatestCallback(() => {
+		const entry = focusedEntry;
+		if (entry === null || selection.keys.length > 1) return;
+		setRename({ path: entry.path, draft: entry.name });
+	});
+
+	/** ⌥↑: the enclosing folder, with the folder just left selected and scrolled into view. */
+	const goToParentFolder = useLatestCallback(() => {
+		if (path === "" || isVirtualListing(path) || isVirtualTabPath(path)) return;
+		const parent = dirname(path);
+		if (parent === "" || parent === path) return;
+		setTabsState((state) =>
+			patchActiveTab(navigateTab(state, parent), (current) => ({ ...current, selection: single(path) })),
+		);
+		setQueryValue("");
+		scrollTarget.current = path;
+	});
+
 	/**
 	 * Ask the OS which services it offers for `paths` and show them in the open
 	 * menu. The menu opens at once without them; a slow answer for a menu that
@@ -1677,6 +1696,8 @@ export function useFinderController(
 			setFolderOpen,
 			openEntry,
 			trash: trashPaths,
+			renameFocused,
+			goToParentFolder,
 			copySelection,
 			cutSelection,
 			pasteClipboard,
@@ -1700,6 +1721,8 @@ export function useFinderController(
 			setFolderOpen,
 			openEntry,
 			trashPaths,
+			renameFocused,
+			goToParentFolder,
 			copySelection,
 			cutSelection,
 			pasteClipboard,

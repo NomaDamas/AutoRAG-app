@@ -32,6 +32,8 @@ export type KeyAction =
 	| { readonly type: "quickLook" }
 	| { readonly type: "open" }
 	| { readonly type: "trash" }
+	| { readonly type: "rename" }
+	| { readonly type: "parentFolder" }
 	| { readonly type: "copy" }
 	| { readonly type: "cut" }
 	| { readonly type: "paste"; readonly move: boolean }
@@ -77,6 +79,9 @@ export function resolveKeyAction(event: KeyEventLike, context: KeyContext): KeyA
 				return context.typing || context.zone !== "finder" ? null : { type: "cut" };
 			case "v":
 				return context.typing || context.zone !== "finder" ? null : { type: "paste", move: false };
+			case "r":
+				// ⌘R renames the selected row, as Finder's Return does.
+				return context.typing || context.zone !== "finder" ? null : { type: "rename" };
 			case "z":
 				// ⌘Z undoes the newest file operation; ⇧⌘Z redoes the one it took back.
 				if (context.typing || context.zone !== "finder") return null;
@@ -98,6 +103,10 @@ export function resolveKeyAction(event: KeyEventLike, context: KeyContext): KeyA
 	}
 	if (context.typing) {
 		return null;
+	}
+	// ⌥↑ goes up to the enclosing folder; it must not fall through to the plain ↑ row move.
+	if (event.alt && !event.meta && event.key === "ArrowUp") {
+		return context.zone === "finder" ? { type: "parentFolder" } : null;
 	}
 	if (event.key === " ") {
 		return { type: "quickLook" };
