@@ -183,7 +183,7 @@ function makeBrowser(mutate: (callback: string) => string = (callback) => callba
 	};
 }
 
-function build(openExternal = makeBrowser(), overrides: { signInTimeoutMs?: number; fetch?: typeof fetch } = {}): AccountService {
+function build(openExternal = makeBrowser(), overrides: { signInTimeoutMs?: number; fetch?: typeof fetch; onSignedIn?: () => Promise<void> } = {}): AccountService {
 	return createAccountService({
 		env,
 		credentials: creds.service as never,
@@ -389,6 +389,98 @@ describe("sign out", () => {
 		expect(status).toMatchObject({ state: "signedOut", account: null });
 		expect(creds.store.size).toBe(0);
 		expect((await build().status()).account).toBeNull();
+	});
+});
+
+describe("model catalog sync hook", () => {
+	it("runs after sign-in succeeds and on a later refresh of a signed-in account", async () => {
+		const synced: string[] = [];
+		service = build(undefined, { onSignedIn: async () => void synced.push("sync") });
+
+		await service.signIn();
+		await service.refresh();
+
+		expect(synced).toEqual(["sync", "sync"]);
+	});
+
+	it("never runs while signed out, and never breaks sign-in when it throws", async () => {
+		const synced: string[] = [];
+		const signedOut = build(undefined, { onSignedIn: async () => void synced.push("sync") });
+		await signedOut.refresh();
+		expect(synced).toEqual([]);
+
+		service = build(undefined, {
+			onSignedIn: async () => {
+				throw new Error("boom");
+			},
+		});
+		expect((await service.signIn()).state).toBe("signedIn");
+	});
+
+	it("does not run when the server rejects the key", async () => {
+		const synced: string[] = [];
+		service = build(undefined, { onSignedIn: async () => void synced.push("sync") });
+		await service.signIn();
+		synced.length = 0;
+		fake.failNext.set("/v1/account", { status: 401, body: { error: { message: "Invalid or revoked API key.", type: "invalid_request_error", code: "invalid_api_key" } } });
+
+		await service.refresh();
+
+		expect(synced).toEqual([]);
+	});
+});
+
+describe("default model after sign-in", () => {
+	const readConfig = async (): Promise<Record<string, unknown>> => JSON.parse(await readFile(join(root, "config.json"), "utf8")) as Record<string, unknown>;
+
+	it("points a config with no model at the account's models as soon as sign-in succeeds", async () => {
+		await writeFile(join(root, "config.json"), JSON.stringify({ searchPaths: ["/docs"] }), "utf8");
+
+		await service.signIn();
+
+		const config = await readConfig();
+		expect(config.searchPaths).toEqual(["/docs"]);
+		expect(config.model).toMatchObject({ provider: "autorag", id: "vendor/pricey", baseUrl: `${fake.url}/v1`, apiKeyEnv: ACCOUNT_API_KEY_ENV });
+	});
+
+	it("creates the config when none exists", async () => {
+		await service.signIn();
+
+		expect((await readConfig()).model).toMatchObject({ provider: "autorag" });
+	});
+
+	it("leaves a model the user picked from another provider alone", async () => {
+		await writeFile(join(root, "config.json"), JSON.stringify({ model: { provider: "anthropic", id: "claude-haiku-5.5" } }), "utf8");
+
+		await service.signIn();
+
+		expect((await readConfig()).model).toEqual({ provider: "anthropic", id: "claude-haiku-5.5" });
+	});
+
+	it("re-adopts when the configured model is already an AutoRAG one (a later login refreshes it)", async () => {
+		await writeFile(join(root, "config.json"), JSON.stringify({ model: { provider: "autorag", id: "retired/model" } }), "utf8");
+
+		await service.signIn();
+
+		expect((await readConfig()).model).toMatchObject({ provider: "autorag", id: "vendor/pricey" });
+	});
+
+	it("does not touch the config on a plain refresh or when the catalog cannot be read", async () => {
+		await service.signIn();
+		await writeFile(join(root, "config.json"), JSON.stringify({ model: { provider: "openai-compatible", id: "mine" } }), "utf8");
+		fake.failNext.set("/v1/account", { status: 200, body: FREE_ACCOUNT });
+
+		await service.refresh();
+
+		expect((await readConfig()).model).toEqual({ provider: "openai-compatible", id: "mine" });
+	});
+
+	it("still signs in when the model list is unavailable", async () => {
+		fake.failNext.set("/v1/models", { status: 500, body: { error: { message: "boom", type: "server_error", code: "internal" } } });
+
+		const status = await service.signIn();
+
+		expect(status.state).toBe("signedIn");
 	});
 });
 

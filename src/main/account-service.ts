@@ -8,7 +8,9 @@ import { readRawConfigObject, writeConfigObject } from "@autorag/librarian/core"
 import {
 	ACCOUNT_API_KEY_ENV,
 	ACCOUNT_CHANNELS,
+	AUTORAG_PROVIDER_ID,
 	DEFAULT_ACCOUNT_BASE_URL,
+	shouldAdoptManagedModel,
 	type AccountPlanId,
 	type AccountSnapshot,
 	type AccountStatus,
@@ -46,6 +48,8 @@ export interface AccountServiceDeps {
 	readonly send: (channel: string, payload: unknown) => void;
 	readonly fetch?: typeof globalThis.fetch;
 	readonly signInTimeoutMs?: number;
+	/** Runs after the server confirmed the account (sign-in and every refresh); must not throw to callers. */
+	readonly onSignedIn?: () => Promise<void>;
 }
 
 export interface AccountService {
@@ -285,6 +289,10 @@ export function createAccountService(deps: AccountServiceDeps): AccountService {
 				} else {
 					await writeCache(account);
 					lastError = null;
+					// Best effort: the model picker lists the plan's models from this catalog.
+					await deps.onSignedIn?.().catch((error: unknown) => {
+						console.warn("[account] onSignedIn hook failed:", error);
+					});
 				}
 				offline = false;
 			} else {
@@ -370,6 +378,7 @@ export function createAccountService(deps: AccountServiceDeps): AccountService {
 					await deps.credentials.set(ACCOUNT_API_KEY_ENV, token);
 					revokedKey = null;
 					lastError = null;
+					await adoptManagedModelIfUnset();
 				}
 			}
 		} catch (error) {
@@ -378,6 +387,55 @@ export function createAccountService(deps: AccountServiceDeps): AccountService {
 			flow = null;
 		}
 		return refresh();
+	}
+
+	/**
+	 * Points the shared config at the signed-in account's models. The server
+	 * decides the catalog and its order, so the first entry is the recommended
+	 * chat model; question decomposition runs on the cheapest one.
+	 */
+	async function applyManagedModel(): Promise<ManagedModelResult> {
+		const catalog = parseCatalog(await callSignedIn("/v1/models", {}));
+		const main = catalog[0];
+		const cheapest = catalog.reduce<CatalogModel | undefined>((best, model) => (best === undefined || model.price < best.price ? model : best), undefined);
+		if (main === undefined || cheapest === undefined) throw new Error("Your AutoRAG plan lists no models.");
+		const reference = (model: CatalogModel): Record<string, unknown> => ({
+			provider: AUTORAG_PROVIDER_ID,
+			id: model.id,
+			name: model.name,
+			baseUrl: `${baseUrl()}/v1`,
+			api: "openai-responses",
+			apiKeyEnv: ACCOUNT_API_KEY_ENV,
+			reasoning: model.reasoning,
+			input: [...model.input],
+			contextWindow: model.contextWindow,
+			maxTokens: model.maxTokens,
+		});
+		const raw = existsSync(deps.configPath) ? readRawConfigObject(deps.configPath) : {};
+		const next: Record<string, unknown> = { ...raw, model: reference(main) };
+		// The librarian's default decomposition model is on OpenRouter, which an
+		// account holder has no key for. An explicit choice (`false` or another
+		// provider) stays; the OpenRouter default moves to the account's models.
+		const decomposition = raw.queryDecomposition;
+		const decompositionModel = isJsonObject(decomposition) && isJsonObject(decomposition.model) ? decomposition.model : null;
+		if (decomposition === undefined || (decomposition !== false && (decompositionModel === null || decompositionModel.provider === "openrouter" || decompositionModel.provider === AUTORAG_PROVIDER_ID))) {
+			next.queryDecomposition = { model: reference(cheapest) };
+		}
+		writeConfigObject(deps.configPath, next);
+		return { modelId: main.id, modelName: main.name };
+	}
+
+	/**
+	 * Right after a successful sign-in: adopt the account's models unless the
+	 * user already chose another provider's model. Never fails the sign-in.
+	 */
+	async function adoptManagedModelIfUnset(): Promise<void> {
+		try {
+			const raw = existsSync(deps.configPath) ? readRawConfigObject(deps.configPath) : {};
+			if (shouldAdoptManagedModel(raw)) await applyManagedModel();
+		} catch (error) {
+			console.warn("[account] could not set the account's models as the default:", error);
+		}
 	}
 
 	return {
@@ -413,37 +471,6 @@ export function createAccountService(deps: AccountServiceDeps): AccountService {
 		},
 		checkout: (plan) => openHostedUrl("/v1/account/checkout", { plan }),
 		portal: () => openHostedUrl("/v1/account/portal"),
-		useManagedModel: async () => {
-			const catalog = parseCatalog(await callSignedIn("/v1/models", {}));
-			// The server decides the catalog and its order, so the first entry is the
-			// recommended chat model; question decomposition runs on the cheapest one.
-			const main = catalog[0];
-			const cheapest = catalog.reduce<CatalogModel | undefined>((best, model) => (best === undefined || model.price < best.price ? model : best), undefined);
-			if (main === undefined || cheapest === undefined) throw new Error("Your AutoRAG plan lists no models.");
-			const reference = (model: CatalogModel): Record<string, unknown> => ({
-				provider: "autorag",
-				id: model.id,
-				name: model.name,
-				baseUrl: `${baseUrl()}/v1`,
-				api: "openai-responses",
-				apiKeyEnv: ACCOUNT_API_KEY_ENV,
-				reasoning: model.reasoning,
-				input: [...model.input],
-				contextWindow: model.contextWindow,
-				maxTokens: model.maxTokens,
-			});
-			const raw = existsSync(deps.configPath) ? readRawConfigObject(deps.configPath) : {};
-			const next: Record<string, unknown> = { ...raw, model: reference(main) };
-			// The librarian's default decomposition model is on OpenRouter, which an
-			// account holder has no key for. An explicit choice (`false` or another
-			// provider) stays; the OpenRouter default moves to the account's models.
-			const decomposition = raw.queryDecomposition;
-			const decompositionModel = isJsonObject(decomposition) && isJsonObject(decomposition.model) ? decomposition.model : null;
-			if (decomposition === undefined || (decomposition !== false && (decompositionModel === null || decompositionModel.provider === "openrouter" || decompositionModel.provider === "autorag"))) {
-				next.queryDecomposition = { model: reference(cheapest) };
-			}
-			writeConfigObject(deps.configPath, next);
-			return { modelId: main.id, modelName: main.name };
-		},
+		useManagedModel: () => applyManagedModel(),
 	};
 }
