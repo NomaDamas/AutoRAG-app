@@ -29,6 +29,8 @@ Everything the app needs, so a user installs one file and nothing else:
 | `slacrawl`, `notcrawl` | newest GitHub release (macOS); built from the newest tag with Go (Windows, no archive published) | |
 | `dupey`, `jikji`, `clawgallery` | newest crates.io release, compiled on the build machine | |
 | `lazykatok` | `changeroa/lazykatok` HEAD (macOS only: KakaoTalk for macOS) | no crates.io or release build exists |
+| `fsearch-cli` | `NomaDamas/fsearch-mac` via its Homebrew tap (macOS only) | fast file-name index. Homebrew links it to `/opt/homebrew/...`, so the stager copies it with its 16 dylibs into `tools/{bin,lib}` and re-points them at `@executable_path/../lib`. Needs `brew install nomadamas/fsearch-mac/fsearch-mac` on the build Mac (the stager runs it if missing; it compiles GTK, so the first run is slow). GPL-2.0-or-later: license and notice ship in `tools/licenses/fsearch-mac` |
+| Everything + ES (Windows only) | the librarian's own `vendor/everything` | the Windows equivalent of fsearch; already inside the app, hash-checked and unpacked on first use |
 | `mailcrawl`, `qmd`, `kordoc` | newest npm release, installed with the bundled Node | native add-ons are fetched for the bundled Node's ABI |
 | Qwen3-Embedding-0.6B (Q8_0) + llama.cpp runtime | the librarian's own pinned manifest | hash-checked at build time |
 
@@ -53,8 +55,6 @@ does not match its published digest.
 
 ### Deliberately not bundled
 
-* `fsearch-cli`: GPL-2.0-or-later and linked against GTK; the librarian already treats it
-  as an optional separate install and falls back to a filesystem walk.
 * CUDA builds of `node-llama-cpp` (500 MB, needs an NVIDIA toolkit); CPU and Vulkan are kept.
 * Other platforms' native add-ons. Intel Macs, Windows on ARM and Linux are not shipped.
 

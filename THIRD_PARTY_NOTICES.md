@@ -59,8 +59,14 @@ given release are in the `components-<platform>.json` file attached to it.
 | discrawl, telecrawl, wacrawl, slacrawl, notcrawl | MIT |
 | himalaya, clawgallery | Apache-2.0 |
 | lazykatok (macOS only) | MIT |
+| Everything and ES (Windows only; shipped inside `@autorag/librarian`) | MIT (+ PCRE BSD) |
+| fsearch-cli from fsearch-mac (macOS only) and its libraries glib, pango, harfbuzz, ICU, PCRE2, freetype, ... | GPL-2.0-or-later (fsearch-cli); LGPL-2.1+, MIT, ICU, BSD (libraries) |
 | llama.cpp (`llama-server` runtime) | MIT |
 | Qwen3-Embedding-0.6B (GGUF Q8_0 weights) | Apache-2.0 |
 
-`fsearch-cli` (GPL-2.0-or-later) is **not** bundled; the app uses it only when
-the user installs it separately.
+`fsearch-cli` is GPL-2.0-or-later, and AutoRAG only starts it as a separate
+program (no linking), so AutoRAG stays AGPL-3.0. Its license and notice are
+installed in `resources/tools/licenses/fsearch-mac`. Source for the shipped
+version: https://github.com/NomaDamas/fsearch-mac (tag in `components-macos-arm64.json`).
+The bundled glib/pango/ICU libraries are unmodified Homebrew builds whose install
+paths were rewritten so they load from the app.

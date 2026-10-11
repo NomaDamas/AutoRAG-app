@@ -22,8 +22,8 @@
  * Windows x64 machine.
  */
 
-import { chmodSync, copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { basename, join, relative } from "node:path";
+import { chmodSync, copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { basename, dirname, join, relative } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
 	BUILD_DIR,
@@ -142,6 +142,76 @@ async function stageCargoBinary({ name, crate = name, git }) {
 	}
 	installBinary(installed, name);
 	record({ name, version, source });
+}
+
+/**
+ * fsearch-cli (macOS): NomaDamas/fsearch-mac, built by its own Homebrew tap. The Homebrew binary
+ * links glib/pango/ICU by absolute /opt/homebrew paths, so it is copied together with its dylib
+ * closure into tools/{bin,lib} and re-pointed at @executable_path/../lib; it then runs on a Mac
+ * that has no Homebrew. Windows has no fsearch: it uses the Everything bundle the librarian ships.
+ */
+async function stageFsearch() {
+	const formula = "nomadamas/fsearch-mac/fsearch-mac";
+	if (run("brew", ["list", "--versions", "fsearch-mac"], { capture: true, allowFailure: true }).trim() === "") {
+		log(`brew install ${formula}`);
+		run("brew", ["install", formula]);
+	}
+	const version = run("brew", ["list", "--versions", "fsearch-mac"], { capture: true }).trim().split(/\s+/).pop();
+	const prefix = run("brew", ["--prefix", "fsearch-mac"], { capture: true }).trim();
+	const source = realpathSync(join(prefix, "bin", "fsearch-cli"));
+
+	const libDir = join(TOOLS, "lib");
+	rmSync(libDir, { recursive: true, force: true });
+	mkdirSync(libDir, { recursive: true });
+	const binary = installBinary(source, "fsearch-cli");
+
+	const linked = (file) =>
+		run("otool", ["-L", file], { capture: true })
+			.split("\n")
+			.slice(1)
+			.map((line) => line.trim().split(" ")[0])
+			.filter((name) => name.length > 0);
+	const isSystem = (name) => name.startsWith("/usr/lib/") || name.startsWith("/System/");
+	// @loader_path references (ICU's data library) resolve against the file that names them.
+	const resolveRef = (name, referrer) => (name.startsWith("@loader_path/") ? join(dirname(referrer), name.slice("@loader_path/".length)) : name.startsWith("@") ? null : name);
+
+	const copied = new Map(); // real source path -> staged file name
+	const queue = [source];
+	while (queue.length > 0) {
+		const file = queue.pop();
+		for (const name of linked(file)) {
+			if (isSystem(name)) continue;
+			const resolved = resolveRef(name, file);
+			if (resolved === null) continue;
+			const real = realpathSync(resolved);
+			if (copied.has(real)) continue;
+			copied.set(real, basename(name));
+			copyFileSync(real, join(libDir, basename(name)));
+			chmodSync(join(libDir, basename(name)), 0o755);
+			queue.push(real);
+		}
+	}
+	const repoint = (file, prefixRef) => {
+		for (const name of linked(file)) {
+			if (isSystem(name) || name.startsWith("@executable_path/")) continue;
+			run("install_name_tool", ["-change", name, `${prefixRef}/${basename(name)}`, file]);
+		}
+	};
+	for (const name of readdirSync(libDir)) {
+		const file = join(libDir, name);
+		run("install_name_tool", ["-id", `@loader_path/${name}`, file]);
+		repoint(file, "@loader_path");
+	}
+	repoint(binary, "@executable_path/../lib");
+	// install_name_tool invalidates the signature, and Apple Silicon refuses unsigned code;
+	// electron-builder re-signs everything with the release identity later.
+	for (const file of [binary, ...readdirSync(libDir).map((name) => join(libDir, name))]) run("codesign", ["--force", "--sign", "-", file]);
+
+	// GPL-2.0-or-later: ship the license and notice beside the binary.
+	const licenseDir = join(TOOLS, "licenses", "fsearch-mac");
+	mkdirSync(licenseDir, { recursive: true });
+	for (const name of ["LICENSE", "NOTICE.md"]) if (existsSync(join(prefix, name))) copyFileSync(join(prefix, name), join(licenseDir, name));
+	record({ name: "fsearch-cli", version, source: `homebrew ${formula} (+${copied.size} relocated dylibs)` });
 }
 
 async function stageNode() {
@@ -284,6 +354,7 @@ for (const item of GO_CRAWLERS) {
 	else await stageReleaseBinary(item);
 }
 for (const item of CARGO_BINARIES) if (wanted(item.name)) await stageCargoBinary(item);
+if (target.os === "darwin" && wanted("fsearch-cli")) await stageFsearch();
 if (!flag("--skip-seed") && wanted("seed")) await stageSeed();
 
 const manifestPath = join(TOOLS, "manifest.json");
