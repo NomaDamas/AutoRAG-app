@@ -48,7 +48,7 @@ import {
 	selectDupey,
 	type LayerStore,
 } from "../state/layers";
-import { activeNavPath, basename, breadcrumbTrail, dirname, type Crumb } from "../state/paths";
+import { activeNavPath, basename, breadcrumbTrail, dirname, resolvePathInput, type Crumb } from "../state/paths";
 import {
 	applyRowClick,
 	EMPTY_SELECTION,
@@ -252,6 +252,12 @@ export interface FinderController {
 	readonly listRef: RefObject<HTMLDivElement | null>;
 	readonly searchRef: RefObject<HTMLInputElement | null>;
 	navigate(path: string): void;
+	/**
+	 * The path bar's editor: go to a typed or pasted location. A folder opens,
+	 * a file is revealed in its folder; resolves false (after a toast) when the
+	 * text names nothing that exists.
+	 */
+	goToPath(input: string): Promise<boolean>;
 	navigateNav(item: NavItem): void;
 	/** Unmount the volume behind a sidebar row; tabs inside it move out first. */
 	ejectNav(item: NavItem): void;
@@ -851,6 +857,25 @@ export function useFinderController(
 	const navigate = useLatestCallback((next: string) => {
 		setTabsState((state) => navigateTab(state, next));
 		setQueryValue("");
+	});
+
+	const goToPath = useLatestCallback(async (input: string): Promise<boolean> => {
+		const home = locations.find((location) => location.icon === "home")?.path ?? null;
+		const target = resolvePathInput(input, { current: path, home });
+		if (target === null) {
+			showToast(t("finder.pathBar.invalid", "이동할 경로를 입력하세요"));
+			return false;
+		}
+		let entry: FinderEntry;
+		try {
+			entry = await source.stat(target);
+		} catch {
+			showToast(t("finder.pathBar.notFound", { defaultValue: "\"{{path}}\" 위치를 찾을 수 없습니다", path: target }));
+			return false;
+		}
+		if (entry.kind === "folder") navigate(target);
+		else revealEntry(entry);
+		return true;
 	});
 
 	const navigateNav = useLatestCallback(
@@ -1880,6 +1905,7 @@ export function useFinderController(
 		listRef,
 		searchRef,
 		navigate,
+		goToPath,
 		navigateNav,
 		ejectNav,
 		selectTabId,
