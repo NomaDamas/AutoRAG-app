@@ -873,7 +873,8 @@ export function useFinderController(
 			showToast(t("finder.pathBar.notFound", { defaultValue: "\"{{path}}\" 위치를 찾을 수 없습니다", path: target }));
 			return false;
 		}
-		if (entry.kind === "folder") navigate(target);
+		// The bridge answers with the on-disk spelling ("autorag" typed, "AutoRAG" shown).
+		if (entry.kind === "folder") navigate(entry.path);
 		else revealEntry(entry);
 		return true;
 	});
