@@ -70,6 +70,37 @@ upstream (`platform ?? <derived from process.platform>`); until it lands, semant
 indexing on Windows reports the embedder as unavailable and falls back to BM25.
 macOS is unaffected.
 
+## Install time
+
+Budget: **5 minutes from running the installer to a usable app, download excluded.** Measured with
+`scripts/release/smoke-installed.mjs`, which installs the real artifact, launches it, waits for the
+embedding model to be in place, and fails above `AUTORAG_INSTALL_BUDGET_SECONDS` (default 300).
+
+| | installer | launch to model seeded | total |
+|---|---|---|---|
+| macOS (Apple Silicon, this Mac) | 20 s | 3 s | 22 s |
+| Windows 11, Defender real-time protection on (12 cores, NVMe) | 63-68 s (six more bare installs: 66-67 s) | 13-15 s | 77-82 s; one first run took 240 s |
+
+What made the Windows installer slow, measured on that PC: the installer wrote each of ~46,000 small
+files twice (electron-builder's NSIS template extracts to a temp folder, then `CopyFiles` into the
+install directory) at about 40 files/s, for 19-26 minutes. Defender was not the cause: excluding the
+install directory, temp, and the installer process still took 13 minutes, with 31 s of Defender CPU.
+
+The fix is in two parts:
+
+* **One tar instead of 46,000 files.** `afterPack` packs `app/node_modules`, `tools/npm` and
+  `tools/node` into `resources/payload.tar`; `build/installer.nsh` unpacks it with the system
+  `System32\tar.exe` (bsdtar, Windows 10 1803+). The same tree extracted at about 1,000 files/s
+  (46 s). macOS is a single `.app` copy and needs none of this.
+* **Fewer files.** Source maps, `.d.ts` files and READMEs are never read at run time and were about
+  half of the npm trees: 7,600 files removed from `tools/npm`, and the `files` globs in
+  `electron-builder.config.mjs` drop the same kinds from the app. That glob also used to drop every
+  `*.md`, including the librarian's four `SKILL.md` agent skills, which were missing from the
+  packaged app; they are now included.
+
+A new `AutoRAG-Setup` is also smaller (1.17 GB) and the app no longer contains the renderer-only
+libraries Vite already bundles.
+
 ## Runners
 
 GitHub-hosted runners are currently refused for this repository ("recent account
