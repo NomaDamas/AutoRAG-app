@@ -3,6 +3,7 @@ import { AI_SEARCH_PATH, navigateTab, openTabAt, SETTINGS_PATH } from "../src/re
 import {
 	canCloseWorkspaceTab,
 	canDropTab,
+	CLOSED_TAB_LIMIT,
 	closeWorkspaceTab,
 	createWorkspace,
 	dropZoneAt,
@@ -11,6 +12,7 @@ import {
 	focusPane,
 	moveTab,
 	openOrSelectSettingsInWorkspace,
+	reopenClosedTab,
 	paneOf,
 	paneRects,
 	resizeSplit,
@@ -285,5 +287,79 @@ describe("workspace-wide tab commands", () => {
 		expect(paneRects(wider.layout).get(1)?.width).toBeCloseTo(0.7);
 		const clamped = resizeSplit(ws, handle.splitId, handle.index, 0.9, 0.1);
 		expect(paneRects(clamped.layout).get(2)?.width).toBeCloseTo(0.1);
+	});
+});
+
+describe("reopening closed tabs", () => {
+	it("brings back the closed tab with its folder, history and selection, in its old slot", () => {
+		let ws = withTabs(createWorkspace("/a"), 1, "/b", "/c");
+		ws = updatePaneTabs(ws, 1, (state) => {
+			const moved = navigateTab(state, "/c/deeper");
+			return {
+				...moved,
+				tabs: moved.tabs.map((tab) =>
+					tab.path === "/c/deeper" ? { ...tab, selection: { keys: ["/c/deeper/x"], anchor: "/c/deeper/x", focus: "/c/deeper/x" } } : tab,
+				),
+			};
+		});
+		const closedId = tabId(ws, 1, "/c/deeper");
+		ws = closeWorkspaceTab(withTabs(ws, 1, "/d"), tabId(ws, 1, "/b"));
+		ws = closeWorkspaceTab(ws, closedId);
+		expect(paths(ws, 1)).toEqual(["/a", "/d"]);
+
+		const reopened = reopenClosedTab(ws);
+		expect(paths(reopened, 1)).toEqual(["/a", "/c/deeper", "/d"]);
+		const tab = paneOf(reopened, 1).tabs.find((candidate) => candidate.path === "/c/deeper")!;
+		expect(paneOf(reopened, 1).activeId).toBe(tab.id);
+		expect(tab.id).not.toBe(closedId);
+		expect(tab.back).toEqual(["/c"]);
+		expect(tab.selection.focus).toBe("/c/deeper/x");
+		expect(reopened.closedTabs).toHaveLength(1);
+	});
+
+	it("reopens most recent first, then the earlier ones", () => {
+		let ws = withTabs(createWorkspace("/a"), 1, "/b", "/c");
+		ws = closeWorkspaceTab(ws, tabId(ws, 1, "/b"));
+		ws = closeWorkspaceTab(ws, tabId(ws, 1, "/c"));
+		ws = reopenClosedTab(ws);
+		expect(activePath(ws, 1)).toBe("/c");
+		ws = reopenClosedTab(ws);
+		expect(paths(ws, 1)).toEqual(["/a", "/b", "/c"]);
+		expect(activePath(ws, 1)).toBe("/b");
+		expect(reopenClosedTab(ws)).toBe(ws);
+	});
+
+	it("restores a tab whose pane was closed into the focused pane", () => {
+		let ws = createWorkspace("/a");
+		ws = withTabs(ws, 1, "/b");
+		ws = moveTab(ws, tabId(ws, 1, "/b"), { kind: "split", paneId: 1, edge: "right" });
+		ws = closeWorkspaceTab(ws, tabId(ws, 2, "/b"));
+		expect(ws.panes).toHaveLength(1);
+		const reopened = reopenClosedTab(ws);
+		expect(paths(reopened, 1)).toEqual(["/a", "/b"]);
+		expect(reopened.focusedPaneId).toBe(1);
+	});
+
+	it("never remembers Settings or AI Search tabs", () => {
+		let ws = withTabs(createWorkspace("/a"), 1, SETTINGS_PATH, AI_SEARCH_PATH);
+		ws = closeWorkspaceTab(ws, tabId(ws, 1, SETTINGS_PATH));
+		ws = closeWorkspaceTab(ws, tabId(ws, 1, AI_SEARCH_PATH));
+		expect(ws.closedTabs).toEqual([]);
+		expect(reopenClosedTab(ws)).toBe(ws);
+	});
+
+	it("does not remember a refused close of the window's last tab", () => {
+		const ws = createWorkspace("/a");
+		expect(closeWorkspaceTab(ws, tabId(ws, 1, "/a")).closedTabs).toEqual([]);
+	});
+
+	it("keeps only the newest CLOSED_TAB_LIMIT closed tabs", () => {
+		let ws = createWorkspace("/keep");
+		for (let index = 0; index < CLOSED_TAB_LIMIT + 5; index += 1) {
+			ws = withTabs(ws, 1, `/t${index}`);
+			ws = closeWorkspaceTab(ws, tabId(ws, 1, `/t${index}`));
+		}
+		expect(ws.closedTabs).toHaveLength(CLOSED_TAB_LIMIT);
+		expect(reopenClosedTab(ws).panes[0]?.tabs.at(-1)?.path).toBe(`/t${CLOSED_TAB_LIMIT + 4}`);
 	});
 });

@@ -161,6 +161,7 @@ The app's own icon comes from the native thumbnail lane, which renders a bundle 
 | `⌘,` | Global | Open or focus Settings tab |
 | `⌘T` | Window | Open new Finder tab |
 | `⌘W` | Window | Close current Finder tab |
+| `⇧⌘T` | Window | Reopen the most recently closed folder tab (like a browser): same folder, back/forward history, selection and column chain, back in its old strip slot when it returns to the pane it left. Repeats through the last 20; Settings and AI Search tabs are not remembered |
 | `⌘F` | Window | Focus Instant Search bar |
 | `⌘K` | Window | Show the nearest AI Search tab (or open one) and focus its composer |
 | `⌘Z` | Finder | Undo the newest file operation (copy, move, duplicate, rename, New Folder / File, trash, Put Back, compress, extract); repeats back through the last 100 |

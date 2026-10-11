@@ -48,6 +48,7 @@ export type KeyAction =
 	| { readonly type: "focusSearch" }
 	| { readonly type: "focusComposer" }
 	| { readonly type: "newTab" }
+	| { readonly type: "reopenTab" }
 	| { readonly type: "closeTab" }
 	| { readonly type: "newFolder" }
 	| { readonly type: "newFile"; readonly format: NewFileFormatId }
@@ -62,8 +63,9 @@ export function resolveKeyAction(event: KeyEventLike, context: KeyContext): KeyA
 				return { type: "focusSearch" };
 			case "k":
 				return { type: "focusComposer" };
+			// ⇧⌘T brings back the tab ⌘W closed, as in a browser.
 			case "t":
-				return { type: "newTab" };
+				return event.shift ? { type: "reopenTab" } : { type: "newTab" };
 			case "w":
 				return { type: "closeTab" };
 			case ",":

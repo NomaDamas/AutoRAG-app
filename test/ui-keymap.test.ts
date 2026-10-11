@@ -67,6 +67,13 @@ describe("resolveKeyAction", () => {
 		expect(resolveKeyAction(key("k", { meta: true }), { ...finder, typing: true })).toEqual({ type: "focusComposer" });
 	});
 
+	it("maps ⇧⌘T to reopen the closed tab, even from a text field, and keeps ⌘T as new tab", () => {
+		expect(resolveKeyAction(key("T", { meta: true, shift: true }), finder)).toEqual({ type: "reopenTab" });
+		expect(resolveKeyAction(key("t", { ctrl: true, shift: true }), finder)).toEqual({ type: "reopenTab" });
+		expect(resolveKeyAction(key("T", { meta: true, shift: true }), { ...finder, typing: true })).toEqual({ type: "reopenTab" });
+		expect(resolveKeyAction(key("t", { meta: true }), finder)).toEqual({ type: "newTab" });
+	});
+
 	it("maps control shortcuts for Windows and Linux", () => {
 		expect(resolveKeyAction(key("f", { ctrl: true }), finder)).toEqual({ type: "focusSearch" });
 	});

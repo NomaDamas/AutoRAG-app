@@ -106,6 +106,7 @@ import {
 	focusTab,
 	focusAiSearchInWorkspace,
 	openOrSelectSettingsInWorkspace,
+	reopenClosedTab as reopenClosedWorkspaceTab,
 	updatePaneTabs,
 	type Pane,
 	type Workspace,
@@ -1676,6 +1677,22 @@ export function useFinderController(
 		focusComposerRef.current?.();
 	});
 	const newTab = useLatestCallback(() => setTabsState((state) => openTab(state)));
+	// ⇧⌘T: the closed tab returns active in this pane; once it is the shown tab,
+	// scroll to the row it had selected (the scroll offset itself is not kept).
+	const revealOnReopenRef = useRef(false);
+	const reopenClosedTab = useLatestCallback(() =>
+		updateWorkspace((workspace) => {
+			const next = reopenClosedWorkspaceTab(workspace);
+			if (next !== workspace) revealOnReopenRef.current = true;
+			return next;
+		}),
+	);
+	const shownTabId = tab.id;
+	useEffect(() => {
+		if (!revealOnReopenRef.current) return;
+		revealOnReopenRef.current = false;
+		scrollTarget.current = selection.focus;
+	}, [shownTabId]);
 	const openSettings = useLatestCallback(() => updateWorkspace(openOrSelectSettingsInWorkspace));
 	// Every member is a stable useLatestCallback, so this object is created once.
 	const keyActions = useMemo(
@@ -1683,6 +1700,7 @@ export function useFinderController(
 			dismiss,
 			focusSearch,
 			newTab,
+			reopenClosedTab,
 			newFolder,
 			newFile,
 			closeTab: closeActiveTab,
@@ -1710,7 +1728,8 @@ export function useFinderController(
 			newTab,
 			newFolder,
 			newFile,
-			closeActiveTab,
+			newTab,
+			reopenClosedTab,
 			openSettings,
 			focusComposer,
 			quickLookSelection,
