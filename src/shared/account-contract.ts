@@ -134,3 +134,18 @@ export function shouldAdoptManagedModel(config: { readonly model?: unknown }): b
 	if (model === undefined) return true;
 	return typeof model === "object" && model !== null && "provider" in model && model.provider === AUTORAG_PROVIDER_ID;
 }
+
+/**
+ * Where connecting or disconnecting a provider is handled. The AutoRAG plan is
+ * signed in through the account service (encrypted key, adopted defaults,
+ * Settings > 계정); signing in through the generic Pi flow would store the
+ * token in plaintext and skip all of that. Every other provider uses Pi.
+ */
+export function providerConnectRoute(providerId: string): "account" | "provider" {
+	return providerId === AUTORAG_PROVIDER_ID ? "account" : "provider";
+}
+
+/** The providers the generic Pi connect menu may offer: everything except the AutoRAG plan. */
+export function withoutAutorag<T extends { readonly id: string }>(items: readonly T[]): T[] {
+	return items.filter((item) => providerConnectRoute(item.id) === "provider");
+}

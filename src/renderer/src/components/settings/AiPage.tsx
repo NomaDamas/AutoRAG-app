@@ -29,6 +29,7 @@ import { AppIcon, FloatingMenu, ModalActions, ModalShell, Note, Row, Section, Se
 import { asRecord, defaultEnvName, errorText, getAt, isAllowedAgentApi, stringOf, useConfigWriter } from "./configSupport";
 import { EmbeddingPicker } from "./EmbeddingPicker";
 import { jevBackendFor, jevModelsFor, rerankModelsFor } from "../../../../shared/ai-roles";
+import { providerConnectRoute, withoutAutorag } from "../../../../shared/account-contract";
 
 const settings = window.autorag.settings;
 
@@ -292,6 +293,18 @@ export function AiPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 		void run([{ path: ["rerank"], value: { enabled: true, provider: entry.provider, model: entry.id } }]);
 	}
 
+	/** Sign in to the AutoRAG plan through the account service (browser PKCE, encrypted key, adopted defaults). */
+	async function signInToAutorag(): Promise<void> {
+		setNotice("브라우저에서 AutoRAG에 로그인하세요…");
+		try {
+			const status = await window.autorag.account.signIn();
+			setNotice(status.state === "signedIn" ? "AutoRAG에 로그인했습니다." : (status.error ?? "로그인하지 않았습니다."));
+			await reload();
+		} catch (cause) {
+			setNotice(errorText(cause));
+		}
+	}
+
 	/**
 	 * Disconnect a provider: clear any role that pointed at it (answer/decomposition
 	 * fall back to their defaults by removing the field; rerank/jev disable), then
@@ -299,6 +312,18 @@ export function AiPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 	 * delete — that is reported as info, never as a success.
 	 */
 	async function disconnectProvider(provider: ProviderSummary): Promise<void> {
+		// The AutoRAG plan is signed in through the account service, so its key,
+		// cached account and adopted defaults are removed there, not by Pi's logout.
+		if (providerConnectRoute(provider.id) === "account") {
+			try {
+				const status = await window.autorag.account.signOut();
+				setNotice(status.state === "signedIn" ? "환경 변수 AUTORAG_API_KEY로 로그인되어 있어 앱에서 로그아웃할 수 없습니다. 해당 환경 변수를 직접 제거하세요." : `${provider.name} 연결을 해제했습니다.`);
+				await reload();
+			} catch (cause) {
+				setNotice(errorText(cause));
+			}
+			return;
+		}
 		if (provider.authSource === "environment") {
 			setNotice(`${provider.name} 키가 운영체제 환경 변수에서 제공되어 앱에서 해제할 수 없습니다. 해당 환경 변수를 직접 제거하세요.`);
 			return;
@@ -393,7 +418,8 @@ export function AiPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 				<FloatingMenu anchor={menu.anchor} compact={menu.kind === "thinking"} onClose={closeMenu}>
 					{menu.kind === "connect" ? (
 						<ConnectMenu
-							providers={available}
+							providers={withoutAutorag(available)}
+							onSignInToAutorag={available.some((provider) => providerConnectRoute(provider.id) === "account") ? () => { closeMenu(); void signInToAutorag(); } : undefined}
 							onConnect={(provider, authType) => {
 								closeMenu();
 								if (authType === "api_key" && (provider.apiKeyEnv === CREDENTIAL_ONLY_ENV || provider.id === "typesafe")) setKeyModal(provider);
@@ -528,11 +554,14 @@ function RoleRow({
 
 function ConnectMenu({
 	providers,
+	onSignInToAutorag,
 	onConnect,
 	onPickServer,
 	onPickServerExisting,
 }: {
 	readonly providers: readonly ProviderSummary[];
+	/** Present while the AutoRAG plan is not signed in; it opens the account sign-in, not Pi's login. */
+	readonly onSignInToAutorag: (() => void) | undefined;
 	readonly onConnect: (provider: ProviderSummary, authType: "oauth" | "api_key") => void;
 	readonly onPickServer: (kind: "local" | "custom") => void;
 	readonly onPickServerExisting: (provider: ProviderSummary) => void;
@@ -542,6 +571,15 @@ function ConnectMenu({
 	const servers = providers.filter((provider) => provider.kind === "local" || provider.kind === "custom");
 	return (
 		<>
+			{onSignInToAutorag !== undefined ? (
+				<>
+					<p className="settings-menu-group">AutoRAG 요금제</p>
+					<button type="button" className="settings-menu-item" onClick={onSignInToAutorag}>
+						<AppIcon small label="AutoRAG" />
+						<span>AutoRAG 계정으로 로그인</span>
+					</button>
+				</>
+			) : null}
 			{subscriptions.length > 0 ? (
 				<>
 					<p className="settings-menu-group">구독 계정</p>

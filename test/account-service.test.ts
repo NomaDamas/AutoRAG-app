@@ -402,6 +402,78 @@ describe("sign out", () => {
 	});
 });
 
+describe("review follow-ups for the default model", () => {
+	const readConfig = async (): Promise<Record<string, unknown>> => JSON.parse(await readFile(join(root, "config.json"), "utf8")) as Record<string, unknown>;
+	/** The provider of the configured decomposition model, read through checked narrowing. */
+	const decompositionProvider = (config: Record<string, unknown>): unknown => {
+		const block = config.queryDecomposition;
+		if (typeof block !== "object" || block === null || !("model" in block)) return undefined;
+		const model = block.model;
+		return typeof model === "object" && model !== null && "provider" in model ? model.provider : undefined;
+	};
+
+	it("does not hold sign-in or a refresh back on a slow catalog sync", async () => {
+		const never = Promise.withResolvers<void>();
+		service = build(undefined, { onSignedIn: () => never.promise });
+
+		const status = await service.signIn();
+		const refreshed = await service.refresh();
+
+		expect(status.state).toBe("signedIn");
+		expect(refreshed.account?.email).toBe("user@example.com");
+		never.resolve();
+	});
+
+	it("does not undo a config change made while the model lists are being fetched", async () => {
+		await writeFile(join(root, "config.json"), JSON.stringify({ searchPaths: ["/before"] }), "utf8");
+		const jevList = Promise.withResolvers<void>();
+		const slow = build(undefined, {
+			fetch: (async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+				if (String(input).includes("operation=jev")) {
+					await writeFile(join(root, "config.json"), JSON.stringify({ searchPaths: ["/changed-meanwhile"] }), "utf8");
+					jevList.resolve();
+				}
+				return fetch(input, init);
+			}) as typeof fetch,
+		});
+
+		await slow.signIn();
+		await jevList.promise;
+
+		expect((await readConfig()).searchPaths).toEqual(["/changed-meanwhile"]);
+	});
+
+	it("keeps an AutoRAG reranker the user switched off or tuned across a new sign-in", async () => {
+		await writeFile(join(root, "config.json"), JSON.stringify({ rerank: { provider: "autorag", enabled: false }, jev: { backend: "autorag", confidenceThreshold: 0.8 } }), "utf8");
+
+		await service.signIn();
+
+		const config = await readConfig();
+		expect(config.rerank).toEqual({ provider: "autorag", enabled: false });
+		expect(config.jev).toEqual({ backend: "autorag", confidenceThreshold: 0.8 });
+	});
+
+	it("keeps a deliberately chosen OpenRouter decomposition model, but replaces the librarian's untouched one", async () => {
+		await writeFile(join(root, "config.json"), JSON.stringify({ queryDecomposition: { model: { provider: "openrouter", id: "anthropic/claude-haiku-5.5" } } }), "utf8");
+		await service.signIn();
+		expect((await readConfig()).queryDecomposition).toEqual({ model: { provider: "openrouter", id: "anthropic/claude-haiku-5.5" } });
+
+		await service.signOut();
+		await writeFile(join(root, "config.json"), JSON.stringify({ queryDecomposition: { model: { provider: "openrouter", id: "qwen/qwen3.7-flash" } } }), "utf8");
+		await service.signIn();
+		expect(decompositionProvider(await readConfig())).toBe("autorag");
+	});
+
+	it("lets the explicit button still replace any decomposition model", async () => {
+		await service.signIn();
+		await writeFile(join(root, "config.json"), JSON.stringify({ model: { provider: "autorag", id: "x" }, queryDecomposition: { model: { provider: "openrouter", id: "anthropic/claude-haiku-5.5" } } }), "utf8");
+
+		await service.useManagedModel();
+
+		expect(decompositionProvider(await readConfig())).toBe("autorag");
+	});
+});
+
 describe("model catalog sync hook", () => {
 	it("runs after sign-in succeeds and on a later refresh of a signed-in account", async () => {
 		const synced: string[] = [];

@@ -1,5 +1,7 @@
 import { AUTORAG_PROVIDER_ID } from "./account-contract";
 
+export { providerConnectRoute, withoutAutorag } from "./account-contract";
+
 /**
  * The Jev and rerank roles are not general LLM roles: each backend serves a
  * fixed set of wire model ids. This module holds those tables and the rules
@@ -75,25 +77,35 @@ const UNTOUCHED_DEFAULTS: Readonly<Record<"backend" | "provider", Readonly<Recor
 	provider: { provider: "openrouter", model: "voyageai/rerank-3-lite", apiKeyEnv: "OPENROUTER_API_KEY", topN: 25 },
 };
 
+/** Keys an AutoRAG role block may carry and still be ours to refresh (anything else is the user's tuning). */
+const REFRESHABLE_KEYS: Readonly<Record<"backend" | "provider", readonly string[]>> = {
+	backend: ["backend", "model"],
+	provider: ["provider", "model", "enabled"],
+};
+
 /**
  * Classify a role block: `unset` for `undefined`, `{}` or the librarian's
- * untouched default, `autorag` when its `key` names the AutoRAG plan, otherwise
- * `other` (an explicit `false`, another backend/provider, or a malformed value,
- * all of which are the user's choice).
+ * untouched default; `autorag` for an AutoRAG block that is on and carries
+ * only the plan and a model; otherwise `other`: an explicit `false`, another
+ * backend/provider, a malformed value, or an AutoRAG block the user switched
+ * off (`enabled: false`) or tuned (`topN`, `baseUrl`, `confidenceThreshold`...).
  */
 function roleOwner(value: unknown, key: "backend" | "provider"): "unset" | "autorag" | "other" {
 	if (value === undefined) return "unset";
 	if (typeof value !== "object" || value === null || Array.isArray(value)) return "other";
 	const entries = Object.entries(value);
 	if (entries.length === 0) return "unset";
-	if (entries.some(([name, named]) => name === key && named === AUTORAG_PROVIDER_ID)) return "autorag";
+	if (entries.some(([name, named]) => name === key && named === AUTORAG_PROVIDER_ID)) {
+		const refreshable = entries.every(([name, named]) => REFRESHABLE_KEYS[key].includes(name) && (name !== "enabled" || named === true));
+		return refreshable ? "autorag" : "other";
+	}
 	const untouched = Object.entries(UNTOUCHED_DEFAULTS[key]);
 	return entries.length === untouched.length && untouched.every(([name, expected]) => entries.some(([entryName, entryValue]) => entryName === name && entryValue === expected)) ? "unset" : "other";
 }
 
 /**
  * Per role: may signing in point it at the AutoRAG plan? Only when the config
- * names nothing for it, or it already names AutoRAG.
+ * names nothing for it, or it already names AutoRAG without anything to keep.
  */
 export function shouldAdoptManagedRoles(config: { readonly jev?: unknown; readonly rerank?: unknown }): { readonly jev: boolean; readonly rerank: boolean } {
 	return {
@@ -102,21 +114,53 @@ export function shouldAdoptManagedRoles(config: { readonly jev?: unknown; readon
 	};
 }
 
+/** The decomposition model the librarian writes into a fresh config. */
+const UNTOUCHED_DECOMPOSITION_ID = "qwen/qwen3.7-flash";
+
+/**
+ * Question decomposition: adoptable when absent, `{}`, already an AutoRAG
+ * model, or the librarian's untouched default. A deliberate OpenRouter pick,
+ * `false` ("decompose with the answer model") and anything else stay.
+ */
+export function shouldAdoptManagedDecomposition(value: unknown): boolean {
+	if (value === undefined) return true;
+	if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+	const entries = Object.entries(value);
+	if (entries.length === 0) return true;
+	const [only] = entries;
+	if (entries.length !== 1 || only === undefined || only[0] !== "model") return false;
+	const model = only[1];
+	if (typeof model !== "object" || model === null || Array.isArray(model)) return false;
+	const fields = Object.entries(model);
+	if (fields.some(([name, named]) => name === "provider" && named === AUTORAG_PROVIDER_ID)) return true;
+	return fields.length === 2 && fields.every(([name, named]) => (name === "provider" && named === "openrouter") || (name === "id" && named === UNTOUCHED_DECOMPOSITION_ID));
+}
+
 export interface ManagedRoleUpdates {
 	readonly jev?: { readonly backend: "autorag"; readonly model: string };
 	readonly rerank?: { readonly enabled: true; readonly provider: "autorag"; readonly model: string };
 }
 
-/** The config blocks to write for the roles that may be adopted, using the server's first model for each. */
+/**
+ * The config blocks to write for the roles that may be adopted. A model the
+ * existing AutoRAG block names is kept while the server still lists it;
+ * otherwise the server's first model is used.
+ */
 export function managedRoleUpdates(
 	adopt: { readonly jev: boolean; readonly rerank: boolean },
 	jevModels: readonly { readonly id: string }[],
 	rerankModels: readonly { readonly id: string }[],
+	current: { readonly jev?: unknown; readonly rerank?: unknown } = {},
 ): ManagedRoleUpdates {
-	const jevModel = jevModels[0];
-	const rerankModel = rerankModels[0];
+	const jevModel = pickModel(jevModels, current.jev);
+	const rerankModel = pickModel(rerankModels, current.rerank);
 	return {
-		...(adopt.jev && jevModel !== undefined ? { jev: { backend: "autorag" as const, model: jevModel.id } } : {}),
-		...(adopt.rerank && rerankModel !== undefined ? { rerank: { enabled: true as const, provider: "autorag" as const, model: rerankModel.id } } : {}),
+		...(adopt.jev && jevModel !== undefined ? { jev: { backend: "autorag" as const, model: jevModel } } : {}),
+		...(adopt.rerank && rerankModel !== undefined ? { rerank: { enabled: true as const, provider: "autorag" as const, model: rerankModel } } : {}),
 	};
+}
+
+function pickModel(models: readonly { readonly id: string }[], block: unknown): string | undefined {
+	const named = typeof block === "object" && block !== null && "model" in block ? block.model : undefined;
+	return models.find((model) => model.id === named)?.id ?? models[0]?.id;
 }

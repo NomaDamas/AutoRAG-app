@@ -18,7 +18,7 @@ import {
 	type PaidPlanId,
 } from "../shared/account-contract";
 import { isJsonObject } from "../shared/settings-contract";
-import { managedRoleUpdates, shouldAdoptManagedRoles } from "../shared/ai-roles";
+import { managedRoleUpdates, shouldAdoptManagedDecomposition, shouldAdoptManagedRoles } from "../shared/ai-roles";
 import type { ProviderCredentialService } from "./provider-credentials";
 
 /**
@@ -290,10 +290,6 @@ export function createAccountService(deps: AccountServiceDeps): AccountService {
 				} else {
 					await writeCache(account);
 					lastError = null;
-					// Best effort: the model picker lists the plan's models from this catalog.
-					await deps.onSignedIn?.().catch((error: unknown) => {
-						console.warn("[account] onSignedIn hook failed:", error);
-					});
 				}
 				offline = false;
 			} else {
@@ -305,7 +301,15 @@ export function createAccountService(deps: AccountServiceDeps): AccountService {
 			offline = true;
 			lastError = null;
 		}
-		return publish();
+		const status = await publish();
+		// Best effort and off the critical path: the model picker lists the plan's
+		// models from this catalog, but a slow server must not hold the status back.
+		if (status.state === "signedIn" && status.account !== null && !offline && lastError === null) {
+			void deps.onSignedIn?.().catch((error: unknown) => {
+				console.warn("[account] onSignedIn hook failed:", error);
+			});
+		}
+		return status;
 	}
 
 	/** Runs the loopback listener until the browser calls back, the user cancels, or the wait times out. */
@@ -403,12 +407,21 @@ export function createAccountService(deps: AccountServiceDeps): AccountService {
 	 * Points the shared config at the signed-in account's models. The server
 	 * decides the catalog and its order, so the first entry is the recommended
 	 * chat model; question decomposition runs on the cheapest one.
+	 *
+	 * Every network call finishes before the config is read, so the read, the
+	 * merge and the write run back to back and never undo a change made elsewhere
+	 * while the lists were loading. `onlyUntouchedDecomposition` is the automatic
+	 * (sign-in) mode: it replaces the decomposition model only when it is absent,
+	 * already AutoRAG, or the librarian's untouched default; the explicit button
+	 * also replaces a deliberately chosen OpenRouter one.
 	 */
-	async function applyManagedModel(): Promise<ManagedModelResult> {
+	async function applyManagedModel(options: { readonly onlyUntouchedDecomposition?: boolean } = {}): Promise<ManagedModelResult> {
 		const catalog = parseCatalog(await callSignedIn("/v1/models", {}));
 		const main = catalog[0];
 		const cheapest = catalog.reduce<CatalogModel | undefined>((best, model) => (best === undefined || model.price < best.price ? model : best), undefined);
 		if (main === undefined || cheapest === undefined) throw new Error("Your AutoRAG plan lists no models.");
+		// A list the server cannot give leaves that role alone and never fails the chat model.
+		const [jevIds, rerankIds] = await Promise.all([operationModelIds("jev"), operationModelIds("rerank")]);
 		const reference = (model: CatalogModel): Record<string, unknown> => ({
 			provider: AUTORAG_PROVIDER_ID,
 			id: model.id,
@@ -424,19 +437,18 @@ export function createAccountService(deps: AccountServiceDeps): AccountService {
 		const raw = existsSync(deps.configPath) ? readRawConfigObject(deps.configPath) : {};
 		const next: Record<string, unknown> = { ...raw, model: reference(main) };
 		// The librarian's default decomposition model is on OpenRouter, which an
-		// account holder has no key for. An explicit choice (`false` or another
-		// provider) stays; the OpenRouter default moves to the account's models.
+		// account holder has no key for.
 		const decomposition = raw.queryDecomposition;
 		const decompositionModel = isJsonObject(decomposition) && isJsonObject(decomposition.model) ? decomposition.model : null;
-		if (decomposition === undefined || (decomposition !== false && (decompositionModel === null || decompositionModel.provider === "openrouter" || decompositionModel.provider === AUTORAG_PROVIDER_ID))) {
-			next.queryDecomposition = { model: reference(cheapest) };
-		}
-		// Jev and rerank are served by the same account. Each is adopted only when
-		// the config names nothing for it (or the librarian's untouched OpenRouter
-		// default, which an account holder has no key for); a list the server cannot
-		// give leaves the role alone and never fails the chat model.
-		const [jevIds, rerankIds] = await Promise.all([operationModelIds("jev"), operationModelIds("rerank")]);
-		Object.assign(next, managedRoleUpdates(shouldAdoptManagedRoles(raw), jevIds, rerankIds));
+		const replaceDecomposition =
+			options.onlyUntouchedDecomposition === true
+				? shouldAdoptManagedDecomposition(decomposition)
+				: decomposition === undefined || (decomposition !== false && (decompositionModel === null || decompositionModel.provider === "openrouter" || decompositionModel.provider === AUTORAG_PROVIDER_ID));
+		if (replaceDecomposition) next.queryDecomposition = { model: reference(cheapest) };
+		// Jev and rerank are adopted per role: only when the config names nothing
+		// for it (or the librarian's untouched OpenRouter default), or already names
+		// the plan without anything the user switched off or tuned.
+		Object.assign(next, managedRoleUpdates(shouldAdoptManagedRoles(raw), jevIds, rerankIds, raw));
 		writeConfigObject(deps.configPath, next);
 		return { modelId: main.id, modelName: main.name };
 	}
@@ -444,11 +456,12 @@ export function createAccountService(deps: AccountServiceDeps): AccountService {
 	/**
 	 * Right after a successful sign-in: adopt the account's models unless the
 	 * user already chose another provider's model. Never fails the sign-in.
+	 * Only untouched defaults are replaced here; the explicit button replaces any.
 	 */
 	async function adoptManagedModelIfUnset(): Promise<void> {
 		try {
 			const raw = existsSync(deps.configPath) ? readRawConfigObject(deps.configPath) : {};
-			if (shouldAdoptManagedModel(raw)) await applyManagedModel();
+			if (shouldAdoptManagedModel(raw)) await applyManagedModel({ onlyUntouchedDecomposition: true });
 		} catch (error) {
 			console.warn("[account] could not set the account's models as the default:", error);
 		}
