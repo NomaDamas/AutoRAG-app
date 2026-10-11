@@ -41,9 +41,12 @@ does not match its published digest.
 
 ### How the app uses them
 
-* `resources/tools/bin` is put first on `PATH` at startup (`src/main/bundled-tools.ts`)
-  and handed to the background refresh job (launchd / Task Scheduler), so a tool
-  the user already has never shadows the version that was tested with the app.
+* `resources/tools/bin` is put first on `PATH` at startup (`src/main/bundled-tools.ts`),
+  so a tool the user already has never shadows the version that was tested with the app.
+  The background refresh job (launchd / Task Scheduler) runs the app's own executable
+  and applies the same `PATH` itself (`src/main/refresh-job.ts`); the OS job definition
+  carries no tools path, which keeps the Task Scheduler command under its 261-character
+  `/TR` limit.
 * npm CLIs (`mailcrawl`, `qmd`, `kordoc`) and `autorag` are launched through a tiny
   native launcher (`scripts/release/shim`) that runs the bundled Node. Windows
   cannot spawn a script by name; this makes them real executables on both platforms.

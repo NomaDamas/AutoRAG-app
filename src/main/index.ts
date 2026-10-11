@@ -1,9 +1,9 @@
 import { homedir } from "node:os";
-import { applyBundledTools, bundledToolsBin } from "./bundled-tools";
-import { seedAssets } from "./seed-assets";
 import { access, open, readdir, readFile, stat } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { isAbsolute, join, sep } from "node:path";
+import { applyBundledTools } from "./bundled-tools";
+import { seedAssets } from "./seed-assets";
 import {
 	app,
 	BrowserWindow,
@@ -331,7 +331,7 @@ app.whenReady().then(async () => {
 	// Packaged builds carry the dependency CLIs and the embedding model: tools go first on PATH
 	// before anything reads the environment, and the model/runtime are copied into the AutoRAG home
 	// in the background so a fresh install indexes offline without a ~650 MB download.
-	const bundledTools = applyBundledTools({ resourcesPath: process.resourcesPath, env: process.env });
+	applyBundledTools({ resourcesPath: process.resourcesPath, env: process.env });
 	void seedAssets({
 		seedDir: join(process.resourcesPath, "seed"),
 		autoragHome: process.env.AUTORAG_HOME?.trim() || join(homedir(), ".autorag"),
@@ -522,7 +522,6 @@ app.whenReady().then(async () => {
 		execPath: process.execPath,
 		jobPath: join(import.meta.dirname, "refresh-job.js"),
 		configPath: autoragConfigPath,
-		...(bundledTools === null ? {} : { toolsBin: bundledToolsBin(bundledTools) }),
 	});
 	const settingsService = createSettingsService({
 		directory: join(app.getPath("userData"), "settings"),
