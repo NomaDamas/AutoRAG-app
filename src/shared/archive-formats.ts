@@ -22,6 +22,7 @@ export type ArchiveFormat =
 	| "tgz"
 	| "gz"
 	| "7z"
+	| "rar"
 	| "tar.bz2"
 	| "tbz2"
 	| "tar.xz"
@@ -47,6 +48,7 @@ const ARCHIVE_SUFFIXES: readonly { readonly suffix: string; readonly format: Arc
 	{ suffix: ".tar", format: "tar" },
 	{ suffix: ".gz", format: "gz" },
 	{ suffix: ".7z", format: "7z" },
+	{ suffix: ".rar", format: "rar" },
 ];
 
 /**

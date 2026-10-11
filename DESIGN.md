@@ -209,7 +209,7 @@ The Info half's bottom bar is data-driven, not a fixed four buttons.
   the IPC channels, and the capability gating need no change.
 - Action outputs never overwrite: `uniqueChild` numbers them Finder-style
   (`photo.jpeg`, `photo 2.jpeg`). Extraction offers every format the shared
-  `archiveFormatOf` predicate recognizes — zip, tar, tar.gz/tgz, gz, 7z, and
+  `archiveFormatOf` predicate recognizes — zip, tar, tar.gz/tgz, gz, 7z, rar, and
   tar.bz2/tar.xz — writing into a hidden staging folder beside the destination
   (removed on any failure) and then renaming it into place, flattening a single
   wrapper folder that matches the archive stem. The wasm engine's licenses are

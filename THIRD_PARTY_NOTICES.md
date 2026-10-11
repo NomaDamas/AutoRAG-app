@@ -2,7 +2,7 @@
 
 AutoRAG is distributed under the **AGPL-3.0**. This file lists the third-party
 components that ship inside the app's archive-extraction engine — the
-`libarchive-wasm` WebAssembly build (7z, tar.bz2, tar.xz) and the JavaScript zip
+`libarchive-wasm` WebAssembly build (7z, RAR, tar.bz2, tar.xz) and the JavaScript zip
 path. **Every component below is permissively licensed and AGPL-3.0 compatible**
 (MIT, BSD-2-Clause, Apache-2.0, zlib, 0BSD/public domain).
 
@@ -36,9 +36,11 @@ Notes on what was verified:
   **zero** OpenSSL/`evp`/`libcrypto` hits, so the shipped binary does not appear
   to reference it (the linker pulled in no crypto objects for this feature set).
   Encrypted archives are refused rather than decrypted.
-- **unRAR is absent.** libarchive's own RAR v4/v5 readers are BSD-2-Clause;
-  there is no 7-Zip unRAR code (the reason `7z-wasm` was not used). RAR is not
-  an offered extraction format.
+- **unRAR is absent.** RAR is extracted by libarchive's own RAR v4/v5 readers
+  (BSD-2-Clause, clean-room, written from the public format description). No
+  RARLAB unRAR source is linked, and there is no 7-Zip unRAR code (the reason
+  `7z-wasm` was not used). RAR is extract-only: the format is proprietary and
+  RARLAB's license forbids building a RAR compressor, so none is offered.
 - **No zstd, lz4, or lzo**: absent from the upstream build (`--without-lz4`,
   `--without-lzo2`) and from the shipped wasm symbols.
 - `libarchive-wasm` replaces `libarchive.js`: the shipped `libarchive.js` wasm
