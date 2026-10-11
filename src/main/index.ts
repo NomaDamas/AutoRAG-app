@@ -575,6 +575,7 @@ app.whenReady().then(async () => {
 	});
 	registerAccountIpcHandlers(accountService);
 	void accountService.refresh().catch(() => undefined);
+	app.once("will-quit", () => void accountService.dispose());
 
 	const onboardingService: OnboardingService = createOnboardingService({
 		userDataDir,

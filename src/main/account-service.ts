@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
@@ -57,6 +57,8 @@ export interface AccountService {
 	checkout(plan: PaidPlanId): Promise<void>;
 	portal(): Promise<void>;
 	useManagedModel(): Promise<ManagedModelResult>;
+	/** Aborts a sign-in in flight so its loopback listener closes (app quit). */
+	dispose(): Promise<void>;
 }
 
 interface ApiResponse {
@@ -170,35 +172,47 @@ export function createAccountService(deps: AccountServiceDeps): AccountService {
 		return cached;
 	}
 
-	async function writeCache(account: AccountSnapshot | null): Promise<void> {
+	/** Cache writes run one at a time: overlapping refreshes must not share a temporary file. */
+	let cacheQueue: Promise<unknown> = Promise.resolve();
+	function writeCache(account: AccountSnapshot | null): Promise<void> {
 		cached = account;
-		if (account === null) {
-			await rm(deps.cachePath, { force: true });
-			return;
-		}
-		await mkdir(dirname(deps.cachePath), { recursive: true });
-		const temporary = `${deps.cachePath}.${process.pid}.tmp`;
-		const wire = {
-			email: account.email,
-			plan: account.plan,
-			status: account.status,
-			trialing: account.trialing,
-			cancel_scheduled: account.cancelScheduled,
-			period_end: account.periodEnd,
-			credits: { used_cents: account.creditsUsedCents, limit_cents: account.creditsLimitCents, period: account.creditPeriod },
-			limits: { requests_per_minute: account.requestsPerMinute },
-			billing: account.billing,
+		const run = async (): Promise<void> => {
+			if (account === null) {
+				await rm(deps.cachePath, { force: true });
+				return;
+			}
+			await mkdir(dirname(deps.cachePath), { recursive: true });
+			const temporary = `${deps.cachePath}.${process.pid}.${randomUUID()}.tmp`;
+			const wire = {
+				email: account.email,
+				plan: account.plan,
+				status: account.status,
+				trialing: account.trialing,
+				cancel_scheduled: account.cancelScheduled,
+				period_end: account.periodEnd,
+				credits: { used_cents: account.creditsUsedCents, limit_cents: account.creditsLimitCents, period: account.creditPeriod },
+				limits: { requests_per_minute: account.requestsPerMinute },
+				billing: account.billing,
+			};
+			await writeFile(temporary, `${JSON.stringify({ version: CACHE_VERSION, baseUrl: baseUrl(), account: wire })}\n`, { encoding: "utf8", mode: 0o600 });
+			await rename(temporary, deps.cachePath);
 		};
-		await writeFile(temporary, `${JSON.stringify({ version: CACHE_VERSION, baseUrl: baseUrl(), account: wire })}\n`, { encoding: "utf8", mode: 0o600 });
-		await rename(temporary, deps.cachePath);
+		const result = cacheQueue.then(run, run);
+		cacheQueue = result.catch(() => undefined);
+		return result;
 	}
 
-	/** The key in use and where it comes from; null when absent or rejected by the server. */
+	/**
+	 * The key in use and where it comes from; null when absent or rejected by the
+	 * server. The credential store skips a stored entry while the environment
+	 * already holds the name, so the effective source (not mere presence of an
+	 * entry) decides whether the app can sign this key out.
+	 */
 	async function currentKey(): Promise<{ readonly key: string; readonly source: "stored" | "env" } | null> {
 		const key = deps.env[ACCOUNT_API_KEY_ENV];
 		if (typeof key !== "string" || key.length === 0 || key === revokedKey) return null;
 		const [row] = await deps.credentials.list([ACCOUNT_API_KEY_ENV]);
-		return { key, source: row?.stored === true ? "stored" : "env" };
+		return { key, source: row?.source === "stored" ? "stored" : "env" };
 	}
 
 	async function buildStatus(): Promise<AccountStatus> {
@@ -377,6 +391,10 @@ export function createAccountService(deps: AccountServiceDeps): AccountService {
 			flow = { promise, abort };
 			void publish();
 			return promise;
+		},
+		dispose: async () => {
+			flow?.abort.abort();
+			await flow?.promise.catch(() => undefined);
 		},
 		cancelSignIn: async () => {
 			flow?.abort.abort();

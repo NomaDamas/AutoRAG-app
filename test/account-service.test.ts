@@ -392,6 +392,42 @@ describe("sign out", () => {
 	});
 });
 
+describe("review follow-ups", () => {
+	it("reports an ambient key as the active source even when an encrypted entry also exists, and does not claim to sign it out", async () => {
+		// The real credential store skips a stored entry when the env already holds the name.
+		creds.store.set(ACCOUNT_API_KEY_ENV, "dz_stale");
+		env[ACCOUNT_API_KEY_ENV] = "dz_fakekey";
+		creds.service.list = async (names = []) => names.map((envName) => ({ envName, stored: true, source: "env" as const }));
+
+		const status = await service.refresh();
+
+		expect(status).toMatchObject({ state: "signedIn", source: "env" });
+		expect((await service.signOut()).state).toBe("signedIn");
+		expect(creds.store.get(ACCOUNT_API_KEY_ENV)).toBe("dz_stale");
+	});
+
+	it("survives concurrent refreshes writing the cache", async () => {
+		await service.signIn();
+
+		const results = await Promise.allSettled(Array.from({ length: 8 }, () => service.refresh()));
+
+		expect(results.map((result) => result.status)).toEqual(Array(8).fill("fulfilled"));
+		expect((await build().status()).account?.email).toBe("user@example.com");
+	});
+
+	it("closes the loopback listener when the app quits mid sign-in", async () => {
+		const browserOpened = Promise.withResolvers<string>();
+		service = build(async (url) => browserOpened.resolve(url));
+
+		const pending = service.signIn();
+		const redirect = new URL(new URL(await browserOpened.promise).searchParams.get("redirect_uri") ?? "");
+		await service.dispose();
+
+		expect((await pending).state).toBe("signedOut");
+		await expect(fetch(redirect)).rejects.toThrow();
+	});
+});
+
 describe("hosted billing", () => {
 	it("opens the hosted checkout for the chosen plan in the browser", async () => {
 		await service.signIn();
