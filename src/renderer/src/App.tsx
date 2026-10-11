@@ -21,7 +21,7 @@ import { percentPlacement, TAB_DRAG_TYPE, WorkspaceView } from "./components/Wor
 import { createDirectoryStore } from "./data/directory-store";
 import { createEntrySidecar } from "./data/entry-sidecar";
 import type { DirectoryData } from "./hooks/useDirectoryData";
-import { isTagPath, RECENTS_PATH, tagNameOf } from "../../shared/fs-contract";
+import { isTagPath, tagNameOf } from "../../shared/fs-contract";
 import { useFinderSource } from "./hooks/useFinderSource";
 import { TagCatalogContext, useTagCatalogLoader } from "./hooks/useTagCatalog";
 import { createControllerStore, usePaneController } from "./hooks/usePaneControllers";
@@ -406,7 +406,7 @@ export function App(): ReactElement {
 			}
 			// A Settings / AI Search tab lists nothing: the results show in its last folder.
 			finder.leaveVirtualTab();
-			finder.setSearchScope(mode === "folder" ? "current" : "all");
+			finder.setSearchScope("all");
 			finder.setQuery(value);
 		},
 		[contentSearch, finder],
@@ -565,10 +565,6 @@ export function App(): ReactElement {
 				: finder?.searching === true
 					? `Search "${finder.query}"`
 					: isTagPath(path) ? tagNameOf(path) : basename(path);
-	/** The folder the sidebar search can be limited to; Settings, AI Search and Recents hold no folder. */
-	const lastFolderPath = path === SETTINGS_PATH || aiTabActive || path === RECENTS_PATH ? null : path;
-	const searchFolderName =
-		lastFolderPath === null ? null : isTagPath(lastFolderPath) ? tagNameOf(lastFolderPath) : basename(lastFolderPath);
 
 	/** The sidebar AI Search item: a drop turns the focused tab into AI Search with the files attached. */
 	const aiSearchDrop = {
@@ -622,8 +618,6 @@ export function App(): ReactElement {
 						searchQuery={finder?.query ?? ""}
 						searchRef={finder?.searchRef ?? NO_INPUT}
 						searchFocused={finder?.searchFocused ?? false}
-						searchFolderName={searchFolderName}
-						folderFilterRequest={finder?.folderFilterRequest ?? 0}
 						onSearchFocus={() => finder?.setSearchFocused(true)}
 						onSearchBlur={() => finder?.setSearchFocused(false)}
 						onSubmitSearch={submitSidebarSearch}

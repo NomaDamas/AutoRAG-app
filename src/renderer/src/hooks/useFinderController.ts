@@ -174,8 +174,6 @@ export interface FinderController {
 	/** Turn the path bar into a text field (⌘L, or a double-click on its empty part). */
 	editPath(): void;
 	cancelPathEdit(): void;
-	/** Bumped by ⇧⌘F: the sidebar search focuses and switches to "this folder". */
-	readonly folderFilterRequest: number;
 	readonly searching: boolean;
 	readonly emptyText: string;
 	readonly rows: readonly FinderEntry[];
@@ -402,7 +400,6 @@ export function useFinderController(
 	const [flashPath, setFlashPath] = useState<string | null>(null);
 	const [searchFocused, setSearchFocused] = useState(false);
 	const [pathEditing, setPathEditing] = useState(false);
-	const [folderFilterRequest, setFolderFilterRequest] = useState(0);
 	const [revision, setRevision] = useState(0);
 	const [actionCapabilities, setActionCapabilities] = useState<ActionCapabilities>(NO_CAPABILITIES);
 	const [layerStore, setLayerStore] = useState<LayerStore>(EMPTY_LAYER_STORE);
@@ -1690,11 +1687,6 @@ export function useFinderController(
 		focusSearchRef.current?.();
 		searchRef.current?.focus();
 	});
-	const focusFolderFilter = useLatestCallback(() => {
-		setFolderFilterRequest((count) => count + 1);
-		focusSearchRef.current?.();
-		searchRef.current?.focus();
-	});
 	const editPath = useLatestCallback(() => setPathEditing(true));
 	const duplicateSelection = useLatestCallback(() => duplicatePaths(selection.keys));
 	const cancelPathEdit = useLatestCallback(() => setPathEditing(false));
@@ -1756,13 +1748,14 @@ export function useFinderController(
 		revealOnReopenRef.current = false;
 		scrollTarget.current = selection.focus;
 	}, [shownTabId]);
+	const back = useLatestCallback(() => setTabsState((state) => goBack(state)));
+	const forward = useLatestCallback(() => setTabsState((state) => goForward(state)));
 	const openSettings = useLatestCallback(() => updateWorkspace(openOrSelectSettingsInWorkspace));
 	// Every member is a stable useLatestCallback, so this object is created once.
 	const keyActions = useMemo(
 		() => ({
 			dismiss,
 			focusSearch,
-			focusFolderFilter,
 			editPath,
 			duplicateSelection,
 			newTab,
@@ -1787,11 +1780,12 @@ export function useFinderController(
 			pasteClipboard,
 			undoLastOperation,
 			redoLastOperation,
+			back,
+			forward,
 		}),
 		[
 			dismiss,
 			focusSearch,
-			focusFolderFilter,
 			editPath,
 			duplicateSelection,
 			newTab,
@@ -1816,6 +1810,8 @@ export function useFinderController(
 			pasteClipboard,
 			undoLastOperation,
 			redoLastOperation,
+			back,
+			forward,
 		],
 	);
 	useFinderKeyboard({
@@ -1891,8 +1887,6 @@ export function useFinderController(
 	const openAiSearch = useLatestCallback(() => setTabsState((state) => openAiSearchTab(state)));
 	const focusAiSearch = useLatestCallback(() => updateWorkspace(focusAiSearchInWorkspace));
 	const leaveVirtualTab = useLatestCallback(() => setTabsState((state) => exitVirtualTab(state)));
-	const back = useLatestCallback(() => setTabsState((state) => goBack(state)));
-	const forward = useLatestCallback(() => setTabsState((state) => goForward(state)));
 	const sortBy = useLatestCallback((key: SortKey) => setSort((current) => cycleSort(current, key)));
 	const focusFinder = useLatestCallback(() => setZone("finder"));
 	const clickRow = useLatestCallback((entry: FinderEntry, event: ReactMouseEvent<HTMLDivElement>) => {
@@ -2010,7 +2004,6 @@ export function useFinderController(
 		pathEditText: isVirtualListing(path) ? "" : path,
 		commitPath,
 		cancelPathEdit,
-		folderFilterRequest,
 		sortBy,
 		applySort,
 		setGrouping,

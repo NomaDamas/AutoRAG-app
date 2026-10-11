@@ -5,11 +5,8 @@ import { formatShortcut, hostPlatform } from "../lib/shortcuts";
 import { SearchIcon } from "./icons";
 import { Keycap } from "./primitives/Keycap";
 
-/**
- * What Enter commits against: a filename search over the whole machine, the AI
- * content search, or a filename search inside the folder in view only.
- */
-export type SearchMode = "name" | "content" | "folder";
+/** What Enter commits against: a filename search over the whole machine, or the AI content search. */
+export type SearchMode = "name" | "content";
 
 const CHIP_CLASS =
 	"flex-1 min-w-0 h-pill px-8 border border-transparent rounded-11 text-badge whitespace-nowrap cursor-default transition-[background,color,border-color] duration-(--dur-color) ease-[ease]";
@@ -26,8 +23,6 @@ export function SidebarSearch({
 	inputRef,
 	focused,
 	showHotkeys,
-	folderName,
-	folderFilterRequest,
 	onFocus,
 	onBlur,
 	onSubmit,
@@ -37,10 +32,6 @@ export function SidebarSearch({
 	readonly inputRef: RefObject<HTMLInputElement | null>;
 	readonly focused: boolean;
 	readonly showHotkeys: boolean;
-	/** The folder (or tag) in view, named on the "this folder" chip; null when the view is not a folder. */
-	readonly folderName: string | null;
-	/** Bumped by ⇧⌘F: select the "this folder" chip. */
-	readonly folderFilterRequest: number;
 	readonly onFocus: () => void;
 	readonly onBlur: () => void;
 	/** mode + raw text; an empty text clears the committed search. */
@@ -48,9 +39,7 @@ export function SidebarSearch({
 }): ReactElement {
 	const { t } = useTranslation();
 	const [draft, setDraft] = useState(query);
-	const [chosen, setMode] = useState<SearchMode>("name");
-	// The folder chip needs a folder: elsewhere (Recents, Settings) the field falls back to the machine-wide search.
-	const mode: SearchMode = chosen === "folder" && folderName === null ? "name" : chosen;
+	const [mode, setMode] = useState<SearchMode>("name");
 	const machine = hostPlatform() === "win32" ? t("scopeBar.thisComputer", "컴퓨터") : t("scopeBar.thisMac", "Mac");
 	const chips: readonly { readonly mode: SearchMode; readonly label: string; readonly hint: string }[] = useMemo(
 		() => [
@@ -59,19 +48,6 @@ export function SidebarSearch({
 				label: t("sidebarSearch.fileName", "파일 이름"),
 				hint: t("sidebarSearch.fileNameHint", { machine, defaultValue: `이 ${machine} 전체에서 파일 이름 검색` }),
 			},
-			...(folderName === null
-				? []
-				: [
-						{
-							mode: "folder" as const,
-							label: folderName,
-							hint: t("sidebarSearch.folderHint", {
-								folder: folderName,
-								shortcut: formatShortcut({ key: "F", shift: true }),
-								defaultValue: `"${folderName}" 안에서만 파일 이름 검색 (${formatShortcut({ key: "F", shift: true })})`,
-							}),
-						},
-					]),
 			{
 				mode: "content",
 				label: t("sidebarSearch.content", "내용"),
@@ -81,12 +57,8 @@ export function SidebarSearch({
 				}),
 			},
 		],
-		[t, machine, folderName],
+		[t, machine],
 	);
-
-	useEffect(() => {
-		if (folderFilterRequest > 0) setMode("folder");
-	}, [folderFilterRequest]);
 
 	useEffect(() => {
 		setDraft(query);
@@ -150,7 +122,7 @@ export function SidebarSearch({
 				) : null}
 			</label>
 			{focused ? (
-				<div className="search-scopes flex flex-wrap gap-2 mt-6 p-2 rounded-12 bg-hover" role="group" aria-label="검색 범위">
+				<div className="search-scopes flex gap-2 mt-6 p-2 rounded-12 bg-hover" role="group" aria-label="검색 범위">
 					{chips.map((chip) => (
 						<button
 							key={chip.mode}
@@ -158,8 +130,6 @@ export function SidebarSearch({
 							className={cn(
 								"scope-chip",
 								CHIP_CLASS,
-								// The folder chip carries a user's folder name: it takes its own row and truncates there.
-								chip.mode === "folder" && "order-last basis-full overflow-hidden text-ellipsis",
 								mode === chip.mode
 									? "bg-window border-border text-ink"
 									: "bg-transparent text-ink-muted hover:bg-hover-strong hover:text-ink",

@@ -3,7 +3,7 @@ import type { FinderEntry } from "../data/entries";
 import type { ColumnDirection } from "../state/columns";
 import { discloseStep, type TreeRow } from "../state/folder-tree";
 import type { GroupSection } from "../state/grouping";
-import { type FocusZone, type KeyAction, resolveKeyAction } from "../state/keymap";
+import { type FocusZone, type KeyAction, mouseNavDirection, resolveKeyAction } from "../state/keymap";
 import { moveSelection, type SelectionState } from "../state/selection";
 import { isVirtualTabPath } from "../state/tabs";
 import type { StackRow } from "../state/version-family";
@@ -155,8 +155,6 @@ export interface FinderKeyboardInput {
 	readonly actions: {
 		dismiss(): void;
 		focusSearch(): void;
-		/** ⇧⌘F: focus the sidebar search scoped to the folder in view. */
-		focusFolderFilter(): void;
 		/** ⌘L: turn the path bar into a text field holding the current path. */
 		editPath(): void;
 		/** ⌘D: duplicate the selected rows next to themselves. */
@@ -187,6 +185,9 @@ export interface FinderKeyboardInput {
 		pasteClipboard(move: boolean): void;
 		undoLastOperation(): void;
 		redoLastOperation(): void;
+		/** The toolbar's Back and Forward, also driven by the mouse side buttons. */
+		back(): void;
+		forward(): void;
 	};
 }
 
@@ -234,10 +235,6 @@ export function useFinderKeyboard(input: FinderKeyboardInput): void {
 				case "focusSearch":
 					event.preventDefault();
 					actions.focusSearch();
-					return;
-				case "focusFolderFilter":
-					event.preventDefault();
-					actions.focusFolderFilter();
 					return;
 				case "editPath":
 					event.preventDefault();
@@ -372,7 +369,28 @@ export function useFinderKeyboard(input: FinderKeyboardInput): void {
 					return;
 			}
 		};
+		// The mouse side buttons are the toolbar's Back and Forward. `mouseup`
+		// acts, and `mousedown`/`auxclick` are cancelled so the page never also
+		// runs Chromium's own history step.
+		const onMouseUp = (event: MouseEvent): void => {
+			const direction = mouseNavDirection(event.button);
+			if (direction === null) return;
+			event.preventDefault();
+			if (direction === "back") actions.back();
+			else actions.forward();
+		};
+		const swallow = (event: MouseEvent): void => {
+			if (mouseNavDirection(event.button) !== null) event.preventDefault();
+		};
 		window.addEventListener("keydown", onKeyDown);
-		return () => window.removeEventListener("keydown", onKeyDown);
+		window.addEventListener("mouseup", onMouseUp);
+		window.addEventListener("mousedown", swallow);
+		window.addEventListener("auxclick", swallow);
+		return () => {
+			window.removeEventListener("keydown", onKeyDown);
+			window.removeEventListener("mouseup", onMouseUp);
+			window.removeEventListener("mousedown", swallow);
+			window.removeEventListener("auxclick", swallow);
+		};
 	}, [focused, zone, path, layout, selection, orderedKeys, stackRows, stackSections, focusedEntry, listRef, actions]);
 }

@@ -75,8 +75,7 @@
     "fileNameHint": "在此{{machine}}全部范围内搜索文件名",
     "contentHint": "使用 AI 搜索文件内容 ({{shortcut}})",
     "placeholder": "搜索…",
-    "clearSearch": "清除搜索",
-    "folderHint": "仅在 \"{{folder}}\" 内搜索文件名 ({{shortcut}})"
+    "clearSearch": "清除搜索"
   },
   "pathBar": {
     "notFound": "找不到 \"{{path}}\"。"

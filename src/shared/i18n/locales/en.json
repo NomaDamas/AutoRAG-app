@@ -75,8 +75,7 @@
     "fileNameHint": "Search file names across this {{machine}}",
     "contentHint": "Search file contents with AI ({{shortcut}})",
     "placeholder": "Search…",
-    "clearSearch": "Clear search",
-    "folderHint": "Search file names only inside \"{{folder}}\" ({{shortcut}})"
+    "clearSearch": "Clear search"
   },
   "pathBar": {
     "notFound": "Can't find \"{{path}}\"."

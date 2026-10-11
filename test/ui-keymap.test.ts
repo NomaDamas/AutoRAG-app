@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveKeyAction } from "../src/renderer/src/state/keymap";
+import { mouseNavDirection, resolveKeyAction } from "../src/renderer/src/state/keymap";
 
 const finder = { zone: "finder" as const, typing: false };
 const key = (k: string, mods: Partial<{ meta: boolean; ctrl: boolean; shift: boolean; alt: boolean }> = {}) => ({
@@ -143,10 +143,10 @@ describe("resolveKeyAction", () => {
 		expect(resolveKeyAction(key("l", { meta: true }), { ...finder, typing: true })).toEqual({ type: "editPath" });
 	});
 
-	it("splits ⌘F (whole machine) from ⇧⌘F (this folder)", () => {
-		expect(resolveKeyAction(key("f", { meta: true }), finder)).toEqual({ type: "focusSearch" });
-		expect(resolveKeyAction(key("F", { meta: true, shift: true }), finder)).toEqual({ type: "focusFolderFilter" });
-		expect(resolveKeyAction(key("f", { ctrl: true, shift: true }), { ...finder, typing: true })).toEqual({ type: "focusFolderFilter" });
+	it("reads the mouse side buttons as Back (3) and Forward (4), and ignores the rest", () => {
+		expect(mouseNavDirection(3)).toBe("back");
+		expect(mouseNavDirection(4)).toBe("forward");
+		for (const other of [0, 1, 2, 5]) expect(mouseNavDirection(other)).toBeNull();
 	});
 
 	it("ignores unmapped keys", () => {

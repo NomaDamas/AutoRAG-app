@@ -46,7 +46,6 @@ export type KeyAction =
 	| { readonly type: "disclose"; readonly direction: "expand" | "collapse" }
 	| { readonly type: "dismiss" }
 	| { readonly type: "focusSearch" }
-	| { readonly type: "focusFolderFilter" }
 	| { readonly type: "editPath" }
 	| { readonly type: "duplicate" }
 	| { readonly type: "focusComposer" }
@@ -62,9 +61,8 @@ export function resolveKeyAction(event: KeyEventLike, context: KeyContext): KeyA
 	}
 	if ((event.meta || event.ctrl === true) && !event.alt) {
 		switch (event.key.toLowerCase()) {
-			// ⌘F searches the whole machine; ⇧⌘F filters only the folder in view.
 			case "f":
-				return event.shift ? { type: "focusFolderFilter" } : { type: "focusSearch" };
+				return { type: "focusSearch" };
 			// ⌘L types a path into the path bar, as in a browser's address bar.
 			case "l":
 				return { type: "editPath" };
@@ -143,5 +141,15 @@ export function resolveKeyAction(event: KeyEventLike, context: KeyContext): KeyA
 	if ((event.key === "Delete" || event.key === "Backspace") && context.zone === "finder") {
 		return { type: "trash" };
 	}
+	return null;
+}
+
+/**
+ * The history step a mouse button asks for: the side buttons are DOM buttons
+ * 3 (back) and 4 (forward). Anything else is not navigation.
+ */
+export function mouseNavDirection(button: number): "back" | "forward" | null {
+	if (button === 3) return "back";
+	if (button === 4) return "forward";
 	return null;
 }
