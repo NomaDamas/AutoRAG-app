@@ -2,6 +2,8 @@ import { homedir } from "node:os";
 import { access, open, readdir, readFile, stat } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { isAbsolute, join, sep } from "node:path";
+import { applyBundledTools } from "./bundled-tools";
+import { seedAssets } from "./seed-assets";
 import {
 	app,
 	BrowserWindow,
@@ -326,6 +328,19 @@ app.whenReady().then(async () => {
 	const iconProvider = createIconProvider();
 	registerIconProtocol(iconProvider);
 	registerQuickLookIpc(iconProvider);
+	// Packaged builds carry the dependency CLIs and the embedding model: tools go first on PATH
+	// before anything reads the environment, and the model/runtime are copied into the AutoRAG home
+	// in the background so a fresh install indexes offline without a ~650 MB download.
+	applyBundledTools({ resourcesPath: process.resourcesPath, env: process.env });
+	void seedAssets({
+		seedDir: join(process.resourcesPath, "seed"),
+		autoragHome: process.env.AUTORAG_HOME?.trim() || join(homedir(), ".autorag"),
+	}).then(
+		(outcome) => {
+			if (outcome.kind === "done" && outcome.copied.length > 0) console.log(`[autorag] seeded ${outcome.copied.join(", ")}`);
+		},
+		(error: unknown) => console.error("[autorag] seeding the embedding model failed; it will be downloaded on first use:", error),
+	);
 	await ensureAutoRAGConfig();
 	const devLabel = resolveDevLabel();
 	console.log(`[autorag] ${formatWindowTitle(APP_NAME, APP_VERSION, devLabel)}`);

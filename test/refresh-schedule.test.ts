@@ -336,4 +336,33 @@ describe("scheduler service", () => {
 		const h = harness("freebsd", { appIndexing: { refreshIntervalMs: 60 * MIN } });
 		expect(await h.scheduler.reconcile()).toMatchObject({ supported: false, mechanism: null, installed: false, error: null });
 	});
+
+	it("keeps the Task Scheduler command within schtasks' 261-character /TR limit for a per-user install", async () => {
+		// The real per-user NSIS location; a longer user name only leaves less room.
+		const install = "C:\\Users\\someone\\AppData\\Local\\Programs\\AutoRAG";
+		const calls: (readonly string[])[] = [];
+		const run = async (command: string, args: readonly string[]): Promise<CommandResult> => {
+			if (command === "schtasks") calls.push(args);
+			return { code: 0, stdout: "", stderr: "" };
+		};
+		const configPath = join(dir, "config.json");
+		writeFileSync(configPath, JSON.stringify({ appIndexing: { refreshIntervalMs: 60 * MIN } }));
+		const scheduler = createRefreshScheduler({
+			platform: "win32",
+			home: join(dir, "home"),
+			execPath: `${install}\\AutoRAG.exe`,
+			jobPath: `${install}\\resources\\app\\out\\main\\refresh-job.js`,
+			configPath: () => configPath,
+			env: { Path: "C:\\Windows\\System32" },
+			run,
+		});
+		await scheduler.reconcile();
+		const create = calls.find((args) => args[0] === "/Create");
+		// The config has to be a real file here, so its log path is this host's temp directory; measure the
+		// command with the log where an installed app keeps it.
+		const tr = (create?.[create.indexOf("/TR") + 1] ?? "").replace(schedulePaths(configPath).log, "C:\\Users\\someone\\.autorag\\app-refresh\\job.log");
+		expect(tr).toContain("refresh-job.js");
+		expect(tr).toContain("C:\\Users\\someone\\.autorag\\app-refresh\\job.log");
+		expect(tr.length).toBeLessThanOrEqual(261);
+	});
 });
