@@ -1,4 +1,7 @@
-export const APP_NAME = "AutoRAG";
+/** Short product name: inline copy, menus, and every place the full name will not fit. */
+export const APP_NAME = "Dazzi";
+/** Full product name: window titles, onboarding, the About panel, and notifications. */
+export const APP_FULL_NAME = "Dazzi powered by AutoRAG";
 export const APP_VERSION = "0.1.0";
 
 /**

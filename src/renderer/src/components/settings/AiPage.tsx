@@ -411,7 +411,7 @@ export function AiPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 					</button>
 				</div>
 			</Section>
-			<Section title="역할별 모델" description="AutoRAG는 일을 역할별로 나눠 처리합니다. 역할마다 맞는 모델을 고르세요.">
+			<Section title="역할별 모델" description="Dazzi는 일을 역할별로 나눠 처리합니다. 역할마다 맞는 모델을 고르세요.">
 				<p className="settings-subsection-title">답변</p>
 				<RoleRow role="answer" label="답변 모델" hint="질문에 답하고 문서를 요약합니다." current={answerLabel(snapshot)} onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "answer" })} thinking={{ onOpen: (anchor) => setMenu({ kind: "thinking", anchor }) }} />
 				<p className="settings-subsection-title">검색 보조</p>

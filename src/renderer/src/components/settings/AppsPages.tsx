@@ -407,7 +407,7 @@ export function AppsPage({
 
 	return (
 		<>
-			<SettingsPageHead title="연결된 앱" description="메신저, 메일, 클라우드의 자료를 AutoRAG에서 함께 검색합니다." />
+			<SettingsPageHead title="연결된 앱" description="메신저, 메일, 클라우드의 자료를 Dazzi에서 함께 검색합니다." />
 			{addError !== null ? <div className="settings-error" role="alert">{addError}</div> : null}
 			<Section title="내 연결">
 				{rows.length === 0 ? <Note>연결된 앱이 없습니다. 아래에서 추가하세요.</Note> : null}
@@ -631,7 +631,7 @@ export function SourceDetailPage({
 				</Section>
 			) : null}
 			<Section title="연결 해제">
-				<Row name="연결 해제" hint="AutoRAG 검색에서만 제거되며 원본 앱의 데이터는 지워지지 않습니다.">
+				<Row name="연결 해제" hint="Dazzi 검색에서만 제거되며 원본 앱의 데이터는 지워지지 않습니다.">
 					<button type="button" className="linear-btn is-danger" disabled={busy} onClick={() => setConfirmDelete(true)}>
 						<Trash2 size={14} aria-hidden="true" focusable="false" />연결 해제
 					</button>
@@ -640,7 +640,7 @@ export function SourceDetailPage({
 			{confirmDelete ? (
 				<ModalShell onClose={() => setConfirmDelete(false)}>
 					<h2>연결을 해제할까요?</h2>
-					<p>'{alias}' 연결이 AutoRAG 검색에서 제거됩니다. 원본 앱의 데이터는 지워지지 않습니다.</p>
+					<p>'{alias}' 연결이 Dazzi 검색에서 제거됩니다. 원본 앱의 데이터는 지워지지 않습니다.</p>
 					<ModalActions>
 						<button type="button" className="linear-btn" onClick={() => setConfirmDelete(false)}>취소</button>
 						<button type="button" className="linear-btn is-danger" disabled={busy} onClick={() => void removeConnection()}>연결 해제</button>

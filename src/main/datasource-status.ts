@@ -145,7 +145,7 @@ async function findExecutable(name: string, env: NodeJS.ProcessEnv): Promise<str
 async function installState(type: string, entry: DatasourceSkillConfig, env: NodeJS.ProcessEnv): Promise<DataSourceRow["install"]> {
 	const app = await desktopAppRequirement(type, env);
 	if (!BUILTIN_DATASOURCE_SKILL_NAMES.includes(type)) {
-		return { state: "unsupported", binary: null, path: null, detail: `No built-in AutoRAG datasource named "${type}"`, app };
+		return { state: "unsupported", binary: null, path: null, detail: `No built-in Dazzi datasource named "${type}"`, app };
 	}
 	const connector = isJsonObject(entry.connector) ? entry.connector : {};
 	if (type === "github" || type === "github-gist") {
@@ -154,10 +154,10 @@ async function installState(type: string, entry: DatasourceSkillConfig, env: Nod
 		const gh = type === "github-gist" ? await findExecutable("gh", env) : null;
 		return hasToken || gh !== null
 			? { state: "builtin", binary: null, path: gh, detail: hasToken ? `Token from ${tokenEnv}` : "Token from gh auth", app }
-			: { state: "credential-missing", binary: null, path: null, detail: `Set ${tokenEnv} to let AutoRAG reach GitHub`, app };
+			: { state: "credential-missing", binary: null, path: null, detail: `Set ${tokenEnv} to let Dazzi reach GitHub`, app };
 	}
 	const binary = BACKEND_BINARIES[type];
-	if (binary === undefined) return { state: "builtin", binary: null, path: null, detail: "Built into AutoRAG", app };
+	if (binary === undefined) return { state: "builtin", binary: null, path: null, detail: "Built into Dazzi", app };
 	const configured = typeof connector.binaryPath === "string" ? connector.binaryPath : binary;
 	const path = await findExecutable(configured, env);
 	return path === null
@@ -177,7 +177,7 @@ function buildSkill(
 
 function agentState(skill: DatasourceSkill | undefined, enabled: boolean): DataSourceRow["agent"] {
 	if (skill === undefined) {
-		return { state: "unsupported", skillName: null, tags: [], detail: "The AutoRAG agent skips unknown datasources" };
+		return { state: "unsupported", skillName: null, tags: [], detail: "The Dazzi agent skips unknown datasources" };
 	}
 	const descriptor = skill.describe();
 	const skillName = skill.skillManifest().name;
@@ -382,7 +382,7 @@ export function createDataSourceStatusService(deps: DataSourceStatusDeps): DataS
 		}
 		const type = entry.type ?? id;
 		if (!BUILTIN_DATASOURCE_SKILL_NAMES.includes(type)) {
-			return { ...base, state: "unsupported", error: `No built-in AutoRAG datasource named "${type}"` };
+			return { ...base, state: "unsupported", error: `No built-in Dazzi datasource named "${type}"` };
 		}
 		const install = await installState(type, entry, deps.env);
 		if (install.state === "missing" || install.state === "credential-missing") {
@@ -395,7 +395,7 @@ export function createDataSourceStatusService(deps: DataSourceStatusDeps): DataS
 			return { ...base, state: "failed", error: error instanceof Error ? error.message : String(error), durationMs: Date.now() - startedAt };
 		}
 		if (skill === undefined) {
-			return { ...base, state: "unsupported", error: `No built-in AutoRAG datasource named "${type}"` };
+			return { ...base, state: "unsupported", error: `No built-in Dazzi datasource named "${type}"` };
 		}
 		let result: DatasourceIndexResult;
 		try {

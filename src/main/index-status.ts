@@ -67,7 +67,7 @@ export function createIndexStatusService(deps: IndexStatusServiceDeps): IndexSta
 		return Promise.all(paths.map(async (path): Promise<IndexStatus> => {
 			const real = await canonical(path);
 			if (!roots.some((root) => isUnder(real, root))) {
-				return { path, kind: "outside", excluded: false, toggleable: false, detail: "AutoRAG 검색 경로 밖의 파일" };
+				return { path, kind: "outside", excluded: false, toggleable: false, detail: "Dazzi 검색 경로 밖의 파일" };
 			}
 			const exclusion = exclusions.find((candidate) => isUnder(real, candidate));
 			const excluded = exclusion !== undefined;

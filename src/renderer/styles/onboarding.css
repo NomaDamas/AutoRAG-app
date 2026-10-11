@@ -364,15 +364,6 @@ html[data-appearance="dark"] .onb {
 	place-items: center;
 	width: 38px;
 	height: 38px;
-	border-radius: 11px;
-	background: linear-gradient(145deg,#47a1ff,#0a64d8 70%);
-	color: #fff;
-	box-shadow: inset 0 0 0 1px rgba(255,255,255,.25),0 4px 10px rgba(10,100,216,.25);
-}
-
-.onb .app-mini svg {
-	width: 23px;
-	height: 23px;
 }
 
 .onb .app-mark {
@@ -380,15 +371,14 @@ html[data-appearance="dark"] .onb {
 	place-items: center;
 	width: 56px;
 	height: 56px;
-	border-radius: 16px;
-	background: linear-gradient(145deg,#47a1ff,#0a64d8 72%);
-	color: #fff;
-	box-shadow: 0 12px 22px rgba(10,100,216,.22);
 }
 
-.onb .app-mark svg {
-	width: 31px;
-	height: 31px;
+.onb .app-logo {
+	width: 100%;
+	height: 100%;
+	object-fit: contain;
+	pointer-events: none;
+	-webkit-user-drag: none;
 }
 
 .onb .feature-grid {
@@ -1210,10 +1200,6 @@ html[data-appearance="dark"] .onb .source-icon.brand {
 
 .onb .settings-mock.win .system-toggle.on {
 	background: #0078d4;
-}
-
-.onb .system-alert.win .app-mini {
-	background: linear-gradient(145deg,#4aa3ff,#0f6cbd 70%);
 }
 
 .onb .folder-head {

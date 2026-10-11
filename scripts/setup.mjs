@@ -79,7 +79,7 @@ const checkToolchain = () => {
 			process.stdout.write("[setup] dupey missing (AUTORAG_SKIP_DUPEY_CHECK=1: continuing).\n");
 		} else {
 			die([
-				"[setup] The dupey CLI is required by the AutoRAG desktop app.",
+				"[setup] The dupey CLI is required by the Dazzi desktop app.",
 				`  Detail: ${dupey.detail}`,
 				"  Install: cargo install dupey --locked   (Rust toolchain: https://rustup.rs)",
 				"  Set AUTORAG_SKIP_DUPEY_CHECK=1 only for an intentional degraded run.",

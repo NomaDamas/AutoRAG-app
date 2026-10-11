@@ -220,7 +220,7 @@
     "emptyPromptTitle": "想查找什么内容？",
     "emptyPromptDesc": "在文件、邮件和消息中全局搜索，同时提供快速回答与深度回答。",
     "generatingDeep": "正在撰写深度回答…",
-    "askAutoRAG": "向 AutoRAG 提问",
+    "askDazzi": "向 Dazzi 提问",
     "stop": "停止",
     "thinking": "思考中…",
     "workedFor": "思考耗时 {{time}}",
@@ -237,8 +237,8 @@
     }
   },
   "osMenu": {
-    "ask": "向 AutoRAG 提问",
-    "reveal": "在 AutoRAG 中显示"
+    "ask": "向 Dazzi 提问",
+    "reveal": "在 Dazzi 中显示"
   },
   "toasts": {
     "trashSingle": "已将 {{name}} 移到废纸篓",
@@ -319,7 +319,7 @@
       "telemetry": "分享匿名诊断数据",
       "telemetryHint": "分享匿名化性能指标。",
       "osMenuIntegration": "添加到文件右键菜单",
-      "osMenuIntegrationHint": "在访达(macOS)或资源管理器(Windows)中右键点击文件,即可使用“向 AutoRAG 提问”和“在 AutoRAG 中显示”。",
+      "osMenuIntegrationHint": "在访达(macOS)或资源管理器(Windows)中右键点击文件,即可使用“向 Dazzi 提问”和“在 Dazzi 中显示”。",
       "osMenuIntegrationError": "无法设置右键菜单"
     }
   },
@@ -348,7 +348,7 @@
     "welcome": {
       "eyebrow": "Pro 7 天免费试用",
       "title": "直接向\n文件提问",
-      "lead": "无需打开文件夹翻找。AutoRAG 会阅读文档中的内容，并附上依据作答。",
+      "lead": "无需打开文件夹翻找。Dazzi 会阅读文档中的内容，并附上依据作答。",
       "note": "默认在本地处理。需要远程处理时，我们会先显示哪些内容将被发送。",
       "chat": {
         "user": "上一季度的成本为什么下降了？",
@@ -397,7 +397,7 @@
       "title": "请允许访问\n以便正确读取",
       "leadMac": "macOS 会在应用访问文档和受保护的应用数据前征求许可。权限与索引范围是两回事。",
       "leadWindows": "只需确认通知和网络即可开始。其余可稍后在设置中更改。",
-      "note": "AutoRAG 不会修改你的文件。实际要索引的文件夹由你在下一步自行选择。",
+      "note": "Dazzi 不会修改你的文件。实际要索引的文件夹由你在下一步自行选择。",
       "required": "必需",
       "optional": "可选",
       "setting": "设置",
@@ -625,7 +625,7 @@
         "datasources": "数据源",
         "finalizing": "整理"
       },
-      "title": "AutoRAG 正在读取你的文件",
+      "title": "Dazzi 正在读取你的文件",
       "titleDone": "一切就绪",
       "metaDone": "正在确认总用时",
       "metaTotal": "总计 {{minutes}} 分钟",
@@ -638,11 +638,11 @@
       "gateOkDetail": "已读取全部 {{files}} 个文件。新更改的文件会在后台继续读取。",
       "gateFailTitle": "未能完成索引",
       "gateFailDetail": "重试后将从断点继续。",
-      "gateTitle": "请勿退出 AutoRAG 或关闭 {{machine}}",
+      "gateTitle": "请勿退出 Dazzi 或关闭 {{machine}}",
       "gateDetailMac": "首次索引耗时较长。退出会中断进度。请连接电源适配器并保持屏幕开启。",
       "gateDetailWindows": "首次索引耗时较长。退出会中断进度。请保持连接电源。",
       "gateLocked": "完成后即可打开",
-      "open": "打开 AutoRAG",
+      "open": "打开 Dazzi",
       "retry": "重试"
     },
     "tips": {
@@ -695,7 +695,7 @@
         "heading": "在系统设置中开启",
         "lead": "只需允许一次即可读取 macOS 受保护的区域。即使退出应用，引导也会从此步骤继续。",
         "step1": "打开 隐私与安全性 → 完全磁盘访问权限。",
-        "step2": "将 AutoRAG 添加到列表并打开开关。",
+        "step2": "将 Dazzi 添加到列表并打开开关。",
         "step3": "如果 macOS 提示，请退出后重新打开。",
         "drag": "如果不在列表中，请将此图标拖到列表中",
         "allowed": "我已允许",
@@ -709,7 +709,7 @@
         }
       },
       "restart": {
-        "title": "要重新打开 AutoRAG 吗？",
+        "title": "要重新打开 Dazzi 吗？",
         "lead": "完全磁盘访问权限需要退出并重新打开应用后才能生效。引导会从当前步骤继续。",
         "action": "退出并重新打开"
       },
@@ -734,7 +734,7 @@
       "verified": "已确认连接。",
       "planActive": "{{plan}} 套餐已生效。",
       "signInFailed": "无法登录。",
-      "notIndexed": "索引完成后才能打开 AutoRAG。"
+      "notIndexed": "索引完成后才能打开 Dazzi。"
     }
   }
 }

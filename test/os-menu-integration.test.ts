@@ -26,7 +26,7 @@ async function tempDir(): Promise<string> {
 	return dir;
 }
 
-const LABELS = { ask: "Ask AutoRAG", reveal: "Show in AutoRAG" } as const;
+const LABELS = { ask: "Ask Dazzi", reveal: "Show in Dazzi" } as const;
 // The workflow runs under zsh and Automator's plist tooling; both exist only on macOS.
 const onMac = describe.skipIf(process.platform !== "darwin");
 
@@ -72,8 +72,8 @@ describe("macOS install", () => {
 		const runs: string[][] = [];
 		const menu = menuFor(home, runs);
 		await menu.install(LABELS);
-		expect((await readdir(services)).sort()).toEqual(["Ask AutoRAG.workflow", "Show in AutoRAG.workflow", "Someone Else.workflow"]);
-		for (const name of ["Ask AutoRAG.workflow", "Show in AutoRAG.workflow"]) {
+		expect((await readdir(services)).sort()).toEqual(["Ask Dazzi.workflow", "Show in Dazzi.workflow", "Someone Else.workflow"]);
+		for (const name of ["Ask Dazzi.workflow", "Show in Dazzi.workflow"]) {
 			for (const file of ["Info.plist", "document.wflow"]) {
 				execFileSync("/usr/bin/plutil", ["-lint", join(services, name, "Contents", file)]);
 			}
@@ -98,7 +98,7 @@ describe("macOS install", () => {
 	it("never lets a caption escape the Services directory", () => {
 		expect(workflowDirName("../../evil")).toBe(".. .. evil.workflow");
 		expect(workflowDirName("a:b/c")).toBe("a b c.workflow");
-		expect(workflowDirName("  ")).toBe("AutoRAG.workflow");
+		expect(workflowDirName("  ")).toBe("Dazzi.workflow");
 	});
 });
 
@@ -111,7 +111,7 @@ describe("Windows commands", () => {
 		expect(keys.every((key) => key?.startsWith("HKCU\\Software\\Classes\\"))).toBe(true);
 		expect(keys).toContain("HKCU\\Software\\Classes\\*\\shell\\AutoRAG.ask\\command");
 		expect(keys).toContain("HKCU\\Software\\Classes\\Directory\\shell\\AutoRAG.reveal\\command");
-		expect(calls).toContainEqual(["add", "HKCU\\Software\\Classes\\*\\shell\\AutoRAG.ask", "/ve", "/d", "Ask AutoRAG", "/f"]);
+		expect(calls).toContainEqual(["add", "HKCU\\Software\\Classes\\*\\shell\\AutoRAG.ask", "/ve", "/d", "Ask Dazzi", "/f"]);
 	});
 
 	it("builds a command line Explorer can run", () => {

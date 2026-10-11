@@ -220,7 +220,7 @@
     "emptyPromptTitle": "何をお探しですか？",
     "emptyPromptDesc": "ファイル、メール、メッセージ全体から素早い回答と詳細な回答を並べて提示します。",
     "generatingDeep": "詳細な回答を生成中…",
-    "askAutoRAG": "AutoRAGに質問する",
+    "askDazzi": "Dazziに質問する",
     "stop": "停止",
     "thinking": "思考中…",
     "workedFor": "{{time}}間回答を生成",
@@ -237,8 +237,8 @@
     }
   },
   "osMenu": {
-    "ask": "AutoRAGに質問",
-    "reveal": "AutoRAGで表示"
+    "ask": "Dazziに質問",
+    "reveal": "Dazziで表示"
   },
   "toasts": {
     "trashSingle": "{{name}}をゴミ箱に移動しました",
@@ -319,7 +319,7 @@
       "telemetry": "匿名の診断情報を共有",
       "telemetryHint": "匿名化されたパフォーマンス指標を共有します。",
       "osMenuIntegration": "ファイルの右クリックメニューに追加",
-      "osMenuIntegrationHint": "Finder(macOS)またはエクスプローラー(Windows)でファイルを右クリックすると「AutoRAGに質問」「AutoRAGで表示」が表示されます。",
+      "osMenuIntegrationHint": "Finder(macOS)またはエクスプローラー(Windows)でファイルを右クリックすると「Dazziに質問」「Dazziで表示」が表示されます。",
       "osMenuIntegrationError": "右クリックメニューを設定できませんでした"
     }
   },
@@ -348,7 +348,7 @@
     "welcome": {
       "eyebrow": "Pro 7日間無料トライアル",
       "title": "ファイルに\n聞いてみましょう",
-      "lead": "フォルダを開いて探し回る必要はありません。AutoRAGが文書の中身を読み、根拠とともに答えます。",
+      "lead": "フォルダを開いて探し回る必要はありません。Dazziが文書の中身を読み、根拠とともに答えます。",
       "note": "既定ではローカル処理です。リモート処理が必要なときは、何が送信されるかを先に表示します。",
       "chat": {
         "user": "前四半期のコストはなぜ減ったの？",
@@ -397,7 +397,7 @@
       "title": "正しく読み取れるように\n許可してください",
       "leadMac": "macOSは、アプリが文書や保護されたアプリデータにアクセスする前に許可を求めます。権限とインデックス作成の範囲は別ものです。",
       "leadWindows": "通知とネットワークだけ確認すればすぐに始められます。残りは後で設定から変更できます。",
-      "note": "AutoRAGはファイルを変更しません。実際にインデックスするフォルダは次のステップでご自身で選びます。",
+      "note": "Dazziはファイルを変更しません。実際にインデックスするフォルダは次のステップでご自身で選びます。",
       "required": "必須",
       "optional": "任意",
       "setting": "設定",
@@ -625,7 +625,7 @@
         "datasources": "データソース",
         "finalizing": "整理"
       },
-      "title": "AutoRAGがファイルを読み込んでいます",
+      "title": "Dazziがファイルを読み込んでいます",
       "titleDone": "すべての準備が整いました",
       "metaDone": "合計所要時間を確認中",
       "metaTotal": "合計{{minutes}}分",
@@ -638,11 +638,11 @@
       "gateOkDetail": "{{files}}ファイルをすべて読み込みました。新しく変更されたファイルはバックグラウンドで続けて読み込みます。",
       "gateFailTitle": "インデックス作成を完了できませんでした",
       "gateFailDetail": "再試行すると続きから進みます。",
-      "gateTitle": "AutoRAGを終了したり{{machine}}の電源を切らないでください",
+      "gateTitle": "Dazziを終了したり{{machine}}の電源を切らないでください",
       "gateDetailMac": "最初のインデックス作成は時間がかかります。終了すると進行が止まります。電源アダプターを接続し、フタを開けたままにしてください。",
       "gateDetailWindows": "最初のインデックス作成は時間がかかります。終了すると進行が止まります。電源に接続したままにしてください。",
       "gateLocked": "完了すると開けます",
-      "open": "AutoRAGを開く",
+      "open": "Dazziを開く",
       "retry": "再試行"
     },
     "tips": {
@@ -695,7 +695,7 @@
         "heading": "システム設定でオンにする",
         "lead": "macOSの保護領域を読み取るには一度許可するだけで済みます。アプリを終了してもオンボーディングはこのステップから続きます。",
         "step1": "プライバシーとセキュリティ → フルディスクアクセスを開きます。",
-        "step2": "AutoRAGをリストに追加し、トグルをオンにします。",
+        "step2": "Dazziをリストに追加し、トグルをオンにします。",
         "step3": "macOSが要求したら、終了して再度開きます。",
         "drag": "リストにない場合は、このアイコンをリストにドラッグ",
         "allowed": "許可しました",
@@ -709,7 +709,7 @@
         }
       },
       "restart": {
-        "title": "AutoRAGを再度開きますか？",
+        "title": "Dazziを再度開きますか？",
         "lead": "フルディスクアクセスの権限を適用するには、アプリを終了して再度開く必要があります。オンボーディングは現在のステップから続きます。",
         "action": "終了して再度開く"
       },
@@ -734,7 +734,7 @@
       "verified": "接続を確認しました。",
       "planActive": "{{plan}}プランが有効になりました。",
       "signInFailed": "ログインできませんでした。",
-      "notIndexed": "インデックス作成が終わらないとAutoRAGを開けません。"
+      "notIndexed": "インデックス作成が終わらないとDazziを開けません。"
     }
   }
 }

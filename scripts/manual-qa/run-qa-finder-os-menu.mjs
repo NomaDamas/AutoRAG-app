@@ -2,12 +2,12 @@
 // file right-click menu"). Drives the built app and proves, on macOS:
 //   1. the Settings switch writes two Finder Quick Action workflows into the
 //      profile's ~/Library/Services, and switching it off removes them;
-//   2. running the installed "Ask AutoRAG" workflow through the real
+//   2. running the installed "Ask Dazzi" workflow through the real
 //      Automator runtime (`automator -i <file> <workflow>`, the same shell
 //      action Finder's Quick Actions run) hands the selected files to the
 //      RUNNING app, which attaches them to AI Search — and no second app
 //      process stays behind;
-//   3. the "Show in AutoRAG" workflow opens the file's folder with it selected;
+//   3. the "Show in Dazzi" workflow opens the file's folder with it selected;
 //   4. a cold start with the request flags in argv (what the workflow does when
 //      the app is not running) attaches the files on first load.
 // Windows has no Automator; there the registry commands are covered by unit tests.
@@ -84,9 +84,9 @@ try {
 		for (const file of ["Info.plist", "document.wflow"]) execFileSync("/usr/bin/plutil", ["-lint", join(SERVICES, name, "Contents", file)]);
 	}
 
-	// 2. Ask AutoRAG on the running app: files + a folder, names with spaces and Hangul.
+	// 2. Ask Dazzi on the running app: files + a folder, names with spaces and Hangul.
 	const before = laneProcesses().length;
-	const output = runWorkflow("Ask AutoRAG", [BRIEF, FOLDER]);
+	const output = runWorkflow("Ask Dazzi", [BRIEF, FOLDER]);
 	console.log(`automator: ${output.trim() || "(no output)"}`);
 	const pills = page.locator(`${AI_PANEL} .composer-attach-pill`);
 	const attached = await until(async () => (await pills.count()) === 2);
@@ -99,8 +99,8 @@ try {
 	await sleep(1500);
 	check("ask: no second app process is left behind", laneProcesses().length === before, `${before} → ${laneProcesses().length}`);
 
-	// 3. Show in AutoRAG: the file's folder opens with the file selected.
-	runWorkflow("Show in AutoRAG", [REVEAL]);
+	// 3. Show in Dazzi: the file's folder opens with the file selected.
+	runWorkflow("Show in Dazzi", [REVEAL]);
 	const row = page.locator(`[data-path="${REVEAL}"]`).first();
 	const shown = await until(async () => (await row.count()) > 0);
 	check("reveal: the folder opens and lists the file", shown !== false);

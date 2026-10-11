@@ -86,7 +86,7 @@ async function warmIndex() {
 const readState = ([panel]) => {
 	const root = document.querySelector(panel);
 	if (root === null) return null;
-	const input = root.querySelector('input[aria-label="Ask AutoRAG"]');
+	const input = root.querySelector('input[aria-label="Ask Dazzi"]');
 	return {
 		settled:
 			input !== null &&
@@ -122,7 +122,7 @@ try {
 	page.on("pageerror", (error) => log(`[pageerror] ${String(error).slice(0, 300)}`));
 	await openAiSearch(page);
 
-	await page.fill('input[aria-label="Ask AutoRAG"]', QUERY);
+	await page.fill('input[aria-label="Ask Dazzi"]', QUERY);
 	await page.keyboard.press("Enter");
 	log(`submitted: ${QUERY}`);
 	await page.waitForSelector('button[aria-label="Stop search"]', { timeout: RUN_TIMEOUT_MS });
@@ -139,7 +139,7 @@ try {
 			(panel) => {
 				const root = document.querySelector(panel);
 				if (root === null) return false;
-				const input = root.querySelector('input[aria-label="Ask AutoRAG"]');
+				const input = root.querySelector('input[aria-label="Ask Dazzi"]');
 				return (
 					input !== null &&
 					!input.disabled &&

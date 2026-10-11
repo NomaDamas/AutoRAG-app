@@ -220,7 +220,7 @@
     "emptyPromptTitle": "What can I find for you?",
     "emptyPromptDesc": "Search across files, emails, and chats for quick and deep answers side by side.",
     "generatingDeep": "Generating deep answer…",
-    "askAutoRAG": "Ask AutoRAG",
+    "askDazzi": "Ask Dazzi",
     "stop": "Stop",
     "thinking": "Thinking…",
     "workedFor": "Worked for {{time}}",
@@ -237,8 +237,8 @@
     }
   },
   "osMenu": {
-    "ask": "Ask AutoRAG",
-    "reveal": "Show in AutoRAG"
+    "ask": "Ask Dazzi",
+    "reveal": "Show in Dazzi"
   },
   "toasts": {
     "trashSingle": "Moved {{name}} to Trash",
@@ -319,7 +319,7 @@
       "telemetry": "Share anonymous diagnostics",
       "telemetryHint": "Share anonymized performance diagnostics.",
       "osMenuIntegration": "Add to the file right-click menu",
-      "osMenuIntegrationHint": "Right-click a file in Finder (macOS) or Explorer (Windows) to get 'Ask AutoRAG' and 'Show in AutoRAG'.",
+      "osMenuIntegrationHint": "Right-click a file in Finder (macOS) or Explorer (Windows) to get 'Ask Dazzi' and 'Show in Dazzi'.",
       "osMenuIntegrationError": "Could not set up the right-click menu"
     }
   },
@@ -348,7 +348,7 @@
     "welcome": {
       "eyebrow": "Pro 7-day free trial",
       "title": "Ask your\nfiles",
-      "lead": "You don't have to dig through folders. AutoRAG reads what's inside your documents and answers with sources.",
+      "lead": "You don't have to dig through folders. Dazzi reads what's inside your documents and answers with sources.",
       "note": "Local by default. When remote processing is needed, we show you exactly what will be sent first.",
       "chat": {
         "user": "Why did last quarter's costs go down?",
@@ -397,7 +397,7 @@
       "title": "Allow access so we\ncan read properly",
       "leadMac": "macOS asks for your permission before an app can access documents and protected app data. Permissions and indexing scope are different things.",
       "leadWindows": "Just confirm notifications and network and you can start right away. You can change the rest later in Settings.",
-      "note": "AutoRAG never modifies your files. You pick exactly which folders to index in the next step.",
+      "note": "Dazzi never modifies your files. You pick exactly which folders to index in the next step.",
       "required": "Required",
       "optional": "Optional",
       "setting": "Setting",
@@ -408,7 +408,7 @@
       "footnote": "Turn it on to continue.",
       "fda": {
         "name": "Full Disk Access",
-        "desc": "Needed for AutoRAG to work properly."
+        "desc": "Needed for Dazzi to work properly."
       },
       "notifications": {
         "name": "Notifications",
@@ -625,7 +625,7 @@
         "datasources": "Data sources",
         "finalizing": "Tidying up"
       },
-      "title": "AutoRAG is reading your files",
+      "title": "Dazzi is reading your files",
       "titleDone": "Everything's ready",
       "metaDone": "Checking total time",
       "metaTotal": "{{minutes}} min total",
@@ -638,11 +638,11 @@
       "gateOkDetail": "We've read all {{files}} files. Newly changed files continue to be read in the background.",
       "gateFailTitle": "Indexing couldn't be completed",
       "gateFailDetail": "Try again and it'll continue where it left off.",
-      "gateTitle": "Don't quit AutoRAG or turn off {{machine}}",
+      "gateTitle": "Don't quit Dazzi or turn off {{machine}}",
       "gateDetailMac": "The first index takes a while. Quitting stops progress. Plug in the power adapter and keep the lid open.",
       "gateDetailWindows": "The first index takes a while. Quitting stops progress. Keep it plugged in.",
       "gateLocked": "Opens once it's done",
-      "open": "Open AutoRAG",
+      "open": "Open Dazzi",
       "retry": "Try again"
     },
     "tips": {
@@ -695,7 +695,7 @@
         "heading": "Turn it on in System Settings",
         "lead": "You only need to allow it once to read macOS protected areas. Onboarding continues from this step even if you quit the app.",
         "step1": "Open Privacy & Security → Full Disk Access.",
-        "step2": "Add AutoRAG to the list and turn on the toggle.",
+        "step2": "Add Dazzi to the list and turn on the toggle.",
         "step3": "If macOS asks, quit and reopen.",
         "drag": "If it's not in the list, drag this icon onto the list",
         "allowed": "I've allowed it",
@@ -709,7 +709,7 @@
         }
       },
       "restart": {
-        "title": "Reopen AutoRAG?",
+        "title": "Reopen Dazzi?",
         "lead": "Full Disk Access takes effect after you quit and reopen the app. Onboarding continues from the current step.",
         "action": "Quit and reopen"
       },
@@ -727,14 +727,14 @@
       "signedIn": "Signed in.",
       "notificationsOn": "Notification permission granted.",
       "notificationsOff": "Allow notifications in System Settings.",
-      "loginFailed": "Couldn't add AutoRAG to login items.",
+      "loginFailed": "Couldn't add Dazzi to login items.",
       "networkOk": "Network connection verified.",
       "networkFail": "Can't connect to the network.",
       "fdaPending": "The permission applies once you reopen the app.",
       "verified": "Connection verified.",
       "planActive": "The {{plan}} plan is active.",
       "signInFailed": "Couldn't sign in.",
-      "notIndexed": "Finish indexing to open AutoRAG."
+      "notIndexed": "Finish indexing to open Dazzi."
     }
   }
 }

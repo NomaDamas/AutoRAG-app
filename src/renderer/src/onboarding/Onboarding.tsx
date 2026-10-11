@@ -28,10 +28,11 @@ import type {
 	PermissionStatus,
 	PlanId,
 } from "../../../shared/onboarding-contract";
+import { APP_FULL_NAME } from "../../../shared/app-info";
 import { useTranslation } from "../../../shared/i18n";
 import { cn } from "../lib/cn";
 import { buildFlow, bySourceOrder, canAdvance, planHeld, primaryLabelKey, type Translate } from "./flow";
-import { Icon } from "./marks";
+import { AppLogo, Icon } from "./marks";
 import type { OnboardingCtx, OverlayKind } from "./context";
 import { IndexingScreen } from "./IndexingScreen";
 import { AccountStep } from "./steps/Account";
@@ -47,7 +48,7 @@ const autorag = window.autorag;
 const bridge = autorag.onboarding;
 
 /** The prototype seeds this window title; the real window keeps the same label. */
-const WINDOW_TITLE = "AutoRAG";
+const WINDOW_TITLE = APP_FULL_NAME;
 
 const TOAST_MS = 2400;
 const SAVE_DEBOUNCE_MS = 300;
@@ -769,7 +770,7 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 function GuideAppMark({ onDrag }: { readonly onDrag: () => void }): ReactElement {
 	return (
 		<span className="app-mark" draggable onDragStart={onDrag} style={{ cursor: "grab" }}>
-			<Icon name="folder-search" size={31} />
+			<AppLogo />
 		</span>
 	);
 }
@@ -844,7 +845,7 @@ function renderOverlay(kind: OverlayKind | null, h: OverlayHandlers): ReactEleme
 										<span className="system-app">
 											<Icon name="sparkles" size={13} />
 										</span>
-										<strong>AutoRAG</strong>
+										<strong>Dazzi</strong>
 										<button
 											type="button"
 											className={cn("system-toggle", h.ctx.permissions?.fullDiskAccess === true && "on pulse")}
@@ -874,7 +875,7 @@ function renderOverlay(kind: OverlayKind | null, h: OverlayHandlers): ReactEleme
 			return (
 				<div className="modal system-alert">
 					<div className="app-mini">
-						<Icon name="sparkles" size={21} />
+						<AppLogo />
 					</div>
 					<h3>{t("onboarding.overlay.restart.title")}</h3>
 					<p>{t("onboarding.overlay.restart.lead")}</p>

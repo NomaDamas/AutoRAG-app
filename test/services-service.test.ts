@@ -120,7 +120,7 @@ describe("selectServices", () => {
 			snapshot(
 				[
 					service("Folder Actions Setup", { NSRestricted: "1" }),
-					service("Ask AutoRAG", { NSBundleIdentifier: "com.autorag.app.service.ask" }),
+					service("Ask Dazzi", { NSBundleIdentifier: "com.autorag.app.service.ask" }),
 					hidden,
 					service("Kept"),
 				],
