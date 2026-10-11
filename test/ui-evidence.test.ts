@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
 	evidenceDetail,
+	evidenceHeading,
 	evidenceKind,
 	evidenceSourceUrl,
 	findEvidenceSource,
@@ -37,6 +38,31 @@ describe("evidenceDetail", () => {
 	it("shows the confidence as a percentage", () => {
 		expect(evidenceDetail(0.8735)).toBe("관련도 87%");
 		expect(evidenceDetail(1)).toBe("관련도 100%");
+	});
+
+	it("shows nothing when the librarian measured no confidence", () => {
+		expect(evidenceDetail(undefined)).toBeNull();
+		expect(evidenceDetail(0)).toBe("관련도 0%");
+	});
+});
+
+describe("evidenceHeading", () => {
+	it("keeps a local file's name", () => {
+		expect(evidenceHeading("refund-policy.md", "/Users/jeff/Documents/refund-policy.md")).toBe("refund-policy.md");
+	});
+
+	it("labels a datasource chunk by datasource and instance instead of its opaque id", () => {
+		expect(evidenceHeading("msg-1", "/kakao/work/chunks/msg-1")).toBe("kakao · work");
+		expect(evidenceHeading("a1", "/discord/guild-9/chunks/a1")).toBe("discord · guild-9");
+	});
+
+	it("keeps the title for a web page and for a missing source", () => {
+		expect(evidenceHeading("Pricing", "https://example.com/pricing")).toBe("Pricing");
+		expect(evidenceHeading("Memo", null)).toBe("Memo");
+	});
+
+	it("keeps a datasource title that is not an opaque chunk id", () => {
+		expect(evidenceHeading("Q3 plan", "/obsidian/vault/notes/Q3 plan.md")).toBe("Q3 plan");
 	});
 });
 
