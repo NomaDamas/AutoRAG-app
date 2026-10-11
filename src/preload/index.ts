@@ -1,3 +1,4 @@
+import { createAccountBridge } from "./account-bridge";
 import { contextBridge, ipcRenderer, webUtils } from "electron";
 import { createBridge } from "../shared/bridge";
 import type { DevLabel } from "../shared/app-info";
@@ -32,6 +33,7 @@ contextBridge.exposeInMainWorld("autorag", {
 	...createBridge(readDevLabelArg(), process.platform),
 	fs: createFsBridge(ipcRenderer, fsWorker),
 	actions: createActionsBridge(ipcRenderer),
+	account: createAccountBridge(ipcRenderer),
 	indexActivity: createIndexActivityBridge(ipcRenderer),
 	live: createLiveBridge(fsWorker),
 	onboarding: createOnboardingBridge(ipcRenderer),

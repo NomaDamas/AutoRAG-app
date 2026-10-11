@@ -1,7 +1,7 @@
-/** Step 3 — placeholder sign-in (no account backend; records the method only). */
+/** Step 3 — real sign-in through the system browser (OAuth code + PKCE), or the no-account BYOK path. */
 
-import { useState, type ReactElement } from "react";
-import { BrandMark, Icon } from "../marks";
+import type { ReactElement } from "react";
+import { Icon } from "../marks";
 import { Eyebrow, Multiline, SplitScreen } from "../parts";
 import type { OnboardingCtx } from "../context";
 
@@ -15,10 +15,10 @@ function AppMark(): ReactElement {
 }
 
 export function AccountStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElement {
-	const { t, draft, authBusy } = ctx;
-	const [email, setEmail] = useState("");
-	const signedIn = draft.account !== null;
-	const shownEmail = draft.account?.email ?? t("onboarding.account.sampleEmail");
+	const { t, account } = ctx;
+	const signedIn = account?.state === "signedIn";
+	const signingIn = account?.state === "signingIn";
+	const snapshot = account?.account ?? null;
 
 	return (
 		<SplitScreen
@@ -44,14 +44,21 @@ export function AccountStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElem
 						</div>
 						<div>
 							<strong>{t("onboarding.account.signedIn")}</strong>
-							<small>{shownEmail} · {t("onboarding.account.signedInNote")}</small>
+							<small>
+								{snapshot === null
+									? t("onboarding.account.signedInEnv")
+									: `${snapshot.email} · ${t("onboarding.account.planLabel", { plan: t(`onboarding.plan.plan.${snapshot.plan}.name`) })}`}
+							</small>
+							{account?.offline === true ? <small>{t("onboarding.account.offline")}</small> : null}
 						</div>
 					</div>
-					<div className="action-row">
-						<button type="button" className="secondary" onClick={ctx.signOut}>
-							{t("onboarding.account.otherAccount")}
-						</button>
-					</div>
+					{account?.source === "stored" ? (
+						<div className="action-row">
+							<button type="button" className="secondary" onClick={ctx.signOut}>
+								{t("onboarding.account.otherAccount")}
+							</button>
+						</div>
+					) : null}
 				</div>
 			) : (
 				<div className="auth-card card">
@@ -62,51 +69,44 @@ export function AccountStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElem
 							<small>{t("onboarding.account.cardSub")}</small>
 						</div>
 					</div>
-					{authBusy ? (
-						<div className="status-card">
-							<div className="status-mark">
-								<span className="spin">
-									<Icon name="loader-circle" size={16} />
-								</span>
-							</div>
-							<div>
-								<strong>{t("onboarding.account.busy")}</strong>
-								<small>{t("onboarding.account.busyNote")}</small>
-							</div>
-						</div>
-					) : (
+					{signingIn ? (
 						<>
-							<button type="button" className="auth-btn apple" onClick={() => ctx.signIn("apple")}>
-								<span className="auth-mark">
-									<BrandMark name="apple" size={15} />
-								</span>
-								{t("onboarding.account.apple")}
-							</button>
-							<button type="button" className="auth-btn google" onClick={() => ctx.signIn("google")}>
-								<span className="auth-mark">
-									<BrandMark name="googleG" size={15} />
-								</span>
-								{t("onboarding.account.google")}
-							</button>
-							<div className="divider">{t("onboarding.account.or")}</div>
-							<div className="input-row">
-								<input
-									className="input"
-									type="email"
-									placeholder={t("onboarding.account.emailPlaceholder")}
-									value={email}
-									onChange={(e) => setEmail(e.target.value)}
-								/>
-								<button
-									type="button"
-									className="auth-btn email"
-									style={{ marginTop: 0, width: "auto", padding: "0 12px" }}
-									onClick={() => ctx.signIn("email", email)}
-								>
-									{t("onboarding.account.magicLink")}
+							<div className="status-card">
+								<div className="status-mark">
+									<span className="spin">
+										<Icon name="loader-circle" size={16} />
+									</span>
+								</div>
+								<div>
+									<strong>{t("onboarding.account.busy")}</strong>
+									<small>{t("onboarding.account.busyNote")}</small>
+								</div>
+							</div>
+							<div className="action-row">
+								<button type="button" className="secondary" onClick={ctx.cancelSignIn}>
+									{t("onboarding.account.cancel")}
 								</button>
 							</div>
+						</>
+					) : (
+						<>
+							<button type="button" className="auth-btn email" onClick={ctx.signIn}>
+								<span className="auth-mark">
+									<Icon name="external-link" size={15} />
+								</span>
+								{t("onboarding.account.signIn")}
+							</button>
+							{account?.error ? (
+								<p className="auth-note" role="alert">
+									{account.error}
+								</p>
+							) : null}
 							<p className="auth-note">{t("onboarding.account.authNote")}</p>
+							<div className="action-row">
+								<button type="button" className="secondary" onClick={ctx.skipAccount}>
+									{t("onboarding.account.skip")}
+								</button>
+							</div>
 						</>
 					)}
 				</div>

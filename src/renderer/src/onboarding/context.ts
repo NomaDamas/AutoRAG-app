@@ -4,8 +4,8 @@
  * so the step files stay presentational and the controller owns all state.
  */
 
+import type { AccountStatus } from "../../../shared/account-contract";
 import type {
-	AccountMethod,
 	ByokProviderId,
 	DetectedModelProvider,
 	DetectedSource,
@@ -47,8 +47,9 @@ export interface OnboardingCtx {
 	/** The last verification error, cleared on the next attempt. */
 	readonly modelError: string | null;
 	readonly indexStatus: IndexingStatus | null;
-	readonly authBusy: boolean;
-	readonly payAgree: boolean;
+	/** Null until the main process answered the first status call. */
+	readonly account: AccountStatus | null;
+	readonly paying: boolean;
 	readonly tipIndex: number;
 	readonly t: Translate;
 
@@ -67,8 +68,15 @@ export interface OnboardingCtx {
 	setSourceOn(id: SourceId, on: boolean): void;
 
 	choosePlan(plan: PlanId): void;
-	signIn(method: AccountMethod, email?: string): void;
+	signIn(): void;
+	cancelSignIn(): void;
 	signOut(): void;
+	/** The no-account path: pick BYOK and move on. */
+	skipAccount(): void;
+	/** Re-reads the account and opens the hosted checkout for the chosen paid plan. */
+	openCheckout(): void;
+	/** Re-reads the account from the server (the pay overlay's "check payment"). */
+	refreshAccount(): void;
 	setLaunchAtLogin(enabled: boolean): void;
 	requestNotifications(): void;
 	openNotificationSettings(): void;
@@ -78,9 +86,6 @@ export interface OnboardingCtx {
 	setModelKey(value: string): void;
 	setModelBaseUrl(value: string): void;
 	verifyModel(provider?: ByokProviderId): void;
-
-	setPayAgree(value: boolean): void;
-	confirmPayment(): void;
 
 	startIndexing(): void;
 	finish(): void;

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { AccountStatus } from "../src/shared/account-contract";
 import {
 	buildFlow,
 	bySourceOrder,
@@ -7,6 +8,7 @@ import {
 	etaMinutes,
 	formatSize,
 	phaseIndex,
+	planHeld,
 	primaryLabelKey,
 	scanTotals,
 	sourceDetail,
@@ -83,6 +85,12 @@ describe("onboarding flow", () => {
 		expect(canAdvance({ ...base, stepId: "permissions", platform: "win32" })).toBe(true);
 		expect(canAdvance({ ...base, stepId: "account" })).toBe(false);
 		expect(canAdvance({ ...base, stepId: "account", signedIn: true })).toBe(true);
+		// Choosing BYOK on the account step is the sign-in-free path.
+		expect(canAdvance({ ...base, stepId: "account", plan: "byok" })).toBe(true);
+		// A managed plan needs an account; BYOK does not.
+		expect(canAdvance({ ...base, stepId: "plan", plan: "air" })).toBe(false);
+		expect(canAdvance({ ...base, stepId: "plan", plan: "air", signedIn: true })).toBe(true);
+		expect(canAdvance({ ...base, stepId: "plan", plan: "byok" })).toBe(true);
 		expect(canAdvance({ ...base, stepId: "folders" })).toBe(false);
 		expect(canAdvance({ ...base, stepId: "folders", selectedFolders: 2 })).toBe(true);
 		expect(canAdvance({ ...base, stepId: "embedding" })).toBe(true);
@@ -92,13 +100,51 @@ describe("onboarding flow", () => {
 		expect(canAdvance({ ...base, stepId: "model", plan: "byok", modelVerified: true })).toBe(true);
 	});
 
-	it("labels the plan primary button", () => {
-		expect(primaryLabelKey("welcome", "pro", null)).toBe("onboarding.stepLabel.welcome");
-		expect(primaryLabelKey("plan", "free", null)).toBe("onboarding.plan.continue");
-		expect(primaryLabelKey("plan", "byok", null)).toBe("onboarding.plan.continue");
-		expect(primaryLabelKey("plan", "pro", "pro")).toBe("onboarding.plan.continue");
-		expect(primaryLabelKey("plan", "pro", null)).toBe("onboarding.plan.startTrial");
-		expect(primaryLabelKey("plan", "air", null)).toBe("onboarding.plan.subscribeAir");
+	it("labels the plan primary button by what the account already holds", () => {
+		expect(primaryLabelKey("welcome", "pro", false)).toBe("onboarding.stepLabel.welcome");
+		expect(primaryLabelKey("plan", "free", false)).toBe("onboarding.plan.continue");
+		expect(primaryLabelKey("plan", "byok", false)).toBe("onboarding.plan.continue");
+		expect(primaryLabelKey("plan", "pro", true)).toBe("onboarding.plan.continue");
+		expect(primaryLabelKey("plan", "pro", false)).toBe("onboarding.plan.checkoutPro");
+		expect(primaryLabelKey("plan", "air", false)).toBe("onboarding.plan.checkoutAir");
+	});
+});
+
+describe("planHeld", () => {
+	const signedIn = (plan: "free" | "air" | "pro"): AccountStatus => ({
+		state: "signedIn",
+		source: "stored",
+		offline: false,
+		error: null,
+		baseUrl: "https://example.test",
+		account: {
+			email: "user@example.com",
+			plan,
+			status: "active",
+			trialing: false,
+			cancelScheduled: false,
+			periodEnd: null,
+			creditsUsedCents: 0,
+			creditsLimitCents: 50,
+			creditPeriod: "2026-W41",
+			requestsPerMinute: 10,
+			billing: { air: true, pro: true, portal: false },
+		},
+	});
+
+	it("holds a paid plan only when the signed-in account's plan covers it", () => {
+		expect(planHeld("air", signedIn("free"))).toBe(false);
+		expect(planHeld("air", signedIn("air"))).toBe(true);
+		expect(planHeld("air", signedIn("pro"))).toBe(true);
+		expect(planHeld("pro", signedIn("air"))).toBe(false);
+		expect(planHeld("pro", signedIn("pro"))).toBe(true);
+	});
+
+	it("never holds a plan without a confirmed account, and free/BYOK are never held", () => {
+		expect(planHeld("pro", null)).toBe(false);
+		expect(planHeld("pro", { ...signedIn("pro"), state: "signedOut", account: null })).toBe(false);
+		expect(planHeld("free", signedIn("pro"))).toBe(false);
+		expect(planHeld("byok", signedIn("pro"))).toBe(false);
 	});
 });
 

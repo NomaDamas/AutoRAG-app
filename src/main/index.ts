@@ -39,6 +39,7 @@ import type { KnownFolders } from "../shared/fs-worker-contract";
 import { hasErrorCode, pathExists } from "./fs-entry";
 import { refreshAutoragIndex, resolveEffectiveConfig } from "./index-refresh";
 import { createFolderScanCoordinator, supportedExtensionsFromRegistry } from "./onboarding-scan";
+import { createAccountService } from "./account-service";
 import { createOnboardingService, type OnboardingService } from "./onboarding-service";
 import { detectSources } from "./onboarding-sources";
 import { detectModelProviders, verifyModel as verifyModelRequest } from "./onboarding-models";
@@ -56,6 +57,7 @@ import { createEmbeddingSettingsService, type EmbeddingSettingsRuntime } from ".
 import { createDefaultAgentFactory, createSearchService } from "./search-service";
 import { createSettingsService } from "./settings-service";
 import {
+	registerAccountIpcHandlers,
 	registerActionsIpcHandlers,
 	registerDragOutIpcHandlers,
 	registerIndexActivityIpcHandlers,
@@ -563,6 +565,18 @@ app.whenReady().then(async () => {
 		...(process.platform === "darwin" ? { listDatalessPaths: listMacDatalessPaths } : {}),
 		emit: (scan) => sendToMainWindow(ONBOARDING_CHANNELS.scanProgress, scan),
 	});
+	const accountService = createAccountService({
+		env: process.env,
+		credentials,
+		cachePath: join(app.getPath("userData"), "account.json"),
+		configPath: autoragConfigPath(),
+		openExternal: (url) => shell.openExternal(url),
+		send: sendToMainWindow,
+	});
+	registerAccountIpcHandlers(accountService);
+	void accountService.refresh().catch(() => undefined);
+	app.once("will-quit", () => void accountService.dispose());
+
 	const onboardingService: OnboardingService = createOnboardingService({
 		userDataDir,
 		env: process.env,
@@ -625,6 +639,7 @@ app.whenReady().then(async () => {
 				},
 				onFound,
 			),
+		useManagedModel: () => accountService.useManagedModel(),
 		gitToken: async () => {
 			try {
 				const token = (await runCommand("gh", ["auth", "token"])).trim();
