@@ -63,8 +63,7 @@ export function createIndexStatusService(deps: IndexStatusServiceDeps): IndexSta
 		const registry = createDefaultParserRegistry((config.parserOptions ?? {}) as DefaultParserRegistryOptions);
 		const entries = new Map(Object.values(index.entries).map((entry) => [entry.sourcePath, entry]));
 		const skips = new Map(Object.values(index.skipped ?? {}).map((entry) => [entry.sourcePath, entry]));
-		const minSyncRoot =
-			config.minSync?.enabled === false ? null : (config.minSync?.workspacePath ?? minSyncWorkspaceRoot(config.workspacePath));
+		const minSyncRoot = config.minSync?.workspacePath ?? minSyncWorkspaceRoot(config.workspacePath);
 		return Promise.all(paths.map(async (path): Promise<IndexStatus> => {
 			const real = await canonical(path);
 			if (!roots.some((root) => isUnder(real, root))) {
@@ -75,8 +74,7 @@ export function createIndexStatusService(deps: IndexStatusServiceDeps): IndexSta
 			const toggleable = exclusion === undefined || exclusion === real;
 			const entry = entries.get(real);
 			const staged =
-				entry !== undefined &&
-				(minSyncRoot === null || (await access(minSyncDocumentPath(minSyncRoot, entry.virtualPath)).then(() => true, () => false)));
+				entry !== undefined && (await access(minSyncDocumentPath(minSyncRoot, entry.virtualPath)).then(() => true, () => false));
 			if (excluded) {
 				return entry === undefined
 					? { path, kind: "excluded", excluded, toggleable, detail: toggleable ? "인덱싱에서 제외됨" : "상위 폴더가 인덱싱에서 제외됨" }

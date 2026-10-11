@@ -416,7 +416,7 @@ export function AiPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 				<RoleRow role="answer" label="답변 모델" hint="질문에 답하고 문서를 요약합니다." current={answerLabel(snapshot)} onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "answer" })} thinking={{ onOpen: (anchor) => setMenu({ kind: "thinking", anchor }) }} />
 				<p className="settings-subsection-title">검색 보조</p>
 				<RoleRow role="decomposition" label="질문 나누기" hint="긴 질문을 검색어 여러 개로 나눕니다. 빠르고 저렴한 모델이 잘 맞습니다." current={decompositionLabel(snapshot)} onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "decomposition" })} />
-				<RoleRow role="jev" label="판단 모델 (Jev)" hint="자료를 더 찾을지, 웹을 검색할지 판단합니다." current={jevLabel(snapshot)} onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "jev" })} />
+				<RoleRow role="jev" label="판단 모델 (Jev)" hint="바로 답할지, 내 자료를 검색할지 판단합니다." current={jevLabel(snapshot)} onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "jev" })} />
 				<RoleRow role="rerank" label="검색 결과 정렬" hint="관련 높은 결과를 위로 올립니다. 답변이 조금 느려질 수 있습니다." current={rerankLabel(snapshot)} onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "rerank" })} />
 				<p className="settings-subsection-title">문서 이해</p>
 				<EmbeddingPicker />

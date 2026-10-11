@@ -141,7 +141,7 @@ export interface ApplyAppIndexingOptions {
 /**
  * Resolve the config the app actually runs with: parsed/MinSync get absolute
  * `excludePaths`, Jikji gets `--exclude` globs, and the features the app never
- * runs (Tesseract OCR, Jikji's media index) are pinned off, see `indexing-policy`.
+ * runs (OCR, Jikji's media index) are pinned off, see `indexing-policy`.
  * Existing exclusion values are kept, so adding this feature never drops a
  * user's earlier exclusions.
  */

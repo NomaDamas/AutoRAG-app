@@ -266,6 +266,11 @@ Each setting fixes a failure seen in the lanes, not a preference:
 - A lane that passes in a VM has not proven real-hardware behavior for things
   a VM cannot show (GPU rendering, a physical display, real Finder.app state).
   Run `--host` for those before release.
+- A fresh VM has no embedding model. For the `onboarding` lane, a full sweep, or a
+  `qa script`, the runner copies `models/` and `runtime/` from the host's
+  `~/.autorag` (or `AUTORAG_HOME`) into the guest; without them the first index
+  fails with "Embedding runtime assets are unavailable". Run `autorag models
+  prefetch` on the host once.
 - Never run `qa:vm:setup` while a run is active; setup needs both VM slots.
 - Do not copy `~/.autorag-qa`, the golden image, or `evidence` into a
   repository. They are machine-local.
