@@ -36,6 +36,15 @@ function newestInstaller() {
 const installer = resolve(process.argv[2] ?? newestInstaller());
 log(`installer ${installer}`);
 
+/**
+ * Install budget: the time from running the installer to a usable app, download excluded. The first
+ * number is the installer itself; the second is how long after launch the embedding model and runtime
+ * are in place (the app copies them in the background and can already be used meanwhile).
+ */
+const BUDGET_SECONDS = Number(process.env.AUTORAG_INSTALL_BUDGET_SECONDS ?? 300);
+const installStarted = Date.now();
+
+let installSeconds = 0;
 let appRoot; // directory holding the executable
 let resources; // <resources>
 let executable;
@@ -67,6 +76,7 @@ if (!win) {
 	};
 }
 
+installSeconds = (Date.now() - installStarted) / 1000;
 const failures = [];
 const expect = (ok, label, detail = "") => {
 	process.stdout.write(`${ok ? "ok  " : "FAIL"} ${label}${ok ? "" : ` ${detail}`}\n`);
@@ -87,6 +97,7 @@ try {
 	const autoragHome = join(home, ".autorag");
 	const profile = join(work, "profile");
 	mkdirSync(home, { recursive: true });
+	const launched = Date.now();
 	const app = await _electron.launch({
 		executablePath: executable,
 		args: [`--user-data-dir=${profile}`, ...(win ? ["--disable-gpu"] : [])],
@@ -130,6 +141,10 @@ try {
 		const deadline = Date.now() + 180_000;
 		while (!existsSync(model) && Date.now() < deadline) await new Promise((r) => setTimeout(r, 1000));
 		expect(existsSync(model), "embedding model seeded into the AutoRAG home", model);
+		const seedSeconds = (Date.now() - launched) / 1000;
+		const totalSeconds = installSeconds + seedSeconds;
+		process.stdout.write(`time install=${installSeconds.toFixed(0)}s  launch->model seeded=${seedSeconds.toFixed(0)}s  total=${totalSeconds.toFixed(0)}s  budget=${BUDGET_SECONDS}s\n`);
+		expect(totalSeconds <= BUDGET_SECONDS, `install + first-launch seeding within ${BUDGET_SECONDS}s`, `${totalSeconds.toFixed(0)}s`);
 		expect(readdirSync(join(autoragHome, "runtime")).some((name) => name.startsWith("llama-")), "llama.cpp runtime seeded");
 		writeFileSync(join(outDir, "installed-app.json"), `${JSON.stringify(inside, null, 2)}\n`);
 	} finally {
