@@ -90,7 +90,9 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 	const [scans, setScans] = useState<ReadonlyMap<string, FolderScan>>(new Map());
 	const [embedding, setEmbedding] = useState<EmbeddingInfo | null>(null);
 	const [detectedSources, setDetectedSources] = useState<readonly DetectedSource[]>([]);
-	const [sourcesChecking, setSourcesChecking] = useState(false);
+	// Done, not "checking": the step's first frame must already show the checking line,
+	// never the empty result that would flash before the probe effect runs.
+	const [sourcesDone, setSourcesDone] = useState(false);
 	const [models, setModels] = useState<readonly DetectedModelProvider[]>([]);
 	const [modelKey, setModelKey] = useState("");
 	const [modelOptions, setModelOptions] = useState<readonly ModelOption[]>([]);
@@ -357,7 +359,6 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 			return;
 		}
 		sourcesRef.current = true;
-		setSourcesChecking(true);
 		const offFound = bridge.onSourceDetected((source) => {
 			setDetectedSources((previous) =>
 				previous.some((known) => known.id === source.id) ? previous : previous.concat(source).sort(bySourceOrder),
@@ -369,8 +370,8 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 				return { ...current, sources: current.sources.concat({ id: source.id, on: false }) };
 			});
 		});
-		const offDone = bridge.onSourcesDone(() => setSourcesChecking(false));
-		void bridge.detectSources().catch(() => setSourcesChecking(false));
+		const offDone = bridge.onSourcesDone(() => setSourcesDone(true));
+		void bridge.detectSources().catch(() => setSourcesDone(true));
 		return () => {
 			offFound();
 			offDone();
@@ -495,7 +496,7 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 		candidates,
 		embedding,
 		sources: detectedSources,
-		sourcesChecking,
+		sourcesChecking: !sourcesDone,
 		models,
 		modelKey,
 		modelBaseUrl: draft?.model?.baseUrl ?? "",
