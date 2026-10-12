@@ -78,12 +78,14 @@ Settings follows `docs/prototypes/settings` and writes to the shared AutoRAG
 `config.json` and the Pi agent's `auth.json`/`models.json`; the Finder keeps no
 second datasource or model configuration. The sidebar is searchable and grouped:
 
-- **계정** — 내 계정 and 구독 및 사용량. AutoRAG has no account or billing
-  backend yet, so these pages show no account data; billing actions open the
-  AutoRAG billing web pages.
+- **계정** — 내 계정 and 구독 및 사용량, read from the hosted AutoRAG service
+  (email, plan, weekly credits); sign-in, checkout and the
+  billing portal open in the system browser. Signed out, every value reads
+  "확인할 수 없음".
 - **기본 → 일반** — appearance, app language, hidden files, launch at login,
   automatic updates, telemetry, and document languages.
-- **AI → AI 모델** — connect services through the same Pi `/login` the AutoRAG
+- **AI → AI 모델** — the AutoRAG plan is listed first and connects through the
+  account service (not Pi's login); other services use the same Pi `/login` the AutoRAG
   agent uses: subscription sign-in (Claude Pro/Max, ChatGPT Plus/Pro, GitHub
   Copilot, …) opens the browser or shows a device code; API-key providers prompt
   for the key; local (loopback) and OpenAI-compatible servers are discovered and
@@ -225,11 +227,24 @@ an `AccountStatus` (email, plan, subscription state, weekly credits), never the
 key. Air and Pro open the service's hosted checkout in the browser, and the plan
 step continues once the server reports that plan; cancel, refund, and the
 payment method live in the hosted billing portal (Settings › 구독 및 사용량).
-Skipping the account is the BYOK path. For a managed plan the first index also
-points `model` (and question decomposition) at the account's models, through
-the librarian's `autorag` provider (the config carries an explicit
-`baseUrl` and `apiKeyEnv`, never the key). The corpus-text rule is unchanged:
-embeddings stay on this Mac.
+Skipping the account is the BYOK path.
+
+**What signing in changes.** A successful sign-in (onboarding, Settings, or the
+AutoRAG entry in Settings › AI) points the agent at the account's models, per
+role, in the shared `config.json` (the config carries an explicit `baseUrl` and
+`apiKeyEnv`, never the key):
+
+| Role | Replaced when the config holds | Kept when it holds |
+|---|---|---|
+| answer `model` | nothing, or an AutoRAG model | any other provider's model |
+| `queryDecomposition` | nothing, an AutoRAG model, or the librarian's untouched default | another model you chose (including another OpenRouter one) or `false` |
+| `jev` | nothing, the librarian's untouched OpenRouter default, or a bare AutoRAG block | `false`, another backend, or an AutoRAG block you switched off (`enabled: false`) or tuned |
+| `rerank` | the same | the same (`topN`, `baseUrl`, … count as tuning) |
+
+The model ids come from the server (`GET /v1/models`, `?operation=jev|rerank`);
+a list that cannot be fetched leaves that role alone. Settings › 계정 › "계정
+모델로 설정" applies the plan to the answer and decomposition roles
+unconditionally. The corpus-text rule is unchanged: embeddings stay on this Mac.
 
 Onboarding state lives in `<userData>/onboarding/state.json`. Set
 `AUTORAG_SKIP_ONBOARDING=1` to open the Finder directly; the manual-QA launcher

@@ -19,6 +19,8 @@ import type {
 } from "../shared/settings-contract";
 import { isJsonObject } from "../shared/settings-contract";
 import type { ProviderCredentialService } from "./provider-credentials";
+import { registerAutoRAGProvider } from "@autorag/librarian";
+import { ACCOUNT_API_KEY_ENV, AUTORAG_PROVIDER_ID, autoragFirst } from "../shared/account-contract";
 
 /**
  * Real Pi provider authentication: `/login` OAuth and API-key flows driven by
@@ -44,6 +46,8 @@ export interface ProviderAuthService {
 	test(id: string): Promise<ProviderConnectionResult>;
 	/** Bridge auth.json-stored OpenRouter/Vercel keys into the process env Jev/rerank read. */
 	warmEnv(): Promise<void>;
+	/** Fetch the signed-in account's model catalog into the runtime (no-op when signed out or offline). */
+	syncAutoragCatalog(): Promise<void>;
 	/** Cancel active logins and detach the process-env bridges this service injected. */
 	dispose(): Promise<void>;
 }
@@ -202,7 +206,12 @@ export function createProviderAuthService(deps: ProviderAuthServiceDeps): Provid
 	const timeoutMs = deps.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 	const fetchImpl = deps.fetch ?? globalThis.fetch;
 	const sessions = new Map<string, Session>();
-	const runtimePromise = ModelRuntime.create({ authPath, modelsPath, allowModelNetwork: false });
+	// The hosted AutoRAG plan is its own provider; it must exist on this runtime
+	// for `/login`, the provider list, and its persisted model catalog.
+	const runtimePromise = ModelRuntime.create({ authPath, modelsPath, allowModelNetwork: false }).then(async (created) => {
+		await registerAutoRAGProvider(created, deps.env);
+		return created;
+	});
 	/** Process env values this service injected, keyed by env name. */
 	const injected = new Map<string, { readonly providerId: string; readonly value: string }>();
 
@@ -309,7 +318,7 @@ export function createProviderAuthService(deps: ProviderAuthServiceDeps): Provid
 		const raw = await readModelsJson(modelsPath);
 		const customProviders = modelsJsonProviders(raw);
 		const available = new Set(runtime.getAvailableSnapshot().map((model) => `${model.provider}/${model.id}`));
-		return runtime.getProviders().map((provider): ProviderSummary => {
+		return autoragFirst(runtime.getProviders().map((provider): ProviderSummary => {
 			const status = runtime.getProviderAuthStatus(provider.id);
 			const rawCustom = customProviders[provider.id];
 			const custom = isJsonObject(rawCustom) ? rawCustom : undefined;
@@ -348,7 +357,7 @@ export function createProviderAuthService(deps: ProviderAuthServiceDeps): Provid
 					apiKeyEnv,
 				})),
 			};
-		});
+		}));
 	}
 
 	async function start(providerId: string, authType: ProviderAuthKind): Promise<ProviderLoginStartResult> {
@@ -571,6 +580,19 @@ export function createProviderAuthService(deps: ProviderAuthServiceDeps): Provid
 		test,
 		warmEnv: async () => {
 			for (const bridge of ENV_BRIDGES) await injectEnv(bridge.providerId);
+		},
+		syncAutoragCatalog: async () => {
+			// Only with an account key: a signed-out provider must make no network call.
+			const key = deps.env[ACCOUNT_API_KEY_ENV];
+			if (typeof key !== "string" || key.length === 0) return;
+			const runtime = await runtimePromise;
+			try {
+				// One provider, with the network on: the librarian provider fetches
+				// `/v1/models` and persists the snapshot; a failure keeps the old one.
+				await runtime.refresh({ allowNetwork: true, providers: [AUTORAG_PROVIDER_ID], force: true });
+			} catch (error) {
+				console.warn("[providers] could not refresh the AutoRAG catalog:", error);
+			}
 		},
 		dispose: async () => {
 			for (const sessionId of [...sessions.keys()]) await cancel(sessionId);

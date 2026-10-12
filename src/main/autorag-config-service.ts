@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 import { access, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { getAgentDir, ModelRuntime } from "@earendil-works/pi-coding-agent";
+import { registerAutoRAGProvider } from "@autorag/librarian";
+import { autoragFirst } from "../shared/account-contract";
 import { findEnvKeys } from "@earendil-works/pi-ai/compat";
 import {
 	buildAgentOptions,
@@ -664,6 +666,7 @@ export function createAutoRagConfigService(deps: AutoRagConfigServiceDeps): Auto
 					modelsPath: join(agentDir, "models.json"),
 					allowModelNetwork: false,
 				});
+				await registerAutoRAGProvider(runtime, deps.env);
 				const available = new Set<string>();
 				try {
 					for (const model of await runtime.getAvailable()) available.add(`${model.provider}/${model.id}`);
@@ -698,7 +701,7 @@ export function createAutoRagConfigService(deps: AutoRagConfigServiceDeps): Auto
 						models,
 					};
 				});
-				return { error: null, providers };
+				return { error: null, providers: autoragFirst(providers) };
 			} catch (error) {
 				return { error: error instanceof Error ? error.message : String(error), providers: [] };
 			}

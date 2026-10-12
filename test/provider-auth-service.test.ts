@@ -79,6 +79,89 @@ async function fixture(fetchImpl: typeof fetch): Promise<Fixture> {
 	return { service, agentDir, env };
 }
 
+describe("AutoRAG plan provider", () => {
+	const planCatalog = (async (input: string | URL | Request): Promise<Response> => {
+		const url = String(input);
+		if (url.endsWith("/v1/models")) {
+			return jsonResponse({
+				object: "list",
+				data: [
+					{ id: "vendor/main", name: "Main", context_window: 200000, max_output_tokens: 32000, input_modalities: ["text"], reasoning: true, pricing: { input: 0.3, output: 1.2 } },
+					{ id: "vendor/cheap", name: "Cheap", context_window: 100000, max_output_tokens: 8000, input_modalities: ["text", "image"], reasoning: false, pricing: { input: 0.1, output: 0.5 } },
+				],
+			});
+		}
+		return new Response("not found", { status: 404 });
+	}) as unknown as typeof fetch;
+
+	// The librarian's provider reads the account key from the real process
+	// environment and fetches with the global `fetch`, exactly as in the app.
+	const savedKey = process.env.AUTORAG_API_KEY;
+	const savedFetch = globalThis.fetch;
+	afterEach(() => {
+		globalThis.fetch = savedFetch;
+		if (savedKey === undefined) delete process.env.AUTORAG_API_KEY;
+		else process.env.AUTORAG_API_KEY = savedKey;
+	});
+
+	const build = async (env: NodeJS.ProcessEnv, fetchImpl: typeof fetch, agentDir?: string): Promise<{ service: ProviderAuthService; agentDir: string }> => {
+		globalThis.fetch = fetchImpl;
+		const dir = agentDir ?? (await createAgentDir());
+		const service = createProviderAuthService({ send: () => undefined, env, credentials: fakeCredentials(env), agentDir: dir, fetch: fetchImpl });
+		services.push(service);
+		return { service, agentDir: dir };
+	};
+
+	it("is listed first, even before sign-in, with no models and no network call", async () => {
+		let calls = 0;
+		const { service } = await build({ AUTORAG_BASE_URL: "http://127.0.0.1:1" }, (async () => {
+			calls += 1;
+			return new Response("no", { status: 500 });
+		}) as unknown as typeof fetch);
+
+		const providers = await service.list();
+
+		expect(providers[0]?.id).toBe("autorag");
+		expect(providers[0]?.authConfigured).toBe(false);
+		expect(providers[0]?.models).toEqual([]);
+		expect(calls).toBe(0);
+	});
+
+	it("lists the plan's models, first, once the catalog is synced with the account key", async () => {
+		process.env.AUTORAG_API_KEY = "dz_test";
+		const { service } = await build({ AUTORAG_BASE_URL: "http://plan.test", AUTORAG_API_KEY: "dz_test" }, planCatalog);
+
+		await service.syncAutoragCatalog();
+		const providers = await service.list();
+
+		expect(providers[0]).toMatchObject({ id: "autorag", authConfigured: true });
+		expect(providers[0]?.models.map((model) => model.id)).toEqual(["vendor/main", "vendor/cheap"]);
+		expect(providers[0]?.models[0]?.baseUrl).toBe("http://plan.test/v1");
+	});
+
+	it("keeps the previous catalog when the server cannot be reached", async () => {
+		process.env.AUTORAG_API_KEY = "dz_test";
+		const env = { AUTORAG_BASE_URL: "http://plan.test", AUTORAG_API_KEY: "dz_test" };
+		const first = await build(env, planCatalog);
+		await first.service.syncAutoragCatalog();
+
+		const offline = await build(env, (async () => {
+			throw new TypeError("fetch failed");
+		}) as unknown as typeof fetch, first.agentDir);
+		await offline.service.syncAutoragCatalog();
+
+		expect((await offline.service.list())[0]?.models.map((model) => model.id)).toEqual(["vendor/main", "vendor/cheap"]);
+	});
+
+	it("does nothing without an account key", async () => {
+		const { service } = await build({ AUTORAG_BASE_URL: "http://plan.test" }, planCatalog);
+
+		await service.syncAutoragCatalog();
+
+		expect((await service.list())[0]?.models).toEqual([]);
+	});
+});
+
 describe("createProviderAuthService", () => {
 	it("lists runtime providers with auth kinds and OAuth subscription metadata", async () => {
 		const { service } = await fixture(openAiFetch);

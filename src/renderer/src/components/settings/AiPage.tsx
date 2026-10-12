@@ -28,6 +28,8 @@ import type {
 import { AppIcon, FloatingMenu, ModalActions, ModalShell, Note, Row, Section, SettingsPageHead } from "./SettingsKit";
 import { asRecord, defaultEnvName, errorText, getAt, isAllowedAgentApi, stringOf, useConfigWriter } from "./configSupport";
 import { EmbeddingPicker } from "./EmbeddingPicker";
+import { jevBackendFor, jevModelsFor, rerankModelsFor } from "../../../../shared/ai-roles";
+import { providerConnectRoute, withoutAutorag } from "../../../../shared/account-contract";
 
 const settings = window.autorag.settings;
 
@@ -44,38 +46,6 @@ const THINKING_LEVELS: readonly { readonly value: string; readonly label: string
 	{ value: "high", label: "높음", note: "정확도 우선" },
 	{ value: "max", label: "최대", note: "가장 느림" },
 ];
-
-/**
- * Jev backend a Pi provider id maps to. `jev-use` resolves typesafe /
- * openrouter / vercel backends; the Vercel AI Gateway provider id is
- * `vercel-ai-gateway`, not `vercel`.
- */
-const JEV_BACKEND_BY_PROVIDER: Readonly<Record<string, "typesafe" | "openrouter" | "vercel">> = {
-	typesafe: "typesafe",
-	openrouter: "openrouter",
-	"vercel-ai-gateway": "vercel",
-};
-
-/** The Jev model ids each backend accepts (jev is not a general LLM role). */
-const JEV_MODELS_BY_BACKEND: Readonly<Record<"typesafe" | "openrouter" | "vercel", readonly { readonly id: string; readonly label: string }[]>> = {
-	typesafe: [{ id: "jev-latest", label: "Jev (최신)" }],
-	openrouter: [
-		{ id: "typesafe/jev-1.13", label: "Jev 1.13" },
-		{ id: "typesafe/jev-latest", label: "Jev (최신)" },
-	],
-	vercel: [{ id: "typesafe/jev-latest", label: "Jev (최신)" }],
-};
-
-/** OpenRouter rerank model ids the config accepts (rerank is not a general LLM role). */
-const RERANK_MODELS: readonly { readonly id: string; readonly label: string }[] = [
-	{ id: "voyageai/rerank-3-lite", label: "Voyage Rerank 3 Lite" },
-	{ id: "voyageai/rerank-3", label: "Voyage Rerank 3" },
-	{ id: "cohere/rerank-v3.5", label: "Cohere Rerank 3.5" },
-	{ id: "cohere/rerank-4-fast", label: "Cohere Rerank 4 Fast" },
-];
-
-/** Backend that serves the rerank role (v2.7 supports OpenRouter only). */
-const RERANK_PROVIDER_ID = "openrouter";
 
 /** Decomposition specials: `false` means "let the answer model do it"; absence uses the documented default. */
 const DECOMPOSITION_SPECIALS: readonly { readonly value: string; readonly label: string }[] = [
@@ -121,6 +91,9 @@ function rolesUsingProvider(snapshot: AutoRagConfigSnapshot, providerId: string)
 	if (stringOf(decomposition?.provider) === providerId) out.push("질문 나누기");
 	const rerank = asRecord(getAt(snapshot.config, ["rerank"]));
 	if (stringOf(rerank?.provider) === providerId) out.push("정렬");
+	const jev = asRecord(getAt(snapshot.config, ["jev"]));
+	const jevBackend = jevBackendFor(providerId);
+	if (jevBackend !== undefined && stringOf(jev?.backend) === jevBackend) out.push("판단");
 	return out;
 }
 
@@ -169,20 +142,16 @@ export function AiPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 	const available = useMemo(() => (providers ?? []).filter((provider) => !provider.authConfigured), [providers]);
 	const catalogModels = useMemo(() => connected.flatMap((provider) => provider.models.map((model) => ({ provider, model }))), [connected]);
 	// Jev/rerank are not general LLM roles: offer only the backends/providers
-	// that actually serve them, with the model ids each accepts.
+	// that actually serve them, with the model ids each accepts. The AutoRAG
+	// plan comes first because `connected` is already ordered that way.
 	const jevOptions = useMemo(
-		() =>
-			connected.flatMap((provider) => {
-				const backend = JEV_BACKEND_BY_PROVIDER[provider.id];
-				if (backend === undefined) return [];
-				return JEV_MODELS_BY_BACKEND[backend].map((model) => ({ provider, model: staticCatalogEntry(provider, model.id, model.label) }));
-			}),
+		() => connected.flatMap((provider) => jevModelsFor(provider.id).map((model) => ({ provider, model: staticCatalogEntry(provider, model.id, model.label) }))),
 		[connected],
 	);
-	const rerankOptions = useMemo(() => {
-		const provider = connected.find((item) => item.id === RERANK_PROVIDER_ID);
-		return provider === undefined ? [] : RERANK_MODELS.map((model) => ({ provider, model: staticCatalogEntry(provider, model.id, model.label) }));
-	}, [connected]);
+	const rerankOptions = useMemo(
+		() => connected.flatMap((provider) => rerankModelsFor(provider.id).map((model) => ({ provider, model: staticCatalogEntry(provider, model.id, model.label) }))),
+		[connected],
+	);
 
 	function closeMenu(): void {
 		setMenu(null);
@@ -316,12 +285,24 @@ export function AiPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 	}
 
 	function writeJev(entry: ModelCatalogEntry): void {
-		const backend = JEV_BACKEND_BY_PROVIDER[entry.provider];
+		const backend = jevBackendFor(entry.provider);
 		void run([{ path: ["jev"], value: { model: entry.id, ...(backend === undefined ? {} : { backend }) } }]);
 	}
 
 	function writeRerank(entry: ModelCatalogEntry): void {
 		void run([{ path: ["rerank"], value: { enabled: true, provider: entry.provider, model: entry.id } }]);
+	}
+
+	/** Sign in to the AutoRAG plan through the account service (browser PKCE, encrypted key, adopted defaults). */
+	async function signInToAutorag(): Promise<void> {
+		setNotice("브라우저에서 AutoRAG에 로그인하세요…");
+		try {
+			const status = await window.autorag.account.signIn();
+			setNotice(status.state === "signedIn" ? "AutoRAG에 로그인했습니다." : (status.error ?? "로그인하지 않았습니다."));
+			await reload();
+		} catch (cause) {
+			setNotice(errorText(cause));
+		}
 	}
 
 	/**
@@ -331,6 +312,18 @@ export function AiPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 	 * delete — that is reported as info, never as a success.
 	 */
 	async function disconnectProvider(provider: ProviderSummary): Promise<void> {
+		// The AutoRAG plan is signed in through the account service, so its key,
+		// cached account and adopted defaults are removed there, not by Pi's logout.
+		if (providerConnectRoute(provider.id) === "account") {
+			try {
+				const status = await window.autorag.account.signOut();
+				setNotice(status.state === "signedIn" ? "환경 변수 AUTORAG_API_KEY로 로그인되어 있어 앱에서 로그아웃할 수 없습니다. 해당 환경 변수를 직접 제거하세요." : `${provider.name} 연결을 해제했습니다.`);
+				await reload();
+			} catch (cause) {
+				setNotice(errorText(cause));
+			}
+			return;
+		}
 		if (provider.authSource === "environment") {
 			setNotice(`${provider.name} 키가 운영체제 환경 변수에서 제공되어 앱에서 해제할 수 없습니다. 해당 환경 변수를 직접 제거하세요.`);
 			return;
@@ -343,7 +336,7 @@ export function AiPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 		if (stringOf(model?.provider) === provider.id) ops.push({ path: ["model"], remove: true });
 		if (stringOf(decomposition?.provider) === provider.id) ops.push({ path: ["queryDecomposition"], remove: true });
 		if (stringOf(rerank?.provider) === provider.id) ops.push({ path: ["rerank"], value: false });
-		if (stringOf(jev?.backend) === JEV_BACKEND_BY_PROVIDER[provider.id]) ops.push({ path: ["jev"], value: false });
+		if (stringOf(jev?.backend) === jevBackendFor(provider.id)) ops.push({ path: ["jev"], value: false });
 		try {
 			if (ops.length > 0) await run(ops);
 			if (provider.kind === "local" || provider.kind === "custom") await settings.providersRemove(provider.id);
@@ -425,7 +418,8 @@ export function AiPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 				<FloatingMenu anchor={menu.anchor} compact={menu.kind === "thinking"} onClose={closeMenu}>
 					{menu.kind === "connect" ? (
 						<ConnectMenu
-							providers={available}
+							providers={withoutAutorag(available)}
+							onSignInToAutorag={available.some((provider) => providerConnectRoute(provider.id) === "account") ? () => { closeMenu(); void signInToAutorag(); } : undefined}
 							onConnect={(provider, authType) => {
 								closeMenu();
 								if (authType === "api_key" && (provider.apiKeyEnv === CREDENTIAL_ONLY_ENV || provider.id === "typesafe")) setKeyModal(provider);
@@ -560,11 +554,14 @@ function RoleRow({
 
 function ConnectMenu({
 	providers,
+	onSignInToAutorag,
 	onConnect,
 	onPickServer,
 	onPickServerExisting,
 }: {
 	readonly providers: readonly ProviderSummary[];
+	/** Present while the AutoRAG plan is not signed in; it opens the account sign-in, not Pi's login. */
+	readonly onSignInToAutorag: (() => void) | undefined;
 	readonly onConnect: (provider: ProviderSummary, authType: "oauth" | "api_key") => void;
 	readonly onPickServer: (kind: "local" | "custom") => void;
 	readonly onPickServerExisting: (provider: ProviderSummary) => void;
@@ -574,6 +571,15 @@ function ConnectMenu({
 	const servers = providers.filter((provider) => provider.kind === "local" || provider.kind === "custom");
 	return (
 		<>
+			{onSignInToAutorag !== undefined ? (
+				<>
+					<p className="settings-menu-group">AutoRAG 요금제</p>
+					<button type="button" className="settings-menu-item" onClick={onSignInToAutorag}>
+						<AppIcon small label="AutoRAG" />
+						<span>AutoRAG 계정으로 로그인</span>
+					</button>
+				</>
+			) : null}
 			{subscriptions.length > 0 ? (
 				<>
 					<p className="settings-menu-group">구독 계정</p>
