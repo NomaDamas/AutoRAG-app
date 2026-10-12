@@ -1,0 +1,18 @@
+[package]
+name = "autorag-shim"
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-only"
+description = "Launcher that runs a bundled npm CLI with the bundled Node runtime"
+publish = false
+
+[[bin]]
+name = "autorag-shim"
+path = "src/main.rs"
+
+[profile.release]
+opt-level = "z"
+lto = true
+strip = true
+panic = "abort"
+codegen-units = 1
