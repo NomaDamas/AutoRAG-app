@@ -1,7 +1,7 @@
 /**
  * Install the built installer the way a user would, then prove the install works.
  *
- *   node scripts/release/smoke-installed.mjs [path/to/AutoRAG.dmg|AutoRAG-Setup.exe]
+ *   node scripts/release/smoke-installed.mjs [path/to/Dazzi.dmg|Dazzi-Setup.exe]
  *
  * Without an argument the newest installer in dist/ is used. Steps:
  *   1. install: mount the .dmg and copy the app, or run the NSIS installer silently
@@ -56,21 +56,21 @@ if (!win) {
 	run("hdiutil", ["attach", installer, "-nobrowse", "-readonly", "-mountpoint", mount]);
 	const destination = join(work, "Applications");
 	mkdirSync(destination);
-	run("ditto", [join(mount, "AutoRAG.app"), join(destination, "AutoRAG.app")]);
+	run("ditto", [join(mount, "Dazzi.app"), join(destination, "Dazzi.app")]);
 	run("hdiutil", ["detach", mount, "-force"], { allowFailure: true });
-	appRoot = join(destination, "AutoRAG.app");
+	appRoot = join(destination, "Dazzi.app");
 	resources = join(appRoot, "Contents", "Resources");
-	executable = join(appRoot, "Contents", "MacOS", "AutoRAG");
+	executable = join(appRoot, "Contents", "MacOS", "Dazzi");
 	uninstall = () => rmSync(appRoot, { recursive: true, force: true });
 } else {
 	// One-click per-user NSIS: /S is silent, /D sets the install directory (must be last, unquoted).
-	appRoot = join(work, "AutoRAG");
+	appRoot = join(work, "Dazzi");
 	const result = spawnSync(installer, ["/S", `/D=${appRoot}`], { stdio: "inherit", windowsHide: true });
 	if (result.status !== 0) throw new Error(`installer exited ${result.status}`);
 	resources = join(appRoot, "resources");
-	executable = join(appRoot, "AutoRAG.exe");
+	executable = join(appRoot, "Dazzi.exe");
 	uninstall = () => {
-		const uninstaller = join(appRoot, "Uninstall AutoRAG.exe");
+		const uninstaller = join(appRoot, "Uninstall Dazzi.exe");
 		if (existsSync(uninstaller)) spawnSync(uninstaller, ["/S", `_?=${appRoot}`], { stdio: "inherit", windowsHide: true });
 		rmSync(appRoot, { recursive: true, force: true });
 	};

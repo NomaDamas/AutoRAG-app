@@ -12,6 +12,7 @@
  * endorsement. Monochrome marks inherit `color`; the Google G keeps its own fills.
  */
 
+import dazziLogo from "../assets/dazzi-logo.png";
 import {
 	AppWindow,
 	ArrowRight,
@@ -279,4 +280,9 @@ export function BrandMark({ name, size = 16 }: BrandMarkProps): ReactElement | n
 			{def.mark}
 		</svg>
 	);
+}
+
+/** The Dazzi logo on a transparent background; sized by its container (`.app-mark`, `.app-mini`). */
+export function AppLogo(): ReactElement {
+	return <img className="app-logo" src={dazziLogo} alt="" draggable={false} />;
 }

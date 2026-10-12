@@ -1,11 +1,20 @@
-# AutoRAG App
+# Dazzi App
 
-**AutoRAG is this app's name.** Every user-facing surface — the window title,
-renderer UI copy, README, DESIGN, and this document — uses **AutoRAG**. The
-backend it consumes keeps its existing identifiers: `@autorag/librarian`,
-`@autorag/app`, the shared AutoRAG config, and the
-`AutoRAGAgent`/`AutoRAGLite` classes. Do not introduce a second product name on
-a user-facing surface, and do not rename those backend identifiers.
+**Dazzi is this app's name; the full name is "Dazzi powered by AutoRAG".** Use
+the full name where it fits and identifies the product — the window title, the
+onboarding header, the About panel, notifications, and docs headlines — and the
+short name **Dazzi** in running copy, menus, and labels (`APP_FULL_NAME` and
+`APP_NAME` in `src/shared/app-info.ts`). "AutoRAG" on its own names the backend
+the app consumes: `@autorag/librarian`, `@autorag/app`, the shared AutoRAG
+config, and the `AutoRAGAgent`/`AutoRAGLite` classes keep their identifiers.
+Do not rename those backend identifiers, and do not introduce a third product
+name on a user-facing surface.
+
+The logo is the sunflower-with-sunglasses mark. `build/` holds the app icon set
+(`icon.icns`, `icon.ico`, `icon.png`, `icons/<size>.png`) and
+`src/renderer/src/assets/dazzi-logo.png` is the transparent mark the renderer
+draws; regenerate all of them from one transparent master rather than editing
+one in isolation.
 
 This repository is the standalone Electron Finder app: one repository, one
 app. It is not a monorepo, and no other package is built or released from

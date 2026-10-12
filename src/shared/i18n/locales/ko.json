@@ -230,7 +230,7 @@
     "emptyPromptTitle": "무엇을 찾아드릴까요?",
     "emptyPromptDesc": "파일, 메일, 메신저 전체에서 찾아 빠른 답변과 정밀한 답변을 함께 드립니다.",
     "generatingDeep": "정밀 답변 작성 중…",
-    "askAutoRAG": "AutoRAG에게 물어보기",
+    "askDazzi": "Dazzi에게 물어보기",
     "stop": "중지",
     "thinking": "생각하는 중…",
     "workedFor": "{{time}} 동안 답변 생성",
@@ -247,8 +247,8 @@
     }
   },
   "osMenu": {
-    "ask": "AutoRAG에게 물어보기",
-    "reveal": "AutoRAG에서 보기"
+    "ask": "Dazzi에게 물어보기",
+    "reveal": "Dazzi에서 보기"
   },
   "toasts": {
     "trashSingle": "{{name}}을(를) 휴지통으로 이동했습니다",
@@ -311,7 +311,7 @@
     },
     "general": {
       "title": "화면 표시 및 일반",
-      "desc": "앱 화면과 AutoRAG 일반 언어 설정입니다. workspacePath와 memoryPath는 기본값으로 유지합니다.",
+      "desc": "앱 화면과 Dazzi 일반 언어 설정입니다. workspacePath와 memoryPath는 기본값으로 유지합니다.",
       "appearance": "화면 테마",
       "appearanceHint": "Finder, Settings, Quick Look에 같은 테마를 적용합니다.",
       "language": "인터페이스 언어",
@@ -329,7 +329,7 @@
       "telemetry": "익명 진단 데이터 공유",
       "telemetryHint": "익명화된 성능 지표를 공유합니다.",
       "osMenuIntegration": "Finder 우클릭 메뉴에 추가",
-      "osMenuIntegrationHint": "Finder(macOS) 또는 탐색기(Windows)에서 파일을 우클릭하면 'AutoRAG에게 물어보기'와 'AutoRAG에서 보기' 항목이 나타납니다.",
+      "osMenuIntegrationHint": "Finder(macOS) 또는 탐색기(Windows)에서 파일을 우클릭하면 'Dazzi에게 물어보기'와 'Dazzi에서 보기' 항목이 나타납니다.",
       "osMenuIntegrationError": "우클릭 메뉴를 설정하지 못했습니다"
     }
   },
@@ -358,7 +358,7 @@
     "welcome": {
       "eyebrow": "Pro 7일 무료 체험",
       "title": "파일에게\n물어보세요",
-      "lead": "폴더를 열어 뒤지지 않아도 됩니다. AutoRAG가 문서 안의 내용을 읽고, 근거와 함께 답합니다.",
+      "lead": "폴더를 열어 뒤지지 않아도 됩니다. Dazzi가 문서 안의 내용을 읽고, 근거와 함께 답합니다.",
       "note": "기본값은 로컬 처리입니다. 원격 처리가 필요한 순간에는 무엇이 전송되는지 먼저 보여드립니다.",
       "chat": {
         "user": "지난 분기 비용이 왜 줄었어?",
@@ -390,7 +390,7 @@
       "signedIn": "로그인되었습니다",
       "signedInNote": "다음 단계로 이동합니다",
       "otherAccount": "다른 계정",
-      "cardTitle": "AutoRAG 계정",
+      "cardTitle": "Dazzi 계정",
       "cardSub": "플랜과 사용량을 관리합니다",
       "busy": "브라우저에서 로그인 중…",
       "busyNote": "인증이 끝나면 자동으로 돌아옵니다.",
@@ -398,7 +398,7 @@
       "cancel": "취소",
       "skip": "계정 없이 내 API 키로 사용 (BYOK)",
       "offline": "서버에 연결할 수 없어 마지막으로 확인한 정보를 보여줍니다.",
-      "authNote": "로그인 방법(이메일 코드, 소셜 로그인)은 브라우저의 AutoRAG 로그인 화면에서 고릅니다. 계정에는 파일 내용이 저장되지 않습니다.",
+      "authNote": "로그인 방법(이메일 코드, 소셜 로그인)은 브라우저의 Dazzi 로그인 화면에서 고릅니다. 계정에는 파일 내용이 저장되지 않습니다.",
       "planLabel": "{{plan}} 플랜",
       "signedInEnv": "환경 변수의 API 키로 사용 중"
     },
@@ -407,7 +407,7 @@
       "title": "제대로 읽을 수 있게\n허용해주세요",
       "leadMac": "macOS는 앱이 문서와 보호된 앱 데이터에 접근하기 전에 허락을 받습니다. 권한과 인덱싱 범위는 서로 다릅니다.",
       "leadWindows": "알림과 네트워크만 확인하면 바로 시작할 수 있습니다. 나머지는 나중에 Settings에서 바꿀 수 있습니다.",
-      "note": "AutoRAG는 파일을 수정하지 않습니다. 실제로 인덱싱할 폴더는 다음 단계에서 직접 고릅니다.",
+      "note": "Dazzi는 파일을 수정하지 않습니다. 실제로 인덱싱할 폴더는 다음 단계에서 직접 고릅니다.",
       "required": "필수",
       "optional": "선택",
       "setting": "설정",
@@ -532,7 +532,7 @@
           "price": "무료",
           "note": "카드 없이 바로 시작",
           "tag": "가볍게 시작하기",
-          "chip": "질문은 AutoRAG 모델로 전송",
+          "chip": "질문은 Dazzi 모델로 전송",
           "feature": {
             "a": "이 Mac에서 로컬 임베딩",
             "b": "관리형 AI 모델 · 기본 사용량",
@@ -544,7 +544,7 @@
           "price": "$4",
           "note": "월 $4 · 언제든 해지",
           "tag": "매일 가볍게 쓰기",
-          "chip": "질문은 AutoRAG 모델로 전송",
+          "chip": "질문은 Dazzi 모델로 전송",
           "feature": {
             "a": "이 Mac에서 로컬 임베딩",
             "b": "관리형 AI 모델 · 넉넉한 사용량",
@@ -556,7 +556,7 @@
           "price": "$20",
           "note": "월 $20 · 언제든 해지",
           "tag": "가장 빠른 첫 인덱싱",
-          "chip": "질문은 AutoRAG 모델로 전송",
+          "chip": "질문은 Dazzi 모델로 전송",
           "feature": {
             "a": "이 Mac에서 로컬 임베딩 (본문은 전송되지 않음)",
             "b": "관리형 AI 모델 · 가장 많은 사용량",
@@ -635,7 +635,7 @@
         "datasources": "데이터 소스",
         "finalizing": "정리"
       },
-      "title": "AutoRAG가 파일을 읽고 있어요",
+      "title": "Dazzi가 파일을 읽고 있어요",
       "titleDone": "모든 준비가 끝났어요",
       "metaDone": "총 소요 시간 확인 중",
       "metaTotal": "총 {{minutes}}분",
@@ -648,11 +648,11 @@
       "gateOkDetail": "{{files}}개 파일을 모두 읽었어요. 새로 바뀐 파일은 백그라운드에서 이어서 읽습니다.",
       "gateFailTitle": "인덱싱을 완료하지 못했습니다",
       "gateFailDetail": "다시 시도하면 이어서 진행합니다.",
-      "gateTitle": "AutoRAG를 종료하거나 {{machine}} 끄지 마세요",
+      "gateTitle": "Dazzi를 종료하거나 {{machine}} 끄지 마세요",
       "gateDetailMac": "첫 인덱싱은 오래 걸립니다. 종료하면 진행이 멈춰요. 전원 어댑터를 연결하고 덮개를 열어 두세요.",
       "gateDetailWindows": "첫 인덱싱은 오래 걸립니다. 종료하면 진행이 멈춰요. 전원을 연결해 두세요.",
       "gateLocked": "완료되면 열 수 있어요",
-      "open": "AutoRAG 열기",
+      "open": "Dazzi 열기",
       "retry": "다시 시도"
     },
     "tips": {
@@ -705,7 +705,7 @@
         "heading": "System Settings에서 켜기",
         "lead": "macOS 보호 영역을 읽으려면 한 번만 허용하면 됩니다. 앱을 종료해도 온보딩은 이 단계에서 이어집니다.",
         "step1": "Privacy & Security → Full Disk Access를 엽니다.",
-        "step2": "AutoRAG를 목록에 추가하고 토글을 켭니다.",
+        "step2": "Dazzi를 목록에 추가하고 토글을 켭니다.",
         "step3": "macOS가 요청하면 종료 후 다시 엽니다.",
         "drag": "목록에 없으면 이 아이콘을 목록으로 드래그",
         "allowed": "허용했어요",
@@ -719,7 +719,7 @@
         }
       },
       "restart": {
-        "title": "AutoRAG를 다시 열까요?",
+        "title": "Dazzi를 다시 열까요?",
         "lead": "전체 디스크 접근 권한을 적용하려면 앱을 종료하고 다시 열어야 합니다. 온보딩은 현재 단계에서 이어집니다.",
         "action": "종료 후 다시 열기"
       },
@@ -744,7 +744,7 @@
       "verified": "연결을 확인했습니다.",
       "planActive": "{{plan}} 플랜이 적용되었습니다.",
       "signInFailed": "로그인하지 못했습니다.",
-      "notIndexed": "인덱싱이 끝나야 AutoRAG를 열 수 있어요."
+      "notIndexed": "인덱싱이 끝나야 Dazzi를 열 수 있어요."
     }
   }
 }

@@ -332,7 +332,7 @@ records and the cached folders, both bounded.
 
 Listings, watches, Finder metadata, OS kinds, places, the dupey scan, and the
 index badges moved off the main process into one Electron utility process,
-"AutoRAG File System" (`src/fs-worker/`). The renderer reaches it over a
+"Dazzi File System" (`src/fs-worker/`). The renderer reaches it over a
 `MessagePort` (`{ id, op, args }` → `{ id, ok, value | error }`, cancel →
 `AbortController` in the worker); main only brokers ports, restarts the worker
 when it dies, and serves the Electron-only ops it asks for (thumbnails, file

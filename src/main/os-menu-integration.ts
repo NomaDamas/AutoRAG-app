@@ -317,7 +317,7 @@ export function macServiceWorkflow(script: string): string {
 export function workflowDirName(label: string): string {
 	// eslint-disable-next-line no-control-regex
 	const safe = label.replace(/[/\\:\u0000-\u001f]/gu, " ").trim();
-	return `${safe === "" ? "AutoRAG" : safe}.workflow`;
+	return `${safe === "" ? "Dazzi" : safe}.workflow`;
 }
 
 /** The registry key (under HKCU) of one verb on one class root. */

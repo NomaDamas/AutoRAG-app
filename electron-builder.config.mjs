@@ -1,8 +1,8 @@
 /**
- * electron-builder configuration for the AutoRAG installers.
+ * electron-builder configuration for the Dazzi installers.
  *
- *   macOS    AutoRAG-<version>-arm64.dmg      (Apple Silicon)
- *   Windows  AutoRAG-Setup-<version>-x64.exe  (NSIS, per-user, no admin prompt)
+ *   macOS    Dazzi-<version>-arm64.dmg      (Apple Silicon)
+ *   Windows  Dazzi-Setup-<version>-x64.exe  (NSIS, per-user, no admin prompt)
  *
  * What goes into the installer besides the app itself is produced by
  * `scripts/release/stage-tools.mjs` into `build/stage/<platform>/`:
@@ -35,9 +35,9 @@ const hasAzureSigning = Boolean(process.env.AZURE_TENANT_ID && process.env.AZURE
 /** @type {import("electron-builder").Configuration} */
 const config = {
 	appId: "com.autorag.app",
-	productName: "AutoRAG",
+	productName: "Dazzi",
 	copyright: "Copyright (c) NomaDamas / Marker Inc.",
-	artifactName: "AutoRAG-${version}-${arch}.${ext}",
+	artifactName: "Dazzi-${version}-${arch}.${ext}",
 	directories: { output: "dist", buildResources: "build" },
 	// No asar: the bundled `autorag` CLI runs under plain Node, which cannot read
 	// inside an asar, and the app spawns native helpers that must be real files.
@@ -63,7 +63,7 @@ const config = {
 	mac: {
 		category: "public.app-category.productivity",
 		target: [{ target: "dmg", arch: ["arm64"] }],
-		icon: "build/icon.png",
+		icon: "build/icon.icns",
 		hardenedRuntime: true,
 		gatekeeperAssess: false,
 		entitlements: "build/entitlements.mac.plist",
@@ -72,9 +72,9 @@ const config = {
 		// app's identity so notarization accepts the bundle as a whole.
 		binaries: [],
 		extendInfo: {
-			NSDocumentsFolderUsageDescription: "AutoRAG indexes and searches the folders you choose.",
-			NSDesktopFolderUsageDescription: "AutoRAG indexes and searches the folders you choose.",
-			NSDownloadsFolderUsageDescription: "AutoRAG indexes and searches the folders you choose.",
+			NSDocumentsFolderUsageDescription: "Dazzi indexes and searches the folders you choose.",
+			NSDesktopFolderUsageDescription: "Dazzi indexes and searches the folders you choose.",
+			NSDownloadsFolderUsageDescription: "Dazzi indexes and searches the folders you choose.",
 		},
 		// Without a Developer ID the bundle is ad-hoc signed ("-"): Apple Silicon refuses to run unsigned code.
 		...(hasMacSigning ? {} : { identity: "-" }),
@@ -91,7 +91,7 @@ const config = {
 
 	win: {
 		target: [{ target: "nsis", arch: ["x64"] }],
-		icon: "build/icon.png",
+		icon: "build/icon.ico",
 		...(hasAzureSigning
 			? {
 					azureSignOptions: {
@@ -107,7 +107,7 @@ const config = {
 		perMachine: false,
 		runAfterFinish: true,
 		deleteAppDataOnUninstall: false,
-		artifactName: "AutoRAG-Setup-${version}-${arch}.${ext}",
+		artifactName: "Dazzi-Setup-${version}-${arch}.${ext}",
 		// Windows long paths: node_modules trees under resources/ nest deeply.
 		warningsAsErrors: false,
 	},

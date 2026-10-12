@@ -1,7 +1,8 @@
-# AutoRAG
+# Dazzi powered by AutoRAG
 
-AutoRAG is a standalone Electron + React desktop app — a Finder-style file
-browser with grounded AI assistance — built on the public AutoRAG librarian.
+Dazzi (full name: Dazzi powered by AutoRAG) is a standalone Electron + React
+desktop app — a Finder-style file browser with grounded AI assistance — built
+on the public AutoRAG librarian.
 Internal identifiers such as `@autorag/librarian`, `@autorag/app`,
 `AutoRAGAgent`, and the shared AutoRAG config are unchanged.
 
@@ -150,7 +151,7 @@ a Finder tab restores its existing folder listing and watch set.
 
 Folder listings, incremental reads, Finder metadata, OS kinds, the sidebar
 places, the dupey scan, the index badges, and the native watcher run in one
-Electron utility process, "AutoRAG File System" (`src/fs-worker/`), not on the
+Electron utility process, "Dazzi File System" (`src/fs-worker/`), not on the
 main process. The renderer talks to it over a `MessagePort` the main process
 hands the preload (`src/preload/worker-link.ts`); main only brokers ports and
 owns the process lifecycle (`src/main/fs-worker-host.ts`). Main keeps what

@@ -112,7 +112,7 @@ export function ScopePage({ snapshot, onSaved }: { readonly snapshot: AutoRagCon
 
 	return (
 		<>
-			<SettingsPageHead title="검색 범위" description="AutoRAG가 읽고 검색할 폴더와 제외할 항목을 정합니다." />
+			<SettingsPageHead title="검색 범위" description="Dazzi가 읽고 검색할 폴더와 제외할 항목을 정합니다." />
 			{error !== null ? <div className="settings-error" role="alert">{error}</div> : null}
 			<Section title="검색할 폴더" description="이 폴더의 내용을 AI 검색에 포함합니다.">
 				<Row name="검색 폴더" hint="설정한 폴더 경로를 직접 입력해 추가·삭제합니다." stack>

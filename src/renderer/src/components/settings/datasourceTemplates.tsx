@@ -53,7 +53,7 @@ const CRAWLER_ADVANCED: FieldGroup = {
 		{ key: "binaryPath", label: "실행 파일 경로", kind: "text", hint: "비우면 PATH에서 찾습니다." },
 		{ key: "databasePath", label: "데이터베이스 경로", kind: "text" },
 		{ key: "sourcePath", label: "소스 경로", kind: "text" },
-		{ key: "configPath", label: "설정 파일 경로", kind: "text", hint: "직접 지정한 네이티브 설정은 AutoRAG가 고쳐 쓰지 않습니다." },
+		{ key: "configPath", label: "설정 파일 경로", kind: "text", hint: "직접 지정한 네이티브 설정은 Dazzi가 고쳐 쓰지 않습니다." },
 		{ key: "syncSource", label: "동기화 소스", kind: "text" },
 		{ key: "timeoutMs", label: "검색 타임아웃 (ms)", kind: "number" },
 		{ key: "indexTimeoutMs", label: "인덱싱 타임아웃 (ms)", kind: "number" },

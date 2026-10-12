@@ -295,10 +295,10 @@ export function AiPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 
 	/** Sign in to the AutoRAG plan through the account service (browser PKCE, encrypted key, adopted defaults). */
 	async function signInToAutorag(): Promise<void> {
-		setNotice("브라우저에서 AutoRAG에 로그인하세요…");
+		setNotice("브라우저에서 Dazzi에 로그인하세요…");
 		try {
 			const status = await window.autorag.account.signIn();
-			setNotice(status.state === "signedIn" ? "AutoRAG에 로그인했습니다." : (status.error ?? "로그인하지 않았습니다."));
+			setNotice(status.state === "signedIn" ? "Dazzi에 로그인했습니다." : (status.error ?? "로그인하지 않았습니다."));
 			await reload();
 		} catch (cause) {
 			setNotice(errorText(cause));
@@ -404,7 +404,7 @@ export function AiPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 					</button>
 				</div>
 			</Section>
-			<Section title="역할별 모델" description="AutoRAG는 일을 역할별로 나눠 처리합니다. 역할마다 맞는 모델을 고르세요.">
+			<Section title="역할별 모델" description="Dazzi는 일을 역할별로 나눠 처리합니다. 역할마다 맞는 모델을 고르세요.">
 				<p className="settings-subsection-title">답변</p>
 				<RoleRow role="answer" label="답변 모델" hint="질문에 답하고 문서를 요약합니다." current={answerLabel(snapshot)} onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "answer" })} thinking={{ onOpen: (anchor) => setMenu({ kind: "thinking", anchor }) }} />
 				<p className="settings-subsection-title">검색 보조</p>
@@ -573,10 +573,10 @@ function ConnectMenu({
 		<>
 			{onSignInToAutorag !== undefined ? (
 				<>
-					<p className="settings-menu-group">AutoRAG 요금제</p>
+					<p className="settings-menu-group">Dazzi 요금제</p>
 					<button type="button" className="settings-menu-item" onClick={onSignInToAutorag}>
-						<AppIcon small label="AutoRAG" />
-						<span>AutoRAG 계정으로 로그인</span>
+						<AppIcon small label="Dazzi" />
+						<span>Dazzi 계정으로 로그인</span>
 					</button>
 				</>
 			) : null}

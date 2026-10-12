@@ -1,7 +1,7 @@
 /** Step 3 — real sign-in through the system browser (OAuth code + PKCE), or the no-account BYOK path. */
 
 import type { ReactElement } from "react";
-import { Icon } from "../marks";
+import { AppLogo, Icon } from "../marks";
 import { Eyebrow, Multiline, SplitScreen } from "../parts";
 import type { OnboardingCtx } from "../context";
 
@@ -9,7 +9,7 @@ import type { OnboardingCtx } from "../context";
 function AppMark(): ReactElement {
 	return (
 		<span className="app-mark">
-			<Icon name="folder-search" size={31} />
+			<AppLogo />
 		</span>
 	);
 }

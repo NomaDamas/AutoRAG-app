@@ -1,11 +1,11 @@
-# Releasing AutoRAG
+# Releasing Dazzi
 
 Publishing a GitHub release builds two installers and attaches them to it:
 
 | Platform | File | Install |
 |---|---|---|
-| macOS (Apple Silicon) | `AutoRAG-<version>-arm64.dmg` | open, drag AutoRAG to Applications |
-| Windows (x64) | `AutoRAG-Setup-<version>-x64.exe` | double-click; per-user, no admin prompt |
+| macOS (Apple Silicon) | `Dazzi-<version>-arm64.dmg` | open, drag Dazzi to Applications |
+| Windows (x64) | `Dazzi-Setup-<version>-x64.exe` | double-click; per-user, no admin prompt |
 
 ```sh
 gh release create v1.2.3 --generate-notes      # builds and attaches both installers
@@ -22,7 +22,7 @@ Everything the app needs, so a user installs one file and nothing else:
 
 | Component | Source | Notes |
 |---|---|---|
-| AutoRAG app | this repo | Electron, unpacked (the bundled CLIs run under plain Node) |
+| Dazzi app | this repo | Electron, unpacked (the bundled CLIs run under plain Node) |
 | `autorag` (agent/CLI) | `@autorag/librarian`, public `origin/main` | built by `scripts/sync-librarian.mjs` |
 | Node 24 LTS + npm | nodejs.org | runtime of the npm-based CLIs, checked against nodejs.org's SHASUMS |
 | `minsync`, `rhwp`, `himalaya`, `rclone`, `lark-cli`, `discrawl`, `telecrawl`, `wacrawl` | newest GitHub release, per platform | download verified against the sha256 GitHub publishes for the asset |
@@ -105,7 +105,7 @@ That 240 s run (installer 226 s) came right after the installer was built on the
 reproduced in nine other installs (63-68 s), including a freshly copied installer file, so it is not a
 first-scan effect. It is still under the 300 s budget; if CI sees it, suspect other load on the machine.
 
-A new `AutoRAG-Setup` is also smaller (1.17 GB) and the app no longer contains the renderer-only
+A new `Dazzi-Setup` is also smaller (1.17 GB) and the app no longer contains the renderer-only
 libraries Vite already bundles.
 
 ## Runners

@@ -46,7 +46,9 @@ import { createOnboardingService, type OnboardingService } from "./onboarding-se
 import { detectSources } from "./onboarding-sources";
 import { detectModelProviders, verifyModel as verifyModelRequest } from "./onboarding-models";
 import { FS_CHANNELS } from "../shared/fs-contract";
-import { APP_NAME, APP_VERSION, formatWindowTitle, type DevLabel } from "../shared/app-info";
+import dockIconPath from "../../build/icon.png?asset";
+import windowIconPath from "../../build/icons/512x512.png?asset";
+import { APP_FULL_NAME, APP_VERSION, formatWindowTitle, type DevLabel } from "../shared/app-info";
 import { createChatStore } from "./chat-store";
 import { createDataSourceStatusService } from "./datasource-status";
 import { readDevLabel, resolveClonePath } from "./dev-label";
@@ -144,7 +146,9 @@ function createMainWindow(devLabel: DevLabel | null, appearance: AppAppearance, 
 		...(pending
 			? { width: 1120, height: 720, minWidth: 960, minHeight: 680, center: true }
 			: { width: 1440, height: 900, minWidth: 1360, minHeight: 820 }),
-		title: formatWindowTitle(APP_NAME, APP_VERSION, devLabel),
+		title: formatWindowTitle(APP_FULL_NAME, APP_VERSION, devLabel),
+		// Windows and Linux take the window/taskbar icon here; macOS uses the bundle icon (the Dock icon below when unpackaged).
+		...(process.platform === "darwin" ? {} : { icon: windowIconPath }),
 		// v7: traffic lights overlay the sidebar header / toolbar (macOS-native chrome).
 		titleBarStyle: "hiddenInset",
 		webPreferences: {
@@ -163,7 +167,7 @@ function createMainWindow(devLabel: DevLabel | null, appearance: AppAppearance, 
 	// The renderer's static <title> would otherwise replace the window title.
 	window.webContents.on("page-title-updated", (event) => {
 		event.preventDefault();
-		window.setTitle(formatWindowTitle(APP_NAME, APP_VERSION, devLabel));
+		window.setTitle(formatWindowTitle(APP_FULL_NAME, APP_VERSION, devLabel));
 	});
 
 	loadRendererPage(window, "index.html");
@@ -262,7 +266,7 @@ function runCommand(command: string, args: readonly string[], timeoutMs = 5000):
 function showSystemNotification(): Promise<boolean> {
 	if (!Notification.isSupported()) return Promise.resolve(false);
 	return new Promise<boolean>((resolve) => {
-		const notification = new Notification({ title: "AutoRAG", body: "알림이 켜졌습니다." });
+		const notification = new Notification({ title: APP_FULL_NAME, body: "알림이 켜졌습니다." });
 		let settled = false;
 		const done = (value: boolean): void => {
 			if (settled) return;
@@ -324,6 +328,9 @@ app.whenReady().then(async () => {
 		return;
 	}
 	void app.dock?.show();
+	// A packaged macOS build gets its Dock icon from the bundle (build/icon.icns); `electron .` would show Electron's.
+	if (!app.isPackaged) app.dock?.setIcon(dockIconPath);
+	app.setAboutPanelOptions({ applicationName: APP_FULL_NAME, applicationVersion: APP_VERSION, iconPath: windowIconPath });
 	registerPreviewProtocol();
 	const iconProvider = createIconProvider();
 	registerIconProtocol(iconProvider);
@@ -343,7 +350,7 @@ app.whenReady().then(async () => {
 	);
 	await ensureAutoRAGConfig();
 	const devLabel = resolveDevLabel();
-	console.log(`[autorag] ${formatWindowTitle(APP_NAME, APP_VERSION, devLabel)}`);
+	console.log(`[autorag] ${formatWindowTitle(APP_FULL_NAME, APP_VERSION, devLabel)}`);
 	const qaRoot = process.env.AUTORAG_QA_ROOT?.trim() ?? "";
 	// Windows can redirect the known folders (OneDrive backup moves Desktop/Documents),
 	// so Explorer's real paths come from Electron; on macOS they always live under $HOME.

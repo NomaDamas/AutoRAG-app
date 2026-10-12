@@ -88,7 +88,7 @@ export const FS_WORKER_CHANNELS = {
 export const FS_WORKER_CONFIG_FLAG = "--autorag-fs-worker=";
 
 /** Electron's `serviceName` for the worker, as `app.getAppMetrics()` reports it. */
-export const FS_WORKER_SERVICE_NAME = "AutoRAG File System";
+export const FS_WORKER_SERVICE_NAME = "Dazzi File System";
 
 /** What the worker needs from main at start; everything else it reads itself. */
 export interface FsWorkerConfig {

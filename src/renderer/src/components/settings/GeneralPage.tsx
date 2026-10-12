@@ -39,7 +39,7 @@ export function GeneralPage({
 	}
 	return (
 		<>
-			<SettingsPageHead title="일반" description="AutoRAG의 화면과 시작 방식을 설정합니다." />
+			<SettingsPageHead title="일반" description="Dazzi의 화면과 시작 방식을 설정합니다." />
 			<Section title="화면">
 				<Row name="화면 모드" hint="전체 화면에 같은 테마를 적용합니다.">
 					<select className="linear-select" aria-label="화면 모드" value={appSettings.appearance} onChange={(event) => void setApp({ appearance: event.target.value as AppSettings["appearance"] })}>
@@ -62,11 +62,11 @@ export function GeneralPage({
 				</Row>
 			</Section>
 			<Section title="시작 및 업데이트">
-				<Row name="로그인할 때 자동 실행" hint="컴퓨터를 켤 때 AutoRAG를 백그라운드에서 시작합니다.">
+				<Row name="로그인할 때 자동 실행" hint="컴퓨터를 켤 때 Dazzi를 백그라운드에서 시작합니다.">
 					<Switch checked={appSettings.launchAtLogin} onChange={() => void setApp({ launchAtLogin: !appSettings.launchAtLogin })} ariaLabel="로그인할 때 자동 실행" />
 				</Row>
 				{hostPlatform() === "darwin" || hostPlatform() === "win32" ? (
-					<Row name="파일 우클릭 메뉴에 추가" hint="Finder(macOS)나 탐색기(Windows)에서 파일을 우클릭하면 'AutoRAG에게 물어보기'와 'AutoRAG에서 보기'가 나옵니다.">
+					<Row name="파일 우클릭 메뉴에 추가" hint="Finder(macOS)나 탐색기(Windows)에서 파일을 우클릭하면 'Dazzi에게 물어보기'와 'Dazzi에서 보기'가 나옵니다.">
 						<Switch checked={appSettings.osMenuIntegration} onChange={() => void setApp({ osMenuIntegration: !appSettings.osMenuIntegration })} ariaLabel="파일 우클릭 메뉴에 추가" />
 					</Row>
 				) : null}

@@ -391,8 +391,8 @@ function checkKnownBlock(path: string, value: unknown): void {
 		if (value.embedder !== undefined) {
 			const embedder = value.embedder;
 			if (!isJsonObject(embedder)) return fail("minSync.embedder must be an object");
-			if (embedder.profile !== undefined && embedder.profile !== "qwen3-embedding-0.6b" && embedder.profile !== "embeddinggemma-300m") {
-				fail("minSync.embedder.profile must be qwen3-embedding-0.6b or embeddinggemma-300m");
+			if (embedder.profile !== undefined && embedder.profile !== "qwen3-embedding-0.6b") {
+				fail("minSync.embedder.profile must be qwen3-embedding-0.6b");
 			}
 			for (const key of ["id", "baseUrl"] as const) {
 				if (embedder[key] !== undefined && !(typeof embedder[key] === "string" && (embedder[key] as string).length > 0)) {

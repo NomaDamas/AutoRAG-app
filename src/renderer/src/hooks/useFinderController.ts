@@ -1082,7 +1082,7 @@ export function useFinderController(
 		() =>
 			source.onIndexRefreshed((error) => {
 				if (error !== null) {
-					reportError(new Error(`AutoRAG 인덱스 새로고침 실패: ${error}`));
+					reportError(new Error(`Dazzi 인덱스 새로고침 실패: ${error}`));
 				}
 				setIndexRevision((value) => value + 1);
 			}),

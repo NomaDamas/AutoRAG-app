@@ -1,6 +1,6 @@
-# AutoRAG Design System (v7 Bloom)
+# Dazzi Design System (v7 Bloom)
 
-Implementation contract and design specification for **AutoRAG** — the AI Finder
+Implementation contract and design specification for **Dazzi** (powered by AutoRAG) — the AI Finder
 desktop app (Electron + React + TypeScript, hand-written CSS, macOS Native
 Finder fidelity) whose backend is the AutoRAG agent.
 
