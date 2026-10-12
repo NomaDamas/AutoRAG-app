@@ -14,7 +14,7 @@
     StrCmp $0 "0" payloadOk payloadFailed
   payloadFailed:
     DetailPrint "Unpacking failed (tar exit $0)"
-    MessageBox MB_OK|MB_ICONSTOP "AutoRAG could not unpack its components (tar exit code $0). Free some disk space and run the installer again." /SD IDOK
+    MessageBox MB_OK|MB_ICONSTOP "Dazzi could not unpack its components (tar exit code $0). Free some disk space and run the installer again." /SD IDOK
     Abort
   payloadOk:
     Delete "$INSTDIR\resources\payload.tar"
