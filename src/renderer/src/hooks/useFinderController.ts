@@ -1506,6 +1506,19 @@ export function useFinderController(
 						.then((outcome) => showToast(outcome.note))
 						.catch(reportError);
 					return;
+				case "compress7z":
+					// Same one-archive-per-selection rule as zip; the undo record is still "compress".
+					source.actions
+						.run(targets, { kind: "compress", format: "7z" })
+						.then((outcome) => {
+							showToast(outcome.note);
+							if (outcome.output !== null) {
+								recordActionOutput("compress", outcome.output);
+								refresh();
+							}
+						})
+						.catch(reportError);
+					return;
 				case "compress":
 				case "extract":
 					// One request for the whole selection: compress writes one archive,

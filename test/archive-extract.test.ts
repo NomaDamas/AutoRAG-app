@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { lstat, mkdir, mkdtemp, readFile, readdir, rename, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { crc32 } from "node:zlib";
 import { zipSync } from "fflate";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createActionService, type ActionService } from "../src/main/action-service";
@@ -263,6 +264,110 @@ describe("libarchive-backed extraction", () => {
 		const tiny = { ...LIMITS, maxEngineBytes: 1024 };
 		await expect(service(tiny).run([archive], { kind: "extract" }, null)).rejects.toThrow(/너무 커서/);
 		expect(await readdir(root)).toEqual(["big.7z"]);
+	});
+});
+
+/** One zip entry with its name as raw bytes and the general-purpose flags chosen by the caller. */
+function rawZip(entries: readonly { readonly name: Buffer; readonly flags: number; readonly body: Buffer }[]): Buffer {
+	const locals: Buffer[] = [];
+	const directory: Buffer[] = [];
+	let offset = 0;
+	for (const entry of entries) {
+		const crc = crc32(entry.body);
+		const local = Buffer.alloc(30);
+		local.writeUInt32LE(0x04034b50, 0);
+		local.writeUInt16LE(20, 4);
+		local.writeUInt16LE(entry.flags, 6);
+		local.writeUInt32LE(crc, 14);
+		local.writeUInt32LE(entry.body.length, 18);
+		local.writeUInt32LE(entry.body.length, 22);
+		local.writeUInt16LE(entry.name.length, 26);
+		const central = Buffer.alloc(46);
+		central.writeUInt32LE(0x02014b50, 0);
+		central.writeUInt16LE(20, 4);
+		central.writeUInt16LE(20, 6);
+		central.writeUInt16LE(entry.flags, 8);
+		central.writeUInt32LE(crc, 16);
+		central.writeUInt32LE(entry.body.length, 20);
+		central.writeUInt32LE(entry.body.length, 24);
+		central.writeUInt16LE(entry.name.length, 28);
+		central.writeUInt32LE(offset, 42);
+		const piece = Buffer.concat([local, entry.name, entry.body]);
+		locals.push(piece);
+		directory.push(Buffer.concat([central, entry.name]));
+		offset += piece.length;
+	}
+	const central = Buffer.concat(directory);
+	const end = Buffer.alloc(22);
+	end.writeUInt32LE(0x06054b50, 0);
+	end.writeUInt16LE(entries.length, 8);
+	end.writeUInt16LE(entries.length, 10);
+	end.writeUInt32LE(central.length, 12);
+	end.writeUInt32LE(offset, 16);
+	return Buffer.concat([...locals, central, end]);
+}
+
+describe("Korean file names", () => {
+	const NFC = "한글 보고서.txt";
+	/** The CP949 bytes Korean Windows Explorer writes into a zip, with no UTF-8 flag. */
+	const CP949_NAME = Buffer.from([0xc7, 0xd1, 0xb1, 0xdb, 0x20, 0xba, 0xb8, 0xb0, 0xed, 0xbc, 0xad, 0x2e, 0x74, 0x78, 0x74]);
+
+	it("restores a CP949 zip name from Windows Explorer", async () => {
+		const archive = join(root, "win.zip");
+		await writeFile(archive, rawZip([{ name: CP949_NAME, flags: 0, body: Buffer.from("본문") }]));
+		const out = await service().run([archive], { kind: "extract" }, null);
+		expect(await readdir(out.output ?? "")).toEqual([NFC]);
+		expect(await readFile(join(out.output ?? "", NFC), "utf8")).toBe("본문");
+	});
+
+	it("restores a UTF-8 zip name written without the UTF-8 flag", async () => {
+		const archive = join(root, "unflagged.zip");
+		await writeFile(archive, rawZip([{ name: Buffer.from(NFC, "utf8"), flags: 0, body: Buffer.from("x") }]));
+		const out = await service().run([archive], { kind: "extract" }, null);
+		expect(await readdir(out.output ?? "")).toEqual([NFC]);
+	});
+
+	it("keeps a flagged UTF-8 zip name that happens to look like Latin-1 mojibake", async () => {
+		const archive = join(root, "flagged.zip");
+		await writeFile(archive, rawZip([{ name: Buffer.from("Ç.txt", "utf8"), flags: 0x0800, body: Buffer.from("x") }]));
+		const out = await service().run([archive], { kind: "extract" }, null);
+		expect(await readdir(out.output ?? "")).toEqual(["Ç.txt"]);
+	});
+
+	it("composes a Mac-style decomposed (NFD) name so Windows sees the same file", async () => {
+		const archive = join(root, "mac.zip");
+		await writeFile(archive, zipSync({ [NFC.normalize("NFD")]: Buffer.from("x") }));
+		const out = await service().run([archive], { kind: "extract" }, null);
+		const [name] = await readdir(out.output ?? "");
+		expect(name).toBe(NFC);
+	});
+
+	it("flattens the wrapper folder even when the archive stem is NFD and the entries are NFC", async () => {
+		const archive = join(root, "자료.zip".normalize("NFD"));
+		await writeFile(archive, zipSync({ [`${"자료".normalize("NFC")}/a.txt`]: Buffer.from("a") }));
+		const out = await service().run([archive], { kind: "extract" }, null);
+		expect(await readdir(out.output ?? "")).toEqual(["a.txt"]);
+	});
+
+	it.skipIf(!hasBin("bsdtar"))("extracts a Korean file name from a .7z", async () => {
+		const src = join(root, "src");
+		await mkdir(join(src, "자료"), { recursive: true });
+		await writeFile(join(src, "자료", NFC), "본문");
+		const archive = join(root, "자료.7z");
+		execFileSync("bsdtar", ["-a", "-cf", archive, "-C", src, "자료"], { env: { ...process.env, COPYFILE_DISABLE: "1" } });
+		const out = await service().run([archive], { kind: "extract" }, null);
+		expect(await readdir(out.output ?? "")).toEqual([NFC]);
+		expect(await readFile(join(out.output ?? "", NFC), "utf8")).toBe("본문");
+	});
+
+	it.skipIf(!hasBin("xz"))("extracts a Korean file name from a .tar.xz", async () => {
+		const src = join(root, "src");
+		await mkdir(join(src, "자료"), { recursive: true });
+		await writeFile(join(src, "자료", NFC), "본문");
+		const archive = join(root, "자료.tar.xz");
+		execFileSync("tar", ["-cJf", archive, "-C", src, "자료"], { env: { ...process.env, COPYFILE_DISABLE: "1" } });
+		const out = await service().run([archive], { kind: "extract" }, null);
+		expect(await readdir(out.output ?? "")).toEqual([NFC]);
 	});
 });
 
