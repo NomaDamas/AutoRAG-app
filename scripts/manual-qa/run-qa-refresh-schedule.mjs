@@ -62,34 +62,34 @@ try {
 	await page.waitForSelector(".sidebar__item");
 	await page.locator(".sidebar__item", { hasText: "Settings" }).click();
 	await page.waitForSelector(".settings-panel");
-	await page.locator(".settings-nav-item", { hasText: "인덱싱" }).first().click();
-	const local = page.locator('select[aria-label="로컬 폴더 최신화 주기"]');
+	await page.locator(".settings-nav-item", { hasText: "Indexing" }).first().click();
+	const local = page.locator('select[aria-label="Local folder refresh interval"]');
 	await local.waitFor();
 
 	check("nothing is scheduled by default (manual)", (await local.inputValue()) === "0" && readConfig().appIndexing?.refreshIntervalMs === undefined);
 	check("no OS job exists before a cadence is chosen", process.platform !== "darwin" || !existsSync(plistPath));
-	check("local cadence offers manual plus the preset cadences", (await local.locator("option").allInnerTexts()).join(",") === "직접,5분,15분,30분,1시간,6시간,하루");
+	check("local cadence offers manual plus the preset cadences", (await local.locator("option").allInnerTexts()).join(",") === "Manual,5 min,15 min,30 min,1 hour,6 hours,Daily");
 	await page.screenshot({ path: join(EVIDENCE, "01-manual.png") });
 
-	await local.selectOption({ label: "1시간" });
+	await local.selectOption({ label: "1 hour" });
 	const stored = await waitFor(() => readConfig().appIndexing?.refreshIntervalMs === 3_600_000);
-	check("choosing 1시간 writes appIndexing.refreshIntervalMs", stored === true, String(readConfig().appIndexing?.refreshIntervalMs));
+	check("choosing 1 hour writes appIndexing.refreshIntervalMs", stored === true, String(readConfig().appIndexing?.refreshIntervalMs));
 	if (process.platform === "darwin") {
 		check("a LaunchAgent is registered", (await waitFor(() => existsSync(plistPath))) === true);
 		const plist = existsSync(plistPath) ? readFileSync(plistPath, "utf8") : "";
 		check("the agent wakes every 30 minutes (cap) and runs the app in plain-Node mode", plist.includes("<integer>1800</integer>") && plist.includes("ELECTRON_RUN_AS_NODE"));
 		check("the agent points at the built job", /refresh-job\.js/u.test(plist));
 	}
-	const note = await waitFor(async () => (await page.locator(".settings-content").innerText()).includes("앱이 꺼져 있어도 30분마다 확인"));
+	const note = await waitFor(async () => (await page.locator(".settings-content").innerText()).includes("checks every 30 min"));
 	check("the page says the job is active", note === true);
 	await page.screenshot({ path: join(EVIDENCE, "02-scheduled.png") });
 
-	await page.locator('select[aria-label="slack 최신화 주기"]').selectOption({ label: "15분" });
+	await page.locator('select[aria-label="slack refresh interval"]').selectOption({ label: "15 min" });
 	check("a datasource cadence is written", (await waitFor(() => readConfig().datasources?.slack?.pollingIntervalMs === 900_000)) === true);
-	check("the wake interval follows the shortest cadence (15 minutes)", (await waitFor(async () => (await page.locator(".settings-content").innerText()).includes("15분마다 확인"))) === true);
+	check("the wake interval follows the shortest cadence (15 minutes)", (await waitFor(async () => (await page.locator(".settings-content").innerText()).includes("checks every 15 min"))) === true);
 
-	await local.selectOption({ label: "직접" });
-	await page.locator('select[aria-label="slack 최신화 주기"]').selectOption({ label: "직접" });
+	await local.selectOption({ label: "Manual" });
+	await page.locator('select[aria-label="slack refresh interval"]').selectOption({ label: "Manual" });
 	check("manual again clears nothing it should keep", (await waitFor(() => readConfig().datasources?.slack?.pollingIntervalMs === 0)) === true && readConfig().datasources.slack.description === "Team Slack");
 	if (process.platform === "darwin") {
 		check("the LaunchAgent is removed once nothing is scheduled", (await waitFor(() => !existsSync(plistPath))) === true);

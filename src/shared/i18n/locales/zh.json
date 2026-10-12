@@ -776,7 +776,7 @@
   },
   "finderComponents": {
     "searchRange": "搜索范围",
-    "sidebar": "边栏",
+    "sidebar": "位置",
     "pathBar": "路径",
     "inspectorAside": "检查器",
     "fileActions": "文件操作",

@@ -14,7 +14,7 @@ await page.waitForSelector('[role="row"]');
 await page.locator(".sidebar__item", { hasText: "Settings" }).click();
 await page.waitForSelector(".settings-panel");
 
-const sw = page.locator(".linear-row", { hasText: "숨김 파일 보기" }).locator(".settings-switch");
+const sw = page.locator(".linear-row", { hasText: "Show Hidden Files" }).locator(".settings-switch");
 const thumb = sw.locator(".settings-switch__thumb");
 
 const geometry = async () => ({

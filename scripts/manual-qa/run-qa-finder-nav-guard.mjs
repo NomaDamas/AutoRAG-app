@@ -28,7 +28,7 @@ mkdirSync(EVIDENCE, { recursive: true });
 const SOURCE_LABELS = ["Slack", "Gmail", "Notion", "Discord", "Telegram"];
 /** Every place the sidebar can still show. */
 const PLACE_LABELS = ["Desktop", "Downloads", "Documents", "iCloud Drive", "Google Drive", "Dropbox"];
-const NOT_LINKED = "아직 연결되지 않았습니다";
+const NOT_LINKED = "Couldn't open the location";
 
 const app = await launchFinder();
 const results = [];

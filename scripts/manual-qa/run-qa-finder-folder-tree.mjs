@@ -57,7 +57,7 @@ try {
 	check("root row starts collapsed at level 1", [await level(rootName), await row(rootName).getAttribute("aria-expanded")], ["1", "false"]);
 	check("children hidden before expanding", await level("data_multi_page"), null);
 
-	await toggle(rootName, "펼치기");
+	await toggle(rootName, "Expand");
 	await settle("run_multi_hop_generate.py", true);
 	check("expanded children at level 2", [await level("data_multi_page"), await level("ko_vlm_benchmark"), await level("run_multi_hop_generate.py")], ["2", "2", "2"]);
 	check("folders sort before files inside the expansion", await page.locator('[role="row"] .row__label').evaluateAll((labels, name) => {
@@ -66,22 +66,22 @@ try {
 		return names.slice(at + 1, at + 4);
 	}, rootName), ["data_multi_page", "ko_vlm_benchmark", "run_multi_hop_generate.py"]);
 
-	await toggle("ko_vlm_benchmark", "펼치기");
+	await toggle("ko_vlm_benchmark", "Expand");
 	await settle("multi_hop_question", true);
-	await toggle("multi_hop_question", "펼치기");
+	await toggle("multi_hop_question", "Expand");
 	await settle("generate.py", true);
-	await toggle("data_multi_page", "펼치기");
+	await toggle("data_multi_page", "Expand");
 	await settle("partial_results.json", true);
 	check("nested levels 3 and 4", [await level("partial_results.json"), await level("multi_hop_question"), await level("generate.py")], ["3", "3", "4"]);
 	await row(rootName).scrollIntoViewIfNeeded();
 	await page.screenshot({ path: `${EVIDENCE}/expanded-tree.png` });
 	await page.locator(".list").screenshot({ path: `${EVIDENCE}/expanded-tree-list.png` });
 
-	await toggle(rootName, "접기");
+	await toggle(rootName, "Collapse");
 	await settle("data_multi_page", false);
 	check("collapsing the root hides every descendant", [await level("data_multi_page"), await level("generate.py"), await level("partial_results.json")], [null, null, null]);
 
-	await toggle(rootName, "펼치기");
+	await toggle(rootName, "Expand");
 	// Both nested rows must be mounted before their levels are read: the list is
 	// virtualized, so the deeper row can land a frame later.
 	await settle("generate.py", true);
@@ -102,7 +102,7 @@ try {
 	check("ArrowRight expands it again", await level("multi_hop_question"), "3");
 
 	await row("partial_results.json").click();
-	await toggle(rootName, "접기");
+	await toggle(rootName, "Collapse");
 	await settle("partial_results.json", false);
 	check("collapsing over a hidden selection selects the collapsed folder", await row(rootName).getAttribute("aria-selected"), "true");
 

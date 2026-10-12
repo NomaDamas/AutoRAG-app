@@ -93,7 +93,7 @@ try {
 
 	// State B — the EXIF-rich photo (the panel starts fully expanded): scrolls.
 	await select(page, "photo.jpg");
-	await page.waitForFunction(() => document.querySelector(".inspector-body")?.innerText.includes("생성한 날짜"), undefined, {
+	await page.waitForFunction(() => document.querySelector(".inspector-body")?.innerText.includes("Date Created"), undefined, {
 		timeout: 10000,
 	});
 	await page.waitForFunction(

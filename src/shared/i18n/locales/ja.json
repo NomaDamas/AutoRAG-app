@@ -776,7 +776,7 @@
   },
   "finderComponents": {
     "searchRange": "検索範囲",
-    "sidebar": "サイドバー",
+    "sidebar": "場所",
     "pathBar": "パス",
     "inspectorAside": "インスペクタ",
     "fileActions": "ファイル操作",

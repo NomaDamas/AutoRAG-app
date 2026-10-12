@@ -188,7 +188,7 @@ async function poll(read, accept, timeoutMs = 8000) {
 	return value;
 }
 
-const app = await launchFinder({ env: { AUTORAG_QA_ROOT: root, AUTORAG_SKIP_DUPEY_CHECK: "1" } });
+const app = await launchFinder({ env: { AUTORAG_QA_ROOT: root, AUTORAG_SKIP_DUPEY_CHECK: "1" }, language: "ko" });
 
 /** Luminance variance of a screenshot region, measured through Electron's nativeImage. */
 async function regionVariance(page, clip) {

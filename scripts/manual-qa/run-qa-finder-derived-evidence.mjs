@@ -132,7 +132,7 @@ const select = async (n) => {
 await select(1);
 let text = await evidenceText();
 check("a local file keeps its file name as the heading", (await title()) === `1. ${basename(POLICY)}`, await title());
-check("no relevance line when no confidence was measured", !text.includes("관련도"), text.replace(/\s+/g, " ").slice(0, 140));
+check("no relevance line when no confidence was measured", !text.includes("Relevance"), text.replace(/\s+/g, " ").slice(0, 140));
 check("never prints NaN", !text.includes("NaN"), text.includes("NaN") ? "NaN present" : "clean");
 await page.screenshot({ path: join(EVIDENCE, "1-local-file-no-confidence.png") });
 
@@ -142,13 +142,13 @@ text = await evidenceText();
 check("a datasource chunk is headed by datasource and instance", (await title()) === "2. kakao · work", await title());
 check("the opaque chunk id is not the heading", !(await title()).includes("msg-91"), await title());
 check("the cited sentence is shown as the summary", text.includes("재무팀이 7월 리뷰에서 정책을 확인했습니다"), text.replace(/\s+/g, " ").slice(0, 140));
-check("no relevance line for the datasource chunk either", !text.includes("관련도"), "absent");
+check("no relevance line for the datasource chunk either", !text.includes("Relevance"), "absent");
 await page.screenshot({ path: join(EVIDENCE, "2-datasource-chunk.png") });
 
 // 3 — a result that does carry a confidence still shows it.
 await select(3);
 text = await evidenceText();
-check("a measured confidence is still shown", text.includes("관련도 81%"), text.replace(/\s+/g, " ").slice(0, 140));
+check("a measured confidence is still shown", text.includes("Relevance 81%"), text.replace(/\s+/g, " ").slice(0, 140));
 await page.screenshot({ path: join(EVIDENCE, "3-with-confidence.png") });
 
 await app.close();

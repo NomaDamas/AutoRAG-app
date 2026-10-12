@@ -200,7 +200,7 @@ async function poll(read, accept, timeoutMs = 8000) {
  * are pinned to the same appearance so the reference panels are comparable.
  */
 async function pass(appearance) {
-	const app = await launchFinder({ env: { AUTORAG_QA_ROOT: root, AUTORAG_SKIP_DUPEY_CHECK: "1" } });
+	const app = await launchFinder({ env: { AUTORAG_QA_ROOT: root, AUTORAG_SKIP_DUPEY_CHECK: "1" }, language: "ko" });
 	try {
 		await app.evaluate(({ nativeTheme }, source) => {
 			nativeTheme.themeSource = source;

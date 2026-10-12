@@ -222,8 +222,8 @@ check("the cited chip lights up with the active accent", JSON.stringify(activeCi
 check("the citation selects evidence 2", activeTab === "2" && evTitle.startsWith("2. "), `tab=${activeTab} title=${evTitle.slice(0, 32)}`);
 check("the evidence title is the Show-in-Finder action", (await revealBtn.count()) === 1, `count=${await revealBtn.count()}`);
 const detail = (await page.locator(`${EVIDENCE_HALF} .preview-sub`).textContent()) ?? "";
-check("the detail shows confidence without the source path", detail.includes("관련도 81%") && !detail.includes("qa-evidence-memo.md"), detail.replace(/\s+/g, " ").slice(0, 120));
-check("the Evidence header, eye, and close controls are removed", (await page.locator(`${EVIDENCE_HALF} .inspector-head`).count()) === 0 && (await page.locator(`${EVIDENCE_HALF} button[aria-label="Quick Look"]`).count()) === 0 && (await page.locator(`${EVIDENCE_HALF} button[aria-label="근거 닫기"]`).count()) === 0, "header controls absent");
+check("the detail shows confidence without the source path", detail.includes("Relevance 81%") && !detail.includes("qa-evidence-memo.md"), detail.replace(/\s+/g, " ").slice(0, 120));
+check("the Evidence header, eye, and close controls are removed", (await page.locator(`${EVIDENCE_HALF} .inspector-head`).count()) === 0 && (await page.locator(`${EVIDENCE_HALF} button[aria-label="Quick Look"]`).count()) === 0 && (await page.locator(`${EVIDENCE_HALF} button[aria-label="Close"]`).count()) === 0, "header controls absent");
 await page.screenshot({ path: join(EVIDENCE, "02-evidence-panel.png") });
 
 // 2b. Layout geometry (Evidence fills the whole inspector column, numbered

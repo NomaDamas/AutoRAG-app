@@ -56,7 +56,7 @@ await new Promise((resolve) => stub.listen(0, "127.0.0.1", resolve));
 const stubUrl = `http://127.0.0.1:${stub.address().port}/v1`;
 const env = { AUTORAG_HOME, AUTORAG_CONFIG: CONFIG, AUTORAG_SKIP_DUPEY_CHECK: "1" };
 const userDataDir = join(WORK, "user-data");
-const app = await launchFinder({ userDataDir, env, onboarding: true });
+const app = await launchFinder({ userDataDir, env, onboarding: true, language: "ko" });
 const errors = [];
 try {
 	const page = await finderWindow(app, 20_000);

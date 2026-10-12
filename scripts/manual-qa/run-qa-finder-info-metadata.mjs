@@ -118,7 +118,7 @@ try {
 	check("Lens comes from EXIF", valueOf(photo_, "Lens") === "TestLens 24-70", String(valueOf(photo_, "Lens")));
 	check("ISO comes from EXIF", valueOf(photo_, "ISO") === "400", String(valueOf(photo_, "ISO")));
 	check("Aperture is formatted as f-number", valueOf(photo_, "Aperture") === "f/2.8", String(valueOf(photo_, "Aperture")));
-	check("Shutter Speed is formatted as a reciprocal", valueOf(photo_, "Shutter Speed") === "1/125초", String(valueOf(photo_, "Shutter Speed")));
+	check("Shutter Speed is formatted as a reciprocal", valueOf(photo_, "Shutter Speed") === "1/125 s", String(valueOf(photo_, "Shutter Speed")));
 	check("Focal Length is formatted in mm", valueOf(photo_, "Focal Length") === "35 mm", String(valueOf(photo_, "Focal Length")));
 	check("Image Size is formatted as width × height", valueOf(photo_, "Image Size") === "4000 × 3000", String(valueOf(photo_, "Image Size")));
 
@@ -193,7 +193,7 @@ try {
 	await page.screenshot({ path: join(EVIDENCE, "05-folder.png") });
 	check(
 		"a folder shows its kind and no photo section",
-		/Folder|폴더/.test(String(valueOf(sectionRows(dir, "General Info"), "Kind"))) && sectionRows(dir, "Image Info").length === 0,
+		/Folder/.test(String(valueOf(sectionRows(dir, "General Info"), "Kind"))) && sectionRows(dir, "Image Info").length === 0,
 		String(valueOf(sectionRows(dir, "General Info"), "Kind")),
 	);
 
