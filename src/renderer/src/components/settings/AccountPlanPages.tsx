@@ -9,11 +9,18 @@
  */
 
 import { useCallback, useEffect, useState, type ReactElement } from "react";
+import { ExternalLink } from "lucide-react";
 import type { AccountPlanId, AccountSnapshot, AccountStatus, PaidPlanId } from "../../../../shared/account-contract";
-import { planCovers } from "../../../../shared/account-contract";
+import { accountLegalUrl, planCovers, type AccountLegalRoute } from "../../../../shared/account-contract";
 import { Note, Row, Section, SettingsPageHead } from "./SettingsKit";
 
 const UNKNOWN = "확인할 수 없음";
+
+/** Opens one of the server's legal pages in the system browser (the routes the web login links). */
+function openLegal(baseUrl: string | undefined, route: AccountLegalRoute): void {
+	const open = window.autorag?.fs?.openUrl;
+	if (typeof open === "function") void open(accountLegalUrl(baseUrl, route));
+}
 
 interface PlanTier {
 	readonly id: AccountPlanId;
@@ -117,6 +124,28 @@ export function AccountPage(): ReactElement {
 					<button type="button" className="linear-btn" disabled={!signedIn || busy} onClick={() => run(() => window.autorag.account.useManagedModel())}>
 						계정 모델로 설정
 					</button>
+				</Row>
+			</Section>
+			<Section title="약관 및 정책" description="웹 로그인 화면과 같은 문서입니다. 브라우저에서 열립니다.">
+				<Row name="문서 보기" hint="서버 약관, 개인정보처리방침(모델별 데이터 처리), 수용 가능한 사용 정책, 하위 처리자 목록." stack>
+					<div className="settings-legal-links">
+						<button type="button" className="linear-btn settings-btn-quiet" onClick={() => openLegal(status?.baseUrl, "terms")}>
+							서비스 약관
+							<ExternalLink size={13} aria-hidden="true" focusable="false" />
+						</button>
+						<button type="button" className="linear-btn settings-btn-quiet" onClick={() => openLegal(status?.baseUrl, "privacy")}>
+							개인정보처리방침
+							<ExternalLink size={13} aria-hidden="true" focusable="false" />
+						</button>
+						<button type="button" className="linear-btn settings-btn-quiet" onClick={() => openLegal(status?.baseUrl, "acceptableUse")}>
+							수용 가능한 사용 정책
+							<ExternalLink size={13} aria-hidden="true" focusable="false" />
+						</button>
+						<button type="button" className="linear-btn settings-btn-quiet" onClick={() => openLegal(status?.baseUrl, "subprocessors")}>
+							하위 처리자
+							<ExternalLink size={13} aria-hidden="true" focusable="false" />
+						</button>
+					</div>
 				</Row>
 			</Section>
 		</>

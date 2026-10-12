@@ -88,6 +88,7 @@ export function PlanStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElement
 									<li key={key}>{t(`onboarding.plan.plan.${plan.id}.feature.${key}`)}</li>
 								))}
 							</ul>
+							<div className="plan-training">{t(`onboarding.plan.plan.${plan.id}.training`)}</div>
 							<div className="plan-meta">
 								<span className="meta-chip">{t(`onboarding.plan.plan.${plan.id}.chip`)}</span>
 							</div>

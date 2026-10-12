@@ -33,7 +33,7 @@ describe("jev and rerank roles", () => {
 
 	it("offers the plan's Jev model and its rerankers only for the AutoRAG provider", () => {
 		expect(jevModelsFor("autorag").map((model) => model.id)).toEqual(["jev-1.13"]);
-		expect(rerankModelsFor("autorag").map((model) => model.id)).toEqual(["qwen/qwen3-reranker-8b", "nvidia/llama-nemotron-rerank-vl-1b-v2:free"]);
+		expect(rerankModelsFor("autorag").map((model) => model.id)).toEqual(["qwen/qwen3-reranker-8b"]);
 		expect(rerankModelsFor("openrouter").length).toBeGreaterThan(0);
 		expect(rerankModelsFor("anthropic")).toEqual([]);
 	});
@@ -99,7 +99,7 @@ describe("managed Jev and rerank defaults", () => {
 	});
 	it("writes only the roles it may adopt, using the server's first models", () => {
 		const jevModels = [{ id: "jev-1.13" }];
-		const rerankModels = [{ id: "qwen/qwen3-reranker-8b" }, { id: "nvidia/llama-nemotron-rerank-vl-1b-v2:free" }];
+		const rerankModels = [{ id: "qwen/qwen3-reranker-8b" }];
 
 		expect(managedRoleUpdates({ jev: true, rerank: true }, jevModels, rerankModels)).toEqual({
 			jev: { backend: "autorag", model: "jev-1.13" },
