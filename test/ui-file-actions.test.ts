@@ -94,13 +94,13 @@ describe("optimize gate follows the platform image backend", () => {
 describe("base action set", () => {
 	it("offers open, open-with, archive, share and AI to a plain file", () => {
 		const actions = suggestedActions({ name: "notes.txt", kind: "file" }, DARWIN);
-		expect(ids(actions)).toEqual(["open", "openWith", "compress", "share", "askAi"]);
+		expect(ids(actions)).toEqual(["open", "openWith", "compress", "compress7z", "share", "askAi"]);
 		expect(actions.every((action) => action.kind === "action")).toBe(true);
 	});
 
 	it("drops open-with, archive and share for a folder", () => {
 		const actions = suggestedActions({ name: "docs", kind: "folder" }, DARWIN);
-		expect(ids(actions)).toEqual(["compress", "share", "askAi"]);
+		expect(ids(actions)).toEqual(["compress", "compress7z", "share", "askAi"]);
 	});
 
 	it("never offers an action the machine cannot run", () => {
@@ -119,13 +119,14 @@ describe("base action set", () => {
 describe("archives", () => {
 	it("extracts in place, before compressing", () => {
 		const actions = suggestedActions({ name: "docs.zip", kind: "file" }, DARWIN);
-		expect(ids(actions)).toEqual(["open", "openWith", "extract", "compress", "share", "askAi"]);
+		expect(ids(actions)).toEqual(["open", "openWith", "extract", "compress", "compress7z", "share", "askAi"]);
 	});
 
 	it("offers extraction for every archive format, but never a plain file", () => {
 		expect(ids(suggestedActions({ name: "docs.tar", kind: "file" }, DARWIN))).toContain("extract");
 		expect(ids(suggestedActions({ name: "docs.tar.gz", kind: "file" }, DARWIN))).toContain("extract");
 		expect(ids(suggestedActions({ name: "docs.7z", kind: "file" }, DARWIN))).toContain("extract");
+		expect(ids(suggestedActions({ name: "docs.rar", kind: "file" }, DARWIN))).toContain("extract");
 		expect(ids(suggestedActions({ name: "notes.txt", kind: "file" }, DARWIN))).not.toContain("extract");
 		expect(ids(suggestedActions({ name: "docs.zip", kind: "file" }, NO_CAPABILITIES))).not.toContain("extract");
 	});

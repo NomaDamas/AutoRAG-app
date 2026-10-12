@@ -27,6 +27,10 @@ export type ImageFormat = "jpeg" | "png" | "webp" | "heic" | "avif" | "gif" | "t
 /** Video containers the container-conversion action can remux into. */
 export type VideoContainer = "mp4" | "mov" | "mkv";
 
+/** Archive formats Compress can write; a request without one writes zip. */
+export type CompressFormat = "zip" | "7z";
+const COMPRESS_FORMATS: readonly string[] = ["zip", "7z"];
+
 /**
  * One unit of work. `openWith`, `compress`, and the share sheet act on the
  * whole target list (one chooser, one archive, one sheet); `extract` and the
@@ -37,7 +41,7 @@ export type VideoContainer = "mp4" | "mov" | "mkv";
  */
 export type ActionRequest =
 	| { readonly kind: "openWith"; readonly application: string | null }
-	| { readonly kind: "compress" }
+	| { readonly kind: "compress"; readonly format?: CompressFormat }
 	| { readonly kind: "extract" }
 	| { readonly kind: "convertImage"; readonly format: ImageFormat }
 	| { readonly kind: "resizeImage"; readonly maxEdge: number }
@@ -118,6 +122,7 @@ export function isActionRequest(value: unknown): value is ActionRequest {
 				(value.application === null || (typeof value.application === "string" && value.application.length > 0))
 			);
 		case "compress":
+			return !("format" in value) || (typeof value.format === "string" && COMPRESS_FORMATS.includes(value.format));
 		case "extract":
 		case "optimizeImage":
 			return true;

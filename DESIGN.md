@@ -223,11 +223,26 @@ The Info half's bottom bar is data-driven, not a fixed four buttons.
   the IPC channels, and the capability gating need no change.
 - Action outputs never overwrite: `uniqueChild` numbers them Finder-style
   (`photo.jpeg`, `photo 2.jpeg`). Extraction offers every format the shared
-  `archiveFormatOf` predicate recognizes — zip, tar, tar.gz/tgz, gz, 7z, and
+  `archiveFormatOf` predicate recognizes — zip, tar, tar.gz/tgz, gz, 7z, rar, and
   tar.bz2/tar.xz — writing into a hidden staging folder beside the destination
   (removed on any failure) and then renaming it into place, flattening a single
-  wrapper folder that matches the archive stem. The wasm engine's licenses are
+  wrapper folder that matches the archive stem. Entry names are normalized to
+  NFC before any path check (Mac tools store Hangul decomposed; Windows cannot
+  match that against the composed name), and zip names written without the
+  UTF-8 flag are recovered as UTF-8 or CP949, so a Korean Windows archive no
+  longer extracts as `ÇÑ±Û.txt`. The wasm engine is a vendored rebuild with a
+  UTF-8 locale (`scripts/libarchive-wasm/`); its licenses are
   recorded in `THIRD_PARTY_NOTICES.md`.
+- Compression writes zip (default) or 7z — "7z로 압축" is a second row beside "압축"
+  in the Inspector and context menu, a `compress` request with `format: "7z"`.
+  The 7z writer (`src/main/sevenzip-writer.ts`) writes solid LZMA blocks (up to
+  32 MiB each, so redundancy between files is shared): the LZMA encoder is
+  WebAssembly (`lzma-wasm`) running in `src/main/lzma-worker.mjs`, so the main
+  thread never blocks. A block whose sample does not shrink (jpg, mp4, zip)
+  is stored as Copy rather than spending seconds in the encoder, and one file over
+  256 MiB — beyond the wasm encoder's 32-bit memory — is deflated on its own.
+  Entry names are written NFC. RAR is extract-only: the format is proprietary
+  and RARLAB's license forbids building a compressor.
 
 ---
 

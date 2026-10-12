@@ -222,6 +222,13 @@ export function suggestedActions(subject: ActionSubject, capabilities: ActionCap
 				icon: "compress",
 				target: { kind: "request", request: { kind: "compress" } },
 			});
+			actions.push({
+				kind: "action",
+				id: "compress7z",
+				label: "7z로 압축",
+				icon: "compress",
+				target: { kind: "request", request: { kind: "compress", format: "7z" } },
+			});
 		}
 		if (capabilities.share) {
 			actions.push({ kind: "action", id: "share", label: "공유", icon: "share", target: { kind: "share" } });
@@ -270,6 +277,13 @@ export function suggestedActions(subject: ActionSubject, capabilities: ActionCap
 			label: "압축",
 			icon: "compress",
 			target: { kind: "request", request: { kind: "compress" } },
+		});
+		actions.push({
+			kind: "action",
+			id: "compress7z",
+			label: "7z로 압축",
+			icon: "compress",
+			target: { kind: "request", request: { kind: "compress", format: "7z" } },
 		});
 	}
 	if (capabilities.share) {

@@ -67,6 +67,7 @@ describe("buildContextMenu", () => {
 			"copyPath",
 			"newFolder",
 			"compress",
+			"compress7z",
 			"share",
 			"trash",
 		]);
@@ -119,6 +120,7 @@ describe("buildContextMenu", () => {
 			"item",
 			"item",
 			"item",
+			"item",
 			"separator",
 			"item",
 		]);
@@ -143,6 +145,7 @@ describe("buildContextMenu row actions", () => {
 			"newFolder",
 			"extract",
 			"compress",
+			"compress7z",
 			"share",
 			"trash",
 		]);
@@ -335,7 +338,7 @@ describe("menuPlacement", () => {
 
 describe("estimateMenuHeight", () => {
 	it("measures items, separators, and the menu padding", () => {
-		expect(estimateMenuHeight(buildContextMenu(file))).toBe(13 * 28 + 4 * 9 + 2 * 5);
+		expect(estimateMenuHeight(buildContextMenu(file))).toBe(14 * 28 + 4 * 9 + 2 * 5);
 	});
 });
 

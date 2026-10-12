@@ -6,6 +6,7 @@ import { useRowPipeline } from "./useRowPipeline";
 import { itemElement, useFinderKeyboard } from "./useFinderKeyboard";
 import type { MouseEvent as ReactMouseEvent, RefObject } from "react";
 import { NO_CAPABILITIES, type ActionAnchor, type ActionCapabilities, type OpenWithApplication } from "../../../shared/actions-contract";
+import { archiveFormatOf } from "../../../shared/archive-formats";
 import { isTagPath, isVirtualListing, RECENTS_PATH, tagPath } from "../../../shared/fs-contract";
 import type { IndexStatus } from "../../../shared/index-contract";
 import { DUPEY_LAYER_ID, type LiveMessage } from "../../../shared/live-contract";
@@ -939,6 +940,22 @@ export function useFinderController(
 				revealEntry(entry);
 				return;
 			}
+			// An archive extracts in place, exactly like the context menu's "압축 해제",
+			// instead of handing the file to whatever app the OS associates with it.
+			// Without the archive capability the OS default still opens it.
+			if (actionCapabilities.archive && archiveFormatOf(entry.name) !== null) {
+				source.actions
+					.run([entry.path], { kind: "extract" })
+					.then((outcome) => {
+						showToast(outcome.note);
+						if (outcome.output !== null) {
+							recordActionOutput("extract", outcome.output);
+							refresh();
+						}
+					})
+					.catch(reportError);
+				return;
+			}
 			// Double-click / Enter on a file: the OS default application opens it.
 			source.open(entry.path).catch(reportError);
 		});
@@ -1530,6 +1547,19 @@ export function useFinderController(
 					source.actions
 						.run(targets, { kind: "openWith", application: null })
 						.then((outcome) => showToast(outcome.note))
+						.catch(reportError);
+					return;
+				case "compress7z":
+					// Same one-archive-per-selection rule as zip; the undo record is still "compress".
+					source.actions
+						.run(targets, { kind: "compress", format: "7z" })
+						.then((outcome) => {
+							showToast(outcome.note);
+							if (outcome.output !== null) {
+								recordActionOutput("compress", outcome.output);
+								refresh();
+							}
+						})
 						.catch(reportError);
 					return;
 				case "compress":

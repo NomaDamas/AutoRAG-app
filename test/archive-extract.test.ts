@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { lstat, mkdir, mkdtemp, readFile, readdir, rename, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { crc32 } from "node:zlib";
 import { zipSync } from "fflate";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createActionService, type ActionService } from "../src/main/action-service";
@@ -39,6 +40,16 @@ function service(archiveLimits?: ArchiveLimits): ActionService {
 }
 
 const LIMITS: ArchiveLimits = { maxTotalBytes: 20 * 1024 ** 3, maxEntries: 100_000, maxEngineBytes: 1024 ** 3 };
+
+/** libarchive's test_read_format_rar.rar: test.txt, a symlink, testdir/test.txt, and two directories. */
+const RAR4_TREE =
+	"UmFyIRoHAM+QcwAADQAAAAAAAACEUnQgkDIAFAAAABQAAAADQqLIvrd22j4UMAgApIEAAHRlc3QudHh0gAi3dto+t3baPnRlc3QgdGV4dCBkb2N1bWVudA0KnS90IJAyAAgAAAAIAAAAA3tEybbRTNg+FDAIAP+hAAB0ZXN0bGlua8AI0UzYPlBf2j50ZXN0LnR4dM3gdCCQOgAUAAAAFAAAAANCosi+Y3faPhQwEACkgQAAdGVzdGRpclx0ZXN0LnR4dMDMY3faPmN32j50ZXN0IHRleHQgZG9jdW1lbnQNCqHIdOCQMQAAAAAAAAAAAAMAAAAAY3faPhQwBwDtQQAAdGVzdGRpcsDMY3faPmR32j7m53TgkDYAAAAAAAAAAAADAAAAAJ2r1T4UMAwA7UEAAHRlc3RlbXB0eWRpcoDMnavVPsVd2j7EPXsAQAcA";
+/** libarchive's test_read_format_rar5_stored.rar: one stored member, helloworld.txt. */
+const RAR5_STORED =
+	"UmFyIRoHAQAzkrXlCgEFBgAFAQGAgAA4MAZjLAIDC50ABJ0ApIMCtEOglYAAAQ5oZWxsb3dvcmxkLnR4dAoDE34Oq1tW6Q4aaGVsbG8gbGliYXJjaGl2ZSB0ZXN0IHN1aXRlIQodd1ZRAwUEAA==";
+/** libarchive's test_read_format_rar5_encrypted.rar: four members behind a password. */
+const RAR5_ENCRYPTED =
+	"UmFyIRoHAQAzkrXlCgEFBgAFAQGAgAA1/zIeHwIDCxIEEiBVblrugAAABWEudHh0CgMCfCGEo4J82gFUaGlzIGlzIGZyb20gYS50eHR6QXGzUAIDPDAEEiAYRaMCgAMABWIudHh0MAEAAw/HRF7hgPi1n9YrQzcIvFfN+jTfBqtdBdSTB3cPHY6AU+o1Zx1w8S1La5wanAoDAnJlmKaCfNoBY7pUstAQpUlftLrTwGmoOxu8uzgn14eTeHMvfJPi0ijEAN7+psA7fmxn1AVQANz4jXzxZh8CAwsSBBIgNT2alIAAAAVjLnR4dAoDAj5I6a6CfNoBVGhpcyBpcyBmcm9tIGMudHh07P3wXVICAzygAASSACDD32MSgAMABWQudHh0MAEAAw/HRF7hgPi1n9YrQzcIvFfN883Wsxy0W6d8rDZYjrMOaYNM1EjpFevWrHe3owoDAnvFKfSPfNoB22ly9PZWjqb9GWXplbM2hTQ39Sqg0yeHsvXBAjLYql4dd1ZRAwUEAA==";
 
 /** A source tree with a wrapper folder, a nested file, and an empty directory. */
 async function docsSource(): Promise<string> {
@@ -263,6 +274,138 @@ describe("libarchive-backed extraction", () => {
 		const tiny = { ...LIMITS, maxEngineBytes: 1024 };
 		await expect(service(tiny).run([archive], { kind: "extract" }, null)).rejects.toThrow(/너무 커서/);
 		expect(await readdir(root)).toEqual(["big.7z"]);
+	});
+
+	// Fixtures are libarchive's own RAR test archives (BSD-2-Clause), embedded
+	// because no RAR writer exists to build them here.
+	it("extracts a RAR4 archive, skipping its symlink and keeping its empty directory", async () => {
+		const archive = join(root, "legacy.rar");
+		await writeFile(archive, Buffer.from(RAR4_TREE, "base64"));
+		const out = await service().run([archive], { kind: "extract" }, null);
+		expect(out.output).toBe(join(root, "legacy"));
+		expect(await readFile(join(root, "legacy", "test.txt"), "utf8")).toBe("test text document\r\n");
+		expect(await readFile(join(root, "legacy", "testdir", "test.txt"), "utf8")).toBe("test text document\r\n");
+		expect((await stat(join(root, "legacy", "testemptydir"))).isDirectory()).toBe(true);
+		expect(await lstat(join(root, "legacy", "testlink")).catch(() => null)).toBeNull();
+	});
+
+	it("extracts a RAR5 archive", async () => {
+		const archive = join(root, "modern.rar");
+		await writeFile(archive, Buffer.from(RAR5_STORED, "base64"));
+		const out = await service().run([archive], { kind: "extract" }, null);
+		expect(out.output).toBe(join(root, "modern"));
+		expect(await readFile(join(root, "modern", "helloworld.txt"), "utf8")).toBe("hello libarchive test suite!\n");
+	});
+
+	it("refuses an encrypted RAR with Korean copy and leaves nothing behind", async () => {
+		const archive = join(root, "secret.rar");
+		await writeFile(archive, Buffer.from(RAR5_ENCRYPTED, "base64"));
+		await expect(service().run([archive], { kind: "extract" }, null)).rejects.toThrow(/암호|손상/);
+		expect(await readdir(root)).toEqual(["secret.rar"]);
+	});
+});
+
+/** One zip entry with its name as raw bytes and the general-purpose flags chosen by the caller. */
+function rawZip(entries: readonly { readonly name: Buffer; readonly flags: number; readonly body: Buffer }[]): Buffer {
+	const locals: Buffer[] = [];
+	const directory: Buffer[] = [];
+	let offset = 0;
+	for (const entry of entries) {
+		const crc = crc32(entry.body);
+		const local = Buffer.alloc(30);
+		local.writeUInt32LE(0x04034b50, 0);
+		local.writeUInt16LE(20, 4);
+		local.writeUInt16LE(entry.flags, 6);
+		local.writeUInt32LE(crc, 14);
+		local.writeUInt32LE(entry.body.length, 18);
+		local.writeUInt32LE(entry.body.length, 22);
+		local.writeUInt16LE(entry.name.length, 26);
+		const central = Buffer.alloc(46);
+		central.writeUInt32LE(0x02014b50, 0);
+		central.writeUInt16LE(20, 4);
+		central.writeUInt16LE(20, 6);
+		central.writeUInt16LE(entry.flags, 8);
+		central.writeUInt32LE(crc, 16);
+		central.writeUInt32LE(entry.body.length, 20);
+		central.writeUInt32LE(entry.body.length, 24);
+		central.writeUInt16LE(entry.name.length, 28);
+		central.writeUInt32LE(offset, 42);
+		const piece = Buffer.concat([local, entry.name, entry.body]);
+		locals.push(piece);
+		directory.push(Buffer.concat([central, entry.name]));
+		offset += piece.length;
+	}
+	const central = Buffer.concat(directory);
+	const end = Buffer.alloc(22);
+	end.writeUInt32LE(0x06054b50, 0);
+	end.writeUInt16LE(entries.length, 8);
+	end.writeUInt16LE(entries.length, 10);
+	end.writeUInt32LE(central.length, 12);
+	end.writeUInt32LE(offset, 16);
+	return Buffer.concat([...locals, central, end]);
+}
+
+describe("Korean file names", () => {
+	const NFC = "한글 보고서.txt";
+	/** The CP949 bytes Korean Windows Explorer writes into a zip, with no UTF-8 flag. */
+	const CP949_NAME = Buffer.from([0xc7, 0xd1, 0xb1, 0xdb, 0x20, 0xba, 0xb8, 0xb0, 0xed, 0xbc, 0xad, 0x2e, 0x74, 0x78, 0x74]);
+
+	it("restores a CP949 zip name from Windows Explorer", async () => {
+		const archive = join(root, "win.zip");
+		await writeFile(archive, rawZip([{ name: CP949_NAME, flags: 0, body: Buffer.from("본문") }]));
+		const out = await service().run([archive], { kind: "extract" }, null);
+		expect(await readdir(out.output ?? "")).toEqual([NFC]);
+		expect(await readFile(join(out.output ?? "", NFC), "utf8")).toBe("본문");
+	});
+
+	it("restores a UTF-8 zip name written without the UTF-8 flag", async () => {
+		const archive = join(root, "unflagged.zip");
+		await writeFile(archive, rawZip([{ name: Buffer.from(NFC, "utf8"), flags: 0, body: Buffer.from("x") }]));
+		const out = await service().run([archive], { kind: "extract" }, null);
+		expect(await readdir(out.output ?? "")).toEqual([NFC]);
+	});
+
+	it("keeps a flagged UTF-8 zip name that happens to look like Latin-1 mojibake", async () => {
+		const archive = join(root, "flagged.zip");
+		await writeFile(archive, rawZip([{ name: Buffer.from("Ç.txt", "utf8"), flags: 0x0800, body: Buffer.from("x") }]));
+		const out = await service().run([archive], { kind: "extract" }, null);
+		expect(await readdir(out.output ?? "")).toEqual(["Ç.txt"]);
+	});
+
+	it("composes a Mac-style decomposed (NFD) name so Windows sees the same file", async () => {
+		const archive = join(root, "mac.zip");
+		await writeFile(archive, zipSync({ [NFC.normalize("NFD")]: Buffer.from("x") }));
+		const out = await service().run([archive], { kind: "extract" }, null);
+		const [name] = await readdir(out.output ?? "");
+		expect(name).toBe(NFC);
+	});
+
+	it("flattens the wrapper folder even when the archive stem is NFD and the entries are NFC", async () => {
+		const archive = join(root, "자료.zip".normalize("NFD"));
+		await writeFile(archive, zipSync({ [`${"자료".normalize("NFC")}/a.txt`]: Buffer.from("a") }));
+		const out = await service().run([archive], { kind: "extract" }, null);
+		expect(await readdir(out.output ?? "")).toEqual(["a.txt"]);
+	});
+
+	it.skipIf(!hasBin("bsdtar"))("extracts a Korean file name from a .7z", async () => {
+		const src = join(root, "src");
+		await mkdir(join(src, "자료"), { recursive: true });
+		await writeFile(join(src, "자료", NFC), "본문");
+		const archive = join(root, "자료.7z");
+		execFileSync("bsdtar", ["-a", "-cf", archive, "-C", src, "자료"], { env: { ...process.env, COPYFILE_DISABLE: "1" } });
+		const out = await service().run([archive], { kind: "extract" }, null);
+		expect(await readdir(out.output ?? "")).toEqual([NFC]);
+		expect(await readFile(join(out.output ?? "", NFC), "utf8")).toBe("본문");
+	});
+
+	it.skipIf(!hasBin("xz"))("extracts a Korean file name from a .tar.xz", async () => {
+		const src = join(root, "src");
+		await mkdir(join(src, "자료"), { recursive: true });
+		await writeFile(join(src, "자료", NFC), "본문");
+		const archive = join(root, "자료.tar.xz");
+		execFileSync("tar", ["-cJf", archive, "-C", src, "자료"], { env: { ...process.env, COPYFILE_DISABLE: "1" } });
+		const out = await service().run([archive], { kind: "extract" }, null);
+		expect(await readdir(out.output ?? "")).toEqual([NFC]);
 	});
 });
 
