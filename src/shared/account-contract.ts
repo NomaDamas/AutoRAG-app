@@ -36,6 +36,28 @@ export const ACCOUNT_API_KEY_ENV = "AUTORAG_API_KEY";
 /** Server root used when `AUTORAG_BASE_URL` is unset. */
 export const DEFAULT_ACCOUNT_BASE_URL = "https://api.dazziapp.com";
 
+/**
+ * Legal pages the hosted service serves. The web sign-in shows the first three
+ * as an agreement note; the account surfaces link them (and Subprocessors) too.
+ */
+export const ACCOUNT_LEGAL_ROUTES = {
+	terms: "/terms",
+	privacy: "/privacy",
+	acceptableUse: "/acceptable-use",
+	subprocessors: "/subprocessors",
+	/** The per-model retention table inside the Privacy Policy. */
+	privacyModels: "/privacy#models",
+} as const;
+
+export type AccountLegalRoute = keyof typeof ACCOUNT_LEGAL_ROUTES;
+
+/** Absolute URL of one legal page on the account server; empty or unknown roots fall back to the default. */
+export function accountLegalUrl(baseUrl: string | null | undefined, route: AccountLegalRoute): string {
+	const configured = typeof baseUrl === "string" ? baseUrl.trim() : "";
+	const root = (configured.length > 0 ? configured : DEFAULT_ACCOUNT_BASE_URL).replace(/\/+$/u, "");
+	return `${root}${ACCOUNT_LEGAL_ROUTES[route]}`;
+}
+
 export interface AccountSnapshot {
 	readonly email: string;
 	readonly plan: AccountPlanId;

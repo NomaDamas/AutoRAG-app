@@ -2,7 +2,8 @@
 
 import type { ReactElement } from "react";
 import { AppLogo, Icon } from "../marks";
-import { Eyebrow, Multiline, SplitScreen } from "../parts";
+import { Eyebrow, Multiline, SplitScreen, openExternal } from "../parts";
+import { accountLegalUrl } from "../../../../shared/account-contract";
 import type { OnboardingCtx } from "../context";
 
 /** The prototype's `appIcon()` — the app mark used in the account card head. */
@@ -102,6 +103,20 @@ export function AccountStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElem
 								</p>
 							) : null}
 							<p className="auth-note">{t("onboarding.account.authNote")}</p>
+							<p className="auth-note legal-note">
+								{t("onboarding.account.agreeLead")}{" "}
+								<button type="button" className="inline-link" onClick={() => openExternal(accountLegalUrl(account?.baseUrl, "terms"))}>
+									{t("onboarding.account.agreeTerms")}
+								</button>
+								{" · "}
+								<button type="button" className="inline-link" onClick={() => openExternal(accountLegalUrl(account?.baseUrl, "privacy"))}>
+									{t("onboarding.account.agreePrivacy")}
+								</button>
+								{" · "}
+								<button type="button" className="inline-link" onClick={() => openExternal(accountLegalUrl(account?.baseUrl, "acceptableUse"))}>
+									{t("onboarding.account.agreeUse")}
+								</button>
+							</p>
 							<div className="action-row">
 								<button type="button" className="secondary" onClick={ctx.skipAccount}>
 									{t("onboarding.account.skip")}

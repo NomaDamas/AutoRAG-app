@@ -2,7 +2,9 @@ name: Release
 
 # Publishing a GitHub release builds the macOS .dmg and the Windows installer
 # .exe, each carrying the app, every dependency program, and the local embedding
-# model, and attaches them to that release. See docs/release.md.
+# model, attaches them to that release, and — when its variables and secrets
+# exist — mirrors the same files to a Cloudflare R2 bucket for CDN-backed
+# downloads. See docs/release.md.
 #
 #   gh release create v1.2.3 --generate-notes     # -> this workflow
 #
@@ -114,6 +116,22 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: upload/*
+      - name: Sync installers to the R2 mirror
+        if: ${{ github.event_name == 'release' }}
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ENDPOINT: ${{ vars.R2_ENDPOINT }}
+          R2_BUCKET: ${{ vars.R2_BUCKET }}
+        shell: bash
+        run: |
+          if [ -z "$R2_ENDPOINT" ] || [ -z "$R2_BUCKET" ] || [ -z "$AWS_ACCESS_KEY_ID" ]; then
+            echo "no R2 endpoint/bucket/credentials configured: skipping the CDN mirror"
+            exit 0
+          fi
+          aws s3 sync upload/ "s3://$R2_BUCKET/v$RELEASE_TAG/" \
+            --endpoint-url "$R2_ENDPOINT" \
+            --cache-control "public, max-age=31536000, immutable"
 
   windows:
     runs-on: ${{ fromJSON(vars.RELEASE_RUNNER_WIN || '"windows-2022"') }}
@@ -190,3 +208,19 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: upload/*
+      - name: Sync installers to the R2 mirror
+        if: ${{ github.event_name == 'release' }}
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ENDPOINT: ${{ vars.R2_ENDPOINT }}
+          R2_BUCKET: ${{ vars.R2_BUCKET }}
+        shell: bash
+        run: |
+          if [ -z "$R2_ENDPOINT" ] || [ -z "$R2_BUCKET" ] || [ -z "$AWS_ACCESS_KEY_ID" ]; then
+            echo "no R2 endpoint/bucket/credentials configured: skipping the CDN mirror"
+            exit 0
+          fi
+          aws s3 sync upload/ "s3://$R2_BUCKET/v$RELEASE_TAG/" \
+            --endpoint-url "$R2_ENDPOINT" \
+            --cache-control "public, max-age=31536000, immutable"

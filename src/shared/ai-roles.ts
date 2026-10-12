@@ -21,7 +21,7 @@ export interface RoleModel {
 interface RoleModelSpec {
 	readonly id: string;
 	readonly label?: string;
-	readonly labelKey?: "finderState.roles.jevLatest" | "finderState.roles.rerankFree";
+	readonly labelKey?: "finderState.roles.jevLatest";
 }
 
 /**
@@ -47,12 +47,11 @@ const JEV_MODELS_BY_BACKEND: Readonly<Record<JevBackend, readonly RoleModelSpec[
 	vercel: [{ id: "typesafe/jev-latest", labelKey: "finderState.roles.jevLatest" }],
 };
 
-/** Rerank model ids each provider serves (rerank is not a general LLM role). */
+/** Rerank model ids each provider serves (rerank is not a general LLM role). The
+ * AutoRAG plan serves one reranker: `qwen/qwen3-reranker-8b` (the free NVIDIA
+ * reranker left the server's allow-list, so it can no longer be named). */
 const RERANK_MODELS_BY_PROVIDER: Readonly<Record<string, readonly RoleModelSpec[]>> = {
-	[AUTORAG_PROVIDER_ID]: [
-		{ id: "qwen/qwen3-reranker-8b", label: "Qwen3 Reranker 8B" },
-		{ id: "nvidia/llama-nemotron-rerank-vl-1b-v2:free", labelKey: "finderState.roles.rerankFree" },
-	],
+	[AUTORAG_PROVIDER_ID]: [{ id: "qwen/qwen3-reranker-8b", label: "Qwen3 Reranker 8B" }],
 	openrouter: [
 		{ id: "voyageai/rerank-3-lite", label: "Voyage Rerank 3 Lite" },
 		{ id: "voyageai/rerank-3", label: "Voyage Rerank 3" },

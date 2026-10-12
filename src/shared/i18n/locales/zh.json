@@ -424,7 +424,11 @@
       "cancel": "取消",
       "skip": "不使用账户，改用自己的 API 密钥 (BYOK)",
       "offline": "无法连接服务器，显示的是上次确认的信息。",
-      "authNote": "登录方式（邮箱验证码、第三方登录）在浏览器的 Dazzi 登录页面选择。账户中不会保存文件内容。",
+      "authNote": "登录方式（邮箱验证码、第三方登录）在浏览器的 Dazzi 登录页面选择。Dazzi 不保存请求内容，仅发送至零数据保留（ZDR）服务商。",
+      "agreeLead": "继续即表示您同意 Dazzi 的以下条款:",
+      "agreeTerms": "服务条款",
+      "agreePrivacy": "隐私政策",
+      "agreeUse": "可接受使用政策",
       "planLabel": "{{plan}} 套餐",
       "signedInEnv": "正在使用环境变量中的 API 密钥"
     },
@@ -504,7 +508,8 @@
       "cloudTitle": "在云端",
       "cloudLead": "处理更快，但你选择的文档正文会被发送。",
       "cloudBulletPerf": "对 Mac 性能影响较小",
-      "cloudBulletNoStore": "处理后不保留正文"
+      "cloudBulletNoStore": "Dazzi 不保存请求内容，仅发送至零数据保留（ZDR）服务商",
+      "privacyTable": "隐私政策中的模型数据表"
     },
     "sources": {
       "eyebrow": "数据源",
@@ -559,6 +564,7 @@
           "note": "无需银行卡即可开始",
           "tag": "轻松上手",
           "chip": "提问会发送至 Dazzi 模型",
+          "training": "输入与输出可能用于改进服务",
           "feature": {
             "a": "在这台 Mac 上本地嵌入",
             "b": "托管 AI 模型 · 基础用量",
@@ -571,6 +577,7 @@
           "note": "每月 $4 · 随时取消",
           "tag": "每天轻松使用",
           "chip": "提问会发送至 Dazzi 模型",
+          "training": "输入与输出不用于模型训练",
           "feature": {
             "a": "在这台 Mac 上本地嵌入",
             "b": "托管 AI 模型 · 充足用量",
@@ -583,6 +590,7 @@
           "note": "每月 $20 · 随时取消",
           "tag": "最快的首次索引",
           "chip": "问题将发送到 Dazzi 模型",
+          "training": "输入与输出不用于模型训练",
           "feature": {
             "a": "在这台 Mac 上本地嵌入（内容不会被发送）",
             "b": "托管 AI 模型 · 最高用量",
@@ -595,6 +603,7 @@
           "note": "直接向 provider 付费",
           "tag": "用自己的密钥直接连接",
           "chip": "需要输入 API 密钥",
+          "training": "遵循您所选服务商的政策",
           "feature": {
             "a": "在这台 Mac 上本地嵌入",
             "b": "自行选择 provider 和模型",
@@ -832,8 +841,7 @@
       "unknown": "未知的文件格式：{{id}}"
     },
     "roles": {
-      "jevLatest": "Jev (最新)",
-      "rerankFree": "Nemotron Rerank VL 1B (免费)"
+      "jevLatest": "Jev (最新)"
     },
     "servicesUnavailable": "无法在此环境中运行服务",
     "workerRestarted": "文件服务在操作过程中重启了。请确认结果后重试。",
@@ -1367,6 +1375,16 @@
           "price": "每月 $20",
           "perks": "每周 $5 额度 · 每分钟 240 次"
         }
+      },
+      "legal": {
+        "title": "条款与政策",
+        "description": "与网页登录页面相同的文档，将在浏览器中打开。",
+        "rowName": "查看文档",
+        "rowHint": "服务器条款、隐私政策（各模型的数据处理）、可接受使用政策以及子处理方列表。",
+        "terms": "服务条款",
+        "privacy": "隐私政策",
+        "acceptableUse": "可接受使用政策",
+        "subprocessors": "子处理方"
       }
     },
     "ai": {

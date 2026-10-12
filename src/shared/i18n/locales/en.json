@@ -424,7 +424,11 @@
       "cancel": "Cancel",
       "skip": "Continue without an account, with my own API key (BYOK)",
       "offline": "Can't reach the server, so this is the last information we confirmed.",
-      "authNote": "You choose how to sign in (email code or social sign-in) on the Dazzi page in your browser. No file contents are stored in your account.",
+      "authNote": "You choose how to sign in (email code or social sign-in) on the Dazzi page in your browser. Dazzi stores no request content and sends it only to zero-data-retention (ZDR) providers.",
+      "agreeLead": "By continuing, you agree to Dazzi's:",
+      "agreeTerms": "Terms of Service",
+      "agreePrivacy": "Privacy Policy",
+      "agreeUse": "Acceptable Use",
       "planLabel": "{{plan}} plan",
       "signedInEnv": "Using the API key from the environment"
     },
@@ -504,7 +508,8 @@
       "cloudTitle": "In the cloud",
       "cloudLead": "Processes faster, but the contents of the documents you select are sent.",
       "cloudBulletPerf": "Little impact on Mac performance",
-      "cloudBulletNoStore": "Content not stored after processing"
+      "cloudBulletNoStore": "Nothing is stored; requests go only to zero-data-retention (ZDR) providers",
+      "privacyTable": "Model data table in the Privacy Policy"
     },
     "sources": {
       "eyebrow": "Data sources",
@@ -559,6 +564,7 @@
           "note": "Start right away, no card",
           "tag": "Start light",
           "chip": "Questions are sent to Dazzi models",
+          "training": "Inputs and outputs may be used to improve the service",
           "feature": {
             "a": "Local embedding on this Mac",
             "b": "Managed AI models · basic usage",
@@ -571,6 +577,7 @@
           "note": "$4/mo · cancel anytime",
           "tag": "Light everyday use",
           "chip": "Questions are sent to Dazzi models",
+          "training": "Inputs and outputs are not used to train models",
           "feature": {
             "a": "Local embedding on this Mac",
             "b": "Managed AI models · generous usage",
@@ -583,6 +590,7 @@
           "note": "$20/mo · cancel anytime",
           "tag": "Fastest first indexing",
           "chip": "Questions are sent to Dazzi models",
+          "training": "Inputs and outputs are not used to train models",
           "feature": {
             "a": "Local embedding on this Mac (contents are never sent)",
             "b": "Managed AI models · highest usage",
@@ -595,6 +603,7 @@
           "note": "Pay the provider directly",
           "tag": "Connect directly with your own key",
           "chip": "API key required",
+          "training": "Follows the policy of the provider you choose",
           "feature": {
             "a": "Local embedding on this Mac",
             "b": "Choose the provider and model yourself",
@@ -832,8 +841,7 @@
       "unknown": "Unknown file format: {{id}}"
     },
     "roles": {
-      "jevLatest": "Jev (latest)",
-      "rerankFree": "Nemotron Rerank VL 1B (free)"
+      "jevLatest": "Jev (latest)"
     },
     "servicesUnavailable": "Services can't run in this environment",
     "workerRestarted": "The file service restarted mid-operation. Check the result and try again.",
@@ -1367,6 +1375,16 @@
           "price": "$20/mo",
           "perks": "$5 credit/week · 240/min"
         }
+      },
+      "legal": {
+        "title": "Terms & Policies",
+        "description": "The same documents as the web sign-in page. They open in your browser.",
+        "rowName": "View documents",
+        "rowHint": "Server terms, privacy policy (per-model data handling), acceptable use policy, and the subprocessor list.",
+        "terms": "Terms of Service",
+        "privacy": "Privacy Policy",
+        "acceptableUse": "Acceptable Use Policy",
+        "subprocessors": "Subprocessors"
       }
     },
     "ai": {

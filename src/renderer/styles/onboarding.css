@@ -956,6 +956,14 @@ html[data-appearance="dark"] .onb .source-icon.brand {
 	font-weight: 700;
 }
 
+/* One-line plan-training note (Terms §5: paid plans never train on it, Free may). */
+.onb .plan-training {
+	margin-top: 8px;
+	color: var(--onb-faint);
+	font-size: 9px;
+	line-height: 1.4;
+}
+
 .onb .plan-meta {
 	display: flex;
 	gap: 5px;
@@ -1493,6 +1501,22 @@ html[data-appearance="dark"] .onb .source-icon.brand {
 	content: "✓";
 	color: var(--onb-green);
 	font-weight: 700;
+}
+
+/* Text links that sit inside a note or bullet and open the system browser. */
+.onb .inline-link {
+	border: 0;
+	padding: 0;
+	background: none;
+	color: var(--onb-blue);
+	font: inherit;
+	text-decoration: underline;
+	text-underline-offset: 2px;
+	cursor: pointer;
+}
+
+.onb .legal-note {
+	margin-top: 6px;
 }
 
 .onb .reindex-note {

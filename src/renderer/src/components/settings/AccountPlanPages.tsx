@@ -10,10 +10,16 @@
 
 import { useCallback, useEffect, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
+import { ExternalLink } from "lucide-react";
 import type { AccountPlanId, AccountSnapshot, AccountStatus, PaidPlanId } from "../../../../shared/account-contract";
-import { planCovers } from "../../../../shared/account-contract";
+import { accountLegalUrl, planCovers, type AccountLegalRoute } from "../../../../shared/account-contract";
 import { Note, Row, Section, SettingsPageHead } from "./SettingsKit";
 
+/** Opens one of the server's legal pages in the system browser (the routes the web login links). */
+function openLegal(baseUrl: string | undefined, route: AccountLegalRoute): void {
+	const open = window.autorag?.fs?.openUrl;
+	if (typeof open === "function") void open(accountLegalUrl(baseUrl, route));
+}
 interface PlanTier {
 	readonly id: AccountPlanId;
 	readonly label: string;
@@ -117,6 +123,28 @@ export function AccountPage(): ReactElement {
 					<button type="button" className="linear-btn" disabled={!signedIn || busy} onClick={() => run(() => window.autorag.account.useManagedModel())}>
 						{t("settingsCore.account.useManaged")}
 					</button>
+				</Row>
+			</Section>
+			<Section title={t("settingsCore.account.legal.title")} description={t("settingsCore.account.legal.description")}>
+				<Row name={t("settingsCore.account.legal.rowName")} hint={t("settingsCore.account.legal.rowHint")} stack>
+					<div className="settings-legal-links">
+						<button type="button" className="linear-btn settings-btn-quiet" onClick={() => openLegal(status?.baseUrl, "terms")}>
+							{t("settingsCore.account.legal.terms")}
+							<ExternalLink size={13} aria-hidden="true" focusable="false" />
+						</button>
+						<button type="button" className="linear-btn settings-btn-quiet" onClick={() => openLegal(status?.baseUrl, "privacy")}>
+							{t("settingsCore.account.legal.privacy")}
+							<ExternalLink size={13} aria-hidden="true" focusable="false" />
+						</button>
+						<button type="button" className="linear-btn settings-btn-quiet" onClick={() => openLegal(status?.baseUrl, "acceptableUse")}>
+							{t("settingsCore.account.legal.acceptableUse")}
+							<ExternalLink size={13} aria-hidden="true" focusable="false" />
+						</button>
+						<button type="button" className="linear-btn settings-btn-quiet" onClick={() => openLegal(status?.baseUrl, "subprocessors")}>
+							{t("settingsCore.account.legal.subprocessors")}
+							<ExternalLink size={13} aria-hidden="true" focusable="false" />
+						</button>
+					</div>
 				</Row>
 			</Section>
 		</>

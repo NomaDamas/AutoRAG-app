@@ -188,8 +188,11 @@ export function ContextMenu({
 						onClick={() => onSelect(entry.action, null, null, null)}
 					>
 						<span className="menu__label flex-1">{entry.label}</span>
+						{/* A visual hint only: the item's accessible name stays "Rename", not "Rename⌘R". */}
 						{entry.keycap === null ? null : (
-							<span className="menu__keycap flex-none ml-auto text-ink-faint text-badge">{entry.keycap}</span>
+							<span className="menu__keycap flex-none ml-auto text-ink-faint text-badge" aria-hidden="true">
+								{entry.keycap}
+							</span>
 						)}
 					</button>
 				);

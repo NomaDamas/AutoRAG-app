@@ -59,6 +59,17 @@ export function Eyebrow({ icon, warn, children }: EyebrowProps): ReactElement {
 	);
 }
 
+/**
+ * Opens a URL in the system browser through the fs bridge's `openUrl`
+ * (`file:`/`javascript:` never reach it). A no-op until the bridge exists, so a
+ * step still renders while the window is coming up.
+ */
+export function openExternal(url: string | null | undefined): void {
+	if (typeof url !== "string" || url.length === 0) return;
+	const open = window.autorag?.fs?.openUrl;
+	if (typeof open === "function") void open(url);
+}
+
 interface SourceIconProps {
 	readonly id: SourceId;
 }
