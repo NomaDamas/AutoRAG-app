@@ -85,6 +85,9 @@ export function registerSearchIpcHandlers(service: SearchBridge): void {
 	ipcMain.handle(SEARCH_CHANNELS.start, (_event, searchId: string, chatId: string, query: string, attachments) =>
 		service.start(searchId, chatId, query, attachments),
 	);
+	ipcMain.handle(SEARCH_CHANNELS.steer, (_event, searchId: unknown, text: unknown) =>
+		typeof searchId === "string" && typeof text === "string" ? service.steer(searchId, text) : false,
+	);
 	ipcMain.handle(SEARCH_CHANNELS.cancel, (_event, searchId: string) => service.cancel(searchId));
 	ipcMain.handle(SEARCH_CHANNELS.historyList, () => service.historyList());
 	ipcMain.handle(SEARCH_CHANNELS.historyGet, (_event, chatId: string) => service.historyGet(chatId));

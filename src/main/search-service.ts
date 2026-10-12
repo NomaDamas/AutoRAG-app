@@ -15,6 +15,7 @@ import type {
 	AnswerPhaseName,
 	ChatAttachment,
 	ChatMessageAssistant,
+	ChatRecord,
 	ChatMessageUser,
 	SearchBridge,
 	SearchStreamEvent,
@@ -54,6 +55,8 @@ type SearchAgent = {
 	readonly setAttachmentContext: (context: string) => void;
 	readonly subscribe?: (listener: (event: LiveAgentEvent) => void) => () => void;
 	readonly abort?: () => void;
+	/** Correct the running search; false when it no longer takes steers. */
+	readonly steer?: (text: string) => boolean;
 	readonly createChatSession?: (options: { readonly systemPrompt: string }) => ChatSession;
 };
 
@@ -74,9 +77,15 @@ interface SearchRun {
 	readonly finish: Promise<void>;
 	readonly resolveFinish: () => void;
 	cancelled: boolean;
+	/** The stream ended: the run takes no more steers. */
+	ended: boolean;
 	quick: AnswerPhase | null;
 	deep: AnswerPhase | null;
 	sessionId: string;
+	/** Steers sent that no model request has taken yet. */
+	pendingSteers: number;
+	/** Chat-store writes of this run, in order: each reads the record the previous one wrote. */
+	writes: Promise<void>;
 }
 
 /**
@@ -202,14 +211,37 @@ export function createSearchService(deps: SearchServiceDeps): SearchBridge {
 
 	const emit = (event: SearchStreamEvent): void => deps.send(SEARCH_CHANNELS.event, event);
 
-	async function saveRunMessage(run: SearchRun, stopped: boolean): Promise<void> {
-		const existing = await deps.chatStore.get(run.chatId);
-		if (existing === null) return;
-		const messages = existing.messages.filter((message) => message.role !== "assistant");
-		await deps.chatStore.save({
+	/** Runs one read-modify-write of the run's chat record after every earlier one. */
+	function writeChat(run: SearchRun, update: (existing: ChatRecord) => ChatRecord): Promise<void> {
+		const write = run.writes.then(async () => {
+			const existing = await deps.chatStore.get(run.chatId);
+			if (existing !== null) await deps.chatStore.save(update(existing));
+		});
+		run.writes = write.catch(() => undefined);
+		return write;
+	}
+
+	function saveRunMessage(run: SearchRun, stopped: boolean): Promise<void> {
+		return writeChat(run, (existing) => ({
 			...existing,
-			messages: [...messages, assistantMessage(run, stopped, now)],
+			messages: [...existing.messages.filter((message) => message.role !== "assistant"), assistantMessage(run, stopped, now)],
 			updatedAt: now().toISOString(),
+		}));
+	}
+
+	/** A steer joins the run's user turns, before its one assistant message. */
+	function saveSteer(run: SearchRun, text: string): Promise<void> {
+		const steer: ChatMessageUser = {
+			role: "user",
+			text,
+			attachments: [],
+			at: now().toISOString(),
+			steer: run.quick === null ? "before-quick" : "after-quick",
+		};
+		return writeChat(run, (existing) => {
+			const users = existing.messages.filter((message) => message.role !== "assistant");
+			const assistant = existing.messages.filter((message) => message.role === "assistant");
+			return { ...existing, messages: [...users, steer, ...assistant], updatedAt: steer.at };
 		});
 	}
 
@@ -219,7 +251,13 @@ export function createSearchService(deps: SearchServiceDeps): SearchBridge {
 		});
 		// Subscribe before the generator starts the run, or the first thinking
 		// tokens are lost.
-		const unsubscribe = agent.subscribe?.(mapLive);
+		const unsubscribe = agent.subscribe?.((event) => {
+			mapLive(event);
+			// Each model request starts with a user message, and queued steers go out with it.
+			if (event.type !== "message_start" || event.message?.role !== "user" || run.pendingSteers === 0) return;
+			run.pendingSteers = 0;
+			if (!run.cancelled) emit({ type: "steer-delivered", searchId: run.searchId });
+		});
 		try {
 			// Reading a large PDF can outlast a Stop; a cancelled run never reaches the agent.
 			const context = await (deps.attachmentContext ?? buildAttachmentContext)(attachments);
@@ -265,6 +303,7 @@ export function createSearchService(deps: SearchServiceDeps): SearchBridge {
 			}
 		} finally {
 			unsubscribe?.();
+			run.ended = true;
 			if (!run.cancelled) emit({ type: "done", searchId: run.searchId });
 			active.delete(run.searchId);
 			run.resolveFinish();
@@ -292,9 +331,12 @@ export function createSearchService(deps: SearchServiceDeps): SearchBridge {
 				finish,
 				resolveFinish,
 				cancelled: false,
+				ended: false,
 				quick: null,
 				deep: null,
 				sessionId: "",
+				pendingSteers: 0,
+				writes: Promise.resolve(),
 			};
 			// Register before the async factory resolves so Stop during creation
 			// cancels the run instead of racing it.
@@ -329,6 +371,16 @@ export function createSearchService(deps: SearchServiceDeps): SearchBridge {
 			run.agent = agent;
 			void consume(run, agent, query, attachments);
 			await finish;
+		},
+		steer: async (searchId, text) => {
+			const run = active.get(searchId);
+			const trimmed = text.trim();
+			// A run still building its agent has no search to steer yet; the caller asks it next.
+			if (run === undefined || run.cancelled || run.ended || run.agent?.steer === undefined || trimmed === "") return false;
+			if (!run.agent.steer(trimmed)) return false;
+			run.pendingSteers += 1;
+			await saveSteer(run, trimmed);
+			return true;
 		},
 		cancel: async (searchId) => {
 			const run = active.get(searchId);
