@@ -77,6 +77,9 @@
     "placeholder": "検索…",
     "clearSearch": "検索をクリア"
   },
+  "pathBar": {
+    "notFound": "\"{{path}}\" が見つかりません。"
+  },
   "scopeBar": {
     "search": "検索:",
     "thisMac": "このMac",

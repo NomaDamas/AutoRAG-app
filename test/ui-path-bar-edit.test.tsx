@@ -23,7 +23,7 @@ afterEach(() => {
 	host.remove();
 });
 
-function render(props: { path?: string; onNavigate?: (path: string) => void; onGoToPath?: (input: string) => Promise<boolean> }): void {
+function render(props: { path?: string; onNavigate?: (path: string) => void; onGoToPath?: (input: string) => Promise<boolean>; openEditor?: number; onEditorClosed?: () => void }): void {
 	const path = props.path ?? PATH;
 	act(() =>
 		root.render(
@@ -33,6 +33,8 @@ function render(props: { path?: string; onNavigate?: (path: string) => void; onG
 				selectedName={null}
 				onNavigate={props.onNavigate ?? (() => {})}
 				onGoToPath={props.onGoToPath ?? (() => Promise.resolve(true))}
+				openEditor={props.openEditor ?? 0}
+				onEditorClosed={props.onEditorClosed ?? (() => {})}
 			/>,
 		),
 	);

@@ -165,12 +165,18 @@ The app's own icon comes from the native thumbnail lane, which renders a bundle 
 | `⌘,` | Global | Open or focus Settings tab |
 | `⌘T` | Window | Open new Finder tab |
 | `⌘W` | Window | Close current Finder tab |
+| `⇧⌘T` | Window | Reopen the most recently closed folder tab (like a browser): same folder, back/forward history, selection and column chain, back in its old strip slot when it returns to the pane it left. Repeats through the last 20; Settings and AI Search tabs are not remembered |
 | `⌘F` | Window | Focus Instant Search bar |
+| `⌘L` | Window | Turn the path bar into a text field holding the current path. Enter goes there: a folder opens, a file opens its folder with the file selected; `~` expands to the home folder, pasted quotes and trailing separators are ignored, and a missing path toasts and stays. Escape or leaving the field cancels. Double-clicking the bar's empty part does the same |
 | `⌘K` | Window | Show the nearest AI Search tab (or open one) and focus its composer |
 | `⌘Z` | Finder | Undo the newest file operation (copy, move, duplicate, rename, New Folder / File, trash, Put Back, compress, extract); repeats back through the last 100 |
 | `⇧⌘Z` | Finder | Redo the operation the last ⌘Z took back |
 | `⇧⌘N` | Finder | New folder in the folder in view (inline rename starts at once) |
 | `⌥⌘N` | Finder | New text file in the folder in view (inline rename starts at once) |
+| `⌘R` | Finder | Inline rename of the single selected row (same state as the row menu's Rename) |
+| `⌥↑` | Finder | Go up to the enclosing folder; the folder just left is selected and scrolled into view |
+| `⌘D` | Finder | Duplicate the selected rows next to themselves (undoable with ⌘Z) |
+| Mouse back / forward buttons | Window | Same as the toolbar's Back and Forward (the tab's history, also on Settings and AI Search tabs); a press at either end of the history does nothing |
 | `Space` | File List | Quick Look preview of the selected file or folder (`src/preview/DESIGN.md`) |
 | `⌥ Space` | Global | Global AutoRAG Spotlight summon |
 | `Enter` | Search Bar | Commit search with Filenames |

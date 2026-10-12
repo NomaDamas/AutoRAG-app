@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveKeyAction } from "../src/renderer/src/state/keymap";
+import { mouseNavDirection, resolveKeyAction } from "../src/renderer/src/state/keymap";
 
 const finder = { zone: "finder" as const, typing: false };
 const key = (k: string, mods: Partial<{ meta: boolean; ctrl: boolean; shift: boolean; alt: boolean }> = {}) => ({
@@ -67,6 +67,13 @@ describe("resolveKeyAction", () => {
 		expect(resolveKeyAction(key("k", { meta: true }), { ...finder, typing: true })).toEqual({ type: "focusComposer" });
 	});
 
+	it("maps ⇧⌘T to reopen the closed tab, even from a text field, and keeps ⌘T as new tab", () => {
+		expect(resolveKeyAction(key("T", { meta: true, shift: true }), finder)).toEqual({ type: "reopenTab" });
+		expect(resolveKeyAction(key("t", { ctrl: true, shift: true }), finder)).toEqual({ type: "reopenTab" });
+		expect(resolveKeyAction(key("T", { meta: true, shift: true }), { ...finder, typing: true })).toEqual({ type: "reopenTab" });
+		expect(resolveKeyAction(key("t", { meta: true }), finder)).toEqual({ type: "newTab" });
+	});
+
 	it("maps control shortcuts for Windows and Linux", () => {
 		expect(resolveKeyAction(key("f", { ctrl: true }), finder)).toEqual({ type: "focusSearch" });
 	});
@@ -107,6 +114,39 @@ describe("resolveKeyAction", () => {
 		expect(resolveKeyAction(key("n", { meta: true }), finder)).toBeNull();
 		expect(resolveKeyAction(key("n", { meta: true, shift: true }), { ...finder, typing: true })).toBeNull();
 		expect(resolveKeyAction(key("n", { meta: true, alt: true }), { zone: "evidence", typing: false })).toBeNull();
+	});
+
+	it("maps ⌘R to rename, never while typing or outside the Finder zone", () => {
+		expect(resolveKeyAction(key("r", { meta: true }), finder)).toEqual({ type: "rename" });
+		expect(resolveKeyAction(key("R", { ctrl: true }), finder)).toEqual({ type: "rename" });
+		expect(resolveKeyAction(key("r", { meta: true }), { ...finder, typing: true })).toBeNull();
+		expect(resolveKeyAction(key("r", { meta: true }), { zone: "evidence", typing: false })).toBeNull();
+	});
+
+	it("maps ⌥↑ to the parent folder instead of moving the selection", () => {
+		expect(resolveKeyAction(key("ArrowUp", { alt: true }), finder)).toEqual({ type: "parentFolder" });
+		expect(resolveKeyAction(key("ArrowUp", { alt: true }), { ...finder, typing: true })).toBeNull();
+		expect(resolveKeyAction(key("ArrowUp", { alt: true }), { zone: "evidence", typing: false })).toBeNull();
+		expect(resolveKeyAction(key("ArrowUp"), finder)).toEqual({ type: "moveSelection", delta: -1 });
+	});
+
+	it("maps ⌘D to duplicate in the Finder zone only, leaving a text field its own ⌘D", () => {
+		expect(resolveKeyAction(key("d", { meta: true }), finder)).toEqual({ type: "duplicate" });
+		expect(resolveKeyAction(key("D", { ctrl: true }), finder)).toEqual({ type: "duplicate" });
+		expect(resolveKeyAction(key("d", { meta: true }), { ...finder, typing: true })).toBeNull();
+		expect(resolveKeyAction(key("d", { meta: true }), { zone: "evidence", typing: false })).toBeNull();
+	});
+
+	it("maps ⌘L to the path field, even from a text field, as a browser's address bar does", () => {
+		expect(resolveKeyAction(key("l", { meta: true }), finder)).toEqual({ type: "editPath" });
+		expect(resolveKeyAction(key("L", { ctrl: true }), finder)).toEqual({ type: "editPath" });
+		expect(resolveKeyAction(key("l", { meta: true }), { ...finder, typing: true })).toEqual({ type: "editPath" });
+	});
+
+	it("reads the mouse side buttons as Back (3) and Forward (4), and ignores the rest", () => {
+		expect(mouseNavDirection(3)).toBe("back");
+		expect(mouseNavDirection(4)).toBe("forward");
+		for (const other of [0, 1, 2, 5]) expect(mouseNavDirection(other)).toBeNull();
 	});
 
 	it("ignores unmapped keys", () => {

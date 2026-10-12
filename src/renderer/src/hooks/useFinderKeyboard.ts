@@ -3,7 +3,7 @@ import type { FinderEntry } from "../data/entries";
 import type { ColumnDirection } from "../state/columns";
 import { discloseStep, type TreeRow } from "../state/folder-tree";
 import type { GroupSection } from "../state/grouping";
-import { type FocusZone, type KeyAction, resolveKeyAction } from "../state/keymap";
+import { type FocusZone, type KeyAction, mouseNavDirection, resolveKeyAction } from "../state/keymap";
 import { moveSelection, type SelectionState } from "../state/selection";
 import { isVirtualTabPath } from "../state/tabs";
 import type { StackRow } from "../state/version-family";
@@ -17,6 +17,7 @@ const WINDOW_KEY_ACTIONS: Partial<Record<KeyAction["type"], true>> = {
 	focusSearch: true,
 	focusComposer: true,
 	newTab: true,
+	reopenTab: true,
 	closeTab: true,
 	openSettings: true,
 	setViewMode: true,
@@ -154,9 +155,14 @@ export interface FinderKeyboardInput {
 	readonly actions: {
 		dismiss(): void;
 		focusSearch(): void;
+		/** ⌘L: turn the path bar into a text field holding the current path. */
+		editPath(): void;
+		/** ⌘D: duplicate the selected rows next to themselves. */
+		duplicateSelection(): void;
 		newTab(): void;
 		newFolder(): void;
 		newFile(format: NewFileFormatId): void;
+		reopenClosedTab(): void;
 		closeTab(): void;
 		openSettings(): void;
 		focusComposer(): void;
@@ -170,11 +176,18 @@ export interface FinderKeyboardInput {
 		setFolderOpen(folder: string, open: boolean): void;
 		openEntry(entry: FinderEntry): void;
 		trash(paths: readonly string[]): void;
+		/** Start the inline rename of the focused row (⌘R). */
+		renameFocused(): void;
+		/** Go up to the enclosing folder and select the folder just left (⌥↑). */
+		goToParentFolder(): void;
 		copySelection(): void;
 		cutSelection(): void;
 		pasteClipboard(move: boolean): void;
 		undoLastOperation(): void;
 		redoLastOperation(): void;
+		/** The toolbar's Back and Forward, also driven by the mouse side buttons. */
+		back(): void;
+		forward(): void;
 	};
 }
 
@@ -223,9 +236,21 @@ export function useFinderKeyboard(input: FinderKeyboardInput): void {
 					event.preventDefault();
 					actions.focusSearch();
 					return;
+				case "editPath":
+					event.preventDefault();
+					actions.editPath();
+					return;
+				case "duplicate":
+					event.preventDefault();
+					actions.duplicateSelection();
+					return;
 				case "newTab":
 					event.preventDefault();
 					actions.newTab();
+					return;
+				case "reopenTab":
+					event.preventDefault();
+					actions.reopenClosedTab();
 					return;
 				case "newFolder":
 					event.preventDefault();
@@ -314,6 +339,14 @@ export function useFinderKeyboard(input: FinderKeyboardInput): void {
 					event.preventDefault();
 					actions.trash(selection.keys);
 					return;
+				case "rename":
+					event.preventDefault();
+					actions.renameFocused();
+					return;
+				case "parentFolder":
+					event.preventDefault();
+					actions.goToParentFolder();
+					return;
 				case "copy":
 					event.preventDefault();
 					actions.copySelection();
@@ -336,7 +369,28 @@ export function useFinderKeyboard(input: FinderKeyboardInput): void {
 					return;
 			}
 		};
+		// The mouse side buttons are the toolbar's Back and Forward. `mouseup`
+		// acts, and `mousedown`/`auxclick` are cancelled so the page never also
+		// runs Chromium's own history step.
+		const onMouseUp = (event: MouseEvent): void => {
+			const direction = mouseNavDirection(event.button);
+			if (direction === null) return;
+			event.preventDefault();
+			if (direction === "back") actions.back();
+			else actions.forward();
+		};
+		const swallow = (event: MouseEvent): void => {
+			if (mouseNavDirection(event.button) !== null) event.preventDefault();
+		};
 		window.addEventListener("keydown", onKeyDown);
-		return () => window.removeEventListener("keydown", onKeyDown);
+		window.addEventListener("mouseup", onMouseUp);
+		window.addEventListener("mousedown", swallow);
+		window.addEventListener("auxclick", swallow);
+		return () => {
+			window.removeEventListener("keydown", onKeyDown);
+			window.removeEventListener("mouseup", onMouseUp);
+			window.removeEventListener("mousedown", swallow);
+			window.removeEventListener("auxclick", swallow);
+		};
 	}, [focused, zone, path, layout, selection, orderedKeys, stackRows, stackSections, focusedEntry, listRef, actions]);
 }
