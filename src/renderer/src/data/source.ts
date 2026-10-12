@@ -66,6 +66,8 @@ export interface FinderSource {
 	onReconnect(listener: () => void): () => void;
 	liveLayers(): Promise<LiveResync>;
 	exists(path: string): Promise<boolean>;
+	/** The row for one path (folder or file); rejects when it is missing. */
+	stat(path: string): Promise<FinderEntry>;
 	list(path: string): Promise<readonly FinderEntry[]>;
 	/**
 	 * OS kind and icon URLs for rows already on screen. The results go to the
@@ -200,6 +202,7 @@ export function createBridgeSource(
 			return { ...result, layers: result.layers.map(mapLayerPublication) };
 		},
 		exists: (path) => fs.exists(path),
+		stat: async (path) => entryFromFs(await fs.stat(path)),
 		async list(path) {
 			const listing = await fs.listDir(path);
 			// A row's folder is derived from its path, so Recents rows point at the real folder.
@@ -456,6 +459,14 @@ export function createFixtureSource(): FinderSource {
 		enrich: async () => [],
 		finderMetadata: async () => [],
 		exists: (path) => Promise.resolve(state.tree.has(path) || findItem(state, path) !== null),
+		stat: (path) => {
+			const item = findItem(state, path);
+			if (item !== null) return Promise.resolve(entryFromFixture(item, dirname(path)));
+			if (state.tree.has(path)) {
+				return Promise.resolve(entryFromFixture({ name: basename(path), fileKind: "folder", dateLabel: "", sizeLabel: "" }, dirname(path)));
+			}
+			return Promise.reject(new Error(`No such file or folder: ${path}`));
+		},
 		list: (path) =>
 			Promise.resolve((state.tree.get(path) ?? []).map((item) => entryFromFixture(item, path))),
 		readEntries: async (dir, paths) => {

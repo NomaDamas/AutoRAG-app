@@ -396,9 +396,11 @@ export const FinderPane = memo(function FinderPane({
 							</div>
 						)}
 						<PathBar
+							path={finder.path}
 							crumbs={breadcrumbTrail(finder.path, Number.MAX_SAFE_INTEGER)}
 							selectedName={focusedEntry !== null && focusedEntry.kind === "file" ? focusedEntry.name : null}
 							onNavigate={finder.navigate}
+							onGoToPath={finder.goToPath}
 						/>
 					</>
 				)}
