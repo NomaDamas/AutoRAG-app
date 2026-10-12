@@ -77,6 +77,9 @@
     "placeholder": "搜索…",
     "clearSearch": "清除搜索"
   },
+  "pathBar": {
+    "notFound": "找不到 \"{{path}}\"。"
+  },
   "scopeBar": {
     "search": "搜索:",
     "thisMac": "这台 Mac",

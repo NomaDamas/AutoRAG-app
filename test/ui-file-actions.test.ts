@@ -8,17 +8,18 @@ import {
 	type FileActionItem,
 } from "../src/renderer/src/state/file-actions";
 
+/** What `capabilities()` reports on macOS 26 without ffmpeg: every sips-writable format. */
 const DARWIN: ActionCapabilities = {
 	openWith: true,
 	share: true,
 	archive: true,
-	imageFormats: ["jpeg", "png", "tiff", "heic"],
+	imageFormats: ["jpeg", "png", "heic", "avif", "gif", "tiff", "bmp"],
 	videoContainers: [],
 };
 
 const DARWIN_FFMPEG: ActionCapabilities = {
 	...DARWIN,
-	imageFormats: ["jpeg", "png", "tiff", "heic", "webp"],
+	imageFormats: ["jpeg", "png", "webp", "heic", "avif", "gif", "tiff", "bmp"],
 	videoContainers: ["mp4", "mov", "mkv"],
 };
 
@@ -137,8 +138,11 @@ describe("image menu", () => {
 		const items = menuItems(actions, "imageEdit");
 		expect(items.map((item) => item.label)).toEqual([
 			"JPEG로 변환",
-			"TIFF로 변환",
 			"HEIC로 변환",
+			"AVIF로 변환",
+			"GIF로 변환",
+			"TIFF로 변환",
+			"BMP로 변환",
 			"최대 1920px",
 			"최대 1280px",
 			"최대 640px",
@@ -151,6 +155,35 @@ describe("image menu", () => {
 		const items = menuItems(actions, "imageEdit");
 		expect(items.map((item) => item.label)).toContain("용량 최적화");
 		expect(items.map((item) => item.label)).not.toContain("HEIC로 변환");
+	});
+
+	it("leads an iPhone HEIC/HEIF photo's menu with JPEG and sends a JPEG conversion", () => {
+		for (const name of ["IMG_0001.HEIC", "IMG_0002.heif"]) {
+			const items = menuItems(suggestedActions({ name, kind: "file" }, DARWIN_FFMPEG), "imageEdit");
+			expect(items[0]).toEqual({
+				id: "image:convert:jpeg",
+				label: "JPEG로 변환",
+				target: { kind: "request", request: { kind: "convertImage", format: "jpeg" } },
+			});
+			expect(items.slice(0, 6).map((item) => item.label)).toEqual([
+				"JPEG로 변환",
+				"PNG로 변환",
+				"WebP로 변환",
+				"AVIF로 변환",
+				"GIF로 변환",
+				"TIFF로 변환",
+			]);
+		}
+	});
+
+	it("converts GIF, BMP and AVIF to every other format; resizes BMP/AVIF but never a (possibly animated) GIF", () => {
+		for (const name of ["anim.gif", "scan.bmp", "photo.avif"]) {
+			const labels = menuItems(suggestedActions({ name, kind: "file" }, DARWIN), "imageEdit").map((item) => item.label);
+			expect(labels).toContain("JPEG로 변환");
+			expect(labels.filter((label) => label.endsWith("로 변환"))).toHaveLength(DARWIN.imageFormats.length - 1);
+			expect(labels).not.toContain("용량 최적화");
+			expect(labels.includes("최대 640px")).toBe(name !== "anim.gif");
+		}
 	});
 
 	it("adds WebP conversion only when the machine can encode it", () => {

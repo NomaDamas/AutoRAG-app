@@ -32,6 +32,8 @@ export type KeyAction =
 	| { readonly type: "quickLook" }
 	| { readonly type: "open" }
 	| { readonly type: "trash" }
+	| { readonly type: "rename" }
+	| { readonly type: "parentFolder" }
 	| { readonly type: "copy" }
 	| { readonly type: "cut" }
 	| { readonly type: "paste"; readonly move: boolean }
@@ -44,8 +46,11 @@ export type KeyAction =
 	| { readonly type: "disclose"; readonly direction: "expand" | "collapse" }
 	| { readonly type: "dismiss" }
 	| { readonly type: "focusSearch" }
+	| { readonly type: "editPath" }
+	| { readonly type: "duplicate" }
 	| { readonly type: "focusComposer" }
 	| { readonly type: "newTab" }
+	| { readonly type: "reopenTab" }
 	| { readonly type: "closeTab" }
 	| { readonly type: "newFolder" }
 	| { readonly type: "newFile"; readonly format: NewFileFormatId }
@@ -58,10 +63,17 @@ export function resolveKeyAction(event: KeyEventLike, context: KeyContext): KeyA
 		switch (event.key.toLowerCase()) {
 			case "f":
 				return { type: "focusSearch" };
+			// ⌘L types a path into the path bar, as in a browser's address bar.
+			case "l":
+				return { type: "editPath" };
+			// ⌘D duplicates the selection, as in Finder.
+			case "d":
+				return context.typing || context.zone !== "finder" ? null : { type: "duplicate" };
 			case "k":
 				return { type: "focusComposer" };
+			// ⇧⌘T brings back the tab ⌘W closed, as in a browser.
 			case "t":
-				return { type: "newTab" };
+				return event.shift ? { type: "reopenTab" } : { type: "newTab" };
 			case "w":
 				return { type: "closeTab" };
 			case ",":
@@ -77,6 +89,9 @@ export function resolveKeyAction(event: KeyEventLike, context: KeyContext): KeyA
 				return context.typing || context.zone !== "finder" ? null : { type: "cut" };
 			case "v":
 				return context.typing || context.zone !== "finder" ? null : { type: "paste", move: false };
+			case "r":
+				// ⌘R renames the selected row, as Finder's Return does.
+				return context.typing || context.zone !== "finder" ? null : { type: "rename" };
 			case "z":
 				// ⌘Z undoes the newest file operation; ⇧⌘Z redoes the one it took back.
 				if (context.typing || context.zone !== "finder") return null;
@@ -98,6 +113,10 @@ export function resolveKeyAction(event: KeyEventLike, context: KeyContext): KeyA
 	}
 	if (context.typing) {
 		return null;
+	}
+	// ⌥↑ goes up to the enclosing folder; it must not fall through to the plain ↑ row move.
+	if (event.alt && !event.meta && event.key === "ArrowUp") {
+		return context.zone === "finder" ? { type: "parentFolder" } : null;
 	}
 	if (event.key === " ") {
 		return { type: "quickLook" };
@@ -122,5 +141,15 @@ export function resolveKeyAction(event: KeyEventLike, context: KeyContext): KeyA
 	if ((event.key === "Delete" || event.key === "Backspace") && context.zone === "finder") {
 		return { type: "trash" };
 	}
+	return null;
+}
+
+/**
+ * The history step a mouse button asks for: the side buttons are DOM buttons
+ * 3 (back) and 4 (forward). Anything else is not navigation.
+ */
+export function mouseNavDirection(button: number): "back" | "forward" | null {
+	if (button === 3) return "back";
+	if (button === 4) return "forward";
 	return null;
 }

@@ -165,12 +165,18 @@ The app's own icon comes from the native thumbnail lane, which renders a bundle 
 | `⌘,` | Global | Open or focus Settings tab |
 | `⌘T` | Window | Open new Finder tab |
 | `⌘W` | Window | Close current Finder tab |
+| `⇧⌘T` | Window | Reopen the most recently closed folder tab (like a browser): same folder, back/forward history, selection and column chain, back in its old strip slot when it returns to the pane it left. Repeats through the last 20; Settings and AI Search tabs are not remembered |
 | `⌘F` | Window | Focus Instant Search bar |
+| `⌘L` | Window | Turn the path bar into a text field holding the current path. Enter goes there: a folder opens, a file opens its folder with the file selected; `~` expands to the home folder, pasted quotes and trailing separators are ignored, and a missing path toasts and stays. Escape or leaving the field cancels. Double-clicking the bar's empty part does the same |
 | `⌘K` | Window | Show the nearest AI Search tab (or open one) and focus its composer |
 | `⌘Z` | Finder | Undo the newest file operation (copy, move, duplicate, rename, New Folder / File, trash, Put Back, compress, extract); repeats back through the last 100 |
 | `⇧⌘Z` | Finder | Redo the operation the last ⌘Z took back |
 | `⇧⌘N` | Finder | New folder in the folder in view (inline rename starts at once) |
 | `⌥⌘N` | Finder | New text file in the folder in view (inline rename starts at once) |
+| `⌘R` | Finder | Inline rename of the single selected row (same state as the row menu's Rename) |
+| `⌥↑` | Finder | Go up to the enclosing folder; the folder just left is selected and scrolled into view |
+| `⌘D` | Finder | Duplicate the selected rows next to themselves (undoable with ⌘Z) |
+| Mouse back / forward buttons | Window | Same as the toolbar's Back and Forward (the tab's history, also on Settings and AI Search tabs); a press at either end of the history does nothing |
 | `Space` | File List | Quick Look preview of the selected file or folder (`src/preview/DESIGN.md`) |
 | `⌥ Space` | Global | Global AutoRAG Spotlight summon |
 | `Enter` | Search Bar | Commit search with Filenames |
@@ -204,9 +210,19 @@ The Info half's bottom bar is data-driven, not a fixed four buttons.
   that file; main refuses anything else. Off macOS the OS list cannot be read,
   so the menu is just `기타…`.
 - **Whether an action is real** comes from `actions:capabilities` in main: the
-  macOS share sheet, the image engine (`sips`, plus WebP through `ffmpeg`), and
-  video container conversion (`ffmpeg`) are probed once per session. A missing
-  engine removes the button instead of failing on click.
+  macOS share sheet, the image engine, and video container conversion
+  (`ffmpeg`) are probed once per session. A missing engine removes the button
+  instead of failing on click.
+- **이미지 편집 → ○○로 변환** converts any image (HEIC/HEIF, JPEG, PNG, WebP,
+  AVIF, GIF, TIFF, BMP) into every other format the machine can write, listed
+  most common first: JPEG · PNG · WebP · HEIC · AVIF · GIF · TIFF · BMP, minus
+  the source's own format. On macOS `sips` writes everything except WebP, and
+  `sips --formats` decides which of them this macOS can write (AVIF is newer);
+  WebP needs an `ffmpeg` that lists a WebP encoder. Elsewhere `ffmpeg` is the
+  whole engine: its `-encoders`/`-muxers` lists gate each format (HEIC needs
+  `libx265` + `heif`, AVIF an AV1 encoder + `avif`), and GIF gets a per-image
+  palette. Resizing (최대 ○px) keeps the source format and is not offered for
+  GIF, because both engines resize one frame and would drop an animation.
 - **Adding an action** is two edits: one entry in `suggestedActions` (label,
   icon, and the `ActionRequest` it runs) and one `case` in
   `createActionService.run` (`src/main/action-service.ts`). The bar, the menu,

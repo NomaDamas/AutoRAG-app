@@ -107,6 +107,7 @@ import {
 	focusTab,
 	focusAiSearchInWorkspace,
 	openOrSelectSettingsInWorkspace,
+	reopenClosedTab as reopenClosedWorkspaceTab,
 	updatePaneTabs,
 	type Pane,
 	type Workspace,
@@ -165,6 +166,12 @@ export interface FinderController {
 	readonly canGoForward: boolean;
 	readonly query: string;
 	readonly searchFocused: boolean;
+	/** Bumped by every ⌘L: each bump opens (or re-selects) the path bar's editor. */
+	readonly pathEditingCount: number;
+	/** Start editing the path (⌘L). */
+	editPath(): void;
+	/** The edit ended: Enter, Escape, or the bar closed it itself. */
+	endPathEdit(): void;
 	readonly searching: boolean;
 	readonly emptyText: string;
 	readonly rows: readonly FinderEntry[];
@@ -396,6 +403,7 @@ export function useFinderController(
 	const [emptyTrashConfirm, setEmptyTrashConfirm] = useState(false);
 	const [flashPath, setFlashPath] = useState<string | null>(null);
 	const [searchFocused, setSearchFocused] = useState(false);
+	const [pathEditingCount, setPathEditingCount] = useState(0);
 	const [revision, setRevision] = useState(0);
 	const [actionCapabilities, setActionCapabilities] = useState<ActionCapabilities>(NO_CAPABILITIES);
 	const [layerStore, setLayerStore] = useState<LayerStore>(EMPTY_LAYER_STORE);
@@ -994,6 +1002,19 @@ export function useFinderController(
 				.catch(reportError);
 		});
 
+	/** Duplicate rows next to themselves (⌘D and the row menu). */
+	const duplicatePaths = useLatestCallback(
+		(paths: readonly string[]) => {
+			if (paths.length === 0) return;
+			source
+				.duplicate(paths)
+				.then((result) => {
+					if (result.failed.length > 0) showToast(batchToast("duplicate", result));
+					refresh();
+				})
+				.catch(reportError);
+		});
+
 	/** The sidebar's Trash location, the only folder whose rows restore instead of trash. */
 	const trashLocationPath = useMemo(
 		() => locations.find((location) => location.icon === "trash")?.path ?? null,
@@ -1527,13 +1548,7 @@ export function useFinderController(
 					cutPaths(targets);
 					return;
 				case "duplicate":
-					source
-						.duplicate(targets)
-						.then((result) => {
-							if (result.failed.length > 0) showToast(batchToast("duplicate", result));
-							refresh();
-						})
-						.catch(reportError);
+					duplicatePaths(targets);
 					return;
 				case "rename":
 					setRename({ path: entry.path, draft: entry.name });
@@ -1623,6 +1638,25 @@ export function useFinderController(
 			.catch(reportError);
 	});
 
+	/** ⌘R: inline rename of the single focused row, the same state the context menu's 이름 변경 starts. */
+	const renameFocused = useLatestCallback(() => {
+		const entry = focusedEntry;
+		if (entry === null || selection.keys.length > 1) return;
+		setRename({ path: entry.path, draft: entry.name });
+	});
+
+	/** ⌥↑: the enclosing folder, with the folder just left selected and scrolled into view. */
+	const goToParentFolder = useLatestCallback(() => {
+		if (path === "" || isVirtualListing(path) || isVirtualTabPath(path)) return;
+		const parent = dirname(path);
+		if (parent === "" || parent === path) return;
+		setTabsState((state) =>
+			patchActiveTab(navigateTab(state, parent), (current) => ({ ...current, selection: single(path) })),
+		);
+		setQueryValue("");
+		scrollTarget.current = path;
+	});
+
 	/**
 	 * Ask the OS which services it offers for `paths` and show them in the open
 	 * menu. The menu opens at once without them; a slow answer for a menu that
@@ -1702,6 +1736,9 @@ export function useFinderController(
 		focusSearchRef.current?.();
 		searchRef.current?.focus();
 	});
+	const editPath = useLatestCallback(() => setPathEditingCount((count) => count + 1));
+	const endPathEdit = useLatestCallback(() => setPathEditingCount((count) => count));
+	const duplicateSelection = useLatestCallback(() => duplicatePaths(selection.keys));
 	const closeActiveTab = useLatestCallback(() =>
 		updateWorkspace((workspace) => {
 			const current = workspace.panes.find((candidate) => candidate.id === paneId);
@@ -1713,13 +1750,34 @@ export function useFinderController(
 		focusComposerRef.current?.();
 	});
 	const newTab = useLatestCallback(() => setTabsState((state) => openTab(state)));
+	// ⇧⌘T: the closed tab returns active in this pane; once it is the shown tab,
+	// scroll to the row it had selected (the scroll offset itself is not kept).
+	const revealOnReopenRef = useRef(false);
+	const reopenClosedTab = useLatestCallback(() =>
+		updateWorkspace((workspace) => {
+			const next = reopenClosedWorkspaceTab(workspace);
+			if (next !== workspace) revealOnReopenRef.current = true;
+			return next;
+		}),
+	);
+	const shownTabId = tab.id;
+	useEffect(() => {
+		if (!revealOnReopenRef.current) return;
+		revealOnReopenRef.current = false;
+		scrollTarget.current = selection.focus;
+	}, [shownTabId]);
+	const back = useLatestCallback(() => setTabsState((state) => goBack(state)));
+	const forward = useLatestCallback(() => setTabsState((state) => goForward(state)));
 	const openSettings = useLatestCallback(() => updateWorkspace(openOrSelectSettingsInWorkspace));
 	// Every member is a stable useLatestCallback, so this object is created once.
 	const keyActions = useMemo(
 		() => ({
 			dismiss,
 			focusSearch,
+			editPath,
+			duplicateSelection,
 			newTab,
+			reopenClosedTab,
 			newFolder,
 			newFile,
 			closeTab: closeActiveTab,
@@ -1733,19 +1791,26 @@ export function useFinderController(
 			setFolderOpen,
 			openEntry,
 			trash: trashPaths,
+			renameFocused,
+			goToParentFolder,
 			copySelection,
 			cutSelection,
 			pasteClipboard,
 			undoLastOperation,
 			redoLastOperation,
+			back,
+			forward,
 		}),
 		[
 			dismiss,
 			focusSearch,
+			editPath,
+			duplicateSelection,
 			newTab,
 			newFolder,
 			newFile,
-			closeActiveTab,
+			newTab,
+			reopenClosedTab,
 			openSettings,
 			focusComposer,
 			quickLookSelection,
@@ -1756,11 +1821,15 @@ export function useFinderController(
 			setFolderOpen,
 			openEntry,
 			trashPaths,
+			renameFocused,
+			goToParentFolder,
 			copySelection,
 			cutSelection,
 			pasteClipboard,
 			undoLastOperation,
 			redoLastOperation,
+			back,
+			forward,
 		],
 	);
 	useFinderKeyboard({
@@ -1836,8 +1905,6 @@ export function useFinderController(
 	const openAiSearch = useLatestCallback(() => setTabsState((state) => openAiSearchTab(state)));
 	const focusAiSearch = useLatestCallback(() => updateWorkspace(focusAiSearchInWorkspace));
 	const leaveVirtualTab = useLatestCallback(() => setTabsState((state) => exitVirtualTab(state)));
-	const back = useLatestCallback(() => setTabsState((state) => goBack(state)));
-	const forward = useLatestCallback(() => setTabsState((state) => goForward(state)));
 	const sortBy = useLatestCallback((key: SortKey) => setSort((current) => cycleSort(current, key)));
 	const focusFinder = useLatestCallback(() => setZone("finder"));
 	const clickRow = useLatestCallback((entry: FinderEntry, event: ReactMouseEvent<HTMLDivElement>) => {
@@ -1951,6 +2018,9 @@ export function useFinderController(
 		forward,
 		setQuery: setQueryValue,
 		setSearchFocused,
+		pathEditingCount,
+		editPath,
+		endPathEdit,
 		sortBy,
 		applySort,
 		setGrouping,

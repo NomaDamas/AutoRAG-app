@@ -1,5 +1,6 @@
 import {
 	useCallback,
+	useEffect,
 	useLayoutEffect,
 	useRef,
 	useState,
@@ -63,6 +64,8 @@ export function PathBar({
 	selectedName,
 	onNavigate,
 	onGoToPath,
+	openEditor,
+	onEditorClosed,
 }: {
 	/** The folder in view; the editor opens holding it. */
 	readonly path: string;
@@ -71,6 +74,10 @@ export function PathBar({
 	readonly onNavigate: (path: string) => void;
 	/** Go to a typed location; resolves false (editor stays open) when it cannot be opened. */
 	readonly onGoToPath: (input: string) => Promise<boolean>;
+	/** ⌘L: the Finder keymap opened the editor; counted up on every press so a repeat press re-selects. */
+	readonly openEditor: number;
+	/** The editor reports that it closed (Enter, Escape, blur), so the keymap can open it again. */
+	readonly onEditorClosed: () => void;
 }): ReactElement {
 	const { t } = useTranslation();
 	const first = crumbs[0];
@@ -144,9 +151,22 @@ export function PathBar({
 	const editorRef = useRef<HTMLInputElement>(null);
 	if (editFor !== null && editFor !== path) setEditFor(null);
 	const editing = editFor === path;
+	const openedByEditor = useRef(0);
 	useLayoutEffect(() => {
 		if (editing) editorRef.current?.select();
 	}, [editing]);
+	// ⌘L opens the editor from the keyboard; a press while it is already open
+	// re-selects, and one after it closed reopens it.
+	useEffect(() => {
+		if (openEditor === openedByEditor.current) return;
+		openedByEditor.current = openEditor;
+		if (openEditor === 0) return;
+		setDraft(path);
+		setEditFor(path);
+	}, [openEditor, path]);
+	useEffect(() => {
+		if (!editing) onEditorClosed();
+	}, [editing, onEditorClosed]);
 
 	const startEditing = (event: MouseEvent<HTMLElement>): void => {
 		if (editing || (event.target as Element).closest("[data-crumb-path]") !== null) return;

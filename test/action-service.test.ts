@@ -33,17 +33,35 @@ interface Harness {
 
 /**
  * A realistic `ffmpeg -encoders` body: the image encoders this machine has, but
- * no heif muxer (so HEIC stays hidden), matching the probe's parsing contract.
+ * no heif/avif muxer (so HEIC and AVIF stay hidden), matching the probe's
+ * parsing contract.
  */
 const FFMPEG_ENCODERS =
 	" V....D apng                 APNG image\n" +
+	" V....D bmp                  BMP (Windows and OS/2 bitmap)\n" +
+	" V....D gif                  GIF (Graphics Interchange Format)\n" +
 	" VFS..D mjpeg                MJPEG (Motion JPEG)\n" +
 	" VF...D png                  PNG image\n" +
 	" VF...D tiff                 TIFF image\n" +
 	" V....D libwebp              libwebp WebP image\n" +
+	" V..... libsvtav1            SVT-AV1 encoder (codec av1)\n" +
 	" V....D libx265              libx265 H.265 / HEVC\n";
-/** A muxer list without `heif`, so HEIC is not offered. */
-const FFMPEG_MUXERS = "  E  image2          image2 sequence\n  E  mp4             MP4\n";
+/** A muxer list without `heif` or `avif`, so HEIC and AVIF are not offered. */
+const FFMPEG_MUXERS = "  E  image2          image2 sequence\n  E  gif             GIF\n  E  mp4             MP4\n";
+/** `sips --formats` as macOS 26 prints it (abridged): which UTIs ImageIO can write. */
+const SIPS_FORMATS_LISTING =
+	"Supported Formats:\n" +
+	"-------------------------------------------\n" +
+	"com.adobe.pdf                pdf   Writable\n" +
+	"com.compuserve.gif           gif   Writable\n" +
+	"com.microsoft.bmp            bmp   Writable\n" +
+	"org.webmproject.webp         webp  \n" +
+	"public.avif                  avif  Writable\n" +
+	"public.heic                  heic  Writable\n" +
+	"public.heif                  heif  \n" +
+	"public.jpeg                  jpeg  Writable\n" +
+	"public.png                   png   Writable\n" +
+	"public.tiff                  tiff  Writable\n";
 
 /** A service whose external commands are recorded and whose "image" output is written. */
 function makeService(
@@ -53,8 +71,12 @@ function makeService(
 		readonly picked?: string | null;
 		/** Bytes written for a produced image; keep below the source to pass optimize. */
 		readonly imageOutput?: string;
-		/** Overrides the fake `ffmpeg -muxers` body (default: no heif muxer). */
+		/** Overrides the fake `ffmpeg -encoders` body. */
+		readonly encoders?: string;
+		/** Overrides the fake `ffmpeg -muxers` body (default: no heif/avif muxer). */
 		readonly muxers?: string;
+		/** Overrides the fake `sips --formats` body; `null` makes the probe fail. */
+		readonly sipsFormats?: string | null;
 		/** Applications the fake Launch Services reports for any file, default first. */
 		readonly registered?: readonly string[];
 		/** Make the Launch Services lookup fail. */
@@ -70,8 +92,13 @@ function makeService(
 		if (command === "ffmpeg" && args[0] === "-version") {
 			return { stdout: "ffmpeg version 9", stderr: "" };
 		}
-		if (command === "ffmpeg" && args.includes("-encoders")) return { stdout: FFMPEG_ENCODERS, stderr: "" };
+		if (command === "ffmpeg" && args.includes("-encoders")) return { stdout: options.encoders ?? FFMPEG_ENCODERS, stderr: "" };
 		if (command === "ffmpeg" && args.includes("-muxers")) return { stdout: options.muxers ?? FFMPEG_MUXERS, stderr: "" };
+		if (command === "sips" && args[0] === "--formats") {
+			const listing = options.sipsFormats === undefined ? SIPS_FORMATS_LISTING : options.sipsFormats;
+			if (listing === null) throw new Error("sips: unrecognized option");
+			return { stdout: listing, stderr: "" };
+		}
 		if (command === "osascript") {
 			if (options.lookupFails === true) throw new Error("osascript failed");
 			const [defaultPath = null, ...rest] = options.registered ?? [];
@@ -309,6 +336,14 @@ describe("image actions", () => {
 		]);
 	});
 
+	it("hides WebP on macOS when the ffmpeg build has no libwebp encoder", async () => {
+		const { service } = makeService({ ffmpeg: true, encoders: FFMPEG_ENCODERS.replace(/^.*libwebp.*\n/mu, "") });
+		expect((await service.capabilities()).imageFormats).not.toContain("webp");
+		const source = join(root, "photo.heic");
+		await writeFile(source, "heic");
+		await expect(service.run([source], { kind: "convertImage", format: "webp" }, null)).rejects.toThrow(/WEBP/);
+	});
+
 	it("resizes to a bounded long edge and refuses WebP sources", async () => {
 		const { service, commands } = makeService();
 		const source = join(root, "photo.jpeg");
@@ -332,6 +367,59 @@ describe("image actions", () => {
 		const png = join(root, "flat.png");
 		await writeFile(png, "png");
 		await expect(service.run([png], { kind: "optimizeImage" }, null)).rejects.toThrow(/지원하지 않습니다/);
+	});
+
+	it("converts HEIC to JPEG through sips", async () => {
+		const { service, commands } = makeService({ ffmpeg: false });
+		const source = join(root, "IMG_0001.HEIC");
+		await writeFile(source, "heic");
+
+		const outcome = await service.run([source], { kind: "convertImage", format: "jpeg" }, null);
+		expect(outcome.output).toBe(join(root, "IMG_0001.jpg"));
+		expect(commands.at(-1)).toEqual({
+			command: "sips",
+			args: ["-s", "format", "jpeg", "--out", join(root, "IMG_0001.jpg"), source],
+		});
+	});
+
+	it.each([
+		["gif", "gif"],
+		["bmp", "bmp"],
+		["avif", "avif"],
+	] as const)("writes %s through sips with the .%s extension", async (format, extension) => {
+		const { service, commands } = makeService({ ffmpeg: false });
+		const source = join(root, "photo.heic");
+		await writeFile(source, "heic");
+
+		const outcome = await service.run([source], { kind: "convertImage", format }, null);
+		expect(outcome.output).toBe(join(root, `photo.${extension}`));
+		expect(commands.at(-1)).toEqual({
+			command: "sips",
+			args: ["-s", "format", format, "--out", join(root, `photo.${extension}`), source],
+		});
+	});
+
+	it("refuses AVIF when this macOS cannot write it", async () => {
+		const { service } = makeService({
+			ffmpeg: false,
+			sipsFormats: SIPS_FORMATS_LISTING.replace("public.avif                  avif  Writable", "public.avif  avif"),
+		});
+		const source = join(root, "photo.heic");
+		await writeFile(source, "heic");
+		await expect(service.run([source], { kind: "convertImage", format: "avif" }, null)).rejects.toThrow(/AVIF/);
+	});
+
+	it("resizes BMP through sips but refuses GIF, whose animation a one-frame resize would drop", async () => {
+		const { service, commands } = makeService();
+		const bmp = join(root, "scan.bmp");
+		await writeFile(bmp, "bmp");
+		const outcome = await service.run([bmp], { kind: "resizeImage", maxEdge: 640 }, null);
+		expect(outcome.output).toBe(join(root, "scan-640.bmp"));
+		expect(commands.at(-1)?.args).toEqual(["-Z", "640", "--out", join(root, "scan-640.bmp"), bmp]);
+
+		const gif = join(root, "anim.gif");
+		await writeFile(gif, "gif");
+		await expect(service.run([gif], { kind: "resizeImage", maxEdge: 640 }, null)).rejects.toThrow(/지원하지 않습니다/);
 	});
 });
 
@@ -451,6 +539,53 @@ describe("image actions on Windows (ffmpeg backend)", () => {
 		const args = commands.at(-1)?.args ?? [];
 		expect(args.join(" ")).toContain("-crf 23");
 		expect(args.join(" ")).not.toContain("-q:v");
+	});
+
+	it("quantizes GIF through a generated palette, without image2's -update", async () => {
+		const { service, commands } = makeService({ platform: "win32" });
+		const source = join(root, "photo.heic");
+		await writeFile(source, "heic");
+		const outcome = await service.run([source], { kind: "convertImage", format: "gif" }, null);
+		expect(outcome.output).toBe(join(root, "photo.gif"));
+		const args = commands.at(-1)?.args ?? [];
+		expect(args.join(" ")).toContain("palettegen");
+		expect(args.join(" ")).toContain("paletteuse");
+		expect(args).not.toContain("-update");
+		expect(args.at(-1)).toBe(join(root, "photo.gif"));
+	});
+
+	it("writes BMP as a literal single image2 file", async () => {
+		const { service, commands } = makeService({ platform: "win32" });
+		const source = join(root, "shot.png");
+		await writeFile(source, "png");
+		const outcome = await service.run([source], { kind: "convertImage", format: "bmp" }, null);
+		expect(outcome.output).toBe(join(root, "shot.bmp"));
+		const args = commands.at(-1)?.args ?? [];
+		expect(args.join(" ")).toContain("-update 1");
+		expect(args.at(-1)).toBe(join(root, "shot.bmp"));
+	});
+
+	it("hides AVIF without the avif muxer", async () => {
+		const { service } = makeService({ platform: "win32" });
+		const source = join(root, "shot.png");
+		await writeFile(source, "png");
+		await expect(service.run([source], { kind: "convertImage", format: "avif" }, null)).rejects.toThrow(/AVIF/);
+	});
+
+	it("encodes AVIF with the AV1 encoder the build lists", async () => {
+		const { service, commands } = makeService({
+			platform: "win32",
+			muxers: "  E  image2          image2 sequence\n  E  avif            AVIF\n",
+		});
+		const source = join(root, "photo.heic");
+		await writeFile(source, "heic");
+		const outcome = await service.run([source], { kind: "convertImage", format: "avif" }, null);
+		expect(outcome.output).toBe(join(root, "photo.avif"));
+		const args = commands.at(-1)?.args ?? [];
+		expect(args.join(" ")).toContain("-c:v libsvtav1");
+		expect(args.join(" ")).toContain("-pix_fmt yuv420p");
+		expect(args.join(" ")).toContain("-crf");
+		expect(args).not.toContain("-update");
 	});
 });
 
@@ -593,32 +728,40 @@ describe("batch targets", () => {
 });
 
 describe("capabilities", () => {
-	it("reports the macOS engines and probes ffmpeg once", async () => {
+	it("reports the macOS engines, ordered by how common each format is, and probes once", async () => {
 		const { service, commands } = makeService({ ffmpeg: true });
 		const capabilities = await service.capabilities();
 		expect(capabilities).toEqual({
 			openWith: true,
 			share: true,
 			archive: true,
-			imageFormats: ["jpeg", "png", "tiff", "heic", "webp"],
+			imageFormats: ["jpeg", "png", "webp", "heic", "avif", "gif", "tiff", "bmp"],
 			videoContainers: ["mp4", "mov", "mkv"],
 		});
 		await service.capabilities();
-		expect(commands.filter((command) => command.command === "ffmpeg")).toHaveLength(1);
+		// One probe each per session: `-version`, `-encoders`, `-muxers`, and `sips --formats`.
+		expect(commands.filter((command) => command.command === "ffmpeg")).toHaveLength(3);
+		expect(commands.filter((command) => command.command === "sips")).toHaveLength(1);
 	});
 
-	it("drops video containers without ffmpeg and keeps the native image formats", async () => {
+	it("drops video containers without ffmpeg and keeps the sips-writable image formats", async () => {
 		const { service } = makeService({ ffmpeg: false });
 		const capabilities = await service.capabilities();
 		expect(capabilities.videoContainers).toEqual([]);
-		expect(capabilities.imageFormats).toEqual(["jpeg", "png", "tiff", "heic"]);
+		expect(capabilities.imageFormats).toEqual(["jpeg", "png", "heic", "avif", "gif", "tiff", "bmp"]);
+	});
+
+	it("falls back to the formats every sips writes when the format probe fails", async () => {
+		const { service } = makeService({ ffmpeg: false, sipsFormats: null });
+		const capabilities = await service.capabilities();
+		expect(capabilities.imageFormats).toEqual(["jpeg", "png", "heic", "gif", "tiff", "bmp"]);
 	});
 
 	it("offers ffmpeg-backed image formats on Windows but still no share sheet", async () => {
 		const { service } = makeService({ platform: "win32" });
 		const capabilities = await service.capabilities();
-		// The probe lists mjpeg/png/libwebp/tiff and no heif muxer.
-		expect(capabilities.imageFormats).toEqual(["jpeg", "png", "webp", "tiff"]);
+		// The probe lists mjpeg/png/libwebp/gif/tiff/bmp and no heif or avif muxer.
+		expect(capabilities.imageFormats).toEqual(["jpeg", "png", "webp", "gif", "tiff", "bmp"]);
 		expect(capabilities.share).toBe(false);
 		await expect(service.share([join(root, "a.txt")], { x: 0, y: 0, width: 10, height: 10 }, null)).rejects.toThrow(
 			/지원하지 않습니다/,
