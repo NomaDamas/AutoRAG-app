@@ -12,8 +12,10 @@ import { fileURLToPath } from "node:url";
  * drives: the full-height Evidence view on an AI Search tab and Info on a
  * folder tab, citation chips, evidence tabs (no thumbs controls: the librarian dropped feedback),
  * title -> new-tab reveal with file selection, the datasource virtual-source
- * title guard, and a web-page source opening in the OS browser (main's
- * shell.openExternal is stubbed to record the URL, so no browser launches).
+ * title guard, a web-page source opening in the OS browser (main's
+ * shell.openExternal is stubbed to record the URL, so no browser launches),
+ * and chunks whose markup the chunker cut: spreadsheet rows without their
+ * <table> (starting inside a cell), a headerless pipe table, and hostile HTML.
  *
  * Run from the repo root:  bun scripts/manual-qa/run-qa-finder-evidence-panel.mjs
  * Prereq: bun run build
@@ -38,6 +40,7 @@ const USER_DATA = join(tmpdir(), RUN_ID);
 const DOCS = join(homedir(), "Documents", RUN_ID);
 const POLICY = join(DOCS, "한글 공백 정책.md");
 const MEMO = join(DOCS, "qa-evidence-memo.md");
+const SHEET = join(DOCS, "260414 발표 목차_v0.6.xlsx");
 const FOLDER = basename(DOCS);
 /** A web evidence source, the shape a model cites for a page it read. */
 const WEB_SOURCE = "https://music.bugs.co.kr/artist/20047596";
@@ -70,6 +73,7 @@ mkdirSync(join(USER_DATA, "chat-history"), { recursive: true });
 mkdirSync(DOCS, { recursive: true });
 writeFileSync(POLICY.normalize("NFD"), "## 승인 규칙\n1. 일반 환불은 5영업일 내 처리합니다.\n2. 예외는 임원 승인이 필요합니다.\n비고: 긴급 예외도 승인 생략 불가.\n");
 writeFileSync(MEMO, "## 메모\n승인 체인 원본 첨부 필수.\n");
+writeFileSync(SHEET, "fixture");
 log(`fixtures: ${DOCS}`);
 
 const evidenceAll = [
@@ -106,6 +110,25 @@ const evidenceAll = [
 		source: WEB_SOURCE,
 		excerpts: ["프로미스나인은 2018년 1월 24일 9인조로 데뷔."],
 		confidence: 0.9,
+	},
+	{
+		number: 5,
+		title: "260414 발표 목차_v0.6.xlsx",
+		summary: "발표 목차(최신 v0.6)에 별도 항목 존재**: '오픈소스 커뮤니티' 섹션에 \"해커톤/컨퍼런스/확산\" 항목이 명시적으로 들어가 있습니다",
+		source: SHEET,
+		excerpts: [
+			[
+				"사용 시나리오</td><td>15</td><td>핵심 사용 시나리오</td><td>○</td></tr>",
+				"<tr><td>고도화 후 실제 사용 시나리오 &amp; 경쟁 우위</td><td>16</td><td></td><td></td></tr>",
+				"<tr><td>왜 오픈소스여야 하는가</td><td>17</td><td>○</td><td></td></tr>",
+				"<tr><td>개발 로드맵</td><td>18</td><td>○</td><td></td></tr>",
+				"<tr><td>모듈 분리 운영 전략</td><td>19</td><td></td><td></td></tr>",
+				"<tr><td>20</td><td>기관별",
+			].join("\n"),
+			"| 오픈소스 커뮤니티 | 21 | 해커톤/컨퍼런스/확산 |\n| 마무리 | 22 | **Q&A** |",
+			'<div onclick="window.__qaPwned = true"><p>정상 문단</p><script>window.__qaPwned = true</script><img src="https://tracker.example/p.gif" alt=""><a href="https://example.com/roadmap">로드맵 링크</a> <a href="javascript:window.__qaPwned = true">나쁜 링크</a></div>',
+		],
+		confidence: 0.77,
 	},
 ];
 const record = {
@@ -350,6 +373,73 @@ check("opening a web source adds no Finder tab", (await page.locator(".tabs .tab
 check("opening a web source raises no error toast", (await page.locator(".toast").count()) === 0, (await page.locator(".toast").textContent().catch(() => "")) ?? "");
 await page.screenshot({ path: join(EVIDENCE, "07-web-source.png") });
 
+// 9. Chunk formats: HTML cut out of a spreadsheet, a headerless pipe table, hostile HTML.
+await page.locator(`${EVIDENCE_HALF} .evidence-tab`, { hasText: /^5$/ }).first().click();
+await page.waitForFunction((sel) => document.querySelector(sel)?.textContent?.startsWith("5. "), `${EVIDENCE_HALF} .preview-title`);
+const chunk = await page.evaluate((half) => {
+	const root = document.querySelector(`${half} .inspector-body`);
+	const htmlTables = [...root.querySelectorAll(".evidence__block--html table")];
+	const pipe = root.querySelector(".evidence__block--table table");
+	const cells = (table) => [...table.querySelectorAll("tr")].map((row) => [...row.children].map((cell) => cell.textContent));
+	const wrap = root.querySelector(".evidence__table-wrap");
+	return {
+		htmlTables: htmlTables.length,
+		rows: htmlTables[0] ? cells(htmlTables[0]) : [],
+		pipe: pipe ? cells(pipe) : [],
+		pipeStrong: pipe?.querySelector("strong")?.textContent ?? null,
+		literalTags: /<\/?t[dr]\b/.test(root.innerText),
+		html: [...root.querySelectorAll(".evidence__block--html")].map((block) => block.innerHTML).join(""),
+		wrapOverflow: wrap ? getComputedStyle(wrap).overflowX : null,
+		wrapFits: wrap ? wrap.getBoundingClientRect().right <= root.getBoundingClientRect().right + 0.5 : false,
+	};
+}, EVIDENCE_HALF);
+check("no literal <td>/<tr> tags are shown", !chunk.literalTags);
+check("the spreadsheet chunk renders as one table", chunk.htmlTables === 1, `tables=${chunk.htmlTables}`);
+check(
+	"the cut-off first cell, the cells between, and the cut-off last row survive",
+	JSON.stringify(chunk.rows[0]) === JSON.stringify(["사용 시나리오", "15", "핵심 사용 시나리오", "○"]) &&
+		chunk.rows[1]?.[0] === "고도화 후 실제 사용 시나리오 & 경쟁 우위" &&
+		JSON.stringify(chunk.rows.at(-1)) === JSON.stringify(["20", "기관별"]),
+	JSON.stringify(chunk.rows),
+);
+check(
+	"a headerless pipe table renders as a table with inline markdown",
+	chunk.pipe.length === 2 && chunk.pipe[0]?.[2] === "해커톤/컨퍼런스/확산" && chunk.pipeStrong === "Q&A",
+	JSON.stringify({ pipe: chunk.pipe, strong: chunk.pipeStrong }),
+);
+check("a wide table scrolls inside the column instead of overflowing it", chunk.wrapOverflow === "auto" && chunk.wrapFits, JSON.stringify({ overflow: chunk.wrapOverflow, fits: chunk.wrapFits }));
+check(
+	"chunk HTML is sanitized: no script, handler, javascript: link, or remote image",
+	!/script|onclick|javascript:|tracker\.example/.test(chunk.html) && (await page.evaluate(() => globalThis.__qaPwned === undefined)),
+	chunk.html.slice(0, 200),
+);
+await page.locator(`${EVIDENCE_HALF} .inspector-body`).evaluate((el) => el.scrollTo(0, 0));
+await page.screenshot({ path: join(EVIDENCE, "08-chunk-formats.png") });
+await page.locator(`${EVIDENCE_HALF}`).screenshot({ path: join(EVIDENCE, "08b-chunk-formats-panel.png") });
+const urlsBefore = (await openedUrls()).length;
+const tabsBeforeLink = await page.locator(".tabs .tab").count();
+await page.locator(`${EVIDENCE_HALF} .evidence__block--html a`, { hasText: "로드맵 링크" }).click();
+await sleep(500);
+const afterLink = await openedUrls();
+check("an http(s) link in chunk HTML opens in the OS browser", afterLink.length === urlsBefore + 1 && afterLink.at(-1) === "https://example.com/roadmap", JSON.stringify(afterLink));
+await page.locator(`${EVIDENCE_HALF} .evidence__block--html a`, { hasText: "나쁜 링크" }).click();
+await sleep(300);
+check(
+	"a stripped link is inert: no navigation, no new tab, nothing opened",
+	(await openedUrls()).length === afterLink.length && (await page.locator(".tabs .tab").count()) === tabsBeforeLink && page.url().includes("index.html") && (await page.evaluate(() => globalThis.__qaPwned === undefined)),
+	page.url(),
+);
+await page.locator(`${EVIDENCE_HALF} .evidence__block--html`).last().scrollIntoViewIfNeeded();
+await page.locator(`${EVIDENCE_HALF}`).screenshot({ path: join(EVIDENCE, "09-chunk-formats-bottom.png") });
+const linkLooks = await page.locator(`${EVIDENCE_HALF} .evidence__block--html a`).evaluateAll((links) =>
+	links.map((link) => ({ text: link.textContent, href: link.hasAttribute("href"), underline: getComputedStyle(link).textDecorationLine })),
+);
+check(
+	"only a link that kept its href is styled as a link",
+	linkLooks.some((link) => link.text === "로드맵 링크" && link.href && link.underline === "underline") &&
+		linkLooks.some((link) => link.text === "나쁜 링크" && !link.href && link.underline === "none"),
+	JSON.stringify(linkLooks),
+);
 
 log(`RESULT ${failures.length === 0 ? "ALL PASS" : `${failures.length} FAILURES: ${failures.join(" | ")}`}`);
 // Close before sweeping: on Windows, deleting userData while Electron is
