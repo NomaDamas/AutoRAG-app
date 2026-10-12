@@ -75,6 +75,7 @@ function createFakeAgent(stream: (live: (event: LiveAgentEvent) => void) => Asyn
 	};
 	return {
 		listeners,
+		live,
 		searchDocumentsStream: vi.fn(() => stream(live)),
 		subscribe: (listener: (event: LiveAgentEvent) => void) => {
 			listeners.add(listener);
@@ -83,6 +84,7 @@ function createFakeAgent(stream: (live: (event: LiveAgentEvent) => void) => Asyn
 			};
 		},
 		abort: vi.fn(),
+		steer: vi.fn((_text: string): boolean => true),
 		setAttachmentContext: vi.fn((_context: string) => undefined),
 	};
 }
@@ -478,6 +480,141 @@ describe("createSearchService", () => {
 
 		expect(agent.searchDocumentsStream).not.toHaveBeenCalled();
 		expect(events).toEqual([{ type: "cancelled", searchId: "search-build" }]);
+	});
+
+	describe("steer", () => {
+		/** A run that waits for `quick` before its Quick answer and for `finish` before its Deep answer. */
+		async function runningSearch({ afterQuick = true }: { readonly afterQuick?: boolean } = {}) {
+			const quick = Promise.withResolvers<void>();
+			const finish = Promise.withResolvers<void>();
+			const quickSeen = Promise.withResolvers<void>();
+			const streaming = Promise.withResolvers<void>();
+			const agent = createFakeAgent(async function*() {
+				streaming.resolve();
+				await quick.promise;
+				yield { type: "preliminary", response: createResponse("session-steer", "Quick: May", 0) };
+				await finish.promise;
+				yield { type: "complete", response: createResponse("session-steer", "Deep: July", 1) };
+			});
+			const events: SearchStreamEvent[] = [];
+			const store = await createStore();
+			const service = createSearchService({
+				agentFactory: () => agent,
+				chatStore: store,
+				send: (_channel, payload) => {
+					events.push(payload);
+					if (payload.type === "quick") quickSeen.resolve();
+				},
+				now,
+			});
+			const started = service.start("search-steer", "chat-steer", "When is the launch?", []);
+			await streaming.promise;
+			const showQuick = async (): Promise<void> => {
+				quick.resolve();
+				await quickSeen.promise;
+			};
+			if (afterQuick) await showQuick();
+			return {
+				agent,
+				events,
+				service,
+				started,
+				showQuick,
+				finish: () => {
+					quick.resolve();
+					finish.resolve();
+				},
+			};
+		}
+
+		it("hands a message sent after the Quick answer to that run's agent and records it as the user's steer", async () => {
+			const run = await runningSearch();
+
+			expect(await run.service.steer("search-steer", "Use the June plan.")).toBe(true);
+			run.finish();
+			await run.started;
+
+			expect(run.agent.steer).toHaveBeenCalledWith("Use the June plan.");
+			// One run: the steer started no second search.
+			expect(run.agent.searchDocumentsStream).toHaveBeenCalledTimes(1);
+			const record = await run.service.historyGet("chat-steer");
+			expect(record?.messages).toMatchObject([
+				{ role: "user", text: "When is the launch?" },
+				{ role: "user", text: "Use the June plan.", steer: "after-quick" },
+				{ role: "assistant", deep: { answer: "Deep: July" } },
+			]);
+			expect(record?.messages[0]).not.toHaveProperty("steer");
+		});
+
+		it("records a steer sent before the Quick answer as such, ahead of that answer", async () => {
+			const run = await runningSearch({ afterQuick: false });
+
+			expect(await run.service.steer("search-steer", "Only last week's messages.")).toBe(true);
+			await run.showQuick();
+			run.finish();
+			await run.started;
+
+			expect((await run.service.historyGet("chat-steer"))?.messages).toMatchObject([
+				{ role: "user", text: "When is the launch?" },
+				{ role: "user", text: "Only last week's messages.", steer: "before-quick" },
+				{ role: "assistant" },
+			]);
+		});
+
+		it("reports delivery once a model request took the pending steers", async () => {
+			const run = await runningSearch();
+			await run.service.steer("search-steer", "Use the June plan.");
+
+			// The run's own prompt is a user message too; only one after a steer counts.
+			run.agent.live({ type: "message_start", message: { role: "assistant" } });
+			expect(run.events.some((event) => event.type === "steer-delivered")).toBe(false);
+			run.agent.live({ type: "message_start", message: { role: "user" } });
+			run.agent.live({ type: "message_start", message: { role: "user" } });
+			run.finish();
+			await run.started;
+
+			expect(run.events.filter((event) => event.type === "steer-delivered")).toEqual([
+				{ type: "steer-delivered", searchId: "search-steer" },
+			]);
+		});
+
+		it("refuses a steer the agent no longer takes and records nothing", async () => {
+			const run = await runningSearch();
+			run.agent.steer.mockReturnValueOnce(false);
+
+			expect(await run.service.steer("search-steer", "Too late.")).toBe(false);
+			run.finish();
+			await run.started;
+
+			const record = await run.service.historyGet("chat-steer");
+			expect(record?.messages.filter((message) => message.role === "user")).toHaveLength(1);
+		});
+
+		it("refuses a steer for a finished, stopped, or unknown run without touching the agent", async () => {
+			const finished = await runningSearch();
+			finished.finish();
+			await finished.started;
+			expect(await finished.service.steer("search-steer", "After the answer.")).toBe(false);
+
+			const stopped = await runningSearch();
+			await stopped.service.cancel("search-steer");
+			await stopped.started;
+			expect(await stopped.service.steer("search-steer", "After Stop.")).toBe(false);
+
+			expect(await stopped.service.steer("search-unknown", "Nobody runs this.")).toBe(false);
+			expect(finished.agent.steer).not.toHaveBeenCalled();
+			expect(stopped.agent.steer).not.toHaveBeenCalled();
+		});
+
+		it("refuses a blank steer", async () => {
+			const run = await runningSearch();
+
+			expect(await run.service.steer("search-steer", "   ")).toBe(false);
+			run.finish();
+			await run.started;
+
+			expect(run.agent.steer).not.toHaveBeenCalled();
+		});
 	});
 
 	it("delegates history reads and clear to the chat store", async () => {

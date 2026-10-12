@@ -137,6 +137,17 @@ small {
 	}
 }
 
+/* AI Search steer waiting for the next model request — the bubble's accent ring breathes. */
+@keyframes steerWait {
+	0%,
+	100% {
+		box-shadow: 0 0 0 0 var(--accent-soft);
+	}
+	50% {
+		box-shadow: 0 0 0 4px var(--accent-soft);
+	}
+}
+
 /* Split panes — a new pane fades and settles in from its split edge. */
 @keyframes paneIn {
 	from {
@@ -207,6 +218,13 @@ small {
 		100% {
 			opacity: 1;
 			transform: none;
+		}
+	}
+
+	@keyframes steerWait {
+		0%,
+		100% {
+			box-shadow: 0 0 0 2px var(--accent-soft);
 		}
 	}
 
