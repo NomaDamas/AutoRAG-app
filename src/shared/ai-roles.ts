@@ -39,12 +39,11 @@ const JEV_MODELS_BY_BACKEND: Readonly<Record<JevBackend, readonly RoleModel[]>> 
 	vercel: [{ id: "typesafe/jev-latest", label: "Jev (최신)" }],
 };
 
-/** Rerank model ids each provider serves (rerank is not a general LLM role). */
+/** Rerank model ids each provider serves (rerank is not a general LLM role). The
+ * AutoRAG plan serves one reranker: `qwen/qwen3-reranker-8b` (the free NVIDIA
+ * reranker left the server's allow-list, so it can no longer be named). */
 const RERANK_MODELS_BY_PROVIDER: Readonly<Record<string, readonly RoleModel[]>> = {
-	[AUTORAG_PROVIDER_ID]: [
-		{ id: "qwen/qwen3-reranker-8b", label: "Qwen3 Reranker 8B" },
-		{ id: "nvidia/llama-nemotron-rerank-vl-1b-v2:free", label: "Nemotron Rerank VL 1B (무료)" },
-	],
+	[AUTORAG_PROVIDER_ID]: [{ id: "qwen/qwen3-reranker-8b", label: "Qwen3 Reranker 8B" }],
 	openrouter: [
 		{ id: "voyageai/rerank-3-lite", label: "Voyage Rerank 3 Lite" },
 		{ id: "voyageai/rerank-3", label: "Voyage Rerank 3" },

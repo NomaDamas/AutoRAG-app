@@ -2,8 +2,9 @@
 
 import type { ReactElement } from "react";
 import { Icon } from "../marks";
-import { Eyebrow, Multiline, SplitScreen } from "../parts";
+import { Eyebrow, Multiline, SplitScreen, openExternal } from "../parts";
 import { etaMinutes, formatSize, scanTotals } from "../flow";
+import { accountLegalUrl } from "../../../../shared/account-contract";
 import type { OnboardingCtx } from "../context";
 
 export function EmbeddingStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElement {
@@ -94,6 +95,15 @@ export function EmbeddingStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactEl
 						<ul className="bullets">
 							<li>{t("onboarding.embedding.cloudBulletPerf")}</li>
 							<li>{t("onboarding.embedding.cloudBulletNoStore")}</li>
+							<li>
+								<button
+									type="button"
+									className="inline-link"
+									onClick={() => openExternal(accountLegalUrl(ctx.account?.baseUrl, "privacyModels"))}
+								>
+									{t("onboarding.embedding.privacyTable")}
+								</button>
+							</li>
 						</ul>
 					</div>
 				</div>

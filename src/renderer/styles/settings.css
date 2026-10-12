@@ -1245,6 +1245,13 @@
 	font-size: var(--font-size-meta);
 }
 
+/* Legal document links on Settings → 내 계정. */
+.settings-view .settings-legal-links {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-8);
+}
+
 /* ---------------------------------------------------- Indexing / sync ---- */
 
 .settings-view .settings-sync-row {
