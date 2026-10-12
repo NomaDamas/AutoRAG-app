@@ -430,7 +430,7 @@ async function pass(appearance) {
 		ms = await open("Projects", () => document.querySelector(".ql-folder__name")?.textContent === "Projects");
 		check("folder opens with Space", ms < 1500, `${ms}ms`);
 		const count = await poll(() => preview.locator(".ql-folder__count").textContent(), (text) => (text ?? "").includes("MB"));
-		check("folder shows count and size", (count ?? "").startsWith("24 items, "), count ?? "");
+		check("folder shows count and size", (count ?? "").startsWith("24개 항목, "), count ?? "");
 		const items = await preview.locator(".ql-folder__items > div > span").evaluateAll((nodes) => nodes.map((node) => node.textContent));
 		check("folder lists recent items first", JSON.stringify(items) === JSON.stringify(["kill-seoksam", "build_eval.py", "README.md", "assets", "demo.mp4", "report.pdf"]), JSON.stringify(items));
 		state = await capture("08-folder");

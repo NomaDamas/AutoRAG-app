@@ -10,6 +10,7 @@
 
 import { useCallback, useEffect, useMemo, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
+import type { LocaleKey } from "../../../shared/i18n/core";
 import { Copy, CreditCard, FileText, Folder, Globe, Plug, RefreshCw, Search, Settings, Sparkles, User, type LucideIcon } from "lucide-react";
 import type { AppSettings, AutoRagConfigSnapshot, DataSourcesSnapshot } from "../../../shared/settings-contract";
 import { isJsonObject } from "../../../shared/settings-contract";
@@ -54,24 +55,24 @@ interface PageMeta {
 	readonly labelKey: NavLabelKey;
 	readonly icon: LucideIcon;
 	readonly groupKey: NavGroupKey;
-	/** Search-only text: the Korean keywords stay searchable; the translated label joins the haystack at query time. */
-	readonly keywords: string;
+	/** Search-only synonyms, translated like the label. */
+	readonly keywordsKey: LocaleKey;
 }
 
 /** Group identity comparison uses this literal key, never translated text. */
 const GROUP_APPS: NavGroupKey = "settingsCore.nav.group.apps";
 
 const PAGES = [
-	{ id: "account", labelKey: "settingsCore.nav.account", icon: User, groupKey: "settingsCore.nav.group.account", keywords: "계정 로그인 이메일 이름 프로필" },
-	{ id: "plan", labelKey: "settingsCore.nav.plan", icon: CreditCard, groupKey: "settingsCore.nav.group.account", keywords: "요금제 결제 크레딧 사용량 구독 billing" },
-	{ id: "general", labelKey: "settingsCore.nav.general", icon: Settings, groupKey: "settingsCore.nav.group.basic", keywords: "화면 테마 언어 숨김 파일 로그인 업데이트 통계 문서 언어" },
-	{ id: "ai", labelKey: "settingsCore.nav.ai", icon: Sparkles, groupKey: "settingsCore.nav.group.ai", keywords: "LLM 모델 공급자 서비스 API 키 구독 임베딩 Jev 질문 나누기 정렬" },
-	{ id: "web", labelKey: "settingsCore.nav.web", icon: Globe, groupKey: "settingsCore.nav.group.ai", keywords: "웹 검색 인터넷 검색 서비스 페이지 읽기" },
-	{ id: "indexing", labelKey: "settingsCore.nav.indexing", icon: RefreshCw, groupKey: "settingsCore.nav.group.search", keywords: "최신화 동기화 증분 색인 갱신 주기 sync" },
-	{ id: "scope", labelKey: "settingsCore.nav.scope", icon: Folder, groupKey: "settingsCore.nav.group.search", keywords: "검색 범위 폴더 제외 경로" },
-	{ id: "reading", labelKey: "settingsCore.nav.reading", icon: FileText, groupKey: "settingsCore.nav.group.search", keywords: "문서 읽기 언어 파서" },
-	{ id: "duplicates", labelKey: "settingsCore.nav.duplicates", icon: Copy, groupKey: "settingsCore.nav.group.search", keywords: "중복 파일 버전 정리 dupey" },
-	{ id: "apps", labelKey: "settingsCore.nav.apps", icon: Plug, groupKey: GROUP_APPS, keywords: "연결 앱 데이터소스 메신저 메일 클라우드" },
+	{ id: "account", labelKey: "settingsCore.nav.account", icon: User, groupKey: "settingsCore.nav.group.account", keywordsKey: "settingsCore.nav.keywords.account" },
+	{ id: "plan", labelKey: "settingsCore.nav.plan", icon: CreditCard, groupKey: "settingsCore.nav.group.account", keywordsKey: "settingsCore.nav.keywords.plan" },
+	{ id: "general", labelKey: "settingsCore.nav.general", icon: Settings, groupKey: "settingsCore.nav.group.basic", keywordsKey: "settingsCore.nav.keywords.general" },
+	{ id: "ai", labelKey: "settingsCore.nav.ai", icon: Sparkles, groupKey: "settingsCore.nav.group.ai", keywordsKey: "settingsCore.nav.keywords.ai" },
+	{ id: "web", labelKey: "settingsCore.nav.web", icon: Globe, groupKey: "settingsCore.nav.group.ai", keywordsKey: "settingsCore.nav.keywords.web" },
+	{ id: "indexing", labelKey: "settingsCore.nav.indexing", icon: RefreshCw, groupKey: "settingsCore.nav.group.search", keywordsKey: "settingsCore.nav.keywords.indexing" },
+	{ id: "scope", labelKey: "settingsCore.nav.scope", icon: Folder, groupKey: "settingsCore.nav.group.search", keywordsKey: "settingsCore.nav.keywords.scope" },
+	{ id: "reading", labelKey: "settingsCore.nav.reading", icon: FileText, groupKey: "settingsCore.nav.group.search", keywordsKey: "settingsCore.nav.keywords.reading" },
+	{ id: "duplicates", labelKey: "settingsCore.nav.duplicates", icon: Copy, groupKey: "settingsCore.nav.group.search", keywordsKey: "settingsCore.nav.keywords.duplicates" },
+	{ id: "apps", labelKey: "settingsCore.nav.apps", icon: Plug, groupKey: GROUP_APPS, keywordsKey: "settingsCore.nav.keywords.apps" },
 ] as const satisfies readonly PageMeta[];
 
 /** Map a legacy category onto the page that replaced it. */
@@ -166,7 +167,7 @@ export function SettingsView({ initialCategory = "general", onSettingsChanged }:
 	const filteredPages = useMemo(() => {
 		const needle = query.trim().toLowerCase();
 		if (needle.length === 0) return PAGES;
-		return PAGES.filter((page) => `${t(page.labelKey)} ${page.keywords}`.toLowerCase().includes(needle));
+		return PAGES.filter((page) => `${t(page.labelKey)} ${t(page.keywordsKey)}`.toLowerCase().includes(needle));
 	}, [query, t]);
 	const filteredSources = useMemo(() => {
 		const needle = query.trim().toLowerCase();

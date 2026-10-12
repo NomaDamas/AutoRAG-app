@@ -1262,6 +1262,18 @@
         "ai": "AI",
         "search": "Search",
         "apps": "Connected Apps"
+      },
+      "keywords": {
+        "account": "account sign in email name profile",
+        "plan": "plan billing credits usage subscription",
+        "general": "display theme appearance language hidden files login updates statistics document language",
+        "ai": "LLM model provider service API key subscription embedding Jev query decomposition rerank",
+        "web": "web search internet search service page reading",
+        "indexing": "refresh sync incremental index update interval schedule",
+        "scope": "search scope folders exclude paths",
+        "reading": "document reading language parser OCR",
+        "duplicates": "duplicate files versions cleanup dupey",
+        "apps": "connections apps data sources messenger mail cloud"
       }
     },
     "view": {

@@ -99,7 +99,8 @@ try {
 	const title = () => page.locator(".settings-content .linear-title").first().innerText();
 
 	// --- IA + search ------------------------------------------------------
-	const groups = await page.locator(".settings-sidebar-group-title").allInnerTexts();
+	// textContent, not innerText: the group titles are uppercased by CSS.
+	const groups = await page.locator(".settings-sidebar-group-title").evaluateAll((nodes) => nodes.map((node) => node.textContent ?? ""));
 	check("sidebar groups follow the prototype", JSON.stringify(groups.slice(0, 5)) === JSON.stringify(["Account", "General", "AI", "Search", "Connected Apps"]), JSON.stringify(groups));
 	for (const [label, heading] of [["My Account", "My Account"], ["Subscription & Usage", "Subscription & Usage"], ["General", "General"], ["AI Models", "AI Models"], ["Web Search", "Web search"], ["Indexing", "Indexing"], ["Search Scope", "Search scope"], ["Document Reading", "Document reading"], ["Duplicate Cleanup", "Duplicate cleanup"], ["All Connections", "Connected apps"]]) {
 		await nav(label);
