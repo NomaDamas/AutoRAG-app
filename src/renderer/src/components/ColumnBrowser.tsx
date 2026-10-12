@@ -149,7 +149,7 @@ export function ColumnBrowser({
 								<span className="col-name flex-1 min-w-0 overflow-hidden whitespace-nowrap text-ellipsis text-sm">
 									{member.entry.name}
 								</span>
-								<VersionTag tone={member.relation} label={RELATION_LABELS[member.relation]} />
+								<VersionTag tone={member.relation} />
 							</div>
 						))}
 					</div>

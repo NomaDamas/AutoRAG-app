@@ -49,6 +49,8 @@ export type FsWorkerOp =
 	| "versionFamilies"
 	| "refreshVersionFamilies"
 	| "setScanInterval"
+	/** The Interface language: the worker's user-facing messages follow it. */
+	| "setLanguage"
 	| "indexStatus"
 	| "setIndexExcluded"
 	| "setWatchSet"

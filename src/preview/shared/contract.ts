@@ -1,3 +1,4 @@
+import type { AppSettings } from "../../shared/settings-contract";
 import type { BinaryKind } from "./binary-kind";
 import type { Bounds, QuickLookFit } from "./fit";
 import type { ZoomDirection, ZoomGeometry } from "./zoom";
@@ -189,6 +190,9 @@ export interface PreviewBridge {
 /** Exposed to the Quick Look window as `window.quickLook`. */
 export interface QuickLookWindowBridge {
 	readonly platform: string;
+	/** The interface language the window started in. */
+	readonly language: AppSettings["language"];
+	onLanguage(listener: (language: AppSettings["language"]) => void): () => void;
 	onLoad(listener: (load: QuickLookLoad) => void): () => void;
 	onUnload(listener: () => void): () => void;
 	onZoom(listener: (zoom: QuickLookZoom) => void): () => void;

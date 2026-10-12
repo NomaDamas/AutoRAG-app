@@ -1,5 +1,6 @@
 import { StrictMode, useCallback, useEffect, useMemo, useRef, useState, type ReactElement, type SyntheticEvent } from "react";
 import { createRoot } from "react-dom/client";
+import { setAppLanguage } from "../../shared/i18n";
 import type { QuickLookLoad, QuickLookWindowBridge, QuickLookZoom } from "../shared/contract";
 import type { QuickLookFit, Size } from "../shared/fit";
 import { extensionOf, formatBytes } from "../shared/format";
@@ -302,6 +303,9 @@ function QuickLookWindow({ bridge }: { readonly bridge: QuickLookWindowBridge })
 export function mountQuickLookWindow(): void {
 	const container = document.getElementById("root");
 	if (container === null) throw new Error("Quick Look mount point #root not found");
+	// Main pushes the Interface language; react-i18next re-renders the viewers on a change.
+	void setAppLanguage(window.quickLook.language);
+	window.quickLook.onLanguage((language) => void setAppLanguage(language));
 	createRoot(container).render(
 		<StrictMode>
 			<QuickLookWindow bridge={window.quickLook} />

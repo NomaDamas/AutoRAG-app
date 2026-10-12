@@ -12,6 +12,8 @@
 import { join } from "node:path";
 import type { FsClipboard, FsEnrichmentTarget, FsSearchOptions, FsTagChange } from "../shared/fs-contract";
 import type { FsWorkerConfig, FsWorkerOp } from "../shared/fs-worker-contract";
+import { setAppLanguage } from "../shared/i18n/core";
+import { isAppLanguage } from "../shared/language-contract";
 import { FS_WORKER_PUSH, type WorkerHandler } from "../shared/fs-worker-protocol";
 import { DUPEY_LAYER_ID, type LiveMessage } from "../shared/live-contract";
 import { isNewFileFormatId } from "../shared/new-file-contract";
@@ -278,6 +280,10 @@ export function createFsWorkerService(deps: FsWorkerServiceDeps): FsWorkerServic
 			if (typeof args[0] !== "number" || !Number.isFinite(args[0])) throw new TypeError("interval must be a number of minutes");
 			scanIntervalMinutes = args[0];
 			versionFamilies.reschedule();
+		},
+		setLanguage: async (args) => {
+			if (!isAppLanguage(args[0])) throw new TypeError("language must be ko, en, ja, or zh");
+			await setAppLanguage(args[0]);
 		},
 		indexStatus: (args) => indexStatus.indexStatus(stringsArg(args, 0, "paths")),
 		setIndexExcluded: (args) => {

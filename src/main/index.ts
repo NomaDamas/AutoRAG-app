@@ -22,8 +22,10 @@ import {
 	type OpenDialogOptions,
 } from "electron";
 import { APPEARANCE_CHANNELS } from "../shared/appearance-contract";
+import { setAppLanguage } from "../shared/i18n/core";
+import { LANGUAGE_CHANNELS } from "../shared/language-contract";
 import { ONBOARDING_CHANNELS, ONBOARDING_PENDING_FLAG, type NetworkCheck } from "../shared/onboarding-contract";
-import type { AppAppearance, ConfigRefreshResult } from "../shared/settings-contract";
+import type { AppAppearance, AppSettings, ConfigRefreshResult } from "../shared/settings-contract";
 import { attachQuickLook, PREVIEW_PRIVILEGED_SCHEME, registerPreviewProtocol, registerQuickLookIpc } from "../preview/node/register";
 import { createDefaultParserRegistry, DEFAULT_MAX_SOURCE_BYTES, writeDefaultConfig } from "@autorag/librarian";
 import { readRawConfigObject, resolveConfigPath, writeConfigObject } from "@autorag/librarian/core";
@@ -174,6 +176,7 @@ function createMainWindow(devLabel: DevLabel | null, appearance: AppAppearance, 
 	attachQuickLook(window, {
 		preload: join(import.meta.dirname, "../preload/quick-look.mjs"),
 		appearance,
+		language: currentLanguage,
 		loadPage: (preview) => loadRendererPage(preview, "quick-look.html"),
 		// Spawning osascript blocks the caller for the fork; the worker pays it.
 		defaultApp: (path) => (fsWorker === null ? Promise.resolve(null) : fsWorker.client.call<string | null>("defaultApp", [path])),
@@ -185,14 +188,15 @@ let fsWorker: FsWorkerHost | null = null;
 let providerAuthService: ProviderAuthService | null = null;
 let mainWindow: BrowserWindow | null = null;
 let currentAppearance: AppAppearance = "light";
+let currentLanguage: AppSettings["language"] = "ko";
 function sendToMainWindow(channel: string, payload: unknown): void {
 	if (mainWindow === null || mainWindow.isDestroyed()) return;
 	mainWindow.webContents.send(channel, payload);
 }
 
-function sendAppearance(appearance: AppAppearance): void {
+function sendToAllWindows(channel: string, payload: unknown): void {
 	for (const window of BrowserWindow.getAllWindows()) {
-		if (!window.isDestroyed()) window.webContents.send(APPEARANCE_CHANNELS.changed, appearance);
+		if (!window.isDestroyed()) window.webContents.send(channel, payload);
 	}
 }
 
@@ -311,7 +315,7 @@ let onOsRequestQueued: () => void = () => undefined;
 
 app.whenReady().then(async () => {
 	nativeTheme.on("updated", () => {
-		sendAppearance(nativeTheme.shouldUseDarkColors ? "dark" : "light");
+		sendToAllWindows(APPEARANCE_CHANNELS.changed, nativeTheme.shouldUseDarkColors ? "dark" : "light");
 	});
 	// A menu request goes to the app that is already running: the request process hands it over and exits.
 	const launchRequest = parseOsRequestArgv(process.argv);
@@ -389,6 +393,10 @@ app.whenReady().then(async () => {
 		shell,
 		clipboard,
 		icons: iconProvider,
+		// A fresh worker starts in Korean; give it the current Interface language.
+		onFork: (client) => {
+			if (currentLanguage !== "ko") void client.call("setLanguage", [currentLanguage]).catch((error: unknown) => console.error("[fs-worker] language:", error));
+		},
 	});
 	fsWorker = workerHost;
 	registerFsWorkerIpc(workerHost, ipcMain);
@@ -447,7 +455,15 @@ app.whenReady().then(async () => {
 	const applyAppearance = (appearance: AppAppearance): void => {
 		currentAppearance = appearance;
 		nativeTheme.themeSource = appearance;
-		sendAppearance(appearance);
+		sendToAllWindows(APPEARANCE_CHANNELS.changed, appearance);
+	};
+	/** Main's own messages, the fs worker's, and Quick Look follow the Interface language; the Finder applies it itself. */
+	const applyLanguage = (language: AppSettings["language"]): void => {
+		if (language === currentLanguage) return;
+		currentLanguage = language;
+		void setAppLanguage(language);
+		void workerHost.client.call("setLanguage", [language]).catch((error: unknown) => console.error("[fs-worker] language:", error));
+		sendToAllWindows(LANGUAGE_CHANNELS.changed, language);
 	};
 	// Stored provider keys reach process.env before any agent resolves, so the
 	// LLM/embedding/reranker all see the same credential.
@@ -555,6 +571,7 @@ app.whenReady().then(async () => {
 		},
 		onSettingsChanged: (settings) => {
 			applyAppearance(settings.appearance);
+			applyLanguage(settings.language);
 			applyScanInterval(settings.dupeyScanIntervalMinutes);
 			if (appliedLaunchAtLogin !== settings.launchAtLogin) {
 				appliedLaunchAtLogin = settings.launchAtLogin;
@@ -579,6 +596,7 @@ app.whenReady().then(async () => {
 	const settings = await settingsService.get();
 	appliedLaunchAtLogin = settings.launchAtLogin;
 	applyAppearance(settings.appearance);
+	applyLanguage(settings.language);
 	if (settings.dupeyScanIntervalMinutes !== DEFAULT_SCAN_INTERVAL_MINUTES) applyScanInterval(settings.dupeyScanIntervalMinutes);
 	const userDataDir = app.getPath("userData");
 	const supportedExtensions = supportedExtensionsFromRegistry(createDefaultParserRegistry());

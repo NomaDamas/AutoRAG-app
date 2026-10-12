@@ -47,7 +47,7 @@ import {
 	type FileActionTarget,
 } from "../state/file-actions";
 import { basename, dirname } from "../state/paths";
-import { RELATION_LABELS } from "../state/version-family";
+import { VERSION_TAG_KEYS } from "../state/version-family";
 import { imageTarget } from "../state/answer-markdown";
 import type { FileKind } from "../state/kinds";
 import type { ImageActions } from "./AnswerImage";
@@ -732,7 +732,7 @@ function VersionTag({ relation }: { readonly relation: "latest" | "exact" | "nea
 					: "bg-input text-ink-muted";
 	return (
 		<span className={cn("vtag flex-none inline-flex items-center h-16 px-6 rounded-4 text-tile font-semibold whitespace-nowrap leading-none", tone)}>
-			{relation === "latest" ? t("inspector.latestVersion", "최신본") : t(`inspector.versionRelations.${relation}`, RELATION_LABELS[relation])}
+			{t(VERSION_TAG_KEYS[relation])}
 		</span>
 	);
 }

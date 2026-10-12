@@ -5,7 +5,6 @@ import {
 	buildVersionFamilies,
 	defaultIndexIncluded,
 	EMPTY_VERSION_FAMILIES,
-	relationLabel,
 	stackSelectionKeys,
 	type VersionFamilyData,
 } from "../src/renderer/src/state/version-family";
@@ -165,16 +164,6 @@ describe("stackCount matches children", () => {
 		expect(out[0]?.stackCount).toBe(1);
 		expect(out.length).toBe(2); // head + 1 child
 		expect(out.filter((r) => r.child).length).toBe(out[0]?.stackCount);
-	});
-});
-
-describe("relationLabel", () => {
-	it("labels the relation alone in the same folder", () => {
-		expect(relationLabel("exact", "Documents/Finance/2026 Q3", "Documents/Finance/2026 Q3")).toBe("동일본");
-	});
-
-	it("appends the folder when the member lives elsewhere", () => {
-		expect(relationLabel("near", "Downloads", "Documents/Finance/2026 Q3")).toBe("유사본 · Downloads");
 	});
 });
 

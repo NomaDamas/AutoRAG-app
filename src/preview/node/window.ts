@@ -1,5 +1,6 @@
 import { basename, extname } from "node:path";
-import type { AppAppearance } from "../../shared/settings-contract";
+import { LANGUAGE_FLAG } from "../../shared/language-contract";
+import type { AppAppearance, AppSettings } from "../../shared/settings-contract";
 import { isAppBundle } from "../../main/fs-entry";
 import {
 	app,
@@ -69,6 +70,7 @@ const SOLID_PANEL = { light: "#F2F2F4", dark: "#2A2A2C" } as const;
 export interface QuickLookWindowOptions {
 	readonly preload: string;
 	readonly appearance: AppAppearance;
+	readonly language: AppSettings["language"];
 	readonly loadPage: (window: BrowserWindow) => void;
 	/** The app that opens `path`, or null; main hands this to the fs worker so no child spawns here. */
 	readonly defaultApp: (path: string) => Promise<string | null>;
@@ -478,7 +480,7 @@ export function attachQuickLook(owner: BrowserWindow, options: QuickLookWindowOp
 			spellcheck: false,
 			backgroundThrottling: false,
 			autoplayPolicy: "no-user-gesture-required",
-			additionalArguments: [`--autorag-appearance=${options.appearance}`],
+			additionalArguments: [`--autorag-appearance=${options.appearance}`, `${LANGUAGE_FLAG}${options.language}`],
 		},
 	});
 	if (darwin) window.setWindowButtonVisibility(false);

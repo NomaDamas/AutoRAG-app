@@ -24,11 +24,13 @@ export interface VersionFamilyData {
 	readonly entriesByPath: Readonly<Record<string, FinderEntry>>;
 }
 
-export const RELATION_LABELS: Readonly<Record<VersionRelation, string>> = {
-	exact: "동일본",
-	near: "유사본",
-	contains: "포함본",
-};
+/** The locale key of each family badge; the head row's badge is `latest`. */
+export const VERSION_TAG_KEYS = {
+	latest: "inspector.latestVersion",
+	exact: "inspector.versionRelations.exact",
+	near: "inspector.versionRelations.near",
+	contains: "inspector.versionRelations.contains",
+} as const satisfies Readonly<Record<"latest" | VersionRelation, string>>;
 
 export interface ResolvedMembership {
 	readonly family: VersionFamilyData;
@@ -125,12 +127,6 @@ export interface StackOptions {
 	readonly families: VersionFamilies;
 	readonly manualOpen: ReadonlySet<string>;
 	readonly selectedKeys: readonly string[];
-}
-
-/** Kind-cell label for a child row: relation plus the folder when it differs. */
-export function relationLabel(relation: VersionRelation, memberLocation: string, listPath: string): string {
-	const folder = basename(memberLocation);
-	return memberLocation === listPath ? RELATION_LABELS[relation] : `${RELATION_LABELS[relation]} · ${folder}`;
 }
 
 /**
