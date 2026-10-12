@@ -239,7 +239,10 @@ interface ArchiveMember {
  * archiver must not escape the tree or chase a cycle.
  */
 async function archiveMembers(root: string, isDirectory: boolean): Promise<ArchiveMember[]> {
-	const name = basename(root);
+	// Entry names are written NFC: Windows, Linux and Finder-created files use the
+	// composed form, while a name copied from an NFD source (older macOS volumes,
+	// other archives) lists on Windows as separate jamo and cannot be matched.
+	const name = basename(root).normalize("NFC");
 	if (!isDirectory) {
 		return [{ source: root, entry: name, directory: false }];
 	}
@@ -250,7 +253,7 @@ async function archiveMembers(root: string, isDirectory: boolean): Promise<Archi
 		for (const dirent of dirents) {
 			if (dirent.isSymbolicLink()) continue;
 			const source = join(dir, dirent.name);
-			const entry = `${prefix}${dirent.name}`;
+			const entry = `${prefix}${dirent.name.normalize("NFC")}`;
 			if (dirent.isDirectory()) {
 				members.push({ source, entry: `${entry}/`, directory: true });
 				await walk(source, `${entry}/`);

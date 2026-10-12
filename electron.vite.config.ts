@@ -36,9 +36,10 @@ export default defineConfig({
 					"refresh-job": resolve(import.meta.dirname, "src/main/refresh-job.ts"),
 					"fs-worker": resolve(import.meta.dirname, "src/fs-worker/index.ts"),
 					"archive-worker": resolve(import.meta.dirname, "src/main/archive-worker.mjs"),
+					"lzma-worker": resolve(import.meta.dirname, "src/main/lzma-worker.mjs"),
 				},
 				output: {
-					entryFileNames: (chunk) => (chunk.name === "archive-worker" ? "archive-worker.mjs" : "[name].js"),
+					entryFileNames: (chunk) => (chunk.name === "archive-worker" || chunk.name === "lzma-worker" ? `${chunk.name}.mjs` : "[name].js"),
 				},
 			},
 		},

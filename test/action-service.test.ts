@@ -1,7 +1,8 @@
 import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, isAbsolute, join, resolve } from "node:path";
-import { zipSync } from "fflate";
+import { ArchiveReader, libarchiveWasm } from "libarchive-wasm";
+import { unzipSync, zipSync } from "fflate";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { ActionAnchor } from "../src/shared/actions-contract";
 import {
@@ -173,6 +174,32 @@ describe("archive round-trip", () => {
 		expect(await readFile(join(out, "empty", "keep.txt"), "utf8")).toBe("keep");
 		expect(await readFile(join(out, "noise.bin"))).toEqual(noise);
 		expect((await stat(join(out, "hollow"))).isDirectory()).toBe(true);
+	});
+
+	it("writes decomposed (NFD) Mac names composed into the zip and 7z entries themselves", async () => {
+		const { service } = makeService();
+		const source = join(root, "한글 폴더".normalize("NFD"));
+		await mkdir(source);
+		await writeFile(join(source, "보고서.txt".normalize("NFD")), "본문 ".repeat(1000));
+		// APFS keeps the decomposed spelling, so the walk really does see NFD names.
+		expect((await readdir(source))[0]).not.toBe("보고서.txt");
+
+		const zip = await service.run([source], { kind: "compress", format: "zip" }, null);
+		const zipNames = Object.keys(unzipSync(new Uint8Array(await readFile(zip.output ?? ""))));
+		expect(zipNames.sort()).toEqual(["한글 폴더/", "한글 폴더/보고서.txt"]);
+
+		// Read the 7z's own entry names, bypassing the extractor's guard, which would also compose them.
+		const sevenZip = await service.run([source], { kind: "compress", format: "7z" }, null);
+		const archive = await readFile(sevenZip.output ?? "");
+		const reader = new ArchiveReader(
+			await libarchiveWasm({ wasmBinary: await readFile(new URL("../src/main/vendor/libarchive.wasm", import.meta.url)) }),
+			new Int8Array(archive.buffer, archive.byteOffset, archive.byteLength),
+		);
+		const sevenZipNames: string[] = [];
+		for (const entry of reader.entries()) sevenZipNames.push(entry.getPathname());
+		reader.free();
+		expect(sevenZipNames.sort()).toEqual(["한글 폴더/", "한글 폴더/보고서.txt"]);
+		expect(sevenZipNames.every((name) => name === name.normalize("NFC"))).toBe(true);
 	});
 
 	it("names a multi-selection 7z Archive.7z and numbers it when taken", async () => {

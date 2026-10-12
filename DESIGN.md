@@ -221,10 +221,14 @@ The Info half's bottom bar is data-driven, not a fixed four buttons.
   recorded in `THIRD_PARTY_NOTICES.md`.
 - Compression writes zip (default) or 7z — "7z로 압축" is a second row beside "압축"
   in the Inspector and context menu, a `compress` request with `format: "7z"`.
-  The 7z writer (`src/main/sevenzip-writer.ts`) is in-process, uses Deflate from
-  `node:zlib` (one folder per file, so it streams like the zip writer), and links
-  no archive library. RAR is extract-only: the format is proprietary and
-  RARLAB's license forbids building a compressor.
+  The 7z writer (`src/main/sevenzip-writer.ts`) writes solid LZMA blocks (up to
+  32 MiB each, so redundancy between files is shared): the LZMA encoder is
+  WebAssembly (`lzma-wasm`) running in `src/main/lzma-worker.mjs`, so the main
+  thread never blocks. A block whose sample does not shrink (jpg, mp4, zip)
+  is stored as Copy rather than spending seconds in the encoder, and one file over
+  256 MiB — beyond the wasm encoder's 32-bit memory — is deflated on its own.
+  Entry names are written NFC. RAR is extract-only: the format is proprietary
+  and RARLAB's license forbids building a compressor.
 
 ---
 

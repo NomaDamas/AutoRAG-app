@@ -39,6 +39,7 @@
 		"i18next": "^26.4.2",
 		"libarchive-wasm": "1.2.0",
 		"lucide-react": "^1.49.0",
+		"lzma-wasm": "1.0.7",
 		"marked": "^18.0.14",
 		"music-metadata": "^11.16.1",
 		"pdfjs-dist": "^6.3.289",

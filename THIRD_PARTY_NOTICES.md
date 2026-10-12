@@ -2,7 +2,8 @@
 
 AutoRAG is distributed under the **AGPL-3.0**. This file lists the third-party
 components that ship inside the app's archive-extraction engine — the
-`libarchive-wasm` WebAssembly build (7z, tar.bz2, tar.xz) and the JavaScript zip
+`libarchive-wasm` WebAssembly build (7z, RAR, tar.bz2, tar.xz), the `lzma-wasm`
+LZMA encoder behind 7z compression, and the JavaScript zip
 path. **Every component below is permissively licensed and AGPL-3.0 compatible**
 (MIT, BSD-2-Clause, Apache-2.0, zlib, 0BSD/public domain).
 
@@ -36,6 +37,9 @@ at all — see the notes below. The runtime reports:
 | Emscripten runtime and musl libc | (emsdk 4.0.5) | MIT / University of Illinois/NCSA | Emscripten and musl contributors |
 | libarchive-wasm (JS wrapper + `libarchive.c`) | 1.2.0 | MIT | ofk — https://github.com/ofk/libarchive-wasm |
 | fflate | 0.8.x | MIT | Arjun Barrett — https://github.com/101arrowz/fflate |
+| lzma-wasm (7z compression) | 1.0.7 | MIT OR Apache-2.0 | Aluria — https://github.com/Wu-Yijun/lzma-wasm |
+| lzma-rust2 (compiled into lzma-wasm) | 0.16.2 (its lockfile) | Apache-2.0 | https://github.com/hasenbanck/lzma-rust2 |
+| sha2, digest, block-buffer, crypto-common, generic-array, typenum, cfg-if, once_cell, wasm-bindgen, version_check, cpufeatures, libc (Rust crates in lzma-wasm's lockfile) | various | MIT or MIT OR Apache-2.0 | crates.io |
 
 Notes on what was verified:
 
