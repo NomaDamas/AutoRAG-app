@@ -1,5 +1,7 @@
 import { useMemo, type ReactElement } from "react";
+import { useTranslation } from "react-i18next";
 import { gunzipSync } from "fflate";
+import { t } from "../../shared/i18n/core";
 import type { PreviewDocument } from "../shared/contract";
 import { summarizeArchive, type ArchiveEntry } from "../shared/archive-items";
 import { formatFinderDate, formatFinderSize, formatItemCount } from "../shared/format";
@@ -28,20 +30,21 @@ function read(file: PreviewDocument, bytes: Uint8Array): Listing {
 			if (tar !== null) return { kind: "entries", entries: tar };
 			if (looksLikeText(inflated)) return { kind: "text", text: decodeUtf8(inflated) };
 		} catch (caught) {
-			return { kind: "failed", note: caught instanceof Error ? caught.message : "압축을 풀지 못했습니다" };
+			return { kind: "failed", note: caught instanceof Error ? caught.message : t("quickLook.archive.extractFailed") };
 		}
-		return { kind: "failed", note: "압축 목록을 읽지 못했습니다" };
+		return { kind: "failed", note: t("quickLook.archive.listFailed") };
 	}
 	if (file.ext === "tar") {
 		const tar = listTarEntries(bytes);
-		return tar === null ? { kind: "failed", note: "tar 목록을 읽지 못했습니다" } : { kind: "entries", entries: tar };
+		return tar === null ? { kind: "failed", note: t("quickLook.archive.tarListFailed") } : { kind: "entries", entries: tar };
 	}
 	const zip = listZipEntries(bytes);
-	if (zip === null) return { kind: "failed", note: "압축 목록을 읽지 못했습니다" };
+	if (zip === null) return { kind: "failed", note: t("quickLook.archive.listFailed") };
 	return { kind: "entries", entries: zip.map((entry) => ({ name: entry.name, size: entry.uncompressedSize, modified: entry.modified })) };
 }
 
 function ArchivePanel({ file, entries }: { readonly file: PreviewDocument; readonly entries: readonly ArchiveEntry[] }): ReactElement {
+	const { t } = useTranslation();
 	useHiddenTitle();
 	const attach = usePanelHeight(CONTENTS_WIDTH);
 	const summary = useMemo(() => summarizeArchive(entries, ARCHIVE_PREVIEW_ITEMS), [entries]);
@@ -55,10 +58,10 @@ function ArchivePanel({ file, entries }: { readonly file: PreviewDocument; reado
 					<div className="ql-archive__count text-[14px] text-ql-ink-secondary">
 						{formatItemCount(summary.itemCount)}, {formatFinderSize(file.size)}
 					</div>
-					<div className="text-[14px] text-ql-ink-secondary">Last modified {formatFinderDate(file.modifiedAt, false)}</div>
+					<div className="text-[14px] text-ql-ink-secondary">{t("quickLook.fallback.lastModified", { date: formatFinderDate(file.modifiedAt, false) })}</div>
 				</div>
 			</div>
-			<ContentsBox kind="archive" items={summary.items} total={summary.itemCount} order="최근 수정 순" empty="비어 있는 압축 파일" />
+			<ContentsBox kind="archive" items={summary.items} total={summary.itemCount} order={t("quickLook.archive.order")} empty={t("quickLook.archive.empty")} />
 		</div>
 	);
 }
@@ -69,9 +72,10 @@ function ArchivePanel({ file, entries }: { readonly file: PreviewDocument; reado
  * of a single text file shows the text instead, since it holds no items.
  */
 export function ArchiveView({ file }: { readonly file: PreviewDocument }): ReactElement {
+	const { t, i18n } = useTranslation();
 	const bytes = file.bytes;
-	const listing = useMemo(() => (bytes === null ? null : read(file, bytes)), [file, bytes]);
-	if (listing === null) return <FallbackView file={file} note="압축 파일을 읽지 못했습니다" />;
+	const listing = useMemo(() => (bytes === null ? null : read(file, bytes)), [file, bytes, i18n.language]);
+	if (listing === null) return <FallbackView file={file} note={t("quickLook.archive.readFailed")} />;
 	if (listing.kind === "failed") return <FallbackView file={file} note={listing.note} />;
 	if (listing.kind === "text") {
 		return <pre className="ql__pre box-border self-stretch w-full h-auto m-0 px-24 py-20 bg-window text-ink font-mono text-meta leading-[1.55] whitespace-pre-wrap [word-break:break-word] select-text">{listing.text}</pre>;

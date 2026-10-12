@@ -9,7 +9,7 @@
  * main's `setLanguage` call.
  */
 
-import i18n from "i18next";
+import i18n, { type ParseKeys } from "i18next";
 import { APP_LANGUAGES, isAppLanguage } from "../language-contract";
 import type { AppSettings } from "../settings-contract";
 
@@ -54,6 +54,9 @@ export async function setAppLanguage(lang: AppLanguage): Promise<void> {
 
 export { i18n };
 export const t = i18n.t.bind(i18n);
+
+/** Any key of the locale files: type data fields that hold a key to translate later with this. */
+export type LocaleKey = ParseKeys;
 
 declare module "i18next" {
 	interface CustomTypeOptions {

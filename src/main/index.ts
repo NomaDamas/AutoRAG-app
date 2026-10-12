@@ -22,7 +22,7 @@ import {
 	type OpenDialogOptions,
 } from "electron";
 import { APPEARANCE_CHANNELS } from "../shared/appearance-contract";
-import { setAppLanguage } from "../shared/i18n/core";
+import { setAppLanguage, t } from "../shared/i18n/core";
 import { LANGUAGE_CHANNELS } from "../shared/language-contract";
 import { ONBOARDING_CHANNELS, ONBOARDING_PENDING_FLAG, type NetworkCheck } from "../shared/onboarding-contract";
 import type { AppAppearance, AppSettings, ConfigRefreshResult } from "../shared/settings-contract";
@@ -270,7 +270,7 @@ function runCommand(command: string, args: readonly string[], timeoutMs = 5000):
 function showSystemNotification(): Promise<boolean> {
 	if (!Notification.isSupported()) return Promise.resolve(false);
 	return new Promise<boolean>((resolve) => {
-		const notification = new Notification({ title: APP_FULL_NAME, body: "알림이 켜졌습니다." });
+		const notification = new Notification({ title: APP_FULL_NAME, body: t("main.dialogs.notificationBody") });
 		let settled = false;
 		const done = (value: boolean): void => {
 			if (settled) return;
@@ -409,8 +409,8 @@ app.whenReady().then(async () => {
 			applications: {
 				async pick(window) {
 					const options: OpenDialogOptions = {
-						title: "다른 앱으로 열기",
-						buttonLabel: "열기",
+						title: t("main.dialogs.openWithTitle"),
+						buttonLabel: t("main.dialogs.openButton"),
 						properties: ["openFile"],
 						...(process.platform === "darwin" ? { defaultPath: "/Applications" } : {}),
 					};
@@ -718,8 +718,8 @@ app.whenReady().then(async () => {
 		},
 		pickFolders: async () => {
 			const options: OpenDialogOptions = {
-				title: "폴더 선택",
-				buttonLabel: "추가",
+				title: t("main.dialogs.chooseFolderTitle"),
+				buttonLabel: t("main.dialogs.addButton"),
 				properties: ["openDirectory", "multiSelections", "createDirectory"],
 			};
 			const result = mainWindow === null ? await dialog.showOpenDialog(options) : await dialog.showOpenDialog(mainWindow, options);
@@ -765,11 +765,11 @@ app.whenReady().then(async () => {
 			void dialog
 				.showMessageBox(window, {
 					type: "warning",
-					buttons: ["종료", "계속"],
+					buttons: [t("main.dialogs.quitButton"), t("main.dialogs.continueButton")],
 					defaultId: 1,
 					cancelId: 1,
-					message: "인덱싱이 진행 중입니다.",
-					detail: "종료하면 진행이 멈춥니다.",
+					message: t("main.dialogs.indexingInProgress"),
+					detail: t("main.dialogs.indexingQuitDetail"),
 				})
 				.then((result) => {
 					if (result.response === 0 && !window.isDestroyed()) window.destroy();

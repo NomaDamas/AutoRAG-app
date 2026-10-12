@@ -2,6 +2,7 @@ import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { ConfigRefreshResult, DataSourceSyncResult, ScheduledRunRecord } from "../shared/settings-contract";
 import { isJsonObject } from "../shared/settings-contract";
+import { i18n, t } from "../shared/i18n/core";
 import { LIVE_QUERY_TEMPLATES } from "./datasource-index-probe";
 import { createActivityJournal, LOCAL_ITEM, sourceItem, type ActivityItemSeed } from "./index-activity-journal";
 import { acquireRefreshLock, isLockHeld, type RefreshLockHolder } from "./refresh-lock";
@@ -161,11 +162,18 @@ export type ScheduledRunOutcome =
 	| { readonly kind: "locked"; readonly heldBy: RefreshLockHolder };
 
 function localDetail(result: ConfigRefreshResult): string {
-	return `스캔 ${result.scanned} · 기록 ${result.written} · 삭제 ${result.deleted} · 건너뜀 ${result.skipped}`;
+	return t("indexActivity.counts", {
+		scanned: result.scanned,
+		written: result.written,
+		deleted: result.deleted,
+		skipped: result.skipped,
+	});
 }
 
 function sourceDetail(result: DataSourceSyncResult): string {
-	return result.chunkCount === null ? result.state : `${result.state} · ${result.chunkCount.toLocaleString()}개`;
+	return result.chunkCount === null
+		? result.state
+		: t("main.refresh.sourceDetail", { state: result.state, count: result.chunkCount.toLocaleString(i18n.language) });
 }
 
 function message(error: unknown): string {

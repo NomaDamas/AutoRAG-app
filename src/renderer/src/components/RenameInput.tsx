@@ -1,4 +1,5 @@
 import type { ChangeEvent, KeyboardEvent, MouseEvent, ReactElement } from "react";
+import { useTranslation } from "react-i18next";
 import type { RowCallbacks } from "./FileRow";
 
 /** Inline rename field shared by the icon tiles and the column rows. */
@@ -11,6 +12,7 @@ export function RenameInput({
 	readonly draft: string;
 	readonly callbacks: RowCallbacks;
 }): ReactElement {
+	const { t } = useTranslation();
 	return (
 		<input
 			// biome-ignore lint/a11y/noAutofocus: inline rename must take the caret immediately
@@ -18,7 +20,7 @@ export function RenameInput({
 			className={className}
 			type="text"
 			value={draft}
-			aria-label="새 이름"
+			aria-label={t("finderComponents.newName")}
 			onChange={(event: ChangeEvent<HTMLInputElement>) => callbacks.onRenameChange(event.target.value)}
 			onClick={(event: MouseEvent<HTMLInputElement>) => event.stopPropagation()}
 			onDoubleClick={(event: MouseEvent<HTMLInputElement>) => event.stopPropagation()}

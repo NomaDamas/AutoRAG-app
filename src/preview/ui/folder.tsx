@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactElement } from "react";
+import { useTranslation } from "react-i18next";
 import type { FolderSize, FolderSummary } from "../shared/contract";
 import { formatFinderDate, formatFinderSize, formatItemCount } from "../shared/format";
 import { useChrome, useHiddenTitle, usePanelHeight } from "./chrome";
@@ -11,6 +12,7 @@ import { FolderGlyph } from "./icons";
  * arrives after a bounded walk; until then the line shows the count alone.
  */
 export function FolderView({ folder }: { readonly folder: FolderSummary }): ReactElement {
+	const { t } = useTranslation();
 	useHiddenTitle();
 	const { bridge } = useChrome();
 	const attach = usePanelHeight(CONTENTS_WIDTH);
@@ -36,20 +38,20 @@ export function FolderView({ folder }: { readonly folder: FolderSummary }): Reac
 				<FolderGlyph />
 				<div className="flex flex-col flex-1 gap-3 min-w-0">
 					<div className="ql-folder__name mb-4 overflow-hidden text-[22px] font-bold tracking-[-0.01em] text-ellipsis whitespace-nowrap select-text">{folder.name}</div>
-					<div className="text-[14px] text-ql-ink-secondary">Folder</div>
+					<div className="text-[14px] text-ql-ink-secondary">{t("quickLook.folder.kind")}</div>
 					<div className="ql-folder__count text-[14px] text-ql-ink-secondary">
 						{formatItemCount(folder.itemCount)}
 						{total}
 					</div>
-					<div className="text-[14px] text-ql-ink-secondary">Last modified {formatFinderDate(folder.modifiedAt, false)}</div>
+					<div className="text-[14px] text-ql-ink-secondary">{t("quickLook.fallback.lastModified", { date: formatFinderDate(folder.modifiedAt, false) })}</div>
 				</div>
 			</div>
 			<ContentsBox
 				kind="folder"
 				items={folder.recent}
 				total={folder.itemCount}
-				order="최근 수정 순"
-				empty="비어 있는 폴더"
+				order={t("quickLook.archive.order")}
+				empty={t("quickLook.folder.empty")}
 			/>
 		</div>
 	);

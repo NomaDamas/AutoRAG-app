@@ -482,7 +482,7 @@ export function App(): ReactElement {
 			// A citation chip with no evidence entry must never open a different
 			// result: the panel would silently show unrelated evidence.
 			if (!evidence.some((item) => item.number === number)) {
-				setToast(`근거 ${number}에 대한 정보를 찾을 수 없습니다`);
+				setToast(t("finderComponents.evidenceNotFound", { number }));
 				return;
 			}
 			setSelectedEvidence(number);
@@ -559,11 +559,11 @@ export function App(): ReactElement {
 	const aiTabActive = path === AI_SEARCH_PATH;
 	const toolbarTitle =
 		path === SETTINGS_PATH
-			? "Settings"
+			? t("settings.title")
 			: aiTabActive
-				? "AI Search"
+				? t("places.aiSearch")
 				: finder?.searching === true
-					? `Search "${finder.query}"`
+					? t("finderComponents.searchTitle", { query: finder.query })
 					: isTagPath(path) ? tagNameOf(path) : basename(path);
 
 	/** The sidebar AI Search item: a drop turns the focused tab into AI Search with the files attached. */
@@ -741,14 +741,14 @@ export function App(): ReactElement {
 				{sidebarVisible ? (
 					<PaneGrip
 						position={{ left: sidebarWidth - 3 }}
-						label="Resize sidebar"
+						label={t("finderComponents.resizeSidebar")}
 						onDelta={(dx) => setSidebarWidth((width) => clampWidth(width + dx, SIDEBAR_MIN, SIDEBAR_MAX))}
 					/>
 				) : null}
 				{inspectorVisible ? (
 					<PaneGrip
 						position={{ right: inspectorWidth - 3 }}
-						label="Resize inspector"
+						label={t("finderComponents.resizeInspector")}
 						onDelta={(dx) => setInspectorWidth((width) => clampWidth(width - dx, INSPECTOR_MIN, INSPECTOR_MAX))}
 					/>
 				) : null}
@@ -763,10 +763,10 @@ export function App(): ReactElement {
 			)}
 			{finder?.emptyTrashConfirm === true ? (
 				<ConfirmDialog
-					title={t("confirm.emptyTrashTitle", "휴지통 비우기")}
-					message={t("confirm.emptyTrashMessage", "휴지통의 모든 항목이 영구 삭제됩니다. 이 작업은 되돌릴 수 없습니다.")}
-					confirmLabel={t("confirm.emptyTrashAction", "비우기")}
-					cancelLabel={t("common.cancel", "취소")}
+					title={t("confirm.emptyTrashTitle")}
+					message={t("confirm.emptyTrashMessage")}
+					confirmLabel={t("confirm.emptyTrashAction")}
+					cancelLabel={t("common.cancel")}
 					danger
 					onConfirm={() => finder?.confirmEmptyTrash()}
 					onCancel={() => finder?.cancelEmptyTrash()}

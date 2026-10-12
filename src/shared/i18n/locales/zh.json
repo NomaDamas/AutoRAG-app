@@ -373,15 +373,41 @@
       }
     },
     "feature": {
-      "ai": { "title": "AI 搜索", "sub": "答案与依据一并呈现" },
-      "citation": { "title": "引用依据", "sub": "查看答案的来源" },
-      "versions": { "title": "版本归组", "sub": "整理重复文档" },
-      "quicklook": { "title": "Quick Look", "sub": "打开前预览" },
-      "sources": { "title": "数据源", "sub": "连同已连接的位置一起搜索" },
-      "hybrid": { "title": "混合搜索", "sub": "关键词与语义并用，按重排排序" }
+      "ai": {
+        "title": "AI 搜索",
+        "sub": "答案与依据一并呈现"
+      },
+      "citation": {
+        "title": "引用依据",
+        "sub": "查看答案的来源"
+      },
+      "versions": {
+        "title": "版本归组",
+        "sub": "整理重复文档"
+      },
+      "quicklook": {
+        "title": "Quick Look",
+        "sub": "打开前预览"
+      },
+      "sources": {
+        "title": "数据源",
+        "sub": "连同已连接的位置一起搜索"
+      },
+      "hybrid": {
+        "title": "混合搜索",
+        "sub": "关键词与语义并用，按重排排序"
+      }
     },
-    "hybrid": { "keyword": "关键词", "semantic": "语义", "rerank": "重排" },
-    "versions": { "latest": "最新版", "near": "相似版", "exact": "相同版" },
+    "hybrid": {
+      "keyword": "关键词",
+      "semantic": "语义",
+      "rerank": "重排"
+    },
+    "versions": {
+      "latest": "最新版",
+      "near": "相似版",
+      "exact": "相同版"
+    },
     "account": {
       "eyebrow": "账户",
       "title": "用账户\n开始使用",
@@ -648,7 +674,8 @@
       "gateOkDetail": "已读取全部 {{files}} 个文件。新更改的文件会在后台继续读取。",
       "gateFailTitle": "未能完成索引",
       "gateFailDetail": "重试后将从断点继续。",
-      "gateTitle": "请勿退出 Dazzi 或关闭 {{machine}}",
+      "gateTitleMac": "请勿退出 Dazzi 或关闭 Mac",
+      "gateTitlePc": "请勿退出 Dazzi 或关闭电脑",
       "gateDetailMac": "首次索引耗时较长。退出会中断进度。请连接电源适配器并保持屏幕开启。",
       "gateDetailWindows": "首次索引耗时较长。退出会中断进度。请保持连接电源。",
       "gateLocked": "完成后即可打开",
@@ -745,6 +772,1092 @@
       "planActive": "{{plan}} 套餐已生效。",
       "signInFailed": "无法登录。",
       "notIndexed": "索引完成后才能打开 Dazzi。"
+    }
+  },
+  "finderComponents": {
+    "searchRange": "搜索范围",
+    "sidebar": "边栏",
+    "pathBar": "路径",
+    "inspectorAside": "检查器",
+    "fileActions": "文件操作",
+    "detailActions": "更多操作",
+    "filesList": "文件",
+    "variantColumn": "相似/重复文件",
+    "expand": "展开",
+    "collapse": "折叠",
+    "newName": "新名称",
+    "indexIncluded": "已包含在 AI 搜索索引中",
+    "indexExcluded": "已从 AI 搜索索引中排除",
+    "stackToggle": "另外 {{count}} 个版本 · 点击展开",
+    "webImage": "网络图片",
+    "image": "图片",
+    "quickLookLabel": "{{name}} 快速查看",
+    "imageLoadFailed": "无法加载图片",
+    "clickToQuickLook": "点击以快速查看打开",
+    "sortBy": "按{{label}}排序",
+    "resizeColumn": "调整{{label}}大小",
+    "columnsMenu": "列",
+    "evidenceNotFound": "找不到证据 {{number}} 的信息",
+    "searchTitle": "搜索“{{query}}”",
+    "resizeSidebar": "调整边栏大小",
+    "resizeInspector": "调整检查器大小",
+    "composerPlaceholder": "在文件、邮件和即时通讯中提问（可拖放文件）",
+    "removeAttachment": "移除附件",
+    "locationOpenFailed": "无法打开“{{name}}”的位置。",
+    "ejected": "已推出“{{name}}”。",
+    "ejectFailed": "推出“{{name}}”失败：{{error}}",
+    "indexRefreshFailed": "刷新 Dazzi 索引失败：{{error}}",
+    "folderCreated": "{{name}} — 已创建新文件夹",
+    "fileCreated": "{{name}} — 已创建新文件",
+    "shareAnchorMissing": "找不到共享弹出位置",
+    "tagChangeFailed": "{{name}} — 无法更改标签：{{message}}",
+    "onboardingDemo": {
+      "meetingNotes": "会议记录.md"
+    }
+  },
+  "finderState": {
+    "contextMenu": {
+      "quickLook": "快速查看",
+      "showInEnclosingFolder": "在所在文件夹中显示",
+      "addTag": "添加“{{name}}”",
+      "removeTag": "移除“{{name}}”"
+    },
+    "newFileFormats": {
+      "text": "文本文件",
+      "markdown": "Markdown 文档",
+      "rtf": "富文本",
+      "word": "Word 文档",
+      "excel": "Excel 电子表格",
+      "powerpoint": "PowerPoint 演示文稿",
+      "unknown": "未知的文件格式：{{id}}"
+    },
+    "roles": {
+      "jevLatest": "Jev (最新)",
+      "rerankFree": "Nemotron Rerank VL 1B (免费)"
+    },
+    "servicesUnavailable": "无法在此环境中运行服务",
+    "workerRestarted": "文件服务在操作过程中重启了。请确认结果后重试。",
+    "seconds": "{{value}} 秒",
+    "evidenceDetail": "相关度 {{percent}}%",
+    "renameEmpty": "请输入名称",
+    "renameSlash": "名称中不能包含 /",
+    "renameDuplicate": "已存在同名的项目",
+    "kindCount": "{{count}} 个",
+    "kindSummaryMore": "另有 {{count}} 种",
+    "openWithDefault": "{{name}}（默认）",
+    "openWithOther": "其他…",
+    "source": {
+      "actionsUnavailable": "无法在此环境中执行文件操作",
+      "shareUnavailable": "无法在此环境中共享",
+      "nothingToUndo": "没有可撤销的项目",
+      "trashItemNotFound": "在废纸篓中找不到该项目",
+      "indexExcluded": "已从索引中排除",
+      "indexIncluded": "已包含在 MinSync 索引中",
+      "tagsUnavailable": "无法在此环境中更改标签",
+      "itemNotFound": "找不到项目",
+      "originUnknown": "无法确定原始位置"
+    },
+    "toast": {
+      "trashSingle": "{{name}} — 已移到废纸篓",
+      "putBackSingle": "{{name}} — 已放回原处",
+      "putBackCount": "已将 {{count}} 个项目放回原处",
+      "emptyTrashDone": "废纸篓已清空",
+      "emptyTrashFailed": "无法清空废纸篓：{{message}}",
+      "emptyTrashPartial": "已删除 {{count}} 个项目 · {{name}} — 无法删除：{{message}}",
+      "batchDoneCount": "{{count}} 个项目{{action}}",
+      "batchFailedSingle": "{{name}} — {{reason}}：{{message}}",
+      "batchFailedCount": "{{count}} 个项目{{reason}}（{{name}}：{{message}}）",
+      "batchCombined": "{{done}} · {{failure}}",
+      "batchDone": {
+        "trash": "已移到废纸篓",
+        "putBack": "已放回原处",
+        "move": "已移动",
+        "copy": "已复制",
+        "duplicate": "已复制"
+      },
+      "batchFailed": {
+        "trash": "无法移到废纸篓",
+        "putBack": "无法放回原处",
+        "move": "无法移动",
+        "copy": "无法复制",
+        "duplicate": "无法复制"
+      }
+    },
+    "history": {
+      "undo": "撤销{{operation}}",
+      "redo": "重做{{operation}}",
+      "failed": "{{label}}失败：{{name}} — {{message}}{{more}}",
+      "more": "（另有 {{count}} 项）",
+      "op": {
+        "copy": "复制",
+        "move": "移动",
+        "duplicate": "复制",
+        "rename": "重命名",
+        "createFolder": "新建文件夹",
+        "createFile": "新建文件",
+        "trash": "移到废纸篓",
+        "restore": "放回原处",
+        "extract": "解压",
+        "compress": "压缩",
+        "generic": "文件操作"
+      }
+    },
+    "groups": {
+      "unknownDate": "未知日期",
+      "today": "今天",
+      "yesterday": "昨天",
+      "prev7": "过去 7 天",
+      "prev30": "过去 30 天",
+      "folder": "文件夹",
+      "noExtension": "无扩展名",
+      "zeroKb": "0 KB",
+      "underKb": "小于 1 KB",
+      "kbToMb": "1 KB – 1 MB",
+      "mbToGb": "1 MB – 1 GB",
+      "overGb": "大于 1 GB",
+      "noApplication": "无应用程序",
+      "noTags": "无标签",
+      "noComments": "无注释",
+      "noDimensions": "无尺寸信息",
+      "noRating": "无评分",
+      "stars": "{{count}} 星",
+      "star": "1 星"
+    }
+  },
+  "main": {
+    "action": {
+      "unsupportedResize": "此格式不支持调整大小。",
+      "unsupportedOptimize": "此格式不支持容量优化。",
+      "alreadyOptimized": "此文件已优化。",
+      "unsupportedExtract": "无法解压此文件格式。",
+      "emptyTarget": "没有可操作的目标。",
+      "singleTargetOnly": "此操作一次仅支持一个项目。",
+      "openCancelled": "已取消打开。",
+      "appCannotOpen": "该应用无法打开此文件。",
+      "openedWithFile": "{{name}} — 已用 {{app}} 打开",
+      "openedWithCount": "{{count}} 个文件 — 已用 {{app}} 打开",
+      "compressed": "{{name}} — 已压缩",
+      "extracted": "{{name}} — 已解压",
+      "unsupportedConvert": "不支持转换为 {{format}}。",
+      "converted": "{{name}} — 已转换",
+      "resized": "{{name}} — 已调整大小",
+      "optimized": "{{name}} — 已优化容量",
+      "videoNeedsFfmpeg": "视频转换需要 ffmpeg。",
+      "containerConverted": "{{name}} — 已转换容器",
+      "shareUnsupported": "此平台不支持系统共享。"
+    },
+    "indexStatus": {
+      "outside": "文件在 Dazzi 搜索路径之外",
+      "excluded": "已从索引中排除",
+      "parentExcluded": "上级文件夹已从索引中排除",
+      "excludedPending": "已保存排除 · 下次刷新时将移出索引",
+      "unsupported": "不支持索引的文件格式",
+      "included": "已包含在 MinSync 索引中",
+      "parsedPending": "已解析 · 等待同步到 MinSync",
+      "skipped": "刷新时已跳过 ({{reason}})",
+      "notIndexed": "尚未建立索引"
+    },
+    "archive": {
+      "corrupt": "压缩文件已损坏。",
+      "encrypted": "无法解压受密码保护的压缩文件。",
+      "combined": "压缩文件已损坏或受密码保护。",
+      "tooManyEntries": "压缩文件的条目过多。",
+      "tooLarge": "压缩文件的解压大小过大。",
+      "tooLargeForEngine": "此格式的压缩文件过大，无法解压。",
+      "unsupportedFormat": "无法解压此文件格式。",
+      "lzmaFailed": "LZMA 压缩失败。",
+      "lzmaAborted": "LZMA 压缩任务已中止。"
+    },
+    "tags": {
+      "nameEmpty": "标签名称为空。",
+      "nameNewline": "标签名称不能包含换行符。",
+      "nameTooLong": "标签名称过长。",
+      "unreadable": "标签信息格式无法读取。",
+      "macosOnly": "Finder 标签仅在 macOS 上可用。"
+    },
+    "services": {
+      "macosOnly": "服务仅在 macOS 上可用。",
+      "unavailable": "该服务无法用于此选择。",
+      "runFailed": "无法运行该服务。"
+    },
+    "ipc": {
+      "invalidPaths": "文件路径无效。",
+      "unknownAction": "未知的文件操作。",
+      "invalidAnchor": "共享位置无效。",
+      "invalidServiceRequest": "服务请求无效。"
+    },
+    "dialogs": {
+      "notificationBody": "通知已开启。",
+      "openWithTitle": "打开方式",
+      "openButton": "打开",
+      "chooseFolderTitle": "选择文件夹",
+      "addButton": "添加",
+      "quitButton": "退出",
+      "continueButton": "继续",
+      "indexingInProgress": "正在建立索引。",
+      "indexingQuitDetail": "退出将停止进度。"
+    },
+    "onboarding": {
+      "apiKeyRequired": "需要 API 密钥。",
+      "baseUrlRequired": "需要服务器地址(base URL)。",
+      "indexingFailed": "建立索引失败。"
+    },
+    "lock": {
+      "scheduledBusy": "后台刷新正在运行。完成后请重试。",
+      "otherBusy": "另一个刷新正在运行。完成后请重试。"
+    },
+    "activity": {
+      "aborted": "已中止"
+    },
+    "refresh": {
+      "sourceDetail": "{{state}} · {{count}} 项"
+    },
+    "worker": {
+      "unknownFormat": "未知的文件格式：{{format}}",
+      "invalidUrl": "网址无效。"
+    },
+    "fs": {
+      "restoreTempFailed": "{{message}}(无法从临时名称 {{name}} 恢复：{{detail}})",
+      "trashLocationUnknown": "无法确定废纸篓位置。",
+      "trashItemNotFound": "在废纸篓中找不到该项目：{{name}}",
+      "trashOriginUnknown": "无法确定原始位置：{{name}}",
+      "notWebUrl": "不是网址：{{text}}",
+      "renameEmpty": "名称无效：新名称不能为空。",
+      "renameSeparator": "名称“{{name}}”无效：不允许使用路径分隔符。",
+      "renameCollision": "名为“{{name}}”的文件或文件夹已存在。"
+    },
+    "embedding": {
+      "profiles": {
+        "nativeQwen3": {
+          "description": "直接在此 Mac 上运行的默认文档理解模型(1024 维)。无需单独的服务器。"
+        },
+        "runtime": {
+          "label": "Qwen3 Embedding 0.6B (Dazzi 运行时)",
+          "description": "由 Dazzi 嵌入运行时通过 loopback 上的 llama-server 提供的 1024 维模型。"
+        },
+        "localServer": {
+          "label": "本机嵌入服务器",
+          "description": "使用在 loopback 上运行的 OpenAI 兼容嵌入服务器。请自行指定模型、维度和前缀。"
+        }
+      },
+      "errors": {
+        "modelNameEmpty": "嵌入服务器模型名称为空。",
+        "dimensionPositive": "嵌入服务器维度必须为正整数。",
+        "badUrl": "嵌入服务器地址不是有效的 URL。",
+        "loopbackOnly": "嵌入服务器必须是 loopback 地址(文档不会离开此 Mac)。",
+        "unknownProfile": "未知的嵌入配置：{{id}}",
+        "localServerRequired": "需要嵌入服务器信息(id、baseUrl、dimension)。",
+        "localServerMissing": "需要嵌入服务器信息。",
+        "httpStatus": "嵌入服务器以 HTTP {{status}} 响应。",
+        "badJson": "无法将嵌入服务器响应解析为 JSON。",
+        "noVector": "嵌入服务器未返回向量。",
+        "dimensionMismatch": "嵌入服务器维度为 {{actual}}，但指定为 {{expected}}。",
+        "incompatibleSources": "有数据源无法跟随此模型：{{ids}}"
+      },
+      "reasons": {
+        "mailcrawlIncompatible": "mailcrawl 仅支持内置的 Qwen3，无法使用任意的 HTTP 嵌入服务器。",
+        "mailcrawlPropagated": "在 connector.env 中记录嵌入提供商(模型更改时 mailcrawl 会自动重新建立索引)。",
+        "obsidianIncompatible": "qmd (obsidian) 只能使用本地 GGUF 模型，因此无法使用 HTTP 嵌入服务器。",
+        "obsidianPropagated": "在 qmd 子进程上设置 QMD_EMBED_MODEL，并用 `qmd embed -f` 重新建立索引。",
+        "discordIncompatible": "此应用无法在 loopback 上提供 Dazzi 嵌入运行时(非公开导出)。请选择嵌入服务器以传递给 discrawl。",
+        "discordPropagated": "重写 Dazzi 管理的 discrawl config，并用 `discrawl embed --rebuild` 重新建立索引。",
+        "kakaoIncompatible": "lazykatok 使用其自带的内置嵌入器(EmbeddingGemma)，无法通过 Dazzi 共享 config 更改(由原生设置拥有)。",
+        "githubGistIncompatible": "GitHubGistSkill 不是 @autorag/librarian 的公开导出，因此应用无法指定其嵌入器(由运行时网关配置固定)。",
+        "clawgalleryNotApplicable": "ClawGallery 是图像(VDR)索引，不使用文本嵌入。",
+        "larkNotApplicable": "Lark 仅使用远程 API 搜索，拒绝本地嵌入。",
+        "defaultNotApplicable": "此数据源使用自己的关键词/解析索引，不使用全局嵌入器。"
+      },
+      "actions": {
+        "discordConfig": "由 datasources.<id> 管理的 discrawl config.toml"
+      }
+    }
+  },
+  "quickLook": {
+    "window": {
+      "fullscreen": "全屏",
+      "openWith": "用默认应用打开",
+      "open": "打开",
+      "openWithApp": "用{{name}}打开",
+      "cannotOpen": "无法打开文件"
+    },
+    "status": {
+      "loading": "正在加载"
+    },
+    "fallback": {
+      "loading": "正在加载…",
+      "computing": "正在计算…",
+      "copied": "已复制",
+      "copy": "复制",
+      "moreDetails": "详细信息",
+      "createdAt": "创建日期",
+      "location": "位置",
+      "lastModified": "修改于 {{date}}",
+      "revealFinder": "在访达中显示",
+      "revealExplorer": "在资源管理器中显示",
+      "revealFolder": "在文件夹中显示"
+    },
+    "body": {
+      "emptyFile": "空文件",
+      "tooLarge": "此文件太大，改为显示其信息"
+    },
+    "archive": {
+      "extractFailed": "无法解压归档",
+      "listFailed": "无法读取归档列表",
+      "tarListFailed": "无法读取 tar 列表",
+      "readFailed": "无法读取归档",
+      "empty": "空的归档",
+      "order": "修改日期"
+    },
+    "folder": {
+      "kind": "文件夹",
+      "empty": "空文件夹"
+    },
+    "contents": {
+      "title": "包含内容"
+    },
+    "code": {
+      "wrap": "自动换行",
+      "copy": "复制代码",
+      "lines": "{{count}} 行",
+      "truncated": "仅显示前 {{size}}",
+      "viewMode": "视图",
+      "readFailed": "无法读取文本",
+      "modes": {
+        "desktop": "桌面",
+        "mobile": "移动",
+        "source": "源码"
+      }
+    },
+    "markdown": {
+      "viewMode": "视图",
+      "headings": "标题 {{count}}",
+      "tables": "表格 {{count}}",
+      "codeBlocks": "代码块 {{count}}",
+      "lines": "{{count}} 行",
+      "words": "{{count}} 词",
+      "modes": {
+        "source": "源码",
+        "split": "并排",
+        "preview": "渲染"
+      }
+    },
+    "documents": {
+      "readFailed": "无法读取文档",
+      "openFailed": "无法打开文档",
+      "sheetReadFailed": "无法读取工作表",
+      "sheetOpenFailed": "无法打开工作表",
+      "sheetMissing": "没有工作表",
+      "previous": "上一个",
+      "next": "下一个"
+    },
+    "hwp": {
+      "openFailed": "无法打开 HWP 文档",
+      "page": "第 {{count}} 页",
+      "noPages": "没有页面"
+    },
+    "iwork": {
+      "slideMissing": "此幻灯片没有图片",
+      "drawFailed": "无法绘制幻灯片",
+      "noPreview": "此文档没有预览图片",
+      "page": "第 {{count}} 页"
+    },
+    "media": {
+      "imageOpenFailed": "无法打开图片",
+      "imageReadFailed": "无法读取图片",
+      "fontOpenFailed": "无法打开字体",
+      "tiffNoPages": "没有 TIFF 页面",
+      "canvasFailed": "无法创建画布",
+      "tiffOpenFailed": "无法打开 TIFF",
+      "heicNoResult": "没有 HEIC 转换结果",
+      "heicOpenFailed": "无法打开 HEIC",
+      "fontSampleTail": "0123456789 — 预览"
+    },
+    "epub": {
+      "readFailed": "无法读取书籍",
+      "noText": "未找到正文"
+    },
+    "paged": {
+      "drawFailed": "无法绘制页面",
+      "goToPage": "转到第 {{count}} 页",
+      "zoomOut": "缩小",
+      "zoomIn": "放大",
+      "rail": "页面预览"
+    },
+    "pdf": {
+      "openFailed": "无法打开 PDF"
+    },
+    "pptx": {
+      "openFailed": "无法打开演示文稿",
+      "noSlides": "没有幻灯片",
+      "readFailed": "无法读取演示文稿",
+      "slideReadFailed": "无法读取幻灯片",
+      "slideRenderFailed": "无法显示幻灯片",
+      "image": "图片",
+      "chart": "图表",
+      "media": "媒体",
+      "object": "对象"
+    },
+    "player": {
+      "videoFailed": "无法播放视频",
+      "audioFailed": "无法播放音频",
+      "playPause": "播放或暂停",
+      "muteToggle": "切换静音",
+      "volume": "音量",
+      "skipBack": "后退 15 秒",
+      "skipForward": "前进 15 秒",
+      "playbackRate": "播放速度",
+      "loop": "循环播放",
+      "loopLabel": "循环",
+      "pip": "画中画",
+      "position": "播放位置",
+      "waveformPosition": "在波形中定位",
+      "continueInApp": "在默认应用中继续收听",
+      "continueIn": "在{{name}}中继续收听",
+      "artist": "艺术家",
+      "album": "专辑",
+      "time": "时长"
+    },
+    "binary": {
+      "platform": "平台",
+      "format": "格式",
+      "appleDiskImage": "Apple 磁盘映像 (UDIF)"
+    },
+    "itemCount": {
+      "zero": "无项目",
+      "one": "1 个项目",
+      "many": "{{count}} 个项目"
+    },
+    "errors": {
+      "unreadableFolder": "没有读取此文件夹的权限",
+      "notShowing": "当前预览的不是该项目",
+      "invalidTarget": "预览请求无效",
+      "unknownAction": "未知的 Quick Look 操作",
+      "changedWhileHashing": "预览项目已更改，已停止计算",
+      "invalidShareAnchor": "共享位置无效",
+      "invalidCopyText": "要复制的内容无效",
+      "notAbsolute": "预览路径无效",
+      "missing": "找不到文件",
+      "notFile": "无法预览文件夹"
+    }
+  },
+  "settingsCore": {
+    "common": {
+      "notSet": "未设置",
+      "unknown": "无法确认"
+    },
+    "nav": {
+      "account": "我的账户",
+      "plan": "订阅与用量",
+      "general": "通用",
+      "ai": "AI 模型",
+      "web": "网页搜索",
+      "indexing": "索引",
+      "scope": "搜索范围",
+      "reading": "文档读取",
+      "duplicates": "重复文件整理",
+      "apps": "全部连接",
+      "group": {
+        "account": "账户",
+        "basic": "基本",
+        "ai": "AI",
+        "search": "搜索",
+        "apps": "已连接的应用"
+      }
+    },
+    "view": {
+      "navAria": "设置导航",
+      "search": "搜索设置",
+      "menuAria": "设置菜单",
+      "empty": "没有匹配的设置。",
+      "contentAria": "{{name}} 设置"
+    },
+    "general": {
+      "description": "设置 Dazzi 的界面和启动方式。",
+      "screenTitle": "界面",
+      "appearanceName": "显示模式",
+      "appearanceHint": "将同一主题应用到整个界面。",
+      "appearanceLight": "浅色",
+      "appearanceDark": "深色",
+      "appLanguage": "应用语言",
+      "appLanguageHint": "菜单和设置使用的语言。",
+      "finderTitle": "Finder",
+      "finderDesc": "Mac 文件浏览界面的行为。",
+      "showHiddenFiles": "显示隐藏文件",
+      "showHiddenFilesHint": "在 Finder 中显示以点(.)开头的系统文件。",
+      "launchTitle": "启动与更新",
+      "launchAtLogin": "登录时自动启动",
+      "launchAtLoginHint": "开机时在后台启动 Dazzi。",
+      "osMenu": "添加到文件右键菜单",
+      "osMenuHint": "在 Finder (macOS) 或资源管理器 (Windows) 中右键单击文件时会显示“询问 Dazzi”和“在 Dazzi 中查看”。",
+      "autoUpdates": "自动安装更新",
+      "autoUpdatesHint": "下次启动应用时自动应用新版本。",
+      "privacyTitle": "隐私",
+      "telemetry": "发送匿名使用统计",
+      "telemetryHint": "仅发送不含文档内容的性能信息。",
+      "docLanguagesTitle": "文档语言",
+      "docLanguagesDesc": "读取和搜索文档时优先使用的语言。",
+      "docLanguagesHint": "可以选择多个。",
+      "osMenuError": "无法设置右键菜单：{{error}}"
+    },
+    "account": {
+      "description": "Dazzi 账户和登录状态。",
+      "profileTitle": "个人资料",
+      "accountName": "Dazzi 账户",
+      "accountHint": "登录在系统浏览器中进行，本应用不会接收密码。",
+      "signingIn": "正在浏览器中登录…",
+      "signedIn": "已登录",
+      "signedOut": "未登录",
+      "email": "电子邮箱",
+      "emailHint": "服务器确认的账户邮箱。",
+      "offline": "无法连接服务器，显示最后确认的信息。",
+      "signOut": "退出登录",
+      "signIn": "登录",
+      "hintEnv": "已通过环境变量 AUTORAG_API_KEY 登录，无法在应用内退出登录。",
+      "hintSignedIn": "删除存储在此 Mac 上的密钥。可在 Dazzi 网站的 API 密钥页面吊销该密钥。",
+      "hintSignedOut": "浏览器将打开，确认后会回到本应用。",
+      "signInBrowser": "在浏览器中登录",
+      "managedDesc": "将 Dazzi 账户的托管模型用于 AI 搜索。",
+      "managedName": "使用托管模型",
+      "managedHint": "更改 Dazzi 设置，使 AI 搜索使用此账户的模型。手动输入的 API 密钥设置将在这一步被替换。",
+      "useManaged": "设为账户模型",
+      "planDescription": "查看 Dazzi 套餐和本周 AI 用量。",
+      "currentPlan": "当前套餐",
+      "currentPlanHintSignedIn": "服务器确认的套餐。",
+      "currentPlanHintSignedOut": "请先登录以查看套餐。",
+      "trialing": " · 试用中",
+      "cancelScheduled": "已预约取消。在 {{date}} 之前仍可使用当前套餐。",
+      "pastDue": "支付失败。请在结算门户中检查支付方式。",
+      "inUse": "使用中",
+      "openCheckout": "打开支付页面",
+      "billingTitle": "结算管理",
+      "billingHint": "支付方式、发票、取消订阅和退款均在结算门户中管理。",
+      "openPortal": "打开结算门户",
+      "usageTitle": "本周用量",
+      "usageName": "AI 用量",
+      "usageHint": "使用 Dazzi 套餐模型时扣减的每周额度。",
+      "usageMeterAria": "每周额度使用量",
+      "usageUnavailable": "无法加载用量",
+      "creditsLeft": "剩余额度",
+      "creditsLeftHint": "达到上限后，请求将被拒绝，直到下周重置。",
+      "requestLimit": "请求上限",
+      "requestLimitHint": "各套餐每分钟的请求数。",
+      "requestsPerMinute": "每分钟 {{count}} 次",
+      "plan": {
+        "free": {
+          "price": "免费",
+          "perks": "每周 $0.50 额度 · 每分钟 10 次"
+        },
+        "air": {
+          "price": "每月 $4",
+          "perks": "每周 $1 额度 · 每分钟 60 次"
+        },
+        "pro": {
+          "price": "每月 $20",
+          "perks": "每周 $5 额度 · 每分钟 240 次"
+        }
+      }
+    },
+    "ai": {
+      "description": "连接 AI 服务，并为每个角色选择模型。",
+      "kind": {
+        "runtime": "运行时提供商",
+        "local": "本机服务器",
+        "custom": "自定义服务器"
+      },
+      "thinking": {
+        "off": "不思考",
+        "offNote": "最快",
+        "low": "低",
+        "medium": "中",
+        "high": "高",
+        "highNote": "精度优先",
+        "max": "最高",
+        "maxNote": "最慢"
+      },
+      "thinkingDepth": "思考深度",
+      "thinkingDepthFor": "{{label}} 思考深度",
+      "sameAsAnswer": "与回答模型相同",
+      "decompDefault": "默认 (OpenRouter Qwen3.7 Flash)",
+      "defaultModel": "默认 (Qwen3.7 Flash)",
+      "off": "不使用",
+      "role": {
+        "answer": "回答",
+        "decomposition": "问题拆分",
+        "rerank": "重排",
+        "jev": "判断"
+      },
+      "usedFor": "用于 {{roles}}",
+      "subscriptionAccount": "订阅账户",
+      "providerMenu": "{{name}} 菜单",
+      "noServices": "还没有已连接的服务。请在下方连接。",
+      "connectService": "连接服务",
+      "servicesTitle": "已连接的服务",
+      "servicesDesc": "可在下方角色中选择已连接服务的模型。",
+      "rolesTitle": "按角色的模型",
+      "rolesDesc": "Dazzi 按角色分工处理任务。请为每个角色选择合适的模型。",
+      "subSearchAssistant": "搜索辅助",
+      "answerModel": "回答模型",
+      "answerHint": "回答问题并总结文档。",
+      "decompositionHint": "将长问题拆分为多个搜索词。适合快速且便宜的模型。",
+      "jevModel": "判断模型 (Jev)",
+      "jevHint": "判断是直接回答还是搜索你的资料。",
+      "rerankModel": "搜索结果重排",
+      "rerankHint": "将相关性高的结果移到前面。回答可能会稍慢。",
+      "subDocUnderstanding": "文档理解",
+      "selectRole": "选择 {{label}}",
+      "login": {
+        "starting": "正在开始连接…",
+        "completeInBrowser": "请在浏览器中完成登录。",
+        "enterCode": "请在浏览器中输入代码。",
+        "completed": "已连接 {{name}}。",
+        "signInBrowser": "请在浏览器中登录 Dazzi…",
+        "signedIn": "已登录 Dazzi。",
+        "notSignedIn": "未登录。"
+      },
+      "disconnect": {
+        "envLocked": "已通过环境变量 AUTORAG_API_KEY 登录，无法在应用内退出登录。请自行删除该环境变量。",
+        "title": "要断开 {{name}} 吗？",
+        "body": "删除已保存的凭据并将其从列表中移除。使用该服务的角色可能需要选择新模型。",
+        "action": "断开连接"
+      },
+      "disconnected": "已断开 {{name}}。",
+      "envKeyCannotRemove": "{{name}} 的密钥由操作系统环境变量提供，无法在应用内解除。请自行删除该环境变量。",
+      "testing": "{{name}}：检查中…",
+      "testOk": "连接成功",
+      "testFail": "连接失败",
+      "discoverFound": "{{name}}：发现 {{count}} 个模型 ({{protocol}})",
+      "discoverFailed": "{{name}}：{{error}}",
+      "discoverFailWord": "发现失败",
+      "menu": {
+        "dazziPlan": "Dazzi 套餐",
+        "apiKeys": "API 密钥",
+        "localMachine": "本机",
+        "signInDazzi": "使用 Dazzi 账户登录",
+        "addCustom": "自定义添加 (OpenAI 兼容)",
+        "addLocalServer": "添加本机服务器"
+      },
+      "providerNotFound": "找不到提供商。",
+      "provider": {
+        "edit": "编辑连接信息",
+        "test": "检查连接",
+        "discover": "重新搜索模型"
+      },
+      "searchModels": "搜索模型",
+      "emptyRoleModels": "没有可用于该角色的受支持模型。请先连接相应服务。",
+      "emptyModels": "已连接的服务中没有可用的模型。",
+      "connect": {
+        "title": "连接 {{name}}",
+        "body": "请粘贴 {{name}} 颁发的 API 密钥。密钥会加密保存，且不会再次显示。",
+        "apiKeyLabel": "API 密钥 ({{env}})",
+        "keyPlaceholder": "粘贴密钥",
+        "saved": "已保存 {{name}} 的密钥。",
+        "action": "连接"
+      },
+      "server": {
+        "defaultLocal": "本机服务器",
+        "defaultCustom": "公司网关",
+        "titleLocal": "连接本机服务器",
+        "titleCustom": "添加 OpenAI 兼容服务",
+        "titleEdit": "编辑连接信息",
+        "bodyLocal": "只能连接在此 Mac 上运行的服务器，例如 Ollama、LM Studio。",
+        "bodyCustom": "连接公司网关或 OpenAI 兼容服务器。密钥会加密保存。",
+        "name": "名称",
+        "baseUrl": "服务器地址",
+        "apiKeyOptional": "API 密钥 (可选)",
+        "optionalPlaceholder": "可选",
+        "saved": "已保存 {{name}}。"
+      },
+      "loginModal": {
+        "openManually": "如果浏览器没有打开，请手动打开下面的地址。",
+        "openBrowser": "打开浏览器",
+        "enterCode": "请在浏览器中输入下面的代码。",
+        "submit": "提交"
+      },
+      "auto": "自动",
+      "defaultValue": "默认值"
+    },
+    "embedding": {
+      "errorModelRequired": "请输入嵌入服务器模型名称。",
+      "errorDimension": "嵌入服务器维度必须为正整数。",
+      "title": "文档理解模型",
+      "hint": "分析文档的含义。文档内容不会离开此 Mac。",
+      "body": "用于分析文档含义的嵌入模型。只能选择 Dazzi 运行时和本机服务器，文档内容不会离开此 Mac。",
+      "dimension": "{{count}} 维",
+      "modelName": "模型名称",
+      "baseUrl": "服务器地址",
+      "dimensionLabel": "维度",
+      "modelPlaceholder": "例如：nomic-embed-text",
+      "dimensionPlaceholder": "例如：768",
+      "incompatibleNote": "有 {{count}} 个数据源与此配置不兼容。继续将保留这些源不变，仅更改其余部分。",
+      "acknowledge": "同时对不兼容的源应用",
+      "applied": "已应用。",
+      "notApplied": "未应用。",
+      "written": "记录了 config {{count}} 个条目",
+      "rebuild": "重新索引 {{count}} 个源",
+      "preview": "查看计划",
+      "apply": "应用"
+    },
+    "language": {
+      "remove": "移除 {{name}}",
+      "placeholder": "选择语言…",
+      "search": "搜索 {{name}}",
+      "openList": "打开 {{name}} 列表",
+      "noMatch": "没有匹配的语言。",
+      "custom": "自定义",
+      "inherited": "继承上级语言设置",
+      "resetDefault": "默认值"
+    },
+    "chips": {
+      "add": "+ 添加",
+      "remove": "移除 {{item}}"
+    }
+  },
+  "settingsSources": {
+    "templates": {
+      "telegram": {
+        "summary": "从 telecrawl 存档中搜索 Telegram 消息。"
+      },
+      "whatsapp": {
+        "summary": "从 wacrawl 存档中搜索 WhatsApp 消息。"
+      },
+      "slack": {
+        "summary": "从 slacrawl 存档中搜索 Slack 消息。"
+      },
+      "discord": {
+        "summary": "从 discrawl 存档中搜索 Discord 消息。"
+      },
+      "clawgallery": {
+        "summary": "搜索 clawgallery 图片存档。"
+      },
+      "notion": {
+        "summary": "从 notcrawl 存档中搜索 Notion 文档。"
+      },
+      "lark": {
+        "summary": "使用 lark-cli 搜索 Lark 消息和文档。"
+      },
+      "kakao": {
+        "summary": "从 lazykatok 存档中搜索 KakaoTalk 消息。"
+      },
+      "github": {
+        "summary": "通过 REST API 索引 GitHub 议题和 PR。"
+      },
+      "githubGist": {
+        "summary": "索引已认证账户的 GitHub Gist。"
+      },
+      "cloudDrive": {
+        "summary": "通过增量镜像索引 rclone 远程。"
+      },
+      "mailExport": {
+        "summary": "索引本地 .eml / .mbox 存档文件。"
+      },
+      "mailcrawl": {
+        "summary": "从 mailcrawl 存档中搜索邮件。"
+      },
+      "obsidian": {
+        "summary": "使用 qmd 搜索 Obsidian 库。"
+      },
+      "rss": {
+        "summary": "轮询并索引 RSS 2.0 / Atom 订阅源。"
+      },
+      "spotlight": {
+        "summary": "使用 macOS Spotlight (mdfind) 查询索引本地文件。"
+      }
+    },
+    "groups": {
+      "advancedRuntime": "高级 · 运行环境",
+      "advanced": "高级",
+      "contentScope": "内容范围",
+      "parserLanguages": "解析器（文档语言）",
+      "telegram": "Telegram (telecrawl)",
+      "whatsapp": "WhatsApp (wacrawl)",
+      "slack": "Slack (slacrawl)",
+      "discord": "Discord (discrawl)",
+      "clawGallery": "ClawGallery",
+      "notion": "Notion (notcrawl)",
+      "lark": "Lark (lark-cli)",
+      "kakao": "KakaoTalk (lazykatok)",
+      "github": "GitHub",
+      "githubGist": "GitHub Gist",
+      "cloudDrive": "Cloud Drive (rclone)",
+      "mailExport": "Mail Export",
+      "mail": "Mail",
+      "obsidian": "Obsidian (qmd)",
+      "rss": "RSS / News",
+      "spotlight": "Spotlight (mdfind)"
+    },
+    "fields": {
+      "binaryPath": "可执行文件路径",
+      "databasePath": "数据库路径",
+      "sourcePath": "源路径",
+      "configPath": "配置文件路径",
+      "syncSource": "同步源",
+      "searchTimeoutMs": "搜索超时 (ms)",
+      "indexTimeoutMs": "索引超时 (ms)",
+      "maxBufferBytes": "最大缓冲区 (bytes)",
+      "env": "环境变量",
+      "workspaceId": "工作区 id",
+      "guildId": "服务器 id",
+      "defaultMode": "默认搜索模式",
+      "embeddingProvider": "嵌入提供方",
+      "embeddingModel": "嵌入模型",
+      "embedLimit": "最大嵌入数量",
+      "root": "根路径",
+      "workspacePath": "工作目录",
+      "timeoutMs": "超时 (ms)",
+      "vaultPath": "存档路径",
+      "configDir": "配置目录",
+      "vdrBackend": "VDR 后端",
+      "syncVisual": "同步视觉数据",
+      "embedderBaseUrl": "嵌入器 base URL",
+      "dataDir": "数据目录",
+      "sourceAdapter": "源适配器",
+      "repos": "仓库 (owner/repo)",
+      "tokenEnv": "令牌环境变量名",
+      "baseUrl": "REST base URL",
+      "maxPages": "最大页数",
+      "maxDocuments": "最大文档数",
+      "ghCliFallback": "回退使用 gh CLI 令牌",
+      "statePath": "增量游标路径",
+      "maxGists": "最大 Gist 数",
+      "provider": "提供方",
+      "remote": "远程名称",
+      "rcloneConfigPath": "rclone 配置路径",
+      "extensions": "包含扩展名",
+      "includeGlob": "包含通配符",
+      "excludeGlob": "排除通配符",
+      "exportFormats": "导出格式",
+      "maxBytesPerFile": "每文件最大字节",
+      "maxContentChars": "每文档最大字符",
+      "concurrency": "并发数",
+      "bandwidthLimit": "带宽限制",
+      "dryRun": "试运行",
+      "docLanguages": "文档语言",
+      "kordocOcr": "kordoc OCR",
+      "rcloneBinaryPath": "rclone 可执行文件路径",
+      "mailPaths": "邮件文件/目录路径",
+      "account": "账户",
+      "mailbox": "邮箱",
+      "backend": "后端",
+      "source": "源",
+      "fixture": "测试数据",
+      "himalayaConfig": "himalaya 配置",
+      "qmdBinaryPath": "qmd 可执行文件路径",
+      "feeds": "订阅源",
+      "maxItemsPerFeed": "每订阅源最大条目",
+      "queries": "查询",
+      "onlyIn": "搜索目录 (-onlyin)",
+      "maxResultsPerQuery": "每查询最大结果",
+      "defaultOption": "(默认)",
+      "envAria": "环境变量 (JSON)",
+      "envEditorHint": "注入子进程的环境变量。机密令牌/密码请放在操作系统环境变量中，而不要填在这里。",
+      "hint": {
+        "binaryPathEmpty": "留空则在 PATH 中查找。",
+        "nativeConfig": "Dazzi 不会改写你自行指定的原生配置。",
+        "env": "注入子进程的环境变量。机密值请放在操作系统环境变量中。",
+        "workspace": "slacrawl 搜索必须指定工作区才有结果。",
+        "embeddingProvider": "用于 discrawl 原生配置的提供方。",
+        "embeddingModel": "用于 discrawl 原生配置的模型。",
+        "envSimple": "机密值请放在操作系统环境变量中。",
+        "defaultOn": "默认：开启。",
+        "defaultOff": "默认：关闭。",
+        "tokenEnv": "这是存放令牌的环境变量名，而不是令牌本身。",
+        "rcloneConfig": "自行指定的 rclone.conf 仅以只读方式使用。"
+      },
+      "envError": {
+        "object": "环境变量必须是 JSON 对象。",
+        "string": "'{{name}}' 的值必须是字符串。",
+        "secret": "'{{name}}' 的值看起来是明文机密，已拒绝保存。请移到操作系统环境变量。",
+        "json": "不是有效的 JSON。"
+      },
+      "list": {
+        "removeItem": "删除条目",
+        "addItem": "添加条目",
+        "addLabel": "+ 添加条目",
+        "itemAt": "{{label}} {{index}}",
+        "removeItemAt": "删除 {{label}} {{index}}",
+        "addItemWith": "添加 {{label}}"
+      },
+      "feedsAria": {
+        "urlAria": "订阅源 URL {{index}}",
+        "categoryAria": "订阅源分类 {{index}}",
+        "removeAt": "删除订阅源 {{index}}",
+        "addAria": "添加订阅源",
+        "addLabel": "+ 添加订阅源"
+      }
+    },
+    "cadence": {
+      "min5": "5 分钟",
+      "min15": "15 分钟",
+      "min30": "30 分钟",
+      "hour1": "1 小时",
+      "hour3": "3 小时",
+      "hour6": "6 小时",
+      "hour12": "12 小时",
+      "day1": "每天"
+    },
+    "units": {
+      "message": "消息",
+      "document": "文档",
+      "image": "图片"
+    },
+    "common": {
+      "manual": "手动",
+      "itemNoun": "条目",
+      "off": "关闭",
+      "inUse": "使用中",
+      "syncing": "更新中…",
+      "justNow": "刚刚",
+      "minutesAgo": "{{count}} 分钟前",
+      "hoursAgo": "{{count}} 小时前",
+      "daysAgo": "{{count}} 天前",
+      "autoOk": "自动 {{ago}} 成功",
+      "autoFail": "自动 {{ago}} 失败"
+    },
+    "meta": {
+      "folders": "{{count}} 个文件夹",
+      "chunkCount": "{{noun}} {{count}}",
+      "noDocsYet": "尚未读取任何文档",
+      "notFetchedYet": "尚未获取任何内容",
+      "importedNone": "未导入任何{{noun}}",
+      "liveQuery": "搜索时即时查询",
+      "appNeeds": "需要 {{name}} 桌面应用"
+    },
+    "indexing": {
+      "title": "索引",
+      "desc": "检查待搜索文件夹和已连接应用的内容是否为最新，并仅重新获取变更部分。",
+      "progress": "进度",
+      "refreshStatus": "更新状态",
+      "localFolder": "本地文件夹",
+      "localIntervalAria": "本地文件夹更新间隔",
+      "refreshLocalAria": "立即刷新本地文件夹",
+      "refreshTitle": "立即刷新",
+      "rowIntervalAria": "{{id}} 更新间隔",
+      "rowRefreshAria": "立即更新 {{id}}",
+      "rowRefreshTitle": "立即更新",
+      "localUpdating": "刷新中…",
+      "empty": "没有已连接的数据源。请在“已连接应用”中添加。",
+      "footer": "仅重新读取变更的文件和消息。首次连接的应用会完整获取。",
+      "syncAll": "立即全部更新",
+      "localRefreshName": "刷新本地文件夹",
+      "localRefreshHint": "重新读取搜索文件夹中的文档以更新搜索索引。仅处理已变更的文档。",
+      "localRefreshButton": "立即刷新",
+      "scanned": "扫描 {{scanned}} · 写入 {{written}} · 删除 {{deleted}} · 跳过 {{skipped}}",
+      "diagnostics": " · {{count}} 项诊断",
+      "scheduleUnsupported": "此计算机不支持应用关闭时的自动刷新。",
+      "scheduleRegisterFailed": "无法注册自动刷新：{{error}}",
+      "scheduleNotRegistered": "自动刷新尚未注册。再次选择间隔即可注册。",
+      "scheduleConflicts": "此计算机已有单独刷新 Dazzi 的计划任务（{{list}}）。为避免重复处理同一文件夹，建议只使用其中一个。",
+      "scheduleActive": "即使应用已关闭，也会每 {{minutes}} 分钟检查一次，仅刷新到期的项目。",
+      "scheduleLastCheck": "上次检查 {{ago}}。",
+      "scheduleNever": "尚未运行过。"
+    },
+    "apps": {
+      "title": "已连接应用",
+      "desc": "在 Dazzi 中一起搜索你的即时通讯、邮件和云端内容。",
+      "myConnections": "我的连接",
+      "groups": {
+        "messengers": "即时通讯",
+        "docsNotes": "文档与笔记",
+        "mail": "邮件",
+        "cloudDev": "云端与开发",
+        "newsOther": "新闻与其他"
+      },
+      "empty": "没有已连接的应用。请在下方添加。",
+      "connectApps": "连接应用",
+      "connectAppsDesc": "选择要添加的应用。",
+      "connected": "已连接",
+      "connect": "连接",
+      "promptTitle": "连接 {{name}}",
+      "promptDesc": "设置连接 id 后添加。留空则使用模板名称。",
+      "promptLabel": "连接 id",
+      "promptConfirm": "添加连接"
+    },
+    "sourceDetail": {
+      "fallbackSummary": "管理此连接的设置。",
+      "statusSection": "连接状态",
+      "enabledName": "启用状态",
+      "enabledHint": "关闭后将从搜索中暂时排除此连接。",
+      "appRow": "{{name}} 桌面应用",
+      "appHintMissing": "要获取 {{name}} 内容，此 Mac 上必须安装 {{name}} 应用。",
+      "appHintInstalled": "从此 Mac 上的 {{name}} 应用获取内容。",
+      "appDownload": "下载 {{name}}",
+      "appNeeded": "需要",
+      "appInstalled": "已安装",
+      "refreshName": "刷新",
+      "refreshLast": "上次刷新 {{date}}",
+      "refreshNever": "尚未获取任何内容。",
+      "stateNone": "无状态",
+      "intervalName": "更新间隔",
+      "intervalHint": "即使应用已关闭，计算机也会按设定间隔获取新内容。设为“手动”则仅在你点击时获取。",
+      "generalSection": "基本设置",
+      "descName": "给 AI 的说明",
+      "descHint": "说明何时参考此连接比较合适。",
+      "descAria": "说明",
+      "templateSection": "{{label}} 设置",
+      "removeSection": "断开连接",
+      "removeHint": "仅从 Dazzi 搜索中移除，源应用的数据不会被删除。",
+      "confirmTitle": "要断开此连接吗？",
+      "confirmBody": "将把 '{{alias}}' 连接从 Dazzi 搜索中移除。源应用的数据不会被删除。"
+    },
+    "scope": {
+      "title": "搜索范围",
+      "desc": "设定 Dazzi 读取和搜索的文件夹以及要排除的项目。",
+      "foldersTitle": "要搜索的文件夹",
+      "foldersDesc": "这些文件夹的内容将纳入 AI 搜索。",
+      "folderName": "搜索文件夹",
+      "folderHint": "直接输入文件夹路径来添加或删除。",
+      "addFolder": "添加文件夹",
+      "emptyFolderNote": "还没有搜索文件夹。若不添加，将使用默认搜索范围。",
+      "excludeTitle": "要排除的项目",
+      "excludeDesc": "不进行搜索的文件夹和文件。",
+      "excludeNote": "开发用文件夹（{{folders}}）以及所有以点开头的文件夹（.idea、.vscode、.cache 等）会自动排除。",
+      "excludeList": "排除列表",
+      "excludeListHint": "进一步排除名称匹配的文件夹和文件。",
+      "fileScopeTitle": "文件包含范围",
+      "autoWatch": "自动检测更改",
+      "autoWatchHintOff": "文件搜索已关闭，无法使用。",
+      "autoWatchHintOn": "文件变化时更新文件名搜索列表。文档内容索引需在索引界面手动刷新。",
+      "addFolderTitle": "添加搜索文件夹",
+      "addItemTitle": "添加排除项",
+      "addFolderDesc": "输入要包含在搜索中的文件夹路径。",
+      "addItemDesc": "输入要从搜索中排除的文件夹或文件名。",
+      "folderPath": "文件夹路径",
+      "item": "条目",
+      "addFolderPlaceholder": "例如：~/Documents",
+      "addItemPlaceholder": "例如：node_modules",
+      "confirmAdd": "添加",
+      "addChip": "+ 添加"
+    },
+    "web": {
+      "title": "网页搜索",
+      "desc": "对于需要最新信息的问题，在回答中使用互联网搜索结果。",
+      "useSection": "使用网页搜索",
+      "useHint": "你的问题可能会被发送到搜索服务。",
+      "providerName": "搜索服务",
+      "providerHintOn": "默认为自动选择。",
+      "providerHintOff": "开启网页搜索后才能选择。",
+      "auto": "自动选择",
+      "fetchName": "读取网页内容",
+      "fetchHintOn": "在回答中参考搜索结果链接的正文。",
+      "fetchHintOff": "网页搜索已关闭。"
+    },
+    "reading": {
+      "title": "文档阅读",
+      "desc": "设定读取和搜索文档时优先使用的语言。",
+      "sectionTitle": "文档语言",
+      "sectionDesc": "读取和搜索文档内容时优先使用的语言。",
+      "langHint": "可以选择多个。"
+    },
+    "duplicates": {
+      "title": "重复文件整理",
+      "desc": "整理以避免相同内容在搜索结果中重复出现。",
+      "section": "搜索结果整理",
+      "exactName": "完全相同的文件仅保留一个",
+      "exactHint": "内容相同的文件只显示最新的一个。",
+      "versionsName": "归并相似版本",
+      "versionsHint": "将报告_最终、报告_最终2 之类的相关文件归并显示。",
+      "intervalName": "检查间隔",
+      "intervalHint": "重新检查文件变化的间隔。"
     }
   }
 }

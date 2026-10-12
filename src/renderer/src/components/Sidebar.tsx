@@ -100,15 +100,15 @@ export function Sidebar({
 	return (
 		<aside
 			className="sidebar flex w-full flex-none flex-col min-h-0 bg-sidebar border-r border-border backdrop-blur-[18px]"
-			aria-label="Places"
+			aria-label={t("finderComponents.sidebar")}
 		>
 			<div className="side-head flex flex-none items-center gap-8 h-toolbar px-12 [-webkit-app-region:drag]">
 				<div className="flex-1" aria-hidden="true" />
 				<button
 					type="button"
 					className={HEAD_BUTTON_CLASS}
-					title={t("toolbar.hideSidebar", "Hide sidebar")}
-					aria-label="Hide sidebar"
+					title={t("toolbar.hideSidebar")}
+					aria-label={t("toolbar.hideSidebar")}
 					onClick={onHideSidebar}
 				>
 					<PanelLeft size={18} strokeWidth={1.8} />
@@ -183,8 +183,8 @@ export function Sidebar({
 										<button
 											type="button"
 											className={EJECT_BUTTON_CLASS}
-											title={t("places.eject", `"${item.label}" 추출`, { name: item.label })}
-											aria-label={t("places.eject", `"${item.label}" 추출`, { name: item.label })}
+											title={t("places.eject", { name: item.label })}
+											aria-label={t("places.eject", { name: item.label })}
 											onClick={() => onEject(item)}
 										>
 											<Eject size={12} strokeWidth={1.8} />
@@ -202,14 +202,14 @@ export function Sidebar({
 					type="button"
 					className={cn(ITEM_CLASS, "sidebar__item--settings", settingsActive && "bg-selected-nav text-ink")}
 					aria-current={settingsActive ? "true" : undefined}
-					aria-label="Settings"
+					aria-label={t("places.settings")}
 					onClick={onOpenSettings}
 				>
 					<GearIcon
 						className={cn("sidebar__item-icon flex-none", settingsActive ? "text-accent-text" : "text-ink-muted")}
 					/>
-					<span className="sidebar__item-label flex-1 min-w-0 truncate">{t("places.settings", "설정")}</span>
-					<span className="sr-only" aria-hidden="true" style={{ display: "none" }}>Settings</span>
+					<span className="sidebar__item-label flex-1 min-w-0 truncate">{t("places.settings")}</span>
+					<span className="sr-only" aria-hidden="true" style={{ display: "none" }}>{t("places.settings")}</span>
 					{showHotkeys ? <Keycap label={formatShortcut({ key: "," })} /> : null}
 				</button>
 			</div>

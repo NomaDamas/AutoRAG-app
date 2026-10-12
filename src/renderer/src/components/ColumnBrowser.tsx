@@ -1,5 +1,6 @@
 import { useLayoutEffect, useMemo, useRef } from "react";
 import type { MouseEvent, ReactElement, RefObject } from "react";
+import { useTranslation } from "react-i18next";
 import type { FinderEntry } from "../data/entries";
 import { useScrollWindow } from "../hooks/useScrollWindow";
 import { useDirectoryData, useEntrySidecar } from "../hooks/useDirectoryData";
@@ -86,6 +87,7 @@ export function ColumnBrowser({
 	readonly dropBackgroundDir: string | null;
 	readonly callbacks: RowCallbacks;
 }): ReactElement {
+	const { t } = useTranslation();
 	return (
 		<div className="columns flex flex-1 flex-col min-h-0" ref={listRef}>
 			<VersionFamilyBanner error={versionFamilyError} onRetry={onRetryVersionFamilies} />
@@ -112,11 +114,11 @@ export function ColumnBrowser({
 					<div
 						className="column column--variants flex-1 basis-0 min-w-0 min-h-0 p-6 overflow-auto"
 						role="listbox"
-						aria-label="유사·중복본"
+						aria-label={t("finderComponents.variantColumn")}
 						aria-multiselectable="true"
 					>
 						<div className="column-title flex items-center gap-6 h-28 px-12 text-meta font-semibold text-ink-muted">
-							유사·중복본
+							{t("finderComponents.variantColumn")}
 							<span className="vcount inline-flex flex-none items-center h-16 px-6 rounded-full bg-input text-tile text-ink-muted">
 								{variantColumn.count}
 							</span>

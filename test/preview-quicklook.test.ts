@@ -9,6 +9,7 @@ import { describeBinary } from "../src/preview/shared/binary-kind";
 import { isQuickLookLoad, isQuickLookReady } from "../src/preview/shared/contract";
 import { fitQuickLook, QUICK_LOOK_TOOLBAR } from "../src/preview/shared/fit";
 import { formatClock, formatFinderDate, formatFinderSize, formatItemCount } from "../src/preview/shared/format";
+import { setAppLanguage } from "../src/shared/i18n/core";
 import { locationCrumbs } from "../src/preview/shared/location";
 
 const SCREEN = { width: 1440, height: 900 };
@@ -60,11 +61,15 @@ describe("finder formatting", () => {
 		expect(formatClock(Number.NaN)).toBe("0:00");
 	});
 
-	it("counts items in English like the Finder header", () => {
+	it("counts items in the Interface language", async () => {
+		await setAppLanguage("en");
 		expect(formatItemCount(0)).toBe("Zero items");
 		expect(formatItemCount(1)).toBe("1 item");
 		expect(formatItemCount(24)).toBe("24 items");
 		expect(formatItemCount(12_400)).toBe("12,400 items");
+		await setAppLanguage("ko");
+		expect(formatItemCount(0)).toBe("항목 없음");
+		expect(formatItemCount(12_400)).toBe("12,400개 항목");
 	});
 });
 
@@ -114,9 +119,9 @@ function portableExecutable(machine: number, magic: number): Uint8Array {
 
 describe("binary sniffing", () => {
 	it("names the platform of Windows executables", () => {
-		expect(describeBinary(portableExecutable(0x8664, 0x20b), null)).toEqual({ label: "플랫폼", value: "Windows (PE32+, x86-64)" });
-		expect(describeBinary(portableExecutable(0x14c, 0x10b), null)).toEqual({ label: "플랫폼", value: "Windows (PE32, x86)" });
-		expect(describeBinary(portableExecutable(0xaa64, 0x20b), null)).toEqual({ label: "플랫폼", value: "Windows (PE32+, ARM64)" });
+		expect(describeBinary(portableExecutable(0x8664, 0x20b), null)).toEqual({ label: "platform", value: "Windows (PE32+, x86-64)" });
+		expect(describeBinary(portableExecutable(0x14c, 0x10b), null)).toEqual({ label: "platform", value: "Windows (PE32, x86)" });
+		expect(describeBinary(portableExecutable(0xaa64, 0x20b), null)).toEqual({ label: "platform", value: "Windows (PE32+, ARM64)" });
 	});
 
 	it("names Mach-O and ELF binaries", () => {
@@ -124,19 +129,19 @@ describe("binary sniffing", () => {
 			[0, [0xcf, 0xfa, 0xed, 0xfe]],
 			[4, u32(0x0100000c)],
 		]);
-		expect(describeBinary(machO, null)).toEqual({ label: "플랫폼", value: "macOS (Mach-O, arm64)" });
+		expect(describeBinary(machO, null)).toEqual({ label: "platform", value: "macOS (Mach-O, arm64)" });
 		const universal = bytes(64, [[0, [0xca, 0xfe, 0xba, 0xbe, 0, 0, 0, 2]]]);
-		expect(describeBinary(universal, null)).toEqual({ label: "플랫폼", value: "macOS (Universal)" });
+		expect(describeBinary(universal, null)).toEqual({ label: "platform", value: "macOS (Universal)" });
 		const elf = bytes(64, [
 			[0, [0x7f, 0x45, 0x4c, 0x46, 2, 1]],
 			[18, u16(0x3e)],
 		]);
-		expect(describeBinary(elf, null)).toEqual({ label: "플랫폼", value: "Linux (ELF 64-bit, x86-64)" });
+		expect(describeBinary(elf, null)).toEqual({ label: "platform", value: "Linux (ELF 64-bit, x86-64)" });
 	});
 
 	it("recognizes an Apple disk image from its trailer", () => {
 		const tail = bytes(512, [[0, [0x6b, 0x6f, 0x6c, 0x79]]]);
-		expect(describeBinary(new Uint8Array(64), tail)).toEqual({ label: "포맷", value: "Apple 디스크 이미지 (UDIF)" });
+		expect(describeBinary(new Uint8Array(64), tail)).toEqual({ label: "format", value: "Apple 디스크 이미지 (UDIF)" });
 	});
 
 	it("stays quiet about anything else", () => {

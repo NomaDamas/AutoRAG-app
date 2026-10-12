@@ -1,5 +1,6 @@
 import { StrictMode, useCallback, useEffect, useMemo, useRef, useState, type ReactElement, type SyntheticEvent } from "react";
 import { createRoot } from "react-dom/client";
+import { useTranslation } from "react-i18next";
 import { setAppLanguage } from "../../shared/i18n";
 import type { QuickLookLoad, QuickLookWindowBridge, QuickLookZoom } from "../shared/contract";
 import type { QuickLookFit, Size } from "../shared/fit";
@@ -159,6 +160,7 @@ const PANEL =
 	"qlw relative flex flex-col h-full overflow-hidden text-ql-ink font-ql antialiased select-none data-[material=glass]:rounded-[18px] data-[material=glass]:bg-ql-panel data-[material=glass]:shadow-ql-panel data-[material=solid]:bg-ql-panel-solid";
 
 function QuickLookWindow({ bridge }: { readonly bridge: QuickLookWindowBridge }): ReactElement {
+	const { t } = useTranslation();
 	const [load, setLoad] = useState<QuickLookLoad | null>(null);
 	const [app, setApp] = useState<string | null>(null);
 	const [toolbar, setToolbar] = useState<HTMLElement | null>(null);
@@ -252,10 +254,10 @@ function QuickLookWindow({ bridge }: { readonly bridge: QuickLookWindowBridge })
 		<ChromeProvider value={chrome}>
 			<div className={PANEL} data-material={material} data-quicklook-state="ready" data-platform={bridge.platform} role="dialog" aria-label={load.name}>
 				<header className="qlw__toolbar flex flex-none items-center gap-6 h-46 pl-12 pr-10 [-webkit-app-region:drag]">
-					<button type="button" className={TOOL_BUTTON} aria-label="닫기" title="닫기" onClick={() => void bridge.request("close")}>
+					<button type="button" className={TOOL_BUTTON} aria-label={t("common.close")} title={t("common.close")} onClick={() => void bridge.request("close")}>
 						<CloseIcon />
 					</button>
-					<button type="button" className={TOOL_BUTTON} aria-label="전체 화면" title="전체 화면" onClick={() => void bridge.request("fullscreen")}>
+					<button type="button" className={TOOL_BUTTON} aria-label={t("quickLook.window.fullscreen")} title={t("quickLook.window.fullscreen")} onClick={() => void bridge.request("fullscreen")}>
 						<FullscreenIcon />
 					</button>
 					<div className="qlw__name flex-1 min-w-0 ml-4 overflow-hidden text-[14px] font-semibold tracking-[-0.01em] text-ellipsis whitespace-nowrap" title={meta}>
@@ -263,17 +265,17 @@ function QuickLookWindow({ bridge }: { readonly bridge: QuickLookWindowBridge })
 					</div>
 					<div ref={setToolbar} className="qlw__slot contents" />
 					{bridge.platform === "darwin" ? (
-						<button type="button" className={TOOL_BUTTON} aria-label="공유" title="공유" onClick={share}>
+						<button type="button" className={TOOL_BUTTON} aria-label={t("toolbar.share")} title={t("toolbar.share")} onClick={share}>
 							<ShareIcon />
 						</button>
 					) : null}
 					<button
 						type="button"
 						className="qlw__open flex-none h-28 ml-4 px-14 border-0 rounded-[999px] bg-ql-button text-ql-ink font-ql text-[13px] font-medium whitespace-nowrap cursor-default hover:bg-ql-button-hover [-webkit-app-region:no-drag]"
-						title="기본 앱으로 열기"
+						title={t("quickLook.window.openWith")}
 						onClick={() => void bridge.request("open")}
 					>
-						{app === null ? "Open" : `Open with ${app}`}
+						{app === null ? t("quickLook.window.open") : t("quickLook.window.openWithApp", { name: app })}
 					</button>
 				</header>
 				<main
@@ -290,7 +292,7 @@ function QuickLookWindow({ bridge }: { readonly bridge: QuickLookWindowBridge })
 					) : folder !== null ? (
 						<FolderView folder={folder} />
 					) : document === null ? (
-						<ErrorView message={load.error ?? "파일을 열 수 없습니다"} />
+						<ErrorView message={load.error ?? t("quickLook.window.cannotOpen")} />
 					) : (
 						<PreviewBody file={document} />
 					)}

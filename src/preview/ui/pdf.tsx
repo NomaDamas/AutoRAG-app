@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type ReactElement } from "react";
+import { useTranslation } from "react-i18next";
 import { getDocument, GlobalWorkerOptions, type PDFDocumentProxy, type RenderTask } from "pdfjs-dist";
 import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { previewStreamUrl, type PreviewDocument } from "../shared/contract";
@@ -20,6 +21,7 @@ function ensurePdfWorker(): void {
  * assumes the first page's size until it renders.
  */
 export function PdfView({ file }: { readonly file: PreviewDocument }): ReactElement {
+	const { t } = useTranslation();
 	const [opened, setOpened] = useState<{ readonly pdf: PDFDocumentProxy; readonly boxes: readonly Size[] } | null>(null);
 	const [error, setError] = useState<string | null>(null);
 
@@ -35,7 +37,7 @@ export function PdfView({ file }: { readonly file: PreviewDocument }): ReactElem
 				setOpened({ pdf: loaded, boxes: Array.from({ length: loaded.numPages }, () => box) });
 			})
 			.catch((caught: unknown) => {
-				if (!cancelled) setError(caught instanceof Error ? caught.message : "PDF를 열 수 없습니다");
+				if (!cancelled) setError(caught instanceof Error ? caught.message : t("quickLook.pdf.openFailed"));
 			});
 		return () => {
 			cancelled = true;
@@ -66,6 +68,6 @@ export function PdfView({ file }: { readonly file: PreviewDocument }): ReactElem
 	);
 
 	if (error !== null) return <FallbackView file={file} note={error} />;
-	if (opened === null) return <Status>불러오는 중</Status>;
+	if (opened === null) return <Status>{t("quickLook.status.loading")}</Status>;
 	return <PagedView file={file} boxes={opened.boxes} draw={draw} />;
 }

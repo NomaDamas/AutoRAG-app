@@ -27,6 +27,7 @@ import {
 	type FsSearchResult,
 } from "../shared/fs-contract";
 import { newFileFormat, type NewFileFormatId } from "../shared/new-file-contract";
+import { t } from "../shared/i18n/core";
 import type { FileNameSearchBackend } from "./file-name-search";
 import { newFileContents } from "./file-templates";
 import { createFinderMetadataResolver, type FinderMetadataLookup } from "./finder-metadata";
@@ -147,7 +148,13 @@ async function trashOne(path: string, platform: NodeJS.Platform, trashItem: (pat
 		try {
 			await fsRename(parked, path);
 		} catch (restoreError) {
-			throw new Error(`${errorMessage(error)} (임시 이름 ${basename(parked)}에서 되돌리지 못했습니다: ${errorMessage(restoreError)})`);
+			throw new Error(
+				t("main.fs.restoreTempFailed", {
+					message: errorMessage(error),
+					name: basename(parked),
+					detail: errorMessage(restoreError),
+				}),
+			);
 		}
 	}
 	await trashItem(toHandoffPath(path, platform));
@@ -693,7 +700,7 @@ export function createFsService(deps: FsServiceDeps): FsService {
 		if (platform === "win32") {
 			const dir = await places.trashDir();
 			if (dir === null) {
-				throw new Error("휴지통 위치를 알 수 없습니다");
+				throw new Error(t("main.fs.trashLocationUnknown"));
 			}
 			let found: { readonly payload: string; readonly deletedAt: bigint } | null = null;
 			for (const name of await readdir(dir).catch(() => [] as string[])) {
@@ -705,17 +712,17 @@ export function createFsService(deps: FsServiceDeps): FsService {
 				if (found === null || record.deletedAt > found.deletedAt) found = { payload, deletedAt: record.deletedAt };
 			}
 			if (found === null) {
-				throw new Error(`휴지통에서 항목을 찾을 수 없습니다: ${basename(sourcePath)}`);
+				throw new Error(t("main.fs.trashItemNotFound", { name: basename(sourcePath) }));
 			}
 			return found.payload;
 		}
 		const dir = await places.trashDir();
 		if (dir === null) {
-			throw new Error("휴지통 위치를 알 수 없습니다");
+			throw new Error(t("main.fs.trashLocationUnknown"));
 		}
 		const expected = join(dir, basename(sourcePath));
 		if (!(await pathExists(expected))) {
-			throw new Error(`휴지통에서 항목을 찾을 수 없습니다: ${basename(sourcePath)}`);
+			throw new Error(t("main.fs.trashItemNotFound", { name: basename(sourcePath) }));
 		}
 		return expected;
 	}
@@ -726,7 +733,7 @@ export function createFsService(deps: FsServiceDeps): FsService {
 		const result = await runBatch(paths, async (payloadPath) => {
 			const origin = await trashOrigin(payloadPath);
 			if (origin === null) {
-				throw new Error(`원래 위치를 알 수 없습니다: ${basename(payloadPath)}`);
+				throw new Error(t("main.fs.trashOriginUnknown", { name: basename(payloadPath) }));
 			}
 			// ⌘Z moves the row back into the Trash, like undoing any other move.
 			steps.push({ kind: "restore", path: await putBackPayload(payloadPath, origin) });
@@ -744,7 +751,7 @@ export function createFsService(deps: FsServiceDeps): FsService {
 	async function emptyTrash(): Promise<FsBatchResult> {
 		const dir = await places.trashDir();
 		if (dir === null) {
-			return { ok: [], failed: [{ path: "", message: "휴지통 위치를 알 수 없습니다" }] };
+			return { ok: [], failed: [{ path: "", message: t("main.fs.trashLocationUnknown") }] };
 		}
 		let names: string[];
 		try {
@@ -808,7 +815,7 @@ export function createFsService(deps: FsServiceDeps): FsService {
 			await writeFile(path, newFileContents(make.format), { flag: "wx" });
 		} else {
 			if (await pathExists(path)) {
-				throw new Error(`A file or folder named "${basename(path)}" already exists`);
+				throw new Error(t("main.fs.renameCollision", { name: basename(path) }));
 			}
 			await cp(make.from, path, { recursive: true });
 		}
@@ -899,7 +906,7 @@ export function createFsService(deps: FsServiceDeps): FsService {
 	async function renameTo(path: string, newName: string): Promise<string> {
 		const target = join(dirname(path), newName);
 		if (newName.toLowerCase() !== basename(path).toLowerCase() && (await pathExists(target))) {
-			throw new FsRenameError("name-collision", `A file or folder named "${newName}" already exists`);
+			throw new FsRenameError("name-collision", t("main.fs.renameCollision", { name: newName }));
 		}
 		await fsRename(path, target);
 		return target;
@@ -907,14 +914,14 @@ export function createFsService(deps: FsServiceDeps): FsService {
 
 	async function rename(path: string, newName: string): Promise<FsEntry> {
 		if (newName.trim().length === 0) {
-			throw new FsRenameError("invalid-name", "Invalid name: the new name must not be empty");
+			throw new FsRenameError("invalid-name", t("main.fs.renameEmpty"));
 		}
 		if (newName.includes("/") || newName.includes("\\") || newName === "." || newName === "..") {
-			throw new FsRenameError("invalid-name", `Invalid name "${newName}": path separators are not allowed`);
+			throw new FsRenameError("invalid-name", t("main.fs.renameSeparator", { name: newName }));
 		}
 		const currentName = basename(path);
 		if (newName === currentName) {
-			throw new FsRenameError("name-collision", `A file or folder named "${newName}" already exists`);
+			throw new FsRenameError("name-collision", t("main.fs.renameCollision", { name: newName }));
 		}
 		const target = await renameTo(path, newName);
 		record("rename", [{ kind: "rename", path: target, name: currentName }]);
@@ -1028,7 +1035,7 @@ export function createFsService(deps: FsServiceDeps): FsService {
 		},
 		openUrl: async (text) => {
 			const url = webUrl(text);
-			if (url === null) throw new Error(`웹 주소가 아닙니다: ${text}`);
+			if (url === null) throw new Error(t("main.fs.notWebUrl", { text }));
 			await deps.shell.openExternal(url);
 		},
 		clipboardSet: async (clipboard) => {

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import type { ReactElement } from "react";
+import { useTranslation } from "react-i18next";
 import { CONTEXT_MENU_WIDTH, menuHeightForItems, menuPlacement } from "../../state/context-menu";
 import type { FileActionItem, FileActionTarget } from "../../state/file-actions";
 
@@ -24,6 +25,7 @@ export function ActionMenu({
 	readonly onSelect: (target: FileActionTarget) => void;
 	readonly onClose: () => void;
 }): ReactElement {
+	const { t } = useTranslation();
 	const ref = useRef<HTMLDivElement>(null);
 
 	useEffect(() => {
@@ -78,7 +80,7 @@ export function ActionMenu({
 			ref={ref}
 			className="menu fixed z-60 flex flex-col w-context-menu p-4 border border-border rounded-10 bg-window shadow-menu animate-[rise_var(--dur-menu)_var(--ease-out)]"
 			role="menu"
-			aria-label="세부 작업"
+			aria-label={t("finderComponents.detailActions")}
 			style={{ left: `${placement.left}px`, top: `${placement.top}px`, maxHeight: `${MAX_MENU_HEIGHT}px` }}
 		>
 			<div className="flex min-h-0 flex-col overflow-y-auto">{listItems.map(renderItem)}</div>

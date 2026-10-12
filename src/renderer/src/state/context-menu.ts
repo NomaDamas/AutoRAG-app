@@ -16,6 +16,7 @@
  */
 
 import { deleteKeyLabel, enterKeyLabel, formatShortcut } from "../lib/shortcuts";
+import { t } from "../../../shared/i18n/core";
 import { NEW_FILE_FORMATS, type NewFileFormatId } from "../../../shared/new-file-contract";
 import type { ActionCapabilities } from "../../../shared/actions-contract";
 import { archiveFormatOf } from "../../../shared/archive-formats";
@@ -154,7 +155,6 @@ const SEPARATOR: FinderMenuSeparator = { kind: "separator" };
 function servicesSubmenu(
 	services: readonly ServiceEntry[] | undefined,
 	inTrash: boolean,
-	tr: (key: string, def: string, opt?: Record<string, unknown>) => string,
 ): FinderMenuSubmenu | null {
 	if (inTrash || services === undefined || services.length === 0) return null;
 	const leaf = (service: ServiceEntry): FinderMenuSubmenuItem => ({
@@ -171,7 +171,7 @@ function servicesSubmenu(
 		groups.set(service.group, [...(groups.get(service.group) ?? []), leaf(service)]);
 	}
 	for (const [group, children] of groups) items.push({ kind: "submenu", label: group, items: children });
-	return { kind: "submenu", label: tr("contextMenu.services", "서비스"), items };
+	return { kind: "submenu", label: t("contextMenu.services"), items };
 }
 
 /**
@@ -179,10 +179,7 @@ function servicesSubmenu(
  * listing every tag Finder knows (ticked when the whole selection carries it).
  * Empty off macOS, in the Trash, and when the registry has nothing to offer.
  */
-function tagMenuEntries(
-	input: ContextMenuInput,
-	tr: (key: string, def: string, opt?: Record<string, unknown>) => string,
-): FinderMenuEntry[] {
+function tagMenuEntries(input: ContextMenuInput): FinderMenuEntry[] {
 	const tags = input.tags;
 	if (tags === undefined || !tags.catalog.supported || input.inTrash === true) return [];
 	const names = tags.catalog.colorNames;
@@ -192,9 +189,7 @@ function tagMenuEntries(
 		const name = pinned?.name ?? names[color] ?? "";
 		if (name === "") return [];
 		const checked = tags.shared.has(tagKey(name));
-		const hint = checked
-			? tr("contextMenu.removeTag", `Remove “${name}”`, { name })
-			: tr("contextMenu.addTag", `Add “${name}”`, { name });
+		const hint = checked ? t("finderState.contextMenu.removeTag", { name }) : t("finderState.contextMenu.addTag", { name });
 		return [{ name, color, checked, hint }];
 	});
 	const leaves: FinderMenuSubmenuItem[] = tags.catalog.tags.map((tag) => ({
@@ -206,49 +201,45 @@ function tagMenuEntries(
 		checked: tags.shared.has(tagKey(tag.name)),
 	}));
 	const entries: FinderMenuEntry[] = [];
-	if (swatches.length > 0) entries.push({ kind: "tags", label: tr("contextMenu.tags", "태그"), swatches });
-	if (leaves.length > 0) entries.push({ kind: "submenu", label: tr("contextMenu.tagsMenu", "태그…"), items: leaves });
+	if (swatches.length > 0) entries.push({ kind: "tags", label: t("contextMenu.tags"), swatches });
+	if (leaves.length > 0) entries.push({ kind: "submenu", label: t("contextMenu.tagsMenu"), items: leaves });
 	return entries;
 }
 
-export function buildContextMenu(
-	input: ContextMenuInput,
-	translate?: (key: string, def: string, opt?: Record<string, unknown>) => string,
-): FinderMenuEntry[] {
+export function buildContextMenu(input: ContextMenuInput): FinderMenuEntry[] {
 	const isFolder = input.target.kind === "folder";
 	const multi = input.selectionCount > 1;
-	const tr = (key: string, def: string, opt?: Record<string, unknown>): string => (translate ? translate(key, def, opt) : def);
 	const entries: FinderMenuEntry[] = [
 		isFolder
-			? item("open", tr("contextMenu.open", "열기"), { keycap: enterKeyLabel() })
-			: item("quickLook", tr("contextMenu.quickLook", "Quick Look"), { keycap: "space" }),
+			? item("open", t("contextMenu.open"), { keycap: enterKeyLabel() })
+			: item("quickLook", t("finderState.contextMenu.quickLook"), { keycap: "space" }),
 	];
 	// The open group, Finder-style: 다른 앱으로 열기 sits directly under 열기.
 	// Like the row-action group below, it never appears inside the Trash.
 	if (!isFolder && input.inTrash !== true && input.capabilities.openWith) {
-		entries.push(item("openWith", tr("contextMenu.openWith", "다른 앱으로 열기")));
+		entries.push(item("openWith", t("contextMenu.openWith")));
 	}
 	if (input.inRecents === true) {
-		entries.push(SEPARATOR, item("showInEnclosingFolder", tr("contextMenu.showInEnclosingFolder", "Show in Enclosing Folder")));
+		entries.push(SEPARATOR, item("showInEnclosingFolder", t("finderState.contextMenu.showInEnclosingFolder")));
 	}
 
 	if (!isFolder) {
 		entries.push(SEPARATOR);
 		entries.push(
 			input.indexFailed === true
-				? item("retryIndex", tr("contextMenu.retryIndex", "인덱싱 다시 시도"), { tone: "warning" })
-				: item("toggleIndex", input.indexIncluded ? tr("contextMenu.excludeFromIndex", "인덱싱에서 제외") : tr("contextMenu.includeInIndex", "인덱싱에 포함")),
+				? item("retryIndex", t("contextMenu.retryIndex"), { tone: "warning" })
+				: item("toggleIndex", input.indexIncluded ? t("contextMenu.excludeFromIndex") : t("contextMenu.includeInIndex")),
 		);
 	}
 
 	entries.push(
 		SEPARATOR,
-		item("copy", tr("contextMenu.copy", "복사"), { keycap: formatShortcut({ key: "C" }) }),
-		item("paste", tr("contextMenu.paste", "붙여넣기"), { keycap: formatShortcut({ key: "V" }), disabled: input.clipboardCount === 0 }),
-		item("cut", tr("contextMenu.cut", "잘라내기"), { keycap: formatShortcut({ key: "X" }) }),
-		item("duplicate", tr("contextMenu.duplicate", "복제"), { keycap: formatShortcut({ key: "D" }) }),
-		item("rename", tr("contextMenu.rename", "이름 변경"), { keycap: formatShortcut({ key: "R" }), disabled: multi }),
-		item("copyPath", tr("contextMenu.copyPath", "경로 복사")),
+		item("copy", t("contextMenu.copy"), { keycap: formatShortcut({ key: "C" }) }),
+		item("paste", t("contextMenu.paste"), { keycap: formatShortcut({ key: "V" }), disabled: input.clipboardCount === 0 }),
+		item("cut", t("contextMenu.cut"), { keycap: formatShortcut({ key: "X" }) }),
+		item("duplicate", t("contextMenu.duplicate"), { keycap: formatShortcut({ key: "D" }) }),
+		item("rename", t("contextMenu.rename"), { keycap: formatShortcut({ key: "R" }), disabled: multi }),
+		item("copyPath", t("contextMenu.copyPath")),
 	);
 
 	// The row-action group: the Inspector's headline actions, run on the whole
@@ -257,34 +248,34 @@ export function buildContextMenu(
 	const rowActions: FinderMenuItem[] = [];
 	if (input.inTrash !== true) {
 		if (input.canCreateFolder) {
-			rowActions.push(item("newFolder", tr("contextMenu.newFolder", "새 폴더")));
+			rowActions.push(item("newFolder", t("contextMenu.newFolder")));
 		}
 		if (input.capabilities.archive) {
 			// Extraction is single-target: one archive row on its own.
 			if (!multi && archiveFormatOf(input.target.name) !== null) {
-				rowActions.push(item("extract", tr("contextMenu.extract", "압축 해제")));
+				rowActions.push(item("extract", t("contextMenu.extract")));
 			}
 			rowActions.push(
 				item(
 					"compress",
 					multi
-						? tr("contextMenu.compressCount", `${input.selectionCount}개 항목 압축`, { count: input.selectionCount })
-						: tr("contextMenu.compress", "압축"),
+						? t("contextMenu.compressCount", { count: input.selectionCount })
+						: t("contextMenu.compress"),
 				),
 			);
-			rowActions.push(item("compress7z", tr("contextMenu.compress7z", "7z로 압축")));
+			rowActions.push(item("compress7z", t("contextMenu.compress7z")));
 		}
 		if (input.capabilities.share) {
-			rowActions.push(item("share", tr("contextMenu.share", "공유")));
+			rowActions.push(item("share", t("contextMenu.share")));
 		}
 	}
 	if (rowActions.length > 0) {
 		entries.push(SEPARATOR, ...rowActions);
 	}
-	const services = servicesSubmenu(input.services, input.inTrash === true, tr);
+	const services = servicesSubmenu(input.services, input.inTrash === true);
 	if (services !== null) entries.push(SEPARATOR, services);
 
-	const tagItems = tagMenuEntries(input, tr);
+	const tagItems = tagMenuEntries(input);
 	if (tagItems.length > 0) entries.push(SEPARATOR, ...tagItems);
 
 	entries.push(
@@ -293,14 +284,14 @@ export function buildContextMenu(
 			? item(
 					"putBack",
 					multi
-						? tr("contextMenu.putBackCount", `${input.selectionCount}개 항목 원래 위치로 복원`, { count: input.selectionCount })
-						: tr("contextMenu.putBack", "원래 위치로 복원"),
+						? t("contextMenu.putBackCount", { count: input.selectionCount })
+						: t("contextMenu.putBack"),
 				)
 			: item(
 					"trash",
 					multi
-						? tr("contextMenu.moveToTrashCount", `${input.selectionCount}개 항목 휴지통으로 이동`, { count: input.selectionCount })
-						: tr("contextMenu.moveToTrash", "휴지통으로 이동"),
+						? t("contextMenu.moveToTrashCount", { count: input.selectionCount })
+						: t("contextMenu.moveToTrash"),
 					{
 						keycap: deleteKeyLabel(),
 						tone: "danger",
@@ -324,35 +315,29 @@ export interface BackgroundMenuInput {
  * a folder and every new-file format; 붙여넣기 pastes the in-app file clipboard
  * into the folder in view. It never carries row actions — those need a target.
  */
-export function buildBackgroundContextMenu(
-	input: BackgroundMenuInput,
-	translate?: (key: string, def: string, opt?: Record<string, unknown>) => string,
-): FinderMenuEntry[] {
-	const tr = (key: string, def: string, opt?: Record<string, unknown>): string => (translate ? translate(key, def, opt) : def);
+export function buildBackgroundContextMenu(input: BackgroundMenuInput): FinderMenuEntry[] {
 	const submenu: FinderMenuSubmenu = {
 		kind: "submenu",
-		label: tr("contextMenu.new", "새로 만들기"),
+		label: t("contextMenu.new"),
 		items: [
-			{ kind: "submenu-item", action: "newFolder", label: tr("contextMenu.newFolder", "새 폴더"), format: null },
+			{ kind: "submenu-item", action: "newFolder", label: t("contextMenu.newFolder"), format: null },
 			...NEW_FILE_FORMATS.map(
 				(format): FinderMenuSubmenuItem => ({
 					kind: "submenu-item",
 					action: "newFile",
-					label: format.label,
+					label: t(format.label),
 					format: format.id,
 				}),
 			),
 		],
 	};
-	const services = servicesSubmenu(input.services, input.inTrash === true, tr);
+	const services = servicesSubmenu(input.services, input.inTrash === true);
 	return [
 		submenu,
 		SEPARATOR,
-		item("paste", tr("contextMenu.paste", "붙여넣기"), { keycap: formatShortcut({ key: "V" }), disabled: input.clipboardCount === 0 }),
+		item("paste", t("contextMenu.paste"), { keycap: formatShortcut({ key: "V" }), disabled: input.clipboardCount === 0 }),
 		...(services === null ? [] : [SEPARATOR, services]),
-		...(input.inTrash === true
-			? [SEPARATOR, item("emptyTrash", tr("contextMenu.emptyTrash", "휴지통 비우기"), { tone: "danger" })]
-			: []),
+		...(input.inTrash === true ? [SEPARATOR, item("emptyTrash", t("contextMenu.emptyTrash"), { tone: "danger" })] : []),
 	];
 }
 

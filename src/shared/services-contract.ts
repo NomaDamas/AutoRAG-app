@@ -11,6 +11,8 @@
  * rows and sends back the id it was given. All paths are absolute OS paths.
  */
 
+import { t } from "./i18n/core";
+
 /** IPC channel names. Keep in 1:1 sync with the main-process handlers. */
 export const SERVICES_CHANNELS = {
 	list: "services:list",
@@ -40,7 +42,7 @@ export interface ServicesBridge {
 /** The weakest bridge: nothing is offered and nothing runs. Used where the real bridge is absent. */
 export const NO_SERVICES: ServicesBridge = {
 	list: () => Promise.resolve([]),
-	run: () => Promise.reject(new Error("이 환경에서는 서비스를 실행할 수 없습니다")),
+	run: () => Promise.reject(new Error(t("finderState.servicesUnavailable"))),
 };
 
 /**

@@ -10,6 +10,7 @@
  */
 
 import { useEffect, useRef, useState, type ReactElement } from "react";
+import { useTranslation } from "react-i18next";
 import { ChevronRight, ExternalLink, Plus, RefreshCw, Trash2 } from "lucide-react";
 import type {
 	AutoRagConfigSnapshot,
@@ -20,6 +21,7 @@ import type {
 	RefreshScheduleStatus,
 	ScheduledRunRecord,
 } from "../../../../shared/settings-contract";
+import { t, type LocaleKey } from "../../../../shared/i18n/core";
 import { ConnectorFieldInput, TEMPLATE_BY_ID, type FieldSpec } from "./datasourceTemplates";
 import { ModalShell, ModalActions, Note, PromptModal, Row, Section, SettingsPageHead, StatusDot } from "./SettingsKit";
 import { SourceIcon } from "./SourceIcon";
@@ -32,21 +34,21 @@ import { IndexActivityCard } from "./IndexActivityCard";
 const settings = window.autorag.settings;
 
 /** Refresh cadences the config stores in milliseconds. */
-const INTERVAL_OPTIONS: readonly { readonly ms: number; readonly label: string }[] = [
-	{ ms: 5 * 60_000, label: "5분" },
-	{ ms: 15 * 60_000, label: "15분" },
-	{ ms: 30 * 60_000, label: "30분" },
-	{ ms: 60 * 60_000, label: "1시간" },
-	{ ms: 6 * 60 * 60_000, label: "6시간" },
-	{ ms: 24 * 60 * 60_000, label: "하루" },
+const INTERVAL_OPTIONS: readonly { readonly ms: number; readonly label: LocaleKey }[] = [
+	{ ms: 5 * 60_000, label: "settingsSources.cadence.min5" },
+	{ ms: 15 * 60_000, label: "settingsSources.cadence.min15" },
+	{ ms: 30 * 60_000, label: "settingsSources.cadence.min30" },
+	{ ms: 60 * 60_000, label: "settingsSources.cadence.hour1" },
+	{ ms: 6 * 60 * 60_000, label: "settingsSources.cadence.hour6" },
+	{ ms: 24 * 60 * 60_000, label: "settingsSources.cadence.day1" },
 ];
 
-const GALLERY_GROUPS: readonly { readonly title: string; readonly ids: readonly string[] }[] = [
-	{ title: "메신저", ids: ["slack", "kakao", "discord", "telegram", "whatsapp", "lark"] },
-	{ title: "문서·노트", ids: ["notion", "obsidian", "clawgallery"] },
-	{ title: "메일", ids: ["mailcrawl", "mail-export"] },
-	{ title: "클라우드·개발", ids: ["cloud-drive", "github", "github-gist"] },
-	{ title: "뉴스·기타", ids: ["rss", "spotlight"] },
+const GALLERY_GROUPS: readonly { readonly title: LocaleKey; readonly ids: readonly string[] }[] = [
+	{ title: "settingsSources.apps.groups.messengers", ids: ["slack", "kakao", "discord", "telegram", "whatsapp", "lark"] },
+	{ title: "settingsSources.apps.groups.docsNotes", ids: ["notion", "obsidian", "clawgallery"] },
+	{ title: "settingsSources.apps.groups.mail", ids: ["mailcrawl", "mail-export"] },
+	{ title: "settingsSources.apps.groups.cloudDev", ids: ["cloud-drive", "github", "github-gist"] },
+	{ title: "settingsSources.apps.groups.newsOther", ids: ["rss", "spotlight"] },
 ];
 
 function templateLabel(type: string): string {
@@ -76,32 +78,32 @@ function sourceTone(row: DataSourceRow): "ok" | "warn" | "run" | "off" {
 	return "warn";
 }
 
-const UNIT_LABEL: Readonly<Record<NonNullable<DataSourceRow["index"]["unit"]>, string>> = {
-	message: "메시지",
-	document: "문서",
-	image: "이미지",
+const UNIT_LABEL: Readonly<Record<NonNullable<DataSourceRow["index"]["unit"]>, LocaleKey>> = {
+	message: "settingsSources.units.message",
+	document: "settingsSources.units.document",
+	image: "settingsSources.units.image",
 };
 
 /** The local-folder row's meta line: what the last refresh actually parsed. */
 function localMeta(local: DataSourcesSnapshot["local"] | null, folderCount: number): string {
-	const folders = `폴더 ${folderCount}개`;
+	const folders = t("settingsSources.meta.folders", { count: folderCount });
 	if (local === null || local.documentCount === null) return folders;
-	if (local.documentCount === 0) return `아직 읽은 문서 없음 · ${folders}`;
-	return `문서 ${local.documentCount.toLocaleString()}개 · ${folders}`;
+	if (local.documentCount === 0) return `${t("settingsSources.meta.noDocsYet")} · ${folders}`;
+	return `${t("settingsSources.meta.chunkCount", { noun: t("settingsSources.units.document"), count: local.documentCount.toLocaleString() })} · ${folders}`;
 }
 
 function sourceMeta(row: DataSourceRow): string {
-	if (!row.enabled) return "꺼짐";
-	if (row.status === "syncing") return "최신화 중…";
+	if (!row.enabled) return t("settingsSources.common.off");
+	if (row.status === "syncing") return t("settingsSources.common.syncing");
 	const { state, chunkCount, unit } = row.index;
-	const noun = unit === null ? "항목" : UNIT_LABEL[unit];
+	const noun = unit === null ? t("settingsSources.common.itemNoun") : t(UNIT_LABEL[unit]);
 	// Content the backend already holds outranks "the desktop app is missing".
-	if (state === "indexed" && chunkCount !== null) return `${noun} ${chunkCount.toLocaleString()}개`;
-	if (row.install.app.required && row.install.app.installed === false) return `${row.install.app.name} 컴퓨터 앱 필요`;
-	if (state === "empty") return `가져온 ${noun} 없음`;
-	if (state === "live") return "검색할 때 바로 조회";
+	if (state === "indexed" && chunkCount !== null) return t("settingsSources.meta.chunkCount", { noun, count: chunkCount.toLocaleString() });
+	if (row.install.app.required && row.install.app.installed === false) return t("settingsSources.meta.appNeeds", { name: row.install.app.name });
+	if (state === "empty") return t("settingsSources.meta.importedNone", { noun });
+	if (state === "live") return t("settingsSources.meta.liveQuery");
 	if (row.install.state === "missing") return row.install.detail;
-	return "아직 내용을 가져오지 않았습니다";
+	return t("settingsSources.meta.notFetchedYet");
 }
 
 /* ============================================================== Indexing == */
@@ -119,6 +121,7 @@ export function IndexingPage({
 	readonly setSources: (next: DataSourcesSnapshot) => void;
 	readonly onOpenSource: (alias: string) => void;
 }): ReactElement {
+	useTranslation();
 	const { run, error } = useConfigWriter(onSaved);
 	const [busy, setBusy] = useState<string | null>(null);
 	const [localError, setLocalError] = useState<string | null>(null);
@@ -214,18 +217,18 @@ export function IndexingPage({
 	const problem = localError ?? error;
 	return (
 		<>
-			<SettingsPageHead title="인덱싱" description="검색할 폴더와 연결된 앱의 내용이 최신인지 확인하고, 바뀐 부분만 다시 가져옵니다." />
+			<SettingsPageHead title={t("settingsSources.indexing.title")} description={t("settingsSources.indexing.desc")} />
 			{problem !== null ? <div className="settings-error" role="alert">{problem}</div> : null}
-			<Section title="진행 상황">
+			<Section title={t("settingsSources.indexing.progress")}>
 				<IndexActivityCard snapshot={activity} />
 			</Section>
-			<Section title="최신화 상태">
+			<Section title={t("settingsSources.indexing.refreshStatus")}>
 				<div className="settings-list">
 					<div className="settings-list-row settings-sync-row">
 						<button type="button" className="settings-sync-name" onClick={() => onOpenSource("")}>
-							<SourceIcon small type="local" label="로컬 폴더" />
+							<SourceIcon small type="local" label={t("settingsSources.indexing.localFolder")} />
 							<span className="settings-list-body">
-								<span className="settings-list-title">로컬 폴더</span>
+								<span className="settings-list-title">{t("settingsSources.indexing.localFolder")}</span>
 								<span className="settings-list-meta" title={schedule?.local?.error ?? undefined}>
 									{[localMeta(local, localCount), lastAutoText(schedule?.local, now)].filter((part) => part !== null).join(" · ")}
 								</span>
@@ -233,24 +236,24 @@ export function IndexingPage({
 						</button>
 						<span className="settings-status">
 							<StatusDot tone={localRunning ? "run" : local !== null && (local.documentCount ?? 0) > 0 ? "ok" : "warn"} />
-							{localRunning ? "새로 고치는 중…" : "사용 중"}
+							{localRunning ? t("settingsSources.indexing.localUpdating") : t("settingsSources.common.inUse")}
 						</span>
 						<select
 							className="settings-select-compact"
-							aria-label="로컬 폴더 최신화 주기"
+							aria-label={t("settingsSources.indexing.localIntervalAria")}
 							value={String(localInterval)}
 							onChange={(event) => void changeInterval(["appIndexing", "refreshIntervalMs"], Number(event.target.value))}
 						>
-							<option value="0">직접</option>
+							<option value="0">{t("settingsSources.common.manual")}</option>
 							{INTERVAL_OPTIONS.map((option) => (
-								<option key={option.ms} value={option.ms}>{option.label}</option>
+								<option key={option.ms} value={option.ms}>{t(option.label)}</option>
 							))}
 						</select>
 						<button
 							type="button"
 							className="settings-icon-btn"
-							aria-label="로컬 폴더 지금 새로 고침"
-							title="지금 새로 고침"
+							aria-label={t("settingsSources.indexing.refreshLocalAria")}
+							title={t("settingsSources.indexing.refreshTitle")}
 							disabled={busy !== null}
 							onClick={() => void refreshIndex()}
 						>
@@ -264,30 +267,30 @@ export function IndexingPage({
 								<span className="settings-list-body">
 									<span className="settings-list-title">{sourceTitle(row)}</span>
 									<span className="settings-list-meta" title={schedule?.sources[row.id]?.error ?? undefined}>
-										{[syncingOf(row) ? "최신화 중…" : sourceMeta(row), lastAutoText(schedule?.sources[row.id], now)].filter((part) => part !== null).join(" · ")}
+										{[syncingOf(row) ? t("settingsSources.common.syncing") : sourceMeta(row), lastAutoText(schedule?.sources[row.id], now)].filter((part) => part !== null).join(" · ")}
 									</span>
 								</span>
 							</button>
 							<span className="settings-status">
 								<StatusDot tone={syncingOf(row) ? "run" : sourceTone(row)} />
-								{syncingOf(row) ? "최신화 중…" : row.enabled ? "사용 중" : "꺼짐"}
+								{syncingOf(row) ? t("settingsSources.common.syncing") : row.enabled ? t("settingsSources.common.inUse") : t("settingsSources.common.off")}
 							</span>
 							<select
 								className="settings-select-compact"
-								aria-label={`${row.id} 최신화 주기`}
+								aria-label={t("settingsSources.indexing.rowIntervalAria", { id: row.id })}
 								value={String(intervalOf(row, snapshot))}
 								onChange={(event) => void changeInterval(["datasources", row.id, "pollingIntervalMs"], Number(event.target.value))}
 							>
-								<option value="0">직접</option>
+								<option value="0">{t("settingsSources.common.manual")}</option>
 								{INTERVAL_OPTIONS.map((option) => (
-									<option key={option.ms} value={option.ms}>{option.label}</option>
+									<option key={option.ms} value={option.ms}>{t(option.label)}</option>
 								))}
 							</select>
 							<button
 								type="button"
 								className="settings-icon-btn"
-								aria-label={`${row.id} 지금 최신화`}
-								title="지금 최신화"
+								aria-label={t("settingsSources.indexing.rowRefreshAria", { id: row.id })}
+								title={t("settingsSources.indexing.rowRefreshTitle")}
 								disabled={busy !== null || !row.enabled}
 								onClick={() => void syncOne(row.id)}
 							>
@@ -296,19 +299,19 @@ export function IndexingPage({
 						</div>
 					))}
 				</div>
-				{rows.length === 0 ? <Note>연결된 데이터소스가 없습니다. 연결된 앱에서 앱을 추가하세요.</Note> : null}
+				{rows.length === 0 ? <Note>{t("settingsSources.indexing.empty")}</Note> : null}
 				<ScheduleNote status={schedule} />
 				<div className="settings-sync-footer">
-					<span className="settings-list-meta">바뀐 파일과 메시지만 다시 읽습니다. 처음 연결한 앱은 전체를 가져옵니다.</span>
-					<button type="button" className="linear-btn" disabled={busy !== null || rows.length === 0} onClick={() => void syncAll()}>모두 지금 최신화</button>
+					<span className="settings-list-meta">{t("settingsSources.indexing.footer")}</span>
+					<button type="button" className="linear-btn" disabled={busy !== null || rows.length === 0} onClick={() => void syncAll()}>{t("settingsSources.indexing.syncAll")}</button>
 				</div>
-				<Row name="로컬 폴더 새로 고침" hint="검색 폴더의 문서를 다시 읽어 검색 색인을 갱신합니다. 바뀐 문서만 처리합니다.">
-					<button type="button" className="linear-btn" disabled={busy !== null} onClick={() => void refreshIndex()}>지금 새로 고침</button>
+				<Row name={t("settingsSources.indexing.localRefreshName")} hint={t("settingsSources.indexing.localRefreshHint")}>
+					<button type="button" className="linear-btn" disabled={busy !== null} onClick={() => void refreshIndex()}>{t("settingsSources.indexing.localRefreshButton")}</button>
 				</Row>
 				{refreshResult !== null ? (
 					<Note>
-						스캔 {refreshResult.scanned} · 기록 {refreshResult.written} · 삭제 {refreshResult.deleted} · 건너뜀 {refreshResult.skipped}
-						{refreshResult.diagnostics.length > 0 ? ` · 진단 ${refreshResult.diagnostics.length}건` : ""}
+						{t("settingsSources.indexing.scanned", { scanned: refreshResult.scanned, written: refreshResult.written, deleted: refreshResult.deleted, skipped: refreshResult.skipped })}
+						{refreshResult.diagnostics.length > 0 ? t("settingsSources.indexing.diagnostics", { count: refreshResult.diagnostics.length }) : ""}
 					</Note>
 				) : null}
 			</Section>
@@ -328,15 +331,15 @@ function agoText(iso: string, now: number): string {
 	const at = Date.parse(iso);
 	if (Number.isNaN(at)) return "";
 	const minutes = Math.max(0, Math.round((now - at) / 60_000));
-	if (minutes < 1) return "방금";
-	if (minutes < 60) return `${minutes}분 전`;
-	if (minutes < 24 * 60) return `${Math.round(minutes / 60)}시간 전`;
-	return `${Math.round(minutes / (24 * 60))}일 전`;
+	if (minutes < 1) return t("settingsSources.common.justNow");
+	if (minutes < 60) return t("settingsSources.common.minutesAgo", { count: minutes });
+	if (minutes < 24 * 60) return t("settingsSources.common.hoursAgo", { count: Math.round(minutes / 60) });
+	return t("settingsSources.common.daysAgo", { count: Math.round(minutes / (24 * 60)) });
 }
 
 function lastAutoText(record: ScheduledRunRecord | null | undefined, now: number): string | null {
 	if (record === null || record === undefined) return null;
-	return `자동 ${agoText(record.at, now)} ${record.ok ? "성공" : "실패"}`;
+	return record.ok ? t("settingsSources.common.autoOk", { ago: agoText(record.at, now) }) : t("settingsSources.common.autoFail", { ago: agoText(record.at, now) });
 }
 
 /**
@@ -345,20 +348,21 @@ function lastAutoText(record: ScheduledRunRecord | null | undefined, now: number
  * cadence while something is scheduled. Silent when everything is manual.
  */
 function ScheduleNote({ status }: { readonly status: RefreshScheduleStatus | null }): ReactElement | null {
+	useTranslation();
 	if (status === null) return null;
 	if (!status.supported) {
-		return status.wanted ? <Note>이 컴퓨터에서는 앱이 닫혀 있을 때의 자동 새로 고침을 지원하지 않습니다.</Note> : null;
+		return status.wanted ? <Note>{t("settingsSources.indexing.scheduleUnsupported")}</Note> : null;
 	}
 	const parts: ReactElement[] = [];
-	if (status.error !== null) parts.push(<Note key="error">자동 새로 고침을 등록하지 못했습니다: {status.error}</Note>);
+	if (status.error !== null) parts.push(<Note key="error">{t("settingsSources.indexing.scheduleRegisterFailed", { error: status.error })}</Note>);
 	if (status.wanted && !status.installed && status.error === null) {
-		parts.push(<Note key="missing">자동 새로 고침이 아직 등록되지 않았습니다. 주기를 다시 선택하면 등록합니다.</Note>);
+		parts.push(<Note key="missing">{t("settingsSources.indexing.scheduleNotRegistered")}</Note>);
 	}
 	// Two jobs only double-process the folders when this app's job is also active.
 	if (status.conflicts.length > 0 && (status.wanted || status.installed)) {
 		parts.push(
 			<Note key="conflicts">
-				이 컴퓨터에는 Dazzi를 따로 새로 고치는 예약 작업이 이미 있습니다({status.conflicts.join(" · ")}). 같은 폴더를 두 번 처리하지 않도록 한쪽만 쓰는 것을 권장합니다.
+				{t("settingsSources.indexing.scheduleConflicts", { list: status.conflicts.join(" · ") })}
 			</Note>,
 		);
 	}
@@ -366,8 +370,8 @@ function ScheduleNote({ status }: { readonly status: RefreshScheduleStatus | nul
 		const minutes = Math.round(status.intervalMs / 60_000);
 		parts.push(
 			<Note key="active">
-				앱이 꺼져 있어도 {minutes}분마다 확인해, 주기가 된 항목만 새로 고칩니다.
-				{status.lastTickAt !== null ? ` 마지막 확인 ${agoText(status.lastTickAt, Date.now())}.` : " 아직 실행된 적이 없습니다."}
+				{t("settingsSources.indexing.scheduleActive", { minutes })}
+				{status.lastTickAt !== null ? ` ${t("settingsSources.indexing.scheduleLastCheck", { ago: agoText(status.lastTickAt, Date.now()) })}` : ` ${t("settingsSources.indexing.scheduleNever")}`}
 			</Note>,
 		);
 	}
@@ -387,6 +391,7 @@ export function AppsPage({
 	readonly sources: DataSourcesSnapshot | null;
 	readonly onOpenSource: (alias: string) => void;
 }): ReactElement {
+	useTranslation();
 	const [addTemplate, setAddTemplate] = useState<string | null>(null);
 	const [addError, setAddError] = useState<string | null>(null);
 	const rows = sources?.sources ?? [];
@@ -407,10 +412,10 @@ export function AppsPage({
 
 	return (
 		<>
-			<SettingsPageHead title="연결된 앱" description="메신저, 메일, 클라우드의 자료를 Dazzi에서 함께 검색합니다." />
+			<SettingsPageHead title={t("settingsSources.apps.title")} description={t("settingsSources.apps.desc")} />
 			{addError !== null ? <div className="settings-error" role="alert">{addError}</div> : null}
-			<Section title="내 연결">
-				{rows.length === 0 ? <Note>연결된 앱이 없습니다. 아래에서 추가하세요.</Note> : null}
+			<Section title={t("settingsSources.apps.myConnections")}>
+				{rows.length === 0 ? <Note>{t("settingsSources.apps.empty")}</Note> : null}
 				<div className="settings-list">
 					{rows.map((row) => (
 						<button type="button" className="settings-list-row" key={row.id} onClick={() => onOpenSource(row.id)}>
@@ -425,10 +430,10 @@ export function AppsPage({
 					))}
 				</div>
 			</Section>
-			<Section title="앱 연결하기" description="추가할 앱을 선택하세요.">
+			<Section title={t("settingsSources.apps.connectApps")} description={t("settingsSources.apps.connectAppsDesc")}>
 				{GALLERY_GROUPS.map((group) => (
 					<div key={group.title}>
-						<div className="linear-section-title" style={{ marginTop: 18, fontSize: 13 }}>{group.title}</div>
+						<div className="linear-section-title" style={{ marginTop: 18, fontSize: 13 }}>{t(group.title)}</div>
 						<div className="settings-list">
 							{group.ids.map((templateId) => {
 								const template = TEMPLATE_BY_ID[templateId];
@@ -438,11 +443,11 @@ export function AppsPage({
 										<SourceIcon type={templateId} label={template.label} />
 										<span className="settings-list-body">
 											<span className="settings-list-title">{template.label}</span>
-											<span className="settings-list-meta">{template.summary}</span>
+											<span className="settings-list-meta">{t(template.summary)}</span>
 										</span>
-										{connectedTypes.has(templateId) ? <span className="settings-badge">연결됨</span> : null}
+										{connectedTypes.has(templateId) ? <span className="settings-badge">{t("settingsSources.apps.connected")}</span> : null}
 										<button type="button" className="linear-btn" onClick={() => setAddTemplate(templateId)}>
-											<Plus size={13} aria-hidden="true" focusable="false" />연결
+											<Plus size={13} aria-hidden="true" focusable="false" />{t("settingsSources.apps.connect")}
 										</button>
 									</div>
 								);
@@ -453,11 +458,11 @@ export function AppsPage({
 			</Section>
 			{addTemplate !== null ? (
 				<PromptModal
-					title={`${templateLabel(addTemplate)} 연결`}
-					description="연결 id를 정하고 추가합니다. 비워두면 템플릿 이름을 사용합니다."
-					label="연결 id"
+					title={t("settingsSources.apps.promptTitle", { name: templateLabel(addTemplate) })}
+					description={t("settingsSources.apps.promptDesc")}
+					label={t("settingsSources.apps.promptLabel")}
 					placeholder={addTemplate}
-					confirmLabel="연결 추가"
+					confirmLabel={t("settingsSources.apps.promptConfirm")}
 					onCancel={() => { setAddTemplate(null); setAddError(null); }}
 					onSubmit={(value) => void addConnection(addTemplate, value)}
 				/>
@@ -481,6 +486,7 @@ export function SourceDetailPage({
 	readonly sources: DataSourcesSnapshot | null;
 	readonly setSources: (next: DataSourcesSnapshot) => void;
 }): ReactElement {
+	useTranslation();
 	const { run, error } = useConfigWriter(onSaved);
 	const [busy, setBusy] = useState(false);
 	const [localError, setLocalError] = useState<string | null>(null);
@@ -544,21 +550,21 @@ export function SourceDetailPage({
 
 	return (
 		<div className="settings-source is-open" data-source-id={alias}>
-			<SettingsPageHead title={sourceTitle({ id: alias, type })} description={template?.summary ?? "이 연결의 설정을 관리합니다."} />
+			<SettingsPageHead title={sourceTitle({ id: alias, type })} description={template !== undefined ? t(template.summary) : t("settingsSources.sourceDetail.fallbackSummary")} />
 			{problem !== null ? <div className="settings-error" role="alert">{problem}</div> : null}
-			<Section title="연결 상태">
-				<Row name="사용 여부" hint="끄면 이 연결을 검색에서 잠시 제외합니다.">
+			<Section title={t("settingsSources.sourceDetail.statusSection")}>
+				<Row name={t("settingsSources.sourceDetail.enabledName")} hint={t("settingsSources.sourceDetail.enabledHint")}>
 					<Switch
 						checked={enabled}
 						disabled={busy}
-						ariaLabel="사용 여부"
+						ariaLabel={t("settingsSources.sourceDetail.enabledName")}
 						onChange={() => {
 							void run([{ path: ["datasources", alias, "enabled"], value: !enabled }]).then(() => refresh());
 						}}
 					/>
 				</Row>
 				{appRequirement !== null && appRequirement.required ? (
-					<Row name={`${appRequirement.name} 컴퓨터 앱`} hint={appRequirement.installed === false ? `${appRequirement.name} 내용을 가져오려면 이 Mac에 ${appRequirement.name} 앱이 있어야 합니다.` : `이 Mac의 ${appRequirement.name} 앱에서 내용을 가져옵니다.`}>
+					<Row name={t("settingsSources.sourceDetail.appRow", { name: appRequirement.name })} hint={appRequirement.installed === false ? t("settingsSources.sourceDetail.appHintMissing", { name: appRequirement.name }) : t("settingsSources.sourceDetail.appHintInstalled", { name: appRequirement.name })}>
 						{appRequirement.installed === false ? (
 							<button
 								type="button"
@@ -569,42 +575,42 @@ export function SourceDetailPage({
 									if (downloadUrl !== undefined && typeof open === "function") void open(downloadUrl);
 								}}
 							>
-								{appRequirement.name} 다운로드
+								{t("settingsSources.sourceDetail.appDownload", { name: appRequirement.name })}
 								<ExternalLink size={13} aria-hidden="true" focusable="false" />
 							</button>
 						) : null}
 						<span className="settings-status">
 							<StatusDot tone={appRequirement.installed === false ? "warn" : "ok"} />
-							{appRequirement.installed === false ? "필요" : "설치됨"}
+							{appRequirement.installed === false ? t("settingsSources.sourceDetail.appNeeded") : t("settingsSources.sourceDetail.appInstalled")}
 						</span>
 					</Row>
 				) : null}
-				<Row name="최신화" hint={row !== null && row.index.indexedAt !== null ? `마지막 최신화 ${new Date(row.index.indexedAt).toLocaleString()}` : "아직 내용을 가져오지 않았습니다."}>
+				<Row name={t("settingsSources.sourceDetail.refreshName")} hint={row !== null && row.index.indexedAt !== null ? t("settingsSources.sourceDetail.refreshLast", { date: new Date(row.index.indexedAt).toLocaleString() }) : t("settingsSources.sourceDetail.refreshNever")}>
 					<span className="settings-status">
 						<StatusDot tone={row === null ? "off" : sourceTone(row)} />
-						{row === null ? "상태 없음" : sourceMeta(row)}
+						{row === null ? t("settingsSources.sourceDetail.stateNone") : sourceMeta(row)}
 					</span>
-					<button type="button" className="linear-btn settings-btn-quiet" disabled={busy || row === null} onClick={() => void syncNow()}>지금 최신화</button>
+					<button type="button" className="linear-btn settings-btn-quiet" disabled={busy || row === null} onClick={() => void syncNow()}>{t("settingsSources.indexing.rowRefreshTitle")}</button>
 				</Row>
-				<Row name="최신화 주기" hint="이 앱이 닫혀 있어도 컴퓨터가 정해진 간격으로 새 내용을 가져옵니다. 직접으로 두면 직접 누를 때만 가져옵니다.">
+				<Row name={t("settingsSources.sourceDetail.intervalName")} hint={t("settingsSources.sourceDetail.intervalHint")}>
 					<select
 						className="linear-select"
-						aria-label="최신화 주기"
+						aria-label={t("settingsSources.sourceDetail.intervalName")}
 						value={String(polling)}
 						onChange={(event) => void changeInterval(["datasources", alias, "pollingIntervalMs"], Number(event.target.value))}
 					>
-						<option value="0">직접</option>
+						<option value="0">{t("settingsSources.common.manual")}</option>
 						{INTERVAL_OPTIONS.map((option) => (
-							<option key={option.ms} value={option.ms}>{option.label}</option>
+							<option key={option.ms} value={option.ms}>{t(option.label)}</option>
 						))}
 					</select>
 				</Row>
 			</Section>
-			<Section title="기본 설정">
-				<Row name="AI에게 알려줄 설명" hint="이 연결을 언제 참고하면 좋은지 적어주세요." stack>
+			<Section title={t("settingsSources.sourceDetail.generalSection")}>
+				<Row name={t("settingsSources.sourceDetail.descName")} hint={t("settingsSources.sourceDetail.descHint")} stack>
 					<textarea
 						className="linear-textarea"
-						aria-label="설명"
+						aria-label={t("settingsSources.sourceDetail.descAria")}
 						rows={2}
 						value={description}
 						onChange={(event) => void run([{ path: ["datasources", alias, "description"], value: event.target.value }])}
@@ -612,7 +618,7 @@ export function SourceDetailPage({
 				</Row>
 			</Section>
 			{template !== undefined && template.groups.length > 0 ? (
-				<Section title={`${template.label} 설정`}>
+				<Section title={t("settingsSources.sourceDetail.templateSection", { label: template.label })}>
 					{template.groups.map((group) => (
 						<div key={group.title}>
 							{group.fields.map((field) => (
@@ -630,20 +636,20 @@ export function SourceDetailPage({
 					))}
 				</Section>
 			) : null}
-			<Section title="연결 해제">
-				<Row name="연결 해제" hint="Dazzi 검색에서만 제거되며 원본 앱의 데이터는 지워지지 않습니다.">
+			<Section title={t("settingsSources.sourceDetail.removeSection")}>
+				<Row name={t("settingsSources.sourceDetail.removeSection")} hint={t("settingsSources.sourceDetail.removeHint")}>
 					<button type="button" className="linear-btn is-danger" disabled={busy} onClick={() => setConfirmDelete(true)}>
-						<Trash2 size={14} aria-hidden="true" focusable="false" />연결 해제
+						<Trash2 size={14} aria-hidden="true" focusable="false" />{t("settingsSources.sourceDetail.removeSection")}
 					</button>
 				</Row>
 			</Section>
 			{confirmDelete ? (
 				<ModalShell onClose={() => setConfirmDelete(false)}>
-					<h2>연결을 해제할까요?</h2>
-					<p>'{alias}' 연결이 Dazzi 검색에서 제거됩니다. 원본 앱의 데이터는 지워지지 않습니다.</p>
+					<h2>{t("settingsSources.sourceDetail.confirmTitle")}</h2>
+					<p>{t("settingsSources.sourceDetail.confirmBody", { alias })}</p>
 					<ModalActions>
-						<button type="button" className="linear-btn" onClick={() => setConfirmDelete(false)}>취소</button>
-						<button type="button" className="linear-btn is-danger" disabled={busy} onClick={() => void removeConnection()}>연결 해제</button>
+						<button type="button" className="linear-btn" onClick={() => setConfirmDelete(false)}>{t("common.cancel")}</button>
+						<button type="button" className="linear-btn is-danger" disabled={busy} onClick={() => void removeConnection()}>{t("settingsSources.sourceDetail.removeSection")}</button>
 					</ModalActions>
 				</ModalShell>
 			) : null}
@@ -652,17 +658,20 @@ export function SourceDetailPage({
 }
 
 function ConnectorFieldRow({ field, value, onChange }: { readonly field: FieldSpec; readonly value: unknown; readonly onChange: (value: unknown) => void }): ReactElement {
+	useTranslation();
+	const label = t(field.label);
+	const hint = field.hint === undefined ? "" : t(field.hint);
 	if (field.kind === "boolean") {
 		const checked = typeof value === "boolean" ? value : field.defaultValue === true;
 		return (
-			<Row name={field.label} hint={field.hint ?? ""}>
-				<Switch checked={checked} ariaLabel={field.label} onChange={() => onChange(!checked)} />
+			<Row name={label} hint={hint}>
+				<Switch checked={checked} ariaLabel={label} onChange={() => onChange(!checked)} />
 			</Row>
 		);
 	}
 	const stack = field.kind === "stringList" || field.kind === "pathList" || field.kind === "env" || field.kind === "feeds";
 	return (
-		<Row name={field.label} hint={field.hint ?? ""} stack={stack}>
+		<Row name={label} hint={hint} stack={stack}>
 			<ConnectorFieldInput field={field} value={value} onChange={onChange} />
 		</Row>
 	);

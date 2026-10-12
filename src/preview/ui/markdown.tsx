@@ -1,4 +1,5 @@
 import { useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type ReactElement } from "react";
+import { useTranslation } from "react-i18next";
 import { marked } from "marked";
 import type { PreviewDocument } from "../shared/contract";
 import { markdownLine, markdownStats } from "../shared/markdown-source";
@@ -10,9 +11,9 @@ import { sanitizeMarkdownHtml } from "./markdown-html";
 type MarkdownMode = "source" | "split" | "preview";
 
 const MODES = [
-	{ value: "source", label: "원본" },
-	{ value: "split", label: "나란히" },
-	{ value: "preview", label: "렌더링" },
+	{ value: "source", labelKey: "quickLook.markdown.modes.source" },
+	{ value: "split", labelKey: "quickLook.markdown.modes.split" },
+	{ value: "preview", labelKey: "quickLook.markdown.modes.preview" },
 ] as const;
 
 /** The reference panel is 1100 wide; the height follows the longer pane. */
@@ -49,9 +50,11 @@ function holdLinks(event: MouseEvent<HTMLElement>): void {
  * headings, tables, and code blocks.
  */
 export function MarkdownView({ file }: { readonly file: PreviewDocument }): ReactElement {
+	const { t, i18n } = useTranslation();
 	const { report } = useChrome();
 	const decoded = useDecodedText(file);
 	const [mode, setMode] = useState<MarkdownMode>("split");
+	const modes = useMemo(() => MODES.map((option) => ({ value: option.value, label: t(option.labelKey) })), [t, i18n.language]);
 	const source = useMemo(() => (decoded === null ? [] : sourceLines(decoded.text)), [decoded]);
 	const html = useMemo(() => {
 		if (decoded === null) return "";
@@ -67,12 +70,16 @@ export function MarkdownView({ file }: { readonly file: PreviewDocument }): Reac
 		const tallest = Math.max(source, previewRef.current?.offsetHeight ?? 0);
 		if (tallest > 0) report({ width: MARKDOWN_WIDTH, height: tallest + MARKDOWN_CHROME }, "clamp");
 	}, [report, html, source]);
-	if (decoded === null || stats === null) return <FallbackView file={file} note="문서를 읽지 못했습니다" />;
-	const blocks = [`제목 ${stats.headings}`, `표 ${stats.tables}`, `코드 블록 ${stats.codeBlocks}`].join(" · ");
+	if (decoded === null || stats === null) return <FallbackView file={file} note={t("quickLook.documents.readFailed")} />;
+	const blocks = [
+		t("quickLook.markdown.headings", { count: stats.headings }),
+		t("quickLook.markdown.tables", { count: stats.tables }),
+		t("quickLook.markdown.codeBlocks", { count: stats.codeBlocks }),
+	].join(" · ");
 	return (
 		<>
 			<ToolbarSlot>
-				<Segmented label="보기 방식" options={MODES} value={mode} onChange={setMode} />
+				<Segmented label={t("quickLook.markdown.viewMode")} options={modes} value={mode} onChange={setMode} />
 			</ToolbarSlot>
 			<div className="ql-markdown flex flex-1 min-h-0 border-t-[0.5px] border-ql-hairline">
 				{mode === "preview" ? null : (
@@ -91,8 +98,8 @@ export function MarkdownView({ file }: { readonly file: PreviewDocument }): Reac
 			</div>
 			<footer className="flex flex-none items-center gap-14 h-28 px-16 border-t-[0.5px] border-ql-hairline text-ql-ink-secondary text-[11.5px] whitespace-nowrap">
 				<span className="font-semibold text-ql-ink">Markdown</span>
-				<span>{stats.lines.toLocaleString("ko-KR")}줄</span>
-				<span>{stats.words.toLocaleString("ko-KR")}단어</span>
+				<span>{t("quickLook.markdown.lines", { count: stats.lines.toLocaleString(i18n.language) })}</span>
+				<span>{t("quickLook.markdown.words", { count: stats.words.toLocaleString(i18n.language) })}</span>
 				<span className="flex-1" />
 				<span>{blocks}</span>
 			</footer>

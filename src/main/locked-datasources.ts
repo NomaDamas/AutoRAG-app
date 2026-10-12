@@ -1,3 +1,4 @@
+import { t } from "../shared/i18n/core";
 import type { DataSourceStatusService } from "./datasource-status";
 import { createActivityJournal, journalSingleRun, sourceItem } from "./index-activity-journal";
 import type { RefreshLockHolder } from "./refresh-lock";
@@ -5,7 +6,7 @@ import { withRefreshLock, type SchedulePaths } from "./refresh-schedule";
 
 /** Why a manual sync did not start: another refresh holds the shared lock. */
 export function busyMessage(holder: RefreshLockHolder): string {
-	return holder.owner === "scheduled-job" ? "백그라운드 새로 고침이 실행 중입니다. 끝난 뒤 다시 시도하세요." : "다른 새로 고침이 실행 중입니다. 끝난 뒤 다시 시도하세요.";
+	return holder.owner === "scheduled-job" ? t("main.lock.scheduledBusy") : t("main.lock.otherBusy");
 }
 
 /**

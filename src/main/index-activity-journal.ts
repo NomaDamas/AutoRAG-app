@@ -1,5 +1,6 @@
 import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
+import { t } from "../shared/i18n/core";
 
 /**
  * What the shared refresh lock cannot say: which items the holder is working on.
@@ -91,7 +92,7 @@ export function createActivityJournal(path: string, options: ActivityJournalOpti
 				...record,
 				finishedAt: new Date(now()).toISOString(),
 				items: record.items.map((item) =>
-					item.state === "done" || item.state === "failed" ? item : { ...item, state: "failed", error: item.error ?? "중단되었습니다" },
+					item.state === "done" || item.state === "failed" ? item : { ...item, state: "failed", error: item.error ?? t("main.activity.aborted") },
 				),
 			});
 		},

@@ -9,25 +9,24 @@
  */
 
 import { useCallback, useEffect, useState, type ReactElement } from "react";
+import { useTranslation } from "react-i18next";
 import type { AccountPlanId, AccountSnapshot, AccountStatus, PaidPlanId } from "../../../../shared/account-contract";
 import { planCovers } from "../../../../shared/account-contract";
 import { Note, Row, Section, SettingsPageHead } from "./SettingsKit";
 
-const UNKNOWN = "확인할 수 없음";
-
 interface PlanTier {
 	readonly id: AccountPlanId;
 	readonly label: string;
-	readonly price: string;
-	readonly perks: string;
+	readonly priceKey: string;
+	readonly perksKey: string;
 }
 
 /** Product facts the service publishes (README "Plans"); credit figures are weekly dollar budgets. */
-const PLAN_TIERS: readonly PlanTier[] = [
-	{ id: "free", label: "Dazzi Free", price: "무료", perks: "주 $0.50 크레딧 · 분당 10회" },
-	{ id: "air", label: "Dazzi Air", price: "월 $4", perks: "주 $1 크레딧 · 분당 60회" },
-	{ id: "pro", label: "Dazzi Pro", price: "월 $20", perks: "주 $5 크레딧 · 분당 240회" },
-];
+const PLAN_TIERS = [
+	{ id: "free", label: "Dazzi Free", priceKey: "settingsCore.account.plan.free.price", perksKey: "settingsCore.account.plan.free.perks" },
+	{ id: "air", label: "Dazzi Air", priceKey: "settingsCore.account.plan.air.price", perksKey: "settingsCore.account.plan.air.perks" },
+	{ id: "pro", label: "Dazzi Pro", priceKey: "settingsCore.account.plan.pro.price", perksKey: "settingsCore.account.plan.pro.perks" },
+] as const satisfies readonly PlanTier[];
 
 const PLAN_LABEL: Readonly<Record<AccountPlanId, string>> = { free: "Free", air: "Air", pro: "Pro" };
 
@@ -67,55 +66,56 @@ function accountOf(status: AccountStatus | null): AccountSnapshot | null {
 }
 
 export function AccountPage(): ReactElement {
+	const { t } = useTranslation();
 	const { status, busy, error, run } = useAccount();
 	const account = accountOf(status);
 	const signedIn = status?.state === "signedIn";
 
 	return (
 		<>
-			<SettingsPageHead title="내 계정" description="Dazzi 계정과 로그인 상태입니다." />
-			<Section title="프로필">
-				<Row name="Dazzi 계정" hint="로그인은 시스템 브라우저에서 진행되며, 이 앱은 비밀번호를 받지 않습니다.">
+			<SettingsPageHead title={t("settingsCore.nav.account")} description={t("settingsCore.account.description")} />
+			<Section title={t("settingsCore.account.profileTitle")}>
+				<Row name={t("settingsCore.account.accountName")} hint={t("settingsCore.account.accountHint")}>
 					<span className="settings-value">
 						<span className={`settings-dot ${signedIn ? "is-ok" : "is-warn"}`} aria-hidden="true" />
 					</span>
-					<span className="settings-value">{status?.state === "signingIn" ? "브라우저에서 로그인 중…" : signedIn ? "로그인됨" : "로그인하지 않음"}</span>
+					<span className="settings-value">{status?.state === "signingIn" ? t("settingsCore.account.signingIn") : signedIn ? t("settingsCore.account.signedIn") : t("settingsCore.account.signedOut")}</span>
 				</Row>
-				<Row name="이메일" hint="서버가 확인한 계정 이메일입니다.">
-					<span className="settings-value">{account?.email ?? UNKNOWN}</span>
+				<Row name={t("settingsCore.account.email")} hint={t("settingsCore.account.emailHint")}>
+					<span className="settings-value">{account?.email ?? t("settingsCore.common.unknown")}</span>
 				</Row>
-				{status?.offline === true ? <Note>서버에 연결할 수 없어 마지막으로 확인한 정보를 보여줍니다.</Note> : null}
+				{status?.offline === true ? <Note>{t("settingsCore.account.offline")}</Note> : null}
 				{status?.error ? <Note>{status.error}</Note> : null}
 				{error !== null ? <Note>{error}</Note> : null}
 				<Row
-					name={signedIn ? "로그아웃" : "로그인"}
+					name={signedIn ? t("settingsCore.account.signOut") : t("settingsCore.account.signIn")}
 					hint={
 						status?.source === "env"
-							? "환경 변수 AUTORAG_API_KEY로 로그인되어 있어 앱에서 로그아웃할 수 없습니다."
+							? t("settingsCore.account.hintEnv")
 							: signedIn
-								? "이 Mac에 저장된 키를 삭제합니다. 키는 Dazzi 웹의 API 키 화면에서 폐기할 수 있습니다."
-								: "브라우저가 열리고, 승인하면 이 앱으로 돌아옵니다."
+								? t("settingsCore.account.hintSignedIn")
+								: t("settingsCore.account.hintSignedOut")
 					}
 				>
 					{signedIn ? (
 						<button type="button" className="linear-btn" disabled={busy || status?.source === "env"} onClick={() => run(() => window.autorag.account.signOut())}>
-							로그아웃
+							{t("settingsCore.account.signOut")}
 						</button>
 					) : status?.state === "signingIn" ? (
 						<button type="button" className="linear-btn" onClick={() => run(() => window.autorag.account.cancelSignIn())}>
-							취소
+							{t("common.cancel")}
 						</button>
 					) : (
 						<button type="button" className="linear-btn" disabled={busy} onClick={() => run(() => window.autorag.account.signIn())}>
-							브라우저에서 로그인
+							{t("settingsCore.account.signInBrowser")}
 						</button>
 					)}
 				</Row>
 			</Section>
-			<Section title="AI 모델" description="Dazzi 계정의 관리형 모델을 AI 검색에 사용합니다.">
-				<Row name="관리형 모델 사용" hint="AI 검색이 이 계정의 모델을 쓰도록 Dazzi 설정을 바꿉니다. 직접 입력한 API 키 설정은 이 단계에서 교체됩니다.">
+			<Section title={t("settingsCore.nav.ai")} description={t("settingsCore.account.managedDesc")}>
+				<Row name={t("settingsCore.account.managedName")} hint={t("settingsCore.account.managedHint")}>
 					<button type="button" className="linear-btn" disabled={!signedIn || busy} onClick={() => run(() => window.autorag.account.useManagedModel())}>
-						계정 모델로 설정
+						{t("settingsCore.account.useManaged")}
 					</button>
 				</Row>
 			</Section>
@@ -124,6 +124,7 @@ export function AccountPage(): ReactElement {
 }
 
 export function PlanPage(): ReactElement {
+	const { t } = useTranslation();
 	const { status, busy, error, run } = useAccount();
 	const account = accountOf(status);
 	const signedIn = status?.state === "signedIn";
@@ -135,55 +136,55 @@ export function PlanPage(): ReactElement {
 
 	return (
 		<>
-			<SettingsPageHead title="구독 및 사용량" description="Dazzi 요금제와 이번 주 AI 사용량을 확인합니다." />
-			<Section title="현재 요금제">
-				<Row name="현재 요금제" hint={signedIn ? "서버가 확인한 요금제입니다." : "요금제를 보려면 먼저 로그인하세요."}>
+			<SettingsPageHead title={t("settingsCore.nav.plan")} description={t("settingsCore.account.planDescription")} />
+			<Section title={t("settingsCore.account.currentPlan")}>
+				<Row name={t("settingsCore.account.currentPlan")} hint={signedIn ? t("settingsCore.account.currentPlanHintSignedIn") : t("settingsCore.account.currentPlanHintSignedOut")}>
 					<span className="settings-value is-strong">
-						{plan === null ? UNKNOWN : `${PLAN_LABEL[plan]}${account?.trialing === true ? " · 체험 중" : ""}`}
+						{plan === null ? t("settingsCore.common.unknown") : `${PLAN_LABEL[plan]}${account?.trialing === true ? t("settingsCore.account.trialing") : ""}`}
 					</span>
 				</Row>
-				{account?.cancelScheduled === true && renewal !== null ? <Note>해지가 예약되어 있습니다. {renewal}까지 현재 요금제를 사용할 수 있습니다.</Note> : null}
-				{account !== null && account.status === "past_due" ? <Note>결제에 실패했습니다. 결제 포털에서 결제 수단을 확인하세요.</Note> : null}
+				{account?.cancelScheduled === true && renewal !== null ? <Note>{t("settingsCore.account.cancelScheduled", { date: renewal })}</Note> : null}
+				{account !== null && account.status === "past_due" ? <Note>{t("settingsCore.account.pastDue")}</Note> : null}
 				{error !== null ? <Note>{error}</Note> : null}
 				{PLAN_TIERS.map((tier) => {
 					const held = plan !== null && plan === tier.id;
 					const paid = tier.id === "air" || tier.id === "pro";
 					const available = tier.id === "air" ? account?.billing.air === true : tier.id === "pro" ? account?.billing.pro === true : false;
 					return (
-						<Row key={tier.id} name={tier.label} hint={`${tier.price} · ${tier.perks}`}>
+						<Row key={tier.id} name={tier.label} hint={`${t(tier.priceKey)} · ${t(tier.perksKey)}`}>
 							{held ? (
-								<span className="settings-value">사용 중</span>
+								<span className="settings-value">{t("settingsCore.account.inUse")}</span>
 							) : paid && plan !== null && !planCovers(plan, tier.id) ? (
 								<button type="button" className="linear-btn" disabled={busy || !available} onClick={() => run(() => window.autorag.account.checkout(tier.id as PaidPlanId))}>
-									결제 페이지 열기
+									{t("settingsCore.account.openCheckout")}
 								</button>
 							) : null}
 						</Row>
 					);
 				})}
-				<Row name="결제 관리" hint="결제 수단, 영수증, 구독 해지·환불은 결제 포털에서 관리합니다.">
+				<Row name={t("settingsCore.account.billingTitle")} hint={t("settingsCore.account.billingHint")}>
 					<button type="button" className="linear-btn" disabled={busy || account?.billing.portal !== true} onClick={() => run(() => window.autorag.account.portal())}>
-						결제 포털 열기
+						{t("settingsCore.account.openPortal")}
 					</button>
 				</Row>
 			</Section>
-			<Section title="이번 주 사용량">
-				<Row name="AI 사용량" hint="Dazzi 요금제 모델을 쓸 때 차감되는 주간 크레딧입니다." stack>
+			<Section title={t("settingsCore.account.usageTitle")}>
+				<Row name={t("settingsCore.account.usageName")} hint={t("settingsCore.account.usageHint")} stack>
 					<div className="settings-usage">
-						<div className="settings-meter" role="meter" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent} aria-label="주간 크레딧 사용량">
+						<div className="settings-meter" role="meter" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent} aria-label={t("settingsCore.account.usageMeterAria")}>
 							<span style={{ width: `${percent}%` }} />
 						</div>
 						<div className="settings-usage-legend">
-							<span>{account === null ? "사용량을 불러올 수 없습니다" : `${formatCents(usedCents)} / ${formatCents(limitCents)}`}</span>
+							<span>{account === null ? t("settingsCore.account.usageUnavailable") : `${formatCents(usedCents)} / ${formatCents(limitCents)}`}</span>
 							<span>{account === null ? "—" : `${percent}%`}</span>
 						</div>
 					</div>
 				</Row>
-				<Row name="남은 크레딧" hint="한도에 도달하면 다음 주 초기화될 때까지 요청이 거절됩니다.">
-					<span className="settings-value is-strong">{account === null ? UNKNOWN : formatCents(Math.max(0, limitCents - usedCents))}</span>
+				<Row name={t("settingsCore.account.creditsLeft")} hint={t("settingsCore.account.creditsLeftHint")}>
+					<span className="settings-value is-strong">{account === null ? t("settingsCore.common.unknown") : formatCents(Math.max(0, limitCents - usedCents))}</span>
 				</Row>
-				<Row name="요청 한도" hint="요금제별 분당 요청 수입니다.">
-					<span className="settings-value">{account === null ? UNKNOWN : `분당 ${account.requestsPerMinute}회`}</span>
+				<Row name={t("settingsCore.account.requestLimit")} hint={t("settingsCore.account.requestLimitHint")}>
+					<span className="settings-value">{account === null ? t("settingsCore.common.unknown") : t("settingsCore.account.requestsPerMinute", { count: account.requestsPerMinute })}</span>
 				</Row>
 			</Section>
 		</>

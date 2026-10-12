@@ -1,4 +1,5 @@
 import { basename, extname } from "node:path";
+import { t } from "../../shared/i18n/core";
 import { LANGUAGE_FLAG } from "../../shared/language-contract";
 import type { AppAppearance, AppSettings } from "../../shared/settings-contract";
 import { isAppBundle } from "../../main/fs-entry";
@@ -305,7 +306,7 @@ async function readFolder(path: string): Promise<TargetContent> {
 	try {
 		return { document: null, folder: await summarizeFolder(path, FOLDER_PREVIEW_ITEMS), bundle: null, error: null };
 	} catch (error) {
-		if (isUnreadableFolder(error)) return { document: null, folder: null, bundle: null, error: "이 폴더를 읽을 권한이 없습니다" };
+		if (isUnreadableFolder(error)) return { document: null, folder: null, bundle: null, error: t("quickLook.errors.unreadableFolder") };
 		throw error;
 	}
 }
@@ -434,7 +435,7 @@ function fromPreview(event: IpcMainInvokeEvent | IpcMainEvent): Session | null {
 function shownPath(event: IpcMainInvokeEvent, path: unknown): { readonly state: Session; readonly path: string } {
 	const state = fromPreview(event);
 	if (state === null) throw new Error("Quick Look is not attached to this window");
-	if (typeof path !== "string" || state.current?.path !== path) throw new Error("미리보기 중인 항목이 아닙니다");
+	if (typeof path !== "string" || state.current?.path !== path) throw new Error(t("quickLook.errors.notShowing"));
 	return { state, path };
 }
 
@@ -560,7 +561,7 @@ export function registerQuickLookIpc(icons: BundleIconSource | null = null, ipc:
 	});
 	ipc.handle(PREVIEW_CHANNELS.show, async (event, target: unknown, origin: unknown) => {
 		const state = fromOwner(event);
-		if (!isQuickLookTarget(target)) throw new Error("미리보기 요청이 올바르지 않습니다");
+		if (!isQuickLookTarget(target)) throw new Error(t("quickLook.errors.invalidTarget"));
 		await show(state, target, ownerOrigin(state, origin));
 	});
 	ipc.handle(PREVIEW_CHANNELS.hide, (event, origin: unknown) => {
@@ -580,14 +581,14 @@ export function registerQuickLookIpc(icons: BundleIconSource | null = null, ipc:
 	ipc.handle(PREVIEW_CHANNELS.request, async (event, action: unknown) => {
 		const state = fromPreview(event);
 		if (state === null) throw new Error("Quick Look is not attached to this window");
-		if (!isQuickLookAction(action)) throw new Error("알 수 없는 Quick Look 동작입니다");
+		if (!isQuickLookAction(action)) throw new Error(t("quickLook.errors.unknownAction"));
 		await act(state, action);
 	});
 	ipc.handle(PREVIEW_CHANNELS.details, (event, path: unknown) => fileDetails(shownPath(event, path).path));
 	ipc.handle(PREVIEW_CHANNELS.sha256, async (event, path: unknown) => {
 		const shown = shownPath(event, path);
 		const digest = await sha256File(shown.path, () => shown.state.current?.path !== shown.path);
-		if (digest === null) throw new Error("미리보기 항목이 바뀌어 계산을 멈췄습니다");
+		if (digest === null) throw new Error(t("quickLook.errors.changedWhileHashing"));
 		return digest;
 	});
 	ipc.handle(PREVIEW_CHANNELS.folderSize, (event, path: unknown) => {
@@ -598,7 +599,7 @@ export function registerQuickLookIpc(icons: BundleIconSource | null = null, ipc:
 	ipc.handle(PREVIEW_CHANNELS.share, (event, anchor: unknown) => {
 		const state = fromPreview(event);
 		if (state === null || state.current === null || process.platform !== "darwin") return;
-		if (!isBounds(anchor)) throw new Error("공유 위치가 올바르지 않습니다");
+		if (!isBounds(anchor)) throw new Error(t("quickLook.errors.invalidShareAnchor"));
 		new ShareMenu({ filePaths: [state.current.path] }).popup({
 			window: state.window,
 			x: Math.round(anchor.x),
@@ -607,7 +608,7 @@ export function registerQuickLookIpc(icons: BundleIconSource | null = null, ipc:
 	});
 	ipc.handle(PREVIEW_CHANNELS.copyText, (event, text: unknown) => {
 		if (fromPreview(event) === null) throw new Error("Quick Look is not attached to this window");
-		if (typeof text !== "string") throw new Error("복사할 내용이 올바르지 않습니다");
+		if (typeof text !== "string") throw new Error(t("quickLook.errors.invalidCopyText"));
 		clipboard.writeText(text);
 	});
 }

@@ -9,6 +9,8 @@
  */
 
 import { useEffect, useRef, useState, type ReactElement } from "react";
+import { useTranslation } from "react-i18next";
+import type { LocaleKey } from "../../../../shared/i18n/core";
 import { isJsonObject } from "../../../../shared/settings-contract";
 
 /* ------------------------------------------------------------- field schema -- */
@@ -17,9 +19,9 @@ export type FieldKind = "text" | "number" | "boolean" | "select" | "stringList" 
 
 export interface FieldSpec {
 	readonly key: string;
-	readonly label: string;
+	readonly label: LocaleKey;
 	readonly kind: FieldKind;
-	readonly hint?: string;
+	readonly hint?: LocaleKey;
 	readonly placeholder?: string;
 	readonly options?: readonly string[];
 	/** Maps select labels to stored JSON values (e.g. label "off" → false). */
@@ -29,7 +31,7 @@ export interface FieldSpec {
 }
 
 export interface FieldGroup {
-	readonly title: string;
+	readonly title: LocaleKey;
 	readonly fields: readonly FieldSpec[];
 }
 
@@ -37,7 +39,7 @@ export interface TemplateMeta {
 	readonly id: string;
 	readonly label: string;
 	readonly binary: string | null;
-	readonly summary: string;
+	readonly summary: LocaleKey;
 	/** Which channel allowlists this template's factory forwards. */
 	readonly channels: "none" | "ids" | "both";
 	/** Whether the factory forwards `pollingIntervalMs`. */
@@ -48,17 +50,17 @@ export interface TemplateMeta {
 /** Shared advanced block for crawler-CLI templates (`CrawlerCliOptions`). */
 
 const CRAWLER_ADVANCED: FieldGroup = {
-	title: "고급 · 실행 환경",
+	title: "settingsSources.groups.advancedRuntime",
 	fields: [
-		{ key: "binaryPath", label: "실행 파일 경로", kind: "text", hint: "비우면 PATH에서 찾습니다." },
-		{ key: "databasePath", label: "데이터베이스 경로", kind: "text" },
-		{ key: "sourcePath", label: "소스 경로", kind: "text" },
-		{ key: "configPath", label: "설정 파일 경로", kind: "text", hint: "직접 지정한 네이티브 설정은 Dazzi가 고쳐 쓰지 않습니다." },
-		{ key: "syncSource", label: "동기화 소스", kind: "text" },
-		{ key: "timeoutMs", label: "검색 타임아웃 (ms)", kind: "number" },
-		{ key: "indexTimeoutMs", label: "인덱싱 타임아웃 (ms)", kind: "number" },
-		{ key: "maxBufferBytes", label: "최대 버퍼 (bytes)", kind: "number" },
-		{ key: "env", label: "환경 변수", kind: "env", hint: "자식 프로세스에 주입할 환경 변수입니다. 비밀값은 OS 환경 변수로 두세요." },
+		{ key: "binaryPath", label: "settingsSources.fields.binaryPath", kind: "text", hint: "settingsSources.fields.hint.binaryPathEmpty" },
+		{ key: "databasePath", label: "settingsSources.fields.databasePath", kind: "text" },
+		{ key: "sourcePath", label: "settingsSources.fields.sourcePath", kind: "text" },
+		{ key: "configPath", label: "settingsSources.fields.configPath", kind: "text", hint: "settingsSources.fields.hint.nativeConfig" },
+		{ key: "syncSource", label: "settingsSources.fields.syncSource", kind: "text" },
+		{ key: "timeoutMs", label: "settingsSources.fields.searchTimeoutMs", kind: "number" },
+		{ key: "indexTimeoutMs", label: "settingsSources.fields.indexTimeoutMs", kind: "number" },
+		{ key: "maxBufferBytes", label: "settingsSources.fields.maxBufferBytes", kind: "number" },
+		{ key: "env", label: "settingsSources.fields.env", kind: "env", hint: "settingsSources.fields.hint.env" },
 	],
 } as FieldGroup;
 
@@ -67,29 +69,29 @@ export const TEMPLATES: readonly TemplateMeta[] = [
 		id: "telegram",
 		label: "Telegram",
 		binary: "telecrawl",
-		summary: "telecrawl 보관함에서 Telegram 메시지를 검색합니다.",
+		summary: "settingsSources.templates.telegram.summary",
 		channels: "both",
 		polling: true,
-		groups: [{ title: "Telegram (telecrawl)", fields: [] }, CRAWLER_ADVANCED],
+		groups: [{ title: "settingsSources.groups.telegram", fields: [] }, CRAWLER_ADVANCED],
 	},
 	{
 		id: "whatsapp",
 		label: "WhatsApp",
 		binary: "wacrawl",
-		summary: "wacrawl 보관함에서 WhatsApp 메시지를 검색합니다.",
+		summary: "settingsSources.templates.whatsapp.summary",
 		channels: "both",
 		polling: true,
-		groups: [{ title: "WhatsApp (wacrawl)", fields: [] }, CRAWLER_ADVANCED],
+		groups: [{ title: "settingsSources.groups.whatsapp", fields: [] }, CRAWLER_ADVANCED],
 	},
 	{
 		id: "slack",
 		label: "Slack",
 		binary: "slacrawl",
-		summary: "slacrawl 보관함에서 Slack 메시지를 검색합니다.",
+		summary: "settingsSources.templates.slack.summary",
 		channels: "both",
 		polling: true,
 		groups: [
-			{ title: "Slack (slacrawl)", fields: [{ key: "workspace", label: "워크스페이스 id", kind: "text", placeholder: "T0435JHH63Z", hint: "slacrawl 검색은 워크스페이스를 지정해야 결과가 나옵니다." }] },
+			{ title: "settingsSources.groups.slack", fields: [{ key: "workspace", label: "settingsSources.fields.workspaceId", kind: "text", placeholder: "T0435JHH63Z", hint: "settingsSources.fields.hint.workspace" }] },
 			CRAWLER_ADVANCED,
 		],
 	},
@@ -97,30 +99,30 @@ export const TEMPLATES: readonly TemplateMeta[] = [
 		id: "discord",
 		label: "Discord",
 		binary: "discrawl",
-		summary: "discrawl 보관함에서 Discord 메시지를 검색합니다.",
+		summary: "settingsSources.templates.discord.summary",
 		channels: "both",
 		polling: true,
 		groups: [
 			{
-				title: "Discord (discrawl)",
+				title: "settingsSources.groups.discord",
 				fields: [
-					{ key: "guildId", label: "길드 id", kind: "text" },
-					{ key: "defaultMode", label: "기본 검색 모드", kind: "select", options: ["hybrid", "fts", "semantic"] },
-					{ key: "embeddingProvider", label: "임베딩 제공자", kind: "text", hint: "discrawl 네이티브 설정에 쓰이는 제공자." },
-					{ key: "embeddingModel", label: "임베딩 모델", kind: "text", hint: "discrawl 네이티브 설정에 쓰이는 모델." },
-					{ key: "embedLimit", label: "임베딩 최대 개수", kind: "number" },
+					{ key: "guildId", label: "settingsSources.fields.guildId", kind: "text" },
+					{ key: "defaultMode", label: "settingsSources.fields.defaultMode", kind: "select", options: ["hybrid", "fts", "semantic"] },
+					{ key: "embeddingProvider", label: "settingsSources.fields.embeddingProvider", kind: "text", hint: "settingsSources.fields.hint.embeddingProvider" },
+					{ key: "embeddingModel", label: "settingsSources.fields.embeddingModel", kind: "text", hint: "settingsSources.fields.hint.embeddingModel" },
+					{ key: "embedLimit", label: "settingsSources.fields.embedLimit", kind: "number" },
 				],
 			},
 			{
-				title: "고급 · 실행 환경",
+				title: "settingsSources.groups.advancedRuntime",
 				fields: [
-					{ key: "binaryPath", label: "실행 파일 경로", kind: "text" },
-					{ key: "configPath", label: "설정 파일 경로", kind: "text" },
-					{ key: "root", label: "루트 경로", kind: "text" },
-					{ key: "workspacePath", label: "작업 디렉터리", kind: "text" },
-					{ key: "timeoutMs", label: "타임아웃 (ms)", kind: "number" },
-					{ key: "maxBufferBytes", label: "최대 버퍼 (bytes)", kind: "number" },
-					{ key: "env", label: "환경 변수", kind: "env", hint: "비밀값은 OS 환경 변수로 두세요." },
+					{ key: "binaryPath", label: "settingsSources.fields.binaryPath", kind: "text" },
+					{ key: "configPath", label: "settingsSources.fields.configPath", kind: "text" },
+					{ key: "root", label: "settingsSources.fields.root", kind: "text" },
+					{ key: "workspacePath", label: "settingsSources.fields.workspacePath", kind: "text" },
+					{ key: "timeoutMs", label: "settingsSources.fields.timeoutMs", kind: "number" },
+					{ key: "maxBufferBytes", label: "settingsSources.fields.maxBufferBytes", kind: "number" },
+					{ key: "env", label: "settingsSources.fields.env", kind: "env", hint: "settingsSources.fields.hint.envSimple" },
 				],
 			},
 		],
@@ -129,27 +131,27 @@ export const TEMPLATES: readonly TemplateMeta[] = [
 		id: "clawgallery",
 		label: "ClawGallery",
 		binary: "clawgallery",
-		summary: "clawgallery 이미지 보관함을 검색합니다.",
+		summary: "settingsSources.templates.clawgallery.summary",
 		channels: "both",
 		polling: true,
 		groups: [
 			{
-				title: "ClawGallery",
+				title: "settingsSources.groups.clawGallery",
 				fields: [
-					{ key: "path", label: "보관함 경로", kind: "text" },
-					{ key: "configDir", label: "설정 디렉터리", kind: "text" },
-					{ key: "defaultMode", label: "기본 검색 모드", kind: "select", options: ["hybrid", "keyword", "lexical", "embedding"] },
-					{ key: "vdrBackend", label: "VDR 백엔드", kind: "select", options: ["mlx", "jina-mlx", "vsplade"] },
-					{ key: "syncVisual", label: "시각 데이터 동기화", kind: "boolean", defaultValue: true, hint: "기본값: 켜짐." },
+					{ key: "path", label: "settingsSources.fields.vaultPath", kind: "text" },
+					{ key: "configDir", label: "settingsSources.fields.configDir", kind: "text" },
+					{ key: "defaultMode", label: "settingsSources.fields.defaultMode", kind: "select", options: ["hybrid", "keyword", "lexical", "embedding"] },
+					{ key: "vdrBackend", label: "settingsSources.fields.vdrBackend", kind: "select", options: ["mlx", "jina-mlx", "vsplade"] },
+					{ key: "syncVisual", label: "settingsSources.fields.syncVisual", kind: "boolean", defaultValue: true, hint: "settingsSources.fields.hint.defaultOn" },
 				],
 			},
 			{
-				title: "고급 · 실행 환경",
+				title: "settingsSources.groups.advancedRuntime",
 				fields: [
-					{ key: "binaryPath", label: "실행 파일 경로", kind: "text" },
-					{ key: "timeoutMs", label: "타임아웃 (ms)", kind: "number" },
-					{ key: "maxBufferBytes", label: "최대 버퍼 (bytes)", kind: "number" },
-					{ key: "env", label: "환경 변수", kind: "env", hint: "비밀값은 OS 환경 변수로 두세요." },
+					{ key: "binaryPath", label: "settingsSources.fields.binaryPath", kind: "text" },
+					{ key: "timeoutMs", label: "settingsSources.fields.timeoutMs", kind: "number" },
+					{ key: "maxBufferBytes", label: "settingsSources.fields.maxBufferBytes", kind: "number" },
+					{ key: "env", label: "settingsSources.fields.env", kind: "env", hint: "settingsSources.fields.hint.envSimple" },
 				],
 			},
 		],
@@ -158,24 +160,24 @@ export const TEMPLATES: readonly TemplateMeta[] = [
 		id: "notion",
 		label: "Notion",
 		binary: "notcrawl",
-		summary: "notcrawl 보관함에서 Notion 문서를 검색합니다.",
+		summary: "settingsSources.templates.notion.summary",
 		channels: "both",
 		polling: true,
-		groups: [{ title: "Notion (notcrawl)", fields: [] }, CRAWLER_ADVANCED],
+		groups: [{ title: "settingsSources.groups.notion", fields: [] }, CRAWLER_ADVANCED],
 	},
 	{
 		id: "lark",
 		label: "Lark",
 		binary: "lark-cli",
-		summary: "lark-cli로 Lark 메시지와 문서를 검색합니다.",
+		summary: "settingsSources.templates.lark.summary",
 		channels: "ids",
 		polling: false,
 		groups: [
 			{
-				title: "Lark (lark-cli)",
+				title: "settingsSources.groups.lark",
 				fields: [
-					{ key: "binaryPath", label: "실행 파일 경로", kind: "text" },
-					{ key: "embedderBaseUrl", label: "임베더 base URL", kind: "text" },
+					{ key: "binaryPath", label: "settingsSources.fields.binaryPath", kind: "text" },
+					{ key: "embedderBaseUrl", label: "settingsSources.fields.embedderBaseUrl", kind: "text" },
 				],
 			},
 		],
@@ -184,26 +186,26 @@ export const TEMPLATES: readonly TemplateMeta[] = [
 		id: "kakao",
 		label: "KakaoTalk",
 		binary: "lazykatok",
-		summary: "lazykatok 보관함에서 KakaoTalk 메시지를 검색합니다.",
+		summary: "settingsSources.templates.kakao.summary",
 		channels: "both",
 		polling: true,
 		groups: [
 			{
-				title: "KakaoTalk (lazykatok)",
+				title: "settingsSources.groups.kakao",
 				fields: [
-					{ key: "configPath", label: "설정 파일 경로", kind: "text" },
-					{ key: "workspacePath", label: "데이터 디렉터리", kind: "text" },
-					{ key: "source", label: "소스 어댑터", kind: "text", placeholder: "macos" },
+					{ key: "configPath", label: "settingsSources.fields.configPath", kind: "text" },
+					{ key: "workspacePath", label: "settingsSources.fields.dataDir", kind: "text" },
+					{ key: "source", label: "settingsSources.fields.sourceAdapter", kind: "text", placeholder: "macos" },
 				],
 			},
 			{
-				title: "고급 · 실행 환경",
+				title: "settingsSources.groups.advancedRuntime",
 				fields: [
-					{ key: "binaryPath", label: "실행 파일 경로", kind: "text" },
-					{ key: "timeoutMs", label: "검색 타임아웃 (ms)", kind: "number" },
-					{ key: "indexTimeoutMs", label: "인덱싱 타임아웃 (ms)", kind: "number" },
-					{ key: "maxBufferBytes", label: "최대 버퍼 (bytes)", kind: "number" },
-					{ key: "env", label: "환경 변수", kind: "env", hint: "비밀값은 OS 환경 변수로 두세요." },
+					{ key: "binaryPath", label: "settingsSources.fields.binaryPath", kind: "text" },
+					{ key: "timeoutMs", label: "settingsSources.fields.searchTimeoutMs", kind: "number" },
+					{ key: "indexTimeoutMs", label: "settingsSources.fields.indexTimeoutMs", kind: "number" },
+					{ key: "maxBufferBytes", label: "settingsSources.fields.maxBufferBytes", kind: "number" },
+					{ key: "env", label: "settingsSources.fields.env", kind: "env", hint: "settingsSources.fields.hint.envSimple" },
 				],
 			},
 		],
@@ -212,24 +214,24 @@ export const TEMPLATES: readonly TemplateMeta[] = [
 		id: "github",
 		label: "GitHub",
 		binary: null,
-		summary: "GitHub 이슈와 PR을 REST API로 색인합니다.",
+		summary: "settingsSources.templates.github.summary",
 		channels: "both",
 		polling: true,
 		groups: [
 			{
-				title: "GitHub",
+				title: "settingsSources.groups.github",
 				fields: [
-					{ key: "repos", label: "저장소 (owner/repo)", kind: "stringList", placeholder: "owner/repo" },
-					{ key: "tokenEnv", label: "토큰 환경 변수 이름", kind: "text", placeholder: "GITHUB_TOKEN", hint: "비밀 토큰 자체가 아니라, 토큰이 담긴 환경 변수 이름입니다." },
-					{ key: "baseUrl", label: "REST base URL", kind: "text", placeholder: "https://api.github.com" },
+					{ key: "repos", label: "settingsSources.fields.repos", kind: "stringList", placeholder: "owner/repo" },
+					{ key: "tokenEnv", label: "settingsSources.fields.tokenEnv", kind: "text", placeholder: "GITHUB_TOKEN", hint: "settingsSources.fields.hint.tokenEnv" },
+					{ key: "baseUrl", label: "settingsSources.fields.baseUrl", kind: "text", placeholder: "https://api.github.com" },
 				],
 			},
 			{
-				title: "고급",
+				title: "settingsSources.groups.advanced",
 				fields: [
-					{ key: "timeoutMs", label: "타임아웃 (ms)", kind: "number" },
-					{ key: "maxPages", label: "최대 페이지", kind: "number" },
-					{ key: "maxDocuments", label: "최대 문서 수", kind: "number" },
+					{ key: "timeoutMs", label: "settingsSources.fields.timeoutMs", kind: "number" },
+					{ key: "maxPages", label: "settingsSources.fields.maxPages", kind: "number" },
+					{ key: "maxDocuments", label: "settingsSources.fields.maxDocuments", kind: "number" },
 				],
 			},
 		],
@@ -238,25 +240,25 @@ export const TEMPLATES: readonly TemplateMeta[] = [
 		id: "github-gist",
 		label: "GitHub Gist",
 		binary: null,
-		summary: "인증된 계정의 GitHub Gist를 색인합니다.",
+		summary: "settingsSources.templates.githubGist.summary",
 		channels: "both",
 		polling: true,
 		groups: [
 			{
-				title: "GitHub Gist",
+				title: "settingsSources.groups.githubGist",
 				fields: [
-					{ key: "tokenEnv", label: "토큰 환경 변수 이름", kind: "text", placeholder: "GITHUB_TOKEN", hint: "비밀 토큰 자체가 아니라, 토큰이 담긴 환경 변수 이름입니다." },
-					{ key: "ghCliFallback", label: "gh CLI 토큰 대체 사용", kind: "boolean", defaultValue: true, hint: "기본값: 켜짐." },
-					{ key: "baseUrl", label: "REST base URL", kind: "text", placeholder: "https://api.github.com" },
+					{ key: "tokenEnv", label: "settingsSources.fields.tokenEnv", kind: "text", placeholder: "GITHUB_TOKEN", hint: "settingsSources.fields.hint.tokenEnv" },
+					{ key: "ghCliFallback", label: "settingsSources.fields.ghCliFallback", kind: "boolean", defaultValue: true, hint: "settingsSources.fields.hint.defaultOn" },
+					{ key: "baseUrl", label: "settingsSources.fields.baseUrl", kind: "text", placeholder: "https://api.github.com" },
 				],
 			},
 			{
-				title: "고급",
+				title: "settingsSources.groups.advanced",
 				fields: [
-					{ key: "statePath", label: "증분 커서 경로", kind: "text" },
-					{ key: "timeoutMs", label: "타임아웃 (ms)", kind: "number" },
-					{ key: "maxPages", label: "최대 페이지", kind: "number" },
-					{ key: "maxGists", label: "최대 Gist 수", kind: "number" },
+					{ key: "statePath", label: "settingsSources.fields.statePath", kind: "text" },
+					{ key: "timeoutMs", label: "settingsSources.fields.timeoutMs", kind: "number" },
+					{ key: "maxPages", label: "settingsSources.fields.maxPages", kind: "number" },
+					{ key: "maxGists", label: "settingsSources.fields.maxGists", kind: "number" },
 				],
 			},
 		],
@@ -265,45 +267,45 @@ export const TEMPLATES: readonly TemplateMeta[] = [
 		id: "cloud-drive",
 		label: "Cloud Drive",
 		binary: "rclone",
-		summary: "rclone 원격을 증분 미러링해 색인합니다.",
+		summary: "settingsSources.templates.cloudDrive.summary",
 		channels: "both",
 		polling: true,
 		groups: [
 			{
-				title: "Cloud Drive (rclone)",
+				title: "settingsSources.groups.cloudDrive",
 				fields: [
-					{ key: "provider", label: "제공자", kind: "text", placeholder: "google-drive" },
-					{ key: "remote", label: "원격 이름", kind: "text" },
-					{ key: "configPath", label: "rclone 설정 경로", kind: "text", hint: "직접 지정한 rclone.conf는 읽기 전용으로만 씁니다." },
+					{ key: "provider", label: "settingsSources.fields.provider", kind: "text", placeholder: "google-drive" },
+					{ key: "remote", label: "settingsSources.fields.remote", kind: "text" },
+					{ key: "configPath", label: "settingsSources.fields.rcloneConfigPath", kind: "text", hint: "settingsSources.fields.hint.rcloneConfig" },
 				],
 			},
 			{
-				title: "콘텐츠 범위",
+				title: "settingsSources.groups.contentScope",
 				fields: [
-					{ key: "extensions", label: "포함 확장자", kind: "stringList", placeholder: ".md" },
-					{ key: "include", label: "포함 글롭", kind: "stringList" },
-					{ key: "exclude", label: "제외 글롭", kind: "stringList" },
-					{ key: "exportFormats", label: "내보내기 형식", kind: "text", placeholder: "txt,csv" },
-					{ key: "maxDocuments", label: "최대 문서 수", kind: "number" },
-					{ key: "maxBytesPerFile", label: "파일당 최대 바이트", kind: "number" },
-					{ key: "maxContentChars", label: "문서당 최대 문자", kind: "number" },
-					{ key: "concurrency", label: "동시성", kind: "number" },
-					{ key: "bandwidthLimit", label: "대역폭 제한", kind: "text" },
-					{ key: "dryRun", label: "드라이 런", kind: "boolean", defaultValue: false, hint: "기본값: 꺼짐." },
+					{ key: "extensions", label: "settingsSources.fields.extensions", kind: "stringList", placeholder: ".md" },
+					{ key: "include", label: "settingsSources.fields.includeGlob", kind: "stringList" },
+					{ key: "exclude", label: "settingsSources.fields.excludeGlob", kind: "stringList" },
+					{ key: "exportFormats", label: "settingsSources.fields.exportFormats", kind: "text", placeholder: "txt,csv" },
+					{ key: "maxDocuments", label: "settingsSources.fields.maxDocuments", kind: "number" },
+					{ key: "maxBytesPerFile", label: "settingsSources.fields.maxBytesPerFile", kind: "number" },
+					{ key: "maxContentChars", label: "settingsSources.fields.maxContentChars", kind: "number" },
+					{ key: "concurrency", label: "settingsSources.fields.concurrency", kind: "number" },
+					{ key: "bandwidthLimit", label: "settingsSources.fields.bandwidthLimit", kind: "text" },
+					{ key: "dryRun", label: "settingsSources.fields.dryRun", kind: "boolean", defaultValue: false, hint: "settingsSources.fields.hint.defaultOff" },
 				],
 			},
 			{
-				title: "파서 (문서 언어)",
+				title: "settingsSources.groups.parserLanguages",
 				fields: [
-					{ key: "parserOptions.languages", label: "문서 언어", kind: "stringList", placeholder: "ko" },
-					{ key: "parserOptions.kordoc.ocr", label: "kordoc OCR", kind: "select", options: ["off", "force"], optionValues: { off: false, force: "force" } },
+					{ key: "parserOptions.languages", label: "settingsSources.fields.docLanguages", kind: "stringList", placeholder: "ko" },
+					{ key: "parserOptions.kordoc.ocr", label: "settingsSources.fields.kordocOcr", kind: "select", options: ["off", "force"], optionValues: { off: false, force: "force" } },
 				],
 			},
 			{
-				title: "고급 · 실행 환경",
+				title: "settingsSources.groups.advancedRuntime",
 				fields: [
-					{ key: "binaryPath", label: "rclone 실행 파일 경로", kind: "text" },
-					{ key: "timeoutMs", label: "타임아웃 (ms)", kind: "number" },
+					{ key: "binaryPath", label: "settingsSources.fields.rcloneBinaryPath", kind: "text" },
+					{ key: "timeoutMs", label: "settingsSources.fields.timeoutMs", kind: "number" },
 				],
 			},
 		],
@@ -312,16 +314,16 @@ export const TEMPLATES: readonly TemplateMeta[] = [
 		id: "mail-export",
 		label: "Mail Export",
 		binary: null,
-		summary: "로컬 .eml / .mbox 보관 파일을 색인합니다.",
+		summary: "settingsSources.templates.mailExport.summary",
 		channels: "both",
 		polling: true,
 		groups: [
 			{
-				title: "Mail Export",
+				title: "settingsSources.groups.mailExport",
 				fields: [
-					{ key: "paths", label: "메일 파일·디렉터리 경로", kind: "pathList" },
-					{ key: "maxDocuments", label: "최대 문서 수", kind: "number" },
-					{ key: "maxBytesPerFile", label: "파일당 최대 바이트", kind: "number" },
+					{ key: "paths", label: "settingsSources.fields.mailPaths", kind: "pathList" },
+					{ key: "maxDocuments", label: "settingsSources.fields.maxDocuments", kind: "number" },
+					{ key: "maxBytesPerFile", label: "settingsSources.fields.maxBytesPerFile", kind: "number" },
 				],
 			},
 		],
@@ -330,30 +332,30 @@ export const TEMPLATES: readonly TemplateMeta[] = [
 		id: "mailcrawl",
 		label: "Mail",
 		binary: "mailcrawl",
-		summary: "mailcrawl 보관함에서 메일을 검색합니다.",
+		summary: "settingsSources.templates.mailcrawl.summary",
 		channels: "both",
 		polling: true,
 		groups: [
 			{
-				title: "Mail",
+				title: "settingsSources.groups.mail",
 				fields: [
-					{ key: "account", label: "계정", kind: "text", placeholder: "gmail" },
-					{ key: "mailbox", label: "메일함", kind: "text", placeholder: "INBOX" },
-					{ key: "dataDir", label: "데이터 디렉터리", kind: "text" },
-					{ key: "backend", label: "백엔드", kind: "text" },
-					{ key: "source", label: "소스", kind: "text" },
-					{ key: "fixture", label: "픽스처", kind: "text" },
-					{ key: "himalayaConfig", label: "himalaya 설정", kind: "text" },
+					{ key: "account", label: "settingsSources.fields.account", kind: "text", placeholder: "gmail" },
+					{ key: "mailbox", label: "settingsSources.fields.mailbox", kind: "text", placeholder: "INBOX" },
+					{ key: "dataDir", label: "settingsSources.fields.dataDir", kind: "text" },
+					{ key: "backend", label: "settingsSources.fields.backend", kind: "text" },
+					{ key: "source", label: "settingsSources.fields.source", kind: "text" },
+					{ key: "fixture", label: "settingsSources.fields.fixture", kind: "text" },
+					{ key: "himalayaConfig", label: "settingsSources.fields.himalayaConfig", kind: "text" },
 				],
 			},
 			{
-				title: "고급 · 실행 환경",
+				title: "settingsSources.groups.advancedRuntime",
 				fields: [
-					{ key: "binaryPath", label: "실행 파일 경로", kind: "text" },
-					{ key: "timeoutMs", label: "검색 타임아웃 (ms)", kind: "number" },
-					{ key: "indexTimeoutMs", label: "인덱싱 타임아웃 (ms)", kind: "number" },
-					{ key: "maxBufferBytes", label: "최대 버퍼 (bytes)", kind: "number" },
-					{ key: "env", label: "환경 변수", kind: "env", hint: "비밀값은 OS 환경 변수로 두세요." },
+					{ key: "binaryPath", label: "settingsSources.fields.binaryPath", kind: "text" },
+					{ key: "timeoutMs", label: "settingsSources.fields.searchTimeoutMs", kind: "number" },
+					{ key: "indexTimeoutMs", label: "settingsSources.fields.indexTimeoutMs", kind: "number" },
+					{ key: "maxBufferBytes", label: "settingsSources.fields.maxBufferBytes", kind: "number" },
+					{ key: "env", label: "settingsSources.fields.env", kind: "env", hint: "settingsSources.fields.hint.envSimple" },
 				],
 			},
 		],
@@ -362,16 +364,16 @@ export const TEMPLATES: readonly TemplateMeta[] = [
 		id: "obsidian",
 		label: "Obsidian",
 		binary: "qmd",
-		summary: "qmd로 Obsidian 보관함을 검색합니다.",
+		summary: "settingsSources.templates.obsidian.summary",
 		channels: "both",
 		polling: true,
 		groups: [
 			{
-				title: "Obsidian (qmd)",
+				title: "settingsSources.groups.obsidian",
 				fields: [
-					{ key: "vaultPath", label: "보관함 경로", kind: "text" },
-					{ key: "binaryPath", label: "qmd 실행 파일 경로", kind: "text" },
-					{ key: "configPath", label: "설정 디렉터리", kind: "text" },
+					{ key: "vaultPath", label: "settingsSources.fields.vaultPath", kind: "text" },
+					{ key: "binaryPath", label: "settingsSources.fields.qmdBinaryPath", kind: "text" },
+					{ key: "configPath", label: "settingsSources.fields.configDir", kind: "text" },
 				],
 			},
 		],
@@ -380,18 +382,18 @@ export const TEMPLATES: readonly TemplateMeta[] = [
 		id: "rss",
 		label: "RSS / News",
 		binary: null,
-		summary: "RSS 2.0 / Atom 피드를 폴링해 색인합니다.",
+		summary: "settingsSources.templates.rss.summary",
 		channels: "both",
 		polling: true,
 		groups: [
 			{
-				title: "RSS / News",
+				title: "settingsSources.groups.rss",
 				fields: [
-					{ key: "feeds", label: "피드", kind: "feeds" },
-					{ key: "maxItemsPerFeed", label: "피드당 최대 항목", kind: "number" },
-					{ key: "maxDocuments", label: "최대 문서 수", kind: "number" },
-					{ key: "maxContentChars", label: "문서당 최대 문자", kind: "number" },
-					{ key: "timeoutMs", label: "타임아웃 (ms)", kind: "number" },
+					{ key: "feeds", label: "settingsSources.fields.feeds", kind: "feeds" },
+					{ key: "maxItemsPerFeed", label: "settingsSources.fields.maxItemsPerFeed", kind: "number" },
+					{ key: "maxDocuments", label: "settingsSources.fields.maxDocuments", kind: "number" },
+					{ key: "maxContentChars", label: "settingsSources.fields.maxContentChars", kind: "number" },
+					{ key: "timeoutMs", label: "settingsSources.fields.timeoutMs", kind: "number" },
 				],
 			},
 		],
@@ -400,25 +402,25 @@ export const TEMPLATES: readonly TemplateMeta[] = [
 		id: "spotlight",
 		label: "Spotlight",
 		binary: "mdfind",
-		summary: "macOS Spotlight(mdfind) 쿼리로 로컬 파일을 색인합니다.",
+		summary: "settingsSources.templates.spotlight.summary",
 		channels: "both",
 		polling: true,
 		groups: [
 			{
-				title: "Spotlight (mdfind)",
+				title: "settingsSources.groups.spotlight",
 				fields: [
-					{ key: "queries", label: "쿼리", kind: "stringList", placeholder: "kMDItemContentType == 'public.plain-text'" },
-					{ key: "onlyIn", label: "검색 디렉터리 (-onlyin)", kind: "text" },
+					{ key: "queries", label: "settingsSources.fields.queries", kind: "stringList", placeholder: "kMDItemContentType == 'public.plain-text'" },
+					{ key: "onlyIn", label: "settingsSources.fields.onlyIn", kind: "text" },
 				],
 			},
 			{
-				title: "고급",
+				title: "settingsSources.groups.advanced",
 				fields: [
-					{ key: "maxResultsPerQuery", label: "쿼리당 최대 결과", kind: "number" },
-					{ key: "maxDocuments", label: "최대 문서 수", kind: "number" },
-					{ key: "maxContentChars", label: "문서당 최대 문자", kind: "number" },
-					{ key: "maxBytesPerFile", label: "파일당 최대 바이트", kind: "number" },
-					{ key: "timeoutMs", label: "타임아웃 (ms)", kind: "number" },
+					{ key: "maxResultsPerQuery", label: "settingsSources.fields.maxResultsPerQuery", kind: "number" },
+					{ key: "maxDocuments", label: "settingsSources.fields.maxDocuments", kind: "number" },
+					{ key: "maxContentChars", label: "settingsSources.fields.maxContentChars", kind: "number" },
+					{ key: "maxBytesPerFile", label: "settingsSources.fields.maxBytesPerFile", kind: "number" },
+					{ key: "timeoutMs", label: "settingsSources.fields.timeoutMs", kind: "number" },
 				],
 			},
 		],
@@ -459,13 +461,14 @@ function asStringArray(value: unknown): string[] {
 /* -------------------------------------------------------------- editors -- */
 
 export function ConnectorFieldInput({ field, value, onChange }: { readonly field: FieldSpec; readonly value: unknown; readonly onChange: (value: unknown) => void }): ReactElement {
+	const { t } = useTranslation();
 	switch (field.kind) {
 		case "number":
 			return (
 				<input
 					type="number"
 					className="settings-source-desc__input"
-					aria-label={field.label}
+					aria-label={t(field.label)}
 					value={typeof value === "number" ? String(value) : ""}
 					onChange={(event) => {
 						const parsed = Number(event.target.value);
@@ -486,7 +489,7 @@ export function ConnectorFieldInput({ field, value, onChange }: { readonly field
 				<select
 					className="linear-select"
 					style={CONTROL_INPUT}
-					aria-label={field.label}
+					aria-label={t(field.label)}
 					value={current}
 					onChange={(event) => {
 						const label = event.target.value;
@@ -494,7 +497,7 @@ export function ConnectorFieldInput({ field, value, onChange }: { readonly field
 						else onChange(label.length === 0 ? undefined : label);
 					}}
 				>
-					<option value="">(기본값)</option>
+					<option value="">{t("settingsSources.fields.defaultOption")}</option>
 					{options.map((option) => (
 						<option key={option} value={option}>
 							{option}
@@ -510,7 +513,7 @@ export function ConnectorFieldInput({ field, value, onChange }: { readonly field
 				<ListEditor
 					value={asStringArray(value)}
 					onChange={(next) => onChange(next.length === 0 ? undefined : next)}
-					ariaLabel={field.label}
+					ariaLabel={t(field.label)}
 					{...(field.placeholder === undefined ? {} : { placeholder: field.placeholder })}
 				/>
 			);
@@ -522,7 +525,7 @@ export function ConnectorFieldInput({ field, value, onChange }: { readonly field
 			return (
 				<input
 					className="settings-source-desc__input"
-					aria-label={field.label}
+					aria-label={t(field.label)}
 					value={typeof value === "string" ? value : ""}
 					placeholder={field.placeholder}
 					onChange={(event) => onChange(event.target.value.length === 0 ? undefined : event.target.value)}
@@ -542,13 +545,14 @@ function ListEditor({
 	readonly placeholder?: string;
 	readonly ariaLabel?: string;
 }): ReactElement {
+	const { t } = useTranslation();
 	return (
 		<div style={ROW_STACK}>
 			{value.map((item, index) => (
 				<div key={index} style={{ display: "flex", gap: "var(--space-6)" }}>
 					<input
 						className="settings-source-desc__input"
-						aria-label={ariaLabel === undefined ? undefined : `${ariaLabel} ${index + 1}`}
+						aria-label={ariaLabel === undefined ? undefined : t("settingsSources.fields.list.itemAt", { label: ariaLabel, index: index + 1 })}
 						value={item}
 						{...(placeholder === undefined ? {} : { placeholder })}
 						onChange={(event) => {
@@ -560,15 +564,15 @@ function ListEditor({
 					<button
 						type="button"
 						className="linear-btn"
-						aria-label={ariaLabel === undefined ? "항목 삭제" : `${ariaLabel} ${index + 1} 삭제`}
+						aria-label={ariaLabel === undefined ? t("settingsSources.fields.list.removeItem") : t("settingsSources.fields.list.removeItemAt", { label: ariaLabel, index: index + 1 })}
 						onClick={() => onChange(value.filter((_, i) => i !== index))}
 					>
 						–
 					</button>
 				</div>
 			))}
-			<button type="button" className="linear-btn" aria-label={ariaLabel === undefined ? "항목 추가" : `${ariaLabel} 추가`} onClick={() => onChange([...value, ""])}>
-				+ 항목 추가
+			<button type="button" className="linear-btn" aria-label={ariaLabel === undefined ? t("settingsSources.fields.list.addItem") : t("settingsSources.fields.list.addItemWith", { label: ariaLabel })} onClick={() => onChange([...value, ""])}>
+				{t("settingsSources.fields.list.addLabel")}
 			</button>
 		</div>
 	);
@@ -590,6 +594,7 @@ function feedRows(value: unknown, counter: { current: number }): FeedRow[] {
 
 
 function FeedsEditor({ value, onChange }: { readonly value: unknown; readonly onChange: (next: unknown) => void }): ReactElement {
+	const { t } = useTranslation();
 	const idRef = useRef(0);
 	const [rows, setRows] = useState<FeedRow[]>(() => feedRows(value, idRef));
 	const lastEmitted = useRef<string | null>(null);
@@ -638,14 +643,14 @@ function FeedsEditor({ value, onChange }: { readonly value: unknown; readonly on
 				<div key={row.id} style={{ display: "flex", gap: "var(--space-6)" }}>
 					<input
 						className="settings-source-desc__input"
-						aria-label={`피드 URL ${index + 1}`}
+						aria-label={t("settingsSources.fields.feedsAria.urlAria", { index: index + 1 })}
 						placeholder="https://example.com/feed.xml"
 						value={typeof row.record.url === "string" ? row.record.url : ""}
 						onChange={(event) => setFeedField(index, "url", event.target.value)}
 					/>
 					<input
 						className="settings-source-desc__input"
-						aria-label={`피드 카테고리 ${index + 1}`}
+						aria-label={t("settingsSources.fields.feedsAria.categoryAria", { index: index + 1 })}
 						placeholder="category"
 						style={{ maxWidth: 140 }}
 						value={typeof row.record.category === "string" ? row.record.category : ""}
@@ -654,7 +659,7 @@ function FeedsEditor({ value, onChange }: { readonly value: unknown; readonly on
 					<button
 						type="button"
 						className="linear-btn"
-						aria-label={`피드 ${index + 1} 삭제`}
+						aria-label={t("settingsSources.fields.feedsAria.removeAt", { index: index + 1 })}
 						onClick={() => apply(rows.filter((_, i) => i !== index))}
 					>
 						–
@@ -664,19 +669,32 @@ function FeedsEditor({ value, onChange }: { readonly value: unknown; readonly on
 			<button
 				type="button"
 				className="linear-btn"
-				aria-label="피드 추가"
+				aria-label={t("settingsSources.fields.feedsAria.addAria")}
 				onClick={() => apply([...rows, { id: (idRef.current += 1), record: {} }])}
 			>
-				+ 피드 추가
+				{t("settingsSources.fields.feedsAria.addLabel")}
 			</button>
 		</div>
 	);
 }
 
+const ENV_ERROR_KEYS = {
+	object: "settingsSources.fields.envError.object",
+	string: "settingsSources.fields.envError.string",
+	secret: "settingsSources.fields.envError.secret",
+	json: "settingsSources.fields.envError.json",
+} as const;
+
+interface EnvError {
+	readonly key: (typeof ENV_ERROR_KEYS)[keyof typeof ENV_ERROR_KEYS];
+	readonly name?: string;
+}
+
 function EnvEditor({ value, onChange }: { readonly value: unknown; readonly onChange: (next: unknown) => void }): ReactElement {
+	const { t } = useTranslation();
 	const record = asRecord(value);
 	const [text, setText] = useState(() => JSON.stringify(record, null, 2));
-	const [error, setError] = useState<string | null>(null);
+	const [error, setError] = useState<EnvError | null>(null);
 
 	useEffect(() => {
 		setText(JSON.stringify(record, null, 2));
@@ -694,21 +712,21 @@ function EnvEditor({ value, onChange }: { readonly value: unknown; readonly onCh
 		try {
 			const parsed: unknown = JSON.parse(next);
 			if (!isJsonObject(parsed)) {
-				setError("환경 변수는 JSON 객체여야 합니다.");
+				setError({ key: ENV_ERROR_KEYS.object });
 				return;
 			}
 			const bad = Object.entries(parsed).find(([, child]) => child !== undefined && typeof child !== "string");
 			if (bad !== undefined) {
-				setError(`'${bad[0]}' 값은 문자열이어야 합니다.`);
+				setError({ key: ENV_ERROR_KEYS.string, name: bad[0] });
 				return;
 			}
 			const secret = Object.entries(parsed).find(
 				([key, child]) => SECRET_KEY.test(key) && !SECRET_NAME_SUFFIX.test(key) && typeof child === "string" && child.length > 0 && child !== REDACTED_SECRET,
 			);
-			setError(secret === undefined ? null : `'${secret[0]}' 값이 평문 비밀처럼 보여 저장이 거부됩니다. OS 환경 변수로 옮기세요.`);
+			setError(secret === undefined ? null : { key: "settingsSources.fields.envError.secret", name: secret[0] });
 			onChange(parsed);
 		} catch {
-			setError("올바른 JSON이 아닙니다.");
+			setError({ key: ENV_ERROR_KEYS.json });
 		}
 	}
 
@@ -718,14 +736,14 @@ function EnvEditor({ value, onChange }: { readonly value: unknown; readonly onCh
 				className="settings-source-desc__input"
 				rows={5}
 				style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}
-				aria-label="환경 변수 (JSON)"
+				aria-label={t("settingsSources.fields.envAria")}
 				value={text}
 				onChange={(event) => update(event.target.value)}
 			/>
-			<span style={HINT_TEXT}>자식 프로세스에 주입할 환경 변수입니다. 비밀 토큰·비밀번호는 여기 대신 OS 환경 변수로 두세요.</span>
+			<span style={HINT_TEXT}>{t("settingsSources.fields.envEditorHint")}</span>
 			{error !== null ? (
 				<span style={{ ...HINT_TEXT, color: "var(--danger-text)" }} role="alert">
-					{error}
+					{t(error.key, { name: error.name ?? "" })}
 				</span>
 			) : null}
 		</div>

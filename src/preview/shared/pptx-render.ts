@@ -5,6 +5,7 @@
  * `document` — and every string is set through `textContent`/`setAttribute`,
  * never HTML. Text is real, selectable DOM text, so a slide scales with CSS.
  */
+import { t } from "../../shared/i18n/core";
 import { assertNever } from "./assert";
 import { EMU_PER_PX, type PptxNode, type PptxParagraph, type PptxRun, type PptxSlide, type PptxText, type PptxTransform, type PptxDeck } from "./pptx-model";
 
@@ -140,7 +141,7 @@ function renderPicture(
 	const url = resolveImage(node.entry);
 	if (url === null) {
 		container.setAttribute("style", `${container.getAttribute("style") ?? ""}display:flex;align-items:center;justify-content:center;border:1px dashed rgba(0,0,0,0.35);color:#777;font-size:12px;box-sizing:border-box;`);
-		container.textContent = "이미지";
+		container.textContent = t("quickLook.pptx.image");
 		return container;
 	}
 	const fullWidth = node.transform.w / Math.max(0.0001, 1 - node.crop.l - node.crop.r);
@@ -241,7 +242,7 @@ function errorCard(slide: PptxSlide | undefined, dom: PptxDom): PptxDomElement {
 		"pptx-error",
 		"position:absolute;left:0;top:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#F4F4F5;color:#666;font-size:14px;text-align:center;padding:12px;box-sizing:border-box;",
 	);
-	card.textContent = slide?.error ?? "슬라이드를 표시할 수 없습니다";
+	card.textContent = slide?.error ?? t("quickLook.pptx.slideRenderFailed");
 	return card;
 }
 

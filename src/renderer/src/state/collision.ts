@@ -6,6 +6,8 @@
  * validate rename input before it crosses the bridge.
  */
 
+import { t } from "../../../shared/i18n/core";
+
 export interface SplitName {
 	readonly stem: string;
 	readonly ext: string;
@@ -40,16 +42,16 @@ export type NameCheck = { readonly ok: true } | { readonly ok: false; readonly m
 export function validateName(name: string, taken: readonly string[], current?: string): NameCheck {
 	const trimmed = name.trim();
 	if (trimmed === "") {
-		return { ok: false, message: "이름을 입력해 주세요" };
+		return { ok: false, message: t("finderState.renameEmpty") };
 	}
 	if (trimmed.includes("/")) {
-		return { ok: false, message: "이름에 / 는 쓸 수 없습니다" };
+		return { ok: false, message: t("finderState.renameSlash") };
 	}
 	if (current !== undefined && trimmed === current) {
 		return { ok: true };
 	}
 	if (taken.includes(trimmed)) {
-		return { ok: false, message: "같은 이름의 항목이 이미 있습니다" };
+		return { ok: false, message: t("finderState.renameDuplicate") };
 	}
 	return { ok: true };
 }

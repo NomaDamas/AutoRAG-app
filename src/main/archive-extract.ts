@@ -15,13 +15,13 @@ import { finished } from "node:stream/promises";
 import { createGunzip } from "node:zlib";
 import { Unzip, UnzipInflate } from "fflate";
 import type { ArchiveFormat } from "../shared/archive-formats";
+import { t } from "../shared/i18n/core";
 import { ArchiveError, archiveEntryPath } from "./archive-guard.mjs";
 import { ByteReader, writeChunk, type ArchiveLimits } from "./archive-common";
 import { TAR_BLOCK_SIZE, extractTar, looksLikeTar } from "./tar-reader";
 import { extractWithLibarchive } from "./libarchive-reader";
 
-const CORRUPT_MESSAGE = "압축 파일이 손상되었습니다";
-const ENCRYPTED_MESSAGE = "암호로 보호된 압축 파일은 풀 수 없습니다";
+const corruptMessage = (): string => t("main.archive.corrupt");
 /** The central-directory scan is a guard, not a parser: a directory past this is left to fflate. */
 const MAX_DIRECTORY_BYTES = 64 * 1024 * 1024;
 
@@ -115,7 +115,7 @@ function decodeLegacyZipName(name: string): string {
  */
 async function readZip(source: string, destDir: string, limits: ArchiveLimits): Promise<void> {
 	const scan = await scanZipDirectory(source);
-	if (scan.encrypted) throw new ArchiveError(ENCRYPTED_MESSAGE);
+	if (scan.encrypted) throw new ArchiveError(t("main.archive.encrypted"));
 	await mkdir(destDir, { recursive: true });
 	const writes: Promise<void>[] = [];
 	let failure: ArchiveError | null = null;
@@ -128,14 +128,14 @@ async function readZip(source: string, destDir: string, limits: ArchiveLimits): 
 		try {
 			return archiveEntryPath(destDir, name);
 		} catch (error) {
-			failure = error instanceof ArchiveError ? error : new ArchiveError(CORRUPT_MESSAGE);
+			failure = error instanceof ArchiveError ? error : new ArchiveError(corruptMessage());
 			return null;
 		}
 	}
 
 	const unzipper = new Unzip((file) => {
 		entries += 1;
-		if (failure === null && entries > limits.maxEntries) failure = new ArchiveError("압축 파일의 항목 수가 너무 많습니다");
+		if (failure === null && entries > limits.maxEntries) failure = new ArchiveError(t("main.archive.tooManyEntries"));
 		const target = resolveEntry(scan.legacyNames.has(file.name) ? decodeLegacyZipName(file.name) : file.name);
 		if (target === null || target.directory) {
 			if (target !== null) writes.push(mkdir(target.path, { recursive: true }).then(() => undefined));
@@ -146,7 +146,7 @@ async function readZip(source: string, destDir: string, limits: ArchiveLimits): 
 		const chunks: Uint8Array[] = [];
 		file.ondata = (error, chunk, final) => {
 			if (error !== null) {
-				failure = new ArchiveError(CORRUPT_MESSAGE);
+				failure = new ArchiveError(corruptMessage());
 				return;
 			}
 			chunks.push(chunk);
@@ -155,7 +155,7 @@ async function readZip(source: string, destDir: string, limits: ArchiveLimits): 
 			chunks.length = 0;
 			bytes += body.length;
 			if (bytes > limits.maxTotalBytes) {
-				failure = new ArchiveError("압축 파일의 해제 용량이 너무 큽니다");
+				failure = new ArchiveError(t("main.archive.tooLarge"));
 				return;
 			}
 			writes.push(mkdir(dirname(target.path), { recursive: true }).then(() => writeFile(target.path, body)));
@@ -175,7 +175,7 @@ async function readZip(source: string, destDir: string, limits: ArchiveLimits): 
 	}
 	await Promise.all(writes);
 	if (failure !== null) throw failure;
-	if (parseError !== null) throw parseError instanceof ArchiveError ? parseError : new ArchiveError(CORRUPT_MESSAGE);
+	if (parseError !== null) throw parseError instanceof ArchiveError ? parseError : new ArchiveError(corruptMessage());
 }
 
 /** Inflate `source` and, if the stream is a tar, extract it; otherwise write it as one file. */
@@ -201,7 +201,7 @@ export async function extractGzipInto(sourcePath: string, destDir: string, stem:
 		return "file";
 	} catch (error) {
 		if (error instanceof ArchiveError) throw error;
-		throw new ArchiveError(CORRUPT_MESSAGE);
+		throw new ArchiveError(corruptMessage());
 	}
 }
 
@@ -217,7 +217,7 @@ export async function extractIntoFolder(sourcePath: string, format: ArchiveForma
 			try {
 				return await extractTar(new ByteReader(createReadStream(sourcePath).pipe(createGunzip())), destDir, limits);
 			} catch (error) {
-				throw error instanceof ArchiveError ? error : new ArchiveError(CORRUPT_MESSAGE);
+				throw error instanceof ArchiveError ? error : new ArchiveError(corruptMessage());
 			}
 		case "7z":
 		case "rar":
@@ -227,7 +227,7 @@ export async function extractIntoFolder(sourcePath: string, format: ArchiveForma
 		case "txz":
 			return extractWithLibarchive(sourcePath, destDir, limits);
 		case "gz":
-			throw new ArchiveError("압축을 풀 수 없는 파일 형식입니다");
+			throw new ArchiveError(t("main.archive.unsupportedFormat"));
 	}
 }
 

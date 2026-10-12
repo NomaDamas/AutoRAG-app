@@ -75,7 +75,7 @@ export function ToolbarMenu({
 			ref={ref}
 			className="menu fixed z-60 flex flex-col w-context-menu p-4 border border-border rounded-10 bg-window shadow-menu overflow-y-auto animate-[rise_var(--dur-menu)_var(--ease-out)] [-webkit-app-region:no-drag]"
 			role="menu"
-			aria-label={kind === "sort" ? t("toolbar.sort", "Sort") : t("toolbar.group", "Group")}
+			aria-label={kind === "sort" ? t("toolbar.sort") : t("toolbar.group")}
 			style={{ left: placement.left, top: placement.top, maxHeight: window.innerHeight - 16 }}
 			onContextMenu={(event) => event.preventDefault()}
 			onKeyDown={(event) => {
@@ -102,8 +102,8 @@ export function ToolbarMenu({
 						closeAndFocus();
 					}))}
 					<div className="flex-none h-px mx-6 my-4 bg-border" role="separator" />
-					{row(t("sort.ascending", "Ascending"), sort?.dir === 1, () => { onSort(sort?.key ?? "name", 1); closeAndFocus(); })}
-					{row(t("sort.descending", "Descending"), sort?.dir === -1, () => { onSort(sort?.key ?? "name", -1); closeAndFocus(); })}
+					{row(t("sort.ascending"), sort?.dir === 1, () => { onSort(sort?.key ?? "name", 1); closeAndFocus(); })}
+					{row(t("sort.descending"), sort?.dir === -1, () => { onSort(sort?.key ?? "name", -1); closeAndFocus(); })}
 				</>
 			) : (
 				GROUP_OPTIONS.map((option, index) => (

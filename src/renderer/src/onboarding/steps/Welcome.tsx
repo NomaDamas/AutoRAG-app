@@ -63,7 +63,7 @@ export function WelcomeStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElem
 								{t("onboarding.welcome.chat.replyTail")}
 								<br />
 								<span className="cite">budget.xlsx · 4</span>
-								<span className="cite">회의록.md · 2</span>
+								<span className="cite">{t("finderComponents.onboardingDemo.meetingNotes")} · 2</span>
 							</div>
 						</div>
 					}
@@ -163,7 +163,7 @@ export function WelcomeStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElem
 							<div className="rank-list">
 								<div className="rank-row">
 									<span className="rank-n">1</span>
-									<span>회의록.md</span>
+									<span>{t("finderComponents.onboardingDemo.meetingNotes")}</span>
 									<span className="rank-badge">↑ 3→1</span>
 								</div>
 								<div className="rank-row">

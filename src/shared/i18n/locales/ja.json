@@ -373,15 +373,41 @@
       }
     },
     "feature": {
-      "ai": { "title": "AI検索", "sub": "回答と根拠を一度に" },
-      "citation": { "title": "根拠の引用", "sub": "回答の出典を確認" },
-      "versions": { "title": "バージョンのまとめ", "sub": "重複した文書を整理" },
-      "quicklook": { "title": "Quick Look", "sub": "開く前にプレビュー" },
-      "sources": { "title": "データソース", "sub": "接続先もまとめて検索" },
-      "hybrid": { "title": "ハイブリッド検索", "sub": "キーワードと意味を併用し、リランキングで並べ替え" }
+      "ai": {
+        "title": "AI検索",
+        "sub": "回答と根拠を一度に"
+      },
+      "citation": {
+        "title": "根拠の引用",
+        "sub": "回答の出典を確認"
+      },
+      "versions": {
+        "title": "バージョンのまとめ",
+        "sub": "重複した文書を整理"
+      },
+      "quicklook": {
+        "title": "Quick Look",
+        "sub": "開く前にプレビュー"
+      },
+      "sources": {
+        "title": "データソース",
+        "sub": "接続先もまとめて検索"
+      },
+      "hybrid": {
+        "title": "ハイブリッド検索",
+        "sub": "キーワードと意味を併用し、リランキングで並べ替え"
+      }
     },
-    "hybrid": { "keyword": "キーワード", "semantic": "意味", "rerank": "リランキング" },
-    "versions": { "latest": "最新版", "near": "類似版", "exact": "同一版" },
+    "hybrid": {
+      "keyword": "キーワード",
+      "semantic": "意味",
+      "rerank": "リランキング"
+    },
+    "versions": {
+      "latest": "最新版",
+      "near": "類似版",
+      "exact": "同一版"
+    },
     "account": {
       "eyebrow": "アカウント",
       "title": "アカウントで\n始める",
@@ -648,7 +674,8 @@
       "gateOkDetail": "{{files}}ファイルをすべて読み込みました。新しく変更されたファイルはバックグラウンドで続けて読み込みます。",
       "gateFailTitle": "インデックス作成を完了できませんでした",
       "gateFailDetail": "再試行すると続きから進みます。",
-      "gateTitle": "Dazziを終了したり{{machine}}の電源を切らないでください",
+      "gateTitleMac": "Dazziを終了したりMacの電源を切らないでください",
+      "gateTitlePc": "Dazziを終了したりPCの電源を切らないでください",
       "gateDetailMac": "最初のインデックス作成は時間がかかります。終了すると進行が止まります。電源アダプターを接続し、フタを開けたままにしてください。",
       "gateDetailWindows": "最初のインデックス作成は時間がかかります。終了すると進行が止まります。電源に接続したままにしてください。",
       "gateLocked": "完了すると開けます",
@@ -745,6 +772,1092 @@
       "planActive": "{{plan}}プランが有効になりました。",
       "signInFailed": "ログインできませんでした。",
       "notIndexed": "インデックス作成が終わらないとDazziを開けません。"
+    }
+  },
+  "finderComponents": {
+    "searchRange": "検索範囲",
+    "sidebar": "サイドバー",
+    "pathBar": "パス",
+    "inspectorAside": "インスペクタ",
+    "fileActions": "ファイル操作",
+    "detailActions": "詳細操作",
+    "filesList": "ファイル",
+    "variantColumn": "類似・重複ファイル",
+    "expand": "展開",
+    "collapse": "折りたたむ",
+    "newName": "新しい名前",
+    "indexIncluded": "AI検索インデックスに含まれています",
+    "indexExcluded": "AI検索インデックスから除外されています",
+    "stackToggle": "他のバージョン {{count}} 件 · クリックで展開",
+    "webImage": "Web画像",
+    "image": "画像",
+    "quickLookLabel": "{{name}} をクイックルック",
+    "imageLoadFailed": "画像を読み込めません",
+    "clickToQuickLook": "クリックするとクイックルックで開きます",
+    "sortBy": "{{label}} で並べ替え",
+    "resizeColumn": "{{label}} のサイズを変更",
+    "columnsMenu": "列",
+    "evidenceNotFound": "根拠 {{number}} の情報が見つかりません",
+    "searchTitle": "\"{{query}}\" を検索",
+    "resizeSidebar": "サイドバーのサイズを変更",
+    "resizeInspector": "インスペクタのサイズを変更",
+    "composerPlaceholder": "ファイル・メール・メッセンジャー全体に質問（ファイルのドラッグ＆ドロップ可）",
+    "removeAttachment": "添付を削除",
+    "locationOpenFailed": "\"{{name}}\" の場所を開けませんでした。",
+    "ejected": "\"{{name}}\" を取り出しました。",
+    "ejectFailed": "\"{{name}}\" の取り出しに失敗しました: {{error}}",
+    "indexRefreshFailed": "Dazzi インデックスの更新に失敗しました: {{error}}",
+    "folderCreated": "{{name}} — 新しいフォルダを作成しました",
+    "fileCreated": "{{name}} — 新しいファイルを作成しました",
+    "shareAnchorMissing": "共有シートの表示位置が見つかりませんでした",
+    "tagChangeFailed": "{{name}} — タグを変更できませんでした: {{message}}",
+    "onboardingDemo": {
+      "meetingNotes": "議事録.md"
+    }
+  },
+  "finderState": {
+    "contextMenu": {
+      "quickLook": "クイックルック",
+      "showInEnclosingFolder": "格納先フォルダを表示",
+      "addTag": "「{{name}}」を追加",
+      "removeTag": "「{{name}}」を削除"
+    },
+    "newFileFormats": {
+      "text": "テキストファイル",
+      "markdown": "Markdown 文書",
+      "rtf": "リッチテキスト",
+      "word": "Word 文書",
+      "excel": "Excel スプレッドシート",
+      "powerpoint": "PowerPoint プレゼンテーション",
+      "unknown": "不明なファイル形式です: {{id}}"
+    },
+    "roles": {
+      "jevLatest": "Jev (最新)",
+      "rerankFree": "Nemotron Rerank VL 1B (無料)"
+    },
+    "servicesUnavailable": "この環境ではサービスを実行できません",
+    "workerRestarted": "ファイルサービスが操作中に再起動しました。結果を確認して再試行してください。",
+    "seconds": "{{value}}秒",
+    "evidenceDetail": "関連度 {{percent}}%",
+    "renameEmpty": "名前を入力してください",
+    "renameSlash": "名前に / は使用できません",
+    "renameDuplicate": "同じ名前の項目がすでに存在します",
+    "kindCount": "{{count}}個",
+    "kindSummaryMore": "他{{count}}種",
+    "openWithDefault": "{{name}} (デフォルト)",
+    "openWithOther": "その他…",
+    "source": {
+      "actionsUnavailable": "この環境ではファイル操作を実行できません",
+      "shareUnavailable": "この環境では共有を実行できません",
+      "nothingToUndo": "元に戻す項目がありません",
+      "trashItemNotFound": "ゴミ箱に項目が見つかりません",
+      "indexExcluded": "インデックスから除外",
+      "indexIncluded": "MinSync インデックスに含まれる",
+      "tagsUnavailable": "この環境ではタグを変更できません",
+      "itemNotFound": "項目が見つかりません",
+      "originUnknown": "元の場所が不明です"
+    },
+    "toast": {
+      "trashSingle": "{{name}} — ゴミ箱に移動しました",
+      "putBackSingle": "{{name}} — 元の場所に戻しました",
+      "putBackCount": "{{count}}個の項目を元の場所に戻しました",
+      "emptyTrashDone": "ゴミ箱を空にしました",
+      "emptyTrashFailed": "ゴミ箱を空にできませんでした: {{message}}",
+      "emptyTrashPartial": "{{count}}個の項目を削除しました · {{name}} — 削除できませんでした: {{message}}",
+      "batchDoneCount": "{{count}}個の項目を{{action}}",
+      "batchFailedSingle": "{{name}} — {{reason}}: {{message}}",
+      "batchFailedCount": "{{count}}個の項目を{{reason}} ({{name}}: {{message}})",
+      "batchCombined": "{{done}} · {{failure}}",
+      "batchDone": {
+        "trash": "ゴミ箱に移動しました",
+        "putBack": "元の場所に戻しました",
+        "move": "移動しました",
+        "copy": "コピーしました",
+        "duplicate": "複製しました"
+      },
+      "batchFailed": {
+        "trash": "ゴミ箱に移動できませんでした",
+        "putBack": "元の場所に戻せませんでした",
+        "move": "移動できませんでした",
+        "copy": "コピーできませんでした",
+        "duplicate": "複製できませんでした"
+      }
+    },
+    "history": {
+      "undo": "{{operation}}を元に戻す",
+      "redo": "{{operation}}をやり直す",
+      "failed": "{{label}}に失敗しました: {{name}} — {{message}}{{more}}",
+      "more": "（他{{count}}件）",
+      "op": {
+        "copy": "コピー",
+        "move": "移動",
+        "duplicate": "複製",
+        "rename": "名前の変更",
+        "createFolder": "新規フォルダ",
+        "createFile": "新規ファイル",
+        "trash": "ゴミ箱に移動",
+        "restore": "元の場所に戻す",
+        "extract": "展開",
+        "compress": "圧縮",
+        "generic": "ファイル操作"
+      }
+    },
+    "groups": {
+      "unknownDate": "日付不明",
+      "today": "今日",
+      "yesterday": "昨日",
+      "prev7": "過去7日間",
+      "prev30": "過去30日間",
+      "folder": "フォルダ",
+      "noExtension": "拡張子なし",
+      "zeroKb": "0 KB",
+      "underKb": "1 KB未満",
+      "kbToMb": "1 KB – 1 MB",
+      "mbToGb": "1 MB – 1 GB",
+      "overGb": "1 GB超",
+      "noApplication": "アプリケーションなし",
+      "noTags": "タグなし",
+      "noComments": "コメントなし",
+      "noDimensions": "サイズ情報なし",
+      "noRating": "評価なし",
+      "stars": "星{{count}}つ",
+      "star": "星1つ"
+    }
+  },
+  "main": {
+    "action": {
+      "unsupportedResize": "この形式はサイズ変更に対応していません。",
+      "unsupportedOptimize": "この形式は容量の最適化に対応していません。",
+      "alreadyOptimized": "このファイルはすでに最適化されています。",
+      "unsupportedExtract": "展開できないファイル形式です。",
+      "emptyTarget": "対象が空です。",
+      "singleTargetOnly": "この操作は一度に 1 つの項目のみ対応しています。",
+      "openCancelled": "開くのをキャンセルしました。",
+      "appCannotOpen": "このファイルを開けるアプリではありません。",
+      "openedWithFile": "{{name}} — {{app}} で開きました",
+      "openedWithCount": "{{count}} 個のファイル — {{app}} で開きました",
+      "compressed": "{{name}} — 圧縮しました",
+      "extracted": "{{name}} — 展開しました",
+      "unsupportedConvert": "{{format}} への変換は対応していません。",
+      "converted": "{{name}} — 変換しました",
+      "resized": "{{name}} — サイズを変更しました",
+      "optimized": "{{name}} — 容量を最適化しました",
+      "videoNeedsFfmpeg": "動画の変換には ffmpeg が必要です。",
+      "containerConverted": "{{name}} — コンテナを変換しました",
+      "shareUnsupported": "このプラットフォームはシステム共有に対応していません。"
+    },
+    "indexStatus": {
+      "outside": "Dazzi の検索パス外のファイル",
+      "excluded": "インデックスから除外済み",
+      "parentExcluded": "親フォルダーがインデックスから除外済み",
+      "excludedPending": "除外を保存済み · 次回の更新でインデックスから除外されます",
+      "unsupported": "インデックスに未対応のファイル形式",
+      "included": "MinSync インデックスに含まれています",
+      "parsedPending": "解析済み · MinSync への反映待ち",
+      "skipped": "更新時にスキップ ({{reason}})",
+      "notIndexed": "まだインデックスされていません"
+    },
+    "archive": {
+      "corrupt": "圧縮ファイルが破損しています。",
+      "encrypted": "パスワード保護された圧縮ファイルは展開できません。",
+      "combined": "圧縮ファイルが破損しているか、パスワードで保護されています。",
+      "tooManyEntries": "圧縮ファイルの項目数が多すぎます。",
+      "tooLarge": "圧縮ファイルの展開サイズが大きすぎます。",
+      "tooLargeForEngine": "この形式の圧縮ファイルは大きすぎて展開できません。",
+      "unsupportedFormat": "展開できないファイル形式です。",
+      "lzmaFailed": "LZMA 圧縮に失敗しました。",
+      "lzmaAborted": "LZMA 圧縮処理が中断されました。"
+    },
+    "tags": {
+      "nameEmpty": "タグ名が空です。",
+      "nameNewline": "タグ名に改行は使用できません。",
+      "nameTooLong": "タグ名が長すぎます。",
+      "unreadable": "タグ情報が読み取れない形式です。",
+      "macosOnly": "Finder タグは macOS でのみ使用できます。"
+    },
+    "services": {
+      "macosOnly": "サービスは macOS でのみ使用できます。",
+      "unavailable": "この選択では使用できないサービスです。",
+      "runFailed": "サービスを実行できませんでした。"
+    },
+    "ipc": {
+      "invalidPaths": "ファイルパスが正しくありません。",
+      "unknownAction": "不明なファイル操作です。",
+      "invalidAnchor": "共有位置が正しくありません。",
+      "invalidServiceRequest": "サービスリクエストが正しくありません。"
+    },
+    "dialogs": {
+      "notificationBody": "通知がオンになりました。",
+      "openWithTitle": "このアプリケーションで開く",
+      "openButton": "開く",
+      "chooseFolderTitle": "フォルダを選択",
+      "addButton": "追加",
+      "quitButton": "終了",
+      "continueButton": "続ける",
+      "indexingInProgress": "インデックス作成中です。",
+      "indexingQuitDetail": "終了すると進行が停止します。"
+    },
+    "onboarding": {
+      "apiKeyRequired": "API キーが必要です。",
+      "baseUrlRequired": "サーバーアドレス(ベース URL)が必要です。",
+      "indexingFailed": "インデックス作成に失敗しました。"
+    },
+    "lock": {
+      "scheduledBusy": "バックグラウンド更新を実行中です。終了後に再試行してください。",
+      "otherBusy": "別の更新を実行中です。終了後に再試行してください。"
+    },
+    "activity": {
+      "aborted": "中断されました"
+    },
+    "refresh": {
+      "sourceDetail": "{{state}} · {{count}} 件"
+    },
+    "worker": {
+      "unknownFormat": "不明なファイル形式です: {{format}}",
+      "invalidUrl": "ウェブアドレスが正しくありません。"
+    },
+    "fs": {
+      "restoreTempFailed": "{{message}}(一時名 {{name}} から元に戻せませんでした: {{detail}})",
+      "trashLocationUnknown": "ゴミ箱の場所を特定できません。",
+      "trashItemNotFound": "ゴミ箱に項目が見つかりません: {{name}}",
+      "trashOriginUnknown": "元の場所を特定できません: {{name}}",
+      "notWebUrl": "ウェブアドレスではありません: {{text}}",
+      "renameEmpty": "名前を入力してください。",
+      "renameSeparator": "「{{name}}」という名前にはパス区切り文字を使用できません。",
+      "renameCollision": "「{{name}}」という名前のファイルまたはフォルダーはすでに存在します。"
+    },
+    "embedding": {
+      "profiles": {
+        "nativeQwen3": {
+          "description": "この Mac 上で直接動作する既定の文書理解モデル(1024 次元)。別途サーバーは不要です。"
+        },
+        "runtime": {
+          "label": "Qwen3 Embedding 0.6B (Dazzi ランタイム)",
+          "description": "Dazzi 埋め込みランタイムが loopback 上の llama-server で提供する 1024 次元モデルです。"
+        },
+        "localServer": {
+          "label": "自分のコンピューターの埋め込みサーバー",
+          "description": "loopback で動作する OpenAI 互換の埋め込みサーバーを使用します。モデル・次元・プレフィックスはご自身で指定してください。"
+        }
+      },
+      "errors": {
+        "modelNameEmpty": "埋め込みサーバーのモデル名が空です。",
+        "dimensionPositive": "埋め込みサーバーの次元は正の整数でなければなりません。",
+        "badUrl": "埋め込みサーバーのアドレスが有効な URL ではありません。",
+        "loopbackOnly": "埋め込みサーバーは loopback アドレスでなければなりません(文書はこの Mac から出ません)。",
+        "unknownProfile": "不明な埋め込みプロファイル: {{id}}",
+        "localServerRequired": "埋め込みサーバー情報(id、baseUrl、dimension)が必要です。",
+        "localServerMissing": "埋め込みサーバー情報が必要です。",
+        "httpStatus": "埋め込みサーバーが HTTP {{status}} で応答しました。",
+        "badJson": "埋め込みサーバーの応答を JSON として読み取れませんでした。",
+        "noVector": "埋め込みサーバーがベクトルを返しませんでした。",
+        "dimensionMismatch": "埋め込みサーバーの次元は {{actual}} ですが、{{expected}} と指定されています。",
+        "incompatibleSources": "このモデルに追従できないデータソースがあります: {{ids}}"
+      },
+      "reasons": {
+        "mailcrawlIncompatible": "mailcrawl は組み込みの Qwen3 のみ対応しており、任意の HTTP 埋め込みサーバーは使用できません。",
+        "mailcrawlPropagated": "connector.env に埋め込みプロバイダーを記録します(モデルが変わると mailcrawl が自動的に再インデックスします)。",
+        "obsidianIncompatible": "qmd(obsidian)はローカルの GGUF モデルのみ使用できるため、HTTP 埋め込みサーバーは使用できません。",
+        "obsidianPropagated": "qmd 子プロセスに QMD_EMBED_MODEL を設定し、`qmd embed -f` で再インデックスします。",
+        "discordIncompatible": "このアプリは Dazzi 埋め込みランタイムを loopback で提供できません(公開エクスポートではない)。discrawl に渡すには埋め込みサーバーを選択してください。",
+        "discordPropagated": "Dazzi 管理の discrawl config を書き直し、`discrawl embed --rebuild` で再インデックスします。",
+        "kakaoIncompatible": "lazykatok は独自の組み込みエンベッダー(EmbeddingGemma)を使用しており、Dazzi 共有 config では変更できません(ネイティブ設定が所有)。",
+        "githubGistIncompatible": "GitHubGistSkill は @autorag/librarian の公開エクスポートではないため、アプリからエンベッダーを指定できません(ランタイムゲートウェイプロファイルで固定)。",
+        "clawgalleryNotApplicable": "ClawGallery は画像(VDR)インデックスであり、テキスト埋め込みを使用しません。",
+        "larkNotApplicable": "Lark はリモート API 検索のみを使用し、ローカル埋め込みを拒否します。",
+        "defaultNotApplicable": "このデータソースは独自のキーワード/パースインデックスを使用し、グローバルエンベッダーを使用しません。"
+      },
+      "actions": {
+        "discordConfig": "datasources.<id> が管理する discrawl config.toml"
+      }
+    }
+  },
+  "quickLook": {
+    "window": {
+      "fullscreen": "フルスクリーン",
+      "openWith": "デフォルトのアプリで開く",
+      "open": "開く",
+      "openWithApp": "{{name}}で開く",
+      "cannotOpen": "ファイルを開けませんでした"
+    },
+    "status": {
+      "loading": "読み込み中"
+    },
+    "fallback": {
+      "loading": "読み込み中…",
+      "computing": "計算中…",
+      "copied": "コピーしました",
+      "copy": "コピー",
+      "moreDetails": "詳細情報",
+      "createdAt": "作成日",
+      "location": "場所",
+      "lastModified": "変更日 {{date}}",
+      "revealFinder": "Finderで表示",
+      "revealExplorer": "エクスプローラーで表示",
+      "revealFolder": "フォルダで表示"
+    },
+    "body": {
+      "emptyFile": "空のファイル",
+      "tooLarge": "このファイルは大きすぎるため、内容の代わりに情報を表示します"
+    },
+    "archive": {
+      "extractFailed": "アーカイブを展開できませんでした",
+      "listFailed": "アーカイブの一覧を読み込めませんでした",
+      "tarListFailed": "tarの一覧を読み込めませんでした",
+      "readFailed": "アーカイブを読み込めませんでした",
+      "empty": "空のアーカイブ",
+      "order": "変更日の新しい順"
+    },
+    "folder": {
+      "kind": "フォルダ",
+      "empty": "空のフォルダ"
+    },
+    "contents": {
+      "title": "内容"
+    },
+    "code": {
+      "wrap": "行を折り返す",
+      "copy": "コードをコピー",
+      "lines": "{{count}}行",
+      "truncated": "先頭 {{size}} を表示",
+      "viewMode": "表示",
+      "readFailed": "テキストを読み込めませんでした",
+      "modes": {
+        "desktop": "デスクトップ",
+        "mobile": "モバイル",
+        "source": "ソース"
+      }
+    },
+    "markdown": {
+      "viewMode": "表示",
+      "headings": "見出し {{count}}",
+      "tables": "表 {{count}}",
+      "codeBlocks": "コードブロック {{count}}",
+      "lines": "{{count}}行",
+      "words": "{{count}}語",
+      "modes": {
+        "source": "ソース",
+        "split": "並べて表示",
+        "preview": "レンダリング"
+      }
+    },
+    "documents": {
+      "readFailed": "文書を読み込めませんでした",
+      "openFailed": "文書を開けませんでした",
+      "sheetReadFailed": "シートを読み込めませんでした",
+      "sheetOpenFailed": "シートを開けませんでした",
+      "sheetMissing": "シートがありません",
+      "previous": "前へ",
+      "next": "次へ"
+    },
+    "hwp": {
+      "openFailed": "HWP文書を開けませんでした",
+      "page": "{{count}}ページ",
+      "noPages": "ページがありません"
+    },
+    "iwork": {
+      "slideMissing": "このスライドには画像がありません",
+      "drawFailed": "スライドを描画できませんでした",
+      "noPreview": "この文書にはプレビュー画像がありません",
+      "page": "{{count}}ページ"
+    },
+    "media": {
+      "imageOpenFailed": "画像を開けませんでした",
+      "imageReadFailed": "画像を読み込めませんでした",
+      "fontOpenFailed": "フォントを開けませんでした",
+      "tiffNoPages": "TIFFページがありません",
+      "canvasFailed": "キャンバスを作成できませんでした",
+      "tiffOpenFailed": "TIFFを開けませんでした",
+      "heicNoResult": "HEICの変換結果がありません",
+      "heicOpenFailed": "HEICを開けませんでした",
+      "fontSampleTail": "0123456789 — プレビュー"
+    },
+    "epub": {
+      "readFailed": "書籍を読み込めませんでした",
+      "noText": "本文が見つかりませんでした"
+    },
+    "paged": {
+      "drawFailed": "ページを描画できませんでした",
+      "goToPage": "{{count}}ページへ移動",
+      "zoomOut": "縮小",
+      "zoomIn": "拡大",
+      "rail": "ページプレビュー"
+    },
+    "pdf": {
+      "openFailed": "PDFを開けませんでした"
+    },
+    "pptx": {
+      "openFailed": "プレゼンテーションを開けませんでした",
+      "noSlides": "スライドがありません",
+      "readFailed": "プレゼンテーションを読み込めませんでした",
+      "slideReadFailed": "スライドを読み込めませんでした",
+      "slideRenderFailed": "スライドを表示できません",
+      "image": "画像",
+      "chart": "グラフ",
+      "media": "メディア",
+      "object": "オブジェクト"
+    },
+    "player": {
+      "videoFailed": "動画を再生できませんでした",
+      "audioFailed": "音声を再生できませんでした",
+      "playPause": "再生または一時停止",
+      "muteToggle": "ミュートの切り替え",
+      "volume": "音量",
+      "skipBack": "15秒戻る",
+      "skipForward": "15秒進む",
+      "playbackRate": "再生速度",
+      "loop": "リピート再生",
+      "loopLabel": "リピート",
+      "pip": "ピクチャ・イン・ピクチャ",
+      "position": "再生位置",
+      "waveformPosition": "波形で再生位置を移動",
+      "continueInApp": "デフォルトのアプリで続けて聴く",
+      "continueIn": "{{name}}で続けて聴く",
+      "artist": "アーティスト",
+      "album": "アルバム",
+      "time": "再生時間"
+    },
+    "binary": {
+      "platform": "プラットフォーム",
+      "format": "フォーマット",
+      "appleDiskImage": "Apple ディスクイメージ (UDIF)"
+    },
+    "itemCount": {
+      "zero": "項目なし",
+      "one": "1項目",
+      "many": "{{count}}項目"
+    },
+    "errors": {
+      "unreadableFolder": "このフォルダを読み取る権限がありません",
+      "notShowing": "プレビュー中の項目ではありません",
+      "invalidTarget": "プレビュー要求が正しくありません",
+      "unknownAction": "不明なQuick Look操作です",
+      "changedWhileHashing": "プレビュー項目が変わったため計算を停止しました",
+      "invalidShareAnchor": "共有位置が正しくありません",
+      "invalidCopyText": "コピーする内容が正しくありません",
+      "notAbsolute": "プレビューのパスが正しくありません",
+      "missing": "ファイルが見つかりません",
+      "notFile": "フォルダはプレビューできません"
+    }
+  },
+  "settingsCore": {
+    "common": {
+      "notSet": "未設定",
+      "unknown": "確認できません"
+    },
+    "nav": {
+      "account": "マイアカウント",
+      "plan": "サブスクリプションと使用量",
+      "general": "一般",
+      "ai": "AI モデル",
+      "web": "ウェブ検索",
+      "indexing": "インデックス作成",
+      "scope": "検索範囲",
+      "reading": "文書の読み込み",
+      "duplicates": "重複ファイルの整理",
+      "apps": "すべての接続",
+      "group": {
+        "account": "アカウント",
+        "basic": "基本",
+        "ai": "AI",
+        "search": "検索",
+        "apps": "接続済みアプリ"
+      }
+    },
+    "view": {
+      "navAria": "設定のナビゲーション",
+      "search": "設定を検索",
+      "menuAria": "設定メニュー",
+      "empty": "一致する設定がありません。",
+      "contentAria": "{{name}} の設定"
+    },
+    "general": {
+      "description": "Dazzi の画面と起動方法を設定します。",
+      "screenTitle": "画面",
+      "appearanceName": "画面モード",
+      "appearanceHint": "全画面に同じテーマを適用します。",
+      "appearanceLight": "ライト",
+      "appearanceDark": "ダーク",
+      "appLanguage": "アプリの言語",
+      "appLanguageHint": "メニューと設定で使用する言語です。",
+      "finderTitle": "Finder",
+      "finderDesc": "Mac のファイル閲覧画面の動作です。",
+      "showHiddenFiles": "隠しファイルを表示",
+      "showHiddenFilesHint": "ドット(.)で始まるシステムファイルを Finder に表示します。",
+      "launchTitle": "起動と更新",
+      "launchAtLogin": "ログイン時に自動起動",
+      "launchAtLoginHint": "コンピュータの起動時に Dazzi をバックグラウンドで開始します。",
+      "osMenu": "ファイルの右クリックメニューに追加",
+      "osMenuHint": "Finder(macOS)やエクスプローラー(Windows)でファイルを右クリックすると「Dazzi に質問」と「Dazzi で表示」が表示されます。",
+      "autoUpdates": "更新を自動インストール",
+      "autoUpdatesHint": "新しいバージョンを次回のアプリ起動時に自動で適用します。",
+      "privacyTitle": "プライバシー",
+      "telemetry": "匿名使用統計を送信",
+      "telemetryHint": "文書の内容を除くパフォーマンス情報のみを送信します。",
+      "docLanguagesTitle": "文書の言語",
+      "docLanguagesDesc": "文書を読み込み・検索する際に優先する言語です。",
+      "docLanguagesHint": "複数選択できます。",
+      "osMenuError": "右クリックメニューを設定できませんでした：{{error}}"
+    },
+    "account": {
+      "description": "Dazzi アカウントとログイン状態です。",
+      "profileTitle": "プロフィール",
+      "accountName": "Dazzi アカウント",
+      "accountHint": "ログインはシステムのブラウザで行われ、このアプリはパスワードを受け取りません。",
+      "signingIn": "ブラウザでログイン中…",
+      "signedIn": "ログイン済み",
+      "signedOut": "未ログイン",
+      "email": "メールアドレス",
+      "emailHint": "サーバーが確認したアカウントのメールアドレスです。",
+      "offline": "サーバーに接続できないため、最後に確認した情報を表示しています。",
+      "signOut": "ログアウト",
+      "signIn": "ログイン",
+      "hintEnv": "環境変数 AUTORAG_API_KEY でログインしているため、アプリからログアウトできません。",
+      "hintSignedIn": "この Mac に保存されたキーを削除します。キーは Dazzi ウェブの API キー画面で失効できます。",
+      "hintSignedOut": "ブラウザが開き、承認するとこのアプリに戻ります。",
+      "signInBrowser": "ブラウザでログイン",
+      "managedDesc": "Dazzi アカウントの管理モデルを AI 検索で使用します。",
+      "managedName": "管理モデルを使用",
+      "managedHint": "AI 検索がこのアカウントのモデルを使うように Dazzi 設定を変更します。手動で入力した API キー設定はこの手順で置き換えられます。",
+      "useManaged": "アカウントモデルに設定",
+      "planDescription": "Dazzi のプランと今週の AI 使用量を確認します。",
+      "currentPlan": "現在のプラン",
+      "currentPlanHintSignedIn": "サーバーが確認したプランです。",
+      "currentPlanHintSignedOut": "プランを表示するには先にログインしてください。",
+      "trialing": " · トライアル中",
+      "cancelScheduled": "解約が予約されています。{{date}} まで現在のプランを使用できます。",
+      "pastDue": "支払いに失敗しました。請求ポータルで支払い方法を確認してください。",
+      "inUse": "使用中",
+      "openCheckout": "支払いページを開く",
+      "billingTitle": "請求管理",
+      "billingHint": "支払い方法、領収書、解約・返金は請求ポータルで管理します。",
+      "openPortal": "請求ポータルを開く",
+      "usageTitle": "今週の使用量",
+      "usageName": "AI 使用量",
+      "usageHint": "Dazzi プランのモデルを使うと差し引かれる週間クレジットです。",
+      "usageMeterAria": "週間クレジットの使用量",
+      "usageUnavailable": "使用量を読み込めません",
+      "creditsLeft": "残りクレジット",
+      "creditsLeftHint": "上限に達すると、来週リセットされるまでリクエストが拒否されます。",
+      "requestLimit": "リクエスト上限",
+      "requestLimitHint": "プランごとの毎分リクエスト数です。",
+      "requestsPerMinute": "毎分 {{count}} 回",
+      "plan": {
+        "free": {
+          "price": "無料",
+          "perks": "週 $0.50 クレジット · 毎分 10 回"
+        },
+        "air": {
+          "price": "月 $4",
+          "perks": "週 $1 クレジット · 毎分 60 回"
+        },
+        "pro": {
+          "price": "月 $20",
+          "perks": "週 $5 クレジット · 毎分 240 回"
+        }
+      }
+    },
+    "ai": {
+      "description": "AI サービスを接続し、役割ごとに使うモデルを選びます。",
+      "kind": {
+        "runtime": "ランタイムプロバイダー",
+        "local": "ローカルサーバー",
+        "custom": "追加したサーバー"
+      },
+      "thinking": {
+        "off": "考えない",
+        "offNote": "最速",
+        "low": "低",
+        "medium": "中",
+        "high": "高",
+        "highNote": "精度優先",
+        "max": "最大",
+        "maxNote": "最も遅い"
+      },
+      "thinkingDepth": "思考の深さ",
+      "thinkingDepthFor": "{{label}} の思考の深さ",
+      "sameAsAnswer": "回答モデルと同じ",
+      "decompDefault": "デフォルト (OpenRouter Qwen3.7 Flash)",
+      "defaultModel": "デフォルト (Qwen3.7 Flash)",
+      "off": "使用しない",
+      "role": {
+        "answer": "回答",
+        "decomposition": "質問の分割",
+        "rerank": "並べ替え",
+        "jev": "判断"
+      },
+      "usedFor": "{{roles}} に使用中",
+      "subscriptionAccount": "サブスクリプションアカウント",
+      "providerMenu": "{{name}} メニュー",
+      "noServices": "まだ接続されたサービスがありません。以下から接続してください。",
+      "connectService": "サービスを接続",
+      "servicesTitle": "接続済みサービス",
+      "servicesDesc": "接続したサービスのモデルを以下の役割で選べます。",
+      "rolesTitle": "役割ごとのモデル",
+      "rolesDesc": "Dazzi は作業を役割ごとに分けて処理します。役割ごとに適したモデルを選んでください。",
+      "subSearchAssistant": "検索補助",
+      "answerModel": "回答モデル",
+      "answerHint": "質問に回答し、文書を要約します。",
+      "decompositionHint": "長い質問を複数の検索語に分割します。速くて安いモデルが適しています。",
+      "jevModel": "判断モデル (Jev)",
+      "jevHint": "そのまま回答するか、自分の資料を検索するかを判断します。",
+      "rerankModel": "検索結果の並べ替え",
+      "rerankHint": "関連性の高い結果を上位に移動します。回答が少し遅くなることがあります。",
+      "subDocUnderstanding": "文書の理解",
+      "selectRole": "{{label}} を選択",
+      "login": {
+        "starting": "接続を開始します…",
+        "completeInBrowser": "ブラウザでログインを完了してください。",
+        "enterCode": "ブラウザでコードを入力してください。",
+        "completed": "{{name}} を接続しました。",
+        "signInBrowser": "ブラウザで Dazzi にログインしてください…",
+        "signedIn": "Dazzi にログインしました。",
+        "notSignedIn": "ログインしていません。"
+      },
+      "disconnect": {
+        "envLocked": "環境変数 AUTORAG_API_KEY でログインしているため、アプリからログアウトできません。該当の環境変数を自分で削除してください。",
+        "title": "{{name}} を切断しますか？",
+        "body": "保存された認証情報を削除し、一覧から除外します。このサービスを使っていた役割は新しいモデルを選ぶ必要がある場合があります。",
+        "action": "切断"
+      },
+      "disconnected": "{{name}} を切断しました。",
+      "envKeyCannotRemove": "{{name}} のキーは OS の環境変数から提供されているため、アプリから解除できません。該当の環境変数を自分で削除してください。",
+      "testing": "{{name}}: 確認中…",
+      "testOk": "接続成功",
+      "testFail": "接続失敗",
+      "discoverFound": "{{name}}: {{count}} 個のモデルを検出 ({{protocol}})",
+      "discoverFailed": "{{name}}: {{error}}",
+      "discoverFailWord": "検出失敗",
+      "menu": {
+        "dazziPlan": "Dazzi プラン",
+        "apiKeys": "API キー",
+        "localMachine": "このコンピュータ",
+        "signInDazzi": "Dazzi アカウントでログイン",
+        "addCustom": "追加 (OpenAI 互換)",
+        "addLocalServer": "ローカルサーバーを追加"
+      },
+      "providerNotFound": "プロバイダーが見つかりません。",
+      "provider": {
+        "edit": "接続情報を編集",
+        "test": "接続を確認",
+        "discover": "モデルを再検索"
+      },
+      "searchModels": "モデルを検索",
+      "emptyRoleModels": "この役割で使える対応モデルがありません。先に該当のサービスを接続してください。",
+      "emptyModels": "接続済みサービスから利用できるモデルがありません。",
+      "connect": {
+        "title": "{{name}} を接続",
+        "body": "{{name}} で発行した API キーを貼り付けてください。キーは暗号化して保管し、再度表示しません。",
+        "apiKeyLabel": "API キー ({{env}})",
+        "keyPlaceholder": "キーを貼り付け",
+        "saved": "{{name}} のキーを保存しました。",
+        "action": "接続"
+      },
+      "server": {
+        "defaultLocal": "ローカルサーバー",
+        "defaultCustom": "社内ゲートウェイ",
+        "titleLocal": "ローカルサーバーを接続",
+        "titleCustom": "OpenAI 互換サービスを追加",
+        "titleEdit": "接続情報を編集",
+        "bodyLocal": "Ollama、LM Studio のようにこの Mac で実行中のサーバーのみ接続できます。",
+        "bodyCustom": "社内ゲートウェイや OpenAI 互換サーバーを接続します。キーは暗号化して保管します。",
+        "name": "名前",
+        "baseUrl": "サーバーアドレス",
+        "apiKeyOptional": "API キー (任意)",
+        "optionalPlaceholder": "任意",
+        "saved": "{{name}} を保存しました。"
+      },
+      "loginModal": {
+        "openManually": "ブラウザが開かない場合は、以下のアドレスを直接開いてください。",
+        "openBrowser": "ブラウザを開く",
+        "enterCode": "以下のコードをブラウザに入力してください。",
+        "submit": "送信"
+      },
+      "auto": "自動",
+      "defaultValue": "デフォルト"
+    },
+    "embedding": {
+      "errorModelRequired": "埋め込みサーバーのモデル名を入力してください。",
+      "errorDimension": "埋め込みサーバーの次元は正の整数でなければなりません。",
+      "title": "文書理解モデル",
+      "hint": "文書の意味を分析します。文書の内容はこの Mac の外に出ません。",
+      "body": "文書の意味を分析する埋め込みモデルです。Dazzi ランタイムとローカルサーバーからのみ選択でき、文書の内容はこの Mac の外に出ません。",
+      "dimension": "{{count}} 次元",
+      "modelName": "モデル名",
+      "baseUrl": "サーバーアドレス",
+      "dimensionLabel": "次元",
+      "modelPlaceholder": "例: nomic-embed-text",
+      "dimensionPlaceholder": "例: 768",
+      "incompatibleNote": "{{count}} 個のデータソースがこのプロファイルと互換性がありません。続行すると、該当ソースはそのままにして残りのみ変更されます。",
+      "acknowledge": "互換性のないソースにも適用",
+      "applied": "適用しました。",
+      "notApplied": "適用されませんでした。",
+      "written": "config {{count}} 件の項目を記録",
+      "rebuild": "{{count}} 個のソースを再インデックス",
+      "preview": "計画を確認",
+      "apply": "適用"
+    },
+    "language": {
+      "remove": "{{name}} を削除",
+      "placeholder": "言語を選択…",
+      "search": "{{name}} を検索",
+      "openList": "{{name}} のリストを開く",
+      "noMatch": "一致する言語がありません。",
+      "custom": "手動設定",
+      "inherited": "上位の言語設定を継承",
+      "resetDefault": "デフォルト"
+    },
+    "chips": {
+      "add": "+ 追加",
+      "remove": "{{item}} を削除"
+    }
+  },
+  "settingsSources": {
+    "templates": {
+      "telegram": {
+        "summary": "telecrawl アーカイブから Telegram メッセージを検索します。"
+      },
+      "whatsapp": {
+        "summary": "wacrawl アーカイブから WhatsApp メッセージを検索します。"
+      },
+      "slack": {
+        "summary": "slacrawl アーカイブから Slack メッセージを検索します。"
+      },
+      "discord": {
+        "summary": "discrawl アーカイブから Discord メッセージを検索します。"
+      },
+      "clawgallery": {
+        "summary": "clawgallery 画像アーカイブを検索します。"
+      },
+      "notion": {
+        "summary": "notcrawl アーカイブから Notion ドキュメントを検索します。"
+      },
+      "lark": {
+        "summary": "lark-cli で Lark のメッセージとドキュメントを検索します。"
+      },
+      "kakao": {
+        "summary": "lazykatok アーカイブから KakaoTalk メッセージを検索します。"
+      },
+      "github": {
+        "summary": "GitHub の issue と PR を REST API でインデックスします。"
+      },
+      "githubGist": {
+        "summary": "認証済みアカウントの GitHub Gist をインデックスします。"
+      },
+      "cloudDrive": {
+        "summary": "rclone リモートを増分ミラーリングしてインデックスします。"
+      },
+      "mailExport": {
+        "summary": "ローカルの .eml / .mbox アーカイブをインデックスします。"
+      },
+      "mailcrawl": {
+        "summary": "mailcrawl アーカイブからメールを検索します。"
+      },
+      "obsidian": {
+        "summary": "qmd で Obsidian ボルトを検索します。"
+      },
+      "rss": {
+        "summary": "RSS 2.0 / Atom フィードをポーリングしてインデックスします。"
+      },
+      "spotlight": {
+        "summary": "macOS Spotlight(mdfind)クエリでローカルファイルをインデックスします。"
+      }
+    },
+    "groups": {
+      "advancedRuntime": "詳細 · 実行環境",
+      "advanced": "詳細",
+      "contentScope": "コンテンツ範囲",
+      "parserLanguages": "パーサー（ドキュメント言語）",
+      "telegram": "Telegram (telecrawl)",
+      "whatsapp": "WhatsApp (wacrawl)",
+      "slack": "Slack (slacrawl)",
+      "discord": "Discord (discrawl)",
+      "clawGallery": "ClawGallery",
+      "notion": "Notion (notcrawl)",
+      "lark": "Lark (lark-cli)",
+      "kakao": "KakaoTalk (lazykatok)",
+      "github": "GitHub",
+      "githubGist": "GitHub Gist",
+      "cloudDrive": "Cloud Drive (rclone)",
+      "mailExport": "Mail Export",
+      "mail": "Mail",
+      "obsidian": "Obsidian (qmd)",
+      "rss": "RSS / News",
+      "spotlight": "Spotlight (mdfind)"
+    },
+    "fields": {
+      "binaryPath": "実行ファイルのパス",
+      "databasePath": "データベースのパス",
+      "sourcePath": "ソースのパス",
+      "configPath": "設定ファイルのパス",
+      "syncSource": "同期ソース",
+      "searchTimeoutMs": "検索タイムアウト (ms)",
+      "indexTimeoutMs": "インデックス タイムアウト (ms)",
+      "maxBufferBytes": "最大バッファ (bytes)",
+      "env": "環境変数",
+      "workspaceId": "ワークスペース id",
+      "guildId": "ギルド id",
+      "defaultMode": "デフォルトの検索モード",
+      "embeddingProvider": "埋め込みプロバイダー",
+      "embeddingModel": "埋め込みモデル",
+      "embedLimit": "埋め込みの最大数",
+      "root": "ルートパス",
+      "workspacePath": "作業ディレクトリ",
+      "timeoutMs": "タイムアウト (ms)",
+      "vaultPath": "アーカイブのパス",
+      "configDir": "設定ディレクトリ",
+      "vdrBackend": "VDR バックエンド",
+      "syncVisual": "ビジュアルデータを同期",
+      "embedderBaseUrl": "埋め込み base URL",
+      "dataDir": "データディレクトリ",
+      "sourceAdapter": "ソースアダプター",
+      "repos": "リポジトリ (owner/repo)",
+      "tokenEnv": "トークン環境変数名",
+      "baseUrl": "REST base URL",
+      "maxPages": "最大ページ数",
+      "maxDocuments": "最大ドキュメント数",
+      "ghCliFallback": "gh CLI トークンにフォールバック",
+      "statePath": "増分カーソルのパス",
+      "maxGists": "最大 Gist 数",
+      "provider": "プロバイダー",
+      "remote": "リモート名",
+      "rcloneConfigPath": "rclone 設定のパス",
+      "extensions": "含める拡張子",
+      "includeGlob": "含める glob",
+      "excludeGlob": "除外する glob",
+      "exportFormats": "エクスポート形式",
+      "maxBytesPerFile": "ファイルあたりの最大バイト数",
+      "maxContentChars": "ドキュメントあたりの最大文字数",
+      "concurrency": "同時実行数",
+      "bandwidthLimit": "帯域幅制限",
+      "dryRun": "ドライラン",
+      "docLanguages": "ドキュメント言語",
+      "kordocOcr": "kordoc OCR",
+      "rcloneBinaryPath": "rclone 実行ファイルのパス",
+      "mailPaths": "メールファイル・ディレクトリのパス",
+      "account": "アカウント",
+      "mailbox": "メールボックス",
+      "backend": "バックエンド",
+      "source": "ソース",
+      "fixture": "フィクスチャ",
+      "himalayaConfig": "himalaya 設定",
+      "qmdBinaryPath": "qmd 実行ファイルのパス",
+      "feeds": "フィード",
+      "maxItemsPerFeed": "フィードあたりの最大項目数",
+      "queries": "クエリ",
+      "onlyIn": "検索ディレクトリ (-onlyin)",
+      "maxResultsPerQuery": "クエリあたりの最大結果数",
+      "defaultOption": "(デフォルト)",
+      "envAria": "環境変数 (JSON)",
+      "envEditorHint": "子プロセスに注入する環境変数です。秘密のトークンやパスワードはここではなく OS の環境変数に置いてください。",
+      "hint": {
+        "binaryPathEmpty": "空欄にすると PATH から探します。",
+        "nativeConfig": "自分で指定したネイティブ設定は Dazzi が書き換えません。",
+        "env": "子プロセスに注入する環境変数です。秘密の値は OS の環境変数に置いてください。",
+        "workspace": "slacrawl の検索はワークスペースを指定しないと結果が出ません。",
+        "embeddingProvider": "discrawl のネイティブ設定で使うプロバイダー。",
+        "embeddingModel": "discrawl のネイティブ設定で使うモデル。",
+        "envSimple": "秘密の値は OS の環境変数に置いてください。",
+        "defaultOn": "デフォルト: オン。",
+        "defaultOff": "デフォルト: オフ。",
+        "tokenEnv": "トークンそのものではなく、トークンが入った環境変数の名前です。",
+        "rcloneConfig": "自分で指定した rclone.conf は読み取り専用でのみ使います。"
+      },
+      "envError": {
+        "object": "環境変数は JSON オブジェクトでなければなりません。",
+        "string": "'{{name}}' の値は文字列でなければなりません。",
+        "secret": "'{{name}}' の値が平文の秘密情報に見えるため保存を拒否します。OS の環境変数に移してください。",
+        "json": "有効な JSON ではありません。"
+      },
+      "list": {
+        "removeItem": "項目を削除",
+        "addItem": "項目を追加",
+        "addLabel": "+ 項目を追加",
+        "itemAt": "{{label}} {{index}}",
+        "removeItemAt": "{{label}} {{index}} を削除",
+        "addItemWith": "{{label}} を追加"
+      },
+      "feedsAria": {
+        "urlAria": "フィード URL {{index}}",
+        "categoryAria": "フィードカテゴリ {{index}}",
+        "removeAt": "フィード {{index}} を削除",
+        "addAria": "フィードを追加",
+        "addLabel": "+ フィードを追加"
+      }
+    },
+    "cadence": {
+      "min5": "5分",
+      "min15": "15分",
+      "min30": "30分",
+      "hour1": "1時間",
+      "hour3": "3時間",
+      "hour6": "6時間",
+      "hour12": "12時間",
+      "day1": "1日"
+    },
+    "units": {
+      "message": "メッセージ",
+      "document": "ドキュメント",
+      "image": "画像"
+    },
+    "common": {
+      "manual": "手動",
+      "itemNoun": "項目",
+      "off": "オフ",
+      "inUse": "使用中",
+      "syncing": "更新中…",
+      "justNow": "たった今",
+      "minutesAgo": "{{count}}分前",
+      "hoursAgo": "{{count}}時間前",
+      "daysAgo": "{{count}}日前",
+      "autoOk": "自動 {{ago}} 成功",
+      "autoFail": "自動 {{ago}} 失敗"
+    },
+    "meta": {
+      "folders": "フォルダ {{count}}個",
+      "chunkCount": "{{noun}} {{count}}個",
+      "noDocsYet": "まだ読み込んだドキュメントなし",
+      "notFetchedYet": "まだ内容を取得していません",
+      "importedNone": "取り込んだ{{noun}}なし",
+      "liveQuery": "検索時に都度照会",
+      "appNeeds": "{{name}} デスクトップアプリが必要"
+    },
+    "indexing": {
+      "title": "インデックス",
+      "desc": "検索対象のフォルダと接続済みアプリの内容が最新かを確認し、変わった部分だけを再取得します。",
+      "progress": "進行状況",
+      "refreshStatus": "更新状況",
+      "localFolder": "ローカルフォルダ",
+      "localIntervalAria": "ローカルフォルダの更新間隔",
+      "refreshLocalAria": "ローカルフォルダを今すぐ更新",
+      "refreshTitle": "今すぐ更新",
+      "rowIntervalAria": "{{id}} の更新間隔",
+      "rowRefreshAria": "{{id}} を今すぐ更新",
+      "rowRefreshTitle": "今すぐ更新",
+      "localUpdating": "更新中…",
+      "empty": "接続済みのデータソースがありません。「接続済みアプリ」で追加してください。",
+      "footer": "変更されたファイルとメッセージだけを読み直します。初めて接続したアプリは全体を取得します。",
+      "syncAll": "すべて今すぐ更新",
+      "localRefreshName": "ローカルフォルダを更新",
+      "localRefreshHint": "検索フォルダのドキュメントを読み直して検索インデックスを更新します。変更されたドキュメントのみ処理します。",
+      "localRefreshButton": "今すぐ更新",
+      "scanned": "スキャン {{scanned}} · 記録 {{written}} · 削除 {{deleted}} · スキップ {{skipped}}",
+      "diagnostics": " · 診断 {{count}}件",
+      "scheduleUnsupported": "このコンピュータではアプリを閉じている間の自動更新に対応していません。",
+      "scheduleRegisterFailed": "自動更新を登録できませんでした: {{error}}",
+      "scheduleNotRegistered": "自動更新がまだ登録されていません。間隔をもう一度選ぶと登録します。",
+      "scheduleConflicts": "このコンピュータには Dazzi を別途更新する定期タスクが既にあります（{{list}}）。同じフォルダを二重に処理しないよう、片方だけを使うことをおすすめします。",
+      "scheduleActive": "アプリを閉じていても {{minutes}}分ごとに確認し、間隔が来た項目だけを更新します。",
+      "scheduleLastCheck": "最終確認 {{ago}}。",
+      "scheduleNever": "まだ実行されたことがありません。"
+    },
+    "apps": {
+      "title": "接続済みアプリ",
+      "desc": "メッセンジャー、メール、クラウドの資料を Dazzi でまとめて検索します。",
+      "myConnections": "自分の接続",
+      "groups": {
+        "messengers": "メッセンジャー",
+        "docsNotes": "ドキュメント・ノート",
+        "mail": "メール",
+        "cloudDev": "クラウド・開発",
+        "newsOther": "ニュース・その他"
+      },
+      "empty": "接続済みのアプリがありません。下から追加してください。",
+      "connectApps": "アプリを接続",
+      "connectAppsDesc": "追加するアプリを選んでください。",
+      "connected": "接続済み",
+      "connect": "接続",
+      "promptTitle": "{{name}} を接続",
+      "promptDesc": "接続 ID を決めて追加します。空欄にするとテンプレート名を使います。",
+      "promptLabel": "接続 ID",
+      "promptConfirm": "接続を追加"
+    },
+    "sourceDetail": {
+      "fallbackSummary": "この接続の設定を管理します。",
+      "statusSection": "接続状態",
+      "enabledName": "有効",
+      "enabledHint": "オフにすると、この接続を検索から一時的に除外します。",
+      "appRow": "{{name}} デスクトップアプリ",
+      "appHintMissing": "{{name}} の内容を取り込むには、この Mac に {{name}} アプリが必要です。",
+      "appHintInstalled": "この Mac の {{name}} アプリから内容を取り込みます。",
+      "appDownload": "{{name}} をダウンロード",
+      "appNeeded": "必要",
+      "appInstalled": "インストール済み",
+      "refreshName": "更新",
+      "refreshLast": "最終更新 {{date}}",
+      "refreshNever": "まだ内容を取得していません。",
+      "stateNone": "状態なし",
+      "intervalName": "更新間隔",
+      "intervalHint": "アプリを閉じていても、コンピュータが決まった間隔で新しい内容を取得します。「手動」にすると自分で押したときだけ取得します。",
+      "generalSection": "基本設定",
+      "descName": "AI に伝える説明",
+      "descHint": "この接続をいつ参照するとよいかを書いてください。",
+      "descAria": "説明",
+      "templateSection": "{{label}} の設定",
+      "removeSection": "接続を解除",
+      "removeHint": "Dazzi の検索からのみ削除され、元のアプリのデータは消えません。",
+      "confirmTitle": "接続を解除しますか？",
+      "confirmBody": "'{{alias}}' 接続を Dazzi の検索から削除します。元のアプリのデータは消えません。"
+    },
+    "scope": {
+      "title": "検索範囲",
+      "desc": "Dazzi が読み取って検索するフォルダと除外する項目を決めます。",
+      "foldersTitle": "検索するフォルダ",
+      "foldersDesc": "これらのフォルダの内容を AI 検索に含めます。",
+      "folderName": "検索フォルダ",
+      "folderHint": "設定したフォルダのパスを直接入力して追加・削除します。",
+      "addFolder": "フォルダを追加",
+      "emptyFolderNote": "検索フォルダがまだありません。追加しない場合はデフォルトの検索範囲を使います。",
+      "excludeTitle": "除外する項目",
+      "excludeDesc": "検索しないフォルダとファイルです。",
+      "excludeNote": "開発用フォルダ（{{folders}}）とドットで始まるすべてのフォルダ（.idea、.vscode、.cache など）は自動的に除外されています。",
+      "excludeList": "除外リスト",
+      "excludeListHint": "名前が一致するフォルダ・ファイルをさらに除外します。",
+      "fileScopeTitle": "ファイルの対象範囲",
+      "autoWatch": "変更の自動検出",
+      "autoWatchHintOff": "ファイル検索がオフのため使用できません。",
+      "autoWatchHintOn": "ファイル名検索の一覧をファイルが変わったときに更新します。ドキュメント内容のインデックスはインデックス画面で手動更新します。",
+      "addFolderTitle": "検索フォルダを追加",
+      "addItemTitle": "除外項目を追加",
+      "addFolderDesc": "検索に含めるフォルダのパスを入力してください。",
+      "addItemDesc": "検索から除外するフォルダ・ファイル名を入力してください。",
+      "folderPath": "フォルダのパス",
+      "item": "項目",
+      "addFolderPlaceholder": "例: ~/Documents",
+      "addItemPlaceholder": "例: node_modules",
+      "confirmAdd": "追加",
+      "addChip": "+ 追加"
+    },
+    "web": {
+      "title": "ウェブ検索",
+      "desc": "最新情報が必要な質問に、インターネット検索の結果を回答に使います。",
+      "useSection": "ウェブ検索を使う",
+      "useHint": "質問が検索サービスに送信される場合があります。",
+      "providerName": "検索サービス",
+      "providerHintOn": "デフォルトは自動選択です。",
+      "providerHintOff": "ウェブ検索をオンにすると選択できます。",
+      "auto": "自動選択",
+      "fetchName": "ウェブページの内容を読む",
+      "fetchHintOn": "検索結果リンクの本文を回答に参照します。",
+      "fetchHintOff": "ウェブ検索がオフです。"
+    },
+    "reading": {
+      "title": "ドキュメントの読み取り",
+      "desc": "ドキュメントを読み取り検索するときに優先する言語を設定します。",
+      "sectionTitle": "ドキュメント言語",
+      "sectionDesc": "ドキュメントの内容を読み取り検索するときに優先する言語です。",
+      "langHint": "複数選択できます。"
+    },
+    "duplicates": {
+      "title": "重複ファイルの整理",
+      "desc": "検索結果に同じ内容が繰り返し現れないように整理します。",
+      "section": "検索結果の整理",
+      "exactName": "完全に同じファイルは1つだけ",
+      "exactHint": "内容が同じファイルは最も新しいものだけを表示します。",
+      "versionsName": "類似バージョンをまとめる",
+      "versionsHint": "報告書_最終、報告書_最終2 のように関連ファイルをまとめて表示します。",
+      "intervalName": "チェック間隔",
+      "intervalHint": "ファイルの変化を再確認する間隔です。"
     }
   }
 }

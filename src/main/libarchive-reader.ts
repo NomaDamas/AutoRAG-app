@@ -11,6 +11,7 @@
 
 import { stat } from "node:fs/promises";
 import { Worker } from "node:worker_threads";
+import { t } from "../shared/i18n/core";
 import { ArchiveError } from "./archive-guard.mjs";
 import { type ArchiveLimits } from "./archive-common";
 
@@ -21,7 +22,7 @@ interface WorkerReply {
 }
 
 /** The fallback when the engine traps instead of reporting: a message covering both causes. */
-const COMBINED_MESSAGE = "압축 파일이 손상되었거나 암호로 보호되어 있습니다";
+const combinedMessage = (): string => t("main.archive.combined");
 
 /**
  * Extract `sourcePath` into `destDir` on a worker thread. Throws
@@ -31,7 +32,7 @@ const COMBINED_MESSAGE = "압축 파일이 손상되었거나 암호로 보호�
 export async function extractWithLibarchive(sourcePath: string, destDir: string, limits: ArchiveLimits): Promise<void> {
 	const size = (await stat(sourcePath)).size;
 	if (size > limits.maxEngineBytes) {
-		throw new ArchiveError("이 형식의 압축 파일은 너무 커서 풀 수 없습니다");
+		throw new ArchiveError(t("main.archive.tooLargeForEngine"));
 	}
 	await new Promise<void>((resolve, reject) => {
 		const worker = new Worker(new URL("./archive-worker.mjs", import.meta.url), {
@@ -42,10 +43,10 @@ export async function extractWithLibarchive(sourcePath: string, destDir: string,
 			if (error === null) resolve();
 			else reject(error);
 		};
-		worker.once("message", (reply: WorkerReply) => settle(reply.ok ? null : new ArchiveError(reply.message ?? COMBINED_MESSAGE)));
-		worker.once("error", () => settle(new ArchiveError(COMBINED_MESSAGE)));
+		worker.once("message", (reply: WorkerReply) => settle(reply.ok ? null : new ArchiveError(reply.message ?? combinedMessage())));
+		worker.once("error", () => settle(new ArchiveError(combinedMessage())));
 		worker.once("exit", (code) => {
-			if (code !== 0) settle(new ArchiveError(COMBINED_MESSAGE));
+			if (code !== 0) settle(new ArchiveError(combinedMessage()));
 		});
 	});
 }

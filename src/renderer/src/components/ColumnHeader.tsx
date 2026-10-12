@@ -136,7 +136,7 @@ export function ColumnHeader({
 										"col-header__sort flex items-center gap-4 w-full min-w-0 h-full p-0 pr-10 border-0 bg-transparent text-badge font-medium text-left whitespace-nowrap",
 										active ? "text-ink font-semibold" : "text-inherit hover:text-ink",
 									].join(" ")}
-									title={`Sort by ${getColumnLabel(option.key, option.label)}`}
+									title={t("finderComponents.sortBy", { label: getColumnLabel(option.key, option.label) })}
 									aria-sort={active ? (descending ? "descending" : "ascending") : "none"}
 									onClick={() => onSort(sortKey)}
 								>
@@ -158,7 +158,7 @@ export function ColumnHeader({
 								<span
 									className="col-grip absolute -right-4 top-0 w-8 h-full cursor-col-resize"
 									role="separator"
-									aria-label={`Resize ${getColumnLabel(option.key, option.label)}`}
+									aria-label={t("finderComponents.resizeColumn", { label: getColumnLabel(option.key, option.label) })}
 									onPointerDown={startResize(option.key)}
 									onPointerMove={moveResize}
 									onPointerUp={endResize}
@@ -174,7 +174,7 @@ export function ColumnHeader({
 					ref={menuRef}
 					className="col-menu fixed z-[80] w-max p-4 bg-window border border-border rounded-10 shadow-menu"
 					role="menu"
-					aria-label="Columns"
+					aria-label={t("finderComponents.columnsMenu")}
 					style={{ left: menu.x, top: menu.y }}
 					onContextMenu={(event) => event.preventDefault()}
 				>
@@ -218,7 +218,7 @@ export function ColumnHeader({
 							setMenu(null);
 						}}
 					>
-						{t("finder.columns.reset", "Use Default Columns")}
+						{t("finder.columns.reset")}
 					</button>
 				</div>
 			) : null}

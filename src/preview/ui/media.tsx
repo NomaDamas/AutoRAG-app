@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactElement } from "react";
+import { useTranslation } from "react-i18next";
 import * as UTIF from "utif";
 import { previewStreamUrl, type PreviewDocument } from "../shared/contract";
 import { FallbackView, Status } from "./fallback";
@@ -10,12 +11,14 @@ function copyBytes(bytes: Uint8Array): Uint8Array<ArrayBuffer> {
 }
 
 export function ImageView({ file }: { readonly file: PreviewDocument }): ReactElement {
+	const { t } = useTranslation();
 	const [failed, setFailed] = useState(false);
-	if (failed) return <FallbackView file={file} note="이미지를 열 수 없습니다" />;
+	if (failed) return <FallbackView file={file} note={t("quickLook.media.imageOpenFailed")} />;
 	return <img className="ql__image block max-w-full max-h-full min-h-0 object-contain" alt="" decoding="async" src={previewStreamUrl(file.path)} onError={() => setFailed(true)} />;
 }
 
 export function FontView({ file }: { readonly file: PreviewDocument }): ReactElement {
+	const { t } = useTranslation();
 	const [ready, setReady] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const url = previewStreamUrl(file.path);
@@ -31,7 +34,7 @@ export function FontView({ file }: { readonly file: PreviewDocument }): ReactEle
 			})
 			.catch((caught: unknown) => {
 				if (cancelled) return;
-				setError(caught instanceof Error ? caught.message : "글꼴을 열 수 없습니다");
+				setError(caught instanceof Error ? caught.message : t("quickLook.media.fontOpenFailed"));
 			});
 		return () => {
 			cancelled = true;
@@ -39,17 +42,18 @@ export function FontView({ file }: { readonly file: PreviewDocument }): ReactEle
 		};
 	}, [url]);
 	if (error !== null) return <FallbackView file={file} note={error} />;
-	if (!ready) return <Status>불러오는 중</Status>;
+	if (!ready) return <Status>{t("quickLook.status.loading")}</Status>;
 	return (
 		<div className="ql__font grid gap-12 p-24 bg-window" style={{ fontFamily: "QuickLookSample, sans-serif" }}>
 			<div style={{ fontSize: 42 }}>가나다 Abc 123</div>
 			<div style={{ fontSize: 24 }}>The quick brown fox jumps over the lazy dog.</div>
-			<div style={{ fontSize: 16 }}>0123456789 — 미리보기</div>
+			<div style={{ fontSize: 16 }}>{t("quickLook.media.fontSampleTail")}</div>
 		</div>
 	);
 }
 
 export function TiffView({ file }: { readonly file: PreviewDocument }): ReactElement {
+	const { t } = useTranslation();
 	const bytes = file.bytes;
 	const [url, setUrl] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
@@ -61,7 +65,7 @@ export function TiffView({ file }: { readonly file: PreviewDocument }): ReactEle
 			const pages = UTIF.decode(bytes);
 			const page = pages[0];
 			if (page === undefined) {
-				setError("TIFF 페이지가 없습니다");
+				setError(t("quickLook.media.tiffNoPages"));
 				return;
 			}
 			UTIF.decodeImage(bytes, page);
@@ -71,7 +75,7 @@ export function TiffView({ file }: { readonly file: PreviewDocument }): ReactEle
 			canvas.height = page.height;
 			const context = canvas.getContext("2d");
 			if (context === null) {
-				setError("캔버스를 만들지 못했습니다");
+				setError(t("quickLook.media.canvasFailed"));
 				return;
 			}
 			const image = context.createImageData(page.width, page.height);
@@ -83,20 +87,21 @@ export function TiffView({ file }: { readonly file: PreviewDocument }): ReactEle
 				setUrl(current);
 			});
 		} catch (caught) {
-			setError(caught instanceof Error ? caught.message : "TIFF를 열 수 없습니다");
+			setError(caught instanceof Error ? caught.message : t("quickLook.media.tiffOpenFailed"));
 		}
 		return () => {
 			cancelled = true;
 			if (current !== null) URL.revokeObjectURL(current);
 		};
 	}, [bytes]);
-	if (bytes === null) return <FallbackView file={file} note="이미지를 읽지 못했습니다" />;
+	if (bytes === null) return <FallbackView file={file} note={t("quickLook.media.imageReadFailed")} />;
 	if (error !== null) return <FallbackView file={file} note={error} />;
-	if (url === null) return <Status>불러오는 중</Status>;
+	if (url === null) return <Status>{t("quickLook.status.loading")}</Status>;
 	return <img className="ql__image block max-w-full max-h-full min-h-0 object-contain" alt="" src={url} />;
 }
 
 export function HeicView({ file }: { readonly file: PreviewDocument }): ReactElement {
+	const { t } = useTranslation();
 	const bytes = file.bytes;
 	const [url, setUrl] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
@@ -110,7 +115,7 @@ export function HeicView({ file }: { readonly file: PreviewDocument }): ReactEle
 				if (cancelled) return;
 				const blob = converted instanceof Blob ? converted : converted[0];
 				if (blob === undefined) {
-					setError("HEIC 변환 결과가 없습니다");
+					setError(t("quickLook.media.heicNoResult"));
 					return;
 				}
 				current = URL.createObjectURL(blob);
@@ -118,15 +123,15 @@ export function HeicView({ file }: { readonly file: PreviewDocument }): ReactEle
 			})
 			.catch((caught: unknown) => {
 				if (cancelled) return;
-				setError(caught instanceof Error ? caught.message : "HEIC를 열 수 없습니다");
+				setError(caught instanceof Error ? caught.message : t("quickLook.media.heicOpenFailed"));
 			});
 		return () => {
 			cancelled = true;
 			if (current !== null) URL.revokeObjectURL(current);
 		};
 	}, [bytes]);
-	if (bytes === null) return <FallbackView file={file} note="이미지를 읽지 못했습니다" />;
+	if (bytes === null) return <FallbackView file={file} note={t("quickLook.media.imageReadFailed")} />;
 	if (error !== null) return <FallbackView file={file} note={error} />;
-	if (url === null) return <Status>불러오는 중</Status>;
+	if (url === null) return <Status>{t("quickLook.status.loading")}</Status>;
 	return <img className="ql__image block max-w-full max-h-full min-h-0 object-contain" alt="" src={url} />;
 }

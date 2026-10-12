@@ -1,4 +1,5 @@
 import type { ReactElement } from "react";
+import { useTranslation } from "react-i18next";
 import { assertNever } from "../shared/assert";
 import type { PreviewDocument } from "../shared/contract";
 import { viewerForExtension } from "../shared/registry";
@@ -17,11 +18,12 @@ import { PdfView } from "./pdf";
 import { AudioView, VideoView } from "./player";
 
 export function PreviewBody({ file }: { readonly file: PreviewDocument }): ReactElement {
+	const { t } = useTranslation();
 	const kind = viewerForExtension(file.ext);
-	if (file.size === 0) return <FallbackView file={file} note="빈 파일" />;
+	if (file.size === 0) return <FallbackView file={file} note={t("quickLook.body.emptyFile")} />;
 	// Only whole-file viewers arrive truncated without bytes; streamed and prefix viewers always have what they need.
 	if (file.truncated && file.bytes === null) {
-		return <FallbackView file={file} note="이 파일은 너무 커서 내용 대신 정보만 보여 줍니다" />;
+		return <FallbackView file={file} note={t("quickLook.body.tooLarge")} />;
 	}
 	switch (kind) {
 		case "image":

@@ -5,5 +5,5 @@ import { i18n } from "./core";
 
 setI18n(i18n);
 
-export { i18n, isSupportedLanguage, resources, setAppLanguage, SUPPORTED_LANGUAGES, t, type AppLanguage, type SupportedLanguage } from "./core";
+export { i18n, isSupportedLanguage, resources, setAppLanguage, SUPPORTED_LANGUAGES, t, type AppLanguage, type LocaleKey, type SupportedLanguage } from "./core";
 export { useTranslation };

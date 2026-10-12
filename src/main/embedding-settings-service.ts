@@ -5,6 +5,7 @@ import type { DataSourceStatusService } from "./datasource-status";
 import type { EmbeddingSettingsService } from "./settings-service";
 import { startEmbeddingLoopbackAdapter, type EmbeddingLoopbackAdapter } from "./embedding-loopback-adapter";
 import { isJsonObject } from "../shared/settings-contract";
+import { t } from "../shared/i18n/core";
 import type {
 	AutoRagConfigUpdate,
 	DataSourceRow,
@@ -107,59 +108,61 @@ const LOOPBACK_HOSTS: Record<string, true> = { localhost: true, "127.0.0.1": tru
  * The global embedder choices. The AutoRAG plan and local servers are the only
  * sources the prototype lists; corpus text never goes to a remote embedder.
  */
-export const EMBEDDING_PROFILES: readonly EmbeddingProfile[] = [
-	{
-		id: "native-qwen3",
-		kind: "native",
-		label: "Qwen3 Embedding 0.6B",
-		description: "이 Mac에서 직접 도는 기본 문서 이해 모델(1024차원). 별도 서버가 필요 없습니다.",
-		model: "native:Qwen/Qwen3-Embedding-0.6B",
-		dimension: 1024,
-		queryPrefix: "",
-		passagePrefix: "",
-		baseUrl: null,
-		requiresLocalServer: false,
-	},
-	{
-		id: "qwen3-embedding-0.6b",
-		kind: "profile",
-		label: "Qwen3 Embedding 0.6B (Dazzi 런타임)",
-		description: "Dazzi 임베딩 런타임이 loopback에서 llama-server로 서빙하는 1024차원 모델입니다.",
-		model: "qwen3-embedding-0.6b",
-		dimension: 1024,
-		queryPrefix: "",
-		passagePrefix: "",
-		baseUrl: null,
-		requiresLocalServer: false,
-	},
-	{
-		id: "local-server",
-		kind: "local-server",
-		label: "내 컴퓨터 임베딩 서버",
-		description: "loopback에서 도는 OpenAI 호환 임베딩 서버를 씁니다. 모델·차원·접두어를 직접 지정하세요.",
-		model: "",
-		dimension: 0,
-		queryPrefix: "",
-		passagePrefix: "",
-		baseUrl: null,
-		requiresLocalServer: true,
-	},
-];
+export function embeddingProfiles(): readonly EmbeddingProfile[] {
+	return [
+		{
+			id: "native-qwen3",
+			kind: "native",
+			label: "Qwen3 Embedding 0.6B",
+			description: t("main.embedding.profiles.nativeQwen3.description"),
+			model: "native:Qwen/Qwen3-Embedding-0.6B",
+			dimension: 1024,
+			queryPrefix: "",
+			passagePrefix: "",
+			baseUrl: null,
+			requiresLocalServer: false,
+		},
+		{
+			id: "qwen3-embedding-0.6b",
+			kind: "profile",
+			label: t("main.embedding.profiles.runtime.label"),
+			description: t("main.embedding.profiles.runtime.description"),
+			model: "qwen3-embedding-0.6b",
+			dimension: 1024,
+			queryPrefix: "",
+			passagePrefix: "",
+			baseUrl: null,
+			requiresLocalServer: false,
+		},
+		{
+			id: "local-server",
+			kind: "local-server",
+			label: t("main.embedding.profiles.localServer.label"),
+			description: t("main.embedding.profiles.localServer.description"),
+			model: "",
+			dimension: 0,
+			queryPrefix: "",
+			passagePrefix: "",
+			baseUrl: null,
+			requiresLocalServer: true,
+		},
+	];
+}
 
 function findProfile(profileId: string): EmbeddingProfile | undefined {
-	return EMBEDDING_PROFILES.find((profile) => profile.id === profileId);
+	return embeddingProfiles().find((profile) => profile.id === profileId);
 }
 
 function assertLocalServer(local: LocalServer): void {
-	if (local.id.trim().length === 0) throw new Error("임베딩 서버 모델 이름이 비어 있습니다");
-	if (!Number.isInteger(local.dimension) || local.dimension <= 0) throw new Error("임베딩 서버 차원은 양의 정수여야 합니다");
+	if (local.id.trim().length === 0) throw new Error(t("main.embedding.errors.modelNameEmpty"));
+	if (!Number.isInteger(local.dimension) || local.dimension <= 0) throw new Error(t("main.embedding.errors.dimensionPositive"));
 	let host: string;
 	try {
 		host = new URL(local.baseUrl).hostname.toLowerCase();
 	} catch {
-		throw new Error("임베딩 서버 주소가 올바른 URL이 아닙니다");
+		throw new Error(t("main.embedding.errors.badUrl"));
 	}
-	if (LOOPBACK_HOSTS[host] !== true) throw new Error("임베딩 서버는 loopback 주소여야 합니다(문서는 이 Mac을 벗어나지 않습니다)");
+	if (LOOPBACK_HOSTS[host] !== true) throw new Error(t("main.embedding.errors.loopbackOnly"));
 }
 
 /** The `minSync.embedder` value the shared config should hold for a choice. */
@@ -245,57 +248,56 @@ function adoptionFor(
 			return !(choice.profile.id === "local-server" ? adapterAvailable : mailcrawlEnvFor(choice, null) !== null)
 				? {
 						adoption: "incompatible",
-						reason: "mailcrawl은 내장 Qwen3만 지원하고 임의의 HTTP 임베딩 서버는 쓸 수 없습니다",
+						reason: t("main.embedding.reasons.mailcrawlIncompatible"),
 						action: null,
 					}
 				: {
 						adoption: "propagated",
-						reason: "connector.env에 임베딩 프로바이더를 기록합니다(모델이 바뀌면 mailcrawl이 자동으로 다시 색인합니다)",
+						reason: t("main.embedding.reasons.mailcrawlPropagated"),
 						action: "datasources.<id>.connector.env.MAILCRAWL_*",
 					};
 		case "obsidian":
 			return qmdModelFor(choice) === null
 				? {
 						adoption: "incompatible",
-						reason: "qmd(obsidian)는 로컬 GGUF 모델만 쓸 수 있어 HTTP 임베딩 서버를 사용할 수 없습니다",
+						reason: t("main.embedding.reasons.obsidianIncompatible"),
 						action: null,
 					}
 				: {
 						adoption: "propagated",
-						reason: "qmd 자식 프로세스에 QMD_EMBED_MODEL을 설정하고 `qmd embed -f`로 다시 색인합니다",
+						reason: t("main.embedding.reasons.obsidianPropagated"),
 						action: `QMD_EMBED_MODEL=${qmdModelFor(choice)}`,
 					};
 		case "discord":
 			return discrawlRuntimeFor(choice) === undefined
 				? {
 						adoption: "incompatible",
-						reason:
-							"이 앱은 Dazzi 임베딩 런타임을 loopback으로 서빙할 수 없습니다(공개 export 아님). 임베딩 서버를 골라야 discrawl에 전달할 수 있습니다",
+						reason: t("main.embedding.reasons.discordIncompatible"),
 						action: null,
 					}
 				: {
 						adoption: "propagated",
-						reason: "Dazzi 관리 discrawl config를 다시 쓰고 `discrawl embed --rebuild`로 다시 색인합니다",
-						action: "datasources.<id>이 관리하는 discrawl config.toml",
+						reason: t("main.embedding.reasons.discordPropagated"),
+						action: t("main.embedding.actions.discordConfig"),
 					};
 		case "kakao":
 			return {
 				adoption: "incompatible",
-				reason: "lazykatok은 자체 내장 임베더(EmbeddingGemma)를 쓰며 Dazzi 공유 config로 바꿀 수 없습니다(네이티브 설정이 소유)",
+				reason: t("main.embedding.reasons.kakaoIncompatible"),
 				action: null,
 			};
 		case "github-gist":
 			return {
 				adoption: "incompatible",
-				reason: "GitHubGistSkill이 @autorag/librarian 공개 export가 아니라 임베더를 앱에서 지정할 수 없습니다(런타임 게이트웨이 프로필 고정)",
+				reason: t("main.embedding.reasons.githubGistIncompatible"),
 				action: null,
 			};
 		case "clawgallery":
-			return { adoption: "not-applicable", reason: "ClawGallery는 이미지(VDR) 색인이며 텍스트 임베딩을 쓰지 않습니다", action: null };
+			return { adoption: "not-applicable", reason: t("main.embedding.reasons.clawgalleryNotApplicable"), action: null };
 		case "lark":
-			return { adoption: "not-applicable", reason: "Lark은 원격 API 검색만 사용하고 로컬 임베딩을 거부합니다", action: null };
+			return { adoption: "not-applicable", reason: t("main.embedding.reasons.larkNotApplicable"), action: null };
 		default:
-			return { adoption: "not-applicable", reason: "이 데이터소스는 자체 키워드/파싱 색인을 쓰며 전역 임베더를 사용하지 않습니다", action: null };
+			return { adoption: "not-applicable", reason: t("main.embedding.reasons.defaultNotApplicable"), action: null };
 	}
 }
 
@@ -363,10 +365,10 @@ export function createEmbeddingSettingsService(deps: EmbeddingSettingsDeps): Emb
 
 	const resolveChoice = (request: EmbeddingChangeRequest): { choice: EmbeddingChoice } | { error: string } => {
 		const profile = findProfile(request.profileId);
-		if (profile === undefined) return { error: `알 수 없는 임베딩 프로필: ${request.profileId}` };
+		if (profile === undefined) return { error: t("main.embedding.errors.unknownProfile", { id: request.profileId }) };
 		if (!profile.requiresLocalServer) return { choice: { profile } };
 		const local = request.localServer;
-		if (local === undefined) return { error: "임베딩 서버 정보(id, baseUrl, dimension)가 필요합니다" };
+		if (local === undefined) return { error: t("main.embedding.errors.localServerRequired") };
 		try {
 			assertLocalServer(local);
 		} catch (error) {
@@ -383,7 +385,7 @@ export function createEmbeddingSettingsService(deps: EmbeddingSettingsDeps): Emb
 	};
 
 	const startAdapter = async (choice: EmbeddingChoice): Promise<string> => {
-		if (choice.localServer === undefined) throw new Error("임베딩 서버 정보가 필요합니다");
+		if (choice.localServer === undefined) throw new Error(t("main.embedding.errors.localServerMissing"));
 		await stopAdapter();
 		const started = await startEmbeddingLoopbackAdapter({
 			upstreamBaseUrl: choice.localServer.baseUrl,
@@ -407,20 +409,20 @@ export function createEmbeddingSettingsService(deps: EmbeddingSettingsDeps): Emb
 		} catch (error) {
 			return error instanceof Error ? error.message : String(error);
 		}
-		if (!response.ok) return `임베딩 서버가 HTTP ${response.status}로 응답했습니다`;
+		if (!response.ok) return t("main.embedding.errors.httpStatus", { status: response.status });
 		let parsed: unknown;
 		try {
 			parsed = await response.json();
 		} catch {
-			return "임베딩 서버 응답을 JSON으로 읽지 못했습니다";
+			return t("main.embedding.errors.badJson");
 		}
 		const first = isJsonObject(parsed) && Array.isArray(parsed.data) ? parsed.data[0] : undefined;
 		const embedding = isJsonObject(first) ? first.embedding : undefined;
 		if (!Array.isArray(embedding) || embedding.some((value) => typeof value !== "number")) {
-			return "임베딩 서버가 벡터를 반환하지 않았습니다";
+			return t("main.embedding.errors.noVector");
 		}
 		if (embedding.length !== local.dimension) {
-			return `임베딩 서버 차원이 ${embedding.length}인데 ${local.dimension}로 지정했습니다`;
+			return t("main.embedding.errors.dimensionMismatch", { actual: embedding.length, expected: local.dimension });
 		}
 		return null;
 	};
@@ -437,7 +439,7 @@ export function createEmbeddingSettingsService(deps: EmbeddingSettingsDeps): Emb
 			configExists: existsSync(path),
 			error,
 			current: { profileId: choice.profile.id, embedder: deriveEmbedder(choice) },
-			profiles: EMBEDDING_PROFILES,
+			profiles: embeddingProfiles(),
 			sources: [],
 		};
 		const sources = await deps.dataSources.list();
@@ -455,7 +457,7 @@ export function createEmbeddingSettingsService(deps: EmbeddingSettingsDeps): Emb
 				configExists: existsSync(path),
 				error: null,
 				current: { profileId, embedder: asJsonObject(embedder) },
-				profiles: EMBEDDING_PROFILES,
+				profiles: embeddingProfiles(),
 				sources: [],
 			};
 			const sources = await deps.dataSources.list();
@@ -473,7 +475,7 @@ export function createEmbeddingSettingsService(deps: EmbeddingSettingsDeps): Emb
 					configExists: existsSync(configPath()),
 					error: resolved.error,
 					current: { profileId: currentProfileId(embedder), embedder: asJsonObject(embedder) },
-					profiles: EMBEDDING_PROFILES,
+					profiles: embeddingProfiles(),
 					sources: [],
 				};
 			}
@@ -515,7 +517,7 @@ export function createEmbeddingSettingsService(deps: EmbeddingSettingsDeps): Emb
 			if (incompatibilities.length > 0 && request.acknowledgeIncompatible !== true) {
 				return {
 					...result,
-					error: `이 모델을 따를 수 없는 데이터소스가 있습니다: ${incompatibilities.map((status) => status.id).join(", ")}`,
+					error: t("main.embedding.errors.incompatibleSources", { ids: incompatibilities.map((status) => status.id).join(", ") }),
 				};
 			}
 

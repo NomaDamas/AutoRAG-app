@@ -872,14 +872,14 @@ export function useFinderController(
 		const home = locations.find((location) => location.icon === "home")?.path ?? null;
 		const target = resolvePathInput(input, { current: path, home });
 		if (target === null) {
-			showToast(t("finder.pathBar.invalid", "이동할 경로를 입력하세요"));
+			showToast(t("finder.pathBar.invalid"));
 			return false;
 		}
 		let entry: FinderEntry;
 		try {
 			entry = await source.stat(target);
 		} catch {
-			showToast(t("finder.pathBar.notFound", { defaultValue: "\"{{path}}\" 위치를 찾을 수 없습니다", path: target }));
+			showToast(t("finder.pathBar.notFound", { path: target }));
 			return false;
 		}
 		// The bridge answers with the on-disk spelling ("autorag" typed, "AutoRAG" shown).
@@ -891,7 +891,7 @@ export function useFinderController(
 	const navigateNav = useLatestCallback(
 		(item: NavItem) => {
 			if (!item.available) {
-				showToast(`"${item.label}" 위치를 열 수 없습니다.`);
+				showToast(t("finderComponents.locationOpenFailed", { name: item.label }));
 				return;
 			}
 			navigate(item.path);
@@ -905,9 +905,9 @@ export function useFinderController(
 			setLocations((current) => current.filter((location) => location.path !== item.path));
 			source
 				.ejectLocation(item.path)
-				.then(() => showToast(`"${item.label}" 을(를) 추출했습니다.`))
+				.then(() => showToast(t("finderComponents.ejected", { name: item.label })))
 				.catch((error: unknown) => {
-					reportError(new Error(`"${item.label}" 추출 실패: ${error instanceof Error ? error.message : String(error)}`));
+					reportError(new Error(t("finderComponents.ejectFailed", { name: item.label, error: error instanceof Error ? error.message : String(error) })));
 				})
 				.finally(() => {
 					// Success or refusal, the sidebar shows what is actually mounted now.
@@ -1082,7 +1082,7 @@ export function useFinderController(
 		() =>
 			source.onIndexRefreshed((error) => {
 				if (error !== null) {
-					reportError(new Error(`Dazzi 인덱스 새로고침 실패: ${error}`));
+					reportError(new Error(t("finderComponents.indexRefreshFailed", { error })));
 				}
 				setIndexRevision((value) => value + 1);
 			}),
@@ -1154,7 +1154,7 @@ export function useFinderController(
 			source
 				.createFolder(dir)
 				.then((created) => {
-					showToast(`${created.name} — 새 폴더를 만들었습니다`);
+					showToast(t("finderComponents.folderCreated", { name: created.name }));
 					revealCreated(created);
 				})
 				.catch(reportError);
@@ -1168,7 +1168,7 @@ export function useFinderController(
 			source
 				.createFile(dir, format)
 				.then((created) => {
-					showToast(`${created.name} — 새 파일을 만들었습니다`);
+					showToast(t("finderComponents.fileCreated", { name: created.name }));
 					revealCreated(created);
 				})
 				.catch(reportError);
@@ -1186,7 +1186,7 @@ export function useFinderController(
 		(entry: FinderEntry) => {
 			source
 				.copyPaths([entry.path])
-				.then(() => showToast("경로를 복사했습니다"))
+				.then(() => showToast(t("toasts.copiedPath")))
 				.catch(reportError);
 		});
 
@@ -1203,7 +1203,7 @@ export function useFinderController(
 					return;
 				case "share":
 					if (anchor === null) {
-						showToast("공유 위치를 찾지 못했습니다");
+						showToast(t("finderComponents.shareAnchorMissing"));
 						return;
 					}
 					source.actions.share([entry.path], anchor).catch(reportError);
@@ -1457,7 +1457,7 @@ export function useFinderController(
 				.setTags(targets, change)
 				.then((result) => {
 					const first = result.failed[0];
-					if (first !== undefined) showToast(`${basename(first.path)} — 태그를 바꾸지 못했습니다: ${first.message}`);
+					if (first !== undefined) showToast(t("finderComponents.tagChangeFailed", { name: basename(first.path), message: first.message }));
 					const changed = viewEntries.filter((row) => result.ok.includes(row.path));
 					if (changed.length > 0) {
 						source
@@ -1867,24 +1867,22 @@ export function useFinderController(
 			return [];
 		}
 		if (menu.entry === null) {
-			return buildBackgroundContextMenu({ clipboardCount, inTrash: inTrashLocation, services: menuServices }, (k, def) => t(k, { defaultValue: def }));
+			return buildBackgroundContextMenu({ clipboardCount, inTrash: inTrashLocation, services: menuServices });
 		}
 		const entry = menu.entry;
-		return buildContextMenu(
-			{
-				target: { name: entry.name, kind: entry.kind },
-				selectionCount: menuTargets(entry).length,
-				indexIncluded: sidecar.indexStatus(entry.path)?.excluded !== true,
-				clipboardCount,
-				inRecents: path === RECENTS_PATH || isTagPath(path),
-				inTrash: inTrashLocation,
-				capabilities: actionCapabilities,
-				canCreateFolder: canCreateIn(menuCreateDir(menu)),
-				services: menuServices,
-				tags: { catalog: tagCatalog.catalog, shared: sharedTags(menuTargets(entry).map((target) => tagsOf(target))) },
-			},
-			(k, def, opt) => t(k, { defaultValue: def, ...(opt as Record<string, unknown> | undefined) }),
-		);
+		return buildContextMenu({
+			target: { name: entry.name, kind: entry.kind },
+			selectionCount: menuTargets(entry).length,
+			indexIncluded: sidecar.indexStatus(entry.path)?.excluded !== true,
+			clipboardCount,
+			inRecents: path === RECENTS_PATH || isTagPath(path),
+			inTrash: inTrashLocation,
+			capabilities: actionCapabilities,
+			canCreateFolder: canCreateIn(menuCreateDir(menu)),
+			services: menuServices,
+			tags: { catalog: tagCatalog.catalog, shared: sharedTags(menuTargets(entry).map((target) => tagsOf(target))) },
+		});
+		// `t` changes identity with the language, so the menu re-labels on a switch.
 	}, [contextMenu, menuTargets, sidecar, clipboardCount, path, t, inTrashLocation, actionCapabilities, canCreateIn, menuCreateDir, layout, panePaths, menuServices, tagCatalog, tagsOf]);
 
 	const navTargets = useMemo(
@@ -1952,7 +1950,7 @@ export function useFinderController(
 		query,
 		searchFocused,
 		searching,
-		emptyText: emptyStateText(query, path, (k, def, opt) => t(k, { defaultValue: def, ...(opt as Record<string, unknown> | undefined) })),
+		emptyText: emptyStateText(query, path),
 		rows,
 		stackRows,
 		stackSections,
