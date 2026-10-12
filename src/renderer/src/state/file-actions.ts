@@ -76,9 +76,15 @@ const FORMAT_LABELS: Readonly<Record<ImageFormat, string>> = {
 	jpeg: "JPEG",
 	png: "PNG",
 	webp: "WebP",
-	tiff: "TIFF",
 	heic: "HEIC",
+	avif: "AVIF",
+	gif: "GIF",
+	tiff: "TIFF",
+	bmp: "BMP",
 };
+
+/** Extensions that name the same format under another spelling. */
+const EXTENSION_ALIASES: Readonly<Record<string, ImageFormat>> = { jpg: "jpeg", tif: "tiff", heif: "heic" };
 
 const CONTAINER_LABELS: Readonly<Record<VideoContainer, string>> = {
 	mp4: "MP4",
@@ -96,10 +102,8 @@ export function fileExtension(name: string): string {
 /** The image format a file name denotes, when the image actions know it. */
 function imageFormatOfName(name: string): ImageFormat | null {
 	const ext = fileExtension(name);
-	const normalized = ext === "jpg" ? "jpeg" : ext === "tif" ? "tiff" : ext === "heif" ? "heic" : ext;
-	return (Object.keys(FORMAT_LABELS) as ImageFormat[]).includes(normalized as ImageFormat)
-		? (normalized as ImageFormat)
-		: null;
+	const normalized = EXTENSION_ALIASES[ext] ?? ext;
+	return Object.hasOwn(FORMAT_LABELS, normalized) ? (normalized as ImageFormat) : null;
 }
 
 function isImage(name: string): boolean {
@@ -123,8 +127,9 @@ function imageItems(name: string, capabilities: ActionCapabilities): readonly Fi
 	}
 	// Resizing rewrites the file's own format, so it needs the source format to
 	// be one the engine can encode (WebP only arrives with ffmpeg, and then only
-	// as a conversion target).
-	if (source !== null && source !== "webp" && capabilities.imageFormats.includes(source)) {
+	// as a conversion target). GIF is excluded: both engines resize one frame,
+	// which would silently drop an animation.
+	if (source !== null && source !== "webp" && source !== "gif" && capabilities.imageFormats.includes(source)) {
 		for (const maxEdge of RESIZE_PRESETS) {
 			items.push({
 				id: `image:resize:${maxEdge}`,
