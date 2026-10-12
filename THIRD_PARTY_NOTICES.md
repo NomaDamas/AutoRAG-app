@@ -11,6 +11,15 @@ Its upstream build (`lib/Dockerfile` and `lib/build.bash` in
 `ofk/libarchive-wasm`) compiles libarchive together with zlib, xz/liblzma,
 bzip2, and OpenSSL 3.4.1, then links them into the wasm.
 
+AutoRAG ships its **own rebuild** of that binary at `src/main/vendor/libarchive.wasm`,
+loaded in place of the npm package's `dist/libarchive.wasm`. The only source
+change is one `setlocale(LC_ALL, "C.UTF-8")` call in `libarchive.c`, which
+makes non-ASCII (Korean) entry names readable; the Dockerfile and build flags are
+upstream's unchanged. The full recipe, with upstream's MIT license text, is in
+`scripts/libarchive-wasm/` and rebuilds with `scripts/libarchive-wasm/build.sh`.
+The `strings` inspection below was repeated on this rebuilt binary with the
+same result.
+
 Inspection of the **shipped** `dist/libarchive.wasm` (via `strings` and the
 runtime's own version banner) found no `unrar`, `ZSTD_`, `LZ4_`, or `LZO_`
 symbols, and no `openssl`/`evp`/`libcrypto` symbol or OpenSSL assertion string

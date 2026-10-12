@@ -24,7 +24,10 @@ const COMBINED_MESSAGE = "압축 파일이 손상되었거나 암호로 보호�
 async function extract({ sourcePath, destDir, limits }) {
 	const buffer = readFileSync(sourcePath);
 	const data = new Int8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
-	const libarchive = await libarchiveWasm();
+	// The engine is the vendored rebuild (see scripts/libarchive-wasm/README.md):
+	// upstream's binary runs in the ASCII locale and turns non-ASCII names into `*`.
+	const wasmBinary = readFileSync(new URL("./vendor/libarchive.wasm", import.meta.url));
+	const libarchive = await libarchiveWasm({ wasmBinary });
 	const reader = new ArchiveReader(libarchive, data);
 	try {
 		if (reader.hasEncryptedData() === true) throw new ArchiveError(ENCRYPTED_MESSAGE);

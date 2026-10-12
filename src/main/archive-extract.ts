@@ -32,16 +32,26 @@ async function readRange(handle: FileHandle, position: number, length: number): 
 	return buffer;
 }
 
+/** What the zip central directory says before any entry is read. */
+interface ZipDirectoryScan {
+	/** Any entry sets the "encrypted" general-purpose bit. */
+	readonly encrypted: boolean;
+	/** Names written without the UTF-8 flag, as fflate reports them: one Latin-1 character per original byte. */
+	readonly legacyNames: ReadonlySet<string>;
+}
+
 /**
- * Whether any zip entry sets the "encrypted" general-purpose bit. fflate would
- * otherwise hand back raw ciphertext as if it were the file's contents, so this
- * runs before extraction.
+ * Read the central directory's flag bits. Encryption matters because fflate
+ * would otherwise hand back raw ciphertext as if it were the file's contents.
+ * The name-encoding bit matters because fflate reads an unflagged name as
+ * Latin-1, which turns the CP949 names Korean Windows writes into `ÇÑ±Û.txt`.
  */
-async function zipHasEncryptedEntry(path: string): Promise<boolean> {
+async function scanZipDirectory(path: string): Promise<ZipDirectoryScan> {
+	const none: ZipDirectoryScan = { encrypted: false, legacyNames: new Set() };
 	const handle = await open(path, "r");
 	try {
 		const { size } = await handle.stat();
-		if (size < 22) return false;
+		if (size < 22) return none;
 		const tailLength = Math.min(size, 22 + 0xffff);
 		const tail = await readRange(handle, size - tailLength, tailLength);
 		let eocd = -1;
@@ -51,27 +61,51 @@ async function zipHasEncryptedEntry(path: string): Promise<boolean> {
 				break;
 			}
 		}
-		if (eocd < 0) return false;
+		if (eocd < 0) return none;
 		const count = tail.readUInt16LE(eocd + 10);
 		const directorySize = tail.readUInt32LE(eocd + 12);
 		const directoryOffset = tail.readUInt32LE(eocd + 16);
-		if (directoryOffset === 0xffffffff || directorySize === 0xffffffff || directoryOffset > size) return false;
-		if (directorySize > MAX_DIRECTORY_BYTES) return false;
+		if (directoryOffset === 0xffffffff || directorySize === 0xffffffff || directoryOffset > size) return none;
+		if (directorySize > MAX_DIRECTORY_BYTES) return none;
 		const tailStart = size - tailLength;
 		const directory =
 			directoryOffset >= tailStart && directoryOffset + directorySize <= size
 				? tail.subarray(directoryOffset - tailStart, directoryOffset - tailStart + directorySize)
 				: await readRange(handle, directoryOffset, directorySize);
+		const legacyNames = new Set<string>();
 		let offset = 0;
 		for (let index = 0; index < count; index += 1) {
 			if (offset + 46 > directory.length || directory.readUInt32LE(offset) !== 0x02014b50) break;
-			if ((directory.readUInt16LE(offset + 8) & 0x0001) !== 0) return true;
+			const flags = directory.readUInt16LE(offset + 8);
+			if ((flags & 0x0001) !== 0) return { encrypted: true, legacyNames: new Set() };
+			const nameStart = offset + 46;
+			if ((flags & 0x0800) === 0) legacyNames.add(directory.toString("latin1", nameStart, nameStart + directory.readUInt16LE(offset + 28)));
 			offset += 46 + directory.readUInt16LE(offset + 28) + directory.readUInt16LE(offset + 30) + directory.readUInt16LE(offset + 32);
 		}
-		return false;
+		return { encrypted: false, legacyNames };
 	} finally {
 		await handle.close();
 	}
+}
+
+/**
+ * Recover the real name of a zip entry written without the UTF-8 flag. fflate
+ * returns those as Latin-1, so each character is one original byte. Many tools
+ * (Info-ZIP on Linux, Python) write UTF-8 without the flag; Korean Windows
+ * Explorer writes CP949. UTF-8 is tried first because it is strict — a CP949
+ * name is almost never valid UTF-8 — and a name that is neither stays as read.
+ */
+function decodeLegacyZipName(name: string): string {
+	if (!/[\u0080-\u00ff]/.test(name) || /[^\u0000-\u00ff]/.test(name)) return name;
+	const bytes = Buffer.from(name, "latin1");
+	for (const label of ["utf-8", "euc-kr"]) {
+		try {
+			return new TextDecoder(label, { fatal: true }).decode(bytes);
+		} catch {
+			// Not this encoding; try the next.
+		}
+	}
+	return name;
 }
 
 /**
@@ -80,7 +114,8 @@ async function zipHasEncryptedEntry(path: string): Promise<boolean> {
  * with a NUL/absolute path sinks the whole extraction.
  */
 async function readZip(source: string, destDir: string, limits: ArchiveLimits): Promise<void> {
-	if (await zipHasEncryptedEntry(source)) throw new ArchiveError(ENCRYPTED_MESSAGE);
+	const scan = await scanZipDirectory(source);
+	if (scan.encrypted) throw new ArchiveError(ENCRYPTED_MESSAGE);
 	await mkdir(destDir, { recursive: true });
 	const writes: Promise<void>[] = [];
 	let failure: ArchiveError | null = null;
@@ -101,7 +136,7 @@ async function readZip(source: string, destDir: string, limits: ArchiveLimits): 
 	const unzipper = new Unzip((file) => {
 		entries += 1;
 		if (failure === null && entries > limits.maxEntries) failure = new ArchiveError("압축 파일의 항목 수가 너무 많습니다");
-		const target = resolveEntry(file.name);
+		const target = resolveEntry(scan.legacyNames.has(file.name) ? decodeLegacyZipName(file.name) : file.name);
 		if (target === null || target.directory) {
 			if (target !== null) writes.push(mkdir(target.path, { recursive: true }).then(() => undefined));
 			file.ondata = () => {};
@@ -203,7 +238,8 @@ export async function extractIntoFolder(sourcePath: string, format: ArchiveForma
  * directory is untouched, as is an archive with several top-level folders.
  */
 export async function flattenWrapper(destDir: string, stem: string): Promise<void> {
-	const inner = join(destDir, stem);
+	// Entry names are NFC (see archiveEntryPath); a Finder-made archive's stem may be NFD.
+	const inner = join(destDir, stem.normalize("NFC"));
 	const info = await lstat(inner).catch(() => null);
 	if (info === null || !info.isDirectory()) return;
 	for (const child of await readdir(inner)) await rename(join(inner, child), join(destDir, child));

@@ -1,9 +1,28 @@
+import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "electron-vite";
+import type { Plugin } from "vite";
+
+/**
+ * Ship the rebuilt libarchive engine beside the bundled archive worker, which
+ * reads `./vendor/libarchive.wasm` relative to itself (src/main/vendor/ in
+ * dev and tests, out/main/vendor/ in a build). See scripts/libarchive-wasm/README.md.
+ */
+const vendoredLibarchiveWasm: Plugin = {
+	name: "autorag-vendored-libarchive-wasm",
+	generateBundle() {
+		this.emitFile({
+			type: "asset",
+			fileName: "vendor/libarchive.wasm",
+			source: readFileSync(resolve(import.meta.dirname, "src/main/vendor/libarchive.wasm")),
+		});
+	},
+};
 
 export default defineConfig({
 	main: {
+		plugins: [vendoredLibarchiveWasm],
 		build: {
 			rollupOptions: {
 				// The fs worker is a second Node entry: an Electron utility process
