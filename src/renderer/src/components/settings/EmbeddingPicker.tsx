@@ -120,7 +120,7 @@ export function EmbeddingPicker(): ReactElement {
 			{open ? (
 				<ModalShell onClose={() => setOpen(false)}>
 					<h2>문서 이해 모델</h2>
-					<p>문서의 의미를 분석하는 임베딩 모델입니다. AutoRAG 런타임과 내 컴퓨터 서버만 고를 수 있고, 문서 내용은 이 Mac 밖으로 나가지 않습니다.</p>
+					<p>문서의 의미를 분석하는 임베딩 모델입니다. Dazzi 런타임과 내 컴퓨터 서버만 고를 수 있고, 문서 내용은 이 Mac 밖으로 나가지 않습니다.</p>
 					<div className="settings-list">
 						{profiles.map((profile) => (
 							<label key={profile.id} className="settings-list-row" style={{ cursor: "pointer" }}>

@@ -306,7 +306,7 @@
     },
     "general": {
       "title": "画面表示と一般",
-      "desc": "アプリ画面とAutoRAGの一般言語設定です。workspacePathとmemoryPathはデフォルト値を維持します。",
+      "desc": "アプリ画面とDazziの一般言語設定です。workspacePathとmemoryPathはデフォルト値を維持します。",
       "appearance": "外観",
       "appearanceHint": "Finder、設定、Quick Lookに同じテーマを適用します。",
       "language": "UI言語",
@@ -385,7 +385,7 @@
       "signedIn": "ログインしました",
       "signedInNote": "次のステップに進みます",
       "otherAccount": "別のアカウント",
-      "cardTitle": "AutoRAGアカウント",
+      "cardTitle": "Dazziアカウント",
       "cardSub": "プランと使用量を管理します",
       "busy": "ブラウザでログイン中…",
       "busyNote": "認証が完了すると自動的に戻ります。",
@@ -393,7 +393,7 @@
       "cancel": "キャンセル",
       "skip": "アカウントなしで自分のAPIキーを使う (BYOK)",
       "offline": "サーバーに接続できないため、最後に確認した情報を表示しています。",
-      "authNote": "ログイン方法（メールコード、ソーシャルログイン）は、ブラウザのAutoRAGログイン画面で選びます。アカウントにファイルの内容は保存されません。",
+      "authNote": "ログイン方法（メールコード、ソーシャルログイン）は、ブラウザのDazziログイン画面で選びます。アカウントにファイルの内容は保存されません。",
       "planLabel": "{{plan}} プラン",
       "signedInEnv": "環境変数のAPIキーを使用中"
     },
@@ -527,7 +527,7 @@
           "price": "無料",
           "note": "カードなしですぐ開始",
           "tag": "気軽に始める",
-          "chip": "質問はAutoRAGモデルに送信",
+          "chip": "質問はDazziモデルに送信",
           "feature": {
             "a": "このMacでローカル埋め込み",
             "b": "マネージドAIモデル · 基本利用量",
@@ -539,7 +539,7 @@
           "price": "$4",
           "note": "月額$4 · いつでも解約可",
           "tag": "毎日気軽に使う",
-          "chip": "質問はAutoRAGモデルに送信",
+          "chip": "質問はDazziモデルに送信",
           "feature": {
             "a": "このMacでローカル埋め込み",
             "b": "マネージドAIモデル · 十分な利用量",
@@ -551,7 +551,7 @@
           "price": "$20",
           "note": "月額$20 · いつでも解約可",
           "tag": "最速の初回インデックス作成",
-          "chip": "質問はAutoRAGモデルに送信",
+          "chip": "質問はDazziモデルに送信",
           "feature": {
             "a": "このMacでローカル埋め込み（本文は送信されません）",
             "b": "マネージドAIモデル · 最大の利用量",

@@ -306,7 +306,7 @@
     },
     "general": {
       "title": "显示与通用",
-      "desc": "应用界面与 AutoRAG 通用语言设置。workspacePath 和 memoryPath 保持默认值。",
+      "desc": "应用界面与 Dazzi 通用语言设置。workspacePath 和 memoryPath 保持默认值。",
       "appearance": "外观",
       "appearanceHint": "为访达、设置和快速查看应用相同主题。",
       "language": "界面语言",
@@ -385,7 +385,7 @@
       "signedIn": "已登录",
       "signedInNote": "正在进入下一步",
       "otherAccount": "其他账户",
-      "cardTitle": "AutoRAG 账户",
+      "cardTitle": "Dazzi 账户",
       "cardSub": "管理套餐和用量",
       "busy": "正在浏览器中登录…",
       "busyNote": "认证完成后会自动返回。",
@@ -393,7 +393,7 @@
       "cancel": "取消",
       "skip": "不使用账户，改用自己的 API 密钥 (BYOK)",
       "offline": "无法连接服务器，显示的是上次确认的信息。",
-      "authNote": "登录方式（邮箱验证码、第三方登录）在浏览器的 AutoRAG 登录页面选择。账户中不会保存文件内容。",
+      "authNote": "登录方式（邮箱验证码、第三方登录）在浏览器的 Dazzi 登录页面选择。账户中不会保存文件内容。",
       "planLabel": "{{plan}} 套餐",
       "signedInEnv": "正在使用环境变量中的 API 密钥"
     },
@@ -527,7 +527,7 @@
           "price": "免费",
           "note": "无需银行卡即可开始",
           "tag": "轻松上手",
-          "chip": "提问会发送至 AutoRAG 模型",
+          "chip": "提问会发送至 Dazzi 模型",
           "feature": {
             "a": "在这台 Mac 上本地嵌入",
             "b": "托管 AI 模型 · 基础用量",
@@ -539,7 +539,7 @@
           "price": "$4",
           "note": "每月 $4 · 随时取消",
           "tag": "每天轻松使用",
-          "chip": "提问会发送至 AutoRAG 模型",
+          "chip": "提问会发送至 Dazzi 模型",
           "feature": {
             "a": "在这台 Mac 上本地嵌入",
             "b": "托管 AI 模型 · 充足用量",
@@ -551,7 +551,7 @@
           "price": "$20",
           "note": "每月 $20 · 随时取消",
           "tag": "最快的首次索引",
-          "chip": "问题将发送到 AutoRAG 模型",
+          "chip": "问题将发送到 Dazzi 模型",
           "feature": {
             "a": "在这台 Mac 上本地嵌入（内容不会被发送）",
             "b": "托管 AI 模型 · 最高用量",

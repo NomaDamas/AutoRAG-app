@@ -95,7 +95,7 @@ function readNumber(value: unknown, fallback: number): number {
 
 function errorMessageOf(response: ApiResponse): string {
 	const error = isJsonObject(response.body) && isJsonObject(response.body.error) ? response.body.error : null;
-	return typeof error?.message === "string" && error.message.length > 0 ? error.message : `The AutoRAG service answered HTTP ${response.status}.`;
+	return typeof error?.message === "string" && error.message.length > 0 ? error.message : `The Dazzi service answered HTTP ${response.status}.`;
 }
 
 /** Maps the server's `GET /v1/account` body; null when it is not an account. */
@@ -146,9 +146,9 @@ function base64Url(bytes: Buffer): string {
 	return bytes.toString("base64url");
 }
 
-const CALLBACK_PAGE = `<!doctype html><meta charset="utf-8"><title>AutoRAG</title>
+const CALLBACK_PAGE = `<!doctype html><meta charset="utf-8"><title>Dazzi</title>
 <body style="font:16px system-ui;display:grid;place-items:center;height:100vh;margin:0">
-<p>AutoRAG에 로그인했습니다. 이 탭을 닫아도 됩니다.<br>Signed in to AutoRAG. You can close this tab.</p></body>`;
+<p>Dazzi에 로그인했습니다. 이 탭을 닫아도 됩니다.<br>Signed in to Dazzi. You can close this tab.</p></body>`;
 
 export function createAccountService(deps: AccountServiceDeps): AccountService {
 	const doFetch = deps.fetch ?? globalThis.fetch;
@@ -255,12 +255,12 @@ export function createAccountService(deps: AccountServiceDeps): AccountService {
 	/** An authenticated call that throws the server's own message on any failure. */
 	async function callSignedIn(path: string, init: { readonly method?: string; readonly body?: unknown }): Promise<unknown> {
 		const key = await currentKey();
-		if (key === null) throw new Error("Sign in to your AutoRAG account first.");
+		if (key === null) throw new Error("Sign in to your Dazzi account first.");
 		let response: ApiResponse;
 		try {
 			response = await call(path, { ...init, key: key.key });
 		} catch (error) {
-			throw error instanceof OfflineError ? new Error("Cannot reach the AutoRAG service. Check your connection and try again.") : error;
+			throw error instanceof OfflineError ? new Error("Cannot reach the Dazzi service. Check your connection and try again.") : error;
 		}
 		if (response.status < 200 || response.status >= 300) throw new Error(errorMessageOf(response));
 		return response.body;
@@ -269,7 +269,7 @@ export function createAccountService(deps: AccountServiceDeps): AccountService {
 	async function openHostedUrl(path: string, body?: unknown): Promise<void> {
 		const result = await callSignedIn(path, { method: "POST", ...(body === undefined ? {} : { body }) });
 		const url = isJsonObject(result) && typeof result.url === "string" ? result.url : "";
-		if (!url.startsWith("https://")) throw new Error("The AutoRAG service did not return a secure https address.");
+		if (!url.startsWith("https://")) throw new Error("The Dazzi service did not return a secure https address.");
 		await deps.openExternal(url);
 	}
 
@@ -286,7 +286,7 @@ export function createAccountService(deps: AccountServiceDeps): AccountService {
 			} else if (response.status >= 200 && response.status < 300) {
 				const account = parseAccount(response.body);
 				if (account === null) {
-					lastError = "The AutoRAG service returned an account this app cannot read.";
+					lastError = "The Dazzi service returned an account this app cannot read.";
 				} else {
 					await writeCache(account);
 					lastError = null;
@@ -387,7 +387,7 @@ export function createAccountService(deps: AccountServiceDeps): AccountService {
 				}
 			}
 		} catch (error) {
-			lastError = error instanceof OfflineError ? "Cannot reach the AutoRAG service. Check your connection and try again." : error instanceof Error ? error.message : String(error);
+			lastError = error instanceof OfflineError ? "Cannot reach the Dazzi service. Check your connection and try again." : error instanceof Error ? error.message : String(error);
 		} finally {
 			flow = null;
 		}
@@ -419,7 +419,7 @@ export function createAccountService(deps: AccountServiceDeps): AccountService {
 		const catalog = parseCatalog(await callSignedIn("/v1/models", {}));
 		const main = catalog[0];
 		const cheapest = catalog.reduce<CatalogModel | undefined>((best, model) => (best === undefined || model.price < best.price ? model : best), undefined);
-		if (main === undefined || cheapest === undefined) throw new Error("Your AutoRAG plan lists no models.");
+		if (main === undefined || cheapest === undefined) throw new Error("Your Dazzi plan lists no models.");
 		// A list the server cannot give leaves that role alone and never fails the chat model.
 		const [jevIds, rerankIds] = await Promise.all([operationModelIds("jev"), operationModelIds("rerank")]);
 		const reference = (model: CatalogModel): Record<string, unknown> => ({

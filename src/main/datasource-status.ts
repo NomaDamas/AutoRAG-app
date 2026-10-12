@@ -181,7 +181,7 @@ function agentState(skill: DatasourceSkill | undefined, enabled: boolean): DataS
 	}
 	const descriptor = skill.describe();
 	const skillName = skill.skillManifest().name;
-	if (!enabled) return { state: "disabled", skillName, tags: descriptor.tags, detail: "Turned off in the AutoRAG config" };
+	if (!enabled) return { state: "disabled", skillName, tags: descriptor.tags, detail: "Turned off in the Dazzi config" };
 	return { state: "connected", skillName, tags: descriptor.tags, detail: `Agents load ${skillName}` };
 }
 

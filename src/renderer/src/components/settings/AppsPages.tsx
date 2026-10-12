@@ -358,7 +358,7 @@ function ScheduleNote({ status }: { readonly status: RefreshScheduleStatus | nul
 	if (status.conflicts.length > 0 && (status.wanted || status.installed)) {
 		parts.push(
 			<Note key="conflicts">
-				이 컴퓨터에는 AutoRAG를 따로 새로 고치는 예약 작업이 이미 있습니다({status.conflicts.join(" · ")}). 같은 폴더를 두 번 처리하지 않도록 한쪽만 쓰는 것을 권장합니다.
+				이 컴퓨터에는 Dazzi를 따로 새로 고치는 예약 작업이 이미 있습니다({status.conflicts.join(" · ")}). 같은 폴더를 두 번 처리하지 않도록 한쪽만 쓰는 것을 권장합니다.
 			</Note>,
 		);
 	}

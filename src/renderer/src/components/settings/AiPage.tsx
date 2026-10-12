@@ -295,10 +295,10 @@ export function AiPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 
 	/** Sign in to the AutoRAG plan through the account service (browser PKCE, encrypted key, adopted defaults). */
 	async function signInToAutorag(): Promise<void> {
-		setNotice("브라우저에서 AutoRAG에 로그인하세요…");
+		setNotice("브라우저에서 Dazzi에 로그인하세요…");
 		try {
 			const status = await window.autorag.account.signIn();
-			setNotice(status.state === "signedIn" ? "AutoRAG에 로그인했습니다." : (status.error ?? "로그인하지 않았습니다."));
+			setNotice(status.state === "signedIn" ? "Dazzi에 로그인했습니다." : (status.error ?? "로그인하지 않았습니다."));
 			await reload();
 		} catch (cause) {
 			setNotice(errorText(cause));
@@ -573,10 +573,10 @@ function ConnectMenu({
 		<>
 			{onSignInToAutorag !== undefined ? (
 				<>
-					<p className="settings-menu-group">AutoRAG 요금제</p>
+					<p className="settings-menu-group">Dazzi 요금제</p>
 					<button type="button" className="settings-menu-item" onClick={onSignInToAutorag}>
-						<AppIcon small label="AutoRAG" />
-						<span>AutoRAG 계정으로 로그인</span>
+						<AppIcon small label="Dazzi" />
+						<span>Dazzi 계정으로 로그인</span>
 					</button>
 				</>
 			) : null}

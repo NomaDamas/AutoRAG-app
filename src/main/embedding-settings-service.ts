@@ -124,8 +124,8 @@ export const EMBEDDING_PROFILES: readonly EmbeddingProfile[] = [
 	{
 		id: "qwen3-embedding-0.6b",
 		kind: "profile",
-		label: "Qwen3 Embedding 0.6B (AutoRAG 런타임)",
-		description: "AutoRAG 임베딩 런타임이 loopback에서 llama-server로 서빙하는 1024차원 모델입니다.",
+		label: "Qwen3 Embedding 0.6B (Dazzi 런타임)",
+		description: "Dazzi 임베딩 런타임이 loopback에서 llama-server로 서빙하는 1024차원 모델입니다.",
 		model: "qwen3-embedding-0.6b",
 		dimension: 1024,
 		queryPrefix: "",
@@ -285,7 +285,7 @@ function adoptionFor(
 				? {
 						adoption: "incompatible",
 						reason:
-							"이 앱은 AutoRAG 임베딩 런타임을 loopback으로 서빙할 수 없습니다(공개 export 아님). 임베딩 서버를 골라야 discrawl에 전달할 수 있습니다",
+							"이 앱은 Dazzi 임베딩 런타임을 loopback으로 서빙할 수 없습니다(공개 export 아님). 임베딩 서버를 골라야 discrawl에 전달할 수 있습니다",
 						action: null,
 					}
 				: {

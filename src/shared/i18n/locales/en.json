@@ -306,7 +306,7 @@
     },
     "general": {
       "title": "Display & General",
-      "desc": "App interface and AutoRAG general language settings. workspacePath and memoryPath stay default.",
+      "desc": "App interface and Dazzi general language settings. workspacePath and memoryPath stay default.",
       "appearance": "Appearance",
       "appearanceHint": "Applies the same theme to Finder, Settings, and Quick Look.",
       "language": "Interface language",
@@ -385,7 +385,7 @@
       "signedIn": "Signed in",
       "signedInNote": "Moving to the next step",
       "otherAccount": "Another account",
-      "cardTitle": "AutoRAG account",
+      "cardTitle": "Dazzi account",
       "cardSub": "Manage your plan and usage",
       "busy": "Signing in in your browser…",
       "busyNote": "You'll return here automatically once authentication finishes.",
@@ -393,7 +393,7 @@
       "cancel": "Cancel",
       "skip": "Continue without an account, with my own API key (BYOK)",
       "offline": "Can't reach the server, so this is the last information we confirmed.",
-      "authNote": "You choose how to sign in (email code or social sign-in) on the AutoRAG page in your browser. No file contents are stored in your account.",
+      "authNote": "You choose how to sign in (email code or social sign-in) on the Dazzi page in your browser. No file contents are stored in your account.",
       "planLabel": "{{plan}} plan",
       "signedInEnv": "Using the API key from the environment"
     },
@@ -527,7 +527,7 @@
           "price": "Free",
           "note": "Start right away, no card",
           "tag": "Start light",
-          "chip": "Questions are sent to AutoRAG models",
+          "chip": "Questions are sent to Dazzi models",
           "feature": {
             "a": "Local embedding on this Mac",
             "b": "Managed AI models · basic usage",
@@ -539,7 +539,7 @@
           "price": "$4",
           "note": "$4/mo · cancel anytime",
           "tag": "Light everyday use",
-          "chip": "Questions are sent to AutoRAG models",
+          "chip": "Questions are sent to Dazzi models",
           "feature": {
             "a": "Local embedding on this Mac",
             "b": "Managed AI models · generous usage",
@@ -551,7 +551,7 @@
           "price": "$20",
           "note": "$20/mo · cancel anytime",
           "tag": "Fastest first indexing",
-          "chip": "Questions are sent to AutoRAG models",
+          "chip": "Questions are sent to Dazzi models",
           "feature": {
             "a": "Local embedding on this Mac (contents are never sent)",
             "b": "Managed AI models · highest usage",

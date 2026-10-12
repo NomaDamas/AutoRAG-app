@@ -306,7 +306,7 @@
     },
     "general": {
       "title": "화면 표시 및 일반",
-      "desc": "앱 화면과 AutoRAG 일반 언어 설정입니다. workspacePath와 memoryPath는 기본값으로 유지합니다.",
+      "desc": "앱 화면과 Dazzi 일반 언어 설정입니다. workspacePath와 memoryPath는 기본값으로 유지합니다.",
       "appearance": "화면 테마",
       "appearanceHint": "Finder, Settings, Quick Look에 같은 테마를 적용합니다.",
       "language": "인터페이스 언어",
@@ -385,7 +385,7 @@
       "signedIn": "로그인되었습니다",
       "signedInNote": "다음 단계로 이동합니다",
       "otherAccount": "다른 계정",
-      "cardTitle": "AutoRAG 계정",
+      "cardTitle": "Dazzi 계정",
       "cardSub": "플랜과 사용량을 관리합니다",
       "busy": "브라우저에서 로그인 중…",
       "busyNote": "인증이 끝나면 자동으로 돌아옵니다.",
@@ -393,7 +393,7 @@
       "cancel": "취소",
       "skip": "계정 없이 내 API 키로 사용 (BYOK)",
       "offline": "서버에 연결할 수 없어 마지막으로 확인한 정보를 보여줍니다.",
-      "authNote": "로그인 방법(이메일 코드, 소셜 로그인)은 브라우저의 AutoRAG 로그인 화면에서 고릅니다. 계정에는 파일 내용이 저장되지 않습니다.",
+      "authNote": "로그인 방법(이메일 코드, 소셜 로그인)은 브라우저의 Dazzi 로그인 화면에서 고릅니다. 계정에는 파일 내용이 저장되지 않습니다.",
       "planLabel": "{{plan}} 플랜",
       "signedInEnv": "환경 변수의 API 키로 사용 중"
     },
@@ -527,7 +527,7 @@
           "price": "무료",
           "note": "카드 없이 바로 시작",
           "tag": "가볍게 시작하기",
-          "chip": "질문은 AutoRAG 모델로 전송",
+          "chip": "질문은 Dazzi 모델로 전송",
           "feature": {
             "a": "이 Mac에서 로컬 임베딩",
             "b": "관리형 AI 모델 · 기본 사용량",
@@ -539,7 +539,7 @@
           "price": "$4",
           "note": "월 $4 · 언제든 해지",
           "tag": "매일 가볍게 쓰기",
-          "chip": "질문은 AutoRAG 모델로 전송",
+          "chip": "질문은 Dazzi 모델로 전송",
           "feature": {
             "a": "이 Mac에서 로컬 임베딩",
             "b": "관리형 AI 모델 · 넉넉한 사용량",
@@ -551,7 +551,7 @@
           "price": "$20",
           "note": "월 $20 · 언제든 해지",
           "tag": "가장 빠른 첫 인덱싱",
-          "chip": "질문은 AutoRAG 모델로 전송",
+          "chip": "질문은 Dazzi 모델로 전송",
           "feature": {
             "a": "이 Mac에서 로컬 임베딩 (본문은 전송되지 않음)",
             "b": "관리형 AI 모델 · 가장 많은 사용량",
