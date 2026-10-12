@@ -125,6 +125,7 @@ describe("archives", () => {
 		expect(ids(suggestedActions({ name: "docs.tar", kind: "file" }, DARWIN))).toContain("extract");
 		expect(ids(suggestedActions({ name: "docs.tar.gz", kind: "file" }, DARWIN))).toContain("extract");
 		expect(ids(suggestedActions({ name: "docs.7z", kind: "file" }, DARWIN))).toContain("extract");
+		expect(ids(suggestedActions({ name: "docs.rar", kind: "file" }, DARWIN))).toContain("extract");
 		expect(ids(suggestedActions({ name: "notes.txt", kind: "file" }, DARWIN))).not.toContain("extract");
 		expect(ids(suggestedActions({ name: "docs.zip", kind: "file" }, NO_CAPABILITIES))).not.toContain("extract");
 	});

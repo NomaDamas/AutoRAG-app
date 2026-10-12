@@ -1,5 +1,5 @@
 /**
- * Worker entry for the libarchive wasm engine (7z, tar.bz2, tar.xz).
+ * Worker entry for the libarchive wasm engine (7z, rar, tar.bz2, tar.xz).
  *
  * The wasm runs in this worker thread, never the Electron main thread, and one
  * worker handles one extraction — so a wasm trap on a corrupt archive cannot

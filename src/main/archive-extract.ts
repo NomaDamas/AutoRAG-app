@@ -220,6 +220,7 @@ export async function extractIntoFolder(sourcePath: string, format: ArchiveForma
 				throw error instanceof ArchiveError ? error : new ArchiveError(CORRUPT_MESSAGE);
 			}
 		case "7z":
+		case "rar":
 		case "tar.bz2":
 		case "tbz2":
 		case "tar.xz":

@@ -41,6 +41,16 @@ function service(archiveLimits?: ArchiveLimits): ActionService {
 
 const LIMITS: ArchiveLimits = { maxTotalBytes: 20 * 1024 ** 3, maxEntries: 100_000, maxEngineBytes: 1024 ** 3 };
 
+/** libarchive's test_read_format_rar.rar: test.txt, a symlink, testdir/test.txt, and two directories. */
+const RAR4_TREE =
+	"UmFyIRoHAM+QcwAADQAAAAAAAACEUnQgkDIAFAAAABQAAAADQqLIvrd22j4UMAgApIEAAHRlc3QudHh0gAi3dto+t3baPnRlc3QgdGV4dCBkb2N1bWVudA0KnS90IJAyAAgAAAAIAAAAA3tEybbRTNg+FDAIAP+hAAB0ZXN0bGlua8AI0UzYPlBf2j50ZXN0LnR4dM3gdCCQOgAUAAAAFAAAAANCosi+Y3faPhQwEACkgQAAdGVzdGRpclx0ZXN0LnR4dMDMY3faPmN32j50ZXN0IHRleHQgZG9jdW1lbnQNCqHIdOCQMQAAAAAAAAAAAAMAAAAAY3faPhQwBwDtQQAAdGVzdGRpcsDMY3faPmR32j7m53TgkDYAAAAAAAAAAAADAAAAAJ2r1T4UMAwA7UEAAHRlc3RlbXB0eWRpcoDMnavVPsVd2j7EPXsAQAcA";
+/** libarchive's test_read_format_rar5_stored.rar: one stored member, helloworld.txt. */
+const RAR5_STORED =
+	"UmFyIRoHAQAzkrXlCgEFBgAFAQGAgAA4MAZjLAIDC50ABJ0ApIMCtEOglYAAAQ5oZWxsb3dvcmxkLnR4dAoDE34Oq1tW6Q4aaGVsbG8gbGliYXJjaGl2ZSB0ZXN0IHN1aXRlIQodd1ZRAwUEAA==";
+/** libarchive's test_read_format_rar5_encrypted.rar: four members behind a password. */
+const RAR5_ENCRYPTED =
+	"UmFyIRoHAQAzkrXlCgEFBgAFAQGAgAA1/zIeHwIDCxIEEiBVblrugAAABWEudHh0CgMCfCGEo4J82gFUaGlzIGlzIGZyb20gYS50eHR6QXGzUAIDPDAEEiAYRaMCgAMABWIudHh0MAEAAw/HRF7hgPi1n9YrQzcIvFfN+jTfBqtdBdSTB3cPHY6AU+o1Zx1w8S1La5wanAoDAnJlmKaCfNoBY7pUstAQpUlftLrTwGmoOxu8uzgn14eTeHMvfJPi0ijEAN7+psA7fmxn1AVQANz4jXzxZh8CAwsSBBIgNT2alIAAAAVjLnR4dAoDAj5I6a6CfNoBVGhpcyBpcyBmcm9tIGMudHh07P3wXVICAzygAASSACDD32MSgAMABWQudHh0MAEAAw/HRF7hgPi1n9YrQzcIvFfN883Wsxy0W6d8rDZYjrMOaYNM1EjpFevWrHe3owoDAnvFKfSPfNoB22ly9PZWjqb9GWXplbM2hTQ39Sqg0yeHsvXBAjLYql4dd1ZRAwUEAA==";
+
 /** A source tree with a wrapper folder, a nested file, and an empty directory. */
 async function docsSource(): Promise<string> {
 	const src = join(root, "src");
@@ -264,6 +274,34 @@ describe("libarchive-backed extraction", () => {
 		const tiny = { ...LIMITS, maxEngineBytes: 1024 };
 		await expect(service(tiny).run([archive], { kind: "extract" }, null)).rejects.toThrow(/너무 커서/);
 		expect(await readdir(root)).toEqual(["big.7z"]);
+	});
+
+	// Fixtures are libarchive's own RAR test archives (BSD-2-Clause), embedded
+	// because no RAR writer exists to build them here.
+	it("extracts a RAR4 archive, skipping its symlink and keeping its empty directory", async () => {
+		const archive = join(root, "legacy.rar");
+		await writeFile(archive, Buffer.from(RAR4_TREE, "base64"));
+		const out = await service().run([archive], { kind: "extract" }, null);
+		expect(out.output).toBe(join(root, "legacy"));
+		expect(await readFile(join(root, "legacy", "test.txt"), "utf8")).toBe("test text document\r\n");
+		expect(await readFile(join(root, "legacy", "testdir", "test.txt"), "utf8")).toBe("test text document\r\n");
+		expect((await stat(join(root, "legacy", "testemptydir"))).isDirectory()).toBe(true);
+		expect(await lstat(join(root, "legacy", "testlink")).catch(() => null)).toBeNull();
+	});
+
+	it("extracts a RAR5 archive", async () => {
+		const archive = join(root, "modern.rar");
+		await writeFile(archive, Buffer.from(RAR5_STORED, "base64"));
+		const out = await service().run([archive], { kind: "extract" }, null);
+		expect(out.output).toBe(join(root, "modern"));
+		expect(await readFile(join(root, "modern", "helloworld.txt"), "utf8")).toBe("hello libarchive test suite!\n");
+	});
+
+	it("refuses an encrypted RAR with Korean copy and leaves nothing behind", async () => {
+		const archive = join(root, "secret.rar");
+		await writeFile(archive, Buffer.from(RAR5_ENCRYPTED, "base64"));
+		await expect(service().run([archive], { kind: "extract" }, null)).rejects.toThrow(/암호|손상/);
+		expect(await readdir(root)).toEqual(["secret.rar"]);
 	});
 });
 
