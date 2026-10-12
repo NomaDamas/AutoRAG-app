@@ -9,7 +9,7 @@ import { fileKindOf } from "../state/entry-values";
 import { GROUP_HEADER_HEIGHT, groupedLayout, groupedWindow, type GroupSection } from "../state/grouping";
 import { basename } from "../state/paths";
 import { LIST_OVERSCAN } from "../state/virtual";
-import { RELATION_LABELS, type StackRow, type VersionFamilyError } from "../state/version-family";
+import type { StackRow, VersionFamilyError } from "../state/version-family";
 import { isHiddenName } from "../state/visibility";
 import { ChevronRightIcon } from "./icons";
 import { GroupHeader } from "./GroupHeader";
