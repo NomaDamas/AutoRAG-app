@@ -312,25 +312,45 @@ describe("createSearchService", () => {
 		]);
 	});
 
-	it("maps the complete stream event to a Deep phase", async () => {
-		const deepResponse = createResponse("session-deep", "Deep answer", 4);
+	it("sends a complete answer that no preliminary preceded as the Quick phase and stores it once", async () => {
+		// Jev judged the fast answer final: the run streams only `complete`. Sent as
+		// `deep` it would render beside the Quick draft that already shows its text.
+		const response = createResponse("session-only", "Only answer", 4);
 		const agent = createFakeAgent(async function*() {
-			yield { type: "complete", response: deepResponse };
+			yield { type: "complete", response };
 		});
 		const { events, send } = collectEvents();
-		const service = createSearchService({
-			agentFactory: () => agent,
-			chatStore: await createStore(),
-			send,
-			now,
-		});
+		const store = await createStore();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: store, send, now });
 
 		await service.start("search-2", "chat-2", "refund approval", []);
 
+		expect(events.filter((event) => event.type === "deep")).toEqual([]);
+		const quick = events.find((event) => event.type === "quick");
+		assert(quick !== undefined);
+		expect(quick.searchId).toBe("search-2");
+		expect(quick.sessionId).toBe("session-only");
+		expect(quick.phase.answer).toBe("Only answer");
+		const saved = await store.get("chat-2");
+		const assistant = saved?.messages.find((message) => message.role === "assistant");
+		assert(assistant?.role === "assistant");
+		expect(assistant.quick?.answer).toBe("Only answer");
+		expect(assistant.deep).toBeNull();
+	});
+
+	it("maps the complete event after a preliminary to the Deep phase", async () => {
+		const agent = createFakeAgent(async function*() {
+			yield { type: "preliminary", response: createResponse("session-deep", "Quick answer", 1) };
+			yield { type: "complete", response: createResponse("session-deep", "Deep answer", 4) };
+		});
+		const { events, send } = collectEvents();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send, now });
+
+		await service.start("search-2", "chat-2", "refund approval", []);
+
+		expect(events.filter((event) => event.type === "quick" || event.type === "deep").map((event) => event.type)).toEqual(["quick", "deep"]);
 		const deep = events.find((event) => event.type === "deep");
 		assert(deep !== undefined);
-		expect(deep.searchId).toBe("search-2");
-		expect(deep.sessionId).toBe("session-deep");
 		expect(deep.phase.answer).toBe("Deep answer");
 	});
 

@@ -283,13 +283,18 @@ export function createSearchService(deps: SearchServiceDeps): SearchBridge {
 					}
 					case "complete": {
 						run.sessionId = event.response.sessionId;
-						run.deep = mapPhase(event.response);
-						emit({
-							type: "deep",
-							searchId: run.searchId,
-							sessionId: run.sessionId,
-							phase: run.deep,
-						});
+						const phase = mapPhase(event.response);
+						// Without a preliminary this is the run's only answer: Jev judged the
+						// fast answer final (or routed straight to a direct answer), so no
+						// verification ran. It belongs in the Quick slot, which already shows
+						// its streamed draft; a Deep block would repeat that same text.
+						if (run.quick === null) {
+							run.quick = phase;
+							emit({ type: "quick", searchId: run.searchId, sessionId: run.sessionId, phase });
+						} else {
+							run.deep = phase;
+							emit({ type: "deep", searchId: run.searchId, sessionId: run.sessionId, phase });
+						}
 						await saveRunMessage(run, false);
 						break;
 					}
