@@ -59,6 +59,14 @@ describe("EvidenceExcerpt", () => {
 		expect(table?.querySelectorAll("tbody td")[1]?.getAttribute("style")).toContain("text-align: right");
 	});
 
+	it("breaks a pipe cell at <br> instead of printing the tag", () => {
+		render("| 2.2.2 | 발전성(35)<br>활용성(15) <br>ㆍSW 개발 |\n| 2.2.3 | 관리 |");
+		const cell = host.querySelectorAll(".evidence__block--table td")[1];
+		expect(cell?.querySelectorAll("br")).toHaveLength(2);
+		expect(cell?.textContent).toBe("발전성(35)활용성(15) ㆍSW 개발");
+		expect(host.textContent).not.toContain("<br>");
+	});
+
 	it("keeps markdown blocks rendering as before", () => {
 		render("## 승인 규칙\n- 항목\n```\n<td>코드</td>\n```");
 		expect(host.querySelectorAll(".evidence__block--heading")).toHaveLength(1);

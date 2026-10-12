@@ -83,6 +83,14 @@ describe("splitExcerpt", () => {
 		const text = "| 하나뿐인 줄";
 		expect(splitExcerpt(text)).toEqual([{ kind: "markdown", text }]);
 	});
+
+	it("unescapes markdown punctuation in pipe cells (kordoc writes `\\_` and `\\*`)", () => {
+		const parts = splitExcerpt("| 1.2.1 | 기술적 우수성\\_ 독창성 |\n| \\* 비고 | a \\| b |");
+		expect(parts[0]?.kind === "table" ? parts[0].rows : []).toEqual([
+			["1.2.1", "기술적 우수성_ 독창성"],
+			["* 비고", "a | b"],
+		]);
+	});
 });
 
 describe("repairHtmlFragment", () => {

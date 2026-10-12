@@ -58,7 +58,7 @@ function ExcerptPartView({ part, images }: { readonly part: ExcerptPart; readonl
 								<tr>
 									{part.header.map((cell, column) => (
 										<th key={`${column}`} style={{ textAlign: part.align[column] ?? "left" }}>
-											{renderInline(parseInline(cell))}
+											<TableCell text={cell} />
 										</th>
 									))}
 								</tr>
@@ -69,7 +69,7 @@ function ExcerptPartView({ part, images }: { readonly part: ExcerptPart; readonl
 								<tr key={`${line}`}>
 									{row.map((cell, column) => (
 										<td key={`${column}`} style={part.align[column] == null ? undefined : { textAlign: part.align[column] }}>
-											{renderInline(parseInline(cell))}
+											<TableCell text={cell} />
 										</td>
 									))}
 								</tr>
@@ -87,6 +87,20 @@ function ExcerptPartView({ part, images }: { readonly part: ExcerptPart; readonl
 				</>
 			);
 	}
+}
+
+/** A pipe-table cell: inline markdown, with the `<br>` a parser writes for an in-cell line break. */
+function TableCell({ text }: { readonly text: string }): ReactElement {
+	return (
+		<>
+			{text.split(/<br\s*\/?>/iu).map((line, index) => (
+				<span key={`${index}`}>
+					{index === 0 ? null : <br />}
+					{renderInline(parseInline(line))}
+				</span>
+			))}
+		</>
+	);
 }
 
 /**

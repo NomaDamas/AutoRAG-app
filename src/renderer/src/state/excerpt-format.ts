@@ -56,12 +56,12 @@ function blockDepthDelta(line: string): number | null {
 
 const DELIMITER_CELL = /^\s*:?-+:?\s*$/u;
 
-/** Cells of one pipe-table line; `\|` is a literal pipe. */
+/** Cells of one pipe-table line; `\|` is a literal pipe and `\_`, `\*` etc. are markdown escapes. */
 function pipeCells(line: string): string[] {
 	let body = line.trim();
 	if (body.startsWith("|")) body = body.slice(1);
 	if (body.endsWith("|") && !body.endsWith("\\|")) body = body.slice(0, -1);
-	return body.split(/(?<!\\)\|/u).map((cell) => cell.trim().replaceAll("\\|", "|"));
+	return body.split(/(?<!\\)\|/u).map((cell) => cell.trim().replace(/\\([!-/:-@[-`{-~])/gu, "$1"));
 }
 
 function isDelimiterRow(line: string): boolean {
