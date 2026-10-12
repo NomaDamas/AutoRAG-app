@@ -7,7 +7,8 @@
  * `configPatch` writes, so unknown config keys survive).
  */
 
-import type { ReactElement } from "react";
+import { useEffect, useState, type ReactElement } from "react";
+import type { AppUpdateSnapshot } from "../../../../shared/update-contract";
 import type { AppSettings, AutoRagConfigSnapshot } from "../../../../shared/settings-contract";
 import { LanguageSettings } from "./LanguageSettings";
 import { Row, Section, SettingsPageHead } from "./SettingsKit";
@@ -70,9 +71,10 @@ export function GeneralPage({
 						<Switch checked={appSettings.osMenuIntegration} onChange={() => void setApp({ osMenuIntegration: !appSettings.osMenuIntegration })} ariaLabel="파일 우클릭 메뉴에 추가" />
 					</Row>
 				) : null}
-				<Row name="업데이트 자동 설치" hint="새 버전을 다음 앱 시작 때 자동으로 적용합니다.">
+				<Row name="업데이트 자동 설치" hint="새 버전을 백그라운드에서 내려받고, 앱을 종료할 때 적용합니다.">
 					<Switch checked={appSettings.autoInstallUpdates} onChange={() => void setApp({ autoInstallUpdates: !appSettings.autoInstallUpdates })} ariaLabel="업데이트 자동 설치" />
 				</Row>
+				<AppUpdateRow />
 			</Section>
 			<Section title="개인정보">
 				<Row name="익명 사용 통계 보내기" hint="문서 내용을 제외한 성능 정보만 전송합니다.">
@@ -83,5 +85,67 @@ export function GeneralPage({
 				<LanguageSettings snapshot={snapshot} path={["languages"]} name="문서 언어" hint="여러 개를 선택할 수 있습니다." onSaved={onSaved} fallback={["ko", "en"]} />
 			</Section>
 		</>
+	);
+}
+
+/** "앱 업데이트": the running version, what the updater is doing, and the one action that fits. */
+function AppUpdateRow(): ReactElement | null {
+	const bridge = autorag.appUpdate;
+	const [update, setUpdate] = useState<AppUpdateSnapshot | null>(null);
+	useEffect(() => {
+		let live = true;
+		void bridge.get().then((snapshot) => {
+			if (live) setUpdate(snapshot);
+		});
+		const unsubscribe = bridge.onChange(setUpdate);
+		return () => {
+			live = false;
+			unsubscribe();
+		};
+	}, [bridge]);
+	if (update === null) return null;
+	const { state, currentVersion } = update;
+	let hint: string;
+	switch (state.kind) {
+		case "unsupported":
+			hint = `현재 버전 ${currentVersion}. 이 빌드는 자동 업데이트를 지원하지 않습니다.`;
+			break;
+		case "checking":
+			hint = "업데이트를 확인하는 중…";
+			break;
+		case "available":
+			hint = update.mode === "notify" ? `새 버전 ${state.version}이(가) 있습니다. 설치 파일을 내려받아 교체하세요.` : `새 버전 ${state.version}이(가) 있습니다.`;
+			break;
+		case "downloading":
+			hint = `${state.version} 내려받는 중… ${state.percent}%`;
+			break;
+		case "ready":
+			hint = `${state.version} 준비됨. 앱을 종료하거나 지금 재시작하면 설치됩니다.`;
+			break;
+		case "error":
+			hint = `확인하지 못했습니다: ${state.message}`;
+			break;
+		case "idle":
+			hint = state.checkedAt === null ? `현재 버전 ${currentVersion}` : `현재 버전 ${currentVersion}. 최신 버전입니다.`;
+			break;
+	}
+	const action =
+		state.kind === "ready" ? (
+			<button type="button" className="linear-btn settings-btn-primary" onClick={() => void bridge.install()}>
+				지금 재시작
+			</button>
+		) : state.kind === "available" ? (
+			<button type="button" className="linear-btn settings-btn-primary" onClick={() => void bridge.download()}>
+				{update.mode === "notify" ? "설치 파일 받기" : "내려받기"}
+			</button>
+		) : state.kind === "unsupported" ? null : (
+			<button type="button" className="linear-btn" disabled={state.kind === "checking" || state.kind === "downloading"} onClick={() => void bridge.check()}>
+				업데이트 확인
+			</button>
+		);
+	return (
+		<Row name="앱 업데이트" hint={hint}>
+			{action}
+		</Row>
 	);
 }

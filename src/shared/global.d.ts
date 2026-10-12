@@ -10,12 +10,14 @@ import type { OsRequestBridge } from "./os-request-contract";
 import type { SearchBridge } from "./search-contract";
 import type { SettingsBridge } from "./settings-contract";
 import type { ServicesBridge } from "./services-contract";
+import type { AppUpdateBridge } from "./update-contract";
 
 declare global {
 	interface Window {
 		readonly autorag: AutoRagBridge & {
 			readonly fs: FsBridge;
 			readonly actions: ActionsBridge;
+			readonly appUpdate: AppUpdateBridge;
 			readonly account: AccountBridge;
 			readonly indexActivity: IndexActivityBridge;
 			readonly live: LiveBridge;

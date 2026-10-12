@@ -237,9 +237,9 @@ requesting a fresh key clears it. `v0-test.txt` at the bucket root is a
 deliberate 20-byte canary for exactly this check.
 
 After a release, the files land at `https://dl.nomadamas.org/v<version>/` —
-`AutoRAG-<version>-arm64.dmg`, `AutoRAG-Setup-<version>-x64.exe`,
-`components-<platform>.json`, and the `SHA256SUMS-*` files. Each version is
-synced into its own prefix with
+`Dazzi-<version>-arm64.dmg`, `Dazzi-Setup-<version>-x64.exe`,
+`components-<platform>.json`, the `SHA256SUMS-*` files, and the auto-update
+payloads below. Each version is synced into its own prefix with
 `Cache-Control: public, max-age=31536000, immutable`: an installer never
 changes once uploaded, so the CDN may cache it forever and edge hits give the
 same fast download everywhere. Range requests are supported, so interrupted
@@ -249,6 +249,81 @@ GitHub release as fallback — and verify checksums after download either way.
 What this does not solve: China. Neither Cloudflare nor GitHub is reliably
 reachable there; a China-hosted mirror (for example Alibaba Cloud OSS behind an
 ICP-licensed domain) would be its own upload step and its own decision.
+
+## Auto-update
+
+The packaged app updates itself with `electron-updater` (generic provider)
+from the R2 mirror. Only the changed parts of a release are downloaded: each
+update payload ships with a `.blockmap` (content-defined chunks, 8–32 KB), and
+the app fetches only the chunks its previous payload lacks.
+
+### What a release publishes
+
+| Path on `dl.nomadamas.org` | Cache | Contents |
+|---|---|---|
+| `v<version>/Dazzi-<version>-arm64.zip` + `.zip.blockmap` | immutable | macOS update payload (Squirrel.Mac installs from the zip; the dmg stays the first-install download) |
+| `v<version>/Dazzi-Setup-<version>-x64.exe.blockmap` | immutable | Windows: the installer is the payload; its blockmap must come from the same build |
+| `v<version>/feed/latest*.yml` | immutable | this release's feed, kept for rollback |
+| `latest/latest-mac.yml`, `latest/latest.yml` | `no-cache` | the feed the app polls; entries point at `../v<version>/…` |
+
+The update zip is not attached to the GitHub release (GitHub caps an asset at
+2 GiB and the feed never points there). `scripts/release/update-feed.mjs`
+rewrites electron-builder's feed into the `latest/` form, and the sync step
+uploads the feed last, after everything it references.
+
+A build gets a feed only when `AUTORAG_UPDATE_FEED_URL` is set at pack time;
+the workflow sets it to `https://dl.nomadamas.org/latest/` whenever the R2
+variables exist. That writes `resources/app-update.yml`. A local
+`release:pack:*` without it has no `app-update.yml`, and that app never checks.
+A pre-release tag (`v1.2.3-rc.1`) writes `<channel>-mac.yml` / `<channel>.yml`
+and follows only that channel, so releases never pick it up.
+
+Cloudflare's custom-domain edge answers a multi-range request
+(`Range: bytes=0-1,5-6`) with 400 and a single range with 206 (measured), so
+the feed sets `useMultipleRangeRequest: false` and the app fetches one range
+per request.
+
+### Policy
+
+* One check 30 s after launch, then every 6 hours; Settings → 일반 → 앱 업데이트
+  and the macOS app menu's "업데이트 확인…" check on demand.
+* "업데이트 자동 설치" on (the default): the update downloads in the background
+  and installs when the app quits; a system notification says so once per
+  version, and "지금 재시작" applies it at once. Off: the app reports the new
+  version and downloads only when asked.
+* A failed background check keeps the previous state; a failed check the user
+  started is shown. The updater writes `updater.log` in Electron's logs folder,
+  which is named after the package (`~/Library/Logs/@autorag/app`,
+  `%APPDATA%\@autorag\app\logs`), including each blockmap plan
+  (`Full: … To download: … (n%)`).
+
+### Platform rules
+
+* **macOS needs a Developer ID signature.** Squirrel.Mac refuses to install
+  over an ad-hoc signed app. The app reads its own signature at startup
+  (`codesign -dv`); an ad-hoc build only reports the new version and opens the
+  dmg link in the browser ("설치 파일 받기"). Set the signing secrets above to
+  turn on real updates.
+* **macOS differential needs a previous zip.** The first update after a dmg
+  install downloads the whole zip (there is nothing cached to diff against);
+  every update after that is differential.
+* **Windows** installs per-user with no prompt; the installer copies itself
+  into the updater cache at install time, so even the first update is
+  differential. Without Azure signing the app installs updates unverified
+  (electron-updater checks the publisher only when the build is signed).
+
+### Kill switch
+
+To stop a bad release from spreading, point `latest/` back at the previous
+version's feed; clients still on the old version then see nothing new
+(clients that already updated stay on the bad version until a newer release):
+
+```sh
+aws s3 cp "s3://autorag-dl/v<previous>/feed/" s3://autorag-dl/latest/ --recursive \
+  --endpoint-url "$R2_ENDPOINT" --cache-control no-cache
+```
+
+Ship the fix as a new, higher version; electron-updater never downgrades.
 
 ## Before the first release
 
