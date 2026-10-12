@@ -89,7 +89,6 @@ interface EmbeddingChoice {
 }
 
 const QWEN3_GGUF = "hf:Qwen/Qwen3-Embedding-0.6B-GGUF/Qwen3-Embedding-0.6B-Q8_0.gguf";
-const GEMMA_GGUF = "hf:ggml-org/embeddinggemma-300M-GGUF/embeddinggemma-300M-Q8_0.gguf";
 const MAILCRAWL_NATIVE_MODEL = "Qwen/Qwen3-Embedding-0.6B";
 
 /** Mailcrawl env keys this service owns; any not set for the choice are removed. */
@@ -130,18 +129,6 @@ export const EMBEDDING_PROFILES: readonly EmbeddingProfile[] = [
 		dimension: 1024,
 		queryPrefix: "",
 		passagePrefix: "",
-		baseUrl: null,
-		requiresLocalServer: false,
-	},
-	{
-		id: "embeddinggemma-300m",
-		kind: "profile",
-		label: "EmbeddingGemma 300M",
-		description: "가벼운 다국어 모델(768차원). 카카오톡·메일이 기본으로 쓰는 모델과 같습니다.",
-		model: "embeddinggemma-300m",
-		dimension: 768,
-		queryPrefix: "task: search result | query: ",
-		passagePrefix: "title: none | text: ",
 		baseUrl: null,
 		requiresLocalServer: false,
 	},
@@ -202,7 +189,7 @@ function deriveEmbedder(choice: EmbeddingChoice): JsonObject {
 function currentProfileId(embedder: unknown): string | null {
 	if (!isJsonObject(embedder)) return null;
 	const profile = embedder.profile;
-	if (profile === "qwen3-embedding-0.6b" || profile === "embeddinggemma-300m") return profile;
+	if (profile === "qwen3-embedding-0.6b") return profile;
 	const id = embedder.id;
 	if (typeof id === "string") {
 		if (id.startsWith("native:")) return "native-qwen3";
@@ -214,7 +201,6 @@ function currentProfileId(embedder: unknown): string | null {
 /** The qmd `QMD_EMBED_MODEL` GGUF URI for the choice, or null when qmd cannot use it. */
 function qmdModelFor(choice: EmbeddingChoice): string | null {
 	const id = choice.profile.id;
-	if (id === "embeddinggemma-300m") return GEMMA_GGUF;
 	if (id === "native-qwen3" || id === "qwen3-embedding-0.6b") return QWEN3_GGUF;
 	return null;
 }
@@ -225,7 +211,6 @@ function mailcrawlEnvFor(choice: EmbeddingChoice, adapterUrl: string | null): Re
 	if (id === "native-qwen3" || id === "qwen3-embedding-0.6b") {
 		return { MAILCRAWL_EMBEDDER_PROVIDER: "native", MAILCRAWL_NATIVE_MODEL, MAILCRAWL_NATIVE_DEVICE: "auto" };
 	}
-	if (id === "embeddinggemma-300m") return { MAILCRAWL_EMBEDDER_PROVIDER: "legacy-onnx" };
 	if (id === "local-server" && choice.localServer !== undefined && adapterUrl !== null) {
 		return {
 			MAILCRAWL_EMBEDDER_PROVIDER: "loopback-http",
@@ -260,7 +245,7 @@ function adoptionFor(
 			return !(choice.profile.id === "local-server" ? adapterAvailable : mailcrawlEnvFor(choice, null) !== null)
 				? {
 						adoption: "incompatible",
-						reason: "mailcrawl은 내장 Qwen3/EmbeddingGemma만 지원하고 임의의 HTTP 임베딩 서버는 쓸 수 없습니다",
+						reason: "mailcrawl은 내장 Qwen3만 지원하고 임의의 HTTP 임베딩 서버는 쓸 수 없습니다",
 						action: null,
 					}
 				: {
@@ -290,22 +275,15 @@ function adoptionFor(
 					}
 				: {
 						adoption: "propagated",
-						reason: "AutoRAG 관리 discrawl config를 다시 쓰고 `discrawl embed --rebuild`로 다시 색인합니다",
+						reason: "Dazzi 관리 discrawl config를 다시 쓰고 `discrawl embed --rebuild`로 다시 색인합니다",
 						action: "datasources.<id>이 관리하는 discrawl config.toml",
 					};
 		case "kakao":
-			return choice.profile.id === "embeddinggemma-300m"
-				? {
-						adoption: "native",
-						reason: "lazykatok은 EmbeddingGemma 300M을 in-process로 내장하고 있어 그대로 일치합니다",
-						action: null,
-					}
-				: {
-						adoption: "incompatible",
-						reason:
-							"lazykatok은 EmbeddingGemma 300M만 내장 지원합니다. 다른 모델은 AutoRAG 공유 config로 지정할 수 없습니다(네이티브 설정이 소유)",
-						action: null,
-					};
+			return {
+				adoption: "incompatible",
+				reason: "lazykatok은 자체 내장 임베더(EmbeddingGemma)를 쓰며 Dazzi 공유 config로 바꿀 수 없습니다(네이티브 설정이 소유)",
+				action: null,
+			};
 		case "github-gist":
 			return {
 				adoption: "incompatible",
@@ -372,7 +350,6 @@ function findChoiceFromConfig(embedder: unknown, profileId: string): EmbeddingCh
 
 function qmdModelForConfig(embedder: unknown): string | null {
 	if (!isJsonObject(embedder)) return null;
-	if (embedder.profile === "embeddinggemma-300m") return GEMMA_GGUF;
 	if (embedder.profile === "qwen3-embedding-0.6b") return QWEN3_GGUF;
 	if (typeof embedder.id === "string" && embedder.id.startsWith("native:")) return QWEN3_GGUF;
 	return null;

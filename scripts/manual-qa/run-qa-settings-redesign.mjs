@@ -206,16 +206,16 @@ try {
 	// --- Embedding: plan + apply propagates to datasources ---------------
 	await page.locator(".settings-trigger[aria-haspopup='dialog']").click();
 	await page.waitForSelector(".settings-modal input[name='embedding-profile']");
-	await page.locator(".settings-modal .settings-list-row", { hasText: "EmbeddingGemma" }).click();
+	await page.locator(".settings-modal .settings-list-row", { hasText: "Dazzi 런타임" }).click();
 	await page.locator(".settings-modal button", { hasText: "계획 확인" }).click();
 	const planText = await waitFor(async () => { const text = await page.locator(".settings-modal").innerText(); return text.includes("mail") ? text : null; });
 	check("embedding plan lists per-datasource adoption", planText !== null && planText.includes("mail") && planText.includes("slack"), planText ?? "");
 	await page.screenshot({ path: join(EVIDENCE, "05-embedding-plan.png") });
 	await page.locator(".settings-modal button", { hasText: "적용" }).click();
-	const applied = await waitFor(() => readConfig().minSync?.embedder?.profile === "embeddinggemma-300m" ? readConfig() : null, 30000);
+	const applied = await waitFor(() => readConfig().minSync?.embedder?.profile === "qwen3-embedding-0.6b" ? readConfig() : null, 30000);
 	check("embedding apply writes minSync.embedder", applied !== null, JSON.stringify(readConfig().minSync));
 	const mailEnv = readConfig().datasources.mail.connector.env;
-	check("embedding change propagates to the mailcrawl CLI env", mailEnv.MAILCRAWL_EMBEDDER_PROVIDER === "legacy-onnx", JSON.stringify(mailEnv));
+	check("embedding change propagates to the mailcrawl CLI env", mailEnv.MAILCRAWL_EMBEDDER_PROVIDER === "native", JSON.stringify(mailEnv));
 	check("propagation preserves unrelated CLI env", mailEnv.MAILCRAWL_KIWI_MODEL === "/keep/me");
 	check("propagation preserves other datasource config", readConfig().datasources.slack.connector.workspace === "T0QA");
 	// Apply also runs the per-source rebuilds; the result line appears when they settle.
