@@ -698,10 +698,6 @@ html[data-appearance="dark"] .onb {
 	display: inline-flex;
 }
 
-.onb .auth-btn.apple .auth-mark {
-	color: #fff;
-}
-
 html[data-appearance="dark"] .onb .source-icon.brand,
 html[data-appearance="dark"] .onb .source-token.brand,
 html[data-appearance="dark"] .onb .more-chips .brand-chip {
@@ -755,18 +751,6 @@ html[data-appearance="dark"] .onb .source-icon.brand {
 	border-radius: 7px;
 	font-size: 12px;
 	font-weight: 500;
-}
-
-.onb .auth-btn.apple {
-	border: 1px solid #000;
-	background: #000;
-	color: #fff;
-}
-
-.onb .auth-btn.google {
-	border: 1px solid var(--onb-border);
-	background: var(--onb-bg-card);
-	color: var(--onb-ink);
 }
 
 .onb .auth-btn.email {
@@ -1021,14 +1005,6 @@ html[data-appearance="dark"] .onb .source-icon.brand {
 	font-size: 10px;
 }
 
-.onb .pay-summary+.pay-grid {
-	margin-top: 12px;
-}
-
-.onb .pay-grid .input {
-	flex: none;
-}
-
 .onb .plan-callout {
 	display: flex;
 	align-items: flex-start;
@@ -1054,24 +1030,6 @@ html[data-appearance="dark"] .onb .source-icon.brand {
 	color: var(--onb-muted);
 	font-size: 10.5px;
 	line-height: 1.5;
-}
-
-.onb .pay-grid {
-	display: grid;
-	grid-template-columns: 1fr 1fr;
-	gap: 9px;
-}
-
-.onb .pay-grid label {
-	display: flex;
-	flex-direction: column;
-	gap: 5px;
-	font-size: 10px;
-	color: var(--onb-muted);
-}
-
-.onb .pay-grid label:first-child {
-	grid-column: 1 / -1;
 }
 
 .onb .pay-demo {
@@ -1549,24 +1507,6 @@ html[data-appearance="dark"] .onb .source-icon.brand {
 	content: "✓";
 	color: var(--onb-green);
 	font-weight: 700;
-}
-
-.onb .consent {
-	display: flex;
-	align-items: flex-start;
-	gap: 8px;
-	margin-top: 13px;
-	padding: 10px;
-	border: 1px solid var(--onb-divider);
-	border-radius: 7px;
-	color: var(--onb-muted);
-	font-size: 10px;
-	line-height: 1.45;
-}
-
-.onb .consent input {
-	accent-color: var(--onb-blue);
-	margin-top: 2px;
 }
 
 .onb .reindex-note {

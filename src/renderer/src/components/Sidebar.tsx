@@ -10,6 +10,7 @@ import { GearIcon } from "./icons";
 import { iconButtonClass } from "./primitives/icon-button";
 import { Keycap } from "./primitives/Keycap";
 import { StatusDot } from "./primitives/StatusDot";
+import { SidebarIndexActivity } from "./SidebarIndexActivity";
 import { SidebarSearch, type SearchMode } from "./SidebarSearch";
 
 /** Shared shape of a sidebar row (nav item and the footer settings button): 28px rows, 12px labels. */
@@ -45,6 +46,7 @@ export function Sidebar({
 	onEject,
 	onOpenSettings,
 	onHideSidebar,
+	onOpenIndexing,
 	sourceStatus,
 	searchQuery,
 	searchRef,
@@ -63,6 +65,8 @@ export function Sidebar({
 	readonly onEject: (item: NavItem) => void;
 	readonly onOpenSettings?: (() => void) | undefined;
 	readonly onHideSidebar: () => void;
+	/** The indexing block opens Settings on its Indexing page. */
+	readonly onOpenIndexing: () => void;
 	readonly sourceStatus?: Readonly<Partial<Record<FsLocationIcon, "syncing" | "error">>>;
 	readonly searchQuery: string;
 	readonly searchRef: RefObject<HTMLInputElement | null>;
@@ -193,6 +197,7 @@ export function Sidebar({
 				))}
 			</div>
 			<div className="side-footer flex flex-none flex-col p-10 border-t border-border">
+				<SidebarIndexActivity onOpen={onOpenIndexing} />
 				<button
 					type="button"
 					className={cn(ITEM_CLASS, "sidebar__item--settings", settingsActive && "bg-selected-nav text-ink")}

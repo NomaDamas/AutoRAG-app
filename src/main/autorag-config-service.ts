@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 import { access, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { getAgentDir, ModelRuntime } from "@earendil-works/pi-coding-agent";
+import { registerAutoRAGProvider } from "@autorag/librarian";
+import { autoragFirst } from "../shared/account-contract";
 import { findEnvKeys } from "@earendil-works/pi-ai/compat";
 import {
 	buildAgentOptions,
@@ -376,9 +378,10 @@ function checkKnownBlock(path: string, value: unknown): void {
 		return;
 	}
 	if (path === "minSync") {
-		if (value === false) return;
-		if (!isJsonObject(value)) return fail("minSync must be an object or false");
+		if (value === false) return fail("MinSync is required and cannot be disabled");
+		if (!isJsonObject(value)) return fail("minSync must be an object");
 		if (value.enabled !== undefined && typeof value.enabled !== "boolean") fail("minSync.enabled must be a boolean");
+		if (value.enabled === false) fail("MinSync is required and cannot be disabled");
 		if (value.workspacePath !== undefined && typeof value.workspacePath !== "string") fail("minSync.workspacePath must be a string");
 		if (value.binaryPath !== undefined && typeof value.binaryPath !== "string") fail("minSync.binaryPath must be a string");
 		if (value.autoInstall !== undefined && typeof value.autoInstall !== "boolean") fail("minSync.autoInstall must be a boolean");
@@ -663,6 +666,7 @@ export function createAutoRagConfigService(deps: AutoRagConfigServiceDeps): Auto
 					modelsPath: join(agentDir, "models.json"),
 					allowModelNetwork: false,
 				});
+				await registerAutoRAGProvider(runtime, deps.env);
 				const available = new Set<string>();
 				try {
 					for (const model of await runtime.getAvailable()) available.add(`${model.provider}/${model.id}`);
@@ -697,7 +701,7 @@ export function createAutoRagConfigService(deps: AutoRagConfigServiceDeps): Auto
 						models,
 					};
 				});
-				return { error: null, providers };
+				return { error: null, providers: autoragFirst(providers) };
 			} catch (error) {
 				return { error: error instanceof Error ? error.message : String(error), providers: [] };
 			}

@@ -9,10 +9,14 @@ import { FS_CHANNELS } from "../shared/fs-contract";
 import { SEARCH_CHANNELS, type SearchBridge } from "../shared/search-contract";
 import { OS_REQUEST_CHANNELS } from "../shared/os-request-contract";
 import { SETTINGS_CHANNELS, type EmbeddingChangeRequest, type JsonValue, type ProviderAuthKind, type ProviderServerInput, type SettingsBridge } from "../shared/settings-contract";
+import { ACCOUNT_CHANNELS } from "../shared/account-contract";
 import { ONBOARDING_CHANNELS } from "../shared/onboarding-contract";
 import { isServiceRunRequest, SERVICES_CHANNELS } from "../shared/services-contract";
+import { INDEX_ACTIVITY_CHANNELS } from "../shared/index-activity-contract";
 import type { ActionService } from "./action-service";
+import type { IndexActivityService } from "./index-activity";
 import { dragOutPaths } from "./drag-out";
+import type { AccountService } from "./account-service";
 import type { OnboardingService } from "./onboarding-service";
 import type { OsRequestService } from "./os-request-service";
 import type { ServicesService } from "./services-service";
@@ -242,6 +246,21 @@ export function registerSettingsIpcHandlers(service: SettingsBridge): void {
 	);
 }
 
+/** AutoRAG account: the plan is the only renderer-supplied payload and is validated here. */
+export function registerAccountIpcHandlers(service: AccountService): void {
+	ipcMain.handle(ACCOUNT_CHANNELS.status, () => service.status());
+	ipcMain.handle(ACCOUNT_CHANNELS.refresh, () => service.refresh());
+	ipcMain.handle(ACCOUNT_CHANNELS.signIn, () => service.signIn());
+	ipcMain.handle(ACCOUNT_CHANNELS.cancelSignIn, () => service.cancelSignIn());
+	ipcMain.handle(ACCOUNT_CHANNELS.signOut, () => service.signOut());
+	ipcMain.handle(ACCOUNT_CHANNELS.checkout, (_event, plan: unknown) => {
+		if (plan !== "air" && plan !== "pro") throw new TypeError("account:checkout expects \"air\" or \"pro\"");
+		return service.checkout(plan);
+	});
+	ipcMain.handle(ACCOUNT_CHANNELS.portal, () => service.portal());
+	ipcMain.handle(ACCOUNT_CHANNELS.useManagedModel, () => service.useManagedModel());
+}
+
 /** First-run onboarding: every payload is validated inside the service. */
 export function registerOnboardingIpcHandlers(service: OnboardingService): void {
 	ipcMain.handle(ONBOARDING_CHANNELS.load, () => service.load());
@@ -275,4 +294,9 @@ export function registerOnboardingIpcHandlers(service: OnboardingService): void 
 /** The renderer drains requests that came from the OS file menu. */
 export function registerOsRequestIpcHandlers(service: OsRequestService): void {
 	ipcMain.handle(OS_REQUEST_CHANNELS.take, () => service.take());
+}
+
+/** The renderer's one read of what is indexing right now; changes are pushed by the main process. */
+export function registerIndexActivityIpcHandlers(service: IndexActivityService): void {
+	ipcMain.handle(INDEX_ACTIVITY_CHANNELS.get, () => service.snapshot());
 }

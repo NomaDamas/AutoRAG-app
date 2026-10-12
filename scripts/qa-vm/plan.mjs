@@ -90,3 +90,14 @@ export function orphanVmNames(vms, holders, runPrefix) {
 	const named = new Set(holders.map((holder) => holder.owner.vm));
 	return vms.filter((vm) => vm.Name.startsWith(runPrefix) && !named.has(vm.Name)).map((vm) => vm.Name);
 }
+
+/**
+ * Whether a job indexes for real and so needs the host's embedding model and
+ * runtime in the guest. A fresh VM has neither, and MinSync refuses to index
+ * without them. Only the onboarding lane (and a sweep that runs every lane)
+ * performs a real first index; a script may, so it gets them too.
+ */
+export function needsEmbeddingAssets(job) {
+	if (job.kind === "script") return true;
+	return job.lanes.length === 0 || job.lanes.includes("onboarding");
+}

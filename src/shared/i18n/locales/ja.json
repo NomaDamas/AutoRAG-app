@@ -104,6 +104,11 @@
     },
     "versionBanner": {
       "retry": "再確認"
+    },
+    "pathBar": {
+      "edit": "パスへ移動",
+      "invalid": "移動先のパスを入力してください",
+      "notFound": "\"{{path}}\" が見つかりません"
     }
   },
   "contextMenu": {
@@ -248,6 +253,34 @@
     "copiedPath": "パスをコピーしました",
     "feedbackSent": "フィードバックを送信しました"
   },
+  "indexActivity": {
+    "title": "インデックス",
+    "queued": "待機中",
+    "idle": "現在インデックス作成中のものはありません。",
+    "counts": "スキャン {{scanned}} · 書き込み {{written}} · 削除 {{deleted}} · スキップ {{skipped}}",
+    "local": "ローカルフォルダ",
+    "source": "データソース",
+    "running": "インデックス作成中",
+    "runningCount": "インデックス作成中 {{done}}/{{total}}",
+    "done": "インデックス作成完了",
+    "failed": "インデックス作成に失敗",
+    "syncing": "{{name}} を同期中",
+    "andMore": "{{text}} ほか {{count}} 件",
+    "open": "インデックスの状況を表示",
+    "origin": {
+      "scheduled": "自動更新",
+      "external": "アプリ外から実行"
+    },
+    "phases": {
+      "parsed": "書類を読み込み中",
+      "minsync": "検索インデックスを作成中",
+      "datasources": "データソースを同期中",
+      "jikji": "フォルダマップを作成中",
+      "everything": "ファイル名をインデックス中",
+      "fsearch": "ファイル名をインデックス中",
+      "finalizing": "仕上げ中"
+    }
+  },
   "confirm": {
     "emptyTrashTitle": "ゴミ箱を空にする",
     "emptyTrashMessage": "ゴミ箱内のすべての項目が完全に削除されます。この操作は取り消せません。",
@@ -347,22 +380,22 @@
     "account": {
       "eyebrow": "アカウント",
       "title": "アカウントで\n始める",
-      "lead": "プランとトライアルだけがアカウントに紐づきます。ファイルとインデックスはこのMacに残ります。",
-      "note": "ブラウザでログインすると、自動的にこのアプリに戻ります。パスワードをこのアプリに入力することはありません。",
+      "lead": "プランと使用量だけがアカウントに紐づきます。ファイルとインデックスはこのMacに残ります。",
+      "note": "ブラウザでログインすると、自動でこのアプリに戻ります。パスワードはアプリに入力しません。",
       "signedIn": "ログインしました",
       "signedInNote": "次のステップに進みます",
       "otherAccount": "別のアカウント",
       "cardTitle": "AutoRAGアカウント",
-      "cardSub": "トライアルと設定を管理します",
+      "cardSub": "プランと使用量を管理します",
       "busy": "ブラウザでログイン中…",
       "busyNote": "認証が完了すると自動的に戻ります。",
-      "apple": "Appleで続ける",
-      "google": "Googleで続ける",
-      "or": "または",
-      "emailPlaceholder": "メールアドレス",
-      "magicLink": "リンクを受け取る",
-      "authNote": "ログインリンクをメールでお送りします。アカウントにファイルの内容は保存されません。",
-      "sampleEmail": "hello@autorag.example"
+      "signIn": "ブラウザでログイン",
+      "cancel": "キャンセル",
+      "skip": "アカウントなしで自分のAPIキーを使う (BYOK)",
+      "offline": "サーバーに接続できないため、最後に確認した情報を表示しています。",
+      "authNote": "ログイン方法（メールコード、ソーシャルログイン）は、ブラウザのAutoRAGログイン画面で選びます。アカウントにファイルの内容は保存されません。",
+      "planLabel": "{{plan}} プラン",
+      "signedInEnv": "環境変数のAPIキーを使用中"
     },
     "permissions": {
       "eyebrow": "権限",
@@ -481,10 +514,13 @@
       "badgeSubscribed": "購読中",
       "perMonth": "/ 月",
       "continue": "このプランで続ける",
-      "startTrial": "7日間無料トライアルを開始",
-      "subscribeAir": "Airを購読する",
-      "notePaid": "支払い方法の登録完了",
-      "noteProTrialActive": "トライアル中 · 7日後に月額$20",
+      "checkoutPro": "Proの決済ページを開く",
+      "checkoutAir": "Airの決済ページを開く",
+      "noteHeld": "このアカウントで利用中",
+      "noteTrialing": "トライアル中 · {{date}}まで",
+      "noteCancelScheduled": "解約予定 · {{date}}まで利用可",
+      "signInFirst": "AirとProにはアカウントが必要です。先にログインしてください。",
+      "signInAction": "ログイン",
       "plan": {
         "free": {
           "name": "Free",
@@ -501,7 +537,7 @@
         "air": {
           "name": "Air",
           "price": "$4",
-          "note": "トライアルなしですぐ開始",
+          "note": "月額$4 · いつでも解約可",
           "tag": "毎日気軽に使う",
           "chip": "質問はAutoRAGモデルに送信",
           "feature": {
@@ -513,11 +549,11 @@
         "pro": {
           "name": "Pro",
           "price": "$20",
-          "note": "7日間無料トライアル後に課金",
+          "note": "月額$20 · いつでも解約可",
           "tag": "最速の初回インデックス作成",
-          "chip": "ファイル本文の送信前に同意が必要",
+          "chip": "質問はAutoRAGモデルに送信",
           "feature": {
-            "a": "クラウド埋め込みでより速く",
+            "a": "このMacでローカル埋め込み（本文は送信されません）",
             "b": "マネージドAIモデル · 最大の利用量",
             "c": "Airの機能をすべて含む"
           }
@@ -683,22 +719,13 @@
         "action": "終了して再度開く"
       },
       "pay": {
-        "proTitle": "Pro 7日間無料トライアルを開始",
-        "airTitle": "Airプランを購読",
-        "proLead": "7日間無料です。トライアル期間中は課金されず、終了前に通知します。クラウド埋め込みはトライアルを開始するとすぐに使えます。",
-        "airLead": "本日から毎月$4が請求されます。マネージドAIモデルをFreeより多く使えます。",
-        "today": "本日支払い",
-        "afterPro": "7日後から",
-        "fromNext": "次回の支払いから",
-        "monthly": "毎月{{price}}",
-        "cardNumber": "カード番号",
-        "expiry": "有効期限",
-        "cvc": "CVC",
-        "proConsent": "7日間無料トライアル終了後に毎月$20が自動で請求されることに同意します。いつでも設定から解約できます。",
-        "airConsent": "毎月$4が自動で請求されることに同意します。いつでも設定から解約できます。",
-        "demo": "実際の支払いは発生しません。このステップはQA用のプレースホルダーであり、カード情報は保存も送信もされません。",
-        "startTrial": "トライアルを開始",
-        "payAir": "$4を支払って続ける"
+        "proTitle": "Proの決済",
+        "airTitle": "Airの決済",
+        "lead": "決済はブラウザの決済ページで行います。カード情報はこのアプリに入力しません。",
+        "waiting": "決済が完了すると、このウィンドウが自動で更新されます。",
+        "reopen": "決済ページを開き直す",
+        "check": "決済を確認",
+        "checking": "確認中…"
       }
     },
     "toast": {
@@ -710,9 +737,8 @@
       "networkFail": "ネットワークに接続できません。",
       "fdaPending": "アプリを再度開くと権限が適用されます。",
       "verified": "接続を確認しました。",
-      "payMissing": "カード情報と同意が必要です。（デモ）",
-      "trialStarted": "Pro 7日間無料トライアルを開始しました。（デモ · 実際の支払いなし）",
-      "subscribed": "プランを購読しました。（デモ · 実際の支払いなし）",
+      "planActive": "{{plan}}プランが有効になりました。",
+      "signInFailed": "ログインできませんでした。",
       "notIndexed": "インデックス作成が終わらないとAutoRAGを開けません。"
     }
   }

@@ -70,7 +70,7 @@ try {
 
 	await main.keyboard.press(chord("2"));
 	await main.locator(".sidebar__item", { hasText: "Settings" }).click();
-	const appearance = main.locator('select[aria-label="Appearance"]');
+	const appearance = main.locator('select[aria-label="화면 모드"]');
 	await appearance.waitFor({ timeout: 15_000 });
 	await appearance.selectOption("dark");
 	const dark = await poll(
@@ -108,7 +108,7 @@ try {
 	check("dark appearance survives restart", persisted === "dark", String(persisted));
 	await restarted.keyboard.press(chord("2"));
 	await restarted.locator(".sidebar__item", { hasText: "Settings" }).click();
-	const persistedSelect = restarted.locator('select[aria-label="Appearance"]');
+	const persistedSelect = restarted.locator('select[aria-label="화면 모드"]');
 	await persistedSelect.waitFor({ timeout: 15_000 });
 	check("settings reload the persisted dark choice", (await persistedSelect.inputValue()) === "dark", await persistedSelect.inputValue());
 } finally {

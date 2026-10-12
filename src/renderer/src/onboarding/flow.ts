@@ -8,6 +8,8 @@
  * in the locale files.
  */
 
+import type { AccountStatus } from "../../../shared/account-contract";
+import { planCovers } from "../../../shared/account-contract";
 import type {
 	FolderScan,
 	IndexingPhase,
@@ -58,7 +60,10 @@ export function canAdvance(state: AdvanceState): boolean {
 		case "permissions":
 			return state.platform === "win32" || state.fullDiskAccess;
 		case "account":
-			return state.signedIn;
+			// Skipping the account is the BYOK path: it needs no sign-in.
+			return state.signedIn || state.plan === "byok";
+		case "plan":
+			return state.signedIn || state.plan === "byok";
 		case "folders":
 			return state.selectedFolders > 0;
 		case "embedding":
@@ -70,15 +75,28 @@ export function canAdvance(state: AdvanceState): boolean {
 	}
 }
 
-/** The prototype's `nextLabel()`: the footer primary's label for the step. */
-export function primaryLabelKey(stepId: OnboardingStepId, plan: PlanId, paid: PlanId | null): string {
+/**
+ * True when the signed-in account's plan already includes `plan`. Free and BYOK
+ * need nothing from the account, so only Air and Pro can be "held".
+ */
+export function planHeld(plan: PlanId, status: AccountStatus | null): boolean {
+	if (plan !== "air" && plan !== "pro") return false;
+	return status?.state === "signedIn" && status.account !== null && planCovers(status.account.plan, plan);
+}
+
+/**
+ * The footer primary's label for the step. On the plan step a paid choice the
+ * account does not hold yet opens the hosted checkout; once the account's
+ * plan covers the choice the step just continues.
+ */
+export function primaryLabelKey(stepId: OnboardingStepId, plan: PlanId, held: boolean): string {
 	if (stepId !== "plan") {
 		return `onboarding.stepLabel.${stepId}`;
 	}
-	if (plan === paid || plan === "free" || plan === "byok") {
+	if (held || plan === "free" || plan === "byok") {
 		return "onboarding.plan.continue";
 	}
-	return plan === "pro" ? "onboarding.plan.startTrial" : "onboarding.plan.subscribeAir";
+	return plan === "pro" ? "onboarding.plan.checkoutPro" : "onboarding.plan.checkoutAir";
 }
 
 /** Files-per-minute ETA the prototype computes with `eta(mode)`. */

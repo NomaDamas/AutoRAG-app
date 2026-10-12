@@ -91,7 +91,7 @@ writeFileSync(
 		searchPaths: [DOCS],
 		workspacePath: join(USER_DATA, "workspace"),
 		memoryPath: join(USER_DATA, "workspace", "memory.json"),
-		minSync: { enabled: false },
+		minSync: { enabled: true },
 		jikji: false,
 		model: { provider: "openrouter", id: "deepseek/deepseek-v4.1-flash", baseUrl: "https://openrouter.ai/api/v1", api: "openai-completions", apiKeyEnv: "OPENROUTER_API_KEY" },
 	}),

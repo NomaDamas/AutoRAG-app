@@ -222,6 +222,19 @@ describe("stat", () => {
 			flags: 0,
 		});
 	});
+
+	it("names the entry with the path's on-disk spelling, not the typed one", async () => {
+		// Given a folder on the (case-insensitive) temp volume, typed in the wrong case
+		await mkdir(join(root, "AutoRAG", "Docs"), { recursive: true });
+		const typed = join(root, "autorag", "DOCS");
+		if (!(await stat(typed).then(() => true, () => false))) return; // case-sensitive volume: nothing to restore
+
+		// When statting it
+		const entry = await createFsService(makeDeps(root).deps).stat(typed);
+
+		// Then path and name carry the real case, so the tab and path bar show it
+		expect(entry).toMatchObject({ name: "Docs", path: join(root, "AutoRAG", "Docs"), kind: "folder" });
+	});
 });
 
 describe("readEntries", () => {

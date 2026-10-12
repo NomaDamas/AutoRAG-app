@@ -38,7 +38,7 @@ import { anchorOf } from "../lib/anchor";
 import { dateLabelOf, fileKindOf, kindLabelOf, sizeLabelOf } from "../state/entry-values";
 import { buildInfoRows, hasMoreInfoRows, visibleInfoRows } from "../state/inspector-info";
 import { stackCards, summarizeSelection } from "../state/inspector-multi";
-import { evidenceDetail, evidenceKind, evidenceSourceUrl } from "../state/evidence";
+import { evidenceDetail, evidenceHeading, evidenceKind, evidenceSourceUrl } from "../state/evidence";
 import {
 	openWithItems,
 	suggestedActions,
@@ -770,6 +770,8 @@ function EvidencePanel({
 		);
 	}
 	const source = item.source;
+	const detail = evidenceDetail(item.confidence);
+	const heading = evidenceHeading(item.title, item.source);
 	const url = source === null ? null : evidenceSourceUrl(source);
 	// A datasource virtual id is not a folder on disk; only a local file's
 	// folder resolves the relative image links in its excerpts.
@@ -804,7 +806,7 @@ function EvidencePanel({
 				)}
 				{source === null || source.startsWith("/kakao/") ? (
 					<div className="preview-title text-body font-semibold text-ink leading-[1.3] [overflow-wrap:anywhere]">
-						{item.number}. {item.title}
+						{item.number}. {heading}
 					</div>
 				) : (
 					<button
@@ -813,7 +815,7 @@ function EvidencePanel({
 						title={url === null ? t("inspector.evidencePanel.showInFinder", "Show in Finder") : t("inspector.evidencePanel.openInBrowser", "Open in browser")}
 						onClick={() => onReveal(source)}
 					>
-						{item.number}. {item.title}
+						{item.number}. {heading}
 					</button>
 				)}
 				{url === null ? null : (
@@ -821,7 +823,7 @@ function EvidencePanel({
 						{url}
 					</div>
 				)}
-                <div className="preview-sub mt-4 text-badge text-ink-muted">{evidenceDetail(item.confidence)}</div>
+				{detail === null ? null : <div className="preview-sub mt-4 text-badge text-ink-muted">{detail}</div>}
 
 				<div className="text-badge font-semibold text-ink-muted">{t("inspector.evidencePanel.excerpts", "근거 내용 발췌")}</div>
 				<div className="flex flex-col gap-8 mt-4">

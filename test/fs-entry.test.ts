@@ -1,8 +1,20 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { existsSync, mkdirSync, rmSync } from "node:fs";
+import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { buildFsEntry } from "../src/main/fs-entry";
+import { buildFsEntry, onDiskPath } from "../src/main/fs-entry";
+
+/** The temp volume ignores case (APFS and NTFS defaults); most Linux filesystems do not. */
+const CASE_INSENSITIVE = (() => {
+	const probe = join(tmpdir(), `fs-entry-case-${process.pid}-Probe`);
+	try {
+		mkdirSync(probe);
+		return existsSync(probe.toLowerCase());
+	} finally {
+		rmSync(probe, { recursive: true, force: true });
+	}
+})();
 
 /** A `.app` on disk is a directory; only its name marks it as such. */
 async function appBundle(path: string): Promise<void> {
@@ -71,5 +83,47 @@ describe("buildFsEntry application bundles", () => {
 
 		expect(await buildFsEntry(join(path, "Contents"), "darwin")).toMatchObject({ kind: "folder" });
 		expect(await buildFsEntry(dirname(path), "darwin")).toMatchObject({ kind: "folder" });
+	});
+});
+
+describe("onDiskPath", () => {
+	let root: string;
+
+	beforeEach(async () => {
+		root = await mkdtemp(join(tmpdir(), "fs-entry-"));
+	});
+
+	afterEach(async () => {
+		await rm(root, { recursive: true, force: true });
+	});
+
+	it("keeps a path that is already spelled as on disk", async () => {
+		await mkdir(join(root, "AutoRAG", "Docs"), { recursive: true });
+		const path = join(root, "AutoRAG", "Docs");
+		expect(await onDiskPath(path)).toBe(path);
+	});
+
+	it.skipIf(!CASE_INSENSITIVE)("restores every segment's on-disk case on a case-insensitive volume", async () => {
+		await mkdir(join(root, "AutoRAG", "Docs"), { recursive: true });
+		await writeFile(join(root, "AutoRAG", "Docs", "ReadMe.md"), "x");
+		expect(await onDiskPath(join(root, "autorag", "DOCS"))).toBe(join(root, "AutoRAG", "Docs"));
+		expect(await onDiskPath(join(root, "AutoRAg", "docs", "readme.MD"))).toBe(join(root, "AutoRAG", "Docs", "ReadMe.md"));
+	});
+
+	it.skipIf(!CASE_INSENSITIVE)("restores the on-disk Unicode form of a name typed in another normalization", async () => {
+		const decomposed = "문서".normalize("NFD");
+		await mkdir(join(root, decomposed));
+		expect(await onDiskPath(join(root, "문서".normalize("NFC")))).toBe(join(root, decomposed));
+	});
+
+	it("never resolves a symlink: the link keeps its own name", async () => {
+		await mkdir(join(root, "Target"));
+		await symlink(join(root, "Target"), join(root, "Link"));
+		const typed = CASE_INSENSITIVE ? join(root, "link") : join(root, "Link");
+		expect(await onDiskPath(typed)).toBe(join(root, "Link"));
+	});
+
+	it("rejects a path that does not exist", async () => {
+		await expect(onDiskPath(join(root, "missing", "child"))).rejects.toMatchObject({ code: "ENOENT" });
 	});
 });

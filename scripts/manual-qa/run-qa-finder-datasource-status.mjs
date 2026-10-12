@@ -42,7 +42,7 @@ writeFileSync(join(chunkStore, "chunks.json"), JSON.stringify({
 const writeConfig = (datasources) => writeFileSync(configPath, `${JSON.stringify({
 	searchPaths: [join(workspace, "docs")],
 	workspacePath: workspace,
-	minSync: { enabled: false },
+	minSync: { enabled: true },
 	jikji: false,
 	datasources,
 }, null, 2)}\n`);

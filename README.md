@@ -77,12 +77,14 @@ Settings follows `docs/prototypes/settings` and writes to the shared AutoRAG
 `config.json` and the Pi agent's `auth.json`/`models.json`; the Finder keeps no
 second datasource or model configuration. The sidebar is searchable and grouped:
 
-- **계정** — 내 계정 and 구독 및 사용량. AutoRAG has no account or billing
-  backend yet, so these pages show no account data; billing actions open the
-  AutoRAG billing web pages.
+- **계정** — 내 계정 and 구독 및 사용량, read from the hosted AutoRAG service
+  (email, plan, weekly credits); sign-in, checkout and the
+  billing portal open in the system browser. Signed out, every value reads
+  "확인할 수 없음".
 - **기본 → 일반** — appearance, app language, hidden files, launch at login,
   automatic updates, telemetry, and document languages.
-- **AI → AI 모델** — connect services through the same Pi `/login` the AutoRAG
+- **AI → AI 모델** — the AutoRAG plan is listed first and connects through the
+  account service (not Pi's login); other services use the same Pi `/login` the AutoRAG
   agent uses: subscription sign-in (Claude Pro/Max, ChatGPT Plus/Pro, GitHub
   Copilot, …) opens the browser or shows a device code; API-key providers prompt
   for the key; local (loopback) and OpenAI-compatible servers are discovered and
@@ -101,7 +103,7 @@ second datasource or model configuration. The sidebar is searchable and grouped:
   Folders named in `appIndexing.codeFolderNames` (`node_modules`, `.git`, …) and
   every folder whose name starts with `.` (always, no setting)
   are left out of indexing; the app finds them itself and passes them as
-  `excludePaths`. Tesseract OCR and Jikji's media index are pinned off in every
+  `excludePaths`. OCR (`parserOptions.ocr.enabled`, which makes the librarian parse image files) and Jikji's media index are pinned off in every
   config the app hands to the librarian.
 - **Automatic refresh** — a cadence is `직접` (manual, the default) or 5 min to a
   day, for the local folders (`appIndexing.refreshIntervalMs`) and for each
@@ -113,6 +115,22 @@ second datasource or model configuration. The sidebar is searchable and grouped:
   a tick never overlap. Results land in `app-refresh/state.json` beside the
   config. The app never edits a crontab line or LaunchAgent it did not create and
   only warns when another job already refreshes AutoRAG.
+- **Indexing progress** — a block above 설정 in the sidebar shows what is
+  indexing right now, with a progress bar: the local folders and every
+  datasource, whether the run came from a Settings button, the OS job, or an
+  `autorag watch` outside the app. It names the running phase or datasource,
+  shows `done/total` for a multi-item run, turns green for "완료" (or orange with
+  the reason on a failure) and disappears a few seconds later (15 s after a
+  failure). Clicking it opens 설정 > 인덱싱, whose top section (진행 상황) lists
+  every item of the run. Sources: the librarian's
+  `<workspace>/.autorag/refresh-progress.json` (phase, parsed counts; a run is
+  live while its `pid` is, never judged by `updatedAt`, which only moves between
+  phases) and `app-refresh/activity.json`, the plan of whoever holds the refresh
+  lock (manual buttons and the OS job). The bar is a position, not a percent of
+  work: the librarian reports phases, not per-file totals, and a datasource sync
+  reports nothing while it runs, so the bar steps per finished item and is a
+  shimmer while a lone datasource syncs. Per-file and per-source progress is
+  requested upstream in Marker-Inc-Korea/AutoRAG#1840.
 - **연결된 앱** — all connections plus a gallery of the 16 datasource templates;
   each configured connection gets its own page with enable, desktop-app
   requirement and download link, per-source AI access, sync, polling interval,
@@ -198,9 +216,34 @@ resumes at the same step.
   `workspacePath` at the app's cwd seed is moved to `<AutoRAG home>/workspace`.
   The Finder opens only after the first index succeeds.
 
-Account sign-in and plan checkout are placeholders: they record the choice in
-the onboarding draft so QA can walk the full flow, but no account is created,
-no card data is stored or sent, and nothing is charged.
+Account and plan are real. The account step signs in through the system
+browser (OAuth 2.0 authorization code + PKCE over a loopback redirect, RFC 8252)
+against the hosted AutoRAG service (`AUTORAG_BASE_URL`, default
+`https://api.dazziapp.com`); no password and no card number is typed into the
+app. The returned API key (`AUTORAG_API_KEY`) lives only in the encrypted
+credential store and `process.env`, exactly like a BYOK key; the renderer sees
+an `AccountStatus` (email, plan, subscription state, weekly credits), never the
+key. Air and Pro open the service's hosted checkout in the browser, and the plan
+step continues once the server reports that plan; cancel, refund, and the
+payment method live in the hosted billing portal (Settings › 구독 및 사용량).
+Skipping the account is the BYOK path.
+
+**What signing in changes.** A successful sign-in (onboarding, Settings, or the
+AutoRAG entry in Settings › AI) points the agent at the account's models, per
+role, in the shared `config.json` (the config carries an explicit `baseUrl` and
+`apiKeyEnv`, never the key):
+
+| Role | Replaced when the config holds | Kept when it holds |
+|---|---|---|
+| answer `model` | nothing, or an AutoRAG model | any other provider's model |
+| `queryDecomposition` | nothing, an AutoRAG model, or the librarian's untouched default | another model you chose (including another OpenRouter one) or `false` |
+| `jev` | nothing, the librarian's untouched OpenRouter default, or a bare AutoRAG block | `false`, another backend, or an AutoRAG block you switched off (`enabled: false`) or tuned |
+| `rerank` | the same | the same (`topN`, `baseUrl`, … count as tuning) |
+
+The model ids come from the server (`GET /v1/models`, `?operation=jev|rerank`);
+a list that cannot be fetched leaves that role alone. Settings › 계정 › "계정
+모델로 설정" applies the plan to the answer and decomposition roles
+unconditionally. The corpus-text rule is unchanged: embeddings stay on this Mac.
 
 Onboarding state lives in `<userData>/onboarding/state.json`. Set
 `AUTORAG_SKIP_ONBOARDING=1` to open the Finder directly; the manual-QA launcher
@@ -416,6 +459,16 @@ equivalents (the registry for file kinds, `tasklist`/`taskkill`, the Recycle
 Bin) and scripts that genuinely need macOS log a skip instead of failing.
 Lane logs and `summary.json` land in `.omo/evidence/win-qa/`. The sweep also
 runs in CI (`.github/workflows/qa-windows.yml`).
+
+## Releases and installers
+
+Publishing a GitHub release builds `AutoRAG-<version>-arm64.dmg` and
+`AutoRAG-Setup-<version>-x64.exe` and attaches them to it. Each installer carries
+the app plus every program it drives (the `autorag` agent, minsync, jikji, dupey,
+the datasource crawlers, rhwp, kordoc, Node and npm-based CLIs) and the local
+Qwen3 embedding model, so one download is the whole install. See
+[`docs/release.md`](docs/release.md) for the contents, the signing secrets to
+configure, and how to rehearse a release.
 
 ## License
 

@@ -1,7 +1,9 @@
 import type { PreviewBridge } from "../preview/shared/contract";
+import type { AccountBridge } from "./account-contract";
 import type { ActionsBridge } from "./actions-contract";
 import type { AutoRagBridge } from "./bridge";
 import type { FsBridge } from "./fs-contract";
+import type { IndexActivityBridge } from "./index-activity-contract";
 import type { LiveBridge } from "./live-contract";
 import type { OnboardingBridge } from "./onboarding-contract";
 import type { OsRequestBridge } from "./os-request-contract";
@@ -14,6 +16,8 @@ declare global {
 		readonly autorag: AutoRagBridge & {
 			readonly fs: FsBridge;
 			readonly actions: ActionsBridge;
+			readonly account: AccountBridge;
+			readonly indexActivity: IndexActivityBridge;
 			readonly live: LiveBridge;
 			readonly onboarding: OnboardingBridge;
 			readonly osRequests: OsRequestBridge;

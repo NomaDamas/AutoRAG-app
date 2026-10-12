@@ -79,6 +79,20 @@ bun scripts/manual-qa/compare-visual-parity.mjs /tmp/parity/before /tmp/parity/a
 and what the harness has caught. On an unchanged tree the harness is
 byte-identical between runs; anything else is a real difference to explain.
 
+## Release pipeline
+
+`.github/workflows/release.yml` turns a published GitHub release into a macOS
+`.dmg` and a Windows `.exe`. `scripts/release/` holds the pieces and
+`docs/release.md` explains them: `stage-tools.mjs` fetches or builds the newest
+dependency programs and the embedding model into `build/stage/<platform>/`,
+`verify-bundle.mjs` runs each of them on a bare `PATH`, `electron-builder.config.mjs`
+packs them into the app's `resources/`, and `smoke-installed.mjs` installs the
+real artifact and launches it. At run time `src/main/bundled-tools.ts` puts
+`resources/tools/bin` first on `PATH` and `src/main/seed-assets.ts` copies the
+model into `~/.autorag`. Stage each platform on a matching host; never commit
+`build/stage`, `build/.cache`, or `dist`. Signing credentials live only in GitHub
+secrets.
+
 ## Windows QA
 
 The manual-QA lanes run on Windows 11 as well as macOS. Build once, then run
@@ -252,6 +266,11 @@ Each setting fixes a failure seen in the lanes, not a preference:
 - A lane that passes in a VM has not proven real-hardware behavior for things
   a VM cannot show (GPU rendering, a physical display, real Finder.app state).
   Run `--host` for those before release.
+- A fresh VM has no embedding model. For the `onboarding` lane, a full sweep, or a
+  `qa script`, the runner copies `models/` and `runtime/` from the host's
+  `~/.autorag` (or `AUTORAG_HOME`) into the guest; without them the first index
+  fails with "Embedding runtime assets are unavailable". Run `autorag models
+  prefetch` on the host once.
 - Never run `qa:vm:setup` while a run is active; setup needs both VM slots.
 - Do not copy `~/.autorag-qa`, the golden image, or `evidence` into a
   repository. They are machine-local.

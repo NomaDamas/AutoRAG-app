@@ -70,7 +70,7 @@ writeFileSync(
 			searchPaths: [CORPUS],
 			workspacePath: WORK,
 			memoryPath: join(WORK, "memory.json"),
-			minSync: false,
+			minSync: { enabled: true },
 			jikji: false,
 			model: {
 				provider: "openrouter",

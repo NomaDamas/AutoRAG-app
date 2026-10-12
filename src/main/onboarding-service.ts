@@ -84,6 +84,8 @@ export interface OnboardingServiceDeps {
 	};
 	readonly detectSources: (onFound?: (source: DetectedSource) => void) => Promise<SourceDetection>;
 	readonly gitToken: () => Promise<string | null>;
+	/** Points the AutoRAG agent at the signed-in account's managed models (managed plans only). */
+	readonly useManagedModel: () => Promise<unknown>;
 	readonly detectModels: () => Promise<readonly DetectedModelProvider[]>;
 	readonly verifyModel: (request: ModelVerifyRequest) => Promise<ModelVerifyResult>;
 	readonly send: (channel: string, payload: unknown) => void;
@@ -177,7 +179,6 @@ const SOURCE_IDS: Readonly<Record<string, true>> = {
 	github: true,
 	obsidian: true,
 };
-const ACCOUNT_METHODS: Readonly<Record<string, true>> = { apple: true, google: true, email: true };
 
 function onboardingStatePath(userDataDir: string): string {
 	return join(userDataDir, "onboarding", "state.json");
@@ -229,11 +230,6 @@ function isOnboardingDraft(value: unknown): value is OnboardingDraft {
 	if (!isJsonObject(value)) return false;
 	if (value.version !== 1) return false;
 	if (typeof value.stepId !== "string" || STEP_IDS[value.stepId] !== true) return false;
-	const account = value.account;
-	if (account !== null) {
-		if (!isJsonObject(account) || typeof account.method !== "string" || ACCOUNT_METHODS[account.method] !== true) return false;
-		if (account.email !== null && typeof account.email !== "string") return false;
-	}
 	if (typeof value.notifications !== "boolean") return false;
 	if (typeof value.network !== "boolean") return false;
 	if (typeof value.launchAtLogin !== "boolean") return false;
@@ -241,7 +237,6 @@ function isOnboardingDraft(value: unknown): value is OnboardingDraft {
 	if (!Array.isArray(value.sources) || !value.sources.every(isSourceChoice)) return false;
 	if (typeof value.plan !== "string" || PLAN_IDS[value.plan] !== true) return false;
 	if (typeof value.planConfirmed !== "boolean") return false;
-	if (value.paid !== null && (typeof value.paid !== "string" || PLAN_IDS[value.paid] !== true)) return false;
 	if (value.model !== null && !isModelChoice(value.model)) return false;
 	return true;
 }
@@ -610,6 +605,13 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 							},
 			});
 			writeConfigObject(deps.configPath, next);
+			if (request.plan !== "byok") {
+				// The index never needs the model, so an unreachable account must not block
+				// the first index; Settings → 계정 offers the same step again.
+				await deps.useManagedModel().catch((error: unknown) => {
+					console.warn("[onboarding] could not point the agent at the account's models:", error);
+				});
+			}
 			await maybeStoreGitToken(request.sources.map((source) => source.id));
 			const methods = ["parsed", "minsync", ...(request.sources.length > 0 ? ["datasources"] : [])];
 			workspacePath = await deps.resolveWorkspacePath();

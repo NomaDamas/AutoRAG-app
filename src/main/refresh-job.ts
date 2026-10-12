@@ -6,9 +6,14 @@
 import { appendFileSync, existsSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { readRawConfigObject, resolveConfigPath } from "@autorag/librarian/core";
+import { applyBundledTools } from "./bundled-tools";
 import { createDataSourceStatusService } from "./datasource-status";
 import { refreshAutoragIndex } from "./index-refresh";
 import { runScheduledRefresh, schedulePaths } from "./refresh-schedule";
+
+// The job runs the app's own executable, so an installed build finds the bundled CLIs exactly as the app does,
+// and the OS job definition never carries the directory (Task Scheduler caps `/TR` at 261 characters).
+applyBundledTools({ resourcesPath: process.resourcesPath, env: process.env });
 
 /** A tick that has not finished by then is abandoned: the lock must not outlive a hung child CLI. */
 const WATCHDOG_MS = 90 * 60_000;

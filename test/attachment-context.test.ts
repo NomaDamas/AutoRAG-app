@@ -208,34 +208,25 @@ describe("AttachmentContextAgent", () => {
 			},
 			(context: { readonly messages: unknown }) => {
 				requests.push(JSON.stringify(context.messages));
-				return pi.fauxAssistantMessage(
-					[
-						pi.fauxToolCall("emit_autorag_results", {
-							answer: "The codename is BLUEHERON-4827 [1].",
-							results: [
-								{
-									number: 1,
-									title: "secret-brief.md",
-									summary: "Project codename",
-									evidence: [{ excerpt: "Project codename: BLUEHERON-4827." }],
-									confidence: 1,
-								},
-							],
-							mapping: [{ number: 1, source: attached, method: "attachment", content: "Project codename: BLUEHERON-4827." }],
-						}),
-					],
-					{ stopReason: "toolUse" },
-				);
+				// The model cites the file it was handed; the librarian derives the result.
+				return pi.fauxAssistantMessage(`The codename is BLUEHERON-4827. [file:${attached}]`, { stopReason: "stop" });
 			},
 		]);
 		try {
+			const minsync = join(directory, "minsync");
+			await writeFile(
+				minsync,
+				`#!/usr/bin/env node\nconst c = process.argv[2];\nconsole.log(JSON.stringify(c === "query" ? { results: [] } : c === "check" ? { vectorstore_ok: true, embedder_ok: true } : c === "sync" ? { files_processed: 0 } : { initialized: true }));\n`,
+				{ mode: 0o755 },
+			);
 			const agent = new AttachmentContextAgent({
 				model: registration.getModel() as never,
 				searchPaths: [corpus],
 				workspacePath: directory,
 				memoryPath: join(directory, "memory.json"),
 				jikji: false,
-				minSync: false,
+				// MinSync is required: an inert binary stands in so the run never depends on a real install.
+				minSync: { binaryPath: minsync, autoInstall: false },
 				webSearch: false,
 				dupey: false,
 			});
@@ -248,6 +239,9 @@ describe("AttachmentContextAgent", () => {
 			expect(requests[0]).toContain("Project codename: BLUEHERON-4827.");
 			expect(requests[0]).toContain("What is the project codename?");
 			expect(response.query).toBe("What is the project codename?");
+			// The answer's citation became a numbered result backed by the attached file.
+			expect(response.answer).toBe("The codename is BLUEHERON-4827. [1]");
+			expect(response.results.map((result) => result.source)).toEqual([attached]);
 		} finally {
 			registration.unregister();
 		}

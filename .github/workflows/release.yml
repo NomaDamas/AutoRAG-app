@@ -1,0 +1,192 @@
+name: Release
+
+# Publishing a GitHub release builds the macOS .dmg and the Windows installer
+# .exe, each carrying the app, every dependency program, and the local embedding
+# model, and attaches them to that release. See docs/release.md.
+#
+#   gh release create v1.2.3 --generate-notes     # -> this workflow
+#
+# `workflow_dispatch` builds the same installers from any ref without a release
+# (they land as workflow artifacts, nothing is published): a release rehearsal.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to stamp (v1.2.3). Defaults to v0.0.0-dev.<run number>.
+        required: false
+        type: string
+
+permissions:
+  contents: write # attach the installers to the release
+
+concurrency:
+  group: release-${{ github.event.release.tag_name || github.ref }}
+  cancel-in-progress: false
+
+env:
+  # The tag is the version: the release's tag, else the manual input, else a dev number.
+  RELEASE_TAG: ${{ github.event.release.tag_name || inputs.version || format('v0.0.0-dev.{0}', github.run_number) }}
+
+# Runners are repository variables (Settings > Secrets and variables > Actions > Variables) holding
+# a JSON value: RELEASE_RUNNER_MAC / RELEASE_RUNNER_WIN = "macos-15" or ["self-hosted","macOS","ARM64"].
+# Unset = GitHub-hosted. docs/release.md explains when to point them at your own machines.
+
+jobs:
+  macos:
+    runs-on: ${{ fromJSON(vars.RELEASE_RUNNER_MAC || '"macos-15"') }}
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: dtolnay/rust-toolchain@stable
+
+      # `bun install` resolves the `file:./.upstream/autorag` dependency before
+      # its `preinstall` hook runs, so the librarian is cloned and built first.
+      - name: Sync librarian
+        run: node scripts/sync-librarian.mjs
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Stamp version
+        run: node scripts/release/set-version.mjs "$RELEASE_TAG"
+
+      # Only the suites that guard what the installer adds. The full suite runs on main;
+      # gating a release on unrelated failures would block shipping a fix.
+      - name: Test packaging runtime
+        env:
+          AUTORAG_SKIP_DUPEY_CHECK: "1"
+        run: bunx vitest run test/bundled-tools.test.ts test/refresh-schedule.test.ts
+      - name: Build app
+        env:
+          AUTORAG_SKIP_DUPEY_CHECK: "1"
+        run: bun run build
+
+      - name: Stage dependency tools and embedding model
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/release/stage-tools.mjs
+      - name: Verify the staged tools run on a bare PATH
+        run: node scripts/release/verify-bundle.mjs build/stage/darwin-arm64/tools --seed build/stage/darwin-arm64/seed
+
+      # Signing and notarization switch on by themselves when these secrets exist;
+      # without them the .dmg is ad-hoc signed (it runs, but Gatekeeper warns).
+      - name: Import Apple notarization key
+        env:
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+        run: |
+          if [ -z "$APPLE_API_KEY_P8" ]; then echo "no APPLE_API_KEY_P8: skipping notarization key"; exit 0; fi
+          mkdir -p "$RUNNER_TEMP/apple"
+          printf '%s' "$APPLE_API_KEY_P8" | base64 --decode > "$RUNNER_TEMP/apple/AuthKey.p8"
+          echo "APPLE_API_KEY=$RUNNER_TEMP/apple/AuthKey.p8" >> "$GITHUB_ENV"
+      - name: Package .dmg
+        env:
+          CSC_LINK: ${{ secrets.MAC_CERTIFICATE_P12 }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CERTIFICATE_PASSWORD }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: bun run release:pack:mac
+
+      - name: Smoke-test the installed app
+        run: node scripts/release/smoke-installed.mjs
+
+      - name: Name release files
+        run: |
+          mkdir -p upload
+          cp dist/*.dmg upload/
+          cp build/stage/darwin-arm64/tools/manifest.json upload/components-macos-arm64.json
+          (cd upload && shasum -a 256 *.dmg > SHA256SUMS-macos.txt)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: upload/*
+          retention-days: 14
+      - name: Attach to the release
+        if: ${{ github.event_name == 'release' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          files: upload/*
+
+  windows:
+    runs-on: ${{ fromJSON(vars.RELEASE_RUNNER_WIN || '"windows-2022"') }}
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      # slacrawl and notcrawl publish no Windows archive, so they are built from source with Go.
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Sync librarian
+        run: node scripts/sync-librarian.mjs
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Stamp version
+        run: node scripts/release/set-version.mjs "$env:RELEASE_TAG"
+
+      - name: Test packaging runtime
+        env:
+          AUTORAG_SKIP_DUPEY_CHECK: "1"
+        run: bunx vitest run test/bundled-tools.test.ts test/refresh-schedule.test.ts
+      - name: Build app
+        env:
+          AUTORAG_SKIP_DUPEY_CHECK: "1"
+        run: bun run build
+
+      - name: Stage dependency tools and embedding model
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/release/stage-tools.mjs
+      - name: Verify the staged tools run on a bare PATH
+        run: node scripts/release/verify-bundle.mjs build/stage/win32-x64/tools --seed build/stage/win32-x64/seed
+
+      # Azure Trusted Signing switches on when these secrets exist; without them
+      # the installer is unsigned and Windows SmartScreen warns.
+      - name: Package installer
+        env:
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_CODESIGN_ENDPOINT: ${{ vars.AZURE_CODESIGN_ENDPOINT }}
+          AZURE_CODESIGN_ACCOUNT: ${{ vars.AZURE_CODESIGN_ACCOUNT }}
+          AZURE_CODESIGN_PROFILE: ${{ vars.AZURE_CODESIGN_PROFILE }}
+        run: bun run release:pack:win
+
+      - name: Smoke-test the installed app
+        run: node scripts/release/smoke-installed.mjs
+
+      - name: Name release files
+        shell: bash
+        run: |
+          mkdir -p upload
+          cp dist/*.exe upload/
+          cp build/stage/win32-x64/tools/manifest.json upload/components-windows-x64.json
+          (cd upload && sha256sum *.exe > SHA256SUMS-windows.txt)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: upload/*
+          retention-days: 14
+      - name: Attach to the release
+        if: ${{ github.event_name == 'release' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          files: upload/*

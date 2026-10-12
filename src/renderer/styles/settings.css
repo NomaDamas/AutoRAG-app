@@ -1336,3 +1336,43 @@
 		flex-wrap: wrap;
 	}
 }
+
+/* Indexing > 진행 상황: the live run, same snapshot as the sidebar block. */
+.settings-view .settings-activity {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-8);
+	padding: var(--space-8) 0;
+}
+
+.settings-view .settings-activity-head {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: var(--space-12);
+}
+
+.settings-view .settings-activity-items {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-6);
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.settings-view .settings-activity-item {
+	display: flex;
+	align-items: center;
+	gap: var(--space-8);
+	min-width: 0;
+}
+
+.settings-view .settings-activity-item .settings-list-meta {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	text-align: right;
+}

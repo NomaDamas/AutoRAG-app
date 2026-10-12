@@ -104,6 +104,11 @@
     },
     "versionBanner": {
       "retry": "重新检查"
+    },
+    "pathBar": {
+      "edit": "前往路径",
+      "invalid": "请输入要前往的路径",
+      "notFound": "找不到 \"{{path}}\""
     }
   },
   "contextMenu": {
@@ -248,6 +253,34 @@
     "copiedPath": "已拷贝路径",
     "feedbackSent": "已发送反馈"
   },
+  "indexActivity": {
+    "title": "索引",
+    "queued": "等待中",
+    "idle": "当前没有正在建立的索引。",
+    "counts": "扫描 {{scanned}} · 写入 {{written}} · 删除 {{deleted}} · 跳过 {{skipped}}",
+    "local": "本地文件夹",
+    "source": "数据源",
+    "running": "正在建立索引",
+    "runningCount": "正在建立索引 {{done}}/{{total}}",
+    "done": "索引已完成",
+    "failed": "索引失败",
+    "syncing": "正在同步 {{name}}",
+    "andMore": "{{text}} 等 {{count}} 项",
+    "open": "查看索引状态",
+    "origin": {
+      "scheduled": "自动刷新",
+      "external": "由应用外部启动"
+    },
+    "phases": {
+      "parsed": "正在读取文档",
+      "minsync": "正在建立搜索索引",
+      "datasources": "正在同步数据源",
+      "jikji": "正在建立文件夹地图",
+      "everything": "正在为文件名建立索引",
+      "fsearch": "正在为文件名建立索引",
+      "finalizing": "即将完成"
+    }
+  },
   "confirm": {
     "emptyTrashTitle": "清倒废纸篓",
     "emptyTrashMessage": "废纸篓中的所有项目将被永久删除。此操作无法撤销。",
@@ -347,22 +380,22 @@
     "account": {
       "eyebrow": "账户",
       "title": "用账户\n开始使用",
-      "lead": "只有套餐和试用版与账户关联。文件和索引保留在这台 Mac 上。",
-      "note": "在浏览器中登录后会自动返回此应用。你无需在此应用中输入密码。",
+      "lead": "只有套餐和用量与账户关联。文件和索引保留在这台 Mac 上。",
+      "note": "在浏览器中登录后会自动返回此应用。不会在应用中输入密码。",
       "signedIn": "已登录",
       "signedInNote": "正在进入下一步",
       "otherAccount": "其他账户",
       "cardTitle": "AutoRAG 账户",
-      "cardSub": "管理试用版与设置",
+      "cardSub": "管理套餐和用量",
       "busy": "正在浏览器中登录…",
       "busyNote": "认证完成后会自动返回。",
-      "apple": "使用 Apple 继续",
-      "google": "使用 Google 继续",
-      "or": "或",
-      "emailPlaceholder": "电子邮箱地址",
-      "magicLink": "获取链接",
-      "authNote": "我们会将登录链接发送到你的邮箱。账户中不会存储文件内容。",
-      "sampleEmail": "hello@autorag.example"
+      "signIn": "在浏览器中登录",
+      "cancel": "取消",
+      "skip": "不使用账户，改用自己的 API 密钥 (BYOK)",
+      "offline": "无法连接服务器，显示的是上次确认的信息。",
+      "authNote": "登录方式（邮箱验证码、第三方登录）在浏览器的 AutoRAG 登录页面选择。账户中不会保存文件内容。",
+      "planLabel": "{{plan}} 套餐",
+      "signedInEnv": "正在使用环境变量中的 API 密钥"
     },
     "permissions": {
       "eyebrow": "权限",
@@ -481,10 +514,13 @@
       "badgeSubscribed": "已订阅",
       "perMonth": "/ 月",
       "continue": "使用此套餐继续",
-      "startTrial": "开始 7 天免费试用",
-      "subscribeAir": "订阅 Air",
-      "notePaid": "已完成支付方式绑定",
-      "noteProTrialActive": "试用中 · 7 天后每月 $20",
+      "checkoutPro": "打开 Pro 结算页面",
+      "checkoutAir": "打开 Air 结算页面",
+      "noteHeld": "此账户正在使用",
+      "noteTrialing": "试用中 · 至 {{date}}",
+      "noteCancelScheduled": "已预约取消 · 可用至 {{date}}",
+      "signInFirst": "Air 和 Pro 需要账户。请先登录。",
+      "signInAction": "登录",
       "plan": {
         "free": {
           "name": "Free",
@@ -501,7 +537,7 @@
         "air": {
           "name": "Air",
           "price": "$4",
-          "note": "无需试用即可开始",
+          "note": "每月 $4 · 随时取消",
           "tag": "每天轻松使用",
           "chip": "提问会发送至 AutoRAG 模型",
           "feature": {
@@ -513,11 +549,11 @@
         "pro": {
           "name": "Pro",
           "price": "$20",
-          "note": "7 天免费试用后计费",
+          "note": "每月 $20 · 随时取消",
           "tag": "最快的首次索引",
-          "chip": "发送文件正文前需同意",
+          "chip": "问题将发送到 AutoRAG 模型",
           "feature": {
-            "a": "云端嵌入，速度更快",
+            "a": "在这台 Mac 上本地嵌入（内容不会被发送）",
             "b": "托管 AI 模型 · 最高用量",
             "c": "包含 Air 的全部功能"
           }
@@ -683,22 +719,13 @@
         "action": "退出并重新打开"
       },
       "pay": {
-        "proTitle": "开始 Pro 7 天免费试用",
-        "airTitle": "订阅 Air 套餐",
-        "proLead": "前 7 天免费。试用期间不会扣费，并会在结束前通知你。开始试用后即可立即使用云端嵌入。",
-        "airLead": "从今天起每月收取 $4。可比 Free 更充裕地使用托管 AI 模型。",
-        "today": "今天支付",
-        "afterPro": "7 天后开始",
-        "fromNext": "从下次账单起",
-        "monthly": "每月 {{price}}",
-        "cardNumber": "卡号",
-        "expiry": "有效期",
-        "cvc": "CVC",
-        "proConsent": "我同意在 7 天免费试用结束后每月自动扣款 $20。可随时在设置中取消。",
-        "airConsent": "我同意每月自动扣款 $4。可随时在设置中取消。",
-        "demo": "不会发生实际支付。此步骤仅为 QA 占位符，卡信息不会被存储或发送。",
-        "startTrial": "开始试用",
-        "payAir": "支付 $4 并继续"
+        "proTitle": "Pro 结算",
+        "airTitle": "Air 结算",
+        "lead": "付款在浏览器的结算页面完成。不会在此应用中输入银行卡信息。",
+        "waiting": "完成付款后，此窗口会自动更新。",
+        "reopen": "重新打开结算页面",
+        "check": "确认付款",
+        "checking": "确认中…"
       }
     },
     "toast": {
@@ -710,9 +737,8 @@
       "networkFail": "无法连接到网络。",
       "fdaPending": "重新打开应用后权限将生效。",
       "verified": "已确认连接。",
-      "payMissing": "需要卡信息和同意。（演示）",
-      "trialStarted": "已开始 Pro 7 天免费试用。（演示 · 无实际支付）",
-      "subscribed": "已订阅套餐。（演示 · 无实际支付）",
+      "planActive": "{{plan}} 套餐已生效。",
+      "signInFailed": "无法登录。",
       "notIndexed": "索引完成后才能打开 AutoRAG。"
     }
   }

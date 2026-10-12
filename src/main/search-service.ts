@@ -1,7 +1,6 @@
 import { access } from "node:fs/promises";
 import {
 	buildAgentOptions,
-	EMIT_AUTORAG_RESULTS_TOOL_NAME,
 	resolveConfigReadOnly,
 	type AutoRAGAgent,
 	type AutoRAGAgentOptions,
@@ -25,24 +24,19 @@ import { AttachmentContextAgent, buildAttachmentContext } from "./attachment-con
 import type { ChatStore } from "./chat-store";
 
 /**
- * The librarian registers this fast-phase tool but does not export its name.
- * It is the tool whose `answer` argument becomes the Quick answer.
- */
-const EMIT_FAST_ANSWER_TOOL_NAME = "emit_fast_answer";
-
-/**
  * The slice of a pi agent event the live stream reads. `searchDocumentsStream`
  * only yields progress/preliminary/complete, so thinking and the answer text
- * streamed inside the emit tool-call arguments come from `subscribe`.
+ * come from `subscribe`.
  */
 export interface LiveAgentEvent {
 	readonly type: string;
-	readonly toolName?: string;
+	readonly message?: {
+		readonly role?: string;
+		readonly stopReason?: string;
+	};
 	readonly assistantMessageEvent?: {
 		readonly type: string;
 		readonly delta?: string;
-		readonly contentIndex?: number;
-		readonly partial?: { readonly content?: readonly unknown[] };
 	};
 }
 
@@ -85,74 +79,84 @@ interface SearchRun {
 	sessionId: string;
 }
 
-/** Answer text streamed so far in an emit tool call's partially parsed arguments. */
-function streamedToolAnswer(event: NonNullable<LiveAgentEvent["assistantMessageEvent"]>): { readonly tool: string; readonly answer: string } | null {
-	if (event.contentIndex === undefined) return null;
-	const block = event.partial?.content?.[event.contentIndex];
-	if (block === null || typeof block !== "object") return null;
-	const { type, name, arguments: args } = block as { type?: unknown; name?: unknown; arguments?: unknown };
-	if (type !== "toolCall" || typeof name !== "string" || args === null || typeof args !== "object") return null;
-	const answer = (args as { answer?: unknown }).answer;
-	return typeof answer === "string" ? { tool: name, answer } : null;
+/**
+ * The model cites with the evidence ids the librarian's tools print
+ * (`[e3]`, `[e3, e7]`, `[e3][e7]`) or `[file:<path>]`. They become `[n]` chips
+ * only on the authoritative `quick`/`deep` event, so a draft shows none of
+ * them. A trailing, still-incomplete marker (`[e`, `[file:/a/b`) is held back
+ * as well, or it would flash as text until the closing bracket arrives.
+ */
+const COMPLETE_CITATION = /\s*\[(?:e\d+(?:\s*,\s*e\d+)*|file:[^\]\n]*)\]/gu;
+const PARTIAL_CITATION = /\s*\[(?:e[\d,\s]*|f(?:i(?:l(?:e(?::[^\]\n]*)?)?)?)?)?$/u;
+
+export function draftText(raw: string): string {
+	return raw.replace(COMPLETE_CITATION, "").replace(PARTIAL_CITATION, "");
 }
 
 /**
  * Turns raw agent events into thinking/draft stream events for one run.
  * Reasoning text is dropped: only the first thinking token of each phase is
  * forwarded, as a `thinking` signal.
- * The two-phase flow runs the fast (Quick) prompt first; the phase flips to
- * Deep once emit_fast_answer has executed or the agent starts its second run
- * (the refinement prompt).
+ *
+ * The two-phase flow runs the fast (Quick) prompt first and the verification
+ * (Deep) prompt second, so the phase is the number of `agent_start` events
+ * seen. Both answer in plain assistant text. Whether a message is the answer
+ * is not known while its text streams: a message that goes on to call a tool
+ * (`stopReason: "toolUse"`) is a progress note ("checking X next"), which the
+ * stream reports as `progress`, never as part of the answer. So a draft is the
+ * text of the message currently streaming, and it is withdrawn (an empty
+ * draft) the moment that message starts a tool call, which is announced when
+ * its text ends and well before the tool has finished running.
  */
 function createLiveStreamMapper(searchId: string, emit: (event: SearchStreamEvent) => void): (event: LiveAgentEvent) => void {
 	let agentRuns = 0;
-	let fastAnswerDone = false;
-	let quickText = "";
-	let quickDraft = "";
-	let deepDraft = "";
+	let current = "";
+	let lastDraft = "";
 	const thinkingPhases = new Set<AnswerPhaseName>();
-	const phase = (): AnswerPhaseName => (fastAnswerDone || agentRuns > 1 ? "deep" : "quick");
-	const setQuickDraft = (text: string): void => {
-		if (text === quickDraft || text.trim() === "") return;
-		quickDraft = text;
-		emit({ type: "quick-draft", searchId, text });
+	const phase = (): AnswerPhaseName => (agentRuns > 1 ? "deep" : "quick");
+	const setDraft = (text: string): void => {
+		if (text === lastDraft) return;
+		lastDraft = text;
+		emit({ type: phase() === "quick" ? "quick-draft" : "deep-draft", searchId, text });
 	};
 	return (event) => {
 		if (event.type === "agent_start") {
 			agentRuns += 1;
+			current = "";
+			lastDraft = "";
 			return;
 		}
-		if (event.type === "tool_execution_end" && event.toolName === EMIT_FAST_ANSWER_TOOL_NAME) {
-			fastAnswerDone = true;
+		if (event.type === "message_start" && event.message?.role === "assistant") {
+			current = "";
+			return;
+		}
+		if (event.type === "message_end" && event.message?.role === "assistant") {
+			// Backstop for a provider that announces no tool call before the message ends.
+			if (event.message.stopReason === "toolUse" && lastDraft !== "") setDraft("");
+			current = "";
 			return;
 		}
 		const update = event.type === "message_update" ? event.assistantMessageEvent : undefined;
 		if (update === undefined) return;
 		switch (update.type) {
 			case "thinking_delta": {
-				const current = phase();
-				if (!update.delta || thinkingPhases.has(current)) return;
-				thinkingPhases.add(current);
-				emit({ type: "thinking", searchId, phase: current });
+				const now = phase();
+				if (!update.delta || thinkingPhases.has(now)) return;
+				thinkingPhases.add(now);
+				emit({ type: "thinking", searchId, phase: now });
 				return;
 			}
-			case "text_delta":
-				// A fast phase that answers in plain text (no emit_fast_answer call)
-				// becomes the Quick answer, so its text is the Quick draft.
-				if (phase() === "quick" && update.delta) {
-					quickText += update.delta;
-					setQuickDraft(quickText);
-				}
+			case "text_delta": {
+				if (!update.delta) return;
+				current += update.delta;
+				const visible = draftText(current);
+				if (visible.trim() !== "") setDraft(visible);
 				return;
-			case "toolcall_delta": {
-				const streamed = streamedToolAnswer(update);
-				if (streamed === null) return;
-				if (streamed.tool === EMIT_FAST_ANSWER_TOOL_NAME && phase() === "quick") {
-					setQuickDraft(streamed.answer);
-				} else if (streamed.tool === EMIT_AUTORAG_RESULTS_TOOL_NAME && streamed.answer !== deepDraft && streamed.answer.trim() !== "") {
-					deepDraft = streamed.answer;
-					emit({ type: "deep-draft", searchId, text: streamed.answer });
-				}
+			}
+			case "toolcall_start": {
+				// The message is a progress note, not the answer: take back its text.
+				if (lastDraft !== "") setDraft("");
+				current = "";
 				return;
 			}
 			default:
@@ -174,7 +178,9 @@ function mapPhase(response: SearchDocumentsResponse): AnswerPhase {
 			summary: result.summary,
 			source: result.source ?? null,
 			excerpts: result.evidence.map((evidence) => evidence.excerpt),
-			confidence: result.confidence,
+			// The librarian derives results from the answer's citations and
+			// measures no confidence; do not invent one.
+			...(result.confidence === undefined ? {} : { confidence: result.confidence }),
 		})),
 	};
 }

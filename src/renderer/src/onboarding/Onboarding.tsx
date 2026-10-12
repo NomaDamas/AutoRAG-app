@@ -10,11 +10,10 @@ import {
 	useMemo,
 	useRef,
 	useState,
-	type ChangeEvent,
 	type ReactElement,
 } from "react";
+import type { AccountStatus } from "../../../shared/account-contract";
 import type {
-	AccountMethod,
 	ByokProviderId,
 	DetectedModelProvider,
 	DetectedSource,
@@ -31,7 +30,7 @@ import type {
 } from "../../../shared/onboarding-contract";
 import { useTranslation } from "../../../shared/i18n";
 import { cn } from "../lib/cn";
-import { buildFlow, bySourceOrder, canAdvance, primaryLabelKey, type Translate } from "./flow";
+import { buildFlow, bySourceOrder, canAdvance, planHeld, primaryLabelKey, type Translate } from "./flow";
 import { Icon } from "./marks";
 import type { OnboardingCtx, OverlayKind } from "./context";
 import { IndexingScreen } from "./IndexingScreen";
@@ -56,11 +55,16 @@ const SAVE_DEBOUNCE_MS = 300;
 /** Cloud embedding is unavailable (corpus text never leaves the machine). */
 const EMBED = "local" as const;
 
+/** Electron wraps a handler's error as "Error invoking remote method 'x': Error: <message>"; show only the message. */
+function ipcMessage(error: unknown): string {
+	const text = error instanceof Error ? error.message : String(error);
+	return text.replace(/^Error invoking remote method '[^']*': (?:Error: )?/u, "");
+}
+
 function seedDraft(candidates: readonly FolderCandidate[], permissions: PermissionStatus | null): OnboardingDraft {
 	return {
 		version: 1,
 		stepId: "welcome",
-		account: null,
 		notifications: false,
 		network: false,
 		launchAtLogin: permissions?.launchAtLogin ?? true,
@@ -68,7 +72,6 @@ function seedDraft(candidates: readonly FolderCandidate[], permissions: Permissi
 		sources: [],
 		plan: "pro",
 		planConfirmed: false,
-		paid: null,
 		model: null,
 	};
 }
@@ -95,14 +98,14 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 	const [overlay, setOverlay] = useState<OverlayKind | null>(null);
 	const [toast, setToast] = useState<string | null>(null);
 	const [tipIndex, setTipIndex] = useState(0);
-	const [authBusy, setAuthBusy] = useState(false);
-	const [payAgree, setPayAgree] = useState(false);
+	const [account, setAccount] = useState<AccountStatus | null>(null);
+	const [paying, setPaying] = useState(false);
 	const [indexStatus, setIndexStatus] = useState<IndexingStatus | null>(null);
-	const [card, setCard] = useState({ number: "", expiry: "", cvc: "" });
 
 	const draftRef = useRef<OnboardingDraft | null>(null);
 	const permissionRef = useRef<PermissionStatus | null>(null);
 	const modelKeyRef = useRef("");
+	const accountRef = useRef<AccountStatus | null>(null);
 	const overlayRef = useRef<OverlayKind | null>(null);
 	const toastTimer = useRef<number | null>(null);
 	const saveTimer = useRef<number | null>(null);
@@ -116,6 +119,7 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 	// auto-advance, keyboard handler) must see the state of the latest render.
 	draftRef.current = draft;
 	permissionRef.current = permission;
+	accountRef.current = account;
 	useEffect(() => {
 		modelKeyRef.current = modelKey;
 	}, [modelKey]);
@@ -213,7 +217,7 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 			stepId: current.stepId,
 			platform: status?.platform ?? "",
 			fullDiskAccess: status?.fullDiskAccess === true,
-			signedIn: current.account !== null,
+			signedIn: accountRef.current?.state === "signedIn",
 			selectedFolders: current.folders.filter((folder) => folder.selected).length,
 			embed: EMBED,
 			cloudConsent: false,
@@ -243,13 +247,31 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 		});
 	}, []);
 
+	const refreshAccount = useCallback((): void => {
+		setPaying(true);
+		void autorag.account
+			.refresh()
+			.then(setAccount, (error: unknown) => showToast(ipcMessage(error)))
+			.finally(() => setPaying(false));
+	}, [showToast]);
+
+	const openCheckout = useCallback((): void => {
+		const plan = draftRef.current?.plan;
+		if (plan !== "air" && plan !== "pro") {
+			return;
+		}
+		void autorag.account.checkout(plan).catch((error: unknown) => showToast(ipcMessage(error)));
+	}, [showToast]);
+
 	const next = useCallback((): void => {
 		const current = draftRef.current;
 		if (current === null || !currentAdvance()) {
 			return;
 		}
-		if (current.stepId === "plan" && (current.plan === "air" || current.plan === "pro") && current.paid !== current.plan) {
-			setPayAgree(false);
+		if (current.stepId === "plan" && (current.plan === "air" || current.plan === "pro") && !planHeld(current.plan, accountRef.current)) {
+			if (overlayRef.current !== "pay") {
+				openCheckout();
+			}
 			setOverlay("pay");
 			return;
 		}
@@ -412,23 +434,52 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 		return () => window.removeEventListener("keydown", onKeyDown);
 	}, []);
 
-	const signIn = useCallback(
-		(method: AccountMethod, email?: string): void => {
-			setAuthBusy(true);
-			const delay = method === "email" ? 1100 : 900;
-			window.setTimeout(() => {
-				setAuthBusy(false);
-				patch({ account: { method, email: email !== undefined && email.trim() !== "" ? email.trim() : null } });
-				showToast(t("onboarding.toast.signedIn"));
-				window.setTimeout(() => {
-					if (draftRef.current?.stepId === "account") {
-						next();
-					}
-				}, 700);
-			}, delay);
-		},
-		[next, patch, showToast, t],
-	);
+	// The account lives in the main process; this window only mirrors its status.
+	useEffect(() => {
+		const off = autorag.account.onChanged(setAccount);
+		void autorag.account.status().then(setAccount);
+		void autorag.account.refresh().then(setAccount, () => undefined);
+		return off;
+	}, []);
+
+	// Paying happens in the browser: coming back to this window re-reads the plan.
+	useEffect(() => {
+		if (overlay !== "pay") {
+			return;
+		}
+		window.addEventListener("focus", refreshAccount);
+		return () => window.removeEventListener("focus", refreshAccount);
+	}, [overlay, refreshAccount]);
+
+	// The server confirmed the plan the checkout was for: close the overlay and move on.
+	useEffect(() => {
+		const current = draftRef.current;
+		if (overlay !== "pay" || current === null || !planHeld(current.plan, account)) {
+			return;
+		}
+		setOverlay(null);
+		showToast(t("onboarding.toast.planActive", { plan: t(`onboarding.plan.plan.${current.plan}.name`) }));
+		next();
+	}, [overlay, account, next, showToast, t]);
+
+	const signIn = useCallback((): void => {
+		void autorag.account.signIn().then(
+			(status) => {
+				setAccount(status);
+				if (status.state === "signedIn") {
+					showToast(t("onboarding.toast.signedIn"));
+					window.setTimeout(() => {
+						if (draftRef.current?.stepId === "account") {
+							next();
+						}
+					}, 700);
+				} else if (status.error !== null) {
+					showToast(status.error);
+				}
+			},
+			(error: unknown) => showToast(ipcMessage(error) || t("onboarding.toast.signInFailed")),
+		);
+	}, [next, showToast, t]);
 
 	const ctx: OnboardingCtx = {
 		draft: draft as OnboardingDraft,
@@ -451,8 +502,8 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 		verifying,
 		modelError,
 		indexStatus,
-		authBusy,
-		payAgree,
+		account,
+		paying,
 		tipIndex,
 		t,
 		patch,
@@ -510,7 +561,23 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 			}),
 		choosePlan: (plan: PlanId) => patch({ plan }),
 		signIn,
-		signOut: () => patch({ account: null }),
+		cancelSignIn: () => {
+			void autorag.account.cancelSignIn().then(setAccount);
+		},
+		signOut: () => {
+			void autorag.account.signOut().then(setAccount);
+		},
+		skipAccount: () => {
+			const current = draftRef.current;
+			if (current === null) {
+				return;
+			}
+			const list = buildFlow("byok", current.planConfirmed, EMBED);
+			const target = list[list.indexOf(current.stepId) + 1];
+			setDraft({ ...current, plan: "byok", ...(target === undefined ? {} : { stepId: target }) });
+		},
+		openCheckout,
+		refreshAccount,
 		setLaunchAtLogin: (enabled) => {
 			patch({ launchAtLogin: enabled });
 			void bridge.setLaunchAtLogin(enabled).then((stored) => {
@@ -593,23 +660,6 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 					setModelError(error instanceof Error ? error.message : String(error));
 				});
 		},
-		setPayAgree,
-		confirmPayment: () => {
-			const current = draftRef.current;
-			if (current === null) {
-				return;
-			}
-			if (!payAgree || card.number.trim() === "" || card.expiry.trim() === "" || card.cvc.trim() === "") {
-				showToast(t("onboarding.toast.payMissing"));
-				return;
-			}
-			const list = buildFlow(current.plan, current.planConfirmed, EMBED);
-			const target = list[list.indexOf("plan") + 1];
-			setCard({ number: "", expiry: "", cvc: "" });
-			setOverlay(null);
-			setDraft({ ...current, paid: current.plan, ...(target === undefined ? {} : { stepId: target }) });
-			showToast(t(current.plan === "pro" ? "onboarding.toast.trialStarted" : "onboarding.toast.subscribed"));
-		},
 		startIndexing,
 		finish,
 		setTipIndex,
@@ -674,7 +724,7 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 					))}
 				</div>
 				<button type="button" className="primary" disabled={!currentAdvance()} onClick={next}>
-					{t(primaryLabelKey(draft.stepId, draft.plan, draft.paid))} <span className="kbd">↵</span>
+					{t(primaryLabelKey(draft.stepId, draft.plan, planHeld(draft.plan, account)))} <span className="kbd">↵</span>
 				</button>
 			</>
 		);
@@ -691,10 +741,6 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 				{renderOverlay(overlay, {
 					t,
 					ctx,
-					payAgree,
-					card,
-					onCard: setCard,
-					onPayAgree: setPayAgree,
 					onClose: () => setOverlay(null),
 					onFdaAllowed: () => {
 						void bridge.permissions().then((status) => {
@@ -731,10 +777,6 @@ function GuideAppMark({ onDrag }: { readonly onDrag: () => void }): ReactElement
 interface OverlayHandlers {
 	readonly t: Translate;
 	readonly ctx: OnboardingCtx;
-	readonly payAgree: boolean;
-	readonly card: { readonly number: string; readonly expiry: string; readonly cvc: string };
-	readonly onCard: (value: { number: string; expiry: string; cvc: string }) => void;
-	readonly onPayAgree: (value: boolean) => void;
 	readonly onClose: () => void;
 	readonly onFdaAllowed: () => void;
 	readonly onFdaLater: () => void;
@@ -848,8 +890,6 @@ function renderOverlay(kind: OverlayKind | null, h: OverlayHandlers): ReactEleme
 			);
 		case "pay": {
 			const pro = h.ctx.draft.plan === "pro";
-			const onField = (key: "number" | "expiry" | "cvc") => (event: ChangeEvent<HTMLInputElement>) =>
-				h.onCard({ ...h.card, [key]: event.target.value });
 			return (
 				<div className="modal" style={{ width: 460 }}>
 					<div className="modal-head">
@@ -860,46 +900,21 @@ function renderOverlay(kind: OverlayKind | null, h: OverlayHandlers): ReactEleme
 						</button>
 					</div>
 					<div className="modal-body">
-						<p className="pay-lead">{pro ? t("onboarding.overlay.pay.proLead") : t("onboarding.overlay.pay.airLead")}</p>
+						<p className="pay-lead">{t("onboarding.overlay.pay.lead")}</p>
 						<div className="pay-summary">
-							<span>{t("onboarding.overlay.pay.today")}</span>
-							<b>{pro ? "$0" : "$4"}</b>
+							<span>{t(`onboarding.plan.plan.${pro ? "pro" : "air"}.name`)}</span>
+							<small>{t(`onboarding.plan.plan.${pro ? "pro" : "air"}.note`)}</small>
 						</div>
-						<div className="pay-summary">
-							<span>{pro ? t("onboarding.overlay.pay.afterPro") : t("onboarding.overlay.pay.fromNext")}</span>
-							<small>{t("onboarding.overlay.pay.monthly", { price: pro ? "$20" : "$4" })}</small>
-						</div>
-						<div className="pay-grid">
-							<label>
-								{t("onboarding.overlay.pay.cardNumber")}
-								<input
-									className="input"
-									inputMode="numeric"
-									placeholder="4242 4242 4242 4242"
-									value={h.card.number}
-									onChange={onField("number")}
-								/>
-							</label>
-							<label>
-								{t("onboarding.overlay.pay.expiry")}
-								<input className="input" placeholder="MM / YY" value={h.card.expiry} onChange={onField("expiry")} />
-							</label>
-							<label>
-								{t("onboarding.overlay.pay.cvc")}
-								<input className="input" inputMode="numeric" placeholder="123" value={h.card.cvc} onChange={onField("cvc")} />
-							</label>
-						</div>
-						<label className="consent">
-							<input type="checkbox" checked={h.payAgree} onChange={(event) => h.onPayAgree(event.target.checked)} />
-							<span>{pro ? t("onboarding.overlay.pay.proConsent") : t("onboarding.overlay.pay.airConsent")}</span>
-						</label>
-						<p className="pay-demo">{t("onboarding.overlay.pay.demo")}</p>
+						<p className="pay-demo">{t("onboarding.overlay.pay.waiting")}</p>
 						<div className="modal-actions">
 							<button type="button" className="secondary" onClick={h.onClose}>
 								{t("onboarding.overlay.later")}
 							</button>
-							<button type="button" className="primary" onClick={h.ctx.confirmPayment}>
-								{pro ? t("onboarding.overlay.pay.startTrial") : t("onboarding.overlay.pay.payAir")}
+							<button type="button" className="secondary" onClick={h.ctx.openCheckout}>
+								{t("onboarding.overlay.pay.reopen")}
+							</button>
+							<button type="button" className="primary" disabled={h.ctx.paying} onClick={h.ctx.refreshAccount}>
+								{h.ctx.paying ? t("onboarding.overlay.pay.checking") : t("onboarding.overlay.pay.check")}
 							</button>
 						</div>
 					</div>

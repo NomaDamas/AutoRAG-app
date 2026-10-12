@@ -2,6 +2,8 @@ import { homedir } from "node:os";
 import { access, open, readdir, readFile, stat } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { isAbsolute, join, sep } from "node:path";
+import { applyBundledTools } from "./bundled-tools";
+import { seedAssets } from "./seed-assets";
 import {
 	app,
 	BrowserWindow,
@@ -27,7 +29,10 @@ import { createDefaultParserRegistry, DEFAULT_MAX_SOURCE_BYTES, writeDefaultConf
 import { readRawConfigObject, resolveConfigPath, writeConfigObject } from "@autorag/librarian/core";
 import { DEFAULT_CODE_FOLDER_NAMES, isJsonObject, SETTINGS_CHANNELS } from "../shared/settings-contract";
 import { LOCAL_REFRESH_METHODS } from "./index-refresh";
-import type { RefreshLockHolder } from "./refresh-lock";
+import { INDEX_ACTIVITY_CHANNELS } from "../shared/index-activity-contract";
+import { createIndexActivityService } from "./index-activity";
+import { createActivityJournal, journalSingleRun, LOCAL_ITEM } from "./index-activity-journal";
+import { busyMessage, lockDataSources } from "./locked-datasources";
 import { schedulePaths, withRefreshLock } from "./refresh-schedule";
 import { createRefreshScheduler } from "./refresh-scheduler";
 import { createIconProvider } from "./file-icon";
@@ -36,6 +41,7 @@ import type { KnownFolders } from "../shared/fs-worker-contract";
 import { hasErrorCode, pathExists } from "./fs-entry";
 import { refreshAutoragIndex, resolveEffectiveConfig } from "./index-refresh";
 import { createFolderScanCoordinator, supportedExtensionsFromRegistry } from "./onboarding-scan";
+import { createAccountService } from "./account-service";
 import { createOnboardingService, type OnboardingService } from "./onboarding-service";
 import { detectSources } from "./onboarding-sources";
 import { detectModelProviders, verifyModel as verifyModelRequest } from "./onboarding-models";
@@ -53,8 +59,10 @@ import { createEmbeddingSettingsService, type EmbeddingSettingsRuntime } from ".
 import { createDefaultAgentFactory, createSearchService } from "./search-service";
 import { createSettingsService } from "./settings-service";
 import {
+	registerAccountIpcHandlers,
 	registerActionsIpcHandlers,
 	registerDragOutIpcHandlers,
+	registerIndexActivityIpcHandlers,
 	registerOnboardingIpcHandlers,
 	registerOsRequestIpcHandlers,
 	registerSearchIpcHandlers,
@@ -320,6 +328,19 @@ app.whenReady().then(async () => {
 	const iconProvider = createIconProvider();
 	registerIconProtocol(iconProvider);
 	registerQuickLookIpc(iconProvider);
+	// Packaged builds carry the dependency CLIs and the embedding model: tools go first on PATH
+	// before anything reads the environment, and the model/runtime are copied into the AutoRAG home
+	// in the background so a fresh install indexes offline without a ~650 MB download.
+	applyBundledTools({ resourcesPath: process.resourcesPath, env: process.env });
+	void seedAssets({
+		seedDir: join(process.resourcesPath, "seed"),
+		autoragHome: process.env.AUTORAG_HOME?.trim() || join(homedir(), ".autorag"),
+	}).then(
+		(outcome) => {
+			if (outcome.kind === "done" && outcome.copied.length > 0) console.log(`[autorag] seeded ${outcome.copied.join(", ")}`);
+		},
+		(error: unknown) => console.error("[autorag] seeding the embedding model failed; it will be downloaded on first use:", error),
+	);
 	await ensureAutoRAGConfig();
 	const devLabel = resolveDevLabel();
 	console.log(`[autorag] ${formatWindowTitle(APP_NAME, APP_VERSION, devLabel)}`);
@@ -460,11 +481,15 @@ app.whenReady().then(async () => {
 		cwd: process.cwd(),
 		discrawlEmbeddingRuntime: () => embeddingSettings?.discrawlRuntime(),
 	});
+	// Every datasource sync the app starts (Settings buttons, embedding rebuild) goes through this one wrapper:
+	// it takes the shared refresh lock and is journaled, so it shows in the indexing progress.
+	const schedulePath = schedulePaths(autoragConfigPath());
+	const lockedDataSources = lockDataSources(dataSources, schedulePath);
 	const embeddingService = createEmbeddingSettingsService({
 		env: process.env,
 		cwd: process.cwd(),
 		config: autoRagConfig,
-		dataSources,
+		dataSources: lockedDataSources,
 	});
 	embeddingSettings = embeddingService;
 	// A persisted local-server embedder points mailcrawl at the app's ephemeral
@@ -492,26 +517,12 @@ app.whenReady().then(async () => {
 		return registered === enabled;
 	};
 	let appliedLaunchAtLogin: boolean | null = null;
-	const schedulePath = schedulePaths(autoragConfigPath());
 	const refreshScheduler = createRefreshScheduler({
 		platform: process.platform,
 		execPath: process.execPath,
 		jobPath: join(import.meta.dirname, "refresh-job.js"),
 		configPath: autoragConfigPath,
 	});
-	// A manual refresh or sync takes the same lock as the scheduled job, so the two never run at once.
-	const busyMessage = (holder: RefreshLockHolder): string =>
-		holder.owner === "scheduled-job" ? "백그라운드 새로 고침이 실행 중입니다. 끝난 뒤 다시 시도하세요." : "다른 새로 고침이 실행 중입니다. 끝난 뒤 다시 시도하세요.";
-	const lockedDataSources: typeof dataSources = {
-		...dataSources,
-		sync: (id) =>
-			withRefreshLock(
-				schedulePath.lock,
-				"manual-sync",
-				() => dataSources.sync(id),
-				(holder) => ({ id, ok: false, state: "failed", chunkCount: null, indexedAt: null, durationMs: 0, diagnostics: [], error: busyMessage(holder) }),
-			),
-	};
 	const settingsService = createSettingsService({
 		directory: join(app.getPath("userData"), "settings"),
 		dataSources: lockedDataSources,
@@ -521,7 +532,7 @@ app.whenReady().then(async () => {
 			withRefreshLock(
 				schedulePath.lock,
 				"manual-refresh",
-				() => refreshConfig(methods),
+				() => journalSingleRun(createActivityJournal(schedulePath.activity, { owner: "manual-refresh" }), LOCAL_ITEM, () => refreshConfig(methods)),
 				(holder) => ({ ok: false, methods: methods ?? LOCAL_REFRESH_METHODS, scanned: 0, written: 0, deleted: 0, skipped: 0, diagnostics: [], error: busyMessage(holder) }),
 			),
 		refreshScheduler,
@@ -545,6 +556,16 @@ app.whenReady().then(async () => {
 		},
 	});
 	registerSettingsIpcHandlers(settingsService);
+	const indexActivity = createIndexActivityService({
+		configPath: autoragConfigPath,
+		resolveWorkspacePath: async () => (await resolveEffectiveConfig({ env: process.env, cwd: process.cwd() })).config.workspacePath,
+		journalPath: () => schedulePath.activity,
+		// The fs worker runs the checkbox-toggle refresh, so its pid marks that run as this app's own.
+		ownPids: () => [workerHost.status().pid],
+	});
+	registerIndexActivityIpcHandlers(indexActivity);
+	const stopIndexActivity = indexActivity.start((snapshot) => sendToMainWindow(INDEX_ACTIVITY_CHANNELS.changed, snapshot));
+	app.once("will-quit", stopIndexActivity);
 	registerOsRequestIpcHandlers(osRequests);
 	// The in-app right-click → 서비스 submenu: what macOS offers for the selection, and performing one.
 	registerServicesIpcHandlers(createServicesService());
@@ -559,6 +580,20 @@ app.whenReady().then(async () => {
 		...(process.platform === "darwin" ? { listDatalessPaths: listMacDatalessPaths } : {}),
 		emit: (scan) => sendToMainWindow(ONBOARDING_CHANNELS.scanProgress, scan),
 	});
+	const accountService = createAccountService({
+		env: process.env,
+		credentials,
+		cachePath: join(app.getPath("userData"), "account.json"),
+		configPath: autoragConfigPath(),
+		openExternal: (url) => shell.openExternal(url),
+		send: sendToMainWindow,
+		// The picker lists the plan's models from the runtime's persisted catalog.
+		onSignedIn: () => providerAuth.syncAutoragCatalog(),
+	});
+	registerAccountIpcHandlers(accountService);
+	void accountService.refresh().catch(() => undefined);
+	app.once("will-quit", () => void accountService.dispose());
+
 	const onboardingService: OnboardingService = createOnboardingService({
 		userDataDir,
 		env: process.env,
@@ -621,6 +656,7 @@ app.whenReady().then(async () => {
 				},
 				onFound,
 			),
+		useManagedModel: () => accountService.useManagedModel(),
 		gitToken: async () => {
 			try {
 				const token = (await runCommand("gh", ["auth", "token"])).trim();

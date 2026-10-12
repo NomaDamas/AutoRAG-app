@@ -104,6 +104,11 @@
     },
     "versionBanner": {
       "retry": "Check again"
+    },
+    "pathBar": {
+      "edit": "Go to path",
+      "invalid": "Enter a path to go to",
+      "notFound": "\"{{path}}\" can't be found"
     }
   },
   "contextMenu": {
@@ -248,6 +253,34 @@
     "copiedPath": "Copied path",
     "feedbackSent": "Feedback sent"
   },
+  "indexActivity": {
+    "title": "Indexing",
+    "queued": "Waiting",
+    "idle": "Nothing is indexing right now.",
+    "counts": "Scanned {{scanned}} · written {{written}} · deleted {{deleted}} · skipped {{skipped}}",
+    "local": "Local folders",
+    "source": "Data source",
+    "running": "Indexing",
+    "runningCount": "Indexing {{done}}/{{total}}",
+    "done": "Indexing complete",
+    "failed": "Indexing failed",
+    "syncing": "Syncing {{name}}",
+    "andMore": "{{text}} and {{count}} more",
+    "open": "Show indexing status",
+    "origin": {
+      "scheduled": "Automatic refresh",
+      "external": "Started outside the app"
+    },
+    "phases": {
+      "parsed": "Reading documents",
+      "minsync": "Building the search index",
+      "datasources": "Syncing data sources",
+      "jikji": "Building the folder map",
+      "everything": "Indexing file names",
+      "fsearch": "Indexing file names",
+      "finalizing": "Finishing up"
+    }
+  },
   "confirm": {
     "emptyTrashTitle": "Empty Trash",
     "emptyTrashMessage": "All items in the Trash will be permanently deleted. This cannot be undone.",
@@ -347,22 +380,22 @@
     "account": {
       "eyebrow": "Account",
       "title": "Start with\nyour account",
-      "lead": "Only your plan and trial are tied to your account. Your files and index stay on this Mac.",
+      "lead": "Only your plan and usage are tied to your account. Your files and index stay on this Mac.",
       "note": "You sign in in your browser and come back to this app automatically. You never enter your password in the app.",
       "signedIn": "Signed in",
       "signedInNote": "Moving to the next step",
       "otherAccount": "Another account",
       "cardTitle": "AutoRAG account",
-      "cardSub": "Manage your trial and settings",
+      "cardSub": "Manage your plan and usage",
       "busy": "Signing in in your browser…",
       "busyNote": "You'll return here automatically once authentication finishes.",
-      "apple": "Continue with Apple",
-      "google": "Continue with Google",
-      "or": "or",
-      "emailPlaceholder": "Email address",
-      "magicLink": "Send link",
-      "authNote": "We'll email you a sign-in link. No file contents are stored in your account.",
-      "sampleEmail": "hello@autorag.example"
+      "signIn": "Sign in with your browser",
+      "cancel": "Cancel",
+      "skip": "Continue without an account, with my own API key (BYOK)",
+      "offline": "Can't reach the server, so this is the last information we confirmed.",
+      "authNote": "You choose how to sign in (email code or social sign-in) on the AutoRAG page in your browser. No file contents are stored in your account.",
+      "planLabel": "{{plan}} plan",
+      "signedInEnv": "Using the API key from the environment"
     },
     "permissions": {
       "eyebrow": "Permissions",
@@ -481,10 +514,13 @@
       "badgeSubscribed": "Subscribed",
       "perMonth": "/ mo",
       "continue": "Continue with this plan",
-      "startTrial": "Start 7-day free trial",
-      "subscribeAir": "Subscribe to Air",
-      "notePaid": "Payment method added",
-      "noteProTrialActive": "Trial · $20/mo after 7 days",
+      "checkoutPro": "Open the Pro checkout page",
+      "checkoutAir": "Open the Air checkout page",
+      "noteHeld": "Active on this account",
+      "noteTrialing": "Trial · until {{date}}",
+      "noteCancelScheduled": "Cancels · usable until {{date}}",
+      "signInFirst": "Air and Pro need an account. Sign in first.",
+      "signInAction": "Sign in",
       "plan": {
         "free": {
           "name": "Free",
@@ -501,7 +537,7 @@
         "air": {
           "name": "Air",
           "price": "$4",
-          "note": "Start right away, no trial",
+          "note": "$4/mo · cancel anytime",
           "tag": "Light everyday use",
           "chip": "Questions are sent to AutoRAG models",
           "feature": {
@@ -513,11 +549,11 @@
         "pro": {
           "name": "Pro",
           "price": "$20",
-          "note": "Billed after a 7-day free trial",
+          "note": "$20/mo · cancel anytime",
           "tag": "Fastest first indexing",
-          "chip": "Consent required before file contents are sent",
+          "chip": "Questions are sent to AutoRAG models",
           "feature": {
-            "a": "Faster with cloud embedding",
+            "a": "Local embedding on this Mac (contents are never sent)",
             "b": "Managed AI models · highest usage",
             "c": "Everything in Air"
           }
@@ -683,22 +719,13 @@
         "action": "Quit and reopen"
       },
       "pay": {
-        "proTitle": "Start Pro 7-day free trial",
-        "airTitle": "Subscribe to the Air plan",
-        "proLead": "It's free for 7 days. You won't be billed during the trial and we'll let you know before it ends. Cloud embedding is available as soon as you start the trial.",
-        "airLead": "You'll be billed $4/mo starting today. You can use managed AI models more generously than Free.",
-        "today": "Billed today",
-        "afterPro": "Starting after 7 days",
-        "fromNext": "From the next billing",
-        "monthly": "{{price}} / mo",
-        "cardNumber": "Card number",
-        "expiry": "Expiry",
-        "cvc": "CVC",
-        "proConsent": "I agree to an automatic $20/mo charge when the 7-day free trial ends. I can cancel anytime in Settings.",
-        "airConsent": "I agree to an automatic $4/mo charge. I can cancel anytime in Settings.",
-        "demo": "No real payment will occur. This step is a placeholder for QA, and card details are neither stored nor sent.",
-        "startTrial": "Start trial",
-        "payAir": "Pay $4 and continue"
+        "proTitle": "Pro checkout",
+        "airTitle": "Air checkout",
+        "lead": "Payment happens on the checkout page in your browser. You never enter card details in this app.",
+        "waiting": "This window updates automatically once you finish paying.",
+        "reopen": "Reopen the checkout page",
+        "check": "Check payment",
+        "checking": "Checking…"
       }
     },
     "toast": {
@@ -710,9 +737,8 @@
       "networkFail": "Can't connect to the network.",
       "fdaPending": "The permission applies once you reopen the app.",
       "verified": "Connection verified.",
-      "payMissing": "Card details and consent are required. (Demo)",
-      "trialStarted": "Started the Pro 7-day free trial. (Demo · no real payment)",
-      "subscribed": "Subscribed to the plan. (Demo · no real payment)",
+      "planActive": "The {{plan}} plan is active.",
+      "signInFailed": "Couldn't sign in.",
       "notIndexed": "Finish indexing to open AutoRAG."
     }
   }

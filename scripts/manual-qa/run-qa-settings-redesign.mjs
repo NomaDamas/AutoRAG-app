@@ -50,7 +50,7 @@ const serverUrl = `http://127.0.0.1:${server.address().port}`;
 writeFileSync(configPath, `${JSON.stringify({
 	searchPaths: [join(workspace, "docs")],
 	workspacePath: workspace,
-	minSync: { enabled: false, embedder: { id: "native:Qwen/Qwen3-Embedding-0.6B", dimension: 1024 } },
+	minSync: { enabled: true, embedder: { id: "native:Qwen/Qwen3-Embedding-0.6B", dimension: 1024 } },
 	jikji: false,
 	unknownTopLevel: { keep: true },
 	datasources: {

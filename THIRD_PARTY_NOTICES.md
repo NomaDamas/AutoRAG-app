@@ -44,3 +44,29 @@ Notes on what was verified:
 - `libarchive-wasm` replaces `libarchive.js`: the shipped `libarchive.js` wasm
   did contain OpenSSL 1.0.2/`libcrypto` code (its OpenSSL/SSLeay dual license is
   not AGPL-3.0 compatible), so it was removed.
+
+## Programs and models bundled in the installers
+
+The macOS and Windows installers ship these programs unmodified, as separate
+executables the app starts as child processes (no linking). Exact versions for a
+given release are in the `components-<platform>.json` file attached to it.
+
+| Component | License |
+|---|---|
+| Node.js | MIT |
+| npm | Artistic-2.0 |
+| minsync, jikji, dupey, kordoc, mailcrawl, rhwp, rclone, lark-cli, qmd | MIT |
+| discrawl, telecrawl, wacrawl, slacrawl, notcrawl | MIT |
+| himalaya, clawgallery | Apache-2.0 |
+| lazykatok (macOS only) | MIT |
+| Everything and ES (Windows only; shipped inside `@autorag/librarian`) | MIT (+ PCRE BSD) |
+| fsearch-cli from fsearch-mac (macOS only) and its libraries glib, pango, harfbuzz, ICU, PCRE2, freetype, ... | GPL-2.0-or-later (fsearch-cli); LGPL-2.1+, MIT, ICU, BSD (libraries) |
+| llama.cpp (`llama-server` runtime) | MIT |
+| Qwen3-Embedding-0.6B (GGUF Q8_0 weights) | Apache-2.0 |
+
+`fsearch-cli` is GPL-2.0-or-later, and AutoRAG only starts it as a separate
+program (no linking), so AutoRAG stays AGPL-3.0. Its license and notice are
+installed in `resources/tools/licenses/fsearch-mac`. Source for the shipped
+version: https://github.com/NomaDamas/fsearch-mac (tag in `components-macos-arm64.json`).
+The bundled glib/pango/ICU libraries are unmodified Homebrew builds whose install
+paths were rewritten so they load from the app.
