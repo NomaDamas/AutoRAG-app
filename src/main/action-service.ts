@@ -35,6 +35,7 @@ import {
 	type OpenWithApplication,
 	type VideoContainer,
 } from "../shared/actions-contract";
+import { writeSevenZip } from "./sevenzip-writer";
 import { errorMessage, pathExists } from "./fs-entry";
 
 /** Result of one external command. */
@@ -238,7 +239,10 @@ interface ArchiveMember {
  * archiver must not escape the tree or chase a cycle.
  */
 async function archiveMembers(root: string, isDirectory: boolean): Promise<ArchiveMember[]> {
-	const name = basename(root);
+	// Entry names are written NFC: Windows, Linux and Finder-created files use the
+	// composed form, while a name copied from an NFD source (older macOS volumes,
+	// other archives) lists on Windows as separate jamo and cannot be matched.
+	const name = basename(root).normalize("NFC");
 	if (!isDirectory) {
 		return [{ source: root, entry: name, directory: false }];
 	}
@@ -249,7 +253,7 @@ async function archiveMembers(root: string, isDirectory: boolean): Promise<Archi
 		for (const dirent of dirents) {
 			if (dirent.isSymbolicLink()) continue;
 			const source = join(dir, dirent.name);
-			const entry = `${prefix}${dirent.name}`;
+			const entry = `${prefix}${dirent.name.normalize("NFC")}`;
 			if (dirent.isDirectory()) {
 				members.push({ source, entry: `${entry}/`, directory: true });
 				await walk(source, `${entry}/`);
@@ -617,14 +621,15 @@ export function createActionService(deps: ActionServiceDeps): ActionService {
 				case "compress": {
 					// Finder's rule: one archive per Compress — named after the sole
 					// target, or "Archive" when the selection spans several.
-					const name = paths.length === 1 ? `${basename(first)}.zip` : "Archive.zip";
-					const target = await uniqueChild(dirname(first), name);
+					const format = request.format ?? "zip";
+					const stem = paths.length === 1 ? basename(first) : "Archive";
+					const target = await uniqueChild(dirname(first), `${stem}.${format}`);
 					const members: ArchiveMember[] = [];
 					for (const path of paths) {
 						const stat = await lstat(path);
 						members.push(...(await archiveMembers(path, stat.isDirectory())));
 					}
-					await writeZip(target, members);
+					await (format === "7z" ? writeSevenZip(target, members) : writeZip(target, members));
 					return { output: target, note: `${basename(target)} — 압축했습니다` };
 				}
 				case "extract": {

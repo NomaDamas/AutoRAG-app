@@ -29,12 +29,18 @@ export function normalizeEntryName(name) {
  * directory. Rejects absolute entries, Windows drive paths, NUL bytes in the
  * name, and any entry escaping `destDir` (zip-slip), so a hostile archive can
  * never write outside the chosen folder.
+ *
+ * The name is normalized to NFC *before* any check, so the guard judges the
+ * exact name that reaches the disk. Mac tools store Hangul decomposed (NFD,
+ * `ㅎ`+`ㅏ`+`ㄴ`), which Windows lists as separate jamo and cannot match against
+ * the composed name; NFC is what Windows, Linux, and Finder's own file
+ * creation use. APFS treats both forms as one name, so nothing is lost there.
  */
 export function archiveEntryPath(destDir, name) {
 	if (name.includes("\0")) {
 		throw new ArchiveError(`압축 파일 항목 이름이 올바르지 않습니다: ${JSON.stringify(name)}`);
 	}
-	const normalized = name.replace(/\\/g, "/");
+	const normalized = name.normalize("NFC").replace(/\\/g, "/");
 	if (normalized.startsWith("/") || /^[A-Za-z]:/.test(normalized)) {
 		throw new ArchiveError(`압축 파일에 절대 경로 항목이 있습니다: ${name}`);
 	}

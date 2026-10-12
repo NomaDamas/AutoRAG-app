@@ -9,6 +9,7 @@ describe("archiveFormatOf", () => {
 		expect(archiveFormatOf("docs.tbz2")).toEqual({ format: "tbz2", stem: "docs" });
 		expect(archiveFormatOf("docs.txz")).toEqual({ format: "txz", stem: "docs" });
 		expect(archiveFormatOf("docs.7z")).toEqual({ format: "7z", stem: "docs" });
+		expect(archiveFormatOf("docs.RAR")).toEqual({ format: "rar", stem: "docs" });
 	});
 
 	it("matches multi-dot suffixes longest-first", () => {
