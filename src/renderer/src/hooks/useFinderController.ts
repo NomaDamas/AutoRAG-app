@@ -1858,7 +1858,8 @@ export function useFinderController(
 					aiSearch: current.path === AI_SEARCH_PATH,
 				};
 			}),
-		[pane, query],
+		// `t` changes identity with the language, so fixed titles (Settings, AI Search) re-translate.
+		[pane, query, t],
 	);
 
 	const contextMenuEntries = useMemo<readonly FinderMenuEntry[]>(() => {
