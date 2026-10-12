@@ -196,13 +196,68 @@ gh variable set AZURE_CODESIGN_PROFILE  --repo NomaDamas/AutoRAG-app --body <cer
 
 3. Ship unsigned and document the SmartScreen "More info → Run anyway" step.
 
+## Download distribution (optional Cloudflare R2 mirror)
+
+GitHub Releases stays the canonical, free mirror, and both installers keep
+being attached to every release. For uniform download speed worldwide the
+workflow can additionally mirror the same files to a Cloudflare R2 bucket
+behind a custom domain: R2 egress is free, so traffic costs only pennies of
+storage, and the custom domain serves the objects through Cloudflare's CDN.
+The sync step is release-only and switches on by itself when the configuration
+below exists; without it the run skips the mirror and GitHub Releases remains
+the only host.
+
+The mirror is configured and live:
+
+1. The bucket (`autorag-dl`) and its custom domain (`dl.nomadamas.org`, zone
+   `nomadamas.org`) are provisioned; the domain is the production download
+   host. Never publish a `*.r2.dev` development URL; it is rate-limited and
+   not built for production.
+2. `R2_ENDPOINT` (the account's S3 endpoint) and `R2_BUCKET` are repository
+   variables; `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` are repository
+   secrets holding an R2 API token with *Object Read & Write* scoped to
+   `autorag-dl`.
+3. To rotate that token, create a new one (dash.cloudflare.com → R2 → Account
+   Details → Manage API Tokens; the secret access key is shown once), store
+   it, then revoke the old one:
+
+```sh
+gh secret set R2_ACCESS_KEY_ID     --repo NomaDamas/AutoRAG-app
+gh secret set R2_SECRET_ACCESS_KEY --repo NomaDamas/AutoRAG-app
+```
+
+If `https://dl.nomadamas.org/` answers with R2's "not publicly accessible"
+404 page even though objects exist, the account's R2 purchase/billing
+enablement is not finished — complete it in the R2 dashboard (Settings /
+billing banner) and retry; the same enablement is what unblocks the API token
+step above. After enabling it, keys that were requested while access was
+still off can keep answering 404: R2's edge caches that negative lookup per
+key. Re-uploading the same key (which the release sync effectively does) or
+requesting a fresh key clears it. `v0-test.txt` at the bucket root is a
+deliberate 20-byte canary for exactly this check.
+
+After a release, the files land at `https://dl.nomadamas.org/v<version>/` —
+`AutoRAG-<version>-arm64.dmg`, `AutoRAG-Setup-<version>-x64.exe`,
+`components-<platform>.json`, and the `SHA256SUMS-*` files. Each version is
+synced into its own prefix with
+`Cache-Control: public, max-age=31536000, immutable`: an installer never
+changes once uploaded, so the CDN may cache it forever and edge hits give the
+same fast download everywhere. Range requests are supported, so interrupted
+downloads resume. Keep both links on the download page — the CDN first, the
+GitHub release as fallback — and verify checksums after download either way.
+
+What this does not solve: China. Neither Cloudflare nor GitHub is reliably
+reachable there; a China-hosted mirror (for example Alibaba Cloud OSS behind an
+ICP-licensed domain) would be its own upload step and its own decision.
+
 ## Before the first release
 
 1. Set the runner variables above (or fix billing).
 2. Add the signing secrets you want.
-3. Run the rehearsal: `gh workflow run release.yml -f version=v0.1.0-rc.1`, download the
+3. Confirm the R2 mirror variables and secrets above are still present.
+4. Run the rehearsal: `gh workflow run release.yml -f version=v0.1.0-rc.1`, download the
    artifacts, and install them on a clean machine.
-4. `gh release create v0.1.0 --generate-notes`.
+5. `gh release create v0.1.0 --generate-notes`.
 
 ## Local build
 
