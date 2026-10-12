@@ -2,7 +2,7 @@
  * Manual QA: the Inspector action bar follows the file's own type.
  *
  * Proves, against the real app (production build, isolated HOME and userData):
- *  1. a text file offers 열기 / 다른 앱으로 열기 / 압축 / 공유 / AI 요약 — and no
+ *  1. a text file offers 열기 / 다른 앱으로 열기 / 압축 / 7z로 압축 / 공유 / AI 요약 — and no
  *     Quick Look, copy-path, or trash button (those live elsewhere)
  *  2. 압축 really writes a zip next to the source
  *  3. a zip offers 압축 해제, which restores the folder
@@ -149,8 +149,8 @@ try {
 	await selectFile(page, "notes.txt");
 	const textActions = await actionLabels(page);
 	const expectedTextActions = canShare
-		? ["Open", "Open With", "Compress", "Share", "AI Summary"]
-		: ["Open", "Open With", "Compress", "AI Summary"];
+		? ["Open", "Open With", "Compress", "Compress as 7z", "Share", "AI Summary"]
+		: ["Open", "Open With", "Compress", "Compress as 7z", "AI Summary"];
 	check("text actions", JSON.stringify(textActions), JSON.stringify(expectedTextActions));
 	check("no Quick Look button", textActions.includes("Quick Look"), false);
 	await page.screenshot({ path: join(EVIDENCE, "1-text-actions.png") });
