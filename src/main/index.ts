@@ -587,6 +587,8 @@ app.whenReady().then(async () => {
 		configPath: autoragConfigPath(),
 		openExternal: (url) => shell.openExternal(url),
 		send: sendToMainWindow,
+		// The picker lists the plan's models from the runtime's persisted catalog.
+		onSignedIn: () => providerAuth.syncAutoragCatalog(),
 	});
 	registerAccountIpcHandlers(accountService);
 	void accountService.refresh().catch(() => undefined);

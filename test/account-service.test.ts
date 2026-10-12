@@ -98,7 +98,17 @@ async function startFakeServer(): Promise<FakeServer> {
 				return;
 			}
 			if (path === "/v1/account" && request.method === "GET") return reply(response, 200, fake.account);
-			if (path === "/v1/models" && request.method === "GET") return reply(response, 200, CATALOG);
+			if (path === "/v1/models" && request.method === "GET") {
+				const operation = new URL(request.url ?? "/", "http://fake").searchParams.get("operation");
+				if (operation === null) return reply(response, 200, CATALOG);
+				const failure = fake.failNext.get(`/v1/models?operation=${operation}`);
+				if (failure !== undefined) {
+					fake.failNext.delete(`/v1/models?operation=${operation}`);
+					return reply(response, failure.status, failure.body);
+				}
+				const ids = operation === "jev" ? ["jev-1.13"] : operation === "rerank" ? ["vendor/rerank-a", "vendor/rerank-b"] : [];
+				return reply(response, 200, { object: "list", data: ids.map((id) => ({ id, object: "model" })) });
+			}
 			if (path === "/v1/account/checkout" && request.method === "POST") {
 				const body = await readBody(request);
 				return reply(response, 200, { url: `https://checkout.example/${String(body.plan)}` });
@@ -183,7 +193,7 @@ function makeBrowser(mutate: (callback: string) => string = (callback) => callba
 	};
 }
 
-function build(openExternal = makeBrowser(), overrides: { signInTimeoutMs?: number; fetch?: typeof fetch } = {}): AccountService {
+function build(openExternal = makeBrowser(), overrides: { signInTimeoutMs?: number; fetch?: typeof fetch; onSignedIn?: () => Promise<void> } = {}): AccountService {
 	return createAccountService({
 		env,
 		credentials: creds.service as never,
@@ -389,6 +399,220 @@ describe("sign out", () => {
 		expect(status).toMatchObject({ state: "signedOut", account: null });
 		expect(creds.store.size).toBe(0);
 		expect((await build().status()).account).toBeNull();
+	});
+});
+
+describe("review follow-ups for the default model", () => {
+	const readConfig = async (): Promise<Record<string, unknown>> => JSON.parse(await readFile(join(root, "config.json"), "utf8")) as Record<string, unknown>;
+	/** The provider of the configured decomposition model, read through checked narrowing. */
+	const decompositionProvider = (config: Record<string, unknown>): unknown => {
+		const block = config.queryDecomposition;
+		if (typeof block !== "object" || block === null || !("model" in block)) return undefined;
+		const model = block.model;
+		return typeof model === "object" && model !== null && "provider" in model ? model.provider : undefined;
+	};
+
+	it("does not hold sign-in or a refresh back on a slow catalog sync", async () => {
+		const never = Promise.withResolvers<void>();
+		service = build(undefined, { onSignedIn: () => never.promise });
+
+		const status = await service.signIn();
+		const refreshed = await service.refresh();
+
+		expect(status.state).toBe("signedIn");
+		expect(refreshed.account?.email).toBe("user@example.com");
+		never.resolve();
+	});
+
+	it("does not undo a config change made while the model lists are being fetched", async () => {
+		await writeFile(join(root, "config.json"), JSON.stringify({ searchPaths: ["/before"] }), "utf8");
+		const jevList = Promise.withResolvers<void>();
+		const slow = build(undefined, {
+			fetch: (async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+				if (String(input).includes("operation=jev")) {
+					await writeFile(join(root, "config.json"), JSON.stringify({ searchPaths: ["/changed-meanwhile"] }), "utf8");
+					jevList.resolve();
+				}
+				return fetch(input, init);
+			}) as typeof fetch,
+		});
+
+		await slow.signIn();
+		await jevList.promise;
+
+		expect((await readConfig()).searchPaths).toEqual(["/changed-meanwhile"]);
+	});
+
+	it("keeps an AutoRAG reranker the user switched off or tuned across a new sign-in", async () => {
+		await writeFile(join(root, "config.json"), JSON.stringify({ rerank: { provider: "autorag", enabled: false }, jev: { backend: "autorag", confidenceThreshold: 0.8 } }), "utf8");
+
+		await service.signIn();
+
+		const config = await readConfig();
+		expect(config.rerank).toEqual({ provider: "autorag", enabled: false });
+		expect(config.jev).toEqual({ backend: "autorag", confidenceThreshold: 0.8 });
+	});
+
+	it("keeps a deliberately chosen OpenRouter decomposition model, but replaces the librarian's untouched one", async () => {
+		await writeFile(join(root, "config.json"), JSON.stringify({ queryDecomposition: { model: { provider: "openrouter", id: "anthropic/claude-haiku-5.5" } } }), "utf8");
+		await service.signIn();
+		expect((await readConfig()).queryDecomposition).toEqual({ model: { provider: "openrouter", id: "anthropic/claude-haiku-5.5" } });
+
+		await service.signOut();
+		await writeFile(join(root, "config.json"), JSON.stringify({ queryDecomposition: { model: { provider: "openrouter", id: "qwen/qwen3.7-flash" } } }), "utf8");
+		await service.signIn();
+		expect(decompositionProvider(await readConfig())).toBe("autorag");
+	});
+
+	it("lets the explicit button still replace any decomposition model", async () => {
+		await service.signIn();
+		await writeFile(join(root, "config.json"), JSON.stringify({ model: { provider: "autorag", id: "x" }, queryDecomposition: { model: { provider: "openrouter", id: "anthropic/claude-haiku-5.5" } } }), "utf8");
+
+		await service.useManagedModel();
+
+		expect(decompositionProvider(await readConfig())).toBe("autorag");
+	});
+});
+
+describe("model catalog sync hook", () => {
+	it("runs after sign-in succeeds and on a later refresh of a signed-in account", async () => {
+		const synced: string[] = [];
+		service = build(undefined, { onSignedIn: async () => void synced.push("sync") });
+
+		await service.signIn();
+		await service.refresh();
+
+		expect(synced).toEqual(["sync", "sync"]);
+	});
+
+	it("never runs while signed out, and never breaks sign-in when it throws", async () => {
+		const synced: string[] = [];
+		const signedOut = build(undefined, { onSignedIn: async () => void synced.push("sync") });
+		await signedOut.refresh();
+		expect(synced).toEqual([]);
+
+		service = build(undefined, {
+			onSignedIn: async () => {
+				throw new Error("boom");
+			},
+		});
+		expect((await service.signIn()).state).toBe("signedIn");
+	});
+
+	it("does not run when the server rejects the key", async () => {
+		const synced: string[] = [];
+		service = build(undefined, { onSignedIn: async () => void synced.push("sync") });
+		await service.signIn();
+		synced.length = 0;
+		fake.failNext.set("/v1/account", { status: 401, body: { error: { message: "Invalid or revoked API key.", type: "invalid_request_error", code: "invalid_api_key" } } });
+
+		await service.refresh();
+
+		expect(synced).toEqual([]);
+	});
+});
+
+describe("Jev and rerank after sign-in", () => {
+	const readConfig = async (): Promise<Record<string, unknown>> => JSON.parse(await readFile(join(root, "config.json"), "utf8")) as Record<string, unknown>;
+
+	it("points Jev and rerank at the plan when the config names neither", async () => {
+		await writeFile(join(root, "config.json"), JSON.stringify({ searchPaths: ["/docs"] }), "utf8");
+
+		await service.signIn();
+
+		const config = await readConfig();
+		expect(config.jev).toEqual({ backend: "autorag", model: "jev-1.13" });
+		expect(config.rerank).toEqual({ enabled: true, provider: "autorag", model: "vendor/rerank-a" });
+	});
+
+	it("replaces the librarian's untouched OpenRouter defaults, which an account holder has no key for", async () => {
+		await writeFile(
+			join(root, "config.json"),
+			JSON.stringify({ jev: { backend: "openrouter" }, rerank: { provider: "openrouter", model: "voyageai/rerank-3-lite", apiKeyEnv: "OPENROUTER_API_KEY", topN: 25 } }),
+			"utf8",
+		);
+
+		await service.signIn();
+
+		const config = await readConfig();
+		expect(config.jev).toMatchObject({ backend: "autorag" });
+		expect(config.rerank).toMatchObject({ provider: "autorag" });
+	});
+
+	it("keeps a role the user turned off or pointed at another provider", async () => {
+		await writeFile(join(root, "config.json"), JSON.stringify({ jev: false, rerank: { provider: "openrouter", model: "voyageai/rerank-3" } }), "utf8");
+
+		await service.signIn();
+
+		const config = await readConfig();
+		expect(config.jev).toBe(false);
+		expect(config.rerank).toEqual({ provider: "openrouter", model: "voyageai/rerank-3" });
+	});
+
+	it("still adopts the chat model when the Jev and rerank lists cannot be read", async () => {
+		fake.failNext.set("/v1/models?operation=jev", { status: 500, body: { error: { message: "boom", type: "server_error", code: "internal" } } });
+		fake.failNext.set("/v1/models?operation=rerank", { status: 500, body: { error: { message: "boom", type: "server_error", code: "internal" } } });
+
+		await service.signIn();
+
+		const config = await readConfig();
+		expect(config.model).toMatchObject({ provider: "autorag" });
+		expect(config.jev).toBeUndefined();
+		expect(config.rerank).toBeUndefined();
+	});
+});
+
+describe("default model after sign-in", () => {
+	const readConfig = async (): Promise<Record<string, unknown>> => JSON.parse(await readFile(join(root, "config.json"), "utf8")) as Record<string, unknown>;
+
+	it("points a config with no model at the account's models as soon as sign-in succeeds", async () => {
+		await writeFile(join(root, "config.json"), JSON.stringify({ searchPaths: ["/docs"] }), "utf8");
+
+		await service.signIn();
+
+		const config = await readConfig();
+		expect(config.searchPaths).toEqual(["/docs"]);
+		expect(config.model).toMatchObject({ provider: "autorag", id: "vendor/pricey", baseUrl: `${fake.url}/v1`, apiKeyEnv: ACCOUNT_API_KEY_ENV });
+	});
+
+	it("creates the config when none exists", async () => {
+		await service.signIn();
+
+		expect((await readConfig()).model).toMatchObject({ provider: "autorag" });
+	});
+
+	it("leaves a model the user picked from another provider alone", async () => {
+		await writeFile(join(root, "config.json"), JSON.stringify({ model: { provider: "anthropic", id: "claude-haiku-5.5" } }), "utf8");
+
+		await service.signIn();
+
+		expect((await readConfig()).model).toEqual({ provider: "anthropic", id: "claude-haiku-5.5" });
+	});
+
+	it("re-adopts when the configured model is already an AutoRAG one (a later login refreshes it)", async () => {
+		await writeFile(join(root, "config.json"), JSON.stringify({ model: { provider: "autorag", id: "retired/model" } }), "utf8");
+
+		await service.signIn();
+
+		expect((await readConfig()).model).toMatchObject({ provider: "autorag", id: "vendor/pricey" });
+	});
+
+	it("does not touch the config on a plain refresh or when the catalog cannot be read", async () => {
+		await service.signIn();
+		await writeFile(join(root, "config.json"), JSON.stringify({ model: { provider: "openai-compatible", id: "mine" } }), "utf8");
+		fake.failNext.set("/v1/account", { status: 200, body: FREE_ACCOUNT });
+
+		await service.refresh();
+
+		expect((await readConfig()).model).toEqual({ provider: "openai-compatible", id: "mine" });
+	});
+
+	it("still signs in when the model list is unavailable", async () => {
+		fake.failNext.set("/v1/models", { status: 500, body: { error: { message: "boom", type: "server_error", code: "internal" } } });
+
+		const status = await service.signIn();
+
+		expect(status.state).toBe("signedIn");
 	});
 });
 

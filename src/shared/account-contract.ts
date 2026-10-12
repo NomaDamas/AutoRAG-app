@@ -103,3 +103,49 @@ const PLAN_RANK: Readonly<Record<AccountPlanId, number>> = { free: 0, air: 1, pr
 export function planCovers(have: AccountPlanId, want: AccountPlanId): boolean {
 	return PLAN_RANK[have] >= PLAN_RANK[want];
 }
+
+/** Provider id the hosted plan registers under (the librarian's `autorag` provider). */
+export const AUTORAG_PROVIDER_ID = "autorag";
+
+/**
+ * Stable partition that lists the AutoRAG plan before every other provider
+ * (the plan is the product's own, prioritised choice). `keyOf` picks the
+ * provider id off a row. Returns a new array.
+ */
+export function autoragFirst<T extends { readonly id: string }>(items: readonly T[]): T[];
+export function autoragFirst<T>(items: readonly T[], keyOf: (item: T) => string): T[];
+export function autoragFirst<T>(items: readonly T[], keyOf?: (item: T) => string): T[] {
+	const isAutorag = (item: T): boolean => (keyOf === undefined ? hasProviderId(item) : keyOf(item) === AUTORAG_PROVIDER_ID);
+	return [...items.filter(isAutorag), ...items.filter((item) => !isAutorag(item))];
+}
+
+function hasProviderId(item: unknown): boolean {
+	return typeof item === "object" && item !== null && "id" in item && item.id === AUTORAG_PROVIDER_ID;
+}
+
+/**
+ * Whether signing in may point the agent at the account's models: only when
+ * the shared config names no model yet, or already names an AutoRAG one. A
+ * model the user picked from another provider is never overridden, and a
+ * malformed `model` value counts as theirs.
+ */
+export function shouldAdoptManagedModel(config: { readonly model?: unknown }): boolean {
+	const model = config.model;
+	if (model === undefined) return true;
+	return typeof model === "object" && model !== null && "provider" in model && model.provider === AUTORAG_PROVIDER_ID;
+}
+
+/**
+ * Where connecting or disconnecting a provider is handled. The AutoRAG plan is
+ * signed in through the account service (encrypted key, adopted defaults,
+ * Settings > 계정); signing in through the generic Pi flow would store the
+ * token in plaintext and skip all of that. Every other provider uses Pi.
+ */
+export function providerConnectRoute(providerId: string): "account" | "provider" {
+	return providerId === AUTORAG_PROVIDER_ID ? "account" : "provider";
+}
+
+/** The providers the generic Pi connect menu may offer: everything except the AutoRAG plan. */
+export function withoutAutorag<T extends { readonly id: string }>(items: readonly T[]): T[] {
+	return items.filter((item) => providerConnectRoute(item.id) === "provider");
+}
