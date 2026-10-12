@@ -6,8 +6,8 @@ import {
 	dirname,
 	isAbsolutePath,
 	joinPath,
-	normalizeTypedPath,
 	pathSegments,
+	resolvePathInput,
 	volumeLabel,
 	whereSegments,
 } from "../src/renderer/src/state/paths";
@@ -192,34 +192,59 @@ describe("volumeLabel", () => {
 	});
 });
 
-describe("normalizeTypedPath", () => {
-	const home = "/Users/me";
+describe("resolvePathInput", () => {
+	const posix = { current: "/Users/jeffrey/Documents", home: "/Users/jeffrey" };
+
+	it("keeps a pasted absolute path, trimmed and without trailing separators", () => {
+		expect(resolvePathInput("  /Users/jeffrey/Downloads/  \n", posix)).toBe("/Users/jeffrey/Downloads");
+		expect(resolvePathInput("/", posix)).toBe("/");
+	});
+
+	it("drops the quotes a shell or 'Copy as Pathname' wraps around a path", () => {
+		expect(resolvePathInput('"/Users/jeffrey/My Files"', posix)).toBe("/Users/jeffrey/My Files");
+		expect(resolvePathInput("'/tmp/a b'", posix)).toBe("/tmp/a b");
+	});
+
+	it("collapses repeated separators and dot segments without leaving the root", () => {
+		expect(resolvePathInput("/Users//jeffrey/./Documents/../Desktop", posix)).toBe("/Users/jeffrey/Desktop");
+		expect(resolvePathInput("/../..", posix)).toBe("/");
+	});
 
 	it("expands ~ to the home folder", () => {
-		expect(normalizeTypedPath("~", home)).toBe("/Users/me");
-		expect(normalizeTypedPath("~/Documents/Projects", home)).toBe("/Users/me/Documents/Projects");
-		expect(normalizeTypedPath("~\\Documents", "C:\\Users\\me")).toBe("C:\\Users\\me\\Documents");
+		expect(resolvePathInput("~", posix)).toBe("/Users/jeffrey");
+		expect(resolvePathInput("~/Library/Caches", posix)).toBe("/Users/jeffrey/Library/Caches");
 	});
 
-	it("leaves ~ alone when the home folder is unknown, and never expands ~name", () => {
-		expect(normalizeTypedPath("~/x", null)).toBe("~/x");
-		expect(normalizeTypedPath("~other/x", home)).toBe("~other/x");
+	it("rejects ~ when the home folder is unknown", () => {
+		expect(resolvePathInput("~/Desktop", { ...posix, home: null })).toBeNull();
 	});
 
-	it("strips pasted quotes, whitespace and trailing separators", () => {
-		expect(normalizeTypedPath("  '/Users/me/My Files'  ", home)).toBe("/Users/me/My Files");
-		expect(normalizeTypedPath('"/Users/me/Docs/"', home)).toBe("/Users/me/Docs");
-		expect(normalizeTypedPath("/Users/me/Docs///", home)).toBe("/Users/me/Docs");
+	it("resolves a relative path against the folder in view", () => {
+		expect(resolvePathInput("Finance/2026", posix)).toBe("/Users/jeffrey/Documents/Finance/2026");
+		expect(resolvePathInput("..", posix)).toBe("/Users/jeffrey");
 	});
 
-	it("keeps a root a root", () => {
-		expect(normalizeTypedPath("/", home)).toBe("/");
-		expect(normalizeTypedPath("C:\\", home)).toBe("C:\\");
-		expect(normalizeTypedPath("C:\\Users\\", home)).toBe("C:\\Users");
+	it("reads a file:// URL as its decoded path", () => {
+		expect(resolvePathInput("file:///Users/jeffrey/My%20Files/", posix)).toBe("/Users/jeffrey/My Files");
+		expect(resolvePathInput("file:///C:/Users/me/Docs", posix)).toBe("C:\\Users\\me\\Docs");
 	});
 
-	it("returns empty for blank input", () => {
-		expect(normalizeTypedPath("   ", home)).toBe("");
-		expect(normalizeTypedPath("''", home)).toBe("");
+	it("rejects blank input", () => {
+		expect(resolvePathInput("   ", posix)).toBeNull();
+		expect(resolvePathInput('""', posix)).toBeNull();
+	});
+
+	it("normalizes Windows drive and UNC paths with backslashes", () => {
+		const windows = { current: "C:\\Users\\me", home: "C:\\Users\\me" };
+		expect(resolvePathInput("C:/Users/me/Documents/", windows)).toBe("C:\\Users\\me\\Documents");
+		expect(resolvePathInput("d:\\", windows)).toBe("d:\\");
+		expect(resolvePathInput("\\\\server\\share\\team\\..\\docs", windows)).toBe("\\\\server\\share\\docs");
+		expect(resolvePathInput("~\\Desktop", windows)).toBe("C:\\Users\\me\\Desktop");
+		expect(resolvePathInput("Downloads", windows)).toBe("C:\\Users\\me\\Downloads");
+	});
+
+	it("treats input as root-relative when the folder in view is not absolute", () => {
+		expect(resolvePathInput("Documents/Finance/", { current: "Documents/Finance/2026 Q3", home: null })).toBe("Documents/Finance");
+		expect(resolvePathInput("Desktop", { current: "Recents", home: null })).toBe("Desktop");
 	});
 });

@@ -107,6 +107,11 @@
     },
     "versionBanner": {
       "retry": "다시 확인"
+    },
+    "pathBar": {
+      "edit": "경로로 이동",
+      "invalid": "이동할 경로를 입력하세요",
+      "notFound": "\"{{path}}\" 위치를 찾을 수 없습니다"
     }
   },
   "contextMenu": {
@@ -129,6 +134,7 @@
     "copyPath": "경로 복사",
     "compress": "압축",
     "compressCount": "{{count}}개 항목 압축",
+    "compress7z": "7z로 압축",
     "extract": "압축 해제",
     "share": "공유",
     "services": "서비스",
@@ -190,6 +196,7 @@
       "open": "열기",
       "openWith": "다른 앱으로 열기",
       "compress": "압축",
+      "compress7z": "7z로 압축",
       "extract": "압축 해제",
       "share": "공유",
       "askAi": "AI 요약",

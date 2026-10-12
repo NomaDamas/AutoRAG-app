@@ -38,6 +38,7 @@ export type FinderMenuAction =
 	| "copyPath"
 	| "share"
 	| "compress"
+	| "compress7z"
 	| "extract"
 	| "putBack"
 	| "trash"
@@ -271,6 +272,7 @@ export function buildContextMenu(
 						: tr("contextMenu.compress", "압축"),
 				),
 			);
+			rowActions.push(item("compress7z", tr("contextMenu.compress7z", "7z로 압축")));
 		}
 		if (input.capabilities.share) {
 			rowActions.push(item("share", tr("contextMenu.share", "공유")));

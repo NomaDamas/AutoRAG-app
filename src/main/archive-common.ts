@@ -27,7 +27,7 @@ export interface ArchiveLimits {
 	 */
 	readonly maxEntries: number;
 	/**
-	 * The wasm engine (7z, tar.bz2, tar.xz) decompresses in memory, so the
+	 * The wasm engine (7z, rar, tar.bz2, tar.xz) decompresses in memory, so the
 	 * *compressed* archive — and any single member — must fit too; larger inputs
 	 * are refused rather than risking an out-of-memory crash. The pure-Node
 	 * tar/gzip path streams and has no such limit.

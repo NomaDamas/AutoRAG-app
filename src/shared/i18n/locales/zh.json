@@ -107,6 +107,11 @@
     },
     "versionBanner": {
       "retry": "重新检查"
+    },
+    "pathBar": {
+      "edit": "前往路径",
+      "invalid": "请输入要前往的路径",
+      "notFound": "找不到 \"{{path}}\""
     }
   },
   "contextMenu": {
@@ -129,6 +134,7 @@
     "copyPath": "拷贝路径",
     "compress": "压缩",
     "compressCount": "压缩 {{count}} 个项目",
+    "compress7z": "压缩为 7z",
     "extract": "解压",
     "share": "共享",
     "services": "服务",
@@ -190,6 +196,7 @@
       "open": "打开",
       "openWith": "打开方式",
       "compress": "压缩",
+      "compress7z": "压缩为 7z",
       "extract": "解压",
       "share": "共享",
       "askAi": "AI 总结",

@@ -107,6 +107,11 @@
     },
     "versionBanner": {
       "retry": "Check again"
+    },
+    "pathBar": {
+      "edit": "Go to path",
+      "invalid": "Enter a path to go to",
+      "notFound": "\"{{path}}\" can't be found"
     }
   },
   "contextMenu": {
@@ -129,6 +134,7 @@
     "copyPath": "Copy Path",
     "compress": "Compress",
     "compressCount": "Compress {{count}} Items",
+    "compress7z": "Compress as 7z",
     "extract": "Extract",
     "share": "Share",
     "services": "Services",
@@ -190,6 +196,7 @@
       "open": "Open",
       "openWith": "Open With",
       "compress": "Compress",
+      "compress7z": "Compress as 7z",
       "extract": "Extract",
       "share": "Share",
       "askAi": "AI Summary",

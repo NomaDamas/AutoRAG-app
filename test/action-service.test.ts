@@ -1,7 +1,8 @@
 import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, isAbsolute, join, resolve } from "node:path";
-import { zipSync } from "fflate";
+import { ArchiveReader, libarchiveWasm } from "libarchive-wasm";
+import { unzipSync, zipSync } from "fflate";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { ActionAnchor } from "../src/shared/actions-contract";
 import {
@@ -146,6 +147,69 @@ describe("archive round-trip", () => {
 		expect(await readFile(join(unpacked.output ?? "", "readme.md"), "utf8")).toBe("hello");
 		expect(await readFile(join(unpacked.output ?? "", "empty", "keep.txt"), "utf8")).toBe("keep");
 		expect((await readdir(join(unpacked.output ?? "", "empty"))).length).toBe(1);
+	});
+
+	it("compresses to 7z with empty files and directories, and extracts it back byte for byte", async () => {
+		const { service } = makeService();
+		const source = join(root, "docs");
+		await mkdir(join(source, "empty"), { recursive: true });
+		await mkdir(join(source, "hollow"));
+		await writeFile(join(source, "readme.md"), "hello");
+		await writeFile(join(source, "text.txt"), "한글 본문\n".repeat(5000));
+		await writeFile(join(source, "zero.txt"), "");
+		await writeFile(join(source, "empty", "keep.txt"), "keep");
+		const noise = Buffer.from(Array.from({ length: 70_000 }, (_, i) => (i * 2654435761) >>> 24));
+		await writeFile(join(source, "noise.bin"), noise);
+
+		const packed = await service.run([source], { kind: "compress", format: "7z" }, null);
+		expect(packed.output).toBe(join(root, "docs.7z"));
+		expect((await readFile(packed.output ?? "")).subarray(0, 6)).toEqual(Buffer.from([0x37, 0x7a, 0xbc, 0xaf, 0x27, 0x1c]));
+
+		const unpacked = await service.run([packed.output ?? ""], { kind: "extract" }, null);
+		expect(unpacked.output).toBe(join(root, "docs 2"));
+		const out = unpacked.output ?? "";
+		expect(await readFile(join(out, "readme.md"), "utf8")).toBe("hello");
+		expect(await readFile(join(out, "text.txt"), "utf8")).toBe("한글 본문\n".repeat(5000));
+		expect(await readFile(join(out, "zero.txt"), "utf8")).toBe("");
+		expect(await readFile(join(out, "empty", "keep.txt"), "utf8")).toBe("keep");
+		expect(await readFile(join(out, "noise.bin"))).toEqual(noise);
+		expect((await stat(join(out, "hollow"))).isDirectory()).toBe(true);
+	});
+
+	it("writes decomposed (NFD) Mac names composed into the zip and 7z entries themselves", async () => {
+		const { service } = makeService();
+		const source = join(root, "한글 폴더".normalize("NFD"));
+		await mkdir(source);
+		await writeFile(join(source, "보고서.txt".normalize("NFD")), "본문 ".repeat(1000));
+		// APFS keeps the decomposed spelling, so the walk really does see NFD names.
+		expect((await readdir(source))[0]).not.toBe("보고서.txt");
+
+		const zip = await service.run([source], { kind: "compress", format: "zip" }, null);
+		const zipNames = Object.keys(unzipSync(new Uint8Array(await readFile(zip.output ?? ""))));
+		expect(zipNames.sort()).toEqual(["한글 폴더/", "한글 폴더/보고서.txt"]);
+
+		// Read the 7z's own entry names, bypassing the extractor's guard, which would also compose them.
+		const sevenZip = await service.run([source], { kind: "compress", format: "7z" }, null);
+		const archive = await readFile(sevenZip.output ?? "");
+		const reader = new ArchiveReader(
+			await libarchiveWasm({ wasmBinary: await readFile(new URL("../src/main/vendor/libarchive.wasm", import.meta.url)) }),
+			new Int8Array(archive.buffer, archive.byteOffset, archive.byteLength),
+		);
+		const sevenZipNames: string[] = [];
+		for (const entry of reader.entries()) sevenZipNames.push(entry.getPathname());
+		reader.free();
+		expect(sevenZipNames.sort()).toEqual(["한글 폴더/", "한글 폴더/보고서.txt"]);
+		expect(sevenZipNames.every((name) => name === name.normalize("NFC"))).toBe(true);
+	});
+
+	it("names a multi-selection 7z Archive.7z and numbers it when taken", async () => {
+		const { service } = makeService();
+		await writeFile(join(root, "a.txt"), "a");
+		await writeFile(join(root, "b.txt"), "b");
+		const first = await service.run([join(root, "a.txt"), join(root, "b.txt")], { kind: "compress", format: "7z" }, null);
+		expect(first.output).toBe(join(root, "Archive.7z"));
+		const second = await service.run([join(root, "a.txt"), join(root, "b.txt")], { kind: "compress", format: "7z" }, null);
+		expect(second.output).toBe(join(root, "Archive 2.7z"));
 	});
 
 	it("names a single-file archive after the full file name", async () => {

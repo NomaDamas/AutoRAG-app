@@ -6,6 +6,7 @@ import { useRowPipeline } from "./useRowPipeline";
 import { itemElement, useFinderKeyboard } from "./useFinderKeyboard";
 import type { MouseEvent as ReactMouseEvent, RefObject } from "react";
 import { NO_CAPABILITIES, type ActionAnchor, type ActionCapabilities, type OpenWithApplication } from "../../../shared/actions-contract";
+import { archiveFormatOf } from "../../../shared/archive-formats";
 import { isTagPath, isVirtualListing, RECENTS_PATH, tagPath } from "../../../shared/fs-contract";
 import type { IndexStatus } from "../../../shared/index-contract";
 import { DUPEY_LAYER_ID, type LiveMessage } from "../../../shared/live-contract";
@@ -48,7 +49,7 @@ import {
 	selectDupey,
 	type LayerStore,
 } from "../state/layers";
-import { activeNavPath, basename, breadcrumbTrail, dirname, isAbsolutePath, normalizeTypedPath, type Crumb } from "../state/paths";
+import { activeNavPath, basename, breadcrumbTrail, dirname, resolvePathInput, type Crumb } from "../state/paths";
 import {
 	applyRowClick,
 	EMPTY_SELECTION,
@@ -165,15 +166,12 @@ export interface FinderController {
 	readonly canGoForward: boolean;
 	readonly query: string;
 	readonly searchFocused: boolean;
-	/** ⌘L: the path bar is a text field. */
-	readonly pathEditing: boolean;
-	/** What the path field starts with: the folder in view (empty for Recents and tags, which have no path). */
-	readonly pathEditText: string;
-	/** Go to the typed path: a folder opens, a file's folder opens with the file selected. */
-	commitPath(text: string): void;
-	/** Turn the path bar into a text field (⌘L, or a double-click on its empty part). */
+	/** Bumped by every ⌘L: each bump opens (or re-selects) the path bar's editor. */
+	readonly pathEditingCount: number;
+	/** Start editing the path (⌘L). */
 	editPath(): void;
-	cancelPathEdit(): void;
+	/** The edit ended: Enter, Escape, or the bar closed it itself. */
+	endPathEdit(): void;
 	readonly searching: boolean;
 	readonly emptyText: string;
 	readonly rows: readonly FinderEntry[];
@@ -262,6 +260,12 @@ export interface FinderController {
 	readonly listRef: RefObject<HTMLDivElement | null>;
 	readonly searchRef: RefObject<HTMLInputElement | null>;
 	navigate(path: string): void;
+	/**
+	 * The path bar's editor: go to a typed or pasted location. A folder opens,
+	 * a file is revealed in its folder; resolves false (after a toast) when the
+	 * text names nothing that exists.
+	 */
+	goToPath(input: string): Promise<boolean>;
 	navigateNav(item: NavItem): void;
 	/** Unmount the volume behind a sidebar row; tabs inside it move out first. */
 	ejectNav(item: NavItem): void;
@@ -399,7 +403,7 @@ export function useFinderController(
 	const [emptyTrashConfirm, setEmptyTrashConfirm] = useState(false);
 	const [flashPath, setFlashPath] = useState<string | null>(null);
 	const [searchFocused, setSearchFocused] = useState(false);
-	const [pathEditing, setPathEditing] = useState(false);
+	const [pathEditingCount, setPathEditingCount] = useState(0);
 	const [revision, setRevision] = useState(0);
 	const [actionCapabilities, setActionCapabilities] = useState<ActionCapabilities>(NO_CAPABILITIES);
 	const [layerStore, setLayerStore] = useState<LayerStore>(EMPTY_LAYER_STORE);
@@ -864,6 +868,26 @@ export function useFinderController(
 		setQueryValue("");
 	});
 
+	const goToPath = useLatestCallback(async (input: string): Promise<boolean> => {
+		const home = locations.find((location) => location.icon === "home")?.path ?? null;
+		const target = resolvePathInput(input, { current: path, home });
+		if (target === null) {
+			showToast(t("finder.pathBar.invalid", "이동할 경로를 입력하세요"));
+			return false;
+		}
+		let entry: FinderEntry;
+		try {
+			entry = await source.stat(target);
+		} catch {
+			showToast(t("finder.pathBar.notFound", { defaultValue: "\"{{path}}\" 위치를 찾을 수 없습니다", path: target }));
+			return false;
+		}
+		// The bridge answers with the on-disk spelling ("autorag" typed, "AutoRAG" shown).
+		if (entry.kind === "folder") navigate(entry.path);
+		else revealEntry(entry);
+		return true;
+	});
+
 	const navigateNav = useLatestCallback(
 		(item: NavItem) => {
 			if (!item.available) {
@@ -922,6 +946,22 @@ export function useFinderController(
 				(layout === "columns" && panePaths.includes(location));
 			if (searching || (!inView && path !== RECENTS_PATH && !isTagPath(path))) {
 				revealEntry(entry);
+				return;
+			}
+			// An archive extracts in place, exactly like the context menu's "압축 해제",
+			// instead of handing the file to whatever app the OS associates with it.
+			// Without the archive capability the OS default still opens it.
+			if (actionCapabilities.archive && archiveFormatOf(entry.name) !== null) {
+				source.actions
+					.run([entry.path], { kind: "extract" })
+					.then((outcome) => {
+						showToast(outcome.note);
+						if (outcome.output !== null) {
+							recordActionOutput("extract", outcome.output);
+							refresh();
+						}
+					})
+					.catch(reportError);
 				return;
 			}
 			// Double-click / Enter on a file: the OS default application opens it.
@@ -1524,6 +1564,19 @@ export function useFinderController(
 						.then((outcome) => showToast(outcome.note))
 						.catch(reportError);
 					return;
+				case "compress7z":
+					// Same one-archive-per-selection rule as zip; the undo record is still "compress".
+					source.actions
+						.run(targets, { kind: "compress", format: "7z" })
+						.then((outcome) => {
+							showToast(outcome.note);
+							if (outcome.output !== null) {
+								recordActionOutput("compress", outcome.output);
+								refresh();
+							}
+						})
+						.catch(reportError);
+					return;
 				case "compress":
 				case "extract":
 					// One request for the whole selection: compress writes one archive,
@@ -1650,10 +1703,6 @@ export function useFinderController(
 		});
 
 	const dismiss = useLatestCallback(() => {
-		if (pathEditing) {
-			setPathEditing(false);
-			return;
-		}
 		if (emptyTrashConfirm) {
 			setEmptyTrashConfirm(false);
 			return;
@@ -1687,40 +1736,9 @@ export function useFinderController(
 		focusSearchRef.current?.();
 		searchRef.current?.focus();
 	});
-	const editPath = useLatestCallback(() => setPathEditing(true));
+	const editPath = useLatestCallback(() => setPathEditingCount((count) => count + 1));
+	const endPathEdit = useLatestCallback(() => setPathEditingCount((count) => count));
 	const duplicateSelection = useLatestCallback(() => duplicatePaths(selection.keys));
-	const cancelPathEdit = useLatestCallback(() => setPathEditing(false));
-	/** Resolve typed text to a place: `~` and quotes are tolerated; a file opens its folder with the file selected. */
-	const commitPath = useLatestCallback((text: string) => {
-		setPathEditing(false);
-		const home = locations.find((location) => location.icon === "home")?.path ?? null;
-		const target = normalizeTypedPath(text, home);
-		if (target === "" || target === path) return;
-		const missing = (): void =>
-			showToast(t("pathBar.notFound", { path: target, defaultValue: `"${target}" 경로를 찾을 수 없습니다.` }));
-		if (source.native && !isAbsolutePath(target)) {
-			missing();
-			return;
-		}
-		const parent = dirname(target);
-		if (parent === target) {
-			// A root has no parent to ask: it is a folder when it exists.
-			source
-				.exists(target)
-				.then((exists) => (exists ? navigate(target) : missing()))
-				.catch(reportError);
-			return;
-		}
-		source
-			.readEntries(parent, [target])
-			.then((patch) => {
-				const entry = patch.entries[0];
-				if (entry === undefined) missing();
-				else if (entry.kind === "folder") navigate(entry.path);
-				else revealEntry(entry);
-			})
-			.catch(reportError);
-	});
 	const closeActiveTab = useLatestCallback(() =>
 		updateWorkspace((workspace) => {
 			const current = workspace.panes.find((candidate) => candidate.id === paneId);
@@ -1985,6 +2003,7 @@ export function useFinderController(
 		listRef,
 		searchRef,
 		navigate,
+		goToPath,
 		navigateNav,
 		ejectNav,
 		selectTabId,
@@ -1999,11 +2018,9 @@ export function useFinderController(
 		forward,
 		setQuery: setQueryValue,
 		setSearchFocused,
-		pathEditing,
+		pathEditingCount,
 		editPath,
-		pathEditText: isVirtualListing(path) ? "" : path,
-		commitPath,
-		cancelPathEdit,
+		endPathEdit,
 		sortBy,
 		applySort,
 		setGrouping,

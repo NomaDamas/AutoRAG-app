@@ -1,5 +1,16 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
+import {
+	useCallback,
+	useEffect,
+	useLayoutEffect,
+	useRef,
+	useState,
+	type KeyboardEvent,
+	type MouseEvent,
+	type ReactElement,
+	type ReactNode,
+} from "react";
 import { flushSync } from "react-dom";
+import { useTranslation } from "react-i18next";
 import { HardDrive, Home } from "lucide-react";
 import { cn } from "../lib/cn";
 import { fitPathBar, sameFit, type PathFit, type SegmentFit } from "../state/path-fit";
@@ -13,6 +24,12 @@ import { FileTile } from "./primitives/FileTile";
  * One line, always. The trail is measured against the bar and `fitPathBar`
  * decides, per segment, whether the label shows in full, is clipped behind a
  * trailing fade (never an ellipsis), or is dropped so only the icon remains.
+ *
+ * A click anywhere that is not a folder segment (the gaps, the trailing space,
+ * the volume or file segment) turns the bar into a text field holding the full
+ * path: type or paste a location and Enter goes there, Escape or leaving the
+ * field puts the trail back. The trail stays mounted under the field so its
+ * measurement never goes stale.
  */
 
 interface PathSegment {
@@ -42,26 +59,27 @@ function extensionOf(name: string): string {
 }
 
 export function PathBar({
+	path,
 	crumbs,
 	selectedName,
 	onNavigate,
-	editing,
-	editText,
-	onCommit,
-	onCancel,
-	onStartEdit,
+	onGoToPath,
+	openEditor,
+	onEditorClosed,
 }: {
+	/** The folder in view; the editor opens holding it. */
+	readonly path: string;
 	readonly crumbs: readonly Crumb[];
 	readonly selectedName: string | null;
 	readonly onNavigate: (path: string) => void;
-	/** ⌘L: the trail is replaced by a text field holding `editText`. */
-	readonly editing: boolean;
-	readonly editText: string;
-	readonly onCommit: (text: string) => void;
-	readonly onCancel: () => void;
-	/** A double-click on the empty part of the bar starts editing, like a browser's address bar. */
-	readonly onStartEdit: () => void;
+	/** Go to a typed location; resolves false (editor stays open) when it cannot be opened. */
+	readonly onGoToPath: (input: string) => Promise<boolean>;
+	/** ⌘L: the Finder keymap opened the editor; counted up on every press so a repeat press re-selects. */
+	readonly openEditor: number;
+	/** The editor reports that it closed (Enter, Escape, blur), so the keymap can open it again. */
+	readonly onEditorClosed: () => void;
 }): ReactElement {
+	const { t } = useTranslation();
 	const first = crumbs[0];
 	const local = first?.label === "Users";
 	const segments: PathSegment[] = [];
@@ -116,35 +134,73 @@ export function PathBar({
 	// Label widths depend only on the label text; width changes arrive through
 	// the observer. Both paths settle before paint, so a stale fit never shows.
 	const labelKey = segments.map((segment) => segment.label).join("\u0000");
-	useLayoutEffect(refit, [refit, labelKey, editing]);
+	useLayoutEffect(refit, [refit, labelKey]);
 	useLayoutEffect(() => {
 		const viewport = viewportRef.current;
 		if (viewport === null || typeof ResizeObserver === "undefined") return;
 		const observer = new ResizeObserver(() => flushSync(refit));
 		observer.observe(viewport);
 		return () => observer.disconnect();
-	}, [refit, editing]);
+	}, [refit]);
 
-	if (editing) {
-		return (
-			<nav
-				className="pathbar flex h-24 flex-none items-center overflow-hidden whitespace-nowrap border-t border-border bg-chrome px-8 text-badge text-ink-body"
-				aria-label="Path"
-			>
-				<PathField initial={editText} onCommit={onCommit} onCancel={onCancel} />
-			</nav>
-		);
-	}
+	// The editor belongs to the folder it was opened on: navigating away by any
+	// route (a sidebar click, a successful Enter) closes it, and coming back
+	// later must not find it open again.
+	const [editFor, setEditFor] = useState<string | null>(null);
+	const [draft, setDraft] = useState("");
+	const editorRef = useRef<HTMLInputElement>(null);
+	if (editFor !== null && editFor !== path) setEditFor(null);
+	const editing = editFor === path;
+	const openedByEditor = useRef(0);
+	useLayoutEffect(() => {
+		if (editing) editorRef.current?.select();
+	}, [editing]);
+	// ⌘L opens the editor from the keyboard; a press while it is already open
+	// re-selects, and one after it closed reopens it.
+	useEffect(() => {
+		if (openEditor === openedByEditor.current) return;
+		openedByEditor.current = openEditor;
+		if (openEditor === 0) return;
+		setDraft(path);
+		setEditFor(path);
+	}, [openEditor, path]);
+	useEffect(() => {
+		if (!editing) onEditorClosed();
+	}, [editing, onEditorClosed]);
+
+	const startEditing = (event: MouseEvent<HTMLElement>): void => {
+		if (editing || (event.target as Element).closest("[data-crumb-path]") !== null) return;
+		setDraft(path);
+		setEditFor(path);
+	};
+	const onEditorKeyDown = (event: KeyboardEvent<HTMLInputElement>): void => {
+		if (event.key !== "Enter" && event.key !== "Escape") return;
+		// Both keys belong to the field, not the Finder keymap (Escape would dismiss, Enter open).
+		event.preventDefault();
+		event.stopPropagation();
+		if (event.key === "Escape") {
+			setEditFor(null);
+			return;
+		}
+		const input = event.currentTarget;
+		void onGoToPath(draft).then((ok) => {
+			if (ok) setEditFor(null);
+			else input.select();
+		});
+	};
 
 	return (
+		// `pr-24` keeps a strip of empty bar after the trail even when the trail
+		// fills the width, so the path can always be edited from the end.
 		<nav
-			className="pathbar flex h-24 flex-none items-center overflow-hidden whitespace-nowrap border-t border-border bg-chrome px-8 text-badge text-ink-body"
+			className="pathbar relative flex h-24 flex-none cursor-text items-center overflow-hidden whitespace-nowrap border-t border-border bg-chrome pl-8 pr-24 text-badge text-ink-body"
 			aria-label="Path"
-			onDoubleClick={(event) => {
-				if (event.target === event.currentTarget) onStartEdit();
-			}}
+			onClick={startEditing}
 		>
-			<div ref={viewportRef} className={cn("flex min-w-0 flex-1 overflow-hidden", fit.overflow && ["justify-end", FADE_START])}>
+			<div
+				ref={viewportRef}
+				className={cn("flex min-w-0 flex-1 overflow-hidden", fit.overflow && ["justify-end", FADE_START], editing && "invisible")}
+			>
 				<div ref={trailRef} className="path-trail flex w-max flex-none items-center gap-1">
 					{segments.map((segment, index) => {
 						const segmentFit = fit.segments[index] ?? FULL;
@@ -155,6 +211,7 @@ export function PathBar({
 									type="button"
 									className={cn(SEGMENT_CLASS, segment.path !== null && "cursor-pointer hover:bg-hover hover:text-ink")}
 									title={segment.path ?? segment.label}
+									data-crumb-path={segment.path ?? undefined}
 									onClick={segment.path === null ? undefined : () => onNavigate(segment.path ?? "")}
 								>
 									<span className={ICON_CLASS}>{segment.icon}</span>
@@ -175,55 +232,22 @@ export function PathBar({
 					})}
 				</div>
 			</div>
+			{editing ? (
+				<input
+					ref={editorRef}
+					// biome-ignore lint/a11y/noAutofocus: the click that opened the editor asks for the caret
+					autoFocus
+					className="path-edit absolute inset-x-4 top-1/2 h-20 -translate-y-1/2 rounded-4 border border-accent bg-window px-5 text-badge text-ink outline-none"
+					type="text"
+					spellCheck={false}
+					autoComplete="off"
+					aria-label={t("finder.pathBar.edit", "경로로 이동")}
+					value={draft}
+					onChange={(event) => setDraft(event.target.value)}
+					onKeyDown={onEditorKeyDown}
+					onBlur={() => setEditFor(null)}
+				/>
+			) : null}
 		</nav>
-	);
-}
-
-/** The path bar's text field: selects its text on open, Enter goes, Escape (or leaving) cancels. */
-function PathField({
-	initial,
-	onCommit,
-	onCancel,
-}: {
-	readonly initial: string;
-	readonly onCommit: (text: string) => void;
-	readonly onCancel: () => void;
-}): ReactElement {
-	const ref = useRef<HTMLInputElement>(null);
-	const [draft, setDraft] = useState(initial);
-	// Enter commits and unmounts the field: the blur that follows must not cancel a second time.
-	const settled = useRef(false);
-	useEffect(() => {
-		ref.current?.focus();
-		ref.current?.select();
-	}, []);
-	const settle = (action: () => void): void => {
-		if (settled.current) return;
-		settled.current = true;
-		action();
-	};
-	return (
-		<input
-			ref={ref}
-			className="h-20 min-w-0 flex-1 rounded-4 border border-accent bg-window px-6 text-badge text-ink outline-none"
-			type="text"
-			spellCheck={false}
-			autoCapitalize="off"
-			autoCorrect="off"
-			aria-label="Path"
-			value={draft}
-			onChange={(event) => setDraft(event.target.value)}
-			onKeyDown={(event) => {
-				if (event.key === "Enter") {
-					event.preventDefault();
-					settle(() => onCommit(draft));
-				} else if (event.key === "Escape") {
-					event.preventDefault();
-					event.stopPropagation();
-					settle(onCancel);
-				}
-			}}
-			onBlur={() => settle(onCancel)}
-		/>
 	);
 }

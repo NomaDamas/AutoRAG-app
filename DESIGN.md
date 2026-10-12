@@ -65,6 +65,10 @@ replaced with modification time or an unrelated application.
 Pure behavior is covered by `test/ui-sort.test.ts` and `test/ui-grouping.test.ts`.
 ### 1.3 Path bar
 The path bar under the Finder list is one line at every window size and never shows an ellipsis. When the trail does not fit, labels give up space in a fixed order — middle segments left to right (`Users`, the home folder, …), then the root (`Macintosh HD`), then the parent of the current location, then the current location or selected file. A label first narrows with its last `--fade-label` (14px) faded out, so the word reads as cut off; once fewer than 32px would remain, the segment shows only its icon. If even the icon-only trail is too wide, it stays pinned to its end and fades in from the leading edge. Logic: `src/renderer/src/state/path-fit.ts`; visual check: `scripts/manual-qa/run-qa-finder-path-bar.mjs`.
+
+**Editing the path.** A folder segment navigates. A click anywhere else on the bar (the gap between segments, the strip after the trail, the volume or selected-file segment) swaps the trail for a text field holding the full path, all selected. The bar keeps a 24px right padding, so that strip exists even when the trail fills the width. Enter goes to the typed location: an absolute POSIX, drive or UNC path, `~/…`, a `file://` URL, a quoted path, or a path relative to the folder in view. A folder opens in the tab; a file opens its folder with the file selected. A location that does not exist shows a toast and leaves the field open with the text selected. Escape, a click elsewhere, or any navigation closes the field. Enter and Escape stay inside the field, and the trail stays mounted (invisible) under it, so the fit never goes stale. Resolution: `resolvePathInput` in `src/renderer/src/state/paths.ts` (`test/ui-paths.test.ts`); field behaviour: `test/ui-path-bar-edit.test.tsx`.
+
+A typed path can differ from the disk in case (`/volumes/ssd1/autorag`) or Unicode form (a Korean name typed NFC, stored NFD); a case-insensitive volume (the APFS and NTFS default) still opens it. The tab and the path bar still show the on-disk spelling: `fs.stat` maps every segment back to its directory entry, matched by case and Unicode form and confirmed by inode, and never resolves a symlink. The renderer then navigates to the path it gets back. Logic: `onDiskPath` in `src/main/fs-entry.ts` (`test/fs-entry.test.ts`).
 ### 1.3 Finder list density
 The list view follows the Bloom Finder density contract: file rows are 24px high, names and metadata use 12px text, default file names use the primary near-black ink, and alternate rows use `#F4F5F5`. A focused selection fills the complete row with the accent color immediately, with no background-color transition and no visible corner rounding; an unfocused selection remains muted gray. Virtualized row geometry and keyboard reveal scrolling use the same 24px stride. The top Finder chrome uses larger 32px controls with 18px glyphs so navigation, sorting, view mode, and folder actions remain easy to target.
 Fresh windows start with the sidebar at its minimum 180px width and the inspector at its minimum 300px width; user-resized values remain persisted.
@@ -215,11 +219,26 @@ The Info half's bottom bar is data-driven, not a fixed four buttons.
   the IPC channels, and the capability gating need no change.
 - Action outputs never overwrite: `uniqueChild` numbers them Finder-style
   (`photo.jpeg`, `photo 2.jpeg`). Extraction offers every format the shared
-  `archiveFormatOf` predicate recognizes — zip, tar, tar.gz/tgz, gz, 7z, and
+  `archiveFormatOf` predicate recognizes — zip, tar, tar.gz/tgz, gz, 7z, rar, and
   tar.bz2/tar.xz — writing into a hidden staging folder beside the destination
   (removed on any failure) and then renaming it into place, flattening a single
-  wrapper folder that matches the archive stem. The wasm engine's licenses are
+  wrapper folder that matches the archive stem. Entry names are normalized to
+  NFC before any path check (Mac tools store Hangul decomposed; Windows cannot
+  match that against the composed name), and zip names written without the
+  UTF-8 flag are recovered as UTF-8 or CP949, so a Korean Windows archive no
+  longer extracts as `ÇÑ±Û.txt`. The wasm engine is a vendored rebuild with a
+  UTF-8 locale (`scripts/libarchive-wasm/`); its licenses are
   recorded in `THIRD_PARTY_NOTICES.md`.
+- Compression writes zip (default) or 7z — "7z로 압축" is a second row beside "압축"
+  in the Inspector and context menu, a `compress` request with `format: "7z"`.
+  The 7z writer (`src/main/sevenzip-writer.ts`) writes solid LZMA blocks (up to
+  32 MiB each, so redundancy between files is shared): the LZMA encoder is
+  WebAssembly (`lzma-wasm`) running in `src/main/lzma-worker.mjs`, so the main
+  thread never blocks. A block whose sample does not shrink (jpg, mp4, zip)
+  is stored as Copy rather than spending seconds in the encoder, and one file over
+  256 MiB — beyond the wasm encoder's 32-bit memory — is deflated on its own.
+  Entry names are written NFC. RAR is extract-only: the format is proprietary
+  and RARLAB's license forbids building a compressor.
 
 ---
 

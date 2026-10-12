@@ -1,5 +1,7 @@
 out/
 dist/
+build/stage/
+build/.cache/
 node_modules/
 .upstream/
 .autorag/

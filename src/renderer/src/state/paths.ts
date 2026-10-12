@@ -100,6 +100,57 @@ export function whereSegments(path: string): string {
 	return pathSegments(path).join(" › ");
 }
 
+/** Where a typed or pasted location is resolved from. */
+export interface PathInputContext {
+	/** The folder in view; a relative entry is resolved against it when it is absolute. */
+	readonly current: string;
+	/** The user's home folder, for `~`; null when unknown. */
+	readonly home: string | null;
+}
+
+const QUOTED = /^(["'])(.*)\1$/s;
+const FILE_URL = /^file:\/\/(?:localhost)?(?=\/)/i;
+const BARE_DRIVE = /^[A-Za-z]:$/;
+
+/**
+ * The folder path a typed or pasted location names (the path bar's editor),
+ * or null when it names nothing. Accepts absolute POSIX, drive and UNC paths,
+ * `~`, `file://` URLs, quoted paths, and paths relative to the folder in view;
+ * the result is normalized (no `.`/`..`, repeated or trailing separators) in
+ * the convention of its root.
+ */
+export function resolvePathInput(input: string, context: PathInputContext): string | null {
+	let text = input.trim();
+	const quoted = QUOTED.exec(text);
+	if (quoted !== null) text = (quoted[2] ?? "").trim();
+	if (text === "") return null;
+	if (FILE_URL.test(text)) {
+		try {
+			text = decodeURIComponent(text.replace(FILE_URL, ""));
+		} catch {
+			return null;
+		}
+		// "file:///C:/x" carries the drive behind a slash.
+		if (/^\/[A-Za-z]:[\\/]/.test(text)) text = text.slice(1);
+	}
+	if (BARE_DRIVE.test(text)) text += "\\";
+	if (text === "~" || text.startsWith("~/") || text.startsWith("~\\")) {
+		if (context.home === null) return null;
+		text = context.home + text.slice(1);
+	} else if (!isAbsolutePath(text) && isAbsolutePath(context.current)) {
+		text = joinPath(context.current, text);
+	}
+	const root = pathRoot(text);
+	const parts: string[] = [];
+	for (const segment of pathSegments(text).slice(root?.skip ?? 0)) {
+		if (segment === ".") continue;
+		if (segment === "..") parts.pop();
+		else parts.push(segment);
+	}
+	if (root === null) return parts.length === 0 ? null : parts.join("/");
+	return root.prefix + parts.join(root.separator);
+}
+
 export interface Crumb {
 	readonly label: string;
 	readonly path: string;

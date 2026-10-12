@@ -595,6 +595,7 @@ function ActionBar({
 							case "open": return t("inspector.actions.open", def);
 							case "openWith": return t("inspector.actions.openWith", def);
 							case "compress": return t("inspector.actions.compress", def);
+							case "compress7z": return t("inspector.actions.compress7z", def);
 							case "extract": return t("inspector.actions.extract", def);
 							case "share": return t("inspector.actions.share", def);
 							case "askAi": return t("inspector.actions.askAi", def);

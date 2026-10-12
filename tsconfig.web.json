@@ -18,6 +18,6 @@
 		"skipLibCheck": true,
 		"noEmit": true
 	},
-	"include": ["src/renderer", "src/shared", "src/preview/shared", "src/preview/ui", "test/preview-markdown-html.test.ts", "test/row-pipeline.test.tsx"],
+	"include": ["src/renderer", "src/shared", "src/preview/shared", "src/preview/ui", "test/preview-markdown-html.test.ts", "test/row-pipeline.test.tsx", "test/ui-path-bar-edit.test.tsx"],
 	"exclude": ["node_modules", "out"]
 }
