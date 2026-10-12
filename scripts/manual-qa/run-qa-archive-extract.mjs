@@ -7,6 +7,8 @@
  *  2. clicking it writes the right folder — or, for a bare .gz, the single
  *     uncompressed file — next to the archive with the right contents
  *  3. the Inspector action bar extracts another archive
+ *  3b. double-clicking or pressing Enter on an archive extracts it in place
+ *      (the same as the context menu) instead of opening it in another app
  *  4. a plain (non-archive) row shows neither
  *
  * Fixtures are built at run time in a temp dir (never committed): zips with the
@@ -80,6 +82,8 @@ function fixture() {
 		{ archive: "delta.7z", output: "delta", content: "delta content", build: () => { seedFolder("delta", "delta content"); run("tar", ["-a", "-cf", join(QA_ROOT, "delta.7z"), "-C", join(QA_ROOT, "build"), "delta"]); } },
 		{ archive: "solo.txt.gz", output: "solo.txt", content: "solo gz content", file: true, build: () => writeFileSync(join(QA_ROOT, "solo.txt.gz"), gzipSync(Buffer.from("solo gz content"))) },
 		{ archive: "insp.zip", output: "insp", content: "insp content", inspector: true, build: () => writeFileSync(join(QA_ROOT, "insp.zip"), zipSync({ "insp/": new Uint8Array(0), "insp/inside.txt": new Uint8Array(Buffer.from("insp content")) })) },
+		{ archive: "dbl.zip", output: "dbl", content: "dbl content", opened: true, build: () => writeFileSync(join(QA_ROOT, "dbl.zip"), zipSync({ "dbl/": new Uint8Array(0), "dbl/inside.txt": new Uint8Array(Buffer.from("dbl content")) })) },
+		{ archive: "ent.7z", output: "ent", content: "ent content", opened: true, build: () => { seedFolder("ent", "ent content"); run("tar", ["-a", "-cf", join(QA_ROOT, "ent.7z"), "-C", join(QA_ROOT, "build"), "ent"]); } },
 	];
 	if (hasBin("bzip2")) {
 		entries.push({ archive: "eps.tar.bz2", output: "eps", content: "eps content", build: () => { seedFolder("eps", "eps content"); run("tar", ["-cjf", join(QA_ROOT, "eps.tar.bz2"), "-C", join(QA_ROOT, "build"), "eps"]); } });
@@ -154,7 +158,7 @@ try {
 
 	// 1+2. Every offered format extracts from its row's context menu.
 	for (const entry of entries) {
-		if (entry.available === false || entry.inspector === true) continue;
+		if (entry.available === false || entry.inspector === true || entry.opened === true) continue;
 		await openRowMenu(page, entry.archive);
 		check(`${entry.archive} menu offers Extract`, (await menuLabels(page)).includes("Extract"), true);
 		if (entry.archive === "alpha.zip") await page.screenshot({ path: join(EVIDENCE, "1-context-menu.png") });
@@ -178,6 +182,19 @@ try {
 	await page.locator(".inspector-actions").getByRole("button", { name: "Extract", exact: true }).click();
 	await waitFor(() => existsSync(join(QA_ROOT, "insp", "inside.txt")), { label: "insp extraction" });
 	check("Inspector extract wrote the folder", readFileSync(join(QA_ROOT, "insp", "inside.txt"), "utf8"), "insp content");
+
+	// 3b. Opening an archive — double-click or Enter — extracts it in place,
+	// exactly like the context menu, instead of handing it to the OS default app.
+	await rowFor(page, "dbl.zip").dblclick();
+	await waitFor(() => existsSync(join(QA_ROOT, "dbl", "inside.txt")), { label: "double-click extraction" });
+	check("double-click extracted the folder", readFileSync(join(QA_ROOT, "dbl", "inside.txt"), "utf8"), "dbl content");
+	await page.screenshot({ path: join(EVIDENCE, "2b-double-click-extract.png") });
+	await rowFor(page, "ent.7z").click();
+	// Enter acts on the focused row: let the click's selection land before the key.
+	await sleep(300);
+	await page.keyboard.press("Enter");
+	await waitFor(() => existsSync(join(QA_ROOT, "ent", "inside.txt")), { label: "Enter extraction" });
+	check("Enter extracted the folder", readFileSync(join(QA_ROOT, "ent", "inside.txt"), "utf8"), "ent content");
 
 	// 4. A plain file offers neither.
 	await openRowMenu(page, "plain.txt");

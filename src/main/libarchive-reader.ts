@@ -1,6 +1,6 @@
 /**
  * libarchive-wasm-backed extractor for the formats Node cannot read natively:
- * 7z, and the bzip2/xz tar wrappers. The wasm build reads them in memory and
+ * 7z, RAR, and the bzip2/xz tar wrappers. The wasm build reads them in memory and
  * runs in a Node worker thread, so the Electron main thread never blocks.
  *
  * The engine is loaded lazily, inside the worker, on the first such extraction.
