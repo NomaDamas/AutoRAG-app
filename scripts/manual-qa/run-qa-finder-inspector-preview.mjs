@@ -242,15 +242,15 @@ try {
 		JSON.stringify(multi.cards.map((card) => ({ rotate: card.rotate, left: card.left }))),
 	);
 	check("every sheet is dog-eared and shadowed", multi.cards.every((card) => card.curl && card.boxShadow !== "none"), "");
-	check("the title counts the selection", multi.title === "2개 항목", multi.title);
-	check("the subtitle carries the kind breakdown and the total size", /PDF document 2개 · .+/.test(multi.sub), multi.sub);
-	check("the rows carry the total size", /B$/.test(String(valueOf(multi.rows, "총 크기"))), String(valueOf(multi.rows, "총 크기")));
+	check("the title counts the selection", multi.title === "2 items", multi.title);
+	check("the subtitle carries the kind breakdown and the total size", /PDF document 2 · .+/.test(multi.sub), multi.sub);
+	check("the rows carry the total size", /B$/.test(String(valueOf(multi.rows, "Total size"))), String(valueOf(multi.rows, "Total size")));
 	check(
 		"the rows carry the modified date for the shared fixture day",
-		valueOf(multi.rows, "수정한 날짜") === "2026-01-02",
-		String(valueOf(multi.rows, "수정한 날짜")),
+		valueOf(multi.rows, "Date Modified") === "2026-01-02",
+		String(valueOf(multi.rows, "Date Modified")),
 	);
-	check("no single-file action bar in the stack mode", !multi.text.includes("인덱스 포함"), "");
+	check("no single-file action bar in the stack mode", !multi.text.includes("Included in AI search index"), "");
 
 	console.log("phase: five");
 	// ------------------------------------------- five selections: full fan
@@ -285,8 +285,8 @@ try {
 		JSON.stringify(five.cards.map((card) => card.rotate)),
 	);
 	check("every fanned sheet is dog-eared and shadowed", five.cards.every((card) => card.curl && card.boxShadow !== "none"), "");
-	check("the title counts five items", five.title === "5개 항목", five.title);
-	check("the subtitle breaks the kinds down", five.sub.startsWith("PDF document 4개"), five.sub);
+	check("the title counts five items", five.title === "5 items", five.title);
+	check("the subtitle breaks the kinds down", five.sub.startsWith("PDF document 4"), five.sub);
 
 	console.log("phase: restore");
 	// --------------------------------------------- back to single: restore

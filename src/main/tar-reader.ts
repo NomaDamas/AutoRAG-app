@@ -21,6 +21,7 @@ import {
 	archiveEntryPath,
 	normalizeEntryName,
 } from "./archive-guard.mjs";
+import { t } from "../shared/i18n/core";
 import { ByteReader, writeChunk, type ArchiveLimits } from "./archive-common";
 
 /** Tar's fixed header/data block; also the size a `.gz` is peeked at to spot a tar. */
@@ -36,7 +37,7 @@ const PREFIX_LENGTH = 155;
 /** pax and GNU long-name bodies are short; a bogus huge size is corruption, not memory. */
 const MAX_META_BYTES = 1 << 20;
 
-const CORRUPT_MESSAGE = "압축 파일이 손상되었습니다";
+const corruptMessage = (): string => t("main.archive.corrupt");
 
 /** Trim a NUL-terminated field to its string. */
 function cString(bytes: Buffer): string {
@@ -112,12 +113,12 @@ function parsePax(data: Buffer): Record<string, string> {
 
 /** Read `size` body bytes plus their block padding, bounded for meta records. */
 async function readBody(reader: ByteReader, size: number): Promise<Buffer> {
-	if (size > MAX_META_BYTES) throw new ArchiveError(CORRUPT_MESSAGE);
+	if (size > MAX_META_BYTES) throw new ArchiveError(corruptMessage());
 	const parts: Buffer[] = [];
 	let remaining = size;
 	while (remaining > 0) {
 		if (reader.available === 0) await reader.pull();
-		if (reader.available === 0) throw new ArchiveError(CORRUPT_MESSAGE);
+		if (reader.available === 0) throw new ArchiveError(corruptMessage());
 		const take = Math.min(reader.available, remaining);
 		parts.push(reader.consume(take));
 		remaining -= take;
@@ -131,7 +132,7 @@ async function skipPadding(reader: ByteReader, size: number): Promise<void> {
 	const padding = (BLOCK_SIZE - (size % BLOCK_SIZE)) % BLOCK_SIZE;
 	if (padding === 0) return;
 	await reader.fill(padding);
-	if (reader.consume(padding).length < padding) throw new ArchiveError(CORRUPT_MESSAGE);
+	if (reader.consume(padding).length < padding) throw new ArchiveError(corruptMessage());
 }
 
 /** Discard `size` body bytes plus padding (a skipped entry's data). */
@@ -139,7 +140,7 @@ async function discard(reader: ByteReader, size: number): Promise<void> {
 	let remaining = size;
 	while (remaining > 0) {
 		if (reader.available === 0) await reader.pull();
-		if (reader.available === 0) throw new ArchiveError(CORRUPT_MESSAGE);
+		if (reader.available === 0) throw new ArchiveError(corruptMessage());
 		const take = Math.min(reader.available, remaining);
 		reader.consume(take);
 		remaining -= take;
@@ -152,12 +153,12 @@ async function writeFileBody(reader: ByteReader, sink: Writable, size: number, l
 	let remaining = size;
 	while (remaining > 0) {
 		if (reader.available === 0) await reader.pull();
-		if (reader.available === 0) throw new ArchiveError(CORRUPT_MESSAGE);
+		if (reader.available === 0) throw new ArchiveError(corruptMessage());
 		const take = Math.min(reader.available, remaining);
 		const chunk = reader.consume(take);
 		used.bytes += take;
 		if (used.bytes > limits.maxTotalBytes) {
-			throw new ArchiveError("압축 파일의 해제 용량이 너무 큽니다");
+			throw new ArchiveError(t("main.archive.tooLarge"));
 		}
 		await writeChunk(sink, chunk);
 		remaining -= take;
@@ -175,19 +176,19 @@ export async function extractTar(reader: ByteReader, destDir: string, limits: Ar
 
 	const countEntry = (): void => {
 		entries += 1;
-		if (entries > limits.maxEntries) throw new ArchiveError("압축 파일의 항목 수가 너무 많습니다");
+		if (entries > limits.maxEntries) throw new ArchiveError(t("main.archive.tooManyEntries"));
 	};
 
 	for (;;) {
 		await reader.fill(BLOCK_SIZE);
 		const header = reader.peek(BLOCK_SIZE);
 		if (header.length === 0) break;
-		if (header.length < BLOCK_SIZE) throw new ArchiveError(CORRUPT_MESSAGE);
+		if (header.length < BLOCK_SIZE) throw new ArchiveError(corruptMessage());
 		if (isZeroBlock(header)) {
 			reader.consume(BLOCK_SIZE);
 			break;
 		}
-		if (!looksLikeTar(header)) throw new ArchiveError(CORRUPT_MESSAGE);
+		if (!looksLikeTar(header)) throw new ArchiveError(corruptMessage());
 		reader.consume(BLOCK_SIZE);
 
 		const type = String.fromCharCode(header[TYPEFLAG_OFFSET] ?? 0);

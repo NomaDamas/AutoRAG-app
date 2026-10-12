@@ -28,6 +28,7 @@ import {
 } from "../shared/onboarding-contract";
 import type { AppSettings, ConfigRefreshResult } from "../shared/settings-contract";
 import { isJsonObject } from "../shared/settings-contract";
+import { t } from "../shared/i18n/core";
 import { applyIndexingConfig } from "./onboarding-config";
 import { PROVIDER_ENV_NAME } from "./onboarding-models";
 import { computeIndexingProgress } from "./onboarding-progress";
@@ -448,7 +449,7 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 		void persist();
 		status = ok
 			? { ...status, state: "success", progress: 100, remainingMinutes: null, finishedAt, error: null }
-			: { ...status, state: "failed", remainingMinutes: null, finishedAt, error: error ?? "인덱싱에 실패했습니다." };
+			: { ...status, state: "failed", remainingMinutes: null, finishedAt, error: error ?? t("main.onboarding.indexingFailed") };
 		emitStatus();
 	}
 

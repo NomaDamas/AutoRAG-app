@@ -1,3 +1,5 @@
+import { i18n, t } from "../../shared/i18n/core";
+
 const UNITS = ["bytes", "KB", "MB", "GB", "TB"] as const;
 
 export function formatBytes(size: number): string {
@@ -70,6 +72,7 @@ export function formatClock(seconds: number): string {
 }
 
 export function formatItemCount(count: number): string {
-	if (count === 0) return "Zero items";
-	return count === 1 ? "1 item" : `${count.toLocaleString("en-US")} items`;
+	if (count === 0) return t("quickLook.itemCount.zero");
+	if (count === 1) return t("quickLook.itemCount.one");
+	return t("quickLook.itemCount.many", { count: count.toLocaleString(i18n.language) });
 }

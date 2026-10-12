@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactElement } from "react";
+import { useTranslation } from "react-i18next";
 import type { BundleSummary, FolderSize } from "../shared/contract";
 import { formatFinderDate, formatFinderSize } from "../shared/format";
 import { describeExtension } from "../shared/registry";
@@ -16,6 +17,7 @@ const BUNDLE_WIDTH = 620;
  * rendering at the preview tier.
  */
 export function BundleView({ bundle }: { readonly bundle: BundleSummary }): ReactElement {
+	const { t } = useTranslation();
 	useHiddenTitle();
 	const { bridge } = useChrome();
 	const attach = usePanelHeight(BUNDLE_WIDTH);
@@ -57,7 +59,7 @@ export function BundleView({ bundle }: { readonly bundle: BundleSummary }): Reac
 							{size.complete ? "" : "+"}
 						</div>
 					)}
-					<div className="text-[14px] text-ql-ink-secondary">Last modified {formatFinderDate(bundle.modifiedAt, false)}</div>
+					<div className="text-[14px] text-ql-ink-secondary">{t("quickLook.fallback.lastModified", { date: formatFinderDate(bundle.modifiedAt, false) })}</div>
 				</div>
 			</div>
 		</div>

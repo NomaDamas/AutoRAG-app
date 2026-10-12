@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactElement } from "react";
+import { useTranslation } from "react-i18next";
 import { previewStreamUrl, type AudioMetadata, type PreviewDocument } from "../shared/contract";
 import { formatClock, formatFinderSize } from "../shared/format";
 import { useChrome } from "./chrome";
@@ -168,6 +169,7 @@ function Track({
  * with elapsed and remaining time. Clicking the picture plays or pauses.
  */
 export function VideoView({ file }: { readonly file: PreviewDocument }): ReactElement {
+	const { t } = useTranslation();
 	const [element, setElement] = useState<HTMLVideoElement | null>(null);
 	const [failed, setFailed] = useState(false);
 	const [idle, setIdle] = useState(false);
@@ -183,7 +185,7 @@ export function VideoView({ file }: { readonly file: PreviewDocument }): ReactEl
 		wake();
 		return () => window.clearTimeout(timer.current);
 	}, [wake]);
-	if (failed) return <FallbackView file={file} note="동영상을 재생할 수 없습니다" />;
+	if (failed) return <FallbackView file={file} note={t("quickLook.player.videoFailed")} />;
 	const hidden = idle && media.playing;
 	const volume = media.muted ? 0 : media.volume;
 	return (
@@ -197,7 +199,7 @@ export function VideoView({ file }: { readonly file: PreviewDocument }): ReactEl
 				preload="auto"
 				onError={() => setFailed(true)}
 			/>
-			<button type="button" className="absolute inset-0 p-0 border-0 bg-transparent cursor-default" aria-label="재생 또는 일시정지" onClick={media.toggle} />
+			<button type="button" className="absolute inset-0 p-0 border-0 bg-transparent cursor-default" aria-label={t("quickLook.player.playPause")} onClick={media.toggle} />
 			{media.playing ? null : (
 				<div className="absolute left-1/2 top-1/2 grid place-items-center w-76 h-76 -mt-58 -ml-38 rounded-full bg-ql-hud-badge text-ql-hud-ink [backdrop-filter:blur(16px)] pointer-events-none">
 					<PlayIcon size={34} />
@@ -209,19 +211,19 @@ export function VideoView({ file }: { readonly file: PreviewDocument }): ReactEl
 			>
 				<div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center">
 					<div className="flex items-center gap-8">
-						<button type="button" className={HUD_BUTTON} aria-label="음소거 전환" onClick={media.toggleMute}>
+						<button type="button" className={HUD_BUTTON} aria-label={t("quickLook.player.muteToggle")} onClick={media.toggleMute}>
 							<SpeakerIcon size={20} muted={volume === 0} />
 						</button>
-						<Track value={volume} max={1} step={0.01} label="볼륨" onChange={media.setVolume} className="w-84 h-4 rounded-2" track="bg-ql-hud-track" knob={null} />
+						<Track value={volume} max={1} step={0.01} label={t("quickLook.player.volume")} onChange={media.setVolume} className="w-84 h-4 rounded-2" track="bg-ql-hud-track" knob={null} />
 					</div>
 					<div className="flex items-center gap-16">
-						<button type="button" className={HUD_BUTTON} aria-label="15초 뒤로" onClick={() => media.skip(-SKIP_SECONDS)}>
+						<button type="button" className={HUD_BUTTON} aria-label={t("quickLook.player.skipBack")} onClick={() => media.skip(-SKIP_SECONDS)}>
 							<SkipIcon direction="back" />
 						</button>
-						<button type="button" className={`${HUD_BUTTON} w-40 h-40`} aria-label="재생 또는 일시정지" onClick={media.toggle}>
+						<button type="button" className={`${HUD_BUTTON} w-40 h-40`} aria-label={t("quickLook.player.playPause")} onClick={media.toggle}>
 							{media.playing ? <PauseIcon size={28} /> : <PlayIcon size={28} />}
 						</button>
-						<button type="button" className={HUD_BUTTON} aria-label="15초 앞으로" onClick={() => media.skip(SKIP_SECONDS)}>
+						<button type="button" className={HUD_BUTTON} aria-label={t("quickLook.player.skipForward")} onClick={() => media.skip(SKIP_SECONDS)}>
 							<SkipIcon direction="forward" />
 						</button>
 					</div>
@@ -229,7 +231,7 @@ export function VideoView({ file }: { readonly file: PreviewDocument }): ReactEl
 						<button
 							type="button"
 							className="h-22 px-8 border-0 rounded-6 bg-ql-hud-pill text-ql-hud-ink font-ql text-[11px] font-semibold tabular-nums cursor-default"
-							aria-label="재생 속도"
+							aria-label={t("quickLook.player.playbackRate")}
 							onClick={() => media.cycleRate(VIDEO_SPEEDS)}
 						>
 							{media.rate}×
@@ -237,7 +239,7 @@ export function VideoView({ file }: { readonly file: PreviewDocument }): ReactEl
 						<button
 							type="button"
 							className={`${HUD_BUTTON} ${media.loop ? "" : "text-ql-hud-ink-off"}`}
-							aria-label="반복 재생"
+							aria-label={t("quickLook.player.loop")}
 							aria-pressed={media.loop}
 							onClick={media.toggleLoop}
 						>
@@ -246,7 +248,7 @@ export function VideoView({ file }: { readonly file: PreviewDocument }): ReactEl
 						<button
 							type="button"
 							className={HUD_BUTTON}
-							aria-label="PIP 모드"
+							aria-label={t("quickLook.player.pip")}
 							onClick={() => {
 								if (element !== null) void element.requestPictureInPicture().catch(() => undefined);
 							}}
@@ -257,7 +259,7 @@ export function VideoView({ file }: { readonly file: PreviewDocument }): ReactEl
 				</div>
 				<div className="flex items-center gap-10 text-ql-hud-ink-dim text-[11px] tabular-nums">
 					<span className="w-36">{formatClock(media.time)}</span>
-					<Track value={media.time} max={media.duration} step={0.1} label="재생 위치" onChange={media.seek} className="flex-1 h-4 rounded-2" track="bg-ql-hud-track" knob="-top-4 w-12 h-12 -ml-6" />
+					<Track value={media.time} max={media.duration} step={0.1} label={t("quickLook.player.position")} onChange={media.seek} className="flex-1 h-4 rounded-2" track="bg-ql-hud-track" knob="-top-4 w-12 h-12 -ml-6" />
 					<span className="w-40 text-right">-{formatClock(media.duration - media.time)}</span>
 				</div>
 			</div>
@@ -344,6 +346,7 @@ const CHIP = "inline-flex items-center gap-5 h-22 px-8 border-0 rounded-6 bg-ql-
  * whose last button continues in the default app.
  */
 export function AudioView({ file }: { readonly file: PreviewDocument }): ReactElement {
+	const { t } = useTranslation();
 	const { report, bridge, app } = useChrome();
 	const [element, setElement] = useState<HTMLAudioElement | null>(null);
 	const [failed, setFailed] = useState(false);
@@ -352,14 +355,14 @@ export function AudioView({ file }: { readonly file: PreviewDocument }): ReactEl
 	const peaks = useWaveform(file);
 	const { metadata, cover } = useAudioMetadata(file);
 	useEffect(() => report(AUDIO_BODY, "clamp"), [report]);
-	if (failed) return <FallbackView file={file} note="오디오를 재생할 수 없습니다" />;
+	if (failed) return <FallbackView file={file} note={t("quickLook.player.audioFailed")} />;
 	const title = metadata?.title ?? file.name.replace(/\.[^.]+$/, "");
 	const duration = media.duration > 0 ? media.duration : (metadata?.duration ?? 0);
 	const played = duration > 0 ? media.time / duration : 0;
 	const rows: readonly (readonly [string, string])[] = [
-		...(metadata?.artist == null ? [] : [["Artist", metadata.artist] as const]),
-		...(metadata?.album == null ? [] : [["Album", metadata.album] as const]),
-		["Time", formatClock(duration)],
+		...(metadata?.artist == null ? [] : [[t("quickLook.player.artist"), metadata.artist] as const]),
+		...(metadata?.album == null ? [] : [[t("quickLook.player.album"), metadata.album] as const]),
+		[t("quickLook.player.time"), formatClock(duration)],
 	];
 	return (
 		<div className="ql-audio relative flex-1 min-h-0">
@@ -369,7 +372,7 @@ export function AudioView({ file }: { readonly file: PreviewDocument }): ReactEl
 					value={media.muted ? 0 : media.volume}
 					max={1}
 					step={0.01}
-					label="볼륨"
+					label={t("quickLook.player.volume")}
 					onChange={media.setVolume}
 					className="flex-1 h-5 rounded-3"
 					track="bg-ql-hud-track"
@@ -409,36 +412,36 @@ export function AudioView({ file }: { readonly file: PreviewDocument }): ReactEl
 						max={duration > 0 ? duration : 1}
 						step={0.5}
 						value={media.time}
-						aria-label="파형에서 재생 위치 이동"
+						aria-label={t("quickLook.player.waveformPosition")}
 						onChange={(event) => media.seek(Number(event.target.value))}
 					/>
 				</div>
 				<div className="flex items-center gap-6 mt-6 text-ql-ink-secondary text-[11px]">
 					<span className="overflow-hidden text-ellipsis whitespace-nowrap">{streamFacts(file, metadata)}</span>
 					<span className="flex-1" />
-					<button type="button" className={CHIP} aria-label="재생 속도" onClick={() => media.cycleRate(AUDIO_SPEEDS)}>
+					<button type="button" className={CHIP} aria-label={t("quickLook.player.playbackRate")} onClick={() => media.cycleRate(AUDIO_SPEEDS)}>
 						{media.rate}×
 					</button>
-					<button type="button" className={CHIP} aria-label="반복 재생" aria-pressed={media.loop} onClick={media.toggleLoop}>
+					<button type="button" className={CHIP} aria-label={t("quickLook.player.loop")} aria-pressed={media.loop} onClick={media.toggleLoop}>
 						<LoopIcon size={13} weight={2.2} />
-						반복
+						{t("quickLook.player.loopLabel")}
 					</button>
 				</div>
 			</div>
 			<div className="absolute left-8 right-8 bottom-8 flex items-center gap-4 h-48 px-10 rounded-14 bg-ql-hud-audio text-ql-hud-ink text-[12px] tabular-nums [backdrop-filter:var(--backdrop-ql-hud)]">
-				<button type="button" className={HUD_BUTTON} aria-label="15초 뒤로" onClick={() => media.skip(-SKIP_SECONDS)}>
+				<button type="button" className={HUD_BUTTON} aria-label={t("quickLook.player.skipBack")} onClick={() => media.skip(-SKIP_SECONDS)}>
 					<SkipIcon direction="back" />
 				</button>
-				<button type="button" className={HUD_BUTTON} aria-label="재생 또는 일시정지" onClick={media.toggle}>
+				<button type="button" className={HUD_BUTTON} aria-label={t("quickLook.player.playPause")} onClick={media.toggle}>
 					{media.playing ? <PauseIcon size={22} /> : <PlayIcon size={22} />}
 				</button>
-				<button type="button" className={HUD_BUTTON} aria-label="15초 앞으로" onClick={() => media.skip(SKIP_SECONDS)}>
+				<button type="button" className={HUD_BUTTON} aria-label={t("quickLook.player.skipForward")} onClick={() => media.skip(SKIP_SECONDS)}>
 					<SkipIcon direction="forward" />
 				</button>
 				<span className="w-46 text-center text-ql-hud-ink-dim">{formatClock(media.time)}</span>
-				<Track value={media.time} max={duration} step={0.5} label="재생 위치" onChange={media.seek} className="flex-1 h-4 rounded-2" track="bg-ql-hud-track" knob="-top-6 w-16 h-16 -ml-8" />
+				<Track value={media.time} max={duration} step={0.5} label={t("quickLook.player.position")} onChange={media.seek} className="flex-1 h-4 rounded-2" track="bg-ql-hud-track" knob="-top-6 w-16 h-16 -ml-8" />
 				<span className="w-46 text-center text-ql-hud-ink-dim">{formatClock(duration)}</span>
-				<button type="button" className={HUD_BUTTON} aria-label={app === null ? "기본 앱에서 계속 듣기" : `${app}에서 계속 듣기`} title={app === null ? "기본 앱에서 계속 듣기" : `${app}에서 계속 듣기`} onClick={() => {
+				<button type="button" className={HUD_BUTTON} aria-label={app === null ? t("quickLook.player.continueInApp") : t("quickLook.player.continueIn", { name: app })} title={app === null ? t("quickLook.player.continueInApp") : t("quickLook.player.continueIn", { name: app })} onClick={() => {
 					element?.pause();
 					void bridge.request("open");
 				}}>

@@ -7,6 +7,7 @@
  * Everything here is pure over the row model; the component only renders.
  */
 
+import { t } from "../../../shared/i18n/core";
 import type { FinderEntry } from "../data/entries";
 import { createdMsOf, kindLabelOf, sizeOf } from "./entry-values";
 import { formatSize } from "./format";
@@ -59,9 +60,9 @@ function kindSummary(entries: readonly FinderEntry[]): string {
 		counts.set(label, (counts.get(label) ?? 0) + 1);
 	}
 	const groups = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "ko"));
-	const shown = groups.slice(0, KIND_GROUP_MAX).map(([label, count]) => `${label} ${count}개`);
+	const shown = groups.slice(0, KIND_GROUP_MAX).map(([label, count]) => `${label} ${t("finderState.kindCount", { count })}`);
 	const rest = groups.length - shown.length;
-	return rest > 0 ? `${shown.join(", ")}, 외 ${rest}종` : shown.join(", ");
+	return rest > 0 ? `${shown.join(", ")}, ${t("finderState.kindSummaryMore", { count: rest })}` : shown.join(", ");
 }
 
 export function summarizeSelection(entries: readonly FinderEntry[]): SelectionSummary {
@@ -69,7 +70,7 @@ export function summarizeSelection(entries: readonly FinderEntry[]): SelectionSu
 	const hasFile = entries.some((entry) => entry.kind === "file");
 	return {
 		count: entries.length,
-		title: `${entries.length}개 항목`,
+		title: t("finder.itemsCount", { count: entries.length }),
 		kindSummary: kindSummary(entries),
 		totalBytes,
 		sizeLabel: hasFile ? formatSize(totalBytes) : null,

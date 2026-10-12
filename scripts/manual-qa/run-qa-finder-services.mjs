@@ -178,7 +178,7 @@ try {
 	let labels = await menuLabels(page);
 	check("file menu has a Services parent", labels.includes("Services"), true);
 	check("Services lists the registered Quick Action", labels.includes(PROBE_NAME), true);
-	check("Services never lists this app's own Finder workflows", labels.some((label) => label.startsWith("AutoRAG에") || label.startsWith("Ask Dazzi") || label.startsWith("Show in Dazzi")), false);
+	check("Services never lists this app's own Finder workflows", labels.some((label) => label.startsWith("Ask Dazzi") || label.startsWith("Show in Dazzi")), false);
 	check("a folder-only service is not offered for a file", labels.includes("New Terminal at Folder"), false);
 	await page.screenshot({ path: join(EVIDENCE, "1-file-services.png") });
 	await page.getByRole("menuitem", { name: PROBE_NAME, exact: true }).click();

@@ -1,4 +1,5 @@
 import type { ReactElement } from "react";
+import { useTranslation } from "react-i18next";
 import { viewerForExtension, type ViewerKind } from "../shared/registry";
 import { SmallFolderGlyph } from "./icons";
 
@@ -76,10 +77,11 @@ export function ContentsBox({
 	/** Namespaces the grid's class (`ql-folder__items`, `ql-archive__items`). */
 	readonly kind: "folder" | "archive";
 }): ReactElement {
+	const { t } = useTranslation();
 	return (
 		<div className="flex flex-none flex-col gap-10 mx-16 mb-16 px-14 pt-12 pb-14 rounded-12 bg-ql-sunk">
 			<div className="flex items-baseline text-[11.5px] text-ql-ink-secondary">
-				<span className="font-semibold text-ql-ink">포함된 항목</span>
+				<span className="font-semibold text-ql-ink">{t("quickLook.contents.title")}</span>
 				<span className="flex-1" />
 				{total === 0 ? null : (
 					<span>

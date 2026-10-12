@@ -5,6 +5,7 @@
  */
 
 import { webUrl } from "../../../shared/fs-contract";
+import { t } from "../../../shared/i18n/core";
 import { citedNumbers } from "./answer-markdown";
 import { type FileKind, kindFromExtension } from "./kinds";
 
@@ -51,7 +52,7 @@ export function evidenceHeading(title: string, source: string | null): string {
 
 /** Confidence as a percentage, shown right of the source line; `null` when the librarian measured none. */
 export function evidenceDetail(confidence: number | undefined): string | null {
-	return confidence === undefined ? null : `관련도 ${Math.round(confidence * 100)}%`;
+	return confidence === undefined ? null : t("finderState.evidenceDetail", { percent: Math.round(confidence * 100) });
 }
 
 const EXTENSION = /\.([A-Za-z0-9]{1,6})$/u;

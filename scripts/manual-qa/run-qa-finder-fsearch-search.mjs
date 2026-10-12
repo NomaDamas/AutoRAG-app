@@ -92,7 +92,7 @@ try {
 	//    file is outside every scanned sidebar place, so only the index can
 	//    return it.
 	await search.click();
-	await chip("파일 이름").click();
+	await chip("File Name").click();
 	await search.fill(outsideName);
 	await search.press("Enter");
 	await page.waitForSelector(".scope", { timeout: 15000 });

@@ -200,7 +200,7 @@ async function poll(read, accept, timeoutMs = 8000) {
  * are pinned to the same appearance so the reference panels are comparable.
  */
 async function pass(appearance) {
-	const app = await launchFinder({ env: { AUTORAG_QA_ROOT: root, AUTORAG_SKIP_DUPEY_CHECK: "1" } });
+	const app = await launchFinder({ env: { AUTORAG_QA_ROOT: root, AUTORAG_SKIP_DUPEY_CHECK: "1" }, language: "ko" });
 	try {
 		await app.evaluate(({ nativeTheme }, source) => {
 			nativeTheme.themeSource = source;
@@ -430,7 +430,7 @@ async function pass(appearance) {
 		ms = await open("Projects", () => document.querySelector(".ql-folder__name")?.textContent === "Projects");
 		check("folder opens with Space", ms < 1500, `${ms}ms`);
 		const count = await poll(() => preview.locator(".ql-folder__count").textContent(), (text) => (text ?? "").includes("MB"));
-		check("folder shows count and size", (count ?? "").startsWith("24 items, "), count ?? "");
+		check("folder shows count and size", (count ?? "").startsWith("24개 항목, "), count ?? "");
 		const items = await preview.locator(".ql-folder__items > div > span").evaluateAll((nodes) => nodes.map((node) => node.textContent));
 		check("folder lists recent items first", JSON.stringify(items) === JSON.stringify(["kill-seoksam", "build_eval.py", "README.md", "assets", "demo.mp4", "report.pdf"]), JSON.stringify(items));
 		state = await capture("08-folder");

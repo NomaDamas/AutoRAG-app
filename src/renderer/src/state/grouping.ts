@@ -11,6 +11,7 @@
  * `groupedRowTop` maps a flattened row index to its content-space top.
  */
 
+import { i18n, t } from "../../../shared/i18n/core";
 import { ROW_HEIGHT } from "./selection";
 import {
 	addedMsOf,
@@ -104,34 +105,34 @@ function startOfDay(value: number): number {
 /** Finder's relative date buckets: Today, Yesterday, Previous 7/30 Days, then months. */
 function dateGroupValue(value: number, now: number): GroupValue {
 	if (!Number.isFinite(value) || value <= 0) {
-		return { id: "unknown", label: "Unknown Date", order: Number.MAX_SAFE_INTEGER, text: null };
+		return { id: "unknown", label: t("finderState.groups.unknownDate"), order: Number.MAX_SAFE_INTEGER, text: null };
 	}
 	const today = startOfDay(now);
 	const diffDays = Math.round((today - startOfDay(value)) / DAY_MS);
-	if (diffDays <= 0) return { id: "today", label: "Today", order: -today, text: null };
-	if (diffDays === 1) return { id: "yesterday", label: "Yesterday", order: -(today - DAY_MS), text: null };
-	if (diffDays <= 7) return { id: "prev7", label: "Previous 7 Days", order: -(today - 7 * DAY_MS), text: null };
-	if (diffDays <= 30) return { id: "prev30", label: "Previous 30 Days", order: -(today - 30 * DAY_MS), text: null };
+	if (diffDays <= 0) return { id: "today", label: t("finderState.groups.today"), order: -today, text: null };
+	if (diffDays === 1) return { id: "yesterday", label: t("finderState.groups.yesterday"), order: -(today - DAY_MS), text: null };
+	if (diffDays <= 7) return { id: "prev7", label: t("finderState.groups.prev7"), order: -(today - 7 * DAY_MS), text: null };
+	if (diffDays <= 30) return { id: "prev30", label: t("finderState.groups.prev30"), order: -(today - 30 * DAY_MS), text: null };
 	const date = new Date(value);
-	const label = new Intl.DateTimeFormat("en", { year: "numeric", month: "long" }).format(date);
+	const label = new Intl.DateTimeFormat(i18n.language, { year: "numeric", month: "long" }).format(date);
 	const monthStart = new Date(date.getFullYear(), date.getMonth(), 1).getTime();
-	return { id: `month-${label}`, label, order: -monthStart, text: null };
+	return { id: `month-${monthStart}`, label, order: -monthStart, text: null };
 }
 
 function extensionLabel(entry: SortableEntry): string {
-	if (entry.kind === "folder") return "Folder";
+	if (entry.kind === "folder") return t("finderState.groups.folder");
 	const dot = entry.name.lastIndexOf(".");
-	return dot > 0 && dot < entry.name.length - 1 ? `${entry.name.slice(dot + 1)}`.toUpperCase() : "No Extension";
+	return dot > 0 && dot < entry.name.length - 1 ? `${entry.name.slice(dot + 1)}`.toUpperCase() : t("finderState.groups.noExtension");
 }
 
 /** Finder's size bands; zero-byte entries (folders included) share Zero KB. */
 function sizeGroupValue(value: number): GroupValue {
 	const size = Number.isFinite(value) && value > 0 ? value : 0;
-	if (size === 0) return { id: "zero", label: "Zero KB", order: 0, text: null };
-	if (size < 1024) return { id: "sub-kb", label: "Under 1 KB", order: 1, text: null };
-	if (size < 1024 * 1024) return { id: "kb", label: "1 KB – 1 MB", order: 2, text: null };
-	if (size < 1024 * 1024 * 1024) return { id: "mb", label: "1 MB – 1 GB", order: 3, text: null };
-	return { id: "gb", label: "Over 1 GB", order: 4, text: null };
+	if (size === 0) return { id: "zero", label: t("finderState.groups.zeroKb"), order: 0, text: null };
+	if (size < 1024) return { id: "sub-kb", label: t("finderState.groups.underKb"), order: 1, text: null };
+	if (size < 1024 * 1024) return { id: "kb", label: t("finderState.groups.kbToMb"), order: 2, text: null };
+	if (size < 1024 * 1024 * 1024) return { id: "mb", label: t("finderState.groups.mbToGb"), order: 3, text: null };
+	return { id: "gb", label: t("finderState.groups.overGb"), order: 4, text: null };
 }
 
 function textValue(label: string): GroupValue {
@@ -141,8 +142,8 @@ function textValue(label: string): GroupValue {
 function ratingValue(value: number | undefined): GroupValue {
 	const rating = value !== undefined && Number.isFinite(value) && value > 0 ? value : 0;
 	return rating === 0
-		? { id: "unrated", label: "No Rating", order: -1, text: null }
-		: { id: `stars-${rating}`, label: `${rating} Star${rating === 1 ? "" : "s"}`, order: rating, text: null };
+		? { id: "unrated", label: t("finderState.groups.noRating"), order: -1, text: null }
+		: { id: `stars-${rating}`, label: rating === 1 ? t("finderState.groups.star") : t("finderState.groups.stars", { count: rating }), order: rating, text: null };
 }
 
 function groupValue(entry: SortableEntry, key: Exclude<GroupKey, "none">, now: number): GroupValue {
@@ -157,7 +158,7 @@ function groupValue(entry: SortableEntry, key: Exclude<GroupKey, "none">, now: n
 		case "extension":
 			return textValue(extensionLabel(entry));
 		case "application":
-			return textValue(applicationOf(entry) ?? "No Application");
+			return textValue(applicationOf(entry) ?? t("finderState.groups.noApplication"));
 		case "dateCreated":
 			return dateGroupValue(createdMsOf(entry) ?? 0, now);
 		case "date":
@@ -169,11 +170,11 @@ function groupValue(entry: SortableEntry, key: Exclude<GroupKey, "none">, now: n
 		case "size":
 			return sizeGroupValue(sizeOf(entry));
 		case "tags":
-			return textValue(tagsTextOf(entry) ?? "No Tags");
+			return textValue(tagsTextOf(entry) ?? t("finderState.groups.noTags"));
 		case "comments":
-			return textValue(commentsTextOf(entry) ?? "No Comments");
+			return textValue(commentsTextOf(entry) ?? t("finderState.groups.noComments"));
 		case "dimensions":
-			return textValue(dimensionsTextOf(entry) ?? "No Dimensions");
+			return textValue(dimensionsTextOf(entry) ?? t("finderState.groups.noDimensions"));
 		case "rating":
 			return ratingValue(ratingOf(entry));
 	}

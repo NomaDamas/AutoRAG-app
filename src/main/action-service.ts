@@ -23,6 +23,7 @@ import { finished } from "node:stream/promises";
 import { Zip, ZipDeflate, ZipPassThrough } from "fflate";
 import type { BrowserWindow } from "electron";
 import { archiveFormatOf } from "../shared/archive-formats";
+import { t } from "../shared/i18n/core";
 import { ArchiveError } from "./archive-guard.mjs";
 import { DEFAULT_ARCHIVE_LIMITS, type ArchiveLimits } from "./archive-common";
 import { extractGzipInto, extractIntoFolder, flattenWrapper } from "./archive-extract";
@@ -533,10 +534,10 @@ export function createActionService(deps: ActionServiceDeps): ActionService {
 	async function resizeImage(source: string, maxEdge: number): Promise<string> {
 		const format = imageFormatOf(source);
 		// Both engines decode one frame, so resizing a GIF would drop its animation.
-		if (format === null || format === "gif") throw new Error("이 형식은 크기 조절을 지원하지 않습니다");
+		if (format === null || format === "gif") throw new Error(t("main.action.unsupportedResize"));
 		const probe = platform === "darwin" ? null : await probeFfmpegImages();
 		const encodable = probe === null ? await probeSips() : probe.formats;
-		if (!encodable.includes(format)) throw new Error("이 형식은 크기 조절을 지원하지 않습니다");
+		if (!encodable.includes(format)) throw new Error(t("main.action.unsupportedResize"));
 		const target = await uniqueChild(dirname(source), `${stemOf(source)}-${maxEdge}${extname(source)}`);
 		if (probe === null) await run("sips", sipsResizeArgs(source, target, maxEdge));
 		else await run("ffmpeg", ffmpegResizeArgs(source, target, maxEdge, format, probe.avifEncoder));
@@ -545,13 +546,13 @@ export function createActionService(deps: ActionServiceDeps): ActionService {
 
 	async function optimizeImage(source: string): Promise<string> {
 		const format = imageFormatOf(source);
-		if (format === null) throw new Error("이 형식은 용량 최적화를 지원하지 않습니다");
+		if (format === null) throw new Error(t("main.action.unsupportedOptimize"));
 		// Optimize re-encodes lossy formats; the ffmpeg backend also deflates PNG losslessly.
 		const optimizable = LOSSY_FORMATS.includes(format) || (platform !== "darwin" && format === "png");
-		if (!optimizable) throw new Error("이 형식은 용량 최적화를 지원하지 않습니다");
+		if (!optimizable) throw new Error(t("main.action.unsupportedOptimize"));
 		const probe = platform === "darwin" ? null : await probeFfmpegImages();
 		if (probe !== null && !probe.formats.includes(format)) {
-			throw new Error("이 형식은 용량 최적화를 지원하지 않습니다");
+			throw new Error(t("main.action.unsupportedOptimize"));
 		}
 		const target = await uniqueChild(dirname(source), `${stemOf(source)}-optimized${extname(source)}`);
 		if (platform === "darwin" && format === "webp") await run("ffmpeg", ffmpegWebpArgs(source, target));
@@ -561,7 +562,7 @@ export function createActionService(deps: ActionServiceDeps): ActionService {
 			// Keep the output only when it actually shrank; ffmpeg may re-encode larger.
 			if ((await lstat(target)).size >= (await lstat(source)).size) {
 				await rm(target, { force: true });
-				throw new Error("이미 최적화된 파일입니다");
+				throw new Error(t("main.action.alreadyOptimized"));
 			}
 		}
 		return target;
@@ -610,7 +611,7 @@ export function createActionService(deps: ActionServiceDeps): ActionService {
 	 */
 	async function extractArchive(source: string): Promise<string> {
 		const match = archiveFormatOf(basename(source));
-		if (match === null) throw new ArchiveError("압축을 풀 수 없는 파일 형식입니다");
+		if (match === null) throw new ArchiveError(t("main.action.unsupportedExtract"));
 		const directory = dirname(source);
 		const staging = await mkdtemp(join(directory, `.${match.stem}-`));
 		try {
@@ -662,12 +663,12 @@ export function createActionService(deps: ActionServiceDeps): ActionService {
 
 		async run(paths: readonly string[], request: ActionRequest, window: BrowserWindow | null): Promise<ActionOutcome> {
 			const [first] = paths;
-			if (first === undefined) throw new Error("작업 대상이 비어 있습니다");
+			if (first === undefined) throw new Error(t("main.action.emptyTarget"));
 			// The edit conversions and extraction are single-target; the menu and
 			// the Inspector only ever send them one path, and the archive keeps
 			// that promise at the boundary too.
 			const sole = (): string => {
-				if (paths.length !== 1) throw new Error("이 작업은 한 번에 하나의 항목만 지원합니다");
+				if (paths.length !== 1) throw new Error(t("main.action.singleTargetOnly"));
 				return first;
 			};
 			switch (request.kind) {
@@ -675,13 +676,13 @@ export function createActionService(deps: ActionServiceDeps): ActionService {
 					let application: string | null;
 					if (request.application === null) {
 						application = await deps.applications.pick(window);
-						if (application === null) return { output: null, note: "열기를 취소했습니다" };
+						if (application === null) return { output: null, note: t("main.action.openCancelled") };
 					} else {
 						// A named application must be one the OS offered for this file;
 						// anything else goes through the chooser, never straight to exec.
 						application = request.application;
 						if (!(await registeredApplications(first)).some((candidate) => candidate.path === application)) {
-							throw new Error("이 파일을 열 수 있는 앱이 아닙니다");
+							throw new Error(t("main.action.appCannotOpen"));
 						}
 					}
 					if (platform === "darwin") await run("open", ["-a", application, ...paths]);
@@ -690,8 +691,8 @@ export function createActionService(deps: ActionServiceDeps): ActionService {
 						output: null,
 						note:
 							paths.length === 1
-								? `${basename(first)} — ${applicationName(application)}로 열었습니다`
-								: `파일 ${paths.length}개 — ${applicationName(application)}로 열었습니다`,
+								? t("main.action.openedWithFile", { name: basename(first), app: applicationName(application) })
+								: t("main.action.openedWithCount", { count: paths.length, app: applicationName(application) }),
 					};
 				}
 				case "compress": {
@@ -706,41 +707,41 @@ export function createActionService(deps: ActionServiceDeps): ActionService {
 						members.push(...(await archiveMembers(path, stat.isDirectory())));
 					}
 					await (format === "7z" ? writeSevenZip(target, members) : writeZip(target, members));
-					return { output: target, note: `${basename(target)} — 압축했습니다` };
+					return { output: target, note: t("main.action.compressed", { name: basename(target) }) };
 				}
 				case "extract": {
 					const output = await extractArchive(sole());
-					return { output, note: `${basename(output)} — 압축을 풀었습니다` };
+					return { output, note: t("main.action.extracted", { name: basename(output) }) };
 				}
 				case "convertImage": {
 					if (!(await imageTargets()).includes(request.format)) {
-						throw new Error(`${request.format.toUpperCase()} 변환을 지원하지 않습니다`);
+						throw new Error(t("main.action.unsupportedConvert", { format: request.format.toUpperCase() }));
 					}
 					const output = await convertImage(sole(), request.format);
-					return { output, note: `${basename(output)} — 변환했습니다` };
+					return { output, note: t("main.action.converted", { name: basename(output) }) };
 				}
 				case "resizeImage": {
 					const output = await resizeImage(sole(), request.maxEdge);
-					return { output, note: `${basename(output)} — 크기를 조절했습니다` };
+					return { output, note: t("main.action.resized", { name: basename(output) }) };
 				}
 				case "optimizeImage": {
 					const output = await optimizeImage(sole());
-					return { output, note: `${basename(output)} — 용량을 최적화했습니다` };
+					return { output, note: t("main.action.optimized", { name: basename(output) }) };
 				}
 				case "convertVideo": {
-					if (!(await hasFfmpeg())) throw new Error("동영상 변환에는 ffmpeg가 필요합니다");
+					if (!(await hasFfmpeg())) throw new Error(t("main.action.videoNeedsFfmpeg"));
 					const path = sole();
 					const target = await uniqueChild(dirname(path), `${stemOf(path)}.${request.container}`);
 					await run("ffmpeg", ffmpegRemuxArgs(path, target));
-					return { output: target, note: `${basename(target)} — 컨테이너를 변환했습니다` };
+					return { output: target, note: t("main.action.containerConverted", { name: basename(target) }) };
 				}
 			}
 		},
 
 		async share(paths: readonly string[], anchor: ActionAnchor, window: BrowserWindow | null): Promise<void> {
-			if (paths.length === 0) throw new Error("작업 대상이 비어 있습니다");
+			if (paths.length === 0) throw new Error(t("main.action.emptyTarget"));
 			if (platform !== "darwin" || share === null) {
-				throw new Error("이 플랫폼은 시스템 공유를 지원하지 않습니다");
+				throw new Error(t("main.action.shareUnsupported"));
 			}
 			share.present(paths, anchor, window);
 		},

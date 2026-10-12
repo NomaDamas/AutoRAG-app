@@ -12,6 +12,7 @@
  */
 
 import { useEffect, useState, type ReactElement } from "react";
+import { useTranslation } from "react-i18next";
 import { previewStreamUrl, type QuickLookTarget } from "../../../preview/shared/contract";
 import { imageTarget, type InlineSegment } from "../state/answer-markdown";
 import { ImageEditIcon, LinkIcon } from "./icons";
@@ -75,6 +76,7 @@ export function AnswerImage({
 	readonly captioned: boolean;
 	readonly actions: ImageActions;
 }): ReactElement {
+	const { t } = useTranslation();
 	const target = imageTarget(reference, folder);
 	const [failed, setFailed] = useState(false);
 	useEffect(() => setFailed(false), [reference, folder]);
@@ -91,7 +93,7 @@ export function AnswerImage({
 					<LinkIcon size={14} />
 				</span>
 				<span className="min-w-0 flex-1">
-					<span className="block truncate text-caption font-semibold text-ink">{alt === "" ? "웹 이미지" : alt}</span>
+					<span className="block truncate text-caption font-semibold text-ink">{alt === "" ? t("finderComponents.webImage") : alt}</span>
 					<span className="block truncate text-badge text-accent-text" title={target.url}>
 						{target.url}
 					</span>
@@ -105,7 +107,7 @@ export function AnswerImage({
 			<div className={CARD}>
 				<ImageGlyph />
 				<span className="min-w-0 flex-1">
-					<span className="block truncate text-caption font-semibold text-ink">{alt === "" ? "이미지" : alt}</span>
+					<span className="block truncate text-caption font-semibold text-ink">{alt === "" ? t("finderComponents.image") : alt}</span>
 					<span className="block truncate font-mono text-badge text-ink-muted select-text" title={target.text}>
 						{target.text}
 					</span>
@@ -126,7 +128,7 @@ export function AnswerImage({
 			<figure data-image-path={target.path} className="answer-image m-0 flex max-w-full flex-col gap-4">
 				<button
 					type="button"
-					aria-label={`${target.name} 훑어보기`}
+					aria-label={t("finderComponents.quickLookLabel", { name: target.name })}
 					title={target.path}
 					className="block w-fit max-w-full cursor-zoom-in overflow-hidden rounded-8 border border-border bg-window p-0"
 					onClick={open}
@@ -160,7 +162,7 @@ export function AnswerImage({
 				<span className="min-w-0 flex-1">
 					<span className="block truncate text-caption font-semibold text-ink">{target.name}</span>
 					{pathLine}
-					<span className="block text-badge text-ink-muted">이미지를 불러올 수 없습니다</span>
+					<span className="block text-badge text-ink-muted">{t("finderComponents.imageLoadFailed")}</span>
 				</span>
 			</figure>
 		);
@@ -174,7 +176,7 @@ export function AnswerImage({
 				<span className="min-w-0 flex-1">
 					<span className="block truncate text-caption font-semibold text-ink">{target.name}</span>
 					{pathLine}
-					<span className="block text-badge text-ink-muted">클릭하면 훑어보기로 엽니다</span>
+					<span className="block text-badge text-ink-muted">{t("finderComponents.clickToQuickLook")}</span>
 				</span>
 			</button>
 		</figure>

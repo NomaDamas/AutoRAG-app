@@ -10,6 +10,7 @@
  */
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { X } from "lucide-react";
 
 export function SettingsPageHead({ title, description }: { readonly title: string; readonly description: string }): ReactElement {
@@ -71,20 +72,21 @@ export function Chips({
 	items,
 	onRemove,
 	onAdd,
-	addLabel = "+ 추가",
+	addLabel,
 }: {
 	readonly items: readonly string[];
 	readonly onRemove?: (index: number) => void;
 	readonly onAdd?: () => void;
 	readonly addLabel?: string;
 }): ReactElement {
+	const { t } = useTranslation();
 	return (
 		<div className="settings-chips">
 			{items.map((item, index) => (
 				<span className="settings-chip" key={`${item}-${index}`}>
 					{item}
 					{onRemove !== undefined ? (
-						<button type="button" aria-label={`${item} 삭제`} onClick={() => onRemove(index)}>
+						<button type="button" aria-label={t("settingsCore.chips.remove", { item })} onClick={() => onRemove(index)}>
 							<X size={11} aria-hidden="true" focusable="false" />
 						</button>
 					) : null}
@@ -92,7 +94,7 @@ export function Chips({
 			))}
 			{onAdd !== undefined ? (
 				<button type="button" className="settings-chip-add" onClick={onAdd}>
-					{addLabel}
+					{addLabel ?? t("settingsCore.chips.add")}
 				</button>
 			) : null}
 		</div>
@@ -168,6 +170,7 @@ export function FloatingMenu({
 }
 
 export function ModalShell({ onClose, children }: { readonly onClose: () => void; readonly children: ReactNode }): ReactElement {
+	const { t } = useTranslation();
 	useEffect(() => {
 		const onKey = (event: KeyboardEvent): void => {
 			if (event.key === "Escape") onClose();
@@ -178,7 +181,7 @@ export function ModalShell({ onClose, children }: { readonly onClose: () => void
 	return (
 		<div className="settings-modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
 			<div className="settings-modal" role="dialog" aria-modal="true">
-				<button type="button" className="settings-modal-close" aria-label="닫기" onClick={onClose}>
+				<button type="button" className="settings-modal-close" aria-label={t("common.close")} onClick={onClose}>
 					<X size={14} aria-hidden="true" focusable="false" />
 				</button>
 				{children}
@@ -211,6 +214,7 @@ export function PromptModal({
 	readonly onCancel: () => void;
 	readonly onSubmit: (value: string) => void;
 }): ReactElement {
+	const { t } = useTranslation();
 	const [value, setValue] = useState(initialValue);
 	const submit = (): void => {
 		const trimmed = value.trim();
@@ -234,7 +238,7 @@ export function PromptModal({
 			</label>
 			<ModalActions>
 				<button type="button" className="linear-btn" onClick={onCancel}>
-					취소
+					{t("common.cancel")}
 				</button>
 				<button type="button" className="linear-btn settings-btn-primary" disabled={value.trim().length === 0} onClick={submit}>
 					{confirmLabel}

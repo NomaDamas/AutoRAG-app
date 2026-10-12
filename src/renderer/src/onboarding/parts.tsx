@@ -188,7 +188,7 @@ export function TipArt({ platform, art, t }: TipArtProps): ReactElement {
 					<div className="ix-bubble">
 						{t("onboarding.tips.2.bubble")}
 						<span className="ix-cite hot">budget.xlsx · 4</span>
-						<span className="ix-cite">회의록.md · 2</span>
+						<span className="ix-cite">{t("finderComponents.onboardingDemo.meetingNotes")} · 2</span>
 					</div>
 				</div>
 			);

@@ -1,4 +1,5 @@
 import { useMemo, type ReactElement } from "react";
+import { useTranslation } from "react-i18next";
 import { strFromU8, unzipSync } from "fflate";
 import type { PreviewDocument } from "../shared/contract";
 import { FallbackView } from "./fallback";
@@ -28,6 +29,7 @@ function stripTags(source: string): string {
 }
 
 export function EpubView({ file }: { readonly file: PreviewDocument }): ReactElement {
+	const { t } = useTranslation();
 	const bytes = file.bytes;
 	const text = useMemo(() => {
 		if (bytes === null) return null;
@@ -45,8 +47,8 @@ export function EpubView({ file }: { readonly file: PreviewDocument }): ReactEle
 			throw caught;
 		}
 	}, [bytes]);
-	if (text === null) return <FallbackView file={file} note="책을 읽지 못했습니다" />;
-	if (text.trim() === "") return <FallbackView file={file} note="본문을 찾지 못했습니다" />;
+	if (text === null) return <FallbackView file={file} note={t("quickLook.epub.readFailed")} />;
+	if (text.trim() === "") return <FallbackView file={file} note={t("quickLook.epub.noText")} />;
 	return <pre className="ql__pre box-border self-stretch w-full h-auto m-0 px-24 py-20 bg-window text-ink font-mono text-meta leading-[1.55] whitespace-pre-wrap [word-break:break-word] select-text">{text}</pre>;
 }
 

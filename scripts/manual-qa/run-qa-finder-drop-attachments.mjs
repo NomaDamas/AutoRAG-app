@@ -113,7 +113,7 @@ async function showRows(page) {
 }
 
 async function clearPills(page) {
-	while ((await page.$$(PILL)).length > 0) await page.click(`${PILL} button[aria-label="첨부 제거"]`);
+	while ((await page.$$(PILL)).length > 0) await page.click(`${PILL} button[aria-label="Remove attachment"]`);
 }
 
 /** An external drag through the browser process: what an OS drag delivers. */

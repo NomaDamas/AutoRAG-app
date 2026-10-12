@@ -23,10 +23,10 @@ import {
 } from "./icons";
 import { ToolbarMenu } from "./ToolbarMenu";
 
-const VIEW_OPTIONS: readonly { readonly mode: ViewMode; readonly label: string; readonly key: string; readonly Icon: typeof IconsViewIcon }[] = [
-	{ mode: "icons", label: "Icons", key: "1", Icon: IconsViewIcon },
-	{ mode: "list", label: "List", key: "2", Icon: ListRowsIcon },
-	{ mode: "columns", label: "Columns", key: "3", Icon: ColumnsViewIcon },
+const VIEW_OPTIONS: readonly { readonly mode: ViewMode; readonly key: string; readonly Icon: typeof IconsViewIcon }[] = [
+	{ mode: "icons", key: "1", Icon: IconsViewIcon },
+	{ mode: "list", key: "2", Icon: ListRowsIcon },
+	{ mode: "columns", key: "3", Icon: ColumnsViewIcon },
 ];
 
 const NAV_BUTTON =
@@ -103,11 +103,11 @@ export function Toolbar({
 	readonly onShowSidebar: () => void;
 }): ReactElement {
 	const { t } = useTranslation();
-	const viewLabel = (mode: ViewMode, def: string): string => {
+	const viewLabel = (mode: ViewMode): string => {
 		switch (mode) {
-			case "icons": return t("toolbar.viewIcons", def);
-			case "list": return t("toolbar.viewList", def);
-			case "columns": return t("toolbar.viewColumns", def);
+			case "icons": return t("toolbar.viewIcons");
+			case "list": return t("toolbar.viewList");
+			case "columns": return t("toolbar.viewColumns");
 		}
 	};
 	const [menu, setMenu] = useState<{
@@ -129,8 +129,8 @@ export function Toolbar({
 					<button
 						type="button"
 						className={`${NAV_BUTTON} [-webkit-app-region:no-drag]`}
-						title={t("toolbar.showSidebar", "Show sidebar")}
-						aria-label={t("toolbar.showSidebar", "Show sidebar")}
+						title={t("toolbar.showSidebar")}
+						aria-label={t("toolbar.showSidebar")}
 						onClick={onShowSidebar}
 					>
 						<PanelLeftIcon size={18} />
@@ -140,8 +140,8 @@ export function Toolbar({
 			<button
 				type="button"
 				className={`${NAV_BUTTON} [-webkit-app-region:no-drag]`}
-				title={t("toolbar.back", "Back")}
-				aria-label={t("toolbar.back", "Back")}
+				title={t("toolbar.back")}
+				aria-label={t("toolbar.back")}
 				disabled={!canGoBack}
 				onClick={onBack}
 			>
@@ -150,8 +150,8 @@ export function Toolbar({
 			<button
 				type="button"
 				className={`${NAV_BUTTON} [-webkit-app-region:no-drag]`}
-				title={t("toolbar.forward", "Forward")}
-				aria-label={t("toolbar.forward", "Forward")}
+				title={t("toolbar.forward")}
+				aria-label={t("toolbar.forward")}
 				disabled={!canGoForward}
 				onClick={onForward}
 			>
@@ -161,8 +161,8 @@ export function Toolbar({
 				{title}
 			</strong>
 			<span className="toolbar-spacer flex-1" />
-			<div className="seg flex flex-none items-center p-2 rounded-10 bg-subtle-alt [-webkit-app-region:no-drag]" role="group" aria-label={t("toolbar.view", "View")}>
-				{VIEW_OPTIONS.map(({ mode, label, key, Icon }) => (
+			<div className="seg flex flex-none items-center p-2 rounded-10 bg-subtle-alt [-webkit-app-region:no-drag]" role="group" aria-label={t("toolbar.view")}>
+				{VIEW_OPTIONS.map(({ mode, key, Icon }) => (
 					<button
 						key={mode}
 						type="button"
@@ -171,8 +171,8 @@ export function Toolbar({
 							"flex items-center justify-center size-toolbar-icon p-0 border-0 rounded-7 transition-[background,color] duration-(--dur-color) ease-[ease]",
 							mode === viewMode ? "bg-sel-mute text-ink" : "bg-transparent text-ink-muted hover:text-ink",
 						].join(" ")}
-						title={t("toolbar.viewAs", { label: viewLabel(mode, label), shortcut: formatShortcut({ key }), defaultValue: `as ${label} (${formatShortcut({ key })})` })}
-						aria-label={viewLabel(mode, label)}
+						title={t("toolbar.viewAs", { label: viewLabel(mode), shortcut: formatShortcut({ key }) })}
+						aria-label={viewLabel(mode)}
 						aria-pressed={mode === viewMode}
 						onClick={() => onViewModeChange(mode)}
 					>
@@ -181,14 +181,14 @@ export function Toolbar({
 				))}
 			</div>
 			<ToolbarControl
-				label={t("toolbar.sort", "Sort")}
+				label={t("toolbar.sort")}
 				active={sort !== null}
 				open={menu?.kind === "sort"}
 				icon={<SortIcon size={14} />}
 				onClick={(event) => openMenu("sort", event)}
 			/>
 			<ToolbarControl
-				label={t("toolbar.group", "Group")}
+				label={t("toolbar.group")}
 				active={grouping !== "none"}
 				open={menu?.kind === "group"}
 				icon={<GroupIcon size={14} />}
@@ -200,8 +200,8 @@ export function Toolbar({
 						<button
 							type="button"
 							className={NAV_BUTTON}
-							title={t("toolbar.putBack", "원래 위치로 복원")}
-							aria-label={t("toolbar.putBack", "원래 위치로 복원")}
+							title={t("toolbar.putBack")}
+							aria-label={t("toolbar.putBack")}
 							disabled={!canPutBack}
 							onClick={onPutBack}
 						>
@@ -210,8 +210,8 @@ export function Toolbar({
 						<button
 							type="button"
 							className={NAV_BUTTON}
-							title={t("toolbar.emptyTrash", "휴지통 비우기")}
-							aria-label={t("toolbar.emptyTrash", "휴지통 비우기")}
+							title={t("toolbar.emptyTrash")}
+							aria-label={t("toolbar.emptyTrash")}
 							onClick={onEmptyTrash}
 						>
 							<EmptyTrashIcon size={18} />
@@ -226,8 +226,8 @@ export function Toolbar({
 							? "bg-transparent text-accent"
 							: "bg-transparent text-ink-muted hover:bg-hover-icon hover:text-ink",
 					].join(" ")}
-					title={inspectorVisible ? t("toolbar.hideInspector", "Hide inspector") : t("toolbar.showInspector", "Show inspector")}
-					aria-label={t("toolbar.toggleInspector", "Toggle inspector")}
+					title={inspectorVisible ? t("toolbar.hideInspector") : t("toolbar.showInspector")}
+					aria-label={t("toolbar.toggleInspector")}
 					aria-pressed={inspectorVisible}
 					onClick={onToggleInspector}
 				>
@@ -239,8 +239,8 @@ export function Toolbar({
 						"flex flex-none items-center justify-center size-toolbar-icon p-0 border-0 rounded-6 cursor-pointer transition-[background,color] duration-(--dur-color) ease-[ease]",
 						aiActive ? "bg-transparent text-accent" : "bg-transparent text-ink-muted hover:bg-hover-icon hover:text-ink",
 					].join(" ")}
-					title={t("toolbar.aiSearchShortcut", { shortcut: formatShortcut({ key: "K" }), defaultValue: `AI Search (${formatShortcut({ key: "K" })})` })}
-					aria-label={t("toolbar.showAiSearch", "Show AI Search")}
+					title={t("toolbar.aiSearchShortcut", { shortcut: formatShortcut({ key: "K" }) })}
+					aria-label={t("toolbar.showAiSearch")}
 					aria-pressed={aiActive}
 					onClick={onShowAi}
 				>
@@ -250,8 +250,8 @@ export function Toolbar({
 					<button
 						type="button"
 						className={NAV_BUTTON}
-						title={t("toolbar.share", "Share")}
-						aria-label={t("toolbar.share", "Share")}
+						title={t("toolbar.share")}
+						aria-label={t("toolbar.share")}
 						disabled={!canShare}
 						onClick={(event) => onShare(anchorOf(event.currentTarget))}
 					>

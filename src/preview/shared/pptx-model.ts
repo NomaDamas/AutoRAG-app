@@ -7,6 +7,7 @@
  * inflated by the caller, so a deck of any size is cheap to model.
  */
 import { strFromU8, unzipSync } from "fflate";
+import { t } from "../../shared/i18n/core";
 
 /** English Metric Units per CSS pixel at 1:1; a slide's natural pixel size. */
 export const EMU_PER_PX = 9525;
@@ -799,7 +800,7 @@ function buildPicture(picture: XmlElement, ctx: NodeContext): PptxNode | null {
 	const rel = embed === null ? undefined : ctx.rels.get(embed);
 	const entry = rel === undefined ? null : resolvePath(ctx.slideDir, rel.target);
 	if (entry === null || !isImageEntry(entry)) {
-		return { kind: "placeholder", transform, label: "이미지" };
+		return { kind: "placeholder", transform, label: t("quickLook.pptx.image") };
 	}
 	const srcRect = childNamed(blipFill, "srcRect");
 	const crop = {
@@ -834,10 +835,10 @@ function buildGroup(group: XmlElement, ctx: NodeContext): PptxNode | null {
 }
 
 function graphicLabel(uri: string): string {
-	if (uri.includes("/chart")) return "차트";
+	if (uri.includes("/chart")) return t("quickLook.pptx.chart");
 	if (uri.includes("/diagram")) return "SmartArt";
-	if (uri.includes("/media")) return "미디어";
-	return "개체";
+	if (uri.includes("/media")) return t("quickLook.pptx.media");
+	return t("quickLook.pptx.object");
 }
 
 function buildTable(table: XmlElement, transform: PptxTransform, ctx: NodeContext): PptxNode {
@@ -882,7 +883,7 @@ function buildNode(shape: XmlElement, ctx: NodeContext): PptxNode | null {
 			return {
 				kind: "placeholder",
 				transform: readXfrm(childNamed(childNamed(shape, "spPr"), "xfrm")) ?? { x: 0, y: 0, w: 0, h: 0, rot: 0, flipH: false, flipV: false },
-				label: "미디어",
+				label: t("quickLook.pptx.media"),
 			};
 		default:
 			return null;
@@ -942,7 +943,7 @@ function readRels(root: XmlElement | null): Map<string, Rel> {
 function buildSlide(path: string, ctx: BuildContext): PptxSlide {
 	const empty: PptxSlide = { background: "#FFFFFF", nodes: [], media: [], error: null };
 	const slide = ctx.part(path);
-	if (slide === null || slide.localName !== "sld") return { ...empty, error: "슬라이드를 읽지 못했습니다" };
+	if (slide === null || slide.localName !== "sld") return { ...empty, error: t("quickLook.pptx.slideReadFailed") };
 	try {
 		const rels = readRels(ctx.part(relsPathFor(path)));
 		// A relationship target is relative to the part that declares it, so each
@@ -975,7 +976,7 @@ function buildSlide(path: string, ctx: BuildContext): PptxSlide {
 		}
 		return { background: readBackground(cSld, layout, master, theme), nodes, media: collectMedia(nodes), error: null };
 	} catch {
-		return { ...empty, error: "슬라이드를 표시할 수 없습니다" };
+		return { ...empty, error: t("quickLook.pptx.slideRenderFailed") };
 	}
 }
 

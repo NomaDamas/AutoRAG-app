@@ -128,7 +128,7 @@ function fixtureFamily(snapshot) {
  * `.row--child` class was removed with the v6 row markup.
  */
 const childRows = (page) =>
-	page.locator('[role="row"]').filter({ has: page.locator(".vtag", { hasText: /동일본|유사본|포함본/ }) });
+	page.locator('[role="row"]').filter({ has: page.locator(".vtag", { hasText: /Exact|Similar|Contains/ }) });
 
 fixture();
 if (process.platform !== "win32") rmSync(join(homedir(), ".Trash", VICTIM), { force: true });

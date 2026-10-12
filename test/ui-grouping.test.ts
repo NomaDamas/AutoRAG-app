@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { FinderEntry } from "../src/renderer/src/data/entries";
 import {
 	GROUP_OPTIONS,
@@ -14,6 +14,11 @@ import {
 import type { SortableEntry } from "../src/renderer/src/state/entry-values";
 import type { StackRow } from "../src/renderer/src/state/version-family";
 import type { FsFinderMetadata } from "../src/shared/fs-contract";
+import { setAppLanguage } from "../src/shared/i18n/core";
+
+// Section headers follow the Interface language; these cases pin the English (Finder) wording.
+beforeAll(() => setAppLanguage("en"));
+afterAll(() => setAppLanguage("ko"));
 
 function finder(overrides: Partial<FsFinderMetadata> = {}): FsFinderMetadata {
 	return {
@@ -225,6 +230,16 @@ describe("groupEntries", () => {
 			"2 Stars",
 			"5 Stars",
 		]);
+	});
+
+	it("labels sections in the Interface language", async () => {
+		const rows = [e("today.txt", "file", stamp(15, 9), 1, "Markdown"), e("month.txt", "file", august(6), 1, "Markdown"), e("unknown.txt", "file", 0, 1, "Markdown")];
+		await setAppLanguage("ko");
+		try {
+			expect(labels(groupEntries(rows, "date", NOW))).toEqual(["오늘", "2026년 8월", "날짜 알 수 없음"]);
+		} finally {
+			await setAppLanguage("en");
+		}
 	});
 });
 

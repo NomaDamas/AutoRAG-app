@@ -30,7 +30,7 @@ export function VersionFamilyBanner({
 				className="list__error-retry h-pill px-10 border border-danger-border rounded-6 bg-window text-danger-text text-meta cursor-pointer"
 				onClick={onRetry}
 			>
-				{t("finder.versionBanner.retry", "다시 확인")}
+				{t("finder.versionBanner.retry")}
 			</button>
 		</div>
 	);

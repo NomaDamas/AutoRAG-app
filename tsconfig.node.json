@@ -18,5 +18,5 @@
 		"noEmit": true
 	},
 	"include": ["src/main", "src/preload", "src/shared", "src/preview/shared", "src/preview/node", "test", "electron.vite.config.ts"],
-	"exclude": ["node_modules", "out", "test/preview-markdown-html.test.ts", "test/manual-qa-platform.test.ts", "test/qa-vm-slots.test.ts", "test/qa-vm-plan.test.ts", "test/row-pipeline.test.tsx", "test/ui-path-bar-edit.test.tsx", "test/ui-context-menu-a11y.test.tsx"]
+	"exclude": ["node_modules", "out", "test/preview-markdown-html.test.ts", "test/manual-qa-platform.test.ts", "test/qa-vm-slots.test.ts", "test/qa-vm-plan.test.ts", "test/row-pipeline.test.tsx", "test/ui-path-bar-edit.test.tsx", "test/ui-context-menu-a11y.test.tsx", "test/ui-version-tag.test.tsx"]
 }

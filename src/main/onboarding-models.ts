@@ -7,6 +7,7 @@ import type {
 } from "../shared/onboarding-contract";
 import type { ModelCatalogSnapshot } from "../shared/settings-contract";
 import { isJsonObject } from "../shared/settings-contract";
+import { t } from "../shared/i18n/core";
 import type { ProviderCredentialService } from "./provider-credentials";
 
 /**
@@ -211,21 +212,21 @@ export async function verifyModel(deps: ModelDetectionDeps, request: ModelVerify
 		let catalogIds: readonly string[] = [];
 		switch (request.provider) {
 			case "anthropic":
-				if (key.length === 0) return { ok: false, error: "API 키가 필요합니다." };
+				if (key.length === 0) return { ok: false, error: t("main.onboarding.apiKeyRequired") };
 				catalogIds = ["anthropic"];
 				models = await fetchAnthropic(deps, key);
 				break;
 			case "openai":
-				if (key.length === 0) return { ok: false, error: "API 키가 필요합니다." };
+				if (key.length === 0) return { ok: false, error: t("main.onboarding.apiKeyRequired") };
 				catalogIds = ["openai"];
 				models = await fetchOpenai(deps, key);
 				break;
 			case "openrouter":
-				if (key.length === 0) return { ok: false, error: "API 키가 필요합니다." };
+				if (key.length === 0) return { ok: false, error: t("main.onboarding.apiKeyRequired") };
 				models = await fetchOpenrouter(deps, key);
 				break;
 			case "google":
-				if (key.length === 0) return { ok: false, error: "API 키가 필요합니다." };
+				if (key.length === 0) return { ok: false, error: t("main.onboarding.apiKeyRequired") };
 				catalogIds = ["google"];
 				models = await fetchGoogle(deps, key);
 				break;
@@ -233,7 +234,7 @@ export async function verifyModel(deps: ModelDetectionDeps, request: ModelVerify
 				models = await fetchOllama(deps);
 				break;
 			case "openai-compatible": {
-				if (request.baseUrl === null || request.baseUrl.length === 0) return { ok: false, error: "서버 주소(base URL)가 필요합니다." };
+				if (request.baseUrl === null || request.baseUrl.length === 0) return { ok: false, error: t("main.onboarding.baseUrlRequired") };
 				models = await fetchOpenai(deps, key, request.baseUrl);
 				break;
 			}

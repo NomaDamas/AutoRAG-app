@@ -121,8 +121,8 @@ try {
 		await shareButton(page).click();
 		await sleep(1000);
 		const toasts = await page.locator(".toast").allInnerTexts().catch(() => []);
-		check("share does not copy the path", toasts.some((text) => text.includes("경로를 복사")), false);
-		check("share does not error", toasts.some((text) => text.includes("지원하지 않") || text.includes("공유 위치를 찾지 못")), false);
+		check("share does not copy the path", toasts.some((text) => text.includes("Copied path")), false);
+		check("share does not error", toasts.some((text) => text.includes("does not support") || text.includes("Couldn't find where to show the share sheet")), false);
 		check("pasteboard keeps the sentinel", sh("pbpaste").trim(), SENTINEL);
 		await page.screenshot({ path: join(EVIDENCE, "2-share-clicked.png") });
 

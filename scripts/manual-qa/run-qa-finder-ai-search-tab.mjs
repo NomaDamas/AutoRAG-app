@@ -154,27 +154,27 @@ try {
 	);
 
 	// 6. Inspector AI 요약 opens a NEW AI tab, attaches the file, and sends the summary run.
-	const SUMMARY_PROMPT = "첨부한 파일을 요약해줘. 핵심 내용 · 주요 수치 · 주의사항 순으로, 근거가 된 파일 경로를 출처로 인용해줘.";
+	const SUMMARY_PROMPT = "Summarize the attached file. Cover the key points, notable figures, and any cautions in that order, and cite the source file paths you relied on.";
 	await showFolderTab(page);
 	await page.locator(`[data-path="${BRIEF}"]`).click();
-	await page.locator(".inspector-actions button", { hasText: "AI 요약" }).click();
+	await page.locator(".inspector-actions button", { hasText: "AI Summary" }).click();
 	await page.locator(`${PANEL} .assistant-msg`).waitFor({ timeout: 10_000 });
 	now = await tabs(page);
 	check(
-		"AI 요약 opens a new AI Search tab",
+		"AI Summary opens a new AI Search tab",
 		now.length === 3 && now[2]?.active === true && now[2]?.ai === true,
 		JSON.stringify(now),
 	);
 	const summaryText = (await page.locator(`${PANEL} .user-msg .bubble`).first().innerText()).trim();
 	check(
-		"AI 요약 sends the summary query with the file attached, not a bare draft chip",
+		"AI Summary sends the summary query with the file attached, not a bare draft chip",
 		summaryText === SUMMARY_PROMPT &&
 			(await page.locator(`${PANEL} .ref-file-chip[title="${BRIEF}"]`).count()) === 1 &&
 			(await pills(page)).length === 0,
 		`query="${summaryText}" pills=${JSON.stringify(await pills(page))}`,
 	);
 	check(
-		"AI 요약 renders an answer block or an inline error instead of a silent no-op",
+		"AI Summary renders an answer block or an inline error instead of a silent no-op",
 		(await page.locator(`${PANEL} .assistant-msg`).count()) === 1,
 	);
 	await page.screenshot({ path: join(EVIDENCE, "03-ai-summary-tab.png") });
@@ -243,20 +243,20 @@ try {
 	for (const type of ["dragEnter", "dragOver", "drop"]) await cdp.send("Input.dispatchDragEvent", { type, x, y, data: payload });
 	await waitForPill(page, EXTERNAL).catch(() => undefined);
 	check("an external file drop on the panel attaches its absolute path", (await pills(page)).includes(EXTERNAL), JSON.stringify(await pills(page)));
-	check("the drag overlay clears after the drop", (await page.getByText("여기로 끌어서 AI에게 물어보기").count()) === 0);
+	check("the drag overlay clears after the drop", (await page.getByText("Drag here to ask AI").count()) === 0);
 	await page.screenshot({ path: join(EVIDENCE, "05-panel-drops.png") });
 
 	// 11. Sidebar 내용 opens a new AI tab and sends the query.
 	const countBefore = (await tabs(page)).length;
 	const search = page.locator(".side-search input");
 	await search.click();
-	await page.locator(".scope-chip", { hasText: /^내용$/ }).click();
+	await page.locator(".scope-chip", { hasText: /^Content$/ }).click();
 	await search.fill("approval notes");
 	await search.press("Enter");
 	await page.locator(`${PANEL} .user-msg .bubble`).first().waitFor({ timeout: 10_000 });
 	now = await tabs(page);
 	check(
-		"내용 opens a new AI Search tab and sends the query",
+		"Content opens a new AI Search tab and sends the query",
 		now.length === countBefore + 1 &&
 			now.at(-1)?.active === true &&
 			now.at(-1)?.ai === true &&
@@ -272,7 +272,7 @@ try {
 	await page.waitForSelector(PANEL);
 	await search.click();
 	// 파일 이름 scopes the search to the tab's folder, so the hit is the fixture, fast.
-	await page.locator(".scope-chip", { hasText: /^파일 이름$/ }).click();
+	await page.locator(".scope-chip", { hasText: /^File Name$/ }).click();
 	await search.fill("budget");
 	await search.press("Enter");
 	await page.waitForSelector(`[data-path="${BUDGET}"]`, { timeout: 15_000 }).catch(() => undefined);
@@ -290,9 +290,9 @@ try {
 	// 13. "AI 요약" follows the Interface language setting.
 	await page.locator(".sidebar__item", { hasText: "Settings" }).click();
 	await page.waitForSelector(".settings-panel");
-	await page.locator('select[aria-label="앱 언어"]').selectOption("en");
+	await page.locator('select[aria-label="App Language"]').selectOption("en");
 	// The set IPC resolves and App adopts it (onSettingsChanged) before the tab closes.
-	await page.waitForFunction(() => document.querySelector('select[aria-label="앱 언어"]')?.value === "en");
+	await page.waitForFunction(() => document.querySelector('select[aria-label="App Language"]')?.value === "en");
 	await sleep(300);
 	await page.keyboard.press(chord("w"));
 	await page.locator(".sidebar__item", { hasText: "QA" }).click();
@@ -302,7 +302,7 @@ try {
 	await page.locator(`${PANEL} .assistant-msg`).waitFor({ timeout: 10_000 });
 	const englishText = (await page.locator(`${PANEL} .user-msg .bubble`).first().innerText()).trim();
 	check(
-		"AI 요약 asks in the Interface language setting",
+		"AI Summary asks in the Interface language setting",
 		englishText ===
 			"Summarize the attached file. Cover the key points, notable figures, and any cautions in that order, and cite the source file paths you relied on.",
 		`query="${englishText}"`,

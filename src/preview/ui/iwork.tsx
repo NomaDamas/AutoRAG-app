@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type ReactElement } from "react";
+import { useTranslation } from "react-i18next";
 import type { PreviewDocument } from "../shared/contract";
 import type { Size } from "../shared/fit";
 import { FallbackView, Status } from "./fallback";
@@ -12,6 +13,7 @@ import { PagedView, type DrawPage } from "./paged";
  * page image gets the "Other" panel.
  */
 export function IworkView({ file }: { readonly file: PreviewDocument }): ReactElement {
+	const { t } = useTranslation();
 	const bytes = file.bytes;
 	const pages = file.pages ?? null;
 	const paged = pages !== null && pages.length > 1;
@@ -65,23 +67,23 @@ export function IworkView({ file }: { readonly file: PreviewDocument }): ReactEl
 	const draw = useCallback<DrawPage>(
 		(index) => {
 			const source = urls?.[index];
-			if (source === undefined) throw new Error("이 슬라이드의 이미지가 없습니다");
+			if (source === undefined) throw new Error(t("quickLook.iwork.slideMissing"));
 			const image = new Image();
-			image.alt = `${index + 1}페이지`;
+			image.alt = t("quickLook.iwork.page", { count: index + 1 });
 			image.draggable = false;
 			const done = new Promise<HTMLElement>((resolve, reject) => {
 				image.onload = () => resolve(image);
-				image.onerror = () => reject(new Error("슬라이드를 그리지 못했습니다"));
+				image.onerror = () => reject(new Error(t("quickLook.iwork.drawFailed")));
 			});
 			image.src = source;
 			return { done, cancel: () => image.removeAttribute("src") };
 		},
-		[urls],
+		[urls, t],
 	);
 
-	if (bytes === null || failed) return <FallbackView file={file} note="이 문서에는 미리보기 이미지가 없습니다" />;
+	if (bytes === null || failed) return <FallbackView file={file} note={t("quickLook.iwork.noPreview")} />;
 	if (pages !== null && pages.length > 1) {
-		if (box === null) return <Status>불러오는 중</Status>;
+		if (box === null) return <Status>{t("quickLook.status.loading")}</Status>;
 		// The stage centers single pictures, which would shrink the paged column
 		// to fit; stretching the wrapper keeps the rail and the paper cards full width.
 		return (
@@ -90,6 +92,6 @@ export function IworkView({ file }: { readonly file: PreviewDocument }): ReactEl
 			</div>
 		);
 	}
-	if (url === null) return <Status>불러오는 중</Status>;
+	if (url === null) return <Status>{t("quickLook.status.loading")}</Status>;
 	return <img className="ql__image block max-w-full max-h-full min-h-0 object-contain" alt="" src={url} onError={() => setFailed(true)} />;
 }

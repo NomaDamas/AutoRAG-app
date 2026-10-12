@@ -175,13 +175,13 @@ try {
 		await selectFile(page, "photo.png");
 		check("png offers the image menu", (await actionLabels(page)).includes("Edit Image"), true);
 		await page.getByRole("button", { name: "Edit Image", exact: true }).click();
-		const imageItems = await page.locator('[role="menu"][aria-label="세부 작업"] [role="menuitem"] span').allInnerTexts();
-		check("image menu has a JPEG target", imageItems.includes("JPEG로 변환"), true);
-		check("image menu resizes", imageItems.some((label) => label.startsWith("최대 ")), true);
+		const imageItems = await page.locator('[role="menu"][aria-label="More actions"] [role="menuitem"] span').allInnerTexts();
+		check("image menu has a JPEG target", imageItems.includes("Convert to JPEG"), true);
+		check("image menu resizes", imageItems.some((label) => label.startsWith("Max ")), true);
 		// The menu rises in over `--dur-menu`; shoot it settled, not mid-animation.
 		await sleep(400);
 		await page.screenshot({ path: join(EVIDENCE, "3-image-menu.png") });
-		await page.getByRole("menuitem", { name: "JPEG로 변환", exact: true }).click();
+		await page.getByRole("menuitem", { name: "Convert to JPEG", exact: true }).click();
 		await waitFor(() => existsSync(join(QA_ROOT, "photo.jpg")), { label: "photo.jpg" });
 		check("convert wrote a JPEG", existsSync(join(QA_ROOT, "photo.jpg")), true);
 	} else {
@@ -194,18 +194,18 @@ try {
 		const imageMenuItems = async () => {
 			await selectFile(page, "IMG_0001.HEIC");
 			await page.getByRole("button", { name: "Edit Image", exact: true }).click();
-			return page.locator('[role="menu"][aria-label="세부 작업"] [role="menuitem"] span').allInnerTexts();
+			return page.locator('[role="menu"][aria-label="More actions"] [role="menuitem"] span').allInnerTexts();
 		};
 		const heicItems = await imageMenuItems();
 		console.log(`heic menu: ${heicItems.join(" | ")}`);
-		check("heic menu leads with JPEG", heicItems[0], "JPEG로 변환");
-		for (const label of ["PNG로 변환", "AVIF로 변환", "GIF로 변환", "TIFF로 변환", "BMP로 변환"]) {
+		check("heic menu leads with JPEG", heicItems[0], "Convert to JPEG");
+		for (const label of ["Convert to PNG", "Convert to AVIF", "Convert to GIF", "Convert to TIFF", "Convert to BMP"]) {
 			check(`heic menu offers ${label}`, heicItems.includes(label), true);
 		}
-		check("heic menu omits its own format", heicItems.includes("HEIC로 변환"), false);
+		check("heic menu omits its own format", heicItems.includes("Convert to HEIC"), false);
 		await sleep(400);
 		await page.screenshot({ path: join(EVIDENCE, "3b-heic-menu.png") });
-		await page.getByRole("menuitem", { name: "JPEG로 변환", exact: true }).click();
+		await page.getByRole("menuitem", { name: "Convert to JPEG", exact: true }).click();
 		const heicJpeg = join(QA_ROOT, "IMG_0001.jpg");
 		await waitFor(() => existsSync(heicJpeg), { label: "IMG_0001.jpg" });
 		await sleep(300);
@@ -214,7 +214,7 @@ try {
 		await page.screenshot({ path: join(EVIDENCE, "3c-heic-converted.png") });
 
 		await imageMenuItems();
-		await page.getByRole("menuitem", { name: "GIF로 변환", exact: true }).click();
+		await page.getByRole("menuitem", { name: "Convert to GIF", exact: true }).click();
 		const heicGif = join(QA_ROOT, "IMG_0001.gif");
 		await waitFor(() => existsSync(heicGif), { label: "IMG_0001.gif" });
 		await sleep(300);
@@ -228,9 +228,9 @@ try {
 		await selectFile(page, "clip.mov");
 		check("mov offers container conversion", (await actionLabels(page)).includes("Convert Video"), true);
 		await page.getByRole("button", { name: "Convert Video", exact: true }).click();
-		const videoItems = await page.locator('[role="menu"][aria-label="세부 작업"] [role="menuitem"] span').allInnerTexts();
-		check("video menu drops the current container", videoItems.includes("MP4로 변환") && !videoItems.includes("MOV로 변환"), true);
-		await page.getByRole("menuitem", { name: "MP4로 변환", exact: true }).click();
+		const videoItems = await page.locator('[role="menu"][aria-label="More actions"] [role="menuitem"] span').allInnerTexts();
+		check("video menu drops the current container", videoItems.includes("Convert to MP4") && !videoItems.includes("Convert to MOV"), true);
+		await page.getByRole("menuitem", { name: "Convert to MP4", exact: true }).click();
 		await waitFor(() => existsSync(join(QA_ROOT, "clip.mp4")), { label: "clip.mp4", timeoutMs: 60_000 });
 		check("remux wrote an MP4", existsSync(join(QA_ROOT, "clip.mp4")), true);
 		await page.screenshot({ path: join(EVIDENCE, "4-video-actions.png") });
@@ -244,7 +244,7 @@ try {
 		await page.locator(".inspector-actions").getByRole("button", { name: "Share", exact: true }).click();
 		await sleep(800);
 		const toast = await page.locator(".toast").allInnerTexts();
-		check("share did not error", toast.some((text) => text.includes("지원하지 않") || text.includes("Error")), false);
+		check("share did not error", toast.some((text) => text.includes("does not support") || text.includes("Error")), false);
 		await page.screenshot({ path: join(EVIDENCE, "5-share.png") });
 	} else {
 		check("share button is absent without a share sheet", (await actionLabels(page)).includes("Share"), false);
@@ -256,18 +256,18 @@ try {
 	// survives it; the sheet goes away with the process when the run ends.
 	await selectFile(page, "photo.png");
 	await page.getByRole("button", { name: "Open With", exact: true }).click();
-	const menu = page.getByRole("menu", { name: "세부 작업" });
+	const menu = page.getByRole("menu", { name: "More actions" });
 	await menu.waitFor({ state: "visible", timeout: 10_000 });
 	const labels = await menu.getByRole("menuitem").allInnerTexts();
 	console.log(`open-with menu: ${labels.join(" | ")}`);
-	check("open-with menu ends with 기타…", labels.at(-1)?.trim(), "기타…");
+	check("open-with menu ends with Other…", labels.at(-1)?.trim(), "Other…");
 	if (process.platform === "darwin") {
-		check("open-with menu suggests the OS's applications before 기타…", labels.length > 1, true);
+		check("open-with menu suggests the OS's applications before Other…", labels.length > 1, true);
 	}
-	check("open-with 기타… is visible without scrolling", await menu.getByRole("menuitem", { name: "기타…" }).isVisible() && (await menu.getByRole("menuitem", { name: "기타…" }).evaluate((node) => { const box = node.getBoundingClientRect(); return box.bottom <= window.innerHeight && box.top >= 0; })), true);
+	check("open-with Other… is visible without scrolling", await menu.getByRole("menuitem", { name: "Other…" }).isVisible() && (await menu.getByRole("menuitem", { name: "Other…" }).evaluate((node) => { const box = node.getBoundingClientRect(); return box.bottom <= window.innerHeight && box.top >= 0; })), true);
 	await sleep(600);
 	await page.screenshot({ path: join(EVIDENCE, "6-open-with-menu.png") });
-	await menu.getByRole("menuitem", { name: "기타…" }).click();
+	await menu.getByRole("menuitem", { name: "Other…" }).click();
 	await sleep(1500);
 	const responsive = await page.evaluate(() => document.querySelectorAll(".inspector-actions").length === 1);
 	check("open-with chooser leaves the window responsive", responsive, true);

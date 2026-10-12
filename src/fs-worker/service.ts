@@ -12,6 +12,8 @@
 import { join } from "node:path";
 import type { FsClipboard, FsEnrichmentTarget, FsSearchOptions, FsTagChange } from "../shared/fs-contract";
 import type { FsWorkerConfig, FsWorkerOp } from "../shared/fs-worker-contract";
+import { setAppLanguage, t } from "../shared/i18n/core";
+import { isAppLanguage } from "../shared/language-contract";
 import { FS_WORKER_PUSH, type WorkerHandler } from "../shared/fs-worker-protocol";
 import { DUPEY_LAYER_ID, type LiveMessage } from "../shared/live-contract";
 import { isNewFileFormatId } from "../shared/new-file-contract";
@@ -240,7 +242,7 @@ export function createFsWorkerService(deps: FsWorkerServiceDeps): FsWorkerServic
 		createFolder: (args) => fsService.createFolder(stringArg(args, 0, "directory")),
 		createFile: (args) => {
 			const format = args[1];
-			if (typeof format !== "string" || !isNewFileFormatId(format)) throw new Error(`알 수 없는 파일 형식입니다: ${String(format)}`);
+			if (typeof format !== "string" || !isNewFileFormatId(format)) throw new Error(t("main.worker.unknownFormat", { format: String(format) }));
 			return fsService.createFile(stringArg(args, 0, "directory"), format);
 		},
 		trash: async (args) => {
@@ -259,7 +261,7 @@ export function createFsWorkerService(deps: FsWorkerServiceDeps): FsWorkerServic
 		quickLook: (args) => fsService.quickLook(stringArg(args, 0, "path")),
 		open: (args) => fsService.open(stringArg(args, 0, "path")),
 		openUrl: (args) => {
-			if (typeof args[0] !== "string") throw new Error("웹 주소가 올바르지 않습니다");
+			if (typeof args[0] !== "string") throw new Error(t("main.worker.invalidUrl"));
 			return fsService.openUrl(args[0]);
 		},
 		clipboardSet: (args) => fsService.clipboardSet(clipboardArg(args[0])),
@@ -278,6 +280,10 @@ export function createFsWorkerService(deps: FsWorkerServiceDeps): FsWorkerServic
 			if (typeof args[0] !== "number" || !Number.isFinite(args[0])) throw new TypeError("interval must be a number of minutes");
 			scanIntervalMinutes = args[0];
 			versionFamilies.reschedule();
+		},
+		setLanguage: async (args) => {
+			if (!isAppLanguage(args[0])) throw new TypeError("language must be ko, en, ja, or zh");
+			await setAppLanguage(args[0]);
 		},
 		indexStatus: (args) => indexStatus.indexStatus(stringsArg(args, 0, "paths")),
 		setIndexExcluded: (args) => {

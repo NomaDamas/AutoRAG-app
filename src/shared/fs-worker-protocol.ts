@@ -19,6 +19,8 @@
  * the worker (MessagePortMain) adapt their port to {@link WorkerPort}.
  */
 
+import { t } from "./i18n/core";
+
 /** The narrow port both DOM `MessagePort` and Electron `MessagePortMain` adapt to. */
 export interface WorkerPort {
 	postMessage(message: unknown): void;
@@ -90,9 +92,6 @@ export const REPLAY_UNSAFE_OPS: Readonly<Record<string, true>> = {
 	ejectLocation: true,
 	dispose: true,
 };
-
-/** The message a replay-unsafe request rejects with when the worker restarted under it. */
-export const WORKER_RESTARTED_MESSAGE = "파일 서비스가 작업 도중 다시 시작되었습니다. 결과를 확인한 뒤 다시 시도하세요";
 
 export function serializeError(error: unknown): SerializedError {
 	if (error instanceof Error) {
@@ -201,7 +200,7 @@ export interface WorkerClient {
 	call<T>(op: string, args?: readonly unknown[], options?: WorkerCallOptions): Promise<T>;
 	/**
 	 * Adopt a (new) port. Unanswered requests are re-sent on it, except
-	 * replay-unsafe ones, which reject with {@link WORKER_RESTARTED_MESSAGE}.
+	 * replay-unsafe ones, which reject with the `finderState.workerRestarted` message.
 	 * Calls made before the first port queue until it arrives.
 	 */
 	attach(port: WorkerPort): void;
@@ -282,7 +281,7 @@ export function createWorkerClient(): WorkerClient {
 			for (const [id, call] of [...pending]) {
 				if (call.sentOn !== null && REPLAY_UNSAFE_OPS[call.request.op] === true) {
 					pending.delete(id);
-					call.reject(new Error(WORKER_RESTARTED_MESSAGE));
+					call.reject(new Error(t("finderState.workerRestarted")));
 					continue;
 				}
 				send(call);

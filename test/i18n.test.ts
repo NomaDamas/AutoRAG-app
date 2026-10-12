@@ -7,11 +7,30 @@ describe("i18n configuration and locale keys", () => {
 		expect(Object.keys(resources)).toEqual(["ko", "en", "ja", "zh"]);
 	});
 
-	it("has complete top-level sections in all 4 language dictionaries", () => {
-		const koKeys = Object.keys(resources.ko.translation).sort();
+	/** Every leaf key with its value: a missing or extra key in one language is a string that never translates. */
+	function leaves(tree: object, prefix = ""): Map<string, string> {
+		const out = new Map<string, string>();
+		for (const [key, value] of Object.entries(tree)) {
+			if (typeof value === "string") out.set(`${prefix}${key}`, value);
+			else for (const [leaf, text] of leaves(value as object, `${prefix}${key}.`)) out.set(leaf, text);
+		}
+		return out;
+	}
+	const variables = (text: string): string[] => [...text.matchAll(/\{\{\s*(\w+)\s*\}\}/g)].map((match) => match[1] ?? "").sort();
+	const ko = leaves(resources.ko.translation);
+
+	it("has the same keys and interpolation variables in all 4 language dictionaries", () => {
 		for (const lang of ["en", "ja", "zh"] as const) {
-			const langKeys = Object.keys(resources[lang].translation).sort();
-			expect(langKeys).toEqual(koKeys);
+			const other = leaves(resources[lang].translation);
+			expect([...other.keys()].sort()).toEqual([...ko.keys()].sort());
+			for (const [key, text] of ko) expect(variables(other.get(key) ?? ""), `${lang} ${key}`).toEqual(variables(text));
+		}
+	});
+
+	it("has no Korean left in the en, ja, and zh dictionaries", () => {
+		for (const lang of ["en", "ja", "zh"] as const) {
+			const korean = [...leaves(resources[lang].translation)].filter(([, text]) => /[\uac00-\ud7a3]/.test(text)).map(([key]) => key);
+			expect(korean, lang).toEqual([]);
 		}
 	});
 

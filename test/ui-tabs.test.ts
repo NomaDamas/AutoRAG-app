@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { setAppLanguage } from "../src/shared/i18n/core";
 import {
 	activeTab,
 	AI_SEARCH_PATH,
@@ -144,15 +145,22 @@ describe("tabTitle", () => {
 	});
 
 	it("shows the search query on the active tab", () => {
-		expect(tabTitle(tab, { isActive: true, query: "예산" })).toBe('Search "예산"');
+		expect(tabTitle(tab, { isActive: true, query: "예산" })).toBe('"예산" 검색');
 	});
 
 	it("ignores the query on inactive tabs", () => {
 		expect(tabTitle(tab, { isActive: false, query: "예산" })).toBe("2026 Q3");
 	});
 
-	it("keeps the Settings title and ignores search query", () => {
-		expect(tabTitle({ path: SETTINGS_PATH }, { isActive: true, query: "model" })).toBe("Settings");
+	it("titles Settings in the Interface language and ignores the search query", async () => {
+		expect(tabTitle({ path: SETTINGS_PATH }, { isActive: true, query: "model" })).toBe("설정");
+		await setAppLanguage("en");
+		try {
+			expect(tabTitle({ path: SETTINGS_PATH }, { isActive: true, query: "model" })).toBe("Settings");
+			expect(tabTitle(tab, { isActive: true, query: "budget" })).toBe('Search "budget"');
+		} finally {
+			await setAppLanguage("ko");
+		}
 	});
 });
 
@@ -178,7 +186,7 @@ describe("openOrSelectSettingsTab", () => {
 
 describe("AI Search tabs", () => {
 	it("titles an AI Search tab and ignores the search query", () => {
-		expect(tabTitle({ path: AI_SEARCH_PATH }, { isActive: true, query: "budget" })).toBe("AI Search");
+		expect(tabTitle({ path: AI_SEARCH_PATH }, { isActive: true, query: "budget" })).toBe("AI 검색");
 	});
 
 	it("treats Settings and AI Search as virtual paths, never folders", () => {

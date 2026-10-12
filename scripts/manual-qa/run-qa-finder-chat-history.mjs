@@ -128,8 +128,8 @@ await openAiSearch(page);
 await openHistory(page);
 const groups = await texts(page, ".history-group");
 check(
-	"the popover groups history as 오늘 / 어제 / 지난 7일 / 지난 30일 / 그 이전",
-	JSON.stringify(groups) === JSON.stringify(["오늘", "어제", "지난 7일", "지난 30일", "그 이전"]),
+	"the popover groups history as Today / Yesterday / Previous 7 days / Previous 30 days / Earlier",
+	JSON.stringify(groups) === JSON.stringify(["Today", "Yesterday", "Previous 7 days", "Previous 30 days", "Earlier"]),
 	JSON.stringify(groups),
 );
 const expectedTitles = CHATS.map((chat) => chat.title);
@@ -197,7 +197,7 @@ check(
 );
 check(
 	"the regrouped hits keep the day order",
-	JSON.stringify(await texts(page, ".history-group")) === JSON.stringify(["오늘", "어제", "지난 7일", "지난 30일"]),
+	JSON.stringify(await texts(page, ".history-group")) === JSON.stringify(["Today", "Yesterday", "Previous 7 days", "Previous 30 days"]),
 	JSON.stringify(await texts(page, ".history-group")),
 );
 await page.screenshot({ path: join(EVIDENCE, "history-search.png") });
@@ -221,7 +221,7 @@ await page.screenshot({ path: join(EVIDENCE, "history-search-body.png") });
 await page.locator(".history input").fill("zzz-no-hit");
 await page.locator(".history-list > span").waitFor({ state: "visible", timeout: 5000 });
 const emptyText = await page.locator(".history-list > span").innerText();
-check('the empty state names the query in the reference copy', emptyText === '"zzz-no-hit"에 해당하는 대화가 없습니다', emptyText);
+check('the empty state names the query in the reference copy', emptyText === 'No chats matching "zzz-no-hit"', emptyText);
 await page.screenshot({ path: join(EVIDENCE, "history-empty.png") });
 
 // 4. Enter opens the first hit of the current query.
@@ -261,8 +261,8 @@ check("⌘⇧H closes it again", await popoverClosed(page));
 
 // 8. Adjacent Finder surfaces still work after the popover keyboard work.
 await page.locator(".sidebar__item", { hasText: "Recents" }).first().click();
-await page.waitForFunction(() => document.querySelector(".list__empty")?.textContent === "최근에 연 파일이 없습니다", null, { timeout: 5000 });
-check("the Recents view still renders its empty state", (await page.locator(".list__empty").innerText()) === "최근에 연 파일이 없습니다");
+await page.waitForFunction(() => document.querySelector(".list__empty")?.textContent === "No recently opened files", null, { timeout: 5000 });
+check("the Recents view still renders its empty state", (await page.locator(".list__empty").innerText()) === "No recently opened files");
 await page.screenshot({ path: join(EVIDENCE, "finder-regression.png") });
 
 // 9. v7 surface metrics. The v7 handoff prototype draws this popover at

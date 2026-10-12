@@ -9,9 +9,20 @@
  */
 
 import type { ChatSummary } from "../../../shared/search-contract";
+import { i18n, t } from "../../../shared/i18n/core";
 
-export const HISTORY_BUCKETS = ["오늘", "어제", "지난 7일", "지난 30일", "그 이전"] as const;
+/** Stable bucket ids; the display label is translated at render. */
+export const HISTORY_BUCKETS = ["today", "yesterday", "last7Days", "last30Days", "older"] as const;
 export type HistoryBucket = (typeof HISTORY_BUCKETS)[number];
+
+/** The locale key of each bucket's group heading. */
+export const HISTORY_BUCKET_KEYS = {
+	today: "aiSearch.historyGroups.today",
+	yesterday: "aiSearch.historyGroups.yesterday",
+	last7Days: "aiSearch.historyGroups.last7Days",
+	last30Days: "aiSearch.historyGroups.last30Days",
+	older: "aiSearch.historyGroups.older",
+} as const satisfies Readonly<Record<HistoryBucket, string>>;
 
 export interface ChatHistoryEntry {
 	readonly id: string;
@@ -46,10 +57,10 @@ function daysAgo(iso: string, now: Date): number | null {
 
 export function historyBucket(updatedAt: string, now: Date): HistoryBucket {
 	const days = daysAgo(updatedAt, now);
-	if (days === null || days > MONTH_DAYS) return "그 이전";
-	if (days > WEEK_DAYS) return "지난 30일";
-	if (days > 1) return "지난 7일";
-	return days === 1 ? "어제" : "오늘";
+	if (days === null || days > MONTH_DAYS) return "older";
+	if (days > WEEK_DAYS) return "last30Days";
+	if (days > 1) return "last7Days";
+	return days === 1 ? "yesterday" : "today";
 }
 
 export function historyTimeLabel(updatedAt: string, now: Date): string {
@@ -58,11 +69,15 @@ export function historyTimeLabel(updatedAt: string, now: Date): string {
 		return NO_VALUE;
 	}
 	const bucket = historyBucket(updatedAt, now);
-	if (bucket === "오늘" || bucket === "어제") {
+	if (bucket === "today" || bucket === "yesterday") {
 		return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 	}
-	const day = `${date.getMonth() + 1}월 ${date.getDate()}일`;
-	return date.getFullYear() === now.getFullYear() ? day : `${date.getFullYear()}년 ${day}`;
+	const sameYear = date.getFullYear() === now.getFullYear();
+	return new Intl.DateTimeFormat(i18n.language, {
+		...(sameYear ? {} : { year: "numeric" }),
+		month: "long",
+		day: "numeric",
+	}).format(date);
 }
 
 export function groupChatHistory(summaries: readonly ChatSummary[], now: Date): readonly ChatHistoryGroup[] {
@@ -85,14 +100,11 @@ export function groupChatHistory(summaries: readonly ChatSummary[], now: Date): 
 }
 
 export function historyEmptyText(
-	query: string,
-	translate?: (key: "aiSearch.emptyHistory" | "aiSearch.emptyHistorySearch", options?: { query: string }) => string,
+	query: string
 ): string {
 	const trimmed = query.trim();
 	if (trimmed === "") {
-		return translate ? translate("aiSearch.emptyHistory") : "저장된 대화가 없습니다.";
+		return t("aiSearch.emptyHistory");
 	}
-	return translate
-		? translate("aiSearch.emptyHistorySearch", { query: trimmed })
-		: `"${trimmed}"에 해당하는 대화가 없습니다`;
+	return t("aiSearch.emptyHistorySearch", { query: trimmed });
 }

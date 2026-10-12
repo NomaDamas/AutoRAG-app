@@ -4,7 +4,7 @@
  * Drives the production Electron app (out/) against a fixture folder and
  * asserts on disk, through the real IPC + fs worker:
  *
- *   1. rename → ⌘Z puts the old name back, toast says "이름 변경 취소";
+ *   1. rename → ⌘Z puts the old name back, toast says "Undo Rename";
  *   2. duplicate → ⌘Z removes the copy;
  *   3. New Folder (⇧⌘N) → ⌘Z removes it;
  *   4. compress → ⌘Z moves the archive to the Trash (recoverable);
@@ -105,10 +105,10 @@ try {
 
 	/* -------------------------------------------------- 1. rename + ⌘Z */
 	await rowMenu(page, "uh-a.txt", "Rename");
-	await page.locator('input[aria-label="새 이름"]').fill("uh-renamed.txt");
+	await page.locator('input[aria-label="New name"]').fill("uh-renamed.txt");
 	await page.keyboard.press("Enter");
 	await waitFor(() => existsSync(join(DIR, "uh-renamed.txt")) && !existsSync(join(DIR, "uh-a.txt")), "rename on disk");
-	const undoneRename = await step(page, chord("z"), "이름 변경 취소");
+	const undoneRename = await step(page, chord("z"), "Undo Rename");
 	await waitFor(() => existsSync(join(DIR, "uh-a.txt")), "undo of rename");
 	await page.screenshot({ path: join(EVIDENCE, "1-undo-rename.png") });
 	check(
@@ -120,7 +120,7 @@ try {
 	/* ----------------------------------------------- 2. duplicate + ⌘Z */
 	await rowMenu(page, "uh-b.txt", "Duplicate");
 	await waitFor(() => existsSync(join(DIR, "uh-b copy.txt")), "duplicate on disk");
-	const undoneDuplicate = await step(page, chord("z"), "복제 취소");
+	const undoneDuplicate = await step(page, chord("z"), "Undo Duplicate");
 	await waitFor(() => !existsSync(join(DIR, "uh-b copy.txt")), "undo of duplicate");
 	check("⌘Z removes the duplicate", undoneDuplicate && !existsSync(join(DIR, "uh-b copy.txt")), `disk=${names()}`);
 
@@ -129,7 +129,7 @@ try {
 	await page.keyboard.press(chord("Shift", "N"));
 	await waitFor(() => existsSync(join(DIR, "untitled folder")), "new folder on disk");
 	await page.keyboard.press("Escape");
-	const undoneFolder = await step(page, chord("z"), "새 폴더 취소");
+	const undoneFolder = await step(page, chord("z"), "Undo New Folder");
 	await waitFor(() => !existsSync(join(DIR, "untitled folder")), "undo of new folder");
 	check("⌘Z removes the created folder", undoneFolder && !existsSync(join(DIR, "untitled folder")), `disk=${names()}`);
 
@@ -137,7 +137,7 @@ try {
 	await rowMenu(page, "uh-b.txt", "Compress");
 	await waitFor(() => existsSync(join(DIR, "uh-b.txt.zip")), "archive on disk");
 	await sleep(500);
-	const undoneCompress = await step(page, chord("z"), "압축 취소");
+	const undoneCompress = await step(page, chord("z"), "Undo Compress");
 	await waitFor(() => !existsSync(join(DIR, "uh-b.txt.zip")), "undo of compress");
 	check(
 		"⌘Z moves the compressed archive to the Trash",
@@ -154,7 +154,7 @@ try {
 	const EXTRACTED = join(DIR, "uh-b 2.txt");
 	await waitFor(() => existsSync(join(EXTRACTED, "uh-b.txt")), "extraction on disk");
 	await sleep(500);
-	const undoneExtract = await step(page, chord("z"), "압축 해제 취소");
+	const undoneExtract = await step(page, chord("z"), "Undo Extract");
 	await waitFor(() => !existsSync(EXTRACTED), "undo of extract");
 	check(
 		"⌘Z moves the extracted folder to the Trash, keeping the archive",
@@ -162,24 +162,24 @@ try {
 		`disk=${names()}`,
 	);
 	await page.screenshot({ path: join(EVIDENCE, "2-undo-extract.png") });
-	const redoneExtract = await step(page, redoChord, "압축 해제 다시 실행");
+	const redoneExtract = await step(page, redoChord, "Redo Extract");
 	await waitFor(() => existsSync(join(EXTRACTED, "uh-b.txt")), "redo of extract");
 	check("⇧⌘Z puts the extracted folder back with its contents", redoneExtract && readFileSync(join(EXTRACTED, "uh-b.txt"), "utf8") === "bravo", `disk=${names()}`);
 
 	/* -------------------------- 6. + 7. several undos, then redos forward */
 	// History now (newest last): …, compress (archive in the folder).
 	await rowMenu(page, "uh-a.txt", "Rename");
-	await page.locator('input[aria-label="새 이름"]').fill("uh-one.txt");
+	await page.locator('input[aria-label="New name"]').fill("uh-one.txt");
 	await page.keyboard.press("Enter");
 	await waitFor(() => existsSync(join(DIR, "uh-one.txt")), "first rename");
 	await rowMenu(page, "uh-one.txt", "Rename");
-	await page.locator('input[aria-label="새 이름"]').fill("uh-two.txt");
+	await page.locator('input[aria-label="New name"]').fill("uh-two.txt");
 	await page.keyboard.press("Enter");
 	await waitFor(() => existsSync(join(DIR, "uh-two.txt")), "second rename");
 
-	const back1 = await step(page, chord("z"), "이름 변경 취소");
+	const back1 = await step(page, chord("z"), "Undo Rename");
 	await waitFor(() => existsSync(join(DIR, "uh-one.txt")), "first undo");
-	const back2 = await step(page, chord("z"), "이름 변경 취소");
+	const back2 = await step(page, chord("z"), "Undo Rename");
 	await waitFor(() => existsSync(join(DIR, "uh-a.txt")), "second undo");
 	check(
 		"each ⌘Z undoes exactly one operation, newest first",
@@ -187,20 +187,20 @@ try {
 		`disk=${names()}`,
 	);
 
-	const fwd1 = await step(page, redoChord, "이름 변경 다시 실행");
+	const fwd1 = await step(page, redoChord, "Redo Rename");
 	await waitFor(() => existsSync(join(DIR, "uh-one.txt")), "first redo");
-	const fwd2 = await step(page, redoChord, "이름 변경 다시 실행");
+	const fwd2 = await step(page, redoChord, "Redo Rename");
 	await waitFor(() => existsSync(join(DIR, "uh-two.txt")), "second redo");
 	await page.screenshot({ path: join(EVIDENCE, "3-redo.png") });
 	check(
-		"⇧⌘Z redoes the undone renames forward and the toast says 다시 실행",
+		"⇧⌘Z redoes the undone renames forward and the toast says Redo",
 		fwd1 && fwd2 && existsSync(join(DIR, "uh-two.txt")) && !existsSync(join(DIR, "uh-a.txt")),
 		`disk=${names()}`,
 	);
 	check("the redone content is intact", readFileSync(join(DIR, "uh-two.txt"), "utf8") === "alpha", "content=alpha");
 
 	/* -------------------------------- 8. a new operation clears redo */
-	await step(page, chord("z"), "이름 변경 취소");
+	await step(page, chord("z"), "Undo Rename");
 	await waitFor(() => existsSync(join(DIR, "uh-one.txt")), "undo before new op");
 	await page.locator(".list").click({ position: { x: 40, y: 8 } });
 	await page.keyboard.press(chord("Shift", "N"));
@@ -216,14 +216,14 @@ try {
 	);
 
 	/* ---- 9. retaken name: verbatim failure, nothing overwritten */
-	await step(page, chord("z"), "새 폴더 취소");
+	await step(page, chord("z"), "Undo New Folder");
 	await waitFor(() => !existsSync(join(DIR, "untitled folder")), "undo of folder");
 	await rowMenu(page, "uh-one.txt", "Rename");
-	await page.locator('input[aria-label="새 이름"]').fill("uh-moved.txt");
+	await page.locator('input[aria-label="New name"]').fill("uh-moved.txt");
 	await page.keyboard.press("Enter");
 	await waitFor(() => existsSync(join(DIR, "uh-moved.txt")), "rename before retake");
 	writeFileSync(join(DIR, "uh-one.txt"), "intruder");
-	const failedUndo = await step(page, chord("z"), "이름 변경 취소 실패");
+	const failedUndo = await step(page, chord("z"), "Undo Rename failed");
 	check(
 		"an undo onto a retaken name reports the verbatim reason and overwrites nothing",
 		failedUndo && readFileSync(join(DIR, "uh-one.txt"), "utf8") === "intruder" && existsSync(join(DIR, "uh-moved.txt")),

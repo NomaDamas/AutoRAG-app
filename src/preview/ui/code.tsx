@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactElement } from "react";
+import { useTranslation } from "react-i18next";
 import hljs from "highlight.js/lib/core";
 import bash from "highlight.js/lib/languages/bash";
 import c from "highlight.js/lib/languages/c";
@@ -222,6 +223,7 @@ const FOOTER = "flex flex-none items-center gap-14 px-16 border-t-[0.5px] border
  * and a footer with language, encoding, line ending, and line count.
  */
 export function TextView({ file }: { readonly file: PreviewDocument }): ReactElement {
+	const { t, i18n } = useTranslation();
 	const { report } = useChrome();
 	const decoded = useDecodedText(file);
 	const language = LANGUAGES[file.ext] ?? PLAIN;
@@ -235,16 +237,16 @@ export function TextView({ file }: { readonly file: PreviewDocument }): ReactEle
 		if (content === null) return;
 		report({ width: CODE_WIDTH, height: content.offsetHeight + CODE_CHROME }, "clamp");
 	}, [report, lines]);
-	if (decoded === null) return <FallbackView file={file} note="텍스트를 읽지 못했습니다" />;
+	if (decoded === null) return <FallbackView file={file} note={t("quickLook.code.readFailed")} />;
 	return (
 		<>
 			<ToolbarSlot>
-				<button type="button" className={TOOL_BUTTON} aria-label="줄 바꿈" title="줄 바꿈" aria-pressed={wrap} onClick={() => setWrap((current) => !current)}>
+				<button type="button" className={TOOL_BUTTON} aria-label={t("quickLook.code.wrap")} title={t("quickLook.code.wrap")} aria-pressed={wrap} onClick={() => setWrap((current) => !current)}>
 					<WrapIcon />
 				</button>
-				<button type="button" className={SMALL_BUTTON} aria-label="코드 복사" onClick={copy}>
+				<button type="button" className={SMALL_BUTTON} aria-label={t("quickLook.code.copy")} onClick={copy}>
 					<CopyIcon />
-					{copied ? "복사됨" : "복사"}
+					{copied ? t("quickLook.fallback.copied") : t("quickLook.fallback.copy")}
 				</button>
 			</ToolbarSlot>
 			<div className="ql-lines ql-lines--code flex-1 min-h-0 overflow-auto pt-12 pb-18 bg-ql-paper font-ql-mono text-[12.5px] leading-[1.62] select-text" data-wrap={wrap}>
@@ -259,9 +261,9 @@ export function TextView({ file }: { readonly file: PreviewDocument }): ReactEle
 				</span>
 				<span>{decoded.encoding}</span>
 				<span>{decoded.ending}</span>
-				<span>{lines.length.toLocaleString("ko-KR")}줄</span>
+				<span>{t("quickLook.code.lines", { count: lines.length.toLocaleString(i18n.language) })}</span>
 				<span className="flex-1" />
-				<span>{file.truncated ? `앞 ${formatFinderSize(file.bytes?.byteLength ?? 0)}만 표시` : formatFinderSize(file.size)}</span>
+				<span>{file.truncated ? t("quickLook.code.truncated", { size: formatFinderSize(file.bytes?.byteLength ?? 0) }) : formatFinderSize(file.size)}</span>
 			</footer>
 		</>
 	);
@@ -270,9 +272,9 @@ export function TextView({ file }: { readonly file: PreviewDocument }): ReactEle
 type HtmlMode = "desktop" | "mobile" | "source";
 
 const HTML_MODES = [
-	{ value: "desktop", label: "데스크톱", icon: <DesktopIcon /> },
-	{ value: "mobile", label: "모바일", icon: <MobileIcon /> },
-	{ value: "source", label: "소스", icon: <SourceIcon /> },
+	{ value: "desktop", labelKey: "quickLook.code.modes.desktop", icon: <DesktopIcon /> },
+	{ value: "mobile", labelKey: "quickLook.code.modes.mobile", icon: <MobileIcon /> },
+	{ value: "source", labelKey: "quickLook.code.modes.source", icon: <SourceIcon /> },
 ] as const;
 
 /**
@@ -280,17 +282,19 @@ const HTML_MODES = [
  * in a 390px phone column, or as highlighted source.
  */
 export function HtmlView({ file }: { readonly file: PreviewDocument }): ReactElement {
+	const { t, i18n } = useTranslation();
 	const { report } = useChrome();
 	const decoded = useDecodedText(file);
 	const [mode, setMode] = useState<HtmlMode>("desktop");
 	const source = useMemo(() => (decoded === null || mode !== "source" ? [] : highlightLines(decoded.text, "xml")), [decoded, mode]);
+	const modes = useMemo(() => HTML_MODES.map((option) => ({ value: option.value, icon: option.icon, label: t(option.labelKey) })), [t, i18n.language]);
 	useEffect(() => report(HTML_SIZE, "clamp"), [report]);
-	if (decoded === null) return <FallbackView file={file} note="문서를 읽지 못했습니다" />;
+	if (decoded === null) return <FallbackView file={file} note={t("quickLook.documents.readFailed")} />;
 	const mobile = mode === "mobile";
 	return (
 		<>
 			<ToolbarSlot>
-				<Segmented label="보기 방식" options={HTML_MODES} value={mode} onChange={setMode} />
+				<Segmented label={t("quickLook.code.viewMode")} options={modes} value={mode} onChange={setMode} />
 			</ToolbarSlot>
 			{mode === "source" ? (
 				<div className="ql-lines ql-lines--html flex-1 min-h-0 overflow-auto py-14 bg-ql-paper font-ql-mono text-[12.5px] leading-[1.65] select-text" data-wrap={false}>

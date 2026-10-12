@@ -194,7 +194,7 @@ try {
 		await page.getByRole("menuitem", { name: "Share", exact: true }).click();
 		await sleep(800);
 		const toast = await page.locator(".toast").allInnerTexts();
-		check("menu share did not error", toast.some((text) => text.includes("지원하지 않") || text.includes("Error")), false);
+		check("menu share did not error", toast.some((text) => text.includes("does not support") || text.includes("Error")), false);
 	}
 
 	// 8. Open With opens the native application chooser. The sheet is a native
