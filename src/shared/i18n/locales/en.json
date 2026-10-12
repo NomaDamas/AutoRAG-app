@@ -104,6 +104,11 @@
     },
     "versionBanner": {
       "retry": "Check again"
+    },
+    "pathBar": {
+      "edit": "Go to path",
+      "invalid": "Enter a path to go to",
+      "notFound": "\"{{path}}\" can't be found"
     }
   },
   "contextMenu": {

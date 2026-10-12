@@ -34,7 +34,7 @@ import { createFinderTags, type FinderTags } from "./finder-tags";
 import { createIconProvider, type IconProvider } from "./file-icon";
 import { createOsKindResolver } from "./file-kind";
 import { readFileDetails } from "./file-details";
-import { buildFsEntry, errorMessage, hasErrorCode, isAvailable, pathExists, resolveCopyName } from "./fs-entry";
+import { buildFsEntry, errorMessage, hasErrorCode, isAvailable, onDiskPath, pathExists, resolveCopyName } from "./fs-entry";
 import { createPlaces, type Places } from "./places";
 import { isRecycleBinDir, readRecycleBinName, readRecycleBinRecord } from "./recycle-bin";
 import { createRecentsStore, type RecentsStore } from "./recents-store";
@@ -961,7 +961,8 @@ export function createFsService(deps: FsServiceDeps): FsService {
 		finderMetadata: finderMetadataFor,
 		listDir,
 		readEntries,
-		stat: (path) => buildFsEntry(path, platform),
+		// A typed location (the path bar) may differ from the disk in case or Unicode form.
+		stat: async (path) => buildFsEntry(await onDiskPath(path), platform),
 		details: deps.details ?? readFileDetails,
 		previewIcon: (path, mtimeMs) =>
 			iconProvider.preview({ path, ext: extname(path).slice(1).toLowerCase(), mtimeMs }),

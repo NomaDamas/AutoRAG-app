@@ -1,6 +1,6 @@
 import { constants } from "node:fs";
-import { access, lstat, stat } from "node:fs/promises";
-import { basename, join } from "node:path";
+import { access, lstat, readdir, realpath, stat } from "node:fs/promises";
+import { basename, join, parse, resolve, sep } from "node:path";
 import { FS_ENTRY_SYMLINK, type FsEntry } from "../shared/fs-contract";
 
 /** True when the error carries the given Node errno code. */
@@ -38,6 +38,45 @@ export async function isAvailable(path: string): Promise<boolean> {
 		}
 		throw error;
 	}
+}
+
+/**
+ * `path` spelled as the filesystem stores it. On a case-insensitive volume
+ * (APFS and NTFS defaults) "/Volumes/ssd/autorag" opens "/Volumes/SSD/AutoRAG";
+ * every segment is matched back to its directory entry, by case and Unicode
+ * form, and confirmed by inode. Symlinks are never resolved: a link keeps its
+ * own name. Rejects with ENOENT/ENOTDIR when the path does not exist.
+ */
+export async function onDiskPath(path: string): Promise<string> {
+	const absolute = resolve(path);
+	// Already exact and free of symlinks: the common case costs one call
+	// (`fs/promises` realpath is the OS one, which answers in on-disk case).
+	if ((await realpath(absolute)) === absolute) return absolute;
+	const { root } = parse(absolute);
+	let current = root;
+	for (const segment of absolute.slice(root.length).split(sep).filter((part) => part.length > 0)) {
+		const target = await lstat(join(current, segment), { bigint: true });
+		let names: string[] = [];
+		try {
+			names = await readdir(current);
+		} catch (error) {
+			// A traverse-only folder (execute without read) cannot be listed: keep the typed name.
+			if (!hasErrorCode(error, "EACCES") && !hasErrorCode(error, "EPERM")) throw error;
+		}
+		const key = segment.normalize("NFC").toLowerCase();
+		let match = segment;
+		for (const name of names) {
+			if (name === segment) break;
+			if (name.normalize("NFC").toLowerCase() !== key) continue;
+			const candidate = await lstat(join(current, name), { bigint: true }).catch(() => null);
+			if (candidate !== null && candidate.ino === target.ino && candidate.dev === target.dev) {
+				match = name;
+				break;
+			}
+		}
+		current = join(current, match);
+	}
+	return current;
 }
 
 /** Lowercase extension without the dot; "" for extensionless names and dotfiles. */
