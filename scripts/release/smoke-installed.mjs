@@ -145,7 +145,12 @@ try {
 		const totalSeconds = installSeconds + seedSeconds;
 		process.stdout.write(`time install=${installSeconds.toFixed(0)}s  launch->model seeded=${seedSeconds.toFixed(0)}s  total=${totalSeconds.toFixed(0)}s  budget=${BUDGET_SECONDS}s\n`);
 		expect(totalSeconds <= BUDGET_SECONDS, `install + first-launch seeding within ${BUDGET_SECONDS}s`, `${totalSeconds.toFixed(0)}s`);
-		expect(readdirSync(join(autoragHome, "runtime")).some((name) => name.startsWith("llama-")), "llama.cpp runtime seeded");
+		// macOS ships the runtime extracted and signed (with the librarian's marker), Windows the pinned archive.
+		const runtimes = readdirSync(join(autoragHome, "runtime")).filter((name) => name.startsWith("llama-"));
+		const runtimeReady = win
+			? runtimes.some((name) => name.endsWith(".zip"))
+			: runtimes.some((name) => name.endsWith(".extracted") && existsSync(join(autoragHome, "runtime", name, ".autorag-archive-sha256")) && existsSync(join(autoragHome, "runtime", name, "llama-b10951", "llama-server")));
+		expect(runtimeReady, "llama.cpp runtime seeded", runtimes.join(", "));
 		writeFileSync(join(outDir, "installed-app.json"), `${JSON.stringify(inside, null, 2)}\n`);
 	} finally {
 		await app.close().catch(() => undefined);

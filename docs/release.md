@@ -52,9 +52,17 @@ does not match its published digest.
   cannot spawn a script by name; this makes them real executables on both platforms.
 * On first launch the embedding model and llama.cpp runtime are copied from
   `resources/seed` into `~/.autorag/{models,runtime}` (`src/main/seed-assets.ts`),
-  verified by SHA-256, never overwriting an existing file. A fresh install indexes
-  offline; there is no 650 MB download step. If seeding fails the librarian
-  downloads the same pinned files on first use, as before.
+  never overwriting an existing entry. A fresh install indexes offline; there is
+  no 650 MB download step. If seeding fails the librarian downloads the same
+  pinned files on first use, as before.
+  * The model, and the Windows runtime archive, are verified by SHA-256 while they are copied.
+  * The macOS runtime ships already extracted, as
+    `runtime/<archive>.extracted/` with the librarian's `.autorag-archive-sha256`
+    marker. Notarization requires every Mach-O in the app to carry our Developer ID
+    signature, and binaries left inside the pinned archive cannot be signed (Apple
+    rejected the first signed build for exactly those 41 files). The librarian
+    accepts the marked tree in place of the archive, so the app's code signature,
+    not the archive digest, is what vouches for these binaries.
 
 ### Deliberately not bundled
 
