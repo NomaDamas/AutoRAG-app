@@ -105,7 +105,7 @@ try {
 	const inspectorBox = await page.locator(".inspector").boundingBox();
 	check("C1 sidebar defaults to minimum width", Math.round(sidebarBox.width), 180);
 	check("C1 inspector defaults to minimum width", Math.round(inspectorBox.width), 300);
-	const composer = page.locator(`${AI_PANEL} input[placeholder*="Ask Dazzi"]`);
+	const composer = page.locator(`${AI_PANEL} input[aria-label="Ask Dazzi"]`);
 	const tabCount = () => page.locator(".tabs .tab").count();
 	check("C1 there is no AI Search dock under the Finder", await page.locator(AI_PANEL).count(), 0);
 	await page.keyboard.press(chord("k"));

@@ -10,10 +10,9 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync, appendFileSync } from "n
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { _electron } from "playwright";
 import { AutoRAGAgent, buildAgentOptions, resolveConfigReadOnly } from "@autorag/librarian";
 import { resolveAgentModel } from "@autorag/librarian/core";
-import { AI_PANEL, finderWindow, openAiSearch } from "./launch-finder.mjs";
+import { AI_PANEL, finderWindow, launchFinder, openAiSearch } from "./launch-finder.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const EVIDENCE = join(ROOT, ".omo", "evidence", "ai-finder-app", "qa-answer-streaming");
@@ -95,13 +94,8 @@ async function warmIndex(configPath) {
 }
 
 async function launch(configPath, label) {
-	const env = { ...process.env, AUTORAG_CONFIG: configPath, AUTORAG_SKIP_ONBOARDING: "1" };
-	delete env.ELECTRON_RENDERER_URL;
-	const app = await _electron.launch({
-		args: [ROOT, `--user-data-dir=${join(WORK, `user-data-${label}`)}`],
-		cwd: WORK,
-		env,
-	});
+	const env = { AUTORAG_CONFIG: configPath, ELECTRON_RENDERER_URL: undefined };
+	const app = await launchFinder({ userDataDir: join(WORK, `user-data-${label}`), env });
 	const page = await finderWindow(app, 30_000);
 	page.on("pageerror", (error) => log(`[${label}:pageerror] ${String(error).slice(0, 300)}`));
 	app.process().stderr?.on("data", (chunk) => {
@@ -121,12 +115,13 @@ async function installRecorder(page) {
 		const read = () => {
 			// v7 renders the loaded answer as plain `.assistant-prose` blocks under
 			// `.assistant-msg`: Quick first, Deep second. Streaming has no dedicated
-			// class; the disabled composer marks a run in progress.
+			// class, and the composer stays enabled for steering (#176): the Stop
+			// button is what marks a run in progress.
 			const prose = [...document.querySelectorAll(".assistant-msg .assistant-prose")];
 			const quick = prose[0] ?? null;
 			const deep = prose[1] ?? null;
 			const input = document.querySelector('input[aria-label="Ask Dazzi"]');
-			const inProgress = input !== null && input.disabled;
+			const inProgress = document.querySelector('button[aria-label="Stop"]') !== null;
 			return {
 				thinking: document.querySelector(".water-wave-thinking") !== null,
 				thinkingTexts: [...document.querySelectorAll(".water-wave-thinking")].map((element) => element.textContent),
@@ -161,7 +156,7 @@ async function installRecorder(page) {
 
 const FINISHED = () => {
 	const input = document.querySelector('input[aria-label="Ask Dazzi"]');
-	return input !== null && !input.disabled && document.querySelector(".user-msg") !== null;
+	return input !== null && document.querySelector('button[aria-label="Stop"]') === null && document.querySelector(".user-msg") !== null;
 };
 
 const distinctGrowth = (values) => {
