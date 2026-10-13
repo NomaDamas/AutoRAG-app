@@ -14,6 +14,8 @@ import { ONBOARDING_CHANNELS } from "../shared/onboarding-contract";
 import { isServiceRunRequest, SERVICES_CHANNELS } from "../shared/services-contract";
 import { t } from "../shared/i18n/core";
 import { INDEX_ACTIVITY_CHANNELS } from "../shared/index-activity-contract";
+import { APP_UPDATE_CHANNELS } from "../shared/update-contract";
+import type { AppUpdaterService } from "./app-updater";
 import type { ActionService } from "./action-service";
 import type { IndexActivityService } from "./index-activity";
 import { dragOutPaths } from "./drag-out";
@@ -303,4 +305,12 @@ export function registerOsRequestIpcHandlers(service: OsRequestService): void {
 /** The renderer's one read of what is indexing right now; changes are pushed by the main process. */
 export function registerIndexActivityIpcHandlers(service: IndexActivityService): void {
 	ipcMain.handle(INDEX_ACTIVITY_CHANNELS.get, () => service.snapshot());
+}
+
+/** Self-update: one snapshot read and three user actions; state changes are pushed by the main process. */
+export function registerAppUpdateIpcHandlers(service: AppUpdaterService): void {
+	ipcMain.handle(APP_UPDATE_CHANNELS.get, () => service.snapshot());
+	ipcMain.handle(APP_UPDATE_CHANNELS.check, () => service.check());
+	ipcMain.handle(APP_UPDATE_CHANNELS.download, () => service.download());
+	ipcMain.handle(APP_UPDATE_CHANNELS.install, () => service.install());
 }

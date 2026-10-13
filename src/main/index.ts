@@ -33,6 +33,9 @@ import { DEFAULT_CODE_FOLDER_NAMES, isJsonObject, SETTINGS_CHANNELS } from "../s
 import { LOCAL_REFRESH_METHODS } from "./index-refresh";
 import { INDEX_ACTIVITY_CHANNELS } from "../shared/index-activity-contract";
 import { createIndexActivityService } from "./index-activity";
+import { APP_UPDATE_CHANNELS } from "../shared/update-contract";
+import type { AppUpdaterService } from "./app-updater";
+import { createAppUpdateHost, installCheckForUpdatesMenuItem } from "./app-update-host";
 import { createActivityJournal, journalSingleRun, LOCAL_ITEM } from "./index-activity-journal";
 import { busyMessage, lockDataSources } from "./locked-datasources";
 import { schedulePaths, withRefreshLock } from "./refresh-schedule";
@@ -65,6 +68,7 @@ import { createSettingsService } from "./settings-service";
 import {
 	registerAccountIpcHandlers,
 	registerActionsIpcHandlers,
+	registerAppUpdateIpcHandlers,
 	registerDragOutIpcHandlers,
 	registerIndexActivityIpcHandlers,
 	registerOnboardingIpcHandlers,
@@ -540,6 +544,8 @@ app.whenReady().then(async () => {
 		return registered === enabled;
 	};
 	let appliedLaunchAtLogin: boolean | null = null;
+	// Created once settings are readable (below); settings changes before that have nothing to re-apply.
+	let appUpdater: AppUpdaterService | null = null;
 	const refreshScheduler = createRefreshScheduler({
 		platform: process.platform,
 		execPath: process.execPath,
@@ -577,6 +583,7 @@ app.whenReady().then(async () => {
 				appliedLaunchAtLogin = settings.launchAtLogin;
 				applyLoginItem(settings.launchAtLogin);
 			}
+			void appUpdater?.applySettings();
 		},
 	});
 	registerSettingsIpcHandlers(settingsService);
@@ -598,6 +605,30 @@ app.whenReady().then(async () => {
 	applyAppearance(settings.appearance);
 	applyLanguage(settings.language);
 	if (settings.dupeyScanIntervalMinutes !== DEFAULT_SCAN_INTERVAL_MINUTES) applyScanInterval(settings.dupeyScanIntervalMinutes);
+	let notifiedUpdate: string | null = null;
+	appUpdater = await createAppUpdateHost({
+		isPackaged: app.isPackaged,
+		platform: process.platform,
+		resourcesPath: process.resourcesPath,
+		executablePath: app.getPath("exe"),
+		currentVersion: APP_VERSION,
+		logPath: join(app.getPath("logs"), "updater.log"),
+		autoInstall: async () => (await settingsService.get()).autoInstallUpdates,
+		openExternal: (url) => shell.openExternal(url),
+		onChange: (snapshot) => {
+			sendToMainWindow(APP_UPDATE_CHANNELS.changed, snapshot);
+			// One system notification per version: when it is installed-on-quit, or (notify mode) when it can be downloaded.
+			const { state } = snapshot;
+			const version = state.kind === "ready" || (state.kind === "available" && snapshot.mode === "notify") ? state.version : null;
+			if (version === null || version === notifiedUpdate || !Notification.isSupported()) return;
+			notifiedUpdate = version;
+			const body = t(state.kind === "ready" ? "main.update.readyNotification" : "main.update.availableNotification", { version });
+			new Notification({ title: APP_FULL_NAME, body }).show();
+		},
+	});
+	registerAppUpdateIpcHandlers(appUpdater);
+	installCheckForUpdatesMenuItem(appUpdater);
+	appUpdater.start();
 	const userDataDir = app.getPath("userData");
 	const supportedExtensions = supportedExtensionsFromRegistry(createDefaultParserRegistry());
 	const scanCoordinator = createFolderScanCoordinator({

@@ -1,8 +1,9 @@
 /**
  * electron-builder configuration for the Dazzi installers.
  *
- *   macOS    Dazzi-<version>-arm64.dmg      (Apple Silicon)
- *   Windows  Dazzi-Setup-<version>-x64.exe  (NSIS, per-user, no admin prompt)
+ *   macOS    Dazzi-<version>-arm64.dmg      (Apple Silicon; first install)
+ *            Dazzi-<version>-arm64.zip      (+ .blockmap; what auto-update downloads)
+ *   Windows  Dazzi-Setup-<version>-x64.exe  (NSIS, per-user, no admin prompt; + .blockmap)
  *
  * What goes into the installer besides the app itself is produced by
  * `scripts/release/stage-tools.mjs` into `build/stage/<platform>/`:
@@ -13,6 +14,12 @@
  * Signing is optional at the config level so unsigned CI and local builds
  * work; docs/release.md lists the secrets that turn it on. Nothing here ever
  * contains a credential: electron-builder reads them from the environment.
+ *
+ * Auto-update: with `AUTORAG_UPDATE_FEED_URL` set (the release workflow sets
+ * it to `https://dl.nomadamas.org/latest/` when the R2 mirror is configured),
+ * the build writes `resources/app-update.yml` pointing at that feed, plus the
+ * `latest*.yml` feed files and `.blockmap`s next to the installers. Without it
+ * there is no feed and the packaged app never checks (docs/release.md → "Auto-update").
  */
 
 import { spawnSync } from "node:child_process";
@@ -31,6 +38,7 @@ const hasNotarization = Boolean(
 		(process.env.APPLE_ID && process.env.APPLE_APP_SPECIFIC_PASSWORD && process.env.APPLE_TEAM_ID),
 );
 const hasAzureSigning = Boolean(process.env.AZURE_TENANT_ID && process.env.AZURE_CLIENT_ID && process.env.AZURE_CLIENT_SECRET);
+const updateFeedUrl = process.env.AUTORAG_UPDATE_FEED_URL || null;
 
 /** @type {import("electron-builder").Configuration} */
 const config = {
@@ -62,7 +70,11 @@ const config = {
 
 	mac: {
 		category: "public.app-category.productivity",
-		target: [{ target: "dmg", arch: ["arm64"] }],
+		// The zip is what electron-updater (Squirrel.Mac) installs from; the dmg stays the first-install download.
+		target: [
+			{ target: "dmg", arch: ["arm64"] },
+			{ target: "zip", arch: ["arm64"] },
+		],
 		icon: "build/icon.icns",
 		hardenedRuntime: true,
 		gatekeeperAssess: false,
@@ -125,7 +137,9 @@ const config = {
 		for (const tree of trees) rmSync(join(resources, tree), { recursive: true, force: true });
 	},
 
-	publish: null,
+	// Cloudflare's custom-domain edge answers a multi-range request with 400 (single ranges get 206),
+	// so differential downloads fetch one range per request.
+	publish: updateFeedUrl === null ? null : { provider: "generic", url: updateFeedUrl, useMultipleRangeRequest: false },
 };
 
 if (!existsSync(join(stage, "tools"))) {

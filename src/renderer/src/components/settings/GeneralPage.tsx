@@ -7,8 +7,9 @@
  * `configPatch` writes, so unknown config keys survive).
  */
 
-import type { ReactElement } from "react";
+import { useEffect, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
+import type { AppUpdateSnapshot } from "../../../../shared/update-contract";
 import type { AppSettings, AutoRagConfigSnapshot } from "../../../../shared/settings-contract";
 import { LanguageSettings } from "./LanguageSettings";
 import { Row, Section, SettingsPageHead } from "./SettingsKit";
@@ -75,6 +76,7 @@ export function GeneralPage({
 				<Row name={t("settingsCore.general.autoUpdates")} hint={t("settingsCore.general.autoUpdatesHint")}>
 					<Switch checked={appSettings.autoInstallUpdates} onChange={() => void setApp({ autoInstallUpdates: !appSettings.autoInstallUpdates })} ariaLabel={t("settingsCore.general.autoUpdates")} />
 				</Row>
+				<AppUpdateRow />
 			</Section>
 			<Section title={t("settingsCore.general.privacyTitle")}>
 				<Row name={t("settingsCore.general.telemetry")} hint={t("settingsCore.general.telemetryHint")}>
@@ -85,5 +87,68 @@ export function GeneralPage({
 				<LanguageSettings snapshot={snapshot} path={["languages"]} name={t("settingsCore.general.docLanguagesTitle")} hint={t("settingsCore.general.docLanguagesHint")} onSaved={onSaved} fallback={["ko", "en"]} />
 			</Section>
 		</>
+	);
+}
+
+/** "앱 업데이트": the running version, what the updater is doing, and the one action that fits. */
+function AppUpdateRow(): ReactElement | null {
+	const { t } = useTranslation();
+	const bridge = autorag.appUpdate;
+	const [update, setUpdate] = useState<AppUpdateSnapshot | null>(null);
+	useEffect(() => {
+		let live = true;
+		void bridge.get().then((snapshot) => {
+			if (live) setUpdate(snapshot);
+		});
+		const unsubscribe = bridge.onChange(setUpdate);
+		return () => {
+			live = false;
+			unsubscribe();
+		};
+	}, [bridge]);
+	if (update === null) return null;
+	const { state, currentVersion } = update;
+	let hint: string;
+	switch (state.kind) {
+		case "unsupported":
+			hint = t("settingsCore.general.appUpdateUnsupported", { version: currentVersion });
+			break;
+		case "checking":
+			hint = t("settingsCore.general.appUpdateChecking");
+			break;
+		case "available":
+			hint = t(update.mode === "notify" ? "settingsCore.general.appUpdateAvailableManual" : "settingsCore.general.appUpdateAvailable", { version: state.version });
+			break;
+		case "downloading":
+			hint = t("settingsCore.general.appUpdateDownloading", { version: state.version, percent: state.percent });
+			break;
+		case "ready":
+			hint = t("settingsCore.general.appUpdateReady", { version: state.version });
+			break;
+		case "error":
+			hint = t("settingsCore.general.appUpdateError", { message: state.message });
+			break;
+		case "idle":
+			hint = t(state.checkedAt === null ? "settingsCore.general.appUpdateCurrent" : "settingsCore.general.appUpdateLatest", { version: currentVersion });
+			break;
+	}
+	const action =
+		state.kind === "ready" ? (
+			<button type="button" className="linear-btn settings-btn-primary" onClick={() => void bridge.install()}>
+				{t("settingsCore.general.appUpdateRestart")}
+			</button>
+		) : state.kind === "available" ? (
+			<button type="button" className="linear-btn settings-btn-primary" onClick={() => void bridge.download()}>
+				{t(update.mode === "notify" ? "settingsCore.general.appUpdateDownloadInstaller" : "settingsCore.general.appUpdateDownload")}
+			</button>
+		) : state.kind === "unsupported" ? null : (
+			<button type="button" className="linear-btn" disabled={state.kind === "checking" || state.kind === "downloading"} onClick={() => void bridge.check()}>
+				{t("settingsCore.general.appUpdateCheck")}
+			</button>
+		);
+	return (
+		<Row name={t("settingsCore.general.appUpdate")} hint={hint}>
+			{action}
+		</Row>
 	);
 }

@@ -1088,6 +1088,11 @@
       "actions": {
         "discordConfig": "由 datasources.<id> 管理的 discrawl config.toml"
       }
+    },
+    "update": {
+      "checkMenu": "检查更新…",
+      "readyNotification": "Dazzi {{version}} 已就绪。退出应用时将自动安装。",
+      "availableNotification": "Dazzi {{version}} 可供下载。"
     }
   },
   "quickLook": {
@@ -1320,7 +1325,21 @@
       "osMenu": "添加到文件右键菜单",
       "osMenuHint": "在 Finder (macOS) 或资源管理器 (Windows) 中右键单击文件时会显示“询问 Dazzi”和“在 Dazzi 中查看”。",
       "autoUpdates": "自动安装更新",
-      "autoUpdatesHint": "下次启动应用时自动应用新版本。",
+      "autoUpdatesHint": "在后台下载新版本，并在退出应用时应用。",
+      "appUpdate": "应用更新",
+      "appUpdateUnsupported": "当前版本 {{version}}。此版本不支持自动更新。",
+      "appUpdateCurrent": "当前版本 {{version}}",
+      "appUpdateLatest": "当前版本 {{version}}。已是最新版本。",
+      "appUpdateChecking": "正在检查更新…",
+      "appUpdateAvailable": "有新版本 {{version}}。",
+      "appUpdateAvailableManual": "有新版本 {{version}}。请下载安装程序进行替换。",
+      "appUpdateDownloading": "正在下载 {{version}}… {{percent}}%",
+      "appUpdateReady": "{{version}} 已就绪。退出应用或立即重启即可安装。",
+      "appUpdateError": "无法检查：{{message}}",
+      "appUpdateCheck": "检查更新",
+      "appUpdateDownload": "下载",
+      "appUpdateDownloadInstaller": "获取安装程序",
+      "appUpdateRestart": "立即重启",
       "privacyTitle": "隐私",
       "telemetry": "发送匿名使用统计",
       "telemetryHint": "仅发送不含文档内容的性能信息。",

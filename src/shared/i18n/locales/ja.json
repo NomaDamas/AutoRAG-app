@@ -1088,6 +1088,11 @@
       "actions": {
         "discordConfig": "datasources.<id> が管理する discrawl config.toml"
       }
+    },
+    "update": {
+      "checkMenu": "アップデートを確認…",
+      "readyNotification": "Dazzi {{version}} の準備ができました。アプリを終了するとインストールされます。",
+      "availableNotification": "Dazzi {{version}} をダウンロードできます。"
     }
   },
   "quickLook": {
@@ -1320,7 +1325,21 @@
       "osMenu": "ファイルの右クリックメニューに追加",
       "osMenuHint": "Finder(macOS)やエクスプローラー(Windows)でファイルを右クリックすると「Dazzi に質問」と「Dazzi で表示」が表示されます。",
       "autoUpdates": "更新を自動インストール",
-      "autoUpdatesHint": "新しいバージョンを次回のアプリ起動時に自動で適用します。",
+      "autoUpdatesHint": "新しいバージョンをバックグラウンドでダウンロードし、アプリの終了時に適用します。",
+      "appUpdate": "アプリのアップデート",
+      "appUpdateUnsupported": "現在のバージョン {{version}}。このビルドは自動アップデートに対応していません。",
+      "appUpdateCurrent": "現在のバージョン {{version}}",
+      "appUpdateLatest": "現在のバージョン {{version}}。最新です。",
+      "appUpdateChecking": "アップデートを確認しています…",
+      "appUpdateAvailable": "新しいバージョン {{version}} があります。",
+      "appUpdateAvailableManual": "新しいバージョン {{version}} があります。インストーラをダウンロードして置き換えてください。",
+      "appUpdateDownloading": "{{version}} をダウンロード中… {{percent}}%",
+      "appUpdateReady": "{{version}} の準備ができました。終了時、または今すぐ再起動するとインストールされます。",
+      "appUpdateError": "確認できませんでした: {{message}}",
+      "appUpdateCheck": "アップデートを確認",
+      "appUpdateDownload": "ダウンロード",
+      "appUpdateDownloadInstaller": "インストーラを入手",
+      "appUpdateRestart": "今すぐ再起動",
       "privacyTitle": "プライバシー",
       "telemetry": "匿名使用統計を送信",
       "telemetryHint": "文書の内容を除くパフォーマンス情報のみを送信します。",

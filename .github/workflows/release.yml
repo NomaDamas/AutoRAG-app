@@ -30,6 +30,9 @@ concurrency:
 env:
   # The tag is the version: the release's tag, else the manual input, else a dev number.
   RELEASE_TAG: ${{ github.event.release.tag_name || inputs.version || format('v0.0.0-dev.{0}', github.run_number) }}
+  # The auto-update feed the packaged app polls (docs/release.md → "Auto-update"). Builds get it only
+  # when the R2 mirror is configured; without a feed the app never checks.
+  AUTORAG_UPDATE_FEED_URL: ${{ vars.R2_BUCKET != '' && 'https://dl.nomadamas.org/latest/' || '' }}
 
 # Runners are repository variables (Settings > Secrets and variables > Actions > Variables) holding
 # a JSON value: RELEASE_RUNNER_MAC / RELEASE_RUNNER_WIN = "macos-15" or ["self-hosted","macOS","ARM64"].
@@ -89,7 +92,7 @@ jobs:
           mkdir -p "$RUNNER_TEMP/apple"
           printf '%s' "$APPLE_API_KEY_P8" | base64 --decode > "$RUNNER_TEMP/apple/AuthKey.p8"
           echo "APPLE_API_KEY=$RUNNER_TEMP/apple/AuthKey.p8" >> "$GITHUB_ENV"
-      - name: Package .dmg
+      - name: Package .dmg and update .zip
         env:
           CSC_LINK: ${{ secrets.MAC_CERTIFICATE_P12 }}
           CSC_KEY_PASSWORD: ${{ secrets.MAC_CERTIFICATE_PASSWORD }}
@@ -102,14 +105,20 @@ jobs:
 
       - name: Name release files
         run: |
-          mkdir -p upload
+          mkdir -p upload update
           cp dist/*.dmg upload/
           cp build/stage/darwin-arm64/tools/manifest.json upload/components-macos-arm64.json
           (cd upload && shasum -a 256 *.dmg > SHA256SUMS-macos.txt)
+          # Auto-update payloads: CDN only (the feed points there; GitHub caps an asset at 2 GiB).
+          cp dist/*.zip dist/*.blockmap update/
+          if [ -n "$AUTORAG_UPDATE_FEED_URL" ]; then node scripts/release/update-feed.mjs dist feed; fi
       - uses: actions/upload-artifact@v4
         with:
           name: macos
-          path: upload/*
+          path: |
+            upload/*
+            update/*
+            feed/*
           retention-days: 14
       - name: Attach to the release
         if: ${{ github.event_name == 'release' }}
@@ -129,9 +138,16 @@ jobs:
             echo "no R2 endpoint/bucket/credentials configured: skipping the CDN mirror"
             exit 0
           fi
-          aws s3 sync upload/ "s3://$R2_BUCKET/v$RELEASE_TAG/" \
-            --endpoint-url "$R2_ENDPOINT" \
-            --cache-control "public, max-age=31536000, immutable"
+          prefix="s3://$R2_BUCKET/v${RELEASE_TAG#v}"
+          for dir in upload update; do
+            aws s3 sync "$dir/" "$prefix/" --endpoint-url "$R2_ENDPOINT" --cache-control "public, max-age=31536000, immutable"
+          done
+          # The feed goes last, once everything it points at is downloadable. latest/ changes every
+          # release, so it is never cached; v<version>/feed/ keeps this release's copy for rollback.
+          if [ -d feed ]; then
+            aws s3 sync feed/ "$prefix/feed/" --endpoint-url "$R2_ENDPOINT" --cache-control "public, max-age=31536000, immutable"
+            aws s3 cp feed/ "s3://$R2_BUCKET/latest/" --recursive --endpoint-url "$R2_ENDPOINT" --cache-control "no-cache"
+          fi
 
   windows:
     runs-on: ${{ fromJSON(vars.RELEASE_RUNNER_WIN || '"windows-2022"') }}
@@ -194,14 +210,20 @@ jobs:
       - name: Name release files
         shell: bash
         run: |
-          mkdir -p upload
+          mkdir -p upload update
           cp dist/*.exe upload/
           cp build/stage/win32-x64/tools/manifest.json upload/components-windows-x64.json
           (cd upload && sha256sum *.exe > SHA256SUMS-windows.txt)
+          # The installer is the update payload too; its blockmap (from the same build) drives the differential download.
+          cp dist/*.exe.blockmap update/
+          if [ -n "$AUTORAG_UPDATE_FEED_URL" ]; then node scripts/release/update-feed.mjs dist feed; fi
       - uses: actions/upload-artifact@v4
         with:
           name: windows
-          path: upload/*
+          path: |
+            upload/*
+            update/*
+            feed/*
           retention-days: 14
       - name: Attach to the release
         if: ${{ github.event_name == 'release' }}
@@ -221,6 +243,11 @@ jobs:
             echo "no R2 endpoint/bucket/credentials configured: skipping the CDN mirror"
             exit 0
           fi
-          aws s3 sync upload/ "s3://$R2_BUCKET/v$RELEASE_TAG/" \
-            --endpoint-url "$R2_ENDPOINT" \
-            --cache-control "public, max-age=31536000, immutable"
+          prefix="s3://$R2_BUCKET/v${RELEASE_TAG#v}"
+          for dir in upload update; do
+            aws s3 sync "$dir/" "$prefix/" --endpoint-url "$R2_ENDPOINT" --cache-control "public, max-age=31536000, immutable"
+          done
+          if [ -d feed ]; then
+            aws s3 sync feed/ "$prefix/feed/" --endpoint-url "$R2_ENDPOINT" --cache-control "public, max-age=31536000, immutable"
+            aws s3 cp feed/ "s3://$R2_BUCKET/latest/" --recursive --endpoint-url "$R2_ENDPOINT" --cache-control "no-cache"
+          fi

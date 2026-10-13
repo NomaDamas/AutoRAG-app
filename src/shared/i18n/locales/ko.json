@@ -1088,6 +1088,11 @@
       "actions": {
         "discordConfig": "datasources.<id>이 관리하는 discrawl config.toml"
       }
+    },
+    "update": {
+      "checkMenu": "업데이트 확인…",
+      "readyNotification": "Dazzi {{version}}이(가) 준비되었습니다. 앱을 종료하면 설치됩니다.",
+      "availableNotification": "Dazzi {{version}}을(를) 내려받을 수 있습니다."
     }
   },
   "quickLook": {
@@ -1320,7 +1325,21 @@
       "osMenu": "파일 우클릭 메뉴에 추가",
       "osMenuHint": "Finder(macOS)나 탐색기(Windows)에서 파일을 우클릭하면 'Dazzi에게 물어보기'와 'Dazzi에서 보기'가 나옵니다.",
       "autoUpdates": "업데이트 자동 설치",
-      "autoUpdatesHint": "새 버전을 다음 앱 시작 때 자동으로 적용합니다.",
+      "autoUpdatesHint": "새 버전을 백그라운드에서 내려받고, 앱을 종료할 때 적용합니다.",
+      "appUpdate": "앱 업데이트",
+      "appUpdateUnsupported": "현재 버전 {{version}}. 이 빌드는 자동 업데이트를 지원하지 않습니다.",
+      "appUpdateCurrent": "현재 버전 {{version}}",
+      "appUpdateLatest": "현재 버전 {{version}}. 최신 버전입니다.",
+      "appUpdateChecking": "업데이트를 확인하는 중…",
+      "appUpdateAvailable": "새 버전 {{version}}이(가) 있습니다.",
+      "appUpdateAvailableManual": "새 버전 {{version}}이(가) 있습니다. 설치 파일을 내려받아 교체하세요.",
+      "appUpdateDownloading": "{{version}} 내려받는 중… {{percent}}%",
+      "appUpdateReady": "{{version}} 준비됨. 앱을 종료하거나 지금 재시작하면 설치됩니다.",
+      "appUpdateError": "확인하지 못했습니다: {{message}}",
+      "appUpdateCheck": "업데이트 확인",
+      "appUpdateDownload": "내려받기",
+      "appUpdateDownloadInstaller": "설치 파일 받기",
+      "appUpdateRestart": "지금 재시작",
       "privacyTitle": "개인정보",
       "telemetry": "익명 사용 통계 보내기",
       "telemetryHint": "문서 내용을 제외한 성능 정보만 전송합니다.",

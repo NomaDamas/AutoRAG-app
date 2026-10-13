@@ -1088,6 +1088,11 @@
       "actions": {
         "discordConfig": "discrawl config.toml managed by datasources.<id>"
       }
+    },
+    "update": {
+      "checkMenu": "Check for Updates…",
+      "readyNotification": "Dazzi {{version}} is ready. It installs when you quit the app.",
+      "availableNotification": "Dazzi {{version}} is available to download."
     }
   },
   "quickLook": {
@@ -1320,7 +1325,21 @@
       "osMenu": "Add to File Right-Click Menu",
       "osMenuHint": "Right-clicking a file in Finder (macOS) or Explorer (Windows) shows 'Ask Dazzi' and 'View in Dazzi'.",
       "autoUpdates": "Install Updates Automatically",
-      "autoUpdatesHint": "Apply new versions automatically on the next app launch.",
+      "autoUpdatesHint": "Download new versions in the background and apply them when you quit the app.",
+      "appUpdate": "App Update",
+      "appUpdateUnsupported": "Version {{version}}. This build does not update automatically.",
+      "appUpdateCurrent": "Version {{version}}",
+      "appUpdateLatest": "Version {{version}}. You're up to date.",
+      "appUpdateChecking": "Checking for updates…",
+      "appUpdateAvailable": "Version {{version}} is available.",
+      "appUpdateAvailableManual": "Version {{version}} is available. Download the installer to replace this app.",
+      "appUpdateDownloading": "Downloading {{version}}… {{percent}}%",
+      "appUpdateReady": "{{version}} is ready. It installs when you quit, or restart now.",
+      "appUpdateError": "Could not check: {{message}}",
+      "appUpdateCheck": "Check for Updates",
+      "appUpdateDownload": "Download",
+      "appUpdateDownloadInstaller": "Get Installer",
+      "appUpdateRestart": "Restart Now",
       "privacyTitle": "Privacy",
       "telemetry": "Send Anonymous Usage Statistics",
       "telemetryHint": "Only performance data is sent, never document content.",
