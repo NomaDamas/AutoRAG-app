@@ -9,10 +9,9 @@ import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "n
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { _electron } from "playwright";
 import { AutoRAGAgent, buildAgentOptions, resolveConfigReadOnly } from "@autorag/librarian";
 import { resolveAgentModel } from "@autorag/librarian/core";
-import { AI_PANEL, finderWindow, openAiSearch } from "./launch-finder.mjs";
+import { AI_PANEL, finderWindow, launchFinder, openAiSearch } from "./launch-finder.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const EVIDENCE = join(ROOT, ".omo", "evidence", "ai-finder-app", "qa-answer-stop");
@@ -115,9 +114,8 @@ try {
 	log(`work dir: ${WORK}`);
 	await warmIndex();
 
-	const env = { ...process.env, AUTORAG_CONFIG: CONFIG, AUTORAG_SKIP_ONBOARDING: "1" };
-	delete env.ELECTRON_RENDERER_URL;
-	app = await _electron.launch({ args: [ROOT, `--user-data-dir=${join(WORK, "user-data")}`], cwd: WORK, env });
+	const env = { AUTORAG_CONFIG: CONFIG, ELECTRON_RENDERER_URL: undefined };
+	app = await launchFinder({ userDataDir: join(WORK, "user-data"), env });
 	page = await finderWindow(app, 30_000);
 	page.on("pageerror", (error) => log(`[pageerror] ${String(error).slice(0, 300)}`));
 	await openAiSearch(page);
@@ -125,13 +123,13 @@ try {
 	await page.fill('input[aria-label="Ask Dazzi"]', QUERY);
 	await page.keyboard.press("Enter");
 	log(`submitted: ${QUERY}`);
-	await page.waitForSelector('button[aria-label="Stop search"]', { timeout: RUN_TIMEOUT_MS });
+	await page.waitForSelector('button[aria-label="Stop"]', { timeout: RUN_TIMEOUT_MS });
 	const before = await page.evaluate(readState, [AI_PANEL]);
 	check("the run is generating when Stop is pressed", before !== null && before.generating, JSON.stringify(before));
 	await page.screenshot({ path: join(EVIDENCE, "1-generating.png") });
 
 	const clickedAt = Date.now();
-	await page.click('button[aria-label="Stop search"]');
+	await page.click('button[aria-label="Stop"]');
 	let settled = false;
 	let settleError = "";
 	try {
