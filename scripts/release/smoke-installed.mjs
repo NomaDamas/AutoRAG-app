@@ -145,12 +145,17 @@ try {
 		const totalSeconds = installSeconds + seedSeconds;
 		process.stdout.write(`time install=${installSeconds.toFixed(0)}s  launch->model seeded=${seedSeconds.toFixed(0)}s  total=${totalSeconds.toFixed(0)}s  budget=${BUDGET_SECONDS}s\n`);
 		expect(totalSeconds <= BUDGET_SECONDS, `install + first-launch seeding within ${BUDGET_SECONDS}s`, `${totalSeconds.toFixed(0)}s`);
-		// macOS ships the runtime extracted and signed (with the librarian's marker), Windows the pinned archive.
-		const runtimes = readdirSync(join(autoragHome, "runtime")).filter((name) => name.startsWith("llama-"));
-		const runtimeReady = win
-			? runtimes.some((name) => name.endsWith(".zip"))
-			: runtimes.some((name) => name.endsWith(".extracted") && existsSync(join(autoragHome, "runtime", name, ".autorag-archive-sha256")) && existsSync(join(autoragHome, "runtime", name, "llama-b10951", "llama-server")));
-		expect(runtimeReady, "llama.cpp runtime seeded", runtimes.join(", "));
+		// The runtime is copied after the model, so wait for it as well. macOS ships it extracted and signed
+		// (with the librarian's marker, renamed into place once complete), Windows the pinned archive.
+		const runtimeDir = join(autoragHome, "runtime");
+		const runtimeReady = () => {
+			const names = existsSync(runtimeDir) ? readdirSync(runtimeDir).filter((name) => name.startsWith("llama-")) : [];
+			return win
+				? names.some((name) => name.endsWith(".zip"))
+				: names.some((name) => name.endsWith(".extracted") && existsSync(join(runtimeDir, name, ".autorag-archive-sha256")) && existsSync(join(runtimeDir, name, "llama-b10951", "llama-server")));
+		};
+		while (!runtimeReady() && Date.now() < deadline) await new Promise((r) => setTimeout(r, 1000));
+		expect(runtimeReady(), "llama.cpp runtime seeded", existsSync(runtimeDir) ? readdirSync(runtimeDir).join(", ") : "no runtime dir");
 		writeFileSync(join(outDir, "installed-app.json"), `${JSON.stringify(inside, null, 2)}\n`);
 	} finally {
 		await app.close().catch(() => undefined);
