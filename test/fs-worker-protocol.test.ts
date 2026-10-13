@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import {
 	createWorkerClient,
 	serveWorkerPort,
-	WORKER_RESTARTED_MESSAGE,
 	type WorkerHandler,
 	type WorkerPort,
 } from "../src/shared/fs-worker-protocol";
@@ -124,7 +123,7 @@ describe("fs worker protocol", () => {
 			},
 		});
 		client.attach(second.client);
-		await expect(write).rejects.toThrow(WORKER_RESTARTED_MESSAGE);
+		await expect(write).rejects.toThrow("파일 서비스가 작업 도중 다시 시작되었습니다");
 		expect(replayed).toBe(0);
 		second.close();
 	});

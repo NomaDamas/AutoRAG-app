@@ -13,6 +13,7 @@
  */
 
 import { hostPlatform } from "../lib/shortcuts";
+import { t } from "../../../shared/i18n/core";
 import type {
 	ActionCapabilities,
 	ActionRequest,
@@ -121,7 +122,7 @@ function imageItems(name: string, capabilities: ActionCapabilities): readonly Fi
 		if (format === source) continue;
 		items.push({
 			id: `image:convert:${format}`,
-			label: `${FORMAT_LABELS[format]}로 변환`,
+			label: t("inspector.actions.convertTo", { format: FORMAT_LABELS[format] }),
 			target: { kind: "request", request: { kind: "convertImage", format } },
 		});
 	}
@@ -133,7 +134,7 @@ function imageItems(name: string, capabilities: ActionCapabilities): readonly Fi
 		for (const maxEdge of RESIZE_PRESETS) {
 			items.push({
 				id: `image:resize:${maxEdge}`,
-				label: `최대 ${maxEdge}px`,
+				label: t("inspector.actions.maxEdge", { edge: maxEdge }),
 				target: { kind: "request", request: { kind: "resizeImage", maxEdge } },
 			});
 		}
@@ -146,7 +147,7 @@ function imageItems(name: string, capabilities: ActionCapabilities): readonly Fi
 	) {
 		items.push({
 			id: "image:optimize",
-			label: "용량 최적화",
+			label: t("inspector.actions.optimizeSize"),
 			target: { kind: "request", request: { kind: "optimizeImage" } },
 		});
 	}
@@ -159,7 +160,7 @@ function videoItems(name: string, capabilities: ActionCapabilities): readonly Fi
 		.filter((container) => container !== source)
 		.map((container) => ({
 			id: `video:convert:${container}`,
-			label: `${CONTAINER_LABELS[container]}로 변환`,
+			label: t("inspector.actions.convertTo", { format: CONTAINER_LABELS[container] }),
 			target: { kind: "request", request: { kind: "convertVideo", container } } as const,
 		}));
 }
@@ -190,14 +191,14 @@ export function openWithItems(applications: readonly OpenWithApplication[]): rea
 		...applications.map(
 			(application): FileActionItem => ({
 				id: `app:${application.path}`,
-				label: application.isDefault ? `${application.name} (기본)` : application.name,
+				label: application.isDefault ? t("finderState.openWithDefault", { name: application.name }) : application.name,
 				icon: application.icon,
 				target: { kind: "request", request: { kind: "openWith", application: application.path } },
 			}),
 		),
 		{
 			id: "other",
-			label: "기타…",
+			label: t("finderState.openWithOther"),
 			// An icon-width spacer keeps the label aligned with the application rows.
 			...(applications.length > 0 ? { icon: null } : {}),
 			separated: applications.length > 0,
@@ -218,33 +219,33 @@ export function suggestedActions(subject: ActionSubject, capabilities: ActionCap
 			actions.push({
 				kind: "action",
 				id: "compress",
-				label: "압축",
+				label: t("inspector.actions.compress"),
 				icon: "compress",
 				target: { kind: "request", request: { kind: "compress" } },
 			});
 			actions.push({
 				kind: "action",
 				id: "compress7z",
-				label: "7z로 압축",
+				label: t("inspector.actions.compress7z"),
 				icon: "compress",
 				target: { kind: "request", request: { kind: "compress", format: "7z" } },
 			});
 		}
 		if (capabilities.share) {
-			actions.push({ kind: "action", id: "share", label: "공유", icon: "share", target: { kind: "share" } });
+			actions.push({ kind: "action", id: "share", label: t("inspector.actions.share"), icon: "share", target: { kind: "share" } });
 		}
-		actions.push({ kind: "action", id: "askAi", label: "AI 요약", icon: "askAi", target: { kind: "askAi" } });
+		actions.push({ kind: "action", id: "askAi", label: t("inspector.actions.askAi"), icon: "askAi", target: { kind: "askAi" } });
 		return actions;
 	}
 
 	const actions: FileAction[] = [
-		{ kind: "action", id: "open", label: "열기", icon: "open", target: { kind: "open" } },
+		{ kind: "action", id: "open", label: t("inspector.actions.open"), icon: "open", target: { kind: "open" } },
 	];
 	if (capabilities.openWith) {
 		actions.push({
 			kind: "action",
 			id: "openWith",
-			label: "다른 앱으로 열기",
+			label: t("inspector.actions.openWith"),
 			icon: "openWith",
 			target: { kind: "openWith" },
 		});
@@ -253,7 +254,7 @@ export function suggestedActions(subject: ActionSubject, capabilities: ActionCap
 		actions.push({
 			kind: "action",
 			id: "extract",
-			label: "압축 해제",
+			label: t("inspector.actions.extract"),
 			icon: "extract",
 			target: { kind: "request", request: { kind: "extract" } },
 		});
@@ -261,34 +262,34 @@ export function suggestedActions(subject: ActionSubject, capabilities: ActionCap
 	if (isImage(subject.name)) {
 		const items = imageItems(subject.name, capabilities);
 		if (items.length > 0) {
-			actions.push({ kind: "menu", id: "imageEdit", label: "이미지 편집", icon: "image", items });
+			actions.push({ kind: "menu", id: "imageEdit", label: t("inspector.actions.imageEdit"), icon: "image", items });
 		}
 	}
 	if (isVideo(subject.name)) {
 		const items = videoItems(subject.name, capabilities);
 		if (items.length > 0) {
-			actions.push({ kind: "menu", id: "videoConvert", label: "동영상 변환", icon: "video", items });
+			actions.push({ kind: "menu", id: "videoConvert", label: t("inspector.actions.videoConvert"), icon: "video", items });
 		}
 	}
 	if (capabilities.archive) {
 		actions.push({
 			kind: "action",
 			id: "compress",
-			label: "압축",
+			label: t("inspector.actions.compress"),
 			icon: "compress",
 			target: { kind: "request", request: { kind: "compress" } },
 		});
 		actions.push({
 			kind: "action",
 			id: "compress7z",
-			label: "7z로 압축",
+			label: t("inspector.actions.compress7z"),
 			icon: "compress",
 			target: { kind: "request", request: { kind: "compress", format: "7z" } },
 		});
 	}
 	if (capabilities.share) {
-		actions.push({ kind: "action", id: "share", label: "공유", icon: "share", target: { kind: "share" } });
+		actions.push({ kind: "action", id: "share", label: t("inspector.actions.share"), icon: "share", target: { kind: "share" } });
 	}
-	actions.push({ kind: "action", id: "askAi", label: "AI 요약", icon: "askAi", target: { kind: "askAi" } });
+	actions.push({ kind: "action", id: "askAi", label: t("inspector.actions.askAi"), icon: "askAi", target: { kind: "askAi" } });
 	return actions;
 }

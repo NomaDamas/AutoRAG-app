@@ -1,4 +1,6 @@
 import type { IpcRenderer, IpcRendererEvent } from "electron";
+import { isAppLanguage, LANGUAGE_CHANNELS } from "../../shared/language-contract";
+import type { AppSettings } from "../../shared/settings-contract";
 import {
 	isNavigateDelta,
 	isQuickLookApp,
@@ -36,9 +38,14 @@ export function createPreviewBridge(ipcRenderer: IpcRenderer): PreviewBridge {
 	};
 }
 
-export function createQuickLookWindowBridge(ipcRenderer: IpcRenderer, platform: string): QuickLookWindowBridge {
+export function createQuickLookWindowBridge(ipcRenderer: IpcRenderer, platform: string, language: AppSettings["language"]): QuickLookWindowBridge {
 	return {
 		platform,
+		language,
+		onLanguage: (listener) =>
+			subscribe(ipcRenderer, LANGUAGE_CHANNELS.changed, (next) => {
+				if (isAppLanguage(next)) listener(next);
+			}),
 		onLoad: (listener) =>
 			subscribe(ipcRenderer, PREVIEW_CHANNELS.load, (load) => {
 				if (isQuickLookLoad(load)) listener(load);

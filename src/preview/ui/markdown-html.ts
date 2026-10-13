@@ -79,7 +79,7 @@ const ALLOW: Partial<Record<string, readonly string[]>> = {
 const SAFE_HREF = /^(https?:|mailto:|#)/i;
 const DATA_IMAGE = /^data:image\/(png|jpe?g|gif|webp|avif);/i;
 
-function cleanAttributes(element: Element, tag: string, folder: string): void {
+function cleanAttributes(element: Element, tag: string, folder: string | null): void {
 	const allowed = ALLOW[tag] ?? [];
 	for (const name of element.getAttributeNames()) {
 		if (!allowed.includes(name)) element.removeAttribute(name);
@@ -90,13 +90,13 @@ function cleanAttributes(element: Element, tag: string, folder: string): void {
 	}
 	if (tag === "IMG") {
 		const src = element.getAttribute("src") ?? "";
-		const local = resolveRelative(folder, src);
+		const local = folder === null ? null : resolveRelative(folder, src);
 		if (local !== null) element.setAttribute("src", previewStreamUrl(local));
 		else if (!DATA_IMAGE.test(src)) element.removeAttribute("src");
 	}
 }
 
-function clean(parent: Node, folder: string): void {
+function clean(parent: Node, folder: string | null): void {
 	for (const node of Array.from(parent.childNodes)) {
 		if (node.nodeType === node.COMMENT_NODE) {
 			node.remove();
@@ -123,13 +123,14 @@ function clean(parent: Node, folder: string): void {
 }
 
 /**
- * Makes marked's HTML safe to insert into the preview page. Markdown may embed
- * raw HTML, so the markup is parsed into an inert document (nothing loads or
- * runs there), reduced to an allowlist of elements and attributes, and its
- * relative images are pointed at the preview protocol. Remote images are
+ * Makes marked's HTML (or an evidence chunk's HTML) safe to insert into the
+ * page. Markdown may embed raw HTML, so the markup is parsed into an inert
+ * document (nothing loads or runs there), reduced to an allowlist of elements
+ * and attributes, and its relative images are pointed at the preview protocol;
+ * with no `folder` to resolve against they are dropped. Remote images are
  * dropped: the preview never reaches the network.
  */
-export function sanitizeMarkdownHtml(html: string, folder: string): string {
+export function sanitizeMarkdownHtml(html: string, folder: string | null): string {
 	const inert = new DOMParser().parseFromString(`<!doctype html><body>${html}`, "text/html");
 	clean(inert.body, folder);
 	return inert.body.innerHTML;

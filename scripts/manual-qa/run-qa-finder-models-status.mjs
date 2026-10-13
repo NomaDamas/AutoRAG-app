@@ -46,7 +46,7 @@ try {
 	const openModels = async () => {
 		await page.locator(".sidebar__item", { hasText: "Settings" }).click();
 		await page.waitForSelector(".settings-panel");
-		await page.locator(".settings-nav-item", { hasText: "AI 모델" }).click();
+		await page.locator(".settings-nav-item", { hasText: "AI Models" }).click();
 		await page.locator('[data-role="answer"]').waitFor();
 	};
 	const closeSettings = async () => {
@@ -66,7 +66,7 @@ try {
 	await closeSettings();
 	check("⌘W closes the Settings tab", (await settingsOpen()) === 0);
 	await openModels();
-	check("reopening AI 모델 shows the edited model", (await answer()) === "QA Edited Model", await answer());
+	check("reopening AI Models shows the edited model", (await answer()) === "QA Edited Model", await answer());
 	await page.screenshot({ path: join(EVIDENCE, "02-models-edited.png") });
 } finally {
 	await app.close();
@@ -77,5 +77,5 @@ if (fails.length > 0) {
 	console.log("FAIL:", fails);
 	process.exitCode = 1;
 } else {
-	console.log(`PASS: Settings > AI 모델 mirrors the shared config — evidence in ${EVIDENCE}`);
+	console.log(`PASS: Settings > AI Models mirrors the shared config — evidence in ${EVIDENCE}`);
 }

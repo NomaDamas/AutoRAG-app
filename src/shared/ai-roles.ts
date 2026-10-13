@@ -1,4 +1,5 @@
 import { AUTORAG_PROVIDER_ID } from "./account-contract";
+import { t } from "./i18n/core";
 
 export { providerConnectRoute, withoutAutorag } from "./account-contract";
 
@@ -16,6 +17,13 @@ export interface RoleModel {
 	readonly label: string;
 }
 
+/** A catalog entry: `labelKey` translates at read time, `label` stays verbatim. */
+interface RoleModelSpec {
+	readonly id: string;
+	readonly label?: string;
+	readonly labelKey?: "finderState.roles.jevLatest";
+}
+
 /**
  * Jev backend a Pi provider id maps to. `jev-use` resolves typesafe /
  * openrouter / vercel; the hosted plan is the `autorag` backend. The Vercel AI
@@ -29,20 +37,20 @@ const JEV_BACKEND_BY_PROVIDER: Readonly<Record<string, JevBackend>> = {
 };
 
 /** The Jev model ids each backend accepts. */
-const JEV_MODELS_BY_BACKEND: Readonly<Record<JevBackend, readonly RoleModel[]>> = {
+const JEV_MODELS_BY_BACKEND: Readonly<Record<JevBackend, readonly RoleModelSpec[]>> = {
 	autorag: [{ id: "jev-1.13", label: "Jev 1.13" }],
-	typesafe: [{ id: "jev-latest", label: "Jev (최신)" }],
+	typesafe: [{ id: "jev-latest", labelKey: "finderState.roles.jevLatest" }],
 	openrouter: [
 		{ id: "typesafe/jev-1.13", label: "Jev 1.13" },
-		{ id: "typesafe/jev-latest", label: "Jev (최신)" },
+		{ id: "typesafe/jev-latest", labelKey: "finderState.roles.jevLatest" },
 	],
-	vercel: [{ id: "typesafe/jev-latest", label: "Jev (최신)" }],
+	vercel: [{ id: "typesafe/jev-latest", labelKey: "finderState.roles.jevLatest" }],
 };
 
 /** Rerank model ids each provider serves (rerank is not a general LLM role). The
  * AutoRAG plan serves one reranker: `qwen/qwen3-reranker-8b` (the free NVIDIA
  * reranker left the server's allow-list, so it can no longer be named). */
-const RERANK_MODELS_BY_PROVIDER: Readonly<Record<string, readonly RoleModel[]>> = {
+const RERANK_MODELS_BY_PROVIDER: Readonly<Record<string, readonly RoleModelSpec[]>> = {
 	[AUTORAG_PROVIDER_ID]: [{ id: "qwen/qwen3-reranker-8b", label: "Qwen3 Reranker 8B" }],
 	openrouter: [
 		{ id: "voyageai/rerank-3-lite", label: "Voyage Rerank 3 Lite" },
@@ -58,11 +66,20 @@ export function jevBackendFor(providerId: string): JevBackend | undefined {
 
 export function jevModelsFor(providerId: string): readonly RoleModel[] {
 	const backend = JEV_BACKEND_BY_PROVIDER[providerId];
-	return backend === undefined ? [] : JEV_MODELS_BY_BACKEND[backend];
+	if (backend === undefined) return [];
+	return JEV_MODELS_BY_BACKEND[backend].map(({ id, label, labelKey }) => ({
+		id,
+		label: labelKey === undefined ? (label ?? id) : t(labelKey),
+	}));
 }
 
 export function rerankModelsFor(providerId: string): readonly RoleModel[] {
-	return RERANK_MODELS_BY_PROVIDER[providerId] ?? [];
+	const specs = RERANK_MODELS_BY_PROVIDER[providerId];
+	if (specs === undefined) return [];
+	return specs.map(({ id, label, labelKey }) => ({
+		id,
+		label: labelKey === undefined ? (label ?? id) : t(labelKey),
+	}));
 }
 
 /**

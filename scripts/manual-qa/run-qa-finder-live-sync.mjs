@@ -432,7 +432,7 @@ async function runS3(page) {
 
 /** v7 list children of an expanded version stack carry a relation vtag. */
 function stackChildRows(page) {
-	return page.locator('[role="row"]').filter({ has: page.locator(".vtag", { hasText: /동일본|유사본|포함본/ }) });
+	return page.locator('[role="row"]').filter({ has: page.locator(".vtag", { hasText: /Exact|Similar|Contains/ }) });
 }
 
 async function openStack(page, family) {
@@ -869,7 +869,7 @@ async function runS12(page) {
 	const renameTarget = join(FIXTURE_DIR, "rename-before.txt");
 	await rowFor(page, "rename-before.txt").click({ button: "right" });
 	await page.getByRole("menuitem", { name: "Rename", exact: true }).click();
-	const renameInput = page.getByRole("textbox", { name: "새 이름", exact: true });
+	const renameInput = page.getByRole("textbox", { name: "New name", exact: true });
 	await renameInput.waitFor({ state: "visible", timeout: 10_000 });
 	const createdDuringRename = join(FIXTURE_DIR, "created-during-rename.txt");
 	const createStarted = Date.now();
@@ -877,19 +877,19 @@ async function runS12(page) {
 	await rowFor(page, "created-during-rename.txt").waitFor({ timeout: LIVE_BOUND_MS });
 	const createElapsedMs = Date.now() - createStarted;
 	if (createElapsedMs > LIVE_BOUND_MS) throw new Error(`unrelated create took ${createElapsedMs}ms > ${LIVE_BOUND_MS}ms`);
-	const editorAfterCreateCount = await page.locator('input.row__rename[aria-label="새 이름"]').count();
+	const editorAfterCreateCount = await page.locator('input.row__rename[aria-label="New name"]').count();
 	if (editorAfterCreateCount !== 1) {
 		throw new Error("rename editor closed after an unrelated file was created");
 	}
 	const deleteStarted = Date.now();
 	rmSync(renameTarget, { force: true });
 	await waitFor(
-		async () => (await page.locator('input.row__rename[aria-label="새 이름"]').count()) === 0,
+		async () => (await page.locator('input.row__rename[aria-label="New name"]').count()) === 0,
 		{ timeoutMs: LIVE_BOUND_MS, label: "rename editor to close after its file vanished" },
 	);
 	const deleteElapsedMs = Date.now() - deleteStarted;
 	if (deleteElapsedMs > LIVE_BOUND_MS) throw new Error(`rename editor close took ${deleteElapsedMs}ms > ${LIVE_BOUND_MS}ms`);
-	const editorAfterDeleteCount = await page.locator('input.row__rename[aria-label="새 이름"]').count();
+	const editorAfterDeleteCount = await page.locator('input.row__rename[aria-label="New name"]').count();
 	await page.screenshot({ path: join(EVIDENCE, "S12.png") });
 	pass(
 		"S12 rename editor lifecycle",

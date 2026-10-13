@@ -271,7 +271,12 @@ describe("buildBackgroundContextMenu", () => {
 		]);
 		expect(submenu.items.map((entry) => entry.label)).toEqual([
 			"새 폴더",
-			...NEW_FILE_FORMATS.map((format) => format.label),
+			"텍스트 파일",
+			"Markdown 문서",
+			"서식 있는 텍스트",
+			"Word 문서",
+			"Excel 스프레드시트",
+			"PowerPoint 프레젠테이션",
 		]);
 	});
 

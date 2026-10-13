@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ReactElement } from "react";
+import { useTranslation } from "react-i18next";
 import { Combobox } from "@base-ui/react";
 import type { AutoRagConfigSnapshot, JsonObject, JsonValue } from "../../../../shared/settings-contract";
 import { isJsonObject } from "../../../../shared/settings-contract";
@@ -62,6 +63,7 @@ export function LanguageSettings({
 	readonly onSaved: (next: AutoRagConfigSnapshot) => void;
 	readonly fallback?: readonly string[];
 }): ReactElement {
+	const { t } = useTranslation();
 	const stored = readAt(snapshot.config, path);
 	const configured = Array.isArray(stored);
 	const inherited = fallback.filter((value) => SUPPORTED_VALUES.has(value));
@@ -119,13 +121,13 @@ export function LanguageSettings({
 							{selected.map((value) => (
 								<span className="language-combobox__chip" key={value}>
 									{LABELS.get(value) ?? value}
-									<button type="button" className="language-combobox__remove" aria-label={`${LABELS.get(value) ?? value} 제거`} onClick={() => select(selected.filter((item) => item !== value))}>
+									<button type="button" className="language-combobox__remove" aria-label={t("settingsCore.language.remove", { name: LABELS.get(value) ?? value })} onClick={() => select(selected.filter((item) => item !== value))}>
 										×
 									</button>
 								</span>
 							))}
-							<Combobox.Input className="language-combobox__input" placeholder="언어 선택…" aria-label={`${name} 검색`} />
-							<Combobox.Trigger className="language-combobox__trigger" aria-label={`${name} 목록 열기`}>
+							<Combobox.Input className="language-combobox__input" placeholder={t("settingsCore.language.placeholder")} aria-label={t("settingsCore.language.search", { name })} />
+							<Combobox.Trigger className="language-combobox__trigger" aria-label={t("settingsCore.language.openList", { name })}>
 								⌄
 							</Combobox.Trigger>
 						</div>
@@ -140,15 +142,15 @@ export function LanguageSettings({
 											</Combobox.Item>
 										)}
 									</Combobox.List>
-									<Combobox.Empty className="language-combobox__empty">일치하는 언어가 없습니다.</Combobox.Empty>
+									<Combobox.Empty className="language-combobox__empty">{t("settingsCore.language.noMatch")}</Combobox.Empty>
 								</Combobox.Popup>
 							</Combobox.Positioner>
 						</Combobox.Portal>
 					</div>
 				</Combobox.Root>
-				{configured && fallback.length > 0 ? <span className="settings-config__note">직접 설정</span> : null}
-				{!configured && fallback.length > 0 ? <span className="settings-config__note">상위 언어 설정 상속</span> : null}
-				{stored !== undefined ? <button type="button" className="linear-btn settings-config__reset" disabled={saving} onClick={() => void save([])}>기본값</button> : null}
+				{configured && fallback.length > 0 ? <span className="settings-config__note">{t("settingsCore.language.custom")}</span> : null}
+				{!configured && fallback.length > 0 ? <span className="settings-config__note">{t("settingsCore.language.inherited")}</span> : null}
+				{stored !== undefined ? <button type="button" className="linear-btn settings-config__reset" disabled={saving} onClick={() => void save([])}>{t("settingsCore.language.resetDefault")}</button> : null}
 				{error ? <span className="settings-inline-error">{error}</span> : null}
 			</div>
 		</div>

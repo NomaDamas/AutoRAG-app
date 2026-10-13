@@ -40,20 +40,19 @@ export function SidebarSearch({
 	const { t } = useTranslation();
 	const [draft, setDraft] = useState(query);
 	const [mode, setMode] = useState<SearchMode>("name");
-	const machine = hostPlatform() === "win32" ? t("scopeBar.thisComputer", "컴퓨터") : t("scopeBar.thisMac", "Mac");
+	const machine = hostPlatform() === "win32" ? t("scopeBar.thisComputer") : t("scopeBar.thisMac");
 	const chips: readonly { readonly mode: SearchMode; readonly label: string; readonly hint: string }[] = useMemo(
 		() => [
 			{
 				mode: "name",
-				label: t("sidebarSearch.fileName", "파일 이름"),
-				hint: t("sidebarSearch.fileNameHint", { machine, defaultValue: `이 ${machine} 전체에서 파일 이름 검색` }),
+				label: t("sidebarSearch.fileName"),
+				hint: t("sidebarSearch.fileNameHint", { machine }),
 			},
 			{
 				mode: "content",
-				label: t("sidebarSearch.content", "내용"),
+				label: t("sidebarSearch.content"),
 				hint: t("sidebarSearch.contentHint", {
 					shortcut: formatShortcut({ key: "Enter", alt: true, primary: false }),
-					defaultValue: `AI로 파일 내용 검색 (${formatShortcut({ key: "Enter", alt: true, primary: false })})`,
 				}),
 			},
 		],
@@ -99,8 +98,8 @@ export function SidebarSearch({
 					className="flex-1 min-w-0 h-full border-0 outline-none bg-transparent text-ink text-meta"
 					type="text"
 					value={draft}
-					placeholder={t("sidebarSearch.placeholder", "검색")}
-					aria-label={t("sidebarSearch.placeholder", "검색")}
+					placeholder={t("sidebarSearch.placeholder")}
+					aria-label={t("sidebarSearch.placeholder")}
 					onChange={(event) => setDraft(event.target.value)}
 					onKeyDown={onKeyDown}
 					onFocus={onFocus}
@@ -110,8 +109,8 @@ export function SidebarSearch({
 					<button
 						type="button"
 						className="flex-none flex items-center justify-center size-16 p-0 border-0 rounded-full bg-border-strong text-on-accent text-[9px] leading-none cursor-default hover:bg-ink-muted"
-						title={t("sidebarSearch.clearSearch", "검색어 지우기")}
-						aria-label={t("sidebarSearch.clearSearch", "검색어 지우기")}
+						title={t("sidebarSearch.clearSearch")}
+						aria-label={t("sidebarSearch.clearSearch")}
 						onMouseDown={keepFocus}
 						onClick={clear}
 					>
@@ -122,7 +121,7 @@ export function SidebarSearch({
 				) : null}
 			</label>
 			{focused ? (
-				<div className="search-scopes flex gap-2 mt-6 p-2 rounded-12 bg-hover" role="group" aria-label="검색 범위">
+				<div className="search-scopes flex gap-2 mt-6 p-2 rounded-12 bg-hover" role="group" aria-label={t("finderComponents.searchRange")}>
 					{chips.map((chip) => (
 						<button
 							key={chip.mode}

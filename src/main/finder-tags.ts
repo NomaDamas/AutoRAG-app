@@ -28,6 +28,7 @@ import { execFile } from "node:child_process";
 import { access, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import type { FsBatchResult, FsOpError, FsTag, FsTagCatalog, FsTagChange, FsTagColor } from "../shared/fs-contract";
+import { t } from "../shared/i18n/core";
 import { errorMessage } from "./fs-entry";
 
 /** Runs one OS helper with optional stdin and resolves its raw stdout; rejects with stderr (or the spawn error) verbatim. */
@@ -147,9 +148,9 @@ export function spotlightLiteral(name: string): string {
 /** Throws the reason a tag name cannot be stored, or returns the trimmed name. */
 export function validTagName(name: string): string {
 	const trimmed = name.trim();
-	if (trimmed === "") throw new Error("태그 이름이 비어 있습니다");
-	if (/[\n\r\u0000]/.test(trimmed)) throw new Error("태그 이름에 줄바꿈을 쓸 수 없습니다");
-	if (trimmed.length > MAX_TAG_NAME_LENGTH) throw new Error("태그 이름이 너무 깁니다");
+	if (trimmed === "") throw new Error(t("main.tags.nameEmpty"));
+	if (/[\n\r\u0000]/.test(trimmed)) throw new Error(t("main.tags.nameNewline"));
+	if (trimmed.length > MAX_TAG_NAME_LENGTH) throw new Error(t("main.tags.nameTooLong"));
 	return trimmed;
 }
 
@@ -300,7 +301,7 @@ export function createFinderTags(deps: FinderTagsDeps = {}): FinderTags {
 		const parsed = await plistToJson(bytes);
 		// A value that is not a list of strings is not ours to overwrite.
 		if (!Array.isArray(parsed) || parsed.some((item) => typeof item !== "string")) {
-			throw new Error("태그 정보를 읽을 수 없는 형식입니다");
+			throw new Error(t("main.tags.unreadable"));
 		}
 		return parsed as string[];
 	}
@@ -319,7 +320,7 @@ export function createFinderTags(deps: FinderTagsDeps = {}): FinderTags {
 	}
 
 	async function set(paths: readonly string[], change: FsTagChange): Promise<FsBatchResult> {
-		if (platform !== "darwin") throw new Error("Finder 태그는 macOS에서만 사용할 수 있습니다");
+		if (platform !== "darwin") throw new Error(t("main.tags.macosOnly"));
 		const add = [...new Set(change.add.map(validTagName))];
 		const remove = new Set(change.remove.map((name) => name.trim().toLowerCase()).filter((name) => name !== ""));
 		const colors = new Map<string, FsTagColor>();

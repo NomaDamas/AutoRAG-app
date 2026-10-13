@@ -5,6 +5,7 @@
  */
 
 import { isTagPath, tagNameOf } from "../../../shared/fs-contract";
+import { t } from "../../../shared/i18n/core";
 import { EMPTY_SELECTION, type SelectionState } from "./selection";
 import { basename, parentPrefix } from "./paths";
 
@@ -261,14 +262,14 @@ export function aiPanelTabs(
 
 export function tabTitle(tab: { readonly path: string }, view: { readonly isActive: boolean; readonly query: string }): string {
 	if (tab.path === SETTINGS_PATH) {
-		return "Settings";
+		return t("places.settings");
 	}
 	if (tab.path === AI_SEARCH_PATH) {
-		return "AI Search";
+		return t("places.aiSearch");
 	}
 	const query = view.query.trim();
 	if (view.isActive && query !== "") {
-		return `Search "${query}"`;
+		return t("finderComponents.searchTitle", { query });
 	}
 	return isTagPath(tab.path) ? tagNameOf(tab.path) : basename(tab.path) || tab.path;
 }

@@ -1,6 +1,9 @@
+import { t } from "../../shared/i18n/core";
+
 /** One extra row the "Other" preview adds for executables and disk images. */
 export interface BinaryKind {
-	readonly label: "플랫폼" | "포맷";
+	/** Stable id the "Other" preview translates (`quickLook.binary.*`). */
+	readonly label: "platform" | "format";
 	readonly value: string;
 }
 
@@ -37,7 +40,7 @@ function portableExecutable(view: DataView): BinaryKind | null {
 	if (view.getUint32(offset, false) !== 0x50450000) return null;
 	const machine = PE_MACHINES[view.getUint16(offset + 4, true)] ?? "unknown CPU";
 	const format = view.getUint16(offset + 24, true) === 0x20b ? "PE32+" : "PE32";
-	return { label: "플랫폼", value: `Windows (${format}, ${machine})` };
+	return { label: "platform", value: `Windows (${format}, ${machine})` };
 }
 
 /**
@@ -50,17 +53,17 @@ export function describeBinary(head: Uint8Array, tail: Uint8Array | null): Binar
 	if (startsWith(head, [0x4d, 0x5a])) return portableExecutable(view);
 	if (head.length >= 8 && (startsWith(head, [0xcf, 0xfa, 0xed, 0xfe]) || startsWith(head, [0xce, 0xfa, 0xed, 0xfe]))) {
 		const cpu = MACHO_CPUS[view.getUint32(4, true)] ?? "unknown CPU";
-		return { label: "플랫폼", value: `macOS (Mach-O, ${cpu})` };
+		return { label: "platform", value: `macOS (Mach-O, ${cpu})` };
 	}
 	if (startsWith(head, [0xca, 0xfe, 0xba, 0xbe]) && head.length >= 8 && view.getUint32(4, false) < 20) {
 		// Java class files share the magic; their next word is a version far above 20.
-		return { label: "플랫폼", value: "macOS (Universal)" };
+		return { label: "platform", value: "macOS (Universal)" };
 	}
 	if (startsWith(head, [0x7f, 0x45, 0x4c, 0x46]) && head.length >= 20) {
 		const bits = head[4] === 2 ? "64-bit" : "32-bit";
 		const machine = ELF_MACHINES[view.getUint16(18, head[5] !== 2)] ?? "unknown CPU";
-		return { label: "플랫폼", value: `Linux (ELF ${bits}, ${machine})` };
+		return { label: "platform", value: `Linux (ELF ${bits}, ${machine})` };
 	}
-	if (tail !== null && startsWith(tail, [0x6b, 0x6f, 0x6c, 0x79])) return { label: "포맷", value: "Apple 디스크 이미지 (UDIF)" };
+	if (tail !== null && startsWith(tail, [0x6b, 0x6f, 0x6c, 0x79])) return { label: "format", value: t("quickLook.binary.appleDiskImage") };
 	return null;
 }

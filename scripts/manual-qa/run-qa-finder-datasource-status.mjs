@@ -76,8 +76,8 @@ try {
 	const openSources = async () => {
 		await page.locator(".sidebar__item", { hasText: "Settings" }).click();
 		await page.waitForSelector(".settings-panel");
-		await page.locator(".settings-nav-item", { hasText: "모든 연결" }).click();
-		await page.locator(".settings-content .linear-title", { hasText: "연결된 앱" }).waitFor();
+		await page.locator(".settings-nav-item", { hasText: "All Connections" }).click();
+		await page.locator(".settings-content .linear-title", { hasText: "Connected apps" }).waitFor();
 	};
 	const closeSettings = async () => {
 		await page.keyboard.press(chord("w"));
@@ -121,11 +121,11 @@ try {
 	}
 	await openConnection("my-drive");
 	const driveText = await row("my-drive").innerText();
-	check("my-drive shows its chunk count", driveText.includes("문서 3개"), driveText.slice(0, 200));
+	check("my-drive shows its chunk count", driveText.includes("3 documents"), driveText.slice(0, 200));
 	await page.screenshot({ path: join(EVIDENCE, "01-sources-expanded.png") });
 
 	await openConnection("slack");
-	const description = row("slack").locator('textarea[aria-label="설명"]');
+	const description = row("slack").locator('textarea[aria-label="Description"]');
 	await description.fill("Release and incident chatter");
 	await description.press("Tab");
 	await page.waitForTimeout(900);
@@ -137,7 +137,7 @@ try {
 	await page.screenshot({ path: join(EVIDENCE, "01b-description-autosaved.png") });
 
 	check("agent sees slack before the toggle", agentSkills().includes("slack"), JSON.stringify(agentSkills()));
-	await row("slack").locator('[role="switch"][aria-label="사용 여부"]').click();
+	await row("slack").locator('[role="switch"][aria-label="Enabled"]').click();
 	await page.waitForFunction(() => window.autorag.settings.sourcesList().then((s) => s.sources.find((x) => x.id === "slack")?.status === "paused"));
 	const onDisk = JSON.parse(readFileSync(configPath, "utf8"));
 	check("toggle wrote enabled:false into the shared config", onDisk.datasources.slack.enabled === false && onDisk.datasources.slack.description === "Release and incident chatter", JSON.stringify(onDisk.datasources.slack));

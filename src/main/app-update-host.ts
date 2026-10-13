@@ -5,6 +5,7 @@ import { promisify } from "node:util";
 import { autoUpdater as nativeUpdater, Menu, MenuItem } from "electron";
 // CommonJS package: its `autoUpdater` is a lazy getter, so importing it constructs nothing until first use.
 import electronUpdater from "electron-updater";
+import { t } from "../shared/i18n/core";
 import type { AppUpdateMode, AppUpdateSnapshot } from "../shared/update-contract";
 import { createAppUpdater, type AppUpdaterService, type UpdaterLike } from "./app-updater";
 
@@ -127,7 +128,7 @@ export async function createAppUpdateHost(deps: AppUpdateHostDeps): Promise<AppU
 }
 
 /**
- * "업데이트 확인…" in the macOS app menu, below About (Windows has no menu bar:
+ * "Check for Updates…" in the macOS app menu, below About (Windows has no menu bar:
  * the titlebar is hidden, so Settings → 일반 is its only entry point). Only an
  * updatable build gets the item.
  */
@@ -137,6 +138,7 @@ export function installCheckForUpdatesMenuItem(service: AppUpdaterService): void
 	// Electron types the role as "appMenu"; the default menu reports it lowercased at runtime.
 	const appMenu = menu?.items.find((item) => item.role?.toLowerCase() === "appmenu")?.submenu;
 	if (menu === null || appMenu === undefined) return;
-	appMenu.insert(1, new MenuItem({ label: "업데이트 확인…", click: () => void service.check() }));
+	// Labelled in the interface language at launch, like the rest of the menu Electron builds once.
+	appMenu.insert(1, new MenuItem({ label: t("main.update.checkMenu"), click: () => void service.check() }));
 	Menu.setApplicationMenu(menu);
 }

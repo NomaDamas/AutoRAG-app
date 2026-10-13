@@ -18,16 +18,17 @@ import type {
 	CitationEvidence,
 	SearchStreamEvent,
 } from "../../../shared/search-contract";
+import { composerAction, deliverSteers, restoreChat, settleSteers, type SteerItem } from "../state/steering";
 import { isImageOnlyLine, parseAnswerBlocks, parseInline, type AnswerBlock } from "../state/answer-markdown";
 import { summaryRequest, type SummaryLanguage } from "../state/ai-summary";
 import { answerViewState } from "../state/answer-view";
 import { attachmentsFromDrop, isAttachmentDrag, mergeAttachments } from "../state/attachments";
 import { ImageRow, lineImages, type ImageActions } from "./AnswerImage";
 import { evidenceKind, unresolvedCitationNumbers } from "../state/evidence";
-import { groupChatHistory, historyEmptyText } from "../state/history";
+import { groupChatHistory, HISTORY_BUCKET_KEYS, historyEmptyText } from "../state/history";
 import { cn } from "../lib/cn";
-import { formatShortcut } from "../lib/shortcuts";
-import { ArrowUpIcon, CloseIcon, HistoryIcon, LinkIcon, PlusIcon, SparklesIcon } from "./icons";
+import { enterKeyLabel, formatShortcut } from "../lib/shortcuts";
+import { ArrowUpIcon, CheckIcon, CloseIcon, HistoryIcon, LinkIcon, PlusIcon, SparklesIcon } from "./icons";
 import { iconButtonClass } from "./primitives/icon-button";
 import { FileTile } from "./primitives/FileTile";
 
@@ -35,7 +36,6 @@ const autorag = window.autorag;
 
 /** History search fires this long after the last keystroke, so typing stays smooth. */
 const HISTORY_SEARCH_DEBOUNCE_MS = 300;
-const COMPOSER_PLACEHOLDER = "파일, 메일, 메신저 전체에서 물어보세요 (파일 드래그 앤 드롭 가능)";
 const CENTERED = "mx-auto w-full max-w-[820px]";
 
 /**
@@ -118,6 +118,14 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	const [historyQuery, setHistoryQuery] = useState("");
 	const [history, setHistory] = useState<readonly ChatSummary[]>([]);
 	const [attachments, setAttachments] = useState<readonly ChatAttachment[]>([]);
+	/** Corrections sent while the current run streamed, in send order. */
+	const [steers, setSteers] = useState<readonly SteerItem[]>([]);
+	/** Questions queued with ⌥Enter during a run, asked one by one once it ends. */
+	const [queued, setQueued] = useState<readonly string[]>([]);
+	const queuedRef = useRef(queued);
+	queuedRef.current = queued;
+	/** The current run already showed its Quick answer (read by steer timing). */
+	const quickShownRef = useRef(false);
 	const [deepElapsed, setDeepElapsed] = useState<number | null>(null);
 	const [dragActive, setDragActive] = useState(false);
 	const [dragOver, setDragOver] = useState(false);
@@ -172,6 +180,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 					setQuick(event.phase);
 					setQuickDraft(event.phase.answer);
 					setProgress("");
+					quickShownRef.current = true;
 					break;
 				case "deep":
 					setDeep(event.phase);
@@ -179,24 +188,38 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 					setDeepElapsed(startedAtRef.current === 0 ? null : Date.now() - startedAtRef.current);
 					setProgress("");
 					break;
+				case "steer-delivered":
+					setSteers(deliverSteers);
+					break;
 				case "error":
 					setError(event.message);
 					setProgress("");
+					setSteers(settleSteers);
 					setSearchId(null);
 					break;
 				case "cancelled":
 					setStopped(true);
 					setProgress("");
+					setSteers(settleSteers);
 					setSearchId(null);
 					break;
 				case "done":
 					setProgress("");
+					setSteers(settleSteers);
 					setSearchId(null);
 					break;
 			}
 		});
 		return unsubscribe;
 	}, []);
+
+	// A question queued with ⌥Enter is asked as soon as the run it waited on ends.
+	useEffect(() => {
+		const [next, ...rest] = queued;
+		if (searchId !== null || next === undefined) return;
+		setQueued(rest);
+		void runSearch(next, attachmentsRef.current);
+	}, [searchId, queued]);
 
 	const evidence = useMemo(() => deep?.evidence ?? quick?.evidence ?? [], [deep, quick]);
 
@@ -211,7 +234,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	useEffect(() => {
 		const body = bodyRef.current;
 		if (body !== null) body.scrollTop = body.scrollHeight;
-	}, [quick, deep, quickDraft, deepDraft, submittedQuery, progress, attachments]);
+	}, [quick, deep, quickDraft, deepDraft, submittedQuery, progress, attachments, steers, queued]);
 
 	useEffect(() => {
 		if (!active) return;
@@ -290,8 +313,10 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		setStopped(false);
 		setSubmittedQuery(text);
 		setSubmittedAttachments(sent);
+		setSteers([]);
+		quickShownRef.current = false;
 		setDeepElapsed(null);
-		setProgress("Reviewing the query.");
+		setProgress(t("aiSearch.reviewing"));
 		setChatId(nextChatId);
 		startedAtRef.current = Date.now();
 		setAttachments([]);
@@ -309,9 +334,40 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 
 	function submit(event: FormEvent<HTMLFormElement>): void {
 		event.preventDefault();
+		send(false);
+	}
+
+	/**
+	 * Send the composer. Idle: a new question. During a run: Enter steers it
+	 * (the text corrects the search in flight) and ⌥Enter queues the text as
+	 * the next question. Steers carry text only; drafted attachments stay in
+	 * the tray for the next question.
+	 */
+	function send(altKey: boolean): void {
 		const text = query.trim();
-		if (text.length === 0 || searchIdRef.current !== null) return;
-		void runSearch(text, attachments);
+		const runId = searchIdRef.current;
+		const action = composerAction({ searching: runId !== null, altKey });
+		if (action === "ask") {
+			if (text.length > 0) void runSearch(text, attachments);
+			return;
+		}
+		if (text.length === 0 || runId === null) return;
+		setQuery("");
+		if (action === "queue") {
+			setQueued((current) => [...current, text]);
+			return;
+		}
+		const id = crypto.randomUUID();
+		setSteers((current) => [
+			...current,
+			{ id, text, timing: quickShownRef.current ? "after-quick" : "before-quick", status: "pending" },
+		]);
+		void autorag.search.steer(runId, text).then((accepted) => {
+			if (accepted) return;
+			// The run is past its last model request: ask the text as the next question instead.
+			setSteers((current) => current.filter((steer) => steer.id !== id));
+			setQueued((current) => [...current, text]);
+		});
 	}
 
 	function clearHistoryDebounce(): void {
@@ -378,6 +434,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		setSubmittedQuery(null);
 		setSubmittedAttachments([]);
 		setAttachments([]);
+		setSteers([]);
+		setQueued([]);
 		setChatId(null);
 		setHistoryOpen(false);
 		setDeepElapsed(null);
@@ -386,15 +444,18 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	async function loadHistory(id: string): Promise<void> {
 		clearHistoryDebounce();
 		const record = await autorag.search.historyGet(id);
-		const assistant = record?.messages.findLast((message) => message.role === "assistant");
-		if (assistant?.role !== "assistant") return;
-		const user = record?.messages.findLast((message) => message.role === "user");
+		if (record === null) return;
+		const restored = restoreChat(record.messages);
+		const assistant = restored.assistant;
+		if (assistant === null) return;
 		setQuick(assistant.quick);
 		setDeep(assistant.deep);
 		setQuickDraft(assistant.quick?.answer ?? "");
 		setDeepDraft(assistant.deep?.answer ?? "");
-		setSubmittedQuery(user?.role === "user" ? user.text : null);
-		setSubmittedAttachments(user?.role === "user" ? user.attachments : []);
+		setSubmittedQuery(restored.question?.text ?? null);
+		setSubmittedAttachments(restored.question?.attachments ?? []);
+		setSteers(restored.steers);
+		setQueued([]);
 		setStopped(assistant.stopped);
 		setError(null);
 		setProgress("");
@@ -414,6 +475,13 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		setSearchId(null);
 		setProgress("");
 		setStopped(true);
+		setSteers(settleSteers);
+		// Stop ends the whole turn: questions queued behind it go back to the composer, unasked.
+		const unasked = queuedRef.current;
+		if (unasked.length > 0) {
+			setQuery((current) => [current.trim(), ...unasked].filter((text) => text !== "").join(" "));
+			setQueued([]);
+		}
 		await autorag.search.cancel(id);
 	}
 
@@ -500,17 +568,25 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	const deepUnresolved = useMemo(() => unresolvedCitationNumbers(deepText, deep?.evidence ?? []), [deepText, deep]);
 	const quickReady = quickText !== "";
 	const deepReady = deepText !== "";
+	const searching = searchId !== null;
 	const { skeleton, thinking } = answerViewState({
-		pending: searchId !== null,
+		pending: searching,
 		quickReady,
 		deepReady,
 	});
 	const showEmpty = submittedQuery === null && error === null && !quickReady && !deepReady;
+	const steersBeforeQuick = steers.filter((steer) => steer.timing === "before-quick");
+	const steersAfterQuick = steers.filter((steer) => steer.timing === "after-quick");
+	const steerLabels = {
+		pending: t("aiSearch.steerPending"),
+		delivered: t("aiSearch.steerDelivered"),
+		dropped: t("aiSearch.steerDropped"),
+	};
 
 	return (
 		<section
 			className={cn("ai relative min-h-0 flex-1 flex-col bg-subtle-alt", visible ? "flex" : "hidden")}
-			aria-label="AI Search"
+			aria-label={t("aiSearch.title")}
 			aria-hidden={visible ? undefined : true}
 			data-focused={active ? "true" : undefined}
 			onDragEnter={onDockDragEnter}
@@ -522,13 +598,13 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 				<span className="ai-mark grid flex-none place-items-center text-accent">
 					<SparklesIcon />
 				</span>
-				<strong className="flex-none text-sm font-semibold text-ink">AI Search</strong>
+				<strong className="flex-none text-sm font-semibold text-ink">{t("aiSearch.title")}</strong>
 				<span className="flex-1" />
 				<button
 					type="button"
 					className={cn(iconButtonClass({ size: "size-icon-sm", tone: "text-ink-muted" }), historyOpen && "bg-selected-nav text-ink")}
-					title={t("aiSearch.historyShortcut", { shortcut: formatShortcut({ key: "H", shift: true }), defaultValue: `Chat history ${formatShortcut({ key: "H", shift: true })}` })}
-					aria-label="Chat history"
+					title={t("aiSearch.historyShortcut", { shortcut: formatShortcut({ key: "H", shift: true }) })}
+					aria-label={t("aiSearch.history")}
 					onClick={() => toggleHistory()}
 				>
 					<HistoryIcon size={15} />
@@ -536,8 +612,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 				<button
 					type="button"
 					className={iconButtonClass({ size: "size-icon-sm", tone: "text-ink-muted" })}
-					title={t("aiSearch.newChatShortcut", { shortcut: formatShortcut({ key: "N" }), defaultValue: `New chat ${formatShortcut({ key: "N" })}` })}
-					aria-label="New chat"
+					title={t("aiSearch.newChatShortcut", { shortcut: formatShortcut({ key: "N" }) })}
+					aria-label={t("aiSearch.newChat")}
 					onClick={() => newChat()}
 				>
 					<PlusIcon />
@@ -547,7 +623,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 			{historyOpen ? (
 				<>
 					<div className="absolute inset-0 z-20" aria-hidden="true" onClick={closeHistory} />
-					<div className="history absolute right-12 top-40 z-30 flex max-h-[72%] w-360 flex-col overflow-hidden rounded-12 border border-border bg-window shadow-menu" aria-label="Chat history">
+					<div className="history absolute right-12 top-40 z-30 flex max-h-[72%] w-360 flex-col overflow-hidden rounded-12 border border-border bg-window shadow-menu" aria-label={t("aiSearch.history")}>
 						<input
 							autoFocus
 							value={historyQuery}
@@ -569,22 +645,18 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 									if (first !== undefined) void loadHistory(first.id);
 								});
 							}}
-							placeholder={t("aiSearch.searchHistory", "대화 기록 검색")}
-							aria-label={t("aiSearch.searchHistory", "대화 기록 검색")}
+							placeholder={t("aiSearch.searchHistory")}
+							aria-label={t("aiSearch.searchHistory")}
 							className="h-[38px] w-full flex-none border-x-0 border-t-0 border-b border-divider bg-transparent px-12 text-sm text-ink outline-none placeholder:text-ink-muted"
 						/>
 						<div className="history-list min-h-0 flex-1 overflow-auto p-5">
 							{historyGroups.length === 0 ? (
-								<span className="block px-12 py-28 text-center text-meta text-ink-muted">{historyEmptyText(historyQuery, (k, opt) => (opt ? t(k, opt) : t(k)))}</span>
+								<span className="block px-12 py-28 text-center text-meta text-ink-muted">{historyEmptyText(historyQuery)}</span>
 							) : (
 								historyGroups.map((group) => (
 									<div key={group.label}>
 										<div className="history-group px-8 py-8 text-tile font-bold text-ink-muted">
-											{group.label === "오늘" ? t("aiSearch.historyGroups.today", group.label) :
-											 group.label === "어제" ? t("aiSearch.historyGroups.yesterday", group.label) :
-											 group.label === "지난 7일" ? t("aiSearch.historyGroups.last7Days", group.label) :
-											 group.label === "지난 30일" ? t("aiSearch.historyGroups.last30Days", group.label) :
-											 t("aiSearch.historyGroups.older", group.label)}
+											{t(HISTORY_BUCKET_KEYS[group.label])}
 										</div>
 										{group.items.map((item) => (
 											<button
@@ -616,8 +688,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 				<div className={cn(CENTERED, "flex flex-col space-y-16")}>
 					{showEmpty ? (
 						<div className="ai-empty my-28 text-center">
-							<strong className="block text-title font-semibold text-ink">{t("aiSearch.emptyPromptTitle", "무엇을 찾아드릴까요?")}</strong>
-							<p className="mt-8 text-body leading-[1.5] text-ink-muted break-keep">{t("aiSearch.emptyPromptDesc", "파일, 메일, 메신저 전체에서 찾아 빠른 답변과 정밀한 답변을 함께 드립니다.")}</p>
+							<strong className="block text-title font-semibold text-ink">{t("aiSearch.emptyPromptTitle")}</strong>
+							<p className="mt-8 text-body leading-[1.5] text-ink-muted break-keep">{t("aiSearch.emptyPromptDesc")}</p>
 						</div>
 					) : null}
 
@@ -638,6 +710,10 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 
 					{error === null ? null : <div className="rounded-10 border border-danger-border bg-danger-bg-soft px-14 py-10 text-body text-danger-text">{error}</div>}
 
+					{steersBeforeQuick.map((steer) => (
+						<SteerBubble key={steer.id} steer={steer} labels={steerLabels} />
+					))}
+
 					{submittedQuery === null ? null : (
 						<div className="message assistant-msg flex flex-col gap-14">
 							{quickReady ? (
@@ -651,10 +727,13 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 								</div>
 							) : null}
 
+							{steersAfterQuick.map((steer) => (
+								<SteerBubble key={steer.id} steer={steer} labels={steerLabels} />
+							))}
 							{thinking ? (
 								<div className="water-wave-thinking my-6 flex items-center gap-8 text-meta text-ink-muted">
 									<span className="size-7 flex-none rounded-full bg-info-dot animate-[pulseDot_1.4s_ease-in-out_infinite]" />
-									<span className="min-w-0 truncate">{t("aiSearch.thinking", "Thinking…")}{progress === "" ? "" : ` ${progress}`}</span>
+									<span className="min-w-0 truncate">{t("aiSearch.thinking")}{progress === "" ? "" : ` ${progress}`}</span>
 								</div>
 							) : null}
 
@@ -662,7 +741,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 								<div className="flex flex-col gap-6">
 									{deepElapsed === null ? null : (
 										<div className="thinking-header flex items-center gap-5 text-meta font-medium text-ink-muted">
-											<span>{t("aiSearch.workedFor", { time: formatElapsed(deepElapsed), defaultValue: `Worked for ${formatElapsed(deepElapsed)}` })}</span>
+											<span>{t("aiSearch.workedFor", { time: formatElapsed(deepElapsed) })}</span>
 										</div>
 									)}
 									<div className="assistant-prose flex flex-col gap-8 text-body leading-[1.55] text-ink-body">
@@ -673,7 +752,27 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 						</div>
 					)}
 
-					{stopped ? <div className="text-body text-ink-muted">{t("aiSearch.stopped", "응답 생성을 중단했습니다.")}</div> : null}
+					{stopped ? <div className="text-body text-ink-muted">{t("aiSearch.stopped")}</div> : null}
+
+					{queued.length > 0 ? (
+						<div className="queued-questions flex flex-col items-end gap-6" aria-label={t("aiSearch.queuedLabel")}>
+							{queued.map((text, index) => (
+								<div key={`${index}:${text}`} className="queued-question flex max-w-bubble-max items-center gap-8 rounded-10 border border-dashed border-border-strong px-12 py-6 text-meta text-ink-muted">
+									<span className="flex-none font-medium">{t("aiSearch.queuedLabel")}</span>
+									<span className="min-w-0 truncate text-ink-body">{text}</span>
+									<button
+										type="button"
+										className="flex size-16 flex-none cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 text-ink-muted transition-[background,color] duration-(--dur-color) ease-out hover:bg-hover-strong hover:text-danger-text"
+										aria-label={t("aiSearch.queuedRemove")}
+										title={t("aiSearch.queuedRemove")}
+										onClick={() => setQueued((current) => current.filter((_, position) => position !== index))}
+									>
+										<CloseIcon size={10} />
+									</button>
+								</div>
+							))}
+						</div>
+					) : null}
 				</div>
 			</div>
 
@@ -688,8 +787,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 									<button
 										type="button"
 										className="flex size-16 flex-none cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 text-ink-muted transition-[background,color] duration-(--dur-color) ease-out hover:bg-hover-strong hover:text-danger-text"
-										aria-label="첨부 제거"
-										title="첨부 제거"
+										aria-label={t("finderComponents.removeAttachment")}
+										title={t("finderComponents.removeAttachment")}
 										onClick={() => removeAttachment(index)}
 									>
 										<CloseIcon size={10} />
@@ -698,35 +797,59 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 							))}
 						</div>
 					) : null}
+					{searching ? (
+						<div className="steer-hint flex items-center gap-10 px-4 pb-6 text-tile text-ink-muted select-none" aria-hidden="true">
+							<span className="size-6 flex-none rounded-full bg-info-dot animate-[pulseDot_1.4s_ease-in-out_infinite]" />
+							<span className="min-w-0 flex-1 truncate">{t("aiSearch.steerHintLead")}</span>
+							<span className="flex-none"><kbd className="font-sans font-semibold text-ink">{enterKeyLabel()}</kbd> {t("aiSearch.steerHintEnter")}</span>
+							<span className="flex-none"><kbd className="font-sans font-semibold text-ink">{formatShortcut({ key: enterKeyLabel(), alt: true, primary: false })}</kbd> {t("aiSearch.steerHintAltEnter")}</span>
+							<span className="flex-none"><kbd className="font-sans font-semibold text-ink">Esc</kbd> {t("aiSearch.stop")}</span>
+						</div>
+					) : null}
 					<div className="compose-box flex min-h-40 items-center gap-7 rounded-12 border border-border bg-input px-11 py-4 transition-colors duration-(--dur-color) ease-out focus-within:border-accent">
 						<input
 							ref={inputRef}
 							value={query}
 							onChange={(event) => setQuery(event.target.value)}
-							placeholder={t("aiSearch.askDazzi", COMPOSER_PLACEHOLDER)}
-							aria-label="Ask Dazzi"
-							disabled={searchId !== null}
+							onKeyDown={(event) => {
+								// ⌥Enter queues; plain Enter goes through the form. A Hangul IME's composing Enter is no send.
+								if (event.key !== "Enter" || !event.altKey || event.nativeEvent.isComposing) return;
+								event.preventDefault();
+								send(true);
+							}}
+							placeholder={searching ? t("aiSearch.steerPlaceholder") : t("finderComponents.composerPlaceholder")}
+							aria-label={t("aiSearch.askDazzi")}
 							className="h-30 min-w-0 flex-1 border-0 bg-transparent text-body text-ink-body outline-none placeholder:text-ink-muted"
 						/>
-						{searchId === null ? (
+						{searching && query.trim().length > 0 ? (
 							<button
 								type="submit"
-								className="send flex size-32 flex-none items-center justify-center rounded-full border-0 bg-accent text-on-accent cursor-pointer transition-colors duration-(--dur-color) ease-out enabled:hover:bg-accent-hover disabled:cursor-default disabled:bg-border-strong"
-								title="Ask Dazzi"
-								aria-label="Ask Dazzi"
-								disabled={query.trim().length === 0 && attachments.length === 0}
+								className="send steer-send flex size-32 flex-none items-center justify-center rounded-full border-0 bg-accent text-on-accent cursor-pointer transition-colors duration-(--dur-color) ease-out hover:bg-accent-hover"
+								title={t("aiSearch.steerSend")}
+								aria-label={t("aiSearch.steerSend")}
 							>
 								<ArrowUpIcon />
 							</button>
-						) : (
+						) : null}
+						{searching ? (
 							<button
 								type="button"
 								className="send flex size-32 flex-none items-center justify-center rounded-full border-0 bg-ink text-on-accent cursor-pointer"
-								title={t("aiSearch.stop", "중단")}
-								aria-label={t("aiSearch.stop", "중단")}
+								title={t("aiSearch.stop")}
+								aria-label={t("aiSearch.stop")}
 								onClick={() => void stop()}
 							>
 								<Square size={10} strokeWidth={3} fill="currentColor" />
+							</button>
+						) : (
+							<button
+								type="submit"
+								className="send flex size-32 flex-none items-center justify-center rounded-full border-0 bg-accent text-on-accent cursor-pointer transition-colors duration-(--dur-color) ease-out enabled:hover:bg-accent-hover disabled:cursor-default disabled:bg-border-strong"
+								title={t("aiSearch.askDazzi")}
+								aria-label={t("aiSearch.askDazzi")}
+								disabled={query.trim().length === 0 && attachments.length === 0}
+							>
+								<ArrowUpIcon />
 							</button>
 						)}
 					</div>
@@ -739,7 +862,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 						<SparklesIcon size={28} />
 						<span className="absolute -bottom-4 -right-4 flex size-22 items-center justify-center rounded-full bg-accent text-badge font-bold text-on-accent">+</span>
 					</span>
-					<span className="text-body font-medium text-ink">{dragOver ? t("aiSearch.dropAttach", "놓으면 대화에 첨부됩니다") : t("aiSearch.dropPrompt", "여기로 끌어서 AI에게 물어보기")}</span>
+					<span className="text-body font-medium text-ink">{dragOver ? t("aiSearch.dropAttach") : t("aiSearch.dropPrompt")}</span>
 					{dragName === null ? null : <span className="text-meta text-ink-muted">{dragName}</span>}
 				</div>
 			) : null}
@@ -772,6 +895,44 @@ function RefFileChip({ att }: { readonly att: ChatAttachment }): ReactElement {
 			<span className="ref-chip-name text-meta font-medium text-ink">{att.name}</span>
 			{folder === null ? null : <span className="ref-chip-sub text-badge text-ink-muted">· {folder}</span>}
 		</span>
+	);
+}
+
+/**
+ * A correction sent while the run streamed, right-aligned like the question.
+ * Waiting: a dashed accent outline that breathes, with a pulsing dot. Taken by
+ * the model: a solid bubble with a check. The run ended first: dimmed, struck.
+ */
+function SteerBubble({
+	steer,
+	labels,
+}: {
+	readonly steer: SteerItem;
+	readonly labels: Readonly<Record<SteerItem["status"], string>>;
+}): ReactElement {
+	return (
+		<div className="message steer-msg flex justify-end animate-rise" data-steer-status={steer.status}>
+			<div className="flex max-w-bubble-max flex-col items-end gap-5">
+				<div
+					className={cn(
+						"bubble steer-bubble rounded-10 border px-14 py-10 text-body leading-[1.5] break-words transition-[border-color,background-color,color] duration-(--dur-color) ease-out",
+						steer.status === "pending" && "border-dashed border-accent bg-accent-wash text-ink-body animate-[steerWait_1.6s_ease-in-out_infinite]",
+						steer.status === "delivered" && "border-border bg-input text-ink-body",
+						steer.status === "dropped" && "border-border bg-input text-ink-muted line-through",
+					)}
+				>
+					{steer.text}
+				</div>
+				<span className={cn("steer-status flex items-center gap-5 text-tile", steer.status === "pending" ? "text-accent-text" : "text-ink-muted")} role="status">
+					{steer.status === "pending" ? (
+						<span className="size-6 flex-none rounded-full bg-accent animate-[pulseDot_1.4s_ease-in-out_infinite]" aria-hidden="true" />
+					) : steer.status === "delivered" ? (
+						<CheckIcon size={11} />
+					) : null}
+					{labels[steer.status]}
+				</span>
+			</div>
+		</div>
 	);
 }
 

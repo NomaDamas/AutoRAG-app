@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { ReactElement } from "react";
+import { useTranslation } from "react-i18next";
 import { cn } from "../../lib/cn";
 import {
 	CONTEXT_MENU_WIDTH,
@@ -91,6 +92,7 @@ export function ContextMenu({
 	readonly onSelect: MenuSelect;
 	readonly onClose: () => void;
 }): ReactElement {
+	const { t } = useTranslation();
 	const ref = useRef<HTMLDivElement>(null);
 	const [openSubmenu, setOpenSubmenu] = useState<{ readonly label: string; readonly anchorTop: number } | null>(null);
 
@@ -117,7 +119,7 @@ export function ContextMenu({
 			ref={ref}
 			className="menu fixed z-60 flex flex-col w-context-menu p-4 border border-border rounded-10 bg-window shadow-menu animate-[rise_var(--dur-menu)_var(--ease-out)]"
 			role="menu"
-			aria-label="파일 작업"
+			aria-label={t("finderComponents.fileActions")}
 			style={{ left: `${placement.left}px`, top: `${placement.top}px` }}
 		>
 			{entries.map((entry, index) => {

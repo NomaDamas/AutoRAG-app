@@ -12,6 +12,7 @@ import { SETTINGS_CHANNELS, type EmbeddingChangeRequest, type JsonValue, type Pr
 import { ACCOUNT_CHANNELS } from "../shared/account-contract";
 import { ONBOARDING_CHANNELS } from "../shared/onboarding-contract";
 import { isServiceRunRequest, SERVICES_CHANNELS } from "../shared/services-contract";
+import { t } from "../shared/i18n/core";
 import { INDEX_ACTIVITY_CHANNELS } from "../shared/index-activity-contract";
 import { APP_UPDATE_CHANNELS } from "../shared/update-contract";
 import type { AppUpdaterService } from "./app-updater";
@@ -55,17 +56,17 @@ export function registerDragOutIpcHandlers(): void {
 export function registerActionsIpcHandlers(service: ActionService): void {
 	ipcMain.handle(ACTIONS_CHANNELS.capabilities, () => service.capabilities());
 	ipcMain.handle(ACTIONS_CHANNELS.run, (event, paths: unknown, request: unknown) => {
-		if (!isActionPaths(paths)) throw new Error("파일 경로가 올바르지 않습니다");
-		if (!isActionRequest(request)) throw new Error("알 수 없는 파일 작업입니다");
+		if (!isActionPaths(paths)) throw new Error(t("main.ipc.invalidPaths"));
+		if (!isActionRequest(request)) throw new Error(t("main.ipc.unknownAction"));
 		return service.run(paths, request, BrowserWindow.fromWebContents(event.sender));
 	});
 	ipcMain.handle(ACTIONS_CHANNELS.openWithApplications, (_event, path: unknown) => {
-		if (typeof path !== "string" || path.length === 0) throw new Error("파일 경로가 올바르지 않습니다");
+		if (typeof path !== "string" || path.length === 0) throw new Error(t("main.ipc.invalidPaths"));
 		return service.openWithApplications(path);
 	});
 	ipcMain.handle(ACTIONS_CHANNELS.share, (event, paths: unknown, anchor: unknown) => {
-		if (!isActionPaths(paths)) throw new Error("파일 경로가 올바르지 않습니다");
-		if (!isActionAnchor(anchor)) throw new Error("공유 위치가 올바르지 않습니다");
+		if (!isActionPaths(paths)) throw new Error(t("main.ipc.invalidPaths"));
+		if (!isActionAnchor(anchor)) throw new Error(t("main.ipc.invalidAnchor"));
 		return service.share(paths, anchor, BrowserWindow.fromWebContents(event.sender));
 	});
 }
@@ -73,11 +74,11 @@ export function registerActionsIpcHandlers(service: ActionService): void {
 /** The OS Services submenu: list what the system offers for a selection, and perform one. */
 export function registerServicesIpcHandlers(service: ServicesService): void {
 	ipcMain.handle(SERVICES_CHANNELS.list, (_event, paths: unknown) => {
-		if (!isActionPaths(paths)) throw new Error("파일 경로가 올바르지 않습니다");
+		if (!isActionPaths(paths)) throw new Error(t("main.ipc.invalidPaths"));
 		return service.list(paths);
 	});
 	ipcMain.handle(SERVICES_CHANNELS.run, (_event, id: unknown, paths: unknown) => {
-		if (typeof id !== "string" || !isServiceRunRequest(id, paths)) throw new Error("서비스 요청이 올바르지 않습니다");
+		if (typeof id !== "string" || !isServiceRunRequest(id, paths)) throw new Error(t("main.ipc.invalidServiceRequest"));
 		return service.run(id, paths);
 	});
 }
@@ -85,6 +86,9 @@ export function registerServicesIpcHandlers(service: ServicesService): void {
 export function registerSearchIpcHandlers(service: SearchBridge): void {
 	ipcMain.handle(SEARCH_CHANNELS.start, (_event, searchId: string, chatId: string, query: string, attachments) =>
 		service.start(searchId, chatId, query, attachments),
+	);
+	ipcMain.handle(SEARCH_CHANNELS.steer, (_event, searchId: unknown, text: unknown) =>
+		typeof searchId === "string" && typeof text === "string" ? service.steer(searchId, text) : false,
 	);
 	ipcMain.handle(SEARCH_CHANNELS.cancel, (_event, searchId: string) => service.cancel(searchId));
 	ipcMain.handle(SEARCH_CHANNELS.historyList, () => service.historyList());

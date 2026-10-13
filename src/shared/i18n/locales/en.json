@@ -238,6 +238,16 @@
     "stopped": "Generation stopped.",
     "dropAttach": "Drop to attach to chat",
     "dropPrompt": "Drag here to ask AI",
+    "steerPlaceholder": "Search going the wrong way? Correct it (e.g. only last week's messages)",
+    "steerSend": "Correct the search",
+    "steerHintLead": "You can type while it searches",
+    "steerHintEnter": "correct",
+    "steerHintAltEnter": "next question",
+    "steerPending": "Waiting · goes in at the next step",
+    "steerDelivered": "Applied to the search",
+    "steerDropped": "The search ended before this was applied",
+    "queuedLabel": "Next question",
+    "queuedRemove": "Cancel next question",
     "historyGroups": {
       "today": "Today",
       "yesterday": "Yesterday",
@@ -373,15 +383,41 @@
       }
     },
     "feature": {
-      "ai": { "title": "AI Search", "sub": "Answers and sources at once" },
-      "citation": { "title": "Citations", "sub": "Check where answers come from" },
-      "versions": { "title": "Version grouping", "sub": "Tidy up duplicate documents" },
-      "quicklook": { "title": "Quick Look", "sub": "Preview before opening" },
-      "sources": { "title": "Data sources", "sub": "Search connected sources too" },
-      "hybrid": { "title": "Hybrid search", "sub": "Keywords and meaning together, ordered by reranking" }
+      "ai": {
+        "title": "AI Search",
+        "sub": "Answers and sources at once"
+      },
+      "citation": {
+        "title": "Citations",
+        "sub": "Check where answers come from"
+      },
+      "versions": {
+        "title": "Version grouping",
+        "sub": "Tidy up duplicate documents"
+      },
+      "quicklook": {
+        "title": "Quick Look",
+        "sub": "Preview before opening"
+      },
+      "sources": {
+        "title": "Data sources",
+        "sub": "Search connected sources too"
+      },
+      "hybrid": {
+        "title": "Hybrid search",
+        "sub": "Keywords and meaning together, ordered by reranking"
+      }
     },
-    "hybrid": { "keyword": "Keyword", "semantic": "Meaning", "rerank": "Reranking" },
-    "versions": { "latest": "Latest", "near": "Similar", "exact": "Identical" },
+    "hybrid": {
+      "keyword": "Keyword",
+      "semantic": "Meaning",
+      "rerank": "Reranking"
+    },
+    "versions": {
+      "latest": "Latest",
+      "near": "Similar",
+      "exact": "Identical"
+    },
     "account": {
       "eyebrow": "Account",
       "title": "Start with\nyour account",
@@ -657,7 +693,8 @@
       "gateOkDetail": "We've read all {{files}} files. Newly changed files continue to be read in the background.",
       "gateFailTitle": "Indexing couldn't be completed",
       "gateFailDetail": "Try again and it'll continue where it left off.",
-      "gateTitle": "Don't quit Dazzi or turn off {{machine}}",
+      "gateTitleMac": "Don't quit Dazzi or turn off your Mac",
+      "gateTitlePc": "Don't quit Dazzi or turn off your PC",
       "gateDetailMac": "The first index takes a while. Quitting stops progress. Plug in the power adapter and keep the lid open.",
       "gateDetailWindows": "The first index takes a while. Quitting stops progress. Keep it plugged in.",
       "gateLocked": "Opens once it's done",
@@ -754,6 +791,1132 @@
       "planActive": "The {{plan}} plan is active.",
       "signInFailed": "Couldn't sign in.",
       "notIndexed": "Finish indexing to open Dazzi."
+    }
+  },
+  "finderComponents": {
+    "searchRange": "Search scope",
+    "sidebar": "Places",
+    "pathBar": "Path",
+    "inspectorAside": "Inspector",
+    "fileActions": "File actions",
+    "detailActions": "More actions",
+    "filesList": "Files",
+    "variantColumn": "Similar/Duplicate Files",
+    "expand": "Expand",
+    "collapse": "Collapse",
+    "newName": "New name",
+    "indexIncluded": "Included in AI search index",
+    "indexExcluded": "Excluded from AI search index",
+    "stackToggle": "{{count}} other versions · click to expand",
+    "webImage": "Web image",
+    "image": "Image",
+    "quickLookLabel": "Quick Look {{name}}",
+    "imageLoadFailed": "Can't load the image",
+    "clickToQuickLook": "Click to open in Quick Look",
+    "sortBy": "Sort by {{label}}",
+    "resizeColumn": "Resize {{label}}",
+    "columnsMenu": "Columns",
+    "evidenceNotFound": "No information found for evidence {{number}}",
+    "searchTitle": "Search \"{{query}}\"",
+    "resizeSidebar": "Resize sidebar",
+    "resizeInspector": "Resize inspector",
+    "composerPlaceholder": "Ask across files, mail, and messengers (drop files here)",
+    "removeAttachment": "Remove attachment",
+    "locationOpenFailed": "Couldn't open the location \"{{name}}\".",
+    "ejected": "Ejected \"{{name}}\".",
+    "ejectFailed": "Couldn't eject \"{{name}}\": {{error}}",
+    "indexRefreshFailed": "Couldn't refresh the Dazzi index: {{error}}",
+    "folderCreated": "{{name}} — created a new folder",
+    "fileCreated": "{{name}} — created a new file",
+    "shareAnchorMissing": "Couldn't find where to show the share sheet",
+    "tagChangeFailed": "{{name}} — couldn't change tags: {{message}}",
+    "onboardingDemo": {
+      "meetingNotes": "meeting-notes.md"
+    }
+  },
+  "finderState": {
+    "contextMenu": {
+      "quickLook": "Quick Look",
+      "showInEnclosingFolder": "Show in Enclosing Folder",
+      "addTag": "Add “{{name}}”",
+      "removeTag": "Remove “{{name}}”"
+    },
+    "newFileFormats": {
+      "text": "Text File",
+      "markdown": "Markdown Document",
+      "rtf": "Rich Text",
+      "word": "Word Document",
+      "excel": "Excel Spreadsheet",
+      "powerpoint": "PowerPoint Presentation",
+      "unknown": "Unknown file format: {{id}}"
+    },
+    "roles": {
+      "jevLatest": "Jev (latest)"
+    },
+    "servicesUnavailable": "Services can't run in this environment",
+    "workerRestarted": "The file service restarted mid-operation. Check the result and try again.",
+    "seconds": "{{value}} s",
+    "evidenceDetail": "Relevance {{percent}}%",
+    "renameEmpty": "Enter a name",
+    "renameSlash": "A name can't contain /",
+    "renameDuplicate": "An item with the same name already exists",
+    "kindCount": "{{count}}",
+    "kindSummaryMore": "{{count}} more kinds",
+    "openWithDefault": "{{name}} (Default)",
+    "openWithOther": "Other…",
+    "source": {
+      "actionsUnavailable": "File actions can't run in this environment",
+      "shareUnavailable": "Sharing can't run in this environment",
+      "nothingToUndo": "Nothing to undo",
+      "trashItemNotFound": "The item isn't in the Trash",
+      "indexExcluded": "Excluded from indexing",
+      "indexIncluded": "Included in the MinSync index",
+      "tagsUnavailable": "Tags can't be changed in this environment",
+      "itemNotFound": "Item not found",
+      "originUnknown": "Unknown original location"
+    },
+    "toast": {
+      "trashSingle": "{{name}} — moved to Trash",
+      "putBackSingle": "{{name}} — put back",
+      "putBackCount": "{{count}} items restored",
+      "emptyTrashDone": "Trash emptied",
+      "emptyTrashFailed": "Couldn't empty Trash: {{message}}",
+      "emptyTrashPartial": "Deleted {{count}} items · {{name}} — couldn't delete: {{message}}",
+      "batchDoneCount": "{{count}} items {{action}}",
+      "batchFailedSingle": "{{name}} — {{reason}}: {{message}}",
+      "batchFailedCount": "{{count}} items {{reason}} ({{name}}: {{message}})",
+      "batchCombined": "{{done}} · {{failure}}",
+      "batchDone": {
+        "trash": "moved to Trash",
+        "putBack": "restored",
+        "move": "moved",
+        "copy": "copied",
+        "duplicate": "duplicated"
+      },
+      "batchFailed": {
+        "trash": "couldn't be moved to Trash",
+        "putBack": "couldn't be restored",
+        "move": "couldn't be moved",
+        "copy": "couldn't be copied",
+        "duplicate": "couldn't be duplicated"
+      }
+    },
+    "history": {
+      "undo": "Undo {{operation}}",
+      "redo": "Redo {{operation}}",
+      "failed": "{{label}} failed: {{name}} — {{message}}{{more}}",
+      "more": " (+{{count}} more)",
+      "op": {
+        "copy": "Copy",
+        "move": "Move",
+        "duplicate": "Duplicate",
+        "rename": "Rename",
+        "createFolder": "New Folder",
+        "createFile": "New File",
+        "trash": "Move to Trash",
+        "restore": "Put Back",
+        "extract": "Extract",
+        "compress": "Compress",
+        "generic": "File operation"
+      }
+    },
+    "groups": {
+      "unknownDate": "Unknown Date",
+      "today": "Today",
+      "yesterday": "Yesterday",
+      "prev7": "Previous 7 Days",
+      "prev30": "Previous 30 Days",
+      "folder": "Folder",
+      "noExtension": "No Extension",
+      "zeroKb": "Zero KB",
+      "underKb": "Under 1 KB",
+      "kbToMb": "1 KB – 1 MB",
+      "mbToGb": "1 MB – 1 GB",
+      "overGb": "Over 1 GB",
+      "noApplication": "No Application",
+      "noTags": "No Tags",
+      "noComments": "No Comments",
+      "noDimensions": "No Dimensions",
+      "noRating": "No Rating",
+      "stars": "{{count}} Stars",
+      "star": "1 Star"
+    }
+  },
+  "main": {
+    "action": {
+      "unsupportedResize": "This format cannot be resized.",
+      "unsupportedOptimize": "This format cannot be size-optimized.",
+      "alreadyOptimized": "This file is already optimized.",
+      "unsupportedExtract": "This file format cannot be extracted.",
+      "emptyTarget": "There is nothing to act on.",
+      "singleTargetOnly": "This action only supports one item at a time.",
+      "openCancelled": "Open cancelled.",
+      "appCannotOpen": "That app cannot open this file.",
+      "openedWithFile": "{{name}} — opened with {{app}}",
+      "openedWithCount": "{{count}} files — opened with {{app}}",
+      "compressed": "{{name}} — compressed",
+      "extracted": "{{name}} — extracted",
+      "unsupportedConvert": "{{format}} conversion is not supported.",
+      "converted": "{{name}} — converted",
+      "resized": "{{name}} — resized",
+      "optimized": "{{name}} — size optimized",
+      "videoNeedsFfmpeg": "Video conversion requires ffmpeg.",
+      "containerConverted": "{{name}} — container converted",
+      "shareUnsupported": "This platform does not support system sharing."
+    },
+    "indexStatus": {
+      "outside": "File outside Dazzi search paths",
+      "excluded": "Excluded from indexing",
+      "parentExcluded": "Parent folder excluded from indexing",
+      "excludedPending": "Exclusion saved · removed from the index on the next refresh",
+      "unsupported": "File format not supported for indexing",
+      "included": "Included in the MinSync index",
+      "parsedPending": "Parsed · waiting to sync to MinSync",
+      "skipped": "Skipped on refresh ({{reason}})",
+      "notIndexed": "Not indexed yet"
+    },
+    "archive": {
+      "corrupt": "The archive is corrupted.",
+      "encrypted": "Password-protected archives cannot be extracted.",
+      "combined": "The archive is corrupted or password-protected.",
+      "tooManyEntries": "The archive has too many entries.",
+      "tooLarge": "The archive's extracted size is too large.",
+      "tooLargeForEngine": "An archive of this format is too large to extract.",
+      "unsupportedFormat": "This file format cannot be extracted.",
+      "lzmaFailed": "LZMA compression failed.",
+      "lzmaAborted": "The LZMA compression job was aborted."
+    },
+    "tags": {
+      "nameEmpty": "The tag name is empty.",
+      "nameNewline": "A tag name cannot contain line breaks.",
+      "nameTooLong": "The tag name is too long.",
+      "unreadable": "The tag data is in an unreadable format.",
+      "macosOnly": "Finder tags are only available on macOS."
+    },
+    "services": {
+      "macosOnly": "Services are only available on macOS.",
+      "unavailable": "That service is not available for this selection.",
+      "runFailed": "The service could not be run."
+    },
+    "ipc": {
+      "invalidPaths": "The file path is invalid.",
+      "unknownAction": "Unknown file action.",
+      "invalidAnchor": "The share anchor is invalid.",
+      "invalidServiceRequest": "The service request is invalid."
+    },
+    "dialogs": {
+      "notificationBody": "Notifications are on.",
+      "openWithTitle": "Open With",
+      "openButton": "Open",
+      "chooseFolderTitle": "Choose Folder",
+      "addButton": "Add",
+      "quitButton": "Quit",
+      "continueButton": "Continue",
+      "indexingInProgress": "Indexing is in progress.",
+      "indexingQuitDetail": "Quitting will stop progress."
+    },
+    "onboarding": {
+      "apiKeyRequired": "An API key is required.",
+      "baseUrlRequired": "A server address (base URL) is required.",
+      "indexingFailed": "Indexing failed."
+    },
+    "lock": {
+      "scheduledBusy": "A background refresh is running. Try again after it finishes.",
+      "otherBusy": "Another refresh is running. Try again after it finishes."
+    },
+    "activity": {
+      "aborted": "Aborted"
+    },
+    "refresh": {
+      "sourceDetail": "{{state}} · {{count}}"
+    },
+    "worker": {
+      "unknownFormat": "Unknown file format: {{format}}",
+      "invalidUrl": "The web address is invalid."
+    },
+    "fs": {
+      "restoreTempFailed": "{{message}} (could not restore from the temporary name {{name}}: {{detail}})",
+      "trashLocationUnknown": "The Trash location could not be determined.",
+      "trashItemNotFound": "Could not find the item in the Trash: {{name}}",
+      "trashOriginUnknown": "The original location could not be determined: {{name}}",
+      "notWebUrl": "Not a web address: {{text}}",
+      "renameEmpty": "Invalid name: the new name must not be empty",
+      "renameSeparator": "Invalid name \"{{name}}\": path separators are not allowed",
+      "renameCollision": "A file or folder named \"{{name}}\" already exists"
+    },
+    "embedding": {
+      "profiles": {
+        "nativeQwen3": {
+          "description": "The default document-understanding model (1024 dimensions) running directly on this Mac. No separate server needed."
+        },
+        "runtime": {
+          "label": "Qwen3 Embedding 0.6B (Dazzi runtime)",
+          "description": "A 1024-dimension model served by the Dazzi embedding runtime via llama-server on loopback."
+        },
+        "localServer": {
+          "label": "My computer's embedding server",
+          "description": "Use an OpenAI-compatible embedding server running on loopback. Specify the model, dimensions, and prefixes yourself."
+        }
+      },
+      "errors": {
+        "modelNameEmpty": "The embedding server model name is empty.",
+        "dimensionPositive": "The embedding server dimension must be a positive integer.",
+        "badUrl": "The embedding server address is not a valid URL.",
+        "loopbackOnly": "The embedding server must be a loopback address (documents never leave this Mac).",
+        "unknownProfile": "Unknown embedding profile: {{id}}",
+        "localServerRequired": "Embedding server details (id, baseUrl, dimension) are required.",
+        "localServerMissing": "Embedding server details are required.",
+        "httpStatus": "The embedding server responded with HTTP {{status}}.",
+        "badJson": "Could not read the embedding server response as JSON.",
+        "noVector": "The embedding server did not return a vector.",
+        "dimensionMismatch": "The embedding server dimension is {{actual}}, but {{expected}} was specified.",
+        "incompatibleSources": "Some data sources cannot follow this model: {{ids}}"
+      },
+      "reasons": {
+        "mailcrawlIncompatible": "mailcrawl only supports the built-in Qwen3 and cannot use an arbitrary HTTP embedding server.",
+        "mailcrawlPropagated": "Records the embedding provider in connector.env (mailcrawl re-indexes automatically when the model changes).",
+        "obsidianIncompatible": "qmd (obsidian) can only use local GGUF models, so it cannot use an HTTP embedding server.",
+        "obsidianPropagated": "Sets QMD_EMBED_MODEL on the qmd child process and re-indexes with `qmd embed -f`.",
+        "discordIncompatible": "This app cannot serve the Dazzi embedding runtime on loopback (not a public export). Choose an embedding server to pass it to discrawl.",
+        "discordPropagated": "Rewrites the Dazzi-managed discrawl config and re-indexes with `discrawl embed --rebuild`.",
+        "kakaoIncompatible": "lazykatok uses its own built-in embedder (EmbeddingGemma) and cannot be changed via the shared Dazzi config (owned by native settings).",
+        "githubGistIncompatible": "GitHubGistSkill is not a public @autorag/librarian export, so the app cannot set its embedder (fixed by the runtime gateway profile).",
+        "clawgalleryNotApplicable": "ClawGallery is an image (VDR) index and does not use text embeddings.",
+        "larkNotApplicable": "Lark uses only remote API search and refuses local embeddings.",
+        "defaultNotApplicable": "This data source uses its own keyword/parse index and does not use the global embedder."
+      },
+      "actions": {
+        "discordConfig": "discrawl config.toml managed by datasources.<id>"
+      }
+    },
+    "update": {
+      "checkMenu": "Check for Updates…",
+      "readyNotification": "Dazzi {{version}} is ready. It installs when you quit the app.",
+      "availableNotification": "Dazzi {{version}} is available to download."
+    }
+  },
+  "quickLook": {
+    "window": {
+      "fullscreen": "Full Screen",
+      "openWith": "Open in Default App",
+      "open": "Open",
+      "openWithApp": "Open with {{name}}",
+      "cannotOpen": "Couldn’t open the file"
+    },
+    "status": {
+      "loading": "Loading"
+    },
+    "fallback": {
+      "loading": "Loading…",
+      "computing": "Calculating…",
+      "copied": "Copied",
+      "copy": "Copy",
+      "moreDetails": "More Info",
+      "createdAt": "Created",
+      "location": "Location",
+      "lastModified": "Last modified {{date}}",
+      "revealFinder": "Reveal in Finder",
+      "revealExplorer": "Reveal in Explorer",
+      "revealFolder": "Reveal in Folder"
+    },
+    "body": {
+      "emptyFile": "Empty file",
+      "tooLarge": "This file is too large to preview; showing its details instead"
+    },
+    "archive": {
+      "extractFailed": "Couldn’t extract the archive",
+      "listFailed": "Couldn’t read the archive listing",
+      "tarListFailed": "Couldn’t read the tar listing",
+      "readFailed": "Couldn’t read the archive",
+      "empty": "Empty archive",
+      "order": "Date Modified"
+    },
+    "folder": {
+      "kind": "Folder",
+      "empty": "Empty folder"
+    },
+    "contents": {
+      "title": "Contains"
+    },
+    "code": {
+      "wrap": "Wrap Lines",
+      "copy": "Copy Code",
+      "lines": "{{count}} lines",
+      "truncated": "Showing first {{size}}",
+      "viewMode": "View",
+      "readFailed": "Couldn’t read the text",
+      "modes": {
+        "desktop": "Desktop",
+        "mobile": "Mobile",
+        "source": "Source"
+      }
+    },
+    "markdown": {
+      "viewMode": "View",
+      "headings": "{{count}} headings",
+      "tables": "{{count}} tables",
+      "codeBlocks": "{{count}} code blocks",
+      "lines": "{{count}} lines",
+      "words": "{{count}} words",
+      "modes": {
+        "source": "Source",
+        "split": "Split",
+        "preview": "Preview"
+      }
+    },
+    "documents": {
+      "readFailed": "Couldn’t read the document",
+      "openFailed": "Couldn’t open the document",
+      "sheetReadFailed": "Couldn’t read the sheet",
+      "sheetOpenFailed": "Couldn’t open the sheet",
+      "sheetMissing": "No sheets",
+      "previous": "Previous",
+      "next": "Next"
+    },
+    "hwp": {
+      "openFailed": "Couldn’t open the HWP document",
+      "page": "Page {{count}}",
+      "noPages": "No pages"
+    },
+    "iwork": {
+      "slideMissing": "This slide has no image",
+      "drawFailed": "Couldn’t draw the slide",
+      "noPreview": "This document has no preview image",
+      "page": "Page {{count}}"
+    },
+    "media": {
+      "imageOpenFailed": "Couldn’t open the image",
+      "imageReadFailed": "Couldn’t read the image",
+      "fontOpenFailed": "Couldn’t open the font",
+      "tiffNoPages": "No TIFF pages",
+      "canvasFailed": "Couldn’t create the canvas",
+      "tiffOpenFailed": "Couldn’t open the TIFF",
+      "heicNoResult": "No HEIC conversion result",
+      "heicOpenFailed": "Couldn’t open the HEIC",
+      "fontSampleTail": "0123456789 — Preview"
+    },
+    "epub": {
+      "readFailed": "Couldn’t read the book",
+      "noText": "No text found"
+    },
+    "paged": {
+      "drawFailed": "Couldn’t draw the page",
+      "goToPage": "Go to page {{count}}",
+      "zoomOut": "Zoom Out",
+      "zoomIn": "Zoom In",
+      "rail": "Page previews"
+    },
+    "pdf": {
+      "openFailed": "Couldn’t open the PDF"
+    },
+    "pptx": {
+      "openFailed": "Couldn’t open the presentation",
+      "noSlides": "No slides",
+      "readFailed": "Couldn’t read the presentation",
+      "slideReadFailed": "Couldn’t read the slide",
+      "slideRenderFailed": "Couldn’t display the slide",
+      "image": "Image",
+      "chart": "Chart",
+      "media": "Media",
+      "object": "Object"
+    },
+    "player": {
+      "videoFailed": "Couldn’t play the video",
+      "audioFailed": "Couldn’t play the audio",
+      "playPause": "Play or Pause",
+      "muteToggle": "Toggle Mute",
+      "volume": "Volume",
+      "skipBack": "Back 15 Seconds",
+      "skipForward": "Forward 15 Seconds",
+      "playbackRate": "Playback Speed",
+      "loop": "Repeat",
+      "loopLabel": "Repeat",
+      "pip": "Picture-in-Picture",
+      "position": "Position",
+      "waveformPosition": "Seek in waveform",
+      "continueInApp": "Continue in Default App",
+      "continueIn": "Continue in {{name}}",
+      "artist": "Artist",
+      "album": "Album",
+      "time": "Time"
+    },
+    "binary": {
+      "platform": "Platform",
+      "format": "Format",
+      "appleDiskImage": "Apple Disk Image (UDIF)"
+    },
+    "itemCount": {
+      "zero": "Zero items",
+      "one": "1 item",
+      "many": "{{count}} items"
+    },
+    "errors": {
+      "unreadableFolder": "You don’t have permission to read this folder",
+      "notShowing": "This item isn’t being previewed",
+      "invalidTarget": "Invalid preview request",
+      "unknownAction": "Unknown Quick Look action",
+      "changedWhileHashing": "The preview item changed; stopped calculating",
+      "invalidShareAnchor": "Invalid share position",
+      "invalidCopyText": "Invalid text to copy",
+      "notAbsolute": "Invalid preview path",
+      "missing": "File not found",
+      "notFile": "Folders can’t be previewed"
+    }
+  },
+  "settingsCore": {
+    "common": {
+      "notSet": "Not set",
+      "unknown": "Unknown"
+    },
+    "nav": {
+      "account": "My Account",
+      "plan": "Subscription & Usage",
+      "general": "General",
+      "ai": "AI Models",
+      "web": "Web Search",
+      "indexing": "Indexing",
+      "scope": "Search Scope",
+      "reading": "Document Reading",
+      "duplicates": "Duplicate Cleanup",
+      "apps": "All Connections",
+      "group": {
+        "account": "Account",
+        "basic": "General",
+        "ai": "AI",
+        "search": "Search",
+        "apps": "Connected Apps"
+      },
+      "keywords": {
+        "account": "account sign in email name profile",
+        "plan": "plan billing credits usage subscription",
+        "general": "display theme appearance language hidden files login updates statistics document language",
+        "ai": "LLM model provider service API key subscription embedding Jev query decomposition rerank",
+        "web": "web search internet search service page reading",
+        "indexing": "refresh sync incremental index update interval schedule",
+        "scope": "search scope folders exclude paths",
+        "reading": "document reading language parser OCR",
+        "duplicates": "duplicate files versions cleanup dupey",
+        "apps": "connections apps data sources messenger mail cloud"
+      }
+    },
+    "view": {
+      "navAria": "Settings navigation",
+      "search": "Search settings",
+      "menuAria": "Settings menu",
+      "empty": "No matching settings.",
+      "contentAria": "{{name}} settings"
+    },
+    "general": {
+      "description": "Configure Dazzi's appearance and startup behavior.",
+      "screenTitle": "Appearance",
+      "appearanceName": "Appearance",
+      "appearanceHint": "Apply the same theme to the entire screen.",
+      "appearanceLight": "Light",
+      "appearanceDark": "Dark",
+      "appLanguage": "App Language",
+      "appLanguageHint": "Language used for menus and settings.",
+      "finderTitle": "Finder",
+      "finderDesc": "Behavior of the Mac file browsing screen.",
+      "showHiddenFiles": "Show Hidden Files",
+      "showHiddenFilesHint": "Show system files that start with a dot (.) in Finder.",
+      "launchTitle": "Startup & Updates",
+      "launchAtLogin": "Launch at Login",
+      "launchAtLoginHint": "Start Dazzi in the background when you turn on your computer.",
+      "osMenu": "Add to File Right-Click Menu",
+      "osMenuHint": "Right-clicking a file in Finder (macOS) or Explorer (Windows) shows 'Ask Dazzi' and 'View in Dazzi'.",
+      "autoUpdates": "Install Updates Automatically",
+      "autoUpdatesHint": "Download new versions in the background and apply them when you quit the app.",
+      "appUpdate": "App Update",
+      "appUpdateUnsupported": "Version {{version}}. This build does not update automatically.",
+      "appUpdateCurrent": "Version {{version}}",
+      "appUpdateLatest": "Version {{version}}. You're up to date.",
+      "appUpdateChecking": "Checking for updates…",
+      "appUpdateAvailable": "Version {{version}} is available.",
+      "appUpdateAvailableManual": "Version {{version}} is available. Download the installer to replace this app.",
+      "appUpdateDownloading": "Downloading {{version}}… {{percent}}%",
+      "appUpdateReady": "{{version}} is ready. It installs when you quit, or restart now.",
+      "appUpdateError": "Could not check: {{message}}",
+      "appUpdateCheck": "Check for Updates",
+      "appUpdateDownload": "Download",
+      "appUpdateDownloadInstaller": "Get Installer",
+      "appUpdateRestart": "Restart Now",
+      "privacyTitle": "Privacy",
+      "telemetry": "Send Anonymous Usage Statistics",
+      "telemetryHint": "Only performance data is sent, never document content.",
+      "docLanguagesTitle": "Document Languages",
+      "docLanguagesDesc": "Preferred languages for reading and searching documents.",
+      "docLanguagesHint": "You can select multiple.",
+      "osMenuError": "Could not set the right-click menu: {{error}}"
+    },
+    "account": {
+      "description": "Your Dazzi account and sign-in status.",
+      "profileTitle": "Profile",
+      "accountName": "Dazzi Account",
+      "accountHint": "Sign-in happens in your system browser; this app never receives your password.",
+      "signingIn": "Signing in in the browser…",
+      "signedIn": "Signed in",
+      "signedOut": "Not signed in",
+      "email": "Email",
+      "emailHint": "The account email confirmed by the server.",
+      "offline": "Could not reach the server; showing the last confirmed information.",
+      "signOut": "Sign Out",
+      "signIn": "Sign In",
+      "hintEnv": "Signed in via the AUTORAG_API_KEY environment variable, so you cannot sign out from the app.",
+      "hintSignedIn": "Deletes the key stored on this Mac. You can revoke it from the API keys screen on the Dazzi website.",
+      "hintSignedOut": "A browser opens; approve there and you'll return to this app.",
+      "signInBrowser": "Sign In in Browser",
+      "managedDesc": "Use this account's managed models for AI Search.",
+      "managedName": "Use Managed Models",
+      "managedHint": "Changes Dazzi settings so AI Search uses this account's models. Your manually entered API key settings are replaced by this step.",
+      "useManaged": "Use Account Models",
+      "planDescription": "Check your Dazzi plan and this week's AI usage.",
+      "currentPlan": "Current Plan",
+      "currentPlanHintSignedIn": "The plan confirmed by the server.",
+      "currentPlanHintSignedOut": "Sign in first to see your plan.",
+      "trialing": " · Trialing",
+      "cancelScheduled": "Cancellation is scheduled. You can use the current plan until {{date}}.",
+      "pastDue": "Payment failed. Check your payment method in the billing portal.",
+      "inUse": "In use",
+      "openCheckout": "Open Checkout Page",
+      "billingTitle": "Billing",
+      "billingHint": "Manage payment methods, receipts, and cancellations/refunds in the billing portal.",
+      "openPortal": "Open Billing Portal",
+      "usageTitle": "This Week's Usage",
+      "usageName": "AI Usage",
+      "usageHint": "Weekly credits deducted when you use Dazzi plan models.",
+      "usageMeterAria": "Weekly credit usage",
+      "usageUnavailable": "Could not load usage",
+      "creditsLeft": "Credits Left",
+      "creditsLeftHint": "When you reach the limit, requests are rejected until the next weekly reset.",
+      "requestLimit": "Request Limit",
+      "requestLimitHint": "Requests per minute for each plan.",
+      "requestsPerMinute": "{{count}}/min",
+      "plan": {
+        "free": {
+          "price": "Free",
+          "perks": "$0.50 credit/week · 10/min"
+        },
+        "air": {
+          "price": "$4/mo",
+          "perks": "$1 credit/week · 60/min"
+        },
+        "pro": {
+          "price": "$20/mo",
+          "perks": "$5 credit/week · 240/min"
+        }
+      },
+      "legal": {
+        "title": "Terms & Policies",
+        "description": "The same documents as the web sign-in page. They open in your browser.",
+        "rowName": "View documents",
+        "rowHint": "Server terms, privacy policy (per-model data handling), acceptable use policy, and the subprocessor list.",
+        "terms": "Terms of Service",
+        "privacy": "Privacy Policy",
+        "acceptableUse": "Acceptable Use Policy",
+        "subprocessors": "Subprocessors"
+      }
+    },
+    "ai": {
+      "description": "Connect AI services and choose the model for each role.",
+      "kind": {
+        "runtime": "Runtime Provider",
+        "local": "Local Server",
+        "custom": "Custom Server"
+      },
+      "thinking": {
+        "off": "Off",
+        "offNote": "Fastest",
+        "low": "Low",
+        "medium": "Medium",
+        "high": "High",
+        "highNote": "Accuracy first",
+        "max": "Max",
+        "maxNote": "Slowest"
+      },
+      "thinkingDepth": "Thinking Depth",
+      "thinkingDepthFor": "{{label}} thinking depth",
+      "sameAsAnswer": "Same as Answer Model",
+      "decompDefault": "Default (OpenRouter Qwen3.7 Flash)",
+      "defaultModel": "Default (Qwen3.7 Flash)",
+      "off": "Disabled",
+      "role": {
+        "answer": "Answer",
+        "decomposition": "Query Decomposition",
+        "rerank": "Rerank",
+        "jev": "Judge"
+      },
+      "usedFor": "Used for {{roles}}",
+      "subscriptionAccount": "Subscription Account",
+      "providerMenu": "{{name}} menu",
+      "noServices": "No services connected yet. Connect one below.",
+      "connectService": "Connect Service",
+      "servicesTitle": "Connected Services",
+      "servicesDesc": "Choose models from connected services for the roles below.",
+      "rolesTitle": "Models by Role",
+      "rolesDesc": "Dazzi splits work by role. Choose the right model for each role.",
+      "subSearchAssistant": "Search Assist",
+      "answerModel": "Answer Model",
+      "answerHint": "Answers questions and summarizes documents.",
+      "decompositionHint": "Splits long questions into multiple search terms. A fast, cheap model works well.",
+      "jevModel": "Judge Model (Jev)",
+      "jevHint": "Decides whether to answer directly or search your documents.",
+      "rerankModel": "Rerank Results",
+      "rerankHint": "Raises more relevant results to the top. Answers may be slightly slower.",
+      "subDocUnderstanding": "Document Understanding",
+      "selectRole": "Select {{label}}",
+      "login": {
+        "starting": "Starting connection…",
+        "completeInBrowser": "Complete sign-in in the browser.",
+        "enterCode": "Enter the code in the browser.",
+        "completed": "Connected {{name}}.",
+        "signInBrowser": "Sign in to Dazzi in the browser…",
+        "signedIn": "Signed in to Dazzi.",
+        "notSignedIn": "Not signed in."
+      },
+      "disconnect": {
+        "envLocked": "Signed in via the AUTORAG_API_KEY environment variable, so you cannot sign out from the app. Remove that environment variable yourself.",
+        "title": "Disconnect {{name}}?",
+        "body": "Deletes the stored credentials and removes it from the list. Roles using this service may need a new model.",
+        "action": "Disconnect"
+      },
+      "disconnected": "Disconnected {{name}}.",
+      "envKeyCannotRemove": "{{name}}'s key is provided by an OS environment variable, so it cannot be removed from the app. Remove that environment variable yourself.",
+      "testing": "{{name}}: checking…",
+      "testOk": "connection successful",
+      "testFail": "connection failed",
+      "discoverFound": "{{name}}: found {{count}} models ({{protocol}})",
+      "discoverFailed": "{{name}}: {{error}}",
+      "discoverFailWord": "discovery failed",
+      "menu": {
+        "dazziPlan": "Dazzi Plans",
+        "apiKeys": "API Keys",
+        "localMachine": "This Computer",
+        "signInDazzi": "Sign in with Dazzi account",
+        "addCustom": "Add Custom (OpenAI-compatible)",
+        "addLocalServer": "Add Local Server"
+      },
+      "providerNotFound": "Provider not found.",
+      "provider": {
+        "edit": "Edit Connection Info",
+        "test": "Test Connection",
+        "discover": "Refresh Models"
+      },
+      "searchModels": "Search models",
+      "emptyRoleModels": "No supported models are available for this role. Connect the service first.",
+      "emptyModels": "No models are available from connected services.",
+      "connect": {
+        "title": "Connect {{name}}",
+        "body": "Paste the API key issued by {{name}}. The key is stored encrypted and never shown again.",
+        "apiKeyLabel": "API Key ({{env}})",
+        "keyPlaceholder": "Paste key",
+        "saved": "Saved the key for {{name}}.",
+        "action": "Connect"
+      },
+      "server": {
+        "defaultLocal": "Local Server",
+        "defaultCustom": "Company Gateway",
+        "titleLocal": "Connect Local Server",
+        "titleCustom": "Add OpenAI-compatible Service",
+        "titleEdit": "Edit Connection Info",
+        "bodyLocal": "You can only connect servers running on this Mac, such as Ollama or LM Studio.",
+        "bodyCustom": "Connect a company gateway or OpenAI-compatible server. The key is stored encrypted.",
+        "name": "Name",
+        "baseUrl": "Server URL",
+        "apiKeyOptional": "API Key (optional)",
+        "optionalPlaceholder": "Optional",
+        "saved": "Saved {{name}}."
+      },
+      "loginModal": {
+        "openManually": "If the browser doesn't open, open the address below yourself.",
+        "openBrowser": "Open Browser",
+        "enterCode": "Enter the code below in the browser.",
+        "submit": "Submit"
+      },
+      "auto": "Auto",
+      "defaultValue": "Default"
+    },
+    "embedding": {
+      "errorModelRequired": "Enter the embedding server model name.",
+      "errorDimension": "The embedding server dimension must be a positive integer.",
+      "title": "Document Understanding Model",
+      "hint": "Analyzes the meaning of documents. Document content never leaves this Mac.",
+      "body": "The embedding model that analyzes document meaning. You can only choose the Dazzi runtime or your local server; document content never leaves this Mac.",
+      "dimension": "{{count}}d",
+      "modelName": "Model Name",
+      "baseUrl": "Server URL",
+      "dimensionLabel": "Dimension",
+      "modelPlaceholder": "e.g. nomic-embed-text",
+      "dimensionPlaceholder": "e.g. 768",
+      "incompatibleNote": "{{count}} data sources are incompatible with this profile. If you continue, those sources stay as they are and only the rest change.",
+      "acknowledge": "Also apply to incompatible sources",
+      "applied": "Applied.",
+      "notApplied": "Not applied.",
+      "written": "config {{count}} entries recorded",
+      "rebuild": "{{count}} sources reindexed",
+      "preview": "Review Plan",
+      "apply": "Apply"
+    },
+    "language": {
+      "remove": "Remove {{name}}",
+      "placeholder": "Select a language…",
+      "search": "Search {{name}}",
+      "openList": "Open {{name}} list",
+      "noMatch": "No matching language.",
+      "custom": "Custom",
+      "inherited": "Inherited from parent language settings",
+      "resetDefault": "Default"
+    },
+    "chips": {
+      "add": "+ Add",
+      "remove": "Remove {{item}}"
+    }
+  },
+  "settingsSources": {
+    "templates": {
+      "telegram": {
+        "summary": "Search Telegram messages from the telecrawl archive."
+      },
+      "whatsapp": {
+        "summary": "Search WhatsApp messages from the wacrawl archive."
+      },
+      "slack": {
+        "summary": "Search Slack messages from the slacrawl archive."
+      },
+      "discord": {
+        "summary": "Search Discord messages from the discrawl archive."
+      },
+      "clawgallery": {
+        "summary": "Search the clawgallery image archive."
+      },
+      "notion": {
+        "summary": "Search Notion documents from the notcrawl archive."
+      },
+      "lark": {
+        "summary": "Search Lark messages and documents with lark-cli."
+      },
+      "kakao": {
+        "summary": "Search KakaoTalk messages from the lazykatok archive."
+      },
+      "github": {
+        "summary": "Index GitHub issues and PRs over the REST API."
+      },
+      "githubGist": {
+        "summary": "Index GitHub Gists from the authenticated account."
+      },
+      "cloudDrive": {
+        "summary": "Index an rclone remote by incremental mirroring."
+      },
+      "mailExport": {
+        "summary": "Index local .eml / .mbox archive files."
+      },
+      "mailcrawl": {
+        "summary": "Search mail from the mailcrawl archive."
+      },
+      "obsidian": {
+        "summary": "Search an Obsidian vault with qmd."
+      },
+      "rss": {
+        "summary": "Index RSS 2.0 / Atom feeds by polling."
+      },
+      "spotlight": {
+        "summary": "Index local files with macOS Spotlight (mdfind) queries."
+      }
+    },
+    "groups": {
+      "advancedRuntime": "Advanced · Runtime",
+      "advanced": "Advanced",
+      "contentScope": "Content scope",
+      "parserLanguages": "Parser (document languages)",
+      "telegram": "Telegram (telecrawl)",
+      "whatsapp": "WhatsApp (wacrawl)",
+      "slack": "Slack (slacrawl)",
+      "discord": "Discord (discrawl)",
+      "clawGallery": "ClawGallery",
+      "notion": "Notion (notcrawl)",
+      "lark": "Lark (lark-cli)",
+      "kakao": "KakaoTalk (lazykatok)",
+      "github": "GitHub",
+      "githubGist": "GitHub Gist",
+      "cloudDrive": "Cloud Drive (rclone)",
+      "mailExport": "Mail Export",
+      "mail": "Mail",
+      "obsidian": "Obsidian (qmd)",
+      "rss": "RSS / News",
+      "spotlight": "Spotlight (mdfind)"
+    },
+    "fields": {
+      "binaryPath": "Executable path",
+      "databasePath": "Database path",
+      "sourcePath": "Source path",
+      "configPath": "Config file path",
+      "syncSource": "Sync source",
+      "searchTimeoutMs": "Search timeout (ms)",
+      "indexTimeoutMs": "Indexing timeout (ms)",
+      "maxBufferBytes": "Max buffer (bytes)",
+      "env": "Environment variables",
+      "workspaceId": "Workspace id",
+      "guildId": "Guild id",
+      "defaultMode": "Default search mode",
+      "embeddingProvider": "Embedding provider",
+      "embeddingModel": "Embedding model",
+      "embedLimit": "Max embeddings",
+      "root": "Root path",
+      "workspacePath": "Working directory",
+      "timeoutMs": "Timeout (ms)",
+      "vaultPath": "Archive path",
+      "configDir": "Config directory",
+      "vdrBackend": "VDR backend",
+      "syncVisual": "Sync visual data",
+      "embedderBaseUrl": "Embedder base URL",
+      "dataDir": "Data directory",
+      "sourceAdapter": "Source adapter",
+      "repos": "Repositories (owner/repo)",
+      "tokenEnv": "Token env var name",
+      "baseUrl": "REST base URL",
+      "maxPages": "Max pages",
+      "maxDocuments": "Max documents",
+      "ghCliFallback": "Fall back to gh CLI token",
+      "statePath": "Incremental cursor path",
+      "maxGists": "Max Gists",
+      "provider": "Provider",
+      "remote": "Remote name",
+      "rcloneConfigPath": "rclone config path",
+      "extensions": "Include extensions",
+      "includeGlob": "Include globs",
+      "excludeGlob": "Exclude globs",
+      "exportFormats": "Export formats",
+      "maxBytesPerFile": "Max bytes per file",
+      "maxContentChars": "Max characters per document",
+      "concurrency": "Concurrency",
+      "bandwidthLimit": "Bandwidth limit",
+      "dryRun": "Dry run",
+      "docLanguages": "Document languages",
+      "kordocOcr": "kordoc OCR",
+      "rcloneBinaryPath": "rclone executable path",
+      "mailPaths": "Mail file/directory paths",
+      "account": "Account",
+      "mailbox": "Mailbox",
+      "backend": "Backend",
+      "source": "Source",
+      "fixture": "Fixture",
+      "himalayaConfig": "himalaya config",
+      "qmdBinaryPath": "qmd executable path",
+      "feeds": "Feeds",
+      "maxItemsPerFeed": "Max items per feed",
+      "queries": "Queries",
+      "onlyIn": "Search directory (-onlyin)",
+      "maxResultsPerQuery": "Max results per query",
+      "defaultOption": "(Default)",
+      "envAria": "Environment variables (JSON)",
+      "envEditorHint": "Environment variables injected into the child process. Keep secret tokens/passwords in OS env vars instead.",
+      "hint": {
+        "binaryPathEmpty": "Leave empty to find it on PATH.",
+        "nativeConfig": "Dazzi never rewrites a native config you set yourself.",
+        "env": "Environment variables injected into the child process. Keep secrets in OS env vars.",
+        "workspace": "slacrawl search returns results only when a workspace is set.",
+        "embeddingProvider": "Provider used in the discrawl native config.",
+        "embeddingModel": "Model used in the discrawl native config.",
+        "envSimple": "Keep secrets in OS env vars.",
+        "defaultOn": "Default: on.",
+        "defaultOff": "Default: off.",
+        "tokenEnv": "This is the env var name that holds the token, not the token itself.",
+        "rcloneConfig": "A rclone.conf you set yourself is used read-only."
+      },
+      "envError": {
+        "object": "Environment variables must be a JSON object.",
+        "string": "The value of '{{name}}' must be a string.",
+        "secret": "The value of '{{name}}' looks like a plaintext secret, so saving is refused. Move it to an OS env var.",
+        "json": "Not valid JSON."
+      },
+      "list": {
+        "removeItem": "Remove item",
+        "addItem": "Add item",
+        "addLabel": "+ Add item",
+        "itemAt": "{{label}} {{index}}",
+        "removeItemAt": "Remove {{label}} {{index}}",
+        "addItemWith": "Add {{label}}"
+      },
+      "feedsAria": {
+        "urlAria": "Feed URL {{index}}",
+        "categoryAria": "Feed category {{index}}",
+        "removeAt": "Remove feed {{index}}",
+        "addAria": "Add feed",
+        "addLabel": "+ Add feed"
+      }
+    },
+    "cadence": {
+      "min5": "5 min",
+      "min15": "15 min",
+      "min30": "30 min",
+      "hour1": "1 hour",
+      "hour3": "3 hours",
+      "hour6": "6 hours",
+      "hour12": "12 hours",
+      "day1": "Daily"
+    },
+    "units": {
+      "message": "messages",
+      "document": "documents",
+      "image": "images"
+    },
+    "common": {
+      "manual": "Manual",
+      "itemNoun": "items",
+      "off": "Off",
+      "inUse": "In use",
+      "syncing": "Updating…",
+      "justNow": "just now",
+      "minutesAgo": "{{count}} min ago",
+      "hoursAgo": "{{count}} hr ago",
+      "daysAgo": "{{count}} d ago",
+      "autoOk": "Auto: succeeded {{ago}}",
+      "autoFail": "Auto: failed {{ago}}"
+    },
+    "meta": {
+      "folders": "{{count}} folders",
+      "chunkCount": "{{count}} {{noun}}",
+      "noDocsYet": "No documents read yet",
+      "notFetchedYet": "No content fetched yet",
+      "importedNone": "No {{noun}} imported",
+      "liveQuery": "Queried live on search",
+      "appNeeds": "{{name}} desktop app required"
+    },
+    "indexing": {
+      "title": "Indexing",
+      "desc": "Check that your search folders and connected apps are up to date, and re-fetch only what changed.",
+      "progress": "Progress",
+      "refreshStatus": "Refresh status",
+      "localFolder": "Local folders",
+      "localIntervalAria": "Local folder refresh interval",
+      "refreshLocalAria": "Refresh local folders now",
+      "refreshTitle": "Refresh now",
+      "rowIntervalAria": "{{id}} refresh interval",
+      "rowRefreshAria": "Update {{id}} now",
+      "rowRefreshTitle": "Update now",
+      "localUpdating": "Refreshing…",
+      "empty": "No data sources connected. Add one from Connected Apps.",
+      "footer": "Only changed files and messages are re-read. An app connected for the first time is fully fetched.",
+      "syncAll": "Update all now",
+      "localRefreshName": "Refresh local folders",
+      "localRefreshHint": "Re-read documents in the search folders to update the search index. Only changed documents are processed.",
+      "localRefreshButton": "Refresh now",
+      "scanned": "Scanned {{scanned}} · Written {{written}} · Deleted {{deleted}} · Skipped {{skipped}}",
+      "diagnostics": " · {{count}} diagnostics",
+      "scheduleUnsupported": "This computer does not support automatic refresh while the app is closed.",
+      "scheduleRegisterFailed": "Could not register automatic refresh: {{error}}",
+      "scheduleNotRegistered": "Automatic refresh is not registered yet. Pick the interval again to register it.",
+      "scheduleConflicts": "This computer already has a scheduled task that refreshes Dazzi separately ({{list}}). To avoid processing the same folders twice, we recommend using only one.",
+      "scheduleActive": "Even when the app is closed, it checks every {{minutes}} min and refreshes only the items that are due.",
+      "scheduleLastCheck": "Last checked {{ago}}.",
+      "scheduleNever": "It has never run yet."
+    },
+    "apps": {
+      "title": "Connected apps",
+      "desc": "Search your messengers, mail, and cloud content together in Dazzi.",
+      "myConnections": "My connections",
+      "groups": {
+        "messengers": "Messengers",
+        "docsNotes": "Documents & notes",
+        "mail": "Mail",
+        "cloudDev": "Cloud & dev",
+        "newsOther": "News & other"
+      },
+      "empty": "No apps connected. Add one below.",
+      "connectApps": "Connect an app",
+      "connectAppsDesc": "Choose an app to add.",
+      "connected": "Connected",
+      "connect": "Connect",
+      "promptTitle": "Connect {{name}}",
+      "promptDesc": "Choose a connection id and add it. Leave empty to use the template name.",
+      "promptLabel": "Connection id",
+      "promptConfirm": "Add connection"
+    },
+    "sourceDetail": {
+      "fallbackSummary": "Manage the settings for this connection.",
+      "statusSection": "Connection status",
+      "enabledName": "Enabled",
+      "enabledHint": "Turn off to temporarily exclude this connection from search.",
+      "appRow": "{{name}} desktop app",
+      "appHintMissing": "To fetch {{name}} content, the {{name}} app must be on this Mac.",
+      "appHintInstalled": "Content is fetched from the {{name}} app on this Mac.",
+      "appDownload": "Download {{name}}",
+      "appNeeded": "Required",
+      "appInstalled": "Installed",
+      "refreshName": "Refresh",
+      "refreshLast": "Last refreshed {{date}}",
+      "refreshNever": "No content fetched yet.",
+      "stateNone": "No status",
+      "intervalName": "Refresh interval",
+      "intervalHint": "Even when the app is closed, the computer fetches new content at the set interval. Set it to Manual to fetch only when you click.",
+      "generalSection": "General",
+      "descName": "Description for the AI",
+      "descHint": "Note when this connection is worth consulting.",
+      "descAria": "Description",
+      "templateSection": "{{label}} settings",
+      "removeSection": "Disconnect",
+      "removeHint": "Removed only from Dazzi search; the source app's data is not deleted.",
+      "confirmTitle": "Disconnect this connection?",
+      "confirmBody": "The '{{alias}}' connection will be removed from Dazzi search. The source app's data is not deleted."
+    },
+    "scope": {
+      "title": "Search scope",
+      "desc": "Choose the folders Dazzi reads and searches, and what to exclude.",
+      "foldersTitle": "Folders to search",
+      "foldersDesc": "The contents of these folders are included in AI search.",
+      "folderName": "Search folders",
+      "folderHint": "Add or remove folders by entering their paths directly.",
+      "addFolder": "Add folder",
+      "emptyFolderNote": "No search folders yet. Without any, the default search scope is used.",
+      "excludeTitle": "Items to exclude",
+      "excludeDesc": "Folders and files that will not be searched.",
+      "excludeNote": "Developer folders ({{folders}}) and all folders starting with a dot (.idea, .vscode, .cache, etc.) are excluded automatically.",
+      "excludeList": "Exclusion list",
+      "excludeListHint": "Also exclude folders and files with matching names.",
+      "fileScopeTitle": "File inclusion scope",
+      "autoWatch": "Auto-detect changes",
+      "autoWatchHintOff": "Unavailable because file search is off.",
+      "autoWatchHintOn": "Updates the file-name search list when files change. The document content index is refreshed manually from the Indexing screen.",
+      "addFolderTitle": "Add search folder",
+      "addItemTitle": "Add exclusion",
+      "addFolderDesc": "Enter the folder path to include in search.",
+      "addItemDesc": "Enter the folder or file name to exclude from search.",
+      "folderPath": "Folder path",
+      "item": "Item",
+      "addFolderPlaceholder": "e.g. ~/Documents",
+      "addItemPlaceholder": "e.g. node_modules",
+      "confirmAdd": "Add",
+      "addChip": "+ Add"
+    },
+    "web": {
+      "title": "Web search",
+      "desc": "Uses internet search results in answers for questions that need up-to-date information.",
+      "useSection": "Use web search",
+      "useHint": "Your question may be sent to the search service.",
+      "providerName": "Search service",
+      "providerHintOn": "The default is automatic.",
+      "providerHintOff": "Turn on web search to choose.",
+      "auto": "Automatic",
+      "fetchName": "Read web page content",
+      "fetchHintOn": "Uses the body text of search-result links in answers.",
+      "fetchHintOff": "Web search is off."
+    },
+    "reading": {
+      "title": "Document reading",
+      "desc": "Set the preferred languages for reading and searching documents.",
+      "sectionTitle": "Document languages",
+      "sectionDesc": "The preferred languages for reading and searching document content.",
+      "langHint": "You can select more than one."
+    },
+    "duplicates": {
+      "title": "Duplicate cleanup",
+      "desc": "Cleans up so the same content does not repeat in search results.",
+      "section": "Search result cleanup",
+      "exactName": "Only one of each exact duplicate",
+      "exactHint": "For files with identical content, only the most recent is shown.",
+      "versionsName": "Group similar versions",
+      "versionsHint": "Groups related files like report_final and report_final2 together.",
+      "intervalName": "Check interval",
+      "intervalHint": "How often to re-check for file changes."
     }
   }
 }

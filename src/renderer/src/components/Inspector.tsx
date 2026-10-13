@@ -47,7 +47,7 @@ import {
 	type FileActionTarget,
 } from "../state/file-actions";
 import { basename, dirname } from "../state/paths";
-import { RELATION_LABELS } from "../state/version-family";
+import { VERSION_TAG_KEYS } from "../state/version-family";
 import { imageTarget } from "../state/answer-markdown";
 import type { FileKind } from "../state/kinds";
 import type { ImageActions } from "./AnswerImage";
@@ -151,10 +151,11 @@ export function Inspector({
 	onToast,
 	imageActions,
 }: InspectorProps): ReactElement {
+	const { t } = useTranslation();
 	return (
 		<aside
 			className="inspector w-full min-w-0 h-full flex flex-col bg-subtle border-l border-border overflow-hidden"
-			aria-label="Inspector"
+			aria-label={t("finderComponents.inspectorAside")}
 		>
 			{view === "evidence" ? (
 				<EvidencePanel
@@ -236,18 +237,18 @@ function InfoHalf({
 	}, [focusedPath]);
 	const { t } = useTranslation();
 	const included = indexStatus === null || !indexStatus.excluded;
-	const infoRows = entry === null ? [] : buildInfoRows(details, entry, (k, def) => t(k, def));
+	const infoRows = entry === null ? [] : buildInfoRows(details, entry);
 	const shownRows = visibleInfoRows(infoRows, brief);
 	const generalRows = shownRows.filter((row) => row.section === "general");
 	const imageRows = shownRows.filter((row) => row.section === "image");
 	const moreInfo = hasMoreInfoRows(infoRows);
 
 	return (
-		<div className="inspector-half flex-1 min-h-0 flex flex-col overflow-hidden relative" aria-label="Info">
+		<div className="inspector-half flex-1 min-h-0 flex flex-col overflow-hidden relative" aria-label={t("inspector.title")}>
 
 			{entry === null ? (
 				<div className="flex-1 flex items-center justify-center px-10 text-center text-sm text-ink-muted leading-body whitespace-pre-line">
-					{t("inspector.evidencePanel.emptyTitle", "파일을 선택하면\n미리보기와 정보를 표시합니다.")}
+					{t("inspector.evidencePanel.emptyTitle")}
 				</div>
 			) : (
 				<div className="inspector-body flex-1 min-h-0 overflow-auto px-16 pt-18 pb-24">
@@ -261,14 +262,14 @@ function InfoHalf({
 						{entry.kind === "file" ? (
 							<Chip onClick={() => onToggleIndex(entry)}>
 								<CheckIcon size={12} />
-								{included ? t("contextMenu.includeInIndex", "인덱스 포함") : t("contextMenu.excludeFromIndex", "인덱스 제외")}
+								{included ? t("contextMenu.includeInIndex") : t("contextMenu.excludeFromIndex")}
 							</Chip>
 						) : null}
 						<Chip onClick={() => onTrash(entry)}>
-							<TrashIcon size={12} />{t("contextMenu.trashShort", "휴지통")}
+							<TrashIcon size={12} />{t("contextMenu.trashShort")}
 						</Chip>
 						<Chip onClick={() => onCopyPath(entry)}>
-							<CopyIcon size={12} />{t("contextMenu.copyPath", "경로 복사")}
+							<CopyIcon size={12} />{t("contextMenu.copyPath")}
 						</Chip>
 					</div>
 
@@ -276,14 +277,14 @@ function InfoHalf({
 
 					<div className="info-section border-t border-border pt-12 mt-12">
 						<div className="section-title flex items-center justify-between mb-6">
-							<span className="text-meta font-semibold text-ink">{t("inspector.generalInfo", "일반 정보")}</span>
+							<span className="text-meta font-semibold text-ink">{t("inspector.generalInfo")}</span>
 							{moreInfo ? (
 								<button
 									type="button"
 									className="p-0 border-0 bg-transparent text-accent-text text-badge cursor-pointer"
 									onClick={() => setBrief((current) => !current)}
 								>
-									{brief ? t("inspector.showMore", "전체 정보") : t("inspector.showLess", "간략히")}
+									{brief ? t("inspector.showMore") : t("inspector.showLess")}
 								</button>
 							) : null}
 						</div>
@@ -297,7 +298,7 @@ function InfoHalf({
 					{imageRows.length === 0 ? null : (
 						<div className="info-section border-t border-border pt-12 mt-12">
 							<div className="section-title mb-6">
-								<span className="text-meta font-semibold text-ink">{t("inspector.imageInfo", "사진 정보")}</span>
+								<span className="text-meta font-semibold text-ink">{t("inspector.imageInfo")}</span>
 							</div>
 							<dl className="m-0">
 								{imageRows.map((row) => (
@@ -508,7 +509,7 @@ function MultiInfoHalf({
 	// DOM order paints back-to-front so the focused paper lands on top.
 	const staged = [...cards].reverse();
 	return (
-		<div className="inspector-half flex-1 min-h-0 flex flex-col overflow-hidden relative" aria-label="Info">
+		<div className="inspector-half flex-1 min-h-0 flex flex-col overflow-hidden relative" aria-label={t("inspector.title")}>
 			<div className="inspector-body flex-1 min-h-0 overflow-auto px-16 pt-18 pb-24">
 				<div className="preview-stack relative flex-none flex items-center justify-center h-240 mb-14">
 					{staged.map((card, index) => {
@@ -539,12 +540,12 @@ function MultiInfoHalf({
 				</div>
 				<div className="info-section border-t border-border pt-12 mt-12">
 					<div className="section-title mb-6">
-						<span className="text-meta font-semibold text-ink">{t("inspector.generalInfo", "일반 정보")}</span>
+						<span className="text-meta font-semibold text-ink">{t("inspector.generalInfo")}</span>
 					</div>
 					<dl className="m-0">
-						{summary.sizeLabel === null ? null : <InfoRow label={t("inspector.totalSize", "총 크기")} value={summary.sizeLabel} />}
-						{summary.createdRange === null ? null : <InfoRow label={t("inspector.labels.dateCreated", "생성한 날짜")} value={summary.createdRange} />}
-						{summary.modifiedRange === null ? null : <InfoRow label={t("inspector.labels.dateModified", "수정한 날짜")} value={summary.modifiedRange} />}
+						{summary.sizeLabel === null ? null : <InfoRow label={t("inspector.totalSize")} value={summary.sizeLabel} />}
+						{summary.createdRange === null ? null : <InfoRow label={t("inspector.labels.dateCreated")} value={summary.createdRange} />}
+						{summary.modifiedRange === null ? null : <InfoRow label={t("inspector.labels.dateModified")} value={summary.modifiedRange} />}
 					</dl>
 				</div>
 			</div>
@@ -689,6 +690,7 @@ function VersionsSection({
 	readonly entry: FinderEntry;
 	readonly onOpenMember: (path: string) => void;
 }): ReactElement {
+	const { t } = useTranslation();
 	const rows = [
 		{ path: family.headPath, name: family.headName, relation: "latest" as const, where: dirname(family.headPath) },
 		...family.members.map((member) => ({ path: member.path, name: member.name, relation: member.relation, where: member.where })),
@@ -696,7 +698,7 @@ function VersionsSection({
 	return (
 		<div className="info-section border-t border-border pt-12 mt-12">
 			<div className="section-title flex items-center justify-between mb-6">
-				<span className="text-meta font-semibold text-ink">Versions</span>
+				<span className="text-meta font-semibold text-ink">{t("inspector.versions")}</span>
 				<span className="inline-flex items-center h-[19px] px-6 rounded-full bg-input text-tile font-semibold text-ink-body">{rows.length}</span>
 			</div>
 			<div className="flex flex-col">
@@ -732,7 +734,7 @@ function VersionTag({ relation }: { readonly relation: "latest" | "exact" | "nea
 					: "bg-input text-ink-muted";
 	return (
 		<span className={cn("vtag flex-none inline-flex items-center h-16 px-6 rounded-4 text-tile font-semibold whitespace-nowrap leading-none", tone)}>
-			{relation === "latest" ? t("inspector.latestVersion", "최신본") : t(`inspector.versionRelations.${relation}`, RELATION_LABELS[relation])}
+			{t(VERSION_TAG_KEYS[relation])}
 		</span>
 	);
 }
@@ -763,9 +765,9 @@ function EvidencePanel({
 	const item = evidence.find((entry) => entry.number === selected);
 	if (item === undefined) {
 		return (
-			<div className="inspector-half flex-1 min-h-0 flex flex-col overflow-hidden relative" aria-label="Evidence">
+			<div className="inspector-half flex-1 min-h-0 flex flex-col overflow-hidden relative" aria-label={t("inspector.evidence")}>
 				<div className="flex-1 flex items-center justify-center px-10 text-center text-sm text-ink-muted leading-body whitespace-pre-line">
-					{t("inspector.evidencePanel.emptyTitle", "답변의 근거가\n여기에 표시됩니다.")}
+					{t("inspector.evidencePanel.emptyTitle")}
 				</div>
 			</div>
 		);
@@ -780,7 +782,7 @@ function EvidencePanel({
 	const excerptImages = { folder: local ? dirname(source) : null, actions: imageActions };
 	const sourceImage = local ? imageTarget(source, null) : null;
 	return (
-		<div className="inspector-half flex-1 min-h-0 flex flex-col overflow-hidden relative" aria-label="Evidence">
+		<div className="inspector-half flex-1 min-h-0 flex flex-col overflow-hidden relative" aria-label={t("inspector.evidence")}>
 			<div className="inspector-body flex-1 min-h-0 overflow-auto px-16 pt-18 pb-24">
 				<div className="evidence-tabs flex gap-3 overflow-auto mb-12">
 					{evidence.map((entry) => (
@@ -813,7 +815,7 @@ function EvidencePanel({
 					<button
 						type="button"
 						className="preview-title text-left text-body font-semibold text-ink leading-[1.3] [overflow-wrap:anywhere] cursor-pointer border-0 bg-transparent p-0 transition-colors duration-(--dur-color) ease-[ease] hover:text-accent-text"
-						title={url === null ? t("inspector.evidencePanel.showInFinder", "Show in Finder") : t("inspector.evidencePanel.openInBrowser", "Open in browser")}
+						title={url === null ? t("inspector.evidencePanel.showInFinder") : t("inspector.evidencePanel.openInBrowser")}
 						onClick={() => onReveal(source)}
 					>
 						{item.number}. {heading}
@@ -826,7 +828,7 @@ function EvidencePanel({
 				)}
 				{detail === null ? null : <div className="preview-sub mt-4 text-badge text-ink-muted">{detail}</div>}
 
-				<div className="text-badge font-semibold text-ink-muted">{t("inspector.evidencePanel.excerpts", "근거 내용 발췌")}</div>
+				<div className="text-badge font-semibold text-ink-muted">{t("inspector.evidencePanel.excerpts")}</div>
 				<div className="flex flex-col gap-8 mt-4">
 					{item.summary.length === 0 ? null : (
 						<InlineWithImages
@@ -860,6 +862,7 @@ function EvidenceImagePaper({
 	readonly kind: FileKind;
 	readonly onOpen: ImageActions["onOpenImage"];
 }): ReactElement {
+	const { t } = useTranslation();
 	const [failed, setFailed] = useState(false);
 	if (failed) {
 		return (
@@ -872,7 +875,7 @@ function EvidenceImagePaper({
 		<button
 			type="button"
 			data-image-path={path}
-			aria-label={`${name} 훑어보기`}
+			aria-label={t("finderComponents.quickLookLabel", { name })}
 			className="preview-paper flex-none flex w-full items-center justify-center overflow-hidden rounded-6 border border-border bg-window shadow-raised mb-14 p-0 cursor-zoom-in max-h-[50vh]"
 			onClick={() => onOpen({ path, name })}
 		>

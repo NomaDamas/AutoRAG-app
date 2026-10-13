@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import type { DirectorySnapshot } from "../data/directory-store";
 import type { FinderEntry } from "../data/entries";
 import type { EntrySidecar } from "../data/entry-sidecar";
@@ -66,9 +67,13 @@ export function useRowPipeline(input: RowPipelineInput): RowPipeline {
 	const { sort, grouping, showHiddenFiles, families, stackPinned, stackSelected } = input;
 	const enrichedOrder = (sort !== null && !LISTED_SORT_KEYS.has(sort.key)) || !LISTED_GROUP_KEYS.has(grouping);
 	const sidecarVersion = useSidecarVersion(sidecar, enrichedOrder);
+	// Group headers are translated text: a language switch must regroup.
+	const { i18n } = useTranslation();
+	const language = i18n.language;
 
 	const stackSections = useMemo<readonly GroupSection<TreeRow>[]>(() => {
 		void sidecarVersion;
+		void language;
 		const prepare = (entries: readonly FinderEntry[]): readonly StackRow[] => {
 			const shown = visibleEntries(entries, showHiddenFiles);
 			return applyVersionStacks(sortEntries(enrichedOrder ? shown.map((entry) => sidecar.resolve(entry)) : shown, sort), {
@@ -101,11 +106,12 @@ export function useRowPipeline(input: RowPipelineInput): RowPipeline {
 				},
 			}),
 		}));
-	}, [searching, hits, listing, sort, grouping, showHiddenFiles, families, stackPinned, stackSelected, expanded, children, searchScope, path, sidecar, enrichedOrder, sidecarVersion]);
+	}, [searching, hits, listing, sort, grouping, showHiddenFiles, families, stackPinned, stackSelected, expanded, children, searchScope, path, sidecar, enrichedOrder, sidecarVersion, language]);
 	const stackRows = useMemo(() => stackSections.flatMap((section) => section.rows), [stackSections]);
 
 	const paneViews = useMemo<readonly ColumnPaneView[]>(() => {
 		void sidecarVersion;
+		void language;
 		return panePaths.map((panePath, index) => {
 			const snapshot = panes[index];
 			const shown = visibleEntries(snapshot?.entries ?? [], showHiddenFiles);
@@ -116,7 +122,7 @@ export function useRowPipeline(input: RowPipelineInput): RowPipeline {
 			});
 			return { path: panePath, loaded: snapshot?.loaded === true, rows, sections: groupRows(rows, grouping, Date.now()) };
 		});
-	}, [panePaths, panes, showHiddenFiles, sort, grouping, families, stackPinned, stackSelected, sidecar, enrichedOrder, sidecarVersion]);
+	}, [panePaths, panes, showHiddenFiles, sort, grouping, families, stackPinned, stackSelected, sidecar, enrichedOrder, sidecarVersion, language]);
 	// Keyboard and shift-range order inside a pane is the visual section order
 	// (each section's rows, sections flattened), not the pre-group sort order.
 	const paneEntries = useMemo(

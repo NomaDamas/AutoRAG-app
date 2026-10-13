@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactElement, type RefObject } from "react";
+import { useTranslation } from "react-i18next";
 import type { FinderEntry } from "../data/entries";
 import { cn } from "../lib/cn";
 import { fileKindOf } from "../state/entry-values";
@@ -74,6 +75,7 @@ export function IconGrid({
 	/** A rubber-band drag on empty space: the covered tiles, in view order. */
 	readonly onMarqueeSelect: (keys: readonly string[]) => void;
 }): ReactElement {
+	const { t } = useTranslation();
 	const contentRef = useRef<HTMLDivElement | null>(null);
 	const scroll = useScrollWindow(listRef, contentRef);
 	// Tile geometry read from the laid-out grid: tracks per row and one row's
@@ -207,7 +209,7 @@ export function IconGrid({
 			<div
 				ref={contentRef}
 				role="listbox"
-				aria-label="Files"
+				aria-label={t("finderComponents.filesList")}
 				aria-multiselectable="true"
 				style={{
 					paddingTop: padTop,
@@ -281,6 +283,7 @@ function IconTile({
 	readonly renameDraft: string | null;
 	readonly callbacks: RowCallbacks;
 }): ReactElement {
+	const { t } = useTranslation();
 	// Icon and OS kind come from the sidecar: only this tile re-renders when they land.
 	const { entry } = useEntrySidecar(useDirectoryData().sidecar, listed);
 	const { colors: tagColors } = useTagCatalog();
@@ -332,8 +335,8 @@ function IconTile({
 							"absolute -right-4 -bottom-2 min-w-20 h-18 px-5 border border-window rounded-9 text-badge font-semibold cursor-pointer",
 							stackOpen ? "bg-border-strong text-ink" : "bg-border text-ink-body",
 						)}
-						title={`다른 버전 ${stackCount}개 · 클릭하면 펼쳐집니다`}
-						aria-label={`다른 버전 ${stackCount}개 · 클릭하면 펼쳐집니다`}
+						title={t("finderComponents.stackToggle", { count: stackCount })}
+						aria-label={t("finderComponents.stackToggle", { count: stackCount })}
 						aria-expanded={stackOpen}
 						onClick={(event) => {
 							event.stopPropagation();

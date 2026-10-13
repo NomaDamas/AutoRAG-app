@@ -27,6 +27,7 @@ import { lstat, open, readFile, rm } from "node:fs/promises";
 import { Worker } from "node:worker_threads";
 import { promisify } from "node:util";
 import { crc32, deflateRaw } from "node:zlib";
+import { t } from "../shared/i18n/core";
 
 const deflate = promisify(deflateRaw);
 
@@ -166,10 +167,10 @@ class LzmaWorker {
 			const request = this.waiting.get(reply.id);
 			this.waiting.delete(reply.id);
 			if (reply.ok && reply.data !== undefined) request?.resolve(reply.data);
-			else request?.reject(new Error(reply.message ?? "LZMA 압축에 실패했습니다"));
+			else request?.reject(new Error(reply.message ?? t("main.archive.lzmaFailed")));
 		});
 		const fail = (): void => {
-			for (const request of this.waiting.values()) request.reject(new Error("LZMA 압축 작업이 중단되었습니다"));
+			for (const request of this.waiting.values()) request.reject(new Error(t("main.archive.lzmaAborted")));
 			this.waiting.clear();
 		};
 		this.worker.on("error", fail);

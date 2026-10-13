@@ -1,4 +1,5 @@
 import { useCallback, useMemo, type ReactElement } from "react";
+import { useTranslation } from "react-i18next";
 import { unzipSync } from "fflate";
 import type { PreviewDocument } from "../shared/contract";
 import { buildPptxDeck, entryMime, EMU_PER_PX, type ParseXml, type PptxDeck, type XmlDocument } from "../shared/pptx-model";
@@ -28,6 +29,7 @@ function parsePptxXml(text: string): XmlDocument | null {
  * revoked when the page is released.
  */
 export function PptxView({ file }: { readonly file: PreviewDocument }): ReactElement {
+	const { t } = useTranslation();
 	const bytes = file.bytes;
 	const deck: PptxDeck | null = useMemo(() => (bytes === null ? null : buildPptxDeck(bytes, parsePptxXml)), [bytes]);
 	const boxes = useMemo(
@@ -36,9 +38,9 @@ export function PptxView({ file }: { readonly file: PreviewDocument }): ReactEle
 	);
 	const draw = useCallback<DrawPage>(
 		(index, width, onBox) => {
-			if (deck === null || bytes === null) throw new Error("프레젠테이션을 열지 못했습니다");
+			if (deck === null || bytes === null) throw new Error(t("quickLook.pptx.openFailed"));
 			const slide = deck.slides[index];
-			if (slide === undefined) throw new Error("슬라이드가 없습니다");
+			if (slide === undefined) throw new Error(t("quickLook.pptx.noSlides"));
 			const naturalWidth = deck.width / EMU_PER_PX;
 			const naturalHeight = deck.height / EMU_PER_PX;
 			onBox({ width: naturalWidth, height: naturalHeight });
@@ -77,9 +79,9 @@ export function PptxView({ file }: { readonly file: PreviewDocument }): ReactEle
 				},
 			};
 		},
-		[deck, bytes],
+		[deck, bytes, t],
 	);
-	if (bytes === null || deck === null || deck.slides.length === 0) return <FallbackView file={file} note="프레젠테이션을 읽지 못했습니다" />;
+	if (bytes === null || deck === null || deck.slides.length === 0) return <FallbackView file={file} note={t("quickLook.pptx.readFailed")} />;
 	// The stage centers measured viewers, which would collapse `PagedView`'s
 	// flex row to its content width; this pane stretches it in either layout.
 	return (

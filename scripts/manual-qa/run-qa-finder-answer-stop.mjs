@@ -93,10 +93,10 @@ const readState = ([panel]) => {
 			!input.disabled &&
 			root.querySelector(".skeleton") === null &&
 			root.querySelector(".water-wave-thinking") === null &&
-			(root.textContent ?? "").includes("응답 생성을 중단했습니다."),
+			(root.textContent ?? "").includes("Generation stopped."),
 		generating: root.querySelector(".skeleton") !== null || root.querySelector(".water-wave-thinking") !== null,
 		inputDisabled: input?.disabled ?? null,
-		stoppedNotice: (root.textContent ?? "").includes("응답 생성을 중단했습니다."),
+		stoppedNotice: (root.textContent ?? "").includes("Generation stopped."),
 		error: root.querySelector(".text-danger-text")?.textContent ?? "",
 	};
 };
@@ -145,7 +145,7 @@ try {
 					!input.disabled &&
 					root.querySelector(".skeleton") === null &&
 					root.querySelector(".water-wave-thinking") === null &&
-					(root.textContent ?? "").includes("응답 생성을 중단했습니다.")
+					(root.textContent ?? "").includes("Generation stopped.")
 				);
 			},
 			AI_PANEL,

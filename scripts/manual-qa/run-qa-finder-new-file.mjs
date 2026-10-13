@@ -93,24 +93,24 @@ try {
 	check(
 		"the empty-space menu's New submenu lists a folder and every document format",
 		submenuLabels.includes("New Folder") &&
-			["텍스트 파일", "Markdown 문서", "서식 있는 텍스트", "Word 문서", "Excel 스프레드시트", "PowerPoint 프레젠테이션"].every((label) =>
+			["Text File", "Markdown Document", "Rich Text", "Word Document", "Excel Spreadsheet", "PowerPoint Presentation"].every((label) =>
 				submenuLabels.includes(label),
 			),
 		`items=${JSON.stringify(submenuLabels)}`,
 	);
 
 	/* ----------------------- 2 + 3. text file, inline rename, commit the rename */
-	await chooseNew(page, "텍스트 파일");
+	await chooseNew(page, "Text File");
 	await waitForDisk(() => existsSync(join(top, "untitled.txt")), "untitled.txt");
-	await page.waitForSelector('input[aria-label="새 이름"]', { timeout: 5_000 });
-	const draft = await page.locator('input[aria-label="새 이름"]').inputValue();
+	await page.waitForSelector('input[aria-label="New name"]', { timeout: 5_000 });
+	const draft = await page.locator('input[aria-label="New name"]').inputValue();
 	await page.screenshot({ path: join(EVIDENCE, "2-inline-rename.png") });
 	check(
 		"the New menu writes untitled.txt and starts the inline rename selected",
 		existsSync(join(top, "untitled.txt")) && draft === "untitled.txt",
 		`draft=${draft} disk=${listNames(top)}`,
 	);
-	await page.locator('input[aria-label="새 이름"]').fill("meeting-notes.txt");
+	await page.locator('input[aria-label="New name"]').fill("meeting-notes.txt");
 	await page.keyboard.press("Enter");
 	await waitForDisk(() => existsSync(join(top, "meeting-notes.txt")) && !existsSync(join(top, "untitled.txt")), "rename commit");
 	check(
@@ -121,7 +121,7 @@ try {
 
 	/* ------------------------------------ 4. Word document is a real package */
 	await openBackgroundMenu(page);
-	await chooseNew(page, "Word 문서");
+	await chooseNew(page, "Word Document");
 	// The file appears before its bytes are fully written (create, then write):
 	// wait until the package actually unzips instead of reading it on first sight.
 	let parts = [];
@@ -134,7 +134,7 @@ try {
 		}
 	}, "untitled.docx to be a readable zip");
 	check(
-		"Word 문서 writes an OOXML docx package, not an empty stub",
+		"Word Document writes an OOXML docx package, not an empty stub",
 		parts.includes("[Content_Types].xml") && parts.includes("word/document.xml"),
 		`parts=${JSON.stringify(parts)}`,
 	);
@@ -155,14 +155,14 @@ try {
 	/* ------------------------------ 5. Finders-style collision numbering */
 	const before5 = listNames(top);
 	await openBackgroundMenu(page);
-	await chooseNew(page, "텍스트 파일");
+	await chooseNew(page, "Text File");
 	const firstText = await waitForNewName(before5, "first new text file");
 	await page.keyboard.press("Escape");
 	check("a new text file is untitled.txt", firstText === "untitled.txt", `new=${firstText} disk=${listNames(top)}`);
 
 	const before5b = listNames(top);
 	await openBackgroundMenu(page);
-	await chooseNew(page, "텍스트 파일");
+	await chooseNew(page, "Text File");
 	const secondText = await waitForNewName(before5b, "second new text file");
 	await page.keyboard.press("Escape");
 	check(

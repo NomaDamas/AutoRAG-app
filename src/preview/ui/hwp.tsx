@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type ReactElement } from "react";
+import { useTranslation } from "react-i18next";
 import type { PreviewDocument } from "../shared/contract";
 import type { HwpPages } from "../shared/hwp";
 import { FallbackView, Status } from "./fallback";
@@ -11,6 +12,7 @@ import { loadRhwp } from "./rhwp";
  * of that SVG, so nothing in the document can run script or reach the network.
  */
 export function HwpView({ file }: { readonly file: PreviewDocument }): ReactElement {
+	const { t } = useTranslation();
 	const bytes = file.bytes;
 	const [pages, setPages] = useState<HwpPages | null>(null);
 	const [error, setError] = useState<string | null>(null);
@@ -26,7 +28,7 @@ export function HwpView({ file }: { readonly file: PreviewDocument }): ReactElem
 				setPages(opened);
 			})
 			.catch((caught: unknown) => {
-				if (!cancelled) setError(caught instanceof Error ? caught.message : "한글 문서를 열 수 없습니다");
+				if (!cancelled) setError(caught instanceof Error ? caught.message : t("quickLook.hwp.openFailed"));
 			});
 		return () => {
 			cancelled = true;
@@ -38,7 +40,7 @@ export function HwpView({ file }: { readonly file: PreviewDocument }): ReactElem
 		(index) => {
 			if (pages === null) throw new Error("HWP document is not open");
 			const image = new Image();
-			image.alt = `${index + 1}페이지`;
+			image.alt = t("quickLook.hwp.page", { count: index + 1 });
 			image.draggable = false;
 			const done = Promise.resolve()
 				.then(() => {
@@ -48,12 +50,12 @@ export function HwpView({ file }: { readonly file: PreviewDocument }): ReactElem
 				.then(() => image);
 			return { done, cancel: () => image.removeAttribute("src") };
 		},
-		[pages],
+		[pages, t],
 	);
 
-	if (bytes === null) return <FallbackView file={file} note="문서를 읽지 못했습니다" />;
+	if (bytes === null) return <FallbackView file={file} note={t("quickLook.documents.readFailed")} />;
 	if (error !== null) return <FallbackView file={file} note={error} />;
-	if (pages === null) return <Status>불러오는 중</Status>;
-	if (pages.boxes.length === 0) return <FallbackView file={file} note="페이지가 없습니다" />;
+	if (pages === null) return <Status>{t("quickLook.status.loading")}</Status>;
+	if (pages.boxes.length === 0) return <FallbackView file={file} note={t("quickLook.hwp.noPages")} />;
 	return <PagedView file={file} boxes={pages.boxes} draw={draw} />;
 }

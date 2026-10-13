@@ -194,7 +194,7 @@ export function PathBar({
 		// fills the width, so the path can always be edited from the end.
 		<nav
 			className="pathbar relative flex h-24 flex-none cursor-text items-center overflow-hidden whitespace-nowrap border-t border-border bg-chrome pl-8 pr-24 text-badge text-ink-body"
-			aria-label="Path"
+			aria-label={t("finderComponents.pathBar")}
 			onClick={startEditing}
 		>
 			<div
@@ -241,7 +241,7 @@ export function PathBar({
 					type="text"
 					spellCheck={false}
 					autoComplete="off"
-					aria-label={t("finder.pathBar.edit", "경로로 이동")}
+					aria-label={t("finder.pathBar.edit")}
 					value={draft}
 					onChange={(event) => setDraft(event.target.value)}
 					onKeyDown={onEditorKeyDown}

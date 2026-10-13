@@ -11,21 +11,21 @@ function summary(id: string, updatedAt: string, title = `${id} title`, snippet =
 
 describe("historyBucket", () => {
 	it("buckets today and yesterday by calendar day, not by 24 hours", () => {
-		expect(historyBucket("2026-09-29T00:01:00", NOW)).toBe("오늘");
-		expect(historyBucket("2026-09-28T23:59:00", NOW)).toBe("어제");
+		expect(historyBucket("2026-09-29T00:01:00", NOW)).toBe("today");
+		expect(historyBucket("2026-09-28T23:59:00", NOW)).toBe("yesterday");
 	});
 
 	it("buckets the rest of the past week and month", () => {
-		expect(historyBucket("2026-09-27T12:00:00", NOW)).toBe("지난 7일");
-		expect(historyBucket("2026-09-22T12:00:00", NOW)).toBe("지난 7일");
-		expect(historyBucket("2026-09-21T12:00:00", NOW)).toBe("지난 30일");
-		expect(historyBucket("2026-08-30T12:00:00", NOW)).toBe("지난 30일");
+		expect(historyBucket("2026-09-27T12:00:00", NOW)).toBe("last7Days");
+		expect(historyBucket("2026-09-22T12:00:00", NOW)).toBe("last7Days");
+		expect(historyBucket("2026-09-21T12:00:00", NOW)).toBe("last30Days");
+		expect(historyBucket("2026-08-30T12:00:00", NOW)).toBe("last30Days");
 	});
 
 	it("keeps anything older in its own bucket", () => {
-		expect(historyBucket("2026-08-29T12:00:00", NOW)).toBe("그 이전");
-		expect(historyBucket("2025-01-05T12:00:00", NOW)).toBe("그 이전");
-		expect(historyBucket("not-a-date", NOW)).toBe("그 이전");
+		expect(historyBucket("2026-08-29T12:00:00", NOW)).toBe("older");
+		expect(historyBucket("2025-01-05T12:00:00", NOW)).toBe("older");
+		expect(historyBucket("not-a-date", NOW)).toBe("older");
 	});
 });
 
@@ -63,7 +63,7 @@ describe("groupChatHistory", () => {
 			NOW,
 		);
 
-		expect(groups.map((group) => group.label)).toEqual(["오늘", "어제", "지난 7일", "지난 30일", "그 이전"]);
+		expect(groups.map((group) => group.label)).toEqual(["today", "yesterday", "last7Days", "last30Days", "older"]);
 		expect(groups.map((group) => group.items.map((item) => item.id))).toEqual([
 			["c1", "c2"],
 			["c3"],

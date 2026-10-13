@@ -9,6 +9,8 @@
  */
 
 import { useCallback, useEffect, useMemo, useState, type ReactElement } from "react";
+import { useTranslation } from "react-i18next";
+import type { LocaleKey } from "../../../shared/i18n/core";
 import { Copy, CreditCard, FileText, Folder, Globe, Plug, RefreshCw, Search, Settings, Sparkles, User, type LucideIcon } from "lucide-react";
 import type { AppSettings, AutoRagConfigSnapshot, DataSourcesSnapshot } from "../../../shared/settings-contract";
 import { isJsonObject } from "../../../shared/settings-contract";
@@ -29,26 +31,49 @@ export type StaticSettingsCategory = "account" | "plan" | "general" | "ai" | "we
 type LegacyCategory = "llm" | "embedding" | "reranker" | "sources" | "deep" | "light";
 export type SettingsCategory = StaticSettingsCategory | LegacyCategory | `source:${string}`;
 
+type NavLabelKey =
+	| "settingsCore.nav.account"
+	| "settingsCore.nav.plan"
+	| "settingsCore.nav.general"
+	| "settingsCore.nav.ai"
+	| "settingsCore.nav.web"
+	| "settingsCore.nav.indexing"
+	| "settingsCore.nav.scope"
+	| "settingsCore.nav.reading"
+	| "settingsCore.nav.duplicates"
+	| "settingsCore.nav.apps";
+
+type NavGroupKey =
+	| "settingsCore.nav.group.account"
+	| "settingsCore.nav.group.basic"
+	| "settingsCore.nav.group.ai"
+	| "settingsCore.nav.group.search"
+	| "settingsCore.nav.group.apps";
+
 interface PageMeta {
 	readonly id: StaticSettingsCategory;
-	readonly label: string;
+	readonly labelKey: NavLabelKey;
 	readonly icon: LucideIcon;
-	readonly group: string;
-	readonly keywords: string;
+	readonly groupKey: NavGroupKey;
+	/** Search-only synonyms, translated like the label. */
+	readonly keywordsKey: LocaleKey;
 }
 
-const PAGES: readonly PageMeta[] = [
-	{ id: "account", label: "내 계정", icon: User, group: "계정", keywords: "계정 로그인 이메일 이름 프로필" },
-	{ id: "plan", label: "구독 및 사용량", icon: CreditCard, group: "계정", keywords: "요금제 결제 크레딧 사용량 구독 billing" },
-	{ id: "general", label: "일반", icon: Settings, group: "기본", keywords: "화면 테마 언어 숨김 파일 로그인 업데이트 통계 문서 언어" },
-	{ id: "ai", label: "AI 모델", icon: Sparkles, group: "AI", keywords: "LLM 모델 공급자 서비스 API 키 구독 임베딩 Jev 질문 나누기 정렬" },
-	{ id: "web", label: "웹 검색", icon: Globe, group: "AI", keywords: "웹 검색 인터넷 검색 서비스 페이지 읽기" },
-	{ id: "indexing", label: "인덱싱", icon: RefreshCw, group: "검색", keywords: "최신화 동기화 증분 색인 갱신 주기 sync" },
-	{ id: "scope", label: "검색 범위", icon: Folder, group: "검색", keywords: "검색 범위 폴더 제외 경로" },
-	{ id: "reading", label: "문서 읽기", icon: FileText, group: "검색", keywords: "문서 읽기 언어 파서" },
-	{ id: "duplicates", label: "중복 파일 정리", icon: Copy, group: "검색", keywords: "중복 파일 버전 정리 dupey" },
-	{ id: "apps", label: "모든 연결", icon: Plug, group: "연결된 앱", keywords: "연결 앱 데이터소스 메신저 메일 클라우드" },
-];
+/** Group identity comparison uses this literal key, never translated text. */
+const GROUP_APPS: NavGroupKey = "settingsCore.nav.group.apps";
+
+const PAGES = [
+	{ id: "account", labelKey: "settingsCore.nav.account", icon: User, groupKey: "settingsCore.nav.group.account", keywordsKey: "settingsCore.nav.keywords.account" },
+	{ id: "plan", labelKey: "settingsCore.nav.plan", icon: CreditCard, groupKey: "settingsCore.nav.group.account", keywordsKey: "settingsCore.nav.keywords.plan" },
+	{ id: "general", labelKey: "settingsCore.nav.general", icon: Settings, groupKey: "settingsCore.nav.group.basic", keywordsKey: "settingsCore.nav.keywords.general" },
+	{ id: "ai", labelKey: "settingsCore.nav.ai", icon: Sparkles, groupKey: "settingsCore.nav.group.ai", keywordsKey: "settingsCore.nav.keywords.ai" },
+	{ id: "web", labelKey: "settingsCore.nav.web", icon: Globe, groupKey: "settingsCore.nav.group.ai", keywordsKey: "settingsCore.nav.keywords.web" },
+	{ id: "indexing", labelKey: "settingsCore.nav.indexing", icon: RefreshCw, groupKey: "settingsCore.nav.group.search", keywordsKey: "settingsCore.nav.keywords.indexing" },
+	{ id: "scope", labelKey: "settingsCore.nav.scope", icon: Folder, groupKey: "settingsCore.nav.group.search", keywordsKey: "settingsCore.nav.keywords.scope" },
+	{ id: "reading", labelKey: "settingsCore.nav.reading", icon: FileText, groupKey: "settingsCore.nav.group.search", keywordsKey: "settingsCore.nav.keywords.reading" },
+	{ id: "duplicates", labelKey: "settingsCore.nav.duplicates", icon: Copy, groupKey: "settingsCore.nav.group.search", keywordsKey: "settingsCore.nav.keywords.duplicates" },
+	{ id: "apps", labelKey: "settingsCore.nav.apps", icon: Plug, groupKey: GROUP_APPS, keywordsKey: "settingsCore.nav.keywords.apps" },
+] as const satisfies readonly PageMeta[];
 
 /** Map a legacy category onto the page that replaced it. */
 function normalizeCategory(category: SettingsCategory): SettingsCategory {
@@ -88,6 +113,7 @@ function errorMessage(error: unknown): string {
 }
 
 export function SettingsView({ initialCategory = "general", onSettingsChanged }: { readonly initialCategory?: SettingsCategory; readonly onSettingsChanged?: (settings: AppSettings) => void }): ReactElement {
+	const { t } = useTranslation();
 	const [category, setCategory] = useState<SettingsCategory>(() => normalizeCategory(initialCategory));
 	const [query, setQuery] = useState("");
 	const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
@@ -141,8 +167,8 @@ export function SettingsView({ initialCategory = "general", onSettingsChanged }:
 	const filteredPages = useMemo(() => {
 		const needle = query.trim().toLowerCase();
 		if (needle.length === 0) return PAGES;
-		return PAGES.filter((page) => `${page.label} ${page.keywords}`.toLowerCase().includes(needle));
-	}, [query]);
+		return PAGES.filter((page) => `${t(page.labelKey)} ${t(page.keywordsKey)}`.toLowerCase().includes(needle));
+	}, [query, t]);
 	const filteredSources = useMemo(() => {
 		const needle = query.trim().toLowerCase();
 		if (needle.length === 0) return entries;
@@ -150,20 +176,20 @@ export function SettingsView({ initialCategory = "general", onSettingsChanged }:
 	}, [query, entries]);
 
 	const groups = useMemo(() => {
-		const order: string[] = [];
-		const map = new Map<string, PageMeta[]>();
+		const order: NavGroupKey[] = [];
+		const map = new Map<NavGroupKey, PageMeta[]>();
 		for (const page of filteredPages) {
-			if (!map.has(page.group)) {
-				map.set(page.group, []);
-				order.push(page.group);
+			if (!map.has(page.groupKey)) {
+				map.set(page.groupKey, []);
+				order.push(page.groupKey);
 			}
-			map.get(page.group)?.push(page);
+			map.get(page.groupKey)?.push(page);
 		}
-		return order.map((group) => ({ group, pages: map.get(group) ?? [] }));
+		return order.map((groupKey) => ({ groupKey, pages: map.get(groupKey) ?? [] }));
 	}, [filteredPages]);
 
 	const content = ((): ReactElement => {
-		if (loading || appSettings === null || snapshot === null) return <p className="linear-section-desc">설정을 불러오는 중…</p>;
+		if (loading || appSettings === null || snapshot === null) return <p className="linear-section-desc">{t("common.loading")}</p>;
 		const page = normalizeCategory(category);
 		if (sourceAlias !== null) return <SourceDetailPage key={sourceAlias} snapshot={snapshot} onSaved={saveSnapshot} alias={sourceAlias} sources={sources} setSources={setSources} />;
 		switch (page) {
@@ -208,18 +234,18 @@ export function SettingsView({ initialCategory = "general", onSettingsChanged }:
 	});
 
 	return (
-		<div className="settings-view settings-panel" role="region" aria-label="Settings">
-			<aside className="settings-sidebar" aria-label="설정 탐색">
+		<div className="settings-view settings-panel" role="region" aria-label={t("settings.title")}>
+			<aside className="settings-sidebar" aria-label={t("settingsCore.view.navAria")}>
 				<label className="settings-search">
 					<span className="settings-search__icon" aria-hidden="true">
 						<Search size={14} />
 					</span>
-					<input type="search" aria-label="설정 검색" placeholder="설정 검색" value={query} onChange={(event) => setQuery(event.target.value)} />
+					<input type="search" aria-label={t("settingsCore.view.search")} placeholder={t("settingsCore.view.search")} value={query} onChange={(event) => setQuery(event.target.value)} />
 				</label>
-				<nav aria-label="설정 메뉴" style={{ display: "contents" }}>
+				<nav aria-label={t("settingsCore.view.menuAria")} style={{ display: "contents" }}>
 					{groups.map((group) => (
-						<div key={group.group}>
-							<div className="settings-sidebar-group-title">{group.group}</div>
+						<div key={group.groupKey}>
+							<div className="settings-sidebar-group-title">{t(group.groupKey)}</div>
 							{group.pages.map((page) => {
 								const Icon = page.icon;
 								const active = sourceAlias === null && normalizeCategory(category) === page.id;
@@ -228,23 +254,23 @@ export function SettingsView({ initialCategory = "general", onSettingsChanged }:
 										<span className="settings-nav-icon" aria-hidden="true">
 											<Icon size={16} />
 										</span>
-										<span>{page.label}</span>
+										<span>{t(page.labelKey)}</span>
 									</button>
 								);
 							})}
-							{group.group === "연결된 앱" ? sourceButtons : null}
+							{group.groupKey === GROUP_APPS ? sourceButtons : null}
 						</div>
 					))}
-					{!groups.some((group) => group.group === "연결된 앱") && filteredSources.length > 0 ? (
+					{!groups.some((group) => group.groupKey === GROUP_APPS) && filteredSources.length > 0 ? (
 						<div>
-							<div className="settings-sidebar-group-title">연결된 앱</div>
+							<div className="settings-sidebar-group-title">{t(GROUP_APPS)}</div>
 							{sourceButtons}
 						</div>
 					) : null}
 				</nav>
-				{query.trim().length > 0 && groups.length === 0 && filteredSources.length === 0 ? <p className="settings-nav-empty">일치하는 설정이 없습니다.</p> : null}
+				{query.trim().length > 0 && groups.length === 0 && filteredSources.length === 0 ? <p className="settings-nav-empty">{t("settingsCore.view.empty")}</p> : null}
 			</aside>
-			<main className="settings-content" aria-label={`${sourceAlias ?? normalizeCategory(category)} settings`}>
+			<main className="settings-content" aria-label={t("settingsCore.view.contentAria", { name: sourceAlias ?? normalizeCategory(category) })}>
 				<div className="settings-content-wrap">
 					{error !== null ? <div className="settings-error" role="alert">{error}</div> : null}
 					{content}

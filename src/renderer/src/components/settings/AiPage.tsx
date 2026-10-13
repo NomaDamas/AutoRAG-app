@@ -16,6 +16,8 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
+import type { TFunction } from "i18next";
+import { useTranslation } from "react-i18next";
 import { Check, ChevronDown, Ellipsis, ExternalLink, Plus, Search } from "lucide-react";
 import type {
 	AutoRagConfigSnapshot,
@@ -33,28 +35,28 @@ import { providerConnectRoute, withoutAutorag } from "../../../../shared/account
 
 const settings = window.autorag.settings;
 
-const KIND_LABEL: Readonly<Record<ProviderSummary["kind"], string>> = {
-	runtime: "런타임 공급자",
-	local: "내 컴퓨터 서버",
-	custom: "직접 추가한 서버",
-};
+const KIND_LABEL_KEY = {
+	runtime: "settingsCore.ai.kind.runtime",
+	local: "settingsCore.ai.kind.local",
+	custom: "settingsCore.ai.kind.custom",
+} as const satisfies Readonly<Record<ProviderSummary["kind"], string>>;
 
-const THINKING_LEVELS: readonly { readonly value: string; readonly label: string; readonly note?: string }[] = [
-	{ value: "off", label: "생각 안 함", note: "가장 빠름" },
-	{ value: "low", label: "낮음" },
-	{ value: "medium", label: "보통" },
-	{ value: "high", label: "높음", note: "정확도 우선" },
-	{ value: "max", label: "최대", note: "가장 느림" },
-];
+const THINKING_LEVELS = [
+	{ value: "off", labelKey: "settingsCore.ai.thinking.off" },
+	{ value: "low", labelKey: "settingsCore.ai.thinking.low" },
+	{ value: "medium", labelKey: "settingsCore.ai.thinking.medium" },
+	{ value: "high", labelKey: "settingsCore.ai.thinking.high" },
+	{ value: "max", labelKey: "settingsCore.ai.thinking.max" },
+] as const;
 
 /** Decomposition specials: `false` means "let the answer model do it"; absence uses the documented default. */
-const DECOMPOSITION_SPECIALS: readonly { readonly value: string; readonly label: string }[] = [
-	{ value: "same", label: "답변 모델과 같게" },
-	{ value: "default", label: "기본값 (OpenRouter Qwen3.7 Flash)" },
-];
+const DECOMPOSITION_SPECIALS = [
+	{ value: "same", labelKey: "settingsCore.ai.sameAsAnswer" },
+	{ value: "default", labelKey: "settingsCore.ai.decompDefault" },
+] as const;
 
 /** Jev and rerank disable by writing `false` to their block. */
-const OFF_SPECIALS: readonly { readonly value: string; readonly label: string }[] = [{ value: "off", label: "사용 안 함" }];
+const OFF_SPECIALS = [{ value: "off", labelKey: "settingsCore.ai.off" }] as const;
 
 /** TypeSafe only exposes a key env var; it has no interactive Pi /login. */
 const CREDENTIAL_ONLY_ENV = "TYPESAFE_API_KEY";
@@ -83,17 +85,17 @@ interface LoginState {
 }
 
 /** Roles currently served by a provider, from the shared config. */
-function rolesUsingProvider(snapshot: AutoRagConfigSnapshot, providerId: string): readonly string[] {
+function rolesUsingProvider(snapshot: AutoRagConfigSnapshot, providerId: string, t: TFunction): readonly string[] {
 	const out: string[] = [];
 	const model = asRecord(getAt(snapshot.config, ["model"]));
-	if (stringOf(model?.provider) === providerId) out.push("답변");
+	if (stringOf(model?.provider) === providerId) out.push(t("settingsCore.ai.role.answer"));
 	const decomposition = asRecord(getAt(snapshot.config, ["queryDecomposition", "model"]));
-	if (stringOf(decomposition?.provider) === providerId) out.push("질문 나누기");
+	if (stringOf(decomposition?.provider) === providerId) out.push(t("settingsCore.ai.role.decomposition"));
 	const rerank = asRecord(getAt(snapshot.config, ["rerank"]));
-	if (stringOf(rerank?.provider) === providerId) out.push("정렬");
+	if (stringOf(rerank?.provider) === providerId) out.push(t("settingsCore.ai.role.rerank"));
 	const jev = asRecord(getAt(snapshot.config, ["jev"]));
 	const jevBackend = jevBackendFor(providerId);
-	if (jevBackend !== undefined && stringOf(jev?.backend) === jevBackend) out.push("판단");
+	if (jevBackend !== undefined && stringOf(jev?.backend) === jevBackend) out.push(t("settingsCore.ai.role.jev"));
 	return out;
 }
 
@@ -103,6 +105,7 @@ function openExternal(url: string): void {
 }
 
 export function AiPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfigSnapshot; readonly onSaved: (next: AutoRagConfigSnapshot) => void }): ReactElement {
+	const { t } = useTranslation();
 	const { run, error } = useConfigWriter(onSaved);
 	const [providers, setProviders] = useState<readonly ProviderSummary[] | null>(null);
 	const [notice, setNotice] = useState<string | null>(null);
@@ -182,7 +185,7 @@ export function AiPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 			try {
 				const started = await settings.providerLoginStart(provider.id, authType);
 				activeSessionRef.current = started.sessionId;
-				setLogin({ sessionId: started.sessionId, providerName: provider.name, prompt: null, message: "연결을 시작합니다…", authUrl: null, instructions: null, deviceCode: null, error: null, busy: false });
+				setLogin({ sessionId: started.sessionId, providerName: provider.name, prompt: null, message: t("settingsCore.ai.login.starting"), authUrl: null, instructions: null, deviceCode: null, error: null, busy: false });
 				const pending = bufferedEventsRef.current;
 				bufferedEventsRef.current = [];
 				for (const event of pending) {
@@ -213,16 +216,16 @@ export function AiPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 					return { ...current, message: event.message };
 				case "auth_url":
 					openExternal(event.url);
-					return { ...current, authUrl: event.url, instructions: event.instructions ?? null, message: "브라우저에서 로그인을 완료하세요." };
+					return { ...current, authUrl: event.url, instructions: event.instructions ?? null, message: t("settingsCore.ai.login.completeInBrowser") };
 				case "device_code":
 					openExternal(event.verificationUri);
-					return { ...current, deviceCode: { userCode: event.userCode, verificationUri: event.verificationUri }, message: "브라우저에서 코드를 입력하세요." };
+					return { ...current, deviceCode: { userCode: event.userCode, verificationUri: event.verificationUri }, message: t("settingsCore.ai.login.enterCode") };
 				case "done":
 					activeSessionRef.current = null;
 					bufferedEventsRef.current = [];
 					listenerRef.current?.();
 					listenerRef.current = null;
-					setNotice(`${current.providerName} 연결을 완료했습니다.`);
+					setNotice(t("settingsCore.ai.login.completed", { name: current.providerName }));
 					void reload();
 					return null;
 				case "error":
@@ -295,10 +298,10 @@ export function AiPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 
 	/** Sign in to the AutoRAG plan through the account service (browser PKCE, encrypted key, adopted defaults). */
 	async function signInToAutorag(): Promise<void> {
-		setNotice("브라우저에서 Dazzi에 로그인하세요…");
+		setNotice(t("settingsCore.ai.login.signInBrowser"));
 		try {
 			const status = await window.autorag.account.signIn();
-			setNotice(status.state === "signedIn" ? "Dazzi에 로그인했습니다." : (status.error ?? "로그인하지 않았습니다."));
+			setNotice(status.state === "signedIn" ? t("settingsCore.ai.login.signedIn") : (status.error ?? t("settingsCore.ai.login.notSignedIn")));
 			await reload();
 		} catch (cause) {
 			setNotice(errorText(cause));
@@ -317,7 +320,7 @@ export function AiPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 		if (providerConnectRoute(provider.id) === "account") {
 			try {
 				const status = await window.autorag.account.signOut();
-				setNotice(status.state === "signedIn" ? "환경 변수 AUTORAG_API_KEY로 로그인되어 있어 앱에서 로그아웃할 수 없습니다. 해당 환경 변수를 직접 제거하세요." : `${provider.name} 연결을 해제했습니다.`);
+				setNotice(status.state === "signedIn" ? t("settingsCore.ai.disconnect.envLocked") : t("settingsCore.ai.disconnected", { name: provider.name }));
 				await reload();
 			} catch (cause) {
 				setNotice(errorText(cause));
@@ -325,7 +328,7 @@ export function AiPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 			return;
 		}
 		if (provider.authSource === "environment") {
-			setNotice(`${provider.name} 키가 운영체제 환경 변수에서 제공되어 앱에서 해제할 수 없습니다. 해당 환경 변수를 직접 제거하세요.`);
+			setNotice(t("settingsCore.ai.envKeyCannotRemove", { name: provider.name }));
 			return;
 		}
 		const model = asRecord(getAt(snapshot.config, ["model"]));
@@ -341,7 +344,7 @@ export function AiPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 			if (ops.length > 0) await run(ops);
 			if (provider.kind === "local" || provider.kind === "custom") await settings.providersRemove(provider.id);
 			else await settings.providerLogout(provider.id);
-			setNotice(`${provider.name} 연결을 해제했습니다.`);
+			setNotice(t("settingsCore.ai.disconnected", { name: provider.name }));
 			await reload();
 		} catch (cause) {
 			setNotice(errorText(cause));
@@ -349,12 +352,12 @@ export function AiPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 	}
 
 	async function test(provider: ProviderSummary): Promise<void> {
-		setNotice(`${provider.name}: 확인 중…`);
+		setNotice(t("settingsCore.ai.testing", { name: provider.name }));
 		try {
 			const result = await settings.providersTest(provider.id);
-			setNotice(`${provider.name}: ${result.ok ? "연결 성공" : "연결 실패"}`);
+			setNotice(`${provider.name}: ${result.ok ? t("settingsCore.ai.testOk") : t("settingsCore.ai.testFail")}`);
 		} catch {
-			setNotice(`${provider.name}: 연결 실패`);
+			setNotice(`${provider.name}: ${t("settingsCore.ai.testFail")}`);
 		}
 	}
 
@@ -362,23 +365,30 @@ export function AiPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 		if (provider.baseUrl === null) return;
 		try {
 			const result = await settings.providersDiscover({ id: provider.id, kind: provider.kind === "local" ? "local" : "custom", label: provider.name, baseUrl: provider.baseUrl });
-			setNotice(result.ok ? `${provider.name}: ${result.models.length}개 모델 발견 (${result.protocol ?? ""})` : `${provider.name}: ${result.error ?? "발견 실패"}`);
+			setNotice(result.ok ? t("settingsCore.ai.discoverFound", { name: provider.name, count: result.models.length, protocol: result.protocol ?? "" }) : t("settingsCore.ai.discoverFailed", { name: provider.name, error: result.error ?? t("settingsCore.ai.discoverFailWord") }));
 		} catch (cause) {
 			setNotice(errorText(cause));
 		}
 	}
 
 	const problem = error;
+
+	function specialsFor(role: string): readonly { readonly value: string; readonly label: string }[] {
+		if (role === "decomposition") return DECOMPOSITION_SPECIALS.map((special) => ({ value: special.value, label: t(special.labelKey) }));
+		if (role === "jev" || role === "rerank") return OFF_SPECIALS.map((special) => ({ value: special.value, label: t(special.labelKey) }));
+		return [];
+	}
+
 	return (
 		<>
-			<SettingsPageHead title="AI 모델" description="AI 서비스를 연결하고, 역할마다 쓸 모델을 고릅니다." />
+			<SettingsPageHead title={t("settingsCore.nav.ai")} description={t("settingsCore.ai.description")} />
 			{problem !== null ? <div className="settings-error" role="alert">{problem}</div> : null}
 			{notice !== null ? <Note>{notice}</Note> : null}
-			<Section title="연결된 서비스" description="연결한 서비스의 모델을 아래 역할에서 고를 수 있습니다.">
+			<Section title={t("settingsCore.ai.servicesTitle")} description={t("settingsCore.ai.servicesDesc")}>
 				<div className="settings-list">
 					{connected.map((provider) => {
-						const used = rolesUsingProvider(snapshot, provider.id);
-						const meta = `${provider.subscription ? "구독 계정" : KIND_LABEL[provider.kind]}${provider.baseUrl === null ? "" : ` · ${provider.baseUrl}`}${used.length > 0 ? ` · ${used.join(", ")}에 사용 중` : ""}`;
+						const used = rolesUsingProvider(snapshot, provider.id, t);
+						const meta = `${provider.subscription ? t("settingsCore.ai.subscriptionAccount") : t(KIND_LABEL_KEY[provider.kind])}${provider.baseUrl === null ? "" : ` · ${provider.baseUrl}`}${used.length > 0 ? ` · ${t("settingsCore.ai.usedFor", { roles: used.join(", ") })}` : ""}`;
 						return (
 							<div className="settings-list-row" key={provider.id}>
 								<AppIcon label={provider.name} />
@@ -389,7 +399,7 @@ export function AiPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 								<button
 									type="button"
 									className="settings-icon-btn"
-									aria-label={`${provider.name} 메뉴`}
+									aria-label={t("settingsCore.ai.providerMenu", { name: provider.name })}
 									onClick={(event) => setMenu(menu?.kind === "provider" && menu.arg === provider.id ? null : { kind: "provider", anchor: event.currentTarget, arg: provider.id })}
 								>
 									<Ellipsis size={16} aria-hidden="true" focusable="false" />
@@ -397,21 +407,21 @@ export function AiPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 							</div>
 						);
 					})}
-					{connected.length === 0 ? <Note>아직 연결된 서비스가 없습니다. 아래에서 연결하세요.</Note> : null}
+					{connected.length === 0 ? <Note>{t("settingsCore.ai.noServices")}</Note> : null}
 					<button type="button" className="settings-list-row settings-add-row" onClick={(event) => setMenu({ kind: "connect", anchor: event.currentTarget })}>
 						<Plus size={14} aria-hidden="true" focusable="false" />
-						<span>서비스 연결</span>
+						<span>{t("settingsCore.ai.connectService")}</span>
 					</button>
 				</div>
 			</Section>
-			<Section title="역할별 모델" description="Dazzi는 일을 역할별로 나눠 처리합니다. 역할마다 맞는 모델을 고르세요.">
-				<p className="settings-subsection-title">답변</p>
-				<RoleRow role="answer" label="답변 모델" hint="질문에 답하고 문서를 요약합니다." current={answerLabel(snapshot)} onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "answer" })} thinking={{ onOpen: (anchor) => setMenu({ kind: "thinking", anchor }) }} />
-				<p className="settings-subsection-title">검색 보조</p>
-				<RoleRow role="decomposition" label="질문 나누기" hint="긴 질문을 검색어 여러 개로 나눕니다. 빠르고 저렴한 모델이 잘 맞습니다." current={decompositionLabel(snapshot)} onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "decomposition" })} />
-				<RoleRow role="jev" label="판단 모델 (Jev)" hint="바로 답할지, 내 자료를 검색할지 판단합니다." current={jevLabel(snapshot)} onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "jev" })} />
-				<RoleRow role="rerank" label="검색 결과 정렬" hint="관련 높은 결과를 위로 올립니다. 답변이 조금 느려질 수 있습니다." current={rerankLabel(snapshot)} onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "rerank" })} />
-				<p className="settings-subsection-title">문서 이해</p>
+			<Section title={t("settingsCore.ai.rolesTitle")} description={t("settingsCore.ai.rolesDesc")}>
+				<p className="settings-subsection-title">{t("settingsCore.ai.role.answer")}</p>
+				<RoleRow role="answer" label={t("settingsCore.ai.answerModel")} hint={t("settingsCore.ai.answerHint")} current={answerLabel(snapshot, t)} onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "answer" })} thinking={{ onOpen: (anchor) => setMenu({ kind: "thinking", anchor }) }} />
+				<p className="settings-subsection-title">{t("settingsCore.ai.subSearchAssistant")}</p>
+				<RoleRow role="decomposition" label={t("settingsCore.ai.role.decomposition")} hint={t("settingsCore.ai.decompositionHint")} current={decompositionLabel(snapshot, t)} onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "decomposition" })} />
+				<RoleRow role="jev" label={t("settingsCore.ai.jevModel")} hint={t("settingsCore.ai.jevHint")} current={jevLabel(snapshot, t)} onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "jev" })} />
+				<RoleRow role="rerank" label={t("settingsCore.ai.rerankModel")} hint={t("settingsCore.ai.rerankHint")} current={rerankLabel(snapshot, t)} onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "rerank" })} />
+				<p className="settings-subsection-title">{t("settingsCore.ai.subDocUnderstanding")}</p>
 				<EmbeddingPicker />
 			</Section>
 			{menu !== null ? (
@@ -434,7 +444,7 @@ export function AiPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 						<RolePicker
 							role={menu.arg ?? "answer"}
 							models={menu.arg === "jev" ? jevOptions : menu.arg === "rerank" ? rerankOptions : catalogModels}
-							specials={menu.arg === "decomposition" ? DECOMPOSITION_SPECIALS : menu.arg === "jev" || menu.arg === "rerank" ? OFF_SPECIALS : []}
+							specials={specialsFor(menu.arg ?? "answer")}
 							onPick={(entry) => {
 								closeMenu();
 								if (menu.arg === "decomposition") writeDecomposition(entry);
@@ -453,11 +463,11 @@ export function AiPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 					) : null}
 					{menu.kind === "thinking" ? (
 						<div className="settings-list">
-							<p className="settings-menu-group">생각 깊이</p>
+							<p className="settings-menu-group">{t("settingsCore.ai.thinkingDepth")}</p>
 							{THINKING_LEVELS.map((level) => (
 								<button key={level.value} type="button" className="settings-menu-item" onClick={() => { closeMenu(); void settings.configSet(["thinking", "final"], level.value).then(onSaved).catch((cause) => setNotice(errorText(cause))); }}>
-									<span>{level.label}</span>
-									{level.note !== undefined ? <small>{level.note}</small> : null}
+									<span>{t(level.labelKey)}</span>
+									{level.value === "off" ? <small>{t("settingsCore.ai.thinking.offNote")}</small> : level.value === "high" ? <small>{t("settingsCore.ai.thinking.highNote")}</small> : level.value === "max" ? <small>{t("settingsCore.ai.thinking.maxNote")}</small> : null}
 									{thinkingValue(snapshot) === level.value ? <Check size={14} aria-hidden="true" focusable="false" /> : null}
 								</button>
 							))}
@@ -469,11 +479,11 @@ export function AiPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 			{serverModal !== null ? <ServerModal kind={serverModal.kind} provider={serverModal.provider} onClose={() => setServerModal(null)} onDone={(message) => { setServerModal(null); setNotice(message); void reload(); }} /> : null}
 			{disconnect !== null ? (
 				<ModalShell onClose={() => setDisconnect(null)}>
-					<h2>{disconnect.name} 연결을 해제할까요?</h2>
-					<p>저장된 자격 증명을 지우고 목록에서 제거합니다. 이 서비스를 쓰던 역할은 새 모델을 골라야 할 수 있습니다.</p>
+					<h2>{t("settingsCore.ai.disconnect.title", { name: disconnect.name })}</h2>
+					<p>{t("settingsCore.ai.disconnect.body")}</p>
 					<ModalActions>
-						<button type="button" className="linear-btn" onClick={() => setDisconnect(null)}>취소</button>
-						<button type="button" className="linear-btn is-danger" onClick={() => { const target = disconnect; setDisconnect(null); void disconnectProvider(target); }}>연결 해제</button>
+						<button type="button" className="linear-btn" onClick={() => setDisconnect(null)}>{t("common.cancel")}</button>
+						<button type="button" className="linear-btn is-danger" onClick={() => { const target = disconnect; setDisconnect(null); void disconnectProvider(target); }}>{t("settingsCore.ai.disconnect.action")}</button>
 					</ModalActions>
 				</ModalShell>
 			) : null}
@@ -484,34 +494,34 @@ export function AiPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 
 /* --------------------------------------------------------------- labels -- */
 
-function answerLabel(snapshot: AutoRagConfigSnapshot): string {
+function answerLabel(snapshot: AutoRagConfigSnapshot, t: TFunction): string {
 	const model = asRecord(getAt(snapshot.config, ["model"]));
 	const name = stringOf(model?.name);
 	const id = stringOf(model?.id);
-	return name.length > 0 ? name : id.length > 0 ? id : "설정 안 됨";
+	return name.length > 0 ? name : id.length > 0 ? id : t("settingsCore.common.notSet");
 }
 
-function decompositionLabel(snapshot: AutoRagConfigSnapshot): string {
+function decompositionLabel(snapshot: AutoRagConfigSnapshot, t: TFunction): string {
 	const raw = getAt(snapshot.config, ["queryDecomposition"]);
 	// `false` means "let the answer model do it"; absent means the documented default model.
-	if (raw === false) return "답변 모델과 같게";
-	if (raw === undefined) return "기본값 (Qwen3.7 Flash)";
+	if (raw === false) return t("settingsCore.ai.sameAsAnswer");
+	if (raw === undefined) return t("settingsCore.ai.defaultModel");
 	const model = asRecord(asRecord(raw)?.model);
-	return stringOf(model?.name) || stringOf(model?.id) || "기본값 (Qwen3.7 Flash)";
+	return stringOf(model?.name) || stringOf(model?.id) || t("settingsCore.ai.defaultModel");
 }
 
-function jevLabel(snapshot: AutoRagConfigSnapshot): string {
+function jevLabel(snapshot: AutoRagConfigSnapshot, t: TFunction): string {
 	const raw = getAt(snapshot.config, ["jev"]);
-	if (raw === false) return "사용 안 함";
-	if (raw === undefined) return "자동";
-	return stringOf(asRecord(raw)?.model) || "자동";
+	if (raw === false) return t("settingsCore.ai.off");
+	if (raw === undefined) return t("settingsCore.ai.auto");
+	return stringOf(asRecord(raw)?.model) || t("settingsCore.ai.auto");
 }
 
-function rerankLabel(snapshot: AutoRagConfigSnapshot): string {
+function rerankLabel(snapshot: AutoRagConfigSnapshot, t: TFunction): string {
 	const raw = getAt(snapshot.config, ["rerank"]);
-	if (raw === false) return "사용 안 함";
-	if (raw === undefined || raw === true) return "기본값";
-	return stringOf(asRecord(raw)?.model) || "기본값";
+	if (raw === false) return t("settingsCore.ai.off");
+	if (raw === undefined || raw === true) return t("settingsCore.ai.defaultValue");
+	return stringOf(asRecord(raw)?.model) || t("settingsCore.ai.defaultValue");
 }
 
 function thinkingValue(snapshot: AutoRagConfigSnapshot): string {
@@ -535,15 +545,16 @@ function RoleRow({
 	readonly onOpen: (anchor: HTMLElement) => void;
 	readonly thinking?: { readonly onOpen: (anchor: HTMLElement) => void };
 }): ReactElement {
+	const { t } = useTranslation();
 	return (
 		<Row name={label} hint={hint}>
 			<span className={`settings-split${thinking === undefined ? " is-solo" : ""}`}>
-				<button type="button" className="settings-trigger" aria-label={`${label} 선택`} data-role={role} onClick={(event) => onOpen(event.currentTarget)}>
+				<button type="button" className="settings-trigger" aria-label={t("settingsCore.ai.selectRole", { label })} data-role={role} onClick={(event) => onOpen(event.currentTarget)}>
 					<span className="settings-trigger-label">{current}</span>
 					<ChevronDown size={14} aria-hidden="true" focusable="false" />
 				</button>
 				{thinking !== undefined ? (
-					<button type="button" className="settings-icon-btn" aria-label={`${label} 생각 깊이`} title="생각 깊이" onClick={(event) => thinking.onOpen(event.currentTarget)}>
+					<button type="button" className="settings-icon-btn" aria-label={t("settingsCore.ai.thinkingDepthFor", { label })} title={t("settingsCore.ai.thinkingDepth")} onClick={(event) => thinking.onOpen(event.currentTarget)}>
 						<Ellipsis size={16} aria-hidden="true" focusable="false" />
 					</button>
 				) : null}
@@ -566,6 +577,7 @@ function ConnectMenu({
 	readonly onPickServer: (kind: "local" | "custom") => void;
 	readonly onPickServerExisting: (provider: ProviderSummary) => void;
 }): ReactElement {
+	const { t } = useTranslation();
 	const subscriptions = providers.filter((provider) => provider.kind === "runtime" && (provider.subscription || provider.authKinds.includes("oauth")));
 	const apiKeys = providers.filter((provider) => provider.kind === "runtime" && !provider.subscription && provider.authKinds.includes("api_key"));
 	const servers = providers.filter((provider) => provider.kind === "local" || provider.kind === "custom");
@@ -573,16 +585,16 @@ function ConnectMenu({
 		<>
 			{onSignInToAutorag !== undefined ? (
 				<>
-					<p className="settings-menu-group">Dazzi 요금제</p>
+					<p className="settings-menu-group">{t("settingsCore.ai.menu.dazziPlan")}</p>
 					<button type="button" className="settings-menu-item" onClick={onSignInToAutorag}>
 						<AppIcon small label="Dazzi" />
-						<span>Dazzi 계정으로 로그인</span>
+						<span>{t("settingsCore.ai.menu.signInDazzi")}</span>
 					</button>
 				</>
 			) : null}
 			{subscriptions.length > 0 ? (
 				<>
-					<p className="settings-menu-group">구독 계정</p>
+					<p className="settings-menu-group">{t("settingsCore.ai.subscriptionAccount")}</p>
 					{subscriptions.map((provider) => (
 						<button key={provider.id} type="button" className="settings-menu-item" onClick={() => onConnect(provider, "oauth")}>
 							<AppIcon small label={provider.name} />
@@ -593,7 +605,7 @@ function ConnectMenu({
 			) : null}
 			{apiKeys.length > 0 ? (
 				<>
-					<p className="settings-menu-group">API 키</p>
+					<p className="settings-menu-group">{t("settingsCore.ai.menu.apiKeys")}</p>
 					{apiKeys.map((provider) => (
 						<button key={provider.id} type="button" className="settings-menu-item" onClick={() => onConnect(provider, "api_key")}>
 							<AppIcon small label={provider.name} />
@@ -602,7 +614,7 @@ function ConnectMenu({
 					))}
 				</>
 			) : null}
-			<p className="settings-menu-group">내 컴퓨터</p>
+			<p className="settings-menu-group">{t("settingsCore.ai.menu.localMachine")}</p>
 			{servers.map((provider) => (
 				<button key={provider.id} type="button" className="settings-menu-item" onClick={() => onPickServerExisting(provider)}>
 					<AppIcon small label={provider.name} />
@@ -612,11 +624,11 @@ function ConnectMenu({
 			<div className="settings-menu-sep" />
 			<button type="button" className="settings-menu-item" onClick={() => onPickServer("custom")}>
 				<Plus size={14} aria-hidden="true" focusable="false" />
-				<span>직접 추가 (OpenAI 호환)</span>
+				<span>{t("settingsCore.ai.menu.addCustom")}</span>
 			</button>
 			<button type="button" className="settings-menu-item" onClick={() => onPickServer("local")}>
 				<Plus size={14} aria-hidden="true" focusable="false" />
-				<span>내 컴퓨터 서버 추가</span>
+				<span>{t("settingsCore.ai.menu.addLocalServer")}</span>
 			</button>
 		</>
 	);
@@ -635,30 +647,31 @@ function ProviderMenu({
 	readonly onDiscover: (provider: ProviderSummary) => void;
 	readonly onLogout: (provider: ProviderSummary) => void;
 }): ReactElement {
-	if (provider === null) return <p className="settings-menu-empty">공급자를 찾을 수 없습니다.</p>;
+	const { t } = useTranslation();
+	if (provider === null) return <p className="settings-menu-empty">{t("settingsCore.ai.providerNotFound")}</p>;
 	const editable = provider.kind === "local" || provider.kind === "custom";
 	return (
 		<>
 			{editable ? (
 				<button type="button" className="settings-menu-item" onClick={() => onEdit(provider)}>
 					<ExternalLink size={14} aria-hidden="true" focusable="false" />
-					<span>연결 정보 수정</span>
+					<span>{t("settingsCore.ai.provider.edit")}</span>
 				</button>
 			) : null}
 			<button type="button" className="settings-menu-item" onClick={() => onTest(provider)}>
 				<Check size={14} aria-hidden="true" focusable="false" />
-				<span>연결 확인</span>
+				<span>{t("settingsCore.ai.provider.test")}</span>
 			</button>
 			{editable && provider.baseUrl !== null ? (
 				<button type="button" className="settings-menu-item" onClick={() => onDiscover(provider)}>
 					<Search size={14} aria-hidden="true" focusable="false" />
-					<span>모델 다시 검색</span>
+					<span>{t("settingsCore.ai.provider.discover")}</span>
 				</button>
 			) : null}
 			<div className="settings-menu-sep" />
 			<button type="button" className="settings-menu-item is-danger" onClick={() => onLogout(provider)}>
 				<ExternalLink size={14} aria-hidden="true" focusable="false" />
-				<span>연결 해제</span>
+				<span>{t("settingsCore.ai.disconnect.action")}</span>
 			</button>
 		</>
 	);
@@ -677,6 +690,7 @@ function RolePicker({
 	readonly onPick: (entry: ModelCatalogEntry) => void;
 	readonly onSpecial: (special: string) => void;
 }): ReactElement {
+	const { t } = useTranslation();
 	const [query, setQuery] = useState("");
 	const lower = query.trim().toLowerCase();
 	const match = (text: string): boolean => lower.length === 0 || text.toLowerCase().includes(lower);
@@ -701,10 +715,10 @@ function RolePicker({
 			) : null}
 			<label className="settings-menu-search">
 				<Search size={14} aria-hidden="true" focusable="false" />
-				<input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="모델 검색" />
+				<input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("settingsCore.ai.searchModels")} />
 			</label>
 			{byProvider.size === 0 ? (
-				<p className="settings-menu-empty">{role === "jev" || role === "rerank" ? "이 역할에 쓸 수 있는 지원 모델이 없습니다. 해당 서비스를 먼저 연결하세요." : "연결된 서비스에서 사용할 수 있는 모델이 없습니다."}</p>
+				<p className="settings-menu-empty">{role === "jev" || role === "rerank" ? t("settingsCore.ai.emptyRoleModels") : t("settingsCore.ai.emptyModels")}</p>
 			) : (
 				[...byProvider.values()].map((bucket) => (
 					<div key={bucket.provider.id}>
@@ -723,21 +737,22 @@ function RolePicker({
 }
 
 function ApiKeyModal({ provider, onClose, onDone }: { readonly provider: ProviderSummary; readonly onClose: () => void; readonly onDone: (message: string) => void }): ReactElement {
+	const { t } = useTranslation();
 	const envName = provider.apiKeyEnv ?? defaultEnvName(provider.id);
 	const [secret, setSecret] = useState("");
 	const [error, setError] = useState<string | null>(null);
 	const [busy, setBusy] = useState(false);
 	return (
 		<ModalShell onClose={onClose}>
-			<h2>{provider.name} 연결</h2>
-			<p>{provider.name}에서 발급한 API 키를 붙여 넣으세요. 키는 암호화해 보관하며 다시 표시하지 않습니다.</p>
+			<h2>{t("settingsCore.ai.connect.title", { name: provider.name })}</h2>
+			<p>{t("settingsCore.ai.connect.body", { name: provider.name })}</p>
 			<label>
-				API 키 ({envName})
-				<input type="password" autoFocus value={secret} placeholder="키 붙여 넣기" onChange={(event) => setSecret(event.target.value)} />
+				{t("settingsCore.ai.connect.apiKeyLabel", { env: envName })}
+				<input type="password" autoFocus value={secret} placeholder={t("settingsCore.ai.connect.keyPlaceholder")} onChange={(event) => setSecret(event.target.value)} />
 			</label>
 			{error !== null ? <p className="settings-modal-error">{error}</p> : null}
 			<ModalActions>
-				<button type="button" className="linear-btn" onClick={onClose} disabled={busy}>취소</button>
+				<button type="button" className="linear-btn" onClick={onClose} disabled={busy}>{t("common.cancel")}</button>
 				<button
 					type="button"
 					className="linear-btn settings-btn-primary"
@@ -747,11 +762,11 @@ function ApiKeyModal({ provider, onClose, onDone }: { readonly provider: Provide
 						setError(null);
 						void settings
 							.credentialsSet(envName, secret.trim())
-							.then(() => onDone(`${provider.name} 키를 저장했습니다.`))
+							.then(() => onDone(t("settingsCore.ai.connect.saved", { name: provider.name })))
 							.catch((cause) => { setError(errorText(cause)); setBusy(false); });
 					}}
 				>
-					연결
+					{t("settingsCore.ai.connect.action")}
 				</button>
 			</ModalActions>
 		</ModalShell>
@@ -759,21 +774,22 @@ function ApiKeyModal({ provider, onClose, onDone }: { readonly provider: Provide
 }
 
 function ServerModal({ kind, provider, onClose, onDone }: { readonly kind: "local" | "custom"; readonly provider: ProviderSummary | null; readonly onClose: () => void; readonly onDone: (message: string) => void }): ReactElement {
-	const [label, setLabel] = useState(provider?.name ?? (kind === "local" ? "내 컴퓨터 서버" : "사내 게이트웨이"));
+	const { t } = useTranslation();
+	const [label, setLabel] = useState(provider?.name ?? (kind === "local" ? t("settingsCore.ai.server.defaultLocal") : t("settingsCore.ai.server.defaultCustom")));
 	const [baseUrl, setBaseUrl] = useState(provider?.baseUrl ?? (kind === "local" ? "http://127.0.0.1:11434" : ""));
 	const [apiKey, setApiKey] = useState("");
 	const [error, setError] = useState<string | null>(null);
 	const [busy, setBusy] = useState(false);
 	return (
 		<ModalShell onClose={onClose}>
-			<h2>{provider === null ? (kind === "local" ? "내 컴퓨터 서버 연결" : "OpenAI 호환 서비스 추가") : "연결 정보 수정"}</h2>
-			<p>{kind === "local" ? "Ollama, LM Studio처럼 이 Mac에서 실행 중인 서버만 연결할 수 있습니다." : "회사 게이트웨이나 OpenAI 호환 서버를 연결합니다. 키는 암호화해 보관합니다."}</p>
-			<label>이름<input autoFocus value={label} onChange={(event) => setLabel(event.target.value)} /></label>
-			<label>서버 주소<input value={baseUrl} placeholder="https://…/v1" onChange={(event) => setBaseUrl(event.target.value)} /></label>
-			<label>API 키 (선택)<input type="password" value={apiKey} placeholder="선택 사항" onChange={(event) => setApiKey(event.target.value)} /></label>
+			<h2>{provider === null ? (kind === "local" ? t("settingsCore.ai.server.titleLocal") : t("settingsCore.ai.server.titleCustom")) : t("settingsCore.ai.server.titleEdit")}</h2>
+			<p>{kind === "local" ? t("settingsCore.ai.server.bodyLocal") : t("settingsCore.ai.server.bodyCustom")}</p>
+			<label>{t("settingsCore.ai.server.name")}<input autoFocus value={label} onChange={(event) => setLabel(event.target.value)} /></label>
+			<label>{t("settingsCore.ai.server.baseUrl")}<input value={baseUrl} placeholder="https://…/v1" onChange={(event) => setBaseUrl(event.target.value)} /></label>
+			<label>{t("settingsCore.ai.server.apiKeyOptional")}<input type="password" value={apiKey} placeholder={t("settingsCore.ai.server.optionalPlaceholder")} onChange={(event) => setApiKey(event.target.value)} /></label>
 			{error !== null ? <p className="settings-modal-error">{error}</p> : null}
 			<ModalActions>
-				<button type="button" className="linear-btn" onClick={onClose} disabled={busy}>취소</button>
+				<button type="button" className="linear-btn" onClick={onClose} disabled={busy}>{t("common.cancel")}</button>
 				<button
 					type="button"
 					className="linear-btn settings-btn-primary"
@@ -784,11 +800,11 @@ function ServerModal({ kind, provider, onClose, onDone }: { readonly kind: "loca
 						const input = { ...(provider === null ? {} : { id: provider.id }), kind, label: label.trim(), baseUrl: baseUrl.trim(), ...(apiKey.trim().length > 0 ? { apiKey: apiKey.trim() } : {}) };
 						void settings
 							.providersUpsert(input)
-							.then(() => onDone(`${label.trim()}을(를) 저장했습니다.`))
+							.then(() => onDone(t("settingsCore.ai.server.saved", { name: label.trim() })))
 							.catch((cause) => { setError(errorText(cause)); setBusy(false); });
 					}}
 				>
-					{provider === null ? "연결" : "저장"}
+					{provider === null ? t("settingsCore.ai.connect.action") : t("common.save")}
 				</button>
 			</ModalActions>
 		</ModalShell>
@@ -808,28 +824,29 @@ function LoginModal({
 	readonly onRespond: (value: string) => void;
 	readonly onCancel: () => void;
 }): ReactElement {
+	const { t } = useTranslation();
 	const prompt = state.prompt;
 	return (
 		<ModalShell onClose={onCancel}>
-			<h2>{state.providerName} 연결</h2>
+			<h2>{t("settingsCore.ai.connect.title", { name: state.providerName })}</h2>
 			{state.message !== null ? <p>{state.message}</p> : null}
 			{state.authUrl !== null ? (
 				<>
-					<p>브라우저가 열리지 않으면 아래 주소를 직접 여세요.</p>
+					<p>{t("settingsCore.ai.loginModal.openManually")}</p>
 					<span className="settings-code">{state.authUrl}</span>
 					{state.instructions !== null ? <p>{state.instructions}</p> : null}
 					<ModalActions>
-						<button type="button" className="linear-btn" onClick={() => openExternal(state.authUrl ?? "")}>브라우저 열기</button>
+						<button type="button" className="linear-btn" onClick={() => openExternal(state.authUrl ?? "")}>{t("settingsCore.ai.loginModal.openBrowser")}</button>
 					</ModalActions>
 				</>
 			) : null}
 			{state.deviceCode !== null ? (
 				<>
-					<p>아래 코드를 브라우저에 입력하세요.</p>
+					<p>{t("settingsCore.ai.loginModal.enterCode")}</p>
 					<span className="settings-code">{state.deviceCode.userCode}</span>
 					<span className="settings-code">{state.deviceCode.verificationUri}</span>
 					<ModalActions>
-						<button type="button" className="linear-btn" onClick={() => openExternal(state.deviceCode?.verificationUri ?? "")}>브라우저 열기</button>
+						<button type="button" className="linear-btn" onClick={() => openExternal(state.deviceCode?.verificationUri ?? "")}>{t("settingsCore.ai.loginModal.openBrowser")}</button>
 					</ModalActions>
 				</>
 			) : null}
@@ -856,13 +873,13 @@ function LoginModal({
 						onKeyDown={(event) => { if (event.key === "Enter") onRespond(input); }}
 					/>
 					<ModalActions>
-						<button type="button" className="linear-btn settings-btn-primary" disabled={state.busy || input.trim().length === 0} onClick={() => onRespond(input)}>제출</button>
+						<button type="button" className="linear-btn settings-btn-primary" disabled={state.busy || input.trim().length === 0} onClick={() => onRespond(input)}>{t("settingsCore.ai.loginModal.submit")}</button>
 					</ModalActions>
 				</label>
 			) : null}
 			{state.error !== null ? <p className="settings-modal-error">{state.error}</p> : null}
 			<ModalActions>
-				<button type="button" className="linear-btn" onClick={onCancel}>취소</button>
+				<button type="button" className="linear-btn" onClick={onCancel}>{t("common.cancel")}</button>
 			</ModalActions>
 		</ModalShell>
 	);

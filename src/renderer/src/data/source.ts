@@ -11,6 +11,7 @@ import { NO_CAPABILITIES, type ActionsBridge } from "../../../shared/actions-con
 import { NO_SERVICES, type ServicesBridge } from "../../../shared/services-contract";
 import { RECENTS_PATH, type FsBatchResult, type FsBridge, type FsClipboard, type FsEnrichmentTarget, type FsEntryEnrichment, type FsFinderEnrichment, type FsHistoryOperation, type FsLocation, type FsLocationIcon, type FsOpError, type FsRecordedOperation, type FsSearchOptions, type FsTagCatalog, type FsTagChange, type FsUndoOutcome, type FsVersionFamiliesResult } from "../../../shared/fs-contract";
 import { newFileFormat, type NewFileFormatId } from "../../../shared/new-file-contract";
+import { t } from "../../../shared/i18n/core";
 import type { IndexStatus } from "../../../shared/index-contract";
 import {
 	DUPEY_LAYER_ID,
@@ -44,9 +45,9 @@ export interface SearchHits {
  */
 const UNAVAILABLE_ACTIONS: ActionsBridge = {
 	capabilities: () => Promise.resolve(NO_CAPABILITIES),
-	run: () => Promise.reject(new Error("이 환경에서는 파일 작업을 실행할 수 없습니다")),
+	run: () => Promise.reject(new Error(t("finderState.source.actionsUnavailable"))),
 	openWithApplications: () => Promise.resolve([]),
-	share: () => Promise.reject(new Error("이 환경에서는 공유를 실행할 수 없습니다")),
+	share: () => Promise.reject(new Error(t("finderState.source.shareUnavailable"))),
 };
 
 export interface FinderSource {
@@ -376,7 +377,7 @@ export function createFixtureSource(): FinderSource {
 	const createdStep = (path: string, item: FixtureItem): FixtureStep => ({
 		path,
 		apply: () => {
-			if (removeItem(state, path) === null) throw new Error("되돌릴 항목이 없습니다");
+			if (removeItem(state, path) === null) throw new Error(t("finderState.source.nothingToUndo"));
 			return removedStep(path, item);
 		},
 	});
@@ -394,7 +395,7 @@ export function createFixtureSource(): FinderSource {
 		path,
 		apply: () => {
 			const item = removeItem(state, path);
-			if (item === null) throw new Error("되돌릴 항목이 없습니다");
+			if (item === null) throw new Error(t("finderState.source.nothingToUndo"));
 			const name = copyName(item.name, takenNames(state, restoreDir));
 			insertItem(state, restoreDir, { ...item, name });
 			return moveStep(joinPath(restoreDir, name), dirname(path));
@@ -405,7 +406,7 @@ export function createFixtureSource(): FinderSource {
 		path,
 		apply: () => {
 			const item = findItem(state, path);
-			if (item === null) throw new Error("되돌릴 항목이 없습니다");
+			if (item === null) throw new Error(t("finderState.source.nothingToUndo"));
 			if (name.toLowerCase() !== basename(path).toLowerCase() && takenNames(state, dirname(path)).includes(name)) {
 				throw new Error(`A file or folder named "${name}" already exists`);
 			}
@@ -422,7 +423,7 @@ export function createFixtureSource(): FinderSource {
 			const trashItems = state.tree.get("Trash") ?? [];
 			const index = trashItems.findIndex((item) => item.name === basename(path));
 			const [moved] = index < 0 ? [] : trashItems.splice(index, 1);
-			if (moved === undefined) throw new Error("휴지통에서 항목을 찾을 수 없습니다");
+			if (moved === undefined) throw new Error(t("finderState.source.trashItemNotFound"));
 			state.trash.delete(joinPath("Trash", moved.name));
 			const dir = dirname(path);
 			const name = copyName(moved.name, takenNames(state, dir));
@@ -435,7 +436,7 @@ export function createFixtureSource(): FinderSource {
 		path,
 		apply: () => {
 			const item = removeItem(state, path);
-			if (item === null) throw new Error("되돌릴 항목이 없습니다");
+			if (item === null) throw new Error(t("finderState.source.nothingToUndo"));
 			const name = copyName(item.name, takenNames(state, "Trash"));
 			insertItem(state, "Trash", { ...item, name });
 			state.trash.set(joinPath("Trash", name), dirname(path));
@@ -444,8 +445,8 @@ export function createFixtureSource(): FinderSource {
 	});
 	const fixtureIndexStatus = (path: string): IndexStatus =>
 		state.indexExcluded.has(path)
-			? { path, kind: "excluded", excluded: true, toggleable: true, detail: "인덱싱에서 제외됨" }
-			: { path, kind: "included", excluded: false, toggleable: true, detail: "MinSync 인덱스에 포함됨" };
+			? { path, kind: "excluded", excluded: true, toggleable: true, detail: t("finderState.source.indexExcluded") }
+			: { path, kind: "included", excluded: false, toggleable: true, detail: t("finderState.source.indexIncluded") };
 
 	return {
 		native: false,
@@ -506,7 +507,7 @@ export function createFixtureSource(): FinderSource {
 			return Promise.resolve(hits);
 		},
 		tags: () => Promise.resolve({ supported: false, tags: [], colorNames: [] }),
-		setTags: (paths) => Promise.resolve({ ok: [], failed: paths.map((path) => ({ path, message: "이 환경에서는 태그를 바꿀 수 없습니다" })) }),
+		setTags: (paths) => Promise.resolve({ ok: [], failed: paths.map((path) => ({ path, message: t("finderState.source.tagsUnavailable") })) }),
 		locations: () =>
 			Promise.resolve(
 				FIXTURE_PLACES.filter(([name]) => !state.ejected.has(name)).map(([name, section, icon]) => ({
@@ -535,7 +536,7 @@ export function createFixtureSource(): FinderSource {
 			for (const path of paths) {
 				const item = removeItem(state, path);
 				if (item === null) {
-					failed.push({ path, message: "항목을 찾을 수 없습니다" });
+					failed.push({ path, message: t("finderState.source.itemNotFound") });
 					continue;
 				}
 				// The fixture Trash is a plain folder: the item moves there and its origin is remembered.
@@ -556,7 +557,7 @@ export function createFixtureSource(): FinderSource {
 				const originalDir = state.trash.get(trashPath);
 				const item = originalDir === undefined ? null : removeItem(state, trashPath);
 				if (originalDir === undefined || item === null) {
-					failed.push({ path: trashPath, message: "원래 위치를 알 수 없습니다" });
+					failed.push({ path: trashPath, message: t("finderState.source.originUnknown") });
 					continue;
 				}
 				state.trash.delete(trashPath);
@@ -675,7 +676,7 @@ export function createFixtureSource(): FinderSource {
 		undo: () => Promise.resolve(replay(undoStack, redoStack)),
 		redo: () => Promise.resolve(replay(redoStack, undoStack)),
 		recordCreated: (path, operation) => {
-			if (findItem(state, path) === null) return Promise.reject(new Error("항목을 찾을 수 없습니다"));
+			if (findItem(state, path) === null) return Promise.reject(new Error(t("finderState.source.itemNotFound")));
 			record(operation, [restoredStep(path)]);
 			return Promise.resolve();
 		},

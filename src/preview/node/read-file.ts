@@ -1,5 +1,6 @@
 import { open, stat } from "node:fs/promises";
 import { basename, extname, isAbsolute } from "node:path";
+import { t } from "../../shared/i18n/core";
 import type { PreviewDocument } from "../shared/contract";
 import { mimeForExtension } from "../shared/registry";
 
@@ -44,16 +45,16 @@ export async function readHead(filePath: string, length: number): Promise<Uint8A
  */
 export async function readPreviewFile(filePath: string, limit: number, whole = false): Promise<PreviewDocument> {
 	if (!isAbsolute(filePath) || filePath.includes("\0")) {
-		throw new PreviewReadError("not-absolute", "미리보기 경로가 올바르지 않습니다");
+		throw new PreviewReadError("not-absolute", t("quickLook.errors.notAbsolute"));
 	}
 	let followed;
 	try {
 		followed = await stat(filePath);
 	} catch (error) {
-		if (isEnoent(error)) throw new PreviewReadError("missing", "파일을 찾을 수 없습니다");
+		if (isEnoent(error)) throw new PreviewReadError("missing", t("quickLook.errors.missing"));
 		throw error;
 	}
-	if (!followed.isFile()) throw new PreviewReadError("not-file", "폴더는 미리볼 수 없습니다");
+	if (!followed.isFile()) throw new PreviewReadError("not-file", t("quickLook.errors.notFile"));
 	const ext = extname(filePath).slice(1).toLowerCase();
 	const truncated = limit > 0 && followed.size > limit;
 	const bytes = limit === 0 || (truncated && whole) ? null : await readHead(filePath, Math.min(followed.size, limit));

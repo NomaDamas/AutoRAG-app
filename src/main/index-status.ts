@@ -3,6 +3,7 @@ import { basename, isAbsolute, resolve, sep } from "node:path";
 import { AutoRAGLite, createDefaultParserRegistry, loadMirrorIndex, minSyncDocumentPath, minSyncWorkspaceRoot, type DefaultParserRegistryOptions } from "@autorag/librarian";
 import { readRawConfigObject, resolveConfigPath, resolveConfigReadOnly, writeConfigObject } from "@autorag/librarian/core";
 import { applyAppIndexing } from "./app-indexing";
+import { t } from "../shared/i18n/core";
 import type { IndexStatus } from "../shared/index-contract";
 
 /**
@@ -67,7 +68,7 @@ export function createIndexStatusService(deps: IndexStatusServiceDeps): IndexSta
 		return Promise.all(paths.map(async (path): Promise<IndexStatus> => {
 			const real = await canonical(path);
 			if (!roots.some((root) => isUnder(real, root))) {
-				return { path, kind: "outside", excluded: false, toggleable: false, detail: "Dazzi 검색 경로 밖의 파일" };
+				return { path, kind: "outside", excluded: false, toggleable: false, detail: t("main.indexStatus.outside") };
 			}
 			const exclusion = exclusions.find((candidate) => isUnder(real, candidate));
 			const excluded = exclusion !== undefined;
@@ -77,25 +78,31 @@ export function createIndexStatusService(deps: IndexStatusServiceDeps): IndexSta
 				entry !== undefined && (await access(minSyncDocumentPath(minSyncRoot, entry.virtualPath)).then(() => true, () => false));
 			if (excluded) {
 				return entry === undefined
-					? { path, kind: "excluded", excluded, toggleable, detail: toggleable ? "인덱싱에서 제외됨" : "상위 폴더가 인덱싱에서 제외됨" }
-					: { path, kind: "pending", excluded, toggleable, detail: "제외 저장됨 · 다음 새로고침에서 인덱스에서 빠짐" };
+					? {
+							path,
+							kind: "excluded",
+							excluded,
+							toggleable,
+							detail: toggleable ? t("main.indexStatus.excluded") : t("main.indexStatus.parentExcluded"),
+						}
+					: { path, kind: "pending", excluded, toggleable, detail: t("main.indexStatus.excludedPending") };
 			}
 			if (registry.getForVirtualPath(real) === undefined || PRODUCT_ARTIFACT_FILE_NAMES.has(basename(real))) {
-				return { path, kind: "unsupported", excluded, toggleable: false, detail: "인덱싱을 지원하지 않는 파일 형식" };
+				return { path, kind: "unsupported", excluded, toggleable: false, detail: t("main.indexStatus.unsupported") };
 			}
 			if (staged) {
-				return { path, kind: "included", excluded, toggleable, detail: "MinSync 인덱스에 포함됨" };
+				return { path, kind: "included", excluded, toggleable, detail: t("main.indexStatus.included") };
 			}
 			if (entry !== undefined) {
-				return { path, kind: "pending", excluded, toggleable, detail: "파싱됨 · MinSync 반영 대기" };
+				return { path, kind: "pending", excluded, toggleable, detail: t("main.indexStatus.parsedPending") };
 			}
 			const skip = skips.get(real);
 			// `user-excluded` arrives with Marker-Inc-Korea/AutoRAG#1750; a just-cleared exclusion is pending, not skipped.
 			const skipReason: string | undefined = skip?.reason;
 			if (skipReason !== undefined && skipReason !== "user-excluded") {
-				return { path, kind: "skipped", excluded, toggleable: false, detail: `새로고침에서 건너뜀 (${skipReason})` };
+				return { path, kind: "skipped", excluded, toggleable: false, detail: t("main.indexStatus.skipped", { reason: skipReason }) };
 			}
-			return { path, kind: "pending", excluded, toggleable, detail: "아직 인덱싱되지 않음" };
+			return { path, kind: "pending", excluded, toggleable, detail: t("main.indexStatus.notIndexed") };
 		}));
 	}
 

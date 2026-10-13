@@ -29,6 +29,8 @@ export interface FsWorkerHostDeps {
 	readonly icons: IconSource;
 	/** Defaults to the built worker beside the main bundle. */
 	readonly entry?: string;
+	/** Runs after every fork, once main's client is attached: re-applies state a fresh worker lacks. */
+	readonly onFork?: (client: WorkerClient) => void;
 }
 
 export interface FsWorkerHost {
@@ -143,6 +145,7 @@ export function createFsWorkerHost(deps: FsWorkerHostDeps): FsWorkerHost {
 		child.postMessage({ type: "client", kind: "main" }, [own.port1]);
 		client.attach(adaptPort(own.port2));
 		for (const contents of renderers) sendPort(contents);
+		deps.onFork?.(client);
 		child.once("exit", (code) => {
 			if (worker !== child) return;
 			worker = null;

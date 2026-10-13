@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactElement } from "react";
+import { useTranslation } from "react-i18next";
 import type { PreviewDocument } from "../shared/contract";
 import type { Size } from "../shared/fit";
 import { useChrome } from "./chrome";
@@ -59,6 +60,7 @@ function useNearScreen<T extends HTMLElement>(scroller: string, margin: string):
  * page while the new resolution renders.
  */
 function usePageDraw(draw: DrawPage, index: number, width: number | null, holder: HTMLElement | null, onBox: (index: number, box: Size) => void, onError: (message: string) => void): boolean {
+	const { t } = useTranslation();
 	const [drawn, setDrawn] = useState(false);
 	useEffect(() => {
 		if (width === null || holder === null) return;
@@ -73,13 +75,13 @@ function usePageDraw(draw: DrawPage, index: number, width: number | null, holder
 				setDrawn(true);
 			})
 			.catch((caught: unknown) => {
-				if (!cancelled) onError(caught instanceof Error ? caught.message : "페이지를 그리지 못했습니다");
+				if (!cancelled) onError(caught instanceof Error ? caught.message : t("quickLook.paged.drawFailed"));
 			});
 		return () => {
 			cancelled = true;
 			job.cancel();
 		};
-	}, [draw, index, width, holder, onBox, onError]);
+	}, [draw, index, width, holder, onBox, onError, t]);
 	return drawn;
 }
 
@@ -127,6 +129,7 @@ function Thumb({ draw, index, box, active, onPick, onBox, onError }: {
 	readonly onBox: (index: number, box: Size) => void;
 	readonly onError: (message: string) => void;
 }): ReactElement {
+	const { t } = useTranslation();
 	const { attach, near } = useNearScreen<HTMLButtonElement>(".ql__rail", RAIL_MARGIN);
 	const [holder, setHolder] = useState<HTMLDivElement | null>(null);
 	const [seen, setSeen] = useState(false);
@@ -140,7 +143,7 @@ function Thumb({ draw, index, box, active, onPick, onBox, onError }: {
 			type="button"
 			className="ql__rail-item block flex-none p-0 border-0 bg-transparent text-ql-ink-secondary font-ql text-[10.5px] text-center cursor-default"
 			data-active={active ? "true" : undefined}
-			aria-label={`${index + 1}페이지로 이동`}
+			aria-label={t("quickLook.paged.goToPage", { count: index + 1 })}
 			onClick={() => onPick(index)}
 		>
 			<div
@@ -163,6 +166,7 @@ function Thumb({ draw, index, box, active, onPick, onBox, onError }: {
  * document's width plus the margins and rail once, when it mounts.
  */
 export function PagedView({ file, boxes: initialBoxes, draw }: { readonly file: PreviewDocument; readonly boxes: readonly Size[]; readonly draw: DrawPage }): ReactElement {
+	const { t } = useTranslation();
 	const { report } = useChrome();
 	const scrollerRef = useRef<HTMLDivElement | null>(null);
 	const nodesRef = useRef<(HTMLDivElement | null)[]>([]);
@@ -265,11 +269,11 @@ export function PagedView({ file, boxes: initialBoxes, draw }: { readonly file: 
 					</div>
 				</div>
 				<div className="ql-pages__pill absolute left-1/2 bottom-14 flex items-center gap-2 px-6 py-3 rounded-11 bg-ql-panel text-[12px] tabular-nums shadow-ql-float [backdrop-filter:var(--backdrop-ql-float)] -translate-x-1/2">
-					<button type="button" className="grid place-items-center w-26 h-26 p-0 border-0 rounded-7 bg-transparent text-ql-ink font-ql text-[15px] cursor-default hover:bg-ql-button disabled:opacity-40" aria-label="축소" disabled={zoomOut === undefined} onClick={() => setZoom(zoomOut ?? scale)}>
+					<button type="button" className="grid place-items-center w-26 h-26 p-0 border-0 rounded-7 bg-transparent text-ql-ink font-ql text-[15px] cursor-default hover:bg-ql-button disabled:opacity-40" aria-label={t("quickLook.paged.zoomOut")} disabled={zoomOut === undefined} onClick={() => setZoom(zoomOut ?? scale)}>
 						−
 					</button>
 					<span className="min-w-44 text-center text-ql-ink-secondary">{Math.round(scale * 100)}%</span>
-					<button type="button" className="grid place-items-center w-26 h-26 p-0 border-0 rounded-7 bg-transparent text-ql-ink font-ql text-[15px] cursor-default hover:bg-ql-button disabled:opacity-40" aria-label="확대" disabled={zoomIn === undefined} onClick={() => setZoom(zoomIn ?? scale)}>
+					<button type="button" className="grid place-items-center w-26 h-26 p-0 border-0 rounded-7 bg-transparent text-ql-ink font-ql text-[15px] cursor-default hover:bg-ql-button disabled:opacity-40" aria-label={t("quickLook.paged.zoomIn")} disabled={zoomIn === undefined} onClick={() => setZoom(zoomIn ?? scale)}>
 						+
 					</button>
 					<span className="w-1 h-14 mx-6 bg-ql-hairline" />
@@ -279,7 +283,7 @@ export function PagedView({ file, boxes: initialBoxes, draw }: { readonly file: 
 				</div>
 			</div>
 			{boxes.length > 1 ? (
-				<nav className="ql__rail flex flex-none flex-col items-center gap-12 w-128 pt-10 pb-20 overflow-y-auto bg-ql-sunk border-l-[0.5px] border-ql-hairline" aria-label="페이지 미리보기">
+				<nav className="ql__rail flex flex-none flex-col items-center gap-12 w-128 pt-10 pb-20 overflow-y-auto bg-ql-sunk border-l-[0.5px] border-ql-hairline" aria-label={t("quickLook.paged.rail")}>
 					{boxes.map((box, index) => (
 						<Thumb key={index} draw={draw} index={index} box={box} active={index === active} onPick={pick} onBox={onBox} onError={fail} />
 					))}

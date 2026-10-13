@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactElement, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import type { FileDetails, PreviewDocument } from "../shared/contract";
 import { formatFinderDate, formatFinderSize } from "../shared/format";
 import { describeExtension } from "../shared/registry";
@@ -12,10 +13,19 @@ const ERROR_SIZE = { width: 420, height: 120 } as const;
 const MINI_BUTTON =
 	"flex-none h-22 px-8 border-0 rounded-5 bg-ql-button text-ql-ink font-ql text-[11px] font-medium whitespace-nowrap cursor-default hover:bg-ql-button-hover";
 
-function revealLabel(platform: string): string {
-	if (platform === "darwin") return "Finder에서 보기";
-	return platform === "win32" ? "탐색기에서 보기" : "폴더에서 보기";
+/** Reveal-in-file-manager label per platform; unknown platforms fall back to "folder". */
+const REVEAL_LABEL_KEYS = {
+	darwin: "quickLook.fallback.revealFinder",
+	win32: "quickLook.fallback.revealExplorer",
+} as const;
+type RevealLabelKey = (typeof REVEAL_LABEL_KEYS)[keyof typeof REVEAL_LABEL_KEYS] | "quickLook.fallback.revealFolder";
+
+function revealLabelKey(platform: string): RevealLabelKey {
+	const key = REVEAL_LABEL_KEYS[platform as keyof typeof REVEAL_LABEL_KEYS];
+	return key ?? "quickLook.fallback.revealFolder";
 }
+
+const BINARY_LABEL_KEYS = { platform: "quickLook.binary.platform", format: "quickLook.binary.format" } as const;
 
 function DetailRow({ label, children }: { readonly label: string; readonly children: ReactNode }): ReactElement {
 	return (
@@ -27,6 +37,7 @@ function DetailRow({ label, children }: { readonly label: string; readonly child
 }
 
 function Details({ file }: { readonly file: PreviewDocument }): ReactElement {
+	const { t } = useTranslation();
 	const { bridge } = useChrome();
 	const [details, setDetails] = useState<FileDetails | null>(null);
 	const [hash, setHash] = useState<string | null>(null);
@@ -52,18 +63,18 @@ function Details({ file }: { readonly file: PreviewDocument }): ReactElement {
 		const timer = setTimeout(() => setCopied(false), 1500);
 		return () => clearTimeout(timer);
 	}, [copied]);
-	const pending = failure ?? "불러오는 중…";
+	const pending = failure ?? t("quickLook.fallback.loading");
 	return (
 		<dl className="ql-other__details flex flex-col gap-7 mx-24 my-0 px-16 py-14 rounded-10 bg-ql-sunk select-text">
-			<DetailRow label="생성일">{details === null ? pending : formatFinderDate(details.createdAt, true)}</DetailRow>
-			<DetailRow label="위치">
+			<DetailRow label={t("quickLook.fallback.createdAt")}>{details === null ? pending : formatFinderDate(details.createdAt, true)}</DetailRow>
+			<DetailRow label={t("quickLook.fallback.location")}>
 				<span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">{details === null ? pending : details.location.join(" › ")}</span>
 				<button type="button" className={MINI_BUTTON} onClick={() => void bridge.request("reveal")}>
-					{revealLabel(bridge.platform)}
+					{t(revealLabelKey(bridge.platform))}
 				</button>
 			</DetailRow>
 			<DetailRow label="SHA-256">
-				<span className="min-w-0 overflow-hidden font-ql-mono text-[11.5px] text-ellipsis whitespace-nowrap">{hash ?? (failure ?? "계산 중…")}</span>
+				<span className="min-w-0 overflow-hidden font-ql-mono text-[11.5px] text-ellipsis whitespace-nowrap">{hash ?? (failure ?? t("quickLook.fallback.computing"))}</span>
 				{hash === null ? null : (
 					<button
 						type="button"
@@ -72,11 +83,11 @@ function Details({ file }: { readonly file: PreviewDocument }): ReactElement {
 							void bridge.copyText(hash).then(() => setCopied(true));
 						}}
 					>
-						{copied ? "복사됨" : "복사"}
+						{copied ? t("quickLook.fallback.copied") : t("quickLook.fallback.copy")}
 					</button>
 				)}
 			</DetailRow>
-			{details?.binary == null ? null : <DetailRow label={details.binary.label}>{details.binary.value}</DetailRow>}
+			{details?.binary == null ? null : <DetailRow label={t(BINARY_LABEL_KEYS[details.binary.label])}>{details.binary.value}</DetailRow>}
 		</dl>
 	);
 }
@@ -88,6 +99,7 @@ function Details({ file }: { readonly file: PreviewDocument }): ReactElement {
  * with `note` saying why.
  */
 export function FallbackView({ file, note }: { readonly file: PreviewDocument; readonly note?: string }): ReactElement {
+	const { t } = useTranslation();
 	useHiddenTitle();
 	const attach = usePanelHeight(OTHER_WIDTH);
 	const [open, setOpen] = useState(false);
@@ -100,7 +112,7 @@ export function FallbackView({ file, note }: { readonly file: PreviewDocument; r
 					<div className="ql-other__name mb-4 overflow-hidden text-[22px] font-bold tracking-[-0.01em] text-ellipsis whitespace-nowrap select-text">{file.name}</div>
 					<div className="text-[14px] text-ql-ink-secondary">{describeExtension(file.ext)}</div>
 					<div className="text-[14px] text-ql-ink-secondary">{formatFinderSize(file.size)}</div>
-					<div className="text-[14px] text-ql-ink-secondary">Last modified {formatFinderDate(file.modifiedAt, true)}</div>
+					<div className="text-[14px] text-ql-ink-secondary">{t("quickLook.fallback.lastModified", { date: formatFinderDate(file.modifiedAt, true) })}</div>
 					{note === undefined ? null : <div className="ql__note mt-4 text-[12px] text-ql-ink-secondary">{note}</div>}
 					<div className="mt-10">
 						<button
@@ -110,7 +122,7 @@ export function FallbackView({ file, note }: { readonly file: PreviewDocument; r
 							onClick={() => setOpen((current) => !current)}
 						>
 							<ChevronIcon open={open} />
-							자세한 정보
+							{t("quickLook.fallback.moreDetails")}
 						</button>
 					</div>
 				</div>

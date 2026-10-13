@@ -1,11 +1,12 @@
 import { useEffect, type ChangeEvent, type DragEvent, type KeyboardEvent, type MouseEvent, type PointerEvent, type ReactElement } from "react";
+import { useTranslation } from "react-i18next";
 import type { FinderEntry } from "../data/entries";
 import { useDirectoryData, useEntrySidecar } from "../hooks/useDirectoryData";
 import { dateLabelOf, fileKindOf, kindLabelOf, locationOf, sizeLabelOf } from "../state/entry-values";
 import type { Disclosure } from "../state/folder-tree";
 import { LIST_COLUMN_OPTIONS, type ListColumnKey, type ListColumnsState, listGridTemplate } from "../state/list-columns";
 import { basename, dirname } from "../state/paths";
-import { RELATION_LABELS, type VersionRelation } from "../state/version-family";
+import { VERSION_TAG_KEYS, type VersionRelation } from "../state/version-family";
 import { isHiddenName } from "../state/visibility";
 import { cn } from "../lib/cn";
 import { CheckIcon } from "./icons";
@@ -61,9 +62,10 @@ const VTAG_TONE: Readonly<Record<"latest" | VersionRelation, string>> = {
 };
 
 /** v7 `.vtag` — the duplicate-family relation chip shared by the list, columns,
- * and variants rows. */
-export function VersionTag({ tone, label }: { readonly tone: "latest" | VersionRelation; readonly label: string }): ReactElement {
-	return <span className={`${VTAG_BASE} ${VTAG_TONE[tone]}`}>{label}</span>;
+ * and variants rows, labelled in the Interface language. */
+export function VersionTag({ tone }: { readonly tone: "latest" | VersionRelation }): ReactElement {
+	const { t } = useTranslation();
+	return <span className={`${VTAG_BASE} ${VTAG_TONE[tone]}`}>{t(VERSION_TAG_KEYS[tone])}</span>;
 }
 
 const FOLDER_BACK = "M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z";
@@ -125,6 +127,7 @@ export function FileRow({
 }): ReactElement {
 	// The listing row stays as read; its icon, OS kind, metadata, and index
 	// state come from the sidecar, and only this row re-renders when they land.
+	const { t } = useTranslation();
 	const { entry, indexStatus } = useEntrySidecar(useDirectoryData().sidecar, listed);
 	const { colors: tagColors } = useTagCatalog();
 	// Virtualized: only rows near the viewport mount, so reporting them fills
@@ -217,7 +220,7 @@ export function FileRow({
 							"disclosure flex flex-none items-center justify-center w-[13px] h-[17px] p-0 border-0 bg-transparent cursor-default",
 							selected ? "text-inherit" : "text-ink-muted",
 						)}
-						aria-label={`${entry.name} ${isHead ? "유사·중복본 " : ""}${open ? "접기" : "펼치기"}`}
+						aria-label={`${entry.name} ${isHead ? `${t("finderComponents.variantColumn")} ` : ""}${open ? t("finderComponents.collapse") : t("finderComponents.expand")}`}
 						aria-expanded={open}
 						tabIndex={-1}
 						onClick={(event) => {
@@ -254,7 +257,7 @@ export function FileRow({
 						className="row__rename flex-1 min-w-0 h-pill px-5 border border-accent rounded-5 outline-none bg-window text-ink text-file-row"
 						type="text"
 						value={renameDraft}
-						aria-label="새 이름"
+						aria-label={t("finderComponents.newName")}
 						onChange={(event: ChangeEvent<HTMLInputElement>) => callbacks.onRenameChange(event.target.value)}
 						onClick={(event: MouseEvent<HTMLInputElement>) => event.stopPropagation()}
 						onKeyDown={(event: KeyboardEvent<HTMLInputElement>) => {
@@ -273,14 +276,14 @@ export function FileRow({
 				<TagDots dots={tagDotsOf(entry.finder, tagColors)} className="ml-auto pl-6" />
 				{isHead ? (
 					<>
-						<VersionTag tone="latest" label="최신본" />
+						<VersionTag tone="latest" />
 						<span className="vcount inline-flex flex-none items-center h-16 px-6 rounded-full bg-input text-tile text-ink-muted">
 							+{stackCount}
 						</span>
 					</>
 				) : relation !== null ? (
 					<>
-						<VersionTag tone={relation} label={RELATION_LABELS[relation]} />
+						<VersionTag tone={relation} />
 						{locationOf(entry) !== listPath ? <LocationChip location={locationOf(entry)} /> : null}
 					</>
 				) : null}
@@ -304,8 +307,8 @@ export function FileRow({
 										: cn("bg-window text-accent", selected ? "border-on-accent/90" : "border-border-strong"),
 									syncing && "opacity-60",
 								)}
-								title={indexStatus?.detail ?? (checked ? "AI 검색 인덱스에 포함됨" : "AI 검색 인덱스에서 제외됨")}
-								aria-label={checked ? "AI 검색 인덱스에 포함됨" : "AI 검색 인덱스에서 제외됨"}
+								title={indexStatus?.detail ?? (checked ? t("finderComponents.indexIncluded") : t("finderComponents.indexExcluded"))}
+								aria-label={checked ? t("finderComponents.indexIncluded") : t("finderComponents.indexExcluded")}
 								onClick={(event) => {
 									event.stopPropagation();
 									callbacks.onToggleIndex(entry);

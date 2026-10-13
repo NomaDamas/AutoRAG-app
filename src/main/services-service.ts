@@ -1,3 +1,4 @@
+import { t } from "../shared/i18n/core";
 import { splitServiceTitle, type ServiceEntry } from "../shared/services-contract";
 import { defaultRun, type CommandRunner } from "./action-service";
 
@@ -236,11 +237,11 @@ export function createServicesService(deps: ServicesServiceDeps = {}): ServicesS
 	return {
 		list,
 		async run(id, paths) {
-			if (platform !== "darwin") throw new Error("서비스는 macOS에서만 사용할 수 있습니다");
+			if (platform !== "darwin") throw new Error(t("main.services.macosOnly"));
 			// Only a service the OS offers for exactly this selection may run: the id comes from the renderer.
-			if (!(await list(paths)).some((entry) => entry.id === id)) throw new Error("이 선택에는 사용할 수 없는 서비스입니다");
+			if (!(await list(paths)).some((entry) => entry.id === id)) throw new Error(t("main.services.unavailable"));
 			const { stdout } = await run("osascript", ["-l", "JavaScript", "-e", PERFORM_SCRIPT, id, ...paths], { timeoutMs: PERFORM_TIMEOUT_MS });
-			if (stdout.trim() !== "performed") throw new Error("서비스를 실행하지 못했습니다");
+			if (stdout.trim() !== "performed") throw new Error(t("main.services.runFailed"));
 		},
 	};
 }

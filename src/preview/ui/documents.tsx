@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactElement } from "react";
+import { useTranslation } from "react-i18next";
 import { renderAsync } from "docx-preview";
 import { read, utils } from "xlsx";
 import type { PreviewDocument } from "../shared/contract";
@@ -13,6 +14,7 @@ function copyBytes(bytes: Uint8Array): Uint8Array<ArrayBuffer> {
 }
 
 export function DocxView({ file }: { readonly file: PreviewDocument }): ReactElement {
+	const { t } = useTranslation();
 	const bytes = file.bytes;
 	const [srcdoc, setSrcdoc] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
@@ -27,15 +29,15 @@ export function DocxView({ file }: { readonly file: PreviewDocument }): ReactEle
 			})
 			.catch((caught: unknown) => {
 				if (cancelled) return;
-				setError(caught instanceof Error ? caught.message : "문서를 열 수 없습니다");
+				setError(caught instanceof Error ? caught.message : t("quickLook.documents.openFailed"));
 			});
 		return () => {
 			cancelled = true;
 		};
 	}, [bytes]);
-	if (bytes === null) return <FallbackView file={file} note="문서를 읽지 못했습니다" />;
+	if (bytes === null) return <FallbackView file={file} note={t("quickLook.documents.readFailed")} />;
 	if (error !== null) return <FallbackView file={file} note={error} />;
-	if (srcdoc === null) return <Status>불러오는 중</Status>;
+	if (srcdoc === null) return <Status>{t("quickLook.status.loading")}</Status>;
 	return <iframe className="ql__frame flex-1 self-stretch w-full h-full border-0 bg-window" sandbox="" title={file.name} srcDoc={srcdoc} />;
 }
 
@@ -46,9 +48,10 @@ function cellText(cell: unknown): string {
 }
 
 export function SheetView({ file }: { readonly file: PreviewDocument }): ReactElement {
+	const { t } = useTranslation();
 	const bytes = file.bytes;
 	const [sheet, setSheet] = useState(0);
-	if (bytes === null) return <FallbackView file={file} note="시트를 읽지 못했습니다" />;
+	if (bytes === null) return <FallbackView file={file} note={t("quickLook.documents.sheetReadFailed")} />;
 	let names: readonly string[] = [];
 	let rows: readonly (readonly string[])[] = [];
 	try {
@@ -63,10 +66,10 @@ export function SheetView({ file }: { readonly file: PreviewDocument }): ReactEl
 			}
 		}
 	} catch (caught) {
-		const message = caught instanceof Error ? caught.message : "시트를 열 수 없습니다";
+		const message = caught instanceof Error ? caught.message : t("quickLook.documents.sheetOpenFailed");
 		return <FallbackView file={file} note={message} />;
 	}
-	if (names.length === 0) return <FallbackView file={file} note="시트가 없습니다" />;
+	if (names.length === 0) return <FallbackView file={file} note={t("quickLook.documents.sheetMissing")} />;
 	return (
 		<>
 			<div className="ql__tablewrap box-border self-stretch w-full h-auto m-0 p-16">
@@ -85,11 +88,11 @@ export function SheetView({ file }: { readonly file: PreviewDocument }): ReactEl
 			{names.length > 1 ? (
 				<div className="ql__pager flex flex-none self-stretch items-center justify-center gap-12 h-[40px] border-t border-divider bg-ql-sunk text-ink-muted text-meta [&_button]:h-icon-sm [&_button]:px-10 [&_button]:border [&_button]:border-border [&_button]:rounded-6 [&_button]:bg-window [&_button]:text-ink [&_button]:disabled:text-ink-faint">
 					<button type="button" disabled={sheet <= 0} onClick={() => setSheet((current) => current - 1)}>
-						이전
+						{t("quickLook.documents.previous")}
 					</button>
 					<span>{names[sheet] ?? ""}</span>
 					<button type="button" disabled={sheet >= names.length - 1} onClick={() => setSheet((current) => current + 1)}>
-						다음
+						{t("quickLook.documents.next")}
 					</button>
 				</div>
 			) : null}
@@ -98,7 +101,8 @@ export function SheetView({ file }: { readonly file: PreviewDocument }): ReactEl
 }
 
 export function RtfView({ file }: { readonly file: PreviewDocument }): ReactElement {
-	if (file.bytes === null) return <FallbackView file={file} note="문서를 읽지 못했습니다" />;
+	const { t } = useTranslation();
+	if (file.bytes === null) return <FallbackView file={file} note={t("quickLook.documents.readFailed")} />;
 	return (
 		<pre className="ql__pre box-border self-stretch w-full h-auto m-0 px-24 py-20 bg-window text-ink font-mono text-meta leading-[1.55] whitespace-pre-wrap [word-break:break-word] select-text">
 			{rtfToText(decodeUtf8(file.bytes))}

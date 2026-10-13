@@ -7,6 +7,7 @@
  */
 
 import { isTagPath, RECENTS_PATH, tagNameOf, type FsHistoryOperation, type FsUndoOutcome } from "../../../shared/fs-contract";
+import { t } from "../../../shared/i18n/core";
 import { basename } from "./paths";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"] as const;
@@ -114,16 +115,16 @@ export function parseSizeLabel(label: string): number {
 
 export function trashToast(paths: readonly string[]): string {
 	if (paths.length === 1) {
-		return `${basename(paths[0] ?? "")} — 휴지통으로 이동했습니다`;
+		return t("finderState.toast.trashSingle", { name: basename(paths[0] ?? "") });
 	}
-	return `${paths.length}개 항목을 휴지통으로 이동했습니다`;
+	return t("toasts.trashCount", { count: paths.length });
 }
 
 export function putBackToast(paths: readonly string[]): string {
 	if (paths.length === 1) {
-		return `${basename(paths[0] ?? "")} — 원래 위치로 복원했습니다`;
+		return t("finderState.toast.putBackSingle", { name: basename(paths[0] ?? "") });
 	}
-	return `${paths.length}개 항목을 원래 위치로 복원했습니다`;
+	return t("finderState.toast.putBackCount", { count: paths.length });
 }
 
 /** The toast for an emptied Trash: what went, and the first verbatim refusal. */
@@ -133,31 +134,35 @@ export function emptyTrashToast(result: {
 }): string {
 	const first = result.failed[0];
 	if (first === undefined) {
-		return "휴지통을 비웠습니다";
+		return t("finderState.toast.emptyTrashDone");
 	}
 	return result.ok.length === 0
-		? `휴지통 비우기 실패: ${first.message}`
-		: `${result.ok.length}개 항목을 삭제했습니다 · ${basename(first.path)} — 삭제하지 못했습니다: ${first.message}`;
+		? t("finderState.toast.emptyTrashFailed", { message: first.message })
+		: t("finderState.toast.emptyTrashPartial", {
+				count: result.ok.length,
+				name: basename(first.path),
+				message: first.message,
+			});
 }
 
 /** A batch file operation's verb, as the toast names it. */
 export type BatchVerb = "trash" | "putBack" | "move" | "copy" | "duplicate";
 
-const BATCH_DONE: Record<BatchVerb, string> = {
-	trash: "휴지통으로 이동했습니다",
-	putBack: "원래 위치로 복원했습니다",
-	move: "옮겼습니다",
-	copy: "복사했습니다",
-	duplicate: "복제했습니다",
-};
+const BATCH_DONE = {
+	trash: "finderState.toast.batchDone.trash",
+	putBack: "finderState.toast.batchDone.putBack",
+	move: "finderState.toast.batchDone.move",
+	copy: "finderState.toast.batchDone.copy",
+	duplicate: "finderState.toast.batchDone.duplicate",
+} as const satisfies Readonly<Record<BatchVerb, string>>;
 
-const BATCH_FAILED: Record<BatchVerb, string> = {
-	trash: "휴지통으로 이동하지 못했습니다",
-	putBack: "원래 위치로 복원하지 못했습니다",
-	move: "옮기지 못했습니다",
-	copy: "복사하지 못했습니다",
-	duplicate: "복제하지 못했습니다",
-};
+const BATCH_FAILED = {
+	trash: "finderState.toast.batchFailed.trash",
+	putBack: "finderState.toast.batchFailed.putBack",
+	move: "finderState.toast.batchFailed.move",
+	copy: "finderState.toast.batchFailed.copy",
+	duplicate: "finderState.toast.batchFailed.duplicate",
+} as const satisfies Readonly<Record<BatchVerb, string>>;
 
 /**
  * The toast for a finished batch. A partial batch names both counts and the
@@ -167,32 +172,42 @@ export function batchToast(
 	verb: BatchVerb,
 	result: { readonly ok: readonly string[]; readonly failed: readonly { readonly path: string; readonly message: string }[] },
 ): string {
+	const doneCount = (): string => t("finderState.toast.batchDoneCount", { count: result.ok.length, action: t(BATCH_DONE[verb]) });
 	const first = result.failed[0];
 	if (first === undefined) {
 		if (verb === "trash") return trashToast(result.ok);
 		if (verb === "putBack") return putBackToast(result.ok);
-		return `${result.ok.length}개 항목을 ${BATCH_DONE[verb]}`;
+		return doneCount();
 	}
 	const failedPart =
 		result.failed.length === 1
-			? `${basename(first.path)} — ${BATCH_FAILED[verb]}: ${first.message}`
-			: `${result.failed.length}개 항목을 ${BATCH_FAILED[verb]} (${basename(first.path)}: ${first.message})`;
-	return result.ok.length === 0 ? failedPart : `${result.ok.length}개 항목을 ${BATCH_DONE[verb]} · ${failedPart}`;
+			? t("finderState.toast.batchFailedSingle", {
+					name: basename(first.path),
+					reason: t(BATCH_FAILED[verb]),
+					message: first.message,
+				})
+			: t("finderState.toast.batchFailedCount", {
+					count: result.failed.length,
+					reason: t(BATCH_FAILED[verb]),
+					name: basename(first.path),
+					message: first.message,
+				});
+	return result.ok.length === 0 ? failedPart : t("finderState.toast.batchCombined", { done: doneCount(), failure: failedPart });
 }
 
 /** How each recorded operation is named in the "…취소" / "…다시 실행" toast. */
-const HISTORY_LABEL: Record<FsHistoryOperation, string> = {
-	copy: "복사",
-	move: "이동",
-	duplicate: "복제",
-	rename: "이름 변경",
-	createFolder: "새 폴더",
-	createFile: "새 파일",
-	trash: "휴지통으로 이동",
-	restore: "원래 위치로 복원",
-	extract: "압축 해제",
-	compress: "압축",
-};
+const HISTORY_LABEL = {
+	copy: "finderState.history.op.copy",
+	move: "finderState.history.op.move",
+	duplicate: "finderState.history.op.duplicate",
+	rename: "finderState.history.op.rename",
+	createFolder: "finderState.history.op.createFolder",
+	createFile: "finderState.history.op.createFile",
+	trash: "finderState.history.op.trash",
+	restore: "finderState.history.op.restore",
+	extract: "finderState.history.op.extract",
+	compress: "finderState.history.op.compress",
+} as const satisfies Readonly<Record<FsHistoryOperation, string>>;
 
 /**
  * The toast for a ⌘Z / ⇧⌘Z: the operation it undid or redid ("이름 변경 취소"),
@@ -201,36 +216,33 @@ const HISTORY_LABEL: Record<FsHistoryOperation, string> = {
  */
 export function historyToast(direction: "undo" | "redo", outcome: FsUndoOutcome): string | null {
 	if (outcome.empty) return null;
-	const label = `${outcome.operation === undefined ? "파일 작업" : HISTORY_LABEL[outcome.operation]} ${direction === "undo" ? "취소" : "다시 실행"}`;
+	const operation = outcome.operation === undefined ? t("finderState.history.op.generic") : t(HISTORY_LABEL[outcome.operation]);
+	const label = direction === "undo" ? t("finderState.history.undo", { operation }) : t("finderState.history.redo", { operation });
 	const first = outcome.failed[0];
 	if (first === undefined) return label;
-	const more = outcome.failed.length > 1 ? ` (외 ${outcome.failed.length - 1}개 항목)` : "";
-	return `${label} 실패: ${basename(first.path)} — ${first.message}${more}`;
+	const more = outcome.failed.length > 1 ? t("finderState.history.more", { count: outcome.failed.length - 1 }) : "";
+	return t("finderState.history.failed", { label, name: basename(first.path), message: first.message, more });
 }
 
 export function indexToast(name: string, included: boolean): string {
-	return included ? `${name} — 인덱싱에 포함했습니다` : `${name} — 인덱싱에서 제외했습니다`;
+	return included ? t("toasts.indexIncluded", { name }) : t("toasts.indexExcluded", { name });
 }
 
 export function emptyStateText(
 	query: string,
-	path = "",
-	translate?: (key: string, def: string, opt?: Record<string, unknown>) => string,
+	path = ""
 ): string {
 	const trimmed = query.trim();
 	if (trimmed !== "") {
-		return translate
-			? translate("finder.emptySearch", `"${trimmed}"와 일치하는 파일이 없습니다`, { query: trimmed })
-			: `"${trimmed}"와 일치하는 파일이 없습니다`;
+		return t("finder.emptySearch", { query: trimmed });
 	}
 	if (path === RECENTS_PATH) {
-		return translate ? translate("finder.emptyRecents", "최근에 연 파일이 없습니다") : "최근에 연 파일이 없습니다";
+		return t("finder.emptyRecents");
 	}
 	if (isTagPath(path)) {
-		const name = tagNameOf(path);
-		return translate ? translate("finder.emptyTag", `"${name}" 태그가 붙은 항목이 없습니다`, { name }) : `"${name}" 태그가 붙은 항목이 없습니다`;
+		return t("finder.emptyTag", { name: tagNameOf(path) });
 	}
-	return translate ? translate("finder.emptyFolder", "빈 폴더") : "빈 폴더";
+	return t("finder.emptyFolder");
 }
 
 /** Display width in Latin-letter units: CJK and other wide scripts count 2. */

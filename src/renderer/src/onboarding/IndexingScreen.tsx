@@ -317,7 +317,7 @@ export function IndexingScreen({ ctx }: { readonly ctx: OnboardingCtx }): ReactE
 							<Icon name="triangle-alert" size={18} />
 							<span>
 								<strong>
-									{t("onboarding.indexing.gateTitle", { machine: platform === "win32" ? "PC를" : "Mac을" })}
+									{platform === "win32" ? t("onboarding.indexing.gateTitlePc") : t("onboarding.indexing.gateTitleMac")}
 								</strong>
 								<small>
 									{platform === "win32" ? t("onboarding.indexing.gateDetailWindows") : t("onboarding.indexing.gateDetailMac")}
