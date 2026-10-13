@@ -4,7 +4,10 @@
  * The main process owns one AutoRAGAgent instance (the "main search agent")
  * and streams `searchDocumentsStream` events to the renderer over IPC.
  * Quick = the stream's `preliminary` event (the fast phase's plain-text answer);
- * Deep = the stream's `complete` event (full SearchDocumentsResponse).
+ * Deep = the stream's `complete` event (full SearchDocumentsResponse). A run
+ * that ends without verification (Jev judged the fast answer final, or routed
+ * to a direct answer) streams only `complete`; that single answer is sent as
+ * `quick`, never as `deep`, so the panel does not show the same text twice.
  * While a phase runs, the main process also forwards the agent's live model
  * stream: `thinking` signals (once per phase) that the model started
  * reasoning — the reasoning text itself never crosses IPC — and
