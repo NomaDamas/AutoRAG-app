@@ -35,6 +35,7 @@ import {
 	pruneDeadWeight,
 	download,
 	extract,
+	fetchText,
 	findFile,
 	hostPlatformId,
 	latestCrateVersion,
@@ -219,7 +220,7 @@ async function stageNode() {
 	const version = await latestNode24();
 	const base = `https://nodejs.org/dist/${version}`;
 	const archive = `node-${version}-${target.nodeSuffix}`;
-	const sums = await (await fetch(`${base}/SHASUMS256.txt`)).text();
+	const sums = await fetchText(`${base}/SHASUMS256.txt`);
 	const line = sums.split("\n").find((entry) => entry.endsWith(`  ${archive}`));
 	if (line === undefined) throw new Error(`SHASUMS256.txt has no ${archive}`);
 	const file = await download(`${base}/${archive}`, archive, line.split(/\s+/)[0]);
@@ -304,11 +305,21 @@ async function stageSeed() {
 	const modelFile = await download(model.url, modelFilename, model.sha256);
 	const runtimeFile = await download(runtime.url, runtime.filename, runtime.sha256);
 	copyFileSync(modelFile.path, join(SEED, "models", modelFilename));
-	copyFileSync(runtimeFile.path, join(SEED, "runtime", runtime.filename));
 	const files = [
 		{ path: `models/${modelFilename}`, destination: `models/${modelFilename}`, sha256: model.sha256, bytes: statSync(join(SEED, "models", modelFilename)).size },
-		{ path: `runtime/${runtime.filename}`, destination: `runtime/${runtime.filename}`, sha256: runtime.sha256, bytes: statSync(join(SEED, "runtime", runtime.filename)).size },
 	];
+	if (target.os === "darwin") {
+		// A notarized app signs every Mach-O it carries, and the binaries inside the pinned archive
+		// cannot be signed. Ship the runtime extracted, as the librarian lays it out
+		// (runtime/<archive>.extracted/), with the marker that lets it stand in for the archive.
+		const tree = `runtime/${runtime.filename}.extracted`;
+		extract(runtimeFile.path, join(SEED, tree));
+		writeFileSync(join(SEED, tree, ".autorag-archive-sha256"), `${runtime.sha256}\n`);
+		files.push({ kind: "tree", path: tree, destination: tree });
+	} else {
+		copyFileSync(runtimeFile.path, join(SEED, "runtime", runtime.filename));
+		files.push({ path: `runtime/${runtime.filename}`, destination: `runtime/${runtime.filename}`, sha256: runtime.sha256, bytes: statSync(join(SEED, "runtime", runtime.filename)).size });
+	}
 	writeFileSync(join(SEED, "manifest.json"), `${JSON.stringify({ schema: 1, files }, null, 2)}\n`);
 	record({ name: "qwen3-embedding-0.6b", version: model.revision.slice(0, 12), source: model.url, sha256: model.sha256, verifiedAgainstPublisherDigest: true });
 	record({ name: "llama.cpp-runtime", version: runtime.version, source: runtime.url, sha256: runtime.sha256, verifiedAgainstPublisherDigest: true });

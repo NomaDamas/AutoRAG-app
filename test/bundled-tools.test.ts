@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from "node:fs";
+import { lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join, win32 } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -85,5 +85,38 @@ describe("seeding the embedding model", () => {
 
 	it("reports no seed when the build has none", async () => {
 		expect(await seedAssets({ seedDir: temp(), autoragHome: temp() })).toEqual({ kind: "none" });
+	});
+
+	describe("a runtime shipped extracted (signed macOS build)", () => {
+		function treeSeed(): string {
+			const dir = temp();
+			const tree = join(dir, "runtime", "llama.tar.gz.extracted");
+			mkdirSync(join(tree, "llama-b10951"), { recursive: true });
+			writeFileSync(join(tree, ".autorag-archive-sha256"), `${"a".repeat(64)}\n`);
+			writeFileSync(join(tree, "llama-b10951", "libggml.0.23.0.dylib"), "lib");
+			symlinkSync("libggml.0.23.0.dylib", join(tree, "llama-b10951", "libggml.dylib"));
+			const entry = { kind: "tree", path: "runtime/llama.tar.gz.extracted", destination: "runtime/llama.tar.gz.extracted" };
+			writeFileSync(join(dir, "manifest.json"), JSON.stringify({ schema: 1, files: [entry] }));
+			return dir;
+		}
+
+		it("copies the whole tree, keeping the dylib symlinks as symlinks", async () => {
+			const home = temp();
+			const outcome = await seedAssets({ seedDir: treeSeed(), autoragHome: home });
+			expect(outcome).toEqual({ kind: "done", copied: ["runtime/llama.tar.gz.extracted"], present: [] });
+			const tree = join(home, "runtime", "llama.tar.gz.extracted");
+			expect(readFileSync(join(tree, ".autorag-archive-sha256"), "utf8").trim()).toBe("a".repeat(64));
+			expect(lstatSync(join(tree, "llama-b10951", "libggml.dylib")).isSymbolicLink()).toBe(true);
+			expect(readlinkSync(join(tree, "llama-b10951", "libggml.dylib"))).toBe("libggml.0.23.0.dylib");
+			expect(existsSync(`${tree}.seed-part`)).toBe(false);
+		});
+
+		it("leaves a runtime tree the user already has untouched", async () => {
+			const home = temp();
+			mkdirSync(join(home, "runtime", "llama.tar.gz.extracted"), { recursive: true });
+			const outcome = await seedAssets({ seedDir: treeSeed(), autoragHome: home });
+			expect(outcome).toEqual({ kind: "done", copied: [], present: ["runtime/llama.tar.gz.extracted"] });
+			expect(existsSync(join(home, "runtime", "llama.tar.gz.extracted", ".autorag-archive-sha256"))).toBe(false);
+		});
 	});
 });

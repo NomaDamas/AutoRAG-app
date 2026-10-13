@@ -32,6 +32,10 @@ const root = dirname(fileURLToPath(import.meta.url));
 const platformId = process.env.AUTORAG_RELEASE_PLATFORM ?? `${process.platform}-${process.arch}`;
 const stage = join(root, "build", "stage", platformId);
 
+// CI passes a secret that does not exist as an empty string. electron-builder treats an empty
+// CSC_LINK as set, resolves it as a path to the working directory, and fails with "<repo> not a
+// file", so an unsigned build must not see it at all.
+for (const name of ["CSC_LINK", "CSC_KEY_PASSWORD", "CSC_NAME"]) if (process.env[name] === "") delete process.env[name];
 const hasMacSigning = Boolean(process.env.CSC_LINK || process.env.CSC_NAME);
 const hasNotarization = Boolean(
 	(process.env.APPLE_API_KEY && process.env.APPLE_API_KEY_ID && process.env.APPLE_API_ISSUER) ||
