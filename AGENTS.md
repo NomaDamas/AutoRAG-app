@@ -88,6 +88,43 @@ bun scripts/manual-qa/compare-visual-parity.mjs /tmp/parity/before /tmp/parity/a
 and what the harness has caught. On an unchanged tree the harness is
 byte-identical between runs; anything else is a real difference to explain.
 
+## User-facing text and translations (i18n)
+
+The app ships in four interface languages: Korean (the default), English,
+Japanese, and Simplified Chinese (`APP_LANGUAGES` in
+`src/shared/language-contract.ts`). Every string a user can see goes through
+i18next. Never hardcode a user-facing string in any language: no literals in
+JSX, `aria-label`/`title`/`placeholder`, toasts, dialogs, menus,
+notifications, or error messages shown to the user.
+
+- **Where strings live.** One dictionary per language in
+  `src/shared/i18n/locales/{ko,en,ja,zh}.json`. Put a key under the namespace of
+  the surface it belongs to (for example `settingsCore.general.*` for
+  Settings → 일반, `main.*` for strings the main process shows). Reuse an
+  existing key before adding one.
+- **Every key in all four files, in the same change.** Write a real
+  translation for each language; never copy the Korean text into `en`/`ja`/`zh`
+  or leave a placeholder. Interpolate with `{{name}}` and use the same
+  variables in all four.
+- **Renderer.** Components use `const { t } = useTranslation()` (from
+  `src/shared/i18n`) and `t("namespace.key", { name })`. Non-React code
+  (`state/*.ts`) imports `t` from `src/shared/i18n/core`.
+- **Main process and fs worker.** Import `t` from `src/shared/i18n/core` (no
+  React). Its language follows the interface-language setting: main applies it
+  at startup and on every change and passes it to the fs worker. A string built
+  once at launch, such as an application-menu label, appears in the language
+  set at launch.
+- **Data that is translated later.** Store the key, typed as `LocaleKey`, and
+  call `t` where the text is shown, not when the data is created.
+- **Not translated.** Product and brand names (`APP_NAME`/`APP_FULL_NAME`, see
+  the top of this file), file names, paths, and text that comes from the user,
+  a document, or an external service.
+
+`test/i18n.test.ts` fails when a key is missing in any language, the
+interpolation variables differ, or Korean is left in `en`, `ja`, or `zh`.
+Check new UI in at least two languages, because translations change line
+length and layout.
+
 ## Release pipeline
 
 `.github/workflows/release.yml` turns a published GitHub release into a macOS
