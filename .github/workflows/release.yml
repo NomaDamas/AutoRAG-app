@@ -98,7 +98,16 @@ jobs:
           CSC_KEY_PASSWORD: ${{ secrets.MAC_CERTIFICATE_PASSWORD }}
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-        run: bun run release:pack:mac
+        # @electron/osx-sign opens every file of the bundle at once to find the binaries (an unbounded
+        # Promise.all over ~130k files), so signing fails with EMFILE once the process passes the
+        # kernel's per-process cap (observed in run 38380649023). Raise the kernel caps (GitHub-hosted
+        # runners allow passwordless sudo; a self-hosted Mac without it keeps its own limits), then
+        # the shell's limit up to them.
+        run: |
+          sudo -n sysctl -w kern.maxfiles=524288 kern.maxfilesperproc=262144 || echo "cannot raise kern.maxfiles* (no passwordless sudo)"
+          ulimit -n "$(sysctl -n kern.maxfilesperproc)" || ulimit -n "$(ulimit -Hn)"
+          echo "file descriptors: soft $(ulimit -n), hard $(ulimit -Hn), per-process cap $(sysctl -n kern.maxfilesperproc)"
+          bun run release:pack:mac
 
       - name: Smoke-test the installed app
         run: node scripts/release/smoke-installed.mjs
