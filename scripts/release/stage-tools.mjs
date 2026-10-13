@@ -35,6 +35,7 @@ import {
 	pruneDeadWeight,
 	download,
 	extract,
+	fetchText,
 	findFile,
 	hostPlatformId,
 	latestCrateVersion,
@@ -219,7 +220,7 @@ async function stageNode() {
 	const version = await latestNode24();
 	const base = `https://nodejs.org/dist/${version}`;
 	const archive = `node-${version}-${target.nodeSuffix}`;
-	const sums = await (await fetch(`${base}/SHASUMS256.txt`)).text();
+	const sums = await fetchText(`${base}/SHASUMS256.txt`);
 	const line = sums.split("\n").find((entry) => entry.endsWith(`  ${archive}`));
 	if (line === undefined) throw new Error(`SHASUMS256.txt has no ${archive}`);
 	const file = await download(`${base}/${archive}`, archive, line.split(/\s+/)[0]);

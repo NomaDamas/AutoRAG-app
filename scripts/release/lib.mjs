@@ -60,10 +60,39 @@ function githubHeaders() {
 	return { accept: "application/vnd.github+json", "user-agent": "autorag-release", ...(token ? { authorization: `Bearer ${token}` } : {}) };
 }
 
+/**
+ * `fetch` that retries what a long staging run on a shared runner hits now and
+ * then: the connection dropped mid-request (observed: GitHub's API closing the
+ * socket, `UND_ERR_SOCKET`) or a 5xx/429. Other HTTP errors return at once.
+ */
+async function fetchRetrying(url, init, attempts = 4) {
+	for (let attempt = 1; ; attempt += 1) {
+		try {
+			const response = await fetch(url, init);
+			if (attempt < attempts && (response.status >= 500 || response.status === 429)) {
+				await response.body?.cancel();
+				log(`GET ${url} -> HTTP ${response.status}; retry ${attempt}/${attempts - 1}`);
+			} else {
+				return response;
+			}
+		} catch (error) {
+			if (attempt >= attempts) throw error;
+			log(`GET ${url} failed (${error.cause?.code ?? error.message}); retry ${attempt}/${attempts - 1}`);
+		}
+		await new Promise((resolve) => setTimeout(resolve, 2_000 * 2 ** (attempt - 1)));
+	}
+}
+
 export async function fetchJson(url, headers = {}) {
-	const response = await fetch(url, { headers: { "user-agent": "autorag-release", ...headers } });
+	const response = await fetchRetrying(url, { headers: { "user-agent": "autorag-release", ...headers } });
 	if (!response.ok) throw new Error(`GET ${url} -> HTTP ${response.status}`);
 	return response.json();
+}
+
+export async function fetchText(url) {
+	const response = await fetchRetrying(url, { headers: { "user-agent": "autorag-release" } });
+	if (!response.ok) throw new Error(`GET ${url} -> HTTP ${response.status}`);
+	return response.text();
 }
 
 /** The repository's latest (non-prerelease) GitHub release: tag plus assets with their server-side sha256 digests. */
@@ -100,7 +129,7 @@ export async function download(url, filename, expected) {
 		return { path: destination, sha256: expected ?? (await sha256File(destination)) };
 	}
 	log(`download ${url}`);
-	const response = await fetch(url, { headers: { "user-agent": "autorag-release" }, redirect: "follow" });
+	const response = await fetchRetrying(url, { headers: { "user-agent": "autorag-release" }, redirect: "follow" });
 	if (!response.ok || response.body === null) throw new Error(`GET ${url} -> HTTP ${response.status}`);
 	const part = `${destination}.part`;
 	await pipeline(Readable.fromWeb(response.body), createWriteStream(part));
