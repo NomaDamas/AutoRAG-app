@@ -97,6 +97,10 @@ const config = {
 		notarize: hasMacSigning && hasNotarization,
 	},
 	dmg: {
+		// APFS keeps file names byte for byte. HFS+ (the default) stores names decomposed (NFD), so the
+		// app copied out of v0.1.0's dmg failed its own code seal: kordoc's Korean template names were
+		// signed composed (NFC) and came back as "file missing" + "file added", and Gatekeeper rejects that.
+		filesystem: "APFS",
 		sign: false,
 		writeUpdateInfo: false,
 		contents: [

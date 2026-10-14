@@ -88,6 +88,19 @@ try {
 	expect(existsSync(join(resources, "tools", "bin")), "tools/bin installed");
 	expect(existsSync(join(resources, "seed", "manifest.json")), "seed installed");
 
+	// The copy a user installs must still match its own code seal. v0.1.0's dmg broke it (HFS+ rewrote
+	// non-ASCII file names), which only an installed-copy check sees; an ad-hoc build skips Gatekeeper.
+	if (!win) {
+		const seal = spawnSync("codesign", ["--verify", "--deep", "--strict", appRoot], { encoding: "utf8" });
+		expect(seal.status === 0, "installed app matches its code signature", seal.stderr.trim().split("\n").slice(-3).join(" | "));
+		const details = spawnSync("codesign", ["-dv", appRoot], { encoding: "utf8" }).stderr;
+		const signed = /TeamIdentifier=(?!not set)\S+/.test(details);
+		if (signed) {
+			const gatekeeper = spawnSync("spctl", ["--assess", "--type", "execute", "-vv", appRoot], { encoding: "utf8" });
+			expect(gatekeeper.status === 0 && /source=Notarized Developer ID/.test(gatekeeper.stderr), "Gatekeeper accepts the installed app as notarized", gatekeeper.stderr.trim());
+		}
+	}
+
 	// 2. The installed tools, on a bare PATH.
 	const verify = spawnSync(process.execPath, [join(ROOT, "scripts", "release", "verify-bundle.mjs"), join(resources, "tools"), "--seed", join(resources, "seed")], { stdio: "inherit" });
 	expect(verify.status === 0, "installed tools pass verify-bundle");
