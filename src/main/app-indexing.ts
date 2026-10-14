@@ -3,6 +3,7 @@ import { readdir, realpath } from "node:fs/promises";
 import { join } from "node:path";
 import type { CliConfig } from "@autorag/librarian/core";
 import { DEFAULT_CODE_FOLDER_NAMES, isJsonObject } from "../shared/settings-contract";
+import { embedderKind, learnedBatchSize } from "./embedding-batch";
 import { withIndexingPoliciesApplied } from "./indexing-policy";
 
 /**
@@ -166,5 +167,17 @@ export async function applyAppIndexing(
 		const existing = Array.isArray(jikji.exclude) ? jikji.exclude.filter((value): value is string => typeof value === "string") : [];
 		jikji = { ...jikji, exclude: [...new Set([...existing, ...globs])] };
 	}
-	return jikji === undefined ? { ...config, excludePaths } : { ...config, excludePaths, jikji };
+	const withExcludes = jikji === undefined ? { ...config, excludePaths } : { ...config, excludePaths, jikji };
+	return withLearnedEmbeddingBatch(withExcludes, raw);
+}
+
+/**
+ * A refresh that once timed out on the embedding gateway learned a smaller batch
+ * for this embedder kind (see `embedding-batch`); every later run starts there.
+ */
+function withLearnedEmbeddingBatch(config: CliConfig, raw: Record<string, unknown>): CliConfig {
+	const embedder = config.minSync?.embedder;
+	const learned = learnedBatchSize(raw, embedderKind(embedder));
+	if (learned === null) return config;
+	return { ...config, minSync: { ...config.minSync, embedder: { ...embedder, batchSize: learned } } };
 }

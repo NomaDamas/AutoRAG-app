@@ -1,8 +1,15 @@
 import { existsSync } from "node:fs";
 import { AutoRAGLite, type RefreshMethod } from "@autorag/librarian";
-import { readRawConfigObject, resolveConfigPath, resolveConfigReadOnly, type CliConfig } from "@autorag/librarian/core";
+import { readRawConfigObject, resolveConfigPath, resolveConfigReadOnly, writeConfigObject, type CliConfig } from "@autorag/librarian/core";
 import type { ConfigRefreshDiagnostic, ConfigRefreshResult } from "../shared/settings-contract";
 import { APP_INDEXING_CAPABILITIES, applyAppIndexing, readAppIndexing } from "./app-indexing";
+import {
+	embedderKind,
+	isEmbeddingTimeout,
+	smallerBatchSize,
+	startingBatchSize,
+	withLearnedBatchSize,
+} from "./embedding-batch";
 
 /**
  * The single AutoRAG index-refresh path shared by Settings (manual refresh) and
@@ -67,15 +74,38 @@ export async function refreshAutoragIndex(
 	try {
 		const lite = new AutoRAGLite(effective);
 		const result = await lite.refresh(false, { methods: selected });
-		diagnostics.push(
-			...result.diagnostics.map((diagnostic) => ({
-				code: String(diagnostic.code),
-				severity: diagnostic.severity,
-				message: diagnostic.message,
-			})),
-		);
+		const toDiagnostic = (diagnostic: { readonly code: unknown; readonly severity: ConfigRefreshDiagnostic["severity"]; readonly message: string }): ConfigRefreshDiagnostic => ({
+			code: String(diagnostic.code),
+			severity: diagnostic.severity,
+			message: diagnostic.message,
+		});
+		diagnostics.push(...result.diagnostics.map(toDiagnostic));
+		// The embedding gateway aborts a request after 30 s. When a MinSync batch is
+		// too big for this machine, halve it and run only MinSync again until it fits.
+		let minsync = result.minsync;
+		if (selected.includes("minsync")) {
+			const embedder = effective.minSync?.embedder;
+			const kind = embedderKind(embedder);
+			const initial = embedder?.batchSize ?? startingBatchSize(raw);
+			let batch = initial;
+			while (minsync !== undefined && minsync.ok === false && isEmbeddingTimeout(minsyncFailureText(minsync, diagnostics))) {
+				const next = smallerBatchSize(batch);
+				if (next === null) break;
+				batch = next;
+				const retry = await new AutoRAGLite({ ...effective, minSync: { ...effective.minSync, embedder: { ...embedder, batchSize: batch } } }).refresh(false, { methods: ["minsync"] });
+				minsync = retry.minsync;
+				for (let index = diagnostics.length - 1; index >= 0; index -= 1) {
+					if (diagnostics[index]?.code === "minsync-sync-failed") diagnostics.splice(index, 1);
+				}
+				diagnostics.push(...retry.diagnostics.map(toDiagnostic));
+			}
+			if (minsync?.ok !== false && batch < initial) {
+				// Remember what worked so the next refresh does not repeat the failures.
+				writeConfigObject(configPath, withLearnedBatchSize(readRawConfigObject(configPath), kind, batch));
+			}
+		}
 		const failures: string[] = [];
-		if (result.minsync !== undefined && result.minsync.ok === false) failures.push(`minsync: ${result.minsync.reason ?? "failed"}`);
+		if (minsync !== undefined && minsync.ok === false) failures.push(`minsync: ${minsync.reason ?? "failed"}`);
 		if (result.everything !== undefined && result.everything.ok === false) failures.push(`everything: ${result.everything.reason ?? "failed"}`);
 		// fsearch-cli is an optional user install: without it file-name search falls
 		// back to a filesystem walk, so a missing binary must not fail the refresh.
@@ -124,4 +154,14 @@ export async function refreshAutoragIndex(
 			error: error instanceof Error ? error.message : String(error),
 		};
 	}
+}
+
+/** The text a failed MinSync step reports: its reason plus any MinSync diagnostic. */
+function minsyncFailureText(
+	minsync: { readonly reason?: string; readonly diagnostic?: { readonly message: string } },
+	diagnostics: readonly ConfigRefreshDiagnostic[],
+): string {
+	return [minsync.reason, minsync.diagnostic?.message, ...diagnostics.filter((diagnostic) => diagnostic.code === "minsync-sync-failed").map((diagnostic) => diagnostic.message)]
+		.filter((part): part is string => part !== undefined)
+		.join(" ");
 }
