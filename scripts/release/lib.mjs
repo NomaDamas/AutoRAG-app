@@ -232,6 +232,30 @@ export function pruneDeadWeight(root) {
 }
 
 /**
+ * Rename every non-ASCII name under `root` to its decomposed (NFD) form, deepest entries first, and
+ * return how many were renamed. macOS must see the names in the code seal byte for byte, and Finder
+ * writes names decomposed when it copies an app out of the dmg (measured on macOS 26.6: kordoc's
+ * composed `일반기안문_서식.hwpx` arrived decomposed, the seal reported "file added" + "file missing",
+ * and Gatekeeper called the app damaged). Signing names that are already NFD makes Finder's copy a
+ * no-op. APFS lookups are normalization-insensitive, so code that opens the composed name still finds it.
+ */
+export function decomposeNonAsciiNames(root) {
+	let renamed = 0;
+	const walk = (directory) => {
+		for (const entry of readdirSync(directory, { withFileTypes: true })) {
+			const full = join(directory, entry.name);
+			if (entry.isDirectory()) walk(full);
+			const decomposed = entry.name.normalize("NFD");
+			if (decomposed === entry.name) continue;
+			renameSync(full, join(directory, decomposed));
+			renamed += 1;
+		}
+	};
+	walk(root);
+	return renamed;
+}
+
+/**
  * The system bsdtar. Windows ships it as System32\\tar.exe, which is also what the installer
  * calls, so building and unpacking use the same tool; a Git-for-Windows `tar` on PATH is GNU tar
  * and cannot read the same flags.

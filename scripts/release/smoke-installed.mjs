@@ -93,6 +93,17 @@ try {
 	if (!win) {
 		const seal = spawnSync("codesign", ["--verify", "--deep", "--strict", appRoot], { encoding: "utf8" });
 		expect(seal.status === 0, "installed app matches its code signature", seal.stderr.trim().split("\n").slice(-3).join(" | "));
+		// ditto keeps names byte for byte, but Finder (how users install) writes them decomposed: v0.1.1
+		// passed the seal check above and was still "damaged" after a drag to /Applications.
+		const composed = [];
+		const walk = (directory) => {
+			for (const entry of readdirSync(directory, { withFileTypes: true })) {
+				if (entry.name !== entry.name.normalize("NFD")) composed.push(join(directory, entry.name));
+				if (entry.isDirectory()) walk(join(directory, entry.name));
+			}
+		};
+		walk(appRoot);
+		expect(composed.length === 0, "every file name is NFD, so a Finder copy keeps the seal", composed.slice(0, 3).join(" | "));
 		const details = spawnSync("codesign", ["-dv", appRoot], { encoding: "utf8" }).stderr;
 		const signed = /TeamIdentifier=(?!not set)\S+/.test(details);
 		if (signed) {

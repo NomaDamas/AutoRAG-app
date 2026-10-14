@@ -40,6 +40,9 @@ env:
 
 jobs:
   macos:
+    # A release that already carries the Mac dmg was built locally (docs/release.md → "Local Mac
+    # release"); mac-prebuilt mirrors it instead of building a second, different one.
+    if: ${{ github.event_name != 'release' || !contains(join(github.event.release.assets.*.name, ','), '-arm64.dmg') }}
     runs-on: ${{ fromJSON(vars.RELEASE_RUNNER_MAC || '"macos-15"') }}
     timeout-minutes: 120
     steps:
@@ -142,21 +145,43 @@ jobs:
           R2_ENDPOINT: ${{ vars.R2_ENDPOINT }}
           R2_BUCKET: ${{ vars.R2_BUCKET }}
         shell: bash
+        run: bash scripts/release/sync-r2.sh "$RELEASE_TAG" upload update feed
+
+  mac-prebuilt:
+    if: ${{ github.event_name == 'release' && contains(join(github.event.release.assets.*.name, ','), '-arm64.dmg') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      # The local build attached the update payload and feed too, because they reach R2 only from here.
+      # They leave the release once mirrored: the feed never points at GitHub, and the zip can outgrow
+      # GitHub's 2 GiB asset cap.
+      - name: Download the locally built Mac files
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          if [ -z "$R2_ENDPOINT" ] || [ -z "$R2_BUCKET" ] || [ -z "$AWS_ACCESS_KEY_ID" ]; then
-            echo "no R2 endpoint/bucket/credentials configured: skipping the CDN mirror"
-            exit 0
-          fi
-          prefix="s3://$R2_BUCKET/v${RELEASE_TAG#v}"
-          for dir in upload update; do
-            aws s3 sync "$dir/" "$prefix/" --endpoint-url "$R2_ENDPOINT" --cache-control "public, max-age=31536000, immutable"
+          mkdir -p upload update feed
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --dir upload -p '*-arm64.dmg' -p 'components-macos-arm64.json' -p 'SHA256SUMS-macos.txt'
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --dir update -p '*-arm64.zip' -p '*-arm64.zip.blockmap'
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --dir feed -p '*-mac.yml'
+          (cd upload && sha256sum --check SHA256SUMS-macos.txt)
+          ls -l upload update feed
+      - name: Sync installers to the R2 mirror
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ENDPOINT: ${{ vars.R2_ENDPOINT }}
+          R2_BUCKET: ${{ vars.R2_BUCKET }}
+        run: bash scripts/release/sync-r2.sh "$RELEASE_TAG" upload update feed
+      - name: Remove the update payload from the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for asset in update/* feed/*; do
+            gh release delete-asset "$RELEASE_TAG" "$(basename "$asset")" --repo "$GITHUB_REPOSITORY" --yes
           done
-          # The feed goes last, once everything it points at is downloadable. latest/ changes every
-          # release, so it is never cached; v<version>/feed/ keeps this release's copy for rollback.
-          if [ -d feed ]; then
-            aws s3 sync feed/ "$prefix/feed/" --endpoint-url "$R2_ENDPOINT" --cache-control "public, max-age=31536000, immutable"
-            aws s3 cp feed/ "s3://$R2_BUCKET/latest/" --recursive --endpoint-url "$R2_ENDPOINT" --cache-control "no-cache"
-          fi
 
   windows:
     runs-on: ${{ fromJSON(vars.RELEASE_RUNNER_WIN || '"windows-2022"') }}
@@ -247,16 +272,4 @@ jobs:
           R2_ENDPOINT: ${{ vars.R2_ENDPOINT }}
           R2_BUCKET: ${{ vars.R2_BUCKET }}
         shell: bash
-        run: |
-          if [ -z "$R2_ENDPOINT" ] || [ -z "$R2_BUCKET" ] || [ -z "$AWS_ACCESS_KEY_ID" ]; then
-            echo "no R2 endpoint/bucket/credentials configured: skipping the CDN mirror"
-            exit 0
-          fi
-          prefix="s3://$R2_BUCKET/v${RELEASE_TAG#v}"
-          for dir in upload update; do
-            aws s3 sync "$dir/" "$prefix/" --endpoint-url "$R2_ENDPOINT" --cache-control "public, max-age=31536000, immutable"
-          done
-          if [ -d feed ]; then
-            aws s3 sync feed/ "$prefix/feed/" --endpoint-url "$R2_ENDPOINT" --cache-control "public, max-age=31536000, immutable"
-            aws s3 cp feed/ "s3://$R2_BUCKET/latest/" --recursive --endpoint-url "$R2_ENDPOINT" --cache-control "no-cache"
-          fi
+        run: bash scripts/release/sync-r2.sh "$RELEASE_TAG" upload update feed
