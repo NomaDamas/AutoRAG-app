@@ -137,6 +137,8 @@ export const APP_INDEXING_CAPABILITIES: AppIndexingCapabilities = {
 export interface ApplyAppIndexingOptions {
 	/** Walk the search paths again instead of reusing a recent walk. Refreshes pass true. */
 	readonly fresh?: boolean;
+	/** Config file path; when given, the embedding batch size a past refresh learned is applied. */
+	readonly configPath?: string;
 }
 
 /**
@@ -151,6 +153,7 @@ export async function applyAppIndexing(
 	raw: Record<string, unknown>,
 	options: ApplyAppIndexingOptions = {},
 ): Promise<CliConfig> {
+	const { configPath } = options;
 	const config = withIndexingPoliciesApplied(input);
 	const settings = readAppIndexing(raw);
 	const excluded = new Set<string>(config.excludePaths ?? []);
@@ -168,16 +171,16 @@ export async function applyAppIndexing(
 		jikji = { ...jikji, exclude: [...new Set([...existing, ...globs])] };
 	}
 	const withExcludes = jikji === undefined ? { ...config, excludePaths } : { ...config, excludePaths, jikji };
-	return withLearnedEmbeddingBatch(withExcludes, raw);
+	return configPath === undefined ? withExcludes : withLearnedEmbeddingBatch(withExcludes, configPath);
 }
 
 /**
  * A refresh that once timed out on the embedding gateway learned a smaller batch
  * for this embedder kind (see `embedding-batch`); every later run starts there.
  */
-function withLearnedEmbeddingBatch(config: CliConfig, raw: Record<string, unknown>): CliConfig {
+function withLearnedEmbeddingBatch(config: CliConfig, configPath: string): CliConfig {
 	const embedder = config.minSync?.embedder;
-	const learned = learnedBatchSize(raw, embedderKind(embedder));
+	const learned = learnedBatchSize(configPath, embedderKind(embedder));
 	if (learned === null) return config;
 	return { ...config, minSync: { ...config.minSync, embedder: { ...embedder, batchSize: learned } } };
 }

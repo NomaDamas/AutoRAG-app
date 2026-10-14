@@ -3,10 +3,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type * as Librarian from "@autorag/librarian";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { refreshAutoragIndex } from "../src/main/index-refresh";
 
 const refresh = vi.hoisted(() => vi.fn());
+const syncMinSync = vi.hoisted(() => vi.fn());
 const batches = vi.hoisted((): Array<number | undefined> => []);
 
 vi.mock("@autorag/librarian", async (importOriginal) => ({
@@ -16,6 +17,7 @@ vi.mock("@autorag/librarian", async (importOriginal) => ({
 			batches.push(config.minSync?.embedder?.batchSize);
 		}
 		refresh = refresh;
+		syncMinSync = syncMinSync;
 	},
 }));
 
@@ -37,6 +39,7 @@ function result(fsearch: unknown): unknown {
 
 beforeEach(() => {
 	refresh.mockReset();
+	syncMinSync.mockReset();
 	batches.length = 0;
 });
 afterEach(async () => {
@@ -61,31 +64,37 @@ describe("refreshAutoragIndex", () => {
 	});
 
 	describe("embedding timeouts", () => {
+		const timeoutMessage = 'TEI API error 504 Gateway Timeout: {"code":"timeout"}';
 		const timeout = {
 			scanned: 1,
 			written: 1,
 			deleted: 0,
 			skipped: 0,
-			diagnostics: [{ code: "minsync-sync-failed", severity: "error", message: 'TEI API error 504 Gateway Timeout: {"code":"timeout"}' }],
-			minsync: { ok: false, reason: "sync-failed" },
+			diagnostics: [{ code: "minsync-sync-failed", severity: "error", source: "minsync", message: timeoutMessage }],
+			minsync: { ok: false, synced: 0, reason: "sync-failed", diagnostics: [{ code: "minsync-sync-failed", severity: "error", source: "minsync", message: timeoutMessage }] },
 		};
-		const fits = { scanned: 0, written: 0, deleted: 0, skipped: 0, diagnostics: [], minsync: { ok: true } };
+		const failed = { ok: false, synced: 0, reason: "sync-failed", diagnostic: { code: "sync-failed", message: timeoutMessage } };
+		const fits = { ok: true, synced: 3 };
+		const learnedFile = (deps: { env: NodeJS.ProcessEnv }): string => join(deps.env.HOME as string, "embedding-batch.json");
 
-		it("halves the batch after each timeout, succeeds, and remembers the size for the local embedder", async () => {
-			refresh.mockResolvedValueOnce(timeout).mockResolvedValueOnce(timeout).mockResolvedValueOnce(fits);
+		it("halves the batch with MinSync-only retries, succeeds, and remembers the local size", async () => {
+			refresh.mockResolvedValueOnce(timeout);
+			syncMinSync.mockResolvedValueOnce(failed).mockResolvedValueOnce(fits);
 			const deps = await fixture();
 
 			const outcome = await refreshAutoragIndex(deps);
 
 			expect(outcome).toMatchObject({ ok: true, error: null });
+			expect(outcome.diagnostics).toEqual([]);
+			expect(refresh).toHaveBeenCalledTimes(1);
 			expect(batches).toEqual([undefined, 32, 16]);
-			expect(refresh.mock.calls.map((call) => (call[1] as { methods: string[] }).methods)).toEqual([["parsed", "minsync"], ["minsync"], ["minsync"]]);
-			const stored = JSON.parse(readFileSync(deps.env.AUTORAG_CONFIG as string, "utf8"));
-			expect(stored.appIndexing.embeddingBatchSize).toEqual({ local: 16 });
+			expect(JSON.parse(readFileSync(learnedFile(deps), "utf8"))).toEqual({ local: 16 });
+			expect(JSON.parse(readFileSync(deps.env.AUTORAG_CONFIG as string, "utf8")).appIndexing).toBeUndefined();
 		});
 
 		it("starts the next refresh at the remembered size", async () => {
-			refresh.mockResolvedValueOnce(timeout).mockResolvedValueOnce(fits).mockResolvedValueOnce(fits);
+			refresh.mockResolvedValueOnce(timeout).mockResolvedValueOnce({ ...timeout, minsync: { ok: true, synced: 1 }, diagnostics: [] });
+			syncMinSync.mockResolvedValueOnce(fits);
 			const deps = await fixture();
 			await refreshAutoragIndex(deps);
 			batches.length = 0;
@@ -95,22 +104,26 @@ describe("refreshAutoragIndex", () => {
 			expect(batches).toEqual([32]);
 		});
 
-		it("does not shrink for a failure that is not a timeout", async () => {
-			refresh.mockResolvedValue({ ...timeout, diagnostics: [{ code: "minsync-sync-failed", severity: "error", message: "model file is missing" }] });
+		it("does not shrink for a failure that is not a gateway timeout", async () => {
+			const unavailable = { code: "embedder-unavailable", severity: "error", source: "minsync", message: "Embedding runtime did not become ready within 60000ms: health check timed out" };
+			refresh.mockResolvedValue({ ...timeout, diagnostics: [unavailable], minsync: { ok: false, synced: 0, reason: "embedder-unavailable", diagnostics: [unavailable] } });
 
 			const outcome = await refreshAutoragIndex(await fixture());
 
 			expect(outcome.ok).toBe(false);
-			expect(refresh).toHaveBeenCalledTimes(1);
+			expect(syncMinSync).not.toHaveBeenCalled();
 		});
 
-		it("gives up at a batch of one and reports the failure", async () => {
+		it("gives up at a batch of one and reports the failure without remembering anything", async () => {
 			refresh.mockResolvedValue(timeout);
+			syncMinSync.mockResolvedValue(failed);
+			const deps = await fixture();
 
-			const outcome = await refreshAutoragIndex(await fixture());
+			const outcome = await refreshAutoragIndex(deps);
 
 			expect(outcome.ok).toBe(false);
 			expect(batches).toEqual([undefined, 32, 16, 8, 4, 2, 1]);
+			expect(existsSync(learnedFile(deps))).toBe(false);
 		});
 	});
 });

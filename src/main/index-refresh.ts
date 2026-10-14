@@ -1,14 +1,14 @@
 import { existsSync } from "node:fs";
 import { AutoRAGLite, type RefreshMethod } from "@autorag/librarian";
-import { readRawConfigObject, resolveConfigPath, resolveConfigReadOnly, writeConfigObject, type CliConfig } from "@autorag/librarian/core";
+import { readRawConfigObject, resolveConfigPath, resolveConfigReadOnly, type CliConfig } from "@autorag/librarian/core";
 import type { ConfigRefreshDiagnostic, ConfigRefreshResult } from "../shared/settings-contract";
 import { APP_INDEXING_CAPABILITIES, applyAppIndexing, readAppIndexing } from "./app-indexing";
 import {
 	embedderKind,
 	isEmbeddingTimeout,
 	smallerBatchSize,
+	saveLearnedBatchSize,
 	startingBatchSize,
-	withLearnedBatchSize,
 } from "./embedding-batch";
 
 /**
@@ -69,7 +69,7 @@ export async function refreshAutoragIndex(
 	const configPath = resolveConfigPath(input).configPath;
 	const raw = existsSync(configPath) ? readRawConfigObject(configPath) : {};
 	// A refresh re-walks the folders, so a dot-folder created minutes ago is excluded too.
-	const effective = await applyAppIndexing(resolveConfigReadOnly(input), raw, { fresh: true });
+	const effective = await applyAppIndexing(resolveConfigReadOnly(input), raw, { fresh: true, configPath });
 	const diagnostics: ConfigRefreshDiagnostic[] = [];
 	try {
 		const lite = new AutoRAGLite(effective);
@@ -79,33 +79,40 @@ export async function refreshAutoragIndex(
 			severity: diagnostic.severity,
 			message: diagnostic.message,
 		});
-		diagnostics.push(...result.diagnostics.map(toDiagnostic));
 		// The embedding gateway aborts a request after 30 s. When a MinSync batch is
-		// too big for this machine, halve it and run only MinSync again until it fits.
-		let minsync = result.minsync;
+		// too big for this machine, halve it and re-run only the MinSync step
+		// (`syncMinSync`, not a full refresh) until it fits.
+		let minsyncOk = result.minsync?.ok;
+		let minsyncReason = result.minsync?.reason;
+		let minsyncDiagnostics: readonly ConfigRefreshDiagnostic[] = (result.minsync?.diagnostics ?? []).map(toDiagnostic);
 		if (selected.includes("minsync")) {
 			const embedder = effective.minSync?.embedder;
-			const kind = embedderKind(embedder);
-			const initial = embedder?.batchSize ?? startingBatchSize(raw);
+			const initial = embedder?.batchSize ?? startingBatchSize(configPath, raw);
 			let batch = initial;
-			while (minsync !== undefined && minsync.ok === false && isEmbeddingTimeout(minsyncFailureText(minsync, diagnostics))) {
+			while (minsyncOk === false && isEmbeddingTimeout([minsyncReason, ...minsyncDiagnostics.map((diagnostic) => diagnostic.message)].join(" "))) {
 				const next = smallerBatchSize(batch);
 				if (next === null) break;
 				batch = next;
-				const retry = await new AutoRAGLite({ ...effective, minSync: { ...effective.minSync, embedder: { ...embedder, batchSize: batch } } }).refresh(false, { methods: ["minsync"] });
-				minsync = retry.minsync;
-				for (let index = diagnostics.length - 1; index >= 0; index -= 1) {
-					if (diagnostics[index]?.code === "minsync-sync-failed") diagnostics.splice(index, 1);
-				}
-				diagnostics.push(...retry.diagnostics.map(toDiagnostic));
+				const retry = await new AutoRAGLite({ ...effective, minSync: { ...effective.minSync, embedder: { ...embedder, batchSize: batch } } }).syncMinSync();
+				minsyncOk = retry?.ok;
+				minsyncReason = retry?.reason;
+				minsyncDiagnostics =
+					retry?.diagnostic === undefined
+						? retry?.ok === false
+							? [{ code: "minsync-sync-failed", severity: "error", message: `MinSync sync failed: ${retry.reason ?? "failed"}` }]
+							: []
+						: [{ code: retry.diagnostic.code, severity: retry.ok ? "info" : "error", message: retry.diagnostic.message }];
 			}
-			if (minsync?.ok !== false && batch < initial) {
+			if (minsyncOk !== false && batch < initial) {
 				// Remember what worked so the next refresh does not repeat the failures.
-				writeConfigObject(configPath, withLearnedBatchSize(readRawConfigObject(configPath), kind, batch));
+				saveLearnedBatchSize(configPath, embedderKind(embedder), batch);
 			}
 		}
+		// Everything but MinSync's own diagnostics comes from the one full refresh; MinSync's
+		// are the last attempt's, so a superseded timeout never reaches the user.
+		diagnostics.push(...result.diagnostics.filter((diagnostic) => diagnostic.source !== "minsync").map(toDiagnostic), ...minsyncDiagnostics);
 		const failures: string[] = [];
-		if (minsync !== undefined && minsync.ok === false) failures.push(`minsync: ${minsync.reason ?? "failed"}`);
+		if (minsyncOk === false) failures.push(`minsync: ${minsyncReason ?? "failed"}`);
 		if (result.everything !== undefined && result.everything.ok === false) failures.push(`everything: ${result.everything.reason ?? "failed"}`);
 		// fsearch-cli is an optional user install: without it file-name search falls
 		// back to a filesystem walk, so a missing binary must not fail the refresh.
@@ -154,14 +161,4 @@ export async function refreshAutoragIndex(
 			error: error instanceof Error ? error.message : String(error),
 		};
 	}
-}
-
-/** The text a failed MinSync step reports: its reason plus any MinSync diagnostic. */
-function minsyncFailureText(
-	minsync: { readonly reason?: string; readonly diagnostic?: { readonly message: string } },
-	diagnostics: readonly ConfigRefreshDiagnostic[],
-): string {
-	return [minsync.reason, minsync.diagnostic?.message, ...diagnostics.filter((diagnostic) => diagnostic.code === "minsync-sync-failed").map((diagnostic) => diagnostic.message)]
-		.filter((part): part is string => part !== undefined)
-		.join(" ");
 }

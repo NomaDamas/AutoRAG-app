@@ -1,11 +1,26 @@
-import { describe, expect, it } from "vitest";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
 import {
 	embedderKind,
 	isEmbeddingTimeout,
+	saveLearnedBatchSize,
 	smallerBatchSize,
 	startingBatchSize,
-	withLearnedBatchSize,
 } from "../src/main/embedding-batch";
+
+const directories: string[] = [];
+
+async function configPath(): Promise<string> {
+	const dir = await mkdtemp(join(tmpdir(), "autorag-batch-"));
+	directories.push(dir);
+	return join(dir, "config.json");
+}
+
+afterEach(async () => {
+	await Promise.all(directories.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
+});
 
 describe("embedding batch size", () => {
 	it("halves 64 down to 1 and then stops", () => {
@@ -20,24 +35,28 @@ describe("embedding batch size", () => {
 		expect(embedderKind({ id: "x", baseUrl: "https://api.example.com/v1" })).toBe("remote");
 	});
 
-	it("keeps local and remote sizes apart", () => {
-		const local = withLearnedBatchSize({ minSync: { embedder: { profile: "qwen3-embedding-0.6b" } } }, "local", 8);
-		expect(startingBatchSize(local)).toBe(8);
-		const remote = { ...local, minSync: { embedder: { id: "x", baseUrl: "https://api.example.com/v1" } } };
-		expect(startingBatchSize(remote)).toBe(64);
-		expect(startingBatchSize(withLearnedBatchSize(remote, "remote", 16))).toBe(16);
+	it("keeps local and remote sizes apart", async () => {
+		const path = await configPath();
+		const local = { minSync: { embedder: { profile: "qwen3-embedding-0.6b" } } };
+		const remote = { minSync: { embedder: { id: "x", baseUrl: "https://api.example.com/v1" } } };
+		saveLearnedBatchSize(path, "local", 8);
+		expect(startingBatchSize(path, local)).toBe(8);
+		expect(startingBatchSize(path, remote)).toBe(64);
+		saveLearnedBatchSize(path, "remote", 16);
+		expect(startingBatchSize(path, remote)).toBe(16);
+		expect(startingBatchSize(path, local)).toBe(8);
 	});
 
-	it("falls back to the operator's batchSize, then the default, and preserves other appIndexing keys", () => {
-		expect(startingBatchSize({ minSync: { embedder: { batchSize: 20 } } })).toBe(20);
-		expect(startingBatchSize({})).toBe(64);
-		const next = withLearnedBatchSize({ appIndexing: { refreshIntervalMs: 5 } }, "local", 4);
-		expect(next.appIndexing).toEqual({ refreshIntervalMs: 5, embeddingBatchSize: { local: 4 } });
+	it("falls back to the operator's batchSize, then the default", async () => {
+		const path = await configPath();
+		expect(startingBatchSize(path, { minSync: { embedder: { batchSize: 20 } } })).toBe(20);
+		expect(startingBatchSize(path, {})).toBe(64);
 	});
 
-	it("recognises the gateway timeout and nothing else", () => {
+	it("recognises the gateway timeout but not a runtime that never became ready", () => {
 		expect(isEmbeddingTimeout('embedding failed: TEI API error 504 Gateway Timeout: {"code":"timeout"}')).toBe(true);
-		expect(isEmbeddingTimeout("embedding request timed out")).toBe(true);
+		expect(isEmbeddingTimeout("Embedding upstream timed out after 30000ms")).toBe(true);
+		expect(isEmbeddingTimeout("Embedding runtime did not become ready within 60000ms: health check timed out")).toBe(false);
 		expect(isEmbeddingTimeout("model file is missing")).toBe(false);
 		expect(isEmbeddingTimeout(undefined)).toBe(false);
 	});
