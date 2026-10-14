@@ -3,6 +3,7 @@ import { readdir, realpath } from "node:fs/promises";
 import { join } from "node:path";
 import type { CliConfig } from "@autorag/librarian/core";
 import { DEFAULT_CODE_FOLDER_NAMES, isJsonObject } from "../shared/settings-contract";
+import { embedderKind, learnedBatchSize } from "./embedding-batch";
 import { DEFAULT_FILE_TIMEOUT_MS, kordocDefaultParse, withFileTimeout } from "./file-timeout";
 import { withIndexingPoliciesApplied } from "./indexing-policy";
 
@@ -143,6 +144,8 @@ export const APP_INDEXING_CAPABILITIES: AppIndexingCapabilities = {
 export interface ApplyAppIndexingOptions {
 	/** Walk the search paths again instead of reusing a recent walk. Refreshes pass true. */
 	readonly fresh?: boolean;
+	/** Config file path; when given, the embedding batch size a past refresh learned is applied. */
+	readonly configPath?: string;
 }
 
 /**
@@ -157,6 +160,7 @@ export async function applyAppIndexing(
 	raw: Record<string, unknown>,
 	options: ApplyAppIndexingOptions = {},
 ): Promise<CliConfig> {
+	const { configPath } = options;
 	const config = withIndexingPoliciesApplied(input);
 	const settings = readAppIndexing(raw);
 	const excluded = new Set<string>(config.excludePaths ?? []);
@@ -177,5 +181,17 @@ export async function applyAppIndexing(
 	const kordoc = isJsonObject(config.parserOptions?.kordoc) ? config.parserOptions.kordoc : {};
 	const parse = typeof kordoc.parse === "function" ? (kordoc.parse as typeof kordocDefaultParse) : kordocDefaultParse;
 	const parserOptions = { ...config.parserOptions, kordoc: { ...kordoc, parse: withFileTimeout(parse, settings.fileTimeoutMs) } };
-	return jikji === undefined ? { ...config, excludePaths, parserOptions } : { ...config, excludePaths, parserOptions, jikji };
+	const withExcludes = jikji === undefined ? { ...config, excludePaths, parserOptions } : { ...config, excludePaths, parserOptions, jikji };
+	return configPath === undefined ? withExcludes : withLearnedEmbeddingBatch(withExcludes, configPath);
+}
+
+/**
+ * A refresh that once timed out on the embedding gateway learned a smaller batch
+ * for this embedder kind (see `embedding-batch`); every later run starts there.
+ */
+function withLearnedEmbeddingBatch(config: CliConfig, configPath: string): CliConfig {
+	const embedder = config.minSync?.embedder;
+	const learned = learnedBatchSize(configPath, embedderKind(embedder));
+	if (learned === null) return config;
+	return { ...config, minSync: { ...config.minSync, embedder: { ...embedder, batchSize: learned } } };
 }

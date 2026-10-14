@@ -54,6 +54,14 @@ second datasource or model configuration. The sidebar is searchable and grouped:
   are left out of indexing; the app finds them itself and passes them as
   `excludePaths`. OCR (`parserOptions.ocr.enabled`, which makes the librarian parse image files) and Jikji's media index are pinned off in every
   config the app hands to the librarian.
+- **Embedding batch size** — the embedding gateway aborts a request after 30 s.
+  When a refresh's MinSync step fails with that timeout, the app halves
+  `minSync.embedder.batchSize` (64 → 32 → 16 → … → 1), re-runs only the MinSync step, and
+  stores the size that worked in `embedding-batch.json` beside the config (`local`,
+  or `remote` for a non-loopback `baseUrl`; the two are learned separately; a
+  sidecar so a refresh never rewrites the file Settings edits). Later refreshes
+  start from the stored size. Only the gateway's 504 triggers this; a runtime
+  that never became ready does not.
 - **Automatic refresh** — a cadence is `직접` (manual, the default) or 5 min to a
   day, for the local folders (`appIndexing.refreshIntervalMs`) and for each
   datasource (`pollingIntervalMs`). Choosing one registers an OS job that runs
