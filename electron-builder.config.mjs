@@ -24,7 +24,7 @@
 
 import { spawnSync } from "node:child_process";
 import { existsSync, rmSync } from "node:fs";
-import { PLATFORMS, pruneNativeForPlatform, systemTar } from "./scripts/release/lib.mjs";
+import { PLATFORMS, decomposeNonAsciiNames, pruneNativeForPlatform, systemTar } from "./scripts/release/lib.mjs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -97,9 +97,8 @@ const config = {
 		notarize: hasMacSigning && hasNotarization,
 	},
 	dmg: {
-		// APFS keeps file names byte for byte. HFS+ (the default) stores names decomposed (NFD), so the
-		// app copied out of v0.1.0's dmg failed its own code seal: kordoc's Korean template names were
-		// signed composed (NFC) and came back as "file missing" + "file added", and Gatekeeper rejects that.
+		// APFS keeps file names byte for byte. HFS+ (the default) rewrites them decomposed (NFD) and the
+		// app copied out of v0.1.0's dmg failed its own code seal; afterPack signs NFD names for the same reason.
 		filesystem: "APFS",
 		sign: false,
 		writeUpdateInfo: false,
@@ -137,7 +136,12 @@ const config = {
 		const windows = context.electronPlatformName !== "darwin";
 		const resources = windows ? join(context.appOutDir, "resources") : join(context.appOutDir, `${context.packager.appInfo.productFilename}.app`, "Contents", "Resources");
 		pruneNativeForPlatform(join(resources, "app", "node_modules"), PLATFORMS[platformId]);
-		if (!windows) return;
+		if (!windows) {
+			// Finder copies an app out of the dmg with decomposed names; sign them that way (see the helper).
+			const renamed = decomposeNonAsciiNames(resources);
+			console.log(`  • decomposed ${renamed} non-ASCII file name(s) to NFD before signing`);
+			return;
+		}
 		// Windows: the small-file trees ship as one tar that build/installer.nsh unpacks (see the notes there).
 		const trees = ["app/node_modules", "tools/npm", "tools/node"];
 		const tar = spawnSync(systemTar(), ["-cf", join(resources, "payload.tar"), "-C", resources, ...trees], { stdio: "inherit" });

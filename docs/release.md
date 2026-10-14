@@ -63,6 +63,13 @@ does not match its published digest.
     rejected the first signed build for exactly those 41 files). The librarian
     accepts the marked tree in place of the archive, so the app's code signature,
     not the archive digest, is what vouches for these binaries.
+* Non-ASCII file names are signed decomposed (NFD). Finder writes names decomposed when
+  a user drags the app out of the dmg, and the code seal compares names byte for byte:
+  v0.1.1 signed kordoc's four Korean template names composed (NFC), passed `codesign`
+  and Gatekeeper on a `ditto` copy, and was still "damaged" after a Finder drag (seal:
+  "file added" + "file missing"). `afterPack` renames them with `decomposeNonAsciiNames`
+  before signing, and `smoke-installed.mjs` fails a build with any name that is not NFD.
+  APFS lookups ignore normalization, so code that opens the composed name still finds the file.
 
 ### Deliberately not bundled
 
@@ -357,3 +364,31 @@ Each platform is staged on a matching host: crates and npm add-ons are compiled
 or fetched for the machine they run on. Needs Rust, Go (Windows only), and Node 24.
 
 `scripts/release/stage-tools.mjs --only minsync,rhwp` re-stages just those tools.
+
+## Local Mac release
+
+A Mac with the Developer ID certificate in its login keychain builds, signs and
+notarizes the dmg in about 20 minutes against roughly 35 on a hosted runner. Build it
+there, attach it to a draft release, then publish; the workflow sees the dmg already
+attached, skips its own Mac build (`macos`), and `mac-prebuilt` mirrors the local files to
+R2 and points `latest/` at them. Windows still builds in CI.
+
+```sh
+node scripts/release/set-version.mjs v1.2.3
+AUTORAG_SKIP_DUPEY_CHECK=1 bun run build
+GITHUB_TOKEN=$(gh auth token) node scripts/release/stage-tools.mjs
+CSC_NAME="Dongkyu Kim (M23FFWRBMY)" APPLE_API_KEY=/path/AuthKey_<id>.p8 APPLE_API_KEY_ID=<id> \
+  APPLE_API_ISSUER=<uuid> AUTORAG_UPDATE_FEED_URL=https://dl.nomadamas.org/latest/ bun run release:pack:mac
+node scripts/release/smoke-installed.mjs
+node scripts/release/update-feed.mjs dist feed
+cp build/stage/darwin-arm64/tools/manifest.json dist/components-macos-arm64.json
+(cd dist && shasum -a 256 *.dmg > SHA256SUMS-macos.txt)
+gh release create v1.2.3 --draft --generate-notes dist/*.dmg dist/*.zip dist/*.zip.blockmap \
+  dist/components-macos-arm64.json dist/SHA256SUMS-macos.txt feed/latest-mac.yml
+gh release edit v1.2.3 --draft=false                # -> mac-prebuilt + windows
+```
+
+The update zip and feed are attached only as a hand-off to `mac-prebuilt`, which deletes
+them from the release after the mirror, so a zip near GitHub's 2 GiB asset cap is fine
+while it lasts. `smoke-installed.mjs` is the gate: it fails a dmg whose installed copy does
+not match its seal, is not notarized, or carries a name a Finder copy would rewrite.
