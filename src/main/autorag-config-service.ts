@@ -336,6 +336,12 @@ function checkKnownBlock(path: string, value: unknown): void {
 			fail("appIndexing.refreshIntervalMs must be a non-negative integer");
 		}
 		if (
+			value.fileTimeoutMs !== undefined &&
+			!(typeof value.fileTimeoutMs === "number" && Number.isInteger(value.fileTimeoutMs) && value.fileTimeoutMs > 0)
+		) {
+			fail("appIndexing.fileTimeoutMs must be a positive integer");
+		}
+		if (
 			value.codeFolderNames !== undefined &&
 			(!Array.isArray(value.codeFolderNames) || value.codeFolderNames.some((name) => typeof name !== "string" || name.length === 0))
 		) {
