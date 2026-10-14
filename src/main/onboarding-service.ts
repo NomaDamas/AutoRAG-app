@@ -45,6 +45,13 @@ import type { ProviderCredentialService } from "./provider-credentials";
 
 const EMBEDDER_PROFILE = "qwen3-embedding-0.6b";
 const EMBEDDER_DIMENSION = 1024;
+/**
+ * The loopback gateway aborts an embedding request after 30 s. MinSync's default
+ * batch (64 chunks of up to 4096 characters) takes longer than that on a Mac
+ * whose llama runtime is slow or CPU-bound, so every retry timed out and the
+ * first index failed. Eight chunks per request stay well under the limit.
+ */
+const EMBEDDER_BATCH_SIZE = 8;
 const EMBEDDER_MODEL_BYTES = 639_150_592;
 const EMBEDDER_MODEL_FILE = "Qwen3-Embedding-0.6B-Q8_0.gguf";
 const POLL_INTERVAL_MS = 1000;
@@ -582,7 +589,7 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 				folders: request.folders,
 				datasources,
 				home: deps.home,
-				embedder: configured ? null : { profile: EMBEDDER_PROFILE, dimension: EMBEDDER_DIMENSION },
+				embedder: configured ? null : { profile: EMBEDDER_PROFILE, dimension: EMBEDDER_DIMENSION, batchSize: EMBEDDER_BATCH_SIZE },
 				// The app seeds `workspacePath = cwd` (the repo in dev, `/` when packaged);
 				// the first index belongs in the AutoRAG home instead. A workspace the
 				// user set explicitly stays.

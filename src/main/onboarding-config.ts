@@ -13,6 +13,8 @@ import { isJsonObject } from "../shared/settings-contract";
 export interface EmbedderChoice {
 	readonly profile: string;
 	readonly dimension: number;
+	/** Texts per embedding request; MinSync's default of 64 can outlast the gateway's 30 s limit. */
+	readonly batchSize: number;
 }
 
 export interface ByokModelChoice {
@@ -118,7 +120,7 @@ export function applyIndexingConfig(input: ApplyIndexingConfigInput): Record<str
 	if (input.workspacePath !== null) raw.workspacePath = input.workspacePath;
 	if (input.embedder !== null) {
 		const minSync = isJsonObject(raw.minSync) ? raw.minSync : {};
-		raw.minSync = { ...minSync, embedder: { profile: input.embedder.profile, dimension: input.embedder.dimension } };
+		raw.minSync = { ...minSync, embedder: { profile: input.embedder.profile, dimension: input.embedder.dimension, batchSize: input.embedder.batchSize } };
 	}
 	if (input.model !== null) {
 		raw.model = {

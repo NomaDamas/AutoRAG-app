@@ -34,11 +34,24 @@ describe("applyIndexingConfig", () => {
 			folders: ["/a"],
 			datasources: [],
 			home: HOME,
-			embedder: { profile: "qwen3-embedding-0.6b", dimension: 1024 },
+			embedder: { profile: "qwen3-embedding-0.6b", dimension: 1024, batchSize: 8 },
 			workspacePath: null,
 			model: null,
 		});
-		expect(isJsonObject(next.minSync) && next.minSync.embedder).toEqual({ profile: "qwen3-embedding-0.6b", dimension: 1024 });
+		expect(isJsonObject(next.minSync) && next.minSync.embedder).toEqual({ profile: "qwen3-embedding-0.6b", dimension: 1024, batchSize: 8 });
+	});
+
+	it("writes small embedding batches so a slow machine stays under the gateway's 30 s request limit", () => {
+		const next = applyIndexingConfig({
+			raw: {},
+			folders: ["/a"],
+			datasources: [],
+			home: HOME,
+			embedder: { profile: "qwen3-embedding-0.6b", dimension: 1024, batchSize: 8 },
+			workspacePath: null,
+			model: null,
+		});
+		expect(isJsonObject(next.minSync) && next.minSync.embedder).toEqual({ profile: "qwen3-embedding-0.6b", dimension: 1024, batchSize: 8 });
 	});
 
 	it("merges datasource aliases, keeping other existing fields", () => {
