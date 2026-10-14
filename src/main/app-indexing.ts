@@ -5,6 +5,7 @@ import type { CliConfig } from "@autorag/librarian/core";
 import { DEFAULT_CODE_FOLDER_NAMES, isJsonObject } from "../shared/settings-contract";
 import { embedderKind, learnedBatchSize } from "./embedding-batch";
 import { DEFAULT_FILE_TIMEOUT_MS, kordocDefaultParse, withFileTimeout } from "./file-timeout";
+import { sharedParsePool } from "./parse-isolation";
 import { withIndexingPoliciesApplied } from "./indexing-policy";
 
 /**
@@ -177,10 +178,12 @@ export async function applyAppIndexing(
 		const existing = Array.isArray(jikji.exclude) ? jikji.exclude.filter((value): value is string => typeof value === "string") : [];
 		jikji = { ...jikji, exclude: [...new Set([...existing, ...globs])] };
 	}
-	// Every parse of a local file carries the per-file budget: a file that hangs is skipped, not waited on.
+	// Every parse of a local file carries the per-file budget: a file that hangs is killed and skipped, not waited on.
 	const kordoc = isJsonObject(config.parserOptions?.kordoc) ? config.parserOptions.kordoc : {};
-	const parse = typeof kordoc.parse === "function" ? (kordoc.parse as typeof kordocDefaultParse) : kordocDefaultParse;
-	const parserOptions = { ...config.parserOptions, kordoc: { ...kordoc, parse: withFileTimeout(parse, settings.fileTimeoutMs) } };
+	// A hard kill needs the parse to run on a thread: only a caller-supplied parse (a function, never from the JSON config) stays in-process.
+	const inProcess = withFileTimeout(typeof kordoc.parse === "function" ? (kordoc.parse as typeof kordocDefaultParse) : kordocDefaultParse, settings.fileTimeoutMs);
+	const parse = typeof kordoc.parse === "function" ? inProcess : sharedParsePool(settings.fileTimeoutMs, inProcess).parse;
+	const parserOptions = { ...config.parserOptions, kordoc: { ...kordoc, parse } };
 	const withExcludes = jikji === undefined ? { ...config, excludePaths, parserOptions } : { ...config, excludePaths, parserOptions, jikji };
 	return configPath === undefined ? withExcludes : withLearnedEmbeddingBatch(withExcludes, configPath);
 }

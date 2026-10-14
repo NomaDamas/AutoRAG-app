@@ -1,0 +1,94 @@
+import { describe, expect, it } from "vitest";
+import { MAX_QUARANTINED, runWithRecovery } from "../src/main/refresh-recovery";
+
+const ROOT = "/data/docs";
+const fail = (code: string, path?: string): Error => Object.assign(new Error(`${code}: boom`), { code, ...(path === undefined ? {} : { path }) });
+
+function harness(script: Array<Error | "ok">) {
+	const sleeps: number[] = [];
+	const seen: Array<readonly string[]> = [];
+	let call = 0;
+	return {
+		sleeps,
+		seen,
+		run: () =>
+			runWithRecovery(
+				async (excluded) => {
+					seen.push([...excluded]);
+					const step = script[Math.min(call, script.length - 1)];
+					call += 1;
+					if (step instanceof Error) throw step;
+					return "done";
+				},
+				{ searchPaths: [ROOT], sleep: async (ms) => void sleeps.push(ms) },
+			),
+	};
+}
+
+describe("runWithRecovery", () => {
+	it("returns at once when nothing fails", async () => {
+		const h = harness(["ok"]);
+
+		expect(await h.run()).toEqual({ value: "done", retries: 0, quarantined: [], code: null });
+		expect(h.sleeps).toEqual([]);
+	});
+
+	it("retries a transient error with growing waits and reports what it saw", async () => {
+		const h = harness([fail("EMFILE"), fail("EMFILE"), "ok"]);
+
+		expect(await h.run()).toMatchObject({ value: "done", retries: 2, quarantined: [], code: "EMFILE" });
+		expect(h.sleeps).toEqual([2_000, 6_000]);
+	});
+
+	it("throws an error that is not transient, untouched", async () => {
+		const error = fail("ENOSPC", `${ROOT}/a.md`);
+		const h = harness([error]);
+
+		await expect(h.run()).rejects.toBe(error);
+		expect(h.sleeps).toEqual([]);
+	});
+
+	it("throws an error with no code, untouched", async () => {
+		const error = new Error("plain");
+
+		await expect(harness([error]).run()).rejects.toBe(error);
+	});
+
+	it("leaves out a file that keeps failing and carries on with everything else", async () => {
+		const locked = `${ROOT}/locked.docx`;
+		const h = harness([fail("EBUSY", locked), fail("EBUSY", locked), fail("EBUSY", locked), "ok"]);
+
+		expect(await h.run()).toMatchObject({ value: "done", retries: 2, quarantined: [locked], code: "EBUSY" });
+		expect(h.seen.at(-1)).toEqual([locked]);
+	});
+
+	it("gives every file its own retry budget", async () => {
+		const [a, b] = [`${ROOT}/a.docx`, `${ROOT}/b.docx`];
+		const h = harness([fail("EIO", a), fail("EIO", a), fail("EIO", a), fail("EIO", b), fail("EIO", b), fail("EIO", b), "ok"]);
+
+		expect((await h.run()).quarantined).toEqual([a, b]);
+	});
+
+	it("does not leave out a file for process-wide pressure like EMFILE, nor one outside the search roots", async () => {
+		const pressure = fail("EMFILE", `${ROOT}/a.md`);
+		await expect(harness([pressure, pressure, pressure, pressure]).run()).rejects.toBe(pressure);
+
+		const outside = fail("EIO", "/data/workspace/.autorag/parsed/x.md");
+		await expect(harness([outside, outside, outside, outside]).run()).rejects.toBe(outside);
+	});
+
+	it("does not match a sibling folder that shares the root's name as a prefix", async () => {
+		const sibling = fail("EIO", `${ROOT}-other/a.md`);
+
+		await expect(harness([sibling, sibling, sibling, sibling]).run()).rejects.toBe(sibling);
+	});
+
+	it("stops leaving files out once too many fail, because then it is not about files", async () => {
+		const script: Array<Error | "ok"> = [];
+		for (let index = 0; index <= MAX_QUARANTINED; index += 1) script.push(...Array.from({ length: 3 }, () => fail("EIO", `${ROOT}/f${index}.md`)));
+		const h = harness(script);
+
+		await expect(h.run()).rejects.toMatchObject({ code: "EIO" });
+		expect(h.seen.at(-1)).toHaveLength(MAX_QUARANTINED);
+	});
+});

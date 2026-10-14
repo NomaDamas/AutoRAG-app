@@ -1,8 +1,9 @@
 import { access, realpath } from "node:fs/promises";
 import { basename, isAbsolute, resolve, sep } from "node:path";
-import { AutoRAGLite, createDefaultParserRegistry, loadMirrorIndex, minSyncDocumentPath, minSyncWorkspaceRoot, type DefaultParserRegistryOptions } from "@autorag/librarian";
+import { createDefaultParserRegistry, loadMirrorIndex, minSyncDocumentPath, minSyncWorkspaceRoot, type DefaultParserRegistryOptions } from "@autorag/librarian";
 import { readRawConfigObject, resolveConfigPath, resolveConfigReadOnly, writeConfigObject } from "@autorag/librarian/core";
 import { applyAppIndexing } from "./app-indexing";
+import { refreshAutoragIndex } from "./index-refresh";
 import { t } from "../shared/i18n/core";
 import type { IndexStatus } from "../shared/index-contract";
 
@@ -110,12 +111,14 @@ export function createIndexStatusService(deps: IndexStatusServiceDeps): IndexSta
 	function scheduleRefresh(): void {
 		refreshTail = refreshTail.then(async () => {
 			try {
-				if (deps.refresh !== undefined) await deps.refresh();
-				else {
-					const raw = readRawConfigObject(resolveConfigPath(input).configPath);
-					await new AutoRAGLite(await applyAppIndexing(resolveConfigReadOnly(input), raw)).refresh(false, { methods: ["parsed", "minsync"] });
+				if (deps.refresh !== undefined) {
+					await deps.refresh();
+					deps.onRefreshed(null);
+				} else {
+					// The same guarded path as Settings and the background job: root check, stall watchdog, learned batch size.
+					const outcome = await refreshAutoragIndex({ env: deps.env, cwd: deps.cwd });
+					deps.onRefreshed(outcome.ok ? null : outcome.error);
 				}
-				deps.onRefreshed(null);
 			} catch (error) {
 				deps.onRefreshed(error instanceof Error ? error.message : String(error));
 			}

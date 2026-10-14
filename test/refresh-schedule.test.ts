@@ -120,6 +120,49 @@ describe("refresh lock", () => {
 		expect(isLockHeld(taken)).toBe(false);
 	});
 
+	it("keeps a lock held for hours while its holder keeps beating (a first index of a big corpus)", () => {
+		const path = join(dir, "lock");
+		let clock = 1_000_000;
+		const first = acquireRefreshLock(path, { owner: "a", pid: 111, now: () => clock, isAlive: () => true, heartbeatMs: 0 });
+		for (let minute = 0; minute < 5 * 60; minute += 1) {
+			clock += MIN;
+			if (!isLockHeld(first)) first.beat();
+		}
+		const second = acquireRefreshLock(path, { owner: "b", pid: 222, now: () => clock, isAlive: () => true, heartbeatMs: 0 });
+		expect(isLockHeld(second) && second.heldBy.pid).toBe(111);
+	});
+
+	it("takes over a live holder that stopped beating", () => {
+		const path = join(dir, "lock");
+		let clock = 1_000_000;
+		const first = acquireRefreshLock(path, { owner: "a", pid: 111, now: () => clock, isAlive: () => true, heartbeatMs: 0 });
+		clock += 9 * MIN;
+		if (!isLockHeld(first)) first.beat();
+		clock += 9 * MIN;
+		expect(isLockHeld(acquireRefreshLock(path, { owner: "b", pid: 222, now: () => clock, isAlive: () => true, heartbeatMs: 0 }))).toBe(true);
+		clock += 2 * MIN;
+		expect(isLockHeld(acquireRefreshLock(path, { owner: "b", pid: 222, now: () => clock, isAlive: () => true, heartbeatMs: 0 }))).toBe(false);
+	});
+
+	it("still honors a lock an older build wrote without a heartbeat for the old two-hour window", () => {
+		const path = join(dir, "lock");
+		const started = 1_000_000;
+		writeFileSync(path, JSON.stringify({ pid: 111, startedAt: new Date(started).toISOString(), owner: "old-build" }));
+		const at = (minutes: number) => acquireRefreshLock(path, { owner: "b", pid: 222, now: () => started + minutes * MIN, isAlive: () => true, heartbeatMs: 0 });
+
+		expect(isLockHeld(at(90))).toBe(true);
+		expect(isLockHeld(at(121))).toBe(false);
+	});
+
+	it("stops beating once someone else holds the lock", () => {
+		const path = join(dir, "lock");
+		const mine = acquireRefreshLock(path, { owner: "a", pid: 111, isAlive: () => true, heartbeatMs: 0 });
+		writeFileSync(path, JSON.stringify({ pid: 999, startedAt: new Date().toISOString(), owner: "other" }));
+		if (!isLockHeld(mine)) mine.beat();
+
+		expect(JSON.parse(readFileSync(path, "utf8")).pid).toBe(999);
+	});
+
 	it("takes over an unreadable lock file", () => {
 		const path = join(dir, "lock");
 		writeFileSync(path, "not json");

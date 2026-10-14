@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { AutoRAGLite, type RefreshMethod } from "@autorag/librarian";
+import { AutoRAGLite, type AutoRAGRefreshResult, type RefreshMethod } from "@autorag/librarian";
 import { readRawConfigObject, resolveConfigPath, resolveConfigReadOnly, type CliConfig } from "@autorag/librarian/core";
 import type { ConfigRefreshDiagnostic, ConfigRefreshResult } from "../shared/settings-contract";
 import { APP_INDEXING_CAPABILITIES, applyAppIndexing, readAppIndexing } from "./app-indexing";
@@ -11,6 +11,10 @@ import {
 	startingBatchSize,
 } from "./embedding-batch";
 import { createMinSyncWatchdog, EMBEDDING_STALL_RETRIES, runWithStallRetry } from "./minsync-watchdog";
+import { takeSharedParseFailures } from "./parse-isolation";
+import { runWithRecovery } from "./refresh-recovery";
+import { findUnavailableRoots } from "./search-roots";
+import { t } from "../shared/i18n/core";
 
 /**
  * The single AutoRAG index-refresh path shared by Settings (manual refresh) and
@@ -22,6 +26,8 @@ import { createMinSyncWatchdog, EMBEDDING_STALL_RETRIES, runWithStallRetry } fro
 export interface AutoragRefreshDeps {
 	readonly env: NodeJS.ProcessEnv;
 	readonly cwd: string;
+	/** Test seam: waits between retries of a transient file error; production uses `RECOVERY_BACKOFF_MS`. */
+	readonly recoveryBackoffMs?: readonly number[];
 }
 
 export const REFRESH_METHODS: Record<RefreshMethod, true> = {
@@ -72,22 +78,56 @@ export async function refreshAutoragIndex(
 	// A refresh re-walks the folders, so a dot-folder created minutes ago is excluded too.
 	const effective = await applyAppIndexing(resolveConfigReadOnly(input), raw, { fresh: true, configPath });
 	const diagnostics: ConfigRefreshDiagnostic[] = [];
+	// A root that cannot be listed, or reads as empty although it was full, would make this
+	// refresh delete everything indexed from it; leave the index alone until it returns.
+	if (selected.includes("parsed") || selected.includes("minsync")) {
+		const problems = await findUnavailableRoots(effective.searchPaths, effective.workspacePath);
+		if (problems.length > 0) {
+			const message = problems.map((problem) => t("main.refresh.rootUnavailable", { folder: problem.root, indexed: problem.indexed })).join(" ");
+			return {
+				ok: false,
+				methods: selected,
+				scanned: 0,
+				written: 0,
+				deleted: 0,
+				skipped: 0,
+				diagnostics: [{ code: "search-root-unavailable", severity: "error", message }],
+				error: message,
+			};
+		}
+	}
 	try {
-		const lite = new AutoRAGLite(effective);
+		// A file the OS keeps failing to read is left out of this run, not allowed to abort every other document.
+		let recovered: { retries: number; quarantined: readonly string[]; code: string | null } = { retries: 0, quarantined: [], code: null };
+		const refreshOnce = async (): Promise<AutoRAGRefreshResult> => {
+			const outcome = await runWithRecovery(
+				(left) => new AutoRAGLite({ ...effective, excludePaths: [...(effective.excludePaths ?? []), ...left] }).refresh(false, { methods: selected }),
+				{ searchPaths: effective.searchPaths, ...(deps.recoveryBackoffMs === undefined ? {} : { backoffMs: deps.recoveryBackoffMs }) },
+			);
+			recovered = { retries: recovered.retries + outcome.retries, quarantined: [...new Set([...recovered.quarantined, ...outcome.quarantined])], code: outcome.code ?? recovered.code };
+			return outcome.value;
+		};
 		// A hung embedder never returns on its own: the watchdog kills it and the sync is retried
 		// (parsing is incremental, so a retry repeats only the embedding).
-		const { value: result, retries } = await runWithStallRetry(
-			() => lite.refresh(false, { methods: selected }),
-			(outcome) => outcome.minsync?.ok !== false,
-			createMinSyncWatchdog(),
-			EMBEDDING_STALL_RETRIES,
-		);
+		const { value: result, retries } = await runWithStallRetry(refreshOnce, (outcome) => outcome.minsync?.ok !== false, createMinSyncWatchdog(), EMBEDDING_STALL_RETRIES);
+		if (recovered.retries > 0 || recovered.quarantined.length > 0) {
+			diagnostics.push({
+				code: recovered.quarantined.length > 0 ? "files-left-out" : "refresh-retried",
+				severity: "warning",
+				message: t(recovered.quarantined.length > 0 ? "main.refresh.filesLeftOut" : "main.refresh.retried", { files: recovered.quarantined.length, retries: recovered.retries, code: recovered.code ?? "" }),
+			});
+		}
 		if (retries > 0) {
 			diagnostics.push({
 				code: "minsync-stalled-retried",
 				severity: "warning",
 				message: `The embedder stopped making progress and was restarted ${retries} time(s).`,
 			});
+		}
+		// The librarian reports every failed parse with one generic message; what killed the file is only known here.
+		const killed = takeSharedParseFailures();
+		if (killed.timedOut > 0 || killed.crashed > 0) {
+			diagnostics.push({ code: "parse-killed", severity: "warning", message: t("main.refresh.parseKilled", { timedOut: killed.timedOut, crashed: killed.crashed }) });
 		}
 		const toDiagnostic = (diagnostic: { readonly code: unknown; readonly severity: ConfigRefreshDiagnostic["severity"]; readonly message: string }): ConfigRefreshDiagnostic => ({
 			code: String(diagnostic.code),

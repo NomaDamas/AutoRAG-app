@@ -5,18 +5,17 @@
  */
 import { appendFileSync, existsSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-import { readRawConfigObject, resolveConfigPath } from "@autorag/librarian/core";
+import { readRawConfigObject, resolveConfigPath, resolveConfigReadOnly } from "@autorag/librarian/core";
 import { applyBundledTools } from "./bundled-tools";
 import { createDataSourceStatusService } from "./datasource-status";
 import { refreshAutoragIndex } from "./index-refresh";
+import { createJobWatchdog, type JobWatchdog, latestModification, progressFiles } from "./job-watchdog";
+import { terminateMinSyncChildren } from "./minsync-watchdog";
 import { runScheduledRefresh, schedulePaths } from "./refresh-schedule";
 
 // The job runs the app's own executable, so an installed build finds the bundled CLIs exactly as the app does,
 // and the OS job definition never carries the directory (Task Scheduler caps `/TR` at 261 characters).
 applyBundledTools({ resourcesPath: process.resourcesPath, env: process.env });
-
-/** A tick that has not finished by then is abandoned: the lock must not outlive a hung child CLI. */
-const WATCHDOG_MS = 90 * 60_000;
 
 async function main(): Promise<number> {
 	const env = process.env;
@@ -36,7 +35,20 @@ async function main(): Promise<number> {
 		return 0;
 	}
 	const dataSources = createDataSourceStatusService({ env, cwd });
+	let watchdog: JobWatchdog | null = null;
 	try {
+		// A run that stops producing progress is abandoned; one that keeps going is not, however long it takes.
+		// The activity journal moves between datasource syncs, which touch none of the workspace files.
+		const files = [...progressFiles(resolveConfigReadOnly({ flags: {}, env, cwd }).workspacePath), paths.activity];
+		watchdog = createJobWatchdog({
+			latestSignal: () => latestModification(files),
+			onExpire: (reason, idleMs) => {
+				log(`watchdog: abandoned (${reason}) after ${Math.round(idleMs / 60_000)} min without progress`);
+				// minsync outlives its parent and keeps its lock; stop it so the next tick can resume.
+				void terminateMinSyncChildren().finally(() => process.exit(124));
+			},
+		});
+		watchdog.start();
 		const outcome = await runScheduledRefresh({
 			paths,
 			log,
@@ -49,19 +61,10 @@ async function main(): Promise<number> {
 	} catch (error) {
 		log(`crash: ${error instanceof Error ? (error.stack ?? error.message) : String(error)}`);
 		return 2;
+	} finally {
+		watchdog?.stop();
 	}
 }
 
-const watchdog = setTimeout(() => {
-	try {
-		const configPath = resolveConfigPath({ flags: {}, env: process.env, cwd: process.cwd() }).configPath;
-		appendFileSync(schedulePaths(configPath).log, `${new Date().toISOString()} watchdog: abandoned after ${WATCHDOG_MS / 60_000} min\n`);
-	} catch {
-		// nothing more to do
-	}
-	process.exit(124);
-}, WATCHDOG_MS);
-watchdog.unref();
-
 // Exit explicitly: a lingering child-process handle must not keep the job (and its lock) alive.
-void main().then((code) => process.exit(code));
+void main().then((code) => terminateMinSyncChildren().finally(() => process.exit(code)));
