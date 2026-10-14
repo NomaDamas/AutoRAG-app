@@ -502,6 +502,75 @@ describe("createSearchService", () => {
 		expect(events).toEqual([{ type: "cancelled", searchId: "search-build" }]);
 	});
 
+	describe("follow-up questions in one chat", () => {
+		it("appends each turn to the same chat record and reuses the chat's agent", async () => {
+			let turn = 0;
+			const agent = createFakeAgent(async function*() {
+				turn += 1;
+				yield { type: "complete", response: createResponse(`session-${turn}`, `Answer ${turn}`, 1) };
+			});
+			const agentFactory = vi.fn(() => agent);
+			const service = createSearchService({ agentFactory, chatStore: await createStore(), send: () => undefined, now });
+
+			await service.start("search-a", "chat-follow", "First question", []);
+			await service.start("search-b", "chat-follow", "Second question", []);
+
+			expect(agentFactory).toHaveBeenCalledTimes(1);
+			const record = await service.historyGet("chat-follow");
+			expect(record?.title).toBe("First question");
+			expect(record?.messages).toMatchObject([
+				{ role: "user", text: "First question" },
+				{ role: "assistant", sessionId: "session-1", quick: { answer: "Answer 1" } },
+				{ role: "user", text: "Second question" },
+				{ role: "assistant", sessionId: "session-2", quick: { answer: "Answer 2" } },
+			]);
+		});
+
+		it("builds a fresh agent for a new chat", async () => {
+			const agentFactory = vi.fn(() =>
+				createFakeAgent(async function*() {
+					yield { type: "complete", response: createResponse("s", "A", 1) };
+				}),
+			);
+			const service = createSearchService({ agentFactory, chatStore: await createStore(), send: () => undefined, now });
+
+			await service.start("search-a", "chat-one", "Q1", []);
+			await service.start("search-b", "chat-two", "Q2", []);
+
+			expect(agentFactory).toHaveBeenCalledTimes(2);
+		});
+
+		it("keeps a follow-up's steer inside its own turn, after the earlier turn", async () => {
+			const release = Promise.withResolvers<void>();
+			const streaming = Promise.withResolvers<void>();
+			let turn = 0;
+			const agent = createFakeAgent(async function*() {
+				turn += 1;
+				if (turn === 2) {
+					streaming.resolve();
+					await release.promise;
+				}
+				yield { type: "complete", response: createResponse(`session-${turn}`, `Answer ${turn}`, 1) };
+			});
+			const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send: () => undefined, now });
+
+			await service.start("search-a", "chat-steer-follow", "First", []);
+			const second = service.start("search-b", "chat-steer-follow", "Second", []);
+			await streaming.promise;
+			expect(await service.steer("search-b", "Use June.")).toBe(true);
+			release.resolve();
+			await second;
+
+			expect((await service.historyGet("chat-steer-follow"))?.messages).toMatchObject([
+				{ role: "user", text: "First" },
+				{ role: "assistant", sessionId: "session-1" },
+				{ role: "user", text: "Second" },
+				{ role: "user", text: "Use June.", steer: "before-quick" },
+				{ role: "assistant", sessionId: "session-2" },
+			]);
+		});
+	});
+
 	describe("steer", () => {
 		/** A run that waits for `quick` before its Quick answer and for `finish` before its Deep answer. */
 		async function runningSearch({ afterQuick = true }: { readonly afterQuick?: boolean } = {}) {

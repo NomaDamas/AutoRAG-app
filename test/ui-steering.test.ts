@@ -39,21 +39,30 @@ describe("steer delivery", () => {
 });
 
 describe("restoreChat", () => {
-	it("separates the question from the steers sent during its run", () => {
+	it("splits a stored chat into turns, each with its question, the steers its run took, and its answer", () => {
 		const messages: ChatMessage[] = [
 			{ role: "user", text: "When is the launch?", attachments: [], at: "t0" },
 			{ role: "user", text: "Only last week.", attachments: [], at: "t1", steer: "before-quick" },
-			{ role: "user", text: "Use the June plan.", attachments: [], at: "t2", steer: "after-quick" },
-			{ role: "assistant", sessionId: "s", quick: null, deep: null, stopped: false, at: "t3" },
+			{ role: "assistant", sessionId: "s1", quick: null, deep: null, stopped: false, at: "t2" },
+			{ role: "user", text: "And the budget?", attachments: [], at: "t3" },
+			{ role: "user", text: "Use the June plan.", attachments: [], at: "t4", steer: "after-quick" },
+			{ role: "assistant", sessionId: "s2", quick: null, deep: null, stopped: false, at: "t5" },
 		];
 
-		const restored = restoreChat(messages);
+		const turns = restoreChat(messages);
 
-		expect(restored.question?.text).toBe("When is the launch?");
-		expect(restored.steers.map(({ text, timing, status }) => [text, timing, status])).toEqual([
-			["Only last week.", "before-quick", "delivered"],
-			["Use the June plan.", "after-quick", "delivered"],
+		expect(turns.map((turn) => turn.question.text)).toEqual(["When is the launch?", "And the budget?"]);
+		expect(turns.map((turn) => turn.assistant?.sessionId)).toEqual(["s1", "s2"]);
+		expect(turns.map((turn) => turn.steers.map(({ text, timing, status }) => [text, timing, status]))).toEqual([
+			[["Only last week.", "before-quick", "delivered"]],
+			[["Use the June plan.", "after-quick", "delivered"]],
 		]);
-		expect(restored.assistant?.sessionId).toBe("s");
+	});
+
+	it("keeps a last question that has no answer yet", () => {
+		const turns = restoreChat([{ role: "user", text: "Pending?", attachments: [], at: "t0" }]);
+
+		expect(turns).toHaveLength(1);
+		expect(turns[0]?.assistant).toBeNull();
 	});
 });
