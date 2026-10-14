@@ -10,6 +10,7 @@ import {
 	saveLearnedBatchSize,
 	startingBatchSize,
 } from "./embedding-batch";
+import { createMinSyncWatchdog, EMBEDDING_STALL_RETRIES, runWithStallRetry } from "./minsync-watchdog";
 
 /**
  * The single AutoRAG index-refresh path shared by Settings (manual refresh) and
@@ -73,7 +74,21 @@ export async function refreshAutoragIndex(
 	const diagnostics: ConfigRefreshDiagnostic[] = [];
 	try {
 		const lite = new AutoRAGLite(effective);
-		const result = await lite.refresh(false, { methods: selected });
+		// A hung embedder never returns on its own: the watchdog kills it and the sync is retried
+		// (parsing is incremental, so a retry repeats only the embedding).
+		const { value: result, retries } = await runWithStallRetry(
+			() => lite.refresh(false, { methods: selected }),
+			(outcome) => outcome.minsync?.ok !== false,
+			createMinSyncWatchdog(),
+			EMBEDDING_STALL_RETRIES,
+		);
+		if (retries > 0) {
+			diagnostics.push({
+				code: "minsync-stalled-retried",
+				severity: "warning",
+				message: `The embedder stopped making progress and was restarted ${retries} time(s).`,
+			});
+		}
 		const toDiagnostic = (diagnostic: { readonly code: unknown; readonly severity: ConfigRefreshDiagnostic["severity"]; readonly message: string }): ConfigRefreshDiagnostic => ({
 			code: String(diagnostic.code),
 			severity: diagnostic.severity,

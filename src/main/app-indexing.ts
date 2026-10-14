@@ -4,6 +4,7 @@ import { join } from "node:path";
 import type { CliConfig } from "@autorag/librarian/core";
 import { DEFAULT_CODE_FOLDER_NAMES, isJsonObject } from "../shared/settings-contract";
 import { embedderKind, learnedBatchSize } from "./embedding-batch";
+import { DEFAULT_FILE_TIMEOUT_MS, kordocDefaultParse, withFileTimeout } from "./file-timeout";
 import { withIndexingPoliciesApplied } from "./indexing-policy";
 
 /**
@@ -20,6 +21,8 @@ import { withIndexingPoliciesApplied } from "./indexing-policy";
 export interface AppIndexingSettings {
 	readonly excludeCodeFolders: boolean;
 	readonly codeFolderNames: readonly string[];
+	/** Per-file parse budget; a file over it is skipped. */
+	readonly fileTimeoutMs: number;
 }
 
 /** Read `appIndexing` from a raw config object, applying defaults. */
@@ -30,7 +33,11 @@ export function readAppIndexing(raw: Record<string, unknown>): AppIndexingSettin
 		Array.isArray(block.codeFolderNames) && block.codeFolderNames.every((name) => typeof name === "string" && name.length > 0)
 			? (block.codeFolderNames as string[])
 			: [...DEFAULT_CODE_FOLDER_NAMES];
-	return { excludeCodeFolders, codeFolderNames: names };
+	const fileTimeoutMs =
+		typeof block.fileTimeoutMs === "number" && Number.isInteger(block.fileTimeoutMs) && block.fileTimeoutMs > 0
+			? block.fileTimeoutMs
+			: DEFAULT_FILE_TIMEOUT_MS;
+	return { excludeCodeFolders, codeFolderNames: names, fileTimeoutMs };
 }
 
 /**
@@ -170,7 +177,11 @@ export async function applyAppIndexing(
 		const existing = Array.isArray(jikji.exclude) ? jikji.exclude.filter((value): value is string => typeof value === "string") : [];
 		jikji = { ...jikji, exclude: [...new Set([...existing, ...globs])] };
 	}
-	const withExcludes = jikji === undefined ? { ...config, excludePaths } : { ...config, excludePaths, jikji };
+	// Every parse of a local file carries the per-file budget: a file that hangs is skipped, not waited on.
+	const kordoc = isJsonObject(config.parserOptions?.kordoc) ? config.parserOptions.kordoc : {};
+	const parse = typeof kordoc.parse === "function" ? (kordoc.parse as typeof kordocDefaultParse) : kordocDefaultParse;
+	const parserOptions = { ...config.parserOptions, kordoc: { ...kordoc, parse: withFileTimeout(parse, settings.fileTimeoutMs) } };
+	const withExcludes = jikji === undefined ? { ...config, excludePaths, parserOptions } : { ...config, excludePaths, parserOptions, jikji };
 	return configPath === undefined ? withExcludes : withLearnedEmbeddingBatch(withExcludes, configPath);
 }
 

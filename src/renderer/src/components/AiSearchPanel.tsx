@@ -114,6 +114,12 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	const [submittedQuery, setSubmittedQuery] = useState<string | null>(null);
 	const [submittedAttachments, setSubmittedAttachments] = useState<readonly ChatAttachment[]>([]);
 	const [chatId, setChatId] = useState<string | null>(null);
+	/** Earlier turns of this chat, oldest first; the live state above is the latest turn. */
+	const [pastTurns, setPastTurns] = useState<readonly PastTurn[]>([]);
+	const pastTurnsRef = useRef(pastTurns);
+	pastTurnsRef.current = pastTurns;
+	const chatIdRef = useRef(chatId);
+	chatIdRef.current = chatId;
 	const [historyOpen, setHistoryOpen] = useState(false);
 	const [historyQuery, setHistoryQuery] = useState("");
 	const [history, setHistory] = useState<readonly ChatSummary[]>([]);
@@ -141,6 +147,27 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	activeRef.current = active;
 	const attachmentsRef = useRef(attachments);
 	attachmentsRef.current = attachments;
+
+	const submittedQueryRef = useRef(submittedQuery);
+	submittedQueryRef.current = submittedQuery;
+	const submittedAttachmentsRef = useRef(submittedAttachments);
+	submittedAttachmentsRef.current = submittedAttachments;
+	const steersRef = useRef(steers);
+	steersRef.current = steers;
+	const quickRef = useRef(quick);
+	quickRef.current = quick;
+	const deepRef = useRef(deep);
+	deepRef.current = deep;
+	const quickDraftRef = useRef(quickDraft);
+	quickDraftRef.current = quickDraft;
+	const deepDraftRef = useRef(deepDraft);
+	deepDraftRef.current = deepDraft;
+	const stoppedRef = useRef(stopped);
+	stoppedRef.current = stopped;
+	const errorRef = useRef(error);
+	errorRef.current = error;
+	const deepElapsedRef = useRef(deepElapsed);
+	deepElapsedRef.current = deepElapsed;
 
 	useEffect(() => {
 		if (!active) {
@@ -234,7 +261,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	useEffect(() => {
 		const body = bodyRef.current;
 		if (body !== null) body.scrollTop = body.scrollHeight;
-	}, [quick, deep, quickDraft, deepDraft, submittedQuery, progress, attachments, steers, queued]);
+	}, [quick, deep, quickDraft, deepDraft, submittedQuery, progress, attachments, steers, queued, pastTurns]);
 
 	useEffect(() => {
 		if (!active) return;
@@ -302,8 +329,24 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 
 	async function runSearch(text: string, sent: readonly ChatAttachment[]): Promise<void> {
 		if (searchIdRef.current !== null) return;
-		const nextChatId = crypto.randomUUID();
+		// Only New chat starts a new chat; any other question continues the current one.
+		const nextChatId = chatIdRef.current ?? crypto.randomUUID();
 		const nextSearchId = crypto.randomUUID();
+		if (submittedQueryRef.current !== null) {
+			const finished: PastTurn = {
+				question: submittedQueryRef.current,
+				attachments: submittedAttachmentsRef.current,
+				steers: steersRef.current,
+				quick: quickRef.current,
+				deep: deepRef.current,
+				quickText: quickRef.current?.answer ?? quickDraftRef.current,
+				deepText: deepRef.current?.answer ?? deepDraftRef.current,
+				stopped: stoppedRef.current,
+				error: errorRef.current,
+				deepElapsed: deepElapsedRef.current,
+			};
+			setPastTurns((current) => [...current, finished]);
+		}
 		setSearchId(nextSearchId);
 		setQuick(null);
 		setDeep(null);
@@ -437,6 +480,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		setSteers([]);
 		setQueued([]);
 		setChatId(null);
+		setPastTurns([]);
 		setHistoryOpen(false);
 		setDeepElapsed(null);
 	}
@@ -445,18 +489,33 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		clearHistoryDebounce();
 		const record = await autorag.search.historyGet(id);
 		if (record === null) return;
-		const restored = restoreChat(record.messages);
-		const assistant = restored.assistant;
-		if (assistant === null) return;
-		setQuick(assistant.quick);
-		setDeep(assistant.deep);
-		setQuickDraft(assistant.quick?.answer ?? "");
-		setDeepDraft(assistant.deep?.answer ?? "");
-		setSubmittedQuery(restored.question?.text ?? null);
-		setSubmittedAttachments(restored.question?.attachments ?? []);
-		setSteers(restored.steers);
+		const turns = restoreChat(record.messages);
+		const latest = turns[turns.length - 1];
+		if (latest === undefined) return;
+		const assistant = latest.assistant;
+		setPastTurns(
+			turns.slice(0, -1).map((turn) => ({
+				question: turn.question.text,
+				attachments: turn.question.attachments,
+				steers: turn.steers,
+				quick: turn.assistant?.quick ?? null,
+				deep: turn.assistant?.deep ?? null,
+				quickText: turn.assistant?.quick?.answer ?? "",
+				deepText: turn.assistant?.deep?.answer ?? "",
+				stopped: turn.assistant?.stopped ?? false,
+				error: null,
+				deepElapsed: null,
+			})),
+		);
+		setQuick(assistant?.quick ?? null);
+		setDeep(assistant?.deep ?? null);
+		setQuickDraft(assistant?.quick?.answer ?? "");
+		setDeepDraft(assistant?.deep?.answer ?? "");
+		setSubmittedQuery(latest.question.text);
+		setSubmittedAttachments(latest.question.attachments);
+		setSteers(latest.steers);
 		setQueued([]);
-		setStopped(assistant.stopped);
+		setStopped(assistant?.stopped ?? false);
 		setError(null);
 		setProgress("");
 		setChatId(id);
@@ -692,6 +751,10 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 							<p className="mt-8 text-body leading-[1.5] text-ink-muted break-keep">{t("aiSearch.emptyPromptDesc")}</p>
 						</div>
 					) : null}
+
+					{pastTurns.map((turn, index) => (
+						<PastTurnView key={index} turn={turn} steerLabels={steerLabels} imageActions={imageActions} />
+					))}
 
 					{submittedQuery === null ? null : (
 						<div className="message user-msg flex justify-end">
@@ -933,6 +996,85 @@ function SteerBubble({
 				</span>
 			</div>
 		</div>
+	);
+}
+
+/** A finished earlier turn of the chat, kept so the conversation reads top to bottom. */
+interface PastTurn {
+	readonly question: string;
+	readonly attachments: readonly ChatAttachment[];
+	readonly steers: readonly SteerItem[];
+	readonly quick: AnswerPhase | null;
+	readonly deep: AnswerPhase | null;
+	readonly quickText: string;
+	readonly deepText: string;
+	readonly stopped: boolean;
+	readonly error: string | null;
+	readonly deepElapsed: number | null;
+}
+
+const NO_CITATION = (): void => undefined;
+
+function PastTurnView({
+	turn,
+	steerLabels,
+	imageActions,
+}: {
+	readonly turn: PastTurn;
+	readonly steerLabels: Record<SteerItem["status"], string>;
+	readonly imageActions: ImageActions;
+}): ReactElement {
+	const { t } = useTranslation();
+	const before = turn.steers.filter((steer) => steer.timing === "before-quick");
+	const after = turn.steers.filter((steer) => steer.timing === "after-quick");
+	// Citation chips of an earlier turn do not open evidence: the inspector shows the latest turn's.
+	const prose = (text: string, phase: AnswerPhase | null): ReactElement => (
+		<div className="assistant-prose flex flex-col gap-8 text-body leading-[1.55] text-ink-body">
+			<ProseBlocks
+				text={text}
+				selected={null}
+				unresolved={unresolvedCitationNumbers(text, phase?.evidence ?? [])}
+				onCitation={NO_CITATION}
+				imageActions={imageActions}
+			/>
+		</div>
+	);
+	return (
+		<>
+			<div className="message user-msg flex justify-end">
+				<div className="user-bubble-wrap flex max-w-bubble-max flex-col items-end gap-6">
+					{turn.attachments.length > 0 ? (
+						<div className="ref-attachments flex flex-wrap justify-end gap-6">
+							{turn.attachments.map((att) => (
+								<RefFileChip key={`${att.id}:${att.name}`} att={att} />
+							))}
+						</div>
+					) : null}
+					<div className="bubble w-full rounded-10 border border-border bg-input px-14 py-10 text-body leading-[1.5] text-ink-body break-words">{turn.question}</div>
+				</div>
+			</div>
+			{turn.error === null ? null : <div className="rounded-10 border border-danger-border bg-danger-bg-soft px-14 py-10 text-body text-danger-text">{turn.error}</div>}
+			{before.map((steer) => (
+				<SteerBubble key={steer.id} steer={steer} labels={steerLabels} />
+			))}
+			<div className="message assistant-msg flex flex-col gap-14">
+				{turn.quickText === "" ? null : prose(turn.quickText, turn.quick)}
+				{after.map((steer) => (
+					<SteerBubble key={steer.id} steer={steer} labels={steerLabels} />
+				))}
+				{turn.deepText === "" ? null : (
+					<div className="flex flex-col gap-6">
+						{turn.deepElapsed === null ? null : (
+							<div className="thinking-header flex items-center gap-5 text-meta font-medium text-ink-muted">
+								<span>{t("aiSearch.workedFor", { time: formatElapsed(turn.deepElapsed) })}</span>
+							</div>
+						)}
+						{prose(turn.deepText, turn.deep)}
+					</div>
+				)}
+			</div>
+			{turn.stopped ? <div className="text-body text-ink-muted">{t("aiSearch.stopped")}</div> : null}
+		</>
 	);
 }
 

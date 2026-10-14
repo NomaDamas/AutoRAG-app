@@ -82,6 +82,8 @@ interface SearchRun {
 	quick: AnswerPhase | null;
 	deep: AnswerPhase | null;
 	sessionId: string;
+	/** Messages the chat held before this run's question: earlier turns, left untouched by this run's writes. */
+	base: number;
 	/** Steers sent that no model request has taken yet. */
 	pendingSteers: number;
 	/** Chat-store writes of this run, in order: each reads the record the previous one wrote. */
@@ -205,9 +207,33 @@ function assistantMessage(run: SearchRun, stopped: boolean, now: () => Date): Ch
 	};
 }
 
+/** Chats whose agent stays alive for follow-ups. */
+const MAX_CHAT_AGENTS = 8;
+
 export function createSearchService(deps: SearchServiceDeps): SearchBridge {
 	const now = deps.now ?? (() => new Date());
 	const active = new Map<string, SearchRun>();
+
+	/**
+	 * One agent per chat: the librarian keys its conversation memory ("everything
+	 * judged earlier in this conversation") to the agent instance, so a follow-up
+	 * in the same chat must reach the same agent. Only the New chat button starts
+	 * a new chat id, and with it a new agent. Oldest chats are evicted past the cap.
+	 */
+	const agents = new Map<string, SearchAgent>();
+	async function agentFor(chatId: string): Promise<SearchAgent> {
+		const cached = agents.get(chatId);
+		if (cached !== undefined) {
+			// Re-insert so the Map's order is least recently used first.
+			agents.delete(chatId);
+			agents.set(chatId, cached);
+			return cached;
+		}
+		const built = await deps.agentFactory();
+		agents.set(chatId, built);
+		for (const stale of [...agents.keys()].slice(0, Math.max(0, agents.size - MAX_CHAT_AGENTS))) agents.delete(stale);
+		return built;
+	}
 
 	const emit = (event: SearchStreamEvent): void => deps.send(SEARCH_CHANNELS.event, event);
 
@@ -224,7 +250,11 @@ export function createSearchService(deps: SearchServiceDeps): SearchBridge {
 	function saveRunMessage(run: SearchRun, stopped: boolean): Promise<void> {
 		return writeChat(run, (existing) => ({
 			...existing,
-			messages: [...existing.messages.filter((message) => message.role !== "assistant"), assistantMessage(run, stopped, now)],
+			messages: [
+				...existing.messages.slice(0, run.base),
+				...existing.messages.slice(run.base).filter((message) => message.role !== "assistant"),
+				assistantMessage(run, stopped, now),
+			],
 			updatedAt: now().toISOString(),
 		}));
 	}
@@ -239,9 +269,11 @@ export function createSearchService(deps: SearchServiceDeps): SearchBridge {
 			steer: run.quick === null ? "before-quick" : "after-quick",
 		};
 		return writeChat(run, (existing) => {
-			const users = existing.messages.filter((message) => message.role !== "assistant");
-			const assistant = existing.messages.filter((message) => message.role === "assistant");
-			return { ...existing, messages: [...users, steer, ...assistant], updatedAt: steer.at };
+			const earlier = existing.messages.slice(0, run.base);
+			const turn = existing.messages.slice(run.base);
+			const users = turn.filter((message) => message.role !== "assistant");
+			const assistant = turn.filter((message) => message.role === "assistant");
+			return { ...existing, messages: [...earlier, ...users, steer, ...assistant], updatedAt: steer.at };
 		});
 	}
 
@@ -340,6 +372,7 @@ export function createSearchService(deps: SearchServiceDeps): SearchBridge {
 				quick: null,
 				deep: null,
 				sessionId: "",
+				base: 0,
 				pendingSteers: 0,
 				writes: Promise.resolve(),
 			};
@@ -347,6 +380,7 @@ export function createSearchService(deps: SearchServiceDeps): SearchBridge {
 			// cancels the run instead of racing it.
 			active.set(searchId, run);
 			const existing = await deps.chatStore.get(chatId);
+			run.base = existing?.messages.length ?? 0;
 			await deps.chatStore.save({
 				id: chatId,
 				title: query,
@@ -358,7 +392,7 @@ export function createSearchService(deps: SearchServiceDeps): SearchBridge {
 			try {
 				// A bad config (e.g. a search root that no longer exists) throws
 				// here; the panel must show it instead of waiting forever.
-				agent = await deps.agentFactory();
+				agent = await agentFor(chatId);
 			} catch (error) {
 				active.delete(searchId);
 				if (!run.cancelled) {

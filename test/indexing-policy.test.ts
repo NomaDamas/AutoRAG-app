@@ -84,6 +84,6 @@ describe("Jikji's media index is never run", () => {
 		const effective = await applyAppIndexing(config, {});
 
 		expect(effective.jikji).toMatchObject({ enableMediaIndex: false, exclude: expect.arrayContaining(["**/node_modules/**"]) });
-		expect(effective.parserOptions).toEqual({ ocr: { enabled: false } });
+		expect(effective.parserOptions).toMatchObject({ ocr: { enabled: false } });
 	});
 });
