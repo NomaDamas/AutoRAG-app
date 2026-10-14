@@ -34,20 +34,28 @@ export function settleSteers(items: readonly SteerItem[]): readonly SteerItem[] 
 	return items.map((item) => (item.status === "pending" ? { ...item, status: "dropped" } : item));
 }
 
-/** A stored chat: its question, the steers its run took, and its answer. */
-export function restoreChat(messages: readonly ChatMessage[]): {
-	readonly question: ChatMessageUser | null;
+/** One stored turn: its question, the steers its run took, and its answer (null while unanswered). */
+export interface RestoredTurn {
+	readonly question: ChatMessageUser;
 	readonly steers: readonly SteerItem[];
 	readonly assistant: ChatMessageAssistant | null;
-} {
-	let question: ChatMessageUser | null = null;
-	const steers: SteerItem[] = [];
-	let assistant: ChatMessageAssistant | null = null;
+}
+
+/** A stored chat split into its turns, oldest first. A turn starts at each user message that is not a steer. */
+export function restoreChat(messages: readonly ChatMessage[]): readonly RestoredTurn[] {
+	const turns: { question: ChatMessageUser; steers: SteerItem[]; assistant: ChatMessageAssistant | null }[] = [];
 	for (const message of messages) {
-		if (message.role === "assistant") assistant = message;
-		else if (message.steer === undefined) question = message;
-		// A stored steer was accepted by its run, which then answered with it.
-		else steers.push({ id: message.at, text: message.text, timing: message.steer, status: "delivered" });
+		const turn = turns[turns.length - 1];
+		if (message.role === "user" && message.steer === undefined) {
+			turns.push({ question: message, steers: [], assistant: null });
+		} else if (turn === undefined) {
+			continue;
+		} else if (message.role === "assistant") {
+			turn.assistant = message;
+		} else if (message.steer !== undefined) {
+			// A stored steer was accepted by its run, which then answered with it.
+			turn.steers.push({ id: message.at, text: message.text, timing: message.steer, status: "delivered" });
+		}
 	}
-	return { question, steers, assistant };
+	return turns;
 }
