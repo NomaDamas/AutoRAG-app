@@ -80,6 +80,14 @@ describe("findUnavailableRoots", () => {
 		expect(problems).toEqual([{ root: docs, reason: "unreadable", indexed: 3 }]);
 	});
 
+	it("also stops waiting when the root's real path never resolves, and falls back to the configured one", async () => {
+		const { docs, workspace } = await fixture(3);
+
+		const problems = await findUnavailableRoots([docs], workspace, { probe: () => new Promise(() => undefined), realpath: () => new Promise(() => undefined), timeoutMs: 20 });
+
+		expect(problems).toEqual([{ root: docs, reason: "unreadable", indexed: 3 }]);
+	});
+
 	it("only counts documents under the root that is checked", async () => {
 		const { docs, workspace } = await fixture(5);
 		const other = join(tmpdir(), "autorag-search-roots-other");

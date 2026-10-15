@@ -1,10 +1,18 @@
-import { describe, expect, it } from "vitest";
+import { mkdir, mkdtemp, realpath, rm, symlink } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
 import { MAX_QUARANTINED, runWithRecovery } from "../src/main/refresh-recovery";
 
 const ROOT = "/data/docs";
 const fail = (code: string, path?: string): Error => Object.assign(new Error(`${code}: boom`), { code, ...(path === undefined ? {} : { path }) });
+const directories: string[] = [];
 
-function harness(script: Array<Error | "ok">) {
+afterEach(async () => {
+	await Promise.all(directories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
+});
+
+function harness(script: Array<Error | "ok">, searchPaths: readonly string[] = [ROOT]) {
 	const sleeps: number[] = [];
 	const seen: Array<readonly string[]> = [];
 	let call = 0;
@@ -20,7 +28,7 @@ function harness(script: Array<Error | "ok">) {
 					if (step instanceof Error) throw step;
 					return "done";
 				},
-				{ searchPaths: [ROOT], sleep: async (ms) => void sleeps.push(ms) },
+				{ searchPaths, sleep: async (ms) => void sleeps.push(ms) },
 			),
 	};
 }
@@ -75,6 +83,22 @@ describe("runWithRecovery", () => {
 
 		const outside = fail("EIO", "/data/workspace/.autorag/parsed/x.md");
 		await expect(harness([outside, outside, outside, outside]).run()).rejects.toBe(outside);
+	});
+
+	it.skipIf(process.platform === "win32")("leaves out a file reached through a symlinked search root, which the librarian walks by its real path", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "autorag-refresh-recovery-"));
+		directories.push(directory);
+		const target = join(directory, "target");
+		await mkdir(target, { recursive: true });
+		const link = join(directory, "link");
+		await symlink(target, link);
+		// The failing path as the librarian reports it: walked from the pinned (real) root.
+		const locked = join(await realpath(target), "locked.docx");
+		const busy = fail("EBUSY", locked);
+		const h = harness([busy, busy, busy, "ok"], [link]);
+
+		expect(await h.run()).toMatchObject({ value: "done", quarantined: [locked] });
+		expect(h.seen.at(-1)).toEqual([locked]);
 	});
 
 	it("does not match a sibling folder that shares the root's name as a prefix", async () => {

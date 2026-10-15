@@ -29,6 +29,8 @@ export type RootProbe = "entries" | "empty" | "unreadable";
 
 export interface RootCheckDeps {
 	readonly probe?: (root: string) => Promise<RootProbe>;
+	/** Test seam: resolves a root's canonical path; production uses fs realpath. */
+	readonly realpath?: (path: string) => Promise<string>;
 	readonly timeoutMs?: number;
 }
 
@@ -45,11 +47,12 @@ async function listRoot(root: string): Promise<RootProbe> {
 	}
 }
 
-function withTimeout(probe: Promise<RootProbe>, timeoutMs: number): Promise<RootProbe> {
-	const { promise: timeout, resolve } = Promise.withResolvers<RootProbe>();
-	const timer = setTimeout(() => resolve("unreadable"), timeoutMs);
+/** `work` gets the same bound as a root listing: a hung mount answers neither, and waiting on it would hang the refresh. */
+function withTimeout<T>(work: Promise<T>, timeoutMs: number, fallback: T): Promise<T> {
+	const { promise: timeout, resolve } = Promise.withResolvers<T>();
+	const timer = setTimeout(() => resolve(fallback), timeoutMs);
 	timer.unref();
-	return Promise.race([probe, timeout]).finally(() => clearTimeout(timer));
+	return Promise.race([work, timeout]).finally(() => clearTimeout(timer));
 }
 
 function indexedEntries(workspacePath: string): readonly string[] {
@@ -66,14 +69,15 @@ function indexedEntries(workspacePath: string): readonly string[] {
  */
 export async function findUnavailableRoots(searchPaths: readonly string[], workspacePath: string, deps: RootCheckDeps = {}): Promise<readonly RootProblem[]> {
 	const probe = deps.probe ?? listRoot;
+	const canonical = deps.realpath ?? realpath;
 	const timeoutMs = deps.timeoutMs ?? ROOT_PROBE_TIMEOUT_MS;
 	const sources = indexedEntries(workspacePath);
 	const problems: RootProblem[] = [];
 	for (const root of searchPaths) {
-		const outcome = await withTimeout(probe(root), timeoutMs);
+		const outcome = await withTimeout(probe(root), timeoutMs, "unreadable");
 		if (outcome === "entries") continue;
 		const resolved = resolve(root);
-		const prefixes = new Set([resolved, await realpath(resolved).catch(() => resolved)]);
+		const prefixes = new Set([resolved, await withTimeout(canonical(resolved).catch(() => resolved), timeoutMs, resolved)]);
 		const indexed = sources.filter((source) => [...prefixes].some((prefix) => source === prefix || source.startsWith(`${prefix}${sep}`))).length;
 		if (outcome === "unreadable" && indexed > 0) problems.push({ root, reason: "unreadable", indexed });
 		if (outcome === "empty" && indexed >= EMPTY_ROOT_MIN_INDEXED) problems.push({ root, reason: "empty", indexed });

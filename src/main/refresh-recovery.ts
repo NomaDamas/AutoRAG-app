@@ -1,3 +1,4 @@
+import { realpath } from "node:fs/promises";
 import { resolve, sep } from "node:path";
 
 /**
@@ -52,7 +53,14 @@ export async function runWithRecovery<T>(attempt: (excluded: readonly string[]) 
 			return promise;
 		});
 	const backoff = deps.backoffMs ?? RECOVERY_BACKOFF_MS;
-	const roots = deps.searchPaths.map((root) => resolve(root));
+	// The librarian pins search roots to their real path, so a failing file's path is canonical;
+	// a root configured through a symlink only matches through that form (see search-roots.ts).
+	const roots = await Promise.all(
+		deps.searchPaths.map(async (root) => {
+			const resolved = resolve(root);
+			return [resolved, await realpath(resolved).catch(() => resolved)] as const;
+		}),
+	);
 	const quarantined: string[] = [];
 	let retries = 0;
 	let streak = 0;
@@ -74,7 +82,12 @@ export async function runWithRecovery<T>(attempt: (excluded: readonly string[]) 
 				continue;
 			}
 			const file = errno.path === undefined ? undefined : resolve(errno.path);
-			const leavable = file !== undefined && PER_FILE[errno.code] === true && roots.some((root) => file.startsWith(`${root}${sep}`)) && !quarantined.includes(file) && quarantined.length < MAX_QUARANTINED;
+			const leavable =
+				file !== undefined &&
+				PER_FILE[errno.code] === true &&
+				roots.some((prefixes) => prefixes.some((prefix) => file.startsWith(`${prefix}${sep}`))) &&
+				!quarantined.includes(file) &&
+				quarantined.length < MAX_QUARANTINED;
 			if (!leavable) throw error;
 			quarantined.push(file);
 			streak = 0;
