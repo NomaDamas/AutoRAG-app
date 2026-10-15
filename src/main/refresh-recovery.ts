@@ -63,8 +63,8 @@ export async function runWithRecovery<T>(attempt: (excluded: readonly string[]) 
 	);
 	const quarantined: string[] = [];
 	let retries = 0;
-	let streak = 0;
-	let streakKey = "";
+	// Failures counted per file, not per error code: a file that alternates EBUSY and EIO still runs out of budget.
+	const failures = new Map<string, number>();
 	let lastCode: string | null = null;
 	for (;;) {
 		try {
@@ -72,9 +72,9 @@ export async function runWithRecovery<T>(attempt: (excluded: readonly string[]) 
 		} catch (error) {
 			const errno = errnoOf(error);
 			if (errno === null || TRANSIENT[errno.code] !== true) throw error;
-			const key = `${errno.code}:${errno.path ?? ""}`;
-			streak = key === streakKey ? streak + 1 : 1;
-			streakKey = key;
+			const key = errno.path ?? "";
+			const streak = (failures.get(key) ?? 0) + 1;
+			failures.set(key, streak);
 			lastCode = errno.code;
 			if (streak <= backoff.length) {
 				retries += 1;
@@ -85,13 +85,12 @@ export async function runWithRecovery<T>(attempt: (excluded: readonly string[]) 
 			const leavable =
 				file !== undefined &&
 				PER_FILE[errno.code] === true &&
-				roots.some((prefixes) => prefixes.some((prefix) => file.startsWith(`${prefix}${sep}`))) &&
+				roots.some((prefixes) => prefixes.some((prefix) => file.startsWith(prefix.endsWith(sep) ? prefix : `${prefix}${sep}`))) &&
 				!quarantined.includes(file) &&
 				quarantined.length < MAX_QUARANTINED;
 			if (!leavable) throw error;
 			quarantined.push(file);
-			streak = 0;
-			streakKey = "";
+			failures.delete(key);
 		}
 	}
 }

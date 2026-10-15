@@ -78,7 +78,7 @@ export async function findUnavailableRoots(searchPaths: readonly string[], works
 		if (outcome === "entries") continue;
 		const resolved = resolve(root);
 		const prefixes = new Set([resolved, await withTimeout(canonical(resolved).catch(() => resolved), timeoutMs, resolved)]);
-		const indexed = sources.filter((source) => [...prefixes].some((prefix) => source === prefix || source.startsWith(`${prefix}${sep}`))).length;
+		const indexed = sources.filter((source) => [...prefixes].some((prefix) => source === prefix || source.startsWith(prefix.endsWith(sep) ? prefix : `${prefix}${sep}`))).length;
 		if (outcome === "unreadable" && indexed > 0) problems.push({ root, reason: "unreadable", indexed });
 		if (outcome === "empty" && indexed >= EMPTY_ROOT_MIN_INDEXED) problems.push({ root, reason: "empty", indexed });
 	}

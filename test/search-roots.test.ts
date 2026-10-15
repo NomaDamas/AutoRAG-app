@@ -96,4 +96,11 @@ describe("findUnavailableRoots", () => {
 
 		expect(problems).toEqual([{ root: docs, reason: "unreadable", indexed: 5 }]);
 	});
+
+	it.skipIf(process.platform === "win32")("matches documents under a filesystem root, whose path already ends in a separator", async () => {
+		const { workspace } = await fixture(EMPTY_ROOT_MIN_INDEXED + 5);
+
+		const problems = await findUnavailableRoots(["/"], workspace, { probe: async () => "empty" });
+		expect(problems).toEqual([{ root: "/", reason: "empty", indexed: EMPTY_ROOT_MIN_INDEXED + 5 }]);
+	});
 });

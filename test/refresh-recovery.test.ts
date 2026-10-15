@@ -77,6 +77,13 @@ describe("runWithRecovery", () => {
 		expect((await h.run()).quarantined).toEqual([a, b]);
 	});
 
+	it("spends one retry budget per file even when the error code keeps changing", async () => {
+		const file = `${ROOT}/flaky.docx`;
+		const h = harness([fail("EBUSY", file), fail("EIO", file), fail("EBUSY", file), "ok"]);
+
+		expect(await h.run()).toMatchObject({ value: "done", retries: 2, quarantined: [file] });
+	});
+
 	it("does not leave out a file for process-wide pressure like EMFILE, nor one outside the search roots", async () => {
 		const pressure = fail("EMFILE", `${ROOT}/a.md`);
 		await expect(harness([pressure, pressure, pressure, pressure]).run()).rejects.toBe(pressure);

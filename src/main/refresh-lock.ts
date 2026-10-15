@@ -102,16 +102,19 @@ export function acquireRefreshLock(path: string, options: RefreshLockOptions): R
 			let timer: NodeJS.Timeout | undefined;
 			const stop = (): void => clearInterval(timer);
 			const beat = (): void => {
-				// Never write over a lock someone else took after we stopped beating.
-				const current = readHolder(path)?.holder;
-				if (current?.pid !== pid || current.startedAt !== startedAt) {
-					stop();
-					return;
-				}
-				// Rename, not rewrite: a reader must never see a half-written file, which reads as abandoned.
+				// Prepare first, then check ownership immediately before the rename, so the window in which a
+				// takeover could be overwritten is two synchronous calls, not a file write.
 				const temporary = `${path}.${pid}.tmp`;
 				try {
 					writeFileSync(temporary, JSON.stringify({ pid, startedAt, owner: options.owner, heartbeatAt: new Date(now()).toISOString() }));
+					const current = readHolder(path)?.holder;
+					if (current?.pid !== pid || current.startedAt !== startedAt) {
+						// Someone else took the lock after we stopped beating; never write over it.
+						stop();
+						unlinkSync(temporary);
+						return;
+					}
+					// Rename, not rewrite: a reader must never see a half-written file, which reads as abandoned.
 					renameSync(temporary, path);
 				} catch {
 					// A missed beat only brings the stale window closer.
