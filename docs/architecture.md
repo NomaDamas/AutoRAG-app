@@ -31,7 +31,7 @@ second datasource or model configuration. The sidebar is searchable and grouped:
   billing portal open in the system browser. Signed out, every value reads
   "확인할 수 없음".
 - **기본 → 일반** — appearance, app language, hidden files, launch at login,
-  automatic updates, telemetry, and document languages.
+  automatic updates, error reports, and document languages.
 - **AI → AI 모델** — the AutoRAG plan is listed first and connects through the
   account service (not Pi's login); other services use the same Pi `/login` the AutoRAG
   agent uses: subscription sign-in (Claude Pro/Max, ChatGPT Plus/Pro, GitHub
@@ -124,6 +124,38 @@ message asking the user to check the result.
 Quitting asks the worker to release its watches and waits up to 2 s before
 exiting. QA lane: `scripts/manual-qa/run-qa-finder-fs-worker-crash.mjs`
 (SIGKILLs the worker twice and checks the tabs recover within 5 s).
+
+## Error reports (Sentry)
+
+Dazzi sends a report to the maintainers' Sentry project when something breaks,
+so a stuck or failed index is seen without the user filing an issue. It is on
+by default; Settings → 일반 → 개인정보 → "오류 보고서 보내기" turns it off, and
+while it is off every event is dropped before it is queued. There is no
+per-report prompt.
+
+What is reported: uncaught errors in the main process and the pages, a crashed
+or killed renderer or fs worker (`child-process-gone`, no minidump), and three
+indexing signals: a refresh that returns `ok: false` (failing step, counts), a
+file whose parse hits the per-file timeout (its size only), and a local index
+run whose activity snapshot does not change for 30 minutes (phase, counts).
+Identical reports (same fingerprint) are sent once per run, and Sentry groups
+them into one issue.
+
+What is never reported: file paths and names (every string passes `scrubText`,
+which turns a path into `<path>.ext`), document text, user, IP, host name,
+console and network breadcrumbs, local variables, screenshots, sessions, and
+native minidumps (process memory can hold document text).
+
+Design: `src/main/error-report-core.ts` holds the scrubbing, the report
+builders and the stall detector (no `electron` import, so the scheduled refresh
+job can load it); `src/main/error-reporting.ts` owns the one Sentry client.
+The fs worker (`@sentry/electron/utility`) and the pages
+(`@sentry/electron/renderer`, with the SDK preload imported by
+`src/preload/index.ts`) relay through main, so the DSN, the toggle and
+`beforeSend` exist in one place. The DSN is a public write-only key injected at
+build time as `MAIN_VITE_SENTRY_DSN` (the release workflow reads the
+`SENTRY_DSN` repository variable); a build without it initialises nothing.
+Tracing, replay, logs and user feedback are not enabled.
 
 ## First-run onboarding
 

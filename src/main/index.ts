@@ -86,8 +86,13 @@ import { OS_REQUEST_CHANNELS, parseOsRequestArgv } from "../shared/os-request-co
 import { listenForOsRequests, osRequestEndpoint, sendOsRequest } from "./os-request-channel";
 import { createOsRequestService, diskKindOf } from "./os-request-service";
 import { createOsMenuIntegration, menuLabels } from "./os-menu-integration";
+import { initErrorReporting, setErrorReportingEnabled } from "./error-reporting";
+import { createStallDetector, readErrorReportingEnabled, refreshFailureReport, reportError } from "./error-report-core";
 
 const execFileAsync = promisify(execFile);
+
+// Before `ready`, so a crash during startup is reported. The Settings toggle is read from disk because the settings service loads later.
+initErrorReporting({ dsn: import.meta.env.MAIN_VITE_SENTRY_DSN, enabled: readErrorReportingEnabled(app.getPath("userData")), version: APP_VERSION, packaged: app.isPackaged });
 
 /** The one AutoRAG config every surface (CLI, TUI, serve, this app) resolves. */
 function autoragConfigPath(): string {
@@ -128,7 +133,11 @@ async function ensureAutoRAGConfig(): Promise<void> {
 
 /** Manual index refresh from Settings (shared with onboarding's first run). */
 function refreshConfig(methods?: readonly string[]): Promise<ConfigRefreshResult> {
-	return refreshAutoragIndex({ env: process.env, cwd: process.cwd() }, methods);
+	return refreshAutoragIndex({ env: process.env, cwd: process.cwd() }, methods).then((result) => {
+		const report = refreshFailureReport(result);
+		if (report !== null) reportError(report);
+		return result;
+	});
 }
 
 /** Unpackaged runs (and AUTORAG_DEV_LABEL=1) carry the clone label. */
@@ -576,6 +585,7 @@ app.whenReady().then(async () => {
 			}
 		},
 		onSettingsChanged: (settings) => {
+			setErrorReportingEnabled(settings.errorReporting);
 			applyAppearance(settings.appearance);
 			applyLanguage(settings.language);
 			applyScanInterval(settings.dupeyScanIntervalMinutes);
@@ -595,8 +605,15 @@ app.whenReady().then(async () => {
 		ownPids: () => [workerHost.status().pid],
 	});
 	registerIndexActivityIpcHandlers(indexActivity);
-	const stopIndexActivity = indexActivity.start((snapshot) => sendToMainWindow(INDEX_ACTIVITY_CHANNELS.changed, snapshot));
-	app.once("will-quit", stopIndexActivity);
+	const stallDetector = createStallDetector(reportError);
+	const stopIndexActivity = indexActivity.start((snapshot) => {
+		sendToMainWindow(INDEX_ACTIVITY_CHANNELS.changed, snapshot);
+		stallDetector.observe(snapshot);
+	});
+	app.once("will-quit", () => {
+		stopIndexActivity();
+		stallDetector.dispose();
+	});
 	registerOsRequestIpcHandlers(osRequests);
 	// The in-app right-click → 서비스 submenu: what macOS offers for the selection, and performing one.
 	registerServicesIpcHandlers(createServicesService());

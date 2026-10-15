@@ -1,3 +1,4 @@
+import "./lib/error-reporting";
 import { StrictMode, useCallback, useState, type ReactElement } from "react";
 import { createRoot } from "react-dom/client";
 import "../styles/app.css";

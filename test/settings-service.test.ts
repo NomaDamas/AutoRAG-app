@@ -97,12 +97,12 @@ describe("createSettingsService", () => {
 		directories.push(directory);
 		const service = createSettingsService({ directory, dataSources: noDataSources, models: noModels, ...baseDeps });
 
-		await service.set({ telemetry: true });
+		await service.set({ errorReporting: false });
 		await service.permSet("/tmp/docs", "allow", "apply-all");
 		expect((await service.permGet("/tmp/docs/readme.md")).value).toBe("allow");
 
 		const reloaded = createSettingsService({ directory, dataSources: noDataSources, models: noModels, ...baseDeps });
-		expect((await reloaded.get()).telemetry).toBe(true);
+		expect((await reloaded.get()).errorReporting).toBe(false);
 		expect((await reloaded.permGet("/tmp/docs/readme.md")).value).toBe("allow");
 	});
 

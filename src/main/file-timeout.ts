@@ -1,5 +1,6 @@
 import { parse as kordocParse } from "kordoc";
 import type { KordocParseFn } from "@autorag/librarian";
+import { fileTimeoutReport, reportError } from "./error-report-core";
 
 /**
  * Per-file time budget for parsing. A file that spends longer than this is
@@ -28,7 +29,10 @@ export const kordocDefaultParse: KordocParseFn = async (bytes, options) => {
 export function withFileTimeout(parse: KordocParseFn, timeoutMs: number): KordocParseFn {
 	return async (bytes, options) => {
 		const { promise, reject } = Promise.withResolvers<never>();
-		const timer = setTimeout(() => reject(new Error(`parsing timed out after ${timeoutMs}ms`)), timeoutMs);
+		const timer = setTimeout(() => {
+			reportError(fileTimeoutReport(timeoutMs, bytes.byteLength));
+			reject(new Error(`parsing timed out after ${timeoutMs}ms`));
+		}, timeoutMs);
 		try {
 			return await Promise.race([parse(bytes, options), promise]);
 		} finally {
