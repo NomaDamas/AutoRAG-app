@@ -1028,7 +1028,11 @@
       "aborted": "Aborted"
     },
     "refresh": {
-      "sourceDetail": "{{state}} · {{count}}"
+      "sourceDetail": "{{state}} · {{count}}",
+      "rootUnavailable": "Refresh skipped: the search folder {{folder}} is unreadable or empty. This keeps the {{indexed}} documents indexed from it from being deleted. Reconnect the drive or cloud folder, or remove it from your search folders if you no longer need it.",
+      "retried": "A temporary file system error ({{code}}) occurred; the refresh was retried {{retries}} time(s).",
+      "filesLeftOut": "{{files}} file(s) that kept failing with {{code}} were left out of this refresh. They will be tried again on the next one.",
+      "parseKilled": "{{timedOut}} file(s) were skipped for exceeding the time limit and {{crashed}} because the parser stopped. They will be tried again on the next refresh."
     },
     "worker": {
       "unknownFormat": "Unknown file format: {{format}}",

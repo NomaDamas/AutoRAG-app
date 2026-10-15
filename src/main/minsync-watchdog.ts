@@ -123,6 +123,32 @@ export function createStallWatchdog(options: StallWatchdogOptions): StallWatchdo
 	};
 }
 
+/**
+ * Stop every minsync child this process started. MinSync is a separate process
+ * with no signal handler: when its parent quits or gives up, it keeps running
+ * headless and keeps `.minsync/lock`, so the next refresh fails with "another
+ * sync is in progress" until it finishes. SIGTERM ends it at once and the OS
+ * releases the lock; the next sync resumes from `progress.jsonl`. Windows lists
+ * no parent for a process, so a minsync there cannot be told from the user's own.
+ */
+export async function terminateMinSyncChildren(
+	sample: () => Promise<readonly MinSyncProcess[]> = sampleMinSyncProcesses,
+	kill: (pid: number) => void = (pid) => process.kill(pid, "SIGTERM"),
+	platform: NodeJS.Platform = process.platform,
+): Promise<number> {
+	if (platform === "win32") return 0;
+	let stopped = 0;
+	for (const { pid } of await sample()) {
+		try {
+			kill(pid);
+			stopped += 1;
+		} catch {
+			// Already gone.
+		}
+	}
+	return stopped;
+}
+
 /** The watchdog the refresh uses: real process listing, SIGTERM. */
 export function createMinSyncWatchdog(stallMs: number = DEFAULT_EMBEDDING_STALL_MS): StallWatchdog {
 	return createStallWatchdog({

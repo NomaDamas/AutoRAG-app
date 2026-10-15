@@ -1028,7 +1028,11 @@
       "aborted": "已中止"
     },
     "refresh": {
-      "sourceDetail": "{{state}} · {{count}} 项"
+      "sourceDetail": "{{state}} · {{count}} 项",
+      "rootUnavailable": "搜索文件夹 {{folder}} 无法读取或为空，已跳过刷新，以免删除已从中建立索引的 {{indexed}} 个文档。请重新连接驱动器或云端文件夹；如不再需要，请将其从搜索文件夹中移除。",
+      "retried": "出现临时文件系统错误({{code}}),刷新已重试 {{retries}} 次。",
+      "filesLeftOut": "有 {{files}} 个文件持续出现 {{code}} 错误,已从本次刷新中排除,将在下次刷新时重试。",
+      "parseKilled": "有 {{timedOut}} 个文件因超时、{{crashed}} 个文件因解析器中止而被跳过,将在下次刷新时重试。"
     },
     "worker": {
       "unknownFormat": "未知的文件格式：{{format}}",

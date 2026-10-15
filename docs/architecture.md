@@ -62,6 +62,58 @@ second datasource or model configuration. The sidebar is searchable and grouped:
   sidecar so a refresh never rewrites the file Settings edits). Later refreshes
   start from the stored size. Only the gateway's 504 triggers this; a runtime
   that never became ready does not.
+- **Indexing that survives bad files and bad folders** — a refresh never lets one
+  file, folder, or process take the rest of the index down.
+  - *Parsing runs on a worker thread* (`parse-isolation.ts`, `parse-worker.mjs`)
+    with a per-file budget (`appIndexing.fileTimeoutMs`, 180 s) and a 2 GB heap
+    cap. A parse that spins is killed and the worker restarted, an out-of-memory
+    parse is a skipped file instead of a dead app, and the main thread stays free.
+    A timer on the parsing thread cannot do this: a 3000 ms busy loop returned
+    after 3001 ms under a 200 ms `Promise.race` timeout. Not contained: a native
+    crash inside the worker still ends the process (a worker is a thread; kordoc's
+    optional native dependencies are only expected on its OCR path, which the app
+    keeps off, but that was not verified). The refresh reports how many files were
+    killed (`parse-killed`), because the librarian's own diagnostic for every
+    failed parse is one generic sentence.
+  - *A folder that cannot be listed, or reads as empty although at least 20
+    documents were indexed from it, stops the refresh* (`search-roots.ts`,
+    `search-root-unavailable`). The librarian treats "not found under the root" as
+    "deleted", so an unplugged drive whose mount point remains, a signed-out
+    cloud folder, or a revoked permission would delete its documents from the
+    index and cost hours of re-embedding. Removing the folder from the search
+    folders is how to say it is gone for good. A folder that was removed entirely
+    already fails in the librarian, and one nothing was indexed from never
+    blocks. This also holds the other folders until it is resolved; the
+    librarian cannot refresh the rest without deleting this folder's documents
+    (Marker-Inc-Korea/AutoRAG#1889).
+  - *A transient file error is retried, then the file is left out*
+    (`refresh-recovery.ts`). The librarian skips a file only for `ENOENT`,
+    `ENOTDIR`, `EISDIR`, `EACCES`, `EPERM`; any other read error aborts the whole
+    refresh (AutoRAG#1890). `EMFILE`/`EBUSY`/`EIO`/… are retried after 2 s and 6 s;
+    a file that still fails (`EBUSY`/`EIO`/`ETIMEDOUT`/`EAGAIN`, under a search
+    folder, at most 10 per run) is left out of that run and tried again on the
+    next. A full disk and every other error fail the refresh as before.
+  - *The refresh lock beats its own heart* (`refresh-lock.ts`): the holder
+    rewrites `heartbeatAt` every 30 s, and a lock is stale after 10 minutes
+    without one. The old rule (2 h since the start) let a scheduled tick take the
+    lock from a first index that was still running, which at 2.5 h+ for a large
+    corpus happens. A lock an older build wrote has no heartbeat and keeps the
+    2 h rule.
+  - *The background job is abandoned when it stops making progress*
+    (`job-watchdog.ts`), not after a fixed 90 minutes: no change in
+    `refresh-progress.json`, the mirror checkpoint, MinSync's `progress.jsonl`, or
+    the activity journal for 90 minutes, or 24 hours in total. MinSync is a
+    separate process with no signal handler that outlives its parent and keeps
+    `.minsync/lock`, so the job, and the app's main process on quit, stop the minsync
+    children they started (`terminateMinSyncChildren`; not on Windows, where a
+    minsync cannot be told from the user's own, and not the ones the fs worker
+    started for a Finder toggle). MinSync resumes from `progress.jsonl`.
+  - *The Finder's exclusion toggle refreshes through the same path*
+    (`index-status.ts` calls `refreshAutoragIndex`), so it has the folder check,
+    the embedder watchdog, and the learned batch size.
+  - Not covered: cancelling a refresh from the UI (the librarian has no abort
+    signal, AutoRAG#1892), which file a MinSync failure belongs to (MinSync#78),
+    and an unreadable subfolder inside a readable root (AutoRAG#1889).
 - **Automatic refresh** — a cadence is `직접` (manual, the default) or 5 min to a
   day, for the local folders (`appIndexing.refreshIntervalMs`) and for each
   datasource (`pollingIntervalMs`). Choosing one registers an OS job that runs

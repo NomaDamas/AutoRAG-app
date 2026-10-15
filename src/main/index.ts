@@ -45,6 +45,7 @@ import { registerIconProtocol, THUMB_PRIVILEGED_SCHEME } from "./icon-register";
 import type { KnownFolders } from "../shared/fs-worker-contract";
 import { hasErrorCode, pathExists } from "./fs-entry";
 import { refreshAutoragIndex, resolveEffectiveConfig } from "./index-refresh";
+import { terminateMinSyncChildren } from "./minsync-watchdog";
 import { createFolderScanCoordinator, supportedExtensionsFromRegistry } from "./onboarding-scan";
 import { createAccountService } from "./account-service";
 import { createOnboardingService, type OnboardingService } from "./onboarding-service";
@@ -850,8 +851,8 @@ app.whenReady().then(async () => {
 	// re-entering `app.quit()` from inside its own quit can stall the teardown.
 	app.once("will-quit", (event) => {
 		event.preventDefault();
-		void workerHost
-			.dispose()
+		// minsync outlives the app and keeps its lock; stop it so the next launch can resume instead of failing on the lock.
+		void Promise.all([terminateMinSyncChildren(), workerHost.dispose()])
 			.catch((error: unknown) => console.error("[fs-worker] dispose on quit failed:", error))
 			.finally(() => app.exit(0));
 	});

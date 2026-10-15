@@ -1028,7 +1028,11 @@
       "aborted": "中断されました"
     },
     "refresh": {
-      "sourceDetail": "{{state}} · {{count}} 件"
+      "sourceDetail": "{{state}} · {{count}} 件",
+      "rootUnavailable": "検索フォルダ {{folder}} を読み取れないか空のため、更新をスキップしました。このフォルダから索引化された {{indexed}} 件の文書を削除しないためです。ドライブやクラウドフォルダを再接続するか、不要であれば検索フォルダから削除してください。",
+      "retried": "一時的なファイルシステムエラー({{code}})が発生したため、更新を {{retries}} 回再試行しました。",
+      "filesLeftOut": "{{code}} エラーが続いたファイル {{files}} 件を今回の更新から除外しました。次回の更新で再試行します。",
+      "parseKilled": "制限時間を超えたファイル {{timedOut}} 件と、パーサーが停止したファイル {{crashed}} 件をスキップしました。次回の更新で再試行します。"
     },
     "worker": {
       "unknownFormat": "不明なファイル形式です: {{format}}",
