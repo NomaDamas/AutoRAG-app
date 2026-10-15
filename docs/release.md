@@ -16,6 +16,24 @@ The tag is the version. CI rewrites `package.json` and `APP_VERSION` from it
 (`scripts/release/set-version.mjs`); nothing needs bumping by hand. A tag that
 is not `vX.Y.Z` or `vX.Y.Z-suffix` fails the run before any build starts.
 
+## Homebrew
+
+```sh
+brew install --cask nomadamas/dazzi/dazzi     # Apple Silicon
+brew upgrade --cask dazzi                    # catches up with the newest release
+```
+
+The tap is [`NomaDamas/homebrew-dazzi`](https://github.com/NomaDamas/homebrew-dazzi). The `homebrew`
+job of `release.yml` runs after the Mac dmg is on a stable (`vX.Y.Z`) release, whether built in CI or
+locally, renders `Casks/dazzi.rb` with `scripts/release/render-cask.mjs` from the dmg's digest in
+`SHA256SUMS-macos.txt` and pushes it to the tap, so brew serves the newest release as soon as it is
+published. Pre-releases are skipped. The cask declares `auto_updates true`: the in-app updater keeps
+working, and `brew upgrade --cask --greedy` also works.
+
+One-time setup: create a fine-grained PAT with *Contents: read and write* on `NomaDamas/homebrew-dazzi`
+and store it: `gh secret set HOMEBREW_TAP_TOKEN --repo NomaDamas/AutoRAG-app`. Without it the job
+skips. The cask is not notarization-dependent, but an unsigned dmg still triggers Gatekeeper's warning.
+
 ## What one installer contains
 
 Everything the app needs, so a user installs one file and nothing else:

@@ -273,3 +273,35 @@ jobs:
           R2_BUCKET: ${{ vars.R2_BUCKET }}
         shell: bash
         run: bash scripts/release/sync-r2.sh "$RELEASE_TAG" upload update feed
+
+  # Point the Homebrew cask (NomaDamas/homebrew-dazzi) at the published dmg. Runs for stable vX.Y.Z
+  # releases only, after the Mac dmg is on the release (built here or locally), and skips without
+  # the HOMEBREW_TAP_TOKEN secret (a fine-grained PAT with contents:write on the tap repository).
+  homebrew:
+    needs: [macos, mac-prebuilt]
+    if: ${{ !cancelled() && github.event_name == 'release' && (needs.macos.result == 'success' || needs.mac-prebuilt.result == 'success') && !github.event.release.prerelease && !contains(github.event.release.tag_name, '-') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Update the cask
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          if [ -z "$TAP_TOKEN" ]; then echo "no HOMEBREW_TAP_TOKEN: skipping the Homebrew cask"; exit 0; fi
+          mkdir upload
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --dir upload -p 'SHA256SUMS-macos.txt'
+          sha=$(awk '/-arm64\.dmg$/ {print $1}' upload/SHA256SUMS-macos.txt)
+          git clone "https://x-access-token:${TAP_TOKEN}@github.com/NomaDamas/homebrew-dazzi.git" tap
+          mkdir -p tap/Casks
+          node scripts/release/render-cask.mjs "$RELEASE_TAG" "$sha" > tap/Casks/dazzi.rb
+          cd tap
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Casks/dazzi.rb
+          git diff --cached --quiet && { echo "cask already current"; exit 0; }
+          git commit -m "dazzi ${RELEASE_TAG#v}"
+          git push origin HEAD:main
