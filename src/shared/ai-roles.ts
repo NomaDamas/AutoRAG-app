@@ -1,4 +1,4 @@
-import { AUTORAG_PROVIDER_ID } from "./account-contract";
+import { AUTORAG_PROVIDER_ID, isManagedProviderId } from "./account-contract";
 import { t } from "./i18n/core";
 
 export { providerConnectRoute, withoutAutorag } from "./account-contract";
@@ -10,7 +10,7 @@ export { providerConnectRoute, withoutAutorag } from "./account-contract";
  * account service read one source.
  */
 
-export type JevBackend = "autorag" | "typesafe" | "openrouter" | "vercel";
+export type JevBackend = "dazzi" | "typesafe" | "openrouter" | "vercel";
 
 export interface RoleModel {
 	readonly id: string;
@@ -26,11 +26,11 @@ interface RoleModelSpec {
 
 /**
  * Jev backend a Pi provider id maps to. `jev-use` resolves typesafe /
- * openrouter / vercel; the hosted plan is the `autorag` backend. The Vercel AI
+ * openrouter / vercel; the hosted plan is the `dazzi` backend. The Vercel AI
  * Gateway provider id is `vercel-ai-gateway`, not `vercel`.
  */
 const JEV_BACKEND_BY_PROVIDER: Readonly<Record<string, JevBackend>> = {
-	[AUTORAG_PROVIDER_ID]: "autorag",
+	[AUTORAG_PROVIDER_ID]: "dazzi",
 	typesafe: "typesafe",
 	openrouter: "openrouter",
 	"vercel-ai-gateway": "vercel",
@@ -38,7 +38,7 @@ const JEV_BACKEND_BY_PROVIDER: Readonly<Record<string, JevBackend>> = {
 
 /** The Jev model ids each backend accepts. */
 const JEV_MODELS_BY_BACKEND: Readonly<Record<JevBackend, readonly RoleModelSpec[]>> = {
-	autorag: [{ id: "jev-1.13", label: "Jev 1.13" }],
+	dazzi: [{ id: "jev-1.13", label: "Jev 1.13" }],
 	typesafe: [{ id: "jev-latest", labelKey: "finderState.roles.jevLatest" }],
 	openrouter: [
 		{ id: "typesafe/jev-1.13", label: "Jev 1.13" },
@@ -101,19 +101,19 @@ const REFRESHABLE_KEYS: Readonly<Record<"backend" | "provider", readonly string[
 
 /**
  * Classify a role block: `unset` for `undefined`, `{}` or the librarian's
- * untouched default; `autorag` for an AutoRAG block that is on and carries
+ * untouched default; `dazzi` for an AutoRAG block that is on and carries
  * only the plan and a model; otherwise `other`: an explicit `false`, another
  * backend/provider, a malformed value, or an AutoRAG block the user switched
  * off (`enabled: false`) or tuned (`topN`, `baseUrl`, `confidenceThreshold`...).
  */
-function roleOwner(value: unknown, key: "backend" | "provider"): "unset" | "autorag" | "other" {
+function roleOwner(value: unknown, key: "backend" | "provider"): "unset" | "dazzi" | "other" {
 	if (value === undefined) return "unset";
 	if (typeof value !== "object" || value === null || Array.isArray(value)) return "other";
 	const entries = Object.entries(value);
 	if (entries.length === 0) return "unset";
-	if (entries.some(([name, named]) => name === key && named === AUTORAG_PROVIDER_ID)) {
+	if (entries.some(([name, named]) => name === key && isManagedProviderId(named))) {
 		const refreshable = entries.every(([name, named]) => REFRESHABLE_KEYS[key].includes(name) && (name !== "enabled" || named === true));
-		return refreshable ? "autorag" : "other";
+		return refreshable ? "dazzi" : "other";
 	}
 	const untouched = Object.entries(UNTOUCHED_DEFAULTS[key]);
 	return entries.length === untouched.length && untouched.every(([name, expected]) => entries.some(([entryName, entryValue]) => entryName === name && entryValue === expected)) ? "unset" : "other";
@@ -148,13 +148,13 @@ export function shouldAdoptManagedDecomposition(value: unknown): boolean {
 	const model = only[1];
 	if (typeof model !== "object" || model === null || Array.isArray(model)) return false;
 	const fields = Object.entries(model);
-	if (fields.some(([name, named]) => name === "provider" && named === AUTORAG_PROVIDER_ID)) return true;
+	if (fields.some(([name, named]) => name === "provider" && isManagedProviderId(named))) return true;
 	return fields.length === 2 && fields.every(([name, named]) => (name === "provider" && named === "openrouter") || (name === "id" && named === UNTOUCHED_DECOMPOSITION_ID));
 }
 
 export interface ManagedRoleUpdates {
-	readonly jev?: { readonly backend: "autorag"; readonly model: string };
-	readonly rerank?: { readonly enabled: true; readonly provider: "autorag"; readonly model: string };
+	readonly jev?: { readonly backend: "dazzi"; readonly model: string };
+	readonly rerank?: { readonly enabled: true; readonly provider: "dazzi"; readonly model: string };
 }
 
 /**
@@ -171,8 +171,8 @@ export function managedRoleUpdates(
 	const jevModel = pickModel(jevModels, current.jev);
 	const rerankModel = pickModel(rerankModels, current.rerank);
 	return {
-		...(adopt.jev && jevModel !== undefined ? { jev: { backend: "autorag" as const, model: jevModel } } : {}),
-		...(adopt.rerank && rerankModel !== undefined ? { rerank: { enabled: true as const, provider: "autorag" as const, model: rerankModel } } : {}),
+		...(adopt.jev && jevModel !== undefined ? { jev: { backend: "dazzi" as const, model: jevModel } } : {}),
+		...(adopt.rerank && rerankModel !== undefined ? { rerank: { enabled: true as const, provider: "dazzi" as const, model: rerankModel } } : {}),
 	};
 }
 

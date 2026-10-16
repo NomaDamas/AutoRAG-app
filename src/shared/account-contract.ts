@@ -126,8 +126,20 @@ export function planCovers(have: AccountPlanId, want: AccountPlanId): boolean {
 	return PLAN_RANK[have] >= PLAN_RANK[want];
 }
 
-/** Provider id the hosted plan registers under (the librarian's `autorag` provider). */
-export const AUTORAG_PROVIDER_ID = "autorag";
+/** Provider id the hosted plan registers under (the librarian's `dazzi` provider). */
+export const AUTORAG_PROVIDER_ID = "dazzi";
+
+/**
+ * Provider id the hosted plan used before the librarian's 2.10.2 rename.
+ * Configs this app (or an older librarian) wrote still carry it, so adoption
+ * and routing accept both spellings until every config has been rewritten.
+ */
+export const LEGACY_AUTORAG_PROVIDER_ID = "autorag";
+
+/** Whether a provider id names the hosted plan, under either spelling. */
+export function isManagedProviderId(providerId: unknown): boolean {
+	return providerId === AUTORAG_PROVIDER_ID || providerId === LEGACY_AUTORAG_PROVIDER_ID;
+}
 
 /**
  * Stable partition that lists the AutoRAG plan before every other provider
@@ -137,24 +149,25 @@ export const AUTORAG_PROVIDER_ID = "autorag";
 export function autoragFirst<T extends { readonly id: string }>(items: readonly T[]): T[];
 export function autoragFirst<T>(items: readonly T[], keyOf: (item: T) => string): T[];
 export function autoragFirst<T>(items: readonly T[], keyOf?: (item: T) => string): T[] {
-	const isAutorag = (item: T): boolean => (keyOf === undefined ? hasProviderId(item) : keyOf(item) === AUTORAG_PROVIDER_ID);
+	const isAutorag = (item: T): boolean => (keyOf === undefined ? hasProviderId(item) : isManagedProviderId(keyOf(item)));
 	return [...items.filter(isAutorag), ...items.filter((item) => !isAutorag(item))];
 }
 
 function hasProviderId(item: unknown): boolean {
-	return typeof item === "object" && item !== null && "id" in item && item.id === AUTORAG_PROVIDER_ID;
+	return typeof item === "object" && item !== null && "id" in item && isManagedProviderId(item.id);
 }
 
 /**
  * Whether signing in may point the agent at the account's models: only when
- * the shared config names no model yet, or already names an AutoRAG one. A
- * model the user picked from another provider is never overridden, and a
- * malformed `model` value counts as theirs.
+ * the shared config names no model yet, or already names an AutoRAG one (either
+ * provider spelling; a legacy one is rewritten on adoption). A model the user
+ * picked from another provider is never overridden, and a malformed `model`
+ * value counts as theirs.
  */
 export function shouldAdoptManagedModel(config: { readonly model?: unknown }): boolean {
 	const model = config.model;
 	if (model === undefined) return true;
-	return typeof model === "object" && model !== null && "provider" in model && model.provider === AUTORAG_PROVIDER_ID;
+	return typeof model === "object" && model !== null && "provider" in model && isManagedProviderId(model.provider);
 }
 
 /**
@@ -164,7 +177,7 @@ export function shouldAdoptManagedModel(config: { readonly model?: unknown }): b
  * token in plaintext and skip all of that. Every other provider uses Pi.
  */
 export function providerConnectRoute(providerId: string): "account" | "provider" {
-	return providerId === AUTORAG_PROVIDER_ID ? "account" : "provider";
+	return isManagedProviderId(providerId) ? "account" : "provider";
 }
 
 /** The providers the generic Pi connect menu may offer: everything except the AutoRAG plan. */

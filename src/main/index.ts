@@ -30,6 +30,7 @@ import { attachQuickLook, PREVIEW_PRIVILEGED_SCHEME, registerPreviewProtocol, re
 import { createDefaultParserRegistry, DEFAULT_MAX_SOURCE_BYTES, writeDefaultConfig } from "@autorag/librarian";
 import { readRawConfigObject, resolveConfigPath, writeConfigObject } from "@autorag/librarian/core";
 import { DEFAULT_CODE_FOLDER_NAMES, isJsonObject, SETTINGS_CHANNELS } from "../shared/settings-contract";
+import { migrateLegacyProviderIds } from "./config-legacy-ids";
 import { LOCAL_REFRESH_METHODS } from "./index-refresh";
 import { INDEX_ACTIVITY_CHANNELS } from "../shared/index-activity-contract";
 import { createIndexActivityService } from "./index-activity";
@@ -117,6 +118,14 @@ function ensureAppIndexingMetadata(configPath: string): void {
 async function ensureAutoRAGConfig(): Promise<void> {
 	const configPath = autoragConfigPath();
 	if (await access(configPath).then(() => true, () => false)) {
+		// Before anything resolves the config: the librarian's 2.10.2 rename
+		// turned `jev.backend: "autorag"` into a validation error, so a config
+		// this app wrote earlier must be rewritten first.
+		try {
+			migrateLegacyProviderIds(configPath);
+		} catch (error) {
+			console.error("AutoRAG config legacy provider migration failed", error);
+		}
 		ensureAppIndexingMetadata(configPath);
 		return;
 	}

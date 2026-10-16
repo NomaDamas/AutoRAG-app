@@ -7,6 +7,7 @@ const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const upstream = join(root, ".upstream", "autorag");
 const installed = join(root, "node_modules", "@autorag", "librarian");
 const remote = "https://github.com/Marker-Inc-Korea/AutoRAG.git";
+const librarianRef = "v2.10.3";
 
 function run(command, args, cwd = root) {
 	const result = spawnSync(command, args, { cwd, stdio: "inherit" });
@@ -24,11 +25,12 @@ const hadInstalled = existsSync(installed);
 const hasClone = existsSync(join(upstream, ".git"));
 const previous = hasClone ? headRevision() : "";
 if (!hasClone) {
-	run("git", ["clone", "--depth", "1", "--branch", "main", remote, upstream]);
+	run("git", ["clone", "--depth", "1", "--branch", librarianRef, remote, upstream]);
 } else {
-	run("git", ["fetch", "origin", "main"], upstream);
-	run("git", ["merge", "--ff-only", "FETCH_HEAD"], upstream);
+	run("git", ["fetch", "--depth", "1", "origin", "tag", librarianRef], upstream);
+	run("git", ["checkout", "--detach", librarianRef], upstream);
 }
+
 const revision = headRevision();
 
 if (previous !== revision || !existsSync(join(upstream, "dist", "index.js")) ||
@@ -55,4 +57,4 @@ if (hadInstalled && installedIsStale()) {
 	run("bun", ["install", "--ignore-scripts"]);
 }
 
-console.log(`[sync-librarian] origin/main ${revision}`);
+console.log(`[sync-librarian] ${librarianRef} ${revision}`);

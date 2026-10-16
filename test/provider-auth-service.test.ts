@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createProviderAuthService, rankConnectionProbeModels, type ProviderAuthService } from "../src/main/provider-auth-service";
+import { storeDazziPlanCredential } from "../src/main/dazzi-plan-credential";
 import type { ProviderCredentialService } from "../src/main/provider-credentials";
 import type { ProviderCredentialStatus } from "../src/shared/settings-contract";
 
@@ -121,7 +122,7 @@ describe("AutoRAG plan provider", () => {
 
 		const providers = await service.list();
 
-		expect(providers[0]?.id).toBe("autorag");
+		expect(providers[0]?.id).toBe("dazzi");
 		expect(providers[0]?.authConfigured).toBe(false);
 		expect(providers[0]?.models).toEqual([]);
 		expect(calls).toBe(0);
@@ -129,12 +130,15 @@ describe("AutoRAG plan provider", () => {
 
 	it("lists the plan's models, first, once the catalog is synced with the account key", async () => {
 		process.env.AUTORAG_API_KEY = "dz_test";
-		const { service } = await build({ AUTORAG_BASE_URL: "http://plan.test", AUTORAG_API_KEY: "dz_test" }, planCatalog);
+		const { service, agentDir } = await build({ AUTORAG_BASE_URL: "http://plan.test", AUTORAG_API_KEY: "dz_test" }, planCatalog);
+		// The account sign-in bridges its token into `auth.json`; the librarian
+		// refresh reads the plan credential only from there (2.10.2, OAuth-only).
+		await storeDazziPlanCredential(agentDir, "dz_test");
 
 		await service.syncAutoragCatalog();
 		const providers = await service.list();
 
-		expect(providers[0]).toMatchObject({ id: "autorag", authConfigured: true });
+		expect(providers[0]).toMatchObject({ id: "dazzi", authConfigured: true });
 		expect(providers[0]?.models.map((model) => model.id)).toEqual(["vendor/main", "vendor/cheap"]);
 		expect(providers[0]?.models[0]?.baseUrl).toBe("http://plan.test/v1");
 	});
@@ -143,6 +147,7 @@ describe("AutoRAG plan provider", () => {
 		process.env.AUTORAG_API_KEY = "dz_test";
 		const env = { AUTORAG_BASE_URL: "http://plan.test", AUTORAG_API_KEY: "dz_test" };
 		const first = await build(env, planCatalog);
+		await storeDazziPlanCredential(first.agentDir, "dz_test");
 		await first.service.syncAutoragCatalog();
 
 		const offline = await build(env, (async () => {

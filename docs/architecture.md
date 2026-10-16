@@ -43,8 +43,19 @@ second datasource or model configuration. The sidebar is searchable and grouped:
   flow that propagates the embedder to every datasource CLI that can adopt it
   (mailcrawl env, qmd `QMD_EMBED_MODEL`, discrawl managed config), reports the
   ones that cannot (lazykatok, GitHub Gist, Lark, ClawGallery), refuses to write
-  while an enabled source is incompatible unless acknowledged, and runs the real
-  per-source rebuilds.
+  while an enabled source is incompatible unless acknowledged, and runs the
+  real per-source rebuilds. The plan itself is the librarian's
+  `dazzi` provider (renamed from `autorag` in librarian 2.10.2), which is
+  OAuth-only: its chat, catalog, Jev, and rerank traffic reads one credential —
+  the `/login` token in Pi's `auth.json` — and rejects any `apiKeyEnv` leaf.
+  The app's account sign-in exchanges the same OAuth code for the same
+  long-lived key, so signing in stores that key in the encrypted credential
+  store (for the account API) and mirrors it into `auth.json` as the plan's
+  credential (`dazzi-plan-credential.ts`); sign-out and a server-revoked key
+  remove both. A startup migration (`config-legacy-ids.ts`) rewrites the
+  pre-2.10.2 `autorag` spellings and strips the now-invalid `apiKeyEnv` leaves
+  from an existing config, which the librarian would otherwise refuse to
+  resolve at all.
 - **AI → 웹 검색** — `webSearch` on/off, provider, and page fetch.
 - **검색** — 인덱싱 (per-source status, refresh cadence, sync now, index
   refresh), 검색 범위 (search paths, exclusions, watch), 문서 읽기
@@ -55,7 +66,8 @@ second datasource or model configuration. The sidebar is searchable and grouped:
   `excludePaths`. OCR (`parserOptions.ocr.enabled`, which makes the librarian parse image files) and Jikji's media index are pinned off in every
   config the app hands to the librarian.
 - **Embedding batch size** — the embedding gateway aborts a request after 30 s.
-  When a refresh's MinSync step fails with that timeout, the app halves
+  When a refresh's MinSync step fails with that timeout (or skips a file on a
+  partial sync because its batch timed out), the app halves
   `minSync.embedder.batchSize` (64 → 32 → 16 → … → 1), re-runs only the MinSync step, and
   stores the size that worked in `embedding-batch.json` beside the config (`local`,
   or `remote` for a non-loopback `baseUrl`; the two are learned separately; a
@@ -111,9 +123,15 @@ second datasource or model configuration. The sidebar is searchable and grouped:
   - *The Finder's exclusion toggle refreshes through the same path*
     (`index-status.ts` calls `refreshAutoragIndex`), so it has the folder check,
     the embedder watchdog, and the learned batch size.
+  - *A file MinSync cannot read, chunk, or embed is skipped, not fatal*
+    (MinSync 0.4.8 / librarian 2.10.3, `minsync-file-skipped`). MinSync exits 6
+    with `partial: true` and `files_failed`, keeps the file's older chunks, and
+    retries it on the next sync; if the skip came from an embedding gateway
+    timeout, `index-refresh` halves `batchSize` and re-runs `syncMinSync` in the
+    same refresh.
   - Not covered: cancelling a refresh from the UI (the librarian has no abort
-    signal, AutoRAG#1892), which file a MinSync failure belongs to (MinSync#78),
-    and an unreadable subfolder inside a readable root (AutoRAG#1889).
+    signal, AutoRAG#1892), and an unreadable subfolder inside a readable root
+    (AutoRAG#1889).
 - **Automatic refresh** — a cadence is `직접` (manual, the default) or 5 min to a
   day, for the local folders (`appIndexing.refreshIntervalMs`) and for each
   datasource (`pollingIntervalMs`). Choosing one registers an OS job that runs

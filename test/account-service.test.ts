@@ -199,6 +199,9 @@ function build(openExternal = makeBrowser(), overrides: { signInTimeoutMs?: numb
 		credentials: creds.service as never,
 		cachePath: join(root, "account.json"),
 		configPath: join(root, "config.json"),
+		// The plan credential bridges into Pi's `auth.json` here; a temp dir
+		// keeps the developer's real agent home out of the test.
+		agentDir: root,
 		openExternal,
 		send: (channel, payload) => {
 			if (channel === ACCOUNT_CHANNELS.changed) events.push(payload as AccountStatus);
@@ -237,6 +240,10 @@ describe("sign in", () => {
 			billing: { air: true, pro: true, portal: false },
 		});
 		expect(creds.store.get(ACCOUNT_API_KEY_ENV)).toBe("dz_fakekey");
+		// The same token is bridged into Pi's `auth.json` as the plan credential
+		// the librarian (2.10.2) reads for chat, catalog, Jev, and rerank.
+		const stored = JSON.parse(await readFile(join(root, "auth.json"), "utf8")) as Record<string, { type: string; access: string }>;
+		expect(stored.dazzi).toMatchObject({ type: "oauth", access: "dz_fakekey" });
 		const authorize = new URL(opened[0] ?? "");
 		expect(authorize.origin).toBe(fake.url);
 		expect(authorize.searchParams.get("client")).toBe("app");
@@ -333,6 +340,8 @@ describe("status and refresh", () => {
 		const refreshed = await service.refresh();
 		expect(refreshed).toMatchObject({ state: "signedIn", source: "env" });
 		expect(refreshed.account?.email).toBe("user@example.com");
+		const stored = JSON.parse(await readFile(join(root, "auth.json"), "utf8")) as Record<string, { type: string; access: string }>;
+		expect(stored.dazzi).toMatchObject({ type: "oauth", access: "dz_fakekey" });
 
 		expect((await service.signOut()).state).toBe("signedIn");
 	});
@@ -398,6 +407,8 @@ describe("sign out", () => {
 
 		expect(status).toMatchObject({ state: "signedOut", account: null });
 		expect(creds.store.size).toBe(0);
+		const auth = JSON.parse(await readFile(join(root, "auth.json"), "utf8")) as Record<string, unknown>;
+		expect("dazzi" in auth).toBe(false);
 		expect((await build().status()).account).toBeNull();
 	});
 });
@@ -444,13 +455,13 @@ describe("review follow-ups for the default model", () => {
 	});
 
 	it("keeps an AutoRAG reranker the user switched off or tuned across a new sign-in", async () => {
-		await writeFile(join(root, "config.json"), JSON.stringify({ rerank: { provider: "autorag", enabled: false }, jev: { backend: "autorag", confidenceThreshold: 0.8 } }), "utf8");
+		await writeFile(join(root, "config.json"), JSON.stringify({ rerank: { provider: "dazzi", enabled: false }, jev: { backend: "dazzi", confidenceThreshold: 0.8 } }), "utf8");
 
 		await service.signIn();
 
 		const config = await readConfig();
-		expect(config.rerank).toEqual({ provider: "autorag", enabled: false });
-		expect(config.jev).toEqual({ backend: "autorag", confidenceThreshold: 0.8 });
+		expect(config.rerank).toEqual({ provider: "dazzi", enabled: false });
+		expect(config.jev).toEqual({ backend: "dazzi", confidenceThreshold: 0.8 });
 	});
 
 	it("keeps a deliberately chosen OpenRouter decomposition model, but replaces the librarian's untouched one", async () => {
@@ -461,16 +472,16 @@ describe("review follow-ups for the default model", () => {
 		await service.signOut();
 		await writeFile(join(root, "config.json"), JSON.stringify({ queryDecomposition: { model: { provider: "openrouter", id: "qwen/qwen3.7-flash" } } }), "utf8");
 		await service.signIn();
-		expect(decompositionProvider(await readConfig())).toBe("autorag");
+		expect(decompositionProvider(await readConfig())).toBe("dazzi");
 	});
 
 	it("lets the explicit button still replace any decomposition model", async () => {
 		await service.signIn();
-		await writeFile(join(root, "config.json"), JSON.stringify({ model: { provider: "autorag", id: "x" }, queryDecomposition: { model: { provider: "openrouter", id: "anthropic/claude-haiku-5.5" } } }), "utf8");
+		await writeFile(join(root, "config.json"), JSON.stringify({ model: { provider: "dazzi", id: "x" }, queryDecomposition: { model: { provider: "openrouter", id: "anthropic/claude-haiku-5.5" } } }), "utf8");
 
 		await service.useManagedModel();
 
-		expect(decompositionProvider(await readConfig())).toBe("autorag");
+		expect(decompositionProvider(await readConfig())).toBe("dazzi");
 	});
 });
 
@@ -521,8 +532,8 @@ describe("Jev and rerank after sign-in", () => {
 		await service.signIn();
 
 		const config = await readConfig();
-		expect(config.jev).toEqual({ backend: "autorag", model: "jev-1.13" });
-		expect(config.rerank).toEqual({ enabled: true, provider: "autorag", model: "vendor/rerank-a" });
+		expect(config.jev).toEqual({ backend: "dazzi", model: "jev-1.13" });
+		expect(config.rerank).toEqual({ enabled: true, provider: "dazzi", model: "vendor/rerank-a" });
 	});
 
 	it("replaces the librarian's untouched OpenRouter defaults, which an account holder has no key for", async () => {
@@ -535,8 +546,8 @@ describe("Jev and rerank after sign-in", () => {
 		await service.signIn();
 
 		const config = await readConfig();
-		expect(config.jev).toMatchObject({ backend: "autorag" });
-		expect(config.rerank).toMatchObject({ provider: "autorag" });
+		expect(config.jev).toMatchObject({ backend: "dazzi" });
+		expect(config.rerank).toMatchObject({ provider: "dazzi" });
 	});
 
 	it("keeps a role the user turned off or pointed at another provider", async () => {
@@ -556,7 +567,7 @@ describe("Jev and rerank after sign-in", () => {
 		await service.signIn();
 
 		const config = await readConfig();
-		expect(config.model).toMatchObject({ provider: "autorag" });
+		expect(config.model).toMatchObject({ provider: "dazzi" });
 		expect(config.jev).toBeUndefined();
 		expect(config.rerank).toBeUndefined();
 	});
@@ -572,13 +583,15 @@ describe("default model after sign-in", () => {
 
 		const config = await readConfig();
 		expect(config.searchPaths).toEqual(["/docs"]);
-		expect(config.model).toMatchObject({ provider: "autorag", id: "vendor/pricey", baseUrl: `${fake.url}/v1`, apiKeyEnv: ACCOUNT_API_KEY_ENV });
+		expect(config.model).toMatchObject({ provider: "dazzi", id: "vendor/pricey", baseUrl: `${fake.url}/v1` });
+		// The plan's credential is the bridged `auth.json` entry, never an env leaf.
+		expect("apiKeyEnv" in (config.model as Record<string, unknown>)).toBe(false);
 	});
 
 	it("creates the config when none exists", async () => {
 		await service.signIn();
 
-		expect((await readConfig()).model).toMatchObject({ provider: "autorag" });
+		expect((await readConfig()).model).toMatchObject({ provider: "dazzi" });
 	});
 
 	it("leaves a model the user picked from another provider alone", async () => {
@@ -590,11 +603,19 @@ describe("default model after sign-in", () => {
 	});
 
 	it("re-adopts when the configured model is already an AutoRAG one (a later login refreshes it)", async () => {
+		await writeFile(join(root, "config.json"), JSON.stringify({ model: { provider: "dazzi", id: "retired/model" } }), "utf8");
+
+		await service.signIn();
+
+		expect((await readConfig()).model).toMatchObject({ provider: "dazzi", id: "vendor/pricey" });
+	});
+
+	it("re-adopts and rewrites the plan's pre-2.10.2 provider spelling", async () => {
 		await writeFile(join(root, "config.json"), JSON.stringify({ model: { provider: "autorag", id: "retired/model" } }), "utf8");
 
 		await service.signIn();
 
-		expect((await readConfig()).model).toMatchObject({ provider: "autorag", id: "vendor/pricey" });
+		expect((await readConfig()).model).toMatchObject({ provider: "dazzi", id: "vendor/pricey" });
 	});
 
 	it("does not touch the config on a plain refresh or when the catalog cannot be read", async () => {
@@ -700,12 +721,11 @@ describe("managed model", () => {
 		const config = JSON.parse(await readFile(join(root, "config.json"), "utf8")) as Record<string, unknown>;
 		expect(config.searchPaths).toEqual(["/docs"]);
 		expect(config.model).toEqual({
-			provider: "autorag",
+			provider: "dazzi",
 			id: result.modelId,
 			name: result.modelName,
 			baseUrl: `${fake.url}/v1`,
 			api: "openai-responses",
-			apiKeyEnv: ACCOUNT_API_KEY_ENV,
 			reasoning: expect.any(Boolean),
 			input: expect.any(Array),
 			contextWindow: expect.any(Number),
@@ -720,7 +740,7 @@ describe("managed model", () => {
 		await service.useManagedModel();
 
 		const config = JSON.parse(await readFile(join(root, "config.json"), "utf8")) as { queryDecomposition: { model: Record<string, unknown> } };
-		expect(config.queryDecomposition.model).toMatchObject({ provider: "autorag", id: "vendor/cheap", baseUrl: `${fake.url}/v1`, apiKeyEnv: ACCOUNT_API_KEY_ENV });
+		expect(config.queryDecomposition.model).toMatchObject({ provider: "dazzi", id: "vendor/cheap", baseUrl: `${fake.url}/v1` });
 	});
 
 	it("needs a signed-in account", async () => {
