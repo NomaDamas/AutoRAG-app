@@ -161,9 +161,9 @@ const brandVars=(n)=>`--brand:${BRAND[n].color}${BRAND[n].lift?`;--lift:${BRAND[
 const brandMark=(n,size=16)=>`<svg class="brand-mark" width="${size}" height="${size}" viewBox="0 0 24 24" aria-hidden="true">${BRAND[n].mark}</svg>`;
 const sourceTile=(s)=>s.brand?`<span class="source-icon brand" style="${brandVars(s.brand)}">${brandMark(s.brand,17)}</span>`:`<span class="source-icon ${s.color}">${icon(s.icon,16)}</span>`;
 const brandChip=(n,label)=>`<span class="brand-chip" style="${brandVars(n)}">${brandMark(n,12)}${label}</span>`;
-const steps=[['welcome','소개'],['permissions','권한'],['account','계정'],['folders','폴더'],['embedding','임베딩'],['sources','데이터 소스'],['plan','플랜'],['model','AI 모델'],['indexing','인덱싱']];
+const steps=[['welcome','소개'],['permissions','권한'],['account','계정'],['folders','스마트 인덱싱'],['embedding','임베딩'],['sources','데이터 소스'],['plan','플랜'],['model','AI 모델'],['indexing','인덱싱']];
 const stepLabel=(id)=>steps.find(s=>s[0]===id)[1];
-const STEP_LABELS={welcome:'시작하기',permissions:'계속',account:'계속',folders:'폴더로 계속',embedding:'계속',sources:'계속',model:'계속'};
+const STEP_LABELS={welcome:'시작하기',permissions:'계속',account:'계속',folders:'범위 확정하고 계속',embedding:'계속',sources:'계속',model:'계속'};
 /* 클라우드 임베딩을 고르면 플랜이 임베딩 바로 뒤로 온다. 로컬이면 데이터 소스 뒤에 온다.
    이미 플랜을 확정했거나 관리형 플랜이면 해당 단계는 목록에서 빠진다(모델 화면은 BYOK 전용). */
 const flow=()=>{
