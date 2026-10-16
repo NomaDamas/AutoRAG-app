@@ -333,7 +333,11 @@ describe("createOnboardingService persistence", () => {
 					env[name] = secret;
 					return [];
 				},
-				remove: async () => [],
+				remove: async (name) => {
+					stored.delete(name);
+					delete env[name];
+					return [];
+				},
 				load: async () => [],
 			},
 		});
@@ -345,8 +349,6 @@ describe("createOnboardingService persistence", () => {
 			plan: "pro",
 			model: null,
 		});
-		service.dispose();
-
 		const written = JSON.parse(await readFile(join(directory, "config.json"), "utf8")) as {
 			minSync?: { embedder?: Record<string, unknown> };
 		};
@@ -358,6 +360,42 @@ describe("createOnboardingService persistence", () => {
 		});
 		expect(env.OPENAI_API_KEY).toBe("dz_cloud_token");
 		expect(stored.get("OPENAI_API_KEY")).toBe("dz_cloud_token");
+		service.dispose();
+
+		// Re-running with embed=local replaces the Dazzi cloud embedder with the local profile.
+		const service2 = createOnboardingService({
+			...makeDeps(directory, env),
+			credentials: {
+				list: async () => [],
+				set: async (name, secret) => {
+					stored.set(name, secret);
+					env[name] = secret;
+					return [];
+				},
+				remove: async (name) => {
+					stored.delete(name);
+					delete env[name];
+					return [];
+				},
+				load: async () => [],
+			},
+		});
+		await service2.startIndexing({
+			folders: ["/Users/me/Documents"],
+			embed: "local",
+			sources: [],
+			plan: "pro",
+			model: null,
+		});
+		service2.dispose();
+		const rewritten = JSON.parse(await readFile(join(directory, "config.json"), "utf8")) as {
+			minSync?: { embedder?: Record<string, unknown> };
+		};
+		expect(rewritten.minSync?.embedder).toEqual({
+			profile: "qwen3-embedding-0.6b",
+			dimension: 1024,
+		});
+		expect(stored.has("OPENAI_API_KEY")).toBe(false);
 	});
 });
 

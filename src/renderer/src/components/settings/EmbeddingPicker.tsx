@@ -62,6 +62,8 @@ export function EmbeddingPicker(): ReactElement {
 	const current = state?.current.profileId ?? null;
 	const profiles = state?.profiles ?? [];
 	const currentProfile = profiles.find((profile) => profile.id === current) ?? null;
+	const rawEmbedderId = typeof state?.current.embedder.id === "string" && state.current.embedder.id.length > 0 ? state.current.embedder.id : null;
+	const currentLabel = currentProfile?.label ?? rawEmbedderId;
 
 	function openModal(): void {
 		setOpen(true);
@@ -116,7 +118,7 @@ export function EmbeddingPicker(): ReactElement {
 		<>
 			<Row name={t("settingsCore.embedding.title")} hint={t("settingsCore.embedding.hint")}>
 				<button type="button" className="settings-trigger" onClick={openModal} aria-haspopup="dialog">
-					<span className={`settings-trigger-label${currentProfile === null ? " is-muted" : ""}`}>{currentProfile?.label ?? t("settingsCore.common.notSet")}</span>
+					<span className={`settings-trigger-label${currentLabel === null ? " is-muted" : ""}`}>{currentLabel ?? t("settingsCore.common.notSet")}</span>
 					<ChevronDown size={14} aria-hidden="true" focusable="false" />
 				</button>
 			</Row>

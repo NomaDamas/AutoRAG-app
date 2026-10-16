@@ -87,6 +87,38 @@ function seedDraft(candidates: readonly FolderCandidate[], permissions: Permissi
 	};
 }
 
+function reconcileAccountDraft(current: OnboardingDraft, status: AccountStatus | null): OnboardingDraft {
+	if (status === null) return current;
+	if (status.state !== "signedIn") {
+		if (current.embed !== "cloud" && !current.cloudConsent) return current;
+		return { ...current, embed: "local", cloudConsent: false };
+	}
+	const embed: EmbedMode = current.embed === "cloud" ? "cloud" : "local";
+	const subPlan = status.account?.plan;
+	if (subPlan === "air" || subPlan === "pro") {
+		const nextPlan: PlanId = embed === "cloud" ? "pro" : subPlan;
+		if (embed === "cloud" && subPlan !== "pro") {
+			const nextStepId: OnboardingStepId =
+				current.stepId === "sources" || current.stepId === "indexing" ? "plan" : current.stepId;
+			if (current.plan === nextPlan && current.stepId === nextStepId && !current.planConfirmed) return current;
+			return { ...current, plan: nextPlan, stepId: nextStepId, planConfirmed: false };
+		}
+		const skipPlan = shouldSkipPlanStep(current.planConfirmed, embed, status);
+		const nextStepId: OnboardingStepId =
+			current.stepId === "plan" && skipPlan ? (embed === "cloud" ? "sources" : "indexing") : current.stepId;
+		const nextConfirmed = current.planConfirmed || (current.stepId === "plan" && skipPlan);
+		if (current.plan === nextPlan && current.stepId === nextStepId && current.planConfirmed === nextConfirmed) return current;
+		return { ...current, plan: nextPlan, stepId: nextStepId, planConfirmed: nextConfirmed };
+	}
+	if (subPlan === "free" && embed === "cloud") {
+		const nextStepId: OnboardingStepId =
+			current.stepId === "sources" || current.stepId === "indexing" ? "plan" : current.stepId;
+		if (current.plan === "pro" && current.stepId === nextStepId && !current.planConfirmed) return current;
+		return { ...current, plan: "pro", stepId: nextStepId, planConfirmed: false };
+	}
+	return current;
+}
+
 export function Onboarding({ onComplete }: { readonly onComplete: () => void }): ReactElement {
 	const { t: translateFn } = useTranslation();
 	// The onboarding copy lives under a fixed `onboarding` namespace tree; a loose
@@ -181,7 +213,7 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 					}),
 				);
 			setCandidates([...folders, ...added]);
-			setDraft(draft);
+			setDraft(reconcileAccountDraft(draft, accountRef.current));
 		})();
 		return () => {
 			alive = false;
@@ -481,26 +513,9 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 	// The account lives in the main process; this window only mirrors its status.
 	useEffect(() => {
 		const applyAccount = (status: AccountStatus): void => {
+			accountRef.current = status;
 			setAccount(status);
-			const subPlan = status.state === "signedIn" ? status.account?.plan : undefined;
-			if (subPlan === "air" || subPlan === "pro") {
-				setDraft((current) => {
-					if (current === null) return current;
-					const embed: EmbedMode = status.state === "signedIn" && current.embed === "cloud" ? "cloud" : "local";
-					const nextPlan: PlanId = embed === "cloud" ? "pro" : subPlan;
-					const skipPlan = shouldSkipPlanStep(current.planConfirmed, embed, status);
-					const nextStepId: OnboardingStepId =
-						current.stepId === "plan" && skipPlan ? (embed === "cloud" ? "sources" : "indexing") : current.stepId;
-					const nextConfirmed = current.planConfirmed || (current.stepId === "plan" && skipPlan);
-					if (current.plan === nextPlan && current.stepId === nextStepId && current.planConfirmed === nextConfirmed) return current;
-					return { ...current, plan: nextPlan, stepId: nextStepId, planConfirmed: nextConfirmed };
-				});
-			} else if (status.state !== "signedIn") {
-				setDraft((current) => {
-					if (current === null || (current.embed !== "cloud" && !current.cloudConsent)) return current;
-					return { ...current, embed: "local", cloudConsent: false };
-				});
-			}
+			setDraft((current) => (current === null ? current : reconcileAccountDraft(current, status)));
 		};
 		const off = autorag.account.onChanged(applyAccount);
 		void autorag.account.status().then(applyAccount);
@@ -642,11 +657,19 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 			}
 			setDraft((current) => {
 				if (current === null) return current;
+				const subPlan = accountRef.current?.state === "signedIn" ? accountRef.current.account?.plan : undefined;
+				const nextPlan: PlanId =
+					embed === "cloud"
+						? "pro"
+						: subPlan === "air" || subPlan === "pro"
+							? subPlan
+							: current.plan;
 				return {
 					...current,
 					embed,
 					cloudConsent: false,
-					...(embed === "cloud" ? { plan: "pro" } : {}),
+					plan: nextPlan,
+					planConfirmed: false,
 				};
 			});
 		},

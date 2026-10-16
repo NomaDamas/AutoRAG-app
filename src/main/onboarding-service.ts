@@ -606,7 +606,9 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 			}));
 			const raw = existsSync(deps.configPath) ? readRawConfigObject(deps.configPath) : {};
 			const minSync = isJsonObject(raw.minSync) ? raw.minSync : {};
-			const configured = isJsonObject(minSync.embedder) && Object.keys(minSync.embedder).length > 0;
+			const existingEmbedder = isJsonObject(minSync.embedder) ? minSync.embedder : {};
+			const isDazziCloudEmbedder = existingEmbedder.id === DAZZI_CLOUD_EMBEDDER_ID;
+			const configured = Object.keys(existingEmbedder).length > 0 && !isDazziCloudEmbedder;
 			const embedMode: EmbedMode = request.embed === "cloud" ? "cloud" : "local";
 			const configuredBaseUrl = deps.env.AUTORAG_BASE_URL?.trim();
 			const accountBaseUrl = (configuredBaseUrl !== undefined && configuredBaseUrl.length > 0 ? configuredBaseUrl : DEFAULT_ACCOUNT_BASE_URL).replace(/\/+$/u, "");
@@ -659,6 +661,8 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 			}
 			if (embedMode === "cloud") {
 				await maybeStoreCloudEmbedderKey();
+			} else if (isDazziCloudEmbedder && deps.env[DAZZI_CLOUD_EMBEDDER_KEY_ENV] === deps.env[ACCOUNT_API_KEY_ENV]) {
+				await deps.credentials.remove(DAZZI_CLOUD_EMBEDDER_KEY_ENV).catch(() => undefined);
 			}
 			await maybeStoreGitToken(request.sources.map((source) => source.id));
 			const methods = ["parsed", "minsync"];
@@ -718,11 +722,11 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 	async function maybeStoreCloudEmbedderKey(): Promise<void> {
 		const token = deps.env[ACCOUNT_API_KEY_ENV];
 		if (typeof token !== "string" || token.length === 0) return;
+		deps.env[DAZZI_CLOUD_EMBEDDER_KEY_ENV] = token;
 		try {
 			await deps.credentials.set(DAZZI_CLOUD_EMBEDDER_KEY_ENV, token);
 		} catch (error) {
 			console.warn("[onboarding] could not store the Dazzi cloud embedder credential:", error);
-			deps.env[DAZZI_CLOUD_EMBEDDER_KEY_ENV] = token;
 		}
 	}
 

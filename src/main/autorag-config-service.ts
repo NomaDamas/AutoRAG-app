@@ -490,7 +490,11 @@ const LOOPBACK_HOSTS: Record<string, true> = { localhost: true, "127.0.0.1": tru
 const DAZZI_HOSTS: Record<string, true> = { "api.dazziapp.com": true };
 
 /** Reject corpus embedding endpoints that are malformed, non-http, or off-device. */
-function assertLoopback(value: string, label: string, options: { readonly allowDazzi?: boolean } = {}): void {
+function assertLoopback(
+	value: string,
+	label: string,
+	options: { readonly allowDazzi?: boolean; readonly allowedHost?: string | undefined } = {},
+): void {
 	let url: URL;
 	try {
 		url = new URL(value);
@@ -502,7 +506,7 @@ function assertLoopback(value: string, label: string, options: { readonly allowD
 	}
 	const host = url.hostname.toLowerCase();
 	if (LOOPBACK_HOSTS[host] === true) return;
-	if (options.allowDazzi === true && DAZZI_HOSTS[host] === true) return;
+	if (options.allowDazzi === true && (DAZZI_HOSTS[host] === true || (options.allowedHost !== undefined && host === options.allowedHost))) return;
 	throw new Error(`AutoRAG config ${label} must point at loopback (corpus never leaves this device)`);
 }
 
@@ -511,21 +515,19 @@ function assertNoRemoteEgress(candidate: Record<string, unknown>, env?: NodeJS.P
 	const minSync = isJsonObject(candidate.minSync) ? candidate.minSync : undefined;
 	const embedder = minSync !== undefined && isJsonObject(minSync.embedder) ? minSync.embedder : undefined;
 	if (embedder !== undefined && typeof embedder.baseUrl === "string") {
-		let allowDazzi = true;
+		let allowedHost: string | undefined;
 		const configuredBase = env?.AUTORAG_BASE_URL?.trim();
-		if (configuredBase !== undefined && configuredBase.length > 0 && embedder.baseUrl.replace(/\/+$/u, "") === configuredBase.replace(/\/+$/u, "")) {
-			allowDazzi = true;
-		}
 		if (configuredBase !== undefined && configuredBase.length > 0) {
 			try {
-				const configuredHost = new URL(configuredBase).hostname.toLowerCase();
-				const targetHost = new URL(embedder.baseUrl).hostname.toLowerCase();
-				if (targetHost === configuredHost) return;
+				const configuredUrl = new URL(configuredBase);
+				if (configuredUrl.protocol === "http:" || configuredUrl.protocol === "https:") {
+					allowedHost = configuredUrl.hostname.toLowerCase();
+				}
 			} catch {
 				// Fall through to assertLoopback validation.
 			}
 		}
-		assertLoopback(embedder.baseUrl, "minSync.embedder.baseUrl", { allowDazzi });
+		assertLoopback(embedder.baseUrl, "minSync.embedder.baseUrl", { allowDazzi: true, allowedHost });
 	}
 	const datasources = isJsonObject(candidate.datasources) ? candidate.datasources : undefined;
 	if (datasources === undefined) return;

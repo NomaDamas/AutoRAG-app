@@ -163,18 +163,39 @@ export function createAccountService(deps: AccountServiceDeps): AccountService {
 	 * credential (librarian 2.10.2 reads the plan only from there). Best-effort:
 	 * a bridging failure warns and never fails the sign-in itself.
 	 */
+	const isDazziCloudEmbedderConfigured = (): boolean => {
+		if (!existsSync(deps.configPath)) return false;
+		try {
+			const raw = readRawConfigObject(deps.configPath);
+			const minSync = isJsonObject(raw.minSync) ? raw.minSync : undefined;
+			const embedder = minSync !== undefined && isJsonObject(minSync.embedder) ? minSync.embedder : undefined;
+			return embedder?.id === "openai:qwen/qwen3-embedding-0.6b" && embedder.apiKeyEnv === "OPENAI_API_KEY";
+		} catch {
+			return false;
+		}
+	};
 	const bridgePlanCredential = async (token: string): Promise<void> => {
 		try {
 			await storeDazziPlanCredential(agentDir, token);
 		} catch (error) {
 			console.warn("[account] could not bridge the plan credential into auth.json:", error);
 		}
+		if (isDazziCloudEmbedderConfigured() && deps.env.OPENAI_API_KEY !== token) {
+			try {
+				await deps.credentials.set("OPENAI_API_KEY", token);
+			} catch {
+				deps.env.OPENAI_API_KEY = token;
+			}
+		}
 	};
-	const forgetPlanCredential = async (): Promise<void> => {
+	const forgetPlanCredential = async (revokedOrSignedOutToken?: string): Promise<void> => {
 		try {
 			await clearDazziPlanCredential(agentDir);
 		} catch (error) {
 			console.warn("[account] could not remove the plan credential from auth.json:", error);
+		}
+		if (revokedOrSignedOutToken !== undefined && deps.env.OPENAI_API_KEY === revokedOrSignedOutToken) {
+			await deps.credentials.remove("OPENAI_API_KEY").catch(() => undefined);
 		}
 	};
 	let cached: AccountSnapshot | null | undefined;
@@ -306,7 +327,7 @@ export function createAccountService(deps: AccountServiceDeps): AccountService {
 				revokedKey = key.key;
 				lastError = errorMessageOf(response);
 				if (key.source === "stored") await deps.credentials.remove(ACCOUNT_API_KEY_ENV);
-				await forgetPlanCredential();
+				await forgetPlanCredential(key.key);
 				await writeCache(null);
 			} else if (response.status >= 200 && response.status < 300) {
 				const account = parseAccount(response.body);
@@ -522,7 +543,7 @@ export function createAccountService(deps: AccountServiceDeps): AccountService {
 			const key = await currentKey();
 			if (key?.source === "stored") {
 				await deps.credentials.remove(ACCOUNT_API_KEY_ENV);
-				await forgetPlanCredential();
+				await forgetPlanCredential(key.key);
 				await writeCache(null);
 				lastError = null;
 				offline = false;
