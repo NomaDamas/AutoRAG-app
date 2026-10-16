@@ -22,6 +22,7 @@
  * Windows x64 machine.
  */
 
+import { createHash } from "node:crypto";
 import { chmodSync, copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, relative } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -316,7 +317,7 @@ async function stageSeed() {
 	const refRel = `${NATIVE_QWEN3_REPO_DIR}/refs/main`;
 	const refContent = Buffer.from(NATIVE_QWEN3_REVISION, "utf8");
 	writeFileSync(join(SEED, refRel), refContent);
-	const refSha256 = "e799482e46d6de745a0c42a3173dc2e16f49cd562e91f597d4298055e1bf0716";
+	const refSha256 = createHash("sha256").update(refContent).digest("hex");
 	const files = [
 		{ path: refRel, destination: refRel, sha256: refSha256, bytes: refContent.length },
 	];
