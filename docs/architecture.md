@@ -247,7 +247,7 @@ resumes at the same step.
 - **Folders** are pre-scanned with the indexer's own rules (supported
   extensions, size cap, skipped dependency/code folders) to show real file
   counts and an ETA.
-- **Embedding** offers local (`qwen3-embedding-0.6b`) by default and enables
+- **Embedding** offers local (`native:Qwen/Qwen3-Embedding-0.6B`) by default and enables
   Dazzi cloud embedding (`openai:qwen/qwen3-embedding-0.6b` on the Dazzi
   endpoint) once the user is signed in to Dazzi and gives explicit consent.
   Choosing cloud embedding places the plan step immediately after embedding and
@@ -317,8 +317,8 @@ does this for every lane except `run-qa-onboarding.mjs`.
 `make onboarding` walks the flow on a disposable profile: every run starts from
 scratch in a temp sandbox holding its own `userData` (via `--user-data-dir`),
 AutoRAG config, home, and workspace, so the real `~/.autorag` and the app's
-support directory are never read or written. The cached embedding model and
-llama runtime are copied in so the first index runs offline. When the app exits
+support directory are never read or written. The cached native MinSync
+embedding model is copied in so the first index runs offline. When the app exits
 the wrapper kills the run's processes and removes the sandbox; a SIGKILL of
 the wrapper is covered by a detached watchdog, and the next `make onboarding`
 sweeps any sandbox whose owner and watchdog both died. The QA lane covers the

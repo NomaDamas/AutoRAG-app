@@ -33,11 +33,7 @@ writeFileSync(join(DOCS, "report-q3.md"), "# Q3 report\n\nOperating cost fell be
 writeFileSync(join(DOCS, "notes.txt"), "Budget summary for the third quarter.\n");
 mkdirSync(AUTORAG_HOME, { recursive: true });
 mkdirSync(join(WORK, "config"), { recursive: true });
-const realHome = process.env.AUTORAG_HOME?.trim() || join(homeDir(), ".autorag");
-for (const dir of ["models", "runtime"]) {
-	if (existsSync(join(realHome, dir))) symlinkSync(join(realHome, dir), join(AUTORAG_HOME, dir), "dir");
-}
-
+const realMinsyncModels = process.env.FASTEMBED_CACHE_DIR?.trim() || join(homeDir(), ".cache", "minsync", "models");
 const failures = [];
 const check = (name, ok, detail = "") => {
 	console.log(`${ok ? "PASS" : "FAIL"} ${name}${detail ? ` — ${detail}` : ""}`);
@@ -54,7 +50,12 @@ const stub = createServer((request, response) => {
 });
 await new Promise((resolve) => stub.listen(0, "127.0.0.1", resolve));
 const stubUrl = `http://127.0.0.1:${stub.address().port}/v1`;
-const env = { AUTORAG_HOME, AUTORAG_CONFIG: CONFIG, AUTORAG_SKIP_DUPEY_CHECK: "1" };
+const env = {
+	AUTORAG_HOME,
+	AUTORAG_CONFIG: CONFIG,
+	AUTORAG_SKIP_DUPEY_CHECK: "1",
+	...(existsSync(realMinsyncModels) ? { FASTEMBED_CACHE_DIR: realMinsyncModels } : {}),
+};
 const userDataDir = join(WORK, "user-data");
 const app = await launchFinder({ userDataDir, env, onboarding: true, language: "ko" });
 const errors = [];

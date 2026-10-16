@@ -181,13 +181,13 @@ async function main() {
 	const userDataDir = join(sandbox, "user-data");
 	mkdirSync(autoragHome, { recursive: true });
 	mkdirSync(userDataDir, { recursive: true });
-	for (const cache of ["models", "runtime"]) {
-		const source = join(realHome, cache);
-		if (!existsSync(source)) continue; // the first index then downloads it into the sandbox
+	const minsyncCache = join(sandbox, "minsync-models");
+	const realMinsyncCache = process.env.FASTEMBED_CACHE_DIR?.trim() || join(homedir(), ".cache", "minsync", "models");
+	if (existsSync(realMinsyncCache)) {
 		try {
-			copyDirInto(source, join(autoragHome, cache));
+			copyDirInto(realMinsyncCache, minsyncCache);
 		} catch (error) {
-			fail(`could not copy the real ${cache} cache into the sandbox: ${error}`);
+			fail(`could not copy the real MinSync model cache into the sandbox: ${error}`);
 		}
 	}
 	const marker = { owner: process.pid, watchdog: null, sandbox };
@@ -200,6 +200,7 @@ async function main() {
 		AUTORAG_HOME: autoragHome,
 		AUTORAG_CONFIG: configPath,
 		AUTORAG_WORKSPACE: join(autoragHome, "workspace"),
+		...(existsSync(minsyncCache) ? { FASTEMBED_CACHE_DIR: minsyncCache } : {}),
 	};
 
 	// Same dev entry point as `make run`: predev hooks sync the librarian and

@@ -50,7 +50,7 @@ Everything the app needs, so a user installs one file and nothing else:
 | `fsearch-cli` | `NomaDamas/fsearch-mac` via its Homebrew tap (macOS only) | fast file-name index. Homebrew links it to `/opt/homebrew/...`, so the stager copies it with its 16 dylibs into `tools/{bin,lib}` and re-points them at `@executable_path/../lib`. Needs `brew install nomadamas/fsearch-mac/fsearch-mac` on the build Mac (the stager runs it if missing; it compiles GTK, so the first run is slow). GPL-2.0-or-later: license and notice ship in `tools/licenses/fsearch-mac` |
 | Everything + ES (Windows only) | the librarian's own `vendor/everything` | the Windows equivalent of fsearch; already inside the app, hash-checked and unpacked on first use |
 | `mailcrawl`, `qmd`, `kordoc` | newest npm release, installed with the bundled Node | native add-ons are fetched for the bundled Node's ABI |
-| Qwen3-Embedding-0.6B (Q8_0) + llama.cpp runtime | the librarian's own pinned manifest | hash-checked at build time |
+| Qwen3-Embedding-0.6B (native safetensors + tokenizer) | `Qwen/Qwen3-Embedding-0.6B` pinned revision `97b0c614be4d` | hash-checked at build and first-launch seed time |
 
 "Newest" is resolved at build time, so each release ships current dependencies.
 `components-<platform>.json` on the release lists exactly what shipped (name,
@@ -68,19 +68,13 @@ does not match its published digest.
 * npm CLIs (`mailcrawl`, `qmd`, `kordoc`) and `autorag` are launched through a tiny
   native launcher (`scripts/release/shim`) that runs the bundled Node. Windows
   cannot spawn a script by name; this makes them real executables on both platforms.
-* On first launch the embedding model and llama.cpp runtime are copied from
-  `resources/seed` into `~/.autorag/{models,runtime}` (`src/main/seed-assets.ts`),
-  never overwriting an existing entry. A fresh install indexes offline; there is
-  no 650 MB download step. If seeding fails the librarian downloads the same
-  pinned files on first use, as before.
-  * The model, and the Windows runtime archive, are verified by SHA-256 while they are copied.
-  * The macOS runtime ships already extracted, as
-    `runtime/<archive>.extracted/` with the librarian's `.autorag-archive-sha256`
-    marker. Notarization requires every Mach-O in the app to carry our Developer ID
-    signature, and binaries left inside the pinned archive cannot be signed (Apple
-    rejected the first signed build for exactly those 41 files). The librarian
-    accepts the marked tree in place of the archive, so the app's code signature,
-    not the archive digest, is what vouches for these binaries.
+* On first launch the native Qwen3 embedding model (`Qwen/Qwen3-Embedding-0.6B`)
+  is copied from `resources/seed` into MinSync's native model cache
+  (`~/.cache/minsync/models` on macOS, `%LOCALAPPDATA%\minsync\models` on
+  Windows; `src/main/seed-assets.ts`), never overwriting an existing entry. Every
+  file (`config.json`, `tokenizer.json`, `model.safetensors`, `refs/main`) is
+  verified by SHA-256 while it is copied. A fresh install indexes offline using
+  MinSync's in-process Metal/CPU embedder without a ~1.2 GB download step.
 * Non-ASCII file names are signed decomposed (NFD). Finder writes names decomposed when
   a user drags the app out of the dmg, and the code seal compares names byte for byte:
   v0.1.1 signed kordoc's four Korean template names composed (NFC), passed `codesign`
@@ -91,21 +85,9 @@ does not match its published digest.
 
 ### Deliberately not bundled
 
+* `llama.cpp` (`llama-server`) and the `Q8_0` GGUF embedding weights: MinSync's native in-process `fastembed` (`candle`) embedder runs directly on `Qwen/Qwen3-Embedding-0.6B` safetensors on both macOS (Metal) and Windows (CPU), so no separate `llama-server` process or GGUF copy is shipped.
 * CUDA builds of `node-llama-cpp` (500 MB, needs an NVIDIA toolkit); CPU and Vulkan are kept.
 * Other platforms' native add-ons. Intel Macs, Windows on ARM and Linux are not shipped.
-
-### Known limitation: embedder on Windows (upstream)
-
-`ensureRuntime` in the librarian (`src/embedding-runtime/index.ts`) defaults its
-platform to `darwin-arm64-metal` and never looks at `process.platform`. Measured
-on the Windows installer's seeded files: `createEmbeddingRuntime({ platform: "win-x64-cpu" })`
-starts llama-server and returns 1024-dimension Qwen3 vectors, but the default call
-that MinSync makes fails with "Embedding runtime assets are unavailable". The
-installer ships the correct Windows runtime and model, so the fix is one line
-upstream (`platform ?? <derived from process.platform>`); until it lands, semantic
-indexing on Windows reports the embedder as unavailable and falls back to BM25.
-macOS is unaffected.
-
 ## Install time
 
 Budget: **5 minutes from running the installer to a usable app, download excluded.** Measured with

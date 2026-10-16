@@ -7,33 +7,55 @@ import { Transform } from "node:stream";
 import { isJsonObject } from "../shared/settings-contract";
 
 /**
- * First-launch seeding of the local embedding model and llama.cpp runtime.
+ * First-launch seeding of the native MinSync Qwen3 embedding model.
  *
- * The installer carries both under `<resources>/seed` (see
- * `scripts/release/stage-tools.mjs`). The librarian looks for them in
- * `<AutoRAG home>/models` and `<AutoRAG home>/runtime`, verified by SHA-256
- * and otherwise downloaded; copying the shipped files into place makes a fresh
- * install work offline and skips a ~650 MB download.
- *
- * The model and the Windows runtime ship as the pinned files themselves. The
- * macOS runtime ships already extracted (a "tree" entry): the notarized app
- * signs every binary in it with the app's Developer ID, so it can no longer
- * match the pinned archive. The tree carries the librarian's
- * `.autorag-archive-sha256` marker, and the librarian accepts it in place of
- * the archive; the app's code signature, not a digest, is what vouches for it.
+ * The installer carries the pinned `Qwen/Qwen3-Embedding-0.6B` checkpoint under
+ * `<resources>/seed` (see `scripts/release/stage-tools.mjs`). MinSync's native
+ * embedder (`fastembed-rs` + `hf-hub`) looks for it in `<cacheRoot>/models--Qwen--Qwen3-Embedding-0.6B/snapshots/<commit>/`;
+ * copying the shipped files into place makes a fresh install work offline and
+ * skips a ~1.2 GB download on first index.
  */
+
+export const NATIVE_QWEN3_REPO_DIR = "models--Qwen--Qwen3-Embedding-0.6B";
+export const NATIVE_QWEN3_REVISION = "97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3";
+export const NATIVE_QWEN3_MODEL_BYTES = 1_203_010_848;
+export const NATIVE_QWEN3_SAFETENSORS_RELATIVE_PATH = join(
+	NATIVE_QWEN3_REPO_DIR,
+	"snapshots",
+	NATIVE_QWEN3_REVISION,
+	"model.safetensors",
+);
+
+/**
+ * Where `minsync`'s `NativeEmbedder` (`apply_cache_dir` in `native.rs`) looks
+ * for cached Hugging Face models: `FASTEMBED_CACHE_DIR` when set, else
+ * `%LOCALAPPDATA%\minsync\models` on Windows and `~/.cache/minsync/models`
+ * everywhere else.
+ */
+export function minSyncModelCacheRoot(options: {
+	readonly platform?: NodeJS.Platform;
+	readonly home: string;
+	readonly env?: NodeJS.ProcessEnv;
+}): string {
+	const override = options.env?.FASTEMBED_CACHE_DIR?.trim();
+	if (override !== undefined && override.length > 0) return override;
+	if ((options.platform ?? process.platform) === "win32") {
+		const localAppData = options.env?.LOCALAPPDATA?.trim();
+		const root = localAppData !== undefined && localAppData.length > 0 ? localAppData : join(options.home, "AppData", "Local");
+		return join(root, "minsync", "models");
+	}
+	return join(options.home, ".cache", "minsync", "models");
+}
 
 export interface SeedFile {
 	readonly kind: "file";
 	/** Path of the shipped file relative to the seed directory. */
 	readonly path: string;
-	/** Where it goes, relative to the AutoRAG home. */
+	/** Where it goes, relative to the model cache root. */
 	readonly destination: string;
 	readonly sha256: string;
 	readonly bytes: number;
 }
-
-/** A shipped directory, copied as a whole (symlinks kept as symlinks). */
 export interface SeedTree {
 	readonly kind: "tree";
 	readonly path: string;
@@ -78,21 +100,19 @@ export function readSeedManifest(seedDir: string): SeedManifest | null {
 }
 
 /**
- * Copy every manifest entry that is not already in the AutoRAG home. An entry
- * that is there is left alone whatever its content: the librarian verifies it
- * on use and re-downloads a corrupt one, and a user may have swapped in
- * another model on purpose. A file is hashed while it is written; a file or a
- * tree is only renamed into place once complete (and, for a file, matching its
- * SHA-256), so an interrupted or corrupt copy never leaves a half entry where
- * the librarian would trust it.
+ * Copy every manifest entry that is not already in `cacheRoot`. An entry that
+ * is there is left alone whatever its content: a user may have already cached
+ * or swapped in another model on purpose. Each file is hashed while it is
+ * written and only renamed into place once complete and matching its SHA-256,
+ * so an interrupted or corrupt copy never leaves a half entry in the cache.
  */
-export async function seedAssets(input: { readonly seedDir: string; readonly autoragHome: string }): Promise<SeedOutcome> {
+export async function seedAssets(input: { readonly seedDir: string; readonly cacheRoot: string }): Promise<SeedOutcome> {
 	const manifest = readSeedManifest(input.seedDir);
 	if (manifest === null) return { kind: "none" };
 	const copied: string[] = [];
 	const present: string[] = [];
 	for (const file of manifest.files) {
-		const destination = join(input.autoragHome, file.destination);
+		const destination = join(input.cacheRoot, file.destination);
 		if (await stat(destination).then(() => true, () => false)) {
 			present.push(file.destination);
 			continue;
