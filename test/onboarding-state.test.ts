@@ -137,19 +137,156 @@ describe("createOnboardingService persistence", () => {
 		expect((await fresh.load()).draft).toEqual(DRAFT);
 	});
 
-	it("starts the index and settles to success when the refresh resolves", async () => {
+	it("starts local-only indexing (parsed + minsync) and settles to success when the refresh resolves", async () => {
 		const directory = await workDir();
 		const gate = Promise.withResolvers<ConfigRefreshResult>();
-		const deps: OnboardingServiceDeps = { ...makeDeps(directory), refresh: () => gate.promise };
+		const requestedMethods: Array<readonly string[] | undefined> = [];
+		const deps: OnboardingServiceDeps = {
+			...makeDeps(directory),
+			refresh: (methods) => {
+				requestedMethods.push(methods);
+				return gate.promise;
+			},
+		};
 		const service = createOnboardingService(deps);
-		const status = await service.startIndexing({ folders: ["/Users/me/Documents"], sources: [], plan: "byok", model: null });
+		const status = await service.startIndexing({
+			folders: ["/Users/me/Documents"],
+			sources: [{ id: "slack" }],
+			plan: "byok",
+			model: null,
+		});
 		expect(status.state).toBe("running");
+		expect(requestedMethods).toEqual([["parsed", "minsync"]]);
 		expect(service.isIndexing()).toBe(true);
-		gate.resolve({ ok: true, methods: ["parsed"], scanned: 0, written: 0, deleted: 0, skipped: 0, diagnostics: [], error: null });
+		gate.resolve({ ok: true, methods: ["parsed", "minsync"], scanned: 0, written: 0, deleted: 0, skipped: 0, diagnostics: [], error: null });
 		// Flush microtasks; no wall-clock wait.
 		for (let tick = 0; tick < 20 && service.isIndexing(); tick += 1) await Promise.resolve();
 		expect((await service.indexStatus()).state).toBe("success");
 		expect(service.isIndexing()).toBe(false);
+	});
+
+	it("allows completing onboarding while indexing is still running in the background", async () => {
+		const directory = await workDir();
+		const gate = Promise.withResolvers<ConfigRefreshResult>();
+		let completedCalls = 0;
+		const service = createOnboardingService({
+			...makeDeps(directory),
+			refresh: () => gate.promise,
+			onComplete: () => {
+				completedCalls += 1;
+			},
+		});
+		await service.startIndexing({ folders: ["/Users/me/Documents"], sources: [], plan: "byok", model: null });
+		expect(service.pending()).toBe(true);
+		expect(service.isIndexing()).toBe(true);
+
+		await service.complete();
+		await service.complete();
+		expect(service.pending()).toBe(false);
+		expect(completedCalls).toBe(1);
+		expect(service.isIndexing()).toBe(true);
+
+		gate.resolve({ ok: true, methods: ["parsed", "minsync"], scanned: 3, written: 3, deleted: 0, skipped: 0, diagnostics: [], error: null });
+		for (let tick = 0; tick < 20 && service.isIndexing(); tick += 1) await Promise.resolve();
+		expect(service.isIndexing()).toBe(false);
+		expect((await service.indexStatus()).state).toBe("success");
+	});
+
+	it("triggers background datasource indexing only after both local indexing and onboarding completion finish", async () => {
+		const directory = await workDir();
+		const gate = Promise.withResolvers<ConfigRefreshResult>();
+		const syncedAliases: string[][] = [];
+		const mailcrawl: DetectedSource = { id: "mailcrawl", facts: { accounts: ["gmail", "work"] } };
+		const obsidian: DetectedSource = { id: "obsidian", facts: { vaults: ["/v1", "/v2"] } };
+		const service = createOnboardingService({
+			...makeDeps(directory),
+			detectSources: async (onFound): Promise<SourceDetection> => {
+				onFound?.(mailcrawl);
+				onFound?.(obsidian);
+				return { sources: [mailcrawl, obsidian] };
+			},
+			refresh: () => gate.promise,
+			syncDatasources: async (aliases) => {
+				syncedAliases.push([...aliases]);
+			},
+		});
+
+		await service.detectSources();
+		await service.startIndexing({
+			folders: ["/Users/me/Documents"],
+			sources: [{ id: "mailcrawl" }, { id: "obsidian" }],
+			plan: "free",
+			model: null,
+		});
+
+		// Completing onboarding while local indexing is still in flight waits for local indexing to finish first.
+		await service.complete();
+		expect(syncedAliases).toEqual([]);
+
+		gate.resolve({ ok: true, methods: ["parsed", "minsync"], scanned: 1, written: 1, deleted: 0, skipped: 0, diagnostics: [], error: null });
+		for (let tick = 0; tick < 20 && syncedAliases.length === 0; tick += 1) await Promise.resolve();
+		expect(syncedAliases).toEqual([["mailcrawl-gmail", "mailcrawl-work", "obsidian", "obsidian-2"]]);
+	});
+
+	it("triggers background datasource indexing on complete() when local indexing already finished", async () => {
+		const directory = await workDir();
+		const syncedAliases: string[][] = [];
+		const whatsapp: DetectedSource = { id: "whatsapp", facts: { chats: 2, messages: 9 } };
+		const service = createOnboardingService({
+			...makeDeps(directory),
+			detectSources: async (onFound): Promise<SourceDetection> => {
+				onFound?.(whatsapp);
+				return { sources: [whatsapp] };
+			},
+			syncDatasources: async (aliases) => {
+				syncedAliases.push([...aliases]);
+			},
+		});
+
+		await service.detectSources();
+		await service.startIndexing({
+			folders: ["/Users/me/Documents"],
+			sources: [{ id: "whatsapp" }],
+			plan: "free",
+			model: null,
+		});
+		for (let tick = 0; tick < 20 && service.isIndexing(); tick += 1) await Promise.resolve();
+		// Not completed yet -> datasources have not started.
+		expect(syncedAliases).toEqual([]);
+
+		await service.complete();
+		for (let tick = 0; tick < 20 && syncedAliases.length === 0; tick += 1) await Promise.resolve();
+		expect(syncedAliases).toEqual([["whatsapp"]]);
+	});
+	it("does not trigger background datasource indexing when local indexing fails", async () => {
+		const directory = await workDir();
+		const gate = Promise.withResolvers<ConfigRefreshResult>();
+		const syncedAliases: string[][] = [];
+		const whatsapp: DetectedSource = { id: "whatsapp", facts: { chats: 2, messages: 9 } };
+		const service = createOnboardingService({
+			...makeDeps(directory),
+			detectSources: async (onFound): Promise<SourceDetection> => {
+				onFound?.(whatsapp);
+				return { sources: [whatsapp] };
+			},
+			refresh: () => gate.promise,
+			syncDatasources: async (aliases) => {
+				syncedAliases.push([...aliases]);
+			},
+		});
+
+		await service.detectSources();
+		await service.startIndexing({
+			folders: ["/Users/me/Documents"],
+			sources: [{ id: "whatsapp" }],
+			plan: "free",
+			model: null,
+		});
+		await service.complete();
+		gate.resolve({ ok: false, methods: ["parsed", "minsync"], scanned: 0, written: 0, deleted: 0, skipped: 0, diagnostics: [], error: "disk full" });
+		for (let tick = 0; tick < 20 && service.isIndexing(); tick += 1) await Promise.resolve();
+		expect((await service.indexStatus()).state).toBe("failed");
+		expect(syncedAliases).toEqual([]);
 	});
 
 	it("points the agent at the account's models on a managed plan, and leaves BYOK alone", async () => {

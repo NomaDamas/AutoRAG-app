@@ -37,7 +37,7 @@ import { createIndexActivityService } from "./index-activity";
 import { APP_UPDATE_CHANNELS } from "../shared/update-contract";
 import type { AppUpdaterService } from "./app-updater";
 import { createAppUpdateHost, installCheckForUpdatesMenuItem } from "./app-update-host";
-import { createActivityJournal, journalSingleRun, LOCAL_ITEM } from "./index-activity-journal";
+import { createActivityJournal, journalSingleRun, LOCAL_ITEM, sourceItem } from "./index-activity-journal";
 import { busyMessage, lockDataSources } from "./locked-datasources";
 import { schedulePaths, withRefreshLock } from "./refresh-schedule";
 import { createRefreshScheduler } from "./refresh-scheduler";
@@ -723,7 +723,45 @@ app.whenReady().then(async () => {
 		},
 		configPath: autoragConfigPath(),
 		resolveWorkspacePath: async () => (await resolveEffectiveConfig({ env: process.env, cwd: process.cwd() })).config.workspacePath,
-		refresh: refreshConfig,
+		refresh: (methods) =>
+			withRefreshLock(
+				schedulePath.lock,
+				"onboarding-index",
+				() => journalSingleRun(createActivityJournal(schedulePath.activity, { owner: "onboarding-index" }), LOCAL_ITEM, () => refreshConfig(methods)),
+				(holder) => ({ ok: false, methods: methods ?? LOCAL_REFRESH_METHODS, scanned: 0, written: 0, deleted: 0, skipped: 0, diagnostics: [], error: busyMessage(holder) }),
+			),
+		syncDatasources: async (aliases) => {
+			if (aliases.length === 0) return;
+			for (;;) {
+				const ran = await withRefreshLock(
+					schedulePath.lock,
+					"onboarding-datasources",
+					async () => {
+						const journal = createActivityJournal(schedulePath.activity, { owner: "onboarding-datasources" });
+						journal.begin(aliases.map(sourceItem));
+						try {
+							for (const alias of aliases) {
+								journal.start(sourceItem(alias).key);
+								try {
+									const result = await dataSources.sync(alias);
+									journal.finish(sourceItem(alias).key, result.ok, result.error);
+								} catch (error) {
+									journal.finish(sourceItem(alias).key, false, error instanceof Error ? error.message : String(error));
+								}
+							}
+						} finally {
+							journal.end();
+						}
+						return true;
+					},
+					() => false,
+				);
+				if (ran) return;
+				const wait = Promise.withResolvers<void>();
+				setTimeout(wait.resolve, 1_000);
+				await wait.promise;
+			}
+		},
 		credentials,
 		settings: settingsService,
 		detectSources: (onFound) =>

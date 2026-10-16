@@ -665,19 +665,15 @@
       "waitingNote": "Preparing the first index.",
       "running": "{{phase}}…",
       "detailParsing": "Reading documents",
-      "detailSources": "{{sources}} · syncing metadata",
-      "detailNoSources": "No connected data sources · skipped",
       "detailFinalizing": "Optimizing the search index",
       "phaseLabel": {
         "parsed": "Reading documents",
         "minsync": "Embedding",
-        "datasources": "Checking data sources",
         "finalizing": "Tidying up"
       },
       "phase": {
         "parsed": "Reading documents",
         "minsync": "Embedding",
-        "datasources": "Data sources",
         "finalizing": "Tidying up"
       },
       "title": "Dazzi is reading your files",
@@ -699,7 +695,8 @@
       "gateDetailWindows": "The first index takes a while. Quitting stops progress. Keep it plugged in.",
       "gateLocked": "Opens once it's done",
       "open": "Open Dazzi",
-      "retry": "Try again"
+      "retry": "Try again",
+      "startInBackground": "Continue in background and start right away"
     },
     "tips": {
       "1": {

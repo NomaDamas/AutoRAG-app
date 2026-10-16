@@ -190,10 +190,8 @@ export function phaseIndex(phase: IndexingPhase): number {
 			return 0;
 		case "minsync":
 			return 1;
-		case "datasources":
-			return 2;
 		case "finalizing":
-			return 3;
+			return 2;
 	}
 }
 

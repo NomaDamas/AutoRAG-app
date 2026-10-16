@@ -194,10 +194,9 @@ describe("detected sources list", () => {
 });
 
 describe("indexing phases", () => {
-	it("maps a phase to its strip position", () => {
+	it("maps a local phase to its strip position", () => {
 		expect(phaseIndex("parsed")).toBe(0);
 		expect(phaseIndex("minsync")).toBe(1);
-		expect(phaseIndex("datasources")).toBe(2);
-		expect(phaseIndex("finalizing")).toBe(3);
+		expect(phaseIndex("finalizing")).toBe(2);
 	});
 });

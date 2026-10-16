@@ -208,9 +208,16 @@ try {
 	check("stub endpoint verifies with the entered key", stubHits.includes("Bearer sk-qa-stub"), JSON.stringify(stubHits));
 	await primary.click();
 
-	// indexing: real first index; gate opens only on success.
+	// indexing: real first index; gate opens only on success, while subtle bottom button allows background start.
 	await page.waitForSelector(".onb.immersive .ix-bar", { timeout: 10_000 });
 	check("open button disabled while indexing", await page.locator(".onb .ix-open-btn").first().isDisabled().catch(() => true));
+	check("subtle background-start button is visible while indexing", await page.locator(".onb .ix-bg-start").isVisible());
+	const phaseLabels = await page.locator(".onb .ix-phases .ix-phase").allInnerTexts();
+	check(
+		"indexing phases show only local phases (parsed, minsync, finalizing)",
+		phaseLabels.length === 3 && !phaseLabels.some((label) => label.includes("데이터 소스")),
+		phaseLabels.join(" | "),
+	);
 	await shot("08-indexing");
 	await page.waitForFunction(
 		() => {
@@ -222,6 +229,7 @@ try {
 	);
 	const failed = await page.locator(".onb .ix-notice.warn").count();
 	check("first index succeeds", failed === 0, failed ? await page.locator(".onb .ix-notice.warn").innerText() : "");
+	check("subtle background-start button hides once indexing finishes", (await page.locator(".onb .ix-bg-start").count()) === 0);
 	const raw = JSON.parse(readFileSync(CONFIG, "utf8"));
 	check(
 		"BYOK model written with base URL and key env name (no key in config)",

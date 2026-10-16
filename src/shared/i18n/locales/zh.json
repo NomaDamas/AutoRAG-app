@@ -665,19 +665,15 @@
       "waitingNote": "正在准备首次索引。",
       "running": "{{phase}}…",
       "detailParsing": "正在读取文档",
-      "detailSources": "{{sources}} · 正在同步元数据",
-      "detailNoSources": "未连接数据源 · 已跳过",
       "detailFinalizing": "正在优化搜索索引",
       "phaseLabel": {
         "parsed": "正在读取文档",
         "minsync": "正在嵌入",
-        "datasources": "正在检查数据源",
         "finalizing": "正在整理"
       },
       "phase": {
         "parsed": "读取文档",
         "minsync": "嵌入",
-        "datasources": "数据源",
         "finalizing": "整理"
       },
       "title": "Dazzi 正在读取你的文件",
@@ -699,7 +695,8 @@
       "gateDetailWindows": "首次索引耗时较长。退出会中断进度。请保持连接电源。",
       "gateLocked": "完成后即可打开",
       "open": "打开 Dazzi",
-      "retry": "重试"
+      "retry": "重试",
+      "startInBackground": "在后台继续并立即开始使用"
     },
     "tips": {
       "1": {

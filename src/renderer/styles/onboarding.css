@@ -3147,3 +3147,36 @@ html[data-appearance="light"] .onb .ix-notice.warn strong {
 .onb .embed-card.disabled .recommended {
 	background: color-mix(in srgb, var(--onb-muted) 70%, transparent);
 }
+
+/* Subtle bottom link on the indexing screen to continue in the background and open the app immediately. */
+.onb .ix-bg-start {
+	margin-top: 14px;
+	padding: 2px 6px;
+	border: 0;
+	border-radius: 4px;
+	background: transparent;
+	color: rgba(255, 255, 255, 0.34);
+	font-size: 11px;
+	font-weight: 400;
+	line-height: 1.4;
+	letter-spacing: -0.01em;
+	text-decoration: underline;
+	text-decoration-color: rgba(255, 255, 255, 0.16);
+	text-underline-offset: 3px;
+	transition: color 0.15s ease, text-decoration-color 0.15s ease;
+}
+
+.onb .ix-bg-start:hover {
+	color: rgba(255, 255, 255, 0.68);
+	text-decoration-color: rgba(255, 255, 255, 0.42);
+}
+
+html[data-appearance="light"] .onb .ix-bg-start {
+	color: rgba(82, 98, 122, 0.56);
+	text-decoration-color: rgba(82, 98, 122, 0.24);
+}
+
+html[data-appearance="light"] .onb .ix-bg-start:hover {
+	color: #172033;
+	text-decoration-color: rgba(23, 32, 51, 0.45);
+}
