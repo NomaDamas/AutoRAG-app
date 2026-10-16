@@ -487,9 +487,10 @@ function assertNoNewPlaintextSecrets(value: unknown, key?: string): void {
 }
 
 const LOOPBACK_HOSTS: Record<string, true> = { localhost: true, "127.0.0.1": true, "::1": true, "[::1]": true };
+const DAZZI_HOSTS: Record<string, true> = { "api.dazziapp.com": true };
 
 /** Reject corpus embedding endpoints that are malformed, non-http, or off-device. */
-function assertLoopback(value: string, label: string): void {
+function assertLoopback(value: string, label: string, options: { readonly allowDazzi?: boolean } = {}): void {
 	let url: URL;
 	try {
 		url = new URL(value);
@@ -499,15 +500,33 @@ function assertLoopback(value: string, label: string): void {
 	if (url.protocol !== "http:" && url.protocol !== "https:") {
 		throw new Error(`AutoRAG config ${label} must use http or https`);
 	}
-	if (LOOPBACK_HOSTS[url.hostname.toLowerCase()] === true) return;
+	const host = url.hostname.toLowerCase();
+	if (LOOPBACK_HOSTS[host] === true) return;
+	if (options.allowDazzi === true && DAZZI_HOSTS[host] === true) return;
 	throw new Error(`AutoRAG config ${label} must point at loopback (corpus never leaves this device)`);
 }
 
-/** Corpus embedding/rerank endpoints must stay on-device; other connector URLs may be remote. */
-function assertNoRemoteEgress(candidate: Record<string, unknown>): void {
+/** Corpus embedding/rerank endpoints must stay on-device (or the Dazzi cloud embedder); other connector URLs may be remote. */
+function assertNoRemoteEgress(candidate: Record<string, unknown>, env?: NodeJS.ProcessEnv): void {
 	const minSync = isJsonObject(candidate.minSync) ? candidate.minSync : undefined;
 	const embedder = minSync !== undefined && isJsonObject(minSync.embedder) ? minSync.embedder : undefined;
-	if (embedder !== undefined && typeof embedder.baseUrl === "string") assertLoopback(embedder.baseUrl, "minSync.embedder.baseUrl");
+	if (embedder !== undefined && typeof embedder.baseUrl === "string") {
+		let allowDazzi = true;
+		const configuredBase = env?.AUTORAG_BASE_URL?.trim();
+		if (configuredBase !== undefined && configuredBase.length > 0 && embedder.baseUrl.replace(/\/+$/u, "") === configuredBase.replace(/\/+$/u, "")) {
+			allowDazzi = true;
+		}
+		if (configuredBase !== undefined && configuredBase.length > 0) {
+			try {
+				const configuredHost = new URL(configuredBase).hostname.toLowerCase();
+				const targetHost = new URL(embedder.baseUrl).hostname.toLowerCase();
+				if (targetHost === configuredHost) return;
+			} catch {
+				// Fall through to assertLoopback validation.
+			}
+		}
+		assertLoopback(embedder.baseUrl, "minSync.embedder.baseUrl", { allowDazzi });
+	}
 	const datasources = isJsonObject(candidate.datasources) ? candidate.datasources : undefined;
 	if (datasources === undefined) return;
 	for (const [id, entry] of Object.entries(datasources)) {
@@ -534,7 +553,7 @@ async function validateCandidate(path: string, candidate: Record<string, unknown
 	try {
 		await writeFile(temporary, `${JSON.stringify(candidate, null, 2)}\n`, { encoding: "utf8", mode: 0o600, flag: "wx" });
 		validateKnownBlocks(candidate);
-		assertNoRemoteEgress(candidate);
+		assertNoRemoteEgress(candidate, env);
 		const resolved = resolveConfigReadOnly({ flags: { config: temporary }, env, cwd });
 		// Drop `datasources` before buildAgentOptions: building skill instances is
 		// side-effecting and its shape is the app's to validate (above).

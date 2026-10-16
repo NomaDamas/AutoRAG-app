@@ -4,13 +4,16 @@ import {
 	buildFlow,
 	bySourceOrder,
 	canAdvance,
+	canSelectCloudEmbedding,
 	connectableLater,
 	etaMinutes,
 	formatSize,
+	isPlanSelectable,
 	phaseIndex,
 	planHeld,
 	primaryLabelKey,
 	scanTotals,
+	shouldSkipPlanStep,
 	sourceDetail,
 	type Translate,
 } from "../src/renderer/src/onboarding/flow";
@@ -67,6 +70,42 @@ describe("onboarding flow", () => {
 		]);
 	});
 
+	it("allows selecting cloud embedding only when signed in to Dazzi", () => {
+		expect(canSelectCloudEmbedding(null)).toBe(false);
+		expect(
+			canSelectCloudEmbedding({
+				state: "signedOut",
+				source: null,
+				account: null,
+				offline: false,
+				error: null,
+				baseUrl: "https://api.dazziapp.com",
+			}),
+		).toBe(false);
+		expect(
+			canSelectCloudEmbedding({
+				state: "signedIn",
+				source: "stored",
+				account: null,
+				offline: false,
+				error: null,
+				baseUrl: "https://api.dazziapp.com",
+			}),
+		).toBe(true);
+	});
+
+	it("restricts plan selection to Pro when cloud embedding is selected", () => {
+		expect(isPlanSelectable("free", "local")).toBe(true);
+		expect(isPlanSelectable("air", "local")).toBe(true);
+		expect(isPlanSelectable("pro", "local")).toBe(true);
+		expect(isPlanSelectable("byok", "local")).toBe(true);
+
+		expect(isPlanSelectable("pro", "cloud")).toBe(true);
+		expect(isPlanSelectable("free", "cloud")).toBe(false);
+		expect(isPlanSelectable("air", "cloud")).toBe(false);
+		expect(isPlanSelectable("byok", "cloud")).toBe(false);
+	});
+
 	it("gates the advance per step", () => {
 		const base = {
 			stepId: "welcome",
@@ -98,6 +137,11 @@ describe("onboarding flow", () => {
 		expect(canAdvance({ ...base, stepId: "embedding", embed: "cloud", cloudConsent: true })).toBe(true);
 		expect(canAdvance({ ...base, stepId: "model", plan: "byok" })).toBe(false);
 		expect(canAdvance({ ...base, stepId: "model", plan: "byok", modelVerified: true })).toBe(true);
+		// Cloud embedding requires Pro on the plan step.
+		expect(canAdvance({ ...base, stepId: "plan", embed: "cloud", plan: "air", signedIn: true })).toBe(false);
+		expect(canAdvance({ ...base, stepId: "plan", embed: "cloud", plan: "free", signedIn: true })).toBe(false);
+		expect(canAdvance({ ...base, stepId: "plan", embed: "cloud", plan: "byok", signedIn: true })).toBe(false);
+		expect(canAdvance({ ...base, stepId: "plan", embed: "cloud", plan: "pro", signedIn: true })).toBe(true);
 	});
 
 	it("labels the plan primary button by what the account already holds", () => {
@@ -145,6 +189,18 @@ describe("planHeld", () => {
 		expect(planHeld("pro", { ...signedIn("pro"), state: "signedOut", account: null })).toBe(false);
 		expect(planHeld("free", signedIn("pro"))).toBe(false);
 		expect(planHeld("byok", signedIn("pro"))).toBe(false);
+	});
+
+	it("skips the plan step when already subscribed to Air or Pro (and Pro for cloud)", () => {
+		expect(shouldSkipPlanStep(false, "local", null)).toBe(false);
+		expect(shouldSkipPlanStep(false, "local", signedIn("free"))).toBe(false);
+		expect(shouldSkipPlanStep(false, "local", signedIn("air"))).toBe(true);
+		expect(shouldSkipPlanStep(false, "local", signedIn("pro"))).toBe(true);
+		// Cloud embedding requires Pro, so Air must still visit the plan step to upgrade to Pro.
+		expect(shouldSkipPlanStep(false, "cloud", signedIn("free"))).toBe(false);
+		expect(shouldSkipPlanStep(false, "cloud", signedIn("air"))).toBe(false);
+		expect(shouldSkipPlanStep(false, "cloud", signedIn("pro"))).toBe(true);
+		expect(shouldSkipPlanStep(true, "cloud", signedIn("free"))).toBe(true);
 	});
 });
 

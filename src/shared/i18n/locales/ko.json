@@ -514,12 +514,13 @@
       "bulletGpuMac": "Apple Silicon GPU 사용",
       "bulletGpuWindows": "GPU 가속 사용 (가능한 경우)",
       "bulletPower": "노트북은 전원 연결 권장",
-      "cloudBadge": "준비 중",
+      "cloudBadge": "Pro 전용",
       "cloudTitle": "클라우드에서",
       "cloudLead": "더 빠르게 처리하지만 선택한 문서 본문이 전송됩니다.",
       "cloudBulletPerf": "Mac 성능에 영향이 적음",
       "cloudBulletNoStore": "Dazzi는 요청 내용을 저장하지 않고, 저장 없음(ZDR) 제공자로만 전송합니다",
-      "privacyTable": "개인정보처리방침의 모델 데이터 표"
+      "privacyTable": "개인정보처리방침의 모델 데이터 표",
+      "cloudConsent": "선택한 폴더의 문서 본문이 임베딩 처리를 위해 Dazzi 서버로 전송되는 것에 동의합니다. 처리 후 보관하지 않습니다."
     },
     "sources": {
       "eyebrow": "데이터 소스",
@@ -555,6 +556,9 @@
       "title": "어떻게 사용할까요?",
       "titleReady": "플랜이 준비됐어요",
       "lead": "플랜에 따라 AI 사용량과 임베딩 위치가 정해집니다. 나중에 Settings에서 바꿀 수 있습니다.",
+      "leadCloud": "클라우드 임베딩을 선택했어요. Pro 플랜으로 계속할 수 있습니다.",
+      "leadCloudReady": "클라우드 임베딩을 쓸 수 있습니다. 계속 진행하세요.",
+      "cloudCallout": "클라우드 임베딩은 Pro 전용입니다.",
       "badgeRecommended": "추천",
       "badgeTrial": "체험 진행 중",
       "badgeSubscribed": "구독 중",
@@ -602,7 +606,7 @@
           "chip": "질문은 Dazzi 모델로 전송",
           "training": "입력·출력을 모델 학습에 쓰지 않습니다",
           "feature": {
-            "a": "이 Mac에서 로컬 임베딩 (본문은 전송되지 않음)",
+            "a": "클라우드 임베딩으로 더 빠르게",
             "b": "관리형 AI 모델 · 가장 많은 사용량",
             "c": "Air 기능 모두 포함"
           }

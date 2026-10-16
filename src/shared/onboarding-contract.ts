@@ -14,8 +14,8 @@
  * browser (account-contract.ts) and the plan step reads the entitlement the
  * hosted service reports and opens its hosted checkout. The draft keeps no
  * account or payment state; both come from `window.autorag.account`.
- * Cloud embedding stays unavailable: corpus text never goes to a remote
- * embedder (AGENTS.md), so the first index always embeds on this machine.
+ * Cloud embedding is available once signed in to Dazzi (Pro plan required).
+ * Local embedding runs on this machine without sending corpus text off-device.
  */
 
 export const ONBOARDING_CHANNELS = {
@@ -73,8 +73,9 @@ export type OnboardingStepId =
 	| "model"
 	| "indexing";
 
-export type PlanId = "free" | "air" | "pro" | "byok";
+export type EmbedMode = "local" | "cloud";
 
+export type PlanId = "free" | "air" | "pro" | "byok";
 export type ByokProviderId = "anthropic" | "openai" | "openrouter" | "google" | "ollama" | "openai-compatible";
 
 /**
@@ -113,6 +114,8 @@ export interface OnboardingDraft {
 	readonly launchAtLogin: boolean;
 	/** Candidate and user-added folders, in display order. */
 	readonly folders: readonly OnboardingFolderChoice[];
+	readonly embed?: EmbedMode;
+	readonly cloudConsent?: boolean;
 	readonly sources: readonly OnboardingSourceChoice[];
 	readonly plan: PlanId;
 	/** The plan step was passed once; it then leaves the step list (back skips it). */
@@ -235,6 +238,7 @@ export type ModelVerifyResult =
 
 export interface IndexingRequest {
 	readonly folders: readonly string[];
+	readonly embed?: EmbedMode;
 	readonly sources: readonly { readonly id: SourceId }[];
 	readonly plan: PlanId;
 	/** BYOK only. */

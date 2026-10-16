@@ -1,18 +1,22 @@
-/** Step 5 — local embedding (cloud is unavailable; its card renders disabled). */
+/** Step 5 — embedding location: local on this device, or Dazzi cloud when signed in. */
 
 import type { ReactElement } from "react";
+import { cn } from "../../lib/cn";
 import { Icon } from "../marks";
 import { Eyebrow, Multiline, SplitScreen, openExternal } from "../parts";
-import { etaMinutes, formatSize, scanTotals } from "../flow";
+import { canSelectCloudEmbedding, etaMinutes, formatSize, scanTotals } from "../flow";
 import { accountLegalUrl } from "../../../../shared/account-contract";
 import type { OnboardingCtx } from "../context";
 
 export function EmbeddingStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElement {
-	const { t, draft, scans, embedding, platform } = ctx;
+	const { t, draft, scans, embedding, platform, account } = ctx;
 	const selected = draft.folders.filter((f) => f.selected).map((f) => f.path);
 	const totals = scanTotals(selected, scans);
 	const localEta = etaMinutes(totals.files, "local");
 	const cloudEta = etaMinutes(totals.files, "cloud");
+	const cloudAvailable = canSelectCloudEmbedding(account);
+	const embedMode = cloudAvailable && draft.embed === "cloud" ? "cloud" : "local";
+	const cloudConsent = draft.cloudConsent === true;
 	const download =
 		embedding === null
 			? t("onboarding.embedding.downloadUnknown")
@@ -46,7 +50,10 @@ export function EmbeddingStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactEl
 		>
 			<div className="embed-wrap">
 				<div className="embed-cards">
-					<div className="embed-card selected">
+					<div
+						className={cn("embed-card", embedMode === "local" && "selected")}
+						onClick={() => ctx.setEmbedMode("local")}
+					>
 						<div className="embed-icon">
 							<Icon name="laptop" size={19} />
 						</div>
@@ -71,7 +78,13 @@ export function EmbeddingStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactEl
 							<li>{t("onboarding.embedding.bulletPower")}</li>
 						</ul>
 					</div>
-					<div className="embed-card disabled" aria-disabled="true">
+					<div
+						className={cn("embed-card", embedMode === "cloud" && "selected", !cloudAvailable && "disabled")}
+						aria-disabled={!cloudAvailable}
+						onClick={() => {
+							if (cloudAvailable) ctx.setEmbedMode("cloud");
+						}}
+					>
 						<span className="recommended">{t("onboarding.embedding.cloudBadge")}</span>
 						<div className="embed-icon">
 							<Icon name="cloud" size={19} />
@@ -99,7 +112,10 @@ export function EmbeddingStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactEl
 								<button
 									type="button"
 									className="inline-link"
-									onClick={() => openExternal(accountLegalUrl(ctx.account?.baseUrl, "privacyModels"))}
+									onClick={(e) => {
+										e.stopPropagation();
+										openExternal(accountLegalUrl(ctx.account?.baseUrl, "privacyModels"));
+									}}
 								>
 									{t("onboarding.embedding.privacyTable")}
 								</button>
@@ -107,6 +123,16 @@ export function EmbeddingStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactEl
 						</ul>
 					</div>
 				</div>
+				{embedMode === "cloud" ? (
+					<label className="consent">
+						<input
+							type="checkbox"
+							checked={cloudConsent}
+							onChange={(e) => ctx.setCloudConsent(e.target.checked)}
+						/>
+						<span>{t("onboarding.embedding.cloudConsent")}</span>
+					</label>
+				) : null}
 			</div>
 		</SplitScreen>
 	);

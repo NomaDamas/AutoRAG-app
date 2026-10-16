@@ -31,6 +31,8 @@ const DRAFT: OnboardingDraft = {
 	network: false,
 	launchAtLogin: false,
 	folders: [{ path: "/Users/me/Documents", selected: true }],
+	embed: "local",
+	cloudConsent: false,
 	sources: [],
 	plan: "free",
 	planConfirmed: false,
@@ -316,6 +318,46 @@ describe("createOnboardingService persistence", () => {
 
 		expect(status.state).toBe("running");
 		service.dispose();
+	});
+
+	it("configures Dazzi cloud embedding when indexing with embed=cloud", async () => {
+		const directory = await workDir();
+		const env: NodeJS.ProcessEnv = { AUTORAG_API_KEY: "dz_cloud_token", AUTORAG_BASE_URL: "https://api.dazziapp.com" };
+		const stored = new Map<string, string>();
+		const service = createOnboardingService({
+			...makeDeps(directory, env),
+			credentials: {
+				list: async () => [],
+				set: async (name, secret) => {
+					stored.set(name, secret);
+					env[name] = secret;
+					return [];
+				},
+				remove: async () => [],
+				load: async () => [],
+			},
+		});
+
+		await service.startIndexing({
+			folders: ["/Users/me/Documents"],
+			embed: "cloud",
+			sources: [],
+			plan: "pro",
+			model: null,
+		});
+		service.dispose();
+
+		const written = JSON.parse(await readFile(join(directory, "config.json"), "utf8")) as {
+			minSync?: { embedder?: Record<string, unknown> };
+		};
+		expect(written.minSync?.embedder).toEqual({
+			id: "openai:qwen/qwen3-embedding-0.6b",
+			baseUrl: "https://api.dazziapp.com",
+			dimension: 1024,
+			apiKeyEnv: "OPENAI_API_KEY",
+		});
+		expect(env.OPENAI_API_KEY).toBe("dz_cloud_token");
+		expect(stored.get("OPENAI_API_KEY")).toBe("dz_cloud_token");
 	});
 });
 
