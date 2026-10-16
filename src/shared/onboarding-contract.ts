@@ -241,7 +241,7 @@ export interface IndexingRequest {
 	readonly model: { readonly provider: ByokProviderId; readonly modelId: string; readonly baseUrl: string | null } | null;
 }
 
-export type IndexingPhase = "parsed" | "minsync" | "datasources" | "finalizing";
+export type IndexingPhase = "parsed" | "minsync" | "finalizing";
 
 export interface IndexingStatus {
 	readonly state: "idle" | "running" | "success" | "failed";

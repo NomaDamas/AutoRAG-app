@@ -699,7 +699,8 @@
       "gateDetailWindows": "首次索引耗时较长。退出会中断进度。请保持连接电源。",
       "gateLocked": "完成后即可打开",
       "open": "打开 Dazzi",
-      "retry": "重试"
+      "retry": "重试",
+      "startInBackground": "在后台继续并立即开始使用"
     },
     "tips": {
       "1": {

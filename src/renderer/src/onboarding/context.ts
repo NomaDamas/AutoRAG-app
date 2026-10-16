@@ -89,6 +89,7 @@ export interface OnboardingCtx {
 
 	startIndexing(): void;
 	finish(): void;
+	finishInBackground(): void;
 	setTipIndex(index: number): void;
 
 	dragApp(): void;

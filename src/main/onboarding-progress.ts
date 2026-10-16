@@ -43,11 +43,9 @@ export function computeIndexingProgress(input: PhaseProgressInput): PhaseProgres
 				return { progress: measured, remainingMinutes: remaining };
 			}
 			case "minsync":
-				return { progress: 50 + 40 * ratio, remainingMinutes: remainingFrom(input.phaseElapsedMs) };
-			case "datasources":
-				return { progress: 90 + 7 * ratio, remainingMinutes: remainingFrom(input.phaseElapsedMs) };
+				return { progress: 50 + 45 * ratio, remainingMinutes: remainingFrom(input.phaseElapsedMs) };
 			case "finalizing":
-				return { progress: 97 + 2 * ratio, remainingMinutes: remainingFrom(input.phaseElapsedMs) };
+				return { progress: 95 + 4 * ratio, remainingMinutes: remainingFrom(input.phaseElapsedMs) };
 			default:
 				return { progress: 0, remainingMinutes: input.totalFiles > 0 ? Math.ceil(input.totalFiles / LOCAL_FILES_PER_MINUTE) : null };
 		}

@@ -104,7 +104,7 @@ function entriesFor(datasource: IndexingDatasource, home: string): Record<string
 	}
 }
 
-function buildDatasourceEntries(datasources: readonly IndexingDatasource[], home: string): Record<string, Record<string, unknown>> {
+export function buildDatasourceEntries(datasources: readonly IndexingDatasource[], home: string): Record<string, Record<string, unknown>> {
 	const entries: Record<string, Record<string, unknown>> = {};
 	for (const datasource of datasources) {
 		for (const [alias, entry] of Object.entries(entriesFor(datasource, home))) entries[alias] = entry;

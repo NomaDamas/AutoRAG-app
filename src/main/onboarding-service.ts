@@ -29,7 +29,7 @@ import {
 import type { AppSettings, ConfigRefreshResult } from "../shared/settings-contract";
 import { isJsonObject } from "../shared/settings-contract";
 import { t } from "../shared/i18n/core";
-import { applyIndexingConfig } from "./onboarding-config";
+import { applyIndexingConfig, buildDatasourceEntries } from "./onboarding-config";
 import { PROVIDER_ENV_NAME } from "./onboarding-models";
 import { computeIndexingProgress } from "./onboarding-progress";
 import type { ProviderCredentialService } from "./provider-credentials";
@@ -78,6 +78,8 @@ export interface OnboardingServiceDeps {
 	readonly configPath: string;
 	readonly resolveWorkspacePath: () => Promise<string>;
 	readonly refresh: (methods?: readonly string[]) => Promise<ConfigRefreshResult>;
+	/** Background datasource sync triggered once both onboarding and the local index have completed. */
+	readonly syncDatasources?: (aliases: readonly string[]) => Promise<void>;
 	readonly credentials: ProviderCredentialService;
 	readonly settings: {
 		get(): Promise<AppSettings>;
@@ -294,9 +296,9 @@ const IDLE_STATUS: IndexingStatus = {
 	error: null,
 };
 
-/** Map a librarian refresh phase to a contract phase (`jikji`/search phases fold into finalizing). */
+/** Map a librarian refresh phase to a local onboarding contract phase (`jikji`/search phases fold into finalizing). */
 function toIndexingPhase(value: unknown): IndexingPhase | null {
-	if (value === "parsed" || value === "minsync" || value === "datasources" || value === "finalizing") return value;
+	if (value === "parsed" || value === "minsync" || value === "finalizing") return value;
 	if (value === "jikji" || value === "everything" || value === "fsearch") return "finalizing";
 	return null;
 }
@@ -353,9 +355,20 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 	let phaseStartedAt = 0;
 	let selectedFolders: readonly string[] = [];
 	let sourceNames: readonly string[] = [];
+	let pendingDatasourceAliases: readonly string[] = [];
+	let localIndexDone = false;
 	let parsedSnapshot: ParsedMirrorSnapshot = { processedFiles: 0, recentFile: null, recentSourcePath: null };
 	let progressSignature = "";
 	let parsedSignature = "";
+
+	const maybeStartBackgroundDatasources = (): void => {
+		if (pending || refreshPromise !== null || !localIndexDone || pendingDatasourceAliases.length === 0) return;
+		const aliases = pendingDatasourceAliases;
+		pendingDatasourceAliases = [];
+		void deps.syncDatasources?.(aliases)?.catch((error: unknown) => {
+			console.warn("[onboarding] background datasource sync failed:", error);
+		});
+	};
 
 	const persist = async (): Promise<void> => {
 		const path = onboardingStatePath(deps.userDataDir);
@@ -443,6 +456,7 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 	function finish(ok: boolean, error: string | null): void {
 		stopPolling();
 		refreshPromise = null;
+		localIndexDone = ok;
 		const finishedAt = new Date(now()).toISOString();
 		const indexing = stateFile.indexing;
 		if (indexing !== undefined) stateFile = { ...stateFile, indexing: { ...indexing, finishedAt } };
@@ -451,6 +465,7 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 			? { ...status, state: "success", progress: 100, remainingMinutes: null, finishedAt, error: null }
 			: { ...status, state: "failed", remainingMinutes: null, finishedAt, error: error ?? t("main.onboarding.indexingFailed") };
 		emitStatus();
+		maybeStartBackgroundDatasources();
 	}
 
 	return {
@@ -614,7 +629,7 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 				});
 			}
 			await maybeStoreGitToken(request.sources.map((source) => source.id));
-			const methods = ["parsed", "minsync", ...(request.sources.length > 0 ? ["datasources"] : [])];
+			const methods = ["parsed", "minsync"];
 			workspacePath = await deps.resolveWorkspacePath();
 			selectedFolders = request.folders;
 			folderRoots = request.folders.flatMap((folder) => {
@@ -628,8 +643,9 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 				return real === folder ? [{ root: folder, name }] : [{ root: folder, name }, { root: real, name }];
 			});
 			sourceNames = request.sources.map((source) => SOURCE_LABELS[source.id]);
+			pendingDatasourceAliases = Object.keys(buildDatasourceEntries(datasources, deps.home));
+			localIndexDone = false;
 			phase = null;
-			phaseStartedAt = now();
 			progressSignature = "";
 			parsedSignature = "";
 			parsedSnapshot = { processedFiles: 0, recentFile: null, recentSourcePath: null };
@@ -659,6 +675,7 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 			pending = false;
 			await persist();
 			deps.onComplete();
+			maybeStartBackgroundDatasources();
 		},
 		dispose: () => stopPolling(),
 	};

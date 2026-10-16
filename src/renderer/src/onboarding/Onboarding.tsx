@@ -315,6 +315,10 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 		void bridge.complete().then(onComplete);
 	}, [onComplete, showToast, t]);
 
+	const finishInBackground = useCallback((): void => {
+		void bridge.complete().then(onComplete);
+	}, [onComplete]);
+
 	// Step entry: permissions polling, folder pre-scan, connector/model detection.
 	const stepId = draft?.stepId ?? "welcome";
 	useEffect(() => {
@@ -664,6 +668,7 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 		},
 		startIndexing,
 		finish,
+		finishInBackground,
 		setTipIndex,
 		dragApp: () => bridge.dragApp(),
 		relaunch: () => {

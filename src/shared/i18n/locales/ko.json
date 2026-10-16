@@ -699,7 +699,8 @@
       "gateDetailWindows": "첫 인덱싱은 오래 걸립니다. 종료하면 진행이 멈춰요. 전원을 연결해 두세요.",
       "gateLocked": "완료되면 열 수 있어요",
       "open": "Dazzi 열기",
-      "retry": "다시 시도"
+      "retry": "다시 시도",
+      "startInBackground": "백그라운드에서 계속하고 바로 시작하기"
     },
     "tips": {
       "1": {

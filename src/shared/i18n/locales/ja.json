@@ -699,7 +699,8 @@
       "gateDetailWindows": "最初のインデックス作成は時間がかかります。終了すると進行が止まります。電源に接続したままにしてください。",
       "gateLocked": "完了すると開けます",
       "open": "Dazziを開く",
-      "retry": "再試行"
+      "retry": "再試行",
+      "startInBackground": "バックグラウンドで続けてすぐに始める"
     },
     "tips": {
       "1": {
