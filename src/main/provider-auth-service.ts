@@ -19,7 +19,7 @@ import type {
 } from "../shared/settings-contract";
 import { isJsonObject } from "../shared/settings-contract";
 import type { ProviderCredentialService } from "./provider-credentials";
-import { registerAutoRAGProvider } from "@autorag/librarian";
+import { registerDazziProvider } from "@autorag/librarian";
 import { ACCOUNT_API_KEY_ENV, AUTORAG_PROVIDER_ID, autoragFirst } from "../shared/account-contract";
 
 /**
@@ -209,7 +209,7 @@ export function createProviderAuthService(deps: ProviderAuthServiceDeps): Provid
 	// The hosted AutoRAG plan is its own provider; it must exist on this runtime
 	// for `/login`, the provider list, and its persisted model catalog.
 	const runtimePromise = ModelRuntime.create({ authPath, modelsPath, allowModelNetwork: false }).then(async (created) => {
-		await registerAutoRAGProvider(created, deps.env);
+		await registerDazziProvider(created, deps.env);
 		return created;
 	});
 	/** Process env values this service injected, keyed by env name. */
@@ -588,7 +588,8 @@ export function createProviderAuthService(deps: ProviderAuthServiceDeps): Provid
 			const runtime = await runtimePromise;
 			try {
 				// One provider, with the network on: the librarian provider fetches
-				// `/v1/models` and persists the snapshot; a failure keeps the old one.
+				// `/v1/models` with the plan credential the account sign-in stored
+				// in `auth.json` and persists the snapshot; a failure keeps the old one.
 				await runtime.refresh({ allowNetwork: true, providers: [AUTORAG_PROVIDER_ID], force: true });
 			} catch (error) {
 				console.warn("[providers] could not refresh the AutoRAG catalog:", error);
