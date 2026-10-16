@@ -38,7 +38,7 @@ interface ProbeSpec {
 	/** Template-specific env prefixes the CLI reads (its own config, never credentials of others). */
 	readonly envPrefixes: readonly string[];
 	readonly command: (context: ProbeContext) => ProbeCommand;
-	readonly parse: (stdout: string) => BackendIndexReading | undefined;
+	readonly parse: (stdout: string, context: ProbeContext) => BackendIndexReading | undefined;
 }
 
 const PROBE_TIMEOUT_MS = 8000;
@@ -181,16 +181,20 @@ const SPECS: Readonly<Record<string, ProbeSpec>> = {
 		command: ({ connector }) => ({
 			args: [...optionFlags(connector, { workspacePath: "--data-dir", configPath: "--config" }), "doctor", "--json"],
 		}),
-		parse: (stdout) => {
+		parse: (stdout, context) => {
 			const doctor = parseJson(stdout);
 			const freshness = isJsonObject(doctor?.freshness) ? doctor.freshness : undefined;
 			const lastSync = isJsonObject(freshness?.last_sync) ? freshness.last_sync : undefined;
 			if (lastSync === undefined) return { count: 0, at: null };
-			// `LazykatokSkill.index()` runs `sync` then `index`. When `last_index` is
-			// `null` or `recommendation.index_before_semantic_search` is true (because
-			// `sync` ran and updated the archive revision, but `index` failed or has not
-			// committed the matching semantic generation yet), report `undefined`
-			// (`not-indexed`) rather than claiming a stale/partial archive is indexed.
+			const sidecarPath = join(context.workspacePath, ".autorag", "datasources", context.id, context.instanceId, "sidecar.sqlite");
+			if (existsSync(sidecarPath)) {
+				return reading(lastSync.total_messages, lastSync.completed_at);
+			}
+			// In CLI-only mode (`LazykatokSkill.index()` without a sidecar), `sync` runs
+			// then `index`. When `last_index` is `null` or `recommendation.index_before_semantic_search`
+			// is true (because `sync` ran and updated the archive revision, but `index`
+			// failed or has not committed the matching semantic generation yet), report
+			// `undefined` (`not-indexed`) rather than claiming a stale/partial archive is indexed.
 			const recommendation = isJsonObject(freshness?.recommendation) ? freshness.recommendation : undefined;
 			const lastIndex = isJsonObject(freshness?.last_index) ? freshness.last_index : undefined;
 			if (freshness?.last_index === null || recommendation?.index_before_semantic_search === true) {
@@ -306,7 +310,7 @@ export async function probeBackendIndex(
 	if (command.runnable === false) return command.absent ?? null;
 	const stdout = await run(binary, command.args, probeEnv(env, spec.envPrefixes, command.env));
 	if (stdout === null) return null;
-	return spec.parse(stdout) ?? null;
+	return spec.parse(stdout, context) ?? null;
 }
 
 export type { ProbeContext as BackendProbeContext };

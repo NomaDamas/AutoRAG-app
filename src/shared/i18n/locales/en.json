@@ -1081,6 +1081,7 @@
         "discordIncompatible": "This app cannot serve the Dazzi embedding runtime on loopback (not a public export). Choose an embedding server to pass it to discrawl.",
         "discordPropagated": "Rewrites the Dazzi-managed discrawl config and re-indexes with `discrawl embed --rebuild`.",
         "kakaoIncompatible": "lazykatok uses its own built-in embedder (EmbeddingGemma) and cannot be changed via the shared Dazzi config (owned by native settings).",
+        "kakaoPropagated": "Records the KATOK_* embedding configuration in connector.env and re-indexes the sidecar and lazykatok archive.",
         "githubGistIncompatible": "GitHubGistSkill is not a public @autorag/librarian export, so the app cannot set its embedder (fixed by the runtime gateway profile).",
         "clawgalleryNotApplicable": "ClawGallery is an image (VDR) index and does not use text embeddings.",
         "larkNotApplicable": "Lark uses only remote API search and refuses local embeddings.",

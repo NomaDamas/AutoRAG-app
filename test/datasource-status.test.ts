@@ -394,6 +394,34 @@ describe("backend-owned index counts", () => {
 		});
 	});
 
+	it("reports kakao as indexed when the AutoRAG sidecar database exists even if lazykatok's native last_index is null", async () => {
+		const fixture = await createFixtureWithOnlySlacrawlOnPath();
+		await installFakeCli(
+			fixture,
+			"lazykatok",
+			JSON.stringify({
+				freshness: {
+					last_sync: { total_messages: 50632, completed_at: "2026-09-23T06:07:17Z" },
+					last_index: null,
+					recommendation: { sync_before_search: false, index_before_semantic_search: true },
+				},
+			}),
+		);
+		await writeConfig(fixture, { kakao: {} });
+		const sidecarDir = join(fixture.workspace, ".autorag", "datasources", "kakao", "default");
+		await mkdir(sidecarDir, { recursive: true });
+		await writeFile(join(sidecarDir, "sidecar.sqlite"), "");
+		const service = createDataSourceStatusService({ env: fixture.env, cwd: fixture.root });
+
+		const [indexed] = (await service.list()).sources;
+		expect(indexed?.index).toMatchObject({
+			state: "indexed",
+			chunkCount: 50632,
+			unit: "message",
+			indexedAt: "2026-09-23T06:07:17.000Z",
+		});
+	});
+
 	it("reports an empty archive as empty and an unreadable one as not-indexed", async () => {
 		const fixture = await createFixtureWithOnlySlacrawlOnPath();
 		await installFakeCli(fixture, "slacrawl", JSON.stringify({ messages: 0, last_sync_at: "" }));

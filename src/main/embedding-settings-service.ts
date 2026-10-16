@@ -102,6 +102,13 @@ const MAILCRAWL_KEYS = [
 	"MAILCRAWL_EMBED_DIM",
 ] as const;
 
+/** Kakao (`lazykatok`) env keys this service owns; any not set for the choice are removed. */
+const KAKAO_KEYS = [
+	"KATOK_EMBEDDER",
+	"KATOK_EMBED_URL",
+	"KATOK_EMBED_MODEL",
+	"KATOK_EMBED_DIM",
+] as const;
 const LOOPBACK_HOSTS: Record<string, true> = { localhost: true, "127.0.0.1": true, "::1": true, "[::1]": true };
 
 /**
@@ -225,6 +232,23 @@ function mailcrawlEnvFor(choice: EmbeddingChoice, adapterUrl: string | null): Re
 	return null;
 }
 
+/** Kakao (`lazykatok`) env the choice maps to, or null when kakao cannot adopt it. */
+function kakaoEnvFor(choice: EmbeddingChoice, adapterUrl: string | null): Record<string, string> | null {
+	const id = choice.profile.id;
+	if (id === "native-qwen3" || id === "qwen3-embedding-0.6b") {
+		return { KATOK_EMBEDDER: "local-test" };
+	}
+	if (id === "local-server" && choice.localServer !== undefined && adapterUrl !== null) {
+		return {
+			KATOK_EMBEDDER: "loopback-http",
+			KATOK_EMBED_URL: `${adapterUrl}/v1/embeddings`,
+			KATOK_EMBED_MODEL: choice.localServer.id,
+			KATOK_EMBED_DIM: String(choice.localServer.dimension),
+		};
+	}
+	return null;
+}
+
 function discrawlRuntimeFor(choice: EmbeddingChoice): DiscrawlEmbeddingRuntime | undefined {
 	if (choice.profile.kind !== "local-server" || choice.localServer === undefined) return undefined;
 	const local = choice.localServer;
@@ -281,11 +305,17 @@ function adoptionFor(
 						action: t("main.embedding.actions.discordConfig"),
 					};
 		case "kakao":
-			return {
-				adoption: "incompatible",
-				reason: t("main.embedding.reasons.kakaoIncompatible"),
-				action: null,
-			};
+			return !(choice.profile.id === "local-server" ? adapterAvailable : kakaoEnvFor(choice, null) !== null)
+				? {
+						adoption: "incompatible",
+						reason: t("main.embedding.reasons.kakaoIncompatible"),
+						action: null,
+					}
+				: {
+						adoption: "propagated",
+						reason: t("main.embedding.reasons.kakaoPropagated"),
+						action: "datasources.<id>.connector.env.KATOK_*",
+					};
 		case "github-gist":
 			return {
 				adoption: "incompatible",
@@ -539,6 +569,18 @@ export function createEmbeddingSettingsService(deps: EmbeddingSettingsDeps): Emb
 						}
 					}
 				}
+				if (status.type === "kakao") {
+					const target = kakaoEnvFor(choice, adapterUrl);
+					if (target === null) continue;
+					for (const key of KAKAO_KEYS) {
+						const value = target[key];
+						if (value === undefined) updates.push({ path: ["datasources", status.id, "connector", "env", key], remove: true });
+						else {
+							updates.push({ path: ["datasources", status.id, "connector", "env", key], value });
+							written.push(["datasources", status.id, "connector", "env", key]);
+						}
+					}
+				}
 				if (status.adoption === "propagated" || status.adoption === "native") toRebuild.push(status.id);
 			}
 
@@ -623,15 +665,24 @@ export function createEmbeddingSettingsService(deps: EmbeddingSettingsDeps): Emb
 			}
 			const snapshot = await deps.dataSources.list();
 			if (snapshot.error !== null) return;
-			const target = mailcrawlEnvFor({ profile, localServer: local }, url);
-			if (target === null) return;
+			const mailTarget = mailcrawlEnvFor({ profile, localServer: local }, url);
+			const kakaoTarget = kakaoEnvFor({ profile, localServer: local }, url);
 			const updates: AutoRagConfigUpdate[] = [];
 			for (const row of snapshot.sources) {
-				if (!row.enabled || row.type !== "mailcrawl") continue;
-				for (const key of MAILCRAWL_KEYS) {
-					const value = target[key];
-					if (value === undefined) updates.push({ path: ["datasources", row.id, "connector", "env", key], remove: true });
-					else updates.push({ path: ["datasources", row.id, "connector", "env", key], value });
+				if (!row.enabled) continue;
+				if (row.type === "mailcrawl" && mailTarget !== null) {
+					for (const key of MAILCRAWL_KEYS) {
+						const value = mailTarget[key];
+						if (value === undefined) updates.push({ path: ["datasources", row.id, "connector", "env", key], remove: true });
+						else updates.push({ path: ["datasources", row.id, "connector", "env", key], value });
+					}
+				}
+				if (row.type === "kakao" && kakaoTarget !== null) {
+					for (const key of KAKAO_KEYS) {
+						const value = kakaoTarget[key];
+						if (value === undefined) updates.push({ path: ["datasources", row.id, "connector", "env", key], remove: true });
+						else updates.push({ path: ["datasources", row.id, "connector", "env", key], value });
+					}
 				}
 			}
 			if (updates.length > 0) await deps.config.patch(updates);
