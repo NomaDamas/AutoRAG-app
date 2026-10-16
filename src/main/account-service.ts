@@ -314,6 +314,7 @@ export function createAccountService(deps: AccountServiceDeps): AccountService {
 					lastError = "The Dazzi service returned an account this app cannot read.";
 				} else {
 					await writeCache(account);
+					await bridgePlanCredential(key.key);
 					lastError = null;
 				}
 				offline = false;
@@ -442,6 +443,8 @@ export function createAccountService(deps: AccountServiceDeps): AccountService {
 	 * also replaces a deliberately chosen OpenRouter one.
 	 */
 	async function applyManagedModel(options: { readonly onlyUntouchedDecomposition?: boolean } = {}): Promise<ManagedModelResult> {
+		const activeKey = await currentKey();
+		if (activeKey !== null) await bridgePlanCredential(activeKey.key);
 		const catalog = parseCatalog(await callSignedIn("/v1/models", {}));
 		const main = catalog[0];
 		const cheapest = catalog.reduce<CatalogModel | undefined>((best, model) => (best === undefined || model.price < best.price ? model : best), undefined);

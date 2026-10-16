@@ -340,6 +340,8 @@ describe("status and refresh", () => {
 		const refreshed = await service.refresh();
 		expect(refreshed).toMatchObject({ state: "signedIn", source: "env" });
 		expect(refreshed.account?.email).toBe("user@example.com");
+		const stored = JSON.parse(await readFile(join(root, "auth.json"), "utf8")) as Record<string, { type: string; access: string }>;
+		expect(stored.dazzi).toMatchObject({ type: "oauth", access: "dz_fakekey" });
 
 		expect((await service.signOut()).state).toBe("signedIn");
 	});
