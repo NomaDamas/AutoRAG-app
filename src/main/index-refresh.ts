@@ -139,33 +139,50 @@ export async function refreshAutoragIndex(
 		// (`syncMinSync`, not a full refresh) until it fits.
 		let minsyncOk = result.minsync?.ok;
 		let minsyncReason = result.minsync?.reason;
-		let minsyncDiagnostics: readonly ConfigRefreshDiagnostic[] = (result.minsync?.diagnostics ?? []).map(toDiagnostic);
+		let minsyncDiagnostics: readonly ConfigRefreshDiagnostic[] = [
+			...(result.minsync?.diagnostics ?? []),
+			...result.diagnostics.filter((diagnostic) => diagnostic.code === "minsync-file-skipped"),
+		].map(toDiagnostic);
 		if (selected.includes("minsync")) {
 			const embedder = effective.minSync?.embedder;
 			const initial = embedder?.batchSize ?? startingBatchSize(configPath, raw);
 			let batch = initial;
-			while (minsyncOk === false && isEmbeddingTimeout([minsyncReason, ...minsyncDiagnostics.map((diagnostic) => diagnostic.message)].join(" "))) {
+			// MinSync 0.4.8 aborts (`ok: false`) when the first files time out, and exits 6
+			// (`ok: true`, `minsync-file-skipped`) when a later batch times out mid-run;
+			// either way, halving the batch and re-running `syncMinSync` retries the skipped files.
+			const minsyncTimedOut = (): boolean =>
+				isEmbeddingTimeout([minsyncReason, ...minsyncDiagnostics.map((diagnostic) => diagnostic.message)].join(" "));
+			while (minsyncTimedOut()) {
 				const next = smallerBatchSize(batch);
 				if (next === null) break;
 				batch = next;
 				const retry = await new AutoRAGLite({ ...effective, minSync: { ...effective.minSync, embedder: { ...embedder, batchSize: batch } } }).syncMinSync();
 				minsyncOk = retry?.ok;
 				minsyncReason = retry?.reason;
-				minsyncDiagnostics =
+				const baseDiagnostics: ConfigRefreshDiagnostic[] =
 					retry?.diagnostic === undefined
 						? retry?.ok === false
 							? [{ code: "minsync-sync-failed", severity: "error", message: `MinSync sync failed: ${retry.reason ?? "failed"}` }]
 							: []
 						: [{ code: retry.diagnostic.code, severity: retry.ok ? "info" : "error", message: retry.diagnostic.message }];
+				const skippedDiagnostics: ConfigRefreshDiagnostic[] = (retry?.filesFailed ?? []).map((failure) => ({
+					code: "minsync-file-skipped",
+					severity: "warning",
+					message: `MinSync skipped this file at the ${failure.stage} stage and will retry it on the next sync: ${failure.error}`,
+				}));
+				minsyncDiagnostics = [...baseDiagnostics, ...skippedDiagnostics];
 			}
-			if (minsyncOk !== false && batch < initial) {
+			if (minsyncOk !== false && !minsyncTimedOut() && batch < initial) {
 				// Remember what worked so the next refresh does not repeat the failures.
 				saveLearnedBatchSize(configPath, embedderKind(embedder), batch);
 			}
 		}
 		// Everything but MinSync's own diagnostics comes from the one full refresh; MinSync's
 		// are the last attempt's, so a superseded timeout never reaches the user.
-		diagnostics.push(...result.diagnostics.filter((diagnostic) => diagnostic.source !== "minsync").map(toDiagnostic), ...minsyncDiagnostics);
+		diagnostics.push(
+			...result.diagnostics.filter((diagnostic) => diagnostic.source !== "minsync" && diagnostic.code !== "minsync-file-skipped").map(toDiagnostic),
+			...minsyncDiagnostics,
+		);
 		const failures: string[] = [];
 		if (minsyncOk === false) failures.push(`minsync: ${minsyncReason ?? "failed"}`);
 		if (result.everything !== undefined && result.everything.ok === false) failures.push(`everything: ${result.everything.reason ?? "failed"}`);

@@ -129,6 +129,50 @@ describe("refreshAutoragIndex", () => {
 			expect(batches).toEqual([undefined, 32, 16, 8, 4, 2, 1]);
 			expect(existsSync(learnedFile(deps))).toBe(false);
 		});
+
+		it("halves the batch when MinSync 0.4.8 skips a timed-out file on a partial sync (exit 6) and clears the superseded skip", async () => {
+			const partialTimeout = {
+				scanned: 2,
+				written: 2,
+				deleted: 0,
+				skipped: 0,
+				diagnostics: [
+					{
+						code: "minsync-file-skipped",
+						severity: "warning",
+						source: "files/large.md",
+						message: `MinSync skipped this file at the embed stage and will retry it on the next sync: ${timeoutMessage}`,
+					},
+				],
+				minsync: { ok: true, synced: 1 },
+			};
+			refresh.mockResolvedValueOnce(partialTimeout);
+			syncMinSync
+				.mockResolvedValueOnce({
+					ok: true,
+					synced: 0,
+					filesFailed: [{ path: "files/large.md", stage: "embed", error: timeoutMessage }],
+				})
+				.mockResolvedValueOnce({
+					ok: true,
+					synced: 1,
+					filesFailed: [{ path: "files/unreadable.md", stage: "read", error: "Permission denied" }],
+				});
+			const deps = await fixture();
+
+			const outcome = await refreshAutoragIndex(deps);
+
+			expect(outcome).toMatchObject({ ok: true, error: null });
+			expect(batches).toEqual([undefined, 32, 16]);
+			expect(JSON.parse(readFileSync(learnedFile(deps), "utf8"))).toEqual({ local: 16 });
+			expect(outcome.diagnostics).toEqual([
+				{
+					code: "minsync-file-skipped",
+					severity: "warning",
+					message: "MinSync skipped this file at the read stage and will retry it on the next sync: Permission denied",
+				},
+			]);
+		});
 	});
 });
 

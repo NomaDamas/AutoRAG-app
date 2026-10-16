@@ -138,8 +138,8 @@ export async function runInVm({ root, job, slot, vmName, runDir }) {
 		await waitForSsh(ip, 180_000, { signal: abort.signal });
 		log(`${vmName} is up at ${ip}`);
 		interrupted();
-		log("syncing the checkout (node_modules and out/ included; .upstream and evidence excluded)");
-		await pushTree(ip, root, GUEST_REPO, { excludes: [".upstream", ".omo/evidence", ".autorag", ".DS_Store"], signal: abort.signal });
+		log("syncing the checkout (node_modules and out/ included; .upstream, release artifacts, and evidence excluded)");
+		await pushTree(ip, root, GUEST_REPO, { excludes: ["/.upstream", "/.omo/evidence", "/.autorag", "/build/stage", "/build/.cache", "/dist", ".DS_Store"], signal: abort.signal });
 		await waitForReady(ip, log, abort.signal);
 		interrupted();
 		if (needsEmbeddingAssets(job)) await pushEmbeddingAssets(ip, abort.signal);
