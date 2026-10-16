@@ -3,10 +3,10 @@
 import type { ReactElement } from "react";
 import type { PlanId } from "../../../../shared/onboarding-contract";
 import { cn } from "../../lib/cn";
+import { Icon } from "../marks";
 import { Eyebrow, Multiline } from "../parts";
 import type { OnboardingCtx } from "../context";
-import { planHeld } from "../flow";
-
+import { canSelectCloudEmbedding, isPlanSelectable, planHeld } from "../flow";
 interface PlanDefinition {
 	readonly id: PlanId;
 	readonly per: boolean;
@@ -24,8 +24,10 @@ export function PlanStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElement
 	const { t, draft, account } = ctx;
 	const signedIn = account?.state === "signedIn";
 	const snapshot = account?.account ?? null;
+	const cloud = canSelectCloudEmbedding(account) && draft.embed === "cloud";
 	const needsAccount = (draft.plan === "air" || draft.plan === "pro") && !signedIn;
 	const date = snapshot?.periodEnd === null || snapshot === null ? "" : new Date(snapshot.periodEnd).toLocaleDateString();
+	const proHeld = planHeld("pro", account);
 
 	return (
 		<section className="screen center">
@@ -33,7 +35,7 @@ export function PlanStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElement
 				<Eyebrow icon="zap">{t("onboarding.plan.eyebrow")}</Eyebrow>
 				<h1>{planHeld(draft.plan, account) ? t("onboarding.plan.titleReady") : t("onboarding.plan.title")}</h1>
 				<p>
-					<Multiline text={t("onboarding.plan.lead")} />
+					<Multiline text={cloud ? (proHeld ? t("onboarding.plan.leadCloudReady") : t("onboarding.plan.leadCloud")) : t("onboarding.plan.lead")} />
 				</p>
 				{needsAccount ? (
 					<p className="auth-note" role="status">
@@ -44,8 +46,15 @@ export function PlanStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElement
 					</p>
 				) : null}
 			</div>
+			{cloud && !proHeld ? (
+				<div className="plan-callout">
+					<Icon name="cloud" size={14} />
+					<span>{t("onboarding.plan.cloudCallout")}</span>
+				</div>
+			) : null}
 			<div className="plan-list">
 				{PLANS.map((plan) => {
+					const selectable = isPlanSelectable(plan.id, cloud ? "cloud" : "local");
 					const held = planHeld(plan.id, account) && snapshot?.plan === plan.id;
 					const selected = draft.plan === plan.id;
 					let badge: ReactElement | null = null;
@@ -67,8 +76,11 @@ export function PlanStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElement
 					return (
 						<div
 							key={plan.id}
-							className={cn("plan-card", selected && "selected")}
-							onClick={() => ctx.choosePlan(plan.id)}
+							className={cn("plan-card", selected && "selected", !selectable && "disabled")}
+							aria-disabled={!selectable}
+							onClick={() => {
+								if (selectable) ctx.choosePlan(plan.id);
+							}}
 						>
 							<span className="radio" />
 							<div className="plan-name">

@@ -514,12 +514,13 @@
       "bulletGpuMac": "Apple Silicon GPUを使用",
       "bulletGpuWindows": "GPUアクセラレーションを使用（可能な場合）",
       "bulletPower": "ノートPCは電源接続を推奨",
-      "cloudBadge": "準備中",
+      "cloudBadge": "Pro限定",
       "cloudTitle": "クラウドで",
       "cloudLead": "より速く処理できますが、選択した文書の本文が送信されます。",
       "cloudBulletPerf": "Macの性能への影響が少ない",
       "cloudBulletNoStore": "Dazziはリクエスト内容を保存せず、データ保持なし（ZDR）プロバイダーにのみ送信します",
-      "privacyTable": "プライバシーポリシーのモデルデータ表"
+      "privacyTable": "プライバシーポリシーのモデルデータ表",
+      "cloudConsent": "選択したフォルダの文書本文が埋め込み処理のためにDazziサーバーへ送信されることに同意します。処理後は保持されません。"
     },
     "sources": {
       "eyebrow": "データソース",
@@ -555,6 +556,9 @@
       "title": "どのように使いますか？",
       "titleReady": "プランの準備ができました",
       "lead": "プランによってAIの利用量と埋め込みの場所が決まります。後で設定から変更できます。",
+      "leadCloud": "クラウド埋め込みを選択しました。Proプランで続行できます。",
+      "leadCloudReady": "クラウド埋め込みを利用できます。そのまま進んでください。",
+      "cloudCallout": "クラウド埋め込みはProプラン限定です。",
       "badgeRecommended": "おすすめ",
       "badgeTrial": "トライアル中",
       "badgeSubscribed": "購読中",
@@ -602,7 +606,7 @@
           "chip": "質問はDazziモデルに送信",
           "training": "入出力をモデルの学習に使用しません",
           "feature": {
-            "a": "このMacでローカル埋め込み（本文は送信されません）",
+            "a": "クラウド埋め込みでより高速に",
             "b": "マネージドAIモデル · 最大の利用量",
             "c": "Airの機能をすべて含む"
           }

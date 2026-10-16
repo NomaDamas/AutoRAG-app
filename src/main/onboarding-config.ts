@@ -10,10 +10,17 @@ import { isJsonObject } from "../shared/settings-contract";
  * unit-testable without touching disk.
  */
 
-export interface EmbedderChoice {
-	readonly id: string;
-	readonly dimension: number;
-}
+export type EmbedderChoice =
+	| {
+			readonly id: string;
+			readonly dimension: number;
+			readonly baseUrl?: string;
+			readonly apiKeyEnv?: string;
+	  }
+	| {
+			readonly profile: string;
+			readonly dimension: number;
+	  };
 
 export interface ByokModelChoice {
 	readonly provider: ByokProviderId;
@@ -118,7 +125,16 @@ export function applyIndexingConfig(input: ApplyIndexingConfigInput): Record<str
 	if (input.workspacePath !== null) raw.workspacePath = input.workspacePath;
 	if (input.embedder !== null) {
 		const minSync = isJsonObject(raw.minSync) ? raw.minSync : {};
-		raw.minSync = { ...minSync, embedder: { id: input.embedder.id, dimension: input.embedder.dimension } };
+		const embedder =
+			"profile" in input.embedder
+				? { profile: input.embedder.profile, dimension: input.embedder.dimension }
+				: {
+						id: input.embedder.id,
+						dimension: input.embedder.dimension,
+						...(input.embedder.baseUrl !== undefined ? { baseUrl: input.embedder.baseUrl } : {}),
+						...(input.embedder.apiKeyEnv !== undefined ? { apiKeyEnv: input.embedder.apiKeyEnv } : {}),
+					};
+		raw.minSync = { ...minSync, embedder };
 	}
 	if (input.model !== null) {
 		raw.model = {

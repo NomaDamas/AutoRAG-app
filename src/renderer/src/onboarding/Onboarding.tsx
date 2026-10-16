@@ -17,6 +17,7 @@ import type {
 	ByokProviderId,
 	DetectedModelProvider,
 	DetectedSource,
+	EmbedMode,
 	EmbeddingInfo,
 	FolderCandidate,
 	FolderScan,
@@ -31,7 +32,17 @@ import type {
 import { APP_FULL_NAME } from "../../../shared/app-info";
 import { useTranslation } from "../../../shared/i18n";
 import { cn } from "../lib/cn";
-import { buildFlow, bySourceOrder, canAdvance, planHeld, primaryLabelKey, type Translate } from "./flow";
+import {
+	buildFlow,
+	bySourceOrder,
+	canAdvance,
+	canSelectCloudEmbedding,
+	isPlanSelectable,
+	planHeld,
+	primaryLabelKey,
+	shouldSkipPlanStep,
+	type Translate,
+} from "./flow";
 import { AppLogo, Icon } from "./marks";
 import type { OnboardingCtx, OverlayKind } from "./context";
 import { IndexingScreen } from "./IndexingScreen";
@@ -53,9 +64,6 @@ const WINDOW_TITLE = APP_FULL_NAME;
 const TOAST_MS = 2400;
 const SAVE_DEBOUNCE_MS = 300;
 
-/** Cloud embedding is unavailable (corpus text never leaves the machine). */
-const EMBED = "local" as const;
-
 /** Electron wraps a handler's error as "Error invoking remote method 'x': Error: <message>"; show only the message. */
 function ipcMessage(error: unknown): string {
 	const text = error instanceof Error ? error.message : String(error);
@@ -70,11 +78,45 @@ function seedDraft(candidates: readonly FolderCandidate[], permissions: Permissi
 		network: false,
 		launchAtLogin: permissions?.launchAtLogin ?? true,
 		folders: candidates.map((candidate) => ({ path: candidate.path, selected: candidate.defaultSelected })),
+		embed: "local",
+		cloudConsent: false,
 		sources: [],
 		plan: "pro",
 		planConfirmed: false,
 		model: null,
 	};
+}
+
+function reconcileAccountDraft(current: OnboardingDraft, status: AccountStatus | null): OnboardingDraft {
+	if (status === null) return current;
+	if (status.state !== "signedIn") {
+		if (current.embed !== "cloud" && !current.cloudConsent) return current;
+		return { ...current, embed: "local", cloudConsent: false };
+	}
+	const embed: EmbedMode = current.embed === "cloud" ? "cloud" : "local";
+	const subPlan = status.account?.plan;
+	if (subPlan === "air" || subPlan === "pro") {
+		const nextPlan: PlanId = embed === "cloud" ? "pro" : subPlan;
+		if (embed === "cloud" && subPlan !== "pro") {
+			const nextStepId: OnboardingStepId =
+				current.stepId === "sources" || current.stepId === "indexing" ? "plan" : current.stepId;
+			if (current.plan === nextPlan && current.stepId === nextStepId && !current.planConfirmed) return current;
+			return { ...current, plan: nextPlan, stepId: nextStepId, planConfirmed: false };
+		}
+		const skipPlan = shouldSkipPlanStep(current.planConfirmed, embed, status);
+		const nextStepId: OnboardingStepId =
+			current.stepId === "plan" && skipPlan ? (embed === "cloud" ? "sources" : "indexing") : current.stepId;
+		const nextConfirmed = current.planConfirmed || (current.stepId === "plan" && skipPlan);
+		if (current.plan === nextPlan && current.stepId === nextStepId && current.planConfirmed === nextConfirmed) return current;
+		return { ...current, plan: nextPlan, stepId: nextStepId, planConfirmed: nextConfirmed };
+	}
+	if (subPlan === "free" && embed === "cloud") {
+		const nextStepId: OnboardingStepId =
+			current.stepId === "sources" || current.stepId === "indexing" ? "plan" : current.stepId;
+		if (current.plan === "pro" && current.stepId === nextStepId && !current.planConfirmed) return current;
+		return { ...current, plan: "pro", stepId: nextStepId, planConfirmed: false };
+	}
+	return current;
 }
 
 export function Onboarding({ onComplete }: { readonly onComplete: () => void }): ReactElement {
@@ -171,7 +213,7 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 					}),
 				);
 			setCandidates([...folders, ...added]);
-			setDraft(draft);
+			setDraft(reconcileAccountDraft(draft, accountRef.current));
 		})();
 		return () => {
 			alive = false;
@@ -223,28 +265,37 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 			return false;
 		}
 		const status = permissionRef.current;
+		const signedIn = accountRef.current?.state === "signedIn";
+		const embed: EmbedMode = signedIn && current.embed === "cloud" ? "cloud" : "local";
 		return canAdvance({
 			stepId: current.stepId,
 			platform: status?.platform ?? "",
 			fullDiskAccess: status?.fullDiskAccess === true,
-			signedIn: accountRef.current?.state === "signedIn",
+			signedIn,
 			selectedFolders: current.folders.filter((folder) => folder.selected).length,
-			embed: EMBED,
-			cloudConsent: false,
+			embed,
+			cloudConsent: current.cloudConsent === true,
 			plan: current.plan,
 			modelVerified: current.model?.verified === true,
 		});
 	}, []);
 
-	const flow = draft === null ? [] : buildFlow(draft.plan, draft.planConfirmed, EMBED);
+	const currentEmbed: EmbedMode = canSelectCloudEmbedding(account) && draft?.embed === "cloud" ? "cloud" : "local";
+	const flow =
+		draft === null
+			? []
+			: buildFlow(draft.plan, shouldSkipPlanStep(draft.planConfirmed, currentEmbed, account), currentEmbed);
 
 	const startIndexing = useCallback((): void => {
 		const current = draftRef.current;
 		if (current === null) {
 			return;
 		}
+		const signedIn = accountRef.current?.state === "signedIn";
+		const embed: EmbedMode = signedIn && current.embed === "cloud" ? "cloud" : "local";
 		const request: IndexingRequest = {
 			folders: current.folders.filter((folder) => folder.selected).map((folder) => folder.path),
+			embed,
 			sources: current.sources.filter((source) => source.on).map((source) => ({ id: source.id })),
 			plan: current.plan,
 			model:
@@ -285,21 +336,25 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 			setOverlay("pay");
 			return;
 		}
-		const list = buildFlow(current.plan, current.planConfirmed, EMBED);
+		const signedIn = accountRef.current?.state === "signedIn";
+		const embed: EmbedMode = signedIn && current.embed === "cloud" ? "cloud" : "local";
+		const list = buildFlow(current.plan, shouldSkipPlanStep(current.planConfirmed, embed, accountRef.current), embed);
 		const target = list[list.indexOf(current.stepId) + 1];
 		setDraft({
 			...current,
 			...(current.stepId === "plan" ? { planConfirmed: true } : {}),
 			...(target === undefined ? {} : { stepId: target }),
 		});
-	}, [currentAdvance]);
+	}, [currentAdvance, openCheckout]);
 
 	const back = useCallback((): void => {
 		const current = draftRef.current;
 		if (current === null) {
 			return;
 		}
-		const list = buildFlow(current.plan, current.planConfirmed, EMBED);
+		const signedIn = accountRef.current?.state === "signedIn";
+		const embed: EmbedMode = signedIn && current.embed === "cloud" ? "cloud" : "local";
+		const list = buildFlow(current.plan, shouldSkipPlanStep(current.planConfirmed, embed, accountRef.current), embed);
 		const index = list.indexOf(current.stepId);
 		if (index > 0) {
 			const target = list[index - 1];
@@ -457,9 +512,14 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 
 	// The account lives in the main process; this window only mirrors its status.
 	useEffect(() => {
-		const off = autorag.account.onChanged(setAccount);
-		void autorag.account.status().then(setAccount);
-		void autorag.account.refresh().then(setAccount, () => undefined);
+		const applyAccount = (status: AccountStatus): void => {
+			accountRef.current = status;
+			setAccount(status);
+			setDraft((current) => (current === null ? current : reconcileAccountDraft(current, status)));
+		};
+		const off = autorag.account.onChanged(applyAccount);
+		void autorag.account.status().then(applyAccount);
+		void autorag.account.refresh().then(applyAccount, () => undefined);
 		return off;
 	}, []);
 
@@ -480,7 +540,9 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 		}
 		setOverlay(null);
 		showToast(t("onboarding.toast.planActive", { plan: t(`onboarding.plan.plan.${current.plan}.name`) }));
-		next();
+		if (current.stepId === "plan") {
+			next();
+		}
 	}, [overlay, account, next, showToast, t]);
 
 	const signIn = useCallback((): void => {
@@ -488,6 +550,19 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 			(status) => {
 				setAccount(status);
 				if (status.state === "signedIn") {
+					const subPlan = status.account?.plan;
+					setDraft((current) => {
+						if (current === null) return current;
+						const nextPlan: PlanId =
+							subPlan === "air" || subPlan === "pro"
+								? current.embed === "cloud"
+									? "pro"
+									: subPlan
+								: current.plan === "byok"
+									? "pro"
+									: current.plan;
+						return { ...current, plan: nextPlan };
+					});
 					showToast(t("onboarding.toast.signedIn"));
 					window.setTimeout(() => {
 						if (draftRef.current?.stepId === "account") {
@@ -576,26 +651,59 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 				}
 			});
 		},
+		setEmbedMode: (embed: EmbedMode) => {
+			if (embed === "cloud" && !canSelectCloudEmbedding(accountRef.current)) {
+				return;
+			}
+			setDraft((current) => {
+				if (current === null) return current;
+				const subPlan = accountRef.current?.state === "signedIn" ? accountRef.current.account?.plan : undefined;
+				const nextPlan: PlanId =
+					embed === "cloud"
+						? "pro"
+						: subPlan === "air" || subPlan === "pro"
+							? subPlan
+							: current.plan;
+				return {
+					...current,
+					embed,
+					cloudConsent: false,
+					plan: nextPlan,
+					planConfirmed: false,
+				};
+			});
+		},
+		setCloudConsent: (cloudConsent: boolean) => patch({ cloudConsent }),
 		setSourceOn: (id, on) =>
 			patch({
 				sources: (draftRef.current?.sources ?? []).map((source) => (source.id === id ? { ...source, on } : source)),
 			}),
-		choosePlan: (plan: PlanId) => patch({ plan }),
+		choosePlan: (plan: PlanId) => {
+			const current = draftRef.current;
+			const embed: EmbedMode = canSelectCloudEmbedding(accountRef.current) && current?.embed === "cloud" ? "cloud" : "local";
+			if (!isPlanSelectable(plan, embed)) {
+				return;
+			}
+			patch({ plan });
+		},
 		signIn,
 		cancelSignIn: () => {
 			void autorag.account.cancelSignIn().then(setAccount);
 		},
 		signOut: () => {
-			void autorag.account.signOut().then(setAccount);
+			void autorag.account.signOut().then((status) => {
+				setAccount(status);
+				patch({ embed: "local", cloudConsent: false });
+			});
 		},
 		skipAccount: () => {
 			const current = draftRef.current;
 			if (current === null) {
 				return;
 			}
-			const list = buildFlow("byok", current.planConfirmed, EMBED);
+			const list = buildFlow("byok", current.planConfirmed, "local");
 			const target = list[list.indexOf(current.stepId) + 1];
-			setDraft({ ...current, plan: "byok", ...(target === undefined ? {} : { stepId: target }) });
+			setDraft({ ...current, embed: "local", cloudConsent: false, plan: "byok", ...(target === undefined ? {} : { stepId: target }) });
 		},
 		openCheckout,
 		refreshAccount,

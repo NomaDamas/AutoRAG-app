@@ -41,6 +41,29 @@ describe("applyIndexingConfig", () => {
 		expect(isJsonObject(next.minSync) && next.minSync.embedder).toEqual({ id: "native:Qwen/Qwen3-Embedding-0.6B", dimension: 1024 });
 	});
 
+	it("writes a remote cloud embedder block with id, baseUrl, dimension, and apiKeyEnv", () => {
+		const next = applyIndexingConfig({
+			raw: { minSync: { embedder: { profile: "qwen3-embedding-0.6b", dimension: 1024 } } },
+			folders: ["/a"],
+			datasources: [],
+			home: HOME,
+			embedder: {
+				id: "openai:qwen/qwen3-embedding-0.6b",
+				baseUrl: "https://api.dazziapp.com",
+				dimension: 1024,
+				apiKeyEnv: "OPENAI_API_KEY",
+			},
+			workspacePath: null,
+			model: null,
+		});
+		expect(isJsonObject(next.minSync) && next.minSync.embedder).toEqual({
+			id: "openai:qwen/qwen3-embedding-0.6b",
+			baseUrl: "https://api.dazziapp.com",
+			dimension: 1024,
+			apiKeyEnv: "OPENAI_API_KEY",
+		});
+	});
+
 	it("merges datasource aliases, keeping other existing fields", () => {
 		const raw = { datasources: { github: { type: "github", description: "old", pollingIntervalMs: 60 } } };
 		const next = applyIndexingConfig({

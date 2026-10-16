@@ -403,6 +403,14 @@ app.whenReady().then(async () => {
 					pictures: knownFolder("pictures", join(home, "Pictures")),
 				}
 			: undefined;
+	// Stored provider keys reach process.env before the fs worker or any agent
+	// resolves, so the worker, LLM, embedding, and reranker all see the same credential.
+	const credentials = createProviderCredentialService({
+		filePath: join(app.getPath("userData"), "credentials.enc.json"),
+		safeStorage,
+		env: process.env,
+	});
+	await credentials.load();
 	// Listings, watches, Finder metadata, places, dupey scans, and the index
 	// badges run in the fs worker, off this event loop; a native fault there
 	// ends only that process (FS roadmap #101). Main keeps the Electron-only
@@ -488,13 +496,6 @@ app.whenReady().then(async () => {
 		void workerHost.client.call("setLanguage", [language]).catch((error: unknown) => console.error("[fs-worker] language:", error));
 		sendToAllWindows(LANGUAGE_CHANNELS.changed, language);
 	};
-	// Stored provider keys reach process.env before any agent resolves, so the
-	// LLM/embedding/reranker all see the same credential.
-	const credentials = createProviderCredentialService({
-		filePath: join(app.getPath("userData"), "credentials.enc.json"),
-		safeStorage,
-		env: process.env,
-	});
 	const osMenu = createOsMenuIntegration({
 		platform: process.platform,
 		// os.homedir() honors $HOME (and USERPROFILE), so QA and tests can aim the install at a throwaway home.
@@ -507,7 +508,6 @@ app.whenReady().then(async () => {
 			await execFileAsync(command, [...args]);
 		},
 	});
-	await credentials.load();
 	const autoRagConfig = createAutoRagConfigService({ env: process.env, cwd: process.cwd() });
 	const providerAuth = createProviderAuthService({
 		send: (event) => sendToMainWindow(SETTINGS_CHANNELS.providerLoginEvent, event),

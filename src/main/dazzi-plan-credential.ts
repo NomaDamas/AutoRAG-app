@@ -71,3 +71,18 @@ export async function clearDazziPlanCredential(agentDir: string): Promise<void> 
 	delete next[AUTORAG_PROVIDER_ID];
 	await writeAuthObject(authPath, next);
 }
+
+/** Read the hosted plan's token from `auth.json`, or null when absent/unreadable. */
+export async function readDazziPlanCredential(agentDir: string): Promise<string | null> {
+	const authPath = join(agentDir, "auth.json");
+	if (!existsSync(authPath)) return null;
+	try {
+		const parsed: unknown = JSON.parse(await readFile(authPath, "utf8"));
+		if (!isJsonObject(parsed)) return null;
+		const entry = parsed[AUTORAG_PROVIDER_ID];
+		if (!isJsonObject(entry) || typeof entry.access !== "string" || entry.access.length === 0) return null;
+		return entry.access;
+	} catch {
+		return null;
+	}
+}

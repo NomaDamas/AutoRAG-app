@@ -514,12 +514,13 @@
       "bulletGpuMac": "使用 Apple Silicon GPU",
       "bulletGpuWindows": "使用 GPU 加速（如可用）",
       "bulletPower": "笔记本电脑建议连接电源",
-      "cloudBadge": "准备中",
+      "cloudBadge": "仅限 Pro",
       "cloudTitle": "在云端",
       "cloudLead": "处理更快，但你选择的文档正文会被发送。",
       "cloudBulletPerf": "对 Mac 性能影响较小",
       "cloudBulletNoStore": "Dazzi 不保存请求内容，仅发送至零数据保留（ZDR）服务商",
-      "privacyTable": "隐私政策中的模型数据表"
+      "privacyTable": "隐私政策中的模型数据表",
+      "cloudConsent": "我同意将所选文件夹中的文档正文发送至 Dazzi 服务器进行嵌入处理。处理后不会保留。"
     },
     "sources": {
       "eyebrow": "数据源",
@@ -555,6 +556,9 @@
       "title": "你打算如何使用？",
       "titleReady": "套餐已就绪",
       "lead": "套餐决定 AI 用量和嵌入位置。可稍后在设置中更改。",
+      "leadCloud": "已选择云端嵌入。可使用 Pro 套餐继续。",
+      "leadCloudReady": "可以使用云端嵌入。请继续下一步。",
+      "cloudCallout": "云端嵌入仅限 Pro 套餐使用。",
       "badgeRecommended": "推荐",
       "badgeTrial": "试用进行中",
       "badgeSubscribed": "已订阅",
@@ -602,7 +606,7 @@
           "chip": "问题将发送到 Dazzi 模型",
           "training": "输入与输出不用于模型训练",
           "feature": {
-            "a": "在这台 Mac 上本地嵌入（内容不会被发送）",
+            "a": "通过云端嵌入更快完成",
             "b": "托管 AI 模型 · 最高用量",
             "c": "包含 Air 的全部功能"
           }

@@ -247,8 +247,13 @@ resumes at the same step.
 - **Folders** are pre-scanned with the indexer's own rules (supported
   extensions, size cap, skipped dependency/code folders) to show real file
   counts and an ETA.
-- **Embedding** is local (`qwen3-embedding-0.6b`); cloud embedding is shown but
-  unavailable, since corpus text is never sent to remote embedders.
+- **Embedding** offers local (`qwen3-embedding-0.6b`) by default and enables
+  Dazzi cloud embedding (`openai:qwen/qwen3-embedding-0.6b` on the Dazzi
+  endpoint) once the user is signed in to Dazzi and gives explicit consent.
+  Choosing cloud embedding places the plan step immediately after embedding and
+  restricts plan selection to Pro; when the signed-in account already holds an
+  active paid subscription (Air/Pro for local, Pro for cloud), the plan step is
+  skipped automatically.
 - **Data sources** list only usable connectors, and every one starts off. The
   probes run in parallel and each row appears the moment its own probe finishes
   (fast ones first); a "checking" line stays under the list until all of them are

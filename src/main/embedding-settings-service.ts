@@ -196,7 +196,14 @@ function currentProfileId(embedder: unknown): string | null {
 	const id = embedder.id;
 	if (typeof id === "string") {
 		if (id.startsWith("native:")) return "native-qwen3";
-		if (typeof embedder.baseUrl === "string" && embedder.baseUrl.length > 0) return "local-server";
+		if (typeof embedder.baseUrl === "string" && embedder.baseUrl.length > 0) {
+			try {
+				const host = new URL(embedder.baseUrl).hostname.toLowerCase();
+				if (LOOPBACK_HOSTS[host] === true) return "local-server";
+			} catch {
+				return null;
+			}
+		}
 	}
 	return null;
 }
