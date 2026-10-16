@@ -3,10 +3,15 @@ import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { basename, join, sep } from "node:path";
 import { readRawConfigObject, writeConfigObject } from "@autorag/librarian/core";
 import {
+	ACCOUNT_API_KEY_ENV,
+	DEFAULT_ACCOUNT_BASE_URL,
+} from "../shared/account-contract";
+import {
 	ONBOARDING_CHANNELS,
 	type ByokProviderId,
 	type DetectedModelProvider,
 	type DetectedSource,
+	type EmbedMode,
 	type EmbeddingInfo,
 	type FolderCandidate,
 	type FolderScan,
@@ -47,6 +52,8 @@ const EMBEDDER_PROFILE = "qwen3-embedding-0.6b";
 const EMBEDDER_DIMENSION = 1024;
 const EMBEDDER_MODEL_BYTES = 639_150_592;
 const EMBEDDER_MODEL_FILE = "Qwen3-Embedding-0.6B-Q8_0.gguf";
+const DAZZI_CLOUD_EMBEDDER_ID = "openai:qwen/qwen3-embedding-0.6b";
+const DAZZI_CLOUD_EMBEDDER_KEY_ENV = "OPENAI_API_KEY";
 const POLL_INTERVAL_MS = 1000;
 const SOURCE_LABELS: Readonly<Record<SourceId, string>> = {
 	kakao: "KakaoTalk",
@@ -164,6 +171,7 @@ const STEP_IDS: Readonly<Record<string, true>> = {
 	indexing: true,
 };
 const PLAN_IDS: Readonly<Record<string, true>> = { free: true, air: true, pro: true, byok: true };
+const EMBED_MODES: Readonly<Record<string, true>> = { local: true, cloud: true };
 const BYOK_PROVIDERS: Readonly<Record<string, true>> = {
 	anthropic: true,
 	openai: true,
@@ -237,6 +245,8 @@ function isOnboardingDraft(value: unknown): value is OnboardingDraft {
 	if (typeof value.network !== "boolean") return false;
 	if (typeof value.launchAtLogin !== "boolean") return false;
 	if (!Array.isArray(value.folders) || !value.folders.every(isFolderChoice)) return false;
+	if (value.embed !== undefined && (typeof value.embed !== "string" || EMBED_MODES[value.embed] !== true)) return false;
+	if (value.cloudConsent !== undefined && typeof value.cloudConsent !== "boolean") return false;
 	if (!Array.isArray(value.sources) || !value.sources.every(isSourceChoice)) return false;
 	if (typeof value.plan !== "string" || PLAN_IDS[value.plan] !== true) return false;
 	if (typeof value.planConfirmed !== "boolean") return false;
@@ -248,6 +258,7 @@ function isIndexingRequest(value: unknown): value is IndexingRequest {
 	if (!isJsonObject(value)) return false;
 	if (!Array.isArray(value.folders) || !value.folders.every(isAbsoluteString)) return false;
 	if (value.folders.length === 0) return false;
+	if (value.embed !== undefined && (typeof value.embed !== "string" || EMBED_MODES[value.embed] !== true)) return false;
 	if (!Array.isArray(value.sources)) return false;
 	for (const source of value.sources) {
 		if (!isJsonObject(source) || typeof source.id !== "string" || SOURCE_IDS[source.id] !== true) return false;
@@ -595,15 +606,30 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 			}));
 			const raw = existsSync(deps.configPath) ? readRawConfigObject(deps.configPath) : {};
 			const minSync = isJsonObject(raw.minSync) ? raw.minSync : {};
-			const configured = isJsonObject(minSync.embedder) && Object.keys(minSync.embedder).length > 0;
+			const existingEmbedder = isJsonObject(minSync.embedder) ? minSync.embedder : {};
+			const isDazziCloudEmbedder = existingEmbedder.id === DAZZI_CLOUD_EMBEDDER_ID;
+			const configured = Object.keys(existingEmbedder).length > 0 && !isDazziCloudEmbedder;
+			const embedMode: EmbedMode = request.embed === "cloud" ? "cloud" : "local";
+			const configuredBaseUrl = deps.env.AUTORAG_BASE_URL?.trim();
+			const accountBaseUrl = (configuredBaseUrl !== undefined && configuredBaseUrl.length > 0 ? configuredBaseUrl : DEFAULT_ACCOUNT_BASE_URL).replace(/\/+$/u, "");
+			const embedder =
+				embedMode === "cloud"
+					? {
+							id: DAZZI_CLOUD_EMBEDDER_ID,
+							baseUrl: accountBaseUrl,
+							dimension: EMBEDDER_DIMENSION,
+							apiKeyEnv: DAZZI_CLOUD_EMBEDDER_KEY_ENV,
+						}
+					: configured
+						? null
+						: { profile: EMBEDDER_PROFILE, dimension: EMBEDDER_DIMENSION };
 			const modelProvider = request.model === null ? null : (request.model.provider as ByokProviderId);
 			const next = applyIndexingConfig({
 				raw,
 				folders: request.folders,
 				datasources,
 				home: deps.home,
-				embedder: configured ? null : { profile: EMBEDDER_PROFILE, dimension: EMBEDDER_DIMENSION },
-				// The app seeds `workspacePath = cwd` (the repo in dev, `/` when packaged);
+				embedder,
 				// the first index belongs in the AutoRAG home instead. A workspace the
 				// user set explicitly stays.
 				workspacePath:
@@ -632,6 +658,11 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 				await deps.useManagedModel().catch((error: unknown) => {
 					console.warn("[onboarding] could not point the agent at the account's models:", error);
 				});
+			}
+			if (embedMode === "cloud") {
+				await maybeStoreCloudEmbedderKey();
+			} else if (isDazziCloudEmbedder && deps.env[DAZZI_CLOUD_EMBEDDER_KEY_ENV] === deps.env[ACCOUNT_API_KEY_ENV]) {
+				await deps.credentials.remove(DAZZI_CLOUD_EMBEDDER_KEY_ENV).catch(() => undefined);
 			}
 			await maybeStoreGitToken(request.sources.map((source) => source.id));
 			const methods = ["parsed", "minsync"];
@@ -687,6 +718,17 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 		},
 		dispose: () => stopPolling(),
 	};
+
+	async function maybeStoreCloudEmbedderKey(): Promise<void> {
+		const token = deps.env[ACCOUNT_API_KEY_ENV];
+		if (typeof token !== "string" || token.length === 0) return;
+		deps.env[DAZZI_CLOUD_EMBEDDER_KEY_ENV] = token;
+		try {
+			await deps.credentials.set(DAZZI_CLOUD_EMBEDDER_KEY_ENV, token);
+		} catch (error) {
+			console.warn("[onboarding] could not store the Dazzi cloud embedder credential:", error);
+		}
+	}
 
 	async function maybeStoreGitToken(sourceIds: readonly SourceId[]): Promise<void> {
 		if (!sourceIds.includes("github")) return;

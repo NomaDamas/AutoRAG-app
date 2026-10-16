@@ -514,12 +514,13 @@
       "bulletGpuMac": "Uses Apple Silicon GPU",
       "bulletGpuWindows": "Uses GPU acceleration (when available)",
       "bulletPower": "Recommended to plug in on laptops",
-      "cloudBadge": "Preparing",
+      "cloudBadge": "Pro only",
       "cloudTitle": "In the cloud",
       "cloudLead": "Processes faster, but the contents of the documents you select are sent.",
       "cloudBulletPerf": "Little impact on Mac performance",
       "cloudBulletNoStore": "Nothing is stored; requests go only to zero-data-retention (ZDR) providers",
-      "privacyTable": "Model data table in the Privacy Policy"
+      "privacyTable": "Model data table in the Privacy Policy",
+      "cloudConsent": "I agree that the contents of documents in the selected folders will be sent to Dazzi servers for embedding. Nothing is stored after processing."
     },
     "sources": {
       "eyebrow": "Data sources",
@@ -555,6 +556,9 @@
       "title": "How will you use it?",
       "titleReady": "Your plan is ready",
       "lead": "Your plan determines AI usage and where embedding happens. You can change it later in Settings.",
+      "leadCloud": "You chose cloud embedding. Continue with the Pro plan.",
+      "leadCloudReady": "Cloud embedding is ready to use. Continue to the next step.",
+      "cloudCallout": "Cloud embedding is only available on the Pro plan.",
       "badgeRecommended": "Recommended",
       "badgeTrial": "Trial in progress",
       "badgeSubscribed": "Subscribed",
@@ -602,7 +606,7 @@
           "chip": "Questions are sent to Dazzi models",
           "training": "Inputs and outputs are not used to train models",
           "feature": {
-            "a": "Local embedding on this Mac (contents are never sent)",
+            "a": "Faster with cloud embedding",
             "b": "Managed AI models · highest usage",
             "c": "Everything in Air"
           }
