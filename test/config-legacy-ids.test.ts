@@ -85,4 +85,17 @@ describe("migrateLegacyProviderIds", () => {
 		expect((raw.model as Record<string, unknown>).provider).toBe("dazzi");
 		expect((raw.rerank as Record<string, unknown>).provider).toBe("dazzi");
 	});
+
+	it("migrates legacy minSync.embedder.profile='qwen3-embedding-0.6b' to native:Qwen/Qwen3-Embedding-0.6B", () => {
+		const path = writeConfig({
+			workspacePath: "/docs",
+			searchPaths: ["/docs"],
+			minSync: { enabled: true, embedder: { profile: "qwen3-embedding-0.6b", dimension: 1024 } },
+		});
+
+		expect(migrateLegacyProviderIds(path)).toBe(true);
+
+		const raw = JSON.parse(readFileSync(path, "utf8")) as { minSync: { embedder: Record<string, unknown> } };
+		expect(raw.minSync.embedder).toEqual({ id: "native:Qwen/Qwen3-Embedding-0.6B", dimension: 1024 });
+	});
 });

@@ -38,6 +38,11 @@ import { applyIndexingConfig, buildDatasourceEntries } from "./onboarding-config
 import { PROVIDER_ENV_NAME } from "./onboarding-models";
 import { computeIndexingProgress } from "./onboarding-progress";
 import type { ProviderCredentialService } from "./provider-credentials";
+import {
+	minSyncModelCacheRoot,
+	NATIVE_QWEN3_MODEL_BYTES,
+	NATIVE_QWEN3_SAFETENSORS_RELATIVE_PATH,
+} from "./seed-assets";
 
 /**
  * The main-process half of onboarding: everything that touches the OS or the
@@ -50,8 +55,6 @@ import type { ProviderCredentialService } from "./provider-credentials";
 
 const EMBEDDER_ID = "native:Qwen/Qwen3-Embedding-0.6B";
 const EMBEDDER_DIMENSION = 1024;
-const EMBEDDER_MODEL_BYTES = 639_150_592;
-const EMBEDDER_MODEL_FILE = "Qwen3-Embedding-0.6B-Q8_0.gguf";
 const DAZZI_CLOUD_EMBEDDER_ID = "openai:qwen/qwen3-embedding-0.6b";
 const DAZZI_CLOUD_EMBEDDER_KEY_ENV = "OPENAI_API_KEY";
 const POLL_INTERVAL_MS = 1000;
@@ -581,11 +584,11 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 			const raw = existsSync(deps.configPath) ? readRawConfigObject(deps.configPath) : {};
 			const minSync = isJsonObject(raw.minSync) ? raw.minSync : {};
 			const embedder = isJsonObject(minSync.embedder) ? minSync.embedder : {};
-			const autoragHome = deps.env.AUTORAG_HOME ?? join(deps.home, ".autorag");
+			const cacheRoot = minSyncModelCacheRoot({ platform: deps.platform, home: deps.home, env: deps.env });
 			return {
 				profile: EMBEDDER_ID,
-				modelBytes: EMBEDDER_MODEL_BYTES,
-				cached: existsSync(join(autoragHome, "models", EMBEDDER_MODEL_FILE)),
+				modelBytes: NATIVE_QWEN3_MODEL_BYTES,
+				cached: existsSync(join(cacheRoot, NATIVE_QWEN3_SAFETENSORS_RELATIVE_PATH)),
 				configured: Object.keys(embedder).length > 0,
 			};
 		},

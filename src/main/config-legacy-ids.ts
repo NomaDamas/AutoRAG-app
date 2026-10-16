@@ -44,6 +44,12 @@ export function migrateLegacyProviderIds(configPath: string): boolean {
 	}
 	dropApiKeyEnv(raw.rerank, rewrite(raw.rerank, "provider"));
 	rewrite(raw.jev, "backend");
+	if (isJsonObject(raw.minSync) && isJsonObject(raw.minSync.embedder) && raw.minSync.embedder.profile === "qwen3-embedding-0.6b") {
+		delete raw.minSync.embedder.profile;
+		raw.minSync.embedder.id = "native:Qwen/Qwen3-Embedding-0.6B";
+		if (typeof raw.minSync.embedder.dimension !== "number") raw.minSync.embedder.dimension = 1024;
+		changed = true;
+	}
 	if (changed) writeConfigObject(configPath, raw);
 	return changed;
 }

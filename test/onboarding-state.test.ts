@@ -167,11 +167,25 @@ describe("createOnboardingService persistence", () => {
 		expect(service.isIndexing()).toBe(false);
 	});
 
-	it("writes the native Qwen3 embedder on first index instead of the llama-server gateway profile", async () => {
+	it("writes the native Qwen3 embedder on first index and detects the native MinSync model cache", async () => {
 		const directory = await workDir();
-		const service = createOnboardingService(makeDeps(directory));
+		const nativeSnapshot = join(
+			directory,
+			".cache",
+			"minsync",
+			"models",
+			"models--Qwen--Qwen3-Embedding-0.6B",
+			"snapshots",
+			"97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3",
+		);
+		await mkdir(nativeSnapshot, { recursive: true });
+		await writeFile(join(nativeSnapshot, "model.safetensors"), "weights");
+
+		const service = createOnboardingService({ ...makeDeps(directory), home: directory });
 		const info = await service.embedding();
 		expect(info.profile).toBe("native:Qwen/Qwen3-Embedding-0.6B");
+		expect(info.cached).toBe(true);
+		expect(info.modelBytes).toBeGreaterThan(1_000_000_000);
 
 		await service.startIndexing({
 			folders: ["/Users/me/Documents"],

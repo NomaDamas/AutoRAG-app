@@ -3,7 +3,7 @@ import { access, open, readdir, readFile, stat } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { isAbsolute, join, sep } from "node:path";
 import { applyBundledTools } from "./bundled-tools";
-import { seedAssets } from "./seed-assets";
+import { minSyncModelCacheRoot, seedAssets } from "./seed-assets";
 import {
 	app,
 	BrowserWindow,
@@ -368,7 +368,7 @@ app.whenReady().then(async () => {
 	applyBundledTools({ resourcesPath: process.resourcesPath, env: process.env });
 	void seedAssets({
 		seedDir: join(process.resourcesPath, "seed"),
-		autoragHome: process.env.AUTORAG_HOME?.trim() || join(homedir(), ".autorag"),
+		cacheRoot: minSyncModelCacheRoot({ platform: process.platform, home: homedir(), env: process.env }),
 	}).then(
 		(outcome) => {
 			if (outcome.kind === "done" && outcome.copied.length > 0) console.log(`[autorag] seeded ${outcome.copied.join(", ")}`);

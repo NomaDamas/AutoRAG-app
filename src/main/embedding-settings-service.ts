@@ -123,18 +123,6 @@ export function embeddingProfiles(): readonly EmbeddingProfile[] {
 			requiresLocalServer: false,
 		},
 		{
-			id: "qwen3-embedding-0.6b",
-			kind: "profile",
-			label: t("main.embedding.profiles.runtime.label"),
-			description: t("main.embedding.profiles.runtime.description"),
-			model: "qwen3-embedding-0.6b",
-			dimension: 1024,
-			queryPrefix: "",
-			passagePrefix: "",
-			baseUrl: null,
-			requiresLocalServer: false,
-		},
-		{
 			id: "local-server",
 			kind: "local-server",
 			label: t("main.embedding.profiles.localServer.label"),
@@ -191,8 +179,7 @@ function deriveEmbedder(choice: EmbeddingChoice): JsonObject {
 
 function currentProfileId(embedder: unknown): string | null {
 	if (!isJsonObject(embedder)) return null;
-	const profile = embedder.profile;
-	if (profile === "qwen3-embedding-0.6b") return profile;
+	if (embedder.profile === "qwen3-embedding-0.6b") return "native-qwen3";
 	const id = embedder.id;
 	if (typeof id === "string") {
 		if (id.startsWith("native:")) return "native-qwen3";

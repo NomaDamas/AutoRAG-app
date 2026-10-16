@@ -6,9 +6,9 @@
 // config and index are never touched. Electron resolves the home folder from
 // the OS (not $HOME), so the lane deselects the real Desktop/Documents
 // candidates and adds two fixture folders through a stubbed folder dialog. The
-// local embedding model and llama runtime are linked in from the real AutoRAG
-// home when cached (otherwise the first index downloads them).
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
+// local native embedding model is referenced from the real MinSync cache when
+// present (otherwise the first index downloads it).
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
@@ -33,11 +33,11 @@ writeFileSync(join(DOCS, "report-q3.md"), "# Q3 report\n\nOperating cost fell be
 writeFileSync(join(DOCS, "notes.txt"), "Budget summary for the third quarter.\n");
 mkdirSync(AUTORAG_HOME, { recursive: true });
 mkdirSync(join(WORK, "config"), { recursive: true });
-const realHome = process.env.AUTORAG_HOME?.trim() || join(homeDir(), ".autorag");
-for (const dir of ["models", "runtime"]) {
-	if (existsSync(join(realHome, dir))) symlinkSync(join(realHome, dir), join(AUTORAG_HOME, dir), "dir");
-}
-
+const realMinsyncModels =
+	process.env.FASTEMBED_CACHE_DIR?.trim() ||
+	(process.platform === "win32"
+		? join(process.env.LOCALAPPDATA?.trim() || join(homeDir(), "AppData", "Local"), "minsync", "models")
+		: join(homeDir(), ".cache", "minsync", "models"));
 const failures = [];
 const check = (name, ok, detail = "") => {
 	console.log(`${ok ? "PASS" : "FAIL"} ${name}${detail ? ` — ${detail}` : ""}`);
@@ -54,7 +54,12 @@ const stub = createServer((request, response) => {
 });
 await new Promise((resolve) => stub.listen(0, "127.0.0.1", resolve));
 const stubUrl = `http://127.0.0.1:${stub.address().port}/v1`;
-const env = { AUTORAG_HOME, AUTORAG_CONFIG: CONFIG, AUTORAG_SKIP_DUPEY_CHECK: "1" };
+const env = {
+	AUTORAG_HOME,
+	AUTORAG_CONFIG: CONFIG,
+	AUTORAG_SKIP_DUPEY_CHECK: "1",
+	...(existsSync(realMinsyncModels) ? { FASTEMBED_CACHE_DIR: realMinsyncModels } : {}),
+};
 const userDataDir = join(WORK, "user-data");
 const app = await launchFinder({ userDataDir, env, onboarding: true, language: "ko" });
 const errors = [];
@@ -271,7 +276,7 @@ try {
 	failures.push(String(error));
 	console.error(error);
 } finally {
-	// The first index leaves two daemons pointing into WORK (llama-server,
+	// The first index leaves background helpers pointing into WORK (e.g.
 	// fsearch-cli watch); kill them by their command line before deleting it.
 	if (process.platform !== "win32") {
 		spawnSync("pkill", ["-9", "-f", WORK]);
