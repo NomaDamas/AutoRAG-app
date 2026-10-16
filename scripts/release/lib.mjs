@@ -18,8 +18,8 @@ export const CACHE_DIR = join(BUILD_DIR, ".cache");
 
 /** The two shipped targets. Everything else (Intel Mac, Windows on ARM, Linux) is out of scope. */
 export const PLATFORMS = {
-	"darwin-arm64": { os: "darwin", arch: "arm64", exe: "", nodeSuffix: "darwin-arm64.tar.gz", llama: "darwin-arm64-metal" },
-	"win32-x64": { os: "win32", arch: "x64", exe: ".exe", nodeSuffix: "win-x64.zip", llama: "win-x64-cpu" },
+	"darwin-arm64": { os: "darwin", arch: "arm64", exe: "", nodeSuffix: "darwin-arm64.tar.gz" },
+	"win32-x64": { os: "win32", arch: "x64", exe: ".exe", nodeSuffix: "win-x64.zip" },
 };
 
 export function hostPlatformId() {

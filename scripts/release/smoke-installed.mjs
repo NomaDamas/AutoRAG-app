@@ -7,8 +7,8 @@
  *   1. install: mount the .dmg and copy the app, or run the NSIS installer silently
  *   2. run scripts/release/verify-bundle.mjs against the INSTALLED tools directory
  *   3. launch the installed app on a throwaway profile and check, from inside
- *      its main process, that the bundled tools lead PATH and that the embedding
- *      model was seeded into the AutoRAG home
+ *      its main process, that the bundled tools lead PATH and that the native
+ *      embedding model was seeded into the MinSync model cache
  *   4. uninstall
  * The profile, HOME and AUTORAG_HOME are temporary; nothing of the real user is read.
  */
@@ -38,8 +38,8 @@ log(`installer ${installer}`);
 
 /**
  * Install budget: the time from running the installer to a usable app, download excluded. The first
- * number is the installer itself; the second is how long after launch the embedding model and runtime
- * are in place (the app copies them in the background and can already be used meanwhile).
+ * number is the installer itself; the second is how long after launch the native embedding model
+ * is in place (the app copies it in the background and can already be used meanwhile).
  */
 const BUDGET_SECONDS = Number(process.env.AUTORAG_INSTALL_BUDGET_SECONDS ?? 300);
 const installStarted = Date.now();

@@ -7,7 +7,7 @@
 //   `--user-data-dir` (the app's own support dir is left alone);
 // - AUTORAG_CONFIG + AUTORAG_HOME + AUTORAG_WORKSPACE: tmp sandbox (the real
 //   `~/.autorag/config.json`, index, and memory are never read or written);
-// - the embedding model and llama runtime are COPIED into the sandbox so the
+// - the native MinSync embedding model is COPIED into the sandbox so the
 //   first index runs offline; the real cache is never written through.
 //
 // Teardown, ordered from graceful to brutal:
@@ -61,7 +61,7 @@ function sweepStaleSandboxes() {
 	}
 }
 
-// A leaked daemon (llama-server, fsearch-cli) carries its DEAD sandbox's path
+// A leaked daemon (fsearch-cli) carries its DEAD sandbox's path
 // on its command line, so no dir-based sweep can find it once the dir is gone.
 // Scan the process table and kill only rows whose sandbox no longer exists;
 // live runs (dirs present) are never touched. Not on Windows: no `ps`, and the
@@ -163,7 +163,7 @@ function rmManaged(sandbox) {
 	console.warn(`[onboarding] could not remove ${sandbox}; the next run sweeps it again`);
 }
 
-// A deep copy (not a symlink) of the cached model and llama runtime, so the
+// A deep copy (not a symlink) of the cached native embedding model, so the
 // sandbox never writes through into the real cache. macOS clones it in APFS
 // copy-on-write when source and destination share the volume.
 function copyDirInto(source, destination) {
@@ -174,15 +174,19 @@ async function main() {
 	sweepStaleSandboxes();
 	reapOrphanSandboxProcesses();
 
-	const realHome = process.env.AUTORAG_HOME?.trim() || join(homedir(), ".autorag");
 	const sandbox = mkdtempSync(join(tmpdir(), PREFIX));
 	const autoragHome = join(sandbox, "autorag-home");
 	const configPath = join(sandbox, "config.json");
 	const userDataDir = join(sandbox, "user-data");
+	const minsyncCache = join(sandbox, "minsync-models");
 	mkdirSync(autoragHome, { recursive: true });
 	mkdirSync(userDataDir, { recursive: true });
-	const minsyncCache = join(sandbox, "minsync-models");
-	const realMinsyncCache = process.env.FASTEMBED_CACHE_DIR?.trim() || join(homedir(), ".cache", "minsync", "models");
+	mkdirSync(minsyncCache, { recursive: true });
+	const realMinsyncCache =
+		process.env.FASTEMBED_CACHE_DIR?.trim() ||
+		(process.platform === "win32"
+			? join(process.env.LOCALAPPDATA?.trim() || join(homedir(), "AppData", "Local"), "minsync", "models")
+			: join(homedir(), ".cache", "minsync", "models"));
 	if (existsSync(realMinsyncCache)) {
 		try {
 			copyDirInto(realMinsyncCache, minsyncCache);
@@ -200,7 +204,7 @@ async function main() {
 		AUTORAG_HOME: autoragHome,
 		AUTORAG_CONFIG: configPath,
 		AUTORAG_WORKSPACE: join(autoragHome, "workspace"),
-		...(existsSync(minsyncCache) ? { FASTEMBED_CACHE_DIR: minsyncCache } : {}),
+		FASTEMBED_CACHE_DIR: minsyncCache,
 	};
 
 	// Same dev entry point as `make run`: predev hooks sync the librarian and

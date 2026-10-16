@@ -9,13 +9,13 @@
  *   tools/node/       Node 24 LTS + npm (also the runtime of the npm-based CLIs)
  *   tools/npm/        mailcrawl, qmd, kordoc and their node_modules
  *   tools/manifest.json   what was staged: name, version, source, sha256
- *   seed/             Qwen3 embedding model + llama.cpp runtime for first launch
+ *   seed/             native Qwen3-Embedding-0.6B checkpoint for first launch
  *
  * Versions are resolved at run time from the publishers' "latest" (GitHub
  * releases, crates.io, npm, nodejs.org), so every release ships the newest
- * dependencies; manifest.json records exactly what that was. The embedding
- * model and llama.cpp build are the exception: the librarian pins them by
- * sha256 in its own manifest, which is the source of truth read here.
+ * dependencies; manifest.json records exactly what that was. The native
+ * embedding model is the exception: it is pinned by commit revision and sha256
+ * so the bundled weights never drift silently.
  *
  * Each platform is staged on a matching host (native compiles, native npm
  * prebuilds): the macOS stage on an Apple Silicon Mac, the Windows stage on a
