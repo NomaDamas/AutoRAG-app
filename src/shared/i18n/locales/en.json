@@ -665,19 +665,15 @@
       "waitingNote": "Preparing the first index.",
       "running": "{{phase}}…",
       "detailParsing": "Reading documents",
-      "detailSources": "{{sources}} · syncing metadata",
-      "detailNoSources": "No connected data sources · skipped",
       "detailFinalizing": "Optimizing the search index",
       "phaseLabel": {
         "parsed": "Reading documents",
         "minsync": "Embedding",
-        "datasources": "Checking data sources",
         "finalizing": "Tidying up"
       },
       "phase": {
         "parsed": "Reading documents",
         "minsync": "Embedding",
-        "datasources": "Data sources",
         "finalizing": "Tidying up"
       },
       "title": "Dazzi is reading your files",

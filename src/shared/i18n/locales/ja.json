@@ -665,19 +665,15 @@
       "waitingNote": "最初のインデックス作成を準備しています。",
       "running": "{{phase}}…",
       "detailParsing": "文書を読み込み中",
-      "detailSources": "{{sources}} · メタデータを同期中",
-      "detailNoSources": "接続したデータソースなし · スキップ",
       "detailFinalizing": "検索インデックスを最適化中",
       "phaseLabel": {
         "parsed": "文書を読み込み中",
         "minsync": "埋め込み中",
-        "datasources": "データソースを確認中",
         "finalizing": "整理中"
       },
       "phase": {
         "parsed": "文書の読み込み",
         "minsync": "埋め込み",
-        "datasources": "データソース",
         "finalizing": "整理"
       },
       "title": "Dazziがファイルを読み込んでいます",

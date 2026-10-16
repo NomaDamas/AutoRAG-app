@@ -327,7 +327,7 @@ export function IndexingScreen({ ctx }: { readonly ctx: OnboardingCtx }): ReactE
 				)}
 			</div>
 			<TipCard ctx={ctx} />
-			{!success ? (
+			{!success && !failed ? (
 				<button type="button" className="ix-bg-start" onClick={ctx.finishInBackground}>
 					{t("onboarding.indexing.startInBackground")}
 				</button>

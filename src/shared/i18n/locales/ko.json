@@ -665,19 +665,15 @@
       "waitingNote": "첫 인덱싱을 준비하고 있습니다.",
       "running": "{{phase}}…",
       "detailParsing": "문서 읽는 중",
-      "detailSources": "{{sources}} · 메타데이터 동기화",
-      "detailNoSources": "연결한 데이터 소스 없음 · 건너뜀",
       "detailFinalizing": "검색 인덱스 최적화",
       "phaseLabel": {
         "parsed": "문서 읽는 중",
         "minsync": "임베딩 중",
-        "datasources": "데이터 소스 확인 중",
         "finalizing": "정리 중"
       },
       "phase": {
         "parsed": "문서 읽기",
         "minsync": "임베딩",
-        "datasources": "데이터 소스",
         "finalizing": "정리"
       },
       "title": "Dazzi가 파일을 읽고 있어요",

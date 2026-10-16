@@ -370,10 +370,15 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 		});
 	};
 
-	const persist = async (): Promise<void> => {
+	let persistChain: Promise<void> = Promise.resolve();
+	const persist = (): Promise<void> => {
 		const path = onboardingStatePath(deps.userDataDir);
-		await mkdir(join(deps.userDataDir, "onboarding"), { recursive: true });
-		await writeFile(path, `${JSON.stringify(stateFile, null, 2)}\n`, "utf8");
+		const run = async (): Promise<void> => {
+			await mkdir(join(deps.userDataDir, "onboarding"), { recursive: true });
+			await writeFile(path, `${JSON.stringify(stateFile, null, 2)}\n`, "utf8");
+		};
+		persistChain = persistChain.then(run, run);
+		return persistChain;
 	};
 
 	const emitStatus = (): void => {
@@ -671,8 +676,11 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 		indexStatus: async () => status,
 		isIndexing: () => refreshPromise !== null,
 		complete: async () => {
+			if (!pending) return;
 			stateFile = { ...stateFile, completed: true };
 			pending = false;
+			clearInterval(pollTimer ?? undefined);
+			pollTimer = null;
 			await persist();
 			deps.onComplete();
 			maybeStartBackgroundDatasources();

@@ -181,6 +181,7 @@ describe("createOnboardingService persistence", () => {
 		expect(service.isIndexing()).toBe(true);
 
 		await service.complete();
+		await service.complete();
 		expect(service.pending()).toBe(false);
 		expect(completedCalls).toBe(1);
 		expect(service.isIndexing()).toBe(true);
@@ -257,6 +258,37 @@ describe("createOnboardingService persistence", () => {
 		for (let tick = 0; tick < 20 && syncedAliases.length === 0; tick += 1) await Promise.resolve();
 		expect(syncedAliases).toEqual([["whatsapp"]]);
 	});
+	it("does not trigger background datasource indexing when local indexing fails", async () => {
+		const directory = await workDir();
+		const gate = Promise.withResolvers<ConfigRefreshResult>();
+		const syncedAliases: string[][] = [];
+		const whatsapp: DetectedSource = { id: "whatsapp", facts: { chats: 2, messages: 9 } };
+		const service = createOnboardingService({
+			...makeDeps(directory),
+			detectSources: async (onFound): Promise<SourceDetection> => {
+				onFound?.(whatsapp);
+				return { sources: [whatsapp] };
+			},
+			refresh: () => gate.promise,
+			syncDatasources: async (aliases) => {
+				syncedAliases.push([...aliases]);
+			},
+		});
+
+		await service.detectSources();
+		await service.startIndexing({
+			folders: ["/Users/me/Documents"],
+			sources: [{ id: "whatsapp" }],
+			plan: "free",
+			model: null,
+		});
+		await service.complete();
+		gate.resolve({ ok: false, methods: ["parsed", "minsync"], scanned: 0, written: 0, deleted: 0, skipped: 0, diagnostics: [], error: "disk full" });
+		for (let tick = 0; tick < 20 && service.isIndexing(); tick += 1) await Promise.resolve();
+		expect((await service.indexStatus()).state).toBe("failed");
+		expect(syncedAliases).toEqual([]);
+	});
+
 	it("points the agent at the account's models on a managed plan, and leaves BYOK alone", async () => {
 		const managedCalls: string[] = [];
 		const run = async (plan: "free" | "air" | "pro" | "byok", useManagedModel: () => Promise<unknown>): Promise<void> => {

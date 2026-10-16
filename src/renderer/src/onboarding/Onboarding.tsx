@@ -202,8 +202,15 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 		}
 		const pending = draft;
 		saveTimer.current = window.setTimeout(() => {
+			saveTimer.current = null;
 			void bridge.save(pending);
 		}, SAVE_DEBOUNCE_MS);
+		return () => {
+			if (saveTimer.current !== null) {
+				window.clearTimeout(saveTimer.current);
+				saveTimer.current = null;
+			}
+		};
 	}, [draft]);
 
 	const patch = useCallback((value: Partial<OnboardingDraft>): void => {
@@ -312,10 +319,18 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 			showToast(t("onboarding.toast.notIndexed"));
 			return;
 		}
+		if (saveTimer.current !== null) {
+			window.clearTimeout(saveTimer.current);
+			saveTimer.current = null;
+		}
 		void bridge.complete().then(onComplete);
 	}, [onComplete, showToast, t]);
 
 	const finishInBackground = useCallback((): void => {
+		if (saveTimer.current !== null) {
+			window.clearTimeout(saveTimer.current);
+			saveTimer.current = null;
+		}
 		void bridge.complete().then(onComplete);
 	}, [onComplete]);
 
