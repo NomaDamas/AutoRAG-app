@@ -169,7 +169,7 @@ export async function refreshAutoragIndex(
 			// (`ok: true`, `minsync-file-skipped`) when a later batch times out mid-run;
 			// either way, halving the batch and re-running `syncMinSync` retries the skipped files.
 			const minsyncTimedOut = (): boolean =>
-				isEmbeddingTimeout([minsyncReason, ...minsyncDiagnostics.map((diagnostic) => diagnostic.message)].join(" "));
+				isEmbeddingTimeout([minsyncReason, ...minsyncDiagnostics.map((diagnostic) => diagnostic.message)]);
 			while (minsyncTimedOut()) {
 				const next = smallerBatchSize(batch);
 				if (next === null) break;

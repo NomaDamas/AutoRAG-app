@@ -191,6 +191,36 @@ describe("refreshAutoragIndex", () => {
 			expect(batches).toEqual([undefined, 32]);
 			expect(JSON.parse(readFileSync(learnedFile(deps), "utf8"))).toEqual({ local: 32 });
 		});
+
+		it("does not shrink or remember a smaller batch when a skipped file merely has 413 in its name", async () => {
+			const unrelatedSkip = {
+				scanned: 2,
+				written: 2,
+				deleted: 0,
+				skipped: 0,
+				diagnostics: [
+					{
+						code: "minsync-file-skipped",
+						severity: "warning",
+						source: "files/invoice-413.md",
+						message: "MinSync skipped this file at the embed stage and will retry it on the next sync: files/invoice-413.md: embedding failed: non-finite values",
+					},
+				],
+				minsync: { ok: true, synced: 1 },
+			};
+			refresh.mockResolvedValueOnce(unrelatedSkip);
+			const deps = await fixture();
+
+			const outcome = await refreshAutoragIndex(deps);
+
+			expect(outcome.ok).toBe(true);
+			expect(syncMinSync).not.toHaveBeenCalled();
+			expect(batches).toEqual([undefined]);
+			expect(existsSync(learnedFile(deps))).toBe(false);
+			expect(outcome.diagnostics).toEqual([
+				expect.objectContaining({ code: "minsync-file-skipped", message: expect.stringContaining("invoice-413.md") }),
+			]);
+		});
 	});
 });
 

@@ -62,4 +62,29 @@ describe("embedding batch size", () => {
 		expect(isEmbeddingTimeout("model file is missing")).toBe(false);
 		expect(isEmbeddingTimeout(undefined)).toBe(false);
 	});
+
+	describe("does not mistake an unrelated message for an embedding timeout", () => {
+		it.each([
+			["a file name that contains 413", "MinSync skipped this file at the embed stage: files/Docs/invoice-413.pdf.md: embedding failed: non-finite values"],
+			["a file name that contains 504", "MinSync skipped this file at the read stage: files/Docs/room-504.md: Permission denied"],
+			["a size in bytes", "MinSync skipped this file at the read stage: file is 413 bytes, too small"],
+			["a port number", "embedder unavailable: connection refused at 127.0.0.1:504"],
+			["a file called timeout", "MinSync skipped this file at the read stage: files/notes/gateway timeout plan.md: invalid utf-8"],
+			["a file called batch-limit", "MinSync skipped this file at the read stage: files/batch-limit.md: invalid utf-8"],
+			["a document path that names the deadline phrase", "MinSync skipped this file at the read stage: files/native embedding batch exceeded.md: invalid utf-8"],
+		])("ignores %s", (_label, message) => {
+			expect(isEmbeddingTimeout(message)).toBe(false);
+		});
+
+		it("still recognises the same signals when a file path precedes them", () => {
+			expect(isEmbeddingTimeout("embedder timeout: files/huge.md: native embedding batch exceeded 60s; its thread cannot be cancelled")).toBe(true);
+			expect(isEmbeddingTimeout("embedding failed: files/invoice-413.md: OpenAI API error 504 Gateway Timeout")).toBe(true);
+			expect(isEmbeddingTimeout("embedding failed: OpenAI API error 413 Payload Too Large: Embedding batch exceeds the configured limit.")).toBe(true);
+		});
+
+		it("takes a list so a path in one message cannot combine with a code in another", () => {
+			expect(isEmbeddingTimeout(["files/room-504.md: Permission denied", "files/a.md: invalid utf-8"])).toBe(false);
+			expect(isEmbeddingTimeout(["files/a.md: Permission denied", "TEI API error 504 Gateway Timeout"])).toBe(true);
+		});
+	});
 });
