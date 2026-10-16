@@ -669,6 +669,7 @@
       "waitingNote": "正在准备首次索引。",
       "running": "{{phase}}…",
       "detailParsing": "正在读取文档",
+      "detailEmbedding": "正在构建向量索引",
       "detailFinalizing": "正在优化搜索索引",
       "phaseLabel": {
         "parsed": "正在读取文档",

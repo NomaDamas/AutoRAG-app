@@ -12,14 +12,14 @@ import { isJsonObject } from "../shared/settings-contract";
 
 export type EmbedderChoice =
 	| {
-			readonly profile: string;
+			readonly id: string;
 			readonly dimension: number;
+			readonly baseUrl?: string;
+			readonly apiKeyEnv?: string;
 	  }
 	| {
-			readonly id: string;
-			readonly baseUrl: string;
+			readonly profile: string;
 			readonly dimension: number;
-			readonly apiKeyEnv?: string;
 	  };
 
 export interface ByokModelChoice {
@@ -130,8 +130,8 @@ export function applyIndexingConfig(input: ApplyIndexingConfigInput): Record<str
 				? { profile: input.embedder.profile, dimension: input.embedder.dimension }
 				: {
 						id: input.embedder.id,
-						baseUrl: input.embedder.baseUrl,
 						dimension: input.embedder.dimension,
+						...(input.embedder.baseUrl !== undefined ? { baseUrl: input.embedder.baseUrl } : {}),
 						...(input.embedder.apiKeyEnv !== undefined ? { apiKeyEnv: input.embedder.apiKeyEnv } : {}),
 					};
 		raw.minSync = { ...minSync, embedder };

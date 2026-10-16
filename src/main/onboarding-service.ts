@@ -48,7 +48,7 @@ import type { ProviderCredentialService } from "./provider-credentials";
  * sent anywhere.
  */
 
-const EMBEDDER_PROFILE = "qwen3-embedding-0.6b";
+const EMBEDDER_ID = "native:Qwen/Qwen3-Embedding-0.6B";
 const EMBEDDER_DIMENSION = 1024;
 const EMBEDDER_MODEL_BYTES = 639_150_592;
 const EMBEDDER_MODEL_FILE = "Qwen3-Embedding-0.6B-Q8_0.gguf";
@@ -346,6 +346,12 @@ function readParsedMirror(text: string): ParsedMirrorSnapshot {
 	return { processedFiles: Object.keys(entries).length + Object.keys(skipped).length, recentFile, recentSourcePath };
 }
 
+/** Count the committed file entries in MinSync's crash-resume log (`progress.jsonl`). */
+function countMinSyncProgress(text: string | null): number {
+	if (text === null) return 0;
+	const lines = text.split("\n").filter((line) => line.trim().length > 0);
+	return Math.max(0, lines.length - 1);
+}
 export function createOnboardingService(deps: OnboardingServiceDeps): OnboardingService {
 	const now = deps.now ?? Date.now;
 	const existing = readOnboardingState(deps.userDataDir);
@@ -369,9 +375,10 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 	let pendingDatasourceAliases: readonly string[] = [];
 	let localIndexDone = false;
 	let parsedSnapshot: ParsedMirrorSnapshot = { processedFiles: 0, recentFile: null, recentSourcePath: null };
+	let embeddedFiles = 0;
 	let progressSignature = "";
 	let parsedSignature = "";
-
+	let minsyncSignature = "";
 	const maybeStartBackgroundDatasources = (): void => {
 		if (pending || refreshPromise !== null || !localIndexDone || pendingDatasourceAliases.length === 0) return;
 		const aliases = pendingDatasourceAliases;
@@ -439,11 +446,18 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 			parsedSignature = parsedRead.signature;
 			parsedSnapshot = readParsedMirror(parsedRead.text);
 		}
+		const minsyncPath = join(workspacePath, ".autorag", "minsync", ".minsync", "progress.jsonl");
+		const minsyncRead = await readIfChanged(minsyncPath, minsyncSignature);
+		if (minsyncRead.text !== null) {
+			minsyncSignature = minsyncRead.signature;
+			embeddedFiles = Math.max(embeddedFiles, countMinSyncProgress(minsyncRead.text));
+		}
 		const totalFiles = deps.folderTotals(selectedFolders);
 		const { progress, remainingMinutes } = computeIndexingProgress({
 			state: "running",
 			phase,
 			processedFiles: parsedSnapshot.processedFiles,
+			embeddedFiles,
 			totalFiles,
 			phaseElapsedMs: phase === null ? 0 : now() - phaseStartedAt,
 		});
@@ -569,7 +583,7 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 			const embedder = isJsonObject(minSync.embedder) ? minSync.embedder : {};
 			const autoragHome = deps.env.AUTORAG_HOME ?? join(deps.home, ".autorag");
 			return {
-				profile: EMBEDDER_PROFILE,
+				profile: EMBEDDER_ID,
 				modelBytes: EMBEDDER_MODEL_BYTES,
 				cached: existsSync(join(autoragHome, "models", EMBEDDER_MODEL_FILE)),
 				configured: Object.keys(embedder).length > 0,
@@ -622,7 +636,7 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 						}
 					: configured
 						? null
-						: { profile: EMBEDDER_PROFILE, dimension: EMBEDDER_DIMENSION };
+						: { id: EMBEDDER_ID, dimension: EMBEDDER_DIMENSION };
 			const modelProvider = request.model === null ? null : (request.model.provider as ByokProviderId);
 			const next = applyIndexingConfig({
 				raw,
@@ -630,6 +644,7 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 				datasources,
 				home: deps.home,
 				embedder,
+				// The app seeds `workspacePath = cwd` (the repo in dev, `/` when packaged);
 				// the first index belongs in the AutoRAG home instead. A workspace the
 				// user set explicitly stays.
 				workspacePath:
@@ -684,7 +699,9 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 			phase = null;
 			progressSignature = "";
 			parsedSignature = "";
+			minsyncSignature = "";
 			parsedSnapshot = { processedFiles: 0, recentFile: null, recentSourcePath: null };
+			embeddedFiles = 0;
 			const startedAt = new Date(now()).toISOString();
 			stateFile = { ...stateFile, indexing: { startedAt, finishedAt: null } };
 			void persist();

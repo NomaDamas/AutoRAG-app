@@ -85,6 +85,8 @@ export function parseRefreshProgress(text: string): ProgressView | null {
 export interface DeriveInput {
 	readonly progress: ProgressView | null;
 	readonly journal: ActivityRecord | null;
+	/** Committed file count from `.autorag/minsync/.minsync/progress.jsonl` while MinSync runs. */
+	readonly minsyncCommitted?: number;
 	readonly now: number;
 	readonly alive: (pid: number) => boolean;
 	/** Pids of this app's own processes (main, fs worker); a refresh from any other pid is external. */
@@ -96,16 +98,22 @@ function time(iso: string | null): number {
 	return Number.isNaN(value) ? 0 : value;
 }
 
-function localFraction(phase: IndexActivityPhase | null): number {
-	return phase === null ? 0 : PHASE_START[phase];
+function localFraction(phase: IndexActivityPhase | null, counts: IndexActivityCounts | null, minsyncCommitted = 0): number {
+	if (phase === null) return 0;
+	const base = PHASE_START[phase];
+	if (phase === "minsync" && minsyncCommitted > 0 && counts !== null && counts.written > 0) {
+		const span = PHASE_START.datasources - PHASE_START.minsync;
+		return base + span * Math.min(1, minsyncCommitted / counts.written);
+	}
+	return base;
 }
 
-function fractionOf(items: readonly IndexActivityItem[]): number | null {
+function fractionOf(items: readonly IndexActivityItem[], minsyncCommitted = 0): number | null {
 	const finished = items.filter((item) => item.state === "done" || item.state === "failed").length;
 	const local = items.find((item) => item.kind === "local" && item.state === "running");
 	// A datasource sync reports nothing while it runs: with nothing finished and no local phase to read, the position is unknown.
 	if (finished === 0 && (local === undefined || local.phase === null)) return null;
-	const partial = local === undefined ? 0 : localFraction(local.phase);
+	const partial = local === undefined ? 0 : localFraction(local.phase, local.counts, minsyncCommitted);
 	return Math.min(1, (finished + partial) / items.length);
 }
 
@@ -116,7 +124,7 @@ function originOf(journal: ActivityRecord | null, progress: ProgressView | null,
 
 /** Pure merge of the two files into the snapshot the UI shows; time and process liveness are inputs so it tests without a clock. */
 export function deriveIndexActivity(input: DeriveInput): IndexActivitySnapshot {
-	const { progress, journal, now, alive, ownPids } = input;
+	const { progress, journal, minsyncCommitted = 0, now, alive, ownPids } = input;
 	const progressRunning = progress !== null && progress.state === "running" && alive(progress.pid);
 	const journalLive = journal !== null && journal.finishedAt === null && alive(journal.pid);
 
@@ -152,7 +160,7 @@ export function deriveIndexActivity(input: DeriveInput): IndexActivitySnapshot {
 			startedAt: journalLive ? journal.startedAt : (progress?.startedAt ?? null),
 			finishedAt: null,
 			items,
-			fraction: fractionOf(items),
+			fraction: fractionOf(items, minsyncCommitted),
 			error: null,
 		};
 	}
@@ -241,9 +249,13 @@ export function createIndexActivityService(deps: IndexActivityDeps): IndexActivi
 	async function poll(): Promise<IndexActivitySnapshot> {
 		const root = await workspacePath();
 		const text = root === null ? null : await readFile(join(root, ".autorag", "refresh-progress.json"), "utf8").catch(() => null);
+		const minsyncLog =
+			root === null ? null : await readFile(join(root, ".autorag", "minsync", ".minsync", "progress.jsonl"), "utf8").catch(() => null);
+		const minsyncLines = minsyncLog === null ? 0 : minsyncLog.split("\n").filter((line) => line.trim().length > 0).length;
 		current = deriveIndexActivity({
 			progress: text === null ? null : parseRefreshProgress(text),
 			journal: readActivity(deps.journalPath()),
+			minsyncCommitted: Math.max(0, minsyncLines - 1),
 			now: now(),
 			alive: processAlive,
 			ownPids: [process.pid, ...deps.ownPids()].filter((pid): pid is number => pid !== null),

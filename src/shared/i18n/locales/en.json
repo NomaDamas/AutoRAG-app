@@ -669,6 +669,7 @@
       "waitingNote": "Preparing the first index.",
       "running": "{{phase}}…",
       "detailParsing": "Reading documents",
+      "detailEmbedding": "Building vector index",
       "detailFinalizing": "Optimizing the search index",
       "phaseLabel": {
         "parsed": "Reading documents",

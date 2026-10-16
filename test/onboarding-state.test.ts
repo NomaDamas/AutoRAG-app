@@ -167,6 +167,27 @@ describe("createOnboardingService persistence", () => {
 		expect(service.isIndexing()).toBe(false);
 	});
 
+	it("writes the native Qwen3 embedder on first index instead of the llama-server gateway profile", async () => {
+		const directory = await workDir();
+		const service = createOnboardingService(makeDeps(directory));
+		const info = await service.embedding();
+		expect(info.profile).toBe("native:Qwen/Qwen3-Embedding-0.6B");
+
+		await service.startIndexing({
+			folders: ["/Users/me/Documents"],
+			sources: [],
+			plan: "byok",
+			model: null,
+		});
+		for (let tick = 0; tick < 20 && service.isIndexing(); tick += 1) await Promise.resolve();
+
+		const config = JSON.parse(await readFile(join(directory, "config.json"), "utf8")) as {
+			minSync?: { embedder?: Record<string, unknown> };
+		};
+		expect(config.minSync?.embedder).toEqual({ id: "native:Qwen/Qwen3-Embedding-0.6B", dimension: 1024 });
+		service.dispose();
+	});
+
 	it("allows completing onboarding while indexing is still running in the background", async () => {
 		const directory = await workDir();
 		const gate = Promise.withResolvers<ConfigRefreshResult>();
@@ -392,7 +413,7 @@ describe("createOnboardingService persistence", () => {
 			minSync?: { embedder?: Record<string, unknown> };
 		};
 		expect(rewritten.minSync?.embedder).toEqual({
-			profile: "qwen3-embedding-0.6b",
+			id: "native:Qwen/Qwen3-Embedding-0.6B",
 			dimension: 1024,
 		});
 		expect(stored.has("OPENAI_API_KEY")).toBe(false);

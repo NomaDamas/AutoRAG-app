@@ -174,7 +174,12 @@ export async function refreshAutoragIndex(
 				const next = smallerBatchSize(batch);
 				if (next === null) break;
 				batch = next;
-				const retry = await new AutoRAGLite({ ...effective, minSync: { ...effective.minSync, embedder: { ...embedder, batchSize: batch } } }).syncMinSync();
+				const { value: retry } = await runWithStallRetry(
+					() => new AutoRAGLite({ ...effective, minSync: { ...effective.minSync, embedder: { ...embedder, batchSize: batch } } }).syncMinSync(),
+					(outcome) => outcome?.ok !== false,
+					createMinSyncWatchdog(),
+					EMBEDDING_STALL_RETRIES,
+				);
 				minsyncOk = retry?.ok;
 				minsyncReason = retry?.reason;
 				const baseDiagnostics: ConfigRefreshDiagnostic[] =

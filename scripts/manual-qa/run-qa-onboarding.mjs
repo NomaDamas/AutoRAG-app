@@ -247,7 +247,7 @@ try {
 		check(`${requestedSource} datasource config written`, configured.length > 0, JSON.stringify(configured));
 	}
 	check("config searchPaths = selected folders", JSON.stringify(raw.searchPaths) === JSON.stringify([DESK, DOCS]), JSON.stringify(raw.searchPaths));
-	check("config local embedder set", raw.minSync?.embedder?.profile === "qwen3-embedding-0.6b", JSON.stringify(raw.minSync?.embedder));
+	check("config local embedder set", raw.minSync?.embedder?.id === "native:Qwen/Qwen3-Embedding-0.6B", JSON.stringify(raw.minSync?.embedder));
 	check("first index lives in the AutoRAG home, not the app cwd", raw.workspacePath === join(AUTORAG_HOME, "workspace") && !existsSync(join(ROOT, ".autorag")), String(raw.workspacePath));
 	const final = await page.evaluate(() => window.autorag.onboarding.indexStatus());
 	check(

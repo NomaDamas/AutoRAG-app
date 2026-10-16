@@ -34,11 +34,11 @@ describe("applyIndexingConfig", () => {
 			folders: ["/a"],
 			datasources: [],
 			home: HOME,
-			embedder: { profile: "qwen3-embedding-0.6b", dimension: 1024 },
+			embedder: { id: "native:Qwen/Qwen3-Embedding-0.6B", dimension: 1024 },
 			workspacePath: null,
 			model: null,
 		});
-		expect(isJsonObject(next.minSync) && next.minSync.embedder).toEqual({ profile: "qwen3-embedding-0.6b", dimension: 1024 });
+		expect(isJsonObject(next.minSync) && next.minSync.embedder).toEqual({ id: "native:Qwen/Qwen3-Embedding-0.6B", dimension: 1024 });
 	});
 
 	it("writes a remote cloud embedder block with id, baseUrl, dimension, and apiKeyEnv", () => {

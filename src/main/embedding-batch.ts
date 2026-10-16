@@ -79,10 +79,18 @@ export function smallerBatchSize(current: number): number | null {
 }
 
 /**
- * True when MinSync failed because an embedding request timed out at the
- * gateway (HTTP 504 / "Embedding upstream timed out"). A runtime that never
- * became ready ("health check timed out") is not a batch-size problem.
+ * True when MinSync failed because an embedding batch timed out or exceeded the
+ * batch limit:
+ * - gateway timeout (HTTP 504 / "Embedding upstream timed out"),
+ * - gateway batch character/input limit (HTTP 413 / "batch-limit" / "Embedding batch exceeds the configured limit"),
+ * - native in-process embedder per-batch deadline ("embedder timeout:" / "native embedding batch exceeded").
+ * A runtime that never became ready ("health check timed out") is not a batch-size problem.
  */
 export function isEmbeddingTimeout(message: string | undefined): boolean {
-	return message !== undefined && /\b504\b|gateway timeout|embedding upstream timed out/iu.test(message);
+	return (
+		message !== undefined &&
+		/\b504\b|gateway timeout|embedding upstream timed out|\b413\b|batch-limit|embedding batch exceeds the configured limit|embedder timeout:|native embedding batch exceeded/iu.test(
+			message,
+		)
+	);
 }
