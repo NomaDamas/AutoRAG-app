@@ -173,6 +173,24 @@ describe("refreshAutoragIndex", () => {
 				},
 			]);
 		});
+
+		it("halves the batch when the native embedder exceeds its per-batch deadline (exit 7)", async () => {
+			const nativeDeadlineMessage = "embedder timeout: files/huge.md: native embedding batch exceeded 60s; its thread cannot be cancelled — re-run `minsync sync` to resume";
+			const nativeTimeout = {
+				...timeout,
+				diagnostics: [{ code: "minsync-sync-failed", severity: "error", source: "minsync", message: nativeDeadlineMessage }],
+				minsync: { ok: false, synced: 0, reason: "sync-failed", diagnostics: [{ code: "minsync-sync-failed", severity: "error", source: "minsync", message: nativeDeadlineMessage }] },
+			};
+			refresh.mockResolvedValueOnce(nativeTimeout);
+			syncMinSync.mockResolvedValueOnce(fits);
+			const deps = await fixture();
+
+			const outcome = await refreshAutoragIndex(deps);
+
+			expect(outcome).toMatchObject({ ok: true, error: null });
+			expect(batches).toEqual([undefined, 32]);
+			expect(JSON.parse(readFileSync(learnedFile(deps), "utf8"))).toEqual({ local: 32 });
+		});
 	});
 });
 

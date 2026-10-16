@@ -168,10 +168,12 @@ export function IndexingScreen({ ctx }: { readonly ctx: OnboardingCtx }): ReactE
 	const processed = status?.processedFiles ?? 0;
 	const sources = status?.sources ?? [];
 
-	const phaseLabel = phase === null ? "" : t(`onboarding.indexing.phaseLabel.${phase}`);
+	const phaseLabel = phase === null ? t("onboarding.indexing.phaseLabel.parsed") : t(`onboarding.indexing.phaseLabel.${phase}`);
 	let statusDetail: string;
 	if (phase === "finalizing") {
 		statusDetail = t("onboarding.indexing.detailFinalizing");
+	} else if (phase === "minsync") {
+		statusDetail = t("onboarding.indexing.detailEmbedding");
 	} else if (status?.recentFolder != null && status.recentFile != null) {
 		statusDetail = `${status.recentFolder} · ${status.recentFile}`;
 	} else {

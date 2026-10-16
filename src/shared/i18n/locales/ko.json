@@ -665,6 +665,7 @@
       "waitingNote": "첫 인덱싱을 준비하고 있습니다.",
       "running": "{{phase}}…",
       "detailParsing": "문서 읽는 중",
+      "detailEmbedding": "벡터 인덱스 만드는 중",
       "detailFinalizing": "검색 인덱스 최적화",
       "phaseLabel": {
         "parsed": "문서 읽는 중",

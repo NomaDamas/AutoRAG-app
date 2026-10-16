@@ -53,9 +53,11 @@ describe("embedding batch size", () => {
 		expect(startingBatchSize(path, {})).toBe(64);
 	});
 
-	it("recognises the gateway timeout but not a runtime that never became ready", () => {
+	it("recognises gateway timeouts, native embedder deadlines, and batch-limit 413 errors, but not a runtime that never became ready", () => {
 		expect(isEmbeddingTimeout('embedding failed: TEI API error 504 Gateway Timeout: {"code":"timeout"}')).toBe(true);
 		expect(isEmbeddingTimeout("Embedding upstream timed out after 30000ms")).toBe(true);
+		expect(isEmbeddingTimeout('embedding failed: TEI API error 413 Payload Too Large: {"error":"Embedding batch exceeds the configured limit.","code":"batch-limit"}')).toBe(true);
+		expect(isEmbeddingTimeout("embedder timeout: native embedding batch exceeded 60s; its thread cannot be cancelled")).toBe(true);
 		expect(isEmbeddingTimeout("Embedding runtime did not become ready within 60000ms: health check timed out")).toBe(false);
 		expect(isEmbeddingTimeout("model file is missing")).toBe(false);
 		expect(isEmbeddingTimeout(undefined)).toBe(false);

@@ -11,7 +11,7 @@ import { isJsonObject } from "../shared/settings-contract";
  */
 
 export interface EmbedderChoice {
-	readonly profile: string;
+	readonly id: string;
 	readonly dimension: number;
 }
 
@@ -118,7 +118,7 @@ export function applyIndexingConfig(input: ApplyIndexingConfigInput): Record<str
 	if (input.workspacePath !== null) raw.workspacePath = input.workspacePath;
 	if (input.embedder !== null) {
 		const minSync = isJsonObject(raw.minSync) ? raw.minSync : {};
-		raw.minSync = { ...minSync, embedder: { profile: input.embedder.profile, dimension: input.embedder.dimension } };
+		raw.minSync = { ...minSync, embedder: { id: input.embedder.id, dimension: input.embedder.dimension } };
 	}
 	if (input.model !== null) {
 		raw.model = {

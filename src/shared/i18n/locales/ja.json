@@ -665,6 +665,7 @@
       "waitingNote": "最初のインデックス作成を準備しています。",
       "running": "{{phase}}…",
       "detailParsing": "文書を読み込み中",
+      "detailEmbedding": "ベクトルインデックスを作成中",
       "detailFinalizing": "検索インデックスを最適化中",
       "phaseLabel": {
         "parsed": "文書を読み込み中",
