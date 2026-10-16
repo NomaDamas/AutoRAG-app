@@ -65,7 +65,8 @@ export interface AppSettings {
 	readonly launchAtLogin: boolean;
 	readonly showInMenuBar: boolean;
 	readonly autoInstallUpdates: boolean;
-	readonly telemetry: boolean;
+	/** Crash and indexing-failure reports go to the maintainers (no file paths, names or document text). On by default. */
+	readonly errorReporting: boolean;
 	/** Off: dot-prefixed files never appear. On: they appear, rendered dimmed. */
 	readonly showHiddenFiles: boolean;
 	/** How often the app re-runs the dupey version-family scan, in minutes. */
@@ -80,7 +81,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
 	launchAtLogin: false,
 	showInMenuBar: true,
 	autoInstallUpdates: true,
-	telemetry: false,
+	errorReporting: true,
 	showHiddenFiles: false,
 	dupeyScanIntervalMinutes: 60,
 	osMenuIntegration: false,

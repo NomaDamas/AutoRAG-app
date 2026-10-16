@@ -13,6 +13,7 @@
  */
 
 import type { MessagePortMain } from "electron";
+import { initWorkerErrorReporting } from "./error-reporting";
 import type { FsWorkerClientHello, FsWorkerConfig, FsWorkerDiagnostics, FsWorkerRequestRecord, KnownFolders } from "../shared/fs-worker-contract";
 import { FS_WORKER_CONFIG_FLAG } from "../shared/fs-worker-contract";
 import { createWorkerClient, serveWorkerPort, type WorkerConnection, type WorkerPort } from "../shared/fs-worker-protocol";
@@ -68,6 +69,7 @@ function isType(value: unknown, type: string): boolean {
 	return typeof value === "object" && value !== null && "type" in value && value.type === type;
 }
 
+initWorkerErrorReporting();
 const parentPort = process.parentPort;
 const host = createWorkerClient();
 const renderers = new Set<WorkerConnection>();

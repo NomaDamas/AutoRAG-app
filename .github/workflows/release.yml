@@ -76,6 +76,8 @@ jobs:
       - name: Build app
         env:
           AUTORAG_SKIP_DUPEY_CHECK: "1"
+          # A public write-only key, not a secret; unset leaves error reporting out of the build.
+          MAIN_VITE_SENTRY_DSN: ${{ vars.SENTRY_DSN }}
         run: bun run build
 
       - name: Stage dependency tools and embedding model
@@ -217,6 +219,8 @@ jobs:
       - name: Build app
         env:
           AUTORAG_SKIP_DUPEY_CHECK: "1"
+          # A public write-only key, not a secret; unset leaves error reporting out of the build.
+          MAIN_VITE_SENTRY_DSN: ${{ vars.SENTRY_DSN }}
         run: bun run build
 
       - name: Stage dependency tools and embedding model

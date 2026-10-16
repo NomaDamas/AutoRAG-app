@@ -1,3 +1,4 @@
+import "@sentry/electron/preload";
 import { createAccountBridge } from "./account-bridge";
 import { createAppUpdateBridge } from "./app-update-bridge";
 import { contextBridge, ipcRenderer, webUtils } from "electron";
