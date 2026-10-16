@@ -151,10 +151,10 @@ jobs:
 
   mac-prebuilt:
     if: ${{ github.event_name == 'release' && contains(join(github.event.release.assets.*.name, ','), '-arm64.dmg') }}
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: useblacksmith/checkout@v1
         with:
           persist-credentials: false
       # The local build attached the update payload and feed too, because they reach R2 only from here.
@@ -284,10 +284,10 @@ jobs:
   homebrew:
     needs: [macos, mac-prebuilt]
     if: ${{ !cancelled() && github.event_name == 'release' && (needs.macos.result == 'success' || needs.mac-prebuilt.result == 'success') && !github.event.release.prerelease && !contains(github.event.release.tag_name, '-') }}
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: useblacksmith/checkout@v1
         with:
           persist-credentials: false
       - name: Update the cask
