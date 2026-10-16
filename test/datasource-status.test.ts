@@ -341,6 +341,59 @@ describe("backend-owned index counts", () => {
 		expect(byId(rows, "kakao").index).toMatchObject({ state: "indexed", chunkCount: 50632, unit: "message" });
 	});
 
+	it("reports kakao as not-indexed when sync ran without a committed semantic index, and indexed once both completed", async () => {
+		const fixture = await createFixtureWithOnlySlacrawlOnPath();
+		await installFakeCli(
+			fixture,
+			"lazykatok",
+			JSON.stringify({
+				freshness: {
+					last_sync: { total_messages: 50632, completed_at: "2026-09-23T06:07:17Z" },
+					last_index: null,
+					recommendation: { sync_before_search: false, index_before_semantic_search: true },
+				},
+			}),
+		);
+		await writeConfig(fixture, { kakao: {} });
+		const service = createDataSourceStatusService({ env: fixture.env, cwd: fixture.root });
+
+		const [unindexed] = (await service.list()).sources;
+		expect(unindexed?.index).toMatchObject({ state: "not-indexed", chunkCount: null, unit: "message" });
+
+		await installFakeCli(
+			fixture,
+			"lazykatok",
+			JSON.stringify({
+				freshness: {
+					last_sync: { total_messages: 50632, completed_at: "2026-09-23T06:09:00Z" },
+					last_index: { completed_at: "2026-09-23T06:08:00Z", embedded_texts: 120 },
+					recommendation: { sync_before_search: false, index_before_semantic_search: true },
+				},
+			}),
+		);
+		const [stale] = (await service.list()).sources;
+		expect(stale?.index).toMatchObject({ state: "not-indexed", chunkCount: null, unit: "message" });
+
+		await installFakeCli(
+			fixture,
+			"lazykatok",
+			JSON.stringify({
+				freshness: {
+					last_sync: { total_messages: 50632, completed_at: "2026-09-23T06:07:17Z" },
+					last_index: { completed_at: "2026-09-23T06:08:00Z", embedded_texts: 120 },
+					recommendation: { sync_before_search: false, index_before_semantic_search: false },
+				},
+			}),
+		);
+		const [indexed] = (await service.list()).sources;
+		expect(indexed?.index).toMatchObject({
+			state: "indexed",
+			chunkCount: 50632,
+			unit: "message",
+			indexedAt: "2026-09-23T06:08:00.000Z",
+		});
+	});
+
 	it("reports an empty archive as empty and an unreadable one as not-indexed", async () => {
 		const fixture = await createFixtureWithOnlySlacrawlOnPath();
 		await installFakeCli(fixture, "slacrawl", JSON.stringify({ messages: 0, last_sync_at: "" }));

@@ -186,7 +186,17 @@ const SPECS: Readonly<Record<string, ProbeSpec>> = {
 			const freshness = isJsonObject(doctor?.freshness) ? doctor.freshness : undefined;
 			const lastSync = isJsonObject(freshness?.last_sync) ? freshness.last_sync : undefined;
 			if (lastSync === undefined) return { count: 0, at: null };
-			return reading(lastSync.total_messages, lastSync.completed_at);
+			// `LazykatokSkill.index()` runs `sync` then `index`. When `last_index` is
+			// `null` or `recommendation.index_before_semantic_search` is true (because
+			// `sync` ran and updated the archive revision, but `index` failed or has not
+			// committed the matching semantic generation yet), report `undefined`
+			// (`not-indexed`) rather than claiming a stale/partial archive is indexed.
+			const recommendation = isJsonObject(freshness?.recommendation) ? freshness.recommendation : undefined;
+			const lastIndex = isJsonObject(freshness?.last_index) ? freshness.last_index : undefined;
+			if (freshness?.last_index === null || recommendation?.index_before_semantic_search === true) {
+				return undefined;
+			}
+			return reading(lastSync.total_messages, lastIndex?.completed_at ?? lastSync.completed_at);
 		},
 	},
 	clawgallery: {

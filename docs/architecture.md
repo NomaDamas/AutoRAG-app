@@ -258,8 +258,9 @@ resumes at the same step.
   Local files are covered by the folders step, so
   Spotlight and Apple Mail are not offered. Each row appears only when the
   connector's own health probe says its data is reachable: KakaoTalk
-  (`lazykatok doctor --macos-probe`: app, container, cached login, readable
-  database files), Slack (`slacrawl`, at least one workspace), Discord
+  (`lazykatok doctor --macos-probe` plus `lazykatok source chats --source macos`
+  when `auth.json` has not been cached yet: app, container, verifiable login,
+  readable database files), Slack (`slacrawl`, at least one workspace), Discord
   (`discrawl` ready database plus a dry-run `wiretap` that finds messages),
   Telegram (`telecrawl doctor`), WhatsApp (`wacrawl doctor`, read-only, with
   messages), mail (`mailcrawl` installed and a `himalaya` account whose login
@@ -271,10 +272,14 @@ resumes at the same step.
 - **Model** (BYOK) verifies the provider key against the provider's API and
   stores it in the encrypted credential store, never in `config.json`.
 - **Indexing** writes `searchPaths`, the embedder (only when none is set), the
-  enabled datasources and their access tags, and the BYOK model into the shared
-  config, then runs the same refresh as Settings. A config still pointing its
+  enabled datasources (`kakao` sets `KATOK_EMBEDDER=local-test` so `lazykatok index`
+  commits parent windows without fastembed's cwd-relative `.fastembed_cache`
+  or 11–30+ min re-embed), and the BYOK model into the shared config, then runs
+  the local refresh (`parsed`, `minsync`) and syncs enabled datasources in the
+  background once local indexing and onboarding complete. A config still pointing its
   `workspacePath` at the app's cwd seed is moved to `<AutoRAG home>/workspace`.
-  The Finder opens only after the first index succeeds.
+  The Finder opens once the first index succeeds or the user chooses to continue
+  in the background.
 
 Account and plan are real. The account step signs in through the system
 browser (OAuth 2.0 authorization code + PKCE over a loopback redirect, RFC 8252)

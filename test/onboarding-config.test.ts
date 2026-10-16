@@ -87,6 +87,30 @@ describe("applyIndexingConfig", () => {
 		}
 	});
 
+	it("sets KATOK_EMBEDDER=local-test on the onboarding kakao connector so the first index builds semantic windows without fastembed", () => {
+		const next = applyIndexingConfig({
+			raw: { datasources: { kakao: { description: "existing", pollingIntervalMs: 3600000 } } },
+			folders: ["/a"],
+			datasources: [{ id: "kakao", facts: { chats: 12 } }],
+			home: HOME,
+			embedder: null,
+			workspacePath: null,
+			model: null,
+		});
+		const datasources = isJsonObject(next.datasources) ? next.datasources : {};
+		const kakao = isJsonObject(datasources.kakao) ? datasources.kakao : {};
+		expect(kakao).toEqual({
+			description: "existing",
+			pollingIntervalMs: 3600000,
+			instanceId: "default",
+			connector: {
+				env: {
+					KATOK_EMBEDDER: "local-test",
+				},
+			},
+		});
+	});
+
 	it("writes one obsidian alias per vault", () => {
 		const next = applyIndexingConfig({
 			raw: {},
