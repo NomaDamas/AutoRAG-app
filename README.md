@@ -132,7 +132,7 @@ Connect the apps you already talk in; Dazzi searches them alongside your files.
 > [!NOTE]
 > The librarian is **not** vendored. Lifecycle scripts clone the public
 > AutoRAG repository into the ignored `.upstream/autorag` at the pinned
-> release tag (`v2.10.3`), build it, and print the exact revision the app
+> release tag (`v2.10.4`), build it, and print the exact revision the app
 > runs against.
 
 **Prerequisites:** [Bun](https://bun.sh), Node.js 24+, and `dupey`

@@ -150,11 +150,8 @@ describe("createEmbeddingSettingsService", () => {
 		await embedding.dispose();
 	});
 
-	it("probes a local server for real vectors and overlays mailcrawl and kakao through the loopback adapter", async () => {
-		const fixture = await createFixture({
-			mail: { type: "mailcrawl", connector: {} },
-			kakao: { type: "kakao", connector: {} },
-		});
+	it("probes a local server for real vectors and overlays mailcrawl through the loopback adapter", async () => {
+		const fixture = await createFixture({ mail: { type: "mailcrawl", connector: {} } });
 		const fetchImpl = vi.fn(async () => vectorResponse(1024)) as unknown as typeof fetch;
 		const { embedding } = buildService(fixture, fetchImpl);
 
@@ -169,14 +166,6 @@ describe("createEmbeddingSettingsService", () => {
 		const env = mailEnv(config);
 		expect(env.MAILCRAWL_EMBEDDER_PROVIDER).toBe("loopback-http");
 		expect(env.MAILCRAWL_EMBED_URL).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/mailcrawl\/embeddings$/);
-		const datasources = config.datasources as Record<string, { connector?: { env?: Record<string, string> } }> | undefined;
-		const kakaoEnv = datasources?.kakao?.connector?.env;
-		expect(kakaoEnv).toMatchObject({
-			KATOK_EMBEDDER: "loopback-http",
-			KATOK_EMBED_MODEL: "bge-m3",
-			KATOK_EMBED_DIM: "1024",
-		});
-		expect(kakaoEnv?.KATOK_EMBED_URL).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/v1\/embeddings$/);
 		await embedding.dispose();
 	});
 

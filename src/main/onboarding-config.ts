@@ -52,19 +52,9 @@ function obsidianAlias(index: number): string {
 function entriesFor(datasource: IndexingDatasource, home: string): Record<string, Record<string, unknown>> {
 	switch (datasource.id) {
 		case "kakao":
-			return {
-				kakao: {
-					instanceId: "default",
-					connector: {
-						// lazykatok's default local embedder (fastembed) writes relative to
-						// cwd (`.fastembed_cache`), which fails with EROFS in a packaged app
-						// (`cwd = "/"`), and re-embeds all ~10k parent windows in one blocking
-						// pass (11–30+ min). `local-test` commits the semantic parent windows
-						// deterministically in seconds while keeping FTS5/BM25 intact.
-						env: { KATOK_EMBEDDER: "local-test" },
-					},
-				},
-			};
+			// With librarian >= 2.10.4 the kakao sidecar reads lazykatok's archive and embeds
+			// with the shared embedder, so `lazykatok index` (fastembed) is never run.
+			return { kakao: { instanceId: "default", connector: {} } };
 		case "github":
 			return {
 				github: {

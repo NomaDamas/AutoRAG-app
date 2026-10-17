@@ -124,7 +124,7 @@ second datasource or model configuration. The sidebar is searchable and grouped:
     (`index-status.ts` calls `refreshAutoragIndex`), so it has the folder check,
     the embedder watchdog, and the learned batch size.
   - *A file MinSync cannot read, chunk, or embed is skipped, not fatal*
-    (MinSync 0.4.8 / librarian 2.10.3, `minsync-file-skipped`). MinSync exits 6
+    (MinSync 0.4.8 / librarian 2.10.4, `minsync-file-skipped`). MinSync exits 6
     with `partial: true` and `files_failed`, keeps the file's older chunks, and
     retries it on the next sync; if the skip came from an embedding gateway
     timeout, `index-refresh` halves `batchSize` and re-runs `syncMinSync` in the
@@ -272,9 +272,9 @@ resumes at the same step.
 - **Model** (BYOK) verifies the provider key against the provider's API and
   stores it in the encrypted credential store, never in `config.json`.
 - **Indexing** writes `searchPaths`, the embedder (only when none is set), the
-  enabled datasources (`kakao` sets `KATOK_EMBEDDER=local-test` so `lazykatok index`
-  commits parent windows without fastembed's cwd-relative `.fastembed_cache`
-  or 11–30+ min re-embed), and the BYOK model into the shared config, then runs
+  enabled datasources (`kakao` is indexed by the librarian's read-only sidecar over
+  lazykatok's archive with the shared embedder, so `lazykatok index` and its
+  fastembed pipeline never run), and the BYOK model into the shared config, then runs
   the local refresh (`parsed`, `minsync`) and syncs enabled datasources in the
   background once local indexing and onboarding complete. A config still pointing its
   `workspacePath` at the app's cwd seed is moved to `<AutoRAG home>/workspace`.
