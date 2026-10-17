@@ -49,13 +49,9 @@ second datasource or model configuration. The sidebar is searchable and grouped:
   OAuth-only: its chat, catalog, Jev, and rerank traffic reads one credential —
   the `/login` token in Pi's `auth.json` — and rejects any `apiKeyEnv` leaf.
   The app's account sign-in exchanges the same OAuth code for the same
-  long-lived key, so signing in stores that key in the encrypted credential
-  store (for the account API) and mirrors it into `auth.json` as the plan's
-  credential (`dazzi-plan-credential.ts`); sign-out and a server-revoked key
-  remove both. A startup migration (`config-legacy-ids.ts`) rewrites the
-  pre-2.10.2 `autorag` spellings and strips the now-invalid `apiKeyEnv` leaves
-  from an existing config, which the librarian would otherwise refuse to
-  resolve at all.
+  long-lived key, so signing in stores that key in `auth.json` as the plan's
+  credential (`dazzi-plan-credential.ts`), the single place both the app and
+  the librarian read it from; sign-out and a server-revoked key remove it.
 - **AI → 웹 검색** — `webSearch` on/off, provider, and page fetch.
 - **검색** — 인덱싱 (per-source status, refresh cadence, sync now, index
   refresh), 검색 범위 (search paths, exclusions, watch), 문서 읽기

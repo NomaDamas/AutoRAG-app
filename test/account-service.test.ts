@@ -1,5 +1,4 @@
 import { createHash, randomUUID } from "node:crypto";
-import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -606,14 +605,6 @@ describe("default model after sign-in", () => {
 		expect((await readConfig()).model).toMatchObject({ provider: "dazzi", id: "vendor/pricey" });
 	});
 
-	it("re-adopts and rewrites the plan's pre-2.10.2 provider spelling", async () => {
-		await writeFile(join(root, "config.json"), JSON.stringify({ model: { provider: "autorag", id: "retired/model" } }), "utf8");
-
-		await service.signIn();
-
-		expect((await readConfig()).model).toMatchObject({ provider: "dazzi", id: "vendor/pricey" });
-	});
-
 	it("does not touch the config on a plain refresh or when the catalog cannot be read", async () => {
 		await service.signIn();
 		await writeFile(join(root, "config.json"), JSON.stringify({ model: { provider: "openai-compatible", id: "mine" } }), "utf8");
@@ -634,26 +625,6 @@ describe("default model after sign-in", () => {
 });
 
 describe("review follow-ups", () => {
-	it("moves a key a pre-2.10.3 build kept only in the encrypted store into auth.json", async () => {
-		creds.store.set("AUTORAG_API_KEY", "dz_fakekey");
-		env.AUTORAG_API_KEY = "dz_fakekey";
-
-		const status = await service.refresh();
-
-		expect(status).toMatchObject({ state: "signedIn" });
-		const stored = JSON.parse(await readFile(join(root, "auth.json"), "utf8")) as Record<string, { access: string }>;
-		expect(stored.dazzi?.access).toBe("dz_fakekey");
-		expect(creds.store.has("AUTORAG_API_KEY")).toBe(false);
-		expect(env.AUTORAG_API_KEY).toBeUndefined();
-	});
-
-	it("does not adopt an ambient AUTORAG_API_KEY: only the app's own sign-in counts", async () => {
-		env.AUTORAG_API_KEY = "dz_fakekey";
-
-		expect(await service.refresh()).toMatchObject({ state: "signedOut" });
-		expect(existsSync(join(root, "auth.json"))).toBe(false);
-	});
-
 	it("survives concurrent refreshes writing the cache", async () => {
 		await service.signIn();
 

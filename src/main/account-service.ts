@@ -9,9 +9,7 @@ import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import {
 	ACCOUNT_CHANNELS,
 	AUTORAG_PROVIDER_ID,
-	isManagedProviderId,
 	DEFAULT_ACCOUNT_BASE_URL,
-	LEGACY_ACCOUNT_API_KEY_ENV,
 	shouldAdoptManagedModel,
 	type AccountPlanId,
 	type AccountSnapshot,
@@ -169,24 +167,6 @@ export function createAccountService(deps: AccountServiceDeps): AccountService {
 			return false;
 		}
 	};
-	/**
-	 * Builds before 2.10.3 kept the key only in the encrypted credential store
-	 * (under the name below). Move such a key into `auth.json` once and drop the
-	 * stored entry; an ambient variable the user set is not the app's key and is
-	 * left alone.
-	 */
-	const migrateLegacyKey = async (): Promise<void> => {
-		const legacy = deps.env[LEGACY_ACCOUNT_API_KEY_ENV];
-		if (typeof legacy !== "string" || legacy.length === 0) return;
-		try {
-			const [row] = await deps.credentials.list([LEGACY_ACCOUNT_API_KEY_ENV]);
-			if (row?.source !== "stored") return;
-			if ((await readDazziPlanCredential(agentDir)) === null) await storeDazziPlanCredential(agentDir, legacy);
-			await deps.credentials.remove(LEGACY_ACCOUNT_API_KEY_ENV);
-		} catch (error) {
-			console.warn("[account] could not move the stored account key into auth.json:", error);
-		}
-	};
 	/** The cloud embedder authenticates with the same token under the OpenAI key name. */
 	const syncCloudEmbedderKey = async (token: string): Promise<void> => {
 		if (isDazziCloudEmbedderConfigured() && deps.env.OPENAI_API_KEY !== token) {
@@ -267,7 +247,6 @@ export function createAccountService(deps: AccountServiceDeps): AccountService {
 	 * and the librarian can never disagree about whether the user is signed in.
 	 */
 	async function currentKey(): Promise<string | null> {
-		await migrateLegacyKey();
 		const key = await readDazziPlanCredential(agentDir);
 		return key === null || key === revokedKey ? null : key;
 	}
@@ -500,7 +479,7 @@ export function createAccountService(deps: AccountServiceDeps): AccountService {
 		const replaceDecomposition =
 			options.onlyUntouchedDecomposition === true
 				? shouldAdoptManagedDecomposition(decomposition)
-				: decomposition === undefined || (decomposition !== false && (decompositionModel === null || decompositionModel.provider === "openrouter" || isManagedProviderId(decompositionModel.provider)));
+				: decomposition === undefined || (decomposition !== false && (decompositionModel === null || decompositionModel.provider === "openrouter" || decompositionModel.provider === AUTORAG_PROVIDER_ID));
 		if (replaceDecomposition) next.queryDecomposition = { model: reference(cheapest) };
 		// Jev and rerank are adopted per role: only when the config names nothing
 		// for it (or the librarian's untouched OpenRouter default), or already names
