@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { DatabaseSync } from "node:sqlite";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { isJsonObject, type DataSourceIndexUnit } from "../shared/settings-contract";
@@ -90,6 +91,20 @@ function parseJson(stdout: string): Record<string, unknown> | undefined {
 		return isJsonObject(parsed) ? parsed : undefined;
 	} catch {
 		return undefined;
+	}
+}
+
+/** Whether the kakao sidecar database holds an embedder identity and a stored vector. Any read problem means no. */
+function sidecarHasVectors(path: string): boolean {
+	let db: DatabaseSync | undefined;
+	try {
+		db = new DatabaseSync(path, { readOnly: true });
+		const identity = db.prepare("select 1 from sidecar_meta where k = 'identity'").get();
+		return identity !== undefined && db.prepare("select 1 from sidecar_vec limit 1").get() !== undefined;
+	} catch {
+		return false;
+	} finally {
+		db?.close();
 	}
 }
 
@@ -188,7 +203,11 @@ const SPECS: Readonly<Record<string, ProbeSpec>> = {
 			if (lastSync === undefined) return { count: 0, at: null };
 			const sidecarPath = join(context.workspacePath, ".autorag", "datasources", context.id, context.instanceId, "sidecar.sqlite");
 			if (existsSync(sidecarPath)) {
-				return reading(lastSync.total_messages, lastSync.completed_at);
+				// The sidecar file appears as soon as a sync starts, so a failed first sync leaves it
+				// behind. It counts only once it holds an embedder identity and at least one vector
+				// (or when the connector turned semantic search off, so it never will).
+				const semanticOff = isJsonObject(context.connector.sidecar) && context.connector.sidecar.semantic === false;
+				return semanticOff || sidecarHasVectors(sidecarPath) ? reading(lastSync.total_messages, lastSync.completed_at) : undefined;
 			}
 			// In CLI-only mode (`LazykatokSkill.index()` without a sidecar), `sync` runs
 			// then `index`. When `last_index` is `null` or `recommendation.index_before_semantic_search`

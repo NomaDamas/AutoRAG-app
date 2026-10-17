@@ -1,4 +1,5 @@
 import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { DatabaseSync } from "node:sqlite";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildAgentOptions, resolveConfigReadOnly, saveMirrorIndex, type ParsedMirrorEntry as MirrorEntry } from "@autorag/librarian";
@@ -394,7 +395,7 @@ describe("backend-owned index counts", () => {
 		});
 	});
 
-	it("reports kakao as indexed when the AutoRAG sidecar database exists even if lazykatok's native last_index is null", async () => {
+	it("reports kakao as not-indexed while the sidecar holds no vectors, and indexed once it does", async () => {
 		const fixture = await createFixtureWithOnlySlacrawlOnPath();
 		await installFakeCli(
 			fixture,
@@ -410,9 +411,22 @@ describe("backend-owned index counts", () => {
 		await writeConfig(fixture, { kakao: {} });
 		const sidecarDir = join(fixture.workspace, ".autorag", "datasources", "kakao", "default");
 		await mkdir(sidecarDir, { recursive: true });
-		await writeFile(join(sidecarDir, "sidecar.sqlite"), "");
+		// What a failed first sync leaves behind: the tables, no identity, no vectors.
+		const db = new DatabaseSync(join(sidecarDir, "sidecar.sqlite"));
+		db.exec(`
+			create table sidecar_meta (k text primary key, v text not null);
+			create table sidecar_vec (message_key text primary key, hash text not null, vec blob not null);
+		`);
 		const service = createDataSourceStatusService({ env: fixture.env, cwd: fixture.root });
 
+		const [failed] = (await service.list()).sources;
+		expect(failed?.index).toMatchObject({ state: "not-indexed", chunkCount: null, unit: "message" });
+
+		db.exec(`
+			insert into sidecar_meta values ('identity', '{"provider":"qwen","model":"m","dimension":2}');
+			insert into sidecar_vec values ('k1', 'h', x'00');
+		`);
+		db.close();
 		const [indexed] = (await service.list()).sources;
 		expect(indexed?.index).toMatchObject({
 			state: "indexed",
