@@ -120,6 +120,22 @@ export function primaryLabelKey(stepId: OnboardingStepId, plan: PlanId, held: bo
 	return plan === "pro" ? "onboarding.plan.checkoutPro" : "onboarding.plan.checkoutAir";
 }
 
+/**
+ * Whether the welcome checkbox starts ticked. Ticked by product decision; a pre-ticked box is not valid
+ * consent under the EU's GDPR/ePrivacy rules, so set this to false (or tick by region) if EU users are served.
+ */
+export const SHARE_USAGE_DEFAULT = true;
+
+/**
+ * The value to save for "usage statistics" when the user leaves `stepId`, or
+ * null when that step records nothing. Consent is the act of continuing from
+ * the step that shows the checkbox: closing the window there saves nothing, and
+ * the setting stays at its default (off).
+ */
+export function usageConsentOnLeaving(stepId: OnboardingStepId, checked: boolean): boolean | null {
+	return stepId === "welcome" ? checked : null;
+}
+
 /** Files-per-minute ETA the prototype computes with `eta(mode)`. */
 export function etaMinutes(files: number, mode: EmbedMode): number {
 	const rate = mode === "cloud" ? CLOUD_FILES_PER_MINUTE : LOCAL_FILES_PER_MINUTE;

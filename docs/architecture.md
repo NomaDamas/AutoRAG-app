@@ -233,6 +233,16 @@ Separate from error reports: Settings → 일반 → 개인정보 has a second s
 `usageAnalytics`, **off by default** (opt-in). It answers "which features are
 used", never "what is in them".
 
+How a user opts in: the first onboarding step (welcome) carries a small
+checkbox, ticked by default, with a link to the Privacy Policy. Continuing from
+that step saves its value to `usageAnalytics`; closing the window there saves
+nothing, so the setting stays off. `SHARE_USAGE_DEFAULT` in
+`src/renderer/src/onboarding/flow.ts` sets the initial tick. A pre-ticked box
+is not valid consent under the EU's GDPR/ePrivacy rules; if EU users are
+served, set it to false or tick by region, and have the Privacy Policy name the
+desktop app's analytics (the policy at `/privacy` today names only the website's
+cookies, Google Analytics and PostHog).
+
 What is sent, and only after the user turns it on: `app_opened`,
 `settings_changed` (a setting's name and `on`/`off` or its enum value),
 `onboarding_completed`, `ai_search_started` (has attachments, is a follow-up),

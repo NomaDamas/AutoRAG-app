@@ -16,6 +16,7 @@ import {
 	shouldSkipPlanStep,
 	sourceDetail,
 	type Translate,
+	usageConsentOnLeaving,
 } from "../src/renderer/src/onboarding/flow";
 import type { FolderScan } from "../src/shared/onboarding-contract";
 
@@ -254,5 +255,18 @@ describe("indexing phases", () => {
 		expect(phaseIndex("parsed")).toBe(0);
 		expect(phaseIndex("minsync")).toBe(1);
 		expect(phaseIndex("finalizing")).toBe(2);
+	});
+});
+
+describe("usage statistics consent", () => {
+	it("is recorded when the user leaves the welcome step, with the checkbox's value", () => {
+		expect(usageConsentOnLeaving("welcome", true)).toBe(true);
+		expect(usageConsentOnLeaving("welcome", false)).toBe(false);
+	});
+
+	it("is not recorded by any other step, so only the step that shows the checkbox can consent", () => {
+		for (const stepId of ["permissions", "account", "folders", "embedding", "sources", "model", "plan", "indexing"] as const) {
+			expect(usageConsentOnLeaving(stepId, true)).toBeNull();
+		}
 	});
 });
