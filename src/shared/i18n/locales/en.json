@@ -1349,6 +1349,8 @@
       "privacyTitle": "Privacy",
       "errorReporting": "Send Error Reports",
       "errorReportingHint": "When the app crashes or indexing fails, the cause is sent to the developers. File paths, file names and document content are never sent.",
+      "usageAnalytics": "Send Usage Statistics",
+      "usageAnalyticsHint": "Anonymously sends which features are used and how often. File paths, file names, searches, questions, document content and account details are never sent, and turning this off deletes the anonymous ID.",
       "docLanguagesTitle": "Document Languages",
       "docLanguagesDesc": "Preferred languages for reading and searching documents.",
       "docLanguagesHint": "You can select multiple.",

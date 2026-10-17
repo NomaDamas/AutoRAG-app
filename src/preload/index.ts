@@ -1,5 +1,6 @@
 import "@sentry/electron/preload";
 import { createAccountBridge } from "./account-bridge";
+import { createAnalyticsBridge } from "./analytics-bridge";
 import { createAppUpdateBridge } from "./app-update-bridge";
 import { contextBridge, ipcRenderer, webUtils } from "electron";
 import { createBridge } from "../shared/bridge";
@@ -35,6 +36,7 @@ contextBridge.exposeInMainWorld("autorag", {
 	...createBridge(readDevLabelArg(), process.platform),
 	fs: createFsBridge(ipcRenderer, fsWorker),
 	actions: createActionsBridge(ipcRenderer),
+	analytics: createAnalyticsBridge(ipcRenderer),
 	appUpdate: createAppUpdateBridge(ipcRenderer),
 	account: createAccountBridge(ipcRenderer),
 	indexActivity: createIndexActivityBridge(ipcRenderer),

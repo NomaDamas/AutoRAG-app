@@ -15,8 +15,10 @@ import { isServiceRunRequest, SERVICES_CHANNELS } from "../shared/services-contr
 import { t } from "../shared/i18n/core";
 import { INDEX_ACTIVITY_CHANNELS } from "../shared/index-activity-contract";
 import { APP_UPDATE_CHANNELS } from "../shared/update-contract";
+import { ANALYTICS_CHANNELS } from "../shared/analytics-contract";
 import type { AppUpdaterService } from "./app-updater";
 import type { ActionService } from "./action-service";
+import type { Analytics } from "./analytics-core";
 import type { IndexActivityService } from "./index-activity";
 import { dragOutPaths } from "./drag-out";
 import type { AccountService } from "./account-service";
@@ -50,6 +52,11 @@ export function registerDragOutIpcHandlers(): void {
 		if (valid === null) return;
 		void startNativeDrag(event.sender, valid);
 	});
+}
+
+/** Renderer analytics events: one-way, and untrusted — the analytics service validates every one against the contract. */
+export function registerAnalyticsIpcHandlers(analytics: Analytics): void {
+	ipcMain.on(ANALYTICS_CHANNELS.track, (_event, name: unknown, properties: unknown) => analytics.ingest(name, properties));
 }
 
 /** Inspector file actions: probe once, run one request, or pop the share sheet. */

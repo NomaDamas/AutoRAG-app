@@ -1349,6 +1349,8 @@
       "privacyTitle": "プライバシー",
       "errorReporting": "エラーレポートを送信",
       "errorReportingHint": "アプリがクラッシュしたりインデックス作成に失敗したりすると、原因を開発チームに送信します。ファイルのパス、ファイル名、文書の内容は送信されません。",
+      "usageAnalytics": "利用統計を送信",
+      "usageAnalyticsHint": "どの機能がどれくらい使われているかだけを匿名で開発チームに送信します。ファイルのパス、ファイル名、検索語、質問、文書の内容、アカウント情報は送信されません。オフにすると匿名IDも削除されます。",
       "docLanguagesTitle": "文書の言語",
       "docLanguagesDesc": "文書を読み込み・検索する際に優先する言語です。",
       "docLanguagesHint": "複数選択できます。",

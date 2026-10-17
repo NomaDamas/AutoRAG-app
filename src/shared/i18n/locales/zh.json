@@ -1349,6 +1349,8 @@
       "privacyTitle": "隐私",
       "errorReporting": "发送错误报告",
       "errorReportingHint": "应用崩溃或索引失败时，会把原因发送给开发团队。不会发送文件路径、文件名或文档内容。",
+      "usageAnalytics": "发送使用统计",
+      "usageAnalyticsHint": "仅匿名向开发团队发送使用了哪些功能以及使用频率。不会发送文件路径、文件名、搜索词、提问、文档内容或账户信息；关闭后匿名 ID 也会被删除。",
       "docLanguagesTitle": "文档语言",
       "docLanguagesDesc": "读取和搜索文档时优先使用的语言。",
       "docLanguagesHint": "可以选择多个。",

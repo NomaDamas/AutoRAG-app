@@ -46,6 +46,7 @@ const DEFAULT_SETTINGS: AppSettings = {
 	showInMenuBar: true,
 	autoInstallUpdates: true,
 	errorReporting: true,
+	usageAnalytics: false,
 	showHiddenFiles: false,
 	dupeyScanIntervalMinutes: 60,
 	osMenuIntegration: false,

@@ -739,3 +739,128 @@ describe("createSearchService", () => {
 		expect(await service.historyList()).toEqual([]);
 	});
 });
+
+describe("createSearchService usage analytics", () => {
+	interface Tracked {
+		readonly event: string;
+		readonly properties: unknown;
+	}
+
+	function recorder(): { tracked: Tracked[]; analytics: { track: (event: never, properties: never) => void } } {
+		const tracked: Tracked[] = [];
+		return { tracked, analytics: { track: (event, properties) => void tracked.push({ event, properties }) } };
+	}
+
+	it("reports a started and a finished run with only coarse facts, never the query or the answer", async () => {
+		const agent = createFakeAgent(async function*() {
+			yield { type: "preliminary", response: createResponse("session-a", "Quick answer about 분기 매출", 1) };
+			yield { type: "complete", response: createResponse("session-a", "Deep answer", 1) };
+		});
+		const { tracked, analytics } = recorder();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send: () => undefined, now, analytics });
+
+		await service.start("search-a", "chat-a", "분기 매출 계약서", []);
+
+		expect(tracked).toEqual([
+			{ event: "ai_search_started", properties: { has_attachments: false, follow_up: false } },
+			{ event: "ai_search_finished", properties: { outcome: "answered", deepened: true, duration: "lt_1s" } },
+		]);
+		expect(JSON.stringify(tracked)).not.toMatch(/분기|refund|Quick answer|Deep answer/u);
+	});
+
+	it("marks a quick-only answer as not deepened", async () => {
+		const agent = createFakeAgent(async function*() {
+			yield { type: "complete", response: createResponse("session-b", "Only answer", 1) };
+		});
+		const { tracked, analytics } = recorder();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send: () => undefined, now, analytics });
+
+		await service.start("search-b", "chat-b", "refund approval", []);
+
+		expect(tracked.at(-1)).toEqual({ event: "ai_search_finished", properties: { outcome: "answered", deepened: false, duration: "lt_1s" } });
+	});
+
+	it("flags a follow-up turn in an existing chat and a run that carries attachments", async () => {
+		const agent = createFakeAgent(async function*() {
+			yield { type: "complete", response: createResponse("session-c", "Answer", 1) };
+		});
+		const { tracked, analytics } = recorder();
+		const service = createSearchService({
+			agentFactory: () => agent,
+			chatStore: await createStore(),
+			send: () => undefined,
+			now,
+			analytics,
+			attachmentContext: async () => "",
+		});
+
+		await service.start("search-c1", "chat-c", "first question", []);
+		await service.start("search-c2", "chat-c", "second question", [{ kind: "file", id: "/Users/jeff/Documents/secret.pdf", name: "secret.pdf" }]);
+
+		expect(tracked.filter((entry) => entry.event === "ai_search_started").map((entry) => entry.properties)).toEqual([
+			{ has_attachments: false, follow_up: false },
+			{ has_attachments: true, follow_up: true },
+		]);
+		expect(JSON.stringify(tracked)).not.toMatch(/secret|Users|question/u);
+	});
+
+	it("reports a failed run, whether the agent throws or cannot be built", async () => {
+		const throwing = createFakeAgent(async function*() {
+			yield { type: "progress", sessionId: "", query: "q", text: "working" };
+			throw new Error("provider exploded at /Users/jeff/Documents");
+		});
+		const first = recorder();
+		await createSearchService({ agentFactory: () => throwing, chatStore: await createStore(), send: () => undefined, now, analytics: first.analytics }).start("search-d1", "chat-d1", "q", []);
+		expect(first.tracked.at(-1)).toEqual({ event: "ai_search_finished", properties: { outcome: "failed", deepened: false, duration: "lt_1s" } });
+		expect(JSON.stringify(first.tracked)).not.toMatch(/exploded|Users/u);
+
+		const second = recorder();
+		await createSearchService({
+			agentFactory: () => {
+				throw new Error("search root does not exist");
+			},
+			chatStore: await createStore(),
+			send: () => undefined,
+			now,
+			analytics: second.analytics,
+		}).start("search-d2", "chat-d2", "q", []);
+		expect(second.tracked.map((entry) => entry.event)).toEqual(["ai_search_started", "ai_search_finished"]);
+		expect(second.tracked.at(-1)?.properties).toEqual({ outcome: "failed", deepened: false, duration: "lt_1s" });
+	});
+
+	it("reports a stopped run exactly once", async () => {
+		const quickSeen = Promise.withResolvers<void>();
+		const agent = createFakeAgent(async function*() {
+			yield { type: "preliminary", response: createResponse("session-e", "Quick answer", 1) };
+			await Promise.withResolvers<void>().promise;
+		});
+		const { tracked, analytics } = recorder();
+		const service = createSearchService({
+			agentFactory: () => agent,
+			chatStore: await createStore(),
+			send: (_channel, payload) => {
+				if (payload.type === "quick") quickSeen.resolve();
+			},
+			now,
+			analytics,
+		});
+
+		const started = service.start("search-e", "chat-e", "refund approval", []);
+		await quickSeen.promise;
+		await service.cancel("search-e");
+		await started;
+
+		expect(tracked.filter((entry) => entry.event === "ai_search_finished")).toEqual([
+			{ event: "ai_search_finished", properties: { outcome: "stopped", deepened: false, duration: "lt_1s" } },
+		]);
+	});
+
+	it("runs unchanged without an analytics sink", async () => {
+		const agent = createFakeAgent(async function*() {
+			yield { type: "complete", response: createResponse("session-f", "Answer", 1) };
+		});
+		const { events, send } = collectEvents();
+		await createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send, now }).start("search-f", "chat-f", "q", []);
+		expect(events.at(-1)).toEqual({ type: "done", searchId: "search-f" });
+	});
+});

@@ -1349,6 +1349,8 @@
       "privacyTitle": "개인정보",
       "errorReporting": "오류 보고서 보내기",
       "errorReportingHint": "앱이 멈추거나 오류가 나면 원인을 개발팀에 보냅니다. 파일 경로·파일 이름·문서 내용은 보내지 않습니다.",
+      "usageAnalytics": "사용 통계 보내기",
+      "usageAnalyticsHint": "어떤 기능을 얼마나 쓰는지만 익명으로 개발팀에 보냅니다. 파일 경로·파일 이름·검색어·질문·문서 내용·계정 정보는 보내지 않으며, 끄면 익명 ID도 지워집니다.",
       "docLanguagesTitle": "문서 언어",
       "docLanguagesDesc": "문서를 읽고 검색할 때 우선 사용할 언어입니다.",
       "docLanguagesHint": "여러 개를 선택할 수 있습니다.",
