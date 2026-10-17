@@ -20,15 +20,15 @@ import { Switch } from "../primitives/Switch";
 
 /** Web-search providers offered as the default provider in the web-search page. */
 const WEBSEARCH_PROVIDERS: readonly { readonly id: string; readonly label: string }[] = [
+	{ id: "parallel", label: "Parallel" },
+	{ id: "duckduckgo", label: "DuckDuckGo" },
 	{ id: "gemini", label: "Gemini" },
 	{ id: "anthropic", label: "Anthropic" },
 	{ id: "codex", label: "OpenAI" },
 	{ id: "xai", label: "xAI" },
 	{ id: "perplexity", label: "Perplexity" },
-	{ id: "parallel", label: "Parallel" },
 	{ id: "searxng", label: "SearXNG" },
 	{ id: "startpage", label: "Startpage" },
-	{ id: "duckduckgo", label: "DuckDuckGo" },
 	{ id: "ecosia", label: "Ecosia" },
 	{ id: "google", label: "Google" },
 	{ id: "mojeek", label: "Mojeek" },

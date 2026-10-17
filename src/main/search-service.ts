@@ -454,6 +454,30 @@ type AgentThinking = NonNullable<AutoRAGAgentOptions["thinking"]>;
 type AgentThinkingLevel = NonNullable<AgentThinking["final"]>;
 type AgentQueryDecomposition = AutoRAGAgentOptions["queryDecomposition"];
 
+/**
+ * Default web-search fallback order: keyless Parallel MCP and DuckDuckGo HTML
+ * lead the chain ahead of Perplexity's rate-limited anonymous endpoint and
+ * bot-challenged scrapers.
+ */
+export const DEFAULT_WEB_SEARCH_PROVIDER_ORDER = ["parallel", "duckduckgo"] as const;
+
+/**
+ * Re-attach `webSearch` from the raw config object (librarian's `resolveConfig`
+ * drops it) and apply {@link DEFAULT_WEB_SEARCH_PROVIDER_ORDER} when enabled
+ * without an explicit `order`.
+ */
+export function resolveWebSearchConfig(raw: Record<string, unknown>): NonNullable<CliConfig["webSearch"]> {
+	const webSearch = raw.webSearch;
+	if (webSearch === false) return { enabled: false };
+	if (!isJsonObject(webSearch)) return { order: [...DEFAULT_WEB_SEARCH_PROVIDER_ORDER] };
+	if (webSearch.enabled === false) return webSearch as NonNullable<CliConfig["webSearch"]>;
+	if (webSearch.order !== undefined) return webSearch as NonNullable<CliConfig["webSearch"]>;
+	return {
+		...webSearch,
+		order: [...DEFAULT_WEB_SEARCH_PROVIDER_ORDER],
+	} as NonNullable<CliConfig["webSearch"]>;
+}
+
 function readThinking(raw: Record<string, unknown>): AgentThinking | undefined {
 	const value = raw.thinking;
 	if (!isJsonObject(value)) return undefined;
@@ -493,10 +517,10 @@ export function createDefaultAgentFactory(): () => Promise<SearchAgent> {
 		const raw = (await access(configPath).then(() => true, () => false)) ? readRawConfigObject(configPath) : {};
 		// librarian's resolveConfig drops `webSearch`; re-attach the raw block so
 		// buildAgentOptions applies it, then layer the app's code-folder exclusions.
-		const withWebSearch: CliConfig =
-			raw.webSearch === undefined
-				? config
-				: { ...config, webSearch: raw.webSearch as NonNullable<CliConfig["webSearch"]> };
+		const withWebSearch: CliConfig = {
+			...config,
+			webSearch: resolveWebSearchConfig(raw),
+		};
 		const effective = await applyAppIndexing(withWebSearch, raw);
 		// Credentials resolve fresh from auth.json/process.env on every agent build,
 		// so a login or key change reaches the next search without a restart.
