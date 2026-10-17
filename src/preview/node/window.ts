@@ -44,6 +44,7 @@ import { type BundleIconSource, summarizeBundle } from "./bundle";
 import { createDefaultAppCache, type DefaultAppCache } from "./default-app";
 import { fileDetails, sha256File } from "./details";
 import { measureFolder, summarizeFolder } from "./folder";
+import { readHeicPreview } from "./heic";
 import { readIworkPreview } from "./iwork";
 import { PREVIEW_BYTE_CAP, PreviewReadError, readPreviewFile, SNIFF_BYTES, TEXT_BYTE_CAP } from "./read-file";
 
@@ -324,6 +325,8 @@ async function readDocument(path: string): Promise<PreviewDocument> {
 			return readPreviewFile(path, TEXT_BYTE_CAP);
 		case "whole":
 			return readPreviewFile(path, PREVIEW_BYTE_CAP, true);
+		case "decode":
+			return readHeicPreview(path);
 		case "extract": {
 			// The file's own metadata, the page image Apple stored inside it, and
 			// (for a Keynote deck) every slide image in show order.

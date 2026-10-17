@@ -179,7 +179,10 @@ The main process reads only what the viewer will use (`byteNeed` in
 `registry.ts`): nothing for media, PDF, images, and fonts, which stream through
 `autorag-preview://` (it answers `Range` with `206`); the first 4MB of text,
 code, Markdown, and HTML; whole documents (HWP included) up to 32MB; for iWork
-packages the directory, the Keynote slide tree, and the page images inside; and
+packages the directory, the Keynote slide tree, and the page images inside; a
+HEIC as the JPEG macOS's own `sips` decodes from it (`node/heic.ts`, about
+0.2s on a 24MP iPhone photo even on a spinning disk; the viewer's wasm decoder
+never finished one, and remains only where `sips` is absent or fails); and
 a 64KB sniff of an unknown file, read on as text only when it looks like text.
 The detail calls (details, SHA-256, folder size, audio tags) answer only for the
 path the window is showing, and the hash and folder walk stop when the preview
