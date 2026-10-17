@@ -41,7 +41,6 @@ import {
 	planHeld,
 	primaryLabelKey,
 	shouldSkipPlanStep,
-	SHARE_USAGE_DEFAULT,
 	usageConsentOnLeaving,
 	type Translate,
 } from "./flow";
@@ -148,7 +147,8 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 	const [account, setAccount] = useState<AccountStatus | null>(null);
 	const [paying, setPaying] = useState(false);
 	const [indexStatus, setIndexStatus] = useState<IndexingStatus | null>(null);
-	const [shareUsage, setShareUsage] = useState(SHARE_USAGE_DEFAULT);
+	// Unticked: usage statistics are opt-in (an EU user's consent must be an affirmative act).
+	const [shareUsage, setShareUsage] = useState(false);
 
 	const draftRef = useRef<OnboardingDraft | null>(null);
 	const permissionRef = useRef<PermissionStatus | null>(null);
@@ -162,7 +162,7 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 	const embeddingRef = useRef(false);
 	const modelsRef = useRef(false);
 	const indexingRef = useRef(false);
-	const shareUsageRef = useRef(SHARE_USAGE_DEFAULT);
+	const shareUsageRef = useRef(false);
 
 	// Synced during render, not in an effect: deferred callbacks (the sign-in
 	// auto-advance, keyboard handler) must see the state of the latest render.
