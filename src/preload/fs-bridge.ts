@@ -34,6 +34,8 @@ export function createFsBridge(ipcRenderer: IpcRenderer, worker: WorkerClient): 
 		rename: (path, newName) => call<FsEntry>("rename", path, newName),
 		createFolder: (directory) => call<{ readonly path: string; readonly name: string }>("createFolder", directory),
 		createFile: (directory, format) => call<{ readonly path: string; readonly name: string }>("createFile", directory, format),
+		createEvidenceFolder: (paths, folderName) => call<string>("createEvidenceFolder", paths, folderName),
+		removeEvidenceFolder: (folderPath) => call<void>("removeEvidenceFolder", folderPath),
 		trash: (paths) => call<FsBatchResult>("trash", paths),
 		restoreFromTrash: (paths) => call<FsBatchResult>("restoreFromTrash", paths),
 		emptyTrash: () => call<FsBatchResult>("emptyTrash"),

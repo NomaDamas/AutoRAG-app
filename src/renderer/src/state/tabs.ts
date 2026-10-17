@@ -19,6 +19,8 @@ export interface FinderTab {
 	readonly flash: boolean;
 	/** Column view: folders opened pane by pane, each the parent of the next (state/columns.ts). */
 	readonly chain: readonly string[];
+	/** Root path of the temporary Evidence Folder this tab owns; cleaned up when the tab closes or leaves it. */
+	readonly evidenceFolder?: string;
 }
 
 export interface TabsState {
@@ -29,6 +31,30 @@ export interface TabsState {
 
 function blankTab(id: number, path: string): FinderTab {
 	return { id, path, back: [], fwd: [], selection: EMPTY_SELECTION, flash: false, chain: [] };
+}
+
+/**
+ * Keep `evidenceFolder` while the tab stays inside that temporary folder tree;
+ * the moment the tab navigates outside it, drop `evidenceFolder` and prune its
+ * paths from `back`, `fwd`, and `chain` so history never points to a deleted temp folder.
+ */
+function retainEvidenceFolder(tab: FinderTab): FinderTab {
+	const root = tab.evidenceFolder;
+	if (root === undefined) {
+		return tab;
+	}
+	const prefix = parentPrefix(root);
+	const inside = (path: string): boolean => path === root || path.startsWith(prefix);
+	if (inside(tab.path)) {
+		return tab;
+	}
+	const { evidenceFolder: _, ...rest } = tab;
+	return {
+		...rest,
+		back: tab.back.filter((entry) => !inside(entry)),
+		fwd: tab.fwd.filter((entry) => !inside(entry)),
+		chain: tab.chain.filter((entry) => !inside(entry)),
+	};
 }
 
 export function createTabsState(path: string): TabsState {
@@ -44,7 +70,7 @@ export function activeTab(state: TabsState): FinderTab {
 }
 
 export function patchActiveTab(state: TabsState, patch: (tab: FinderTab) => FinderTab): TabsState {
-	return { ...state, tabs: state.tabs.map((tab) => (tab.id === state.activeId ? patch(tab) : tab)) };
+	return { ...state, tabs: state.tabs.map((tab) => (tab.id === state.activeId ? retainEvidenceFolder(patch(tab)) : tab)) };
 }
 
 /**
@@ -83,6 +109,16 @@ export function openTabAt(state: TabsState, path: string): TabsState {
 	const id = state.nextId;
 	return {
 		tabs: [...state.tabs, blankTab(id, path)],
+		activeId: id,
+		nextId: id + 1,
+	};
+}
+
+/** Open a temporary Evidence Folder in a new tab and mark the tab as owning it. */
+export function openEvidenceFolderTab(state: TabsState, folderPath: string): TabsState {
+	const id = state.nextId;
+	return {
+		tabs: [...state.tabs, { ...blankTab(id, folderPath), evidenceFolder: folderPath }],
 		activeId: id,
 		nextId: id + 1,
 	};

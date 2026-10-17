@@ -249,8 +249,8 @@ export function closeWorkspaceTab(ws: Workspace, tabId: number): Workspace {
 	const recentTabs = next.recentTabs.filter((id) => id !== tabId);
 	const paneGone = !next.panes.some((pane) => pane.id === from.id);
 	const focusedPaneId = paneGone && next.focusedPaneId === from.id ? recentPane({ ...next, recentTabs }) : next.focusedPaneId;
-	// Settings and AI Search show no folder, and an AI Search chat does not outlive its tab: nothing to bring back.
-	const closedTabs = isVirtualTabPath(closing.path)
+	// Settings, AI Search, and temporary Evidence Folders do not outlive their tab: nothing for ⇧⌘T to bring back.
+	const closedTabs = isVirtualTabPath(closing.path) || closing.evidenceFolder !== undefined
 		? next.closedTabs
 		: [{ tab: closing, paneId: from.id, index: from.tabs.indexOf(closing) }, ...next.closedTabs].slice(0, CLOSED_TAB_LIMIT);
 	return remember({ ...next, recentTabs, focusedPaneId, closedTabs });

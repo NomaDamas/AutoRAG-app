@@ -24,7 +24,7 @@ import { summaryRequest, type SummaryLanguage } from "../state/ai-summary";
 import { answerViewState } from "../state/answer-view";
 import { attachmentsFromDrop, isAttachmentDrag, mergeAttachments } from "../state/attachments";
 import { ImageRow, lineImages, type ImageActions } from "./AnswerImage";
-import { evidenceKind, unresolvedCitationNumbers } from "../state/evidence";
+import { collectSessionEvidence, evidenceKind, unresolvedCitationNumbers } from "../state/evidence";
 import { groupChatHistory, HISTORY_BUCKET_KEYS, historyEmptyText } from "../state/history";
 import { cn } from "../lib/cn";
 import { enterKeyLabel, formatShortcut } from "../lib/shortcuts";
@@ -71,7 +71,7 @@ export interface AiSearchPanelProps {
 	readonly visible: boolean;
 	readonly selectedEvidence: number | null;
 	readonly onSelectEvidence: (number: number) => void;
-	readonly onPublish: (evidence: readonly CitationEvidence[]) => void;
+	readonly onPublish: (evidence: readonly CitationEvidence[], sessionEvidence?: readonly CitationEvidence[]) => void;
 	/** Images in an answer: a local picture opens in Quick Look, a web image's page in the OS browser. */
 	readonly imageActions: ImageActions;
 	/** The Interface language setting: "AI 요약" asks in this language. */
@@ -249,12 +249,20 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	}, [searchId, queued]);
 
 	const evidence = useMemo(() => deep?.evidence ?? quick?.evidence ?? [], [deep, quick]);
+	const sessionEvidence = useMemo(() => {
+		const phases: (AnswerPhase | null)[] = [];
+		for (const turn of pastTurns) {
+			phases.push(turn.quick, turn.deep);
+		}
+		phases.push(quick, deep);
+		return collectSessionEvidence(phases);
+	}, [pastTurns, quick, deep]);
 
 	// Only the visible tab's chat feeds the inspector; it keeps that evidence
 	// while the user browses folders in other tabs.
 	useEffect(() => {
-		if (active) onPublish(evidence);
-	}, [active, evidence, onPublish]);
+		if (active) onPublish(evidence, sessionEvidence);
+	}, [active, evidence, sessionEvidence, onPublish]);
 
 	const historyGroups = useMemo(() => groupChatHistory(history, new Date()), [history]);
 

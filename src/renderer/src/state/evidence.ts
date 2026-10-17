@@ -6,6 +6,7 @@
 
 import { webUrl } from "../../../shared/fs-contract";
 import { t } from "../../../shared/i18n/core";
+import type { AnswerPhase, CitationEvidence } from "../../../shared/search-contract";
 import { citedNumbers } from "./answer-markdown";
 import { type FileKind, kindFromExtension } from "./kinds";
 
@@ -48,6 +49,63 @@ export function evidenceHeading(title: string, source: string | null): string {
 	const opaque = surface === "chunks" || surface === "messages" || surface === "images";
 	if (datasource === undefined || instance === undefined || !opaque) return title;
 	return `${datasource} · ${instance}`;
+}
+
+/**
+ * True when `source` names a local filesystem path rather than null, a web
+ * URL (`http:`/`https:`), or an opaque datasource chunk/message/image id
+ * (`/kakao/.../chunks/...`).
+ */
+export function isLocalEvidenceSource(source: string | null): source is string {
+	if (source === null) return false;
+	const trimmed = source.trim();
+	if (trimmed === "" || webUrl(trimmed) !== null) return false;
+	if (trimmed.startsWith("/")) {
+		const [datasource, instance, surface] = trimmed.split("/").filter((part) => part.length > 0);
+		if (
+			datasource !== undefined &&
+			instance !== undefined &&
+			(surface === "chunks" || surface === "messages" || surface === "images")
+		) {
+			return false;
+		}
+	}
+	return true;
+}
+
+/**
+ * Gather every citation across all phases of a session (earlier turns and the
+ * current turn's Quick/Deep phases) in chronological order.
+ */
+export function collectSessionEvidence(
+	phases: readonly (AnswerPhase | null | undefined)[],
+): readonly CitationEvidence[] {
+	const items: CitationEvidence[] = [];
+	for (const phase of phases) {
+		if (phase === null || phase === undefined) continue;
+		for (const entry of phase.evidence) {
+			items.push(entry);
+		}
+	}
+	return items;
+}
+
+/**
+ * Unique local file paths from a session's evidence list, in first-seen order
+ * (canonicalized by NFC for deduplication while keeping the first spelling).
+ */
+export function sessionEvidencePaths(evidence: readonly CitationEvidence[]): readonly string[] {
+	const seen = new Set<string>();
+	const paths: string[] = [];
+	for (const entry of evidence) {
+		if (!isLocalEvidenceSource(entry.source)) continue;
+		const trimmed = entry.source.trim();
+		const key = trimmed.normalize("NFC");
+		if (seen.has(key)) continue;
+		seen.add(key);
+		paths.push(trimmed);
+	}
+	return paths;
 }
 
 /** Confidence as a percentage, shown right of the source line; `null` when the librarian measured none. */

@@ -68,6 +68,8 @@ function fakeFs(result: FsVersionFamiliesResult): FsBridge {
 		rename: async (path, name) => fsEntry(`${path}/${name}`),
 		createFolder: async (directory) => ({ path: `${directory}/untitled folder`, name: "untitled folder" }),
 		createFile: async (directory, format) => ({ path: `${directory}/untitled.${format}`, name: `untitled.${format}` }),
+		createEvidenceFolder: async (_paths, folderName) => `/tmp/dazzi-evidence-1/${folderName ?? "Evidence Folder"}`,
+		removeEvidenceFolder: async () => {},
 		trash: batch,
 		restoreFromTrash: batch,
 		emptyTrash: batch,
@@ -416,5 +418,34 @@ describe("live Finder source adapters", () => {
 		// Then both reached the bridge with their arguments
 		expect(restorePaths).toEqual([["/.Trash/a.md"]]);
 		expect(emptied).toHaveLength(1);
+	});
+
+	it("creates and removes temporary Evidence Folders in both fixture and bridge sources", async () => {
+		const fixture = createFixtureSource();
+		const folder = await fixture.createEvidenceFolder(["Desktop/회의록_0922.md", "Desktop/주간보고_0919.pptx"], "Evidence Folder");
+		expect(await fixture.exists(folder)).toBe(true);
+		expect((await fixture.list(folder)).map((e) => e.name)).toEqual(["회의록_0922.md", "주간보고_0919.pptx"]);
+		await fixture.removeEvidenceFolder(folder);
+		expect(await fixture.exists(folder)).toBe(false);
+
+		const createdCalls: Array<{ readonly paths: readonly string[]; readonly name?: string }> = [];
+		const removedCalls: string[] = [];
+		const bridge = createBridgeSource(
+			{
+				...fakeFs(familyResult()),
+				createEvidenceFolder: async (paths, folderName) => {
+					createdCalls.push({ paths, ...(folderName === undefined ? {} : { name: folderName }) });
+					return "/tmp/ev/Evidence Folder";
+				},
+				removeEvidenceFolder: async (path) => {
+					removedCalls.push(path);
+				},
+			},
+			"",
+		);
+		await expect(bridge.createEvidenceFolder(["/a.md"], "Evidence Folder")).resolves.toBe("/tmp/ev/Evidence Folder");
+		await bridge.removeEvidenceFolder("/tmp/ev/Evidence Folder");
+		expect(createdCalls).toEqual([{ paths: ["/a.md"], name: "Evidence Folder" }]);
+		expect(removedCalls).toEqual(["/tmp/ev/Evidence Folder"]);
 	});
 });

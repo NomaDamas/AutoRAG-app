@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+	collectSessionEvidence,
 	evidenceDetail,
 	evidenceHeading,
 	evidenceKind,
 	evidenceSourceUrl,
 	findEvidenceSource,
+	isLocalEvidenceSource,
+	sessionEvidencePaths,
 	unresolvedCitationNumbers,
 } from "../src/renderer/src/state/evidence";
 
@@ -111,5 +114,55 @@ describe("unresolvedCitationNumbers", () => {
 
 	it("returns nothing when the answer cites nothing", () => {
 		expect(unresolvedCitationNumbers("일반 지식으로 답합니다.", evidence)).toEqual([]);
+	});
+});
+
+describe("isLocalEvidenceSource and sessionEvidencePaths", () => {
+	it("accepts local POSIX and Windows paths and rejects null, web URLs, and datasource virtual ids", () => {
+		expect(isLocalEvidenceSource("/Users/jeff/Documents/policy.md")).toBe(true);
+		expect(isLocalEvidenceSource("C:\\Users\\jeff\\Documents\\policy.md")).toBe(true);
+		expect(isLocalEvidenceSource("/obsidian/vault/notes/Q3 plan.md")).toBe(true);
+		expect(isLocalEvidenceSource(null)).toBe(false);
+		expect(isLocalEvidenceSource("")).toBe(false);
+		expect(isLocalEvidenceSource("https://example.com/doc")).toBe(false);
+		expect(isLocalEvidenceSource("/kakao/work/chunks/msg-1")).toBe(false);
+		expect(isLocalEvidenceSource("/slack/team/messages/42")).toBe(false);
+		expect(isLocalEvidenceSource("/discord/srv/images/9")).toBe(false);
+	});
+
+	it("gathers unique local file paths in order across all turns and phases of a session", () => {
+		const composed = "/Users/jeff/Documents/한글 정책.md".normalize("NFC");
+		const decomposed = composed.normalize("NFD");
+		const phases = [
+			{
+				answer: "turn 1 quick",
+				evidence: [
+					{ number: 1, title: "한글 정책.md", summary: "", source: composed, excerpts: [] },
+					{ number: 2, title: "web", summary: "", source: "https://example.com", excerpts: [] },
+				],
+			},
+			{
+				answer: "turn 1 deep",
+				evidence: [
+					{ number: 1, title: "한글 정책.md", summary: "", source: decomposed, excerpts: [] },
+					{ number: 2, title: "kakao", summary: "", source: "/kakao/work/chunks/7", excerpts: [] },
+					{ number: 3, title: "budget.xlsx", summary: "", source: "/Users/jeff/Desktop/budget.xlsx", excerpts: [] },
+				],
+			},
+			null,
+			{
+				answer: "turn 2 deep",
+				evidence: [
+					{ number: 1, title: "memo.txt", summary: "", source: "/Users/jeff/Notes/memo.txt", excerpts: [] },
+					{ number: 2, title: "budget.xlsx", summary: "", source: "/Users/jeff/Desktop/budget.xlsx", excerpts: [] },
+				],
+			},
+		];
+		const collected = collectSessionEvidence(phases);
+		expect(sessionEvidencePaths(collected)).toEqual([
+			composed,
+			"/Users/jeff/Desktop/budget.xlsx",
+			"/Users/jeff/Notes/memo.txt",
+		]);
 	});
 });
