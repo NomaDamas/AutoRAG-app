@@ -95,16 +95,10 @@ export function AccountPage(): ReactElement {
 				{error !== null ? <Note>{error}</Note> : null}
 				<Row
 					name={signedIn ? t("settingsCore.account.signOut") : t("settingsCore.account.signIn")}
-					hint={
-						status?.source === "env"
-							? t("settingsCore.account.hintEnv")
-							: signedIn
-								? t("settingsCore.account.hintSignedIn")
-								: t("settingsCore.account.hintSignedOut")
-					}
+					hint={signedIn ? t("settingsCore.account.hintSignedIn") : t("settingsCore.account.hintSignedOut")}
 				>
 					{signedIn ? (
-						<button type="button" className="linear-btn" disabled={busy || status?.source === "env"} onClick={() => run(() => window.autorag.account.signOut())}>
+						<button type="button" className="linear-btn" disabled={busy} onClick={() => run(() => window.autorag.account.signOut())}>
 							{t("settingsCore.account.signOut")}
 						</button>
 					) : status?.state === "signingIn" ? (

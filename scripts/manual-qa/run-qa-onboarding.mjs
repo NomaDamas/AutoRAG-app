@@ -6,9 +6,9 @@
 // config and index are never touched. Electron resolves the home folder from
 // the OS (not $HOME), so the lane deselects the real Desktop/Documents
 // candidates and adds two fixture folders through a stubbed folder dialog. The
-// local embedding model and llama runtime are linked in from the real AutoRAG
-// home when cached (otherwise the first index downloads them).
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
+// local native embedding model is referenced from the real MinSync cache when
+// present (otherwise the first index downloads it).
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
@@ -33,11 +33,11 @@ writeFileSync(join(DOCS, "report-q3.md"), "# Q3 report\n\nOperating cost fell be
 writeFileSync(join(DOCS, "notes.txt"), "Budget summary for the third quarter.\n");
 mkdirSync(AUTORAG_HOME, { recursive: true });
 mkdirSync(join(WORK, "config"), { recursive: true });
-const realHome = process.env.AUTORAG_HOME?.trim() || join(homeDir(), ".autorag");
-for (const dir of ["models", "runtime"]) {
-	if (existsSync(join(realHome, dir))) symlinkSync(join(realHome, dir), join(AUTORAG_HOME, dir), "dir");
-}
-
+const realMinsyncModels =
+	process.env.FASTEMBED_CACHE_DIR?.trim() ||
+	(process.platform === "win32"
+		? join(process.env.LOCALAPPDATA?.trim() || join(homeDir(), "AppData", "Local"), "minsync", "models")
+		: join(homeDir(), ".cache", "minsync", "models"));
 const failures = [];
 const check = (name, ok, detail = "") => {
 	console.log(`${ok ? "PASS" : "FAIL"} ${name}${detail ? ` — ${detail}` : ""}`);
@@ -54,7 +54,12 @@ const stub = createServer((request, response) => {
 });
 await new Promise((resolve) => stub.listen(0, "127.0.0.1", resolve));
 const stubUrl = `http://127.0.0.1:${stub.address().port}/v1`;
-const env = { AUTORAG_HOME, AUTORAG_CONFIG: CONFIG, AUTORAG_SKIP_DUPEY_CHECK: "1" };
+const env = {
+	AUTORAG_HOME,
+	AUTORAG_CONFIG: CONFIG,
+	AUTORAG_SKIP_DUPEY_CHECK: "1",
+	...(existsSync(realMinsyncModels) ? { FASTEMBED_CACHE_DIR: realMinsyncModels } : {}),
+};
 const userDataDir = join(WORK, "user-data");
 const app = await launchFinder({ userDataDir, env, onboarding: true, language: "ko" });
 const errors = [];
@@ -208,9 +213,16 @@ try {
 	check("stub endpoint verifies with the entered key", stubHits.includes("Bearer sk-qa-stub"), JSON.stringify(stubHits));
 	await primary.click();
 
-	// indexing: real first index; gate opens only on success.
+	// indexing: real first index; gate opens only on success, while subtle bottom button allows background start.
 	await page.waitForSelector(".onb.immersive .ix-bar", { timeout: 10_000 });
 	check("open button disabled while indexing", await page.locator(".onb .ix-open-btn").first().isDisabled().catch(() => true));
+	check("subtle background-start button is visible while indexing", await page.locator(".onb .ix-bg-start").isVisible());
+	const phaseLabels = await page.locator(".onb .ix-phases .ix-phase").allInnerTexts();
+	check(
+		"indexing phases show only local phases (parsed, minsync, finalizing)",
+		phaseLabels.length === 3 && !phaseLabels.some((label) => label.includes("데이터 소스")),
+		phaseLabels.join(" | "),
+	);
 	await shot("08-indexing");
 	await page.waitForFunction(
 		() => {
@@ -222,6 +234,7 @@ try {
 	);
 	const failed = await page.locator(".onb .ix-notice.warn").count();
 	check("first index succeeds", failed === 0, failed ? await page.locator(".onb .ix-notice.warn").innerText() : "");
+	check("subtle background-start button hides once indexing finishes", (await page.locator(".onb .ix-bg-start").count()) === 0);
 	const raw = JSON.parse(readFileSync(CONFIG, "utf8"));
 	check(
 		"BYOK model written with base URL and key env name (no key in config)",
@@ -239,7 +252,7 @@ try {
 		check(`${requestedSource} datasource config written`, configured.length > 0, JSON.stringify(configured));
 	}
 	check("config searchPaths = selected folders", JSON.stringify(raw.searchPaths) === JSON.stringify([DESK, DOCS]), JSON.stringify(raw.searchPaths));
-	check("config local embedder set", raw.minSync?.embedder?.profile === "qwen3-embedding-0.6b", JSON.stringify(raw.minSync?.embedder));
+	check("config local embedder set", raw.minSync?.embedder?.id === "native:Qwen/Qwen3-Embedding-0.6B", JSON.stringify(raw.minSync?.embedder));
 	check("first index lives in the AutoRAG home, not the app cwd", raw.workspacePath === join(AUTORAG_HOME, "workspace") && !existsSync(join(ROOT, ".autorag")), String(raw.workspacePath));
 	const final = await page.evaluate(() => window.autorag.onboarding.indexStatus());
 	check(
@@ -263,7 +276,7 @@ try {
 	failures.push(String(error));
 	console.error(error);
 } finally {
-	// The first index leaves two daemons pointing into WORK (llama-server,
+	// The first index leaves background helpers pointing into WORK (e.g.
 	// fsearch-cli watch); kill them by their command line before deleting it.
 	if (process.platform !== "win32") {
 		spawnSync("pkill", ["-9", "-f", WORK]);

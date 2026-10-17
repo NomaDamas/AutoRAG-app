@@ -6,6 +6,7 @@ import { ONBOARDING_CHANNELS, type DetectedSource, type OnboardingDraft, type So
 import type { AppSettings, ConfigRefreshResult } from "../src/shared/settings-contract";
 import type { OnboardingServiceDeps } from "../src/main/onboarding-service";
 import { createOnboardingService, readOnboardingPending } from "../src/main/onboarding-service";
+import { storeDazziPlanCredential } from "../src/main/dazzi-plan-credential";
 
 const directories: string[] = [];
 
@@ -31,6 +32,8 @@ const DRAFT: OnboardingDraft = {
 	network: false,
 	launchAtLogin: false,
 	folders: [{ path: "/Users/me/Documents", selected: true }],
+	embed: "local",
+	cloudConsent: false,
 	sources: [],
 	plan: "free",
 	planConfirmed: false,
@@ -53,6 +56,8 @@ function makeDeps(userDataDir: string, env: NodeJS.ProcessEnv = {}): OnboardingS
 	return {
 		userDataDir,
 		env,
+		// Pi's agent home is the user data dir here, so a test never reads the developer's own sign-in.
+		agentDir: userDataDir,
 		cwd: "/repo",
 		platform: "darwin",
 		home: "/Users/me",
@@ -137,19 +142,191 @@ describe("createOnboardingService persistence", () => {
 		expect((await fresh.load()).draft).toEqual(DRAFT);
 	});
 
-	it("starts the index and settles to success when the refresh resolves", async () => {
+	it("starts local-only indexing (parsed + minsync) and settles to success when the refresh resolves", async () => {
 		const directory = await workDir();
 		const gate = Promise.withResolvers<ConfigRefreshResult>();
-		const deps: OnboardingServiceDeps = { ...makeDeps(directory), refresh: () => gate.promise };
+		const requestedMethods: Array<readonly string[] | undefined> = [];
+		const deps: OnboardingServiceDeps = {
+			...makeDeps(directory),
+			refresh: (methods) => {
+				requestedMethods.push(methods);
+				return gate.promise;
+			},
+		};
 		const service = createOnboardingService(deps);
-		const status = await service.startIndexing({ folders: ["/Users/me/Documents"], sources: [], plan: "byok", model: null });
+		const status = await service.startIndexing({
+			folders: ["/Users/me/Documents"],
+			sources: [{ id: "slack" }],
+			plan: "byok",
+			model: null,
+		});
 		expect(status.state).toBe("running");
+		expect(requestedMethods).toEqual([["parsed", "minsync"]]);
 		expect(service.isIndexing()).toBe(true);
-		gate.resolve({ ok: true, methods: ["parsed"], scanned: 0, written: 0, deleted: 0, skipped: 0, diagnostics: [], error: null });
+		gate.resolve({ ok: true, methods: ["parsed", "minsync"], scanned: 0, written: 0, deleted: 0, skipped: 0, diagnostics: [], error: null });
 		// Flush microtasks; no wall-clock wait.
 		for (let tick = 0; tick < 20 && service.isIndexing(); tick += 1) await Promise.resolve();
 		expect((await service.indexStatus()).state).toBe("success");
 		expect(service.isIndexing()).toBe(false);
+	});
+
+	it("writes the native Qwen3 embedder on first index and detects the native MinSync model cache", async () => {
+		const directory = await workDir();
+		const nativeSnapshot = join(
+			directory,
+			".cache",
+			"minsync",
+			"models",
+			"models--Qwen--Qwen3-Embedding-0.6B",
+			"snapshots",
+			"97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3",
+		);
+		await mkdir(nativeSnapshot, { recursive: true });
+		await writeFile(join(nativeSnapshot, "model.safetensors"), "weights");
+
+		const service = createOnboardingService({ ...makeDeps(directory), home: directory });
+		const info = await service.embedding();
+		expect(info.profile).toBe("native:Qwen/Qwen3-Embedding-0.6B");
+		expect(info.cached).toBe(true);
+		expect(info.modelBytes).toBeGreaterThan(1_000_000_000);
+
+		await service.startIndexing({
+			folders: ["/Users/me/Documents"],
+			sources: [],
+			plan: "byok",
+			model: null,
+		});
+		for (let tick = 0; tick < 20 && service.isIndexing(); tick += 1) await Promise.resolve();
+
+		const config = JSON.parse(await readFile(join(directory, "config.json"), "utf8")) as {
+			minSync?: { embedder?: Record<string, unknown> };
+		};
+		expect(config.minSync?.embedder).toEqual({ id: "native:Qwen/Qwen3-Embedding-0.6B", dimension: 1024 });
+		service.dispose();
+	});
+
+	it("allows completing onboarding while indexing is still running in the background", async () => {
+		const directory = await workDir();
+		const gate = Promise.withResolvers<ConfigRefreshResult>();
+		let completedCalls = 0;
+		const service = createOnboardingService({
+			...makeDeps(directory),
+			refresh: () => gate.promise,
+			onComplete: () => {
+				completedCalls += 1;
+			},
+		});
+		await service.startIndexing({ folders: ["/Users/me/Documents"], sources: [], plan: "byok", model: null });
+		expect(service.pending()).toBe(true);
+		expect(service.isIndexing()).toBe(true);
+
+		await service.complete();
+		await service.complete();
+		expect(service.pending()).toBe(false);
+		expect(completedCalls).toBe(1);
+		expect(service.isIndexing()).toBe(true);
+
+		gate.resolve({ ok: true, methods: ["parsed", "minsync"], scanned: 3, written: 3, deleted: 0, skipped: 0, diagnostics: [], error: null });
+		for (let tick = 0; tick < 20 && service.isIndexing(); tick += 1) await Promise.resolve();
+		expect(service.isIndexing()).toBe(false);
+		expect((await service.indexStatus()).state).toBe("success");
+	});
+
+	it("triggers background datasource indexing only after both local indexing and onboarding completion finish", async () => {
+		const directory = await workDir();
+		const gate = Promise.withResolvers<ConfigRefreshResult>();
+		const syncedAliases: string[][] = [];
+		const mailcrawl: DetectedSource = { id: "mailcrawl", facts: { accounts: ["gmail", "work"] } };
+		const obsidian: DetectedSource = { id: "obsidian", facts: { vaults: ["/v1", "/v2"] } };
+		const service = createOnboardingService({
+			...makeDeps(directory),
+			detectSources: async (onFound): Promise<SourceDetection> => {
+				onFound?.(mailcrawl);
+				onFound?.(obsidian);
+				return { sources: [mailcrawl, obsidian] };
+			},
+			refresh: () => gate.promise,
+			syncDatasources: async (aliases) => {
+				syncedAliases.push([...aliases]);
+			},
+		});
+
+		await service.detectSources();
+		await service.startIndexing({
+			folders: ["/Users/me/Documents"],
+			sources: [{ id: "mailcrawl" }, { id: "obsidian" }],
+			plan: "free",
+			model: null,
+		});
+
+		// Completing onboarding while local indexing is still in flight waits for local indexing to finish first.
+		await service.complete();
+		expect(syncedAliases).toEqual([]);
+
+		gate.resolve({ ok: true, methods: ["parsed", "minsync"], scanned: 1, written: 1, deleted: 0, skipped: 0, diagnostics: [], error: null });
+		for (let tick = 0; tick < 20 && syncedAliases.length === 0; tick += 1) await Promise.resolve();
+		expect(syncedAliases).toEqual([["mailcrawl-gmail", "mailcrawl-work", "obsidian", "obsidian-2"]]);
+	});
+
+	it("triggers background datasource indexing on complete() when local indexing already finished", async () => {
+		const directory = await workDir();
+		const syncedAliases: string[][] = [];
+		const whatsapp: DetectedSource = { id: "whatsapp", facts: { chats: 2, messages: 9 } };
+		const service = createOnboardingService({
+			...makeDeps(directory),
+			detectSources: async (onFound): Promise<SourceDetection> => {
+				onFound?.(whatsapp);
+				return { sources: [whatsapp] };
+			},
+			syncDatasources: async (aliases) => {
+				syncedAliases.push([...aliases]);
+			},
+		});
+
+		await service.detectSources();
+		await service.startIndexing({
+			folders: ["/Users/me/Documents"],
+			sources: [{ id: "whatsapp" }],
+			plan: "free",
+			model: null,
+		});
+		for (let tick = 0; tick < 20 && service.isIndexing(); tick += 1) await Promise.resolve();
+		// Not completed yet -> datasources have not started.
+		expect(syncedAliases).toEqual([]);
+
+		await service.complete();
+		for (let tick = 0; tick < 20 && syncedAliases.length === 0; tick += 1) await Promise.resolve();
+		expect(syncedAliases).toEqual([["whatsapp"]]);
+	});
+	it("does not trigger background datasource indexing when local indexing fails", async () => {
+		const directory = await workDir();
+		const gate = Promise.withResolvers<ConfigRefreshResult>();
+		const syncedAliases: string[][] = [];
+		const whatsapp: DetectedSource = { id: "whatsapp", facts: { chats: 2, messages: 9 } };
+		const service = createOnboardingService({
+			...makeDeps(directory),
+			detectSources: async (onFound): Promise<SourceDetection> => {
+				onFound?.(whatsapp);
+				return { sources: [whatsapp] };
+			},
+			refresh: () => gate.promise,
+			syncDatasources: async (aliases) => {
+				syncedAliases.push([...aliases]);
+			},
+		});
+
+		await service.detectSources();
+		await service.startIndexing({
+			folders: ["/Users/me/Documents"],
+			sources: [{ id: "whatsapp" }],
+			plan: "free",
+			model: null,
+		});
+		await service.complete();
+		gate.resolve({ ok: false, methods: ["parsed", "minsync"], scanned: 0, written: 0, deleted: 0, skipped: 0, diagnostics: [], error: "disk full" });
+		for (let tick = 0; tick < 20 && service.isIndexing(); tick += 1) await Promise.resolve();
+		expect((await service.indexStatus()).state).toBe("failed");
+		expect(syncedAliases).toEqual([]);
 	});
 
 	it("points the agent at the account's models on a managed plan, and leaves BYOK alone", async () => {
@@ -179,6 +356,85 @@ describe("createOnboardingService persistence", () => {
 
 		expect(status.state).toBe("running");
 		service.dispose();
+	});
+
+	it("configures Dazzi cloud embedding when indexing with embed=cloud", async () => {
+		const directory = await workDir();
+		const env: NodeJS.ProcessEnv = { AUTORAG_BASE_URL: "https://api.dazziapp.com" };
+		await storeDazziPlanCredential(directory, "dz_cloud_token");
+		const stored = new Map<string, string>();
+		const service = createOnboardingService({
+			...makeDeps(directory, env),
+			credentials: {
+				list: async () => [],
+				set: async (name, secret) => {
+					stored.set(name, secret);
+					env[name] = secret;
+					return [];
+				},
+				remove: async (name) => {
+					stored.delete(name);
+					delete env[name];
+					return [];
+				},
+				load: async () => [],
+			},
+		});
+
+		await service.startIndexing({
+			folders: ["/Users/me/Documents"],
+			embed: "cloud",
+			sources: [],
+			plan: "pro",
+			model: null,
+		});
+		const written = JSON.parse(await readFile(join(directory, "config.json"), "utf8")) as {
+			minSync?: { embedder?: Record<string, unknown> };
+		};
+		expect(written.minSync?.embedder).toEqual({
+			id: "openai:qwen/qwen3-embedding-0.6b",
+			baseUrl: "https://api.dazziapp.com",
+			dimension: 1024,
+			apiKeyEnv: "OPENAI_API_KEY",
+		});
+		expect(env.OPENAI_API_KEY).toBe("dz_cloud_token");
+		expect(stored.get("OPENAI_API_KEY")).toBe("dz_cloud_token");
+		service.dispose();
+
+		// Re-running with embed=local replaces the Dazzi cloud embedder with the local profile.
+		const service2 = createOnboardingService({
+			...makeDeps(directory, env),
+			credentials: {
+				list: async () => [],
+				set: async (name, secret) => {
+					stored.set(name, secret);
+					env[name] = secret;
+					return [];
+				},
+				remove: async (name) => {
+					stored.delete(name);
+					delete env[name];
+					return [];
+				},
+				load: async () => [],
+			},
+		});
+		await service2.startIndexing({
+			folders: ["/Users/me/Documents"],
+			embed: "local",
+			sources: [],
+			plan: "pro",
+			model: null,
+		});
+		service2.dispose();
+		const rewritten = JSON.parse(await readFile(join(directory, "config.json"), "utf8")) as {
+			minSync?: { embedder?: Record<string, unknown> };
+		};
+		expect(rewritten.minSync?.embedder).toEqual({
+			id: "native:Qwen/Qwen3-Embedding-0.6B",
+			dimension: 1024,
+		});
+		expect(stored.has("OPENAI_API_KEY")).toBe(false);
 	});
 });
 

@@ -439,8 +439,7 @@
       "agreeTerms": "Terms of Service",
       "agreePrivacy": "Privacy Policy",
       "agreeUse": "Acceptable Use",
-      "planLabel": "{{plan}} plan",
-      "signedInEnv": "Using the API key from the environment"
+      "planLabel": "{{plan}} plan"
     },
     "permissions": {
       "eyebrow": "Permissions",
@@ -514,12 +513,13 @@
       "bulletGpuMac": "Uses Apple Silicon GPU",
       "bulletGpuWindows": "Uses GPU acceleration (when available)",
       "bulletPower": "Recommended to plug in on laptops",
-      "cloudBadge": "Preparing",
+      "cloudBadge": "Pro only",
       "cloudTitle": "In the cloud",
       "cloudLead": "Processes faster, but the contents of the documents you select are sent.",
       "cloudBulletPerf": "Little impact on Mac performance",
       "cloudBulletNoStore": "Nothing is stored; requests go only to zero-data-retention (ZDR) providers",
-      "privacyTable": "Model data table in the Privacy Policy"
+      "privacyTable": "Model data table in the Privacy Policy",
+      "cloudConsent": "I agree that the contents of documents in the selected folders will be sent to Dazzi servers for embedding. Nothing is stored after processing."
     },
     "sources": {
       "eyebrow": "Data sources",
@@ -555,6 +555,9 @@
       "title": "How will you use it?",
       "titleReady": "Your plan is ready",
       "lead": "Your plan determines AI usage and where embedding happens. You can change it later in Settings.",
+      "leadCloud": "You chose cloud embedding. Continue with the Pro plan.",
+      "leadCloudReady": "Cloud embedding is ready to use. Continue to the next step.",
+      "cloudCallout": "Cloud embedding is only available on the Pro plan.",
       "badgeRecommended": "Recommended",
       "badgeTrial": "Trial in progress",
       "badgeSubscribed": "Subscribed",
@@ -602,7 +605,7 @@
           "chip": "Questions are sent to Dazzi models",
           "training": "Inputs and outputs are not used to train models",
           "feature": {
-            "a": "Local embedding on this Mac (contents are never sent)",
+            "a": "Faster with cloud embedding",
             "b": "Managed AI models · highest usage",
             "c": "Everything in Air"
           }
@@ -665,19 +668,16 @@
       "waitingNote": "Preparing the first index.",
       "running": "{{phase}}…",
       "detailParsing": "Reading documents",
-      "detailSources": "{{sources}} · syncing metadata",
-      "detailNoSources": "No connected data sources · skipped",
+      "detailEmbedding": "Building vector index",
       "detailFinalizing": "Optimizing the search index",
       "phaseLabel": {
         "parsed": "Reading documents",
         "minsync": "Embedding",
-        "datasources": "Checking data sources",
         "finalizing": "Tidying up"
       },
       "phase": {
         "parsed": "Reading documents",
         "minsync": "Embedding",
-        "datasources": "Data sources",
         "finalizing": "Tidying up"
       },
       "title": "Dazzi is reading your files",
@@ -699,7 +699,8 @@
       "gateDetailWindows": "The first index takes a while. Quitting stops progress. Keep it plugged in.",
       "gateLocked": "Opens once it's done",
       "open": "Open Dazzi",
-      "retry": "Try again"
+      "retry": "Try again",
+      "startInBackground": "Continue in background and start right away"
     },
     "tips": {
       "1": {
@@ -1365,7 +1366,6 @@
       "offline": "Could not reach the server; showing the last confirmed information.",
       "signOut": "Sign Out",
       "signIn": "Sign In",
-      "hintEnv": "Signed in via the AUTORAG_API_KEY environment variable, so you cannot sign out from the app.",
       "hintSignedIn": "Deletes the key stored on this Mac. You can revoke it from the API keys screen on the Dazzi website.",
       "hintSignedOut": "A browser opens; approve there and you'll return to this app.",
       "signInBrowser": "Sign In in Browser",
@@ -1478,7 +1478,6 @@
         "notSignedIn": "Not signed in."
       },
       "disconnect": {
-        "envLocked": "Signed in via the AUTORAG_API_KEY environment variable, so you cannot sign out from the app. Remove that environment variable yourself.",
         "title": "Disconnect {{name}}?",
         "body": "Deletes the stored credentials and removes it from the list. Roles using this service may need a new model.",
         "action": "Disconnect"

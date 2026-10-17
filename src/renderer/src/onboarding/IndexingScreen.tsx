@@ -97,7 +97,6 @@ function IxFloats(): ReactElement {
 const PHASES: readonly { readonly id: IndexingPhase; readonly key: string }[] = [
 	{ id: "parsed", key: "parsed" },
 	{ id: "minsync", key: "minsync" },
-	{ id: "datasources", key: "datasources" },
 	{ id: "finalizing", key: "finalizing" },
 ];
 
@@ -169,13 +168,12 @@ export function IndexingScreen({ ctx }: { readonly ctx: OnboardingCtx }): ReactE
 	const processed = status?.processedFiles ?? 0;
 	const sources = status?.sources ?? [];
 
-	const phaseLabel = phase === null ? "" : t(`onboarding.indexing.phaseLabel.${phase}`);
+	const phaseLabel = phase === null ? t("onboarding.indexing.phaseLabel.parsed") : t(`onboarding.indexing.phaseLabel.${phase}`);
 	let statusDetail: string;
-	if (phase === "datasources") {
-		statusDetail =
-			sources.length > 0 ? t("onboarding.indexing.detailSources", { sources: sources.join(", ") }) : t("onboarding.indexing.detailNoSources");
-	} else if (phase === "finalizing") {
+	if (phase === "finalizing") {
 		statusDetail = t("onboarding.indexing.detailFinalizing");
+	} else if (phase === "minsync") {
+		statusDetail = t("onboarding.indexing.detailEmbedding");
 	} else if (status?.recentFolder != null && status.recentFile != null) {
 		statusDetail = `${status.recentFolder} · ${status.recentFile}`;
 	} else {
@@ -331,6 +329,11 @@ export function IndexingScreen({ ctx }: { readonly ctx: OnboardingCtx }): ReactE
 				)}
 			</div>
 			<TipCard ctx={ctx} />
+			{!success && !failed ? (
+				<button type="button" className="ix-bg-start" onClick={ctx.finishInBackground}>
+					{t("onboarding.indexing.startInBackground")}
+				</button>
+			) : null}
 		</section>
 	);
 }

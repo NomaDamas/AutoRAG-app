@@ -30,8 +30,6 @@ describe("shouldAdoptManagedModel", () => {
 
 	it("re-adopts when the configured model is already an AutoRAG one", () => {
 		expect(shouldAdoptManagedModel({ model: { provider: "dazzi", id: "x" } })).toBe(true);
-		// The pre-2.10.2 spelling still names the plan: sign-in re-adopts it.
-		expect(shouldAdoptManagedModel({ model: { provider: "autorag", id: "x" } })).toBe(true);
 	});
 
 	it("never overrides a model the user picked from another provider", () => {

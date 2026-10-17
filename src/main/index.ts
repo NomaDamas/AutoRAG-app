@@ -3,7 +3,7 @@ import { access, open, readdir, readFile, stat } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { isAbsolute, join, sep } from "node:path";
 import { applyBundledTools } from "./bundled-tools";
-import { seedAssets } from "./seed-assets";
+import { minSyncModelCacheRoot, seedAssets } from "./seed-assets";
 import {
 	app,
 	BrowserWindow,
@@ -30,14 +30,13 @@ import { attachQuickLook, PREVIEW_PRIVILEGED_SCHEME, registerPreviewProtocol, re
 import { createDefaultParserRegistry, DEFAULT_MAX_SOURCE_BYTES, writeDefaultConfig } from "@autorag/librarian";
 import { readRawConfigObject, resolveConfigPath, writeConfigObject } from "@autorag/librarian/core";
 import { DEFAULT_CODE_FOLDER_NAMES, isJsonObject, SETTINGS_CHANNELS } from "../shared/settings-contract";
-import { migrateLegacyProviderIds } from "./config-legacy-ids";
 import { LOCAL_REFRESH_METHODS } from "./index-refresh";
 import { INDEX_ACTIVITY_CHANNELS } from "../shared/index-activity-contract";
 import { createIndexActivityService } from "./index-activity";
 import { APP_UPDATE_CHANNELS } from "../shared/update-contract";
 import type { AppUpdaterService } from "./app-updater";
 import { createAppUpdateHost, installCheckForUpdatesMenuItem } from "./app-update-host";
-import { createActivityJournal, journalSingleRun, LOCAL_ITEM } from "./index-activity-journal";
+import { createActivityJournal, journalSingleRun, LOCAL_ITEM, sourceItem } from "./index-activity-journal";
 import { busyMessage, lockDataSources } from "./locked-datasources";
 import { schedulePaths, withRefreshLock } from "./refresh-schedule";
 import { createRefreshScheduler } from "./refresh-scheduler";
@@ -118,14 +117,6 @@ function ensureAppIndexingMetadata(configPath: string): void {
 async function ensureAutoRAGConfig(): Promise<void> {
 	const configPath = autoragConfigPath();
 	if (await access(configPath).then(() => true, () => false)) {
-		// Before anything resolves the config: the librarian's 2.10.2 rename
-		// turned `jev.backend: "autorag"` into a validation error, so a config
-		// this app wrote earlier must be rewritten first.
-		try {
-			migrateLegacyProviderIds(configPath);
-		} catch (error) {
-			console.error("AutoRAG config legacy provider migration failed", error);
-		}
 		ensureAppIndexingMetadata(configPath);
 		return;
 	}
@@ -368,7 +359,7 @@ app.whenReady().then(async () => {
 	applyBundledTools({ resourcesPath: process.resourcesPath, env: process.env });
 	void seedAssets({
 		seedDir: join(process.resourcesPath, "seed"),
-		autoragHome: process.env.AUTORAG_HOME?.trim() || join(homedir(), ".autorag"),
+		cacheRoot: minSyncModelCacheRoot({ platform: process.platform, home: homedir(), env: process.env }),
 	}).then(
 		(outcome) => {
 			if (outcome.kind === "done" && outcome.copied.length > 0) console.log(`[autorag] seeded ${outcome.copied.join(", ")}`);
@@ -403,6 +394,14 @@ app.whenReady().then(async () => {
 					pictures: knownFolder("pictures", join(home, "Pictures")),
 				}
 			: undefined;
+	// Stored provider keys reach process.env before the fs worker or any agent
+	// resolves, so the worker, LLM, embedding, and reranker all see the same credential.
+	const credentials = createProviderCredentialService({
+		filePath: join(app.getPath("userData"), "credentials.enc.json"),
+		safeStorage,
+		env: process.env,
+	});
+	await credentials.load();
 	// Listings, watches, Finder metadata, places, dupey scans, and the index
 	// badges run in the fs worker, off this event loop; a native fault there
 	// ends only that process (FS roadmap #101). Main keeps the Electron-only
@@ -488,13 +487,6 @@ app.whenReady().then(async () => {
 		void workerHost.client.call("setLanguage", [language]).catch((error: unknown) => console.error("[fs-worker] language:", error));
 		sendToAllWindows(LANGUAGE_CHANNELS.changed, language);
 	};
-	// Stored provider keys reach process.env before any agent resolves, so the
-	// LLM/embedding/reranker all see the same credential.
-	const credentials = createProviderCredentialService({
-		filePath: join(app.getPath("userData"), "credentials.enc.json"),
-		safeStorage,
-		env: process.env,
-	});
 	const osMenu = createOsMenuIntegration({
 		platform: process.platform,
 		// os.homedir() honors $HOME (and USERPROFILE), so QA and tests can aim the install at a throwaway home.
@@ -507,7 +499,6 @@ app.whenReady().then(async () => {
 			await execFileAsync(command, [...args]);
 		},
 	});
-	await credentials.load();
 	const autoRagConfig = createAutoRagConfigService({ env: process.env, cwd: process.cwd() });
 	const providerAuth = createProviderAuthService({
 		send: (event) => sendToMainWindow(SETTINGS_CHANNELS.providerLoginEvent, event),
@@ -723,7 +714,45 @@ app.whenReady().then(async () => {
 		},
 		configPath: autoragConfigPath(),
 		resolveWorkspacePath: async () => (await resolveEffectiveConfig({ env: process.env, cwd: process.cwd() })).config.workspacePath,
-		refresh: refreshConfig,
+		refresh: (methods) =>
+			withRefreshLock(
+				schedulePath.lock,
+				"onboarding-index",
+				() => journalSingleRun(createActivityJournal(schedulePath.activity, { owner: "onboarding-index" }), LOCAL_ITEM, () => refreshConfig(methods)),
+				(holder) => ({ ok: false, methods: methods ?? LOCAL_REFRESH_METHODS, scanned: 0, written: 0, deleted: 0, skipped: 0, diagnostics: [], error: busyMessage(holder) }),
+			),
+		syncDatasources: async (aliases) => {
+			if (aliases.length === 0) return;
+			for (;;) {
+				const ran = await withRefreshLock(
+					schedulePath.lock,
+					"onboarding-datasources",
+					async () => {
+						const journal = createActivityJournal(schedulePath.activity, { owner: "onboarding-datasources" });
+						journal.begin(aliases.map(sourceItem));
+						try {
+							for (const alias of aliases) {
+								journal.start(sourceItem(alias).key);
+								try {
+									const result = await dataSources.sync(alias);
+									journal.finish(sourceItem(alias).key, result.ok, result.error);
+								} catch (error) {
+									journal.finish(sourceItem(alias).key, false, error instanceof Error ? error.message : String(error));
+								}
+							}
+						} finally {
+							journal.end();
+						}
+						return true;
+					},
+					() => false,
+				);
+				if (ran) return;
+				const wait = Promise.withResolvers<void>();
+				setTimeout(wait.resolve, 1_000);
+				await wait.promise;
+			}
+		},
 		credentials,
 		settings: settingsService,
 		detectSources: (onFound) =>

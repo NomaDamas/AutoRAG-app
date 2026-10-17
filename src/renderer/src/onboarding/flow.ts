@@ -11,6 +11,7 @@
 import type { AccountStatus } from "../../../shared/account-contract";
 import { planCovers } from "../../../shared/account-contract";
 import type {
+	EmbedMode,
 	FolderScan,
 	IndexingPhase,
 	OnboardingStepId,
@@ -20,16 +21,14 @@ import type {
 } from "../../../shared/onboarding-contract";
 import { CLOUD_FILES_PER_MINUTE, LOCAL_FILES_PER_MINUTE } from "../../../shared/onboarding-contract";
 
-export type EmbedMode = "local" | "cloud";
+export type { EmbedMode };
 
 export type Translate = (key: string, options?: Record<string, unknown>) => string;
 
 /**
  * The prototype's `flow()`: cloud embedding puts the plan step right after
- * embedding; a confirmed plan drops out of the list, and the model step only
- * exists for BYOK. (Cloud embedding is unavailable in the product, so the
- * shipped flow is welcome → permissions → account → folders → embedding →
- * sources → [plan] → [model] → indexing.)
+ * embedding; a confirmed plan (or an already active Air/Pro subscription)
+ * drops out of the list, and the model step only exists for BYOK.
  */
 export function buildFlow(plan: PlanId, planConfirmed: boolean, embed: EmbedMode): OnboardingStepId[] {
 	const mid: OnboardingStepId[] = embed === "cloud" ? ["plan", "sources"] : ["sources", "plan"];
@@ -42,6 +41,27 @@ export function stepIndex(flow: readonly OnboardingStepId[], stepId: OnboardingS
 	return Math.max(0, flow.indexOf(stepId));
 }
 
+/** Cloud embedding can be selected on the embedding step as soon as the user is signed in to Dazzi. */
+export function canSelectCloudEmbedding(status: AccountStatus | null): boolean {
+	return status?.state === "signedIn";
+}
+
+/** When cloud embedding is selected, only the Pro plan is available on the plan step. */
+export function isPlanSelectable(plan: PlanId, embed: EmbedMode): boolean {
+	return embed === "cloud" ? plan === "pro" : true;
+}
+
+/**
+ * Whether the plan step should be skipped in the onboarding flow.
+ * Already confirmed, or the signed-in account already holds a paid subscription
+ * (Air or Pro for local embedding; Pro for cloud embedding).
+ */
+export function shouldSkipPlanStep(planConfirmed: boolean, embed: EmbedMode, status: AccountStatus | null): boolean {
+	if (planConfirmed) return true;
+	const activePlan = status?.state === "signedIn" ? status.account?.plan : undefined;
+	if (embed === "cloud") return activePlan === "pro";
+	return activePlan === "air" || activePlan === "pro";
+}
 export interface AdvanceState {
 	readonly stepId: OnboardingStepId;
 	readonly platform: string;
@@ -63,6 +83,7 @@ export function canAdvance(state: AdvanceState): boolean {
 			// Skipping the account is the BYOK path: it needs no sign-in.
 			return state.signedIn || state.plan === "byok";
 		case "plan":
+			if (!isPlanSelectable(state.plan, state.embed)) return false;
 			return state.signedIn || state.plan === "byok";
 		case "folders":
 			return state.selectedFolders > 0;
@@ -190,10 +211,8 @@ export function phaseIndex(phase: IndexingPhase): number {
 			return 0;
 		case "minsync":
 			return 1;
-		case "datasources":
-			return 2;
 		case "finalizing":
-			return 3;
+			return 2;
 	}
 }
 

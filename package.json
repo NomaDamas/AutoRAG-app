@@ -2,7 +2,7 @@
 	"name": "@autorag/app",
 	"version": "0.1.0",
 	"private": true,
-	"license": "AGPL-3.0-only",
+	"license": "FSL-1.1-MIT",
 	"description": "Dazzi powered by AutoRAG — a Finder-style desktop app built on the public AutoRAG librarian.",
 	"type": "module",
 	"main": "out/main/index.js",

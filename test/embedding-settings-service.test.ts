@@ -90,7 +90,7 @@ function vectorResponse(dimension: number): Response {
 }
 
 describe("createEmbeddingSettingsService", () => {
-	it("propagates a profile change to minSync and every reachable datasource while preserving unknown config", async () => {
+	it("propagates a native-qwen3 change to minSync and every reachable datasource while preserving unknown config", async () => {
 		const fixture = await createFixture({
 			mail: { type: "mailcrawl", connector: {} },
 			vault: { type: "obsidian", connector: { vaultPath: fixtureRootPlaceholder() } },
@@ -98,13 +98,13 @@ describe("createEmbeddingSettingsService", () => {
 		});
 		const { embedding } = buildService(fixture);
 
-		const result = await embedding.apply({ profileId: "qwen3-embedding-0.6b" });
+		const result = await embedding.apply({ profileId: "native-qwen3" });
 
 		expect(result.ok).toBe(true);
 		expect(result.applied).toBe(true);
 		expect(result.incompatibilities).toEqual([]);
 		const config = await readConfig(fixture);
-		expect(config.minSync).toMatchObject({ embedder: { profile: "qwen3-embedding-0.6b", dimension: 1024 } });
+		expect(config.minSync).toMatchObject({ embedder: { id: "native:Qwen/Qwen3-Embedding-0.6B", dimension: 1024 } });
 		expect(config.customSection).toEqual({ keep: true });
 		expect(mailEnv(config).MAILCRAWL_EMBEDDER_PROVIDER).toBe("native");
 		// rss keeps its own lexical index; only embedding sources reindex.
@@ -201,15 +201,17 @@ describe("createEmbeddingSettingsService", () => {
 		await embedding.dispose();
 	});
 
-	it("no longer offers the dropped EmbeddingGemma profile and rejects it", async () => {
+	it("offers only native-qwen3 and local-server, and rejects retired runtime profiles", async () => {
 		const fixture = await createFixture({ mail: { type: "mailcrawl", connector: {} } });
 		const { embedding } = buildService(fixture);
 
-		expect((await embedding.get()).profiles.map((profile) => profile.id)).not.toContain("embeddinggemma-300m");
-		const result = await embedding.apply({ profileId: "embeddinggemma-300m" });
-
-		expect(result.ok).toBe(false);
-		expect(result.error).toContain("embeddinggemma-300m");
+		const profileIds = (await embedding.get()).profiles.map((profile) => profile.id);
+		expect(profileIds).toEqual(["native-qwen3", "local-server"]);
+		for (const retired of ["embeddinggemma-300m", "qwen3-embedding-0.6b"]) {
+			const result = await embedding.apply({ profileId: retired });
+			expect(result.ok).toBe(false);
+			expect(result.error).toContain(retired);
+		}
 		expect((await readConfig(fixture)).minSync).toBeUndefined();
 		await embedding.dispose();
 	});
@@ -220,10 +222,10 @@ describe("createEmbeddingSettingsService", () => {
 			chat: { type: "discord", connector: {} },
 		});
 		const { embedding } = buildService(fixture);
-		await embedding.apply({ profileId: "qwen3-embedding-0.6b", acknowledgeIncompatible: true });
+		await embedding.apply({ profileId: "native-qwen3", acknowledgeIncompatible: true });
 
 		const snapshot = await embedding.get();
-		expect(snapshot.current.profileId).toBe("qwen3-embedding-0.6b");
+		expect(snapshot.current.profileId).toBe("native-qwen3");
 		expect(snapshot.profiles.map((profile) => profile.id)).toContain("local-server");
 		expect(snapshot.sources.find((source) => source.id === "mail")?.adoption).toBe("propagated");
 		expect(snapshot.sources.find((source) => source.id === "chat")?.adoption).toBe("incompatible");

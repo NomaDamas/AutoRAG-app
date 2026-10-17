@@ -439,8 +439,7 @@
       "agreeTerms": "이용약관",
       "agreePrivacy": "개인정보처리방침",
       "agreeUse": "수용 가능한 사용 정책",
-      "planLabel": "{{plan}} 플랜",
-      "signedInEnv": "환경 변수의 API 키로 사용 중"
+      "planLabel": "{{plan}} 플랜"
     },
     "permissions": {
       "eyebrow": "권한",
@@ -514,12 +513,13 @@
       "bulletGpuMac": "Apple Silicon GPU 사용",
       "bulletGpuWindows": "GPU 가속 사용 (가능한 경우)",
       "bulletPower": "노트북은 전원 연결 권장",
-      "cloudBadge": "준비 중",
+      "cloudBadge": "Pro 전용",
       "cloudTitle": "클라우드에서",
       "cloudLead": "더 빠르게 처리하지만 선택한 문서 본문이 전송됩니다.",
       "cloudBulletPerf": "Mac 성능에 영향이 적음",
       "cloudBulletNoStore": "Dazzi는 요청 내용을 저장하지 않고, 저장 없음(ZDR) 제공자로만 전송합니다",
-      "privacyTable": "개인정보처리방침의 모델 데이터 표"
+      "privacyTable": "개인정보처리방침의 모델 데이터 표",
+      "cloudConsent": "선택한 폴더의 문서 본문이 임베딩 처리를 위해 Dazzi 서버로 전송되는 것에 동의합니다. 처리 후 보관하지 않습니다."
     },
     "sources": {
       "eyebrow": "데이터 소스",
@@ -555,6 +555,9 @@
       "title": "어떻게 사용할까요?",
       "titleReady": "플랜이 준비됐어요",
       "lead": "플랜에 따라 AI 사용량과 임베딩 위치가 정해집니다. 나중에 Settings에서 바꿀 수 있습니다.",
+      "leadCloud": "클라우드 임베딩을 선택했어요. Pro 플랜으로 계속할 수 있습니다.",
+      "leadCloudReady": "클라우드 임베딩을 쓸 수 있습니다. 계속 진행하세요.",
+      "cloudCallout": "클라우드 임베딩은 Pro 전용입니다.",
       "badgeRecommended": "추천",
       "badgeTrial": "체험 진행 중",
       "badgeSubscribed": "구독 중",
@@ -602,7 +605,7 @@
           "chip": "질문은 Dazzi 모델로 전송",
           "training": "입력·출력을 모델 학습에 쓰지 않습니다",
           "feature": {
-            "a": "이 Mac에서 로컬 임베딩 (본문은 전송되지 않음)",
+            "a": "클라우드 임베딩으로 더 빠르게",
             "b": "관리형 AI 모델 · 가장 많은 사용량",
             "c": "Air 기능 모두 포함"
           }
@@ -665,19 +668,16 @@
       "waitingNote": "첫 인덱싱을 준비하고 있습니다.",
       "running": "{{phase}}…",
       "detailParsing": "문서 읽는 중",
-      "detailSources": "{{sources}} · 메타데이터 동기화",
-      "detailNoSources": "연결한 데이터 소스 없음 · 건너뜀",
+      "detailEmbedding": "벡터 인덱스 만드는 중",
       "detailFinalizing": "검색 인덱스 최적화",
       "phaseLabel": {
         "parsed": "문서 읽는 중",
         "minsync": "임베딩 중",
-        "datasources": "데이터 소스 확인 중",
         "finalizing": "정리 중"
       },
       "phase": {
         "parsed": "문서 읽기",
         "minsync": "임베딩",
-        "datasources": "데이터 소스",
         "finalizing": "정리"
       },
       "title": "Dazzi가 파일을 읽고 있어요",
@@ -699,7 +699,8 @@
       "gateDetailWindows": "첫 인덱싱은 오래 걸립니다. 종료하면 진행이 멈춰요. 전원을 연결해 두세요.",
       "gateLocked": "완료되면 열 수 있어요",
       "open": "Dazzi 열기",
-      "retry": "다시 시도"
+      "retry": "다시 시도",
+      "startInBackground": "백그라운드에서 계속하고 바로 시작하기"
     },
     "tips": {
       "1": {
@@ -1365,7 +1366,6 @@
       "offline": "서버에 연결할 수 없어 마지막으로 확인한 정보를 보여줍니다.",
       "signOut": "로그아웃",
       "signIn": "로그인",
-      "hintEnv": "환경 변수 AUTORAG_API_KEY로 로그인되어 있어 앱에서 로그아웃할 수 없습니다.",
       "hintSignedIn": "이 Mac에 저장된 키를 삭제합니다. 키는 Dazzi 웹의 API 키 화면에서 폐기할 수 있습니다.",
       "hintSignedOut": "브라우저가 열리고, 승인하면 이 앱으로 돌아옵니다.",
       "signInBrowser": "브라우저에서 로그인",
@@ -1478,7 +1478,6 @@
         "notSignedIn": "로그인하지 않았습니다."
       },
       "disconnect": {
-        "envLocked": "환경 변수 AUTORAG_API_KEY로 로그인되어 있어 앱에서 로그아웃할 수 없습니다. 해당 환경 변수를 직접 제거하세요.",
         "title": "{{name}} 연결을 해제할까요?",
         "body": "저장된 자격 증명을 지우고 목록에서 제거합니다. 이 서비스를 쓰던 역할은 새 모델을 골라야 할 수 있습니다.",
         "action": "연결 해제"

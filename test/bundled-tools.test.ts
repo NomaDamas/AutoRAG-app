@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { delimiter, join, win32 } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { applyBundledTools, pathKey, prependPath } from "../src/main/bundled-tools";
-import { readSeedManifest, seedAssets } from "../src/main/seed-assets";
+import { minSyncModelCacheRoot, readSeedManifest, seedAssets } from "../src/main/seed-assets";
 
 const dirs: string[] = [];
 function temp(): string {
@@ -41,82 +41,58 @@ describe("bundled tools on PATH", () => {
 	});
 });
 
-describe("seeding the embedding model", () => {
-	const content = Buffer.from("not really a gguf");
+describe("seeding the native MinSync embedding model", () => {
+	const content = Buffer.from("not really safetensors");
 	const sha256 = createHash("sha256").update(content).digest("hex");
+	const repoDest = "models--Qwen--Qwen3-Embedding-0.6B/snapshots/97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3/model.safetensors";
 
 	function seedDir(overrides: Record<string, unknown> = {}): string {
 		const dir = temp();
-		mkdirSync(join(dir, "models"), { recursive: true });
-		writeFileSync(join(dir, "models", "m.gguf"), content);
-		const file = { path: "models/m.gguf", destination: "models/m.gguf", sha256, bytes: content.length, ...overrides };
+		mkdirSync(join(dir, "models--Qwen--Qwen3-Embedding-0.6B", "snapshots", "97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3"), { recursive: true });
+		writeFileSync(join(dir, repoDest), content);
+		const file = { path: repoDest, destination: repoDest, sha256, bytes: content.length, ...overrides };
 		writeFileSync(join(dir, "manifest.json"), JSON.stringify({ schema: 1, files: [file] }));
 		return dir;
 	}
 
-	it("copies the shipped file into the AutoRAG home", async () => {
-		const home = temp();
-		const outcome = await seedAssets({ seedDir: seedDir(), autoragHome: home });
-		expect(outcome).toEqual({ kind: "done", copied: ["models/m.gguf"], present: [] });
-		expect(readFileSync(join(home, "models", "m.gguf"))).toEqual(content);
+	it("resolves MinSync's native model cache root on macOS and Windows", () => {
+		expect(minSyncModelCacheRoot({ platform: "darwin", home: "/Users/me", env: {} })).toBe(join("/Users/me", ".cache", "minsync", "models"));
+		expect(minSyncModelCacheRoot({ platform: "win32", home: "C:\\Users\\me", env: { LOCALAPPDATA: "C:\\Users\\me\\AppData\\Local" } })).toBe(
+			join("C:\\Users\\me\\AppData\\Local", "minsync", "models"),
+		);
+		expect(minSyncModelCacheRoot({ platform: "darwin", home: "/Users/me", env: { FASTEMBED_CACHE_DIR: "/custom/cache" } })).toBe("/custom/cache");
 	});
 
-	it("never overwrites a model the user already has", async () => {
-		const home = temp();
-		mkdirSync(join(home, "models"), { recursive: true });
-		writeFileSync(join(home, "models", "m.gguf"), "mine");
-		const outcome = await seedAssets({ seedDir: seedDir(), autoragHome: home });
-		expect(outcome).toEqual({ kind: "done", copied: [], present: ["models/m.gguf"] });
-		expect(readFileSync(join(home, "models", "m.gguf"), "utf8")).toBe("mine");
+	it("copies the shipped native model files into the MinSync cache root", async () => {
+		const cacheRoot = temp();
+		const outcome = await seedAssets({ seedDir: seedDir(), cacheRoot });
+		expect(outcome).toEqual({ kind: "done", copied: [repoDest], present: [] });
+		expect(readFileSync(join(cacheRoot, repoDest))).toEqual(content);
 	});
 
-	it("rejects a corrupt shipped file and leaves nothing the librarian could trust", async () => {
-		const home = temp();
+	it("never overwrites a model file the user already has", async () => {
+		const cacheRoot = temp();
+		mkdirSync(join(cacheRoot, "models--Qwen--Qwen3-Embedding-0.6B", "snapshots", "97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3"), { recursive: true });
+		writeFileSync(join(cacheRoot, repoDest), "mine");
+		const outcome = await seedAssets({ seedDir: seedDir(), cacheRoot });
+		expect(outcome).toEqual({ kind: "done", copied: [], present: [repoDest] });
+		expect(readFileSync(join(cacheRoot, repoDest), "utf8")).toBe("mine");
+	});
+
+	it("rejects a corrupt shipped file and leaves no partial file behind", async () => {
+		const cacheRoot = temp();
 		const wrong = seedDir({ sha256: "0".repeat(64) });
-		await expect(seedAssets({ seedDir: wrong, autoragHome: home })).rejects.toThrow(/corrupt/);
-		expect(existsSync(join(home, "models", "m.gguf"))).toBe(false);
-		expect(existsSync(join(home, "models", "m.gguf.seed-part"))).toBe(false);
+		await expect(seedAssets({ seedDir: wrong, cacheRoot })).rejects.toThrow(/corrupt/);
+		expect(existsSync(join(cacheRoot, repoDest))).toBe(false);
+		expect(existsSync(join(cacheRoot, `${repoDest}.seed-part`))).toBe(false);
 	});
 
-	it("rejects a manifest entry that escapes the AutoRAG home", () => {
-		expect(() => readSeedManifest(seedDir({ destination: "../outside.gguf" }))).toThrow(/escapes/);
+	it("rejects a manifest entry that escapes the cache root", () => {
+		expect(() => readSeedManifest(seedDir({ destination: "../outside.safetensors" }))).toThrow(/escapes/);
 		expect(() => readSeedManifest(seedDir({ path: "/etc/passwd" }))).toThrow(/escapes/);
 	});
 
 	it("reports no seed when the build has none", async () => {
-		expect(await seedAssets({ seedDir: temp(), autoragHome: temp() })).toEqual({ kind: "none" });
-	});
-
-	describe("a runtime shipped extracted (signed macOS build)", () => {
-		function treeSeed(): string {
-			const dir = temp();
-			const tree = join(dir, "runtime", "llama.tar.gz.extracted");
-			mkdirSync(join(tree, "llama-b10951"), { recursive: true });
-			writeFileSync(join(tree, ".autorag-archive-sha256"), `${"a".repeat(64)}\n`);
-			writeFileSync(join(tree, "llama-b10951", "libggml.0.23.0.dylib"), "lib");
-			symlinkSync("libggml.0.23.0.dylib", join(tree, "llama-b10951", "libggml.dylib"));
-			const entry = { kind: "tree", path: "runtime/llama.tar.gz.extracted", destination: "runtime/llama.tar.gz.extracted" };
-			writeFileSync(join(dir, "manifest.json"), JSON.stringify({ schema: 1, files: [entry] }));
-			return dir;
-		}
-
-		it("copies the whole tree, keeping the dylib symlinks as symlinks", async () => {
-			const home = temp();
-			const outcome = await seedAssets({ seedDir: treeSeed(), autoragHome: home });
-			expect(outcome).toEqual({ kind: "done", copied: ["runtime/llama.tar.gz.extracted"], present: [] });
-			const tree = join(home, "runtime", "llama.tar.gz.extracted");
-			expect(readFileSync(join(tree, ".autorag-archive-sha256"), "utf8").trim()).toBe("a".repeat(64));
-			expect(lstatSync(join(tree, "llama-b10951", "libggml.dylib")).isSymbolicLink()).toBe(true);
-			expect(readlinkSync(join(tree, "llama-b10951", "libggml.dylib"))).toBe("libggml.0.23.0.dylib");
-			expect(existsSync(`${tree}.seed-part`)).toBe(false);
-		});
-
-		it("leaves a runtime tree the user already has untouched", async () => {
-			const home = temp();
-			mkdirSync(join(home, "runtime", "llama.tar.gz.extracted"), { recursive: true });
-			const outcome = await seedAssets({ seedDir: treeSeed(), autoragHome: home });
-			expect(outcome).toEqual({ kind: "done", copied: [], present: ["runtime/llama.tar.gz.extracted"] });
-			expect(existsSync(join(home, "runtime", "llama.tar.gz.extracted", ".autorag-archive-sha256"))).toBe(false);
-		});
+		expect(await seedAssets({ seedDir: temp(), cacheRoot: temp() })).toEqual({ kind: "none" });
 	});
 });

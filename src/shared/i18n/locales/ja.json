@@ -439,8 +439,7 @@
       "agreeTerms": "利用規約",
       "agreePrivacy": "プライバシーポリシー",
       "agreeUse": "受け入れ可能な利用ポリシー",
-      "planLabel": "{{plan}} プラン",
-      "signedInEnv": "環境変数のAPIキーを使用中"
+      "planLabel": "{{plan}} プラン"
     },
     "permissions": {
       "eyebrow": "権限",
@@ -514,12 +513,13 @@
       "bulletGpuMac": "Apple Silicon GPUを使用",
       "bulletGpuWindows": "GPUアクセラレーションを使用（可能な場合）",
       "bulletPower": "ノートPCは電源接続を推奨",
-      "cloudBadge": "準備中",
+      "cloudBadge": "Pro限定",
       "cloudTitle": "クラウドで",
       "cloudLead": "より速く処理できますが、選択した文書の本文が送信されます。",
       "cloudBulletPerf": "Macの性能への影響が少ない",
       "cloudBulletNoStore": "Dazziはリクエスト内容を保存せず、データ保持なし（ZDR）プロバイダーにのみ送信します",
-      "privacyTable": "プライバシーポリシーのモデルデータ表"
+      "privacyTable": "プライバシーポリシーのモデルデータ表",
+      "cloudConsent": "選択したフォルダの文書本文が埋め込み処理のためにDazziサーバーへ送信されることに同意します。処理後は保持されません。"
     },
     "sources": {
       "eyebrow": "データソース",
@@ -555,6 +555,9 @@
       "title": "どのように使いますか？",
       "titleReady": "プランの準備ができました",
       "lead": "プランによってAIの利用量と埋め込みの場所が決まります。後で設定から変更できます。",
+      "leadCloud": "クラウド埋め込みを選択しました。Proプランで続行できます。",
+      "leadCloudReady": "クラウド埋め込みを利用できます。そのまま進んでください。",
+      "cloudCallout": "クラウド埋め込みはProプラン限定です。",
       "badgeRecommended": "おすすめ",
       "badgeTrial": "トライアル中",
       "badgeSubscribed": "購読中",
@@ -602,7 +605,7 @@
           "chip": "質問はDazziモデルに送信",
           "training": "入出力をモデルの学習に使用しません",
           "feature": {
-            "a": "このMacでローカル埋め込み（本文は送信されません）",
+            "a": "クラウド埋め込みでより高速に",
             "b": "マネージドAIモデル · 最大の利用量",
             "c": "Airの機能をすべて含む"
           }
@@ -665,19 +668,16 @@
       "waitingNote": "最初のインデックス作成を準備しています。",
       "running": "{{phase}}…",
       "detailParsing": "文書を読み込み中",
-      "detailSources": "{{sources}} · メタデータを同期中",
-      "detailNoSources": "接続したデータソースなし · スキップ",
+      "detailEmbedding": "ベクトルインデックスを作成中",
       "detailFinalizing": "検索インデックスを最適化中",
       "phaseLabel": {
         "parsed": "文書を読み込み中",
         "minsync": "埋め込み中",
-        "datasources": "データソースを確認中",
         "finalizing": "整理中"
       },
       "phase": {
         "parsed": "文書の読み込み",
         "minsync": "埋め込み",
-        "datasources": "データソース",
         "finalizing": "整理"
       },
       "title": "Dazziがファイルを読み込んでいます",
@@ -699,7 +699,8 @@
       "gateDetailWindows": "最初のインデックス作成は時間がかかります。終了すると進行が止まります。電源に接続したままにしてください。",
       "gateLocked": "完了すると開けます",
       "open": "Dazziを開く",
-      "retry": "再試行"
+      "retry": "再試行",
+      "startInBackground": "バックグラウンドで続けてすぐに始める"
     },
     "tips": {
       "1": {
@@ -1365,7 +1366,6 @@
       "offline": "サーバーに接続できないため、最後に確認した情報を表示しています。",
       "signOut": "ログアウト",
       "signIn": "ログイン",
-      "hintEnv": "環境変数 AUTORAG_API_KEY でログインしているため、アプリからログアウトできません。",
       "hintSignedIn": "この Mac に保存されたキーを削除します。キーは Dazzi ウェブの API キー画面で失効できます。",
       "hintSignedOut": "ブラウザが開き、承認するとこのアプリに戻ります。",
       "signInBrowser": "ブラウザでログイン",
@@ -1478,7 +1478,6 @@
         "notSignedIn": "ログインしていません。"
       },
       "disconnect": {
-        "envLocked": "環境変数 AUTORAG_API_KEY でログインしているため、アプリからログアウトできません。該当の環境変数を自分で削除してください。",
         "title": "{{name}} を切断しますか？",
         "body": "保存された認証情報を削除し、一覧から除外します。このサービスを使っていた役割は新しいモデルを選ぶ必要がある場合があります。",
         "action": "切断"

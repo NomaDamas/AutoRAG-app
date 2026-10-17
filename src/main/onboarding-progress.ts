@@ -12,6 +12,8 @@ export interface PhaseProgressInput {
 	readonly state: IndexingStatus["state"];
 	readonly phase: IndexingPhase | null;
 	readonly processedFiles: number;
+	/** Files MinSync has already committed during the `minsync` phase (`progress.jsonl`). */
+	readonly embeddedFiles?: number;
 	readonly totalFiles: number;
 	/** Time spent in the current phase. */
 	readonly phaseElapsedMs: number;
@@ -42,12 +44,21 @@ export function computeIndexingProgress(input: PhaseProgressInput): PhaseProgres
 					input.totalFiles > 0 ? Math.max(0, Math.ceil((input.totalFiles - input.processedFiles) / LOCAL_FILES_PER_MINUTE)) : null;
 				return { progress: measured, remainingMinutes: remaining };
 			}
-			case "minsync":
-				return { progress: 50 + 40 * ratio, remainingMinutes: remainingFrom(input.phaseElapsedMs) };
-			case "datasources":
-				return { progress: 90 + 7 * ratio, remainingMinutes: remainingFrom(input.phaseElapsedMs) };
+			case "minsync": {
+				const minsyncTotal = Math.max(input.processedFiles, input.totalFiles);
+				const measuredRatio =
+					input.embeddedFiles !== undefined && input.embeddedFiles > 0 && minsyncTotal > 0
+						? clamp01(input.embeddedFiles / minsyncTotal)
+						: 0;
+				const minsyncRatio = Math.max(ratio, measuredRatio);
+				const remaining =
+					measuredRatio > ratio && minsyncTotal > 0 && input.embeddedFiles !== undefined
+						? Math.max(0, Math.ceil((minsyncTotal - input.embeddedFiles) / LOCAL_FILES_PER_MINUTE))
+						: remainingFrom(input.phaseElapsedMs);
+				return { progress: 50 + 45 * minsyncRatio, remainingMinutes: remaining };
+			}
 			case "finalizing":
-				return { progress: 97 + 2 * ratio, remainingMinutes: remainingFrom(input.phaseElapsedMs) };
+				return { progress: 95 + 4 * ratio, remainingMinutes: remainingFrom(input.phaseElapsedMs) };
 			default:
 				return { progress: 0, remainingMinutes: input.totalFiles > 0 ? Math.ceil(input.totalFiles / LOCAL_FILES_PER_MINUTE) : null };
 		}

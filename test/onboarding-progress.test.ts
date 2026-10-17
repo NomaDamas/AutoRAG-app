@@ -29,20 +29,30 @@ describe("computeIndexingProgress", () => {
 		});
 	});
 
-	it("estimates later phases from elapsed time against the local rate", () => {
+	it("estimates later local phases from elapsed time against the local rate", () => {
 		// 85 files ≈ 60s of local work; half elapsed = half of the phase's share.
 		const minsync = computeIndexingProgress({ state: "running", phase: "minsync", processedFiles: 85, totalFiles: 85, phaseElapsedMs: 30_000 });
-		expect(minsync.progress).toBe(70);
+		expect(minsync.progress).toBe(72.5);
 		expect(minsync.remainingMinutes).toBe(1);
-		const datasources = computeIndexingProgress({ state: "running", phase: "datasources", processedFiles: 85, totalFiles: 85, phaseElapsedMs: 60_000 });
-		expect(datasources.progress).toBe(97);
 		const finalizing = computeIndexingProgress({ state: "running", phase: "finalizing", processedFiles: 85, totalFiles: 85, phaseElapsedMs: 60_000 });
 		expect(finalizing.progress).toBe(99);
 	});
 
+	it("measures the minsync phase from embedded/total when MinSync's resume log reports committed files", () => {
+		const half = computeIndexingProgress({
+			state: "running",
+			phase: "minsync",
+			processedFiles: 100,
+			embeddedFiles: 50,
+			totalFiles: 100,
+			phaseElapsedMs: 5_000,
+		});
+		expect(half.progress).toBe(72.5);
+	});
+
 	it("never reaches 100 before success and drops the estimate on failure", () => {
 		const stuck = computeIndexingProgress({ state: "running", phase: "minsync", processedFiles: 85, totalFiles: 85, phaseElapsedMs: 600_000 });
-		expect(stuck.progress).toBe(90);
+		expect(stuck.progress).toBe(95);
 		const failed = computeIndexingProgress({ state: "failed", phase: "parsed", processedFiles: 10, totalFiles: 100, phaseElapsedMs: 0 });
 		expect(failed.remainingMinutes).toBeNull();
 		expect(failed.progress).toBe(5);

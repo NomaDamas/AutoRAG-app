@@ -9,6 +9,7 @@ import type {
 	ByokProviderId,
 	DetectedModelProvider,
 	DetectedSource,
+	EmbedMode,
 	EmbeddingInfo,
 	FolderCandidate,
 	FolderScan,
@@ -65,6 +66,9 @@ export interface OnboardingCtx {
 	toggleAllFolders(): void;
 	addFolders(): void;
 
+	setEmbedMode(mode: EmbedMode): void;
+	setCloudConsent(consent: boolean): void;
+
 	setSourceOn(id: SourceId, on: boolean): void;
 
 	choosePlan(plan: PlanId): void;
@@ -89,6 +93,7 @@ export interface OnboardingCtx {
 
 	startIndexing(): void;
 	finish(): void;
+	finishInBackground(): void;
 	setTipIndex(index: number): void;
 
 	dragApp(): void;

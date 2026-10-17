@@ -36,7 +36,7 @@ The app consumes the librarian only through the dependency declared in
 `package.json` (`@autorag/librarian: file:./.upstream/autorag`). That path
 resolves inside the ignored `.upstream/autorag` clone, which
 `scripts/sync-librarian.mjs` checks out at the pinned release tag
-(`v2.10.3`, raised deliberately with the alignment changes a new librarian
+(`v2.10.4`, raised deliberately with the alignment changes a new librarian
 release needs) and builds. Never point the dependency at `file:..` or at the
 local
 `/Volumes/SSD1/1/AutoRAG` checkout, never commit `.upstream`, and never copy

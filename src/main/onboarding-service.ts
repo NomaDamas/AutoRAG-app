@@ -2,11 +2,15 @@ import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { basename, join, sep } from "node:path";
 import { readRawConfigObject, writeConfigObject } from "@autorag/librarian/core";
+import { getAgentDir } from "@earendil-works/pi-coding-agent";
+import { DEFAULT_ACCOUNT_BASE_URL } from "../shared/account-contract";
+import { readDazziPlanCredential } from "./dazzi-plan-credential";
 import {
 	ONBOARDING_CHANNELS,
 	type ByokProviderId,
 	type DetectedModelProvider,
 	type DetectedSource,
+	type EmbedMode,
 	type EmbeddingInfo,
 	type FolderCandidate,
 	type FolderScan,
@@ -29,10 +33,15 @@ import {
 import type { AppSettings, ConfigRefreshResult } from "../shared/settings-contract";
 import { isJsonObject } from "../shared/settings-contract";
 import { t } from "../shared/i18n/core";
-import { applyIndexingConfig } from "./onboarding-config";
+import { applyIndexingConfig, buildDatasourceEntries } from "./onboarding-config";
 import { PROVIDER_ENV_NAME } from "./onboarding-models";
 import { computeIndexingProgress } from "./onboarding-progress";
 import type { ProviderCredentialService } from "./provider-credentials";
+import {
+	minSyncModelCacheRoot,
+	NATIVE_QWEN3_MODEL_BYTES,
+	NATIVE_QWEN3_SAFETENSORS_RELATIVE_PATH,
+} from "./seed-assets";
 
 /**
  * The main-process half of onboarding: everything that touches the OS or the
@@ -43,10 +52,10 @@ import type { ProviderCredentialService } from "./provider-credentials";
  * sent anywhere.
  */
 
-const EMBEDDER_PROFILE = "qwen3-embedding-0.6b";
+const EMBEDDER_ID = "native:Qwen/Qwen3-Embedding-0.6B";
 const EMBEDDER_DIMENSION = 1024;
-const EMBEDDER_MODEL_BYTES = 639_150_592;
-const EMBEDDER_MODEL_FILE = "Qwen3-Embedding-0.6B-Q8_0.gguf";
+const DAZZI_CLOUD_EMBEDDER_ID = "openai:qwen/qwen3-embedding-0.6b";
+const DAZZI_CLOUD_EMBEDDER_KEY_ENV = "OPENAI_API_KEY";
 const POLL_INTERVAL_MS = 1000;
 const SOURCE_LABELS: Readonly<Record<SourceId, string>> = {
 	kakao: "KakaoTalk",
@@ -62,6 +71,8 @@ const SOURCE_LABELS: Readonly<Record<SourceId, string>> = {
 export interface OnboardingServiceDeps {
 	readonly userDataDir: string;
 	readonly env: NodeJS.ProcessEnv;
+	/** Pi's agent home, where the account's plan credential lives. Defaults to Pi's own. */
+	readonly agentDir?: string;
 	/** The process cwd the app seeds a fresh config's `workspacePath` with. */
 	readonly cwd: string;
 	readonly platform: NodeJS.Platform;
@@ -78,6 +89,8 @@ export interface OnboardingServiceDeps {
 	readonly configPath: string;
 	readonly resolveWorkspacePath: () => Promise<string>;
 	readonly refresh: (methods?: readonly string[]) => Promise<ConfigRefreshResult>;
+	/** Background datasource sync triggered once both onboarding and the local index have completed. */
+	readonly syncDatasources?: (aliases: readonly string[]) => Promise<void>;
 	readonly credentials: ProviderCredentialService;
 	readonly settings: {
 		get(): Promise<AppSettings>;
@@ -162,6 +175,7 @@ const STEP_IDS: Readonly<Record<string, true>> = {
 	indexing: true,
 };
 const PLAN_IDS: Readonly<Record<string, true>> = { free: true, air: true, pro: true, byok: true };
+const EMBED_MODES: Readonly<Record<string, true>> = { local: true, cloud: true };
 const BYOK_PROVIDERS: Readonly<Record<string, true>> = {
 	anthropic: true,
 	openai: true,
@@ -235,6 +249,8 @@ function isOnboardingDraft(value: unknown): value is OnboardingDraft {
 	if (typeof value.network !== "boolean") return false;
 	if (typeof value.launchAtLogin !== "boolean") return false;
 	if (!Array.isArray(value.folders) || !value.folders.every(isFolderChoice)) return false;
+	if (value.embed !== undefined && (typeof value.embed !== "string" || EMBED_MODES[value.embed] !== true)) return false;
+	if (value.cloudConsent !== undefined && typeof value.cloudConsent !== "boolean") return false;
 	if (!Array.isArray(value.sources) || !value.sources.every(isSourceChoice)) return false;
 	if (typeof value.plan !== "string" || PLAN_IDS[value.plan] !== true) return false;
 	if (typeof value.planConfirmed !== "boolean") return false;
@@ -246,6 +262,7 @@ function isIndexingRequest(value: unknown): value is IndexingRequest {
 	if (!isJsonObject(value)) return false;
 	if (!Array.isArray(value.folders) || !value.folders.every(isAbsoluteString)) return false;
 	if (value.folders.length === 0) return false;
+	if (value.embed !== undefined && (typeof value.embed !== "string" || EMBED_MODES[value.embed] !== true)) return false;
 	if (!Array.isArray(value.sources)) return false;
 	for (const source of value.sources) {
 		if (!isJsonObject(source) || typeof source.id !== "string" || SOURCE_IDS[source.id] !== true) return false;
@@ -294,9 +311,9 @@ const IDLE_STATUS: IndexingStatus = {
 	error: null,
 };
 
-/** Map a librarian refresh phase to a contract phase (`jikji`/search phases fold into finalizing). */
+/** Map a librarian refresh phase to a local onboarding contract phase (`jikji`/search phases fold into finalizing). */
 function toIndexingPhase(value: unknown): IndexingPhase | null {
-	if (value === "parsed" || value === "minsync" || value === "datasources" || value === "finalizing") return value;
+	if (value === "parsed" || value === "minsync" || value === "finalizing") return value;
 	if (value === "jikji" || value === "everything" || value === "fsearch") return "finalizing";
 	return null;
 }
@@ -333,7 +350,14 @@ function readParsedMirror(text: string): ParsedMirrorSnapshot {
 	return { processedFiles: Object.keys(entries).length + Object.keys(skipped).length, recentFile, recentSourcePath };
 }
 
+/** Count the committed file entries in MinSync's crash-resume log (`progress.jsonl`). */
+function countMinSyncProgress(text: string | null): number {
+	if (text === null) return 0;
+	const lines = text.split("\n").filter((line) => line.trim().length > 0);
+	return Math.max(0, lines.length - 1);
+}
 export function createOnboardingService(deps: OnboardingServiceDeps): OnboardingService {
+	const agentDir = deps.agentDir ?? getAgentDir();
 	const now = deps.now ?? Date.now;
 	const existing = readOnboardingState(deps.userDataDir);
 	let stateFile: PersistedOnboardingState = existing ?? { completed: false, draft: null };
@@ -353,14 +377,31 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 	let phaseStartedAt = 0;
 	let selectedFolders: readonly string[] = [];
 	let sourceNames: readonly string[] = [];
+	let pendingDatasourceAliases: readonly string[] = [];
+	let localIndexDone = false;
 	let parsedSnapshot: ParsedMirrorSnapshot = { processedFiles: 0, recentFile: null, recentSourcePath: null };
+	let embeddedFiles = 0;
 	let progressSignature = "";
 	let parsedSignature = "";
+	let minsyncSignature = "";
+	const maybeStartBackgroundDatasources = (): void => {
+		if (pending || refreshPromise !== null || !localIndexDone || pendingDatasourceAliases.length === 0) return;
+		const aliases = pendingDatasourceAliases;
+		pendingDatasourceAliases = [];
+		void deps.syncDatasources?.(aliases)?.catch((error: unknown) => {
+			console.warn("[onboarding] background datasource sync failed:", error);
+		});
+	};
 
-	const persist = async (): Promise<void> => {
+	let persistChain: Promise<void> = Promise.resolve();
+	const persist = (): Promise<void> => {
 		const path = onboardingStatePath(deps.userDataDir);
-		await mkdir(join(deps.userDataDir, "onboarding"), { recursive: true });
-		await writeFile(path, `${JSON.stringify(stateFile, null, 2)}\n`, "utf8");
+		const run = async (): Promise<void> => {
+			await mkdir(join(deps.userDataDir, "onboarding"), { recursive: true });
+			await writeFile(path, `${JSON.stringify(stateFile, null, 2)}\n`, "utf8");
+		};
+		persistChain = persistChain.then(run, run);
+		return persistChain;
 	};
 
 	const emitStatus = (): void => {
@@ -410,11 +451,18 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 			parsedSignature = parsedRead.signature;
 			parsedSnapshot = readParsedMirror(parsedRead.text);
 		}
+		const minsyncPath = join(workspacePath, ".autorag", "minsync", ".minsync", "progress.jsonl");
+		const minsyncRead = await readIfChanged(minsyncPath, minsyncSignature);
+		if (minsyncRead.text !== null) {
+			minsyncSignature = minsyncRead.signature;
+			embeddedFiles = Math.max(embeddedFiles, countMinSyncProgress(minsyncRead.text));
+		}
 		const totalFiles = deps.folderTotals(selectedFolders);
 		const { progress, remainingMinutes } = computeIndexingProgress({
 			state: "running",
 			phase,
 			processedFiles: parsedSnapshot.processedFiles,
+			embeddedFiles,
 			totalFiles,
 			phaseElapsedMs: phase === null ? 0 : now() - phaseStartedAt,
 		});
@@ -443,6 +491,7 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 	function finish(ok: boolean, error: string | null): void {
 		stopPolling();
 		refreshPromise = null;
+		localIndexDone = ok;
 		const finishedAt = new Date(now()).toISOString();
 		const indexing = stateFile.indexing;
 		if (indexing !== undefined) stateFile = { ...stateFile, indexing: { ...indexing, finishedAt } };
@@ -451,6 +500,7 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 			? { ...status, state: "success", progress: 100, remainingMinutes: null, finishedAt, error: null }
 			: { ...status, state: "failed", remainingMinutes: null, finishedAt, error: error ?? t("main.onboarding.indexingFailed") };
 		emitStatus();
+		maybeStartBackgroundDatasources();
 	}
 
 	return {
@@ -536,11 +586,11 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 			const raw = existsSync(deps.configPath) ? readRawConfigObject(deps.configPath) : {};
 			const minSync = isJsonObject(raw.minSync) ? raw.minSync : {};
 			const embedder = isJsonObject(minSync.embedder) ? minSync.embedder : {};
-			const autoragHome = deps.env.AUTORAG_HOME ?? join(deps.home, ".autorag");
+			const cacheRoot = minSyncModelCacheRoot({ platform: deps.platform, home: deps.home, env: deps.env });
 			return {
-				profile: EMBEDDER_PROFILE,
-				modelBytes: EMBEDDER_MODEL_BYTES,
-				cached: existsSync(join(autoragHome, "models", EMBEDDER_MODEL_FILE)),
+				profile: EMBEDDER_ID,
+				modelBytes: NATIVE_QWEN3_MODEL_BYTES,
+				cached: existsSync(join(cacheRoot, NATIVE_QWEN3_SAFETENSORS_RELATIVE_PATH)),
 				configured: Object.keys(embedder).length > 0,
 			};
 		},
@@ -575,14 +625,30 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 			}));
 			const raw = existsSync(deps.configPath) ? readRawConfigObject(deps.configPath) : {};
 			const minSync = isJsonObject(raw.minSync) ? raw.minSync : {};
-			const configured = isJsonObject(minSync.embedder) && Object.keys(minSync.embedder).length > 0;
+			const existingEmbedder = isJsonObject(minSync.embedder) ? minSync.embedder : {};
+			const isDazziCloudEmbedder = existingEmbedder.id === DAZZI_CLOUD_EMBEDDER_ID;
+			const configured = Object.keys(existingEmbedder).length > 0 && !isDazziCloudEmbedder;
+			const embedMode: EmbedMode = request.embed === "cloud" ? "cloud" : "local";
+			const configuredBaseUrl = deps.env.AUTORAG_BASE_URL?.trim();
+			const accountBaseUrl = (configuredBaseUrl !== undefined && configuredBaseUrl.length > 0 ? configuredBaseUrl : DEFAULT_ACCOUNT_BASE_URL).replace(/\/+$/u, "");
+			const embedder =
+				embedMode === "cloud"
+					? {
+							id: DAZZI_CLOUD_EMBEDDER_ID,
+							baseUrl: accountBaseUrl,
+							dimension: EMBEDDER_DIMENSION,
+							apiKeyEnv: DAZZI_CLOUD_EMBEDDER_KEY_ENV,
+						}
+					: configured
+						? null
+						: { id: EMBEDDER_ID, dimension: EMBEDDER_DIMENSION };
 			const modelProvider = request.model === null ? null : (request.model.provider as ByokProviderId);
 			const next = applyIndexingConfig({
 				raw,
 				folders: request.folders,
 				datasources,
 				home: deps.home,
-				embedder: configured ? null : { profile: EMBEDDER_PROFILE, dimension: EMBEDDER_DIMENSION },
+				embedder,
 				// The app seeds `workspacePath = cwd` (the repo in dev, `/` when packaged);
 				// the first index belongs in the AutoRAG home instead. A workspace the
 				// user set explicitly stays.
@@ -613,8 +679,13 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 					console.warn("[onboarding] could not point the agent at the account's models:", error);
 				});
 			}
+			if (embedMode === "cloud") {
+				await maybeStoreCloudEmbedderKey();
+			} else if (isDazziCloudEmbedder && deps.env[DAZZI_CLOUD_EMBEDDER_KEY_ENV] === (await readDazziPlanCredential(agentDir))) {
+				await deps.credentials.remove(DAZZI_CLOUD_EMBEDDER_KEY_ENV).catch(() => undefined);
+			}
 			await maybeStoreGitToken(request.sources.map((source) => source.id));
-			const methods = ["parsed", "minsync", ...(request.sources.length > 0 ? ["datasources"] : [])];
+			const methods = ["parsed", "minsync"];
 			workspacePath = await deps.resolveWorkspacePath();
 			selectedFolders = request.folders;
 			folderRoots = request.folders.flatMap((folder) => {
@@ -628,11 +699,14 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 				return real === folder ? [{ root: folder, name }] : [{ root: folder, name }, { root: real, name }];
 			});
 			sourceNames = request.sources.map((source) => SOURCE_LABELS[source.id]);
+			pendingDatasourceAliases = Object.keys(buildDatasourceEntries(datasources, deps.home));
+			localIndexDone = false;
 			phase = null;
-			phaseStartedAt = now();
 			progressSignature = "";
 			parsedSignature = "";
+			minsyncSignature = "";
 			parsedSnapshot = { processedFiles: 0, recentFile: null, recentSourcePath: null };
+			embeddedFiles = 0;
 			const startedAt = new Date(now()).toISOString();
 			stateFile = { ...stateFile, indexing: { startedAt, finishedAt: null } };
 			void persist();
@@ -655,13 +729,28 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 		indexStatus: async () => status,
 		isIndexing: () => refreshPromise !== null,
 		complete: async () => {
+			if (!pending) return;
 			stateFile = { ...stateFile, completed: true };
 			pending = false;
+			clearInterval(pollTimer ?? undefined);
+			pollTimer = null;
 			await persist();
 			deps.onComplete();
+			maybeStartBackgroundDatasources();
 		},
 		dispose: () => stopPolling(),
 	};
+
+	async function maybeStoreCloudEmbedderKey(): Promise<void> {
+		const token = await readDazziPlanCredential(agentDir);
+		if (token === null) return;
+		deps.env[DAZZI_CLOUD_EMBEDDER_KEY_ENV] = token;
+		try {
+			await deps.credentials.set(DAZZI_CLOUD_EMBEDDER_KEY_ENV, token);
+		} catch (error) {
+			console.warn("[onboarding] could not store the Dazzi cloud embedder credential:", error);
+		}
+	}
 
 	async function maybeStoreGitToken(sourceIds: readonly SourceId[]): Promise<void> {
 		if (!sourceIds.includes("github")) return;
