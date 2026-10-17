@@ -152,6 +152,15 @@ const record = {
 			stopped: false,
 			at: new Date(Date.now() - 25_000).toISOString(),
 		},
+		{ role: "user", text: "So what is the bottom-line total?", attachments: [], at: new Date(Date.now() - 10_000).toISOString() },
+		{
+			role: "assistant",
+			sessionId: "qa-smart-folder-session",
+			quick: { answer: "The total is **₩3.8B**, settled within 5 business days.", evidence: [] },
+			deep: null,
+			stopped: false,
+			at: new Date(Date.now() - 5_000).toISOString(),
+		},
 	],
 };
 
@@ -179,6 +188,25 @@ const btnText = (await page.locator(EV_FOLDER_BTN).textContent())?.trim() ?? "";
 check("Evidence Folder button is visible at the top of the Evidence panel", btnText === "Evidence Folder", `text="${btnText}"`);
 await page.screenshot({ path: join(EVIDENCE, "01-evidence-folder-button-en.png") });
 await page.locator(EVIDENCE_HALF).screenshot({ path: join(EVIDENCE, "01b-evidence-panel-header.png") });
+
+// 1b. Clicking citation chips in earlier turns (Turn 1 and Turn 2) shows their detailed evidence in the Inspector even when Turn 3 has no citations.
+const turn1Prose = page.locator(".assistant-msg .assistant-prose").nth(0);
+await turn1Prose.locator(".cite", { hasText: /^1$/ }).first().click();
+await page.waitForFunction(
+	(sel) => document.querySelector(sel)?.textContent?.includes("refund-policy.md"),
+	`${EVIDENCE_HALF} .preview-title`,
+);
+const turn1EvTitle = (await page.locator(`${EVIDENCE_HALF} .preview-title`).textContent())?.trim() ?? "";
+check("Clicking citation [1] in Turn 1 displays Turn 1's evidence in the right panel", turn1EvTitle.includes("refund-policy.md"), `title="${turn1EvTitle}"`);
+
+const turn2Prose = page.locator(".assistant-msg .assistant-prose").nth(2);
+await turn2Prose.locator(".cite", { hasText: /^1$/ }).first().click();
+await page.waitForFunction(
+	(sel) => document.querySelector(sel)?.textContent?.includes("q3-budget.csv"),
+	`${EVIDENCE_HALF} .preview-title`,
+);
+const turn2EvTitle = (await page.locator(`${EVIDENCE_HALF} .preview-title`).textContent())?.trim() ?? "";
+check("Clicking citation [1] in Turn 2 displays Turn 2's evidence in the right panel", turn2EvTitle.includes("q3-budget.csv"), `title="${turn2EvTitle}"`);
 
 // 2. Click Evidence Folder button -> opens new tab with temporary Evidence Folder containing all 3 session local files.
 const tabsBefore = await page.locator(".tabs .tab").count();
@@ -211,7 +239,7 @@ await policyRow.click();
 await page.waitForSelector(INFO_HALF);
 await page.waitForFunction(
 	([half, expected]) => document.querySelector(half)?.textContent?.includes(expected),
-	[INFO_HALF, "refund-policy.md"],
+	[INFO_HALF, "Symbolic Link"],
 );
 const infoText = (await page.locator(INFO_HALF).textContent()) ?? "";
 check("Inspector Info shows Symbolic Link metadata for the Evidence Folder entry", infoText.includes("Symbolic Link"), infoText.slice(0, 200));

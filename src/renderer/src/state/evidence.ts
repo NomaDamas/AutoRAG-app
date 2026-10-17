@@ -108,6 +108,61 @@ export function sessionEvidencePaths(evidence: readonly CitationEvidence[]): rea
 	return paths;
 }
 
+export interface TurnEvidencePhases {
+	readonly quick: AnswerPhase | null;
+	readonly deep: AnswerPhase | null;
+}
+
+export interface EvidenceSelectionSource {
+	readonly turnIndex: number;
+	readonly phase: "quick" | "deep";
+}
+
+/**
+ * Merge a turn's primary and secondary phase evidence lists by citation number:
+ * every entry from `primary` wins for its number, and any numbers present only
+ * in `secondary` are kept so no citation chip in either phase of the turn is
+ * left without an evidence tab.
+ */
+export function mergePhaseEvidence(
+	primary: readonly CitationEvidence[],
+	secondary: readonly CitationEvidence[],
+): readonly CitationEvidence[] {
+	if (secondary.length === 0) return primary;
+	if (primary.length === 0) return secondary;
+	const byNumber = new Map<number, CitationEvidence>();
+	for (const item of secondary) byNumber.set(item.number, item);
+	for (const item of primary) byNumber.set(item.number, item);
+	return [...byNumber.values()].sort((a, b) => a.number - b.number);
+}
+
+/**
+ * Resolve the evidence list the Inspector should show for a conversation's
+ * turns (`turns`, oldest first) and an optional `source` (the turn and phase
+ * whose citation chip the user clicked last).
+ */
+export function resolveActiveEvidence(
+	turns: readonly TurnEvidencePhases[],
+	source: EvidenceSelectionSource | null,
+): readonly CitationEvidence[] {
+	if (source !== null) {
+		const turn = turns[source.turnIndex];
+		if (turn !== undefined) {
+			const primary = (source.phase === "quick" ? turn.quick?.evidence : turn.deep?.evidence) ?? [];
+			const secondary = (source.phase === "quick" ? turn.deep?.evidence : turn.quick?.evidence) ?? [];
+			const merged = mergePhaseEvidence(primary, secondary);
+			if (merged.length > 0) return merged;
+		}
+	}
+	for (let index = turns.length - 1; index >= 0; index -= 1) {
+		const turn = turns[index];
+		if (turn === undefined) continue;
+		const merged = mergePhaseEvidence(turn.deep?.evidence ?? [], turn.quick?.evidence ?? []);
+		if (merged.length > 0) return merged;
+	}
+	return [];
+}
+
 /** Confidence as a percentage, shown right of the source line; `null` when the librarian measured none. */
 export function evidenceDetail(confidence: number | undefined): string | null {
 	return confidence === undefined ? null : t("finderState.evidenceDetail", { percent: Math.round(confidence * 100) });

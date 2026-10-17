@@ -290,11 +290,14 @@ export function App(): ReactElement {
 	// The focused AI Search tab publishes its answer's citations; the inspector
 	// shows them as a full-height Evidence view while that tab is focused.
 	const [evidence, setEvidence] = useState<readonly CitationEvidence[]>([]);
+	const evidenceRef = useRef<readonly CitationEvidence[]>(evidence);
+	evidenceRef.current = evidence;
 	const [sessionEvidence, setSessionEvidence] = useState<readonly CitationEvidence[]>([]);
 	const [selectedEvidence, setSelectedEvidence] = useState<number | null>(null);
 
 	const publishEvidence = useCallback(
 		(items: readonly CitationEvidence[], sessionItems?: readonly CitationEvidence[]) => {
+			evidenceRef.current = items;
 			setEvidence(items);
 			setSessionEvidence(sessionItems ?? items);
 			setSelectedEvidence((current) => (current !== null && items.some((item) => item.number === current) ? current : null));
@@ -505,14 +508,14 @@ export function App(): ReactElement {
 		(number: number) => {
 			// A citation chip with no evidence entry must never open a different
 			// result: the panel would silently show unrelated evidence.
-			if (!evidence.some((item) => item.number === number)) {
+			if (!evidenceRef.current.some((item) => item.number === number)) {
 				setToast(t("finderComponents.evidenceNotFound", { number }));
 				return;
 			}
 			setSelectedEvidence(number);
 			setInspectorVisible(true);
 		},
-		[evidence],
+		[t],
 	);
 
 	const evidenceSelectedNumber = evidence.find((item) => item.number === selectedEvidence)?.number ?? evidence[0]?.number ?? 1;
