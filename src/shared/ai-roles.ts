@@ -1,4 +1,4 @@
-import { AUTORAG_PROVIDER_ID, isManagedProviderId } from "./account-contract";
+import { AUTORAG_PROVIDER_ID } from "./account-contract";
 import { t } from "./i18n/core";
 
 export { providerConnectRoute, withoutAutorag } from "./account-contract";
@@ -111,7 +111,7 @@ function roleOwner(value: unknown, key: "backend" | "provider"): "unset" | "dazz
 	if (typeof value !== "object" || value === null || Array.isArray(value)) return "other";
 	const entries = Object.entries(value);
 	if (entries.length === 0) return "unset";
-	if (entries.some(([name, named]) => name === key && isManagedProviderId(named))) {
+	if (entries.some(([name, named]) => name === key && named === AUTORAG_PROVIDER_ID)) {
 		const refreshable = entries.every(([name, named]) => REFRESHABLE_KEYS[key].includes(name) && (name !== "enabled" || named === true));
 		return refreshable ? "dazzi" : "other";
 	}
@@ -148,7 +148,7 @@ export function shouldAdoptManagedDecomposition(value: unknown): boolean {
 	const model = only[1];
 	if (typeof model !== "object" || model === null || Array.isArray(model)) return false;
 	const fields = Object.entries(model);
-	if (fields.some(([name, named]) => name === "provider" && isManagedProviderId(named))) return true;
+	if (fields.some(([name, named]) => name === "provider" && named === AUTORAG_PROVIDER_ID)) return true;
 	return fields.length === 2 && fields.every(([name, named]) => (name === "provider" && named === "openrouter") || (name === "id" && named === UNTOUCHED_DECOMPOSITION_ID));
 }
 

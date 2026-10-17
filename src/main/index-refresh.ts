@@ -2,7 +2,6 @@ import { existsSync } from "node:fs";
 import { AutoRAGLite, type AutoRAGRefreshResult, type RefreshMethod } from "@autorag/librarian";
 import { readRawConfigObject, resolveConfigPath, resolveConfigReadOnly, type CliConfig } from "@autorag/librarian/core";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
-import { ACCOUNT_API_KEY_ENV } from "../shared/account-contract";
 import { readDazziPlanCredential } from "./dazzi-plan-credential";
 import type { ConfigRefreshDiagnostic, ConfigRefreshResult } from "../shared/settings-contract";
 import { APP_INDEXING_CAPABILITIES, applyAppIndexing, readAppIndexing } from "./app-indexing";
@@ -107,8 +106,6 @@ export async function refreshAutoragIndex(
 	) {
 		const bridged =
 			deps.env.OPENAI_API_KEY ||
-			deps.env[ACCOUNT_API_KEY_ENV] ||
-			process.env[ACCOUNT_API_KEY_ENV] ||
 			(await readDazziPlanCredential(getAgentDir()));
 		if (typeof bridged === "string" && bridged.length > 0) {
 			process.env.OPENAI_API_KEY = bridged;

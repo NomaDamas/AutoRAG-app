@@ -439,8 +439,7 @@
       "agreeTerms": "服务条款",
       "agreePrivacy": "隐私政策",
       "agreeUse": "可接受使用政策",
-      "planLabel": "{{plan}} 套餐",
-      "signedInEnv": "正在使用环境变量中的 API 密钥"
+      "planLabel": "{{plan}} 套餐"
     },
     "permissions": {
       "eyebrow": "权限",
@@ -1367,7 +1366,6 @@
       "offline": "无法连接服务器，显示最后确认的信息。",
       "signOut": "退出登录",
       "signIn": "登录",
-      "hintEnv": "已通过环境变量 AUTORAG_API_KEY 登录，无法在应用内退出登录。",
       "hintSignedIn": "删除存储在此 Mac 上的密钥。可在 Dazzi 网站的 API 密钥页面吊销该密钥。",
       "hintSignedOut": "浏览器将打开，确认后会回到本应用。",
       "signInBrowser": "在浏览器中登录",
@@ -1480,7 +1478,6 @@
         "notSignedIn": "未登录。"
       },
       "disconnect": {
-        "envLocked": "已通过环境变量 AUTORAG_API_KEY 登录，无法在应用内退出登录。请自行删除该环境变量。",
         "title": "要断开 {{name}} 吗？",
         "body": "删除已保存的凭据并将其从列表中移除。使用该服务的角色可能需要选择新模型。",
         "action": "断开连接"
