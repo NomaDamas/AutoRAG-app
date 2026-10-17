@@ -441,8 +441,7 @@
       "agreeTerms": "利用規約",
       "agreePrivacy": "プライバシーポリシー",
       "agreeUse": "受け入れ可能な利用ポリシー",
-      "planLabel": "{{plan}} プラン",
-      "signedInEnv": "環境変数のAPIキーを使用中"
+      "planLabel": "{{plan}} プラン"
     },
     "permissions": {
       "eyebrow": "権限",
@@ -1087,7 +1086,7 @@
         "obsidianPropagated": "qmd 子プロセスに QMD_EMBED_MODEL を設定し、`qmd embed -f` で再インデックスします。",
         "discordIncompatible": "このアプリは Dazzi 埋め込みランタイムを loopback で提供できません(公開エクスポートではない)。discrawl に渡すには埋め込みサーバーを選択してください。",
         "discordPropagated": "Dazzi 管理の discrawl config を書き直し、`discrawl embed --rebuild` で再インデックスします。",
-        "kakaoIncompatible": "lazykatok は独自の組み込みエンベッダー(EmbeddingGemma)を使用しており、Dazzi 共有 config では変更できません(ネイティブ設定が所有)。",
+        "kakaoSharedEmbedder": "KakaoTalk は lazykatok アーカイブ上のサイドカー経由で Dazzi 共有エンベッダーを使用し、エンベッダーを変更すると次回の同期で再埋め込みされます。",
         "githubGistIncompatible": "GitHubGistSkill は @autorag/librarian の公開エクスポートではないため、アプリからエンベッダーを指定できません(ランタイムゲートウェイプロファイルで固定)。",
         "clawgalleryNotApplicable": "ClawGallery は画像(VDR)インデックスであり、テキスト埋め込みを使用しません。",
         "larkNotApplicable": "Lark はリモート API 検索のみを使用し、ローカル埋め込みを拒否します。",
@@ -1371,7 +1370,6 @@
       "offline": "サーバーに接続できないため、最後に確認した情報を表示しています。",
       "signOut": "ログアウト",
       "signIn": "ログイン",
-      "hintEnv": "環境変数 AUTORAG_API_KEY でログインしているため、アプリからログアウトできません。",
       "hintSignedIn": "この Mac に保存されたキーを削除します。キーは Dazzi ウェブの API キー画面で失効できます。",
       "hintSignedOut": "ブラウザが開き、承認するとこのアプリに戻ります。",
       "signInBrowser": "ブラウザでログイン",
@@ -1484,7 +1482,6 @@
         "notSignedIn": "ログインしていません。"
       },
       "disconnect": {
-        "envLocked": "環境変数 AUTORAG_API_KEY でログインしているため、アプリからログアウトできません。該当の環境変数を自分で削除してください。",
         "title": "{{name}} を切断しますか？",
         "body": "保存された認証情報を削除し、一覧から除外します。このサービスを使っていた役割は新しいモデルを選ぶ必要がある場合があります。",
         "action": "切断"

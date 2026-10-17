@@ -2,10 +2,9 @@ import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { basename, join, sep } from "node:path";
 import { readRawConfigObject, writeConfigObject } from "@autorag/librarian/core";
-import {
-	ACCOUNT_API_KEY_ENV,
-	DEFAULT_ACCOUNT_BASE_URL,
-} from "../shared/account-contract";
+import { getAgentDir } from "@earendil-works/pi-coding-agent";
+import { DEFAULT_ACCOUNT_BASE_URL } from "../shared/account-contract";
+import { readDazziPlanCredential } from "./dazzi-plan-credential";
 import {
 	ONBOARDING_CHANNELS,
 	type ByokProviderId,
@@ -72,6 +71,8 @@ const SOURCE_LABELS: Readonly<Record<SourceId, string>> = {
 export interface OnboardingServiceDeps {
 	readonly userDataDir: string;
 	readonly env: NodeJS.ProcessEnv;
+	/** Pi's agent home, where the account's plan credential lives. Defaults to Pi's own. */
+	readonly agentDir?: string;
 	/** The process cwd the app seeds a fresh config's `workspacePath` with. */
 	readonly cwd: string;
 	readonly platform: NodeJS.Platform;
@@ -356,6 +357,7 @@ function countMinSyncProgress(text: string | null): number {
 	return Math.max(0, lines.length - 1);
 }
 export function createOnboardingService(deps: OnboardingServiceDeps): OnboardingService {
+	const agentDir = deps.agentDir ?? getAgentDir();
 	const now = deps.now ?? Date.now;
 	const existing = readOnboardingState(deps.userDataDir);
 	let stateFile: PersistedOnboardingState = existing ?? { completed: false, draft: null };
@@ -679,7 +681,7 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 			}
 			if (embedMode === "cloud") {
 				await maybeStoreCloudEmbedderKey();
-			} else if (isDazziCloudEmbedder && deps.env[DAZZI_CLOUD_EMBEDDER_KEY_ENV] === deps.env[ACCOUNT_API_KEY_ENV]) {
+			} else if (isDazziCloudEmbedder && deps.env[DAZZI_CLOUD_EMBEDDER_KEY_ENV] === (await readDazziPlanCredential(agentDir))) {
 				await deps.credentials.remove(DAZZI_CLOUD_EMBEDDER_KEY_ENV).catch(() => undefined);
 			}
 			await maybeStoreGitToken(request.sources.map((source) => source.id));
@@ -740,8 +742,8 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 	};
 
 	async function maybeStoreCloudEmbedderKey(): Promise<void> {
-		const token = deps.env[ACCOUNT_API_KEY_ENV];
-		if (typeof token !== "string" || token.length === 0) return;
+		const token = await readDazziPlanCredential(agentDir);
+		if (token === null) return;
 		deps.env[DAZZI_CLOUD_EMBEDDER_KEY_ENV] = token;
 		try {
 			await deps.credentials.set(DAZZI_CLOUD_EMBEDDER_KEY_ENV, token);

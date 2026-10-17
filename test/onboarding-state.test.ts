@@ -6,6 +6,7 @@ import { ONBOARDING_CHANNELS, type DetectedSource, type OnboardingDraft, type So
 import type { AppSettings, ConfigRefreshResult } from "../src/shared/settings-contract";
 import type { OnboardingServiceDeps } from "../src/main/onboarding-service";
 import { createOnboardingService, readOnboardingPending } from "../src/main/onboarding-service";
+import { storeDazziPlanCredential } from "../src/main/dazzi-plan-credential";
 
 const directories: string[] = [];
 
@@ -56,6 +57,8 @@ function makeDeps(userDataDir: string, env: NodeJS.ProcessEnv = {}): OnboardingS
 	return {
 		userDataDir,
 		env,
+		// Pi's agent home is the user data dir here, so a test never reads the developer's own sign-in.
+		agentDir: userDataDir,
 		cwd: "/repo",
 		platform: "darwin",
 		home: "/Users/me",
@@ -358,7 +361,8 @@ describe("createOnboardingService persistence", () => {
 
 	it("configures Dazzi cloud embedding when indexing with embed=cloud", async () => {
 		const directory = await workDir();
-		const env: NodeJS.ProcessEnv = { AUTORAG_API_KEY: "dz_cloud_token", AUTORAG_BASE_URL: "https://api.dazziapp.com" };
+		const env: NodeJS.ProcessEnv = { AUTORAG_BASE_URL: "https://api.dazziapp.com" };
+		await storeDazziPlanCredential(directory, "dz_cloud_token");
 		const stored = new Map<string, string>();
 		const service = createOnboardingService({
 			...makeDeps(directory, env),

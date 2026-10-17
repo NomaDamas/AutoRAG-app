@@ -275,11 +275,9 @@ function adoptionFor(
 						action: t("main.embedding.actions.discordConfig"),
 					};
 		case "kakao":
-			return {
-				adoption: "incompatible",
-				reason: t("main.embedding.reasons.kakaoIncompatible"),
-				action: null,
-			};
+			// The librarian's kakao sidecar embeds with the shared embedder, so the choice
+			// applies as-is; the rebuild sync re-embeds when the embedder identity changed.
+			return { adoption: "native", reason: t("main.embedding.reasons.kakaoSharedEmbedder"), action: null };
 		case "github-gist":
 			return {
 				adoption: "incompatible",

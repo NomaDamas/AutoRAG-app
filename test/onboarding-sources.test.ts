@@ -131,15 +131,29 @@ describe("onboarding datasource detection", () => {
 		expect(ids(result)).toEqual([]);
 	});
 
-	it("detects KakaoTalk only on macOS with a cached login and readable data", async () => {
-		const probe = (macos: Record<string, unknown>) =>
-			script({ lazykatok: () => ok({ source_adapter: { macos: { status: "checked", ...macos } } }) });
+	it("detects KakaoTalk on macOS with a cached login or a live source chats probe, and records the chat count", async () => {
+		const probe = (macos: Record<string, unknown>, chatsOutput?: string) =>
+			script({
+				lazykatok: (args) => {
+					if (args[0] === "doctor") return ok({ source_adapter: { macos: { status: "checked", ...macos } } });
+					if (args[0] === "source" && args[1] === "chats" && chatsOutput !== undefined) return chatsOutput;
+					throw new Error(`unexpected lazykatok args: ${args.join(" ")}`);
+				},
+			});
 		const ready = { app_installed: true, container_present: true, auth_cached: true, db_file_count: 2 };
+		const chats = ok([{ chat_id: "c1" }, { chat_id: "c2" }, { chat_id: "c3" }]);
 
-		expect(ids(await detectSources({ ...deps(probe(ready)), ...noGithub, platform: "darwin" }))).toEqual(["kakao"]);
-		expect(ids(await detectSources({ ...deps(probe(ready)), ...noGithub, platform: "linux" }))).toEqual([]);
+		expect(await detectSources({ ...deps(probe(ready, chats)), ...noGithub, platform: "darwin" })).toEqual({
+			sources: [{ id: "kakao", facts: { chats: 3 } }],
+		});
+		expect(ids(await detectSources({ ...deps(probe(ready, chats)), ...noGithub, platform: "linux" }))).toEqual([]);
+		// Fresh machine where auth.json has not been cached yet, but KakaoTalk is signed in and `source chats --source macos` succeeds:
+		expect(await detectSources({ ...deps(probe({ ...ready, auth_cached: false }, chats)), ...noGithub, platform: "darwin" })).toEqual({
+			sources: [{ id: "kakao", facts: { chats: 3 } }],
+		});
+		// No cached auth and live source chats fails -> not detected:
 		expect(ids(await detectSources({ ...deps(probe({ ...ready, auth_cached: false })), ...noGithub, platform: "darwin" }))).toEqual([]);
-		expect(ids(await detectSources({ ...deps(probe({ ...ready, db_file_count: 0 })), ...noGithub, platform: "darwin" }))).toEqual([]);
+		expect(ids(await detectSources({ ...deps(probe({ ...ready, db_file_count: 0 }, chats)), ...noGithub, platform: "darwin" }))).toEqual([]);
 	});
 
 	it("keeps a failing probe from hiding the others", async () => {

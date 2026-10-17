@@ -20,7 +20,8 @@ import type {
 import { isJsonObject } from "../shared/settings-contract";
 import type { ProviderCredentialService } from "./provider-credentials";
 import { registerDazziProvider } from "@autorag/librarian";
-import { ACCOUNT_API_KEY_ENV, AUTORAG_PROVIDER_ID, autoragFirst } from "../shared/account-contract";
+import { AUTORAG_PROVIDER_ID, autoragFirst } from "../shared/account-contract";
+import { readDazziPlanCredential } from "./dazzi-plan-credential";
 
 /**
  * Real Pi provider authentication: `/login` OAuth and API-key flows driven by
@@ -583,8 +584,8 @@ export function createProviderAuthService(deps: ProviderAuthServiceDeps): Provid
 		},
 		syncAutoragCatalog: async () => {
 			// Only with an account key: a signed-out provider must make no network call.
-			const key = deps.env[ACCOUNT_API_KEY_ENV];
-			if (typeof key !== "string" || key.length === 0) return;
+			const key = await readDazziPlanCredential(agentDir);
+			if (key === null) return;
 			const runtime = await runtimePromise;
 			try {
 				// One provider, with the network on: the librarian provider fetches

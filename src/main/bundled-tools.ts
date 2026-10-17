@@ -26,28 +26,46 @@ export function pathKey(env: NodeJS.ProcessEnv, platform: NodeJS.Platform = proc
 /** `current` with `directory` first; an existing occurrence is moved up, never duplicated. */
 export function prependPath(current: string | undefined, directory: string, platform: NodeJS.Platform = process.platform): string {
 	const separator = platform === "win32" ? win32.delimiter : posix.delimiter;
-	const same = (entry: string): boolean => (platform === "win32" ? entry.toLowerCase() === directory.toLowerCase() : entry === directory);
-	const rest = (current ?? "").split(separator).filter((entry) => entry.length > 0 && !same(entry));
+	const rest = (current ?? "").split(separator).filter((entry) => {
+		if (entry.length === 0) return false;
+		return platform === "win32" ? entry.toLowerCase() !== directory.toLowerCase() : entry !== directory;
+	});
 	return [directory, ...rest].join(separator);
 }
 
+/** Standard POSIX user/system tool directories launchd's minimal Finder PATH omits (`~/.cargo/bin`, `/opt/homebrew/bin`, ...). */
+function appendStandardToolDirs(current: string | undefined, home: string | undefined, platform: NodeJS.Platform): string | undefined {
+	if (platform === "win32") return current;
+	const separator = posix.delimiter;
+	const existing = (current ?? "").split(separator).filter((entry) => entry.length > 0);
+	const homeDirs = typeof home === "string" && home.length > 0 ? [posix.join(home, ".cargo", "bin"), posix.join(home, ".local", "bin")] : [];
+	const candidates = [...homeDirs, "/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"];
+	for (const candidate of candidates) {
+		if (!existing.includes(candidate)) existing.push(candidate);
+	}
+	return existing.join(separator);
+}
+
 /**
- * Put the bundled tools first on `env.PATH`, in place. Returns the tools root
- * when something was applied. Both entry points call it before anything reads
- * `process.env`: the app at startup, and the OS-scheduled refresh job (which
- * runs the same executable, so `process.resourcesPath` is the same and the OS
- * job definition never has to carry the directory). Every child process
- * either of them starts inherits it.
+ * Put the bundled tools first on `env.PATH`, in place, and append standard user
+ * tool directories after the existing entries when `augmentUserPaths` is set
+ * so a Finder-launched build still resolves user-installed CLIs (`~/.cargo/bin/lazykatok`, Homebrew, ...).
+ * Returns the tools root when bundled tools were applied.
  */
 export function applyBundledTools(input: {
 	readonly resourcesPath: string;
 	readonly env: NodeJS.ProcessEnv;
 	readonly platform?: NodeJS.Platform;
+	readonly augmentUserPaths?: boolean;
 }): string | null {
 	const platform = input.platform ?? process.platform;
+	const key = pathKey(input.env, platform);
+	if (input.augmentUserPaths) {
+		const augmented = appendStandardToolDirs(input.env[key], input.env.HOME, platform);
+		if (augmented !== undefined) input.env[key] = augmented;
+	}
 	const root = bundledToolsRoot(input);
 	if (root === null) return null;
-	const key = pathKey(input.env, platform);
 	input.env[key] = prependPath(input.env[key], join(root, "bin"), platform);
 	return root;
 }
