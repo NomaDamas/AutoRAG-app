@@ -8,7 +8,9 @@ import {
 	type SearchDocumentsStreamEvent,
 } from "@autorag/librarian";
 import { readRawConfigObject, resolveAgentModel, resolveConfigPath, type CliConfig } from "@autorag/librarian/core";
+import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { isJsonObject } from "../shared/settings-contract";
+import { openPlanRuntime, preferPlanOAuth } from "./dazzi-session-auth";
 import { applyAppIndexing } from "./app-indexing";
 import type {
 	AnswerPhase,
@@ -498,7 +500,9 @@ export function createDefaultAgentFactory(): () => Promise<SearchAgent> {
 		const effective = await applyAppIndexing(withWebSearch, raw);
 		// Credentials resolve fresh from auth.json/process.env on every agent build,
 		// so a login or key change reaches the next search without a restart.
-		const resolved = await resolveAgentModel(effective, { env: input.env, cwd: input.cwd });
+		// The signed-in plan authenticates through its stored OAuth credential; the
+		// session must not replace it with an API key (see dazzi-session-auth.ts).
+		const resolved = await preferPlanOAuth(await resolveAgentModel(effective, { env: input.env, cwd: input.cwd }), () => openPlanRuntime(getAgentDir(), input.env));
 		const decomposition = await resolveDecomposition(effective, input.env, input.cwd);
 		// The decomposition model's thinking is upstream-fixed off; only the
 		// two-phase answer model takes config thinking.fast/final.
