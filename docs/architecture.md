@@ -120,7 +120,7 @@ second datasource or model configuration. The sidebar is searchable and grouped:
     (`index-status.ts` calls `refreshAutoragIndex`), so it has the folder check,
     the embedder watchdog, and the learned batch size.
   - *A file MinSync cannot read, chunk, or embed is skipped, not fatal*
-    (MinSync 0.4.8 / librarian 2.10.3, `minsync-file-skipped`). MinSync exits 6
+    (MinSync 0.4.8 / librarian 2.10.4, `minsync-file-skipped`). MinSync exits 6
     with `partial: true` and `files_failed`, keeps the file's older chunks, and
     retries it on the next sync; if the skip came from an embedding gateway
     timeout, `index-refresh` halves `batchSize` and re-runs `syncMinSync` in the
@@ -259,8 +259,9 @@ resumes at the same step.
   Local files are covered by the folders step, so
   Spotlight and Apple Mail are not offered. Each row appears only when the
   connector's own health probe says its data is reachable: KakaoTalk
-  (`lazykatok doctor --macos-probe`: app, container, cached login, readable
-  database files), Slack (`slacrawl`, at least one workspace), Discord
+  (`lazykatok doctor --macos-probe` plus `lazykatok source chats --source macos`
+  when `auth.json` has not been cached yet: app, container, verifiable login,
+  readable database files), Slack (`slacrawl`, at least one workspace), Discord
   (`discrawl` ready database plus a dry-run `wiretap` that finds messages),
   Telegram (`telecrawl doctor`), WhatsApp (`wacrawl doctor`, read-only, with
   messages), mail (`mailcrawl` installed and a `himalaya` account whose login
@@ -272,10 +273,14 @@ resumes at the same step.
 - **Model** (BYOK) verifies the provider key against the provider's API and
   stores it in the encrypted credential store, never in `config.json`.
 - **Indexing** writes `searchPaths`, the embedder (only when none is set), the
-  enabled datasources and their access tags, and the BYOK model into the shared
-  config, then runs the same refresh as Settings. A config still pointing its
+  enabled datasources (`kakao` is indexed by the librarian's read-only sidecar over
+  lazykatok's archive with the shared embedder, so `lazykatok index` and its
+  fastembed pipeline never run), and the BYOK model into the shared config, then runs
+  the local refresh (`parsed`, `minsync`) and syncs enabled datasources in the
+  background once local indexing and onboarding complete. A config still pointing its
   `workspacePath` at the app's cwd seed is moved to `<AutoRAG home>/workspace`.
-  The Finder opens only after the first index succeeds.
+  The Finder opens once the first index succeeds or the user chooses to continue
+  in the background.
 
 Account and plan are real. The account step signs in through the system
 browser (OAuth 2.0 authorization code + PKCE over a loopback redirect, RFC 8252)

@@ -1084,7 +1084,7 @@
         "obsidianPropagated": "Sets QMD_EMBED_MODEL on the qmd child process and re-indexes with `qmd embed -f`.",
         "discordIncompatible": "This app cannot serve the Dazzi embedding runtime on loopback (not a public export). Choose an embedding server to pass it to discrawl.",
         "discordPropagated": "Rewrites the Dazzi-managed discrawl config and re-indexes with `discrawl embed --rebuild`.",
-        "kakaoIncompatible": "lazykatok uses its own built-in embedder (EmbeddingGemma) and cannot be changed via the shared Dazzi config (owned by native settings).",
+        "kakaoSharedEmbedder": "Kakao uses the shared Dazzi embedder through the sidecar over lazykatok's archive; changing the embedder re-embeds it on the next sync.",
         "githubGistIncompatible": "GitHubGistSkill is not a public @autorag/librarian export, so the app cannot set its embedder (fixed by the runtime gateway profile).",
         "clawgalleryNotApplicable": "ClawGallery is an image (VDR) index and does not use text embeddings.",
         "larkNotApplicable": "Lark uses only remote API search and refuses local embeddings.",

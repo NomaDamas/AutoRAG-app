@@ -1084,7 +1084,7 @@
         "obsidianPropagated": "qmd 子プロセスに QMD_EMBED_MODEL を設定し、`qmd embed -f` で再インデックスします。",
         "discordIncompatible": "このアプリは Dazzi 埋め込みランタイムを loopback で提供できません(公開エクスポートではない)。discrawl に渡すには埋め込みサーバーを選択してください。",
         "discordPropagated": "Dazzi 管理の discrawl config を書き直し、`discrawl embed --rebuild` で再インデックスします。",
-        "kakaoIncompatible": "lazykatok は独自の組み込みエンベッダー(EmbeddingGemma)を使用しており、Dazzi 共有 config では変更できません(ネイティブ設定が所有)。",
+        "kakaoSharedEmbedder": "KakaoTalk は lazykatok アーカイブ上のサイドカー経由で Dazzi 共有エンベッダーを使用し、エンベッダーを変更すると次回の同期で再埋め込みされます。",
         "githubGistIncompatible": "GitHubGistSkill は @autorag/librarian の公開エクスポートではないため、アプリからエンベッダーを指定できません(ランタイムゲートウェイプロファイルで固定)。",
         "clawgalleryNotApplicable": "ClawGallery は画像(VDR)インデックスであり、テキスト埋め込みを使用しません。",
         "larkNotApplicable": "Lark はリモート API 検索のみを使用し、ローカル埋め込みを拒否します。",

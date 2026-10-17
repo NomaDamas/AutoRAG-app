@@ -59,6 +59,8 @@ function obsidianAlias(index: number): string {
 function entriesFor(datasource: IndexingDatasource, home: string): Record<string, Record<string, unknown>> {
 	switch (datasource.id) {
 		case "kakao":
+			// With librarian >= 2.10.4 the kakao sidecar reads lazykatok's archive and embeds
+			// with the shared embedder, so `lazykatok index` (fastembed) is never run.
 			return { kakao: { instanceId: "default", connector: {} } };
 		case "github":
 			return {

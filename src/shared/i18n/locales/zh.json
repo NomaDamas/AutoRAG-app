@@ -1084,7 +1084,7 @@
         "obsidianPropagated": "在 qmd 子进程上设置 QMD_EMBED_MODEL，并用 `qmd embed -f` 重新建立索引。",
         "discordIncompatible": "此应用无法在 loopback 上提供 Dazzi 嵌入运行时(非公开导出)。请选择嵌入服务器以传递给 discrawl。",
         "discordPropagated": "重写 Dazzi 管理的 discrawl config，并用 `discrawl embed --rebuild` 重新建立索引。",
-        "kakaoIncompatible": "lazykatok 使用其自带的内置嵌入器(EmbeddingGemma)，无法通过 Dazzi 共享 config 更改(由原生设置拥有)。",
+        "kakaoSharedEmbedder": "KakaoTalk 通过 lazykatok 归档之上的 sidecar 使用 Dazzi 共享嵌入器；更换嵌入器后会在下次同步时重新嵌入。",
         "githubGistIncompatible": "GitHubGistSkill 不是 @autorag/librarian 的公开导出，因此应用无法指定其嵌入器(由运行时网关配置固定)。",
         "clawgalleryNotApplicable": "ClawGallery 是图像(VDR)索引，不使用文本嵌入。",
         "larkNotApplicable": "Lark 仅使用远程 API 搜索，拒绝本地嵌入。",

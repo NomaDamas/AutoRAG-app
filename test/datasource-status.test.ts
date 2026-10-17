@@ -1,4 +1,5 @@
 import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { DatabaseSync } from "node:sqlite";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildAgentOptions, resolveConfigReadOnly, saveMirrorIndex, type ParsedMirrorEntry as MirrorEntry } from "@autorag/librarian";
@@ -339,6 +340,100 @@ describe("backend-owned index counts", () => {
 		expect(byId(rows, "notion").index).toMatchObject({ state: "indexed", chunkCount: 12, unit: "document", indexedAt: "2026-09-21T14:13:20.000Z" });
 		expect(byId(rows, "clawgallery").index).toMatchObject({ state: "indexed", chunkCount: 13635, unit: "image" });
 		expect(byId(rows, "kakao").index).toMatchObject({ state: "indexed", chunkCount: 50632, unit: "message" });
+	});
+
+	it("reports kakao as not-indexed when sync ran without a committed semantic index, and indexed once both completed", async () => {
+		const fixture = await createFixtureWithOnlySlacrawlOnPath();
+		await installFakeCli(
+			fixture,
+			"lazykatok",
+			JSON.stringify({
+				freshness: {
+					last_sync: { total_messages: 50632, completed_at: "2026-09-23T06:07:17Z" },
+					last_index: null,
+					recommendation: { sync_before_search: false, index_before_semantic_search: true },
+				},
+			}),
+		);
+		await writeConfig(fixture, { kakao: {} });
+		const service = createDataSourceStatusService({ env: fixture.env, cwd: fixture.root });
+
+		const [unindexed] = (await service.list()).sources;
+		expect(unindexed?.index).toMatchObject({ state: "not-indexed", chunkCount: null, unit: "message" });
+
+		await installFakeCli(
+			fixture,
+			"lazykatok",
+			JSON.stringify({
+				freshness: {
+					last_sync: { total_messages: 50632, completed_at: "2026-09-23T06:09:00Z" },
+					last_index: { completed_at: "2026-09-23T06:08:00Z", embedded_texts: 120 },
+					recommendation: { sync_before_search: false, index_before_semantic_search: true },
+				},
+			}),
+		);
+		const [stale] = (await service.list()).sources;
+		expect(stale?.index).toMatchObject({ state: "not-indexed", chunkCount: null, unit: "message" });
+
+		await installFakeCli(
+			fixture,
+			"lazykatok",
+			JSON.stringify({
+				freshness: {
+					last_sync: { total_messages: 50632, completed_at: "2026-09-23T06:07:17Z" },
+					last_index: { completed_at: "2026-09-23T06:08:00Z", embedded_texts: 120 },
+					recommendation: { sync_before_search: false, index_before_semantic_search: false },
+				},
+			}),
+		);
+		const [indexed] = (await service.list()).sources;
+		expect(indexed?.index).toMatchObject({
+			state: "indexed",
+			chunkCount: 50632,
+			unit: "message",
+			indexedAt: "2026-09-23T06:08:00.000Z",
+		});
+	});
+
+	it("reports kakao as not-indexed while the sidecar holds no vectors, and indexed once it does", async () => {
+		const fixture = await createFixtureWithOnlySlacrawlOnPath();
+		await installFakeCli(
+			fixture,
+			"lazykatok",
+			JSON.stringify({
+				freshness: {
+					last_sync: { total_messages: 50632, completed_at: "2026-09-23T06:07:17Z" },
+					last_index: null,
+					recommendation: { sync_before_search: false, index_before_semantic_search: true },
+				},
+			}),
+		);
+		await writeConfig(fixture, { kakao: {} });
+		const sidecarDir = join(fixture.workspace, ".autorag", "datasources", "kakao", "default");
+		await mkdir(sidecarDir, { recursive: true });
+		// What a failed first sync leaves behind: the tables, no identity, no vectors.
+		const db = new DatabaseSync(join(sidecarDir, "sidecar.sqlite"));
+		db.exec(`
+			create table sidecar_meta (k text primary key, v text not null);
+			create table sidecar_vec (message_key text primary key, hash text not null, vec blob not null);
+		`);
+		const service = createDataSourceStatusService({ env: fixture.env, cwd: fixture.root });
+
+		const [failed] = (await service.list()).sources;
+		expect(failed?.index).toMatchObject({ state: "not-indexed", chunkCount: null, unit: "message" });
+
+		db.exec(`
+			insert into sidecar_meta values ('identity', '{"provider":"qwen","model":"m","dimension":2}');
+			insert into sidecar_vec values ('k1', 'h', x'00');
+		`);
+		db.close();
+		const [indexed] = (await service.list()).sources;
+		expect(indexed?.index).toMatchObject({
+			state: "indexed",
+			chunkCount: 50632,
+			unit: "message",
+			indexedAt: "2026-09-23T06:07:17.000Z",
+		});
 	});
 
 	it("reports an empty archive as empty and an unreadable one as not-indexed", async () => {

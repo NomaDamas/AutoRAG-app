@@ -33,6 +33,21 @@ describe("bundled tools on PATH", () => {
 		expect(env.PATH).toBe("/usr/bin");
 	});
 
+	it("augments a minimal launchd/Finder PATH with standard user and system tool directories when requested", () => {
+		const env: NodeJS.ProcessEnv = { HOME: "/Users/test", PATH: "/usr/bin:/bin" };
+		applyBundledTools({ resourcesPath: temp(), env, platform: "darwin", augmentUserPaths: true });
+		expect(env.PATH?.split(":")).toEqual([
+			"/usr/bin",
+			"/bin",
+			"/Users/test/.cargo/bin",
+			"/Users/test/.local/bin",
+			"/opt/homebrew/bin",
+			"/usr/local/bin",
+			"/usr/sbin",
+			"/sbin",
+		]);
+	});
+
 	it("keeps the Windows spelling of the variable and compares entries case-insensitively", () => {
 		const env: NodeJS.ProcessEnv = { Path: "C:\\Windows" };
 		expect(pathKey(env, "win32")).toBe("Path");

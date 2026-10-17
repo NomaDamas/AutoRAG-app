@@ -269,7 +269,45 @@ try {
 		check("AutoRAG opens the Finder at full size", fits(finder, [1440, 900]) && finder.min[0] === Math.min(1360, finder.work[0]), JSON.stringify(finder));
 		const state = JSON.parse(readFileSync(join(userDataDir, "onboarding", "state.json"), "utf8"));
 		check("onboarding marked completed", state.completed === true);
+		if (requestedSource.length > 0) {
+			const completedAt = Date.parse(final.finishedAt ?? final.startedAt ?? new Date().toISOString()) - 2_000;
+			const deadline = Date.now() + 120_000;
+			let matching = [];
+			while (Date.now() < deadline) {
+				const { activity, snapshot } = await page.evaluate(async () => ({
+					activity: await window.autorag.indexActivity.get(),
+					snapshot: await window.autorag.settings.sourcesList(),
+				}));
+				matching = snapshot.sources.filter(
+					(row) => row.id === requestedSource || row.type === requestedSource || row.id.startsWith(`${requestedSource}-`),
+				);
+				const done =
+					activity.state !== "running" &&
+					matching.length > 0 &&
+					matching.every(
+						(row) =>
+							row.status === "ready" &&
+							(row.index.state === "indexed" || row.index.state === "empty") &&
+							(row.index.indexedAt === null || Date.parse(row.index.indexedAt) >= completedAt),
+					);
+				if (done) break;
+				await page.waitForTimeout(1_000);
+			}
+			await page.waitForFunction(() => document.querySelector('.sidebar__activity[data-tone="run"]') === null, null, { timeout: 5_000 });
+			check(
+				`${requestedSource} datasource finishes indexing in the background`,
+				matching.length > 0 && matching.every((row) => row.index.state === "indexed" && (row.index.chunkCount ?? 0) > 0),
+				JSON.stringify(matching.map((row) => ({ id: row.id, status: row.status, index: row.index }))),
+			);
+		}
 		await page.screenshot({ path: join(EVIDENCE, "10-finder.png") });
+		if (requestedSource.length > 0) {
+			await page.locator(".sidebar__item--settings").click();
+			await page.waitForSelector(".settings-sidebar", { timeout: 10_000 });
+			await page.locator(".settings-sidebar .settings-nav-item", { hasText: "인덱싱" }).click();
+			await page.waitForSelector(".settings-sync-row", { timeout: 10_000 });
+			await page.screenshot({ path: join(EVIDENCE, "11-settings-indexing.png") });
+		}
 	}
 	check("no renderer errors", errors.length === 0, errors.slice(0, 3).join(" | "));
 } catch (error) {

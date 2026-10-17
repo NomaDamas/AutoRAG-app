@@ -356,7 +356,7 @@ app.whenReady().then(async () => {
 	// Packaged builds carry the dependency CLIs and the embedding model: tools go first on PATH
 	// before anything reads the environment, and the model/runtime are copied into the AutoRAG home
 	// in the background so a fresh install indexes offline without a ~650 MB download.
-	applyBundledTools({ resourcesPath: process.resourcesPath, env: process.env });
+	applyBundledTools({ resourcesPath: process.resourcesPath, env: process.env, augmentUserPaths: true });
 	void seedAssets({
 		seedDir: join(process.resourcesPath, "seed"),
 		cacheRoot: minSyncModelCacheRoot({ platform: process.platform, home: homedir(), env: process.env }),

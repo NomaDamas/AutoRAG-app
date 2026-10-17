@@ -96,16 +96,24 @@ function parseCount(output: string): number {
 	return 0;
 }
 
-/** KakaoTalk for Mac: the app, its container, a cached login, and readable db files. */
+/** KakaoTalk for Mac: the app, its container, a cached or verifiable login, and readable db files. */
 async function detectKakao(deps: SourceDetectionDeps): Promise<DetectedSource | null> {
 	if (deps.platform !== "darwin") return null;
 	const doctor = await runJsonObject(deps, "lazykatok", ["doctor", "--macos-probe", "--json"]);
 	const adapter = isJsonObject(doctor?.source_adapter) ? doctor.source_adapter : null;
 	const macos = isJsonObject(adapter?.macos) ? adapter.macos : null;
 	if (macos === null || macos.status !== "checked") return null;
-	if (macos.app_installed !== true || macos.container_present !== true || macos.auth_cached !== true) return null;
+	if (macos.app_installed !== true || macos.container_present !== true) return null;
 	if (positiveInt(macos.db_file_count) === 0) return null;
-	return { id: "kakao", facts: {} };
+	let chats: number | undefined;
+	try {
+		const parsed: unknown = JSON.parse(await deps.run("lazykatok", ["source", "chats", "--source", "macos", "--json"]));
+		if (Array.isArray(parsed)) chats = parsed.length;
+	} catch {
+		// Live chat probe failed; if no cached auth exists either, the databases cannot be opened.
+	}
+	if (macos.auth_cached !== true && chats === undefined) return null;
+	return { id: "kakao", facts: chats !== undefined ? { chats } : {} };
 }
 
 async function detectSlack(deps: SourceDetectionDeps): Promise<DetectedSource | null> {
