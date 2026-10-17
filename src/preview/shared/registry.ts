@@ -72,10 +72,11 @@ export function claimedViewerExtensions(): readonly { readonly ext: string; read
  * What a viewer needs from the main process. `stream` viewers load the file
  * through the range-capable protocol (media, fonts, and PDF, which pdf.js
  * fetches page by page); `prefix` viewers render however much text arrives;
- * `whole` viewers parse the entire file; `sniff` reads enough to tell text
- * from binary.
+ * `whole` viewers parse the entire file; `decode` viewers get an image the OS
+ * decoded for them (the raw file when it cannot); `sniff` reads enough to tell
+ * text from binary.
  */
-export type ByteNeed = "stream" | "prefix" | "whole" | "sniff" | "extract";
+export type ByteNeed = "stream" | "prefix" | "whole" | "decode" | "sniff" | "extract";
 
 export function byteNeed(kind: ViewerKind): ByteNeed {
 	switch (kind) {
@@ -91,7 +92,6 @@ export function byteNeed(kind: ViewerKind): ByteNeed {
 		case "rtf":
 			return "prefix";
 		case "tiff":
-		case "heic":
 		case "docx":
 		case "sheet":
 		case "pptx":
@@ -99,6 +99,8 @@ export function byteNeed(kind: ViewerKind): ByteNeed {
 		case "epub":
 		case "hwp":
 			return "whole";
+		case "heic":
+			return "decode";
 		case "iwork":
 			return "extract";
 		case "fallback":
