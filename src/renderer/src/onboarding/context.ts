@@ -9,6 +9,7 @@ import type {
 	ByokProviderId,
 	DetectedModelProvider,
 	DetectedSource,
+	EmbedMode,
 	EmbeddingInfo,
 	FolderCandidate,
 	FolderScan,
@@ -64,6 +65,9 @@ export interface OnboardingCtx {
 	setFolderSelected(path: string, selected: boolean): void;
 	toggleAllFolders(): void;
 	addFolders(): void;
+
+	setEmbedMode(mode: EmbedMode): void;
+	setCloudConsent(consent: boolean): void;
 
 	setSourceOn(id: SourceId, on: boolean): void;
 

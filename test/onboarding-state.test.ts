@@ -6,6 +6,7 @@ import { ONBOARDING_CHANNELS, type DetectedSource, type OnboardingDraft, type So
 import type { AppSettings, ConfigRefreshResult } from "../src/shared/settings-contract";
 import type { OnboardingServiceDeps } from "../src/main/onboarding-service";
 import { createOnboardingService, readOnboardingPending } from "../src/main/onboarding-service";
+import { storeDazziPlanCredential } from "../src/main/dazzi-plan-credential";
 
 const directories: string[] = [];
 
@@ -31,6 +32,8 @@ const DRAFT: OnboardingDraft = {
 	network: false,
 	launchAtLogin: false,
 	folders: [{ path: "/Users/me/Documents", selected: true }],
+	embed: "local",
+	cloudConsent: false,
 	sources: [],
 	plan: "free",
 	planConfirmed: false,
@@ -53,6 +56,8 @@ function makeDeps(userDataDir: string, env: NodeJS.ProcessEnv = {}): OnboardingS
 	return {
 		userDataDir,
 		env,
+		// Pi's agent home is the user data dir here, so a test never reads the developer's own sign-in.
+		agentDir: userDataDir,
 		cwd: "/repo",
 		platform: "darwin",
 		home: "/Users/me",
@@ -163,6 +168,41 @@ describe("createOnboardingService persistence", () => {
 		for (let tick = 0; tick < 20 && service.isIndexing(); tick += 1) await Promise.resolve();
 		expect((await service.indexStatus()).state).toBe("success");
 		expect(service.isIndexing()).toBe(false);
+	});
+
+	it("writes the native Qwen3 embedder on first index and detects the native MinSync model cache", async () => {
+		const directory = await workDir();
+		const nativeSnapshot = join(
+			directory,
+			".cache",
+			"minsync",
+			"models",
+			"models--Qwen--Qwen3-Embedding-0.6B",
+			"snapshots",
+			"97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3",
+		);
+		await mkdir(nativeSnapshot, { recursive: true });
+		await writeFile(join(nativeSnapshot, "model.safetensors"), "weights");
+
+		const service = createOnboardingService({ ...makeDeps(directory), home: directory });
+		const info = await service.embedding();
+		expect(info.profile).toBe("native:Qwen/Qwen3-Embedding-0.6B");
+		expect(info.cached).toBe(true);
+		expect(info.modelBytes).toBeGreaterThan(1_000_000_000);
+
+		await service.startIndexing({
+			folders: ["/Users/me/Documents"],
+			sources: [],
+			plan: "byok",
+			model: null,
+		});
+		for (let tick = 0; tick < 20 && service.isIndexing(); tick += 1) await Promise.resolve();
+
+		const config = JSON.parse(await readFile(join(directory, "config.json"), "utf8")) as {
+			minSync?: { embedder?: Record<string, unknown> };
+		};
+		expect(config.minSync?.embedder).toEqual({ id: "native:Qwen/Qwen3-Embedding-0.6B", dimension: 1024 });
+		service.dispose();
 	});
 
 	it("allows completing onboarding while indexing is still running in the background", async () => {
@@ -316,6 +356,85 @@ describe("createOnboardingService persistence", () => {
 
 		expect(status.state).toBe("running");
 		service.dispose();
+	});
+
+	it("configures Dazzi cloud embedding when indexing with embed=cloud", async () => {
+		const directory = await workDir();
+		const env: NodeJS.ProcessEnv = { AUTORAG_BASE_URL: "https://api.dazziapp.com" };
+		await storeDazziPlanCredential(directory, "dz_cloud_token");
+		const stored = new Map<string, string>();
+		const service = createOnboardingService({
+			...makeDeps(directory, env),
+			credentials: {
+				list: async () => [],
+				set: async (name, secret) => {
+					stored.set(name, secret);
+					env[name] = secret;
+					return [];
+				},
+				remove: async (name) => {
+					stored.delete(name);
+					delete env[name];
+					return [];
+				},
+				load: async () => [],
+			},
+		});
+
+		await service.startIndexing({
+			folders: ["/Users/me/Documents"],
+			embed: "cloud",
+			sources: [],
+			plan: "pro",
+			model: null,
+		});
+		const written = JSON.parse(await readFile(join(directory, "config.json"), "utf8")) as {
+			minSync?: { embedder?: Record<string, unknown> };
+		};
+		expect(written.minSync?.embedder).toEqual({
+			id: "openai:qwen/qwen3-embedding-0.6b",
+			baseUrl: "https://api.dazziapp.com",
+			dimension: 1024,
+			apiKeyEnv: "OPENAI_API_KEY",
+		});
+		expect(env.OPENAI_API_KEY).toBe("dz_cloud_token");
+		expect(stored.get("OPENAI_API_KEY")).toBe("dz_cloud_token");
+		service.dispose();
+
+		// Re-running with embed=local replaces the Dazzi cloud embedder with the local profile.
+		const service2 = createOnboardingService({
+			...makeDeps(directory, env),
+			credentials: {
+				list: async () => [],
+				set: async (name, secret) => {
+					stored.set(name, secret);
+					env[name] = secret;
+					return [];
+				},
+				remove: async (name) => {
+					stored.delete(name);
+					delete env[name];
+					return [];
+				},
+				load: async () => [],
+			},
+		});
+		await service2.startIndexing({
+			folders: ["/Users/me/Documents"],
+			embed: "local",
+			sources: [],
+			plan: "pro",
+			model: null,
+		});
+		service2.dispose();
+		const rewritten = JSON.parse(await readFile(join(directory, "config.json"), "utf8")) as {
+			minSync?: { embedder?: Record<string, unknown> };
+		};
+		expect(rewritten.minSync?.embedder).toEqual({
+			id: "native:Qwen/Qwen3-Embedding-0.6B",
+			dimension: 1024,
+		});
+		expect(stored.has("OPENAI_API_KEY")).toBe(false);
 	});
 });
 

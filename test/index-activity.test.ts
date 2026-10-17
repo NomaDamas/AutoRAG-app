@@ -86,6 +86,19 @@ describe("deriveIndexActivity", () => {
 		expect(view.fraction).toBeCloseTo(0.5 / 3);
 	});
 
+	it("advances the local minsync fraction from MinSync's committed-file count when available", () => {
+		const view = deriveIndexActivity({
+			progress: progress({ pid: 100, phase: "minsync", parsedCounts: { scanned: 100, written: 80, deleted: 0, skipped: 20 } }),
+			journal: null,
+			minsyncCommitted: 40,
+			now: T0,
+			alive,
+			ownPids: [100],
+		});
+		// 40 of 80 written files embedded -> halfway through the minsync→datasources span (0.5 + 0.5 * 0.4 = 0.7).
+		expect(view.fraction).toBeCloseTo(0.7);
+	});
+
 	it("advances past a finished item even when the next one is a silent datasource sync", () => {
 		const journal = record({
 			items: [

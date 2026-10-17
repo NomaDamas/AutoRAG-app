@@ -49,13 +49,9 @@ second datasource or model configuration. The sidebar is searchable and grouped:
   OAuth-only: its chat, catalog, Jev, and rerank traffic reads one credential —
   the `/login` token in Pi's `auth.json` — and rejects any `apiKeyEnv` leaf.
   The app's account sign-in exchanges the same OAuth code for the same
-  long-lived key, so signing in stores that key in the encrypted credential
-  store (for the account API) and mirrors it into `auth.json` as the plan's
-  credential (`dazzi-plan-credential.ts`); sign-out and a server-revoked key
-  remove both. A startup migration (`config-legacy-ids.ts`) rewrites the
-  pre-2.10.2 `autorag` spellings and strips the now-invalid `apiKeyEnv` leaves
-  from an existing config, which the librarian would otherwise refuse to
-  resolve at all.
+  long-lived key, so signing in stores that key in `auth.json` as the plan's
+  credential (`dazzi-plan-credential.ts`), the single place both the app and
+  the librarian read it from; sign-out and a server-revoked key remove it.
 - **AI → 웹 검색** — `webSearch` on/off, provider, and page fetch.
 - **검색** — 인덱싱 (per-source status, refresh cadence, sync now, index
   refresh), 검색 범위 (search paths, exclusions, watch), 문서 읽기
@@ -247,8 +243,13 @@ resumes at the same step.
 - **Folders** are pre-scanned with the indexer's own rules (supported
   extensions, size cap, skipped dependency/code folders) to show real file
   counts and an ETA.
-- **Embedding** is local (`qwen3-embedding-0.6b`); cloud embedding is shown but
-  unavailable, since corpus text is never sent to remote embedders.
+- **Embedding** offers local (`native:Qwen/Qwen3-Embedding-0.6B`) by default and enables
+  Dazzi cloud embedding (`openai:qwen/qwen3-embedding-0.6b` on the Dazzi
+  endpoint) once the user is signed in to Dazzi and gives explicit consent.
+  Choosing cloud embedding places the plan step immediately after embedding and
+  restricts plan selection to Pro; when the signed-in account already holds an
+  active paid subscription (Air/Pro for local, Pro for cloud), the plan step is
+  skipped automatically.
 - **Data sources** list only usable connectors, and every one starts off. The
   probes run in parallel and each row appears the moment its own probe finishes
   (fast ones first); a "checking" line stays under the list until all of them are
@@ -285,9 +286,11 @@ Account and plan are real. The account step signs in through the system
 browser (OAuth 2.0 authorization code + PKCE over a loopback redirect, RFC 8252)
 against the hosted AutoRAG service (`AUTORAG_BASE_URL`, default
 `https://api.dazziapp.com`); no password and no card number is typed into the
-app. The returned API key (`AUTORAG_API_KEY`) lives only in the encrypted
-credential store and `process.env`, exactly like a BYOK key; the renderer sees
-an `AccountStatus` (email, plan, subscription state, weekly credits), never the
+app. The returned API key lives only in Pi's `auth.json` as the `dazzi`
+credential (mode 0600), the single place the librarian reads the hosted plan
+from, so the app and the librarian cannot disagree about being signed in; the
+renderer sees an `AccountStatus` (email, plan, subscription state, weekly
+credits), never the
 key. Air and Pro open the service's hosted checkout in the browser, and the plan
 step continues once the server reports that plan; cancel, refund, and the
 payment method live in the hosted billing portal (Settings › 구독 및 사용량).
@@ -295,8 +298,8 @@ Skipping the account is the BYOK path.
 
 **What signing in changes.** A successful sign-in (onboarding, Settings, or the
 AutoRAG entry in Settings › AI) points the agent at the account's models, per
-role, in the shared `config.json` (the config carries an explicit `baseUrl` and
-`apiKeyEnv`, never the key):
+role, in the shared `config.json` (the config carries an explicit
+`baseUrl`, never the key or an env var name):
 
 | Role | Replaced when the config holds | Kept when it holds |
 |---|---|---|
@@ -317,8 +320,8 @@ does this for every lane except `run-qa-onboarding.mjs`.
 `make onboarding` walks the flow on a disposable profile: every run starts from
 scratch in a temp sandbox holding its own `userData` (via `--user-data-dir`),
 AutoRAG config, home, and workspace, so the real `~/.autorag` and the app's
-support directory are never read or written. The cached embedding model and
-llama runtime are copied in so the first index runs offline. When the app exits
+support directory are never read or written. The cached native MinSync
+embedding model is copied in so the first index runs offline. When the app exits
 the wrapper kills the run's processes and removes the sandbox; a SIGKILL of
 the wrapper is covered by a detached watchdog, and the next `make onboarding`
 sweeps any sandbox whose owner and watchdog both died. The QA lane covers the

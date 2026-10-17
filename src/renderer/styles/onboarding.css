@@ -855,6 +855,16 @@ html[data-appearance="dark"] .onb .source-icon.brand {
 	box-shadow: 0 0 0 2px color-mix(in srgb,var(--onb-blue) 17%,transparent);
 }
 
+.onb .plan-card.disabled {
+	opacity: .45;
+	cursor: not-allowed;
+}
+
+.onb .plan-card.disabled:hover {
+	border-color: var(--onb-border);
+	transform: none;
+}
+
 .onb .radio {
 	position: absolute;
 	top: 15px;
@@ -1501,6 +1511,24 @@ html[data-appearance="dark"] .onb .source-icon.brand {
 	content: "✓";
 	color: var(--onb-green);
 	font-weight: 700;
+}
+
+.onb .consent {
+	display: flex;
+	align-items: flex-start;
+	gap: 8px;
+	margin-top: 13px;
+	padding: 10px;
+	border: 1px solid var(--onb-divider);
+	border-radius: 7px;
+	color: var(--onb-muted);
+	font-size: 10px;
+	line-height: 1.45;
+}
+
+.onb .consent input {
+	accent-color: var(--onb-blue);
+	margin-top: 2px;
 }
 
 /* Text links that sit inside a note or bullet and open the system browser. */

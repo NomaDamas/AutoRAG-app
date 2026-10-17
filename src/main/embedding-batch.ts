@@ -79,10 +79,34 @@ export function smallerBatchSize(current: number): number | null {
 }
 
 /**
- * True when MinSync failed because an embedding request timed out at the
- * gateway (HTTP 504 / "Embedding upstream timed out"). A runtime that never
- * became ready ("health check timed out") is not a batch-size problem.
+ * The three shapes an over-sized or too-slow embedding batch is reported in. Each is
+ * anchored to the sentence MinSync or the gateway actually writes, never to a bare
+ * number or word: a skipped file's name (`invoice-413.pdf`), a byte count, or a port
+ * can contain the same digits, and matching those shrank the batch for nothing and
+ * remembered the smaller size for every later run.
+ *
+ * - an HTTP failure from the embedding endpoint, `<provider> API error 504|413 ...`
+ *   (the 413 body carries "batch-limit" / "Embedding batch exceeds the configured limit"),
+ * - the gateway's own deadline, `Embedding upstream timed out after <n>ms`,
+ * - the native embedder's per-batch deadline, `embedder timeout: [<path>: ]native embedding
+ *   batch exceeded <duration>`; a path may sit between the two parts, so only the prefix and the
+ *   phrase with its duration are required.
  */
-export function isEmbeddingTimeout(message: string | undefined): boolean {
-	return message !== undefined && /\b504\b|gateway timeout|embedding upstream timed out/iu.test(message);
+const EMBEDDING_TIMEOUT_SIGNALS: readonly RegExp[] = [
+	/\bAPI error (?:504|413)\b/u,
+	/\bembedding upstream timed out after \d+ms\b/iu,
+	/\bembedder timeout:.*\bnative embedding batch exceeded \d+(?:\.\d+)?m?s\b/isu,
+];
+
+/**
+ * True when MinSync failed because an embedding batch timed out or exceeded the
+ * batch limit. A runtime that never became ready ("health check timed out") is not a
+ * batch-size problem.
+ *
+ * A list is checked one message at a time: joining messages let a file name in one
+ * combine with a status code in another.
+ */
+export function isEmbeddingTimeout(messages: string | undefined | readonly (string | undefined)[]): boolean {
+	const list = typeof messages === "string" || messages === undefined ? [messages] : messages;
+	return list.some((message) => message !== undefined && EMBEDDING_TIMEOUT_SIGNALS.some((signal) => signal.test(message)));
 }

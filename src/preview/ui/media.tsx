@@ -109,22 +109,27 @@ export function HeicView({ file }: { readonly file: PreviewDocument }): ReactEle
 		if (bytes === null) return;
 		let cancelled = false;
 		let current: string | null = null;
-		import("heic2any")
-			.then((mod) => mod.default({ blob: new Blob([copyBytes(bytes)]), toType: "image/jpeg", quality: 0.82 }))
-			.then((converted) => {
-				if (cancelled) return;
-				const blob = converted instanceof Blob ? converted : converted[0];
-				if (blob === undefined) {
-					setError(t("quickLook.media.heicNoResult"));
-					return;
-				}
-				current = URL.createObjectURL(blob);
-				setUrl(current);
-			})
-			.catch((caught: unknown) => {
-				if (cancelled) return;
-				setError(caught instanceof Error ? caught.message : t("quickLook.media.heicOpenFailed"));
-			});
+		const show = (blob: Blob | undefined): void => {
+			if (cancelled) return;
+			if (blob === undefined) {
+				setError(t("quickLook.media.heicNoResult"));
+				return;
+			}
+			current = URL.createObjectURL(blob);
+			setUrl(current);
+		};
+		// The main process already decoded it with the OS (macOS): a plain JPEG.
+		if (file.mime === "image/jpeg") {
+			show(new Blob([copyBytes(bytes)], { type: file.mime }));
+		} else {
+			import("heic2any")
+				.then((mod) => mod.default({ blob: new Blob([copyBytes(bytes)]), toType: "image/jpeg", quality: 0.82 }))
+				.then((converted) => show(converted instanceof Blob ? converted : converted[0]))
+				.catch((caught: unknown) => {
+					if (cancelled) return;
+					setError(caught instanceof Error ? caught.message : t("quickLook.media.heicOpenFailed"));
+				});
+		}
 		return () => {
 			cancelled = true;
 			if (current !== null) URL.revokeObjectURL(current);

@@ -50,7 +50,7 @@ const serverUrl = `http://127.0.0.1:${server.address().port}`;
 writeFileSync(configPath, `${JSON.stringify({
 	searchPaths: [join(workspace, "docs")],
 	workspacePath: workspace,
-	minSync: { enabled: true, embedder: { id: "native:Qwen/Qwen3-Embedding-0.6B", dimension: 1024 } },
+	minSync: { enabled: true, embedder: { profile: "qwen3-embedding-0.6b", dimension: 1024 } },
 	jikji: false,
 	unknownTopLevel: { keep: true },
 	datasources: {
@@ -207,13 +207,20 @@ try {
 	// --- Embedding: plan + apply propagates to datasources ---------------
 	await page.locator(".settings-trigger[aria-haspopup='dialog']").click();
 	await page.waitForSelector(".settings-modal input[name='embedding-profile']");
-	await page.locator(".settings-modal .settings-list-row", { hasText: "Dazzi runtime" }).click();
+	await page.locator(".settings-modal .settings-list-row", { hasText: "Qwen3 Embedding 0.6B" }).click();
 	await page.locator(".settings-modal button", { hasText: "Review Plan" }).click();
 	const planText = await waitFor(async () => { const text = await page.locator(".settings-modal").innerText(); return text.includes("mail") ? text : null; });
 	check("embedding plan lists per-datasource adoption", planText !== null && planText.includes("mail") && planText.includes("slack"), planText ?? "");
 	await page.screenshot({ path: join(EVIDENCE, "05-embedding-plan.png") });
 	await page.locator(".settings-modal button", { hasText: "Apply" }).click();
-	const applied = await waitFor(() => readConfig().minSync?.embedder?.profile === "qwen3-embedding-0.6b" ? readConfig() : null, 30000);
+	const applied = await waitFor(
+		() =>
+			readConfig().minSync?.embedder?.id === "native:Qwen/Qwen3-Embedding-0.6B" &&
+			readConfig().datasources?.mail?.connector?.env?.MAILCRAWL_EMBEDDER_PROVIDER === "native"
+				? readConfig()
+				: null,
+		30000,
+	);
 	check("embedding apply writes minSync.embedder", applied !== null, JSON.stringify(readConfig().minSync));
 	const mailEnv = readConfig().datasources.mail.connector.env;
 	check("embedding change propagates to the mailcrawl CLI env", mailEnv.MAILCRAWL_EMBEDDER_PROVIDER === "native", JSON.stringify(mailEnv));

@@ -1,6 +1,8 @@
 import { existsSync } from "node:fs";
 import { AutoRAGLite, type AutoRAGRefreshResult, type RefreshMethod } from "@autorag/librarian";
 import { readRawConfigObject, resolveConfigPath, resolveConfigReadOnly, type CliConfig } from "@autorag/librarian/core";
+import { getAgentDir } from "@earendil-works/pi-coding-agent";
+import { readDazziPlanCredential } from "./dazzi-plan-credential";
 import type { ConfigRefreshDiagnostic, ConfigRefreshResult } from "../shared/settings-contract";
 import { APP_INDEXING_CAPABILITIES, applyAppIndexing, readAppIndexing } from "./app-indexing";
 import {
@@ -96,6 +98,19 @@ export async function refreshAutoragIndex(
 			};
 		}
 	}
+	if (
+		selected.includes("minsync") &&
+		effective.minSync?.embedder?.id === "openai:qwen/qwen3-embedding-0.6b" &&
+		effective.minSync.embedder.apiKeyEnv === "OPENAI_API_KEY" &&
+		(typeof process.env.OPENAI_API_KEY !== "string" || process.env.OPENAI_API_KEY.length === 0)
+	) {
+		const bridged =
+			deps.env.OPENAI_API_KEY ||
+			(await readDazziPlanCredential(getAgentDir()));
+		if (typeof bridged === "string" && bridged.length > 0) {
+			process.env.OPENAI_API_KEY = bridged;
+		}
+	}
 	try {
 		// A file the OS keeps failing to read is left out of this run, not allowed to abort every other document.
 		let recovered: { retries: number; quarantined: readonly string[]; code: string | null } = { retries: 0, quarantined: [], code: null };
@@ -151,12 +166,17 @@ export async function refreshAutoragIndex(
 			// (`ok: true`, `minsync-file-skipped`) when a later batch times out mid-run;
 			// either way, halving the batch and re-running `syncMinSync` retries the skipped files.
 			const minsyncTimedOut = (): boolean =>
-				isEmbeddingTimeout([minsyncReason, ...minsyncDiagnostics.map((diagnostic) => diagnostic.message)].join(" "));
+				isEmbeddingTimeout([minsyncReason, ...minsyncDiagnostics.map((diagnostic) => diagnostic.message)]);
 			while (minsyncTimedOut()) {
 				const next = smallerBatchSize(batch);
 				if (next === null) break;
 				batch = next;
-				const retry = await new AutoRAGLite({ ...effective, minSync: { ...effective.minSync, embedder: { ...embedder, batchSize: batch } } }).syncMinSync();
+				const { value: retry } = await runWithStallRetry(
+					() => new AutoRAGLite({ ...effective, minSync: { ...effective.minSync, embedder: { ...embedder, batchSize: batch } } }).syncMinSync(),
+					(outcome) => outcome?.ok !== false,
+					createMinSyncWatchdog(),
+					EMBEDDING_STALL_RETRIES,
+				);
 				minsyncOk = retry?.ok;
 				minsyncReason = retry?.reason;
 				const baseDiagnostics: ConfigRefreshDiagnostic[] =

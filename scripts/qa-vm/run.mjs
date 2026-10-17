@@ -99,20 +99,19 @@ const hostCommand = (job) =>
 		: { command: "bun", args: [join("scripts", "manual-qa", "run-all.mjs"), ...job.lanes] };
 
 /**
- * Copy the host's embedding model and runtime into the guest's `~/.autorag`.
- * Without them a real first index fails ("Embedding runtime assets are
- * unavailable"). Absent on the host, nothing is copied and the lane reports it.
+ * Copy the host's native MinSync embedding model cache into the guest's
+ * `~/.cache/minsync/models`. Without it a real first index downloads ~1.2 GB
+ * from Hugging Face inside the guest.
  */
 async function pushEmbeddingAssets(ip, signal) {
-	const home = process.env.AUTORAG_HOME?.trim() || join(homedir(), ".autorag");
-	const present = ["models", "runtime"].filter((name) => existsSync(join(home, name)));
-	if (present.length === 0) {
-		log(`no embedding assets under ${home}; a lane that indexes for real will fail in the guest`);
+	const minsyncModels = process.env.FASTEMBED_CACHE_DIR?.trim() || join(homedir(), ".cache", "minsync", "models");
+	if (!existsSync(minsyncModels)) {
+		log(`no native embedding cache at ${minsyncModels}; the guest will download it on first index`);
 		return;
 	}
-	log(`copying embedding assets (${present.join(", ")}) into the guest`);
-	await sshOk(ip, "mkdir -p \"$HOME/.autorag\"");
-	for (const name of present) await pushTree(ip, join(home, name), `.autorag/${name}`, { signal });
+	log("copying native embedding model cache (.cache/minsync/models) into the guest");
+	await sshOk(ip, "mkdir -p \"$HOME/.cache/minsync/models\"");
+	await pushTree(ip, minsyncModels, ".cache/minsync/models", { signal });
 }
 
 /**

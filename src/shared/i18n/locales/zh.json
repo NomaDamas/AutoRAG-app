@@ -439,8 +439,7 @@
       "agreeTerms": "服务条款",
       "agreePrivacy": "隐私政策",
       "agreeUse": "可接受使用政策",
-      "planLabel": "{{plan}} 套餐",
-      "signedInEnv": "正在使用环境变量中的 API 密钥"
+      "planLabel": "{{plan}} 套餐"
     },
     "permissions": {
       "eyebrow": "权限",
@@ -514,12 +513,13 @@
       "bulletGpuMac": "使用 Apple Silicon GPU",
       "bulletGpuWindows": "使用 GPU 加速（如可用）",
       "bulletPower": "笔记本电脑建议连接电源",
-      "cloudBadge": "准备中",
+      "cloudBadge": "仅限 Pro",
       "cloudTitle": "在云端",
       "cloudLead": "处理更快，但你选择的文档正文会被发送。",
       "cloudBulletPerf": "对 Mac 性能影响较小",
       "cloudBulletNoStore": "Dazzi 不保存请求内容，仅发送至零数据保留（ZDR）服务商",
-      "privacyTable": "隐私政策中的模型数据表"
+      "privacyTable": "隐私政策中的模型数据表",
+      "cloudConsent": "我同意将所选文件夹中的文档正文发送至 Dazzi 服务器进行嵌入处理。处理后不会保留。"
     },
     "sources": {
       "eyebrow": "数据源",
@@ -555,6 +555,9 @@
       "title": "你打算如何使用？",
       "titleReady": "套餐已就绪",
       "lead": "套餐决定 AI 用量和嵌入位置。可稍后在设置中更改。",
+      "leadCloud": "已选择云端嵌入。可使用 Pro 套餐继续。",
+      "leadCloudReady": "可以使用云端嵌入。请继续下一步。",
+      "cloudCallout": "云端嵌入仅限 Pro 套餐使用。",
       "badgeRecommended": "推荐",
       "badgeTrial": "试用进行中",
       "badgeSubscribed": "已订阅",
@@ -602,7 +605,7 @@
           "chip": "问题将发送到 Dazzi 模型",
           "training": "输入与输出不用于模型训练",
           "feature": {
-            "a": "在这台 Mac 上本地嵌入（内容不会被发送）",
+            "a": "通过云端嵌入更快完成",
             "b": "托管 AI 模型 · 最高用量",
             "c": "包含 Air 的全部功能"
           }
@@ -665,6 +668,7 @@
       "waitingNote": "正在准备首次索引。",
       "running": "{{phase}}…",
       "detailParsing": "正在读取文档",
+      "detailEmbedding": "正在构建向量索引",
       "detailFinalizing": "正在优化搜索索引",
       "phaseLabel": {
         "parsed": "正在读取文档",
@@ -1362,7 +1366,6 @@
       "offline": "无法连接服务器，显示最后确认的信息。",
       "signOut": "退出登录",
       "signIn": "登录",
-      "hintEnv": "已通过环境变量 AUTORAG_API_KEY 登录，无法在应用内退出登录。",
       "hintSignedIn": "删除存储在此 Mac 上的密钥。可在 Dazzi 网站的 API 密钥页面吊销该密钥。",
       "hintSignedOut": "浏览器将打开，确认后会回到本应用。",
       "signInBrowser": "在浏览器中登录",
@@ -1475,7 +1478,6 @@
         "notSignedIn": "未登录。"
       },
       "disconnect": {
-        "envLocked": "已通过环境变量 AUTORAG_API_KEY 登录，无法在应用内退出登录。请自行删除该环境变量。",
         "title": "要断开 {{name}} 吗？",
         "body": "删除已保存的凭据并将其从列表中移除。使用该服务的角色可能需要选择新模型。",
         "action": "断开连接"

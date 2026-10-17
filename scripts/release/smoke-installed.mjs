@@ -7,8 +7,8 @@
  *   1. install: mount the .dmg and copy the app, or run the NSIS installer silently
  *   2. run scripts/release/verify-bundle.mjs against the INSTALLED tools directory
  *   3. launch the installed app on a throwaway profile and check, from inside
- *      its main process, that the bundled tools lead PATH and that the embedding
- *      model was seeded into the AutoRAG home
+ *      its main process, that the bundled tools lead PATH and that the native
+ *      embedding model was seeded into the MinSync model cache
  *   4. uninstall
  * The profile, HOME and AUTORAG_HOME are temporary; nothing of the real user is read.
  */
@@ -38,8 +38,8 @@ log(`installer ${installer}`);
 
 /**
  * Install budget: the time from running the installer to a usable app, download excluded. The first
- * number is the installer itself; the second is how long after launch the embedding model and runtime
- * are in place (the app copies them in the background and can already be used meanwhile).
+ * number is the installer itself; the second is how long after launch the native embedding model
+ * is in place (the app copies it in the background and can already be used meanwhile).
  */
 const BUDGET_SECONDS = Number(process.env.AUTORAG_INSTALL_BUDGET_SECONDS ?? 300);
 const installStarted = Date.now();
@@ -119,6 +119,7 @@ try {
 	// 3. Launch the installed app on a throwaway profile.
 	const home = join(work, "home");
 	const autoragHome = join(home, ".autorag");
+	const localAppData = join(home, "AppData", "Local");
 	const profile = join(work, "profile");
 	mkdirSync(home, { recursive: true });
 	const launched = Date.now();
@@ -129,6 +130,7 @@ try {
 			...process.env,
 			HOME: home,
 			USERPROFILE: home,
+			LOCALAPPDATA: localAppData,
 			AUTORAG_HOME: autoragHome,
 			AUTORAG_SKIP_ONBOARDING: "1",
 			// A PATH without the developer's toolchain: the bundled tools must be what the app finds.
@@ -161,25 +163,21 @@ try {
 		expect(existsSync(first) && real(first) === real(join(resources, "tools", "bin")), "bundled tools lead PATH", first);
 
 		// The seed copy runs in the background after launch.
-		const model = join(autoragHome, "models", "Qwen3-Embedding-0.6B-Q8_0.gguf");
+		const cacheRoot = win ? join(localAppData, "minsync", "models") : join(home, ".cache", "minsync", "models");
+		const model = join(
+			cacheRoot,
+			"models--Qwen--Qwen3-Embedding-0.6B",
+			"snapshots",
+			"97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3",
+			"model.safetensors",
+		);
 		const deadline = Date.now() + 180_000;
 		while (!existsSync(model) && Date.now() < deadline) await new Promise((r) => setTimeout(r, 1000));
-		expect(existsSync(model), "embedding model seeded into the AutoRAG home", model);
+		expect(existsSync(model), "native embedding model seeded into the MinSync cache", model);
 		const seedSeconds = (Date.now() - launched) / 1000;
 		const totalSeconds = installSeconds + seedSeconds;
 		process.stdout.write(`time install=${installSeconds.toFixed(0)}s  launch->model seeded=${seedSeconds.toFixed(0)}s  total=${totalSeconds.toFixed(0)}s  budget=${BUDGET_SECONDS}s\n`);
 		expect(totalSeconds <= BUDGET_SECONDS, `install + first-launch seeding within ${BUDGET_SECONDS}s`, `${totalSeconds.toFixed(0)}s`);
-		// The runtime is copied after the model, so wait for it as well. macOS ships it extracted and signed
-		// (with the librarian's marker, renamed into place once complete), Windows the pinned archive.
-		const runtimeDir = join(autoragHome, "runtime");
-		const runtimeReady = () => {
-			const names = existsSync(runtimeDir) ? readdirSync(runtimeDir).filter((name) => name.startsWith("llama-")) : [];
-			return win
-				? names.some((name) => name.endsWith(".zip"))
-				: names.some((name) => name.endsWith(".extracted") && existsSync(join(runtimeDir, name, ".autorag-archive-sha256")) && existsSync(join(runtimeDir, name, "llama-b10951", "llama-server")));
-		};
-		while (!runtimeReady() && Date.now() < deadline) await new Promise((r) => setTimeout(r, 1000));
-		expect(runtimeReady(), "llama.cpp runtime seeded", existsSync(runtimeDir) ? readdirSync(runtimeDir).join(", ") : "no runtime dir");
 		writeFileSync(join(outDir, "installed-app.json"), `${JSON.stringify(inside, null, 2)}\n`);
 	} finally {
 		await app.close().catch(() => undefined);

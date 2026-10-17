@@ -3,7 +3,7 @@ import { access, open, readdir, readFile, stat } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { isAbsolute, join, sep } from "node:path";
 import { applyBundledTools } from "./bundled-tools";
-import { seedAssets } from "./seed-assets";
+import { minSyncModelCacheRoot, seedAssets } from "./seed-assets";
 import {
 	app,
 	BrowserWindow,
@@ -30,7 +30,6 @@ import { attachQuickLook, PREVIEW_PRIVILEGED_SCHEME, registerPreviewProtocol, re
 import { createDefaultParserRegistry, DEFAULT_MAX_SOURCE_BYTES, writeDefaultConfig } from "@autorag/librarian";
 import { readRawConfigObject, resolveConfigPath, writeConfigObject } from "@autorag/librarian/core";
 import { DEFAULT_CODE_FOLDER_NAMES, isJsonObject, SETTINGS_CHANNELS } from "../shared/settings-contract";
-import { migrateLegacyProviderIds } from "./config-legacy-ids";
 import { LOCAL_REFRESH_METHODS } from "./index-refresh";
 import { INDEX_ACTIVITY_CHANNELS } from "../shared/index-activity-contract";
 import { createIndexActivityService } from "./index-activity";
@@ -118,14 +117,6 @@ function ensureAppIndexingMetadata(configPath: string): void {
 async function ensureAutoRAGConfig(): Promise<void> {
 	const configPath = autoragConfigPath();
 	if (await access(configPath).then(() => true, () => false)) {
-		// Before anything resolves the config: the librarian's 2.10.2 rename
-		// turned `jev.backend: "autorag"` into a validation error, so a config
-		// this app wrote earlier must be rewritten first.
-		try {
-			migrateLegacyProviderIds(configPath);
-		} catch (error) {
-			console.error("AutoRAG config legacy provider migration failed", error);
-		}
 		ensureAppIndexingMetadata(configPath);
 		return;
 	}
@@ -368,7 +359,7 @@ app.whenReady().then(async () => {
 	applyBundledTools({ resourcesPath: process.resourcesPath, env: process.env, augmentUserPaths: true });
 	void seedAssets({
 		seedDir: join(process.resourcesPath, "seed"),
-		autoragHome: process.env.AUTORAG_HOME?.trim() || join(homedir(), ".autorag"),
+		cacheRoot: minSyncModelCacheRoot({ platform: process.platform, home: homedir(), env: process.env }),
 	}).then(
 		(outcome) => {
 			if (outcome.kind === "done" && outcome.copied.length > 0) console.log(`[autorag] seeded ${outcome.copied.join(", ")}`);
@@ -403,6 +394,14 @@ app.whenReady().then(async () => {
 					pictures: knownFolder("pictures", join(home, "Pictures")),
 				}
 			: undefined;
+	// Stored provider keys reach process.env before the fs worker or any agent
+	// resolves, so the worker, LLM, embedding, and reranker all see the same credential.
+	const credentials = createProviderCredentialService({
+		filePath: join(app.getPath("userData"), "credentials.enc.json"),
+		safeStorage,
+		env: process.env,
+	});
+	await credentials.load();
 	// Listings, watches, Finder metadata, places, dupey scans, and the index
 	// badges run in the fs worker, off this event loop; a native fault there
 	// ends only that process (FS roadmap #101). Main keeps the Electron-only
@@ -488,13 +487,6 @@ app.whenReady().then(async () => {
 		void workerHost.client.call("setLanguage", [language]).catch((error: unknown) => console.error("[fs-worker] language:", error));
 		sendToAllWindows(LANGUAGE_CHANNELS.changed, language);
 	};
-	// Stored provider keys reach process.env before any agent resolves, so the
-	// LLM/embedding/reranker all see the same credential.
-	const credentials = createProviderCredentialService({
-		filePath: join(app.getPath("userData"), "credentials.enc.json"),
-		safeStorage,
-		env: process.env,
-	});
 	const osMenu = createOsMenuIntegration({
 		platform: process.platform,
 		// os.homedir() honors $HOME (and USERPROFILE), so QA and tests can aim the install at a throwaway home.
@@ -507,7 +499,6 @@ app.whenReady().then(async () => {
 			await execFileAsync(command, [...args]);
 		},
 	});
-	await credentials.load();
 	const autoRagConfig = createAutoRagConfigService({ env: process.env, cwd: process.cwd() });
 	const providerAuth = createProviderAuthService({
 		send: (event) => sendToMainWindow(SETTINGS_CHANNELS.providerLoginEvent, event),

@@ -38,6 +38,18 @@ describe("computeIndexingProgress", () => {
 		expect(finalizing.progress).toBe(99);
 	});
 
+	it("measures the minsync phase from embedded/total when MinSync's resume log reports committed files", () => {
+		const half = computeIndexingProgress({
+			state: "running",
+			phase: "minsync",
+			processedFiles: 100,
+			embeddedFiles: 50,
+			totalFiles: 100,
+			phaseElapsedMs: 5_000,
+		});
+		expect(half.progress).toBe(72.5);
+	});
+
 	it("never reaches 100 before success and drops the estimate on failure", () => {
 		const stuck = computeIndexingProgress({ state: "running", phase: "minsync", processedFiles: 85, totalFiles: 85, phaseElapsedMs: 600_000 });
 		expect(stuck.progress).toBe(95);
