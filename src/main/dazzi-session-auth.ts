@@ -1,5 +1,6 @@
 import { join } from "node:path";
 import { registerDazziProvider } from "@autorag/librarian";
+import { getModel } from "@earendil-works/pi-ai/compat";
 import { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { AUTORAG_PROVIDER_ID } from "../shared/account-contract";
 
@@ -67,4 +68,22 @@ export async function preferPlanOAuth<T extends SessionModelAuth>(resolved: T, o
 	const { apiKey: _apiKey, providerApiKeys, ...rest } = resolved;
 	const { [AUTORAG_PROVIDER_ID]: _planKey, ...otherKeys } = providerApiKeys ?? {};
 	return { ...rest, ...(Object.keys(otherKeys).length > 0 ? { providerApiKeys: otherKeys } : {}) } as T;
+}
+
+/**
+ * The Dazzi `/v1/models` catalog omits `thinkingLevelMap` for its OpenRouter-backed
+ * model ids (e.g. `z-ai/glm-5.3-flash`, `anthropic/claude-haiku-5.5`). Without it,
+ * Pi's `clampThinkingLevel(model, "off")` keeps `"off"` and `openai-responses`
+ * sends `reasoning: { effort: "none" }`, which mandatory-reasoning endpoints
+ * reject with HTTP 400 (`Reasoning is mandatory for this endpoint and cannot be
+ * disabled`), breaking the Fast Answer phase. Inherit the upstream OpenRouter
+ * `thinkingLevelMap` when present so `"off"` clamps to `"low"` for those models.
+ */
+export function applyDazziThinkingLevels<
+	T extends { readonly provider: string; readonly id: string; readonly thinkingLevelMap?: unknown },
+>(model: T): T {
+	if (model.provider !== AUTORAG_PROVIDER_ID || model.thinkingLevelMap !== undefined) return model;
+	const upstream = getModel("openrouter", model.id as never);
+	if (upstream?.thinkingLevelMap === undefined) return model;
+	return { ...model, thinkingLevelMap: upstream.thinkingLevelMap };
 }

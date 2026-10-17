@@ -1,8 +1,10 @@
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { Model } from "@earendil-works/pi-ai";
+import { clampThinkingLevel } from "@earendil-works/pi-ai/compat";
 import { afterEach, describe, expect, it, vi, type Mock } from "vitest";
-import { openPlanRuntime, preferPlanOAuth, type PlanRuntime } from "../src/main/dazzi-session-auth";
+import { applyDazziThinkingLevels, openPlanRuntime, preferPlanOAuth, type PlanRuntime } from "../src/main/dazzi-session-auth";
 
 const MODEL = { provider: "dazzi", id: "deepseek/deepseek-v4.1-flash" };
 
@@ -117,5 +119,33 @@ describe("openPlanRuntime", () => {
 		const result = await preferPlanOAuth(resolved, async () => real);
 		expect(result.apiKey).toBeUndefined();
 		expect(real.hasConfiguredAuth("dazzi")).toBe(true);
+	});
+});
+
+describe("applyDazziThinkingLevels", () => {
+	it("attaches the upstream thinkingLevelMap so mandatory-reasoning Dazzi models clamp 'off' to 'low'", () => {
+		const glm: Model<"openai-responses"> = {
+			type: "chat" as const,
+			provider: "dazzi",
+			id: "z-ai/glm-5.3-flash",
+			name: "GLM 5.3 Flash",
+			api: "openai-responses" as const,
+			baseUrl: "https://api.dazziapp.com/v1",
+			reasoning: true,
+			input: ["text" as const],
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+			contextWindow: 1048576,
+			maxTokens: 32000,
+		};
+		const enriched = applyDazziThinkingLevels(glm);
+		expect(enriched.thinkingLevelMap).toMatchObject({ off: null, low: "low", high: "high" });
+		expect(clampThinkingLevel(enriched, "off")).toBe("low");
+	});
+
+	it("leaves non-dazzi models and models with an explicit thinkingLevelMap untouched", () => {
+		const other = { provider: "openrouter", id: "z-ai/glm-5.3-flash" };
+		expect(applyDazziThinkingLevels(other)).toBe(other);
+		const explicit = { provider: "dazzi", id: "z-ai/glm-5.3-flash", thinkingLevelMap: { off: "none" } };
+		expect(applyDazziThinkingLevels(explicit)).toBe(explicit);
 	});
 });

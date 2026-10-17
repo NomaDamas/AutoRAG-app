@@ -215,7 +215,9 @@
       "emptyTitle": "回答の根拠が\nここに表示されます。",
       "excerpts": "根拠の抜粋",
       "showInFinder": "Finderで表示",
-      "openInBrowser": "ブラウザーで開く"
+      "openInBrowser": "ブラウザーで開く",
+      "evidenceFolder": "根拠フォルダ",
+      "evidenceFolderTooltip": "この会話の根拠ファイルを一時フォルダタブで開く"
     }
   },
   "aiSearch": {
@@ -299,7 +301,10 @@
   "confirm": {
     "emptyTrashTitle": "ゴミ箱を空にする",
     "emptyTrashMessage": "ゴミ箱内のすべての項目が完全に削除されます。この操作は取り消せません。",
-    "emptyTrashAction": "空にする"
+    "emptyTrashAction": "空にする",
+    "closeEvidenceFolderTitle": "根拠フォルダを閉じる",
+    "closeEvidenceFolderMessage": "このタブを閉じると一時的な根拠フォルダが削除・整理されます。元のファイルはそのまま残ります。本当に閉じますか？",
+    "closeEvidenceFolderAction": "閉じる"
   },
   "settings": {
     "title": "設定",

@@ -215,7 +215,9 @@
       "emptyTitle": "Answer evidence\nwill appear here.",
       "excerpts": "Evidence excerpts",
       "showInFinder": "Show in Finder",
-      "openInBrowser": "Open in browser"
+      "openInBrowser": "Open in browser",
+      "evidenceFolder": "Evidence Folder",
+      "evidenceFolderTooltip": "Open this session's evidence files in a temporary folder tab"
     }
   },
   "aiSearch": {
@@ -299,7 +301,10 @@
   "confirm": {
     "emptyTrashTitle": "Empty Trash",
     "emptyTrashMessage": "All items in the Trash will be permanently deleted. This cannot be undone.",
-    "emptyTrashAction": "Empty"
+    "emptyTrashAction": "Empty",
+    "closeEvidenceFolderTitle": "Close Evidence Folder",
+    "closeEvidenceFolderMessage": "Closing this tab will delete and clean up the temporary Evidence Folder. Your original files will stay untouched. Are you sure you want to close it?",
+    "closeEvidenceFolderAction": "Close"
   },
   "settings": {
     "title": "Settings",

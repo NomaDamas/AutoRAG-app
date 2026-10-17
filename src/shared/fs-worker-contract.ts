@@ -34,6 +34,8 @@ export type FsWorkerOp =
 	| "createFolder"
 	| "createFile"
 	| "trash"
+	| "createEvidenceFolder"
+	| "removeEvidenceFolder"
 	| "restoreFromTrash"
 	| "emptyTrash"
 	| "reveal"

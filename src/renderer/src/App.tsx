@@ -27,6 +27,7 @@ import { TagCatalogContext, useTagCatalogLoader } from "./hooks/useTagCatalog";
 import { createControllerStore, usePaneController } from "./hooks/usePaneControllers";
 import { attachmentsFromDrop, isAttachmentDrag } from "./state/attachments";
 import { toolbarShareControl, type FileActionTarget } from "./state/file-actions";
+import { sessionEvidencePaths } from "./state/evidence";
 import { watchSetFor } from "./state/live";
 import { loadListColumns, saveListColumns, type ListColumnsState } from "./state/list-columns";
 import { basename, dirname } from "./state/paths";
@@ -268,16 +269,42 @@ export function App(): ReactElement {
 		};
 	}, [source]);
 
+	// Temporary Evidence Folders owned by open tabs: when a tab closes or
+	// navigates away from its Evidence Folder, delete the temporary folder from disk.
+	const activeEvidenceFoldersRef = useRef<Set<string>>(new Set());
+	const evidenceFoldersKey = tabs
+		.map((tab) => tab.evidenceFolder ?? "")
+		.filter((folder) => folder !== "")
+		.join("\u0000");
+	useEffect(() => {
+		const current = new Set(evidenceFoldersKey === "" ? [] : evidenceFoldersKey.split("\u0000"));
+		for (const previous of activeEvidenceFoldersRef.current) {
+			if (!current.has(previous)) {
+				directoryData.store.drop([previous]);
+				void source.removeEvidenceFolder(previous).catch((error: unknown) => console.error(error));
+			}
+		}
+		activeEvidenceFoldersRef.current = current;
+	}, [source, directoryData, evidenceFoldersKey]);
 	/* --------------------------------------------------------- evidence state */
 	// The focused AI Search tab publishes its answer's citations; the inspector
 	// shows them as a full-height Evidence view while that tab is focused.
 	const [evidence, setEvidence] = useState<readonly CitationEvidence[]>([]);
+	const evidenceRef = useRef<readonly CitationEvidence[]>(evidence);
+	evidenceRef.current = evidence;
+	const [sessionEvidence, setSessionEvidence] = useState<readonly CitationEvidence[]>([]);
 	const [selectedEvidence, setSelectedEvidence] = useState<number | null>(null);
 
-	const publishEvidence = useCallback((items: readonly CitationEvidence[]) => {
-		setEvidence(items);
-		setSelectedEvidence((current) => (current !== null && items.some((item) => item.number === current) ? current : null));
-	}, []);
+	const publishEvidence = useCallback(
+		(items: readonly CitationEvidence[], sessionItems?: readonly CitationEvidence[]) => {
+			evidenceRef.current = items;
+			setEvidence(items);
+			setSessionEvidence(sessionItems ?? items);
+			setSelectedEvidence((current) => (current !== null && items.some((item) => item.number === current) ? current : null));
+		},
+		[],
+	);
+	const localEvidencePaths = useMemo(() => sessionEvidencePaths(sessionEvidence), [sessionEvidence]);
 
 	/**
 	 * Work for the AI Search tab that is (about to be) focused: the tab switch
@@ -481,14 +508,14 @@ export function App(): ReactElement {
 		(number: number) => {
 			// A citation chip with no evidence entry must never open a different
 			// result: the panel would silently show unrelated evidence.
-			if (!evidence.some((item) => item.number === number)) {
+			if (!evidenceRef.current.some((item) => item.number === number)) {
 				setToast(t("finderComponents.evidenceNotFound", { number }));
 				return;
 			}
 			setSelectedEvidence(number);
 			setInspectorVisible(true);
 		},
-		[evidence],
+		[t],
 	);
 
 	const evidenceSelectedNumber = evidence.find((item) => item.number === selectedEvidence)?.number ?? evidence[0]?.number ?? 1;
@@ -733,6 +760,8 @@ export function App(): ReactElement {
 								onRevealPath={(target) => finder?.revealEvidence(target)}
 								onToast={setToast}
 								imageActions={imageActions}
+								evidenceFolderCount={localEvidencePaths.length}
+								onOpenEvidenceFolder={() => finder?.openEvidenceFolder(localEvidencePaths)}
 							/>
 						) : null}
 					</div>
@@ -770,6 +799,17 @@ export function App(): ReactElement {
 					danger
 					onConfirm={() => finder?.confirmEmptyTrash()}
 					onCancel={() => finder?.cancelEmptyTrash()}
+				/>
+			) : null}
+			{finder?.closeEvidenceFolderConfirm === true ? (
+				<ConfirmDialog
+					title={t("confirm.closeEvidenceFolderTitle")}
+					message={t("confirm.closeEvidenceFolderMessage")}
+					confirmLabel={t("confirm.closeEvidenceFolderAction")}
+					cancelLabel={t("common.cancel")}
+					danger
+					onConfirm={() => finder?.confirmCloseEvidenceFolder()}
+					onCancel={() => finder?.cancelCloseEvidenceFolder()}
 				/>
 			) : null}
 		</div>

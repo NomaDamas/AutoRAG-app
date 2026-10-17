@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AI_SEARCH_PATH, navigateTab, openTabAt, SETTINGS_PATH } from "../src/renderer/src/state/tabs";
+import { AI_SEARCH_PATH, navigateTab, openEvidenceFolderTab, openTabAt, SETTINGS_PATH } from "../src/renderer/src/state/tabs";
 import {
 	canCloseWorkspaceTab,
 	canDropTab,
@@ -361,5 +361,27 @@ describe("reopening closed tabs", () => {
 		}
 		expect(ws.closedTabs).toHaveLength(CLOSED_TAB_LIMIT);
 		expect(reopenClosedTab(ws).panes[0]?.tabs.at(-1)?.path).toBe(`/t${CLOSED_TAB_LIMIT + 4}`);
+	});
+});
+
+describe("Evidence Folder workspace lifecycle", () => {
+	it("does not remember a closed Evidence Folder tab in closedTabs (⇧⌘T)", () => {
+		const evidenceRoot = "/tmp/dazzi-evidence-abc/Evidence Folder";
+		let ws = createWorkspace("/a");
+		ws = updatePaneTabs(ws, 1, (state) => openEvidenceFolderTab(state, evidenceRoot));
+		const evTabId = tabId(ws, 1, evidenceRoot);
+		ws = closeWorkspaceTab(ws, evTabId);
+		expect(paths(ws, 1)).toEqual(["/a"]);
+		expect(ws.closedTabs).toEqual([]);
+		expect(reopenClosedTab(ws)).toBe(ws);
+	});
+
+	it("preserves evidenceFolder ownership when an Evidence Folder tab moves between split panes", () => {
+		const evidenceRoot = "/tmp/dazzi-evidence-abc/Evidence Folder";
+		let ws = createWorkspace("/a");
+		ws = updatePaneTabs(ws, 1, (state) => openEvidenceFolderTab(state, evidenceRoot));
+		const evTabId = tabId(ws, 1, evidenceRoot);
+		ws = moveTab(ws, evTabId, { kind: "split", paneId: 1, edge: "right" });
+		expect(paneOf(ws, 2).tabs[0]?.evidenceFolder).toBe(evidenceRoot);
 	});
 });

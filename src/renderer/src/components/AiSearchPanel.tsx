@@ -24,7 +24,13 @@ import { summaryRequest, type SummaryLanguage } from "../state/ai-summary";
 import { answerViewState } from "../state/answer-view";
 import { attachmentsFromDrop, isAttachmentDrag, mergeAttachments } from "../state/attachments";
 import { ImageRow, lineImages, type ImageActions } from "./AnswerImage";
-import { evidenceKind, unresolvedCitationNumbers } from "../state/evidence";
+import {
+	collectSessionEvidence,
+	evidenceKind,
+	resolveActiveEvidence,
+	unresolvedCitationNumbers,
+	type EvidenceSelectionSource,
+} from "../state/evidence";
 import { groupChatHistory, HISTORY_BUCKET_KEYS, historyEmptyText } from "../state/history";
 import { cn } from "../lib/cn";
 import { enterKeyLabel, formatShortcut } from "../lib/shortcuts";
@@ -71,7 +77,7 @@ export interface AiSearchPanelProps {
 	readonly visible: boolean;
 	readonly selectedEvidence: number | null;
 	readonly onSelectEvidence: (number: number) => void;
-	readonly onPublish: (evidence: readonly CitationEvidence[]) => void;
+	readonly onPublish: (evidence: readonly CitationEvidence[], sessionEvidence?: readonly CitationEvidence[]) => void;
 	/** Images in an answer: a local picture opens in Quick Look, a web image's page in the OS browser. */
 	readonly imageActions: ImageActions;
 	/** The Interface language setting: "AI 요약" asks in this language. */
@@ -119,6 +125,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	const pastTurnsRef = useRef(pastTurns);
 	pastTurnsRef.current = pastTurns;
 	const chatIdRef = useRef(chatId);
+	/** Which turn and phase's citation chip the user clicked last; null uses the newest non-empty turn. */
+	const [evidenceSource, setEvidenceSource] = useState<EvidenceSelectionSource | null>(null);
 	chatIdRef.current = chatId;
 	const [historyOpen, setHistoryOpen] = useState(false);
 	const [historyQuery, setHistoryQuery] = useState("");
@@ -206,11 +214,13 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 				case "quick":
 					setQuick(event.phase);
 					setQuickDraft(event.phase.answer);
+					if (deepRef.current === null) setDeepDraft("");
 					setProgress("");
 					quickShownRef.current = true;
 					break;
 				case "deep":
 					setDeep(event.phase);
+					setEvidenceSource(null);
 					setDeepDraft(event.phase.answer);
 					setDeepElapsed(startedAtRef.current === 0 ? null : Date.now() - startedAtRef.current);
 					setProgress("");
@@ -248,13 +258,36 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		void runSearch(next, attachmentsRef.current);
 	}, [searchId, queued]);
 
-	const evidence = useMemo(() => deep?.evidence ?? quick?.evidence ?? [], [deep, quick]);
+	const allTurnPhases = useMemo(
+		() => [...pastTurns.map((turn) => ({ quick: turn.quick, deep: turn.deep })), { quick, deep }],
+		[pastTurns, quick, deep],
+	);
+	const evidence = useMemo(
+		() => resolveActiveEvidence(allTurnPhases, evidenceSource),
+		[allTurnPhases, evidenceSource],
+	);
+	const sessionEvidence = useMemo(() => {
+		const phases: (AnswerPhase | null)[] = [];
+		for (const turn of pastTurns) {
+			phases.push(turn.quick, turn.deep);
+		}
+		phases.push(quick, deep);
+		return collectSessionEvidence(phases);
+	}, [pastTurns, quick, deep]);
 
 	// Only the visible tab's chat feeds the inspector; it keeps that evidence
 	// while the user browses folders in other tabs.
 	useEffect(() => {
-		if (active) onPublish(evidence);
-	}, [active, evidence, onPublish]);
+		if (active) onPublish(evidence, sessionEvidence);
+	}, [active, evidence, sessionEvidence, onPublish]);
+
+	function selectPhaseCitation(turnIndex: number, phase: "quick" | "deep", number: number): void {
+		const nextSource: EvidenceSelectionSource = { turnIndex, phase };
+		setEvidenceSource(nextSource);
+		const nextEvidence = resolveActiveEvidence(allTurnPhases, nextSource);
+		if (active) onPublish(nextEvidence, sessionEvidence);
+		onSelectEvidence(number);
+	}
 
 	const historyGroups = useMemo(() => groupChatHistory(history, new Date()), [history]);
 
@@ -349,6 +382,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		}
 		setSearchId(nextSearchId);
 		setQuick(null);
+		setEvidenceSource(null);
 		setDeep(null);
 		setQuickDraft("");
 		setDeepDraft("");
@@ -473,6 +507,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		setError(null);
 		setStopped(false);
 		setProgress("");
+		setEvidenceSource(null);
 		setQuery("");
 		setSubmittedQuery(null);
 		setSubmittedAttachments([]);
@@ -514,6 +549,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		setSubmittedQuery(latest.question.text);
 		setSubmittedAttachments(latest.question.attachments);
 		setSteers(latest.steers);
+		setEvidenceSource(null);
 		setQueued([]);
 		setStopped(assistant?.stopped ?? false);
 		setError(null);
@@ -753,7 +789,16 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 					) : null}
 
 					{pastTurns.map((turn, index) => (
-						<PastTurnView key={index} turn={turn} steerLabels={steerLabels} imageActions={imageActions} />
+						<PastTurnView
+							key={index}
+							turn={turn}
+							turnIndex={index}
+							activeSource={evidenceSource}
+							selectedEvidence={selectedEvidence}
+							onCitation={selectPhaseCitation}
+							steerLabels={steerLabels}
+							imageActions={imageActions}
+						/>
 					))}
 
 					{submittedQuery === null ? null : (
@@ -781,7 +826,18 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 						<div className="message assistant-msg flex flex-col gap-14">
 							{quickReady ? (
 								<div className="assistant-prose flex flex-col gap-8 text-body leading-[1.55] text-ink-body">
-									<ProseBlocks text={quickText} selected={selectedEvidence} unresolved={quickUnresolved} onCitation={onSelectEvidence} imageActions={imageActions} />
+									<ProseBlocks
+										text={quickText}
+										selected={
+											evidenceSource === null ||
+											(evidenceSource.turnIndex === pastTurns.length && evidenceSource.phase === "quick")
+												? selectedEvidence
+												: null
+										}
+										unresolved={quickUnresolved}
+										onCitation={(number) => selectPhaseCitation(pastTurns.length, "quick", number)}
+										imageActions={imageActions}
+									/>
 								</div>
 							) : skeleton ? (
 								<div className="flex flex-col gap-8">
@@ -808,7 +864,18 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 										</div>
 									)}
 									<div className="assistant-prose flex flex-col gap-8 text-body leading-[1.55] text-ink-body">
-										<ProseBlocks text={deepText} selected={selectedEvidence} unresolved={deepUnresolved} onCitation={onSelectEvidence} imageActions={imageActions} />
+										<ProseBlocks
+											text={deepText}
+											selected={
+												evidenceSource === null ||
+												(evidenceSource.turnIndex === pastTurns.length && evidenceSource.phase === "deep")
+													? selectedEvidence
+													: null
+											}
+											unresolved={deepUnresolved}
+											onCitation={(number) => selectPhaseCitation(pastTurns.length, "deep", number)}
+											imageActions={imageActions}
+										/>
 									</div>
 								</div>
 							) : null}
@@ -1013,28 +1080,37 @@ interface PastTurn {
 	readonly deepElapsed: number | null;
 }
 
-const NO_CITATION = (): void => undefined;
-
 function PastTurnView({
 	turn,
+	turnIndex,
+	activeSource,
+	selectedEvidence,
+	onCitation,
 	steerLabels,
 	imageActions,
 }: {
 	readonly turn: PastTurn;
+	readonly turnIndex: number;
+	readonly activeSource: EvidenceSelectionSource | null;
+	readonly selectedEvidence: number | null;
+	readonly onCitation: (turnIndex: number, phase: "quick" | "deep", number: number) => void;
 	readonly steerLabels: Record<SteerItem["status"], string>;
 	readonly imageActions: ImageActions;
 }): ReactElement {
 	const { t } = useTranslation();
 	const before = turn.steers.filter((steer) => steer.timing === "before-quick");
 	const after = turn.steers.filter((steer) => steer.timing === "after-quick");
-	// Citation chips of an earlier turn do not open evidence: the inspector shows the latest turn's.
-	const prose = (text: string, phase: AnswerPhase | null): ReactElement => (
+	const prose = (text: string, phase: AnswerPhase | null, phaseKind: "quick" | "deep"): ReactElement => (
 		<div className="assistant-prose flex flex-col gap-8 text-body leading-[1.55] text-ink-body">
 			<ProseBlocks
 				text={text}
-				selected={null}
+				selected={
+					activeSource?.turnIndex === turnIndex && activeSource.phase === phaseKind
+						? selectedEvidence
+						: null
+				}
 				unresolved={unresolvedCitationNumbers(text, phase?.evidence ?? [])}
-				onCitation={NO_CITATION}
+				onCitation={(number) => onCitation(turnIndex, phaseKind, number)}
 				imageActions={imageActions}
 			/>
 		</div>
@@ -1058,7 +1134,7 @@ function PastTurnView({
 				<SteerBubble key={steer.id} steer={steer} labels={steerLabels} />
 			))}
 			<div className="message assistant-msg flex flex-col gap-14">
-				{turn.quickText === "" ? null : prose(turn.quickText, turn.quick)}
+				{turn.quickText === "" ? null : prose(turn.quickText, turn.quick, "quick")}
 				{after.map((steer) => (
 					<SteerBubble key={steer.id} steer={steer} labels={steerLabels} />
 				))}
@@ -1069,7 +1145,7 @@ function PastTurnView({
 								<span>{t("aiSearch.workedFor", { time: formatElapsed(turn.deepElapsed) })}</span>
 							</div>
 						)}
-						{prose(turn.deepText, turn.deep)}
+						{prose(turn.deepText, turn.deep, "deep")}
 					</div>
 				)}
 			</div>

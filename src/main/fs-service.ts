@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
-import type { Dirent } from "node:fs";
-import { cp, lstat, mkdir, readdir, rename as fsRename, rm, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
-import { basename, dirname, extname, isAbsolute, join, win32 } from "node:path";
+import type { Dirent, Stats } from "node:fs";
+import { cp, link, lstat, mkdir, mkdtemp, readdir, readlink, realpath, rename as fsRename, rm, rmdir, stat, symlink, writeFile } from "node:fs/promises";
+import { homedir, tmpdir } from "node:os";
+import { basename, dirname, extname, isAbsolute, join, sep, win32 } from "node:path";
 import {
 	RECENTS_PATH,
 	isTagPath,
@@ -278,6 +278,8 @@ async function walkForSearch(dir: string, depth: number, context: SearchContext)
 export interface FsService extends FsCoreBridge {
 	listDir(path: string, signal?: AbortSignal): Promise<DirListing>;
 	search(query: string, options?: FsSearchOptions, signal?: AbortSignal): Promise<readonly FsSearchResult[]>;
+	/** Clean up any remaining temporary Evidence Folders on worker shutdown. */
+	disposeEvidenceFolders?(): Promise<void>;
 }
 
 export function createFsService(deps: FsServiceDeps): FsService {
@@ -293,6 +295,133 @@ export function createFsService(deps: FsServiceDeps): FsService {
 	const trashStore = deps.trashStore ?? createTrashStore({ directory: join(home, "trash-store") });
 	// In-app clipboard lives in this process's memory only (the fs worker in the app).
 	let inAppClipboard: FsClipboard | null = null;
+	/**
+	 * Resolved targets for symlinks placed on the in-app clipboard: when an
+	 * Evidence Folder is removed before the user pastes, the clipboard entry
+	 * still resolves to the original source file under the link's (possibly
+	 * renamed) filename.
+	 */
+	const clipboardResolved = new Map<string, { readonly targetPath: string; readonly name: string }>();
+	/** Active temporary Evidence Folders: `folderPath -> parentTempDir`. */
+	const evidenceFolders = new Map<string, string>();
+
+	async function rememberClipboardTargets(paths: readonly string[]): Promise<void> {
+		await Promise.all(
+			paths.map(async (path) => {
+				try {
+					const info = await lstat(path);
+					if (!info.isSymbolicLink()) return;
+					const resolved = await realpath(path).catch(() => readlink(path));
+					if (isAbsolute(resolved)) {
+						clipboardResolved.set(path, { targetPath: resolved, name: basename(path) });
+					}
+				} catch {
+					/* path may already be resolved or gone */
+				}
+			}),
+		);
+	}
+
+	function sanitizeFolderName(raw: string | undefined): string {
+		const trimmed = (raw ?? "").trim().replace(/[/\\:*?"<>|\0]/gu, "-");
+		if (trimmed.length === 0 || trimmed === "." || trimmed === "..") return "Evidence Folder";
+		return trimmed;
+	}
+
+	function findTrackedEvidenceFolder(candidate: string): { readonly folderPath: string; readonly parentDir: string } | null {
+		const direct = evidenceFolders.get(candidate);
+		if (direct !== undefined) return { folderPath: candidate, parentDir: direct };
+		for (const [folderPath, parentDir] of evidenceFolders) {
+			if (candidate === parentDir || candidate.startsWith(`${folderPath}${sep}`)) {
+				return { folderPath, parentDir };
+			}
+		}
+		return null;
+	}
+
+	function forgetEvidenceSteps(folderPath: string, parentDir: string): void {
+		const inside = (path: string): boolean =>
+			path === folderPath ||
+			path === parentDir ||
+			path.startsWith(`${folderPath}${sep}`) ||
+			path.startsWith(`${parentDir}${sep}`);
+		const stepTouches = (step: FsUndoStep): boolean =>
+			inside(step.path) || (step.kind === "move" && inside(step.restoreDir));
+		for (const stack of [undoStack, redoStack]) {
+			for (let index = stack.length - 1; index >= 0; index -= 1) {
+				const entry = stack[index];
+				if (entry === undefined) continue;
+				entry.steps = entry.steps.filter((step) => !stepTouches(step));
+				if (entry.steps.length === 0) stack.splice(index, 1);
+			}
+		}
+	}
+
+	async function linkEvidenceEntry(sourcePath: string, targetPath: string, isDirectory: boolean): Promise<void> {
+		try {
+			await symlink(sourcePath, targetPath, isDirectory ? "junction" : "file");
+			return;
+		} catch (error) {
+			if (!hasErrorCode(error, "EPERM") && !hasErrorCode(error, "EACCES") && !hasErrorCode(error, "ENOSYS")) {
+				throw error;
+			}
+		}
+		if (!isDirectory) {
+			try {
+				await link(sourcePath, targetPath);
+				return;
+			} catch {
+				/* cross-device or unsupported: fall back to copy */
+			}
+		}
+		await cp(sourcePath, targetPath, { recursive: true, dereference: true });
+	}
+
+	async function createEvidenceFolder(paths: readonly string[], folderName?: string): Promise<string> {
+		const baseTmp = await realpath(tmpdir()).catch(() => tmpdir());
+		const parentDir = await mkdtemp(join(baseTmp, "dazzi-evidence-"));
+		const folderPath = join(parentDir, sanitizeFolderName(folderName));
+		await mkdir(folderPath, { recursive: true });
+		evidenceFolders.set(folderPath, parentDir);
+
+		const seen = new Set<string>();
+		for (const rawPath of paths) {
+			if (!isAbsolute(rawPath)) continue;
+			const key = rawPath.normalize("NFC");
+			if (seen.has(key)) continue;
+			seen.add(key);
+			try {
+				const diskPath = await onDiskPath(rawPath).catch(() => rawPath);
+				const sourceStat = await stat(diskPath);
+				const isDir = sourceStat.isDirectory();
+				const targetName = await resolveCopyName(folderPath, basename(diskPath), isDir);
+				await linkEvidenceEntry(diskPath, join(folderPath, targetName), isDir);
+			} catch (error) {
+				if (!hasErrorCode(error, "ENOENT") && !hasErrorCode(error, "ENOTDIR")) {
+					console.warn(`fs:createEvidenceFolder skipping ${rawPath}: ${errorMessage(error)}`);
+				}
+			}
+		}
+		return folderPath;
+	}
+
+	async function removeEvidenceFolder(folderPath: string): Promise<void> {
+		const tracked = findTrackedEvidenceFolder(folderPath);
+		if (tracked === null) return;
+		if (inAppClipboard !== null) {
+			await rememberClipboardTargets(inAppClipboard.paths);
+		}
+		evidenceFolders.delete(tracked.folderPath);
+		forgetEvidenceSteps(tracked.folderPath, tracked.parentDir);
+		await rm(tracked.folderPath, { recursive: true, force: true });
+		await rmdir(tracked.parentDir).catch(() => undefined);
+	}
+
+	async function disposeEvidenceFolders(): Promise<void> {
+		const parents = [...new Set(evidenceFolders.values())];
+		evidenceFolders.clear();
+		await Promise.all(parents.map((dir) => rm(dir, { recursive: true, force: true }).catch(() => undefined)));
+	}
 	/**
 	 * OS kind and tile icon only. Finder metadata is a separate call: its
 	 * helper processes and EXIF reads are far slower than the icon pool on a
@@ -785,11 +914,29 @@ export function createFsService(deps: FsServiceDeps): FsService {
 	async function copy(paths: readonly string[], destDir: string): Promise<FsBatchResult> {
 		const steps: FsUndoStep[] = [];
 		const result = await runBatch(paths, async (source) => {
-			const sourceStat = await lstat(source);
-			const targetName = await resolveCopyName(destDir, basename(source), sourceStat.isDirectory());
+			let sourcePath = source;
+			let desiredName = basename(source);
+			let isSymlink = false;
+			let isDirectory = false;
+			try {
+				const sourceStat = await lstat(source);
+				isSymlink = sourceStat.isSymbolicLink();
+				const effectiveStat = isSymlink ? await stat(source).catch(() => sourceStat) : sourceStat;
+				isDirectory = effectiveStat.isDirectory();
+			} catch (error) {
+				const preserved = clipboardResolved.get(source);
+				if (preserved === undefined || (!hasErrorCode(error, "ENOENT") && !hasErrorCode(error, "ENOTDIR"))) {
+					throw error;
+				}
+				sourcePath = preserved.targetPath;
+				desiredName = preserved.name;
+				isSymlink = true;
+				isDirectory = (await stat(sourcePath)).isDirectory();
+			}
+			const targetName = await resolveCopyName(destDir, desiredName, isDirectory);
 			const target = join(destDir, targetName);
-			await cp(source, target, { recursive: true });
-			steps.push({ kind: "created", path: target, make: { kind: "copy", from: source } });
+			await cp(sourcePath, target, { recursive: true, dereference: isSymlink });
+			steps.push({ kind: "created", path: target, make: { kind: "copy", from: isSymlink ? await realpath(sourcePath).catch(() => sourcePath) : sourcePath } });
 		});
 		if (steps.length > 0) record("copy", steps);
 		return result;
@@ -798,7 +945,29 @@ export function createFsService(deps: FsServiceDeps): FsService {
 	async function move(paths: readonly string[], destDir: string): Promise<FsBatchResult> {
 		const steps: FsUndoStep[] = [];
 		const result = await runBatch(paths, async (source) => {
-			const sourceStat = await lstat(source);
+			let sourceStat: Stats | null = null;
+			try {
+				sourceStat = await lstat(source);
+			} catch (error) {
+				const preserved = clipboardResolved.get(source);
+				if (preserved === undefined || (!hasErrorCode(error, "ENOENT") && !hasErrorCode(error, "ENOTDIR"))) {
+					throw error;
+				}
+				const targetStat = await stat(preserved.targetPath);
+				const target = join(destDir, await resolveCopyName(destDir, preserved.name, targetStat.isDirectory()));
+				await cp(preserved.targetPath, target, { recursive: true, dereference: true });
+				steps.push({ kind: "created", path: target, make: { kind: "copy", from: preserved.targetPath } });
+				return;
+			}
+			if (sourceStat.isSymbolicLink()) {
+				const effectiveStat = await stat(source).catch(() => sourceStat);
+				const realTarget = await realpath(source).catch(() => source);
+				const target = join(destDir, await resolveCopyName(destDir, basename(source), effectiveStat.isDirectory()));
+				await cp(source, target, { recursive: true, dereference: true });
+				await rm(source, { recursive: true, force: true });
+				steps.push({ kind: "created", path: target, make: { kind: "copy", from: realTarget } });
+				return;
+			}
 			const target = join(destDir, await resolveCopyName(destDir, basename(source), sourceStat.isDirectory()));
 			await movePath(source, target);
 			steps.push({ kind: "move", path: target, restoreDir: dirname(source) });
@@ -892,11 +1061,13 @@ export function createFsService(deps: FsServiceDeps): FsService {
 		const steps: FsUndoStep[] = [];
 		const result = await runBatch(paths, async (source) => {
 			const sourceStat = await lstat(source);
+			const isSymlink = sourceStat.isSymbolicLink();
+			const effectiveStat = isSymlink ? await stat(source).catch(() => sourceStat) : sourceStat;
 			const dir = dirname(source);
-			const targetName = await resolveCopyName(dir, basename(source), sourceStat.isDirectory());
+			const targetName = await resolveCopyName(dir, basename(source), effectiveStat.isDirectory());
 			const target = join(dir, targetName);
-			await cp(source, target, { recursive: true });
-			steps.push({ kind: "created", path: target, make: { kind: "copy", from: source } });
+			await cp(source, target, { recursive: true, dereference: isSymlink });
+			steps.push({ kind: "created", path: target, make: { kind: "copy", from: isSymlink ? await realpath(source).catch(() => source) : source } });
 		});
 		if (steps.length > 0) record("duplicate", steps);
 		return result;
@@ -996,6 +1167,9 @@ export function createFsService(deps: FsServiceDeps): FsService {
 		recordCreated,
 		createFolder,
 		createFile,
+		createEvidenceFolder,
+		removeEvidenceFolder,
+		disposeEvidenceFolders,
 		trash: async (paths) => {
 			if (paths.length === 0) {
 				return { ok: [], failed: [] };
@@ -1040,6 +1214,7 @@ export function createFsService(deps: FsServiceDeps): FsService {
 		},
 		clipboardSet: async (clipboard) => {
 			inAppClipboard = { op: clipboard.op, paths: [...clipboard.paths] };
+			await rememberClipboardTargets(clipboard.paths);
 		},
 		clipboardGet: async () => inAppClipboard,
 		copyPathsToClipboard: async (paths) => {

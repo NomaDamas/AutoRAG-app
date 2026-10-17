@@ -215,7 +215,9 @@
       "emptyTitle": "回答的依据\n将显示在此处。",
       "excerpts": "依据摘录",
       "showInFinder": "在访达中显示",
-      "openInBrowser": "在浏览器中打开"
+      "openInBrowser": "在浏览器中打开",
+      "evidenceFolder": "依据文件夹",
+      "evidenceFolderTooltip": "在临时文件夹标签页中打开当前对话的依据文件"
     }
   },
   "aiSearch": {
@@ -299,7 +301,10 @@
   "confirm": {
     "emptyTrashTitle": "清倒废纸篓",
     "emptyTrashMessage": "废纸篓中的所有项目将被永久删除。此操作无法撤销。",
-    "emptyTrashAction": "清倒"
+    "emptyTrashAction": "清倒",
+    "closeEvidenceFolderTitle": "关闭依据文件夹",
+    "closeEvidenceFolderMessage": "关闭此标签页将删除并清理临时依据文件夹，原始文件不会受到影响。确定要关闭吗？",
+    "closeEvidenceFolderAction": "关闭"
   },
   "settings": {
     "title": "设置",
