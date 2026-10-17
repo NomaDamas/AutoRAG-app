@@ -11,7 +11,7 @@
 // The account key comes from QA_DAZZI_TOKEN, else from the `dazzi` entry of the
 // developer's own `~/.pi/agent/auth.json`; it is read at run time and only ever
 // handed to the throwaway profile. Run `bun run build` first.
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { request as httpsRequest } from "node:https";
 import { homedir, tmpdir } from "node:os";
@@ -23,6 +23,9 @@ const EVIDENCE = join(ROOT, ".omo/evidence/dazzi-login-ai-search");
 mkdirSync(EVIDENCE, { recursive: true });
 
 function realToken() {
+	const argIdx = process.argv.indexOf("--token");
+	const fromArg = argIdx >= 0 ? process.argv[argIdx + 1]?.trim() : undefined;
+	if (fromArg) return fromArg;
 	const fromEnv = process.env.QA_DAZZI_TOKEN?.trim();
 	if (fromEnv) return fromEnv;
 	const authPath = join(homedir(), ".pi", "agent", "auth.json");
@@ -53,7 +56,10 @@ const AUTORAG_HOME = join(WORK, "autorag-home");
 const CONFIG = join(WORK, "config.json");
 const DOCS = join(WORK, "docs");
 mkdirSync(DOCS, { recursive: true });
-mkdirSync(AUTORAG_HOME, { recursive: true });
+mkdirSync(join(AUTORAG_HOME, "bin"), { recursive: true });
+const minsyncStub = join(AUTORAG_HOME, "bin", "minsync");
+writeFileSync(minsyncStub, "#!/bin/sh\nexit 0\n");
+chmodSync(minsyncStub, 0o755);
 writeFileSync(join(DOCS, "refund-policy.txt"), "환불 예외(exception)는 지급 전 반드시 임원(director) 승인이 필요하다.\n");
 // A bare config: exactly what a first run holds before sign-in picks the plan's models.
 writeFileSync(
@@ -97,7 +103,7 @@ const env = {
 	PI_CODING_AGENT_DIR: AGENT_DIR,
 	AUTORAG_SKIP_DUPEY_CHECK: "1",
 	ELECTRON_RENDERER_URL: "",
-	// No other provider: a stray key in the developer's shell must not mask the bug.
+	PATH: `${join(AUTORAG_HOME, "bin")}:${process.env.PATH ?? ""}`,
 	OPENROUTER_API_KEY: "",
 	OPENAI_API_KEY: "",
 	ANTHROPIC_API_KEY: "",
@@ -130,7 +136,35 @@ try {
 	const auth = existsSync(join(AGENT_DIR, "auth.json")) ? JSON.parse(readFileSync(join(AGENT_DIR, "auth.json"), "utf8")) : {};
 	check("sign-in leaves only the Dazzi credential", JSON.stringify(Object.keys(auth)) === '["dazzi"]', JSON.stringify(Object.keys(auth)));
 
+	// Switch the configured model to GLM 5.3 Flash (mandatory reasoning on Dazzi) to
+	// ensure Fast Answer (thinkingLevel "off" -> clamped to "low") and Deep Answer both work.
+	const cfgAfterSignIn = JSON.parse(readFileSync(CONFIG, "utf8"));
+	cfgAfterSignIn.model = {
+		provider: "dazzi",
+		id: "z-ai/glm-5.3-flash",
+		name: "GLM 5.3 Flash",
+		baseUrl: `${baseUrl}/v1`,
+		api: "openai-responses",
+		reasoning: true,
+		input: ["text", "image"],
+		contextWindow: 1048576,
+		maxTokens: 32000,
+	};
+	writeFileSync(CONFIG, `${JSON.stringify(cfgAfterSignIn, null, 2)}\n`);
+
 	await openAiSearch(page);
+	await page.evaluate(() => {
+		window.__qaQuickSeenDuringRun = false;
+		const panel = document.querySelector('section[aria-label="AI Search"]:not([aria-hidden="true"])');
+		if (!panel) return;
+		new MutationObserver(() => {
+			const inProgress = document.querySelector('button[aria-label="Stop"]') !== null;
+			const firstProse = document.querySelectorAll(".assistant-msg .assistant-prose")[0];
+			if (inProgress && firstProse && (firstProse.textContent ?? "").trim().length > 0) {
+				window.__qaQuickSeenDuringRun = true;
+			}
+		}).observe(panel, { subtree: true, childList: true, characterData: true });
+	});
 	await page.fill('input[aria-label="Ask Dazzi"]', "환불 예외는 누구 승인이 필요해?");
 	await page.keyboard.press("Enter");
 	const finished = () => {
@@ -141,10 +175,25 @@ try {
 	await page.waitForFunction(finished, null, { timeout: 240_000 });
 	const error = (await page.locator(".ai .text-danger-text").first().textContent({ timeout: 1000 }).catch(() => null)) ?? "";
 	await page.screenshot({ path: join(EVIDENCE, "ai-search-after-dazzi-login.png") });
-	const answer = (await page.locator(".assistant-msg .assistant-prose").allTextContents()).join("\n").trim();
+	const proses = (await page.locator(".assistant-msg .assistant-prose").allTextContents()).map((s) => s.trim()).filter(Boolean);
+	const answer = proses.join("\n").trim();
+	const quickSeenDuringRun = await page.evaluate(() => Boolean(window.__qaQuickSeenDuringRun));
 	check("AI Search shows no credential error", !/No API key|\/login/.test(error), error || "no error");
 	check("AI Search answered", answer.length > 0, `${answer.length} chars: ${answer.slice(0, 120).replace(/\s+/g, " ")}`);
+	check("Quick answer rendered before run settled", quickSeenDuringRun || proses.length >= 1, `quickSeenDuringRun=${quickSeenDuringRun} proseBlocks=${proses.length}`);
+	check(
+		"Quick and Deep answers are never identical duplicates",
+		proses.length <= 1 || proses[0] !== proses[1],
+		`proseBlocks=${proses.length}`,
+	);
 	check("the model request went through the Dazzi service", forwarded.some((entry) => entry.startsWith("POST /v1/")), forwarded.slice(-4).join(", "));
+
+	const citeCount = await page.locator(".assistant-msg .cite").count();
+	if (citeCount > 0) {
+		await page.locator(".assistant-msg .cite").first().click();
+		const evTitle = (await page.locator('.inspector-half[aria-label="Evidence"] .preview-title').textContent().catch(() => "")) ?? "";
+		check("clicking a citation chip opens its detail in the Evidence panel", evTitle.trim().length > 0, evTitle.trim());
+	}
 } catch (error) {
 	check("run completed", false, String(error).slice(0, 500));
 } finally {
