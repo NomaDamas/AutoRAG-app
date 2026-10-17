@@ -95,14 +95,10 @@ describe("AutoRAG plan provider", () => {
 		return new Response("not found", { status: 404 });
 	}) as unknown as typeof fetch;
 
-	// The librarian's provider reads the account key from the real process
-	// environment and fetches with the global `fetch`, exactly as in the app.
-	const savedKey = process.env.AUTORAG_API_KEY;
+	// The librarian's provider fetches with the global `fetch`, exactly as in the app.
 	const savedFetch = globalThis.fetch;
 	afterEach(() => {
 		globalThis.fetch = savedFetch;
-		if (savedKey === undefined) delete process.env.AUTORAG_API_KEY;
-		else process.env.AUTORAG_API_KEY = savedKey;
 	});
 
 	const build = async (env: NodeJS.ProcessEnv, fetchImpl: typeof fetch, agentDir?: string): Promise<{ service: ProviderAuthService; agentDir: string }> => {
@@ -129,8 +125,7 @@ describe("AutoRAG plan provider", () => {
 	});
 
 	it("lists the plan's models, first, once the catalog is synced with the account key", async () => {
-		process.env.AUTORAG_API_KEY = "dz_test";
-		const { service, agentDir } = await build({ AUTORAG_BASE_URL: "http://plan.test", AUTORAG_API_KEY: "dz_test" }, planCatalog);
+		const { service, agentDir } = await build({ AUTORAG_BASE_URL: "http://plan.test" }, planCatalog);
 		// The account sign-in bridges its token into `auth.json`; the librarian
 		// refresh reads the plan credential only from there (2.10.2, OAuth-only).
 		await storeDazziPlanCredential(agentDir, "dz_test");
@@ -144,8 +139,7 @@ describe("AutoRAG plan provider", () => {
 	});
 
 	it("keeps the previous catalog when the server cannot be reached", async () => {
-		process.env.AUTORAG_API_KEY = "dz_test";
-		const env = { AUTORAG_BASE_URL: "http://plan.test", AUTORAG_API_KEY: "dz_test" };
+		const env = { AUTORAG_BASE_URL: "http://plan.test" };
 		const first = await build(env, planCatalog);
 		await storeDazziPlanCredential(first.agentDir, "dz_test");
 		await first.service.syncAutoragCatalog();

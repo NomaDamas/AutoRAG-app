@@ -110,6 +110,25 @@ describe("applyIndexingConfig", () => {
 		}
 	});
 
+	it("leaves the kakao connector free of embedder overrides so the sidecar uses the shared embedder", () => {
+		const next = applyIndexingConfig({
+			raw: { datasources: { kakao: { description: "existing", pollingIntervalMs: 3600000 } } },
+			folders: ["/a"],
+			datasources: [{ id: "kakao", facts: { chats: 12 } }],
+			home: HOME,
+			embedder: null,
+			workspacePath: null,
+			model: null,
+		});
+		const datasources = isJsonObject(next.datasources) ? next.datasources : {};
+		expect(datasources.kakao).toEqual({
+			description: "existing",
+			pollingIntervalMs: 3600000,
+			instanceId: "default",
+			connector: {},
+		});
+	});
+
 	it("writes one obsidian alias per vault", () => {
 		const next = applyIndexingConfig({
 			raw: {},

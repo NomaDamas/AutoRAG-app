@@ -320,7 +320,7 @@ export function AiPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 		if (providerConnectRoute(provider.id) === "account") {
 			try {
 				const status = await window.autorag.account.signOut();
-				setNotice(status.state === "signedIn" ? t("settingsCore.ai.disconnect.envLocked") : t("settingsCore.ai.disconnected", { name: provider.name }));
+				if (status.state !== "signedIn") setNotice(t("settingsCore.ai.disconnected", { name: provider.name }));
 				await reload();
 			} catch (cause) {
 				setNotice(errorText(cause));

@@ -7,10 +7,8 @@ import { dirname } from "node:path";
 import { readRawConfigObject, writeConfigObject } from "@autorag/librarian/core";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import {
-	ACCOUNT_API_KEY_ENV,
 	ACCOUNT_CHANNELS,
 	AUTORAG_PROVIDER_ID,
-	isManagedProviderId,
 	DEFAULT_ACCOUNT_BASE_URL,
 	shouldAdoptManagedModel,
 	type AccountPlanId,
@@ -22,7 +20,7 @@ import {
 import { isJsonObject } from "../shared/settings-contract";
 import { managedRoleUpdates, shouldAdoptManagedDecomposition, shouldAdoptManagedRoles } from "../shared/ai-roles";
 import type { ProviderCredentialService } from "./provider-credentials";
-import { clearDazziPlanCredential, storeDazziPlanCredential } from "./dazzi-plan-credential";
+import { clearDazziPlanCredential, readDazziPlanCredential, storeDazziPlanCredential } from "./dazzi-plan-credential";
 
 /**
  * The main-process half of the AutoRAG account: browser sign-in (OAuth 2.0
@@ -30,10 +28,9 @@ import { clearDazziPlanCredential, storeDazziPlanCredential } from "./dazzi-plan
  * API key, the account/plan read, hosted checkout and billing portal, and
  * pointing the shared AutoRAG config at the account's managed models.
  *
- * The API key is the only secret. It lives in the encrypted credential store
- * (`credentials.enc.json`) and the process environment, exactly like a BYOK
- * key, so the librarian resolves it with the same `apiKeyEnv` mechanism; it
- * never reaches the renderer, the config file, or a log line.
+ * The API key is the only secret. It lives in Pi's `auth.json` as the `dazzi`
+ * credential, the one place the librarian reads the hosted plan from; it never
+ * reaches the renderer, the config file, or a log line.
  */
 
 const SIGN_IN_TIMEOUT_MS = 5 * 60 * 1000;
@@ -158,11 +155,7 @@ const CALLBACK_PAGE = `<!doctype html><meta charset="utf-8"><title>Dazzi</title>
 export function createAccountService(deps: AccountServiceDeps): AccountService {
 	const doFetch = deps.fetch ?? globalThis.fetch;
 	const agentDir = deps.agentDir ?? getAgentDir();
-	/**
-	 * Mirror the account token into Pi's `auth.json` as the hosted plan's
-	 * credential (librarian 2.10.2 reads the plan only from there). Best-effort:
-	 * a bridging failure warns and never fails the sign-in itself.
-	 */
+	/** Whether the shared config embeds through the Dazzi cloud embedder (which reuses the account token). */
 	const isDazziCloudEmbedderConfigured = (): boolean => {
 		if (!existsSync(deps.configPath)) return false;
 		try {
@@ -174,12 +167,8 @@ export function createAccountService(deps: AccountServiceDeps): AccountService {
 			return false;
 		}
 	};
-	const bridgePlanCredential = async (token: string): Promise<void> => {
-		try {
-			await storeDazziPlanCredential(agentDir, token);
-		} catch (error) {
-			console.warn("[account] could not bridge the plan credential into auth.json:", error);
-		}
+	/** The cloud embedder authenticates with the same token under the OpenAI key name. */
+	const syncCloudEmbedderKey = async (token: string): Promise<void> => {
 		if (isDazziCloudEmbedderConfigured() && deps.env.OPENAI_API_KEY !== token) {
 			try {
 				await deps.credentials.set("OPENAI_API_KEY", token);
@@ -188,13 +177,13 @@ export function createAccountService(deps: AccountServiceDeps): AccountService {
 			}
 		}
 	};
-	const forgetPlanCredential = async (revokedOrSignedOutToken?: string): Promise<void> => {
+	const forgetPlanCredential = async (revokedOrSignedOutToken: string): Promise<void> => {
 		try {
 			await clearDazziPlanCredential(agentDir);
 		} catch (error) {
 			console.warn("[account] could not remove the plan credential from auth.json:", error);
 		}
-		if (revokedOrSignedOutToken !== undefined && deps.env.OPENAI_API_KEY === revokedOrSignedOutToken) {
+		if (deps.env.OPENAI_API_KEY === revokedOrSignedOutToken) {
 			await deps.credentials.remove("OPENAI_API_KEY").catch(() => undefined);
 		}
 	};
@@ -253,23 +242,20 @@ export function createAccountService(deps: AccountServiceDeps): AccountService {
 	}
 
 	/**
-	 * The key in use and where it comes from; null when absent or rejected by the
-	 * server. The credential store skips a stored entry while the environment
-	 * already holds the name, so the effective source (not mere presence of an
-	 * entry) decides whether the app can sign this key out.
+	 * The account key in use; null when absent or rejected by the server. The
+	 * plan credential in Pi's `auth.json` is the only place it lives, so the app
+	 * and the librarian can never disagree about whether the user is signed in.
 	 */
-	async function currentKey(): Promise<{ readonly key: string; readonly source: "stored" | "env" } | null> {
-		const key = deps.env[ACCOUNT_API_KEY_ENV];
-		if (typeof key !== "string" || key.length === 0 || key === revokedKey) return null;
-		const [row] = await deps.credentials.list([ACCOUNT_API_KEY_ENV]);
-		return { key, source: row?.source === "stored" ? "stored" : "env" };
+	async function currentKey(): Promise<string | null> {
+		const key = await readDazziPlanCredential(agentDir);
+		return key === null || key === revokedKey ? null : key;
 	}
 
 	async function buildStatus(): Promise<AccountStatus> {
 		const key = await currentKey();
 		const base = { baseUrl: baseUrl(), error: lastError };
-		if (key === null) return { ...base, state: flow === null ? "signedOut" : "signingIn", source: null, account: null, offline: false };
-		return { ...base, state: "signedIn", source: key.source, account: await readCache(), offline };
+		if (key === null) return { ...base, state: flow === null ? "signedOut" : "signingIn", account: null, offline: false };
+		return { ...base, state: "signedIn", account: await readCache(), offline };
 	}
 
 	async function publish(): Promise<AccountStatus> {
@@ -303,7 +289,7 @@ export function createAccountService(deps: AccountServiceDeps): AccountService {
 		if (key === null) throw new Error("Sign in to your Dazzi account first.");
 		let response: ApiResponse;
 		try {
-			response = await call(path, { ...init, key: key.key });
+			response = await call(path, { ...init, key });
 		} catch (error) {
 			throw error instanceof OfflineError ? new Error("Cannot reach the Dazzi service. Check your connection and try again.") : error;
 		}
@@ -322,12 +308,11 @@ export function createAccountService(deps: AccountServiceDeps): AccountService {
 		const key = await currentKey();
 		if (key === null) return publish();
 		try {
-			const response = await call("/v1/account", { key: key.key });
+			const response = await call("/v1/account", { key });
 			if (response.status === 401) {
-				revokedKey = key.key;
+				revokedKey = key;
 				lastError = errorMessageOf(response);
-				if (key.source === "stored") await deps.credentials.remove(ACCOUNT_API_KEY_ENV);
-				await forgetPlanCredential(key.key);
+				await forgetPlanCredential(key);
 				await writeCache(null);
 			} else if (response.status >= 200 && response.status < 300) {
 				const account = parseAccount(response.body);
@@ -335,7 +320,7 @@ export function createAccountService(deps: AccountServiceDeps): AccountService {
 					lastError = "The Dazzi service returned an account this app cannot read.";
 				} else {
 					await writeCache(account);
-					await bridgePlanCredential(key.key);
+					await syncCloudEmbedderKey(key);
 					lastError = null;
 				}
 				offline = false;
@@ -427,8 +412,8 @@ export function createAccountService(deps: AccountServiceDeps): AccountService {
 				if (response.status !== 200 || typeof token !== "string" || token.length === 0) {
 					lastError = errorMessageOf(response);
 				} else {
-					await deps.credentials.set(ACCOUNT_API_KEY_ENV, token);
-					await bridgePlanCredential(token);
+					await storeDazziPlanCredential(agentDir, token);
+					await syncCloudEmbedderKey(token);
 					revokedKey = null;
 					lastError = null;
 					await adoptManagedModelIfUnset();
@@ -465,7 +450,7 @@ export function createAccountService(deps: AccountServiceDeps): AccountService {
 	 */
 	async function applyManagedModel(options: { readonly onlyUntouchedDecomposition?: boolean } = {}): Promise<ManagedModelResult> {
 		const activeKey = await currentKey();
-		if (activeKey !== null) await bridgePlanCredential(activeKey.key);
+		if (activeKey !== null) await syncCloudEmbedderKey(activeKey);
 		const catalog = parseCatalog(await callSignedIn("/v1/models", {}));
 		const main = catalog[0];
 		const cheapest = catalog.reduce<CatalogModel | undefined>((best, model) => (best === undefined || model.price < best.price ? model : best), undefined);
@@ -494,7 +479,7 @@ export function createAccountService(deps: AccountServiceDeps): AccountService {
 		const replaceDecomposition =
 			options.onlyUntouchedDecomposition === true
 				? shouldAdoptManagedDecomposition(decomposition)
-				: decomposition === undefined || (decomposition !== false && (decompositionModel === null || decompositionModel.provider === "openrouter" || isManagedProviderId(decompositionModel.provider)));
+				: decomposition === undefined || (decomposition !== false && (decompositionModel === null || decompositionModel.provider === "openrouter" || decompositionModel.provider === AUTORAG_PROVIDER_ID));
 		if (replaceDecomposition) next.queryDecomposition = { model: reference(cheapest) };
 		// Jev and rerank are adopted per role: only when the config names nothing
 		// for it (or the librarian's untouched OpenRouter default), or already names
@@ -541,9 +526,8 @@ export function createAccountService(deps: AccountServiceDeps): AccountService {
 		},
 		signOut: async () => {
 			const key = await currentKey();
-			if (key?.source === "stored") {
-				await deps.credentials.remove(ACCOUNT_API_KEY_ENV);
-				await forgetPlanCredential(key.key);
+			if (key !== null) {
+				await forgetPlanCredential(key);
 				await writeCache(null);
 				lastError = null;
 				offline = false;

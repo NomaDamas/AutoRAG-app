@@ -45,21 +45,17 @@ export function AccountStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElem
 						</div>
 						<div>
 							<strong>{t("onboarding.account.signedIn")}</strong>
-							<small>
-								{snapshot === null
-									? t("onboarding.account.signedInEnv")
-									: `${snapshot.email} · ${t("onboarding.account.planLabel", { plan: t(`onboarding.plan.plan.${snapshot.plan}.name`) })}`}
-							</small>
+							{snapshot === null ? null : (
+								<small>{`${snapshot.email} · ${t("onboarding.account.planLabel", { plan: t(`onboarding.plan.plan.${snapshot.plan}.name`) })}`}</small>
+							)}
 							{account?.offline === true ? <small>{t("onboarding.account.offline")}</small> : null}
 						</div>
 					</div>
-					{account?.source === "stored" ? (
-						<div className="action-row">
-							<button type="button" className="secondary" onClick={ctx.signOut}>
-								{t("onboarding.account.otherAccount")}
-							</button>
-						</div>
-					) : null}
+					<div className="action-row">
+						<button type="button" className="secondary" onClick={ctx.signOut}>
+							{t("onboarding.account.otherAccount")}
+						</button>
+					</div>
 				</div>
 			) : (
 				<div className="auth-card card">

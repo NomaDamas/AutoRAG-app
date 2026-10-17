@@ -278,6 +278,9 @@ The Info half's bottom bar is data-driven, not a fixed four buttons.
 - Prototype simulations are replaced by real state: the indexing screen shows
   real progress (no 30-minute minimum), folder cards show "세는 중…" until their
   pre-scan finishes, and a failed index shows a warning notice with retry.
+- The design reference now includes an experimental **Smart Indexing** step between account and folder selection. It is intentionally synthetic: it shows a bounded discovery pass, broad include roots, nested exclude paths (including `~/Documents/Codex`), hidden-folder exclusion, editable recommendations, and the hand-off to the existing folder scope screen. It does not read the host filesystem, call an LLM, write `searchPaths`/`excludePaths`, or start indexing.
+- The prototype controls can jump directly to each current-main-aligned step, switch light/dark appearance, and reset the synthetic state. The recommendation evidence and file counts are illustrative only; production model/provider, privacy consent, sampling limits, and path policy remain open design decisions.
+- The reference is a standalone HTML demo; its hardcoded copy is not application runtime UI. Production implementation MUST use the existing i18n and onboarding bridge contracts rather than copying the demo state.
 - Changes to these screens are checked against the prototype with
   `scripts/manual-qa/run-qa-onboarding.mjs`, which also writes per-step
   screenshots to `.omo/evidence/onboarding/`.

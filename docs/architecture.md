@@ -49,13 +49,9 @@ second datasource or model configuration. The sidebar is searchable and grouped:
   OAuth-only: its chat, catalog, Jev, and rerank traffic reads one credential —
   the `/login` token in Pi's `auth.json` — and rejects any `apiKeyEnv` leaf.
   The app's account sign-in exchanges the same OAuth code for the same
-  long-lived key, so signing in stores that key in the encrypted credential
-  store (for the account API) and mirrors it into `auth.json` as the plan's
-  credential (`dazzi-plan-credential.ts`); sign-out and a server-revoked key
-  remove both. A startup migration (`config-legacy-ids.ts`) rewrites the
-  pre-2.10.2 `autorag` spellings and strips the now-invalid `apiKeyEnv` leaves
-  from an existing config, which the librarian would otherwise refuse to
-  resolve at all.
+  long-lived key, so signing in stores that key in `auth.json` as the plan's
+  credential (`dazzi-plan-credential.ts`), the single place both the app and
+  the librarian read it from; sign-out and a server-revoked key remove it.
 - **AI → 웹 검색** — `webSearch` on/off, provider, and page fetch.
 - **검색** — 인덱싱 (per-source status, refresh cadence, sync now, index
   refresh), 검색 범위 (search paths, exclusions, watch), 문서 읽기
@@ -124,7 +120,7 @@ second datasource or model configuration. The sidebar is searchable and grouped:
     (`index-status.ts` calls `refreshAutoragIndex`), so it has the folder check,
     the embedder watchdog, and the learned batch size.
   - *A file MinSync cannot read, chunk, or embed is skipped, not fatal*
-    (MinSync 0.4.8 / librarian 2.10.3, `minsync-file-skipped`). MinSync exits 6
+    (MinSync 0.4.8 / librarian 2.10.4, `minsync-file-skipped`). MinSync exits 6
     with `partial: true` and `files_failed`, keeps the file's older chunks, and
     retries it on the next sync; if the skip came from an embedding gateway
     timeout, `index-refresh` halves `batchSize` and re-runs `syncMinSync` in the
@@ -263,8 +259,9 @@ resumes at the same step.
   Local files are covered by the folders step, so
   Spotlight and Apple Mail are not offered. Each row appears only when the
   connector's own health probe says its data is reachable: KakaoTalk
-  (`lazykatok doctor --macos-probe`: app, container, cached login, readable
-  database files), Slack (`slacrawl`, at least one workspace), Discord
+  (`lazykatok doctor --macos-probe` plus `lazykatok source chats --source macos`
+  when `auth.json` has not been cached yet: app, container, verifiable login,
+  readable database files), Slack (`slacrawl`, at least one workspace), Discord
   (`discrawl` ready database plus a dry-run `wiretap` that finds messages),
   Telegram (`telecrawl doctor`), WhatsApp (`wacrawl doctor`, read-only, with
   messages), mail (`mailcrawl` installed and a `himalaya` account whose login
@@ -276,18 +273,24 @@ resumes at the same step.
 - **Model** (BYOK) verifies the provider key against the provider's API and
   stores it in the encrypted credential store, never in `config.json`.
 - **Indexing** writes `searchPaths`, the embedder (only when none is set), the
-  enabled datasources and their access tags, and the BYOK model into the shared
-  config, then runs the same refresh as Settings. A config still pointing its
+  enabled datasources (`kakao` is indexed by the librarian's read-only sidecar over
+  lazykatok's archive with the shared embedder, so `lazykatok index` and its
+  fastembed pipeline never run), and the BYOK model into the shared config, then runs
+  the local refresh (`parsed`, `minsync`) and syncs enabled datasources in the
+  background once local indexing and onboarding complete. A config still pointing its
   `workspacePath` at the app's cwd seed is moved to `<AutoRAG home>/workspace`.
-  The Finder opens only after the first index succeeds.
+  The Finder opens once the first index succeeds or the user chooses to continue
+  in the background.
 
 Account and plan are real. The account step signs in through the system
 browser (OAuth 2.0 authorization code + PKCE over a loopback redirect, RFC 8252)
 against the hosted AutoRAG service (`AUTORAG_BASE_URL`, default
 `https://api.dazziapp.com`); no password and no card number is typed into the
-app. The returned API key (`AUTORAG_API_KEY`) lives only in the encrypted
-credential store and `process.env`, exactly like a BYOK key; the renderer sees
-an `AccountStatus` (email, plan, subscription state, weekly credits), never the
+app. The returned API key lives only in Pi's `auth.json` as the `dazzi`
+credential (mode 0600), the single place the librarian reads the hosted plan
+from, so the app and the librarian cannot disagree about being signed in; the
+renderer sees an `AccountStatus` (email, plan, subscription state, weekly
+credits), never the
 key. Air and Pro open the service's hosted checkout in the browser, and the plan
 step continues once the server reports that plan; cancel, refund, and the
 payment method live in the hosted billing portal (Settings › 구독 및 사용량).
@@ -295,8 +298,8 @@ Skipping the account is the BYOK path.
 
 **What signing in changes.** A successful sign-in (onboarding, Settings, or the
 AutoRAG entry in Settings › AI) points the agent at the account's models, per
-role, in the shared `config.json` (the config carries an explicit `baseUrl` and
-`apiKeyEnv`, never the key):
+role, in the shared `config.json` (the config carries an explicit
+`baseUrl`, never the key or an env var name):
 
 | Role | Replaced when the config holds | Kept when it holds |
 |---|---|---|

@@ -15,7 +15,7 @@ import { runScheduledRefresh, schedulePaths } from "./refresh-schedule";
 
 // The job runs the app's own executable, so an installed build finds the bundled CLIs exactly as the app does,
 // and the OS job definition never carries the directory (Task Scheduler caps `/TR` at 261 characters).
-applyBundledTools({ resourcesPath: process.resourcesPath, env: process.env });
+applyBundledTools({ resourcesPath: process.resourcesPath, env: process.env, augmentUserPaths: true });
 
 async function main(): Promise<number> {
 	const env = process.env;

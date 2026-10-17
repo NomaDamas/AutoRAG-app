@@ -15,8 +15,6 @@ describe("AutoRAG connect and disconnect routing", () => {
 		expect(providerConnectRoute("dazzi")).toBe("account");
 		expect(providerConnectRoute("openrouter")).toBe("provider");
 		expect(providerConnectRoute("anthropic")).toBe("provider");
-		// Pre-2.10.2 spelling of the plan's provider id: still the account's own.
-		expect(providerConnectRoute("autorag")).toBe("account");
 	});
 
 	it("keeps AutoRAG out of the Pi connect lists", () => {
@@ -46,8 +44,6 @@ describe("managed Jev and rerank defaults", () => {
 		expect(shouldAdoptManagedRoles({})).toEqual({ jev: true, rerank: true });
 		expect(shouldAdoptManagedRoles({ jev: { backend: "dazzi", model: "jev-1.13" }, rerank: { provider: "dazzi" } })).toEqual({ jev: true, rerank: true });
 		expect(shouldAdoptManagedRoles({ jev: { backend: "openrouter", model: "typesafe/jev-1.13" }, rerank: { provider: "openrouter", model: "voyageai/rerank-3" } })).toEqual({ jev: false, rerank: false });
-		// A legacy-spelled block is ours to refresh, so sign-in rewrites it.
-		expect(shouldAdoptManagedRoles({ jev: { backend: "autorag" }, rerank: { provider: "autorag", enabled: true, model: "x" } })).toEqual({ jev: true, rerank: true });
 	});
 
 	it("respects an explicit off and a malformed value as the user's choice", () => {
@@ -100,7 +96,6 @@ describe("managed Jev and rerank defaults", () => {
 		expect(shouldAdoptManagedDecomposition(false)).toBe(false);
 		expect(shouldAdoptManagedDecomposition("x")).toBe(false);
 		expect(shouldAdoptManagedDecomposition({ model: { provider: "anthropic", id: "y" } })).toBe(false);
-		expect(shouldAdoptManagedDecomposition({ model: { provider: "autorag", id: "x" } })).toBe(true);
 	});
 	it("writes only the roles it may adopt, using the server's first models", () => {
 		const jevModels = [{ id: "jev-1.13" }];
