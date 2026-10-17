@@ -400,22 +400,39 @@ function ensureLoupeTour(){
  if(typeof state.scanIdx!=='number')state.scanIdx=0;
  handle.loupeTimer=setInterval(()=>{if(state.stepId!=='smartScan'||state.scanPaused)return;moveLoupeDom(((state.scanIdx||0)+1)%SCAN_NODES.length);},1250);
 }
-const origOpenOverlay=openOverlay;
-openOverlay=function(type){
- if(type==='addExcludeModal'){state.overlay=type;const o=document.getElementById('overlay');o.hidden=false;const selRoots=state.folders.filter(f=>f.selected);o.innerHTML=`<div class="modal" style="width:400px"><div class="modal-head">${icon('eye-off',15)}<strong>제외할 하위 폴더 추가</strong><button class="quiet" data-act="closeOverlay">${icon('x',15)}</button></div><div class="modal-body"><div class="pay-grid" style="grid-template-columns:1fr"><label>상위 폴더<select class="input" id="excParentInput">${selRoots.map(f=>`<option value="${f.id}">${esc(f.name)}</option>`).join('')}</select></label><label>제외할 하위 폴더<input class="input" id="excSubInput" placeholder="예: Archive/Logs" value="Archive/Logs"></label></div><div class="modal-actions"><button class="secondary" data-act="closeOverlay">취소</button><button class="primary" data-act="confirmAddExclude">추가</button></div></div></div>`;return;}
- if(type==='addFolderModal'){state.overlay=type;const o=document.getElementById('overlay');o.hidden=false;o.innerHTML=`<div class="modal" style="width:400px"><div class="modal-head">${icon('folder',15)}<strong>포함할 상위 폴더 추가</strong><button class="quiet" data-act="closeOverlay">${icon('x',15)}</button></div><div class="modal-body"><div class="pay-grid" style="grid-template-columns:1fr"><label>폴더 이름<input class="input" id="incFolderInput" placeholder="예: ClientDocs" value="ClientDocs"></label></div><div class="modal-actions"><button class="secondary" data-act="closeOverlay">취소</button><button class="primary" data-act="confirmAddFolder">추가</button></div></div></div>`;return;}
- origOpenOverlay(type);
-};
+function addPickedFolder(mode,rawName){
+ const name=(rawName||'').trim().replace(/^\/+|\/+$/g,'');if(!name)return;
+ if(mode==='include'){
+  const ex=state.folders.find(f=>f.name.toLowerCase()===name.toLowerCase());
+  if(ex){ex.selected=true;render();showToast(`${ex.name} 상위 폴더를 포함했습니다.`);return;}
+  state.folders.push({id:'custom-'+Date.now(),name,path:`~/${name}`,files:520,size:'1.1 GB',time:7,selected:true,icon:'folder'});
+  render();showToast(`${name} 상위 폴더를 포함 목록에 추가했습니다.`);
+ }else{
+  const parent=state.folders.find(f=>f.selected)||state.folders[0];
+  state.smartExcludes.push({id:'custom-'+Date.now(),parentId:parent.id,parentName:parent.name,subPath:name,files:480,gb:0.6,excluded:true});
+  render();showToast(`${parent.name} / ${name} 하위 폴더를 제외 목록에 추가했습니다.`);
+ }
+}
+async function pickNativeDirectory(mode){
+ if(mode==='exclude'&&!state.folders.some(f=>f.selected)){showToast('먼저 포함할 상위 폴더를 선택해주세요.');return;}
+ if(typeof window.showDirectoryPicker==='function'){
+  try{const dir=await window.showDirectoryPicker({mode:'read'});if(dir?.name)addPickedFolder(mode,dir.name);}catch(e){}
+  return;
+ }
+ let inp=document.getElementById('nativeDirPicker');
+ if(!inp){inp=document.createElement('input');inp.id='nativeDirPicker';inp.type='file';inp.setAttribute('webkitdirectory','');inp.setAttribute('directory','');inp.hidden=true;document.body.appendChild(inp);}
+ inp.value='';
+ inp.onchange=()=>{const rel=inp.files?.[0]?.webkitRelativePath||'';const folderName=rel.split('/')[0]||inp.files?.[0]?.name;if(folderName)addPickedFolder(mode,folderName);};
+ inp.click();
+}
 const origHandle=handle;
 handle=function(action,value){
  if(action==='toggleExclude'){const item=state.smartExcludes.find(x=>x.id===value);if(item){item.excluded=!item.excluded;render();}return;}
  if(action==='focusScanNode'){moveLoupeDom(Number(value));return;}
  if(action==='toggleScanPlay'){state.scanPaused=!state.scanPaused;render();return;}
  if(action==='resetSmart'){state.folders=structuredClone(folders);state.smartExcludes=structuredClone(smartExcludes);render();showToast('AI 추천 범위로 복원했습니다.');return;}
- if(action==='openAddFolder'){openOverlay('addFolderModal');return;}
- if(action==='confirmAddFolder'){const name=(document.getElementById('incFolderInput')?.value||'').trim().replace(/^\/+|\/+$/g,'');if(!name)return;state.folders.push({id:'custom-'+Date.now(),name,path:`~/${name}`,files:520,size:'1.1 GB',time:7,selected:true,icon:'folder'});closeOverlay();render();return;}
- if(action==='openAddExclude'){if(!state.folders.some(f=>f.selected)){showToast('먼저 포함할 상위 폴더를 선택해주세요.');return;}openOverlay('addExcludeModal');return;}
- if(action==='confirmAddExclude'){const parentId=document.getElementById('excParentInput')?.value||'documents';const sub=(document.getElementById('excSubInput')?.value||'').trim().replace(/^\/+|\/+$/g,'');if(!sub)return;const parent=state.folders.find(f=>f.id===parentId)||state.folders[0];state.smartExcludes.push({id:'custom-'+Date.now(),parentId:parent.id,parentName:parent.name,subPath:sub,files:480,gb:0.6,excluded:true});closeOverlay();render();return;}
+ if(action==='openAddFolder'){pickNativeDirectory('include');return;}
+ if(action==='openAddExclude'){pickNativeDirectory('exclude');return;}
  origHandle(action,value);
 };
 render();
