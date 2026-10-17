@@ -64,7 +64,8 @@ const LANES = [
 	{ name: "quick-look-heic", script: "run-qa-quick-look-heic.mjs", timeout: 240 },
 	{ name: "fs-worker-crash", script: "run-qa-finder-fs-worker-crash.mjs", timeout: 180 },
 	{ name: "quit-clean", script: "run-qa-finder-quit-clean.mjs", timeout: 600 },
-	{ name: "onboarding", script: "run-qa-onboarding.mjs", timeout: 900 }
+	{ name: "onboarding", script: "run-qa-onboarding.mjs", timeout: 900 },
+	{ name: "analytics", script: "run-qa-analytics.mjs", timeout: 600 }
 ];
 
 /**

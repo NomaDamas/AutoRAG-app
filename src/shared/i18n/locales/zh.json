@@ -370,6 +370,8 @@
       "title": "直接向\n文件提问",
       "lead": "无需打开文件夹翻找。Dazzi 会阅读文档中的内容，并附上依据作答。",
       "note": "默认在本地处理。需要远程处理时，我们会先显示哪些内容将被发送。",
+      "usageStats": "发送匿名使用统计以帮助改进 Dazzi。不包含文件、搜索词或文档内容，可随时在设置中关闭。",
+      "usageStatsPolicy": "隐私政策",
       "chat": {
         "user": "上一季度的成本为什么下降了？",
         "replyLead": "营销成本比上季度下降了",
@@ -1348,6 +1350,8 @@
       "privacyTitle": "隐私",
       "errorReporting": "发送错误报告",
       "errorReportingHint": "应用崩溃或索引失败时，会把原因发送给开发团队。不会发送文件路径、文件名或文档内容。",
+      "usageAnalytics": "发送使用统计",
+      "usageAnalyticsHint": "仅匿名向开发团队发送使用了哪些功能以及使用频率。不会发送文件路径、文件名、搜索词、提问、文档内容或账户信息；关闭后匿名 ID 也会被删除。",
       "docLanguagesTitle": "文档语言",
       "docLanguagesDesc": "读取和搜索文档时优先使用的语言。",
       "docLanguagesHint": "可以选择多个。",

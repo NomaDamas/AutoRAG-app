@@ -223,6 +223,57 @@ build time as `MAIN_VITE_SENTRY_DSN` (the release workflow reads the
 `SENTRY_DSN` repository variable); a build without it initialises nothing.
 Tracing, replay, logs and user feedback are not enabled.
 
+## Usage statistics (PostHog)
+
+Separate from error reports: Settings → 일반 → 개인정보 has a second switch,
+`usageAnalytics`, **off by default** (opt-in). It answers "which features are
+used", never "what is in them".
+
+How a user opts in: the first onboarding step (welcome) carries a small,
+**unticked** checkbox with a link to the Privacy Policy, and Settings → 일반 →
+개인정보 has the same choice as a switch. Continuing from the welcome step saves
+the checkbox's value to `usageAnalytics`; closing the window there saves
+nothing. Either way nothing is sent until the user ticks or switches it on, so
+consent is an affirmative act, as the EU's GDPR/ePrivacy rules require. The
+Privacy Policy (served from the landing-page repo) must name the desktop app's
+usage statistics before EU users are served.
+
+What is sent, and only after the user turns it on: `app_opened`,
+`settings_changed` (a setting's name and `on`/`off` or its enum value),
+`onboarding_completed`, `ai_search_started` (has attachments, is a follow-up),
+`ai_search_finished` (answered / failed / stopped, whether Deep ran, a coarse
+duration bucket) and `settings_page_viewed` (a fixed page id; a connected app's
+page is just `source`). Every event also carries app version, platform, arch,
+packaged flag and interface language.
+
+What cannot be sent is a property of the schema, not of discipline:
+`src/shared/analytics-contract.ts` declares every event, and every property is
+a value from a fixed list (no free string, number or object slot), so a path,
+file name, query, answer or source name has nowhere to go.
+`sanitizeAnalyticsEvent` checks each event against it in the main process,
+whichever process raised it, and drops a malformed event whole. The renderer can
+only send the events it owns (`settings_page_viewed`) through the one-way
+`analytics:track` IPC channel.
+
+Identity: a random uuid in `userData/analytics/install-id`, never linked to an
+account, machine or person. Turning the switch off drops everything queued,
+deletes the id and stops at once; turning it on again makes a new id. Events are
+sent with `$process_person_profile: false` (no person record) and
+`disableGeoip`; no feature-flag, config or autocapture traffic, no session
+replay. One PostHog **project setting** is not controllable from the app and
+must be on: "Discard client IP data".
+
+Design: `src/main/analytics-core.ts` is the pure part (schema check, consent,
+id store, setting-diff events, target resolution); `src/main/analytics.ts` is
+the `posthog-node` sink (created lazily on the first event, batched, flushed on
+quit). The build supplies `MAIN_VITE_POSTHOG_KEY` (a public write-only
+`phc_…` key) and optionally `MAIN_VITE_POSTHOG_HOST` (default
+`https://eu.i.posthog.com`); a build without a key sends nothing. An unpackaged
+run (dev, the QA lanes) may override both with `AUTORAG_ANALYTICS_KEY` and
+`AUTORAG_ANALYTICS_HOST`; a packaged app ignores the environment.
+`scripts/manual-qa/run-qa-analytics.mjs` is the live check: it points the real
+app at a local capture server and asserts the rules above over HTTP.
+
 ## First-run onboarding
 
 A fresh install opens onboarding instead of the Finder: welcome, permissions,

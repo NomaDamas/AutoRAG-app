@@ -82,6 +82,9 @@ export function GeneralPage({
 				<Row name={t("settingsCore.general.errorReporting")} hint={t("settingsCore.general.errorReportingHint")}>
 					<Switch checked={appSettings.errorReporting} onChange={() => void setApp({ errorReporting: !appSettings.errorReporting })} ariaLabel={t("settingsCore.general.errorReporting")} />
 				</Row>
+				<Row name={t("settingsCore.general.usageAnalytics")} hint={t("settingsCore.general.usageAnalyticsHint")}>
+					<Switch checked={appSettings.usageAnalytics} onChange={() => void setApp({ usageAnalytics: !appSettings.usageAnalytics })} ariaLabel={t("settingsCore.general.usageAnalytics")} />
+				</Row>
 			</Section>
 			<Section title={t("settingsCore.general.docLanguagesTitle")} description={t("settingsCore.general.docLanguagesDesc")}>
 				<LanguageSettings snapshot={snapshot} path={["languages"]} name={t("settingsCore.general.docLanguagesTitle")} hint={t("settingsCore.general.docLanguagesHint")} onSaved={onSaved} fallback={["ko", "en"]} />
