@@ -10,7 +10,7 @@ import {
 import { readRawConfigObject, resolveAgentModel, resolveConfigPath, type CliConfig } from "@autorag/librarian/core";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { isJsonObject } from "../shared/settings-contract";
-import { openPlanRuntime, preferPlanOAuth } from "./dazzi-session-auth";
+import { applyDazziThinkingLevels, openPlanRuntime, preferPlanOAuth } from "./dazzi-session-auth";
 import { applyAppIndexing } from "./app-indexing";
 import type {
 	AnswerPhase,
@@ -125,6 +125,7 @@ function createLiveStreamMapper(searchId: string, emit: (event: SearchStreamEven
 	let agentRuns = 0;
 	let current = "";
 	let lastDraft = "";
+	let lastStopReason: string | undefined;
 	const thinkingPhases = new Set<AnswerPhaseName>();
 	const phase = (): AnswerPhaseName => (agentRuns > 1 ? "deep" : "quick");
 	const setDraft = (text: string): void => {
@@ -134,7 +135,13 @@ function createLiveStreamMapper(searchId: string, emit: (event: SearchStreamEven
 	};
 	return (event) => {
 		if (event.type === "agent_start") {
-			agentRuns += 1;
+			// If the first phase failed with a provider error before producing a fast
+			// answer, the next agent_start produces the run's only answer (delivered
+			// into the Quick slot on `complete`), so keep streaming it as Quick.
+			if (!(agentRuns === 1 && lastStopReason === "error")) {
+				agentRuns += 1;
+			}
+			lastStopReason = undefined;
 			current = "";
 			lastDraft = "";
 			return;
@@ -144,8 +151,11 @@ function createLiveStreamMapper(searchId: string, emit: (event: SearchStreamEven
 			return;
 		}
 		if (event.type === "message_end" && event.message?.role === "assistant") {
+			lastStopReason = event.message.stopReason;
 			// Backstop for a provider that announces no tool call before the message ends.
-			if (event.message.stopReason === "toolUse" && lastDraft !== "") setDraft("");
+			if ((event.message.stopReason === "toolUse" || event.message.stopReason === "error") && lastDraft !== "") {
+				setDraft("");
+			}
 			current = "";
 			return;
 		}
@@ -482,7 +492,7 @@ async function resolveDecomposition(
 	const reference = config.queryDecomposition?.model ?? DEFAULT_QUERY_DECOMPOSITION;
 	const resolved = await resolveAgentModel({ ...config, model: reference }, { env, cwd });
 	const apiKey = resolved.apiKey ?? resolved.providerApiKeys?.[resolved.model.provider];
-	return { model: resolved.model, ...(apiKey === undefined ? {} : { apiKey }) };
+	return { model: applyDazziThinkingLevels(resolved.model), ...(apiKey === undefined ? {} : { apiKey }) };
 }
 
 export function createDefaultAgentFactory(): () => Promise<SearchAgent> {
@@ -509,7 +519,7 @@ export function createDefaultAgentFactory(): () => Promise<SearchAgent> {
 		const thinking = readThinking(raw);
 		const options: AutoRAGAgentOptions = {
 			...buildAgentOptions(effective),
-			model: resolved.model,
+			model: applyDazziThinkingLevels(resolved.model),
 			...(resolved.apiKey !== undefined ? { apiKey: resolved.apiKey } : {}),
 			...(resolved.providerApiKeys !== undefined ? { providerApiKeys: resolved.providerApiKeys } : {}),
 			...(decomposition !== undefined ? { queryDecomposition: decomposition } : {}),

@@ -206,6 +206,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 				case "quick":
 					setQuick(event.phase);
 					setQuickDraft(event.phase.answer);
+					if (deepRef.current === null) setDeepDraft("");
 					setProgress("");
 					quickShownRef.current = true;
 					break;
