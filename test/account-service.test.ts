@@ -1,11 +1,12 @@
 import { createHash, randomUUID } from "node:crypto";
+import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { ACCOUNT_API_KEY_ENV, ACCOUNT_CHANNELS, type AccountStatus } from "../src/shared/account-contract";
+import { ACCOUNT_CHANNELS, type AccountStatus } from "../src/shared/account-contract";
 import { createAccountService, type AccountService } from "../src/main/account-service";
 
 /**
@@ -230,7 +231,6 @@ describe("sign in", () => {
 		const status = await service.signIn();
 
 		expect(status.state).toBe("signedIn");
-		expect(status.source).toBe("stored");
 		expect(status.account).toMatchObject({
 			email: "user@example.com",
 			plan: "free",
@@ -239,7 +239,7 @@ describe("sign in", () => {
 			requestsPerMinute: 10,
 			billing: { air: true, pro: true, portal: false },
 		});
-		expect(creds.store.get(ACCOUNT_API_KEY_ENV)).toBe("dz_fakekey");
+		expect(creds.store.size).toBe(0);
 		// The same token is bridged into Pi's `auth.json` as the plan credential
 		// the librarian (2.10.2) reads for chat, catalog, Jev, and rerank.
 		const stored = JSON.parse(await readFile(join(root, "auth.json"), "utf8")) as Record<string, { type: string; access: string }>;
@@ -274,7 +274,6 @@ describe("sign in", () => {
 		const status = await service.signIn();
 
 		expect(status).toMatchObject({ state: "signedOut", error: null });
-		expect(creds.store.size).toBe(0);
 	});
 
 	it("ignores a callback with the wrong state and keeps waiting for the real one", async () => {
@@ -298,7 +297,6 @@ describe("sign in", () => {
 		const status = await service.signIn();
 
 		expect(status).toMatchObject({ state: "signedOut", error: "The code expired." });
-		expect(creds.store.size).toBe(0);
 	});
 
 	it("times out when the browser never comes back", async () => {
@@ -331,19 +329,19 @@ describe("sign in", () => {
 
 describe("status and refresh", () => {
 	it("is signed out without a key", async () => {
-		expect(await service.status()).toMatchObject({ state: "signedOut", source: null, account: null, baseUrl: fake.url });
+		expect(await service.status()).toMatchObject({ state: "signedOut", account: null, baseUrl: fake.url });
 	});
 
-	it("picks up a headless AUTORAG_API_KEY and refuses to remove it", async () => {
-		env[ACCOUNT_API_KEY_ENV] = "dz_fakekey";
+	it("picks up a plan credential already in auth.json and signs it out by removing it", async () => {
+		await writeFile(join(root, "auth.json"), JSON.stringify({ dazzi: { type: "oauth", access: "dz_fakekey", refresh: "", expires: Number.MAX_SAFE_INTEGER }, openrouter: { type: "api_key", key: "or" } }));
 
 		const refreshed = await service.refresh();
-		expect(refreshed).toMatchObject({ state: "signedIn", source: "env" });
+		expect(refreshed).toMatchObject({ state: "signedIn" });
 		expect(refreshed.account?.email).toBe("user@example.com");
-		const stored = JSON.parse(await readFile(join(root, "auth.json"), "utf8")) as Record<string, { type: string; access: string }>;
-		expect(stored.dazzi).toMatchObject({ type: "oauth", access: "dz_fakekey" });
 
-		expect((await service.signOut()).state).toBe("signedIn");
+		expect((await service.signOut()).state).toBe("signedOut");
+		const auth = JSON.parse(await readFile(join(root, "auth.json"), "utf8")) as Record<string, unknown>;
+		expect(auth).toEqual({ openrouter: { type: "api_key", key: "or" } });
 	});
 
 	it("maps trial, scheduled cancel and the period end", async () => {
@@ -385,7 +383,6 @@ describe("status and refresh", () => {
 		const status = await service.refresh();
 
 		expect(status).toMatchObject({ state: "signedOut", account: null, error: "Invalid or revoked API key." });
-		expect(creds.store.size).toBe(0);
 	});
 
 	it("keeps the account on a server error", async () => {
@@ -406,7 +403,6 @@ describe("sign out", () => {
 		const status = await service.signOut();
 
 		expect(status).toMatchObject({ state: "signedOut", account: null });
-		expect(creds.store.size).toBe(0);
 		const auth = JSON.parse(await readFile(join(root, "auth.json"), "utf8")) as Record<string, unknown>;
 		expect("dazzi" in auth).toBe(false);
 		expect((await build().status()).account).toBeNull();
@@ -638,17 +634,24 @@ describe("default model after sign-in", () => {
 });
 
 describe("review follow-ups", () => {
-	it("reports an ambient key as the active source even when an encrypted entry also exists, and does not claim to sign it out", async () => {
-		// The real credential store skips a stored entry when the env already holds the name.
-		creds.store.set(ACCOUNT_API_KEY_ENV, "dz_stale");
-		env[ACCOUNT_API_KEY_ENV] = "dz_fakekey";
-		creds.service.list = async (names = []) => names.map((envName) => ({ envName, stored: true, source: "env" as const }));
+	it("moves a key a pre-2.10.3 build kept only in the encrypted store into auth.json", async () => {
+		creds.store.set("AUTORAG_API_KEY", "dz_fakekey");
+		env.AUTORAG_API_KEY = "dz_fakekey";
 
 		const status = await service.refresh();
 
-		expect(status).toMatchObject({ state: "signedIn", source: "env" });
-		expect((await service.signOut()).state).toBe("signedIn");
-		expect(creds.store.get(ACCOUNT_API_KEY_ENV)).toBe("dz_stale");
+		expect(status).toMatchObject({ state: "signedIn" });
+		const stored = JSON.parse(await readFile(join(root, "auth.json"), "utf8")) as Record<string, { access: string }>;
+		expect(stored.dazzi?.access).toBe("dz_fakekey");
+		expect(creds.store.has("AUTORAG_API_KEY")).toBe(false);
+		expect(env.AUTORAG_API_KEY).toBeUndefined();
+	});
+
+	it("does not adopt an ambient AUTORAG_API_KEY: only the app's own sign-in counts", async () => {
+		env.AUTORAG_API_KEY = "dz_fakekey";
+
+		expect(await service.refresh()).toMatchObject({ state: "signedOut" });
+		expect(existsSync(join(root, "auth.json"))).toBe(false);
 	});
 
 	it("survives concurrent refreshes writing the cache", async () => {

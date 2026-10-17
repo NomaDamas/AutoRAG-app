@@ -30,8 +30,11 @@ export type AccountPlanId = "free" | "air" | "pro";
 /** Plans that need a checkout. */
 export type PaidPlanId = "air" | "pro";
 
-/** Environment variable the AutoRAG API key lives in (encrypted store, loaded into `process.env`). */
-export const ACCOUNT_API_KEY_ENV = "AUTORAG_API_KEY";
+/**
+ * Name pre-2.10.3 builds stored the account key under in the encrypted
+ * credential store. The app no longer reads it; it is only migrated away.
+ */
+export const LEGACY_ACCOUNT_API_KEY_ENV = "AUTORAG_API_KEY";
 
 /** Server root used when `AUTORAG_BASE_URL` is unset. */
 export const DEFAULT_ACCOUNT_BASE_URL = "https://api.dazziapp.com";
@@ -80,11 +83,6 @@ export interface AccountSnapshot {
 export interface AccountStatus {
 	/** `signingIn`: the browser sign-in is waiting for the callback. */
 	readonly state: "signedOut" | "signingIn" | "signedIn";
-	/**
-	 * Where the key comes from. `env` (a headless `AUTORAG_API_KEY`) cannot be
-	 * signed out from the app.
-	 */
-	readonly source: "stored" | "env" | null;
 	/** Last account the server confirmed; kept while offline. */
 	readonly account: AccountSnapshot | null;
 	/** The server could not be reached, so `account` may be out of date. */

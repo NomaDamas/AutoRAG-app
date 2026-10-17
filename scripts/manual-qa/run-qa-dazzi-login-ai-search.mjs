@@ -101,7 +101,6 @@ const env = {
 	OPENROUTER_API_KEY: "",
 	OPENAI_API_KEY: "",
 	ANTHROPIC_API_KEY: "",
-	AUTORAG_API_KEY: "",
 };
 
 const app = await launchFinder({ userDataDir: join(WORK, "user-data"), env });

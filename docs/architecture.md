@@ -285,9 +285,11 @@ Account and plan are real. The account step signs in through the system
 browser (OAuth 2.0 authorization code + PKCE over a loopback redirect, RFC 8252)
 against the hosted AutoRAG service (`AUTORAG_BASE_URL`, default
 `https://api.dazziapp.com`); no password and no card number is typed into the
-app. The returned API key (`AUTORAG_API_KEY`) lives only in the encrypted
-credential store and `process.env`, exactly like a BYOK key; the renderer sees
-an `AccountStatus` (email, plan, subscription state, weekly credits), never the
+app. The returned API key lives only in Pi's `auth.json` as the `dazzi`
+credential (mode 0600), the single place the librarian reads the hosted plan
+from, so the app and the librarian cannot disagree about being signed in; the
+renderer sees an `AccountStatus` (email, plan, subscription state, weekly
+credits), never the
 key. Air and Pro open the service's hosted checkout in the browser, and the plan
 step continues once the server reports that plan; cancel, refund, and the
 payment method live in the hosted billing portal (Settings › 구독 및 사용량).
@@ -295,8 +297,8 @@ Skipping the account is the BYOK path.
 
 **What signing in changes.** A successful sign-in (onboarding, Settings, or the
 AutoRAG entry in Settings › AI) points the agent at the account's models, per
-role, in the shared `config.json` (the config carries an explicit `baseUrl` and
-`apiKeyEnv`, never the key):
+role, in the shared `config.json` (the config carries an explicit
+`baseUrl`, never the key or an env var name):
 
 | Role | Replaced when the config holds | Kept when it holds |
 |---|---|---|

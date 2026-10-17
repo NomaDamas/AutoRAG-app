@@ -75,7 +75,6 @@ describe("onboarding flow", () => {
 		expect(
 			canSelectCloudEmbedding({
 				state: "signedOut",
-				source: null,
 				account: null,
 				offline: false,
 				error: null,
@@ -85,7 +84,6 @@ describe("onboarding flow", () => {
 		expect(
 			canSelectCloudEmbedding({
 				state: "signedIn",
-				source: "stored",
 				account: null,
 				offline: false,
 				error: null,
@@ -157,7 +155,6 @@ describe("onboarding flow", () => {
 describe("planHeld", () => {
 	const signedIn = (plan: "free" | "air" | "pro"): AccountStatus => ({
 		state: "signedIn",
-		source: "stored",
 		offline: false,
 		error: null,
 		baseUrl: "https://example.test",

@@ -439,8 +439,7 @@
       "agreeTerms": "Terms of Service",
       "agreePrivacy": "Privacy Policy",
       "agreeUse": "Acceptable Use",
-      "planLabel": "{{plan}} plan",
-      "signedInEnv": "Using the API key from the environment"
+      "planLabel": "{{plan}} plan"
     },
     "permissions": {
       "eyebrow": "Permissions",
@@ -1367,7 +1366,6 @@
       "offline": "Could not reach the server; showing the last confirmed information.",
       "signOut": "Sign Out",
       "signIn": "Sign In",
-      "hintEnv": "Signed in via the AUTORAG_API_KEY environment variable, so you cannot sign out from the app.",
       "hintSignedIn": "Deletes the key stored on this Mac. You can revoke it from the API keys screen on the Dazzi website.",
       "hintSignedOut": "A browser opens; approve there and you'll return to this app.",
       "signInBrowser": "Sign In in Browser",
@@ -1480,7 +1478,6 @@
         "notSignedIn": "Not signed in."
       },
       "disconnect": {
-        "envLocked": "Signed in via the AUTORAG_API_KEY environment variable, so you cannot sign out from the app. Remove that environment variable yourself.",
         "title": "Disconnect {{name}}?",
         "body": "Deletes the stored credentials and removes it from the list. Roles using this service may need a new model.",
         "action": "Disconnect"
