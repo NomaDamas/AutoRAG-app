@@ -4,7 +4,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createChatStore, type ChatStore } from "../src/main/chat-store";
-import { createSearchService, type LiveAgentEvent } from "../src/main/search-service";
+import { buildAgentOptions, type CliConfig } from "@autorag/librarian";
+import {
+	createSearchService,
+	DEFAULT_WEB_SEARCH_PROVIDER_ORDER,
+	resolveWebSearchConfig,
+	type LiveAgentEvent,
+} from "../src/main/search-service";
 import { SEARCH_CHANNELS, type ChatRecord, type SearchStreamEvent } from "../src/shared/search-contract";
 
 interface TestResponse {
@@ -737,5 +743,49 @@ describe("createSearchService", () => {
 		expect(await service.historySearch("approval")).toHaveLength(1);
 		await service.historyClear();
 		expect(await service.historyList()).toEqual([]);
+	});
+});
+
+describe("resolveWebSearchConfig", () => {
+	const baseConfig: CliConfig = {
+		searchPaths: ["/tmp/docs"],
+		workspacePath: "/tmp/workspace",
+		memoryPath: "/tmp/memory.json",
+	};
+
+	it("puts parallel and duckduckgo first in the fallback chain when webSearch is absent", () => {
+		expect(DEFAULT_WEB_SEARCH_PROVIDER_ORDER).toEqual(["parallel", "duckduckgo"]);
+		const webSearch = resolveWebSearchConfig({});
+		expect(webSearch).toEqual({ order: ["parallel", "duckduckgo"] });
+		const agentOpts = buildAgentOptions({ ...baseConfig, webSearch });
+		expect(agentOpts.webSearch).toEqual({ order: ["parallel", "duckduckgo"] });
+	});
+
+	it("fills in the default order when webSearch is an object without an explicit order", () => {
+		const webSearch = resolveWebSearchConfig({ webSearch: { timeoutSeconds: 30, fetch: { timeoutSeconds: 15 } } });
+		expect(webSearch).toEqual({
+			timeoutSeconds: 30,
+			fetch: { timeoutSeconds: 15 },
+			order: ["parallel", "duckduckgo"],
+		});
+		const agentOpts = buildAgentOptions({ ...baseConfig, webSearch });
+		expect(agentOpts.webSearch).toEqual({
+			timeoutSeconds: 30,
+			fetch: { timeoutSeconds: 15 },
+			order: ["parallel", "duckduckgo"],
+		});
+	});
+
+	it("preserves an explicit user-configured webSearch.order", () => {
+		const webSearch = resolveWebSearchConfig({ webSearch: { order: ["duckduckgo", "parallel", "mojeek"] } });
+		expect(webSearch).toEqual({ order: ["duckduckgo", "parallel", "mojeek"] });
+	});
+
+	it("preserves disabled webSearch (false or enabled: false)", () => {
+		expect(resolveWebSearchConfig({ webSearch: false })).toEqual({ enabled: false });
+		expect(buildAgentOptions({ ...baseConfig, webSearch: resolveWebSearchConfig({ webSearch: false }) }).webSearch).toBe(false);
+
+		expect(resolveWebSearchConfig({ webSearch: { enabled: false } })).toEqual({ enabled: false });
+		expect(buildAgentOptions({ ...baseConfig, webSearch: resolveWebSearchConfig({ webSearch: { enabled: false } }) }).webSearch).toBe(false);
 	});
 });
