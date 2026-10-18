@@ -89,6 +89,23 @@ still has the previous file's size when they lay out.
   shows the same first page (`ui/rhwp.ts`), since the OS thumbnailers draw
   nothing for HWP without Hancom's plug-in. Encrypted, DRM, and unsupported
   files fall back to the Other panel with rhwp's message.
+- **Word 97-2003 / PowerPoint 97-2003** (`.doc` `.dot` · `.ppt` `.pps` `.pot`)
+  — text, not layout. `shared/legacy-office.ts` reads the compound-file
+  container itself (bounds-checked typed arrays; a general CFB library turned a
+  32MB file into a 1.2GB array of numbers) and pulls only the streams it needs.
+  Word: the piece table (Clx) in `0Table`/`1Table` gives the main document's
+  UTF-16 and cp1252 pieces; fields keep their result and drop the instruction,
+  cell marks become tab-separated rows, a form feed starts a new page card;
+  footnote/header stories after the main text are not shown. PowerPoint: `Current User` →
+  UserEditAtom chain → persist directory finds the newest copy of every slide
+  (a fast save leaves stale ones behind), and each slide shows its title and
+  text lines in show order, merged with the placeholder text the slide list
+  keeps. Macros, OLE objects, and links are never opened. Encrypted, Word 6/95,
+  empty, damaged, and non-Word files fall back to the Other panel with a note;
+  an RTF or OOXML file saved under the old extension is handed to the RTF /
+  `.docx` / `.pptx` viewer by its first bytes. The Finder tile uses the OS
+  first-page thumbnail (`.doc .dot .ppt .pps .pot .xls .xlt`; measured 0.3-0.6s
+  cold, none empty), unlike `.docx`/`.xlsx`/`.pptx`, which stay letter tiles.
 - **HTML** — a sandboxed frame with scripts off, at desktop width, in a 390px
   phone column, or as highlighted source.
 - **Code** — numbered lines on the paper material with the reference's Xcode
@@ -178,7 +195,7 @@ viewers inside the new chrome.
 The main process reads only what the viewer will use (`byteNeed` in
 `registry.ts`): nothing for media, PDF, images, and fonts, which stream through
 `autorag-preview://` (it answers `Range` with `206`); the first 4MB of text,
-code, Markdown, and HTML; whole documents (HWP included) up to 32MB; for iWork
+code, Markdown, and HTML; whole documents (HWP and legacy Office included) up to 32MB; for iWork
 packages the directory, the Keynote slide tree, and the page images inside; a
 HEIC as the JPEG macOS's own `sips` decodes from it (`node/heic.ts`, about
 0.2s on a 24MP iPhone photo even on a spinning disk; the viewer's wasm decoder

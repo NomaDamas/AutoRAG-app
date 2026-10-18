@@ -76,6 +76,10 @@ const NATIVE_THUMBNAIL_EXTENSIONS = new Set([
 	// (Numbers, Pages, Keynote). Windows has no thumbnailer for them and falls
 	// through to the type icon.
 	"numbers", "pages", "key",
+	// Legacy binary Office: Office.qlgenerator draws the first page, slide, or
+	// sheet in ~300-600 ms cold (24 files at 8 in flight: 2.3-5 s, none empty).
+	// The OOXML siblings (docx/xlsx/pptx) deliberately stay on letter tiles.
+	"doc", "dot", "ppt", "pps", "pot", "xls", "xlt",
 	// A macOS application bundle is a directory on disk, but Quick Look renders
 	// the app's own icon for it — at the listing tier and at the Inspector's
 	// 640px tier — so it takes this lane exactly like a document does.

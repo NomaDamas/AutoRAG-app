@@ -1220,6 +1220,16 @@
       "readFailed": "書籍を読み込めませんでした",
       "noText": "本文が見つかりませんでした"
     },
+    "legacyOffice": {
+      "encrypted": "パスワードで保護されているためプレビューできません",
+      "unsupported": "このWord/PowerPoint形式はプレビューできません",
+      "corrupt": "ファイルが壊れているため読み取れませんでした",
+      "empty": "表示できるテキストがありません",
+      "page": "{{count}}ページ",
+      "slide": "スライド {{count}}",
+      "textOnly": "テキストのみ表示しています。レイアウトや画像はアプリで開いて確認してください。",
+      "truncated": "文書が大きいため、先頭部分のみ表示しています。"
+    },
     "paged": {
       "drawFailed": "ページを描画できませんでした",
       "goToPage": "{{count}}ページへ移動",

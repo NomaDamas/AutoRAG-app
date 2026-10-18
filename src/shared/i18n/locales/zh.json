@@ -1220,6 +1220,16 @@
       "readFailed": "无法读取书籍",
       "noText": "未找到正文"
     },
+    "legacyOffice": {
+      "encrypted": "该文档受密码保护，无法预览",
+      "unsupported": "无法预览此 Word 或 PowerPoint 格式",
+      "corrupt": "文件已损坏，无法读取",
+      "empty": "没有可显示的文本",
+      "page": "第 {{count}} 页",
+      "slide": "幻灯片 {{count}}",
+      "textOnly": "仅显示文本。请在应用中打开文件以查看版式和图片。",
+      "truncated": "文档较大，仅显示开头部分。"
+    },
     "paged": {
       "drawFailed": "无法绘制页面",
       "goToPage": "转到第 {{count}} 页",
