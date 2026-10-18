@@ -37,6 +37,7 @@ import {
 	bySourceOrder,
 	canAdvance,
 	canSelectCloudEmbedding,
+	errorReportsConsentOnLeaving,
 	isPlanSelectable,
 	planHeld,
 	primaryLabelKey,
@@ -149,6 +150,8 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 	const [indexStatus, setIndexStatus] = useState<IndexingStatus | null>(null);
 	// Unticked: usage statistics are opt-in (an EU user's consent must be an affirmative act).
 	const [shareUsage, setShareUsage] = useState(false);
+	// Unticked too: error reports are opt-in, a separate purpose with its own consent.
+	const [shareErrors, setShareErrors] = useState(false);
 
 	const draftRef = useRef<OnboardingDraft | null>(null);
 	const permissionRef = useRef<PermissionStatus | null>(null);
@@ -163,11 +166,13 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 	const modelsRef = useRef(false);
 	const indexingRef = useRef(false);
 	const shareUsageRef = useRef(false);
+	const shareErrorsRef = useRef(false);
 
 	// Synced during render, not in an effect: deferred callbacks (the sign-in
 	// auto-advance, keyboard handler) must see the state of the latest render.
 	draftRef.current = draft;
 	shareUsageRef.current = shareUsage;
+	shareErrorsRef.current = shareErrors;
 	permissionRef.current = permission;
 	accountRef.current = account;
 	useEffect(() => {
@@ -346,9 +351,10 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 		const list = buildFlow(current.plan, shouldSkipPlanStep(current.planConfirmed, embed, accountRef.current), embed);
 		const target = list[list.indexOf(current.stepId) + 1];
 		const consent = usageConsentOnLeaving(current.stepId, shareUsageRef.current);
-		if (consent !== null) {
-			// A failed save leaves the setting at its default (off): the safe direction.
-			void autorag.settings.set({ usageAnalytics: consent }).catch((error: unknown) => console.error("[onboarding] usage statistics choice not saved:", error));
+		const errorConsent = errorReportsConsentOnLeaving(current.stepId, shareErrorsRef.current);
+		if (consent !== null && errorConsent !== null) {
+			// A failed save leaves both settings at their default (off): the safe direction.
+			void autorag.settings.set({ usageAnalytics: consent, errorReporting: errorConsent }).catch((error: unknown) => console.error("[onboarding] privacy choices not saved:", error));
 		}
 		setDraft({
 			...current,
@@ -613,6 +619,8 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 		tipIndex,
 		shareUsage,
 		setShareUsage,
+		shareErrors,
+		setShareErrors,
 		t,
 		patch,
 		setStep: (id: OnboardingStepId) => patch({ stepId: id }),

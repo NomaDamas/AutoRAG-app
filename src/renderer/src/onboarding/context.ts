@@ -54,6 +54,8 @@ export interface OnboardingCtx {
 	readonly tipIndex: number;
 	/** The welcome step's "send anonymous usage statistics" checkbox; saved to Settings when the user continues from that step. */
 	readonly shareUsage: boolean;
+	/** The welcome step's "send error reports" checkbox; saved to Settings when the user continues from that step. */
+	readonly shareErrors: boolean;
 	readonly t: Translate;
 
 	patch(patch: Partial<OnboardingDraft>): void;
@@ -85,6 +87,7 @@ export interface OnboardingCtx {
 	refreshAccount(): void;
 	setLaunchAtLogin(enabled: boolean): void;
 	setShareUsage(value: boolean): void;
+	setShareErrors(value: boolean): void;
 	requestNotifications(): void;
 	openNotificationSettings(): void;
 	checkNetwork(): void;

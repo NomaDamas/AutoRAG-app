@@ -65,7 +65,7 @@ export interface AppSettings {
 	readonly launchAtLogin: boolean;
 	readonly showInMenuBar: boolean;
 	readonly autoInstallUpdates: boolean;
-	/** Crash and indexing-failure reports go to the maintainers (no file paths, names or document text). On by default. */
+	/** Crash and indexing-failure reports go to the maintainers (no file paths, names or document text). Off by default: opt-in, asked on the first onboarding step. */
 	readonly errorReporting: boolean;
 	/**
 	 * Anonymous product-usage statistics (which features are used, never what is in them) go to the maintainers.
@@ -86,7 +86,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
 	launchAtLogin: false,
 	showInMenuBar: true,
 	autoInstallUpdates: true,
-	errorReporting: true,
+	errorReporting: false,
 	usageAnalytics: false,
 	showHiddenFiles: false,
 	dupeyScanIntervalMinutes: 60,
