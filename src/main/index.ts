@@ -69,6 +69,7 @@ import { createSettingsService } from "./settings-service";
 import {
 	registerAccountIpcHandlers,
 	registerActionsIpcHandlers,
+	registerAnalyticsIpcHandlers,
 	registerAppUpdateIpcHandlers,
 	registerDragOutIpcHandlers,
 	registerIndexActivityIpcHandlers,
@@ -89,11 +90,30 @@ import { createOsRequestService, diskKindOf } from "./os-request-service";
 import { createOsMenuIntegration, menuLabels } from "./os-menu-integration";
 import { initErrorReporting, setErrorReportingEnabled } from "./error-reporting";
 import { createStallDetector, readErrorReportingEnabled, refreshFailureReport, reportError } from "./error-report-core";
+import { createAnalytics, createInstallIdStore, readUsageAnalyticsEnabled, resolveAnalyticsTarget, settingChangeEvents } from "./analytics-core";
+import { createPostHogSink } from "./analytics";
 
 const execFileAsync = promisify(execFile);
 
 // Before `ready`, so a crash during startup is reported. The Settings toggle is read from disk because the settings service loads later.
 initErrorReporting({ dsn: import.meta.env.MAIN_VITE_SENTRY_DSN, enabled: readErrorReportingEnabled(app.getPath("userData")), version: APP_VERSION, packaged: app.isPackaged });
+
+/**
+ * Usage statistics: opt-in, anonymous, content-free (see `analytics-core.ts`). Off until the user turns it on in
+ * Settings, read from disk because the settings service loads later. A build with no PostHog key has no sink and sends nothing.
+ */
+const analyticsTarget = resolveAnalyticsTarget({
+	packaged: app.isPackaged,
+	buildKey: import.meta.env.MAIN_VITE_POSTHOG_KEY,
+	buildHost: import.meta.env.MAIN_VITE_POSTHOG_HOST,
+	env: process.env,
+});
+const analytics = createAnalytics({
+	sink: analyticsTarget === null ? null : createPostHogSink(analyticsTarget),
+	installId: createInstallIdStore(join(app.getPath("userData"), "analytics", "install-id")),
+	context: () => ({ app_version: APP_VERSION, platform: process.platform, arch: process.arch, packaged: app.isPackaged, language: currentLanguage }),
+	enabled: readUsageAnalyticsEnabled(app.getPath("userData")),
+});
 
 /** The one AutoRAG config every surface (CLI, TUI, serve, this app) resolves. */
 function autoragConfigPath(): string {
@@ -472,8 +492,10 @@ app.whenReady().then(async () => {
 		agentFactory: createDefaultAgentFactory(),
 		chatStore: createChatStore({ directory: join(app.getPath("userData"), "chat-history") }),
 		send: sendToMainWindow,
+		analytics,
 	});
 	registerSearchIpcHandlers(searchService);
+	let previousSettings: AppSettings | null = null;
 	const applyAppearance = (appearance: AppAppearance): void => {
 		currentAppearance = appearance;
 		nativeTheme.themeSource = appearance;
@@ -586,6 +608,10 @@ app.whenReady().then(async () => {
 			}
 		},
 		onSettingsChanged: (settings) => {
+			// First: turning the setting off must stop everything (and delete the id) before this change's own event is considered.
+			analytics.setEnabled(settings.usageAnalytics);
+			if (previousSettings !== null) for (const change of settingChangeEvents(previousSettings, settings)) analytics.track("settings_changed", change);
+			previousSettings = settings;
 			setErrorReportingEnabled(settings.errorReporting);
 			applyAppearance(settings.appearance);
 			applyLanguage(settings.language);
@@ -598,6 +624,11 @@ app.whenReady().then(async () => {
 		},
 	});
 	registerSettingsIpcHandlers(settingsService);
+	registerAnalyticsIpcHandlers(analytics);
+	void settingsService.get().then((settings) => {
+		previousSettings ??= settings;
+	});
+	analytics.track("app_opened", {});
 	const indexActivity = createIndexActivityService({
 		configPath: autoragConfigPath,
 		resolveWorkspacePath: async () => (await resolveEffectiveConfig({ env: process.env, cwd: process.cwd() })).config.workspacePath,
@@ -822,6 +853,7 @@ app.whenReady().then(async () => {
 		startScans: (paths) => scanCoordinator.start(paths),
 		folderTotals: (paths) => scanCoordinator.totalFiles(paths),
 		onComplete: () => {
+			analytics.track("onboarding_completed", {});
 			const window = mainWindow;
 			if (window === null || window.isDestroyed()) return;
 			// Centering can move a border-spanning window onto another display.
@@ -907,7 +939,7 @@ app.whenReady().then(async () => {
 	app.once("will-quit", (event) => {
 		event.preventDefault();
 		// minsync outlives the app and keeps its lock; stop it so the next launch can resume instead of failing on the lock.
-		void Promise.all([terminateMinSyncChildren(), workerHost.dispose()])
+		void Promise.all([terminateMinSyncChildren(), workerHost.dispose(), analytics.shutdown()])
 			.catch((error: unknown) => console.error("[fs-worker] dispose on quit failed:", error))
 			.finally(() => app.exit(0));
 	});

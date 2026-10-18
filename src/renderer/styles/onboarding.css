@@ -1531,6 +1531,13 @@ html[data-appearance="dark"] .onb .source-icon.brand {
 	margin-top: 2px;
 }
 
+/* The welcome step's usage-statistics checkbox: a small line under the note, not a boxed card. */
+.onb .usage-consent {
+	margin-top: 12px;
+	padding: 0;
+	border: 0;
+}
+
 /* Text links that sit inside a note or bullet and open the system browser. */
 .onb .inline-link {
 	border: 0;

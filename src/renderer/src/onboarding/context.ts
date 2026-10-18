@@ -52,6 +52,8 @@ export interface OnboardingCtx {
 	readonly account: AccountStatus | null;
 	readonly paying: boolean;
 	readonly tipIndex: number;
+	/** The welcome step's "send anonymous usage statistics" checkbox; saved to Settings when the user continues from that step. */
+	readonly shareUsage: boolean;
 	readonly t: Translate;
 
 	patch(patch: Partial<OnboardingDraft>): void;
@@ -82,6 +84,7 @@ export interface OnboardingCtx {
 	/** Re-reads the account from the server (the pay overlay's "check payment"). */
 	refreshAccount(): void;
 	setLaunchAtLogin(enabled: boolean): void;
+	setShareUsage(value: boolean): void;
 	requestNotifications(): void;
 	openNotificationSettings(): void;
 	checkNetwork(): void;

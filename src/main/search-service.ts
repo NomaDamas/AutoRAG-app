@@ -25,6 +25,7 @@ import type {
 import { SEARCH_CHANNELS } from "../shared/search-contract";
 import { AttachmentContextAgent, buildAttachmentContext } from "./attachment-context";
 import type { ChatStore } from "./chat-store";
+import { durationBucket, type Analytics } from "./analytics-core";
 
 /**
  * The slice of a pi agent event the live stream reads. `searchDocumentsStream`
@@ -69,6 +70,8 @@ export interface SearchServiceDeps {
 	readonly now?: () => Date;
 	/** Reads a message's attachments into the agent's context block. Defaults to {@link buildAttachmentContext}. */
 	readonly attachmentContext?: (attachments: readonly ChatAttachment[]) => Promise<string>;
+	/** Usage analytics; absent (tests, a build with no project key) means nothing is reported. */
+	readonly analytics?: Pick<Analytics, "track">;
 }
 
 interface SearchRun {
@@ -90,6 +93,12 @@ interface SearchRun {
 	pendingSteers: number;
 	/** Chat-store writes of this run, in order: each reads the record the previous one wrote. */
 	writes: Promise<void>;
+	/** `now()` when the run began, in ms: the only timing usage analytics keeps, and only as a bucket. */
+	readonly startedAt: number;
+	/** The agent threw while streaming. */
+	failed: boolean;
+	/** `ai_search_finished` was already reported for this run. */
+	reported: boolean;
 }
 
 /**
@@ -249,6 +258,13 @@ export function createSearchService(deps: SearchServiceDeps): SearchBridge {
 
 	const emit = (event: SearchStreamEvent): void => deps.send(SEARCH_CHANNELS.event, event);
 
+	/** Usage analytics: one `ai_search_finished` per run, with coarse facts only (no query, answer, path or source name). */
+	function reportFinished(run: SearchRun, outcome: "answered" | "failed" | "stopped"): void {
+		if (run.reported) return;
+		run.reported = true;
+		deps.analytics?.track("ai_search_finished", { outcome, deepened: run.deep !== null, duration: durationBucket(now().getTime() - run.startedAt) });
+	}
+
 	/** Runs one read-modify-write of the run's chat record after every earlier one. */
 	function writeChat(run: SearchRun, update: (existing: ChatRecord) => ChatRecord): Promise<void> {
 		const write = run.writes.then(async () => {
@@ -347,13 +363,18 @@ export function createSearchService(deps: SearchServiceDeps): SearchBridge {
 				}
 			}
 		} catch (error) {
+			run.failed = true;
 			if (!run.cancelled) {
 				emit({ type: "error", searchId: run.searchId, message: errorText(error) });
 			}
 		} finally {
 			unsubscribe?.();
 			run.ended = true;
-			if (!run.cancelled) emit({ type: "done", searchId: run.searchId });
+			if (!run.cancelled) {
+				emit({ type: "done", searchId: run.searchId });
+				// A stream that ended with no answer at all did not answer.
+				reportFinished(run, run.failed || (run.quick === null && run.deep === null) ? "failed" : "answered");
+			}
 			active.delete(run.searchId);
 			run.resolveFinish();
 		}
@@ -387,12 +408,16 @@ export function createSearchService(deps: SearchServiceDeps): SearchBridge {
 				base: 0,
 				pendingSteers: 0,
 				writes: Promise.resolve(),
+				startedAt: now().getTime(),
+				failed: false,
+				reported: false,
 			};
 			// Register before the async factory resolves so Stop during creation
 			// cancels the run instead of racing it.
 			active.set(searchId, run);
 			const existing = await deps.chatStore.get(chatId);
 			run.base = existing?.messages.length ?? 0;
+			deps.analytics?.track("ai_search_started", { has_attachments: attachments.length > 0, follow_up: run.base > 0 });
 			await deps.chatStore.save({
 				id: chatId,
 				title: query,
@@ -408,6 +433,7 @@ export function createSearchService(deps: SearchServiceDeps): SearchBridge {
 			} catch (error) {
 				active.delete(searchId);
 				if (!run.cancelled) {
+					reportFinished(run, "failed");
 					emit({ type: "error", searchId, message: errorText(error) });
 					emit({ type: "done", searchId });
 				}
@@ -437,6 +463,7 @@ export function createSearchService(deps: SearchServiceDeps): SearchBridge {
 			const run = active.get(searchId);
 			if (run === undefined || run.cancelled) return;
 			run.cancelled = true;
+			reportFinished(run, "stopped");
 			run.agent?.abort?.();
 			emit({ type: "cancelled", searchId });
 			await saveRunMessage(run, true);
@@ -463,6 +490,30 @@ const DEFAULT_QUERY_DECOMPOSITION: { readonly provider: string; readonly id: str
 type AgentThinking = NonNullable<AutoRAGAgentOptions["thinking"]>;
 type AgentThinkingLevel = NonNullable<AgentThinking["final"]>;
 type AgentQueryDecomposition = AutoRAGAgentOptions["queryDecomposition"];
+
+/**
+ * Default web-search fallback order: keyless Parallel MCP and DuckDuckGo HTML
+ * lead the chain ahead of Perplexity's rate-limited anonymous endpoint and
+ * bot-challenged scrapers.
+ */
+export const DEFAULT_WEB_SEARCH_PROVIDER_ORDER = ["parallel", "duckduckgo"] as const;
+
+/**
+ * Re-attach `webSearch` from the raw config object (librarian's `resolveConfig`
+ * drops it) and apply {@link DEFAULT_WEB_SEARCH_PROVIDER_ORDER} when enabled
+ * without an explicit `order`.
+ */
+export function resolveWebSearchConfig(raw: Record<string, unknown>): NonNullable<CliConfig["webSearch"]> {
+	const webSearch = raw.webSearch;
+	if (webSearch === false) return { enabled: false };
+	if (!isJsonObject(webSearch)) return { order: [...DEFAULT_WEB_SEARCH_PROVIDER_ORDER] };
+	if (webSearch.enabled === false) return webSearch as NonNullable<CliConfig["webSearch"]>;
+	if (webSearch.order !== undefined) return webSearch as NonNullable<CliConfig["webSearch"]>;
+	return {
+		...webSearch,
+		order: [...DEFAULT_WEB_SEARCH_PROVIDER_ORDER],
+	} as NonNullable<CliConfig["webSearch"]>;
+}
 
 function readThinking(raw: Record<string, unknown>): AgentThinking | undefined {
 	const value = raw.thinking;
@@ -503,10 +554,10 @@ export function createDefaultAgentFactory(): () => Promise<SearchAgent> {
 		const raw = (await access(configPath).then(() => true, () => false)) ? readRawConfigObject(configPath) : {};
 		// librarian's resolveConfig drops `webSearch`; re-attach the raw block so
 		// buildAgentOptions applies it, then layer the app's code-folder exclusions.
-		const withWebSearch: CliConfig =
-			raw.webSearch === undefined
-				? config
-				: { ...config, webSearch: raw.webSearch as NonNullable<CliConfig["webSearch"]> };
+		const withWebSearch: CliConfig = {
+			...config,
+			webSearch: resolveWebSearchConfig(raw),
+		};
 		const effective = await applyAppIndexing(withWebSearch, raw);
 		// Credentials resolve fresh from auth.json/process.env on every agent build,
 		// so a login or key change reaches the next search without a restart.

@@ -129,6 +129,13 @@ export function SettingsView({ initialCategory = "general", onSettingsChanged }:
 		return detach;
 	}, []);
 
+	// Usage analytics: which page is open. A `source:<alias>` page counts as `source`, so a user-chosen alias is never sent.
+	useEffect(() => {
+		const page = normalizeCategory(category);
+		const id = sourceAliasOf(page) === null ? PAGES.find((meta) => meta.id === page)?.id : "source";
+		if (id !== undefined) window.autorag?.analytics?.track("settings_page_viewed", { page: id });
+	}, [category]);
+
 	const load = useCallback(async (): Promise<void> => {
 		setLoading(true);
 		try {
