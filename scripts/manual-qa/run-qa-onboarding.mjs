@@ -338,9 +338,16 @@ try {
 } finally {
 	// The first index leaves background helpers pointing into WORK (e.g.
 	// fsearch-cli watch); kill them by their command line before deleting it.
-	if (process.platform !== "win32") {
-		spawnSync("pkill", ["-9", "-f", WORK]);
-	}
+	const killHelpers = () => {
+		if (process.platform !== "win32") {
+			spawnSync("pkill", ["-9", "-f", WORK]);
+			return;
+		}
+		// Same by command line on Windows: any process still pointing into WORK would block its removal (EPERM).
+		const script = `Get-CimInstance Win32_Process | Where-Object { $_.ProcessId -ne ${process.pid} -and $_.CommandLine -and $_.CommandLine.Contains($env:QA_WORK) } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }`;
+		spawnSync("powershell", ["-NoProfile", "-Command", script], { env: { ...process.env, QA_WORK: WORK } });
+	};
+	killHelpers();
 	// After the first index the app can keep helper processes alive on Windows, and `close()` then never
 	// returns; give it a moment, then kill the whole process tree so the lane always ends.
 	const pid = app.process().pid;
@@ -350,6 +357,7 @@ try {
 		if (process.platform === "win32") spawnSync("taskkill", ["/F", "/T", "/PID", String(pid)]);
 		else spawnSync("pkill", ["-9", "-P", String(pid)]);
 	}
+	killHelpers();
 	stub.closeAllConnections();
 	stub.close();
 	rmRetry(WORK);
