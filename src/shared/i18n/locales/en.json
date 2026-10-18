@@ -601,7 +601,7 @@
           "note": "$4/mo · cancel anytime",
           "tag": "Light everyday use",
           "chip": "Questions are sent to Dazzi models",
-          "training": "Inputs and outputs are not used to train models",
+          "training": "Dazzi does not use inputs and outputs to train models",
           "feature": {
             "a": "Local embedding or off",
             "b": "Managed AI models · generous usage",
@@ -614,7 +614,7 @@
           "note": "$20/mo · cancel anytime",
           "tag": "Fastest first indexing",
           "chip": "Questions are sent to Dazzi models",
-          "training": "Inputs and outputs are not used to train models",
+          "training": "Dazzi does not use inputs and outputs to train models",
           "feature": {
             "a": "Remote embedding available",
             "b": "Managed AI models · highest usage",
