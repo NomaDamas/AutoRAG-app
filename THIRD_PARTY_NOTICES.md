@@ -62,6 +62,12 @@ Notes on what was verified:
   did contain OpenSSL 1.0.2/`libcrypto` code (OpenSSL/SSLeay dual license), so
   it was replaced with the clean rebuild above.
 
+## Quick Look dependencies
+
+| Component | Version | License | Use |
+|---|---|---|---|
+| cfb (SheetJS) | 1.2.2 | Apache-2.0 | Reads the OLE2 container of Outlook `.msg` files in Quick Look; also pulled in by `xlsx` and `kordoc` |
+
 ## Programs and models bundled in the installers
 
 The macOS and Windows installers ship these programs unmodified, as separate
