@@ -15,6 +15,7 @@ const bridge: QuickLookWindowBridge = {
 	onUnload: () => () => undefined,
 	onZoom: () => () => undefined,
 	onApp: () => () => undefined,
+	onOffice: () => () => undefined,
 	ready: () => undefined,
 	zoomed: () => undefined,
 	request: never,
@@ -42,7 +43,7 @@ function documentFor(ext: string, bytes: Uint8Array): PreviewDocument {
 		truncated: false,
 		bytes,
 		pages: null,
-		rendered: null,
+		office: null,
 	};
 }
 

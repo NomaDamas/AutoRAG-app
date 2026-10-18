@@ -2,8 +2,8 @@ import { mkdir, mkdtemp, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { type OfficeRun, renderOfficeHtml, standaloneOfficeHtml } from "../src/preview/node/office-render";
-import { isPreviewDocument } from "../src/preview/shared/contract";
+import { createOfficeRenderCache, openOffice, type OfficeRun, renderOfficeHtml, standaloneOfficeHtml } from "../src/preview/node/office-render";
+import { isPreviewDocument, isQuickLookOffice, type OfficePage } from "../src/preview/shared/contract";
 import { officePageWidth } from "../src/preview/shared/legacy-office";
 
 const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
@@ -129,13 +129,197 @@ describe("renderOfficeHtml", () => {
 	});
 });
 
-describe("PreviewDocument.rendered", () => {
+describe("PreviewDocument.office", () => {
 	const base = { name: "a.doc", path: "/a.doc", ext: "doc", size: 1, modifiedAt: "2026-01-01T00:00:00.000Z", mime: "application/octet-stream", truncated: false, bytes: null, pages: null };
 
-	it("is a string or null", () => {
-		expect(isPreviewDocument({ ...base, rendered: null })).toBe(true);
-		expect(isPreviewDocument({ ...base, rendered: "<html></html>" })).toBe(true);
-		expect(isPreviewDocument({ ...base, rendered: 5 })).toBe(false);
+	it("is an office state or null", () => {
+		expect(isPreviewDocument({ ...base, office: null })).toBe(true);
+		expect(isPreviewDocument({ ...base, office: { firstPage: null, html: "<p></p>", pending: false } })).toBe(true);
+		expect(isPreviewDocument({ ...base, office: { firstPage: "autorag-thumb://x", html: null, pending: true } })).toBe(true);
+		expect(isPreviewDocument({ ...base, office: { firstPage: 1, html: null, pending: true } })).toBe(false);
+		expect(isPreviewDocument({ ...base, office: { firstPage: null, html: null } })).toBe(false);
 		expect(isPreviewDocument(base)).toBe(false);
+	});
+
+	it("accepts an update only for a sequence with a well-formed state", () => {
+		expect(isQuickLookOffice({ seq: 3, office: { firstPage: null, html: null, pending: false } })).toBe(true);
+		expect(isQuickLookOffice({ seq: "3", office: { firstPage: null, html: null, pending: false } })).toBe(false);
+		expect(isQuickLookOffice({ seq: 3, office: null })).toBe(false);
+	});
+});
+
+describe("createOfficeRenderCache", () => {
+	function counting(pages: Readonly<Record<string, string | null>>, gate?: Promise<void>): { readonly render: (path: string) => Promise<string | null>; readonly calls: string[] } {
+		const calls: string[] = [];
+		return {
+			calls,
+			render: async (path) => {
+				calls.push(path);
+				if (gate !== undefined) await gate;
+				return pages[path] ?? null;
+			},
+		};
+	}
+	const identity = (path: string, mtimeMs = 1, size = 10) => ({ path, mtimeMs, size });
+
+	it("renders a file once for a prefetch and the open that follows it", async () => {
+		const { render, calls } = counting({ "/a.ppt": "<p>a</p>" });
+		const cache = createOfficeRenderCache({ render });
+		cache.prefetch(identity("/a.ppt"));
+		expect(await cache.get(identity("/a.ppt"))).toBe("<p>a</p>");
+		expect(await cache.get(identity("/a.ppt"))).toBe("<p>a</p>");
+		expect(calls).toEqual(["/a.ppt"]);
+	});
+
+	it("lets an open join a render that is still running instead of starting a second one", async () => {
+		let release: () => void = () => undefined;
+		const gate = new Promise<void>((resolve) => (release = resolve));
+		const { render, calls } = counting({ "/a.ppt": "<p>a</p>" }, gate);
+		const cache = createOfficeRenderCache({ render });
+		cache.prefetch(identity("/a.ppt"));
+		const opened = cache.get(identity("/a.ppt"));
+		release();
+		expect(await opened).toBe("<p>a</p>");
+		expect(calls).toHaveLength(1);
+	});
+
+	it("renders again when the file changed, and remembers files the OS cannot draw", async () => {
+		const { render, calls } = counting({ "/a.ppt": "<p>a</p>" });
+		const cache = createOfficeRenderCache({ render });
+		await cache.get(identity("/a.ppt", 1));
+		await cache.get(identity("/a.ppt", 2));
+		expect(calls).toHaveLength(2);
+		expect(await cache.get(identity("/b.ppt"))).toBeNull();
+		expect(await cache.get(identity("/b.ppt"))).toBeNull();
+		expect(calls.filter((call) => call === "/b.ppt")).toHaveLength(1);
+	});
+
+	it("keeps at most the byte budget, dropping the least recently used page first", async () => {
+		const { render, calls } = counting({ "/1": "x".repeat(40), "/2": "y".repeat(40), "/3": "z".repeat(40) });
+		const cache = createOfficeRenderCache({ render, maxBytes: 100 });
+		await cache.get(identity("/1"));
+		await cache.get(identity("/2"));
+		await cache.get(identity("/1"));
+		await cache.get(identity("/3"));
+		await cache.get(identity("/1"));
+		await cache.get(identity("/2"));
+		expect(calls).toEqual(["/1", "/2", "/3", "/2"]);
+	});
+
+	it("keeps only the newest queued prefetch, so a fast arrow-key walk renders what it stops on", async () => {
+		let release: () => void = () => undefined;
+		const gate = new Promise<void>((resolve) => (release = resolve));
+		const calls: string[] = [];
+		const cache = createOfficeRenderCache({
+			render: async (path) => {
+				calls.push(path);
+				await gate;
+				return path;
+			},
+		});
+		for (const name of ["/1", "/2", "/3", "/4"]) cache.prefetch(identity(name));
+		release();
+		expect(await cache.get(identity("/4"))).toBe("/4");
+		expect(calls).toEqual(["/1", "/4"]);
+	});
+
+	it("never lets a failed render break the open that asked for it", async () => {
+		const cache = createOfficeRenderCache({ render: async () => Promise.reject(new Error("boom")), warn: () => undefined });
+		expect(await cache.get(identity("/a.ppt"))).toBeNull();
+	});
+});
+
+describe("createOfficeRenderCache.peek", () => {
+	const identity = (path: string) => ({ path, mtimeMs: 1, size: 10 });
+
+	it("answers undefined until a render settles, then the page, or null when the OS drew nothing", async () => {
+		let release: () => void = () => undefined;
+		const gate = new Promise<void>((resolve) => (release = resolve));
+		const cache = createOfficeRenderCache({ render: async (path) => (await gate, path === "/a" ? "<p>a</p>" : null) });
+		expect(cache.peek(identity("/a"))).toBeUndefined();
+		const running = cache.get(identity("/a"));
+		expect(cache.peek(identity("/a"))).toBeUndefined();
+		release();
+		await running;
+		expect(cache.peek(identity("/a"))).toBe("<p>a</p>");
+		await cache.get(identity("/b"));
+		expect(cache.peek(identity("/b"))).toBeNull();
+	});
+});
+
+describe("openOffice", () => {
+	const file = { path: "/a.ppt", mtimeMs: 1, size: 10 };
+
+	function setup(options: { readonly cached?: string | null | undefined; readonly thumbCached?: string | null; readonly page?: Promise<string | null>; readonly thumb?: Promise<string | null> } = {}) {
+		const published: OfficePage[] = [];
+		let live = true;
+		const deps = {
+			cache: { peek: () => options.cached, get: () => options.page ?? Promise.resolve("<p>page</p>") },
+			firstPage: { peek: () => options.thumbCached ?? null, load: () => options.thumb ?? Promise.resolve("autorag-thumb://first") },
+			publish: (office: OfficePage) => void published.push(office),
+			current: () => live,
+		};
+		return { deps, published, stop: () => (live = false) };
+	}
+	const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+	it("opens finished when the page is already cached, with nothing left to publish", async () => {
+		const { deps, published } = setup({ cached: "<p>ready</p>" });
+		expect(openOffice(file, deps)).toEqual({ firstPage: null, html: "<p>ready</p>", pending: false });
+		await settle();
+		expect(published).toEqual([]);
+	});
+
+	it("opens finished without a page when the OS is known to draw nothing for the file", () => {
+		const { deps } = setup({ cached: null });
+		expect(openOffice(file, deps)).toEqual({ firstPage: null, html: null, pending: false });
+	});
+
+	it("opens at once with the cached first-page image and publishes the page when it lands", async () => {
+		const { deps, published } = setup({ thumbCached: "autorag-thumb://cached" });
+		deps.firstPage.load = () => Promise.reject(new Error("a cached image is not loaded again"));
+		const initial = openOffice(file, deps);
+		expect(initial).toEqual({ firstPage: "autorag-thumb://cached", html: null, pending: true });
+		await settle();
+		expect(published.at(-1)).toEqual({ firstPage: "autorag-thumb://cached", html: "<p>page</p>", pending: false });
+	});
+
+	it("publishes the first-page image as soon as it exists, before the page", async () => {
+		let release: (page: string | null) => void = () => undefined;
+		const page = new Promise<string | null>((resolve) => (release = resolve));
+		const { deps, published } = setup({ page });
+		expect(openOffice(file, deps)).toEqual({ firstPage: null, html: null, pending: true });
+		await settle();
+		expect(published).toEqual([{ firstPage: "autorag-thumb://first", html: null, pending: true }]);
+		release("<p>done</p>");
+		await settle();
+		expect(published.at(-1)).toEqual({ firstPage: "autorag-thumb://first", html: "<p>done</p>", pending: false });
+	});
+
+	it("never replaces a finished page with a first-page image that arrives late", async () => {
+		let release: (url: string | null) => void = () => undefined;
+		const thumb = new Promise<string | null>((resolve) => (release = resolve));
+		const { deps, published } = setup({ thumb });
+		openOffice(file, deps);
+		await settle();
+		release("autorag-thumb://late");
+		await settle();
+		expect(published.at(-1)?.html).toBe("<p>page</p>");
+		expect(published.every((state, index) => index === 0 || state.pending === false || state.html === null)).toBe(true);
+	});
+
+	it("ends pending with no page when rendering fails, so the viewer can show the text", async () => {
+		const { deps, published } = setup({ page: Promise.resolve(null), thumb: Promise.resolve(null) });
+		openOffice(file, deps);
+		await settle();
+		expect(published.at(-1)).toEqual({ firstPage: null, html: null, pending: false });
+	});
+
+	it("stops publishing once the preview has moved on to another file", async () => {
+		const { deps, published, stop } = setup();
+		openOffice(file, deps);
+		stop();
+		await settle();
+		expect(published).toEqual([]);
 	});
 });

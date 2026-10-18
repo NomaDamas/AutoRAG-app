@@ -14,6 +14,8 @@ export const PREVIEW_CHANNELS = {
 	show: "preview:show",
 	/** Finder -> main (invoke): hide the preview. */
 	hide: "preview:hide",
+	/** Finder -> main (send): this file is selected; start rendering it so Space finds it ready. */
+	prefetch: "preview:prefetch",
 	/** Main -> Finder: the preview closed itself (Space, Escape, close button). */
 	closed: "preview:closed",
 	/** Main -> Finder: move the Finder selection (arrow keys pressed in the preview). */
@@ -32,6 +34,8 @@ export const PREVIEW_CHANNELS = {
 	zoomed: "preview:zoomed",
 	/** Main -> preview window: the default app that "Open with" launches, once known. */
 	app: "preview:app",
+	/** Main -> preview window: the Office page macOS drew landed (first-page image, then the whole page). */
+	office: "preview:office",
 	/** Preview window -> main (invoke): creation date, location, and binary kind of the shown file. */
 	details: "preview:details",
 	/** Preview window -> main (invoke): SHA-256 of the shown file. */
@@ -64,13 +68,36 @@ export interface PreviewDocument {
 	 * image first); null for every other document, whose viewer uses `bytes`.
 	 */
 	readonly pages: readonly Uint8Array[] | null;
-	/**
-	 * The page macOS's own Office generator drew for a legacy Office file: one
-	 * self-contained HTML string (pictures inlined, nothing external), shown in
-	 * a sandboxed frame. Null for every other document and when the OS could
-	 * not render it.
-	 */
-	readonly rendered: string | null;
+	/** What macOS draws for a legacy Office file; null for every other document. */
+	readonly office: OfficePage | null;
+}
+
+/**
+ * What macOS's own Office generator has drawn for a legacy Office file so far.
+ * The first-page image (the OS thumbnail, ready in tens of milliseconds) lets
+ * the panel appear at once; `html` is the whole document as one self-contained
+ * page (pictures inlined, nothing external) for a sandboxed frame and takes
+ * over when it lands. `pending` is true while the page is still being drawn,
+ * and false once nothing more will arrive, with `html` null when the OS cannot
+ * draw the file (the viewer then shows the extracted text).
+ */
+export interface OfficePage {
+	readonly firstPage: string | null;
+	readonly html: string | null;
+	readonly pending: boolean;
+}
+
+/** Main -> preview window: a pending Office page progressed. */
+export interface QuickLookOffice {
+	readonly seq: number;
+	readonly office: OfficePage;
+}
+
+/** What the Finder knows of a selected file; the same identity keys the rendered-page cache. */
+export interface PreviewPrefetch {
+	readonly path: string;
+	readonly mtimeMs: number;
+	readonly size: number;
 }
 
 export interface QuickLookTarget {
@@ -190,6 +217,8 @@ export interface PreviewBridge {
 	/** `origin` is the file's icon in the Finder viewport (CSS pixels); null when it is not on screen. */
 	show(target: QuickLookTarget, origin: Bounds | null): Promise<void>;
 	hide(origin: Bounds | null): Promise<void>;
+	/** The selected file's identity; the main process renders what the OS draws for it ahead of Space. */
+	prefetch(file: PreviewPrefetch): void;
 	onClosed(listener: () => void): () => void;
 	onNavigate(listener: (delta: NavigateDelta) => void): () => void;
 }
@@ -204,6 +233,7 @@ export interface QuickLookWindowBridge {
 	onUnload(listener: () => void): () => void;
 	onZoom(listener: (zoom: QuickLookZoom) => void): () => void;
 	onApp(listener: (app: QuickLookApp) => void): () => void;
+	onOffice(listener: (update: QuickLookOffice) => void): () => void;
 	ready(report: QuickLookReady): void;
 	zoomed(report: QuickLookZoomed): void;
 	request(action: QuickLookAction): Promise<void>;
@@ -221,14 +251,27 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null;
 }
 
+export function isOfficePage(value: unknown): value is OfficePage {
+	if (!isRecord(value)) return false;
+	return (value.firstPage === null || typeof value.firstPage === "string") && (value.html === null || typeof value.html === "string") && typeof value.pending === "boolean";
+}
+
+export function isQuickLookOffice(value: unknown): value is QuickLookOffice {
+	return isRecord(value) && typeof value.seq === "number" && isOfficePage(value.office);
+}
+
 export function isPreviewDocument(value: unknown): value is PreviewDocument {
 	if (!isRecord(value)) return false;
 	if (typeof value.name !== "string" || typeof value.path !== "string" || typeof value.ext !== "string") return false;
 	if (typeof value.size !== "number" || typeof value.modifiedAt !== "string" || typeof value.mime !== "string") return false;
 	if (typeof value.truncated !== "boolean") return false;
 	if (value.bytes !== null && !(value.bytes instanceof Uint8Array)) return false;
-	if (value.rendered !== null && typeof value.rendered !== "string") return false;
+	if (value.office !== null && !isOfficePage(value.office)) return false;
 	return value.pages === null || (Array.isArray(value.pages) && value.pages.every((page) => page instanceof Uint8Array));
+}
+
+export function isPreviewPrefetch(value: unknown): value is PreviewPrefetch {
+	return isRecord(value) && typeof value.path === "string" && value.path.length > 0 && Number.isFinite(value.mtimeMs) && Number.isFinite(value.size);
 }
 
 export function isQuickLookTarget(value: unknown): value is QuickLookTarget {

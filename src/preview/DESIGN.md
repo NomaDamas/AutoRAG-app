@@ -103,6 +103,21 @@ still has the previous file's size when they lay out.
   never quirks mode, so every slide collapsed to nothing. The window takes the
   generator's own viewport width (595 for a Word page plus margin room, 720
   for a slide). A Page · Text switch in the toolbar flips to the extracted text.
+  **Time to first content**: the OS takes 0.1-0.7s to draw the page (2-5s when
+  its preview service has been idle) and up to 0.4s more to rasterize pictures,
+  so the page is never waited for. Selecting a file starts the render
+  (`prefetch` channel; one at a time, only the newest queued file is kept) and
+  the OS first-page thumbnail (tens of ms, the same icon provider the Finder
+  tiles use). Space then opens in one tick with what is known: a finished page,
+  or the cached first-page image, with the whole page pushed on the `office`
+  channel when it lands; the image is removed only once the frame has loaded
+  and the frame stays transparent until then, so the panel never blanks. A
+  generic type icon (what the OS returns for a file it cannot draw: an
+  all-transparent corner) is rejected, and the text view shows meanwhile.
+  Pages are cached by path + mtime + size (96MB, least recently used out).
+  Pictures are rasterized at 3x their own drawn width, grouped by power-of-two
+  width into a few parallel `sips` runs: one 2048px run for all of them cost 3.3s
+  on a 26-slide deck, a run per distinct width cost 35 process starts.
   The generator refuses files it cannot read (minimal or non-Word streams): the
   panel then shows the extracted text alone, without the switch.
   Everywhere else, and as that fallback, `shared/legacy-office.ts` reads the

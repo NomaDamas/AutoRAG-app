@@ -181,6 +181,10 @@ function QuickLookWindow({ bridge }: { readonly bridge: QuickLookWindowBridge })
 		const offApp = bridge.onApp((update) => {
 			if (update.seq === seqRef.current) setApp(update.name);
 		});
+		const offOffice = bridge.onOffice((update) => {
+			if (update.seq !== seqRef.current) return;
+			setLoad((current) => (current === null || current.document === null ? current : { ...current, document: { ...current.document, office: update.office } }));
+		});
 		const offUnload = bridge.onUnload(() => {
 			seqRef.current = -1;
 			setLoad(null);
@@ -188,6 +192,7 @@ function QuickLookWindow({ bridge }: { readonly bridge: QuickLookWindowBridge })
 		return () => {
 			offLoad();
 			offApp();
+			offOffice();
 			offUnload();
 		};
 	}, [bridge]);

@@ -4,6 +4,7 @@ import type { AppSettings } from "../../shared/settings-contract";
 import {
 	isNavigateDelta,
 	isQuickLookApp,
+	isQuickLookOffice,
 	isQuickLookLoad,
 	isQuickLookZoom,
 	PREVIEW_CHANNELS,
@@ -30,6 +31,7 @@ export function createPreviewBridge(ipcRenderer: IpcRenderer): PreviewBridge {
 		hide: async (origin) => {
 			await ipcRenderer.invoke(PREVIEW_CHANNELS.hide, origin);
 		},
+		prefetch: (file) => ipcRenderer.send(PREVIEW_CHANNELS.prefetch, { path: file.path, mtimeMs: file.mtimeMs, size: file.size }),
 		onClosed: (listener) => subscribe(ipcRenderer, PREVIEW_CHANNELS.closed, () => listener()),
 		onNavigate: (listener) =>
 			subscribe(ipcRenderer, PREVIEW_CHANNELS.navigate, (delta) => {
@@ -58,6 +60,10 @@ export function createQuickLookWindowBridge(ipcRenderer: IpcRenderer, platform: 
 		onApp: (listener) =>
 			subscribe(ipcRenderer, PREVIEW_CHANNELS.app, (update) => {
 				if (isQuickLookApp(update)) listener(update);
+			}),
+		onOffice: (listener) =>
+			subscribe(ipcRenderer, PREVIEW_CHANNELS.office, (update) => {
+				if (isQuickLookOffice(update)) listener(update);
 			}),
 		ready: (report) => ipcRenderer.send(PREVIEW_CHANNELS.ready, report),
 		zoomed: (report) => ipcRenderer.send(PREVIEW_CHANNELS.zoomed, report),

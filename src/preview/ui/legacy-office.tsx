@@ -31,24 +31,30 @@ type Mode = "page" | "text";
 const PAGE_HEIGHT = 1400;
 /** Width asked for the extracted-text view. */
 const TEXT_WIDTH = 760;
+/** The window width asked for a first-page image before the page states its own: a slide, or a Word page with margin room. */
+const SLIDE_WIDTH = 736;
+const DOCUMENT_WIDTH = 675;
 
 /**
  * The page macOS drew for the file, in a frame with no permissions (no
  * scripts, no network, no navigation; the page also carries its own CSP).
- * With a toolbar switch to the extracted text, which stays readable and
- * selectable when the drawing is not what the user wants.
+ * While the whole page is still being drawn, the OS first-page image holds
+ * the place (`firstPage`) and is removed once the frame has painted.
  */
-function RenderedPage({ html, mode, onMode }: { readonly html: string; readonly mode: Mode; readonly onMode: (mode: Mode) => void }): ReactElement {
+function RenderedPage({ html, firstPage }: { readonly html: string; readonly firstPage: string | null }): ReactElement {
 	const { t } = useTranslation();
-	const { report } = useChrome();
+	const { resize } = useChrome();
 	const width = useMemo(() => officePageWidth(html), [html]);
-	useEffect(() => report({ width, height: PAGE_HEIGHT }, "clamp"), [report, width]);
+	// `resize`, not `report`: the pending view may already have sized the window.
+	useEffect(() => resize({ width, height: PAGE_HEIGHT }), [resize, width]);
 	// A blob URL, not `srcDoc`: the generator writes lengths without units
 	// (`width: 720`), which only quirks mode accepts, and an `srcdoc` document is
 	// never parsed in quirks mode, so every slide would collapse to nothing.
 	const [url, setUrl] = useState<string | null>(null);
+	const [painted, setPainted] = useState(false);
 	useEffect(() => {
 		const next = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" }));
+		setPainted(false);
 		setUrl(next);
 		return () => {
 			URL.revokeObjectURL(next);
@@ -56,9 +62,64 @@ function RenderedPage({ html, mode, onMode }: { readonly html: string; readonly 
 		};
 	}, [html]);
 	return (
+		<div className="ql__office relative flex-1 self-stretch min-h-0 overflow-hidden bg-window">
+			{firstPage !== null && !painted ? <img className="ql__image absolute inset-x-0 top-0 block w-full h-auto" alt="" src={firstPage} draggable={false} /> : null}
+			{/* Transparent until it has loaded: its opaque background would otherwise blank the first-page image while the page is still being parsed. */}
+			{url === null ? null : <iframe className={`ql__frame absolute inset-0 w-full h-full border-0 bg-window ${painted ? "opacity-100" : "opacity-0"}`} sandbox="" title={t("quickLook.legacyOffice.rendered")} src={url} onLoad={() => setPainted(true)} />}
+		</div>
+	);
+}
+
+/**
+ * The OS draws a generic type icon (the Word logo on a transparent page) for a
+ * file it cannot render; a real first-page image is an opaque rectangle. Only
+ * the corner pixel tells them apart cheaply, and showing the logo as if it were
+ * the document would be worse than showing nothing.
+ */
+function isOpaqueCorner(image: HTMLImageElement): boolean {
+	const canvas = document.createElement("canvas");
+	canvas.width = 1;
+	canvas.height = 1;
+	const context = canvas.getContext("2d", { willReadFrequently: true });
+	if (context === null) return false;
+	context.drawImage(image, 0, 0, 1, 1, 0, 0, 1, 1);
+	return (context.getImageData(0, 0, 1, 1).data[3] ?? 0) >= 250;
+}
+
+/** The OS first-page image alone, while the whole page is still being drawn; sizes the window like the page will. */
+function FirstPage({ src, onGeneric }: { readonly src: string; readonly onGeneric: () => void }): ReactElement {
+	const { report } = useChrome();
+	const [shape, setShape] = useState<"unknown" | "landscape" | "portrait">("unknown");
+	useEffect(() => {
+		if (shape !== "unknown") report({ width: shape === "landscape" ? SLIDE_WIDTH : DOCUMENT_WIDTH, height: PAGE_HEIGHT }, "clamp");
+	}, [report, shape]);
+	return (
+		<div className="ql__office relative flex-1 self-stretch min-h-0 overflow-hidden bg-window">
+			<img
+				className={`ql__image absolute inset-x-0 top-0 block w-full h-auto ${shape === "unknown" ? "opacity-0" : "opacity-100"}`}
+				alt=""
+				src={src}
+				crossOrigin="anonymous"
+				draggable={false}
+				onLoad={(event) => {
+					const image = event.currentTarget;
+					if (!isOpaqueCorner(image)) {
+						onGeneric();
+						return;
+					}
+					setShape(image.naturalWidth > image.naturalHeight ? "landscape" : "portrait");
+				}}
+				onError={onGeneric}
+			/>
+		</div>
+	);
+}
+
+function PageWithSwitch({ html, firstPage, mode, onMode }: { readonly html: string; readonly firstPage: string | null; readonly mode: Mode; readonly onMode: (mode: Mode) => void }): ReactElement {
+	return (
 		<>
 			<ModeSwitch mode={mode} onMode={onMode} />
-			{url === null ? null : <iframe className="ql__frame flex-1 self-stretch w-full h-full border-0 bg-window" sandbox="" title={t("quickLook.legacyOffice.rendered")} src={url} />}
+			<RenderedPage html={html} firstPage={firstPage} />
 		</>
 	);
 }
@@ -101,20 +162,24 @@ function Notice({ children }: { readonly children: string }): ReactElement {
 export function LegacyDocView({ file }: { readonly file: PreviewDocument }): ReactElement {
 	const { t } = useTranslation();
 	const [mode, setMode] = useState<Mode>("page");
+	const [generic, setGeneric] = useState(false);
 	const bytes = file.bytes;
 	const container = bytes === null ? null : sniffLegacyContainer(bytes);
 	const result = useMemo(() => (bytes === null || container !== "ole" ? null : attempt<WordText>(bytes, readWordDocument)), [bytes, container]);
 	if (bytes === null) return <FallbackView file={file} note={t("quickLook.documents.readFailed")} />;
 	if (container === "zip") return <DocxView file={file} />;
 	if (container === "rtf") return <RtfView file={file} />;
-	const rendered = file.rendered;
-	if (rendered !== null && mode === "page") return <RenderedPage html={rendered} mode={mode} onMode={setMode} />;
+	const office = file.office;
+	if (office !== null && mode === "page") {
+		if (office.html !== null) return <PageWithSwitch html={office.html} firstPage={office.firstPage} mode={mode} onMode={setMode} />;
+		if (office.pending && office.firstPage !== null && !generic) return <FirstPage src={office.firstPage} onGeneric={() => setGeneric(true)} />;
+	}
 	if (result === null || !result.ok) return <FallbackView file={file} note={t(CODE_KEYS[result === null ? "unsupported" : result.code])} />;
 	const { pages, truncated } = result.value;
 	return (
 		<div className={PAPER}>
 			<TextWidth />
-			{rendered === null ? null : <ModeSwitch mode={mode} onMode={setMode} />}
+			{office?.html == null ? null : <ModeSwitch mode={mode} onMode={setMode} />}
 			{pages.map((page, index) => (
 				<section key={index} className={CARD} aria-label={t("quickLook.legacyOffice.page", { count: index + 1 })}>
 					{page}
@@ -129,19 +194,23 @@ export function LegacyDocView({ file }: { readonly file: PreviewDocument }): Rea
 export function LegacyPptView({ file }: { readonly file: PreviewDocument }): ReactElement {
 	const { t } = useTranslation();
 	const [mode, setMode] = useState<Mode>("page");
+	const [generic, setGeneric] = useState(false);
 	const bytes = file.bytes;
 	const container = bytes === null ? null : sniffLegacyContainer(bytes);
 	const result = useMemo(() => (bytes === null || container !== "ole" ? null : attempt<DeckText>(bytes, readPowerPointDeck)), [bytes, container]);
 	if (bytes === null) return <FallbackView file={file} note={t("quickLook.documents.readFailed")} />;
 	if (container === "zip") return <PptxView file={file} />;
-	const rendered = file.rendered;
-	if (rendered !== null && mode === "page") return <RenderedPage html={rendered} mode={mode} onMode={setMode} />;
+	const office = file.office;
+	if (office !== null && mode === "page") {
+		if (office.html !== null) return <PageWithSwitch html={office.html} firstPage={office.firstPage} mode={mode} onMode={setMode} />;
+		if (office.pending && office.firstPage !== null && !generic) return <FirstPage src={office.firstPage} onGeneric={() => setGeneric(true)} />;
+	}
 	if (result === null || !result.ok) return <FallbackView file={file} note={t(CODE_KEYS[result === null ? "unsupported" : result.code])} />;
 	const { slides, truncated } = result.value;
 	return (
 		<div className={PAPER}>
 			<TextWidth />
-			{rendered === null ? null : <ModeSwitch mode={mode} onMode={setMode} />}
+			{office?.html == null ? null : <ModeSwitch mode={mode} onMode={setMode} />}
 			{slides.map((slide, index) => (
 				<section key={index} className={CARD} aria-label={t("quickLook.legacyOffice.slide", { count: index + 1 })}>
 					<div className="mb-6 text-[11px] text-ink-muted">{t("quickLook.legacyOffice.slide", { count: index + 1 })}</div>
