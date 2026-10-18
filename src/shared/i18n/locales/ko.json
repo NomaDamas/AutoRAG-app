@@ -1332,7 +1332,8 @@
       "repeatOther": "반복",
       "repeatOn": "{{days}}",
       "repeatTimes": "{{count}}회",
-      "repeatUntil": "{{date}}까지",
+      "repeatUntil": "{{date}}까지"
+  },
     "odf": {
       "readFailed": "문서를 읽을 수 없습니다",
       "openFailed": "프레젠테이션을 열 수 없습니다",

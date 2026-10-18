@@ -1332,7 +1332,8 @@
       "repeatOther": "Repeats",
       "repeatOn": "on {{days}}",
       "repeatTimes": "{{count}} times",
-      "repeatUntil": "until {{date}}",
+      "repeatUntil": "until {{date}}"
+  },
     "odf": {
       "readFailed": "Couldn’t read the document",
       "openFailed": "Couldn’t open the presentation",
