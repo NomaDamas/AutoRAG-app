@@ -30,6 +30,10 @@ const BADGE: Readonly<Record<ViewerKind, string>> = {
 	hwp: "bg-ql-badge-doc",
 	font: "bg-ql-badge-other",
 	rtf: "bg-ql-badge-text",
+	mail: "bg-ql-badge-doc",
+	msg: "bg-ql-badge-doc",
+	contact: "bg-ql-badge-doc",
+	calendar: "bg-ql-badge-doc",
 	fallback: "bg-ql-badge-other",
 };
 

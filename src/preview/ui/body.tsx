@@ -5,9 +5,12 @@ import type { PreviewDocument } from "../shared/contract";
 import { viewerForExtension } from "../shared/registry";
 import { looksLikeText } from "../shared/text-sample";
 import { ArchiveView } from "./archive";
+import { CalendarView } from "./calendar";
+import { ContactView } from "./contact";
 import { HtmlView, TextView } from "./code";
 import { DocxView, RtfView, SheetView } from "./documents";
 import { FallbackView } from "./fallback";
+import { MailView } from "./mail";
 import { MarkdownView } from "./markdown";
 import { HwpView } from "./hwp";
 import { FontView, HeicView, ImageView, TiffView } from "./media";
@@ -69,6 +72,13 @@ export function PreviewBody({ file }: { readonly file: PreviewDocument }): React
 			return <EpubView file={file} />;
 		case "hwp":
 			return <HwpView file={file} />;
+		case "mail":
+		case "msg":
+			return <MailView file={file} />;
+		case "contact":
+			return <ContactView file={file} />;
+		case "calendar":
+			return <CalendarView file={file} />;
 		case "fallback":
 			if (file.bytes !== null && looksLikeText(file.bytes)) return <TextView file={file} />;
 			return <FallbackView file={file} />;

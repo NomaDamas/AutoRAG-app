@@ -67,6 +67,10 @@ const bytesForKind: Readonly<Record<ViewerKind, Uint8Array>> = {
 	hwp: new Uint8Array([0xd0, 0xcf, 0x11, 0xe0]),
 	font: new Uint8Array([0x00, 0x01, 0x00, 0x00]),
 	rtf: strToU8("{\\rtf1 hello}"),
+	mail: strToU8("Subject: hi\r\n\r\nbody"),
+	msg: new Uint8Array([0xd0, 0xcf, 0x11, 0xe0]),
+	contact: strToU8("BEGIN:VCARD\nFN:Kim\nEND:VCARD"),
+	calendar: strToU8("BEGIN:VEVENT\nSUMMARY:Lunch\nEND:VEVENT"),
 	fallback: new Uint8Array([0, 1, 2, 3, 4]),
 };
 
@@ -92,6 +96,10 @@ const extForKind: Readonly<Record<ViewerKind, string>> = {
 	hwp: "hwp",
 	font: "ttf",
 	rtf: "rtf",
+	mail: "eml",
+	msg: "msg",
+	contact: "vcf",
+	calendar: "ics",
 	fallback: "bin",
 };
 

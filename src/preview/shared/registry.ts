@@ -22,6 +22,10 @@ export const VIEWER_KINDS = [
 	"hwp",
 	"font",
 	"rtf",
+	"mail",
+	"msg",
+	"contact",
+	"calendar",
 	"fallback",
 ] as const;
 
@@ -66,6 +70,11 @@ assign("epub", ["epub"]);
 assign("hwp", ["hwp", "hwpx"]);
 assign("font", ["ttf", "otf", "woff", "woff2", "eot"]);
 assign("rtf", ["rtf"]);
+assign("mail", ["eml", "emlx", "mbox"]);
+// Outlook's OLE2 container has to be parsed whole; a cut prefix has no directory.
+assign("msg", ["msg"]);
+assign("contact", ["vcf", "vcard"]);
+assign("calendar", ["ics", "ical", "ifb"]);
 
 export function viewerForExtension(ext: string): ViewerKind {
 	const key = ext.toLowerCase().replace(/^\./, "");
@@ -98,6 +107,9 @@ export function byteNeed(kind: ViewerKind): ByteNeed {
 		case "html":
 		case "text":
 		case "rtf":
+		case "mail":
+		case "contact":
+		case "calendar":
 			return "prefix";
 		case "tiff":
 		case "docx":
@@ -108,6 +120,7 @@ export function byteNeed(kind: ViewerKind): ByteNeed {
 		case "archive":
 		case "epub":
 		case "hwp":
+		case "msg":
 			return "whole";
 		case "heic":
 			return "decode";
@@ -198,6 +211,15 @@ const LABELS: Readonly<Record<string, string>> = {
 	key: "Keynote presentation",
 	epub: "EPUB book",
 	hwp: "HWP document",
+	eml: "Email message",
+	emlx: "Apple Mail message",
+	msg: "Outlook message",
+	mbox: "Mailbox",
+	vcf: "vCard contact",
+	vcard: "vCard contact",
+	ics: "iCalendar event",
+	ical: "iCalendar event",
+	ifb: "iCalendar free/busy",
 	hwpx: "HWPX document",
 	ttf: "TrueType font",
 	otf: "OpenType font",
