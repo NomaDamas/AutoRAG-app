@@ -120,8 +120,9 @@ Connect the apps you already talk in; Dazzi searches them alongside your files.
 ### Private by design
 
 - **Embedded on this Mac.** Document understanding runs on a local
-  `Qwen/Qwen3-Embedding-0.6B` model. File contents are never sent to a remote
-  embedder.
+  `Qwen/Qwen3-Embedding-0.6B` model by default. File contents are sent to a
+  remote embedder only if you choose Dazzi cloud embedding (Pro plan) and
+  agree to it in the app.
 - **Keys stay encrypted.** Sign-in tokens and API keys live in the system's
   encrypted store, never in a config file.
 - **Bring your own model.** Use Dazzi's managed models (Free, Air, Pro), or
