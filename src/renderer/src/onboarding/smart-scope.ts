@@ -8,7 +8,9 @@
  * user unselects that folder its proposals neither show nor apply.
  */
 
+import type { EmbedMode } from "../../../shared/onboarding-contract";
 import type { SmartExclusion, SmartIndexingEvent } from "../../../shared/smart-indexing-contract";
+import { etaMinutes } from "./flow";
 
 export function visibleScope(scope: readonly SmartExclusion[] | undefined, selectedRoots: readonly string[]): readonly SmartExclusion[] {
 	return (scope ?? []).filter((item) => selectedRoots.includes(item.root));
@@ -44,6 +46,55 @@ export function indexingExclusions(
 
 export function setScopeExcluded(scope: readonly SmartExclusion[], path: string, excluded: boolean): readonly SmartExclusion[] {
 	return scope.map((item) => (item.path === path ? { ...item, excluded } : item));
+}
+
+/** `path` lies strictly inside `root` (either separator: the renderer sees Windows paths too). */
+function isInside(root: string, path: string): boolean {
+	const rest = path.slice(root.length);
+	return path.startsWith(root) && (rest.startsWith("/") || rest.startsWith("\\"));
+}
+
+export type AddExclusionStatus = "added" | "isRoot" | "outside" | "covered";
+
+/**
+ * Leaves out a folder the user picked. It must lie inside a selected folder and
+ * not already be covered by a left-out one. A folder the AI proposed but the user
+ * kept comes back as excluded; a wider folder replaces the entries inside it. Its
+ * size is measured afterwards (`setScopeMeasure`), so it starts at zero.
+ */
+export function addExclusion(
+	scope: readonly SmartExclusion[] | undefined,
+	path: string,
+	selectedRoots: readonly string[],
+): { readonly status: AddExclusionStatus; readonly scope: readonly SmartExclusion[] } {
+	const current = scope ?? [];
+	if (selectedRoots.includes(path)) return { status: "isRoot", scope: current };
+	const root = selectedRoots.find((candidate) => isInside(candidate, path));
+	if (root === undefined) return { status: "outside", scope: current };
+	if (current.some((item) => item.excluded && (item.path === path || isInside(item.path, path)))) return { status: "covered", scope: current };
+	if (current.some((item) => item.path === path)) return { status: "added", scope: setScopeExcluded(current, path, true) };
+	const kept = current.filter((item) => !isInside(path, item.path));
+	return { status: "added", scope: [...kept, { path, root, reason: "", files: 0, bytes: 0, excluded: true }] };
+}
+
+/** Records the measured files and size of one entry; the same list comes back when the entry is gone. */
+export function setScopeMeasure(scope: readonly SmartExclusion[], path: string, files: number, bytes: number): readonly SmartExclusion[] {
+	if (!scope.some((item) => item.path === path)) return scope;
+	return scope.map((item) => (item.path === path ? { ...item, files, bytes } : item));
+}
+
+export interface EtaSaving {
+	readonly before: number;
+	readonly after: number;
+	/** Whole percent of the time saved; 0 when nothing changes. */
+	readonly percent: number;
+}
+
+/** First-index minutes with and without the left-out files, for the policy bar's "was → now". */
+export function etaSaving(totalFiles: number, excludedFiles: number, mode: EmbedMode): EtaSaving {
+	const before = etaMinutes(totalFiles, mode);
+	const after = etaMinutes(Math.max(0, totalFiles - excludedFiles), mode);
+	return { before, after, percent: after < before ? Math.round(((before - after) / before) * 100) : 0 };
 }
 
 /** Where the analysis stands; its proposals live in the draft, not here. */

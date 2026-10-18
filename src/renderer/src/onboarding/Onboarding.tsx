@@ -41,6 +41,7 @@ import {
 	isPlanSelectable,
 	planHeld,
 	primaryLabelKey,
+	resetFolderSelection,
 	resolveEmbed,
 	shouldSkipPlanStep,
 	usageConsentOnLeaving,
@@ -48,11 +49,21 @@ import {
 } from "./flow";
 import { AppLogo, Icon } from "./marks";
 import type { OnboardingCtx, OverlayKind } from "./context";
-import { indexingExclusions, initialSmartRun, reduceSmartRun, setScopeExcluded, type SmartRun } from "./smart-scope";
+import {
+	addExclusion as withExclusion,
+	indexingExclusions,
+	initialSmartRun,
+	reduceSmartRun,
+	setScopeExcluded,
+	setScopeMeasure,
+	type AddExclusionStatus,
+	type SmartRun,
+} from "./smart-scope";
 import { IndexingScreen } from "./IndexingScreen";
 import { AccountStep } from "./steps/Account";
 import { EmbeddingStep } from "./steps/Embedding";
 import { FoldersStep } from "./steps/Folders";
+import { SmartScanStep } from "./steps/SmartScan";
 import { ModelStep } from "./steps/Model";
 import { PermissionsStep } from "./steps/Permissions";
 import { PlanStep } from "./steps/Plan";
@@ -161,6 +172,7 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 	const draftRef = useRef<OnboardingDraft | null>(null);
 	/** The run whose result may still land in the draft; null once it was cancelled or the step was left. */
 	const smartRunIdRef = useRef<string | null>(null);
+	const smartRunRef = useRef<SmartRun>(initialSmartRun);
 	const permissionRef = useRef<PermissionStatus | null>(null);
 	const modelKeyRef = useRef("");
 	const accountRef = useRef<AccountStatus | null>(null);
@@ -178,6 +190,7 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 	// Synced during render, not in an effect: deferred callbacks (the sign-in
 	// auto-advance, keyboard handler) must see the state of the latest render.
 	draftRef.current = draft;
+	smartRunRef.current = smartRun;
 	shareUsageRef.current = shareUsage;
 	shareErrorsRef.current = shareErrors;
 	permissionRef.current = permission;
@@ -302,6 +315,7 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 			fullDiskAccess: status?.fullDiskAccess === true,
 			signedIn,
 			selectedFolders: current.folders.filter((folder) => folder.selected).length,
+			smartScanning: smartRunRef.current.status === "running",
 			embed,
 			cloudConsent: current.cloudConsent === true,
 			plan: current.plan,
@@ -444,14 +458,15 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 		return () => window.clearInterval(id);
 	}, [stepId, permission?.platform, permission?.fullDiskAccess]);
 
-	// Pre-scan every candidate on the folders step; on a resume past it, still
-	// scan the selected folders so later steps' totals and ETA are real.
+	// Pre-scan every candidate on the smart-scan and folders steps (the folders screen
+	// shows each one's size); on a resume past them, still scan the selected folders so
+	// later steps' totals and ETA are real.
 	useEffect(() => {
 		if (stepId === "welcome" || stepId === "permissions" || stepId === "account") {
 			return;
 		}
 		const wanted =
-			stepId === "folders"
+			stepId === "folders" || stepId === "smartScan"
 				? candidates.map((candidate) => candidate.path)
 				: (draftRef.current?.folders ?? []).filter((folder) => folder.selected).map((folder) => folder.path);
 		const missing = wanted.filter((path) => !scannedRef.current.has(path));
@@ -464,15 +479,61 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 		void bridge.scanFolders(missing);
 	}, [stepId, candidates]);
 
-	// Leaving the folders step ends a smart-indexing run still going: its result would arrive after the choices were made.
+	// Leaving the scan screen ends a smart-indexing run still going: its result would arrive after the choices were made.
 	useEffect(() => {
-		if (stepId === "folders" || smartRunIdRef.current === null) {
+		if (stepId === "smartScan" || smartRunIdRef.current === null) {
 			return;
 		}
 		void autorag.smartIndexing.cancel(smartRunIdRef.current);
 		smartRunIdRef.current = null;
 		setSmartRun(initialSmartRun);
 	}, [stepId]);
+
+	const startSmartScan = useCallback((): void => {
+		const folders = (draftRef.current?.folders ?? []).filter((folder) => folder.selected).map((folder) => folder.path);
+		if (folders.length === 0) {
+			return;
+		}
+		const runId = crypto.randomUUID();
+		smartRunIdRef.current = runId;
+		setSmartRun({ status: "running", runId, current: null });
+		autorag.smartIndexing.analyze(runId, folders).catch((error: unknown) => {
+			if (smartRunIdRef.current === runId) {
+				setSmartRun({ status: "error", message: ipcMessage(error) });
+			}
+		});
+	}, []);
+
+	// Entering the scan screen starts the analysis of the selected folders once; a draft that already holds proposals
+	// (or a run the user cancelled or that failed) is left as it is, with a button to run it again.
+	useEffect(() => {
+		const current = draftRef.current;
+		if (stepId !== "smartScan" || current === null || current.smartScope !== undefined) {
+			return;
+		}
+		if (smartRunRef.current.status !== "idle" || smartRunIdRef.current !== null) {
+			return;
+		}
+		startSmartScan();
+	}, [stepId, startSmartScan]);
+
+	// A folder the user left out by hand is measured by the pre-scan; its size lands in the draft when that scan is done.
+	useEffect(() => {
+		const scope = draft?.smartScope;
+		if (scope === undefined) {
+			return;
+		}
+		let next = scope;
+		for (const item of scope) {
+			const scan = scans.get(item.path);
+			if (scan?.done === true && item.reason === "" && (scan.files !== item.files || scan.bytes !== item.bytes)) {
+				next = setScopeMeasure(next, item.path, scan.files, scan.bytes);
+			}
+		}
+		if (next !== scope) {
+			setDraft((current) => (current === null || current.smartScope === undefined ? current : { ...current, smartScope: next }));
+		}
+	}, [scans, draft?.smartScope]);
 
 	// The sources step probes every connector in main; each usable one streams in
 	// as soon as its own probe finishes, so the list fills row by row.
@@ -665,29 +726,14 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 			patch({
 				folders: (draftRef.current?.folders ?? []).map((folder) => (folder.path === path ? { ...folder, selected } : folder)),
 			}),
-		toggleAllFolders: () => {
+		resetFolders: () => {
 			const current = draftRef.current;
-			if (current === null) {
-				return;
+			if (current !== null) {
+				patch({ folders: resetFolderSelection(candidates, current.folders) });
 			}
-			const all = current.folders.length > 0 && current.folders.every((folder) => folder.selected);
-			patch({ folders: current.folders.map((folder) => ({ ...folder, selected: !all })) });
 		},
 		smartRun,
-		startSmartScan: () => {
-			const folders = (draftRef.current?.folders ?? []).filter((folder) => folder.selected).map((folder) => folder.path);
-			if (folders.length === 0) {
-				return;
-			}
-			const runId = crypto.randomUUID();
-			smartRunIdRef.current = runId;
-			setSmartRun({ status: "running", runId, current: null });
-			autorag.smartIndexing.analyze(runId, folders).catch((error: unknown) => {
-				if (smartRunIdRef.current === runId) {
-					setSmartRun({ status: "error", message: ipcMessage(error) });
-				}
-			});
-		},
+		startSmartScan,
 		cancelSmartScan: () => {
 			const runId = smartRunIdRef.current;
 			smartRunIdRef.current = null;
@@ -696,10 +742,52 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 				void autorag.smartIndexing.cancel(runId);
 			}
 		},
+		rescanSmart: () => {
+			const runId = smartRunIdRef.current;
+			smartRunIdRef.current = null;
+			setSmartRun(initialSmartRun);
+			if (runId !== null) {
+				void autorag.smartIndexing.cancel(runId);
+			}
+			setDraft((current) => {
+				if (current === null) {
+					return current;
+				}
+				const { smartScope: _dropped, ...rest } = current;
+				return { ...rest, stepId: "smartScan" };
+			});
+		},
 		setSmartExcluded: (path, excluded) =>
 			setDraft((current) =>
 				current === null || current.smartScope === undefined ? current : { ...current, smartScope: setScopeExcluded(current.smartScope, path, excluded) },
 			),
+		addExclusion: () => {
+			void bridge.pickFolders().then((picked) => {
+				const current = draftRef.current;
+				if (current === null || picked.length === 0) {
+					return;
+				}
+				const roots = current.folders.filter((folder) => folder.selected).map((folder) => folder.path);
+				let scope = current.smartScope;
+				const added: string[] = [];
+				let refused: AddExclusionStatus | null = null;
+				for (const candidate of picked) {
+					const result = withExclusion(scope, candidate.path, roots);
+					if (result.status === "added") {
+						scope = result.scope;
+						added.push(candidate.path);
+					} else {
+						refused = result.status;
+					}
+				}
+				if (added.length > 0) {
+					patch({ smartScope: scope ?? [] });
+					void bridge.scanFolders(added);
+				} else if (refused !== null) {
+					showToast(t(`onboarding.folders.exclude.refused.${refused}`));
+				}
+			});
+		},
 		addFolders: () => {
 			void bridge.pickFolders().then((picked) => {
 				if (picked.length === 0) {
@@ -903,6 +991,8 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 				return <PermissionsStep ctx={ctx} />;
 			case "account":
 				return <AccountStep ctx={ctx} />;
+			case "smartScan":
+				return <SmartScanStep ctx={ctx} />;
 			case "folders":
 				return <FoldersStep ctx={ctx} />;
 			case "embedding":

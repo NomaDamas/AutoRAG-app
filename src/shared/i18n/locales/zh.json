@@ -354,7 +354,8 @@
       "welcome": "介绍",
       "permissions": "权限",
       "account": "账户",
-      "folders": "文件夹",
+      "smartScan": "智能浏览",
+      "folders": "智能索引",
       "embedding": "嵌入",
       "sources": "数据源",
       "plan": "套餐",
@@ -365,7 +366,8 @@
       "welcome": "开始使用",
       "permissions": "继续",
       "account": "继续",
-      "folders": "选择文件夹并继续",
+      "smartScan": "查看推荐范围",
+      "folders": "确定范围并继续",
       "embedding": "继续",
       "sources": "继续",
       "model": "继续",
@@ -483,36 +485,51 @@
         "allow": "允许"
       }
     },
+    "smartScan": {
+      "title": "正在浏览文件夹…",
+      "done": "浏览完成",
+      "idle": "要浏览文件夹吗？",
+      "failedTitle": "未能浏览文件夹",
+      "lead": "AI 正在浏览你选择的文件夹",
+      "looking": "正在查看：{{path}}",
+      "cancel": "取消并手动选择",
+      "note": "找到 {{count}} 个建议排除的子文件夹。请在下一屏查看。",
+      "noteNone": "没有需要排除的文件夹。所选文件夹以文档为主。",
+      "failed": "未能完成分析。可以在下一屏手动选择范围。",
+      "retry": "重试",
+      "skipped": "不使用 AI 浏览也可以手动选择范围。",
+      "start": "用 AI 浏览"
+    },
     "folders": {
-      "eyebrow": "索引范围",
-      "title": "选择 AI 可读取的文件夹",
-      "lead": "只有此处选择的文件夹会纳入 AI 搜索。范围可稍后扩大或缩小。",
-      "suggested": "推荐位置",
-      "selectAll": "全选",
-      "add": "添加其他文件夹",
-      "stats": "{{files}} 个 · {{size}} · 约 {{minutes}} 分钟",
-      "scanning": "统计中…",
-      "scanError": "无法读取",
-      "summary": "{{folders}} 个文件夹 · {{files}} 个文件 · {{size}}",
-      "summaryNote": "node_modules · .git · 超过 50 MiB 的文件会自动排除。",
-      "localEta": "本地 (此 Mac) 约 {{minutes}} 分钟",
-      "cloudEta": "远程 约 {{minutes}} 分钟",
-      "warning": "范围较广。选择子文件夹或远程嵌入可以更快看到首个结果。",
-      "smart": {
-        "title": "智能索引",
+      "policy": {
+        "title": "智能索引范围",
         "tag": "AI 已分类",
-        "lead": "AI 会浏览你选择的文件夹，把系统数据、日志、代码、录像等对搜索没有帮助的文件夹列为建议排除项。",
-        "start": "用 AI 优化范围",
-        "restart": "重新分析",
-        "cancel": "取消",
-        "needFolder": "请先选择文件夹",
-        "running": "正在浏览文件夹…",
-        "looking": "正在查看：{{path}}",
-        "none": "没有需要排除的文件夹。所选文件夹以文档为主。",
-        "failed": "未能完成分析。可以跳过这一步。",
-        "saved": "排除 {{folders}} 个文件夹 · 少读 {{files}} 个文件 · {{size}}",
-        "excludeHint": "点击以纳入索引",
-        "includeHint": "点击以排除"
+        "lead": "左侧蓝色的上层文件夹全部纳入，右侧红色的子文件夹和 .* 隐藏文件夹将从索引中排除。",
+        "eta": "约 {{minutes}} 分钟",
+        "etaSaved": "缩短 {{percent}}%",
+        "rescan": "重新浏览",
+        "auto": ".* 隐藏文件夹（.git、.obsidian、.cache）和 node_modules 默认排除"
+      },
+      "include": {
+        "title": "要纳入的上层文件夹",
+        "meta": "{{folders}} 个文件夹 · {{files}} 个文件 · {{size}}",
+        "add": "添加文件夹",
+        "remove": "取消纳入",
+        "addable": "可添加：",
+        "allIn": "推荐的上层文件夹已全部纳入",
+        "reset": "默认值"
+      },
+      "exclude": {
+        "title": "要排除的子文件夹",
+        "meta": "{{count}} 个路径 · −{{size}}",
+        "add": "添加排除文件夹",
+        "restore": "取消排除",
+        "restored": "已取消排除：",
+        "refused": {
+          "isRoot": "不能排除所选文件夹本身，请选择其中的子文件夹。",
+          "outside": "只能排除所选文件夹内的子文件夹。",
+          "covered": "该文件夹已被排除。"
+        }
       }
     },
     "embedding": {

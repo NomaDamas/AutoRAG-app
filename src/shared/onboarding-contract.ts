@@ -75,6 +75,7 @@ export type OnboardingStepId =
 	| "welcome"
 	| "permissions"
 	| "account"
+	| "smartScan"
 	| "folders"
 	| "embedding"
 	| "sources"

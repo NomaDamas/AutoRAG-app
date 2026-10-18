@@ -15,6 +15,7 @@ import {
 	planHeld,
 	errorReportsConsentOnLeaving,
 	primaryLabelKey,
+	resetFolderSelection,
 	resolveEmbed,
 	scanTotals,
 	shouldSkipPlanStep,
@@ -32,6 +33,7 @@ describe("onboarding flow", () => {
 			"welcome",
 			"permissions",
 			"account",
+			"smartScan",
 			"folders",
 			"embedding",
 			"sources",
@@ -45,6 +47,7 @@ describe("onboarding flow", () => {
 			"welcome",
 			"permissions",
 			"account",
+			"smartScan",
 			"folders",
 			"embedding",
 			"sources",
@@ -54,6 +57,7 @@ describe("onboarding flow", () => {
 			"welcome",
 			"permissions",
 			"account",
+			"smartScan",
 			"folders",
 			"embedding",
 			"plan",
@@ -67,6 +71,7 @@ describe("onboarding flow", () => {
 			"welcome",
 			"permissions",
 			"account",
+			"smartScan",
 			"folders",
 			"embedding",
 			"sources",
@@ -77,6 +82,7 @@ describe("onboarding flow", () => {
 			"welcome",
 			"permissions",
 			"account",
+			"smartScan",
 			"folders",
 			"embedding",
 			"sources",
@@ -91,6 +97,7 @@ describe("onboarding flow", () => {
 			"welcome",
 			"permissions",
 			"account",
+			"smartScan",
 			"folders",
 			"embedding",
 			"sources",
@@ -146,6 +153,7 @@ describe("onboarding flow", () => {
 			fullDiskAccess: false,
 			signedIn: false,
 			selectedFolders: 0,
+			smartScanning: false,
 			embed: "local",
 			cloudConsent: false,
 			plan: "pro",
@@ -165,6 +173,9 @@ describe("onboarding flow", () => {
 		expect(canAdvance({ ...base, stepId: "plan", plan: "byok" })).toBe(true);
 		expect(canAdvance({ ...base, stepId: "folders" })).toBe(false);
 		expect(canAdvance({ ...base, stepId: "folders", selectedFolders: 2 })).toBe(true);
+		// The scan step waits for the agent, but needs no folder: the next screen is where folders are added.
+		expect(canAdvance({ ...base, stepId: "smartScan", smartScanning: true })).toBe(false);
+		expect(canAdvance({ ...base, stepId: "smartScan" })).toBe(true);
 		expect(canAdvance({ ...base, stepId: "embedding" })).toBe(true);
 		// The keyword-only mode embeds nothing, so it needs no cloud consent.
 		expect(canAdvance({ ...base, stepId: "embedding", embed: "none" })).toBe(true);
@@ -379,7 +390,7 @@ describe("usage statistics consent", () => {
 	});
 
 	it("is not recorded by any other step, so only the step that shows the checkbox can consent", () => {
-		for (const stepId of ["permissions", "account", "folders", "embedding", "sources", "model", "plan", "indexing"] as const) {
+		for (const stepId of ["permissions", "account", "smartScan", "folders", "embedding", "sources", "model", "plan", "indexing"] as const) {
 			expect(usageConsentOnLeaving(stepId, true)).toBeNull();
 		}
 	});
@@ -392,8 +403,29 @@ describe("error reports consent", () => {
 	});
 
 	it("is not recorded by any other step", () => {
-		for (const stepId of ["permissions", "account", "folders", "embedding", "sources", "model", "plan", "indexing"] as const) {
+		for (const stepId of ["permissions", "account", "smartScan", "folders", "embedding", "sources", "model", "plan", "indexing"] as const) {
 			expect(errorReportsConsentOnLeaving(stepId, true)).toBeNull();
 		}
+	});
+});
+
+describe("folder selection reset", () => {
+	const candidates = [
+		{ path: "/docs", name: "Documents", displayPath: "~/Documents", kind: "documents", defaultSelected: true, ocrOff: false },
+		{ path: "/dl", name: "Downloads", displayPath: "~/Downloads", kind: "downloads", defaultSelected: false, ocrOff: false },
+	] as const;
+
+	it("returns every suggested folder to its default and keeps the folders the user added selected", () => {
+		const folders = [
+			{ path: "/docs", selected: false },
+			{ path: "/dl", selected: true },
+			{ path: "/mine", selected: false },
+		];
+
+		expect(resetFolderSelection(candidates, folders)).toEqual([
+			{ path: "/docs", selected: true },
+			{ path: "/dl", selected: false },
+			{ path: "/mine", selected: true },
+		]);
 	});
 });

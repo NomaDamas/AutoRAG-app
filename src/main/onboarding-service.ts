@@ -167,6 +167,7 @@ const STEP_IDS: Readonly<Record<string, true>> = {
 	welcome: true,
 	permissions: true,
 	account: true,
+	smartScan: true,
 	folders: true,
 	embedding: true,
 	sources: true,

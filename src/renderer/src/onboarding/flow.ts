@@ -12,6 +12,7 @@ import type { AccountStatus } from "../../../shared/account-contract";
 import { planCovers } from "../../../shared/account-contract";
 import type {
 	EmbedMode,
+	FolderCandidate,
 	FolderScan,
 	IndexingPhase,
 	OnboardingStepId,
@@ -34,7 +35,7 @@ export type Translate = (key: string, options?: Record<string, unknown>) => stri
 export function buildFlow(plan: PlanId, planConfirmed: boolean, embed: EmbedMode): OnboardingStepId[] {
 	const mid: OnboardingStepId[] = embed === "cloud" ? ["plan", "sources"] : ["sources", "plan"];
 	const tail: OnboardingStepId[] = plan === "byok" ? ["model", "indexing"] : ["indexing"];
-	const head: OnboardingStepId[] = ["welcome", "permissions", "account", "folders", "embedding"];
+	const head: OnboardingStepId[] = ["welcome", "permissions", "account", "smartScan", "folders", "embedding"];
 	return head.concat(planConfirmed ? mid.filter((id) => id !== "plan") : mid).concat(tail);
 }
 
@@ -81,6 +82,8 @@ export interface AdvanceState {
 	readonly fullDiskAccess: boolean;
 	readonly signedIn: boolean;
 	readonly selectedFolders: number;
+	/** The smart-indexing agent is still looking through the folders. */
+	readonly smartScanning: boolean;
 	readonly embed: EmbedMode;
 	readonly cloudConsent: boolean;
 	readonly plan: PlanId;
@@ -98,6 +101,9 @@ export function canAdvance(state: AdvanceState): boolean {
 		case "plan":
 			if (!isPlanSelectable(state.plan, state.embed)) return false;
 			return state.signedIn || state.plan === "byok";
+		case "smartScan":
+			// No folder needed yet: the next screen is where folders are added and removed.
+			return !state.smartScanning;
 		case "folders":
 			return state.selectedFolders > 0;
 		case "embedding":
@@ -270,6 +276,20 @@ export function scanTotals(paths: readonly string[], scans: ReadonlyMap<string, 
 		}
 	}
 	return { files, bytes, onlineOnly };
+}
+
+/**
+ * The folder selection the suggestions start from: each suggested folder at its
+ * default, every folder the user added kept selected.
+ */
+export function resetFolderSelection(
+	candidates: readonly FolderCandidate[],
+	folders: readonly { readonly path: string; readonly selected: boolean }[],
+): { readonly path: string; readonly selected: boolean }[] {
+	return folders.map((folder) => ({
+		path: folder.path,
+		selected: candidates.find((candidate) => candidate.path === folder.path)?.defaultSelected ?? true,
+	}));
 }
 
 /** "1.2 GB" / "812 MB" — decimal units, the prototype's `size` strings. */

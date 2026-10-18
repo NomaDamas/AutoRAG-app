@@ -354,7 +354,8 @@
       "welcome": "Intro",
       "permissions": "Permissions",
       "account": "Account",
-      "folders": "Folders",
+      "smartScan": "Smart scan",
+      "folders": "Smart indexing",
       "embedding": "Embedding",
       "sources": "Data sources",
       "plan": "Plan",
@@ -365,7 +366,8 @@
       "welcome": "Get started",
       "permissions": "Continue",
       "account": "Continue",
-      "folders": "Continue with folders",
+      "smartScan": "See the suggested scope",
+      "folders": "Confirm scope and continue",
       "embedding": "Continue",
       "sources": "Continue",
       "model": "Continue",
@@ -483,36 +485,51 @@
         "allow": "Allow"
       }
     },
+    "smartScan": {
+      "title": "Looking through your folders…",
+      "done": "Finished looking",
+      "idle": "Look through your folders?",
+      "failedTitle": "Could not look through your folders",
+      "lead": "AI is browsing the folders you chose",
+      "looking": "Looking at: {{path}}",
+      "cancel": "Cancel and choose by hand",
+      "note": "Found {{count}} sub-folders worth leaving out. Review them on the next screen.",
+      "noteNone": "Nothing to leave out. The folders you chose look document-heavy.",
+      "failed": "The analysis did not finish. You can pick the scope yourself on the next screen.",
+      "retry": "Try again",
+      "skipped": "You can pick the scope yourself without the AI scan.",
+      "start": "Scan with AI"
+    },
     "folders": {
-      "eyebrow": "Indexing scope",
-      "title": "Choose the folders AI can read",
-      "lead": "Only the folders selected here are included in AI search. You can expand or shrink the scope later.",
-      "suggested": "Suggested locations",
-      "selectAll": "Select all",
-      "add": "Add another folder",
-      "stats": "{{files}} · {{size}} · ~{{minutes}} min",
-      "scanning": "Counting…",
-      "scanError": "Can't read",
-      "summary": "{{folders}} folders · {{files}} files · {{size}}",
-      "summaryNote": "node_modules · .git · files over 50 MiB are excluded automatically.",
-      "localEta": "Local (this Mac) · ~{{minutes}} min",
-      "cloudEta": "Remote · ~{{minutes}} min",
-      "warning": "This scope is broad. Choosing a subfolder or remote embedding shows your first results sooner.",
-      "smart": {
-        "title": "Smart indexing",
+      "policy": {
+        "title": "Smart indexing scope",
         "tag": "Sorted by AI",
-        "lead": "AI looks through the folders you chose and suggests leaving out the ones that do not help search, such as system data, logs, code and recordings.",
-        "start": "Refine the scope with AI",
-        "restart": "Analyze again",
-        "cancel": "Cancel",
-        "needFolder": "Select a folder first",
-        "running": "Looking through your folders…",
-        "looking": "Looking at: {{path}}",
-        "none": "Nothing to leave out. The folders you chose look document-heavy.",
-        "failed": "The analysis did not finish. You can skip this step.",
-        "saved": "Leaving out {{folders}} folders · {{files}} fewer files · {{size}} less to read",
-        "excludeHint": "Click to include in the index",
-        "includeHint": "Click to leave out"
+        "lead": "Blue folders on the left are indexed in full. Red sub-folders on the right and .* hidden folders are left out of the index.",
+        "eta": "~{{minutes}} min",
+        "etaSaved": "{{percent}}% faster",
+        "rescan": "Scan again",
+        "auto": ".* hidden folders (.git, .obsidian, .cache) and node_modules are always left out"
+      },
+      "include": {
+        "title": "Folders to include",
+        "meta": "{{folders}} folders · {{files}} files · {{size}}",
+        "add": "Add folder",
+        "remove": "Stop including",
+        "addable": "Available:",
+        "allIn": "Every suggested folder is included",
+        "reset": "Defaults"
+      },
+      "exclude": {
+        "title": "Sub-folders to leave out",
+        "meta": "{{count}} paths · −{{size}}",
+        "add": "Add folder to leave out",
+        "restore": "Include again",
+        "restored": "Put back:",
+        "refused": {
+          "isRoot": "A selected folder cannot be left out itself. Pick a sub-folder inside it.",
+          "outside": "Only sub-folders of the selected folders can be left out.",
+          "covered": "That folder is already left out."
+        }
       }
     },
     "embedding": {

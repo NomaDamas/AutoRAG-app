@@ -306,8 +306,8 @@ app at a local capture server and asserts the rules above over HTTP.
 ## First-run onboarding
 
 A fresh install opens onboarding instead of the Finder: welcome, permissions,
-account, folders, embedding, data sources, plan, the model step (BYOK only), and
-the first index. The screens port
+account, smart scan, folders (the smart-indexing scope), embedding, data sources,
+plan, the model step (BYOK only), and the first index. The screens port
 `docs/design-reference/onboarding/onboarding-prototype.html`; the draft is saved
 after every change, so a relaunch (for example after granting Full Disk Access)
 resumes at the same step.
@@ -320,24 +320,28 @@ resumes at the same step.
   registers the OS login item in packaged builds only (registering the dev
   binary would add bare "Electron" to Login Items); the switch is read back from
   the OS and flips off with a message if the OS refused.
-- **Folders** are pre-scanned with the indexer's own rules (supported
-  extensions, size cap, skipped dependency/code folders) to show real file
-  counts and an ETA.
-- **Smart indexing** (folders step, button "AI로 범위 다듬기") sends the
-  selected folders to a helper agent (see "Helper agents") that proposes the
+- **Smart scan** (after the account) starts a helper agent (see "Helper agents")
+  on the folders selected by default, with the prototype's drawn folder and
+  roaming magnifying glass and the folder it is looking at. The agent proposes the
   sub-folders not worth indexing: app and system data, machine-written logs,
-  generated docs, code projects, recordings. The agent only names folders; the
-  file counts and sizes next to each proposal are measured with the same walk as
-  the pre-scan, a proposal the index would read nothing from is dropped, and
-  every path is checked against the disk and the selected folders before it
-  reaches the screen. Proposals show as pills (red = left out, blue = kept) and
-  a click flips one. They live in the draft (`smartScope`), so a relaunch
-  restores them. Starting the index writes the ones still left out into the
-  shared config's `excludePaths` after the user's own entries and subtracts
-  their file count from the first index's total and ETA. The analysis is
-  opt-in per click (it spends the AutoRAG model), is cancelled when the user
-  leaves the step, and a failure (no model signed in yet, a provider error)
-  shows on the panel while the step stays usable.
+  generated docs, code projects, recordings. It only names folders; every path is
+  checked against the disk and the selected folders, the file counts and sizes
+  are measured with the pre-scan's own walk, and a proposal the index would read
+  nothing from is dropped. It spends the AutoRAG model, so it runs once on
+  entering the step (a draft that already holds proposals is not re-run); the
+  user can cancel and choose by hand, and a failure (no model signed in yet, a
+  provider error) shows its reason with a retry while the step can still be left.
+- **Folders** is the prototype's smart-indexing scope screen: a policy bar (the
+  estimate, struck through to the old one with the percent saved, and "scan
+  again"), a blue panel of the included folders and a red one of the sub-folders
+  left out. Every suggested folder is pre-scanned for its size. A pill's x removes
+  a folder or puts a left-out one back, ghost pills bring one in again, "reset"
+  restores the suggested selection, and the dashed buttons add a folder to
+  include or a sub-folder of the selected ones to leave out (measured once
+  added). The proposals and the user's choices live in the draft (`smartScope`),
+  so a relaunch restores them. Starting the index writes the folders still left
+  out into the shared config's `excludePaths` after the user's own entries and
+  subtracts their file count from the first index's total and ETA.
 - **Embedding** offers local (`native:Qwen/Qwen3-Embedding-0.6B`) by default and enables
   Dazzi cloud embedding (`openai:qwen/qwen3-embedding-0.6b` on the Dazzi
   endpoint) once the user is signed in to Dazzi and gives explicit consent.

@@ -70,13 +70,18 @@ export interface OnboardingCtx {
 	closeOverlay(): void;
 
 	setFolderSelected(path: string, selected: boolean): void;
-	toggleAllFolders(): void;
 	addFolders(): void;
-	/** Starts the AI analysis of the selected folders (restarting the proposals). */
+	/** Returns the suggested folders to their defaults; folders the user added stay selected. */
+	resetFolders(): void;
+	/** Starts the AI analysis of the selected folders (the scan screen starts it on entry). */
 	startSmartScan(): void;
 	cancelSmartScan(): void;
+	/** Drops the proposals and goes back to the scan screen to analyse the selected folders again. */
+	rescanSmart(): void;
 	/** Sets whether one proposed folder is left out of the index. */
 	setSmartExcluded(path: string, excluded: boolean): void;
+	/** Picks folders inside the selected ones to leave out too; each is measured once it is added. */
+	addExclusion(): void;
 
 	setEmbedMode(mode: EmbedMode): void;
 	setCloudConsent(consent: boolean): void;
