@@ -22,6 +22,7 @@ import type {
 	SourceId,
 } from "../../../shared/onboarding-contract";
 import type { Translate } from "./flow";
+import type { SmartRun } from "./smart-scope";
 
 export type OverlayKind = "fda" | "restart" | "notifications" | "winfw" | "win" | "pay";
 
@@ -34,6 +35,8 @@ export interface OnboardingCtx {
 	/** Any selected folder still has an unfinished scan. */
 	readonly scanning: boolean;
 	readonly scans: ReadonlyMap<string, FolderScan>;
+	/** Where the smart-indexing analysis of the selected folders stands; its proposals are `draft.smartScope`. */
+	readonly smartRun: SmartRun;
 	readonly candidates: readonly FolderCandidate[];
 	readonly embedding: EmbeddingInfo | null;
 	readonly sources: readonly DetectedSource[];
@@ -69,6 +72,11 @@ export interface OnboardingCtx {
 	setFolderSelected(path: string, selected: boolean): void;
 	toggleAllFolders(): void;
 	addFolders(): void;
+	/** Starts the AI analysis of the selected folders (restarting the proposals). */
+	startSmartScan(): void;
+	cancelSmartScan(): void;
+	/** Sets whether one proposed folder is left out of the index. */
+	setSmartExcluded(path: string, excluded: boolean): void;
 
 	setEmbedMode(mode: EmbedMode): void;
 	setCloudConsent(consent: boolean): void;

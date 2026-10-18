@@ -323,6 +323,21 @@ resumes at the same step.
 - **Folders** are pre-scanned with the indexer's own rules (supported
   extensions, size cap, skipped dependency/code folders) to show real file
   counts and an ETA.
+- **Smart indexing** (folders step, button "AI로 범위 다듬기") sends the
+  selected folders to a helper agent (see "Helper agents") that proposes the
+  sub-folders not worth indexing: app and system data, machine-written logs,
+  generated docs, code projects, recordings. The agent only names folders; the
+  file counts and sizes next to each proposal are measured with the same walk as
+  the pre-scan, a proposal the index would read nothing from is dropped, and
+  every path is checked against the disk and the selected folders before it
+  reaches the screen. Proposals show as pills (red = left out, blue = kept) and
+  a click flips one. They live in the draft (`smartScope`), so a relaunch
+  restores them. Starting the index writes the ones still left out into the
+  shared config's `excludePaths` after the user's own entries and subtracts
+  their file count from the first index's total and ETA. The analysis is
+  opt-in per click (it spends the AutoRAG model), is cancelled when the user
+  leaves the step, and a failure (no model signed in yet, a provider error)
+  shows on the panel while the step stays usable.
 - **Embedding** offers local (`native:Qwen/Qwen3-Embedding-0.6B`) by default and enables
   Dazzi cloud embedding (`openai:qwen/qwen3-embedding-0.6b` on the Dazzi
   endpoint) once the user is signed in to Dazzi and gives explicit consent.
@@ -470,6 +485,24 @@ edited file joins version stacks at the next regular scan. A stack member whose
 content changed after the scan is shown as a normal row (detached) until the
 next scan. An external rename of a stack member re-points the stack within a 2 s
 window. Search results are not live.
+
+## Helper agents
+
+AI Search is answered by the AutoRAG agent (`@autorag/librarian`). Every other
+agent in the app is a plain pi session built by one factory,
+`src/main/agents/agent-factory.ts`, from an `AgentProfile`:
+
+| Per profile | Shared by all |
+|---|---|
+| system prompt, tool names (pi built-ins, e.g. `read ls find grep`), custom tools, thinking level, whether pi loads AGENTS.md / skills / extensions (each off unless the profile asks) | the model and its credentials, resolved by `agents/app-model.ts` from the same config AI Search uses; pi's `auth.json` / `models.json` in the agent dir, so one sign-in serves every agent |
+
+A session is in memory and disposed by its caller: nothing is written to the
+agent dir or the working directory, and the user's own pi settings never apply.
+Profiles live in `src/main/agents/profiles/`; the first is smart indexing
+(read-only tools, thinking `low`, answers only through a `propose_exclusions`
+tool that validates paths). A new profile adds one file there and, if it needs
+a UI, its own service and bridge. `test/agent-factory.test.ts` pins what the
+model is offered; it runs on pi's faux provider.
 
 ## AI Search attachments
 

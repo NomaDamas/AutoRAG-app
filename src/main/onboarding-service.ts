@@ -226,6 +226,22 @@ function isFolderChoice(value: unknown): boolean {
 	return isJsonObject(value) && isAbsoluteString(value.path) && typeof value.selected === "boolean";
 }
 
+function isSmartExclusionChoice(value: unknown): boolean {
+	return (
+		isJsonObject(value) &&
+		isAbsoluteString(value.path) &&
+		isAbsoluteString(value.root) &&
+		typeof value.reason === "string" &&
+		typeof value.files === "number" &&
+		Number.isInteger(value.files) &&
+		value.files >= 0 &&
+		typeof value.bytes === "number" &&
+		Number.isFinite(value.bytes) &&
+		value.bytes >= 0 &&
+		typeof value.excluded === "boolean"
+	);
+}
+
 function isSourceChoice(value: unknown): boolean {
 	return isJsonObject(value) && typeof value.id === "string" && SOURCE_IDS[value.id] === true && typeof value.on === "boolean";
 }
@@ -255,6 +271,7 @@ function isOnboardingDraft(value: unknown): value is OnboardingDraft {
 	if (typeof value.plan !== "string" || PLAN_IDS[value.plan] !== true) return false;
 	if (typeof value.planConfirmed !== "boolean") return false;
 	if (value.model !== null && !isModelChoice(value.model)) return false;
+	if (value.smartScope !== undefined && (!Array.isArray(value.smartScope) || !value.smartScope.every(isSmartExclusionChoice))) return false;
 	return true;
 }
 
@@ -263,6 +280,8 @@ function isIndexingRequest(value: unknown): value is IndexingRequest {
 	if (!Array.isArray(value.folders) || !value.folders.every(isAbsoluteString)) return false;
 	if (value.folders.length === 0) return false;
 	if (value.embed !== undefined && (typeof value.embed !== "string" || EMBED_MODES[value.embed] !== true)) return false;
+	if (value.excludePaths !== undefined && (!Array.isArray(value.excludePaths) || !value.excludePaths.every(isAbsoluteString))) return false;
+	if (value.excludedFiles !== undefined && (typeof value.excludedFiles !== "number" || !Number.isInteger(value.excludedFiles) || value.excludedFiles < 0)) return false;
 	if (!Array.isArray(value.sources)) return false;
 	for (const source of value.sources) {
 		if (!isJsonObject(source) || typeof source.id !== "string" || SOURCE_IDS[source.id] !== true) return false;
@@ -376,6 +395,8 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 	let phase: IndexingPhase | null = null;
 	let phaseStartedAt = 0;
 	let selectedFolders: readonly string[] = [];
+	/** Files of the folders the user left out in smart indexing; the pre-scans still count them. */
+	let excludedFiles = 0;
 	let sourceNames: readonly string[] = [];
 	let pendingDatasourceAliases: readonly string[] = [];
 	let localIndexDone = false;
@@ -459,7 +480,7 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 			minsyncSignature = minsyncRead.signature;
 			embeddedFiles = Math.max(embeddedFiles, countMinSyncProgress(minsyncRead.text));
 		}
-		const totalFiles = deps.folderTotals(selectedFolders);
+		const totalFiles = Math.max(0, deps.folderTotals(selectedFolders) - excludedFiles);
 		const { progress, remainingMinutes } = computeIndexingProgress({
 			state: "running",
 			phase,
@@ -647,6 +668,7 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 				raw,
 				folders: request.folders,
 				datasources,
+				excludePaths: request.excludePaths ?? [],
 				home: deps.home,
 				embedder,
 				semanticSearch: embedMode !== "none",
@@ -690,6 +712,7 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 			const methods = ["parsed", "minsync"];
 			workspacePath = await deps.resolveWorkspacePath();
 			selectedFolders = request.folders;
+			excludedFiles = request.excludedFiles ?? 0;
 			folderRoots = request.folders.flatMap((folder) => {
 				const name = displayNameFromPath(folder);
 				let real = folder;
@@ -717,7 +740,7 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 				state: "running",
 				sources: sourceNames,
 				startedAt,
-				totalFiles: deps.folderTotals(request.folders),
+				totalFiles: Math.max(0, deps.folderTotals(request.folders) - excludedFiles),
 			};
 			emitStatus();
 			powerBlockerId = deps.startPowerSaveBlocker();

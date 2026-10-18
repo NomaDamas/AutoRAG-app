@@ -48,6 +48,7 @@ import {
 } from "./flow";
 import { AppLogo, Icon } from "./marks";
 import type { OnboardingCtx, OverlayKind } from "./context";
+import { indexingExclusions, initialSmartRun, reduceSmartRun, setScopeExcluded, type SmartRun } from "./smart-scope";
 import { IndexingScreen } from "./IndexingScreen";
 import { AccountStep } from "./steps/Account";
 import { EmbeddingStep } from "./steps/Embedding";
@@ -151,12 +152,15 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 	const [account, setAccount] = useState<AccountStatus | null>(null);
 	const [paying, setPaying] = useState(false);
 	const [indexStatus, setIndexStatus] = useState<IndexingStatus | null>(null);
+	const [smartRun, setSmartRun] = useState<SmartRun>(initialSmartRun);
 	// Unticked: usage statistics are opt-in (an EU user's consent must be an affirmative act).
 	const [shareUsage, setShareUsage] = useState(false);
 	// Unticked too: error reports are opt-in, a separate purpose with its own consent.
 	const [shareErrors, setShareErrors] = useState(false);
 
 	const draftRef = useRef<OnboardingDraft | null>(null);
+	/** The run whose result may still land in the draft; null once it was cancelled or the step was left. */
+	const smartRunIdRef = useRef<string | null>(null);
 	const permissionRef = useRef<PermissionStatus | null>(null);
 	const modelKeyRef = useRef("");
 	const accountRef = useRef<AccountStatus | null>(null);
@@ -247,6 +251,18 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 		};
 	}, []);
 
+	// The smart-indexing agent streams which folder it is looking at, then one result.
+	useEffect(
+		() =>
+			autorag.smartIndexing.onEvent((event) => {
+				setSmartRun((previous) => reduceSmartRun(previous, event));
+				if (event.type === "result" && event.runId === smartRunIdRef.current) {
+					setDraft((current) => (current === null ? current : { ...current, smartScope: event.exclusions }));
+				}
+			}),
+		[],
+	);
+
 	// Persist every change (debounced).
 	useEffect(() => {
 		if (draft === null) {
@@ -306,8 +322,10 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 		}
 		const signedIn = accountRef.current?.state === "signedIn";
 		const embed = resolveEmbed(current.embed, signedIn);
+		const selectedFolders = current.folders.filter((folder) => folder.selected).map((folder) => folder.path);
+		const { excludePaths, excludedFiles } = indexingExclusions(current.smartScope, selectedFolders);
 		const request: IndexingRequest = {
-			folders: current.folders.filter((folder) => folder.selected).map((folder) => folder.path),
+			folders: selectedFolders,
 			embed,
 			sources: current.sources.filter((source) => source.on).map((source) => ({ id: source.id })),
 			plan: current.plan,
@@ -315,6 +333,7 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 				current.plan === "byok" && current.model !== null
 					? { provider: current.model.provider, modelId: current.model.modelId, baseUrl: current.model.baseUrl === "" ? null : current.model.baseUrl }
 					: null,
+			...(excludePaths.length > 0 ? { excludePaths, excludedFiles } : {}),
 		};
 		void bridge.startIndexing(request).then((status) => {
 			setIndexStatus(status);
@@ -444,6 +463,16 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 		}
 		void bridge.scanFolders(missing);
 	}, [stepId, candidates]);
+
+	// Leaving the folders step ends a smart-indexing run still going: its result would arrive after the choices were made.
+	useEffect(() => {
+		if (stepId === "folders" || smartRunIdRef.current === null) {
+			return;
+		}
+		void autorag.smartIndexing.cancel(smartRunIdRef.current);
+		smartRunIdRef.current = null;
+		setSmartRun(initialSmartRun);
+	}, [stepId]);
 
 	// The sources step probes every connector in main; each usable one streams in
 	// as soon as its own probe finishes, so the list fills row by row.
@@ -644,6 +673,33 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 			const all = current.folders.length > 0 && current.folders.every((folder) => folder.selected);
 			patch({ folders: current.folders.map((folder) => ({ ...folder, selected: !all })) });
 		},
+		smartRun,
+		startSmartScan: () => {
+			const folders = (draftRef.current?.folders ?? []).filter((folder) => folder.selected).map((folder) => folder.path);
+			if (folders.length === 0) {
+				return;
+			}
+			const runId = crypto.randomUUID();
+			smartRunIdRef.current = runId;
+			setSmartRun({ status: "running", runId, current: null });
+			autorag.smartIndexing.analyze(runId, folders).catch((error: unknown) => {
+				if (smartRunIdRef.current === runId) {
+					setSmartRun({ status: "error", message: ipcMessage(error) });
+				}
+			});
+		},
+		cancelSmartScan: () => {
+			const runId = smartRunIdRef.current;
+			smartRunIdRef.current = null;
+			setSmartRun(initialSmartRun);
+			if (runId !== null) {
+				void autorag.smartIndexing.cancel(runId);
+			}
+		},
+		setSmartExcluded: (path, excluded) =>
+			setDraft((current) =>
+				current === null || current.smartScope === undefined ? current : { ...current, smartScope: setScopeExcluded(current.smartScope, path, excluded) },
+			),
 		addFolders: () => {
 			void bridge.pickFolders().then((picked) => {
 				if (picked.length === 0) {

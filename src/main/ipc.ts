@@ -7,6 +7,7 @@ import {
 } from "../shared/actions-contract";
 import { FS_CHANNELS } from "../shared/fs-contract";
 import { SEARCH_CHANNELS, type SearchBridge } from "../shared/search-contract";
+import { SMART_INDEXING_CHANNELS } from "../shared/smart-indexing-contract";
 import { OS_REQUEST_CHANNELS } from "../shared/os-request-contract";
 import { SETTINGS_CHANNELS, type EmbeddingChangeRequest, type JsonValue, type ProviderAuthKind, type ProviderServerInput, type SettingsBridge } from "../shared/settings-contract";
 import { ACCOUNT_CHANNELS } from "../shared/account-contract";
@@ -25,6 +26,7 @@ import type { AccountService } from "./account-service";
 import type { OnboardingService } from "./onboarding-service";
 import type { OsRequestService } from "./os-request-service";
 import type { ServicesService } from "./services-service";
+import type { SmartIndexingService } from "./smart-indexing-service";
 
 /**
  * The row drag-out: the renderer has already cancelled its own drag
@@ -102,6 +104,14 @@ export function registerSearchIpcHandlers(service: SearchBridge): void {
 	ipcMain.handle(SEARCH_CHANNELS.historyGet, (_event, chatId: string) => service.historyGet(chatId));
 	ipcMain.handle(SEARCH_CHANNELS.historySearch, (_event, query: string) => service.historySearch(query));
 	ipcMain.handle(SEARCH_CHANNELS.historyClear, () => service.historyClear());
+}
+
+export function registerSmartIndexingIpcHandlers(service: SmartIndexingService): void {
+	ipcMain.handle(SMART_INDEXING_CHANNELS.analyze, (_event, runId: unknown, roots: unknown) => {
+		if (typeof runId !== "string" || !Array.isArray(roots)) throw new TypeError("smartIndexing:analyze expects a run id and an array of folders");
+		return service.analyze(runId, roots);
+	});
+	ipcMain.handle(SMART_INDEXING_CHANNELS.cancel, (_event, runId: unknown) => (typeof runId === "string" ? service.cancel(runId) : undefined));
 }
 
 interface ConfigUpdatePayload {

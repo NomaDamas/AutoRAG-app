@@ -9,6 +9,7 @@ import type { LiveBridge } from "./live-contract";
 import type { OnboardingBridge } from "./onboarding-contract";
 import type { OsRequestBridge } from "./os-request-contract";
 import type { SearchBridge } from "./search-contract";
+import type { SmartIndexingBridge } from "./smart-indexing-contract";
 import type { SettingsBridge } from "./settings-contract";
 import type { ServicesBridge } from "./services-contract";
 import type { AppUpdateBridge } from "./update-contract";
@@ -27,6 +28,7 @@ declare global {
 			readonly osRequests: OsRequestBridge;
 			readonly preview: PreviewBridge;
 			readonly search: SearchBridge;
+			readonly smartIndexing: SmartIndexingBridge;
 			readonly settings: SettingsBridge;
 			readonly services: ServicesBridge;
 			/** Absolute path of a dropped File (Electron `webUtils.getPathForFile`); "" when it has none on disk. */

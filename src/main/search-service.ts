@@ -10,7 +10,8 @@ import {
 import { readRawConfigObject, resolveAgentModel, resolveConfigPath, type CliConfig } from "@autorag/librarian/core";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { isJsonObject } from "../shared/settings-contract";
-import { applyDazziThinkingLevels, openPlanRuntime, preferPlanOAuth } from "./dazzi-session-auth";
+import { applyDazziThinkingLevels } from "./dazzi-session-auth";
+import { resolveSessionModel } from "./agents/app-model";
 import { applyAppIndexing, readAppIndexing } from "./app-indexing";
 import { agentOptionsForSemantic, applySemanticPolicyToAgent } from "./semantic-policy";
 import type {
@@ -560,18 +561,16 @@ export function createDefaultAgentFactory(): () => Promise<SearchAgent> {
 			webSearch: resolveWebSearchConfig(raw),
 		};
 		const effective = await applyAppIndexing(withWebSearch, raw);
-		// Credentials resolve fresh from auth.json/process.env on every agent build,
-		// so a login or key change reaches the next search without a restart.
-		// The signed-in plan authenticates through its stored OAuth credential; the
-		// session must not replace it with an API key (see dazzi-session-auth.ts).
-		const resolved = await preferPlanOAuth(await resolveAgentModel(effective, { env: input.env, cwd: input.cwd }), () => openPlanRuntime(getAgentDir(), input.env));
+		// The model and credentials come from the one resolver every agent in the
+		// app shares (see agents/app-model.ts): fresh on every agent build.
+		const resolved = await resolveSessionModel(effective, input.env, input.cwd, getAgentDir());
 		const decomposition = await resolveDecomposition(effective, input.env, input.cwd);
 		// The decomposition model's thinking is upstream-fixed off; only the
 		// two-phase answer model takes config thinking.fast/final.
 		const thinking = readThinking(raw);
 		const options: AutoRAGAgentOptions = {
 			...buildAgentOptions(effective),
-			model: applyDazziThinkingLevels(resolved.model),
+			model: resolved.model,
 			...(resolved.apiKey !== undefined ? { apiKey: resolved.apiKey } : {}),
 			...(resolved.providerApiKeys !== undefined ? { providerApiKeys: resolved.providerApiKeys } : {}),
 			...(decomposition !== undefined ? { queryDecomposition: decomposition } : {}),

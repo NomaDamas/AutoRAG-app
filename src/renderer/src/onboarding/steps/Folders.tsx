@@ -2,10 +2,12 @@
 
 import type { ReactElement } from "react";
 import type { FolderCandidate, FolderKind } from "../../../../shared/onboarding-contract";
+import type { SmartExclusion } from "../../../../shared/smart-indexing-contract";
 import { cn } from "../../lib/cn";
 import { Icon } from "../marks";
 import { Eyebrow, Multiline } from "../parts";
 import { etaMinutes, formatSize } from "../flow";
+import { excludedTotals, visibleScope } from "../smart-scope";
 import type { OnboardingCtx } from "../context";
 
 function folderIcon(kind: FolderKind): string {
@@ -41,8 +43,40 @@ export function FoldersStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElem
 			bytes += scan.bytes;
 		}
 	}
+	const selectedList = [...selectedPaths];
+	const smartItems = visibleScope(draft.smartScope, selectedList);
+	const smartTotals = excludedTotals(draft.smartScope, selectedList);
+	files = Math.max(0, files - smartTotals.files);
+	bytes = Math.max(0, bytes - smartTotals.bytes);
 	const localEta = etaMinutes(files, "local");
 	const cloudEta = etaMinutes(files, "cloud");
+	const running = ctx.smartRun.status === "running";
+	const analyzed = draft.smartScope !== undefined;
+
+	const pill = (item: SmartExclusion): ReactElement => {
+		const root = candidates.find((candidate) => candidate.path === item.root)?.name ?? item.root.split(/[\\/]/u).filter(Boolean).pop() ?? item.root;
+		const inside = item.path.slice(item.root.length).replace(/^[\\/]+/u, "");
+		return (
+			<button
+				key={item.path}
+				type="button"
+				className={cn("si-pill", item.excluded ? "red" : "blue")}
+				aria-pressed={item.excluded}
+				title={`${item.reason}\n${item.excluded ? t("onboarding.folders.smart.excludeHint") : t("onboarding.folders.smart.includeHint")}`}
+				onClick={() => ctx.setSmartExcluded(item.path, !item.excluded)}
+			>
+				<span className="si-pill-ico">
+					<Icon name={item.excluded ? "eye-off" : "check"} size={11} />
+				</span>
+				<span className="si-pill-label">
+					<em>{root} /</em> {inside}
+				</span>
+				<span className="si-pill-size">
+					{item.files.toLocaleString()} · {formatSize(item.bytes)}
+				</span>
+			</button>
+		);
+	};
 
 	const card = (candidate: FolderCandidate): ReactElement => {
 		const selected = selectedPaths.has(candidate.path);
@@ -103,6 +137,67 @@ export function FoldersStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElem
 						<Icon name="plus" size={15} />
 						<span>{t("onboarding.folders.add")}</span>
 					</div>
+				</div>
+				<div className="si-panel">
+					<div className="si-bar">
+						<div className="si-copy">
+							<strong>
+								<Icon name="sparkles" size={13} /> {t("onboarding.folders.smart.title")}
+								{analyzed && !running ? <span className="tag rec">{t("onboarding.folders.smart.tag")}</span> : null}
+							</strong>
+							<p>{t("onboarding.folders.smart.lead")}</p>
+						</div>
+						{running ? (
+							<button type="button" className="si-btn" onClick={ctx.cancelSmartScan}>
+								{t("onboarding.folders.smart.cancel")}
+							</button>
+						) : (
+							<button
+								type="button"
+								className="si-btn accent"
+								disabled={selectedPaths.size === 0}
+								title={selectedPaths.size === 0 ? t("onboarding.folders.smart.needFolder") : undefined}
+								onClick={ctx.startSmartScan}
+							>
+								<Icon name={analyzed ? "refresh-cw" : "wand-sparkles"} size={12} />{" "}
+								{analyzed ? t("onboarding.folders.smart.restart") : t("onboarding.folders.smart.start")}
+							</button>
+						)}
+					</div>
+					{ctx.smartRun.status === "running" ? (
+						<div className="si-status">
+							<Icon name="loader-circle" size={12} className="spin" />
+							<span>
+								{ctx.smartRun.current === null
+									? t("onboarding.folders.smart.running")
+									: t("onboarding.folders.smart.looking", { path: ctx.smartRun.current })}
+							</span>
+						</div>
+					) : null}
+					{ctx.smartRun.status === "error" ? (
+						<div className="si-status error">
+							<Icon name="triangle-alert" size={12} />
+							<span>
+								{t("onboarding.folders.smart.failed")} <small>{ctx.smartRun.message}</small>
+							</span>
+						</div>
+					) : null}
+					{analyzed && !running && smartItems.length === 0 && ctx.smartRun.status !== "error" ? (
+						<div className="si-status">
+							<Icon name="circle-check" size={12} />
+							<span>{t("onboarding.folders.smart.none")}</span>
+						</div>
+					) : null}
+					{smartItems.length > 0 ? <div className="si-pills">{smartItems.map(pill)}</div> : null}
+					{smartTotals.folders > 0 ? (
+						<div className="si-saved">
+							{t("onboarding.folders.smart.saved", {
+								folders: smartTotals.folders,
+								files: smartTotals.files.toLocaleString(),
+								size: formatSize(smartTotals.bytes),
+							})}
+						</div>
+					) : null}
 				</div>
 				<div className="folder-summary">
 					<div className="summary-main">

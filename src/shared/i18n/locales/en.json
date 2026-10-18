@@ -497,7 +497,23 @@
       "summaryNote": "node_modules · .git · files over 50 MiB are excluded automatically.",
       "localEta": "Local (this Mac) · ~{{minutes}} min",
       "cloudEta": "Remote · ~{{minutes}} min",
-      "warning": "This scope is broad. Choosing a subfolder or remote embedding shows your first results sooner."
+      "warning": "This scope is broad. Choosing a subfolder or remote embedding shows your first results sooner.",
+      "smart": {
+        "title": "Smart indexing",
+        "tag": "Sorted by AI",
+        "lead": "AI looks through the folders you chose and suggests leaving out the ones that do not help search, such as system data, logs, code and recordings.",
+        "start": "Refine the scope with AI",
+        "restart": "Analyze again",
+        "cancel": "Cancel",
+        "needFolder": "Select a folder first",
+        "running": "Looking through your folders…",
+        "looking": "Looking at: {{path}}",
+        "none": "Nothing to leave out. The folders you chose look document-heavy.",
+        "failed": "The analysis did not finish. You can skip this step.",
+        "saved": "Leaving out {{folders}} folders · {{files}} fewer files · {{size}} less to read",
+        "excludeHint": "Click to include in the index",
+        "includeHint": "Click to leave out"
+      }
     },
     "embedding": {
       "eyebrow": "Semantic search",

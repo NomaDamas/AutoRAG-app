@@ -1384,6 +1384,166 @@ html[data-appearance="dark"] .onb .source-icon.brand {
 	font-size: 9px;
 }
 
+/* ------------------------------------ smart indexing (AI picks folders to leave out)
+ * A policy bar above the folder summary: what the feature does, the action, then
+ * the AI's proposals as pills. A red pill is left out of the index, a blue one is
+ * kept; a click flips it.
+ */
+.onb .si-panel {
+	margin-top: 10px;
+	padding: 11px 13px;
+	border: 1px solid var(--onb-divider);
+	border-radius: 8px;
+	background: var(--onb-bg-card);
+}
+
+.onb .si-bar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 14px;
+}
+
+.onb .si-copy strong {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 11.5px;
+	font-weight: 600;
+}
+
+.onb .si-copy p {
+	margin: 4px 0 0;
+	color: var(--onb-muted);
+	font-size: 9.5px;
+	line-height: 1.45;
+}
+
+.onb .si-btn {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	gap: 5px;
+	height: 26px;
+	padding: 0 10px;
+	border: 1px solid var(--onb-border);
+	border-radius: 6px;
+	background: var(--onb-bg-card);
+	color: var(--onb-ink);
+	font-size: 10px;
+	font-weight: 500;
+	cursor: pointer;
+}
+
+.onb .si-btn.accent {
+	border-color: var(--onb-blue);
+	color: var(--onb-blue);
+}
+
+.onb .si-btn:disabled {
+	opacity: .5;
+	cursor: default;
+}
+
+.onb .si-status {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin-top: 9px;
+	color: var(--onb-muted);
+	font-size: 9.5px;
+}
+
+.onb .si-status span {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.onb .si-status small {
+	color: var(--onb-faint);
+	font-size: 9px;
+}
+
+.onb .si-status.error {
+	color: var(--onb-red);
+}
+
+.onb .si-pills {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin-top: 10px;
+}
+
+.onb .si-pill {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	max-width: 100%;
+	height: 26px;
+	padding: 0 8px 0 6px;
+	border: 1px solid var(--onb-border);
+	border-radius: 7px;
+	background: var(--onb-bg-card);
+	color: var(--onb-ink);
+	font-size: 10px;
+	cursor: pointer;
+}
+
+.onb .si-pill.red {
+	border-color: color-mix(in srgb, var(--onb-red) 30%, var(--onb-border));
+	background: var(--onb-red-bg);
+}
+
+.onb .si-pill.blue {
+	border-color: color-mix(in srgb, var(--onb-blue) 30%, var(--onb-border));
+	background: var(--onb-blue-soft);
+}
+
+.onb .si-pill-ico {
+	display: grid;
+	flex: none;
+	place-items: center;
+	width: 16px;
+	height: 16px;
+	border-radius: 4px;
+}
+
+.onb .si-pill.red .si-pill-ico {
+	color: var(--onb-red);
+}
+
+.onb .si-pill.blue .si-pill-ico {
+	color: var(--onb-blue);
+}
+
+.onb .si-pill-label {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.onb .si-pill-label em {
+	color: var(--onb-muted);
+	font-style: normal;
+}
+
+.onb .si-pill-size {
+	flex: none;
+	color: var(--onb-muted);
+	font-size: 9px;
+	font-variant-numeric: tabular-nums;
+}
+
+.onb .si-saved {
+	margin-top: 9px;
+	color: var(--onb-muted);
+	font-size: 9.5px;
+}
+
 /* ------------------------------------ embedding choice (none / local / remote)
  * The three modes are compared on the same two axes (power needed, accuracy):
  * a meter's length shows the value's size, its colour whether that value is

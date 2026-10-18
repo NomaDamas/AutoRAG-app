@@ -497,7 +497,23 @@
       "summaryNote": "node_modules · .git · 超过 50 MiB 的文件会自动排除。",
       "localEta": "本地 (此 Mac) 约 {{minutes}} 分钟",
       "cloudEta": "远程 约 {{minutes}} 分钟",
-      "warning": "范围较广。选择子文件夹或远程嵌入可以更快看到首个结果。"
+      "warning": "范围较广。选择子文件夹或远程嵌入可以更快看到首个结果。",
+      "smart": {
+        "title": "智能索引",
+        "tag": "AI 已分类",
+        "lead": "AI 会浏览你选择的文件夹，把系统数据、日志、代码、录像等对搜索没有帮助的文件夹列为建议排除项。",
+        "start": "用 AI 优化范围",
+        "restart": "重新分析",
+        "cancel": "取消",
+        "needFolder": "请先选择文件夹",
+        "running": "正在浏览文件夹…",
+        "looking": "正在查看：{{path}}",
+        "none": "没有需要排除的文件夹。所选文件夹以文档为主。",
+        "failed": "未能完成分析。可以跳过这一步。",
+        "saved": "排除 {{folders}} 个文件夹 · 少读 {{files}} 个文件 · {{size}}",
+        "excludeHint": "点击以纳入索引",
+        "includeHint": "点击以排除"
+      }
     },
     "embedding": {
       "eyebrow": "语义搜索",

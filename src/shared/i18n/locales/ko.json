@@ -497,7 +497,23 @@
       "summaryNote": "node_modules · .git · 50 MiB 초과 파일은 자동으로 제외합니다.",
       "localEta": "로컬 (이 Mac) 약 {{minutes}}분",
       "cloudEta": "원격 약 {{minutes}}분",
-      "warning": "범위가 넓습니다. 하위 폴더를 고르거나 원격 임베딩을 선택하면 첫 결과를 더 빨리 볼 수 있습니다."
+      "warning": "범위가 넓습니다. 하위 폴더를 고르거나 원격 임베딩을 선택하면 첫 결과를 더 빨리 볼 수 있습니다.",
+      "smart": {
+        "title": "스마트 인덱싱",
+        "tag": "AI 분류 완료",
+        "lead": "AI가 선택한 폴더를 훑어보고, 시스템 데이터·로그·코드·녹화본처럼 검색에 도움이 안 되는 폴더를 제외 후보로 골라 드려요.",
+        "start": "AI로 범위 다듬기",
+        "restart": "다시 분석",
+        "cancel": "취소",
+        "needFolder": "폴더를 먼저 선택하세요",
+        "running": "폴더를 살펴보는 중…",
+        "looking": "살펴보는 중: {{path}}",
+        "none": "제외할 폴더가 없어요. 선택한 폴더는 문서 위주로 보입니다.",
+        "failed": "분석하지 못했어요. 이 단계는 건너뛰어도 됩니다.",
+        "saved": "제외 {{folders}}개 폴더 · 파일 {{files}}개 · {{size}} 덜 읽어요",
+        "excludeHint": "눌러서 인덱싱에 포함",
+        "includeHint": "눌러서 제외"
+      }
     },
     "embedding": {
       "eyebrow": "의미 검색",

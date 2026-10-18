@@ -51,6 +51,8 @@ export interface ApplyIndexingConfigInput {
 	readonly workspacePath: string | null;
 	/** False writes keyword-only mode (`appIndexing.semanticSearch: false`); true removes the switch. Absent leaves it as is. */
 	readonly semanticSearch?: boolean;
+	/** Folders to leave out; kept after any exclusions the config already has. */
+	readonly excludePaths?: readonly string[];
 	readonly model: ByokModelChoice | null;
 }
 
@@ -126,6 +128,10 @@ export function buildDatasourceEntries(datasources: readonly IndexingDatasource[
 export function applyIndexingConfig(input: ApplyIndexingConfigInput): Record<string, unknown> {
 	const raw = structuredClone(input.raw);
 	raw.searchPaths = [...input.folders];
+	if (input.excludePaths !== undefined && input.excludePaths.length > 0) {
+		const existing = Array.isArray(raw.excludePaths) ? raw.excludePaths.filter((value): value is string => typeof value === "string") : [];
+		raw.excludePaths = [...new Set([...existing, ...input.excludePaths])];
+	}
 	if (input.workspacePath !== null) raw.workspacePath = input.workspacePath;
 	if (input.embedder !== null) {
 		const minSync = isJsonObject(raw.minSync) ? raw.minSync : {};
