@@ -1,9 +1,10 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
 	AutoRAGAgent,
 	buildAgentOptions,
+	buildDatasourceSkills,
 	DiscrawlClient,
 	MailcrawlClient,
 	QmdClient,
@@ -226,5 +227,50 @@ describe("keyword-only search agent", () => {
 	it("keeps memory search keyword-only only when semantic search is off", () => {
 		expect(agentOptionsForSemantic({ searchPaths: [] }, false).memoryEmbedder).toBe(false);
 		expect("memoryEmbedder" in agentOptionsForSemantic({ searchPaths: [] }, true)).toBe(false);
+	});
+});
+
+describe("runWithoutSemanticIndexing and GitHub Gist", () => {
+	const GIST = { id: "g1", description: "notes", public: false, updated_at: "2026-01-01T00:00:00.000Z", html_url: "https://gist.github.com/g1", files: { "a.md": { filename: "a.md", truncated: false } } };
+	const FULL = { ...GIST, files: { "a.md": { filename: "a.md", content: "zebracorn migration notes", truncated: false } } };
+	const fetchImpl = (async (url: string | URL | Request) => {
+		const href = String(url);
+		const body = href.includes("/gists/g1") ? FULL : [GIST];
+		return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+	}) as typeof fetch;
+
+	async function indexGist(): Promise<{ readonly diagnostics: readonly string[]; readonly vectors: boolean; readonly ok: boolean }> {
+		const root = await mkdtemp(join(tmpdir(), "autorag-gist-"));
+		const previousHome = process.env.AUTORAG_HOME;
+		// No cached embedding runtime in here: an embedding attempt can only end as `semantic-unavailable`, never start a model.
+		process.env.AUTORAG_HOME = join(root, "home");
+		try {
+			const { skills } = buildDatasourceSkills({ "github-gist": { connector: { baseUrl: "https://gist.test", token: "t", ghCliFallback: false, fetchImpl } } }, root);
+			const result = await runWithoutSemanticIndexing(() => skills[0]!.index());
+			const vectors = await stat(join(root, ".autorag", "datasources", "github-gist", "default", "vectors.json")).then(() => true, () => false);
+			return { ok: result.ok, diagnostics: result.diagnostics.map((d) => d.message), vectors };
+		} finally {
+			if (previousHome === undefined) delete process.env.AUTORAG_HOME;
+			else process.env.AUTORAG_HOME = previousHome;
+			await rm(root, { recursive: true, force: true });
+		}
+	}
+
+	it("indexes the gist's content but skips its semantic index", async () => {
+		const outcome = await indexGist();
+
+		expect(outcome.ok).toBe(true);
+		expect(outcome.diagnostics.some((message) => message.includes("semantic-unavailable"))).toBe(false);
+		expect(outcome.vectors).toBe(false);
+	});
+
+	it("puts the gist's own index step back afterwards", async () => {
+		const { skills } = buildDatasourceSkills({ "github-gist": {} }, "/tmp/autorag-gist-proto");
+		const prototype = Object.getPrototypeOf(skills[0]) as { index: unknown };
+		const original = prototype.index;
+
+		await runWithoutSemanticIndexing(async () => undefined);
+
+		expect(prototype.index).toBe(original);
 	});
 });
