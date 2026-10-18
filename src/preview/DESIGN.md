@@ -157,7 +157,10 @@ still has the previous file's size when they lay out.
   attributes, and picture references that are absolute, remote, or contain `..`
   are dropped. The Finder's tile and Inspector thumbnails for all four come from
   the same embedded PNG on every platform (`file-icon.ts`), since Quick Look
-  has no ODF thumbnailer.
+  has no ODF thumbnailer. A package with no `Thumbnails/thumbnail.png` (one
+  written by a tool rather than by LibreOffice) keeps the type icon. `.potx`
+  tiles use the JPEG under `docProps/thumbnail.jpeg`, re-encoded to PNG for
+  the icon cache; `.pptx` tiles still come from Quick Look.
 
 - **PowerPoint** — `.pptx`, `.pptm`, `.ppsx`, and `.potx` share the PDF panel's paged
   layout: every slide is a paper card in one scrolling column with the page

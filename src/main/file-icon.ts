@@ -33,7 +33,7 @@
 
 import { extname } from "node:path";
 import { realpath } from "node:fs/promises";
-import { ODF_EXTENSIONS, readOdfThumbnail } from "../preview/node/odf";
+import { EMBEDDED_THUMBNAIL_EXTENSIONS, readEmbeddedThumbnail } from "../preview/node/odf";
 import { errorMessage } from "./fs-entry";
 import { ICON_SIZE, iconUrl } from "./icon-protocol";
 import { createPriorityGate, type PriorityGate } from "./priority-gate";
@@ -78,8 +78,8 @@ const NATIVE_THUMBNAIL_EXTENSIONS = new Set([
 	// (Numbers, Pages, Keynote). Windows has no thumbnailer for them and falls
 	// through to the type icon.
 	"numbers", "pages", "key",
-	// OpenDocument packages are not rendered by Quick Look; their tile is the
-	// first-page PNG the package embeds (`odf.ts`), on every platform.
+	// OpenDocument packages and `.potx` are not rendered by Quick Look; their
+	// tile is the first-page image the package embeds (`odf.ts`), on every platform.
 	// A macOS application bundle is a directory on disk, but Quick Look renders
 	// the app's own icon for it — at the listing tier and at the Inspector's
 	// 640px tier — so it takes this lane exactly like a document does.
@@ -87,7 +87,7 @@ const NATIVE_THUMBNAIL_EXTENSIONS = new Set([
 ]);
 export function isNativeThumbnailExtension(ext: string): boolean {
 	const key = ext.toLowerCase().replace(/^\./, "");
-	return NATIVE_THUMBNAIL_EXTENSIONS.has(key) || ODF_EXTENSIONS.has(key);
+	return NATIVE_THUMBNAIL_EXTENSIONS.has(key) || EMBEDDED_THUMBNAIL_EXTENSIONS.has(key);
 }
 
 export interface IconTarget {
@@ -234,9 +234,17 @@ class IconCache {
 }
 
 async function defaultThumbnail(path: string, size: number): Promise<Uint8Array | null> {
-	// An OpenDocument package carries its own first page; Quick Look would only
-	// answer with a generic type icon for it.
-	if (ODF_EXTENSIONS.has(extname(path).slice(1).toLowerCase())) return readOdfThumbnail(path);
+	// An OpenDocument package or a PowerPoint template carries its own first
+	// page; Quick Look would only answer with a generic type icon for it. The
+	// icon cache serves PNG, so a JPEG thumbnail is re-encoded.
+	const ext = extname(path).slice(1).toLowerCase();
+	if (EMBEDDED_THUMBNAIL_EXTENSIONS.has(ext)) {
+		const embedded = await readEmbeddedThumbnail(path, ext);
+		if (embedded === null || embedded.mime === "image/png") return embedded?.bytes ?? null;
+		const { nativeImage } = await import("electron");
+		const image = nativeImage.createFromBuffer(Buffer.from(embedded.bytes));
+		return image.isEmpty() ? null : image.toPNG();
+	}
 	// Dynamic: `electron` is a main-process-only module and is not importable when
 	// this file is loaded outside Electron (unit tests inject `thumbnail` instead).
 	const [{ nativeImage }, resolved] = await Promise.all([
@@ -373,10 +381,10 @@ export function createIconProvider(deps: IconProviderDeps = {}): IconSource {
 			cache.set(key, bytes);
 			resolvers.get(key)?.(bytes);
 		};
-		// Other platforms use the OS icon, except for OpenDocument packages, whose
-		// embedded first page is read the same way everywhere.
-		const thumbnailed = usesNativeThumbnails ? missing : missing.filter((target) => ODF_EXTENSIONS.has(target.ext.toLowerCase()));
-		const systemOnly = usesNativeThumbnails ? [] : missing.filter((target) => !ODF_EXTENSIONS.has(target.ext.toLowerCase()));
+		// Other platforms use the OS icon, except for packages that embed a
+		// first page (OpenDocument, `.potx`), which is read the same way everywhere.
+		const thumbnailed = usesNativeThumbnails ? missing : missing.filter((target) => EMBEDDED_THUMBNAIL_EXTENSIONS.has(target.ext.toLowerCase()));
+		const systemOnly = usesNativeThumbnails ? [] : missing.filter((target) => !EMBEDDED_THUMBNAIL_EXTENSIONS.has(target.ext.toLowerCase()));
 		const generation = Promise.all([runThumbnails(thumbnailed, resolve, gate, priority), runSystem(systemOnly, resolve, priority)]).then(() => undefined);
 		void generation.catch((error: unknown) => {
 			// Pool-level failure: the whole batch degrades to "no icon".

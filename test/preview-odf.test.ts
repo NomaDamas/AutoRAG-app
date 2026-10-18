@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { strToU8, zipSync } from "fflate";
 import { describe, expect, it } from "vitest";
 import { createIconProvider } from "../src/main/file-icon";
-import { readOdfThumbnail } from "../src/preview/node/odf";
+import { readEmbeddedThumbnail } from "../src/preview/node/odf";
 import { renderOdpSlide, renderOdt, type OdfDom, type OdfDomElement } from "../src/preview/shared/odf-render";
 import type { OdfDocument, ParseOdf } from "../src/preview/shared/odf-xml";
 import { buildOdpDeck } from "../src/preview/shared/odp-model";
@@ -13,6 +13,7 @@ import { buildOdtDocument, odtPictures } from "../src/preview/shared/odt-model";
 import { byteNeed, viewerForExtension } from "../src/preview/shared/registry";
 
 const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]);
+const JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]);
 const NS =
 	'xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0" xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0" xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0" xmlns:svg="urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0" xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:presentation="urn:oasis:names:tc:opendocument:xmlns:presentation:1.0"';
 
@@ -54,7 +55,7 @@ describe("OpenDocument registry", () => {
 	});
 });
 
-describe("readOdfThumbnail", () => {
+describe("readEmbeddedThumbnail", () => {
 	async function pack(name: string, files: Parameters<typeof zipSync>[0]): Promise<{ dir: string; path: string }> {
 		const dir = await mkdtemp(join(tmpdir(), "autorag-odf-"));
 		const path = join(dir, name);
@@ -65,7 +66,7 @@ describe("readOdfThumbnail", () => {
 	it("returns the embedded first-page PNG", async () => {
 		const { dir, path } = await pack("a.odt", { "content.xml": strToU8("x"), "Thumbnails/thumbnail.png": PNG });
 		try {
-			expect(await readOdfThumbnail(path)).toEqual(PNG);
+			expect(await readEmbeddedThumbnail(path, "odt")).toEqual({ bytes: PNG, mime: "image/png" });
 		} finally {
 			await rm(dir, { recursive: true, force: true });
 		}
@@ -77,11 +78,21 @@ describe("readOdfThumbnail", () => {
 		const plain = await pack("d.odt", {});
 		await writeFile(plain.path, "hello");
 		try {
-			expect(await readOdfThumbnail(none.path)).toBeNull();
-			expect(await readOdfThumbnail(bad.path)).toBeNull();
-			expect(await readOdfThumbnail(plain.path)).toBeNull();
+			expect(await readEmbeddedThumbnail(none.path, "odg")).toBeNull();
+			expect(await readEmbeddedThumbnail(bad.path, "odp")).toBeNull();
+			expect(await readEmbeddedThumbnail(plain.path, "odt")).toBeNull();
 		} finally {
 			for (const entry of [none, bad, plain]) await rm(entry.dir, { recursive: true, force: true });
+		}
+	});
+
+	it("reads the JPEG a PowerPoint template stores under docProps and nothing for an extension without one", async () => {
+		const { dir, path } = await pack("t.potx", { "docProps/thumbnail.jpeg": JPEG });
+		try {
+			expect(await readEmbeddedThumbnail(path, "potx")).toEqual({ bytes: JPEG, mime: "image/jpeg" });
+			expect(await readEmbeddedThumbnail(path, "pptx")).toBeNull();
+		} finally {
+			await rm(dir, { recursive: true, force: true });
 		}
 	});
 
