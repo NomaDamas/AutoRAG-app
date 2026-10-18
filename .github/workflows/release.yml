@@ -58,7 +58,7 @@ jobs:
           node-version: 24
       - uses: dtolnay/rust-toolchain@stable
 
-      # `bun install` resolves the `file:./.upstream/autorag` dependency before
+      # `bun install` resolves the `file:./.upstream/librarian-package` dependency before
       # its `preinstall` hook runs, so the librarian is cloned and built first.
       - name: Sync librarian
         run: node scripts/sync-librarian.mjs
