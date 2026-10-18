@@ -22,7 +22,7 @@ Open, and not fixable by documentation alone:
 | Item | Why it is open |
 |---|---|
 | Error reports | Now opt-in: default off, asked with an unticked checkbox on the first onboarding step, switchable in Settings. Limitation: a settings file saved by an earlier build may already hold `errorReporting: true` (the store writes every default on any change), and that cannot be told apart from a deliberate choice, so those installs keep reporting until the user turns it off. |
-| In-app wording | `onboarding.account.authNote` and `onboarding.embedding.cloudBulletNoStore` say Dazzi stores no request content; the Terms allow the Free plan to use Input and Output to improve the Service. The Privacy Policy now says the app wording does not limit that; the app strings still read broader. |
+| In-app wording | Fixed: `onboarding.account.authNote` no longer says Dazzi stores no request content (the Free plan may use Input and Output to improve the Service), and the Settings embedding hint no longer says document content never leaves the Mac (Pro cloud embedding sends it). `cloudBulletNoStore` and `cloudConsent` stay: cloud embedding is Pro-only, where nothing is stored or used for training. |
 | Account deletion | Email only (`privacy@dazziapp.com`). The GDPR allows this; there is no in-app or dashboard delete. |
 | Provider transfer mechanisms | Verified for every provider except DeepInfra (see `data-flows.md`). DeepInfra receives cloud-embedding text and has no public DPA, SCC or DPF statement; get a DPA with SCCs or stop sending EEA traffic there. |
 | EU representative (Art. 27) and DPO | Not assessed; depends on whether Dazzi targets EU users. |
@@ -68,7 +68,7 @@ Check the current text of Art. 14 before relying on these numbers.
 
 ## Still open
 
-Needs a decision, an external party or a larger change: in-app wording about
-request storage, an account deletion path, DeepInfra transfer basis, the
+Needs a decision, an external party or a larger change: an account deletion
+path, DeepInfra transfer basis, the
 `sandbox: false` windows and the CSP `unsafe-inline`, the upstream advisories
 above, and a manual run of the new SBOM workflow on the next release.
