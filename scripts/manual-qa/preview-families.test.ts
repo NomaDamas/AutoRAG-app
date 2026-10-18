@@ -22,6 +22,7 @@ const bridge: QuickLookWindowBridge = {
 	sha256: never,
 	folderSize: never,
 	audioMetadata: never,
+	dataPreview: never,
 	share: never,
 	copyText: never,
 };
@@ -64,6 +65,9 @@ const bytesForKind: Readonly<Record<ViewerKind, Uint8Array>> = {
 	hwp: new Uint8Array([0xd0, 0xcf, 0x11, 0xe0]),
 	font: new Uint8Array([0x00, 0x01, 0x00, 0x00]),
 	rtf: strToU8("{\\rtf1 hello}"),
+	data: new Uint8Array([0x53, 0x51, 0x4c]),
+	jsonl: strToU8('{"a":1}\n{"a":2}\n'),
+	plist: strToU8('<plist version="1.0"><dict/></plist>'),
 	fallback: new Uint8Array([0, 1, 2, 3, 4]),
 };
 
@@ -86,6 +90,9 @@ const extForKind: Readonly<Record<ViewerKind, string>> = {
 	hwp: "hwp",
 	font: "ttf",
 	rtf: "rtf",
+	data: "sqlite",
+	jsonl: "jsonl",
+	plist: "plist",
 	fallback: "bin",
 };
 

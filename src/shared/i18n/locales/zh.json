@@ -1150,6 +1150,35 @@
         "desktop": "桌面",
         "mobile": "移动",
         "source": "源码"
+      },
+      "firstRecords": "正在显示前 {{count}} 条记录",
+      "plistInvalid": "无法读取属性列表",
+      "plistConverted": "二进制 plist 以 XML 显示"
+    },
+    "data": {
+      "readFailed": "无法读取数据文件",
+      "tables": "表",
+      "noTables": "没有表",
+      "tableCount": "{{count}} 个表",
+      "rows": "{{count}} 行",
+      "rowsAtLeast": "{{count}}+",
+      "columns": "{{count}} 列",
+      "rowGroups": "{{count}} 个行组",
+      "view": "视图",
+      "noColumns": "此表没有列",
+      "noRows": "没有行",
+      "viewNotRun": "预览不会运行视图",
+      "tableFailed": "无法读取此表",
+      "tooLarge": "第一个行组过大，无法预览",
+      "firstRows": "正在显示前 {{count}} 行",
+      "columnsCut": "仅显示前 {{count}} 列",
+      "blob": "二进制 {{size}}",
+      "walPending": "不显示 -wal 文件中的最新更改",
+      "unreadable": {
+        "not-sqlite": "不是可读取的 SQLite 数据库(可能已加密)",
+        "corrupt": "文件已损坏，无法读取",
+        "not-parquet": "不是 Parquet 文件",
+        "encrypted": "此 Parquet 文件已加密"
       }
     },
     "markdown": {

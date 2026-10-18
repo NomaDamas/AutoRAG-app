@@ -40,6 +40,8 @@ export const PREVIEW_CHANNELS = {
 	folderSize: "preview:folder-size",
 	/** Preview window -> main (invoke): tags, cover art, and stream facts of the shown audio file. */
 	audioMetadata: "preview:audio-metadata",
+	/** Preview window -> main (invoke): tables and first rows of the shown database or Parquet file. */
+	data: "preview:data",
 	/** Preview window -> main (invoke): the macOS share menu, anchored under a toolbar rect. */
 	share: "preview:share",
 	/** Preview window -> main (invoke): put text on the system clipboard. */
@@ -160,6 +162,57 @@ export interface AudioMetadata {
 	readonly picture: AudioPicture | null;
 }
 
+/** One grid cell. Text is already capped; `blob` is the byte length of a binary value that is not sent. */
+export type DataCell = string | null | { readonly blob: number };
+
+export interface DataColumn {
+	readonly name: string;
+	/** Declared SQLite type or Parquet logical/physical type; may be empty. */
+	readonly type: string;
+}
+
+export interface DataTable {
+	readonly name: string;
+	readonly view: boolean;
+	/** Null for a view: counting it would run its stored query. */
+	readonly rowCount: number | null;
+	/** False when the count stopped at its cap: `rowCount` is then a lower bound. */
+	readonly exact: boolean;
+}
+
+/** The columns and first rows of one table (or the first row group of a Parquet file). */
+export interface DataRows {
+	readonly name: string;
+	readonly columns: readonly DataColumn[];
+	readonly rows: readonly (readonly DataCell[])[];
+	/** More rows exist than `rows` holds. */
+	readonly more: boolean;
+	/** Columns past the display cap were left out. */
+	readonly columnsCut: boolean;
+	/** Why no rows were read: the table failed, it is a view (its stored query is never run), or the Parquet row group is too large. */
+	readonly failure: "table" | "view" | "too-large" | null;
+}
+
+/** `not-sqlite` also covers an encrypted database: without the key its header is noise. */
+export type DataUnreadable = "not-sqlite" | "corrupt" | "not-parquet" | "encrypted";
+
+export type DataPreview =
+	| {
+			readonly kind: "database";
+			readonly tables: readonly DataTable[];
+			readonly selected: DataRows | null;
+			/** A non-empty `-wal` file sits beside the database; its newest commits are not shown. */
+			readonly walPending: boolean;
+	  }
+	| {
+			readonly kind: "parquet";
+			readonly rowCount: number;
+			readonly rowGroups: number;
+			readonly createdBy: string | null;
+			readonly selected: DataRows;
+	  }
+	| { readonly kind: "unreadable"; readonly reason: DataUnreadable };
+
 export type QuickLookAction = "close" | "next" | "previous" | "open" | "fullscreen" | "reveal";
 
 export type NavigateDelta = 1 | -1;
@@ -205,6 +258,8 @@ export interface QuickLookWindowBridge {
 	sha256(path: string): Promise<string>;
 	folderSize(path: string): Promise<FolderSize>;
 	audioMetadata(path: string): Promise<AudioMetadata>;
+	/** Database tables and first rows, or a Parquet file's schema and first rows. `table` picks a database table (null: the first). */
+	dataPreview(path: string, table: string | null): Promise<DataPreview>;
 	/** `anchor` is the share button's rect in page CSS pixels. macOS only. */
 	share(anchor: Bounds): Promise<void>;
 	copyText(text: string): Promise<void>;

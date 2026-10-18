@@ -19,6 +19,9 @@ export const VIEWER_KINDS = [
 	"hwp",
 	"font",
 	"rtf",
+	"data",
+	"jsonl",
+	"plist",
 	"fallback",
 ] as const;
 
@@ -58,6 +61,11 @@ assign("epub", ["epub"]);
 assign("hwp", ["hwp", "hwpx"]);
 assign("font", ["ttf", "otf", "woff", "woff2", "eot"]);
 assign("rtf", ["rtf"]);
+// Databases and columnar files are opened read-only in the main process; the
+// page only ever receives the capped rows it draws.
+assign("data", ["sqlite", "sqlite3", "db", "parquet"]);
+assign("jsonl", ["jsonl", "ndjson"]);
+assign("plist", ["plist"]);
 
 export function viewerForExtension(ext: string): ViewerKind {
 	const key = ext.toLowerCase().replace(/^\./, "");
@@ -73,9 +81,10 @@ export function claimedViewerExtensions(): readonly { readonly ext: string; read
  * through the range-capable protocol (media, fonts, and PDF, which pdf.js
  * fetches page by page); `prefix` viewers render however much text arrives;
  * `whole` viewers parse the entire file; `sniff` reads enough to tell text
- * from binary.
+ * from binary; `query` sends no bytes: the viewer asks the main process for
+ * capped rows of the file instead.
  */
-export type ByteNeed = "stream" | "prefix" | "whole" | "sniff" | "extract";
+export type ByteNeed = "stream" | "prefix" | "whole" | "sniff" | "extract" | "query";
 
 export function byteNeed(kind: ViewerKind): ByteNeed {
 	switch (kind) {
@@ -89,6 +98,7 @@ export function byteNeed(kind: ViewerKind): ByteNeed {
 		case "html":
 		case "text":
 		case "rtf":
+		case "jsonl":
 			return "prefix";
 		case "tiff":
 		case "heic":
@@ -98,7 +108,10 @@ export function byteNeed(kind: ViewerKind): ByteNeed {
 		case "archive":
 		case "epub":
 		case "hwp":
+		case "plist":
 			return "whole";
+		case "data":
+			return "query";
 		case "iwork":
 			return "extract";
 		case "fallback":
@@ -175,6 +188,13 @@ const LABELS: Readonly<Record<string, string>> = {
 	tar: "TAR archive",
 	gz: "GZIP archive",
 	tgz: "GZIP archive",
+	sqlite: "SQLite database",
+	sqlite3: "SQLite database",
+	db: "Database",
+	parquet: "Parquet data",
+	jsonl: "JSON Lines",
+	ndjson: "JSON Lines",
+	plist: "Property list",
 	numbers: "Numbers spreadsheet",
 	pages: "Pages document",
 	key: "Keynote presentation",

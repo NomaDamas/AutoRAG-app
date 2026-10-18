@@ -1150,6 +1150,35 @@
         "desktop": "데스크톱",
         "mobile": "모바일",
         "source": "소스"
+      },
+      "firstRecords": "처음 {{count}}개 레코드를 표시 중",
+      "plistInvalid": "속성 목록을 읽을 수 없습니다",
+      "plistConverted": "바이너리 plist를 XML로 표시"
+    },
+    "data": {
+      "readFailed": "데이터 파일을 읽을 수 없습니다",
+      "tables": "테이블",
+      "noTables": "테이블 없음",
+      "tableCount": "테이블 {{count}}개",
+      "rows": "{{count}}개 행",
+      "rowsAtLeast": "{{count}}+",
+      "columns": "{{count}}개 열",
+      "rowGroups": "행 그룹 {{count}}개",
+      "view": "뷰",
+      "noColumns": "이 테이블에는 열이 없습니다",
+      "noRows": "행 없음",
+      "viewNotRun": "미리보기에서는 뷰를 실행하지 않습니다",
+      "tableFailed": "이 테이블을 읽을 수 없습니다",
+      "tooLarge": "첫 행 그룹이 너무 커서 미리볼 수 없습니다",
+      "firstRows": "처음 {{count}}개 행을 표시 중",
+      "columnsCut": "처음 {{count}}개 열만 표시 중",
+      "blob": "바이너리 {{size}}",
+      "walPending": "-wal 파일의 최근 변경은 표시되지 않습니다",
+      "unreadable": {
+        "not-sqlite": "읽을 수 있는 SQLite 데이터베이스가 아닙니다(암호화되었을 수 있음)",
+        "corrupt": "파일이 손상되어 읽을 수 없습니다",
+        "not-parquet": "Parquet 파일이 아닙니다",
+        "encrypted": "암호화된 Parquet 파일입니다"
       }
     },
     "markdown": {

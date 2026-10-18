@@ -5,7 +5,8 @@ import type { PreviewDocument } from "../shared/contract";
 import { viewerForExtension } from "../shared/registry";
 import { looksLikeText } from "../shared/text-sample";
 import { ArchiveView } from "./archive";
-import { HtmlView, TextView } from "./code";
+import { HtmlView, JsonLinesView, PlistView, TextView } from "./code";
+import { DataView } from "./data";
 import { DocxView, RtfView, SheetView } from "./documents";
 import { FallbackView } from "./fallback";
 import { MarkdownView } from "./markdown";
@@ -54,6 +55,12 @@ export function PreviewBody({ file }: { readonly file: PreviewDocument }): React
 			return <TextView file={file} />;
 		case "rtf":
 			return <RtfView file={file} />;
+		case "data":
+			return <DataView file={file} />;
+		case "jsonl":
+			return <JsonLinesView file={file} />;
+		case "plist":
+			return <PlistView file={file} />;
 		case "archive":
 			return <ArchiveView file={file} />;
 		case "iwork":

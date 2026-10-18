@@ -27,6 +27,9 @@ const BADGE: Readonly<Record<ViewerKind, string>> = {
 	hwp: "bg-ql-badge-doc",
 	font: "bg-ql-badge-other",
 	rtf: "bg-ql-badge-text",
+	data: "bg-ql-badge-sheet",
+	jsonl: "bg-ql-badge-code",
+	plist: "bg-ql-badge-code",
 	fallback: "bg-ql-badge-other",
 };
 
