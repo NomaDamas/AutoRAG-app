@@ -6,12 +6,15 @@ import {
 	canAdvance,
 	canSelectCloudEmbedding,
 	connectableLater,
+	embedCards,
 	etaMinutes,
 	formatSize,
+	indexingPhases,
 	isPlanSelectable,
 	phaseIndex,
 	planHeld,
 	primaryLabelKey,
+	resolveEmbed,
 	scanTotals,
 	shouldSkipPlanStep,
 	sourceDetail,
@@ -54,6 +57,30 @@ describe("onboarding flow", () => {
 			"embedding",
 			"plan",
 			"sources",
+			"indexing",
+		]);
+	});
+
+	it("treats the keyword-only mode like local embedding for ordering", () => {
+		expect(buildFlow("pro", false, "none")).toEqual([
+			"welcome",
+			"permissions",
+			"account",
+			"folders",
+			"embedding",
+			"sources",
+			"plan",
+			"indexing",
+		]);
+		expect(buildFlow("byok", false, "none")).toEqual([
+			"welcome",
+			"permissions",
+			"account",
+			"folders",
+			"embedding",
+			"sources",
+			"plan",
+			"model",
 			"indexing",
 		]);
 	});
@@ -103,6 +130,12 @@ describe("onboarding flow", () => {
 		expect(isPlanSelectable("free", "cloud")).toBe(false);
 		expect(isPlanSelectable("air", "cloud")).toBe(false);
 		expect(isPlanSelectable("byok", "cloud")).toBe(false);
+
+		// The keyword-only mode puts no constraint on the plan.
+		expect(isPlanSelectable("free", "none")).toBe(true);
+		expect(isPlanSelectable("air", "none")).toBe(true);
+		expect(isPlanSelectable("pro", "none")).toBe(true);
+		expect(isPlanSelectable("byok", "none")).toBe(true);
 	});
 
 	it("gates the advance per step", () => {
@@ -132,6 +165,8 @@ describe("onboarding flow", () => {
 		expect(canAdvance({ ...base, stepId: "folders" })).toBe(false);
 		expect(canAdvance({ ...base, stepId: "folders", selectedFolders: 2 })).toBe(true);
 		expect(canAdvance({ ...base, stepId: "embedding" })).toBe(true);
+		// The keyword-only mode embeds nothing, so it needs no cloud consent.
+		expect(canAdvance({ ...base, stepId: "embedding", embed: "none" })).toBe(true);
 		expect(canAdvance({ ...base, stepId: "embedding", embed: "cloud", cloudConsent: false })).toBe(false);
 		expect(canAdvance({ ...base, stepId: "embedding", embed: "cloud", cloudConsent: true })).toBe(true);
 		expect(canAdvance({ ...base, stepId: "model", plan: "byok" })).toBe(false);
@@ -194,6 +229,9 @@ describe("planHeld", () => {
 		expect(shouldSkipPlanStep(false, "local", signedIn("free"))).toBe(false);
 		expect(shouldSkipPlanStep(false, "local", signedIn("air"))).toBe(true);
 		expect(shouldSkipPlanStep(false, "local", signedIn("pro"))).toBe(true);
+		// The keyword-only mode behaves like local: a held paid plan skips the step.
+		expect(shouldSkipPlanStep(false, "none", signedIn("air"))).toBe(true);
+		expect(shouldSkipPlanStep(false, "none", signedIn("free"))).toBe(false);
 		// Cloud embedding requires Pro, so Air must still visit the plan step to upgrade to Pro.
 		expect(shouldSkipPlanStep(false, "cloud", signedIn("free"))).toBe(false);
 		expect(shouldSkipPlanStep(false, "cloud", signedIn("air"))).toBe(false);
@@ -209,6 +247,76 @@ describe("onboarding ETA and formatting", () => {
 		expect(etaMinutes(86, "local")).toBe(2);
 		expect(etaMinutes(900, "cloud")).toBe(1);
 		expect(etaMinutes(12_600, "cloud")).toBe(14);
+	});
+
+	it("floors the keyword-only ETA at the fixed walk-and-parse cost", () => {
+		expect(etaMinutes(0, "none")).toBe(8);
+		expect(etaMinutes(3_600, "none")).toBe(8);
+		expect(etaMinutes(4_050, "none")).toBe(9);
+	});
+
+	it("resolves a stored mode against the account: only cloud collapses, never none", () => {
+		// A draft saved before the modes existed reads as local (the pre-existing default).
+		expect(resolveEmbed(undefined, false)).toBe("local");
+		expect(resolveEmbed(undefined, true)).toBe("local");
+		expect(resolveEmbed("none", false)).toBe("none");
+		expect(resolveEmbed("none", true)).toBe("none");
+		expect(resolveEmbed("local", false)).toBe("local");
+		expect(resolveEmbed("cloud", false)).toBe("local");
+		expect(resolveEmbed("cloud", true)).toBe("cloud");
+	});
+
+	it("compares the three embedding modes in the prototype's order", () => {
+		const base = { files: 4_000, platform: "darwin", cloudAvailable: true, modelBytes: 600_000_000, modelCached: false } as const;
+		const cards = embedCards(base);
+		expect(cards.map((card) => card.id)).toEqual(["none", "local", "cloud"]);
+		expect(cards.map((card) => card.icon)).toEqual(["search", "cpu", "cloud"]);
+		expect(cards.every((card) => card.disabled)).toBe(false);
+		expect(cards.every((card) => card.foot === null || card.foot.kind === "size")).toBe(true);
+	});
+
+	it("fills each card's meters and ETA from its own mode", () => {
+		const base = { files: 4_000, platform: "darwin", cloudAvailable: true, modelBytes: 600_000_000, modelCached: false } as const;
+		const [none, local, cloud] = embedCards(base);
+		expect(none?.minutes).toBe(etaMinutes(4_000, "none"));
+		expect(none?.meters.map((meter) => [meter.fill, meter.tone])).toEqual([
+			[1, "good"],
+			[2, "warn"],
+		]);
+		expect(none?.tag).toBeNull();
+		expect(local?.minutes).toBe(etaMinutes(4_000, "local"));
+		expect(local?.meters.map((meter) => [meter.fill, meter.tone])).toEqual([
+			[4, "warn"],
+			[4, "good"],
+		]);
+		expect(local?.foot).toEqual({ kind: "size", bytes: 600_000_000 });
+		expect(cloud?.minutes).toBe(etaMinutes(4_000, "cloud"));
+		expect(cloud?.meters.map((meter) => [meter.fill, meter.tone])).toEqual([
+			[1, "good"],
+			[4, "good"],
+		]);
+		expect(cloud?.tag?.tone).toBe("warn");
+		// Only the local embedder downloads a model.
+		expect(none?.foot).toBeNull();
+		expect(cloud?.foot).toBeNull();
+	});
+
+	it("shows the cached or unknown wording when the local model size is not known", () => {
+		const base = { files: 10, platform: "darwin", cloudAvailable: true, modelBytes: 600_000_000, modelCached: false } as const;
+		expect(embedCards({ ...base, modelCached: true })[1]?.foot).toEqual({ kind: "cached" });
+		expect(embedCards({ ...base, modelBytes: null })[1]?.foot).toEqual({ kind: "unknown" });
+	});
+
+	it("disables the cloud card, and only that card, when the account cannot use it", () => {
+		const base = { files: 10, platform: "darwin", cloudAvailable: false, modelBytes: null, modelCached: false } as const;
+		const cards = embedCards(base);
+		expect(cards.map((card) => card.disabled)).toEqual([false, false, true]);
+	});
+
+	it("says PC instead of Mac for the local line on Windows", () => {
+		const base = { files: 10, platform: "win32", cloudAvailable: true, modelBytes: null, modelCached: false } as const;
+		expect(embedCards(base)[1]?.lineKey).toContain("linePc");
+		expect(embedCards({ ...base, platform: "darwin" })[1]?.lineKey).toContain("lineMac");
 	});
 
 	it("formats bytes with decimal units", () => {
@@ -248,10 +356,18 @@ describe("detected sources list", () => {
 });
 
 describe("indexing phases", () => {
-	it("maps a local phase to its strip position", () => {
-		expect(phaseIndex("parsed")).toBe(0);
-		expect(phaseIndex("minsync")).toBe(1);
-		expect(phaseIndex("finalizing")).toBe(2);
+	it("drops the embedding phase on the keyword-only path", () => {
+		expect(indexingPhases("none")).toEqual(["parsed", "finalizing"]);
+		expect(indexingPhases("local")).toEqual(["parsed", "minsync", "finalizing"]);
+		expect(indexingPhases("cloud")).toEqual(["parsed", "minsync", "finalizing"]);
+	});
+
+	it("maps a phase to its position in that run's strip", () => {
+		expect(phaseIndex("local", "parsed")).toBe(0);
+		expect(phaseIndex("local", "minsync")).toBe(1);
+		expect(phaseIndex("local", "finalizing")).toBe(2);
+		expect(phaseIndex("none", "parsed")).toBe(0);
+		expect(phaseIndex("none", "finalizing")).toBe(1);
 	});
 });
 

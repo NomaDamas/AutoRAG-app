@@ -40,6 +40,7 @@ import {
 	isPlanSelectable,
 	planHeld,
 	primaryLabelKey,
+	resolveEmbed,
 	shouldSkipPlanStep,
 	usageConsentOnLeaving,
 	type Translate,
@@ -79,7 +80,8 @@ function seedDraft(candidates: readonly FolderCandidate[], permissions: Permissi
 		network: false,
 		launchAtLogin: permissions?.launchAtLogin ?? true,
 		folders: candidates.map((candidate) => ({ path: candidate.path, selected: candidate.defaultSelected })),
-		embed: "local",
+		// The prototype's default: semantic search is opt-in.
+		embed: "none",
 		cloudConsent: false,
 		sources: [],
 		plan: "pro",
@@ -92,9 +94,10 @@ function reconcileAccountDraft(current: OnboardingDraft, status: AccountStatus |
 	if (status === null) return current;
 	if (status.state !== "signedIn") {
 		if (current.embed !== "cloud" && !current.cloudConsent) return current;
-		return { ...current, embed: "local", cloudConsent: false };
+		// Cloud is gone with the account; a chosen none or local is never rewritten.
+		return { ...current, embed: resolveEmbed(current.embed, false), cloudConsent: false };
 	}
-	const embed: EmbedMode = current.embed === "cloud" ? "cloud" : "local";
+	const embed = resolveEmbed(current.embed, true);
 	const subPlan = status.account?.plan;
 	if (subPlan === "air" || subPlan === "pro") {
 		const nextPlan: PlanId = embed === "cloud" ? "pro" : subPlan;
@@ -271,7 +274,7 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 		}
 		const status = permissionRef.current;
 		const signedIn = accountRef.current?.state === "signedIn";
-		const embed: EmbedMode = signedIn && current.embed === "cloud" ? "cloud" : "local";
+		const embed = resolveEmbed(current.embed, signedIn);
 		return canAdvance({
 			stepId: current.stepId,
 			platform: status?.platform ?? "",
@@ -285,7 +288,7 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 		});
 	}, []);
 
-	const currentEmbed: EmbedMode = canSelectCloudEmbedding(account) && draft?.embed === "cloud" ? "cloud" : "local";
+	const currentEmbed = resolveEmbed(draft?.embed, canSelectCloudEmbedding(account));
 	const flow =
 		draft === null
 			? []
@@ -297,7 +300,7 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 			return;
 		}
 		const signedIn = accountRef.current?.state === "signedIn";
-		const embed: EmbedMode = signedIn && current.embed === "cloud" ? "cloud" : "local";
+		const embed = resolveEmbed(current.embed, signedIn);
 		const request: IndexingRequest = {
 			folders: current.folders.filter((folder) => folder.selected).map((folder) => folder.path),
 			embed,
@@ -342,7 +345,7 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 			return;
 		}
 		const signedIn = accountRef.current?.state === "signedIn";
-		const embed: EmbedMode = signedIn && current.embed === "cloud" ? "cloud" : "local";
+		const embed = resolveEmbed(current.embed, signedIn);
 		const list = buildFlow(current.plan, shouldSkipPlanStep(current.planConfirmed, embed, accountRef.current), embed);
 		const target = list[list.indexOf(current.stepId) + 1];
 		const consent = usageConsentOnLeaving(current.stepId, shareUsageRef.current);
@@ -363,7 +366,7 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 			return;
 		}
 		const signedIn = accountRef.current?.state === "signedIn";
-		const embed: EmbedMode = signedIn && current.embed === "cloud" ? "cloud" : "local";
+		const embed = resolveEmbed(current.embed, signedIn);
 		const list = buildFlow(current.plan, shouldSkipPlanStep(current.planConfirmed, embed, accountRef.current), embed);
 		const index = list.indexOf(current.stepId);
 		if (index > 0) {
@@ -692,7 +695,7 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 			}),
 		choosePlan: (plan: PlanId) => {
 			const current = draftRef.current;
-			const embed: EmbedMode = canSelectCloudEmbedding(accountRef.current) && current?.embed === "cloud" ? "cloud" : "local";
+			const embed = resolveEmbed(current?.embed, canSelectCloudEmbedding(accountRef.current));
 			if (!isPlanSelectable(plan, embed)) {
 				return;
 			}
@@ -705,7 +708,7 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 		signOut: () => {
 			void autorag.account.signOut().then((status) => {
 				setAccount(status);
-				patch({ embed: "local", cloudConsent: false });
+				patch({ embed: resolveEmbed(draftRef.current?.embed, false), cloudConsent: false });
 			});
 		},
 		skipAccount: () => {
@@ -713,9 +716,11 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 			if (current === null) {
 				return;
 			}
-			const list = buildFlow("byok", current.planConfirmed, "local");
+			// BYOK cannot use the cloud embedder, so cloud falls back; a chosen mode stays.
+			const embed = resolveEmbed(current.embed, false);
+			const list = buildFlow("byok", current.planConfirmed, embed);
 			const target = list[list.indexOf(current.stepId) + 1];
-			setDraft({ ...current, embed: "local", cloudConsent: false, plan: "byok", ...(target === undefined ? {} : { stepId: target }) });
+			setDraft({ ...current, embed, cloudConsent: false, plan: "byok", ...(target === undefined ? {} : { stepId: target }) });
 		},
 		openCheckout,
 		refreshAccount,

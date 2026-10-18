@@ -1,4 +1,4 @@
-import { LOCAL_FILES_PER_MINUTE, type IndexingPhase, type IndexingStatus } from "../shared/onboarding-contract";
+import { LOCAL_FILES_PER_MINUTE, NONE_FILES_PER_MINUTE, type IndexingPhase, type IndexingStatus } from "../shared/onboarding-contract";
 
 /**
  * Phase → percent/remaining. The read phase is measured from the parsed mirror
@@ -17,6 +17,8 @@ export interface PhaseProgressInput {
 	readonly totalFiles: number;
 	/** Time spent in the current phase. */
 	readonly phaseElapsedMs: number;
+	/** False for keyword-only indexing: no embedding phase, so reading takes 90% of the bar. Default true. */
+	readonly embedding?: boolean;
 }
 
 export interface PhaseProgressResult {
@@ -32,16 +34,19 @@ function clamp01(value: number): number {
 export function computeIndexingProgress(input: PhaseProgressInput): PhaseProgressResult {
 	if (input.state === "success") return { progress: 100, remainingMinutes: null };
 	if (input.state === "idle") return { progress: 0, remainingMinutes: null };
-	const expectedMs = input.totalFiles > 0 ? (input.totalFiles / LOCAL_FILES_PER_MINUTE) * 60_000 : null;
+	const embedding = input.embedding !== false;
+	const filesPerMinute = embedding ? LOCAL_FILES_PER_MINUTE : NONE_FILES_PER_MINUTE;
+	const readShare = embedding ? 50 : 90;
+	const expectedMs = input.totalFiles > 0 ? (input.totalFiles / filesPerMinute) * 60_000 : null;
 	const ratio = expectedMs === null ? 0 : clamp01(input.phaseElapsedMs / expectedMs);
 	const remainingFrom = (elapsed: number): number | null =>
 		expectedMs === null ? null : Math.max(0, Math.ceil((expectedMs - elapsed) / 60_000));
 	const result = ((): PhaseProgressResult => {
 		switch (input.phase) {
 			case "parsed": {
-				const measured = input.totalFiles > 0 ? clamp01(input.processedFiles / input.totalFiles) * 50 : 0;
+				const measured = input.totalFiles > 0 ? clamp01(input.processedFiles / input.totalFiles) * readShare : 0;
 				const remaining =
-					input.totalFiles > 0 ? Math.max(0, Math.ceil((input.totalFiles - input.processedFiles) / LOCAL_FILES_PER_MINUTE)) : null;
+					input.totalFiles > 0 ? Math.max(0, Math.ceil((input.totalFiles - input.processedFiles) / filesPerMinute)) : null;
 				return { progress: measured, remainingMinutes: remaining };
 			}
 			case "minsync": {
@@ -58,9 +63,9 @@ export function computeIndexingProgress(input: PhaseProgressInput): PhaseProgres
 				return { progress: 50 + 45 * minsyncRatio, remainingMinutes: remaining };
 			}
 			case "finalizing":
-				return { progress: 95 + 4 * ratio, remainingMinutes: remainingFrom(input.phaseElapsedMs) };
+				return { progress: (embedding ? 95 : 90) + (embedding ? 4 : 9) * ratio, remainingMinutes: remainingFrom(input.phaseElapsedMs) };
 			default:
-				return { progress: 0, remainingMinutes: input.totalFiles > 0 ? Math.ceil(input.totalFiles / LOCAL_FILES_PER_MINUTE) : null };
+				return { progress: 0, remainingMinutes: input.totalFiles > 0 ? Math.ceil(input.totalFiles / filesPerMinute) : null };
 		}
 	})();
 	// A failed run has no remaining estimate, even though its last phase is known.

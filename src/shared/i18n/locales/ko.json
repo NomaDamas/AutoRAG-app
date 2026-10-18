@@ -477,7 +477,7 @@
       },
       "network": {
         "name": "네트워크 (방화벽)",
-        "desc": "클라우드 임베딩과 모델 호출에 필요합니다. 첫 실행 때 Windows 보안 경고가 뜨면 허용합니다.",
+        "desc": "원격 임베딩과 모델 호출에 필요합니다. 첫 실행 때 Windows 보안 경고가 뜨면 허용합니다.",
         "allow": "허용"
       }
     },
@@ -493,39 +493,41 @@
       "scanError": "읽을 수 없음",
       "summary": "{{folders}}개 폴더 · {{files}}개 파일 · {{size}}",
       "summaryNote": "node_modules · .git · 50 MiB 초과 파일은 자동으로 제외합니다.",
-      "localEta": "로컬 약 {{minutes}}분",
-      "cloudEta": "클라우드 약 {{minutes}}분",
-      "warning": "범위가 넓습니다. 하위 폴더를 고르거나 클라우드 임베딩을 선택하면 첫 결과를 더 빨리 볼 수 있습니다."
+      "localEta": "로컬 (이 Mac) 약 {{minutes}}분",
+      "cloudEta": "원격 약 {{minutes}}분",
+      "warning": "범위가 넓습니다. 하위 폴더를 고르거나 원격 임베딩을 선택하면 첫 결과를 더 빨리 볼 수 있습니다."
     },
     "embedding": {
-      "eyebrow": "중요한 선택",
-      "title": "어디서\n임베딩할까요?",
-      "lead": "문서를 검색할 수 있게 벡터로 바꾸는 작업을 어디서 할지 정합니다. 나중에 바꾸면 처음부터 다시 해야 해서 시간과 비용이 더 듭니다.",
-      "files": "{{count}}개",
-      "selectedFiles": "선택한 파일",
-      "reindexNote": "임베딩 모델이나 처리 위치를 바꾸면 지금 만든 인덱스를 버리고 처음부터 다시 만들어야 합니다.",
-      "localTitle": "이 Mac에서",
-      "localLead": "파일 본문이 Mac 밖으로 나가지 않습니다.",
-      "metricTime": "예상 시간",
-      "metricDownload": "다운로드",
-      "metricPrivacy": "프라이버시",
-      "metricStorage": "저장",
-      "metricPlan": "플랜",
+      "eyebrow": "의미 검색",
+      "title": "임베딩을 어떻게 쓸까요?",
+      "groupLabel": "임베딩 방식",
+      "card": {
+        "none": {
+          "name": "사용 안 함",
+          "line": "키워드 검색만"
+        },
+        "local": {
+          "name": "로컬 임베딩",
+          "lineMac": "이 Mac에서 처리",
+          "linePc": "이 PC에서 처리"
+        },
+        "cloud": {
+          "name": "원격 임베딩",
+          "line": "서버에서 처리"
+        }
+      },
+      "meter": {
+        "performance": "필요 성능",
+        "accuracy": "정확도",
+        "low": "낮음",
+        "high": "높음",
+        "meh": "아쉬움",
+        "good": "좋음"
+      },
+      "meterAria": "{{label}}: {{value}}",
       "minutes": "약 {{minutes}}분",
       "cached": "준비됨",
       "downloadUnknown": "확인 중",
-      "privacyLocal": "로컬",
-      "storageNone": "하지 않음",
-      "planPro": "Pro 전용",
-      "bulletGpuMac": "Apple Silicon GPU 사용",
-      "bulletGpuWindows": "GPU 가속 사용 (가능한 경우)",
-      "bulletPower": "노트북은 전원 연결 권장",
-      "cloudBadge": "Pro 전용",
-      "cloudTitle": "클라우드에서",
-      "cloudLead": "더 빠르게 처리하지만 선택한 문서 본문이 전송됩니다.",
-      "cloudBulletPerf": "Mac 성능에 영향이 적음",
-      "cloudBulletNoStore": "Dazzi는 요청 내용을 저장하지 않고, 저장 없음(ZDR) 제공자로만 전송합니다",
-      "privacyTable": "개인정보처리방침의 모델 데이터 표",
       "cloudConsent": "선택한 폴더의 문서 본문이 임베딩 처리를 위해 Dazzi 서버로 전송되는 것에 동의합니다. 처리 후 보관하지 않습니다."
     },
     "sources": {
@@ -561,10 +563,10 @@
       "eyebrow": "플랜",
       "title": "어떻게 사용할까요?",
       "titleReady": "플랜이 준비됐어요",
-      "lead": "플랜에 따라 AI 사용량과 임베딩 위치가 정해집니다. 나중에 Settings에서 바꿀 수 있습니다.",
-      "leadCloud": "클라우드 임베딩을 선택했어요. Pro 플랜으로 계속할 수 있습니다.",
-      "leadCloudReady": "클라우드 임베딩을 쓸 수 있습니다. 계속 진행하세요.",
-      "cloudCallout": "클라우드 임베딩은 Pro 전용입니다.",
+      "lead": "플랜에 따라 AI 사용량이 정해지고, 원격 임베딩은 Pro에서만 쓸 수 있습니다. 나중에 Settings에서 바꿀 수 있습니다.",
+      "leadCloud": "원격 임베딩을 선택했어요. Pro 7일 무료 체험을 시작하면 바로 이어집니다.",
+      "leadCloudReady": "원격 임베딩을 쓸 수 있습니다. 계속 진행하세요.",
+      "cloudCallout": "원격 임베딩은 Pro 전용입니다. 카드를 등록하면 7일 동안 무료로 쓸 수 있습니다.",
       "badgeRecommended": "추천",
       "badgeTrial": "체험 진행 중",
       "badgeSubscribed": "구독 중",
@@ -586,7 +588,7 @@
           "chip": "질문은 Dazzi 모델로 전송",
           "training": "서비스 개선을 위해 입력·출력을 사용할 수 있습니다",
           "feature": {
-            "a": "이 Mac에서 로컬 임베딩",
+            "a": "로컬 임베딩 또는 사용 안 함",
             "b": "관리형 AI 모델 · 기본 사용량",
             "c": "Finder와 검색 기능 모두 사용"
           }
@@ -599,7 +601,7 @@
           "chip": "질문은 Dazzi 모델로 전송",
           "training": "입력·출력을 모델 학습에 쓰지 않습니다",
           "feature": {
-            "a": "이 Mac에서 로컬 임베딩",
+            "a": "로컬 임베딩 또는 사용 안 함",
             "b": "관리형 AI 모델 · 넉넉한 사용량",
             "c": "Free 기능 모두 포함"
           }
@@ -612,7 +614,7 @@
           "chip": "질문은 Dazzi 모델로 전송",
           "training": "입력·출력을 모델 학습에 쓰지 않습니다",
           "feature": {
-            "a": "클라우드 임베딩으로 더 빠르게",
+            "a": "원격 임베딩 사용 가능",
             "b": "관리형 AI 모델 · 가장 많은 사용량",
             "c": "Air 기능 모두 포함"
           }
@@ -625,7 +627,7 @@
           "chip": "API 키 입력 필요",
           "training": "요청은 선택한 provider의 정책을 따릅니다",
           "feature": {
-            "a": "이 Mac에서 로컬 임베딩",
+            "a": "로컬 임베딩 또는 사용 안 함",
             "b": "provider와 모델 직접 선택",
             "c": "선택한 provider에만 요청 전송"
           }
@@ -1058,6 +1060,10 @@
     },
     "embedding": {
       "profiles": {
+        "none": {
+          "label": "사용 안 함 (키워드 검색만)",
+          "description": "문서를 임베딩하지 않고 키워드 검색만 씁니다. 모델 내려받기와 임베딩 시간이 들지 않으며, 의미·하이브리드 검색은 꺼집니다."
+        },
         "nativeQwen3": {
           "description": "이 Mac에서 직접 도는 기본 문서 이해 모델(1024차원). 별도 서버가 필요 없습니다."
         },
@@ -1085,6 +1091,7 @@
         "incompatibleSources": "이 모델을 따를 수 없는 데이터소스가 있습니다: {{ids}}"
       },
       "reasons": {
+        "keywordOnly": "키워드 검색만 쓰므로 이 소스도 임베딩하지 않습니다.",
         "mailcrawlIncompatible": "mailcrawl은 내장 Qwen3만 지원하고 임의의 HTTP 임베딩 서버는 쓸 수 없습니다",
         "mailcrawlPropagated": "connector.env에 임베딩 프로바이더를 기록합니다(모델이 바뀌면 mailcrawl이 자동으로 다시 색인합니다)",
         "obsidianIncompatible": "qmd(obsidian)는 로컬 GGUF 모델만 쓸 수 있어 HTTP 임베딩 서버를 사용할 수 없습니다",

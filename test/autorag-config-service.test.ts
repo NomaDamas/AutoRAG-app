@@ -309,6 +309,8 @@ describe("createAutoRagConfigService", () => {
 		const service = createAutoRagConfigService({ env: fixture.env, cwd: fixture.root });
 
 		await expect(service.set(["appIndexing", "excludeCodeFolders"], "yes")).rejects.toThrow(/excludeCodeFolders must be a boolean/);
+		await expect(service.set(["appIndexing", "semanticSearch"], "no")).rejects.toThrow(/semanticSearch must be a boolean/);
+		await expect(service.set(["appIndexing", "semanticSearch"], false)).resolves.toBeDefined();
 	});
 
 	it("applies set and remove updates in one configPatch and rejects the whole batch on failure", async () => {

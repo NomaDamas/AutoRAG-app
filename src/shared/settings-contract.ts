@@ -342,7 +342,7 @@ export interface ProviderCredentialStatus {
 	readonly source: "stored" | "env" | "none";
 }
 
-export type EmbeddingProfileKind = "native" | "profile" | "local-server";
+export type EmbeddingProfileKind = "none" | "native" | "profile" | "local-server";
 
 /** One selectable embedding runtime profile, in the order the settings screen offers them. */
 export interface EmbeddingProfile {

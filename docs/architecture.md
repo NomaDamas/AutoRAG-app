@@ -61,6 +61,28 @@ second datasource or model configuration. The sidebar is searchable and grouped:
   are left out of indexing; the app finds them itself and passes them as
   `excludePaths`. OCR (`parserOptions.ocr.enabled`, which makes the librarian parse image files) and Jikji's media index are pinned off in every
   config the app hands to the librarian.
+- **Keyword-only search** — the onboarding embedding step offers 사용 안 함 /
+  로컬 / 원격, and Settings → AI 모델 → 문서 이해 offers the same choice. 사용 안 함
+  writes `appIndexing.semanticSearch: false` (absent or `true` keeps semantic
+  search; the shared config file otherwise stays as the user left it, `minSync.embedder`
+  included, so choosing a model again needs no re-entry). `semantic-policy.ts`
+  applies it to the config the app hands to the librarian, because the librarian
+  (v2.10.x) has no switch for it:
+  - *Refresh*: `minsync` is replaced by `parsed` + `jikji`, so MinSync never runs, no
+    model is loaded or downloaded, and no `.minsync` index is built.
+  - *Datasources*: the kakao/slack/telegram/whatsapp sidecars get
+    `connector.sidecar.semantic: false` (BM25 only), Discord answers from FTS,
+    ClawGallery skips its visual vector sync, and for the duration of a refresh the
+    embedding steps the librarian runs unconditionally (mailcrawl `index`, qmd
+    `embed` for Obsidian, discrawl `embed`) are successful no-ops; their sync and
+    update steps still run. Not covered: GitHub Gist's own semantic index (its class is
+    not a public export), which stays unavailable without an embedding runtime.
+  - *Search*: the agent's vector and hybrid methods (MinSync's, and every
+    datasource's) answer nothing without being run, so there is no "method failed"
+    diagnostic for an index that is deliberately absent, and the agent's
+    past-question memory ranks by keywords only. Local file content is found by
+    Jikji and the file-name tools.
+  - *Status*: a parsed file counts as included, since nothing is staged into MinSync.
 - **Embedding batch size** — the embedding gateway aborts a request after 30 s.
   When a refresh's MinSync step fails with that timeout (or skips a file on a
   partial sync because its batch timed out), the app halves

@@ -175,7 +175,7 @@ const STEP_IDS: Readonly<Record<string, true>> = {
 	indexing: true,
 };
 const PLAN_IDS: Readonly<Record<string, true>> = { free: true, air: true, pro: true, byok: true };
-const EMBED_MODES: Readonly<Record<string, true>> = { local: true, cloud: true };
+const EMBED_MODES: Readonly<Record<string, true>> = { none: true, local: true, cloud: true };
 const BYOK_PROVIDERS: Readonly<Record<string, true>> = {
 	anthropic: true,
 	openai: true,
@@ -384,6 +384,8 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 	let progressSignature = "";
 	let parsedSignature = "";
 	let minsyncSignature = "";
+	/** True while a keyword-only index runs: no embedding phase exists, so the bar has none. */
+	let keywordOnly = false;
 	const maybeStartBackgroundDatasources = (): void => {
 		if (pending || refreshPromise !== null || !localIndexDone || pendingDatasourceAliases.length === 0) return;
 		const aliases = pendingDatasourceAliases;
@@ -465,6 +467,7 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 			embeddedFiles,
 			totalFiles,
 			phaseElapsedMs: phase === null ? 0 : now() - phaseStartedAt,
+			embedding: !keywordOnly,
 		});
 		status = {
 			...status,
@@ -628,20 +631,17 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 			const existingEmbedder = isJsonObject(minSync.embedder) ? minSync.embedder : {};
 			const isDazziCloudEmbedder = existingEmbedder.id === DAZZI_CLOUD_EMBEDDER_ID;
 			const configured = Object.keys(existingEmbedder).length > 0 && !isDazziCloudEmbedder;
-			const embedMode: EmbedMode = request.embed === "cloud" ? "cloud" : "local";
+			const embedMode: EmbedMode = request.embed ?? "local";
 			const configuredBaseUrl = deps.env.AUTORAG_BASE_URL?.trim();
 			const accountBaseUrl = (configuredBaseUrl !== undefined && configuredBaseUrl.length > 0 ? configuredBaseUrl : DEFAULT_ACCOUNT_BASE_URL).replace(/\/+$/u, "");
-			const embedder =
-				embedMode === "cloud"
-					? {
-							id: DAZZI_CLOUD_EMBEDDER_ID,
-							baseUrl: accountBaseUrl,
-							dimension: EMBEDDER_DIMENSION,
-							apiKeyEnv: DAZZI_CLOUD_EMBEDDER_KEY_ENV,
-						}
-					: configured
-						? null
-						: { id: EMBEDDER_ID, dimension: EMBEDDER_DIMENSION };
+			const cloudEmbedder = {
+				id: DAZZI_CLOUD_EMBEDDER_ID,
+				baseUrl: accountBaseUrl,
+				dimension: EMBEDDER_DIMENSION,
+				apiKeyEnv: DAZZI_CLOUD_EMBEDDER_KEY_ENV,
+			};
+			// Keyword-only writes no embedder at all; a local run keeps one the user already configured.
+			const embedder = embedMode === "none" ? null : embedMode === "cloud" ? cloudEmbedder : configured ? null : { id: EMBEDDER_ID, dimension: EMBEDDER_DIMENSION };
 			const modelProvider = request.model === null ? null : (request.model.provider as ByokProviderId);
 			const next = applyIndexingConfig({
 				raw,
@@ -649,6 +649,7 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 				datasources,
 				home: deps.home,
 				embedder,
+				semanticSearch: embedMode !== "none",
 				// The app seeds `workspacePath = cwd` (the repo in dev, `/` when packaged);
 				// the first index belongs in the AutoRAG home instead. A workspace the
 				// user set explicitly stays.
@@ -685,6 +686,7 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 				await deps.credentials.remove(DAZZI_CLOUD_EMBEDDER_KEY_ENV).catch(() => undefined);
 			}
 			await maybeStoreGitToken(request.sources.map((source) => source.id));
+			keywordOnly = embedMode === "none";
 			const methods = ["parsed", "minsync"];
 			workspacePath = await deps.resolveWorkspacePath();
 			selectedFolders = request.folders;
@@ -720,10 +722,15 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 			emitStatus();
 			powerBlockerId = deps.startPowerSaveBlocker();
 			pollTimer = setInterval(() => void tick().catch(() => undefined), POLL_INTERVAL_MS);
+			// A keyword-only run can end before the first poll: read the mirror once more so the final status counts what it read.
+			const settle = async (ok: boolean, error: string | null): Promise<void> => {
+				await tick().catch(() => undefined);
+				finish(ok, error);
+			};
 			refreshPromise = deps
 				.refresh(methods)
-				.then((result) => finish(result.ok, result.error))
-				.catch((error: unknown) => finish(false, error instanceof Error ? error.message : String(error)));
+				.then((result) => settle(result.ok, result.error))
+				.catch((error: unknown) => settle(false, error instanceof Error ? error.message : String(error)));
 			return status;
 		},
 		indexStatus: async () => status,

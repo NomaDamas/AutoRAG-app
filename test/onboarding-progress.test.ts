@@ -58,3 +58,24 @@ describe("computeIndexingProgress", () => {
 		expect(failed.progress).toBe(5);
 	});
 });
+
+describe("computeIndexingProgress without embedding", () => {
+	it("gives the read phase 90% of the bar, since no embedding phase follows it", () => {
+		const half = computeIndexingProgress({ state: "running", phase: "parsed", processedFiles: 225, totalFiles: 450, phaseElapsedMs: 0, embedding: false });
+		expect(half.progress).toBe(45);
+		expect(half.remainingMinutes).toBe(1);
+		const done = computeIndexingProgress({ state: "running", phase: "parsed", processedFiles: 450, totalFiles: 450, phaseElapsedMs: 0, embedding: false });
+		expect(done.progress).toBe(90);
+	});
+
+	it("finishes in the last tenth and uses the keyword-only rate for the estimate", () => {
+		const finalizing = computeIndexingProgress({ state: "running", phase: "finalizing", processedFiles: 450, totalFiles: 450, phaseElapsedMs: 60_000, embedding: false });
+		expect(finalizing.progress).toBe(99);
+		expect(finalizing.remainingMinutes).toBe(0);
+	});
+
+	it("keeps the embedding layout when the flag is absent or true", () => {
+		const input = { state: "running", phase: "parsed", processedFiles: 85, totalFiles: 170, phaseElapsedMs: 0 } as const;
+		expect(computeIndexingProgress(input)).toEqual(computeIndexingProgress({ ...input, embedding: true }));
+	});
+});
