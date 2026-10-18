@@ -1282,6 +1282,12 @@
       "notAbsolute": "Invalid preview path",
       "missing": "File not found",
       "notFile": "Folders can’t be previewed"
+    },
+    "odf": {
+      "readFailed": "Couldn’t read the document",
+      "openFailed": "Couldn’t open the presentation",
+      "noSlides": "No slides",
+      "noPreview": "This document has no preview image"
     }
   },
   "settingsCore": {
