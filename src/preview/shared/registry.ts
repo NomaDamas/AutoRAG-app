@@ -15,6 +15,9 @@ export const VIEWER_KINDS = [
 	"text",
 	"archive",
 	"iwork",
+	"odt",
+	"odp",
+	"odg",
 	"epub",
 	"hwp",
 	"font",
@@ -42,7 +45,12 @@ assign("audio", ["mp3", "wav", "wave", "m4a", "aac", "flac", "opus", "ogg", "oga
 assign("pdf", ["pdf"]);
 assign("docx", ["docx", "docm", "dotx"]);
 assign("sheet", ["xlsx", "xlsm", "xlsb", "xls", "csv", "tsv", "ods"]);
-assign("pptx", ["pptx", "pptm", "ppsx"]);
+assign("pptx", ["pptx", "pptm", "ppsx", "potx"]);
+// OpenDocument packages. `.ods` stays with the spreadsheet viewer.
+assign("odt", ["odt"]);
+assign("odp", ["odp"]);
+// A drawing has no text model; its package embeds the first page as a PNG.
+assign("odg", ["odg"]);
 assign("markdown", ["md", "markdown", "mdx"]);
 assign("html", ["html", "htm", "xhtml"]);
 assign("text", [
@@ -107,6 +115,8 @@ export function byteNeed(kind: ViewerKind): ByteNeed {
 		case "docx":
 		case "sheet":
 		case "pptx":
+		case "odt":
+		case "odp":
 		case "archive":
 		case "epub":
 		case "hwp":
@@ -115,6 +125,7 @@ export function byteNeed(kind: ViewerKind): ByteNeed {
 		case "heic":
 			return "decode";
 		case "iwork":
+		case "odg":
 			return "extract";
 		case "fallback":
 			return "sniff";
@@ -183,6 +194,11 @@ const LABELS: Readonly<Record<string, string>> = {
 	xls: "Excel spreadsheet",
 	csv: "CSV document",
 	pptx: "PowerPoint presentation",
+	potx: "PowerPoint template",
+	odt: "OpenDocument text",
+	ods: "OpenDocument spreadsheet",
+	odp: "OpenDocument presentation",
+	odg: "OpenDocument drawing",
 	md: "Markdown",
 	txt: "Plain text",
 	json: "JSON",

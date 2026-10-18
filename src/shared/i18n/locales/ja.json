@@ -1332,7 +1332,12 @@
       "repeatOther": "繰り返し",
       "repeatOn": "{{days}}",
       "repeatTimes": "{{count}} 回",
-      "repeatUntil": "{{date}} まで"
+      "repeatUntil": "{{date}} まで",
+    "odf": {
+      "readFailed": "ドキュメントを読み込めませんでした",
+      "openFailed": "プレゼンテーションを開けませんでした",
+      "noSlides": "スライドがありません",
+      "noPreview": "このドキュメントにはプレビュー画像がありません"
     }
   },
   "settingsCore": {

@@ -164,7 +164,27 @@ still has the previous file's size when they lay out.
   extensions (`file-icon.ts`); Windows has no thumbnailer for them and shows
   the type icon.
 
-- **PowerPoint** — `.pptx`, `.pptm`, and `.ppsx` share the PDF panel's paged
+- **OpenDocument** — `.odt`, `.odp`, `.odg`, and `.ods` are ZIPs whose
+  `Thumbnails/thumbnail.png` is the first page, slide, or sheet. `.odt` is
+  modelled from `content.xml`/`styles.xml` (`shared/odt-model.ts`,
+  `shared/odf-blocks.ts`: headings, styled runs, lists, tables, inline
+  pictures) and drawn as inert DOM on a white page column
+  (`shared/odf-render.ts`, `ui/odf.tsx`). `.odp` is modelled per `draw:page`
+  (`shared/odp-model.ts`: master-page shapes, backgrounds, text boxes, pictures,
+  rect/ellipse/line shapes) and drawn in the PDF panel's `PagedView` like a
+  `.pptx`. `.odg` has no text model: `byteNeed` is `extract`, the main process
+  reads the central directory and that one entry (`node/odf.ts` over the shared
+  ranged reader `node/zip-read.ts`) and shows the PNG. `.ods` stays in the
+  spreadsheet viewer. Only `#rrggbb` colours and numeric lengths reach style
+  attributes, and picture references that are absolute, remote, or contain `..`
+  are dropped. The Finder's tile and Inspector thumbnails for all four come from
+  the same embedded PNG on every platform (`file-icon.ts`), since Quick Look
+  has no ODF thumbnailer. A package with no `Thumbnails/thumbnail.png` (one
+  written by a tool rather than by LibreOffice) keeps the type icon. `.potx`
+  tiles use the JPEG under `docProps/thumbnail.jpeg`, re-encoded to PNG for
+  the icon cache; `.pptx` tiles still come from Quick Look.
+
+- **PowerPoint** — `.pptx`, `.pptm`, `.ppsx`, and `.potx` share the PDF panel's paged
   layout: every slide is a paper card in one scrolling column with the page
   rail, the `1 / N` pill, and zoom. `shared/pptx-model.ts` reads the OOXML
   from the whole-file bytes — slide order from `p:sldIdLst` through the

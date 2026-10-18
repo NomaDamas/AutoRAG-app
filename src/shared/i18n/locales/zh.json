@@ -1332,7 +1332,12 @@
       "repeatOther": "重复",
       "repeatOn": "{{days}}",
       "repeatTimes": "{{count}} 次",
-      "repeatUntil": "至 {{date}}"
+      "repeatUntil": "至 {{date}}",
+    "odf": {
+      "readFailed": "无法读取文档",
+      "openFailed": "无法打开演示文稿",
+      "noSlides": "没有幻灯片",
+      "noPreview": "此文档没有预览图像"
     }
   },
   "settingsCore": {
