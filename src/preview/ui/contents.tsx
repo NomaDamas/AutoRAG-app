@@ -33,6 +33,10 @@ const BADGE: Readonly<Record<ViewerKind, string>> = {
 	data: "bg-ql-badge-sheet",
 	jsonl: "bg-ql-badge-code",
 	plist: "bg-ql-badge-code",
+	mail: "bg-ql-badge-doc",
+	msg: "bg-ql-badge-doc",
+	contact: "bg-ql-badge-doc",
+	calendar: "bg-ql-badge-doc",
 	fallback: "bg-ql-badge-other",
 };
 

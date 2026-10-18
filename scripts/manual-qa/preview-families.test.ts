@@ -71,6 +71,10 @@ const bytesForKind: Readonly<Record<ViewerKind, Uint8Array>> = {
 	data: new Uint8Array([0x53, 0x51, 0x4c]),
 	jsonl: strToU8('{"a":1}\n{"a":2}\n'),
 	plist: strToU8('<plist version="1.0"><dict/></plist>'),
+	mail: strToU8("Subject: hi\r\n\r\nbody"),
+	msg: new Uint8Array([0xd0, 0xcf, 0x11, 0xe0]),
+	contact: strToU8("BEGIN:VCARD\nFN:Kim\nEND:VCARD"),
+	calendar: strToU8("BEGIN:VEVENT\nSUMMARY:Lunch\nEND:VEVENT"),
 	fallback: new Uint8Array([0, 1, 2, 3, 4]),
 };
 
@@ -99,6 +103,10 @@ const extForKind: Readonly<Record<ViewerKind, string>> = {
 	data: "sqlite",
 	jsonl: "jsonl",
 	plist: "plist",
+	mail: "eml",
+	msg: "msg",
+	contact: "vcf",
+	calendar: "ics",
 	fallback: "bin",
 };
 
