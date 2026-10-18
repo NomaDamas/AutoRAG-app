@@ -31,7 +31,7 @@ const DROPPED_INTEGRATIONS: Record<string, true> = {
 	ChildProcess: true,
 };
 
-let enabled = true;
+let enabled = false;
 
 /** The Settings toggle: while off, every event is dropped before it is queued or sent. */
 export function setErrorReportingEnabled(next: boolean): void {

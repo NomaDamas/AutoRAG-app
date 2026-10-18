@@ -11,6 +11,7 @@
 import type { AccountStatus } from "../../../shared/account-contract";
 import { planCovers } from "../../../shared/account-contract";
 import type {
+	EmbedMode,
 	FolderScan,
 	IndexingPhase,
 	OnboardingStepId,
@@ -18,18 +19,17 @@ import type {
 	SourceFacts,
 	SourceId,
 } from "../../../shared/onboarding-contract";
-import { CLOUD_FILES_PER_MINUTE, LOCAL_FILES_PER_MINUTE } from "../../../shared/onboarding-contract";
+import { CLOUD_FILES_PER_MINUTE, LOCAL_FILES_PER_MINUTE, NONE_FILES_PER_MINUTE, NONE_MIN_MINUTES } from "../../../shared/onboarding-contract";
 
-export type EmbedMode = "local" | "cloud";
+export type { EmbedMode };
 
 export type Translate = (key: string, options?: Record<string, unknown>) => string;
 
 /**
  * The prototype's `flow()`: cloud embedding puts the plan step right after
- * embedding; a confirmed plan drops out of the list, and the model step only
- * exists for BYOK. (Cloud embedding is unavailable in the product, so the
- * shipped flow is welcome → permissions → account → folders → embedding →
- * sources → [plan] → [model] → indexing.)
+ * embedding; the keyword-only and local modes put it after the sources step.
+ * A confirmed plan (or an already active Air/Pro subscription) drops out of the
+ * list, and the model step only exists for BYOK.
  */
 export function buildFlow(plan: PlanId, planConfirmed: boolean, embed: EmbedMode): OnboardingStepId[] {
 	const mid: OnboardingStepId[] = embed === "cloud" ? ["plan", "sources"] : ["sources", "plan"];
@@ -42,6 +42,39 @@ export function stepIndex(flow: readonly OnboardingStepId[], stepId: OnboardingS
 	return Math.max(0, flow.indexOf(stepId));
 }
 
+/** Cloud embedding can be selected on the embedding step as soon as the user is signed in to Dazzi. */
+export function canSelectCloudEmbedding(status: AccountStatus | null): boolean {
+	return status?.state === "signedIn";
+}
+
+/**
+ * The mode the flow actually runs with. `cloud` is only usable while the
+ * account can select it, so it collapses to the prototype's `fallbackEmbed()`
+ * value (`local`) when it cannot. A mode the user chose — `none` or `local` —
+ * is never rewritten, and a draft saved before the modes existed (`undefined`)
+ * keeps reading as `local`.
+ */
+export function resolveEmbed(embed: EmbedMode | undefined, cloudAvailable: boolean): EmbedMode {
+	if (embed === undefined || embed === "local") return "local";
+	return embed === "none" ? "none" : cloudAvailable ? "cloud" : "local";
+}
+
+/** When cloud embedding is selected, only the Pro plan is available on the plan step. */
+export function isPlanSelectable(plan: PlanId, embed: EmbedMode): boolean {
+	return embed === "cloud" ? plan === "pro" : true;
+}
+
+/**
+ * Whether the plan step should be skipped in the onboarding flow.
+ * Already confirmed, or the signed-in account already holds a paid subscription
+ * (Air or Pro for local embedding; Pro for cloud embedding).
+ */
+export function shouldSkipPlanStep(planConfirmed: boolean, embed: EmbedMode, status: AccountStatus | null): boolean {
+	if (planConfirmed) return true;
+	const activePlan = status?.state === "signedIn" ? status.account?.plan : undefined;
+	if (embed === "cloud") return activePlan === "pro";
+	return activePlan === "air" || activePlan === "pro";
+}
 export interface AdvanceState {
 	readonly stepId: OnboardingStepId;
 	readonly platform: string;
@@ -63,11 +96,13 @@ export function canAdvance(state: AdvanceState): boolean {
 			// Skipping the account is the BYOK path: it needs no sign-in.
 			return state.signedIn || state.plan === "byok";
 		case "plan":
+			if (!isPlanSelectable(state.plan, state.embed)) return false;
 			return state.signedIn || state.plan === "byok";
 		case "folders":
 			return state.selectedFolders > 0;
 		case "embedding":
-			return state.embed === "local" || state.cloudConsent;
+			// Only the cloud embedder sends document text anywhere, so only it needs consent.
+			return state.embed !== "cloud" || state.cloudConsent;
 		case "model":
 			return state.plan !== "byok" || state.modelVerified;
 		default:
@@ -99,10 +134,120 @@ export function primaryLabelKey(stepId: OnboardingStepId, plan: PlanId, held: bo
 	return plan === "pro" ? "onboarding.plan.checkoutPro" : "onboarding.plan.checkoutAir";
 }
 
+/**
+ * The value to save for "usage statistics" when the user leaves `stepId`, or
+ * null when that step records nothing. Consent is the act of continuing from
+ * the step that shows the checkbox: closing the window there saves nothing, and
+ * the setting stays at its default (off).
+ */
+export function usageConsentOnLeaving(stepId: OnboardingStepId, checked: boolean): boolean | null {
+	return stepId === "welcome" ? checked : null;
+}
+
+/** Same rule for "error reports": the value to save when the user leaves `stepId`, or null. Default stays off. */
+export function errorReportsConsentOnLeaving(stepId: OnboardingStepId, checked: boolean): boolean | null {
+	return stepId === "welcome" ? checked : null;
+}
+
 /** Files-per-minute ETA the prototype computes with `eta(mode)`. */
 export function etaMinutes(files: number, mode: EmbedMode): number {
+	if (mode === "none") {
+		// Nothing is embedded, but the folder walk and the parse have a fixed cost.
+		return Math.max(NONE_MIN_MINUTES, Math.ceil(files / NONE_FILES_PER_MINUTE));
+	}
 	const rate = mode === "cloud" ? CLOUD_FILES_PER_MINUTE : LOCAL_FILES_PER_MINUTE;
 	return Math.max(1, Math.ceil(files / rate));
+}
+
+/** How a meter reads: the pip colour, not the value (the prototype's `em-meter.good|warn|bad`). */
+export type EmbedTone = "good" | "warn" | "bad";
+
+/** One `em-meter` row: a label, how many of its four pips are lit, and the value word. */
+export interface EmbedMeter {
+	readonly labelKey: string;
+	readonly fill: number;
+	readonly valueKey: string;
+	readonly tone: EmbedTone;
+}
+
+/** The tail of a card's `em-foot`: the local model's download, and whether it is already here. */
+export type EmbedFoot = { readonly kind: "size"; readonly bytes: number } | { readonly kind: "cached" } | { readonly kind: "unknown" };
+
+/** One `em-card`: everything it shows, as locale keys and numbers the view renders. */
+export interface EmbedCard {
+	readonly id: EmbedMode;
+	readonly icon: string;
+	readonly nameKey: string;
+	readonly tag: { readonly labelKey: string; readonly tone: EmbedTone } | null;
+	readonly lineKey: string;
+	readonly meters: readonly EmbedMeter[];
+	readonly minutes: number;
+	readonly foot: EmbedFoot | null;
+	readonly disabled: boolean;
+}
+
+export interface EmbedCardsInput {
+	readonly files: number;
+	readonly platform: string;
+	/** Signed in to Dazzi: the only thing the cloud card requires. */
+	readonly cloudAvailable: boolean;
+	/** Null while the local embedder's size is still unknown. */
+	readonly modelBytes: number | null;
+	readonly modelCached: boolean;
+}
+
+/**
+ * The prototype's `embedOptions()`: the three ways to make documents searchable,
+ * compared on the same two axes (power needed, accuracy). `none` embeds nothing
+ * and is the cheapest; only the cloud card can be unavailable.
+ */
+export function embedCards(input: EmbedCardsInput): readonly EmbedCard[] {
+	const meter = (label: "performance" | "accuracy", fill: number, value: string, tone: EmbedTone): EmbedMeter => ({
+		labelKey: `onboarding.embedding.meter.${label}`,
+		fill,
+		valueKey: `onboarding.embedding.meter.${value}`,
+		tone,
+	});
+	const localDownload: EmbedFoot = input.modelCached
+		? { kind: "cached" }
+		: input.modelBytes === null
+			? { kind: "unknown" }
+			: { kind: "size", bytes: input.modelBytes };
+	return [
+		{
+			id: "none",
+			icon: "search",
+			nameKey: "onboarding.embedding.card.none.name",
+			tag: null,
+			lineKey: "onboarding.embedding.card.none.line",
+			meters: [meter("performance", 1, "low", "good"), meter("accuracy", 2, "meh", "warn")],
+			minutes: etaMinutes(input.files, "none"),
+			foot: null,
+			disabled: false,
+		},
+		{
+			id: "local",
+			icon: "cpu",
+			nameKey: "onboarding.embedding.card.local.name",
+			tag: null,
+			lineKey: input.platform === "win32" ? "onboarding.embedding.card.local.linePc" : "onboarding.embedding.card.local.lineMac",
+			meters: [meter("performance", 4, "high", "warn"), meter("accuracy", 4, "good", "good")],
+			minutes: etaMinutes(input.files, "local"),
+			foot: localDownload,
+			disabled: false,
+		},
+		{
+			id: "cloud",
+			icon: "cloud",
+			nameKey: "onboarding.embedding.card.cloud.name",
+			tag: { labelKey: "onboarding.plan.plan.pro.name", tone: "warn" },
+			lineKey: "onboarding.embedding.card.cloud.line",
+			meters: [meter("performance", 1, "low", "good"), meter("accuracy", 4, "good", "good")],
+			minutes: etaMinutes(input.files, "cloud"),
+			foot: null,
+			disabled: !input.cloudAvailable,
+		},
+	];
 }
 
 export interface ScanTotals {
@@ -183,16 +328,18 @@ export function bySourceOrder(a: { readonly id: SourceId }, b: { readonly id: So
 	return SOURCE_LIST_ORDER.indexOf(a.id) - SOURCE_LIST_ORDER.indexOf(b.id);
 }
 
-/** Phase → position in the indexing phase strip. */
-export function phaseIndex(phase: IndexingPhase): number {
-	switch (phase) {
-		case "parsed":
-			return 0;
-		case "minsync":
-			return 1;
-		case "finalizing":
-			return 2;
-	}
+/**
+ * The indexing phase strip for a run. The embedding phase only exists when
+ * something is embedded, so the keyword-only path goes straight from reading
+ * documents to finalizing.
+ */
+export function indexingPhases(embed: EmbedMode): readonly IndexingPhase[] {
+	return embed === "none" ? ["parsed", "finalizing"] : ["parsed", "minsync", "finalizing"];
+}
+
+/** Phase → position in that run's strip. */
+export function phaseIndex(embed: EmbedMode, phase: IndexingPhase): number {
+	return Math.max(0, indexingPhases(embed).indexOf(phase));
 }
 
 export type TipArt =

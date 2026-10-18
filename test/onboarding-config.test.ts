@@ -5,6 +5,20 @@ import { isJsonObject } from "../src/shared/settings-contract";
 
 const HOME = "/Users/me";
 
+describe("applyIndexingConfig keyword-only switch", () => {
+	const base = { folders: ["/a"], datasources: [], home: HOME, embedder: null, workspacePath: null, model: null };
+
+	it("writes appIndexing.semanticSearch=false and keeps the block's other settings", () => {
+		const next = applyIndexingConfig({ ...base, raw: { appIndexing: { excludeCodeFolders: false } }, semanticSearch: false });
+		expect(next.appIndexing).toEqual({ excludeCodeFolders: false, semanticSearch: false });
+	});
+
+	it("removes the switch when semantic search is on, and the block with it when nothing else is in it", () => {
+		expect(applyIndexingConfig({ ...base, raw: { appIndexing: { semanticSearch: false } }, semanticSearch: true }).appIndexing).toBeUndefined();
+		expect(applyIndexingConfig({ ...base, raw: { appIndexing: { semanticSearch: false, fileTimeoutMs: 5 } }, semanticSearch: true }).appIndexing).toEqual({ fileTimeoutMs: 5 });
+	});
+});
+
 describe("applyIndexingConfig", () => {
 	it("replaces searchPaths and leaves an existing embedder untouched", () => {
 		const raw = { searchPaths: ["/old"], minSync: { embedder: { profile: "keep", dimension: 1 }, other: true } };
@@ -34,11 +48,34 @@ describe("applyIndexingConfig", () => {
 			folders: ["/a"],
 			datasources: [],
 			home: HOME,
-			embedder: { profile: "qwen3-embedding-0.6b", dimension: 1024 },
+			embedder: { id: "native:Qwen/Qwen3-Embedding-0.6B", dimension: 1024 },
 			workspacePath: null,
 			model: null,
 		});
-		expect(isJsonObject(next.minSync) && next.minSync.embedder).toEqual({ profile: "qwen3-embedding-0.6b", dimension: 1024 });
+		expect(isJsonObject(next.minSync) && next.minSync.embedder).toEqual({ id: "native:Qwen/Qwen3-Embedding-0.6B", dimension: 1024 });
+	});
+
+	it("writes a remote cloud embedder block with id, baseUrl, dimension, and apiKeyEnv", () => {
+		const next = applyIndexingConfig({
+			raw: { minSync: { embedder: { profile: "qwen3-embedding-0.6b", dimension: 1024 } } },
+			folders: ["/a"],
+			datasources: [],
+			home: HOME,
+			embedder: {
+				id: "openai:qwen/qwen3-embedding-0.6b",
+				baseUrl: "https://api.dazziapp.com",
+				dimension: 1024,
+				apiKeyEnv: "OPENAI_API_KEY",
+			},
+			workspacePath: null,
+			model: null,
+		});
+		expect(isJsonObject(next.minSync) && next.minSync.embedder).toEqual({
+			id: "openai:qwen/qwen3-embedding-0.6b",
+			baseUrl: "https://api.dazziapp.com",
+			dimension: 1024,
+			apiKeyEnv: "OPENAI_API_KEY",
+		});
 	});
 
 	it("merges datasource aliases, keeping other existing fields", () => {
@@ -85,6 +122,25 @@ describe("applyIndexingConfig", () => {
 		for (const name of names) {
 			expect(skills.some((skill) => skill.describe().name === name), name).toBe(true);
 		}
+	});
+
+	it("leaves the kakao connector free of embedder overrides so the sidecar uses the shared embedder", () => {
+		const next = applyIndexingConfig({
+			raw: { datasources: { kakao: { description: "existing", pollingIntervalMs: 3600000 } } },
+			folders: ["/a"],
+			datasources: [{ id: "kakao", facts: { chats: 12 } }],
+			home: HOME,
+			embedder: null,
+			workspacePath: null,
+			model: null,
+		});
+		const datasources = isJsonObject(next.datasources) ? next.datasources : {};
+		expect(datasources.kakao).toEqual({
+			description: "existing",
+			pollingIntervalMs: 3600000,
+			instanceId: "default",
+			connector: {},
+		});
 	});
 
 	it("writes one obsidian alias per vault", () => {

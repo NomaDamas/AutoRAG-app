@@ -49,13 +49,9 @@ second datasource or model configuration. The sidebar is searchable and grouped:
   OAuth-only: its chat, catalog, Jev, and rerank traffic reads one credential —
   the `/login` token in Pi's `auth.json` — and rejects any `apiKeyEnv` leaf.
   The app's account sign-in exchanges the same OAuth code for the same
-  long-lived key, so signing in stores that key in the encrypted credential
-  store (for the account API) and mirrors it into `auth.json` as the plan's
-  credential (`dazzi-plan-credential.ts`); sign-out and a server-revoked key
-  remove both. A startup migration (`config-legacy-ids.ts`) rewrites the
-  pre-2.10.2 `autorag` spellings and strips the now-invalid `apiKeyEnv` leaves
-  from an existing config, which the librarian would otherwise refuse to
-  resolve at all.
+  long-lived key, so signing in stores that key in `auth.json` as the plan's
+  credential (`dazzi-plan-credential.ts`), the single place both the app and
+  the librarian read it from; sign-out and a server-revoked key remove it.
 - **AI → 웹 검색** — `webSearch` on/off, provider, and page fetch.
 - **검색** — 인덱싱 (per-source status, refresh cadence, sync now, index
   refresh), 검색 범위 (search paths, exclusions, watch), 문서 읽기
@@ -65,6 +61,31 @@ second datasource or model configuration. The sidebar is searchable and grouped:
   are left out of indexing; the app finds them itself and passes them as
   `excludePaths`. OCR (`parserOptions.ocr.enabled`, which makes the librarian parse image files) and Jikji's media index are pinned off in every
   config the app hands to the librarian.
+- **Keyword-only search** — the onboarding embedding step offers 사용 안 함 /
+  로컬 / 원격, and Settings → AI 모델 → 문서 이해 offers the same choice. 사용 안 함
+  writes `appIndexing.semanticSearch: false` (absent or `true` keeps semantic
+  search; the shared config file otherwise stays as the user left it, `minSync.embedder`
+  included, so choosing a model again needs no re-entry). `semantic-policy.ts`
+  applies it to the config the app hands to the librarian, because the librarian
+  (v2.10.x) has no switch for it:
+  - *Refresh*: `minsync` is replaced by `parsed` + `jikji`, so MinSync never runs, no
+    model is loaded or downloaded, and no `.minsync` index is built.
+  - *Datasources*: the kakao/slack/telegram/whatsapp sidecars get
+    `connector.sidecar.semantic: false` (BM25 only), Discord answers from FTS,
+    ClawGallery skips its visual vector sync, and for the duration of a refresh the
+    embedding steps the librarian runs unconditionally (mailcrawl `index`, qmd
+    `embed` for Obsidian, discrawl `embed`) are successful no-ops; their sync and
+    update steps still run. GitHub Gist's vector sync is skipped the same way (its class is not a public
+    export, so the patch reaches it through a factory-built skill's prototype and
+    swaps in the inherited connector `index`). The policy also sets
+    `connector.semantic: false`, which librarians with Marker-Inc-Korea/AutoRAG#1936
+    honor and v2.10.4 ignores; this app version relies on the patch.
+  - *Search*: the agent's vector and hybrid methods (MinSync's, and every
+    datasource's) answer nothing without being run, so there is no "method failed"
+    diagnostic for an index that is deliberately absent, and the agent's
+    past-question memory ranks by keywords only. Local file content is found by
+    Jikji and the file-name tools.
+  - *Status*: a parsed file counts as included, since nothing is staged into MinSync.
 - **Embedding batch size** — the embedding gateway aborts a request after 30 s.
   When a refresh's MinSync step fails with that timeout (or skips a file on a
   partial sync because its batch timed out), the app halves
@@ -124,7 +145,7 @@ second datasource or model configuration. The sidebar is searchable and grouped:
     (`index-status.ts` calls `refreshAutoragIndex`), so it has the folder check,
     the embedder watchdog, and the learned batch size.
   - *A file MinSync cannot read, chunk, or embed is skipped, not fatal*
-    (MinSync 0.4.8 / librarian 2.10.3, `minsync-file-skipped`). MinSync exits 6
+    (MinSync 0.4.8 / librarian 2.10.4, `minsync-file-skipped`). MinSync exits 6
     with `partial: true` and `files_failed`, keeps the file's older chunks, and
     retries it on the next sync; if the skip came from an embedding gateway
     timeout, `index-refresh` halves `batchSize` and re-runs `syncMinSync` in the
@@ -198,10 +219,14 @@ exiting. QA lane: `scripts/manual-qa/run-qa-finder-fs-worker-crash.mjs`
 ## Error reports (Sentry)
 
 Dazzi sends a report to the maintainers' Sentry project when something breaks,
-so a stuck or failed index is seen without the user filing an issue. It is on
-by default; Settings → 일반 → 개인정보 → "오류 보고서 보내기" turns it off, and
-while it is off every event is dropped before it is queued. There is no
-per-report prompt.
+so a stuck or failed index is seen without the user filing an issue. It is
+**opt-in** (`errorReporting` defaults to off): the first onboarding step carries
+a second unticked checkbox next to the usage-statistics one, and Settings → 일반
+→ 개인정보 → "오류 보고서 보내기" has the same choice as a switch. Continuing from
+the welcome step saves both checkboxes; closing the window there saves nothing.
+Until it is on, every event is dropped before it is queued, and
+`readErrorReportingEnabled` reads the setting as off unless it is exactly `true`.
+There is no per-report prompt.
 
 What is reported: uncaught errors in the main process and the pages, a crashed
 or killed renderer or fs worker (`child-process-gone`, no minidump), and three
@@ -227,6 +252,57 @@ build time as `MAIN_VITE_SENTRY_DSN` (the release workflow reads the
 `SENTRY_DSN` repository variable); a build without it initialises nothing.
 Tracing, replay, logs and user feedback are not enabled.
 
+## Usage statistics (PostHog)
+
+Separate from error reports: Settings → 일반 → 개인정보 has a second switch,
+`usageAnalytics`, **off by default** (opt-in). It answers "which features are
+used", never "what is in them".
+
+How a user opts in: the first onboarding step (welcome) carries a small,
+**unticked** checkbox with a link to the Privacy Policy, and Settings → 일반 →
+개인정보 has the same choice as a switch. Continuing from the welcome step saves
+the checkbox's value to `usageAnalytics`; closing the window there saves
+nothing. Either way nothing is sent until the user ticks or switches it on, so
+consent is an affirmative act, as the EU's GDPR/ePrivacy rules require. The
+Privacy Policy (served from the landing-page repo) must name the desktop app's
+usage statistics before EU users are served.
+
+What is sent, and only after the user turns it on: `app_opened`,
+`settings_changed` (a setting's name and `on`/`off` or its enum value),
+`onboarding_completed`, `ai_search_started` (has attachments, is a follow-up),
+`ai_search_finished` (answered / failed / stopped, whether Deep ran, a coarse
+duration bucket) and `settings_page_viewed` (a fixed page id; a connected app's
+page is just `source`). Every event also carries app version, platform, arch,
+packaged flag and interface language.
+
+What cannot be sent is a property of the schema, not of discipline:
+`src/shared/analytics-contract.ts` declares every event, and every property is
+a value from a fixed list (no free string, number or object slot), so a path,
+file name, query, answer or source name has nowhere to go.
+`sanitizeAnalyticsEvent` checks each event against it in the main process,
+whichever process raised it, and drops a malformed event whole. The renderer can
+only send the events it owns (`settings_page_viewed`) through the one-way
+`analytics:track` IPC channel.
+
+Identity: a random uuid in `userData/analytics/install-id`, never linked to an
+account, machine or person. Turning the switch off drops everything queued,
+deletes the id and stops at once; turning it on again makes a new id. Events are
+sent with `$process_person_profile: false` (no person record) and
+`disableGeoip`; no feature-flag, config or autocapture traffic, no session
+replay. One PostHog **project setting** is not controllable from the app and
+must be on: "Discard client IP data".
+
+Design: `src/main/analytics-core.ts` is the pure part (schema check, consent,
+id store, setting-diff events, target resolution); `src/main/analytics.ts` is
+the `posthog-node` sink (created lazily on the first event, batched, flushed on
+quit). The build supplies `MAIN_VITE_POSTHOG_KEY` (a public write-only
+`phc_…` key) and optionally `MAIN_VITE_POSTHOG_HOST` (default
+`https://eu.i.posthog.com`); a build without a key sends nothing. An unpackaged
+run (dev, the QA lanes) may override both with `AUTORAG_ANALYTICS_KEY` and
+`AUTORAG_ANALYTICS_HOST`; a packaged app ignores the environment.
+`scripts/manual-qa/run-qa-analytics.mjs` is the live check: it points the real
+app at a local capture server and asserts the rules above over HTTP.
+
 ## First-run onboarding
 
 A fresh install opens onboarding instead of the Finder: welcome, permissions,
@@ -247,8 +323,13 @@ resumes at the same step.
 - **Folders** are pre-scanned with the indexer's own rules (supported
   extensions, size cap, skipped dependency/code folders) to show real file
   counts and an ETA.
-- **Embedding** is local (`qwen3-embedding-0.6b`); cloud embedding is shown but
-  unavailable, since corpus text is never sent to remote embedders.
+- **Embedding** offers local (`native:Qwen/Qwen3-Embedding-0.6B`) by default and enables
+  Dazzi cloud embedding (`openai:qwen/qwen3-embedding-0.6b` on the Dazzi
+  endpoint) once the user is signed in to Dazzi and gives explicit consent.
+  Choosing cloud embedding places the plan step immediately after embedding and
+  restricts plan selection to Pro; when the signed-in account already holds an
+  active paid subscription (Air/Pro for local, Pro for cloud), the plan step is
+  skipped automatically.
 - **Data sources** list only usable connectors, and every one starts off. The
   probes run in parallel and each row appears the moment its own probe finishes
   (fast ones first); a "checking" line stays under the list until all of them are
@@ -258,8 +339,9 @@ resumes at the same step.
   Local files are covered by the folders step, so
   Spotlight and Apple Mail are not offered. Each row appears only when the
   connector's own health probe says its data is reachable: KakaoTalk
-  (`lazykatok doctor --macos-probe`: app, container, cached login, readable
-  database files), Slack (`slacrawl`, at least one workspace), Discord
+  (`lazykatok doctor --macos-probe` plus `lazykatok source chats --source macos`
+  when `auth.json` has not been cached yet: app, container, verifiable login,
+  readable database files), Slack (`slacrawl`, at least one workspace), Discord
   (`discrawl` ready database plus a dry-run `wiretap` that finds messages),
   Telegram (`telecrawl doctor`), WhatsApp (`wacrawl doctor`, read-only, with
   messages), mail (`mailcrawl` installed and a `himalaya` account whose login
@@ -271,18 +353,24 @@ resumes at the same step.
 - **Model** (BYOK) verifies the provider key against the provider's API and
   stores it in the encrypted credential store, never in `config.json`.
 - **Indexing** writes `searchPaths`, the embedder (only when none is set), the
-  enabled datasources and their access tags, and the BYOK model into the shared
-  config, then runs the same refresh as Settings. A config still pointing its
+  enabled datasources (`kakao` is indexed by the librarian's read-only sidecar over
+  lazykatok's archive with the shared embedder, so `lazykatok index` and its
+  fastembed pipeline never run), and the BYOK model into the shared config, then runs
+  the local refresh (`parsed`, `minsync`) and syncs enabled datasources in the
+  background once local indexing and onboarding complete. A config still pointing its
   `workspacePath` at the app's cwd seed is moved to `<AutoRAG home>/workspace`.
-  The Finder opens only after the first index succeeds.
+  The Finder opens once the first index succeeds or the user chooses to continue
+  in the background.
 
 Account and plan are real. The account step signs in through the system
 browser (OAuth 2.0 authorization code + PKCE over a loopback redirect, RFC 8252)
 against the hosted AutoRAG service (`AUTORAG_BASE_URL`, default
 `https://api.dazziapp.com`); no password and no card number is typed into the
-app. The returned API key (`AUTORAG_API_KEY`) lives only in the encrypted
-credential store and `process.env`, exactly like a BYOK key; the renderer sees
-an `AccountStatus` (email, plan, subscription state, weekly credits), never the
+app. The returned API key lives only in Pi's `auth.json` as the `dazzi`
+credential (mode 0600), the single place the librarian reads the hosted plan
+from, so the app and the librarian cannot disagree about being signed in; the
+renderer sees an `AccountStatus` (email, plan, subscription state, weekly
+credits), never the
 key. Air and Pro open the service's hosted checkout in the browser, and the plan
 step continues once the server reports that plan; cancel, refund, and the
 payment method live in the hosted billing portal (Settings › 구독 및 사용량).
@@ -290,8 +378,8 @@ Skipping the account is the BYOK path.
 
 **What signing in changes.** A successful sign-in (onboarding, Settings, or the
 AutoRAG entry in Settings › AI) points the agent at the account's models, per
-role, in the shared `config.json` (the config carries an explicit `baseUrl` and
-`apiKeyEnv`, never the key):
+role, in the shared `config.json` (the config carries an explicit
+`baseUrl`, never the key or an env var name):
 
 | Role | Replaced when the config holds | Kept when it holds |
 |---|---|---|
@@ -312,8 +400,8 @@ does this for every lane except `run-qa-onboarding.mjs`.
 `make onboarding` walks the flow on a disposable profile: every run starts from
 scratch in a temp sandbox holding its own `userData` (via `--user-data-dir`),
 AutoRAG config, home, and workspace, so the real `~/.autorag` and the app's
-support directory are never read or written. The cached embedding model and
-llama runtime are copied in so the first index runs offline. When the app exits
+support directory are never read or written. The cached native MinSync
+embedding model is copied in so the first index runs offline. When the app exits
 the wrapper kills the run's processes and removes the sandbox; a SIGKILL of
 the wrapper is covered by a detached watchdog, and the next `make onboarding`
 sweeps any sandbox whose owner and watchdog both died. The QA lane covers the

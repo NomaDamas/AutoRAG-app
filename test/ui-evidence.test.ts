@@ -1,10 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
+	collectSessionEvidence,
 	evidenceDetail,
 	evidenceHeading,
 	evidenceKind,
 	evidenceSourceUrl,
 	findEvidenceSource,
+	isLocalEvidenceSource,
+	mergePhaseEvidence,
+	resolveActiveEvidence,
+	sessionEvidencePaths,
 	unresolvedCitationNumbers,
 } from "../src/renderer/src/state/evidence";
 
@@ -111,5 +116,114 @@ describe("unresolvedCitationNumbers", () => {
 
 	it("returns nothing when the answer cites nothing", () => {
 		expect(unresolvedCitationNumbers("일반 지식으로 답합니다.", evidence)).toEqual([]);
+	});
+});
+
+describe("isLocalEvidenceSource and sessionEvidencePaths", () => {
+	it("accepts local POSIX and Windows paths and rejects null, web URLs, and datasource virtual ids", () => {
+		expect(isLocalEvidenceSource("/Users/jeff/Documents/policy.md")).toBe(true);
+		expect(isLocalEvidenceSource("C:\\Users\\jeff\\Documents\\policy.md")).toBe(true);
+		expect(isLocalEvidenceSource("/obsidian/vault/notes/Q3 plan.md")).toBe(true);
+		expect(isLocalEvidenceSource(null)).toBe(false);
+		expect(isLocalEvidenceSource("")).toBe(false);
+		expect(isLocalEvidenceSource("https://example.com/doc")).toBe(false);
+		expect(isLocalEvidenceSource("/kakao/work/chunks/msg-1")).toBe(false);
+		expect(isLocalEvidenceSource("/slack/team/messages/42")).toBe(false);
+		expect(isLocalEvidenceSource("/discord/srv/images/9")).toBe(false);
+	});
+
+	it("gathers unique local file paths in order across all turns and phases of a session", () => {
+		const composed = "/Users/jeff/Documents/한글 정책.md".normalize("NFC");
+		const decomposed = composed.normalize("NFD");
+		const phases = [
+			{
+				answer: "turn 1 quick",
+				evidence: [
+					{ number: 1, title: "한글 정책.md", summary: "", source: composed, excerpts: [] },
+					{ number: 2, title: "web", summary: "", source: "https://example.com", excerpts: [] },
+				],
+			},
+			{
+				answer: "turn 1 deep",
+				evidence: [
+					{ number: 1, title: "한글 정책.md", summary: "", source: decomposed, excerpts: [] },
+					{ number: 2, title: "kakao", summary: "", source: "/kakao/work/chunks/7", excerpts: [] },
+					{ number: 3, title: "budget.xlsx", summary: "", source: "/Users/jeff/Desktop/budget.xlsx", excerpts: [] },
+				],
+			},
+			null,
+			{
+				answer: "turn 2 deep",
+				evidence: [
+					{ number: 1, title: "memo.txt", summary: "", source: "/Users/jeff/Notes/memo.txt", excerpts: [] },
+					{ number: 2, title: "budget.xlsx", summary: "", source: "/Users/jeff/Desktop/budget.xlsx", excerpts: [] },
+				],
+			},
+		];
+		const collected = collectSessionEvidence(phases);
+		expect(sessionEvidencePaths(collected)).toEqual([
+			composed,
+			"/Users/jeff/Desktop/budget.xlsx",
+			"/Users/jeff/Notes/memo.txt",
+		]);
+	});
+});
+
+describe("mergePhaseEvidence and resolveActiveEvidence", () => {
+	const ev = (number: number, title: string) => ({ number, title, summary: "", source: `/doc/${title}`, excerpts: [] });
+
+	it("merges quick and deep evidence so higher numbers in quick survive when deep has fewer citations or is empty", () => {
+		const quick = [ev(1, "q1"), ev(2, "q2"), ev(3, "q3"), ev(4, "q4")];
+		const deep = [ev(1, "d1"), ev(2, "d2")];
+
+		// Default / deep priority: 1..2 come from deep, 3..4 come from quick
+		expect(mergePhaseEvidence(deep, quick).map((e) => `${e.number}:${e.title}`)).toEqual([
+			"1:d1",
+			"2:d2",
+			"3:q3",
+			"4:q4",
+		]);
+		// Quick clicked: 1..4 come from quick
+		expect(mergePhaseEvidence(quick, deep).map((e) => `${e.number}:${e.title}`)).toEqual([
+			"1:q1",
+			"2:q2",
+			"3:q3",
+			"4:q4",
+		]);
+		// Deep has empty evidence []: falls back to quick
+		expect(mergePhaseEvidence([], quick).map((e) => `${e.number}:${e.title}`)).toEqual([
+			"1:q1",
+			"2:q2",
+			"3:q3",
+			"4:q4",
+		]);
+	});
+
+	it("falls back to the most recent turn with evidence when a follow-up turn has none, and switches to any clicked turn/phase", () => {
+		const turns = [
+			{
+				quick: { answer: "t0 quick [1][2][3][4]", evidence: [ev(1, "t0-q1"), ev(2, "t0-q2"), ev(3, "t0-q3"), ev(4, "t0-q4")] },
+				deep: { answer: "t0 deep [1][2]", evidence: [ev(1, "t0-d1"), ev(2, "t0-d2")] },
+			},
+			{
+				quick: { answer: "follow-up with no citations", evidence: [] },
+				deep: null,
+			},
+		];
+
+		// Default on load: Turn 1 has no evidence, so Turn 0's merged evidence is shown
+		expect(resolveActiveEvidence(turns, null).map((e) => `${e.number}:${e.title}`)).toEqual([
+			"1:t0-d1",
+			"2:t0-d2",
+			"3:t0-q3",
+			"4:t0-q4",
+		]);
+		// Clicking a citation in Turn 0's quick answer prioritizes Turn 0's quick evidence
+		expect(resolveActiveEvidence(turns, { turnIndex: 0, phase: "quick" }).map((e) => `${e.number}:${e.title}`)).toEqual([
+			"1:t0-q1",
+			"2:t0-q2",
+			"3:t0-q3",
+			"4:t0-q4",
+		]);
 	});
 });

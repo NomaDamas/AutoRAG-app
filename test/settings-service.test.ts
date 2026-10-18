@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -104,6 +104,21 @@ describe("createSettingsService", () => {
 		const reloaded = createSettingsService({ directory, dataSources: noDataSources, models: noModels, ...baseDeps });
 		expect((await reloaded.get()).errorReporting).toBe(false);
 		expect((await reloaded.permGet("/tmp/docs/readme.md")).value).toBe("allow");
+	});
+
+	it("keeps usage analytics off until the user turns it on, independent of error reporting", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "autorag-settings-analytics-"));
+		directories.push(directory);
+		// A settings file written before the toggle existed.
+		await mkdir(directory, { recursive: true });
+		await writeFile(join(directory, "settings-state.json"), JSON.stringify({ settings: { language: "ko", errorReporting: true }, permissions: {} }));
+		const service = createSettingsService({ directory, dataSources: noDataSources, models: noModels, ...baseDeps });
+		expect(await service.get()).toMatchObject({ usageAnalytics: false, errorReporting: true });
+
+		await service.set({ usageAnalytics: true });
+		await service.set({ errorReporting: false });
+		const reloaded = createSettingsService({ directory, dataSources: noDataSources, models: noModels, ...baseDeps });
+		expect(await reloaded.get()).toMatchObject({ usageAnalytics: true, errorReporting: false });
 	});
 
 	it("defaults showHiddenFiles off and persists the toggle", async () => {

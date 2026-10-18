@@ -65,8 +65,13 @@ export interface AppSettings {
 	readonly launchAtLogin: boolean;
 	readonly showInMenuBar: boolean;
 	readonly autoInstallUpdates: boolean;
-	/** Crash and indexing-failure reports go to the maintainers (no file paths, names or document text). On by default. */
+	/** Crash and indexing-failure reports go to the maintainers (no file paths, names or document text). Off by default: opt-in, asked on the first onboarding step. */
 	readonly errorReporting: boolean;
+	/**
+	 * Anonymous product-usage statistics (which features are used, never what is in them) go to the maintainers.
+	 * Off by default: it is opt-in, and independent of `errorReporting`.
+	 */
+	readonly usageAnalytics: boolean;
 	/** Off: dot-prefixed files never appear. On: they appear, rendered dimmed. */
 	readonly showHiddenFiles: boolean;
 	/** How often the app re-runs the dupey version-family scan, in minutes. */
@@ -81,7 +86,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
 	launchAtLogin: false,
 	showInMenuBar: true,
 	autoInstallUpdates: true,
-	errorReporting: true,
+	errorReporting: false,
+	usageAnalytics: false,
 	showHiddenFiles: false,
 	dupeyScanIntervalMinutes: 60,
 	osMenuIntegration: false,
@@ -336,7 +342,7 @@ export interface ProviderCredentialStatus {
 	readonly source: "stored" | "env" | "none";
 }
 
-export type EmbeddingProfileKind = "native" | "profile" | "local-server";
+export type EmbeddingProfileKind = "none" | "native" | "profile" | "local-server";
 
 /** One selectable embedding runtime profile, in the order the settings screen offers them. */
 export interface EmbeddingProfile {

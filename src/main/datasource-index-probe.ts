@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { DatabaseSync } from "node:sqlite";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { isJsonObject, type DataSourceIndexUnit } from "../shared/settings-contract";
@@ -38,7 +39,7 @@ interface ProbeSpec {
 	/** Template-specific env prefixes the CLI reads (its own config, never credentials of others). */
 	readonly envPrefixes: readonly string[];
 	readonly command: (context: ProbeContext) => ProbeCommand;
-	readonly parse: (stdout: string) => BackendIndexReading | undefined;
+	readonly parse: (stdout: string, context: ProbeContext) => BackendIndexReading | undefined;
 }
 
 const PROBE_TIMEOUT_MS = 8000;
@@ -90,6 +91,20 @@ function parseJson(stdout: string): Record<string, unknown> | undefined {
 		return isJsonObject(parsed) ? parsed : undefined;
 	} catch {
 		return undefined;
+	}
+}
+
+/** Whether the kakao sidecar database holds an embedder identity and a stored vector. Any read problem means no. */
+function sidecarHasVectors(path: string): boolean {
+	let db: DatabaseSync | undefined;
+	try {
+		db = new DatabaseSync(path, { readOnly: true });
+		const identity = db.prepare("select 1 from sidecar_meta where k = 'identity'").get();
+		return identity !== undefined && db.prepare("select 1 from sidecar_vec limit 1").get() !== undefined;
+	} catch {
+		return false;
+	} finally {
+		db?.close();
 	}
 }
 
@@ -181,12 +196,30 @@ const SPECS: Readonly<Record<string, ProbeSpec>> = {
 		command: ({ connector }) => ({
 			args: [...optionFlags(connector, { workspacePath: "--data-dir", configPath: "--config" }), "doctor", "--json"],
 		}),
-		parse: (stdout) => {
+		parse: (stdout, context) => {
 			const doctor = parseJson(stdout);
 			const freshness = isJsonObject(doctor?.freshness) ? doctor.freshness : undefined;
 			const lastSync = isJsonObject(freshness?.last_sync) ? freshness.last_sync : undefined;
 			if (lastSync === undefined) return { count: 0, at: null };
-			return reading(lastSync.total_messages, lastSync.completed_at);
+			const sidecarPath = join(context.workspacePath, ".autorag", "datasources", context.id, context.instanceId, "sidecar.sqlite");
+			if (existsSync(sidecarPath)) {
+				// The sidecar file appears as soon as a sync starts, so a failed first sync leaves it
+				// behind. It counts only once it holds an embedder identity and at least one vector
+				// (or when the connector turned semantic search off, so it never will).
+				const semanticOff = isJsonObject(context.connector.sidecar) && context.connector.sidecar.semantic === false;
+				return semanticOff || sidecarHasVectors(sidecarPath) ? reading(lastSync.total_messages, lastSync.completed_at) : undefined;
+			}
+			// In CLI-only mode (`LazykatokSkill.index()` without a sidecar), `sync` runs
+			// then `index`. When `last_index` is `null` or `recommendation.index_before_semantic_search`
+			// is true (because `sync` ran and updated the archive revision, but `index`
+			// failed or has not committed the matching semantic generation yet), report
+			// `undefined` (`not-indexed`) rather than claiming a stale/partial archive is indexed.
+			const recommendation = isJsonObject(freshness?.recommendation) ? freshness.recommendation : undefined;
+			const lastIndex = isJsonObject(freshness?.last_index) ? freshness.last_index : undefined;
+			if (freshness?.last_index === null || recommendation?.index_before_semantic_search === true) {
+				return undefined;
+			}
+			return reading(lastSync.total_messages, lastIndex?.completed_at ?? lastSync.completed_at);
 		},
 	},
 	clawgallery: {
@@ -296,7 +329,7 @@ export async function probeBackendIndex(
 	if (command.runnable === false) return command.absent ?? null;
 	const stdout = await run(binary, command.args, probeEnv(env, spec.envPrefixes, command.env));
 	if (stdout === null) return null;
-	return spec.parse(stdout) ?? null;
+	return spec.parse(stdout, context) ?? null;
 }
 
 export type { ProbeContext as BackendProbeContext };

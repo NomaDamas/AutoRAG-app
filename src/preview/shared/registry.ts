@@ -15,6 +15,9 @@ export const VIEWER_KINDS = [
 	"text",
 	"archive",
 	"iwork",
+	"odt",
+	"odp",
+	"odg",
 	"epub",
 	"hwp",
 	"font",
@@ -41,7 +44,12 @@ assign("audio", ["mp3", "wav", "wave", "m4a", "aac", "flac", "opus", "ogg", "oga
 assign("pdf", ["pdf"]);
 assign("docx", ["docx", "docm", "dotx"]);
 assign("sheet", ["xlsx", "xlsm", "xlsb", "xls", "csv", "tsv", "ods"]);
-assign("pptx", ["pptx", "pptm", "ppsx"]);
+assign("pptx", ["pptx", "pptm", "ppsx", "potx"]);
+// OpenDocument packages. `.ods` stays with the spreadsheet viewer.
+assign("odt", ["odt"]);
+assign("odp", ["odp"]);
+// A drawing has no text model; its package embeds the first page as a PNG.
+assign("odg", ["odg"]);
 assign("markdown", ["md", "markdown", "mdx"]);
 assign("html", ["html", "htm", "xhtml"]);
 assign("text", [
@@ -80,11 +88,12 @@ export function claimedViewerExtensions(): readonly { readonly ext: string; read
  * What a viewer needs from the main process. `stream` viewers load the file
  * through the range-capable protocol (media, fonts, and PDF, which pdf.js
  * fetches page by page); `prefix` viewers render however much text arrives;
- * `whole` viewers parse the entire file; `sniff` reads enough to tell text
- * from binary; `query` sends no bytes: the viewer asks the main process for
- * capped rows of the file instead.
+ * `whole` viewers parse the entire file; `decode` viewers get an image the OS
+ * decoded for them (the raw file when it cannot); `sniff` reads enough to tell
+ * text from binary; `query` sends no bytes: the viewer asks the main process
+ * for capped rows of the file instead.
  */
-export type ByteNeed = "stream" | "prefix" | "whole" | "sniff" | "extract" | "query";
+export type ByteNeed = "stream" | "prefix" | "whole" | "decode" | "sniff" | "extract" | "query";
 
 export function byteNeed(kind: ViewerKind): ByteNeed {
 	switch (kind) {
@@ -101,10 +110,11 @@ export function byteNeed(kind: ViewerKind): ByteNeed {
 		case "jsonl":
 			return "prefix";
 		case "tiff":
-		case "heic":
 		case "docx":
 		case "sheet":
 		case "pptx":
+		case "odt":
+		case "odp":
 		case "archive":
 		case "epub":
 		case "hwp":
@@ -112,7 +122,10 @@ export function byteNeed(kind: ViewerKind): ByteNeed {
 			return "whole";
 		case "data":
 			return "query";
+		case "heic":
+			return "decode";
 		case "iwork":
+		case "odg":
 			return "extract";
 		case "fallback":
 			return "sniff";
@@ -181,6 +194,11 @@ const LABELS: Readonly<Record<string, string>> = {
 	xls: "Excel spreadsheet",
 	csv: "CSV document",
 	pptx: "PowerPoint presentation",
+	potx: "PowerPoint template",
+	odt: "OpenDocument text",
+	ods: "OpenDocument spreadsheet",
+	odp: "OpenDocument presentation",
+	odg: "OpenDocument drawing",
 	md: "Markdown",
 	txt: "Plain text",
 	json: "JSON",

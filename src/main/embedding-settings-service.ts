@@ -5,6 +5,7 @@ import type { DataSourceStatusService } from "./datasource-status";
 import type { EmbeddingSettingsService } from "./settings-service";
 import { startEmbeddingLoopbackAdapter, type EmbeddingLoopbackAdapter } from "./embedding-loopback-adapter";
 import { isJsonObject } from "../shared/settings-contract";
+import { readAppIndexing } from "./app-indexing";
 import { t } from "../shared/i18n/core";
 import type {
 	AutoRagConfigUpdate,
@@ -89,6 +90,8 @@ interface EmbeddingChoice {
 	readonly localServer?: LocalServer;
 }
 
+/** Keyword-only search: nothing is embedded (`appIndexing.semanticSearch: false`). */
+const NONE_PROFILE_ID = "none";
 const QWEN3_GGUF = "hf:Qwen/Qwen3-Embedding-0.6B-GGUF/Qwen3-Embedding-0.6B-Q8_0.gguf";
 const MAILCRAWL_NATIVE_MODEL = "Qwen/Qwen3-Embedding-0.6B";
 
@@ -111,23 +114,23 @@ const LOOPBACK_HOSTS: Record<string, true> = { localhost: true, "127.0.0.1": tru
 export function embeddingProfiles(): readonly EmbeddingProfile[] {
 	return [
 		{
-			id: "native-qwen3",
-			kind: "native",
-			label: "Qwen3 Embedding 0.6B",
-			description: t("main.embedding.profiles.nativeQwen3.description"),
-			model: "native:Qwen/Qwen3-Embedding-0.6B",
-			dimension: 1024,
+			id: NONE_PROFILE_ID,
+			kind: "none",
+			label: t("main.embedding.profiles.none.label"),
+			description: t("main.embedding.profiles.none.description"),
+			model: "",
+			dimension: 0,
 			queryPrefix: "",
 			passagePrefix: "",
 			baseUrl: null,
 			requiresLocalServer: false,
 		},
 		{
-			id: "qwen3-embedding-0.6b",
-			kind: "profile",
-			label: t("main.embedding.profiles.runtime.label"),
-			description: t("main.embedding.profiles.runtime.description"),
-			model: "qwen3-embedding-0.6b",
+			id: "native-qwen3",
+			kind: "native",
+			label: "Qwen3 Embedding 0.6B",
+			description: t("main.embedding.profiles.nativeQwen3.description"),
+			model: "native:Qwen/Qwen3-Embedding-0.6B",
 			dimension: 1024,
 			queryPrefix: "",
 			passagePrefix: "",
@@ -189,14 +192,21 @@ function deriveEmbedder(choice: EmbeddingChoice): JsonObject {
 	return { id: profile.model, dimension: profile.dimension };
 }
 
-function currentProfileId(embedder: unknown): string | null {
+function currentProfileId(embedder: unknown, semantic: boolean): string | null {
+	if (!semantic) return NONE_PROFILE_ID;
 	if (!isJsonObject(embedder)) return null;
-	const profile = embedder.profile;
-	if (profile === "qwen3-embedding-0.6b") return profile;
+	if (embedder.profile === "qwen3-embedding-0.6b") return "native-qwen3";
 	const id = embedder.id;
 	if (typeof id === "string") {
 		if (id.startsWith("native:")) return "native-qwen3";
-		if (typeof embedder.baseUrl === "string" && embedder.baseUrl.length > 0) return "local-server";
+		if (typeof embedder.baseUrl === "string" && embedder.baseUrl.length > 0) {
+			try {
+				const host = new URL(embedder.baseUrl).hostname.toLowerCase();
+				if (LOOPBACK_HOSTS[host] === true) return "local-server";
+			} catch {
+				return null;
+			}
+		}
 	}
 	return null;
 }
@@ -243,6 +253,7 @@ function adoptionFor(
 	choice: EmbeddingChoice,
 	adapterAvailable: boolean,
 ): { adoption: EmbeddingAdoption; reason: string; action: string | null } {
+	if (choice.profile.kind === "none") return { adoption: "not-applicable", reason: t("main.embedding.reasons.keywordOnly"), action: null };
 	switch (type) {
 		case "mailcrawl":
 			return !(choice.profile.id === "local-server" ? adapterAvailable : mailcrawlEnvFor(choice, null) !== null)
@@ -281,11 +292,9 @@ function adoptionFor(
 						action: t("main.embedding.actions.discordConfig"),
 					};
 		case "kakao":
-			return {
-				adoption: "incompatible",
-				reason: t("main.embedding.reasons.kakaoIncompatible"),
-				action: null,
-			};
+			// The librarian's kakao sidecar embeds with the shared embedder, so the choice
+			// applies as-is; the rebuild sync re-embeds when the embedder identity changed.
+			return { adoption: "native", reason: t("main.embedding.reasons.kakaoSharedEmbedder"), action: null };
 		case "github-gist":
 			return {
 				adoption: "incompatible",
@@ -332,6 +341,12 @@ function readEmbedder(env: NodeJS.ProcessEnv, cwd: string): unknown {
 	if (!isJsonObject(raw.minSync)) return undefined;
 	return raw.minSync.embedder;
 }
+/** False when the shared config switched semantic search off (keyword-only mode). */
+function readSemantic(env: NodeJS.ProcessEnv, cwd: string): boolean {
+	const path = resolveConfigPath({ flags: {}, env, cwd }).configPath;
+	if (!existsSync(path)) return true;
+	return readAppIndexing(readRawConfigObject(path)).semanticSearch;
+}
 /** Rebuild a choice from the persisted embedder so `get` can plan without a request. */
 function findChoiceFromConfig(embedder: unknown, profileId: string): EmbeddingChoice | undefined {
 	const profile = findProfile(profileId);
@@ -355,6 +370,12 @@ function qmdModelForConfig(embedder: unknown): string | null {
 	if (embedder.profile === "qwen3-embedding-0.6b") return QWEN3_GGUF;
 	if (typeof embedder.id === "string" && embedder.id.startsWith("native:")) return QWEN3_GGUF;
 	return null;
+}
+
+/** The switch itself, or its whole block when it is the block's only setting, so no empty `appIndexing` is left behind. */
+function semanticSwitchPath(path: string): string[] {
+	const block = existsSync(path) ? readRawConfigObject(path).appIndexing : undefined;
+	return isJsonObject(block) && Object.keys(block).every((key) => key === "semanticSearch") ? ["appIndexing"] : ["appIndexing", "semanticSearch"];
 }
 
 export function createEmbeddingSettingsService(deps: EmbeddingSettingsDeps): EmbeddingSettingsRuntime {
@@ -438,7 +459,7 @@ export function createEmbeddingSettingsService(deps: EmbeddingSettingsDeps): Emb
 			configPath: path,
 			configExists: existsSync(path),
 			error,
-			current: { profileId: choice.profile.id, embedder: deriveEmbedder(choice) },
+			current: { profileId: choice.profile.id, embedder: choice.profile.kind === "none" ? asJsonObject(readEmbedder(deps.env, deps.cwd)) : deriveEmbedder(choice) },
 			profiles: embeddingProfiles(),
 			sources: [],
 		};
@@ -451,7 +472,7 @@ export function createEmbeddingSettingsService(deps: EmbeddingSettingsDeps): Emb
 		get: async () => {
 			const path = configPath();
 			const embedder = readEmbedder(deps.env, deps.cwd);
-			const profileId = currentProfileId(embedder);
+			const profileId = currentProfileId(embedder, readSemantic(deps.env, deps.cwd));
 			const base: EmbeddingSettingsSnapshot = {
 				configPath: path,
 				configExists: existsSync(path),
@@ -474,7 +495,7 @@ export function createEmbeddingSettingsService(deps: EmbeddingSettingsDeps): Emb
 					configPath: configPath(),
 					configExists: existsSync(configPath()),
 					error: resolved.error,
-					current: { profileId: currentProfileId(embedder), embedder: asJsonObject(embedder) },
+					current: { profileId: currentProfileId(embedder, readSemantic(deps.env, deps.cwd)), embedder: asJsonObject(embedder) },
 					profiles: embeddingProfiles(),
 					sources: [],
 				};
@@ -521,8 +542,12 @@ export function createEmbeddingSettingsService(deps: EmbeddingSettingsDeps): Emb
 				};
 			}
 
-			const updates: AutoRagConfigUpdate[] = [{ path: ["minSync", "embedder"], value: deriveEmbedder(choice) }];
-			const written: string[][] = [["minSync", "embedder"]];
+			// Keyword-only keeps the configured embedder so choosing a model again needs no re-entry.
+			const updates: AutoRagConfigUpdate[] =
+				choice.profile.kind === "none"
+					? [{ path: ["appIndexing", "semanticSearch"], value: false }]
+					: [{ path: ["minSync", "embedder"], value: deriveEmbedder(choice) }, { path: semanticSwitchPath(configPath()), remove: true }];
+			const written: string[][] = [choice.profile.kind === "none" ? ["appIndexing", "semanticSearch"] : ["minSync", "embedder"]];
 			const toRebuild: string[] = [];
 
 			for (const status of plan) {
@@ -575,7 +600,7 @@ export function createEmbeddingSettingsService(deps: EmbeddingSettingsDeps): Emb
 		},
 		discrawlRuntime: () => {
 			const embedder = readEmbedder(deps.env, deps.cwd);
-			if (currentProfileId(embedder) !== "local-server" || !isJsonObject(embedder)) return undefined;
+			if (currentProfileId(embedder, readSemantic(deps.env, deps.cwd)) !== "local-server" || !isJsonObject(embedder)) return undefined;
 			const profile = findProfile("local-server");
 			if (profile === undefined || typeof embedder.id !== "string" || typeof embedder.baseUrl !== "string" || typeof embedder.dimension !== "number") {
 				return undefined;
@@ -593,7 +618,7 @@ export function createEmbeddingSettingsService(deps: EmbeddingSettingsDeps): Emb
 			const profile = findProfile("local-server");
 			if (
 				profile === undefined ||
-				currentProfileId(embedder) !== "local-server" ||
+				currentProfileId(embedder, readSemantic(deps.env, deps.cwd)) !== "local-server" ||
 				!isJsonObject(embedder) ||
 				typeof embedder.id !== "string" ||
 				typeof embedder.baseUrl !== "string" ||

@@ -33,12 +33,15 @@ path is documentation for humans and agents only; it must never appear in
 application code, config, or scripts.
 
 The app consumes the librarian only through the dependency declared in
-`package.json` (`@autorag/librarian: file:./.upstream/autorag`). That path
-resolves inside the ignored `.upstream/autorag` clone, which
-`scripts/sync-librarian.mjs` checks out at the pinned release tag
-(`v2.10.3`, raised deliberately with the alignment changes a new librarian
-release needs) and builds. Never point the dependency at `file:..` or at the
-local
+`package.json` (`@autorag/librarian: file:./.upstream/librarian-package`). That path
+is a staging directory that `scripts/sync-librarian.mjs` fills from the ignored
+`.upstream/autorag` clone, which it checks out at the pinned release tag
+(`v2.10.4`, raised deliberately with the alignment changes a new librarian
+release needs) and builds. The staging directory holds only what the librarian
+publishes (`files` of its `package.json`, without devDependencies), so the install
+resolves the librarian's dependencies into the app's one `node_modules` and
+`@earendil-works/pi-*` exists once (pointing the dependency at the clone itself
+nests a second copy). Never point the dependency at `file:..` or at the local
 `/Volumes/SSD1/1/AutoRAG` checkout, never commit `.upstream`, and never copy
 librarian sources into this repository.
 

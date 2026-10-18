@@ -248,6 +248,23 @@ describe("createAutoRagConfigService", () => {
 
 		const ok = await service.set(["minSync", "embedder", "baseUrl"], "http://127.0.0.1:8080/v1");
 		expect(ok.error).toBeNull();
+
+		// Dazzi cloud embedding endpoint is allowed for minSync.embedder.baseUrl.
+		const dazziCloud = await service.set(["minSync", "embedder"], {
+			id: "openai:qwen/qwen3-embedding-0.6b",
+			baseUrl: "https://api.dazziapp.com",
+			dimension: 1024,
+			apiKeyEnv: "OPENAI_API_KEY",
+		});
+		expect(dazziCloud.error).toBeNull();
+		expect(dazziCloud.config.minSync).toMatchObject({
+			embedder: {
+				id: "openai:qwen/qwen3-embedding-0.6b",
+				baseUrl: "https://api.dazziapp.com",
+				dimension: 1024,
+				apiKeyEnv: "OPENAI_API_KEY",
+			},
+		});
 	});
 
 	it("applies a configPatch atomically and leaves disk untouched when any update is invalid", async () => {
@@ -292,6 +309,8 @@ describe("createAutoRagConfigService", () => {
 		const service = createAutoRagConfigService({ env: fixture.env, cwd: fixture.root });
 
 		await expect(service.set(["appIndexing", "excludeCodeFolders"], "yes")).rejects.toThrow(/excludeCodeFolders must be a boolean/);
+		await expect(service.set(["appIndexing", "semanticSearch"], "no")).rejects.toThrow(/semanticSearch must be a boolean/);
+		await expect(service.set(["appIndexing", "semanticSearch"], false)).resolves.toBeDefined();
 	});
 
 	it("applies set and remove updates in one configPatch and rejects the whole batch on failure", async () => {

@@ -6,9 +6,9 @@
 // config and index are never touched. Electron resolves the home folder from
 // the OS (not $HOME), so the lane deselects the real Desktop/Documents
 // candidates and adds two fixture folders through a stubbed folder dialog. The
-// local embedding model and llama runtime are linked in from the real AutoRAG
-// home when cached (otherwise the first index downloads them).
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
+// local native embedding model is referenced from the real MinSync cache when
+// present (otherwise the first index downloads it).
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
@@ -33,11 +33,15 @@ writeFileSync(join(DOCS, "report-q3.md"), "# Q3 report\n\nOperating cost fell be
 writeFileSync(join(DOCS, "notes.txt"), "Budget summary for the third quarter.\n");
 mkdirSync(AUTORAG_HOME, { recursive: true });
 mkdirSync(join(WORK, "config"), { recursive: true });
-const realHome = process.env.AUTORAG_HOME?.trim() || join(homeDir(), ".autorag");
-for (const dir of ["models", "runtime"]) {
-	if (existsSync(join(realHome, dir))) symlinkSync(join(realHome, dir), join(AUTORAG_HOME, dir), "dir");
-}
-
+const realMinsyncModels =
+	process.env.FASTEMBED_CACHE_DIR?.trim() ||
+	(process.platform === "win32"
+		? join(process.env.LOCALAPPDATA?.trim() || join(homeDir(), "AppData", "Local"), "minsync", "models")
+		: join(homeDir(), ".cache", "minsync", "models"));
+// The first argument (or QA_ONBOARDING_EMBED) picks the embedding card: none (default, keyword-only) or local. `bun run qa script` forwards arguments into the VM, environment variables do not. Cloud needs an account, so it is not drivable here.
+const EMBED = process.argv[2]?.trim() || process.env.QA_ONBOARDING_EMBED?.trim() || "none";
+const EMBED_CARD = { none: 0, local: 1 }[EMBED];
+if (EMBED_CARD === undefined) throw new Error(`the embed mode must be none or local, got ${EMBED}`);
 const failures = [];
 const check = (name, ok, detail = "") => {
 	console.log(`${ok ? "PASS" : "FAIL"} ${name}${detail ? ` — ${detail}` : ""}`);
@@ -54,7 +58,12 @@ const stub = createServer((request, response) => {
 });
 await new Promise((resolve) => stub.listen(0, "127.0.0.1", resolve));
 const stubUrl = `http://127.0.0.1:${stub.address().port}/v1`;
-const env = { AUTORAG_HOME, AUTORAG_CONFIG: CONFIG, AUTORAG_SKIP_DUPEY_CHECK: "1" };
+const env = {
+	AUTORAG_HOME,
+	AUTORAG_CONFIG: CONFIG,
+	AUTORAG_SKIP_DUPEY_CHECK: "1",
+	...(existsSync(realMinsyncModels) ? { FASTEMBED_CACHE_DIR: realMinsyncModels } : {}),
+};
 const userDataDir = join(WORK, "user-data");
 const app = await launchFinder({ userDataDir, env, onboarding: true, language: "ko" });
 const errors = [];
@@ -126,10 +135,14 @@ try {
 	await shot("04-folders");
 	await primary.click();
 
-	// embedding: local only; cloud card disabled.
-	await page.waitForSelector(".onb .embed-card");
-	check("cloud embedding is offered as unavailable", (await page.locator(".onb .embed-card.disabled").count()) === 1);
+	// embedding: the prototype's three cards; the cloud one is disabled while signed out.
+	await page.waitForSelector(".onb .em-card");
+	check("the three embedding modes are offered", (await page.locator(".onb .em-card").count()) === 3);
+	check("cloud embedding is offered as unavailable", (await page.locator(".onb .em-card.disabled").count()) === 1);
+	check("keyword-only is the preselected default", (await page.locator(".onb .em-card").nth(0).getAttribute("aria-checked")) === "true");
 	await shot("05-embedding");
+	await page.locator(".onb .em-card").nth(EMBED_CARD).click();
+	check(`the ${EMBED} card is selected`, (await page.locator(".onb .em-card").nth(EMBED_CARD).getAttribute("aria-checked")) === "true");
 	// Record the checking line from before the step opens: a machine with no
 	// connectors installed (a fresh QA VM) finishes every probe in milliseconds,
 	// so polling for the line afterwards races its removal.
@@ -214,8 +227,10 @@ try {
 	check("subtle background-start button is visible while indexing", await page.locator(".onb .ix-bg-start").isVisible());
 	const phaseLabels = await page.locator(".onb .ix-phases .ix-phase").allInnerTexts();
 	check(
-		"indexing phases show only local phases (parsed, minsync, finalizing)",
-		phaseLabels.length === 3 && !phaseLabels.some((label) => label.includes("데이터 소스")),
+		EMBED === "none"
+			? "indexing phases of a keyword-only run have no embedding phase (parsed, finalizing)"
+			: "indexing phases show only local phases (parsed, minsync, finalizing)",
+		phaseLabels.length === (EMBED === "none" ? 2 : 3) && !phaseLabels.some((label) => label.includes("데이터 소스")),
 		phaseLabels.join(" | "),
 	);
 	await shot("08-indexing");
@@ -247,7 +262,15 @@ try {
 		check(`${requestedSource} datasource config written`, configured.length > 0, JSON.stringify(configured));
 	}
 	check("config searchPaths = selected folders", JSON.stringify(raw.searchPaths) === JSON.stringify([DESK, DOCS]), JSON.stringify(raw.searchPaths));
-	check("config local embedder set", raw.minSync?.embedder?.profile === "qwen3-embedding-0.6b", JSON.stringify(raw.minSync?.embedder));
+	if (EMBED === "none") {
+		check("keyword-only: semantic search switched off in the config", raw.appIndexing?.semanticSearch === false, JSON.stringify(raw.appIndexing));
+		check("keyword-only: no embedder written", raw.minSync?.embedder === undefined, JSON.stringify(raw.minSync));
+		check("keyword-only: MinSync never ran (no .minsync index in the workspace)", !existsSync(join(AUTORAG_HOME, "workspace", ".autorag", "minsync")));
+		check("keyword-only: the parsed mirror exists", existsSync(join(AUTORAG_HOME, "workspace", ".autorag", "parsed", "index.json")));
+	} else {
+		check("config local embedder set", raw.minSync?.embedder?.id === "native:Qwen/Qwen3-Embedding-0.6B", JSON.stringify(raw.minSync?.embedder));
+		check("semantic search stays on", raw.appIndexing?.semanticSearch === undefined, JSON.stringify(raw.appIndexing));
+	}
 	check("first index lives in the AutoRAG home, not the app cwd", raw.workspacePath === join(AUTORAG_HOME, "workspace") && !existsSync(join(ROOT, ".autorag")), String(raw.workspacePath));
 	const final = await page.evaluate(() => window.autorag.onboarding.indexStatus());
 	check(
@@ -264,14 +287,52 @@ try {
 		check("AutoRAG opens the Finder at full size", fits(finder, [1440, 900]) && finder.min[0] === Math.min(1360, finder.work[0]), JSON.stringify(finder));
 		const state = JSON.parse(readFileSync(join(userDataDir, "onboarding", "state.json"), "utf8"));
 		check("onboarding marked completed", state.completed === true);
+		if (requestedSource.length > 0) {
+			const completedAt = Date.parse(final.finishedAt ?? final.startedAt ?? new Date().toISOString()) - 2_000;
+			const deadline = Date.now() + 120_000;
+			let matching = [];
+			while (Date.now() < deadline) {
+				const { activity, snapshot } = await page.evaluate(async () => ({
+					activity: await window.autorag.indexActivity.get(),
+					snapshot: await window.autorag.settings.sourcesList(),
+				}));
+				matching = snapshot.sources.filter(
+					(row) => row.id === requestedSource || row.type === requestedSource || row.id.startsWith(`${requestedSource}-`),
+				);
+				const done =
+					activity.state !== "running" &&
+					matching.length > 0 &&
+					matching.every(
+						(row) =>
+							row.status === "ready" &&
+							(row.index.state === "indexed" || row.index.state === "empty") &&
+							(row.index.indexedAt === null || Date.parse(row.index.indexedAt) >= completedAt),
+					);
+				if (done) break;
+				await page.waitForTimeout(1_000);
+			}
+			await page.waitForFunction(() => document.querySelector('.sidebar__activity[data-tone="run"]') === null, null, { timeout: 5_000 });
+			check(
+				`${requestedSource} datasource finishes indexing in the background`,
+				matching.length > 0 && matching.every((row) => row.index.state === "indexed" && (row.index.chunkCount ?? 0) > 0),
+				JSON.stringify(matching.map((row) => ({ id: row.id, status: row.status, index: row.index }))),
+			);
+		}
 		await page.screenshot({ path: join(EVIDENCE, "10-finder.png") });
+		if (requestedSource.length > 0) {
+			await page.locator(".sidebar__item--settings").click();
+			await page.waitForSelector(".settings-sidebar", { timeout: 10_000 });
+			await page.locator(".settings-sidebar .settings-nav-item", { hasText: "인덱싱" }).click();
+			await page.waitForSelector(".settings-sync-row", { timeout: 10_000 });
+			await page.screenshot({ path: join(EVIDENCE, "11-settings-indexing.png") });
+		}
 	}
 	check("no renderer errors", errors.length === 0, errors.slice(0, 3).join(" | "));
 } catch (error) {
 	failures.push(String(error));
 	console.error(error);
 } finally {
-	// The first index leaves two daemons pointing into WORK (llama-server,
+	// The first index leaves background helpers pointing into WORK (e.g.
 	// fsearch-cli watch); kill them by their command line before deleting it.
 	if (process.platform !== "win32") {
 		spawnSync("pkill", ["-9", "-f", WORK]);

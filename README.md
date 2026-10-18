@@ -11,7 +11,7 @@ Dazzi powered by [AutoRAG](https://github.com/Marker-Inc-Korea/AutoRAG).
 
 [![Website](https://img.shields.io/badge/dazziapp.com-f5b301?style=flat-square&logo=safari&logoColor=white)](https://dazziapp.com/)
 [![Platform](https://img.shields.io/badge/macOS%20%C2%B7%20Windows-111111?style=flat-square&logo=apple&logoColor=white)](#releases)
-[![License](https://img.shields.io/badge/license-AGPL--3.0-0a84ff?style=flat-square)](LICENSE)
+[![License](https://img.shields.io/badge/license-FSL--1.1--MIT%20(Fair%20Source)-0a84ff?style=flat-square)](LICENSE)
 [![Engine](https://img.shields.io/badge/engine-AutoRAG-7c3aed?style=flat-square&logo=github&logoColor=white)](https://github.com/Marker-Inc-Korea/AutoRAG)
 
 [Website](https://dazziapp.com/) · [Features](#features) · [Develop](#develop) · [Architecture](docs/architecture.md) · [Design](DESIGN.md) · [Releases](docs/release.md)
@@ -120,8 +120,9 @@ Connect the apps you already talk in; Dazzi searches them alongside your files.
 ### Private by design
 
 - **Embedded on this Mac.** Document understanding runs on a local
-  `qwen3-embedding-0.6b` model. File contents are never sent to a remote
-  embedder.
+  `Qwen/Qwen3-Embedding-0.6B` model by default. File contents are sent to a
+  remote embedder only if you choose Dazzi cloud embedding (Pro plan) and
+  agree to it in the app.
 - **Keys stay encrypted.** Sign-in tokens and API keys live in the system's
   encrypted store, never in a config file.
 - **Bring your own model.** Use Dazzi's managed models (Free, Air, Pro), or
@@ -132,7 +133,7 @@ Connect the apps you already talk in; Dazzi searches them alongside your files.
 > [!NOTE]
 > The librarian is **not** vendored. Lifecycle scripts clone the public
 > AutoRAG repository into the ignored `.upstream/autorag` at the pinned
-> release tag (`v2.10.3`), build it, and print the exact revision the app
+> release tag (`v2.10.4`), build it, and print the exact revision the app
 > runs against.
 
 **Prerequisites:** [Bun](https://bun.sh), Node.js 24+, and `dupey`
@@ -189,8 +190,14 @@ it drives, and the local embedding model, so one download is the whole install.
 
 ## License
 
-[AGPL-3.0-only](LICENSE). Bundled third-party components and their licenses are
-listed in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
+Dazzi is [Fair Source](https://fair.io/) software released under
+[**FSL-1.1-MIT**](LICENSE) (Functional Source License, Version 1.1, MIT Future
+License): free to use, read, modify, and redistribute for any non-competing
+purpose, and each release converts automatically to the MIT License two years
+after publication. It is built on the open-source
+[`@autorag/librarian`](https://github.com/Marker-Inc-Korea/AutoRAG) engine
+(Apache-2.0). Bundled third-party components and their licenses are listed in
+[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
 
 <div align="center">
 <br>

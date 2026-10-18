@@ -10,10 +10,17 @@ import { isJsonObject } from "../shared/settings-contract";
  * unit-testable without touching disk.
  */
 
-export interface EmbedderChoice {
-	readonly profile: string;
-	readonly dimension: number;
-}
+export type EmbedderChoice =
+	| {
+			readonly id: string;
+			readonly dimension: number;
+			readonly baseUrl?: string;
+			readonly apiKeyEnv?: string;
+	  }
+	| {
+			readonly profile: string;
+			readonly dimension: number;
+	  };
 
 export interface ByokModelChoice {
 	readonly provider: ByokProviderId;
@@ -42,6 +49,8 @@ export interface ApplyIndexingConfigInput {
 	readonly embedder: EmbedderChoice | null;
 	/** Null keeps the existing `workspacePath`; a path replaces it. */
 	readonly workspacePath: string | null;
+	/** False writes keyword-only mode (`appIndexing.semanticSearch: false`); true removes the switch. Absent leaves it as is. */
+	readonly semanticSearch?: boolean;
 	readonly model: ByokModelChoice | null;
 }
 
@@ -52,6 +61,8 @@ function obsidianAlias(index: number): string {
 function entriesFor(datasource: IndexingDatasource, home: string): Record<string, Record<string, unknown>> {
 	switch (datasource.id) {
 		case "kakao":
+			// With librarian >= 2.10.4 the kakao sidecar reads lazykatok's archive and embeds
+			// with the shared embedder, so `lazykatok index` (fastembed) is never run.
 			return { kakao: { instanceId: "default", connector: {} } };
 		case "github":
 			return {
@@ -118,7 +129,22 @@ export function applyIndexingConfig(input: ApplyIndexingConfigInput): Record<str
 	if (input.workspacePath !== null) raw.workspacePath = input.workspacePath;
 	if (input.embedder !== null) {
 		const minSync = isJsonObject(raw.minSync) ? raw.minSync : {};
-		raw.minSync = { ...minSync, embedder: { profile: input.embedder.profile, dimension: input.embedder.dimension } };
+		const embedder =
+			"profile" in input.embedder
+				? { profile: input.embedder.profile, dimension: input.embedder.dimension }
+				: {
+						id: input.embedder.id,
+						dimension: input.embedder.dimension,
+						...(input.embedder.baseUrl !== undefined ? { baseUrl: input.embedder.baseUrl } : {}),
+						...(input.embedder.apiKeyEnv !== undefined ? { apiKeyEnv: input.embedder.apiKeyEnv } : {}),
+					};
+		raw.minSync = { ...minSync, embedder };
+	}
+	if (input.semanticSearch !== undefined) {
+		const { semanticSearch: _previous, ...rest } = isJsonObject(raw.appIndexing) ? raw.appIndexing : {};
+		const appIndexing = input.semanticSearch ? rest : { ...rest, semanticSearch: false };
+		if (Object.keys(appIndexing).length > 0) raw.appIndexing = appIndexing;
+		else delete raw.appIndexing;
 	}
 	if (input.model !== null) {
 		raw.model = {

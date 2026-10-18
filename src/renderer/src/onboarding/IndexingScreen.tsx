@@ -1,9 +1,8 @@
 /** Step 9 — the immersive first-index screen, driven by the real IndexingStatus. */
 
 import type { CSSProperties, ReactElement } from "react";
-import type { IndexingPhase } from "../../../shared/onboarding-contract";
 import { cn } from "../lib/cn";
-import { TIPS, phaseIndex, type TipArt } from "./flow";
+import { TIPS, indexingPhases, phaseIndex, resolveEmbed, canSelectCloudEmbedding, type TipArt } from "./flow";
 import { BrandMark, brandVars, Icon } from "./marks";
 import { TipArt as TipArtView } from "./parts";
 import type { OnboardingCtx } from "./context";
@@ -94,12 +93,6 @@ function IxFloats(): ReactElement {
 	);
 }
 
-const PHASES: readonly { readonly id: IndexingPhase; readonly key: string }[] = [
-	{ id: "parsed", key: "parsed" },
-	{ id: "minsync", key: "minsync" },
-	{ id: "finalizing", key: "finalizing" },
-];
-
 function TipCard({ ctx }: { readonly ctx: OnboardingCtx }): ReactElement {
 	const { t, platform, tipIndex } = ctx;
 	const list = TIPS;
@@ -163,15 +156,20 @@ export function IndexingScreen({ ctx }: { readonly ctx: OnboardingCtx }): ReactE
 	const running = status?.state === "running";
 	const progress = success ? 100 : (status?.progress ?? 0);
 	const phase = status?.phase ?? null;
-	const activeIndex = phase === null ? -1 : phaseIndex(phase);
+	// The keyword-only path never embeds, so its strip has no embedding phase.
+	const embed = resolveEmbed(ctx.draft.embed, canSelectCloudEmbedding(ctx.account));
+	const phases = indexingPhases(embed);
+	const activeIndex = phase === null ? -1 : phaseIndex(embed, phase);
 	const totalFiles = status?.totalFiles ?? 0;
 	const processed = status?.processedFiles ?? 0;
 	const sources = status?.sources ?? [];
 
-	const phaseLabel = phase === null ? "" : t(`onboarding.indexing.phaseLabel.${phase}`);
+	const phaseLabel = phase === null ? t("onboarding.indexing.phaseLabel.parsed") : t(`onboarding.indexing.phaseLabel.${phase}`);
 	let statusDetail: string;
 	if (phase === "finalizing") {
 		statusDetail = t("onboarding.indexing.detailFinalizing");
+	} else if (phase === "minsync") {
+		statusDetail = t("onboarding.indexing.detailEmbedding");
 	} else if (status?.recentFolder != null && status.recentFile != null) {
 		statusDetail = `${status.recentFolder} · ${status.recentFile}`;
 	} else {
@@ -269,13 +267,13 @@ export function IndexingScreen({ ctx }: { readonly ctx: OnboardingCtx }): ReactE
 			</div>
 			<div className="ix-meta">{meta}</div>
 			<div className="ix-phases">
-				{PHASES.map((item, i) => {
+				{phases.map((id, i) => {
 					const done = success || i < activeIndex;
 					const active = !success && i === activeIndex && running;
 					return (
-						<span key={item.id} className={cn("ix-phase", done && "done", active && "active")}>
+						<span key={id} className={cn("ix-phase", done && "done", active && "active")}>
 							<i />
-							{t(`onboarding.indexing.phase.${item.key}`)}
+							{t(`onboarding.indexing.phase.${id}`)}
 						</span>
 					);
 				})}

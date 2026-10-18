@@ -101,6 +101,18 @@ describe("createIndexStatusService", () => {
 		expect(pending?.kind).toBe("pending");
 	});
 
+	it("reports a parsed file as included in keyword-only mode, where nothing is ever staged into MinSync", async () => {
+		const fixture = await createFixture();
+		const raw = JSON.parse(await readFile(fixture.configPath, "utf8"));
+		await writeFile(fixture.configPath, JSON.stringify({ ...raw, appIndexing: { semanticSearch: false } }));
+		const parsedOnly = await indexFile(fixture, "parsed-only.txt", false);
+		const service = createIndexStatusService({ env: fixture.env, cwd: fixture.workspace, onRefreshed: () => {} });
+
+		const [status] = await service.indexStatus([parsedOnly]);
+
+		expect(status).toMatchObject({ kind: "included", excluded: false, toggleable: true });
+	});
+
 	it("reports files outside every search path as outside and not toggleable", async () => {
 		const fixture = await createFixture();
 		const service = createIndexStatusService({ env: fixture.env, cwd: fixture.workspace, onRefreshed: () => {} });

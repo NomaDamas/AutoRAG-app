@@ -215,11 +215,14 @@
       "emptyTitle": "回答的依据\n将显示在此处。",
       "excerpts": "依据摘录",
       "showInFinder": "在访达中显示",
-      "openInBrowser": "在浏览器中打开"
+      "openInBrowser": "在浏览器中打开",
+      "evidenceFolder": "依据文件夹",
+      "evidenceFolderTooltip": "在临时文件夹标签页中打开当前对话的依据文件"
     }
   },
   "aiSearch": {
     "title": "AI 搜索",
+    "aiNotice": "回答由 AI 生成，可能不准确。请核对引用的来源。",
     "history": "对话记录",
     "historyShortcut": "对话记录 {{shortcut}}",
     "newChat": "新建对话",
@@ -299,7 +302,10 @@
   "confirm": {
     "emptyTrashTitle": "清倒废纸篓",
     "emptyTrashMessage": "废纸篓中的所有项目将被永久删除。此操作无法撤销。",
-    "emptyTrashAction": "清倒"
+    "emptyTrashAction": "清倒",
+    "closeEvidenceFolderTitle": "关闭依据文件夹",
+    "closeEvidenceFolderMessage": "关闭此标签页将删除并清理临时依据文件夹，原始文件不会受到影响。确定要关闭吗？",
+    "closeEvidenceFolderAction": "关闭"
   },
   "settings": {
     "title": "设置",
@@ -370,6 +376,9 @@
       "title": "直接向\n文件提问",
       "lead": "无需打开文件夹翻找。Dazzi 会阅读文档中的内容，并附上依据作答。",
       "note": "默认在本地处理。需要远程处理时，我们会先显示哪些内容将被发送。",
+      "usageStats": "发送匿名使用统计以帮助改进 Dazzi。不包含文件、搜索词或文档内容，可随时在设置中关闭。",
+      "errorReports": "应用崩溃或索引失败时发送错误报告，以帮助修复问题。不包含文件路径、文件名和文档内容，可随时在设置中更改。",
+      "usageStatsPolicy": "隐私政策",
       "chat": {
         "user": "上一季度的成本为什么下降了？",
         "replyLead": "营销成本比上季度下降了",
@@ -434,13 +443,12 @@
       "cancel": "取消",
       "skip": "不使用账户，改用自己的 API 密钥 (BYOK)",
       "offline": "无法连接服务器，显示的是上次确认的信息。",
-      "authNote": "登录方式（邮箱验证码、第三方登录）在浏览器的 Dazzi 登录页面选择。Dazzi 不保存请求内容，仅发送至零数据保留（ZDR）服务商。",
+      "authNote": "登录方式（邮箱验证码、第三方登录）在浏览器的 Dazzi 登录页面选择。",
       "agreeLead": "继续即表示您同意 Dazzi 的以下条款:",
       "agreeTerms": "服务条款",
       "agreePrivacy": "隐私政策",
       "agreeUse": "可接受使用政策",
-      "planLabel": "{{plan}} 套餐",
-      "signedInEnv": "正在使用环境变量中的 API 密钥"
+      "planLabel": "{{plan}} 套餐"
     },
     "permissions": {
       "eyebrow": "权限",
@@ -471,7 +479,7 @@
       },
       "network": {
         "name": "网络（防火墙）",
-        "desc": "云端嵌入和模型调用需要。首次启动时若出现 Windows 安全警告，请选择允许。",
+        "desc": "远程嵌入和模型调用需要。首次启动时若出现 Windows 安全警告，请选择允许。",
         "allow": "允许"
       }
     },
@@ -487,39 +495,42 @@
       "scanError": "无法读取",
       "summary": "{{folders}} 个文件夹 · {{files}} 个文件 · {{size}}",
       "summaryNote": "node_modules · .git · 超过 50 MiB 的文件会自动排除。",
-      "localEta": "本地约 {{minutes}} 分钟",
-      "cloudEta": "云端约 {{minutes}} 分钟",
-      "warning": "范围较广。选择子文件夹或云端嵌入可以更快看到首个结果。"
+      "localEta": "本地 (此 Mac) 约 {{minutes}} 分钟",
+      "cloudEta": "远程 约 {{minutes}} 分钟",
+      "warning": "范围较广。选择子文件夹或远程嵌入可以更快看到首个结果。"
     },
     "embedding": {
-      "eyebrow": "重要选择",
-      "title": "在哪里\n进行嵌入？",
-      "lead": "决定将文档转换为可搜索向量的处理在哪里进行。之后更改需要从头再来，会额外花费时间和成本。",
-      "files": "{{count}} 个",
-      "selectedFiles": "已选文件",
-      "reindexNote": "更改嵌入模型或处理位置会丢弃当前已构建的索引，必须从头重新创建。",
-      "localTitle": "在这台 Mac 上",
-      "localLead": "文件正文不会离开这台 Mac。",
-      "metricTime": "预计用时",
-      "metricDownload": "下载",
-      "metricPrivacy": "隐私",
-      "metricStorage": "存储",
-      "metricPlan": "套餐",
+      "eyebrow": "语义搜索",
+      "title": "如何使用嵌入？",
+      "groupLabel": "嵌入方式",
+      "card": {
+        "none": {
+          "name": "不使用",
+          "line": "仅关键词搜索"
+        },
+        "local": {
+          "name": "本地嵌入",
+          "lineMac": "在此 Mac 上处理",
+          "linePc": "在此 PC 上处理"
+        },
+        "cloud": {
+          "name": "远程嵌入",
+          "line": "在服务器上处理"
+        }
+      },
+      "meter": {
+        "performance": "所需性能",
+        "accuracy": "准确度",
+        "low": "低",
+        "high": "高",
+        "meh": "略逊",
+        "good": "好"
+      },
+      "meterAria": "{{label}}: {{value}}",
       "minutes": "约 {{minutes}} 分钟",
       "cached": "已就绪",
       "downloadUnknown": "检查中",
-      "privacyLocal": "本地",
-      "storageNone": "不存储",
-      "planPro": "仅限 Pro",
-      "bulletGpuMac": "使用 Apple Silicon GPU",
-      "bulletGpuWindows": "使用 GPU 加速（如可用）",
-      "bulletPower": "笔记本电脑建议连接电源",
-      "cloudBadge": "准备中",
-      "cloudTitle": "在云端",
-      "cloudLead": "处理更快，但你选择的文档正文会被发送。",
-      "cloudBulletPerf": "对 Mac 性能影响较小",
-      "cloudBulletNoStore": "Dazzi 不保存请求内容，仅发送至零数据保留（ZDR）服务商",
-      "privacyTable": "隐私政策中的模型数据表"
+      "cloudConsent": "我同意将所选文件夹中的文档正文发送至 Dazzi 服务器进行嵌入处理。处理后不会保留。"
     },
     "sources": {
       "eyebrow": "数据源",
@@ -554,7 +565,10 @@
       "eyebrow": "套餐",
       "title": "你打算如何使用？",
       "titleReady": "套餐已就绪",
-      "lead": "套餐决定 AI 用量和嵌入位置。可稍后在设置中更改。",
+      "lead": "套餐决定 AI 用量，远程嵌入仅 Pro 可用。可稍后在设置中更改。",
+      "leadCloud": "已选择远程嵌入。开始 7 天 Pro 免费试用即可继续。",
+      "leadCloudReady": "可以使用远程嵌入。请继续下一步。",
+      "cloudCallout": "远程嵌入仅限 Pro 套餐使用。绑定银行卡即可免费使用 7 天。",
       "badgeRecommended": "推荐",
       "badgeTrial": "试用进行中",
       "badgeSubscribed": "已订阅",
@@ -576,7 +590,7 @@
           "chip": "提问会发送至 Dazzi 模型",
           "training": "输入与输出可能用于改进服务",
           "feature": {
-            "a": "在这台 Mac 上本地嵌入",
+            "a": "本地嵌入或关闭",
             "b": "托管 AI 模型 · 基础用量",
             "c": "完整使用 Finder 和搜索功能"
           }
@@ -587,9 +601,9 @@
           "note": "每月 $4 · 随时取消",
           "tag": "每天轻松使用",
           "chip": "提问会发送至 Dazzi 模型",
-          "training": "输入与输出不用于模型训练",
+          "training": "Dazzi 不会将输入与输出用于模型训练",
           "feature": {
-            "a": "在这台 Mac 上本地嵌入",
+            "a": "本地嵌入或关闭",
             "b": "托管 AI 模型 · 充足用量",
             "c": "包含 Free 的全部功能"
           }
@@ -600,9 +614,9 @@
           "note": "每月 $20 · 随时取消",
           "tag": "最快的首次索引",
           "chip": "问题将发送到 Dazzi 模型",
-          "training": "输入与输出不用于模型训练",
+          "training": "Dazzi 不会将输入与输出用于模型训练",
           "feature": {
-            "a": "在这台 Mac 上本地嵌入（内容不会被发送）",
+            "a": "可使用远程嵌入",
             "b": "托管 AI 模型 · 最高用量",
             "c": "包含 Air 的全部功能"
           }
@@ -615,7 +629,7 @@
           "chip": "需要输入 API 密钥",
           "training": "遵循您所选服务商的政策",
           "feature": {
-            "a": "在这台 Mac 上本地嵌入",
+            "a": "本地嵌入或关闭",
             "b": "自行选择 provider 和模型",
             "c": "仅向所选 provider 发送请求"
           }
@@ -665,6 +679,7 @@
       "waitingNote": "正在准备首次索引。",
       "running": "{{phase}}…",
       "detailParsing": "正在读取文档",
+      "detailEmbedding": "正在构建向量索引",
       "detailFinalizing": "正在优化搜索索引",
       "phaseLabel": {
         "parsed": "正在读取文档",
@@ -1047,6 +1062,10 @@
     },
     "embedding": {
       "profiles": {
+        "none": {
+          "label": "不使用(仅关键词搜索)",
+          "description": "不对文档做嵌入,只使用关键词搜索。无需下载模型或等待嵌入,语义搜索和混合搜索会关闭。"
+        },
         "nativeQwen3": {
           "description": "直接在此 Mac 上运行的默认文档理解模型(1024 维)。无需单独的服务器。"
         },
@@ -1074,13 +1093,14 @@
         "incompatibleSources": "有数据源无法跟随此模型：{{ids}}"
       },
       "reasons": {
+        "keywordOnly": "仅使用关键词搜索,因此该数据源也不做嵌入。",
         "mailcrawlIncompatible": "mailcrawl 仅支持内置的 Qwen3，无法使用任意的 HTTP 嵌入服务器。",
         "mailcrawlPropagated": "在 connector.env 中记录嵌入提供商(模型更改时 mailcrawl 会自动重新建立索引)。",
         "obsidianIncompatible": "qmd (obsidian) 只能使用本地 GGUF 模型，因此无法使用 HTTP 嵌入服务器。",
         "obsidianPropagated": "在 qmd 子进程上设置 QMD_EMBED_MODEL，并用 `qmd embed -f` 重新建立索引。",
         "discordIncompatible": "此应用无法在 loopback 上提供 Dazzi 嵌入运行时(非公开导出)。请选择嵌入服务器以传递给 discrawl。",
         "discordPropagated": "重写 Dazzi 管理的 discrawl config，并用 `discrawl embed --rebuild` 重新建立索引。",
-        "kakaoIncompatible": "lazykatok 使用其自带的内置嵌入器(EmbeddingGemma)，无法通过 Dazzi 共享 config 更改(由原生设置拥有)。",
+        "kakaoSharedEmbedder": "KakaoTalk 通过 lazykatok 归档之上的 sidecar 使用 Dazzi 共享嵌入器；更换嵌入器后会在下次同步时重新嵌入。",
         "githubGistIncompatible": "GitHubGistSkill 不是 @autorag/librarian 的公开导出，因此应用无法指定其嵌入器(由运行时网关配置固定)。",
         "clawgalleryNotApplicable": "ClawGallery 是图像(VDR)索引，不使用文本嵌入。",
         "larkNotApplicable": "Lark 仅使用远程 API 搜索，拒绝本地嵌入。",
@@ -1291,6 +1311,12 @@
       "notAbsolute": "预览路径无效",
       "missing": "找不到文件",
       "notFile": "无法预览文件夹"
+    },
+    "odf": {
+      "readFailed": "无法读取文档",
+      "openFailed": "无法打开演示文稿",
+      "noSlides": "没有幻灯片",
+      "noPreview": "此文档没有预览图像"
     }
   },
   "settingsCore": {
@@ -1373,6 +1399,8 @@
       "privacyTitle": "隐私",
       "errorReporting": "发送错误报告",
       "errorReportingHint": "应用崩溃或索引失败时，会把原因发送给开发团队。不会发送文件路径、文件名或文档内容。",
+      "usageAnalytics": "发送使用统计",
+      "usageAnalyticsHint": "仅匿名向开发团队发送使用了哪些功能以及使用频率。不会发送文件路径、文件名、搜索词、提问、文档内容或账户信息；关闭后匿名 ID 也会被删除。",
       "docLanguagesTitle": "文档语言",
       "docLanguagesDesc": "读取和搜索文档时优先使用的语言。",
       "docLanguagesHint": "可以选择多个。",
@@ -1391,7 +1419,6 @@
       "offline": "无法连接服务器，显示最后确认的信息。",
       "signOut": "退出登录",
       "signIn": "登录",
-      "hintEnv": "已通过环境变量 AUTORAG_API_KEY 登录，无法在应用内退出登录。",
       "hintSignedIn": "删除存储在此 Mac 上的密钥。可在 Dazzi 网站的 API 密钥页面吊销该密钥。",
       "hintSignedOut": "浏览器将打开，确认后会回到本应用。",
       "signInBrowser": "在浏览器中登录",
@@ -1504,7 +1531,6 @@
         "notSignedIn": "未登录。"
       },
       "disconnect": {
-        "envLocked": "已通过环境变量 AUTORAG_API_KEY 登录，无法在应用内退出登录。请自行删除该环境变量。",
         "title": "要断开 {{name}} 吗？",
         "body": "删除已保存的凭据并将其从列表中移除。使用该服务的角色可能需要选择新模型。",
         "action": "断开连接"
@@ -1569,8 +1595,8 @@
       "errorModelRequired": "请输入嵌入服务器模型名称。",
       "errorDimension": "嵌入服务器维度必须为正整数。",
       "title": "文档理解模型",
-      "hint": "分析文档的含义。文档内容不会离开此 Mac。",
-      "body": "用于分析文档含义的嵌入模型。只能选择 Dazzi 运行时和本机服务器，文档内容不会离开此 Mac。",
+      "hint": "分析文档的含义。除非选择云端嵌入，文档内容不会离开此 Mac。",
+      "body": "用于分析文档含义的嵌入模型。此处只能选择 Dazzi 运行时和本机服务器；仅当你在设置时选择了云端嵌入，文档内容才会离开此 Mac。",
       "dimension": "{{count}} 维",
       "modelName": "模型名称",
       "baseUrl": "服务器地址",

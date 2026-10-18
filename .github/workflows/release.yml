@@ -58,7 +58,7 @@ jobs:
           node-version: 24
       - uses: dtolnay/rust-toolchain@stable
 
-      # `bun install` resolves the `file:./.upstream/autorag` dependency before
+      # `bun install` resolves the `file:./.upstream/librarian-package` dependency before
       # its `preinstall` hook runs, so the librarian is cloned and built first.
       - name: Sync librarian
         run: node scripts/sync-librarian.mjs
@@ -78,6 +78,9 @@ jobs:
           AUTORAG_SKIP_DUPEY_CHECK: "1"
           # A public write-only key, not a secret; unset leaves error reporting out of the build.
           MAIN_VITE_SENTRY_DSN: ${{ vars.SENTRY_DSN }}
+          # A public write-only key, not a secret; unset leaves usage statistics out of the build.
+          MAIN_VITE_POSTHOG_KEY: ${{ vars.POSTHOG_KEY }}
+          MAIN_VITE_POSTHOG_HOST: ${{ vars.POSTHOG_HOST }}
         run: bun run build
 
       - name: Stage dependency tools and embedding model
@@ -221,6 +224,9 @@ jobs:
           AUTORAG_SKIP_DUPEY_CHECK: "1"
           # A public write-only key, not a secret; unset leaves error reporting out of the build.
           MAIN_VITE_SENTRY_DSN: ${{ vars.SENTRY_DSN }}
+          # A public write-only key, not a secret; unset leaves usage statistics out of the build.
+          MAIN_VITE_POSTHOG_KEY: ${{ vars.POSTHOG_KEY }}
+          MAIN_VITE_POSTHOG_HOST: ${{ vars.POSTHOG_HOST }}
         run: bun run build
 
       - name: Stage dependency tools and embedding model

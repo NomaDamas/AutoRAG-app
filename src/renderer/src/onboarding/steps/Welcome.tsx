@@ -2,8 +2,9 @@
 
 import type { ReactElement, ReactNode } from "react";
 import { BrandMark, brandVars, Icon } from "../marks";
-import { Eyebrow, Multiline, SplitScreen } from "../parts";
+import { Eyebrow, Multiline, SplitScreen, openExternal } from "../parts";
 import { WELCOME_BRANDS } from "../flow";
+import { accountLegalUrl } from "../../../../shared/account-contract";
 import type { OnboardingCtx } from "../context";
 
 interface FeatureCardProps {
@@ -46,6 +47,24 @@ export function WelcomeStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElem
 						<Icon name="shield-check" size={14} />
 						<span>{t("onboarding.welcome.note")}</span>
 					</div>
+					<label className="consent usage-consent">
+						<input type="checkbox" checked={ctx.shareUsage} onChange={(event) => ctx.setShareUsage(event.target.checked)} />
+						<span>
+							{t("onboarding.welcome.usageStats")}{" "}
+							<button type="button" className="inline-link" onClick={() => openExternal(accountLegalUrl(ctx.account?.baseUrl, "privacy"))}>
+								{t("onboarding.welcome.usageStatsPolicy")}
+							</button>
+						</span>
+					</label>
+					<label className="consent usage-consent">
+						<input type="checkbox" checked={ctx.shareErrors} onChange={(event) => ctx.setShareErrors(event.target.checked)} />
+						<span>
+							{t("onboarding.welcome.errorReports")}{" "}
+							<button type="button" className="inline-link" onClick={() => openExternal(accountLegalUrl(ctx.account?.baseUrl, "privacy"))}>
+								{t("onboarding.welcome.usageStatsPolicy")}
+							</button>
+						</span>
+					</label>
 				</>
 			}
 		>

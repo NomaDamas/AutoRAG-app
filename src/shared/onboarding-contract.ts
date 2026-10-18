@@ -14,8 +14,8 @@
  * browser (account-contract.ts) and the plan step reads the entitlement the
  * hosted service reports and opens its hosted checkout. The draft keeps no
  * account or payment state; both come from `window.autorag.account`.
- * Cloud embedding stays unavailable: corpus text never goes to a remote
- * embedder (AGENTS.md), so the first index always embeds on this machine.
+ * Cloud embedding is available once signed in to Dazzi (Pro plan required).
+ * Local embedding runs on this machine without sending corpus text off-device.
  */
 
 export const ONBOARDING_CHANNELS = {
@@ -62,6 +62,13 @@ export const LOCAL_FILES_PER_MINUTE = 85;
 /** Files per minute a cloud embedder would sustain; shown only as the comparison figure. */
 export const CLOUD_FILES_PER_MINUTE = 900;
 
+/**
+ * Files per minute the keyword-only path sustains (documents are read and listed, never embedded).
+ * With a floor of {@link NONE_MIN_MINUTES}: the folder walk and parse have a fixed cost.
+ */
+export const NONE_FILES_PER_MINUTE = 450;
+export const NONE_MIN_MINUTES = 8;
+
 export type OnboardingStepId =
 	| "welcome"
 	| "permissions"
@@ -73,8 +80,14 @@ export type OnboardingStepId =
 	| "model"
 	| "indexing";
 
-export type PlanId = "free" | "air" | "pro" | "byok";
+/**
+ * How documents are made searchable by meaning. `none` is keyword search only:
+ * nothing is embedded, MinSync never runs, and no source keeps a semantic or
+ * hybrid method. `local` embeds on this device; `cloud` uses the Dazzi embedder.
+ */
+export type EmbedMode = "none" | "local" | "cloud";
 
+export type PlanId = "free" | "air" | "pro" | "byok";
 export type ByokProviderId = "anthropic" | "openai" | "openrouter" | "google" | "ollama" | "openai-compatible";
 
 /**
@@ -113,6 +126,8 @@ export interface OnboardingDraft {
 	readonly launchAtLogin: boolean;
 	/** Candidate and user-added folders, in display order. */
 	readonly folders: readonly OnboardingFolderChoice[];
+	readonly embed?: EmbedMode;
+	readonly cloudConsent?: boolean;
 	readonly sources: readonly OnboardingSourceChoice[];
 	readonly plan: PlanId;
 	/** The plan step was passed once; it then leaves the step list (back skips it). */
@@ -235,6 +250,7 @@ export type ModelVerifyResult =
 
 export interface IndexingRequest {
 	readonly folders: readonly string[];
+	readonly embed?: EmbedMode;
 	readonly sources: readonly { readonly id: SourceId }[];
 	readonly plan: PlanId;
 	/** BYOK only. */

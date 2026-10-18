@@ -51,6 +51,7 @@ const LANES = [
 	{ name: "trash-restore", script: "run-qa-finder-trash-restore.mjs", timeout: 480 },
 	{ name: "undo-history", script: "run-qa-finder-undo-history.mjs", timeout: 480 },
 	{ name: "evidence-panel", script: "run-qa-finder-evidence-panel.mjs", timeout: 300 },
+	{ name: "evidence-folder", script: "run-qa-finder-evidence-folder.mjs", timeout: 300 },
 	{ name: "split-panes", script: "run-qa-finder-split-panes.mjs", timeout: 300 },
 	{ name: "ai-search-images", script: "run-qa-finder-ai-search-images.mjs", timeout: 300 },
 	{ name: "ai-search-steer", script: "run-qa-finder-ai-search-steer.mjs", timeout: 300 },
@@ -62,9 +63,11 @@ const LANES = [
 	{ name: "global-appearance", script: "run-qa-global-appearance.mjs", timeout: 300 },
 	{ name: "quick-look-reference", script: "run-qa-quick-look-reference.mjs", timeout: 420 },
 	{ name: "quick-look-data", script: "run-qa-quick-look-data.mjs", timeout: 300 },
+	{ name: "quick-look-heic", script: "run-qa-quick-look-heic.mjs", timeout: 240 },
 	{ name: "fs-worker-crash", script: "run-qa-finder-fs-worker-crash.mjs", timeout: 180 },
 	{ name: "quit-clean", script: "run-qa-finder-quit-clean.mjs", timeout: 600 },
-	{ name: "onboarding", script: "run-qa-onboarding.mjs", timeout: 900 }
+	{ name: "onboarding", script: "run-qa-onboarding.mjs", timeout: 900 },
+	{ name: "analytics", script: "run-qa-analytics.mjs", timeout: 600 }
 ];
 
 /**

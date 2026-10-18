@@ -9,19 +9,20 @@
  *   tools/node/       Node 24 LTS + npm (also the runtime of the npm-based CLIs)
  *   tools/npm/        mailcrawl, qmd, kordoc and their node_modules
  *   tools/manifest.json   what was staged: name, version, source, sha256
- *   seed/             Qwen3 embedding model + llama.cpp runtime for first launch
+ *   seed/             native Qwen3-Embedding-0.6B checkpoint for first launch
  *
  * Versions are resolved at run time from the publishers' "latest" (GitHub
  * releases, crates.io, npm, nodejs.org), so every release ships the newest
- * dependencies; manifest.json records exactly what that was. The embedding
- * model and llama.cpp build are the exception: the librarian pins them by
- * sha256 in its own manifest, which is the source of truth read here.
+ * dependencies; manifest.json records exactly what that was. The native
+ * embedding model is the exception: it is pinned by commit revision and sha256
+ * so the bundled weights never drift silently.
  *
  * Each platform is staged on a matching host (native compiles, native npm
  * prebuilds): the macOS stage on an Apple Silicon Mac, the Windows stage on a
  * Windows x64 machine.
  */
 
+import { createHash } from "node:crypto";
 import { chmodSync, copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, relative } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -293,36 +294,49 @@ async function stageAutoragCli() {
 	record({ name: "autorag", version: manifest.version, source: "@autorag/librarian (public origin/main, built by scripts/sync-librarian.mjs)" });
 }
 
-/** Qwen3 embedding model and llama.cpp runtime, pinned by the librarian's own manifest. */
+/**
+ * Native Qwen3 embedding model (`Qwen/Qwen3-Embedding-0.6B`), pinned by commit
+ * and SHA-256 in the Hugging Face Hub cache layout that `minsync` (`fastembed` /
+ * `hf-hub`) and `mailcrawl` read directly without network access.
+ */
+const NATIVE_QWEN3_REPO_DIR = "models--Qwen--Qwen3-Embedding-0.6B";
+const NATIVE_QWEN3_REVISION = "97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3";
+const NATIVE_QWEN3_BASE_URL = `https://huggingface.co/Qwen/Qwen3-Embedding-0.6B/resolve/${NATIVE_QWEN3_REVISION}`;
+const NATIVE_QWEN3_FILES = [
+	{ name: "config.json", sha256: "b5bf1f51fc45be473a54718cef92448d90a1be001bf9b9a44b8c7f10a19feaa9" },
+	{ name: "tokenizer.json", sha256: "def76fb086971c7867b829c23a26261e38d9d74e02139253b38aeb9df8b4b50a" },
+	{ name: "model.safetensors", sha256: "0437e45c94563b09e13cb7a64478fc406947a93cb34a7e05870fc8dcd48e23fd" },
+];
+
 async function stageSeed() {
-	const upstream = await import(pathToFileURL(join(ROOT, ".upstream", "autorag", "src", "embedding-runtime", "manifest.ts")).href);
-	const model = upstream.MODEL_ASSETS.qwen3;
-	const runtime = upstream.platformRuntimeAsset(target.llama);
 	rmSync(SEED, { recursive: true, force: true });
-	mkdirSync(join(SEED, "models"), { recursive: true });
-	mkdirSync(join(SEED, "runtime"), { recursive: true });
-	const modelFilename = basename(new URL(model.url).pathname);
-	const modelFile = await download(model.url, modelFilename, model.sha256);
-	const runtimeFile = await download(runtime.url, runtime.filename, runtime.sha256);
-	copyFileSync(modelFile.path, join(SEED, "models", modelFilename));
+	const refsDir = join(SEED, NATIVE_QWEN3_REPO_DIR, "refs");
+	const snapshotDir = join(SEED, NATIVE_QWEN3_REPO_DIR, "snapshots", NATIVE_QWEN3_REVISION);
+	mkdirSync(refsDir, { recursive: true });
+	mkdirSync(snapshotDir, { recursive: true });
+	const refRel = `${NATIVE_QWEN3_REPO_DIR}/refs/main`;
+	const refContent = Buffer.from(NATIVE_QWEN3_REVISION, "utf8");
+	writeFileSync(join(SEED, refRel), refContent);
+	const refSha256 = createHash("sha256").update(refContent).digest("hex");
 	const files = [
-		{ path: `models/${modelFilename}`, destination: `models/${modelFilename}`, sha256: model.sha256, bytes: statSync(join(SEED, "models", modelFilename)).size },
+		{ path: refRel, destination: refRel, sha256: refSha256, bytes: refContent.length },
 	];
-	if (target.os === "darwin") {
-		// A notarized app signs every Mach-O it carries, and the binaries inside the pinned archive
-		// cannot be signed. Ship the runtime extracted, as the librarian lays it out
-		// (runtime/<archive>.extracted/), with the marker that lets it stand in for the archive.
-		const tree = `runtime/${runtime.filename}.extracted`;
-		extract(runtimeFile.path, join(SEED, tree));
-		writeFileSync(join(SEED, tree, ".autorag-archive-sha256"), `${runtime.sha256}\n`);
-		files.push({ kind: "tree", path: tree, destination: tree });
-	} else {
-		copyFileSync(runtimeFile.path, join(SEED, "runtime", runtime.filename));
-		files.push({ path: `runtime/${runtime.filename}`, destination: `runtime/${runtime.filename}`, sha256: runtime.sha256, bytes: statSync(join(SEED, "runtime", runtime.filename)).size });
+	for (const asset of NATIVE_QWEN3_FILES) {
+		const url = `${NATIVE_QWEN3_BASE_URL}/${asset.name}`;
+		const downloaded = await download(url, `Qwen3-Embedding-0.6B-${NATIVE_QWEN3_REVISION.slice(0, 12)}-${asset.name}`, asset.sha256);
+		const rel = `${NATIVE_QWEN3_REPO_DIR}/snapshots/${NATIVE_QWEN3_REVISION}/${asset.name}`;
+		const destination = join(SEED, rel);
+		copyFileSync(downloaded.path, destination);
+		files.push({ path: rel, destination: rel, sha256: asset.sha256, bytes: statSync(destination).size });
 	}
 	writeFileSync(join(SEED, "manifest.json"), `${JSON.stringify({ schema: 1, files }, null, 2)}\n`);
-	record({ name: "qwen3-embedding-0.6b", version: model.revision.slice(0, 12), source: model.url, sha256: model.sha256, verifiedAgainstPublisherDigest: true });
-	record({ name: "llama.cpp-runtime", version: runtime.version, source: runtime.url, sha256: runtime.sha256, verifiedAgainstPublisherDigest: true });
+	record({
+		name: "qwen3-embedding-0.6b-native",
+		version: NATIVE_QWEN3_REVISION.slice(0, 12),
+		source: `${NATIVE_QWEN3_BASE_URL}/model.safetensors`,
+		sha256: NATIVE_QWEN3_FILES[2].sha256,
+		verifiedAgainstPublisherDigest: true,
+	});
 }
 
 // --------------------------------------------------------------------------

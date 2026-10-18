@@ -245,6 +245,12 @@ export function createFsWorkerService(deps: FsWorkerServiceDeps): FsWorkerServic
 			if (typeof format !== "string" || !isNewFileFormatId(format)) throw new Error(t("main.worker.unknownFormat", { format: String(format) }));
 			return fsService.createFile(stringArg(args, 0, "directory"), format);
 		},
+		createEvidenceFolder: (args) =>
+			fsService.createEvidenceFolder(
+				stringsArg(args, 0, "paths"),
+				typeof args[1] === "string" ? args[1] : undefined,
+			),
+		removeEvidenceFolder: (args) => fsService.removeEvidenceFolder(stringArg(args, 0, "folderPath")),
 		trash: async (args) => {
 			const result = await fsService.trash(stringsArg(args, 0, "paths"));
 			if (result.ok.length > 0) {
@@ -329,7 +335,7 @@ export function createFsWorkerService(deps: FsWorkerServiceDeps): FsWorkerServic
 			// The index daemon (Everything / fsearch) is a separate OS process that
 			// outlives the app unless asked to exit; left running it pins userData.
 			// `stop()` reports its own failures, so it cannot block the watch release.
-			await Promise.all([watch.dispose(), fileNameSearch.stop()]);
+			await Promise.all([watch.dispose(), fileNameSearch.stop(), fsService.disposeEvidenceFolders?.() ?? Promise.resolve()]);
 		},
 	};
 }

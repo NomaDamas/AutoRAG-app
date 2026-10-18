@@ -9,6 +9,7 @@ import type {
 	ByokProviderId,
 	DetectedModelProvider,
 	DetectedSource,
+	EmbedMode,
 	EmbeddingInfo,
 	FolderCandidate,
 	FolderScan,
@@ -51,6 +52,10 @@ export interface OnboardingCtx {
 	readonly account: AccountStatus | null;
 	readonly paying: boolean;
 	readonly tipIndex: number;
+	/** The welcome step's "send anonymous usage statistics" checkbox; saved to Settings when the user continues from that step. */
+	readonly shareUsage: boolean;
+	/** The welcome step's "send error reports" checkbox; saved to Settings when the user continues from that step. */
+	readonly shareErrors: boolean;
 	readonly t: Translate;
 
 	patch(patch: Partial<OnboardingDraft>): void;
@@ -65,6 +70,9 @@ export interface OnboardingCtx {
 	toggleAllFolders(): void;
 	addFolders(): void;
 
+	setEmbedMode(mode: EmbedMode): void;
+	setCloudConsent(consent: boolean): void;
+
 	setSourceOn(id: SourceId, on: boolean): void;
 
 	choosePlan(plan: PlanId): void;
@@ -78,6 +86,8 @@ export interface OnboardingCtx {
 	/** Re-reads the account from the server (the pay overlay's "check payment"). */
 	refreshAccount(): void;
 	setLaunchAtLogin(enabled: boolean): void;
+	setShareUsage(value: boolean): void;
+	setShareErrors(value: boolean): void;
 	requestNotifications(): void;
 	openNotificationSettings(): void;
 	checkNetwork(): void;

@@ -31,6 +31,9 @@
  * same file twice.
  */
 
+import { extname } from "node:path";
+import { realpath } from "node:fs/promises";
+import { EMBEDDED_THUMBNAIL_EXTENSIONS, readEmbeddedThumbnail } from "../preview/node/odf";
 import { errorMessage } from "./fs-entry";
 import { ICON_SIZE, iconUrl } from "./icon-protocol";
 import { createPriorityGate, type PriorityGate } from "./priority-gate";
@@ -75,13 +78,16 @@ const NATIVE_THUMBNAIL_EXTENSIONS = new Set([
 	// (Numbers, Pages, Keynote). Windows has no thumbnailer for them and falls
 	// through to the type icon.
 	"numbers", "pages", "key",
+	// OpenDocument packages and `.potx` are not rendered by Quick Look; their
+	// tile is the first-page image the package embeds (`odf.ts`), on every platform.
 	// A macOS application bundle is a directory on disk, but Quick Look renders
 	// the app's own icon for it — at the listing tier and at the Inspector's
 	// 640px tier — so it takes this lane exactly like a document does.
 	"app",
 ]);
 export function isNativeThumbnailExtension(ext: string): boolean {
-	return NATIVE_THUMBNAIL_EXTENSIONS.has(ext.toLowerCase().replace(/^\./, ""));
+	const key = ext.toLowerCase().replace(/^\./, "");
+	return NATIVE_THUMBNAIL_EXTENSIONS.has(key) || EMBEDDED_THUMBNAIL_EXTENSIONS.has(key);
 }
 
 export interface IconTarget {
@@ -228,18 +234,35 @@ class IconCache {
 }
 
 async function defaultThumbnail(path: string, size: number): Promise<Uint8Array | null> {
+	// An OpenDocument package or a PowerPoint template carries its own first
+	// page; Quick Look would only answer with a generic type icon for it. The
+	// icon cache serves PNG, so a JPEG thumbnail is re-encoded.
+	const ext = extname(path).slice(1).toLowerCase();
+	if (EMBEDDED_THUMBNAIL_EXTENSIONS.has(ext)) {
+		const embedded = await readEmbeddedThumbnail(path, ext);
+		if (embedded === null || embedded.mime === "image/png") return embedded?.bytes ?? null;
+		const { nativeImage } = await import("electron");
+		const image = nativeImage.createFromBuffer(Buffer.from(embedded.bytes));
+		return image.isEmpty() ? null : image.toPNG();
+	}
 	// Dynamic: `electron` is a main-process-only module and is not importable when
 	// this file is loaded outside Electron (unit tests inject `thumbnail` instead).
-	const { nativeImage } = await import("electron");
-	const image = await nativeImage.createThumbnailFromPath(path, { width: size, height: size });
+	const [{ nativeImage }, resolved] = await Promise.all([
+		import("electron"),
+		realpath(path).catch(() => path),
+	]);
+	const image = await nativeImage.createThumbnailFromPath(resolved, { width: size, height: size });
 	return image.isEmpty() ? null : image.toPNG();
 }
 
 async function defaultSystemIcon(path: string): Promise<Uint8Array | null> {
 	// Dynamic: `electron` is a main-process-only module and is not importable when
 	// this file is loaded outside Electron (unit tests inject `systemIcon` instead).
-	const { app } = await import("electron");
-	const image = await app.getFileIcon(path, { size: "normal" });
+	const [{ app }, resolved] = await Promise.all([
+		import("electron"),
+		realpath(path).catch(() => path),
+	]);
+	const image = await app.getFileIcon(resolved, { size: "normal" });
 	return image.isEmpty() ? null : image.toPNG();
 }
 
@@ -358,7 +381,11 @@ export function createIconProvider(deps: IconProviderDeps = {}): IconSource {
 			cache.set(key, bytes);
 			resolvers.get(key)?.(bytes);
 		};
-		const generation = usesNativeThumbnails ? runThumbnails(missing, resolve, gate, priority) : runSystem(missing, resolve, priority);
+		// Other platforms use the OS icon, except for packages that embed a
+		// first page (OpenDocument, `.potx`), which is read the same way everywhere.
+		const thumbnailed = usesNativeThumbnails ? missing : missing.filter((target) => EMBEDDED_THUMBNAIL_EXTENSIONS.has(target.ext.toLowerCase()));
+		const systemOnly = usesNativeThumbnails ? [] : missing.filter((target) => !EMBEDDED_THUMBNAIL_EXTENSIONS.has(target.ext.toLowerCase()));
+		const generation = Promise.all([runThumbnails(thumbnailed, resolve, gate, priority), runSystem(systemOnly, resolve, priority)]).then(() => undefined);
 		void generation.catch((error: unknown) => {
 			// Pool-level failure: the whole batch degrades to "no icon".
 			warn(`file-icon: icon generation failed for ${missing.length} file(s): ${errorMessage(error)}`);

@@ -2209,3 +2209,107 @@ describe("Recycle Bin restore and empty (Windows)", () => {
 		expect(await readdir(sidDir)).toEqual(["desktop.ini"]);
 	});
 });
+
+describe("Evidence Folder (Ask-as-Smart-Folder)", () => {
+	it("creates a temp folder with symlinks, deduplicates paths, and resolves collision names without copying bytes", async () => {
+		const dirA = join(root, "dirA");
+		const dirB = join(root, "dirB");
+		await mkdir(dirA, { recursive: true });
+		await mkdir(dirB, { recursive: true });
+		const fileA = join(dirA, "policy.md");
+		const fileB = join(dirB, "policy.md");
+		const fileC = join(dirA, "budget.xlsx");
+		await writeFile(fileA, "policy A");
+		await writeFile(fileB, "policy B");
+		await writeFile(fileC, "budget C");
+
+		const service = createFsService(makeDeps(root).deps);
+		const folderPath = await service.createEvidenceFolder(
+			[fileA, fileA, fileB, fileC, join(root, "missing.txt")],
+			"Evidence Folder",
+		);
+
+		expect(basename(folderPath)).toBe("Evidence Folder");
+		const listing = await service.listDir(folderPath);
+		expect(listing.entries.map((e) => e.name).sort()).toEqual(["budget.xlsx", "policy copy.md", "policy.md"]);
+		for (const entry of listing.entries) {
+			expect(entry.flags & FS_ENTRY_SYMLINK).toBe(FS_ENTRY_SYMLINK);
+		}
+		expect(await readFile(join(folderPath, "policy.md"), "utf8")).toBe("policy A");
+		expect(await readFile(join(folderPath, "policy copy.md"), "utf8")).toBe("policy B");
+		expect(await readFile(join(folderPath, "budget.xlsx"), "utf8")).toBe("budget C");
+	});
+
+	it("supports rename, copy/paste, and move on Evidence Folder entries without mutating original source files", async () => {
+		const srcDir = join(root, "src");
+		const destDir = join(root, "dest");
+		await mkdir(srcDir, { recursive: true });
+		await mkdir(destDir, { recursive: true });
+		const origA = join(srcDir, "a.txt");
+		const origB = join(srcDir, "b.txt");
+		await writeFile(origA, "content A");
+		await writeFile(origB, "content B");
+
+		const service = createFsService(makeDeps(root).deps);
+		const folderPath = await service.createEvidenceFolder([origA, origB], "Evidence Folder");
+
+		// Rename inside Evidence Folder: renames the entry in the temp folder, leaves origA intact
+		const renamed = await service.rename(join(folderPath, "a.txt"), "renamed-a.txt");
+		expect(renamed.name).toBe("renamed-a.txt");
+		expect(await readFile(origA, "utf8")).toBe("content A");
+		expect(await readFile(renamed.path, "utf8")).toBe("content A");
+
+		// Copy from Evidence Folder to destDir: creates a real dereferenced file at destDir with the renamed name
+		const copyRes = await service.copy([renamed.path], destDir);
+		expect(copyRes.failed).toEqual([]);
+		const copiedTarget = join(destDir, "renamed-a.txt");
+		expect(await readFile(copiedTarget, "utf8")).toBe("content A");
+		const copiedListing = await service.listDir(destDir);
+		expect(copiedListing.entries.find((e) => e.name === "renamed-a.txt")?.flags).toBe(0);
+
+		// Move from Evidence Folder to destDir: creates a real file at destDir, removes link from Evidence Folder, keeps origB intact
+		const moveRes = await service.move([join(folderPath, "b.txt")], destDir);
+		expect(moveRes.failed).toEqual([]);
+		expect(await readFile(join(destDir, "b.txt"), "utf8")).toBe("content B");
+		expect(await readFile(origB, "utf8")).toBe("content B");
+		const remaining = await service.listDir(folderPath);
+		expect(remaining.entries.map((e) => e.name)).toEqual(["renamed-a.txt"]);
+	});
+
+	it("preserves clipboard paste even after the Evidence Folder is removed, and cleans up the temp directory", async () => {
+		const srcDir = join(root, "src");
+		const destDir = join(root, "dest");
+		await mkdir(srcDir, { recursive: true });
+		await mkdir(destDir, { recursive: true });
+		const orig = join(srcDir, "note.md");
+		await writeFile(orig, "important note");
+
+		const service = createFsService(makeDeps(root).deps);
+		const folderPath = await service.createEvidenceFolder([orig], "Evidence Folder");
+		const renamed = await service.rename(join(folderPath, "note.md"), "yoinked-note.md");
+		await service.clipboardSet({ op: "copy", paths: [renamed.path] });
+
+		// Remove the Evidence Folder (as when the tab closes or navigates away)
+		await service.removeEvidenceFolder(folderPath);
+		await expect(access(folderPath)).rejects.toThrow();
+
+		// Pasting the clipboard into destDir still works with the renamed filename and original content
+		const clip = await service.clipboardGet();
+		expect(clip).not.toBeNull();
+		const pasteRes = await service.copy(clip!.paths, destDir);
+		expect(pasteRes.failed).toEqual([]);
+		expect(await readFile(join(destDir, "yoinked-note.md"), "utf8")).toBe("important note");
+		expect(await readFile(orig, "utf8")).toBe("important note");
+	});
+
+	it("refuses to remove directories that were not created as Evidence Folders", async () => {
+		const userDir = join(root, "Documents");
+		await mkdir(userDir, { recursive: true });
+		const userFile = join(userDir, "keep.txt");
+		await writeFile(userFile, "keep");
+
+		const service = createFsService(makeDeps(root).deps);
+		await service.removeEvidenceFolder(userDir);
+		expect(await readFile(userFile, "utf8")).toBe("keep");
+	});
+});

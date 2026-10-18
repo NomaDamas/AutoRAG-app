@@ -157,7 +157,27 @@ still has the previous file's size when they lay out.
   `.jsonl`/`.ndjson` use the text view with the first 2,000 records
   pretty-printed (`shared/jsonl.ts`); `.plist` shows XML, converting `bplist00`
   in `shared/plist.ts` to the text `plutil -convert xml1` writes.
-- **PowerPoint** — `.pptx`, `.pptm`, and `.ppsx` share the PDF panel's paged
+- **OpenDocument** — `.odt`, `.odp`, `.odg`, and `.ods` are ZIPs whose
+  `Thumbnails/thumbnail.png` is the first page, slide, or sheet. `.odt` is
+  modelled from `content.xml`/`styles.xml` (`shared/odt-model.ts`,
+  `shared/odf-blocks.ts`: headings, styled runs, lists, tables, inline
+  pictures) and drawn as inert DOM on a white page column
+  (`shared/odf-render.ts`, `ui/odf.tsx`). `.odp` is modelled per `draw:page`
+  (`shared/odp-model.ts`: master-page shapes, backgrounds, text boxes, pictures,
+  rect/ellipse/line shapes) and drawn in the PDF panel's `PagedView` like a
+  `.pptx`. `.odg` has no text model: `byteNeed` is `extract`, the main process
+  reads the central directory and that one entry (`node/odf.ts` over the shared
+  ranged reader `node/zip-read.ts`) and shows the PNG. `.ods` stays in the
+  spreadsheet viewer. Only `#rrggbb` colours and numeric lengths reach style
+  attributes, and picture references that are absolute, remote, or contain `..`
+  are dropped. The Finder's tile and Inspector thumbnails for all four come from
+  the same embedded PNG on every platform (`file-icon.ts`), since Quick Look
+  has no ODF thumbnailer. A package with no `Thumbnails/thumbnail.png` (one
+  written by a tool rather than by LibreOffice) keeps the type icon. `.potx`
+  tiles use the JPEG under `docProps/thumbnail.jpeg`, re-encoded to PNG for
+  the icon cache; `.pptx` tiles still come from Quick Look.
+
+- **PowerPoint** — `.pptx`, `.pptm`, `.ppsx`, and `.potx` share the PDF panel's paged
   layout: every slide is a paper card in one scrolling column with the page
   rail, the `1 / N` pill, and zoom. `shared/pptx-model.ts` reads the OOXML
   from the whole-file bytes — slide order from `p:sldIdLst` through the
@@ -194,7 +214,10 @@ The main process reads only what the viewer will use (`byteNeed` in
 `registry.ts`): nothing for media, PDF, images, and fonts, which stream through
 `autorag-preview://` (it answers `Range` with `206`); the first 4MB of text,
 code, Markdown, and HTML; whole documents (HWP included) up to 32MB; for iWork
-packages the directory, the Keynote slide tree, and the page images inside; and
+packages the directory, the Keynote slide tree, and the page images inside; a
+HEIC as the JPEG macOS's own `sips` decodes from it (`node/heic.ts`, about
+0.2s on a 24MP iPhone photo even on a spinning disk; the viewer's wasm decoder
+never finished one, and remains only where `sips` is absent or fails); and
 a 64KB sniff of an unknown file, read on as text only when it looks like text.
 The detail calls (details, SHA-256, folder size, audio tags, data rows) answer only for the
 path the window is showing, and the hash and folder walk stop when the preview

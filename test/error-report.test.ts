@@ -183,15 +183,17 @@ describe("readErrorReportingEnabled", () => {
 		return directory;
 	}
 
-	it("is on when nothing is stored yet", async () => {
-		expect(readErrorReportingEnabled(await userDataWith(undefined))).toBe(true);
+	it("is off when nothing is stored yet", async () => {
+		expect(readErrorReportingEnabled(await userDataWith(undefined))).toBe(false);
 	});
 
-	it("is on for settings saved before the toggle existed", async () => {
-		expect(readErrorReportingEnabled(await userDataWith({ language: "ko" }))).toBe(true);
+	it("is off for settings saved before the toggle existed", async () => {
+		expect(readErrorReportingEnabled(await userDataWith({ language: "ko" }))).toBe(false);
 	});
 
-	it("is off only when the user turned it off", async () => {
+	it("is on only when the user turned it on", async () => {
+		expect(readErrorReportingEnabled(await userDataWith({ errorReporting: true }))).toBe(true);
 		expect(readErrorReportingEnabled(await userDataWith({ errorReporting: false }))).toBe(false);
+		expect(readErrorReportingEnabled(await userDataWith({ errorReporting: "yes" }))).toBe(false);
 	});
 });

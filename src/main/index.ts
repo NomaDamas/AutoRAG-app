@@ -3,7 +3,7 @@ import { access, open, readdir, readFile, stat } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { isAbsolute, join, sep } from "node:path";
 import { applyBundledTools } from "./bundled-tools";
-import { seedAssets } from "./seed-assets";
+import { minSyncModelCacheRoot, seedAssets } from "./seed-assets";
 import {
 	app,
 	BrowserWindow,
@@ -30,7 +30,6 @@ import { attachQuickLook, PREVIEW_PRIVILEGED_SCHEME, registerPreviewProtocol, re
 import { createDefaultParserRegistry, DEFAULT_MAX_SOURCE_BYTES, writeDefaultConfig } from "@autorag/librarian";
 import { readRawConfigObject, resolveConfigPath, writeConfigObject } from "@autorag/librarian/core";
 import { DEFAULT_CODE_FOLDER_NAMES, isJsonObject, SETTINGS_CHANNELS } from "../shared/settings-contract";
-import { migrateLegacyProviderIds } from "./config-legacy-ids";
 import { LOCAL_REFRESH_METHODS } from "./index-refresh";
 import { INDEX_ACTIVITY_CHANNELS } from "../shared/index-activity-contract";
 import { createIndexActivityService } from "./index-activity";
@@ -70,6 +69,7 @@ import { createSettingsService } from "./settings-service";
 import {
 	registerAccountIpcHandlers,
 	registerActionsIpcHandlers,
+	registerAnalyticsIpcHandlers,
 	registerAppUpdateIpcHandlers,
 	registerDragOutIpcHandlers,
 	registerIndexActivityIpcHandlers,
@@ -90,11 +90,30 @@ import { createOsRequestService, diskKindOf } from "./os-request-service";
 import { createOsMenuIntegration, menuLabels } from "./os-menu-integration";
 import { initErrorReporting, setErrorReportingEnabled } from "./error-reporting";
 import { createStallDetector, readErrorReportingEnabled, refreshFailureReport, reportError } from "./error-report-core";
+import { createAnalytics, createInstallIdStore, readUsageAnalyticsEnabled, resolveAnalyticsTarget, settingChangeEvents } from "./analytics-core";
+import { createPostHogSink } from "./analytics";
 
 const execFileAsync = promisify(execFile);
 
 // Before `ready`, so a crash during startup is reported. The Settings toggle is read from disk because the settings service loads later.
 initErrorReporting({ dsn: import.meta.env.MAIN_VITE_SENTRY_DSN, enabled: readErrorReportingEnabled(app.getPath("userData")), version: APP_VERSION, packaged: app.isPackaged });
+
+/**
+ * Usage statistics: opt-in, anonymous, content-free (see `analytics-core.ts`). Off until the user turns it on in
+ * Settings, read from disk because the settings service loads later. A build with no PostHog key has no sink and sends nothing.
+ */
+const analyticsTarget = resolveAnalyticsTarget({
+	packaged: app.isPackaged,
+	buildKey: import.meta.env.MAIN_VITE_POSTHOG_KEY,
+	buildHost: import.meta.env.MAIN_VITE_POSTHOG_HOST,
+	env: process.env,
+});
+const analytics = createAnalytics({
+	sink: analyticsTarget === null ? null : createPostHogSink(analyticsTarget),
+	installId: createInstallIdStore(join(app.getPath("userData"), "analytics", "install-id")),
+	context: () => ({ app_version: APP_VERSION, platform: process.platform, arch: process.arch, packaged: app.isPackaged, language: currentLanguage }),
+	enabled: readUsageAnalyticsEnabled(app.getPath("userData")),
+});
 
 /** The one AutoRAG config every surface (CLI, TUI, serve, this app) resolves. */
 function autoragConfigPath(): string {
@@ -118,14 +137,6 @@ function ensureAppIndexingMetadata(configPath: string): void {
 async function ensureAutoRAGConfig(): Promise<void> {
 	const configPath = autoragConfigPath();
 	if (await access(configPath).then(() => true, () => false)) {
-		// Before anything resolves the config: the librarian's 2.10.2 rename
-		// turned `jev.backend: "autorag"` into a validation error, so a config
-		// this app wrote earlier must be rewritten first.
-		try {
-			migrateLegacyProviderIds(configPath);
-		} catch (error) {
-			console.error("AutoRAG config legacy provider migration failed", error);
-		}
 		ensureAppIndexingMetadata(configPath);
 		return;
 	}
@@ -365,10 +376,10 @@ app.whenReady().then(async () => {
 	// Packaged builds carry the dependency CLIs and the embedding model: tools go first on PATH
 	// before anything reads the environment, and the model/runtime are copied into the AutoRAG home
 	// in the background so a fresh install indexes offline without a ~650 MB download.
-	applyBundledTools({ resourcesPath: process.resourcesPath, env: process.env });
+	applyBundledTools({ resourcesPath: process.resourcesPath, env: process.env, augmentUserPaths: true });
 	void seedAssets({
 		seedDir: join(process.resourcesPath, "seed"),
-		autoragHome: process.env.AUTORAG_HOME?.trim() || join(homedir(), ".autorag"),
+		cacheRoot: minSyncModelCacheRoot({ platform: process.platform, home: homedir(), env: process.env }),
 	}).then(
 		(outcome) => {
 			if (outcome.kind === "done" && outcome.copied.length > 0) console.log(`[autorag] seeded ${outcome.copied.join(", ")}`);
@@ -403,6 +414,14 @@ app.whenReady().then(async () => {
 					pictures: knownFolder("pictures", join(home, "Pictures")),
 				}
 			: undefined;
+	// Stored provider keys reach process.env before the fs worker or any agent
+	// resolves, so the worker, LLM, embedding, and reranker all see the same credential.
+	const credentials = createProviderCredentialService({
+		filePath: join(app.getPath("userData"), "credentials.enc.json"),
+		safeStorage,
+		env: process.env,
+	});
+	await credentials.load();
 	// Listings, watches, Finder metadata, places, dupey scans, and the index
 	// badges run in the fs worker, off this event loop; a native fault there
 	// ends only that process (FS roadmap #101). Main keeps the Electron-only
@@ -473,8 +492,10 @@ app.whenReady().then(async () => {
 		agentFactory: createDefaultAgentFactory(),
 		chatStore: createChatStore({ directory: join(app.getPath("userData"), "chat-history") }),
 		send: sendToMainWindow,
+		analytics,
 	});
 	registerSearchIpcHandlers(searchService);
+	let previousSettings: AppSettings | null = null;
 	const applyAppearance = (appearance: AppAppearance): void => {
 		currentAppearance = appearance;
 		nativeTheme.themeSource = appearance;
@@ -488,13 +509,6 @@ app.whenReady().then(async () => {
 		void workerHost.client.call("setLanguage", [language]).catch((error: unknown) => console.error("[fs-worker] language:", error));
 		sendToAllWindows(LANGUAGE_CHANNELS.changed, language);
 	};
-	// Stored provider keys reach process.env before any agent resolves, so the
-	// LLM/embedding/reranker all see the same credential.
-	const credentials = createProviderCredentialService({
-		filePath: join(app.getPath("userData"), "credentials.enc.json"),
-		safeStorage,
-		env: process.env,
-	});
 	const osMenu = createOsMenuIntegration({
 		platform: process.platform,
 		// os.homedir() honors $HOME (and USERPROFILE), so QA and tests can aim the install at a throwaway home.
@@ -507,7 +521,6 @@ app.whenReady().then(async () => {
 			await execFileAsync(command, [...args]);
 		},
 	});
-	await credentials.load();
 	const autoRagConfig = createAutoRagConfigService({ env: process.env, cwd: process.cwd() });
 	const providerAuth = createProviderAuthService({
 		send: (event) => sendToMainWindow(SETTINGS_CHANNELS.providerLoginEvent, event),
@@ -595,6 +608,10 @@ app.whenReady().then(async () => {
 			}
 		},
 		onSettingsChanged: (settings) => {
+			// First: turning the setting off must stop everything (and delete the id) before this change's own event is considered.
+			analytics.setEnabled(settings.usageAnalytics);
+			if (previousSettings !== null) for (const change of settingChangeEvents(previousSettings, settings)) analytics.track("settings_changed", change);
+			previousSettings = settings;
 			setErrorReportingEnabled(settings.errorReporting);
 			applyAppearance(settings.appearance);
 			applyLanguage(settings.language);
@@ -607,6 +624,11 @@ app.whenReady().then(async () => {
 		},
 	});
 	registerSettingsIpcHandlers(settingsService);
+	registerAnalyticsIpcHandlers(analytics);
+	void settingsService.get().then((settings) => {
+		previousSettings ??= settings;
+	});
+	analytics.track("app_opened", {});
 	const indexActivity = createIndexActivityService({
 		configPath: autoragConfigPath,
 		resolveWorkspacePath: async () => (await resolveEffectiveConfig({ env: process.env, cwd: process.cwd() })).config.workspacePath,
@@ -831,6 +853,7 @@ app.whenReady().then(async () => {
 		startScans: (paths) => scanCoordinator.start(paths),
 		folderTotals: (paths) => scanCoordinator.totalFiles(paths),
 		onComplete: () => {
+			analytics.track("onboarding_completed", {});
 			const window = mainWindow;
 			if (window === null || window.isDestroyed()) return;
 			// Centering can move a border-spanning window onto another display.
@@ -916,7 +939,7 @@ app.whenReady().then(async () => {
 	app.once("will-quit", (event) => {
 		event.preventDefault();
 		// minsync outlives the app and keeps its lock; stop it so the next launch can resume instead of failing on the lock.
-		void Promise.all([terminateMinSyncChildren(), workerHost.dispose()])
+		void Promise.all([terminateMinSyncChildren(), workerHost.dispose(), analytics.shutdown()])
 			.catch((error: unknown) => console.error("[fs-worker] dispose on quit failed:", error))
 			.finally(() => app.exit(0));
 	});

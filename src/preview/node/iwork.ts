@@ -1,14 +1,9 @@
-import { type FileHandle, open } from "node:fs/promises";
+import type { FileHandle } from "node:fs/promises";
 import { extname } from "node:path";
-import { inflateSync } from "fflate";
 import { keynoteSlideImageNames } from "../shared/iwork-slides";
-import { listZipEntries, locateZipDirectory, type ZipEntry } from "../shared/zip-list";
+import type { ZipEntry } from "../shared/zip-list";
+import { extractZipEntry as extract, withZip } from "./zip-read";
 
-/** The end-of-central-directory record is 22 bytes plus a comment of at most 65535. */
-const TAIL_BYTES = 22 + 65535;
-/** A local file header is 30 bytes, then a name and an extra field of 16-bit lengths. */
-const LOCAL_HEADER = 30;
-const LOCAL_HEADER_MAX = LOCAL_HEADER + 2 * 0xffff;
 /** The page images iWork stores, best first: the full-size first page, then the web-sized one. */
 const PREVIEW_NAMES = ["preview.jpg", "preview-web.jpg"] as const;
 /** The Keynote slide tree lives here; its name is the same in every `.key`. */
@@ -28,28 +23,6 @@ export interface IworkPreview {
 	readonly firstPage: Uint8Array | null;
 	/** Every Keynote slide's JPEG in order (the quality first-page image comes first); null for Numbers/Pages or an unreadable slide tree. */
 	readonly pages: readonly Uint8Array[] | null;
-}
-
-async function readRange(handle: FileHandle, position: number, length: number): Promise<Uint8Array> {
-	const buffer = new Uint8Array(length);
-	const { bytesRead } = await handle.read(buffer, 0, length, position);
-	return bytesRead === length ? buffer : buffer.subarray(0, bytesRead);
-}
-
-function u16(bytes: Uint8Array, offset: number): number {
-	return (bytes[offset] ?? 0) | ((bytes[offset + 1] ?? 0) << 8);
-}
-
-async function extract(handle: FileHandle, entry: ZipEntry, cap: number): Promise<Uint8Array | null> {
-	if (entry.uncompressedSize > cap || entry.compressedSize > cap) return null;
-	const header = await readRange(handle, entry.headerOffset, LOCAL_HEADER_MAX);
-	if (header.length < LOCAL_HEADER || u16(header, 0) !== 0x4b50 || u16(header, 2) !== 0x0403) return null;
-	const start = LOCAL_HEADER + u16(header, 26) + u16(header, 28);
-	const data = await readRange(handle, entry.headerOffset + start, entry.compressedSize);
-	if (data.length !== entry.compressedSize) return null;
-	if (entry.method === 0) return data;
-	if (entry.method === 8) return inflateSync(data, { out: new Uint8Array(entry.uncompressedSize) });
-	return null;
 }
 
 /** The full-quality first-page image, or the web-sized one when the package omits it. */
@@ -100,19 +73,7 @@ async function readKeySlides(handle: FileHandle, entries: readonly ZipEntry[], f
  * the package is the older directory form, is not a ZIP, or has no image.
  */
 export async function readIworkPreview(path: string): Promise<IworkPreview | null> {
-	const handle = await open(path, "r");
-	try {
-		const { size } = await handle.stat();
-		const tailLength = Math.min(size, TAIL_BYTES);
-		const base = size - tailLength;
-		const tail = await readRange(handle, base, tailLength);
-		const directory = locateZipDirectory(tail);
-		if (directory === null) return null;
-		// The directory normally sits inside the tail; a huge one is read on its own.
-		const inTail = directory.offset >= base;
-		const bytes = inTail ? tail : await readRange(handle, directory.offset, size - directory.offset);
-		const entries = listZipEntries(bytes, inTail ? base : directory.offset);
-		if (entries === null) return null;
+	return withZip(path, async (handle, entries) => {
 		const firstPage = await readFirstPage(handle, entries);
 		if (firstPage === null) return null;
 		if (extname(path).toLowerCase() !== ".key") return { firstPage, pages: null };
@@ -122,7 +83,5 @@ export async function readIworkPreview(path: string): Promise<IworkPreview | nul
 		});
 		if (slides === null) console.warn(`quick-look: no slide list for ${path}; showing the first slide only`);
 		return { firstPage, pages: slides };
-	} finally {
-		await handle.close();
-	}
+	});
 }

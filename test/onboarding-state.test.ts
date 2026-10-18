@@ -6,6 +6,10 @@ import { ONBOARDING_CHANNELS, type DetectedSource, type OnboardingDraft, type So
 import type { AppSettings, ConfigRefreshResult } from "../src/shared/settings-contract";
 import type { OnboardingServiceDeps } from "../src/main/onboarding-service";
 import { createOnboardingService, readOnboardingPending } from "../src/main/onboarding-service";
+import { storeDazziPlanCredential } from "../src/main/dazzi-plan-credential";
+
+/** Yields to the event loop: the final status read after a refresh touches the disk, so microtasks alone are not enough. */
+const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 2));
 
 const directories: string[] = [];
 
@@ -31,6 +35,8 @@ const DRAFT: OnboardingDraft = {
 	network: false,
 	launchAtLogin: false,
 	folders: [{ path: "/Users/me/Documents", selected: true }],
+	embed: "local",
+	cloudConsent: false,
 	sources: [],
 	plan: "free",
 	planConfirmed: false,
@@ -43,7 +49,8 @@ const DEFAULT_SETTINGS: AppSettings = {
 	launchAtLogin: false,
 	showInMenuBar: true,
 	autoInstallUpdates: true,
-	errorReporting: true,
+	errorReporting: false,
+	usageAnalytics: false,
 	showHiddenFiles: false,
 	dupeyScanIntervalMinutes: 60,
 	osMenuIntegration: false,
@@ -53,6 +60,8 @@ function makeDeps(userDataDir: string, env: NodeJS.ProcessEnv = {}): OnboardingS
 	return {
 		userDataDir,
 		env,
+		// Pi's agent home is the user data dir here, so a test never reads the developer's own sign-in.
+		agentDir: userDataDir,
 		cwd: "/repo",
 		platform: "darwin",
 		home: "/Users/me",
@@ -160,9 +169,90 @@ describe("createOnboardingService persistence", () => {
 		expect(service.isIndexing()).toBe(true);
 		gate.resolve({ ok: true, methods: ["parsed", "minsync"], scanned: 0, written: 0, deleted: 0, skipped: 0, diagnostics: [], error: null });
 		// Flush microtasks; no wall-clock wait.
-		for (let tick = 0; tick < 20 && service.isIndexing(); tick += 1) await Promise.resolve();
+		for (let tick = 0; tick < 100 && service.isIndexing(); tick += 1) await flush();
 		expect((await service.indexStatus()).state).toBe("success");
 		expect(service.isIndexing()).toBe(false);
+	});
+
+	it("writes the native Qwen3 embedder on first index and detects the native MinSync model cache", async () => {
+		const directory = await workDir();
+		const nativeSnapshot = join(
+			directory,
+			".cache",
+			"minsync",
+			"models",
+			"models--Qwen--Qwen3-Embedding-0.6B",
+			"snapshots",
+			"97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3",
+		);
+		await mkdir(nativeSnapshot, { recursive: true });
+		await writeFile(join(nativeSnapshot, "model.safetensors"), "weights");
+
+		const service = createOnboardingService({ ...makeDeps(directory), home: directory });
+		const info = await service.embedding();
+		expect(info.profile).toBe("native:Qwen/Qwen3-Embedding-0.6B");
+		expect(info.cached).toBe(true);
+		expect(info.modelBytes).toBeGreaterThan(1_000_000_000);
+
+		await service.startIndexing({
+			folders: ["/Users/me/Documents"],
+			sources: [],
+			plan: "byok",
+			model: null,
+		});
+		for (let tick = 0; tick < 100 && service.isIndexing(); tick += 1) await flush();
+
+		const config = JSON.parse(await readFile(join(directory, "config.json"), "utf8")) as {
+			minSync?: { embedder?: Record<string, unknown> };
+		};
+		expect(config.minSync?.embedder).toEqual({ id: "native:Qwen/Qwen3-Embedding-0.6B", dimension: 1024 });
+		service.dispose();
+	});
+
+	it("saves and reloads a draft that chose keyword-only search", async () => {
+		const directory = await workDir();
+		const service = createOnboardingService(makeDeps(directory));
+		await service.save({ ...DRAFT, embed: "none" });
+		expect((await createOnboardingService(makeDeps(directory)).load()).draft?.embed).toBe("none");
+	});
+
+	it("indexes keyword-only with embed=none: no embedder is written, semantic search is switched off, and a later local run switches it back on", async () => {
+		const directory = await workDir();
+		const service = createOnboardingService(makeDeps(directory));
+		await service.startIndexing({ folders: ["/Users/me/Documents"], embed: "none", sources: [], plan: "free", model: null });
+		for (let tick = 0; tick < 100 && service.isIndexing(); tick += 1) await flush();
+		const read = async (): Promise<{ minSync?: { embedder?: unknown }; appIndexing?: Record<string, unknown> }> =>
+			JSON.parse(await readFile(join(directory, "config.json"), "utf8"));
+
+		const none = await read();
+		expect(none.minSync?.embedder).toBeUndefined();
+		expect(none.appIndexing).toEqual({ semanticSearch: false });
+		service.dispose();
+
+		const again = createOnboardingService(makeDeps(directory));
+		await again.startIndexing({ folders: ["/Users/me/Documents"], embed: "local", sources: [], plan: "free", model: null });
+		for (let tick = 0; tick < 100 && again.isIndexing(); tick += 1) await flush();
+		const local = await read();
+		expect(local.minSync?.embedder).toEqual({ id: "native:Qwen/Qwen3-Embedding-0.6B", dimension: 1024 });
+		expect(local.appIndexing).toBeUndefined();
+		again.dispose();
+	});
+
+	it("reports what a run that finished before the first poll actually read", async () => {
+		const directory = await workDir();
+		await mkdir(join(directory, ".autorag", "parsed"), { recursive: true });
+		const entry = (name: string, updatedAt: string) => ({ sourcePath: `/Users/me/Documents/${name}`, updatedAt });
+		await writeFile(
+			join(directory, ".autorag", "parsed", "index.json"),
+			JSON.stringify({ entries: { a: entry("a.md", "2026-01-01T00:00:00Z"), b: entry("b.md", "2026-01-02T00:00:00Z") }, skipped: {} }),
+		);
+		const service = createOnboardingService({ ...makeDeps(directory), folderTotals: () => 2 });
+
+		await service.startIndexing({ folders: ["/Users/me/Documents"], embed: "none", sources: [], plan: "free", model: null });
+		for (let tick = 0; tick < 50 && service.isIndexing(); tick += 1) await new Promise((resolve) => setTimeout(resolve, 5));
+
+		expect(await service.indexStatus()).toMatchObject({ state: "success", progress: 100, totalFiles: 2, processedFiles: 2, recentFile: "b.md", recentFolder: "Documents" });
+		service.dispose();
 	});
 
 	it("allows completing onboarding while indexing is still running in the background", async () => {
@@ -187,7 +277,7 @@ describe("createOnboardingService persistence", () => {
 		expect(service.isIndexing()).toBe(true);
 
 		gate.resolve({ ok: true, methods: ["parsed", "minsync"], scanned: 3, written: 3, deleted: 0, skipped: 0, diagnostics: [], error: null });
-		for (let tick = 0; tick < 20 && service.isIndexing(); tick += 1) await Promise.resolve();
+		for (let tick = 0; tick < 100 && service.isIndexing(); tick += 1) await flush();
 		expect(service.isIndexing()).toBe(false);
 		expect((await service.indexStatus()).state).toBe("success");
 	});
@@ -224,7 +314,7 @@ describe("createOnboardingService persistence", () => {
 		expect(syncedAliases).toEqual([]);
 
 		gate.resolve({ ok: true, methods: ["parsed", "minsync"], scanned: 1, written: 1, deleted: 0, skipped: 0, diagnostics: [], error: null });
-		for (let tick = 0; tick < 20 && syncedAliases.length === 0; tick += 1) await Promise.resolve();
+		for (let tick = 0; tick < 100 && syncedAliases.length === 0; tick += 1) await flush();
 		expect(syncedAliases).toEqual([["mailcrawl-gmail", "mailcrawl-work", "obsidian", "obsidian-2"]]);
 	});
 
@@ -250,12 +340,12 @@ describe("createOnboardingService persistence", () => {
 			plan: "free",
 			model: null,
 		});
-		for (let tick = 0; tick < 20 && service.isIndexing(); tick += 1) await Promise.resolve();
+		for (let tick = 0; tick < 100 && service.isIndexing(); tick += 1) await flush();
 		// Not completed yet -> datasources have not started.
 		expect(syncedAliases).toEqual([]);
 
 		await service.complete();
-		for (let tick = 0; tick < 20 && syncedAliases.length === 0; tick += 1) await Promise.resolve();
+		for (let tick = 0; tick < 100 && syncedAliases.length === 0; tick += 1) await flush();
 		expect(syncedAliases).toEqual([["whatsapp"]]);
 	});
 	it("does not trigger background datasource indexing when local indexing fails", async () => {
@@ -284,7 +374,7 @@ describe("createOnboardingService persistence", () => {
 		});
 		await service.complete();
 		gate.resolve({ ok: false, methods: ["parsed", "minsync"], scanned: 0, written: 0, deleted: 0, skipped: 0, diagnostics: [], error: "disk full" });
-		for (let tick = 0; tick < 20 && service.isIndexing(); tick += 1) await Promise.resolve();
+		for (let tick = 0; tick < 100 && service.isIndexing(); tick += 1) await flush();
 		expect((await service.indexStatus()).state).toBe("failed");
 		expect(syncedAliases).toEqual([]);
 	});
@@ -316,6 +406,85 @@ describe("createOnboardingService persistence", () => {
 
 		expect(status.state).toBe("running");
 		service.dispose();
+	});
+
+	it("configures Dazzi cloud embedding when indexing with embed=cloud", async () => {
+		const directory = await workDir();
+		const env: NodeJS.ProcessEnv = { AUTORAG_BASE_URL: "https://api.dazziapp.com" };
+		await storeDazziPlanCredential(directory, "dz_cloud_token");
+		const stored = new Map<string, string>();
+		const service = createOnboardingService({
+			...makeDeps(directory, env),
+			credentials: {
+				list: async () => [],
+				set: async (name, secret) => {
+					stored.set(name, secret);
+					env[name] = secret;
+					return [];
+				},
+				remove: async (name) => {
+					stored.delete(name);
+					delete env[name];
+					return [];
+				},
+				load: async () => [],
+			},
+		});
+
+		await service.startIndexing({
+			folders: ["/Users/me/Documents"],
+			embed: "cloud",
+			sources: [],
+			plan: "pro",
+			model: null,
+		});
+		const written = JSON.parse(await readFile(join(directory, "config.json"), "utf8")) as {
+			minSync?: { embedder?: Record<string, unknown> };
+		};
+		expect(written.minSync?.embedder).toEqual({
+			id: "openai:qwen/qwen3-embedding-0.6b",
+			baseUrl: "https://api.dazziapp.com",
+			dimension: 1024,
+			apiKeyEnv: "OPENAI_API_KEY",
+		});
+		expect(env.OPENAI_API_KEY).toBe("dz_cloud_token");
+		expect(stored.get("OPENAI_API_KEY")).toBe("dz_cloud_token");
+		service.dispose();
+
+		// Re-running with embed=local replaces the Dazzi cloud embedder with the local profile.
+		const service2 = createOnboardingService({
+			...makeDeps(directory, env),
+			credentials: {
+				list: async () => [],
+				set: async (name, secret) => {
+					stored.set(name, secret);
+					env[name] = secret;
+					return [];
+				},
+				remove: async (name) => {
+					stored.delete(name);
+					delete env[name];
+					return [];
+				},
+				load: async () => [],
+			},
+		});
+		await service2.startIndexing({
+			folders: ["/Users/me/Documents"],
+			embed: "local",
+			sources: [],
+			plan: "pro",
+			model: null,
+		});
+		service2.dispose();
+		const rewritten = JSON.parse(await readFile(join(directory, "config.json"), "utf8")) as {
+			minSync?: { embedder?: Record<string, unknown> };
+		};
+		expect(rewritten.minSync?.embedder).toEqual({
+			id: "native:Qwen/Qwen3-Embedding-0.6B",
+			dimension: 1024,
+		});
+		expect(stored.has("OPENAI_API_KEY")).toBe(false);
 	});
 });
 

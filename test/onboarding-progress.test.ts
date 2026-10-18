@@ -38,11 +38,44 @@ describe("computeIndexingProgress", () => {
 		expect(finalizing.progress).toBe(99);
 	});
 
+	it("measures the minsync phase from embedded/total when MinSync's resume log reports committed files", () => {
+		const half = computeIndexingProgress({
+			state: "running",
+			phase: "minsync",
+			processedFiles: 100,
+			embeddedFiles: 50,
+			totalFiles: 100,
+			phaseElapsedMs: 5_000,
+		});
+		expect(half.progress).toBe(72.5);
+	});
+
 	it("never reaches 100 before success and drops the estimate on failure", () => {
 		const stuck = computeIndexingProgress({ state: "running", phase: "minsync", processedFiles: 85, totalFiles: 85, phaseElapsedMs: 600_000 });
 		expect(stuck.progress).toBe(95);
 		const failed = computeIndexingProgress({ state: "failed", phase: "parsed", processedFiles: 10, totalFiles: 100, phaseElapsedMs: 0 });
 		expect(failed.remainingMinutes).toBeNull();
 		expect(failed.progress).toBe(5);
+	});
+});
+
+describe("computeIndexingProgress without embedding", () => {
+	it("gives the read phase 90% of the bar, since no embedding phase follows it", () => {
+		const half = computeIndexingProgress({ state: "running", phase: "parsed", processedFiles: 225, totalFiles: 450, phaseElapsedMs: 0, embedding: false });
+		expect(half.progress).toBe(45);
+		expect(half.remainingMinutes).toBe(1);
+		const done = computeIndexingProgress({ state: "running", phase: "parsed", processedFiles: 450, totalFiles: 450, phaseElapsedMs: 0, embedding: false });
+		expect(done.progress).toBe(90);
+	});
+
+	it("finishes in the last tenth and uses the keyword-only rate for the estimate", () => {
+		const finalizing = computeIndexingProgress({ state: "running", phase: "finalizing", processedFiles: 450, totalFiles: 450, phaseElapsedMs: 60_000, embedding: false });
+		expect(finalizing.progress).toBe(99);
+		expect(finalizing.remainingMinutes).toBe(0);
+	});
+
+	it("keeps the embedding layout when the flag is absent or true", () => {
+		const input = { state: "running", phase: "parsed", processedFiles: 85, totalFiles: 170, phaseElapsedMs: 0 } as const;
+		expect(computeIndexingProgress(input)).toEqual(computeIndexingProgress({ ...input, embedding: true }));
 	});
 });

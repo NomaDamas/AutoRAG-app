@@ -2,7 +2,7 @@
 name = "autorag-shim"
 version = "0.1.0"
 edition = "2021"
-license = "AGPL-3.0-only"
+license = "FSL-1.1-MIT"
 description = "Launcher that runs a bundled npm CLI with the bundled Node runtime"
 publish = false
 

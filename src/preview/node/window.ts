@@ -45,7 +45,9 @@ import { type BundleIconSource, summarizeBundle } from "./bundle";
 import { createDefaultAppCache, type DefaultAppCache } from "./default-app";
 import { fileDetails, sha256File } from "./details";
 import { measureFolder, summarizeFolder } from "./folder";
+import { readHeicPreview } from "./heic";
 import { readIworkPreview } from "./iwork";
+import { readEmbeddedThumbnail } from "./odf";
 import { PREVIEW_BYTE_CAP, PreviewReadError, readPreviewFile, SNIFF_BYTES, TEXT_BYTE_CAP } from "./read-file";
 
 /** Media reports its size once decoded; anything slower still shows by then. */
@@ -326,7 +328,17 @@ async function readDocument(path: string): Promise<PreviewDocument> {
 			return readPreviewFile(path, TEXT_BYTE_CAP);
 		case "whole":
 			return readPreviewFile(path, PREVIEW_BYTE_CAP, true);
+		case "decode":
+			return readHeicPreview(path);
 		case "extract": {
+			if (viewerForExtension(extname(path).slice(1)) === "odg") {
+				const document = await readPreviewFile(path, 0);
+				const thumbnail = (await readEmbeddedThumbnail(path, "odg").catch((error: unknown) => {
+					console.warn(`quick-look: OpenDocument thumbnail for ${path} failed: ${error instanceof Error ? error.message : String(error)}`);
+					return null;
+				}))?.bytes ?? null;
+				return { ...document, bytes: thumbnail };
+			}
 			// The file's own metadata, the page image Apple stored inside it, and
 			// (for a Keynote deck) every slide image in show order.
 			const document = await readPreviewFile(path, 0);
