@@ -6,8 +6,8 @@
 // Prerequisites: `bun run build`, OPENROUTER_API_KEY in the environment.
 // Run: node scripts/manual-qa/run-qa-finder-answer-streaming.mjs
 // Set QA_REQUIRE_DEEP_STREAM=1 to also require a streamed Deep draft.
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync, appendFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, appendFileSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { AutoRAGAgent, buildAgentOptions, resolveConfigReadOnly } from "@autorag/librarian";
@@ -19,11 +19,20 @@ const EVIDENCE = join(ROOT, ".omo", "evidence", "ai-finder-app", "qa-answer-stre
 const RUN_TIMEOUT_MS = 240_000;
 const QUERY = "환불 예외 승인 규칙을 문서에서 찾아 요약해줘";
 
-if (!process.env.OPENROUTER_API_KEY) {
-	console.error("OPENROUTER_API_KEY is required for the live AI Search QA.");
+const dazziAuthPath = join(homedir(), ".pi", "agent", "auth.json");
+const hasDazziAuth = (() => {
+	if (!existsSync(dazziAuthPath)) return false;
+	try {
+		const parsed = JSON.parse(readFileSync(dazziAuthPath, "utf8"));
+		return typeof parsed?.dazzi?.access === "string" && parsed.dazzi.access.length > 0;
+	} catch {
+		return false;
+	}
+})();
+if (!process.env.OPENROUTER_API_KEY && !hasDazziAuth) {
+	console.error("Either OPENROUTER_API_KEY or a signed-in ~/.pi/agent/auth.json (dazzi) is required for live AI Search QA.");
 	process.exit(2);
 }
-
 rmSync(EVIDENCE, { recursive: true, force: true });
 mkdirSync(EVIDENCE, { recursive: true });
 const LOG = join(EVIDENCE, "run.log");
@@ -67,13 +76,25 @@ function writeConfig(name, searchPaths) {
 				// Local embeddings only: corpus text never leaves the machine.
 				minSync: { enabled: true, autoInstall: true, embedder: { id: "native:Qwen/Qwen3-Embedding-0.6B", dimension: 1024 } },
 				jikji: false,
-				model: {
-					provider: "openrouter",
-					id: "deepseek/deepseek-v4.1-flash",
-					baseUrl: "https://openrouter.ai/api/v1",
-					api: "openai-completions",
-					apiKeyEnv: "OPENROUTER_API_KEY",
-				},
+				model: process.env.OPENROUTER_API_KEY
+					? {
+							provider: "openrouter",
+							id: "deepseek/deepseek-v4.1-flash",
+							baseUrl: "https://openrouter.ai/api/v1",
+							api: "openai-completions",
+							apiKeyEnv: "OPENROUTER_API_KEY",
+						}
+					: {
+							provider: "dazzi",
+							id: "z-ai/glm-5.3-flash",
+							name: "GLM 5.3 Flash",
+							baseUrl: "https://api.dazziapp.com/v1",
+							api: "openai-responses",
+							reasoning: true,
+							input: ["text", "image"],
+							contextWindow: 1048576,
+							maxTokens: 32000,
+						},
 			},
 			null,
 			2,
@@ -215,8 +236,21 @@ try {
 	// v7 renders the Deep answer permanently under a static "Worked for Ns"
 	// label (no disclosure), so the prose is visible as soon as it exists.
 	await page.locator(".assistant-msg .assistant-prose").nth(1).waitFor({ state: "visible", timeout: 8000 }).catch(() => undefined);
-	const deepFinalChars = ((await page.locator(".assistant-msg .assistant-prose").nth(1).textContent()) ?? "").length;
+	const quickFinalText = ((await page.locator(".assistant-msg .assistant-prose").nth(0).textContent()) ?? "").trim();
+	const deepFinalText = ((await page.locator(".assistant-msg .assistant-prose").nth(1).textContent().catch(() => "")) ?? "").trim();
+	const deepFinalChars = deepFinalText.length;
 	check("deep answer final", deepFinalChars > 0, `deep ${deepFinalChars} chars`);
+	check(
+		"quick and deep answers are distinct (never duplicated)",
+		deepFinalChars === 0 || quickFinalText !== deepFinalText,
+		`quick=${quickFinalText.length} chars, deep=${deepFinalChars} chars`,
+	);
+	const firstCite = page.locator(".assistant-msg .cite").first();
+	if ((await firstCite.count()) > 0) {
+		await firstCite.click();
+		const evTitle = ((await page.locator('.inspector-half[aria-label="Evidence"] .preview-title').textContent().catch(() => "")) ?? "").trim();
+		check("clicking citation chip shows evidence detail in right panel", evTitle.length > 0, evTitle);
+	}
 	// v7 has no per-answer card chrome to police (the Quick/Deep labels are gone).
 	log(`deep thinking indicator shown=${timeline.some((state) => state.thinking)}`);
 	const deepStreaming = timeline.filter((state) => state.deepStreaming);

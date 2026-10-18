@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -172,5 +172,20 @@ describe("fs worker service", () => {
 
 		// Then the daemon was asked to exit
 		expect(stops).toBe(1);
+	});
+
+	it("creates an Evidence Folder via worker handler and removes any remaining ones on dispose", async () => {
+		const src = join(root, "doc.md");
+		await writeFile(src, "evidence text");
+		const worker = start(fakeWatcher());
+		const signal = new AbortController().signal;
+
+		const folderPath = (await worker.handlers.createEvidenceFolder([[src], "Evidence Folder"], signal)) as string;
+		const listing = (await worker.handlers.listDir([folderPath], signal)) as DirListing;
+		expect(listing.entries.map((e) => e.name)).toEqual(["doc.md"]);
+
+		await worker.dispose();
+		service = null;
+		await expect(access(folderPath)).rejects.toThrow();
 	});
 });

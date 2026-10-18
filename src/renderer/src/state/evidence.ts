@@ -6,6 +6,7 @@
 
 import { webUrl } from "../../../shared/fs-contract";
 import { t } from "../../../shared/i18n/core";
+import type { AnswerPhase, CitationEvidence } from "../../../shared/search-contract";
 import { citedNumbers } from "./answer-markdown";
 import { type FileKind, kindFromExtension } from "./kinds";
 
@@ -48,6 +49,118 @@ export function evidenceHeading(title: string, source: string | null): string {
 	const opaque = surface === "chunks" || surface === "messages" || surface === "images";
 	if (datasource === undefined || instance === undefined || !opaque) return title;
 	return `${datasource} · ${instance}`;
+}
+
+/**
+ * True when `source` names a local filesystem path rather than null, a web
+ * URL (`http:`/`https:`), or an opaque datasource chunk/message/image id
+ * (`/kakao/.../chunks/...`).
+ */
+export function isLocalEvidenceSource(source: string | null): source is string {
+	if (source === null) return false;
+	const trimmed = source.trim();
+	if (trimmed === "" || webUrl(trimmed) !== null) return false;
+	if (trimmed.startsWith("/")) {
+		const [datasource, instance, surface] = trimmed.split("/").filter((part) => part.length > 0);
+		if (
+			datasource !== undefined &&
+			instance !== undefined &&
+			(surface === "chunks" || surface === "messages" || surface === "images")
+		) {
+			return false;
+		}
+	}
+	return true;
+}
+
+/**
+ * Gather every citation across all phases of a session (earlier turns and the
+ * current turn's Quick/Deep phases) in chronological order.
+ */
+export function collectSessionEvidence(
+	phases: readonly (AnswerPhase | null | undefined)[],
+): readonly CitationEvidence[] {
+	const items: CitationEvidence[] = [];
+	for (const phase of phases) {
+		if (phase === null || phase === undefined) continue;
+		for (const entry of phase.evidence) {
+			items.push(entry);
+		}
+	}
+	return items;
+}
+
+/**
+ * Unique local file paths from a session's evidence list, in first-seen order
+ * (canonicalized by NFC for deduplication while keeping the first spelling).
+ */
+export function sessionEvidencePaths(evidence: readonly CitationEvidence[]): readonly string[] {
+	const seen = new Set<string>();
+	const paths: string[] = [];
+	for (const entry of evidence) {
+		if (!isLocalEvidenceSource(entry.source)) continue;
+		const trimmed = entry.source.trim();
+		const key = trimmed.normalize("NFC");
+		if (seen.has(key)) continue;
+		seen.add(key);
+		paths.push(trimmed);
+	}
+	return paths;
+}
+
+export interface TurnEvidencePhases {
+	readonly quick: AnswerPhase | null;
+	readonly deep: AnswerPhase | null;
+}
+
+export interface EvidenceSelectionSource {
+	readonly turnIndex: number;
+	readonly phase: "quick" | "deep";
+}
+
+/**
+ * Merge a turn's primary and secondary phase evidence lists by citation number:
+ * every entry from `primary` wins for its number, and any numbers present only
+ * in `secondary` are kept so no citation chip in either phase of the turn is
+ * left without an evidence tab.
+ */
+export function mergePhaseEvidence(
+	primary: readonly CitationEvidence[],
+	secondary: readonly CitationEvidence[],
+): readonly CitationEvidence[] {
+	if (secondary.length === 0) return primary;
+	if (primary.length === 0) return secondary;
+	const byNumber = new Map<number, CitationEvidence>();
+	for (const item of secondary) byNumber.set(item.number, item);
+	for (const item of primary) byNumber.set(item.number, item);
+	return [...byNumber.values()].sort((a, b) => a.number - b.number);
+}
+
+/**
+ * Resolve the evidence list the Inspector should show for a conversation's
+ * turns (`turns`, oldest first) and an optional `source` (the turn and phase
+ * whose citation chip the user clicked last).
+ */
+export function resolveActiveEvidence(
+	turns: readonly TurnEvidencePhases[],
+	source: EvidenceSelectionSource | null,
+): readonly CitationEvidence[] {
+	if (source !== null) {
+		const turn = turns[source.turnIndex];
+		if (turn !== undefined) {
+			const primary = (source.phase === "quick" ? turn.quick?.evidence : turn.deep?.evidence) ?? [];
+			const secondary = (source.phase === "quick" ? turn.deep?.evidence : turn.quick?.evidence) ?? [];
+			const merged = mergePhaseEvidence(primary, secondary);
+			if (merged.length > 0) return merged;
+		}
+	}
+	for (let index = turns.length - 1; index >= 0; index -= 1) {
+		const turn = turns[index];
+		if (turn === undefined) continue;
+		const merged = mergePhaseEvidence(turn.deep?.evidence ?? [], turn.quick?.evidence ?? []);
+		if (merged.length > 0) return merged;
+	}
+	return [];
 }
 
 /** Confidence as a percentage, shown right of the source line; `null` when the librarian measured none. */

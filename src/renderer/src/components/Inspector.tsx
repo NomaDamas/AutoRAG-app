@@ -59,6 +59,7 @@ import {
 	CopyIcon,
 	ExtractIcon,
 	EyeIcon,
+	FolderGlyph,
 	ImageEditIcon,
 	LinkIcon,
 	OpenIcon,
@@ -108,6 +109,10 @@ export interface InspectorProps {
 	readonly evidence: readonly CitationEvidence[];
 	readonly evidenceSelected: number;
 	readonly onSelectEvidence: (n: number) => void;
+	/** Number of local files gathered across the current AI Search session for the Evidence Folder. */
+	readonly evidenceFolderCount?: number;
+	/** Create and open the temporary Evidence Folder tab for the current session. */
+	readonly onOpenEvidenceFolder?: () => void;
 	/** Show the source: a file in the Finder, a web page in the OS browser. */
 	readonly onRevealPath: (path: string) => void;
 	readonly onToast: (msg: string) => void;
@@ -148,6 +153,8 @@ export function Inspector({
 	evidenceSelected,
 	onSelectEvidence,
 	onRevealPath,
+	evidenceFolderCount = 0,
+	onOpenEvidenceFolder,
 	onToast,
 	imageActions,
 }: InspectorProps): ReactElement {
@@ -165,6 +172,8 @@ export function Inspector({
 					onReveal={onRevealPath}
 					onToast={onToast}
 					imageActions={imageActions}
+					evidenceFolderCount={evidenceFolderCount}
+					onOpenEvidenceFolder={onOpenEvidenceFolder}
 				/>
 			) : entries.length > 1 ? (
 				<MultiInfoHalf entries={entries} focusPath={entry?.path ?? null} />
@@ -751,6 +760,8 @@ function EvidencePanel({
 	onReveal,
 	onToast,
 	imageActions,
+	evidenceFolderCount,
+	onOpenEvidenceFolder,
 }: {
 	readonly evidence: readonly CitationEvidence[];
 	readonly selected: number;
@@ -758,14 +769,37 @@ function EvidencePanel({
 	readonly onReveal: (path: string) => void;
 	readonly onToast: (msg: string) => void;
 	readonly imageActions: ImageActions;
+	readonly evidenceFolderCount: number;
+	readonly onOpenEvidenceFolder?: (() => void) | undefined;
 }): ReactElement {
 	const { t } = useTranslation();
+	const canOpenFolder = onOpenEvidenceFolder !== undefined && evidenceFolderCount > 0;
+	const folderButton =
+		onOpenEvidenceFolder === undefined ? null : (
+			<button
+				type="button"
+				data-action="evidence-folder"
+				disabled={!canOpenFolder}
+				aria-label={t("inspector.evidencePanel.evidenceFolder")}
+				title={t("inspector.evidencePanel.evidenceFolderTooltip")}
+				className="evidence-folder-btn flex-none inline-flex items-center gap-5 h-22 px-8 rounded-6 border border-border bg-window text-badge font-semibold text-ink-body whitespace-nowrap cursor-pointer transition-[background,border-color,color] duration-(--dur-color) ease-[ease] enabled:hover:border-border-strong enabled:hover:bg-hover enabled:hover:text-ink disabled:opacity-45 disabled:cursor-default"
+				onClick={onOpenEvidenceFolder}
+			>
+				<FolderGlyph size={13} />
+				<span>{t("inspector.evidencePanel.evidenceFolder")}</span>
+			</button>
+		);
 	// Only the selected number renders: falling back to `evidence[0]` here would
 	// silently show unrelated evidence for a citation the run never produced.
 	const item = evidence.find((entry) => entry.number === selected);
 	if (item === undefined) {
 		return (
 			<div className="inspector-half flex-1 min-h-0 flex flex-col overflow-hidden relative" aria-label={t("inspector.evidence")}>
+				{canOpenFolder ? (
+					<div className="flex items-center justify-end px-16 pt-18">
+						{folderButton}
+					</div>
+				) : null}
 				<div className="flex-1 flex items-center justify-center px-10 text-center text-sm text-ink-muted leading-body whitespace-pre-line">
 					{t("inspector.evidencePanel.emptyTitle")}
 				</div>
@@ -784,20 +818,23 @@ function EvidencePanel({
 	return (
 		<div className="inspector-half flex-1 min-h-0 flex flex-col overflow-hidden relative" aria-label={t("inspector.evidence")}>
 			<div className="inspector-body flex-1 min-h-0 overflow-auto px-16 pt-18 pb-24">
-				<div className="evidence-tabs flex gap-3 overflow-auto mb-12">
-					{evidence.map((entry) => (
-						<button
-							type="button"
-							key={entry.number}
-							className={cn(
-								"evidence-tab flex-none inline-flex items-center justify-center size-22 rounded-6 border text-badge font-semibold cursor-pointer transition-[background,color,border-color] duration-(--dur-color) ease-[ease]",
-								entry.number === item.number ? "bg-accent border-accent text-on-accent" : "bg-window border-border text-ink-muted hover:text-ink",
-							)}
-							onClick={() => onSelect(entry.number)}
-						>
-							{entry.number}
-						</button>
-					))}
+				<div className="evidence-header flex items-center justify-between gap-8 mb-12">
+					<div className="evidence-tabs flex min-w-0 flex-1 gap-3 overflow-auto">
+						{evidence.map((entry) => (
+							<button
+								type="button"
+								key={entry.number}
+								className={cn(
+									"evidence-tab flex-none inline-flex items-center justify-center size-22 rounded-6 border text-badge font-semibold cursor-pointer transition-[background,color,border-color] duration-(--dur-color) ease-[ease]",
+									entry.number === item.number ? "bg-accent border-accent text-on-accent" : "bg-window border-border text-ink-muted hover:text-ink",
+								)}
+								onClick={() => onSelect(entry.number)}
+							>
+								{entry.number}
+							</button>
+						))}
+					</div>
+					{folderButton}
 				</div>
 
 				{sourceImage?.kind === "local" && sourceImage.renderable ? (

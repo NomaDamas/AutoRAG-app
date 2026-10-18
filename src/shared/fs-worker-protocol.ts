@@ -87,6 +87,8 @@ export const REPLAY_UNSAFE_OPS: Readonly<Record<string, true>> = {
 	emptyTrash: true,
 	createFile: true,
 	undo: true,
+	createEvidenceFolder: true,
+	removeEvidenceFolder: true,
 	redo: true,
 	recordCreated: true,
 	ejectLocation: true,

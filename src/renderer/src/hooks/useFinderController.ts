@@ -93,6 +93,7 @@ import {
 	isVirtualTabPath,
 	navigateTab,
 	openAiSearchTab,
+	openEvidenceFolderTab,
 	openTab,
 	openTabAt,
 	patchActiveTab,
@@ -251,6 +252,14 @@ export interface FinderController {
 	cancelEmptyTrash(): void;
 	/** Whether the 휴지통 비우기 confirm is showing. */
 	readonly emptyTrashConfirm: boolean;
+	/** Open a temporary Evidence Folder in a new tab with the session's local evidence files. */
+	openEvidenceFolder(paths: readonly string[]): void;
+	/** Whether the close-Evidence-Folder confirm modal is showing. */
+	readonly closeEvidenceFolderConfirm: boolean;
+	/** Confirm closing the Evidence Folder tab and deleting its temporary directory. */
+	confirmCloseEvidenceFolder(): void;
+	/** Cancel closing the Evidence Folder tab. */
+	cancelCloseEvidenceFolder(): void;
 	/** An in-app row drop: ⌥ copies, otherwise the rows move into the target folder. */
 	transferDropped(paths: readonly string[], destDir: string, copy: boolean): void;
 	/** A drop on another tab: switch to it, then move/copy the rows into its folder. */
@@ -401,6 +410,8 @@ export function useFinderController(
 	const menuServicesToken = useRef(0);
 	/** The 휴지통 비우기 confirm: destructive, so it never runs without an explicit click. */
 	const [emptyTrashConfirm, setEmptyTrashConfirm] = useState(false);
+	/** Tab id of an Evidence Folder tab awaiting close confirmation; null when none is pending. */
+	const [closingEvidenceTabId, setClosingEvidenceTabId] = useState<number | null>(null);
 	const [flashPath, setFlashPath] = useState<string | null>(null);
 	const [searchFocused, setSearchFocused] = useState(false);
 	const [pathEditingCount, setPathEditingCount] = useState(0);
@@ -1057,6 +1068,31 @@ export function useFinderController(
 			.catch(reportError);
 	});
 
+	const openEvidenceFolder = useLatestCallback((paths: readonly string[]) => {
+		if (paths.length === 0) return;
+		source
+			.createEvidenceFolder(paths, t("inspector.evidencePanel.evidenceFolder"))
+			.then((folderPath) => {
+				setTabsState((state) => openEvidenceFolderTab(state, folderPath));
+				setQueryValue("");
+			})
+			.catch(reportError);
+	});
+
+	const cancelCloseEvidenceFolder = useLatestCallback(() => setClosingEvidenceTabId(null));
+	const confirmCloseEvidenceFolder = useLatestCallback(() => {
+		const id = closingEvidenceTabId;
+		setClosingEvidenceTabId(null);
+		if (id === null) return;
+		const closing = tabsRef.current.find((candidate) => candidate.id === id);
+		const folderPath = closing?.evidenceFolder;
+		updateWorkspace((workspace) => closeWorkspaceTab(workspace, id));
+		if (folderPath !== undefined) {
+			store.drop([folderPath]);
+			source.removeEvidenceFolder(folderPath).catch(reportError);
+		}
+	});
+
 	/**
 	 * Flips the file's `excludePaths` entry in the shared AutoRAG config. The row
 	 * adopts the returned status at once (pending while the index catches up);
@@ -1648,6 +1684,7 @@ export function useFinderController(
 	/** ⌥↑: the enclosing folder, with the folder just left selected and scrolled into view. */
 	const goToParentFolder = useLatestCallback(() => {
 		if (path === "" || isVirtualListing(path) || isVirtualTabPath(path)) return;
+		if (tab.evidenceFolder !== undefined && path === tab.evidenceFolder) return;
 		const parent = dirname(path);
 		if (parent === "" || parent === path) return;
 		setTabsState((state) =>
@@ -1703,6 +1740,10 @@ export function useFinderController(
 		});
 
 	const dismiss = useLatestCallback(() => {
+		if (closingEvidenceTabId !== null) {
+			setClosingEvidenceTabId(null);
+			return;
+		}
 		if (emptyTrashConfirm) {
 			setEmptyTrashConfirm(false);
 			return;
@@ -1739,12 +1780,18 @@ export function useFinderController(
 	const editPath = useLatestCallback(() => setPathEditingCount((count) => count + 1));
 	const endPathEdit = useLatestCallback(() => setPathEditingCount((count) => count));
 	const duplicateSelection = useLatestCallback(() => duplicatePaths(selection.keys));
-	const closeActiveTab = useLatestCallback(() =>
+	const closeActiveTab = useLatestCallback(() => {
+		const current = activeTab(tabsState);
+		if (current.evidenceFolder !== undefined) {
+			if (!binding.canCloseTabs) return;
+			setClosingEvidenceTabId(current.id);
+			return;
+		}
 		updateWorkspace((workspace) => {
-			const current = workspace.panes.find((candidate) => candidate.id === paneId);
-			return current === undefined ? workspace : closeWorkspaceTab(workspace, current.activeId);
-		}),
-	);
+			const paneCurrent = workspace.panes.find((candidate) => candidate.id === paneId);
+			return paneCurrent === undefined ? workspace : closeWorkspaceTab(workspace, paneCurrent.activeId);
+		});
+	});
 	const focusComposer = useLatestCallback(() => {
 		updateWorkspace(focusAiSearchInWorkspace);
 		focusComposerRef.current?.();
@@ -1899,7 +1946,15 @@ export function useFinderController(
 	// Handlers handed to the view: one stable identity each (see useLatestCallback),
 	// so no closure here keeps an earlier render's rows alive.
 	const selectTabId = useLatestCallback((id: number) => updateWorkspace((workspace) => focusTab(workspace, id)));
-	const closeTabId = useLatestCallback((id: number) => updateWorkspace((workspace) => closeWorkspaceTab(workspace, id)));
+	const closeTabId = useLatestCallback((id: number) => {
+		const target = tabsRef.current.find((candidate) => candidate.id === id);
+		if (target?.evidenceFolder !== undefined) {
+			if (!binding.canCloseTabs) return;
+			setClosingEvidenceTabId(id);
+			return;
+		}
+		updateWorkspace((workspace) => closeWorkspaceTab(workspace, id));
+	});
 	const showAiSearch = useLatestCallback(() => setTabsState((state) => showAiSearchInActiveTab(state)));
 	const openAiSearch = useLatestCallback(() => setTabsState((state) => openAiSearchTab(state)));
 	const focusAiSearch = useLatestCallback(() => updateWorkspace(focusAiSearchInWorkspace));
@@ -1996,6 +2051,10 @@ export function useFinderController(
 		confirmEmptyTrash,
 		cancelEmptyTrash,
 		emptyTrashConfirm,
+		openEvidenceFolder,
+		closeEvidenceFolderConfirm: closingEvidenceTabId !== null,
+		confirmCloseEvidenceFolder,
+		cancelCloseEvidenceFolder,
 		transferDropped,
 		dropOnTab,
 		columnPanes: paneViews,

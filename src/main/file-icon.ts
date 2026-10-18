@@ -31,6 +31,7 @@
  * same file twice.
  */
 
+import { realpath } from "node:fs/promises";
 import { errorMessage } from "./fs-entry";
 import { ICON_SIZE, iconUrl } from "./icon-protocol";
 import { createPriorityGate, type PriorityGate } from "./priority-gate";
@@ -230,16 +231,22 @@ class IconCache {
 async function defaultThumbnail(path: string, size: number): Promise<Uint8Array | null> {
 	// Dynamic: `electron` is a main-process-only module and is not importable when
 	// this file is loaded outside Electron (unit tests inject `thumbnail` instead).
-	const { nativeImage } = await import("electron");
-	const image = await nativeImage.createThumbnailFromPath(path, { width: size, height: size });
+	const [{ nativeImage }, resolved] = await Promise.all([
+		import("electron"),
+		realpath(path).catch(() => path),
+	]);
+	const image = await nativeImage.createThumbnailFromPath(resolved, { width: size, height: size });
 	return image.isEmpty() ? null : image.toPNG();
 }
 
 async function defaultSystemIcon(path: string): Promise<Uint8Array | null> {
 	// Dynamic: `electron` is a main-process-only module and is not importable when
 	// this file is loaded outside Electron (unit tests inject `systemIcon` instead).
-	const { app } = await import("electron");
-	const image = await app.getFileIcon(path, { size: "normal" });
+	const [{ app }, resolved] = await Promise.all([
+		import("electron"),
+		realpath(path).catch(() => path),
+	]);
+	const image = await app.getFileIcon(resolved, { size: "normal" });
 	return image.isEmpty() ? null : image.toPNG();
 }
 

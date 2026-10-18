@@ -119,6 +119,10 @@ export interface FinderSource {
 	createFolder(dir: string): Promise<{ readonly path: string; readonly name: string }>;
 	/** Create a new file from a format template (Finder-style "untitled.<ext>" / "untitled 2.<ext>"). */
 	createFile(dir: string, format: NewFileFormatId): Promise<{ readonly path: string; readonly name: string }>;
+	/** Create a temporary Evidence Folder containing symlinks to `paths`. */
+	createEvidenceFolder(paths: readonly string[], folderName?: string): Promise<string>;
+	/** Remove a temporary Evidence Folder created by `createEvidenceFolder`. */
+	removeEvidenceFolder(folderPath: string): Promise<void>;
 	duplicate(paths: readonly string[]): Promise<FsBatchResult>;
 	copyInto(paths: readonly string[], destDir: string): Promise<FsBatchResult>;
 	moveInto(paths: readonly string[], destDir: string): Promise<FsBatchResult>;
@@ -236,6 +240,8 @@ export function createBridgeSource(
 		},
 		createFolder: (dir) => fs.createFolder(dir),
 		createFile: (dir, format) => fs.createFile(dir, format),
+		createEvidenceFolder: (paths, folderName) => fs.createEvidenceFolder(paths, folderName),
+		removeEvidenceFolder: (folderPath) => fs.removeEvidenceFolder(folderPath),
 		duplicate: (paths) => fs.duplicate(paths),
 		copyInto: (paths, destDir) => fs.copy(paths, destDir),
 		moveInto: (paths, destDir) => fs.move(paths, destDir),
@@ -268,6 +274,9 @@ interface FixtureState {
 	ejected: Set<string>;
 	/** Fixture Trash origins: payload path → the folder the item came from. */
 	trash: Map<string, string>;
+	/** Active fixture Evidence Folders (`folderPath`). */
+	evidenceFolders: Set<string>;
+	nextEvidenceId: number;
 }
 
 /** Fixture sidebar rows: the FIXTURE_TREE roots plus two volumes to eject. */
@@ -288,7 +297,7 @@ function seedFixtureState(): FixtureState {
 	for (const [path, items] of Object.entries(FIXTURE_TREE)) {
 		tree.set(path, [...items]);
 	}
-	return { tree, clipboard: null, indexExcluded: new Set(), ejected: new Set(), trash: new Map() };
+	return { tree, clipboard: null, indexExcluded: new Set(), ejected: new Set(), trash: new Map(), evidenceFolders: new Set(), nextEvidenceId: 1 };
 }
 
 function takenNames(state: FixtureState, dir: string): string[] {
@@ -622,6 +631,42 @@ export function createFixtureSource(): FinderSource {
 			insertItem(state, dir, item);
 			record("createFile", [createdStep(path, item)]);
 			return Promise.resolve({ path, name });
+		},
+		createEvidenceFolder: (paths, folderName) => {
+			const id = state.nextEvidenceId++;
+			const safeName = (folderName ?? "Evidence Folder").trim() || "Evidence Folder";
+			const folderPath = ` TempEvidence_${id}/${safeName}`.trim();
+			const items: FixtureItem[] = [];
+			const seen = new Set<string>();
+			for (const rawPath of paths) {
+				const norm = rawPath.normalize("NFC");
+				if (seen.has(norm)) continue;
+				seen.add(norm);
+				const existing = findItem(state, rawPath);
+				const base = existing?.name ?? basename(rawPath);
+				if (base === "") continue;
+				const name = copyName(base, items.map((i) => i.name));
+				items.push(
+					existing !== null
+						? { ...existing, name }
+						: {
+								name,
+								fileKind: kindFromExtension(base.includes(".") ? base.slice(base.lastIndexOf(".") + 1) : ""),
+								dateLabel: fixtureNowLabel(),
+								sizeLabel: "4 KB",
+							},
+				);
+			}
+			state.tree.set(folderPath, items);
+			state.evidenceFolders.add(folderPath);
+			return Promise.resolve(folderPath);
+		},
+		removeEvidenceFolder: (folderPath) => {
+			if (state.evidenceFolders.has(folderPath)) {
+				state.evidenceFolders.delete(folderPath);
+				state.tree.delete(folderPath);
+			}
+			return resolve();
 		},
 		duplicate: (paths) => {
 			const ok: string[] = [];

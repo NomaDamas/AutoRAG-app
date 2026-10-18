@@ -426,6 +426,17 @@ export interface FsCoreBridge {
 	 */
 	createFile(directory: string, format: NewFileFormatId): Promise<{ readonly path: string; readonly name: string }>;
 	/** Move to the macOS Trash (shell.trashItem). */
+	/**
+	 * Create a temporary Evidence Folder populated with symlinks (or hardlink/copy
+	 * fallback on restricted platforms) for the existing local paths in `paths`.
+	 * Returns the created folder's absolute path.
+	 */
+	createEvidenceFolder(paths: readonly string[], folderName?: string): Promise<string>;
+	/**
+	 * Delete a temporary Evidence Folder previously created by
+	 * {@link createEvidenceFolder}. Paths outside tracked Evidence Folders are ignored.
+	 */
+	removeEvidenceFolder(folderPath: string): Promise<void>;
 	trash(paths: readonly string[]): Promise<FsBatchResult>;
 	/**
 	 * Restore trashed payloads back to the folders they came from (Finder

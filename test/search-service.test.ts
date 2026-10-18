@@ -344,6 +344,32 @@ describe("createSearchService", () => {
 		expect(assistant.deep).toBeNull();
 	});
 
+	it("keeps streaming as Quick when the first agent_start errors without a preliminary answer", async () => {
+		const agent = createFakeAgent(async function*(live) {
+			live({ type: "agent_start" });
+			live({ type: "message_start", message: { role: "assistant" } });
+			live({ type: "message_end", message: { role: "assistant", stopReason: "error" } });
+			live({ type: "agent_end" });
+			live({ type: "agent_start" });
+			live({ type: "message_start", message: { role: "assistant" } });
+			live({ type: "message_update", assistantMessageEvent: { type: "text_delta", delta: "Single " } });
+			live({ type: "message_update", assistantMessageEvent: { type: "text_delta", delta: "answer." } });
+			live({ type: "message_end", message: { role: "assistant", stopReason: "stop" } });
+			live({ type: "agent_end" });
+			yield { type: "complete", response: createResponse("session-fallback", "Single answer. [1]", 1) };
+		});
+		const { events, send } = collectEvents();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send, now });
+
+		await service.start("search-fallback", "chat-fallback", "refund approval", []);
+
+		expect(events.filter((event) => event.type === "deep-draft" || event.type === "deep")).toEqual([]);
+		expect(events.filter((event) => event.type === "quick-draft")).toEqual([
+			{ type: "quick-draft", searchId: "search-fallback", text: "Single " },
+			{ type: "quick-draft", searchId: "search-fallback", text: "Single answer." },
+		]);
+		expect(events.filter((event) => event.type === "quick")).toHaveLength(1);
+	});
 	it("maps the complete event after a preliminary to the Deep phase", async () => {
 		const agent = createFakeAgent(async function*() {
 			yield { type: "preliminary", response: createResponse("session-deep", "Quick answer", 1) };

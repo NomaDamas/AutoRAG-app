@@ -215,7 +215,9 @@
       "emptyTitle": "답변의 근거가\n여기에 표시됩니다.",
       "excerpts": "근거 내용 발췌",
       "showInFinder": "Finder에서 보기",
-      "openInBrowser": "브라우저에서 열기"
+      "openInBrowser": "브라우저에서 열기",
+      "evidenceFolder": "근거 폴더",
+      "evidenceFolderTooltip": "현재 대화의 근거 파일을 임시 폴더 탭으로 열기"
     }
   },
   "aiSearch": {
@@ -299,7 +301,10 @@
   "confirm": {
     "emptyTrashTitle": "휴지통 비우기",
     "emptyTrashMessage": "휴지통의 모든 항목이 영구 삭제됩니다. 이 작업은 되돌릴 수 없습니다.",
-    "emptyTrashAction": "비우기"
+    "emptyTrashAction": "비우기",
+    "closeEvidenceFolderTitle": "근거 폴더 닫기",
+    "closeEvidenceFolderMessage": "이 탭을 닫으면 임시 근거 폴더가 삭제되어 정리됩니다. 원본 파일은 그대로 유지됩니다. 정말 닫으시겠습니까?",
+    "closeEvidenceFolderAction": "닫기"
   },
   "settings": {
     "title": "설정",

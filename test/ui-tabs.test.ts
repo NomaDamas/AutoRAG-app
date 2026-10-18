@@ -4,6 +4,7 @@ import {
 	activeTab,
 	AI_SEARCH_PATH,
 	aiPanelTabs,
+	applyColumnChoice,
 	canCloseTab,
 	closeTab,
 	createTabsState,
@@ -14,6 +15,7 @@ import {
 	isVirtualTabPath,
 	navigateTab,
 	openAiSearchTab,
+	openEvidenceFolderTab,
 	openTab,
 	openTabAt,
 	openOrSelectSettingsTab,
@@ -279,5 +281,51 @@ describe("AI Search tabs", () => {
 		expect(activeTab(goBack(left)).path).toBe(AI_SEARCH_PATH);
 		const lone = createTabsState(AI_SEARCH_PATH);
 		expect(exitVirtualTab(lone)).toBe(lone);
+	});
+});
+
+describe("Evidence Folder tabs", () => {
+	const evidenceRoot = "/tmp/dazzi-evidence-123/Evidence Folder";
+
+	it("opens a new tab marked with its evidenceFolder root", () => {
+		const initial = openAiSearchTab(createTabsState("/Users/me/Documents"));
+		const state = openEvidenceFolderTab(initial, evidenceRoot);
+		expect(state.tabs).toHaveLength(3);
+		expect(activeTab(state)).toMatchObject({
+			path: evidenceRoot,
+			evidenceFolder: evidenceRoot,
+			back: [],
+			fwd: [],
+		});
+	});
+
+	it("keeps evidenceFolder while browsing inside a nested subfolder, and drops it + prunes history when navigating outside", () => {
+		let state = openEvidenceFolderTab(createTabsState("/Users/me/Documents"), evidenceRoot);
+		// Navigating into a subfolder inside the evidence folder retains ownership
+		state = navigateTab(state, `${evidenceRoot}/sub`);
+		expect(activeTab(state).evidenceFolder).toBe(evidenceRoot);
+		expect(activeTab(state).back).toEqual([evidenceRoot]);
+
+		// Navigating outside the evidence folder drops ownership and strips evidence paths from back/fwd/chain
+		state = navigateTab(state, "/Users/me/Desktop");
+		expect(activeTab(state).evidenceFolder).toBeUndefined();
+		expect(activeTab(state).back).toEqual([]);
+		expect(activeTab(state).fwd).toEqual([]);
+	});
+
+	it("drops evidenceFolder when switching the active tab to AI Search or choosing a column outside the root", () => {
+		const state = openEvidenceFolderTab(createTabsState("/Users/me/Documents"), evidenceRoot);
+		const toAi = showAiSearchInActiveTab(state);
+		expect(activeTab(toAi).path).toBe(AI_SEARCH_PATH);
+		expect(activeTab(toAi).evidenceFolder).toBeUndefined();
+		expect(activeTab(toAi).back).toEqual([]);
+
+		const toCol = applyColumnChoice(
+			state,
+			{ path: "/Users/me/Documents", chain: ["/Users/me/Documents"] },
+			{ keys: [], anchor: null, focus: null },
+		);
+		expect(activeTab(toCol).evidenceFolder).toBeUndefined();
+		expect(activeTab(toCol).back).toEqual([]);
 	});
 });
