@@ -33,11 +33,12 @@ exploitable), social engineering, and denial-of-service by volume.
 
 ## Supported versions
 
-Only the latest release receives security fixes. The app updates itself from
-`https://dl.nomadamas.org/latest/` when the release was built with the update
-feed. Installers are signed when signing credentials are configured (macOS
-Developer ID, Windows Azure signing; see `docs/release.md`). Older versions are
-not patched.
+Dazzi receives security updates for at least five years after its first public
+release. Fixes ship as new versions and only the latest version is patched. The
+app updates itself from `https://dl.nomadamas.org/latest/` when the release was
+built with the update feed. Installers are signed when signing credentials are
+configured (macOS Developer ID, Windows Azure signing; see `docs/release.md`).
+Each published release carries a CycloneDX SBOM (`dazzi-sbom.cdx.json`).
 
 ## What we already do
 
