@@ -203,7 +203,7 @@ jobs:
         with:
           node-version: 24
       # slacrawl and notcrawl publish no Windows archive, so they are built from source with Go.
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version: stable
       - uses: dtolnay/rust-toolchain@stable
