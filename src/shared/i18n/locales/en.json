@@ -490,7 +490,7 @@
       "done": "Finished looking",
       "idle": "Look through your folders?",
       "failedTitle": "Could not look through your folders",
-      "lead": "AI is browsing the folders you chose",
+      "lead": "AI is counting the files in the suggested folders",
       "looking": "Looking at: {{path}}",
       "cancel": "Cancel and choose by hand",
       "note": "Found {{count}} sub-folders worth leaving out. Review them on the next screen.",
@@ -530,6 +530,14 @@
           "outside": "Only sub-folders of the selected folders can be left out.",
           "covered": "That folder is already left out."
         }
+      },
+      "criteria": {
+        "show": "See how the AI decides",
+        "hide": "Hide the criteria",
+        "min": "Too few files: a folder with fewer than {{minFiles}} indexed files is never left out, whatever else is true.",
+        "series": "Machine-written text series (logs, chat exports): at least {{files}} indexed files, {{share}}% or more of them the same type ({{types}}), and distinct file names (digits ignored) at {{names}}% or fewer of the indexed files. Markdown, mail and Office documents do not count.",
+        "sparse": "Documents are a small share of a large folder: at least {{files}} files in all and indexed files below {{share}}% of them (mostly photos, video or binaries).",
+        "appData": "App or system folder: the folder name, or a name on the path down from the chosen folder, is one of (case ignored): {{names}}"
       }
     },
     "embedding": {

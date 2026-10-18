@@ -321,16 +321,27 @@ resumes at the same step.
   binary would add bare "Electron" to Login Items); the switch is read back from
   the OS and flips off with a message if the OS refused.
 - **Smart scan** (after the account) starts a helper agent (see "Helper agents")
-  on the folders selected by default, with the prototype's drawn folder and
-  roaming magnifying glass and the folder it is looking at. The agent proposes the
-  sub-folders not worth indexing: app and system data, machine-written logs,
-  generated docs, code projects, recordings. It only names folders; every path is
-  checked against the disk and the selected folders, the file counts and sizes
-  are measured with the pre-scan's own walk, and a proposal the index would read
-  nothing from is dropped. It spends the AutoRAG model, so it runs once on
-  entering the step (a draft that already holds proposals is not re-run); the
-  user can cancel and choose by hand, and a failure (no model signed in yet, a
-  provider error) shows its reason with a retry while the step can still be left.
+  on every suggested folder (Desktop, Documents, Downloads, iCloud Drive,
+  Pictures, connected cloud drives) and every folder the user added, selected or
+  not: what to index is chosen on the next screen, and a proposal only shows while
+  its folder is selected, so turning a folder on later needs no second analysis.
+  The scan screen shows the prototype's drawn folder and roaming magnifying glass
+  and the folder being looked at. The agent decides from counts, not file names:
+  its `folder_stats` tool counts every file by extension, subfolders included, with
+  the same rules as the pre-scan, and reports which criteria hold for the folder
+  and each subfolder. The criteria are numbers in one module
+  (`src/shared/smart-indexing-criteria.ts`) that the agent's prompt, the tool's
+  verdicts and the "See how the AI decides" text on the folders screen all read:
+  fewer than 20 indexed files is never left out; a *series* (at least 50 indexed
+  files, 90% or more one plain-text type, distinct names at 10% or fewer); a
+  *sparse* folder (at least 300 files, indexed files below 10%); an *app-data*
+  name on the path (Telegram Desktop, Zoom, logs, caches, ...). A folder can only
+  be proposed after the agent counted it, and every path is checked against the
+  disk and the folders looked through; a proposal the index would read nothing
+  from is dropped. It spends the AutoRAG model, so it runs once on entering the
+  step (a draft that already holds proposals is not re-run); the user can cancel
+  and choose by hand, and a failure (no model signed in yet, a provider error)
+  shows its reason with a retry while the step can still be left.
 - **Folders** is the prototype's smart-indexing scope screen: a policy bar (the
   estimate, struck through to the old one with the percent saved, and "scan
   again"), a blue panel of the included folders and a red one of the sub-folders

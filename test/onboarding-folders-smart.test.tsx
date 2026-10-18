@@ -211,4 +211,33 @@ describe("FoldersStep as the smart-indexing scope screen", () => {
 		click(one(".si-rescan"));
 		expect(rescanSmart).toHaveBeenCalledTimes(1);
 	});
+
+	it("explains exactly when a folder is left out, with the numbers the AI was given", () => {
+		renderFolders();
+
+		click(one(".si-criteria-toggle"));
+		const rules = all(".si-criteria li").map((item) => item.textContent ?? "");
+
+		expect(rules).toHaveLength(4);
+		expect(rules[0]).toContain("minFiles=20");
+		expect(rules[1]).toContain("files=50");
+		expect(rules[1]).toContain("share=90");
+		expect(rules[1]).toContain("names=10");
+		expect(rules[1]).toContain(".txt, .text");
+		expect(rules[2]).toContain("files=300");
+		expect(rules[2]).toContain("share=10");
+		expect(rules[3]).toContain("Telegram Desktop");
+		expect(rules[3]).toContain("Application Support");
+	});
+
+	it("keeps the criteria folded until asked", () => {
+		renderFolders();
+
+		expect(host.querySelector(".si-criteria")).toBeNull();
+		click(one(".si-criteria-toggle"));
+		expect(host.querySelector(".si-criteria")).not.toBeNull();
+		click(one(".si-criteria-toggle"));
+		expect(host.querySelector(".si-criteria")).toBeNull();
+	});
 });
+

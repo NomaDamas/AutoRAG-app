@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
 	addExclusion,
+	analysisRoots,
 	etaSaving,
 	excludedTotals,
 	indexingExclusions,
@@ -106,3 +107,33 @@ describe("smart run state", () => {
 		expect(reduceSmartRun(initialSmartRun, event({ type: "exploring", runId: "r1", path: "/x" }))).toBe(initialSmartRun);
 	});
 });
+
+describe("analysis roots", () => {
+	const candidates = [
+		{ path: "/docs", name: "Documents", displayPath: "~/Documents", kind: "documents", defaultSelected: true, ocrOff: false },
+		{ path: "/pics", name: "Pictures", displayPath: "~/Pictures", kind: "pictures", defaultSelected: false, ocrOff: false },
+		{ path: "/gone", name: "Gone", displayPath: "~/Gone", kind: "cloud", defaultSelected: false, ocrOff: false },
+	] as const;
+
+	it("looks through every suggested folder and every folder the user added, selected or not, so selecting one later needs no new analysis", () => {
+		const folders = [
+			{ path: "/docs", selected: true },
+			{ path: "/pics", selected: false },
+			{ path: "/mine", selected: false },
+		];
+
+		// "/gone" is a suggestion the draft does not list (a cloud drive that appeared later): it is looked through too.
+		expect(analysisRoots(candidates, folders)).toEqual(["/docs", "/pics", "/mine", "/gone"]);
+	});
+
+	it("lists a folder once and keeps the draft's order", () => {
+		const folders = [
+			{ path: "/mine", selected: true },
+			{ path: "/docs", selected: true },
+			{ path: "/mine", selected: true },
+		];
+
+		expect(analysisRoots(candidates, folders)).toEqual(["/mine", "/docs", "/pics", "/gone"]);
+	});
+});
+

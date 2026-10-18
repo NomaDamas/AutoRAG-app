@@ -90,7 +90,7 @@ export function SmartScanStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactEl
 			{!running && !done && !failed ? (
 				<>
 					<p className="si-scan-note">{t("onboarding.smartScan.skipped")}</p>
-					<button type="button" className="secondary si-scan-retry" disabled={roots.length === 0} onClick={ctx.startSmartScan}>
+					<button type="button" className="secondary si-scan-retry" disabled={ctx.candidates.length === 0 && draft.folders.length === 0} onClick={ctx.startSmartScan}>
 						{t("onboarding.smartScan.start")}
 					</button>
 				</>

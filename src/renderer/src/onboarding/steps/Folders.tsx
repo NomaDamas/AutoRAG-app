@@ -4,9 +4,10 @@
  * out. Pills are removable, ghost pills bring a folder back, dashed ones add.
  */
 
-import type { ReactElement } from "react";
+import { useState, type ReactElement } from "react";
 import type { FolderCandidate, FolderKind } from "../../../../shared/onboarding-contract";
 import type { SmartExclusion } from "../../../../shared/smart-indexing-contract";
+import { SMART_INDEXING_CRITERIA } from "../../../../shared/smart-indexing-criteria";
 import { Icon } from "../marks";
 import { formatSize, scanTotals } from "../flow";
 import { etaSaving, excludedTotals, visibleScope } from "../smart-scope";
@@ -38,8 +39,31 @@ function insidePath(item: SmartExclusion): string {
 	return item.path.slice(item.root.length).replace(/^[\\/]+/u, "");
 }
 
+const pct = (share: number): number => Math.round(share * 100);
+
+/** The exclusion rules in words, from the numbers the agent was given: what the user reads is what the AI applied. */
+function Criteria({ t }: { readonly t: OnboardingCtx["t"] }): ReactElement {
+	const { minIndexedFiles, series, sparse, appData } = SMART_INDEXING_CRITERIA;
+	return (
+		<ol className="si-criteria">
+			<li>{t("onboarding.folders.criteria.min", { minFiles: minIndexedFiles })}</li>
+			<li>
+				{t("onboarding.folders.criteria.series", {
+					files: series.minIndexedFiles,
+					share: pct(series.minTopExtensionShare),
+					names: pct(series.maxStemRatio),
+					types: series.extensions.join(", "),
+				})}
+			</li>
+			<li>{t("onboarding.folders.criteria.sparse", { files: sparse.minTotalFiles, share: pct(sparse.maxIndexedShare) })}</li>
+			<li>{t("onboarding.folders.criteria.appData", { names: appData.names.join(", ") })}</li>
+		</ol>
+	);
+}
+
 export function FoldersStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElement {
 	const { t, candidates, draft, scans } = ctx;
+	const [showCriteria, setShowCriteria] = useState(false);
 
 	const selectedPaths = draft.folders.filter((folder) => folder.selected).map((folder) => folder.path);
 	const selected = selectedPaths.map((path) => candidates.find((candidate) => candidate.path === path)).filter((candidate): candidate is FolderCandidate => candidate !== undefined);
@@ -61,7 +85,13 @@ export function FoldersStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElem
 						{t("onboarding.folders.policy.title")}
 						{draft.smartScope !== undefined ? <span className="tag rec">{t("onboarding.folders.policy.tag")}</span> : null}
 					</strong>
-					<p>{t("onboarding.folders.policy.lead")}</p>
+					<p>
+						{t("onboarding.folders.policy.lead")}{" "}
+						<button type="button" className="si-criteria-toggle" aria-expanded={showCriteria} onClick={() => setShowCriteria((shown) => !shown)}>
+							{t(showCriteria ? "onboarding.folders.criteria.hide" : "onboarding.folders.criteria.show")}
+						</button>
+					</p>
+					{showCriteria ? <Criteria t={t} /> : null}
 				</div>
 				<div className="si-policy-right">
 					<div className="si-eta-pill">

@@ -2,7 +2,10 @@ import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import type { AgentProfile } from "../src/main/agents/agent-factory";
+import { createFolderStats } from "../src/main/agents/profiles/folder-stats";
 import { createProposalCollector, smartIndexingProfile } from "../src/main/agents/profiles/smart-indexing";
+import { SMART_INDEXING_CRITERIA } from "../src/shared/smart-indexing-criteria";
 
 let root: string;
 let other: string;
@@ -93,28 +96,75 @@ describe("proposal collector", () => {
 });
 
 describe("smart indexing profile", () => {
-	it("lets the agent explore and read but never write, with the proposal tool as its only way to answer", () => {
-		const profile = smartIndexingProfile({ roots: [root], language: "ko", extensions: [".md"], collector: createProposalCollector([root]) });
+	function profileFor(extensions: readonly string[] = [".md"], roots: readonly string[] = [root], language: "ko" | "en" | "ja" | "zh" = "ko"): AgentProfile {
+		return smartIndexingProfile({ roots, language, extensions, collector: createProposalCollector(roots), stats: createFolderStats(roots, { supportedExtensions: new Set(extensions), maxSourceBytes: 1000 }) });
+	}
 
-		expect([...profile.tools].sort()).toEqual(["find", "grep", "ls", "read"]);
-		expect(profile.customTools?.map((tool) => tool.name)).toEqual(["propose_exclusions"]);
+	it("lets the agent look around and count but never write, answering only through the proposal tool", () => {
+		const profile = profileFor();
+
+		expect([...profile.tools].sort()).toEqual(["find", "ls", "read"]);
+		expect(profile.customTools?.map((tool) => tool.name)).toEqual(["folder_stats", "propose_exclusions"]);
 		expect(profile.thinking).toBe("low");
 		expect(profile.context).toBeUndefined();
 	});
 
 	it("tells the model the folders to look at, the language to answer in, and what the app skips on its own", () => {
-		const profile = smartIndexingProfile({ roots: [root, other], language: "ja", extensions: [".pdf", ".hwp", ".md"], collector: createProposalCollector([root, other]) });
+		const prompt = profileFor([".pdf", ".hwp", ".md"], [root, other], "ja").systemPrompt;
 
-		expect(profile.systemPrompt).toContain(root);
-		expect(profile.systemPrompt).toContain(other);
-		expect(profile.systemPrompt).toContain("Japanese");
-		expect(profile.systemPrompt).toContain("node_modules");
-		expect(profile.systemPrompt).toContain("propose_exclusions");
+		expect(prompt).toContain(root);
+		expect(prompt).toContain(other);
+		expect(prompt).toContain("Japanese");
+		expect(prompt).toContain("node_modules");
+		expect(prompt).toContain("propose_exclusions");
 	});
 
-	it("names the file types the index reads, so the agent only spends effort on folders that hold some", () => {
-		const profile = smartIndexingProfile({ roots: [root], language: "en", extensions: [".pdf", ".hwp", ".md"], collector: createProposalCollector([root]) });
+	it("names the file types the index reads", () => {
+		expect(profileFor([".pdf", ".hwp", ".md"], [root], "en").systemPrompt).toContain(".hwp, .md, .pdf");
+	});
 
-		expect(profile.systemPrompt).toContain(".hwp, .md, .pdf");
+	it("states every criterion with the exact numbers the verdicts are computed from", () => {
+		const prompt = profileFor().systemPrompt;
+		const { minIndexedFiles, series, sparse, appData } = SMART_INDEXING_CRITERIA;
+
+		expect(prompt).toContain(`fewer than ${minIndexedFiles} indexed files`);
+		expect(prompt).toContain(`at least ${series.minIndexedFiles} indexed files`);
+		expect(prompt).toContain(`${series.minTopExtensionShare * 100}% or more`);
+		expect(prompt).toContain(`${series.maxStemRatio * 100}% or fewer`);
+		expect(prompt).toContain(series.extensions.join(", "));
+		expect(prompt).toContain(`at least ${sparse.minTotalFiles} files`);
+		expect(prompt).toContain(`below ${sparse.maxIndexedShare * 100}%`);
+		for (const name of appData.names) expect(prompt).toContain(name);
+	});
+
+	it("requires counting a folder before proposing it and forbids proposing from file names alone", () => {
+		const prompt = profileFor().systemPrompt;
+
+		expect(prompt).toContain("folder_stats");
+		expect(prompt).toMatch(/only propose a folder .*folder_stats/isu);
+		expect(prompt).toMatch(/never .*file names/isu);
+	});
+});
+
+describe("proposal collector with measured folders", () => {
+	it("refuses a folder the agent never counted, and says to count it first", async () => {
+		const stats = createFolderStats([root], { supportedExtensions: new Set([".md"]), maxSourceBytes: 1000 });
+		const collector = createProposalCollector([root], stats);
+
+		const outcome = await collector.propose([{ path: join(root, "Telegram Desktop"), reason: "chat" }]);
+
+		expect(outcome.accepted).toEqual([]);
+		expect(outcome.rejected).toEqual([{ path: join(root, "Telegram Desktop"), why: expect.stringContaining("folder_stats") }]);
+	});
+
+	it("takes a folder once it was counted, and lets a counted folder cover the ones inside it", async () => {
+		const stats = createFolderStats([root], { supportedExtensions: new Set([".md"]), maxSourceBytes: 1000 });
+		const collector = createProposalCollector([root], stats);
+		await stats.report(join(root, "Telegram Desktop"), new AbortController().signal);
+
+		const outcome = await collector.propose([{ path: join(root, "Telegram Desktop"), reason: "chat" }]);
+
+		expect(outcome.rejected).toEqual([]);
+		expect(collector.proposals().map((proposal) => proposal.path)).toEqual([join(root, "Telegram Desktop")]);
 	});
 });

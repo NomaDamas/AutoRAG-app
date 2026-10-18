@@ -174,7 +174,7 @@ export interface FolderCandidate {
 	/** `~`-abbreviated path for display. */
 	readonly displayPath: string;
 	readonly kind: FolderKind;
-	/** Documents, Desktop, iCloud Drive start selected; Downloads and the rest do not. */
+	/** Documents, Desktop, Downloads and iCloud Drive start selected; Pictures and cloud drives do not. */
 	readonly defaultSelected: boolean;
 	/** Images in this folder are skipped because OCR is off in the shared config. */
 	readonly ocrOff: boolean;

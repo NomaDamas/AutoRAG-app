@@ -68,6 +68,7 @@ describe("smart indexing service", () => {
 		const registration = register();
 		registration.setResponses([
 			fauxAssistantMessage(fauxToolCall("ls", { path: root })),
+			fauxAssistantMessage(fauxToolCall("folder_stats", { path: join(root, "Telegram Desktop") })),
 			fauxAssistantMessage(
 				fauxToolCall("propose_exclusions", {
 					exclusions: [
@@ -83,6 +84,7 @@ describe("smart indexing service", () => {
 
 		expect(events).toEqual([
 			{ type: "exploring", runId: "run-1", path: root },
+			{ type: "exploring", runId: "run-1", path: join(root, "Telegram Desktop") },
 			{
 				type: "result",
 				runId: "run-1",
@@ -94,6 +96,8 @@ describe("smart indexing service", () => {
 	it("leaves out a proposal the index would read nothing from: excluding it changes nothing", async () => {
 		const registration = register();
 		registration.setResponses([
+			fauxAssistantMessage(fauxToolCall("folder_stats", { path: join(root, "Pictures") })),
+			fauxAssistantMessage(fauxToolCall("folder_stats", { path: join(root, "Telegram Desktop") })),
 			fauxAssistantMessage(
 				fauxToolCall("propose_exclusions", {
 					exclusions: [
@@ -111,6 +115,45 @@ describe("smart indexing service", () => {
 		expect(finalEvent()).toMatchObject({ exclusions: { length: 1 } });
 	});
 
+	it("refuses a folder that was never counted and feeds the model the instruction to count it", async () => {
+		const registration = register();
+		const fed: string[][] = [];
+		registration.setResponses([
+			fauxAssistantMessage(fauxToolCall("propose_exclusions", { exclusions: [{ path: join(root, "Telegram Desktop"), reason: "sounds like chat" }] })),
+			(context) => {
+				fed.push(toolResultTexts(context.messages));
+				return fauxAssistantMessage("done");
+			},
+		]);
+
+		await serviceFor(registration).analyze("run-11", [root]);
+
+		expect(fed[0]?.join("\n")).toContain("folder_stats first");
+		expect(finalEvent()).toEqual({ type: "result", runId: "run-11", exclusions: [] });
+	});
+
+	it("gives the model the folder's real counts, subfolders included", async () => {
+		const registration = register();
+		const fed: string[][] = [];
+		registration.setResponses([
+			fauxAssistantMessage(fauxToolCall("folder_stats", { path: root })),
+			(context) => {
+				fed.push(toolResultTexts(context.messages));
+				return fauxAssistantMessage(fauxToolCall("propose_exclusions", { exclusions: [] }));
+			},
+			fauxAssistantMessage("done"),
+		]);
+
+		await serviceFor(registration).analyze("run-12", [root]);
+
+		const report = fed[0]?.join("\n") ?? "";
+		// report.md + a.md + b.md are indexed; photo.jpg and holiday.jpg are not.
+		expect(report).toContain("3 indexed files of 5 files in all");
+		expect(report).toContain(".md 3 (indexed)");
+		expect(report).toContain(".jpg 2");
+		expect(report).toContain("Telegram Desktop/ indexed 2 of 3");
+	});
+
 	it("tells the model which proposed paths were refused so it can correct them", async () => {
 		const registration = register();
 		const fed: string[][] = [];
@@ -118,8 +161,9 @@ describe("smart indexing service", () => {
 			fauxAssistantMessage(fauxToolCall("propose_exclusions", { exclusions: [{ path: "/etc", reason: "nope" }] })),
 			(context) => {
 				fed.push(toolResultTexts(context.messages));
-				return fauxAssistantMessage(fauxToolCall("propose_exclusions", { exclusions: [{ path: join(root, "Telegram Desktop"), reason: "chat" }] }));
+				return fauxAssistantMessage(fauxToolCall("folder_stats", { path: join(root, "Telegram Desktop") }));
 			},
+			fauxAssistantMessage(fauxToolCall("propose_exclusions", { exclusions: [{ path: join(root, "Telegram Desktop"), reason: "chat" }] })),
 			fauxAssistantMessage("done"),
 		]);
 
@@ -135,6 +179,7 @@ describe("smart indexing service", () => {
 			fauxAssistantMessage(fauxToolCall("ls", { path: root })),
 			fauxAssistantMessage(fauxToolCall("find", { pattern: "*.md", path: join(root, "Docs") })),
 			fauxAssistantMessage(fauxToolCall("read", { path: join(root, "Docs", "report.md") })),
+			fauxAssistantMessage(fauxToolCall("folder_stats", { path: root })),
 			fauxAssistantMessage(fauxToolCall("propose_exclusions", { exclusions: [] })),
 			fauxAssistantMessage("done"),
 		]);
@@ -145,6 +190,7 @@ describe("smart indexing service", () => {
 			root,
 			join(root, "Docs"),
 			join(root, "Docs", "report.md"),
+			root,
 		]);
 		expect(finalEvent()).toEqual({ type: "result", runId: "run-3", exclusions: [] });
 	});
@@ -208,6 +254,7 @@ describe("smart indexing service", () => {
 	it("keeps what the agent found when it runs out of time", async () => {
 		const registration = register();
 		registration.setResponses([
+			fauxAssistantMessage(fauxToolCall("folder_stats", { path: join(root, "Telegram Desktop") })),
 			fauxAssistantMessage(fauxToolCall("propose_exclusions", { exclusions: [{ path: join(root, "Telegram Desktop"), reason: "chat" }] })),
 			(_context, options) =>
 				new Promise<AssistantMessage>((resolve) => {

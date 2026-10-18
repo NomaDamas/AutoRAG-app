@@ -583,7 +583,7 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 			add(deps.knownFolders.desktop, "Desktop", "desktop", true, false);
 			add(deps.knownFolders.documents, "Documents", "documents", true, false);
 			if (deps.iCloudDrivePath !== null) add(deps.iCloudDrivePath, "iCloud Drive", "icloud", true, false);
-			add(deps.knownFolders.downloads, "Downloads", "downloads", false, ocrOff);
+			add(deps.knownFolders.downloads, "Downloads", "downloads", true, ocrOff);
 			add(deps.knownFolders.pictures, "Pictures", "pictures", false, ocrOff);
 			for (const drive of await deps.cloudDrives().catch(() => [])) {
 				add(drive.path, drive.name, "cloud", false, false);

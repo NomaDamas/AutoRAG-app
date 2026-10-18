@@ -1254,6 +1254,32 @@ html[data-appearance="dark"] .onb .source-icon.brand {
 	line-height: 1.45;
 }
 
+.onb .si-criteria-toggle {
+	padding: 0;
+	border: 0;
+	background: none;
+	color: var(--onb-blue);
+	font: inherit;
+	cursor: pointer;
+}
+
+.onb .si-criteria-toggle:hover {
+	text-decoration: underline;
+}
+
+.onb .si-criteria {
+	display: flex;
+	flex-direction: column;
+	gap: 5px;
+	margin: 8px 0 0;
+	padding: 9px 12px 9px 28px;
+	border-radius: 8px;
+	background: var(--onb-bg-stage);
+	color: var(--onb-body);
+	font-size: 10.5px;
+	line-height: 1.5;
+}
+
 .onb .si-policy-right {
 	display: flex;
 	flex: none;

@@ -8,9 +8,20 @@
  * user unselects that folder its proposals neither show nor apply.
  */
 
-import type { EmbedMode } from "../../../shared/onboarding-contract";
+import type { EmbedMode, FolderCandidate } from "../../../shared/onboarding-contract";
 import type { SmartExclusion, SmartIndexingEvent } from "../../../shared/smart-indexing-contract";
 import { etaMinutes } from "./flow";
+
+/**
+ * The folders the AI looks through: every suggested folder and every folder the
+ * user added, whether selected or not. The user chooses what to index on the next
+ * screen, and a proposal only shows while its folder is selected, so turning a
+ * folder on there needs no second analysis. Draft order first, then suggestions
+ * the draft does not list.
+ */
+export function analysisRoots(candidates: readonly FolderCandidate[], folders: readonly { readonly path: string }[]): string[] {
+	return [...new Set([...folders.map((folder) => folder.path), ...candidates.map((candidate) => candidate.path)])];
+}
 
 export function visibleScope(scope: readonly SmartExclusion[] | undefined, selectedRoots: readonly string[]): readonly SmartExclusion[] {
 	return (scope ?? []).filter((item) => selectedRoots.includes(item.root));

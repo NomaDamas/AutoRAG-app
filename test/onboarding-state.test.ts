@@ -238,6 +238,26 @@ describe("createOnboardingService persistence", () => {
 		again.dispose();
 	});
 
+	it("suggests Desktop, Documents, Downloads and iCloud Drive already selected, and leaves Pictures and cloud drives for the user to add", async () => {
+		const directory = await workDir();
+		const folders = { desktop: join(directory, "Desktop"), documents: join(directory, "Documents"), downloads: join(directory, "Downloads"), pictures: join(directory, "Pictures") };
+		const icloud = join(directory, "iCloud");
+		const cloud = join(directory, "Drive");
+		for (const path of [...Object.values(folders), icloud, cloud]) await mkdir(path, { recursive: true });
+		const service = createOnboardingService({ ...makeDeps(directory), knownFolders: folders, iCloudDrivePath: icloud, cloudDrives: async () => [{ path: cloud, name: "Drive" }] });
+
+		const candidates = await service.folderCandidates();
+
+		expect(candidates.map((candidate) => [candidate.kind, candidate.defaultSelected])).toEqual([
+			["desktop", true],
+			["documents", true],
+			["icloud", true],
+			["downloads", true],
+			["pictures", false],
+			["cloud", false],
+		]);
+	});
+
 	it("keeps the smart-indexing proposals in the draft across a reload and refuses malformed ones", async () => {
 		const directory = await workDir();
 		const scope = [{ path: "/Users/me/Documents/Zoom", root: "/Users/me/Documents", reason: "Recordings", files: 12, bytes: 4096, excluded: true }];

@@ -51,6 +51,7 @@ import { AppLogo, Icon } from "./marks";
 import type { OnboardingCtx, OverlayKind } from "./context";
 import {
 	addExclusion as withExclusion,
+	analysisRoots,
 	indexingExclusions,
 	initialSmartRun,
 	reduceSmartRun,
@@ -489,8 +490,10 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 		setSmartRun(initialSmartRun);
 	}, [stepId]);
 
+	const candidatesRef = useRef<readonly FolderCandidate[]>([]);
+	candidatesRef.current = candidates;
 	const startSmartScan = useCallback((): void => {
-		const folders = (draftRef.current?.folders ?? []).filter((folder) => folder.selected).map((folder) => folder.path);
+		const folders = analysisRoots(candidatesRef.current, draftRef.current?.folders ?? []);
 		if (folders.length === 0) {
 			return;
 		}

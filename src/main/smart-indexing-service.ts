@@ -3,6 +3,7 @@ import { isAbsolute } from "node:path";
 import type { AgentSession } from "@earendil-works/pi-coding-agent";
 import type { SmartExclusion, SmartIndexingEvent } from "../shared/smart-indexing-contract";
 import { createProfileSession, type ProfileModel } from "./agents/agent-factory";
+import { createFolderStats } from "./agents/profiles/folder-stats";
 import { createProposalCollector, type ExclusionProposal, type ReplyLanguage, smartIndexingProfile } from "./agents/profiles/smart-indexing";
 import { type FolderScanOptions, scanFolder } from "./onboarding-scan";
 
@@ -40,10 +41,10 @@ export interface SmartIndexingService {
 
 const DEFAULT_TIMEOUT_MS = 4 * 60_000;
 
-const TASK = "Look through the chosen folders and propose the sub-folders to leave out of the index.";
+const TASK = "Count the chosen folders with folder_stats, apply the criteria, and propose the sub-folders to leave out of the index.";
 
 /** Tools whose `path` argument names what the agent is looking at. */
-const EXPLORING_TOOLS: Readonly<Record<string, true>> = { ls: true, find: true, grep: true, read: true };
+const EXPLORING_TOOLS: Readonly<Record<string, true>> = { ls: true, find: true, read: true, folder_stats: true };
 
 interface Run {
 	/** Stops the agent: a cancel or the clock. */
@@ -92,7 +93,8 @@ export function createSmartIndexingService(deps: SmartIndexingServiceDeps): Smar
 	}
 
 	async function execute(runId: string, run: Run, roots: readonly string[]): Promise<void> {
-		const collector = createProposalCollector(roots);
+		const stats = createFolderStats(roots, { supportedExtensions: deps.scanOptions.supportedExtensions, maxSourceBytes: deps.scanOptions.maxSourceBytes });
+		const collector = createProposalCollector(roots, stats);
 		let session: AgentSession | null = null;
 		const timer = setTimeout(() => {
 			run.timedOut = true;
@@ -102,7 +104,7 @@ export function createSmartIndexingService(deps: SmartIndexingServiceDeps): Smar
 			const model = await deps.resolveModel();
 			if (run.cancelled) return;
 			session = await createProfileSession({
-				profile: smartIndexingProfile({ roots, language: deps.language(), extensions: [...deps.scanOptions.supportedExtensions], collector }),
+				profile: smartIndexingProfile({ roots, language: deps.language(), extensions: [...deps.scanOptions.supportedExtensions], collector, stats }),
 				cwd: roots[0] as string,
 				agentDir: deps.agentDir,
 				env: deps.env,
