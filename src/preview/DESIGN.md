@@ -90,9 +90,25 @@ still has the previous file's size when they lay out.
   nothing for HWP without Hancom's plug-in. Encrypted, DRM, and unsupported
   files fall back to the Other panel with rhwp's message.
 - **Word 97-2003 / PowerPoint 97-2003** (`.doc` `.dot` · `.ppt` `.pps` `.pot`)
-  — text, not layout. `shared/legacy-office.ts` reads the compound-file
-  container itself (bounds-checked typed arrays; a general CFB library turned a
-  32MB file into a 1.2GB array of numbers) and pulls only the streams it needs.
+  — on macOS, the page the OS itself draws: `node/office-render.ts` runs
+  `qlmanage -p` (Office.qlgenerator: fonts, colours, tables, every slide,
+  shapes, pictures; about 0.1s for a document, 1.3s for a 26-slide deck) into a
+  temp folder, `sips` rasterizes the vector art it writes as PDF (at 3x the drawn
+  size), and `standaloneOfficeHtml` inlines every picture and strips scripts,
+  frames, links, remote pictures, and event handlers, adding a CSP of
+  `default-src 'none'; img-src data:`. The result travels as
+  `PreviewDocument.rendered` and shows in a `sandbox=""` frame loaded from a
+  **blob URL, not `srcdoc`**: the generator writes unitless lengths
+  (`width: 720`) that only quirks mode honours, and an `srcdoc` document is
+  never quirks mode, so every slide collapsed to nothing. The window takes the
+  generator's own viewport width (595 for a Word page plus margin room, 720
+  for a slide). A Page · Text switch in the toolbar flips to the extracted text.
+  The generator refuses files it cannot read (minimal or non-Word streams): the
+  panel then shows the extracted text alone, without the switch.
+  Everywhere else, and as that fallback, `shared/legacy-office.ts` reads the
+  compound-file container itself (bounds-checked typed arrays; a general CFB
+  library turned a 32MB file into a 1.2GB array of numbers) and pulls only the
+  streams it needs.
   Word: the piece table (Clx) in `0Table`/`1Table` gives the main document's
   UTF-16 and cp1252 pieces; fields keep their result and drop the instruction,
   cell marks become tab-separated rows, a form feed starts a new page card;

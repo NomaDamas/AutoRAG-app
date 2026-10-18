@@ -1221,6 +1221,9 @@
       "noText": "本文が見つかりませんでした"
     },
     "legacyOffice": {
+      "rendered": "ドキュメントのプレビュー",
+      "modePage": "ページ",
+      "modeText": "テキスト",
       "encrypted": "パスワードで保護されているためプレビューできません",
       "unsupported": "このWord/PowerPoint形式はプレビューできません",
       "corrupt": "ファイルが壊れているため読み取れませんでした",

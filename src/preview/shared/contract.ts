@@ -64,6 +64,13 @@ export interface PreviewDocument {
 	 * image first); null for every other document, whose viewer uses `bytes`.
 	 */
 	readonly pages: readonly Uint8Array[] | null;
+	/**
+	 * The page macOS's own Office generator drew for a legacy Office file: one
+	 * self-contained HTML string (pictures inlined, nothing external), shown in
+	 * a sandboxed frame. Null for every other document and when the OS could
+	 * not render it.
+	 */
+	readonly rendered: string | null;
 }
 
 export interface QuickLookTarget {
@@ -220,6 +227,7 @@ export function isPreviewDocument(value: unknown): value is PreviewDocument {
 	if (typeof value.size !== "number" || typeof value.modifiedAt !== "string" || typeof value.mime !== "string") return false;
 	if (typeof value.truncated !== "boolean") return false;
 	if (value.bytes !== null && !(value.bytes instanceof Uint8Array)) return false;
+	if (value.rendered !== null && typeof value.rendered !== "string") return false;
 	return value.pages === null || (Array.isArray(value.pages) && value.pages.every((page) => page instanceof Uint8Array));
 }
 

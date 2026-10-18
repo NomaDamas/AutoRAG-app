@@ -1221,6 +1221,9 @@
       "noText": "No text found"
     },
     "legacyOffice": {
+      "rendered": "Document preview",
+      "modePage": "Page",
+      "modeText": "Text",
       "encrypted": "This document is password-protected and can’t be previewed",
       "unsupported": "This Word or PowerPoint format can’t be previewed",
       "corrupt": "The file is damaged and couldn’t be read",

@@ -42,6 +42,7 @@ function documentFor(ext: string, bytes: Uint8Array): PreviewDocument {
 		truncated: false,
 		bytes,
 		pages: null,
+		rendered: null,
 	};
 }
 

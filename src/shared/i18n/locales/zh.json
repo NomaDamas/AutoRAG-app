@@ -1221,6 +1221,9 @@
       "noText": "未找到正文"
     },
     "legacyOffice": {
+      "rendered": "文档预览",
+      "modePage": "页面",
+      "modeText": "文本",
       "encrypted": "该文档受密码保护，无法预览",
       "unsupported": "无法预览此 Word 或 PowerPoint 格式",
       "corrupt": "文件已损坏，无法读取",

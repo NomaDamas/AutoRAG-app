@@ -42,6 +42,8 @@ const SELF_SIZED: Partial<Record<StageKind, true>> = {
 	audio: true,
 	pdf: true,
 	hwp: true,
+	legacyDoc: true,
+	legacyPpt: true,
 	pptx: true,
 	markdown: true,
 	html: true,

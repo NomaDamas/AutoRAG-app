@@ -37,6 +37,7 @@ import {
 import { looksLikeText } from "../shared/text-sample";
 import { type Bounds, fitQuickLook, placeQuickLook, QUICK_LOOK_MIN } from "../shared/fit";
 import { quickLookKeyAction } from "../shared/keys";
+import { sniffLegacyContainer } from "../shared/legacy-office";
 import { byteNeed, viewerForExtension } from "../shared/registry";
 import { fallbackOrigin, screenOrigin, ZOOM_DONE_TIMEOUT_MS, zoomGeometry } from "../shared/zoom";
 import { readAudioMetadata } from "./audio-metadata";
@@ -46,6 +47,7 @@ import { fileDetails, sha256File } from "./details";
 import { measureFolder, summarizeFolder } from "./folder";
 import { readHeicPreview } from "./heic";
 import { readIworkPreview } from "./iwork";
+import { renderOfficeHtml } from "./office-render";
 import { PREVIEW_BYTE_CAP, PreviewReadError, readPreviewFile, SNIFF_BYTES, TEXT_BYTE_CAP } from "./read-file";
 
 /** Media reports its size once decoded; anything slower still shows by then. */
@@ -318,7 +320,15 @@ async function readFolder(path: string): Promise<TargetContent> {
  * unknown file, which is read on as text only when it looks like text.
  */
 async function readDocument(path: string): Promise<PreviewDocument> {
-	switch (byteNeed(viewerForExtension(extname(path).slice(1)))) {
+	const kind = viewerForExtension(extname(path).slice(1));
+	if (kind === "legacyDoc" || kind === "legacyPpt") {
+		// The whole file for the text reader, plus the page macOS's own Office
+		// generator draws for it (the text reader is the fallback when it cannot).
+		const document = await readPreviewFile(path, PREVIEW_BYTE_CAP, true);
+		const rendered = document.bytes !== null && sniffLegacyContainer(document.bytes) === "ole" ? await renderOfficeHtml(path) : null;
+		return { ...document, rendered };
+	}
+	switch (byteNeed(kind)) {
 		case "stream":
 			return readPreviewFile(path, 0);
 		case "prefix":

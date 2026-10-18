@@ -578,3 +578,22 @@ function readDeck(file: Uint8Array, limit: number): DeckText {
 	if (!anyText) throw new LegacyOfficeError("empty", "no text");
 	return { slides, truncated: budget.left < 0 || listed.length >= MAX_SLIDES };
 }
+
+// ---------------------------------------------------------------------------
+// The page macOS draws
+
+/** A letter page at 96dpi, for a page that does not say how wide it is. */
+const DEFAULT_PAGE_WIDTH = 816;
+/** Room the panel keeps beside a text page: the page's own margins and a scroll bar. */
+const TEXT_PAGE_PADDING = 80;
+
+/**
+ * How wide the Quick Look window should be for the page the OS drew:
+ * the `viewport` width its generator states (595 for a Word page, 720 for a
+ * 16:9 slide) plus margin room for a text page, the slide width as is.
+ */
+export function officePageWidth(html: string): number {
+	const stated = /<meta[^>]*name="viewport"[^>]*content="[^"]*?width=(\d+)/i.exec(html)?.[1];
+	if (stated === undefined) return DEFAULT_PAGE_WIDTH;
+	return /class="slide"/.test(html) ? Number(stated) : Number(stated) + TEXT_PAGE_PADDING;
+}

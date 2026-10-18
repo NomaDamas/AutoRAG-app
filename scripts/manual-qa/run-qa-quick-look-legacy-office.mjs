@@ -1,8 +1,10 @@
 /**
  * Manual QA — legacy Office files (issue #139).
  *
- * Space on `.doc`/`.dot`/`.ppt`/`.pps`/`.pot` must show readable text instead
- * of the "Other" info panel, a password-protected or non-Word file must fall
+ * Space on `.doc`/`.dot`/`.ppt`/`.pps`/`.pot` must show the page macOS's own
+ * Office generator draws (fonts, tables, slides, pictures) in a sandboxed
+ * frame, with a toolbar switch to the extracted text, instead of the "Other"
+ * info panel, a password-protected or non-Word file must fall
  * back to that panel with a clear note, and `.doc`/`.ppt`/`.xls` tiles must
  * show the OS first-page thumbnail. Drives the production build (`bun run
  * build` first) with real Space presses and clicks on files built in-script
@@ -81,10 +83,38 @@ try {
 		await new Promise((resolve) => setTimeout(resolve, 200));
 	}
 	const cards = () => preview.locator(".ql__legacy section").count();
+	/** The page frame's HTML, fetched from its blob URL (the frame is sandboxed, so the page cannot be reached from inside). */
+	const frame = () =>
+		preview
+			.evaluate(async () => {
+				const src = document.querySelector("iframe.ql__frame")?.getAttribute("src");
+				return src === null || src === undefined ? "" : await (await fetch(src)).text();
+			})
+			.catch(() => "");
+	const frameState = async () => {
+		const info = await preview
+			.evaluate(() => {
+				const el = document.querySelector("iframe.ql__frame");
+				return el === null ? null : { sandbox: el.getAttribute("sandbox"), src: el.getAttribute("src") ?? "" };
+			})
+			.catch(() => null);
+		if (info === null) return null;
+		const html = await frame();
+		return { sandbox: info.sandbox, blob: info.src.startsWith("blob:"), imgs: html.match(/<img\b[^>]*src="data:image/g)?.length ?? 0, remote: /src="https?:/i.test(html), csp: /Content-Security-Policy/.test(html) };
+	};
+	const toText = async () => {
+		await preview.getByRole("button", { name: "Text", exact: true }).click();
+		await new Promise((resolve) => setTimeout(resolve, 400));
+		return preview.evaluate(() => document.querySelector(".ql__stage")?.textContent ?? "");
+	};
 	const shot = (name) => preview.screenshot({ path: join(EVIDENCE, `${name.replace(/[^\w.-]/g, "_")}.png`) });
 
+	// The built fixtures are minimal Word/PowerPoint streams that macOS's own
+	// generator refuses to draw; the panel must fall back to the extracted text
+	// (no frame, no mode switch) rather than show nothing.
 	let text = await open("Report.doc");
-	check("Report.doc shows its text, not the Other panel", text.includes("분기 보고서 Quarterly") && text.includes("café “quoted” line"), text.slice(0, 80));
+	check("a file the OS cannot draw falls back to extracted text, with no frame", (await frameState()) === null && text.includes("분기 보고서 Quarterly"), text.slice(0, 60));
+	check("the fallback text keeps both pieces", text.includes("분기 보고서 Quarterly") && text.includes("café “quoted” line"), text.slice(0, 80));
 	check("table cells arrive as one tab-separated row", /A\s+B/.test(text) && text.includes("row two"), "");
 	check("a page break makes a second card", (await cards()) === 2 && text.includes("SECOND-PAGE-MARKER"), String(await cards()));
 	check("the panel says it is text only", text.includes("Showing text only"), "");
@@ -101,10 +131,11 @@ try {
 	await close();
 
 	text = await open("Actually Rich.doc");
-	check("an RTF saved as .doc is rendered by the RTF viewer", text.includes("RTF-INSIDE-DOC"), text.slice(0, 60));
+	check("an RTF saved as .doc is rendered by the RTF viewer", text.includes("RTF-INSIDE-DOC") && (await frameState()) === null, text.slice(0, 60));
 	await close();
 
 	text = await open("Plan.ppt");
+	check("Plan.ppt (not drawable by the OS) falls back to extracted text", (await frameState()) === null, "");
 	check("Plan.ppt lists the slides with their titles", text.includes("ALPHA-TITLE") && text.includes("first bullet") && text.includes("second bullet"), text.slice(0, 100));
 	check("a fast-saved slide shows its newest text", text.includes("BRAVO-NEWEST") && !text.includes("한국어 슬라이드"), "");
 	check("two slide cards", (await cards()) === 2, String(await cards()));
@@ -121,9 +152,28 @@ try {
 
 	for (const name of real) {
 		text = await open(name);
-		const ok = !/can’t be previewed|damaged|no text/i.test(text) && text.length > 40;
-		check(`${name}: real file previews`, ok, text.replace(/\s+/g, " ").slice(0, 100));
-		await shot(name);
+		const state = await frameState();
+		if (/\.xls$/i.test(name)) {
+			check(`${name}: real file previews`, !/can’t be previewed|damaged|no text/i.test(text) && text.length > 40, text.replace(/\s+/g, " ").slice(0, 100));
+		} else {
+			check(`${name}: real file opens as the OS-drawn page`, state !== null && state.sandbox === "" && state.csp && !state.remote, JSON.stringify(state));
+			if (/\.ppt$/i.test(name)) {
+				check(`${name}: slide pictures are inlined`, state !== null && state.imgs > 0, String(state?.imgs));
+				// The slides must actually paint: a collapsed slide leaves only the grey page background.
+				const png = await preview.locator("iframe.ql__frame").screenshot();
+				const paint = await app.evaluate(({ nativeImage }, base64) => {
+					const bitmap = nativeImage.createFromBuffer(Buffer.from(base64, "base64")).getBitmap();
+					const colors = new Set();
+					for (let index = 0; index + 2 < bitmap.length; index += 4 * 97) colors.add((bitmap[index] >> 4) * 256 + (bitmap[index + 1] >> 4) * 16 + (bitmap[index + 2] >> 4));
+					return colors.size;
+				}, png.toString("base64"));
+				check(`${name}: the slides paint real content, not an empty page`, paint > 12, `${paint} distinct colours`);
+			}
+			await shot(name);
+			const extracted = await toText();
+			check(`${name}: the Text switch shows extracted text`, extracted.length > 100 && /Showing text only/.test(extracted), extracted.replace(/\s+/g, " ").slice(0, 80));
+		}
+		await shot(`${name}-last`);
 		await close();
 	}
 
