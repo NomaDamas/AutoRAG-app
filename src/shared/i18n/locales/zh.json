@@ -443,7 +443,7 @@
       "cancel": "取消",
       "skip": "不使用账户，改用自己的 API 密钥 (BYOK)",
       "offline": "无法连接服务器，显示的是上次确认的信息。",
-      "authNote": "登录方式（邮箱验证码、第三方登录）在浏览器的 Dazzi 登录页面选择。请求仅发送至零数据保留（ZDR）服务商。",
+      "authNote": "登录方式（邮箱验证码、第三方登录）在浏览器的 Dazzi 登录页面选择。",
       "agreeLead": "继续即表示您同意 Dazzi 的以下条款:",
       "agreeTerms": "服务条款",
       "agreePrivacy": "隐私政策",

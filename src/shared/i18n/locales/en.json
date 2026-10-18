@@ -443,7 +443,7 @@
       "cancel": "Cancel",
       "skip": "Continue without an account, with my own API key (BYOK)",
       "offline": "Can't reach the server, so this is the last information we confirmed.",
-      "authNote": "You choose how to sign in (email code or social sign-in) on the Dazzi page in your browser. Requests go only to zero-data-retention (ZDR) providers.",
+      "authNote": "You choose how to sign in (email code or social sign-in) on the Dazzi page in your browser.",
       "agreeLead": "By continuing, you agree to Dazzi's:",
       "agreeTerms": "Terms of Service",
       "agreePrivacy": "Privacy Policy",
