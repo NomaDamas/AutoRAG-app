@@ -38,9 +38,28 @@ content only leaves the device through the AI-answer and cloud-embedding flows
 above. The Privacy Policy treats the user as responsible for that content and
 Dazzi as acting on the user's behalf for it.
 
+## Transfer mechanisms (checked 2026-10-18 against each provider's public terms)
+
+| Provider | Basis found |
+|---|---|
+| Vercel | EU-US DPF (active); SCCs and UK addendum in its DPA |
+| Neon | SCCs (Decision 2021/914) in its DPA |
+| OpenRouter | DPA incorporating SCCs |
+| DeepInfra | **None found**: its privacy policy only says data may be processed in the US; no public DPA, SCC or DPF statement |
+| Resend | SCCs in its DPA (stated on its GDPR page) |
+| Creem | EU entity (Armitage Labs OÜ, Estonia); SCCs for its non-EEA providers |
+| Sentry (Functional Software) | EU-US DPF; SCCs in its DPA 5.1.0 |
+| PostHog | EU-US DPF; SCCs in its DPA |
+| Cloudflare | SCCs in its DPA and EU-US DPF |
+| Google, GitHub | EU-US DPF |
+| Apple | SCCs (stated in its privacy policy) |
+
+Re-check when a provider is added or its terms change. DeepInfra receives the
+text of cloud-embedding requests, so close that gap first (request a DPA with
+SCCs from DeepInfra, or stop routing EEA traffic there).
+
 ## Not verifiable from this repository
 
 - Retention periods at Sentry, PostHog, OpenRouter and the model providers.
-- Sentry and PostHog project settings (IP handling). The usage-statistics design
-  requires PostHog's "Discard client IP data"; confirm it is on.
-- Whether each provider relies on the EU-US Data Privacy Framework or SCCs.
+- Sentry project settings (IP handling). PostHog "Discard client IP data" was
+  confirmed on by the owner on 2026-10-18.

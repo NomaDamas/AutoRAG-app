@@ -24,10 +24,10 @@ Open, and not fixable by documentation alone:
 | Error reports are on by default | Sending diagnostic data from the user's device without prior opt-in may need consent under ePrivacy Art. 5(3). Usage statistics are already opt-in; error reports are not. Decide whether to switch the default. |
 | In-app wording | `onboarding.account.authNote` and `onboarding.embedding.cloudBulletNoStore` say Dazzi stores no request content; the Terms allow the Free plan to use Input and Output to improve the Service. The Privacy Policy now says the app wording does not limit that; the app strings still read broader. |
 | Account deletion | Email only (`privacy@dazziapp.com`). The GDPR allows this; there is no in-app or dashboard delete. |
-| Provider transfer mechanisms | Confirm DPF certification or SCCs for each provider before relying on the policy sentence. |
+| Provider transfer mechanisms | Verified for every provider except DeepInfra (see `data-flows.md`). DeepInfra receives cloud-embedding text and has no public DPA, SCC or DPF statement; get a DPA with SCCs or stop sending EEA traffic there. |
 | EU representative (Art. 27) and DPO | Not assessed; depends on whether Dazzi targets EU users. |
 | Retention numbers | The policy gives criteria, not periods, for logs, Sentry and PostHog. |
-| Website trackers | The policy lists Google Analytics and PostHog on the website and promises consent-gated loading. No tracker code exists in the `Dazzi` or landing-page repositories; add a consent mechanism before deploying either. |
+| Website trackers | The policy lists Google Analytics and PostHog on the website and promises consent-gated loading. The landing page now has a consent banner and an analytics gate (`Dazzi-landing-page` `public/consent.js`), but no tracker is wired in yet; any tracker must use the gate. |
 
 ## EU AI Act
 
