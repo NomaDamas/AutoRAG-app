@@ -5,6 +5,20 @@ import { isJsonObject } from "../src/shared/settings-contract";
 
 const HOME = "/Users/me";
 
+describe("applyIndexingConfig keyword-only switch", () => {
+	const base = { folders: ["/a"], datasources: [], home: HOME, embedder: null, workspacePath: null, model: null };
+
+	it("writes appIndexing.semanticSearch=false and keeps the block's other settings", () => {
+		const next = applyIndexingConfig({ ...base, raw: { appIndexing: { excludeCodeFolders: false } }, semanticSearch: false });
+		expect(next.appIndexing).toEqual({ excludeCodeFolders: false, semanticSearch: false });
+	});
+
+	it("removes the switch when semantic search is on, and the block with it when nothing else is in it", () => {
+		expect(applyIndexingConfig({ ...base, raw: { appIndexing: { semanticSearch: false } }, semanticSearch: true }).appIndexing).toBeUndefined();
+		expect(applyIndexingConfig({ ...base, raw: { appIndexing: { semanticSearch: false, fileTimeoutMs: 5 } }, semanticSearch: true }).appIndexing).toEqual({ fileTimeoutMs: 5 });
+	});
+});
+
 describe("applyIndexingConfig", () => {
 	it("replaces searchPaths and leaves an existing embedder untouched", () => {
 		const raw = { searchPaths: ["/old"], minSync: { embedder: { profile: "keep", dimension: 1 }, other: true } };

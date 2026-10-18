@@ -62,6 +62,13 @@ export const LOCAL_FILES_PER_MINUTE = 85;
 /** Files per minute a cloud embedder would sustain; shown only as the comparison figure. */
 export const CLOUD_FILES_PER_MINUTE = 900;
 
+/**
+ * Files per minute the keyword-only path sustains (documents are read and listed, never embedded).
+ * With a floor of {@link NONE_MIN_MINUTES}: the folder walk and parse have a fixed cost.
+ */
+export const NONE_FILES_PER_MINUTE = 450;
+export const NONE_MIN_MINUTES = 8;
+
 export type OnboardingStepId =
 	| "welcome"
 	| "permissions"
@@ -73,7 +80,12 @@ export type OnboardingStepId =
 	| "model"
 	| "indexing";
 
-export type EmbedMode = "local" | "cloud";
+/**
+ * How documents are made searchable by meaning. `none` is keyword search only:
+ * nothing is embedded, MinSync never runs, and no source keeps a semantic or
+ * hybrid method. `local` embeds on this device; `cloud` uses the Dazzi embedder.
+ */
+export type EmbedMode = "none" | "local" | "cloud";
 
 export type PlanId = "free" | "air" | "pro" | "byok";
 export type ByokProviderId = "anthropic" | "openai" | "openrouter" | "google" | "ollama" | "openai-compatible";

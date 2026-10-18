@@ -113,6 +113,54 @@ describe("createEmbeddingSettingsService", () => {
 		await embedding.dispose();
 	});
 
+	it("offers keyword-only search as a profile, and reports it as current once the config switched semantic search off", async () => {
+		const fixture = await createFixture({ chat: { type: "discord", connector: {} } });
+		const { embedding } = buildService(fixture);
+		expect((await embedding.get()).profiles.map((profile) => profile.id)).toEqual(["none", "native-qwen3", "local-server"]);
+		expect((await embedding.get()).current.profileId).toBeNull();
+
+		await embedding.apply({ profileId: "none" });
+
+		const snapshot = await embedding.get();
+		expect(snapshot.current.profileId).toBe("none");
+		expect(snapshot.sources.map((source) => source.adoption)).toEqual(["not-applicable"]);
+		await embedding.dispose();
+	});
+
+	it("applies keyword-only without blocking on sources that cannot adopt a model, keeps the configured embedder, and rebuilds nothing", async () => {
+		const fixture = await createFixture({ chat: { type: "discord", connector: {} }, mail: { type: "mailcrawl", connector: {} } });
+		const raw = await readConfig(fixture);
+		await writeFile(fixture.configPath, JSON.stringify({ ...raw, minSync: { embedder: { id: "native:Qwen/Qwen3-Embedding-0.6B", dimension: 1024 } } }));
+		fixture.env.QMD_EMBED_MODEL = "hf:old";
+		const { embedding } = buildService(fixture);
+
+		const result = await embedding.apply({ profileId: "none" });
+
+		expect(result).toMatchObject({ ok: true, applied: true, incompatibilities: [], rebuilds: [] });
+		const config = await readConfig(fixture);
+		expect(config.appIndexing).toEqual({ semanticSearch: false });
+		expect(config.minSync).toEqual({ embedder: { id: "native:Qwen/Qwen3-Embedding-0.6B", dimension: 1024 } });
+		expect(config.customSection).toEqual({ keep: true });
+		expect(fixture.synced).toEqual([]);
+		expect(fixture.env.QMD_EMBED_MODEL).toBeUndefined();
+		await embedding.dispose();
+	});
+
+	it("switches semantic search back on when a model is chosen after keyword-only, and rebuilds the sources that embed", async () => {
+		const fixture = await createFixture({ mail: { type: "mailcrawl", connector: {} } });
+		const { embedding } = buildService(fixture);
+		await embedding.apply({ profileId: "none" });
+
+		const result = await embedding.apply({ profileId: "native-qwen3" });
+
+		expect(result.ok).toBe(true);
+		const config = await readConfig(fixture);
+		expect(config.appIndexing).toBeUndefined();
+		expect(config.minSync).toMatchObject({ embedder: { id: "native:Qwen/Qwen3-Embedding-0.6B" } });
+		expect(fixture.synced).toEqual(["mail"]);
+		await embedding.dispose();
+	});
+
 	it("writes the native Qwen3 mailcrawl override and the qmd process env", async () => {
 		const fixture = await createFixture({
 			mail: { type: "mailcrawl", connector: {} },
@@ -201,12 +249,12 @@ describe("createEmbeddingSettingsService", () => {
 		await embedding.dispose();
 	});
 
-	it("offers only native-qwen3 and local-server, and rejects retired runtime profiles", async () => {
+	it("offers only keyword-only, native-qwen3 and local-server, and rejects retired runtime profiles", async () => {
 		const fixture = await createFixture({ mail: { type: "mailcrawl", connector: {} } });
 		const { embedding } = buildService(fixture);
 
 		const profileIds = (await embedding.get()).profiles.map((profile) => profile.id);
-		expect(profileIds).toEqual(["native-qwen3", "local-server"]);
+		expect(profileIds).toEqual(["none", "native-qwen3", "local-server"]);
 		for (const retired of ["embeddinggemma-300m", "qwen3-embedding-0.6b"]) {
 			const result = await embedding.apply({ profileId: retired });
 			expect(result.ok).toBe(false);

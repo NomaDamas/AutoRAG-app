@@ -49,6 +49,8 @@ export interface ApplyIndexingConfigInput {
 	readonly embedder: EmbedderChoice | null;
 	/** Null keeps the existing `workspacePath`; a path replaces it. */
 	readonly workspacePath: string | null;
+	/** False writes keyword-only mode (`appIndexing.semanticSearch: false`); true removes the switch. Absent leaves it as is. */
+	readonly semanticSearch?: boolean;
 	readonly model: ByokModelChoice | null;
 }
 
@@ -137,6 +139,12 @@ export function applyIndexingConfig(input: ApplyIndexingConfigInput): Record<str
 						...(input.embedder.apiKeyEnv !== undefined ? { apiKeyEnv: input.embedder.apiKeyEnv } : {}),
 					};
 		raw.minSync = { ...minSync, embedder };
+	}
+	if (input.semanticSearch !== undefined) {
+		const { semanticSearch: _previous, ...rest } = isJsonObject(raw.appIndexing) ? raw.appIndexing : {};
+		const appIndexing = input.semanticSearch ? rest : { ...rest, semanticSearch: false };
+		if (Object.keys(appIndexing).length > 0) raw.appIndexing = appIndexing;
+		else delete raw.appIndexing;
 	}
 	if (input.model !== null) {
 		raw.model = {

@@ -3,7 +3,8 @@ import { DatabaseSync } from "node:sqlite";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildAgentOptions, resolveConfigReadOnly, saveMirrorIndex, type ParsedMirrorEntry as MirrorEntry } from "@autorag/librarian";
-import { afterEach, describe, expect, it } from "vitest";
+import { QmdClient } from "@autorag/librarian";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createDataSourceStatusService } from "../src/main/datasource-status";
 import type { DataSourceRow } from "../src/shared/settings-contract";
 
@@ -273,6 +274,56 @@ describe("createDataSourceStatusService", () => {
 
 		expect(snapshot.sources).toEqual([]);
 		expect(snapshot.error).toMatch(/parse/i);
+	});
+
+	describe("syncing one source in keyword-only mode", () => {
+		async function obsidianFixture(appIndexing: Record<string, unknown> | undefined): Promise<Fixture> {
+			const fixture = await createFixtureWithOnlySlacrawlOnPath();
+			await writeFile(join(fixture.root, "bin", "qmd"), "#!/bin/sh\nexit 0\n");
+			await chmod(join(fixture.root, "bin", "qmd"), 0o755);
+			await writeConfig(fixture, { vault: { type: "obsidian", connector: { vaultPath: join(fixture.workspace, "vault") } } });
+			if (appIndexing !== undefined) {
+				const raw = JSON.parse(await readFile(fixture.configPath, "utf8"));
+				await writeFile(fixture.configPath, JSON.stringify({ ...raw, appIndexing }));
+			}
+			return fixture;
+		}
+
+		function stubQmd(): { readonly embed: ReturnType<typeof vi.fn> } {
+			const done = { stdout: "", stderr: "", code: 0 };
+			vi.spyOn(QmdClient.prototype, "ensureCollection").mockResolvedValue({ ok: true, data: { collectionName: "vault" }, ...done } as never);
+			vi.spyOn(QmdClient.prototype, "update").mockResolvedValue({ ok: true, data: { indexed: 2, updated: 0, unchanged: 0 }, ...done } as never);
+			const embed = vi.spyOn(QmdClient.prototype, "embed").mockResolvedValue({ ok: true, data: { embedded: true }, ...done } as never);
+			return { embed };
+		}
+
+		it("runs the source's embedding step while semantic search is on", async () => {
+			const { embed } = stubQmd();
+			try {
+				const fixture = await obsidianFixture(undefined);
+				const result = await createDataSourceStatusService({ env: fixture.env, cwd: fixture.root }).sync("vault");
+
+				expect(result).toMatchObject({ ok: true, state: "indexed" });
+				expect(embed).toHaveBeenCalledOnce();
+			} finally {
+				vi.restoreAllMocks();
+			}
+		});
+
+		it("updates the source but never embeds it when semantic search is off, and restores the embedding step afterwards", async () => {
+			const { embed } = stubQmd();
+			const realEmbed = QmdClient.prototype.embed;
+			try {
+				const fixture = await obsidianFixture({ semanticSearch: false });
+				const result = await createDataSourceStatusService({ env: fixture.env, cwd: fixture.root }).sync("vault");
+
+				expect(result).toMatchObject({ ok: true, state: "indexed", chunkCount: 2 });
+				expect(embed).not.toHaveBeenCalled();
+				expect(QmdClient.prototype.embed).toBe(realEmbed);
+			} finally {
+				vi.restoreAllMocks();
+			}
+		});
 	});
 
 	it("syncs one source through its skill and explains unavailable/unknown sources", async () => {

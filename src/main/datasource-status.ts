@@ -15,7 +15,9 @@ import {
 } from "@autorag/librarian";
 import { readRawConfigObject, resolveConfigPath, type CliConfig } from "@autorag/librarian/core";
 import { backendIndexUnit, LIVE_QUERY_TEMPLATES, probeBackendIndex } from "./datasource-index-probe";
+import { readAppIndexing } from "./app-indexing";
 import { withConnectorOcrDisabled } from "./indexing-policy";
+import { runWithoutSemanticIndexing, withSemanticPolicyApplied } from "./semantic-policy";
 import type { DiscrawlEmbeddingRuntime } from "./embedding-settings-service";
 import type {
 	ConfigRefreshDiagnostic,
@@ -374,7 +376,9 @@ export function createDataSourceStatusService(deps: DataSourceStatusDeps): DataS
 		} catch (error) {
 			return { ...base, error: error instanceof Error ? error.message : String(error) };
 		}
-		const rawEntry: unknown = config.datasources?.[id];
+		// Keyword-only mode applies to this path too: it builds its own skill, outside the refresh the policy wraps.
+		const semantic = readAppIndexing(readRawConfigObject(path)).semanticSearch;
+		const rawEntry: unknown = withSemanticPolicyApplied(config, semantic).datasources?.[id];
 		if (rawEntry === undefined) return { ...base, error: `Unknown datasource: ${id}` };
 		const entry: DatasourceSkillConfig = isJsonObject(rawEntry) ? rawEntry : {};
 		if (rawEntry === false || entry.enabled === false) {
@@ -390,7 +394,7 @@ export function createDataSourceStatusService(deps: DataSourceStatusDeps): DataS
 		}
 		let skill: DatasourceSkill | undefined;
 		try {
-			skill = buildSkill(id, entry, config.workspacePath, deps.discrawlEmbeddingRuntime?.());
+			skill = buildSkill(id, entry, config.workspacePath, semantic ? deps.discrawlEmbeddingRuntime?.() : undefined);
 		} catch (error) {
 			return { ...base, state: "failed", error: error instanceof Error ? error.message : String(error), durationMs: Date.now() - startedAt };
 		}
@@ -399,7 +403,8 @@ export function createDataSourceStatusService(deps: DataSourceStatusDeps): DataS
 		}
 		let result: DatasourceIndexResult;
 		try {
-			result = await skill.index();
+			const indexing = skill;
+			result = await (semantic ? indexing.index() : runWithoutSemanticIndexing(() => indexing.index()));
 		} catch (error) {
 			return { ...base, state: "failed", error: error instanceof Error ? error.message : String(error), durationMs: Date.now() - startedAt };
 		}

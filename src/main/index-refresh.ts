@@ -16,6 +16,7 @@ import { createMinSyncWatchdog, EMBEDDING_STALL_RETRIES, runWithStallRetry } fro
 import { takeSharedParseFailures } from "./parse-isolation";
 import { runWithRecovery } from "./refresh-recovery";
 import { findUnavailableRoots } from "./search-roots";
+import { methodsForSemantic, runWithoutSemanticIndexing } from "./semantic-policy";
 import { t } from "../shared/i18n/core";
 
 /**
@@ -72,11 +73,13 @@ export async function refreshAutoragIndex(
 	const requested = methods ?? LOCAL_REFRESH_METHODS;
 	const invalid = requested.filter((method) => REFRESH_METHODS[method as RefreshMethod] !== true);
 	if (invalid.length > 0) throw new Error(`Unknown refresh method(s): ${invalid.join(", ")}`);
-	const selected = requested as readonly RefreshMethod[];
-	if (selected.length === 0) throw new Error("At least one refresh method is required");
+	if (requested.length === 0) throw new Error("At least one refresh method is required");
 	const input = configInput(deps);
 	const configPath = resolveConfigPath(input).configPath;
 	const raw = existsSync(configPath) ? readRawConfigObject(configPath) : {};
+	// Keyword-only mode runs no MinSync: its parsed mirror and Jikji steps run instead.
+	const semantic = readAppIndexing(raw).semanticSearch;
+	const selected = methodsForSemantic(requested as readonly RefreshMethod[], semantic);
 	// A refresh re-walks the folders, so a dot-folder created minutes ago is excluded too.
 	const effective = await applyAppIndexing(resolveConfigReadOnly(input), raw, { fresh: true, configPath });
 	const diagnostics: ConfigRefreshDiagnostic[] = [];
@@ -124,7 +127,10 @@ export async function refreshAutoragIndex(
 		};
 		// A hung embedder never returns on its own: the watchdog kills it and the sync is retried
 		// (parsing is incremental, so a retry repeats only the embedding).
-		const { value: result, retries } = await runWithStallRetry(refreshOnce, (outcome) => outcome.minsync?.ok !== false, createMinSyncWatchdog(), EMBEDDING_STALL_RETRIES);
+		const stallRetried = (): Promise<{ value: AutoRAGRefreshResult; retries: number }> =>
+			runWithStallRetry(refreshOnce, (outcome) => outcome.minsync?.ok !== false, createMinSyncWatchdog(), EMBEDDING_STALL_RETRIES);
+		// Keyword-only mode also turns the datasources' own embedding steps off for the duration of the run.
+		const { value: result, retries } = await (semantic ? stallRetried() : runWithoutSemanticIndexing(stallRetried));
 		if (recovered.retries > 0 || recovered.quarantined.length > 0) {
 			diagnostics.push({
 				code: recovered.quarantined.length > 0 ? "files-left-out" : "refresh-retried",

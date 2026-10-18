@@ -7,6 +7,7 @@ import { embedderKind, learnedBatchSize } from "./embedding-batch";
 import { DEFAULT_FILE_TIMEOUT_MS, kordocDefaultParse, withFileTimeout } from "./file-timeout";
 import { sharedParsePool } from "./parse-isolation";
 import { withIndexingPoliciesApplied } from "./indexing-policy";
+import { withSemanticPolicyApplied } from "./semantic-policy";
 
 /**
  * App-owned indexing policy: automatically omit code/dependency directories
@@ -24,6 +25,11 @@ export interface AppIndexingSettings {
 	readonly codeFolderNames: readonly string[];
 	/** Per-file parse budget; a file over it is skipped. */
 	readonly fileTimeoutMs: number;
+	/**
+	 * Off means keyword-only: nothing is embedded and no semantic or hybrid method
+	 * answers (see `semantic-policy`). Anything but an explicit `false` keeps it on.
+	 */
+	readonly semanticSearch: boolean;
 }
 
 /** Read `appIndexing` from a raw config object, applying defaults. */
@@ -38,7 +44,8 @@ export function readAppIndexing(raw: Record<string, unknown>): AppIndexingSettin
 		typeof block.fileTimeoutMs === "number" && Number.isInteger(block.fileTimeoutMs) && block.fileTimeoutMs > 0
 			? block.fileTimeoutMs
 			: DEFAULT_FILE_TIMEOUT_MS;
-	return { excludeCodeFolders, codeFolderNames: names, fileTimeoutMs };
+	const semanticSearch = block.semanticSearch !== false;
+	return { excludeCodeFolders, codeFolderNames: names, fileTimeoutMs, semanticSearch };
 }
 
 /**
@@ -162,8 +169,8 @@ export async function applyAppIndexing(
 	options: ApplyAppIndexingOptions = {},
 ): Promise<CliConfig> {
 	const { configPath } = options;
-	const config = withIndexingPoliciesApplied(input);
 	const settings = readAppIndexing(raw);
+	const config = withSemanticPolicyApplied(withIndexingPoliciesApplied(input), settings.semanticSearch);
 	const excluded = new Set<string>(config.excludePaths ?? []);
 	// AutoRAG's own state directories are product output, never corpus.
 	for (const root of [...config.searchPaths, config.workspacePath]) excluded.add(join(root, ".autorag"));

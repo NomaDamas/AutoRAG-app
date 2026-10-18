@@ -8,6 +8,9 @@ import type { OnboardingServiceDeps } from "../src/main/onboarding-service";
 import { createOnboardingService, readOnboardingPending } from "../src/main/onboarding-service";
 import { storeDazziPlanCredential } from "../src/main/dazzi-plan-credential";
 
+/** Yields to the event loop: the final status read after a refresh touches the disk, so microtasks alone are not enough. */
+const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 2));
+
 const directories: string[] = [];
 
 afterEach(async () => {
@@ -166,7 +169,7 @@ describe("createOnboardingService persistence", () => {
 		expect(service.isIndexing()).toBe(true);
 		gate.resolve({ ok: true, methods: ["parsed", "minsync"], scanned: 0, written: 0, deleted: 0, skipped: 0, diagnostics: [], error: null });
 		// Flush microtasks; no wall-clock wait.
-		for (let tick = 0; tick < 20 && service.isIndexing(); tick += 1) await Promise.resolve();
+		for (let tick = 0; tick < 100 && service.isIndexing(); tick += 1) await flush();
 		expect((await service.indexStatus()).state).toBe("success");
 		expect(service.isIndexing()).toBe(false);
 	});
@@ -197,12 +200,58 @@ describe("createOnboardingService persistence", () => {
 			plan: "byok",
 			model: null,
 		});
-		for (let tick = 0; tick < 20 && service.isIndexing(); tick += 1) await Promise.resolve();
+		for (let tick = 0; tick < 100 && service.isIndexing(); tick += 1) await flush();
 
 		const config = JSON.parse(await readFile(join(directory, "config.json"), "utf8")) as {
 			minSync?: { embedder?: Record<string, unknown> };
 		};
 		expect(config.minSync?.embedder).toEqual({ id: "native:Qwen/Qwen3-Embedding-0.6B", dimension: 1024 });
+		service.dispose();
+	});
+
+	it("saves and reloads a draft that chose keyword-only search", async () => {
+		const directory = await workDir();
+		const service = createOnboardingService(makeDeps(directory));
+		await service.save({ ...DRAFT, embed: "none" });
+		expect((await createOnboardingService(makeDeps(directory)).load()).draft?.embed).toBe("none");
+	});
+
+	it("indexes keyword-only with embed=none: no embedder is written, semantic search is switched off, and a later local run switches it back on", async () => {
+		const directory = await workDir();
+		const service = createOnboardingService(makeDeps(directory));
+		await service.startIndexing({ folders: ["/Users/me/Documents"], embed: "none", sources: [], plan: "free", model: null });
+		for (let tick = 0; tick < 100 && service.isIndexing(); tick += 1) await flush();
+		const read = async (): Promise<{ minSync?: { embedder?: unknown }; appIndexing?: Record<string, unknown> }> =>
+			JSON.parse(await readFile(join(directory, "config.json"), "utf8"));
+
+		const none = await read();
+		expect(none.minSync?.embedder).toBeUndefined();
+		expect(none.appIndexing).toEqual({ semanticSearch: false });
+		service.dispose();
+
+		const again = createOnboardingService(makeDeps(directory));
+		await again.startIndexing({ folders: ["/Users/me/Documents"], embed: "local", sources: [], plan: "free", model: null });
+		for (let tick = 0; tick < 100 && again.isIndexing(); tick += 1) await flush();
+		const local = await read();
+		expect(local.minSync?.embedder).toEqual({ id: "native:Qwen/Qwen3-Embedding-0.6B", dimension: 1024 });
+		expect(local.appIndexing).toBeUndefined();
+		again.dispose();
+	});
+
+	it("reports what a run that finished before the first poll actually read", async () => {
+		const directory = await workDir();
+		await mkdir(join(directory, ".autorag", "parsed"), { recursive: true });
+		const entry = (name: string, updatedAt: string) => ({ sourcePath: `/Users/me/Documents/${name}`, updatedAt });
+		await writeFile(
+			join(directory, ".autorag", "parsed", "index.json"),
+			JSON.stringify({ entries: { a: entry("a.md", "2026-01-01T00:00:00Z"), b: entry("b.md", "2026-01-02T00:00:00Z") }, skipped: {} }),
+		);
+		const service = createOnboardingService({ ...makeDeps(directory), folderTotals: () => 2 });
+
+		await service.startIndexing({ folders: ["/Users/me/Documents"], embed: "none", sources: [], plan: "free", model: null });
+		for (let tick = 0; tick < 50 && service.isIndexing(); tick += 1) await new Promise((resolve) => setTimeout(resolve, 5));
+
+		expect(await service.indexStatus()).toMatchObject({ state: "success", progress: 100, totalFiles: 2, processedFiles: 2, recentFile: "b.md", recentFolder: "Documents" });
 		service.dispose();
 	});
 
@@ -228,7 +277,7 @@ describe("createOnboardingService persistence", () => {
 		expect(service.isIndexing()).toBe(true);
 
 		gate.resolve({ ok: true, methods: ["parsed", "minsync"], scanned: 3, written: 3, deleted: 0, skipped: 0, diagnostics: [], error: null });
-		for (let tick = 0; tick < 20 && service.isIndexing(); tick += 1) await Promise.resolve();
+		for (let tick = 0; tick < 100 && service.isIndexing(); tick += 1) await flush();
 		expect(service.isIndexing()).toBe(false);
 		expect((await service.indexStatus()).state).toBe("success");
 	});
@@ -265,7 +314,7 @@ describe("createOnboardingService persistence", () => {
 		expect(syncedAliases).toEqual([]);
 
 		gate.resolve({ ok: true, methods: ["parsed", "minsync"], scanned: 1, written: 1, deleted: 0, skipped: 0, diagnostics: [], error: null });
-		for (let tick = 0; tick < 20 && syncedAliases.length === 0; tick += 1) await Promise.resolve();
+		for (let tick = 0; tick < 100 && syncedAliases.length === 0; tick += 1) await flush();
 		expect(syncedAliases).toEqual([["mailcrawl-gmail", "mailcrawl-work", "obsidian", "obsidian-2"]]);
 	});
 
@@ -291,12 +340,12 @@ describe("createOnboardingService persistence", () => {
 			plan: "free",
 			model: null,
 		});
-		for (let tick = 0; tick < 20 && service.isIndexing(); tick += 1) await Promise.resolve();
+		for (let tick = 0; tick < 100 && service.isIndexing(); tick += 1) await flush();
 		// Not completed yet -> datasources have not started.
 		expect(syncedAliases).toEqual([]);
 
 		await service.complete();
-		for (let tick = 0; tick < 20 && syncedAliases.length === 0; tick += 1) await Promise.resolve();
+		for (let tick = 0; tick < 100 && syncedAliases.length === 0; tick += 1) await flush();
 		expect(syncedAliases).toEqual([["whatsapp"]]);
 	});
 	it("does not trigger background datasource indexing when local indexing fails", async () => {
@@ -325,7 +374,7 @@ describe("createOnboardingService persistence", () => {
 		});
 		await service.complete();
 		gate.resolve({ ok: false, methods: ["parsed", "minsync"], scanned: 0, written: 0, deleted: 0, skipped: 0, diagnostics: [], error: "disk full" });
-		for (let tick = 0; tick < 20 && service.isIndexing(); tick += 1) await Promise.resolve();
+		for (let tick = 0; tick < 100 && service.isIndexing(); tick += 1) await flush();
 		expect((await service.indexStatus()).state).toBe("failed");
 		expect(syncedAliases).toEqual([]);
 	});

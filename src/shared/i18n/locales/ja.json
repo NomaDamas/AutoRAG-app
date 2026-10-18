@@ -477,7 +477,7 @@
       },
       "network": {
         "name": "ネットワーク（ファイアウォール）",
-        "desc": "クラウド埋め込みとモデル呼び出しに必要です。初回起動時にWindowsのセキュリティ警告が出たら許可します。",
+        "desc": "リモート埋め込みとモデル呼び出しに必要です。初回起動時にWindowsのセキュリティ警告が出たら許可します。",
         "allow": "許可"
       }
     },
@@ -493,39 +493,41 @@
       "scanError": "読み取れません",
       "summary": "{{folders}}フォルダ · {{files}}ファイル · {{size}}",
       "summaryNote": "node_modules · .git · 50 MiBを超えるファイルは自動的に除外されます。",
-      "localEta": "ローカル約{{minutes}}分",
-      "cloudEta": "クラウド約{{minutes}}分",
-      "warning": "範囲が広すぎます。サブフォルダを選ぶか、クラウド埋め込みを選ぶと最初の結果をより早く確認できます。"
+      "localEta": "ローカル（このMac）約{{minutes}}分",
+      "cloudEta": "リモート 約{{minutes}}分",
+      "warning": "範囲が広すぎます。サブフォルダを選ぶか、リモート埋め込みを選ぶと最初の結果をより早く確認できます。"
     },
     "embedding": {
-      "eyebrow": "重要な選択",
-      "title": "どこで\n埋め込みますか？",
-      "lead": "文書を検索可能なベクトルに変換する処理をどこで行うか決めます。後から変更すると最初からやり直すため、時間とコストが余分にかかります。",
-      "files": "{{count}}件",
-      "selectedFiles": "選択したファイル",
-      "reindexNote": "埋め込みモデルや処理場所を変更すると、現在作成したインデックスを破棄して最初から作り直す必要があります。",
-      "localTitle": "このMacで",
-      "localLead": "ファイルの本文はMacの外に出ません。",
-      "metricTime": "予想時間",
-      "metricDownload": "ダウンロード",
-      "metricPrivacy": "プライバシー",
-      "metricStorage": "保存",
-      "metricPlan": "プラン",
+      "eyebrow": "セマンティック検索",
+      "title": "埋め込みをどう使いますか？",
+      "groupLabel": "埋め込み方法",
+      "card": {
+        "none": {
+          "name": "使用しない",
+          "line": "キーワード検索のみ"
+        },
+        "local": {
+          "name": "ローカル埋め込み",
+          "lineMac": "このMacで処理",
+          "linePc": "このPCで処理"
+        },
+        "cloud": {
+          "name": "リモート埋め込み",
+          "line": "サーバーで処理"
+        }
+      },
+      "meter": {
+        "performance": "必要な性能",
+        "accuracy": "精度",
+        "low": "低い",
+        "high": "高い",
+        "meh": "やや不十分",
+        "good": "良い"
+      },
+      "meterAria": "{{label}}: {{value}}",
       "minutes": "約{{minutes}}分",
       "cached": "準備完了",
       "downloadUnknown": "確認中",
-      "privacyLocal": "ローカル",
-      "storageNone": "なし",
-      "planPro": "Pro限定",
-      "bulletGpuMac": "Apple Silicon GPUを使用",
-      "bulletGpuWindows": "GPUアクセラレーションを使用（可能な場合）",
-      "bulletPower": "ノートPCは電源接続を推奨",
-      "cloudBadge": "Pro限定",
-      "cloudTitle": "クラウドで",
-      "cloudLead": "より速く処理できますが、選択した文書の本文が送信されます。",
-      "cloudBulletPerf": "Macの性能への影響が少ない",
-      "cloudBulletNoStore": "Dazziはリクエスト内容を保存せず、データ保持なし（ZDR）プロバイダーにのみ送信します",
-      "privacyTable": "プライバシーポリシーのモデルデータ表",
       "cloudConsent": "選択したフォルダの文書本文が埋め込み処理のためにDazziサーバーへ送信されることに同意します。処理後は保持されません。"
     },
     "sources": {
@@ -561,10 +563,10 @@
       "eyebrow": "プラン",
       "title": "どのように使いますか？",
       "titleReady": "プランの準備ができました",
-      "lead": "プランによってAIの利用量と埋め込みの場所が決まります。後で設定から変更できます。",
-      "leadCloud": "クラウド埋め込みを選択しました。Proプランで続行できます。",
-      "leadCloudReady": "クラウド埋め込みを利用できます。そのまま進んでください。",
-      "cloudCallout": "クラウド埋め込みはProプラン限定です。",
+      "lead": "プランによってAIの利用量が決まり、リモート埋め込みはProでのみ利用できます。後で設定から変更できます。",
+      "leadCloud": "リモート埋め込みを選択しました。Proの7日間無料トライアルを開始するとそのまま続行できます。",
+      "leadCloudReady": "リモート埋め込みを利用できます。そのまま進んでください。",
+      "cloudCallout": "リモート埋め込みはProプラン限定です。カードを登録すると7日間無料で利用できます。",
       "badgeRecommended": "おすすめ",
       "badgeTrial": "トライアル中",
       "badgeSubscribed": "購読中",
@@ -586,7 +588,7 @@
           "chip": "質問はDazziモデルに送信",
           "training": "サービス向上のため入出力を利用する場合があります",
           "feature": {
-            "a": "このMacでローカル埋め込み",
+            "a": "ローカル埋め込みまたは使用しない",
             "b": "マネージドAIモデル · 基本利用量",
             "c": "Finderと検索機能をすべて利用"
           }
@@ -599,7 +601,7 @@
           "chip": "質問はDazziモデルに送信",
           "training": "入出力をモデルの学習に使用しません",
           "feature": {
-            "a": "このMacでローカル埋め込み",
+            "a": "ローカル埋め込みまたは使用しない",
             "b": "マネージドAIモデル · 十分な利用量",
             "c": "Freeの機能をすべて含む"
           }
@@ -612,7 +614,7 @@
           "chip": "質問はDazziモデルに送信",
           "training": "入出力をモデルの学習に使用しません",
           "feature": {
-            "a": "クラウド埋め込みでより高速に",
+            "a": "リモート埋め込みが利用可能",
             "b": "マネージドAIモデル · 最大の利用量",
             "c": "Airの機能をすべて含む"
           }
@@ -625,7 +627,7 @@
           "chip": "APIキーの入力が必要",
           "training": "選択したプロバイダーのポリシーに従います",
           "feature": {
-            "a": "このMacでローカル埋め込み",
+            "a": "ローカル埋め込みまたは使用しない",
             "b": "providerとモデルを直接選択",
             "c": "選択したproviderにのみリクエストを送信"
           }
@@ -1058,6 +1060,10 @@
     },
     "embedding": {
       "profiles": {
+        "none": {
+          "label": "使わない(キーワード検索のみ)",
+          "description": "文書を埋め込まず、キーワード検索のみを使います。モデルのダウンロードや埋め込みの時間は不要で、意味検索とハイブリッド検索はオフになります。"
+        },
         "nativeQwen3": {
           "description": "この Mac 上で直接動作する既定の文書理解モデル(1024 次元)。別途サーバーは不要です。"
         },
@@ -1085,6 +1091,7 @@
         "incompatibleSources": "このモデルに追従できないデータソースがあります: {{ids}}"
       },
       "reasons": {
+        "keywordOnly": "キーワード検索のみのため、このソースも埋め込みません。",
         "mailcrawlIncompatible": "mailcrawl は組み込みの Qwen3 のみ対応しており、任意の HTTP 埋め込みサーバーは使用できません。",
         "mailcrawlPropagated": "connector.env に埋め込みプロバイダーを記録します(モデルが変わると mailcrawl が自動的に再インデックスします)。",
         "obsidianIncompatible": "qmd(obsidian)はローカルの GGUF モデルのみ使用できるため、HTTP 埋め込みサーバーは使用できません。",

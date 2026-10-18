@@ -38,6 +38,10 @@ const realMinsyncModels =
 	(process.platform === "win32"
 		? join(process.env.LOCALAPPDATA?.trim() || join(homeDir(), "AppData", "Local"), "minsync", "models")
 		: join(homeDir(), ".cache", "minsync", "models"));
+// The first argument (or QA_ONBOARDING_EMBED) picks the embedding card: none (default, keyword-only) or local. `bun run qa script` forwards arguments into the VM, environment variables do not. Cloud needs an account, so it is not drivable here.
+const EMBED = process.argv[2]?.trim() || process.env.QA_ONBOARDING_EMBED?.trim() || "none";
+const EMBED_CARD = { none: 0, local: 1 }[EMBED];
+if (EMBED_CARD === undefined) throw new Error(`the embed mode must be none or local, got ${EMBED}`);
 const failures = [];
 const check = (name, ok, detail = "") => {
 	console.log(`${ok ? "PASS" : "FAIL"} ${name}${detail ? ` — ${detail}` : ""}`);
@@ -131,10 +135,14 @@ try {
 	await shot("04-folders");
 	await primary.click();
 
-	// embedding: local only; cloud card disabled.
-	await page.waitForSelector(".onb .embed-card");
-	check("cloud embedding is offered as unavailable", (await page.locator(".onb .embed-card.disabled").count()) === 1);
+	// embedding: the prototype's three cards; the cloud one is disabled while signed out.
+	await page.waitForSelector(".onb .em-card");
+	check("the three embedding modes are offered", (await page.locator(".onb .em-card").count()) === 3);
+	check("cloud embedding is offered as unavailable", (await page.locator(".onb .em-card.disabled").count()) === 1);
+	check("keyword-only is the preselected default", (await page.locator(".onb .em-card").nth(0).getAttribute("aria-checked")) === "true");
 	await shot("05-embedding");
+	await page.locator(".onb .em-card").nth(EMBED_CARD).click();
+	check(`the ${EMBED} card is selected`, (await page.locator(".onb .em-card").nth(EMBED_CARD).getAttribute("aria-checked")) === "true");
 	// Record the checking line from before the step opens: a machine with no
 	// connectors installed (a fresh QA VM) finishes every probe in milliseconds,
 	// so polling for the line afterwards races its removal.
@@ -219,8 +227,10 @@ try {
 	check("subtle background-start button is visible while indexing", await page.locator(".onb .ix-bg-start").isVisible());
 	const phaseLabels = await page.locator(".onb .ix-phases .ix-phase").allInnerTexts();
 	check(
-		"indexing phases show only local phases (parsed, minsync, finalizing)",
-		phaseLabels.length === 3 && !phaseLabels.some((label) => label.includes("데이터 소스")),
+		EMBED === "none"
+			? "indexing phases of a keyword-only run have no embedding phase (parsed, finalizing)"
+			: "indexing phases show only local phases (parsed, minsync, finalizing)",
+		phaseLabels.length === (EMBED === "none" ? 2 : 3) && !phaseLabels.some((label) => label.includes("데이터 소스")),
 		phaseLabels.join(" | "),
 	);
 	await shot("08-indexing");
@@ -252,7 +262,15 @@ try {
 		check(`${requestedSource} datasource config written`, configured.length > 0, JSON.stringify(configured));
 	}
 	check("config searchPaths = selected folders", JSON.stringify(raw.searchPaths) === JSON.stringify([DESK, DOCS]), JSON.stringify(raw.searchPaths));
-	check("config local embedder set", raw.minSync?.embedder?.id === "native:Qwen/Qwen3-Embedding-0.6B", JSON.stringify(raw.minSync?.embedder));
+	if (EMBED === "none") {
+		check("keyword-only: semantic search switched off in the config", raw.appIndexing?.semanticSearch === false, JSON.stringify(raw.appIndexing));
+		check("keyword-only: no embedder written", raw.minSync?.embedder === undefined, JSON.stringify(raw.minSync));
+		check("keyword-only: MinSync never ran (no .minsync index in the workspace)", !existsSync(join(AUTORAG_HOME, "workspace", ".autorag", "minsync")));
+		check("keyword-only: the parsed mirror exists", existsSync(join(AUTORAG_HOME, "workspace", ".autorag", "parsed", "index.json")));
+	} else {
+		check("config local embedder set", raw.minSync?.embedder?.id === "native:Qwen/Qwen3-Embedding-0.6B", JSON.stringify(raw.minSync?.embedder));
+		check("semantic search stays on", raw.appIndexing?.semanticSearch === undefined, JSON.stringify(raw.appIndexing));
+	}
 	check("first index lives in the AutoRAG home, not the app cwd", raw.workspacePath === join(AUTORAG_HOME, "workspace") && !existsSync(join(ROOT, ".autorag")), String(raw.workspacePath));
 	const final = await page.evaluate(() => window.autorag.onboarding.indexStatus());
 	check(

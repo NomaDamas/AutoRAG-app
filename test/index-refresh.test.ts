@@ -5,17 +5,20 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type * as Librarian from "@autorag/librarian";
 import { existsSync, readFileSync } from "node:fs";
+import { MailcrawlClient } from "@autorag/librarian";
 import { refreshAutoragIndex } from "../src/main/index-refresh";
 
 const refresh = vi.hoisted(() => vi.fn());
 const syncMinSync = vi.hoisted(() => vi.fn());
 const batches = vi.hoisted((): Array<number | undefined> => []);
 const excludes = vi.hoisted((): Array<readonly string[]> => []);
+const datasourceConfigs = vi.hoisted((): Array<unknown> => []);
 
 vi.mock("@autorag/librarian", async (importOriginal) => ({
 	...(await importOriginal<typeof Librarian>()),
 	AutoRAGLite: class {
-		constructor(config: { minSync?: { embedder?: { batchSize?: number } }; excludePaths?: readonly string[] }) {
+		constructor(config: { minSync?: { embedder?: { batchSize?: number } }; excludePaths?: readonly string[]; datasources?: unknown }) {
+			datasourceConfigs.push(config.datasources);
 			batches.push(config.minSync?.embedder?.batchSize);
 			excludes.push(config.excludePaths ?? []);
 		}
@@ -45,6 +48,7 @@ beforeEach(() => {
 	syncMinSync.mockReset();
 	batches.length = 0;
 	excludes.length = 0;
+	datasourceConfigs.length = 0;
 });
 afterEach(async () => {
 	await Promise.all(directories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
@@ -289,5 +293,56 @@ describe("refreshAutoragIndex against unreliable folders and files", () => {
 
 		expect(outcome).toMatchObject({ ok: false, error: "ENOSPC: no space left on device" });
 		expect(refresh).toHaveBeenCalledOnce();
+	});
+});
+
+describe("refreshAutoragIndex in keyword-only mode (appIndexing.semanticSearch: false)", () => {
+	async function keywordOnly(): Promise<{ readonly env: NodeJS.ProcessEnv; readonly cwd: string }> {
+		const setup = await fixture();
+		const path = setup.env.AUTORAG_CONFIG as string;
+		const raw = JSON.parse(readFileSync(path, "utf8"));
+		await writeFile(path, JSON.stringify({ ...raw, appIndexing: { semanticSearch: false }, datasources: { slack: { type: "slack" } } }));
+		return setup;
+	}
+
+	it("runs the parsed mirror and Jikji instead of MinSync, and never calls MinSync", async () => {
+		refresh.mockResolvedValue({ scanned: 1, written: 1, deleted: 0, skipped: 0, diagnostics: [] });
+
+		const outcome = await refreshAutoragIndex(await keywordOnly());
+
+		expect(refresh).toHaveBeenCalledWith(false, { methods: ["parsed", "jikji"] });
+		expect(syncMinSync).not.toHaveBeenCalled();
+		expect(outcome).toMatchObject({ ok: true, error: null, methods: ["parsed", "jikji"] });
+	});
+
+	it("hands the librarian datasources whose semantic half is off", async () => {
+		refresh.mockResolvedValue({ scanned: 0, written: 0, deleted: 0, skipped: 0, diagnostics: [] });
+
+		await refreshAutoragIndex(await keywordOnly(), ["datasources"]);
+
+		expect(datasourceConfigs.at(-1)).toEqual({ slack: { type: "slack", connector: { sidecar: { semantic: false } } } });
+	});
+
+	it("disables the datasource embedding steps only while the refresh runs", async () => {
+		const realIndex = MailcrawlClient.prototype.index;
+		let during: unknown;
+		refresh.mockImplementation(async () => {
+			during = MailcrawlClient.prototype.index;
+			return { scanned: 0, written: 0, deleted: 0, skipped: 0, diagnostics: [] };
+		});
+
+		await refreshAutoragIndex(await keywordOnly(), ["datasources"]);
+
+		expect(during).not.toBe(realIndex);
+		expect(MailcrawlClient.prototype.index).toBe(realIndex);
+	});
+
+	it("keeps MinSync in the default refresh when semantic search is on", async () => {
+		refresh.mockResolvedValue(result(undefined));
+
+		await refreshAutoragIndex(await fixture());
+
+		expect(refresh).toHaveBeenCalledWith(false, { methods: ["parsed", "minsync"] });
+		expect(datasourceConfigs.at(-1)).toBeUndefined();
 	});
 });

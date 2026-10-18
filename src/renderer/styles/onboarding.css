@@ -210,19 +210,6 @@ html[data-appearance="dark"] .onb {
 	color: var(--onb-blue);
 }
 
-.onb .copy-stat {
-	display: flex;
-	gap: 7px;
-	margin-top: 20px;
-	color: var(--onb-muted);
-	font-size: 10.5px;
-}
-
-.onb .copy-stat strong {
-	color: var(--onb-ink);
-	font-weight: 600;
-}
-
 .onb .content-panel {
 	min-width: 0;
 }
@@ -1397,51 +1384,112 @@ html[data-appearance="dark"] .onb .source-icon.brand {
 	font-size: 9px;
 }
 
-.onb .embed-wrap {
-	width: 100%;
-	max-width: 720px;
+/* ------------------------------------ embedding choice (none / local / remote)
+ * The three modes are compared on the same two axes (power needed, accuracy):
+ * a meter's length shows the value's size, its colour whether that value is
+ * good or bad.
+ */
+.onb .screen.em-screen {
+	justify-content: center;
+	padding-top: 27px;
 }
 
-.onb .embed-cards {
+.onb .em-cards {
 	display: grid;
-	grid-template-columns: repeat(2,minmax(0,1fr));
+	grid-template-columns: repeat(3,minmax(0,1fr));
 	gap: 12px;
+	width: 100%;
+	max-width: 960px;
+	margin-top: 17px;
 }
 
-.onb .embed-card {
+.onb .em-card {
 	position: relative;
-	padding: 17px;
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	padding: 15px 15px 13px;
 	border: 1px solid var(--onb-border);
-	border-radius: 11px;
+	border-radius: 12px;
 	background: var(--onb-bg-card);
 	cursor: pointer;
+	transition: border .15s, background .15s, box-shadow .15s, transform .15s;
 }
 
-.onb .embed-card:hover {
+.onb .em-card:hover {
 	border-color: color-mix(in srgb,var(--onb-blue) 45%,var(--onb-border));
+	transform: translateY(-1px);
 }
 
-.onb .embed-card.selected {
+.onb .em-card.selected {
 	border-color: var(--onb-blue);
-	box-shadow: 0 0 0 2px color-mix(in srgb,var(--onb-blue) 17%,transparent);
 	background: var(--onb-blue-soft);
+	box-shadow: 0 0 0 2px color-mix(in srgb,var(--onb-blue) 17%,transparent);
 }
 
-.onb .embed-card.disabled {
-	opacity: .5;
+.onb .em-card.disabled {
+	background: var(--onb-bg-input);
 	cursor: not-allowed;
 }
 
-.onb .recommended {
+.onb .em-card.disabled>* {
+	opacity: .55;
+}
+
+.onb .em-card.disabled:hover {
+	border-color: var(--onb-border);
+	transform: none;
+}
+
+.onb .em-radio {
 	position: absolute;
-	right: 12px;
-	top: 12px;
-	padding: 3px 6px;
+	top: 15px;
+	right: 14px;
+	width: 16px;
+	height: 16px;
+	border: 1.5px solid var(--onb-border);
+	border-radius: 50%;
+	background: var(--onb-bg-card);
+}
+
+.onb .em-card.selected .em-radio {
+	border: 5px solid var(--onb-blue);
+}
+
+.onb .em-card.disabled .em-radio {
+	display: none;
+}
+
+.onb .em-title {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin-top: 12px;
+}
+
+.onb .em-title h3 {
+	margin: 0;
+	font-size: 14px;
+}
+
+.onb .em-tag {
+	padding: 2px 6px;
 	border-radius: 4px;
-	background: var(--onb-blue);
-	color: #fff;
-	font-size: 8px;
+	background: var(--onb-bg-input);
+	color: var(--onb-muted);
+	font-size: 8.5px;
 	font-weight: 600;
+}
+
+.onb .em-tag.warn {
+	background: var(--onb-orange-bg);
+	color: #925800;
+}
+
+.onb .em-tag.bad {
+	background: var(--onb-red-bg);
+	color: var(--onb-red);
 }
 
 .onb .embed-icon {
@@ -1454,63 +1502,83 @@ html[data-appearance="dark"] .onb .source-icon.brand {
 	color: var(--onb-body);
 }
 
-.onb .embed-card h3 {
-	margin: 13px 0 4px;
-	font-size: 14px;
-}
-
-.onb .embed-card p {
-	margin: 0;
+.onb .em-line {
+	margin: 4px 0 0;
 	color: var(--onb-muted);
 	font-size: 10.5px;
 	line-height: 1.45;
 }
 
-.onb .metric-grid {
-	display: grid;
-	grid-template-columns: repeat(3,1fr);
-	gap: 7px;
-	margin-top: 16px;
-}
-
-.onb .metric {
-	padding: 7px;
-	border-radius: 6px;
-	background: var(--onb-bg-input);
-}
-
-.onb .metric small {
-	display: block;
-	color: var(--onb-muted);
-	font-size: 8px;
-}
-
-.onb .metric b {
-	display: block;
-	margin-top: 3px;
-	font-size: 10px;
-}
-
-.onb .bullets {
+.onb .em-meters {
 	display: flex;
 	flex-direction: column;
-	gap: 6px;
-	margin: 14px 0 0;
-	padding: 0;
-	list-style: none;
-	color: var(--onb-body);
+	gap: 7px;
+	margin-top: 13px;
+	padding-top: 12px;
+	border-top: 1px solid var(--onb-divider);
+}
+
+.onb .em-meter {
+	display: grid;
+	grid-template-columns: 52px 40px minmax(0,1fr);
+	align-items: center;
+	gap: 8px;
 	font-size: 10px;
 }
 
-.onb .bullets li {
-	display: flex;
-	gap: 6px;
+.onb .em-m-label {
+	color: var(--onb-muted);
 }
 
-.onb .bullets li:before {
-	content: "✓";
-	color: var(--onb-green);
-	font-weight: 700;
+.onb .em-meter b {
+	color: var(--onb-ink);
+	font-size: 10px;
+	font-weight: 600;
+}
+
+.onb .em-pips {
+	display: flex;
+	gap: 2px;
+}
+
+.onb .em-pips i {
+	flex: 1;
+	height: 5px;
+	border-radius: 2px;
+	background: var(--onb-border);
+}
+
+.onb .em-meter.good .em-pips i.on {
+	background: var(--onb-green);
+}
+
+.onb .em-meter.warn .em-pips i.on {
+	background: var(--onb-orange);
+}
+
+.onb .em-meter.bad .em-pips i.on {
+	background: var(--onb-red);
+}
+
+.onb .em-foot {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 5px;
+	margin-top: auto;
+	padding-top: 11px;
+	color: var(--onb-muted);
+	font-size: 10px;
+}
+
+.onb .em-foot b {
+	color: var(--onb-ink);
+	font-weight: 600;
+}
+
+@media (max-width:850px) {
+	.onb .em-cards {
+		grid-template-columns: 1fr;
+	}
 }
 
 .onb .consent {
@@ -1529,6 +1597,17 @@ html[data-appearance="dark"] .onb .source-icon.brand {
 .onb .consent input {
 	accent-color: var(--onb-blue);
 	margin-top: 2px;
+}
+
+/* The cloud-embedding consent under the card grid: wider than the note version. */
+.onb .em-consent {
+	width: 100%;
+	max-width: 960px;
+	margin-top: 12px;
+	border-color: color-mix(in srgb,var(--onb-orange) 40%,var(--onb-border));
+	background: var(--onb-orange-bg);
+	color: var(--onb-body);
+	font-size: 11px;
 }
 
 /* The welcome step's usage-statistics checkbox: a small line under the note, not a boxed card. */
@@ -1552,16 +1631,6 @@ html[data-appearance="dark"] .onb .source-icon.brand {
 
 .onb .legal-note {
 	margin-top: 6px;
-}
-
-.onb .reindex-note {
-	display: flex;
-	align-items: flex-start;
-	gap: 7px;
-	margin-top: 11px;
-	color: var(--onb-orange);
-	font-size: 10px;
-	line-height: 1.4;
 }
 
 .onb .model-ready {
@@ -3176,11 +3245,6 @@ html[data-appearance="light"] .onb .ix-notice.warn svg {
 
 html[data-appearance="light"] .onb .ix-notice.warn strong {
 	color: #b3261e;
-}
-
-/* The disabled "cloud embedding" card keeps its badge legible at 50% opacity. */
-.onb .embed-card.disabled .recommended {
-	background: color-mix(in srgb, var(--onb-muted) 70%, transparent);
 }
 
 /* Subtle bottom link on the indexing screen to continue in the background and open the app immediately. */

@@ -1,139 +1,153 @@
-/** Step 5 — embedding location: local on this device, or Dazzi cloud when signed in. */
+/**
+ * Step 5 — how documents become searchable: keyword only, embedded on this
+ * machine, or embedded by Dazzi's server. A rule-for-rule port of the
+ * prototype's `views.embedding` (centred screen, three radio cards compared on
+ * the same two meters, and the cloud consent under the grid).
+ */
 
-import type { ReactElement } from "react";
+import { useRef, type KeyboardEvent, type ReactElement } from "react";
 import { cn } from "../../lib/cn";
 import { Icon } from "../marks";
-import { Eyebrow, Multiline, SplitScreen, openExternal } from "../parts";
-import { canSelectCloudEmbedding, etaMinutes, formatSize, scanTotals } from "../flow";
-import { accountLegalUrl } from "../../../../shared/account-contract";
+import { Eyebrow } from "../parts";
+import { canSelectCloudEmbedding, embedCards, formatSize, resolveEmbed, scanTotals, type EmbedCard } from "../flow";
 import type { OnboardingCtx } from "../context";
+
+/** The four pips every meter shows, whether or not they are lit. */
+const PIPS = [1, 2, 3, 4];
 
 export function EmbeddingStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElement {
 	const { t, draft, scans, embedding, platform, account } = ctx;
-	const selected = draft.folders.filter((f) => f.selected).map((f) => f.path);
-	const totals = scanTotals(selected, scans);
-	const localEta = etaMinutes(totals.files, "local");
-	const cloudEta = etaMinutes(totals.files, "cloud");
 	const cloudAvailable = canSelectCloudEmbedding(account);
-	const embedMode = cloudAvailable && draft.embed === "cloud" ? "cloud" : "local";
-	const cloudConsent = draft.cloudConsent === true;
-	const download =
-		embedding === null
-			? t("onboarding.embedding.downloadUnknown")
-			: embedding.cached
-				? t("onboarding.embedding.cached")
-				: formatSize(embedding.modelBytes);
+	const totals = scanTotals(
+		draft.folders.filter((folder) => folder.selected).map((folder) => folder.path),
+		scans,
+	);
+	const cards = embedCards({
+		files: totals.files,
+		platform,
+		cloudAvailable,
+		modelBytes: embedding === null ? null : embedding.modelBytes,
+		modelCached: embedding?.cached === true,
+	});
+	const selected = resolveEmbed(draft.embed, cloudAvailable);
+	const listRef = useRef<HTMLDivElement | null>(null);
+
+	const choose = (card: EmbedCard): void => {
+		if (!card.disabled) {
+			ctx.setEmbedMode(card.id);
+		}
+	};
+
+	/** Arrow keys walk the group in card order, skipping a card the account cannot use. */
+	const move = (from: EmbedCard, step: number): void => {
+		let index = cards.indexOf(from);
+		for (let hop = 0; hop < cards.length; hop += 1) {
+			index = (index + step + cards.length) % cards.length;
+			const next = cards[index];
+			if (next !== undefined && !next.disabled) {
+				ctx.setEmbedMode(next.id);
+				listRef.current?.querySelector<HTMLDivElement>(`[data-value="${next.id}"]`)?.focus();
+				return;
+			}
+		}
+	};
+
+	const onKeyDown = (event: KeyboardEvent<HTMLDivElement>, card: EmbedCard): void => {
+		const pick = (): void => {
+			// The shell advances the step on Enter; a card consumes the key itself.
+			event.preventDefault();
+			event.stopPropagation();
+		};
+		if (event.key === "Enter" || event.key === " ") {
+			pick();
+			choose(card);
+		} else if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+			pick();
+			move(card, 1);
+		} else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+			pick();
+			move(card, -1);
+		}
+	};
+
+	const renderCard = (card: EmbedCard): ReactElement => {
+		const checked = card.id === selected;
+		const download =
+			card.foot === null
+				? null
+				: card.foot.kind === "size"
+					? formatSize(card.foot.bytes)
+					: t(card.foot.kind === "cached" ? "onboarding.embedding.cached" : "onboarding.embedding.downloadUnknown");
+		return (
+			<div
+				key={card.id}
+				role="radio"
+				aria-checked={checked}
+				aria-disabled={card.disabled}
+				tabIndex={checked && !card.disabled ? 0 : -1}
+				data-value={card.id}
+				className={cn("em-card", checked && "selected", card.disabled && "disabled")}
+				onClick={() => choose(card)}
+				onKeyDown={(event) => onKeyDown(event, card)}
+			>
+				<span className="em-radio" />
+				<div className="embed-icon">
+					<Icon name={card.icon} size={19} />
+				</div>
+				<div className="em-title">
+					<h3>{t(card.nameKey)}</h3>
+					{card.tag === null ? null : <span className={cn("em-tag", card.tag.tone)}>{t(card.tag.labelKey)}</span>}
+				</div>
+				<p className="em-line">{t(card.lineKey)}</p>
+				<div className="em-meters">
+					{card.meters.map((meter) => (
+						<div
+							key={meter.labelKey}
+							className={cn("em-meter", meter.tone)}
+							aria-label={t("onboarding.embedding.meterAria", { label: t(meter.labelKey), value: t(meter.valueKey) })}
+						>
+							<span className="em-m-label">{t(meter.labelKey)}</span>
+							<span className="em-pips" aria-hidden="true">
+								{PIPS.map((pip) => (
+									<i key={pip} className={pip <= meter.fill ? "on" : ""} />
+								))}
+							</span>
+							<b>{t(meter.valueKey)}</b>
+						</div>
+					))}
+				</div>
+				<div className="em-foot">
+					<b>{t("onboarding.embedding.minutes", { minutes: card.minutes })}</b>
+					{download === null ? null : (
+						<>
+							<span>·</span>
+							{download}
+						</>
+					)}
+				</div>
+			</div>
+		);
+	};
 
 	return (
-		<SplitScreen
-			copy={
-				<>
-					<Eyebrow icon="lock" warn>
-						{t("onboarding.embedding.eyebrow")}
-					</Eyebrow>
-					<h1>
-						<Multiline text={t("onboarding.embedding.title")} />
-					</h1>
-					<p>{t("onboarding.embedding.lead")}</p>
-					<div className="copy-stat">
-						<strong>{t("onboarding.embedding.files", { count: totals.files.toLocaleString() })}</strong>
-						<span>{t("onboarding.embedding.selectedFiles")}</span>
-						<span>·</span>
-						<strong>{formatSize(totals.bytes)}</strong>
-					</div>
-					<div className="reindex-note">
-						<Icon name="triangle-alert" size={13} />
-						<span>{t("onboarding.embedding.reindexNote")}</span>
-					</div>
-				</>
-			}
-		>
-			<div className="embed-wrap">
-				<div className="embed-cards">
-					<div
-						className={cn("embed-card", embedMode === "local" && "selected")}
-						onClick={() => ctx.setEmbedMode("local")}
-					>
-						<div className="embed-icon">
-							<Icon name="laptop" size={19} />
-						</div>
-						<h3>{t("onboarding.embedding.localTitle")}</h3>
-						<p>{t("onboarding.embedding.localLead")}</p>
-						<div className="metric-grid">
-							<div className="metric">
-								<small>{t("onboarding.embedding.metricTime")}</small>
-								<b>{t("onboarding.embedding.minutes", { minutes: localEta })}</b>
-							</div>
-							<div className="metric">
-								<small>{t("onboarding.embedding.metricDownload")}</small>
-								<b>{download}</b>
-							</div>
-							<div className="metric">
-								<small>{t("onboarding.embedding.metricPrivacy")}</small>
-								<b>{t("onboarding.embedding.privacyLocal")}</b>
-							</div>
-						</div>
-						<ul className="bullets">
-							<li>{platform === "win32" ? t("onboarding.embedding.bulletGpuWindows") : t("onboarding.embedding.bulletGpuMac")}</li>
-							<li>{t("onboarding.embedding.bulletPower")}</li>
-						</ul>
-					</div>
-					<div
-						className={cn("embed-card", embedMode === "cloud" && "selected", !cloudAvailable && "disabled")}
-						aria-disabled={!cloudAvailable}
-						onClick={() => {
-							if (cloudAvailable) ctx.setEmbedMode("cloud");
-						}}
-					>
-						<span className="recommended">{t("onboarding.embedding.cloudBadge")}</span>
-						<div className="embed-icon">
-							<Icon name="cloud" size={19} />
-						</div>
-						<h3>{t("onboarding.embedding.cloudTitle")}</h3>
-						<p>{t("onboarding.embedding.cloudLead")}</p>
-						<div className="metric-grid">
-							<div className="metric">
-								<small>{t("onboarding.embedding.metricTime")}</small>
-								<b>{t("onboarding.embedding.minutes", { minutes: cloudEta })}</b>
-							</div>
-							<div className="metric">
-								<small>{t("onboarding.embedding.metricStorage")}</small>
-								<b>{t("onboarding.embedding.storageNone")}</b>
-							</div>
-							<div className="metric">
-								<small>{t("onboarding.embedding.metricPlan")}</small>
-								<b>{t("onboarding.embedding.planPro")}</b>
-							</div>
-						</div>
-						<ul className="bullets">
-							<li>{t("onboarding.embedding.cloudBulletPerf")}</li>
-							<li>{t("onboarding.embedding.cloudBulletNoStore")}</li>
-							<li>
-								<button
-									type="button"
-									className="inline-link"
-									onClick={(e) => {
-										e.stopPropagation();
-										openExternal(accountLegalUrl(ctx.account?.baseUrl, "privacyModels"));
-									}}
-								>
-									{t("onboarding.embedding.privacyTable")}
-								</button>
-							</li>
-						</ul>
-					</div>
-				</div>
-				{embedMode === "cloud" ? (
-					<label className="consent">
-						<input
-							type="checkbox"
-							checked={cloudConsent}
-							onChange={(e) => ctx.setCloudConsent(e.target.checked)}
-						/>
-						<span>{t("onboarding.embedding.cloudConsent")}</span>
-					</label>
-				) : null}
+		<section className="screen center em-screen">
+			<div className="screen-copy">
+				<Eyebrow icon="search">{t("onboarding.embedding.eyebrow")}</Eyebrow>
+				<h1>{t("onboarding.embedding.title")}</h1>
 			</div>
-		</SplitScreen>
+			<div ref={listRef} className="em-cards" role="radiogroup" aria-label={t("onboarding.embedding.groupLabel")}>
+				{cards.map(renderCard)}
+			</div>
+			{selected === "cloud" ? (
+				<label className="consent em-consent">
+					<input
+						type="checkbox"
+						checked={draft.cloudConsent === true}
+						onChange={(event) => ctx.setCloudConsent(event.target.checked)}
+					/>
+					<span>{t("onboarding.embedding.cloudConsent")}</span>
+				</label>
+			) : null}
+		</section>
 	);
 }

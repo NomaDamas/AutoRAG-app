@@ -11,7 +11,8 @@ import { readRawConfigObject, resolveAgentModel, resolveConfigPath, type CliConf
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { isJsonObject } from "../shared/settings-contract";
 import { applyDazziThinkingLevels, openPlanRuntime, preferPlanOAuth } from "./dazzi-session-auth";
-import { applyAppIndexing } from "./app-indexing";
+import { applyAppIndexing, readAppIndexing } from "./app-indexing";
+import { agentOptionsForSemantic, applySemanticPolicyToAgent } from "./semantic-policy";
 import type {
 	AnswerPhase,
 	AnswerPhaseName,
@@ -576,6 +577,9 @@ export function createDefaultAgentFactory(): () => Promise<SearchAgent> {
 			...(decomposition !== undefined ? { queryDecomposition: decomposition } : {}),
 			...(thinking !== undefined ? { thinking } : {}),
 		};
-		return new AttachmentContextAgent(options) as SearchAgent;
+		const semantic = readAppIndexing(raw).semanticSearch;
+		const agent = new AttachmentContextAgent(agentOptionsForSemantic(options, semantic));
+		applySemanticPolicyToAgent(agent, semantic);
+		return agent as SearchAgent;
 	};
 }

@@ -477,7 +477,7 @@
       },
       "network": {
         "name": "网络（防火墙）",
-        "desc": "云端嵌入和模型调用需要。首次启动时若出现 Windows 安全警告，请选择允许。",
+        "desc": "远程嵌入和模型调用需要。首次启动时若出现 Windows 安全警告，请选择允许。",
         "allow": "允许"
       }
     },
@@ -493,39 +493,41 @@
       "scanError": "无法读取",
       "summary": "{{folders}} 个文件夹 · {{files}} 个文件 · {{size}}",
       "summaryNote": "node_modules · .git · 超过 50 MiB 的文件会自动排除。",
-      "localEta": "本地约 {{minutes}} 分钟",
-      "cloudEta": "云端约 {{minutes}} 分钟",
-      "warning": "范围较广。选择子文件夹或云端嵌入可以更快看到首个结果。"
+      "localEta": "本地 (此 Mac) 约 {{minutes}} 分钟",
+      "cloudEta": "远程 约 {{minutes}} 分钟",
+      "warning": "范围较广。选择子文件夹或远程嵌入可以更快看到首个结果。"
     },
     "embedding": {
-      "eyebrow": "重要选择",
-      "title": "在哪里\n进行嵌入？",
-      "lead": "决定将文档转换为可搜索向量的处理在哪里进行。之后更改需要从头再来，会额外花费时间和成本。",
-      "files": "{{count}} 个",
-      "selectedFiles": "已选文件",
-      "reindexNote": "更改嵌入模型或处理位置会丢弃当前已构建的索引，必须从头重新创建。",
-      "localTitle": "在这台 Mac 上",
-      "localLead": "文件正文不会离开这台 Mac。",
-      "metricTime": "预计用时",
-      "metricDownload": "下载",
-      "metricPrivacy": "隐私",
-      "metricStorage": "存储",
-      "metricPlan": "套餐",
+      "eyebrow": "语义搜索",
+      "title": "如何使用嵌入？",
+      "groupLabel": "嵌入方式",
+      "card": {
+        "none": {
+          "name": "不使用",
+          "line": "仅关键词搜索"
+        },
+        "local": {
+          "name": "本地嵌入",
+          "lineMac": "在此 Mac 上处理",
+          "linePc": "在此 PC 上处理"
+        },
+        "cloud": {
+          "name": "远程嵌入",
+          "line": "在服务器上处理"
+        }
+      },
+      "meter": {
+        "performance": "所需性能",
+        "accuracy": "准确度",
+        "low": "低",
+        "high": "高",
+        "meh": "略逊",
+        "good": "好"
+      },
+      "meterAria": "{{label}}: {{value}}",
       "minutes": "约 {{minutes}} 分钟",
       "cached": "已就绪",
       "downloadUnknown": "检查中",
-      "privacyLocal": "本地",
-      "storageNone": "不存储",
-      "planPro": "仅限 Pro",
-      "bulletGpuMac": "使用 Apple Silicon GPU",
-      "bulletGpuWindows": "使用 GPU 加速（如可用）",
-      "bulletPower": "笔记本电脑建议连接电源",
-      "cloudBadge": "仅限 Pro",
-      "cloudTitle": "在云端",
-      "cloudLead": "处理更快，但你选择的文档正文会被发送。",
-      "cloudBulletPerf": "对 Mac 性能影响较小",
-      "cloudBulletNoStore": "Dazzi 不保存请求内容，仅发送至零数据保留（ZDR）服务商",
-      "privacyTable": "隐私政策中的模型数据表",
       "cloudConsent": "我同意将所选文件夹中的文档正文发送至 Dazzi 服务器进行嵌入处理。处理后不会保留。"
     },
     "sources": {
@@ -561,10 +563,10 @@
       "eyebrow": "套餐",
       "title": "你打算如何使用？",
       "titleReady": "套餐已就绪",
-      "lead": "套餐决定 AI 用量和嵌入位置。可稍后在设置中更改。",
-      "leadCloud": "已选择云端嵌入。可使用 Pro 套餐继续。",
-      "leadCloudReady": "可以使用云端嵌入。请继续下一步。",
-      "cloudCallout": "云端嵌入仅限 Pro 套餐使用。",
+      "lead": "套餐决定 AI 用量，远程嵌入仅 Pro 可用。可稍后在设置中更改。",
+      "leadCloud": "已选择远程嵌入。开始 7 天 Pro 免费试用即可继续。",
+      "leadCloudReady": "可以使用远程嵌入。请继续下一步。",
+      "cloudCallout": "远程嵌入仅限 Pro 套餐使用。绑定银行卡即可免费使用 7 天。",
       "badgeRecommended": "推荐",
       "badgeTrial": "试用进行中",
       "badgeSubscribed": "已订阅",
@@ -586,7 +588,7 @@
           "chip": "提问会发送至 Dazzi 模型",
           "training": "输入与输出可能用于改进服务",
           "feature": {
-            "a": "在这台 Mac 上本地嵌入",
+            "a": "本地嵌入或关闭",
             "b": "托管 AI 模型 · 基础用量",
             "c": "完整使用 Finder 和搜索功能"
           }
@@ -599,7 +601,7 @@
           "chip": "提问会发送至 Dazzi 模型",
           "training": "输入与输出不用于模型训练",
           "feature": {
-            "a": "在这台 Mac 上本地嵌入",
+            "a": "本地嵌入或关闭",
             "b": "托管 AI 模型 · 充足用量",
             "c": "包含 Free 的全部功能"
           }
@@ -612,7 +614,7 @@
           "chip": "问题将发送到 Dazzi 模型",
           "training": "输入与输出不用于模型训练",
           "feature": {
-            "a": "通过云端嵌入更快完成",
+            "a": "可使用远程嵌入",
             "b": "托管 AI 模型 · 最高用量",
             "c": "包含 Air 的全部功能"
           }
@@ -625,7 +627,7 @@
           "chip": "需要输入 API 密钥",
           "training": "遵循您所选服务商的政策",
           "feature": {
-            "a": "在这台 Mac 上本地嵌入",
+            "a": "本地嵌入或关闭",
             "b": "自行选择 provider 和模型",
             "c": "仅向所选 provider 发送请求"
           }
@@ -1058,6 +1060,10 @@
     },
     "embedding": {
       "profiles": {
+        "none": {
+          "label": "不使用(仅关键词搜索)",
+          "description": "不对文档做嵌入,只使用关键词搜索。无需下载模型或等待嵌入,语义搜索和混合搜索会关闭。"
+        },
         "nativeQwen3": {
           "description": "直接在此 Mac 上运行的默认文档理解模型(1024 维)。无需单独的服务器。"
         },
@@ -1085,6 +1091,7 @@
         "incompatibleSources": "有数据源无法跟随此模型：{{ids}}"
       },
       "reasons": {
+        "keywordOnly": "仅使用关键词搜索,因此该数据源也不做嵌入。",
         "mailcrawlIncompatible": "mailcrawl 仅支持内置的 Qwen3，无法使用任意的 HTTP 嵌入服务器。",
         "mailcrawlPropagated": "在 connector.env 中记录嵌入提供商(模型更改时 mailcrawl 会自动重新建立索引)。",
         "obsidianIncompatible": "qmd (obsidian) 只能使用本地 GGUF 模型，因此无法使用 HTTP 嵌入服务器。",
