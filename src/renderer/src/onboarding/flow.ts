@@ -144,6 +144,11 @@ export function usageConsentOnLeaving(stepId: OnboardingStepId, checked: boolean
 	return stepId === "welcome" ? checked : null;
 }
 
+/** Same rule for "error reports": the value to save when the user leaves `stepId`, or null. Default stays off. */
+export function errorReportsConsentOnLeaving(stepId: OnboardingStepId, checked: boolean): boolean | null {
+	return stepId === "welcome" ? checked : null;
+}
+
 /** Files-per-minute ETA the prototype computes with `eta(mode)`. */
 export function etaMinutes(files: number, mode: EmbedMode): number {
 	if (mode === "none") {

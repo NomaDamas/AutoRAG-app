@@ -1,0 +1,42 @@
+name: SBOM
+
+# Publishing a release attaches a CycloneDX software bill of materials built from
+# bun.lock (CRA Annex I Part II(1)). It runs apart from the installer workflow so
+# a failure here can never block a release. `workflow_dispatch` produces the
+# same file as a run artifact without touching any release.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write # attach the SBOM to the release
+
+jobs:
+  sbom:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      # cdxgen reads bun.lock directly; nothing is installed or built.
+      - name: Generate the CycloneDX SBOM
+        run: bunx --bun @cyclonedx/cdxgen@12.8.6 -t js --no-recurse --spec-version 1.6 -o dazzi-sbom.cdx.json .
+
+      - name: Attach it to the release
+        if: ${{ github.event_name == 'release' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.event.release.tag_name }}" dazzi-sbom.cdx.json --clobber
+
+      - name: Keep it as a run artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dazzi-sbom
+          path: dazzi-sbom.cdx.json

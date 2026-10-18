@@ -61,14 +61,14 @@ export function scrubEvent<E extends object>(event: E): E {
 	return scrubbed as E;
 }
 
-/** Whether the user left error reporting on, read before the app is ready (the settings store loads asynchronously). */
+/** Whether the user turned error reporting on, read before the app is ready (the settings store loads asynchronously). Off unless the stored setting is exactly `true`. */
 export function readErrorReportingEnabled(userDataDir: string): boolean {
 	try {
 		const parsed: unknown = JSON.parse(readFileSync(join(userDataDir, "settings", "settings-state.json"), "utf8"));
 		const settings = typeof parsed === "object" && parsed !== null && "settings" in parsed ? parsed.settings : null;
-		return !(typeof settings === "object" && settings !== null && "errorReporting" in settings && settings.errorReporting === false);
+		return typeof settings === "object" && settings !== null && "errorReporting" in settings && settings.errorReporting === true;
 	} catch {
-		return true;
+		return false;
 	}
 }
 

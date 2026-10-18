@@ -49,7 +49,7 @@ const DEFAULT_SETTINGS: AppSettings = {
 	launchAtLogin: false,
 	showInMenuBar: true,
 	autoInstallUpdates: true,
-	errorReporting: true,
+	errorReporting: false,
 	usageAnalytics: false,
 	showHiddenFiles: false,
 	dupeyScanIntervalMinutes: 60,

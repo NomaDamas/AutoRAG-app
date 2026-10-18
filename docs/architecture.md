@@ -219,10 +219,14 @@ exiting. QA lane: `scripts/manual-qa/run-qa-finder-fs-worker-crash.mjs`
 ## Error reports (Sentry)
 
 Dazzi sends a report to the maintainers' Sentry project when something breaks,
-so a stuck or failed index is seen without the user filing an issue. It is on
-by default; Settings → 일반 → 개인정보 → "오류 보고서 보내기" turns it off, and
-while it is off every event is dropped before it is queued. There is no
-per-report prompt.
+so a stuck or failed index is seen without the user filing an issue. It is
+**opt-in** (`errorReporting` defaults to off): the first onboarding step carries
+a second unticked checkbox next to the usage-statistics one, and Settings → 일반
+→ 개인정보 → "오류 보고서 보내기" has the same choice as a switch. Continuing from
+the welcome step saves both checkboxes; closing the window there saves nothing.
+Until it is on, every event is dropped before it is queued, and
+`readErrorReportingEnabled` reads the setting as off unless it is exactly `true`.
+There is no per-report prompt.
 
 What is reported: uncaught errors in the main process and the pages, a crashed
 or killed renderer or fs worker (`child-process-gone`, no minidump), and three

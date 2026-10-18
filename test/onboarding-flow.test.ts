@@ -13,6 +13,7 @@ import {
 	isPlanSelectable,
 	phaseIndex,
 	planHeld,
+	errorReportsConsentOnLeaving,
 	primaryLabelKey,
 	resolveEmbed,
 	scanTotals,
@@ -380,6 +381,19 @@ describe("usage statistics consent", () => {
 	it("is not recorded by any other step, so only the step that shows the checkbox can consent", () => {
 		for (const stepId of ["permissions", "account", "folders", "embedding", "sources", "model", "plan", "indexing"] as const) {
 			expect(usageConsentOnLeaving(stepId, true)).toBeNull();
+		}
+	});
+});
+
+describe("error reports consent", () => {
+	it("is recorded when the user leaves the welcome step, independent of the usage statistics checkbox", () => {
+		expect(errorReportsConsentOnLeaving("welcome", true)).toBe(true);
+		expect(errorReportsConsentOnLeaving("welcome", false)).toBe(false);
+	});
+
+	it("is not recorded by any other step", () => {
+		for (const stepId of ["permissions", "account", "folders", "embedding", "sources", "model", "plan", "indexing"] as const) {
+			expect(errorReportsConsentOnLeaving(stepId, true)).toBeNull();
 		}
 	});
 });

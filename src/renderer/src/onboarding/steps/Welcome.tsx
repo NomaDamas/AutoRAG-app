@@ -56,6 +56,15 @@ export function WelcomeStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElem
 							</button>
 						</span>
 					</label>
+					<label className="consent usage-consent">
+						<input type="checkbox" checked={ctx.shareErrors} onChange={(event) => ctx.setShareErrors(event.target.checked)} />
+						<span>
+							{t("onboarding.welcome.errorReports")}{" "}
+							<button type="button" className="inline-link" onClick={() => openExternal(accountLegalUrl(ctx.account?.baseUrl, "privacy"))}>
+								{t("onboarding.welcome.usageStatsPolicy")}
+							</button>
+						</span>
+					</label>
 				</>
 			}
 		>

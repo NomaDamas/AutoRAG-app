@@ -1,0 +1,18 @@
+version: 2
+updates:
+  # bun.lock is the lockfile. Updates arrive weekly and grouped so a security
+  # fix is one reviewable pull request instead of a stream of them.
+  - package-ecosystem: bun
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      production:
+        dependency-type: production
+      development:
+        dependency-type: development
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
