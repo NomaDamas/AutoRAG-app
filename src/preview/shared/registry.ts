@@ -22,6 +22,9 @@ export const VIEWER_KINDS = [
 	"hwp",
 	"font",
 	"rtf",
+	"data",
+	"jsonl",
+	"plist",
 	"mail",
 	"msg",
 	"contact",
@@ -70,6 +73,11 @@ assign("epub", ["epub"]);
 assign("hwp", ["hwp", "hwpx"]);
 assign("font", ["ttf", "otf", "woff", "woff2", "eot"]);
 assign("rtf", ["rtf"]);
+// Databases and columnar files are opened read-only in the main process; the
+// page only ever receives the capped rows it draws.
+assign("data", ["sqlite", "sqlite3", "db", "parquet"]);
+assign("jsonl", ["jsonl", "ndjson"]);
+assign("plist", ["plist"]);
 assign("mail", ["eml", "emlx", "mbox"]);
 // Outlook's OLE2 container has to be parsed whole; a cut prefix has no directory.
 assign("msg", ["msg"]);
@@ -91,9 +99,10 @@ export function claimedViewerExtensions(): readonly { readonly ext: string; read
  * fetches page by page); `prefix` viewers render however much text arrives;
  * `whole` viewers parse the entire file; `decode` viewers get an image the OS
  * decoded for them (the raw file when it cannot); `sniff` reads enough to tell
- * text from binary.
+ * text from binary; `query` sends no bytes: the viewer asks the main process
+ * for capped rows of the file instead.
  */
-export type ByteNeed = "stream" | "prefix" | "whole" | "decode" | "sniff" | "extract";
+export type ByteNeed = "stream" | "prefix" | "whole" | "decode" | "sniff" | "extract" | "query";
 
 export function byteNeed(kind: ViewerKind): ByteNeed {
 	switch (kind) {
@@ -107,6 +116,7 @@ export function byteNeed(kind: ViewerKind): ByteNeed {
 		case "html":
 		case "text":
 		case "rtf":
+		case "jsonl":
 		case "mail":
 		case "contact":
 		case "calendar":
@@ -120,8 +130,11 @@ export function byteNeed(kind: ViewerKind): ByteNeed {
 		case "archive":
 		case "epub":
 		case "hwp":
+		case "plist":
 		case "msg":
 			return "whole";
+		case "data":
+			return "query";
 		case "heic":
 			return "decode";
 		case "iwork":
@@ -206,6 +219,13 @@ const LABELS: Readonly<Record<string, string>> = {
 	tar: "TAR archive",
 	gz: "GZIP archive",
 	tgz: "GZIP archive",
+	sqlite: "SQLite database",
+	sqlite3: "SQLite database",
+	db: "Database",
+	parquet: "Parquet data",
+	jsonl: "JSON Lines",
+	ndjson: "JSON Lines",
+	plist: "Property list",
 	numbers: "Numbers spreadsheet",
 	pages: "Pages document",
 	key: "Keynote presentation",

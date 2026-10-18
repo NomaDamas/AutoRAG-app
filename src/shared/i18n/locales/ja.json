@@ -1170,6 +1170,35 @@
         "desktop": "デスクトップ",
         "mobile": "モバイル",
         "source": "ソース"
+      },
+      "firstRecords": "最初の{{count}}件のレコードを表示中",
+      "plistInvalid": "プロパティリストを読み込めません",
+      "plistConverted": "バイナリplistをXMLで表示"
+    },
+    "data": {
+      "readFailed": "データファイルを読み込めません",
+      "tables": "テーブル",
+      "noTables": "テーブルなし",
+      "tableCount": "{{count}}個のテーブル",
+      "rows": "{{count}}行",
+      "rowsAtLeast": "{{count}}+",
+      "columns": "{{count}}列",
+      "rowGroups": "{{count}}個の行グループ",
+      "view": "ビュー",
+      "noColumns": "このテーブルには列がありません",
+      "noRows": "行なし",
+      "viewNotRun": "プレビューではビューを実行しません",
+      "tableFailed": "このテーブルを読み込めません",
+      "tooLarge": "最初の行グループが大きすぎてプレビューできません",
+      "firstRows": "最初の{{count}}行を表示中",
+      "columnsCut": "最初の{{count}}列のみ表示中",
+      "blob": "バイナリ {{size}}",
+      "walPending": "-walファイルの最新の変更は表示されません",
+      "unreadable": {
+        "not-sqlite": "読み取り可能なSQLiteデータベースではありません(暗号化されている可能性があります)",
+        "corrupt": "ファイルが破損していて読み込めません",
+        "not-parquet": "Parquetファイルではありません",
+        "encrypted": "このParquetファイルは暗号化されています"
       }
     },
     "markdown": {

@@ -164,6 +164,21 @@ still has the previous file's size when they lay out.
   extensions (`file-icon.ts`); Windows has no thumbnailer for them and shows
   the type icon.
 
+- **Databases and data files** — `.sqlite`, `.sqlite3`, `.db`, and `.parquet`
+  (`data` viewer, `byteNeed` `query`) send no file bytes to the page. The
+  `preview:data` call opens the file in the main process (`node/data.ts`) and
+  returns capped rows: 100 rows, 50 columns, 200 characters per cell, and row
+  counts that stop at 100,000. SQLite opens `mode=ro&immutable=1` with
+  `trusted_schema=off`, so no lock is taken and no `-wal`/`-shm` file is
+  created or touched; the cost is that commits still in a `-wal` file are not
+  shown, and the footer says so. Views are listed but never run (their stored
+  query is arbitrary), and no user SQL exists. A file without the SQLite header
+  (including an encrypted database) or that fails to open gets a note in the
+  "Other" panel. Parquet reads the footer and the first row group only (a group
+  over 64MB is not decoded); `PARE` (encrypted footer) is named as such.
+  `.jsonl`/`.ndjson` use the text view with the first 2,000 records
+  pretty-printed (`shared/jsonl.ts`); `.plist` shows XML, converting `bplist00`
+  in `shared/plist.ts` to the text `plutil -convert xml1` writes.
 - **OpenDocument** — `.odt`, `.odp`, `.odg`, and `.ods` are ZIPs whose
   `Thumbnails/thumbnail.png` is the first page, slide, or sheet. `.odt` is
   modelled from `content.xml`/`styles.xml` (`shared/odt-model.ts`,
@@ -226,7 +241,7 @@ HEIC as the JPEG macOS's own `sips` decodes from it (`node/heic.ts`, about
 0.2s on a 24MP iPhone photo even on a spinning disk; the viewer's wasm decoder
 never finished one, and remains only where `sips` is absent or fails); and
 a 64KB sniff of an unknown file, read on as text only when it looks like text.
-The detail calls (details, SHA-256, folder size, audio tags) answer only for the
+The detail calls (details, SHA-256, folder size, audio tags, data rows) answer only for the
 path the window is showing, and the hash and folder walk stop when the preview
 moves on.
 

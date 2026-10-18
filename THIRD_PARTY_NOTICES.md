@@ -92,3 +92,10 @@ installed in `resources/tools/licenses/fsearch-mac`. Source for the shipped
 version: https://github.com/NomaDamas/fsearch-mac (tag in `components-macos-arm64.json`).
 The bundled glib/pango/ICU libraries are unmodified Homebrew builds whose install
 paths were rewritten so they load from the app.
+
+## Quick Look data viewers
+
+| Component | License | Source |
+|---|---|---|
+| hyparquet, hyparquet-compressors | MIT | Hyperparam — https://github.com/hyparam/hyparquet |
+| hyparquet-writer (tests and QA fixtures only) | MIT | Hyperparam — https://github.com/hyparam/hyparquet-writer |

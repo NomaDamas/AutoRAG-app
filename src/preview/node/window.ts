@@ -40,6 +40,7 @@ import { quickLookKeyAction } from "../shared/keys";
 import { byteNeed, viewerForExtension } from "../shared/registry";
 import { fallbackOrigin, screenOrigin, ZOOM_DONE_TIMEOUT_MS, zoomGeometry } from "../shared/zoom";
 import { readAudioMetadata } from "./audio-metadata";
+import { previewData } from "./data";
 import { type BundleIconSource, summarizeBundle } from "./bundle";
 import { createDefaultAppCache, type DefaultAppCache } from "./default-app";
 import { fileDetails, sha256File } from "./details";
@@ -321,6 +322,7 @@ async function readFolder(path: string): Promise<TargetContent> {
 async function readDocument(path: string): Promise<PreviewDocument> {
 	switch (byteNeed(viewerForExtension(extname(path).slice(1)))) {
 		case "stream":
+		case "query":
 			return readPreviewFile(path, 0);
 		case "prefix":
 			return readPreviewFile(path, TEXT_BYTE_CAP);
@@ -608,6 +610,10 @@ export function registerQuickLookIpc(icons: BundleIconSource | null = null, ipc:
 		return measureFolder(shown.path, { ...FOLDER_SIZE_BUDGET, stopped: () => shown.state.current?.path !== shown.path });
 	});
 	ipc.handle(PREVIEW_CHANNELS.audioMetadata, (event, path: unknown) => readAudioMetadata(shownPath(event, path).path));
+	ipc.handle(PREVIEW_CHANNELS.data, (event, path: unknown, table: unknown) => {
+		if (table !== null && typeof table !== "string") throw new Error(t("quickLook.errors.invalidTarget"));
+		return previewData(shownPath(event, path).path, table);
+	});
 	ipc.handle(PREVIEW_CHANNELS.share, (event, anchor: unknown) => {
 		const state = fromPreview(event);
 		if (state === null || state.current === null || process.platform !== "darwin") return;
