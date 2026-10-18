@@ -73,7 +73,7 @@ export async function listenForOsRequests(
 		// Nobody answered: a socket file left by a crashed run would block `listen`.
 		await unlink(endpoint).catch(() => undefined);
 	}
-	const server: Server = createServer((socket) => {
+	const server: Server = createServer({ allowHalfOpen: true }, (socket) => {
 		const chunks: Buffer[] = [];
 		let size = 0;
 		socket.on("data", (chunk: Buffer) => {
@@ -86,7 +86,10 @@ export async function listenForOsRequests(
 		});
 		socket.on("end", () => {
 			// An empty connection is a liveness probe, not a request.
-			if (size === 0) return;
+			if (size === 0) {
+				socket.end();
+				return;
+			}
 			let request: OsLaunchRequest | null = null;
 			try {
 				request = normalizeOsLaunchRequest(JSON.parse(Buffer.concat(chunks).toString("utf8")));
@@ -94,7 +97,10 @@ export async function listenForOsRequests(
 				// Not JSON: handled like an invalid request.
 			}
 			// No acknowledgement for a rejected request: the sender then knows nothing took it.
-			if (request === null) return;
+			if (request === null) {
+				socket.end();
+				return;
+			}
 			onRequest(request);
 			socket.end(ACK);
 		});
