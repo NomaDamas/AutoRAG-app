@@ -13,6 +13,7 @@ import { HwpView } from "./hwp";
 import { FontView, HeicView, ImageView, TiffView } from "./media";
 import { IworkView } from "./iwork";
 import { EpubView } from "./packages";
+import { OdfImageView, OdpView, OdtView } from "./odf";
 import { PptxView } from "./pptx";
 import { PdfView } from "./pdf";
 import { AudioView, VideoView } from "./player";
@@ -46,6 +47,12 @@ export function PreviewBody({ file }: { readonly file: PreviewDocument }): React
 			return <SheetView file={file} />;
 		case "pptx":
 			return <PptxView file={file} />;
+		case "odt":
+			return <OdtView file={file} />;
+		case "odp":
+			return <OdpView file={file} />;
+		case "odg":
+			return <OdfImageView file={file} />;
 		case "markdown":
 			return <MarkdownView file={file} />;
 		case "html":

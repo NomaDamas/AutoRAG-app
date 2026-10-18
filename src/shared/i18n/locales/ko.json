@@ -1282,6 +1282,12 @@
       "notAbsolute": "미리보기 경로가 올바르지 않습니다",
       "missing": "파일을 찾을 수 없습니다",
       "notFile": "폴더는 미리볼 수 없습니다"
+    },
+    "odf": {
+      "readFailed": "문서를 읽을 수 없습니다",
+      "openFailed": "프레젠테이션을 열 수 없습니다",
+      "noSlides": "슬라이드가 없습니다",
+      "noPreview": "이 문서에는 미리보기 이미지가 없습니다"
     }
   },
   "settingsCore": {

@@ -31,7 +31,9 @@
  * same file twice.
  */
 
+import { extname } from "node:path";
 import { realpath } from "node:fs/promises";
+import { ODF_EXTENSIONS, readOdfThumbnail } from "../preview/node/odf";
 import { errorMessage } from "./fs-entry";
 import { ICON_SIZE, iconUrl } from "./icon-protocol";
 import { createPriorityGate, type PriorityGate } from "./priority-gate";
@@ -76,13 +78,16 @@ const NATIVE_THUMBNAIL_EXTENSIONS = new Set([
 	// (Numbers, Pages, Keynote). Windows has no thumbnailer for them and falls
 	// through to the type icon.
 	"numbers", "pages", "key",
+	// OpenDocument packages are not rendered by Quick Look; their tile is the
+	// first-page PNG the package embeds (`odf.ts`), on every platform.
 	// A macOS application bundle is a directory on disk, but Quick Look renders
 	// the app's own icon for it — at the listing tier and at the Inspector's
 	// 640px tier — so it takes this lane exactly like a document does.
 	"app",
 ]);
 export function isNativeThumbnailExtension(ext: string): boolean {
-	return NATIVE_THUMBNAIL_EXTENSIONS.has(ext.toLowerCase().replace(/^\./, ""));
+	const key = ext.toLowerCase().replace(/^\./, "");
+	return NATIVE_THUMBNAIL_EXTENSIONS.has(key) || ODF_EXTENSIONS.has(key);
 }
 
 export interface IconTarget {
@@ -229,6 +234,9 @@ class IconCache {
 }
 
 async function defaultThumbnail(path: string, size: number): Promise<Uint8Array | null> {
+	// An OpenDocument package carries its own first page; Quick Look would only
+	// answer with a generic type icon for it.
+	if (ODF_EXTENSIONS.has(extname(path).slice(1).toLowerCase())) return readOdfThumbnail(path);
 	// Dynamic: `electron` is a main-process-only module and is not importable when
 	// this file is loaded outside Electron (unit tests inject `thumbnail` instead).
 	const [{ nativeImage }, resolved] = await Promise.all([
@@ -365,7 +373,11 @@ export function createIconProvider(deps: IconProviderDeps = {}): IconSource {
 			cache.set(key, bytes);
 			resolvers.get(key)?.(bytes);
 		};
-		const generation = usesNativeThumbnails ? runThumbnails(missing, resolve, gate, priority) : runSystem(missing, resolve, priority);
+		// Other platforms use the OS icon, except for OpenDocument packages, whose
+		// embedded first page is read the same way everywhere.
+		const thumbnailed = usesNativeThumbnails ? missing : missing.filter((target) => ODF_EXTENSIONS.has(target.ext.toLowerCase()));
+		const systemOnly = usesNativeThumbnails ? [] : missing.filter((target) => !ODF_EXTENSIONS.has(target.ext.toLowerCase()));
+		const generation = Promise.all([runThumbnails(thumbnailed, resolve, gate, priority), runSystem(systemOnly, resolve, priority)]).then(() => undefined);
 		void generation.catch((error: unknown) => {
 			// Pool-level failure: the whole batch degrades to "no icon".
 			warn(`file-icon: icon generation failed for ${missing.length} file(s): ${errorMessage(error)}`);

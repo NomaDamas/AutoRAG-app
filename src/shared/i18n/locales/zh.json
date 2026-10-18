@@ -1282,6 +1282,12 @@
       "notAbsolute": "预览路径无效",
       "missing": "找不到文件",
       "notFile": "无法预览文件夹"
+    },
+    "odf": {
+      "readFailed": "无法读取文档",
+      "openFailed": "无法打开演示文稿",
+      "noSlides": "没有幻灯片",
+      "noPreview": "此文档没有预览图像"
     }
   },
   "settingsCore": {
