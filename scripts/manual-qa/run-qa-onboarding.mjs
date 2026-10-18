@@ -341,10 +341,18 @@ try {
 	if (process.platform !== "win32") {
 		spawnSync("pkill", ["-9", "-f", WORK]);
 	}
-	await app.close().catch(() => {});
+	// After the first index the app can keep helper processes alive on Windows, and `close()` then never
+	// returns; give it a moment, then kill the whole process tree so the lane always ends.
+	const pid = app.process().pid;
+	const closed = await Promise.race([app.close().then(() => true, () => true), new Promise((resolve) => setTimeout(() => resolve(false), 30_000))]);
+	if (!closed && pid !== undefined) {
+		console.log("INFO app did not close within 30s; killing its process tree");
+		if (process.platform === "win32") spawnSync("taskkill", ["/F", "/T", "/PID", String(pid)]);
+		else spawnSync("pkill", ["-9", "-P", String(pid)]);
+	}
 	stub.closeAllConnections();
 	stub.close();
 	rmRetry(WORK);
 }
 console.log(failures.length === 0 ? "onboarding QA passed" : `onboarding QA FAILED: ${failures.join("; ")}`);
-process.exitCode = failures.length === 0 ? 0 : 1;
+process.exit(failures.length === 0 ? 0 : 1);
