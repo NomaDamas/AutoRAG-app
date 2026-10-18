@@ -81,7 +81,11 @@ try {
 			const work = screen.getDisplayMatching(window.getBounds()).workAreaSize;
 			return { content: window.getContentSize(), min: window.getMinimumSize(), work: [work.width, work.height] };
 		});
-	const fits = ({ content, work }, [width, height]) => content[0] === Math.min(width, work[0]) && content[1] === Math.min(height, work[1]);
+	// Windows reports the content size inside the frame and title bar, so it can be smaller than the clamped window: allow that chrome (up to 40 px a side, 140 px tall).
+	const fits = ({ content, work }, [width, height]) => {
+		const [wantW, wantH] = [Math.min(width, work[0]), Math.min(height, work[1])];
+		return process.platform === "win32" ? content[0] <= wantW && wantW - content[0] <= 40 && content[1] <= wantH && wantH - content[1] <= 140 : content[0] === wantW && content[1] === wantH;
+	};
 	const size = await windowSize();
 	check("onboarding window opens at the onboarding size", fits(size, [1120, 720]) && size.min[0] === 960, JSON.stringify(size));
 	const shot = (name) => page.locator(".onb").screenshot({ path: join(EVIDENCE, `${name}.png`) });

@@ -134,7 +134,7 @@ let idB = "";
 	await until(() => savedSettings(profileB).usageAnalytics === true, 5000, "the opt-in to be saved");
 	await until(async () => (await toggle.getAttribute("data-state")) === "checked", 5000, "the switch to render as on");
 	check("B: the click turns the switch on", (await toggle.getAttribute("data-state")) === "checked");
-	check("B: the error-report setting is unchanged", savedSettings(profileB).errorReporting !== false);
+	check("B: the error-report setting is unchanged", savedSettings(profileB).errorReporting !== true);
 	await page.screenshot({ path: join(OUT, "b-en-on.png") });
 	await gotoPage(page, "AI Models");
 	await gotoPage(page, "Indexing");

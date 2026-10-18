@@ -17,8 +17,9 @@
  */
 
 import { execSync } from "node:child_process";
-import { copyFileSync, rmSync } from "node:fs";
+import { copyFileSync, rmSync, symlinkSync } from "node:fs";
 import { homedir } from "node:os";
+import { basename, delimiter, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const isWindows = process.platform === "win32";
@@ -141,4 +142,19 @@ export function reapQlmanageOrphans() {
 		}
 	}
 	return reaped;
+}
+
+/**
+ * Put the `dupey` CLI on a throwaway `bin` directory (a symlink; a copy on Windows, where a
+ * symlink needs a privilege the runner lacks) and return a PATH that holds only that directory
+ * plus the OS's own tool directories, so no host datasource CLI is reachable from the app.
+ */
+export function isolatedToolPath(binDir) {
+	const finder = isWindows ? "where dupey" : "command -v dupey";
+	const found = execSync(finder, { encoding: "utf8", shell: isWindows ? undefined : "/bin/sh" }).split(/\r?\n/u)[0].trim();
+	const target = join(binDir, isWindows ? basename(found) : "dupey");
+	if (isWindows) copyFileSync(found, target);
+	else symlinkSync(found, target);
+	const system = isWindows ? [join(process.env.SystemRoot ?? "C:\\Windows", "System32"), process.env.SystemRoot ?? "C:\\Windows"] : ["/usr/bin", "/bin", "/usr/sbin", "/sbin"];
+	return [binDir, ...system].join(delimiter);
 }

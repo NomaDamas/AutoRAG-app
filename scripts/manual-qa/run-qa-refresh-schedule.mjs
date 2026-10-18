@@ -1,10 +1,10 @@
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { launchFinder, finderWindow } from "./launch-finder.mjs";
-import { rmRetry } from "./platform.mjs";
+import { isolatedToolPath, rmRetry } from "./platform.mjs";
 
 // Automatic refresh cadence against the real app: choosing a cadence writes
 // the shared config and registers a real OS job; choosing "직접" removes it.
@@ -25,7 +25,7 @@ mkdirSync(home, { recursive: true });
 writeFileSync(join(workspace, "docs", "a.txt"), "alpha document about apples\n");
 const qaBin = join(root, "bin");
 mkdirSync(qaBin, { recursive: true });
-symlinkSync(execFileSync("/bin/sh", ["-c", "command -v dupey"], { encoding: "utf8" }).trim(), join(qaBin, "dupey"));
+const qaPath = isolatedToolPath(qaBin);
 
 const configPath = join(root, "config.json");
 writeFileSync(configPath, `${JSON.stringify({
@@ -53,7 +53,7 @@ const waitFor = async (predicate, timeoutMs = 10000) => {
 	}
 };
 
-const env = { AUTORAG_CONFIG: configPath, AUTORAG_HOME: root, HOME: home, PATH: `${qaBin}:/usr/bin:/bin:/usr/sbin:/sbin` };
+const env = { AUTORAG_CONFIG: configPath, AUTORAG_HOME: root, HOME: home, PATH: qaPath };
 const app = await launchFinder({ userDataDir: join(root, "user-data"), env });
 const errors = [];
 try {
