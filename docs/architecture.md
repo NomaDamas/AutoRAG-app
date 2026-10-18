@@ -75,8 +75,9 @@ second datasource or model configuration. The sidebar is searchable and grouped:
     ClawGallery skips its visual vector sync, and for the duration of a refresh the
     embedding steps the librarian runs unconditionally (mailcrawl `index`, qmd
     `embed` for Obsidian, discrawl `embed`) are successful no-ops; their sync and
-    update steps still run. Not covered: GitHub Gist's own semantic index (its class is
-    not a public export), which stays unavailable without an embedding runtime.
+    update steps still run. GitHub Gist gets `connector.semantic: false`, which the librarian honors from
+    Marker-Inc-Korea/AutoRAG#1936 on; the pinned v2.10.4 ignores it, so until the pin
+    is raised Gist still builds its semantic index.
   - *Search*: the agent's vector and hybrid methods (MinSync's, and every
     datasource's) answer nothing without being run, so there is no "method failed"
     diagnostic for an index that is deliberately absent, and the agent's

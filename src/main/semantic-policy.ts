@@ -53,6 +53,8 @@ function entryWithoutSemantic(alias: string, entry: unknown): unknown {
 		return { ...entry, connector: { ...connector, sidecar: { ...sidecar, semantic: false } } };
 	}
 	if (template === "discord") return { ...entry, connector: { ...connector, defaultMode: "fts" } };
+	// Needs a librarian that maps `connector.semantic` to the gist skill's own switch; older ones ignore the key.
+	if (template === "github-gist") return { ...entry, connector: { ...connector, semantic: false } };
 	if (template === "clawgallery") return { ...entry, connector: { ...connector, syncVisual: false } };
 	return entry;
 }

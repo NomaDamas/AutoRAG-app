@@ -85,6 +85,13 @@ describe("withSemanticPolicyApplied", () => {
 		expect(effective.datasources?.gallery).toEqual({ type: "clawgallery", connector: { syncVisual: false } });
 	});
 
+	it("asks github-gist to stay lexical-only through connector.semantic", () => {
+		const effective = withSemanticPolicyApplied(config({ "my-gists": { type: "github-gist", connector: { tokenEnv: "GH" } }, "github-gist": {} }), false);
+
+		expect(effective.datasources?.["my-gists"]).toEqual({ type: "github-gist", connector: { tokenEnv: "GH", semantic: false } });
+		expect(effective.datasources?.["github-gist"]).toEqual({ connector: { semantic: false } });
+	});
+
 	it("leaves sources that never embed untouched and does not mutate its input", () => {
 		const input = config({ github: { type: "github", connector: { repos: ["a/b"] } }, slack: { type: "slack" }, off: false });
 
