@@ -46,6 +46,10 @@ function renderScan(overrides: Partial<OnboardingCtx> = {}): OnboardingCtx {
 	return ctx;
 }
 
+function text0(selector: string): string {
+	return host.querySelector(selector)?.textContent ?? "";
+}
+
 function text(selector: string): string {
 	return host.querySelector(selector)?.textContent ?? "";
 }
@@ -212,25 +216,33 @@ describe("FoldersStep as the smart-indexing scope screen", () => {
 		expect(rescanSmart).toHaveBeenCalledTimes(1);
 	});
 
-	it("explains exactly when a folder is left out, with the numbers the AI was given", () => {
+	it("explains in plain words how the AI decides: what it looked at, what it keeps, what it leaves out, and that you decide", () => {
 		renderFolders();
 
 		click(one(".si-criteria-toggle"));
 		const rules = all(".si-criteria li").map((item) => item.textContent ?? "");
 
-		expect(rules).toHaveLength(4);
-		expect(rules[0]).toContain("minFiles=20");
-		expect(rules[1]).toContain("files=50");
-		expect(rules[1]).toContain("share=90");
-		expect(rules[1]).toContain("names=10");
-		expect(rules[1]).toContain(".txt, .text");
-		expect(rules[2]).toContain("files=300");
-		expect(rules[2]).toContain("share=10");
-		expect(rules[3]).toContain("Telegram Desktop");
-		expect(rules[3]).toContain("Application Support");
+		expect(rules.map((rule) => rule.replace(/ .*/u, ""))).toEqual([
+			"onboarding.folders.criteria.looked",
+			"onboarding.folders.criteria.keep",
+			"onboarding.folders.criteria.leave",
+			"onboarding.folders.criteria.doubt",
+			"onboarding.folders.criteria.you",
+		]);
 	});
 
-	it("keeps the criteria folded until asked", () => {
+	it("tells the user what the AI could see, and what it could not", () => {
+		renderFolders();
+
+		click(one(".si-criteria-toggle"));
+		const text = text0(".si-criteria");
+
+		expect(text).toContain("onboarding.folders.criteria.looked");
+		// Names, counts and dates only: the UI makes no claim about reading contents.
+		expect(text).not.toMatch(/\d+%/u);
+	});
+
+	it("keeps the explanation folded until asked", () => {
 		renderFolders();
 
 		expect(host.querySelector(".si-criteria")).toBeNull();
@@ -240,4 +252,3 @@ describe("FoldersStep as the smart-indexing scope screen", () => {
 		expect(host.querySelector(".si-criteria")).toBeNull();
 	});
 });
-

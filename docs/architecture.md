@@ -326,22 +326,24 @@ resumes at the same step.
   not: what to index is chosen on the next screen, and a proposal only shows while
   its folder is selected, so turning a folder on later needs no second analysis.
   The scan screen shows the prototype's drawn folder and roaming magnifying glass
-  and the folder being looked at. The agent decides from counts, not file names:
-  its `folder_stats` tool counts every file by extension, subfolders included, with
-  the same rules as the pre-scan, and reports which criteria hold for the folder
-  and each subfolder. The criteria are numbers in one module
-  (`src/shared/smart-indexing-criteria.ts`) that the agent's prompt, the tool's
-  verdicts and the "See how the AI decides" text on the folders screen all read:
-  fewer than 20 indexed files is never left out; a *series* (at least 50 indexed
-  files, 90% or more one plain-text type, distinct names at 10% or fewer); a
-  *sparse* folder (at least 300 files, indexed files below 10%); an *app-data*
-  name on the path (Telegram Desktop, Zoom, logs, caches, ...). A folder can only
-  be proposed after the agent counted it, and every path is checked against the
-  disk and the folders looked through; a proposal the index would read nothing
-  from is dropped. It spends the AutoRAG model, so it runs once on entering the
-  step (a draft that already holds proposals is not re-run); the user can cancel
-  and choose by hand, and a failure (no model signed in yet, a provider error)
-  shows its reason with a retry while the step can still be left.
+  and the folder being looked at. The model judges, in words and without
+  thresholds, whether a folder holds what a person wrote or collected for
+  their own use or what a program generated as a by-product (logs, app and chat
+  exports, caches, build or generated output, installers, machine-named series).
+  It sees names only: `folder_survey` reports file counts by type (subfolders
+  included, with the pre-scan's own rules), when the files last changed and a
+  spread of file names, for the folder and each subfolder, and `list_folder`
+  lists the names in one folder. No file is opened and no excerpt leaves the
+  machine. The agent has no pi file tools, so it can only look inside the chosen
+  folders. A folder can only be proposed after it was surveyed, every path is
+  checked against the disk and the chosen folders, and a proposal the index would
+  read nothing from is dropped. When in doubt the model keeps the folder: a wrongly
+  excluded document vanishes from search, a wrongly included folder only costs
+  time. Because the model decides, runs can differ a little; each proposal carries
+  the reason the model gave. It spends the AutoRAG model, so it runs once on
+  entering the step (a draft that already holds proposals is not re-run); the user
+  can cancel and choose by hand, and a failure (no model signed in yet, a provider
+  error) shows its reason with a retry while the step can still be left.
 - **Folders** is the prototype's smart-indexing scope screen: a policy bar (the
   estimate, struck through to the old one with the percent saved, and "scan
   again"), a blue panel of the included folders and a red one of the sub-folders
@@ -509,13 +511,13 @@ agent in the app is a plain pi session built by one factory,
 
 | Per profile | Shared by all |
 |---|---|
-| system prompt, tool names (pi built-ins, e.g. `read ls find grep`), custom tools, thinking level, whether pi loads AGENTS.md / skills / extensions (each off unless the profile asks) | the model and its credentials, resolved by `agents/app-model.ts` from the same config AI Search uses; pi's `auth.json` / `models.json` in the agent dir, so one sign-in serves every agent |
+| system prompt, tool names (pi built-ins such as `read ls find grep`, which open any path on the machine, so a profile that must stay inside a folder uses none), custom tools, thinking level, whether pi loads AGENTS.md / skills / extensions (each off unless the profile asks) | the model and its credentials, resolved by `agents/app-model.ts` from the same config AI Search uses; pi's `auth.json` / `models.json` in the agent dir, so one sign-in serves every agent |
 
 A session is in memory and disposed by its caller: nothing is written to the
 agent dir or the working directory, and the user's own pi settings never apply.
 Profiles live in `src/main/agents/profiles/`; the first is smart indexing
-(read-only tools, thinking `low`, answers only through a `propose_exclusions`
-tool that validates paths). A new profile adds one file there and, if it needs
+(thinking `low`; looks only through `folder_survey` and `list_folder`, answers
+only through a `propose_exclusions` tool that validates paths). A new profile adds one file there and, if it needs
 a UI, its own service and bridge. `test/agent-factory.test.ts` pins what the
 model is offered; it runs on pi's faux provider.
 

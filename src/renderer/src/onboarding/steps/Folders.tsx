@@ -7,7 +7,6 @@
 import { useState, type ReactElement } from "react";
 import type { FolderCandidate, FolderKind } from "../../../../shared/onboarding-contract";
 import type { SmartExclusion } from "../../../../shared/smart-indexing-contract";
-import { SMART_INDEXING_CRITERIA } from "../../../../shared/smart-indexing-criteria";
 import { Icon } from "../marks";
 import { formatSize, scanTotals } from "../flow";
 import { etaSaving, excludedTotals, visibleScope } from "../smart-scope";
@@ -39,24 +38,14 @@ function insidePath(item: SmartExclusion): string {
 	return item.path.slice(item.root.length).replace(/^[\\/]+/u, "");
 }
 
-const pct = (share: number): number => Math.round(share * 100);
-
-/** The exclusion rules in words, from the numbers the agent was given: what the user reads is what the AI applied. */
+/** How the AI decides, in words: what it looked at, what it keeps and leaves out, and that the person has the last word. */
 function Criteria({ t }: { readonly t: OnboardingCtx["t"] }): ReactElement {
-	const { minIndexedFiles, series, sparse, appData } = SMART_INDEXING_CRITERIA;
+	const keys = ["looked", "keep", "leave", "doubt", "you"] as const;
 	return (
 		<ol className="si-criteria">
-			<li>{t("onboarding.folders.criteria.min", { minFiles: minIndexedFiles })}</li>
-			<li>
-				{t("onboarding.folders.criteria.series", {
-					files: series.minIndexedFiles,
-					share: pct(series.minTopExtensionShare),
-					names: pct(series.maxStemRatio),
-					types: series.extensions.join(", "),
-				})}
-			</li>
-			<li>{t("onboarding.folders.criteria.sparse", { files: sparse.minTotalFiles, share: pct(sparse.maxIndexedShare) })}</li>
-			<li>{t("onboarding.folders.criteria.appData", { names: appData.names.join(", ") })}</li>
+			{keys.map((key) => (
+				<li key={key}>{t(`onboarding.folders.criteria.${key}`)}</li>
+			))}
 		</ol>
 	);
 }

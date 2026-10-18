@@ -1,101 +1,156 @@
-import { lstat } from "node:fs/promises";
-import { basename, isAbsolute, relative, resolve, sep } from "node:path";
+import { lstat, readdir } from "node:fs/promises";
+import { basename, isAbsolute, relative, resolve } from "node:path";
 import { defineTool, type ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { evaluateCriteria, type CriterionId } from "../../../shared/smart-indexing-criteria";
-import { measureFolder, type FolderStats, type FolderStatsOptions } from "../../folder-stats";
+import { measureFolder, type ChildStats, type ExtensionCount, type FolderStats, type FolderStatsOptions, type ModifiedSpread } from "../../folder-stats";
 
 /**
- * The agent's counting tool. Listing a folder says what it is called; this says
- * how many files of each type it holds, subfolders included, and which of the
- * criteria in `smart-indexing-criteria.ts` hold for it and for each of its
- * subfolders. The model decides from these numbers rather than from file names
- * it happened to open.
+ * The agent's only way to look at the disk, and it can only look inside the
+ * folders the person chose. `folder_survey` reports facts about a folder:
+ * how many files of each type it holds, subfolders included, when they were last
+ * changed, and a spread of file names, for the folder and for each subfolder.
+ * It says nothing about what should be indexed; the agent decides that from the
+ * names, much as a person glancing at a folder listing would.
+ *
+ * `list_folder` shows the names directly inside one folder, files and subfolders,
+ * for a closer look at a subfolder the survey only summarised.
  */
 
-export type StatsReport = { readonly ok: true; readonly text: string } | { readonly ok: false; readonly why: string };
+export type SurveyReport = { readonly ok: true; readonly text: string } | { readonly ok: false; readonly why: string };
 
-export interface FolderStatsTool {
-	/** Measures one folder; refused unless it is an existing folder inside a chosen one. */
-	report(path: string, signal: AbortSignal): Promise<StatsReport>;
-	/** The agent measured exactly this folder. */
+export interface FolderSurvey {
+	/** Surveys one folder; refused unless it is an existing folder inside a chosen one. */
+	report(path: string, signal: AbortSignal): Promise<SurveyReport>;
+	/** Names directly inside one folder; refused on the same terms. */
+	list(path: string): Promise<SurveyReport>;
+	/** The agent surveyed exactly this folder. */
 	counted(path: string): boolean;
-	readonly tool: ToolDefinition;
+	readonly tools: readonly ToolDefinition[];
 }
 
-/** Subfolders listed in a report; the rest are summed into one line. */
+/** Subfolders described in a survey; the rest are summed into one line. */
 const MAX_CHILDREN = 25;
-/** Extensions listed in a report before the tail is summed. */
-const MAX_EXTENSIONS = 12;
+/** Extensions listed per folder before the tail is summed. */
+const MAX_EXTENSIONS = 10;
+/** Folders listed inside one subfolder before the rest are counted. */
+const MAX_PARTS = 12;
+/** Entries one `list_folder` call shows. */
+const MAX_LISTED = 200;
 
-const CRITERION_TEXT: Readonly<Record<CriterionId, string>> = {
-	series: "series (machine-written plain-text series)",
-	sparse: "sparse (documents are a small share)",
-	appData: "appData (app or system folder name)",
-};
-
-function percent(share: number): string {
-	return `${Math.round(share * 100)}%`;
+function extensionLine(extensions: readonly ExtensionCount[]): string {
+	const shown = extensions.slice(0, MAX_EXTENSIONS);
+	const rest = extensions.slice(MAX_EXTENSIONS).reduce((sum, item) => sum + item.files, 0);
+	return `${shown.map((item) => `${item.extension} ${item.files}${item.indexed ? " (indexed)" : ""}`).join(", ")}${rest > 0 ? `, other ${rest}` : ""}`;
 }
 
-export function formatFolderStats(path: string, stats: FolderStats): string {
+function dateText(date: Date): string {
+	return date.toISOString().slice(0, 10);
+}
+
+function modifiedLine(modified: ModifiedSpread | null): string {
+	if (modified === null) return "modified: no files";
+	const together = Math.round(modified.sameDayShare * 100);
+	return `modified ${dateText(modified.oldest)} to ${dateText(modified.newest)} (${Math.round(modified.spanDays)} days apart); ${together}% changed within a day of the median`;
+}
+
+function nameLine(names: readonly string[]): string {
+	return names.length === 0 ? "none" : names.join(", ");
+}
+
+function childBlock(child: ChildStats): string[] {
+	return [
+		`- ${child.name}/ ${child.totalFiles} files, indexed ${child.indexedFiles} of ${child.totalFiles}`,
+		`    types: ${extensionLine(child.extensions)}`,
+		`    ${modifiedLine(child.modified)}`,
+		`    sample names: ${nameLine(child.sample)}`,
+		...(child.subfolders.length === 0 ? [] : [`    subfolders: ${child.subfolders.slice(0, MAX_PARTS).map((part) => `${part.name}/ ${part.totalFiles}`).join(", ")}${child.subfolders.length > MAX_PARTS ? `, and ${child.subfolders.length - MAX_PARTS} more` : ""}`]),
+	];
+}
+
+export function formatSurvey(path: string, stats: FolderStats): string {
 	const lines = [
 		`${path}`,
 		`${stats.indexedFiles} indexed files of ${stats.totalFiles} files in all${stats.truncated ? " (partial: the walk stopped early, real counts are higher)" : ""}.`,
+		`types: ${extensionLine(stats.extensions)}`,
+		modifiedLine(stats.modified),
+		`sample names: ${nameLine(stats.sample)}`,
 	];
-	const shown = stats.extensions.slice(0, MAX_EXTENSIONS);
-	const rest = stats.extensions.slice(MAX_EXTENSIONS).reduce((sum, item) => sum + item.files, 0);
-	lines.push(`extensions: ${shown.map((item) => `${item.extension} ${item.files}${item.indexed ? " (indexed)" : ""}`).join(", ")}${rest > 0 ? `, other ${rest}` : ""}`);
-	const own = evaluateCriteria(stats.measure);
-	lines.push(
-		`this folder: top indexed type ${stats.measure.topExtension ?? "none"} ${percent(stats.measure.topExtensionShare)}, distinct names ${percent(stats.measure.stemRatio)}${stats.measure.appDataName === null ? "" : `, app-data name "${stats.measure.appDataName}"`}`,
-	);
-	lines.push(`criteria met: ${own.length === 0 ? "none" : own.map((id) => CRITERION_TEXT[id]).join("; ")}`);
+	if (stats.ownFiles.length > 0) lines.push(`files directly in this folder: ${nameLine(stats.ownFiles)}`);
 	if (stats.children.length > 0) {
-		lines.push("subfolders (most indexed files first):");
-		for (const child of stats.children.slice(0, MAX_CHILDREN)) {
-			const met = evaluateCriteria(child.measure);
-			const top = child.measure.topExtension === null ? "" : `, top ${child.measure.topExtension} ${percent(child.measure.topExtensionShare)}, distinct names ${percent(child.measure.stemRatio)}`;
-			lines.push(`- ${child.name}/ indexed ${child.indexedFiles} of ${child.totalFiles}${top}${met.length === 0 ? "" : ` -> ${met.join(", ")}`}`);
-		}
+		lines.push("subfolders (most files first):");
+		for (const child of stats.children.slice(0, MAX_CHILDREN)) lines.push(...childBlock(child));
 		const more = stats.children.length - MAX_CHILDREN;
 		if (more > 0) lines.push(`- ... and ${more} more subfolders`);
 	}
 	return lines.join("\n");
 }
 
-export function createFolderStats(roots: readonly string[], options: FolderStatsOptions): FolderStatsTool {
+export function createFolderSurvey(roots: readonly string[], options: FolderStatsOptions): FolderSurvey {
 	const selected = roots.map((root) => resolve(root));
-	const measuredPaths = new Set<string>();
+	const surveyed = new Set<string>();
 
-	async function report(path: string, signal: AbortSignal): Promise<StatsReport> {
+	/** The folder to look at, or why it cannot be looked at. */
+	async function folderIn(path: string): Promise<{ readonly ok: true; readonly target: string; readonly root: string } | { readonly ok: false; readonly why: string }> {
 		if (!isAbsolute(path)) return { ok: false, why: "the path must be absolute" };
 		const target = resolve(path);
-		const root = selected.find((candidate) => target === candidate || (relative(candidate, target) !== "" && !relative(candidate, target).startsWith("..") && !isAbsolute(relative(candidate, target))));
+		const root = selected.find((candidate) => {
+			const rel = relative(candidate, target);
+			return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
+		});
 		if (root === undefined) return { ok: false, why: "the path is outside the chosen folders" };
 		try {
+			// lstat: a symbolic link is not followed out of the chosen folders.
 			if (!(await lstat(target)).isDirectory()) return { ok: false, why: "this is not a folder" };
 		} catch {
 			return { ok: false, why: "this folder does not exist" };
 		}
-		const names = target === root ? [] : relative(root, target).split(sep);
-		measuredPaths.add(target);
-		const stats = await measureFolder(target, names, options, signal);
-		return { ok: true, text: formatFolderStats(target === root ? `${target} (chosen folder ${basename(root)})` : target, stats) };
+		return { ok: true, target, root };
 	}
 
-	const tool = defineTool({
-		name: "folder_stats",
-		label: "Folder statistics",
+	async function report(path: string, signal: AbortSignal): Promise<SurveyReport> {
+		const folder = await folderIn(path);
+		if (!folder.ok) return folder;
+		surveyed.add(folder.target);
+		const stats = await measureFolder(folder.target, options, signal);
+		// The report describes each subfolder it lists (counts, dates, names), so those count as looked at too.
+		for (const child of stats.children.slice(0, MAX_CHILDREN)) surveyed.add(resolve(folder.target, child.name));
+		return { ok: true, text: formatSurvey(folder.target === folder.root ? `${folder.target} (chosen folder ${basename(folder.root)})` : folder.target, stats) };
+	}
+
+	async function list(path: string): Promise<SurveyReport> {
+		const folder = await folderIn(path);
+		if (!folder.ok) return folder;
+		const entries = await readdir(folder.target, { withFileTypes: true }).catch(() => []);
+		const visible = entries.filter((entry) => !entry.name.startsWith("."));
+		const names = visible.map((entry) => (entry.isDirectory() ? `${entry.name}/` : entry.name)).sort((a, b) => a.localeCompare(b));
+		const shown = names.slice(0, MAX_LISTED);
+		const more = names.length - shown.length;
+		return { ok: true, text: `${folder.target}\n${shown.join("\n")}${more > 0 ? `\n... and ${more} more` : ""}` };
+	}
+
+	const survey = defineTool({
+		name: "folder_survey",
+		label: "Folder survey",
 		description:
-			"Count the files in a folder by extension, subfolders included, and see which exclusion criteria hold for it and for each of its subfolders. " +
-			"Use it on every chosen folder and on every subfolder that looks large, generic or machine-made. The path must be an existing folder inside a chosen folder.",
-		parameters: Type.Object({ path: Type.String({ description: "Absolute path of the folder to count." }) }),
+			"Facts about a folder: file counts by extension (subfolders included), when the files were last changed, a spread of file names, and the same for each subfolder. " +
+			"It does not say what should be indexed. The path must be a chosen folder or a folder inside one.",
+		parameters: Type.Object({ path: Type.String({ description: "Absolute path of the folder to survey." }) }),
 		execute: async (_toolCallId, params, signal) => {
 			const result = await report(params.path, signal ?? new AbortController().signal);
 			return { content: [{ type: "text", text: result.ok ? result.text : `Refused: ${result.why}` }], details: undefined };
 		},
 	});
 
-	return { report, counted: (path) => measuredPaths.has(resolve(path)), tool };
+	const listing = defineTool({
+		name: "list_folder",
+		label: "List folder",
+		description: "The names directly inside one folder (subfolders end with /). Use it for a closer look at a subfolder the survey only summarised. Hidden entries are not shown.",
+		parameters: Type.Object({ path: Type.String({ description: "Absolute path of the folder to list." }) }),
+		execute: async (_toolCallId, params) => {
+			const result = await list(params.path);
+			return { content: [{ type: "text", text: result.ok ? result.text : `Refused: ${result.why}` }], details: undefined };
+		},
+	});
+
+	return { report, list, counted: (path) => surveyed.has(resolve(path)), tools: [survey, listing] };
 }

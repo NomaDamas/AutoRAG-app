@@ -1,26 +1,31 @@
-import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, symlink, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { createFolderStats, formatFolderStats } from "../src/main/agents/profiles/folder-stats";
+import { createFolderSurvey, formatSurvey } from "../src/main/agents/profiles/folder-stats";
 import { measureFolder, type FolderStatsOptions } from "../src/main/folder-stats";
 
 let root: string;
 const OPTIONS: FolderStatsOptions = { supportedExtensions: new Set([".txt", ".md", ".pdf"]), maxSourceBytes: 100 };
 const LIVE = new AbortController().signal;
+const DAY = 86_400_000;
 
-async function put(path: string, body = "x"): Promise<void> {
+async function put(path: string, body = "x", modifiedDaysAgo?: number): Promise<void> {
 	await mkdir(join(root, path, ".."), { recursive: true });
 	await writeFile(join(root, path), body);
+	if (modifiedDaysAgo !== undefined) {
+		const when = new Date(Date.now() - modifiedDaysAgo * DAY);
+		await utimes(join(root, path), when, when);
+	}
 }
 
 beforeEach(async () => {
 	root = await mkdtemp(join(tmpdir(), "folder-stats-"));
-	for (let i = 1; i <= 60; i += 1) await put(`chat/messages${i}.txt`);
-	for (let i = 1; i <= 10; i += 1) await put(`chat/photo${i}.jpg`);
+	for (let i = 1; i <= 60; i += 1) await put(`chat/messages${i}.txt`, "x", 3);
+	for (let i = 1; i <= 10; i += 1) await put(`chat/photo${i}.jpg`, "x", 3);
 	for (let i = 1; i <= 40; i += 1) await put(`photos/img${i}.jpg`);
-	for (let i = 1; i <= 25; i += 1) await put(`Docs/report-${String.fromCharCode(96 + i)}.md`);
-	for (let i = 1; i <= 5; i += 1) await put(`Docs/contract-${String.fromCharCode(96 + i)}.pdf`);
+	for (let i = 1; i <= 25; i += 1) await put(`Docs/report-${String.fromCharCode(96 + i)}.md`, "x", 400);
+	for (let i = 1; i <= 5; i += 1) await put(`Docs/contract-${String.fromCharCode(96 + i)}.pdf`, "x", 30);
 	await put("Docs/notes.md");
 	await put("node_modules/pkg/readme.md");
 	await put(".hidden/secret.md");
@@ -34,20 +39,17 @@ afterEach(async () => {
 
 describe("measureFolder", () => {
 	it("counts a folder's files by extension, subfolders included, and what the index would read", async () => {
-		const stats = await measureFolder(join(root, "chat"), [], OPTIONS, LIVE);
+		const stats = await measureFolder(join(root, "chat"), OPTIONS, LIVE);
 
 		expect(stats).toMatchObject({ indexedFiles: 60, totalFiles: 70, truncated: false });
 		expect(stats.extensions).toEqual([
 			{ extension: ".txt", files: 60, indexed: true },
 			{ extension: ".jpg", files: 10, indexed: false },
 		]);
-		expect(stats.measure).toMatchObject({ indexedFiles: 60, totalFiles: 70, topExtension: ".txt", topExtensionShare: 1, appDataName: null });
-		// messages1 .. messages60 differ only in digits: one distinct name in sixty files.
-		expect(stats.measure.stemRatio).toBeCloseTo(1 / 60, 5);
 	});
 
 	it("counts files in nested subfolders, skips dot folders and the app's skipped names, and leaves out oversize sources", async () => {
-		const stats = await measureFolder(root, [], OPTIONS, LIVE);
+		const stats = await measureFolder(root, OPTIONS, LIVE);
 
 		// chat 60 + Docs 31 + top.txt 1; big.txt is over the size cap; node_modules and .hidden are never walked.
 		expect(stats.indexedFiles).toBe(60 + 31 + 1);
@@ -55,29 +57,36 @@ describe("measureFolder", () => {
 		expect(stats.indexedBytes).toBe(92);
 	});
 
-	it("breaks a folder down by its subfolders, largest first, with each one's own numbers", async () => {
-		const stats = await measureFolder(root, [], OPTIONS, LIVE);
+	it("breaks a folder down by its subfolders, most files first, with each one's own counts", async () => {
+		const stats = await measureFolder(root, OPTIONS, LIVE);
 
 		expect(stats.children.map((child) => [child.name, child.indexedFiles, child.totalFiles])).toEqual([
 			["chat", 60, 70],
-			["Docs", 31, 31],
 			["photos", 0, 40],
+			["Docs", 31, 31],
 		]);
-		expect(stats.children[0]?.measure).toMatchObject({ topExtension: ".txt", topExtensionShare: 1 });
-		expect(stats.children[2]?.measure).toMatchObject({ indexedFiles: 0, topExtension: null, topExtensionShare: 0, stemRatio: 0 });
 	});
 
-	it("names the app-data folder on the way down to a subfolder, for the folder and for each of its children", async () => {
-		await put("Work/logs/a.txt");
-		await put("Work/Reports/b.md");
+	it("reports when the files were last changed: the oldest and newest, and how many changed within a day of the median", async () => {
+		const stats = await measureFolder(join(root, "chat"), OPTIONS, LIVE);
 
-		const work = await measureFolder(join(root, "Work"), ["Work"], OPTIONS, LIVE);
-		expect(work.measure.appDataName).toBeNull();
-		expect(work.children.find((child) => child.name === "logs")?.measure.appDataName).toBe("logs");
-		expect(work.children.find((child) => child.name === "Reports")?.measure.appDataName).toBeNull();
+		expect(stats.modified).not.toBeNull();
+		// All seventy files were written three days ago, so they changed together.
+		expect(stats.modified?.spanDays).toBeLessThan(1);
+		expect(stats.modified?.sameDayShare).toBe(1);
 
-		const inside = await measureFolder(join(root, "Work", "logs"), ["Work", "logs"], OPTIONS, LIVE);
-		expect(inside.measure.appDataName).toBe("logs");
+		const docs = await measureFolder(join(root, "Docs"), OPTIONS, LIVE);
+		expect(docs.modified?.spanDays).toBeGreaterThan(300);
+		expect(docs.modified?.sameDayShare).toBeLessThan(0.9);
+	});
+
+	it("samples file names spread over the folder, not only the first ones", async () => {
+		const stats = await measureFolder(join(root, "chat"), { ...OPTIONS, sampleNames: 8 }, LIVE);
+
+		expect(stats.sample).toHaveLength(8);
+		expect(new Set(stats.sample).size).toBe(8);
+		// Files are listed in name order here; a spread sample reaches past the first eight names.
+		expect(stats.sample.some((name) => /messages(4|5|6)\d?\.txt|photo/u.test(name))).toBe(true);
 	});
 
 	it("does not follow a symbolic link out of the folder", async () => {
@@ -86,7 +95,7 @@ describe("measureFolder", () => {
 			await writeFile(join(outside, "x.txt"), "x");
 			await symlink(outside, join(root, "link"));
 
-			const stats = await measureFolder(root, [], OPTIONS, LIVE);
+			const stats = await measureFolder(root, OPTIONS, LIVE);
 			expect(stats.children.some((child) => child.name === "link")).toBe(false);
 		} finally {
 			await rm(outside, { recursive: true, force: true });
@@ -94,65 +103,123 @@ describe("measureFolder", () => {
 	});
 
 	it("says it stopped early when the walk hits its entry limit or is cancelled", async () => {
-		expect((await measureFolder(root, [], { ...OPTIONS, maxEntries: 20 }, LIVE)).truncated).toBe(true);
+		expect((await measureFolder(root, { ...OPTIONS, maxEntries: 20 }, LIVE)).truncated).toBe(true);
 
 		const cancelled = new AbortController();
 		cancelled.abort();
-		expect((await measureFolder(root, [], OPTIONS, cancelled.signal)).truncated).toBe(true);
+		expect((await measureFolder(root, OPTIONS, cancelled.signal)).truncated).toBe(true);
 	});
 });
 
-describe("folder_stats report", () => {
-	it("reports the numbers, the extension mix, the criteria that hold and the largest subfolders", async () => {
-		const report = await createFolderStats([root], OPTIONS).report(root, LIVE);
+describe("what a subfolder contains", () => {
+	it("names the subfolders inside each subfolder with their file counts, so a mixed folder shows its parts", async () => {
+		const other = await mkdtemp(join(tmpdir(), "folder-stats-nested-"));
+		try {
+			const at = async (path: string): Promise<void> => {
+				await mkdir(join(other, path, ".."), { recursive: true });
+				await writeFile(join(other, path), "x");
+			};
+			for (let i = 1; i <= 5; i += 1) await at(`work/exports/report${i}.pdf`);
+			for (let i = 1; i <= 3; i += 1) await at(`work/sync/copy${i}.txt`);
+			for (let i = 1; i <= 2; i += 1) await at(`work/exports/deeper/old${i}.pdf`);
+			await at("work/top.txt");
+
+			const stats = await measureFolder(other, OPTIONS, LIVE);
+			const work = stats.children.find((child) => child.name === "work");
+
+			// exports counts its own files and what is under it; files directly in work belong to no subfolder.
+			expect(work?.subfolders).toEqual([
+				{ name: "exports", totalFiles: 7 },
+				{ name: "sync", totalFiles: 3 },
+			]);
+
+			const report = await createFolderSurvey([other], OPTIONS).report(other, LIVE);
+			expect(report.ok && report.text).toContain("subfolders: exports/ 7, sync/ 3");
+		} finally {
+			await rm(other, { recursive: true, force: true });
+		}
+	});
+
+	it("lists no subfolders for a subfolder that has none", async () => {
+		const stats = await measureFolder(root, OPTIONS, LIVE);
+
+		expect(stats.children.find((child) => child.name === "chat")?.subfolders).toEqual([]);
+	});
+});
+
+describe("folder_survey report", () => {
+	it("reports facts only: counts, the extension mix, when files changed, names, and the subfolders with the same", async () => {
+		const report = await createFolderSurvey([root], OPTIONS).report(root, LIVE);
 
 		expect(report.ok).toBe(true);
 		const text = report.ok ? report.text : "";
-		expect(text).toContain(`${root}`);
 		expect(text).toContain("92 indexed files of 143 files in all");
 		// big.txt is over the size cap, so the index skips it, but it is still a .txt file in the folder.
 		expect(text).toContain(".txt 62 (indexed)");
 		expect(text).toContain(".jpg 50");
 		expect(text).toContain("chat/");
 		expect(text).toContain("indexed 60 of 70");
-		// chat is a series; photos holds no indexed file, so it is below the minimum and gets no verdict.
-		expect(text).toMatch(/chat\/.*series/u);
-		expect(text).not.toMatch(/photos\/.*(series|sparse)/u);
+		expect(text).toMatch(/sample names/iu);
+		expect(text).toMatch(/modified/iu);
 	});
 
-	it("tells the model when a criterion holds for the folder itself", async () => {
-		const report = await createFolderStats([root], OPTIONS).report(join(root, "chat"), LIVE);
+	it("gives no verdict: nothing in the report says a folder should be left out", async () => {
+		const report = await createFolderSurvey([root], OPTIONS).report(root, LIVE);
+		const text = report.ok ? report.text : "";
 
-		expect(report.ok && report.text).toContain("criteria met: series");
+		expect(text).not.toMatch(/criteria|series|sparse|appData|verdict|exclude|leave out/iu);
 	});
 
-	it("says no criterion holds when none does", async () => {
-		const report = await createFolderStats([root], OPTIONS).report(join(root, "Docs"), LIVE);
+	it("names a few files from each subfolder, so a subfolder can be judged without opening it", async () => {
+		const report = await createFolderSurvey([root], { ...OPTIONS, sampleNames: 6 }).report(root, LIVE);
+		const text = report.ok ? report.text : "";
 
-		expect(report.ok && report.text).toContain("criteria met: none");
+		expect(text).toMatch(/chat\/.*messages\d+\.txt/su);
+		expect(text).toMatch(/Docs\/.*(report-|contract-|notes)/su);
+	});
+
+	it("lists the entries directly in the folder, so what sits beside the subfolders is visible", async () => {
+		const report = await createFolderSurvey([root], OPTIONS).report(root, LIVE);
+		const text = report.ok ? report.text : "";
+
+		expect(text).toContain("top.txt");
 	});
 
 	it("refuses anything but an existing folder inside a chosen one", async () => {
-		const stats = createFolderStats([root], OPTIONS);
+		const survey = createFolderSurvey([root], OPTIONS);
 
 		for (const path of ["relative/chat", "/etc", join(root, "missing"), join(root, "top.txt"), join(root, "..")]) {
-			const report = await stats.report(path, LIVE);
+			const report = await survey.report(path, LIVE);
 			expect(report.ok, path).toBe(false);
 		}
 	});
 
-	it("accepts a chosen folder itself and a folder below it", async () => {
-		const stats = createFolderStats([root], OPTIONS);
+	it("accepts a chosen folder itself and a folder below it, and remembers which it looked at", async () => {
+		const survey = createFolderSurvey([root], OPTIONS);
 
-		expect((await stats.report(root, LIVE)).ok).toBe(true);
-		expect((await stats.report(join(root, "Docs"), LIVE)).ok).toBe(true);
+		expect((await survey.report(root, LIVE)).ok).toBe(true);
+		expect((await survey.report(join(root, "Docs"), LIVE)).ok).toBe(true);
+		expect(survey.counted(root)).toBe(true);
+		expect(survey.counted(join(root, "Docs"))).toBe(true);
+		// The root's report described chat/ (counts, dates, names), so it counts as looked at.
+		expect(survey.counted(join(root, "chat"))).toBe(true);
+		// Not described by any report: a folder two levels down, and one outside.
+		expect(survey.counted(join(root, "chat", "deeper"))).toBe(false);
+		expect(survey.counted(join(root, "..", "elsewhere"))).toBe(false);
 	});
 
 	it("marks a partial count as such", () => {
-		const text = formatFolderStats(
-			"/a",
-			{ indexedFiles: 1, totalFiles: 1, indexedBytes: 1, extensions: [], children: [], truncated: true, measure: { indexedFiles: 1, totalFiles: 1, topExtension: null, topExtensionShare: 0, stemRatio: 1, appDataName: null } },
-		);
+		const text = formatSurvey("/a", {
+			indexedFiles: 1,
+			totalFiles: 1,
+			indexedBytes: 1,
+			extensions: [],
+			children: [],
+			ownFiles: [],
+			sample: [],
+			modified: null,
+			truncated: true,
+		});
 
 		expect(text).toContain("partial");
 	});
