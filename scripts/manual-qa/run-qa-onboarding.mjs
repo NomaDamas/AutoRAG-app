@@ -342,6 +342,7 @@ try {
 		spawnSync("pkill", ["-9", "-f", WORK]);
 	}
 	await app.close().catch(() => {});
+	stub.closeAllConnections();
 	stub.close();
 	rmRetry(WORK);
 }

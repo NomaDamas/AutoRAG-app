@@ -238,11 +238,11 @@ let idB = "";
 
 // ── F. onboarding: the welcome checkbox is the consent ──────────────────────
 // Unticked by default (consent must be an affirmative act); the choice is saved only when the user continues.
-const usageChecked = (page) => page.locator(".onb .usage-consent input").isChecked();
+const usageChecked = (page) => page.locator(".onb .usage-consent input").first().isChecked();
 const welcome = async (profile, language) => {
 	const app = await launch(profile, language, true);
 	const page = await finderWindow(app, 20_000);
-	await page.waitForSelector(".onb .usage-consent input", { timeout: 20_000 });
+	await page.locator(".onb .usage-consent input").first().waitFor({ timeout: 20_000 });
 	await sleep(900); // the step fades in
 	return { app, page };
 };
@@ -252,7 +252,7 @@ const profileF1 = join(WORK, "profile-f1");
 {
 	const { app, page } = await welcome(profileF1, "ko");
 	check("F1: the usage-statistics checkbox is unticked by default", !(await usageChecked(page)));
-	check("F1: it links to the privacy policy", (await page.locator(".onb .usage-consent .inline-link").count()) === 1);
+	check("F1: it links to the privacy policy", (await page.locator(".onb .usage-consent .inline-link").count()) === 2);
 	await page.screenshot({ path: join(OUT, "f1-ko-welcome-unticked.png") });
 	await app.close();
 	check("F1: closing the window without continuing saves no consent", savedSettings(profileF1).usageAnalytics !== true);
@@ -263,7 +263,7 @@ const profileF2 = join(WORK, "profile-f2");
 {
 	const before = countBefore();
 	const { app, page } = await welcome(profileF2, "ko");
-	await page.locator(".onb .usage-consent input").check();
+	await page.locator(".onb .usage-consent input").first().check();
 	check("F2: the box can be ticked", await usageChecked(page));
 	check("F2: nothing is saved before continuing", savedSettings(profileF2).usageAnalytics !== true);
 	await page.screenshot({ path: join(OUT, "f2-ko-welcome-ticked.png") });
