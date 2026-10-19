@@ -18,6 +18,8 @@
  * Local embedding runs on this machine without sending corpus text off-device.
  */
 
+import type { SmartExclusion } from "./smart-indexing-contract";
+
 export const ONBOARDING_CHANNELS = {
 	load: "onboarding:load",
 	save: "onboarding:save",
@@ -74,6 +76,8 @@ export type OnboardingStepId =
 	| "permissions"
 	| "account"
 	| "folders"
+	| "smartScan"
+	| "smartScope"
 	| "embedding"
 	| "sources"
 	| "plan"
@@ -133,6 +137,13 @@ export interface OnboardingDraft {
 	/** The plan step was passed once; it then leaves the step list (back skips it). */
 	readonly planConfirmed: boolean;
 	readonly model: OnboardingModelChoice | null;
+	/**
+	 * What the smart-indexing analysis proposed, with the user's toggles. Absent
+	 * until the analysis ran; entries whose `root` is no longer selected are ignored.
+	 */
+	readonly smartScope?: readonly SmartExclusion[];
+	/** The folders the AI looked through to produce `smartScope`; a folder selected later that is not here was never analysed. */
+	readonly smartScopeRoots?: readonly string[];
 }
 
 export interface OnboardingSnapshot {
@@ -166,7 +177,7 @@ export interface FolderCandidate {
 	/** `~`-abbreviated path for display. */
 	readonly displayPath: string;
 	readonly kind: FolderKind;
-	/** Documents, Desktop, iCloud Drive start selected; Downloads and the rest do not. */
+	/** Documents, Desktop, Downloads and iCloud Drive start selected; Pictures and cloud drives do not. */
 	readonly defaultSelected: boolean;
 	/** Images in this folder are skipped because OCR is off in the shared config. */
 	readonly ocrOff: boolean;
@@ -255,6 +266,10 @@ export interface IndexingRequest {
 	readonly plan: PlanId;
 	/** BYOK only. */
 	readonly model: { readonly provider: ByokProviderId; readonly modelId: string; readonly baseUrl: string | null } | null;
+	/** Folders the user left out of the index (smart indexing); added to the config's `excludePaths`. */
+	readonly excludePaths?: readonly string[];
+	/** Files the pre-scans counted inside `excludePaths`, so the first index's total and ETA match what it reads. */
+	readonly excludedFiles?: number;
 }
 
 export type IndexingPhase = "parsed" | "minsync" | "finalizing";

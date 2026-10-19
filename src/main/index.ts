@@ -25,6 +25,7 @@ import { APPEARANCE_CHANNELS } from "../shared/appearance-contract";
 import { setAppLanguage, t } from "../shared/i18n/core";
 import { LANGUAGE_CHANNELS } from "../shared/language-contract";
 import { ONBOARDING_CHANNELS, ONBOARDING_PENDING_FLAG, type NetworkCheck } from "../shared/onboarding-contract";
+import { SMART_INDEXING_CHANNELS } from "../shared/smart-indexing-contract";
 import type { AppAppearance, AppSettings, ConfigRefreshResult } from "../shared/settings-contract";
 import { attachQuickLook, PREVIEW_PRIVILEGED_SCHEME, registerPreviewProtocol, registerQuickLookIpc } from "../preview/node/register";
 import { createDefaultParserRegistry, DEFAULT_MAX_SOURCE_BYTES, writeDefaultConfig } from "@autorag/librarian";
@@ -65,6 +66,9 @@ import { createProviderAuthService, type ProviderAuthService } from "./provider-
 import { createProviderCredentialService } from "./provider-credentials";
 import { createEmbeddingSettingsService, type EmbeddingSettingsRuntime } from "./embedding-settings-service";
 import { createDefaultAgentFactory, createSearchService } from "./search-service";
+import { resolveAppSessionModel } from "./agents/app-model";
+import { createSmartIndexingService } from "./smart-indexing-service";
+import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { createSettingsService } from "./settings-service";
 import {
 	registerAccountIpcHandlers,
@@ -77,6 +81,7 @@ import {
 	registerOsRequestIpcHandlers,
 	registerSearchIpcHandlers,
 	registerServicesIpcHandlers,
+	registerSmartIndexingIpcHandlers,
 	registerSettingsIpcHandlers,
 } from "./ipc";
 import { createActionService } from "./action-service";
@@ -685,6 +690,16 @@ app.whenReady().then(async () => {
 		...(process.platform === "darwin" ? { listDatalessPaths: listMacDatalessPaths } : {}),
 		emit: (scan) => sendToMainWindow(ONBOARDING_CHANNELS.scanProgress, scan),
 	});
+	registerSmartIndexingIpcHandlers(
+		createSmartIndexingService({
+			send: (event) => sendToMainWindow(SMART_INDEXING_CHANNELS.event, event),
+			resolveModel: () => resolveAppSessionModel(process.env, process.cwd(), getAgentDir()),
+			agentDir: getAgentDir(),
+			env: process.env,
+			language: () => currentLanguage,
+			scanOptions: { supportedExtensions, maxSourceBytes: DEFAULT_MAX_SOURCE_BYTES },
+		}),
+	);
 	const accountService = createAccountService({
 		env: process.env,
 		credentials,

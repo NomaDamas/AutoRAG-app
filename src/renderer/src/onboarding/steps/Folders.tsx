@@ -1,4 +1,4 @@
-/** Step 4 — index scope: pick folders, watch the pre-scan totals. */
+/** Step 4 — pick the folders to look through and index; the AI scan that follows reads exactly these. */
 
 import type { ReactElement } from "react";
 import type { FolderCandidate, FolderKind } from "../../../../shared/onboarding-contract";

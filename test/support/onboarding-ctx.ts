@@ -1,0 +1,97 @@
+import type { OnboardingCtx } from "../../src/renderer/src/onboarding/context";
+import type { Translate } from "../../src/renderer/src/onboarding/flow";
+import type { OnboardingDraft } from "../../src/shared/onboarding-contract";
+
+/** A step's copy is irrelevant to its logic tests, so a key comes back verbatim with its variables. */
+export const stubTranslate: Translate = (key, options) =>
+	options === undefined ? key : `${key} ${Object.entries(options).map(([name, value]) => `${name}=${String(value)}`).join(" ")}`;
+
+const noop = (): void => undefined;
+
+export const BASE_DRAFT: OnboardingDraft = {
+	version: 1,
+	stepId: "folders",
+	notifications: false,
+	network: false,
+	launchAtLogin: false,
+	folders: [{ path: "/docs", selected: true }],
+	embed: "local",
+	cloudConsent: false,
+	sources: [],
+	plan: "free",
+	planConfirmed: false,
+	model: null,
+};
+
+/** A complete onboarding controller surface whose actions do nothing; a test overrides what it watches. */
+export function onboardingCtx(overrides: Partial<OnboardingCtx> = {}): OnboardingCtx {
+	return {
+		draft: BASE_DRAFT,
+		platform: "darwin",
+		permissions: null,
+		fdaPending: false,
+		scanning: false,
+		scans: new Map(),
+		smartRun: { status: "idle" },
+		candidates: [],
+		embedding: null,
+		sources: [],
+		sourcesChecking: false,
+		models: [],
+		modelKey: "",
+		modelBaseUrl: "",
+		modelOptions: [],
+		verifying: false,
+		modelError: null,
+		indexStatus: null,
+		account: null,
+		paying: false,
+		tipIndex: 0,
+		shareUsage: false,
+		shareErrors: false,
+		t: stubTranslate,
+		patch: noop,
+		setStep: noop,
+		next: noop,
+		back: noop,
+		toast: noop,
+		openOverlay: noop,
+		closeOverlay: noop,
+		setFolderSelected: noop,
+		addFolders: noop,
+		toggleAllFolders: noop,
+		startSmartScan: noop,
+		cancelSmartScan: noop,
+		rescanSmart: noop,
+		setSmartExcluded: noop,
+		addExclusion: noop,
+		setEmbedMode: noop,
+		setCloudConsent: noop,
+		setSourceOn: noop,
+		choosePlan: noop,
+		signIn: noop,
+		cancelSignIn: noop,
+		signOut: noop,
+		skipAccount: noop,
+		openCheckout: noop,
+		refreshAccount: noop,
+		setLaunchAtLogin: noop,
+		setShareUsage: noop,
+		setShareErrors: noop,
+		requestNotifications: noop,
+		openNotificationSettings: noop,
+		checkNetwork: noop,
+		setModelProvider: noop,
+		setModelKey: noop,
+		setModelBaseUrl: noop,
+		verifyModel: noop,
+		startIndexing: noop,
+		finish: noop,
+		finishInBackground: noop,
+		setTipIndex: noop,
+		dragApp: noop,
+		relaunch: noop,
+		openFullDiskAccess: noop,
+		...overrides,
+	};
+}
