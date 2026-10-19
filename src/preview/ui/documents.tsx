@@ -1,8 +1,8 @@
-import { useEffect, useState, type ReactElement } from "react";
+import { useEffect, useMemo, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { renderAsync } from "docx-preview";
-import { read, utils } from "xlsx";
 import type { PreviewDocument } from "../shared/contract";
+import { readSheetPreview } from "../shared/sheet";
 import { rtfToText } from "../shared/rtf";
 import { decodeUtf8 } from "../shared/text-sample";
 import { FallbackView, Status } from "./fallback";
@@ -41,34 +41,22 @@ export function DocxView({ file }: { readonly file: PreviewDocument }): ReactEle
 	return <iframe className="ql__frame flex-1 self-stretch w-full h-full border-0 bg-window" sandbox="" title={file.name} srcDoc={srcdoc} />;
 }
 
-function cellText(cell: unknown): string {
-	if (cell === null || cell === undefined) return "";
-	if (typeof cell === "string" || typeof cell === "number" || typeof cell === "boolean") return String(cell);
-	return "";
-}
-
 export function SheetView({ file }: { readonly file: PreviewDocument }): ReactElement {
 	const { t } = useTranslation();
 	const bytes = file.bytes;
 	const [sheet, setSheet] = useState(0);
-	if (bytes === null) return <FallbackView file={file} note={t("quickLook.documents.sheetReadFailed")} />;
-	let names: readonly string[] = [];
-	let rows: readonly (readonly string[])[] = [];
-	try {
-		const book = read(copyBytes(bytes), { type: "array" });
-		names = book.SheetNames;
-		const name = names[sheet] ?? names[0];
-		const grid = name === undefined ? undefined : book.Sheets[name];
-		if (grid !== undefined) {
-			const table: unknown = utils.sheet_to_json(grid, { header: 1, raw: false, blankrows: false });
-			if (Array.isArray(table)) {
-				rows = table.slice(0, 100).map((row) => (Array.isArray(row) ? row.slice(0, 20).map(cellText) : []));
-			}
+	// Parsed once per file and sheet: a re-render must not read the workbook again.
+	const read = useMemo(() => {
+		if (bytes === null) return null;
+		try {
+			return { ok: true as const, preview: readSheetPreview(bytes, sheet) };
+		} catch (caught) {
+			return { ok: false as const, message: caught instanceof Error ? caught.message : t("quickLook.documents.sheetOpenFailed") };
 		}
-	} catch (caught) {
-		const message = caught instanceof Error ? caught.message : t("quickLook.documents.sheetOpenFailed");
-		return <FallbackView file={file} note={message} />;
-	}
+	}, [bytes, sheet, t]);
+	if (read === null) return <FallbackView file={file} note={t("quickLook.documents.sheetReadFailed")} />;
+	if (!read.ok) return <FallbackView file={file} note={read.message} />;
+	const { names, rows } = read.preview;
 	if (names.length === 0) return <FallbackView file={file} note={t("quickLook.documents.sheetMissing")} />;
 	return (
 		<>
