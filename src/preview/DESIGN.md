@@ -287,6 +287,18 @@ still has the previous file's size when they lay out.
   the workbook again. `run-qa-quick-look-sheet-large.mjs` drives this on the
   production build.
 
+- **TIFF** — on macOS the main process has the OS decode the file (`sips`, shared
+  with HEIC in `node/sips.ts`) and the panel shows the resulting PNG. A picture
+  longer than 2048px on its long side is shrunk to that; a smaller one is left
+  at its own size, because sips's resize option scales up as readily as down
+  (a 8px TIFF came back 2048px wide). Elsewhere the page's own decoder (UTIF)
+  runs, which decodes synchronously on the page's only thread, so a TIFF over
+  8MB arrives without bytes and the panel shows the file's info instead of
+  freezing. Measured in the built app on an M4 Max, a 21MB scan went from a
+  median 3.8s to 0.26s (the old decoder ranged 0.4-7.3s run to run), and a
+  35MB TIFF, past the old 32MB whole-file cap and never shown, opens in 0.27s.
+  `run-qa-quick-look-tiff.mjs` drives this on the production build.
+
 Images, TIFF, HEIC, fonts, Word, sheets, slides, and EPUB keep their existing
 viewers inside the new chrome.
 

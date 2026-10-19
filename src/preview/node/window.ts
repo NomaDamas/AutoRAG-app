@@ -52,6 +52,7 @@ import { createDefaultAppCache, type DefaultAppCache } from "./default-app";
 import { fileDetails, sha256File } from "./details";
 import { measureFolder, summarizeFolder } from "./folder";
 import { readHeicPreview } from "./heic";
+import { readTiffPreview } from "./tiff";
 import { readIworkPreview } from "./iwork";
 import { createOfficeRenderCache, openOffice, type OfficeRenderCache } from "./office-render";
 import { readEmbeddedThumbnail } from "./odf";
@@ -344,7 +345,7 @@ async function readDocument(path: string): Promise<PreviewDocument> {
 		case "whole":
 			return readPreviewFile(path, PREVIEW_BYTE_CAP, true);
 		case "decode":
-			return readHeicPreview(path);
+			return kind === "tiff" ? readTiffPreview(path) : readHeicPreview(path);
 		case "extract": {
 			if (viewerForExtension(extname(path).slice(1)) === "odg") {
 				const document = await readPreviewFile(path, 0);
