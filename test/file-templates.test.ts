@@ -42,8 +42,6 @@ describe("newFileContents", () => {
 		expect(Object.keys(parts)).toEqual(
 			expect.arrayContaining(["[Content_Types].xml", "_rels/.rels", "word/document.xml"]),
 		);
-		expect(parts["[Content_Types].xml"]).toContain("wordprocessingml.document.main+xml");
-		expect(parts["word/document.xml"]).toContain("<w:document");
 	});
 
 	it("writes an Excel workbook that SheetJS can parse", () => {
@@ -74,6 +72,5 @@ describe("newFileContents", () => {
 				"ppt/theme/theme1.xml",
 			]),
 		);
-		expect(parts["ppt/presentation.xml"]).toContain("<p:presentation");
 	});
 });

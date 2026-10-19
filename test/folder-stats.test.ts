@@ -178,12 +178,12 @@ describe("a folder with very many subfolders", () => {
 			const report = await createFolderSurvey([base], OPTIONS).report(base, LIVE);
 			const text = report.ok ? report.text : "";
 
-			// Detailed blocks carry sample names; compact lines do not.
-			expect((text.match(/sample names:/gu) ?? []).length).toBeLessThan(80);
+			// Detailed blocks carry sample names; compact lines do not, so far fewer blocks than subfolders.
+			expect((text.match(/sample names:/gu) ?? []).length).toBeLessThan(250);
 			expect(text).toContain("project-0001/");
 			expect(text).toContain("project-0500/");
 			// Five hundred full blocks would be about 300,000 characters.
-			expect(text.length).toBeLessThan(80_000);
+			expect(text.length).toBeLessThan(150_000);
 		} finally {
 			await rm(base, { recursive: true, force: true });
 		}

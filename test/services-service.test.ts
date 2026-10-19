@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { CommandRunner } from "../src/main/action-service";
 import { createServicesService, selectServices, type ServiceSnapshot } from "../src/main/services-service";
 import { isServiceRunRequest, splitServiceTitle } from "../src/shared/services-contract";
+import { t } from "../src/shared/i18n/core";
 
 /** A service dictionary as `pbs -dump_pboard` reports it (fields trimmed to the ones the filter reads). */
 function service(title: string, fields: Record<string, unknown> = {}): Record<string, unknown> {
@@ -246,12 +247,12 @@ describe("services service", () => {
 	it("refuses a service the OS does not offer for this selection, without performing anything", async () => {
 		const { run, calls } = fakeRunner({ listing: snapshot([service("Keka/Send to Keka")]) });
 		const services = createServicesService({ platform: "darwin", run });
-		await expect(services.run("Some/Other Service", [FILE])).rejects.toThrow(/서비스/);
+		await expect(services.run("Some/Other Service", [FILE])).rejects.toThrow(t("main.services.unavailable"));
 		expect(calls.some((call) => (call.args[3] ?? "").includes("NSPerformService"))).toBe(false);
 	});
 
 	it("reports a service the system could not perform", async () => {
 		const { run } = fakeRunner({ listing: snapshot([service("Keka/Send to Keka")]), performed: "FAILED" });
-		await expect(createServicesService({ platform: "darwin", run }).run("Keka/Send to Keka", [FILE])).rejects.toThrow(/서비스/);
+		await expect(createServicesService({ platform: "darwin", run }).run("Keka/Send to Keka", [FILE])).rejects.toThrow(t("main.services.runFailed"));
 	});
 });

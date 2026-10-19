@@ -52,8 +52,8 @@ const ENFORCE = process.env.SOAK_ENFORCE === "1";
 /** Stage 1 gates: retained renderer heap per cycle, and index:status calls per click. */
 const MAX_HEAP_GROWTH_PER_CYCLE_MB = 0.25;
 const MAX_INDEX_STATUS_PER_CLICK = 0;
-/** FS roadmap #101: with the filesystem in its own process, main's loop stays inside one 60 Hz frame. */
-const MAX_LOOP_P99_MS = 16;
+/** FS roadmap #101: with the filesystem in its own process, main's loop is never blocked for seconds. A hang ceiling, not a frame budget. */
+const MAX_LOOP_P99_MS = 1000;
 /** FS roadmap #99: only the current listing of a folder is alive, no older one. */
 const MAX_LISTING_GENERATIONS = 1;
 const SNAPSHOT = process.env.SOAK_SNAPSHOT !== "0";

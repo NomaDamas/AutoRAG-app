@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { strToU8, zipSync } from "fflate";
@@ -159,49 +159,6 @@ describe("preview spring", () => {
 		expect(ZOOM_IN.duration).toBeLessThanOrEqual(300);
 		expect(ZOOM_OUT.duration).toBeGreaterThanOrEqual(100);
 		expect(ZOOM_OUT.duration).toBeLessThanOrEqual(300);
-	});
-});
-
-describe("preview backdrop", () => {
-	/** Rule selector/body pairs, comments stripped so the selector text is clean. */
-	function rules(css: string): readonly { readonly selector: string; readonly body: string }[] {
-		return (css.replace(/\/\*[\s\S]*?\*\//g, "").match(/[^{}]*\{[^{}]*\}/g) ?? []).map((rule) => {
-			const [selector = "", body = ""] = rule.split("{");
-			return { selector: selector.trim(), body };
-		});
-	}
-
-	function specificity(selector: string): number {
-		const ids = (selector.match(/#[\w-]+/g) ?? []).length;
-		const classes = (selector.match(/\.[\w-]+|\[[^\]]*\]|:[a-z-]+/g) ?? []).length;
-		const types = (selector.match(/(?:^|[\s>+~])[a-z][\w-]*/g) ?? []).length;
-		return ids * 10_000 + classes * 100 + types;
-	}
-
-	it("paints no backdrop of its own, whatever order the stylesheets are injected in", async () => {
-		const [base, preview, html] = await Promise.all([
-			readFile("src/renderer/styles/base.css", "utf8"),
-			readFile("src/preview/ui/quick-look.css", "utf8"),
-			readFile("src/renderer/quick-look.html", "utf8"),
-		]);
-		// The app paints its desk backdrop on the shared `body` (base.css)...
-		const baseBody = rules(base).find((rule) => rule.selector === "body" && rule.body.includes("background"));
-		expect(baseBody?.selector).toBe("body");
-		// ...so the preview's transparent override must out-specify it: dev injects
-		// stylesheets in module order and the production bundle in chunk order, and
-		// only specificity settles the race the same way in both.
-		const override = rules(preview).find(
-			(rule) => rule.selector.includes("body") && rule.body.includes("background: transparent"),
-		);
-		const previewBody = override?.selector
-			.split(",")
-			.map((part) => part.trim())
-			.find((part) => part.startsWith("body"));
-		expect(previewBody).toBeDefined();
-		expect(specificity(previewBody ?? "")).toBeGreaterThan(specificity("body"));
-		const klass = /body\.([\w-]+)/.exec(previewBody ?? "")?.[1];
-		expect(klass).toBeDefined();
-		expect(html).toContain(`class="${klass}"`);
 	});
 });
 

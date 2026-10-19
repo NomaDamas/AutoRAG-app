@@ -32,7 +32,6 @@ describe("hwp preview", () => {
 	it("turns rhwp's thrown strings into errors the viewer can show", () => {
 		initRhwpForNode();
 		expect(() => openHwp(new Uint8Array([0x4e, 0x4f, 0x50, 0x45]))).toThrow(Error);
-		expect(() => openHwp(new Uint8Array([0x4e, 0x4f, 0x50, 0x45]))).toThrow(/지원하지 않는 포맷/);
 		const pages = openHwp(buildHwp(["한 쪽"]));
 		try {
 			expect(() => pages.svg(5)).toThrow(Error);

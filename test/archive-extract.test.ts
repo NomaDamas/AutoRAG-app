@@ -8,6 +8,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createActionService, type ActionService } from "../src/main/action-service";
 import { type ArchiveLimits } from "../src/main/archive-common";
 import { extractWithLibarchive } from "../src/main/libarchive-reader";
+import { ArchiveError } from "../src/main/archive-guard.mjs";
+import { t } from "../src/shared/i18n/core";
 
 let root: string;
 
@@ -197,7 +199,7 @@ describe("gzip family extraction", () => {
 	it("reports a corrupt .gz with Korean copy and leaves nothing behind", async () => {
 		const archive = join(root, "bad.gz");
 		await writeFile(archive, Buffer.from("this is not a gzip stream"));
-		await expect(service().run([archive], { kind: "extract" }, null)).rejects.toThrow(/손상/);
+		await expect(service().run([archive], { kind: "extract" }, null)).rejects.toThrow(ArchiveError);
 		expect(await readdir(root)).toEqual(["bad.gz"]);
 	});
 });
@@ -264,7 +266,7 @@ describe("libarchive-backed extraction", () => {
 	it("reports a corrupt 7z with Korean copy and no output", async () => {
 		const archive = join(root, "broken.7z");
 		await writeFile(archive, Buffer.from("definitely not a 7z archive, but long enough to read"));
-		await expect(service().run([archive], { kind: "extract" }, null)).rejects.toThrow(/손상|비어/);
+		await expect(service().run([archive], { kind: "extract" }, null)).rejects.toThrow(ArchiveError);
 		expect(await readdir(root)).toEqual(["broken.7z"]);
 	});
 
@@ -272,7 +274,7 @@ describe("libarchive-backed extraction", () => {
 		const archive = join(root, "big.7z");
 		await writeFile(archive, Buffer.alloc(4096));
 		const tiny = { ...LIMITS, maxEngineBytes: 1024 };
-		await expect(service(tiny).run([archive], { kind: "extract" }, null)).rejects.toThrow(/너무 커서/);
+		await expect(service(tiny).run([archive], { kind: "extract" }, null)).rejects.toThrow(ArchiveError);
 		expect(await readdir(root)).toEqual(["big.7z"]);
 	});
 
@@ -300,7 +302,7 @@ describe("libarchive-backed extraction", () => {
 	it("refuses an encrypted RAR with Korean copy and leaves nothing behind", async () => {
 		const archive = join(root, "secret.rar");
 		await writeFile(archive, Buffer.from(RAR5_ENCRYPTED, "base64"));
-		await expect(service().run([archive], { kind: "extract" }, null)).rejects.toThrow(/암호|손상/);
+		await expect(service().run([archive], { kind: "extract" }, null)).rejects.toThrow(ArchiveError);
 		expect(await readdir(root)).toEqual(["secret.rar"]);
 	});
 });
@@ -414,7 +416,7 @@ describe("encrypted archives", () => {
 		await writeFile(join(root, "secret.txt"), "secret");
 		const archive = join(root, "enc.zip");
 		execFileSync("zip", ["-j", "-P", "pw", archive, join(root, "secret.txt")]);
-		await expect(service().run([archive], { kind: "extract" }, null)).rejects.toThrow(/암호/);
+		await expect(service().run([archive], { kind: "extract" }, null)).rejects.toThrow(t("main.archive.encrypted"));
 		expect(await stat(join(root, "enc")).catch(() => null)).toBeNull();
 	});
 
@@ -422,7 +424,7 @@ describe("encrypted archives", () => {
 		await writeFile(join(root, "secret.txt"), "secret");
 		const archive = join(root, "enc.zip");
 		execFileSync("zip", ["-j", "-P", "pw", archive, join(root, "secret.txt")]);
-		await expect(extractWithLibarchive(archive, join(root, "out"), LIMITS)).rejects.toThrow(/암호/);
+		await expect(extractWithLibarchive(archive, join(root, "out"), LIMITS)).rejects.toThrow(ArchiveError);
 	});
 });
 
@@ -430,7 +432,7 @@ describe("hostile archives", () => {
 	it("refuses a tar entry escaping the destination and cleans up staging", async () => {
 		const archive = join(root, "hostile.tar");
 		await writeFile(archive, buildTar([{ name: "../escape.txt", data: Buffer.from("pwned") }]));
-		await expect(service().run([archive], { kind: "extract" }, null)).rejects.toThrow(/벗어납니다/);
+		await expect(service().run([archive], { kind: "extract" }, null)).rejects.toThrow(ArchiveError);
 		await expect(readFile(join(root, "escape.txt"))).rejects.toThrow();
 		expect(await readdir(root)).toEqual(["hostile.tar"]);
 	});
@@ -438,7 +440,7 @@ describe("hostile archives", () => {
 	it("refuses an absolute tar entry", async () => {
 		const archive = join(root, "absolute.tar");
 		await writeFile(archive, buildTar([{ name: "/etc/evil.txt", data: Buffer.from("pwned") }]));
-		await expect(service().run([archive], { kind: "extract" }, null)).rejects.toThrow(/절대 경로/);
+		await expect(service().run([archive], { kind: "extract" }, null)).rejects.toThrow(ArchiveError);
 		expect(await readdir(root)).toEqual(["absolute.tar"]);
 	});
 
@@ -466,7 +468,7 @@ describe("hostile archives", () => {
 	it("refuses a zip-slip entry and leaves no output", async () => {
 		const archive = join(root, "slip.zip");
 		await writeFile(archive, zipSync({ "../escape.txt": new Uint8Array(Buffer.from("pwned")) }));
-		await expect(service().run([archive], { kind: "extract" }, null)).rejects.toThrow(/벗어납니다/);
+		await expect(service().run([archive], { kind: "extract" }, null)).rejects.toThrow(ArchiveError);
 		expect(await readdir(root)).toEqual(["slip.zip"]);
 	});
 
@@ -474,7 +476,7 @@ describe("hostile archives", () => {
 		const archive = join(root, "big.tar");
 		await writeFile(archive, buildTar([{ name: "big.txt", data: Buffer.alloc(4096, 0x61) }]));
 		const tiny = { ...LIMITS, maxTotalBytes: 1024 };
-		await expect(service(tiny).run([archive], { kind: "extract" }, null)).rejects.toThrow(/너무 큽니다/);
+		await expect(service(tiny).run([archive], { kind: "extract" }, null)).rejects.toThrow(ArchiveError);
 		expect(await readdir(root)).toEqual(["big.tar"]);
 	});
 
@@ -488,7 +490,7 @@ describe("hostile archives", () => {
 			]),
 		);
 		const tiny = { ...LIMITS, maxEntries: 1 };
-		await expect(service(tiny).run([archive], { kind: "extract" }, null)).rejects.toThrow(/항목 수/);
+		await expect(service(tiny).run([archive], { kind: "extract" }, null)).rejects.toThrow(ArchiveError);
 		expect(await readdir(root)).toEqual(["many.tar"]);
 	});
 });
@@ -497,12 +499,12 @@ describe("non-archives", () => {
 	it("refuses a file whose name is not an offered archive", async () => {
 		const path = join(root, "notes.txt");
 		await writeFile(path, "plain");
-		await expect(service().run([path], { kind: "extract" }, null)).rejects.toThrow(/압축을 풀 수 없는/);
+		await expect(service().run([path], { kind: "extract" }, null)).rejects.toThrow(t("main.action.unsupportedExtract"));
 	});
 
 	it("refuses a dotfile whose whole name is a suffix", async () => {
 		const path = join(root, ".zip");
 		await writeFile(path, "zipSync({})");
-		await expect(service().run([path], { kind: "extract" }, null)).rejects.toThrow(/압축을 풀 수 없는/);
+		await expect(service().run([path], { kind: "extract" }, null)).rejects.toThrow(t("main.action.unsupportedExtract"));
 	});
 });

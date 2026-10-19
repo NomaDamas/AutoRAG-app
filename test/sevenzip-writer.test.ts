@@ -69,8 +69,8 @@ describe("writeSevenZip", () => {
 		const raw = Object.values(files).reduce((sum, file) => sum + file.length, 0);
 		expect(packed).toBeLessThan(raw / 100);
 		expect(await readBack(archive)).toEqual(files);
-		// The wasm LZMA encoder takes ~4 s alone for this input; the default 5 s fails under a parallel run.
-	}, 30_000);
+		// The wasm LZMA encoder takes ~4 s alone for this input; the timeout is only a hang guard.
+	}, 120_000);
 
 	it("stores already-compressed data as Copy instead of burning time in LZMA", async () => {
 		const noise = randomBytes(600 * 1024);

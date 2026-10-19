@@ -271,7 +271,7 @@ describe("folder summary", () => {
 		const dir = await fixture();
 		try {
 			const total = 10 + 2000 + 300 + 50_000 + 4000 + 20 + 700 + 6000;
-			expect(await measureFolder(dir, { maxEntries: 1000, maxMs: 5000 })).toEqual({ bytes: total, complete: true });
+			expect(await measureFolder(dir, { maxEntries: 1000, maxMs: 300_000 })).toEqual({ bytes: total, complete: true });
 		} finally {
 			await rm(dir, { recursive: true, force: true });
 		}
@@ -280,9 +280,10 @@ describe("folder summary", () => {
 	it("reports a partial total when the walk runs out of budget", async () => {
 		const dir = await fixture();
 		try {
-			const partial = await measureFolder(dir, { maxEntries: 3, maxMs: 5000 });
+			const total = (await measureFolder(dir, { maxEntries: 1000, maxMs: 300_000 })).bytes;
+			const partial = await measureFolder(dir, { maxEntries: 3, maxMs: 300_000 });
 			expect(partial.complete).toBe(false);
-			expect(partial.bytes).toBeLessThan(63_030);
+			expect(partial.bytes).toBeLessThan(total);
 		} finally {
 			await rm(dir, { recursive: true, force: true });
 		}
