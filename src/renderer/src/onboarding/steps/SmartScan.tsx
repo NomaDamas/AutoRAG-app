@@ -1,4 +1,4 @@
-/** Step 4 — smart scan: the AI looks through the chosen folders (prototype's "폴더 탐색 중…" screen). */
+/** Step 5 — smart scan: the AI looks through the folders chosen in the step before (prototype's "폴더 탐색 중…" screen). */
 
 import type { ReactElement } from "react";
 import { visibleScope } from "../smart-scope";

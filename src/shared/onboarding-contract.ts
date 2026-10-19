@@ -75,8 +75,9 @@ export type OnboardingStepId =
 	| "welcome"
 	| "permissions"
 	| "account"
-	| "smartScan"
 	| "folders"
+	| "smartScan"
+	| "smartScope"
 	| "embedding"
 	| "sources"
 	| "plan"
@@ -141,6 +142,8 @@ export interface OnboardingDraft {
 	 * until the analysis ran; entries whose `root` is no longer selected are ignored.
 	 */
 	readonly smartScope?: readonly SmartExclusion[];
+	/** The folders the AI looked through to produce `smartScope`; a folder selected later that is not here was never analysed. */
+	readonly smartScopeRoots?: readonly string[];
 }
 
 export interface OnboardingSnapshot {

@@ -1207,6 +1207,183 @@ html[data-appearance="dark"] .onb .source-icon.brand {
 	background: #0078d4;
 }
 
+.onb .folder-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	width: 100%;
+	margin-bottom: 12px;
+}
+
+.onb .folder-head strong {
+	font-size: 12px;
+}
+
+.onb .folder-head label {
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	color: var(--onb-muted);
+	font-size: 10.5px;
+}
+
+.onb .folder-grid {
+	display: grid;
+	grid-template-columns: repeat(2,minmax(0,1fr));
+	gap: 9px;
+}
+
+.onb .folder-card {
+	position: relative;
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	min-height: 73px;
+	padding: 10px;
+	border: 1px solid var(--onb-border);
+	border-radius: 9px;
+	background: var(--onb-bg-card);
+	cursor: pointer;
+}
+
+.onb .folder-card.selected {
+	border-color: var(--onb-blue);
+	background: var(--onb-blue-soft);
+}
+
+.onb .folder-card.locked {
+	opacity: .58;
+}
+
+.onb .folder-card.add {
+	border-style: dashed;
+	justify-content: center;
+	color: var(--onb-muted);
+}
+
+.onb .check-box {
+	display: grid;
+	place-items: center;
+	flex: none;
+	width: 16px;
+	height: 16px;
+	border: 1.5px solid var(--onb-border);
+	border-radius: 4px;
+	color: transparent;
+}
+
+.onb .folder-card.selected .check-box {
+	border-color: var(--onb-blue);
+	background: var(--onb-blue);
+	color: #fff;
+}
+
+.onb .folder-art {
+	display: grid;
+	place-items: center;
+	flex: none;
+	width: 35px;
+	height: 29px;
+	border-radius: 5px 6px 6px 6px;
+	background: linear-gradient(#8cb9f7 0 28%,#70a8f5 28%);
+	color: #4c89dc;
+}
+
+.onb .folder-art:before {
+	content: "";
+	position: absolute;
+	width: 16px;
+	height: 3px;
+	margin-top: -29px;
+	margin-left: -10px;
+	border-radius: 3px 3px 0 0;
+	background: #8cb9f7;
+}
+
+.onb .folder-info {
+	min-width: 0;
+}
+
+.onb .folder-name {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	font-size: 11.5px;
+	font-weight: 500;
+}
+
+.onb .folder-path {
+	margin-top: 2px;
+	color: var(--onb-muted);
+	font-size: 9px;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.onb .folder-stats {
+	margin-top: 5px;
+	color: var(--onb-faint);
+	font-size: 9px;
+}
+
+.onb .folder-summary {
+	display: flex;
+	align-items: center;
+	gap: 15px;
+	margin-top: 10px;
+	padding: 11px 13px;
+	border: 1px solid var(--onb-divider);
+	border-radius: 8px;
+	background: var(--onb-bg-card);
+}
+
+.onb .summary-main {
+	flex: 1;
+}
+
+.onb .summary-main strong {
+	font-size: 11px;
+}
+
+.onb .summary-main small {
+	display: block;
+	margin-top: 3px;
+	color: var(--onb-muted);
+	font-size: 9.5px;
+}
+
+.onb .eta-row {
+	display: flex;
+	gap: 8px;
+	font-size: 9px;
+	color: var(--onb-muted);
+}
+
+.onb .eta-row b {
+	color: var(--onb-ink);
+	font-weight: 500;
+}
+
+.onb .summary-warning {
+	margin-top: 8px;
+	padding: 8px 10px;
+	border-radius: 6px;
+	background: var(--onb-orange-bg);
+	color: #925800;
+	font-size: 9.5px;
+}
+
+.onb .summary-warning.hidden {
+	display: none;
+}
+
+.onb .folder-caption {
+	margin-top: 9px;
+	color: var(--onb-faint);
+	font-size: 9px;
+}
+
 /* ------------------------------------ smart indexing (prototype: "스마트 인덱싱 범위" + "폴더 탐색 중…")
  * The scope screen is a policy bar over two panels: blue holds the folders that are
  * indexed, red the sub-folders left out. Pills are removable, ghost pills bring a

@@ -306,7 +306,7 @@ app at a local capture server and asserts the rules above over HTTP.
 ## First-run onboarding
 
 A fresh install opens onboarding instead of the Finder: welcome, permissions,
-account, smart scan, folders (the smart-indexing scope), embedding, data sources,
+account, folders, smart scan, smart-indexing scope, embedding, data sources,
 plan, the model step (BYOK only), and the first index. The screens port
 `docs/design-reference/onboarding/onboarding-prototype.html`; the draft is saved
 after every change, so a relaunch (for example after granting Full Disk Access)
@@ -320,12 +320,18 @@ resumes at the same step.
   registers the OS login item in packaged builds only (registering the dev
   binary would add bare "Electron" to Login Items); the switch is read back from
   the OS and flips off with a message if the OS refused.
-- **Smart scan** (after the account) starts a helper agent (see "Helper agents")
-  on every suggested folder (Desktop, Documents, Downloads, iCloud Drive,
-  Pictures, connected cloud drives) and every folder the user added, selected or
-  not: what to index is chosen on the next screen, and a proposal only shows while
-  its folder is selected, so turning a folder on later needs no second analysis.
-  The scan screen shows the prototype's drawn folder and roaming magnifying glass
+- **Folders** shows the suggested locations (Desktop, Documents, Downloads, iCloud
+  Drive start selected; Pictures and connected cloud drives do not) as cards with
+  a checkbox, each pre-scanned with the indexer's own rules (supported
+  extensions, size cap, skipped dependency/code folders) for a real file count,
+  size and ETA, plus "add another folder". This is where the person chooses what
+  the AI looks through and what is indexed; the steps after it work on exactly
+  these folders.
+- **Smart scan** (after the folders) starts a helper agent (see "Helper agents")
+  on the selected folders. It runs once on entering the step, and again only when
+  a folder was selected that the last analysis did not cover (the draft keeps the
+  folders it analysed, `smartScopeRoots`); unselecting a folder just hides its
+  proposals. The scan screen shows the prototype's drawn folder and roaming magnifying glass
   and the folder being looked at. The model judges, in words and without
   thresholds, whether a folder holds what a person wrote or collected for
   their own use or what a program generated as a by-product (logs, app and chat
@@ -345,18 +351,16 @@ resumes at the same step.
   the index would read no file from it (the screen then says "no documents"). When in doubt the model keeps the folder: a wrongly
   excluded document vanishes from search, a wrongly included folder only costs
   time. Because the model decides, runs can differ a little; each proposal carries
-  the reason the model gave. It spends the AutoRAG model, so it runs once on
-  entering the step (a draft that already holds proposals is not re-run); the user
-  can cancel and choose by hand, and a failure (no model signed in yet, a provider
+  the reason the model gave. It spends the AutoRAG model; the user
+  can cancel and carry on by hand, and a failure (no model signed in yet, a provider
   error) shows its reason with a retry while the step can still be left.
-- **Folders** is the prototype's smart-indexing scope screen: a policy bar (the
+- **Smart-indexing scope** is the prototype's scope screen: a policy bar (the
   estimate, struck through to the old one with the percent saved, and "scan
   again"), a blue panel of the included folders and a red one of the sub-folders
-  left out. Every suggested folder is pre-scanned for its size. A pill's x removes
-  a folder or puts a left-out one back, ghost pills bring one in again, "reset"
-  restores the suggested selection, and the dashed buttons add a folder to
-  include or a sub-folder of the selected ones to leave out (measured once
-  added). The proposals and the user's choices live in the draft (`smartScope`),
+  left out. A pill's x removes a folder or puts a left-out one back, a ghost pill brings
+  back a folder the AI had looked through and the person unselected, and the
+  dashed button adds a sub-folder of the selected ones to leave out (measured
+  once added). Choosing which folders to look through is the step before the scan. The proposals and the user's choices live in the draft (`smartScope`),
   so a relaunch restores them. Starting the index writes the folders still left
   out into the shared config's `excludePaths` after the user's own entries and
   subtracts their file count from the first index's total and ETA.

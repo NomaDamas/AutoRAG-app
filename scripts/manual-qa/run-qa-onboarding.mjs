@@ -118,32 +118,40 @@ try {
 	check("signing in is gated until an account exists", await primary.isDisabled());
 	await shot("03-account");
 	await page.locator(".onb .auth-card .action-row button.secondary").click();
-	// smart scan: the AI looks through the preselected folders. This lane has no model, so the
-	// analysis fails visibly and the step stays usable (the real run is run-qa-smart-indexing).
-	await page.waitForSelector(".onb .si-minimal-scan", { timeout: 6000 });
-	check("skipping the account (BYOK) advances to the smart scan", true);
-	await page.waitForSelector(".onb .si-scan-error", { timeout: 30_000 });
-	check("with no model the scan says it failed and offers a retry", (await page.locator(".onb .si-scan-retry").count()) === 1);
-	check("the scan step can still be left", await primary.isEnabled());
-	await shot("03b-smart-scan");
-	await primary.click();
-
-	// folders: the smart-indexing scope screen; swap the real candidates for fixtures picked through the dialog.
-	await page.waitForSelector(".onb .si-dual-panels", { timeout: 6000 });
-	check("the scope screen follows the scan", true);
+	// folders: swap the real candidates for fixtures picked through the dialog.
+	await page.waitForSelector(".onb .folder-grid", { timeout: 6000 });
+	check("skipping the account (BYOK) advances to folders", true);
 	await app.evaluate(({ dialog }, paths) => {
 		dialog.showOpenDialog = async () => ({ canceled: false, filePaths: paths });
 	}, [DESK, DOCS]);
-	while ((await page.locator(".onb .si-panel.blue .si-pill-x").count()) > 0) await page.locator(".onb .si-panel.blue .si-pill-x").first().click();
+	while ((await page.locator(".onb .folder-card.selected").count()) > 0) await page.locator(".onb .folder-card.selected").first().click();
 	check("folders gate closes with nothing selected", await primary.isDisabled());
-	await page.locator(".onb .si-panel.blue .si-add-pill").click();
-	await page.waitForFunction(() => document.querySelectorAll(".onb .si-panel.blue .si-pill").length === 2, null, { timeout: 5000 });
-	await page.waitForFunction(() => /\d+\s*개 파일/.test(document.querySelector(".onb .si-panel.blue .si-panel-meta")?.textContent ?? ""), null, { timeout: 15_000 });
-	await page.waitForFunction(() => ![...document.querySelectorAll(".onb .si-panel.blue .si-pill-size")].some((el) => el.textContent === "…"), null, { timeout: 15_000 });
-	const summary = await page.locator(".onb .si-panel.blue .si-panel-meta").innerText();
-	check("pre-scan counts the three supported fixtures (skips node_modules/unsupported)", /(^|\D)3\s*개 파일/.test(summary), summary.replace(/\s+/g, " "));
-	check("the red panel says what is always left out when nothing was proposed", (await page.locator(".onb .si-panel.red .si-panel-foot").innerText()).includes("node_modules"));
+	await page.locator(".onb .folder-card.add").click();
+	await page.waitForFunction(() => document.querySelectorAll(".onb .folder-card.selected").length === 2, null, { timeout: 5000 });
+	await page.waitForFunction(() => !document.querySelector(".onb .folder-summary")?.textContent?.includes("세는 중"), null, { timeout: 15_000 });
+	const summary = await page.locator(".onb .folder-summary").innerText();
+	check("pre-scan counts the three supported fixtures (skips node_modules/unsupported)", /(^|\D)3\s*개/.test(summary), summary.replace(/\s+/g, " "));
+	check("no smart-indexing panel yet: the folders are chosen before the scan", (await page.locator(".onb .si-dual-panels").count()) === 0);
 	await shot("04-folders");
+	await primary.click();
+
+	// smart scan: the AI looks through the folders just chosen. This lane has no model, so the
+	// analysis fails visibly and the step stays usable (the real run is run-qa-smart-indexing).
+	await page.waitForSelector(".onb .si-minimal-scan", { timeout: 6000 });
+	check("folders advance to the smart scan", true);
+	await page.waitForSelector(".onb .si-scan-error", { timeout: 30_000 });
+	check("with no model the scan says it failed and offers a retry", (await page.locator(".onb .si-scan-retry").count()) === 1);
+	check("the scan step can still be left", await primary.isEnabled());
+	await shot("04b-smart-scan");
+	await primary.click();
+
+	// smart-indexing scope: the chosen folders as blue pills, nothing proposed without a model.
+	await page.waitForSelector(".onb .si-dual-panels", { timeout: 6000 });
+	check("the scope screen follows the scan", true);
+	check("it lists exactly the two chosen folders", (await page.locator(".onb .si-panel.blue .si-pill").count()) === 2);
+	check("the red panel says what is always left out when nothing was proposed", (await page.locator(".onb .si-panel.red .si-panel-foot").innerText()).includes("node_modules"));
+	check("the scope screen can be left", await primary.isEnabled());
+	await shot("04c-smart-scope");
 	await primary.click();
 
 	// embedding: the prototype's three cards; the cloud one is disabled while signed out.

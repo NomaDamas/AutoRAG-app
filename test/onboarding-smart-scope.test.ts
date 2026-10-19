@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
 	addExclusion,
-	analysisRoots,
+	needsAnalysis,
 	etaSaving,
 	excludedTotals,
 	indexingExclusions,
@@ -108,32 +108,27 @@ describe("smart run state", () => {
 	});
 });
 
-describe("analysis roots", () => {
-	const candidates = [
-		{ path: "/docs", name: "Documents", displayPath: "~/Documents", kind: "documents", defaultSelected: true, ocrOff: false },
-		{ path: "/pics", name: "Pictures", displayPath: "~/Pictures", kind: "pictures", defaultSelected: false, ocrOff: false },
-		{ path: "/gone", name: "Gone", displayPath: "~/Gone", kind: "cloud", defaultSelected: false, ocrOff: false },
-	] as const;
+describe("when the AI has to look again", () => {
+	const scope: readonly SmartExclusion[] = [entry("/docs/Zoom")];
 
-	it("looks through every suggested folder and every folder the user added, selected or not, so selecting one later needs no new analysis", () => {
-		const folders = [
-			{ path: "/docs", selected: true },
-			{ path: "/pics", selected: false },
-			{ path: "/mine", selected: false },
-		];
-
-		// "/gone" is a suggestion the draft does not list (a cloud drive that appeared later): it is looked through too.
-		expect(analysisRoots(candidates, folders)).toEqual(["/docs", "/pics", "/mine", "/gone"]);
+	it("looks when it never has, and when no folders were recorded for the proposals it holds", () => {
+		expect(needsAnalysis(["/docs"], undefined, undefined)).toBe(true);
+		expect(needsAnalysis(["/docs"], undefined, scope)).toBe(true);
+		expect(needsAnalysis(["/docs"], ["/docs"], undefined)).toBe(true);
 	});
 
-	it("lists a folder once and keeps the draft's order", () => {
-		const folders = [
-			{ path: "/mine", selected: true },
-			{ path: "/docs", selected: true },
-			{ path: "/mine", selected: true },
-		];
+	it("does not look again while every selected folder was part of the last analysis, even after folders were unselected", () => {
+		expect(needsAnalysis(["/docs"], ["/docs"], scope)).toBe(false);
+		expect(needsAnalysis(["/docs"], ["/docs", "/downloads"], scope)).toBe(false);
+		expect(needsAnalysis([], ["/docs"], scope)).toBe(false);
+	});
 
-		expect(analysisRoots(candidates, folders)).toEqual(["/mine", "/docs", "/pics", "/gone"]);
+	it("looks again as soon as a selected folder was not part of it", () => {
+		expect(needsAnalysis(["/docs", "/pictures"], ["/docs"], scope)).toBe(true);
+		expect(needsAnalysis(["/pictures"], ["/docs"], scope)).toBe(true);
+	});
+
+	it("holds an analysis with no proposals as done", () => {
+		expect(needsAnalysis(["/docs"], ["/docs"], [])).toBe(false);
 	});
 });
-

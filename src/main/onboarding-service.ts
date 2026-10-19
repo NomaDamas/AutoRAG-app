@@ -167,8 +167,9 @@ const STEP_IDS: Readonly<Record<string, true>> = {
 	welcome: true,
 	permissions: true,
 	account: true,
-	smartScan: true,
 	folders: true,
+	smartScan: true,
+	smartScope: true,
 	embedding: true,
 	sources: true,
 	plan: true,
@@ -273,6 +274,7 @@ function isOnboardingDraft(value: unknown): value is OnboardingDraft {
 	if (typeof value.planConfirmed !== "boolean") return false;
 	if (value.model !== null && !isModelChoice(value.model)) return false;
 	if (value.smartScope !== undefined && (!Array.isArray(value.smartScope) || !value.smartScope.every(isSmartExclusionChoice))) return false;
+	if (value.smartScopeRoots !== undefined && (!Array.isArray(value.smartScopeRoots) || !value.smartScopeRoots.every(isAbsoluteString))) return false;
 	return true;
 }
 

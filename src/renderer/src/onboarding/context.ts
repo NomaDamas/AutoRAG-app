@@ -71,8 +71,8 @@ export interface OnboardingCtx {
 
 	setFolderSelected(path: string, selected: boolean): void;
 	addFolders(): void;
-	/** Returns the suggested folders to their defaults; folders the user added stay selected. */
-	resetFolders(): void;
+	/** Selects every folder, or clears the selection when all are selected. */
+	toggleAllFolders(): void;
 	/** Starts the AI analysis of the selected folders (the scan screen starts it on entry). */
 	startSmartScan(): void;
 	cancelSmartScan(): void;

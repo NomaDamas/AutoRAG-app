@@ -111,7 +111,7 @@ function harness(options: { readonly embed: EmbedMode; readonly consent?: boolea
 		setLaunchAtLogin: noop,
 		setShareUsage: noop,
 		setShareErrors: noop,
-		resetFolders: noop,
+		toggleAllFolders: noop,
 		startSmartScan: noop,
 		cancelSmartScan: noop,
 		rescanSmart: noop,

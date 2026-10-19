@@ -1,19 +1,12 @@
-/**
- * Step 5 — smart-indexing scope (prototype's "스마트 인덱싱 범위"): a policy bar, a blue
- * panel of the folders that are included and a red panel of the sub-folders left
- * out. Pills are removable, ghost pills bring a folder back, dashed ones add.
- */
+/** Step 4 — pick the folders to look through and index; the AI scan that follows reads exactly these. */
 
-import { useState, type ReactElement } from "react";
+import type { ReactElement } from "react";
 import type { FolderCandidate, FolderKind } from "../../../../shared/onboarding-contract";
-import type { SmartExclusion } from "../../../../shared/smart-indexing-contract";
+import { cn } from "../../lib/cn";
 import { Icon } from "../marks";
-import { formatSize, scanTotals } from "../flow";
-import { etaSaving, excludedTotals, visibleScope } from "../smart-scope";
+import { Eyebrow, Multiline } from "../parts";
+import { etaMinutes, formatSize } from "../flow";
 import type { OnboardingCtx } from "../context";
-
-/** Ghost pills shown before the rest are summarised; the prototype lists three. */
-const MAX_GHOSTS = 3;
 
 function folderIcon(kind: FolderKind): string {
 	switch (kind) {
@@ -33,177 +26,108 @@ function folderIcon(kind: FolderKind): string {
 	}
 }
 
-/** The part of a left-out folder's path below the folder it lies under. */
-function insidePath(item: SmartExclusion): string {
-	return item.path.slice(item.root.length).replace(/^[\\/]+/u, "");
-}
-
-/** How the AI decides, in words: what it looked at, what it keeps and leaves out, and that the person has the last word. */
-function Criteria({ t }: { readonly t: OnboardingCtx["t"] }): ReactElement {
-	const keys = ["looked", "keep", "leave", "code", "doubt", "you"] as const;
-	return (
-		<ol className="si-criteria">
-			{keys.map((key) => (
-				<li key={key}>{t(`onboarding.folders.criteria.${key}`)}</li>
-			))}
-		</ol>
-	);
-}
-
 export function FoldersStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElement {
 	const { t, candidates, draft, scans } = ctx;
-	const [showCriteria, setShowCriteria] = useState(false);
 
-	const selectedPaths = draft.folders.filter((folder) => folder.selected).map((folder) => folder.path);
-	const selected = selectedPaths.map((path) => candidates.find((candidate) => candidate.path === path)).filter((candidate): candidate is FolderCandidate => candidate !== undefined);
-	const unselected = candidates.filter((candidate) => !selectedPaths.includes(candidate.path));
+	const selectedPaths = new Set(draft.folders.filter((f) => f.selected).map((f) => f.path));
+	const allSelected = candidates.length > 0 && candidates.every((c) => selectedPaths.has(c.path));
 
-	const items = visibleScope(draft.smartScope, selectedPaths);
-	const leftOut = items.filter((item) => item.excluded);
-	const kept = items.filter((item) => !item.excluded);
-	const totals = excludedTotals(draft.smartScope, selectedPaths);
-	const included = scanTotals(selectedPaths, scans);
-	const eta = etaSaving(included.files, totals.files, "local");
-	const rootName = (item: SmartExclusion): string => candidates.find((candidate) => candidate.path === item.root)?.name ?? item.root;
+	let files = 0;
+	let bytes = 0;
+	for (const path of selectedPaths) {
+		const scan = scans.get(path);
+		if (scan !== undefined) {
+			files += scan.files;
+			bytes += scan.bytes;
+		}
+	}
+	const localEta = etaMinutes(files, "local");
+	const cloudEta = etaMinutes(files, "cloud");
 
-	return (
-		<section className="si-screen">
-			<div className="si-policy-bar">
-				<div className="si-policy-copy">
-					<strong>
-						{t("onboarding.folders.policy.title")}
-						{draft.smartScope !== undefined ? <span className="tag rec">{t("onboarding.folders.policy.tag")}</span> : null}
-					</strong>
-					<p>
-						{t("onboarding.folders.policy.lead")}{" "}
-						<button type="button" className="si-criteria-toggle" aria-expanded={showCriteria} onClick={() => setShowCriteria((shown) => !shown)}>
-							{t(showCriteria ? "onboarding.folders.criteria.hide" : "onboarding.folders.criteria.show")}
-						</button>
-					</p>
-					{showCriteria ? <Criteria t={t} /> : null}
-				</div>
-				<div className="si-policy-right">
-					<div className="si-eta-pill">
-						{eta.percent > 0 ? <del>{t("onboarding.folders.policy.eta", { minutes: eta.before })}</del> : null}
-						<b>{t("onboarding.folders.policy.eta", { minutes: eta.after })}</b>
-						{eta.percent > 0 ? <em>{t("onboarding.folders.policy.etaSaved", { percent: eta.percent })}</em> : null}
-					</div>
-					<button type="button" className="secondary si-rescan" onClick={ctx.rescanSmart}>
-						<Icon name="search" size={12} /> {t("onboarding.folders.policy.rescan")}
-					</button>
+	const card = (candidate: FolderCandidate): ReactElement => {
+		const selected = selectedPaths.has(candidate.path);
+		const scan = scans.get(candidate.path);
+		let stats: string;
+		if (scan === undefined) {
+			stats = t("onboarding.folders.scanning");
+		} else if (scan.error !== null) {
+			stats = t("onboarding.folders.scanError");
+		} else {
+			stats = t("onboarding.folders.stats", {
+				files: scan.files.toLocaleString(),
+				size: formatSize(scan.bytes),
+				minutes: etaMinutes(scan.files, "local"),
+			});
+		}
+		return (
+			<div
+				key={candidate.path}
+				className={cn("folder-card", selected && "selected")}
+				onClick={() => ctx.setFolderSelected(candidate.path, !selected)}
+			>
+				<span className="check-box">
+					<Icon name="check" size={12} />
+				</span>
+				<span className="folder-art">
+					<Icon name={folderIcon(candidate.kind)} size={16} />
+				</span>
+				<div className="folder-info">
+					<div className="folder-name">{candidate.name}</div>
+					<div className="folder-path">{candidate.displayPath}</div>
+					<div className="folder-stats">{stats}</div>
 				</div>
 			</div>
-			<div className="si-dual-panels">
-				<div className="si-panel blue">
-					<div className="si-panel-head">
-						<div className="si-panel-title">
-							<i className="si-panel-dot" />
-							{t("onboarding.folders.include.title")}
-						</div>
-						<span className="si-panel-meta">
-							{t("onboarding.folders.include.meta", {
-								folders: selected.length,
-								files: Math.max(0, included.files - totals.files).toLocaleString(),
-								size: formatSize(Math.max(0, included.bytes - totals.bytes)),
-							})}
-						</span>
-					</div>
-					<div className="si-pills">
-						<button type="button" className="si-add-pill blue" onClick={ctx.addFolders}>
-							<Icon name="plus" size={12} /> {t("onboarding.folders.include.add")}
-						</button>
-						{selected.map((candidate) => {
-							const scan = scans.get(candidate.path);
-							return (
-								<span key={candidate.path} className="si-pill blue" title={candidate.displayPath}>
-									<span className="si-pill-ico">
-										<Icon name={folderIcon(candidate.kind)} size={12} />
-									</span>
-									<span className="si-pill-label">{candidate.name}</span>
-									<span className="si-pill-size">{scan === undefined || scan.error !== null ? "…" : formatSize(scan.bytes)}</span>
-									<button
-										type="button"
-										className="si-pill-x"
-										title={t("onboarding.folders.include.remove")}
-										onClick={() => ctx.setFolderSelected(candidate.path, false)}
-									>
-										<Icon name="x" size={11} />
-									</button>
-								</span>
-							);
-						})}
-					</div>
-					<div className="si-panel-foot">
-						<div className="si-ghost-row">
-							{unselected.length > 0 ? (
-								<>
-									<span>{t("onboarding.folders.include.addable")}</span>
-									{unselected.map((candidate) => (
-										<button key={candidate.path} type="button" className="si-ghost-pill" onClick={() => ctx.setFolderSelected(candidate.path, true)}>
-											+ {candidate.name}
-										</button>
-									))}
-								</>
-							) : (
-								<span>{t("onboarding.folders.include.allIn")}</span>
-							)}
-						</div>
-						<button type="button" className="quiet si-reset" onClick={ctx.resetFolders}>
-							{t("onboarding.folders.include.reset")}
-						</button>
+		);
+	};
+
+	return (
+		<section className="screen center">
+			<div className="screen-copy">
+				<Eyebrow icon="folder-search">{t("onboarding.folders.eyebrow")}</Eyebrow>
+				<h1>
+					<Multiline text={t("onboarding.folders.title")} />
+				</h1>
+				<p>{t("onboarding.folders.lead")}</p>
+			</div>
+			<div style={{ width: "100%", maxWidth: 760, marginTop: 19 }}>
+				<div className="folder-head">
+					<strong>{t("onboarding.folders.suggested")}</strong>
+					<label>
+						<input type="checkbox" checked={allSelected} onChange={ctx.toggleAllFolders} />{" "}
+						{t("onboarding.folders.selectAll")}
+					</label>
+				</div>
+				<div className="folder-grid">
+					{candidates.map(card)}
+					<div className="folder-card add" onClick={ctx.addFolders}>
+						<Icon name="plus" size={15} />
+						<span>{t("onboarding.folders.add")}</span>
 					</div>
 				</div>
-				<div className="si-panel red">
-					<div className="si-panel-head">
-						<div className="si-panel-title">
-							<i className="si-panel-dot" />
-							{t("onboarding.folders.exclude.title")}
-						</div>
-						<span className="si-panel-meta">{t("onboarding.folders.exclude.meta", { count: leftOut.length, size: formatSize(totals.bytes) })}</span>
+				<div className="folder-summary">
+					<div className="summary-main">
+						<strong>
+							{t("onboarding.folders.summary", {
+								folders: selectedPaths.size,
+								files: files.toLocaleString(),
+								size: formatSize(bytes),
+							})}
+						</strong>
+						<small>{t("onboarding.folders.summaryNote")}</small>
 					</div>
-					<div className="si-pills">
-						<button type="button" className="si-add-pill red" onClick={ctx.addExclusion} disabled={selectedPaths.length === 0}>
-							<Icon name="plus" size={12} /> {t("onboarding.folders.exclude.add")}
-						</button>
-						{leftOut.map((item) => (
-							<span key={item.path} className="si-pill red" title={item.reason === "" ? item.path : `${item.reason}\n${item.path}`}>
-								<span className="si-pill-ico">
-									<Icon name="eye-off" size={11} />
-								</span>
-								<span className="si-pill-label">
-									<em>{rootName(item)} / </em>
-									<b>{insidePath(item)}</b>
-								</span>
-								<span className="si-pill-size">{item.files === 0 ? t("onboarding.folders.exclude.noDocs") : `−${formatSize(item.bytes)}`}</span>
-								<button
-									type="button"
-									className="si-pill-x"
-									title={t("onboarding.folders.exclude.restore")}
-									onClick={() => ctx.setSmartExcluded(item.path, false)}
-								>
-									<Icon name="x" size={11} />
-								</button>
+					<div>
+						<div className="eta-row">
+							<span>
+								{t("onboarding.folders.localEta", { minutes: localEta })}
 							</span>
-						))}
-					</div>
-					<div className="si-panel-foot">
-						<div className="si-ghost-row">
-							{kept.length > 0 ? (
-								<>
-									<span>{t("onboarding.folders.exclude.restored")}</span>
-									{kept.slice(0, MAX_GHOSTS).map((item) => (
-										<button key={item.path} type="button" className="si-ghost-pill" onClick={() => ctx.setSmartExcluded(item.path, true)}>
-											+ {insidePath(item)}
-										</button>
-									))}
-								</>
-							) : (
-								<span>
-									<Icon name="lock" size={11} /> {t("onboarding.folders.policy.auto")}
-								</span>
-							)}
+							<span>
+								{t("onboarding.folders.cloudEta", { minutes: cloudEta })}
+							</span>
 						</div>
 					</div>
+				</div>
+				<div className={cn("summary-warning", localEta <= 120 && "hidden")}>
+					<Icon name="triangle-alert" size={12} /> {t("onboarding.folders.warning")}
 				</div>
 			</div>
 		</section>

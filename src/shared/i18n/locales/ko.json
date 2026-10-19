@@ -354,8 +354,9 @@
       "welcome": "소개",
       "permissions": "권한",
       "account": "계정",
+      "folders": "폴더",
       "smartScan": "스마트 탐색",
-      "folders": "스마트 인덱싱",
+      "smartScope": "스마트 인덱싱",
       "embedding": "임베딩",
       "sources": "데이터 소스",
       "plan": "플랜",
@@ -366,8 +367,9 @@
       "welcome": "시작하기",
       "permissions": "계속",
       "account": "계속",
+      "folders": "폴더로 계속",
       "smartScan": "추천 범위 보기",
-      "folders": "범위 확정하고 계속",
+      "smartScope": "범위 확정하고 계속",
       "embedding": "계속",
       "sources": "계속",
       "model": "계속",
@@ -501,6 +503,22 @@
       "start": "AI로 탐색하기"
     },
     "folders": {
+      "eyebrow": "인덱싱 범위",
+      "title": "AI가 읽을 폴더를 고르세요",
+      "lead": "여기 선택한 폴더만 AI 검색에 포함됩니다. 범위는 나중에 추가하거나 줄일 수 있습니다.",
+      "suggested": "추천 위치",
+      "selectAll": "모두 선택",
+      "add": "다른 폴더 추가",
+      "stats": "{{files}}개 · {{size}} · 약 {{minutes}}분",
+      "scanning": "세는 중…",
+      "scanError": "읽을 수 없음",
+      "summary": "{{folders}}개 폴더 · {{files}}개 파일 · {{size}}",
+      "summaryNote": "node_modules · .git · 50 MiB 초과 파일은 자동으로 제외합니다.",
+      "localEta": "로컬 (이 Mac) 약 {{minutes}}분",
+      "cloudEta": "원격 약 {{minutes}}분",
+      "warning": "범위가 넓습니다. 하위 폴더를 고르거나 원격 임베딩을 선택하면 첫 결과를 더 빨리 볼 수 있습니다."
+    },
+    "smartScope": {
       "policy": {
         "title": "스마트 인덱싱 범위",
         "tag": "AI 분류 완료",
@@ -513,11 +531,9 @@
       "include": {
         "title": "포함할 상위 폴더",
         "meta": "{{folders}}개 폴더 · {{files}}개 파일 · {{size}}",
-        "add": "폴더 추가",
         "remove": "포함 해제",
         "addable": "추가 가능:",
-        "allIn": "추천된 상위 폴더가 모두 포함됨",
-        "reset": "기본값"
+        "allIn": "추천된 상위 폴더가 모두 포함됨"
       },
       "exclude": {
         "title": "제외할 하위 폴더",

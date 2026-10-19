@@ -15,7 +15,6 @@ import {
 	planHeld,
 	errorReportsConsentOnLeaving,
 	primaryLabelKey,
-	resetFolderSelection,
 	resolveEmbed,
 	scanTotals,
 	shouldSkipPlanStep,
@@ -33,8 +32,9 @@ describe("onboarding flow", () => {
 			"welcome",
 			"permissions",
 			"account",
-			"smartScan",
 			"folders",
+			"smartScan",
+			"smartScope",
 			"embedding",
 			"sources",
 			"plan",
@@ -47,8 +47,9 @@ describe("onboarding flow", () => {
 			"welcome",
 			"permissions",
 			"account",
-			"smartScan",
 			"folders",
+			"smartScan",
+			"smartScope",
 			"embedding",
 			"sources",
 			"indexing",
@@ -57,8 +58,9 @@ describe("onboarding flow", () => {
 			"welcome",
 			"permissions",
 			"account",
-			"smartScan",
 			"folders",
+			"smartScan",
+			"smartScope",
 			"embedding",
 			"plan",
 			"sources",
@@ -71,8 +73,9 @@ describe("onboarding flow", () => {
 			"welcome",
 			"permissions",
 			"account",
-			"smartScan",
 			"folders",
+			"smartScan",
+			"smartScope",
 			"embedding",
 			"sources",
 			"plan",
@@ -82,8 +85,9 @@ describe("onboarding flow", () => {
 			"welcome",
 			"permissions",
 			"account",
-			"smartScan",
 			"folders",
+			"smartScan",
+			"smartScope",
 			"embedding",
 			"sources",
 			"plan",
@@ -97,8 +101,9 @@ describe("onboarding flow", () => {
 			"welcome",
 			"permissions",
 			"account",
-			"smartScan",
 			"folders",
+			"smartScan",
+			"smartScope",
 			"embedding",
 			"sources",
 			"model",
@@ -173,9 +178,12 @@ describe("onboarding flow", () => {
 		expect(canAdvance({ ...base, stepId: "plan", plan: "byok" })).toBe(true);
 		expect(canAdvance({ ...base, stepId: "folders" })).toBe(false);
 		expect(canAdvance({ ...base, stepId: "folders", selectedFolders: 2 })).toBe(true);
-		// The scan step waits for the agent, but needs no folder: the next screen is where folders are added.
+		// The scan step waits for the agent; the folders before it are what it looks through.
 		expect(canAdvance({ ...base, stepId: "smartScan", smartScanning: true })).toBe(false);
 		expect(canAdvance({ ...base, stepId: "smartScan" })).toBe(true);
+		// The scope screen is where folders are added and removed after the scan; it needs one to continue.
+		expect(canAdvance({ ...base, stepId: "smartScope" })).toBe(false);
+		expect(canAdvance({ ...base, stepId: "smartScope", selectedFolders: 1 })).toBe(true);
 		expect(canAdvance({ ...base, stepId: "embedding" })).toBe(true);
 		// The keyword-only mode embeds nothing, so it needs no cloud consent.
 		expect(canAdvance({ ...base, stepId: "embedding", embed: "none" })).toBe(true);
@@ -390,7 +398,7 @@ describe("usage statistics consent", () => {
 	});
 
 	it("is not recorded by any other step, so only the step that shows the checkbox can consent", () => {
-		for (const stepId of ["permissions", "account", "smartScan", "folders", "embedding", "sources", "model", "plan", "indexing"] as const) {
+		for (const stepId of ["permissions", "account", "folders", "smartScan", "smartScope", "embedding", "sources", "model", "plan", "indexing"] as const) {
 			expect(usageConsentOnLeaving(stepId, true)).toBeNull();
 		}
 	});
@@ -403,7 +411,7 @@ describe("error reports consent", () => {
 	});
 
 	it("is not recorded by any other step", () => {
-		for (const stepId of ["permissions", "account", "smartScan", "folders", "embedding", "sources", "model", "plan", "indexing"] as const) {
+		for (const stepId of ["permissions", "account", "folders", "smartScan", "smartScope", "embedding", "sources", "model", "plan", "indexing"] as const) {
 			expect(errorReportsConsentOnLeaving(stepId, true)).toBeNull();
 		}
 	});
@@ -418,26 +426,5 @@ describe("formatSize", () => {
 		expect(formatSize(1_500)).toBe("2 KB");
 		expect(formatSize(2_400_000)).toBe("2 MB");
 		expect(formatSize(1_200_000_000)).toBe("1.2 GB");
-	});
-});
-
-describe("folder selection reset", () => {
-	const candidates = [
-		{ path: "/docs", name: "Documents", displayPath: "~/Documents", kind: "documents", defaultSelected: true, ocrOff: false },
-		{ path: "/dl", name: "Downloads", displayPath: "~/Downloads", kind: "downloads", defaultSelected: false, ocrOff: false },
-	] as const;
-
-	it("returns every suggested folder to its default and keeps the folders the user added selected", () => {
-		const folders = [
-			{ path: "/docs", selected: false },
-			{ path: "/dl", selected: true },
-			{ path: "/mine", selected: false },
-		];
-
-		expect(resetFolderSelection(candidates, folders)).toEqual([
-			{ path: "/docs", selected: true },
-			{ path: "/dl", selected: false },
-			{ path: "/mine", selected: true },
-		]);
 	});
 });

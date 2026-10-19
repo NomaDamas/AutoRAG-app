@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { OnboardingCtx } from "../src/renderer/src/onboarding/context";
 import { FoldersStep } from "../src/renderer/src/onboarding/steps/Folders";
+import { SmartScopeStep } from "../src/renderer/src/onboarding/steps/SmartScope";
 import { SmartScanStep } from "../src/renderer/src/onboarding/steps/SmartScan";
 import type { FolderCandidate, FolderScan } from "../src/shared/onboarding-contract";
 import type { SmartExclusion } from "../src/shared/smart-indexing-contract";
@@ -28,13 +29,19 @@ afterEach(() => {
 const DOCS: FolderCandidate = { path: "/docs", name: "Documents", displayPath: "~/Documents", kind: "documents", defaultSelected: true, ocrOff: false };
 const DOWNLOADS: FolderCandidate = { path: "/dl", name: "Downloads", displayPath: "~/Downloads", kind: "downloads", defaultSelected: false, ocrOff: false };
 const SCAN: FolderScan = { path: "/docs", files: 1000, bytes: 2_000_000_000, onlineOnly: 0, done: true, error: null };
-const DRAFT = { ...BASE_DRAFT, folders: [{ path: "/docs", selected: true }, { path: "/dl", selected: false }] };
+const DRAFT = { ...BASE_DRAFT, folders: [{ path: "/docs", selected: true }, { path: "/dl", selected: false }], smartScopeRoots: ["/docs", "/dl"] };
 
 function proposal(path: string, overrides: Partial<SmartExclusion> = {}): SmartExclusion {
 	return { path, root: "/docs", reason: "Chat app downloads", files: 400, bytes: 500_000_000, excluded: true, ...overrides };
 }
 
 function renderFolders(overrides: Partial<OnboardingCtx> = {}): OnboardingCtx {
+	const ctx = onboardingCtx({ candidates: [DOCS, DOWNLOADS], draft: DRAFT, scans: new Map([["/docs", SCAN]]), ...overrides });
+	act(() => root.render(<SmartScopeStep ctx={ctx} />));
+	return ctx;
+}
+
+function renderPicker(overrides: Partial<OnboardingCtx> = {}): OnboardingCtx {
 	const ctx = onboardingCtx({ candidates: [DOCS, DOWNLOADS], draft: DRAFT, scans: new Map([["/docs", SCAN]]), ...overrides });
 	act(() => root.render(<FoldersStep ctx={ctx} />));
 	return ctx;
@@ -105,17 +112,17 @@ describe("SmartScanStep", () => {
 	});
 });
 
-describe("FoldersStep as the smart-indexing scope screen", () => {
+describe("SmartScopeStep, the smart-indexing scope screen", () => {
 	it("lays out a policy bar, a blue panel of included folders and a red panel of left-out ones", () => {
 		renderFolders();
 
-		expect(text(".si-policy-copy strong")).toContain("onboarding.folders.policy.title");
+		expect(text(".si-policy-copy strong")).toContain("onboarding.smartScope.policy.title");
 		expect(host.querySelector(".si-panel.blue")).not.toBeNull();
 		expect(host.querySelector(".si-panel.red")).not.toBeNull();
 		expect(host.querySelector(".folder-card")).toBeNull();
 	});
 
-	it("lists each selected folder as a blue pill with its size and the unselected ones as ghost pills to add", () => {
+	it("lists each selected folder as a blue pill with its size, and a folder that was analysed but is no longer selected as a ghost pill to put back", () => {
 		const setFolderSelected = vi.fn();
 		renderFolders({ setFolderSelected });
 
@@ -132,23 +139,21 @@ describe("FoldersStep as the smart-indexing scope screen", () => {
 		expect(setFolderSelected).toHaveBeenLastCalledWith("/dl", true);
 	});
 
-	it("takes a folder out of the index from its pill's x, and adds one from the dashed button", () => {
+	it("offers no ghost pill for a folder the AI never looked at: choosing folders happens in the step before", () => {
+		renderFolders({ draft: { ...DRAFT, smartScopeRoots: ["/docs"] } });
+
+		expect(host.querySelector(".si-panel.blue .si-ghost-pill")).toBeNull();
+		expect(text(".si-panel.blue .si-panel-foot")).toContain("onboarding.smartScope.include.allIn");
+	});
+
+	it("takes a folder out of the index from its pill's x, and has no way to add or reset folders here", () => {
 		const setFolderSelected = vi.fn();
-		const addFolders = vi.fn();
-		renderFolders({ setFolderSelected, addFolders });
+		renderFolders({ setFolderSelected });
 
 		click(one(".si-panel.blue .si-pill-x"));
 		expect(setFolderSelected).toHaveBeenLastCalledWith("/docs", false);
-		click(one(".si-panel.blue .si-add-pill"));
-		expect(addFolders).toHaveBeenCalledTimes(1);
-	});
-
-	it("restores the suggested selection from the reset button", () => {
-		const resetFolders = vi.fn();
-		renderFolders({ resetFolders });
-
-		click(one(".si-panel.blue .si-reset"));
-		expect(resetFolders).toHaveBeenCalledTimes(1);
+		expect(host.querySelector(".si-panel.blue .si-add-pill")).toBeNull();
+		expect(host.querySelector(".si-panel.blue .si-reset")).toBeNull();
 	});
 
 	it("lists the left-out sub-folders in red under their parent with the size they save, and puts one back with its x", () => {
@@ -175,7 +180,7 @@ describe("FoldersStep as the smart-indexing scope screen", () => {
 
 		const pill = one(".si-panel.red .si-pill");
 
-		expect(pill.textContent).toContain("onboarding.folders.exclude.noDocs");
+		expect(pill.textContent).toContain("onboarding.smartScope.exclude.noDocs");
 		expect(pill.textContent).not.toContain("−0");
 	});
 
@@ -195,7 +200,7 @@ describe("FoldersStep as the smart-indexing scope screen", () => {
 	it("says what is always left out when nothing was proposed or all were put back", () => {
 		renderFolders({ draft: { ...DRAFT, smartScope: [] } });
 
-		expect(text(".si-panel.red .si-panel-foot")).toContain("onboarding.folders.policy.auto");
+		expect(text(".si-panel.red .si-panel-foot")).toContain("onboarding.smartScope.policy.auto");
 		expect(host.querySelector(".si-panel.red .si-pill")).toBeNull();
 	});
 
@@ -232,12 +237,12 @@ describe("FoldersStep as the smart-indexing scope screen", () => {
 		const rules = all(".si-criteria li").map((item) => item.textContent ?? "");
 
 		expect(rules.map((rule) => rule.replace(/ .*/u, ""))).toEqual([
-			"onboarding.folders.criteria.looked",
-			"onboarding.folders.criteria.keep",
-			"onboarding.folders.criteria.leave",
-			"onboarding.folders.criteria.code",
-			"onboarding.folders.criteria.doubt",
-			"onboarding.folders.criteria.you",
+			"onboarding.smartScope.criteria.looked",
+			"onboarding.smartScope.criteria.keep",
+			"onboarding.smartScope.criteria.leave",
+			"onboarding.smartScope.criteria.code",
+			"onboarding.smartScope.criteria.doubt",
+			"onboarding.smartScope.criteria.you",
 		]);
 	});
 
@@ -247,7 +252,7 @@ describe("FoldersStep as the smart-indexing scope screen", () => {
 		click(one(".si-criteria-toggle"));
 		const text = text0(".si-criteria");
 
-		expect(text).toContain("onboarding.folders.criteria.looked");
+		expect(text).toContain("onboarding.smartScope.criteria.looked");
 		// Names, counts and dates only: the UI makes no claim about reading contents.
 		expect(text).not.toMatch(/\d+%/u);
 	});
@@ -262,3 +267,67 @@ describe("FoldersStep as the smart-indexing scope screen", () => {
 		expect(host.querySelector(".si-criteria")).toBeNull();
 	});
 });
+
+describe("FoldersStep, where the folders to look through are chosen", () => {
+	it("lists every suggested folder as a card with a checkbox, the selected ones marked", () => {
+		renderPicker();
+
+		const cards = all(".folder-card:not(.add)");
+		expect(cards.map((card) => card.querySelector(".folder-name")?.textContent)).toEqual(["Documents", "Downloads"]);
+		expect(cards.map((card) => card.className.includes("selected"))).toEqual([true, false]);
+		expect(cards[0]?.querySelector(".folder-path")?.textContent).toBe("~/Documents");
+	});
+
+	it("shows each folder's file count, size and time while its scan runs and when it is done", () => {
+		renderPicker({ scans: new Map([["/docs", SCAN]]) });
+
+		const stats = all(".folder-card:not(.add) .folder-stats").map((item) => item.textContent ?? "");
+		expect(stats[0]).toContain("files=1,000");
+		expect(stats[0]).toContain("size=2.0 GB");
+		// /dl has no scan yet.
+		expect(stats[1]).toContain("onboarding.folders.scanning");
+	});
+
+	it("selects and unselects a folder from its card", () => {
+		const setFolderSelected = vi.fn();
+		renderPicker({ setFolderSelected });
+
+		const cards = all(".folder-card:not(.add)");
+		click(cards[1] as HTMLElement);
+		expect(setFolderSelected).toHaveBeenLastCalledWith("/dl", true);
+		click(cards[0] as HTMLElement);
+		expect(setFolderSelected).toHaveBeenLastCalledWith("/docs", false);
+	});
+
+	it("selects or clears every folder from the select-all checkbox", () => {
+		const toggleAllFolders = vi.fn();
+		renderPicker({ toggleAllFolders });
+
+		click(one(".folder-head input[type=checkbox]"));
+		expect(toggleAllFolders).toHaveBeenCalledTimes(1);
+	});
+
+	it("adds a folder from the dashed card", () => {
+		const addFolders = vi.fn();
+		renderPicker({ addFolders });
+
+		click(one(".folder-card.add"));
+		expect(addFolders).toHaveBeenCalledTimes(1);
+	});
+
+	it("sums the selected folders into a summary with the local and remote estimate", () => {
+		renderPicker();
+
+		expect(text(".summary-main strong")).toContain("folders=1");
+		expect(text(".summary-main strong")).toContain("files=1,000");
+		expect(text(".eta-row")).toContain("minutes=12");
+	});
+
+	it("does not show the smart-indexing panels: those come after the scan", () => {
+		renderPicker();
+
+		expect(host.querySelector(".si-dual-panels")).toBeNull();
+		expect(host.querySelector(".si-policy-bar")).toBeNull();
+	});
+});
+

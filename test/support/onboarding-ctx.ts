@@ -59,7 +59,7 @@ export function onboardingCtx(overrides: Partial<OnboardingCtx> = {}): Onboardin
 		closeOverlay: noop,
 		setFolderSelected: noop,
 		addFolders: noop,
-		resetFolders: noop,
+		toggleAllFolders: noop,
 		startSmartScan: noop,
 		cancelSmartScan: noop,
 		rescanSmart: noop,
