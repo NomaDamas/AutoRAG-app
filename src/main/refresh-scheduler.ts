@@ -239,8 +239,14 @@ export function createRefreshScheduler(deps: RefreshSchedulerDeps): RefreshSched
 		}
 		if (mechanism === "schtasks") {
 			const minutes = Math.max(1, Math.min(30, Math.round(intervalMs / 60_000)));
-			const command = `cmd /c "set ELECTRON_RUN_AS_NODE=1&& "${deps.execPath}" "${deps.jobPath}" >> "${paths.log}" 2>&1"`;
-			const result = await run("schtasks", ["/Create", "/F", "/SC", "MINUTE", "/MO", String(minutes), "/TN", WINDOWS_TASK_NAME, "/TR", command]);
+			// schtasks stores /TR in at most 261 characters, which the exe, job and log paths overrun on a long
+			// profile path. The task runs a launcher script instead, so /TR is one short path.
+			const launcher = join(paths.dir, "refresh-job.cmd");
+			writeFileSync(
+				launcher,
+				`@echo off\r\nset ELECTRON_RUN_AS_NODE=1\r\n"${deps.execPath}" "${deps.jobPath}" >> "${paths.log}" 2>&1\r\n`,
+			);
+			const result = await run("schtasks", ["/Create", "/F", "/SC", "MINUTE", "/MO", String(minutes), "/TN", WINDOWS_TASK_NAME, "/TR", `"${launcher}"`]);
 			if (result.code !== 0) throw new Error(`schtasks failed: ${result.stderr.trim() || `exit ${result.code}`}`);
 			return;
 		}
@@ -264,6 +270,7 @@ export function createRefreshScheduler(deps: RefreshSchedulerDeps): RefreshSched
 		if (mechanism === "schtasks") {
 			const result = await run("schtasks", ["/Delete", "/F", "/TN", WINDOWS_TASK_NAME]);
 			if (result.code !== 0 && (await isInstalled())) throw new Error(`schtasks failed: ${result.stderr.trim() || `exit ${result.code}`}`);
+			rmSync(join(schedulePaths(deps.configPath()).dir, "refresh-job.cmd"), { force: true });
 		}
 	};
 

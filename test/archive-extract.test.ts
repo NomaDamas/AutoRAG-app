@@ -157,7 +157,7 @@ describe("tar family extraction", () => {
 });
 
 describe("gzip family extraction", () => {
-	it("writes a single compressed file as its name without .gz", async () => {
+	it.skipIf(!hasBin("gzip"))("writes a single compressed file as its name without .gz", async () => {
 		await writeFile(join(root, "notes.txt"), "compressed body");
 		execFileSync("gzip", ["-f", join(root, "notes.txt")]);
 		const out = await service().run([join(root, "notes.txt.gz")], { kind: "extract" }, null);
@@ -165,7 +165,7 @@ describe("gzip family extraction", () => {
 		expect(await readFile(join(root, "notes.txt"), "utf8")).toBe("compressed body");
 	});
 
-	it("treats a .gz wrapping a tar as a tar folder", async () => {
+	it.skipIf(!hasBin("gzip"))("treats a .gz wrapping a tar as a tar folder", async () => {
 		const src = await docsSource();
 		const tar = join(root, "payload.tar");
 		execFileSync("tar", ["-cf", tar, "-C", src, "docs"]);
