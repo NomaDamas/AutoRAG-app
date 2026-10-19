@@ -36,7 +36,7 @@ jobs:
         run: gh release upload "${{ github.event.release.tag_name }}" dazzi-sbom.cdx.json --clobber
 
       - name: Keep it as a run artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: dazzi-sbom
           path: dazzi-sbom.cdx.json

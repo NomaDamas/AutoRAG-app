@@ -1,6 +1,6 @@
 import { mkdir, mkdtemp, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { createOfficeRenderCache, openOffice, type OfficeRun, renderOfficeHtml, standaloneOfficeHtml } from "../src/preview/node/office-render";
 import { isPreviewDocument, isQuickLookOffice, type OfficePage } from "../src/preview/shared/contract";
@@ -57,7 +57,7 @@ function fakeRun(options: { readonly html?: string; readonly attachments?: Reado
 		if (command.endsWith("qlmanage")) {
 			const out = args[args.indexOf("-o") + 1] ?? "";
 			const source = args[args.indexOf("-p") + 1] ?? "";
-			const dir = join(out, `${source.slice(source.lastIndexOf("/") + 1)}.qlpreview`);
+			const dir = join(out, `${basename(source)}.qlpreview`);
 			await mkdir(dir, { recursive: true });
 			if (options.html !== undefined) await writeFile(join(dir, "Preview.html"), options.html);
 			for (const [name, bytes] of Object.entries(options.attachments ?? {})) await writeFile(join(dir, name), bytes);
@@ -66,7 +66,7 @@ function fakeRun(options: { readonly html?: string; readonly attachments?: Reado
 		// sips -s format png --resampleWidth N a.pdf ... --out DIR
 		const out = args[args.indexOf("--out") + 1] ?? "";
 		if (!(await stat(out).then(() => true, () => false))) throw new Error("no destination dir was specified");
-		for (const arg of args) if (arg.endsWith(".pdf")) await writeFile(join(out, `${arg.slice(arg.lastIndexOf("/") + 1, -4)}.png`), PNG);
+		for (const arg of args) if (arg.endsWith(".pdf")) await writeFile(join(out, `${basename(arg, ".pdf")}.png`), PNG);
 	};
 }
 
