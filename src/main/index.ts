@@ -1,6 +1,6 @@
 import { homedir } from "node:os";
 import { access, open, readdir, readFile, stat } from "node:fs/promises";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { isAbsolute, join, sep } from "node:path";
 import { applyBundledTools } from "./bundled-tools";
 import { minSyncModelCacheRoot, seedAssets } from "./seed-assets";
@@ -70,6 +70,7 @@ import { resolveAppSessionModel } from "./agents/app-model";
 import { createSmartIndexingService } from "./smart-indexing-service";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { createSettingsService } from "./settings-service";
+import { detectSystemLanguage } from "./system-language";
 import {
 	registerAccountIpcHandlers,
 	registerActionsIpcHandlers,
@@ -591,6 +592,14 @@ app.whenReady().then(async () => {
 	});
 	const settingsService = createSettingsService({
 		directory: join(app.getPath("userData"), "settings"),
+		// A first run (no stored choice) follows the OS language; onboarding shows it before the user could set one.
+		systemLanguage: detectSystemLanguage({
+			platform: process.platform,
+			preferred: () => app.getPreferredSystemLanguages(),
+			systemLocale: () => app.getSystemLocale(),
+			home: homedir(),
+			readTextFile: (path) => (existsSync(path) ? readFileSync(path, "utf8") : null),
+		}),
 		dataSources: lockedDataSources,
 		models: createModelStatusService({ env: process.env, cwd: process.cwd() }),
 		config: autoRagConfig,

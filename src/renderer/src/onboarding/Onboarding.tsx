@@ -1146,7 +1146,7 @@ function renderOverlay(kind: OverlayKind | null, h: OverlayHandlers): ReactEleme
 									<p>{t("onboarding.overlay.fda.mock.paneLead")}</p>
 									<div className="system-row">
 										<span className="system-app">⌘</span>
-										<strong>Terminal</strong>
+										<strong>{t("onboarding.overlay.fda.mock.terminal")}</strong>
 										<span className="system-toggle on" />
 									</div>
 									<div className="system-row">
@@ -1167,7 +1167,7 @@ function renderOverlay(kind: OverlayKind | null, h: OverlayHandlers): ReactEleme
 									</div>
 									<div className="system-row">
 										<span className="system-app">↗</span>
-										<strong>Backup</strong>
+										<strong>{t("onboarding.overlay.fda.mock.backup")}</strong>
 										<span className="system-toggle" />
 									</div>
 								</div>

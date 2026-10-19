@@ -95,12 +95,23 @@ byte-identical between runs; anything else is a real difference to explain.
 
 ## User-facing text and translations (i18n)
 
-The app ships in four interface languages: Korean (the default), English,
-Japanese, and Simplified Chinese (`APP_LANGUAGES` in
-`src/shared/language-contract.ts`). Every string a user can see goes through
-i18next. Never hardcode a user-facing string in any language: no literals in
-JSX, `aria-label`/`title`/`placeholder`, toasts, dialogs, menus,
-notifications, or error messages shown to the user.
+The app ships in four interface languages: Korean, English, Japanese, and
+Simplified Chinese (`APP_LANGUAGES` in `src/shared/language-contract.ts`). A
+profile with no stored choice starts in the OS language, so first-run
+onboarding is already translated. Korean remains the fallback of the shared
+i18n instance.
+
+`src/main/system-language.ts` (`detectSystemLanguage`) does the detection:
+Electron's `getPreferredSystemLanguages()` on macOS and Windows (the user's
+ordered language list), and on Linux the `LANGUAGE`/`LC_ALL`/`LC_MESSAGES`/`LANG`
+variables it reads through GLib, then `~/.config/locale.conf`,
+`/etc/locale.conf` and `/etc/default/locale` when a launcher started the app
+without any locale. If no preferred language is shipped it uses
+`getSystemLocale()`, then English.
+
+Every string a user can see goes through i18next. Never hardcode a user-facing
+string in any language: no literals in JSX, `aria-label`/`title`/`placeholder`,
+toasts, dialogs, menus, notifications, or error messages shown to the user.
 
 - **Where strings live.** One dictionary per language in
   `src/shared/i18n/locales/{ko,en,ja,zh}.json`. Put a key under the namespace of

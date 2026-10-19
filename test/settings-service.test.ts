@@ -106,6 +106,32 @@ describe("createSettingsService", () => {
 		expect((await reloaded.permGet("/tmp/docs/readme.md")).value).toBe("allow");
 	});
 
+	it("starts in the system language until the user has stored a choice", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "autorag-settings-language-"));
+		directories.push(directory);
+		const service = createSettingsService({ directory, dataSources: noDataSources, models: noModels, ...baseDeps, systemLanguage: "ja" });
+		expect((await service.get()).language).toBe("ja");
+
+		await service.set({ language: "zh" });
+		const reloaded = createSettingsService({ directory, dataSources: noDataSources, models: noModels, ...baseDeps, systemLanguage: "ja" });
+		expect((await reloaded.get()).language).toBe("zh");
+	});
+
+	it("keeps the language stored by an earlier version over the system language", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "autorag-settings-language-stored-"));
+		directories.push(directory);
+		await writeFile(join(directory, "settings-state.json"), JSON.stringify({ settings: { language: "ko" }, permissions: {} }));
+		const service = createSettingsService({ directory, dataSources: noDataSources, models: noModels, ...baseDeps, systemLanguage: "en" });
+		expect((await service.get()).language).toBe("ko");
+	});
+
+	it("defaults to Korean when no system language is supplied", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "autorag-settings-language-default-"));
+		directories.push(directory);
+		const service = createSettingsService({ directory, dataSources: noDataSources, models: noModels, ...baseDeps });
+		expect((await service.get()).language).toBe("ko");
+	});
+
 	it("keeps usage analytics off until the user turns it on, independent of error reporting", async () => {
 		const directory = await mkdtemp(join(tmpdir(), "autorag-settings-analytics-"));
 		directories.push(directory);

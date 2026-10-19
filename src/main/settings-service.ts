@@ -55,20 +55,21 @@ export interface SettingsServiceDeps {
 	readonly refreshScheduler?: RefreshScheduler;
 	readonly onProviderLoginEvent?: (event: ProviderLoginEvent) => void;
 	readonly onSettingsChanged?: (settings: AppSettings) => void;
+	/** The interface language a profile without a stored choice starts in (the OS language); Korean when omitted. */
+	readonly systemLanguage?: AppSettings["language"];
 	/** Installs or removes the OS file-menu entries for a settings change; throwing rejects the change. */
 	readonly applyOsMenu?: (next: AppSettings, previous: AppSettings) => Promise<void>;
 }
 
-const emptyState = (): SettingsState => ({ settings: DEFAULT_SETTINGS, permissions: {} });
-
-async function loadState(path: string): Promise<SettingsState> {
+async function loadState(path: string, defaults: AppSettings): Promise<SettingsState> {
+	const emptyState = (): SettingsState => ({ settings: defaults, permissions: {} });
 	try {
 		const parsed: unknown = JSON.parse(await readFile(path, "utf8"));
 		if (typeof parsed !== "object" || parsed === null) return emptyState();
 		const state = parsed as Partial<SettingsState>;
 		const persisted: Partial<AppSettings> = state.settings ?? {};
 		return {
-			settings: { ...DEFAULT_SETTINGS, ...persisted, appearance: persisted.appearance === "dark" ? "dark" : "light" },
+			settings: { ...defaults, ...persisted, appearance: persisted.appearance === "dark" ? "dark" : "light" },
 			permissions: state.permissions ?? {},
 		};
 	} catch {
@@ -78,7 +79,7 @@ async function loadState(path: string): Promise<SettingsState> {
 
 export function createSettingsService(deps: SettingsServiceDeps): SettingsBridge {
 	const path = join(deps.directory, "settings-state.json");
-	let statePromise = loadState(path);
+	let statePromise = loadState(path, deps.systemLanguage === undefined ? DEFAULT_SETTINGS : { ...DEFAULT_SETTINGS, language: deps.systemLanguage });
 	const persist = async (): Promise<void> => {
 		const state = await statePromise;
 		await mkdir(dirname(path), { recursive: true });

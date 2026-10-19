@@ -5,6 +5,7 @@ import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { setAppLanguage } from "../src/shared/i18n/core";
 import { ACCOUNT_CHANNELS, type AccountStatus } from "../src/shared/account-contract";
 import { createAccountService, type AccountService } from "../src/main/account-service";
 
@@ -211,6 +212,7 @@ function build(openExternal = makeBrowser(), overrides: { signInTimeoutMs?: numb
 }
 
 beforeEach(async () => {
+	await setAppLanguage("en");
 	fake = await startFakeServer();
 	root = await mkdtemp(join(tmpdir(), "autorag-account-"));
 	env = { AUTORAG_BASE_URL: fake.url };
@@ -221,6 +223,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+	await setAppLanguage("ko");
 	await fake.close();
 	await rm(root, { recursive: true, force: true });
 });
@@ -305,6 +308,34 @@ describe("sign in", () => {
 
 		expect(status.state).toBe("signedOut");
 		expect(status.error).toMatch(/timed out/iu);
+	});
+
+	it("reports its own failures in the interface language", async () => {
+		await setAppLanguage("ja");
+		service = build(async () => undefined, { signInTimeoutMs: 50 });
+
+		const timedOut = await service.signIn();
+		expect(timedOut.error).toMatch(/[\u3040-\u30ff]/u);
+		expect(timedOut.error).not.toMatch(/timed out/iu);
+
+		await expect(service.checkout("pro")).rejects.toThrow(/[\u3040-\u30ff]/u);
+	});
+
+	it("shows the browser a sign-in confirmation in the interface language only", async () => {
+		await setAppLanguage("zh");
+		let page = "";
+		service = build(async (url) => {
+			opened.push(url);
+			const callback = await fake.approve(url);
+			page = await (await fetch(callback)).text();
+		});
+
+		await service.signIn();
+
+		expect(page).toContain("已登录 Dazzi");
+		expect(page).not.toMatch(/[\uac00-\ud7a3]/u);
+		expect(page).not.toContain("Signed in to Dazzi");
+		expect(page).toContain('lang="zh"');
 	});
 
 	it("can be cancelled while the browser is open", async () => {

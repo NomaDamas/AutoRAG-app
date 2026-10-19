@@ -26,7 +26,8 @@ function seedLanguage(userDataDir, language) {
  * `args` appends Chromium switches (e.g. `--force-device-scale-factor=2`).
  * Without a `userDataDir` the lane gets a throwaway profile, never the
  * developer's own. Existing lanes start in a known Interface language; an
- * onboarding lane opts out of the Finder bypass.
+ * onboarding lane opts out of the Finder bypass. `language: null` seeds
+ * nothing, so the profile starts the way a first run does (in the OS language).
  */
 export async function launchFinder({
 	userDataDir,
@@ -39,7 +40,7 @@ export async function launchFinder({
 		throw new Error("out/main/index.js is missing — run `bun run build` first");
 	}
 	const profile = userDataDir ?? mkdtempSync(join(tmpdir(), "autorag-qa-profile-"));
-	seedLanguage(profile, language);
+	if (language !== null) seedLanguage(profile, language);
 	// GitHub's Windows runners have no GPU, and Chromium's GPU process dies at
 	// random there mid-session (observed as "Target page, context or browser
 	// has been closed" with nothing in stderr). Software rendering is stable.

@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import "../styles/app.css";
 import { App } from "./App";
 import { Onboarding } from "./onboarding/Onboarding";
+import { applyInterfaceLanguage } from "./lib/interface-language";
 
 /**
  * The first-run gate: show the onboarding flow while this window is pending,
@@ -22,8 +23,11 @@ if (container === null) {
 	throw new Error("Renderer mount point #root not found");
 }
 
-createRoot(container).render(
-	<StrictMode>
-		<Root />
-	</StrictMode>,
-);
+// Render only once the window is in the stored interface language, so no screen paints in the Korean default first.
+void applyInterfaceLanguage(window.autorag.settings).then(() => {
+	createRoot(container).render(
+		<StrictMode>
+			<Root />
+		</StrictMode>,
+	);
+});
