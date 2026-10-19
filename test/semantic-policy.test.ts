@@ -230,7 +230,7 @@ describe("keyword-only search agent", () => {
 	});
 });
 
-describe("runWithoutSemanticIndexing and GitHub Gist", () => {
+describe("GitHub Gist in keyword-only mode", () => {
 	const GIST = { id: "g1", description: "notes", public: false, updated_at: "2026-01-01T00:00:00.000Z", html_url: "https://gist.github.com/g1", files: { "a.md": { filename: "a.md", truncated: false } } };
 	const FULL = { ...GIST, files: { "a.md": { filename: "a.md", content: "zebracorn migration notes", truncated: false } } };
 	const fetchImpl = (async (url: string | URL | Request) => {
@@ -239,16 +239,18 @@ describe("runWithoutSemanticIndexing and GitHub Gist", () => {
 		return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
 	}) as typeof fetch;
 
-	async function indexGist(): Promise<{ readonly diagnostics: readonly string[]; readonly vectors: boolean; readonly ok: boolean }> {
+	async function indexGist(semantic: boolean): Promise<{ readonly diagnostics: readonly string[]; readonly vectors: boolean; readonly ok: boolean; readonly methods: readonly string[] }> {
 		const root = await mkdtemp(join(tmpdir(), "autorag-gist-"));
 		const previousHome = process.env.AUTORAG_HOME;
 		// No cached embedding runtime in here: an embedding attempt can only end as `semantic-unavailable`, never start a model.
 		process.env.AUTORAG_HOME = join(root, "home");
 		try {
-			const { skills } = buildDatasourceSkills({ "github-gist": { connector: { baseUrl: "https://gist.test", token: "t", ghCliFallback: false, fetchImpl } } }, root);
-			const result = await runWithoutSemanticIndexing(() => skills[0]!.index());
+			const connector = { baseUrl: "https://gist.test", token: "t", ghCliFallback: false, fetchImpl };
+			const { datasources } = withSemanticPolicyApplied(config({ "github-gist": { connector } }), semantic);
+			const { skills } = buildDatasourceSkills(datasources ?? {}, root);
+			const result = await skills[0]!.index();
 			const vectors = await stat(join(root, ".autorag", "datasources", "github-gist", "default", "vectors.json")).then(() => true, () => false);
-			return { ok: result.ok, diagnostics: result.diagnostics.map((d) => d.message), vectors };
+			return { ok: result.ok, diagnostics: result.diagnostics.map((d) => d.message), vectors, methods: skills[0]!.retrievalMethods().map((method) => method.describe().type) };
 		} finally {
 			if (previousHome === undefined) delete process.env.AUTORAG_HOME;
 			else process.env.AUTORAG_HOME = previousHome;
@@ -256,21 +258,20 @@ describe("runWithoutSemanticIndexing and GitHub Gist", () => {
 		}
 	}
 
-	it("indexes the gist's content but skips its semantic index", async () => {
-		const outcome = await indexGist();
+	it("indexes the gist's content but builds no vector index and registers no semantic method", async () => {
+		const outcome = await indexGist(false);
 
 		expect(outcome.ok).toBe(true);
 		expect(outcome.diagnostics.some((message) => message.includes("semantic-unavailable"))).toBe(false);
 		expect(outcome.vectors).toBe(false);
+		expect(outcome.methods).not.toContain("vector");
+		expect(outcome.methods).not.toContain("hybrid");
 	});
 
-	it("puts the gist's own index step back afterwards", async () => {
-		const { skills } = buildDatasourceSkills({ "github-gist": {} }, "/tmp/autorag-gist-proto");
-		const prototype = Object.getPrototypeOf(skills[0]) as { index: unknown };
-		const original = prototype.index;
+	it("keeps the gist's semantic method while semantic search is on", () => {
+		const { datasources } = withSemanticPolicyApplied(config({ "github-gist": {} }), true);
+		const { skills } = buildDatasourceSkills(datasources ?? {}, "/tmp/autorag-gist-semantic-on");
 
-		await runWithoutSemanticIndexing(async () => undefined);
-
-		expect(prototype.index).toBe(original);
+		expect(skills[0]!.retrievalMethods().map((method) => method.describe().type)).toContain("vector");
 	});
 });
