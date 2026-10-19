@@ -36,6 +36,8 @@ const MEASURE_FRAMES = 12;
 const SELF_SIZED: Partial<Record<StageKind, true>> = {
 	image: true,
 	iwork: true,
+	odg: true,
+	odp: true,
 	tiff: true,
 	heic: true,
 	video: true,
@@ -48,6 +50,13 @@ const SELF_SIZED: Partial<Record<StageKind, true>> = {
 	markdown: true,
 	html: true,
 	text: true,
+	data: true,
+	jsonl: true,
+	plist: true,
+	mail: true,
+	msg: true,
+	contact: true,
+	calendar: true,
 	fallback: true,
 	folder: true,
 	bundle: true,
@@ -55,7 +64,7 @@ const SELF_SIZED: Partial<Record<StageKind, true>> = {
 };
 
 /** Pictures size the window by their decoded pixels, scaled as a whole. */
-const MEDIA: Partial<Record<StageKind, true>> = { image: true, tiff: true, heic: true, video: true, iwork: true };
+const MEDIA: Partial<Record<StageKind, true>> = { image: true, tiff: true, heic: true, video: true, iwork: true, odg: true };
 
 function mediaSize(target: EventTarget): Size | null {
 	if (target instanceof HTMLImageElement) return { width: target.naturalWidth, height: target.naturalHeight };
@@ -288,7 +297,7 @@ function QuickLookWindow({ bridge }: { readonly bridge: QuickLookWindowBridge })
 				<main
 					ref={stageRef}
 					key={load.seq}
-					className="ql__stage relative flex flex-1 flex-col min-h-0 data-[layout=measured]:items-center data-[layout=measured]:justify-center-safe data-[layout=measured]:overflow-auto data-[layout=fill]:overflow-hidden data-[kind=video]:bg-ql-media data-[kind=image]:items-center data-[kind=image]:justify-center data-[kind=iwork]:items-center data-[kind=iwork]:justify-center data-[kind=tiff]:items-center data-[kind=tiff]:justify-center data-[kind=heic]:items-center data-[kind=heic]:justify-center"
+					className="ql__stage relative flex flex-1 flex-col min-h-0 data-[layout=measured]:items-center data-[layout=measured]:justify-center-safe data-[layout=measured]:overflow-auto data-[layout=fill]:overflow-hidden data-[kind=video]:bg-ql-media data-[kind=image]:items-center data-[kind=image]:justify-center data-[kind=iwork]:items-center data-[kind=iwork]:justify-center data-[kind=odg]:items-center data-[kind=odg]:justify-center data-[kind=tiff]:items-center data-[kind=tiff]:justify-center data-[kind=heic]:items-center data-[kind=heic]:justify-center"
 					data-kind={kind}
 					data-layout={measured ? "measured" : "fill"}
 					onLoadCapture={onMediaEvent}

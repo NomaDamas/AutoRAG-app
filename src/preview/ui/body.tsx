@@ -5,15 +5,20 @@ import type { PreviewDocument } from "../shared/contract";
 import { viewerForExtension } from "../shared/registry";
 import { looksLikeText } from "../shared/text-sample";
 import { ArchiveView } from "./archive";
-import { HtmlView, TextView } from "./code";
+import { CalendarView } from "./calendar";
+import { ContactView } from "./contact";
+import { HtmlView, JsonLinesView, PlistView, TextView } from "./code";
+import { DataView } from "./data";
 import { DocxView, RtfView, SheetView } from "./documents";
 import { FallbackView } from "./fallback";
+import { MailView } from "./mail";
 import { MarkdownView } from "./markdown";
 import { HwpView } from "./hwp";
 import { LegacyDocView, LegacyPptView } from "./legacy-office";
 import { FontView, HeicView, ImageView, TiffView } from "./media";
 import { IworkView } from "./iwork";
 import { EpubView } from "./packages";
+import { OdfImageView, OdpView, OdtView } from "./odf";
 import { PptxView } from "./pptx";
 import { PdfView } from "./pdf";
 import { AudioView, VideoView } from "./player";
@@ -51,6 +56,12 @@ export function PreviewBody({ file }: { readonly file: PreviewDocument }): React
 			return <PptxView file={file} />;
 		case "legacyPpt":
 			return <LegacyPptView file={file} />;
+		case "odt":
+			return <OdtView file={file} />;
+		case "odp":
+			return <OdpView file={file} />;
+		case "odg":
+			return <OdfImageView file={file} />;
 		case "markdown":
 			return <MarkdownView file={file} />;
 		case "html":
@@ -59,6 +70,12 @@ export function PreviewBody({ file }: { readonly file: PreviewDocument }): React
 			return <TextView file={file} />;
 		case "rtf":
 			return <RtfView file={file} />;
+		case "data":
+			return <DataView file={file} />;
+		case "jsonl":
+			return <JsonLinesView file={file} />;
+		case "plist":
+			return <PlistView file={file} />;
 		case "archive":
 			return <ArchiveView file={file} />;
 		case "iwork":
@@ -67,6 +84,13 @@ export function PreviewBody({ file }: { readonly file: PreviewDocument }): React
 			return <EpubView file={file} />;
 		case "hwp":
 			return <HwpView file={file} />;
+		case "mail":
+		case "msg":
+			return <MailView file={file} />;
+		case "contact":
+			return <ContactView file={file} />;
+		case "calendar":
+			return <CalendarView file={file} />;
 		case "fallback":
 			if (file.bytes !== null && looksLikeText(file.bytes)) return <TextView file={file} />;
 			return <FallbackView file={file} />;

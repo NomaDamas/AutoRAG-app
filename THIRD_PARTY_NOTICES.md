@@ -62,6 +62,12 @@ Notes on what was verified:
   did contain OpenSSL 1.0.2/`libcrypto` code (OpenSSL/SSLeay dual license), so
   it was replaced with the clean rebuild above.
 
+## Quick Look dependencies
+
+| Component | Version | License | Use |
+|---|---|---|---|
+| cfb (SheetJS) | 1.2.2 | Apache-2.0 | Reads the OLE2 container of Outlook `.msg` files in Quick Look; also pulled in by `xlsx` and `kordoc` |
+
 ## Programs and models bundled in the installers
 
 The macOS and Windows installers ship these programs unmodified, as separate
@@ -86,3 +92,10 @@ installed in `resources/tools/licenses/fsearch-mac`. Source for the shipped
 version: https://github.com/NomaDamas/fsearch-mac (tag in `components-macos-arm64.json`).
 The bundled glib/pango/ICU libraries are unmodified Homebrew builds whose install
 paths were rewritten so they load from the app.
+
+## Quick Look data viewers
+
+| Component | License | Source |
+|---|---|---|
+| hyparquet, hyparquet-compressors | MIT | Hyperparam — https://github.com/hyparam/hyparquet |
+| hyparquet-writer (tests and QA fixtures only) | MIT | Hyperparam — https://github.com/hyparam/hyparquet-writer |

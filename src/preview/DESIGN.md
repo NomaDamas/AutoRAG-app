@@ -151,6 +151,28 @@ still has the previous file's size when they lay out.
   document (`markdown-html.ts`); relative images load through the preview
   protocol and remote ones are dropped, so the preview never reaches the
   network.
+- **Email, contacts, calendar** — `eml`, `emlx`, `msg`, `mbox`, `vcf`, `ics`,
+  parsed in `shared/mail.ts`, `msg.ts`, `vcf.ts`, `ics.ts` and drawn by
+  `ui/mail.tsx`, `contact.tsx`, `calendar.tsx`. Mail shows From, To, Cc, Date
+  (RFC 2047 words and RFC 2231 parameters decoded), the body, and an attachment
+  list (name, type, size; attachments are counted, never decoded). Quoted-
+  printable and base64 bodies decode in the declared charset; EUC-KR, CP949, and
+  `ks_c_5601-1987` map to Chromium's `euc-kr`, and an unlabelled or mislabelled
+  8-bit body falls back to strict UTF-8, then EUC-KR. A message with both bodies
+  opens rendered, with a 렌더링 · 텍스트 toggle. HTML goes through the Markdown
+  allowlist (`ui/mail-html.ts` over `markdown-html.ts`) with no base folder:
+  scripts, frames, forms, and every remote or relative image are dropped, and a
+  `cid:` image becomes a data URI only when it is a base64 PNG, JPEG, GIF, or
+  WebP under 512KB. `mbox` is read as a 4MB prefix: messages are counted with a
+  byte scan, the first 200 are listed, and the count reads "이상" (at least) when
+  the file was cut. `msg` is an OLE2 compound file, so it is read whole and
+  parsed with `cfb` (Apache-2.0); subject `0037`, sender `0C1A`/`0C1F`/`5D01`,
+  recipients `0E04`/`0E03`, body `1000`, HTML `1013`, and attachments from
+  `__attach_version1.0_#N`. `vcf` shows one card per contact, with the photo as
+  a data URI when it is PNG, JPEG, GIF, or WebP (SVG and remote photos are
+  dropped). `ics` lists events with start, end, time zone, location,
+  description, and a recurrence summary; times show as written in the file,
+  never converted.
 - **Other** — a large page glyph labelled with the extension, the name, kind,
   size, and date, and a 자세한 정보 disclosure with creation date, location,
   SHA-256, and what a binary is (PE, Mach-O, ELF platform; UDIF disk images).
@@ -190,7 +212,42 @@ still has the previous file's size when they lay out.
   extensions (`file-icon.ts`); Windows has no thumbnailer for them and shows
   the type icon.
 
-- **PowerPoint** — `.pptx`, `.pptm`, and `.ppsx` share the PDF panel's paged
+- **Databases and data files** — `.sqlite`, `.sqlite3`, `.db`, and `.parquet`
+  (`data` viewer, `byteNeed` `query`) send no file bytes to the page. The
+  `preview:data` call opens the file in the main process (`node/data.ts`) and
+  returns capped rows: 100 rows, 50 columns, 200 characters per cell, and row
+  counts that stop at 100,000. SQLite opens `mode=ro&immutable=1` with
+  `trusted_schema=off`, so no lock is taken and no `-wal`/`-shm` file is
+  created or touched; the cost is that commits still in a `-wal` file are not
+  shown, and the footer says so. Views are listed but never run (their stored
+  query is arbitrary), and no user SQL exists. A file without the SQLite header
+  (including an encrypted database) or that fails to open gets a note in the
+  "Other" panel. Parquet reads the footer and the first row group only (a group
+  over 64MB is not decoded); `PARE` (encrypted footer) is named as such.
+  `.jsonl`/`.ndjson` use the text view with the first 2,000 records
+  pretty-printed (`shared/jsonl.ts`); `.plist` shows XML, converting `bplist00`
+  in `shared/plist.ts` to the text `plutil -convert xml1` writes.
+- **OpenDocument** — `.odt`, `.odp`, `.odg`, and `.ods` are ZIPs whose
+  `Thumbnails/thumbnail.png` is the first page, slide, or sheet. `.odt` is
+  modelled from `content.xml`/`styles.xml` (`shared/odt-model.ts`,
+  `shared/odf-blocks.ts`: headings, styled runs, lists, tables, inline
+  pictures) and drawn as inert DOM on a white page column
+  (`shared/odf-render.ts`, `ui/odf.tsx`). `.odp` is modelled per `draw:page`
+  (`shared/odp-model.ts`: master-page shapes, backgrounds, text boxes, pictures,
+  rect/ellipse/line shapes) and drawn in the PDF panel's `PagedView` like a
+  `.pptx`. `.odg` has no text model: `byteNeed` is `extract`, the main process
+  reads the central directory and that one entry (`node/odf.ts` over the shared
+  ranged reader `node/zip-read.ts`) and shows the PNG. `.ods` stays in the
+  spreadsheet viewer. Only `#rrggbb` colours and numeric lengths reach style
+  attributes, and picture references that are absolute, remote, or contain `..`
+  are dropped. The Finder's tile and Inspector thumbnails for all four come from
+  the same embedded PNG on every platform (`file-icon.ts`), since Quick Look
+  has no ODF thumbnailer. A package with no `Thumbnails/thumbnail.png` (one
+  written by a tool rather than by LibreOffice) keeps the type icon. `.potx`
+  tiles use the JPEG under `docProps/thumbnail.jpeg`, re-encoded to PNG for
+  the icon cache; `.pptx` tiles still come from Quick Look.
+
+- **PowerPoint** — `.pptx`, `.pptm`, `.ppsx`, and `.potx` share the PDF panel's paged
   layout: every slide is a paper card in one scrolling column with the page
   rail, the `1 / N` pill, and zoom. `shared/pptx-model.ts` reads the OOXML
   from the whole-file bytes — slide order from `p:sldIdLst` through the
@@ -232,7 +289,7 @@ HEIC as the JPEG macOS's own `sips` decodes from it (`node/heic.ts`, about
 0.2s on a 24MP iPhone photo even on a spinning disk; the viewer's wasm decoder
 never finished one, and remains only where `sips` is absent or fails); and
 a 64KB sniff of an unknown file, read on as text only when it looks like text.
-The detail calls (details, SHA-256, folder size, audio tags) answer only for the
+The detail calls (details, SHA-256, folder size, audio tags, data rows) answer only for the
 path the window is showing, and the hash and folder walk stop when the preview
 moves on.
 

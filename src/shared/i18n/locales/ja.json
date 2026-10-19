@@ -1170,6 +1170,35 @@
         "desktop": "デスクトップ",
         "mobile": "モバイル",
         "source": "ソース"
+      },
+      "firstRecords": "最初の{{count}}件のレコードを表示中",
+      "plistInvalid": "プロパティリストを読み込めません",
+      "plistConverted": "バイナリplistをXMLで表示"
+    },
+    "data": {
+      "readFailed": "データファイルを読み込めません",
+      "tables": "テーブル",
+      "noTables": "テーブルなし",
+      "tableCount": "{{count}}個のテーブル",
+      "rows": "{{count}}行",
+      "rowsAtLeast": "{{count}}+",
+      "columns": "{{count}}列",
+      "rowGroups": "{{count}}個の行グループ",
+      "view": "ビュー",
+      "noColumns": "このテーブルには列がありません",
+      "noRows": "行なし",
+      "viewNotRun": "プレビューではビューを実行しません",
+      "tableFailed": "このテーブルを読み込めません",
+      "tooLarge": "最初の行グループが大きすぎてプレビューできません",
+      "firstRows": "最初の{{count}}行を表示中",
+      "columnsCut": "最初の{{count}}列のみ表示中",
+      "blob": "バイナリ {{size}}",
+      "walPending": "-walファイルの最新の変更は表示されません",
+      "unreadable": {
+        "not-sqlite": "読み取り可能なSQLiteデータベースではありません(暗号化されている可能性があります)",
+        "corrupt": "ファイルが破損していて読み込めません",
+        "not-parquet": "Parquetファイルではありません",
+        "encrypted": "このParquetファイルは暗号化されています"
       }
     },
     "markdown": {
@@ -1295,6 +1324,63 @@
       "notAbsolute": "プレビューのパスが正しくありません",
       "missing": "ファイルが見つかりません",
       "notFile": "フォルダはプレビューできません"
+    },
+    "mail": {
+      "from": "差出人",
+      "to": "宛先",
+      "cc": "Cc",
+      "date": "日付",
+      "noSubject": "(件名なし)",
+      "noBody": "本文がありません",
+      "noMessages": "メールがありません",
+      "attachments": "添付ファイル {{count}} 件",
+      "viewMode": "本文の形式",
+      "rendered": "表示",
+      "plain": "テキスト",
+      "messages": "メール {{count}} 通",
+      "messagesAtLeast": "メール {{count}} 通以上",
+      "listCapped": "最初の {{count}} 通のみ表示",
+      "readFailed": "メールを読み込めません",
+      "messageList": "メール一覧",
+      "unknownSender": "(差出人なし)"
+    },
+    "contact": {
+      "noName": "(名前なし)",
+      "phone": "電話",
+      "email": "メール",
+      "address": "住所",
+      "note": "メモ",
+      "contacts": "連絡先 {{count}} 件",
+      "readFailed": "連絡先を読み込めません",
+      "empty": "連絡先がありません",
+      "photo": "{{name}} の写真"
+    },
+    "calendar": {
+      "events": "予定 {{count}} 件",
+      "noTitle": "(タイトルなし)",
+      "allDay": "終日",
+      "location": "場所",
+      "readFailed": "カレンダーを読み込めません",
+      "empty": "予定がありません",
+      "listCapped": "最初の {{count}} 件のみ表示",
+      "repeatDaily": "毎日",
+      "repeatDailyEvery": "{{count}} 日ごと",
+      "repeatWeekly": "毎週",
+      "repeatWeeklyEvery": "{{count}} 週間ごと",
+      "repeatMonthly": "毎月",
+      "repeatMonthlyEvery": "{{count}} か月ごと",
+      "repeatYearly": "毎年",
+      "repeatYearlyEvery": "{{count}} 年ごと",
+      "repeatOther": "繰り返し",
+      "repeatOn": "{{days}}",
+      "repeatTimes": "{{count}} 回",
+      "repeatUntil": "{{date}} まで"
+  },
+    "odf": {
+      "readFailed": "ドキュメントを読み込めませんでした",
+      "openFailed": "プレゼンテーションを開けませんでした",
+      "noSlides": "スライドがありません",
+      "noPreview": "このドキュメントにはプレビュー画像がありません"
     }
   },
   "settingsCore": {

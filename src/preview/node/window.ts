@@ -46,6 +46,7 @@ import { sniffLegacyContainer } from "../shared/legacy-office";
 import { byteNeed, viewerForExtension } from "../shared/registry";
 import { fallbackOrigin, screenOrigin, ZOOM_DONE_TIMEOUT_MS, zoomGeometry } from "../shared/zoom";
 import { readAudioMetadata } from "./audio-metadata";
+import { previewData } from "./data";
 import { type BundleIconSource, summarizeBundle } from "./bundle";
 import { createDefaultAppCache, type DefaultAppCache } from "./default-app";
 import { fileDetails, sha256File } from "./details";
@@ -53,6 +54,7 @@ import { measureFolder, summarizeFolder } from "./folder";
 import { readHeicPreview } from "./heic";
 import { readIworkPreview } from "./iwork";
 import { createOfficeRenderCache, openOffice, type OfficeRenderCache } from "./office-render";
+import { readEmbeddedThumbnail } from "./odf";
 import { PREVIEW_BYTE_CAP, PreviewReadError, readPreviewFile, SNIFF_BYTES, TEXT_BYTE_CAP } from "./read-file";
 
 /** Media reports its size once decoded; anything slower still shows by then. */
@@ -335,6 +337,7 @@ async function readDocument(path: string): Promise<PreviewDocument> {
 	}
 	switch (byteNeed(kind)) {
 		case "stream":
+		case "query":
 			return readPreviewFile(path, 0);
 		case "prefix":
 			return readPreviewFile(path, TEXT_BYTE_CAP);
@@ -343,6 +346,14 @@ async function readDocument(path: string): Promise<PreviewDocument> {
 		case "decode":
 			return readHeicPreview(path);
 		case "extract": {
+			if (viewerForExtension(extname(path).slice(1)) === "odg") {
+				const document = await readPreviewFile(path, 0);
+				const thumbnail = (await readEmbeddedThumbnail(path, "odg").catch((error: unknown) => {
+					console.warn(`quick-look: OpenDocument thumbnail for ${path} failed: ${error instanceof Error ? error.message : String(error)}`);
+					return null;
+				}))?.bytes ?? null;
+				return { ...document, bytes: thumbnail };
+			}
 			// The file's own metadata, the page image Apple stored inside it, and
 			// (for a Keynote deck) every slide image in show order.
 			const document = await readPreviewFile(path, 0);
@@ -652,6 +663,10 @@ export function registerQuickLookIpc(icons: (BundleIconSource & Partial<Pick<Ico
 		return measureFolder(shown.path, { ...FOLDER_SIZE_BUDGET, stopped: () => shown.state.current?.path !== shown.path });
 	});
 	ipc.handle(PREVIEW_CHANNELS.audioMetadata, (event, path: unknown) => readAudioMetadata(shownPath(event, path).path));
+	ipc.handle(PREVIEW_CHANNELS.data, (event, path: unknown, table: unknown) => {
+		if (table !== null && typeof table !== "string") throw new Error(t("quickLook.errors.invalidTarget"));
+		return previewData(shownPath(event, path).path, table);
+	});
 	ipc.handle(PREVIEW_CHANNELS.share, (event, anchor: unknown) => {
 		const state = fromPreview(event);
 		if (state === null || state.current === null || process.platform !== "darwin") return;

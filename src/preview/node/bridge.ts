@@ -9,6 +9,7 @@ import {
 	isQuickLookZoom,
 	PREVIEW_CHANNELS,
 	type AudioMetadata,
+	type DataPreview,
 	type FileDetails,
 	type FolderSize,
 	type PreviewBridge,
@@ -74,6 +75,7 @@ export function createQuickLookWindowBridge(ipcRenderer: IpcRenderer, platform: 
 		sha256: (path): Promise<string> => ipcRenderer.invoke(PREVIEW_CHANNELS.sha256, path),
 		folderSize: (path): Promise<FolderSize> => ipcRenderer.invoke(PREVIEW_CHANNELS.folderSize, path),
 		audioMetadata: (path): Promise<AudioMetadata> => ipcRenderer.invoke(PREVIEW_CHANNELS.audioMetadata, path),
+		dataPreview: (path, table): Promise<DataPreview> => ipcRenderer.invoke(PREVIEW_CHANNELS.data, path, table),
 		share: async (anchor) => {
 			await ipcRenderer.invoke(PREVIEW_CHANNELS.share, { x: anchor.x, y: anchor.y, width: anchor.width, height: anchor.height });
 		},
