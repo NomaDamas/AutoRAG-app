@@ -129,7 +129,7 @@ jobs:
           # Auto-update payloads: CDN only (the feed points there; GitHub caps an asset at 2 GiB).
           cp dist/*.zip dist/*.blockmap update/
           if [ -n "$AUTORAG_UPDATE_FEED_URL" ]; then node scripts/release/update-feed.mjs dist feed; fi
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: macos
           path: |
@@ -261,7 +261,7 @@ jobs:
           # The installer is the update payload too; its blockmap (from the same build) drives the differential download.
           cp dist/*.exe.blockmap update/
           if [ -n "$AUTORAG_UPDATE_FEED_URL" ]; then node scripts/release/update-feed.mjs dist feed; fi
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: windows
           path: |
