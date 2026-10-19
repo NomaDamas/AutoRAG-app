@@ -59,6 +59,12 @@ export function TiffView({ file }: { readonly file: PreviewDocument }): ReactEle
 	const [error, setError] = useState<string | null>(null);
 	useEffect(() => {
 		if (bytes === null) return;
+		// The main process already decoded it with the OS (macOS): a plain PNG, no decoder needed here.
+		if (file.mime === "image/png") {
+			const next = URL.createObjectURL(new Blob([copyBytes(bytes)], { type: file.mime }));
+			setUrl(next);
+			return () => URL.revokeObjectURL(next);
+		}
 		let cancelled = false;
 		let current: string | null = null;
 		try {
@@ -93,7 +99,7 @@ export function TiffView({ file }: { readonly file: PreviewDocument }): ReactEle
 			cancelled = true;
 			if (current !== null) URL.revokeObjectURL(current);
 		};
-	}, [bytes]);
+	}, [bytes, file.mime]);
 	if (bytes === null) return <FallbackView file={file} note={t("quickLook.media.imageReadFailed")} />;
 	if (error !== null) return <FallbackView file={file} note={error} />;
 	if (url === null) return <Status>{t("quickLook.status.loading")}</Status>;

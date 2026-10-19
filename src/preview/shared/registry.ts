@@ -125,7 +125,6 @@ export function byteNeed(kind: ViewerKind): ByteNeed {
 		case "contact":
 		case "calendar":
 			return "prefix";
-		case "tiff":
 		case "docx":
 		case "legacyDoc":
 		case "sheet":
@@ -142,6 +141,7 @@ export function byteNeed(kind: ViewerKind): ByteNeed {
 		case "data":
 			return "query";
 		case "heic":
+		case "tiff":
 			return "decode";
 		case "iwork":
 		case "odg":
