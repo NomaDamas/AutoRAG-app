@@ -101,7 +101,8 @@ try {
 	const visible = () => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find((w) => w.webContents.getURL().includes("quick-look.html"))?.isVisible() ?? false);
 
 	async function open(name) {
-		const row = main.locator(`[data-path$="/${name}"]`).first();
+		// `endsWith` with either separator: a Windows row path ends in `\name`, which `$="/name"` never matches.
+		const row = main.locator(`[data-path$="/${name}"], [data-path$="\\\\${name}"]`).first();
 		await row.waitFor({ timeout: 30_000 });
 		await row.click();
 		await sleep(250);
