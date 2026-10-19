@@ -49,7 +49,7 @@ jobs:
         with:
           node-version: 24
 
-      # `bun install` resolves the `file:./.upstream/autorag` dependency before
+      # `bun install` resolves the `file:./.upstream/librarian-package` dependency before
       # its `preinstall` hook runs, so a fresh checkout must clone and build the
       # librarian first. This is the same script the preinstall hook calls.
       - name: Sync librarian

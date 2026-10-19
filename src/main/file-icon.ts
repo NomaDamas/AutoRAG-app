@@ -31,7 +31,9 @@
  * same file twice.
  */
 
+import { extname } from "node:path";
 import { realpath } from "node:fs/promises";
+import { EMBEDDED_THUMBNAIL_EXTENSIONS, readEmbeddedThumbnail } from "../preview/node/odf";
 import { errorMessage } from "./fs-entry";
 import { ICON_SIZE, iconUrl } from "./icon-protocol";
 import { createPriorityGate, type PriorityGate } from "./priority-gate";
@@ -76,13 +78,20 @@ const NATIVE_THUMBNAIL_EXTENSIONS = new Set([
 	// (Numbers, Pages, Keynote). Windows has no thumbnailer for them and falls
 	// through to the type icon.
 	"numbers", "pages", "key",
+	// Legacy binary Office: Office.qlgenerator draws the first page, slide, or
+	// sheet in ~300-600 ms cold (24 files at 8 in flight: 2.3-5 s, none empty).
+	// The OOXML siblings (docx/xlsx/pptx) deliberately stay on letter tiles.
+	"doc", "dot", "ppt", "pps", "pot", "xls", "xlt",
+	// OpenDocument packages and `.potx` are not rendered by Quick Look; their
+	// tile is the first-page image the package embeds (`odf.ts`), on every platform.
 	// A macOS application bundle is a directory on disk, but Quick Look renders
 	// the app's own icon for it — at the listing tier and at the Inspector's
 	// 640px tier — so it takes this lane exactly like a document does.
 	"app",
 ]);
 export function isNativeThumbnailExtension(ext: string): boolean {
-	return NATIVE_THUMBNAIL_EXTENSIONS.has(ext.toLowerCase().replace(/^\./, ""));
+	const key = ext.toLowerCase().replace(/^\./, "");
+	return NATIVE_THUMBNAIL_EXTENSIONS.has(key) || EMBEDDED_THUMBNAIL_EXTENSIONS.has(key);
 }
 
 export interface IconTarget {
@@ -127,8 +136,17 @@ export interface IconStore {
 	read(path: string, mtimeMs: number, size?: number): Uint8Array | null;
 }
 
+/**
+ * `preview`'s URL when that tier is already cached for this exact file
+ * version, else null; never generates anything. Lets the Quick Look window,
+ * which must open within a frame, use a thumbnail an earlier selection made.
+ */
+export interface IconPreviewCache {
+	cachedPreview(target: IconTarget): string | null;
+}
+
 /** The provider the fs service consumes, plus the byte cache the protocol serves. */
-export type IconSource = IconProvider & IconStore;
+export type IconSource = IconProvider & IconStore & IconPreviewCache;
 
 export interface IconProviderDeps {
 	/** Defaults to process.platform. */
@@ -229,6 +247,17 @@ class IconCache {
 }
 
 async function defaultThumbnail(path: string, size: number): Promise<Uint8Array | null> {
+	// An OpenDocument package or a PowerPoint template carries its own first
+	// page; Quick Look would only answer with a generic type icon for it. The
+	// icon cache serves PNG, so a JPEG thumbnail is re-encoded.
+	const ext = extname(path).slice(1).toLowerCase();
+	if (EMBEDDED_THUMBNAIL_EXTENSIONS.has(ext)) {
+		const embedded = await readEmbeddedThumbnail(path, ext);
+		if (embedded === null || embedded.mime === "image/png") return embedded?.bytes ?? null;
+		const { nativeImage } = await import("electron");
+		const image = nativeImage.createFromBuffer(Buffer.from(embedded.bytes));
+		return image.isEmpty() ? null : image.toPNG();
+	}
 	// Dynamic: `electron` is a main-process-only module and is not importable when
 	// this file is loaded outside Electron (unit tests inject `thumbnail` instead).
 	const [{ nativeImage }, resolved] = await Promise.all([
@@ -365,7 +394,11 @@ export function createIconProvider(deps: IconProviderDeps = {}): IconSource {
 			cache.set(key, bytes);
 			resolvers.get(key)?.(bytes);
 		};
-		const generation = usesNativeThumbnails ? runThumbnails(missing, resolve, gate, priority) : runSystem(missing, resolve, priority);
+		// Other platforms use the OS icon, except for packages that embed a
+		// first page (OpenDocument, `.potx`), which is read the same way everywhere.
+		const thumbnailed = usesNativeThumbnails ? missing : missing.filter((target) => EMBEDDED_THUMBNAIL_EXTENSIONS.has(target.ext.toLowerCase()));
+		const systemOnly = usesNativeThumbnails ? [] : missing.filter((target) => !EMBEDDED_THUMBNAIL_EXTENSIONS.has(target.ext.toLowerCase()));
+		const generation = Promise.all([runThumbnails(thumbnailed, resolve, gate, priority), runSystem(systemOnly, resolve, priority)]).then(() => undefined);
 		void generation.catch((error: unknown) => {
 			// Pool-level failure: the whole batch degrades to "no icon".
 			warn(`file-icon: icon generation failed for ${missing.length} file(s): ${errorMessage(error)}`);
@@ -434,6 +467,11 @@ export function createIconProvider(deps: IconProviderDeps = {}): IconSource {
 			return bytes === null || bytes === undefined
 				? null
 				: iconUrl(target.path, target.mtimeMs, PREVIEW_ICON_SIZE);
+		},
+		cachedPreview(target) {
+			if (usesNativeThumbnails && !isNativeThumbnailExtension(target.ext)) return null;
+			const bytes = cache.get(cacheKey({ ...target, size: PREVIEW_ICON_SIZE }));
+			return bytes === null || bytes === undefined ? null : iconUrl(target.path, target.mtimeMs, PREVIEW_ICON_SIZE);
 		},
 		read(path, mtimeMs, size) {
 			const key = cacheKey(size === undefined ? { path, mtimeMs } : { path, mtimeMs, size });

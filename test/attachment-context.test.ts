@@ -1,10 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
-import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { pathToFileURL } from "node:url";
+import * as pi from "@earendil-works/pi-ai/compat";
 import { afterEach, describe, expect, it } from "vitest";
 import {
 	ATTACHMENT_CHAR_LIMIT,
@@ -154,43 +152,8 @@ describe("buildAttachmentContext", () => {
 	});
 });
 
-/**
- * pi-ai keeps its provider registry in module state, so the faux provider must
- * be registered on the exact pi-ai copy the librarian imports.
- */
-function librarianDependency(packageName: string, subpath: string): string {
-	let directory = dirname(createRequire(import.meta.url).resolve("@autorag/librarian"));
-	for (;;) {
-		const manifest = join(directory, "node_modules", packageName, "package.json");
-		if (existsSync(manifest)) {
-			const exports = JSON.parse(readFileSync(manifest, "utf8")).exports as Record<string, { import: string }>;
-			const target = exports[subpath]?.import;
-			if (target === undefined) throw new Error(`${packageName} does not export ${subpath}`);
-			return pathToFileURL(join(dirname(manifest), target)).href;
-		}
-		const parent = dirname(directory);
-		if (parent === directory) throw new Error(`${packageName} is not installed for @autorag/librarian`);
-		directory = parent;
-	}
-}
-
-interface FauxRegistration {
-	getModel(): unknown;
-	setResponses(responses: unknown[]): void;
-	unregister(): void;
-}
-
-interface FauxModule {
-	registerFauxProvider(options: { api: string; models: { id: string }[] }): FauxRegistration;
-	fauxAssistantMessage(content: unknown, options?: { stopReason?: string }): unknown;
-	fauxToolCall(name: string, args: Record<string, unknown>): unknown;
-}
-
 describe("AttachmentContextAgent", () => {
 	it("puts the attachment context in front of the model while retrieval keeps the plain query", async () => {
-		// Runtime-resolved: a static "@earendil-works/pi-ai/compat" import would load
-		// the app's hoisted copy, whose provider registry the librarian never reads.
-		const pi = (await import(librarianDependency("@earendil-works/pi-ai", "./compat"))) as FauxModule;
 		const directory = await tempDir();
 		const attached = join(directory, "outside", "secret-brief.md");
 		await mkdir(dirname(attached), { recursive: true });

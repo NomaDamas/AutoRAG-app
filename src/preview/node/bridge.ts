@@ -4,10 +4,12 @@ import type { AppSettings } from "../../shared/settings-contract";
 import {
 	isNavigateDelta,
 	isQuickLookApp,
+	isQuickLookOffice,
 	isQuickLookLoad,
 	isQuickLookZoom,
 	PREVIEW_CHANNELS,
 	type AudioMetadata,
+	type DataPreview,
 	type FileDetails,
 	type FolderSize,
 	type PreviewBridge,
@@ -30,6 +32,7 @@ export function createPreviewBridge(ipcRenderer: IpcRenderer): PreviewBridge {
 		hide: async (origin) => {
 			await ipcRenderer.invoke(PREVIEW_CHANNELS.hide, origin);
 		},
+		prefetch: (file) => ipcRenderer.send(PREVIEW_CHANNELS.prefetch, { path: file.path, mtimeMs: file.mtimeMs, size: file.size }),
 		onClosed: (listener) => subscribe(ipcRenderer, PREVIEW_CHANNELS.closed, () => listener()),
 		onNavigate: (listener) =>
 			subscribe(ipcRenderer, PREVIEW_CHANNELS.navigate, (delta) => {
@@ -59,6 +62,10 @@ export function createQuickLookWindowBridge(ipcRenderer: IpcRenderer, platform: 
 			subscribe(ipcRenderer, PREVIEW_CHANNELS.app, (update) => {
 				if (isQuickLookApp(update)) listener(update);
 			}),
+		onOffice: (listener) =>
+			subscribe(ipcRenderer, PREVIEW_CHANNELS.office, (update) => {
+				if (isQuickLookOffice(update)) listener(update);
+			}),
 		ready: (report) => ipcRenderer.send(PREVIEW_CHANNELS.ready, report),
 		zoomed: (report) => ipcRenderer.send(PREVIEW_CHANNELS.zoomed, report),
 		request: async (action) => {
@@ -68,6 +75,7 @@ export function createQuickLookWindowBridge(ipcRenderer: IpcRenderer, platform: 
 		sha256: (path): Promise<string> => ipcRenderer.invoke(PREVIEW_CHANNELS.sha256, path),
 		folderSize: (path): Promise<FolderSize> => ipcRenderer.invoke(PREVIEW_CHANNELS.folderSize, path),
 		audioMetadata: (path): Promise<AudioMetadata> => ipcRenderer.invoke(PREVIEW_CHANNELS.audioMetadata, path),
+		dataPreview: (path, table): Promise<DataPreview> => ipcRenderer.invoke(PREVIEW_CHANNELS.data, path, table),
 		share: async (anchor) => {
 			await ipcRenderer.invoke(PREVIEW_CHANNELS.share, { x: anchor.x, y: anchor.y, width: anchor.width, height: anchor.height });
 		},

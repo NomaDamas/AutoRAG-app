@@ -537,6 +537,19 @@ export function App(): ReactElement {
 		request.catch((error: unknown) => setToast(error instanceof Error ? error.message : String(error)));
 	}, [preview]);
 
+	// The OS takes 0.1-0.7s to draw a legacy Office page and up to 0.4s more to
+	// prepare its pictures; starting when the file is selected means Space finds
+	// the page ready instead of waiting for it.
+	const prefetchEntry = finder?.focusedEntry ?? null;
+	const prefetchPath = prefetchEntry?.kind === "file" ? prefetchEntry.path : undefined;
+	const prefetchMtime = prefetchEntry?.mtimeMs;
+	const prefetchSize = prefetchEntry?.size;
+	useEffect(() => {
+		if (prefetchPath === undefined || prefetchMtime === undefined || prefetchSize === undefined || prefetchSize === null) return;
+		if (!/\.(doc|dot|ppt|pps|pot)$/i.test(prefetchPath)) return;
+		autorag.preview.prefetch({ path: prefetchPath, mtimeMs: prefetchMtime, size: prefetchSize });
+	}, [prefetchPath, prefetchMtime, prefetchSize]);
+
 	const moveSelectionBy = finder?.moveSelectionBy;
 	useEffect(() => {
 		const offClosed = autorag.preview.onClosed(() => setPreview(null));
