@@ -833,7 +833,9 @@
           "files": "Files & Folders",
           "fda": "Full Disk Access",
           "automation": "Automation",
-          "paneLead": "The apps below can access files on your entire disk."
+          "paneLead": "The apps below can access files on your entire disk.",
+          "terminal": "Terminal",
+          "backup": "Backup"
         }
       },
       "restart": {
@@ -1174,6 +1176,18 @@
       "checkMenu": "Check for Updates…",
       "readyNotification": "Dazzi {{version}} is ready. It installs when you quit the app.",
       "availableNotification": "Dazzi {{version}} is available to download."
+    },
+    "account": {
+      "httpStatus": "The Dazzi service answered HTTP {{status}}.",
+      "callbackDone": "Signed in to Dazzi. You can close this tab.",
+      "signInFirst": "Sign in to your Dazzi account first.",
+      "unreachable": "Cannot reach the Dazzi service. Check your connection and try again.",
+      "insecureUrl": "The Dazzi service did not return a secure https address.",
+      "unreadableAccount": "The Dazzi service returned an account this app cannot read.",
+      "signInTimedOut": "Sign-in timed out. Try again.",
+      "noModels": "Your Dazzi plan lists no models.",
+      "invalidState": "Invalid sign-in state.",
+      "missingCode": "Missing sign-in code."
     }
   },
   "quickLook": {
@@ -1435,7 +1449,7 @@
       "repeatOn": "on {{days}}",
       "repeatTimes": "{{count}} times",
       "repeatUntil": "until {{date}}"
-  },
+    },
     "odf": {
       "readFailed": "Couldn’t read the document",
       "openFailed": "Couldn’t open the presentation",

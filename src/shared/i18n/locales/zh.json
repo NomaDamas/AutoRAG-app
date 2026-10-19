@@ -391,8 +391,8 @@
       "evidence": {
         "revenue": "营收报告",
         "revenueQuote": "“同比增长 18%…”",
-        "budget": "Budget summary",
-        "budgetQuote": "“Q3 operating cost…”"
+        "budget": "预算摘要",
+        "budgetQuote": "“第三季度运营成本…”"
       }
     },
     "feature": {
@@ -409,7 +409,7 @@
         "sub": "整理重复文档"
       },
       "quicklook": {
-        "title": "Quick Look",
+        "title": "快速查看",
         "sub": "打开前预览"
       },
       "sources": {
@@ -684,14 +684,14 @@
         "byok": {
           "name": "BYOK",
           "price": "仅 API 费用",
-          "note": "直接向 provider 付费",
+          "note": "直接向提供商付费",
           "tag": "用自己的密钥直接连接",
           "chip": "需要输入 API 密钥",
           "training": "遵循您所选服务商的政策",
           "feature": {
             "a": "本地嵌入或关闭",
-            "b": "自行选择 provider 和模型",
-            "c": "仅向所选 provider 发送请求"
+            "b": "自行选择提供商和模型",
+            "c": "仅向所选提供商发送请求"
           }
         }
       }
@@ -699,10 +699,10 @@
     "model": {
       "eyebrow": "AI 模型",
       "title": "连接要使用的模型",
-      "lead": "使用检测到的连接，或选择 provider 和 API 密钥。",
+      "lead": "使用检测到的连接，或选择提供商和 API 密钥。",
       "note": "密钥会加密存储，不会写入配置文件。",
       "detectedTitle": "检测到的连接",
-      "localRuntime": "本地 runtime",
+      "localRuntime": "本地运行时",
       "storedCredential": "已保存的凭据",
       "use": "使用",
       "provider": {
@@ -722,7 +722,7 @@
       "error": "连接失败：{{error}}",
       "advanced": "高级设置",
       "modelRow": "模型",
-      "recommended": "provider 推荐模型",
+      "recommended": "提供商推荐模型",
       "reasoningRow": "推理级别（仅生成模型）",
       "reasoningValue": "模型默认值"
     },
@@ -785,7 +785,7 @@
       },
       "3": {
         "title": "用 Space 不打开也能浏览",
-        "body": "选中文件后按 Space 即可用 Quick Look 预览。无需切换应用即可查看内容。"
+        "body": "选中文件后按 Space 即可用快速查看预览。无需切换应用即可查看内容。"
       },
       "4": {
         "title": "把文件拖入提问",
@@ -833,7 +833,9 @@
           "files": "文件和文件夹",
           "fda": "完全磁盘访问权限",
           "automation": "自动化",
-          "paneLead": "以下应用可以访问整个磁盘上的文件。"
+          "paneLead": "以下应用可以访问整个磁盘上的文件。",
+          "terminal": "终端",
+          "backup": "备份"
         }
       },
       "restart": {
@@ -1174,6 +1176,18 @@
       "checkMenu": "检查更新…",
       "readyNotification": "Dazzi {{version}} 已就绪。退出应用时将自动安装。",
       "availableNotification": "Dazzi {{version}} 可供下载。"
+    },
+    "account": {
+      "httpStatus": "Dazzi 服务返回了 HTTP {{status}}。",
+      "callbackDone": "已登录 Dazzi。你可以关闭此标签页。",
+      "signInFirst": "请先登录你的 Dazzi 账户。",
+      "unreachable": "无法连接 Dazzi 服务。请检查网络连接后重试。",
+      "insecureUrl": "Dazzi 服务没有返回安全的 https 地址。",
+      "unreadableAccount": "Dazzi 服务返回了此应用无法读取的账户信息。",
+      "signInTimedOut": "登录超时，请重试。",
+      "noModels": "你的 Dazzi 套餐没有可用的模型。",
+      "invalidState": "登录状态值无效。",
+      "missingCode": "缺少登录代码。"
     }
   },
   "quickLook": {
@@ -1435,7 +1449,7 @@
       "repeatOn": "{{days}}",
       "repeatTimes": "{{count}} 次",
       "repeatUntil": "至 {{date}}"
-  },
+    },
     "odf": {
       "readFailed": "无法读取文档",
       "openFailed": "无法打开演示文稿",

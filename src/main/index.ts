@@ -23,7 +23,7 @@ import {
 } from "electron";
 import { APPEARANCE_CHANNELS } from "../shared/appearance-contract";
 import { setAppLanguage, t } from "../shared/i18n/core";
-import { LANGUAGE_CHANNELS } from "../shared/language-contract";
+import { LANGUAGE_CHANNELS, resolveSystemLanguage } from "../shared/language-contract";
 import { ONBOARDING_CHANNELS, ONBOARDING_PENDING_FLAG, type NetworkCheck } from "../shared/onboarding-contract";
 import { SMART_INDEXING_CHANNELS } from "../shared/smart-indexing-contract";
 import type { AppAppearance, AppSettings, ConfigRefreshResult } from "../shared/settings-contract";
@@ -591,6 +591,8 @@ app.whenReady().then(async () => {
 	});
 	const settingsService = createSettingsService({
 		directory: join(app.getPath("userData"), "settings"),
+		// A first run (no stored choice) follows the OS language; onboarding shows it before the user could set one.
+		systemLanguage: resolveSystemLanguage(app.getPreferredSystemLanguages()),
 		dataSources: lockedDataSources,
 		models: createModelStatusService({ env: process.env, cwd: process.cwd() }),
 		config: autoRagConfig,

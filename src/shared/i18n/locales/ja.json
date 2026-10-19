@@ -391,8 +391,8 @@
       "evidence": {
         "revenue": "売上レポート",
         "revenueQuote": "“前年比18%増…”",
-        "budget": "Budget summary",
-        "budgetQuote": "“Q3 operating cost…”"
+        "budget": "予算サマリー",
+        "budgetQuote": "“第3四半期の運営費…”"
       }
     },
     "feature": {
@@ -409,7 +409,7 @@
         "sub": "重複した文書を整理"
       },
       "quicklook": {
-        "title": "Quick Look",
+        "title": "クイックルック",
         "sub": "開く前にプレビュー"
       },
       "sources": {
@@ -612,7 +612,7 @@
       },
       "detail": {
         "kakao": "KakaoTalkアプリのデータを検出",
-        "slack": "workspace {{workspaces}}件に接続済み",
+        "slack": "ワークスペース {{workspaces}}件に接続済み",
         "discord": "Discordアプリのメッセージ {{messages}}件を検出",
         "telegram": "Telegramアプリのデータを検出",
         "whatsapp": "会話 {{chats}}件 · メッセージ {{messages}}件",
@@ -684,14 +684,14 @@
         "byok": {
           "name": "BYOK",
           "price": "API費用のみ",
-          "note": "providerに直接支払い",
+          "note": "プロバイダーに直接支払い",
           "tag": "自分のキーで直接接続",
           "chip": "APIキーの入力が必要",
           "training": "選択したプロバイダーのポリシーに従います",
           "feature": {
             "a": "ローカル埋め込みまたは使用しない",
-            "b": "providerとモデルを直接選択",
-            "c": "選択したproviderにのみリクエストを送信"
+            "b": "プロバイダーとモデルを直接選択",
+            "c": "選択したプロバイダーにのみリクエストを送信"
           }
         }
       }
@@ -699,10 +699,10 @@
     "model": {
       "eyebrow": "AIモデル",
       "title": "使用するモデルを接続してください",
-      "lead": "検出された接続を使うか、providerとAPIキーを選択してください。",
+      "lead": "検出された接続を使うか、プロバイダーとAPIキーを選択してください。",
       "note": "キーは暗号化して保存され、設定ファイルには記録されません。",
       "detectedTitle": "検出された接続",
-      "localRuntime": "ローカルruntime",
+      "localRuntime": "ローカルランタイム",
       "storedCredential": "保存済みの資格情報",
       "use": "使用",
       "provider": {
@@ -722,7 +722,7 @@
       "error": "接続に失敗: {{error}}",
       "advanced": "詳細設定",
       "modelRow": "モデル",
-      "recommended": "providerおすすめモデル",
+      "recommended": "プロバイダーのおすすめモデル",
       "reasoningRow": "推論レベル（生成モデルのみ）",
       "reasoningValue": "モデルの既定値"
     },
@@ -785,7 +785,7 @@
       },
       "3": {
         "title": "Spaceで開かずにざっと見る",
-        "body": "ファイルを選んでSpaceを押すと、Quick Lookでプレビューします。アプリを切り替えずに内容を確認できます。"
+        "body": "ファイルを選んでSpaceを押すと、クイックルックでプレビューします。アプリを切り替えずに内容を確認できます。"
       },
       "4": {
         "title": "ファイルをドラッグして質問に添付",
@@ -833,7 +833,9 @@
           "files": "ファイルとフォルダ",
           "fda": "フルディスクアクセス",
           "automation": "オートメーション",
-          "paneLead": "以下のアプリはディスク全体のファイルにアクセスできます。"
+          "paneLead": "以下のアプリはディスク全体のファイルにアクセスできます。",
+          "terminal": "ターミナル",
+          "backup": "バックアップ"
         }
       },
       "restart": {
@@ -1174,6 +1176,18 @@
       "checkMenu": "アップデートを確認…",
       "readyNotification": "Dazzi {{version}} の準備ができました。アプリを終了するとインストールされます。",
       "availableNotification": "Dazzi {{version}} をダウンロードできます。"
+    },
+    "account": {
+      "httpStatus": "Dazziサービスが HTTP {{status}} で応答しました。",
+      "callbackDone": "Dazziにログインしました。このタブは閉じて構いません。",
+      "signInFirst": "先にDazziアカウントにログインしてください。",
+      "unreachable": "Dazziサービスに接続できません。ネットワーク接続を確認して、もう一度お試しください。",
+      "insecureUrl": "Dazziサービスが安全な https アドレスを返しませんでした。",
+      "unreadableAccount": "Dazziサービスが、このアプリで読み取れないアカウント情報を返しました。",
+      "signInTimedOut": "ログインがタイムアウトしました。もう一度お試しください。",
+      "noModels": "Dazziプランで利用できるモデルがありません。",
+      "invalidState": "ログインの状態値が正しくありません。",
+      "missingCode": "ログインコードがありません。"
     }
   },
   "quickLook": {
@@ -1435,7 +1449,7 @@
       "repeatOn": "{{days}}",
       "repeatTimes": "{{count}} 回",
       "repeatUntil": "{{date}} まで"
-  },
+    },
     "odf": {
       "readFailed": "ドキュメントを読み込めませんでした",
       "openFailed": "プレゼンテーションを開けませんでした",

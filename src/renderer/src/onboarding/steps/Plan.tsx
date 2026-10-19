@@ -2,6 +2,7 @@
 
 import type { ReactElement } from "react";
 import type { PlanId } from "../../../../shared/onboarding-contract";
+import { i18n } from "../../../../shared/i18n";
 import { cn } from "../../lib/cn";
 import { Icon } from "../marks";
 import { Eyebrow, Multiline } from "../parts";
@@ -26,7 +27,7 @@ export function PlanStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElement
 	const snapshot = account?.account ?? null;
 	const cloud = canSelectCloudEmbedding(account) && draft.embed === "cloud";
 	const needsAccount = (draft.plan === "air" || draft.plan === "pro") && !signedIn;
-	const date = snapshot?.periodEnd === null || snapshot === null ? "" : new Date(snapshot.periodEnd).toLocaleDateString();
+	const date = snapshot?.periodEnd === null || snapshot === null ? "" : new Date(snapshot.periodEnd).toLocaleDateString(i18n.language);
 	const proHeld = planHeld("pro", account);
 
 	return (

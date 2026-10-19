@@ -95,9 +95,12 @@ byte-identical between runs; anything else is a real difference to explain.
 
 ## User-facing text and translations (i18n)
 
-The app ships in four interface languages: Korean (the default), English,
-Japanese, and Simplified Chinese (`APP_LANGUAGES` in
-`src/shared/language-contract.ts`). Every string a user can see goes through
+The app ships in four interface languages: Korean, English, Japanese, and
+Simplified Chinese (`APP_LANGUAGES` in `src/shared/language-contract.ts`). A
+profile with no stored choice starts in the OS language
+(`resolveSystemLanguage`, fed by `app.getPreferredSystemLanguages()`; English
+when the OS language is not shipped), so first-run onboarding is already
+translated. Korean remains the fallback of the shared i18n instance. Every string a user can see goes through
 i18next. Never hardcode a user-facing string in any language: no literals in
 JSX, `aria-label`/`title`/`placeholder`, toasts, dialogs, menus,
 notifications, or error messages shown to the user.

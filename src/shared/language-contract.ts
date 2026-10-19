@@ -25,3 +25,17 @@ export function languageFromArgv(argv: readonly string[]): AppSettings["language
 	const value = argv.find((arg) => arg.startsWith(LANGUAGE_FLAG))?.slice(LANGUAGE_FLAG.length);
 	return isAppLanguage(value) ? value : "ko";
 }
+
+/**
+ * The interface language for an OS whose preferred languages are `tags` (BCP 47,
+ * most preferred first, as `app.getPreferredSystemLanguages()` reports them):
+ * the first one the app ships, else English, the common language of a system
+ * the app is not translated for.
+ */
+export function resolveSystemLanguage(tags: readonly string[]): AppSettings["language"] {
+	for (const tag of tags) {
+		const primary = tag.split(/[-_]/u)[0]?.toLowerCase();
+		if (isAppLanguage(primary)) return primary;
+	}
+	return "en";
+}
