@@ -8,7 +8,6 @@
  * must be byte-identical before and after the preview.
  */
 
-import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
@@ -47,10 +46,13 @@ writeFileSync(join(root, "bad.parquet"), "nope");
 const records = Array.from({ length: 30 }, (_, i) => JSON.stringify({ id: i, tags: ["a", "b"], text: "x".repeat(i === 0 ? 120 : 5), nested: { ok: true } }));
 writeFileSync(join(root, "log.jsonl"), `${records.join("\n")}\n`);
 writeFileSync(join(root, "feed.ndjson"), '{"a":1}\n{"a":2}\n');
-writeFileSync(join(root, "Info.json"), '{"CFBundleName":"Demo","LSUIElement":true,"Sizes":[16,32],"When":"x"}');
-execFileSync("plutil", ["-convert", "binary1", "-o", join(root, "Prefs.plist"), join(root, "Info.json")]);
+// A real `bplist00` of {CFBundleName: "Demo", LSUIElement: true, Sizes: [16, 32], When: "x"}, checked with
+// `plutil -convert xml1`. Written as bytes rather than made by `plutil`, which does not exist on Windows.
+writeFileSync(
+	join(root, "Prefs.plist"),
+	Buffer.from("YnBsaXN0MDBcQ0ZCdW5kbGVOYW1lW0xTVUlFbGVtZW50VVNpemVzVFdoZW5URGVtbwkQEBAgogYHUXjUAAECAwQFCAkIFSEnLDEyNDY5OwAAAAAAAAEBAAAAAAAAAAsAAAAAAAAACgAAAAAAAABE", "base64"),
+);
 writeFileSync(join(root, "Plain.plist"), '<?xml version="1.0"?>\n<plist version="1.0"><dict><key>k</key><string>v</string></dict></plist>\n');
-rmSync(join(root, "Info.json"));
 
 const digest = (path) => (existsSync(path) ? createHash("sha256").update(readFileSync(path)).digest("hex") : "absent");
 const sidecars = [dbPath, `${dbPath}-wal`, `${dbPath}-shm`];
