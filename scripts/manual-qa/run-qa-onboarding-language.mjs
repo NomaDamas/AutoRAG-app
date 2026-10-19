@@ -1,20 +1,24 @@
-// First-run onboarding follows the OS language. For each system language the
-// lane launches the built app on a fresh profile with NO seeded interface
-// language (so the app has to derive it), opens every onboarding step, and
-// checks the screen's visible copy: the right language, no Korean left in the
-// English/Japanese/Chinese screens, and no untranslated English prose in the
-// Korean/Japanese/Chinese ones. An unsupported OS language must land on English.
+// First-run onboarding follows the OS language. The lane launches the built app
+// on a fresh profile with NO seeded interface language (so the app has to derive
+// it), opens every onboarding step, and checks the screen's visible copy: the
+// right language, no Korean left in the English/Japanese/Chinese screens, and no
+// untranslated English prose in the Korean/Japanese/Chinese ones.
 //
-// The OS language is injected with the `-AppleLanguages` argument, which Electron
-// reads like the real system preference, so this lane runs on macOS only.
+// How the OS language is set depends on the OS:
+//  - macOS: the `-AppleLanguages` argument, which Electron reads like the real
+//    preference, so five OS languages run (an unsupported one must land on English).
+//  - Windows: Electron reads the user's language list through WinRT and nothing
+//    can override it per process, so the lane runs once and expects the app to
+//    follow whatever language the machine is really set to.
+//  - Linux: not a QA platform of this repo; the lane skips.
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { finderWindow, launchFinder, ROOT } from "./launch-finder.mjs";
 import { rmRetry } from "./platform.mjs";
 
-if (process.platform !== "darwin") {
-	console.log("SKIP onboarding-language: the OS language is injected with -AppleLanguages (macOS only)");
+if (process.platform !== "darwin" && process.platform !== "win32") {
+	console.log(`SKIP onboarding-language: ${process.platform} is not a manual-QA platform`);
 	process.exit(0);
 }
 
@@ -31,14 +35,20 @@ const check = (name, ok, detail = "") => {
 	if (!ok) failures.push(name);
 };
 
-/** OS language -> the interface language the app must pick, and what the welcome headline starts with. */
-const CASES = [
-	{ os: "ko-KR", lang: "ko", headline: "파일에게" },
-	{ os: "en-US", lang: "en", headline: "Ask your" },
-	{ os: "ja-JP", lang: "ja", headline: "ファイルに" },
-	{ os: "zh-Hans-CN", lang: "zh", headline: "向文件" },
-	{ os: "fr-FR", lang: "en", headline: "Ask your" },
-];
+const HEADLINES = { ko: "파일에게", en: "Ask your", ja: "ファイルに", zh: "向文件" };
+/** OS language -> the interface language the app must pick; `lang: null` expects whatever the real OS is set to. */
+const CASES =
+	process.platform === "darwin"
+		? [
+				{ os: "ko-KR", lang: "ko" },
+				{ os: "en-US", lang: "en" },
+				{ os: "ja-JP", lang: "ja" },
+				{ os: "zh-Hans-CN", lang: "zh" },
+				{ os: "fr-FR", lang: "en" },
+			]
+		: [{ os: "system", lang: null }];
+/** The language an OS preference list resolves to: the first shipped one, else English. */
+const resolve = (tags) => tags.map((tag) => tag.split(/[-_.@]/u)[0].toLowerCase()).find((tag) => tag in HEADLINES) ?? "en";
 const STEPS = ["welcome", "permissions", "account", "folders", "embedding", "sources", "plan", "model"];
 
 /** Latin words a translated screen may keep: product and brand names, file names, keys, units, and the OS terms that stay in English. */
@@ -68,16 +78,18 @@ function draft(stepId) {
 	};
 }
 
-for (const { os, lang, headline } of CASES) {
+for (const { os, lang: injected } of CASES) {
 	const userDataDir = join(WORK, `profile-${os}`);
 	const env = { AUTORAG_HOME: join(WORK, `home-${os}`), AUTORAG_CONFIG: join(WORK, `config-${os}`, "config.json"), AUTORAG_SKIP_DUPEY_CHECK: "1" };
 	for (const step of STEPS) {
 		mkdirSync(join(userDataDir, "onboarding"), { recursive: true });
 		writeFileSync(join(userDataDir, "onboarding", "state.json"), `${JSON.stringify({ completed: false, draft: draft(step) })}\n`);
-		const app = await launchFinder({ userDataDir, env, onboarding: true, language: null, args: ["-AppleLanguages", `(${os})`] });
+		const app = await launchFinder({ userDataDir, env, onboarding: true, language: null, args: injected === null ? [] : ["-AppleLanguages", `(${os})`] });
 		try {
 			const page = await finderWindow(app, 20_000);
 			await page.waitForSelector(".onb .screen", { timeout: 20_000 });
+			const lang = injected ?? resolve(await app.evaluate(({ app: electron }) => electron.getPreferredSystemLanguages()));
+			const headline = HEADLINES[lang];
 			// Let the step's own probes (sources, embedding facts) render their copy.
 			await page.waitForTimeout(step === "sources" ? 2500 : 700);
 			const label = `${os}/${step}`;

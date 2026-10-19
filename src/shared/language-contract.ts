@@ -27,15 +27,22 @@ export function languageFromArgv(argv: readonly string[]): AppSettings["language
 }
 
 /**
- * The interface language for an OS whose preferred languages are `tags` (BCP 47,
- * most preferred first, as `app.getPreferredSystemLanguages()` reports them):
- * the first one the app ships, else English, the common language of a system
- * the app is not translated for.
+ * The first interface language the app ships among `tags`, most preferred
+ * first; null when none is. A tag may be BCP 47 (`zh-Hans-CN`), a POSIX locale
+ * name (`ko_KR.UTF-8`, `zh_TW@euro`, `C`), or a colon-separated `LANGUAGE` list
+ * (`fr:ja:en`), because Linux reports whichever its environment holds.
  */
-export function resolveSystemLanguage(tags: readonly string[]): AppSettings["language"] {
+export function shippedLanguage(tags: readonly string[]): AppSettings["language"] | null {
 	for (const tag of tags) {
-		const primary = tag.split(/[-_]/u)[0]?.toLowerCase();
-		if (isAppLanguage(primary)) return primary;
+		for (const entry of tag.split(":")) {
+			const primary = entry.split(/[-_.@]/u)[0]?.toLowerCase();
+			if (isAppLanguage(primary)) return primary;
+		}
 	}
-	return "en";
+	return null;
+}
+
+/** {@link shippedLanguage}, else English: the common language of a system the app is not translated for. */
+export function resolveSystemLanguage(tags: readonly string[]): AppSettings["language"] {
+	return shippedLanguage(tags) ?? "en";
 }
