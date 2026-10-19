@@ -28,8 +28,14 @@ export interface FolderSurvey {
 	readonly tools: readonly ToolDefinition[];
 }
 
-/** Subfolders described in a survey; the rest are summed into one line. */
-const MAX_CHILDREN = 25;
+/** Subfolders a survey names; past this the rest are only counted. */
+const MAX_CHILDREN = 500;
+/**
+ * Subfolders described in full (types, dates, sample names, their own subfolders), largest first.
+ * The others get one line with their name and counts, which is what a person scanning a listing
+ * sees; a full block is about 600 characters, so five hundred of them would flood the model.
+ */
+const DETAILED_CHILDREN = 40;
 /** Extensions listed per folder before the tail is summed. */
 const MAX_EXTENSIONS = 10;
 /** Folders listed inside one subfolder before the rest are counted. */
@@ -57,6 +63,13 @@ function nameLine(names: readonly string[]): string {
 	return names.length === 0 ? "none" : names.join(", ");
 }
 
+/** One line for a subfolder that is not described in full: its name, its counts and what it mostly holds. */
+function childLine(child: ChildStats): string {
+	const top = child.extensions[0];
+	const mix = top === undefined ? "" : `, mostly ${top.extension} ${top.files}`;
+	return `- ${child.name}/ ${child.totalFiles} files, indexed ${child.indexedFiles}${mix}`;
+}
+
 function childBlock(child: ChildStats): string[] {
 	return [
 		`- ${child.name}/ ${child.totalFiles} files, indexed ${child.indexedFiles} of ${child.totalFiles}`,
@@ -77,8 +90,12 @@ export function formatSurvey(path: string, stats: FolderStats): string {
 	];
 	if (stats.ownFiles.length > 0) lines.push(`files directly in this folder: ${nameLine(stats.ownFiles)}`);
 	if (stats.children.length > 0) {
-		lines.push("subfolders (most files first):");
-		for (const child of stats.children.slice(0, MAX_CHILDREN)) lines.push(...childBlock(child));
+		const named = stats.children.slice(0, MAX_CHILDREN);
+		lines.push(`subfolders (most files first; the largest ${Math.min(DETAILED_CHILDREN, named.length)} in detail, the rest one line each):`);
+		named.forEach((child, index) => {
+			if (index < DETAILED_CHILDREN) lines.push(...childBlock(child));
+			else lines.push(childLine(child));
+		});
 		const more = stats.children.length - MAX_CHILDREN;
 		if (more > 0) lines.push(`- ... and ${more} more subfolders`);
 	}

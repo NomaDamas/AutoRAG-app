@@ -147,6 +147,74 @@ describe("what a subfolder contains", () => {
 	});
 });
 
+describe("a folder with very many subfolders", () => {
+	async function manySubfolders(count: number): Promise<string> {
+		const base = await mkdtemp(join(tmpdir(), "folder-stats-many-"));
+		for (let i = 1; i <= count; i += 1) {
+			const dir = join(base, `project-${String(i).padStart(4, "0")}`);
+			await mkdir(dir, { recursive: true });
+			// The first ten folders hold more files, so they are the largest and come first; the rest hold one.
+			for (let f = 0; f < (i <= 10 ? 12 - i : 1); f += 1) await writeFile(join(dir, `file${f}.txt`), "x");
+		}
+		return base;
+	}
+
+	it("names every subfolder up to 500, not only the first 25", async () => {
+		const base = await manySubfolders(120);
+		try {
+			const report = await createFolderSurvey([base], OPTIONS).report(base, LIVE);
+			const text = report.ok ? report.text : "";
+
+			for (const n of [1, 25, 26, 60, 120]) expect(text, `project-${String(n).padStart(4, "0")}`).toContain(`project-${String(n).padStart(4, "0")}/`);
+			expect(text).not.toMatch(/and \d+ more subfolders/u);
+		} finally {
+			await rm(base, { recursive: true, force: true });
+		}
+	});
+
+	it("describes the largest subfolders in full and gives the rest one line each, so the report stays small", async () => {
+		const base = await manySubfolders(500);
+		try {
+			const report = await createFolderSurvey([base], OPTIONS).report(base, LIVE);
+			const text = report.ok ? report.text : "";
+
+			// Detailed blocks carry sample names; compact lines do not.
+			expect((text.match(/sample names:/gu) ?? []).length).toBeLessThan(80);
+			expect(text).toContain("project-0001/");
+			expect(text).toContain("project-0500/");
+			// Five hundred full blocks would be about 300,000 characters.
+			expect(text.length).toBeLessThan(80_000);
+		} finally {
+			await rm(base, { recursive: true, force: true });
+		}
+	});
+
+	it("says how many subfolders it left out when there are more than 500", async () => {
+		const base = await manySubfolders(520);
+		try {
+			const report = await createFolderSurvey([base], OPTIONS).report(base, LIVE);
+			const text = report.ok ? report.text : "";
+
+			expect(text).toMatch(/and 20 more subfolders/u);
+		} finally {
+			await rm(base, { recursive: true, force: true });
+		}
+	});
+
+	it("counts every subfolder the report names as surveyed, so any of them can be proposed", async () => {
+		const base = await manySubfolders(120);
+		try {
+			const survey = createFolderSurvey([base], OPTIONS);
+			await survey.report(base, LIVE);
+
+			expect(survey.counted(join(base, "project-0001"))).toBe(true);
+			expect(survey.counted(join(base, "project-0120"))).toBe(true);
+		} finally {
+			await rm(base, { recursive: true, force: true });
+		}
+	});
+});
+
 describe("folder_survey report", () => {
 	it("reports facts only: counts, the extension mix, when files changed, names, and the subfolders with the same", async () => {
 		const report = await createFolderSurvey([root], OPTIONS).report(root, LIVE);

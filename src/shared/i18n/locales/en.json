@@ -529,7 +529,8 @@
           "isRoot": "A selected folder cannot be left out itself. Pick a sub-folder inside it.",
           "outside": "Only sub-folders of the selected folders can be left out.",
           "covered": "That folder is already left out."
-        }
+        },
+        "noDocs": "no documents"
       },
       "criteria": {
         "show": "See how the AI decides",
@@ -537,6 +538,7 @@
         "looked": "What the AI looked at: the file and folder names in your chosen folders, how many files of each type, and when the files last changed. It does not open any file.",
         "keep": "What it keeps: documents you wrote, received or collected (reports, notes, contracts, papers, course material) and folders named for a project, a person or a date.",
         "leave": "What it leaves out: logs a program made as a by-product, files apps download or export (messengers and the like), caches, temp and crash files, build or generated output, installers and app backups, and folders where many similar-named files piled up at once.",
+        "code": "Code repositories are always left out, even ones you wrote yourself: folders that are mostly source files and have a manifest such as package.json.",
         "doubt": "When in doubt it keeps the folder. Wrongly leaving out your own document makes it vanish from search, while including some clutter only costs time.",
         "you": "You decide. Hover an item to see the reason, undo it with the x, or add your own. The AI may judge a little differently each time."
       }

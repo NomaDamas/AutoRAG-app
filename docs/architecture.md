@@ -330,14 +330,19 @@ resumes at the same step.
   thresholds, whether a folder holds what a person wrote or collected for
   their own use or what a program generated as a by-product (logs, app and chat
   exports, caches, build or generated output, installers, machine-named series).
-  It sees names only: `folder_survey` reports file counts by type (subfolders
-  included, with the pre-scan's own rules), when the files last changed and a
-  spread of file names, for the folder and each subfolder, and `list_folder`
-  lists the names in one folder. No file is opened and no excerpt leaves the
+  Code repositories (mostly source files plus a manifest such as `package.json`,
+  `src`/`test` folders, a cloned project) are always left out, even the person's
+  own; the prompt describes how to recognise one from names. It sees names only:
+  `folder_survey` reports file counts by type, every type and not only the ones
+  the index reads (subfolders included, with the pre-scan's own rules), when the
+  files last changed and a spread of file names, for the folder and each
+  subfolder, and `list_folder` lists the names in one folder. A survey names up to
+  500 subfolders, the largest 40 in detail and the rest one line each (name,
+  counts, main type), so a large folder stays readable. No file is opened and no excerpt leaves the
   machine. The agent has no pi file tools, so it can only look inside the chosen
   folders. A folder can only be proposed after it was surveyed, every path is
-  checked against the disk and the chosen folders, and a proposal the index would
-  read nothing from is dropped. When in doubt the model keeps the folder: a wrongly
+  checked against the disk and the chosen folders. A proposal is kept even when
+  the index would read no file from it (the screen then says "no documents"). When in doubt the model keeps the folder: a wrongly
   excluded document vanishes from search, a wrongly included folder only costs
   time. Because the model decides, runs can differ a little; each proposal carries
   the reason the model gave. It spends the AutoRAG model, so it runs once on

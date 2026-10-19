@@ -85,8 +85,6 @@ export function createSmartIndexingService(deps: SmartIndexingServiceDeps): Smar
 		const exclusions: SmartExclusion[] = [];
 		for (const proposal of proposals) {
 			const scan = await scanFolder(proposal.path, deps.scanOptions, () => undefined, signal);
-			// A folder the index would read nothing from changes nothing when left out.
-			if (scan.files === 0) continue;
 			exclusions.push({ path: proposal.path, root: proposal.root, reason: proposal.reason, files: scan.files, bytes: scan.bytes, excluded: true });
 		}
 		return exclusions;

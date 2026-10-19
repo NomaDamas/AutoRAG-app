@@ -138,6 +138,29 @@ describe("smart indexing profile", () => {
 		expect(prompt).toMatch(/cannot open files/iu);
 	});
 
+	it("tells the model to leave out code repositories, including ones the person wrote, with how to recognise one", () => {
+		const prompt = profileFor().systemPrompt;
+
+		expect(prompt).toMatch(/code repositor/iu);
+		expect(prompt).toMatch(/always leave out/iu);
+		// What a repository looks like from names alone: source files, a manifest, a lockfile, a docs/site folder of a project.
+		expect(prompt).toMatch(/source files/iu);
+		expect(prompt).toMatch(/package\.json/u);
+		// The rule holds even when the code is the person's own.
+		expect(prompt).toMatch(/even (when|if) .*(wrote|own)/iu);
+	});
+
+	it("does not tell the model that folders without indexed files, or small folders, are unimportant", () => {
+		const prompt = profileFor().systemPrompt;
+
+		expect(prompt).not.toMatch(/small folders/iu);
+		expect(prompt).not.toMatch(/saves no time/iu);
+		expect(prompt).not.toMatch(/never indexed/iu);
+		expect(prompt).not.toMatch(/costs nothing/iu);
+		// All file types are evidence, not only the ones the index reads.
+		expect(prompt).toMatch(/every file type/iu);
+	});
+
 	it("asks for a reason that says what the names showed, and for one call with every folder", () => {
 		const prompt = profileFor().systemPrompt;
 

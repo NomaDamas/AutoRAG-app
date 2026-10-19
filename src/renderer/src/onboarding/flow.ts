@@ -300,7 +300,8 @@ export function formatSize(bytes: number): string {
 	if (bytes >= 1_000_000) {
 		return `${Math.round(bytes / 1_000_000)} MB`;
 	}
-	return `${Math.round(bytes / 1000)} KB`;
+	// Anything above zero shows as at least 1 KB, so a small folder is not reported as empty.
+	return `${bytes <= 0 ? 0 : Math.max(1, Math.round(bytes / 1000))} KB`;
 }
 
 /** Icon name and colour for a connector's tile (prototype `sources[]`). */

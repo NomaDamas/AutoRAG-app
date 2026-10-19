@@ -40,7 +40,7 @@ function insidePath(item: SmartExclusion): string {
 
 /** How the AI decides, in words: what it looked at, what it keeps and leaves out, and that the person has the last word. */
 function Criteria({ t }: { readonly t: OnboardingCtx["t"] }): ReactElement {
-	const keys = ["looked", "keep", "leave", "doubt", "you"] as const;
+	const keys = ["looked", "keep", "leave", "code", "doubt", "you"] as const;
 	return (
 		<ol className="si-criteria">
 			{keys.map((key) => (
@@ -174,7 +174,7 @@ export function FoldersStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElem
 									<em>{rootName(item)} / </em>
 									<b>{insidePath(item)}</b>
 								</span>
-								<span className="si-pill-size">−{formatSize(item.bytes)}</span>
+								<span className="si-pill-size">{item.files === 0 ? t("onboarding.folders.exclude.noDocs") : `−${formatSize(item.bytes)}`}</span>
 								<button
 									type="button"
 									className="si-pill-x"

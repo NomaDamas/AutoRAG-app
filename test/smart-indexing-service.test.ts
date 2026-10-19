@@ -93,7 +93,7 @@ describe("smart indexing service", () => {
 		]);
 	});
 
-	it("leaves out a proposal the index would read nothing from: excluding it changes nothing", async () => {
+	it("keeps a proposal even when the index would read nothing from it: what to leave out is the person's to decide, and its count is shown as it is", async () => {
 		const registration = register();
 		registration.setResponses([
 			fauxAssistantMessage(fauxToolCall("folder_survey", { path: join(root, "Pictures") })),
@@ -111,8 +111,8 @@ describe("smart indexing service", () => {
 
 		await serviceFor(registration).analyze("run-10", [root]);
 
-		expect(finalEvent()).toMatchObject({ type: "result", exclusions: [{ path: join(root, "Telegram Desktop"), files: 2 }] });
-		expect(finalEvent()).toMatchObject({ exclusions: { length: 1 } });
+		const last = finalEvent();
+		expect(last).toMatchObject({ type: "result", exclusions: [{ path: join(root, "Pictures"), files: 0, bytes: 0 }, { path: join(root, "Telegram Desktop"), files: 2 }] });
 	});
 
 	it("refuses a folder that was never counted and feeds the model the instruction to count it", async () => {

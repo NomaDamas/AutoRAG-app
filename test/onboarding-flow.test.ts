@@ -409,6 +409,18 @@ describe("error reports consent", () => {
 	});
 });
 
+describe("formatSize", () => {
+	it("never rounds a small non-empty size down to zero", () => {
+		expect(formatSize(0)).toBe("0 KB");
+		expect(formatSize(1)).toBe("1 KB");
+		expect(formatSize(400)).toBe("1 KB");
+		expect(formatSize(1_499)).toBe("1 KB");
+		expect(formatSize(1_500)).toBe("2 KB");
+		expect(formatSize(2_400_000)).toBe("2 MB");
+		expect(formatSize(1_200_000_000)).toBe("1.2 GB");
+	});
+});
+
 describe("folder selection reset", () => {
 	const candidates = [
 		{ path: "/docs", name: "Documents", displayPath: "~/Documents", kind: "documents", defaultSelected: true, ocrOff: false },

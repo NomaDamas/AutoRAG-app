@@ -170,6 +170,15 @@ describe("FoldersStep as the smart-indexing scope screen", () => {
 		expect(setSmartExcluded).toHaveBeenLastCalledWith("/docs/Telegram Desktop", false);
 	});
 
+	it("shows what a left-out folder holds when the index would read nothing from it, instead of a size of zero", () => {
+		renderFolders({ draft: { ...DRAFT, smartScope: [proposal("/docs/Raw", { files: 0, bytes: 0 })] } });
+
+		const pill = one(".si-panel.red .si-pill");
+
+		expect(pill.textContent).toContain("onboarding.folders.exclude.noDocs");
+		expect(pill.textContent).not.toContain("−0");
+	});
+
 	it("offers a left-in proposal as a ghost pill to leave out again, and adds a folder of the user's own from the dashed button", () => {
 		const setSmartExcluded = vi.fn();
 		const addExclusion = vi.fn();
@@ -226,6 +235,7 @@ describe("FoldersStep as the smart-indexing scope screen", () => {
 			"onboarding.folders.criteria.looked",
 			"onboarding.folders.criteria.keep",
 			"onboarding.folders.criteria.leave",
+			"onboarding.folders.criteria.code",
 			"onboarding.folders.criteria.doubt",
 			"onboarding.folders.criteria.you",
 		]);
