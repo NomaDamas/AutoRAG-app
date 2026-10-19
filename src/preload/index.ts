@@ -13,6 +13,7 @@ import { createLiveBridge } from "./live-bridge";
 import { createOnboardingBridge } from "./onboarding-bridge";
 import { createOsRequestBridge } from "./os-request-bridge";
 import { createSearchBridge } from "./search-bridge";
+import { createSmartIndexingBridge } from "./smart-indexing-bridge";
 import { createSettingsBridge } from "./settings-bridge";
 import { createServicesBridge } from "./services-bridge";
 import { installAppearancePreload } from "./appearance";
@@ -45,6 +46,7 @@ contextBridge.exposeInMainWorld("autorag", {
 	osRequests: createOsRequestBridge(ipcRenderer),
 	preview: createPreviewBridge(ipcRenderer),
 	search: createSearchBridge(ipcRenderer),
+	smartIndexing: createSmartIndexingBridge(ipcRenderer),
 	settings: createSettingsBridge(ipcRenderer),
 	services: createServicesBridge(ipcRenderer),
 	// Electron dropped `File.path`; only the preload can map a dropped file to its disk path.

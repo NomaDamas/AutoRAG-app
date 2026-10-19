@@ -238,6 +238,70 @@ describe("createOnboardingService persistence", () => {
 		again.dispose();
 	});
 
+	it("suggests Desktop, Documents, Downloads and iCloud Drive already selected, and leaves Pictures and cloud drives for the user to add", async () => {
+		const directory = await workDir();
+		const folders = { desktop: join(directory, "Desktop"), documents: join(directory, "Documents"), downloads: join(directory, "Downloads"), pictures: join(directory, "Pictures") };
+		const icloud = join(directory, "iCloud");
+		const cloud = join(directory, "Drive");
+		for (const path of [...Object.values(folders), icloud, cloud]) await mkdir(path, { recursive: true });
+		const service = createOnboardingService({ ...makeDeps(directory), knownFolders: folders, iCloudDrivePath: icloud, cloudDrives: async () => [{ path: cloud, name: "Drive" }] });
+
+		const candidates = await service.folderCandidates();
+
+		expect(candidates.map((candidate) => [candidate.kind, candidate.defaultSelected])).toEqual([
+			["desktop", true],
+			["documents", true],
+			["icloud", true],
+			["downloads", true],
+			["pictures", false],
+			["cloud", false],
+		]);
+	});
+
+	it("keeps the smart-indexing proposals in the draft across a reload and refuses malformed ones", async () => {
+		const directory = await workDir();
+		const scope = [{ path: "/Users/me/Documents/Zoom", root: "/Users/me/Documents", reason: "Recordings", files: 12, bytes: 4096, excluded: true }];
+		const service = createOnboardingService(makeDeps(directory));
+		await service.save({ ...DRAFT, smartScope: scope });
+
+		expect((await createOnboardingService(makeDeps(directory)).load()).draft?.smartScope).toEqual(scope);
+		await expect(service.save({ ...DRAFT, smartScope: [{ path: "relative", root: "/Users/me/Documents", reason: "x", files: 1, bytes: 1, excluded: true }] })).rejects.toThrow();
+		await expect(service.save({ ...DRAFT, smartScope: "nope" })).rejects.toThrow();
+	});
+
+	it("writes the excluded folders into excludePaths beside the user's own and counts only the files that remain", async () => {
+		const directory = await workDir();
+		await writeFile(join(directory, "config.json"), JSON.stringify({ excludePaths: ["/keep"] }), "utf8");
+		const service = createOnboardingService({ ...makeDeps(directory), folderTotals: () => 10 });
+
+		const started = await service.startIndexing({
+			folders: ["/Users/me/Documents"],
+			embed: "none",
+			sources: [],
+			plan: "free",
+			model: null,
+			excludePaths: ["/Users/me/Documents/Zoom"],
+			excludedFiles: 3,
+		});
+		for (let tick = 0; tick < 100 && service.isIndexing(); tick += 1) await flush();
+
+		expect(started.totalFiles).toBe(7);
+		expect((await service.indexStatus()).totalFiles).toBe(7);
+		const written = JSON.parse(await readFile(join(directory, "config.json"), "utf8")) as { excludePaths?: string[] };
+		expect(written.excludePaths).toEqual(["/keep", "/Users/me/Documents/Zoom"]);
+		service.dispose();
+	});
+
+	it("refuses an indexing request whose exclusions are not absolute paths or whose excluded count is not a count", async () => {
+		const directory = await workDir();
+		const service = createOnboardingService(makeDeps(directory));
+		const base = { folders: ["/Users/me/Documents"], embed: "none" as const, sources: [], plan: "free" as const, model: null };
+
+		await expect(service.startIndexing({ ...base, excludePaths: ["relative/Zoom"] })).rejects.toThrow();
+		await expect(service.startIndexing({ ...base, excludedFiles: -1 })).rejects.toThrow();
+		service.dispose();
+	});
+
 	it("reports what a run that finished before the first poll actually read", async () => {
 		const directory = await workDir();
 		const documents = join(directory, "Documents");

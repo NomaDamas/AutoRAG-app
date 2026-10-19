@@ -20,6 +20,21 @@ describe("applyIndexingConfig keyword-only switch", () => {
 	});
 });
 
+describe("applyIndexingConfig excludePaths", () => {
+	const base = { folders: ["/a"], datasources: [], home: HOME, embedder: null, workspacePath: null, model: null };
+
+	it("adds the chosen folders after the user's own exclusions, without repeating one", () => {
+		const next = applyIndexingConfig({ ...base, raw: { excludePaths: ["/keep", "/a/Zoom"] }, excludePaths: ["/a/Zoom", "/a/Telegram"] });
+		expect(next.excludePaths).toEqual(["/keep", "/a/Zoom", "/a/Telegram"]);
+	});
+
+	it("creates the list when the config has none, and leaves the config alone when nothing is excluded", () => {
+		expect(applyIndexingConfig({ ...base, raw: {}, excludePaths: ["/a/Zoom"] }).excludePaths).toEqual(["/a/Zoom"]);
+		expect(applyIndexingConfig({ ...base, raw: {}, excludePaths: [] }).excludePaths).toBeUndefined();
+		expect(applyIndexingConfig({ ...base, raw: { excludePaths: ["/keep"] } }).excludePaths).toEqual(["/keep"]);
+	});
+});
+
 describe("applyIndexingConfig", () => {
 	it("replaces searchPaths and leaves an existing embedder untouched", () => {
 		const raw = { searchPaths: ["/old"], minSync: { embedder: { profile: "keep", dimension: 1 }, other: true } };

@@ -275,6 +275,18 @@ still has the previous file's size when they lay out.
   Noto Sans KR fallback (Korean renders through that chain); SmartArt and
   charts are labelled boxes rather than their rendered previews.
 
+- **Spreadsheets** — `.xlsx`, `.xlsm`, `.xlsb`, `.xls`, `.xlt`, `.ods`, `.csv`, `.tsv`
+  show the first 100 non-blank rows and 20 columns as a table, with a pager
+  between sheets. The viewer reads no more than it draws (`shared/sheet.ts`):
+  a workbook container gets a names-only pass and then one pass for the shown
+  sheet, each stopping after 1000 rows; a delimited text file is read in one
+  pass with the same stop. Measured in the built app on an M4 Max, a 12MB
+  workbook of three 60,000-row sheets went from 7.9s to 0.75s to first rows and
+  a 28MB csv from 5.5s to 0.29s; the page used to be unresponsive for the whole
+  wait. The parse is memoised per file and sheet, so a re-render does not read
+  the workbook again. `run-qa-quick-look-sheet-large.mjs` drives this on the
+  production build.
+
 - **TIFF** — on macOS the main process has the OS decode the file (`sips`, shared
   with HEIC in `node/sips.ts`) and the panel shows the resulting PNG. A picture
   longer than 2048px on its long side is shrunk to that; a smaller one is left

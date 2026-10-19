@@ -355,6 +355,9 @@ switch branches in place.
 - `src/main/` — Electron main process: windows, menus, IPC, thumbnails, and
   the fs worker's lifecycle (`fs-worker-host.ts`). Its filesystem services
   (listing, watch, places, dupey, index status) run inside the fs worker.
+- `src/main/agents/` — the factory for helper agents (plain pi sessions that
+  share the AutoRAG agent's model and sign-in) and their profiles; see
+  `docs/architecture.md` "Helper agents". AI Search itself stays on the librarian.
 - `src/fs-worker/` — the "AutoRAG File System" utility process entry.
 - `src/preload/` — typed renderer bridge; FS calls go straight to the worker
   over a MessagePort (`worker-link.ts`).

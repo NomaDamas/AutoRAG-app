@@ -22,6 +22,7 @@ import type {
 	SourceId,
 } from "../../../shared/onboarding-contract";
 import type { Translate } from "./flow";
+import type { SmartRun } from "./smart-scope";
 
 export type OverlayKind = "fda" | "restart" | "notifications" | "winfw" | "win" | "pay";
 
@@ -34,6 +35,8 @@ export interface OnboardingCtx {
 	/** Any selected folder still has an unfinished scan. */
 	readonly scanning: boolean;
 	readonly scans: ReadonlyMap<string, FolderScan>;
+	/** Where the smart-indexing analysis of the selected folders stands; its proposals are `draft.smartScope`. */
+	readonly smartRun: SmartRun;
 	readonly candidates: readonly FolderCandidate[];
 	readonly embedding: EmbeddingInfo | null;
 	readonly sources: readonly DetectedSource[];
@@ -67,8 +70,18 @@ export interface OnboardingCtx {
 	closeOverlay(): void;
 
 	setFolderSelected(path: string, selected: boolean): void;
-	toggleAllFolders(): void;
 	addFolders(): void;
+	/** Selects every folder, or clears the selection when all are selected. */
+	toggleAllFolders(): void;
+	/** Starts the AI analysis of the selected folders (the scan screen starts it on entry). */
+	startSmartScan(): void;
+	cancelSmartScan(): void;
+	/** Drops the proposals and goes back to the scan screen to analyse the selected folders again. */
+	rescanSmart(): void;
+	/** Sets whether one proposed folder is left out of the index. */
+	setSmartExcluded(path: string, excluded: boolean): void;
+	/** Picks folders inside the selected ones to leave out too; each is measured once it is added. */
+	addExclusion(): void;
 
 	setEmbedMode(mode: EmbedMode): void;
 	setCloudConsent(consent: boolean): void;

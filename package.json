@@ -43,6 +43,7 @@
 		"lzma-wasm": "1.0.7",
 		"music-metadata": "^11.16.1",
 		"posthog-node": "^5.56.2",
+		"typebox": "1.3.27",
 		"zod": "^4.6.5"
 	},
 	"devDependencies": {

@@ -34,7 +34,7 @@ export type Translate = (key: string, options?: Record<string, unknown>) => stri
 export function buildFlow(plan: PlanId, planConfirmed: boolean, embed: EmbedMode): OnboardingStepId[] {
 	const mid: OnboardingStepId[] = embed === "cloud" ? ["plan", "sources"] : ["sources", "plan"];
 	const tail: OnboardingStepId[] = plan === "byok" ? ["model", "indexing"] : ["indexing"];
-	const head: OnboardingStepId[] = ["welcome", "permissions", "account", "folders", "embedding"];
+	const head: OnboardingStepId[] = ["welcome", "permissions", "account", "folders", "smartScan", "smartScope", "embedding"];
 	return head.concat(planConfirmed ? mid.filter((id) => id !== "plan") : mid).concat(tail);
 }
 
@@ -81,6 +81,8 @@ export interface AdvanceState {
 	readonly fullDiskAccess: boolean;
 	readonly signedIn: boolean;
 	readonly selectedFolders: number;
+	/** The smart-indexing agent is still looking through the folders. */
+	readonly smartScanning: boolean;
 	readonly embed: EmbedMode;
 	readonly cloudConsent: boolean;
 	readonly plan: PlanId;
@@ -98,7 +100,11 @@ export function canAdvance(state: AdvanceState): boolean {
 		case "plan":
 			if (!isPlanSelectable(state.plan, state.embed)) return false;
 			return state.signedIn || state.plan === "byok";
+		case "smartScan":
+			// The folders were chosen in the step before; the next screen is where the AI's proposals are reviewed.
+			return !state.smartScanning;
 		case "folders":
+		case "smartScope":
 			return state.selectedFolders > 0;
 		case "embedding":
 			// Only the cloud embedder sends document text anywhere, so only it needs consent.
@@ -280,7 +286,8 @@ export function formatSize(bytes: number): string {
 	if (bytes >= 1_000_000) {
 		return `${Math.round(bytes / 1_000_000)} MB`;
 	}
-	return `${Math.round(bytes / 1000)} KB`;
+	// Anything above zero shows as at least 1 KB, so a small folder is not reported as empty.
+	return `${bytes <= 0 ? 0 : Math.max(1, Math.round(bytes / 1000))} KB`;
 }
 
 /** Icon name and colour for a connector's tile (prototype `sources[]`). */

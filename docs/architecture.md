@@ -306,8 +306,8 @@ app at a local capture server and asserts the rules above over HTTP.
 ## First-run onboarding
 
 A fresh install opens onboarding instead of the Finder: welcome, permissions,
-account, folders, embedding, data sources, plan, the model step (BYOK only), and
-the first index. The screens port
+account, folders, smart scan, smart-indexing scope, embedding, data sources,
+plan, the model step (BYOK only), and the first index. The screens port
 `docs/design-reference/onboarding/onboarding-prototype.html`; the draft is saved
 after every change, so a relaunch (for example after granting Full Disk Access)
 resumes at the same step.
@@ -320,9 +320,50 @@ resumes at the same step.
   registers the OS login item in packaged builds only (registering the dev
   binary would add bare "Electron" to Login Items); the switch is read back from
   the OS and flips off with a message if the OS refused.
-- **Folders** are pre-scanned with the indexer's own rules (supported
-  extensions, size cap, skipped dependency/code folders) to show real file
-  counts and an ETA.
+- **Folders** shows the suggested locations (Desktop, Documents, Downloads, iCloud
+  Drive start selected; Pictures and connected cloud drives do not) as cards with
+  a checkbox, each pre-scanned with the indexer's own rules (supported
+  extensions, size cap, skipped dependency/code folders) for a real file count,
+  size and ETA, plus "add another folder". This is where the person chooses what
+  the AI looks through and what is indexed; the steps after it work on exactly
+  these folders.
+- **Smart scan** (after the folders) starts a helper agent (see "Helper agents")
+  on the selected folders. It runs once on entering the step, and again only when
+  a folder was selected that the last analysis did not cover (the draft keeps the
+  folders it analysed, `smartScopeRoots`); unselecting a folder just hides its
+  proposals. The scan screen shows the prototype's drawn folder and roaming magnifying glass
+  and the folder being looked at. The model judges, in words and without
+  thresholds, whether a folder holds what a person wrote or collected for
+  their own use or what a program generated as a by-product (logs, app and chat
+  exports, caches, build or generated output, installers, machine-named series).
+  Code repositories (mostly source files plus a manifest such as `package.json`,
+  `src`/`test` folders, a cloned project) are always left out, even the person's
+  own; the prompt describes how to recognise one from names. It sees names only:
+  `folder_survey` reports file counts by type, every type and not only the ones
+  the index reads (subfolders included, with the pre-scan's own rules), when the
+  files last changed and a spread of file names, for the folder and each
+  subfolder, and `list_folder` lists the names in one folder. A survey names up to
+  500 subfolders, the largest 40 in detail and the rest one line each (name,
+  counts, main type), so a large folder stays readable. No file is opened and no excerpt leaves the
+  machine. The agent has no pi file tools, so it can only look inside the chosen
+  folders. A folder can only be proposed after it was surveyed, every path is
+  checked against the disk and the chosen folders. A proposal is kept even when
+  the index would read no file from it (the screen then says "no documents"). When in doubt the model keeps the folder: a wrongly
+  excluded document vanishes from search, a wrongly included folder only costs
+  time. Because the model decides, runs can differ a little; each proposal carries
+  the reason the model gave. It spends the AutoRAG model; the user
+  can cancel and carry on by hand, and a failure (no model signed in yet, a provider
+  error) shows its reason with a retry while the step can still be left.
+- **Smart-indexing scope** is the prototype's scope screen: a policy bar (the
+  estimate, struck through to the old one with the percent saved, and "scan
+  again"), a blue panel of the included folders and a red one of the sub-folders
+  left out. A pill's x removes a folder or puts a left-out one back, a ghost pill brings
+  back a folder the AI had looked through and the person unselected, and the
+  dashed button adds a sub-folder of the selected ones to leave out (measured
+  once added). Choosing which folders to look through is the step before the scan. The proposals and the user's choices live in the draft (`smartScope`),
+  so a relaunch restores them. Starting the index writes the folders still left
+  out into the shared config's `excludePaths` after the user's own entries and
+  subtracts their file count from the first index's total and ETA.
 - **Embedding** offers local (`native:Qwen/Qwen3-Embedding-0.6B`) by default and enables
   Dazzi cloud embedding (`openai:qwen/qwen3-embedding-0.6b` on the Dazzi
   endpoint) once the user is signed in to Dazzi and gives explicit consent.
@@ -470,6 +511,24 @@ edited file joins version stacks at the next regular scan. A stack member whose
 content changed after the scan is shown as a normal row (detached) until the
 next scan. An external rename of a stack member re-points the stack within a 2 s
 window. Search results are not live.
+
+## Helper agents
+
+AI Search is answered by the AutoRAG agent (`@autorag/librarian`). Every other
+agent in the app is a plain pi session built by one factory,
+`src/main/agents/agent-factory.ts`, from an `AgentProfile`:
+
+| Per profile | Shared by all |
+|---|---|
+| system prompt, tool names (pi built-ins such as `read ls find grep`, which open any path on the machine, so a profile that must stay inside a folder uses none), custom tools, thinking level, whether pi loads AGENTS.md / skills / extensions (each off unless the profile asks) | the model and its credentials, resolved by `agents/app-model.ts` from the same config AI Search uses; pi's `auth.json` / `models.json` in the agent dir, so one sign-in serves every agent |
+
+A session is in memory and disposed by its caller: nothing is written to the
+agent dir or the working directory, and the user's own pi settings never apply.
+Profiles live in `src/main/agents/profiles/`; the first is smart indexing
+(thinking `low`; looks only through `folder_survey` and `list_folder`, answers
+only through a `propose_exclusions` tool that validates paths). A new profile adds one file there and, if it needs
+a UI, its own service and bridge. `test/agent-factory.test.ts` pins what the
+model is offered; it runs on pi's faux provider.
 
 ## AI Search attachments
 

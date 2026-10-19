@@ -355,6 +355,8 @@
       "permissions": "Permissions",
       "account": "Account",
       "folders": "Folders",
+      "smartScan": "Smart scan",
+      "smartScope": "Smart indexing",
       "embedding": "Embedding",
       "sources": "Data sources",
       "plan": "Plan",
@@ -366,6 +368,8 @@
       "permissions": "Continue",
       "account": "Continue",
       "folders": "Continue with folders",
+      "smartScan": "See the suggested scope",
+      "smartScope": "Confirm scope and continue",
       "embedding": "Continue",
       "sources": "Continue",
       "model": "Continue",
@@ -483,6 +487,21 @@
         "allow": "Allow"
       }
     },
+    "smartScan": {
+      "title": "Looking through your folders…",
+      "done": "Finished looking",
+      "idle": "Look through your folders?",
+      "failedTitle": "Could not look through your folders",
+      "lead": "AI is counting the files in the suggested folders",
+      "looking": "Looking at: {{path}}",
+      "cancel": "Cancel and choose by hand",
+      "note": "Found {{count}} sub-folders worth leaving out. Review them on the next screen.",
+      "noteNone": "Nothing to leave out. The folders you chose look document-heavy.",
+      "failed": "The analysis did not finish. You can pick the scope yourself on the next screen.",
+      "retry": "Try again",
+      "skipped": "You can pick the scope yourself without the AI scan.",
+      "start": "Scan with AI"
+    },
     "folders": {
       "eyebrow": "Indexing scope",
       "title": "Choose the folders AI can read",
@@ -498,6 +517,47 @@
       "localEta": "Local (this Mac) · ~{{minutes}} min",
       "cloudEta": "Remote · ~{{minutes}} min",
       "warning": "This scope is broad. Choosing a subfolder or remote embedding shows your first results sooner."
+    },
+    "smartScope": {
+      "policy": {
+        "title": "Smart indexing scope",
+        "tag": "Sorted by AI",
+        "lead": "Blue folders on the left are indexed in full. Red sub-folders on the right and .* hidden folders are left out of the index.",
+        "eta": "~{{minutes}} min",
+        "etaSaved": "{{percent}}% faster",
+        "rescan": "Scan again",
+        "auto": ".* hidden folders (.git, .obsidian, .cache) and node_modules are always left out"
+      },
+      "include": {
+        "title": "Folders to include",
+        "meta": "{{folders}} folders · {{files}} files · {{size}}",
+        "remove": "Stop including",
+        "addable": "Available:",
+        "allIn": "Every suggested folder is included"
+      },
+      "exclude": {
+        "title": "Sub-folders to leave out",
+        "meta": "{{count}} paths · −{{size}}",
+        "add": "Add folder to leave out",
+        "restore": "Include again",
+        "restored": "Put back:",
+        "refused": {
+          "isRoot": "A selected folder cannot be left out itself. Pick a sub-folder inside it.",
+          "outside": "Only sub-folders of the selected folders can be left out.",
+          "covered": "That folder is already left out."
+        },
+        "noDocs": "no documents"
+      },
+      "criteria": {
+        "show": "See how the AI decides",
+        "hide": "Hide the criteria",
+        "looked": "What the AI looked at: the file and folder names in your chosen folders, how many files of each type, and when the files last changed. It does not open any file.",
+        "keep": "What it keeps: documents you wrote, received or collected (reports, notes, contracts, papers, course material) and folders named for a project, a person or a date.",
+        "leave": "What it leaves out: logs a program made as a by-product, files apps download or export (messengers and the like), caches, temp and crash files, build or generated output, installers and app backups, and folders where many similar-named files piled up at once.",
+        "code": "Code repositories are always left out, even ones you wrote yourself: folders that are mostly source files and have a manifest such as package.json.",
+        "doubt": "When in doubt it keeps the folder. Wrongly leaving out your own document makes it vanish from search, while including some clutter only costs time.",
+        "you": "You decide. Hover an item to see the reason, undo it with the x, or add your own. The AI may judge a little differently each time."
+      }
     },
     "embedding": {
       "eyebrow": "Semantic search",
