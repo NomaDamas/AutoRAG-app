@@ -110,7 +110,8 @@ describe("onDiskPath", () => {
 		expect(await onDiskPath(join(root, "AutoRAg", "docs", "readme.MD"))).toBe(join(root, "AutoRAG", "Docs", "ReadMe.md"));
 	});
 
-	it.skipIf(!CASE_INSENSITIVE)("restores the on-disk Unicode form of a name typed in another normalization", async () => {
+	// NTFS stores names as given and does not unify normalization forms; only APFS does.
+	it.skipIf(!CASE_INSENSITIVE || process.platform === "win32")("restores the on-disk Unicode form of a name typed in another normalization", async () => {
 		const decomposed = "문서".normalize("NFD");
 		await mkdir(join(root, decomposed));
 		expect(await onDiskPath(join(root, "문서".normalize("NFC")))).toBe(join(root, decomposed));

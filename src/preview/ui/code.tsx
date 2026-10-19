@@ -24,6 +24,8 @@ import typescript from "highlight.js/lib/languages/typescript";
 import xml from "highlight.js/lib/languages/xml";
 import yaml from "highlight.js/lib/languages/yaml";
 import { decodeText, lineEnding, splitHighlighted, type TextEncodingName } from "../shared/code";
+import { prettyJsonLines } from "../shared/jsonl";
+import { bplistToXml, isBinaryPlist } from "../shared/plist";
 import type { PreviewDocument } from "../shared/contract";
 import { formatFinderSize } from "../shared/format";
 import { SMALL_BUTTON, Segmented, TOOL_BUTTON, ToolbarSlot, useChrome } from "./chrome";
@@ -75,6 +77,9 @@ const LANGUAGES: Readonly<Record<string, Language>> = {
 	cts: { grammar: "typescript", label: "TypeScript", dot: "#3178c6" },
 	json: { grammar: "json", label: "JSON", dot: "#8e8e93" },
 	jsonc: { grammar: "json", label: "JSON", dot: "#8e8e93" },
+	jsonl: { grammar: "json", label: "JSON Lines", dot: "#8e8e93" },
+	ndjson: { grammar: "json", label: "JSON Lines", dot: "#8e8e93" },
+	plist: { grammar: "xml", label: "Property List", dot: "#0060ac" },
 	xml: { grammar: "xml", label: "XML", dot: "#0060ac" },
 	html: { grammar: "xml", label: "HTML", dot: "#e34c26" },
 	htm: { grammar: "xml", label: "HTML", dot: "#e34c26" },
@@ -223,13 +228,24 @@ const FOOTER = "flex flex-none items-center gap-14 px-16 border-t-[0.5px] border
  * and a footer with language, encoding, line ending, and line count.
  */
 export function TextView({ file }: { readonly file: PreviewDocument }): ReactElement {
+	const { t } = useTranslation();
+	const decoded = useDecodedText(file);
+	if (decoded === null) return <FallbackView file={file} note={t("quickLook.code.readFailed")} />;
+	return <CodeBody file={file} decoded={decoded} sizeNote={null} />;
+}
+
+/**
+ * The numbered, highlighted lines with the toolbar and footer `TextView` shows.
+ * `sizeNote` replaces the footer's size label when the viewer cut the text
+ * itself (JSON Lines stops after a record count, not a byte count).
+ */
+export function CodeBody({ file, decoded, sizeNote }: { readonly file: PreviewDocument; readonly decoded: DecodedText; readonly sizeNote: string | null }): ReactElement {
 	const { t, i18n } = useTranslation();
 	const { report } = useChrome();
-	const decoded = useDecodedText(file);
 	const language = LANGUAGES[file.ext] ?? PLAIN;
-	const lines = useMemo(() => (decoded === null ? [] : highlightLines(decoded.text, language.grammar)), [decoded, language.grammar]);
+	const lines = useMemo(() => highlightLines(decoded.text, language.grammar), [decoded, language.grammar]);
 	const [wrap, setWrap] = useState(true);
-	const { copied, copy } = useCopy(decoded?.text ?? "");
+	const { copied, copy } = useCopy(decoded.text);
 	// The window still has the previous file's size here, so measure the lines themselves, not the scroller.
 	const contentRef = useRef<HTMLDivElement | null>(null);
 	useLayoutEffect(() => {
@@ -237,7 +253,7 @@ export function TextView({ file }: { readonly file: PreviewDocument }): ReactEle
 		if (content === null) return;
 		report({ width: CODE_WIDTH, height: content.offsetHeight + CODE_CHROME }, "clamp");
 	}, [report, lines]);
-	if (decoded === null) return <FallbackView file={file} note={t("quickLook.code.readFailed")} />;
+	const size = sizeNote ?? (file.truncated ? t("quickLook.code.truncated", { size: formatFinderSize(file.bytes?.byteLength ?? 0) }) : formatFinderSize(file.size));
 	return (
 		<>
 			<ToolbarSlot>
@@ -263,10 +279,48 @@ export function TextView({ file }: { readonly file: PreviewDocument }): ReactEle
 				<span>{decoded.ending}</span>
 				<span>{t("quickLook.code.lines", { count: lines.length.toLocaleString(i18n.language) })}</span>
 				<span className="flex-1" />
-				<span>{file.truncated ? t("quickLook.code.truncated", { size: formatFinderSize(file.bytes?.byteLength ?? 0) }) : formatFinderSize(file.size)}</span>
+				<span>{size}</span>
 			</footer>
 		</>
 	);
+}
+
+/** Records the JSON Lines view pretty-prints before it stops. */
+const JSONL_RECORD_LIMIT = 2000;
+
+/** JSON Lines: the first records as indented, highlighted JSON. */
+export function JsonLinesView({ file }: { readonly file: PreviewDocument }): ReactElement {
+	const { t, i18n } = useTranslation();
+	const decoded = useDecodedText(file);
+	const shown = useMemo(() => {
+		if (decoded === null) return null;
+		const records = prettyJsonLines(decoded.text, JSONL_RECORD_LIMIT);
+		return { decoded: { ...decoded, text: records.text }, cut: records.cut };
+	}, [decoded]);
+	if (shown === null) return <FallbackView file={file} note={t("quickLook.code.readFailed")} />;
+	const sizeNote = shown.cut ? t("quickLook.code.firstRecords", { count: JSONL_RECORD_LIMIT.toLocaleString(i18n.language) }) : null;
+	return <CodeBody file={file} decoded={shown.decoded} sizeNote={sizeNote} />;
+}
+
+/** Property lists as XML text; a binary plist is converted first, as `plutil -convert xml1` would. */
+export function PlistView({ file }: { readonly file: PreviewDocument }): ReactElement {
+	const { t } = useTranslation();
+	const bytes = file.bytes;
+	const shown = useMemo<{ readonly decoded: DecodedText } | { readonly error: string } | null>(() => {
+		if (bytes === null) return null;
+		if (!isBinaryPlist(bytes)) {
+			const { text, encoding } = decodeText(bytes);
+			return { decoded: { text: text.replace(/\r\n?/g, "\n"), encoding, ending: lineEnding(text) } };
+		}
+		try {
+			return { decoded: { text: bplistToXml(bytes), encoding: "UTF-8", ending: "LF" } };
+		} catch (caught) {
+			return { error: caught instanceof Error ? caught.message : t("quickLook.code.plistInvalid") };
+		}
+	}, [bytes, t]);
+	if (shown === null) return <FallbackView file={file} note={t("quickLook.code.readFailed")} />;
+	if ("error" in shown) return <FallbackView file={file} note={shown.error} />;
+	return <CodeBody file={file} decoded={shown.decoded} sizeNote={isBinaryPlist(bytes ?? new Uint8Array()) ? t("quickLook.code.plistConverted") : null} />;
 }
 
 type HtmlMode = "desktop" | "mobile" | "source";

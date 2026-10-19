@@ -1,11 +1,10 @@
 import { fileURLToPath } from "node:url";
 import { createServer } from "node:http";
-import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { launchFinder, finderWindow } from "./launch-finder.mjs";
-import { chord, rmRetry } from "./platform.mjs";
+import { chord, isolatedToolPath, rmRetry } from "./platform.mjs";
 
 // Redesigned Settings (docs/prototypes/settings) against the real app:
 // prototype IA + search, real Pi provider catalog and /login session, role
@@ -24,7 +23,7 @@ mkdirSync(join(workspace, "docs"), { recursive: true });
 mkdirSync(agentDir, { recursive: true });
 const qaBin = join(root, "bin");
 mkdirSync(qaBin, { recursive: true });
-symlinkSync(execFileSync("/bin/sh", ["-c", "command -v dupey"], { encoding: "utf8" }).trim(), join(qaBin, "dupey"));
+const qaPath = isolatedToolPath(qaBin);
 
 // A loopback stand-in for Ollama / an OpenAI-compatible server: model list,
 // chat model list, and real-shaped embedding vectors of the declared size.
@@ -68,7 +67,7 @@ const env = {
 	// Only `dupey` (required by the Finder) is visible: host datasource CLIs
 	// (mailcrawl, discrawl, …) must never run against the operator's archives
 	// when the embedding change triggers a rebuild.
-	PATH: `${qaBin}:/usr/bin:/bin`,
+	PATH: qaPath,
 };
 
 const fails = [];

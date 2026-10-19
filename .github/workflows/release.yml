@@ -53,12 +53,12 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
       - uses: dtolnay/rust-toolchain@stable
 
-      # `bun install` resolves the `file:./.upstream/autorag` dependency before
+      # `bun install` resolves the `file:./.upstream/librarian-package` dependency before
       # its `preinstall` hook runs, so the librarian is cloned and built first.
       - name: Sync librarian
         run: node scripts/sync-librarian.mjs
@@ -129,7 +129,7 @@ jobs:
           # Auto-update payloads: CDN only (the feed points there; GitHub caps an asset at 2 GiB).
           cp dist/*.zip dist/*.blockmap update/
           if [ -n "$AUTORAG_UPDATE_FEED_URL" ]; then node scripts/release/update-feed.mjs dist feed; fi
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: macos
           path: |
@@ -139,7 +139,7 @@ jobs:
           retention-days: 14
       - name: Attach to the release
         if: ${{ github.event_name == 'release' }}
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: upload/*
       - name: Sync installers to the R2 mirror
@@ -199,11 +199,11 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
       # slacrawl and notcrawl publish no Windows archive, so they are built from source with Go.
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version: stable
       - uses: dtolnay/rust-toolchain@stable
@@ -261,7 +261,7 @@ jobs:
           # The installer is the update payload too; its blockmap (from the same build) drives the differential download.
           cp dist/*.exe.blockmap update/
           if [ -n "$AUTORAG_UPDATE_FEED_URL" ]; then node scripts/release/update-feed.mjs dist feed; fi
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: windows
           path: |
@@ -271,7 +271,7 @@ jobs:
           retention-days: 14
       - name: Attach to the release
         if: ${{ github.event_name == 'release' }}
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: upload/*
       - name: Sync installers to the R2 mirror

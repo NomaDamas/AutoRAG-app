@@ -447,7 +447,7 @@
       "cancel": "キャンセル",
       "skip": "アカウントなしで自分のAPIキーを使う (BYOK)",
       "offline": "サーバーに接続できないため、最後に確認した情報を表示しています。",
-      "authNote": "ログイン方法（メールコード、ソーシャルログイン）は、ブラウザのDazziログイン画面で選びます。Dazziはリクエスト内容を保存せず、データ保持なし（ZDR）プロバイダーにのみ送信します。",
+      "authNote": "ログイン方法（メールコード、ソーシャルログイン）は、ブラウザのDazziログイン画面で選びます。",
       "agreeLead": "続行すると、Dazziの以下に同意したものとみなされます:",
       "agreeTerms": "利用規約",
       "agreePrivacy": "プライバシーポリシー",
@@ -661,7 +661,7 @@
           "note": "月額$4 · いつでも解約可",
           "tag": "毎日気軽に使う",
           "chip": "質問はDazziモデルに送信",
-          "training": "入出力をモデルの学習に使用しません",
+          "training": "Dazziは入出力をモデルの学習に使用しません",
           "feature": {
             "a": "ローカル埋め込みまたは使用しない",
             "b": "マネージドAIモデル · 十分な利用量",
@@ -674,7 +674,7 @@
           "note": "月額$20 · いつでも解約可",
           "tag": "最速の初回インデックス作成",
           "chip": "質問はDazziモデルに送信",
-          "training": "入出力をモデルの学習に使用しません",
+          "training": "Dazziは入出力をモデルの学習に使用しません",
           "feature": {
             "a": "リモート埋め込みが利用可能",
             "b": "マネージドAIモデル · 最大の利用量",
@@ -1230,6 +1230,35 @@
         "desktop": "デスクトップ",
         "mobile": "モバイル",
         "source": "ソース"
+      },
+      "firstRecords": "最初の{{count}}件のレコードを表示中",
+      "plistInvalid": "プロパティリストを読み込めません",
+      "plistConverted": "バイナリplistをXMLで表示"
+    },
+    "data": {
+      "readFailed": "データファイルを読み込めません",
+      "tables": "テーブル",
+      "noTables": "テーブルなし",
+      "tableCount": "{{count}}個のテーブル",
+      "rows": "{{count}}行",
+      "rowsAtLeast": "{{count}}+",
+      "columns": "{{count}}列",
+      "rowGroups": "{{count}}個の行グループ",
+      "view": "ビュー",
+      "noColumns": "このテーブルには列がありません",
+      "noRows": "行なし",
+      "viewNotRun": "プレビューではビューを実行しません",
+      "tableFailed": "このテーブルを読み込めません",
+      "tooLarge": "最初の行グループが大きすぎてプレビューできません",
+      "firstRows": "最初の{{count}}行を表示中",
+      "columnsCut": "最初の{{count}}列のみ表示中",
+      "blob": "バイナリ {{size}}",
+      "walPending": "-walファイルの最新の変更は表示されません",
+      "unreadable": {
+        "not-sqlite": "読み取り可能なSQLiteデータベースではありません(暗号化されている可能性があります)",
+        "corrupt": "ファイルが破損していて読み込めません",
+        "not-parquet": "Parquetファイルではありません",
+        "encrypted": "このParquetファイルは暗号化されています"
       }
     },
     "markdown": {
@@ -1279,6 +1308,19 @@
     "epub": {
       "readFailed": "書籍を読み込めませんでした",
       "noText": "本文が見つかりませんでした"
+    },
+    "legacyOffice": {
+      "rendered": "ドキュメントのプレビュー",
+      "modePage": "ページ",
+      "modeText": "テキスト",
+      "encrypted": "パスワードで保護されているためプレビューできません",
+      "unsupported": "このWord/PowerPoint形式はプレビューできません",
+      "corrupt": "ファイルが壊れているため読み取れませんでした",
+      "empty": "表示できるテキストがありません",
+      "page": "{{count}}ページ",
+      "slide": "スライド {{count}}",
+      "textOnly": "テキストのみ表示しています。レイアウトや画像はアプリで開いて確認してください。",
+      "truncated": "文書が大きいため、先頭部分のみ表示しています。"
     },
     "paged": {
       "drawFailed": "ページを描画できませんでした",
@@ -1342,6 +1384,63 @@
       "notAbsolute": "プレビューのパスが正しくありません",
       "missing": "ファイルが見つかりません",
       "notFile": "フォルダはプレビューできません"
+    },
+    "mail": {
+      "from": "差出人",
+      "to": "宛先",
+      "cc": "Cc",
+      "date": "日付",
+      "noSubject": "(件名なし)",
+      "noBody": "本文がありません",
+      "noMessages": "メールがありません",
+      "attachments": "添付ファイル {{count}} 件",
+      "viewMode": "本文の形式",
+      "rendered": "表示",
+      "plain": "テキスト",
+      "messages": "メール {{count}} 通",
+      "messagesAtLeast": "メール {{count}} 通以上",
+      "listCapped": "最初の {{count}} 通のみ表示",
+      "readFailed": "メールを読み込めません",
+      "messageList": "メール一覧",
+      "unknownSender": "(差出人なし)"
+    },
+    "contact": {
+      "noName": "(名前なし)",
+      "phone": "電話",
+      "email": "メール",
+      "address": "住所",
+      "note": "メモ",
+      "contacts": "連絡先 {{count}} 件",
+      "readFailed": "連絡先を読み込めません",
+      "empty": "連絡先がありません",
+      "photo": "{{name}} の写真"
+    },
+    "calendar": {
+      "events": "予定 {{count}} 件",
+      "noTitle": "(タイトルなし)",
+      "allDay": "終日",
+      "location": "場所",
+      "readFailed": "カレンダーを読み込めません",
+      "empty": "予定がありません",
+      "listCapped": "最初の {{count}} 件のみ表示",
+      "repeatDaily": "毎日",
+      "repeatDailyEvery": "{{count}} 日ごと",
+      "repeatWeekly": "毎週",
+      "repeatWeeklyEvery": "{{count}} 週間ごと",
+      "repeatMonthly": "毎月",
+      "repeatMonthlyEvery": "{{count}} か月ごと",
+      "repeatYearly": "毎年",
+      "repeatYearlyEvery": "{{count}} 年ごと",
+      "repeatOther": "繰り返し",
+      "repeatOn": "{{days}}",
+      "repeatTimes": "{{count}} 回",
+      "repeatUntil": "{{date}} まで"
+  },
+    "odf": {
+      "readFailed": "ドキュメントを読み込めませんでした",
+      "openFailed": "プレゼンテーションを開けませんでした",
+      "noSlides": "スライドがありません",
+      "noPreview": "このドキュメントにはプレビュー画像がありません"
     }
   },
   "settingsCore": {
@@ -1620,8 +1719,8 @@
       "errorModelRequired": "埋め込みサーバーのモデル名を入力してください。",
       "errorDimension": "埋め込みサーバーの次元は正の整数でなければなりません。",
       "title": "文書理解モデル",
-      "hint": "文書の意味を分析します。文書の内容はこの Mac の外に出ません。",
-      "body": "文書の意味を分析する埋め込みモデルです。Dazzi ランタイムとローカルサーバーからのみ選択でき、文書の内容はこの Mac の外に出ません。",
+      "hint": "文書の意味を分析します。クラウド埋め込みを選ばない限り、文書の内容はこの Mac の外に出ません。",
+      "body": "文書の意味を分析する埋め込みモデルです。ここでは Dazzi ランタイムとローカルサーバーからのみ選択でき、文書の内容は設定時にクラウド埋め込みを選んだ場合にのみこの Mac の外に出ます。",
       "dimension": "{{count}} 次元",
       "modelName": "モデル名",
       "baseUrl": "サーバーアドレス",

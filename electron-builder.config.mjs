@@ -65,7 +65,6 @@ const config = {
 		// Prose and type declarations are never read at run time. SKILL.md files are (the librarian loads
 		// them as agent skills), so only README/CHANGELOG-style names go, not *.md in general.
 		"!**/node_modules/**/{README*,readme*,CHANGELOG*,HISTORY*,CONTRIBUTING*,*.markdown,*.d.ts,*.d.mts,*.d.cts,*.tsbuildinfo}",
-		"!node_modules/@autorag/librarian/{src,test,legacy,docs,assets,scripts,skills-src}/**",
 	],
 	extraResources: [
 		{ from: join(stage, "tools"), to: "tools", filter: ["**/*"] },

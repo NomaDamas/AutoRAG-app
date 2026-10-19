@@ -419,6 +419,10 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 		});
 	};
 
+	/** A background write that fails (folder removed, disk full) must not become an unhandled rejection. */
+	const warnPersistFailed = (error: unknown): void => {
+		console.warn("[onboarding] could not save the onboarding state:", error);
+	};
 	let persistChain: Promise<void> = Promise.resolve();
 	const persist = (): Promise<void> => {
 		const path = onboardingStatePath(deps.userDataDir);
@@ -522,7 +526,7 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 		const finishedAt = new Date(now()).toISOString();
 		const indexing = stateFile.indexing;
 		if (indexing !== undefined) stateFile = { ...stateFile, indexing: { ...indexing, finishedAt } };
-		void persist();
+		void persist().catch(warnPersistFailed);
 		status = ok
 			? { ...status, state: "success", progress: 100, remainingMinutes: null, finishedAt, error: null }
 			: { ...status, state: "failed", remainingMinutes: null, finishedAt, error: error ?? t("main.onboarding.indexingFailed") };
@@ -737,7 +741,7 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 			embeddedFiles = 0;
 			const startedAt = new Date(now()).toISOString();
 			stateFile = { ...stateFile, indexing: { startedAt, finishedAt: null } };
-			void persist();
+			void persist().catch(warnPersistFailed);
 			status = {
 				...IDLE_STATUS,
 				state: "running",

@@ -8,17 +8,29 @@ export const VIEWER_KINDS = [
 	"audio",
 	"pdf",
 	"docx",
+	"legacyDoc",
 	"sheet",
 	"pptx",
+	"legacyPpt",
 	"markdown",
 	"html",
 	"text",
 	"archive",
 	"iwork",
+	"odt",
+	"odp",
+	"odg",
 	"epub",
 	"hwp",
 	"font",
 	"rtf",
+	"data",
+	"jsonl",
+	"plist",
+	"mail",
+	"msg",
+	"contact",
+	"calendar",
 	"fallback",
 ] as const;
 
@@ -37,8 +49,15 @@ assign("video", ["mp4", "m4v", "webm", "ogv", "mov", "mkv", "avi", "mpeg", "mpg"
 assign("audio", ["mp3", "wav", "wave", "m4a", "aac", "flac", "opus", "ogg", "oga", "aiff", "aif", "weba", "mid", "midi"]);
 assign("pdf", ["pdf"]);
 assign("docx", ["docx", "docm", "dotx"]);
-assign("sheet", ["xlsx", "xlsm", "xlsb", "xls", "csv", "tsv", "ods"]);
-assign("pptx", ["pptx", "pptm", "ppsx"]);
+assign("legacyDoc", ["doc", "dot"]);
+assign("sheet", ["xlsx", "xlsm", "xlsb", "xls", "xlt", "csv", "tsv", "ods"]);
+assign("pptx", ["pptx", "pptm", "ppsx", "potx"]);
+assign("legacyPpt", ["ppt", "pps", "pot"]);
+// OpenDocument packages. `.ods` stays with the spreadsheet viewer.
+assign("odt", ["odt"]);
+assign("odp", ["odp"]);
+// A drawing has no text model; its package embeds the first page as a PNG.
+assign("odg", ["odg"]);
 assign("markdown", ["md", "markdown", "mdx"]);
 assign("html", ["html", "htm", "xhtml"]);
 assign("text", [
@@ -58,6 +77,16 @@ assign("epub", ["epub"]);
 assign("hwp", ["hwp", "hwpx"]);
 assign("font", ["ttf", "otf", "woff", "woff2", "eot"]);
 assign("rtf", ["rtf"]);
+// Databases and columnar files are opened read-only in the main process; the
+// page only ever receives the capped rows it draws.
+assign("data", ["sqlite", "sqlite3", "db", "parquet"]);
+assign("jsonl", ["jsonl", "ndjson"]);
+assign("plist", ["plist"]);
+assign("mail", ["eml", "emlx", "mbox"]);
+// Outlook's OLE2 container has to be parsed whole; a cut prefix has no directory.
+assign("msg", ["msg"]);
+assign("contact", ["vcf", "vcard"]);
+assign("calendar", ["ics", "ical", "ifb"]);
 
 export function viewerForExtension(ext: string): ViewerKind {
 	const key = ext.toLowerCase().replace(/^\./, "");
@@ -74,9 +103,10 @@ export function claimedViewerExtensions(): readonly { readonly ext: string; read
  * fetches page by page); `prefix` viewers render however much text arrives;
  * `whole` viewers parse the entire file; `decode` viewers get an image the OS
  * decoded for them (the raw file when it cannot); `sniff` reads enough to tell
- * text from binary.
+ * text from binary; `query` sends no bytes: the viewer asks the main process
+ * for capped rows of the file instead.
  */
-export type ByteNeed = "stream" | "prefix" | "whole" | "decode" | "sniff" | "extract";
+export type ByteNeed = "stream" | "prefix" | "whole" | "decode" | "sniff" | "extract" | "query";
 
 export function byteNeed(kind: ViewerKind): ByteNeed {
 	switch (kind) {
@@ -90,18 +120,31 @@ export function byteNeed(kind: ViewerKind): ByteNeed {
 		case "html":
 		case "text":
 		case "rtf":
+		case "jsonl":
+		case "mail":
+		case "contact":
+		case "calendar":
 			return "prefix";
 		case "tiff":
 		case "docx":
+		case "legacyDoc":
 		case "sheet":
 		case "pptx":
+		case "legacyPpt":
+		case "odt":
+		case "odp":
 		case "archive":
 		case "epub":
 		case "hwp":
+		case "plist":
+		case "msg":
 			return "whole";
+		case "data":
+			return "query";
 		case "heic":
 			return "decode";
 		case "iwork":
+		case "odg":
 			return "extract";
 		case "fallback":
 			return "sniff";
@@ -166,10 +209,21 @@ const LABELS: Readonly<Record<string, string>> = {
 	wav: "WAV audio",
 	pdf: "PDF document",
 	docx: "Word document",
+	doc: "Word 97-2003 document",
+	dot: "Word 97-2003 template",
 	xlsx: "Excel spreadsheet",
 	xls: "Excel spreadsheet",
 	csv: "CSV document",
 	pptx: "PowerPoint presentation",
+	ppt: "PowerPoint 97-2003 presentation",
+	pps: "PowerPoint 97-2003 slide show",
+	pot: "PowerPoint 97-2003 template",
+	xlt: "Excel 97-2003 template",
+	potx: "PowerPoint template",
+	odt: "OpenDocument text",
+	ods: "OpenDocument spreadsheet",
+	odp: "OpenDocument presentation",
+	odg: "OpenDocument drawing",
 	md: "Markdown",
 	txt: "Plain text",
 	json: "JSON",
@@ -177,11 +231,27 @@ const LABELS: Readonly<Record<string, string>> = {
 	tar: "TAR archive",
 	gz: "GZIP archive",
 	tgz: "GZIP archive",
+	sqlite: "SQLite database",
+	sqlite3: "SQLite database",
+	db: "Database",
+	parquet: "Parquet data",
+	jsonl: "JSON Lines",
+	ndjson: "JSON Lines",
+	plist: "Property list",
 	numbers: "Numbers spreadsheet",
 	pages: "Pages document",
 	key: "Keynote presentation",
 	epub: "EPUB book",
 	hwp: "HWP document",
+	eml: "Email message",
+	emlx: "Apple Mail message",
+	msg: "Outlook message",
+	mbox: "Mailbox",
+	vcf: "vCard contact",
+	vcard: "vCard contact",
+	ics: "iCalendar event",
+	ical: "iCalendar event",
+	ifb: "iCalendar free/busy",
 	hwpx: "HWPX document",
 	ttf: "TrueType font",
 	otf: "OpenType font",

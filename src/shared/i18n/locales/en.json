@@ -447,7 +447,7 @@
       "cancel": "Cancel",
       "skip": "Continue without an account, with my own API key (BYOK)",
       "offline": "Can't reach the server, so this is the last information we confirmed.",
-      "authNote": "You choose how to sign in (email code or social sign-in) on the Dazzi page in your browser. Dazzi stores no request content and sends it only to zero-data-retention (ZDR) providers.",
+      "authNote": "You choose how to sign in (email code or social sign-in) on the Dazzi page in your browser.",
       "agreeLead": "By continuing, you agree to Dazzi's:",
       "agreeTerms": "Terms of Service",
       "agreePrivacy": "Privacy Policy",
@@ -661,7 +661,7 @@
           "note": "$4/mo · cancel anytime",
           "tag": "Light everyday use",
           "chip": "Questions are sent to Dazzi models",
-          "training": "Inputs and outputs are not used to train models",
+          "training": "Dazzi does not use inputs and outputs to train models",
           "feature": {
             "a": "Local embedding or off",
             "b": "Managed AI models · generous usage",
@@ -674,7 +674,7 @@
           "note": "$20/mo · cancel anytime",
           "tag": "Fastest first indexing",
           "chip": "Questions are sent to Dazzi models",
-          "training": "Inputs and outputs are not used to train models",
+          "training": "Dazzi does not use inputs and outputs to train models",
           "feature": {
             "a": "Remote embedding available",
             "b": "Managed AI models · highest usage",
@@ -1230,6 +1230,35 @@
         "desktop": "Desktop",
         "mobile": "Mobile",
         "source": "Source"
+      },
+      "firstRecords": "Showing first {{count}} records",
+      "plistInvalid": "Couldn’t read the property list",
+      "plistConverted": "Binary plist shown as XML"
+    },
+    "data": {
+      "readFailed": "Couldn’t read the data file",
+      "tables": "Tables",
+      "noTables": "No tables",
+      "tableCount": "{{count}} tables",
+      "rows": "{{count}} rows",
+      "rowsAtLeast": "{{count}}+",
+      "columns": "{{count}} columns",
+      "rowGroups": "{{count}} row groups",
+      "view": "view",
+      "noColumns": "This table has no columns",
+      "noRows": "No rows",
+      "viewNotRun": "Views are not run in the preview",
+      "tableFailed": "Couldn’t read this table",
+      "tooLarge": "The first row group is too large to preview",
+      "firstRows": "Showing first {{count}} rows",
+      "columnsCut": "showing first {{count}} columns",
+      "blob": "{{size}} binary",
+      "walPending": "Recent changes in the -wal file are not shown",
+      "unreadable": {
+        "not-sqlite": "Not a readable SQLite database (it may be encrypted)",
+        "corrupt": "The file is damaged and can’t be read",
+        "not-parquet": "Not a Parquet file",
+        "encrypted": "This Parquet file is encrypted"
       }
     },
     "markdown": {
@@ -1279,6 +1308,19 @@
     "epub": {
       "readFailed": "Couldn’t read the book",
       "noText": "No text found"
+    },
+    "legacyOffice": {
+      "rendered": "Document preview",
+      "modePage": "Page",
+      "modeText": "Text",
+      "encrypted": "This document is password-protected and can’t be previewed",
+      "unsupported": "This Word or PowerPoint format can’t be previewed",
+      "corrupt": "The file is damaged and couldn’t be read",
+      "empty": "There is no text to show",
+      "page": "Page {{count}}",
+      "slide": "Slide {{count}}",
+      "textOnly": "Showing text only. Open the file in its app to see layout and pictures.",
+      "truncated": "The document is large; only the beginning is shown."
     },
     "paged": {
       "drawFailed": "Couldn’t draw the page",
@@ -1342,6 +1384,63 @@
       "notAbsolute": "Invalid preview path",
       "missing": "File not found",
       "notFile": "Folders can’t be previewed"
+    },
+    "mail": {
+      "from": "From",
+      "to": "To",
+      "cc": "Cc",
+      "date": "Date",
+      "noSubject": "(No subject)",
+      "noBody": "This message has no body",
+      "noMessages": "No messages",
+      "attachments": "{{count}} attachments",
+      "viewMode": "Body format",
+      "rendered": "Rendered",
+      "plain": "Plain text",
+      "messages": "{{count}} messages",
+      "messagesAtLeast": "{{count}}+ messages",
+      "listCapped": "Showing the first {{count}}",
+      "readFailed": "Couldn’t read the message",
+      "messageList": "Messages",
+      "unknownSender": "(No sender)"
+    },
+    "contact": {
+      "noName": "(No name)",
+      "phone": "Phone",
+      "email": "Email",
+      "address": "Address",
+      "note": "Note",
+      "contacts": "{{count}} contacts",
+      "readFailed": "Couldn’t read the contact",
+      "empty": "No contacts",
+      "photo": "Photo of {{name}}"
+    },
+    "calendar": {
+      "events": "{{count}} events",
+      "noTitle": "(No title)",
+      "allDay": "All day",
+      "location": "Location",
+      "readFailed": "Couldn’t read the calendar",
+      "empty": "No events",
+      "listCapped": "Showing the first {{count}}",
+      "repeatDaily": "Daily",
+      "repeatDailyEvery": "Every {{count}} days",
+      "repeatWeekly": "Weekly",
+      "repeatWeeklyEvery": "Every {{count}} weeks",
+      "repeatMonthly": "Monthly",
+      "repeatMonthlyEvery": "Every {{count}} months",
+      "repeatYearly": "Yearly",
+      "repeatYearlyEvery": "Every {{count}} years",
+      "repeatOther": "Repeats",
+      "repeatOn": "on {{days}}",
+      "repeatTimes": "{{count}} times",
+      "repeatUntil": "until {{date}}"
+  },
+    "odf": {
+      "readFailed": "Couldn’t read the document",
+      "openFailed": "Couldn’t open the presentation",
+      "noSlides": "No slides",
+      "noPreview": "This document has no preview image"
     }
   },
   "settingsCore": {
@@ -1620,8 +1719,8 @@
       "errorModelRequired": "Enter the embedding server model name.",
       "errorDimension": "The embedding server dimension must be a positive integer.",
       "title": "Document Understanding Model",
-      "hint": "Analyzes the meaning of documents. Document content never leaves this Mac.",
-      "body": "The embedding model that analyzes document meaning. You can only choose the Dazzi runtime or your local server; document content never leaves this Mac.",
+      "hint": "Analyzes the meaning of documents. Document content stays on this Mac unless you chose cloud embedding.",
+      "body": "The embedding model that analyzes document meaning. You can only choose the Dazzi runtime or your local server here; document content leaves this Mac only if you chose cloud embedding during setup.",
       "dimension": "{{count}}d",
       "modelName": "Model Name",
       "baseUrl": "Server URL",

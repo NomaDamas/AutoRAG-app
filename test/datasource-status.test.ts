@@ -364,7 +364,8 @@ async function installFakeCli(fixture: Fixture, binary: string, output: string):
 	return argvLog;
 }
 
-describe("backend-owned index counts", () => {
+/** The fake backend CLIs are `#!/bin/sh` scripts, which Windows cannot execute. */
+describe.skipIf(process.platform === "win32")("backend-owned index counts", () => {
 	it("reads what each backend CLI reports instead of showing a placeholder", async () => {
 		const fixture = await createFixtureWithOnlySlacrawlOnPath();
 		await installFakeCli(fixture, "slacrawl", JSON.stringify({ messages: 179, last_sync_at: "2026-10-08T04:52:09Z" }));

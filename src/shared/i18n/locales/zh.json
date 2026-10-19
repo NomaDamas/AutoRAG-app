@@ -447,7 +447,7 @@
       "cancel": "取消",
       "skip": "不使用账户，改用自己的 API 密钥 (BYOK)",
       "offline": "无法连接服务器，显示的是上次确认的信息。",
-      "authNote": "登录方式（邮箱验证码、第三方登录）在浏览器的 Dazzi 登录页面选择。Dazzi 不保存请求内容，仅发送至零数据保留（ZDR）服务商。",
+      "authNote": "登录方式（邮箱验证码、第三方登录）在浏览器的 Dazzi 登录页面选择。",
       "agreeLead": "继续即表示您同意 Dazzi 的以下条款:",
       "agreeTerms": "服务条款",
       "agreePrivacy": "隐私政策",
@@ -661,7 +661,7 @@
           "note": "每月 $4 · 随时取消",
           "tag": "每天轻松使用",
           "chip": "提问会发送至 Dazzi 模型",
-          "training": "输入与输出不用于模型训练",
+          "training": "Dazzi 不会将输入与输出用于模型训练",
           "feature": {
             "a": "本地嵌入或关闭",
             "b": "托管 AI 模型 · 充足用量",
@@ -674,7 +674,7 @@
           "note": "每月 $20 · 随时取消",
           "tag": "最快的首次索引",
           "chip": "问题将发送到 Dazzi 模型",
-          "training": "输入与输出不用于模型训练",
+          "training": "Dazzi 不会将输入与输出用于模型训练",
           "feature": {
             "a": "可使用远程嵌入",
             "b": "托管 AI 模型 · 最高用量",
@@ -1230,6 +1230,35 @@
         "desktop": "桌面",
         "mobile": "移动",
         "source": "源码"
+      },
+      "firstRecords": "正在显示前 {{count}} 条记录",
+      "plistInvalid": "无法读取属性列表",
+      "plistConverted": "二进制 plist 以 XML 显示"
+    },
+    "data": {
+      "readFailed": "无法读取数据文件",
+      "tables": "表",
+      "noTables": "没有表",
+      "tableCount": "{{count}} 个表",
+      "rows": "{{count}} 行",
+      "rowsAtLeast": "{{count}}+",
+      "columns": "{{count}} 列",
+      "rowGroups": "{{count}} 个行组",
+      "view": "视图",
+      "noColumns": "此表没有列",
+      "noRows": "没有行",
+      "viewNotRun": "预览不会运行视图",
+      "tableFailed": "无法读取此表",
+      "tooLarge": "第一个行组过大，无法预览",
+      "firstRows": "正在显示前 {{count}} 行",
+      "columnsCut": "仅显示前 {{count}} 列",
+      "blob": "二进制 {{size}}",
+      "walPending": "不显示 -wal 文件中的最新更改",
+      "unreadable": {
+        "not-sqlite": "不是可读取的 SQLite 数据库(可能已加密)",
+        "corrupt": "文件已损坏，无法读取",
+        "not-parquet": "不是 Parquet 文件",
+        "encrypted": "此 Parquet 文件已加密"
       }
     },
     "markdown": {
@@ -1279,6 +1308,19 @@
     "epub": {
       "readFailed": "无法读取书籍",
       "noText": "未找到正文"
+    },
+    "legacyOffice": {
+      "rendered": "文档预览",
+      "modePage": "页面",
+      "modeText": "文本",
+      "encrypted": "该文档受密码保护，无法预览",
+      "unsupported": "无法预览此 Word 或 PowerPoint 格式",
+      "corrupt": "文件已损坏，无法读取",
+      "empty": "没有可显示的文本",
+      "page": "第 {{count}} 页",
+      "slide": "幻灯片 {{count}}",
+      "textOnly": "仅显示文本。请在应用中打开文件以查看版式和图片。",
+      "truncated": "文档较大，仅显示开头部分。"
     },
     "paged": {
       "drawFailed": "无法绘制页面",
@@ -1342,6 +1384,63 @@
       "notAbsolute": "预览路径无效",
       "missing": "找不到文件",
       "notFile": "无法预览文件夹"
+    },
+    "mail": {
+      "from": "发件人",
+      "to": "收件人",
+      "cc": "抄送",
+      "date": "日期",
+      "noSubject": "(无主题)",
+      "noBody": "此邮件没有正文",
+      "noMessages": "没有邮件",
+      "attachments": "{{count}} 个附件",
+      "viewMode": "正文格式",
+      "rendered": "渲染",
+      "plain": "纯文本",
+      "messages": "{{count}} 封邮件",
+      "messagesAtLeast": "至少 {{count}} 封邮件",
+      "listCapped": "仅显示前 {{count}} 封",
+      "readFailed": "无法读取邮件",
+      "messageList": "邮件列表",
+      "unknownSender": "(无发件人)"
+    },
+    "contact": {
+      "noName": "(无姓名)",
+      "phone": "电话",
+      "email": "电子邮件",
+      "address": "地址",
+      "note": "备注",
+      "contacts": "{{count}} 位联系人",
+      "readFailed": "无法读取联系人",
+      "empty": "没有联系人",
+      "photo": "{{name}} 的照片"
+    },
+    "calendar": {
+      "events": "{{count}} 个日程",
+      "noTitle": "(无标题)",
+      "allDay": "全天",
+      "location": "地点",
+      "readFailed": "无法读取日历",
+      "empty": "没有日程",
+      "listCapped": "仅显示前 {{count}} 个",
+      "repeatDaily": "每天",
+      "repeatDailyEvery": "每 {{count}} 天",
+      "repeatWeekly": "每周",
+      "repeatWeeklyEvery": "每 {{count}} 周",
+      "repeatMonthly": "每月",
+      "repeatMonthlyEvery": "每 {{count}} 个月",
+      "repeatYearly": "每年",
+      "repeatYearlyEvery": "每 {{count}} 年",
+      "repeatOther": "重复",
+      "repeatOn": "{{days}}",
+      "repeatTimes": "{{count}} 次",
+      "repeatUntil": "至 {{date}}"
+  },
+    "odf": {
+      "readFailed": "无法读取文档",
+      "openFailed": "无法打开演示文稿",
+      "noSlides": "没有幻灯片",
+      "noPreview": "此文档没有预览图像"
     }
   },
   "settingsCore": {
@@ -1620,8 +1719,8 @@
       "errorModelRequired": "请输入嵌入服务器模型名称。",
       "errorDimension": "嵌入服务器维度必须为正整数。",
       "title": "文档理解模型",
-      "hint": "分析文档的含义。文档内容不会离开此 Mac。",
-      "body": "用于分析文档含义的嵌入模型。只能选择 Dazzi 运行时和本机服务器，文档内容不会离开此 Mac。",
+      "hint": "分析文档的含义。除非选择云端嵌入，文档内容不会离开此 Mac。",
+      "body": "用于分析文档含义的嵌入模型。此处只能选择 Dazzi 运行时和本机服务器；仅当你在设置时选择了云端嵌入，文档内容才会离开此 Mac。",
       "dimension": "{{count}} 维",
       "modelName": "模型名称",
       "baseUrl": "服务器地址",

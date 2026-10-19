@@ -802,3 +802,34 @@ describe("preview lane", () => {
 		await listing;
 	});
 });
+
+describe("cachedPreview", () => {
+	it("answers the preview-tier URL only once that tier's bytes are cached, without generating anything", async () => {
+		// Given a provider that has not rendered the file's preview
+		let generated = 0;
+		const provider = createIconProvider({
+			platform: "darwin",
+			thumbnail: async () => {
+				generated += 1;
+				return BYTES;
+			},
+		});
+		expect(provider.cachedPreview(target("/docs/a.doc"))).toBeNull();
+
+		// When the preview tier is rendered for it, and only the listing tier for another file
+		await provider.preview(target("/docs/a.doc"));
+		await provider.icons([target("/docs/b.doc")]);
+
+		// Then the preview URL is answered for the first, not the second, and nothing extra was generated
+		expect(provider.cachedPreview(target("/docs/a.doc"))).toBe(iconUrl("/docs/a.doc", MTIME, PREVIEW_ICON_SIZE));
+		expect(provider.cachedPreview(target("/docs/b.doc"))).toBeNull();
+		expect(provider.cachedPreview(target("/docs/a.doc", MTIME + 1))).toBeNull();
+		expect(generated).toBe(2);
+	});
+
+	it("answers null for a file the OS produced no preview for", async () => {
+		const provider = createIconProvider({ platform: "darwin", thumbnail: async () => null, systemIcon: async () => null });
+		await provider.preview(target("/docs/a.doc"));
+		expect(provider.cachedPreview(target("/docs/a.doc"))).toBeNull();
+	});
+});

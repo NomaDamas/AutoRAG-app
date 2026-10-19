@@ -27,15 +27,20 @@ export function osRequestEndpoint(userDataDir: string, platform: NodeJS.Platform
 	return platform === "win32" ? `\\\\.\\pipe\\autorag-os-${id}` : join(tmpdir(), `autorag-os-${id}.sock`);
 }
 
-/** Send `request` to the app listening on `endpoint`; false when nobody is listening or it did not acknowledge. */
+/**
+ * Send `request` to the app listening on `endpoint`; false when nobody is listening or it did not acknowledge.
+ * The request is newline-framed and the socket stays open until the acknowledgement arrives: a Windows named
+ * pipe has no half-close (`end()` drops the read side too), so waiting on a FIN would lose the reply.
+ */
 export function sendOsRequest(endpoint: string, request: OsLaunchRequest): Promise<boolean> {
 	const { promise, resolve } = Promise.withResolvers<boolean>();
 	const socket = connect(endpoint);
 	let reply = "";
 	socket.setTimeout(CONNECT_TIMEOUT_MS, () => socket.destroy());
-	socket.on("connect", () => socket.end(JSON.stringify(request)));
+	socket.on("connect", () => socket.write(`${JSON.stringify(request)}\n`));
 	socket.on("data", (chunk) => {
 		reply += chunk.toString("utf8");
+		if (reply === ACK) socket.destroy();
 	});
 	socket.on("error", () => resolve(false));
 	socket.on("close", () => resolve(reply === ACK));
@@ -73,20 +78,18 @@ export async function listenForOsRequests(
 		// Nobody answered: a socket file left by a crashed run would block `listen`.
 		await unlink(endpoint).catch(() => undefined);
 	}
-	const server: Server = createServer((socket) => {
+	const server: Server = createServer({ allowHalfOpen: true }, (socket) => {
 		const chunks: Buffer[] = [];
 		let size = 0;
-		socket.on("data", (chunk: Buffer) => {
-			size += chunk.length;
-			if (size > MAX_REQUEST_BYTES) {
-				socket.destroy();
+		let handled = false;
+		const handle = (): void => {
+			if (handled) return;
+			handled = true;
+			// An empty connection is a liveness probe, not a request.
+			if (size === 0) {
+				socket.end();
 				return;
 			}
-			chunks.push(chunk);
-		});
-		socket.on("end", () => {
-			// An empty connection is a liveness probe, not a request.
-			if (size === 0) return;
 			let request: OsLaunchRequest | null = null;
 			try {
 				request = normalizeOsLaunchRequest(JSON.parse(Buffer.concat(chunks).toString("utf8")));
@@ -94,10 +97,23 @@ export async function listenForOsRequests(
 				// Not JSON: handled like an invalid request.
 			}
 			// No acknowledgement for a rejected request: the sender then knows nothing took it.
-			if (request === null) return;
+			if (request === null) {
+				socket.end();
+				return;
+			}
 			onRequest(request);
 			socket.end(ACK);
+		};
+		socket.on("data", (chunk: Buffer) => {
+			size += chunk.length;
+			if (size > MAX_REQUEST_BYTES) {
+				socket.destroy();
+				return;
+			}
+			chunks.push(chunk);
+			if (chunk.includes(0x0a)) handle();
 		});
+		socket.on("end", handle);
 		socket.on("error", () => undefined);
 	});
 	const listening = Promise.withResolvers<boolean>();

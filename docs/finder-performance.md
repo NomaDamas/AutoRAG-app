@@ -173,8 +173,12 @@ relist).
 macOS/Windows tiles no longer shell out to `/usr/bin/qlmanage`; the icon
 provider calls Electron's in-process `nativeImage.createThumbnailFromPath`
 (`src/main/file-icon.ts`). Linux keeps `app.getFileIcon`. Native Quick Look is
-requested only for visual extensions (images, video, and PDF); plain text,
-source, office, archive, and other non-visual files keep their letter tiles.
+requested only for visual extensions (images, video, PDF, iWork, and the legacy
+binary Office types `doc dot ppt pps pot xls xlt`); plain text, source, OOXML
+office, archive, and other non-visual files keep their letter tiles. Legacy
+Office was measured before it was enabled (issue #139): `Office.qlgenerator`
+returned a non-empty first-page image for every `.doc`/`.ppt`/`.xls` tried,
+0.3-0.6 s cold per file and 2.3-5 s for 24-48 files at 8 in flight, 2-8 ms warm.
 This avoids sending large plain-text folders through Quick Look, where macOS
 can wait for the full 4 s deadline without producing a useful thumbnail. The
 provider still caches successful and negative visual lookups by path + mtime.

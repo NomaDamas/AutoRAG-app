@@ -45,11 +45,11 @@ jobs:
         with:
           bun-version: latest
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
 
-      # `bun install` resolves the `file:./.upstream/autorag` dependency before
+      # `bun install` resolves the `file:./.upstream/librarian-package` dependency before
       # its `preinstall` hook runs, so a fresh checkout must clone and build the
       # librarian first. This is the same script the preinstall hook calls.
       - name: Sync librarian
@@ -81,7 +81,7 @@ jobs:
 
       - name: Upload QA evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: qa-windows-evidence
           path: |
