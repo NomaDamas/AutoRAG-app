@@ -1,5 +1,5 @@
 import { existsSync, readdirSync } from "node:fs";
-import { join, relative } from "node:path";
+import { join, relative, sep } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const root = join(import.meta.dirname, "..", "node_modules");
@@ -22,6 +22,7 @@ describe("pi runtime", () => {
 	// Module state (the provider registry) is per copy: a second copy of pi-ai means a provider
 	// registered through the app is invisible to the librarian (AutoRAG-app#225).
 	it.each(["@earendil-works/pi-ai", "@earendil-works/pi-coding-agent", "@earendil-works/pi-agent-core"])("installs %s once", (name) => {
-		expect(copiesOf(name).map((copy) => relative(root, copy))).toEqual([name]);
+		// `relative` uses the platform separator; the package name always uses `/`.
+		expect(copiesOf(name).map((copy) => relative(root, copy).split(sep).join("/"))).toEqual([name]);
 	});
 });
