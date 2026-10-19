@@ -1,7 +1,9 @@
+import { stat } from "node:fs/promises";
 import { basename, extname } from "node:path";
 import { t } from "../../shared/i18n/core";
 import { LANGUAGE_FLAG } from "../../shared/language-contract";
 import type { AppAppearance, AppSettings } from "../../shared/settings-contract";
+import type { IconPreviewCache } from "../../main/file-icon";
 import { isAppBundle } from "../../main/fs-entry";
 import {
 	app,
@@ -18,6 +20,7 @@ import {
 } from "electron";
 import {
 	isBounds,
+	isPreviewPrefetch,
 	isQuickLookAction,
 	isQuickLookReady,
 	isQuickLookTarget,
@@ -26,10 +29,12 @@ import {
 	type BundleSummary,
 	type FolderSummary,
 	type NavigateDelta,
+	type OfficePage,
 	type PreviewDocument,
 	type QuickLookAction,
 	type QuickLookApp,
 	type QuickLookLoad,
+	type QuickLookOffice,
 	type QuickLookReady,
 	type QuickLookTarget,
 	type QuickLookZoom,
@@ -37,6 +42,7 @@ import {
 import { looksLikeText } from "../shared/text-sample";
 import { type Bounds, fitQuickLook, placeQuickLook, QUICK_LOOK_MIN } from "../shared/fit";
 import { quickLookKeyAction } from "../shared/keys";
+import { sniffLegacyContainer } from "../shared/legacy-office";
 import { byteNeed, viewerForExtension } from "../shared/registry";
 import { fallbackOrigin, screenOrigin, ZOOM_DONE_TIMEOUT_MS, zoomGeometry } from "../shared/zoom";
 import { readAudioMetadata } from "./audio-metadata";
@@ -47,6 +53,7 @@ import { fileDetails, sha256File } from "./details";
 import { measureFolder, summarizeFolder } from "./folder";
 import { readHeicPreview } from "./heic";
 import { readIworkPreview } from "./iwork";
+import { createOfficeRenderCache, openOffice, type OfficeRenderCache } from "./office-render";
 import { readEmbeddedThumbnail } from "./odf";
 import { PREVIEW_BYTE_CAP, PreviewReadError, readPreviewFile, SNIFF_BYTES, TEXT_BYTE_CAP } from "./read-file";
 
@@ -109,7 +116,9 @@ let quitting = false;
  * Null in unit tests and before `registerQuickLookIpc` runs; the panel keeps
  * its glyph then.
  */
-let iconSource: BundleIconSource | null = null;
+let iconSource: (BundleIconSource & Partial<Pick<IconPreviewCache, "cachedPreview">>) | null = null;
+/** The Office pages macOS drew, rendered ahead of Space when the Finder selects a legacy Office file. */
+let officePages: OfficeRenderCache = createOfficeRenderCache();
 
 function live(window: BrowserWindow): boolean {
 	return !window.isDestroyed();
@@ -320,7 +329,13 @@ async function readFolder(path: string): Promise<TargetContent> {
  * unknown file, which is read on as text only when it looks like text.
  */
 async function readDocument(path: string): Promise<PreviewDocument> {
-	switch (byteNeed(viewerForExtension(extname(path).slice(1)))) {
+	const kind = viewerForExtension(extname(path).slice(1));
+	if (kind === "legacyDoc" || kind === "legacyPpt") {
+		// The whole file for the text reader. What macOS draws for it arrives
+		// separately (`openOfficePage`): the panel must not wait for it.
+		return readPreviewFile(path, PREVIEW_BYTE_CAP, true);
+	}
+	switch (byteNeed(kind)) {
 		case "stream":
 		case "query":
 			return readPreviewFile(path, 0);
@@ -373,12 +388,42 @@ async function readTarget(target: QuickLookTarget): Promise<TargetContent> {
 	}
 }
 
+/**
+ * A legacy Office document opens now with what is already known about the page
+ * macOS draws for it (see {@link openOffice}); the rest follows on the `office`
+ * channel. Only a real compound file is handed to the OS.
+ */
+async function withOffice(state: Session, seq: number, target: QuickLookTarget, content: TargetContent): Promise<TargetContent> {
+	const document = content.document;
+	if (document === null || document.bytes === null) return content;
+	const kind = viewerForExtension(document.ext);
+	if ((kind !== "legacyDoc" && kind !== "legacyPpt") || sniffLegacyContainer(document.bytes) !== "ole") return content;
+	const info = await stat(target.path);
+	const file = { path: target.path, mtimeMs: info.mtimeMs, size: info.size };
+	const icon = { path: target.path, ext: document.ext, mtimeMs: info.mtimeMs };
+	const office = openOffice(file, {
+		cache: officePages,
+		firstPage: {
+			peek: () => iconSource?.cachedPreview?.(icon) ?? null,
+			load: () => iconSource?.preview(icon) ?? Promise.resolve(null),
+		},
+		publish: (next) => {
+			const update: QuickLookOffice = { seq, office: next };
+			if (live(state.window)) state.window.webContents.send(PREVIEW_CHANNELS.office, update);
+		},
+		current: () => seq === state.seq && live(state.window),
+	});
+	return { ...content, document: { ...document, office } };
+}
+
 async function show(state: Session, target: QuickLookTarget, origin: Bounds | null): Promise<void> {
 	state.seq += 1;
 	const seq = state.seq;
 	state.current = target;
 	state.origin = origin;
-	const [content] = await Promise.all([readTarget(target), state.loaded]);
+	const [read] = await Promise.all([readTarget(target), state.loaded]);
+	if (seq !== state.seq || !live(state.window)) return;
+	const content = await withOffice(state, seq, target, read);
 	if (seq !== state.seq || !live(state.window)) return;
 	const folder = content.folder !== null;
 	// An app bundle is launched by the Open button itself, so there is no
@@ -568,7 +613,7 @@ export function attachQuickLook(owner: BrowserWindow, options: QuickLookWindowOp
 	options.loadPage(window);
 }
 
-export function registerQuickLookIpc(icons: BundleIconSource | null = null, ipc: IpcMain = ipcMain): void {
+export function registerQuickLookIpc(icons: (BundleIconSource & Partial<Pick<IconPreviewCache, "cachedPreview">>) | null = null, ipc: IpcMain = ipcMain): void {
 	iconSource = icons;
 	app.on("before-quit", () => {
 		quitting = true;
@@ -577,6 +622,14 @@ export function registerQuickLookIpc(icons: BundleIconSource | null = null, ipc:
 		const state = fromOwner(event);
 		if (!isQuickLookTarget(target)) throw new Error(t("quickLook.errors.invalidTarget"));
 		await show(state, target, ownerOrigin(state, origin));
+	});
+	ipc.on(PREVIEW_CHANNELS.prefetch, (event, file: unknown) => {
+		if (session === null || !live(session.owner) || event.sender !== session.owner.webContents || !isPreviewPrefetch(file)) return;
+		const kind = viewerForExtension(extname(file.path).slice(1));
+		if (kind !== "legacyDoc" && kind !== "legacyPpt") return;
+		officePages.prefetch(file);
+		// The OS thumbnail is ready in tens of milliseconds and keeps the panel from opening blank.
+		void iconSource?.preview({ path: file.path, ext: extname(file.path).slice(1).toLowerCase(), mtimeMs: file.mtimeMs }).catch(() => null);
 	});
 	ipc.handle(PREVIEW_CHANNELS.hide, (event, origin: unknown) => {
 		const state = fromOwner(event);

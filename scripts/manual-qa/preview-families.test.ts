@@ -15,6 +15,7 @@ const bridge: QuickLookWindowBridge = {
 	onUnload: () => () => undefined,
 	onZoom: () => () => undefined,
 	onApp: () => () => undefined,
+	onOffice: () => () => undefined,
 	ready: () => undefined,
 	zoomed: () => undefined,
 	request: never,
@@ -43,6 +44,7 @@ function documentFor(ext: string, bytes: Uint8Array): PreviewDocument {
 		truncated: false,
 		bytes,
 		pages: null,
+		office: null,
 	};
 }
 
@@ -54,8 +56,10 @@ const bytesForKind: Readonly<Record<ViewerKind, Uint8Array>> = {
 	audio: new Uint8Array([0x49, 0x44, 0x33, 0x04]),
 	pdf: strToU8("%PDF-1.4\n"),
 	docx: zipSync({ "[Content_Types].xml": strToU8("<Types/>") }),
+	legacyDoc: new Uint8Array([0xd0, 0xcf, 0x11, 0xe0]),
 	sheet: strToU8("name,qty\napple,2\n"),
 	pptx: zipSync({ "ppt/slides/slide1.xml": strToU8("<a:t>Title</a:t>") }),
+	legacyPpt: new Uint8Array([0xd0, 0xcf, 0x11, 0xe0]),
 	markdown: strToU8("# Hello\n"),
 	html: strToU8("<p>Hello</p>"),
 	text: strToU8("hello preview\n"),
@@ -86,8 +90,10 @@ const extForKind: Readonly<Record<ViewerKind, string>> = {
 	audio: "mp3",
 	pdf: "pdf",
 	docx: "docx",
+	legacyDoc: "doc",
 	sheet: "csv",
 	pptx: "pptx",
+	legacyPpt: "ppt",
 	markdown: "md",
 	html: "html",
 	text: "txt",

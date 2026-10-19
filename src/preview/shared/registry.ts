@@ -8,8 +8,10 @@ export const VIEWER_KINDS = [
 	"audio",
 	"pdf",
 	"docx",
+	"legacyDoc",
 	"sheet",
 	"pptx",
+	"legacyPpt",
 	"markdown",
 	"html",
 	"text",
@@ -47,8 +49,10 @@ assign("video", ["mp4", "m4v", "webm", "ogv", "mov", "mkv", "avi", "mpeg", "mpg"
 assign("audio", ["mp3", "wav", "wave", "m4a", "aac", "flac", "opus", "ogg", "oga", "aiff", "aif", "weba", "mid", "midi"]);
 assign("pdf", ["pdf"]);
 assign("docx", ["docx", "docm", "dotx"]);
-assign("sheet", ["xlsx", "xlsm", "xlsb", "xls", "csv", "tsv", "ods"]);
+assign("legacyDoc", ["doc", "dot"]);
+assign("sheet", ["xlsx", "xlsm", "xlsb", "xls", "xlt", "csv", "tsv", "ods"]);
 assign("pptx", ["pptx", "pptm", "ppsx", "potx"]);
+assign("legacyPpt", ["ppt", "pps", "pot"]);
 // OpenDocument packages. `.ods` stays with the spreadsheet viewer.
 assign("odt", ["odt"]);
 assign("odp", ["odp"]);
@@ -123,8 +127,10 @@ export function byteNeed(kind: ViewerKind): ByteNeed {
 			return "prefix";
 		case "tiff":
 		case "docx":
+		case "legacyDoc":
 		case "sheet":
 		case "pptx":
+		case "legacyPpt":
 		case "odt":
 		case "odp":
 		case "archive":
@@ -203,10 +209,16 @@ const LABELS: Readonly<Record<string, string>> = {
 	wav: "WAV audio",
 	pdf: "PDF document",
 	docx: "Word document",
+	doc: "Word 97-2003 document",
+	dot: "Word 97-2003 template",
 	xlsx: "Excel spreadsheet",
 	xls: "Excel spreadsheet",
 	csv: "CSV document",
 	pptx: "PowerPoint presentation",
+	ppt: "PowerPoint 97-2003 presentation",
+	pps: "PowerPoint 97-2003 slide show",
+	pot: "PowerPoint 97-2003 template",
+	xlt: "Excel 97-2003 template",
 	potx: "PowerPoint template",
 	odt: "OpenDocument text",
 	ods: "OpenDocument spreadsheet",

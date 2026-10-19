@@ -1249,6 +1249,19 @@
       "readFailed": "Couldn’t read the book",
       "noText": "No text found"
     },
+    "legacyOffice": {
+      "rendered": "Document preview",
+      "modePage": "Page",
+      "modeText": "Text",
+      "encrypted": "This document is password-protected and can’t be previewed",
+      "unsupported": "This Word or PowerPoint format can’t be previewed",
+      "corrupt": "The file is damaged and couldn’t be read",
+      "empty": "There is no text to show",
+      "page": "Page {{count}}",
+      "slide": "Slide {{count}}",
+      "textOnly": "Showing text only. Open the file in its app to see layout and pictures.",
+      "truncated": "The document is large; only the beginning is shown."
+    },
     "paged": {
       "drawFailed": "Couldn’t draw the page",
       "goToPage": "Go to page {{count}}",

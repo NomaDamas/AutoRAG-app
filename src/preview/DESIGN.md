@@ -89,6 +89,54 @@ still has the previous file's size when they lay out.
   shows the same first page (`ui/rhwp.ts`), since the OS thumbnailers draw
   nothing for HWP without Hancom's plug-in. Encrypted, DRM, and unsupported
   files fall back to the Other panel with rhwp's message.
+- **Word 97-2003 / PowerPoint 97-2003** (`.doc` `.dot` · `.ppt` `.pps` `.pot`)
+  — on macOS, the page the OS itself draws: `node/office-render.ts` runs
+  `qlmanage -p` (Office.qlgenerator: fonts, colours, tables, every slide,
+  shapes, pictures; about 0.1s for a document, 1.3s for a 26-slide deck) into a
+  temp folder, `sips` rasterizes the vector art it writes as PDF (at 3x the drawn
+  size), and `standaloneOfficeHtml` inlines every picture and strips scripts,
+  frames, links, remote pictures, and event handlers, adding a CSP of
+  `default-src 'none'; img-src data:`. The result travels as
+  `PreviewDocument.rendered` and shows in a `sandbox=""` frame loaded from a
+  **blob URL, not `srcdoc`**: the generator writes unitless lengths
+  (`width: 720`) that only quirks mode honours, and an `srcdoc` document is
+  never quirks mode, so every slide collapsed to nothing. The window takes the
+  generator's own viewport width (595 for a Word page plus margin room, 720
+  for a slide). A Page · Text switch in the toolbar flips to the extracted text.
+  **Time to first content**: the OS takes 0.1-0.7s to draw the page (2-5s when
+  its preview service has been idle) and up to 0.4s more to rasterize pictures,
+  so the page is never waited for. Selecting a file starts the render
+  (`prefetch` channel; one at a time, only the newest queued file is kept) and
+  the OS first-page thumbnail (tens of ms, the same icon provider the Finder
+  tiles use). Space then opens in one tick with what is known: a finished page,
+  or the cached first-page image, with the whole page pushed on the `office`
+  channel when it lands; the image is removed only once the frame has loaded
+  and the frame stays transparent until then, so the panel never blanks. A
+  generic type icon (what the OS returns for a file it cannot draw: an
+  all-transparent corner) is rejected, and the text view shows meanwhile.
+  Pages are cached by path + mtime + size (96MB, least recently used out).
+  Pictures are rasterized at 3x their own drawn width, grouped by power-of-two
+  width into a few parallel `sips` runs: one 2048px run for all of them cost 3.3s
+  on a 26-slide deck, a run per distinct width cost 35 process starts.
+  The generator refuses files it cannot read (minimal or non-Word streams): the
+  panel then shows the extracted text alone, without the switch.
+  Everywhere else, and as that fallback, `shared/legacy-office.ts` reads the
+  compound-file container itself (bounds-checked typed arrays; a general CFB
+  library turned a 32MB file into a 1.2GB array of numbers) and pulls only the
+  streams it needs.
+  Word: the piece table (Clx) in `0Table`/`1Table` gives the main document's
+  UTF-16 and cp1252 pieces; fields keep their result and drop the instruction,
+  cell marks become tab-separated rows, a form feed starts a new page card;
+  footnote/header stories after the main text are not shown. PowerPoint: `Current User` →
+  UserEditAtom chain → persist directory finds the newest copy of every slide
+  (a fast save leaves stale ones behind), and each slide shows its title and
+  text lines in show order, merged with the placeholder text the slide list
+  keeps. Macros, OLE objects, and links are never opened. Encrypted, Word 6/95,
+  empty, damaged, and non-Word files fall back to the Other panel with a note;
+  an RTF or OOXML file saved under the old extension is handed to the RTF /
+  `.docx` / `.pptx` viewer by its first bytes. The Finder tile uses the OS
+  first-page thumbnail (`.doc .dot .ppt .pps .pot .xls .xlt`; measured 0.3-0.6s
+  cold, none empty), unlike `.docx`/`.xlsx`/`.pptx`, which stay letter tiles.
 - **HTML** — a sandboxed frame with scripts off, at desktop width, in a 390px
   phone column, or as highlighted source.
 - **Code** — numbered lines on the paper material with the reference's Xcode
@@ -235,7 +283,7 @@ viewers inside the new chrome.
 The main process reads only what the viewer will use (`byteNeed` in
 `registry.ts`): nothing for media, PDF, images, and fonts, which stream through
 `autorag-preview://` (it answers `Range` with `206`); the first 4MB of text,
-code, Markdown, and HTML; whole documents (HWP included) up to 32MB; for iWork
+code, Markdown, and HTML; whole documents (HWP and legacy Office included) up to 32MB; for iWork
 packages the directory, the Keynote slide tree, and the page images inside; a
 HEIC as the JPEG macOS's own `sips` decodes from it (`node/heic.ts`, about
 0.2s on a 24MP iPhone photo even on a spinning disk; the viewer's wasm decoder

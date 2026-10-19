@@ -78,6 +78,10 @@ const NATIVE_THUMBNAIL_EXTENSIONS = new Set([
 	// (Numbers, Pages, Keynote). Windows has no thumbnailer for them and falls
 	// through to the type icon.
 	"numbers", "pages", "key",
+	// Legacy binary Office: Office.qlgenerator draws the first page, slide, or
+	// sheet in ~300-600 ms cold (24 files at 8 in flight: 2.3-5 s, none empty).
+	// The OOXML siblings (docx/xlsx/pptx) deliberately stay on letter tiles.
+	"doc", "dot", "ppt", "pps", "pot", "xls", "xlt",
 	// OpenDocument packages and `.potx` are not rendered by Quick Look; their
 	// tile is the first-page image the package embeds (`odf.ts`), on every platform.
 	// A macOS application bundle is a directory on disk, but Quick Look renders
@@ -132,8 +136,17 @@ export interface IconStore {
 	read(path: string, mtimeMs: number, size?: number): Uint8Array | null;
 }
 
+/**
+ * `preview`'s URL when that tier is already cached for this exact file
+ * version, else null; never generates anything. Lets the Quick Look window,
+ * which must open within a frame, use a thumbnail an earlier selection made.
+ */
+export interface IconPreviewCache {
+	cachedPreview(target: IconTarget): string | null;
+}
+
 /** The provider the fs service consumes, plus the byte cache the protocol serves. */
-export type IconSource = IconProvider & IconStore;
+export type IconSource = IconProvider & IconStore & IconPreviewCache;
 
 export interface IconProviderDeps {
 	/** Defaults to process.platform. */
@@ -454,6 +467,11 @@ export function createIconProvider(deps: IconProviderDeps = {}): IconSource {
 			return bytes === null || bytes === undefined
 				? null
 				: iconUrl(target.path, target.mtimeMs, PREVIEW_ICON_SIZE);
+		},
+		cachedPreview(target) {
+			if (usesNativeThumbnails && !isNativeThumbnailExtension(target.ext)) return null;
+			const bytes = cache.get(cacheKey({ ...target, size: PREVIEW_ICON_SIZE }));
+			return bytes === null || bytes === undefined ? null : iconUrl(target.path, target.mtimeMs, PREVIEW_ICON_SIZE);
 		},
 		read(path, mtimeMs, size) {
 			const key = cacheKey(size === undefined ? { path, mtimeMs } : { path, mtimeMs, size });

@@ -68,5 +68,6 @@ export async function readPreviewFile(filePath: string, limit: number, whole = f
 		truncated,
 		bytes,
 		pages: null,
+		office: null,
 	};
 }

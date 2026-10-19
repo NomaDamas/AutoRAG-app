@@ -14,6 +14,7 @@ import { FallbackView } from "./fallback";
 import { MailView } from "./mail";
 import { MarkdownView } from "./markdown";
 import { HwpView } from "./hwp";
+import { LegacyDocView, LegacyPptView } from "./legacy-office";
 import { FontView, HeicView, ImageView, TiffView } from "./media";
 import { IworkView } from "./iwork";
 import { EpubView } from "./packages";
@@ -47,10 +48,14 @@ export function PreviewBody({ file }: { readonly file: PreviewDocument }): React
 			return <PdfView file={file} />;
 		case "docx":
 			return <DocxView file={file} />;
+		case "legacyDoc":
+			return <LegacyDocView file={file} />;
 		case "sheet":
 			return <SheetView file={file} />;
 		case "pptx":
 			return <PptxView file={file} />;
+		case "legacyPpt":
+			return <LegacyPptView file={file} />;
 		case "odt":
 			return <OdtView file={file} />;
 		case "odp":
