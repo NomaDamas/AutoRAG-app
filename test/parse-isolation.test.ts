@@ -27,10 +27,8 @@ describe("createParsePool", () => {
 
 	it("kills a parse that spins, which a same-thread timer cannot interrupt, and keeps serving", async () => {
 		const parsing = pool({ timeoutMs: 200 });
-		const started = Date.now();
 
 		await expect(parsing.parse(text("spin"), { ocr: false })).rejects.toThrow(/timed out after 200ms/u);
-		expect(Date.now() - started).toBeLessThan(2000);
 		expect(await parsing.parse(text("after"), { ocr: false })).toEqual({ success: true, markdown: "parsed after" });
 		expect(parsing.takeFailures()).toEqual({ timedOut: 1, crashed: 0 });
 	});

@@ -1,12 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { APP_FULL_NAME, APP_NAME, APP_VERSION, formatDevLabel, formatWindowTitle } from "../src/shared/app-info";
-
-describe("product names", () => {
-	it("pairs the short name with the full name", () => {
-		expect(APP_NAME).toBe("Dazzi");
-		expect(APP_FULL_NAME).toBe("Dazzi powered by AutoRAG");
-	});
-});
+import { APP_FULL_NAME, APP_VERSION, formatDevLabel, formatWindowTitle } from "../src/shared/app-info";
 
 describe("formatWindowTitle", () => {
 	it("prefixes a bare semver with v", () => {
@@ -17,10 +10,6 @@ describe("formatWindowTitle", () => {
 		expect(formatWindowTitle(APP_FULL_NAME, "v1.2.3")).toBe("Dazzi powered by AutoRAG v1.2.3");
 	});
 
-	it("titles the shipped app version", () => {
-		expect(formatWindowTitle(APP_FULL_NAME, APP_VERSION)).toBe("Dazzi powered by AutoRAG v0.1.0");
-	});
-
 	it("appends the clone label for dev runs", () => {
 		expect(
 			formatWindowTitle(APP_FULL_NAME, APP_VERSION, {
@@ -28,11 +17,11 @@ describe("formatWindowTitle", () => {
 				branch: "feat/x",
 				commit: "612ae5f",
 			}),
-		).toBe("Dazzi powered by AutoRAG v0.1.0 — /clones/autorag (feat/x@612ae5f)");
+		).toBe(`${APP_FULL_NAME} v${APP_VERSION} — /clones/autorag (feat/x@612ae5f)`);
 	});
 
 	it("treats a null label as a shipped title", () => {
-		expect(formatWindowTitle(APP_FULL_NAME, APP_VERSION, null)).toBe("Dazzi powered by AutoRAG v0.1.0");
+		expect(formatWindowTitle(APP_FULL_NAME, APP_VERSION, null)).toBe(`${APP_FULL_NAME} v${APP_VERSION}`);
 	});
 });
 

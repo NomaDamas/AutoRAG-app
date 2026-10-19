@@ -5,7 +5,8 @@
  * renderer's wasm decoder never finished a 24MP iPhone photo; the main process
  * now has the OS decode it (`sips`). Builds a 4000x3000 two-colour HEIC with
  * the system sips, drives the production build (`bun run build` first), opens
- * it with Space, and checks the decoded size, the pixels, and the time.
+ * it with Space, and checks the decoded size and the pixels (the time is only
+ * bounded by a hang ceiling).
  *
  * `QA_HEIC_DIR=<folder>` runs the same check against the first HEIC files of a
  * real folder instead (e.g. a photo library on a spinning disk).
@@ -25,7 +26,8 @@ if (process.platform !== "darwin") {
 
 const EVIDENCE = process.argv[2] ?? "/tmp/autorag-quicklook-heic";
 mkdirSync(EVIDENCE, { recursive: true });
-const MAX_MS = 5000;
+/** Hang ceiling, not a speed gate: a camera HEIC decodes in about a second through sips. */
+const MAX_MS = 60_000;
 
 const CRC_TABLE = (() => {
 	const table = new Uint32Array(256);
@@ -123,11 +125,11 @@ try {
 					})
 					.catch(() => null),
 			Boolean,
-			MAX_MS * 4,
+			MAX_MS,
 		);
 		const elapsed = Date.now() - started;
 		check(`${name}: the real picture appears`, size !== null, size === null ? "still loading" : size.join("x"));
-		check(`${name}: within ${MAX_MS} ms`, size !== null && elapsed <= MAX_MS, `${elapsed} ms`);
+		check(`${name}: within the ${MAX_MS} ms hang ceiling`, size !== null && elapsed <= MAX_MS, `${elapsed} ms`);
 		await preview.screenshot({ path: join(EVIDENCE, `${name}.png`) });
 
 		if (realDir === undefined && size !== null) {

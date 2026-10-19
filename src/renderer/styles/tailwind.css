@@ -34,8 +34,7 @@
  *   --font-sans, --font-mono, --radius-full, --ease-out
  * tokens.css is unlayered while Tailwind's theme defaults are not, so the token
  * value wins at runtime and `font-sans` / `rounded-full` / `ease-out` resolve
- * to the reference values. `test/design-tokens.test.ts` guards this file
- * against drifting from tokens.css.
+ * to the reference values.
  *
  * Layer order: `base` is declared before `utilities`, so a Tailwind utility
  * beats any rule in `base.css` without needing `!important`. `base.css` holds

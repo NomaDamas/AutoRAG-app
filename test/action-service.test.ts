@@ -13,7 +13,8 @@ import {
 	type ActionService,
 	type CommandRunner,
 } from "../src/main/action-service";
-import { archiveEntryPath } from "../src/main/archive-guard.mjs";
+import { ArchiveError, archiveEntryPath } from "../src/main/archive-guard.mjs";
+import { t } from "../src/shared/i18n/core";
 
 let root: string;
 
@@ -138,11 +139,11 @@ describe("archiveEntryPath", () => {
 	});
 
 	it("refuses zip-slip and absolute entries", () => {
-		expect(() => archiveEntryPath("/tmp/out", "../evil.txt")).toThrow(/벗어납니다/);
-		expect(() => archiveEntryPath("/tmp/out", "docs/../../evil.txt")).toThrow(/벗어납니다/);
-		expect(() => archiveEntryPath("/tmp/out", "/etc/passwd")).toThrow(/절대 경로/);
-		expect(() => archiveEntryPath("/tmp/out", "C:/Windows/evil.dll")).toThrow(/절대 경로/);
-		expect(() => archiveEntryPath("/tmp/out", "docs/bad\0.txt")).toThrow(/올바르지 않습니다/);
+		expect(() => archiveEntryPath("/tmp/out", "../evil.txt")).toThrow(ArchiveError);
+		expect(() => archiveEntryPath("/tmp/out", "docs/../../evil.txt")).toThrow(ArchiveError);
+		expect(() => archiveEntryPath("/tmp/out", "/etc/passwd")).toThrow(ArchiveError);
+		expect(() => archiveEntryPath("/tmp/out", "C:/Windows/evil.dll")).toThrow(ArchiveError);
+		expect(() => archiveEntryPath("/tmp/out", "docs/bad\0.txt")).toThrow(ArchiveError);
 	});
 });
 
@@ -287,7 +288,7 @@ describe("archive round-trip", () => {
 		const bytes = zipSync({ "../escape.txt": new Uint8Array(Buffer.from("pwned")) });
 		await writeFile(hostile, bytes);
 
-		await expect(service.run([hostile], { kind: "extract" }, null)).rejects.toThrow(/벗어납니다/);
+		await expect(service.run([hostile], { kind: "extract" }, null)).rejects.toThrow(ArchiveError);
 		await expect(readFile(join(root, "escape.txt"))).rejects.toThrow();
 		// The failed run cleans up its staging: only the archive itself is left.
 		expect(await readdir(root)).toEqual(["hostile.zip"]);
@@ -313,7 +314,7 @@ describe("image actions", () => {
 		const source = join(root, "photo.png");
 		await writeFile(source, "png");
 		await expect(without.service.run([source], { kind: "convertImage", format: "webp" }, null)).rejects.toThrow(
-			/WEBP/,
+			t("main.action.unsupportedConvert", { format: "WEBP" }),
 		);
 
 		const withFfmpeg = makeService({ ffmpeg: true });
@@ -341,7 +342,7 @@ describe("image actions", () => {
 		expect((await service.capabilities()).imageFormats).not.toContain("webp");
 		const source = join(root, "photo.heic");
 		await writeFile(source, "heic");
-		await expect(service.run([source], { kind: "convertImage", format: "webp" }, null)).rejects.toThrow(/WEBP/);
+		await expect(service.run([source], { kind: "convertImage", format: "webp" }, null)).rejects.toThrow(t("main.action.unsupportedConvert", { format: "WEBP" }));
 	});
 
 	it("resizes to a bounded long edge and refuses WebP sources", async () => {
@@ -354,7 +355,7 @@ describe("image actions", () => {
 
 		const webp = join(root, "vector.webp");
 		await writeFile(webp, "webp");
-		await expect(service.run([webp], { kind: "resizeImage", maxEdge: 1920 }, null)).rejects.toThrow(/지원하지 않습니다/);
+		await expect(service.run([webp], { kind: "resizeImage", maxEdge: 1920 }, null)).rejects.toThrow(t("main.action.unsupportedResize"));
 	});
 
 	it("optimizes only lossy formats", async () => {
@@ -366,7 +367,7 @@ describe("image actions", () => {
 
 		const png = join(root, "flat.png");
 		await writeFile(png, "png");
-		await expect(service.run([png], { kind: "optimizeImage" }, null)).rejects.toThrow(/지원하지 않습니다/);
+		await expect(service.run([png], { kind: "optimizeImage" }, null)).rejects.toThrow(t("main.action.unsupportedOptimize"));
 	});
 
 	it("converts HEIC to JPEG through sips", async () => {
@@ -406,7 +407,7 @@ describe("image actions", () => {
 		});
 		const source = join(root, "photo.heic");
 		await writeFile(source, "heic");
-		await expect(service.run([source], { kind: "convertImage", format: "avif" }, null)).rejects.toThrow(/AVIF/);
+		await expect(service.run([source], { kind: "convertImage", format: "avif" }, null)).rejects.toThrow(t("main.action.unsupportedConvert", { format: "AVIF" }));
 	});
 
 	it("resizes BMP through sips but refuses GIF, whose animation a one-frame resize would drop", async () => {
@@ -419,7 +420,7 @@ describe("image actions", () => {
 
 		const gif = join(root, "anim.gif");
 		await writeFile(gif, "gif");
-		await expect(service.run([gif], { kind: "resizeImage", maxEdge: 640 }, null)).rejects.toThrow(/지원하지 않습니다/);
+		await expect(service.run([gif], { kind: "resizeImage", maxEdge: 640 }, null)).rejects.toThrow(t("main.action.unsupportedResize"));
 	});
 });
 
@@ -471,7 +472,7 @@ describe("image actions on Windows (ffmpeg backend)", () => {
 		const bigger = makeService({ platform: "win32", imageOutput: "much-larger-than-source" });
 		const other = join(root, "flat2.png");
 		await writeFile(other, "png");
-		await expect(bigger.service.run([other], { kind: "optimizeImage" }, null)).rejects.toThrow(/최적화/);
+		await expect(bigger.service.run([other], { kind: "optimizeImage" }, null)).rejects.toThrow(t("main.action.alreadyOptimized"));
 	});
 
 	it("hides formats the ffmpeg build cannot encode", async () => {
@@ -479,7 +480,7 @@ describe("image actions on Windows (ffmpeg backend)", () => {
 		const source = join(root, "shot.png");
 		await writeFile(source, "png");
 		// No heif muxer is listed, so HEIC is not a capability and cannot be run.
-		await expect(service.run([source], { kind: "convertImage", format: "heic" }, null)).rejects.toThrow(/HEIC/);
+		await expect(service.run([source], { kind: "convertImage", format: "heic" }, null)).rejects.toThrow(t("main.action.unsupportedConvert", { format: "HEIC" }));
 	});
 
 	it("pins literal filenames against image2's %d pattern expansion", async () => {
@@ -569,7 +570,7 @@ describe("image actions on Windows (ffmpeg backend)", () => {
 		const { service } = makeService({ platform: "win32" });
 		const source = join(root, "shot.png");
 		await writeFile(source, "png");
-		await expect(service.run([source], { kind: "convertImage", format: "avif" }, null)).rejects.toThrow(/AVIF/);
+		await expect(service.run([source], { kind: "convertImage", format: "avif" }, null)).rejects.toThrow(t("main.action.unsupportedConvert", { format: "AVIF" }));
 	});
 
 	it("encodes AVIF with the AV1 encoder the build lists", async () => {
@@ -606,7 +607,7 @@ describe("video actions", () => {
 		const { service } = makeService({ ffmpeg: false });
 		const source = join(root, "clip.mov");
 		await writeFile(source, "mov");
-		await expect(service.run([source], { kind: "convertVideo", container: "mp4" }, null)).rejects.toThrow(/ffmpeg/);
+		await expect(service.run([source], { kind: "convertVideo", container: "mp4" }, null)).rejects.toThrow(t("main.action.videoNeedsFfmpeg"));
 	});
 });
 
@@ -651,7 +652,7 @@ describe("open with", () => {
 		const source = join(root, "clip.mkv");
 		await writeFile(source, "mkv");
 		await expect(service.run([source], { kind: "openWith", application: "/bin/sh" }, null)).rejects.toThrow(
-			/열 수 있는 앱/,
+			t("main.action.appCannotOpen"),
 		);
 		expect(commands.some((command) => command.command === "open")).toBe(false);
 	});
@@ -722,8 +723,8 @@ describe("batch targets", () => {
 		const { service } = makeService();
 		const one = join(root, "a.zip");
 		const two = join(root, "b.zip");
-		await expect(service.run([one, two], { kind: "extract" }, null)).rejects.toThrow(/하나의/);
-		await expect(service.run([one, two], { kind: "convertImage", format: "jpeg" }, null)).rejects.toThrow(/하나의/);
+		await expect(service.run([one, two], { kind: "extract" }, null)).rejects.toThrow(t("main.action.singleTargetOnly"));
+		await expect(service.run([one, two], { kind: "convertImage", format: "jpeg" }, null)).rejects.toThrow(t("main.action.singleTargetOnly"));
 	});
 });
 
@@ -764,7 +765,7 @@ describe("capabilities", () => {
 		expect(capabilities.imageFormats).toEqual(["jpeg", "png", "webp", "gif", "tiff", "bmp"]);
 		expect(capabilities.share).toBe(false);
 		await expect(service.share([join(root, "a.txt")], { x: 0, y: 0, width: 10, height: 10 }, null)).rejects.toThrow(
-			/지원하지 않습니다/,
+			t("main.action.shareUnsupported"),
 		);
 	});
 
