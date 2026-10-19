@@ -380,9 +380,9 @@ describe("scheduler service", () => {
 		expect(await h.scheduler.reconcile()).toMatchObject({ supported: false, mechanism: null, installed: false, error: null });
 	});
 
-	it("keeps the Task Scheduler command within schtasks' 261-character /TR limit for a per-user install", async () => {
-		// The real per-user NSIS location; a longer user name only leaves less room.
-		const install = "C:\\Users\\someone\\AppData\\Local\\Programs\\AutoRAG";
+	it("keeps the Task Scheduler command within schtasks' 261-character /TR limit however long the install and profile paths are", async () => {
+		// A per-user install under a long user name, and a profile deep in the user's directory: far over 261 characters inline.
+		const install = "D:\\actions-runner\\_work\\AutoRAG-app\\AutoRAG-app\\node_modules\\electron\\dist";
 		const calls: (readonly string[])[] = [];
 		const run = async (command: string, args: readonly string[]): Promise<CommandResult> => {
 			if (command === "schtasks") calls.push(args);
@@ -390,22 +390,29 @@ describe("scheduler service", () => {
 		};
 		const configPath = join(dir, "config.json");
 		writeFileSync(configPath, JSON.stringify({ appIndexing: { refreshIntervalMs: 60 * MIN } }));
+		const jobPath = `${install}\\resources\\app\\out\\main\\refresh-job.js`;
 		const scheduler = createRefreshScheduler({
 			platform: "win32",
 			home: join(dir, "home"),
-			execPath: `${install}\\AutoRAG.exe`,
-			jobPath: `${install}\\resources\\app\\out\\main\\refresh-job.js`,
+			execPath: `${install}\\electron.exe`,
+			jobPath,
 			configPath: () => configPath,
 			env: { Path: "C:\\Windows\\System32" },
 			run,
 		});
 		await scheduler.reconcile();
 		const create = calls.find((args) => args[0] === "/Create");
-		// The config has to be a real file here, so its log path is this host's temp directory; measure the
-		// command with the log where an installed app keeps it.
-		const tr = (create?.[create.indexOf("/TR") + 1] ?? "").replace(schedulePaths(configPath).log, "C:\\Users\\someone\\.autorag\\app-refresh\\job.log");
-		expect(tr).toContain("refresh-job.js");
-		expect(tr).toContain("C:\\Users\\someone\\.autorag\\app-refresh\\job.log");
-		expect(tr.length).toBeLessThanOrEqual(261);
+		const tr = create?.[create.indexOf("/TR") + 1] ?? "";
+		expect(tr.length).toBeGreaterThan(0);
+		// The task runs a small launcher script; the real command lives in it, not in /TR.
+		const launcher = tr.replaceAll('"', "");
+		expect(launcher.startsWith(schedulePaths(configPath).dir)).toBe(true);
+		const script = readFileSync(launcher, "utf8");
+		expect(script).toContain("set ELECTRON_RUN_AS_NODE=1");
+		expect(script).toContain(`"${install}\\electron.exe" "${jobPath}"`);
+		expect(script).toContain(`>> "${schedulePaths(configPath).log}" 2>&1`);
+		// What Task Scheduler stores is just the launcher path: short whenever the profile directory is.
+		expect(tr.length).toBe(launcher.length + 2);
 	});
+
 });

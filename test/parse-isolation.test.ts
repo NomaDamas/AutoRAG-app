@@ -1,4 +1,5 @@
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createParsePool, findParseWorker, type ParsePool, type ParsePoolOptions } from "../src/main/parse-isolation";
 
@@ -99,14 +100,15 @@ describe("the real worker", () => {
 });
 
 describe("findParseWorker", () => {
-	const worker = (path: string): boolean => path.endsWith("/out/main/parse-worker.mjs");
+	const worker = (path: string): boolean => path.replaceAll("\\", "/").endsWith("/out/main/parse-worker.mjs");
+	const moduleUrl = (path: string): string => pathToFileURL(resolve(path)).href;
 
 	it("finds the worker beside a module, or one directory up from a shared chunk", () => {
-		expect(fileURLToPath(findParseWorker("file:///app/out/main/parse-isolation.js", worker) as URL)).toBe("/app/out/main/parse-worker.mjs");
-		expect(fileURLToPath(findParseWorker("file:///app/out/main/chunks/parse-isolation-abc.js", worker) as URL)).toBe("/app/out/main/parse-worker.mjs");
+		expect(fileURLToPath(findParseWorker(moduleUrl("/app/out/main/parse-isolation.js"), worker) as URL)).toBe(resolve("/app/out/main/parse-worker.mjs"));
+		expect(fileURLToPath(findParseWorker(moduleUrl("/app/out/main/chunks/parse-isolation-abc.js"), worker) as URL)).toBe(resolve("/app/out/main/parse-worker.mjs"));
 	});
 
 	it("reports a missing worker instead of guessing", () => {
-		expect(findParseWorker("file:///elsewhere/parse-isolation.js", worker)).toBeNull();
+		expect(findParseWorker(moduleUrl("/elsewhere/parse-isolation.js"), worker)).toBeNull();
 	});
 });

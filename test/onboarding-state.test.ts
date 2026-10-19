@@ -14,7 +14,7 @@ const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 
 const directories: string[] = [];
 
 afterEach(async () => {
-	await Promise.all(directories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
+	await Promise.all(directories.splice(0).map((directory) => rm(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })));
 });
 
 async function workDir(): Promise<string> {
@@ -240,15 +240,16 @@ describe("createOnboardingService persistence", () => {
 
 	it("reports what a run that finished before the first poll actually read", async () => {
 		const directory = await workDir();
+		const documents = join(directory, "Documents");
 		await mkdir(join(directory, ".autorag", "parsed"), { recursive: true });
-		const entry = (name: string, updatedAt: string) => ({ sourcePath: `/Users/me/Documents/${name}`, updatedAt });
+		const entry = (name: string, updatedAt: string) => ({ sourcePath: join(documents, name), updatedAt });
 		await writeFile(
 			join(directory, ".autorag", "parsed", "index.json"),
 			JSON.stringify({ entries: { a: entry("a.md", "2026-01-01T00:00:00Z"), b: entry("b.md", "2026-01-02T00:00:00Z") }, skipped: {} }),
 		);
 		const service = createOnboardingService({ ...makeDeps(directory), folderTotals: () => 2 });
 
-		await service.startIndexing({ folders: ["/Users/me/Documents"], embed: "none", sources: [], plan: "free", model: null });
+		await service.startIndexing({ folders: [documents], embed: "none", sources: [], plan: "free", model: null });
 		for (let tick = 0; tick < 50 && service.isIndexing(); tick += 1) await new Promise((resolve) => setTimeout(resolve, 5));
 
 		expect(await service.indexStatus()).toMatchObject({ state: "success", progress: 100, totalFiles: 2, processedFiles: 2, recentFile: "b.md", recentFolder: "Documents" });

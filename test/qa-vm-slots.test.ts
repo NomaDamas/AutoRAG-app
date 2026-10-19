@@ -12,7 +12,8 @@ import { createSlotPool, ownerAlive } from "../scripts/qa-vm/slots.mjs";
  * run's slot, never reclaiming a live one, and one winner per slot across
  * real processes.
  */
-describe("qa-vm slot pool", () => {
+// The pool drives macOS VMs and reads process state through `ps`, which Windows lacks.
+describe.skipIf(process.platform === "win32")("qa-vm slot pool", () => {
 	let dir: string;
 	beforeEach(() => {
 		dir = mkdtempSync(join(tmpdir(), "qa-slots-"));

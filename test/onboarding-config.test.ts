@@ -1,4 +1,5 @@
 import { buildDatasourceSkills, type DatasourcesConfig } from "@autorag/librarian";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { applyIndexingConfig } from "../src/main/onboarding-config";
 import { isJsonObject } from "../src/shared/settings-contract";
@@ -175,8 +176,8 @@ describe("applyIndexingConfig", () => {
 		const work = isJsonObject(datasources["mailcrawl-work.kr"]) ? datasources["mailcrawl-work.kr"] : {};
 		expect(gmail.type).toBe("mailcrawl");
 		expect(gmail.instanceId).toBe("gmail");
-		expect(gmail.connector).toEqual({ account: "gmail", mailbox: "INBOX", dataDir: "/Users/me/.mailcrawl/gmail" });
-		expect(isJsonObject(work.connector) && work.connector.dataDir).toBe("/Users/me/.mailcrawl/work.kr");
+		expect(gmail.connector).toEqual({ account: "gmail", mailbox: "INBOX", dataDir: join(HOME, ".mailcrawl", "gmail") });
+		expect(isJsonObject(work.connector) && work.connector.dataDir).toBe(join(HOME, ".mailcrawl", "work.kr"));
 	});
 
 	it("writes the BYOK model block and leaves managed plans alone", () => {

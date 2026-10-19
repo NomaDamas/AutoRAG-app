@@ -81,7 +81,11 @@ try {
 			const work = screen.getDisplayMatching(window.getBounds()).workAreaSize;
 			return { content: window.getContentSize(), min: window.getMinimumSize(), work: [work.width, work.height] };
 		});
-	const fits = ({ content, work }, [width, height]) => content[0] === Math.min(width, work[0]) && content[1] === Math.min(height, work[1]);
+	// Windows reports the content size inside the frame and title bar, so it can be smaller than the clamped window: allow that chrome (up to 40 px a side, 140 px tall).
+	const fits = ({ content, work }, [width, height]) => {
+		const [wantW, wantH] = [Math.min(width, work[0]), Math.min(height, work[1])];
+		return process.platform === "win32" ? content[0] <= wantW && wantW - content[0] <= 40 && content[1] <= wantH && wantH - content[1] <= 140 : content[0] === wantW && content[1] === wantH;
+	};
 	const size = await windowSize();
 	check("onboarding window opens at the onboarding size", fits(size, [1120, 720]) && size.min[0] === 960, JSON.stringify(size));
 	const shot = (name) => page.locator(".onb").screenshot({ path: join(EVIDENCE, `${name}.png`) });
@@ -334,12 +338,29 @@ try {
 } finally {
 	// The first index leaves background helpers pointing into WORK (e.g.
 	// fsearch-cli watch); kill them by their command line before deleting it.
-	if (process.platform !== "win32") {
-		spawnSync("pkill", ["-9", "-f", WORK]);
+	const killHelpers = () => {
+		if (process.platform !== "win32") {
+			spawnSync("pkill", ["-9", "-f", WORK]);
+			return;
+		}
+		// Same by command line on Windows: any process still pointing into WORK would block its removal (EPERM).
+		const script = `Get-CimInstance Win32_Process | Where-Object { $_.ProcessId -ne ${process.pid} -and $_.CommandLine -and $_.CommandLine.Contains($env:QA_WORK) } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }`;
+		spawnSync("powershell", ["-NoProfile", "-Command", script], { env: { ...process.env, QA_WORK: WORK } });
+	};
+	killHelpers();
+	// After the first index the app can keep helper processes alive on Windows, and `close()` then never
+	// returns; give it a moment, then kill the whole process tree so the lane always ends.
+	const pid = app.process().pid;
+	const closed = await Promise.race([app.close().then(() => true, () => true), new Promise((resolve) => setTimeout(() => resolve(false), 30_000))]);
+	if (!closed && pid !== undefined) {
+		console.log("INFO app did not close within 30s; killing its process tree");
+		if (process.platform === "win32") spawnSync("taskkill", ["/F", "/T", "/PID", String(pid)]);
+		else spawnSync("pkill", ["-9", "-P", String(pid)]);
 	}
-	await app.close().catch(() => {});
+	killHelpers();
+	stub.closeAllConnections();
 	stub.close();
 	rmRetry(WORK);
 }
 console.log(failures.length === 0 ? "onboarding QA passed" : `onboarding QA FAILED: ${failures.join("; ")}`);
-process.exitCode = failures.length === 0 ? 0 : 1;
+process.exit(failures.length === 0 ? 0 : 1);
