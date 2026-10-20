@@ -56,6 +56,64 @@ describe("bundled tools on PATH", () => {
 	});
 });
 
+describe("bundled Kiwi", () => {
+	function toolsWithKiwi(): { readonly resources: string; readonly library: string; readonly model: string } {
+		const resources = temp();
+		const kiwi = join(resources, "tools", "kiwi");
+		mkdirSync(join(resources, "tools", "bin"), { recursive: true });
+		mkdirSync(join(kiwi, "lib"), { recursive: true });
+		mkdirSync(join(kiwi, "models", "cong", "base"), { recursive: true });
+		const library = join(kiwi, "lib", "libkiwi.dylib");
+		writeFileSync(library, "");
+		return { resources, library, model: join(kiwi, "models", "cong", "base") };
+	}
+
+	it("points MinSync's tokenizer at the library and model that shipped with the app", () => {
+		const { resources, library, model } = toolsWithKiwi();
+		const env: NodeJS.ProcessEnv = { PATH: "/usr/bin" };
+
+		applyBundledTools({ resourcesPath: resources, env, platform: "darwin" });
+
+		expect(env.KIWI_LIBRARY_PATH).toBe(library);
+		expect(env.KIWI_MODEL_PATH).toBe(model);
+	});
+
+	it("never overrides a path the user chose, and does not pair a bundled half with theirs", () => {
+		const { resources } = toolsWithKiwi();
+		for (const chosen of [{ KIWI_LIBRARY_PATH: "/mine/libkiwi.dylib" }, { KIWI_MODEL_PATH: "/mine/base" }]) {
+			const env: NodeJS.ProcessEnv = { PATH: "/usr/bin", ...chosen };
+			applyBundledTools({ resourcesPath: resources, env, platform: "darwin" });
+			expect({ library: env.KIWI_LIBRARY_PATH, model: env.KIWI_MODEL_PATH }).toEqual({ library: chosen.KIWI_LIBRARY_PATH, model: chosen.KIWI_MODEL_PATH });
+		}
+	});
+
+	it("sets nothing when the model is missing, so the librarian's probe falls back to whitespace tokenization", () => {
+		const { resources, model } = toolsWithKiwi();
+		rmSync(model, { recursive: true });
+		const env: NodeJS.ProcessEnv = { PATH: "/usr/bin" };
+
+		applyBundledTools({ resourcesPath: resources, env, platform: "darwin" });
+
+		expect(env.KIWI_LIBRARY_PATH).toBeUndefined();
+		expect(env.KIWI_MODEL_PATH).toBeUndefined();
+	});
+
+	it("finds kiwi.dll on Windows, where the environment spells PATH `Path`", () => {
+		const resources = temp();
+		const kiwi = join(resources, "tools", "kiwi");
+		mkdirSync(join(resources, "tools", "bin"), { recursive: true });
+		mkdirSync(join(kiwi, "lib"), { recursive: true });
+		mkdirSync(join(kiwi, "models", "cong", "base"), { recursive: true });
+		writeFileSync(join(kiwi, "lib", "kiwi.dll"), "");
+		const env: NodeJS.ProcessEnv = { Path: "C:\\Windows" };
+
+		applyBundledTools({ resourcesPath: resources, env, platform: "win32" });
+
+		expect(env.KIWI_LIBRARY_PATH).toBe(join(kiwi, "lib", "kiwi.dll"));
+		expect(env.KIWI_MODEL_PATH).toBe(join(kiwi, "models", "cong", "base"));
+	});
+});
+
 describe("seeding the native MinSync embedding model", () => {
 	const content = Buffer.from("not really safetensors");
 	const sha256 = createHash("sha256").update(content).digest("hex");

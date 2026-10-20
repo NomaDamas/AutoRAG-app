@@ -71,8 +71,10 @@ Notes on what was verified:
 ## Programs and models bundled in the installers
 
 The macOS and Windows installers ship these programs unmodified, as separate
-executables the app starts as child processes (no linking). Exact versions for a
-given release are in the `components-<platform>.json` file attached to it.
+executables the app starts as child processes (the app links none of them).
+`minsync` itself statically links one LGPL library, `kiwi-rs`; see below. Exact
+versions for a given release are in the `components-<platform>.json` file
+attached to it.
 
 | Component | License |
 |---|---|
@@ -85,6 +87,7 @@ given release are in the `components-<platform>.json` file attached to it.
 | Everything and ES (Windows only; shipped inside `@autorag/librarian`) | MIT (+ PCRE BSD) |
 | fsearch-cli from fsearch-mac (macOS only) and its libraries glib, pango, harfbuzz, ICU, PCRE2, freetype, ... | GPL-2.0-or-later (fsearch-cli); LGPL-2.1+, MIT, ICU, BSD (libraries) |
 | Qwen/Qwen3-Embedding-0.6B (safetensors weights + tokenizer) | Apache-2.0 |
+| Kiwi native library and base model (`resources/tools/kiwi`): 0.24.0 on macOS, 0.22.2 on Windows | Apache-2.0 (0.24.0); LGPL-2.1-or-later (0.22.2) |
 
 `fsearch-cli` is GPL-2.0-or-later, and Dazzi only starts it as a separate
 program (no linking), per mere aggregation. Its license and notice are
@@ -92,6 +95,47 @@ installed in `resources/tools/licenses/fsearch-mac`. Source for the shipped
 version: https://github.com/NomaDamas/fsearch-mac (tag in `components-macos-arm64.json`).
 The bundled glib/pango/ICU libraries are unmodified Homebrew builds whose install
 paths were rewritten so they load from the app.
+
+### Kiwi and kiwi-rs
+
+`minsync` tokenizes Korean for its keyword index with the Kiwi morphological
+analyzer. The Kiwi native library and its base model ship in
+`resources/tools/kiwi` as separate files that `minsync` loads at run time; the
+app does not link them. Source: https://github.com/bab2min/Kiwi. The models
+were trained on the Sejong and NIKL corpora, which are not distributed.
+
+- **macOS: Kiwi 0.24.0**, Apache-2.0 (library and model). Its LICENSE and NOTICE
+  are installed in `resources/tools/licenses/kiwi`.
+- **Windows: Kiwi 0.22.2**, LGPL-2.1-or-later, **unmodified**: `kiwi.dll` and the
+  model are the official `kiwi_win_x64_v0.22.2.zip` and `kiwi_model_v0.22.2_base.tgz`
+  release assets, not rebuilt or repackaged, with their SHA-256 in
+  `components-win32-x64.json`. Kiwi's LICENSE, the LGPL-2.1 text
+  (`LGPL-2.1.txt`) and a `SOURCE.txt` are installed in
+  `resources/tools/licenses/kiwi`. `SOURCE.txt` states that nothing was changed
+  and gives the complete corresponding source, which is equivalent access from
+  a designated place (LGPL-2.1 sections 4 and 6(d)):
+  https://github.com/bab2min/Kiwi/tree/v0.22.2 (its `third_party/` directory is
+  git submodules and its models are Git LFS objects, so use a recursive clone
+  with Git LFS). The DLL is loaded from its own file at run time, so it can be
+  replaced with a modified, interface-compatible build by setting
+  `KIWI_LIBRARY_PATH` (section 6(b)); users may modify it for their own use and
+  reverse engineer the app to debug such modifications. Kiwi 0.22.2 is used on
+  Windows because 0.23.x and later crashed with MinSync on Windows in our test
+  (see `docs/release.md`).
+
+`minsync` reaches the library through the `kiwi-rs` crate 2026.8.26
+(https://crates.io/crates/kiwi-rs, source https://github.com/JAICHANGPARK/kiwi-rs),
+which is licensed LGPL-2.1-or-later and is statically linked into the `minsync`
+executable, unmodified. MinSync is MIT licensed and its complete source is
+public (https://github.com/NomaDamas/MinSync), so the executable can be rebuilt
+against a modified `kiwi-rs`; see its `THIRD_PARTY_NOTICES.md` for the
+instructions. Users may modify `kiwi-rs` for their own use and reverse engineer
+the result to debug those modifications. The LGPL-2.1 text:
+https://www.gnu.org/licenses/old-licenses/lgpl-2.1.html
+
+`mailcrawl` uses Kiwi through the `kiwi-nlp` npm package (WebAssembly). Version
+0.23.x of that package is LGPL-2.1-or-later and is not linked into `mailcrawl`'s
+own code; it is a separate package loaded at run time.
 
 ## Quick Look data viewers
 

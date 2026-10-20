@@ -8,6 +8,10 @@ import { join, posix, win32 } from "node:path";
  * the bundled directory the first `PATH` entry is the whole integration: no
  * per-tool configuration, and a tool the user already has never shadows the
  * tested version that shipped with the app.
+ *
+ * Kiwi is the exception: MinSync's `multilingual` BM25 tokenizer loads the native library and model by
+ * path, not by name, so the bundle's `kiwi/` directory is announced through `KIWI_LIBRARY_PATH` and
+ * `KIWI_MODEL_PATH` (see {@link applyBundledKiwi}).
  */
 
 /** `<resources>/tools`, or null when this run has no bundled tools (development). */
@@ -15,6 +19,23 @@ function bundledToolsRoot(input: { readonly resourcesPath: string; readonly env:
 	const override = input.env.AUTORAG_TOOLS_DIR?.trim() ?? "";
 	const root = override.length > 0 ? override : join(input.resourcesPath, "tools");
 	return existsSync(join(root, "bin")) ? root : null;
+}
+
+/**
+ * Point `KIWI_LIBRARY_PATH` / `KIWI_MODEL_PATH` at the bundled Kiwi (`<tools>/kiwi`), in place. A variable the
+ * user already set is left alone, and so are both when only one of them is bundled: kiwi-rs treats an
+ * explicit path as authoritative, so overwriting would second-guess a deliberate choice, and a library
+ * paired with another install's model is not a configuration anyone tested.
+ * Returns whether the bundled Kiwi was applied.
+ */
+export function applyBundledKiwi(root: string, env: NodeJS.ProcessEnv, platform: NodeJS.Platform = process.platform): boolean {
+	const library = join(root, "kiwi", "lib", platform === "win32" ? "kiwi.dll" : platform === "darwin" ? "libkiwi.dylib" : "libkiwi.so");
+	const model = join(root, "kiwi", "models", "cong", "base");
+	if (!existsSync(library) || !existsSync(model)) return false;
+	if ((env.KIWI_LIBRARY_PATH?.trim() ?? "") !== "" || (env.KIWI_MODEL_PATH?.trim() ?? "") !== "") return false;
+	env.KIWI_LIBRARY_PATH = library;
+	env.KIWI_MODEL_PATH = model;
+	return true;
 }
 
 /** The name PATH has in `env`: Windows environments are case-insensitive and the OS spells it `Path`. */
@@ -67,5 +88,6 @@ export function applyBundledTools(input: {
 	const root = bundledToolsRoot(input);
 	if (root === null) return null;
 	input.env[key] = prependPath(input.env[key], join(root, "bin"), platform);
+	applyBundledKiwi(root, input.env, platform);
 	return root;
 }
