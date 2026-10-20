@@ -1129,11 +1129,7 @@
           "description": "文書を埋め込まず、キーワード検索のみを使います。モデルのダウンロードや埋め込みの時間は不要で、意味検索とハイブリッド検索はオフになります。"
         },
         "nativeQwen3": {
-          "description": "この Mac 上で直接動作する既定の文書理解モデル(1024 次元)。別途サーバーは不要です。"
-        },
-        "runtime": {
-          "label": "Qwen3 Embedding 0.6B (Dazzi ランタイム)",
-          "description": "Dazzi 埋め込みランタイムが loopback 上の llama-server で提供する 1024 次元モデルです。"
+          "description": "既定の文書理解モデル(1024次元)です。Dazzi が起動する MinSync の埋め込みサーバーがこのマシンで動かすため、別途インストールは不要です。"
         },
         "localServer": {
           "label": "自分のコンピューターの埋め込みサーバー",
@@ -1147,7 +1143,6 @@
         "loopbackOnly": "埋め込みサーバーは loopback アドレスでなければなりません(文書はこの Mac から出ません)。",
         "unknownProfile": "不明な埋め込みプロファイル: {{id}}",
         "localServerRequired": "埋め込みサーバー情報(id、baseUrl、dimension)が必要です。",
-        "localServerMissing": "埋め込みサーバー情報が必要です。",
         "httpStatus": "埋め込みサーバーが HTTP {{status}} で応答しました。",
         "badJson": "埋め込みサーバーの応答を JSON として読み取れませんでした。",
         "noVector": "埋め込みサーバーがベクトルを返しませんでした。",
@@ -1156,17 +1151,15 @@
       },
       "reasons": {
         "keywordOnly": "キーワード検索のみのため、このソースも埋め込みません。",
-        "mailcrawlIncompatible": "mailcrawl は組み込みの Qwen3 のみ対応しており、任意の HTTP 埋め込みサーバーは使用できません。",
-        "mailcrawlPropagated": "connector.env に埋め込みプロバイダーを記録します(モデルが変わると mailcrawl が自動的に再インデックスします)。",
-        "obsidianIncompatible": "qmd(obsidian)はローカルの GGUF モデルのみ使用できるため、HTTP 埋め込みサーバーは使用できません。",
-        "obsidianPropagated": "qmd 子プロセスに QMD_EMBED_MODEL を設定し、`qmd embed -f` で再インデックスします。",
-        "discordIncompatible": "このアプリは Dazzi 埋め込みランタイムを loopback で提供できません(公開エクスポートではない)。discrawl に渡すには埋め込みサーバーを選択してください。",
-        "discordPropagated": "Dazzi 管理の discrawl config を書き直し、`discrawl embed --rebuild` で再インデックスします。",
-        "kakaoSharedEmbedder": "KakaoTalk は lazykatok アーカイブ上のサイドカー経由で Dazzi 共有エンベッダーを使用し、エンベッダーを変更すると次回の同期で再埋め込みされます。",
-        "githubGistIncompatible": "GitHubGistSkill は @autorag/librarian の公開エクスポートではないため、アプリからエンベッダーを指定できません(ランタイムゲートウェイプロファイルで固定)。",
+        "obsidianIncompatible": "qmd(obsidian)は独自の GGUF モデルしか使えないため、別の埋め込みサーバーは使えません。",
+        "obsidianPropagated": "qmd の子プロセスに QMD_EMBED_MODEL を設定し、`qmd embed -f` で再インデックスします。",
+        "discordPropagated": "Dazzi が管理する discrawl の設定を新しいサーバー向けに書き直し、`discrawl embed --rebuild` で再インデックスします。",
         "clawgalleryNotApplicable": "ClawGallery は画像(VDR)インデックスであり、テキスト埋め込みを使用しません。",
         "larkNotApplicable": "Lark はリモート API 検索のみを使用し、ローカル埋め込みを拒否します。",
-        "defaultNotApplicable": "このデータソースは独自のキーワード/パースインデックスを使用し、グローバルエンベッダーを使用しません。"
+        "defaultNotApplicable": "このデータソースは独自のキーワード/パースインデックスを使用し、グローバルエンベッダーを使用しません。",
+        "mailcrawlSharedEmbedder": "mailcrawl は Dazzi と同じ埋め込みサーバーを使います。モデルが変わると、次回のインデックス作成で自動的に作り直します。",
+        "sidecarSharedEmbedder": "チャットアーカイブ上の読み取り専用サイドカーが共有エンベッダーでメッセージを埋め込みます。エンベッダーを変更すると次回の同期で再埋め込みします。",
+        "githubGistSharedEmbedder": "GitHub Gist のベクトルインデックスは共有エンベッダーを使います。エンベッダーを変更すると次回の同期で再埋め込みします。"
       },
       "actions": {
         "discordConfig": "datasources.<id> が管理する discrawl config.toml"

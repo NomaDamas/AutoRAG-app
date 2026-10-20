@@ -138,6 +138,9 @@ if (!win) {
 // Behaviour, not just version output.
 check("kordoc parses a document", join(bin, `kordoc${exe}`), ["--help"], { expect: /kordoc|Usage|usage/i });
 check("minsync reports its embedder commands", join(bin, `minsync${exe}`), ["--help"], { expect: /sync|query/i });
+// The app starts `minsync serve` itself at launch (the one process that holds the model weights, serving
+// every embedding consumer over loopback). Prove the bundled build carries that subcommand and its server.
+check("minsync serve is the shared embedding daemon", join(bin, `minsync${exe}`), ["serve", "--help"], { expect: /loopback HTTP[\s\S]*\/v1\/embeddings/ });
 if (hasApp) check("autorag runs", join(bin, `autorag${exe}`), ["--help"], { expect: /autorag/i });
 probe("transformers.js loads without onnxruntime-web", `import(${JSON.stringify(pathToFileURL(join(modules, "@huggingface", "transformers", "dist", "transformers.node.mjs")).href)}).then((m)=>console.log(typeof m.pipeline==='function'?'loaded':'broken'))`);
 
@@ -154,8 +157,9 @@ if (seedDir !== null) {
 // Kiwi: the bundled library and model must make MinSync's `multilingual` tokenizer work with no
 // ~/.local/kiwi and no KIWI_* of the developer's own. Indexing 환불정책을 and finding it by the stem 환불 is
 // what whitespace tokenization cannot do, so a pass proves the library loaded and the model is usable.
-// The sync embeds, so it needs the seeded native Qwen3 model: a seed without it (an old GGUF-era stage)
-// would make minsync download 1.2 GB and prove nothing about being offline, so the sync is skipped then.
+// The sync embeds, so it needs the seeded native Qwen3 model: a seed without it (a stage built
+// before the native safetensors seed) would make minsync download 1.2 GB and prove nothing about being
+// offline, so the sync is skipped then.
 // macOS ships Apache-2.0 Kiwi 0.24.0 (LICENSE + NOTICE); Windows ships Kiwi 0.22.2, which is LGPL-2.1+ and
 // so also needs the LGPL text and the source/unmodified statement beside it.
 if (existsSync(join(toolsDir, "kiwi"))) {

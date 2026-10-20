@@ -13,6 +13,7 @@ import { isJsonObject } from "../shared/settings-contract";
 import { applyDazziThinkingLevels } from "./dazzi-session-auth";
 import { resolveSessionModel } from "./agents/app-model";
 import { applyAppIndexing, readAppIndexing } from "./app-indexing";
+import { ensureEmbeddingForConfig } from "./embedding-daemon";
 import { agentOptionsForSemantic, applySemanticPolicyToAgent } from "./semantic-policy";
 import type {
 	AnswerPhase,
@@ -561,6 +562,8 @@ export function createDefaultAgentFactory(): () => Promise<SearchAgent> {
 			webSearch: resolveWebSearchConfig(raw),
 		};
 		const effective = await applyAppIndexing(withWebSearch, raw);
+		// A semantic search embeds its query through the local server; a server still loading at launch is waited for here.
+		if (readAppIndexing(raw).semanticSearch) await ensureEmbeddingForConfig(raw);
 		// The model and credentials come from the one resolver every agent in the
 		// app shares (see agents/app-model.ts): fresh on every agent build.
 		const resolved = await resolveSessionModel(effective, input.env, input.cwd, getAgentDir());

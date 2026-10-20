@@ -3,7 +3,7 @@ import { readRawConfigObject, resolveConfigPath } from "@autorag/librarian/core"
 import type { AutoRagConfigService } from "./autorag-config-service";
 import type { DataSourceStatusService } from "./datasource-status";
 import type { EmbeddingSettingsService } from "./settings-service";
-import { startEmbeddingLoopbackAdapter, type EmbeddingLoopbackAdapter } from "./embedding-loopback-adapter";
+import { ensureEmbeddingForConfig } from "./embedding-daemon";
 import { isJsonObject } from "../shared/settings-contract";
 import { readAppIndexing } from "./app-indexing";
 import { t } from "../shared/i18n/core";
@@ -21,60 +21,33 @@ import type {
 } from "../shared/settings-contract";
 
 /**
- * The discrawl embedding runtime the app hands to the discrawl skill so an
- * index run rewrites the managed config and rebuilds embeddings.
- *
- * An app-owned structural copy: `@autorag/librarian` constructs this shape but
- * does not re-export the type from its public entry, so the app declares the
- * exact fields it passes instead of importing a guessed internal module.
- */
-export interface DiscrawlEmbeddingRuntime {
-	readonly provider: string;
-	readonly model: string;
-	readonly baseUrl: string;
-	readonly dimensions: number;
-	readonly identity?: string;
-}
-
-/**
  * Settings > Models > 문서 이해 (the global corpus embedder).
  *
  * `minSync.embedder` is the one setting the app agent, `autorag` refresh, and
  * the AutoRAGLite runtime all resolve. Changing it must reach every configured
  * datasource that can adopt the new model — not just MinSync — so this service
  * validates the choice, reports exactly which sources can and cannot follow,
- * writes the shared config (plus every reachable per-CLI override), and then
- * runs the real per-source index/rebuild pipelines.
+ * writes the shared config, and then runs the real per-source index/rebuild
+ * pipelines.
+ *
+ * Nothing is written into a datasource for the embedder: the librarian points
+ * mailcrawl, lazykatok, discrawl and the chat sidecars at the one endpoint
+ * `minSync.embedder` selects (the `minsync serve` server the app runs, or the
+ * server the user configured) every time they index or search.
  *
  * Honesty rules enforced here:
  * - no remote egress: a local server must be loopback, and is probed for real
  *   vectors before any write (no fake success);
  * - an incompatible configured source blocks the change unless the caller
- *   explicitly acknowledges it, and is always reported;
- * - unreachable upstream prerequisites (e.g. the AutoRAG embedding runtime is
- *   not a public export, `lazykatok` reads its own config) are reported as
- *   incompatibilities instead of silently applying MinSync only.
+ *   explicitly acknowledges it, and is always reported.
  */
 export interface EmbeddingSettingsDeps {
 	readonly env: NodeJS.ProcessEnv;
 	readonly cwd: string;
 	readonly config: AutoRagConfigService;
 	readonly dataSources: DataSourceStatusService;
-	/** Test seam for the local-server probe and the loopback adapter upstream. */
+	/** Test seam for the local-server probe. */
 	readonly fetchImpl?: typeof fetch;
-}
-
-/**
- * The embedding surface plus the app-lifecycle hooks the host needs.
- *
- * `refresh()` MUST run at startup: a persisted local-server embedder stores the
- * app adapter's loopback URL in the mailcrawl env, and that ephemeral port only
- * exists for the current process lifetime, so the adapter and the URL are
- * re-established on every launch.
- */
-export interface EmbeddingSettingsRuntime extends EmbeddingSettingsService {
-	/** Restart the configured loopback adapter and refresh the persisted mailcrawl URL; call at startup. */
-	refresh(): Promise<void>;
 }
 
 interface LocalServer {
@@ -93,23 +66,16 @@ interface EmbeddingChoice {
 /** Keyword-only search: nothing is embedded (`appIndexing.semanticSearch: false`). */
 const NONE_PROFILE_ID = "none";
 const QWEN3_GGUF = "hf:Qwen/Qwen3-Embedding-0.6B-GGUF/Qwen3-Embedding-0.6B-Q8_0.gguf";
-const MAILCRAWL_NATIVE_MODEL = "Qwen/Qwen3-Embedding-0.6B";
-
-/** Mailcrawl env keys this service owns; any not set for the choice are removed. */
-const MAILCRAWL_KEYS = [
-	"MAILCRAWL_EMBEDDER_PROVIDER",
-	"MAILCRAWL_NATIVE_MODEL",
-	"MAILCRAWL_NATIVE_DEVICE",
-	"MAILCRAWL_EMBED_URL",
-	"MAILCRAWL_EMBED_MODEL",
-	"MAILCRAWL_EMBED_DIM",
-] as const;
 
 const LOOPBACK_HOSTS: Record<string, true> = { localhost: true, "127.0.0.1": true, "::1": true, "[::1]": true };
 
+/** Datasource templates whose read-only sidecar embeds with the shared embedder. */
+const SIDECAR_TEMPLATES: Record<string, true> = { kakao: true, slack: true, telegram: true, whatsapp: true };
+
 /**
- * The global embedder choices. The AutoRAG plan and local servers are the only
- * sources the prototype lists; corpus text never goes to a remote embedder.
+ * The global embedder choices. The local model MinSync serves and a local
+ * server are the only sources the prototype lists; corpus text never goes to a
+ * remote embedder from here.
  */
 export function embeddingProfiles(): readonly EmbeddingProfile[] {
 	return [
@@ -181,21 +147,12 @@ function deriveEmbedder(choice: EmbeddingChoice): JsonObject {
 			...(local.passagePrefix !== undefined && local.passagePrefix.length > 0 ? { passagePrefix: local.passagePrefix } : {}),
 		};
 	}
-	if (profile.kind === "profile") {
-		return {
-			profile: profile.model,
-			dimension: profile.dimension,
-			...(profile.queryPrefix.length > 0 ? { queryPrefix: profile.queryPrefix } : {}),
-			...(profile.passagePrefix.length > 0 ? { passagePrefix: profile.passagePrefix } : {}),
-		};
-	}
 	return { id: profile.model, dimension: profile.dimension };
 }
 
 function currentProfileId(embedder: unknown, semantic: boolean): string | null {
 	if (!semantic) return NONE_PROFILE_ID;
 	if (!isJsonObject(embedder)) return null;
-	if (embedder.profile === "qwen3-embedding-0.6b") return "native-qwen3";
 	const id = embedder.id;
 	if (typeof id === "string") {
 		if (id.startsWith("native:")) return "native-qwen3";
@@ -211,96 +168,24 @@ function currentProfileId(embedder: unknown, semantic: boolean): string | null {
 	return null;
 }
 
-/** The qmd `QMD_EMBED_MODEL` GGUF URI for the choice, or null when qmd cannot use it. */
+/** The qmd `QMD_EMBED_MODEL` GGUF URI for the choice, or null when qmd cannot use it. qmd runs its own GGUF engine. */
 function qmdModelFor(choice: EmbeddingChoice): string | null {
-	const id = choice.profile.id;
-	if (id === "native-qwen3" || id === "qwen3-embedding-0.6b") return QWEN3_GGUF;
-	return null;
+	return choice.profile.id === "native-qwen3" ? QWEN3_GGUF : null;
 }
 
-/** Mailcrawl env the choice maps to, or null when mailcrawl cannot adopt it. */
-function mailcrawlEnvFor(choice: EmbeddingChoice, adapterUrl: string | null): Record<string, string> | null {
-	const id = choice.profile.id;
-	if (id === "native-qwen3" || id === "qwen3-embedding-0.6b") {
-		return { MAILCRAWL_EMBEDDER_PROVIDER: "native", MAILCRAWL_NATIVE_MODEL, MAILCRAWL_NATIVE_DEVICE: "auto" };
-	}
-	if (id === "local-server" && choice.localServer !== undefined && adapterUrl !== null) {
-		return {
-			MAILCRAWL_EMBEDDER_PROVIDER: "loopback-http",
-			MAILCRAWL_EMBED_URL: `${adapterUrl}/mailcrawl/embeddings`,
-			MAILCRAWL_EMBED_MODEL: choice.localServer.id,
-			MAILCRAWL_EMBED_DIM: String(choice.localServer.dimension),
-		};
-	}
-	return null;
-}
-
-function discrawlRuntimeFor(choice: EmbeddingChoice): DiscrawlEmbeddingRuntime | undefined {
-	if (choice.profile.kind !== "local-server" || choice.localServer === undefined) return undefined;
-	const local = choice.localServer;
-	let provider = "openai_compatible";
-	try {
-		const url = new URL(local.baseUrl);
-		if (LOOPBACK_HOSTS[url.hostname.toLowerCase()] === true && url.port === "11434") provider = "ollama";
-	} catch {
-		return undefined;
-	}
-	return { provider, model: local.id, baseUrl: local.baseUrl, dimensions: local.dimension };
-}
-
-function adoptionFor(
-	type: string,
-	choice: EmbeddingChoice,
-	adapterAvailable: boolean,
-): { adoption: EmbeddingAdoption; reason: string; action: string | null } {
+function adoptionFor(type: string, choice: EmbeddingChoice): { adoption: EmbeddingAdoption; reason: string; action: string | null } {
 	if (choice.profile.kind === "none") return { adoption: "not-applicable", reason: t("main.embedding.reasons.keywordOnly"), action: null };
+	if (type === "mailcrawl") return { adoption: "native", reason: t("main.embedding.reasons.mailcrawlSharedEmbedder"), action: null };
+	if (SIDECAR_TEMPLATES[type] === true) return { adoption: "native", reason: t("main.embedding.reasons.sidecarSharedEmbedder"), action: null };
 	switch (type) {
-		case "mailcrawl":
-			return !(choice.profile.id === "local-server" ? adapterAvailable : mailcrawlEnvFor(choice, null) !== null)
-				? {
-						adoption: "incompatible",
-						reason: t("main.embedding.reasons.mailcrawlIncompatible"),
-						action: null,
-					}
-				: {
-						adoption: "propagated",
-						reason: t("main.embedding.reasons.mailcrawlPropagated"),
-						action: "datasources.<id>.connector.env.MAILCRAWL_*",
-					};
 		case "obsidian":
 			return qmdModelFor(choice) === null
-				? {
-						adoption: "incompatible",
-						reason: t("main.embedding.reasons.obsidianIncompatible"),
-						action: null,
-					}
-				: {
-						adoption: "propagated",
-						reason: t("main.embedding.reasons.obsidianPropagated"),
-						action: `QMD_EMBED_MODEL=${qmdModelFor(choice)}`,
-					};
+				? { adoption: "incompatible", reason: t("main.embedding.reasons.obsidianIncompatible"), action: null }
+				: { adoption: "propagated", reason: t("main.embedding.reasons.obsidianPropagated"), action: `QMD_EMBED_MODEL=${qmdModelFor(choice)}` };
 		case "discord":
-			return discrawlRuntimeFor(choice) === undefined
-				? {
-						adoption: "incompatible",
-						reason: t("main.embedding.reasons.discordIncompatible"),
-						action: null,
-					}
-				: {
-						adoption: "propagated",
-						reason: t("main.embedding.reasons.discordPropagated"),
-						action: t("main.embedding.actions.discordConfig"),
-					};
-		case "kakao":
-			// The librarian's kakao sidecar embeds with the shared embedder, so the choice
-			// applies as-is; the rebuild sync re-embeds when the embedder identity changed.
-			return { adoption: "native", reason: t("main.embedding.reasons.kakaoSharedEmbedder"), action: null };
+			return { adoption: "propagated", reason: t("main.embedding.reasons.discordPropagated"), action: t("main.embedding.actions.discordConfig") };
 		case "github-gist":
-			return {
-				adoption: "incompatible",
-				reason: t("main.embedding.reasons.githubGistIncompatible"),
-				action: null,
-			};
+			return { adoption: "native", reason: t("main.embedding.reasons.githubGistSharedEmbedder"), action: null };
 		case "clawgallery":
 			return { adoption: "not-applicable", reason: t("main.embedding.reasons.clawgalleryNotApplicable"), action: null };
 		case "lark":
@@ -310,9 +195,9 @@ function adoptionFor(
 	}
 }
 
-function buildPlan(rows: readonly DataSourceRow[], choice: EmbeddingChoice, adapterAvailable: boolean): EmbeddingSourceStatus[] {
+function buildPlan(rows: readonly DataSourceRow[], choice: EmbeddingChoice): EmbeddingSourceStatus[] {
 	return rows.map((row) => {
-		const { adoption, reason, action } = adoptionFor(row.type, choice, adapterAvailable);
+		const { adoption, reason, action } = adoptionFor(row.type, choice);
 		return { id: row.id, type: row.type, adoption, reason, action };
 	});
 }
@@ -366,10 +251,7 @@ function findChoiceFromConfig(embedder: unknown, profileId: string): EmbeddingCh
 }
 
 function qmdModelForConfig(embedder: unknown): string | null {
-	if (!isJsonObject(embedder)) return null;
-	if (embedder.profile === "qwen3-embedding-0.6b") return QWEN3_GGUF;
-	if (typeof embedder.id === "string" && embedder.id.startsWith("native:")) return QWEN3_GGUF;
-	return null;
+	return isJsonObject(embedder) && typeof embedder.id === "string" && embedder.id.startsWith("native:") ? QWEN3_GGUF : null;
 }
 
 /** The switch itself, or its whole block when it is the block's only setting, so no empty `appIndexing` is left behind. */
@@ -378,9 +260,8 @@ function semanticSwitchPath(path: string): string[] {
 	return isJsonObject(block) && Object.keys(block).every((key) => key === "semanticSearch") ? ["appIndexing"] : ["appIndexing", "semanticSearch"];
 }
 
-export function createEmbeddingSettingsService(deps: EmbeddingSettingsDeps): EmbeddingSettingsRuntime {
+export function createEmbeddingSettingsService(deps: EmbeddingSettingsDeps): EmbeddingSettingsService {
 	const doFetch = deps.fetchImpl ?? fetch;
-	let adapter: EmbeddingLoopbackAdapter | null = null;
 
 	const configPath = (): string => resolveConfigPath({ flags: {}, env: deps.env, cwd: deps.cwd }).configPath;
 
@@ -396,26 +277,6 @@ export function createEmbeddingSettingsService(deps: EmbeddingSettingsDeps): Emb
 			return { error: error instanceof Error ? error.message : String(error) };
 		}
 		return { choice: { profile, localServer: local } };
-	};
-
-	const stopAdapter = async (): Promise<void> => {
-		if (adapter === null) return;
-		const closing = adapter;
-		adapter = null;
-		await closing.close();
-	};
-
-	const startAdapter = async (choice: EmbeddingChoice): Promise<string> => {
-		if (choice.localServer === undefined) throw new Error(t("main.embedding.errors.localServerMissing"));
-		await stopAdapter();
-		const started = await startEmbeddingLoopbackAdapter({
-			upstreamBaseUrl: choice.localServer.baseUrl,
-			model: choice.localServer.id,
-			dimension: choice.localServer.dimension,
-			...(deps.fetchImpl === undefined ? {} : { fetchImpl: deps.fetchImpl }),
-		});
-		adapter = started;
-		return started.url;
 	};
 
 	/** Probe the real upstream for a vector of the declared dimension; never fabricate. */
@@ -449,11 +310,7 @@ export function createEmbeddingSettingsService(deps: EmbeddingSettingsDeps): Emb
 	};
 
 	/** Plan result as a snapshot: `current` previews the requested profile, `sources` its adoption. */
-	const snapshotFor = async (
-		choice: EmbeddingChoice,
-		adapterAvailable: boolean,
-		error: string | null,
-	): Promise<EmbeddingSettingsSnapshot> => {
+	const snapshotFor = async (choice: EmbeddingChoice, error: string | null): Promise<EmbeddingSettingsSnapshot> => {
 		const path = configPath();
 		const base: EmbeddingSettingsSnapshot = {
 			configPath: path,
@@ -465,7 +322,7 @@ export function createEmbeddingSettingsService(deps: EmbeddingSettingsDeps): Emb
 		};
 		const sources = await deps.dataSources.list();
 		if (sources.error !== null) return { ...base, error: base.error ?? sources.error };
-		return { ...base, sources: buildPlan(sources.sources, choice, adapterAvailable) };
+		return { ...base, sources: buildPlan(sources.sources, choice) };
 	};
 
 	return {
@@ -485,7 +342,7 @@ export function createEmbeddingSettingsService(deps: EmbeddingSettingsDeps): Emb
 			if (sources.error !== null) return { ...base, error: sources.error };
 			const choice = profileId === null ? undefined : findChoiceFromConfig(embedder, profileId);
 			if (choice === undefined) return base;
-			return { ...base, sources: buildPlan(sources.sources, choice, adapter !== null) };
+			return { ...base, sources: buildPlan(sources.sources, choice) };
 		},
 		plan: async (request) => {
 			const resolved = resolveChoice(request);
@@ -502,12 +359,9 @@ export function createEmbeddingSettingsService(deps: EmbeddingSettingsDeps): Emb
 			}
 			const choice = resolved.choice;
 			if (choice.profile.kind === "local-server" && choice.localServer !== undefined) {
-				const probeError = await probeLocalServer(choice.localServer);
-				// The mailcrawl overlay URL exists only once the adapter starts; the
-				// plan reports mailcrawl as reachable when the probe already passed.
-				return snapshotFor(choice, probeError === null, probeError);
+				return snapshotFor(choice, await probeLocalServer(choice.localServer));
 			}
-			return snapshotFor(choice, false, null);
+			return snapshotFor(choice, null);
 		},
 		apply: async (request) => {
 			const resolved = resolveChoice(request);
@@ -517,22 +371,11 @@ export function createEmbeddingSettingsService(deps: EmbeddingSettingsDeps): Emb
 			if (snapshot.error !== null) return { ...EMPTY_RESULT(request.profileId), error: snapshot.error };
 			const enabledById = new Map(snapshot.sources.map((row) => [row.id, row.enabled] as const));
 
-			let adapterUrl: string | null = null;
+			const plan = buildPlan(snapshot.sources, choice);
 			if (choice.profile.kind === "local-server" && choice.localServer !== undefined) {
 				const probeError = await probeLocalServer(choice.localServer);
-				if (probeError !== null) {
-					return { ...EMPTY_RESULT(request.profileId, buildPlan(snapshot.sources, choice, false)), error: probeError };
-				}
-				try {
-					adapterUrl = await startAdapter(choice);
-				} catch (error) {
-					return { ...EMPTY_RESULT(request.profileId), error: error instanceof Error ? error.message : String(error) };
-				}
-			} else {
-				await stopAdapter();
+				if (probeError !== null) return { ...EMPTY_RESULT(request.profileId, plan), error: probeError };
 			}
-
-			const plan = buildPlan(snapshot.sources, choice, adapterUrl !== null);
 			const incompatibilities = plan.filter((status) => enabledById.get(status.id) === true && status.adoption === "incompatible");
 			const result: EmbeddingChangeResult = { ...EMPTY_RESULT(request.profileId, plan), incompatibilities };
 			if (incompatibilities.length > 0 && request.acknowledgeIncompatible !== true) {
@@ -548,24 +391,7 @@ export function createEmbeddingSettingsService(deps: EmbeddingSettingsDeps): Emb
 					? [{ path: ["appIndexing", "semanticSearch"], value: false }]
 					: [{ path: ["minSync", "embedder"], value: deriveEmbedder(choice) }, { path: semanticSwitchPath(configPath()), remove: true }];
 			const written: string[][] = [choice.profile.kind === "none" ? ["appIndexing", "semanticSearch"] : ["minSync", "embedder"]];
-			const toRebuild: string[] = [];
-
-			for (const status of plan) {
-				if (enabledById.get(status.id) !== true) continue;
-				if (status.type === "mailcrawl") {
-					const target = mailcrawlEnvFor(choice, adapterUrl);
-					if (target === null) continue;
-					for (const key of MAILCRAWL_KEYS) {
-						const value = target[key];
-						if (value === undefined) updates.push({ path: ["datasources", status.id, "connector", "env", key], remove: true });
-						else {
-							updates.push({ path: ["datasources", status.id, "connector", "env", key], value });
-							written.push(["datasources", status.id, "connector", "env", key]);
-						}
-					}
-				}
-				if (status.adoption === "propagated" || status.adoption === "native") toRebuild.push(status.id);
-			}
+			const toRebuild = plan.filter((status) => enabledById.get(status.id) === true && (status.adoption === "propagated" || status.adoption === "native")).map((status) => status.id);
 
 			try {
 				await deps.config.patch(updates);
@@ -577,6 +403,9 @@ export function createEmbeddingSettingsService(deps: EmbeddingSettingsDeps): Emb
 			const qmdModel = qmdModelFor(choice);
 			if (qmdModel === null) delete deps.env.QMD_EMBED_MODEL;
 			else deps.env.QMD_EMBED_MODEL = qmdModel;
+
+			// The rebuilds embed through whatever the new config selects: the local server has to be up (or gone) first.
+			await ensureEmbeddingForConfig(readRawConfigObject(configPath()));
 
 			const rebuilds: DataSourceSyncResult[] = [];
 			for (const id of toRebuild) {
@@ -598,68 +427,10 @@ export function createEmbeddingSettingsService(deps: EmbeddingSettingsDeps): Emb
 
 			return { ...result, ok: true, applied: true, written, rebuilds };
 		},
-		discrawlRuntime: () => {
-			const embedder = readEmbedder(deps.env, deps.cwd);
-			if (currentProfileId(embedder, readSemantic(deps.env, deps.cwd)) !== "local-server" || !isJsonObject(embedder)) return undefined;
-			const profile = findProfile("local-server");
-			if (profile === undefined || typeof embedder.id !== "string" || typeof embedder.baseUrl !== "string" || typeof embedder.dimension !== "number") {
-				return undefined;
-			}
-			return discrawlRuntimeFor({ profile, localServer: { id: embedder.id, baseUrl: embedder.baseUrl, dimension: embedder.dimension } });
-		},
 		applyProcessEnv: () => {
 			const model = qmdModelForConfig(readEmbedder(deps.env, deps.cwd));
 			if (model === null) delete deps.env.QMD_EMBED_MODEL;
 			else deps.env.QMD_EMBED_MODEL = model;
-		},
-		dispose: stopAdapter,
-		refresh: async () => {
-			const embedder = readEmbedder(deps.env, deps.cwd);
-			const profile = findProfile("local-server");
-			if (
-				profile === undefined ||
-				currentProfileId(embedder, readSemantic(deps.env, deps.cwd)) !== "local-server" ||
-				!isJsonObject(embedder) ||
-				typeof embedder.id !== "string" ||
-				typeof embedder.baseUrl !== "string" ||
-				typeof embedder.dimension !== "number"
-			) {
-				await stopAdapter();
-				return;
-			}
-			const local: LocalServer = {
-				id: embedder.id,
-				baseUrl: embedder.baseUrl,
-				dimension: embedder.dimension,
-				...(typeof embedder.queryPrefix === "string" ? { queryPrefix: embedder.queryPrefix } : {}),
-				...(typeof embedder.passagePrefix === "string" ? { passagePrefix: embedder.passagePrefix } : {}),
-			};
-			// The persisted config may point at a server that is no longer running.
-			if ((await probeLocalServer(local)) !== null) {
-				await stopAdapter();
-				return;
-			}
-			let url: string;
-			try {
-				url = await startAdapter({ profile, localServer: local });
-			} catch {
-				await stopAdapter();
-				return;
-			}
-			const snapshot = await deps.dataSources.list();
-			if (snapshot.error !== null) return;
-			const target = mailcrawlEnvFor({ profile, localServer: local }, url);
-			if (target === null) return;
-			const updates: AutoRagConfigUpdate[] = [];
-			for (const row of snapshot.sources) {
-				if (!row.enabled || row.type !== "mailcrawl") continue;
-				for (const key of MAILCRAWL_KEYS) {
-					const value = target[key];
-					if (value === undefined) updates.push({ path: ["datasources", row.id, "connector", "env", key], remove: true });
-					else updates.push({ path: ["datasources", row.id, "connector", "env", key], value });
-				}
-			}
-			if (updates.length > 0) await deps.config.patch(updates);
 		},
 	};
 }

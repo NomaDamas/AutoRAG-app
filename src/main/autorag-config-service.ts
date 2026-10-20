@@ -400,9 +400,7 @@ function checkKnownBlock(path: string, value: unknown): void {
 		if (value.embedder !== undefined) {
 			const embedder = value.embedder;
 			if (!isJsonObject(embedder)) return fail("minSync.embedder must be an object");
-			if (embedder.profile !== undefined && embedder.profile !== "qwen3-embedding-0.6b") {
-				fail("minSync.embedder.profile must be qwen3-embedding-0.6b");
-			}
+			if (embedder.profile !== undefined) fail("minSync.embedder.profile was removed; use id (native:Qwen/Qwen3-Embedding-0.6B)");
 			for (const key of ["id", "baseUrl"] as const) {
 				if (embedder[key] !== undefined && !(typeof embedder[key] === "string" && (embedder[key] as string).length > 0)) {
 					fail(`minSync.embedder.${key} must be a non-empty string`);
@@ -544,10 +542,6 @@ function assertNoRemoteEgress(candidate: Record<string, unknown>, env?: NodeJS.P
 			// Lark API itself) is not restricted here.
 			const embeddingUrl = /(?:embedding|embedder|embed|rerank)/iu.test(key) && /(?:url|endpoint|server)/iu.test(key);
 			if (embeddingUrl) assertLoopback(target, `datasources.${id}.connector.${key}`);
-		}
-		const runtime = isJsonObject(connector.embeddingRuntime) ? connector.embeddingRuntime : undefined;
-		if (runtime !== undefined && typeof runtime.baseUrl === "string") {
-			assertLoopback(runtime.baseUrl, `datasources.${id}.connector.embeddingRuntime.baseUrl`);
 		}
 	}
 }

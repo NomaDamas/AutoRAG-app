@@ -1129,11 +1129,7 @@
           "description": "문서를 임베딩하지 않고 키워드 검색만 씁니다. 모델 내려받기와 임베딩 시간이 들지 않으며, 의미·하이브리드 검색은 꺼집니다."
         },
         "nativeQwen3": {
-          "description": "이 Mac에서 직접 도는 기본 문서 이해 모델(1024차원). 별도 서버가 필요 없습니다."
-        },
-        "runtime": {
-          "label": "Qwen3 Embedding 0.6B (Dazzi 런타임)",
-          "description": "Dazzi 임베딩 런타임이 loopback에서 llama-server로 서빙하는 1024차원 모델입니다."
+          "description": "기본 문서 이해 모델(1024차원)입니다. Dazzi가 실행하는 MinSync 임베딩 서버가 이 Mac에서 직접 구동하며, 따로 설치할 것이 없습니다."
         },
         "localServer": {
           "label": "내 컴퓨터 임베딩 서버",
@@ -1147,7 +1143,6 @@
         "loopbackOnly": "임베딩 서버는 loopback 주소여야 합니다(문서는 이 Mac을 벗어나지 않습니다)",
         "unknownProfile": "알 수 없는 임베딩 프로필: {{id}}",
         "localServerRequired": "임베딩 서버 정보(id, baseUrl, dimension)가 필요합니다",
-        "localServerMissing": "임베딩 서버 정보가 필요합니다",
         "httpStatus": "임베딩 서버가 HTTP {{status}}로 응답했습니다",
         "badJson": "임베딩 서버 응답을 JSON으로 읽지 못했습니다",
         "noVector": "임베딩 서버가 벡터를 반환하지 않았습니다",
@@ -1156,17 +1151,15 @@
       },
       "reasons": {
         "keywordOnly": "키워드 검색만 쓰므로 이 소스도 임베딩하지 않습니다.",
-        "mailcrawlIncompatible": "mailcrawl은 내장 Qwen3만 지원하고 임의의 HTTP 임베딩 서버는 쓸 수 없습니다",
-        "mailcrawlPropagated": "connector.env에 임베딩 프로바이더를 기록합니다(모델이 바뀌면 mailcrawl이 자동으로 다시 색인합니다)",
-        "obsidianIncompatible": "qmd(obsidian)는 로컬 GGUF 모델만 쓸 수 있어 HTTP 임베딩 서버를 사용할 수 없습니다",
-        "obsidianPropagated": "qmd 자식 프로세스에 QMD_EMBED_MODEL을 설정하고 `qmd embed -f`로 다시 색인합니다",
-        "discordIncompatible": "이 앱은 Dazzi 임베딩 런타임을 loopback으로 서빙할 수 없습니다(공개 export 아님). 임베딩 서버를 골라야 discrawl에 전달할 수 있습니다",
-        "discordPropagated": "Dazzi 관리 discrawl config를 다시 쓰고 `discrawl embed --rebuild`로 다시 색인합니다",
-        "kakaoSharedEmbedder": "카카오는 lazykatok 아카이브 위의 사이드카를 통해 Dazzi 공유 임베더를 사용하며, 임베더를 바꾸면 다음 동기화에서 다시 임베딩합니다",
-        "githubGistIncompatible": "GitHubGistSkill이 @autorag/librarian 공개 export가 아니라 임베더를 앱에서 지정할 수 없습니다(런타임 게이트웨이 프로필 고정)",
+        "obsidianIncompatible": "qmd(obsidian)는 자체 GGUF 모델만 쓸 수 있어 다른 임베딩 서버를 사용할 수 없습니다.",
+        "obsidianPropagated": "qmd 자식 프로세스에 QMD_EMBED_MODEL을 설정하고 `qmd embed -f`로 다시 색인합니다.",
+        "discordPropagated": "discrawl의 Dazzi 관리 설정을 새 서버로 다시 쓰고 `discrawl embed --rebuild`로 다시 색인합니다.",
         "clawgalleryNotApplicable": "ClawGallery는 이미지(VDR) 색인이며 텍스트 임베딩을 쓰지 않습니다",
         "larkNotApplicable": "Lark은 원격 API 검색만 사용하고 로컬 임베딩을 거부합니다",
-        "defaultNotApplicable": "이 데이터소스는 자체 키워드/파싱 색인을 쓰며 전역 임베더를 사용하지 않습니다"
+        "defaultNotApplicable": "이 데이터소스는 자체 키워드/파싱 색인을 쓰며 전역 임베더를 사용하지 않습니다",
+        "mailcrawlSharedEmbedder": "mailcrawl은 Dazzi가 쓰는 임베딩 서버를 그대로 사용합니다. 모델이 바뀌면 다음 색인에서 자동으로 다시 만듭니다.",
+        "sidecarSharedEmbedder": "채팅 보관함 위의 읽기 전용 사이드카가 공용 임베더로 메시지를 임베딩합니다. 임베더가 바뀌면 다음 동기화에서 다시 임베딩합니다.",
+        "githubGistSharedEmbedder": "GitHub Gist 벡터 색인이 공용 임베더를 사용합니다. 임베더가 바뀌면 다음 동기화에서 다시 임베딩합니다."
       },
       "actions": {
         "discordConfig": "datasources.<id>이 관리하는 discrawl config.toml"

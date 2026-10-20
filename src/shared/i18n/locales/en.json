@@ -1129,11 +1129,7 @@
           "description": "Documents are not embedded; only keyword search is used. No model download or embedding time, and semantic and hybrid search are off."
         },
         "nativeQwen3": {
-          "description": "The default document-understanding model (1024 dimensions) running directly on this Mac. No separate server needed."
-        },
-        "runtime": {
-          "label": "Qwen3 Embedding 0.6B (Dazzi runtime)",
-          "description": "A 1024-dimension model served by the Dazzi embedding runtime via llama-server on loopback."
+          "description": "The default document-understanding model (1024 dimensions). The MinSync embedding server Dazzi runs serves it on this machine; nothing else to install."
         },
         "localServer": {
           "label": "My computer's embedding server",
@@ -1147,7 +1143,6 @@
         "loopbackOnly": "The embedding server must be a loopback address (documents never leave this Mac).",
         "unknownProfile": "Unknown embedding profile: {{id}}",
         "localServerRequired": "Embedding server details (id, baseUrl, dimension) are required.",
-        "localServerMissing": "Embedding server details are required.",
         "httpStatus": "The embedding server responded with HTTP {{status}}.",
         "badJson": "Could not read the embedding server response as JSON.",
         "noVector": "The embedding server did not return a vector.",
@@ -1156,17 +1151,15 @@
       },
       "reasons": {
         "keywordOnly": "Keyword search only: this source is not embedded either.",
-        "mailcrawlIncompatible": "mailcrawl only supports the built-in Qwen3 and cannot use an arbitrary HTTP embedding server.",
-        "mailcrawlPropagated": "Records the embedding provider in connector.env (mailcrawl re-indexes automatically when the model changes).",
-        "obsidianIncompatible": "qmd (obsidian) can only use local GGUF models, so it cannot use an HTTP embedding server.",
+        "obsidianIncompatible": "qmd (obsidian) runs its own GGUF model only, so it cannot use another embedding server.",
         "obsidianPropagated": "Sets QMD_EMBED_MODEL on the qmd child process and re-indexes with `qmd embed -f`.",
-        "discordIncompatible": "This app cannot serve the Dazzi embedding runtime on loopback (not a public export). Choose an embedding server to pass it to discrawl.",
-        "discordPropagated": "Rewrites the Dazzi-managed discrawl config and re-indexes with `discrawl embed --rebuild`.",
-        "kakaoSharedEmbedder": "Kakao uses the shared Dazzi embedder through the sidecar over lazykatok's archive; changing the embedder re-embeds it on the next sync.",
-        "githubGistIncompatible": "GitHubGistSkill is not a public @autorag/librarian export, so the app cannot set its embedder (fixed by the runtime gateway profile).",
+        "discordPropagated": "Rewrites the Dazzi-managed discrawl config for the new server and re-indexes with `discrawl embed --rebuild`.",
         "clawgalleryNotApplicable": "ClawGallery is an image (VDR) index and does not use text embeddings.",
         "larkNotApplicable": "Lark uses only remote API search and refuses local embeddings.",
-        "defaultNotApplicable": "This data source uses its own keyword/parse index and does not use the global embedder."
+        "defaultNotApplicable": "This data source uses its own keyword/parse index and does not use the global embedder.",
+        "mailcrawlSharedEmbedder": "mailcrawl uses the same embedding server as Dazzi. When the model changes it re-indexes on the next index run.",
+        "sidecarSharedEmbedder": "The read-only sidecar over the chat archive embeds messages with the shared embedder; changing the embedder re-embeds them on the next sync.",
+        "githubGistSharedEmbedder": "The GitHub Gist vector index uses the shared embedder; changing the embedder re-embeds it on the next sync."
       },
       "actions": {
         "discordConfig": "discrawl config.toml managed by datasources.<id>"

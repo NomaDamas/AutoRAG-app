@@ -7,7 +7,7 @@
 	<true/>
 	<key>com.apple.security.cs.allow-unsigned-executable-memory</key>
 	<true/>
-	<!-- Bundled CLIs load native add-ons and the downloaded llama.cpp runtime. -->
+	<!-- Bundled CLIs load their own native add-ons, and the `minsync serve` daemon loads the Kiwi library. -->
 	<key>com.apple.security.cs.disable-library-validation</key>
 	<true/>
 </dict>

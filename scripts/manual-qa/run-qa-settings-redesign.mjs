@@ -212,17 +212,11 @@ try {
 	check("embedding plan lists per-datasource adoption", planText !== null && planText.includes("mail") && planText.includes("slack"), planText ?? "");
 	await page.screenshot({ path: join(EVIDENCE, "05-embedding-plan.png") });
 	await page.locator(".settings-modal button", { hasText: "Apply" }).click();
-	const applied = await waitFor(
-		() =>
-			readConfig().minSync?.embedder?.id === "native:Qwen/Qwen3-Embedding-0.6B" &&
-			readConfig().datasources?.mail?.connector?.env?.MAILCRAWL_EMBEDDER_PROVIDER === "native"
-				? readConfig()
-				: null,
-		30000,
-	);
+	const applied = await waitFor(() => (readConfig().minSync?.embedder?.id === "native:Qwen/Qwen3-Embedding-0.6B" ? readConfig() : null), 30000);
 	check("embedding apply writes minSync.embedder", applied !== null, JSON.stringify(readConfig().minSync));
-	const mailEnv = readConfig().datasources.mail.connector.env;
-	check("embedding change propagates to the mailcrawl CLI env", mailEnv.MAILCRAWL_EMBEDDER_PROVIDER === "native", JSON.stringify(mailEnv));
+	// mailcrawl embeds through the shared embedding server: no embedding override is written into its env, and the user's own variables stay.
+	const mailEnv = readConfig().datasources.mail.connector.env ?? {};
+	check("embedding change writes no embedding override into the mailcrawl CLI env", !Object.keys(mailEnv).some((key) => /^MAILCRAWL_(EMBED|NATIVE_)/.test(key)), JSON.stringify(mailEnv));
 	check("propagation preserves unrelated CLI env", mailEnv.MAILCRAWL_KIWI_MODEL === "/keep/me");
 	check("propagation preserves other datasource config", readConfig().datasources.slack.connector.workspace === "T0QA");
 	// Apply also runs the per-source rebuilds; the result line appears when they settle.

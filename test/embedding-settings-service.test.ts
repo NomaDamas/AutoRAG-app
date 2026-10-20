@@ -74,12 +74,10 @@ async function readConfig(fixture: Fixture): Promise<Record<string, unknown>> {
 	return JSON.parse(await readFile(fixture.configPath, "utf8")) as Record<string, unknown>;
 }
 
-/** The mailcrawl env the embedding service wrote for the fixture's `mail` datasource. */
-function mailEnv(config: Record<string, unknown>): Record<string, string> {
-	const datasources = config.datasources as Record<string, { connector?: { env?: Record<string, string> } }> | undefined;
-	const env = datasources?.mail?.connector?.env;
-	if (env === undefined) throw new Error("Expected a written mailcrawl env");
-	return env;
+/** What the embedding service wrote into the fixture's `mail` datasource connector, if anything. */
+function mailConnector(config: Record<string, unknown>): Record<string, unknown> | undefined {
+	const datasources = config.datasources as Record<string, { connector?: Record<string, unknown> }> | undefined;
+	return datasources?.mail?.connector;
 }
 
 function vectorResponse(dimension: number): Response {
@@ -106,11 +104,11 @@ describe("createEmbeddingSettingsService", () => {
 		const config = await readConfig(fixture);
 		expect(config.minSync).toMatchObject({ embedder: { id: "native:Qwen/Qwen3-Embedding-0.6B", dimension: 1024 } });
 		expect(config.customSection).toEqual({ keep: true });
-		expect(mailEnv(config).MAILCRAWL_EMBEDDER_PROVIDER).toBe("native");
+		// mailcrawl reads the shared endpoint when it indexes; nothing is written into its environment.
+		expect(mailConnector(config)?.env).toBeUndefined();
 		// rss keeps its own lexical index; only embedding sources reindex.
 		expect(fixture.synced.sort()).toEqual(["mail", "vault"]);
 		expect(result.rebuilds.map((rebuild) => rebuild.id).sort()).toEqual(["mail", "vault"]);
-		await embedding.dispose();
 	});
 
 	it("offers keyword-only search as a profile, and reports it as current once the config switched semantic search off", async () => {
@@ -124,7 +122,6 @@ describe("createEmbeddingSettingsService", () => {
 		const snapshot = await embedding.get();
 		expect(snapshot.current.profileId).toBe("none");
 		expect(snapshot.sources.map((source) => source.adoption)).toEqual(["not-applicable"]);
-		await embedding.dispose();
 	});
 
 	it("applies keyword-only without blocking on sources that cannot adopt a model, keeps the configured embedder, and rebuilds nothing", async () => {
@@ -143,7 +140,6 @@ describe("createEmbeddingSettingsService", () => {
 		expect(config.customSection).toEqual({ keep: true });
 		expect(fixture.synced).toEqual([]);
 		expect(fixture.env.QMD_EMBED_MODEL).toBeUndefined();
-		await embedding.dispose();
 	});
 
 	it("switches semantic search back on when a model is chosen after keyword-only, and rebuilds the sources that embed", async () => {
@@ -158,10 +154,9 @@ describe("createEmbeddingSettingsService", () => {
 		expect(config.appIndexing).toBeUndefined();
 		expect(config.minSync).toMatchObject({ embedder: { id: "native:Qwen/Qwen3-Embedding-0.6B" } });
 		expect(fixture.synced).toEqual(["mail"]);
-		await embedding.dispose();
 	});
 
-	it("writes the native Qwen3 mailcrawl override and the qmd process env", async () => {
+	it("sets the qmd process env for the local model, and never writes embedding overrides into mailcrawl", async () => {
 		const fixture = await createFixture({
 			mail: { type: "mailcrawl", connector: {} },
 			vault: { type: "obsidian", connector: { vaultPath: fixtureRootPlaceholder() } },
@@ -172,34 +167,32 @@ describe("createEmbeddingSettingsService", () => {
 
 		const config = await readConfig(fixture);
 		expect(config.minSync).toMatchObject({ embedder: { id: "native:Qwen/Qwen3-Embedding-0.6B", dimension: 1024 } });
-		const env = mailEnv(config);
-		expect(env.MAILCRAWL_EMBEDDER_PROVIDER).toBe("native");
-		expect(env.MAILCRAWL_NATIVE_MODEL).toBe("Qwen/Qwen3-Embedding-0.6B");
+		expect(mailConnector(config)?.env).toBeUndefined();
 		expect(fixture.env.QMD_EMBED_MODEL).toContain("Qwen3-Embedding-0.6B");
-		await embedding.dispose();
 	});
 
 	it("blocks a change when an enabled datasource cannot adopt the model, and does not write", async () => {
-		const fixture = await createFixture({ chat: { type: "discord", connector: {} } });
-		const { embedding } = buildService(fixture);
+		const fixture = await createFixture({ vault: { type: "obsidian", connector: { vaultPath: fixtureRootPlaceholder() } } });
+		const fetchImpl = vi.fn(async () => vectorResponse(1024)) as unknown as typeof fetch;
+		const { embedding } = buildService(fixture, fetchImpl);
+		const request = { profileId: "local-server", localServer: { id: "bge-m3", baseUrl: "http://127.0.0.1:11434", dimension: 1024 } };
 
-		const blocked = await embedding.apply({ profileId: "native-qwen3" });
+		const blocked = await embedding.apply(request);
 
 		expect(blocked.ok).toBe(false);
 		expect(blocked.applied).toBe(false);
-		expect(blocked.incompatibilities.map((status) => status.id)).toEqual(["chat"]);
+		expect(blocked.incompatibilities.map((status) => status.id)).toEqual(["vault"]);
 		expect((await readConfig(fixture)).minSync).toBeUndefined();
 
-		const forced = await embedding.apply({ profileId: "native-qwen3", acknowledgeIncompatible: true });
+		const forced = await embedding.apply({ ...request, acknowledgeIncompatible: true });
 		expect(forced.ok).toBe(true);
 		expect(forced.applied).toBe(true);
-		expect(forced.incompatibilities.map((status) => status.id)).toEqual(["chat"]);
+		expect(forced.incompatibilities.map((status) => status.id)).toEqual(["vault"]);
 		expect(fixture.synced).toEqual([]);
-		await embedding.dispose();
 	});
 
-	it("probes a local server for real vectors and overlays mailcrawl through the loopback adapter", async () => {
-		const fixture = await createFixture({ mail: { type: "mailcrawl", connector: {} } });
+	it("probes a local server for real vectors, writes it as the embedder, and lets mailcrawl and the chat sources follow it", async () => {
+		const fixture = await createFixture({ mail: { type: "mailcrawl", connector: {} }, chat: { type: "discord", connector: {} }, talk: { type: "telegram", connector: {} } });
 		const fetchImpl = vi.fn(async () => vectorResponse(1024)) as unknown as typeof fetch;
 		const { embedding } = buildService(fixture, fetchImpl);
 
@@ -211,10 +204,8 @@ describe("createEmbeddingSettingsService", () => {
 		expect(result.ok).toBe(true);
 		const config = await readConfig(fixture);
 		expect(config.minSync).toMatchObject({ embedder: { id: "bge-m3", baseUrl: "http://127.0.0.1:11434", dimension: 1024 } });
-		const env = mailEnv(config);
-		expect(env.MAILCRAWL_EMBEDDER_PROVIDER).toBe("loopback-http");
-		expect(env.MAILCRAWL_EMBED_URL).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/mailcrawl\/embeddings$/);
-		await embedding.dispose();
+		expect(mailConnector(config)?.env).toBeUndefined();
+		expect(fixture.synced.sort()).toEqual(["chat", "mail", "talk"]);
 	});
 
 	it("rejects a local server whose real dimension differs, and never writes a half state", async () => {
@@ -230,7 +221,6 @@ describe("createEmbeddingSettingsService", () => {
 		expect(result.ok).toBe(false);
 		expect(result.error).toContain("차원");
 		expect((await readConfig(fixture)).minSync).toBeUndefined();
-		await embedding.dispose();
 	});
 
 	it("refuses a non-loopback embedding server before probing", async () => {
@@ -246,7 +236,6 @@ describe("createEmbeddingSettingsService", () => {
 		expect(result.ok).toBe(false);
 		expect(fetchImpl).not.toHaveBeenCalled();
 		expect((await readConfig(fixture)).minSync).toBeUndefined();
-		await embedding.dispose();
 	});
 
 	it("offers only keyword-only, native-qwen3 and local-server, and rejects retired runtime profiles", async () => {
@@ -261,27 +250,29 @@ describe("createEmbeddingSettingsService", () => {
 			expect(result.error).toContain(retired);
 		}
 		expect((await readConfig(fixture)).minSync).toBeUndefined();
-		await embedding.dispose();
 	});
 
-	it("reports the current profile and adoption plan from the shared config", async () => {
+	it("reports the current profile and which sources follow it, from the shared config", async () => {
 		const fixture = await createFixture({
 			mail: { type: "mailcrawl", connector: {} },
 			chat: { type: "discord", connector: {} },
+			talk: { type: "kakao", connector: {} },
+			gist: { type: "github-gist", connector: {} },
+			vault: { type: "obsidian", connector: { vaultPath: fixtureRootPlaceholder() } },
+			news: { type: "rss", connector: { feeds: [{ url: "https://example.com/feed.xml" }] } },
 		});
 		const { embedding } = buildService(fixture);
-		await embedding.apply({ profileId: "native-qwen3", acknowledgeIncompatible: true });
+		await embedding.apply({ profileId: "native-qwen3" });
 
 		const snapshot = await embedding.get();
 		expect(snapshot.current.profileId).toBe("native-qwen3");
 		expect(snapshot.profiles.map((profile) => profile.id)).toContain("local-server");
-		expect(snapshot.sources.find((source) => source.id === "mail")?.adoption).toBe("propagated");
-		expect(snapshot.sources.find((source) => source.id === "chat")?.adoption).toBe("incompatible");
+		const adoption = Object.fromEntries(snapshot.sources.map((source) => [source.id, source.adoption]));
+		expect(adoption).toEqual({ mail: "native", chat: "propagated", talk: "native", gist: "native", vault: "propagated", news: "not-applicable" });
 
 		const plan = await embedding.plan({ profileId: "native-qwen3" });
 		expect(plan.current.profileId).toBe("native-qwen3");
-		expect(plan.sources.find((source) => source.id === "chat")?.adoption).toBe("incompatible");
-		await embedding.dispose();
+		expect(plan.sources.find((source) => source.id === "chat")?.adoption).toBe("propagated");
 	});
 });
 

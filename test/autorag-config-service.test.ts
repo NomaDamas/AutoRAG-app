@@ -143,7 +143,7 @@ describe("createAutoRagConfigService", () => {
 		const fixture = await createFixture(baseConfig(root), "autorag-config-embedder-");
 		const service = createAutoRagConfigService({ env: fixture.env, cwd: fixture.root });
 
-		await expect(service.set(["minSync", "embedder", "profile"], "not-a-profile")).rejects.toThrow(/profile must be/);
+		await expect(service.set(["minSync", "embedder", "profile"], "not-a-profile")).rejects.toThrow(/profile was removed/);
 		await expect(service.set(["minSync", "embedder", "dimension"], 0)).rejects.toThrow(/dimension must be a positive integer/);
 		await expect(
 			service.set(["minSync", "embedder"], { id: "bge-m3", baseUrl: "https://api.example.com", dimension: 1024 }),
