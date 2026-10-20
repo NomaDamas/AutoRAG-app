@@ -67,7 +67,7 @@ second datasource or model configuration. The sidebar is searchable and grouped:
   search; the shared config file otherwise stays as the user left it, `minSync.embedder`
   included, so choosing a model again needs no re-entry). `semantic-policy.ts`
   applies it to the config the app hands to the librarian, because the librarian
-  (v2.10.x) has no switch for it:
+  (v2.10.x, 733e8a0) has no switch for it:
   - *Refresh*: `minsync` is replaced by `parsed` + `jikji`, so MinSync never runs, no
     model is loaded or downloaded, and no `.minsync` index is built.
   - *Datasources*: the kakao/slack/telegram/whatsapp sidecars get
@@ -75,11 +75,10 @@ second datasource or model configuration. The sidebar is searchable and grouped:
     ClawGallery skips its visual vector sync, and for the duration of a refresh the
     embedding steps the librarian runs unconditionally (mailcrawl `index`, qmd
     `embed` for Obsidian, discrawl `embed`) are successful no-ops; their sync and
-    update steps still run. GitHub Gist's vector sync is skipped the same way (its class is not a public
-    export, so the patch reaches it through a factory-built skill's prototype and
-    swaps in the inherited connector `index`). The policy also sets
-    `connector.semantic: false`, which librarians with Marker-Inc-Korea/AutoRAG#1936
-    honor and v2.10.4 ignores; this app version relies on the patch.
+    update steps still run. GitHub Gist sets `connector.semantic: false`, which
+    the librarian (Marker-Inc-Korea/AutoRAG#1936) maps to the gist skill's own
+    switch: no vector index and no `<name>-semantic` method. The pre-#1936
+    prototype patch for it is gone with the v2.10.4 pin.
   - *Search*: the agent's vector and hybrid methods (MinSync's, and every
     datasource's) answer nothing without being run, so there is no "method failed"
     diagnostic for an index that is deliberately absent, and the agent's
@@ -145,11 +144,23 @@ second datasource or model configuration. The sidebar is searchable and grouped:
     (`index-status.ts` calls `refreshAutoragIndex`), so it has the folder check,
     the embedder watchdog, and the learned batch size.
   - *A file MinSync cannot read, chunk, or embed is skipped, not fatal*
-    (MinSync 0.4.8 / librarian 2.10.4, `minsync-file-skipped`). MinSync exits 6
+    (MinSync 0.4.8+ / librarian 2.10.4+, `minsync-file-skipped`). MinSync exits 6
     with `partial: true` and `files_failed`, keeps the file's older chunks, and
     retries it on the next sync; if the skip came from an embedding gateway
     timeout, `index-refresh` halves `batchSize` and re-runs `syncMinSync` in the
-    same refresh.
+    same refresh. Since MinSync 0.4.10 a file over `[sync] max_file_bytes`
+    (64 MiB) is skipped the same way at the `size_guard` stage, before it is read.
+  - *The BM25 tokenizer needs Kiwi* (librarian 733e8a0 / MinSync 0.4.10). The
+    librarian always asks MinSync for the `multilingual` tokenizer, which loads
+    the Kiwi native library and model at run time; neither ships with the app.
+    Without them a new workspace is built with `simple` (whitespace) tokenization
+    and the refresh returns a `lexical-tokenizer-unavailable` warning (not an
+    error: `ok` stays true, so the UI shows it only as the `진단 N건` count after
+    a manual refresh in Settings → 인덱싱); the next
+    refresh after Kiwi is installed (`~/.local/kiwi`, or `KIWI_LIBRARY_PATH` and
+    `KIWI_MODEL_PATH`) re-indexes the workspace once with `multilingual`. A
+    workspace already on `multilingual` is never switched back when Kiwi
+    disappears.
   - Not covered: cancelling a refresh from the UI (the librarian has no abort
     signal, AutoRAG#1892), and an unreadable subfolder inside a readable root
     (AutoRAG#1889).

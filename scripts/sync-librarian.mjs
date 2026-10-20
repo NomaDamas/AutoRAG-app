@@ -9,7 +9,9 @@ const upstream = join(root, ".upstream", "autorag");
 const staged = join(root, ".upstream", "librarian-package");
 const installed = join(root, "node_modules", "@autorag", "librarian");
 const remote = "https://github.com/Marker-Inc-Korea/AutoRAG.git";
-const librarianRef = "v2.10.4";
+// A release tag, or a full commit SHA while the librarian has no tag that carries what the app needs.
+// v2.10.4 pins MinSync 0.4.8; 733e8a0 is the first revision that pins MinSync 0.4.10 (no v2.10.5 yet).
+const librarianRef = "733e8a03b0f46d48320e6dc5d5778ae2fbfac7f0";
 
 function run(command, args, cwd = root) {
 	const result = spawnSync(command, args, { cwd, stdio: "inherit" });
@@ -27,11 +29,13 @@ const hadInstalled = existsSync(installed);
 const hasClone = existsSync(join(upstream, ".git"));
 const previous = hasClone ? headRevision() : "";
 if (!hasClone) {
-	run("git", ["clone", "--depth", "1", "--branch", librarianRef, remote, upstream]);
-} else {
-	run("git", ["fetch", "--depth", "1", "origin", "tag", librarianRef], upstream);
-	run("git", ["checkout", "--detach", librarianRef], upstream);
+	mkdirSync(upstream, { recursive: true });
+	run("git", ["init", "--quiet"], upstream);
+	run("git", ["remote", "add", "origin", remote], upstream);
 }
+// `git fetch origin <ref>` takes a tag name and a commit SHA alike (GitHub serves any reachable SHA).
+run("git", ["fetch", "--depth", "1", "origin", librarianRef], upstream);
+run("git", ["checkout", "--detach", "FETCH_HEAD"], upstream);
 
 const revision = headRevision();
 

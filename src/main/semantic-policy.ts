@@ -1,5 +1,4 @@
 import {
-	buildDatasourceSkills,
 	DiscrawlClient,
 	MailcrawlClient,
 	QmdClient,
@@ -54,7 +53,7 @@ function entryWithoutSemantic(alias: string, entry: unknown): unknown {
 		return { ...entry, connector: { ...connector, sidecar: { ...sidecar, semantic: false } } };
 	}
 	if (template === "discord") return { ...entry, connector: { ...connector, defaultMode: "fts" } };
-	// Needs a librarian that maps `connector.semantic` to the gist skill's own switch; older ones ignore the key.
+	// The librarian maps `connector.semantic: false` to the gist skill's own switch (AutoRAG#1936): no vector index, no semantic method.
 	if (template === "github-gist") return { ...entry, connector: { ...connector, semantic: false } };
 	if (template === "clawgallery") return { ...entry, connector: { ...connector, syncVisual: false } };
 	return entry;
@@ -99,7 +98,6 @@ const NO_OUTPUT = { stdout: "", stderr: "", code: 0 } as const;
  */
 function replacementSteps(): readonly { readonly owner: object; readonly key: string; readonly stub: unknown }[] {
 	return [
-		...gistIndexStep(),
 		{ owner: MailcrawlClient.prototype, key: "index", stub: async () => ({ ok: true, data: { embedded: 0, reused: 0 }, ...NO_OUTPUT }) },
 		{ owner: QmdClient.prototype, key: "embed", stub: async () => ({ ok: true, data: { embedded: false }, ...NO_OUTPUT }) },
 		{
@@ -108,19 +106,6 @@ function replacementSteps(): readonly { readonly owner: object; readonly key: st
 			stub: async () => ({ ok: true, data: { processed: 0, succeeded: 0, failed: 0, remainingBacklog: 0 }, ...NO_OUTPUT }),
 		},
 	];
-}
-
-/**
- * GitHub Gist adds a vector sync after the connector index it inherits, and its class is not a
- * public export. A skill built by the factory leads to it: its prototype's `index` becomes the
- * inherited one, which indexes the gists and builds no vectors.
- */
-function gistIndexStep(): readonly { readonly owner: object; readonly key: string; readonly stub: unknown }[] {
-	const probe = buildDatasourceSkills({ "github-gist": {} }, undefined).skills[0];
-	if (probe === undefined) return [];
-	const owner = Object.getPrototypeOf(probe) as object;
-	const inherited = (Object.getPrototypeOf(owner) as Record<string, unknown>).index;
-	return typeof inherited === "function" && inherited !== (owner as Record<string, unknown>).index ? [{ owner, key: "index", stub: inherited }] : [];
 }
 
 let active = 0;

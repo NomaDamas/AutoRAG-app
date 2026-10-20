@@ -85,7 +85,7 @@ does not match its published digest.
 
 ### Deliberately not bundled
 
-* `llama.cpp` (`llama-server`) and the `Q8_0` GGUF embedding weights: MinSync's native in-process `fastembed` (`candle`) embedder runs directly on `Qwen/Qwen3-Embedding-0.6B` safetensors on both macOS (Metal) and Windows (CPU), so no separate `llama-server` process or GGUF copy is shipped.
+* `llama.cpp` (`llama-server`) and the `Q8_0` GGUF embedding weights: MinSync's native in-process (`candle`) embedder runs directly on `Qwen/Qwen3-Embedding-0.6B` safetensors on both macOS (Metal) and Windows (CPU), so no separate `llama-server` process or GGUF copy is shipped.
 * CUDA builds of `node-llama-cpp` (500 MB, needs an NVIDIA toolkit); CPU and Vulkan are kept.
 * Other platforms' native add-ons. Intel Macs, Windows on ARM and Linux are not shipped.
 ## Install time

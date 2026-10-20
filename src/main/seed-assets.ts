@@ -11,7 +11,7 @@ import { isJsonObject } from "../shared/settings-contract";
  *
  * The installer carries the pinned `Qwen/Qwen3-Embedding-0.6B` checkpoint under
  * `<resources>/seed` (see `scripts/release/stage-tools.mjs`). MinSync's native
- * embedder (`fastembed-rs` + `hf-hub`) looks for it in `<cacheRoot>/models--Qwen--Qwen3-Embedding-0.6B/snapshots/<commit>/`;
+ * embedder (candle + `hf-hub`) looks for it in `<cacheRoot>/models--Qwen--Qwen3-Embedding-0.6B/snapshots/<commit>/`;
  * copying the shipped files into place makes a fresh install work offline and
  * skips a ~1.2 GB download on first index.
  */

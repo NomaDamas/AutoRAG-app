@@ -296,7 +296,7 @@ async function stageAutoragCli() {
 
 /**
  * Native Qwen3 embedding model (`Qwen/Qwen3-Embedding-0.6B`), pinned by commit
- * and SHA-256 in the Hugging Face Hub cache layout that `minsync` (`fastembed` /
+ * and SHA-256 in the Hugging Face Hub cache layout that `minsync` (candle /
  * `hf-hub`) and `mailcrawl` read directly without network access.
  */
 const NATIVE_QWEN3_REPO_DIR = "models--Qwen--Qwen3-Embedding-0.6B";
