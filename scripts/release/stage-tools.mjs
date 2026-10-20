@@ -295,6 +295,52 @@ async function stageAutoragCli() {
 }
 
 /**
+ * Kiwi (Korean morphological analyzer), macOS only. MinSync's `multilingual` BM25 tokenizer loads the
+ * native library and base model at run time (`kiwi-rs`, dlopen) and neither ships with MinSync; without
+ * them the librarian falls back to whitespace tokenization. 0.24.0 is the first Apache-2.0 release
+ * (<= 0.23.2 is LGPL), so the library and model can ship with LICENSE and NOTICE. Windows is not staged:
+ * MinSync's own Windows CI is pinned to 0.22.2 for a `kiwi_config_t` ABI mismatch with its binding, and
+ * 0.24.0 has not been run on Windows; with the library present the librarian would pick `multilingual`
+ * and every sync would depend on a DLL nobody has verified.
+ * `src/main/bundled-tools.ts` points KIWI_LIBRARY_PATH / KIWI_MODEL_PATH at `tools/kiwi`.
+ */
+const KIWI_VERSION = "0.24.0";
+const KIWI_BASE_URL = `https://github.com/bab2min/Kiwi/releases/download/v${KIWI_VERSION}`;
+const KIWI_RAW_URL = `https://raw.githubusercontent.com/bab2min/Kiwi/v${KIWI_VERSION}`;
+const KIWI_MAC_LIBRARY = { name: `kiwi_mac_arm64_v${KIWI_VERSION}.tgz`, sha256: "87eda17f319c371824d5a2cc2e497eda6327ba3ddbf08a018db967f61ddbe48d" };
+const KIWI_MODEL = { name: `kiwi_model_v${KIWI_VERSION}_base.tgz`, sha256: "33188ba932bba4717bad5244bbec0ef8b1c9cbb47e26e68394a7976d8d779083" };
+const KIWI_LICENSES = [
+	{ name: "LICENSE", sha256: "4070ef92694190ae0d19410380654c37f0602e8a2aa3ddcc45e2dad3039b5b20" },
+	{ name: "NOTICE", sha256: "0c1c4963546b66b2b750d14fada239efda2d67774e69ba99ec90829ca393b5bc" },
+];
+
+async function stageKiwi() {
+	const directory = join(TOOLS, "kiwi");
+	rmSync(directory, { recursive: true, force: true });
+	mkdirSync(join(directory, "lib"), { recursive: true });
+
+	const library = await download(`${KIWI_BASE_URL}/${KIWI_MAC_LIBRARY.name}`, `Kiwi-${KIWI_MAC_LIBRARY.name}`, KIWI_MAC_LIBRARY.sha256);
+	const libraryDirectory = join(CACHE_DIR, "x", `kiwi-lib-${KIWI_VERSION}`);
+	extract(library.path, libraryDirectory);
+	// The versioned file itself, not the libkiwi.dylib -> libkiwi.0.dylib -> libkiwi.0.24.0.dylib symlink chain.
+	copyFileSync(join(libraryDirectory, "lib", `libkiwi.${KIWI_VERSION}.dylib`), join(directory, "lib", "libkiwi.dylib"));
+
+	const model = await download(`${KIWI_BASE_URL}/${KIWI_MODEL.name}`, `Kiwi-${KIWI_MODEL.name}`, KIWI_MODEL.sha256);
+	const modelDirectory = join(CACHE_DIR, "x", `kiwi-model-${KIWI_VERSION}`);
+	extract(model.path, modelDirectory);
+	cpSync(join(modelDirectory, "models", "cong", "base"), join(directory, "models", "cong", "base"), { recursive: true });
+
+	// Apache-2.0 section 4: the license text and the NOTICE travel with the binary.
+	const licenseDirectory = join(TOOLS, "licenses", "kiwi");
+	mkdirSync(licenseDirectory, { recursive: true });
+	for (const license of KIWI_LICENSES) {
+		const file = await download(`${KIWI_RAW_URL}/${license.name}`, `Kiwi-${KIWI_VERSION}-${license.name}`, license.sha256);
+		copyFileSync(file.path, join(licenseDirectory, license.name));
+	}
+	record({ name: "kiwi", version: KIWI_VERSION, source: `github.com/bab2min/Kiwi ${KIWI_MAC_LIBRARY.name} + ${KIWI_MODEL.name}`, sha256: library.sha256, verifiedAgainstPublisherDigest: true });
+}
+
+/**
  * Native Qwen3 embedding model (`Qwen/Qwen3-Embedding-0.6B`), pinned by commit
  * and SHA-256 in the Hugging Face Hub cache layout that `minsync` (candle /
  * `hf-hub`) and `mailcrawl` read directly without network access.
@@ -383,6 +429,7 @@ for (const item of GO_CRAWLERS) {
 }
 for (const item of CARGO_BINARIES) if (wanted(item.name)) await stageCargoBinary(item);
 if (target.os === "darwin" && wanted("fsearch-cli")) await stageFsearch();
+if (target.os === "darwin" && wanted("kiwi")) await stageKiwi();
 if (!flag("--skip-seed") && wanted("seed")) await stageSeed();
 
 const manifestPath = join(TOOLS, "manifest.json");

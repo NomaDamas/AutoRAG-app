@@ -71,8 +71,10 @@ Notes on what was verified:
 ## Programs and models bundled in the installers
 
 The macOS and Windows installers ship these programs unmodified, as separate
-executables the app starts as child processes (no linking). Exact versions for a
-given release are in the `components-<platform>.json` file attached to it.
+executables the app starts as child processes (the app links none of them).
+`minsync` itself statically links one LGPL library, `kiwi-rs`; see below. Exact
+versions for a given release are in the `components-<platform>.json` file
+attached to it.
 
 | Component | License |
 |---|---|
@@ -85,6 +87,7 @@ given release are in the `components-<platform>.json` file attached to it.
 | Everything and ES (Windows only; shipped inside `@autorag/librarian`) | MIT (+ PCRE BSD) |
 | fsearch-cli from fsearch-mac (macOS only) and its libraries glib, pango, harfbuzz, ICU, PCRE2, freetype, ... | GPL-2.0-or-later (fsearch-cli); LGPL-2.1+, MIT, ICU, BSD (libraries) |
 | Qwen/Qwen3-Embedding-0.6B (safetensors weights + tokenizer) | Apache-2.0 |
+| Kiwi 0.24.0 native library and base model (macOS only; `resources/tools/kiwi`) | Apache-2.0 |
 
 `fsearch-cli` is GPL-2.0-or-later, and Dazzi only starts it as a separate
 program (no linking), per mere aggregation. Its license and notice are
@@ -92,6 +95,29 @@ installed in `resources/tools/licenses/fsearch-mac`. Source for the shipped
 version: https://github.com/NomaDamas/fsearch-mac (tag in `components-macos-arm64.json`).
 The bundled glib/pango/ICU libraries are unmodified Homebrew builds whose install
 paths were rewritten so they load from the app.
+
+### Kiwi and kiwi-rs
+
+`minsync` tokenizes Korean for its keyword index with the Kiwi morphological
+analyzer. The Kiwi native library (`libkiwi`) and its base model ship in
+`resources/tools/kiwi` as separate files that `minsync` loads at run time. Kiwi
+0.24.0 and its models are Apache-2.0; its license and NOTICE are installed in
+`resources/tools/licenses/kiwi`. The models were trained on the Sejong and NIKL
+corpora, which are not distributed. Source: https://github.com/bab2min/Kiwi.
+
+`minsync` reaches the library through the `kiwi-rs` crate 2026.8.26
+(https://crates.io/crates/kiwi-rs, source https://github.com/JAICHANGPARK/kiwi-rs),
+which is licensed LGPL-2.1-or-later and is statically linked into the `minsync`
+executable, unmodified. MinSync is MIT licensed and its complete source is
+public (https://github.com/NomaDamas/MinSync), so the executable can be rebuilt
+against a modified `kiwi-rs`; see its `THIRD_PARTY_NOTICES.md` for the
+instructions. Users may modify `kiwi-rs` for their own use and reverse engineer
+the result to debug those modifications. The LGPL-2.1 text:
+https://www.gnu.org/licenses/old-licenses/lgpl-2.1.html
+
+`mailcrawl` uses Kiwi through the `kiwi-nlp` npm package (WebAssembly). Version
+0.23.x of that package is LGPL-2.1-or-later and is not linked into `mailcrawl`'s
+own code; it is a separate package loaded at run time.
 
 ## Quick Look data viewers
 

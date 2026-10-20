@@ -151,5 +151,43 @@ if (seedDir !== null) {
 	}
 }
 
+// Kiwi (macOS): the bundled library and model must make MinSync's `multilingual` tokenizer work with no
+// ~/.local/kiwi and no KIWI_* of the developer's own. Indexing 환불정책을 and finding it by the stem 환불 is
+// what whitespace tokenization cannot do, so a pass proves the library loaded and the model is usable.
+// The sync embeds, so it needs the seeded native Qwen3 model: a seed without it (an old GGUF-era stage)
+// would make minsync download 1.2 GB and prove nothing about being offline, so the sync is skipped then.
+if (!win && existsSync(join(toolsDir, "kiwi"))) {
+	const library = join(toolsDir, "kiwi", "lib", "libkiwi.dylib");
+	const model = join(toolsDir, "kiwi", "models", "cong", "base");
+	const present = existsSync(library) && existsSync(model);
+	if (!present) failures += 1;
+	process.stdout.write(`${present ? "ok  " : "FAIL"} kiwi library and model are staged${present ? "" : "  <- missing"}\n`);
+	for (const license of ["LICENSE", "NOTICE"]) {
+		const found = existsSync(join(toolsDir, "licenses", "kiwi", license));
+		if (!found) failures += 1;
+		process.stdout.write(`${found ? "ok  " : "FAIL"} kiwi ${license} ships with it${found ? "" : "  <- missing"}\n`);
+	}
+	const nativeModel = seedDir !== null && existsSync(join(seedDir, "models--Qwen--Qwen3-Embedding-0.6B", "snapshots"));
+	if (present && seedDir !== null && !nativeModel) process.stdout.write("skip minsync Korean tokenization (the seed has no native Qwen3 model; re-stage with `--only seed`)\n");
+	if (present && nativeModel) {
+		const workspace = join(home, "kiwi-workspace");
+		mkdirSync(workspace, { recursive: true });
+		const minsync = join(bin, "minsync");
+		// HF_HUB_OFFLINE: a missing file fails the check instead of being fetched from the network.
+		const env = { ...cleanEnv(home), KIWI_LIBRARY_PATH: library, KIWI_MODEL_PATH: model, FASTEMBED_CACHE_DIR: join(home, "models"), HF_HUB_OFFLINE: "1" };
+		spawnSync("node", ["-e", `require('fs').cpSync(${JSON.stringify(seedDir)}, ${JSON.stringify(join(home, "models"))}, {recursive:true})`]);
+		const sh = (commandArgs) => spawnSync(minsync, commandArgs, { env, cwd: workspace, encoding: "utf8", timeout: 240_000 });
+		sh(["init", "--format", "json", "--embedder", "native:Qwen/Qwen3-Embedding-0.6B"]);
+		const configPath = join(workspace, ".minsync", "config.toml");
+		writeFileSync(configPath, readFileSync(configPath, "utf8").replace(/^language = .*$/m, 'language = "multilingual"'));
+		writeFileSync(join(workspace, "doc.md"), "환불정책을 안내합니다\n");
+		const synced = sh(["--format", "json", "sync"]);
+		const hits = JSON.parse(sh(["--format", "json", "query", "환불", "--mode", "bm25"]).stdout || "[]");
+		const ok = synced.status === 0 && Array.isArray(hits) && hits.length === 1;
+		if (!ok) failures += 1;
+		process.stdout.write(`${ok ? "ok  " : "FAIL"} minsync tokenizes Korean with the bundled Kiwi${ok ? "" : `  <- sync exit ${synced.status}: ${`${synced.stdout}${synced.stderr}`.slice(0, 200).replace(/\s+/g, " ")}; stem hits ${hits.length}`}\n`);
+	}
+}
+
 process.stdout.write(failures === 0 ? `\nbundle OK (${manifest.tools.length} components, ${manifest.platform})\n` : `\n${failures} check(s) FAILED\n`);
 process.exit(failures === 0 ? 0 : 1);
