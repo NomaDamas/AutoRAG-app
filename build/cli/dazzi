@@ -1,0 +1,115 @@
+#!/bin/sh
+# DAZZI-CLI-LAUNCHER (macOS): the `dazzi` command, shipped inside the app at Contents/Resources/bin/dazzi.
+#
+#   dazzi [path...]    open folders (and show files in their folder) in Dazzi, like `open` does for Finder
+#   dazzi              bring Dazzi to the front
+#
+# It only builds the request the OS file menu already sends (`--autorag-request=open` plus one
+# `--autorag-path=` per item) and starts the app's own executable with it. A running Dazzi receives the
+# request over its local socket and this process exits; with none running, the process becomes the app.
+# DAZZI_USER_DATA_DIR aims the request at another profile (development, QA).
+
+MAX_PATHS=200
+
+usage() {
+	cat <<'USAGE'
+Usage: dazzi [--] [path...]
+
+Open folders in Dazzi, or show files selected in their folder.
+With no path, bring Dazzi to the front.
+
+  -h, --help   show this help
+USAGE
+}
+
+# Resolve the symlinks this launcher was reached through (Homebrew, ~/.local/bin, /usr/local/bin) to the real file.
+self=$0
+while [ -h "$self" ]; do
+	target=$(readlink "$self")
+	case $target in
+		/*) self=$target ;;
+		*) self=$(dirname -- "$self")/$target ;;
+	esac
+done
+bin_dir=$(cd -- "$(dirname -- "$self")" && pwd) || exit 1
+app=$(cd -- "$bin_dir/../../.." && pwd) || exit 1
+exe="$app/Contents/MacOS/Dazzi"
+
+if [ ! -x "$exe" ]; then
+	echo "dazzi: $app is not a complete Dazzi.app" >&2
+	exit 1
+fi
+
+# A launcher started from an Electron/Node tool would otherwise turn the app into plain Node.
+unset ELECTRON_RUN_AS_NODE
+
+while [ $# -gt 0 ]; do
+	case $1 in
+		-h | --help)
+			usage
+			exit 0
+			;;
+		--)
+			shift
+			break
+			;;
+		-*)
+			echo "dazzi: unknown option $1" >&2
+			usage >&2
+			exit 2
+			;;
+		*) break ;;
+	esac
+done
+
+if [ $# -eq 0 ]; then
+	exec open "$app"
+fi
+
+if [ $# -gt "$MAX_PATHS" ]; then
+	echo "dazzi: too many paths (the limit is $MAX_PATHS)" >&2
+	exit 1
+fi
+
+status=0
+found=0
+count=$#
+i=0
+while [ $i -lt "$count" ]; do
+	path=$1
+	shift
+	i=$((i + 1))
+	if [ -d "$path" ]; then
+		abs=$(cd -- "$path" && pwd)
+	elif [ -e "$path" ] || [ -h "$path" ]; then
+		dir=$(cd -- "$(dirname -- "$path")" && pwd)
+		case $dir in
+			/) abs=/$(basename -- "$path") ;;
+			*) abs=$dir/$(basename -- "$path") ;;
+		esac
+	else
+		echo "dazzi: $path: No such file or directory" >&2
+		status=1
+		continue
+	fi
+	set -- "$@" "--autorag-path=$abs"
+	found=$((found + 1))
+done
+
+# The loop shifted every input path off and appended one flag per existing path.
+if [ "$found" -eq 0 ]; then
+	exit "$status"
+fi
+
+profile=
+if [ -n "${DAZZI_USER_DATA_DIR-}" ]; then
+	profile=--user-data-dir=$DAZZI_USER_DATA_DIR
+fi
+
+# Detached: with no app running this process becomes the app and must outlive the terminal.
+if [ -n "$profile" ]; then
+	nohup "$exe" "$profile" --autorag-request=open "$@" >/dev/null 2>&1 </dev/null &
+else
+	nohup "$exe" --autorag-request=open "$@" >/dev/null 2>&1 </dev/null &
+fi
+exit "$status"

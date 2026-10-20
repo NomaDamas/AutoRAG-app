@@ -26,6 +26,13 @@ describe("parseOsRequestArgv", () => {
 		expect(parseOsRequestArgv(["--autorag-request=ask", "--autorag-path=relative/file"])).toBeNull();
 	});
 
+	it("reads the open action the dazzi command sends", () => {
+		expect(parseOsRequestArgv(["/App", "--autorag-request=open", "--autorag-path=/work/a", "--autorag-path=/work/b.md"])).toEqual({
+			action: "open",
+			paths: ["/work/a", "/work/b.md"],
+		});
+	});
+
 	it("keeps Windows drive and UNC paths and drops the stray quote Explorer leaves on a drive root", () => {
 		expect(
 			parseOsRequestArgv(["--autorag-request=reveal", "--autorag-path=D:\\", '--autorag-path=D:\\"', "--autorag-path=\\\\srv\\share\\f.txt"]),
@@ -81,6 +88,33 @@ describe("createOsRequestService", () => {
 		const service = createOsRequestService({ kindOf: async (path) => (path === "/a" ? null : "file"), onQueued: () => undefined });
 		await service.push({ action: "reveal", paths: ["/a", "/b", "/c"] });
 		expect(service.take()).toEqual([{ action: "reveal", path: "/b" }]);
+	});
+});
+
+describe("createOsRequestService open", () => {
+	it("keeps every existing path with its kind, in order, and drops the missing ones", async () => {
+		let queued = 0;
+		const kinds: Record<string, "file" | "folder"> = { "/work/dir": "folder", "/work/a.md": "file" };
+		const service = createOsRequestService({ kindOf: async (path) => kinds[path] ?? null, onQueued: () => (queued += 1) });
+		await service.push({ action: "open", paths: ["/work/dir", "/work/gone", "/work/a.md"] });
+		expect(queued).toBe(1);
+		expect(service.take()).toEqual([
+			{
+				action: "open",
+				targets: [
+					{ path: "/work/dir", kind: "folder" },
+					{ path: "/work/a.md", kind: "file" },
+				],
+			},
+		]);
+	});
+
+	it("queues nothing when none of the paths exist", async () => {
+		let queued = 0;
+		const service = createOsRequestService({ kindOf: async () => null, onQueued: () => (queued += 1) });
+		await service.push({ action: "open", paths: ["/nowhere"] });
+		expect(queued).toBe(0);
+		expect(service.take()).toEqual([]);
 	});
 });
 

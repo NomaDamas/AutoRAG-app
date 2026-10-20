@@ -107,6 +107,7 @@ import {
 	evacuateWorkspace,
 	focusTab,
 	focusAiSearchInWorkspace,
+	openOrSelectFolderInWorkspace,
 	openOrSelectSettingsInWorkspace,
 	reopenClosedTab as reopenClosedWorkspaceTab,
 	updatePaneTabs,
@@ -288,6 +289,8 @@ export interface FinderController {
 	openAiSearch(): void;
 	/** ⌘K: adopt the nearest AI Search tab, or open one. */
 	focusAiSearch(): void;
+	/** `dazzi <folder>`: focus the tab already showing the folder, else open a new tab on it. */
+	openFolder(path: string): void;
 	/** A filename search from a Settings / AI Search tab returns that tab to its folder. */
 	leaveVirtualTab(): void;
 	back(): void;
@@ -1958,6 +1961,7 @@ export function useFinderController(
 	const showAiSearch = useLatestCallback(() => setTabsState((state) => showAiSearchInActiveTab(state)));
 	const openAiSearch = useLatestCallback(() => setTabsState((state) => openAiSearchTab(state)));
 	const focusAiSearch = useLatestCallback(() => updateWorkspace(focusAiSearchInWorkspace));
+	const openFolder = useLatestCallback((path: string) => updateWorkspace((workspace) => openOrSelectFolderInWorkspace(workspace, path)));
 	const leaveVirtualTab = useLatestCallback(() => setTabsState((state) => exitVirtualTab(state)));
 	const sortBy = useLatestCallback((key: SortKey) => setSort((current) => cycleSort(current, key)));
 	const focusFinder = useLatestCallback(() => setZone("finder"));
@@ -2071,6 +2075,7 @@ export function useFinderController(
 		showAiSearch,
 		openAiSearch,
 		focusAiSearch,
+		openFolder,
 		leaveVirtualTab,
 		back,
 		forward,

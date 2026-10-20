@@ -44,6 +44,8 @@ export function createOsRequestService(deps: OsRequestServiceDeps): OsRequestSer
 			if (first === undefined) return;
 			if (request.action === "reveal") {
 				queue.push({ action: "reveal", path: first.path });
+			} else if (request.action === "open") {
+				queue.push({ action: "open", targets: found });
 			} else {
 				const attachments: ChatAttachment[] = found.map(({ path, kind }) => ({ kind, id: path, name: basename(path) }));
 				queue.push({ action: "ask", attachments });

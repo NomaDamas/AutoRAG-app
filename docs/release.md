@@ -30,6 +30,11 @@ locally, renders `Casks/dazzi.rb` with `scripts/release/render-cask.mjs` from th
 published. Pre-releases are skipped. The cask declares `auto_updates true`: the in-app updater keeps
 working, and `brew upgrade --cask --greedy` also works.
 
+The cask also links the `dazzi` command (`binary` stanza → `Contents/Resources/bin/dazzi`), and
+the app links it itself on first start for dmg installs (`src/main/cli-install.ts`, see
+`docs/architecture.md` "The `dazzi` command"). `build/cli/` is packed into `resources/bin` by
+`extraResources`; `scripts/release/verify-bundle.mjs` does not need to know about it.
+
 One-time setup: create a fine-grained PAT with *Contents: read and write* on `NomaDamas/homebrew-dazzi`
 and store it: `gh secret set HOMEBREW_TAP_TOKEN --repo NomaDamas/AutoRAG-app`. Without it the job
 skips. The cask is not notarization-dependent, but an unsigned dmg still triggers Gatekeeper's warning.
