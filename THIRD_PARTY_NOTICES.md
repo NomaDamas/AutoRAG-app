@@ -87,7 +87,7 @@ attached to it.
 | Everything and ES (Windows only; shipped inside `@autorag/librarian`) | MIT (+ PCRE BSD) |
 | fsearch-cli from fsearch-mac (macOS only) and its libraries glib, pango, harfbuzz, ICU, PCRE2, freetype, ... | GPL-2.0-or-later (fsearch-cli); LGPL-2.1+, MIT, ICU, BSD (libraries) |
 | Qwen/Qwen3-Embedding-0.6B (safetensors weights + tokenizer) | Apache-2.0 |
-| Kiwi 0.24.0 native library and base model (macOS only; `resources/tools/kiwi`) | Apache-2.0 |
+| Kiwi native library and base model (`resources/tools/kiwi`): 0.24.0 on macOS, 0.22.2 on Windows | Apache-2.0 (0.24.0); LGPL-2.1-or-later (0.22.2) |
 
 `fsearch-cli` is GPL-2.0-or-later, and Dazzi only starts it as a separate
 program (no linking), per mere aggregation. Its license and notice are
@@ -99,11 +99,29 @@ paths were rewritten so they load from the app.
 ### Kiwi and kiwi-rs
 
 `minsync` tokenizes Korean for its keyword index with the Kiwi morphological
-analyzer. The Kiwi native library (`libkiwi`) and its base model ship in
-`resources/tools/kiwi` as separate files that `minsync` loads at run time. Kiwi
-0.24.0 and its models are Apache-2.0; its license and NOTICE are installed in
-`resources/tools/licenses/kiwi`. The models were trained on the Sejong and NIKL
-corpora, which are not distributed. Source: https://github.com/bab2min/Kiwi.
+analyzer. The Kiwi native library and its base model ship in
+`resources/tools/kiwi` as separate files that `minsync` loads at run time; the
+app does not link them. Source: https://github.com/bab2min/Kiwi. The models
+were trained on the Sejong and NIKL corpora, which are not distributed.
+
+- **macOS: Kiwi 0.24.0**, Apache-2.0 (library and model). Its LICENSE and NOTICE
+  are installed in `resources/tools/licenses/kiwi`.
+- **Windows: Kiwi 0.22.2**, LGPL-2.1-or-later, **unmodified**: `kiwi.dll` and the
+  model are the official `kiwi_win_x64_v0.22.2.zip` and `kiwi_model_v0.22.2_base.tgz`
+  release assets, not rebuilt or repackaged, with their SHA-256 in
+  `components-win32-x64.json`. Kiwi's LICENSE, the LGPL-2.1 text
+  (`LGPL-2.1.txt`) and a `SOURCE.txt` are installed in
+  `resources/tools/licenses/kiwi`. `SOURCE.txt` states that nothing was changed
+  and gives the complete corresponding source, which is equivalent access from
+  a designated place (LGPL-2.1 sections 4 and 6(d)):
+  https://github.com/bab2min/Kiwi/tree/v0.22.2 (its `third_party/` directory is
+  git submodules and its models are Git LFS objects, so use a recursive clone
+  with Git LFS). The DLL is loaded from its own file at run time, so it can be
+  replaced with a modified, interface-compatible build by setting
+  `KIWI_LIBRARY_PATH` (section 6(b)); users may modify it for their own use and
+  reverse engineer the app to debug such modifications. Kiwi 0.22.2 is used on
+  Windows because 0.23.x and later crashed with MinSync on Windows in our test
+  (see `docs/release.md`).
 
 `minsync` reaches the library through the `kiwi-rs` crate 2026.8.26
 (https://crates.io/crates/kiwi-rs, source https://github.com/JAICHANGPARK/kiwi-rs),

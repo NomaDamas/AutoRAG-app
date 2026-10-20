@@ -15,7 +15,7 @@
  */
 
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -151,32 +151,43 @@ if (seedDir !== null) {
 	}
 }
 
-// Kiwi (macOS): the bundled library and model must make MinSync's `multilingual` tokenizer work with no
+// Kiwi: the bundled library and model must make MinSync's `multilingual` tokenizer work with no
 // ~/.local/kiwi and no KIWI_* of the developer's own. Indexing 환불정책을 and finding it by the stem 환불 is
 // what whitespace tokenization cannot do, so a pass proves the library loaded and the model is usable.
 // The sync embeds, so it needs the seeded native Qwen3 model: a seed without it (an old GGUF-era stage)
 // would make minsync download 1.2 GB and prove nothing about being offline, so the sync is skipped then.
-if (!win && existsSync(join(toolsDir, "kiwi"))) {
-	const library = join(toolsDir, "kiwi", "lib", "libkiwi.dylib");
+// macOS ships Apache-2.0 Kiwi 0.24.0 (LICENSE + NOTICE); Windows ships Kiwi 0.22.2, which is LGPL-2.1+ and
+// so also needs the LGPL text and the source/unmodified statement beside it.
+if (existsSync(join(toolsDir, "kiwi"))) {
+	const library = join(toolsDir, "kiwi", "lib", win ? "kiwi.dll" : "libkiwi.dylib");
 	const model = join(toolsDir, "kiwi", "models", "cong", "base");
 	const present = existsSync(library) && existsSync(model);
 	if (!present) failures += 1;
 	process.stdout.write(`${present ? "ok  " : "FAIL"} kiwi library and model are staged${present ? "" : "  <- missing"}\n`);
-	for (const license of ["LICENSE", "NOTICE"]) {
+	const licenseFiles = win ? ["LICENSE", "LGPL-2.1.txt", "SOURCE.txt"] : ["LICENSE", "NOTICE"];
+	for (const license of licenseFiles) {
 		const found = existsSync(join(toolsDir, "licenses", "kiwi", license));
 		if (!found) failures += 1;
 		process.stdout.write(`${found ? "ok  " : "FAIL"} kiwi ${license} ships with it${found ? "" : "  <- missing"}\n`);
+	}
+	if (win) {
+		// What SOURCE.txt promises ("unmodified") has to match the staged bytes: the manifest records the release asset's hash.
+		const source = join(toolsDir, "licenses", "kiwi", "SOURCE.txt");
+		const recorded = manifest.tools.find((tool) => tool.name === "kiwi")?.sha256;
+		const stated = existsSync(source) && recorded !== undefined && readFileSync(source, "utf8").includes(recorded);
+		if (!stated) failures += 1;
+		process.stdout.write(`${stated ? "ok  " : "FAIL"} kiwi SOURCE.txt names the sha256 of the release asset that shipped${stated ? "" : "  <- missing or different"}\n`);
 	}
 	const nativeModel = seedDir !== null && existsSync(join(seedDir, "models--Qwen--Qwen3-Embedding-0.6B", "snapshots"));
 	if (present && seedDir !== null && !nativeModel) process.stdout.write("skip minsync Korean tokenization (the seed has no native Qwen3 model; re-stage with `--only seed`)\n");
 	if (present && nativeModel) {
 		const workspace = join(home, "kiwi-workspace");
 		mkdirSync(workspace, { recursive: true });
-		const minsync = join(bin, "minsync");
+		const minsync = join(bin, `minsync${exe}`);
 		// HF_HUB_OFFLINE: a missing file fails the check instead of being fetched from the network.
 		const env = { ...cleanEnv(home), KIWI_LIBRARY_PATH: library, KIWI_MODEL_PATH: model, FASTEMBED_CACHE_DIR: join(home, "models"), HF_HUB_OFFLINE: "1" };
-		spawnSync("node", ["-e", `require('fs').cpSync(${JSON.stringify(seedDir)}, ${JSON.stringify(join(home, "models"))}, {recursive:true})`]);
-		const sh = (commandArgs) => spawnSync(minsync, commandArgs, { env, cwd: workspace, encoding: "utf8", timeout: 240_000 });
+		cpSync(seedDir, join(home, "models"), { recursive: true });
+		const sh = (commandArgs) => spawnSync(minsync, commandArgs, { env, cwd: workspace, encoding: "utf8", timeout: 240_000, windowsHide: true });
 		sh(["init", "--format", "json", "--embedder", "native:Qwen/Qwen3-Embedding-0.6B"]);
 		const configPath = join(workspace, ".minsync", "config.toml");
 		writeFileSync(configPath, readFileSync(configPath, "utf8").replace(/^language = .*$/m, 'language = "multilingual"'));

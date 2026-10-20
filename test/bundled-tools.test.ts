@@ -97,6 +97,21 @@ describe("bundled Kiwi", () => {
 		expect(env.KIWI_LIBRARY_PATH).toBeUndefined();
 		expect(env.KIWI_MODEL_PATH).toBeUndefined();
 	});
+
+	it("finds kiwi.dll on Windows, where the environment spells PATH `Path`", () => {
+		const resources = temp();
+		const kiwi = join(resources, "tools", "kiwi");
+		mkdirSync(join(resources, "tools", "bin"), { recursive: true });
+		mkdirSync(join(kiwi, "lib"), { recursive: true });
+		mkdirSync(join(kiwi, "models", "cong", "base"), { recursive: true });
+		writeFileSync(join(kiwi, "lib", "kiwi.dll"), "");
+		const env: NodeJS.ProcessEnv = { Path: "C:\\Windows" };
+
+		applyBundledTools({ resourcesPath: resources, env, platform: "win32" });
+
+		expect(env.KIWI_LIBRARY_PATH).toBe(join(kiwi, "lib", "kiwi.dll"));
+		expect(env.KIWI_MODEL_PATH).toBe(join(kiwi, "models", "cong", "base"));
+	});
 });
 
 describe("seeding the native MinSync embedding model", () => {

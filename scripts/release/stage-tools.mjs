@@ -295,49 +295,102 @@ async function stageAutoragCli() {
 }
 
 /**
- * Kiwi (Korean morphological analyzer), macOS only. MinSync's `multilingual` BM25 tokenizer loads the
- * native library and base model at run time (`kiwi-rs`, dlopen) and neither ships with MinSync; without
- * them the librarian falls back to whitespace tokenization. 0.24.0 is the first Apache-2.0 release
- * (<= 0.23.2 is LGPL), so the library and model can ship with LICENSE and NOTICE. Windows is not staged:
- * MinSync's own Windows CI is pinned to 0.22.2 for a `kiwi_config_t` ABI mismatch with its binding, and
- * 0.24.0 has not been run on Windows; with the library present the librarian would pick `multilingual`
- * and every sync would depend on a DLL nobody has verified.
- * `src/main/bundled-tools.ts` points KIWI_LIBRARY_PATH / KIWI_MODEL_PATH at `tools/kiwi`.
+ * Kiwi (Korean morphological analyzer). MinSync's `multilingual` BM25 tokenizer loads the native library
+ * and base model at run time (`kiwi-rs`, dlopen / LoadLibrary) and neither ships with MinSync; without
+ * them the librarian falls back to whitespace tokenization. `src/main/bundled-tools.ts` points
+ * KIWI_LIBRARY_PATH / KIWI_MODEL_PATH at `tools/kiwi`.
+ *
+ * macOS ships 0.24.0, the first Apache-2.0 release: LICENSE and NOTICE travel with it.
+ *
+ * Windows ships **0.22.2, LGPL-2.1-or-later, unmodified**. Run on a real Windows runner, MinSync 0.4.11
+ * tokenizes with 0.22.2 and crashes (STATUS_ACCESS_VIOLATION) with 0.23.2 and 0.24.0: the C structs
+ * `kiwi_config_t` and `kiwi_analyze_option_t` grew in 0.23, and MinSync's own Windows CI is pinned to
+ * 0.22.2 for that reason. kiwi.dll is a separate file the app never links, loaded by `kiwi-rs`, so the
+ * user can replace it (LGPL-2.1 section 6(b)). Because the library is redistributed in binary form, the
+ * license text, the exact upstream source location and the hashes of what shipped are installed with it
+ * (sections 4 and 6(d)); `tools/licenses/kiwi/SOURCE.txt` states that nothing was changed.
  */
-const KIWI_VERSION = "0.24.0";
-const KIWI_BASE_URL = `https://github.com/bab2min/Kiwi/releases/download/v${KIWI_VERSION}`;
-const KIWI_RAW_URL = `https://raw.githubusercontent.com/bab2min/Kiwi/v${KIWI_VERSION}`;
-const KIWI_MAC_LIBRARY = { name: `kiwi_mac_arm64_v${KIWI_VERSION}.tgz`, sha256: "87eda17f319c371824d5a2cc2e497eda6327ba3ddbf08a018db967f61ddbe48d" };
-const KIWI_MODEL = { name: `kiwi_model_v${KIWI_VERSION}_base.tgz`, sha256: "33188ba932bba4717bad5244bbec0ef8b1c9cbb47e26e68394a7976d8d779083" };
-const KIWI_LICENSES = [
-	{ name: "LICENSE", sha256: "4070ef92694190ae0d19410380654c37f0602e8a2aa3ddcc45e2dad3039b5b20" },
-	{ name: "NOTICE", sha256: "0c1c4963546b66b2b750d14fada239efda2d67774e69ba99ec90829ca393b5bc" },
-];
+const KIWI = {
+	darwin: {
+		version: "0.24.0",
+		library: { name: "kiwi_mac_arm64_v0.24.0.tgz", sha256: "87eda17f319c371824d5a2cc2e497eda6327ba3ddbf08a018db967f61ddbe48d", from: "lib/libkiwi.0.24.0.dylib", to: "libkiwi.dylib" },
+		model: { name: "kiwi_model_v0.24.0_base.tgz", sha256: "33188ba932bba4717bad5244bbec0ef8b1c9cbb47e26e68394a7976d8d779083" },
+		licenses: [
+			{ name: "LICENSE", sha256: "4070ef92694190ae0d19410380654c37f0602e8a2aa3ddcc45e2dad3039b5b20" },
+			{ name: "NOTICE", sha256: "0c1c4963546b66b2b750d14fada239efda2d67774e69ba99ec90829ca393b5bc" },
+		],
+		lgpl: false,
+	},
+	win32: {
+		version: "0.22.2",
+		library: { name: "kiwi_win_x64_v0.22.2.zip", sha256: "4fd07dfa6405a3d650ed82b20e5e39d375dda26babdb344145e040c86b60e822", from: "lib/kiwi.dll", to: "kiwi.dll" },
+		model: { name: "kiwi_model_v0.22.2_base.tgz", sha256: "aa11a6e5b06c7db43e9b07148620f5fb7838a30172dacb40f75202333110f2d1" },
+		// Kiwi's own LICENSE at v0.22.2 (the LGPL-2.1+ grant) and the FSF text of the LGPL it points to.
+		licenses: [{ name: "LICENSE", sha256: "b1f2dd8c2d5ee0d37abbd63bd3379bbd6ffe7c13079f31f4f0f8299906d83020" }],
+		lgpl: true,
+	},
+};
+// The LGPL-2.1 text (the FSF's, via the SPDX list at a fixed tag), pinned by sha256: it is not part of Kiwi's release assets.
+const LGPL_2_1 = { url: "https://raw.githubusercontent.com/spdx/license-list-data/v3.25.0/text/LGPL-2.1-only.txt", name: "LGPL-2.1.txt", sha256: "5749785c8bdefafcb5d798270ed0a967036fe2ca63dcedade1627565dfef81d2" };
 
 async function stageKiwi() {
+	const kiwi = KIWI[target.os];
+	if (kiwi === undefined) throw new Error(`No Kiwi build is pinned for ${target.os}`);
+	const baseUrl = `https://github.com/bab2min/Kiwi/releases/download/v${kiwi.version}`;
+	const rawUrl = `https://raw.githubusercontent.com/bab2min/Kiwi/v${kiwi.version}`;
 	const directory = join(TOOLS, "kiwi");
 	rmSync(directory, { recursive: true, force: true });
 	mkdirSync(join(directory, "lib"), { recursive: true });
 
-	const library = await download(`${KIWI_BASE_URL}/${KIWI_MAC_LIBRARY.name}`, `Kiwi-${KIWI_MAC_LIBRARY.name}`, KIWI_MAC_LIBRARY.sha256);
-	const libraryDirectory = join(CACHE_DIR, "x", `kiwi-lib-${KIWI_VERSION}`);
+	const library = await download(`${baseUrl}/${kiwi.library.name}`, `Kiwi-${kiwi.library.name}`, kiwi.library.sha256);
+	const libraryDirectory = join(CACHE_DIR, "x", `kiwi-lib-${kiwi.version}-${target.os}`);
 	extract(library.path, libraryDirectory);
-	// The versioned file itself, not the libkiwi.dylib -> libkiwi.0.dylib -> libkiwi.0.24.0.dylib symlink chain.
-	copyFileSync(join(libraryDirectory, "lib", `libkiwi.${KIWI_VERSION}.dylib`), join(directory, "lib", "libkiwi.dylib"));
+	// The versioned file itself (macOS has a libkiwi.dylib -> libkiwi.0.dylib -> libkiwi.0.24.0.dylib symlink chain).
+	copyFileSync(join(libraryDirectory, kiwi.library.from), join(directory, "lib", kiwi.library.to));
 
-	const model = await download(`${KIWI_BASE_URL}/${KIWI_MODEL.name}`, `Kiwi-${KIWI_MODEL.name}`, KIWI_MODEL.sha256);
-	const modelDirectory = join(CACHE_DIR, "x", `kiwi-model-${KIWI_VERSION}`);
+	const model = await download(`${baseUrl}/${kiwi.model.name}`, `Kiwi-${kiwi.model.name}`, kiwi.model.sha256);
+	const modelDirectory = join(CACHE_DIR, "x", `kiwi-model-${kiwi.version}`);
 	extract(model.path, modelDirectory);
 	cpSync(join(modelDirectory, "models", "cong", "base"), join(directory, "models", "cong", "base"), { recursive: true });
 
-	// Apache-2.0 section 4: the license text and the NOTICE travel with the binary.
 	const licenseDirectory = join(TOOLS, "licenses", "kiwi");
+	rmSync(licenseDirectory, { recursive: true, force: true });
 	mkdirSync(licenseDirectory, { recursive: true });
-	for (const license of KIWI_LICENSES) {
-		const file = await download(`${KIWI_RAW_URL}/${license.name}`, `Kiwi-${KIWI_VERSION}-${license.name}`, license.sha256);
+	for (const license of kiwi.licenses) {
+		const file = await download(`${rawUrl}/${license.name}`, `Kiwi-${kiwi.version}-${license.name}`, license.sha256);
 		copyFileSync(file.path, join(licenseDirectory, license.name));
 	}
-	record({ name: "kiwi", version: KIWI_VERSION, source: `github.com/bab2min/Kiwi ${KIWI_MAC_LIBRARY.name} + ${KIWI_MODEL.name}`, sha256: library.sha256, verifiedAgainstPublisherDigest: true });
+	if (kiwi.lgpl) {
+		const lgpl = await download(LGPL_2_1.url, `Kiwi-${LGPL_2_1.name}`, LGPL_2_1.sha256);
+		copyFileSync(lgpl.path, join(licenseDirectory, LGPL_2_1.name));
+		writeFileSync(join(licenseDirectory, "SOURCE.txt"), kiwiSourceNotice(kiwi, library.sha256));
+	}
+	record({ name: "kiwi", version: kiwi.version, source: `github.com/bab2min/Kiwi ${kiwi.library.name} + ${kiwi.model.name}`, sha256: library.sha256, verifiedAgainstPublisherDigest: true });
+}
+
+/** The LGPL-2.1 section 4 / 6(d) statement shipped beside an LGPL Kiwi: what it is, that it is unchanged, where the source is. */
+function kiwiSourceNotice(kiwi, librarySha256) {
+	return [
+		`Kiwi ${kiwi.version} (kiwi.dll and the base model) is distributed with this application under the GNU Lesser`,
+		"General Public License, version 2.1 or (at your option) any later version. See LICENSE (the Kiwi grant) and",
+		`${LGPL_2_1.name} (the license text).`,
+		"",
+		"These files are the unmodified official release assets. Nothing was changed, recompiled or repackaged:",
+		`  ${kiwi.library.name}  sha256 ${librarySha256}`,
+		`  ${kiwi.model.name}  sha256 ${kiwi.model.sha256}`,
+		"",
+		"Complete corresponding source code (section 6(d): equivalent access from a designated place):",
+		`  https://github.com/bab2min/Kiwi/tree/v${kiwi.version}`,
+		`  https://github.com/bab2min/Kiwi/archive/refs/tags/v${kiwi.version}.tar.gz`,
+		"The tag's third_party/ directory is git submodules and the models are Git LFS objects, which that archive does",
+		"not contain; a recursive clone with Git LFS does:",
+		`  git clone --branch v${kiwi.version} --recurse-submodules https://github.com/bab2min/Kiwi.git`,
+		"",
+		"The application does not link Kiwi. It is loaded at run time from its own file, so you may replace kiwi.dll with",
+		"a modified, interface-compatible build (set KIWI_LIBRARY_PATH to it), and you may reverse engineer the",
+		"application to debug such modifications.",
+		"",
+	].join("\n");
 }
 
 /**
@@ -429,7 +482,7 @@ for (const item of GO_CRAWLERS) {
 }
 for (const item of CARGO_BINARIES) if (wanted(item.name)) await stageCargoBinary(item);
 if (target.os === "darwin" && wanted("fsearch-cli")) await stageFsearch();
-if (target.os === "darwin" && wanted("kiwi")) await stageKiwi();
+if (wanted("kiwi")) await stageKiwi();
 if (!flag("--skip-seed") && wanted("seed")) await stageSeed();
 
 const manifestPath = join(TOOLS, "manifest.json");
