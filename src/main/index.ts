@@ -3,7 +3,8 @@ import { access, open, readdir, readFile, stat } from "node:fs/promises";
 import { existsSync, readFileSync } from "node:fs";
 import { isAbsolute, join, sep } from "node:path";
 import { applyBundledTools } from "./bundled-tools";
-import { minSyncModelCacheRoot, seedAssets } from "./seed-assets";
+import { createModelDownloadService, localModelPresent, minSyncModelCacheRoot, nativeQwen3Spec } from "./model-download";
+import { MODEL_DOWNLOAD_CHANNELS } from "../shared/model-download-contract";
 import {
 	app,
 	BrowserWindow,
@@ -80,6 +81,7 @@ import {
 	registerAppUpdateIpcHandlers,
 	registerDragOutIpcHandlers,
 	registerIndexActivityIpcHandlers,
+	registerModelDownloadIpcHandlers,
 	registerOnboardingIpcHandlers,
 	registerOsRequestIpcHandlers,
 	registerSearchIpcHandlers,
@@ -393,19 +395,9 @@ app.whenReady().then(async () => {
 	const iconProvider = createIconProvider();
 	registerIconProtocol(iconProvider);
 	registerQuickLookIpc(iconProvider);
-	// Packaged builds carry the dependency CLIs and the embedding model: tools go first on PATH
-	// before anything reads the environment, and the model/runtime are copied into the AutoRAG home
-	// in the background so a fresh install indexes offline without a ~650 MB download.
+	// Packaged builds carry the dependency CLIs: they go first on PATH before anything reads the environment.
+	// The on-device embedding model is not bundled; `modelDownload` below fetches it when the user picks local embedding.
 	applyBundledTools({ resourcesPath: process.resourcesPath, env: process.env, augmentUserPaths: true });
-	const seeded = seedAssets({
-		seedDir: join(process.resourcesPath, "seed"),
-		cacheRoot: minSyncModelCacheRoot({ platform: process.platform, home: homedir(), env: process.env }),
-	}).then(
-		(outcome) => {
-			if (outcome.kind === "done" && outcome.copied.length > 0) console.log(`[autorag] seeded ${outcome.copied.join(", ")}`);
-		},
-		(error: unknown) => console.error("[autorag] seeding the embedding model failed; it will be downloaded on first use:", error),
-	);
 	// The `dazzi` command ships in the app; every start puts (or repairs) it where a terminal finds it.
 	if (app.isPackaged) {
 		void installCli({
@@ -420,8 +412,14 @@ app.whenReady().then(async () => {
 		);
 	}
 	// The local embedding model is served by MinSync's own `minsync serve`, which the app runs while it is open
-	// and stops on quit. It waits for the seed so it never downloads a model that is being copied in.
-	configureEmbeddingDaemon({ env: process.env, home: homedir(), ownerFile: join(app.getPath("userData"), "embedding-daemon.json"), ready: seeded });
+	// and stops on quit. It never starts before the model is downloaded (`modelDownload`), because `minsync serve`
+	// would fetch the 1.2 GB itself without any way to show progress.
+	configureEmbeddingDaemon({
+		env: process.env,
+		home: homedir(),
+		ownerFile: join(app.getPath("userData"), "embedding-daemon.json"),
+		modelPresent: localModelPresent({ home: homedir(), env: process.env }),
+	});
 	await ensureAutoRAGConfig();
 	const devLabel = resolveDevLabel();
 	console.log(`[autorag] ${formatWindowTitle(APP_FULL_NAME, APP_VERSION, devLabel)}`);
@@ -572,12 +570,25 @@ app.whenReady().then(async () => {
 	// it takes the shared refresh lock and is journaled, so it shows in the indexing progress.
 	const schedulePath = schedulePaths(autoragConfigPath());
 	const lockedDataSources = lockDataSources(dataSources, schedulePath);
+	// The on-device embedding model is downloaded on demand (onboarding, Settings), never bundled. One service for
+	// the whole app, so a download started in one place shows its progress everywhere.
+	const modelDownload = createModelDownloadService({
+		cacheRoot: minSyncModelCacheRoot({ platform: process.platform, home: homedir(), env: process.env }),
+		spec: nativeQwen3Spec(),
+		onChange: (status) => {
+			sendToAllWindows(MODEL_DOWNLOAD_CHANNELS.changed, status);
+			// The server refused to start while the weights were missing; bring it up the moment they are here.
+			if (status.state === "ready") void ensureEmbeddingForConfig(existsSync(autoragConfigPath()) ? readRawConfigObject(autoragConfigPath()) : {});
+		},
+	});
+	registerModelDownloadIpcHandlers(modelDownload);
 	const embeddingService = createEmbeddingSettingsService({
 		env: process.env,
 		cwd: process.cwd(),
 		config: autoRagConfig,
 		dataSources: lockedDataSources,
 		credentials,
+		modelReady: () => modelDownload.status().state === "ready",
 	});
 	embeddingService.applyProcessEnv();
 	// Bring the local model up in the background for the config the user has; search degrades to keywords until it answers.
@@ -787,6 +798,11 @@ app.whenReady().then(async () => {
 		},
 		configPath: autoragConfigPath(),
 		resolveWorkspacePath: async () => (await resolveEffectiveConfig({ env: process.env, cwd: process.cwd() })).config.workspacePath,
+		ensureLocalModel: async () => {
+			await modelDownload.start();
+			const done = await modelDownload.settled();
+			return done.state === "ready" ? null : (done.error ?? t("main.modelDownload.errors.cancelled"));
+		},
 		refresh: (methods) =>
 			withRefreshLock(
 				schedulePath.lock,

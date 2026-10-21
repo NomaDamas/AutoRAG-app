@@ -2,7 +2,8 @@
 
 import type { CSSProperties, ReactElement } from "react";
 import { cn } from "../lib/cn";
-import { TIPS, indexingPhases, phaseIndex, resolveEmbed, canSelectCloudEmbedding, type TipArt } from "./flow";
+import { downloadPercent } from "../state/model-download";
+import { TIPS, formatSize, indexingPhases, phaseIndex, resolveEmbed, canSelectCloudEmbedding, type TipArt } from "./flow";
 import { BrandMark, brandVars, Icon } from "./marks";
 import { TipArt as TipArtView } from "./parts";
 import type { OnboardingCtx } from "./context";
@@ -154,7 +155,10 @@ export function IndexingScreen({ ctx }: { readonly ctx: OnboardingCtx }): ReactE
 	const success = status?.state === "success";
 	const failed = status?.state === "failed";
 	const running = status?.state === "running";
-	const progress = success ? 100 : (status?.progress ?? 0);
+	// The first index of on-device embedding waits for the model: while its download runs, that is the progress.
+	const download = ctx.modelDownload.status;
+	const downloading = running && download.state === "downloading";
+	const progress = success ? 100 : downloading ? downloadPercent(download) : (status?.progress ?? 0);
 	const phase = status?.phase ?? null;
 	// The keyword-only path never embeds, so its strip has no embedding phase.
 	const embed = resolveEmbed(ctx.draft.embed, canSelectCloudEmbedding(ctx.account));
@@ -199,6 +203,16 @@ export function IndexingScreen({ ctx }: { readonly ctx: OnboardingCtx }): ReactE
 				</span>
 			</>
 		);
+	} else if (downloading) {
+		statusPill = (
+			<>
+				<Icon name="loader-circle" size={16} className="spin" />
+				<span>
+					<strong>{t("modelDownload.indexingTitle")}</strong>
+					<small>{t("modelDownload.indexingNote")}</small>
+				</span>
+			</>
+		);
 	} else if (running) {
 		statusPill = (
 			<>
@@ -223,7 +237,15 @@ export function IndexingScreen({ ctx }: { readonly ctx: OnboardingCtx }): ReactE
 
 	const remaining = status?.remainingMinutes ?? null;
 	let meta: ReactElement;
-	if (success) {
+	if (downloading) {
+		meta = (
+			<>
+				<b>{Math.floor(progress)}%</b>
+				<span>·</span>
+				<span>{t("modelDownload.amount", { done: formatSize(download.bytesDone), total: formatSize(download.bytesTotal) })}</span>
+			</>
+		);
+	} else if (success) {
 		const started = status?.startedAt != null ? Date.parse(status.startedAt) : null;
 		const finished = status?.finishedAt != null ? Date.parse(status.finishedAt) : null;
 		const totalMinutes = started !== null && finished !== null ? Math.max(1, Math.ceil((finished - started) / 60_000)) : null;

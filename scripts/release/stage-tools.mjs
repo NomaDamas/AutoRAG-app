@@ -1,29 +1,32 @@
 /**
- * Stage everything the installer carries besides the app itself.
+ * Stage the dependency programs the installer carries besides the app itself,
+ * plus a verification-only copy of the embedding model.
  *
  *   node scripts/release/stage-tools.mjs [--platform darwin-arm64|win32-x64]
- *                                        [--skip-seed] [--only name,name]
+ *                                        [--skip-verify-model] [--only name,name]
  *
  * Output (build/stage/<platform>/):
  *   tools/bin/        the dependency CLIs, each a real executable
  *   tools/node/       Node 24 LTS + npm (also the runtime of the npm-based CLIs)
  *   tools/npm/        mailcrawl, qmd, kordoc and their node_modules
  *   tools/manifest.json   what was staged: name, version, source, sha256
- *   seed/             native Qwen3-Embedding-0.6B checkpoint for first launch
+ *   verify-model/     native Qwen3-Embedding-0.6B checkpoint, for verify-bundle only
  *
  * Versions are resolved at run time from the publishers' "latest" (GitHub
  * releases, crates.io, npm, nodejs.org), so every release ships the newest
- * dependencies; manifest.json records exactly what that was. The native
- * embedding model is the exception: it is pinned by commit revision and sha256
- * so the bundled weights never drift silently.
+ * dependencies; manifest.json records exactly what that was.
+ *
+ * The embedding model is NOT part of the installer: the app downloads it on
+ * demand. `verify-model/` exists only so `verify-bundle.mjs` can run an offline
+ * MinSync sync; it is pinned by commit revision and sha256, carries no
+ * manifest.json, is not recorded in tools/manifest.json, and is never packaged.
  *
  * Each platform is staged on a matching host (native compiles, native npm
  * prebuilds): the macOS stage on an Apple Silicon Mac, the Windows stage on a
  * Windows x64 machine.
  */
 
-import { createHash } from "node:crypto";
-import { chmodSync, copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, relative } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
@@ -65,7 +68,7 @@ const wanted = (name) => only === undefined || only.includes(name);
 const STAGE = join(BUILD_DIR, "stage", platformId);
 const TOOLS = join(STAGE, "tools");
 const BIN = join(TOOLS, "bin");
-const SEED = join(STAGE, "seed");
+const VERIFY_MODEL = join(STAGE, "verify-model");
 const exe = target.exe;
 
 /** Entries of tools/manifest.json. */
@@ -424,6 +427,9 @@ function kiwiSourceNotice(kiwi, librarySha256) {
  * Native Qwen3 embedding model (`Qwen/Qwen3-Embedding-0.6B`), pinned by commit
  * and SHA-256 in the Hugging Face Hub cache layout that `minsync` (candle /
  * `hf-hub`) and `mailcrawl` read directly without network access.
+ *
+ * Staged for `verify-bundle.mjs` only — an offline MinSync sync needs the real
+ * weights — so it is never packaged and never recorded in tools/manifest.json.
  */
 const NATIVE_QWEN3_REPO_DIR = "models--Qwen--Qwen3-Embedding-0.6B";
 const NATIVE_QWEN3_REVISION = "97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3";
@@ -434,35 +440,17 @@ const NATIVE_QWEN3_FILES = [
 	{ name: "model.safetensors", sha256: "0437e45c94563b09e13cb7a64478fc406947a93cb34a7e05870fc8dcd48e23fd" },
 ];
 
-async function stageSeed() {
-	rmSync(SEED, { recursive: true, force: true });
-	const refsDir = join(SEED, NATIVE_QWEN3_REPO_DIR, "refs");
-	const snapshotDir = join(SEED, NATIVE_QWEN3_REPO_DIR, "snapshots", NATIVE_QWEN3_REVISION);
-	mkdirSync(refsDir, { recursive: true });
-	mkdirSync(snapshotDir, { recursive: true });
-	const refRel = `${NATIVE_QWEN3_REPO_DIR}/refs/main`;
-	const refContent = Buffer.from(NATIVE_QWEN3_REVISION, "utf8");
-	writeFileSync(join(SEED, refRel), refContent);
-	const refSha256 = createHash("sha256").update(refContent).digest("hex");
-	const files = [
-		{ path: refRel, destination: refRel, sha256: refSha256, bytes: refContent.length },
-	];
+async function stageVerifyModel() {
+	rmSync(VERIFY_MODEL, { recursive: true, force: true });
+	mkdirSync(join(VERIFY_MODEL, NATIVE_QWEN3_REPO_DIR, "refs"), { recursive: true });
+	mkdirSync(join(VERIFY_MODEL, NATIVE_QWEN3_REPO_DIR, "snapshots", NATIVE_QWEN3_REVISION), { recursive: true });
+	writeFileSync(join(VERIFY_MODEL, NATIVE_QWEN3_REPO_DIR, "refs", "main"), Buffer.from(NATIVE_QWEN3_REVISION, "utf8"));
 	for (const asset of NATIVE_QWEN3_FILES) {
 		const url = `${NATIVE_QWEN3_BASE_URL}/${asset.name}`;
 		const downloaded = await download(url, `Qwen3-Embedding-0.6B-${NATIVE_QWEN3_REVISION.slice(0, 12)}-${asset.name}`, asset.sha256);
-		const rel = `${NATIVE_QWEN3_REPO_DIR}/snapshots/${NATIVE_QWEN3_REVISION}/${asset.name}`;
-		const destination = join(SEED, rel);
-		copyFileSync(downloaded.path, destination);
-		files.push({ path: rel, destination: rel, sha256: asset.sha256, bytes: statSync(destination).size });
+		copyFileSync(downloaded.path, join(VERIFY_MODEL, NATIVE_QWEN3_REPO_DIR, "snapshots", NATIVE_QWEN3_REVISION, asset.name));
 	}
-	writeFileSync(join(SEED, "manifest.json"), `${JSON.stringify({ schema: 1, files }, null, 2)}\n`);
-	record({
-		name: "qwen3-embedding-0.6b-native",
-		version: NATIVE_QWEN3_REVISION.slice(0, 12),
-		source: `${NATIVE_QWEN3_BASE_URL}/model.safetensors`,
-		sha256: NATIVE_QWEN3_FILES[2].sha256,
-		verifiedAgainstPublisherDigest: true,
-	});
+	log(`staged verification model Qwen3-Embedding-0.6B ${NATIVE_QWEN3_REVISION.slice(0, 12)} -> ${VERIFY_MODEL}`);
 }
 
 // --------------------------------------------------------------------------
@@ -508,9 +496,9 @@ for (const item of GO_CRAWLERS) {
 for (const item of CARGO_BINARIES) if (wanted(item.name)) await stageCargoBinary(item);
 if (target.os === "darwin" && wanted("fsearch-cli")) await stageFsearch();
 if (wanted("kiwi")) await stageKiwi();
-if (!flag("--skip-seed") && wanted("seed")) await stageSeed();
+if (!flag("--skip-verify-model") && wanted("verify-model")) await stageVerifyModel();
 
 const manifestPath = join(TOOLS, "manifest.json");
 const kept = only !== undefined && existsSync(manifestPath) ? JSON.parse(readFileSync(manifestPath, "utf8")).tools.filter((tool) => !staged.some((entry) => entry.name === tool.name)) : [];
 writeFileSync(manifestPath, `${JSON.stringify({ schema: 1, platform: platformId, generatedAt: new Date().toISOString(), tools: [...kept, ...staged] }, null, 2)}\n`);
-log(`tools ${mb(dirSizeBytes(TOOLS))}, seed ${existsSync(SEED) ? mb(dirSizeBytes(SEED)) : "skipped"} -> ${STAGE}`);
+log(`tools ${mb(dirSizeBytes(TOOLS))}, verify-model ${existsSync(VERIFY_MODEL) ? mb(dirSizeBytes(VERIFY_MODEL)) : "skipped"} -> ${STAGE}`);

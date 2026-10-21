@@ -11,6 +11,7 @@ import {
 	followConfig,
 	localEmbeddingModel,
 	localEmbeddingServer,
+	localModelMissing,
 	minSyncServeStateRoot,
 	stopEmbeddingDaemon,
 } from "../src/main/embedding-daemon";
@@ -271,19 +272,44 @@ describe.skipIf(process.platform === "win32")("the process-wide hook", () => {
 		expect(existsSync(join(root, "Qwen-Qwen3-Embedding-0.6B-test"))).toBe(false);
 	});
 
-	it("waits for the bundled model to be in place before starting, so the server never downloads it", async () => {
+	it("never starts the server while the model is not downloaded, so minsync does not fetch 1.2 GB by itself", async () => {
 		const fixture = await createFixture();
-		const { promise: seeded, resolve } = Promise.withResolvers<void>();
-		configureEmbeddingDaemon({ env: fixture.env, home: fixture.home, ownerFile: fixture.ownerFile, readyTimeoutMs: 15_000, ready: seeded });
+		let present = false;
+		const daemon = createEmbeddingDaemon({ env: fixture.env, home: fixture.home, ownerFile: fixture.ownerFile, readyTimeoutMs: 15_000, modelPresent: () => present });
 
-		const pending = ensureEmbeddingForConfig({});
-		await Promise.resolve();
+		const blocked = await daemon.ensure(DEFAULT_LOCAL_EMBEDDING_MODEL);
+		expect(blocked).toMatchObject({ state: "unavailable" });
 		expect(await starts(fixture)).toEqual([]);
-		resolve();
-		await pending;
 
+		present = true;
+		const started = await daemon.ensure(DEFAULT_LOCAL_EMBEDDING_MODEL);
+		if (started.state === "running") spawned.push(started.pid);
+		expect(started).toMatchObject({ state: "running", started: true });
 		expect(await starts(fixture)).toHaveLength(1);
-		await stopEmbeddingDaemon();
+		await daemon.stop();
+	});
+
+	it("still answers with a server that is already running when the model check says missing", async () => {
+		const fixture = await createFixture();
+		const first = await build(fixture).ensure(DEFAULT_LOCAL_EMBEDDING_MODEL);
+		if (first.state === "running") spawned.push(first.pid);
+
+		const gated = createEmbeddingDaemon({ env: fixture.env, home: fixture.home, readyTimeoutMs: 15_000, modelPresent: () => false });
+
+		expect(await gated.ensure(DEFAULT_LOCAL_EMBEDDING_MODEL)).toMatchObject({ state: "running", started: false });
+	});
+
+	it("reports a missing download only when this process manages the server and the config wants the local model", async () => {
+		const fixture = await createFixture();
+		expect(localModelMissing({})).toBe(false);
+
+		configureEmbeddingDaemon({ env: fixture.env, home: fixture.home, modelPresent: () => false });
+		expect(localModelMissing({})).toBe(true);
+		expect(localModelMissing({ appIndexing: { semanticSearch: false } })).toBe(false);
+		expect(localModelMissing({ minSync: { embedder: { id: "openai:text-embedding-3-small" } } })).toBe(false);
+
+		configureEmbeddingDaemon({ env: fixture.env, home: fixture.home, modelPresent: () => true });
+		expect(localModelMissing({})).toBe(false);
 	});
 
 	it("does not throw when the server cannot start", async () => {

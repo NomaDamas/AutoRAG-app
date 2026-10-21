@@ -1092,7 +1092,8 @@
     "onboarding": {
       "apiKeyRequired": "API 키가 필요합니다.",
       "baseUrlRequired": "서버 주소(base URL)가 필요합니다.",
-      "indexingFailed": "인덱싱에 실패했습니다."
+      "indexingFailed": "인덱싱에 실패했습니다.",
+      "modelDownloadFailed": "이 컴퓨터용 임베딩 모델을 내려받지 못해 색인을 시작하지 못했습니다: {{error}}"
     },
     "lock": {
       "scheduledBusy": "백그라운드 새로 고침이 실행 중입니다. 끝난 뒤 다시 시도하세요.",
@@ -1106,7 +1107,8 @@
       "rootUnavailable": "검색 폴더 {{folder}}을(를) 읽을 수 없거나 비어 있어 새로 고침을 건너뛰었습니다. 이 폴더에서 색인된 문서 {{indexed}}개를 지우지 않기 위해서입니다. 드라이브나 클라우드 폴더를 다시 연결하거나, 더 이상 필요 없다면 검색 폴더에서 제거하세요.",
       "retried": "파일 시스템 오류({{code}})가 일시적으로 발생해 새로 고침을 {{retries}}번 다시 시도했습니다.",
       "filesLeftOut": "{{code}} 오류가 계속되는 파일 {{files}}개를 이번 새로 고침에서 제외했습니다. 다음 새로 고침에서 다시 시도합니다.",
-      "parseKilled": "파일 {{timedOut}}개는 제한 시간을 넘겨, {{crashed}}개는 파서가 중단되어 건너뛰었습니다. 다음 새로 고침에서 다시 시도합니다."
+      "parseKilled": "파일 {{timedOut}}개는 제한 시간을 넘겨, {{crashed}}개는 파서가 중단되어 건너뛰었습니다. 다음 새로 고침에서 다시 시도합니다.",
+      "modelMissing": "이 컴퓨터용 임베딩 모델이 아직 내려받아지지 않아 색인을 건너뜁니다. 설정 → AI 모델 → 문서 이해 모델에서 다운로드해 주세요."
     },
     "worker": {
       "unknownFormat": "알 수 없는 파일 형식입니다: {{format}}",
@@ -1154,7 +1156,8 @@
         "unauthorized": "서버가 인증을 거부했습니다 (HTTP {{status}}). API 키를 확인하세요.",
         "dazziSignIn": "Dazzi 클라우드를 쓰려면 먼저 Dazzi 계정에 로그인하세요.",
         "consentRequired": "문서 내용이 이 컴퓨터 밖의 서버로 전송됩니다. 동의 후 다시 적용하세요.",
-        "keyRequired": "이 서버에는 API 키가 필요합니다."
+        "keyRequired": "이 서버에는 API 키가 필요합니다.",
+        "modelMissing": "이 컴퓨터용 임베딩 모델이 아직 내려받아지지 않았습니다. 먼저 모델을 다운로드해 주세요."
       },
       "reasons": {
         "keywordOnly": "키워드 검색만 쓰므로 이 소스도 임베딩하지 않습니다.",
@@ -1188,6 +1191,15 @@
       "noModels": "Dazzi 플랜에 사용할 수 있는 모델이 없습니다.",
       "invalidState": "로그인 상태 값이 올바르지 않습니다.",
       "missingCode": "로그인 코드가 없습니다."
+    },
+    "modelDownload": {
+      "errors": {
+        "http": "{{file}} 다운로드 실패: 서버가 HTTP {{status}}로 응답했습니다.",
+        "checksum": "{{file}}이(가) 손상되었습니다. 받은 파일의 체크섬이 맞지 않아 지웠습니다. 다시 시도해 주세요.",
+        "stalled": "{{file}} 다운로드가 멈췄습니다. 네트워크 연결을 확인하고 다시 시도해 주세요.",
+        "network": "{{file}} 다운로드 실패: {{message}}",
+        "cancelled": "다운로드를 취소했습니다. 받아 둔 만큼은 남아 있어 이어서 받을 수 있습니다."
+      }
     }
   },
   "quickLook": {
@@ -2116,5 +2128,24 @@
       "intervalName": "검사 주기",
       "intervalHint": "파일 변화를 다시 확인하는 주기입니다."
     }
+  },
+  "modelDownload": {
+    "title": "이 컴퓨터용 모델",
+    "needed": "이 컴퓨터에서 문서를 이해하려면 모델(약 {{size}})을 한 번 내려받아야 합니다.",
+    "partial": "{{done}}까지 받아 둔 상태입니다. 멈춘 곳부터 이어서 받습니다.",
+    "download": "다운로드",
+    "resume": "이어받기",
+    "cancel": "취소",
+    "retry": "다시 시도",
+    "progressAria": "모델 다운로드 진행률",
+    "percent": "{{percent}}%",
+    "amount": "{{done}} / {{total}}",
+    "file": "{{file}} 받는 중",
+    "keepOpen": "끝날 때까지 Dazzi를 열어 두세요. 중간에 멈춰도 이어서 받을 수 있습니다.",
+    "ready": "모델 준비 완료",
+    "readyDetail": "모델이 이 컴퓨터에 있습니다. 문서는 컴퓨터 밖으로 나가지 않습니다.",
+    "failed": "다운로드가 멈췄습니다",
+    "indexingTitle": "임베딩 모델을 내려받는 중",
+    "indexingNote": "받기가 끝나면 첫 색인이 자동으로 시작됩니다."
   }
 }

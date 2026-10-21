@@ -1092,7 +1092,8 @@
     "onboarding": {
       "apiKeyRequired": "An API key is required.",
       "baseUrlRequired": "A server address (base URL) is required.",
-      "indexingFailed": "Indexing failed."
+      "indexingFailed": "Indexing failed.",
+      "modelDownloadFailed": "Indexing could not start because the on-device embedding model could not be downloaded: {{error}}"
     },
     "lock": {
       "scheduledBusy": "A background refresh is running. Try again after it finishes.",
@@ -1106,7 +1107,8 @@
       "rootUnavailable": "Refresh skipped: the search folder {{folder}} is unreadable or empty. This keeps the {{indexed}} documents indexed from it from being deleted. Reconnect the drive or cloud folder, or remove it from your search folders if you no longer need it.",
       "retried": "A temporary file system error ({{code}}) occurred; the refresh was retried {{retries}} time(s).",
       "filesLeftOut": "{{files}} file(s) that kept failing with {{code}} were left out of this refresh. They will be tried again on the next one.",
-      "parseKilled": "{{timedOut}} file(s) were skipped for exceeding the time limit and {{crashed}} because the parser stopped. They will be tried again on the next refresh."
+      "parseKilled": "{{timedOut}} file(s) were skipped for exceeding the time limit and {{crashed}} because the parser stopped. They will be tried again on the next refresh.",
+      "modelMissing": "Indexing was skipped because the on-device embedding model has not been downloaded yet. Download it in Settings → AI Models → Document Understanding Model."
     },
     "worker": {
       "unknownFormat": "Unknown file format: {{format}}",
@@ -1154,7 +1156,8 @@
         "unauthorized": "The server rejected the credentials (HTTP {{status}}). Check the API key.",
         "dazziSignIn": "Sign in to your Dazzi account first to use the Dazzi cloud.",
         "consentRequired": "Document text will be sent to a server off this computer. Agree to this, then apply again.",
-        "keyRequired": "This server needs an API key."
+        "keyRequired": "This server needs an API key.",
+        "modelMissing": "The on-device embedding model has not been downloaded yet. Download the model first."
       },
       "reasons": {
         "keywordOnly": "Keyword search only: this source is not embedded either.",
@@ -1188,6 +1191,15 @@
       "noModels": "Your Dazzi plan lists no models.",
       "invalidState": "Invalid sign-in state.",
       "missingCode": "Missing sign-in code."
+    },
+    "modelDownload": {
+      "errors": {
+        "http": "Could not download {{file}}: the server answered HTTP {{status}}.",
+        "checksum": "{{file}} is damaged: the downloaded file did not match its checksum and was deleted. Try again.",
+        "stalled": "The download of {{file}} stalled. Check your network connection and try again.",
+        "network": "Could not download {{file}}: {{message}}",
+        "cancelled": "The download was cancelled. What was downloaded is kept, so it can continue where it stopped."
+      }
     }
   },
   "quickLook": {
@@ -2116,5 +2128,24 @@
       "intervalName": "Check interval",
       "intervalHint": "How often to re-check for file changes."
     }
+  },
+  "modelDownload": {
+    "title": "On-device model",
+    "needed": "To understand documents on this computer, Dazzi needs to download the model once (about {{size}}).",
+    "partial": "{{done}} is already downloaded. It continues where it stopped.",
+    "download": "Download",
+    "resume": "Resume",
+    "cancel": "Cancel",
+    "retry": "Try again",
+    "progressAria": "Model download progress",
+    "percent": "{{percent}}%",
+    "amount": "{{done}} of {{total}}",
+    "file": "Downloading {{file}}",
+    "keepOpen": "Keep Dazzi open until it finishes. If it stops, it can continue where it left off.",
+    "ready": "Model ready",
+    "readyDetail": "The model is on this computer. Your documents never leave it.",
+    "failed": "The download stopped",
+    "indexingTitle": "Downloading the embedding model",
+    "indexingNote": "The first index starts by itself when the download is done."
   }
 }

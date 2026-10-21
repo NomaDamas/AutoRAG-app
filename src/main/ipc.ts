@@ -21,6 +21,8 @@ import type { AppUpdaterService } from "./app-updater";
 import type { ActionService } from "./action-service";
 import type { Analytics } from "./analytics-core";
 import type { IndexActivityService } from "./index-activity";
+import { MODEL_DOWNLOAD_CHANNELS } from "../shared/model-download-contract";
+import type { ModelDownloadService } from "./model-download";
 import { dragOutPaths } from "./drag-out";
 import type { AccountService } from "./account-service";
 import type { OnboardingService } from "./onboarding-service";
@@ -322,6 +324,13 @@ export function registerOsRequestIpcHandlers(service: OsRequestService): void {
 /** The renderer's one read of what is indexing right now; changes are pushed by the main process. */
 export function registerIndexActivityIpcHandlers(service: IndexActivityService): void {
 	ipcMain.handle(INDEX_ACTIVITY_CHANNELS.get, () => service.snapshot());
+}
+
+/** The on-device embedding model's download: a status read, start and cancel; progress is pushed by the main process. */
+export function registerModelDownloadIpcHandlers(service: ModelDownloadService): void {
+	ipcMain.handle(MODEL_DOWNLOAD_CHANNELS.get, () => service.status());
+	ipcMain.handle(MODEL_DOWNLOAD_CHANNELS.start, () => service.start());
+	ipcMain.handle(MODEL_DOWNLOAD_CHANNELS.cancel, () => service.cancel());
 }
 
 /** Self-update: one snapshot read and three user actions; state changes are pushed by the main process. */

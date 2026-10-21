@@ -1092,7 +1092,8 @@
     "onboarding": {
       "apiKeyRequired": "需要 API 密钥。",
       "baseUrlRequired": "需要服务器地址(base URL)。",
-      "indexingFailed": "建立索引失败。"
+      "indexingFailed": "建立索引失败。",
+      "modelDownloadFailed": "由于无法下载本机嵌入模型,无法开始建立索引:{{error}}"
     },
     "lock": {
       "scheduledBusy": "后台刷新正在运行。完成后请重试。",
@@ -1106,7 +1107,8 @@
       "rootUnavailable": "搜索文件夹 {{folder}} 无法读取或为空，已跳过刷新，以免删除已从中建立索引的 {{indexed}} 个文档。请重新连接驱动器或云端文件夹；如不再需要，请将其从搜索文件夹中移除。",
       "retried": "出现临时文件系统错误({{code}}),刷新已重试 {{retries}} 次。",
       "filesLeftOut": "有 {{files}} 个文件持续出现 {{code}} 错误,已从本次刷新中排除,将在下次刷新时重试。",
-      "parseKilled": "有 {{timedOut}} 个文件因超时、{{crashed}} 个文件因解析器中止而被跳过,将在下次刷新时重试。"
+      "parseKilled": "有 {{timedOut}} 个文件因超时、{{crashed}} 个文件因解析器中止而被跳过,将在下次刷新时重试。",
+      "modelMissing": "由于尚未下载本机嵌入模型,已跳过建立索引。请在“设置 → AI 模型 → 文档理解模型”中下载。"
     },
     "worker": {
       "unknownFormat": "未知的文件格式：{{format}}",
@@ -1154,7 +1156,8 @@
         "unauthorized": "服务器拒绝了凭据(HTTP {{status}})。请检查 API 密钥。",
         "dazziSignIn": "要使用 Dazzi 云,请先登录 Dazzi 账户。",
         "consentRequired": "文档内容将发送到本机之外的服务器。请先同意,然后再次应用。",
-        "keyRequired": "此服务器需要 API 密钥。"
+        "keyRequired": "此服务器需要 API 密钥。",
+        "modelMissing": "尚未下载本机嵌入模型。请先下载模型。"
       },
       "reasons": {
         "keywordOnly": "仅使用关键词搜索,因此该数据源也不做嵌入。",
@@ -1188,6 +1191,15 @@
       "noModels": "你的 Dazzi 套餐没有可用的模型。",
       "invalidState": "登录状态值无效。",
       "missingCode": "缺少登录代码。"
+    },
+    "modelDownload": {
+      "errors": {
+        "http": "无法下载 {{file}}:服务器返回了 HTTP {{status}}。",
+        "checksum": "{{file}} 已损坏:下载的文件校验和不匹配,已被删除。请重试。",
+        "stalled": "{{file}} 的下载已停滞。请检查网络连接后重试。",
+        "network": "无法下载 {{file}}:{{message}}",
+        "cancelled": "下载已取消。已下载的部分会保留,可从中断处继续。"
+      }
     }
   },
   "quickLook": {
@@ -2116,5 +2128,24 @@
       "intervalName": "检查间隔",
       "intervalHint": "重新检查文件变化的间隔。"
     }
+  },
+  "modelDownload": {
+    "title": "本机模型",
+    "needed": "要在这台电脑上理解文档,Dazzi 需要先下载一次模型(约 {{size}})。",
+    "partial": "已下载 {{done}}。将从中断处继续。",
+    "download": "下载",
+    "resume": "继续下载",
+    "cancel": "取消",
+    "retry": "重试",
+    "progressAria": "模型下载进度",
+    "percent": "{{percent}}%",
+    "amount": "{{done}} / {{total}}",
+    "file": "正在下载 {{file}}",
+    "keepOpen": "下载完成前请保持 Dazzi 打开。即使中断,也可以从中断处继续。",
+    "ready": "模型已就绪",
+    "readyDetail": "模型已在这台电脑上。你的文档不会离开这台电脑。",
+    "failed": "下载已中断",
+    "indexingTitle": "正在下载嵌入模型",
+    "indexingNote": "下载完成后会自动开始首次建立索引。"
   }
 }

@@ -37,11 +37,8 @@ import { applyIndexingConfig, buildDatasourceEntries } from "./onboarding-config
 import { PROVIDER_ENV_NAME } from "./onboarding-models";
 import { computeIndexingProgress } from "./onboarding-progress";
 import type { ProviderCredentialService } from "./provider-credentials";
-import {
-	minSyncModelCacheRoot,
-	NATIVE_QWEN3_MODEL_BYTES,
-	NATIVE_QWEN3_SAFETENSORS_RELATIVE_PATH,
-} from "./seed-assets";
+import { localEmbeddingModel } from "./embedding-daemon";
+import { minSyncModelCacheRoot, modelFilesPresent, modelTotalBytes, nativeQwen3Spec } from "./model-download";
 
 /**
  * The main-process half of onboarding: everything that touches the OS or the
@@ -89,6 +86,11 @@ export interface OnboardingServiceDeps {
 	readonly configPath: string;
 	readonly resolveWorkspacePath: () => Promise<string>;
 	readonly refresh: (methods?: readonly string[]) => Promise<ConfigRefreshResult>;
+	/**
+	 * Makes sure the on-device embedding model is on this computer, downloading it (with progress, through the
+	 * model download service) when it is not. Resolves null when it is there, else the reason it could not be.
+	 */
+	readonly ensureLocalModel: () => Promise<string | null>;
 	/** Background datasource sync triggered once both onboarding and the local index have completed. */
 	readonly syncDatasources?: (aliases: readonly string[]) => Promise<void>;
 	readonly credentials: ProviderCredentialService;
@@ -618,11 +620,13 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 			const minSync = isJsonObject(raw.minSync) ? raw.minSync : {};
 			const embedder = isJsonObject(minSync.embedder) ? minSync.embedder : {};
 			const cacheRoot = minSyncModelCacheRoot({ platform: deps.platform, home: deps.home, env: deps.env });
+			const spec = nativeQwen3Spec();
 			return {
 				profile: EMBEDDER_ID,
-				modelBytes: NATIVE_QWEN3_MODEL_BYTES,
-				cached: existsSync(join(cacheRoot, NATIVE_QWEN3_SAFETENSORS_RELATIVE_PATH)),
+				modelBytes: modelTotalBytes(spec),
+				cached: modelFilesPresent(cacheRoot, spec),
 				configured: Object.keys(embedder).length > 0,
+				localModel: localEmbeddingModel({ minSync }) !== null,
 			};
 		},
 		detectSources: async () => {
@@ -757,8 +761,18 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 				await tick().catch(() => undefined);
 				finish(ok, error);
 			};
-			refreshPromise = deps
-				.refresh(methods)
+			// The first index embeds on this computer when the config now names the local model: its weights have to be
+			// here first, or `minsync` would fetch them itself without telling anyone how far it got.
+			const needsModel = embedMode !== "none" && localEmbeddingModel(next) !== null;
+			const run = async (): Promise<ConfigRefreshResult> => {
+				const missing = needsModel ? await deps.ensureLocalModel() : null;
+				if (missing !== null) {
+					const error = t("main.onboarding.modelDownloadFailed", { error: missing });
+					return { ok: false, methods, scanned: 0, written: 0, deleted: 0, skipped: 0, diagnostics: [], error };
+				}
+				return deps.refresh(methods);
+			};
+			refreshPromise = run()
 				.then((result) => settle(result.ok, result.error))
 				.catch((error: unknown) => settle(false, error instanceof Error ? error.message : String(error)));
 			return status;

@@ -41,7 +41,8 @@ skips. The cask is not notarization-dependent, but an unsigned dmg still trigger
 
 ## What one installer contains
 
-Everything the app needs, so a user installs one file and nothing else:
+Everything the app needs besides the embedding model (downloaded on demand, see below), so a user
+installs one file and nothing else:
 
 | Component | Source | Notes |
 |---|---|---|
@@ -56,7 +57,16 @@ Everything the app needs, so a user installs one file and nothing else:
 | Kiwi library + base model: **0.24.0 on macOS, 0.22.2 on Windows** | `bab2min/Kiwi` releases `v0.24.0` / `v0.22.2`, pinned by sha256 | MinSync's `multilingual` BM25 tokenizer (the librarian always asks for it) loads these by path; without them every Korean particle form (`환불정책과`) stops matching its stem. Staged to `tools/kiwi/{lib,models}`, and `bundled-tools.ts` sets `KIWI_LIBRARY_PATH`/`KIWI_MODEL_PATH` unless the user set one. **macOS 0.24.0 is Apache-2.0** (the first release that is): LICENSE and NOTICE ship in `tools/licenses/kiwi`. **Windows 0.22.2 is LGPL-2.1-or-later and is shipped unmodified** (the official release assets, never rebuilt or repackaged): LICENSE, `LGPL-2.1.txt` and a `SOURCE.txt` (unmodified statement, asset hashes, source location) ship in `tools/licenses/kiwi`. 0.22.2 on Windows because MinSync 0.4.11 crashed there with 0.23.2 and 0.24.0 (`0xC0000005` in `sync`; checked on a GitHub Windows runner) and works with 0.22.2; `kiwi_config_t` and `kiwi_analyze_option_t` grew in 0.23. Revisit when MinSync's Windows CI moves off 0.22.2 |
 | Everything + ES (Windows only) | the librarian's own `vendor/everything` | the Windows equivalent of fsearch; already inside the app, hash-checked and unpacked on first use |
 | `mailcrawl`, `qmd`, `kordoc` | newest npm release, installed with the bundled Node | native add-ons are fetched for the bundled Node's ABI. `mailcrawl` — the stager refuses it below 0.2.2 — embeds through the daemon's OpenAI route |
-| Qwen3-Embedding-0.6B (native safetensors + tokenizer) | `Qwen/Qwen3-Embedding-0.6B` pinned revision `97b0c614be4d` | hash-checked at build and first-launch seed time |
+
+The embedding model is **not** in the installer. The app downloads the pinned
+`Qwen/Qwen3-Embedding-0.6B` files (~1.2 GB, sha256-verified, resumable) from
+Hugging Face into MinSync's model cache (`~/.cache/minsync/models` on macOS,
+`%LOCALAPPDATA%\minsync\models` on Windows, or `FASTEMBED_CACHE_DIR`) when the
+user chooses local embedding in onboarding or switches to it in Settings
+(`src/main/model-download.ts`), and the embedding daemon does not start until the
+model is present. `stage-tools.mjs` still stages a copy under
+`build/stage/<platform>/verify-model` for `verify-bundle.mjs` only; nothing
+packages it.
 
 "Newest" is resolved at build time, so each release ships current dependencies.
 Three tools carry a hard version floor — `minsync` ≥ 0.4.11, `@nomadamas/mailcrawl`
@@ -77,14 +87,16 @@ does not match its published digest.
 * npm CLIs (`mailcrawl`, `qmd`, `kordoc`) and `autorag` are launched through a tiny
   native launcher (`scripts/release/shim`) that runs the bundled Node. Windows
   cannot spawn a script by name; this makes them real executables on both platforms.
-* On first launch the native Qwen3 embedding model (`Qwen/Qwen3-Embedding-0.6B`)
-  is copied from `resources/seed` into MinSync's native model cache
-  (`~/.cache/minsync/models` on macOS, `%LOCALAPPDATA%\minsync\models` on
-  Windows; `src/main/seed-assets.ts`), never overwriting an existing entry. Every
-  file (`config.json`, `tokenizer.json`, `model.safetensors`, `refs/main`) is
-  verified by SHA-256 while it is copied. A fresh install indexes offline through
-  the `minsync serve` daemon (Metal on macOS, CPU on Windows) without a ~1.2 GB
-  download step.
+* The native Qwen3 embedding model (`Qwen/Qwen3-Embedding-0.6B`) is not bundled.
+  The app downloads it when the user chooses local embedding in onboarding or
+  switches to it in Settings (`src/main/model-download.ts`): the pinned revision
+  (`97b0c614be4d`) and its four files (`config.json`, `tokenizer.json`,
+  `model.safetensors`, `refs/main`), each verified by SHA-256 as it arrives and
+  resumed rather than restarted if the download is interrupted. They land in
+  MinSync's native model cache (`~/.cache/minsync/models` on macOS,
+  `%LOCALAPPDATA%\minsync\models` on Windows, or `FASTEMBED_CACHE_DIR`), never
+  overwriting an existing entry, and the `minsync serve` daemon does not start
+  until the model is present.
 * Once the model is in place the app starts `minsync serve` itself —
   `--idle-timeout 0 --embedder native:Qwen/Qwen3-Embedding-0.6B`, MinSync's own
   loopback embedding server — and stops it at quit (`src/main/embedding-daemon.ts`).
@@ -103,19 +115,20 @@ does not match its published digest.
 
 ### Deliberately not bundled
 
-* `llama.cpp` (`llama-server`) and the `Q8_0` GGUF embedding weights: the local model is served by MinSync's own `minsync serve` daemon (started and stopped by the app) directly on the seeded `Qwen/Qwen3-Embedding-0.6B` safetensors — Metal on macOS, CPU on Windows — so no llama.cpp runtime or GGUF copy ships for embeddings.
+* `llama.cpp` (`llama-server`) and the `Q8_0` GGUF embedding weights: the local model is served by MinSync's own `minsync serve` daemon (started and stopped by the app) directly on the downloaded `Qwen/Qwen3-Embedding-0.6B` safetensors — Metal on macOS, CPU on Windows — so no llama.cpp runtime or GGUF copy ships for embeddings.
 * CUDA builds of `node-llama-cpp` (500 MB, needs an NVIDIA toolkit); CPU and Vulkan are kept. The `node-llama-cpp` that stays is only qmd's own GGUF engine for the Obsidian source; `pruneNativeForPlatform` in `lib.mjs` keeps just the staged platform's backend (Metal on macOS; CPU + Vulkan on Windows) and drops the rest.
 * Other platforms' native add-ons. Intel Macs, Windows on ARM and Linux are not shipped.
 ## Install time
 
-Budget: **5 minutes from running the installer to a usable app, download excluded.** Measured with
-`scripts/release/smoke-installed.mjs`, which installs the real artifact, launches it, waits for the
-embedding model to be in place, and fails above `AUTORAG_INSTALL_BUDGET_SECONDS` (default 300).
+Budget: **5 minutes from running the installer to an installed, launchable app.** The model is not
+bundled and nothing is copied or downloaded at install time, so the budget covers the installer step
+alone. Measured with `scripts/release/smoke-installed.mjs`, which installs the real artifact and fails
+above `AUTORAG_INSTALL_BUDGET_SECONDS` (default 300).
 
-| | installer | launch to model seeded | total |
-|---|---|---|---|
-| macOS (Apple Silicon, this Mac) | 20 s | 3 s | 22 s |
-| Windows 11, Defender real-time protection on (12 cores, NVMe) | 63-68 s (six more bare installs: 66-67 s) | 13-15 s | 77-82 s; one run took 240 s (cause unknown) |
+| | installer |
+|---|---|
+| macOS (Apple Silicon, this Mac) | 20 s |
+| Windows 11, Defender real-time protection on (12 cores, NVMe) | 63-68 s (six more bare installs: 66-67 s); one run took 240 s (cause unknown) |
 
 What made the Windows installer slow, measured on that PC: the installer wrote each of ~46,000 small
 files twice (electron-builder's NSIS template extracts to a temp folder, then `CopyFiles` into the

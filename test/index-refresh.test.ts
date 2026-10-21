@@ -7,12 +7,19 @@ import type * as Librarian from "@autorag/librarian";
 import { existsSync, readFileSync } from "node:fs";
 import { MailcrawlClient } from "@autorag/librarian";
 import { refreshAutoragIndex } from "../src/main/index-refresh";
+import { t } from "../src/shared/i18n/core";
 
 const refresh = vi.hoisted(() => vi.fn());
 const syncMinSync = vi.hoisted(() => vi.fn());
 const batches = vi.hoisted((): Array<number | undefined> => []);
 const excludes = vi.hoisted((): Array<readonly string[]> => []);
 const datasourceConfigs = vi.hoisted((): Array<unknown> => []);
+const modelMissing = vi.hoisted(() => ({ value: false }));
+
+vi.mock("../src/main/embedding-daemon", async (importOriginal) => ({
+	...(await importOriginal<typeof import("../src/main/embedding-daemon")>()),
+	localModelMissing: () => modelMissing.value,
+}));
 
 vi.mock("@autorag/librarian", async (importOriginal) => ({
 	...(await importOriginal<typeof Librarian>()),
@@ -49,6 +56,7 @@ beforeEach(() => {
 	batches.length = 0;
 	excludes.length = 0;
 	datasourceConfigs.length = 0;
+	modelMissing.value = false;
 });
 afterEach(async () => {
 	await Promise.all(directories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
@@ -293,6 +301,32 @@ describe("refreshAutoragIndex against unreliable folders and files", () => {
 
 		expect(outcome).toMatchObject({ ok: false, error: "ENOSPC: no space left on device" });
 		expect(refresh).toHaveBeenCalledOnce();
+	});
+});
+
+describe("refreshAutoragIndex while the on-device model is not downloaded", () => {
+	it("stops with a message that points at the download instead of letting MinSync fetch 1.2 GB itself", async () => {
+		modelMissing.value = true;
+
+		const outcome = await refreshAutoragIndex(await fixture());
+
+		expect(refresh).not.toHaveBeenCalled();
+		expect(outcome.ok).toBe(false);
+		expect(outcome.error).toBe(t("main.refresh.modelMissing"));
+		expect(outcome.diagnostics).toEqual([expect.objectContaining({ code: "embedding-model-missing", severity: "error" })]);
+	});
+
+	it("still refreshes keyword-only, which needs no model", async () => {
+		modelMissing.value = true;
+		refresh.mockResolvedValue({ scanned: 1, written: 1, deleted: 0, skipped: 0, diagnostics: [] });
+		const setup = await fixture();
+		const path = setup.env.AUTORAG_CONFIG as string;
+		await writeFile(path, JSON.stringify({ ...JSON.parse(readFileSync(path, "utf8")), appIndexing: { semanticSearch: false } }));
+
+		const outcome = await refreshAutoragIndex(setup);
+
+		expect(outcome.ok).toBe(true);
+		expect(refresh).toHaveBeenCalled();
 	});
 });
 

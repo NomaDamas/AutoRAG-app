@@ -53,6 +53,8 @@ export interface EmbeddingSettingsDeps {
 	readonly dataSources: DataSourceStatusService;
 	/** Where the embedding API key of the Dazzi cloud and of the user's own server is kept (the OS keyring). */
 	readonly credentials: ProviderCredentialService;
+	/** Whether the on-device model's weights are downloaded; choosing the local profile needs them. */
+	readonly modelReady: () => boolean;
 	/** Test seam for the server probe. */
 	readonly fetchImpl?: typeof fetch;
 }
@@ -316,6 +318,7 @@ export function createEmbeddingSettingsService(deps: EmbeddingSettingsDeps): Emb
 
 	/** What stops this choice before anything is sent or written, or null. */
 	const preflight = async (choice: EmbeddingChoice, request: EmbeddingChangeRequest): Promise<{ readonly error: string | null; readonly key: string | null }> => {
+		if (choice.profile.kind === "local" && !deps.modelReady()) return { error: t("main.embedding.errors.modelMissing"), key: null };
 		if (choice.profile.kind === "dazzi") {
 			const token = await readDazziPlanCredential(deps.env.PI_CODING_AGENT_DIR ?? getAgentDir());
 			if (token === null) return { error: t("main.embedding.errors.dazziSignIn"), key: null };

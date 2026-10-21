@@ -7,6 +7,7 @@ import { createAutoRagConfigService } from "../src/main/autorag-config-service";
 import { createDataSourceStatusService } from "../src/main/datasource-status";
 import { createEmbeddingSettingsService } from "../src/main/embedding-settings-service";
 import type { ProviderCredentialService } from "../src/main/provider-credentials";
+import { t } from "../src/shared/i18n/core";
 import type { DataSourceSyncResult } from "../src/shared/settings-contract";
 
 const directories: string[] = [];
@@ -63,7 +64,7 @@ function fakeCredentials(env: NodeJS.ProcessEnv): { readonly service: ProviderCr
 	return { service, stored };
 }
 
-function buildService(fixture: Fixture, fetchImpl?: typeof fetch) {
+function buildService(fixture: Fixture, fetchImpl?: typeof fetch, modelReady: () => boolean = () => true) {
 	const config = createAutoRagConfigService({ env: fixture.env, cwd: fixture.root });
 	const real = createDataSourceStatusService({ env: fixture.env, cwd: fixture.root });
 	const dataSources = {
@@ -80,6 +81,7 @@ function buildService(fixture: Fixture, fetchImpl?: typeof fetch) {
 		config,
 		dataSources,
 		credentials: credentials.service,
+		modelReady,
 		...(fetchImpl === undefined ? {} : { fetchImpl }),
 	});
 	return { embedding, credentials };
@@ -152,6 +154,30 @@ describe("createEmbeddingSettingsService", () => {
 		expect(mailConnector(config)?.env).toBeUndefined();
 		expect(fixture.synced.sort()).toEqual(["mail", "vault"]);
 		expect(fixture.env.QMD_EMBED_MODEL).toContain("Qwen3-Embedding-0.6B");
+	});
+
+	it("refuses to apply the local server until its model is downloaded, and writes nothing", async () => {
+		const fixture = await createFixture({ mail: { type: "mailcrawl", connector: {} } });
+		const before = await readFile(fixture.configPath, "utf8");
+		let ready = false;
+		const { embedding } = buildService(fixture, undefined, () => ready);
+
+		const refused = await embedding.apply({ profileId: "local" });
+
+		expect(refused).toMatchObject({ ok: false, applied: false });
+		expect(refused.error).toBe(t("main.embedding.errors.modelMissing"));
+		expect(await readFile(fixture.configPath, "utf8")).toBe(before);
+		expect(fixture.synced).toEqual([]);
+
+		ready = true;
+		expect(await embedding.apply({ profileId: "local" })).toMatchObject({ ok: true, applied: true });
+	});
+
+	it("needs no model to go keyword-only or to use a server that is not this computer", async () => {
+		const fixture = await createFixture({});
+		const { embedding } = buildService(fixture, undefined, () => false);
+
+		expect(await embedding.apply({ profileId: "none" })).toMatchObject({ ok: true, applied: true });
 	});
 
 	it("applies Dazzi cloud: needs a signed-in account and consent, probes the hosted route, and stores the plan key as the embedding key", async () => {
