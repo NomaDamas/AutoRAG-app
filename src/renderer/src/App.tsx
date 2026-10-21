@@ -449,7 +449,7 @@ export function App(): ReactElement {
 	);
 
 	/**
-	 * Requests from the OS file menu ("Ask AutoRAG", "Show in AutoRAG"). They are
+	 * Requests from the OS file menu ("Ask AutoRAG", "Show in AutoRAG") and the `dazzi` command. They are
 	 * drained into a ref first: a cold start delivers one before the first pane
 	 * has published its controller, and the effect below runs them once it has.
 	 */
@@ -474,6 +474,12 @@ export function App(): ReactElement {
 		for (const request of osQueueRef.current.splice(0)) {
 			if (request.action === "reveal") {
 				finder.revealEvidence(request.path);
+			} else if (request.action === "open") {
+				// `dazzi <path>...`: a folder gets a tab, a file is shown selected in its folder; the last one ends up in front.
+				for (const target of request.targets) {
+					if (target.kind === "folder") finder.openFolder(target.path);
+					else finder.revealEvidence(target.path);
+				}
 			} else {
 				// Attached as drafts on the nearest AI Search tab: the user types the question.
 				finder.focusAiSearch();

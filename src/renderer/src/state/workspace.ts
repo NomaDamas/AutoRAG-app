@@ -20,6 +20,7 @@ import {
 	focusAiSearchTab,
 	isVirtualTabPath,
 	openAiSearchTab,
+	openOrSelectFolderTab,
 	openTabAt,
 	SETTINGS_PATH,
 	type FinderTab,
@@ -535,6 +536,13 @@ export function openOrSelectSettingsInWorkspace(ws: Workspace): Workspace {
 	const existing = allTabs(ws).find((tab) => tab.path === SETTINGS_PATH);
 	if (existing !== undefined) return focusTab(ws, existing.id);
 	return updatePaneTabs(ws, ws.focusedPaneId, (state) => openTabAt(state, SETTINGS_PATH));
+}
+
+/** `dazzi <folder>`: the tab showing the folder wherever it is, else a new tab in the focused pane. */
+export function openOrSelectFolderInWorkspace(ws: Workspace, path: string): Workspace {
+	const existing = allTabs(ws).find((tab) => tab.path === path);
+	if (existing !== undefined) return focusTab(ws, existing.id);
+	return updatePaneTabs(ws, ws.focusedPaneId, (state) => openOrSelectFolderTab(state, path));
 }
 
 /**

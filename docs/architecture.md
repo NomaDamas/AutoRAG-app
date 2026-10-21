@@ -600,6 +600,45 @@ while the setting is on, and switching it off removes exactly the entries it
 wrote (macOS workflows are recognized by their `com.autorag.app.service.`
 bundle identifier). A failed install rejects the toggle instead of saving it.
 
+## The `dazzi` command
+
+Installing the app also installs a terminal command, the way `open` hands a
+folder to Finder:
+
+```sh
+dazzi ~/Documents/project      # a folder opens in a tab (the tab that already shows it is reused)
+dazzi report.pdf notes/        # a file is shown selected in its folder; several paths at once
+dazzi                          # bring Dazzi to the front
+```
+
+Relative paths, `.` and `..` resolve against the caller's directory. A path that
+does not exist is reported like `open` does (`dazzi: nope: No such file or
+directory`), the ones that exist still open, and the exit status is 1. At most 200
+paths per call (the request limit in `src/shared/os-request-contract.ts`); more is
+an error rather than a silent cut.
+
+The launcher is a script that ships inside the app (`build/cli/dazzi` →
+`Dazzi.app/Contents/Resources/bin/dazzi`; `dazzi.cmd` in `resources\bin` on
+Windows). It sends the same request the right-click menu does, with the action
+`open`: `--autorag-request=open` plus one `--autorag-path=` per item. A running
+app receives it over the profile's local socket (`os-request-channel.ts`) and the
+launcher exits; with no app running the launcher process becomes the app, detached
+from the terminal. `DAZZI_USER_DATA_DIR` aims a call at another profile.
+
+`src/main/cli-install.ts` puts the launcher where a shell finds it, on every start
+of a packaged app, per user and without elevation:
+
+| OS | What it does |
+| --- | --- |
+| macOS | Symlinks `dazzi` into the first of `/opt/homebrew/bin`, `/usr/local/bin` (only if they exist and are writable) or `~/.local/bin` (created). `~/.local/bin` is added to `PATH` through the login-shell profile (`.zprofile`, `.bash_profile`, else `.profile`) in one marked `>>> dazzi CLI >>>` block. A link it made earlier is repointed when the app moves; a `dazzi` that is not its own link is never replaced. |
+| Windows | Appends `resources\bin` to the user `Path` (`HKCU\Environment`, kept `REG_EXPAND_SZ`) and announces the change, so new terminals see it without signing out. |
+| Linux | Not shipped. |
+
+The Homebrew cask also declares the launcher as a `binary`, so `brew install
+--cask` links it into Homebrew's bin before the app ever starts. In the renderer
+`open` is handled in `App.tsx`: a folder goes through `openOrSelectFolderInWorkspace`
+(`state/workspace.ts`), a file through the evidence-reveal path.
+
 ## Services in Dazzi's own right-click menu (macOS)
 
 The reverse direction: right-click a row (or the empty space of a folder) in

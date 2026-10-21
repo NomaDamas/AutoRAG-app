@@ -67,6 +67,8 @@ const config = {
 		"!**/node_modules/**/{README*,readme*,CHANGELOG*,HISTORY*,CONTRIBUTING*,*.markdown,*.d.ts,*.d.mts,*.d.cts,*.tsbuildinfo}",
 	],
 	extraResources: [
+		// The `dazzi` command line launcher (build/cli); the app links it into a PATH directory on start.
+		{ from: join(root, "build", "cli"), to: "bin", filter: [platformId.startsWith("win32") ? "dazzi.cmd" : "dazzi"] },
 		{ from: join(stage, "tools"), to: "tools", filter: ["**/*"] },
 		{ from: join(stage, "seed"), to: "seed", filter: ["**/*"] },
 	],

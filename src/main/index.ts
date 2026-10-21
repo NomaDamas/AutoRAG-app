@@ -94,6 +94,7 @@ import { OS_REQUEST_CHANNELS, parseOsRequestArgv } from "../shared/os-request-co
 import { listenForOsRequests, osRequestEndpoint, sendOsRequest } from "./os-request-channel";
 import { createOsRequestService, diskKindOf } from "./os-request-service";
 import { createOsMenuIntegration, menuLabels } from "./os-menu-integration";
+import { installCli } from "./cli-install";
 import { initErrorReporting, setErrorReportingEnabled } from "./error-reporting";
 import { createStallDetector, readErrorReportingEnabled, refreshFailureReport, reportError } from "./error-report-core";
 import { createAnalytics, createInstallIdStore, readUsageAnalyticsEnabled, resolveAnalyticsTarget, settingChangeEvents } from "./analytics-core";
@@ -392,6 +393,19 @@ app.whenReady().then(async () => {
 		},
 		(error: unknown) => console.error("[autorag] seeding the embedding model failed; it will be downloaded on first use:", error),
 	);
+	// The `dazzi` command ships in the app; every start puts (or repairs) it where a terminal finds it.
+	if (app.isPackaged) {
+		void installCli({
+			platform: process.platform,
+			homeDir: homedir(),
+			bundledBinDir: join(process.resourcesPath, "bin"),
+			shell: process.env.SHELL,
+			run: async (command, args) => (await execFileAsync(command, [...args], { windowsHide: true })).stdout,
+		}).then(
+			(result) => console.log(`[cli] ${JSON.stringify(result)}`),
+			(error: unknown) => console.error("[cli] installing the dazzi command failed:", error),
+		);
+	}
 	await ensureAutoRAGConfig();
 	const devLabel = resolveDevLabel();
 	console.log(`[autorag] ${formatWindowTitle(APP_FULL_NAME, APP_VERSION, devLabel)}`);

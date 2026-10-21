@@ -10,6 +10,10 @@ describe("Homebrew cask render", () => {
 		expect(cask).toContain(`sha256 arm: "${sha}"`);
 	});
 
+	it("links the dazzi command into Homebrew's bin, from the launcher inside the app", () => {
+		expect(renderCask("v1.2.3", sha)).toContain('binary "#{appdir}/Dazzi.app/Contents/Resources/bin/dazzi"');
+	});
+
 	it("refuses pre-release tags and malformed digests so a bad cask is never pushed", () => {
 		expect(() => renderCask("v1.2.3-rc.1", sha)).toThrow(/stable/);
 		expect(() => renderCask("v1.2.3", "abc")).toThrow(/sha256/);

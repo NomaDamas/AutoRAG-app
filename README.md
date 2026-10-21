@@ -95,7 +95,8 @@ live as other apps change them.
 
 **And more:** hybrid keyword + meaning search reordered by a reranker ·
 scheduled re-indexing that runs even while the app is closed · *Ask Dazzi* in
-the Finder and Explorer right-click menu · light and dark mode · Korean,
+the Finder and Explorer right-click menu · a `dazzi <folder>` command for the
+terminal, installed with the app · light and dark mode · Korean,
 English, Japanese and Simplified Chinese.
 
 ### Every place, one search
