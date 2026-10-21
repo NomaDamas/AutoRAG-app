@@ -1128,26 +1128,33 @@
           "label": "Off (keyword search only)",
           "description": "Documents are not embedded; only keyword search is used. No model download or embedding time, and semantic and hybrid search are off."
         },
-        "nativeQwen3": {
-          "description": "The default document-understanding model (1024 dimensions). The MinSync embedding server Dazzi runs serves it on this machine; nothing else to install."
+        "local": {
+          "label": "This computer (MinSync local server)",
+          "description": "Dazzi runs the MinSync embedding server on this computer while it is open. Documents never leave this computer."
         },
-        "localServer": {
-          "label": "My computer's embedding server",
-          "description": "Use an OpenAI-compatible embedding server running on loopback. Specify the model, dimensions, and prefixes yourself."
+        "dazzi": {
+          "label": "Dazzi cloud",
+          "description": "Uses the hosted embedding with your Dazzi account. Requires sign-in, and document text is sent to Dazzi's servers."
+        },
+        "byok": {
+          "label": "My own server (OpenAI / TEI compatible)",
+          "description": "Uses an embedding server you run or pay for. Enter its address and API key; if it is off this computer, document text is sent to it."
         }
       },
       "errors": {
-        "modelNameEmpty": "The embedding server model name is empty.",
-        "dimensionPositive": "The embedding server dimension must be a positive integer.",
         "badUrl": "The embedding server address is not a valid URL.",
-        "loopbackOnly": "The embedding server must be a loopback address (documents never leave this Mac).",
         "unknownProfile": "Unknown embedding profile: {{id}}",
-        "localServerRequired": "Embedding server details (id, baseUrl, dimension) are required.",
         "httpStatus": "The embedding server responded with HTTP {{status}}.",
         "badJson": "Could not read the embedding server response as JSON.",
         "noVector": "The embedding server did not return a vector.",
         "dimensionMismatch": "The embedding server dimension is {{actual}}, but {{expected}} was specified.",
-        "incompatibleSources": "Some data sources cannot follow this model: {{ids}}"
+        "incompatibleSources": "Some data sources cannot follow this model: {{ids}}",
+        "serverRequired": "A server address is required.",
+        "badProtocol": "The server type must be OpenAI or TEI.",
+        "unauthorized": "The server rejected the credentials (HTTP {{status}}). Check the API key.",
+        "dazziSignIn": "Sign in to your Dazzi account first to use the Dazzi cloud.",
+        "consentRequired": "Document text will be sent to a server off this computer. Agree to this, then apply again.",
+        "keyRequired": "This server needs an API key."
       },
       "reasons": {
         "keywordOnly": "Keyword search only: this source is not embedded either.",
@@ -1723,17 +1730,10 @@
       "defaultValue": "Default"
     },
     "embedding": {
-      "errorModelRequired": "Enter the embedding server model name.",
-      "errorDimension": "The embedding server dimension must be a positive integer.",
       "title": "Document Understanding Model",
-      "hint": "Analyzes the meaning of documents. Document content stays on this Mac unless you chose cloud embedding.",
-      "body": "The embedding model that analyzes document meaning. You can only choose the Dazzi runtime or your local server here; document content leaves this Mac only if you chose cloud embedding during setup.",
+      "hint": "Analyzes the meaning of documents. If you pick this computer, documents never leave it.",
+      "body": "Choose where the embedding model that analyzes document meaning runs. The model is fixed to Qwen3 Embedding 0.6B, and any choice that sends document text off this computer needs your consent.",
       "dimension": "{{count}}d",
-      "modelName": "Model Name",
-      "baseUrl": "Server URL",
-      "dimensionLabel": "Dimension",
-      "modelPlaceholder": "e.g. nomic-embed-text",
-      "dimensionPlaceholder": "e.g. 768",
       "incompatibleNote": "{{count}} data sources are incompatible with this profile. If you continue, those sources stay as they are and only the rest change.",
       "acknowledge": "Also apply to incompatible sources",
       "applied": "Applied.",
@@ -1741,7 +1741,18 @@
       "written": "config {{count}} entries recorded",
       "rebuild": "{{count}} sources reindexed",
       "preview": "Review Plan",
-      "apply": "Apply"
+      "apply": "Apply",
+      "dimensionFixed": "Model: Qwen3 Embedding 0.6B (1024 dimensions). The model cannot be changed.",
+      "serverUrl": "Server address",
+      "serverUrlPlaceholder": "https://embed.example.com",
+      "serverType": "Server type",
+      "typeOpenai": "OpenAI compatible (/v1/embeddings)",
+      "typeTei": "TEI (/embed)",
+      "apiKey": "API key",
+      "apiKeyPlaceholder": "Leave empty to use the stored key",
+      "apiKeyHint": "The key is stored in this Mac's secure keychain and never written to the config file.",
+      "consentRemote": "I agree that document text is sent to a server off this computer",
+      "signInNote": "The Dazzi cloud needs a Dazzi account sign-in. Sign in from the account settings first."
     },
     "language": {
       "remove": "Remove {{name}}",

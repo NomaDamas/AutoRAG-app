@@ -342,7 +342,8 @@ export interface ProviderCredentialStatus {
 	readonly source: "stored" | "env" | "none";
 }
 
-export type EmbeddingProfileKind = "none" | "native" | "local-server";
+/** keyword-only, the local MinSync server, the Dazzi cloud, or the user's own server. */
+export type EmbeddingProfileKind = "none" | "local" | "dazzi" | "byok";
 
 /** One selectable embedding runtime profile, in the order the settings screen offers them. */
 export interface EmbeddingProfile {
@@ -355,7 +356,6 @@ export interface EmbeddingProfile {
 	readonly queryPrefix: string;
 	readonly passagePrefix: string;
 	readonly baseUrl: string | null;
-	readonly requiresLocalServer: boolean;
 }
 
 /** How one configured datasource adopts the selected global embedding profile. */
@@ -381,16 +381,23 @@ export interface EmbeddingSettingsSnapshot {
 	readonly sources: readonly EmbeddingSourceStatus[];
 }
 
+/**
+ * The user's own embedding server for the `byok` profile. The model is fixed (Qwen3-Embedding-0.6B, 1024
+ * dimensions), so there is no model or dimension here: the server is probed for real vectors of that size.
+ */
+export interface ByokEmbeddingServer {
+	readonly baseUrl: string;
+	readonly protocol: "openai" | "tei";
+	/** Stored in the OS keyring, never in the config. Optional for a loopback server and when a key is already stored. */
+	readonly apiKey?: string;
+}
+
 export interface EmbeddingChangeRequest {
 	readonly profileId: string;
-	readonly localServer?: {
-		readonly id: string;
-		readonly baseUrl: string;
-		readonly dimension: number;
-		readonly queryPrefix?: string;
-		readonly passagePrefix?: string;
-	};
+	readonly byok?: ByokEmbeddingServer;
 	readonly acknowledgeIncompatible?: boolean;
+	/** The user agreed that document text is sent to a server off this computer (`dazzi`, `byok`). */
+	readonly acknowledgeRemote?: boolean;
 }
 
 export interface EmbeddingChangeResult {

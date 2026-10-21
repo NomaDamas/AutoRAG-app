@@ -4,11 +4,16 @@ import type { AutoRagConfigService } from "./autorag-config-service";
 import type { DataSourceStatusService } from "./datasource-status";
 import type { EmbeddingSettingsService } from "./settings-service";
 import { ensureEmbeddingForConfig } from "./embedding-daemon";
+import { readDazziPlanCredential } from "./dazzi-plan-credential";
+import type { ProviderCredentialService } from "./provider-credentials";
+import { getAgentDir } from "@earendil-works/pi-coding-agent";
+import { DEFAULT_ACCOUNT_BASE_URL } from "../shared/account-contract";
 import { isJsonObject } from "../shared/settings-contract";
 import { readAppIndexing } from "./app-indexing";
 import { t } from "../shared/i18n/core";
 import type {
 	AutoRagConfigUpdate,
+	ByokEmbeddingServer,
 	DataSourceRow,
 	DataSourceSyncResult,
 	EmbeddingAdoption,
@@ -46,21 +51,26 @@ export interface EmbeddingSettingsDeps {
 	readonly cwd: string;
 	readonly config: AutoRagConfigService;
 	readonly dataSources: DataSourceStatusService;
-	/** Test seam for the local-server probe. */
+	/** Where the embedding API key of the Dazzi cloud and of the user's own server is kept (the OS keyring). */
+	readonly credentials: ProviderCredentialService;
+	/** Test seam for the server probe. */
 	readonly fetchImpl?: typeof fetch;
 }
 
-interface LocalServer {
-	readonly id: string;
-	readonly baseUrl: string;
-	readonly dimension: number;
-	readonly queryPrefix?: string;
-	readonly passagePrefix?: string;
-}
+/** The model is fixed: Qwen3-Embedding-0.6B at 1024 dimensions, whichever server runs it. Changing it is not offered. */
+const MODEL = "Qwen/Qwen3-Embedding-0.6B";
+const DIMENSION = 1024;
+const LOCAL_ID = `native:${MODEL}`;
+/** The hosted model the Dazzi cloud serves for the same Qwen3-Embedding-0.6B. */
+const DAZZI_MODEL = "qwen/qwen3-embedding-0.6b";
+const DAZZI_KEY_ENV = "OPENAI_API_KEY";
+const BYOK_KEY_ENV = "AUTORAG_EMBEDDING_API_KEY";
+const PROBE_TIMEOUT_MS = 30_000;
 
+/** A choice resolved from a request: the profile, and for the user's own server the validated server. */
 interface EmbeddingChoice {
 	readonly profile: EmbeddingProfile;
-	readonly localServer?: LocalServer;
+	readonly byok?: ByokEmbeddingServer;
 }
 
 /** Keyword-only search: nothing is embedded (`appIndexing.semanticSearch: false`). */
@@ -73,11 +83,12 @@ const LOOPBACK_HOSTS: Record<string, true> = { localhost: true, "127.0.0.1": tru
 const SIDECAR_TEMPLATES: Record<string, true> = { kakao: true, slack: true, telegram: true, whatsapp: true };
 
 /**
- * The global embedder choices. The local model MinSync serves and a local
- * server are the only sources the prototype lists; corpus text never goes to a
- * remote embedder from here.
+ * The embedding choices. The model is the same in all of them (Qwen3-Embedding-0.6B, 1024 dimensions); what
+ * differs is where it runs: nowhere (keyword-only), on this computer through MinSync, in the Dazzi cloud, or on
+ * a server the user runs or pays for.
  */
 export function embeddingProfiles(): readonly EmbeddingProfile[] {
+	const fixed = { model: MODEL, dimension: DIMENSION, queryPrefix: "", passagePrefix: "" } as const;
 	return [
 		{
 			id: NONE_PROFILE_ID,
@@ -89,32 +100,10 @@ export function embeddingProfiles(): readonly EmbeddingProfile[] {
 			queryPrefix: "",
 			passagePrefix: "",
 			baseUrl: null,
-			requiresLocalServer: false,
 		},
-		{
-			id: "native-qwen3",
-			kind: "native",
-			label: "Qwen3 Embedding 0.6B",
-			description: t("main.embedding.profiles.nativeQwen3.description"),
-			model: "native:Qwen/Qwen3-Embedding-0.6B",
-			dimension: 1024,
-			queryPrefix: "",
-			passagePrefix: "",
-			baseUrl: null,
-			requiresLocalServer: false,
-		},
-		{
-			id: "local-server",
-			kind: "local-server",
-			label: t("main.embedding.profiles.localServer.label"),
-			description: t("main.embedding.profiles.localServer.description"),
-			model: "",
-			dimension: 0,
-			queryPrefix: "",
-			passagePrefix: "",
-			baseUrl: null,
-			requiresLocalServer: true,
-		},
+		{ id: "local", kind: "local", label: t("main.embedding.profiles.local.label"), description: t("main.embedding.profiles.local.description"), baseUrl: null, ...fixed },
+		{ id: "dazzi", kind: "dazzi", label: t("main.embedding.profiles.dazzi.label"), description: t("main.embedding.profiles.dazzi.description"), baseUrl: DEFAULT_ACCOUNT_BASE_URL, ...fixed },
+		{ id: "byok", kind: "byok", label: t("main.embedding.profiles.byok.label"), description: t("main.embedding.profiles.byok.description"), baseUrl: null, ...fixed },
 	];
 }
 
@@ -122,55 +111,73 @@ function findProfile(profileId: string): EmbeddingProfile | undefined {
 	return embeddingProfiles().find((profile) => profile.id === profileId);
 }
 
-function assertLocalServer(local: LocalServer): void {
-	if (local.id.trim().length === 0) throw new Error(t("main.embedding.errors.modelNameEmpty"));
-	if (!Number.isInteger(local.dimension) || local.dimension <= 0) throw new Error(t("main.embedding.errors.dimensionPositive"));
-	let host: string;
+function isLoopbackUrl(value: string): boolean {
 	try {
-		host = new URL(local.baseUrl).hostname.toLowerCase();
+		return LOOPBACK_HOSTS[new URL(value).hostname.toLowerCase()] === true;
 	} catch {
-		throw new Error(t("main.embedding.errors.badUrl"));
+		return false;
 	}
-	if (LOOPBACK_HOSTS[host] !== true) throw new Error(t("main.embedding.errors.loopbackOnly"));
 }
 
-/** The `minSync.embedder` value the shared config should hold for a choice. */
-function deriveEmbedder(choice: EmbeddingChoice): JsonObject {
-	const { profile } = choice;
-	if (profile.kind === "local-server" && choice.localServer !== undefined) {
-		const local = choice.localServer;
-		return {
-			id: local.id,
-			baseUrl: local.baseUrl,
-			dimension: local.dimension,
-			...(local.queryPrefix !== undefined && local.queryPrefix.length > 0 ? { queryPrefix: local.queryPrefix } : {}),
-			...(local.passagePrefix !== undefined && local.passagePrefix.length > 0 ? { passagePrefix: local.passagePrefix } : {}),
-		};
+/** The user's own server, or the reason it cannot be used. */
+function checkByok(server: ByokEmbeddingServer | undefined): string | null {
+	if (server === undefined) return t("main.embedding.errors.serverRequired");
+	let url: URL;
+	try {
+		url = new URL(server.baseUrl);
+	} catch {
+		return t("main.embedding.errors.badUrl");
 	}
-	return { id: profile.model, dimension: profile.dimension };
-}
-
-function currentProfileId(embedder: unknown, semantic: boolean): string | null {
-	if (!semantic) return NONE_PROFILE_ID;
-	if (!isJsonObject(embedder)) return null;
-	const id = embedder.id;
-	if (typeof id === "string") {
-		if (id.startsWith("native:")) return "native-qwen3";
-		if (typeof embedder.baseUrl === "string" && embedder.baseUrl.length > 0) {
-			try {
-				const host = new URL(embedder.baseUrl).hostname.toLowerCase();
-				if (LOOPBACK_HOSTS[host] === true) return "local-server";
-			} catch {
-				return null;
-			}
-		}
-	}
+	if (url.protocol !== "http:" && url.protocol !== "https:") return t("main.embedding.errors.badUrl");
+	if (server.protocol !== "openai" && server.protocol !== "tei") return t("main.embedding.errors.badProtocol");
 	return null;
 }
 
-/** The qmd `QMD_EMBED_MODEL` GGUF URI for the choice, or null when qmd cannot use it. qmd runs its own GGUF engine. */
+/** The base URL as the config stores it: no trailing slash, and no `/v1` the route adds itself. */
+function normalizeBaseUrl(value: string): string {
+	return value.trim().replace(/\/+$/u, "").replace(/\/v1$/u, "");
+}
+
+/** The `minSync.embedder` value the shared config should hold for a choice. */
+function deriveEmbedder(choice: EmbeddingChoice, accountBaseUrl: string): JsonObject {
+	switch (choice.profile.kind) {
+		case "dazzi":
+			return { id: `openai:${DAZZI_MODEL}`, baseUrl: accountBaseUrl, dimension: DIMENSION, apiKeyEnv: DAZZI_KEY_ENV };
+		case "byok": {
+			const server = choice.byok;
+			if (server === undefined) return { id: LOCAL_ID, dimension: DIMENSION };
+			return {
+				id: `${server.protocol}:${MODEL}`,
+				baseUrl: normalizeBaseUrl(server.baseUrl),
+				dimension: DIMENSION,
+				...(isLoopbackUrl(server.baseUrl) && server.apiKey === undefined ? {} : { apiKeyEnv: BYOK_KEY_ENV }),
+			};
+		}
+		default:
+			return { id: LOCAL_ID, dimension: DIMENSION };
+	}
+}
+
+/** Which profile the stored `minSync.embedder` is. A server the config names that is not the Dazzi cloud is the user's own. */
+function currentProfileId(embedder: unknown, semantic: boolean, accountBaseUrl: string): string | null {
+	if (!semantic) return NONE_PROFILE_ID;
+	if (!isJsonObject(embedder)) return null;
+	if (embedder.profile !== undefined && embedder.id === undefined) return "local";
+	const id = typeof embedder.id === "string" ? embedder.id : "";
+	const baseUrl = typeof embedder.baseUrl === "string" ? embedder.baseUrl : "";
+	if (baseUrl.length === 0) return id.startsWith("native:") ? "local" : null;
+	try {
+		const host = new URL(baseUrl).hostname.toLowerCase();
+		if (host === new URL(accountBaseUrl).hostname.toLowerCase() && id.startsWith("openai:")) return "dazzi";
+	} catch {
+		return null;
+	}
+	return "byok";
+}
+
+/** The qmd `QMD_EMBED_MODEL` GGUF URI for the choice. qmd runs its own GGUF engine of the same model and cannot use a server. */
 function qmdModelFor(choice: EmbeddingChoice): string | null {
-	return choice.profile.id === "native-qwen3" ? QWEN3_GGUF : null;
+	return choice.profile.kind === "local" ? QWEN3_GGUF : null;
 }
 
 function adoptionFor(type: string, choice: EmbeddingChoice): { adoption: EmbeddingAdoption; reason: string; action: string | null } {
@@ -232,23 +239,6 @@ function readSemantic(env: NodeJS.ProcessEnv, cwd: string): boolean {
 	if (!existsSync(path)) return true;
 	return readAppIndexing(readRawConfigObject(path)).semanticSearch;
 }
-/** Rebuild a choice from the persisted embedder so `get` can plan without a request. */
-function findChoiceFromConfig(embedder: unknown, profileId: string): EmbeddingChoice | undefined {
-	const profile = findProfile(profileId);
-	if (profile === undefined) return undefined;
-	if (profile.kind !== "local-server" || !isJsonObject(embedder)) return { profile };
-	if (typeof embedder.id !== "string" || typeof embedder.baseUrl !== "string" || typeof embedder.dimension !== "number") return undefined;
-	return {
-		profile,
-		localServer: {
-			id: embedder.id,
-			baseUrl: embedder.baseUrl,
-			dimension: embedder.dimension,
-			...(typeof embedder.queryPrefix === "string" ? { queryPrefix: embedder.queryPrefix } : {}),
-			...(typeof embedder.passagePrefix === "string" ? { passagePrefix: embedder.passagePrefix } : {}),
-		},
-	};
-}
 
 function qmdModelForConfig(embedder: unknown): string | null {
 	return isJsonObject(embedder) && typeof embedder.id === "string" && embedder.id.startsWith("native:") ? QWEN3_GGUF : null;
@@ -264,33 +254,53 @@ export function createEmbeddingSettingsService(deps: EmbeddingSettingsDeps): Emb
 	const doFetch = deps.fetchImpl ?? fetch;
 
 	const configPath = (): string => resolveConfigPath({ flags: {}, env: deps.env, cwd: deps.cwd }).configPath;
+	const accountBaseUrl = (): string => {
+		const configured = deps.env.AUTORAG_BASE_URL?.trim();
+		return (configured !== undefined && configured.length > 0 ? configured : DEFAULT_ACCOUNT_BASE_URL).replace(/\/+$/u, "");
+	};
 
 	const resolveChoice = (request: EmbeddingChangeRequest): { choice: EmbeddingChoice } | { error: string } => {
 		const profile = findProfile(request.profileId);
 		if (profile === undefined) return { error: t("main.embedding.errors.unknownProfile", { id: request.profileId }) };
-		if (!profile.requiresLocalServer) return { choice: { profile } };
-		const local = request.localServer;
-		if (local === undefined) return { error: t("main.embedding.errors.localServerRequired") };
-		try {
-			assertLocalServer(local);
-		} catch (error) {
-			return { error: error instanceof Error ? error.message : String(error) };
-		}
-		return { choice: { profile, localServer: local } };
+		if (profile.kind !== "byok") return { choice: { profile } };
+		const problem = checkByok(request.byok);
+		if (problem !== null || request.byok === undefined) return { error: problem ?? t("main.embedding.errors.serverRequired") };
+		return { choice: { profile, byok: request.byok } };
 	};
 
-	/** Probe the real upstream for a vector of the declared dimension; never fabricate. */
-	const probeLocalServer = async (local: LocalServer): Promise<string | null> => {
+	/** The key a request would send: what the user typed, else the one already stored for this slot. */
+	const keyFor = (choice: EmbeddingChoice, token: string | null): { readonly env: string | null; readonly value: string | null } => {
+		if (choice.profile.kind === "dazzi") return { env: DAZZI_KEY_ENV, value: token };
+		if (choice.profile.kind !== "byok") return { env: null, value: null };
+		return { env: BYOK_KEY_ENV, value: choice.byok?.apiKey ?? deps.env[BYOK_KEY_ENV] ?? null };
+	};
+
+	/** True when sending document text to this choice leaves the computer. */
+	const isRemote = (choice: EmbeddingChoice): boolean => choice.profile.kind === "dazzi" || (choice.profile.kind === "byok" && choice.byok !== undefined && !isLoopbackUrl(choice.byok.baseUrl));
+
+	/**
+	 * Ask the real server for one Qwen3 vector and check its size. Nothing is invented: any other answer is
+	 * reported with what the server said.
+	 */
+	const probe = async (choice: EmbeddingChoice, key: string | null): Promise<string | null> => {
+		const dazzi = choice.profile.kind === "dazzi";
+		const server = choice.byok;
+		const protocol = dazzi ? "openai" : (server?.protocol ?? "openai");
+		const root = dazzi ? accountBaseUrl() : normalizeBaseUrl(server?.baseUrl ?? "");
+		const model = dazzi ? DAZZI_MODEL : MODEL;
+		const url = protocol === "tei" ? `${root}/embed` : `${root}/v1/embeddings`;
 		let response: Response;
 		try {
-			response = await doFetch(`${local.baseUrl.replace(/\/+$/u, "")}/v1/embeddings`, {
+			response = await doFetch(url, {
 				method: "POST",
-				headers: { "content-type": "application/json" },
-				body: JSON.stringify({ model: local.id, input: ["ping"] }),
+				headers: { "content-type": "application/json", ...(key === null ? {} : { authorization: `Bearer ${key}` }) },
+				body: JSON.stringify(protocol === "tei" ? { inputs: ["ping"] } : { model, input: ["ping"] }),
+				signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
 			});
 		} catch (error) {
 			return error instanceof Error ? error.message : String(error);
 		}
+		if (response.status === 401 || response.status === 403) return t("main.embedding.errors.unauthorized", { status: response.status });
 		if (!response.ok) return t("main.embedding.errors.httpStatus", { status: response.status });
 		let parsed: unknown;
 		try {
@@ -298,15 +308,27 @@ export function createEmbeddingSettingsService(deps: EmbeddingSettingsDeps): Emb
 		} catch {
 			return t("main.embedding.errors.badJson");
 		}
-		const first = isJsonObject(parsed) && Array.isArray(parsed.data) ? parsed.data[0] : undefined;
-		const embedding = isJsonObject(first) ? first.embedding : undefined;
-		if (!Array.isArray(embedding) || embedding.some((value) => typeof value !== "number")) {
-			return t("main.embedding.errors.noVector");
-		}
-		if (embedding.length !== local.dimension) {
-			return t("main.embedding.errors.dimensionMismatch", { actual: embedding.length, expected: local.dimension });
-		}
+		const first = protocol === "tei" ? (Array.isArray(parsed) ? parsed[0] : undefined) : isJsonObject(parsed) && Array.isArray(parsed.data) && isJsonObject(parsed.data[0]) ? parsed.data[0].embedding : undefined;
+		if (!Array.isArray(first) || first.some((value) => typeof value !== "number")) return t("main.embedding.errors.noVector");
+		if (first.length !== DIMENSION) return t("main.embedding.errors.dimensionMismatch", { actual: first.length, expected: DIMENSION });
 		return null;
+	};
+
+	/** What stops this choice before anything is sent or written, or null. */
+	const preflight = async (choice: EmbeddingChoice, request: EmbeddingChangeRequest): Promise<{ readonly error: string | null; readonly key: string | null }> => {
+		if (choice.profile.kind === "dazzi") {
+			const token = await readDazziPlanCredential(deps.env.PI_CODING_AGENT_DIR ?? getAgentDir());
+			if (token === null) return { error: t("main.embedding.errors.dazziSignIn"), key: null };
+			if (request.acknowledgeRemote !== true) return { error: t("main.embedding.errors.consentRequired"), key: token };
+			return { error: await probe(choice, token), key: token };
+		}
+		if (choice.profile.kind === "byok") {
+			if (isRemote(choice) && request.acknowledgeRemote !== true) return { error: t("main.embedding.errors.consentRequired"), key: null };
+			const { value } = keyFor(choice, null);
+			if (isRemote(choice) && value === null) return { error: t("main.embedding.errors.keyRequired"), key: null };
+			return { error: await probe(choice, value), key: value };
+		}
+		return { error: null, key: null };
 	};
 
 	/** Plan result as a snapshot: `current` previews the requested profile, `sources` its adoption. */
@@ -316,7 +338,7 @@ export function createEmbeddingSettingsService(deps: EmbeddingSettingsDeps): Emb
 			configPath: path,
 			configExists: existsSync(path),
 			error,
-			current: { profileId: choice.profile.id, embedder: choice.profile.kind === "none" ? asJsonObject(readEmbedder(deps.env, deps.cwd)) : deriveEmbedder(choice) },
+			current: { profileId: choice.profile.id, embedder: choice.profile.kind === "none" ? asJsonObject(readEmbedder(deps.env, deps.cwd)) : deriveEmbedder(choice, accountBaseUrl()) },
 			profiles: embeddingProfiles(),
 			sources: [],
 		};
@@ -329,7 +351,7 @@ export function createEmbeddingSettingsService(deps: EmbeddingSettingsDeps): Emb
 		get: async () => {
 			const path = configPath();
 			const embedder = readEmbedder(deps.env, deps.cwd);
-			const profileId = currentProfileId(embedder, readSemantic(deps.env, deps.cwd));
+			const profileId = currentProfileId(embedder, readSemantic(deps.env, deps.cwd), accountBaseUrl());
 			const base: EmbeddingSettingsSnapshot = {
 				configPath: path,
 				configExists: existsSync(path),
@@ -340,9 +362,8 @@ export function createEmbeddingSettingsService(deps: EmbeddingSettingsDeps): Emb
 			};
 			const sources = await deps.dataSources.list();
 			if (sources.error !== null) return { ...base, error: sources.error };
-			const choice = profileId === null ? undefined : findChoiceFromConfig(embedder, profileId);
-			if (choice === undefined) return base;
-			return { ...base, sources: buildPlan(sources.sources, choice) };
+			const profile = profileId === null ? undefined : findProfile(profileId);
+			return profile === undefined ? base : { ...base, sources: buildPlan(sources.sources, { profile }) };
 		},
 		plan: async (request) => {
 			const resolved = resolveChoice(request);
@@ -352,48 +373,43 @@ export function createEmbeddingSettingsService(deps: EmbeddingSettingsDeps): Emb
 					configPath: configPath(),
 					configExists: existsSync(configPath()),
 					error: resolved.error,
-					current: { profileId: currentProfileId(embedder, readSemantic(deps.env, deps.cwd)), embedder: asJsonObject(embedder) },
+					current: { profileId: currentProfileId(embedder, readSemantic(deps.env, deps.cwd), accountBaseUrl()), embedder: asJsonObject(embedder) },
 					profiles: embeddingProfiles(),
 					sources: [],
 				};
 			}
-			const choice = resolved.choice;
-			if (choice.profile.kind === "local-server" && choice.localServer !== undefined) {
-				return snapshotFor(choice, await probeLocalServer(choice.localServer));
-			}
-			return snapshotFor(choice, null);
+			const { choice } = resolved;
+			// A preview only reads: it asks the server, but sends nothing the user has not consented to and stores nothing.
+			return snapshotFor(choice, choice.profile.kind === "dazzi" || choice.profile.kind === "byok" ? (await preflight(choice, { ...request, acknowledgeRemote: true })).error : null);
 		},
 		apply: async (request) => {
 			const resolved = resolveChoice(request);
 			if ("error" in resolved) return { ...EMPTY_RESULT(request.profileId), error: resolved.error };
-			const choice = resolved.choice;
+			const { choice } = resolved;
 			const snapshot = await deps.dataSources.list();
 			if (snapshot.error !== null) return { ...EMPTY_RESULT(request.profileId), error: snapshot.error };
 			const enabledById = new Map(snapshot.sources.map((row) => [row.id, row.enabled] as const));
-
 			const plan = buildPlan(snapshot.sources, choice);
-			if (choice.profile.kind === "local-server" && choice.localServer !== undefined) {
-				const probeError = await probeLocalServer(choice.localServer);
-				if (probeError !== null) return { ...EMPTY_RESULT(request.profileId, plan), error: probeError };
-			}
+
+			const checked = await preflight(choice, request);
+			if (checked.error !== null) return { ...EMPTY_RESULT(request.profileId, plan), error: checked.error };
 			const incompatibilities = plan.filter((status) => enabledById.get(status.id) === true && status.adoption === "incompatible");
 			const result: EmbeddingChangeResult = { ...EMPTY_RESULT(request.profileId, plan), incompatibilities };
 			if (incompatibilities.length > 0 && request.acknowledgeIncompatible !== true) {
-				return {
-					...result,
-					error: t("main.embedding.errors.incompatibleSources", { ids: incompatibilities.map((status) => status.id).join(", ") }),
-				};
+				return { ...result, error: t("main.embedding.errors.incompatibleSources", { ids: incompatibilities.map((status) => status.id).join(", ") }) };
 			}
 
 			// Keyword-only keeps the configured embedder so choosing a model again needs no re-entry.
 			const updates: AutoRagConfigUpdate[] =
 				choice.profile.kind === "none"
 					? [{ path: ["appIndexing", "semanticSearch"], value: false }]
-					: [{ path: ["minSync", "embedder"], value: deriveEmbedder(choice) }, { path: semanticSwitchPath(configPath()), remove: true }];
+					: [{ path: ["minSync", "embedder"], value: deriveEmbedder(choice, accountBaseUrl()) }, { path: semanticSwitchPath(configPath()), remove: true }];
 			const written: string[][] = [choice.profile.kind === "none" ? ["appIndexing", "semanticSearch"] : ["minSync", "embedder"]];
 			const toRebuild = plan.filter((status) => enabledById.get(status.id) === true && (status.adoption === "propagated" || status.adoption === "native")).map((status) => status.id);
 
+			// The key goes to the OS keyring first, so a config that names its variable never points at nothing.
 			try {
+				await storeKeys(choice, checked.key);
 				await deps.config.patch(updates);
 			} catch (error) {
 				return { ...result, error: error instanceof Error ? error.message : String(error) };
@@ -433,4 +449,16 @@ export function createEmbeddingSettingsService(deps: EmbeddingSettingsDeps): Emb
 			else deps.env.QMD_EMBED_MODEL = model;
 		},
 	};
+
+	/**
+	 * Keep exactly the keys the chosen profile needs. A key the user put in their own shell is never touched: only
+	 * what this app stored is removed, and the Dazzi plan key is replaced only when it is the plan token.
+	 */
+	async function storeKeys(choice: EmbeddingChoice, key: string | null): Promise<void> {
+		const stored = new Set((await deps.credentials.list([DAZZI_KEY_ENV, BYOK_KEY_ENV])).filter((entry) => entry.stored).map((entry) => entry.envName));
+		if (choice.profile.kind === "dazzi" && key !== null) await deps.credentials.set(DAZZI_KEY_ENV, key);
+		else if (stored.has(DAZZI_KEY_ENV)) await deps.credentials.remove(DAZZI_KEY_ENV);
+		if (choice.profile.kind === "byok" && key !== null && choice.byok?.apiKey !== undefined) await deps.credentials.set(BYOK_KEY_ENV, key);
+		else if (choice.profile.kind !== "byok" && stored.has(BYOK_KEY_ENV)) await deps.credentials.remove(BYOK_KEY_ENV);
+	}
 }

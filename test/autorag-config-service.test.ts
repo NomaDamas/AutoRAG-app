@@ -145,9 +145,10 @@ describe("createAutoRagConfigService", () => {
 
 		await expect(service.set(["minSync", "embedder", "profile"], "not-a-profile")).rejects.toThrow(/profile was removed/);
 		await expect(service.set(["minSync", "embedder", "dimension"], 0)).rejects.toThrow(/dimension must be a positive integer/);
+		// The user's own server may be anywhere, but a remote one needs the explicit BYOK shape: a bearer key by env name.
 		await expect(
 			service.set(["minSync", "embedder"], { id: "bge-m3", baseUrl: "https://api.example.com", dimension: 1024 }),
-		).rejects.toThrow(/loopback/);
+		).rejects.toThrow(/apiKeyEnv|loopback/);
 
 		const ok = await service.set(["minSync", "embedder"], { id: "bge-m3", baseUrl: "http://127.0.0.1:11434", dimension: 1024 });
 		expect(ok.error).toBeNull();
@@ -234,8 +235,8 @@ describe("createAutoRagConfigService", () => {
 		const service = createAutoRagConfigService({ env: fixture.env, cwd: fixture.root });
 		const before = await readFile(fixture.configPath, "utf8");
 
-		await expect(service.set(["minSync", "embedder", "baseUrl"], "https://api.example.com/v1")).rejects.toThrow(/loopback/);
-		await expect(service.set(["minSync", "embedder", "baseUrl"], "not a url")).rejects.toThrow(/valid loopback URL/);
+		await expect(service.set(["minSync", "embedder", "baseUrl"], "https://api.example.com/v1")).rejects.toThrow(/apiKeyEnv|loopback/);
+		await expect(service.set(["minSync", "embedder", "baseUrl"], "not a url")).rejects.toThrow(/valid .*URL/);
 		await expect(service.set(["minSync", "embedder", "baseUrl"], "ftp://127.0.0.1/v1")).rejects.toThrow(/http or https/);
 		await expect(service.set(["datasources", "lark", "connector", "embedderBaseUrl"], "https://embed.example.com")).rejects.toThrow(/loopback/);
 		expect(await readFile(fixture.configPath, "utf8")).toBe(before);
@@ -250,6 +251,16 @@ describe("createAutoRagConfigService", () => {
 		expect(ok.error).toBeNull();
 
 		// Dazzi cloud embedding endpoint is allowed for minSync.embedder.baseUrl.
+		// A user's own remote server is allowed when it names the environment variable that holds its key.
+		const own = await service.set(["minSync", "embedder"], {
+			id: "openai:Qwen/Qwen3-Embedding-0.6B",
+			baseUrl: "https://embed.example.com",
+			dimension: 1024,
+			apiKeyEnv: "AUTORAG_EMBEDDING_API_KEY",
+		});
+		expect(own.error).toBeNull();
+		await expect(service.set(["minSync", "embedder"], { id: "openai:x", baseUrl: "https://embed.example.com", dimension: 1024 })).rejects.toThrow(/apiKeyEnv/);
+
 		const dazziCloud = await service.set(["minSync", "embedder"], {
 			id: "openai:qwen/qwen3-embedding-0.6b",
 			baseUrl: "https://api.dazziapp.com",

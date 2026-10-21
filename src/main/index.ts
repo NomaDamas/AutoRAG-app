@@ -577,6 +577,7 @@ app.whenReady().then(async () => {
 		cwd: process.cwd(),
 		config: autoRagConfig,
 		dataSources: lockedDataSources,
+		credentials,
 	});
 	embeddingService.applyProcessEnv();
 	// Bring the local model up in the background for the config the user has; search degrades to keywords until it answers.

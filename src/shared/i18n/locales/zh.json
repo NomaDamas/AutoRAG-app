@@ -1128,26 +1128,33 @@
           "label": "不使用(仅关键词搜索)",
           "description": "不对文档做嵌入,只使用关键词搜索。无需下载模型或等待嵌入,语义搜索和混合搜索会关闭。"
         },
-        "nativeQwen3": {
-          "description": "默认的文档理解模型(1024 维)。由 Dazzi 启动的 MinSync 嵌入服务器在本机运行,无需另行安装。"
+        "local": {
+          "label": "本机(MinSync 本地服务器)",
+          "description": "Dazzi 运行期间,在本机运行 MinSync 嵌入服务器。文档不会离开本机。"
         },
-        "localServer": {
-          "label": "本机嵌入服务器",
-          "description": "使用在 loopback 上运行的 OpenAI 兼容嵌入服务器。请自行指定模型、维度和前缀。"
+        "dazzi": {
+          "label": "Dazzi 云",
+          "description": "使用 Dazzi 账户的托管嵌入服务。需要登录,文档内容会发送到 Dazzi 的服务器。"
+        },
+        "byok": {
+          "label": "我自己的服务器(兼容 OpenAI / TEI)",
+          "description": "使用您自己运营或订阅的嵌入服务器。输入服务器地址和 API 密钥;若服务器不在本机,文档内容会发送到该服务器。"
         }
       },
       "errors": {
-        "modelNameEmpty": "嵌入服务器模型名称为空。",
-        "dimensionPositive": "嵌入服务器维度必须为正整数。",
         "badUrl": "嵌入服务器地址不是有效的 URL。",
-        "loopbackOnly": "嵌入服务器必须是 loopback 地址(文档不会离开此 Mac)。",
         "unknownProfile": "未知的嵌入配置：{{id}}",
-        "localServerRequired": "需要嵌入服务器信息(id、baseUrl、dimension)。",
         "httpStatus": "嵌入服务器以 HTTP {{status}} 响应。",
         "badJson": "无法将嵌入服务器响应解析为 JSON。",
         "noVector": "嵌入服务器未返回向量。",
         "dimensionMismatch": "嵌入服务器维度为 {{actual}}，但指定为 {{expected}}。",
-        "incompatibleSources": "有数据源无法跟随此模型：{{ids}}"
+        "incompatibleSources": "有数据源无法跟随此模型：{{ids}}",
+        "serverRequired": "需要提供服务器地址。",
+        "badProtocol": "服务器类型必须是 OpenAI 或 TEI。",
+        "unauthorized": "服务器拒绝了凭据(HTTP {{status}})。请检查 API 密钥。",
+        "dazziSignIn": "要使用 Dazzi 云,请先登录 Dazzi 账户。",
+        "consentRequired": "文档内容将发送到本机之外的服务器。请先同意,然后再次应用。",
+        "keyRequired": "此服务器需要 API 密钥。"
       },
       "reasons": {
         "keywordOnly": "仅使用关键词搜索,因此该数据源也不做嵌入。",
@@ -1723,17 +1730,10 @@
       "defaultValue": "默认值"
     },
     "embedding": {
-      "errorModelRequired": "请输入嵌入服务器模型名称。",
-      "errorDimension": "嵌入服务器维度必须为正整数。",
       "title": "文档理解模型",
-      "hint": "分析文档的含义。除非选择云端嵌入，文档内容不会离开此 Mac。",
-      "body": "用于分析文档含义的嵌入模型。此处只能选择 Dazzi 运行时和本机服务器；仅当你在设置时选择了云端嵌入，文档内容才会离开此 Mac。",
+      "hint": "分析文档含义。选择本机时,文档不会离开本机。",
+      "body": "选择分析文档含义的嵌入模型在哪里运行。模型固定为 Qwen3 Embedding 0.6B,任何会将文档内容发送到本机之外的选择都需要您同意。",
       "dimension": "{{count}} 维",
-      "modelName": "模型名称",
-      "baseUrl": "服务器地址",
-      "dimensionLabel": "维度",
-      "modelPlaceholder": "例如：nomic-embed-text",
-      "dimensionPlaceholder": "例如：768",
       "incompatibleNote": "有 {{count}} 个数据源与此配置不兼容。继续将保留这些源不变，仅更改其余部分。",
       "acknowledge": "同时对不兼容的源应用",
       "applied": "已应用。",
@@ -1741,7 +1741,18 @@
       "written": "记录了 config {{count}} 个条目",
       "rebuild": "重新索引 {{count}} 个源",
       "preview": "查看计划",
-      "apply": "应用"
+      "apply": "应用",
+      "dimensionFixed": "模型:Qwen3 Embedding 0.6B(1024 维)。无法更改模型。",
+      "serverUrl": "服务器地址",
+      "serverUrlPlaceholder": "https://embed.example.com",
+      "serverType": "服务器类型",
+      "typeOpenai": "兼容 OpenAI(/v1/embeddings)",
+      "typeTei": "TEI(/embed)",
+      "apiKey": "API 密钥",
+      "apiKeyPlaceholder": "留空则使用已保存的密钥",
+      "apiKeyHint": "密钥保存在本机的安全钥匙串中,不会写入配置文件。",
+      "consentRemote": "我同意将文档内容发送到本机之外的服务器",
+      "signInNote": "Dazzi 云需要登录 Dazzi 账户。请先在账户设置中登录。"
     },
     "language": {
       "remove": "移除 {{name}}",

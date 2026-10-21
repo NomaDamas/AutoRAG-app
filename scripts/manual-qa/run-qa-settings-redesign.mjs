@@ -206,7 +206,7 @@ try {
 	// --- Embedding: plan + apply propagates to datasources ---------------
 	await page.locator(".settings-trigger[aria-haspopup='dialog']").click();
 	await page.waitForSelector(".settings-modal input[name='embedding-profile']");
-	await page.locator(".settings-modal .settings-list-row", { hasText: "Qwen3 Embedding 0.6B" }).click();
+	await page.locator(".settings-modal .settings-list-row").filter({ has: page.locator(".settings-list-title", { hasText: "This computer" }) }).click();
 	await page.locator(".settings-modal button", { hasText: "Review Plan" }).click();
 	const planText = await waitFor(async () => { const text = await page.locator(".settings-modal").innerText(); return text.includes("mail") ? text : null; });
 	check("embedding plan lists per-datasource adoption", planText !== null && planText.includes("mail") && planText.includes("slack"), planText ?? "");

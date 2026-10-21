@@ -1128,26 +1128,33 @@
           "label": "사용 안 함 (키워드 검색만)",
           "description": "문서를 임베딩하지 않고 키워드 검색만 씁니다. 모델 내려받기와 임베딩 시간이 들지 않으며, 의미·하이브리드 검색은 꺼집니다."
         },
-        "nativeQwen3": {
-          "description": "기본 문서 이해 모델(1024차원)입니다. Dazzi가 실행하는 MinSync 임베딩 서버가 이 Mac에서 직접 구동하며, 따로 설치할 것이 없습니다."
+        "local": {
+          "label": "이 컴퓨터 (MinSync 로컬 서버)",
+          "description": "Dazzi가 켜져 있는 동안 MinSync 임베딩 서버를 이 컴퓨터에서 직접 실행합니다. 문서는 컴퓨터 밖으로 나가지 않습니다."
         },
-        "localServer": {
-          "label": "내 컴퓨터 임베딩 서버",
-          "description": "loopback에서 도는 OpenAI 호환 임베딩 서버를 씁니다. 모델·차원·접두어를 직접 지정하세요."
+        "dazzi": {
+          "label": "Dazzi 클라우드",
+          "description": "Dazzi 계정으로 호스팅 임베딩을 사용합니다. 로그인이 필요하고, 문서 내용이 Dazzi 서버로 전송됩니다."
+        },
+        "byok": {
+          "label": "내 서버 (OpenAI / TEI 호환)",
+          "description": "직접 운영하거나 구독 중인 임베딩 서버를 사용합니다. 서버 주소와 API 키만 입력하며, 서버가 컴퓨터 밖에 있으면 문서 내용이 그 서버로 전송됩니다."
         }
       },
       "errors": {
-        "modelNameEmpty": "임베딩 서버 모델 이름이 비어 있습니다",
-        "dimensionPositive": "임베딩 서버 차원은 양의 정수여야 합니다",
         "badUrl": "임베딩 서버 주소가 올바른 URL이 아닙니다",
-        "loopbackOnly": "임베딩 서버는 loopback 주소여야 합니다(문서는 이 Mac을 벗어나지 않습니다)",
         "unknownProfile": "알 수 없는 임베딩 프로필: {{id}}",
-        "localServerRequired": "임베딩 서버 정보(id, baseUrl, dimension)가 필요합니다",
         "httpStatus": "임베딩 서버가 HTTP {{status}}로 응답했습니다",
         "badJson": "임베딩 서버 응답을 JSON으로 읽지 못했습니다",
         "noVector": "임베딩 서버가 벡터를 반환하지 않았습니다",
         "dimensionMismatch": "임베딩 서버 차원이 {{actual}}인데 {{expected}}로 지정했습니다",
-        "incompatibleSources": "이 모델을 따를 수 없는 데이터소스가 있습니다: {{ids}}"
+        "incompatibleSources": "이 모델을 따를 수 없는 데이터소스가 있습니다: {{ids}}",
+        "serverRequired": "서버 주소가 필요합니다.",
+        "badProtocol": "서버 방식은 OpenAI 또는 TEI여야 합니다.",
+        "unauthorized": "서버가 인증을 거부했습니다 (HTTP {{status}}). API 키를 확인하세요.",
+        "dazziSignIn": "Dazzi 클라우드를 쓰려면 먼저 Dazzi 계정에 로그인하세요.",
+        "consentRequired": "문서 내용이 이 컴퓨터 밖의 서버로 전송됩니다. 동의 후 다시 적용하세요.",
+        "keyRequired": "이 서버에는 API 키가 필요합니다."
       },
       "reasons": {
         "keywordOnly": "키워드 검색만 쓰므로 이 소스도 임베딩하지 않습니다.",
@@ -1723,17 +1730,10 @@
       "defaultValue": "기본값"
     },
     "embedding": {
-      "errorModelRequired": "임베딩 서버 모델 이름을 입력하세요.",
-      "errorDimension": "임베딩 서버 차원은 양의 정수여야 합니다.",
       "title": "문서 이해 모델",
-      "hint": "문서의 의미를 분석합니다. 클라우드 임베딩을 선택하지 않는 한 문서 내용은 이 Mac 밖으로 나가지 않습니다.",
-      "body": "문서의 의미를 분석하는 임베딩 모델입니다. 여기서는 Dazzi 런타임과 내 컴퓨터 서버만 고를 수 있고, 문서 내용은 설정 중 클라우드 임베딩을 선택한 경우에만 이 Mac 밖으로 나갑니다.",
+      "hint": "문서의 의미를 분석합니다. 이 컴퓨터를 고르면 문서가 컴퓨터 밖으로 나가지 않습니다.",
+      "body": "문서의 의미를 분석하는 임베딩 모델이 어디에서 실행될지 고릅니다. 모델은 Qwen3 Embedding 0.6B로 고정되어 있고, 문서 내용이 컴퓨터 밖으로 나가는 선택지는 동의가 필요합니다.",
       "dimension": "{{count}}차원",
-      "modelName": "모델 이름",
-      "baseUrl": "서버 주소",
-      "dimensionLabel": "차원",
-      "modelPlaceholder": "예: nomic-embed-text",
-      "dimensionPlaceholder": "예: 768",
       "incompatibleNote": "{{count}}개 데이터소스가 이 프로필과 호환되지 않습니다. 계속하면 해당 소스는 그대로 두고 나머지만 바뀝니다.",
       "acknowledge": "호환되지 않는 소스도 함께 적용",
       "applied": "적용했습니다.",
@@ -1741,7 +1741,18 @@
       "written": "config {{count}}개 항목 기록",
       "rebuild": "{{count}}개 소스 재색인",
       "preview": "계획 확인",
-      "apply": "적용"
+      "apply": "적용",
+      "dimensionFixed": "모델: Qwen3 Embedding 0.6B (1024차원). 모델은 바꿀 수 없습니다.",
+      "serverUrl": "서버 주소",
+      "serverUrlPlaceholder": "https://embed.example.com",
+      "serverType": "서버 방식",
+      "typeOpenai": "OpenAI 호환 (/v1/embeddings)",
+      "typeTei": "TEI (/embed)",
+      "apiKey": "API 키",
+      "apiKeyPlaceholder": "비워 두면 저장된 키를 사용합니다",
+      "apiKeyHint": "키는 이 Mac의 보안 키체인에 저장되며 설정 파일에는 기록되지 않습니다.",
+      "consentRemote": "문서 내용이 이 컴퓨터 밖의 서버로 전송되는 것에 동의합니다",
+      "signInNote": "Dazzi 클라우드는 Dazzi 계정 로그인이 필요합니다. 계정 설정에서 먼저 로그인하세요."
     },
     "language": {
       "remove": "{{name}} 제거",
