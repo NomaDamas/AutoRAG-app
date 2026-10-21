@@ -118,8 +118,11 @@ export function Toolbar({
 	} | null>(null);
 
 	const openMenu = (kind: "sort" | "group", event: MouseEvent<HTMLButtonElement>): void => {
-		const rect = event.currentTarget.getBoundingClientRect();
-		setMenu((current) => (current?.kind === kind ? null : { kind, x: rect.left, y: rect.bottom, trigger: event.currentTarget }));
+		// Read the button now: React runs this updater after the handler returns (for every
+		// open but the first), when the event's `currentTarget` has already been cleared.
+		const trigger = event.currentTarget;
+		const rect = trigger.getBoundingClientRect();
+		setMenu((current) => (current?.kind === kind ? null : { kind, x: rect.left, y: rect.bottom, trigger }));
 	};
 	return (
 		<div className="toolbar flex flex-none items-center gap-6 h-toolbar px-12 bg-linear-to-b from-window to-subtle-alt border-b border-border [-webkit-app-region:drag]">
