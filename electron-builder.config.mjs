@@ -8,7 +8,7 @@
  * What goes into the installer besides the app itself is produced by
  * `scripts/release/stage-tools.mjs` into `build/stage/<platform>/`:
  *   tools/  the dependency programs (Node + npm, minsync, jikji, discrawl, ...)
- *   seed/   the local embedding model and llama.cpp runtime
+ *   seed/   the Qwen3-Embedding-0.6B safetensors model (seeded into MinSync's cache on first launch)
  * Both land in the app's `resources/` directory (see `extraResources`).
  *
  * Signing is optional at the config level so unsigned CI and local builds

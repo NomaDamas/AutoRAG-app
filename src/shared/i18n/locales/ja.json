@@ -1128,45 +1128,45 @@
           "label": "使わない(キーワード検索のみ)",
           "description": "文書を埋め込まず、キーワード検索のみを使います。モデルのダウンロードや埋め込みの時間は不要で、意味検索とハイブリッド検索はオフになります。"
         },
-        "nativeQwen3": {
-          "description": "この Mac 上で直接動作する既定の文書理解モデル(1024 次元)。別途サーバーは不要です。"
+        "local": {
+          "label": "このコンピューター(MinSync ローカルサーバー)",
+          "description": "Dazzi の起動中、MinSync の埋め込みサーバーをこのコンピューターで実行します。文書がコンピューターの外に出ることはありません。"
         },
-        "runtime": {
-          "label": "Qwen3 Embedding 0.6B (Dazzi ランタイム)",
-          "description": "Dazzi 埋め込みランタイムが loopback 上の llama-server で提供する 1024 次元モデルです。"
+        "dazzi": {
+          "label": "Dazzi クラウド",
+          "description": "Dazzi アカウントでホスト型の埋め込みを使います。サインインが必要で、文書の内容は Dazzi のサーバーに送信されます。"
         },
-        "localServer": {
-          "label": "自分のコンピューターの埋め込みサーバー",
-          "description": "loopback で動作する OpenAI 互換の埋め込みサーバーを使用します。モデル・次元・プレフィックスはご自身で指定してください。"
+        "byok": {
+          "label": "自分のサーバー(OpenAI / TEI 互換)",
+          "description": "自分で運用または契約している埋め込みサーバーを使います。アドレスと API キーを入力します。サーバーがこのコンピューターの外にある場合、文書の内容がそのサーバーに送信されます。"
         }
       },
       "errors": {
-        "modelNameEmpty": "埋め込みサーバーのモデル名が空です。",
-        "dimensionPositive": "埋め込みサーバーの次元は正の整数でなければなりません。",
         "badUrl": "埋め込みサーバーのアドレスが有効な URL ではありません。",
-        "loopbackOnly": "埋め込みサーバーは loopback アドレスでなければなりません(文書はこの Mac から出ません)。",
         "unknownProfile": "不明な埋め込みプロファイル: {{id}}",
-        "localServerRequired": "埋め込みサーバー情報(id、baseUrl、dimension)が必要です。",
-        "localServerMissing": "埋め込みサーバー情報が必要です。",
         "httpStatus": "埋め込みサーバーが HTTP {{status}} で応答しました。",
         "badJson": "埋め込みサーバーの応答を JSON として読み取れませんでした。",
         "noVector": "埋め込みサーバーがベクトルを返しませんでした。",
         "dimensionMismatch": "埋め込みサーバーの次元は {{actual}} ですが、{{expected}} と指定されています。",
-        "incompatibleSources": "このモデルに追従できないデータソースがあります: {{ids}}"
+        "incompatibleSources": "このモデルに追従できないデータソースがあります: {{ids}}",
+        "serverRequired": "サーバーのアドレスが必要です。",
+        "badProtocol": "サーバーの方式は OpenAI または TEI にしてください。",
+        "unauthorized": "サーバーが認証を拒否しました(HTTP {{status}})。API キーを確認してください。",
+        "dazziSignIn": "Dazzi クラウドを使うには、先に Dazzi アカウントにサインインしてください。",
+        "consentRequired": "文書の内容がこのコンピューターの外のサーバーに送信されます。同意してからもう一度適用してください。",
+        "keyRequired": "このサーバーには API キーが必要です。"
       },
       "reasons": {
         "keywordOnly": "キーワード検索のみのため、このソースも埋め込みません。",
-        "mailcrawlIncompatible": "mailcrawl は組み込みの Qwen3 のみ対応しており、任意の HTTP 埋め込みサーバーは使用できません。",
-        "mailcrawlPropagated": "connector.env に埋め込みプロバイダーを記録します(モデルが変わると mailcrawl が自動的に再インデックスします)。",
-        "obsidianIncompatible": "qmd(obsidian)はローカルの GGUF モデルのみ使用できるため、HTTP 埋め込みサーバーは使用できません。",
-        "obsidianPropagated": "qmd 子プロセスに QMD_EMBED_MODEL を設定し、`qmd embed -f` で再インデックスします。",
-        "discordIncompatible": "このアプリは Dazzi 埋め込みランタイムを loopback で提供できません(公開エクスポートではない)。discrawl に渡すには埋め込みサーバーを選択してください。",
-        "discordPropagated": "Dazzi 管理の discrawl config を書き直し、`discrawl embed --rebuild` で再インデックスします。",
-        "kakaoSharedEmbedder": "KakaoTalk は lazykatok アーカイブ上のサイドカー経由で Dazzi 共有エンベッダーを使用し、エンベッダーを変更すると次回の同期で再埋め込みされます。",
-        "githubGistIncompatible": "GitHubGistSkill は @autorag/librarian の公開エクスポートではないため、アプリからエンベッダーを指定できません(ランタイムゲートウェイプロファイルで固定)。",
+        "obsidianIncompatible": "qmd(obsidian)は独自の GGUF モデルしか使えないため、別の埋め込みサーバーは使えません。",
+        "obsidianPropagated": "qmd の子プロセスに QMD_EMBED_MODEL を設定し、`qmd embed -f` で再インデックスします。",
+        "discordPropagated": "Dazzi が管理する discrawl の設定を新しいサーバー向けに書き直し、`discrawl embed --rebuild` で再インデックスします。",
         "clawgalleryNotApplicable": "ClawGallery は画像(VDR)インデックスであり、テキスト埋め込みを使用しません。",
         "larkNotApplicable": "Lark はリモート API 検索のみを使用し、ローカル埋め込みを拒否します。",
-        "defaultNotApplicable": "このデータソースは独自のキーワード/パースインデックスを使用し、グローバルエンベッダーを使用しません。"
+        "defaultNotApplicable": "このデータソースは独自のキーワード/パースインデックスを使用し、グローバルエンベッダーを使用しません。",
+        "mailcrawlSharedEmbedder": "mailcrawl は Dazzi と同じ埋め込みサーバーを使います。モデルが変わると、次回のインデックス作成で自動的に作り直します。",
+        "sidecarSharedEmbedder": "チャットアーカイブ上の読み取り専用サイドカーが共有エンベッダーでメッセージを埋め込みます。エンベッダーを変更すると次回の同期で再埋め込みします。",
+        "githubGistSharedEmbedder": "GitHub Gist のベクトルインデックスは共有エンベッダーを使います。エンベッダーを変更すると次回の同期で再埋め込みします。"
       },
       "actions": {
         "discordConfig": "datasources.<id> が管理する discrawl config.toml"
@@ -1730,17 +1730,10 @@
       "defaultValue": "デフォルト"
     },
     "embedding": {
-      "errorModelRequired": "埋め込みサーバーのモデル名を入力してください。",
-      "errorDimension": "埋め込みサーバーの次元は正の整数でなければなりません。",
       "title": "文書理解モデル",
-      "hint": "文書の意味を分析します。クラウド埋め込みを選ばない限り、文書の内容はこの Mac の外に出ません。",
-      "body": "文書の意味を分析する埋め込みモデルです。ここでは Dazzi ランタイムとローカルサーバーからのみ選択でき、文書の内容は設定時にクラウド埋め込みを選んだ場合にのみこの Mac の外に出ます。",
+      "hint": "文書の意味を分析します。このコンピューターを選ぶと、文書は外に出ません。",
+      "body": "文書の意味を分析する埋め込みモデルをどこで実行するかを選びます。モデルは Qwen3 Embedding 0.6B に固定されており、文書の内容がコンピューターの外に出る選択には同意が必要です。",
       "dimension": "{{count}} 次元",
-      "modelName": "モデル名",
-      "baseUrl": "サーバーアドレス",
-      "dimensionLabel": "次元",
-      "modelPlaceholder": "例: nomic-embed-text",
-      "dimensionPlaceholder": "例: 768",
       "incompatibleNote": "{{count}} 個のデータソースがこのプロファイルと互換性がありません。続行すると、該当ソースはそのままにして残りのみ変更されます。",
       "acknowledge": "互換性のないソースにも適用",
       "applied": "適用しました。",
@@ -1748,7 +1741,18 @@
       "written": "config {{count}} 件の項目を記録",
       "rebuild": "{{count}} 個のソースを再インデックス",
       "preview": "計画を確認",
-      "apply": "適用"
+      "apply": "適用",
+      "dimensionFixed": "モデル: Qwen3 Embedding 0.6B(1024次元)。モデルは変更できません。",
+      "serverUrl": "サーバーのアドレス",
+      "serverUrlPlaceholder": "https://embed.example.com",
+      "serverType": "サーバーの方式",
+      "typeOpenai": "OpenAI 互換(/v1/embeddings)",
+      "typeTei": "TEI(/embed)",
+      "apiKey": "API キー",
+      "apiKeyPlaceholder": "空のままにすると保存済みのキーを使います",
+      "apiKeyHint": "キーはこの Mac の安全なキーチェーンに保存され、設定ファイルには書き込まれません。",
+      "consentRemote": "文書の内容がこのコンピューターの外のサーバーに送信されることに同意します",
+      "signInNote": "Dazzi クラウドには Dazzi アカウントへのサインインが必要です。先にアカウント設定でサインインしてください。"
     },
     "language": {
       "remove": "{{name}} を削除",

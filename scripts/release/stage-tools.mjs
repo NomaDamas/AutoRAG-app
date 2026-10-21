@@ -84,6 +84,40 @@ function installBinary(from, name) {
 	return destination;
 }
 
+/**
+ * Hard version floors: the first release of each tool that carries the shared
+ * `minsync serve` embedding daemon the app now starts at launch.
+ *  - `minsync` 0.4.11 adds `minsync serve` (the loopback embedding server).
+ *  - `@nomadamas/mailcrawl` 0.2.2 gains the openai/tei providers, so it can embed
+ *    through the daemon's OpenAI route instead of loading its own model.
+ *  - `lazykatok` 0.3.3 gains the OpenAI-compatible embedder, the same route.
+ * A resolved version below its floor fails the stage instead of shipping a tool
+ * that cannot reach the daemon (and would embed in-process or not at all).
+ */
+const VERSION_FLOORS = {
+	minsync: "0.4.11",
+	"@nomadamas/mailcrawl": "0.2.2",
+	lazykatok: "0.3.3",
+};
+
+/** Compare dotted numeric versions: `a > b` -> positive, `a < b` -> negative, equal -> 0. */
+function compareVersions(a, b) {
+	const left = a.split(".").map((part) => Number.parseInt(part, 10) || 0);
+	const right = b.split(".").map((part) => Number.parseInt(part, 10) || 0);
+	for (let index = 0; index < Math.max(left.length, right.length); index += 1) {
+		const diff = (left[index] ?? 0) - (right[index] ?? 0);
+		if (diff !== 0) return diff;
+	}
+	return 0;
+}
+
+/** Fail the stage when a resolved tool is older than the floor that carries the shared embedding daemon. */
+function assertVersionFloor(name, version, floor) {
+	if (compareVersions(version, floor) < 0) {
+		throw new Error(`${name} ${version} is below the required ${floor}: this build embeds through the \`minsync serve\` daemon, which ${name} ${floor} is the first to support. Pin a newer ${name} or wait for its release.`);
+	}
+}
+
 /** Newest GitHub release asset matching `pattern`; the server-side sha256 digest verifies the download. */
 async function githubAsset(repo, pattern) {
 	const release = await latestRelease(repo);
@@ -94,15 +128,17 @@ async function githubAsset(repo, pattern) {
 }
 
 /** Prebuilt CLIs published as GitHub release archives: download, verify, pull the executable out. */
-async function stageReleaseBinary({ name, repo, pattern, binary = name }) {
+async function stageReleaseBinary({ name, repo, pattern, binary = name, minVersion }) {
 	const { release, asset, digest } = await githubAsset(repo, pattern);
+	const version = release.tag_name.replace(/^v/, "");
+	if (minVersion !== undefined) assertVersionFloor(name, version, minVersion);
 	const file = await download(asset.browser_download_url, `${repo.replace("/", "__")}-${asset.name}`, digest);
 	const directory = join(CACHE_DIR, "x", `${name}-${release.tag_name}`);
 	extract(file.path, directory);
 	const found = findFile(directory, [`${binary}${exe}`]);
 	if (found === null) throw new Error(`${name}: ${binary}${exe} not found in ${asset.name}`);
 	installBinary(found, name);
-	record({ name, version: release.tag_name.replace(/^v/, ""), source: `github.com/${repo} ${asset.name}`, sha256: file.sha256, verifiedAgainstPublisherDigest: digest !== null });
+	record({ name, version, source: `github.com/${repo} ${asset.name}`, sha256: file.sha256, verifiedAgainstPublisherDigest: digest !== null });
 }
 
 /** Go CLIs that publish no archive for this platform: build the newest tag from source. */
@@ -118,23 +154,12 @@ async function stageGoBinary({ name, repo }) {
 	record({ name, version: tag.replace(/^v/, ""), source: `go install github.com/${repo}@${tag}` });
 }
 
-/** Rust crates: compile the newest crates.io version (or a git HEAD) into the shared cache. */
-async function stageCargoBinary({ name, crate = name, git }) {
+/** Rust crates: compile the newest crates.io version into the shared cache. */
+async function stageCargoBinary({ name, crate = name }) {
 	const cargoRoot = join(CACHE_DIR, "cargo", name);
 	const targetDir = join(CACHE_DIR, "cargo-target");
-	let version;
-	let source;
-	let installArgs;
-	if (git === undefined) {
-		version = await latestCrateVersion(crate);
-		source = `crates.io ${crate}@${version}`;
-		installArgs = ["install", crate, "--version", version, "--locked"];
-	} else {
-		const head = run("git", ["ls-remote", git, "HEAD"], { capture: true }).split(/\s/)[0];
-		version = head.slice(0, 12);
-		source = `${git}#${head}`;
-		installArgs = ["install", "--git", git, "--rev", head, "--locked", "--bin", name];
-	}
+	const version = await latestCrateVersion(crate);
+	const installArgs = ["install", crate, "--version", version, "--locked"];
 	const installed = join(cargoRoot, "bin", `${name}${exe}`);
 	const stamp = join(cargoRoot, "version.txt");
 	if (!(existsSync(installed) && existsSync(stamp) && readFileSync(stamp, "utf8") === version)) {
@@ -144,7 +169,7 @@ async function stageCargoBinary({ name, crate = name, git }) {
 		writeFileSync(stamp, version);
 	}
 	installBinary(installed, name);
-	record({ name, version, source });
+	record({ name, version, source: `crates.io ${crate}@${version}` });
 }
 
 /**
@@ -264,6 +289,8 @@ async function stageNpmCli(nodePath, packages) {
 	const shim = await buildShim();
 	for (const pkg of packages.map((spec) => spec.replace(/@latest$/, ""))) {
 		const manifest = JSON.parse(readFileSync(join(nodeModules, pkg, "package.json"), "utf8"));
+		const floor = VERSION_FLOORS[pkg];
+		if (floor !== undefined) assertVersionFloor(pkg, manifest.version, floor);
 		const bins = typeof manifest.bin === "string" ? { [basename(pkg)]: manifest.bin } : manifest.bin;
 		for (const [binName, entry] of Object.entries(bins ?? {})) {
 			if (binName === "kordoc-mcp") continue;
@@ -441,12 +468,16 @@ async function stageSeed() {
 // --------------------------------------------------------------------------
 
 const RELEASE_BINARIES = [
-	{ name: "minsync", repo: "NomaDamas/MinSync", pattern: target.os === "win32" ? /x86_64-pc-windows-msvc\.zip$/ : /aarch64-apple-darwin\.tar\.gz$/ },
+	{ name: "minsync", repo: "NomaDamas/MinSync", pattern: target.os === "win32" ? /x86_64-pc-windows-msvc\.zip$/ : /aarch64-apple-darwin\.tar\.gz$/, minVersion: VERSION_FLOORS.minsync },
 	{ name: "rhwp", repo: "edwardkim/rhwp", pattern: target.os === "win32" ? /windows-x86_64\.zip$/ : /macos-aarch64\.tar\.gz$/ },
 	{ name: "himalaya", repo: "pimalaya/himalaya", pattern: target.os === "win32" ? /x86_64-windows\.zip$/ : /aarch64-darwin\.tgz$/ },
 	{ name: "rclone", repo: "rclone/rclone", pattern: target.os === "win32" ? /windows-amd64\.zip$/ : /osx-arm64\.zip$/ },
 	{ name: "lark-cli", repo: "larksuite/cli", pattern: target.os === "win32" ? /windows-amd64\.zip$/ : /darwin-arm64\.tar\.gz$/ },
 	...["discrawl", "telecrawl", "wacrawl"].map((name) => ({ name, repo: `openclaw/${name}`, pattern: target.os === "win32" ? /_windows_amd64\.zip$/ : /_darwin_arm64\.tar\.gz$/ })),
+	// lazykatok is an Apple Silicon macOS KakaoTalk client; changeroa/lazykatok publishes one release archive
+	// per version (`lazykatok-<version>-aarch64-apple-darwin.tar.gz`) with a GitHub sha256 digest, so it is
+	// staged like the other release binaries instead of being compiled from git HEAD.
+	...(target.os === "darwin" ? [{ name: "lazykatok", repo: "changeroa/lazykatok", pattern: /^lazykatok-\d+\.\d+\.\d+-aarch64-apple-darwin\.tar\.gz$/, minVersion: VERSION_FLOORS.lazykatok }] : []),
 ];
 
 // openclaw/slacrawl and openclaw/notcrawl publish macOS archives but no Windows one: build the newest tag from source there.
@@ -455,13 +486,7 @@ const GO_CRAWLERS = [
 	{ name: "notcrawl", repo: "openclaw/notcrawl", pattern: /_darwin_arm64\.tar\.gz$/ },
 ];
 
-const CARGO_BINARIES = [
-	{ name: "dupey" },
-	{ name: "jikji", crate: "jikji-cli" },
-	{ name: "clawgallery" },
-	// lazykatok is an Apple Silicon macOS KakaoTalk client and has no crates.io release.
-	...(target.os === "darwin" ? [{ name: "lazykatok", git: "https://github.com/changeroa/lazykatok" }] : []),
-];
+const CARGO_BINARIES = [{ name: "dupey" }, { name: "jikji", crate: "jikji-cli" }, { name: "clawgallery" }];
 
 const NPM_PACKAGES = ["@nomadamas/mailcrawl", "@tobilu/qmd", "kordoc"];
 

@@ -64,7 +64,9 @@ import { createAutoRagConfigService } from "./autorag-config-service";
 import { createModelStatusService } from "./model-status";
 import { createProviderAuthService, type ProviderAuthService } from "./provider-auth-service";
 import { createProviderCredentialService } from "./provider-credentials";
-import { createEmbeddingSettingsService, type EmbeddingSettingsRuntime } from "./embedding-settings-service";
+import { configureEmbeddingDaemon, ensureEmbeddingForConfig, stopEmbeddingDaemon } from "./embedding-daemon";
+import { migrateLegacyEmbedding } from "./embedding-migration";
+import { createEmbeddingSettingsService } from "./embedding-settings-service";
 import { createDefaultAgentFactory, createSearchService } from "./search-service";
 import { resolveAppSessionModel } from "./agents/app-model";
 import { createSmartIndexingService } from "./smart-indexing-service";
@@ -141,9 +143,20 @@ function ensureAppIndexingMetadata(configPath: string): void {
 	}
 }
 
+/** Rewrite what an earlier Dazzi left in the config for the embedding runtime it no longer has. */
+function migrateEmbeddingConfig(configPath: string): void {
+	try {
+		const { raw, changed } = migrateLegacyEmbedding(readRawConfigObject(configPath));
+		if (changed) writeConfigObject(configPath, raw);
+	} catch (error) {
+		console.error("AutoRAG embedding config migration failed", error);
+	}
+}
+
 async function ensureAutoRAGConfig(): Promise<void> {
 	const configPath = autoragConfigPath();
 	if (await access(configPath).then(() => true, () => false)) {
+		migrateEmbeddingConfig(configPath);
 		ensureAppIndexingMetadata(configPath);
 		return;
 	}
@@ -384,7 +397,7 @@ app.whenReady().then(async () => {
 	// before anything reads the environment, and the model/runtime are copied into the AutoRAG home
 	// in the background so a fresh install indexes offline without a ~650 MB download.
 	applyBundledTools({ resourcesPath: process.resourcesPath, env: process.env, augmentUserPaths: true });
-	void seedAssets({
+	const seeded = seedAssets({
 		seedDir: join(process.resourcesPath, "seed"),
 		cacheRoot: minSyncModelCacheRoot({ platform: process.platform, home: homedir(), env: process.env }),
 	}).then(
@@ -406,6 +419,9 @@ app.whenReady().then(async () => {
 			(error: unknown) => console.error("[cli] installing the dazzi command failed:", error),
 		);
 	}
+	// The local embedding model is served by MinSync's own `minsync serve`, which the app runs while it is open
+	// and stops on quit. It waits for the seed so it never downloads a model that is being copied in.
+	configureEmbeddingDaemon({ env: process.env, home: homedir(), ownerFile: join(app.getPath("userData"), "embedding-daemon.json"), ready: seeded });
 	await ensureAutoRAGConfig();
 	const devLabel = resolveDevLabel();
 	console.log(`[autorag] ${formatWindowTitle(APP_FULL_NAME, APP_VERSION, devLabel)}`);
@@ -551,15 +567,7 @@ app.whenReady().then(async () => {
 	// auth.json-stored OpenRouter/Vercel keys reach process.env so the env-driven
 	// Jev/rerank backends resolve the same credential.
 	void providerAuth.warmEnv();
-	// The datasource service hands its discrawl skill the embedding service's
-	// current loopback runtime; the embedding service needs the datasource service
-	// for adoption planning, so the holder is filled right after.
-	let embeddingSettings: EmbeddingSettingsRuntime | null = null;
-	const dataSources = createDataSourceStatusService({
-		env: process.env,
-		cwd: process.cwd(),
-		discrawlEmbeddingRuntime: () => embeddingSettings?.discrawlRuntime(),
-	});
+	const dataSources = createDataSourceStatusService({ env: process.env, cwd: process.cwd() });
 	// Every datasource sync the app starts (Settings buttons, embedding rebuild) goes through this one wrapper:
 	// it takes the shared refresh lock and is journaled, so it shows in the indexing progress.
 	const schedulePath = schedulePaths(autoragConfigPath());
@@ -569,15 +577,11 @@ app.whenReady().then(async () => {
 		cwd: process.cwd(),
 		config: autoRagConfig,
 		dataSources: lockedDataSources,
+		credentials,
 	});
-	embeddingSettings = embeddingService;
-	// A persisted local-server embedder points mailcrawl at the app's ephemeral
-	// adapter port; refresh re-probes and rewrites it before any agent runs.
-	await embeddingService.refresh();
 	embeddingService.applyProcessEnv();
-	app.once("will-quit", () => {
-		void embeddingService.dispose();
-	});
+	// Bring the local model up in the background for the config the user has; search degrades to keywords until it answers.
+	void ensureEmbeddingForConfig(existsSync(autoragConfigPath()) ? readRawConfigObject(autoragConfigPath()) : {});
 	// Unpackaged, registering would add the bare Electron binary to Login Items
 	// rather than AutoRAG, so only a packaged build touches the OS login item.
 	const applyLoginItem = (enabled: boolean): void => {
@@ -977,7 +981,7 @@ app.whenReady().then(async () => {
 	app.once("will-quit", (event) => {
 		event.preventDefault();
 		// minsync outlives the app and keeps its lock; stop it so the next launch can resume instead of failing on the lock.
-		void Promise.all([terminateMinSyncChildren(), workerHost.dispose(), analytics.shutdown()])
+		void Promise.all([stopEmbeddingDaemon().then(() => terminateMinSyncChildren()), workerHost.dispose(), analytics.shutdown()])
 			.catch((error: unknown) => console.error("[fs-worker] dispose on quit failed:", error))
 			.finally(() => app.exit(0));
 	});

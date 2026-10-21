@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import { basename } from "node:path";
 import { promisify } from "node:util";
+import { isEmbeddingDaemonPid } from "./embedding-daemon";
 
 /**
  * MinSync embeds the whole corpus in one child process, so the app cannot time
@@ -74,6 +75,8 @@ export interface StallWatchdogOptions {
 	readonly stallMs: number;
 	readonly intervalMs: number;
 	readonly now?: () => number;
+	/** Processes that idle by design (the embedding daemon) and must never count as stuck. */
+	readonly exempt?: (pid: number) => boolean;
 }
 
 export interface StallWatchdog {
@@ -102,7 +105,7 @@ export function createStallWatchdog(options: StallWatchdogOptions): StallWatchdo
 				seen.set(pid, { cpuMs, since: at });
 				continue;
 			}
-			if (at - previous.since < options.stallMs || killedPids.has(pid)) continue;
+			if (options.exempt?.(pid) === true || at - previous.since < options.stallMs || killedPids.has(pid)) continue;
 			killedPids.add(pid);
 			options.kill(pid);
 		}
@@ -153,6 +156,7 @@ export async function terminateMinSyncChildren(
 export function createMinSyncWatchdog(stallMs: number = DEFAULT_EMBEDDING_STALL_MS): StallWatchdog {
 	return createStallWatchdog({
 		sample: sampleMinSyncProcesses,
+		exempt: isEmbeddingDaemonPid,
 		kill: (pid) => {
 			try {
 				process.kill(pid, "SIGTERM");

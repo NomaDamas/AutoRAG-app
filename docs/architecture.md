@@ -85,14 +85,15 @@ second datasource or model configuration. The sidebar is searchable and grouped:
     past-question memory ranks by keywords only. Local file content is found by
     Jikji and the file-name tools.
   - *Status*: a parsed file counts as included, since nothing is staged into MinSync.
-- **Embedding batch size** — the embedding gateway aborts a request after 30 s.
+- **Embedding batch size** — an embedding request that cannot finish (the local
+  server's request cap answers 413, a user's own server may time out with 504).
   When a refresh's MinSync step fails with that timeout (or skips a file on a
   partial sync because its batch timed out), the app halves
   `minSync.embedder.batchSize` (64 → 32 → 16 → … → 1), re-runs only the MinSync step, and
   stores the size that worked in `embedding-batch.json` beside the config (`local`,
   or `remote` for a non-loopback `baseUrl`; the two are learned separately; a
   sidecar so a refresh never rewrites the file Settings edits). Later refreshes
-  start from the stored size. Only the gateway's 504 triggers this; a runtime
+  start from the stored size. Only that deadline's 504 triggers this; a daemon
   that never became ready does not.
 - **Indexing that survives bad files and bad folders** — a refresh never lets one
   file, folder, or process take the rest of the index down.
@@ -140,13 +141,20 @@ second datasource or model configuration. The sidebar is searchable and grouped:
     children they started (`terminateMinSyncChildren`; not on Windows, where a
     minsync cannot be told from the user's own, and not the ones the fs worker
     started for a Finder toggle). MinSync resumes from `progress.jsonl`.
+  - *The local embedding model is one long-lived daemon* (`embedding-daemon.ts`):
+    the app starts `minsync serve` (loopback, `--idle-timeout 0`, the seeded
+    `native:Qwen/Qwen3-Embedding-0.6B`) once the model is in place and stops it at
+    quit. It is the only process holding the weights; every embedding consumer —
+    MinSync's own sync, the librarian's memory, the chat sidecars, discrawl,
+    mailcrawl, lazykatok — resolves it through the state files it publishes under
+    `~/.cache/minsync/serve/` (`%LOCALAPPDATA%\minsync\serve` on Windows).
   - *The Finder's exclusion toggle refreshes through the same path*
     (`index-status.ts` calls `refreshAutoragIndex`), so it has the folder check,
     the embedder watchdog, and the learned batch size.
   - *A file MinSync cannot read, chunk, or embed is skipped, not fatal*
     (MinSync 0.4.8+ / librarian 2.10.4+, `minsync-file-skipped`). MinSync exits 6
     with `partial: true` and `files_failed`, keeps the file's older chunks, and
-    retries it on the next sync; if the skip came from an embedding gateway
+    retries it on the next sync; if the skip came from an embedding-server
     timeout, `index-refresh` halves `batchSize` and re-runs `syncMinSync` in the
     same refresh. Since MinSync 0.4.10 a file over `[sync] max_file_bytes`
     (64 MiB) is skipped the same way at the `size_guard` stage, before it is read.

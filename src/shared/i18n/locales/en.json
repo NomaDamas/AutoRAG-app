@@ -1128,45 +1128,45 @@
           "label": "Off (keyword search only)",
           "description": "Documents are not embedded; only keyword search is used. No model download or embedding time, and semantic and hybrid search are off."
         },
-        "nativeQwen3": {
-          "description": "The default document-understanding model (1024 dimensions) running directly on this Mac. No separate server needed."
+        "local": {
+          "label": "This computer (MinSync local server)",
+          "description": "Dazzi runs the MinSync embedding server on this computer while it is open. Documents never leave this computer."
         },
-        "runtime": {
-          "label": "Qwen3 Embedding 0.6B (Dazzi runtime)",
-          "description": "A 1024-dimension model served by the Dazzi embedding runtime via llama-server on loopback."
+        "dazzi": {
+          "label": "Dazzi cloud",
+          "description": "Uses the hosted embedding with your Dazzi account. Requires sign-in, and document text is sent to Dazzi's servers."
         },
-        "localServer": {
-          "label": "My computer's embedding server",
-          "description": "Use an OpenAI-compatible embedding server running on loopback. Specify the model, dimensions, and prefixes yourself."
+        "byok": {
+          "label": "My own server (OpenAI / TEI compatible)",
+          "description": "Uses an embedding server you run or pay for. Enter its address and API key; if it is off this computer, document text is sent to it."
         }
       },
       "errors": {
-        "modelNameEmpty": "The embedding server model name is empty.",
-        "dimensionPositive": "The embedding server dimension must be a positive integer.",
         "badUrl": "The embedding server address is not a valid URL.",
-        "loopbackOnly": "The embedding server must be a loopback address (documents never leave this Mac).",
         "unknownProfile": "Unknown embedding profile: {{id}}",
-        "localServerRequired": "Embedding server details (id, baseUrl, dimension) are required.",
-        "localServerMissing": "Embedding server details are required.",
         "httpStatus": "The embedding server responded with HTTP {{status}}.",
         "badJson": "Could not read the embedding server response as JSON.",
         "noVector": "The embedding server did not return a vector.",
         "dimensionMismatch": "The embedding server dimension is {{actual}}, but {{expected}} was specified.",
-        "incompatibleSources": "Some data sources cannot follow this model: {{ids}}"
+        "incompatibleSources": "Some data sources cannot follow this model: {{ids}}",
+        "serverRequired": "A server address is required.",
+        "badProtocol": "The server type must be OpenAI or TEI.",
+        "unauthorized": "The server rejected the credentials (HTTP {{status}}). Check the API key.",
+        "dazziSignIn": "Sign in to your Dazzi account first to use the Dazzi cloud.",
+        "consentRequired": "Document text will be sent to a server off this computer. Agree to this, then apply again.",
+        "keyRequired": "This server needs an API key."
       },
       "reasons": {
         "keywordOnly": "Keyword search only: this source is not embedded either.",
-        "mailcrawlIncompatible": "mailcrawl only supports the built-in Qwen3 and cannot use an arbitrary HTTP embedding server.",
-        "mailcrawlPropagated": "Records the embedding provider in connector.env (mailcrawl re-indexes automatically when the model changes).",
-        "obsidianIncompatible": "qmd (obsidian) can only use local GGUF models, so it cannot use an HTTP embedding server.",
+        "obsidianIncompatible": "qmd (obsidian) runs its own GGUF model only, so it cannot use another embedding server.",
         "obsidianPropagated": "Sets QMD_EMBED_MODEL on the qmd child process and re-indexes with `qmd embed -f`.",
-        "discordIncompatible": "This app cannot serve the Dazzi embedding runtime on loopback (not a public export). Choose an embedding server to pass it to discrawl.",
-        "discordPropagated": "Rewrites the Dazzi-managed discrawl config and re-indexes with `discrawl embed --rebuild`.",
-        "kakaoSharedEmbedder": "Kakao uses the shared Dazzi embedder through the sidecar over lazykatok's archive; changing the embedder re-embeds it on the next sync.",
-        "githubGistIncompatible": "GitHubGistSkill is not a public @autorag/librarian export, so the app cannot set its embedder (fixed by the runtime gateway profile).",
+        "discordPropagated": "Rewrites the Dazzi-managed discrawl config for the new server and re-indexes with `discrawl embed --rebuild`.",
         "clawgalleryNotApplicable": "ClawGallery is an image (VDR) index and does not use text embeddings.",
         "larkNotApplicable": "Lark uses only remote API search and refuses local embeddings.",
-        "defaultNotApplicable": "This data source uses its own keyword/parse index and does not use the global embedder."
+        "defaultNotApplicable": "This data source uses its own keyword/parse index and does not use the global embedder.",
+        "mailcrawlSharedEmbedder": "mailcrawl uses the same embedding server as Dazzi. When the model changes it re-indexes on the next index run.",
+        "sidecarSharedEmbedder": "The read-only sidecar over the chat archive embeds messages with the shared embedder; changing the embedder re-embeds them on the next sync.",
+        "githubGistSharedEmbedder": "The GitHub Gist vector index uses the shared embedder; changing the embedder re-embeds it on the next sync."
       },
       "actions": {
         "discordConfig": "discrawl config.toml managed by datasources.<id>"
@@ -1730,17 +1730,10 @@
       "defaultValue": "Default"
     },
     "embedding": {
-      "errorModelRequired": "Enter the embedding server model name.",
-      "errorDimension": "The embedding server dimension must be a positive integer.",
       "title": "Document Understanding Model",
-      "hint": "Analyzes the meaning of documents. Document content stays on this Mac unless you chose cloud embedding.",
-      "body": "The embedding model that analyzes document meaning. You can only choose the Dazzi runtime or your local server here; document content leaves this Mac only if you chose cloud embedding during setup.",
+      "hint": "Analyzes the meaning of documents. If you pick this computer, documents never leave it.",
+      "body": "Choose where the embedding model that analyzes document meaning runs. The model is fixed to Qwen3 Embedding 0.6B, and any choice that sends document text off this computer needs your consent.",
       "dimension": "{{count}}d",
-      "modelName": "Model Name",
-      "baseUrl": "Server URL",
-      "dimensionLabel": "Dimension",
-      "modelPlaceholder": "e.g. nomic-embed-text",
-      "dimensionPlaceholder": "e.g. 768",
       "incompatibleNote": "{{count}} data sources are incompatible with this profile. If you continue, those sources stay as they are and only the rest change.",
       "acknowledge": "Also apply to incompatible sources",
       "applied": "Applied.",
@@ -1748,7 +1741,18 @@
       "written": "config {{count}} entries recorded",
       "rebuild": "{{count}} sources reindexed",
       "preview": "Review Plan",
-      "apply": "Apply"
+      "apply": "Apply",
+      "dimensionFixed": "Model: Qwen3 Embedding 0.6B (1024 dimensions). The model cannot be changed.",
+      "serverUrl": "Server address",
+      "serverUrlPlaceholder": "https://embed.example.com",
+      "serverType": "Server type",
+      "typeOpenai": "OpenAI compatible (/v1/embeddings)",
+      "typeTei": "TEI (/embed)",
+      "apiKey": "API key",
+      "apiKeyPlaceholder": "Leave empty to use the stored key",
+      "apiKeyHint": "The key is stored in this Mac's secure keychain and never written to the config file.",
+      "consentRemote": "I agree that document text is sent to a server off this computer",
+      "signInNote": "The Dazzi cloud needs a Dazzi account sign-in. Sign in from the account settings first."
     },
     "language": {
       "remove": "Remove {{name}}",

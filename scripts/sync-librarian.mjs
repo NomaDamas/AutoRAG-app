@@ -10,8 +10,8 @@ const staged = join(root, ".upstream", "librarian-package");
 const installed = join(root, "node_modules", "@autorag", "librarian");
 const remote = "https://github.com/Marker-Inc-Korea/AutoRAG.git";
 // A release tag, or a full commit SHA while the librarian has no tag that carries what the app needs.
-// v2.10.4 pins MinSync 0.4.8; 733e8a0 is the first revision that pins MinSync 0.4.10 (no v2.10.5 yet).
-const librarianRef = "733e8a03b0f46d48320e6dc5d5778ae2fbfac7f0";
+// v2.10.6 is the first release that pins MinSync 0.4.10+ and ships the `minsync serve` embedding daemon client.
+const librarianRef = "v2.10.6";
 
 function run(command, args, cwd = root) {
 	const result = spawnSync(command, args, { cwd, stdio: "inherit" });
