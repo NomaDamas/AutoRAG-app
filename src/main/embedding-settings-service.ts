@@ -10,7 +10,8 @@ import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { DEFAULT_ACCOUNT_BASE_URL } from "../shared/account-contract";
 import { isJsonObject } from "../shared/settings-contract";
 import { readAppIndexing } from "./app-indexing";
-import { t } from "../shared/i18n/core";
+import { t, tByName } from "../shared/i18n/core";
+import { localSpecMessage, type LocalSpecVerdict } from "../shared/local-embedding-spec";
 import type {
 	AutoRagConfigUpdate,
 	ByokEmbeddingServer,
@@ -55,6 +56,8 @@ export interface EmbeddingSettingsDeps {
 	readonly credentials: ProviderCredentialService;
 	/** Whether the on-device model's weights are downloaded; choosing the local profile needs them. */
 	readonly modelReady: () => boolean;
+	/** Whether this machine meets the minimum spec for the on-device model (the "spec guard"). */
+	readonly localSpec: () => Promise<LocalSpecVerdict>;
 	/** Test seam for the server probe. */
 	readonly fetchImpl?: typeof fetch;
 }
@@ -89,7 +92,7 @@ const SIDECAR_TEMPLATES: Record<string, true> = { kakao: true, slack: true, tele
  * differs is where it runs: nowhere (keyword-only), on this computer through MinSync, in the Dazzi cloud, or on
  * a server the user runs or pays for.
  */
-export function embeddingProfiles(): readonly EmbeddingProfile[] {
+export function embeddingProfiles(spec: LocalSpecVerdict = { eligible: true }): readonly EmbeddingProfile[] {
 	const fixed = { model: MODEL, dimension: DIMENSION, queryPrefix: "", passagePrefix: "" } as const;
 	return [
 		{
@@ -102,15 +105,24 @@ export function embeddingProfiles(): readonly EmbeddingProfile[] {
 			queryPrefix: "",
 			passagePrefix: "",
 			baseUrl: null,
+			unavailable: null,
 		},
-		{ id: "local", kind: "local", label: t("main.embedding.profiles.local.label"), description: t("main.embedding.profiles.local.description"), baseUrl: null, ...fixed },
-		{ id: "dazzi", kind: "dazzi", label: t("main.embedding.profiles.dazzi.label"), description: t("main.embedding.profiles.dazzi.description"), baseUrl: DEFAULT_ACCOUNT_BASE_URL, ...fixed },
-		{ id: "byok", kind: "byok", label: t("main.embedding.profiles.byok.label"), description: t("main.embedding.profiles.byok.description"), baseUrl: null, ...fixed },
+		{
+			id: "local",
+			kind: "local",
+			label: t("main.embedding.profiles.local.label"),
+			description: t("main.embedding.profiles.local.description"),
+			baseUrl: null,
+			unavailable: spec.eligible ? null : localSpecMessage(spec, tByName),
+			...fixed,
+		},
+		{ id: "dazzi", kind: "dazzi", label: t("main.embedding.profiles.dazzi.label"), description: t("main.embedding.profiles.dazzi.description"), baseUrl: DEFAULT_ACCOUNT_BASE_URL, unavailable: null, ...fixed },
+		{ id: "byok", kind: "byok", label: t("main.embedding.profiles.byok.label"), description: t("main.embedding.profiles.byok.description"), baseUrl: null, unavailable: null, ...fixed },
 	];
 }
 
-function findProfile(profileId: string): EmbeddingProfile | undefined {
-	return embeddingProfiles().find((profile) => profile.id === profileId);
+function findProfile(profileId: string, spec?: LocalSpecVerdict): EmbeddingProfile | undefined {
+	return embeddingProfiles(spec).find((profile) => profile.id === profileId);
 }
 
 function isLoopbackUrl(value: string): boolean {
@@ -261,9 +273,11 @@ export function createEmbeddingSettingsService(deps: EmbeddingSettingsDeps): Emb
 		return (configured !== undefined && configured.length > 0 ? configured : DEFAULT_ACCOUNT_BASE_URL).replace(/\/+$/u, "");
 	};
 
-	const resolveChoice = (request: EmbeddingChangeRequest): { choice: EmbeddingChoice } | { error: string } => {
-		const profile = findProfile(request.profileId);
+	const resolveChoice = async (request: EmbeddingChangeRequest): Promise<{ choice: EmbeddingChoice } | { error: string }> => {
+		const profile = findProfile(request.profileId, await deps.localSpec());
 		if (profile === undefined) return { error: t("main.embedding.errors.unknownProfile", { id: request.profileId }) };
+		// The spec guard: a machine below the minimum never gets the on-device model, however the request arrived.
+		if (profile.unavailable !== null) return { error: profile.unavailable };
 		if (profile.kind !== "byok") return { choice: { profile } };
 		const problem = checkByok(request.byok);
 		if (problem !== null || request.byok === undefined) return { error: problem ?? t("main.embedding.errors.serverRequired") };
@@ -342,7 +356,7 @@ export function createEmbeddingSettingsService(deps: EmbeddingSettingsDeps): Emb
 			configExists: existsSync(path),
 			error,
 			current: { profileId: choice.profile.id, embedder: choice.profile.kind === "none" ? asJsonObject(readEmbedder(deps.env, deps.cwd)) : deriveEmbedder(choice, accountBaseUrl()) },
-			profiles: embeddingProfiles(),
+			profiles: embeddingProfiles(await deps.localSpec()),
 			sources: [],
 		};
 		const sources = await deps.dataSources.list();
@@ -360,7 +374,7 @@ export function createEmbeddingSettingsService(deps: EmbeddingSettingsDeps): Emb
 				configExists: existsSync(path),
 				error: null,
 				current: { profileId, embedder: asJsonObject(embedder) },
-				profiles: embeddingProfiles(),
+				profiles: embeddingProfiles(await deps.localSpec()),
 				sources: [],
 			};
 			const sources = await deps.dataSources.list();
@@ -369,7 +383,7 @@ export function createEmbeddingSettingsService(deps: EmbeddingSettingsDeps): Emb
 			return profile === undefined ? base : { ...base, sources: buildPlan(sources.sources, { profile }) };
 		},
 		plan: async (request) => {
-			const resolved = resolveChoice(request);
+			const resolved = await resolveChoice(request);
 			if ("error" in resolved) {
 				const embedder = readEmbedder(deps.env, deps.cwd);
 				return {
@@ -377,7 +391,7 @@ export function createEmbeddingSettingsService(deps: EmbeddingSettingsDeps): Emb
 					configExists: existsSync(configPath()),
 					error: resolved.error,
 					current: { profileId: currentProfileId(embedder, readSemantic(deps.env, deps.cwd), accountBaseUrl()), embedder: asJsonObject(embedder) },
-					profiles: embeddingProfiles(),
+					profiles: embeddingProfiles(await deps.localSpec()),
 					sources: [],
 				};
 			}
@@ -386,7 +400,7 @@ export function createEmbeddingSettingsService(deps: EmbeddingSettingsDeps): Emb
 			return snapshotFor(choice, choice.profile.kind === "dazzi" || choice.profile.kind === "byok" ? (await preflight(choice, { ...request, acknowledgeRemote: true })).error : null);
 		},
 		apply: async (request) => {
-			const resolved = resolveChoice(request);
+			const resolved = await resolveChoice(request);
 			if ("error" in resolved) return { ...EMPTY_RESULT(request.profileId), error: resolved.error };
 			const { choice } = resolved;
 			const snapshot = await deps.dataSources.list();

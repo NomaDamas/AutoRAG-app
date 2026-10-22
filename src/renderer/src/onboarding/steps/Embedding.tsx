@@ -9,7 +9,8 @@ import { useRef, type KeyboardEvent, type ReactElement } from "react";
 import { cn } from "../../lib/cn";
 import { Icon } from "../marks";
 import { Eyebrow } from "../parts";
-import { canSelectCloudEmbedding, embedCards, formatSize, resolveEmbed, scanTotals, type EmbedCard } from "../flow";
+import { localSpecMessage } from "../../../../shared/local-embedding-spec";
+import { canSelectCloudEmbedding, embedCards, formatSize, localEmbeddingAllowed, resolveEmbed, scanTotals, type EmbedCard } from "../flow";
 import type { OnboardingCtx } from "../context";
 import { ModelDownloadPanel } from "../../components/ModelDownloadPanel";
 
@@ -29,8 +30,9 @@ export function EmbeddingStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactEl
 		cloudAvailable,
 		modelBytes: embedding === null ? null : embedding.modelBytes,
 		modelCached: embedding?.cached === true,
+		localSpec: embedding === null ? null : embedding.localSpec,
 	});
-	const selected = resolveEmbed(draft.embed, cloudAvailable);
+	const selected = resolveEmbed(draft.embed, cloudAvailable, localEmbeddingAllowed(embedding === null ? null : embedding.localSpec));
 	const listRef = useRef<HTMLDivElement | null>(null);
 	// Until main answers the first status read the size is unknown; the embedding info already carries it.
 	const reported = ctx.modelDownload.status;
@@ -40,7 +42,10 @@ export function EmbeddingStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactEl
 			: { ...reported, bytesTotal: embedding.modelBytes, ...(embedding.cached ? { state: "ready" as const, bytesDone: embedding.modelBytes } : {}) };
 
 	const choose = (card: EmbedCard): void => {
-		if (!card.disabled) {
+		if (card.blocked !== null) {
+			// Say why the card cannot be chosen, instead of leaving a click that does nothing.
+			ctx.toast(localSpecMessage(card.blocked, t));
+		} else if (!card.disabled) {
 			ctx.setEmbedMode(card.id);
 		}
 	};
@@ -106,6 +111,7 @@ export function EmbeddingStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactEl
 					{card.tag === null ? null : <span className={cn("em-tag", card.tag.tone)}>{t(card.tag.labelKey)}</span>}
 				</div>
 				<p className="em-line">{t(card.lineKey)}</p>
+				{card.blocked === null ? null : <p className="em-blocked">{localSpecMessage(card.blocked, t)}</p>}
 				<div className="em-meters">
 					{card.meters.map((meter) => (
 						<div

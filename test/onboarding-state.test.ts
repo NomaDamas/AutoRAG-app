@@ -70,6 +70,7 @@ function makeDeps(userDataDir: string, env: NodeJS.ProcessEnv = {}): OnboardingS
 		iCloudDrivePath: null,
 		cloudDrives: async () => [],
 		ocrEnabled: async () => false,
+		localSpec: async () => ({ eligible: true }),
 		configPath: join(userDataDir, "config.json"),
 		resolveWorkspacePath: async () => userDataDir,
 		refresh: async () => ({ ok: true, methods: [], scanned: 0, written: 0, deleted: 0, skipped: 0, diagnostics: [], error: null }),
@@ -220,6 +221,27 @@ describe("createOnboardingService persistence", () => {
 		};
 		expect(config.minSync?.embedder).toEqual({ id: "native:Qwen/Qwen3-Embedding-0.6B", dimension: 1024 });
 		service.dispose();
+	});
+
+	it("on a machine below the local spec: reports it, refuses a local first index, and writes no embedder", async () => {
+		const directory = await workDir();
+		const weak = { eligible: false, reason: "apple-base-chip", vars: { chip: "Apple M2" } } as const;
+		const service = createOnboardingService({ ...makeDeps(directory), localSpec: async () => weak });
+
+		expect((await service.embedding()).localSpec).toEqual(weak);
+		await expect(service.startIndexing({ folders: ["/Users/me/Documents"], embed: "local", sources: [], plan: "free", model: null })).rejects.toThrow(/Apple M2/u);
+		expect(service.isIndexing()).toBe(false);
+		await expect(readFile(join(directory, "config.json"), "utf8")).rejects.toThrow();
+
+		// Keyword-only search needs no model, so the same machine can still index.
+		await service.startIndexing({ folders: ["/Users/me/Documents"], embed: "none", sources: [], plan: "free", model: null });
+		for (let tick = 0; tick < 100 && service.isIndexing(); tick += 1) await flush();
+		service.dispose();
+	});
+
+	it("on a machine that meets the local spec: reports it eligible", async () => {
+		const directory = await workDir();
+		expect((await createOnboardingService(makeDeps(directory)).embedding()).localSpec).toEqual({ eligible: true });
 	});
 
 	describe("the on-device model download", () => {

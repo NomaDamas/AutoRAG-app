@@ -65,6 +65,7 @@ import { createAutoRagConfigService } from "./autorag-config-service";
 import { createModelStatusService } from "./model-status";
 import { createProviderAuthService, type ProviderAuthService } from "./provider-auth-service";
 import { createProviderCredentialService } from "./provider-credentials";
+import { createLocalSpecProbe } from "./hardware-probe";
 import { configureEmbeddingDaemon, ensureEmbeddingForConfig, stopEmbeddingDaemon } from "./embedding-daemon";
 import { migrateLegacyEmbedding } from "./embedding-migration";
 import { createEmbeddingSettingsService } from "./embedding-settings-service";
@@ -570,6 +571,8 @@ app.whenReady().then(async () => {
 	// it takes the shared refresh lock and is journaled, so it shows in the indexing progress.
 	const schedulePath = schedulePaths(autoragConfigPath());
 	const lockedDataSources = lockDataSources(dataSources, schedulePath);
+	// One verdict for the whole process; a packaged app never honors the QA hardware override.
+	const localSpec = createLocalSpecProbe({ env: process.env, allowOverride: !app.isPackaged });
 	// The on-device embedding model is downloaded on demand (onboarding, Settings), never bundled. One service for
 	// the whole app, so a download started in one place shows its progress everywhere.
 	const modelDownload = createModelDownloadService({
@@ -587,6 +590,7 @@ app.whenReady().then(async () => {
 		cwd: process.cwd(),
 		config: autoRagConfig,
 		dataSources: lockedDataSources,
+		localSpec,
 		credentials,
 		modelReady: () => modelDownload.status().state === "ready",
 	});
@@ -786,6 +790,7 @@ app.whenReady().then(async () => {
 			}
 			return [];
 		},
+		localSpec,
 		ocrEnabled: async () => {
 			try {
 				const raw = readRawConfigObject(autoragConfigPath());

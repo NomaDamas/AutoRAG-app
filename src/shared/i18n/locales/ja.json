@@ -2129,6 +2129,18 @@
       "intervalHint": "ファイルの変化を再確認する間隔です。"
     }
   },
+  "localSpec": {
+    "blocked": "このコンピューターはローカル埋め込みの最小要件を満たしていません。{{reason}}",
+    "reason": {
+      "appleBaseChip": "{{chip}} の標準チップは非対応です。Pro・Max・Ultra チップ(例: M2 Pro)と {{minMemoryGb}}GB 以上のユニファイドメモリが必要です。",
+      "appleMemory": "ユニファイドメモリは {{memoryGb}}GB です。{{minMemoryGb}}GB 以上が必要です。",
+      "appleSiliconRequired": "Apple シリコン(Pro・Max・Ultra チップ、ユニファイドメモリ {{minMemoryGb}}GB 以上)が必要です。",
+      "noCudaGpu": "VRAM {{minVramGb}}GB 以上の CUDA 対応 NVIDIA GPU が見つかりませんでした。",
+      "gpuVram": "{{gpu}} の VRAM は {{vramGb}}GB です。{{minVramGb}}GB 以上が必要です。",
+      "unsupportedPlatform": "この OS ではローカル埋め込みに対応していません。",
+      "hardwareUnreadable": "このコンピューターのスペックを確認できませんでした。"
+    }
+  },
   "modelDownload": {
     "title": "このコンピューター用モデル",
     "needed": "このコンピューターで文書を理解するには、モデル(約 {{size}})を一度ダウンロードする必要があります。",

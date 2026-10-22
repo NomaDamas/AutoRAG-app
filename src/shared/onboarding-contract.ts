@@ -18,6 +18,7 @@
  * Local embedding runs on this machine without sending corpus text off-device.
  */
 
+import type { LocalSpecVerdict } from "./local-embedding-spec";
 import type { SmartExclusion } from "./smart-indexing-contract";
 
 export const ONBOARDING_CHANNELS = {
@@ -204,6 +205,8 @@ export interface EmbeddingInfo {
 	readonly configured: boolean;
 	/** Choosing local embedding runs the on-device model, so its weights must be downloaded (false when the config names a server of the user's own). */
 	readonly localModel: boolean;
+	/** Whether this machine meets the minimum spec for the on-device model; local embedding is off-limits when it does not. */
+	readonly localSpec: LocalSpecVerdict;
 }
 
 /** Metadata a detected connector exposes, shown as its second line. */

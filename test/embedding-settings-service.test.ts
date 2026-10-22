@@ -6,8 +6,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { createAutoRagConfigService } from "../src/main/autorag-config-service";
 import { createDataSourceStatusService } from "../src/main/datasource-status";
 import { createEmbeddingSettingsService } from "../src/main/embedding-settings-service";
+import { tByName, t } from "../src/shared/i18n/core";
+import { evaluateLocalEmbeddingSpec, localSpecMessage, type LocalSpecVerdict } from "../src/shared/local-embedding-spec";
 import type { ProviderCredentialService } from "../src/main/provider-credentials";
-import { t } from "../src/shared/i18n/core";
 import type { DataSourceSyncResult } from "../src/shared/settings-contract";
 
 const directories: string[] = [];
@@ -64,7 +65,9 @@ function fakeCredentials(env: NodeJS.ProcessEnv): { readonly service: ProviderCr
 	return { service, stored };
 }
 
-function buildService(fixture: Fixture, fetchImpl?: typeof fetch, modelReady: () => boolean = () => true) {
+const ELIGIBLE: LocalSpecVerdict = { eligible: true };
+
+function buildService(fixture: Fixture, fetchImpl?: typeof fetch, modelReady: () => boolean = () => true, spec: LocalSpecVerdict = ELIGIBLE) {
 	const config = createAutoRagConfigService({ env: fixture.env, cwd: fixture.root });
 	const real = createDataSourceStatusService({ env: fixture.env, cwd: fixture.root });
 	const dataSources = {
@@ -82,6 +85,7 @@ function buildService(fixture: Fixture, fetchImpl?: typeof fetch, modelReady: ()
 		dataSources,
 		credentials: credentials.service,
 		modelReady,
+		localSpec: async () => spec,
 		...(fetchImpl === undefined ? {} : { fetchImpl }),
 	});
 	return { embedding, credentials };
@@ -407,3 +411,49 @@ describe("createEmbeddingSettingsService", () => {
 function fixtureRootPlaceholder(): string {
 	return join(tmpdir(), "autorag-embedding-vault");
 }
+
+describe("the local embedding spec guard", () => {
+	const weak: LocalSpecVerdict = evaluateLocalEmbeddingSpec({ platform: "darwin", arch: "arm64", cpuModel: "Apple M2", memoryBytes: 16 * 1024 ** 3, gpus: [] });
+	const message = localSpecMessage(weak, tByName);
+	const below = (fixture: Fixture, fetchImpl?: typeof fetch) => buildService(fixture, fetchImpl, () => true, weak).embedding;
+
+	it("lists every profile but marks only the on-device model unavailable, with the reason, on a machine below the spec", async () => {
+		const profiles = (await below(await createFixture({})).get()).profiles;
+		expect(profiles.map((profile) => profile.id)).toEqual(["none", "local", "dazzi", "byok"]);
+		expect(profiles.map((profile) => profile.unavailable)).toEqual([null, message, null, null]);
+		expect(message).toContain("Apple M2");
+	});
+
+	it("marks nothing unavailable on a machine that meets the spec", async () => {
+		const { embedding } = buildService(await createFixture({}));
+		expect((await embedding.get()).profiles.map((profile) => profile.unavailable)).toEqual([null, null, null, null]);
+	});
+
+	it("refuses to apply the on-device model below the spec: nothing is written and nothing is rebuilt", async () => {
+		const fixture = await createFixture({ mail: { type: "mailcrawl", connector: {} } });
+		const before = await readFile(fixture.configPath, "utf8");
+
+		const result = await below(fixture).apply({ profileId: "local" });
+
+		expect(result).toMatchObject({ ok: false, applied: false, error: message });
+		expect(await readFile(fixture.configPath, "utf8")).toBe(before);
+		expect(fixture.synced).toEqual([]);
+	});
+
+	it("refuses to plan it too, so the preview never promises what apply would refuse", async () => {
+		const snapshot = await below(await createFixture({})).plan({ profileId: "local" });
+		expect(snapshot.error).toBe(message);
+		expect(snapshot.sources).toEqual([]);
+	});
+
+	it("still lets a weak machine switch to keyword-only search", async () => {
+		const fixture = await createFixture({ chat: { type: "discord", connector: {} } });
+		expect(await below(fixture).apply({ profileId: "none" })).toMatchObject({ ok: true, applied: true });
+	});
+
+	it("still lets a weak machine use an embedding server it runs itself", async () => {
+		const fixture = await createFixture({});
+		const result = await below(fixture, async () => vectorResponse(1024)).apply({ profileId: "byok", byok: { baseUrl: "http://127.0.0.1:11434", protocol: "openai" } });
+		expect(result).toMatchObject({ ok: true, applied: true });
+	});
+});

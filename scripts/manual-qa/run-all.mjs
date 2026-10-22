@@ -72,6 +72,7 @@ const LANES = [
 	{ name: "quit-clean", script: "run-qa-finder-quit-clean.mjs", timeout: 600 },
 	{ name: "onboarding", script: "run-qa-onboarding.mjs", timeout: 900 },
 	{ name: "onboarding-language", script: "run-qa-onboarding-language.mjs", timeout: 900 },
+	{ name: "local-embedding-spec", script: "run-qa-local-embedding-spec.mjs", timeout: 900 },
 	{ name: "analytics", script: "run-qa-analytics.mjs", timeout: 600 }
 ];
 

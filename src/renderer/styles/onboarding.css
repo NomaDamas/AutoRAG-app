@@ -2022,6 +2022,20 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 	opacity: .55;
 }
 
+.onb .em-card.disabled>.em-blocked {
+	opacity: 1;
+}
+
+.onb .em-blocked {
+	margin: 8px 0 0;
+	padding: 6px 8px;
+	border-radius: 6px;
+	background: var(--onb-red-bg);
+	color: var(--onb-red);
+	font-size: 10px;
+	line-height: 1.45;
+}
+
 .onb .em-card.disabled:hover {
 	border-color: var(--onb-border);
 	transform: none;

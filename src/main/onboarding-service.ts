@@ -32,7 +32,8 @@ import {
 } from "../shared/onboarding-contract";
 import type { AppSettings, ConfigRefreshResult } from "../shared/settings-contract";
 import { isJsonObject } from "../shared/settings-contract";
-import { t } from "../shared/i18n/core";
+import { tByName, t } from "../shared/i18n/core";
+import { localSpecMessage, type LocalSpecVerdict } from "../shared/local-embedding-spec";
 import { applyIndexingConfig, buildDatasourceEntries } from "./onboarding-config";
 import { PROVIDER_ENV_NAME } from "./onboarding-models";
 import { computeIndexingProgress } from "./onboarding-progress";
@@ -123,6 +124,8 @@ export interface OnboardingServiceDeps {
 	/** Sum of the given folders' finished pre-scans, for the ETA denominator. */
 	readonly folderTotals: (paths: readonly string[]) => number;
 	readonly onComplete: () => void;
+	/** Whether this machine meets the minimum spec for the local embedding model. */
+	readonly localSpec: () => Promise<LocalSpecVerdict>;
 	readonly now?: () => number;
 }
 
@@ -626,6 +629,7 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 				modelBytes: modelTotalBytes(spec),
 				cached: modelFilesPresent(cacheRoot, spec),
 				configured: Object.keys(embedder).length > 0,
+				localSpec: await deps.localSpec(),
 				localModel: localEmbeddingModel({ minSync }) !== null,
 			};
 		},
@@ -705,6 +709,12 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 								envName: modelProvider === null ? null : PROVIDER_ENV_NAME[modelProvider],
 							},
 			});
+			// The spec guard: the first index would run the on-device model on this computer. The renderer already hides
+			// the option; this holds when it is bypassed. A server of the user's own runs elsewhere and is never gated.
+			if (embedMode !== "none" && localEmbeddingModel(next) !== null) {
+				const spec = await deps.localSpec();
+				if (!spec.eligible) throw new Error(localSpecMessage(spec, tByName));
+			}
 			writeConfigObject(deps.configPath, next);
 			if (request.plan !== "byok") {
 				// The index never needs the model, so an unreachable account must not block
