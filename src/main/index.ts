@@ -69,6 +69,7 @@ import { createLocalSpecProbe } from "./hardware-probe";
 import { configureEmbeddingDaemon, ensureEmbeddingForConfig, stopEmbeddingDaemon } from "./embedding-daemon";
 import { migrateLegacyEmbedding } from "./embedding-migration";
 import { createEmbeddingSettingsService } from "./embedding-settings-service";
+import { createMcpSettingsService } from "./mcp-settings-service";
 import { createDefaultAgentFactory, createSearchService } from "./search-service";
 import { resolveAppSessionModel } from "./agents/app-model";
 import { createSmartIndexingService } from "./smart-indexing-service";
@@ -590,7 +591,6 @@ app.whenReady().then(async () => {
 		credentials,
 		modelReady: () => modelDownload.status().state === "ready",
 	});
-	embeddingService.applyProcessEnv();
 	// Bring the local model up in the background for the config the user has; search degrades to keywords until it answers.
 	void ensureEmbeddingForConfig(existsSync(autoragConfigPath()) ? readRawConfigObject(autoragConfigPath()) : {});
 	// Unpackaged, registering would add the bare Electron binary to Login Items
@@ -643,6 +643,7 @@ app.whenReady().then(async () => {
 		credentials,
 		providers: providerAuth,
 		embedding: embeddingService,
+		mcp: createMcpSettingsService({ agentDir: () => getAgentDir() }),
 		applyOsMenu: async (next, previous) => {
 			if (next.osMenuIntegration) {
 				if (!previous.osMenuIntegration || next.language !== previous.language) await osMenu.install(menuLabels(next.language));

@@ -41,7 +41,9 @@ second datasource or model configuration. The sidebar is searchable and grouped:
   write `model`, `queryDecomposition`, `jev`, `rerank`, and `thinking.final`.
   The 문서 이해 모델 picker changes `minSync.embedder` through a plan → apply
   flow that propagates the embedder to every datasource CLI that can adopt it
-  (mailcrawl env, qmd `QMD_EMBED_MODEL`, discrawl managed config), reports the
+  (mailcrawl env, discrawl managed config; an Obsidian vault is indexed by MinSync
+  in a MinSync workspace of its own, `.autorag/datasources/obsidian/<instance>/minsync`,
+  so it reads the install's `minSync.embedder` without per-source propagation), reports the
   ones that cannot (lazykatok, GitHub Gist, Lark, ClawGallery), refuses to write
   while an enabled source is incompatible unless acknowledged, and runs the
   real per-source rebuilds. The plan itself is the librarian's
@@ -73,9 +75,11 @@ second datasource or model configuration. The sidebar is searchable and grouped:
   - *Datasources*: the kakao/slack/telegram/whatsapp sidecars get
     `connector.sidecar.semantic: false` (BM25 only), Discord answers from FTS,
     ClawGallery skips its visual vector sync, and for the duration of a refresh the
-    embedding steps the librarian runs unconditionally (mailcrawl `index`, qmd
-    `embed` for Obsidian, discrawl `embed`) are successful no-ops; their sync and
-    update steps still run. GitHub Gist sets `connector.semantic: false`, which
+    embedding steps the librarian runs unconditionally (mailcrawl `index`,
+    discrawl `embed`) are successful no-ops; their sync and update steps still run.
+    The Obsidian source is left unindexed instead: MinSync indexes a vault into a
+    MinSync workspace of its own and needs an embedder, so with keyword-only search
+    the app does not index Obsidian at all. GitHub Gist sets `connector.semantic: false`, which
     the librarian (Marker-Inc-Korea/AutoRAG#1936) maps to the gist skill's own
     switch: no vector index and no `<name>-semantic` method. The pre-#1936
     prototype patch for it is gone with the v2.10.4 pin.
@@ -230,6 +234,16 @@ second datasource or model configuration. The sidebar is searchable and grouped:
     stays inert — no `mcp.json` entry is written, a stale `apple-events` entry
     a Mac left behind is removed, the row reads `unsupported`, and 지금 최신화
     refuses with the reason.
+- **MCP 서버** — the external MCP servers the librarian connects to every search
+  and chat session. The page edits `<pi agent dir>/mcp.json` (`getAgentDir()`,
+  the file the librarian reads; a project `.pi/mcp.json` is ignored upstream on
+  purpose). `src/main/mcp-settings-service.ts` validates an entry with the rules
+  pi applies when a session starts, rewrites the file atomically with mode
+  `0600` (headers and env can hold tokens), keeps everything the form does not
+  manage (`oauth`, `auth`, `toolExposure`, top-level options) and entry order,
+  and refuses to touch a file it cannot parse. Each server has an on/off switch
+  and an exposure (`codemode` default, `deferred`, `direct`, `hidden`); changes
+  apply from the next session, so no process is managed here.
 
 Every edit is a validated leaf write that preserves unrelated and unknown
 config keys. Secrets never enter `config.json`: `/login` stores keys and OAuth

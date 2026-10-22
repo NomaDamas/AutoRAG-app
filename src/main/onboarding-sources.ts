@@ -214,7 +214,6 @@ async function detectGithub(deps: SourceDetectionDeps): Promise<DetectedSource |
 }
 
 async function detectObsidian(deps: SourceDetectionDeps): Promise<DetectedSource | null> {
-	if (!(await hasCommand(deps, "qmd"))) return null;
 	const configPath =
 		deps.platform === "win32"
 			? join(deps.env.APPDATA ?? join(deps.home, "AppData", "Roaming"), "obsidian", "obsidian.json")

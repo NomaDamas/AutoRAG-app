@@ -4,7 +4,7 @@
 //! `bin/<name>.shim` beside it, holding the CLI's entry script relative to the
 //! tools root (the directory that contains `bin/` and `node/`). Windows can only
 //! spawn real executables by bare name, and a shebang script is not one, so every
-//! bundled npm CLI (mailcrawl, qmd, kordoc) gets a launcher instead.
+//! bundled npm CLI (mailcrawl, kordoc) gets a launcher instead.
 
 use std::env;
 use std::fs;

@@ -43,9 +43,7 @@ import type {
  *
  * Honesty rules enforced here:
  * - no remote egress: a local server must be loopback, and is probed for real
- *   vectors before any write (no fake success);
- * - an incompatible configured source blocks the change unless the caller
- *   explicitly acknowledges it, and is always reported.
+ *   vectors before any write (no fake success).
  */
 export interface EmbeddingSettingsDeps {
 	readonly env: NodeJS.ProcessEnv;
@@ -80,7 +78,6 @@ interface EmbeddingChoice {
 
 /** Keyword-only search: nothing is embedded (`appIndexing.semanticSearch: false`). */
 const NONE_PROFILE_ID = "none";
-const QWEN3_GGUF = "hf:Qwen/Qwen3-Embedding-0.6B-GGUF/Qwen3-Embedding-0.6B-Q8_0.gguf";
 
 const LOOPBACK_HOSTS: Record<string, true> = { localhost: true, "127.0.0.1": true, "::1": true, "[::1]": true };
 
@@ -189,20 +186,13 @@ function currentProfileId(embedder: unknown, semantic: boolean, accountBaseUrl: 
 	return "byok";
 }
 
-/** The qmd `QMD_EMBED_MODEL` GGUF URI for the choice. qmd runs its own GGUF engine of the same model and cannot use a server. */
-function qmdModelFor(choice: EmbeddingChoice): string | null {
-	return choice.profile.kind === "local" ? QWEN3_GGUF : null;
-}
-
 function adoptionFor(type: string, choice: EmbeddingChoice): { adoption: EmbeddingAdoption; reason: string; action: string | null } {
 	if (choice.profile.kind === "none") return { adoption: "not-applicable", reason: t("main.embedding.reasons.keywordOnly"), action: null };
 	if (type === "mailcrawl") return { adoption: "native", reason: t("main.embedding.reasons.mailcrawlSharedEmbedder"), action: null };
 	if (SIDECAR_TEMPLATES[type] === true) return { adoption: "native", reason: t("main.embedding.reasons.sidecarSharedEmbedder"), action: null };
 	switch (type) {
 		case "obsidian":
-			return qmdModelFor(choice) === null
-				? { adoption: "incompatible", reason: t("main.embedding.reasons.obsidianIncompatible"), action: null }
-				: { adoption: "propagated", reason: t("main.embedding.reasons.obsidianPropagated"), action: `QMD_EMBED_MODEL=${qmdModelFor(choice)}` };
+			return { adoption: "native", reason: t("main.embedding.reasons.obsidianSharedEmbedder"), action: null };
 		case "discord":
 			return { adoption: "propagated", reason: t("main.embedding.reasons.discordPropagated"), action: t("main.embedding.actions.discordConfig") };
 		case "github-gist":
@@ -228,7 +218,6 @@ const EMPTY_RESULT = (profileId: string, plan: readonly EmbeddingSourceStatus[] 
 	applied: false,
 	profileId,
 	plan,
-	incompatibilities: [],
 	written: [],
 	rebuilds: [],
 	error: null,
@@ -252,10 +241,6 @@ function readSemantic(env: NodeJS.ProcessEnv, cwd: string): boolean {
 	const path = resolveConfigPath({ flags: {}, env, cwd }).configPath;
 	if (!existsSync(path)) return true;
 	return readAppIndexing(readRawConfigObject(path)).semanticSearch;
-}
-
-function qmdModelForConfig(embedder: unknown): string | null {
-	return isJsonObject(embedder) && typeof embedder.id === "string" && embedder.id.startsWith("native:") ? QWEN3_GGUF : null;
 }
 
 /** The switch itself, or its whole block when it is the block's only setting, so no empty `appIndexing` is left behind. */
@@ -410,11 +395,7 @@ export function createEmbeddingSettingsService(deps: EmbeddingSettingsDeps): Emb
 
 			const checked = await preflight(choice, request);
 			if (checked.error !== null) return { ...EMPTY_RESULT(request.profileId, plan), error: checked.error };
-			const incompatibilities = plan.filter((status) => enabledById.get(status.id) === true && status.adoption === "incompatible");
-			const result: EmbeddingChangeResult = { ...EMPTY_RESULT(request.profileId, plan), incompatibilities };
-			if (incompatibilities.length > 0 && request.acknowledgeIncompatible !== true) {
-				return { ...result, error: t("main.embedding.errors.incompatibleSources", { ids: incompatibilities.map((status) => status.id).join(", ") }) };
-			}
+			const result: EmbeddingChangeResult = EMPTY_RESULT(request.profileId, plan);
 
 			// Keyword-only keeps the configured embedder so choosing a model again needs no re-entry.
 			const updates: AutoRagConfigUpdate[] =
@@ -431,11 +412,6 @@ export function createEmbeddingSettingsService(deps: EmbeddingSettingsDeps): Emb
 			} catch (error) {
 				return { ...result, error: error instanceof Error ? error.message : String(error) };
 			}
-
-			// qmd reads QMD_EMBED_MODEL from the inherited process env; keep it in sync.
-			const qmdModel = qmdModelFor(choice);
-			if (qmdModel === null) delete deps.env.QMD_EMBED_MODEL;
-			else deps.env.QMD_EMBED_MODEL = qmdModel;
 
 			// The rebuilds embed through whatever the new config selects: the local server has to be up (or gone) first.
 			await ensureEmbeddingForConfig(readRawConfigObject(configPath()));
@@ -459,11 +435,6 @@ export function createEmbeddingSettingsService(deps: EmbeddingSettingsDeps): Emb
 			}
 
 			return { ...result, ok: true, applied: true, written, rebuilds };
-		},
-		applyProcessEnv: () => {
-			const model = qmdModelForConfig(readEmbedder(deps.env, deps.cwd));
-			if (model === null) delete deps.env.QMD_EMBED_MODEL;
-			else deps.env.QMD_EMBED_MODEL = model;
 		},
 	};
 

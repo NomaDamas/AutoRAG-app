@@ -12,6 +12,7 @@ import type {
 	ProviderLoginEvent,
 	ProviderServerInput,
 	ResolvedPermission,
+	McpServerInput,
 	SettingsBridge,
 } from "../shared/settings-contract";
 import { DEFAULT_SETTINGS } from "../shared/settings-contract";
@@ -20,6 +21,7 @@ import type { DataSourceStatusService } from "./datasource-status";
 import type { ModelStatusService } from "./model-status";
 import type { ProviderCredentialService } from "./provider-credentials";
 import type { RefreshScheduler } from "./refresh-scheduler";
+import type { McpSettingsService } from "./mcp-settings-service";
 import type { ProviderAuthService } from "./provider-auth-service";
 
 interface SettingsState {
@@ -35,8 +37,6 @@ export interface EmbeddingSettingsService {
 	plan(request: EmbeddingChangeRequest): Promise<EmbeddingSettingsSnapshot>;
 	/** Validate, write `minSync.embedder` + reachable per-CLI overrides, then rebuild. */
 	apply(request: EmbeddingChangeRequest): Promise<EmbeddingChangeResult>;
-	/** Push derived child-process env (qmd model) from the current config; call at startup. */
-	applyProcessEnv(): void;
 }
 
 export interface SettingsServiceDeps {
@@ -49,6 +49,7 @@ export interface SettingsServiceDeps {
 	readonly providers?: ProviderAuthService;
 	readonly embedding?: EmbeddingSettingsService;
 	readonly refreshScheduler?: RefreshScheduler;
+	readonly mcp?: McpSettingsService;
 	readonly onProviderLoginEvent?: (event: ProviderLoginEvent) => void;
 	readonly onSettingsChanged?: (settings: AppSettings) => void;
 	/** The interface language a profile without a stored choice starts in (the OS language); Korean when omitted. */
@@ -114,6 +115,10 @@ export function createSettingsService(deps: SettingsServiceDeps): SettingsBridge
 	const requireScheduler = (): RefreshScheduler => {
 		if (deps.refreshScheduler === undefined) throw new Error("Background refresh scheduling is unavailable");
 		return deps.refreshScheduler;
+	};
+	const requireMcp = (): McpSettingsService => {
+		if (deps.mcp === undefined) throw new Error("MCP settings are unavailable");
+		return deps.mcp;
 	};
 
 	return {
@@ -193,5 +198,8 @@ export function createSettingsService(deps: SettingsServiceDeps): SettingsBridge
 		embeddingGet: () => requireEmbedding().get(),
 		embeddingPlan: (request: EmbeddingChangeRequest) => requireEmbedding().plan(request),
 		embeddingApply: (request: EmbeddingChangeRequest) => requireEmbedding().apply(request),
+		mcpGet: () => requireMcp().get(),
+		mcpUpsert: (input: McpServerInput) => requireMcp().upsert(input),
+		mcpRemove: (name: string) => requireMcp().remove(name),
 	};
 }

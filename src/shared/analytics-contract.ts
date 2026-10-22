@@ -19,7 +19,7 @@ export type AnalyticsOrigin = "main" | "renderer";
 const BOOLEAN = [true, false] as const;
 
 /** Settings pages an event can name; `source:<alias>` pages collapse to `source` so a user-chosen alias is never sent. */
-const SETTINGS_PAGES = ["account", "plan", "general", "ai", "web", "indexing", "scope", "reading", "duplicates", "apps", "source"] as const;
+const SETTINGS_PAGES = ["account", "plan", "general", "ai", "web", "indexing", "scope", "reading", "duplicates", "mcp", "apps", "source"] as const;
 export const TRACKED_SETTINGS = [
 	"appearance",
 	"language",

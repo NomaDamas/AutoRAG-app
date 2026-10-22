@@ -363,7 +363,7 @@ export const TEMPLATES: readonly TemplateMeta[] = [
 	{
 		id: "obsidian",
 		label: "Obsidian",
-		binary: "qmd",
+		binary: null,
 		summary: "settingsSources.templates.obsidian.summary",
 		channels: "both",
 		polling: true,
@@ -372,8 +372,6 @@ export const TEMPLATES: readonly TemplateMeta[] = [
 				title: "settingsSources.groups.obsidian",
 				fields: [
 					{ key: "vaultPath", label: "settingsSources.fields.vaultPath", kind: "text" },
-					{ key: "binaryPath", label: "settingsSources.fields.qmdBinaryPath", kind: "text" },
-					{ key: "configPath", label: "settingsSources.fields.configDir", kind: "text" },
 				],
 			},
 		],

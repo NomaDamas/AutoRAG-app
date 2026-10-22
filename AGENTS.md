@@ -37,8 +37,8 @@ The app consumes the librarian only through the dependency declared in
 is a staging directory that `scripts/sync-librarian.mjs` fills from the ignored
 `.upstream/autorag` clone, which it checks out at the pinned ref and builds. The
 ref is a release tag or, while the librarian has no tag that carries what the
-app needs, a full commit SHA (now `733e8a0`, the first revision that pins
-MinSync 0.4.10; `v2.10.4` pins 0.4.8). It is raised deliberately with the
+app needs, a full commit SHA (now the tag `v2.11.0`, which pins MinSync 0.4.10+
+and indexes Obsidian vaults with MinSync instead of `qmd`). It is raised deliberately with the
 alignment changes a new librarian release needs. The staging directory holds only what the librarian
 publishes (`files` of its `package.json`, without devDependencies), so the install
 resolves the librarian's dependencies into the app's one `node_modules` and

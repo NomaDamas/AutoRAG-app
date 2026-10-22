@@ -151,13 +151,12 @@ describe("createEmbeddingSettingsService", () => {
 
 		const result = await embedding.apply({ profileId: "local" });
 
-		expect(result).toMatchObject({ ok: true, applied: true, incompatibilities: [] });
+		expect(result).toMatchObject({ ok: true, applied: true });
 		const config = await readConfig(fixture);
 		expect(config.minSync).toMatchObject({ embedder: { id: "native:Qwen/Qwen3-Embedding-0.6B", dimension: QWEN3_DIMENSION } });
 		expect(config.customSection).toEqual({ keep: true });
 		expect(mailConnector(config)?.env).toBeUndefined();
 		expect(fixture.synced.sort()).toEqual(["mail", "vault"]);
-		expect(fixture.env.QMD_EMBED_MODEL).toContain("Qwen3-Embedding-0.6B");
 	});
 
 	it("refuses to apply the local server until its model is downloaded, and writes nothing", async () => {
@@ -326,17 +325,15 @@ describe("createEmbeddingSettingsService", () => {
 		const fixture = await createFixture({ chat: { type: "discord", connector: {} }, mail: { type: "mailcrawl", connector: {} } });
 		const raw = await readConfig(fixture);
 		await writeFile(fixture.configPath, JSON.stringify({ ...raw, minSync: { embedder: { id: "native:Qwen/Qwen3-Embedding-0.6B", dimension: QWEN3_DIMENSION } } }));
-		fixture.env.QMD_EMBED_MODEL = "hf:old";
 		const { embedding } = buildService(fixture);
 
 		const result = await embedding.apply({ profileId: "none" });
 
-		expect(result).toMatchObject({ ok: true, applied: true, incompatibilities: [], rebuilds: [] });
+		expect(result).toMatchObject({ ok: true, applied: true, rebuilds: [] });
 		const config = await readConfig(fixture);
 		expect(config.appIndexing).toEqual({ semanticSearch: false });
 		expect(config.minSync).toEqual({ embedder: { id: "native:Qwen/Qwen3-Embedding-0.6B", dimension: QWEN3_DIMENSION } });
 		expect(fixture.synced).toEqual([]);
-		expect(fixture.env.QMD_EMBED_MODEL).toBeUndefined();
 	});
 
 	it("switches semantic search back on when a model is chosen after keyword-only", async () => {
@@ -351,21 +348,15 @@ describe("createEmbeddingSettingsService", () => {
 		expect(fixture.synced).toEqual(["mail"]);
 	});
 
-	it("blocks a change when an enabled datasource cannot follow the server, and does not write, unless acknowledged", async () => {
+	it("lets Obsidian follow any server, since MinSync indexes the vault with the shared embedder", async () => {
 		const fixture = await createFixture({ vault: { type: "obsidian", connector: { vaultPath: fixtureRootPlaceholder() } } });
 		const server = openAiServer();
 		const { embedding } = buildService(fixture, server.fetchImpl);
-		const request = { profileId: "byok", byok: { baseUrl: "http://127.0.0.1:11434", protocol: "openai" as const } };
 
-		const blocked = await embedding.apply(request);
+		const result = await embedding.apply({ profileId: "byok", byok: { baseUrl: "http://127.0.0.1:11434", protocol: "openai" as const } });
 
-		expect(blocked).toMatchObject({ ok: false, applied: false });
-		expect(blocked.incompatibilities.map((status) => status.id)).toEqual(["vault"]);
-		expect((await readConfig(fixture)).minSync).toBeUndefined();
-
-		const forced = await embedding.apply({ ...request, acknowledgeIncompatible: true });
-		expect(forced).toMatchObject({ ok: true, applied: true });
-		expect(fixture.synced).toEqual([]);
+		expect(result).toMatchObject({ ok: true, applied: true });
+		expect(fixture.synced).toEqual(["vault"]);
 	});
 
 	it("rejects retired and unknown profile ids", async () => {
@@ -403,7 +394,7 @@ describe("createEmbeddingSettingsService", () => {
 		expect(await currentAfter({ id: "bge-m3", baseUrl: "http://127.0.0.1:11434", dimension: 1024 })).toBe("byok");
 
 		const adoption = Object.fromEntries((await embedding.get()).sources.map((source) => [source.id, source.adoption]));
-		expect(adoption).toEqual({ mail: "native", chat: "propagated", talk: "native", vault: "incompatible", news: "not-applicable" });
+		expect(adoption).toEqual({ mail: "native", chat: "propagated", talk: "native", vault: "native", news: "not-applicable" });
 	});
 });
 

@@ -16,7 +16,7 @@ import { isJsonObject } from "../shared/settings-contract";
  * nothing. The shared config file is left alone, like `indexing-policy`: the
  * policy is applied to the config the app hands to the librarian.
  *
- * The librarian (v2.10.x) has no switch for this, so the policy works with what
+ * The librarian (v2.11.x) has no switch for this, so the policy works with what
  * it exposes: refresh method selection, per-datasource connector options, and
  * the public retrieval registry and client classes.
  */
@@ -55,6 +55,8 @@ function entryWithoutSemantic(alias: string, entry: unknown): unknown {
 	// The librarian maps `connector.semantic: false` to the gist skill's own switch (AutoRAG#1936): no vector index, no semantic method.
 	if (template === "github-gist" || template === "hister") return { ...entry, connector: { ...connector, semantic: false } };
 	if (template === "clawgallery") return { ...entry, connector: { ...connector, syncVisual: false } };
+	// An Obsidian vault is indexed by MinSync, which cannot index without an embedder; keyword-only mode runs none.
+	if (template === "obsidian") return { ...entry, enabled: false };
 	return entry;
 }
 

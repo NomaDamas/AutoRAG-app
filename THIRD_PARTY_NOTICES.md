@@ -80,7 +80,7 @@ attached to it.
 |---|---|
 | Node.js | MIT |
 | npm | Artistic-2.0 |
-| minsync, jikji, dupey, kordoc, mailcrawl, rhwp, rclone, lark-cli, qmd | MIT |
+| minsync, jikji, dupey, kordoc, mailcrawl, rhwp, rclone, lark-cli | MIT |
 | discrawl, telecrawl, wacrawl, slacrawl, notcrawl | MIT |
 | himalaya, clawgallery | Apache-2.0 |
 | lazykatok (macOS only) | MIT |

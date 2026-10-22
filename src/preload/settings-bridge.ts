@@ -46,5 +46,8 @@ export function createSettingsBridge(ipcRenderer: IpcRenderer): SettingsBridge {
 		embeddingGet: () => ipcRenderer.invoke(SETTINGS_CHANNELS.embeddingGet),
 		embeddingPlan: (request) => ipcRenderer.invoke(SETTINGS_CHANNELS.embeddingPlan, request),
 		embeddingApply: (request) => ipcRenderer.invoke(SETTINGS_CHANNELS.embeddingApply, request),
+		mcpGet: () => ipcRenderer.invoke(SETTINGS_CHANNELS.mcpGet),
+		mcpUpsert: (input) => ipcRenderer.invoke(SETTINGS_CHANNELS.mcpUpsert, input),
+		mcpRemove: (name) => ipcRenderer.invoke(SETTINGS_CHANNELS.mcpRemove, name),
 	};
 }

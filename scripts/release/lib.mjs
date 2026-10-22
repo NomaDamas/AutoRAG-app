@@ -170,7 +170,7 @@ export function findFile(root, names) {
 /**
  * npm installs every platform's prebuilt add-ons for packages that ship them in-tree. Drop the
  * ones for other targets; the layouts seen in this dependency set are
- *   prebuilds/<os>-<arch>[.node]      (tree-sitter-*, better-sqlite3)
+ *   prebuilds/<os>-<arch>[.node]      (better-sqlite3)
  *   bin/napi-v<n>/<os>/<arch>         (onnxruntime-node)
  * `onnxruntime-web` is the browser/WASM backend; nothing that runs under Node imports it.
  */
@@ -199,13 +199,6 @@ export function pruneNativeForPlatform(root, target) {
 	};
 	walk(root);
 	rmSync(join(root, "onnxruntime-web"), { recursive: true, force: true });
-	// node-llama-cpp ships one package per backend. Keep the portable ones for this target:
-	// Metal on macOS; CPU plus Vulkan on Windows (CUDA needs an NVIDIA toolkit and is 500 MB more).
-	const llama = join(root, "@node-llama-cpp");
-	if (existsSync(llama)) {
-		const keep = target.os === "darwin" ? [`mac-${target.arch}-metal`] : ["win-x64", "win-x64-vulkan"];
-		for (const entry of readdirSync(llama)) if (!keep.includes(entry)) rmSync(join(llama, entry), { recursive: true, force: true });
-	}
 }
 
 /**

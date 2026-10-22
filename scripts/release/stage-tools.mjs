@@ -8,7 +8,7 @@
  * Output (build/stage/<platform>/):
  *   tools/bin/        the dependency CLIs, each a real executable
  *   tools/node/       Node 24 LTS + npm (also the runtime of the npm-based CLIs)
- *   tools/npm/        mailcrawl, qmd, kordoc and their node_modules
+ *   tools/npm/        mailcrawl, kordoc and their node_modules
  *   tools/manifest.json   what was staged: name, version, source, sha256
  *   verify-model/     native Qwen3-Embedding-0.6B checkpoint, for verify-bundle only
  *
@@ -476,7 +476,7 @@ const GO_CRAWLERS = [
 
 const CARGO_BINARIES = [{ name: "dupey" }, { name: "jikji", crate: "jikji-cli" }, { name: "clawgallery" }];
 
-const NPM_PACKAGES = ["@nomadamas/mailcrawl", "@tobilu/qmd", "kordoc"];
+const NPM_PACKAGES = ["@nomadamas/mailcrawl", "kordoc"];
 
 // A full run starts clean; a partial run (--only) touches just the tools it names and keeps the rest.
 if (only === undefined) rmSync(TOOLS, { recursive: true, force: true });

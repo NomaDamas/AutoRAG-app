@@ -9,7 +9,7 @@ import { FS_CHANNELS } from "../shared/fs-contract";
 import { SEARCH_CHANNELS, type SearchBridge } from "../shared/search-contract";
 import { SMART_INDEXING_CHANNELS } from "../shared/smart-indexing-contract";
 import { OS_REQUEST_CHANNELS } from "../shared/os-request-contract";
-import { SETTINGS_CHANNELS, type EmbeddingChangeRequest, type JsonValue, type ProviderAuthKind, type ProviderServerInput, type SettingsBridge } from "../shared/settings-contract";
+import { SETTINGS_CHANNELS, type EmbeddingChangeRequest, type JsonValue, type McpServerInput, type ProviderAuthKind, type ProviderServerInput, type SettingsBridge } from "../shared/settings-contract";
 import { ACCOUNT_CHANNELS } from "../shared/account-contract";
 import { ONBOARDING_CHANNELS } from "../shared/onboarding-contract";
 import { isServiceRunRequest, SERVICES_CHANNELS } from "../shared/services-contract";
@@ -167,6 +167,16 @@ function requireEmbeddingChangeRequest(value: unknown): EmbeddingChangeRequest {
 	return value as EmbeddingChangeRequest;
 }
 
+/** Validate the shape of an MCP server payload; the entry itself is validated by the service. */
+function requireMcpServerInput(value: unknown): McpServerInput {
+	if (value === null || typeof value !== "object") throw new TypeError("MCP server input must be an object");
+	const input = value as Record<string, unknown>;
+	const name = requireNonEmptyString(input.name, "MCP server name");
+	if (input.config === null || typeof input.config !== "object" || Array.isArray(input.config)) throw new TypeError("MCP server config must be an object");
+	if (input.replaces !== undefined && typeof input.replaces !== "string") throw new TypeError("MCP server replaces must be a string");
+	return { name, config: input.config as McpServerInput["config"], ...(typeof input.replaces === "string" ? { replaces: input.replaces } : {}) };
+}
+
 export function registerSettingsIpcHandlers(service: SettingsBridge): void {
 	ipcMain.handle(SETTINGS_CHANNELS.get, () => service.get());
 	ipcMain.handle(SETTINGS_CHANNELS.set, (_event, patch) => service.set(patch));
@@ -269,6 +279,9 @@ export function registerSettingsIpcHandlers(service: SettingsBridge): void {
 	ipcMain.handle(SETTINGS_CHANNELS.embeddingApply, (_event, request: unknown) =>
 		service.embeddingApply(requireEmbeddingChangeRequest(request)),
 	);
+	ipcMain.handle(SETTINGS_CHANNELS.mcpGet, () => service.mcpGet());
+	ipcMain.handle(SETTINGS_CHANNELS.mcpUpsert, (_event, input: unknown) => service.mcpUpsert(requireMcpServerInput(input)));
+	ipcMain.handle(SETTINGS_CHANNELS.mcpRemove, (_event, name: unknown) => service.mcpRemove(requireNonEmptyString(name, "MCP server name")));
 }
 
 /** AutoRAG account: the plan is the only renderer-supplied payload and is validated here. */
