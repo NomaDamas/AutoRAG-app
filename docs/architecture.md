@@ -276,10 +276,15 @@ Until it is on, every event is dropped before it is queued, and
 There is no per-report prompt.
 
 What is reported: uncaught errors in the main process and the pages, a crashed
-or killed renderer or fs worker (`child-process-gone`, no minidump), and three
-indexing signals: a refresh that returns `ok: false` (failing step, counts), a
-file whose parse hits the per-file timeout (its size only), and a local index
-run whose activity snapshot does not change for 30 minutes (phase, counts).
+or killed renderer or fs worker (`child-process-gone`, no minidump), and four
+indexing signals: a refresh that returns `ok: false` (failing step, counts;
+reported by `refreshAutoragIndex`, so Settings, onboarding and the Finder
+checkbox all report), a datasource sync that ran and failed (its built-in type
+and scrubbed error; a missing install or credential is not reported), an
+embedder the watchdog had to kill and restart (restart count), and a file whose
+parse hits the per-file timeout (its size only). There is deliberately no
+"no progress for N minutes" report: the activity snapshot only moves on phase,
+count and MinSync commit changes, so a long single phase looked like a stall.
 Identical reports (same fingerprint) are sent once per run, and Sentry groups
 them into one issue.
 
@@ -288,8 +293,8 @@ which turns a path into `<path>.ext`), document text, user, IP, host name,
 console and network breadcrumbs, local variables, screenshots, sessions, and
 native minidumps (process memory can hold document text).
 
-Design: `src/main/error-report-core.ts` holds the scrubbing, the report
-builders and the stall detector (no `electron` import, so the scheduled refresh
+Design: `src/main/error-report-core.ts` holds the scrubbing and the report
+builders (no `electron` import, so the scheduled refresh
 job can load it); `src/main/error-reporting.ts` owns the one Sentry client.
 The fs worker (`@sentry/electron/utility`) and the pages
 (`@sentry/electron/renderer`, with the SDK preload imported by

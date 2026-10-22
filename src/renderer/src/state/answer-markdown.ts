@@ -15,6 +15,7 @@
 import { viewerForExtension } from "../../../preview/shared/registry";
 import { resolveRelative } from "../../../preview/shared/location";
 import { webUrl } from "../../../shared/fs-contract";
+import { pipeTable, pipeTableLength, type PipeTablePart } from "./excerpt-format";
 import { basename, isAbsolutePath } from "./paths";
 
 export type InlineSegment =
@@ -176,10 +177,10 @@ export function splitAnswerParagraphs(answer: string): readonly string[] {
 
 export type AnswerBlockKind = "heading" | "list" | "quote" | "code" | "paragraph";
 
-export interface AnswerBlock {
-	readonly kind: AnswerBlockKind;
-	readonly text: string;
-}
+export type AnswerBlock =
+	| { readonly kind: AnswerBlockKind; readonly text: string }
+	/** A GFM pipe table; cells are inline markdown. */
+	| { readonly kind: "table"; readonly header: PipeTablePart["header"]; readonly align: PipeTablePart["align"]; readonly rows: PipeTablePart["rows"] };
 
 const HEADING = /^#{1,6}\s+/u;
 const LIST = /^\s*(?:[-*•]|\d+[.)])\s+/u;
@@ -196,7 +197,19 @@ export function parseAnswerBlocks(markdown: string): readonly AnswerBlock[] {
 	const lines = markdown.split("\n");
 	let inFence = false;
 	let fence: string[] = [];
-	for (const raw of lines) {
+	let index = 0;
+	while (index < lines.length) {
+		const raw = lines[index] ?? "";
+		if (!inFence && !FENCE.test(raw)) {
+			const length = pipeTableLength(lines, index);
+			if (length > 0) {
+				const { header, align, rows } = pipeTable(lines.slice(index, index + length));
+				blocks.push({ kind: "table", header, align, rows });
+				index += length;
+				continue;
+			}
+		}
+		index += 1;
 		if (FENCE.test(raw)) {
 			if (inFence) {
 				blocks.push({ kind: "code", text: fence.join("\n") });

@@ -116,6 +116,36 @@ describe("parseAnswerBlocks", () => {
 		const blocks = parseAnswerBlocks("```json\n{\"a\":1}\n```");
 		expect(blocks).toEqual([{ kind: "code", text: "{\"a\":1}" }]);
 	});
+
+	it("parses a GFM pipe table into a table block with header, alignment, and rows", () => {
+		const blocks = parseAnswerBlocks(
+			["비교는 다음과 같습니다.", "", "| 항목 | 금액 | 비고 |", "|:--|--:|:-:|", "| 로드맵 [1] | 18 | **중요** |", "| 운영 \\| 전략 | 19 |", "", "끝."].join("\n"),
+		);
+		expect(blocks).toEqual([
+			{ kind: "paragraph", text: "비교는 다음과 같습니다." },
+			{
+				kind: "table",
+				header: ["항목", "금액", "비고"],
+				align: ["left", "right", "center"],
+				rows: [
+					["로드맵 [1]", "18", "**중요**"],
+					["운영 | 전략", "19", ""],
+				],
+			},
+			{ kind: "paragraph", text: "끝." },
+		]);
+	});
+
+	it("does not read a pipe table inside a code fence as a table", () => {
+		const blocks = parseAnswerBlocks("```\n| a | b |\n|---|---|\n| 1 | 2 |\n```");
+		expect(blocks).toEqual([{ kind: "code", text: "| a | b |\n|---|---|\n| 1 | 2 |" }]);
+	});
+
+	it("keeps a lone line with a pipe as a paragraph and ends a table at the first non-table line", () => {
+		expect(parseAnswerBlocks("A | B 중 하나")).toEqual([{ kind: "paragraph", text: "A | B 중 하나" }]);
+		const blocks = parseAnswerBlocks("| a | b |\n|---|---|\n| 1 | 2 |\n- 목록");
+		expect(blocks.map((block) => block.kind)).toEqual(["table", "list"]);
+	});
 });
 
 describe("parseInline images", () => {

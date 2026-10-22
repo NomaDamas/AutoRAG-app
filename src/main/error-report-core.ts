@@ -1,6 +1,5 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { IndexActivitySnapshot } from "../shared/index-activity-contract";
 import type { ConfigRefreshResult } from "../shared/settings-contract";
 
 /**
@@ -146,43 +145,23 @@ export function fileTimeoutReport(timeoutMs: number, fileSizeBytes: number): Err
 	};
 }
 
-/** The local index run changed nothing for `minutes`. */
-export function stallReport(snapshot: IndexActivitySnapshot, minutes: number): ErrorReport {
-	const local = snapshot.items.find((item) => item.kind === "local");
-	const phase = local?.phase ?? "unknown";
+/** A datasource sync that failed. Identified by its built-in type: the id is a name the user chose. */
+export function datasourceFailureReport(type: string, error: string, durationMs: number): ErrorReport {
+	const text = scrubText(error);
 	return {
-		title: `Indexing made no progress for ${minutes} min`,
-		fingerprint: ["index-stalled", phase],
-		tags: { "index.step": phase },
-		extra: {
-			phase,
-			minutes,
-			origin: snapshot.origin,
-			scanned: local?.counts?.scanned ?? null,
-			written: local?.counts?.written ?? null,
-			skipped: local?.counts?.skipped ?? null,
-		},
+		title: `Datasource sync failed: ${type}`,
+		fingerprint: ["datasource-failed", type, groupingText(text)],
+		tags: { "index.step": "datasources", "datasource.type": type },
+		extra: { error: text, durationMs },
 	};
 }
 
-/** Minutes without any change in the index activity before a run counts as stalled. */
-export const STALL_MINUTES = 30;
-
-export interface StallDetector {
-	/** Feed every snapshot; each change re-arms the clock, a run that ends disarms it. */
-	observe(snapshot: IndexActivitySnapshot): void;
-	dispose(): void;
-}
-
-export function createStallDetector(report: (report: ErrorReport) => void, minutes: number = STALL_MINUTES): StallDetector {
-	let timer: NodeJS.Timeout | undefined;
+/** The embedder used no CPU for minutes; the watchdog killed it and the sync was started again `retries` times. */
+export function embedderStallReport(retries: number): ErrorReport {
 	return {
-		observe(snapshot) {
-			clearTimeout(timer);
-			if (snapshot.state !== "running") return;
-			timer = setTimeout(() => report(stallReport(snapshot, minutes)), minutes * 60_000);
-			timer.unref();
-		},
-		dispose: () => clearTimeout(timer),
+		title: "Embedder hung and was restarted",
+		fingerprint: ["embedder-stalled"],
+		tags: { "index.step": "minsync" },
+		extra: { retries },
 	};
 }

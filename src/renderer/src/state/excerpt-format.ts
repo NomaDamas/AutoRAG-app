@@ -78,8 +78,11 @@ function alignOf(cell: string): ColumnAlign | null {
 	return left ? "left" : null;
 }
 
+/** A parsed GFM pipe table. */
+export type PipeTablePart = Extract<ExcerptPart, { readonly kind: "table" }>;
+
 /** Length of the pipe table starting at `lines[start]`, or 0 when none starts there. */
-function pipeTableLength(lines: readonly string[], start: number): number {
+export function pipeTableLength(lines: readonly string[], start: number): number {
 	const first = lines[start]?.trim() ?? "";
 	const second = lines[start + 1]?.trim() ?? "";
 	const delimited = first.includes("|") && isDelimiterRow(second);
@@ -93,7 +96,7 @@ function pipeTableLength(lines: readonly string[], start: number): number {
 	return end - start;
 }
 
-function pipeTable(lines: readonly string[]): ExcerptPart {
+export function pipeTable(lines: readonly string[]): PipeTablePart {
 	const delimited = lines.length > 1 && isDelimiterRow(lines[1] ?? "");
 	const body = lines.filter((line, index) => !(index === 1 && delimited) && !isDelimiterRow(line)).map(pipeCells);
 	const header = delimited ? (body.shift() ?? null) : null;

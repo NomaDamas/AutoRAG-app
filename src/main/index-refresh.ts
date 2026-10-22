@@ -19,6 +19,7 @@ import { runWithRecovery } from "./refresh-recovery";
 import { findUnavailableRoots } from "./search-roots";
 import { methodsForSemantic, runWithoutSemanticIndexing } from "./semantic-policy";
 import { t } from "../shared/i18n/core";
+import { embedderStallReport, refreshFailureReport, reportError } from "./error-report-core";
 
 /**
  * The single AutoRAG index-refresh path shared by Settings (manual refresh) and
@@ -66,8 +67,19 @@ export async function resolveEffectiveConfig(
 /** What a plain "refresh my folders" run covers: the parsed mirror and its vector index. */
 export const LOCAL_REFRESH_METHODS: readonly RefreshMethod[] = ["parsed", "minsync"];
 
-/** Manual index refresh from Settings; returns diagnostics instead of throwing for known failures. */
-export async function refreshAutoragIndex(
+/**
+ * Manual index refresh from Settings; returns diagnostics instead of throwing for known failures.
+ * A failed run is reported here, so every caller (Settings, onboarding, the Finder checkbox in the
+ * fs worker) reports the same way.
+ */
+export async function refreshAutoragIndex(deps: AutoragRefreshDeps, methods?: readonly string[]): Promise<ConfigRefreshResult> {
+	const result = await runRefresh(deps, methods);
+	const report = refreshFailureReport(result);
+	if (report !== null) reportError(report);
+	return result;
+}
+
+async function runRefresh(
 	deps: AutoragRefreshDeps,
 	methods?: readonly string[],
 ): Promise<ConfigRefreshResult> {
@@ -156,6 +168,7 @@ export async function refreshAutoragIndex(
 			});
 		}
 		if (retries > 0) {
+			reportError(embedderStallReport(retries));
 			diagnostics.push({
 				code: "minsync-stalled-retried",
 				severity: "warning",
