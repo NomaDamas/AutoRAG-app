@@ -101,7 +101,7 @@ import { createOsRequestService, diskKindOf } from "./os-request-service";
 import { createOsMenuIntegration, menuLabels } from "./os-menu-integration";
 import { installCli } from "./cli-install";
 import { initErrorReporting, setErrorReportingEnabled } from "./error-reporting";
-import { createStallDetector, readErrorReportingEnabled, refreshFailureReport, reportError } from "./error-report-core";
+import { readErrorReportingEnabled } from "./error-report-core";
 import { createAnalytics, createInstallIdStore, readUsageAnalyticsEnabled, resolveAnalyticsTarget, settingChangeEvents } from "./analytics-core";
 import { createPostHogSink } from "./analytics";
 
@@ -177,11 +177,7 @@ async function ensureAutoRAGConfig(): Promise<void> {
 
 /** Manual index refresh from Settings (shared with onboarding's first run). */
 function refreshConfig(methods?: readonly string[]): Promise<ConfigRefreshResult> {
-	return refreshAutoragIndex({ env: process.env, cwd: process.cwd() }, methods).then((result) => {
-		const report = refreshFailureReport(result);
-		if (report !== null) reportError(report);
-		return result;
-	});
+	return refreshAutoragIndex({ env: process.env, cwd: process.cwd() }, methods);
 }
 
 /** Unpackaged runs (and AUTORAG_DEV_LABEL=1) carry the clone label. */
@@ -684,15 +680,10 @@ app.whenReady().then(async () => {
 		ownPids: () => [workerHost.status().pid],
 	});
 	registerIndexActivityIpcHandlers(indexActivity);
-	const stallDetector = createStallDetector(reportError);
 	const stopIndexActivity = indexActivity.start((snapshot) => {
 		sendToMainWindow(INDEX_ACTIVITY_CHANNELS.changed, snapshot);
-		stallDetector.observe(snapshot);
 	});
-	app.once("will-quit", () => {
-		stopIndexActivity();
-		stallDetector.dispose();
-	});
+	app.once("will-quit", stopIndexActivity);
 	registerOsRequestIpcHandlers(osRequests);
 	// The in-app right-click → 서비스 submenu: what macOS offers for the selection, and performing one.
 	registerServicesIpcHandlers(createServicesService());
