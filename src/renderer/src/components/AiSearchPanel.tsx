@@ -19,11 +19,12 @@ import type {
 	SearchStreamEvent,
 } from "../../../shared/search-contract";
 import { composerAction, deliverSteers, restoreChat, settleSteers, type SteerItem } from "../state/steering";
-import { isImageOnlyLine, parseAnswerBlocks, parseInline, type AnswerBlock } from "../state/answer-markdown";
+import { isImageOnlyLine, parseAnswerBlocks, parseInline, type AnswerBlock, type InlineSegment } from "../state/answer-markdown";
 import { summaryRequest, type SummaryLanguage } from "../state/ai-summary";
 import { answerViewState } from "../state/answer-view";
 import { attachmentsFromDrop, isAttachmentDrag, mergeAttachments } from "../state/attachments";
 import { ImageRow, lineImages, type ImageActions } from "./AnswerImage";
+import { PipeTable } from "./PipeTable";
 import {
 	collectSessionEvidence,
 	evidenceKind,
@@ -1155,7 +1156,7 @@ function PastTurnView({
 	);
 }
 
-function ProseBlocks({
+export function ProseBlocks({
 	text,
 	selected,
 	unresolved,
@@ -1178,6 +1179,77 @@ function ProseBlocks({
 	);
 }
 
+/** Inline segments of one answer line: bold, code, image paths as written, and citation chips. */
+function AnswerInline({
+	segments: parsed,
+	selected,
+	unresolved,
+	onCitation,
+}: {
+	readonly segments: readonly InlineSegment[];
+	readonly selected: number | null;
+	readonly unresolved: readonly number[];
+	readonly onCitation: (number: number) => void;
+}): ReactElement {
+	return (
+		<>
+			{parsed.map((segment, index) => {
+				switch (segment.kind) {
+					case "bold":
+						return (
+							<strong key={`${index}`} className="font-semibold text-ink">
+								{segment.text}
+							</strong>
+						);
+					case "code":
+						return (
+							<code key={`${index}`} className="rounded-4 bg-code px-4 py-1 font-mono text-caption text-ink-body">
+								{segment.text}
+							</code>
+						);
+					case "image":
+						// A markdown image is the picture below the line; a path the model
+						// wrote in the sentence stays readable where it was written.
+						if (segment.source === "markdown") return null;
+						return segment.source === "code" ? (
+							<code key={`${index}`} className="rounded-4 bg-code px-4 py-1 font-mono text-caption text-ink-body break-all">
+								{segment.target}
+							</code>
+						) : (
+							<span key={`${index}`} className="break-all">
+								{segment.target}
+							</span>
+						);
+					case "citation":
+						// A citation whose number has no matching evidence entry (a real
+						// library behavior: see Marker-Inc-Korea/AutoRAG#1788) is dropped
+						// from the rendered answer. There is nothing to open, so leaving a
+						// dead marker would only mislead; the run's real evidence list is
+						// unaffected.
+						if (unresolved.includes(segment.number)) {
+							return null;
+						}
+						return (
+							<button
+								type="button"
+								key={`${index}`}
+								className={cn(
+									"cite mx-2 inline-flex h-18 min-w-18 items-center justify-center rounded-5 border-0 px-5 align-[1.5px] text-badge font-semibold cursor-pointer transition-[background,color] duration-(--dur-color) ease-[ease]",
+									segment.number === selected ? "active bg-accent text-on-accent" : "bg-accent-wash text-accent-text hover:bg-accent-soft",
+								)}
+								onClick={() => onCitation(segment.number)}
+							>
+								{segment.number}
+							</button>
+						);
+					default:
+						return <span key={`${index}`}>{segment.text}</span>;
+				}
+			})}
+		</>
+	);
+}
+
 function AnswerBlockView({
 	block,
 	selected,
@@ -1194,60 +1266,11 @@ function AnswerBlockView({
 	if (block.kind === "code") {
 		return <pre className="m-0 overflow-auto whitespace-pre rounded-6 border border-border bg-code px-10 py-8 font-mono text-caption text-ink-body">{block.text}</pre>;
 	}
+	if (block.kind === "table") {
+		return <PipeTable table={block} tableClassName="text-caption" renderLine={(line) => <AnswerInline segments={parseInline(line)} selected={selected} unresolved={unresolved} onCitation={onCitation} />} />;
+	}
 	const parsed = parseInline(block.text);
-	const segments = parsed.map((segment, index) => {
-		switch (segment.kind) {
-			case "bold":
-				return (
-					<strong key={`${index}`} className="font-semibold text-ink">
-						{segment.text}
-					</strong>
-				);
-			case "code":
-				return (
-					<code key={`${index}`} className="rounded-4 bg-code px-4 py-1 font-mono text-caption text-ink-body">
-						{segment.text}
-					</code>
-				);
-			case "image":
-				// A markdown image is the picture below the line; a path the model
-				// wrote in the sentence stays readable where it was written.
-				if (segment.source === "markdown") return null;
-				return segment.source === "code" ? (
-					<code key={`${index}`} className="rounded-4 bg-code px-4 py-1 font-mono text-caption text-ink-body break-all">
-						{segment.target}
-					</code>
-				) : (
-					<span key={`${index}`} className="break-all">
-						{segment.target}
-					</span>
-				);
-			case "citation":
-				// A citation whose number has no matching evidence entry (a real
-				// library behavior: see Marker-Inc-Korea/AutoRAG#1788) is dropped
-				// from the rendered answer. There is nothing to open, so leaving a
-				// dead marker would only mislead; the run's real evidence list is
-				// unaffected.
-				if (unresolved.includes(segment.number)) {
-					return null;
-				}
-				return (
-					<button
-						type="button"
-						key={`${index}`}
-						className={cn(
-							"cite mx-2 inline-flex h-18 min-w-18 items-center justify-center rounded-5 border-0 px-5 align-[1.5px] text-badge font-semibold cursor-pointer transition-[background,color] duration-(--dur-color) ease-[ease]",
-							segment.number === selected ? "active bg-accent text-on-accent" : "bg-accent-wash text-accent-text hover:bg-accent-soft",
-						)}
-						onClick={() => onCitation(segment.number)}
-					>
-						{segment.number}
-					</button>
-				);
-			default:
-				return <span key={`${index}`}>{segment.text}</span>;
-		}
-	});
+	const segments = <AnswerInline segments={parsed} selected={selected} unresolved={unresolved} onCitation={onCitation} />;
 	const images = lineImages(parsed);
 	let line: ReactElement;
 	switch (block.kind) {
