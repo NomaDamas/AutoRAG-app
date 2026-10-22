@@ -18,6 +18,7 @@ import {
 	openEvidenceFolderTab,
 	openTab,
 	openTabAt,
+	openOrSelectFolderTab,
 	openOrSelectSettingsTab,
 	selectTab,
 	SETTINGS_PATH,
@@ -327,5 +328,25 @@ describe("Evidence Folder tabs", () => {
 		);
 		expect(activeTab(toCol).evidenceFolder).toBeUndefined();
 		expect(activeTab(toCol).back).toEqual([]);
+	});
+});
+
+describe("openOrSelectFolderTab (dazzi <folder>)", () => {
+	it("opens a new tab on a folder no tab shows yet", () => {
+		const state = openOrSelectFolderTab(createTabsState("/Users/me"), "/work/project");
+		expect(state.tabs.map((tab) => tab.path)).toEqual(["/Users/me", "/work/project"]);
+		expect(activeTab(state).path).toBe("/work/project");
+	});
+
+	it("selects the tab that already shows the folder instead of piling up duplicates", () => {
+		const opened = openOrSelectFolderTab(createTabsState("/Users/me"), "/work/project");
+		const again = openOrSelectFolderTab(selectTab(opened, opened.tabs[0]!.id), "/work/project");
+		expect(again.tabs).toHaveLength(2);
+		expect(activeTab(again).path).toBe("/work/project");
+	});
+
+	it("does not mistake a Settings or AI Search tab for a folder", () => {
+		const state = openOrSelectFolderTab(openOrSelectSettingsTab(createTabsState("/Users/me")), "/work/project");
+		expect(state.tabs.map((tab) => tab.path)).toEqual(["/Users/me", SETTINGS_PATH, "/work/project"]);
 	});
 });

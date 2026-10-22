@@ -15,6 +15,7 @@ import {
 	type RetrievalMethodDescriptor,
 } from "@autorag/librarian";
 import { describe, expect, it, vi } from "vitest";
+import { createEndpointEmbedder } from "../src/main/embedding-endpoint";
 import { readAppIndexing } from "../src/main/app-indexing";
 import { agentOptionsForSemantic, applySemanticPolicyToAgent, methodsForSemantic, neutralizeSemanticMethods, runWithoutSemanticIndexing, withSemanticPolicyApplied } from "../src/main/semantic-policy";
 
@@ -270,7 +271,9 @@ describe("GitHub Gist in keyword-only mode", () => {
 
 	it("keeps the gist's semantic method while semantic search is on", () => {
 		const { datasources } = withSemanticPolicyApplied(config({ "github-gist": {} }), true);
-		const { skills } = buildDatasourceSkills(datasources ?? {}, "/tmp/autorag-gist-semantic-on");
+		// The librarian registers the gist's semantic method only when a shared embedder is passed, as the app does.
+		const embedder = createEndpointEmbedder(async () => undefined, {});
+		const { skills } = buildDatasourceSkills(datasources ?? {}, "/tmp/autorag-gist-semantic-on", { embedder });
 
 		expect(skills[0]!.retrievalMethods().map((method) => method.describe().type)).toContain("vector");
 	});

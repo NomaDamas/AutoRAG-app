@@ -400,9 +400,7 @@ function checkKnownBlock(path: string, value: unknown): void {
 		if (value.embedder !== undefined) {
 			const embedder = value.embedder;
 			if (!isJsonObject(embedder)) return fail("minSync.embedder must be an object");
-			if (embedder.profile !== undefined && embedder.profile !== "qwen3-embedding-0.6b") {
-				fail("minSync.embedder.profile must be qwen3-embedding-0.6b");
-			}
+			if (embedder.profile !== undefined) fail("minSync.embedder.profile was removed; use id (native:Qwen/Qwen3-Embedding-0.6B)");
 			for (const key of ["id", "baseUrl"] as const) {
 				if (embedder[key] !== undefined && !(typeof embedder[key] === "string" && (embedder[key] as string).length > 0)) {
 					fail(`minSync.embedder.${key} must be a non-empty string`);
@@ -496,24 +494,30 @@ const DAZZI_HOSTS: Record<string, true> = { "api.dazziapp.com": true };
 function assertLoopback(
 	value: string,
 	label: string,
-	options: { readonly allowDazzi?: boolean; readonly allowedHost?: string | undefined } = {},
+	options: { readonly allowDazzi?: boolean; readonly allowedHost?: string | undefined; readonly allowRemote?: boolean } = {},
 ): void {
 	let url: URL;
 	try {
 		url = new URL(value);
 	} catch {
-		throw new Error(`AutoRAG config ${label} must be a valid loopback URL`);
+		throw new Error(`AutoRAG config ${label} must be a valid ${options.allowRemote === true ? "http(s)" : "loopback"} URL`);
 	}
 	if (url.protocol !== "http:" && url.protocol !== "https:") {
 		throw new Error(`AutoRAG config ${label} must use http or https`);
 	}
 	const host = url.hostname.toLowerCase();
 	if (LOOPBACK_HOSTS[host] === true) return;
+	if (options.allowRemote === true) return;
 	if (options.allowDazzi === true && (DAZZI_HOSTS[host] === true || (options.allowedHost !== undefined && host === options.allowedHost))) return;
 	throw new Error(`AutoRAG config ${label} must point at loopback (corpus never leaves this device)`);
 }
 
-/** Corpus embedding/rerank endpoints must stay on-device (or the Dazzi cloud embedder); other connector URLs may be remote. */
+/**
+ * Corpus embedding endpoints must stay on-device, with two exceptions the user chooses in Settings: the Dazzi
+ * cloud, and a server of their own. A remote server of their own must authenticate (`apiKeyEnv`, the name of the
+ * variable that holds its key), so an unauthenticated address typed into the config cannot receive the corpus
+ * by accident. Datasource connector URLs for embedding stay on-device.
+ */
 function assertNoRemoteEgress(candidate: Record<string, unknown>, env?: NodeJS.ProcessEnv): void {
 	const minSync = isJsonObject(candidate.minSync) ? candidate.minSync : undefined;
 	const embedder = minSync !== undefined && isJsonObject(minSync.embedder) ? minSync.embedder : undefined;
@@ -530,7 +534,16 @@ function assertNoRemoteEgress(candidate: Record<string, unknown>, env?: NodeJS.P
 				// Fall through to assertLoopback validation.
 			}
 		}
-		assertLoopback(embedder.baseUrl, "minSync.embedder.baseUrl", { allowDazzi: true, allowedHost });
+		const remoteWithKey = typeof embedder.apiKeyEnv === "string" && embedder.apiKeyEnv.length > 0;
+		try {
+			assertLoopback(embedder.baseUrl, "minSync.embedder.baseUrl", { allowDazzi: true, allowedHost, allowRemote: remoteWithKey });
+		} catch (error) {
+			// Say what a remote server needs, not only that it was refused.
+			if (error instanceof Error && /loopback/u.test(error.message) && !remoteWithKey) {
+				throw new Error(`${error.message}; a server off this computer must set minSync.embedder.apiKeyEnv`);
+			}
+			throw error;
+		}
 	}
 	const datasources = isJsonObject(candidate.datasources) ? candidate.datasources : undefined;
 	if (datasources === undefined) return;
@@ -544,10 +557,6 @@ function assertNoRemoteEgress(candidate: Record<string, unknown>, env?: NodeJS.P
 			// Lark API itself) is not restricted here.
 			const embeddingUrl = /(?:embedding|embedder|embed|rerank)/iu.test(key) && /(?:url|endpoint|server)/iu.test(key);
 			if (embeddingUrl) assertLoopback(target, `datasources.${id}.connector.${key}`);
-		}
-		const runtime = isJsonObject(connector.embeddingRuntime) ? connector.embeddingRuntime : undefined;
-		if (runtime !== undefined && typeof runtime.baseUrl === "string") {
-			assertLoopback(runtime.baseUrl, `datasources.${id}.connector.embeddingRuntime.baseUrl`);
 		}
 	}
 }

@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, truncate, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -7,6 +7,7 @@ import type { AppSettings, ConfigRefreshResult } from "../src/shared/settings-co
 import type { OnboardingServiceDeps } from "../src/main/onboarding-service";
 import { createOnboardingService, readOnboardingPending } from "../src/main/onboarding-service";
 import { storeDazziPlanCredential } from "../src/main/dazzi-plan-credential";
+import { modelTotalBytes, nativeQwen3Spec } from "../src/main/model-download";
 
 /** Yields to the event loop: the final status read after a refresh touches the disk, so microtasks alone are not enough. */
 const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 2));
@@ -73,6 +74,7 @@ function makeDeps(userDataDir: string, env: NodeJS.ProcessEnv = {}): OnboardingS
 		configPath: join(userDataDir, "config.json"),
 		resolveWorkspacePath: async () => userDataDir,
 		refresh: async () => ({ ok: true, methods: [], scanned: 0, written: 0, deleted: 0, skipped: 0, diagnostics: [], error: null }),
+		ensureLocalModel: async () => null,
 		credentials: { list: async () => [], set: async () => [], remove: async () => [], load: async () => [] },
 		settings: { get: async () => DEFAULT_SETTINGS, set: async (patch) => ({ ...DEFAULT_SETTINGS, ...patch }) },
 		detectSources: async () => ({ sources: [] }),
@@ -187,13 +189,24 @@ describe("createOnboardingService persistence", () => {
 			"97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3",
 		);
 		await mkdir(nativeSnapshot, { recursive: true });
-		await writeFile(join(nativeSnapshot, "model.safetensors"), "weights");
-
 		const service = createOnboardingService({ ...makeDeps(directory), home: directory });
+		// Only some of the files: the model is not usable, so it must not read as downloaded.
+		await writeFile(join(nativeSnapshot, "model.safetensors"), "weights");
+		expect((await service.embedding()).cached).toBe(false);
+
+		// Every file at its pinned size and the ref written (sparse files: no 1.2 GB on disk).
+		const spec = nativeQwen3Spec();
+		for (const file of spec.files) {
+			await writeFile(join(nativeSnapshot, file.name), "");
+			await truncate(join(nativeSnapshot, file.name), file.bytes);
+		}
+		await mkdir(join(nativeSnapshot, "..", "..", "refs"), { recursive: true });
+		await writeFile(join(nativeSnapshot, "..", "..", "refs", "main"), spec.revision);
 		const info = await service.embedding();
 		expect(info.profile).toBe("native:Qwen/Qwen3-Embedding-0.6B");
 		expect(info.cached).toBe(true);
-		expect(info.modelBytes).toBeGreaterThan(1_000_000_000);
+		expect(info.modelBytes).toBe(modelTotalBytes(spec));
+		expect(info.localModel).toBe(true);
 
 		await service.startIndexing({
 			folders: ["/Users/me/Documents"],
@@ -229,6 +242,104 @@ describe("createOnboardingService persistence", () => {
 	it("on a machine that meets the local spec: reports it eligible", async () => {
 		const directory = await workDir();
 		expect((await createOnboardingService(makeDeps(directory)).embedding()).localSpec).toEqual({ eligible: true });
+	});
+
+	describe("the on-device model download", () => {
+		const request = { folders: ["/Users/me/Documents"], sources: [], plan: "free", model: null } as const;
+
+		it("waits for the model before the first index and refreshes once it is there", async () => {
+			const directory = await workDir();
+			const order: string[] = [];
+			const gate = Promise.withResolvers<string | null>();
+			const service = createOnboardingService({
+				...makeDeps(directory),
+				ensureLocalModel: () => {
+					order.push("model");
+					return gate.promise;
+				},
+				refresh: async () => {
+					order.push("refresh");
+					return { ok: true, methods: [], scanned: 0, written: 0, deleted: 0, skipped: 0, diagnostics: [], error: null };
+				},
+			});
+
+			await service.startIndexing({ ...request, embed: "local" });
+			await flush();
+			expect(order).toEqual(["model"]);
+			expect((await service.indexStatus()).state).toBe("running");
+
+			gate.resolve(null);
+			for (let tick = 0; tick < 100 && service.isIndexing(); tick += 1) await flush();
+			expect(order).toEqual(["model", "refresh"]);
+			expect((await service.indexStatus()).state).toBe("success");
+			service.dispose();
+		});
+
+		it("fails the first index with the download's error and never refreshes", async () => {
+			const directory = await workDir();
+			let refreshed = false;
+			const service = createOnboardingService({
+				...makeDeps(directory),
+				ensureLocalModel: async () => "no network",
+				refresh: async () => {
+					refreshed = true;
+					return { ok: true, methods: [], scanned: 0, written: 0, deleted: 0, skipped: 0, diagnostics: [], error: null };
+				},
+			});
+
+			await service.startIndexing({ ...request, embed: "local" });
+			for (let tick = 0; tick < 100 && service.isIndexing(); tick += 1) await flush();
+
+			const status = await service.indexStatus();
+			expect(status.state).toBe("failed");
+			expect(status.error).toContain("no network");
+			expect(refreshed).toBe(false);
+			service.dispose();
+		});
+
+		it("does not touch the model for keyword-only or cloud embedding", async () => {
+			const directory = await workDir();
+			let asked = 0;
+			for (const embed of ["none", "cloud"] as const) {
+				const service = createOnboardingService({
+					...makeDeps(await workDir()),
+					ensureLocalModel: async () => {
+						asked += 1;
+						return null;
+					},
+				});
+				await service.startIndexing({ ...request, embed });
+				for (let tick = 0; tick < 100 && service.isIndexing(); tick += 1) await flush();
+				service.dispose();
+			}
+			expect(asked).toBe(0);
+			expect(directory).toBeDefined();
+		});
+
+		it("tells the embedding step that no download is needed when the config already names a server of the user's own", async () => {
+			const directory = await workDir();
+			await writeFile(join(directory, "config.json"), JSON.stringify({ minSync: { embedder: { id: "tei:bge", baseUrl: "http://10.0.0.5:8080" } } }));
+
+			expect((await createOnboardingService(makeDeps(directory)).embedding()).localModel).toBe(false);
+			expect((await createOnboardingService(makeDeps(await workDir())).embedding()).localModel).toBe(true);
+		});
+
+		it("does not download when the user's own server is already configured", async () => {
+			const directory = await workDir();
+			await writeFile(join(directory, "config.json"), JSON.stringify({ minSync: { embedder: { id: "openai:text-embedding-3-small", baseUrl: "https://example.com" } } }));
+			let asked = 0;
+			const service = createOnboardingService({
+				...makeDeps(directory),
+				ensureLocalModel: async () => {
+					asked += 1;
+					return null;
+				},
+			});
+			await service.startIndexing({ ...request, embed: "local" });
+			for (let tick = 0; tick < 100 && service.isIndexing(); tick += 1) await flush();
+			expect(asked).toBe(0);
+			service.dispose();
+		});
 	});
 
 	it("saves and reloads a draft that chose keyword-only search", async () => {

@@ -23,11 +23,14 @@ import { OS_REQUEST_FLAG, OS_REQUEST_PATH_FLAG, type OsRequestAction } from "../
  * {@link OsMenuIntegration.uninstall}.
  */
 
+/** The requests the OS file menu offers; `open` belongs to the `dazzi` command only. */
+export type MenuAction = Exclude<OsRequestAction, "open">;
+
 /** The actions the menu offers, in menu order. */
-export const MENU_ACTIONS: readonly OsRequestAction[] = ["ask", "reveal"];
+export const MENU_ACTIONS: readonly MenuAction[] = ["ask", "reveal"];
 
 /** Menu captions per action; the caller supplies them in the interface language. */
-export type MenuLabels = Readonly<Record<OsRequestAction, string>>;
+export type MenuLabels = Readonly<Record<MenuAction, string>>;
 
 export interface OsMenuIntegrationDeps {
 	readonly platform: NodeJS.Platform;
@@ -74,7 +77,7 @@ export function xmlEscape(value: string): string {
 }
 
 /** The script a macOS workflow runs: the selected items arrive as `"$@"`. */
-export function macServiceScript(execPath: string, appArgs: readonly string[], action: OsRequestAction): string {
+export function macServiceScript(execPath: string, appArgs: readonly string[], action: MenuAction): string {
 	const launcher = [execPath, ...appArgs].map(shellQuote).join(" ");
 	return [
 		"args=()",
@@ -84,7 +87,7 @@ export function macServiceScript(execPath: string, appArgs: readonly string[], a
 	].join("\n");
 }
 
-export function macServiceInfoPlist(action: OsRequestAction, label: string): string {
+export function macServiceInfoPlist(action: MenuAction, label: string): string {
 	return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -321,12 +324,12 @@ export function workflowDirName(label: string): string {
 }
 
 /** The registry key (under HKCU) of one verb on one class root. */
-export function winVerbKey(root: (typeof WIN_CLASS_ROOTS)[number], action: OsRequestAction): string {
+export function winVerbKey(root: (typeof WIN_CLASS_ROOTS)[number], action: MenuAction): string {
 	return `HKCU\\Software\\Classes\\${root}\\shell\\${WIN_VERB_PREFIX}${action}`;
 }
 
 /** The command line Explorer runs for a verb; `%1` is the clicked item. */
-export function winVerbCommand(execPath: string, appArgs: readonly string[], action: OsRequestAction): string {
+export function winVerbCommand(execPath: string, appArgs: readonly string[], action: MenuAction): string {
 	const launcher = [execPath, ...appArgs].map((part) => `"${part}"`).join(" ");
 	return `${launcher} ${OS_REQUEST_FLAG}${action} "${OS_REQUEST_PATH_FLAG}%1"`;
 }

@@ -1092,7 +1092,8 @@
     "onboarding": {
       "apiKeyRequired": "API 키가 필요합니다.",
       "baseUrlRequired": "서버 주소(base URL)가 필요합니다.",
-      "indexingFailed": "인덱싱에 실패했습니다."
+      "indexingFailed": "인덱싱에 실패했습니다.",
+      "modelDownloadFailed": "이 컴퓨터용 임베딩 모델을 내려받지 못해 색인을 시작하지 못했습니다: {{error}}"
     },
     "lock": {
       "scheduledBusy": "백그라운드 새로 고침이 실행 중입니다. 끝난 뒤 다시 시도하세요.",
@@ -1106,7 +1107,8 @@
       "rootUnavailable": "검색 폴더 {{folder}}을(를) 읽을 수 없거나 비어 있어 새로 고침을 건너뛰었습니다. 이 폴더에서 색인된 문서 {{indexed}}개를 지우지 않기 위해서입니다. 드라이브나 클라우드 폴더를 다시 연결하거나, 더 이상 필요 없다면 검색 폴더에서 제거하세요.",
       "retried": "파일 시스템 오류({{code}})가 일시적으로 발생해 새로 고침을 {{retries}}번 다시 시도했습니다.",
       "filesLeftOut": "{{code}} 오류가 계속되는 파일 {{files}}개를 이번 새로 고침에서 제외했습니다. 다음 새로 고침에서 다시 시도합니다.",
-      "parseKilled": "파일 {{timedOut}}개는 제한 시간을 넘겨, {{crashed}}개는 파서가 중단되어 건너뛰었습니다. 다음 새로 고침에서 다시 시도합니다."
+      "parseKilled": "파일 {{timedOut}}개는 제한 시간을 넘겨, {{crashed}}개는 파서가 중단되어 건너뛰었습니다. 다음 새로 고침에서 다시 시도합니다.",
+      "modelMissing": "이 컴퓨터용 임베딩 모델이 아직 내려받아지지 않아 색인을 건너뜁니다. 설정 → AI 모델 → 문서 이해 모델에서 다운로드해 주세요."
     },
     "worker": {
       "unknownFormat": "알 수 없는 파일 형식입니다: {{format}}",
@@ -1128,45 +1130,46 @@
           "label": "사용 안 함 (키워드 검색만)",
           "description": "문서를 임베딩하지 않고 키워드 검색만 씁니다. 모델 내려받기와 임베딩 시간이 들지 않으며, 의미·하이브리드 검색은 꺼집니다."
         },
-        "nativeQwen3": {
-          "description": "이 Mac에서 직접 도는 기본 문서 이해 모델(1024차원). 별도 서버가 필요 없습니다."
+        "local": {
+          "label": "이 컴퓨터 (MinSync 로컬 서버)",
+          "description": "Dazzi가 켜져 있는 동안 MinSync 임베딩 서버를 이 컴퓨터에서 직접 실행합니다. 문서는 컴퓨터 밖으로 나가지 않습니다."
         },
-        "runtime": {
-          "label": "Qwen3 Embedding 0.6B (Dazzi 런타임)",
-          "description": "Dazzi 임베딩 런타임이 loopback에서 llama-server로 서빙하는 1024차원 모델입니다."
+        "dazzi": {
+          "label": "Dazzi 클라우드",
+          "description": "Dazzi 계정으로 호스팅 임베딩을 사용합니다. 로그인이 필요하고, 문서 내용이 Dazzi 서버로 전송됩니다."
         },
-        "localServer": {
-          "label": "내 컴퓨터 임베딩 서버",
-          "description": "loopback에서 도는 OpenAI 호환 임베딩 서버를 씁니다. 모델·차원·접두어를 직접 지정하세요."
+        "byok": {
+          "label": "내 서버 (OpenAI / TEI 호환)",
+          "description": "직접 운영하거나 구독 중인 임베딩 서버를 사용합니다. 서버 주소와 API 키만 입력하며, 서버가 컴퓨터 밖에 있으면 문서 내용이 그 서버로 전송됩니다."
         }
       },
       "errors": {
-        "modelNameEmpty": "임베딩 서버 모델 이름이 비어 있습니다",
-        "dimensionPositive": "임베딩 서버 차원은 양의 정수여야 합니다",
         "badUrl": "임베딩 서버 주소가 올바른 URL이 아닙니다",
-        "loopbackOnly": "임베딩 서버는 loopback 주소여야 합니다(문서는 이 Mac을 벗어나지 않습니다)",
         "unknownProfile": "알 수 없는 임베딩 프로필: {{id}}",
-        "localServerRequired": "임베딩 서버 정보(id, baseUrl, dimension)가 필요합니다",
-        "localServerMissing": "임베딩 서버 정보가 필요합니다",
         "httpStatus": "임베딩 서버가 HTTP {{status}}로 응답했습니다",
         "badJson": "임베딩 서버 응답을 JSON으로 읽지 못했습니다",
         "noVector": "임베딩 서버가 벡터를 반환하지 않았습니다",
         "dimensionMismatch": "임베딩 서버 차원이 {{actual}}인데 {{expected}}로 지정했습니다",
-        "incompatibleSources": "이 모델을 따를 수 없는 데이터소스가 있습니다: {{ids}}"
+        "incompatibleSources": "이 모델을 따를 수 없는 데이터소스가 있습니다: {{ids}}",
+        "serverRequired": "서버 주소가 필요합니다.",
+        "badProtocol": "서버 방식은 OpenAI 또는 TEI여야 합니다.",
+        "unauthorized": "서버가 인증을 거부했습니다 (HTTP {{status}}). API 키를 확인하세요.",
+        "dazziSignIn": "Dazzi 클라우드를 쓰려면 먼저 Dazzi 계정에 로그인하세요.",
+        "consentRequired": "문서 내용이 이 컴퓨터 밖의 서버로 전송됩니다. 동의 후 다시 적용하세요.",
+        "keyRequired": "이 서버에는 API 키가 필요합니다.",
+        "modelMissing": "이 컴퓨터용 임베딩 모델이 아직 내려받아지지 않았습니다. 먼저 모델을 다운로드해 주세요."
       },
       "reasons": {
         "keywordOnly": "키워드 검색만 쓰므로 이 소스도 임베딩하지 않습니다.",
-        "mailcrawlIncompatible": "mailcrawl은 내장 Qwen3만 지원하고 임의의 HTTP 임베딩 서버는 쓸 수 없습니다",
-        "mailcrawlPropagated": "connector.env에 임베딩 프로바이더를 기록합니다(모델이 바뀌면 mailcrawl이 자동으로 다시 색인합니다)",
-        "obsidianIncompatible": "qmd(obsidian)는 로컬 GGUF 모델만 쓸 수 있어 HTTP 임베딩 서버를 사용할 수 없습니다",
-        "obsidianPropagated": "qmd 자식 프로세스에 QMD_EMBED_MODEL을 설정하고 `qmd embed -f`로 다시 색인합니다",
-        "discordIncompatible": "이 앱은 Dazzi 임베딩 런타임을 loopback으로 서빙할 수 없습니다(공개 export 아님). 임베딩 서버를 골라야 discrawl에 전달할 수 있습니다",
-        "discordPropagated": "Dazzi 관리 discrawl config를 다시 쓰고 `discrawl embed --rebuild`로 다시 색인합니다",
-        "kakaoSharedEmbedder": "카카오는 lazykatok 아카이브 위의 사이드카를 통해 Dazzi 공유 임베더를 사용하며, 임베더를 바꾸면 다음 동기화에서 다시 임베딩합니다",
-        "githubGistIncompatible": "GitHubGistSkill이 @autorag/librarian 공개 export가 아니라 임베더를 앱에서 지정할 수 없습니다(런타임 게이트웨이 프로필 고정)",
+        "obsidianIncompatible": "qmd(obsidian)는 자체 GGUF 모델만 쓸 수 있어 다른 임베딩 서버를 사용할 수 없습니다.",
+        "obsidianPropagated": "qmd 자식 프로세스에 QMD_EMBED_MODEL을 설정하고 `qmd embed -f`로 다시 색인합니다.",
+        "discordPropagated": "discrawl의 Dazzi 관리 설정을 새 서버로 다시 쓰고 `discrawl embed --rebuild`로 다시 색인합니다.",
         "clawgalleryNotApplicable": "ClawGallery는 이미지(VDR) 색인이며 텍스트 임베딩을 쓰지 않습니다",
         "larkNotApplicable": "Lark은 원격 API 검색만 사용하고 로컬 임베딩을 거부합니다",
-        "defaultNotApplicable": "이 데이터소스는 자체 키워드/파싱 색인을 쓰며 전역 임베더를 사용하지 않습니다"
+        "defaultNotApplicable": "이 데이터소스는 자체 키워드/파싱 색인을 쓰며 전역 임베더를 사용하지 않습니다",
+        "mailcrawlSharedEmbedder": "mailcrawl은 Dazzi가 쓰는 임베딩 서버를 그대로 사용합니다. 모델이 바뀌면 다음 색인에서 자동으로 다시 만듭니다.",
+        "sidecarSharedEmbedder": "채팅 보관함 위의 읽기 전용 사이드카가 공용 임베더로 메시지를 임베딩합니다. 임베더가 바뀌면 다음 동기화에서 다시 임베딩합니다.",
+        "githubGistSharedEmbedder": "GitHub Gist 벡터 색인이 공용 임베더를 사용합니다. 임베더가 바뀌면 다음 동기화에서 다시 임베딩합니다."
       },
       "actions": {
         "discordConfig": "datasources.<id>이 관리하는 discrawl config.toml"
@@ -1188,6 +1191,15 @@
       "noModels": "Dazzi 플랜에 사용할 수 있는 모델이 없습니다.",
       "invalidState": "로그인 상태 값이 올바르지 않습니다.",
       "missingCode": "로그인 코드가 없습니다."
+    },
+    "modelDownload": {
+      "errors": {
+        "http": "{{file}} 다운로드 실패: 서버가 HTTP {{status}}로 응답했습니다.",
+        "checksum": "{{file}}이(가) 손상되었습니다. 받은 파일의 체크섬이 맞지 않아 지웠습니다. 다시 시도해 주세요.",
+        "stalled": "{{file}} 다운로드가 멈췄습니다. 네트워크 연결을 확인하고 다시 시도해 주세요.",
+        "network": "{{file}} 다운로드 실패: {{message}}",
+        "cancelled": "다운로드를 취소했습니다. 받아 둔 만큼은 남아 있어 이어서 받을 수 있습니다."
+      }
     }
   },
   "quickLook": {
@@ -1730,17 +1742,10 @@
       "defaultValue": "기본값"
     },
     "embedding": {
-      "errorModelRequired": "임베딩 서버 모델 이름을 입력하세요.",
-      "errorDimension": "임베딩 서버 차원은 양의 정수여야 합니다.",
       "title": "문서 이해 모델",
-      "hint": "문서의 의미를 분석합니다. 클라우드 임베딩을 선택하지 않는 한 문서 내용은 이 Mac 밖으로 나가지 않습니다.",
-      "body": "문서의 의미를 분석하는 임베딩 모델입니다. 여기서는 Dazzi 런타임과 내 컴퓨터 서버만 고를 수 있고, 문서 내용은 설정 중 클라우드 임베딩을 선택한 경우에만 이 Mac 밖으로 나갑니다.",
+      "hint": "문서의 의미를 분석합니다. 이 컴퓨터를 고르면 문서가 컴퓨터 밖으로 나가지 않습니다.",
+      "body": "문서의 의미를 분석하는 임베딩 모델이 어디에서 실행될지 고릅니다. 모델은 Qwen3 Embedding 0.6B로 고정되어 있고, 문서 내용이 컴퓨터 밖으로 나가는 선택지는 동의가 필요합니다.",
       "dimension": "{{count}}차원",
-      "modelName": "모델 이름",
-      "baseUrl": "서버 주소",
-      "dimensionLabel": "차원",
-      "modelPlaceholder": "예: nomic-embed-text",
-      "dimensionPlaceholder": "예: 768",
       "incompatibleNote": "{{count}}개 데이터소스가 이 프로필과 호환되지 않습니다. 계속하면 해당 소스는 그대로 두고 나머지만 바뀝니다.",
       "acknowledge": "호환되지 않는 소스도 함께 적용",
       "applied": "적용했습니다.",
@@ -1748,7 +1753,18 @@
       "written": "config {{count}}개 항목 기록",
       "rebuild": "{{count}}개 소스 재색인",
       "preview": "계획 확인",
-      "apply": "적용"
+      "apply": "적용",
+      "dimensionFixed": "모델: Qwen3 Embedding 0.6B (1024차원). 모델은 바꿀 수 없습니다.",
+      "serverUrl": "서버 주소",
+      "serverUrlPlaceholder": "https://embed.example.com",
+      "serverType": "서버 방식",
+      "typeOpenai": "OpenAI 호환 (/v1/embeddings)",
+      "typeTei": "TEI (/embed)",
+      "apiKey": "API 키",
+      "apiKeyPlaceholder": "비워 두면 저장된 키를 사용합니다",
+      "apiKeyHint": "키는 이 Mac의 보안 키체인에 저장되며 설정 파일에는 기록되지 않습니다.",
+      "consentRemote": "문서 내용이 이 컴퓨터 밖의 서버로 전송되는 것에 동의합니다",
+      "signInNote": "Dazzi 클라우드는 Dazzi 계정 로그인이 필요합니다. 계정 설정에서 먼저 로그인하세요."
     },
     "language": {
       "remove": "{{name}} 제거",
@@ -2124,5 +2140,24 @@
       "unsupportedPlatform": "이 운영체제에서는 로컬 임베딩을 지원하지 않아요.",
       "hardwareUnreadable": "이 컴퓨터의 사양을 확인하지 못했어요."
     }
+  },
+  "modelDownload": {
+    "title": "이 컴퓨터용 모델",
+    "needed": "이 컴퓨터에서 문서를 이해하려면 모델(약 {{size}})을 한 번 내려받아야 합니다.",
+    "partial": "{{done}}까지 받아 둔 상태입니다. 멈춘 곳부터 이어서 받습니다.",
+    "download": "다운로드",
+    "resume": "이어받기",
+    "cancel": "취소",
+    "retry": "다시 시도",
+    "progressAria": "모델 다운로드 진행률",
+    "percent": "{{percent}}%",
+    "amount": "{{done}} / {{total}}",
+    "file": "{{file}} 받는 중",
+    "keepOpen": "끝날 때까지 Dazzi를 열어 두세요. 중간에 멈춰도 이어서 받을 수 있습니다.",
+    "ready": "모델 준비 완료",
+    "readyDetail": "모델이 이 컴퓨터에 있습니다. 문서는 컴퓨터 밖으로 나가지 않습니다.",
+    "failed": "다운로드가 멈췄습니다",
+    "indexingTitle": "임베딩 모델을 내려받는 중",
+    "indexingNote": "받기가 끝나면 첫 색인이 자동으로 시작됩니다."
   }
 }

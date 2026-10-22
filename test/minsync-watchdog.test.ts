@@ -67,6 +67,26 @@ describe("createStallWatchdog", () => {
 		expect(h.watchdog.killed()).toBe(1);
 	});
 
+	it("never kills a process it was told to leave alone, such as the embedding daemon that idles by design", async () => {
+		let clock = 0;
+		const killed: number[] = [];
+		const exempt = new Set([7]);
+		const watchdog = createStallWatchdog({
+			sample: async () => [{ pid: 7, cpuMs: 1000 }, { pid: 8, cpuMs: 1000 }],
+			kill: (pid) => void killed.push(pid),
+			stallMs: 5000,
+			intervalMs: 1000,
+			now: () => clock,
+			exempt: (pid) => exempt.has(pid),
+		});
+
+		await watchdog.tick();
+		clock += 6000;
+		await watchdog.tick();
+
+		expect(killed).toEqual([8]);
+	});
+
 	it("never kills a child that keeps burning CPU, however long it runs", async () => {
 		const h = harness(5000);
 

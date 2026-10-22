@@ -32,6 +32,7 @@ import type {
 import { APP_FULL_NAME } from "../../../shared/app-info";
 import { useTranslation } from "../../../shared/i18n";
 import { cn } from "../lib/cn";
+import { useModelDownload } from "../state/model-download";
 import {
 	buildFlow,
 	bySourceOrder,
@@ -152,6 +153,11 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 	const [fdaPending, setFdaPending] = useState(false);
 	const [scans, setScans] = useState<ReadonlyMap<string, FolderScan>>(new Map());
 	const [embedding, setEmbedding] = useState<EmbeddingInfo | null>(null);
+	const modelDownload = useModelDownload();
+	const modelDownloadRef = useRef(modelDownload);
+	modelDownloadRef.current = modelDownload;
+	const embeddingInfoRef = useRef<EmbeddingInfo | null>(null);
+	embeddingInfoRef.current = embedding;
 	const [detectedSources, setDetectedSources] = useState<readonly DetectedSource[]>([]);
 	// Done, not "checking": the step's first frame must already show the checking line,
 	// never the empty result that would flash before the probe effect runs.
@@ -712,6 +718,7 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 		scans,
 		candidates,
 		embedding,
+		modelDownload,
 		sources: detectedSources,
 		sourcesChecking: !sourcesDone,
 		models,
@@ -840,6 +847,14 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 			}
 			if (embed === "local" && !localAllowedRef.current) {
 				return;
+			}
+			// Choosing on-device embedding starts fetching its model right away: it downloads while the user finishes
+			// the remaining steps, and the first index waits for it. A server of the user's own needs no model.
+			// Choosing anything else stops a download that is still running; what arrived is kept for a later choice.
+			if (embed === "local") {
+				if (embeddingInfoRef.current?.localModel !== false) modelDownloadRef.current.start();
+			} else if (modelDownloadRef.current.status.state === "downloading") {
+				modelDownloadRef.current.cancel();
 			}
 			setDraft((current) => {
 				if (current === null) return current;

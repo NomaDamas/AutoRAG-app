@@ -18,7 +18,8 @@ import { backendIndexUnit, LIVE_QUERY_TEMPLATES, probeBackendIndex } from "./dat
 import { readAppIndexing } from "./app-indexing";
 import { withConnectorOcrDisabled } from "./indexing-policy";
 import { runWithoutSemanticIndexing, withSemanticPolicyApplied } from "./semantic-policy";
-import type { DiscrawlEmbeddingRuntime } from "./embedding-settings-service";
+import { ensureEmbeddingForConfig, localEmbeddingServer } from "./embedding-daemon";
+import { datasourceEmbeddingFor, resolveEmbeddingEndpoint } from "./embedding-endpoint";
 import type {
 	ConfigRefreshDiagnostic,
 	DataSourceAppRequirement,
@@ -51,12 +52,6 @@ export interface DataSourceStatusService {
 export interface DataSourceStatusDeps {
 	readonly env: NodeJS.ProcessEnv;
 	readonly cwd: string;
-	/**
-	 * The discrawl embedding runtime the app should hand its skill so an index
-	 * run rewrites the managed config and rebuilds embeddings. `undefined` when
-	 * the selected global embedder cannot be served over loopback.
-	 */
-	readonly discrawlEmbeddingRuntime?: () => DiscrawlEmbeddingRuntime | undefined;
 }
 
 /** Backend CLI each built-in template shells out to (mirrors the librarian's `autorag setup` probe). */
@@ -172,9 +167,9 @@ function buildSkill(
 	id: string,
 	entry: DatasourceSkillConfig,
 	workspacePath: string,
-	embeddingRuntime?: DiscrawlEmbeddingRuntime,
+	embedding?: ReturnType<typeof datasourceEmbeddingFor>,
 ): DatasourceSkill | undefined {
-	return buildDatasourceSkills({ [id]: withConnectorOcrDisabled({ ...entry, enabled: true }) }, workspacePath, embeddingRuntime).skills[0];
+	return buildDatasourceSkills({ [id]: withConnectorOcrDisabled({ ...entry, enabled: true }) }, workspacePath, embedding).skills[0];
 }
 
 function agentState(skill: DatasourceSkill | undefined, enabled: boolean): DataSourceRow["agent"] {
@@ -394,7 +389,16 @@ export function createDataSourceStatusService(deps: DataSourceStatusDeps): DataS
 		}
 		let skill: DatasourceSkill | undefined;
 		try {
-			skill = buildSkill(id, entry, config.workspacePath, semantic ? deps.discrawlEmbeddingRuntime?.() : undefined);
+			// A datasource that embeds needs the local embedding server up before it indexes; every embed
+			// call then finds the one endpoint the config selects (the server, or the one the user configured).
+			const raw = readRawConfigObject(path);
+			if (semantic) await ensureEmbeddingForConfig(raw);
+			skill = buildSkill(
+				id,
+				entry,
+				config.workspacePath,
+				semantic ? datasourceEmbeddingFor(() => resolveEmbeddingEndpoint(readRawConfigObject(path), { local: localEmbeddingServer }), { env: deps.env }) : undefined,
+			);
 		} catch (error) {
 			return { ...base, state: "failed", error: error instanceof Error ? error.message : String(error), durationMs: Date.now() - startedAt };
 		}

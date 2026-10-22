@@ -35,6 +35,7 @@ export function onboardingCtx(overrides: Partial<OnboardingCtx> = {}): Onboardin
 		smartRun: { status: "idle" },
 		candidates: [],
 		embedding: null,
+		modelDownload: { status: { state: "absent", bytesDone: 0, bytesTotal: 0, file: null, error: null }, start: noop, cancel: noop },
 		sources: [],
 		sourcesChecking: false,
 		models: [],

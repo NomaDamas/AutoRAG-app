@@ -21,6 +21,7 @@ import type {
 	PlanId,
 	SourceId,
 } from "../../../shared/onboarding-contract";
+import type { ModelDownloadControls } from "../state/model-download";
 import type { Translate } from "./flow";
 import type { SmartRun } from "./smart-scope";
 
@@ -39,6 +40,8 @@ export interface OnboardingCtx {
 	readonly smartRun: SmartRun;
 	readonly candidates: readonly FolderCandidate[];
 	readonly embedding: EmbeddingInfo | null;
+	/** The on-device model's download: its status and the actions on it. Shared with Settings. */
+	readonly modelDownload: ModelDownloadControls;
 	readonly sources: readonly DetectedSource[];
 	/** Source probes are still running; more rows may arrive. */
 	readonly sourcesChecking: boolean;

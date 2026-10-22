@@ -3,7 +3,8 @@ import { access, open, readdir, readFile, stat } from "node:fs/promises";
 import { existsSync, readFileSync } from "node:fs";
 import { isAbsolute, join, sep } from "node:path";
 import { applyBundledTools } from "./bundled-tools";
-import { minSyncModelCacheRoot, seedAssets } from "./seed-assets";
+import { createModelDownloadService, localModelPresent, minSyncModelCacheRoot, nativeQwen3Spec } from "./model-download";
+import { MODEL_DOWNLOAD_CHANNELS } from "../shared/model-download-contract";
 import {
 	app,
 	BrowserWindow,
@@ -65,7 +66,9 @@ import { createModelStatusService } from "./model-status";
 import { createProviderAuthService, type ProviderAuthService } from "./provider-auth-service";
 import { createProviderCredentialService } from "./provider-credentials";
 import { createLocalSpecProbe } from "./hardware-probe";
-import { createEmbeddingSettingsService, type EmbeddingSettingsRuntime } from "./embedding-settings-service";
+import { configureEmbeddingDaemon, ensureEmbeddingForConfig, stopEmbeddingDaemon } from "./embedding-daemon";
+import { migrateLegacyEmbedding } from "./embedding-migration";
+import { createEmbeddingSettingsService } from "./embedding-settings-service";
 import { createDefaultAgentFactory, createSearchService } from "./search-service";
 import { resolveAppSessionModel } from "./agents/app-model";
 import { createSmartIndexingService } from "./smart-indexing-service";
@@ -79,6 +82,7 @@ import {
 	registerAppUpdateIpcHandlers,
 	registerDragOutIpcHandlers,
 	registerIndexActivityIpcHandlers,
+	registerModelDownloadIpcHandlers,
 	registerOnboardingIpcHandlers,
 	registerOsRequestIpcHandlers,
 	registerSearchIpcHandlers,
@@ -95,6 +99,7 @@ import { OS_REQUEST_CHANNELS, parseOsRequestArgv } from "../shared/os-request-co
 import { listenForOsRequests, osRequestEndpoint, sendOsRequest } from "./os-request-channel";
 import { createOsRequestService, diskKindOf } from "./os-request-service";
 import { createOsMenuIntegration, menuLabels } from "./os-menu-integration";
+import { installCli } from "./cli-install";
 import { initErrorReporting, setErrorReportingEnabled } from "./error-reporting";
 import { createStallDetector, readErrorReportingEnabled, refreshFailureReport, reportError } from "./error-report-core";
 import { createAnalytics, createInstallIdStore, readUsageAnalyticsEnabled, resolveAnalyticsTarget, settingChangeEvents } from "./analytics-core";
@@ -141,9 +146,20 @@ function ensureAppIndexingMetadata(configPath: string): void {
 	}
 }
 
+/** Rewrite what an earlier Dazzi left in the config for the embedding runtime it no longer has. */
+function migrateEmbeddingConfig(configPath: string): void {
+	try {
+		const { raw, changed } = migrateLegacyEmbedding(readRawConfigObject(configPath));
+		if (changed) writeConfigObject(configPath, raw);
+	} catch (error) {
+		console.error("AutoRAG embedding config migration failed", error);
+	}
+}
+
 async function ensureAutoRAGConfig(): Promise<void> {
 	const configPath = autoragConfigPath();
 	if (await access(configPath).then(() => true, () => false)) {
+		migrateEmbeddingConfig(configPath);
 		ensureAppIndexingMetadata(configPath);
 		return;
 	}
@@ -380,19 +396,31 @@ app.whenReady().then(async () => {
 	const iconProvider = createIconProvider();
 	registerIconProtocol(iconProvider);
 	registerQuickLookIpc(iconProvider);
-	// Packaged builds carry the dependency CLIs and the embedding model: tools go first on PATH
-	// before anything reads the environment, and the model/runtime are copied into the AutoRAG home
-	// in the background so a fresh install indexes offline without a ~650 MB download.
+	// Packaged builds carry the dependency CLIs: they go first on PATH before anything reads the environment.
+	// The on-device embedding model is not bundled; `modelDownload` below fetches it when the user picks local embedding.
 	applyBundledTools({ resourcesPath: process.resourcesPath, env: process.env, augmentUserPaths: true });
-	void seedAssets({
-		seedDir: join(process.resourcesPath, "seed"),
-		cacheRoot: minSyncModelCacheRoot({ platform: process.platform, home: homedir(), env: process.env }),
-	}).then(
-		(outcome) => {
-			if (outcome.kind === "done" && outcome.copied.length > 0) console.log(`[autorag] seeded ${outcome.copied.join(", ")}`);
-		},
-		(error: unknown) => console.error("[autorag] seeding the embedding model failed; it will be downloaded on first use:", error),
-	);
+	// The `dazzi` command ships in the app; every start puts (or repairs) it where a terminal finds it.
+	if (app.isPackaged) {
+		void installCli({
+			platform: process.platform,
+			homeDir: homedir(),
+			bundledBinDir: join(process.resourcesPath, "bin"),
+			shell: process.env.SHELL,
+			run: async (command, args) => (await execFileAsync(command, [...args], { windowsHide: true })).stdout,
+		}).then(
+			(result) => console.log(`[cli] ${JSON.stringify(result)}`),
+			(error: unknown) => console.error("[cli] installing the dazzi command failed:", error),
+		);
+	}
+	// The local embedding model is served by MinSync's own `minsync serve`, which the app runs while it is open
+	// and stops on quit. It never starts before the model is downloaded (`modelDownload`), because `minsync serve`
+	// would fetch the 1.2 GB itself without any way to show progress.
+	configureEmbeddingDaemon({
+		env: process.env,
+		home: homedir(),
+		ownerFile: join(app.getPath("userData"), "embedding-daemon.json"),
+		modelPresent: localModelPresent({ home: homedir(), env: process.env }),
+	});
 	await ensureAutoRAGConfig();
 	const devLabel = resolveDevLabel();
 	console.log(`[autorag] ${formatWindowTitle(APP_FULL_NAME, APP_VERSION, devLabel)}`);
@@ -538,36 +566,37 @@ app.whenReady().then(async () => {
 	// auth.json-stored OpenRouter/Vercel keys reach process.env so the env-driven
 	// Jev/rerank backends resolve the same credential.
 	void providerAuth.warmEnv();
-	// The datasource service hands its discrawl skill the embedding service's
-	// current loopback runtime; the embedding service needs the datasource service
-	// for adoption planning, so the holder is filled right after.
-	let embeddingSettings: EmbeddingSettingsRuntime | null = null;
-	const dataSources = createDataSourceStatusService({
-		env: process.env,
-		cwd: process.cwd(),
-		discrawlEmbeddingRuntime: () => embeddingSettings?.discrawlRuntime(),
-	});
+	const dataSources = createDataSourceStatusService({ env: process.env, cwd: process.cwd() });
 	// Every datasource sync the app starts (Settings buttons, embedding rebuild) goes through this one wrapper:
 	// it takes the shared refresh lock and is journaled, so it shows in the indexing progress.
 	const schedulePath = schedulePaths(autoragConfigPath());
 	const lockedDataSources = lockDataSources(dataSources, schedulePath);
 	// One verdict for the whole process; a packaged app never honors the QA hardware override.
 	const localSpec = createLocalSpecProbe({ env: process.env, allowOverride: !app.isPackaged });
+	// The on-device embedding model is downloaded on demand (onboarding, Settings), never bundled. One service for
+	// the whole app, so a download started in one place shows its progress everywhere.
+	const modelDownload = createModelDownloadService({
+		cacheRoot: minSyncModelCacheRoot({ platform: process.platform, home: homedir(), env: process.env }),
+		spec: nativeQwen3Spec(),
+		onChange: (status) => {
+			sendToAllWindows(MODEL_DOWNLOAD_CHANNELS.changed, status);
+			// The server refused to start while the weights were missing; bring it up the moment they are here.
+			if (status.state === "ready") void ensureEmbeddingForConfig(existsSync(autoragConfigPath()) ? readRawConfigObject(autoragConfigPath()) : {});
+		},
+	});
+	registerModelDownloadIpcHandlers(modelDownload);
 	const embeddingService = createEmbeddingSettingsService({
 		env: process.env,
 		cwd: process.cwd(),
 		config: autoRagConfig,
 		dataSources: lockedDataSources,
 		localSpec,
+		credentials,
+		modelReady: () => modelDownload.status().state === "ready",
 	});
-	embeddingSettings = embeddingService;
-	// A persisted local-server embedder points mailcrawl at the app's ephemeral
-	// adapter port; refresh re-probes and rewrites it before any agent runs.
-	await embeddingService.refresh();
 	embeddingService.applyProcessEnv();
-	app.once("will-quit", () => {
-		void embeddingService.dispose();
-	});
+	// Bring the local model up in the background for the config the user has; search degrades to keywords until it answers.
+	void ensureEmbeddingForConfig(existsSync(autoragConfigPath()) ? readRawConfigObject(autoragConfigPath()) : {});
 	// Unpackaged, registering would add the bare Electron binary to Login Items
 	// rather than AutoRAG, so only a packaged build touches the OS login item.
 	const applyLoginItem = (enabled: boolean): void => {
@@ -774,6 +803,11 @@ app.whenReady().then(async () => {
 		},
 		configPath: autoragConfigPath(),
 		resolveWorkspacePath: async () => (await resolveEffectiveConfig({ env: process.env, cwd: process.cwd() })).config.workspacePath,
+		ensureLocalModel: async () => {
+			await modelDownload.start();
+			const done = await modelDownload.settled();
+			return done.state === "ready" ? null : (done.error ?? t("main.modelDownload.errors.cancelled"));
+		},
 		refresh: (methods) =>
 			withRefreshLock(
 				schedulePath.lock,
@@ -968,7 +1002,7 @@ app.whenReady().then(async () => {
 	app.once("will-quit", (event) => {
 		event.preventDefault();
 		// minsync outlives the app and keeps its lock; stop it so the next launch can resume instead of failing on the lock.
-		void Promise.all([terminateMinSyncChildren(), workerHost.dispose(), analytics.shutdown()])
+		void Promise.all([stopEmbeddingDaemon().then(() => terminateMinSyncChildren()), workerHost.dispose(), analytics.shutdown()])
 			.catch((error: unknown) => console.error("[fs-worker] dispose on quit failed:", error))
 			.finally(() => app.exit(0));
 	});

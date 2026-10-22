@@ -1,29 +1,32 @@
 /**
- * Stage everything the installer carries besides the app itself.
+ * Stage the dependency programs the installer carries besides the app itself,
+ * plus a verification-only copy of the embedding model.
  *
  *   node scripts/release/stage-tools.mjs [--platform darwin-arm64|win32-x64]
- *                                        [--skip-seed] [--only name,name]
+ *                                        [--skip-verify-model] [--only name,name]
  *
  * Output (build/stage/<platform>/):
  *   tools/bin/        the dependency CLIs, each a real executable
  *   tools/node/       Node 24 LTS + npm (also the runtime of the npm-based CLIs)
  *   tools/npm/        mailcrawl, qmd, kordoc and their node_modules
  *   tools/manifest.json   what was staged: name, version, source, sha256
- *   seed/             native Qwen3-Embedding-0.6B checkpoint for first launch
+ *   verify-model/     native Qwen3-Embedding-0.6B checkpoint, for verify-bundle only
  *
  * Versions are resolved at run time from the publishers' "latest" (GitHub
  * releases, crates.io, npm, nodejs.org), so every release ships the newest
- * dependencies; manifest.json records exactly what that was. The native
- * embedding model is the exception: it is pinned by commit revision and sha256
- * so the bundled weights never drift silently.
+ * dependencies; manifest.json records exactly what that was.
+ *
+ * The embedding model is NOT part of the installer: the app downloads it on
+ * demand. `verify-model/` exists only so `verify-bundle.mjs` can run an offline
+ * MinSync sync; it is pinned by commit revision and sha256, carries no
+ * manifest.json, is not recorded in tools/manifest.json, and is never packaged.
  *
  * Each platform is staged on a matching host (native compiles, native npm
  * prebuilds): the macOS stage on an Apple Silicon Mac, the Windows stage on a
  * Windows x64 machine.
  */
 
-import { createHash } from "node:crypto";
-import { chmodSync, copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, relative } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
@@ -65,7 +68,7 @@ const wanted = (name) => only === undefined || only.includes(name);
 const STAGE = join(BUILD_DIR, "stage", platformId);
 const TOOLS = join(STAGE, "tools");
 const BIN = join(TOOLS, "bin");
-const SEED = join(STAGE, "seed");
+const VERIFY_MODEL = join(STAGE, "verify-model");
 const exe = target.exe;
 
 /** Entries of tools/manifest.json. */
@@ -84,6 +87,40 @@ function installBinary(from, name) {
 	return destination;
 }
 
+/**
+ * Hard version floors: the first release of each tool that carries the shared
+ * `minsync serve` embedding daemon the app now starts at launch.
+ *  - `minsync` 0.4.11 adds `minsync serve` (the loopback embedding server).
+ *  - `@nomadamas/mailcrawl` 0.2.2 gains the openai/tei providers, so it can embed
+ *    through the daemon's OpenAI route instead of loading its own model.
+ *  - `lazykatok` 0.3.3 gains the OpenAI-compatible embedder, the same route.
+ * A resolved version below its floor fails the stage instead of shipping a tool
+ * that cannot reach the daemon (and would embed in-process or not at all).
+ */
+const VERSION_FLOORS = {
+	minsync: "0.4.11",
+	"@nomadamas/mailcrawl": "0.2.2",
+	lazykatok: "0.3.3",
+};
+
+/** Compare dotted numeric versions: `a > b` -> positive, `a < b` -> negative, equal -> 0. */
+function compareVersions(a, b) {
+	const left = a.split(".").map((part) => Number.parseInt(part, 10) || 0);
+	const right = b.split(".").map((part) => Number.parseInt(part, 10) || 0);
+	for (let index = 0; index < Math.max(left.length, right.length); index += 1) {
+		const diff = (left[index] ?? 0) - (right[index] ?? 0);
+		if (diff !== 0) return diff;
+	}
+	return 0;
+}
+
+/** Fail the stage when a resolved tool is older than the floor that carries the shared embedding daemon. */
+function assertVersionFloor(name, version, floor) {
+	if (compareVersions(version, floor) < 0) {
+		throw new Error(`${name} ${version} is below the required ${floor}: this build embeds through the \`minsync serve\` daemon, which ${name} ${floor} is the first to support. Pin a newer ${name} or wait for its release.`);
+	}
+}
+
 /** Newest GitHub release asset matching `pattern`; the server-side sha256 digest verifies the download. */
 async function githubAsset(repo, pattern) {
 	const release = await latestRelease(repo);
@@ -94,15 +131,17 @@ async function githubAsset(repo, pattern) {
 }
 
 /** Prebuilt CLIs published as GitHub release archives: download, verify, pull the executable out. */
-async function stageReleaseBinary({ name, repo, pattern, binary = name }) {
+async function stageReleaseBinary({ name, repo, pattern, binary = name, minVersion }) {
 	const { release, asset, digest } = await githubAsset(repo, pattern);
+	const version = release.tag_name.replace(/^v/, "");
+	if (minVersion !== undefined) assertVersionFloor(name, version, minVersion);
 	const file = await download(asset.browser_download_url, `${repo.replace("/", "__")}-${asset.name}`, digest);
 	const directory = join(CACHE_DIR, "x", `${name}-${release.tag_name}`);
 	extract(file.path, directory);
 	const found = findFile(directory, [`${binary}${exe}`]);
 	if (found === null) throw new Error(`${name}: ${binary}${exe} not found in ${asset.name}`);
 	installBinary(found, name);
-	record({ name, version: release.tag_name.replace(/^v/, ""), source: `github.com/${repo} ${asset.name}`, sha256: file.sha256, verifiedAgainstPublisherDigest: digest !== null });
+	record({ name, version, source: `github.com/${repo} ${asset.name}`, sha256: file.sha256, verifiedAgainstPublisherDigest: digest !== null });
 }
 
 /** Go CLIs that publish no archive for this platform: build the newest tag from source. */
@@ -118,23 +157,12 @@ async function stageGoBinary({ name, repo }) {
 	record({ name, version: tag.replace(/^v/, ""), source: `go install github.com/${repo}@${tag}` });
 }
 
-/** Rust crates: compile the newest crates.io version (or a git HEAD) into the shared cache. */
-async function stageCargoBinary({ name, crate = name, git }) {
+/** Rust crates: compile the newest crates.io version into the shared cache. */
+async function stageCargoBinary({ name, crate = name }) {
 	const cargoRoot = join(CACHE_DIR, "cargo", name);
 	const targetDir = join(CACHE_DIR, "cargo-target");
-	let version;
-	let source;
-	let installArgs;
-	if (git === undefined) {
-		version = await latestCrateVersion(crate);
-		source = `crates.io ${crate}@${version}`;
-		installArgs = ["install", crate, "--version", version, "--locked"];
-	} else {
-		const head = run("git", ["ls-remote", git, "HEAD"], { capture: true }).split(/\s/)[0];
-		version = head.slice(0, 12);
-		source = `${git}#${head}`;
-		installArgs = ["install", "--git", git, "--rev", head, "--locked", "--bin", name];
-	}
+	const version = await latestCrateVersion(crate);
+	const installArgs = ["install", crate, "--version", version, "--locked"];
 	const installed = join(cargoRoot, "bin", `${name}${exe}`);
 	const stamp = join(cargoRoot, "version.txt");
 	if (!(existsSync(installed) && existsSync(stamp) && readFileSync(stamp, "utf8") === version)) {
@@ -144,7 +172,7 @@ async function stageCargoBinary({ name, crate = name, git }) {
 		writeFileSync(stamp, version);
 	}
 	installBinary(installed, name);
-	record({ name, version, source });
+	record({ name, version, source: `crates.io ${crate}@${version}` });
 }
 
 /**
@@ -264,6 +292,8 @@ async function stageNpmCli(nodePath, packages) {
 	const shim = await buildShim();
 	for (const pkg of packages.map((spec) => spec.replace(/@latest$/, ""))) {
 		const manifest = JSON.parse(readFileSync(join(nodeModules, pkg, "package.json"), "utf8"));
+		const floor = VERSION_FLOORS[pkg];
+		if (floor !== undefined) assertVersionFloor(pkg, manifest.version, floor);
 		const bins = typeof manifest.bin === "string" ? { [basename(pkg)]: manifest.bin } : manifest.bin;
 		for (const [binName, entry] of Object.entries(bins ?? {})) {
 			if (binName === "kordoc-mcp") continue;
@@ -397,6 +427,9 @@ function kiwiSourceNotice(kiwi, librarySha256) {
  * Native Qwen3 embedding model (`Qwen/Qwen3-Embedding-0.6B`), pinned by commit
  * and SHA-256 in the Hugging Face Hub cache layout that `minsync` (candle /
  * `hf-hub`) and `mailcrawl` read directly without network access.
+ *
+ * Staged for `verify-bundle.mjs` only — an offline MinSync sync needs the real
+ * weights — so it is never packaged and never recorded in tools/manifest.json.
  */
 const NATIVE_QWEN3_REPO_DIR = "models--Qwen--Qwen3-Embedding-0.6B";
 const NATIVE_QWEN3_REVISION = "97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3";
@@ -407,46 +440,32 @@ const NATIVE_QWEN3_FILES = [
 	{ name: "model.safetensors", sha256: "0437e45c94563b09e13cb7a64478fc406947a93cb34a7e05870fc8dcd48e23fd" },
 ];
 
-async function stageSeed() {
-	rmSync(SEED, { recursive: true, force: true });
-	const refsDir = join(SEED, NATIVE_QWEN3_REPO_DIR, "refs");
-	const snapshotDir = join(SEED, NATIVE_QWEN3_REPO_DIR, "snapshots", NATIVE_QWEN3_REVISION);
-	mkdirSync(refsDir, { recursive: true });
-	mkdirSync(snapshotDir, { recursive: true });
-	const refRel = `${NATIVE_QWEN3_REPO_DIR}/refs/main`;
-	const refContent = Buffer.from(NATIVE_QWEN3_REVISION, "utf8");
-	writeFileSync(join(SEED, refRel), refContent);
-	const refSha256 = createHash("sha256").update(refContent).digest("hex");
-	const files = [
-		{ path: refRel, destination: refRel, sha256: refSha256, bytes: refContent.length },
-	];
+async function stageVerifyModel() {
+	rmSync(VERIFY_MODEL, { recursive: true, force: true });
+	mkdirSync(join(VERIFY_MODEL, NATIVE_QWEN3_REPO_DIR, "refs"), { recursive: true });
+	mkdirSync(join(VERIFY_MODEL, NATIVE_QWEN3_REPO_DIR, "snapshots", NATIVE_QWEN3_REVISION), { recursive: true });
+	writeFileSync(join(VERIFY_MODEL, NATIVE_QWEN3_REPO_DIR, "refs", "main"), Buffer.from(NATIVE_QWEN3_REVISION, "utf8"));
 	for (const asset of NATIVE_QWEN3_FILES) {
 		const url = `${NATIVE_QWEN3_BASE_URL}/${asset.name}`;
 		const downloaded = await download(url, `Qwen3-Embedding-0.6B-${NATIVE_QWEN3_REVISION.slice(0, 12)}-${asset.name}`, asset.sha256);
-		const rel = `${NATIVE_QWEN3_REPO_DIR}/snapshots/${NATIVE_QWEN3_REVISION}/${asset.name}`;
-		const destination = join(SEED, rel);
-		copyFileSync(downloaded.path, destination);
-		files.push({ path: rel, destination: rel, sha256: asset.sha256, bytes: statSync(destination).size });
+		copyFileSync(downloaded.path, join(VERIFY_MODEL, NATIVE_QWEN3_REPO_DIR, "snapshots", NATIVE_QWEN3_REVISION, asset.name));
 	}
-	writeFileSync(join(SEED, "manifest.json"), `${JSON.stringify({ schema: 1, files }, null, 2)}\n`);
-	record({
-		name: "qwen3-embedding-0.6b-native",
-		version: NATIVE_QWEN3_REVISION.slice(0, 12),
-		source: `${NATIVE_QWEN3_BASE_URL}/model.safetensors`,
-		sha256: NATIVE_QWEN3_FILES[2].sha256,
-		verifiedAgainstPublisherDigest: true,
-	});
+	log(`staged verification model Qwen3-Embedding-0.6B ${NATIVE_QWEN3_REVISION.slice(0, 12)} -> ${VERIFY_MODEL}`);
 }
 
 // --------------------------------------------------------------------------
 
 const RELEASE_BINARIES = [
-	{ name: "minsync", repo: "NomaDamas/MinSync", pattern: target.os === "win32" ? /x86_64-pc-windows-msvc\.zip$/ : /aarch64-apple-darwin\.tar\.gz$/ },
+	{ name: "minsync", repo: "NomaDamas/MinSync", pattern: target.os === "win32" ? /x86_64-pc-windows-msvc\.zip$/ : /aarch64-apple-darwin\.tar\.gz$/, minVersion: VERSION_FLOORS.minsync },
 	{ name: "rhwp", repo: "edwardkim/rhwp", pattern: target.os === "win32" ? /windows-x86_64\.zip$/ : /macos-aarch64\.tar\.gz$/ },
 	{ name: "himalaya", repo: "pimalaya/himalaya", pattern: target.os === "win32" ? /x86_64-windows\.zip$/ : /aarch64-darwin\.tgz$/ },
 	{ name: "rclone", repo: "rclone/rclone", pattern: target.os === "win32" ? /windows-amd64\.zip$/ : /osx-arm64\.zip$/ },
 	{ name: "lark-cli", repo: "larksuite/cli", pattern: target.os === "win32" ? /windows-amd64\.zip$/ : /darwin-arm64\.tar\.gz$/ },
 	...["discrawl", "telecrawl", "wacrawl"].map((name) => ({ name, repo: `openclaw/${name}`, pattern: target.os === "win32" ? /_windows_amd64\.zip$/ : /_darwin_arm64\.tar\.gz$/ })),
+	// lazykatok is an Apple Silicon macOS KakaoTalk client; changeroa/lazykatok publishes one release archive
+	// per version (`lazykatok-<version>-aarch64-apple-darwin.tar.gz`) with a GitHub sha256 digest, so it is
+	// staged like the other release binaries instead of being compiled from git HEAD.
+	...(target.os === "darwin" ? [{ name: "lazykatok", repo: "changeroa/lazykatok", pattern: /^lazykatok-\d+\.\d+\.\d+-aarch64-apple-darwin\.tar\.gz$/, minVersion: VERSION_FLOORS.lazykatok }] : []),
 ];
 
 // openclaw/slacrawl and openclaw/notcrawl publish macOS archives but no Windows one: build the newest tag from source there.
@@ -455,13 +474,7 @@ const GO_CRAWLERS = [
 	{ name: "notcrawl", repo: "openclaw/notcrawl", pattern: /_darwin_arm64\.tar\.gz$/ },
 ];
 
-const CARGO_BINARIES = [
-	{ name: "dupey" },
-	{ name: "jikji", crate: "jikji-cli" },
-	{ name: "clawgallery" },
-	// lazykatok is an Apple Silicon macOS KakaoTalk client and has no crates.io release.
-	...(target.os === "darwin" ? [{ name: "lazykatok", git: "https://github.com/changeroa/lazykatok" }] : []),
-];
+const CARGO_BINARIES = [{ name: "dupey" }, { name: "jikji", crate: "jikji-cli" }, { name: "clawgallery" }];
 
 const NPM_PACKAGES = ["@nomadamas/mailcrawl", "@tobilu/qmd", "kordoc"];
 
@@ -483,9 +496,9 @@ for (const item of GO_CRAWLERS) {
 for (const item of CARGO_BINARIES) if (wanted(item.name)) await stageCargoBinary(item);
 if (target.os === "darwin" && wanted("fsearch-cli")) await stageFsearch();
 if (wanted("kiwi")) await stageKiwi();
-if (!flag("--skip-seed") && wanted("seed")) await stageSeed();
+if (!flag("--skip-verify-model") && wanted("verify-model")) await stageVerifyModel();
 
 const manifestPath = join(TOOLS, "manifest.json");
 const kept = only !== undefined && existsSync(manifestPath) ? JSON.parse(readFileSync(manifestPath, "utf8")).tools.filter((tool) => !staged.some((entry) => entry.name === tool.name)) : [];
 writeFileSync(manifestPath, `${JSON.stringify({ schema: 1, platform: platformId, generatedAt: new Date().toISOString(), tools: [...kept, ...staged] }, null, 2)}\n`);
-log(`tools ${mb(dirSizeBytes(TOOLS))}, seed ${existsSync(SEED) ? mb(dirSizeBytes(SEED)) : "skipped"} -> ${STAGE}`);
+log(`tools ${mb(dirSizeBytes(TOOLS))}, verify-model ${existsSync(VERIFY_MODEL) ? mb(dirSizeBytes(VERIFY_MODEL)) : "skipped"} -> ${STAGE}`);

@@ -114,6 +114,12 @@ export function openTabAt(state: TabsState, path: string): TabsState {
 	};
 }
 
+/** `dazzi <folder>`: the tab already showing the folder, else a new tab on it. */
+export function openOrSelectFolderTab(state: TabsState, path: string): TabsState {
+	const existing = state.tabs.find((tab) => tab.path === path);
+	return existing === undefined ? openTabAt(state, path) : selectTab(state, existing.id);
+}
+
 /** Open a temporary Evidence Folder in a new tab and mark the tab as owning it. */
 export function openEvidenceFolderTab(state: TabsState, folderPath: string): TabsState {
 	const id = state.nextId;

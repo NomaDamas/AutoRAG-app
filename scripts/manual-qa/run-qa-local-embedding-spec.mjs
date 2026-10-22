@@ -148,7 +148,7 @@ if (only !== "real") {
 			const rows = await settingsPicker(page);
 			const local = rows[1];
 			const pass = machine.reason === null;
-			check(`${machine.name}: Settings lists the three profiles`, rows.length === 3, String(rows.length));
+			check(`${machine.name}: Settings lists the four profiles`, rows.length === 4, String(rows.length));
 			check(`${machine.name}: Settings marks the local model ${pass ? "available" : "unavailable"}`, local?.disabled === !pass, JSON.stringify(local));
 			if (!pass) check(`${machine.name}: Settings shows the reason`, local?.text.includes(machine.reason) === true, local?.text ?? "");
 			if (!pass) {

@@ -17,7 +17,6 @@ import type {
 import { DEFAULT_SETTINGS } from "../shared/settings-contract";
 import type { AutoRagConfigService } from "./autorag-config-service";
 import type { DataSourceStatusService } from "./datasource-status";
-import type { DiscrawlEmbeddingRuntime } from "./embedding-settings-service";
 import type { ModelStatusService } from "./model-status";
 import type { ProviderCredentialService } from "./provider-credentials";
 import type { RefreshScheduler } from "./refresh-scheduler";
@@ -36,11 +35,8 @@ export interface EmbeddingSettingsService {
 	plan(request: EmbeddingChangeRequest): Promise<EmbeddingSettingsSnapshot>;
 	/** Validate, write `minSync.embedder` + reachable per-CLI overrides, then rebuild. */
 	apply(request: EmbeddingChangeRequest): Promise<EmbeddingChangeResult>;
-	/** The discrawl runtime the app should hand its skill for the current config. */
-	discrawlRuntime(): DiscrawlEmbeddingRuntime | undefined;
 	/** Push derived child-process env (qmd model) from the current config; call at startup. */
 	applyProcessEnv(): void;
-	dispose(): Promise<void>;
 }
 
 export interface SettingsServiceDeps {

@@ -40,6 +40,8 @@ export function renderCask(tag, sha256) {
   depends_on macos: :ventura
 
   app "Dazzi.app"
+  # The dazzi command (dazzi <folder> opens it in Dazzi); the app also links it itself on first start, so either order works.
+  binary "#{appdir}/Dazzi.app/Contents/Resources/bin/dazzi"
 end
 `;
 }

@@ -12,6 +12,7 @@ import { Eyebrow } from "../parts";
 import { localSpecMessage } from "../../../../shared/local-embedding-spec";
 import { canSelectCloudEmbedding, embedCards, formatSize, localEmbeddingAllowed, resolveEmbed, scanTotals, type EmbedCard } from "../flow";
 import type { OnboardingCtx } from "../context";
+import { ModelDownloadPanel } from "../../components/ModelDownloadPanel";
 
 /** The four pips every meter shows, whether or not they are lit. */
 const PIPS = [1, 2, 3, 4];
@@ -33,6 +34,12 @@ export function EmbeddingStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactEl
 	});
 	const selected = resolveEmbed(draft.embed, cloudAvailable, localEmbeddingAllowed(embedding === null ? null : embedding.localSpec));
 	const listRef = useRef<HTMLDivElement | null>(null);
+	// Until main answers the first status read the size is unknown; the embedding info already carries it.
+	const reported = ctx.modelDownload.status;
+	const modelStatus =
+		reported.bytesTotal > 0 || embedding === null
+			? reported
+			: { ...reported, bytesTotal: embedding.modelBytes, ...(embedding.cached ? { state: "ready" as const, bytesDone: embedding.modelBytes } : {}) };
 
 	const choose = (card: EmbedCard): void => {
 		if (card.blocked !== null) {
@@ -144,6 +151,16 @@ export function EmbeddingStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactEl
 			<div ref={listRef} className="em-cards" role="radiogroup" aria-label={t("onboarding.embedding.groupLabel")}>
 				{cards.map(renderCard)}
 			</div>
+			{selected === "local" && embedding?.localModel !== false ? (
+				<div className="em-download">
+					<ModelDownloadPanel
+						status={modelStatus}
+						t={t}
+						onStart={ctx.modelDownload.start}
+						onCancel={ctx.modelDownload.cancel}
+					/>
+				</div>
+			) : null}
 			{selected === "cloud" ? (
 				<label className="consent em-consent">
 					<input

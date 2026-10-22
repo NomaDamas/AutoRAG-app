@@ -6,7 +6,9 @@
 import { appendFileSync, existsSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { readRawConfigObject, resolveConfigPath, resolveConfigReadOnly } from "@autorag/librarian/core";
+import { homedir } from "node:os";
 import { applyBundledTools } from "./bundled-tools";
+import { configureEmbeddingDaemon, stopEmbeddingDaemon } from "./embedding-daemon";
 import { createDataSourceStatusService } from "./datasource-status";
 import { refreshAutoragIndex } from "./index-refresh";
 import { createJobWatchdog, type JobWatchdog, latestModification, progressFiles } from "./job-watchdog";
@@ -16,6 +18,9 @@ import { runScheduledRefresh, schedulePaths } from "./refresh-schedule";
 // The job runs the app's own executable, so an installed build finds the bundled CLIs exactly as the app does,
 // and the OS job definition never carries the directory (Task Scheduler caps `/TR` at 261 characters).
 applyBundledTools({ resourcesPath: process.resourcesPath, env: process.env, augmentUserPaths: true });
+// The job embeds through the same local server as the app: it uses the one the app runs, or starts its own and
+// stops it when the run ends. It keeps no owner file, so it never takes over a server a crashed app left behind.
+configureEmbeddingDaemon({ env: process.env, home: homedir() });
 
 async function main(): Promise<number> {
 	const env = process.env;
@@ -67,4 +72,4 @@ async function main(): Promise<number> {
 }
 
 // Exit explicitly: a lingering child-process handle must not keep the job (and its lock) alive.
-void main().then((code) => terminateMinSyncChildren().finally(() => process.exit(code)));
+void main().then((code) => stopEmbeddingDaemon().then(() => terminateMinSyncChildren()).finally(() => process.exit(code)));

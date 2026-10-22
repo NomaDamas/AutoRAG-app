@@ -203,7 +203,9 @@ export interface EmbeddingInfo {
 	readonly cached: boolean;
 	/** The shared config already names an embedder; onboarding leaves it as is. */
 	readonly configured: boolean;
-	/** Whether this machine meets the minimum spec for the local model; local embedding is off-limits when it does not. */
+	/** Choosing local embedding runs the on-device model, so its weights must be downloaded (false when the config names a server of the user's own). */
+	readonly localModel: boolean;
+	/** Whether this machine meets the minimum spec for the on-device model; local embedding is off-limits when it does not. */
 	readonly localSpec: LocalSpecVerdict;
 }
 

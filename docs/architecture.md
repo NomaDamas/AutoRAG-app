@@ -85,14 +85,15 @@ second datasource or model configuration. The sidebar is searchable and grouped:
     past-question memory ranks by keywords only. Local file content is found by
     Jikji and the file-name tools.
   - *Status*: a parsed file counts as included, since nothing is staged into MinSync.
-- **Embedding batch size** — the embedding gateway aborts a request after 30 s.
+- **Embedding batch size** — an embedding request that cannot finish (the local
+  server's request cap answers 413, a user's own server may time out with 504).
   When a refresh's MinSync step fails with that timeout (or skips a file on a
   partial sync because its batch timed out), the app halves
   `minSync.embedder.batchSize` (64 → 32 → 16 → … → 1), re-runs only the MinSync step, and
   stores the size that worked in `embedding-batch.json` beside the config (`local`,
   or `remote` for a non-loopback `baseUrl`; the two are learned separately; a
   sidecar so a refresh never rewrites the file Settings edits). Later refreshes
-  start from the stored size. Only the gateway's 504 triggers this; a runtime
+  start from the stored size. Only that deadline's 504 triggers this; a daemon
   that never became ready does not.
 - **Indexing that survives bad files and bad folders** — a refresh never lets one
   file, folder, or process take the rest of the index down.
@@ -140,13 +141,20 @@ second datasource or model configuration. The sidebar is searchable and grouped:
     children they started (`terminateMinSyncChildren`; not on Windows, where a
     minsync cannot be told from the user's own, and not the ones the fs worker
     started for a Finder toggle). MinSync resumes from `progress.jsonl`.
+  - *The local embedding model is one long-lived daemon* (`embedding-daemon.ts`):
+    the app starts `minsync serve` (loopback, `--idle-timeout 0`, the downloaded
+    `native:Qwen/Qwen3-Embedding-0.6B`) once the model is in place and stops it at
+    quit. It is the only process holding the weights; every embedding consumer —
+    MinSync's own sync, the librarian's memory, the chat sidecars, discrawl,
+    mailcrawl, lazykatok — resolves it through the state files it publishes under
+    `~/.cache/minsync/serve/` (`%LOCALAPPDATA%\minsync\serve` on Windows).
   - *The Finder's exclusion toggle refreshes through the same path*
     (`index-status.ts` calls `refreshAutoragIndex`), so it has the folder check,
     the embedder watchdog, and the learned batch size.
   - *A file MinSync cannot read, chunk, or embed is skipped, not fatal*
     (MinSync 0.4.8+ / librarian 2.10.4+, `minsync-file-skipped`). MinSync exits 6
     with `partial: true` and `files_failed`, keeps the file's older chunks, and
-    retries it on the next sync; if the skip came from an embedding gateway
+    retries it on the next sync; if the skip came from an embedding-server
     timeout, `index-refresh` halves `batchSize` and re-runs `syncMinSync` in the
     same refresh. Since MinSync 0.4.10 a file over `[sync] max_file_bytes`
     (64 MiB) is skipped the same way at the `size_guard` stage, before it is read.
@@ -616,6 +624,45 @@ while the setting is on, and switching it off removes exactly the entries it
 wrote (macOS workflows are recognized by their `com.autorag.app.service.`
 bundle identifier). A failed install rejects the toggle instead of saving it.
 
+## The `dazzi` command
+
+Installing the app also installs a terminal command, the way `open` hands a
+folder to Finder:
+
+```sh
+dazzi ~/Documents/project      # a folder opens in a tab (the tab that already shows it is reused)
+dazzi report.pdf notes/        # a file is shown selected in its folder; several paths at once
+dazzi                          # bring Dazzi to the front
+```
+
+Relative paths, `.` and `..` resolve against the caller's directory. A path that
+does not exist is reported like `open` does (`dazzi: nope: No such file or
+directory`), the ones that exist still open, and the exit status is 1. At most 200
+paths per call (the request limit in `src/shared/os-request-contract.ts`); more is
+an error rather than a silent cut.
+
+The launcher is a script that ships inside the app (`build/cli/dazzi` →
+`Dazzi.app/Contents/Resources/bin/dazzi`; `dazzi.cmd` in `resources\bin` on
+Windows). It sends the same request the right-click menu does, with the action
+`open`: `--autorag-request=open` plus one `--autorag-path=` per item. A running
+app receives it over the profile's local socket (`os-request-channel.ts`) and the
+launcher exits; with no app running the launcher process becomes the app, detached
+from the terminal. `DAZZI_USER_DATA_DIR` aims a call at another profile.
+
+`src/main/cli-install.ts` puts the launcher where a shell finds it, on every start
+of a packaged app, per user and without elevation:
+
+| OS | What it does |
+| --- | --- |
+| macOS | Symlinks `dazzi` into the first of `/opt/homebrew/bin`, `/usr/local/bin` (only if they exist and are writable) or `~/.local/bin` (created). `~/.local/bin` is added to `PATH` through the login-shell profile (`.zprofile`, `.bash_profile`, else `.profile`) in one marked `>>> dazzi CLI >>>` block. A link it made earlier is repointed when the app moves; a `dazzi` that is not its own link is never replaced. |
+| Windows | Appends `resources\bin` to the user `Path` (`HKCU\Environment`, kept `REG_EXPAND_SZ`) and announces the change, so new terminals see it without signing out. |
+| Linux | Not shipped. |
+
+The Homebrew cask also declares the launcher as a `binary`, so `brew install
+--cask` links it into Homebrew's bin before the app ever starts. In the renderer
+`open` is handled in `App.tsx`: a folder goes through `openOrSelectFolderInWorkspace`
+(`state/workspace.ts`), a file through the evidence-reveal path.
+
 ## Services in Dazzi's own right-click menu (macOS)
 
 The reverse direction: right-click a row (or the empty space of a folder) in
@@ -699,7 +746,9 @@ runs in CI (`.github/workflows/qa-windows.yml`).
 Publishing a GitHub release builds `Dazzi-<version>-arm64.dmg` and
 `Dazzi-Setup-<version>-x64.exe` and attaches them to it. Each installer carries
 the app plus every program it drives (the `autorag` agent, minsync, jikji, dupey,
-the datasource crawlers, rhwp, kordoc, Node and npm-based CLIs) and the local
-Qwen3 embedding model, so one download is the whole install. See
+the datasource crawlers, rhwp, kordoc, Node and npm-based CLIs). The local
+Qwen3 embedding model is not bundled: the app downloads it on demand into
+MinSync's model cache (`src/main/model-download.ts`), so the installer is one
+download and the model is fetched when local embedding is chosen. See
 [`release.md`](release.md) for the contents, the signing secrets to
 configure, and how to rehearse a release.

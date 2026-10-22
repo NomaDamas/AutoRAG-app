@@ -4,7 +4,6 @@ import { tmpdir } from "node:os";
 import { delimiter, join, win32 } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { applyBundledTools, pathKey, prependPath } from "../src/main/bundled-tools";
-import { minSyncModelCacheRoot, readSeedManifest, seedAssets } from "../src/main/seed-assets";
 
 const dirs: string[] = [];
 function temp(): string {
@@ -111,61 +110,5 @@ describe("bundled Kiwi", () => {
 
 		expect(env.KIWI_LIBRARY_PATH).toBe(join(kiwi, "lib", "kiwi.dll"));
 		expect(env.KIWI_MODEL_PATH).toBe(join(kiwi, "models", "cong", "base"));
-	});
-});
-
-describe("seeding the native MinSync embedding model", () => {
-	const content = Buffer.from("not really safetensors");
-	const sha256 = createHash("sha256").update(content).digest("hex");
-	const repoDest = "models--Qwen--Qwen3-Embedding-0.6B/snapshots/97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3/model.safetensors";
-
-	function seedDir(overrides: Record<string, unknown> = {}): string {
-		const dir = temp();
-		mkdirSync(join(dir, "models--Qwen--Qwen3-Embedding-0.6B", "snapshots", "97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3"), { recursive: true });
-		writeFileSync(join(dir, repoDest), content);
-		const file = { path: repoDest, destination: repoDest, sha256, bytes: content.length, ...overrides };
-		writeFileSync(join(dir, "manifest.json"), JSON.stringify({ schema: 1, files: [file] }));
-		return dir;
-	}
-
-	it("resolves MinSync's native model cache root on macOS and Windows", () => {
-		expect(minSyncModelCacheRoot({ platform: "darwin", home: "/Users/me", env: {} })).toBe(join("/Users/me", ".cache", "minsync", "models"));
-		expect(minSyncModelCacheRoot({ platform: "win32", home: "C:\\Users\\me", env: { LOCALAPPDATA: "C:\\Users\\me\\AppData\\Local" } })).toBe(
-			join("C:\\Users\\me\\AppData\\Local", "minsync", "models"),
-		);
-		expect(minSyncModelCacheRoot({ platform: "darwin", home: "/Users/me", env: { FASTEMBED_CACHE_DIR: "/custom/cache" } })).toBe("/custom/cache");
-	});
-
-	it("copies the shipped native model files into the MinSync cache root", async () => {
-		const cacheRoot = temp();
-		const outcome = await seedAssets({ seedDir: seedDir(), cacheRoot });
-		expect(outcome).toEqual({ kind: "done", copied: [repoDest], present: [] });
-		expect(readFileSync(join(cacheRoot, repoDest))).toEqual(content);
-	});
-
-	it("never overwrites a model file the user already has", async () => {
-		const cacheRoot = temp();
-		mkdirSync(join(cacheRoot, "models--Qwen--Qwen3-Embedding-0.6B", "snapshots", "97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3"), { recursive: true });
-		writeFileSync(join(cacheRoot, repoDest), "mine");
-		const outcome = await seedAssets({ seedDir: seedDir(), cacheRoot });
-		expect(outcome).toEqual({ kind: "done", copied: [], present: [repoDest] });
-		expect(readFileSync(join(cacheRoot, repoDest), "utf8")).toBe("mine");
-	});
-
-	it("rejects a corrupt shipped file and leaves no partial file behind", async () => {
-		const cacheRoot = temp();
-		const wrong = seedDir({ sha256: "0".repeat(64) });
-		await expect(seedAssets({ seedDir: wrong, cacheRoot })).rejects.toThrow(/corrupt/);
-		expect(existsSync(join(cacheRoot, repoDest))).toBe(false);
-		expect(existsSync(join(cacheRoot, `${repoDest}.seed-part`))).toBe(false);
-	});
-
-	it("rejects a manifest entry that escapes the cache root", () => {
-		expect(() => readSeedManifest(seedDir({ destination: "../outside.safetensors" }))).toThrow(/escapes/);
-		expect(() => readSeedManifest(seedDir({ path: "/etc/passwd" }))).toThrow(/escapes/);
-	});
-
-	it("reports no seed when the build has none", async () => {
-		expect(await seedAssets({ seedDir: temp(), cacheRoot: temp() })).toEqual({ kind: "none" });
 	});
 });

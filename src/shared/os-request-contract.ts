@@ -1,21 +1,24 @@
 import type { ChatAttachment } from "./search-contract";
 
 /**
- * Requests that arrive from the operating system's file menu: the macOS
- * Finder Quick Action / Services entry and the Windows Explorer context-menu
- * verbs the app installs (Settings → General).
+ * Requests that arrive from outside the window: the macOS Finder Quick
+ * Action / Services entry and the Windows Explorer context-menu verbs the app
+ * installs (Settings → General), and the `dazzi` command line launcher.
  *
- * A menu entry launches the app binary with the flags below. A running app
+ * Each of them launches the app binary with the flags below. A running app
  * receives the request over a per-profile local socket (see
  * `src/main/os-request-channel.ts`); a cold-started one reads it from its own
  * argv. Either way the request ends up in the renderer through
  * {@link OS_REQUEST_CHANNELS}.
  */
 
-/** `ask` attaches the paths to AI Search; `reveal` shows the first one in its folder. */
-export type OsRequestAction = "ask" | "reveal";
+/**
+ * `ask` attaches the paths to AI Search; `reveal` shows the first one in its folder; `open` is the
+ * `dazzi <path>...` command: every folder opens in a tab, every file is shown selected in its folder.
+ */
+export type OsRequestAction = "ask" | "reveal" | "open";
 
-export const OS_REQUEST_ACTIONS: readonly OsRequestAction[] = ["ask", "reveal"];
+export const OS_REQUEST_ACTIONS: readonly OsRequestAction[] = ["ask", "reveal", "open"];
 
 /** The request as a menu entry states it: raw, untrusted paths. */
 export interface OsLaunchRequest {
@@ -26,7 +29,14 @@ export interface OsLaunchRequest {
 /** The request after the main process checked the paths against the disk. */
 export type OsRendererRequest =
 	| { readonly action: "ask"; readonly attachments: readonly ChatAttachment[] }
-	| { readonly action: "reveal"; readonly path: string };
+	| { readonly action: "reveal"; readonly path: string }
+	| { readonly action: "open"; readonly targets: readonly OsOpenTarget[] };
+
+/** One existing path of an `open` request, with what it is on disk. */
+export interface OsOpenTarget {
+	readonly path: string;
+	readonly kind: "file" | "folder";
+}
 
 /** argv flag naming the action; its presence marks a launch as a menu request. */
 export const OS_REQUEST_FLAG = "--autorag-request=";
