@@ -7,7 +7,6 @@ import {
 	buildDatasourceSkills,
 	DiscrawlClient,
 	MailcrawlClient,
-	QmdClient,
 	RetrievalMethodRegistry,
 	type CliConfig,
 	type RefreshMethod,
@@ -141,17 +140,14 @@ describe("neutralizeSemanticMethods", () => {
 
 describe("runWithoutSemanticIndexing", () => {
 	const mailcrawlIndex = MailcrawlClient.prototype.index;
-	const qmdEmbed = QmdClient.prototype.embed;
 	const discrawlEmbed = DiscrawlClient.prototype.embed;
 
 	it("lets the connectors sync and update but turns each one's embedding step into a successful no-op", async () => {
 		await runWithoutSemanticIndexing(async () => {
 			const mail = await new MailcrawlClient({}).index();
-			const notes = await new QmdClient({ vaultPath: "/vault", instanceId: "v" }).embed();
 			const chat = await new DiscrawlClient({}).embed();
 
 			expect(mail).toMatchObject({ ok: true });
-			expect(notes).toMatchObject({ ok: true, data: { embedded: false } });
 			expect(chat).toMatchObject({ ok: true, data: { processed: 0, failed: 0, remainingBacklog: 0 } });
 		});
 	});
@@ -160,7 +156,6 @@ describe("runWithoutSemanticIndexing", () => {
 		await expect(runWithoutSemanticIndexing(async () => Promise.reject(new Error("boom")))).rejects.toThrow("boom");
 
 		expect(MailcrawlClient.prototype.index).toBe(mailcrawlIndex);
-		expect(QmdClient.prototype.embed).toBe(qmdEmbed);
 		expect(DiscrawlClient.prototype.embed).toBe(discrawlEmbed);
 	});
 

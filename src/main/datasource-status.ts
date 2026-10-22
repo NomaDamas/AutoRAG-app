@@ -9,11 +9,15 @@ import {
 	type DatasourceSkill,
 	type DatasourceSkillConfig,
 	datasourceChunkStorePath,
+	HisterClient,
 	loadMirrorIndex,
 	resolveConfigReadOnly,
 	writeConfigObject,
 } from "@autorag/librarian";
 import { readRawConfigObject, resolveConfigPath, type CliConfig } from "@autorag/librarian/core";
+import { getAgentDir } from "@earendil-works/pi-coding-agent";
+import { calendarSupported, isCalendarDatasourceType } from "../shared/calendar-platform";
+import { calendarMcpServerName, syncCalendarMcpConfig } from "./calendar-mcp";
 import { backendIndexUnit, LIVE_QUERY_TEMPLATES, probeBackendIndex } from "./datasource-index-probe";
 import { readAppIndexing } from "./app-indexing";
 import { withConnectorOcrDisabled } from "./indexing-policy";
@@ -53,6 +57,8 @@ export interface DataSourceStatusService {
 export interface DataSourceStatusDeps {
 	readonly env: NodeJS.ProcessEnv;
 	readonly cwd: string;
+	/** The host OS; Calendar is only offered on macOS. Defaults to this process. */
+	readonly platform?: NodeJS.Platform;
 }
 
 /** Backend CLI each built-in template shells out to (mirrors the librarian's `autorag setup` probe). */
@@ -69,6 +75,7 @@ const BACKEND_BINARIES: Readonly<Record<string, string>> = {
 	obsidian: "qmd",
 	clawgallery: "clawgallery",
 	spotlight: "mdfind",
+	hister: "hister",
 };
 
 /** Templates whose chunks AutoRAG itself persists under `.autorag/datasources/<id>/<instance>/chunks.json`. */
@@ -140,8 +147,19 @@ async function findExecutable(name: string, env: NodeJS.ProcessEnv): Promise<str
 	return null;
 }
 
-async function installState(type: string, entry: DatasourceSkillConfig, env: NodeJS.ProcessEnv): Promise<DataSourceRow["install"]> {
+const CALENDAR_UNSUPPORTED = "Apple Calendar & Reminders need macOS (EventKit)";
+
+async function installState(type: string, entry: DatasourceSkillConfig, env: NodeJS.ProcessEnv, platform: string): Promise<DataSourceRow["install"]> {
 	const app = await desktopAppRequirement(type, env);
+	if (isCalendarDatasourceType(type)) {
+		if (!calendarSupported(platform)) return { state: "unsupported", binary: null, path: null, detail: CALENDAR_UNSUPPORTED, app };
+		const connector = isJsonObject(entry.connector) ? entry.connector : {};
+		const configured = typeof connector.command === "string" && connector.command.trim().length > 0 ? connector.command.trim() : "npx";
+		const path = await findExecutable(configured, env);
+		return path === null
+			? { state: "missing", binary: configured, path: null, detail: `${configured} was not found on PATH`, app }
+			: { state: "installed", binary: configured, path, detail: `${configured} at ${path}`, app };
+	}
 	if (!BUILTIN_DATASOURCE_SKILL_NAMES.includes(type)) {
 		return { state: "unsupported", binary: null, path: null, detail: `No built-in Dazzi datasource named "${type}"`, app };
 	}
@@ -153,6 +171,34 @@ async function installState(type: string, entry: DatasourceSkillConfig, env: Nod
 		return hasToken || gh !== null
 			? { state: "builtin", binary: null, path: gh, detail: hasToken ? `Token from ${tokenEnv}` : "Token from gh auth", app }
 			: { state: "credential-missing", binary: null, path: null, detail: `Set ${tokenEnv} to let Dazzi reach GitHub`, app };
+	}
+	if (type === "hister") {
+		const tokenEnv = typeof connector.tokenEnv === "string" && connector.tokenEnv.trim().length > 0 ? connector.tokenEnv.trim() : undefined;
+		if (tokenEnv !== undefined && !env[tokenEnv]) {
+			return { state: "credential-missing", binary: "hister", path: null, detail: `Set ${tokenEnv} to let Dazzi reach Hister`, app };
+		}
+		const configured = typeof connector.binaryPath === "string" ? connector.binaryPath : "hister";
+		const path = await findExecutable(configured, env);
+		if (path !== null) {
+			return { state: "installed", binary: "hister", path, detail: `hister at ${path}`, app };
+		}
+		if (typeof connector.baseUrl === "string" && connector.baseUrl.trim().length > 0) {
+			try {
+				const client = new HisterClient({
+					baseUrl: connector.baseUrl,
+					...(tokenEnv === undefined ? {} : { tokenEnv }),
+					timeoutMs: 2_000,
+					env,
+				});
+				const cfg = await client.config();
+				if (cfg.ok) {
+					return { state: "installed", binary: "hister", path: connector.baseUrl, detail: `hister server at ${connector.baseUrl}`, app };
+				}
+			} catch {
+				// Fall through to missing binary report.
+			}
+		}
+		return { state: "missing", binary: "hister", path: null, detail: `${configured} was not found on PATH`, app };
 	}
 	const binary = BACKEND_BINARIES[type];
 	if (binary === undefined) return { state: "builtin", binary: null, path: null, detail: "Built into Dazzi", app };
@@ -173,7 +219,14 @@ function buildSkill(
 	return buildDatasourceSkills({ [id]: withConnectorOcrDisabled({ ...entry, enabled: true }) }, workspacePath, embedding).skills[0];
 }
 
-function agentState(skill: DatasourceSkill | undefined, enabled: boolean): DataSourceRow["agent"] {
+function agentState(id: string, type: string, skill: DatasourceSkill | undefined, enabled: boolean, platform: string): DataSourceRow["agent"] {
+	if (isCalendarDatasourceType(type)) {
+		if (!calendarSupported(platform)) return { state: "unsupported", skillName: null, tags: [], detail: CALENDAR_UNSUPPORTED };
+		const skillName = `mcp-${calendarMcpServerName(id)}`;
+		const tags = ["calendar", "reminders", "mcp"];
+		if (!enabled) return { state: "disabled", skillName, tags, detail: "Turned off in the Dazzi config" };
+		return { state: "connected", skillName, tags, detail: `Agents load ${skillName}` };
+	}
 	if (skill === undefined) {
 		return { state: "unsupported", skillName: null, tags: [], detail: "The Dazzi agent skips unknown datasources" };
 	}
@@ -225,9 +278,52 @@ async function indexState(
 	workspacePath: string,
 	env: NodeJS.ProcessEnv,
 ): Promise<DataSourceRow["index"]> {
+	if (isCalendarDatasourceType(type)) {
+		if (install.state === "unsupported") return { state: "not-indexed", chunkCount: null, unit: null, indexedAt: null, detail: install.detail };
+		return { state: "live", chunkCount: null, unit: null, indexedAt: null, detail: "Queried live through EventKit MCP" };
+	}
 	if (skill === undefined) return { state: "not-indexed", chunkCount: null, unit: null, indexedAt: null, detail: "Not indexed" };
 	if (LIVE_QUERY_TEMPLATES.has(type)) {
 		return { state: "live", chunkCount: null, unit: null, indexedAt: null, detail: "Searched live through its own CLI" };
+	}
+	if (type === "hister") {
+		if (install.state === "missing" || install.state === "credential-missing") {
+			return { state: "not-indexed", chunkCount: null, unit: "document", indexedAt: null, detail: install.detail };
+		}
+		const connector = isJsonObject(entry.connector) ? entry.connector : {};
+		try {
+			const client = new HisterClient({
+				...(typeof connector.baseUrl === "string" ? { baseUrl: connector.baseUrl } : {}),
+				...(typeof connector.tokenEnv === "string" ? { tokenEnv: connector.tokenEnv } : {}),
+				timeoutMs: 3_000,
+				env,
+			});
+			const cfg = await client.config();
+			if (!cfg.ok || cfg.value.authenticated === false) {
+				return {
+					state: "not-indexed",
+					chunkCount: null,
+					unit: "document",
+					indexedAt: null,
+					detail: cfg.ok ? "Hister requires authentication" : cfg.message,
+				};
+			}
+			const count = await client.count("type:web");
+			if (!count.ok) {
+				return { state: "not-indexed", chunkCount: null, unit: "document", indexedAt: null, detail: count.message };
+			}
+			return count.value === 0
+				? { state: "empty", chunkCount: 0, unit: "document", indexedAt: null, detail: "hister holds nothing yet" }
+				: { state: "indexed", chunkCount: count.value, unit: "document", indexedAt: null, detail: `${count.value} items in hister` };
+		} catch (error) {
+			return {
+				state: "not-indexed",
+				chunkCount: null,
+				unit: "document",
+				indexedAt: null,
+				detail: error instanceof Error ? error.message : String(error),
+			};
+		}
 	}
 	if (!CHUNK_STORE_TEMPLATES.has(type)) return backendIndexState(id, type, entry, install, workspacePath, env);
 	const descriptor = skill.describe();
@@ -298,14 +394,17 @@ function toDiagnostic(diagnostic: DatasourceDiagnostic): ConfigRefreshDiagnostic
 }
 
 export function createDataSourceStatusService(deps: DataSourceStatusDeps): DataSourceStatusService {
+	const platform = deps.platform ?? process.platform;
 	const configPath = (): string => resolveConfigPath({ flags: {}, env: deps.env, cwd: deps.cwd }).configPath;
 	const updateEntry = (id: string, update: (entry: unknown) => unknown): void => {
 		const path = configPath();
 		const raw = readRawConfigObject(path);
+		const previous = structuredClone(raw);
 		const datasources = raw.datasources;
 		if (!isJsonObject(datasources) || !Object.hasOwn(datasources, id)) throw new Error(`Unknown datasource: ${id}`);
 		datasources[id] = update(datasources[id]);
 		writeConfigObject(path, raw);
+		syncCalendarMcpConfig(raw, previous, deps.env.PI_CODING_AGENT_DIR ?? getAgentDir(), platform);
 	};
 
 	const listSnapshot = async (): Promise<DataSourcesSnapshot> => {
@@ -332,13 +431,13 @@ export function createDataSourceStatusService(deps: DataSourceStatusDeps): DataS
 				const enabled = raw !== false && entry.enabled !== false;
 				const type = entry.type ?? id;
 				const skill = BUILTIN_DATASOURCE_SKILL_NAMES.includes(type) ? buildSkill(id, entry, config.workspacePath) : undefined;
-				const install = await installState(type, entry, deps.env);
+				const install = await installState(type, entry, deps.env, platform);
 				const index = await indexState(id, type, entry, skill, install, config.workspacePath, deps.env);
-				const agent = agentState(skill, enabled);
+				const agent = agentState(id, type, skill, enabled, platform);
 				return {
 					id,
 					type,
-					description: entry.description ?? skill?.describe().description ?? type,
+					description: entry.description ?? skill?.describe().description ?? (isCalendarDatasourceType(type) ? "Apple Calendar and Reminders via EventKit MCP" : type),
 					enabled,
 					status: overallStatus({ enabled, install, agent }, refresh),
 					install,
@@ -381,12 +480,29 @@ export function createDataSourceStatusService(deps: DataSourceStatusDeps): DataS
 			return { ...base, error: "This datasource is turned off" };
 		}
 		const type = entry.type ?? id;
-		if (!BUILTIN_DATASOURCE_SKILL_NAMES.includes(type)) {
+		if (!BUILTIN_DATASOURCE_SKILL_NAMES.includes(type) && !isCalendarDatasourceType(type)) {
 			return { ...base, state: "unsupported", error: `No built-in Dazzi datasource named "${type}"` };
 		}
-		const install = await installState(type, entry, deps.env);
+		const install = await installState(type, entry, deps.env, platform);
+		if (install.state === "unsupported") {
+			return { ...base, state: "unsupported", error: install.detail, durationMs: Date.now() - startedAt };
+		}
 		if (install.state === "missing" || install.state === "credential-missing") {
 			return { ...base, state: "unavailable", error: install.detail, durationMs: Date.now() - startedAt };
+		}
+		if (isCalendarDatasourceType(type)) {
+			const raw = readRawConfigObject(path);
+			syncCalendarMcpConfig(raw, raw, deps.env.PI_CODING_AGENT_DIR ?? getAgentDir(), platform);
+			return {
+				id,
+				ok: true,
+				state: "indexed",
+				chunkCount: 0,
+				indexedAt: new Date().toISOString(),
+				durationMs: Date.now() - startedAt,
+				diagnostics: [],
+				error: null,
+			};
 		}
 		// Only a sync that ran and failed is a bug to report; a missing install, credential or config is the user's to fix.
 		const failed = (error: string, diagnostics: readonly ConfigRefreshDiagnostic[] = []): DataSourceSyncResult => {

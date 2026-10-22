@@ -164,6 +164,7 @@ export function SettingsView({ initialCategory = "general", onSettingsChanged }:
 	const saveSnapshot = useCallback((next: AutoRagConfigSnapshot): void => {
 		setSnapshot(next);
 		setError(next.error);
+		void autorag.settings.sourcesList().then(setSources, () => undefined);
 	}, []);
 
 	const sourceAlias = sourceAliasOf(category);

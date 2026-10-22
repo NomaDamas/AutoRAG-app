@@ -21,7 +21,9 @@ import type {
 	RefreshScheduleStatus,
 	ScheduledRunRecord,
 } from "../../../../shared/settings-contract";
+import { calendarSupported, isCalendarDatasourceType } from "../../../../shared/calendar-platform";
 import { t, type LocaleKey } from "../../../../shared/i18n/core";
+import { hostPlatform } from "../../lib/shortcuts";
 import { ConnectorFieldInput, TEMPLATE_BY_ID, type FieldSpec } from "./datasourceTemplates";
 import { ModalShell, ModalActions, Note, PromptModal, Row, Section, SettingsPageHead, StatusDot } from "./SettingsKit";
 import { SourceIcon } from "./SourceIcon";
@@ -48,7 +50,7 @@ const GALLERY_GROUPS: readonly { readonly title: LocaleKey; readonly ids: readon
 	{ title: "settingsSources.apps.groups.docsNotes", ids: ["notion", "obsidian", "clawgallery"] },
 	{ title: "settingsSources.apps.groups.mail", ids: ["mailcrawl", "mail-export"] },
 	{ title: "settingsSources.apps.groups.cloudDev", ids: ["cloud-drive", "github", "github-gist"] },
-	{ title: "settingsSources.apps.groups.newsOther", ids: ["rss", "spotlight"] },
+	{ title: "settingsSources.apps.groups.newsOther", ids: ["rss", "hister", "calendar", "spotlight"] },
 ];
 
 function templateLabel(type: string): string {
@@ -102,6 +104,7 @@ function sourceMeta(row: DataSourceRow): string {
 	if (row.install.app.required && row.install.app.installed === false) return t("settingsSources.meta.appNeeds", { name: row.install.app.name });
 	if (state === "empty") return t("settingsSources.meta.importedNone", { noun });
 	if (state === "live") return t("settingsSources.meta.liveQuery");
+	if (row.install.state === "unsupported" && isCalendarDatasourceType(row.type)) return row.install.detail;
 	if (row.install.state === "missing") return row.install.detail;
 	return t("settingsSources.meta.notFetchedYet");
 }
@@ -438,15 +441,17 @@ export function AppsPage({
 							{group.ids.map((templateId) => {
 								const template = TEMPLATE_BY_ID[templateId];
 								if (template === undefined) return null;
+								// Calendar reads EventKit, so it can only be connected on a Mac.
+								const available = templateId !== "calendar" || calendarSupported(hostPlatform());
 								return (
 									<div className="settings-list-row" key={templateId}>
 										<SourceIcon type={templateId} label={template.label} />
 										<span className="settings-list-body">
 											<span className="settings-list-title">{template.label}</span>
-											<span className="settings-list-meta">{t(template.summary)}</span>
+											<span className="settings-list-meta">{available ? t(template.summary) : t("settingsSources.apps.macOnly")}</span>
 										</span>
 										{connectedTypes.has(templateId) ? <span className="settings-badge">{t("settingsSources.apps.connected")}</span> : null}
-										<button type="button" className="linear-btn" onClick={() => setAddTemplate(templateId)}>
+										<button type="button" className="linear-btn" disabled={!available} onClick={() => setAddTemplate(templateId)}>
 											<Plus size={13} aria-hidden="true" focusable="false" />{t("settingsSources.apps.connect")}
 										</button>
 									</div>
@@ -552,6 +557,7 @@ export function SourceDetailPage({
 		<div className="settings-source is-open" data-source-id={alias}>
 			<SettingsPageHead title={sourceTitle({ id: alias, type })} description={template !== undefined ? t(template.summary) : t("settingsSources.sourceDetail.fallbackSummary")} />
 			{problem !== null ? <div className="settings-error" role="alert">{problem}</div> : null}
+			{row?.install.state === "unsupported" && isCalendarDatasourceType(type) ? <Note>{t("settingsSources.sourceDetail.macOnlyNote")}</Note> : null}
 			<Section title={t("settingsSources.sourceDetail.statusSection")}>
 				<Row name={t("settingsSources.sourceDetail.enabledName")} hint={t("settingsSources.sourceDetail.enabledHint")}>
 					<Switch

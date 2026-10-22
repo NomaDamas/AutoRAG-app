@@ -1828,6 +1828,12 @@
       "rss": {
         "summary": "轮询并索引 RSS 2.0 / Atom 订阅源。"
       },
+      "hister": {
+        "summary": "通过 Hister 服务器搜索浏览器访问过的网页。"
+      },
+      "calendar": {
+        "summary": "通过 EventKit MCP 实时查询 macOS 日历日程与提醒事项。"
+      },
       "spotlight": {
         "summary": "使用 macOS Spotlight (mdfind) 查询索引本地文件。"
       }
@@ -1852,6 +1858,8 @@
       "mail": "Mail",
       "obsidian": "Obsidian (qmd)",
       "rss": "RSS / News",
+      "hister": "Hister (浏览器历史记录)",
+      "calendar": "Apple 日历与提醒事项 (EventKit MCP)",
       "spotlight": "Spotlight (mdfind)"
     },
     "fields": {
@@ -1916,6 +1924,11 @@
       "queries": "查询",
       "onlyIn": "搜索目录 (-onlyin)",
       "maxResultsPerQuery": "每查询最大结果",
+      "semantic": "启用语义搜索",
+      "requireWriteConfirmation": "修改日程或提醒事项前需要确认",
+      "mcpExposure": "MCP 工具暴露方式",
+      "command": "MCP 执行命令",
+      "args": "MCP 执行参数",
       "defaultOption": "(默认)",
       "envAria": "环境变量 (JSON)",
       "envEditorHint": "注入子进程的环境变量。机密令牌/密码请放在操作系统环境变量中，而不要填在这里。",
@@ -1930,7 +1943,11 @@
         "defaultOn": "默认：开启。",
         "defaultOff": "默认：关闭。",
         "tokenEnv": "这是存放令牌的环境变量名，而不是令牌本身。",
-        "rcloneConfig": "自行指定的 rclone.conf 仅以只读方式使用。"
+        "rcloneConfig": "自行指定的 rclone.conf 仅以只读方式使用。",
+        "histerSemantic": "需要 Hister 服务器开启语义搜索 (autorag setup --sync-hister)。",
+        "requireWriteConfirmation": "开启后，未经确认不会修改日程或提醒事项 (--require-write-confirmation)。",
+        "mcpExposure": "direct 直接向模型暴露工具，codemode 通过脚本调用。",
+        "calendarCommand": "留空则使用 npx 启动 mcp-server-apple-events。"
       },
       "envError": {
         "object": "环境变量必须是 JSON 对象。",
@@ -2039,7 +2056,8 @@
       "promptTitle": "连接 {{name}}",
       "promptDesc": "设置连接 id 后添加。留空则使用模板名称。",
       "promptLabel": "连接 id",
-      "promptConfirm": "添加连接"
+      "promptConfirm": "添加连接",
+      "macOnly": "仅在 macOS 上可用（EventKit）。"
     },
     "sourceDetail": {
       "fallbackSummary": "管理此连接的设置。",
@@ -2066,7 +2084,8 @@
       "removeSection": "断开连接",
       "removeHint": "仅从 Dazzi 搜索中移除，源应用的数据不会被删除。",
       "confirmTitle": "要断开此连接吗？",
-      "confirmBody": "将把 '{{alias}}' 连接从 Dazzi 搜索中移除。源应用的数据不会被删除。"
+      "confirmBody": "将把 '{{alias}}' 连接从 Dazzi 搜索中移除。源应用的数据不会被删除。",
+      "macOnlyNote": "Apple 日历和提醒事项只能通过 macOS 的 EventKit 读取，因此此连接在这台电脑上无效。"
     },
     "scope": {
       "title": "搜索范围",

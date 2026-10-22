@@ -1828,6 +1828,12 @@
       "rss": {
         "summary": "RSS 2.0 / Atom フィードをポーリングしてインデックスします。"
       },
+      "hister": {
+        "summary": "Hister サーバー経由でブラウザの閲覧履歴ページを検索します。"
+      },
+      "calendar": {
+        "summary": "EventKit MCP 経由で macOS のカレンダー予定とリマインダーをライブ照会します。"
+      },
       "spotlight": {
         "summary": "macOS Spotlight(mdfind)クエリでローカルファイルをインデックスします。"
       }
@@ -1852,6 +1858,8 @@
       "mail": "Mail",
       "obsidian": "Obsidian (qmd)",
       "rss": "RSS / News",
+      "hister": "Hister (ブラウザ閲覧履歴)",
+      "calendar": "Apple カレンダー・リマインダー (EventKit MCP)",
       "spotlight": "Spotlight (mdfind)"
     },
     "fields": {
@@ -1916,6 +1924,11 @@
       "queries": "クエリ",
       "onlyIn": "検索ディレクトリ (-onlyin)",
       "maxResultsPerQuery": "クエリあたりの最大結果数",
+      "semantic": "セマンティック検索を有効化",
+      "requireWriteConfirmation": "予定・リマインダーの変更時に確認を要求",
+      "mcpExposure": "MCP ツール公開方式",
+      "command": "MCP 実行コマンド",
+      "args": "MCP 実行引数",
       "defaultOption": "(デフォルト)",
       "envAria": "環境変数 (JSON)",
       "envEditorHint": "子プロセスに注入する環境変数です。秘密のトークンやパスワードはここではなく OS の環境変数に置いてください。",
@@ -1930,7 +1943,11 @@
         "defaultOn": "デフォルト: オン。",
         "defaultOff": "デフォルト: オフ。",
         "tokenEnv": "トークンそのものではなく、トークンが入った環境変数の名前です。",
-        "rcloneConfig": "自分で指定した rclone.conf は読み取り専用でのみ使います。"
+        "rcloneConfig": "自分で指定した rclone.conf は読み取り専用でのみ使います。",
+        "histerSemantic": "Hister サーバー側でセマンティック検索が有効である必要があります (autorag setup --sync-hister)。",
+        "requireWriteConfirmation": "オンにすると、確認なしで予定やリマインダーを変更しません (--require-write-confirmation)。",
+        "mcpExposure": "direct はツールを直接モデルに公開し、codemode はスクリプト経由で呼び出します。",
+        "calendarCommand": "空欄にすると npx で mcp-server-apple-events を起動します。"
       },
       "envError": {
         "object": "環境変数は JSON オブジェクトでなければなりません。",
@@ -2039,7 +2056,8 @@
       "promptTitle": "{{name}} を接続",
       "promptDesc": "接続 ID を決めて追加します。空欄にするとテンプレート名を使います。",
       "promptLabel": "接続 ID",
-      "promptConfirm": "接続を追加"
+      "promptConfirm": "接続を追加",
+      "macOnly": "macOS（EventKit）でのみ利用できます。"
     },
     "sourceDetail": {
       "fallbackSummary": "この接続の設定を管理します。",
@@ -2066,7 +2084,8 @@
       "removeSection": "接続を解除",
       "removeHint": "Dazzi の検索からのみ削除され、元のアプリのデータは消えません。",
       "confirmTitle": "接続を解除しますか？",
-      "confirmBody": "'{{alias}}' 接続を Dazzi の検索から削除します。元のアプリのデータは消えません。"
+      "confirmBody": "'{{alias}}' 接続を Dazzi の検索から削除します。元のアプリのデータは消えません。",
+      "macOnlyNote": "Apple カレンダーとリマインダーは macOS の EventKit でのみ読み取れるため、このコンピューターでは接続は無効です。"
     },
     "scope": {
       "title": "検索範囲",

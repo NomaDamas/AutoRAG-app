@@ -95,10 +95,12 @@ export function orphanVmNames(vms, holders, runPrefix) {
  * Whether a job indexes for real and so needs the host's MinSync embedding model
  * cache (`~/.cache/minsync/models`) in the guest. A fresh VM has none, so a real
  * first index would download ~1.2 GB from Hugging Face inside the VM. Only the
- * onboarding lane (and a sweep that runs every lane) performs a real first index;
- * a script may, so it gets the cache too.
+ * onboarding lane performs a real first index; the settings-redesign lane applies
+ * the "This computer" embedding profile, whose model gate needs the cached model
+ * before Apply unlocks. A sweep that runs every lane covers both; a script may
+ * index for real, so it gets the cache too.
  */
 export function needsEmbeddingAssets(job) {
 	if (job.kind === "script") return true;
-	return job.lanes.length === 0 || job.lanes.includes("onboarding");
+	return job.lanes.length === 0 || job.lanes.includes("onboarding") || job.lanes.includes("settings-redesign");
 }

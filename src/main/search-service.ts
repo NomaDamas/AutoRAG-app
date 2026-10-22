@@ -15,6 +15,7 @@ import { resolveSessionModel } from "./agents/app-model";
 import { applyAppIndexing, readAppIndexing } from "./app-indexing";
 import { ensureEmbeddingForConfig } from "./embedding-daemon";
 import { agentOptionsForSemantic, applySemanticPolicyToAgent } from "./semantic-policy";
+import { syncCalendarMcpConfig } from "./calendar-mcp";
 import type {
 	AnswerPhase,
 	AnswerPhaseName,
@@ -567,6 +568,8 @@ export function createDefaultAgentFactory(): () => Promise<SearchAgent> {
 		// The model and credentials come from the one resolver every agent in the
 		// app shares (see agents/app-model.ts): fresh on every agent build.
 		const resolved = await resolveSessionModel(effective, input.env, input.cwd, getAgentDir());
+		const agentDir = input.env.PI_CODING_AGENT_DIR ?? getAgentDir();
+		syncCalendarMcpConfig(raw, raw, agentDir);
 		const decomposition = await resolveDecomposition(effective, input.env, input.cwd);
 		// The decomposition model's thinking is upstream-fixed off; only the
 		// two-phase answer model takes config thinking.fast/final.
@@ -574,6 +577,7 @@ export function createDefaultAgentFactory(): () => Promise<SearchAgent> {
 		const options: AutoRAGAgentOptions = {
 			...buildAgentOptions(effective),
 			model: resolved.model,
+			piAgentDir: agentDir,
 			...(resolved.apiKey !== undefined ? { apiKey: resolved.apiKey } : {}),
 			...(resolved.providerApiKeys !== undefined ? { providerApiKeys: resolved.providerApiKeys } : {}),
 			...(decomposition !== undefined ? { queryDecomposition: decomposition } : {}),

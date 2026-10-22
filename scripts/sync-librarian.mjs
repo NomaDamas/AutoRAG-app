@@ -10,8 +10,8 @@ const staged = join(root, ".upstream", "librarian-package");
 const installed = join(root, "node_modules", "@autorag", "librarian");
 const remote = "https://github.com/Marker-Inc-Korea/AutoRAG.git";
 // A release tag, or a full commit SHA while the librarian has no tag that carries what the app needs.
-// v2.10.6 is the first release that pins MinSync 0.4.10+ and ships the `minsync serve` embedding daemon client.
-const librarianRef = "v2.10.6";
+// v2.11.0 ships the Hister browser web-history datasource, external MCP client support, and MinSync-backed Obsidian indexing.
+const librarianRef = "v2.11.0";
 
 function run(command, args, cwd = root) {
 	const result = spawnSync(command, args, { cwd, stdio: "inherit" });
