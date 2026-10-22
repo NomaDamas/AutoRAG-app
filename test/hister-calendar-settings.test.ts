@@ -260,8 +260,9 @@ describe("Calendar integration settings and MCP server synchronization", () => {
 			}),
 		);
 
-		const config = createAutoRagConfigService({ env: fixture.env, cwd: fixture.root });
-		const status = createDataSourceStatusService({ env: fixture.env, cwd: fixture.root });
+		// This scenario is the macOS connection; the platform gate has its own tests (calendar-platform.test.ts).
+		const config = createAutoRagConfigService({ env: fixture.env, cwd: fixture.root, platform: "darwin" });
+		const status = createDataSourceStatusService({ env: fixture.env, cwd: fixture.root, platform: "darwin" });
 
 		await config.set(["datasources", "calendar"], {
 			type: "calendar",
