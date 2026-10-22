@@ -55,6 +55,12 @@ export async function setAppLanguage(lang: AppLanguage): Promise<void> {
 export { i18n };
 export const t = i18n.t.bind(i18n);
 
+/**
+ * `t` for code that holds the key as a plain string (keys chosen by a shared pure module,
+ * e.g. `localSpecMessage`). The key is still looked up in the locale files at run time.
+ */
+export const tByName = (key: string, options?: Record<string, unknown>): string => (options === undefined ? i18n.t(key as LocaleKey) : i18n.t(key as LocaleKey, options));
+
 /** Any key of the locale files: type data fields that hold a key to translate later with this. */
 export type LocaleKey = ParseKeys;
 

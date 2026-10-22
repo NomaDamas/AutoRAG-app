@@ -37,6 +37,7 @@ import {
 	bySourceOrder,
 	canAdvance,
 	canSelectCloudEmbedding,
+	localEmbeddingAllowed,
 	errorReportsConsentOnLeaving,
 	isPlanSelectable,
 	planHeld,
@@ -104,14 +105,16 @@ function seedDraft(candidates: readonly FolderCandidate[], permissions: Permissi
 	};
 }
 
-function reconcileAccountDraft(current: OnboardingDraft, status: AccountStatus | null): OnboardingDraft {
+function reconcileAccountDraft(current: OnboardingDraft, status: AccountStatus | null, localAllowed: boolean): OnboardingDraft {
+	// A saved draft that chose local embedding cannot keep it on a machine below the spec.
+	if (!localAllowed && current.embed !== "none" && current.embed !== "cloud") current = { ...current, embed: "none" };
 	if (status === null) return current;
 	if (status.state !== "signedIn") {
 		if (current.embed !== "cloud" && !current.cloudConsent) return current;
 		// Cloud is gone with the account; a chosen none or local is never rewritten.
-		return { ...current, embed: resolveEmbed(current.embed, false), cloudConsent: false };
+		return { ...current, embed: resolveEmbed(current.embed, false, localAllowed), cloudConsent: false };
 	}
-	const embed = resolveEmbed(current.embed, true);
+	const embed = resolveEmbed(current.embed, true, localAllowed);
 	const subPlan = status.account?.plan;
 	if (subPlan === "air" || subPlan === "pro") {
 		const nextPlan: PlanId = embed === "cloud" ? "pro" : subPlan;
@@ -184,7 +187,8 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 	const saveTimer = useRef<number | null>(null);
 	const scannedRef = useRef(new Set<string>());
 	const sourcesRef = useRef(false);
-	const embeddingRef = useRef(false);
+	/** Whether this machine may run local embedding; false until its verdict arrives, and for good below the spec. */
+	const localAllowedRef = useRef(false);
 	const modelsRef = useRef(false);
 	const indexingRef = useRef(false);
 	const shareUsageRef = useRef(false);
@@ -198,6 +202,7 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 	shareErrorsRef.current = shareErrors;
 	permissionRef.current = permission;
 	accountRef.current = account;
+	localAllowedRef.current = localEmbeddingAllowed(embedding?.localSpec ?? null);
 	useEffect(() => {
 		modelKeyRef.current = modelKey;
 	}, [modelKey]);
@@ -220,10 +225,18 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 	useEffect(() => {
 		let alive = true;
 		void (async () => {
-			const [snapshot, perms, folders] = await Promise.all([bridge.load(), bridge.permissions(), bridge.folderCandidates()]);
+			// The machine's verdict comes with the draft: a saved draft that chose local embedding must be corrected before any step reads it.
+			const [snapshot, perms, folders, embeddingInfo] = await Promise.all([
+				bridge.load(),
+				bridge.permissions(),
+				bridge.folderCandidates(),
+				bridge.embedding().catch(() => null),
+			]);
 			if (!alive) {
 				return;
 			}
+			localAllowedRef.current = localEmbeddingAllowed(embeddingInfo?.localSpec ?? null);
+			setEmbedding(embeddingInfo);
 			if (!snapshot.pending) {
 				onComplete();
 				return;
@@ -246,7 +259,7 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 					}),
 				);
 			setCandidates([...folders, ...added]);
-			setDraft(reconcileAccountDraft(draft, accountRef.current));
+			setDraft(reconcileAccountDraft(draft, accountRef.current, localAllowedRef.current));
 		})();
 		return () => {
 			alive = false;
@@ -312,7 +325,7 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 		}
 		const status = permissionRef.current;
 		const signedIn = accountRef.current?.state === "signedIn";
-		const embed = resolveEmbed(current.embed, signedIn);
+		const embed = resolveEmbed(current.embed, signedIn, localAllowedRef.current);
 		return canAdvance({
 			stepId: current.stepId,
 			platform: status?.platform ?? "",
@@ -327,7 +340,7 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 		});
 	}, []);
 
-	const currentEmbed = resolveEmbed(draft?.embed, canSelectCloudEmbedding(account));
+	const currentEmbed = resolveEmbed(draft?.embed, canSelectCloudEmbedding(account), localAllowedRef.current);
 	const flow =
 		draft === null
 			? []
@@ -339,7 +352,7 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 			return;
 		}
 		const signedIn = accountRef.current?.state === "signedIn";
-		const embed = resolveEmbed(current.embed, signedIn);
+		const embed = resolveEmbed(current.embed, signedIn, localAllowedRef.current);
 		const selectedFolders = current.folders.filter((folder) => folder.selected).map((folder) => folder.path);
 		const { excludePaths, excludedFiles } = indexingExclusions(current.smartScope, selectedFolders);
 		const request: IndexingRequest = {
@@ -387,7 +400,7 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 			return;
 		}
 		const signedIn = accountRef.current?.state === "signedIn";
-		const embed = resolveEmbed(current.embed, signedIn);
+		const embed = resolveEmbed(current.embed, signedIn, localAllowedRef.current);
 		const list = buildFlow(current.plan, shouldSkipPlanStep(current.planConfirmed, embed, accountRef.current), embed);
 		const target = list[list.indexOf(current.stepId) + 1];
 		const consent = usageConsentOnLeaving(current.stepId, shareUsageRef.current);
@@ -409,7 +422,7 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 			return;
 		}
 		const signedIn = accountRef.current?.state === "signedIn";
-		const embed = resolveEmbed(current.embed, signedIn);
+		const embed = resolveEmbed(current.embed, signedIn, localAllowedRef.current);
 		const list = buildFlow(current.plan, shouldSkipPlanStep(current.planConfirmed, embed, accountRef.current), embed);
 		const index = list.indexOf(current.stepId);
 		if (index > 0) {
@@ -571,14 +584,6 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 	}, [stepId]);
 
 	useEffect(() => {
-		if (stepId !== "embedding" || embeddingRef.current) {
-			return;
-		}
-		embeddingRef.current = true;
-		void bridge.embedding().then(setEmbedding);
-	}, [stepId]);
-
-	useEffect(() => {
 		if (stepId !== "model" || modelsRef.current) {
 			return;
 		}
@@ -633,7 +638,7 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 		const applyAccount = (status: AccountStatus): void => {
 			accountRef.current = status;
 			setAccount(status);
-			setDraft((current) => (current === null ? current : reconcileAccountDraft(current, status)));
+			setDraft((current) => (current === null ? current : reconcileAccountDraft(current, status, localAllowedRef.current)));
 		};
 		const off = autorag.account.onChanged(applyAccount);
 		void autorag.account.status().then(applyAccount);
@@ -833,6 +838,9 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 			if (embed === "cloud" && !canSelectCloudEmbedding(accountRef.current)) {
 				return;
 			}
+			if (embed === "local" && !localAllowedRef.current) {
+				return;
+			}
 			setDraft((current) => {
 				if (current === null) return current;
 				const subPlan = accountRef.current?.state === "signedIn" ? accountRef.current.account?.plan : undefined;
@@ -858,7 +866,7 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 			}),
 		choosePlan: (plan: PlanId) => {
 			const current = draftRef.current;
-			const embed = resolveEmbed(current?.embed, canSelectCloudEmbedding(accountRef.current));
+			const embed = resolveEmbed(current?.embed, canSelectCloudEmbedding(accountRef.current), localAllowedRef.current);
 			if (!isPlanSelectable(plan, embed)) {
 				return;
 			}
@@ -871,7 +879,7 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 		signOut: () => {
 			void autorag.account.signOut().then((status) => {
 				setAccount(status);
-				patch({ embed: resolveEmbed(draftRef.current?.embed, false), cloudConsent: false });
+				patch({ embed: resolveEmbed(draftRef.current?.embed, false, localAllowedRef.current), cloudConsent: false });
 			});
 		},
 		skipAccount: () => {
@@ -880,7 +888,7 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 				return;
 			}
 			// BYOK cannot use the cloud embedder, so cloud falls back; a chosen mode stays.
-			const embed = resolveEmbed(current.embed, false);
+			const embed = resolveEmbed(current.embed, false, localAllowedRef.current);
 			const list = buildFlow("byok", current.planConfirmed, embed);
 			const target = list[list.indexOf(current.stepId) + 1];
 			setDraft({ ...current, embed, cloudConsent: false, plan: "byok", ...(target === undefined ? {} : { stepId: target }) });

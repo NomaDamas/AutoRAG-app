@@ -2112,5 +2112,17 @@
       "intervalName": "검사 주기",
       "intervalHint": "파일 변화를 다시 확인하는 주기입니다."
     }
+  },
+  "localSpec": {
+    "blocked": "이 컴퓨터는 최소 사양을 충족하지 못해 로컬 임베딩을 쓸 수 없어요. {{reason}}",
+    "reason": {
+      "appleBaseChip": "{{chip}} 기본 칩은 지원하지 않습니다. Pro·Max·Ultra 칩(예: M2 Pro)과 통합 메모리 {{minMemoryGb}}GB 이상이 필요해요.",
+      "appleMemory": "통합 메모리가 {{memoryGb}}GB예요. {{minMemoryGb}}GB 이상이 필요해요.",
+      "appleSiliconRequired": "Apple 실리콘(Pro·Max·Ultra 칩, 통합 메모리 {{minMemoryGb}}GB 이상)이 필요해요.",
+      "noCudaGpu": "CUDA를 지원하는 NVIDIA GPU(VRAM {{minVramGb}}GB 이상)를 찾지 못했어요.",
+      "gpuVram": "{{gpu}}의 VRAM이 {{vramGb}}GB예요. {{minVramGb}}GB 이상이 필요해요.",
+      "unsupportedPlatform": "이 운영체제에서는 로컬 임베딩을 지원하지 않아요.",
+      "hardwareUnreadable": "이 컴퓨터의 사양을 확인하지 못했어요."
+    }
   }
 }

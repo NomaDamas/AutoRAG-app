@@ -6,7 +6,8 @@ import type { EmbeddingSettingsService } from "./settings-service";
 import { startEmbeddingLoopbackAdapter, type EmbeddingLoopbackAdapter } from "./embedding-loopback-adapter";
 import { isJsonObject } from "../shared/settings-contract";
 import { readAppIndexing } from "./app-indexing";
-import { t } from "../shared/i18n/core";
+import { t, tByName } from "../shared/i18n/core";
+import { localSpecMessage, type LocalSpecVerdict } from "../shared/local-embedding-spec";
 import type {
 	AutoRagConfigUpdate,
 	DataSourceRow,
@@ -60,6 +61,8 @@ export interface EmbeddingSettingsDeps {
 	readonly cwd: string;
 	readonly config: AutoRagConfigService;
 	readonly dataSources: DataSourceStatusService;
+	/** Whether this machine meets the minimum spec for the built-in local model (the "spec guard"). */
+	readonly localSpec: () => Promise<LocalSpecVerdict>;
 	/** Test seam for the local-server probe and the loopback adapter upstream. */
 	readonly fetchImpl?: typeof fetch;
 }
@@ -111,7 +114,7 @@ const LOOPBACK_HOSTS: Record<string, true> = { localhost: true, "127.0.0.1": tru
  * The global embedder choices. The AutoRAG plan and local servers are the only
  * sources the prototype lists; corpus text never goes to a remote embedder.
  */
-export function embeddingProfiles(): readonly EmbeddingProfile[] {
+export function embeddingProfiles(spec: LocalSpecVerdict = { eligible: true }): readonly EmbeddingProfile[] {
 	return [
 		{
 			id: NONE_PROFILE_ID,
@@ -124,6 +127,7 @@ export function embeddingProfiles(): readonly EmbeddingProfile[] {
 			passagePrefix: "",
 			baseUrl: null,
 			requiresLocalServer: false,
+			unavailable: null,
 		},
 		{
 			id: "native-qwen3",
@@ -136,6 +140,7 @@ export function embeddingProfiles(): readonly EmbeddingProfile[] {
 			passagePrefix: "",
 			baseUrl: null,
 			requiresLocalServer: false,
+			unavailable: spec.eligible ? null : localSpecMessage(spec, tByName),
 		},
 		{
 			id: "local-server",
@@ -148,12 +153,13 @@ export function embeddingProfiles(): readonly EmbeddingProfile[] {
 			passagePrefix: "",
 			baseUrl: null,
 			requiresLocalServer: true,
+			unavailable: null,
 		},
 	];
 }
 
-function findProfile(profileId: string): EmbeddingProfile | undefined {
-	return embeddingProfiles().find((profile) => profile.id === profileId);
+function findProfile(profileId: string, spec?: LocalSpecVerdict): EmbeddingProfile | undefined {
+	return embeddingProfiles(spec).find((profile) => profile.id === profileId);
 }
 
 function assertLocalServer(local: LocalServer): void {
@@ -384,9 +390,11 @@ export function createEmbeddingSettingsService(deps: EmbeddingSettingsDeps): Emb
 
 	const configPath = (): string => resolveConfigPath({ flags: {}, env: deps.env, cwd: deps.cwd }).configPath;
 
-	const resolveChoice = (request: EmbeddingChangeRequest): { choice: EmbeddingChoice } | { error: string } => {
-		const profile = findProfile(request.profileId);
+	const resolveChoice = async (request: EmbeddingChangeRequest): Promise<{ choice: EmbeddingChoice } | { error: string }> => {
+		const profile = findProfile(request.profileId, await deps.localSpec());
 		if (profile === undefined) return { error: t("main.embedding.errors.unknownProfile", { id: request.profileId }) };
+		// The spec guard: a machine below the minimum never gets the built-in local model, however the request arrived.
+		if (profile.unavailable !== null) return { error: profile.unavailable };
 		if (!profile.requiresLocalServer) return { choice: { profile } };
 		const local = request.localServer;
 		if (local === undefined) return { error: t("main.embedding.errors.localServerRequired") };
@@ -455,12 +463,13 @@ export function createEmbeddingSettingsService(deps: EmbeddingSettingsDeps): Emb
 		error: string | null,
 	): Promise<EmbeddingSettingsSnapshot> => {
 		const path = configPath();
+		const spec = await deps.localSpec();
 		const base: EmbeddingSettingsSnapshot = {
 			configPath: path,
 			configExists: existsSync(path),
 			error,
 			current: { profileId: choice.profile.id, embedder: choice.profile.kind === "none" ? asJsonObject(readEmbedder(deps.env, deps.cwd)) : deriveEmbedder(choice) },
-			profiles: embeddingProfiles(),
+			profiles: embeddingProfiles(spec),
 			sources: [],
 		};
 		const sources = await deps.dataSources.list();
@@ -478,7 +487,7 @@ export function createEmbeddingSettingsService(deps: EmbeddingSettingsDeps): Emb
 				configExists: existsSync(path),
 				error: null,
 				current: { profileId, embedder: asJsonObject(embedder) },
-				profiles: embeddingProfiles(),
+				profiles: embeddingProfiles(await deps.localSpec()),
 				sources: [],
 			};
 			const sources = await deps.dataSources.list();
@@ -488,7 +497,7 @@ export function createEmbeddingSettingsService(deps: EmbeddingSettingsDeps): Emb
 			return { ...base, sources: buildPlan(sources.sources, choice, adapter !== null) };
 		},
 		plan: async (request) => {
-			const resolved = resolveChoice(request);
+			const resolved = await resolveChoice(request);
 			if ("error" in resolved) {
 				const embedder = readEmbedder(deps.env, deps.cwd);
 				return {
@@ -496,7 +505,7 @@ export function createEmbeddingSettingsService(deps: EmbeddingSettingsDeps): Emb
 					configExists: existsSync(configPath()),
 					error: resolved.error,
 					current: { profileId: currentProfileId(embedder, readSemantic(deps.env, deps.cwd)), embedder: asJsonObject(embedder) },
-					profiles: embeddingProfiles(),
+					profiles: embeddingProfiles(await deps.localSpec()),
 					sources: [],
 				};
 			}
@@ -510,7 +519,7 @@ export function createEmbeddingSettingsService(deps: EmbeddingSettingsDeps): Emb
 			return snapshotFor(choice, false, null);
 		},
 		apply: async (request) => {
-			const resolved = resolveChoice(request);
+			const resolved = await resolveChoice(request);
 			if ("error" in resolved) return { ...EMPTY_RESULT(request.profileId), error: resolved.error };
 			const choice = resolved.choice;
 			const snapshot = await deps.dataSources.list();

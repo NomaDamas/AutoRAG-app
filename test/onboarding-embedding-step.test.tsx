@@ -7,6 +7,7 @@ import type { EmbedMode, FolderScan, OnboardingDraft } from "../src/shared/onboa
 import { EmbeddingStep } from "../src/renderer/src/onboarding/steps/Embedding";
 import type { OnboardingCtx } from "../src/renderer/src/onboarding/context";
 import type { Translate } from "../src/renderer/src/onboarding/flow";
+import type { LocalSpecVerdict } from "../src/shared/local-embedding-spec";
 
 Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
 
@@ -44,11 +45,13 @@ interface Harness {
 	readonly ctx: OnboardingCtx;
 	readonly setEmbedMode: Mock<(mode: EmbedMode) => void>;
 	readonly setCloudConsent: Mock<(consent: boolean) => void>;
+	readonly toast: Mock<(message: string) => void>;
 }
 
-function harness(options: { readonly embed: EmbedMode; readonly consent?: boolean; readonly account?: AccountStatus | null }): Harness {
+function harness(options: { readonly embed: EmbedMode; readonly consent?: boolean; readonly account?: AccountStatus | null; readonly localSpec?: LocalSpecVerdict }): Harness {
 	const setEmbedMode = vi.fn();
 	const setCloudConsent = vi.fn();
+	const toast = vi.fn();
 	const draft: OnboardingDraft = {
 		version: 1,
 		stepId: "embedding",
@@ -72,7 +75,7 @@ function harness(options: { readonly embed: EmbedMode; readonly consent?: boolea
 		scanning: false,
 		scans,
 		candidates: [],
-		embedding: { profile: "qwen3", modelBytes: 614_000_000, cached: false, configured: false },
+		embedding: { profile: "qwen3", modelBytes: 614_000_000, cached: false, configured: false, localSpec: options.localSpec ?? { eligible: true } },
 		sources: [],
 		sourcesChecking: false,
 		models: [],
@@ -93,7 +96,7 @@ function harness(options: { readonly embed: EmbedMode; readonly consent?: boolea
 		setStep: noop,
 		next: noop,
 		back: noop,
-		toast: noop,
+		toast,
 		openOverlay: noop,
 		closeOverlay: noop,
 		setFolderSelected: noop,
@@ -132,7 +135,7 @@ function harness(options: { readonly embed: EmbedMode; readonly consent?: boolea
 		relaunch: noop,
 		openFullDiskAccess: noop,
 	};
-	return { ctx, setEmbedMode, setCloudConsent };
+	return { ctx, setEmbedMode, setCloudConsent, toast };
 }
 
 function render(ctx: OnboardingCtx): void {
@@ -235,5 +238,46 @@ describe("EmbeddingStep", () => {
 		expect(setEmbedMode).toHaveBeenLastCalledWith("local");
 		key(card("local"), "ArrowRight");
 		expect(setEmbedMode).toHaveBeenLastCalledWith("none");
+	});
+
+	describe("on a machine below the local spec", () => {
+		const weak: LocalSpecVerdict = { eligible: false, reason: "apple-base-chip", vars: { chip: "Apple M2" } };
+
+		it("shows the local card disabled with the reason on the card, and leaves the other two usable", () => {
+			const { ctx } = harness({ embed: "none", localSpec: weak });
+			render(ctx);
+			expect(card("local").getAttribute("aria-disabled")).toBe("true");
+			expect(card("local").className).toContain("disabled");
+			expect(card("none").getAttribute("aria-disabled")).toBe("false");
+			expect(card("cloud").getAttribute("aria-disabled")).toBe("false");
+			expect(card("local").querySelector(".em-blocked")?.textContent).toContain("localSpec.reason.appleBaseChip");
+			expect(card("none").querySelector(".em-blocked")).toBeNull();
+		});
+
+		it("explains instead of selecting when the local card is clicked or chosen with the keyboard", () => {
+			const { ctx, setEmbedMode, toast } = harness({ embed: "none", localSpec: weak });
+			render(ctx);
+			click(card("local"));
+			expect(setEmbedMode).not.toHaveBeenCalled();
+			expect(toast).toHaveBeenCalledTimes(1);
+			expect(toast.mock.calls[0]?.[0]).toContain("localSpec.blocked");
+			expect(toast.mock.calls[0]?.[0]).toContain("localSpec.reason.appleBaseChip");
+			key(card("local"), "Enter");
+			expect(toast).toHaveBeenCalledTimes(2);
+			expect(setEmbedMode).not.toHaveBeenCalled();
+		});
+
+		it("skips the local card when the arrow keys walk the group", () => {
+			const { ctx, setEmbedMode } = harness({ embed: "none", localSpec: weak });
+			render(ctx);
+			key(card("none"), "ArrowRight");
+			expect(setEmbedMode).toHaveBeenLastCalledWith("cloud");
+		});
+	});
+
+	it("shows no blocked line when the machine meets the spec", () => {
+		const { ctx } = harness({ embed: "none" });
+		render(ctx);
+		expect(host.querySelector(".em-blocked")).toBeNull();
 	});
 });

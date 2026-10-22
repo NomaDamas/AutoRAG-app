@@ -18,6 +18,7 @@
  * Local embedding runs on this machine without sending corpus text off-device.
  */
 
+import type { LocalSpecVerdict } from "./local-embedding-spec";
 import type { SmartExclusion } from "./smart-indexing-contract";
 
 export const ONBOARDING_CHANNELS = {
@@ -202,6 +203,8 @@ export interface EmbeddingInfo {
 	readonly cached: boolean;
 	/** The shared config already names an embedder; onboarding leaves it as is. */
 	readonly configured: boolean;
+	/** Whether this machine meets the minimum spec for the local model; local embedding is off-limits when it does not. */
+	readonly localSpec: LocalSpecVerdict;
 }
 
 /** Metadata a detected connector exposes, shown as its second line. */

@@ -64,6 +64,7 @@ import { createAutoRagConfigService } from "./autorag-config-service";
 import { createModelStatusService } from "./model-status";
 import { createProviderAuthService, type ProviderAuthService } from "./provider-auth-service";
 import { createProviderCredentialService } from "./provider-credentials";
+import { createLocalSpecProbe } from "./hardware-probe";
 import { createEmbeddingSettingsService, type EmbeddingSettingsRuntime } from "./embedding-settings-service";
 import { createDefaultAgentFactory, createSearchService } from "./search-service";
 import { resolveAppSessionModel } from "./agents/app-model";
@@ -550,11 +551,14 @@ app.whenReady().then(async () => {
 	// it takes the shared refresh lock and is journaled, so it shows in the indexing progress.
 	const schedulePath = schedulePaths(autoragConfigPath());
 	const lockedDataSources = lockDataSources(dataSources, schedulePath);
+	// One verdict for the whole process; a packaged app never honors the QA hardware override.
+	const localSpec = createLocalSpecProbe({ env: process.env, allowOverride: !app.isPackaged });
 	const embeddingService = createEmbeddingSettingsService({
 		env: process.env,
 		cwd: process.cwd(),
 		config: autoRagConfig,
 		dataSources: lockedDataSources,
+		localSpec,
 	});
 	embeddingSettings = embeddingService;
 	// A persisted local-server embedder points mailcrawl at the app's ephemeral
@@ -757,6 +761,7 @@ app.whenReady().then(async () => {
 			}
 			return [];
 		},
+		localSpec,
 		ocrEnabled: async () => {
 			try {
 				const raw = readRawConfigObject(autoragConfigPath());

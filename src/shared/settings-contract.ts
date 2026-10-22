@@ -356,6 +356,8 @@ export interface EmbeddingProfile {
 	readonly passagePrefix: string;
 	readonly baseUrl: string | null;
 	readonly requiresLocalServer: boolean;
+	/** Why this machine cannot use the profile (already translated), or null when it can. */
+	readonly unavailable: string | null;
 }
 
 /** How one configured datasource adopts the selected global embedding profile. */

@@ -2112,5 +2112,17 @@
       "intervalName": "Check interval",
       "intervalHint": "How often to re-check for file changes."
     }
+  },
+  "localSpec": {
+    "blocked": "This computer doesn't meet the minimum spec for local embedding. {{reason}}",
+    "reason": {
+      "appleBaseChip": "The base {{chip}} chip isn't supported. You need a Pro, Max or Ultra chip (for example M2 Pro) with at least {{minMemoryGb}} GB of unified memory.",
+      "appleMemory": "It has {{memoryGb}} GB of unified memory; at least {{minMemoryGb}} GB is required.",
+      "appleSiliconRequired": "You need Apple silicon (a Pro, Max or Ultra chip with at least {{minMemoryGb}} GB of unified memory).",
+      "noCudaGpu": "No CUDA-capable NVIDIA GPU with at least {{minVramGb}} GB of VRAM was found.",
+      "gpuVram": "{{gpu}} has {{vramGb}} GB of VRAM; at least {{minVramGb}} GB is required.",
+      "unsupportedPlatform": "Local embedding isn't supported on this operating system.",
+      "hardwareUnreadable": "Couldn't read this computer's hardware."
+    }
   }
 }

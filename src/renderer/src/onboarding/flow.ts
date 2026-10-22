@@ -19,6 +19,7 @@ import type {
 	SourceFacts,
 	SourceId,
 } from "../../../shared/onboarding-contract";
+import type { LocalSpecVerdict } from "../../../shared/local-embedding-spec";
 import { CLOUD_FILES_PER_MINUTE, LOCAL_FILES_PER_MINUTE, NONE_FILES_PER_MINUTE, NONE_MIN_MINUTES } from "../../../shared/onboarding-contract";
 
 export type { EmbedMode };
@@ -53,10 +54,20 @@ export function canSelectCloudEmbedding(status: AccountStatus | null): boolean {
  * value (`local`) when it cannot. A mode the user chose — `none` or `local` —
  * is never rewritten, and a draft saved before the modes existed (`undefined`)
  * keeps reading as `local`.
+ *
+ * A machine below the local spec (`localAllowed` false) cannot run local
+ * embedding at all, so everything that would have read as `local` reads as the
+ * keyword-only `none` instead.
  */
-export function resolveEmbed(embed: EmbedMode | undefined, cloudAvailable: boolean): EmbedMode {
-	if (embed === undefined || embed === "local") return "local";
-	return embed === "none" ? "none" : cloudAvailable ? "cloud" : "local";
+export function resolveEmbed(embed: EmbedMode | undefined, cloudAvailable: boolean, localAllowed = true): EmbedMode {
+	const local: EmbedMode = localAllowed ? "local" : "none";
+	if (embed === undefined || embed === "local") return local;
+	return embed === "none" ? "none" : cloudAvailable ? "cloud" : local;
+}
+
+/** Whether the local card may be chosen: false below the spec, and until the machine has been checked. */
+export function localEmbeddingAllowed(localSpec: LocalSpecVerdict | null): boolean {
+	return localSpec?.eligible === true;
 }
 
 /** When cloud embedding is selected, only the Pro plan is available on the plan step. */
@@ -190,6 +201,8 @@ export interface EmbedCard {
 	readonly minutes: number;
 	readonly foot: EmbedFoot | null;
 	readonly disabled: boolean;
+	/** Set on the card a machine below the spec cannot use; the view says why. */
+	readonly blocked: Extract<LocalSpecVerdict, { eligible: false }> | null;
 }
 
 export interface EmbedCardsInput {
@@ -200,6 +213,8 @@ export interface EmbedCardsInput {
 	/** Null while the local embedder's size is still unknown. */
 	readonly modelBytes: number | null;
 	readonly modelCached: boolean;
+	/** This machine's verdict for the local model; null until it has been checked. */
+	readonly localSpec: LocalSpecVerdict | null;
 }
 
 /**
@@ -230,6 +245,7 @@ export function embedCards(input: EmbedCardsInput): readonly EmbedCard[] {
 			minutes: etaMinutes(input.files, "none"),
 			foot: null,
 			disabled: false,
+			blocked: null,
 		},
 		{
 			id: "local",
@@ -240,7 +256,8 @@ export function embedCards(input: EmbedCardsInput): readonly EmbedCard[] {
 			meters: [meter("performance", 4, "high", "warn"), meter("accuracy", 4, "good", "good")],
 			minutes: etaMinutes(input.files, "local"),
 			foot: localDownload,
-			disabled: false,
+			disabled: !localEmbeddingAllowed(input.localSpec),
+			blocked: input.localSpec !== null && !input.localSpec.eligible ? input.localSpec : null,
 		},
 		{
 			id: "cloud",
@@ -252,6 +269,7 @@ export function embedCards(input: EmbedCardsInput): readonly EmbedCard[] {
 			minutes: etaMinutes(input.files, "cloud"),
 			foot: null,
 			disabled: !input.cloudAvailable,
+			blocked: null,
 		},
 	];
 }

@@ -2112,5 +2112,17 @@
       "intervalName": "检查间隔",
       "intervalHint": "重新检查文件变化的间隔。"
     }
+  },
+  "localSpec": {
+    "blocked": "这台电脑未达到本地嵌入的最低配置要求。{{reason}}",
+    "reason": {
+      "appleBaseChip": "不支持基础款 {{chip}} 芯片。需要 Pro、Max 或 Ultra 芯片(例如 M2 Pro)以及至少 {{minMemoryGb}}GB 统一内存。",
+      "appleMemory": "统一内存为 {{memoryGb}}GB,至少需要 {{minMemoryGb}}GB。",
+      "appleSiliconRequired": "需要 Apple 芯片(Pro、Max 或 Ultra 芯片,统一内存至少 {{minMemoryGb}}GB)。",
+      "noCudaGpu": "未找到显存至少 {{minVramGb}}GB 且支持 CUDA 的 NVIDIA 显卡。",
+      "gpuVram": "{{gpu}} 的显存为 {{vramGb}}GB,至少需要 {{minVramGb}}GB。",
+      "unsupportedPlatform": "此操作系统不支持本地嵌入。",
+      "hardwareUnreadable": "无法读取这台电脑的硬件配置。"
+    }
   }
 }

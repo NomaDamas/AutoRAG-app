@@ -375,6 +375,22 @@ resumes at the same step.
   so a relaunch restores them. Starting the index writes the folders still left
   out into the shared config's `excludePaths` after the user's own entries and
   subtracts their file count from the first index's total and ETA.
+- **Local embedding spec guard** — the built-in local model
+  (`native:Qwen/Qwen3-Embedding-0.6B`) only runs on a capable machine:
+  Apple silicon with a Pro, Max or Ultra chip and at least 32 GB of unified
+  memory, or Windows/Linux with a CUDA GPU (NVIDIA, read with `nvidia-smi`) of
+  at least 8 GB VRAM. `src/shared/local-embedding-spec.ts` holds the rule
+  (`evaluateLocalEmbeddingSpec`) and the translated message
+  (`localSpecMessage`, keys `localSpec.*`); `src/main/hardware-probe.ts` reads
+  the hardware once per launch. Below the spec the onboarding local card is
+  disabled and says why, a saved draft that chose local falls back to keyword-only,
+  `startIndexing` refuses `embed: "local"`, and Settings → AI 모델 → 문서 이해
+  marks the native profile unavailable (`EmbeddingProfile.unavailable`); the main
+  process refuses to plan or apply it. Keyword-only, Dazzi cloud embedding and a
+  user-run local embedding server (`local-server`) are never gated. Raising or
+  lowering the minimum is a change to that one file. Unpackaged builds honor
+  `AUTORAG_QA_HARDWARE` (a JSON `HardwareProfile`) so QA can see the blocked state
+  on a capable machine; a packaged app ignores it.
 - **Embedding** offers local (`native:Qwen/Qwen3-Embedding-0.6B`) by default and enables
   Dazzi cloud embedding (`openai:qwen/qwen3-embedding-0.6b` on the Dazzi
   endpoint) once the user is signed in to Dazzi and gives explicit consent.

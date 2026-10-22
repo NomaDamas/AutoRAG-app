@@ -32,7 +32,8 @@ import {
 } from "../shared/onboarding-contract";
 import type { AppSettings, ConfigRefreshResult } from "../shared/settings-contract";
 import { isJsonObject } from "../shared/settings-contract";
-import { t } from "../shared/i18n/core";
+import { tByName, t } from "../shared/i18n/core";
+import { localSpecMessage, type LocalSpecVerdict } from "../shared/local-embedding-spec";
 import { applyIndexingConfig, buildDatasourceEntries } from "./onboarding-config";
 import { PROVIDER_ENV_NAME } from "./onboarding-models";
 import { computeIndexingProgress } from "./onboarding-progress";
@@ -121,6 +122,8 @@ export interface OnboardingServiceDeps {
 	/** Sum of the given folders' finished pre-scans, for the ETA denominator. */
 	readonly folderTotals: (paths: readonly string[]) => number;
 	readonly onComplete: () => void;
+	/** Whether this machine meets the minimum spec for the local embedding model. */
+	readonly localSpec: () => Promise<LocalSpecVerdict>;
 	readonly now?: () => number;
 }
 
@@ -623,6 +626,7 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 				modelBytes: NATIVE_QWEN3_MODEL_BYTES,
 				cached: existsSync(join(cacheRoot, NATIVE_QWEN3_SAFETENSORS_RELATIVE_PATH)),
 				configured: Object.keys(embedder).length > 0,
+				localSpec: await deps.localSpec(),
 			};
 		},
 		detectSources: async () => {
@@ -660,6 +664,11 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 			const isDazziCloudEmbedder = existingEmbedder.id === DAZZI_CLOUD_EMBEDDER_ID;
 			const configured = Object.keys(existingEmbedder).length > 0 && !isDazziCloudEmbedder;
 			const embedMode: EmbedMode = request.embed ?? "local";
+			if (embedMode === "local") {
+				// The renderer already hides the option; this is the guard that holds when it is bypassed.
+				const spec = await deps.localSpec();
+				if (!spec.eligible) throw new Error(localSpecMessage(spec, tByName));
+			}
 			const configuredBaseUrl = deps.env.AUTORAG_BASE_URL?.trim();
 			const accountBaseUrl = (configuredBaseUrl !== undefined && configuredBaseUrl.length > 0 ? configuredBaseUrl : DEFAULT_ACCOUNT_BASE_URL).replace(/\/+$/u, "");
 			const cloudEmbedder = {

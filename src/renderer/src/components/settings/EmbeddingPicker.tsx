@@ -129,10 +129,28 @@ export function EmbeddingPicker(): ReactElement {
 					<div className="settings-list">
 						{profiles.map((profile) => (
 							<label key={profile.id} className="settings-list-row" style={{ cursor: "pointer" }}>
-								<input type="radio" name="embedding-profile" checked={profileId === profile.id} onChange={() => { setProfileId(profile.id); setPlanned(null); setResult(null); }} style={{ width: "auto", margin: 0 }} />
-								<span className="settings-list-body">
+								<input
+									type="radio"
+									name="embedding-profile"
+									checked={profileId === profile.id}
+									aria-disabled={profile.unavailable !== null}
+									onChange={() => {
+										if (profile.unavailable !== null) {
+											// Explain instead of selecting: the machine is below the minimum spec for this model.
+											setError(profile.unavailable);
+											return;
+										}
+										setProfileId(profile.id);
+										setPlanned(null);
+										setResult(null);
+										setError(null);
+									}}
+									style={{ width: "auto", margin: 0 }}
+								/>
+								<span className="settings-list-body" style={profile.unavailable === null ? undefined : { opacity: 0.6 }}>
 									<span className="settings-list-title">{profile.label}</span>
 									<span className="settings-list-meta">{profile.description}{profile.dimension > 0 ? ` · ${t("settingsCore.embedding.dimension", { count: profile.dimension })}` : ""}</span>
+									{profile.unavailable === null ? null : <span className="settings-list-meta" data-role="embedding-unavailable" style={{ color: "var(--error, #d33)", whiteSpace: "normal", overflow: "visible", textOverflow: "clip" }}>{profile.unavailable}</span>}
 								</span>
 							</label>
 						))}

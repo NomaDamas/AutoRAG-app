@@ -286,8 +286,36 @@ describe("onboarding ETA and formatting", () => {
 		expect(resolveEmbed("cloud", true)).toBe("cloud");
 	});
 
+	it("never runs local embedding on a machine below the spec: local, and a draft from before the modes existed, fall back to keyword-only", () => {
+		expect(resolveEmbed("local", false, false)).toBe("none");
+		expect(resolveEmbed(undefined, false, false)).toBe("none");
+		expect(resolveEmbed("local", true, false)).toBe("none");
+		// cloud keeps its own rule, and a chosen keyword-only stays.
+		expect(resolveEmbed("cloud", true, false)).toBe("cloud");
+		expect(resolveEmbed("cloud", false, false)).toBe("none");
+		expect(resolveEmbed("none", false, false)).toBe("none");
+		// the default stays open: a machine that meets the spec behaves as before.
+		expect(resolveEmbed("local", false, true)).toBe("local");
+	});
+
+	it("disables the local card, and only it, below the spec, and carries the verdict for the view to explain", () => {
+		const blocked = { eligible: false, reason: "gpu-vram", vars: { gpu: "RTX 3050", vramGb: 6, minVramGb: 8 } } as const;
+		const base = { files: 10, platform: "win32", cloudAvailable: true, modelBytes: 600_000_000, modelCached: false, localSpec: blocked } as const;
+		const cards = embedCards(base);
+		expect(cards.map((card) => card.disabled)).toEqual([false, true, false]);
+		expect(cards.map((card) => card.blocked)).toEqual([null, blocked, null]);
+		expect(embedCards({ ...base, localSpec: { eligible: true } }).map((card) => card.blocked)).toEqual([null, null, null]);
+	});
+
+	it("keeps the local card shut until the machine has been checked", () => {
+		const base = { files: 10, platform: "darwin", cloudAvailable: true, modelBytes: null, modelCached: false } as const;
+		const cards = embedCards({ ...base, localSpec: null });
+		expect(cards.map((card) => card.disabled)).toEqual([false, true, false]);
+		expect(cards.map((card) => card.blocked)).toEqual([null, null, null]);
+	});
+
 	it("compares the three embedding modes in the prototype's order", () => {
-		const base = { files: 4_000, platform: "darwin", cloudAvailable: true, modelBytes: 600_000_000, modelCached: false } as const;
+		const base = { files: 4_000, platform: "darwin", cloudAvailable: true, modelBytes: 600_000_000, modelCached: false, localSpec: { eligible: true } } as const;
 		const cards = embedCards(base);
 		expect(cards.map((card) => card.id)).toEqual(["none", "local", "cloud"]);
 		expect(cards.map((card) => card.icon)).toEqual(["search", "cpu", "cloud"]);
@@ -296,7 +324,7 @@ describe("onboarding ETA and formatting", () => {
 	});
 
 	it("fills each card's meters and ETA from its own mode", () => {
-		const base = { files: 4_000, platform: "darwin", cloudAvailable: true, modelBytes: 600_000_000, modelCached: false } as const;
+		const base = { files: 4_000, platform: "darwin", cloudAvailable: true, modelBytes: 600_000_000, modelCached: false, localSpec: { eligible: true } } as const;
 		const [none, local, cloud] = embedCards(base);
 		expect(none?.minutes).toBe(etaMinutes(4_000, "none"));
 		expect(none?.meters.map((meter) => [meter.fill, meter.tone])).toEqual([
@@ -322,19 +350,19 @@ describe("onboarding ETA and formatting", () => {
 	});
 
 	it("shows the cached or unknown wording when the local model size is not known", () => {
-		const base = { files: 10, platform: "darwin", cloudAvailable: true, modelBytes: 600_000_000, modelCached: false } as const;
+		const base = { files: 10, platform: "darwin", cloudAvailable: true, modelBytes: 600_000_000, modelCached: false, localSpec: { eligible: true } } as const;
 		expect(embedCards({ ...base, modelCached: true })[1]?.foot).toEqual({ kind: "cached" });
 		expect(embedCards({ ...base, modelBytes: null })[1]?.foot).toEqual({ kind: "unknown" });
 	});
 
 	it("disables the cloud card, and only that card, when the account cannot use it", () => {
-		const base = { files: 10, platform: "darwin", cloudAvailable: false, modelBytes: null, modelCached: false } as const;
+		const base = { files: 10, platform: "darwin", cloudAvailable: false, modelBytes: null, modelCached: false, localSpec: { eligible: true } } as const;
 		const cards = embedCards(base);
 		expect(cards.map((card) => card.disabled)).toEqual([false, false, true]);
 	});
 
 	it("says PC instead of Mac for the local line on Windows", () => {
-		const base = { files: 10, platform: "win32", cloudAvailable: true, modelBytes: null, modelCached: false } as const;
+		const base = { files: 10, platform: "win32", cloudAvailable: true, modelBytes: null, modelCached: false, localSpec: { eligible: true } } as const;
 		expect(embedCards(base)[1]?.lineKey).toContain("linePc");
 		expect(embedCards({ ...base, platform: "darwin" })[1]?.lineKey).toContain("lineMac");
 	});

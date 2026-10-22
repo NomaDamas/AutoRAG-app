@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { createAutoRagConfigService } from "../src/main/autorag-config-service";
 import { createDataSourceStatusService } from "../src/main/datasource-status";
 import { createEmbeddingSettingsService } from "../src/main/embedding-settings-service";
+import { tByName } from "../src/shared/i18n/core";
+import { evaluateLocalEmbeddingSpec, localSpecMessage, type LocalSpecVerdict } from "../src/shared/local-embedding-spec";
 import type { DataSourceSyncResult } from "../src/shared/settings-contract";
 
 const directories: string[] = [];
@@ -41,7 +43,9 @@ async function createFixture(datasources: Record<string, unknown>): Promise<Fixt
 	return { root, configPath, env: { HOME: root, AUTORAG_CONFIG: configPath }, synced: [] };
 }
 
-function buildService(fixture: Fixture, fetchImpl?: typeof fetch) {
+const ELIGIBLE: LocalSpecVerdict = { eligible: true };
+
+function buildService(fixture: Fixture, fetchImpl?: typeof fetch, spec: LocalSpecVerdict = ELIGIBLE) {
 	const config = createAutoRagConfigService({ env: fixture.env, cwd: fixture.root });
 	const real = createDataSourceStatusService({ env: fixture.env, cwd: fixture.root });
 	const dataSources = {
@@ -65,6 +69,7 @@ function buildService(fixture: Fixture, fetchImpl?: typeof fetch) {
 		cwd: fixture.root,
 		config,
 		dataSources,
+		localSpec: async () => spec,
 		...(fetchImpl === undefined ? {} : { fetchImpl }),
 	});
 	return { embedding };
@@ -289,3 +294,62 @@ describe("createEmbeddingSettingsService", () => {
 function fixtureRootPlaceholder(): string {
 	return join(tmpdir(), "autorag-embedding-vault");
 }
+
+describe("the local embedding spec guard", () => {
+	const weak: LocalSpecVerdict = evaluateLocalEmbeddingSpec({ platform: "darwin", arch: "arm64", cpuModel: "Apple M2", memoryBytes: 16 * 1024 ** 3, gpus: [] });
+	const message = localSpecMessage(weak, tByName);
+
+	it("offers every profile but marks the built-in local model unavailable, with the reason, on a machine below the spec", async () => {
+		const fixture = await createFixture({});
+		const { embedding } = buildService(fixture, undefined, weak);
+		const profiles = (await embedding.get()).profiles;
+		expect(profiles.map((profile) => profile.id)).toEqual(["none", "native-qwen3", "local-server"]);
+		expect(profiles.map((profile) => profile.unavailable)).toEqual([null, message, null]);
+		expect(message).toContain("Apple M2");
+		await embedding.dispose();
+	});
+
+	it("marks nothing unavailable on a machine that meets the spec", async () => {
+		const fixture = await createFixture({});
+		const { embedding } = buildService(fixture);
+		expect((await embedding.get()).profiles.map((profile) => profile.unavailable)).toEqual([null, null, null]);
+		await embedding.dispose();
+	});
+
+	it("refuses to apply the built-in local model below the spec: nothing is written and nothing is rebuilt", async () => {
+		const fixture = await createFixture({ mail: { type: "mailcrawl", connector: {} } });
+		const before = await readFile(fixture.configPath, "utf8");
+		const { embedding } = buildService(fixture, undefined, weak);
+
+		const result = await embedding.apply({ profileId: "native-qwen3" });
+
+		expect(result).toMatchObject({ ok: false, applied: false, error: message });
+		expect(await readFile(fixture.configPath, "utf8")).toBe(before);
+		expect(fixture.synced).toEqual([]);
+		await embedding.dispose();
+	});
+
+	it("refuses to plan it too, so the preview never promises what apply would refuse", async () => {
+		const fixture = await createFixture({});
+		const { embedding } = buildService(fixture, undefined, weak);
+		const snapshot = await embedding.plan({ profileId: "native-qwen3" });
+		expect(snapshot.error).toBe(message);
+		expect(snapshot.sources).toEqual([]);
+		await embedding.dispose();
+	});
+
+	it("still lets a weak machine switch to keyword-only search", async () => {
+		const fixture = await createFixture({ chat: { type: "discord", connector: {} } });
+		const { embedding } = buildService(fixture, undefined, weak);
+		expect(await embedding.apply({ profileId: "none" })).toMatchObject({ ok: true, applied: true });
+		await embedding.dispose();
+	});
+
+	it("still lets a weak machine use an embedding server it runs itself", async () => {
+		const fixture = await createFixture({});
+		const { embedding } = buildService(fixture, async () => vectorResponse(8), weak);
+		const result = await embedding.apply({ profileId: "local-server", localServer: { id: "m", baseUrl: "http://127.0.0.1:11434", dimension: 8 } });
+		expect(result).toMatchObject({ ok: true, applied: true });
+		await embedding.dispose();
+	});
+});
