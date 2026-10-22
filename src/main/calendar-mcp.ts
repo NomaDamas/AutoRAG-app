@@ -1,14 +1,11 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { calendarSupported, isCalendarDatasourceType } from "../shared/calendar-platform";
 import { isJsonObject } from "../shared/settings-contract";
 
 export const CALENDAR_MCP_PACKAGE = "mcp-server-apple-events";
 export const CALENDAR_MCP_SERVER_NAME = "apple-events";
 export const CALENDAR_MCP_EXPOSURES = ["codemode", "direct", "deferred", "hidden"] as const;
-
-export function isCalendarDatasourceType(type: string): boolean {
-	return type === "calendar" || type === "apple-events";
-}
 
 export function isCalendarDatasourceEntry(id: string, raw: unknown): boolean {
 	if (raw === false) return isCalendarDatasourceType(id);
@@ -67,15 +64,20 @@ function calendarEntriesOf(rawConfig: Record<string, unknown>): Map<string, unkn
  * Syncs `calendar` / `apple-events` datasource entries from the shared AutoRAG config
  * into `<agentDir>/mcp.json` so `createAutoRAGMcpClient(agentDir)` connects them on session start.
  * Preserves unrelated MCP server entries untouched.
+ *
+ * EventKit exists only on macOS. Elsewhere no server is wanted, whoever wrote the entry (a config
+ * shared with a Mac still carries it): nothing is added, a stale server entry is removed, and the
+ * file is never created for it.
  */
 export function syncCalendarMcpConfig(
 	candidate: Record<string, unknown>,
 	previous: Record<string, unknown>,
 	agentDir: string,
+	platform: string = process.platform,
 ): void {
-	const nextEntries = calendarEntriesOf(candidate);
-	const prevEntries = calendarEntriesOf(previous);
-	if (nextEntries.size === 0 && prevEntries.size === 0) return;
+	const wanted = calendarSupported(platform) ? calendarEntriesOf(candidate) : new Map<string, unknown>();
+	const owned = new Set([...calendarEntriesOf(candidate).keys(), ...calendarEntriesOf(previous).keys()]);
+	if (owned.size === 0) return;
 
 	const mcpPath = join(agentDir, "mcp.json");
 	let root: Record<string, unknown> = {};
@@ -88,14 +90,10 @@ export function syncCalendarMcpConfig(
 		}
 	}
 	const servers: Record<string, unknown> = isJsonObject(root.mcpServers) ? { ...root.mcpServers } : {};
-	for (const prevName of prevEntries.keys()) {
-		if (!nextEntries.has(prevName)) {
-			delete servers[prevName];
-		}
-	}
-	for (const [name, entry] of nextEntries) {
-		servers[name] = buildCalendarMcpServerEntry(entry);
-	}
+	const stale = [...owned].filter((name) => !wanted.has(name) && Object.hasOwn(servers, name));
+	if (wanted.size === 0 && stale.length === 0) return;
+	for (const name of stale) delete servers[name];
+	for (const [name, entry] of wanted) servers[name] = buildCalendarMcpServerEntry(entry);
 	root.mcpServers = servers;
 	mkdirSync(dirname(mcpPath), { recursive: true });
 	writeFileSync(mcpPath, `${JSON.stringify(root, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });

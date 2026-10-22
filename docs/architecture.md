@@ -224,6 +224,12 @@ second datasource or model configuration. The sidebar is searchable and grouped:
     map onto the server's flags; `command`/`args` allow a custom launcher. The
     connection is live-query (EventKit, nothing indexed), reported through the
     same datasource rows.
+    **macOS only** (`shared/calendar-platform.ts`, one rule for both processes):
+    on Windows and Linux the gallery row's 연결 button is disabled with a
+    macOS-only line, and a `calendar` entry that arrives in a shared config
+    stays inert — no `mcp.json` entry is written, a stale `apple-events` entry
+    a Mac left behind is removed, the row reads `unsupported`, and 지금 최신화
+    refuses with the reason.
 
 Every edit is a validated leaf write that preserves unrelated and unknown
 config keys. Secrets never enter `config.json`: `/login` stores keys and OAuth

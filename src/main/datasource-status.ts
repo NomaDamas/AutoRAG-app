@@ -16,7 +16,8 @@ import {
 } from "@autorag/librarian";
 import { readRawConfigObject, resolveConfigPath, type CliConfig } from "@autorag/librarian/core";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
-import { calendarMcpServerName, isCalendarDatasourceType, syncCalendarMcpConfig } from "./calendar-mcp";
+import { calendarSupported, isCalendarDatasourceType } from "../shared/calendar-platform";
+import { calendarMcpServerName, syncCalendarMcpConfig } from "./calendar-mcp";
 import { backendIndexUnit, LIVE_QUERY_TEMPLATES, probeBackendIndex } from "./datasource-index-probe";
 import { readAppIndexing } from "./app-indexing";
 import { withConnectorOcrDisabled } from "./indexing-policy";
@@ -55,6 +56,8 @@ export interface DataSourceStatusService {
 export interface DataSourceStatusDeps {
 	readonly env: NodeJS.ProcessEnv;
 	readonly cwd: string;
+	/** The host OS; Calendar is only offered on macOS. Defaults to this process. */
+	readonly platform?: NodeJS.Platform;
 }
 
 /** Backend CLI each built-in template shells out to (mirrors the librarian's `autorag setup` probe). */
@@ -143,9 +146,12 @@ async function findExecutable(name: string, env: NodeJS.ProcessEnv): Promise<str
 	return null;
 }
 
-async function installState(type: string, entry: DatasourceSkillConfig, env: NodeJS.ProcessEnv): Promise<DataSourceRow["install"]> {
+const CALENDAR_UNSUPPORTED = "Apple Calendar & Reminders need macOS (EventKit)";
+
+async function installState(type: string, entry: DatasourceSkillConfig, env: NodeJS.ProcessEnv, platform: string): Promise<DataSourceRow["install"]> {
 	const app = await desktopAppRequirement(type, env);
 	if (isCalendarDatasourceType(type)) {
+		if (!calendarSupported(platform)) return { state: "unsupported", binary: null, path: null, detail: CALENDAR_UNSUPPORTED, app };
 		const connector = isJsonObject(entry.connector) ? entry.connector : {};
 		const configured = typeof connector.command === "string" && connector.command.trim().length > 0 ? connector.command.trim() : "npx";
 		const path = await findExecutable(configured, env);
@@ -212,8 +218,9 @@ function buildSkill(
 	return buildDatasourceSkills({ [id]: withConnectorOcrDisabled({ ...entry, enabled: true }) }, workspacePath, embedding).skills[0];
 }
 
-function agentState(id: string, type: string, skill: DatasourceSkill | undefined, enabled: boolean): DataSourceRow["agent"] {
+function agentState(id: string, type: string, skill: DatasourceSkill | undefined, enabled: boolean, platform: string): DataSourceRow["agent"] {
 	if (isCalendarDatasourceType(type)) {
+		if (!calendarSupported(platform)) return { state: "unsupported", skillName: null, tags: [], detail: CALENDAR_UNSUPPORTED };
 		const skillName = `mcp-${calendarMcpServerName(id)}`;
 		const tags = ["calendar", "reminders", "mcp"];
 		if (!enabled) return { state: "disabled", skillName, tags, detail: "Turned off in the Dazzi config" };
@@ -271,6 +278,7 @@ async function indexState(
 	env: NodeJS.ProcessEnv,
 ): Promise<DataSourceRow["index"]> {
 	if (isCalendarDatasourceType(type)) {
+		if (install.state === "unsupported") return { state: "not-indexed", chunkCount: null, unit: null, indexedAt: null, detail: install.detail };
 		return { state: "live", chunkCount: null, unit: null, indexedAt: null, detail: "Queried live through EventKit MCP" };
 	}
 	if (skill === undefined) return { state: "not-indexed", chunkCount: null, unit: null, indexedAt: null, detail: "Not indexed" };
@@ -385,6 +393,7 @@ function toDiagnostic(diagnostic: DatasourceDiagnostic): ConfigRefreshDiagnostic
 }
 
 export function createDataSourceStatusService(deps: DataSourceStatusDeps): DataSourceStatusService {
+	const platform = deps.platform ?? process.platform;
 	const configPath = (): string => resolveConfigPath({ flags: {}, env: deps.env, cwd: deps.cwd }).configPath;
 	const updateEntry = (id: string, update: (entry: unknown) => unknown): void => {
 		const path = configPath();
@@ -394,7 +403,7 @@ export function createDataSourceStatusService(deps: DataSourceStatusDeps): DataS
 		if (!isJsonObject(datasources) || !Object.hasOwn(datasources, id)) throw new Error(`Unknown datasource: ${id}`);
 		datasources[id] = update(datasources[id]);
 		writeConfigObject(path, raw);
-		syncCalendarMcpConfig(raw, previous, deps.env.PI_CODING_AGENT_DIR ?? getAgentDir());
+		syncCalendarMcpConfig(raw, previous, deps.env.PI_CODING_AGENT_DIR ?? getAgentDir(), platform);
 	};
 
 	const listSnapshot = async (): Promise<DataSourcesSnapshot> => {
@@ -421,9 +430,9 @@ export function createDataSourceStatusService(deps: DataSourceStatusDeps): DataS
 				const enabled = raw !== false && entry.enabled !== false;
 				const type = entry.type ?? id;
 				const skill = BUILTIN_DATASOURCE_SKILL_NAMES.includes(type) ? buildSkill(id, entry, config.workspacePath) : undefined;
-				const install = await installState(type, entry, deps.env);
+				const install = await installState(type, entry, deps.env, platform);
 				const index = await indexState(id, type, entry, skill, install, config.workspacePath, deps.env);
-				const agent = agentState(id, type, skill, enabled);
+				const agent = agentState(id, type, skill, enabled, platform);
 				return {
 					id,
 					type,
@@ -473,13 +482,16 @@ export function createDataSourceStatusService(deps: DataSourceStatusDeps): DataS
 		if (!BUILTIN_DATASOURCE_SKILL_NAMES.includes(type) && !isCalendarDatasourceType(type)) {
 			return { ...base, state: "unsupported", error: `No built-in Dazzi datasource named "${type}"` };
 		}
-		const install = await installState(type, entry, deps.env);
+		const install = await installState(type, entry, deps.env, platform);
+		if (install.state === "unsupported") {
+			return { ...base, state: "unsupported", error: install.detail, durationMs: Date.now() - startedAt };
+		}
 		if (install.state === "missing" || install.state === "credential-missing") {
 			return { ...base, state: "unavailable", error: install.detail, durationMs: Date.now() - startedAt };
 		}
 		if (isCalendarDatasourceType(type)) {
 			const raw = readRawConfigObject(path);
-			syncCalendarMcpConfig(raw, raw, deps.env.PI_CODING_AGENT_DIR ?? getAgentDir());
+			syncCalendarMcpConfig(raw, raw, deps.env.PI_CODING_AGENT_DIR ?? getAgentDir(), platform);
 			return {
 				id,
 				ok: true,

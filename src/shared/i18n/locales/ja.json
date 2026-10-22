@@ -2056,7 +2056,8 @@
       "promptTitle": "{{name}} を接続",
       "promptDesc": "接続 ID を決めて追加します。空欄にするとテンプレート名を使います。",
       "promptLabel": "接続 ID",
-      "promptConfirm": "接続を追加"
+      "promptConfirm": "接続を追加",
+      "macOnly": "macOS（EventKit）でのみ利用できます。"
     },
     "sourceDetail": {
       "fallbackSummary": "この接続の設定を管理します。",
@@ -2083,7 +2084,8 @@
       "removeSection": "接続を解除",
       "removeHint": "Dazzi の検索からのみ削除され、元のアプリのデータは消えません。",
       "confirmTitle": "接続を解除しますか？",
-      "confirmBody": "'{{alias}}' 接続を Dazzi の検索から削除します。元のアプリのデータは消えません。"
+      "confirmBody": "'{{alias}}' 接続を Dazzi の検索から削除します。元のアプリのデータは消えません。",
+      "macOnlyNote": "Apple カレンダーとリマインダーは macOS の EventKit でのみ読み取れるため、このコンピューターでは接続は無効です。"
     },
     "scope": {
       "title": "検索範囲",

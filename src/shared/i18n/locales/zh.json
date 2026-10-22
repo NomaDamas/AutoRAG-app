@@ -2056,7 +2056,8 @@
       "promptTitle": "连接 {{name}}",
       "promptDesc": "设置连接 id 后添加。留空则使用模板名称。",
       "promptLabel": "连接 id",
-      "promptConfirm": "添加连接"
+      "promptConfirm": "添加连接",
+      "macOnly": "仅在 macOS 上可用（EventKit）。"
     },
     "sourceDetail": {
       "fallbackSummary": "管理此连接的设置。",
@@ -2083,7 +2084,8 @@
       "removeSection": "断开连接",
       "removeHint": "仅从 Dazzi 搜索中移除，源应用的数据不会被删除。",
       "confirmTitle": "要断开此连接吗？",
-      "confirmBody": "将把 '{{alias}}' 连接从 Dazzi 搜索中移除。源应用的数据不会被删除。"
+      "confirmBody": "将把 '{{alias}}' 连接从 Dazzi 搜索中移除。源应用的数据不会被删除。",
+      "macOnlyNote": "Apple 日历和提醒事项只能通过 macOS 的 EventKit 读取，因此此连接在这台电脑上无效。"
     },
     "scope": {
       "title": "搜索范围",

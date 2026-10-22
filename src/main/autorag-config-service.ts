@@ -637,6 +637,8 @@ export interface AutoRagConfigService {
 export interface AutoRagConfigServiceDeps {
 	readonly env: NodeJS.ProcessEnv;
 	readonly cwd: string;
+	/** The host OS; only Calendar's macOS-only MCP sync reads it. Defaults to this process. */
+	readonly platform?: NodeJS.Platform;
 }
 
 export function createAutoRagConfigService(deps: AutoRagConfigServiceDeps): AutoRagConfigService {
@@ -672,7 +674,7 @@ export function createAutoRagConfigService(deps: AutoRagConfigServiceDeps): Auto
 		// Validation runs before the write: a rejected edit never touches disk.
 		await validateCandidate(path, candidate, deps.env, deps.cwd);
 		writeConfigObject(path, candidate);
-		syncCalendarMcpConfig(candidate, previous, deps.env.PI_CODING_AGENT_DIR ?? getAgentDir());
+		syncCalendarMcpConfig(candidate, previous, deps.env.PI_CODING_AGENT_DIR ?? getAgentDir(), deps.platform);
 		return snapshot();
 	}
 

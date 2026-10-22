@@ -2056,7 +2056,8 @@
       "promptTitle": "Connect {{name}}",
       "promptDesc": "Choose a connection id and add it. Leave empty to use the template name.",
       "promptLabel": "Connection id",
-      "promptConfirm": "Add connection"
+      "promptConfirm": "Add connection",
+      "macOnly": "Only available on macOS (EventKit)."
     },
     "sourceDetail": {
       "fallbackSummary": "Manage the settings for this connection.",
@@ -2083,7 +2084,8 @@
       "removeSection": "Disconnect",
       "removeHint": "Removed only from Dazzi search; the source app's data is not deleted.",
       "confirmTitle": "Disconnect this connection?",
-      "confirmBody": "The '{{alias}}' connection will be removed from Dazzi search. The source app's data is not deleted."
+      "confirmBody": "The '{{alias}}' connection will be removed from Dazzi search. The source app's data is not deleted.",
+      "macOnlyNote": "Apple Calendar and Reminders can only be read through EventKit on macOS, so this connection is inactive on this computer."
     },
     "scope": {
       "title": "Search scope",

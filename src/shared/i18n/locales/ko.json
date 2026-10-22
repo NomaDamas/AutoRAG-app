@@ -2056,7 +2056,8 @@
       "promptTitle": "{{name}} 연결",
       "promptDesc": "연결 id를 정하고 추가합니다. 비워두면 템플릿 이름을 사용합니다.",
       "promptLabel": "연결 id",
-      "promptConfirm": "연결 추가"
+      "promptConfirm": "연결 추가",
+      "macOnly": "macOS에서만 사용할 수 있습니다 (EventKit)."
     },
     "sourceDetail": {
       "fallbackSummary": "이 연결의 설정을 관리합니다.",
@@ -2083,7 +2084,8 @@
       "removeSection": "연결 해제",
       "removeHint": "Dazzi 검색에서만 제거되며 원본 앱의 데이터는 지워지지 않습니다.",
       "confirmTitle": "연결을 해제할까요?",
-      "confirmBody": "'{{alias}}' 연결이 Dazzi 검색에서 제거됩니다. 원본 앱의 데이터는 지워지지 않습니다."
+      "confirmBody": "'{{alias}}' 연결이 Dazzi 검색에서 제거됩니다. 원본 앱의 데이터는 지워지지 않습니다.",
+      "macOnlyNote": "Apple 캘린더와 미리알림은 macOS의 EventKit으로만 읽을 수 있어, 이 컴퓨터에서는 연결되지 않습니다."
     },
     "scope": {
       "title": "검색 범위",
