@@ -18,6 +18,7 @@ import { backendIndexUnit, LIVE_QUERY_TEMPLATES, probeBackendIndex } from "./dat
 import { readAppIndexing } from "./app-indexing";
 import { withConnectorOcrDisabled } from "./indexing-policy";
 import { runWithoutSemanticIndexing, withSemanticPolicyApplied } from "./semantic-policy";
+import { datasourceFailureReport, reportError } from "./error-report-core";
 import { ensureEmbeddingForConfig, localEmbeddingServer } from "./embedding-daemon";
 import { datasourceEmbeddingFor, resolveEmbeddingEndpoint } from "./embedding-endpoint";
 import type {
@@ -387,6 +388,12 @@ export function createDataSourceStatusService(deps: DataSourceStatusDeps): DataS
 		if (install.state === "missing" || install.state === "credential-missing") {
 			return { ...base, state: "unavailable", error: install.detail, durationMs: Date.now() - startedAt };
 		}
+		// Only a sync that ran and failed is a bug to report; a missing install, credential or config is the user's to fix.
+		const failed = (error: string, diagnostics: readonly ConfigRefreshDiagnostic[] = []): DataSourceSyncResult => {
+			const durationMs = Date.now() - startedAt;
+			reportError(datasourceFailureReport(type, error, durationMs));
+			return { ...base, state: "failed", durationMs, diagnostics, error };
+		};
 		let skill: DatasourceSkill | undefined;
 		try {
 			// A datasource that embeds needs the local embedding server up before it indexes; every embed
@@ -400,7 +407,7 @@ export function createDataSourceStatusService(deps: DataSourceStatusDeps): DataS
 				semantic ? datasourceEmbeddingFor(() => resolveEmbeddingEndpoint(readRawConfigObject(path), { local: localEmbeddingServer }), { env: deps.env }) : undefined,
 			);
 		} catch (error) {
-			return { ...base, state: "failed", error: error instanceof Error ? error.message : String(error), durationMs: Date.now() - startedAt };
+			return failed(error instanceof Error ? error.message : String(error));
 		}
 		if (skill === undefined) {
 			return { ...base, state: "unsupported", error: `No built-in Dazzi datasource named "${type}"` };
@@ -410,7 +417,7 @@ export function createDataSourceStatusService(deps: DataSourceStatusDeps): DataS
 			const indexing = skill;
 			result = await (semantic ? indexing.index() : runWithoutSemanticIndexing(() => indexing.index()));
 		} catch (error) {
-			return { ...base, state: "failed", error: error instanceof Error ? error.message : String(error), durationMs: Date.now() - startedAt };
+			return failed(error instanceof Error ? error.message : String(error));
 		}
 		const diagnostics = result.diagnostics.map(toDiagnostic);
 		const durationMs = Date.now() - startedAt;
@@ -426,13 +433,7 @@ export function createDataSourceStatusService(deps: DataSourceStatusDeps): DataS
 				error: null,
 			};
 		}
-		return {
-			...base,
-			state: "failed",
-			durationMs,
-			diagnostics,
-			error: result.error ?? result.message ?? "The datasource CLI reported a failure",
-		};
+		return failed(result.error ?? result.message ?? "The datasource CLI reported a failure", diagnostics);
 	};
 
 	return {

@@ -3,7 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-	createStallDetector,
+	datasourceFailureReport,
+	embedderStallReport,
 	fileTimeoutReport,
 	installErrorReporter,
 	readErrorReportingEnabled,
@@ -14,7 +15,6 @@ import {
 	type ErrorReport,
 } from "../src/main/error-report-core";
 import { withFileTimeout } from "../src/main/file-timeout";
-import { IDLE_INDEX_ACTIVITY, type IndexActivitySnapshot } from "../src/shared/index-activity-contract";
 import type { ConfigRefreshResult } from "../src/shared/settings-contract";
 
 const directories: string[] = [];
@@ -97,6 +97,28 @@ describe("refreshFailureReport", () => {
 	});
 });
 
+describe("datasourceFailureReport", () => {
+	it("names the datasource by built-in type and carries no path or user-chosen name", () => {
+		const report = datasourceFailureReport("kakao", "sync failed reading '/Users/kim/Library/kakao.db' (pid 4242)", 1500);
+		expect(report.tags["datasource.type"]).toBe("kakao");
+		expect(JSON.stringify(report)).not.toMatch(/kim|Users/u);
+	});
+
+	it("groups one failure across different numbers and paths, and separates datasource types", () => {
+		const first = datasourceFailureReport("kakao", "failed at '/a/x.db' (pid 1)", 10);
+		const second = datasourceFailureReport("kakao", "failed at '/b/y.db' (pid 2)", 20);
+		expect(second.fingerprint).toEqual(first.fingerprint);
+		expect(datasourceFailureReport("slack", "failed at '/a/x.db' (pid 1)", 10).fingerprint).not.toEqual(first.fingerprint);
+	});
+});
+
+describe("embedderStallReport", () => {
+	it("is one issue however many restarts a run needed, with the count as data", () => {
+		expect(embedderStallReport(1).fingerprint).toEqual(embedderStallReport(2).fingerprint);
+		expect(embedderStallReport(2).extra).toMatchObject({ retries: 2 });
+	});
+});
+
 describe("reportError", () => {
 	it("sends an identical report once per run and different ones separately", () => {
 		const sent: ErrorReport[] = [];
@@ -129,48 +151,6 @@ describe("withFileTimeout reporting", () => {
 		expect(sent).toHaveLength(1);
 		expect(sent[0]?.extra).toMatchObject({ timeoutMs: 20 });
 		expect(JSON.stringify(sent[0])).not.toContain(CORPUS);
-	});
-});
-
-describe("createStallDetector", () => {
-	const running = (phase: "parsed" | "minsync", written: number): IndexActivitySnapshot => ({
-		...IDLE_INDEX_ACTIVITY,
-		state: "running",
-		origin: "app",
-		items: [{ key: "local", kind: "local", id: null, state: "running", phase, counts: { scanned: 50, written, deleted: 0, skipped: 1 }, error: null }],
-	});
-
-	it("reports a run that changes nothing for the whole window, with phase and counts", () => {
-		vi.useFakeTimers();
-		const sent: ErrorReport[] = [];
-		const detector = createStallDetector((report) => sent.push(report), 30);
-		detector.observe(running("minsync", 10));
-		vi.advanceTimersByTime(29 * 60_000);
-		expect(sent).toHaveLength(0);
-		vi.advanceTimersByTime(60_000);
-		expect(sent).toHaveLength(1);
-		expect(sent[0]?.extra).toMatchObject({ phase: "minsync", minutes: 30, scanned: 50, written: 10, skipped: 1 });
-	});
-
-	it("restarts the window on every change", () => {
-		vi.useFakeTimers();
-		const sent: ErrorReport[] = [];
-		const detector = createStallDetector((report) => sent.push(report), 30);
-		detector.observe(running("parsed", 1));
-		vi.advanceTimersByTime(25 * 60_000);
-		detector.observe(running("parsed", 2));
-		vi.advanceTimersByTime(25 * 60_000);
-		expect(sent).toHaveLength(0);
-	});
-
-	it("does not fire after the run ends", () => {
-		vi.useFakeTimers();
-		const sent: ErrorReport[] = [];
-		const detector = createStallDetector((report) => sent.push(report), 30);
-		detector.observe(running("parsed", 1));
-		detector.observe({ ...IDLE_INDEX_ACTIVITY, state: "done" });
-		vi.advanceTimersByTime(24 * 60 * 60_000);
-		expect(sent).toHaveLength(0);
 	});
 });
 
