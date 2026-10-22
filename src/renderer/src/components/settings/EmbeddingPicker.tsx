@@ -12,7 +12,10 @@ import { useCallback, useEffect, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronDown } from "lucide-react";
 import type { EmbeddingChangeRequest, EmbeddingChangeResult, EmbeddingSettingsSnapshot, EmbeddingSourceStatus } from "../../../../shared/settings-contract";
+import { localModelNeeded, useModelDownload } from "../../state/model-download";
+import { ModelDownloadPanel } from "../ModelDownloadPanel";
 import { ModalActions, ModalShell, Note, Row, StatusDot } from "./SettingsKit";
+import type { Translate } from "../../onboarding/flow";
 
 const settings = window.autorag.settings;
 
@@ -61,6 +64,7 @@ export function EmbeddingPicker(): ReactElement {
 	const [consent, setConsent] = useState(false);
 	const [busy, setBusy] = useState(false);
 	const [byok, setByok] = useState<ByokFields>({ baseUrl: "", protocol: "openai", apiKey: "" });
+	const modelDownload = useModelDownload();
 
 	const load = useCallback(async (): Promise<void> => {
 		try {
@@ -131,7 +135,8 @@ export function EmbeddingPicker(): ReactElement {
 	const previewSources = planned?.sources ?? [];
 	const incompatible = previewSources.filter((source) => source.adoption === "incompatible");
 	const needsConsent = sendsOffComputer(profileId, byok);
-	const applyBlocked = busy || profileId.length === 0 || result?.applied === true || (needsConsent && !consent) || (profileId === "byok" && byok.baseUrl.trim().length === 0);
+	const needsModel = localModelNeeded(profileId, modelDownload.status);
+	const applyBlocked = busy || profileId.length === 0 || result?.applied === true || (needsConsent && !consent) || (profileId === "byok" && byok.baseUrl.trim().length === 0) || needsModel;
 
 	return (
 		<>
@@ -157,6 +162,9 @@ export function EmbeddingPicker(): ReactElement {
 						))}
 					</div>
 					{profileId !== "none" && profileId.length > 0 ? <Note>{t("settingsCore.embedding.dimensionFixed")}</Note> : null}
+					{profileId === "local" ? (
+						<ModelDownloadPanel status={modelDownload.status} t={t as unknown as Translate} onStart={modelDownload.start} onCancel={modelDownload.cancel} />
+					) : null}
 					{profileId === "dazzi" ? <Note>{t("settingsCore.embedding.signInNote")}</Note> : null}
 					{profileId === "byok" ? (
 						<>

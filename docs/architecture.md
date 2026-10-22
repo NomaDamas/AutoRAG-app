@@ -142,7 +142,7 @@ second datasource or model configuration. The sidebar is searchable and grouped:
     minsync cannot be told from the user's own, and not the ones the fs worker
     started for a Finder toggle). MinSync resumes from `progress.jsonl`.
   - *The local embedding model is one long-lived daemon* (`embedding-daemon.ts`):
-    the app starts `minsync serve` (loopback, `--idle-timeout 0`, the seeded
+    the app starts `minsync serve` (loopback, `--idle-timeout 0`, the downloaded
     `native:Qwen/Qwen3-Embedding-0.6B`) once the model is in place and stops it at
     quit. It is the only process holding the weights; every embedding consumer —
     MinSync's own sync, the librarian's memory, the chat sidecars, discrawl,
@@ -730,7 +730,9 @@ runs in CI (`.github/workflows/qa-windows.yml`).
 Publishing a GitHub release builds `Dazzi-<version>-arm64.dmg` and
 `Dazzi-Setup-<version>-x64.exe` and attaches them to it. Each installer carries
 the app plus every program it drives (the `autorag` agent, minsync, jikji, dupey,
-the datasource crawlers, rhwp, kordoc, Node and npm-based CLIs) and the local
-Qwen3 embedding model, so one download is the whole install. See
+the datasource crawlers, rhwp, kordoc, Node and npm-based CLIs). The local
+Qwen3 embedding model is not bundled: the app downloads it on demand into
+MinSync's model cache (`src/main/model-download.ts`), so the installer is one
+download and the model is fetched when local embedding is chosen. See
 [`release.md`](release.md) for the contents, the signing secrets to
 configure, and how to rehearse a release.

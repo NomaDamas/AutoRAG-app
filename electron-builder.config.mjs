@@ -8,8 +8,8 @@
  * What goes into the installer besides the app itself is produced by
  * `scripts/release/stage-tools.mjs` into `build/stage/<platform>/`:
  *   tools/  the dependency programs (Node + npm, minsync, jikji, discrawl, ...)
- *   seed/   the Qwen3-Embedding-0.6B safetensors model (seeded into MinSync's cache on first launch)
- * Both land in the app's `resources/` directory (see `extraResources`).
+ * It lands in the app's `resources/` directory (see `extraResources`). The
+ * native embedding model is not packaged: the app downloads it on demand.
  *
  * Signing is optional at the config level so unsigned CI and local builds
  * work; docs/release.md lists the secrets that turn it on. Nothing here ever
@@ -70,7 +70,6 @@ const config = {
 		// The `dazzi` command line launcher (build/cli); the app links it into a PATH directory on start.
 		{ from: join(root, "build", "cli"), to: "bin", filter: [platformId.startsWith("win32") ? "dazzi.cmd" : "dazzi"] },
 		{ from: join(stage, "tools"), to: "tools", filter: ["**/*"] },
-		{ from: join(stage, "seed"), to: "seed", filter: ["**/*"] },
 	],
 
 	mac: {
@@ -158,8 +157,4 @@ const config = {
 if (!existsSync(join(stage, "tools"))) {
 	throw new Error(`Missing ${join(stage, "tools")}. Run \`bun run release:stage\` before electron-builder.`);
 }
-if (!existsSync(join(stage, "seed"))) {
-	throw new Error(`Missing ${join(stage, "seed")}. Run \`bun run release:stage\` before electron-builder.`);
-}
-
 export default config;

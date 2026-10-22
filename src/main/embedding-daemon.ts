@@ -20,7 +20,7 @@ const LOOPBACK_HOSTS = new Set(["127.0.0.1", "::1", "localhost"]);
 const HEALTH_TIMEOUT_MS = 2_000;
 const POLL_INTERVAL_MS = 150;
 const STDERR_LIMIT = 4_000;
-/** The first start may have to download the weights when the bundled copy was not seeded. */
+/** Loading ~1.2 GB of weights into memory takes a while on a cold disk. */
 const DEFAULT_READY_TIMEOUT_MS = 10 * 60_000;
 const STOP_TIMEOUT_MS = 15_000;
 
@@ -79,6 +79,12 @@ export interface EmbeddingDaemonOptions {
 	 */
 	readonly ownerFile?: string;
 	readonly readyTimeoutMs?: number;
+	/**
+	 * Whether the weights of `model` are on this computer. `minsync serve` downloads a missing model by itself
+	 * with no way to report progress, so the app never starts it before the model is there: it is downloaded
+	 * first, with progress (`model-download.ts`). Left out, every model counts as present.
+	 */
+	readonly modelPresent?: (model: string) => boolean;
 }
 
 export function createEmbeddingDaemon(options: EmbeddingDaemonOptions): EmbeddingDaemon {
@@ -179,6 +185,7 @@ export function createEmbeddingDaemon(options: EmbeddingDaemonOptions): Embeddin
 		}
 		// A server of another model from an earlier run is no use now and would hold ~2.8 GB.
 		if (owned === undefined) await stopOwned();
+		if (options.modelPresent?.(model) === false) return { state: "unavailable", reason: `the weights of ${model} are not downloaded yet` };
 
 		const child = spawn("minsync", ["serve", "--format", "json", "--quiet", "--idle-timeout", "0", "--embedder", `native:${model}`], {
 			env: { ...options.env },
@@ -246,18 +253,28 @@ export async function followConfig(daemon: EmbeddingDaemon, raw: Record<string, 
 	return daemon.ensure(model);
 }
 
-let shared: { readonly daemon: EmbeddingDaemon; readonly ready: Promise<unknown> } | undefined;
+let shared: EmbeddingDaemon | undefined;
+let modelCheck: EmbeddingDaemonOptions["modelPresent"];
 let reportedProblem: string | undefined;
 
 /**
- * Makes this process manage the embedding server. `ready` gates every start: on a first launch the bundled
- * model is still being copied into MinSync's cache, and a server started earlier would download it instead.
+ * Makes this process manage the embedding server.
  * A process that never calls this (a test, a one-shot CLI) manages nothing.
  */
-export function configureEmbeddingDaemon(options: EmbeddingDaemonOptions & { readonly ready?: Promise<unknown> }): void {
-	const { ready, ...daemonOptions } = options;
-	shared = { daemon: createEmbeddingDaemon(daemonOptions), ready: ready ?? Promise.resolve() };
+export function configureEmbeddingDaemon(options: EmbeddingDaemonOptions): void {
+	shared = createEmbeddingDaemon(options);
+	modelCheck = options.modelPresent;
 	reportedProblem = undefined;
+}
+
+/**
+ * True when this process manages the server, the config wants a local model, and that model's weights are not
+ * downloaded: nothing can embed until they are. Anything else (a remote embedder, keyword-only mode, a server
+ * that failed for another reason) is false, because only a missing download is the user's to fix in the app.
+ */
+export function localModelMissing(raw: Record<string, unknown>): boolean {
+	const model = localEmbeddingModel(raw);
+	return shared !== undefined && model !== null && modelCheck?.(model) === false;
 }
 
 /**
@@ -266,8 +283,7 @@ export function configureEmbeddingDaemon(options: EmbeddingDaemonOptions & { rea
  */
 export async function ensureEmbeddingForConfig(raw: Record<string, unknown>): Promise<void> {
 	if (shared === undefined) return;
-	await shared.ready.catch(() => undefined);
-	const state = await followConfig(shared.daemon, raw);
+	const state = await followConfig(shared, raw);
 	if (state?.state !== "unavailable") {
 		reportedProblem = undefined;
 		return;
@@ -278,7 +294,7 @@ export async function ensureEmbeddingForConfig(raw: Record<string, unknown>): Pr
 
 /** Stops the server this process started. Call on quit. */
 export async function stopEmbeddingDaemon(): Promise<void> {
-	await shared?.daemon.stop();
+	await shared?.stop();
 }
 
 /**
@@ -287,6 +303,5 @@ export async function stopEmbeddingDaemon(): Promise<void> {
  */
 export async function localEmbeddingServer(model: string): Promise<EmbeddingDaemonState> {
 	if (shared === undefined) return { state: "unavailable", reason: "this process does not manage the embedding server" };
-	await shared.ready.catch(() => undefined);
-	return shared.daemon.ensure(model);
+	return shared.ensure(model);
 }

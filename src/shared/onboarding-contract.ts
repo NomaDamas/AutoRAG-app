@@ -202,6 +202,8 @@ export interface EmbeddingInfo {
 	readonly cached: boolean;
 	/** The shared config already names an embedder; onboarding leaves it as is. */
 	readonly configured: boolean;
+	/** Choosing local embedding runs the on-device model, so its weights must be downloaded (false when the config names a server of the user's own). */
+	readonly localModel: boolean;
 }
 
 /** Metadata a detected connector exposes, shown as its second line. */

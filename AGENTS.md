@@ -148,12 +148,14 @@ length and layout.
 `.github/workflows/release.yml` turns a published GitHub release into a macOS
 `.dmg` and a Windows `.exe`. `scripts/release/` holds the pieces and
 `docs/release.md` explains them: `stage-tools.mjs` fetches or builds the newest
-dependency programs and the embedding model into `build/stage/<platform>/`,
-`verify-bundle.mjs` runs each of them on a bare `PATH`, `electron-builder.config.mjs`
-packs them into the app's `resources/`, and `smoke-installed.mjs` installs the
-real artifact and launches it. At run time `src/main/bundled-tools.ts` puts
-`resources/tools/bin` first on `PATH` and `src/main/seed-assets.ts` copies the
-model into MinSync's model cache (`~/.cache/minsync/models`). Stage each platform on a matching host; never commit
+dependency programs into `build/stage/<platform>/` (plus a `verify-model/` copy
+the bundle check uses but nothing ships), `verify-bundle.mjs` runs each of them on
+a bare `PATH`, `electron-builder.config.mjs` packs them into the app's
+`resources/`, and `smoke-installed.mjs` installs the real artifact and launches
+it. At run time `src/main/bundled-tools.ts` puts `resources/tools/bin` first on
+`PATH`; the embedding model is not bundled — the app downloads it on demand
+(`src/main/model-download.ts`) into MinSync's model cache
+(`~/.cache/minsync/models`). Stage each platform on a matching host; never commit
 `build/stage`, `build/.cache`, or `dist`. Signing credentials live only in GitHub
 secrets.
 

@@ -83,12 +83,12 @@ jobs:
           MAIN_VITE_POSTHOG_HOST: ${{ vars.POSTHOG_HOST }}
         run: bun run build
 
-      - name: Stage dependency tools and embedding model
+      - name: Stage dependency tools and the verification model
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: node scripts/release/stage-tools.mjs
       - name: Verify the staged tools run on a bare PATH
-        run: node scripts/release/verify-bundle.mjs build/stage/darwin-arm64/tools --seed build/stage/darwin-arm64/seed
+        run: node scripts/release/verify-bundle.mjs build/stage/darwin-arm64/tools --model-cache build/stage/darwin-arm64/verify-model
 
       # Signing and notarization switch on by themselves when these secrets exist;
       # without them the .dmg is ad-hoc signed (it runs, but Gatekeeper warns).
@@ -229,12 +229,12 @@ jobs:
           MAIN_VITE_POSTHOG_HOST: ${{ vars.POSTHOG_HOST }}
         run: bun run build
 
-      - name: Stage dependency tools and embedding model
+      - name: Stage dependency tools and the verification model
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: node scripts/release/stage-tools.mjs
       - name: Verify the staged tools run on a bare PATH
-        run: node scripts/release/verify-bundle.mjs build/stage/win32-x64/tools --seed build/stage/win32-x64/seed
+        run: node scripts/release/verify-bundle.mjs build/stage/win32-x64/tools --model-cache build/stage/win32-x64/verify-model
 
       # Azure Trusted Signing switches on when these secrets exist; without them
       # the installer is unsigned and Windows SmartScreen warns.

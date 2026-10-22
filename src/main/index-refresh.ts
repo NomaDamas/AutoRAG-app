@@ -12,7 +12,7 @@ import {
 	saveLearnedBatchSize,
 	startingBatchSize,
 } from "./embedding-batch";
-import { ensureEmbeddingForConfig } from "./embedding-daemon";
+import { ensureEmbeddingForConfig, localModelMissing } from "./embedding-daemon";
 import { createMinSyncWatchdog, EMBEDDING_STALL_RETRIES, runWithStallRetry } from "./minsync-watchdog";
 import { takeSharedParseFailures } from "./parse-isolation";
 import { runWithRecovery } from "./refresh-recovery";
@@ -81,6 +81,20 @@ export async function refreshAutoragIndex(
 	// Keyword-only mode runs no MinSync: its parsed mirror and Jikji steps run instead.
 	const semantic = readAppIndexing(raw).semanticSearch;
 	const selected = methodsForSemantic(requested as readonly RefreshMethod[], semantic);
+	// MinSync would download the missing weights itself, with no progress and no way to stop it: the app's own download comes first.
+	if (selected.includes("minsync") && localModelMissing(raw)) {
+		const message = t("main.refresh.modelMissing");
+		return {
+			ok: false,
+			methods: selected,
+			scanned: 0,
+			written: 0,
+			deleted: 0,
+			skipped: 0,
+			diagnostics: [{ code: "embedding-model-missing", severity: "error", message }],
+			error: message,
+		};
+	}
 	// Everything that embeds during this run (MinSync, mailcrawl, the chat sidecars) finds the local server by its state files.
 	if (semantic) await ensureEmbeddingForConfig(raw);
 	// A refresh re-walks the folders, so a dot-folder created minutes ago is excluded too.

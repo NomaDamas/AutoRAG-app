@@ -1,13 +1,17 @@
 /**
  * Prove an installed (or staged) tool set works on a machine with nothing else.
  *
- *   node scripts/release/verify-bundle.mjs <tools-dir> [--seed <seed-dir>]
+ *   node scripts/release/verify-bundle.mjs <tools-dir> [--model-cache <dir>]
  *
  * Every tool runs from an environment whose PATH holds only `<tools-dir>/bin`
  * plus the OS directories, with no Homebrew, no cargo, no global Node. A tool
  * that only worked because the developer's machine had its dependencies fails
  * here. `<tools-dir>` is `build/stage/<platform>/tools` for the staged tree, or
  * `<resources>/tools` inside an installed app.
+ *
+ * `--model-cache <dir>` is the staged `build/stage/<platform>/verify-model` in
+ * Hugging Face Hub layout: the Kiwi/MinSync sync below embeds, so it needs the
+ * real Qwen3 weights, and the installer no longer carries them.
  *
  * Beyond `--version` it exercises what is easy to break when packaging:
  * Node-based CLIs loading native add-ons (better-sqlite3, lancedb, sharp) and
@@ -23,11 +27,11 @@ import { pathToFileURL } from "node:url";
 const args = process.argv.slice(2);
 const toolsDir = args[0] === undefined ? null : resolve(args[0]);
 if (toolsDir === null) {
-	process.stderr.write("usage: verify-bundle.mjs <tools-dir> [--seed <seed-dir>]\n");
+	process.stderr.write("usage: verify-bundle.mjs <tools-dir> [--model-cache <dir>]\n");
 	process.exit(2);
 }
-const seedIndex = args.indexOf("--seed");
-const seedDir = seedIndex >= 0 ? resolve(args[seedIndex + 1] ?? "") : null;
+const modelCacheIndex = args.indexOf("--model-cache");
+const modelCacheDir = modelCacheIndex >= 0 ? resolve(args[modelCacheIndex + 1] ?? "") : null;
 
 const win = process.platform === "win32";
 const bin = join(toolsDir, "bin");
@@ -144,22 +148,13 @@ check("minsync serve is the shared embedding daemon", join(bin, `minsync${exe}`)
 if (hasApp) check("autorag runs", join(bin, `autorag${exe}`), ["--help"], { expect: /autorag/i });
 probe("transformers.js loads without onnxruntime-web", `import(${JSON.stringify(pathToFileURL(join(modules, "@huggingface", "transformers", "dist", "transformers.node.mjs")).href)}).then((m)=>console.log(typeof m.pipeline==='function'?'loaded':'broken'))`);
 
-if (seedDir !== null) {
-	const seed = JSON.parse(readFileSync(join(seedDir, "manifest.json"), "utf8"));
-	for (const file of seed.files) {
-		const path = join(seedDir, file.path);
-		const ok = existsSync(path);
-		if (!ok) failures += 1;
-		process.stdout.write(`${ok ? "ok  " : "FAIL"} seed ${file.destination}${ok ? "" : " missing"}\n`);
-	}
-}
-
 // Kiwi: the bundled library and model must make MinSync's `multilingual` tokenizer work with no
 // ~/.local/kiwi and no KIWI_* of the developer's own. Indexing 환불정책을 and finding it by the stem 환불 is
 // what whitespace tokenization cannot do, so a pass proves the library loaded and the model is usable.
-// The sync embeds, so it needs the seeded native Qwen3 model: a seed without it (a stage built
-// before the native safetensors seed) would make minsync download 1.2 GB and prove nothing about being
-// offline, so the sync is skipped then.
+// The sync embeds, so it needs the native Qwen3 model. The installer no longer carries it, so it is
+// passed in as `--model-cache build/stage/<platform>/verify-model`; without a cache, or with one that
+// has no snapshot, minsync would download 1.2 GB and prove nothing about being offline, so the sync is
+// skipped then with a printed note.
 // macOS ships Apache-2.0 Kiwi 0.24.0 (LICENSE + NOTICE); Windows ships Kiwi 0.22.2, which is LGPL-2.1+ and
 // so also needs the LGPL text and the source/unmodified statement beside it.
 if (existsSync(join(toolsDir, "kiwi"))) {
@@ -182,15 +177,18 @@ if (existsSync(join(toolsDir, "kiwi"))) {
 		if (!stated) failures += 1;
 		process.stdout.write(`${stated ? "ok  " : "FAIL"} kiwi SOURCE.txt names the sha256 of the release asset that shipped${stated ? "" : "  <- missing or different"}\n`);
 	}
-	const nativeModel = seedDir !== null && existsSync(join(seedDir, "models--Qwen--Qwen3-Embedding-0.6B", "snapshots"));
-	if (present && seedDir !== null && !nativeModel) process.stdout.write("skip minsync Korean tokenization (the seed has no native Qwen3 model; re-stage with `--only seed`)\n");
+	const nativeModel = modelCacheDir !== null && existsSync(join(modelCacheDir, "models--Qwen--Qwen3-Embedding-0.6B", "snapshots"));
+	if (present && !nativeModel) {
+		const why = modelCacheDir === null ? "no --model-cache was passed" : "the model cache has no Qwen3 snapshot";
+		process.stdout.write(`skip minsync Korean tokenization (${why}; stage it with \`--only verify-model\`)\n`);
+	}
 	if (present && nativeModel) {
 		const workspace = join(home, "kiwi-workspace");
 		mkdirSync(workspace, { recursive: true });
 		const minsync = join(bin, `minsync${exe}`);
 		// HF_HUB_OFFLINE: a missing file fails the check instead of being fetched from the network.
 		const env = { ...cleanEnv(home), KIWI_LIBRARY_PATH: library, KIWI_MODEL_PATH: model, FASTEMBED_CACHE_DIR: join(home, "models"), HF_HUB_OFFLINE: "1" };
-		cpSync(seedDir, join(home, "models"), { recursive: true });
+		cpSync(modelCacheDir, join(home, "models"), { recursive: true });
 		const sh = (commandArgs) => spawnSync(minsync, commandArgs, { env, cwd: workspace, encoding: "utf8", timeout: 240_000, windowsHide: true });
 		sh(["init", "--format", "json", "--embedder", "native:Qwen/Qwen3-Embedding-0.6B"]);
 		const configPath = join(workspace, ".minsync", "config.toml");

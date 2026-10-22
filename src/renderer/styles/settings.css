@@ -1383,3 +1383,78 @@
 	white-space: nowrap;
 	text-align: right;
 }
+
+/* The on-device embedding model's download, shared by onboarding and Settings: app tokens only, so both themes and both surfaces match. */
+.model-dl {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-8);
+	width: 100%;
+	max-width: 960px;
+	margin-top: var(--space-12);
+	padding: var(--space-12);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-8);
+	background: var(--bg-hover);
+	color: var(--text-primary);
+	text-align: left;
+}
+
+.model-dl-head {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: var(--space-12);
+}
+
+.model-dl-title {
+	font-size: 12px;
+	font-weight: 600;
+}
+
+.model-dl-meta {
+	color: var(--text-muted);
+	font-size: 11px;
+	line-height: 1.45;
+}
+
+.model-dl-error {
+	color: var(--text-primary);
+	font-size: 11px;
+	line-height: 1.45;
+	overflow-wrap: anywhere;
+}
+
+.model-dl[data-state="failed"] {
+	border-color: var(--error-orange-dot);
+}
+
+.model-dl-actions {
+	display: flex;
+	gap: var(--space-8);
+}
+
+.model-dl-actions button {
+	padding: 5px 12px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-6);
+	background: transparent;
+	color: var(--text-primary);
+	font: inherit;
+	font-size: 12px;
+	cursor: pointer;
+}
+
+.model-dl-actions button:hover {
+	background: var(--bg-hover-strong);
+}
+
+.model-dl-actions button.primary {
+	border-color: var(--accent);
+	background: var(--accent);
+	color: var(--text-on-accent);
+}
+
+.model-dl-actions button.primary:hover {
+	background: var(--accent-hover);
+}

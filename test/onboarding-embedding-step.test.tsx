@@ -3,6 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import type { AccountStatus } from "../src/shared/account-contract";
+import type { ModelDownloadStatus } from "../src/shared/model-download-contract";
 import type { EmbedMode, FolderScan, OnboardingDraft } from "../src/shared/onboarding-contract";
 import { EmbeddingStep } from "../src/renderer/src/onboarding/steps/Embedding";
 import type { OnboardingCtx } from "../src/renderer/src/onboarding/context";
@@ -44,11 +45,19 @@ interface Harness {
 	readonly ctx: OnboardingCtx;
 	readonly setEmbedMode: Mock<(mode: EmbedMode) => void>;
 	readonly setCloudConsent: Mock<(consent: boolean) => void>;
+	readonly startDownload: Mock<() => void>;
 }
 
-function harness(options: { readonly embed: EmbedMode; readonly consent?: boolean; readonly account?: AccountStatus | null }): Harness {
+function harness(options: {
+	readonly embed: EmbedMode;
+	readonly consent?: boolean;
+	readonly account?: AccountStatus | null;
+	readonly download?: ModelDownloadStatus;
+	readonly localModel?: boolean;
+}): Harness {
 	const setEmbedMode = vi.fn();
 	const setCloudConsent = vi.fn();
+	const startDownload = vi.fn();
 	const draft: OnboardingDraft = {
 		version: 1,
 		stepId: "embedding",
@@ -72,7 +81,8 @@ function harness(options: { readonly embed: EmbedMode; readonly consent?: boolea
 		scanning: false,
 		scans,
 		candidates: [],
-		embedding: { profile: "qwen3", modelBytes: 614_000_000, cached: false, configured: false },
+		embedding: { profile: "qwen3", modelBytes: 614_000_000, cached: false, configured: false, localModel: options.localModel ?? true },
+		modelDownload: { status: options.download ?? { state: "absent", bytesDone: 0, bytesTotal: 614_000_000, file: null, error: null }, start: startDownload, cancel: noop },
 		sources: [],
 		sourcesChecking: false,
 		models: [],
@@ -132,7 +142,7 @@ function harness(options: { readonly embed: EmbedMode; readonly consent?: boolea
 		relaunch: noop,
 		openFullDiskAccess: noop,
 	};
-	return { ctx, setEmbedMode, setCloudConsent };
+	return { ctx, setEmbedMode, setCloudConsent, startDownload };
 }
 
 function render(ctx: OnboardingCtx): void {
@@ -217,6 +227,33 @@ describe("EmbeddingStep", () => {
 			act(() => input.click());
 		}
 		expect(cloud.setCloudConsent).toHaveBeenLastCalledWith(true);
+	});
+
+	it("shows the model download under the cards only while on-device embedding is chosen, and starts it from there", () => {
+		for (const embed of ["none", "cloud"] as const) {
+			render(harness({ embed }).ctx);
+			expect(host.querySelector(".model-dl")).toBeNull();
+		}
+
+		const local = harness({ embed: "local" });
+		render(local.ctx);
+		expect(host.querySelector(".model-dl")).not.toBeNull();
+		click([...host.querySelectorAll<HTMLButtonElement>(".model-dl button")].find((button) => button.textContent?.includes("modelDownload.download")) as HTMLElement);
+		expect(local.startDownload).toHaveBeenCalledTimes(1);
+	});
+
+	it("shows live progress in the step and nothing to download once the model is on this computer", () => {
+		render(harness({ embed: "local", download: { state: "downloading", bytesDone: 307_000_000, bytesTotal: 614_000_000, file: "model.safetensors", error: null } }).ctx);
+		expect(host.querySelector('.model-dl [role="progressbar"]')?.getAttribute("aria-valuenow")).toBe("50");
+
+		render(harness({ embed: "local", download: { state: "ready", bytesDone: 614_000_000, bytesTotal: 614_000_000, file: null, error: null } }).ctx);
+		expect(host.querySelector(".model-dl")?.getAttribute("data-state")).toBe("ready");
+		expect(host.querySelectorAll(".model-dl button")).toHaveLength(0);
+	});
+
+	it("offers no download when the config already names a server of the user's own", () => {
+		render(harness({ embed: "local", localModel: false }).ctx);
+		expect(host.querySelector(".model-dl")).toBeNull();
 	});
 
 	it("selects the focused card with Enter or Space", () => {
