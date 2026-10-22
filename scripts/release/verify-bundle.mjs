@@ -90,7 +90,6 @@ const VERSION_ARGS = {
 	"lark-cli": ["--version"],
 	lazykatok: ["--help"],
 	"fsearch-cli": ["--version"],
-	qmd: ["--version"],
 	kordoc: ["--version"],
 	mailcrawl: ["--help"],
 };
@@ -120,7 +119,7 @@ check("node", node, ["--version"], { expect: new RegExp(`^v${(versionOf("node") 
 // Native add-ons the npm CLIs depend on, loaded by the bundled Node itself.
 const modules = join(toolsDir, "npm", "node_modules");
 const probe = (label, code) => check(label, node, ["-e", code], { expect: /loaded/ });
-probe("better-sqlite3 loads", `const D=require(${JSON.stringify(join(modules, "@tobilu", "qmd", "node_modules", "better-sqlite3"))});new D(':memory:').prepare('select 1').get();console.log('loaded')`);
+probe("better-sqlite3 loads", `const D=require(${JSON.stringify(join(modules, "better-sqlite3"))});new D(':memory:').prepare('select 1').get();console.log('loaded')`);
 probe("lancedb loads", `require(${JSON.stringify(join(modules, "@lancedb", "lancedb"))});console.log('loaded')`);
 
 // fsearch-cli (macOS): index, search and the live-watch daemon against a real folder, with no Homebrew on PATH.

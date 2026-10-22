@@ -56,7 +56,7 @@ installs one file and nothing else:
 | `fsearch-cli` | `NomaDamas/fsearch-mac` via its Homebrew tap (macOS only) | fast file-name index. Homebrew links it to `/opt/homebrew/...`, so the stager copies it with its 16 dylibs into `tools/{bin,lib}` and re-points them at `@executable_path/../lib`. Needs `brew install nomadamas/fsearch-mac/fsearch-mac` on the build Mac (the stager runs it if missing; it compiles GTK, so the first run is slow). GPL-2.0-or-later: license and notice ship in `tools/licenses/fsearch-mac` |
 | Kiwi library + base model: **0.24.0 on macOS, 0.22.2 on Windows** | `bab2min/Kiwi` releases `v0.24.0` / `v0.22.2`, pinned by sha256 | MinSync's `multilingual` BM25 tokenizer (the librarian always asks for it) loads these by path; without them every Korean particle form (`환불정책과`) stops matching its stem. Staged to `tools/kiwi/{lib,models}`, and `bundled-tools.ts` sets `KIWI_LIBRARY_PATH`/`KIWI_MODEL_PATH` unless the user set one. **macOS 0.24.0 is Apache-2.0** (the first release that is): LICENSE and NOTICE ship in `tools/licenses/kiwi`. **Windows 0.22.2 is LGPL-2.1-or-later and is shipped unmodified** (the official release assets, never rebuilt or repackaged): LICENSE, `LGPL-2.1.txt` and a `SOURCE.txt` (unmodified statement, asset hashes, source location) ship in `tools/licenses/kiwi`. 0.22.2 on Windows because MinSync 0.4.11 crashed there with 0.23.2 and 0.24.0 (`0xC0000005` in `sync`; checked on a GitHub Windows runner) and works with 0.22.2; `kiwi_config_t` and `kiwi_analyze_option_t` grew in 0.23. Revisit when MinSync's Windows CI moves off 0.22.2 |
 | Everything + ES (Windows only) | the librarian's own `vendor/everything` | the Windows equivalent of fsearch; already inside the app, hash-checked and unpacked on first use |
-| `mailcrawl`, `qmd`, `kordoc` | newest npm release, installed with the bundled Node | native add-ons are fetched for the bundled Node's ABI. `mailcrawl` — the stager refuses it below 0.2.2 — embeds through the daemon's OpenAI route |
+| `mailcrawl`, `kordoc` | newest npm release, installed with the bundled Node | native add-ons are fetched for the bundled Node's ABI. `mailcrawl` — the stager refuses it below 0.2.2 — embeds through the daemon's OpenAI route |
 
 The embedding model is **not** in the installer. The app downloads the pinned
 `Qwen/Qwen3-Embedding-0.6B` files (~1.2 GB, sha256-verified, resumable) from
@@ -84,7 +84,7 @@ does not match its published digest.
   and applies the same `PATH` itself (`src/main/refresh-job.ts`); the OS job definition
   carries no tools path, which keeps the Task Scheduler command under its 261-character
   `/TR` limit.
-* npm CLIs (`mailcrawl`, `qmd`, `kordoc`) and `autorag` are launched through a tiny
+* npm CLIs (`mailcrawl`, `kordoc`) and `autorag` are launched through a tiny
   native launcher (`scripts/release/shim`) that runs the bundled Node. Windows
   cannot spawn a script by name; this makes them real executables on both platforms.
 * The native Qwen3 embedding model (`Qwen/Qwen3-Embedding-0.6B`) is not bundled.
@@ -116,8 +116,7 @@ does not match its published digest.
 ### Deliberately not bundled
 
 * `llama.cpp` (`llama-server`) and the `Q8_0` GGUF embedding weights: the local model is served by MinSync's own `minsync serve` daemon (started and stopped by the app) directly on the downloaded `Qwen/Qwen3-Embedding-0.6B` safetensors — Metal on macOS, CPU on Windows — so no llama.cpp runtime or GGUF copy ships for embeddings.
-* CUDA builds of `node-llama-cpp` (500 MB, needs an NVIDIA toolkit); CPU and Vulkan are kept. The `node-llama-cpp` that stays is only qmd's own GGUF engine for the Obsidian source; `pruneNativeForPlatform` in `lib.mjs` keeps just the staged platform's backend (Metal on macOS; CPU + Vulkan on Windows) and drops the rest.
-* Other platforms' native add-ons. Intel Macs, Windows on ARM and Linux are not shipped.
+* Other platforms' native add-ons. Intel Macs, Windows on ARM and Linux are not shipped, and `pruneNativeForPlatform` in `lib.mjs` deletes the prebuilt add-ons those targets need from the bundled npm tree on each staged platform.
 ## Install time
 
 Budget: **5 minutes from running the installer to an installed, launchable app.** The model is not

@@ -330,14 +330,26 @@ describe("createDataSourceStatusService", () => {
 		});
 	});
 
-	it("syncs one source through its skill and explains unavailable/unknown sources", async () => {
+	it("refuses to sync an Obsidian vault in keyword-only mode and says why, since MinSync cannot index without an embedder", async () => {
 		const fixture = await createFixtureWithOnlySlacrawlOnPath();
 		await writeConfig(fixture, { vault: { type: "obsidian", connector: { vaultPath: join(fixture.workspace, "vault") } } });
+		const raw = JSON.parse(await readFile(fixture.configPath, "utf8"));
+		await writeFile(fixture.configPath, JSON.stringify({ ...raw, appIndexing: { semanticSearch: false } }));
+
+		const result = await createDataSourceStatusService({ env: fixture.env, cwd: fixture.root }).sync("vault");
+
+		expect(result).toMatchObject({ id: "vault", ok: false, state: "unavailable" });
+		expect(result.error).toContain("embedding model");
+	});
+
+	it("syncs one source through its skill and explains unavailable/unknown sources", async () => {
+		const fixture = await createFixtureWithOnlySlacrawlOnPath();
+		await writeConfig(fixture, { chat: { type: "telegram", connector: {} } });
 		const service = createDataSourceStatusService({ env: fixture.env, cwd: fixture.root });
 
-		const unavailable = await service.sync("vault");
-		expect(unavailable).toMatchObject({ id: "vault", ok: false, state: "unavailable" });
-		expect(unavailable.error).toContain("qmd");
+		const unavailable = await service.sync("chat");
+		expect(unavailable).toMatchObject({ id: "chat", ok: false, state: "unavailable" });
+		expect(unavailable.error).toContain("telecrawl");
 		expect(typeof unavailable.durationMs).toBe("number");
 
 		const unknown = await service.sync("nope");

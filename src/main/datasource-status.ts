@@ -12,6 +12,7 @@ import {
 	HisterClient,
 	loadMirrorIndex,
 	resolveConfigReadOnly,
+	sanitizeIdSegment,
 	writeConfigObject,
 } from "@autorag/librarian";
 import { readRawConfigObject, resolveConfigPath, type CliConfig } from "@autorag/librarian/core";
@@ -72,7 +73,6 @@ const BACKEND_BINARIES: Readonly<Record<string, string>> = {
 	notion: "notcrawl",
 	mailcrawl: "mailcrawl",
 	"cloud-drive": "rclone",
-	obsidian: "qmd",
 	clawgallery: "clawgallery",
 	spotlight: "mdfind",
 	hister: "hister",
@@ -269,6 +269,31 @@ async function backendIndexState(
 		: { state: "indexed", chunkCount: reading.count, unit, indexedAt: reading.at, detail: `${reading.count} items in ${binary}` };
 }
 
+function descriptorInstance(skill: DatasourceSkill): string {
+	return skill.describe().instanceId ?? "default";
+}
+
+/**
+ * An Obsidian vault is indexed by MinSync in a workspace of its own (the librarian's layout:
+ * `.autorag/datasources/obsidian/<instance>/`): `staging.json` lists the notes staged for indexing and the
+ * MinSync cursor appears once a sync finished.
+ */
+async function obsidianIndexState(workspacePath: string, instanceId: string): Promise<DataSourceRow["index"]> {
+	const root = join(workspacePath, ".autorag", "datasources", "obsidian", sanitizeIdSegment(instanceId));
+	const cursor = await stat(join(root, "minsync", ".minsync", "cursor.json")).catch(() => null);
+	if (cursor === null) return { state: "not-indexed", chunkCount: null, unit: "document", indexedAt: null, detail: "Run `autorag refresh` to index it" };
+	try {
+		const parsed: unknown = JSON.parse(await readFile(join(root, "staging.json"), "utf8"));
+		const notes = isJsonObject(parsed) && isJsonObject(parsed.entries) ? Object.keys(parsed.entries).length : 0;
+		const indexedAt = cursor.mtime.toISOString();
+		return notes === 0
+			? { state: "empty", chunkCount: 0, unit: "document", indexedAt, detail: "The vault has no notes indexed" }
+			: { state: "indexed", chunkCount: notes, unit: "document", indexedAt, detail: `${notes} notes` };
+	} catch {
+		return { state: "not-indexed", chunkCount: null, unit: "document", indexedAt: null, detail: "Run `autorag refresh` to index it" };
+	}
+}
+
 async function indexState(
 	id: string,
 	type: string,
@@ -325,6 +350,7 @@ async function indexState(
 			};
 		}
 	}
+	if (type === "obsidian") return obsidianIndexState(workspacePath, descriptorInstance(skill));
 	if (!CHUNK_STORE_TEMPLATES.has(type)) return backendIndexState(id, type, entry, install, workspacePath, env);
 	const descriptor = skill.describe();
 	const storePath = datasourceChunkStorePath(workspacePath, descriptor.name, descriptor.instanceId ?? "default");
@@ -473,6 +499,11 @@ export function createDataSourceStatusService(deps: DataSourceStatusDeps): DataS
 		}
 		// Keyword-only mode applies to this path too: it builds its own skill, outside the refresh the policy wraps.
 		const semantic = readAppIndexing(readRawConfigObject(path)).semanticSearch;
+		const configured: unknown = config.datasources?.[id];
+		const configuredType = isJsonObject(configured) && typeof configured.type === "string" ? configured.type : id;
+		if (!semantic && configured !== undefined && configured !== false && configuredType === "obsidian") {
+			return { ...base, state: "unavailable", error: "Obsidian is indexed by MinSync, which needs an embedding model; choose one to index this vault." };
+		}
 		const rawEntry: unknown = withSemanticPolicyApplied(config, semantic).datasources?.[id];
 		if (rawEntry === undefined) return { ...base, error: `Unknown datasource: ${id}` };
 		const entry: DatasourceSkillConfig = isJsonObject(rawEntry) ? rawEntry : {};

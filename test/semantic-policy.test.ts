@@ -86,6 +86,12 @@ describe("withSemanticPolicyApplied", () => {
 		expect(effective.datasources?.gallery).toEqual({ type: "clawgallery", connector: { syncVisual: false } });
 	});
 
+	it("leaves an Obsidian vault unindexed, since MinSync cannot index without an embedder", () => {
+		const effective = withSemanticPolicyApplied(config({ vault: { type: "obsidian", connector: { vaultPath: "/vault" } } }), false);
+
+		expect(effective.datasources?.vault).toEqual({ type: "obsidian", enabled: false, connector: { vaultPath: "/vault" } });
+	});
+
 	it("asks github-gist to stay lexical-only through connector.semantic", () => {
 		const effective = withSemanticPolicyApplied(config({ "my-gists": { type: "github-gist", connector: { tokenEnv: "GH" } }, "github-gist": {} }), false);
 

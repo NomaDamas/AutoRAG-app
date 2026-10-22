@@ -1150,7 +1150,6 @@
         "badJson": "埋め込みサーバーの応答を JSON として読み取れませんでした。",
         "noVector": "埋め込みサーバーがベクトルを返しませんでした。",
         "dimensionMismatch": "埋め込みサーバーの次元は {{actual}} ですが、{{expected}} と指定されています。",
-        "incompatibleSources": "このモデルに追従できないデータソースがあります: {{ids}}",
         "serverRequired": "サーバーのアドレスが必要です。",
         "badProtocol": "サーバーの方式は OpenAI または TEI にしてください。",
         "unauthorized": "サーバーが認証を拒否しました(HTTP {{status}})。API キーを確認してください。",
@@ -1161,15 +1160,14 @@
       },
       "reasons": {
         "keywordOnly": "キーワード検索のみのため、このソースも埋め込みません。",
-        "obsidianIncompatible": "qmd(obsidian)は独自の GGUF モデルしか使えないため、別の埋め込みサーバーは使えません。",
-        "obsidianPropagated": "qmd の子プロセスに QMD_EMBED_MODEL を設定し、`qmd embed -f` で再インデックスします。",
         "discordPropagated": "Dazzi が管理する discrawl の設定を新しいサーバー向けに書き直し、`discrawl embed --rebuild` で再インデックスします。",
         "clawgalleryNotApplicable": "ClawGallery は画像(VDR)インデックスであり、テキスト埋め込みを使用しません。",
         "larkNotApplicable": "Lark はリモート API 検索のみを使用し、ローカル埋め込みを拒否します。",
         "defaultNotApplicable": "このデータソースは独自のキーワード/パースインデックスを使用し、グローバルエンベッダーを使用しません。",
         "mailcrawlSharedEmbedder": "mailcrawl は Dazzi と同じ埋め込みサーバーを使います。モデルが変わると、次回のインデックス作成で自動的に作り直します。",
         "sidecarSharedEmbedder": "チャットアーカイブ上の読み取り専用サイドカーが共有エンベッダーでメッセージを埋め込みます。エンベッダーを変更すると次回の同期で再埋め込みします。",
-        "githubGistSharedEmbedder": "GitHub Gist のベクトルインデックスは共有エンベッダーを使います。エンベッダーを変更すると次回の同期で再埋め込みします。"
+        "githubGistSharedEmbedder": "GitHub Gist のベクトルインデックスは共有エンベッダーを使います。エンベッダーを変更すると次回の同期で再埋め込みします。",
+        "obsidianSharedEmbedder": "Obsidian の保管庫は選択した埋め込みモデルにそのまま従います(MinSync が保管庫専用の作業領域で索引します)。"
       },
       "actions": {
         "discordConfig": "datasources.<id> が管理する discrawl config.toml"
@@ -1199,6 +1197,20 @@
         "stalled": "{{file}} のダウンロードが止まりました。ネットワーク接続を確認して、もう一度お試しください。",
         "network": "{{file}} をダウンロードできませんでした: {{message}}",
         "cancelled": "ダウンロードをキャンセルしました。ダウンロード済みの分は残っているため、続きから再開できます。"
+      }
+    },
+    "mcp": {
+      "errors": {
+        "invalidField": "\"{{field}}\" の値が正しくありません。",
+        "invalidName": "サーバー名には英字・数字・\"_\"・\"-\" のみ使えます。",
+        "notObject": "サーバーの項目はオブジェクトである必要があります。",
+        "sseUnsupported": "従来の SSE 方式には対応していません。ストリーミング HTTP の URL を使ってください。",
+        "badUrl": "URL は http または https である必要があります。",
+        "needsTransport": "実行コマンド(command)か URL(url)のどちらかが必要です。",
+        "unreadable": "{{path}} を使用できません: {{reason}}",
+        "serversNotObject": "\"mcpServers\" はオブジェクトである必要があります。",
+        "duplicate": "\"{{name}}\" というサーバーはすでにあります。",
+        "unknownServer": "\"{{name}}\" というサーバーが見つかりません。"
       }
     }
   },
@@ -1502,8 +1514,10 @@
         "scope": "検索範囲 フォルダ 除外 パス",
         "reading": "書類の読み取り 言語 パーサ OCR",
         "duplicates": "重複ファイル バージョン 整理 dupey",
-        "apps": "接続 アプリ データソース メッセンジャー メール クラウド"
-      }
+        "apps": "接続 アプリ データソース メッセンジャー メール クラウド",
+        "mcp": "mcp サーバー ツール 接続 拡張 外部ツール codemode エージェント"
+      },
+      "mcp": "MCP サーバー"
     },
     "view": {
       "navAria": "設定のナビゲーション",
@@ -1746,8 +1760,6 @@
       "hint": "文書の意味を分析します。このコンピューターを選ぶと、文書は外に出ません。",
       "body": "文書の意味を分析する埋め込みモデルをどこで実行するかを選びます。モデルは Qwen3 Embedding 0.6B に固定されており、文書の内容がコンピューターの外に出る選択には同意が必要です。",
       "dimension": "{{count}} 次元",
-      "incompatibleNote": "{{count}} 個のデータソースがこのプロファイルと互換性がありません。続行すると、該当ソースはそのままにして残りのみ変更されます。",
-      "acknowledge": "互換性のないソースにも適用",
       "applied": "適用しました。",
       "notApplied": "適用されませんでした。",
       "written": "config {{count}} 件の項目を記録",
@@ -1779,6 +1791,62 @@
     "chips": {
       "add": "+ 追加",
       "remove": "{{item}} を削除"
+    },
+    "mcp": {
+      "title": "MCP サーバー",
+      "desc": "外部の MCP サーバーを接続すると、検索やチャットでそのツールを使えます。",
+      "listTitle": "接続済みのサーバー",
+      "listDesc": "サーバーは検索やチャットの開始時に接続されます。変更は次の検索から反映されます。",
+      "add": "サーバーを追加",
+      "empty": "接続済みの MCP サーバーはまだありません。",
+      "file": "設定ファイル: {{path}}",
+      "transportStdio": "コマンド実行",
+      "transportHttp": "HTTP",
+      "transportUnknown": "不明",
+      "on": "使用中",
+      "off": "オフ",
+      "problem": "問題",
+      "edit": "編集",
+      "remove": "削除",
+      "enabledAria": "{{name}} を使う",
+      "exposureLabel": "ツールの公開方法",
+      "exposure": {
+        "codemode": "スクリプトから呼び出し",
+        "deferred": "必要なときに読み込み",
+        "direct": "モデルに直接提供",
+        "hidden": "非表示"
+      },
+      "exposureHint": {
+        "codemode": "モデルが短いスクリプトでツールを呼び出します(既定)。",
+        "deferred": "tool_search で見つけたツールだけをモデルに提供します。",
+        "direct": "内蔵ツールのようにすべてモデルに提供します。",
+        "hidden": "ツールを利用できません。"
+      },
+      "trust": "MCP サーバーはこのコンピューターでコマンドを実行したり、外部サービスに接続したりします。信頼できるサーバーだけを追加してください。サーバーの返す内容は指示ではなくデータとして扱われます。",
+      "fileError": "MCP の設定ファイルを読み取れないため、何も変更しません。ファイルを修正してからもう一度開いてください。",
+      "modal": {
+        "addTitle": "MCP サーバーを追加",
+        "editTitle": "MCP サーバーを編集",
+        "name": "名前",
+        "namePlaceholder": "例: filesystem",
+        "kind": "接続方式",
+        "kindStdio": "コマンドを実行(stdio)",
+        "kindHttp": "HTTP の URL",
+        "command": "コマンド",
+        "commandPlaceholder": "npx",
+        "args": "引数(1 行に 1 つ)",
+        "url": "URL",
+        "urlPlaceholder": "https://example.com/mcp",
+        "headers": "ヘッダー(1 行に 1 つ、名前: 値)",
+        "env": "環境変数(1 行に 1 つ、名前=値)",
+        "envHint": "値には ${NAME} の形で環境変数を参照できます。",
+        "description": "説明(モデルがいつ使うか分かるように)",
+        "save": "保存",
+        "advanced": "この項目にはアプリで編集できない設定があり、そのまま保持されます。",
+        "badLine": "\"{{line}}\" の行を読み取れません。",
+        "removeTitle": "\"{{name}}\" を削除しますか?",
+        "removeBody": "設定ファイルからこのサーバーが削除されます。サーバーが保存したデータはそのまま残ります。"
+      }
     }
   },
   "settingsSources": {
@@ -1823,7 +1891,7 @@
         "summary": "mailcrawl アーカイブからメールを検索します。"
       },
       "obsidian": {
-        "summary": "qmd で Obsidian ボルトを検索します。"
+        "summary": "MinSync で Obsidian の保管庫を検索します。"
       },
       "rss": {
         "summary": "RSS 2.0 / Atom フィードをポーリングしてインデックスします。"
@@ -1856,7 +1924,7 @@
       "cloudDrive": "Cloud Drive (rclone)",
       "mailExport": "Mail Export",
       "mail": "Mail",
-      "obsidian": "Obsidian (qmd)",
+      "obsidian": "Obsidian",
       "rss": "RSS / News",
       "hister": "Hister (ブラウザ閲覧履歴)",
       "calendar": "Apple カレンダー・リマインダー (EventKit MCP)",
@@ -1918,7 +1986,6 @@
       "source": "ソース",
       "fixture": "フィクスチャ",
       "himalayaConfig": "himalaya 設定",
-      "qmdBinaryPath": "qmd 実行ファイルのパス",
       "feeds": "フィード",
       "maxItemsPerFeed": "フィードあたりの最大項目数",
       "queries": "クエリ",

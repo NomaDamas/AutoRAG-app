@@ -234,30 +234,6 @@ const SPECS: Readonly<Record<string, ProbeSpec>> = {
 			return match?.[1] === undefined ? undefined : { count: Number(match[1]), at: null };
 		},
 	},
-	obsidian: {
-		unit: "document",
-		envPrefixes: ["QMD_"],
-		command: ({ connector, instanceId, workspacePath }) => {
-			// Same isolated layout the librarian's Obsidian skill points qmd at.
-			const root = join(workspacePath, ".autorag", "datasources", "obsidian", instanceId);
-			const cache = join(root, "cache");
-			return {
-				args: ["status"],
-				env: {
-					QMD_CONFIG_DIR: text(connector.configPath) ?? join(root, "config"),
-					XDG_CACHE_HOME: cache,
-					QMD_TRUST_LOCAL_CONFIG: "1",
-				},
-				// `qmd status` creates an empty index when none exists; do not leave one behind.
-				runnable: existsSync(join(cache, "qmd", "index.sqlite")),
-				absent: { count: 0, at: null },
-			};
-		},
-		parse: (stdout) => {
-			const match = /Total:\s*([\d,]+)\s+files indexed/u.exec(stdout);
-			return match?.[1] === undefined ? undefined : { count: Number(match[1].replaceAll(",", "")), at: null };
-		},
-	},
 };
 
 /** Templates that have no countable index: the backend answers each query live. */

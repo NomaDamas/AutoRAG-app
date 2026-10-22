@@ -1150,7 +1150,6 @@
         "badJson": "임베딩 서버 응답을 JSON으로 읽지 못했습니다",
         "noVector": "임베딩 서버가 벡터를 반환하지 않았습니다",
         "dimensionMismatch": "임베딩 서버 차원이 {{actual}}인데 {{expected}}로 지정했습니다",
-        "incompatibleSources": "이 모델을 따를 수 없는 데이터소스가 있습니다: {{ids}}",
         "serverRequired": "서버 주소가 필요합니다.",
         "badProtocol": "서버 방식은 OpenAI 또는 TEI여야 합니다.",
         "unauthorized": "서버가 인증을 거부했습니다 (HTTP {{status}}). API 키를 확인하세요.",
@@ -1161,15 +1160,14 @@
       },
       "reasons": {
         "keywordOnly": "키워드 검색만 쓰므로 이 소스도 임베딩하지 않습니다.",
-        "obsidianIncompatible": "qmd(obsidian)는 자체 GGUF 모델만 쓸 수 있어 다른 임베딩 서버를 사용할 수 없습니다.",
-        "obsidianPropagated": "qmd 자식 프로세스에 QMD_EMBED_MODEL을 설정하고 `qmd embed -f`로 다시 색인합니다.",
         "discordPropagated": "discrawl의 Dazzi 관리 설정을 새 서버로 다시 쓰고 `discrawl embed --rebuild`로 다시 색인합니다.",
         "clawgalleryNotApplicable": "ClawGallery는 이미지(VDR) 색인이며 텍스트 임베딩을 쓰지 않습니다",
         "larkNotApplicable": "Lark은 원격 API 검색만 사용하고 로컬 임베딩을 거부합니다",
         "defaultNotApplicable": "이 데이터소스는 자체 키워드/파싱 색인을 쓰며 전역 임베더를 사용하지 않습니다",
         "mailcrawlSharedEmbedder": "mailcrawl은 Dazzi가 쓰는 임베딩 서버를 그대로 사용합니다. 모델이 바뀌면 다음 색인에서 자동으로 다시 만듭니다.",
         "sidecarSharedEmbedder": "채팅 보관함 위의 읽기 전용 사이드카가 공용 임베더로 메시지를 임베딩합니다. 임베더가 바뀌면 다음 동기화에서 다시 임베딩합니다.",
-        "githubGistSharedEmbedder": "GitHub Gist 벡터 색인이 공용 임베더를 사용합니다. 임베더가 바뀌면 다음 동기화에서 다시 임베딩합니다."
+        "githubGistSharedEmbedder": "GitHub Gist 벡터 색인이 공용 임베더를 사용합니다. 임베더가 바뀌면 다음 동기화에서 다시 임베딩합니다.",
+        "obsidianSharedEmbedder": "Obsidian 보관함은 선택한 임베딩 모델을 그대로 따릅니다(MinSync가 보관함 전용 작업 공간에서 색인합니다)."
       },
       "actions": {
         "discordConfig": "datasources.<id>이 관리하는 discrawl config.toml"
@@ -1199,6 +1197,20 @@
         "stalled": "{{file}} 다운로드가 멈췄습니다. 네트워크 연결을 확인하고 다시 시도해 주세요.",
         "network": "{{file}} 다운로드 실패: {{message}}",
         "cancelled": "다운로드를 취소했습니다. 받아 둔 만큼은 남아 있어 이어서 받을 수 있습니다."
+      }
+    },
+    "mcp": {
+      "errors": {
+        "invalidField": "\"{{field}}\" 값이 올바르지 않습니다.",
+        "invalidName": "서버 이름에는 영문, 숫자, \"_\", \"-\"만 쓸 수 있습니다.",
+        "notObject": "서버 항목은 객체여야 합니다.",
+        "sseUnsupported": "예전 SSE 전송 방식은 지원하지 않습니다. 스트리밍 HTTP 주소를 사용하세요.",
+        "badUrl": "주소는 http 또는 https URL이어야 합니다.",
+        "needsTransport": "실행 명령(command) 또는 주소(url) 중 하나가 필요합니다.",
+        "unreadable": "{{path}}을(를) 사용할 수 없습니다: {{reason}}",
+        "serversNotObject": "\"mcpServers\"는 객체여야 합니다.",
+        "duplicate": "이미 \"{{name}}\" 서버가 있습니다.",
+        "unknownServer": "\"{{name}}\" 서버를 찾을 수 없습니다."
       }
     }
   },
@@ -1502,8 +1514,10 @@
         "scope": "검색 범위 폴더 제외 경로",
         "reading": "문서 읽기 언어 파서",
         "duplicates": "중복 파일 버전 정리 dupey",
-        "apps": "연결 앱 데이터소스 메신저 메일 클라우드"
-      }
+        "apps": "연결 앱 데이터소스 메신저 메일 클라우드",
+        "mcp": "mcp 서버 도구 연결 확장 외부 도구 codemode 에이전트"
+      },
+      "mcp": "MCP 서버"
     },
     "view": {
       "navAria": "설정 탐색",
@@ -1746,8 +1760,6 @@
       "hint": "문서의 의미를 분석합니다. 이 컴퓨터를 고르면 문서가 컴퓨터 밖으로 나가지 않습니다.",
       "body": "문서의 의미를 분석하는 임베딩 모델이 어디에서 실행될지 고릅니다. 모델은 Qwen3 Embedding 0.6B로 고정되어 있고, 문서 내용이 컴퓨터 밖으로 나가는 선택지는 동의가 필요합니다.",
       "dimension": "{{count}}차원",
-      "incompatibleNote": "{{count}}개 데이터소스가 이 프로필과 호환되지 않습니다. 계속하면 해당 소스는 그대로 두고 나머지만 바뀝니다.",
-      "acknowledge": "호환되지 않는 소스도 함께 적용",
       "applied": "적용했습니다.",
       "notApplied": "적용되지 않았습니다.",
       "written": "config {{count}}개 항목 기록",
@@ -1779,6 +1791,62 @@
     "chips": {
       "add": "+ 추가",
       "remove": "{{item}} 삭제"
+    },
+    "mcp": {
+      "title": "MCP 서버",
+      "desc": "외부 MCP 서버를 연결하면 검색과 대화에서 그 서버의 도구를 쓸 수 있습니다.",
+      "listTitle": "연결된 서버",
+      "listDesc": "서버는 검색이나 대화를 시작할 때 연결됩니다. 변경 사항은 다음 검색부터 적용됩니다.",
+      "add": "서버 추가",
+      "empty": "아직 연결한 MCP 서버가 없습니다.",
+      "file": "설정 파일: {{path}}",
+      "transportStdio": "명령 실행",
+      "transportHttp": "HTTP",
+      "transportUnknown": "알 수 없음",
+      "on": "사용 중",
+      "off": "꺼짐",
+      "problem": "문제",
+      "edit": "편집",
+      "remove": "삭제",
+      "enabledAria": "{{name}} 사용",
+      "exposureLabel": "도구 노출 방식",
+      "exposure": {
+        "codemode": "스크립트로 호출",
+        "deferred": "필요할 때 불러오기",
+        "direct": "모델에 직접 제공",
+        "hidden": "숨김"
+      },
+      "exposureHint": {
+        "codemode": "모델이 짧은 스크립트로 도구를 호출합니다(기본값).",
+        "deferred": "tool_search로 찾은 도구만 모델에 제공합니다.",
+        "direct": "내장 도구처럼 모델에 모두 제공합니다.",
+        "hidden": "도구에 접근할 수 없습니다."
+      },
+      "trust": "MCP 서버는 이 컴퓨터에서 명령을 실행하거나 외부 서비스에 접속합니다. 신뢰하는 서버만 추가하세요. 서버가 돌려주는 결과는 지시가 아니라 데이터로만 다룹니다.",
+      "fileError": "MCP 설정 파일을 읽을 수 없어 수정하지 않습니다. 파일을 고친 뒤 다시 열어 주세요.",
+      "modal": {
+        "addTitle": "MCP 서버 추가",
+        "editTitle": "MCP 서버 편집",
+        "name": "이름",
+        "namePlaceholder": "예: filesystem",
+        "kind": "연결 방식",
+        "kindStdio": "명령 실행(stdio)",
+        "kindHttp": "HTTP 주소",
+        "command": "실행 명령",
+        "commandPlaceholder": "npx",
+        "args": "인자(한 줄에 하나)",
+        "url": "주소",
+        "urlPlaceholder": "https://example.com/mcp",
+        "headers": "헤더(한 줄에 하나, 이름: 값)",
+        "env": "환경 변수(한 줄에 하나, 이름=값)",
+        "envHint": "값에는 ${NAME} 으로 환경 변수를 참조할 수 있습니다.",
+        "description": "설명(모델이 언제 쓸지 알 수 있게)",
+        "save": "저장",
+        "advanced": "이 항목에는 앱에서 편집하지 않는 설정이 있어 그대로 유지됩니다.",
+        "badLine": "\"{{line}}\" 줄을 읽을 수 없습니다.",
+        "removeTitle": "\"{{name}}\" 서버를 삭제할까요?",
+        "removeBody": "설정 파일에서 이 서버가 지워집니다. 서버가 저장한 데이터는 그대로입니다."
+      }
     }
   },
   "settingsSources": {
@@ -1823,7 +1891,7 @@
         "summary": "mailcrawl 보관함에서 메일을 검색합니다."
       },
       "obsidian": {
-        "summary": "qmd로 Obsidian 보관함을 검색합니다."
+        "summary": "MinSync로 Obsidian 보관함을 검색합니다."
       },
       "rss": {
         "summary": "RSS 2.0 / Atom 피드를 폴링해 색인합니다."
@@ -1856,7 +1924,7 @@
       "cloudDrive": "Cloud Drive (rclone)",
       "mailExport": "Mail Export",
       "mail": "Mail",
-      "obsidian": "Obsidian (qmd)",
+      "obsidian": "Obsidian",
       "rss": "RSS / News",
       "hister": "Hister (브라우저 방문 기록)",
       "calendar": "Apple 캘린더 · 미리알림 (EventKit MCP)",
@@ -1918,7 +1986,6 @@
       "source": "소스",
       "fixture": "픽스처",
       "himalayaConfig": "himalaya 설정",
-      "qmdBinaryPath": "qmd 실행 파일 경로",
       "feeds": "피드",
       "maxItemsPerFeed": "피드당 최대 항목",
       "queries": "쿼리",

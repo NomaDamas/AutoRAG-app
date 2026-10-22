@@ -1150,7 +1150,6 @@
         "badJson": "无法将嵌入服务器响应解析为 JSON。",
         "noVector": "嵌入服务器未返回向量。",
         "dimensionMismatch": "嵌入服务器维度为 {{actual}}，但指定为 {{expected}}。",
-        "incompatibleSources": "有数据源无法跟随此模型：{{ids}}",
         "serverRequired": "需要提供服务器地址。",
         "badProtocol": "服务器类型必须是 OpenAI 或 TEI。",
         "unauthorized": "服务器拒绝了凭据(HTTP {{status}})。请检查 API 密钥。",
@@ -1161,15 +1160,14 @@
       },
       "reasons": {
         "keywordOnly": "仅使用关键词搜索,因此该数据源也不做嵌入。",
-        "obsidianIncompatible": "qmd(obsidian)只能使用自带的 GGUF 模型,因此无法使用其他嵌入服务器。",
-        "obsidianPropagated": "为 qmd 子进程设置 QMD_EMBED_MODEL,并用 `qmd embed -f` 重新索引。",
         "discordPropagated": "为新服务器重写由 Dazzi 管理的 discrawl 配置,并用 `discrawl embed --rebuild` 重新索引。",
         "clawgalleryNotApplicable": "ClawGallery 是图像(VDR)索引，不使用文本嵌入。",
         "larkNotApplicable": "Lark 仅使用远程 API 搜索，拒绝本地嵌入。",
         "defaultNotApplicable": "此数据源使用自己的关键词/解析索引，不使用全局嵌入器。",
         "mailcrawlSharedEmbedder": "mailcrawl 使用与 Dazzi 相同的嵌入服务器。模型更改后，会在下一次索引时自动重建。",
         "sidecarSharedEmbedder": "聊天存档之上的只读 sidecar 使用共享嵌入器为消息生成嵌入;更改嵌入器后会在下一次同步时重新嵌入。",
-        "githubGistSharedEmbedder": "GitHub Gist 向量索引使用共享嵌入器;更改嵌入器后会在下一次同步时重新嵌入。"
+        "githubGistSharedEmbedder": "GitHub Gist 向量索引使用共享嵌入器;更改嵌入器后会在下一次同步时重新嵌入。",
+        "obsidianSharedEmbedder": "Obsidian 保管库直接沿用所选的嵌入模型(MinSync 在保管库专用的工作区中建立索引)。"
       },
       "actions": {
         "discordConfig": "由 datasources.<id> 管理的 discrawl config.toml"
@@ -1199,6 +1197,20 @@
         "stalled": "{{file}} 的下载已停滞。请检查网络连接后重试。",
         "network": "无法下载 {{file}}:{{message}}",
         "cancelled": "下载已取消。已下载的部分会保留,可从中断处继续。"
+      }
+    },
+    "mcp": {
+      "errors": {
+        "invalidField": "\"{{field}}\" 的值无效。",
+        "invalidName": "服务器名称只能使用字母、数字、\"_\" 和 \"-\"。",
+        "notObject": "服务器条目必须是对象。",
+        "sseUnsupported": "不支持旧的 SSE 传输方式，请使用流式 HTTP 地址。",
+        "badUrl": "地址必须是 http 或 https URL。",
+        "needsTransport": "需要提供运行命令(command)或地址(url)之一。",
+        "unreadable": "无法使用 {{path}}：{{reason}}",
+        "serversNotObject": "\"mcpServers\" 必须是对象。",
+        "duplicate": "已存在名为 \"{{name}}\" 的服务器。",
+        "unknownServer": "找不到名为 \"{{name}}\" 的服务器。"
       }
     }
   },
@@ -1502,8 +1514,10 @@
         "scope": "搜索范围 文件夹 排除 路径",
         "reading": "文档读取 语言 解析器 OCR",
         "duplicates": "重复文件 版本 整理 dupey",
-        "apps": "连接 应用 数据源 即时通讯 邮件 云盘"
-      }
+        "apps": "连接 应用 数据源 即时通讯 邮件 云盘",
+        "mcp": "mcp 服务器 工具 连接 扩展 外部工具 codemode 智能体"
+      },
+      "mcp": "MCP 服务器"
     },
     "view": {
       "navAria": "设置导航",
@@ -1746,8 +1760,6 @@
       "hint": "分析文档含义。选择本机时,文档不会离开本机。",
       "body": "选择分析文档含义的嵌入模型在哪里运行。模型固定为 Qwen3 Embedding 0.6B,任何会将文档内容发送到本机之外的选择都需要您同意。",
       "dimension": "{{count}} 维",
-      "incompatibleNote": "有 {{count}} 个数据源与此配置不兼容。继续将保留这些源不变，仅更改其余部分。",
-      "acknowledge": "同时对不兼容的源应用",
       "applied": "已应用。",
       "notApplied": "未应用。",
       "written": "记录了 config {{count}} 个条目",
@@ -1779,6 +1791,62 @@
     "chips": {
       "add": "+ 添加",
       "remove": "移除 {{item}}"
+    },
+    "mcp": {
+      "title": "MCP 服务器",
+      "desc": "连接外部 MCP 服务器后，搜索和对话即可使用它们的工具。",
+      "listTitle": "已连接的服务器",
+      "listDesc": "服务器会在搜索或对话开始时连接。更改从下一次搜索起生效。",
+      "add": "添加服务器",
+      "empty": "尚未连接任何 MCP 服务器。",
+      "file": "配置文件：{{path}}",
+      "transportStdio": "运行命令",
+      "transportHttp": "HTTP",
+      "transportUnknown": "未知",
+      "on": "使用中",
+      "off": "已关闭",
+      "problem": "问题",
+      "edit": "编辑",
+      "remove": "删除",
+      "enabledAria": "使用 {{name}}",
+      "exposureLabel": "工具提供方式",
+      "exposure": {
+        "codemode": "通过脚本调用",
+        "deferred": "按需加载",
+        "direct": "直接提供给模型",
+        "hidden": "隐藏"
+      },
+      "exposureHint": {
+        "codemode": "模型通过简短脚本调用工具(默认)。",
+        "deferred": "仅将通过 tool_search 找到的工具提供给模型。",
+        "direct": "像内置工具一样把全部工具提供给模型。",
+        "hidden": "无法访问这些工具。"
+      },
+      "trust": "MCP 服务器会在这台电脑上运行命令或连接外部服务。请只添加你信任的服务器。服务器返回的内容只会被当作数据，而不是指令。",
+      "fileError": "无法读取 MCP 配置文件，因此不会做任何修改。请修复文件后重新打开此页面。",
+      "modal": {
+        "addTitle": "添加 MCP 服务器",
+        "editTitle": "编辑 MCP 服务器",
+        "name": "名称",
+        "namePlaceholder": "例如：filesystem",
+        "kind": "连接方式",
+        "kindStdio": "运行命令(stdio)",
+        "kindHttp": "HTTP 地址",
+        "command": "命令",
+        "commandPlaceholder": "npx",
+        "args": "参数(每行一个)",
+        "url": "地址",
+        "urlPlaceholder": "https://example.com/mcp",
+        "headers": "请求头(每行一个，名称: 值)",
+        "env": "环境变量(每行一个，名称=值)",
+        "envHint": "值中可以用 ${NAME} 引用环境变量。",
+        "description": "说明(让模型知道何时使用)",
+        "save": "保存",
+        "advanced": "此条目包含应用无法编辑的设置，会原样保留。",
+        "badLine": "无法读取这一行：\"{{line}}\"。",
+        "removeTitle": "删除 \"{{name}}\"？",
+        "removeBody": "该服务器会从配置文件中删除。服务器自己保存的数据不受影响。"
+      }
     }
   },
   "settingsSources": {
@@ -1823,7 +1891,7 @@
         "summary": "从 mailcrawl 存档中搜索邮件。"
       },
       "obsidian": {
-        "summary": "使用 qmd 搜索 Obsidian 库。"
+        "summary": "通过 MinSync 搜索 Obsidian 保管库。"
       },
       "rss": {
         "summary": "轮询并索引 RSS 2.0 / Atom 订阅源。"
@@ -1856,7 +1924,7 @@
       "cloudDrive": "Cloud Drive (rclone)",
       "mailExport": "Mail Export",
       "mail": "Mail",
-      "obsidian": "Obsidian (qmd)",
+      "obsidian": "Obsidian",
       "rss": "RSS / News",
       "hister": "Hister (浏览器历史记录)",
       "calendar": "Apple 日历与提醒事项 (EventKit MCP)",
@@ -1918,7 +1986,6 @@
       "source": "源",
       "fixture": "测试数据",
       "himalayaConfig": "himalaya 配置",
-      "qmdBinaryPath": "qmd 可执行文件路径",
       "feeds": "订阅源",
       "maxItemsPerFeed": "每订阅源最大条目",
       "queries": "查询",

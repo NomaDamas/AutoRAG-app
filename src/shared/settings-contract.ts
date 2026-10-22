@@ -40,6 +40,9 @@ export const SETTINGS_CHANNELS = {
 	embeddingGet: "embedding:get",
 	embeddingPlan: "embedding:plan",
 	embeddingApply: "embedding:apply",
+	mcpGet: "mcp:get",
+	mcpUpsert: "mcp:upsert",
+	mcpRemove: "mcp:remove",
 	sourcesSync: "sources:sync",
 	refreshScheduleGet: "refreshSchedule:get",
 	refreshScheduleApply: "refreshSchedule:apply",
@@ -361,7 +364,7 @@ export interface EmbeddingProfile {
 }
 
 /** How one configured datasource adopts the selected global embedding profile. */
-export type EmbeddingAdoption = "native" | "propagated" | "incompatible" | "not-applicable" | "not-configured";
+export type EmbeddingAdoption = "native" | "propagated" | "not-applicable" | "not-configured";
 
 export interface EmbeddingSourceStatus {
 	readonly id: string;
@@ -397,7 +400,6 @@ export interface ByokEmbeddingServer {
 export interface EmbeddingChangeRequest {
 	readonly profileId: string;
 	readonly byok?: ByokEmbeddingServer;
-	readonly acknowledgeIncompatible?: boolean;
 	/** The user agreed that document text is sent to a server off this computer (`dazzi`, `byok`). */
 	readonly acknowledgeRemote?: boolean;
 }
@@ -407,10 +409,38 @@ export interface EmbeddingChangeResult {
 	readonly applied: boolean;
 	readonly profileId: string;
 	readonly plan: readonly EmbeddingSourceStatus[];
-	readonly incompatibilities: readonly EmbeddingSourceStatus[];
 	readonly written: readonly (readonly string[])[];
 	readonly rebuilds: readonly DataSourceSyncResult[];
 	readonly error: string | null;
+}
+
+/** How a server's tools reach the model (pi's `exposure`): through `codemode` scripts, on demand, declared directly, or not at all. */
+export type McpExposure = "codemode" | "deferred" | "direct" | "hidden";
+
+export interface McpServerRow {
+	readonly name: string;
+	/** The entry as stored, including keys this app does not edit (`oauth`, `toolExposure`, …). */
+	readonly config: JsonObject;
+	readonly transport: "stdio" | "http" | "unknown";
+	readonly enabled: boolean;
+	readonly exposure: McpExposure;
+	/** Why pi would reject this entry at session start; null when it is valid. */
+	readonly problem: string | null;
+}
+
+export interface McpSnapshot {
+	readonly path: string;
+	readonly exists: boolean;
+	/** Set when the file exists but cannot be used; `servers` is then empty and nothing is written until it is fixed. */
+	readonly error: string | null;
+	readonly servers: readonly McpServerRow[];
+}
+
+export interface McpServerInput {
+	readonly name: string;
+	readonly config: JsonObject;
+	/** The name of the server being edited; omitted when adding. */
+	readonly replaces?: string;
 }
 
 /** Outcome of syncing one datasource against its own index. */
@@ -541,4 +571,10 @@ export interface SettingsBridge {
 	refreshScheduleGet(): Promise<RefreshScheduleStatus>;
 	/** Make the OS job match the config (install, re-time, or remove) and return the fresh status. */
 	refreshScheduleApply(): Promise<RefreshScheduleStatus>;
+
+	/** The MCP servers in the agent's `mcp.json`, or why the file cannot be read. */
+	mcpGet(): Promise<McpSnapshot>;
+	/** Adds a server (no `replaces`) or edits/renames one (`replaces` is its current name); the whole entry is validated first. */
+	mcpUpsert(input: McpServerInput): Promise<McpSnapshot>;
+	mcpRemove(name: string): Promise<McpSnapshot>;
  }

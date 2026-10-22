@@ -11,7 +11,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import type { LocaleKey } from "../../../shared/i18n/core";
-import { Copy, CreditCard, FileText, Folder, Globe, Plug, RefreshCw, Search, Settings, Sparkles, User, type LucideIcon } from "lucide-react";
+import { Copy, CreditCard, FileText, Folder, Globe, Plug, RefreshCw, Search, Server, Settings, Sparkles, User, type LucideIcon } from "lucide-react";
 import type { AppSettings, AutoRagConfigSnapshot, DataSourcesSnapshot } from "../../../shared/settings-contract";
 import { isJsonObject } from "../../../shared/settings-contract";
 import { AccountPage, PlanPage } from "./settings/AccountPlanPages";
@@ -19,6 +19,7 @@ import { AiPage } from "./settings/AiPage";
 import { AppsPage, IndexingPage, SourceDetailPage } from "./settings/AppsPages";
 import { DuplicatesPage, ReadingPage, ScopePage, WebPage } from "./settings/ConfigPages";
 import { GeneralPage } from "./settings/GeneralPage";
+import { McpPage } from "./settings/McpPage";
 import { TEMPLATE_BY_ID } from "./settings/datasourceTemplates";
 import { SourceIcon } from "./settings/SourceIcon";
 import { settings } from "../settings-runtime";
@@ -26,7 +27,7 @@ import { attachSettingsNavigation } from "../state/settings-navigation";
 
 const autorag = { settings };
 
-export type StaticSettingsCategory = "account" | "plan" | "general" | "ai" | "web" | "indexing" | "scope" | "reading" | "duplicates" | "apps";
+export type StaticSettingsCategory = "account" | "plan" | "general" | "ai" | "web" | "mcp" | "indexing" | "scope" | "reading" | "duplicates" | "apps";
 /** Legacy ids stay accepted so an old deep link still lands on a page. */
 type LegacyCategory = "llm" | "embedding" | "reranker" | "sources" | "deep" | "light";
 export type SettingsCategory = StaticSettingsCategory | LegacyCategory | `source:${string}`;
@@ -41,6 +42,7 @@ type NavLabelKey =
 	| "settingsCore.nav.scope"
 	| "settingsCore.nav.reading"
 	| "settingsCore.nav.duplicates"
+	| "settingsCore.nav.mcp"
 	| "settingsCore.nav.apps";
 
 type NavGroupKey =
@@ -72,6 +74,7 @@ const PAGES = [
 	{ id: "scope", labelKey: "settingsCore.nav.scope", icon: Folder, groupKey: "settingsCore.nav.group.search", keywordsKey: "settingsCore.nav.keywords.scope" },
 	{ id: "reading", labelKey: "settingsCore.nav.reading", icon: FileText, groupKey: "settingsCore.nav.group.search", keywordsKey: "settingsCore.nav.keywords.reading" },
 	{ id: "duplicates", labelKey: "settingsCore.nav.duplicates", icon: Copy, groupKey: "settingsCore.nav.group.search", keywordsKey: "settingsCore.nav.keywords.duplicates" },
+	{ id: "mcp", labelKey: "settingsCore.nav.mcp", icon: Server, groupKey: "settingsCore.nav.group.ai", keywordsKey: "settingsCore.nav.keywords.mcp" },
 	{ id: "apps", labelKey: "settingsCore.nav.apps", icon: Plug, groupKey: GROUP_APPS, keywordsKey: "settingsCore.nav.keywords.apps" },
 ] as const satisfies readonly PageMeta[];
 
@@ -226,6 +229,8 @@ export function SettingsView({ initialCategory = "general", onSettingsChanged }:
 						onDupeyInterval={(minutes) => void autorag.settings.set({ dupeyScanIntervalMinutes: minutes }).then((next) => { setAppSettings(next); onSettingsChanged?.(next); })}
 					/>
 				);
+			case "mcp":
+				return <McpPage />;
 			default:
 				return <AppsPage snapshot={snapshot} onSaved={saveSnapshot} sources={sources} onOpenSource={(alias) => setCategory(`source:${alias}`)} />;
 		}

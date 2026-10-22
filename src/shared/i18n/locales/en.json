@@ -1150,7 +1150,6 @@
         "badJson": "Could not read the embedding server response as JSON.",
         "noVector": "The embedding server did not return a vector.",
         "dimensionMismatch": "The embedding server dimension is {{actual}}, but {{expected}} was specified.",
-        "incompatibleSources": "Some data sources cannot follow this model: {{ids}}",
         "serverRequired": "A server address is required.",
         "badProtocol": "The server type must be OpenAI or TEI.",
         "unauthorized": "The server rejected the credentials (HTTP {{status}}). Check the API key.",
@@ -1161,15 +1160,14 @@
       },
       "reasons": {
         "keywordOnly": "Keyword search only: this source is not embedded either.",
-        "obsidianIncompatible": "qmd (obsidian) runs its own GGUF model only, so it cannot use another embedding server.",
-        "obsidianPropagated": "Sets QMD_EMBED_MODEL on the qmd child process and re-indexes with `qmd embed -f`.",
         "discordPropagated": "Rewrites the Dazzi-managed discrawl config for the new server and re-indexes with `discrawl embed --rebuild`.",
         "clawgalleryNotApplicable": "ClawGallery is an image (VDR) index and does not use text embeddings.",
         "larkNotApplicable": "Lark uses only remote API search and refuses local embeddings.",
         "defaultNotApplicable": "This data source uses its own keyword/parse index and does not use the global embedder.",
         "mailcrawlSharedEmbedder": "mailcrawl uses the same embedding server as Dazzi. When the model changes it re-indexes on the next index run.",
         "sidecarSharedEmbedder": "The read-only sidecar over the chat archive embeds messages with the shared embedder; changing the embedder re-embeds them on the next sync.",
-        "githubGistSharedEmbedder": "The GitHub Gist vector index uses the shared embedder; changing the embedder re-embeds it on the next sync."
+        "githubGistSharedEmbedder": "The GitHub Gist vector index uses the shared embedder; changing the embedder re-embeds it on the next sync.",
+        "obsidianSharedEmbedder": "An Obsidian vault follows the selected embedding model (MinSync indexes it in a workspace of its own)."
       },
       "actions": {
         "discordConfig": "discrawl config.toml managed by datasources.<id>"
@@ -1199,6 +1197,20 @@
         "stalled": "The download of {{file}} stalled. Check your network connection and try again.",
         "network": "Could not download {{file}}: {{message}}",
         "cancelled": "The download was cancelled. What was downloaded is kept, so it can continue where it stopped."
+      }
+    },
+    "mcp": {
+      "errors": {
+        "invalidField": "\"{{field}}\" is not valid.",
+        "invalidName": "A server name may only use letters, digits, \"_\" and \"-\".",
+        "notObject": "A server entry must be an object.",
+        "sseUnsupported": "The legacy SSE transport is not supported; use the streamable HTTP URL.",
+        "badUrl": "The URL must be an http or https URL.",
+        "needsTransport": "A server needs either a command (stdio) or a url (HTTP).",
+        "unreadable": "{{path}} cannot be used: {{reason}}",
+        "serversNotObject": "\"mcpServers\" must be an object.",
+        "duplicate": "A server named \"{{name}}\" already exists.",
+        "unknownServer": "No server named \"{{name}}\"."
       }
     }
   },
@@ -1502,8 +1514,10 @@
         "scope": "search scope folders exclude paths",
         "reading": "document reading language parser OCR",
         "duplicates": "duplicate files versions cleanup dupey",
-        "apps": "connections apps data sources messenger mail cloud"
-      }
+        "apps": "connections apps data sources messenger mail cloud",
+        "mcp": "mcp server tools connect extension external tools codemode agent"
+      },
+      "mcp": "MCP Servers"
     },
     "view": {
       "navAria": "Settings navigation",
@@ -1746,8 +1760,6 @@
       "hint": "Analyzes the meaning of documents. If you pick this computer, documents never leave it.",
       "body": "Choose where the embedding model that analyzes document meaning runs. The model is fixed to Qwen3 Embedding 0.6B, and any choice that sends document text off this computer needs your consent.",
       "dimension": "{{count}}d",
-      "incompatibleNote": "{{count}} data sources are incompatible with this profile. If you continue, those sources stay as they are and only the rest change.",
-      "acknowledge": "Also apply to incompatible sources",
       "applied": "Applied.",
       "notApplied": "Not applied.",
       "written": "config {{count}} entries recorded",
@@ -1779,6 +1791,62 @@
     "chips": {
       "add": "+ Add",
       "remove": "Remove {{item}}"
+    },
+    "mcp": {
+      "title": "MCP Servers",
+      "desc": "Connect external MCP servers so searches and chats can use their tools.",
+      "listTitle": "Connected servers",
+      "listDesc": "Servers connect when a search or chat starts. Changes apply from the next search.",
+      "add": "Add server",
+      "empty": "No MCP servers connected yet.",
+      "file": "Config file: {{path}}",
+      "transportStdio": "Command",
+      "transportHttp": "HTTP",
+      "transportUnknown": "Unknown",
+      "on": "In use",
+      "off": "Off",
+      "problem": "Problem",
+      "edit": "Edit",
+      "remove": "Remove",
+      "enabledAria": "Use {{name}}",
+      "exposureLabel": "How tools are offered",
+      "exposure": {
+        "codemode": "Called from scripts",
+        "deferred": "Loaded on demand",
+        "direct": "Offered to the model",
+        "hidden": "Hidden"
+      },
+      "exposureHint": {
+        "codemode": "The model calls the tools from a short script (default).",
+        "deferred": "Only tools found with tool_search are offered to the model.",
+        "direct": "Every tool is offered to the model like a built-in tool.",
+        "hidden": "The tools cannot be reached."
+      },
+      "trust": "An MCP server runs commands on this computer or connects to an outside service. Add only servers you trust. What a server returns is treated as data, never as instructions.",
+      "fileError": "The MCP config file cannot be read, so nothing will be changed. Fix the file and reopen this page.",
+      "modal": {
+        "addTitle": "Add MCP server",
+        "editTitle": "Edit MCP server",
+        "name": "Name",
+        "namePlaceholder": "e.g. filesystem",
+        "kind": "Connection",
+        "kindStdio": "Run a command (stdio)",
+        "kindHttp": "HTTP URL",
+        "command": "Command",
+        "commandPlaceholder": "npx",
+        "args": "Arguments (one per line)",
+        "url": "URL",
+        "urlPlaceholder": "https://example.com/mcp",
+        "headers": "Headers (one per line, Name: value)",
+        "env": "Environment (one per line, NAME=value)",
+        "envHint": "Values may reference environment variables as ${NAME}.",
+        "description": "Description (so the model knows when to use it)",
+        "save": "Save",
+        "advanced": "This entry has settings the app does not edit; they are kept as they are.",
+        "badLine": "Cannot read the line \"{{line}}\".",
+        "removeTitle": "Remove \"{{name}}\"?",
+        "removeBody": "The server is deleted from the config file. Data the server stored is left alone."
+      }
     }
   },
   "settingsSources": {
@@ -1823,7 +1891,7 @@
         "summary": "Search mail from the mailcrawl archive."
       },
       "obsidian": {
-        "summary": "Search an Obsidian vault with qmd."
+        "summary": "Search an Obsidian vault, indexed by MinSync."
       },
       "rss": {
         "summary": "Index RSS 2.0 / Atom feeds by polling."
@@ -1856,7 +1924,7 @@
       "cloudDrive": "Cloud Drive (rclone)",
       "mailExport": "Mail Export",
       "mail": "Mail",
-      "obsidian": "Obsidian (qmd)",
+      "obsidian": "Obsidian",
       "rss": "RSS / News",
       "hister": "Hister (Browser history)",
       "calendar": "Apple Calendar & Reminders (EventKit MCP)",
@@ -1918,7 +1986,6 @@
       "source": "Source",
       "fixture": "Fixture",
       "himalayaConfig": "himalaya config",
-      "qmdBinaryPath": "qmd executable path",
       "feeds": "Feeds",
       "maxItemsPerFeed": "Max items per feed",
       "queries": "Queries",

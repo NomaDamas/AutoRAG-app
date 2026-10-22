@@ -4,7 +4,7 @@
  * Drives the global corpus embedder through the embedding bridge:
  * `embeddingGet` reads the current profile and each source's adoption,
  * `embeddingPlan` dry-runs a profile change (no writes, no reindex) so the
- * screen can show incompatibilities before committing, and `embeddingApply`
+ * screen can show how each source follows it before committing, and `embeddingApply`
  * writes the shared config and reports the rebuilds/reindex results.
  */
 
@@ -19,10 +19,8 @@ import type { Translate } from "../../onboarding/flow";
 
 const settings = window.autorag.settings;
 
-function adoptionTone(adoption: EmbeddingSourceStatus["adoption"]): "ok" | "warn" | "off" {
-	if (adoption === "incompatible") return "warn";
-	if (adoption === "not-configured" || adoption === "not-applicable") return "off";
-	return "ok";
+function adoptionTone(adoption: EmbeddingSourceStatus["adoption"]): "ok" | "off" {
+	return adoption === "not-configured" || adoption === "not-applicable" ? "off" : "ok";
 }
 
 interface ByokFields {
@@ -43,10 +41,9 @@ function sendsOffComputer(profileId: string, byok: ByokFields): boolean {
 }
 
 /** Build the apply/plan request. The model is fixed, so the user's own server is only an address, a type and a key. */
-function buildRequest(profileId: string, byok: ByokFields, acknowledgeIncompatible: boolean, acknowledgeRemote: boolean): EmbeddingChangeRequest {
+function buildRequest(profileId: string, byok: ByokFields, acknowledgeRemote: boolean): EmbeddingChangeRequest {
 	return {
 		profileId,
-		...(acknowledgeIncompatible ? { acknowledgeIncompatible: true } : {}),
 		...(acknowledgeRemote ? { acknowledgeRemote: true } : {}),
 		...(profileId === "byok" ? { byok: { baseUrl: byok.baseUrl.trim(), protocol: byok.protocol, ...(byok.apiKey.length > 0 ? { apiKey: byok.apiKey } : {}) } } : {}),
 	};
@@ -60,7 +57,6 @@ export function EmbeddingPicker(): ReactElement {
 	const [profileId, setProfileId] = useState<string>("");
 	const [planned, setPlanned] = useState<EmbeddingSettingsSnapshot | null>(null);
 	const [result, setResult] = useState<EmbeddingChangeResult | null>(null);
-	const [acknowledge, setAcknowledge] = useState(false);
 	const [consent, setConsent] = useState(false);
 	const [busy, setBusy] = useState(false);
 	const [byok, setByok] = useState<ByokFields>({ baseUrl: "", protocol: "openai", apiKey: "" });
@@ -90,7 +86,6 @@ export function EmbeddingPicker(): ReactElement {
 		setProfileId(current ?? profiles[0]?.id ?? "");
 		setPlanned(null);
 		setResult(null);
-		setAcknowledge(false);
 		setConsent(false);
 		setError(null);
 		const stored = state?.current.embedder;
@@ -101,7 +96,7 @@ export function EmbeddingPicker(): ReactElement {
 	}
 
 	async function preview(): Promise<void> {
-		const request = buildRequest(profileId, byok, acknowledge, consent);
+		const request = buildRequest(profileId, byok, consent);
 		setBusy(true);
 		setError(null);
 		try {
@@ -114,7 +109,7 @@ export function EmbeddingPicker(): ReactElement {
 	}
 
 	async function apply(): Promise<void> {
-		const request = buildRequest(profileId, byok, acknowledge, consent);
+		const request = buildRequest(profileId, byok, consent);
 		setBusy(true);
 		setError(null);
 		try {
@@ -133,7 +128,6 @@ export function EmbeddingPicker(): ReactElement {
 	}
 
 	const previewSources = planned?.sources ?? [];
-	const incompatible = previewSources.filter((source) => source.adoption === "incompatible");
 	const needsConsent = sendsOffComputer(profileId, byok);
 	const needsModel = localModelNeeded(profileId, modelDownload.status);
 	const applyBlocked = busy || profileId.length === 0 || result?.applied === true || (needsConsent && !consent) || (profileId === "byok" && byok.baseUrl.trim().length === 0) || needsModel;
@@ -219,15 +213,6 @@ export function EmbeddingPicker(): ReactElement {
 								</div>
 							))}
 						</div>
-					) : null}
-					{incompatible.length > 0 ? (
-						<>
-							<Note>{t("settingsCore.embedding.incompatibleNote", { count: incompatible.length })}</Note>
-							<label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
-								<input type="checkbox" checked={acknowledge} onChange={(event) => setAcknowledge(event.target.checked)} style={{ width: "auto", margin: 0 }} />
-								{t("settingsCore.embedding.acknowledge")}
-							</label>
-						</>
 					) : null}
 					{result !== null ? (
 						<div className="settings-note" style={{ marginTop: 12 }}>
