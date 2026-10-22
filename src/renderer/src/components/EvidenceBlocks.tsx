@@ -17,6 +17,7 @@ import { webUrl } from "../../../shared/fs-contract";
 import { isImageOnlyLine, parseAnswerBlocks, parseInline, type AnswerBlock, type InlineSegment } from "../state/answer-markdown";
 import { splitExcerpt, type ExcerptPart } from "../state/excerpt-format";
 import { ImageRow, lineImages, type ImageActions } from "./AnswerImage";
+import { PipeTable, TABLE, TABLE_WRAP } from "./PipeTable";
 
 /** Where an excerpt came from, for resolving and opening its images. */
 export interface ExcerptImages {
@@ -25,10 +26,6 @@ export interface ExcerptImages {
 	readonly actions: ImageActions;
 }
 
-/** Narrow-column table: scrolls sideways instead of crushing its columns. */
-const TABLE_WRAP = "evidence__table-wrap max-w-full overflow-x-auto rounded-6 border border-border bg-window";
-const TABLE =
-	"min-w-full border-collapse text-badge leading-[1.45] text-ink-body break-keep [overflow-wrap:anywhere] [&_td]:min-w-[64px] [&_th]:min-w-[64px] [&_td]:align-top [&_th]:align-top [&_td]:py-4 [&_th]:py-4 [&_td]:px-8 [&_th]:px-8 [&_td]:border-b [&_th]:border-b [&_td]:border-r [&_th]:border-r [&_td]:border-border [&_th]:border-border [&_td:last-child]:border-r-0 [&_th:last-child]:border-r-0 [&_tr:last-child>td]:border-b-0 [&_th]:bg-code [&_th]:font-semibold [&_th]:text-ink [&_th]:text-left [&_strong]:text-ink [&_strong]:font-semibold";
 /** Flow content of chunk HTML, sized like the markdown blocks around it. */
 const HTML_FLOW =
 	"evidence__block evidence__block--html flex flex-col gap-6 min-w-0 text-caption leading-read text-ink-body text-pretty [&_p]:m-0 [&_h1]:m-0 [&_h2]:m-0 [&_h3]:m-0 [&_h4]:m-0 [&_h5]:m-0 [&_h6]:m-0 [&_h1]:text-body [&_h2]:text-body [&_h3]:text-body [&_h1]:font-semibold [&_h2]:font-semibold [&_h3]:font-semibold [&_h4]:font-semibold [&_h1]:text-ink [&_h2]:text-ink [&_h3]:text-ink [&_ul]:m-0 [&_ol]:m-0 [&_ul]:pl-18 [&_ol]:pl-18 [&_ul]:list-disc [&_ol]:list-decimal [&_blockquote]:m-0 [&_blockquote]:pl-10 [&_blockquote]:text-ink-muted [&_blockquote]:shadow-[inset_2px_0_0_var(--border)] [&_pre]:m-0 [&_pre]:py-8 [&_pre]:px-10 [&_pre]:rounded-6 [&_pre]:bg-code [&_pre]:border [&_pre]:border-border [&_pre]:overflow-auto [&_pre]:font-mono [&_pre]:text-badge [&_code]:font-mono [&_code]:text-badge [&_a[href]]:text-accent-text [&_a[href]]:underline [&_a[href]]:cursor-pointer [&_img]:max-w-full [&_img]:rounded-6 [&_hr]:border-0 [&_hr]:h-px [&_hr]:bg-border [&_strong]:text-ink [&_strong]:font-semibold [&_b]:text-ink [&_b]:font-semibold";
@@ -50,34 +47,7 @@ function ExcerptPartView({ part, images }: { readonly part: ExcerptPart; readonl
 		case "html":
 			return <HtmlPart html={part.html} images={images} />;
 		case "table":
-			return (
-				<div className={`evidence__block evidence__block--table ${TABLE_WRAP}`}>
-					<table className={TABLE}>
-						{part.header === null ? null : (
-							<thead>
-								<tr>
-									{part.header.map((cell, column) => (
-										<th key={`${column}`} style={{ textAlign: part.align[column] ?? "left" }}>
-											<TableCell text={cell} />
-										</th>
-									))}
-								</tr>
-							</thead>
-						)}
-						<tbody>
-							{part.rows.map((row, line) => (
-								<tr key={`${line}`}>
-									{row.map((cell, column) => (
-										<td key={`${column}`} style={part.align[column] == null ? undefined : { textAlign: part.align[column] }}>
-											<TableCell text={cell} />
-										</td>
-									))}
-								</tr>
-							))}
-						</tbody>
-					</table>
-				</div>
-			);
+			return <PipeTable table={part} renderLine={(line) => renderInline(parseInline(line))} wrapClassName="evidence__block evidence__block--table" />;
 		default:
 			return (
 				<>
@@ -87,20 +57,6 @@ function ExcerptPartView({ part, images }: { readonly part: ExcerptPart; readonl
 				</>
 			);
 	}
-}
-
-/** A pipe-table cell: inline markdown, with the `<br>` a parser writes for an in-cell line break. */
-function TableCell({ text }: { readonly text: string }): ReactElement {
-	return (
-		<>
-			{text.split(/<br\s*\/?>/iu).map((line, index) => (
-				<span key={`${index}`}>
-					{index === 0 ? null : <br />}
-					{renderInline(parseInline(line))}
-				</span>
-			))}
-		</>
-	);
 }
 
 /**
@@ -180,6 +136,8 @@ function EvidenceBlock({ block, images }: { readonly block: AnswerBlock; readonl
 			return <InlineWithImages text={block.text} images={images} className="evidence__block evidence__block--quote text-caption leading-read text-ink-muted pl-10 shadow-[inset_2px_0_0_var(--border)] [&_strong]:text-ink [&_strong]:font-semibold" />;
 		case "code":
 			return <pre className="evidence__block evidence__block--code m-0 font-mono text-badge leading-read text-ink-body py-8 px-10 rounded-6 bg-code border border-border overflow-auto whitespace-pre [&_strong]:text-ink [&_strong]:font-semibold">{block.text}</pre>;
+		case "table":
+			return <PipeTable table={block} renderLine={(line) => renderInline(parseInline(line))} wrapClassName="evidence__block evidence__block--table" />;
 		default:
 			return <InlineWithImages text={block.text} images={images} className="evidence__block evidence__block--paragraph text-caption leading-read text-ink-body text-pretty [&_strong]:text-ink [&_strong]:font-semibold" />;
 	}
