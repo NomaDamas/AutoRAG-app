@@ -399,6 +399,44 @@ export const TEMPLATES: readonly TemplateMeta[] = [
 		],
 	},
 	{
+		id: "hister",
+		label: "Hister",
+		binary: "hister",
+		summary: "settingsSources.templates.hister.summary",
+		channels: "none",
+		polling: false,
+		groups: [
+			{
+				title: "settingsSources.groups.hister",
+				fields: [
+					{ key: "baseUrl", label: "settingsSources.fields.baseUrl", kind: "text", placeholder: "http://127.0.0.1:4433" },
+					{ key: "tokenEnv", label: "settingsSources.fields.tokenEnv", kind: "text", placeholder: "HISTER_TOKEN", hint: "settingsSources.fields.hint.tokenEnv" },
+					{ key: "semantic", label: "settingsSources.fields.semantic", kind: "boolean", defaultValue: false, hint: "settingsSources.fields.hint.histerSemantic" },
+					{ key: "timeoutMs", label: "settingsSources.fields.timeoutMs", kind: "number" },
+				],
+			},
+		],
+	},
+	{
+		id: "calendar",
+		label: "Apple Calendar & Reminders",
+		binary: "npx",
+		summary: "settingsSources.templates.calendar.summary",
+		channels: "none",
+		polling: false,
+		groups: [
+			{
+				title: "settingsSources.groups.calendar",
+				fields: [
+					{ key: "requireWriteConfirmation", label: "settingsSources.fields.requireWriteConfirmation", kind: "boolean", defaultValue: true, hint: "settingsSources.fields.hint.requireWriteConfirmation" },
+					{ key: "exposure", label: "settingsSources.fields.mcpExposure", kind: "select", options: ["codemode", "direct", "deferred", "hidden"], hint: "settingsSources.fields.hint.mcpExposure" },
+					{ key: "command", label: "settingsSources.fields.command", kind: "text", placeholder: "npx", hint: "settingsSources.fields.hint.calendarCommand" },
+					{ key: "args", label: "settingsSources.fields.args", kind: "stringList", placeholder: "-y" },
+				],
+			},
+		],
+	},
+	{
 		id: "spotlight",
 		label: "Spotlight",
 		binary: "mdfind",

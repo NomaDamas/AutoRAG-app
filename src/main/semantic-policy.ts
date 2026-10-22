@@ -1,7 +1,6 @@
 import {
 	DiscrawlClient,
 	MailcrawlClient,
-	QmdClient,
 	type CliConfig,
 	type RefreshMethod,
 	type RetrievalMethod,
@@ -54,7 +53,7 @@ function entryWithoutSemantic(alias: string, entry: unknown): unknown {
 	}
 	if (template === "discord") return { ...entry, connector: { ...connector, defaultMode: "fts" } };
 	// The librarian maps `connector.semantic: false` to the gist skill's own switch (AutoRAG#1936): no vector index, no semantic method.
-	if (template === "github-gist") return { ...entry, connector: { ...connector, semantic: false } };
+	if (template === "github-gist" || template === "hister") return { ...entry, connector: { ...connector, semantic: false } };
 	if (template === "clawgallery") return { ...entry, connector: { ...connector, syncVisual: false } };
 	return entry;
 }
@@ -93,13 +92,12 @@ const NO_OUTPUT = { stdout: "", stderr: "", code: 0 } as const;
 
 /**
  * The embedding steps the librarian runs unconditionally while indexing a
- * datasource: mailcrawl's `index`, qmd's `embed` (obsidian), discrawl's `embed`.
+ * datasource: mailcrawl's `index` and discrawl's `embed`.
  * Each becomes a successful no-op; the sync/update steps next to them still run.
  */
 function replacementSteps(): readonly { readonly owner: object; readonly key: string; readonly stub: unknown }[] {
 	return [
 		{ owner: MailcrawlClient.prototype, key: "index", stub: async () => ({ ok: true, data: { embedded: 0, reused: 0 }, ...NO_OUTPUT }) },
-		{ owner: QmdClient.prototype, key: "embed", stub: async () => ({ ok: true, data: { embedded: false }, ...NO_OUTPUT }) },
 		{
 			owner: DiscrawlClient.prototype,
 			key: "embed",

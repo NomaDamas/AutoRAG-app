@@ -1,5 +1,6 @@
 import type { CliConfig } from "@autorag/librarian/core";
 import { isJsonObject } from "../shared/settings-contract";
+import { isCalendarDatasourceEntry } from "./calendar-mcp";
 
 /**
  * Indexing features the app never runs, pinned off in every config it hands to
@@ -44,7 +45,11 @@ export function withIndexingPoliciesApplied(config: CliConfig): CliConfig {
 	const datasources =
 		config.datasources === undefined
 			? undefined
-			: Object.fromEntries(Object.entries(config.datasources).map(([id, entry]) => [id, withConnectorOcrDisabled(entry)]));
+			: Object.fromEntries(
+					Object.entries(config.datasources)
+						.filter(([id, entry]) => !isCalendarDatasourceEntry(id, entry))
+						.map(([id, entry]) => [id, withConnectorOcrDisabled(entry)]),
+				);
 	const jikji = withMediaIndexDisabled(config.jikji);
 	return {
 		...config,

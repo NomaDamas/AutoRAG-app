@@ -48,7 +48,7 @@ const GALLERY_GROUPS: readonly { readonly title: LocaleKey; readonly ids: readon
 	{ title: "settingsSources.apps.groups.docsNotes", ids: ["notion", "obsidian", "clawgallery"] },
 	{ title: "settingsSources.apps.groups.mail", ids: ["mailcrawl", "mail-export"] },
 	{ title: "settingsSources.apps.groups.cloudDev", ids: ["cloud-drive", "github", "github-gist"] },
-	{ title: "settingsSources.apps.groups.newsOther", ids: ["rss", "spotlight"] },
+	{ title: "settingsSources.apps.groups.newsOther", ids: ["rss", "hister", "calendar", "spotlight"] },
 ];
 
 function templateLabel(type: string): string {

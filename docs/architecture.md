@@ -198,10 +198,32 @@ second datasource or model configuration. The sidebar is searchable and grouped:
   reports nothing while it runs, so the bar steps per finished item and is a
   shimmer while a lone datasource syncs. Per-file and per-source progress is
   requested upstream in Marker-Inc-Korea/AutoRAG#1840.
-- **연결된 앱** — all connections plus a gallery of the 16 datasource templates;
-  each configured connection gets its own page with enable, desktop-app
-  requirement and download link, per-source AI access, sync, polling interval,
-  description, and the template's connector fields.
+- **연결된 앱** — all connections plus a gallery of the datasource templates
+  (librarian v2.11.0 adds Hister browser history and Apple Calendar &
+  Reminders); each configured connection gets its own page with enable,
+  desktop-app requirement and download link, per-source AI access, sync,
+  polling interval, description, and the template's connector fields.
+  - *Hister* (`datasources.<id>` with `type: "hister"`) searches the pages a
+    Chromium/Firefox browser visited through a running Hister server
+    (AGPL, separate program; the app only calls its HTTP API). Its detail page
+    edits `connector.baseUrl`, `tokenEnv` (never the token), `semantic`, and
+    `timeoutMs`; a config write refuses a non-loopback `http:` `baseUrl` when a
+    token env is set (mirroring the librarian's client). Status probes the
+    server live (`/api/config`, `type:web` count), and "지금 최신화" runs the
+    librarian `HisterSkill` probe. Keyword-only mode pins
+    `connector.semantic: false` like GitHub Gist.
+  - *Apple Calendar & Reminders* (`type: "calendar"`) is the librarian's
+    documented zero-code macOS path: a `calendar` entry in `datasources` is not
+    a librarian skill but an MCP server the app connects. `calendar-mcp.ts`
+    mirrors it into `<piAgentDir>/mcp.json` (`apple-events`, run as
+    `npx -y mcp-server-apple-events --require-write-confirmation`) whenever the
+    config changes, so the librarian's MCP client (v2.11.0) connects it in
+    every search session; disabling the connection writes `enabled: false`,
+    removing it deletes the server entry, and unrelated MCP entries are kept.
+    `connector.requireWriteConfirmation` (default on) and `connector.exposure`
+    map onto the server's flags; `command`/`args` allow a custom launcher. The
+    connection is live-query (EventKit, nothing indexed), reported through the
+    same datasource rows.
 
 Every edit is a validated leaf write that preserves unrelated and unknown
 config keys. Secrets never enter `config.json`: `/login` stores keys and OAuth

@@ -63,6 +63,11 @@ const env = {
 	AUTORAG_CONFIG: configPath,
 	AUTORAG_HOME: root,
 	PI_CODING_AGENT_DIR: agentDir,
+	// The lane picks "This computer" in the embedding picker, which the spec guard
+	// (#252) disables on a machine below Pro/Max ≥32 GB (the default 12 GB QA VM).
+	// Pretend to be a capable machine, the sanctioned AUTORAG_QA_HARDWARE override
+	// (honored only by unpackaged builds), so the picker flow is testable anywhere.
+	AUTORAG_QA_HARDWARE: JSON.stringify({ platform: "darwin", arch: "arm64", cpuModel: "Apple M4 Max", memoryBytes: 64 * 1024 ** 3, gpus: [] }),
 	OPENROUTER_API_KEY: "qa-openrouter-key",
 	// Only `dupey` (required by the Finder) is visible: host datasource CLIs
 	// (mailcrawl, discrawl, …) must never run against the operator's archives

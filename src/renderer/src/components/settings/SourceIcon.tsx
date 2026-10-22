@@ -8,7 +8,7 @@
  */
 
 import type { ReactElement } from "react";
-import { Cloud, Folder, Images, Mail, Search, type LucideIcon } from "lucide-react";
+import { Calendar, Cloud, Folder, Globe, Images, Mail, Search, type LucideIcon } from "lucide-react";
 import {
 	siDiscord,
 	siGithub,
@@ -42,6 +42,9 @@ const GLYPH_BY_TEMPLATE: Readonly<Record<string, LucideIcon>> = {
 	"mail-export": Mail,
 	local: Folder,
 	spotlight: Search,
+	hister: Globe,
+	calendar: Calendar,
+	"apple-events": Calendar,
 };
 
 /** Marks darker than this vanish on a dark theme, so they follow the text color instead. */

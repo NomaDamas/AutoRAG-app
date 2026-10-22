@@ -1828,6 +1828,12 @@
       "rss": {
         "summary": "Index RSS 2.0 / Atom feeds by polling."
       },
+      "hister": {
+        "summary": "Search visited browser web pages through a Hister server."
+      },
+      "calendar": {
+        "summary": "Query macOS Calendar events and Reminders live via EventKit MCP."
+      },
       "spotlight": {
         "summary": "Index local files with macOS Spotlight (mdfind) queries."
       }
@@ -1852,6 +1858,8 @@
       "mail": "Mail",
       "obsidian": "Obsidian (qmd)",
       "rss": "RSS / News",
+      "hister": "Hister (Browser history)",
+      "calendar": "Apple Calendar & Reminders (EventKit MCP)",
       "spotlight": "Spotlight (mdfind)"
     },
     "fields": {
@@ -1916,6 +1924,11 @@
       "queries": "Queries",
       "onlyIn": "Search directory (-onlyin)",
       "maxResultsPerQuery": "Max results per query",
+      "semantic": "Enable semantic search",
+      "requireWriteConfirmation": "Require confirmation before writes",
+      "mcpExposure": "MCP tool exposure",
+      "command": "MCP command",
+      "args": "MCP arguments",
       "defaultOption": "(Default)",
       "envAria": "Environment variables (JSON)",
       "envEditorHint": "Environment variables injected into the child process. Keep secret tokens/passwords in OS env vars instead.",
@@ -1930,7 +1943,11 @@
         "defaultOn": "Default: on.",
         "defaultOff": "Default: off.",
         "tokenEnv": "This is the env var name that holds the token, not the token itself.",
-        "rcloneConfig": "A rclone.conf you set yourself is used read-only."
+        "rcloneConfig": "A rclone.conf you set yourself is used read-only.",
+        "histerSemantic": "Requires semantic search enabled on the Hister server (autorag setup --sync-hister).",
+        "requireWriteConfirmation": "When on, calendar and reminder writes require confirmation (--require-write-confirmation).",
+        "mcpExposure": "direct exposes tools directly to the model; codemode calls them through a script.",
+        "calendarCommand": "Leave empty to launch mcp-server-apple-events with npx."
       },
       "envError": {
         "object": "Environment variables must be a JSON object.",

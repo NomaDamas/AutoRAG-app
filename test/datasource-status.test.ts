@@ -3,7 +3,7 @@ import { DatabaseSync } from "node:sqlite";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildAgentOptions, resolveConfigReadOnly, saveMirrorIndex, type ParsedMirrorEntry as MirrorEntry } from "@autorag/librarian";
-import { QmdClient } from "@autorag/librarian";
+import { MailcrawlClient } from "@autorag/librarian";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createDataSourceStatusService } from "../src/main/datasource-status";
 import type { DataSourceRow } from "../src/shared/settings-contract";
@@ -277,31 +277,35 @@ describe("createDataSourceStatusService", () => {
 	});
 
 	describe("syncing one source in keyword-only mode", () => {
-		async function obsidianFixture(appIndexing: Record<string, unknown> | undefined): Promise<Fixture> {
+		async function mailcrawlFixture(appIndexing: Record<string, unknown> | undefined): Promise<Fixture> {
 			const fixture = await createFixtureWithOnlySlacrawlOnPath();
-			await writeFile(join(fixture.root, "bin", "qmd"), "#!/bin/sh\nexit 0\n");
-			await chmod(join(fixture.root, "bin", "qmd"), 0o755);
-			await writeConfig(fixture, { vault: { type: "obsidian", connector: { vaultPath: join(fixture.workspace, "vault") } } });
-			if (appIndexing !== undefined) {
-				const raw = JSON.parse(await readFile(fixture.configPath, "utf8"));
-				await writeFile(fixture.configPath, JSON.stringify({ ...raw, appIndexing }));
-			}
+			await writeFile(join(fixture.root, "bin", "mailcrawl"), "#!/bin/sh\nexit 0\n");
+			await chmod(join(fixture.root, "bin", "mailcrawl"), 0o755);
+			await writeConfig(fixture, { mail: { type: "mailcrawl", connector: { account: "work" } } });
+			const raw = JSON.parse(await readFile(fixture.configPath, "utf8"));
+			await writeFile(
+				fixture.configPath,
+				JSON.stringify({
+					...raw,
+					minSync: { embedder: { id: "openai:Qwen/Qwen3-Embedding-0.6B", baseUrl: "http://127.0.0.1:11434", dimension: 1024 } },
+					...(appIndexing === undefined ? {} : { appIndexing }),
+				}),
+			);
 			return fixture;
 		}
 
-		function stubQmd(): { readonly embed: ReturnType<typeof vi.fn> } {
+		function stubMailcrawl(): { readonly embed: ReturnType<typeof vi.fn> } {
 			const done = { stdout: "", stderr: "", code: 0 };
-			vi.spyOn(QmdClient.prototype, "ensureCollection").mockResolvedValue({ ok: true, data: { collectionName: "vault" }, ...done } as never);
-			vi.spyOn(QmdClient.prototype, "update").mockResolvedValue({ ok: true, data: { indexed: 2, updated: 0, unchanged: 0 }, ...done } as never);
-			const embed = vi.spyOn(QmdClient.prototype, "embed").mockResolvedValue({ ok: true, data: { embedded: true }, ...done } as never);
+			vi.spyOn(MailcrawlClient.prototype, "sync").mockResolvedValue({ ok: true, data: { messages: 2, chunksAdded: 2 }, ...done } as never);
+			const embed = vi.spyOn(MailcrawlClient.prototype, "index").mockResolvedValue({ ok: true, data: { embedded: 2, reused: 0 }, ...done } as never);
 			return { embed };
 		}
 
 		it("runs the source's embedding step while semantic search is on", async () => {
-			const { embed } = stubQmd();
+			const { embed } = stubMailcrawl();
 			try {
-				const fixture = await obsidianFixture(undefined);
-				const result = await createDataSourceStatusService({ env: fixture.env, cwd: fixture.root }).sync("vault");
+				const fixture = await mailcrawlFixture(undefined);
+				const result = await createDataSourceStatusService({ env: fixture.env, cwd: fixture.root }).sync("mail");
 
 				expect(result).toMatchObject({ ok: true, state: "indexed" });
 				expect(embed).toHaveBeenCalledOnce();
@@ -311,15 +315,15 @@ describe("createDataSourceStatusService", () => {
 		});
 
 		it("updates the source but never embeds it when semantic search is off, and restores the embedding step afterwards", async () => {
-			const { embed } = stubQmd();
-			const realEmbed = QmdClient.prototype.embed;
+			const { embed } = stubMailcrawl();
+			const realEmbed = MailcrawlClient.prototype.index;
 			try {
-				const fixture = await obsidianFixture({ semanticSearch: false });
-				const result = await createDataSourceStatusService({ env: fixture.env, cwd: fixture.root }).sync("vault");
+				const fixture = await mailcrawlFixture({ semanticSearch: false });
+				const result = await createDataSourceStatusService({ env: fixture.env, cwd: fixture.root }).sync("mail");
 
 				expect(result).toMatchObject({ ok: true, state: "indexed", chunkCount: 2 });
 				expect(embed).not.toHaveBeenCalled();
-				expect(QmdClient.prototype.embed).toBe(realEmbed);
+				expect(MailcrawlClient.prototype.index).toBe(realEmbed);
 			} finally {
 				vi.restoreAllMocks();
 			}

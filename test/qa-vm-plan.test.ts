@@ -107,8 +107,11 @@ describe("qa-vm orphan detection", () => {
 describe("qa-vm embedding assets", () => {
 	it("copies the host's model into the guest only for jobs that index for real", () => {
 		expect(needsEmbeddingAssets({ kind: "sweep", lanes: ["onboarding"] })).toBe(true);
+		expect(needsEmbeddingAssets({ kind: "sweep", lanes: ["settings-redesign"] })).toBe(true);
+		expect(needsEmbeddingAssets({ kind: "sweep", lanes: ["onboarding", "settings-redesign"] })).toBe(true);
 		expect(needsEmbeddingAssets({ kind: "sweep", lanes: [] })).toBe(true);
 		expect(needsEmbeddingAssets({ kind: "script" })).toBe(true);
 		expect(needsEmbeddingAssets({ kind: "sweep", lanes: ["kind", "split-panes"] })).toBe(false);
+		expect(needsEmbeddingAssets({ kind: "sweep", lanes: ["datasource-status"] })).toBe(false);
 	});
 });

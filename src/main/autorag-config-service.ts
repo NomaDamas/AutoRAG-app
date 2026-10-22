@@ -23,6 +23,7 @@ import type {
 	ModelCatalogSnapshot,
 } from "../shared/settings-contract";
 import { isJsonObject } from "../shared/settings-contract";
+import { CALENDAR_MCP_EXPOSURES, syncCalendarMcpConfig } from "./calendar-mcp";
 
 const REDACTED_SECRET = "__AUTORAG_SECRET_REDACTED__";
 /**
@@ -136,7 +137,7 @@ function deleteAt(root: Record<string, unknown>, path: readonly string[]): void 
 	delete current[path[path.length - 1] as string];
 }
 
-type ConnectorFieldKind = "string" | "number" | "boolean" | "stringList" | "env" | "feeds" | "kordocOcr";
+type ConnectorFieldKind = "string" | "number" | "boolean" | "semantic" | "mcpExposure" | "stringList" | "env" | "feeds" | "kordocOcr";
 
 /**
  * Connector option kinds the Settings datasource forms expose, keyed by the
@@ -178,6 +179,8 @@ const CONNECTOR_FIELD_KINDS: Readonly<Record<string, ConnectorFieldKind>> = {
 	baseUrl: "string",
 	tokenEnv: "string",
 	statePath: "string",
+	command: "string",
+	exposure: "mcpExposure",
 	timeoutMs: "number",
 	indexTimeoutMs: "number",
 	maxBufferBytes: "number",
@@ -193,12 +196,15 @@ const CONNECTOR_FIELD_KINDS: Readonly<Record<string, ConnectorFieldKind>> = {
 	syncVisual: "boolean",
 	dryRun: "boolean",
 	ghCliFallback: "boolean",
+	semantic: "semantic",
+	requireWriteConfirmation: "boolean",
 	repos: "stringList",
 	extensions: "stringList",
 	include: "stringList",
 	exclude: "stringList",
 	queries: "stringList",
 	paths: "stringList",
+	args: "stringList",
 	feeds: "feeds",
 	env: "env",
 };
@@ -213,6 +219,19 @@ function assertConnectorField(label: string, kind: ConnectorFieldKind, value: un
 			break;
 		case "boolean":
 			if (typeof value !== "boolean") fail(`${label} must be a boolean`);
+			break;
+		case "semantic":
+			if (
+				typeof value !== "boolean" &&
+				(!isJsonObject(value) || (value.enabled !== undefined && typeof value.enabled !== "boolean"))
+			) {
+				fail(`${label} must be a boolean`);
+			}
+			break;
+		case "mcpExposure":
+			if (typeof value !== "string" || !(CALENDAR_MCP_EXPOSURES as readonly string[]).includes(value)) {
+				fail(`${label} must be one of: ${CALENDAR_MCP_EXPOSURES.join(", ")}`);
+			}
 			break;
 		case "stringList":
 			if (!Array.isArray(value) || value.some((item) => typeof item !== "string" || item.length === 0)) {
@@ -452,6 +471,28 @@ function checkKnownBlock(path: string, value: unknown): void {
 			}
 			if (entry.connector !== undefined && !isJsonObject(entry.connector)) fail(`datasources.${id}.connector must be an object`);
 			if (isJsonObject(entry.connector)) assertConnectorOptions(id, entry.connector, fail);
+			const template = typeof entry.type === "string" && entry.type.length > 0 ? entry.type : id;
+			if (template === "hister" && isJsonObject(entry.connector) && entry.connector.baseUrl !== undefined) {
+				const rawUrl = String(entry.connector.baseUrl).trim();
+				let parsedUrl: URL;
+				try {
+					parsedUrl = new URL(rawUrl);
+				} catch {
+					return fail(`datasources.${id}.connector.baseUrl must be a valid http(s) URL`);
+				}
+				if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
+					fail(`datasources.${id}.connector.baseUrl must be a valid http(s) URL`);
+				}
+				const tokenEnv = entry.connector.tokenEnv;
+				if (
+					typeof tokenEnv === "string" &&
+					tokenEnv.trim().length > 0 &&
+					parsedUrl.protocol === "http:" &&
+					LOOPBACK_HOSTS[parsedUrl.hostname.toLowerCase()] !== true
+				) {
+					fail(`datasources.${id}.connector.baseUrl must use https when tokenEnv is set and host is not loopback`);
+				}
+			}
 		}
 	}
 }
@@ -631,6 +672,7 @@ export function createAutoRagConfigService(deps: AutoRagConfigServiceDeps): Auto
 		// Validation runs before the write: a rejected edit never touches disk.
 		await validateCandidate(path, candidate, deps.env, deps.cwd);
 		writeConfigObject(path, candidate);
+		syncCalendarMcpConfig(candidate, previous, deps.env.PI_CODING_AGENT_DIR ?? getAgentDir());
 		return snapshot();
 	}
 

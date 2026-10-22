@@ -1828,6 +1828,12 @@
       "rss": {
         "summary": "RSS 2.0 / Atom 피드를 폴링해 색인합니다."
       },
+      "hister": {
+        "summary": "Hister 서버에서 브라우저 방문 웹페이지를 검색합니다."
+      },
+      "calendar": {
+        "summary": "EventKit MCP로 macOS 캘린더 일정과 미리알림을 실시간 조회합니다."
+      },
       "spotlight": {
         "summary": "macOS Spotlight(mdfind) 쿼리로 로컬 파일을 색인합니다."
       }
@@ -1852,6 +1858,8 @@
       "mail": "Mail",
       "obsidian": "Obsidian (qmd)",
       "rss": "RSS / News",
+      "hister": "Hister (브라우저 방문 기록)",
+      "calendar": "Apple 캘린더 · 미리알림 (EventKit MCP)",
       "spotlight": "Spotlight (mdfind)"
     },
     "fields": {
@@ -1916,6 +1924,11 @@
       "queries": "쿼리",
       "onlyIn": "검색 디렉터리 (-onlyin)",
       "maxResultsPerQuery": "쿼리당 최대 결과",
+      "semantic": "의미 기반(시맨틱) 검색 사용",
+      "requireWriteConfirmation": "일정·미리알림 수정 시 확인 요구",
+      "mcpExposure": "MCP 도구 노출 방식",
+      "command": "MCP 실행 명령어",
+      "args": "MCP 실행 인자",
       "defaultOption": "(기본값)",
       "envAria": "환경 변수 (JSON)",
       "envEditorHint": "자식 프로세스에 주입할 환경 변수입니다. 비밀 토큰·비밀번호는 여기 대신 OS 환경 변수로 두세요.",
@@ -1930,7 +1943,11 @@
         "defaultOn": "기본값: 켜짐.",
         "defaultOff": "기본값: 꺼짐.",
         "tokenEnv": "비밀 토큰 자체가 아니라, 토큰이 담긴 환경 변수 이름입니다.",
-        "rcloneConfig": "직접 지정한 rclone.conf는 읽기 전용으로만 씁니다."
+        "rcloneConfig": "직접 지정한 rclone.conf는 읽기 전용으로만 씁니다.",
+        "histerSemantic": "Hister 서버에 시맨틱 검색이 켜져 있어야 합니다 (autorag setup --sync-hister).",
+        "requireWriteConfirmation": "켜 두면 확인 없이 일정이나 미리알림을 변경하지 않습니다 (--require-write-confirmation).",
+        "mcpExposure": "direct는 도구를 바로 노출하고, codemode는 스크립트를 통해 호출합니다.",
+        "calendarCommand": "비워 두면 npx로 mcp-server-apple-events를 실행합니다."
       },
       "envError": {
         "object": "환경 변수는 JSON 객체여야 합니다.",
