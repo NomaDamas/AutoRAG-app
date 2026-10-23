@@ -52,6 +52,8 @@ const MAX_ERROR_RATE = 0.2;
 const MAX_HITS = 64;
 /** A segment joins the anchor's cluster only this close to it (key units), or 3× the excerpt. */
 const MIN_WINDOW = 600;
+/** Same, for a segment too short to anchor ("3명", "총 인원수"), which matches almost anywhere. */
+const MIN_SHORT_WINDOW = 160;
 /** Accept a cluster covering this share of the excerpt, or this many key units outright. */
 const MIN_COVERAGE = 0.4;
 const MIN_COVERED = 40;
@@ -141,8 +143,34 @@ function extendHit(key: string, segment: string, from: number, to: number, hit: 
 	return { start, end, errors: hit.errors };
 }
 
-function matchSegments(key: string, rawSegments: readonly string[]): readonly { readonly length: number; readonly hits: readonly Hit[] }[] {
-	const out: { readonly length: number; readonly hits: readonly Hit[] }[] = [];
+interface SegmentMatch {
+	readonly length: number;
+	readonly hits: readonly Hit[];
+}
+
+/**
+ * Cells and lines shorter than {@link MIN_ANCHOR} cannot anchor a match alone
+ * ("3명", "총 인원수"), and a table of them has no anchor at all. Adjacent short
+ * segments are therefore also tried as one run in reading order: a run that is
+ * present whole in the document is as good an anchor as a long sentence.
+ */
+function shortRuns(rawSegments: readonly string[]): readonly string[] {
+	const runs: string[] = [];
+	let run = "";
+	for (const segment of rawSegments) {
+		if (segment.length < MIN_ANCHOR) {
+			run += segment;
+			continue;
+		}
+		if (run.length >= MIN_ANCHOR) runs.push(run);
+		run = "";
+	}
+	if (run.length >= MIN_ANCHOR) runs.push(run);
+	return runs;
+}
+
+function matchSegments(key: string, rawSegments: readonly string[]): readonly SegmentMatch[] {
+	const out: SegmentMatch[] = [];
 	for (const segment of rawSegments) {
 		const hits = segmentHits(key, segment);
 		if (hits.length > 0 || segment.length < SUB_SEGMENT * 2) {
@@ -199,23 +227,35 @@ function toRanges(index: TextIndex, hits: readonly Hit[]): readonly LocatedRange
 /** Where `excerpt` is in the indexed text, or null when it is not there with enough confidence. */
 export function locateExcerpt(index: TextIndex, excerpt: string): LocatedExcerpt | null {
 	if (index.key.length === 0 || BARE_PATH.test(excerpt.trim())) return null;
-	const segments = matchSegments(index.key, excerptSegments(excerpt));
+	const raw = excerptSegments(excerpt);
+	const segments = matchSegments(index.key, raw);
 	const total = segments.reduce((sum, segment) => sum + segment.length, 0);
 	if (total === 0) return null;
 	const window = Math.max(MIN_WINDOW, total * 3);
+	// A short cell ("3명") is everywhere; it may only join an anchor that is close, or it paints a lookalike across the page.
+	const shortWindow = Math.max(MIN_SHORT_WINDOW, total * 2);
+	// Anchors only: a joined run proves where the table is, it adds no coverage of its own.
+	const runs = shortRuns(raw).flatMap((run) => {
+		const hits = segmentHits(index.key, run);
+		return hits.length === 0 ? [] : [{ length: run.length, hits }];
+	});
 
 	let best: { readonly covered: number; readonly gap: number; readonly hits: readonly Hit[] } | null = null;
-	segments.forEach((anchorSegment, anchorIndex) => {
-		if (anchorSegment.length < MIN_ANCHOR) return;
+	const anchors = [...segments.map((segment, at) => ({ segment, at, run: false })), ...runs.map((segment, at) => ({ segment, at: segments.length + at, run: true }))];
+	for (const { segment: anchorSegment, at: anchorIndex, run } of anchors) {
+		if (anchorSegment.length < MIN_ANCHOR) continue;
 		for (const anchor of anchorSegment.hits) {
-			const hits: Hit[] = [];
+			const hits: Hit[] = run ? [anchor] : [];
 			let covered = 0;
 			segments.forEach((segment, index) => {
 				let pick: Hit | null = index === anchorIndex ? anchor : null;
 				if (pick === null) {
 					for (const hit of segment.hits) {
-						const away = distance(anchor, hit);
-						if (away <= window && (pick === null || away < distance(anchor, pick))) pick = hit;
+						// A short cell inside the run the anchor proved: it is the occurrence under the run, not a lookalike elsewhere.
+						const inside = run && hit.start >= anchor.start && hit.end <= anchor.end;
+						const away = inside ? 0 : distance(anchor, hit);
+						const limit = segment.length < MIN_ANCHOR ? shortWindow : window;
+						if (away <= limit && (pick === null || away < distance(anchor, pick))) pick = hit;
 					}
 				}
 				if (pick === null) return;
@@ -226,7 +266,7 @@ export function locateExcerpt(index: TextIndex, excerpt: string): LocatedExcerpt
 			const gap = Math.max(0, span - hits.reduce((sum, hit) => sum + hit.end - hit.start, 0));
 			if (best === null || covered > best.covered || (covered === best.covered && gap < best.gap)) best = { covered, gap, hits };
 		}
-	});
+	}
 	if (best === null) return null;
 	const { covered, hits } = best;
 	if (covered < total * MIN_COVERAGE && covered < MIN_COVERED) return null;
