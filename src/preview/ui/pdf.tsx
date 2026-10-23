@@ -4,8 +4,9 @@ import { getDocument, GlobalWorkerOptions, type PDFDocumentProxy, type RenderTas
 import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { previewStreamUrl, type PreviewDocument } from "../shared/contract";
 import type { Size } from "../shared/fit";
+import { locateMarks, pdfRuns, type TextRun } from "../shared/text-marks";
 import { FallbackView, Status } from "./fallback";
-import { PagedView, type DrawPage } from "./paged";
+import { PagedView, type DrawPage, type EvidenceMarks } from "./paged";
 
 let workerReady = false;
 
@@ -15,15 +16,28 @@ function ensurePdfWorker(): void {
 	workerReady = true;
 }
 
+/** Every page's text runs. pdf.js fetches the ranges it needs; auto-fetch stays off for the drawing. */
+async function pdfText(pdf: PDFDocumentProxy): Promise<readonly (readonly TextRun[])[]> {
+	return Promise.all(
+		Array.from({ length: pdf.numPages }, async (_unused, index) => {
+			const page = await pdf.getPage(index + 1);
+			return pdfRuns((await page.getTextContent()).items, page.getViewport({ scale: 1 }).transform);
+		}),
+	);
+}
+
 /**
  * PDF in the shared paged layout. Pages stream through the range-capable
  * protocol, so a large document opens on its first page; every other page
- * assumes the first page's size until it renders.
+ * assumes the first page's size until it renders. With an `anchor` (AI Search
+ * evidence) the text of every page is read once and the cited passage is
+ * marked and scrolled to.
  */
-export function PdfView({ file }: { readonly file: PreviewDocument }): ReactElement {
+export function PdfView({ file, anchor = null }: { readonly file: PreviewDocument; readonly anchor?: readonly string[] | null }): ReactElement {
 	const { t } = useTranslation();
 	const [opened, setOpened] = useState<{ readonly pdf: PDFDocumentProxy; readonly boxes: readonly Size[] } | null>(null);
 	const [error, setError] = useState<string | null>(null);
+	const [evidence, setEvidence] = useState<EvidenceMarks | null>(null);
 
 	useEffect(() => {
 		ensurePdfWorker();
@@ -46,6 +60,29 @@ export function PdfView({ file }: { readonly file: PreviewDocument }): ReactElem
 	}, [file.path]);
 
 	const pdf = opened?.pdf ?? null;
+	useEffect(() => {
+		if (pdf === null || anchor === null || anchor.length === 0) {
+			setEvidence(null);
+			return;
+		}
+		let cancelled = false;
+		setEvidence({ state: "searching" });
+		void pdfText(pdf)
+			.then((pages) => {
+				if (cancelled) return;
+				const marks = locateMarks(pages, anchor);
+				setEvidence(marks === null ? { state: "missing" } : { state: "found", pages: [marks, ...marks.next] });
+			})
+			.catch((caught: unknown) => {
+				// A page whose text cannot be read still draws; the panel opens at the top.
+				console.warn(`quick-look: PDF text for ${file.path} failed: ${caught instanceof Error ? caught.message : String(caught)}`);
+				if (!cancelled) setEvidence({ state: "missing" });
+			});
+		return () => {
+			cancelled = true;
+		};
+	}, [pdf, anchor, file.path]);
+
 	const draw = useCallback<DrawPage>(
 		(index, width, onBox) => {
 			if (pdf === null) throw new Error("PDF is not open");
@@ -69,5 +106,5 @@ export function PdfView({ file }: { readonly file: PreviewDocument }): ReactElem
 
 	if (error !== null) return <FallbackView file={file} note={error} />;
 	if (opened === null) return <Status>{t("quickLook.status.loading")}</Status>;
-	return <PagedView file={file} boxes={opened.boxes} draw={draw} />;
+	return <PagedView file={file} boxes={opened.boxes} draw={draw} evidence={evidence} />;
 }

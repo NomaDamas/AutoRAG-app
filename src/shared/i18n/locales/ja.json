@@ -215,10 +215,10 @@
     "evidencePanel": {
       "emptyTitle": "回答の根拠が\nここに表示されます。",
       "excerpts": "根拠の抜粋",
-      "showInFinder": "Finderで表示",
       "openInBrowser": "ブラウザーで開く",
       "evidenceFolder": "根拠フォルダ",
-      "evidenceFolderTooltip": "この会話の根拠ファイルを一時フォルダタブで開く"
+      "evidenceFolderTooltip": "この会話の根拠ファイルを一時フォルダタブで開く",
+      "openPreview": "引用箇所をプレビューで表示"
     }
   },
   "aiSearch": {
@@ -1628,6 +1628,11 @@
       "openFailed": "プレゼンテーションを開けませんでした",
       "noSlides": "スライドがありません",
       "noPreview": "このドキュメントにはプレビュー画像がありません"
+    },
+    "evidence": {
+      "searching": "引用箇所を検索中…",
+      "found": "引用箇所をハイライト表示",
+      "missing": "引用箇所が見つかりません"
     }
   },
   "settingsCore": {

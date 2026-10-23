@@ -102,9 +102,17 @@ export interface PreviewPrefetch {
 	readonly size: number;
 }
 
+/** At most this many excerpts, each at most this long, travel with a preview request. */
+export const ANCHOR_LIMITS = { excerpts: 32, chars: 8000 } as const;
+
 export interface QuickLookTarget {
 	readonly path: string;
 	readonly name: string;
+	/**
+	 * Evidence excerpts to find and highlight (an AI Search citation); the
+	 * viewer scrolls to the first one it finds. Absent for a plain preview.
+	 */
+	readonly anchor?: readonly string[];
 }
 
 /** One child of a previewed folder. */
@@ -149,6 +157,8 @@ export interface QuickLookLoad {
 	readonly error: string | null;
 	/** Default app name when already known; otherwise it follows on the `app` channel. */
 	readonly app: string | null;
+	/** The target's excerpts to highlight, null for a plain preview. */
+	readonly anchor: readonly string[] | null;
 }
 
 export interface QuickLookApp {
@@ -329,8 +339,17 @@ export function isPreviewPrefetch(value: unknown): value is PreviewPrefetch {
 	return isRecord(value) && typeof value.path === "string" && value.path.length > 0 && Number.isFinite(value.mtimeMs) && Number.isFinite(value.size);
 }
 
+function isAnchor(value: unknown): value is readonly string[] {
+	return (
+		Array.isArray(value) &&
+		value.length <= ANCHOR_LIMITS.excerpts &&
+		value.every((excerpt) => typeof excerpt === "string" && excerpt.length <= ANCHOR_LIMITS.chars)
+	);
+}
+
 export function isQuickLookTarget(value: unknown): value is QuickLookTarget {
 	if (!isRecord(value)) return false;
+	if (value.anchor !== undefined && !isAnchor(value.anchor)) return false;
 	return typeof value.path === "string" && value.path.length > 0 && typeof value.name === "string";
 }
 
@@ -376,6 +395,7 @@ export function isQuickLookLoad(value: unknown): value is QuickLookLoad {
 	if (value.folder !== null && !isFolderSummary(value.folder)) return false;
 	if (value.bundle !== null && !isBundleSummary(value.bundle)) return false;
 	if (value.app !== null && typeof value.app !== "string") return false;
+	if (value.anchor !== null && !isAnchor(value.anchor)) return false;
 	return value.error === null || typeof value.error === "string";
 }
 

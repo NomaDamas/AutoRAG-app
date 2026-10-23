@@ -78,4 +78,12 @@ describe("locateExcerpt", () => {
 		expect(hit).not.toBeNull();
 		expect(hit!.score).toBe(1);
 	});
+
+	it("finds the verbatim clause inside a model-framed summary sentence", () => {
+		const pieces = ["Page 3 — Security & Hardware Policy", "Lost security keys must be reported to the security desk within 45 minutes and replaced with a YubiKey 5C NFC."];
+		const summary = "New finding: security-policy.pdf specifies that lost security keys must be reported to the security desk within 45 minutes and replaced with a YubiKey 5C NFC**";
+		const hit = locateExcerpt(buildTextIndex(pieces), summary);
+		expect(hit).not.toBeNull();
+		expect(hit!.ranges).toEqual([{ piece: 1, start: 0, end: pieces[1]!.length - 1 }]);
+	});
 });

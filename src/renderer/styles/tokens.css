@@ -55,6 +55,9 @@
   --ql-page: #FFFFFF;
   --ql-accent: #0A64D8;
   --ql-highlight: rgba(255,255,255,0.85);
+  /* A cited passage on a previewed page (AI Search evidence). Pages stay white in dark mode, so one tint serves both. */
+  --ql-evidence-mark: rgba(255,204,0,0.38);
+  --ql-evidence-mark-ring: rgba(214,158,0,0.9);
   --ql-knockout: #F2F2F4;
   --ql-wave-off: rgba(60,60,67,0.25);
   --ql-page-ring: #1D1D1F;

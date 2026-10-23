@@ -73,7 +73,11 @@ still has the previous file's size when they lay out.
   pdf.js streams the file over the range-capable protocol with auto-fetch off,
   so a large document opens on its first page. Pages keep their slot while
   released and render within 600px of the viewport; a zoom keeps the old
-  pixels until the new ones are drawn.
+  pixels until the new ones are drawn. When opened from an AI Search evidence
+  title (`anchor`), every page's text items are read once, the cited passage
+  is located (`shared/locate.ts` + `shared/text-marks.ts`), and its boxes are
+  drawn over the pages (`--ql-evidence-mark`) with the panel scrolled to the
+  first match.
 - **HWP / HWPX** — the same `PagedView`, drawn by rhwp (`@rhwp/core`, the
   Rust + WebAssembly engine alhangeul-macos builds on). rhwp parses HWP 5,
   HWPX, and some HWP 3 documents, paginates them when the file opens, and
