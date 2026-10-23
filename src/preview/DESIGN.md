@@ -357,5 +357,10 @@ When the preview window itself has focus, the main process intercepts Up/Down,
 Space, and Escape in `before-input-event`, so a focused control still closes
 and navigates. Left/Right stay with the page, where media seeks.
 
+An evidence title in the right sidebar opens the panel with no Finder row to
+toggle, and the title button keeps focus. The Finder's keydown handler
+(`useFinderKeyboard`) therefore closes an open preview on a plain Space first,
+before its button and AI Search tab filters, unless the target is a text field.
+
 Media is cleared when the window hides, which stops playback. Previewed pages
 can never navigate the window or open new ones.
