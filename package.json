@@ -54,6 +54,7 @@
 		"@types/node": "^26.6.5",
 		"@types/react": "^19.3.0",
 		"@types/react-dom": "^19.3.0",
+		"approx-string-match": "2.0.1",
 		"clsx": "^2.1.1",
 		"docx-preview": "^0.4.1",
 		"electron": "^44.4.5",
