@@ -26,6 +26,7 @@ import { runWithoutSemanticIndexing, withSemanticPolicyApplied } from "./semanti
 import { datasourceFailureReport, reportError } from "./error-report-core";
 import { ensureEmbeddingForConfig, localEmbeddingServer } from "./embedding-daemon";
 import { datasourceEmbeddingFor, resolveEmbeddingEndpoint } from "./embedding-endpoint";
+import { readLibrarianFile } from "./librarian-file";
 import type {
 	ConfigRefreshDiagnostic,
 	DataSourceAppRequirement,
@@ -389,7 +390,9 @@ function processAlive(pid: unknown): boolean {
 
 async function refreshState(workspacePath: string): Promise<DataSourcesSnapshot["refresh"]> {
 	try {
-		const parsed: unknown = JSON.parse(await readFile(join(workspacePath, ".autorag", "refresh-progress.json"), "utf8"));
+		const text = readLibrarianFile(join(workspacePath, ".autorag", "refresh-progress.json"));
+		if (text === null) return { state: "idle", phase: null, finishedAt: null };
+		const parsed: unknown = JSON.parse(text);
 		if (!isJsonObject(parsed)) return { state: "idle", phase: null, finishedAt: null };
 		const phase = typeof parsed.phase === "string" ? parsed.phase : null;
 		const finishedAt = typeof parsed.finishedAt === "string" ? parsed.finishedAt : null;

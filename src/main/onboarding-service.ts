@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, realpathSync } from "node:fs";
-import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { basename, join, sep } from "node:path";
 import { readRawConfigObject, writeConfigObject } from "@autorag/librarian/core";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
@@ -39,6 +39,7 @@ import { PROVIDER_ENV_NAME } from "./onboarding-models";
 import { computeIndexingProgress } from "./onboarding-progress";
 import type { ProviderCredentialService } from "./provider-credentials";
 import { localEmbeddingModel } from "./embedding-daemon";
+import { readLibrarianFile, statLibrarianFile } from "./librarian-file";
 import { minSyncModelCacheRoot, modelFilesPresent, modelTotalBytes, nativeQwen3Spec } from "./model-download";
 
 /**
@@ -449,21 +450,19 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 	const folderNameFor = (sourcePath: string): string | null =>
 		folderRoots.find(({ root }) => sourcePath === root || sourcePath.startsWith(`${root}${sep}`))?.name ?? null;
 
-	async function readIfChanged(path: string, previousSignature: string): Promise<{ text: string | null; signature: string }> {
-		try {
-			const info = await stat(path);
-			const signature = `${info.mtimeMs}:${info.size}`;
-			if (signature === previousSignature) return { text: null, signature };
-			return { text: await readFile(path, "utf8"), signature };
-		} catch {
-			return { text: null, signature: previousSignature };
-		}
+	function readIfChanged(path: string, previousSignature: string): { text: string | null; signature: string } {
+		const info = statLibrarianFile(path);
+		if (info === null) return { text: null, signature: previousSignature };
+		const signature = `${info.mtimeMs}:${info.size}`;
+		if (signature === previousSignature) return { text: null, signature };
+		const text = readLibrarianFile(path);
+		return text === null ? { text: null, signature: previousSignature } : { text, signature };
 	}
 
 	async function tick(): Promise<void> {
 		if (workspacePath === null) return;
 		const progressPath = join(workspacePath, ".autorag", "refresh-progress.json");
-		const progressRead = await readIfChanged(progressPath, progressSignature);
+		const progressRead = readIfChanged(progressPath, progressSignature);
 		if (progressRead.text !== null) {
 			progressSignature = progressRead.signature;
 			let parsed: unknown;
@@ -481,13 +480,13 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 			}
 		}
 		const parsedPath = join(workspacePath, ".autorag", "parsed", "index.json");
-		const parsedRead = await readIfChanged(parsedPath, parsedSignature);
+		const parsedRead = readIfChanged(parsedPath, parsedSignature);
 		if (parsedRead.text !== null) {
 			parsedSignature = parsedRead.signature;
 			parsedSnapshot = readParsedMirror(parsedRead.text);
 		}
 		const minsyncPath = join(workspacePath, ".autorag", "minsync", ".minsync", "progress.jsonl");
-		const minsyncRead = await readIfChanged(minsyncPath, minsyncSignature);
+		const minsyncRead = readIfChanged(minsyncPath, minsyncSignature);
 		if (minsyncRead.text !== null) {
 			minsyncSignature = minsyncRead.signature;
 			embeddedFiles = Math.max(embeddedFiles, countMinSyncProgress(minsyncRead.text));
