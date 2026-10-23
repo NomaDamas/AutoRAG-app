@@ -297,7 +297,6 @@ export function registerAccountIpcHandlers(service: AccountService): void {
 		if (plan !== "air" && plan !== "pro") throw new TypeError("account:checkout expects \"air\" or \"pro\"");
 		return service.checkout(plan);
 	});
-	ipcMain.handle(ACCOUNT_CHANNELS.portal, () => service.portal());
 	ipcMain.handle(ACCOUNT_CHANNELS.useManagedModel, () => service.useManagedModel());
 }
 

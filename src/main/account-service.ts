@@ -37,7 +37,7 @@ import { clearDazziPlanCredential, readDazziPlanCredential, storeDazziPlanCreden
 const SIGN_IN_TIMEOUT_MS = 5 * 60 * 1000;
 const REQUEST_TIMEOUT_MS = 15_000;
 const CACHE_VERSION = 1;
-const PLAN_IDS: Readonly<Record<string, AccountPlanId>> = { free: "free", air: "air", pro: "pro" };
+const PLAN_IDS: Readonly<Record<string, AccountPlanId>> = { free: "free", air: "air", pro: "pro", max: "max" };
 
 export interface AccountServiceDeps {
 	readonly env: NodeJS.ProcessEnv;
@@ -63,7 +63,6 @@ export interface AccountService {
 	cancelSignIn(): Promise<AccountStatus>;
 	signOut(): Promise<AccountStatus>;
 	checkout(plan: PaidPlanId): Promise<void>;
-	portal(): Promise<void>;
 	useManagedModel(): Promise<ManagedModelResult>;
 	/** Aborts a sign-in in flight so its loopback listener closes (app quit). */
 	dispose(): Promise<void>;
@@ -119,6 +118,8 @@ function parseAccount(body: unknown): AccountSnapshot | null {
 		creditsUsedCents: readNumber(credits.used_cents, 0),
 		creditsLimitCents: readNumber(credits.limit_cents, 0),
 		creditPeriod: typeof credits.period === "string" ? credits.period : "",
+		// Older servers omit the flag; embeddings were always Pro-and-up.
+		embeddings: typeof body.embeddings === "boolean" ? body.embeddings : plan === "pro" || plan === "max",
 		requestsPerMinute: readNumber(limits.requests_per_minute, 0),
 		billing: { air: billing.air === true, pro: billing.pro === true, portal: billing.portal === true },
 	};
@@ -234,6 +235,7 @@ export function createAccountService(deps: AccountServiceDeps): AccountService {
 				cancel_scheduled: account.cancelScheduled,
 				period_end: account.periodEnd,
 				credits: { used_cents: account.creditsUsedCents, limit_cents: account.creditsLimitCents, period: account.creditPeriod },
+				embeddings: account.embeddings,
 				limits: { requests_per_minute: account.requestsPerMinute },
 				billing: account.billing,
 			};
@@ -539,7 +541,6 @@ export function createAccountService(deps: AccountServiceDeps): AccountService {
 			return publish();
 		},
 		checkout: (plan) => openHostedUrl("/v1/account/checkout", { plan }),
-		portal: () => openHostedUrl("/v1/account/portal"),
 		useManagedModel: () => applyManagedModel(),
 	};
 }

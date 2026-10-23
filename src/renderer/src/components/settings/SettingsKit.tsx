@@ -32,12 +32,12 @@ export function Section({ title, description, children }: { readonly title: stri
 	);
 }
 
-export function Row({ name, hint, children, stack = false }: { readonly name: string; readonly hint: string; readonly children?: ReactNode; readonly stack?: boolean }): ReactElement {
+export function Row({ name, hint, children, stack = false }: { readonly name: string; readonly hint?: string; readonly children?: ReactNode; readonly stack?: boolean }): ReactElement {
 	return (
 		<div className={`linear-row${stack ? " is-stack" : ""}`}>
 			<div className="linear-row-label">
 				<span className="linear-row-name">{name}</span>
-				<small>{hint}</small>
+				{hint === undefined ? null : <small>{hint}</small>}
 			</div>
 			<div className="linear-control">{children}</div>
 		</div>

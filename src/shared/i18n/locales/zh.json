@@ -1273,7 +1273,8 @@
         },
         "dazzi": {
           "label": "Dazzi 云",
-          "description": "使用 Dazzi 账户的托管嵌入服务。需要登录,文档内容会发送到 Dazzi 的服务器。"
+          "description": "使用 Dazzi 账户的托管嵌入服务。需要登录,文档内容会发送到 Dazzi 的服务器。",
+          "planRequired": "仅 Pro 及以上套餐(Pro、Max)可用。"
         },
         "byok": {
           "label": "我自己的服务器(兼容 OpenAI / TEI)",
@@ -1722,68 +1723,41 @@
       "description": "Dazzi 账户和登录状态。",
       "profileTitle": "个人资料",
       "accountName": "Dazzi 账户",
-      "accountHint": "登录在系统浏览器中进行，本应用不会接收密码。",
       "signingIn": "正在浏览器中登录…",
-      "signedIn": "已登录",
       "signedOut": "未登录",
-      "email": "电子邮箱",
-      "emailHint": "服务器确认的账户邮箱。",
       "offline": "无法连接服务器，显示最后确认的信息。",
       "signOut": "退出登录",
       "signIn": "登录",
-      "hintSignedIn": "删除存储在此 Mac 上的密钥。可在 Dazzi 网站的 API 密钥页面吊销该密钥。",
-      "hintSignedOut": "浏览器将打开，确认后会回到本应用。",
       "signInBrowser": "在浏览器中登录",
       "managedDesc": "将 Dazzi 账户的托管模型用于 AI 搜索。",
       "managedName": "使用托管模型",
-      "managedHint": "更改 Dazzi 设置，使 AI 搜索使用此账户的模型。手动输入的 API 密钥设置将在这一步被替换。",
+      "managedHint": "AI 搜索使用此账户的模型。",
       "useManaged": "设为账户模型",
-      "planDescription": "查看 Dazzi 套餐和本周 AI 用量。",
+      "planDescription": "当前套餐和本周 AI 用量。",
       "currentPlan": "当前套餐",
-      "currentPlanHintSignedIn": "服务器确认的套餐。",
-      "currentPlanHintSignedOut": "请先登录以查看套餐。",
       "trialing": " · 试用中",
       "cancelScheduled": "已预约取消。在 {{date}} 之前仍可使用当前套餐。",
       "pastDue": "支付失败。请在结算门户中检查支付方式。",
-      "inUse": "使用中",
-      "openCheckout": "打开支付页面",
-      "billingTitle": "结算管理",
-      "billingHint": "支付方式、发票、取消订阅和退款均在结算门户中管理。",
-      "openPortal": "打开结算门户",
       "usageTitle": "本周用量",
       "usageName": "AI 用量",
-      "usageHint": "使用 Dazzi 套餐模型时扣减的每周额度。",
       "usageMeterAria": "每周额度使用量",
       "usageUnavailable": "无法加载用量",
-      "creditsLeft": "剩余额度",
-      "creditsLeftHint": "达到上限后，请求将被拒绝，直到下周重置。",
       "requestLimit": "请求上限",
-      "requestLimitHint": "各套餐每分钟的请求数。",
       "requestsPerMinute": "每分钟 {{count}} 次",
-      "plan": {
-        "free": {
-          "price": "免费",
-          "perks": "每周 $0.50 额度 · 每分钟 10 次"
-        },
-        "air": {
-          "price": "每月 $4",
-          "perks": "每周 $1 额度 · 每分钟 60 次"
-        },
-        "pro": {
-          "price": "每月 $20",
-          "perks": "每周 $5 额度 · 每分钟 240 次"
-        }
-      },
       "legal": {
         "title": "条款与政策",
-        "description": "与网页登录页面相同的文档，将在浏览器中打开。",
-        "rowName": "查看文档",
-        "rowHint": "服务器条款、隐私政策（各模型的数据处理）、可接受使用政策以及子处理方列表。",
         "terms": "服务条款",
         "privacy": "隐私政策",
         "acceptableUse": "可接受使用政策",
         "subprocessors": "子处理方"
-      }
+      },
+      "manageName": "套餐与付款管理",
+      "openDashboard": "打开控制台",
+      "resetsIn": "距离重置还有",
+      "resetsAt": "重置时间",
+      "resetInDays": "{{days}}天 {{hours}}小时",
+      "resetInHours": "{{hours}}小时 {{minutes}}分钟",
+      "resetInMinutes": "{{minutes}}分钟"
     },
     "ai": {
       "description": "连接 AI 服务，并为每个角色选择模型。",

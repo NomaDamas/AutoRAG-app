@@ -10,7 +10,6 @@ export function createAccountBridge(ipcRenderer: IpcRenderer): AccountBridge {
 		cancelSignIn: () => ipcRenderer.invoke(ACCOUNT_CHANNELS.cancelSignIn),
 		signOut: () => ipcRenderer.invoke(ACCOUNT_CHANNELS.signOut),
 		checkout: (plan) => ipcRenderer.invoke(ACCOUNT_CHANNELS.checkout, plan),
-		portal: () => ipcRenderer.invoke(ACCOUNT_CHANNELS.portal),
 		useManagedModel: () => ipcRenderer.invoke(ACCOUNT_CHANNELS.useManagedModel),
 		onChanged: (listener) => {
 			const handler = (_event: IpcRendererEvent, status: AccountStatus): void => listener(status);

@@ -67,7 +67,7 @@ function fakeCredentials(env: NodeJS.ProcessEnv): { readonly service: ProviderCr
 
 const ELIGIBLE: LocalSpecVerdict = { eligible: true };
 
-function buildService(fixture: Fixture, fetchImpl?: typeof fetch, modelReady: () => boolean = () => true, spec: LocalSpecVerdict = ELIGIBLE) {
+function buildService(fixture: Fixture, fetchImpl?: typeof fetch, modelReady: () => boolean = () => true, spec: LocalSpecVerdict = ELIGIBLE, cloudEmbeddings: boolean | null = true) {
 	const config = createAutoRagConfigService({ env: fixture.env, cwd: fixture.root });
 	const real = createDataSourceStatusService({ env: fixture.env, cwd: fixture.root });
 	const dataSources = {
@@ -86,6 +86,7 @@ function buildService(fixture: Fixture, fetchImpl?: typeof fetch, modelReady: ()
 		credentials: credentials.service,
 		modelReady,
 		localSpec: async () => spec,
+		cloudEmbeddings: async () => cloudEmbeddings,
 		...(fetchImpl === undefined ? {} : { fetchImpl }),
 	});
 	return { embedding, credentials };
@@ -139,6 +140,24 @@ describe("createEmbeddingSettingsService", () => {
 		// The model is not a choice: every profile that embeds is Qwen3-Embedding-0.6B at 1024 dimensions.
 		expect(profiles.filter((profile) => profile.kind !== "none").map((profile) => profile.dimension)).toEqual([QWEN3_DIMENSION, QWEN3_DIMENSION, QWEN3_DIMENSION]);
 		expect(profiles.find((profile) => profile.id === "byok")?.model).toBe("Qwen/Qwen3-Embedding-0.6B");
+	});
+
+	it("offers Dazzi cloud only on a plan with embeddings, and refuses to apply it on Free or Air", async () => {
+		const fixture = await createFixture({ mail: { type: "mailcrawl", connector: {} } });
+		signedIn(fixture);
+		const server = openAiServer();
+		const { embedding } = buildService(fixture, server.fetchImpl, () => true, ELIGIBLE, false);
+
+		const dazzi = (await embedding.get()).profiles.find((profile) => profile.id === "dazzi");
+		expect(dazzi?.unavailable).toBe(t("main.embedding.profiles.dazzi.planRequired"));
+
+		const refused = await embedding.apply({ profileId: "dazzi", acknowledgeRemote: true });
+		expect(refused).toMatchObject({ ok: false, applied: false, error: t("main.embedding.profiles.dazzi.planRequired") });
+		expect(server.calls).toEqual([]);
+		expect((await readConfig(fixture)).minSync).toBeUndefined();
+
+		const allowed = buildService(fixture, server.fetchImpl, () => true, ELIGIBLE, true).embedding;
+		expect(await allowed.apply({ profileId: "dazzi", acknowledgeRemote: true })).toMatchObject({ ok: true, applied: true });
 	});
 
 	it("applies the local server: writes the native Qwen3 id, rebuilds the sources that embed, and writes nothing into mailcrawl", async () => {

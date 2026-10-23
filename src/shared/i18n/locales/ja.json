@@ -1273,7 +1273,8 @@
         },
         "dazzi": {
           "label": "Dazzi クラウド",
-          "description": "Dazzi アカウントでホスト型の埋め込みを使います。サインインが必要で、文書の内容は Dazzi のサーバーに送信されます。"
+          "description": "Dazzi アカウントでホスト型の埋め込みを使います。サインインが必要で、文書の内容は Dazzi のサーバーに送信されます。",
+          "planRequired": "Pro 以上のプラン(Pro、Max)で利用できます。"
         },
         "byok": {
           "label": "自分のサーバー(OpenAI / TEI 互換)",
@@ -1722,68 +1723,41 @@
       "description": "Dazzi アカウントとログイン状態です。",
       "profileTitle": "プロフィール",
       "accountName": "Dazzi アカウント",
-      "accountHint": "ログインはシステムのブラウザで行われ、このアプリはパスワードを受け取りません。",
       "signingIn": "ブラウザでログイン中…",
-      "signedIn": "ログイン済み",
       "signedOut": "未ログイン",
-      "email": "メールアドレス",
-      "emailHint": "サーバーが確認したアカウントのメールアドレスです。",
       "offline": "サーバーに接続できないため、最後に確認した情報を表示しています。",
       "signOut": "ログアウト",
       "signIn": "ログイン",
-      "hintSignedIn": "この Mac に保存されたキーを削除します。キーは Dazzi ウェブの API キー画面で失効できます。",
-      "hintSignedOut": "ブラウザが開き、承認するとこのアプリに戻ります。",
       "signInBrowser": "ブラウザでログイン",
       "managedDesc": "Dazzi アカウントの管理モデルを AI 検索で使用します。",
       "managedName": "管理モデルを使用",
-      "managedHint": "AI 検索がこのアカウントのモデルを使うように Dazzi 設定を変更します。手動で入力した API キー設定はこの手順で置き換えられます。",
+      "managedHint": "このアカウントのモデルを AI 検索に使います。",
       "useManaged": "アカウントモデルに設定",
-      "planDescription": "Dazzi のプランと今週の AI 使用量を確認します。",
+      "planDescription": "現在のプランと今週の AI 使用量です。",
       "currentPlan": "現在のプラン",
-      "currentPlanHintSignedIn": "サーバーが確認したプランです。",
-      "currentPlanHintSignedOut": "プランを表示するには先にログインしてください。",
       "trialing": " · トライアル中",
       "cancelScheduled": "解約が予約されています。{{date}} まで現在のプランを使用できます。",
       "pastDue": "支払いに失敗しました。請求ポータルで支払い方法を確認してください。",
-      "inUse": "使用中",
-      "openCheckout": "支払いページを開く",
-      "billingTitle": "請求管理",
-      "billingHint": "支払い方法、領収書、解約・返金は請求ポータルで管理します。",
-      "openPortal": "請求ポータルを開く",
       "usageTitle": "今週の使用量",
       "usageName": "AI 使用量",
-      "usageHint": "Dazzi プランのモデルを使うと差し引かれる週間クレジットです。",
       "usageMeterAria": "週間クレジットの使用量",
       "usageUnavailable": "使用量を読み込めません",
-      "creditsLeft": "残りクレジット",
-      "creditsLeftHint": "上限に達すると、来週リセットされるまでリクエストが拒否されます。",
       "requestLimit": "リクエスト上限",
-      "requestLimitHint": "プランごとの毎分リクエスト数です。",
       "requestsPerMinute": "毎分 {{count}} 回",
-      "plan": {
-        "free": {
-          "price": "無料",
-          "perks": "週 $0.50 クレジット · 毎分 10 回"
-        },
-        "air": {
-          "price": "月 $4",
-          "perks": "週 $1 クレジット · 毎分 60 回"
-        },
-        "pro": {
-          "price": "月 $20",
-          "perks": "週 $5 クレジット · 毎分 240 回"
-        }
-      },
       "legal": {
         "title": "規約とポリシー",
-        "description": "ウェブのログイン画面と同じ文書です。ブラウザで開きます。",
-        "rowName": "文書を表示",
-        "rowHint": "サーバー規約、プライバシーポリシー（モデルごとのデータ処理）、利用規定、サブプロセッサ一覧。",
         "terms": "利用規約",
         "privacy": "プライバシーポリシー",
         "acceptableUse": "利用規定",
         "subprocessors": "サブプロセッサ"
-      }
+      },
+      "manageName": "プラン・お支払い管理",
+      "openDashboard": "ダッシュボードを開く",
+      "resetsIn": "リセットまでの残り時間",
+      "resetsAt": "リセット日時",
+      "resetInDays": "{{days}}日 {{hours}}時間",
+      "resetInHours": "{{hours}}時間 {{minutes}}分",
+      "resetInMinutes": "{{minutes}}分"
     },
     "ai": {
       "description": "AI サービスを接続し、役割ごとに使うモデルを選びます。",

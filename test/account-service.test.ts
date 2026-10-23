@@ -114,7 +114,6 @@ async function startFakeServer(): Promise<FakeServer> {
 				const body = await readBody(request);
 				return reply(response, 200, { url: `https://checkout.example/${String(body.plan)}` });
 			}
-			if (path === "/v1/account/portal" && request.method === "POST") return reply(response, 200, { url: "https://portal.example/session" });
 			reply(response, 404, { error: { message: "not found", type: "invalid_request_error", code: "not_found" } });
 		})();
 	});
@@ -382,6 +381,17 @@ describe("status and refresh", () => {
 
 		expect(status.account).toMatchObject({ plan: "pro", cancelScheduled: true, trialing: false, periodEnd: "2026-11-01T00:00:00.000Z", requestsPerMinute: 240 });
 		expect(status.account?.billing.portal).toBe(true);
+	});
+
+	it("reports embeddings from the server's flag, and understands the Max plan", async () => {
+		await service.signIn();
+		expect((await service.refresh()).account).toMatchObject({ plan: "free", embeddings: false });
+
+		fake.account = { ...FREE_ACCOUNT, plan: "max", embeddings: true };
+		expect((await service.refresh()).account).toMatchObject({ plan: "max", embeddings: true });
+
+		fake.account = { ...FREE_ACCOUNT, plan: "air", embeddings: false };
+		expect((await service.refresh()).account).toMatchObject({ plan: "air", embeddings: false });
 	});
 
 	it("keeps the last known account and flags offline when the server is unreachable", async () => {
@@ -696,23 +706,8 @@ describe("hosted billing", () => {
 		expect(opened).toHaveLength(before);
 	});
 
-	it("opens the billing portal", async () => {
-		await service.signIn();
-
-		await service.portal();
-
-		expect(opened.at(-1)).toBe("https://portal.example/session");
-	});
-
 	it("refuses to start billing when signed out", async () => {
 		await expect(service.checkout("pro")).rejects.toThrow(/sign in/iu);
-	});
-
-	it("never opens a URL that is not https", async () => {
-		await service.signIn();
-		fake.failNext.set("/v1/account/portal", { status: 200, body: { url: "file:///etc/passwd" } });
-
-		await expect(service.portal()).rejects.toThrow(/https/iu);
 	});
 });
 
