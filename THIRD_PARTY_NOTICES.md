@@ -68,6 +68,16 @@ Notes on what was verified:
 |---|---|---|---|
 | cfb (SheetJS) | 1.2.2 | Apache-2.0 | Reads the OLE2 container of Outlook `.msg` files in Quick Look; also pulled in by `xlsx` and `kordoc` |
 
+## Bundled typeface
+
+| Component | Version | License | Copyright / source |
+|---|---|---|---|
+| Pretendard Variable (`PretendardVariable.woff2`) | 1.3.9 | SIL Open Font License 1.1 | Kil Hyung-jin, with Reserved Font Name Pretendard — https://github.com/orioncactus/pretendard |
+
+The font file ships unmodified as the app's UI typeface
+(`src/renderer/styles/fonts/`). The full license text is in
+`src/renderer/styles/fonts/Pretendard-OFL.txt`.
+
 ## Programs and models bundled in the installers
 
 The macOS and Windows installers ship these programs unmodified, as separate
