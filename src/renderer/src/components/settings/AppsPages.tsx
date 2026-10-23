@@ -22,6 +22,7 @@ import type {
 	ScheduledRunRecord,
 } from "../../../../shared/settings-contract";
 import { calendarSupported, isCalendarDatasourceType } from "../../../../shared/calendar-platform";
+import { datasourceSupported } from "../../../../shared/messenger-platform";
 import { t, type LocaleKey } from "../../../../shared/i18n/core";
 import { hostPlatform } from "../../lib/shortcuts";
 import { ConnectorFieldInput, TEMPLATE_BY_ID, type FieldSpec } from "./datasourceTemplates";
@@ -447,6 +448,8 @@ export function AppsPage({
 							{group.ids.map((templateId) => {
 								const template = TEMPLATE_BY_ID[templateId];
 								if (template === undefined) return null;
+								// KakaoTalk is read through a macOS-only program (lazykatok): it is not offered at all elsewhere.
+								if (!datasourceSupported(templateId, hostPlatform())) return null;
 								// Calendar reads EventKit, so it can only be connected on a Mac.
 								const available = templateId !== "calendar" || calendarSupported(hostPlatform());
 								return (
@@ -560,7 +563,7 @@ export function SourceDetailPage({
 	}
 
 	const appRequirement = row?.install.app ?? null;
-	const downloadUrl = appRequirement?.required ? TEMPLATE_APP_URLS[type] : undefined;
+	const downloadUrl = appRequirement?.required ? appDownloadUrl(type, hostPlatform()) : undefined;
 
 	return (
 		<div className="settings-source is-open" data-source-id={alias}>
@@ -703,3 +706,14 @@ const TEMPLATE_APP_URLS: Readonly<Record<string, string>> = {
 	kakao: "https://apps.apple.com/kr/app/kakaotalk/id869223134",
 	obsidian: "https://obsidian.md/download",
 };
+
+/** The same pages for Windows where the Mac one is a different link (`slack.com/downloads/windows`). */
+const WINDOWS_APP_URLS: Readonly<Record<string, string>> = {
+	telegram: "https://desktop.telegram.org/",
+	whatsapp: "https://www.whatsapp.com/download",
+	slack: "https://slack.com/downloads/windows",
+};
+
+function appDownloadUrl(type: string, platform: string): string | undefined {
+	return (platform === "win32" ? WINDOWS_APP_URLS[type] : undefined) ?? TEMPLATE_APP_URLS[type];
+}
