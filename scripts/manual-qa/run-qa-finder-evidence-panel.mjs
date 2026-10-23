@@ -23,8 +23,9 @@ import { fileURLToPath } from "node:url";
 import { mkdirSync, rmSync, writeFileSync, appendFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, basename } from "node:path";
+import { PDFDocument, StandardFonts } from "pdf-lib";
 import { launchFinder, finderWindow, openAiSearch } from "./launch-finder.mjs";
-import { chord, isWindows, rmRetry } from "./platform.mjs";
+import { rmRetry } from "./platform.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const EVIDENCE = join(ROOT, ".omo/evidence/ai-finder-app/qa-evidence-panel");
@@ -39,9 +40,8 @@ const RUN_ID = `ulw-evidence-qa-${Date.now().toString(36)}`;
 const USER_DATA = join(tmpdir(), RUN_ID);
 const DOCS = join(homedir(), "Documents", RUN_ID);
 const POLICY = join(DOCS, "한글 공백 정책.md");
-const MEMO = join(DOCS, "qa-evidence-memo.md");
+const MEMO = join(DOCS, "qa-evidence-memo.pdf");
 const SHEET = join(DOCS, "260414 발표 목차_v0.6.xlsx");
-const FOLDER = basename(DOCS);
 /** A web evidence source, the shape a model cites for a page it read. */
 const WEB_SOURCE = "https://music.bugs.co.kr/artist/20047596";
 
@@ -72,7 +72,13 @@ process.on("exit", () => sweep(false));
 mkdirSync(join(USER_DATA, "chat-history"), { recursive: true });
 mkdirSync(DOCS, { recursive: true });
 writeFileSync(POLICY.normalize("NFD"), "## 승인 규칙\n1. 일반 환불은 5영업일 내 처리합니다.\n2. 예외는 임원 승인이 필요합니다.\n비고: 긴급 예외도 승인 생략 불가.\n");
-writeFileSync(MEMO, "## 메모\n승인 체인 원본 첨부 필수.\n");
+const memoPdf = await PDFDocument.create();
+const memoFont = await memoPdf.embedFont(StandardFonts.Helvetica);
+memoPdf.addPage([600, 800]).drawText("Cover page — general overview of the approval process.", { x: 72, y: 700, size: 14, font: memoFont });
+const memoPage2 = memoPdf.addPage([600, 800]);
+memoPage2.drawText("Section 2 — Exceptions and escalation.", { x: 72, y: 720, size: 16, font: memoFont });
+memoPage2.drawText("Approval chain original attachment is mandatory before payout.", { x: 72, y: 260, size: 12, font: memoFont });
+writeFileSync(MEMO, await memoPdf.save());
 writeFileSync(SHEET, "fixture");
 log(`fixtures: ${DOCS}`);
 
@@ -89,10 +95,10 @@ const evidenceAll = [
 	},
 	{
 		number: 2,
-		title: "qa-evidence-memo.md",
+		title: "qa-evidence-memo.pdf",
 		summary: "승인 체인 첨부 메모입니다.",
 		source: MEMO,
-		excerpts: ["승인 체인 원본 첨부 필수."],
+		excerpts: ["Approval chain original attachment is mandatory before payout."],
 		confidence: 0.81,
 	},
 	{
@@ -240,12 +246,12 @@ await page.waitForSelector(`${EVIDENCE_HALF} .evidence-tab.bg-accent`);
 const activeCite = await quickProse.locator(".cite.active").allTextContents();
 const activeTab = (await page.locator(`${EVIDENCE_HALF} .evidence-tab.bg-accent`).textContent())?.trim();
 const evTitle = (await page.locator(`${EVIDENCE_HALF} .preview-title`).textContent()) ?? "";
-const revealBtn = page.locator(`${EVIDENCE_HALF} .preview-title[title="Show in Finder"]`);
+const revealBtn = page.locator(`${EVIDENCE_HALF} .preview-title[title="Preview at the cited passage"]`);
 check("the cited chip lights up with the active accent", JSON.stringify(activeCite) === JSON.stringify(["2"]), JSON.stringify(activeCite));
 check("the citation selects evidence 2", activeTab === "2" && evTitle.startsWith("2. "), `tab=${activeTab} title=${evTitle.slice(0, 32)}`);
-check("the evidence title is the Show-in-Finder action", (await revealBtn.count()) === 1, `count=${await revealBtn.count()}`);
+check("the evidence title is the preview-at-passage action", (await revealBtn.count()) === 1, `count=${await revealBtn.count()}`);
 const detail = (await page.locator(`${EVIDENCE_HALF} .preview-sub`).textContent()) ?? "";
-check("the detail shows confidence without the source path", detail.includes("Relevance 81%") && !detail.includes("qa-evidence-memo.md"), detail.replace(/\s+/g, " ").slice(0, 120));
+check("the detail shows confidence without the source path", detail.includes("Relevance 81%") && !detail.includes("qa-evidence-memo.pdf"), detail.replace(/\s+/g, " ").slice(0, 120));
 check("the Evidence header, eye, and close controls are removed", (await page.locator(`${EVIDENCE_HALF} .inspector-head`).count()) === 0 && (await page.locator(`${EVIDENCE_HALF} button[aria-label="Quick Look"]`).count()) === 0 && (await page.locator(`${EVIDENCE_HALF} button[aria-label="Close"]`).count()) === 0, "header controls absent");
 await page.screenshot({ path: join(EVIDENCE, "02-evidence-panel.png") });
 
@@ -286,53 +292,25 @@ check(
 const evBold = await page.locator(`${EVIDENCE_HALF} .inspector-body strong`).count();
 check("chunk text bold renders as emphasized strong", evBold >= 1, `strong=${evBold}`);
 
-// 5. Title click opens the enclosing folder in a NEW tab and selects the source row.
+// 5. Title click opens Quick Look at the cited passage instead of a new Finder tab.
+await chipOf(2).click();
 const tabsBefore = await page.locator(".tabs .tab").count();
-const targetName = basename(POLICY).normalize("NFC");
-// The flash is a 1.8s transient that can end before a slow listing paints the
-// row selected, so record it with an observer armed before the click.
-await page.evaluate((name) => {
-	window.__qaFlashSeen = false;
-	const seen = () =>
-		[...document.querySelectorAll(".row.bg-accent-flash")].some((row) => row.textContent?.normalize("NFC").includes(name));
-	window.__qaFlashObserver = new MutationObserver(() => {
-		if (seen()) window.__qaFlashSeen = true;
-	});
-	window.__qaFlashObserver.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["class"] });
-}, targetName);
+const quickLook = app.windows().find((candidate) => candidate.url().includes("quick-look.html")) ?? (await app.waitForEvent("window", { predicate: (candidate) => candidate.url().includes("quick-look.html"), timeout: 15_000 }));
 const clickedAt = Date.now();
-await page.locator(`${EVIDENCE_HALF} button[title="Show in Finder"]`).click();
-// A slow Windows runner paints the folder listing late; the default 8s page
-// timeout is not enough for the new tab to appear (see the 10s/30s waits below).
+await page.locator(`${EVIDENCE_HALF} button[title="Preview at the cited passage"]`).click();
+await quickLook.waitForSelector('.ql-pages__evidence[data-evidence-state="found"]', { timeout: 10_000 });
+const jumpMs = Date.now() - clickedAt;
+const markedPage = await quickLook.locator('.ql__paper:has(.ql__mark[data-evidence-mark="first"])').getAttribute("data-page");
+const pillText = ((await quickLook.locator(".ql-pages__pill").textContent()) ?? "").replace(/\s+/g, " ");
+check("clicking the evidence title adds no Finder tab", (await page.locator(".tabs .tab").count()) === tabsBefore);
+check("Quick Look highlights the cited passage on page 2 and scrolls to it", markedPage === "2" && pillText.includes("2 / 2"), `markedPage=${markedPage} pill="${pillText}" in ${jumpMs}ms`);
+await quickLook.screenshot({ path: join(EVIDENCE, "04-preview-jump.png") });
+await quickLook.locator('button[aria-label="Close"]').click();
+
+// 6. Evidence Folder opens the session's files in a temporary folder tab, whose inspector is Info; switching back restores Evidence.
+await page.locator(`${EVIDENCE_HALF} .evidence-tab`, { hasText: /^1$/ }).first().click();
+await page.locator(`${EVIDENCE_HALF} button[data-action="evidence-folder"]`).click();
 await page.waitForFunction((count) => document.querySelectorAll(".tabs .tab").length === count + 1, tabsBefore, { timeout: 20_000, polling: 50 });
-const newTabTitle = (await page.locator(".tabs .tab--active .tab__title").textContent()) ?? "";
-check("the title opens the source folder in a new tab", newTabTitle === FOLDER, `tab="${newTabTitle}" want="${FOLDER}"`);
-const selected = await page
-	.waitForFunction(
-		(name) =>
-			[...document.querySelectorAll('[role="row"]')].some(
-				(row) => row.getAttribute("aria-selected") === "true" && row.textContent?.normalize("NFC").includes(name),
-			),
-		targetName,
-		{ timeout: 10_000, polling: 50 },
-	)
-	.then(() => true)
-	.catch(() => false);
-const reveal = await page.evaluate(() => {
-	window.__qaFlashObserver.disconnect();
-	return {
-		flash: window.__qaFlashSeen,
-		rows: [...document.querySelectorAll('[role="row"]')].map((row) => ({
-			text: (row.textContent ?? "").normalize("NFC").slice(0, 40),
-			selected: row.getAttribute("aria-selected"),
-		})),
-	};
-});
-check(
-	"the title selects and flashes a Korean filename with spaces and different Unicode normalization",
-	selected && reveal.flash,
-	`selected=${selected} flash=${reveal.flash} after=${Date.now() - clickedAt}ms rows=${JSON.stringify(reveal.rows)}`,
-);
 check(
 	"the folder tab's inspector is the whole Info view, no Evidence",
 	(await page.locator(INFO_HALF).count()) === 1 && (await page.locator(EVIDENCE_HALF).count()) === 0,
@@ -340,9 +318,6 @@ check(
 );
 const infoRatio = await page.evaluate((half) => document.querySelector(half).getBoundingClientRect().height / document.querySelector(".inspector").getBoundingClientRect().height, INFO_HALF);
 check("the Info view fills the whole inspector column", infoRatio > 0.99, `ratio=${infoRatio.toFixed(3)}`);
-await page.screenshot({ path: join(EVIDENCE, "04-new-tab-reveal.png") });
-
-// 6. Back on the AI Search tab, the inspector is that tab's Evidence again.
 await page.locator('.tabs .tab[data-ai-search="true"]').click();
 await page.waitForSelector(EVIDENCE_HALF);
 check(
@@ -351,10 +326,10 @@ check(
 );
 await page.screenshot({ path: join(EVIDENCE, "05-back-to-ai-tab.png") });
 
-// 7. Datasource evidence has no local Finder title action.
+// 7. Datasource evidence has no local preview title action.
 await page.locator(`${EVIDENCE_HALF} .evidence-tab`, { hasText: /^3$/ }).first().click();
 await page.waitForFunction((sel) => document.querySelector(sel)?.textContent?.startsWith("3. "), `${EVIDENCE_HALF} .preview-title`);
-check("a virtual datasource title is not a local Finder action", (await page.locator(`${EVIDENCE_HALF} .preview-title[title="Show in Finder"]`).count()) === 0);
+check("a virtual datasource title is not a local preview action", (await page.locator(`${EVIDENCE_HALF} .preview-title[title="Preview at the cited passage"]`).count()) === 0);
 await page.screenshot({ path: join(EVIDENCE, "06-datasource.png") });
 
 // 8. A web-page source opens in the OS browser: no Finder tab, no error toast.

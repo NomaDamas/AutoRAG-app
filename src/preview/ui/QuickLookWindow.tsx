@@ -310,7 +310,7 @@ function QuickLookWindow({ bridge }: { readonly bridge: QuickLookWindowBridge })
 					) : document === null ? (
 						<ErrorView message={load.error ?? t("quickLook.window.cannotOpen")} />
 					) : (
-						<PreviewBody file={document} />
+						<PreviewBody file={document} anchor={load.anchor} />
 					)}
 				</main>
 			</div>

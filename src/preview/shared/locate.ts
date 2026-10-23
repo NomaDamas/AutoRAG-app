@@ -43,6 +43,8 @@ export interface TextIndex {
 	readonly pieceStarts: Int32Array;
 }
 
+/** A long segment with no whole match is tried in slices this wide, so a verbatim quote inside a paraphrased sentence still lands. */
+const SUB_SEGMENT = 20;
 /** Segments shorter than this never anchor a match. */
 const MIN_ANCHOR = 8;
 const MAX_ERROR_RATE = 0.2;
@@ -130,6 +132,34 @@ function segmentHits(key: string, segment: string): readonly Hit[] {
 	return search(key, segment, Math.floor(segment.length * MAX_ERROR_RATE)).slice(0, MAX_HITS);
 }
 
+/** Walk a slice hit outward across adjacent characters that also match `segment`. */
+function extendHit(key: string, segment: string, from: number, to: number, hit: Hit): Hit {
+	let start = hit.start;
+	let end = hit.end;
+	for (let at = from; at > 0 && start > 0 && segment.charCodeAt(at - 1) === key.charCodeAt(start - 1); at -= 1) start -= 1;
+	for (let at = to; at < segment.length && end < key.length && segment.charCodeAt(at) === key.charCodeAt(end); at += 1) end += 1;
+	return { start, end, errors: hit.errors };
+}
+
+function matchSegments(key: string, rawSegments: readonly string[]): readonly { readonly length: number; readonly hits: readonly Hit[] }[] {
+	const out: { readonly length: number; readonly hits: readonly Hit[] }[] = [];
+	for (const segment of rawSegments) {
+		const hits = segmentHits(key, segment);
+		if (hits.length > 0 || segment.length < SUB_SEGMENT * 2) {
+			out.push({ length: segment.length, hits });
+			continue;
+		}
+		for (let from = 0; from < segment.length; ) {
+			const next = from + SUB_SEGMENT;
+			const to = segment.length - next < MIN_ANCHOR ? segment.length : next;
+			const slice = segment.slice(from, to);
+			out.push({ length: slice.length, hits: segmentHits(key, slice).map((hit) => extendHit(key, segment, from, to, hit)) });
+			from = to;
+		}
+	}
+	return out;
+}
+
 function distance(a: Hit, b: Hit): number {
 	return Math.max(0, b.start - a.end, a.start - b.end);
 }
@@ -169,7 +199,7 @@ function toRanges(index: TextIndex, hits: readonly Hit[]): readonly LocatedRange
 /** Where `excerpt` is in the indexed text, or null when it is not there with enough confidence. */
 export function locateExcerpt(index: TextIndex, excerpt: string): LocatedExcerpt | null {
 	if (index.key.length === 0 || BARE_PATH.test(excerpt.trim())) return null;
-	const segments = excerptSegments(excerpt).map((segment) => ({ length: segment.length, hits: segmentHits(index.key, segment) }));
+	const segments = matchSegments(index.key, excerptSegments(excerpt));
 	const total = segments.reduce((sum, segment) => sum + segment.length, 0);
 	if (total === 0) return null;
 	const window = Math.max(MIN_WINDOW, total * 3);

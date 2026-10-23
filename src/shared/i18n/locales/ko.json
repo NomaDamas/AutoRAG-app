@@ -215,10 +215,10 @@
     "evidencePanel": {
       "emptyTitle": "답변의 근거가\n여기에 표시됩니다.",
       "excerpts": "근거 내용 발췌",
-      "showInFinder": "Finder에서 보기",
       "openInBrowser": "브라우저에서 열기",
       "evidenceFolder": "근거 폴더",
-      "evidenceFolderTooltip": "현재 대화의 근거 파일을 임시 폴더 탭으로 열기"
+      "evidenceFolderTooltip": "현재 대화의 근거 파일을 임시 폴더 탭으로 열기",
+      "openPreview": "미리보기에서 근거 위치 보기"
     }
   },
   "aiSearch": {
@@ -1628,6 +1628,11 @@
       "openFailed": "프레젠테이션을 열 수 없습니다",
       "noSlides": "슬라이드가 없습니다",
       "noPreview": "이 문서에는 미리보기 이미지가 없습니다"
+    },
+    "evidence": {
+      "searching": "근거 위치 찾는 중…",
+      "found": "근거 위치 표시됨",
+      "missing": "근거 위치를 찾지 못함"
     }
   },
   "settingsCore": {

@@ -319,7 +319,7 @@ try {
 	await page.locator(".history-item").first().click();
 	await page.waitForSelector('.inspector-half[aria-label="Evidence"] .evidence-tab');
 	const before = await panes(page);
-	await page.locator('.inspector-half[aria-label="Evidence"] button[title="Show in Finder"]').click();
+	await page.locator('.inspector-half[aria-label="Evidence"] button[data-action="evidence-folder"]').click();
 	await page.waitForFunction(
 		([id, count]) => document.querySelectorAll(`[data-workspace-pane="${id}"] .tabs .tab`).length === count + 1,
 		[aiPane.id, before.find((pane) => pane.id === aiPane.id).tabs.length],
@@ -327,10 +327,10 @@ try {
 	);
 	state = await panes(page);
 	const revealed = state.find((pane) => pane.id === aiPane.id);
-	check("an evidence title opens the source folder in the last focused tab's pane", revealed.tabs.find((entry) => entry.active)?.title === basename(SOURCES), JSON.stringify(revealed.tabs));
+	check("the Evidence Folder opens in a new tab in the last focused tab's pane", revealed.tabs.find((entry) => entry.active)?.title === "Evidence Folder", JSON.stringify(revealed.tabs));
 	check("the other pane is left alone", JSON.stringify(state.find((pane) => pane.id === folderPane.id).tabs) === JSON.stringify(before.find((pane) => pane.id === folderPane.id).tabs));
-	await page.waitForFunction((name) => [...document.querySelectorAll('[role="row"][aria-selected="true"]')].some((row) => row.textContent?.includes(name)), basename(POLICY), { timeout: 10_000 });
-	check("the source file is selected in the revealed tab", true);
+	await page.waitForFunction((name) => [...document.querySelectorAll('[role="row"]')].some((row) => row.textContent?.includes(name)), basename(POLICY), { timeout: 10_000 });
+	check("the source file is listed in the Evidence Folder tab", true);
 	await page.screenshot({ path: join(EVIDENCE, "10-evidence-reveal.png") });
 
 	// The AI tab's chat survives moving into the folder pane's strip.

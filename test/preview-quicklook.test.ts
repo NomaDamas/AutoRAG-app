@@ -6,7 +6,7 @@ import { summarizeBundle } from "../src/preview/node/bundle";
 import { createDefaultAppCache } from "../src/preview/node/default-app";
 import { measureFolder, summarizeFolder } from "../src/preview/node/folder";
 import { describeBinary } from "../src/preview/shared/binary-kind";
-import { isQuickLookLoad, isQuickLookReady } from "../src/preview/shared/contract";
+import { ANCHOR_LIMITS, isQuickLookLoad, isQuickLookReady, isQuickLookTarget } from "../src/preview/shared/contract";
 import { fitQuickLook, QUICK_LOOK_TOOLBAR } from "../src/preview/shared/fit";
 import { formatClock, formatFinderDate, formatFinderSize, formatItemCount } from "../src/preview/shared/format";
 import { setAppLanguage } from "../src/shared/i18n/core";
@@ -223,10 +223,15 @@ describe("application bundle summary", () => {
 			bundle: { name: "Hello.app", path: "/Applications/Hello.app", modifiedAt: "2026-01-01T00:00:00.000Z", iconUrl: null },
 			error: null,
 			app: null,
+			anchor: null,
 		};
 		expect(isQuickLookLoad(load)).toBe(true);
+		expect(isQuickLookLoad({ ...load, anchor: ["cited passage"] })).toBe(true);
+		expect(isQuickLookLoad({ ...load, anchor: [123] })).toBe(false);
 		expect(isQuickLookLoad({ ...load, bundle: { name: "Hello.app" } })).toBe(false);
 		expect(isQuickLookLoad({ ...load, bundle: null, folder: null })).toBe(true);
+		expect(isQuickLookTarget({ path: "/tmp/a.pdf", name: "a.pdf", anchor: ["ok"] })).toBe(true);
+		expect(isQuickLookTarget({ path: "/tmp/a.pdf", name: "a.pdf", anchor: Array.from({ length: ANCHOR_LIMITS.excerpts + 1 }, () => "x") })).toBe(false);
 	});
 });
 

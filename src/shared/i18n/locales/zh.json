@@ -215,10 +215,10 @@
     "evidencePanel": {
       "emptyTitle": "回答的依据\n将显示在此处。",
       "excerpts": "依据摘录",
-      "showInFinder": "在访达中显示",
       "openInBrowser": "在浏览器中打开",
       "evidenceFolder": "依据文件夹",
-      "evidenceFolderTooltip": "在临时文件夹标签页中打开当前对话的依据文件"
+      "evidenceFolderTooltip": "在临时文件夹标签页中打开当前对话的依据文件",
+      "openPreview": "在预览中查看引用段落"
     }
   },
   "aiSearch": {
@@ -1628,6 +1628,11 @@
       "openFailed": "无法打开演示文稿",
       "noSlides": "没有幻灯片",
       "noPreview": "此文档没有预览图像"
+    },
+    "evidence": {
+      "searching": "正在查找引用段落…",
+      "found": "已高亮引用段落",
+      "missing": "未找到引用段落"
     }
   },
   "settingsCore": {

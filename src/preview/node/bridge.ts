@@ -27,7 +27,8 @@ function subscribe(ipcRenderer: IpcRenderer, channel: string, listener: (payload
 export function createPreviewBridge(ipcRenderer: IpcRenderer): PreviewBridge {
 	return {
 		show: async (target, origin) => {
-			await ipcRenderer.invoke(PREVIEW_CHANNELS.show, { path: target.path, name: target.name }, origin);
+			const anchor = target.anchor === undefined ? {} : { anchor: [...target.anchor] };
+			await ipcRenderer.invoke(PREVIEW_CHANNELS.show, { path: target.path, name: target.name, ...anchor }, origin);
 		},
 		hide: async (origin) => {
 			await ipcRenderer.invoke(PREVIEW_CHANNELS.hide, origin);

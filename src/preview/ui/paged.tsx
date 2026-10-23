@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { useTranslation } from "react-i18next";
 import type { PreviewDocument } from "../shared/contract";
 import type { Size } from "../shared/fit";
+import type { PageMarks } from "../shared/text-marks";
 import { useChrome } from "./chrome";
 import { FallbackView } from "./fallback";
 
@@ -90,13 +91,15 @@ interface PageProps {
 	readonly index: number;
 	readonly box: Size;
 	readonly scale: number;
+	/** Cited passages on this page, in page units. */
+	readonly marks: PageMarks["rects"] | undefined;
 	readonly onBox: (index: number, box: Size) => void;
 	readonly onError: (message: string) => void;
 	readonly register: (index: number, node: HTMLDivElement | null) => void;
 }
 
 /** One paper card. It keeps its size while released, so a long document stays cheap to scroll. */
-function Page({ draw, index, box, scale, onBox, onError, register }: PageProps): ReactElement {
+function Page({ draw, index, box, scale, marks, onBox, onError, register }: PageProps): ReactElement {
 	const { attach, near } = useNearScreen<HTMLDivElement>(".ql-pages__scroll", RENDER_MARGIN);
 	const [holder, setHolder] = useState<HTMLDivElement | null>(null);
 	const width = Math.round(box.width * scale);
@@ -115,6 +118,14 @@ function Page({ draw, index, box, scale, onBox, onError, register }: PageProps):
 	return (
 		<div ref={ref} className="ql__paper relative flex-none bg-ql-page shadow-ql-page" data-page={index + 1} style={{ width, height: Math.round(box.height * scale) }}>
 			<div ref={setHolder} className="absolute inset-0 overflow-hidden [&>*]:block [&>*]:w-full [&>*]:h-full" />
+			{marks?.map((rect, order) => (
+				<div
+					key={order}
+					className="ql__mark absolute pointer-events-none rounded-2 bg-ql-evidence-mark mix-blend-multiply shadow-[0_0_0_1px_var(--ql-evidence-mark-ring)]"
+					data-evidence-mark={order === 0 ? "first" : "rest"}
+					style={{ left: (rect.x - 1) * scale, top: (rect.y - 1) * scale, width: (rect.width + 2) * scale, height: (rect.height + 2) * scale }}
+				/>
+			))}
 		</div>
 	);
 }
@@ -159,13 +170,33 @@ function Thumb({ draw, index, box, active, onPick, onBox, onError }: {
 }
 
 /**
+ * What the evidence highlight shows: still searching the document's text, the
+ * cited passage's marks, or nothing found (the document opens at the top).
+ */
+export type EvidenceMarks = { readonly state: "searching" } | { readonly state: "found"; readonly pages: readonly PageMarks[] } | { readonly state: "missing" };
+
+/** The reading line sits a third of the way down; a cited passage lands just above it. */
+const MARK_LEAD = 0.25;
+
+/**
  * A paged document like the reference PDF panel: paper cards in one scrolling
  * column, a floating pill with zoom and the current page, and a page rail on
  * the right. `boxes` is every page's size as known when the document opened;
  * `draw` may correct a page's size as it renders. The panel asks for the
- * document's width plus the margins and rail once, when it mounts.
+ * document's width plus the margins and rail once, when it mounts. `evidence`
+ * (AI Search) draws the cited passage over its pages and scrolls to it once.
  */
-export function PagedView({ file, boxes: initialBoxes, draw }: { readonly file: PreviewDocument; readonly boxes: readonly Size[]; readonly draw: DrawPage }): ReactElement {
+export function PagedView({
+	file,
+	boxes: initialBoxes,
+	draw,
+	evidence = null,
+}: {
+	readonly file: PreviewDocument;
+	readonly boxes: readonly Size[];
+	readonly draw: DrawPage;
+	readonly evidence?: EvidenceMarks | null;
+}): ReactElement {
 	const { t } = useTranslation();
 	const { report } = useChrome();
 	const scrollerRef = useRef<HTMLDivElement | null>(null);
@@ -175,6 +206,7 @@ export function PagedView({ file, boxes: initialBoxes, draw }: { readonly file: 
 	const [zoom, setZoom] = useState<number | null>(null);
 	const [active, setActive] = useState(0);
 	const [error, setError] = useState<string | null>(null);
+	const marksByPage = useMemo(() => new Map(evidence?.state === "found" ? evidence.pages.map((marks) => [marks.page, marks.rects]) : []), [evidence]);
 
 	const openedWith = useRef(initialBoxes);
 	useEffect(() => {
@@ -190,11 +222,14 @@ export function PagedView({ file, boxes: initialBoxes, draw }: { readonly file: 
 	}, [report]);
 
 	const widest = useMemo(() => boxes.reduce((max, box) => Math.max(max, box.width), 0), [boxes]);
+	/** The panel's own width has been measured once; until then `fit` is a guess. */
+	const [measured, setMeasured] = useState(false);
 	useEffect(() => {
 		const scroller = scrollerRef.current;
 		if (scroller === null || widest <= 0) return;
 		const observer = new ResizeObserver(() => {
 			setFit(Math.min(MAX_SCALE, Math.max(MIN_SCALE, (scroller.clientWidth - PAGE_GUTTER * 2) / widest)));
+			setMeasured(true);
 		});
 		observer.observe(scroller);
 		return () => observer.disconnect();
@@ -210,6 +245,18 @@ export function PagedView({ file, boxes: initialBoxes, draw }: { readonly file: 
 		if (scroller === null || previous === scale) return;
 		scroller.scrollTop = (scroller.scrollTop * scale) / previous;
 	}, [scale]);
+
+	// Bring the cited passage into view once, after the fit scale settled; a later zoom keeps the reading position.
+	const focused = useRef(false);
+	const first = evidence?.state === "found" ? evidence.pages[0] : undefined;
+	useLayoutEffect(() => {
+		const scroller = scrollerRef.current;
+		const node = first === undefined ? undefined : nodesRef.current[first.page];
+		if (focused.current || !measured || first === undefined || scroller === null || node === null || node === undefined) return;
+		focused.current = true;
+		const top = Math.min(...first.rects.map((rect) => rect.y));
+		scroller.scrollTop = Math.max(0, node.offsetTop + top * scale - scroller.clientHeight * MARK_LEAD);
+	}, [first, measured, scale]);
 
 	useEffect(() => {
 		const scroller = scrollerRef.current;
@@ -264,7 +311,7 @@ export function PagedView({ file, boxes: initialBoxes, draw }: { readonly file: 
 				<div ref={scrollerRef} className="ql-pages__scroll absolute inset-0 overflow-auto">
 					<div className="flex flex-col items-center gap-18 w-fit min-w-full px-[56px] pt-8 pb-70 box-border">
 						{boxes.map((box, index) => (
-							<Page key={index} draw={draw} index={index} box={box} scale={scale} onBox={onBox} onError={fail} register={register} />
+							<Page key={index} draw={draw} index={index} box={box} scale={scale} marks={marksByPage.get(index)} onBox={onBox} onError={fail} register={register} />
 						))}
 					</div>
 				</div>
@@ -280,6 +327,14 @@ export function PagedView({ file, boxes: initialBoxes, draw }: { readonly file: 
 					<span className="pr-8 pl-2 font-semibold">
 						{active + 1} / {boxes.length}
 					</span>
+					{evidence === null ? null : (
+						<>
+							<span className="w-1 h-14 mx-6 bg-ql-hairline" />
+							<span className="ql-pages__evidence pr-8 text-ql-ink-secondary" data-evidence-state={evidence.state}>
+								{evidence.state === "searching" ? t("quickLook.evidence.searching") : evidence.state === "found" ? t("quickLook.evidence.found") : t("quickLook.evidence.missing")}
+							</span>
+						</>
+					)}
 				</div>
 			</div>
 			{boxes.length > 1 ? (

@@ -431,7 +431,7 @@ async function show(state: Session, target: QuickLookTarget, origin: Bounds | nu
 	// "Open with" app to name: the button stays "Open".
 	const launched = content.bundle !== null;
 	const known = launched ? null : state.defaultApps.known(target.path, folder);
-	const load: QuickLookLoad = { seq, name: target.name, path: target.path, ...content, app: known };
+	const load: QuickLookLoad = { seq, name: target.name, path: target.path, ...content, app: known, anchor: target.anchor ?? null };
 	state.window.setTitle(target.name);
 	state.window.webContents.send(PREVIEW_CHANNELS.load, load);
 	if (known === null && !launched && content.error === null) {

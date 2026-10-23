@@ -23,7 +23,8 @@ import { PptxView } from "./pptx";
 import { PdfView } from "./pdf";
 import { AudioView, VideoView } from "./player";
 
-export function PreviewBody({ file }: { readonly file: PreviewDocument }): ReactElement {
+/** `anchor` holds AI Search evidence excerpts to highlight; viewers that cannot locate text ignore it. */
+export function PreviewBody({ file, anchor = null }: { readonly file: PreviewDocument; readonly anchor?: readonly string[] | null }): ReactElement {
 	const { t } = useTranslation();
 	const kind = viewerForExtension(file.ext);
 	if (file.size === 0) return <FallbackView file={file} note={t("quickLook.body.emptyFile")} />;
@@ -45,7 +46,7 @@ export function PreviewBody({ file }: { readonly file: PreviewDocument }): React
 		case "heic":
 			return <HeicView file={file} />;
 		case "pdf":
-			return <PdfView file={file} />;
+			return <PdfView file={file} anchor={anchor} />;
 		case "docx":
 			return <DocxView file={file} />;
 		case "legacyDoc":

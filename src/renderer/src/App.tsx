@@ -194,8 +194,12 @@ export function App(): ReactElement {
 	const closingRef = useRef<Bounds | null>(null);
 	const openQuickLook = useCallback((target: QuickLookTarget) => {
 		const open = previewRef.current;
-		if (open?.path === target.path) closingRef.current = iconRect(open.path);
-		setPreview((current) => (current?.path === target.path ? null : { path: target.path, name: target.name }));
+		if (open?.path === target.path && target.anchor === undefined) closingRef.current = iconRect(open.path);
+		setPreview((current) =>
+			current?.path === target.path && target.anchor === undefined
+				? null
+				: { path: target.path, name: target.name, ...(target.anchor === undefined ? {} : { anchor: target.anchor }) },
+		);
 	}, []);
 	const closeQuickLook = useCallback(() => {
 		const open = previewRef.current;
@@ -796,7 +800,10 @@ export function App(): ReactElement {
 								evidence={evidence}
 								evidenceSelected={evidenceSelectedNumber}
 								onSelectEvidence={selectEvidence}
-								onRevealPath={(target) => finder?.revealEvidence(target)}
+								onRevealPath={(target, excerpts) => {
+									if (excerpts !== undefined) openQuickLook({ path: target, name: basename(target), anchor: excerpts });
+									else finder?.revealEvidence(target);
+								}}
 								onToast={setToast}
 								imageActions={imageActions}
 								evidenceFolderCount={localEvidencePaths.length}

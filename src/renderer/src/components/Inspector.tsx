@@ -40,7 +40,7 @@ import { rulesWatching } from "../state/automations";
 import { dateLabelOf, fileKindOf, kindLabelOf, sizeLabelOf } from "../state/entry-values";
 import { buildInfoRows, hasMoreInfoRows, visibleInfoRows } from "../state/inspector-info";
 import { stackCards, summarizeSelection } from "../state/inspector-multi";
-import { evidenceDetail, evidenceHeading, evidenceKind, evidenceSourceUrl } from "../state/evidence";
+import { evidenceDetail, evidenceHeading, evidenceKind, evidenceSourceUrl, isLocalEvidenceSource } from "../state/evidence";
 import {
 	openWithItems,
 	suggestedActions,
@@ -116,8 +116,8 @@ export interface InspectorProps {
 	readonly evidenceFolderCount?: number;
 	/** Create and open the temporary Evidence Folder tab for the current session. */
 	readonly onOpenEvidenceFolder?: () => void;
-	/** Show the source: a file in the Finder, a web page in the OS browser. */
-	readonly onRevealPath: (path: string) => void;
+	/** Show the source: a local file in Quick Look at the cited passage, a web page in the OS browser. */
+	readonly onRevealPath: (path: string, excerpts?: readonly string[]) => void;
 	readonly onToast: (msg: string) => void;
 	/** Images in evidence: a local picture opens in Quick Look, a web image's page in the OS browser. */
 	readonly imageActions: ImageActions;
@@ -806,7 +806,7 @@ function EvidencePanel({
 	readonly evidence: readonly CitationEvidence[];
 	readonly selected: number;
 	readonly onSelect: (n: number) => void;
-	readonly onReveal: (path: string) => void;
+	readonly onReveal: (path: string, excerpts?: readonly string[]) => void;
 	readonly onToast: (msg: string) => void;
 	readonly imageActions: ImageActions;
 	readonly evidenceFolderCount: number;
@@ -850,9 +850,9 @@ function EvidencePanel({
 	const detail = evidenceDetail(item.confidence);
 	const heading = evidenceHeading(item.title, item.source);
 	const url = source === null ? null : evidenceSourceUrl(source);
-	// A datasource virtual id is not a folder on disk; only a local file's
-	// folder resolves the relative image links in its excerpts.
-	const local = source !== null && url === null && !source.startsWith("/kakao/");
+	// A datasource virtual id is not a file or folder on disk; only a local
+	// file previews in Quick Look and resolves relative image links.
+	const local = isLocalEvidenceSource(source);
 	const excerptImages = { folder: local ? dirname(source) : null, actions: imageActions };
 	const sourceImage = local ? imageTarget(source, null) : null;
 	return (
@@ -884,7 +884,7 @@ function EvidencePanel({
 						{url === null ? <FileTile kind={evidenceKind(item.title)} large /> : <LinkIcon size={36} className="text-ink-muted" />}
 					</div>
 				)}
-				{source === null || source.startsWith("/kakao/") ? (
+				{!local && url === null ? (
 					<div className="preview-title text-body font-semibold text-ink leading-[1.3] [overflow-wrap:anywhere]">
 						{item.number}. {heading}
 					</div>
@@ -892,8 +892,8 @@ function EvidencePanel({
 					<button
 						type="button"
 						className="preview-title text-left text-body font-semibold text-ink leading-[1.3] [overflow-wrap:anywhere] cursor-pointer border-0 bg-transparent p-0 transition-colors duration-(--dur-color) ease-[ease] hover:text-accent-text"
-						title={url === null ? t("inspector.evidencePanel.showInFinder") : t("inspector.evidencePanel.openInBrowser")}
-						onClick={() => onReveal(source)}
+						title={url === null ? t("inspector.evidencePanel.openPreview") : t("inspector.evidencePanel.openInBrowser")}
+						onClick={() => onReveal(source!, local ? [...item.excerpts, ...(item.summary.length > 0 ? [item.summary] : [])] : undefined)}
 					>
 						{item.number}. {heading}
 					</button>

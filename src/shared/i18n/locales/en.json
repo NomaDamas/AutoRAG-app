@@ -215,10 +215,10 @@
     "evidencePanel": {
       "emptyTitle": "Answer evidence\nwill appear here.",
       "excerpts": "Evidence excerpts",
-      "showInFinder": "Show in Finder",
       "openInBrowser": "Open in browser",
       "evidenceFolder": "Evidence Folder",
-      "evidenceFolderTooltip": "Open this session's evidence files in a temporary folder tab"
+      "evidenceFolderTooltip": "Open this session's evidence files in a temporary folder tab",
+      "openPreview": "Preview at the cited passage"
     }
   },
   "aiSearch": {
@@ -1628,6 +1628,11 @@
       "openFailed": "Couldn’t open the presentation",
       "noSlides": "No slides",
       "noPreview": "This document has no preview image"
+    },
+    "evidence": {
+      "searching": "Finding the cited passage…",
+      "found": "Cited passage highlighted",
+      "missing": "Cited passage not found"
     }
   },
   "settingsCore": {
