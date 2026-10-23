@@ -1232,6 +1232,21 @@ describe("search", () => {
 		expect(results.every((hit) => hit.location === "Documents")).toBe(true);
 	});
 
+	it("finds a decomposed (NFD) Hangul folder name with a composed (NFC) query and the reverse", async () => {
+		// Given a Documents folder stored the way macOS spells Hangul: as separate jamo
+		const home = join(root, "home-nfd");
+		const decomposed = "보안".normalize("NFD");
+		await mkdir(join(home, "Documents", decomposed), { recursive: true });
+		await writeFile(join(home, "Documents", "unrelated.txt"), "u");
+		const service = createFsService(makeDeps(home).deps);
+
+		// When searching with either spelling, Then the walk fallback returns the folder
+		for (const query of ["보안".normalize("NFC"), decomposed]) {
+			const results = await service.search(query);
+			expect(results.map((hit) => hit.entry.name)).toEqual([decomposed]);
+		}
+	});
+
 	it("returns nothing when no name matches", async () => {
 		// Given a home with files that do not match the query
 		const home = join(root, "home-empty");
