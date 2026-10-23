@@ -10,8 +10,9 @@ const staged = join(root, ".upstream", "librarian-package");
 const installed = join(root, "node_modules", "@autorag", "librarian");
 const remote = "https://github.com/Marker-Inc-Korea/AutoRAG.git";
 // A release tag, or a full commit SHA while the librarian has no tag that carries what the app needs.
-// v2.11.0 ships the Hister browser web-history datasource, external MCP client support, and MinSync-backed Obsidian indexing.
-const librarianRef = "v2.11.0";
+// 02c36c2 is the 2.11.1 release commit: v2.11.0 plus file automations (`autorag automate`, the
+// `manage_automations` agent tool), which the app's 자동화 view reads and the agent edits.
+const librarianRef = "02c36c26cfa86e165f3bb732e9d6827e1ab47b53";
 
 function run(command, args, cwd = root) {
 	const result = spawnSync(command, args, { cwd, stdio: "inherit" });

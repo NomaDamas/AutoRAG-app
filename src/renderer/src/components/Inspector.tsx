@@ -29,12 +29,14 @@ import { useTranslation } from "react-i18next";
 import { previewStreamUrl } from "../../../preview/shared/contract";
 import { hwpFirstPageUrl } from "../../../preview/ui/rhwp";
 import type { ActionAnchor, ActionCapabilities, OpenWithApplication } from "../../../shared/actions-contract";
+import type { AutomationRule } from "../../../shared/automation-contract";
 import type { FsFileDetails } from "../../../shared/fs-contract";
 import type { IndexStatus } from "../../../shared/index-contract";
 import type { CitationEvidence } from "../../../shared/search-contract";
 import { type FinderEntry, hasFileVersion } from "../data/entries";
 import { cn } from "../lib/cn";
 import { anchorOf } from "../lib/anchor";
+import { rulesWatching } from "../state/automations";
 import { dateLabelOf, fileKindOf, kindLabelOf, sizeLabelOf } from "../state/entry-values";
 import { buildInfoRows, hasMoreInfoRows, visibleInfoRows } from "../state/inspector-info";
 import { stackCards, summarizeSelection } from "../state/inspector-multi";
@@ -51,6 +53,7 @@ import { VERSION_TAG_KEYS } from "../state/version-family";
 import { imageTarget } from "../state/answer-markdown";
 import type { FileKind } from "../state/kinds";
 import type { ImageActions } from "./AnswerImage";
+import { AutomationRulesSection } from "./AutomationRulesSection";
 import { EvidenceExcerpt, InlineWithImages } from "./EvidenceBlocks";
 import {
 	CheckIcon,
@@ -118,6 +121,18 @@ export interface InspectorProps {
 	readonly onToast: (msg: string) => void;
 	/** Images in evidence: a local picture opens in Quick Look, a web image's page in the OS browser. */
 	readonly imageActions: ImageActions;
+	/**
+	 * The file automations, for the folder inspector's "이 폴더의 자동화" section:
+	 * the rules that watch the shown folder, and what a row does. Absent (or a
+	 * folder nothing watches) leaves the section out.
+	 */
+	readonly automations?: {
+		readonly rules: readonly AutomationRule[];
+		readonly onEdit: (rule: AutomationRule) => void;
+		readonly onDelete: (rule: AutomationRule) => void;
+		/** Right click on a rule row: its menu, at the pointer. Absent leaves the browser's menu alone. */
+		readonly onMenu?: (rule: AutomationRule, at: { readonly x: number; readonly y: number }) => void;
+	};
 }
 
 const HEAD_BUTTON =
@@ -157,6 +172,7 @@ export function Inspector({
 	onOpenEvidenceFolder,
 	onToast,
 	imageActions,
+	automations,
 }: InspectorProps): ReactElement {
 	const { t } = useTranslation();
 	return (
@@ -190,6 +206,7 @@ export function Inspector({
 					actionCapabilities={actionCapabilities}
 					onAction={onAction}
 					loadOpenWithApplications={loadOpenWithApplications}
+					automations={automations}
 				/>
 			)}
 		</aside>
@@ -208,6 +225,7 @@ function InfoHalf({
 	actionCapabilities,
 	onAction,
 	loadOpenWithApplications,
+	automations,
 }: {
 	readonly entry: FinderEntry | null;
 	readonly indexStatus: IndexStatus | null;
@@ -220,6 +238,7 @@ function InfoHalf({
 	readonly actionCapabilities: ActionCapabilities;
 	readonly onAction: (target: FileActionTarget, anchor: ActionAnchor | null) => void;
 	readonly loadOpenWithApplications: (entry: FinderEntry) => Promise<readonly OpenWithApplication[]>;
+	readonly automations?: InspectorProps["automations"];
 }): ReactElement {
 	const [brief, setBrief] = useState(false);
 	const [details, setDetails] = useState<FsFileDetails | null>(null);
@@ -281,6 +300,15 @@ function InfoHalf({
 							<CopyIcon size={12} />{t("contextMenu.copyPath")}
 						</Chip>
 					</div>
+
+					{entry.kind === "folder" && automations !== undefined ? (
+						<AutomationRulesSection
+							rules={rulesWatching(automations.rules, entry.path)}
+							onEdit={automations.onEdit}
+							onDelete={automations.onDelete}
+							onMenu={automations.onMenu}
+						/>
+					) : null}
 
 					{family === null ? null : <VersionsSection family={family} entry={entry} onOpenMember={onOpenMember} />}
 

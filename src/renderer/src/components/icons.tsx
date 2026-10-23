@@ -39,6 +39,7 @@ import {
 	PanelRight,
 	Pencil,
 	Plus,
+	RefreshCw,
 	RotateCw,
 	Rows3,
 	Search,
@@ -50,6 +51,7 @@ import {
 	Undo2,
 	Users,
 	X,
+	Zap,
 	createLucideIcon,
 	type LucideIcon,
 } from "lucide-react";
@@ -142,6 +144,14 @@ export const ArrowUpIcon = glyph(ArrowUp, 16, 2.6);
 export const PencilIcon = glyph(Pencil, 13, 2);
 
 export const RotateIcon = glyph(RotateCw, 10, 2.8);
+
+/**
+ * File automations: a rule's own glyph in a list row, and the glyph of an
+ * `autorag refresh` rule (the zap and the sparkles cover the rest).
+ */
+export const ZapIcon = glyph(Zap, 11, 2);
+
+export const RefreshIcon = glyph(RefreshCw, 20, 1.8);
 
 export const HistoryIcon = glyph(History, 16, 2);
 

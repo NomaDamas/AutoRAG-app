@@ -13,6 +13,7 @@ import { isJsonObject } from "../shared/settings-contract";
 import { applyDazziThinkingLevels } from "./dazzi-session-auth";
 import { resolveSessionModel } from "./agents/app-model";
 import { applyAppIndexing, readAppIndexing } from "./app-indexing";
+import { resolveNodeBinary, runAutomationToolOnNode } from "./automation-runtime";
 import { ensureEmbeddingForConfig } from "./embedding-daemon";
 import { agentOptionsForSemantic, applySemanticPolicyToAgent } from "./semantic-policy";
 import { syncCalendarMcpConfig } from "./calendar-mcp";
@@ -586,6 +587,8 @@ export function createDefaultAgentFactory(): () => Promise<SearchAgent> {
 		const semantic = readAppIndexing(raw).semanticSearch;
 		const agent = new AttachmentContextAgent(agentOptionsForSemantic(options, semantic));
 		applySemanticPolicyToAgent(agent, semantic);
+		// `manage_automations` starts programs by asking for "this Node"; in the app that would be the app itself.
+		runAutomationToolOnNode(agent, () => resolveNodeBinary({ resourcesPath: process.resourcesPath ?? "", env: process.env, platform: process.platform }));
 		return agent as SearchAgent;
 	};
 }

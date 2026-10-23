@@ -15,12 +15,14 @@ import { ONBOARDING_CHANNELS } from "../shared/onboarding-contract";
 import { isServiceRunRequest, SERVICES_CHANNELS } from "../shared/services-contract";
 import { t } from "../shared/i18n/core";
 import { INDEX_ACTIVITY_CHANNELS } from "../shared/index-activity-contract";
+import { AUTOMATION_CHANNELS, type AutomationRemoval } from "../shared/automation-contract";
 import { APP_UPDATE_CHANNELS } from "../shared/update-contract";
 import { ANALYTICS_CHANNELS } from "../shared/analytics-contract";
 import type { AppUpdaterService } from "./app-updater";
 import type { ActionService } from "./action-service";
 import type { Analytics } from "./analytics-core";
 import type { IndexActivityService } from "./index-activity";
+import type { AutomationService } from "./automation-service";
 import { MODEL_DOWNLOAD_CHANNELS } from "../shared/model-download-contract";
 import type { ModelDownloadService } from "./model-download";
 import { dragOutPaths } from "./drag-out";
@@ -337,6 +339,26 @@ export function registerOsRequestIpcHandlers(service: OsRequestService): void {
 /** The renderer's one read of what is indexing right now; changes are pushed by the main process. */
 export function registerIndexActivityIpcHandlers(service: IndexActivityService): void {
 	ipcMain.handle(INDEX_ACTIVITY_CHANNELS.get, () => service.snapshot());
+}
+
+/** Validate a restore payload: the entry itself is checked by the service, the index here. */
+function requireAutomationRemoval(value: unknown): AutomationRemoval {
+	if (value === null || typeof value !== "object" || Array.isArray(value)) throw new TypeError("automation removal must be an object");
+	const removal = value as Record<string, unknown>;
+	if (removal.entry === null || typeof removal.entry !== "object" || Array.isArray(removal.entry)) throw new TypeError("automation removal entry must be an object");
+	if (typeof removal.index !== "number" || !Number.isInteger(removal.index) || removal.index < 0) throw new TypeError("automation removal index must be a non-negative integer");
+	return { entry: removal.entry as Readonly<Record<string, unknown>>, index: removal.index };
+}
+
+/** File automations: read the rules, delete one, undo that, and start or stop the daemon; changes are pushed by the main process. */
+export function registerAutomationIpcHandlers(service: AutomationService): void {
+	ipcMain.handle(AUTOMATION_CHANNELS.get, () => service.snapshot());
+	ipcMain.handle(AUTOMATION_CHANNELS.remove, (_event, id: unknown) => service.remove(requireNonEmptyString(id, "automation id")));
+	ipcMain.handle(AUTOMATION_CHANNELS.restore, (_event, removal: unknown) => service.restore(requireAutomationRemoval(removal)));
+	ipcMain.handle(AUTOMATION_CHANNELS.setDaemon, (_event, enabled: unknown) => {
+		if (typeof enabled !== "boolean") throw new TypeError("automation daemon enabled must be a boolean");
+		return service.setDaemon(enabled);
+	});
 }
 
 /** The on-device embedding model's download: a status read, start and cancel; progress is pushed by the main process. */

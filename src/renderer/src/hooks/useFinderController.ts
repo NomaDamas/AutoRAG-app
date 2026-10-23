@@ -107,6 +107,7 @@ import {
 	evacuateWorkspace,
 	focusTab,
 	focusAiSearchInWorkspace,
+	openOrSelectAutomationsInWorkspace,
 	openOrSelectFolderInWorkspace,
 	openOrSelectSettingsInWorkspace,
 	reopenClosedTab as reopenClosedWorkspaceTab,
@@ -285,6 +286,8 @@ export interface FinderController {
 	openSettings(): void;
 	/** Sidebar "AI Search": the focused tab becomes AI Search. */
 	showAiSearch(): void;
+	/** Sidebar 자동화 / "자동화 탭에서 보기": the open Automations tab, else the focused tab becomes it. */
+	showAutomations(): void;
 	/** A new AI Search tab with an empty chat ("AI 요약", content search). */
 	openAiSearch(): void;
 	/** ⌘K: adopt the nearest AI Search tab, or open one. */
@@ -1959,6 +1962,7 @@ export function useFinderController(
 		updateWorkspace((workspace) => closeWorkspaceTab(workspace, id));
 	});
 	const showAiSearch = useLatestCallback(() => setTabsState((state) => showAiSearchInActiveTab(state)));
+	const showAutomations = useLatestCallback(() => updateWorkspace(openOrSelectAutomationsInWorkspace));
 	const openAiSearch = useLatestCallback(() => setTabsState((state) => openAiSearchTab(state)));
 	const focusAiSearch = useLatestCallback(() => updateWorkspace(focusAiSearchInWorkspace));
 	const openFolder = useLatestCallback((path: string) => updateWorkspace((workspace) => openOrSelectFolderInWorkspace(workspace, path)));
@@ -2073,6 +2077,7 @@ export function useFinderController(
 		newTab,
 		openSettings,
 		showAiSearch,
+		showAutomations,
 		openAiSearch,
 		focusAiSearch,
 		openFolder,

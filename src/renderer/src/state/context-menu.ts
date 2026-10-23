@@ -47,7 +47,13 @@ export type FinderMenuAction =
 	| "newFolder"
 	| "newFile"
 	| "service"
-	| "toggleTag";
+	| "toggleTag"
+	// The automation rules list (자동화 tab): these never reach the Finder controller's runMenuAction.
+	| "editRule"
+	| "addRule"
+	| "deleteRule"
+	| "openRuleFolder"
+	| "revealRule";
 
 export type MenuTone = "default" | "danger" | "warning";
 

@@ -94,6 +94,7 @@ export function Sidebar({
 	};
 	const localizedItemLabel = (item: NavItem): string => {
 		if (item.view === "aiSearch") return t("places.aiSearch", item.label);
+		if (item.view === "automations") return t("places.automations", item.label);
 		if (item.kind !== undefined) return t(`places.${item.kind}`, item.label);
 		return item.label;
 	};
