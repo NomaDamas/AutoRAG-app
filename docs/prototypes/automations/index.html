@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="ko" data-appearance="light">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Dazzi · 파일 자동화 시안</title>
+    <link rel="stylesheet" href="../../../src/renderer/styles/tokens.css">
+    <link rel="stylesheet" href="./prototype.css">
+    <script src="../settings/lucide-icons.js" defer></script>
+    <script src="./prototype.js" defer></script>
+  </head>
+  <body>
+    <header class="review-bar">
+      <div><strong>Dazzi 파일 자동화 시안</strong><span>Space 훑어보기 · 우클릭 · 편집은 AI 검색 새 탭에서</span></div>
+      <nav class="review-actions" aria-label="시안 조작">
+        <button class="rbtn" type="button" data-act="go" data-id="automations">자동화 탭</button>
+        <button class="rbtn" type="button" data-act="go" data-id="folder">다운로드 폴더</button>
+        <span class="review-gap"></span>
+        <button class="rbtn" type="button" data-act="theme" id="theme-toggle">다크 모드</button>
+        <button class="rbtn" type="button" data-act="reset">처음 상태로</button>
+      </nav>
+    </header>
+    <div class="stage"><div class="window" id="window"></div></div>
+  </body>
+</html>
