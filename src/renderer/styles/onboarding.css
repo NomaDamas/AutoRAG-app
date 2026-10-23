@@ -121,6 +121,16 @@ html[data-appearance="dark"] .onb {
 	color: var(--onb-muted);
 }
 
+/* Off macOS the window controls overlay (src/main/window-chrome.ts) sits in this band and the title is not repeated:
+ * the band stays as the 42px drag strip they live in, with the gutter they cover kept free. */
+html:not([data-platform="darwin"]) .onb .window-title {
+	visibility: hidden;
+}
+
+html:not([data-platform="darwin"]) .onb .titlebar {
+	padding-right: calc(15px + var(--window-controls-gutter));
+}
+
 .onb .stage {
 	min-height: 0;
 	overflow: auto;
