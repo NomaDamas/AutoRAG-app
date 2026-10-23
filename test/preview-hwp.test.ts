@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { openHwp } from "../src/preview/shared/hwp";
 import { byteNeed, describeExtension, viewerForExtension } from "../src/preview/shared/registry";
+import { locateMarks } from "../src/preview/shared/text-marks";
 import { buildHwp, initRhwpForNode, svgText } from "./support/hwp-fixture";
 
 const A4 = { width: 793.7, height: 1122.5 };
@@ -24,6 +25,25 @@ describe("hwp preview", () => {
 			}
 			expect(pages.boxes.map((_box, index) => svgText(pages.svg(index)))).toEqual(["첫째쪽본문", "둘째쪽본문", "셋째쪽본문"]);
 			expect(pages.svg(1)).toMatch(/^<svg\b[^>]*viewBox="0 0 793\.\d+ 1122\.\d+"/);
+		} finally {
+			pages.close();
+		}
+	});
+
+	it.each(["hwp", "hwpx"] as const)("locates a cited passage on its page in a %s document with rhwp's character boundaries", (format) => {
+		const pages = openHwp(buildHwp(["첫째 쪽 개요", "둘째 쪽 본문: 긴급 환불은 이사 2인의 서면 승인이 필요합니다.", "셋째 쪽 부록"], format));
+		try {
+			const marks = locateMarks(
+				pages.boxes.map((_box, index) => pages.runs(index)),
+				["긴급 환불은 이사 2인의 서면 승인이 필요합니다."],
+			);
+			expect(marks).not.toBeNull();
+			expect(marks!.page).toBe(1);
+			expect(marks!.rects).toHaveLength(1);
+			const [rect] = marks!.rects;
+			const glyphX = Number(pages.svg(1).match(/<text\b[^>]*\bx="([\d.]+)"[^>]*>긴<\/text>/)?.[1]);
+			expect(rect!.x).toBeCloseTo(glyphX, 0);
+			expect(rect!.width).toBeGreaterThan(150);
 		} finally {
 			pages.close();
 		}

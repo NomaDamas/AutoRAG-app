@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState, type ReactElement } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import type { PreviewDocument } from "../shared/contract";
 import type { HwpPages } from "../shared/hwp";
+import { locateMarks } from "../shared/text-marks";
 import { FallbackView, Status } from "./fallback";
-import { PagedView, type DrawPage } from "./paged";
+import { PagedView, type DrawPage, type EvidenceMarks } from "./paged";
 import { loadRhwp } from "./rhwp";
 
 /**
@@ -11,7 +12,7 @@ import { loadRhwp } from "./rhwp";
  * document up front and draws each page as SVG; a page is shown as an image
  * of that SVG, so nothing in the document can run script or reach the network.
  */
-export function HwpView({ file }: { readonly file: PreviewDocument }): ReactElement {
+export function HwpView({ file, anchor = null }: { readonly file: PreviewDocument; readonly anchor?: readonly string[] | null }): ReactElement {
 	const { t } = useTranslation();
 	const bytes = file.bytes;
 	const [pages, setPages] = useState<HwpPages | null>(null);
@@ -52,10 +53,18 @@ export function HwpView({ file }: { readonly file: PreviewDocument }): ReactElem
 		},
 		[pages, t],
 	);
+	const evidence = useMemo<EvidenceMarks | null>(() => {
+		if (pages === null || anchor === null || anchor.length === 0) return null;
+		const marks = locateMarks(
+			pages.boxes.map((_box, index) => pages.runs(index)),
+			anchor,
+		);
+		return marks === null ? { state: "missing" } : { state: "found", pages: [marks, ...marks.next] };
+	}, [pages, anchor]);
 
 	if (bytes === null) return <FallbackView file={file} note={t("quickLook.documents.readFailed")} />;
 	if (error !== null) return <FallbackView file={file} note={error} />;
 	if (pages === null) return <Status>{t("quickLook.status.loading")}</Status>;
 	if (pages.boxes.length === 0) return <FallbackView file={file} note={t("quickLook.hwp.noPages")} />;
-	return <PagedView file={file} boxes={pages.boxes} draw={draw} />;
+	return <PagedView file={file} boxes={pages.boxes} draw={draw} evidence={evidence} />;
 }
