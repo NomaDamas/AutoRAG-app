@@ -82,7 +82,10 @@ still has the previous file's size when they lay out.
   Rust + WebAssembly engine alhangeul-macos builds on). rhwp parses HWP 5,
   HWPX, and some HWP 3 documents, paginates them when the file opens, and
   renders each page as SVG; a page shows as an `<img>` of that SVG, so the
-  document can neither run script nor fetch anything. Hancom fonts fall back
+  document can neither run script nor fetch anything. With an `anchor` (AI
+  Search evidence) each page's `getPageTextLayout` runs (with exact
+  per-character `charX` edges) feed the same `locateMarks` overlay and scroll
+  as PDF. Hancom fonts fall back
   to rhwp's chain (Batang, Malgun Gothic, Apple SD Gothic Neo, Noto, serif /
   sans-serif). rhwp's glue and its 10MB module are a lazy chunk loaded on the
   first HWP preview, which is why both renderer CSPs allow

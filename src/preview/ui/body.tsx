@@ -84,7 +84,7 @@ export function PreviewBody({ file, anchor = null }: { readonly file: PreviewDoc
 		case "epub":
 			return <EpubView file={file} />;
 		case "hwp":
-			return <HwpView file={file} />;
+			return <HwpView file={file} anchor={anchor} />;
 		case "mail":
 		case "msg":
 			return <MailView file={file} />;

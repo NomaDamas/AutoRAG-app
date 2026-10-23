@@ -58,8 +58,15 @@ export function locateMarks(pages: readonly (readonly TextRun[])[], excerpts: re
 		for (const range of located.ranges) {
 			const { page, run } = runs[range.piece]!;
 			const left = charEdge(run, range.start);
+			const rect = { x: left, y: run.y, width: charEdge(run, range.end) - left, height: run.height };
 			const rects = byPage.get(page) ?? [];
-			rects.push({ x: left, y: run.y, width: charEdge(run, range.end) - left, height: run.height });
+			const last = rects.at(-1);
+			// Hangul and ASCII digits split into separate runs on the same line; join them so no seam shows between them.
+			if (last !== undefined && Math.abs(last.y - rect.y) < 2 && Math.abs(last.height - rect.height) < 2 && rect.x >= last.x && rect.x <= last.x + last.width + rect.height) {
+				rects[rects.length - 1] = { ...last, width: Math.max(last.x + last.width, rect.x + rect.width) - last.x };
+			} else {
+				rects.push(rect);
+			}
 			byPage.set(page, rects);
 		}
 		const [first, ...rest] = [...byPage.entries()].map(([page, rects]) => ({ page, rects }));

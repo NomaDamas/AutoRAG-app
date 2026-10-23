@@ -86,4 +86,21 @@ describe("locateExcerpt", () => {
 		expect(hit).not.toBeNull();
 		expect(hit!.ranges).toEqual([{ piece: 1, start: 0, end: pieces[1]!.length - 1 }]);
 	});
+
+	it("finds a table whose cells are all shorter than an anchor, like the headcount table in a Hancom form", () => {
+		const cells = ["구 분", "㈜마커", "브레인크루", "투이컨설팅", "과제 참여인력", "총 인원수", "3명", "3명", "7명", "정규직", "3명", "3명", "7명", "비정규직", "0명", "0명", "0명"];
+		const pieces = ["3. 사회적 책임", ...cells, "참여인력 4대보험 가입여부", "고용보험", "3명", "100%"];
+		const excerpt =
+			'<tr><th colspan="2">구 분</th><th colspan="2">㈜마커</th><th colspan="2">브레인크루</th><th colspan="2">투이컨설팅</th></tr> <tr><td rowspan="3">과제 참여인력</td><td>총 인원수</td><td colspan="2">3명</td><td colspan="2">3명</td><td colspan="2">7명</td></tr> <tr><td>정규직</td><td colspan="2">3명</td><td colspan="2">3명</td><td colspan="2">7명</td></tr> <tr><td>비정규직</td><td colspan="2">0명</td><td colspan="2">0명</td><td colspan="2"';
+		const hit = locateExcerpt(buildTextIndex(pieces), excerpt);
+		expect(hit).not.toBeNull();
+		// The excerpt is cut at 400 characters inside the last cell, so that cell is not in it and not marked.
+		expect(hit!.ranges.map((range) => range.piece)).toEqual(Array.from({ length: cells.length - 1 }, (_unused, index) => index + 1));
+	});
+
+	it("does not light up a numeric table in a document that only shares its small values", () => {
+		const pieces = ["본문", "3명", "7명", "0명", "다른 표", "1", "2", "3", "4", "5"];
+		const excerpt = "<tr><td>총 인원수</td><td>3명</td><td>3명</td><td>7명</td></tr> <tr><td>정규직</td><td>3명</td><td>3명</td><td>7명</td></tr>";
+		expect(locateExcerpt(buildTextIndex(pieces), excerpt)).toBeNull();
+	});
 });
