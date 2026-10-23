@@ -6,6 +6,7 @@ import { markdownLine, markdownStats } from "../shared/markdown-source";
 import { locateLines } from "../shared/text-marks";
 import { Segmented, ToolbarSlot, useChrome } from "./chrome";
 import { escapeHtml, LineList, useDecodedText } from "./code";
+import { locateDomRanges, paintDomRanges, scrollRangeIntoView } from "./dom-marks";
 import { FallbackView } from "./fallback";
 import { sanitizeMarkdownHtml } from "./markdown-html";
 
@@ -67,11 +68,22 @@ export function MarkdownView({ file, anchor = null }: { readonly file: PreviewDo
 	// The window still has the previous file's size here, so measure the content, not the scrolling panes.
 	const sourceRef = useRef<HTMLDivElement | null>(null);
 	const previewRef = useRef<HTMLElement | null>(null);
+	const [renderedFound, setRenderedFound] = useState(false);
 	useLayoutEffect(() => {
 		const source = sourceRef.current === null ? 0 : sourceRef.current.offsetHeight + SOURCE_PADDING;
 		const tallest = Math.max(source, previewRef.current?.offsetHeight ?? 0);
 		if (tallest > 0) report({ width: MARKDOWN_WIDTH, height: tallest + MARKDOWN_CHROME }, "clamp");
 	}, [report, html, source]);
+	// The rendered page marks the cited passage in its own text (the source pane marks lines) and scrolls to it.
+	useLayoutEffect(() => {
+		const article = previewRef.current;
+		const ranges = article === null || anchor === null || anchor.length === 0 ? [] : locateDomRanges(article, anchor);
+		setRenderedFound(ranges.length > 0);
+		if (article === null || ranges.length === 0) return;
+		const scroller = article.parentElement;
+		if (scroller !== null) scrollRangeIntoView(scroller, ranges[0]!);
+		return paintDomRanges(ranges);
+	}, [html, anchor, mode]);
 	if (decoded === null || stats === null) return <FallbackView file={file} note={t("quickLook.documents.readFailed")} />;
 	const blocks = [
 		t("quickLook.markdown.headings", { count: stats.headings }),
@@ -104,8 +116,8 @@ export function MarkdownView({ file, anchor = null }: { readonly file: PreviewDo
 				<span>{t("quickLook.markdown.words", { count: stats.words.toLocaleString(i18n.language) })}</span>
 				<span className="flex-1" />
 				{evidenceLines === undefined ? null : (
-					<span className="ql-markdown__evidence" data-evidence-state={evidenceLines.size > 0 ? "found" : "missing"}>
-						{evidenceLines.size > 0 ? t("quickLook.evidence.found") : t("quickLook.evidence.missing")}
+					<span className="ql-markdown__evidence" data-evidence-state={evidenceLines.size > 0 || renderedFound ? "found" : "missing"}>
+						{evidenceLines.size > 0 || renderedFound ? t("quickLook.evidence.found") : t("quickLook.evidence.missing")}
 					</span>
 				)}
 				<span>{blocks}</span>

@@ -188,6 +188,12 @@ body.quick-look-page #root {
 	font-weight: 700;
 }
 
+/* The cited passage in the rendered page (CSS Highlight API; `dom-marks.ts` registers the ranges). */
+::highlight(ql-evidence) {
+	background-color: var(--ql-evidence-mark);
+	color: inherit;
+}
+
 /* ---------------------------------------------------------- Rendered Markdown */
 .ql-md {
 	color: var(--ql-ink);

@@ -154,7 +154,10 @@ still has the previous file's size when they lay out.
   near. With an `anchor` (AI Search evidence) `locateLines` marks the cited
   source lines (`.ql-line--marked`), renders their chunk up front however far
   down the file it is, and scrolls to the first marked line; the footer carries
-  the found/missing note. The Markdown source pane takes the same marks.
+  the found/missing note. The Markdown source pane takes the same marks, and
+  the rendered page paints the cited passage through the CSS Highlight API
+  (`dom-marks.ts`, `::highlight(ql-evidence)`), matching the shared locator
+  against the page's text nodes, and scrolls to it.
 - **Markdown** — coloured source and the rendered page side by side (원본 ·
   나란히 · 렌더링), with a footer counting lines, words, headings, tables, and
   code blocks. Raw HTML in Markdown is reduced to an allowlist in an inert
