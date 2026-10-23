@@ -40,6 +40,48 @@ describe("readSheetPreview", () => {
 		expect(preview.rows).toEqual([["h1", "h2"], ["v1", "v2"]]);
 	});
 
+	describe("Korean text tables", () => {
+		const csv = "이름,부서,금액\n김민수,영업,1200\n이지은,마케팅,980\n";
+		const expected = [["이름", "부서", "금액"], ["김민수", "영업", "1200"], ["이지은", "마케팅", "980"]];
+		const utf8 = (text: string): Uint8Array => new TextEncoder().encode(text);
+
+		it("reads a UTF-8 csv without a byte order mark as UTF-8, not Latin-1", () => {
+			expect(readSheetPreview(utf8(csv), 0).rows).toEqual(expected);
+		});
+
+		it("reads a UTF-8 csv with a byte order mark", () => {
+			expect(readSheetPreview(Uint8Array.from([0xef, 0xbb, 0xbf, ...utf8(csv)]), 0).rows).toEqual(expected);
+		});
+
+		it("reads a tab-separated table", () => {
+			expect(readSheetPreview(utf8(csv.replaceAll(",", "\t")), 0).rows).toEqual(expected);
+		});
+
+		it("reads a CP949 csv saved by Excel on Korean Windows", () => {
+			// "이름,부서\n김민수,영업\n" in CP949, the bytes Excel's "CSV" save writes.
+			const bytes = Uint8Array.from([
+				0xc0, 0xcc, 0xb8, 0xa7, 0x2c, 0xba, 0xce, 0xbc, 0xad, 0x0a,
+				0xb1, 0xe8, 0xb9, 0xce, 0xbc, 0xf6, 0x2c, 0xbf, 0xb5, 0xbe, 0xf7, 0x0a,
+			]);
+			expect(readSheetPreview(bytes, 0).rows).toEqual([["이름", "부서"], ["김민수", "영업"]]);
+		});
+
+		it("reads a UTF-16 LE csv with a byte order mark", () => {
+			const units = Array.from("이름,부서\n김민수,영업\n", (ch) => ch.charCodeAt(0));
+			const bytes = new Uint8Array(2 + units.length * 2);
+			bytes.set([0xff, 0xfe]);
+			units.forEach((unit, i) => {
+				bytes[2 + i * 2] = unit & 0xff;
+				bytes[3 + i * 2] = unit >> 8;
+			});
+			expect(readSheetPreview(bytes, 0).rows).toEqual([["이름", "부서"], ["김민수", "영업"]]);
+		});
+
+		it("keeps Korean text in an xlsx workbook", () => {
+			expect(readSheetPreview(workbook({ 지출: [["이름", "금액"], ["김민수", 1200]] }), 0).rows).toEqual([["이름", "금액"], ["김민수", "1200"]]);
+		});
+	});
+
 	it("reads a text table in one pass: it has a single sheet, so there are no names to look up first", () => {
 		const text = new TextEncoder().encode(`id,name\n${Array.from({ length: 20_000 }, (_u, r) => `${r},row-${r}`).join("\n")}`);
 		const preview = readSheetPreview(text, 0);
