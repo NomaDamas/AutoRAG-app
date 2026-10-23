@@ -2186,6 +2186,7 @@
       "off": "꺼짐",
       "inUse": "사용 중",
       "syncing": "최신화 중…",
+      "checking": "확인 중…",
       "justNow": "방금",
       "minutesAgo": "{{count}}분 전",
       "hoursAgo": "{{count}}시간 전",

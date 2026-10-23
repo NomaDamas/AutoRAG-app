@@ -2186,6 +2186,7 @@
       "off": "オフ",
       "inUse": "使用中",
       "syncing": "更新中…",
+      "checking": "確認中…",
       "justNow": "たった今",
       "minutesAgo": "{{count}}分前",
       "hoursAgo": "{{count}}時間前",
