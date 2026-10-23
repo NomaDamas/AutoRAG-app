@@ -2,7 +2,7 @@ import { createRequire } from "node:module";
 import { describe, expect, it } from "vitest";
 import { PDFDocument, StandardFonts } from "pdf-lib";
 import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
-import { locateMarks, pdfRuns, type TextRun } from "../src/preview/shared/text-marks";
+import { locateLines, locateMarks, pdfRuns, type TextRun } from "../src/preview/shared/text-marks";
 
 const run = (text: string, x: number, y: number, width: number, height = 10): TextRun => ({ text, x, y, width, height });
 
@@ -79,5 +79,14 @@ describe("pdfRuns", () => {
 		} finally {
 			await task.destroy();
 		}
+	});
+});
+
+describe("locateLines", () => {
+	it("returns the 0-based line indices of the first matching excerpt across blank lines", () => {
+		const text = ["# 환불 규정", "", "1. 일반 환불은 5영업일 내 처리합니다.", "", "2. 예외는 **임원 승인**이 필요합니다.", "3. 기타 조항"].join("\n");
+		const lines = locateLines(text, ["absent sentence that does not match", "일반 환불은 5영업일 내 처리합니다.\n예외는 임원 승인이 필요합니다."]);
+		expect([...lines]).toEqual([2, 3, 4]);
+		expect([...locateLines(text, ["전혀 없는 문장입니다."])]).toEqual([]);
 	});
 });

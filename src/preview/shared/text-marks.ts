@@ -126,3 +126,25 @@ export function pdfRuns(items: readonly unknown[], viewport: readonly number[]):
 	}
 	return runs;
 }
+
+/**
+ * 0-based line indices of the first excerpt `text` contains (including blank
+ * lines between matched lines); empty when none of `excerpts` is found.
+ */
+export function locateLines(text: string, excerpts: readonly string[]): ReadonlySet<number> {
+	const lines = text.split("\n");
+	const index = buildTextIndex(lines);
+	for (const excerpt of excerpts) {
+		const located = locateExcerpt(index, excerpt);
+		if (located === null || located.ranges.length === 0) continue;
+		const first = located.ranges[0]!.piece;
+		const last = located.ranges.at(-1)!.piece;
+		const pieces = new Set(located.ranges.map((range) => range.piece));
+		const matched = new Set<number>();
+		for (let line = first; line <= last; line += 1) {
+			if (pieces.has(line) || lines[line]?.trim() === "") matched.add(line);
+		}
+		return matched;
+	}
+	return new Set();
+}

@@ -43,6 +43,11 @@ body.quick-look-page #root {
 	align-items: flex-start;
 }
 
+.ql-line--marked {
+	background: color-mix(in srgb, var(--ql-evidence-mark) 65%, transparent);
+	box-shadow: inset 2px 0 0 var(--ql-evidence-mark-ring);
+}
+
 .ql-lines[data-wrap="false"] .ql-line {
 	width: max-content;
 	min-width: 100%;

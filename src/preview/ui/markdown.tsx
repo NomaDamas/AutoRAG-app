@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { marked } from "marked";
 import type { PreviewDocument } from "../shared/contract";
 import { markdownLine, markdownStats } from "../shared/markdown-source";
+import { locateLines } from "../shared/text-marks";
 import { Segmented, ToolbarSlot, useChrome } from "./chrome";
 import { escapeHtml, LineList, useDecodedText } from "./code";
 import { FallbackView } from "./fallback";
@@ -49,13 +50,14 @@ function holdLinks(event: MouseEvent<HTMLElement>): void {
  * side by side (or either alone), with a footer counting lines, words,
  * headings, tables, and code blocks.
  */
-export function MarkdownView({ file }: { readonly file: PreviewDocument }): ReactElement {
+export function MarkdownView({ file, anchor = null }: { readonly file: PreviewDocument; readonly anchor?: readonly string[] | null }): ReactElement {
 	const { t, i18n } = useTranslation();
 	const { report } = useChrome();
 	const decoded = useDecodedText(file);
 	const [mode, setMode] = useState<MarkdownMode>("split");
 	const modes = useMemo(() => MODES.map((option) => ({ value: option.value, label: t(option.labelKey) })), [t, i18n.language]);
 	const source = useMemo(() => (decoded === null ? [] : sourceLines(decoded.text)), [decoded]);
+	const evidenceLines = useMemo(() => (decoded === null || anchor === null || anchor.length === 0 ? undefined : locateLines(decoded.text, anchor)), [decoded, anchor]);
 	const html = useMemo(() => {
 		if (decoded === null) return "";
 		const rendered = marked.parse(decoded.text, { async: false, gfm: true });
@@ -85,7 +87,7 @@ export function MarkdownView({ file }: { readonly file: PreviewDocument }): Reac
 				{mode === "preview" ? null : (
 					<div className="ql-lines ql-lines--markdown flex-1 basis-0 min-w-0 overflow-auto pt-16 pb-24 bg-ql-sunk font-ql-mono text-[12.5px] leading-[1.7] select-text" data-wrap>
 						<div ref={sourceRef}>
-							<LineList lines={source} />
+						<LineList lines={source} {...(evidenceLines === undefined ? {} : { marked: evidenceLines })} />
 						</div>
 					</div>
 				)}
@@ -101,6 +103,11 @@ export function MarkdownView({ file }: { readonly file: PreviewDocument }): Reac
 				<span>{t("quickLook.markdown.lines", { count: stats.lines.toLocaleString(i18n.language) })}</span>
 				<span>{t("quickLook.markdown.words", { count: stats.words.toLocaleString(i18n.language) })}</span>
 				<span className="flex-1" />
+				{evidenceLines === undefined ? null : (
+					<span className="ql-markdown__evidence" data-evidence-state={evidenceLines.size > 0 ? "found" : "missing"}>
+						{evidenceLines.size > 0 ? t("quickLook.evidence.found") : t("quickLook.evidence.missing")}
+					</span>
+				)}
 				<span>{blocks}</span>
 			</footer>
 		</>

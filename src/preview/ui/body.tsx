@@ -64,11 +64,11 @@ export function PreviewBody({ file, anchor = null }: { readonly file: PreviewDoc
 		case "odg":
 			return <OdfImageView file={file} />;
 		case "markdown":
-			return <MarkdownView file={file} />;
+			return <MarkdownView file={file} anchor={anchor} />;
 		case "html":
 			return <HtmlView file={file} />;
 		case "text":
-			return <TextView file={file} />;
+			return <TextView file={file} anchor={anchor} />;
 		case "rtf":
 			return <RtfView file={file} />;
 		case "data":
@@ -93,7 +93,7 @@ export function PreviewBody({ file, anchor = null }: { readonly file: PreviewDoc
 		case "calendar":
 			return <CalendarView file={file} />;
 		case "fallback":
-			if (file.bytes !== null && looksLikeText(file.bytes)) return <TextView file={file} />;
+			if (file.bytes !== null && looksLikeText(file.bytes)) return <TextView file={file} anchor={anchor} />;
 			return <FallbackView file={file} />;
 		default:
 			return assertNever(kind);
