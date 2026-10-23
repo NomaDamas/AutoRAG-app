@@ -1,18 +1,19 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent, type ReactElement } from "react";
 import type { AppSettings } from "../../../shared/settings-contract";
-import type { ChatAttachment } from "../../../shared/search-contract";
 import { isTagPath, RECENTS_PATH, tagNameOf } from "../../../shared/fs-contract";
 import type { FinderSource } from "../data/source";
 import { DirectoryDataContext, type DirectoryData } from "../hooks/useDirectoryData";
 import { useFinderController, type QuickLookBridge } from "../hooks/useFinderController";
 import type { ControllerStore } from "../hooks/usePaneControllers";
 import { pressRow } from "../lib/row-drag";
+import type { AiDeliveryRequest } from "../state/ai-delivery";
 import { attachmentsFromDrop, isAttachmentDrag, isFileTransferDrag, isFinderDrag, readDropPaths } from "../state/attachments";
 import { backgroundDropDir, dropTransferOp } from "../state/file-transfer";
 import { listFixedWidth, resetListColumns, setListColumnWidth, toggleListColumn, type ListColumnKey, type ListColumnsState } from "../state/list-columns";
 import { basename, breadcrumbTrail } from "../state/paths";
-import { AI_SEARCH_PATH, SETTINGS_PATH } from "../state/tabs";
+import { AI_SEARCH_PATH, AUTOMATIONS_PATH, isVirtualTabPath, SETTINGS_PATH } from "../state/tabs";
 import { focusPane, type Pane, type Workspace } from "../state/workspace";
+import { AutomationsTab } from "./AutomationsTab";
 import { ColumnBrowser } from "./ColumnBrowser";
 import { ColumnHeader } from "./ColumnHeader";
 import { FileList } from "./FileList";
@@ -47,7 +48,7 @@ export interface PaneShell {
 	onFocusComposer(): void;
 	onToast(message: string): void;
 	/** Attach to / send a query in the focused AI Search tab once it is visible. */
-	deliverToAi(request: { readonly attach?: readonly ChatAttachment[]; readonly query?: string }): void;
+	deliverToAi(request: AiDeliveryRequest): void;
 	onSettingsChanged(settings: AppSettings): void;
 	setListColumns(change: (current: ListColumnsState) => ListColumnsState): void;
 	/** A strip tab started a drag: the workspace shows where it can land. */
@@ -251,7 +252,7 @@ export const FinderPane = memo(function FinderPane({
 		familyEntries !== null && finder.layout === "columns" && familyEntries.members.length > 0
 			? { count: familyEntries.members.length, rows: familyEntries.members }
 			: null;
-	const listingDir = finder.path === RECENTS_PATH || finder.path === SETTINGS_PATH ? "" : finder.path;
+	const listingDir = finder.path === RECENTS_PATH || isVirtualTabPath(finder.path) ? "" : finder.path;
 
 	return (
 		<DirectoryDataContext value={shell.directoryData}>
@@ -312,6 +313,8 @@ export const FinderPane = memo(function FinderPane({
 				/>
 				{finder.path === SETTINGS_PATH ? (
 					<SettingsView onSettingsChanged={shell.onSettingsChanged} />
+				) : finder.path === AUTOMATIONS_PATH ? (
+					<AutomationsTab />
 				) : finder.path === AI_SEARCH_PATH ? (
 					// The tab's chat is mounted by the workspace over this body, so it survives moving panes.
 					<div className="min-h-0 flex-1 bg-subtle-alt" />

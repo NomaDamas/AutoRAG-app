@@ -2,6 +2,7 @@ import "@sentry/electron/preload";
 import { createAccountBridge } from "./account-bridge";
 import { createAnalyticsBridge } from "./analytics-bridge";
 import { createAppUpdateBridge } from "./app-update-bridge";
+import { createAutomationBridge } from "./automation-bridge";
 import { contextBridge, ipcRenderer, webUtils } from "electron";
 import { createBridge } from "../shared/bridge";
 import type { DevLabel } from "../shared/app-info";
@@ -41,6 +42,7 @@ contextBridge.exposeInMainWorld("autorag", {
 	analytics: createAnalyticsBridge(ipcRenderer),
 	appUpdate: createAppUpdateBridge(ipcRenderer),
 	account: createAccountBridge(ipcRenderer),
+	automations: createAutomationBridge(ipcRenderer),
 	indexActivity: createIndexActivityBridge(ipcRenderer),
 	live: createLiveBridge(fsWorker),
 	modelDownload: createModelDownloadBridge(ipcRenderer),

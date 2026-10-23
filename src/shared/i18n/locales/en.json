@@ -26,7 +26,8 @@
     "movies": "Movies",
     "pictures": "Pictures",
     "trash": "Trash",
-    "eject": "Eject \"{{name}}\""
+    "eject": "Eject \"{{name}}\"",
+    "automations": "Automations"
   },
   "toolbar": {
     "back": "Back",
@@ -257,6 +258,142 @@
       "last7Days": "Previous 7 days",
       "last30Days": "Previous 30 days",
       "older": "Earlier"
+    }
+  },
+  "automations": {
+    "list": "Automation rules",
+    "columns": {
+      "name": "Name",
+      "folder": "Watched folder",
+      "lastRun": "Last run",
+      "status": "Status"
+    },
+    "empty": {
+      "title": "No automations yet",
+      "body": "Decide what Dazzi should do whenever files appear or change.",
+      "add": "Add a rule in AI Search"
+    },
+    "errors": {
+      "config": "The rules file cannot be read",
+      "configHint": "Fix the rule in AI Search or edit the file by hand."
+    },
+    "daemon": {
+      "on": "Running in the background",
+      "off": "Off · rules are not running",
+      "unknown": "Cannot tell whether the background service is running",
+      "turnOn": "Turn on",
+      "turnOff": "Turn off",
+      "busy": "Working…",
+      "count": "Rules: {{count}}"
+    },
+    "menu": {
+      "preview": "Quick Look",
+      "edit": "Edit in AI Search",
+      "reveal": "Show in Automations",
+      "add": "Add a rule in AI Search…",
+      "openFolder": "Open watched folder",
+      "delete": "Delete"
+    },
+    "inspector": {
+      "empty": "Select a rule\nto see its summary here.",
+      "edit": "Edit with AI",
+      "delete": "Delete",
+      "summary": "Summary",
+      "showAll": "Show all",
+      "showLess": "Show less",
+      "when": "When",
+      "what": "Does",
+      "problem": "Problem",
+      "watchedFolders": "Watched folders",
+      "patterns": "File patterns",
+      "excluded": "Excluded",
+      "none": "None",
+      "command": "Command",
+      "ruleId": "Rule ID",
+      "neverRan": "Has not run yet",
+      "ranOk": "Ran {{time}} · succeeded",
+      "ranFail": "Ran {{time}} · failed",
+      "folderSection": "Automations on this folder",
+      "agentAccess": "AI access",
+      "agentProfile": "AI profile"
+    },
+    "quickLook": {
+      "when": "When",
+      "what": "Does",
+      "folders": "Folders",
+      "edit": "Edit in AI Search",
+      "close": "Close",
+      "ranFail": "Ran {{time}} · {{reason}}"
+    },
+    "confirm": {
+      "title": "Delete the rule “{{title}}”?",
+      "message": "Only the rule is removed; the folder and its files stay as they are.",
+      "action": "Delete"
+    },
+    "toast": {
+      "deleted": "Deleted the rule “{{title}}”",
+      "undo": "Undo",
+      "restored": "Restored the rule “{{title}}”"
+    },
+    "kinds": {
+      "screenshot": "Screenshot",
+      "all": "All files",
+      "image": "Image",
+      "text": "Text",
+      "noun": "{{kinds}} files",
+      "allNoun": "Files",
+      "more": "{{kinds}} +{{count}} more"
+    },
+    "trigger": {
+      "create": "{{kind}} are created",
+      "createUpdate": "{{kind}} are created or modified",
+      "any": "{{kind}} change",
+      "update": "{{kind}} are modified",
+      "delete": "{{kind}} are deleted",
+      "createDelete": "{{kind}} are created or deleted",
+      "updateDelete": "{{kind}} are modified or deleted"
+    },
+    "whenIn": "{{trigger}} in {{folder}}",
+    "foldersMore": "{{first}} and {{count}} more",
+    "title": {
+      "rule": "{{trigger}} → {{action}}",
+      "created": "New {{kinds}}",
+      "createdAll": "New file",
+      "changed": "{{kinds}} changes",
+      "changedAll": "File changes"
+    },
+    "action": {
+      "refresh": "Refresh search index",
+      "search": "Hand to Dazzi",
+      "run": "Run {{name}}",
+      "agent": "Handled by AI"
+    },
+    "what": {
+      "refresh": "Brings the search index up to date",
+      "program": "Handled by {{name}}"
+    },
+    "time": {
+      "now": "just now"
+    },
+    "lastRun": {
+      "never": "Not run yet",
+      "ok": "{{time}} · succeeded",
+      "fail": "{{time}} · failed"
+    },
+    "fail": {
+      "timeout": "Timed out",
+      "missing": "Program ‘{{name}}’ was not found",
+      "code": "Exit code {{code}}",
+      "signal": "Stopped by signal {{signal}}",
+      "unknown": "Unknown error"
+    },
+    "prompt": {
+      "edit": "Edit this automation rule — {{id}} ({{when}}). What to change: ",
+      "add": "Create a new automation rule. When, on which files, and what to do: "
+    },
+    "agent": {
+      "reads": "Reads only",
+      "writes": "Can change files"
     }
   },
   "osMenu": {
@@ -1211,6 +1348,17 @@
         "serversNotObject": "\"mcpServers\" must be an object.",
         "duplicate": "A server named \"{{name}}\" already exists.",
         "unknownServer": "No server named \"{{name}}\"."
+      }
+    },
+    "automations": {
+      "errors": {
+        "unreadable": "Cannot read the automation rules file: {{reason}}",
+        "unknownRule": "No rule named “{{id}}”.",
+        "cliFailed": "Could not check the automations: {{reason}}",
+        "cliMissing": "The AutoRAG command-line tool cannot be found.",
+        "nodeMissing": "Testing an automation rule or starting the background service needs Node, and none was found on this computer.",
+        "invalidRemoval": "The rule to restore is not in a valid format.",
+        "duplicateRule": "A rule named “{{id}}” already exists, so it cannot be restored."
       }
     }
   },

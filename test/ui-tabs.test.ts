@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { setAppLanguage } from "../src/shared/i18n/core";
 import {
 	activeTab,
+	AUTOMATIONS_PATH,
 	AI_SEARCH_PATH,
 	aiPanelTabs,
 	applyColumnChoice,
@@ -23,6 +24,7 @@ import {
 	selectTab,
 	SETTINGS_PATH,
 	showAiSearchInActiveTab,
+	showAutomationsInActiveTab,
 	tabTitle,
 	evacuateTabs,
 } from "../src/renderer/src/state/tabs";
@@ -348,5 +350,33 @@ describe("openOrSelectFolderTab (dazzi <folder>)", () => {
 	it("does not mistake a Settings or AI Search tab for a folder", () => {
 		const state = openOrSelectFolderTab(openOrSelectSettingsTab(createTabsState("/Users/me")), "/work/project");
 		expect(state.tabs.map((tab) => tab.path)).toEqual(["/Users/me", SETTINGS_PATH, "/work/project"]);
+	});
+});
+
+describe("Automations tabs", () => {
+	it("titles an Automations tab in the interface language and ignores the search query", async () => {
+		expect(tabTitle({ path: AUTOMATIONS_PATH }, { isActive: true, query: "budget" })).toBe("자동화");
+		await setAppLanguage("en");
+		expect(tabTitle({ path: AUTOMATIONS_PATH }, { isActive: true, query: "budget" })).toBe("Automations");
+		await setAppLanguage("ko");
+	});
+
+	it("treats Automations as a virtual path, never a folder", () => {
+		expect(isVirtualTabPath(AUTOMATIONS_PATH)).toBe(true);
+		expect(isVirtualTabPath("/Users/me/Automations")).toBe(false);
+	});
+
+	it("turns the focused tab into Automations, and Back returns to the folder", () => {
+		const two = openTabAt(createTabsState("/Users/me/Documents"), "/Users/me/Desktop");
+		const shown = showAutomationsInActiveTab(two);
+		expect(shown.tabs).toHaveLength(2);
+		expect(activeTab(shown).path).toBe(AUTOMATIONS_PATH);
+		expect(activeTab(goBack(shown)).path).toBe("/Users/me/Desktop");
+		expect(showAutomationsInActiveTab(shown)).toBe(shown);
+	});
+
+	it("leaves Automations for the last folder it showed", () => {
+		const shown = showAutomationsInActiveTab(createTabsState("/Users/me/Documents"));
+		expect(activeTab(exitVirtualTab(shown)).path).toBe("/Users/me/Documents");
 	});
 });

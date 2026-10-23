@@ -616,6 +616,52 @@ only through a `propose_exclusions` tool that validates paths). A new profile ad
 a UI, its own service and bridge. The factory's own tests (what the model is
 offered, on pi's faux provider) live in the librarian, in `test/profiles/`.
 
+## File automations
+
+The librarian (v2.11.1 and later) runs file automations itself: rules live in
+`<AUTORAG_HOME>/automations.json` (`src/automation/config.ts` upstream), each run
+appends a line to `automations/logs/<id>.jsonl`, and a daemon (`autorag automate
+daemon`, registered as a login service by `autorag automate install`:
+launchd, systemd --user, or Task Scheduler) watches the folders. The package
+exports none of it, so the app reaches it the way a terminal user does.
+
+`src/main/automation-service.ts` (no Electron import, injected `run`) is the one
+owner. **Reads** run `autorag automate status --json` through the librarian's own
+Node, never `process.execPath`: the daemon definition `automate install` writes
+records the Node of whoever ran it, and Electron's binary would start a second
+app. `librarianCommand` picks the bundled `<tools>/node` (or `node` on `PATH`) and
+the installed package's `dist/cli/index.js`. A user with no rules file costs no
+process at all. **Delete and undo** edit the rules file directly, as the librarian
+has no delete command (only the agent tool does): the file is re-read, the entry
+with that id is removed or re-inserted at its old index, every other entry is
+written back untouched, and writes go through a queue so quick successive edits
+cannot lose one. **The service switch** is `automate install` / `uninstall`.
+**Change detection** compares the rules file, the run logs, and the daemon lock
+(a directory holding `owner-*.json` with the daemon's pid, probed for liveness)
+every 2 s and runs the CLI only when something moved; the renderer's
+`state/automations-store.ts` shares one copy of the result between the tab and
+every folder inspector. Editing and adding never go through here: they are an AI
+Search draft (DESIGN.md §1.3c), and the librarian agent's `manage_automations`
+tool writes the file, which this service then notices.
+
+**The agent's own tool needs the same care.** `manage_automations` is built inside the
+librarian agent and takes no option for which Node to use: its `run` action (a test run
+of a rule's `autorag …` or `node …` command) and its `install_service` action both read
+`process.execPath`, which inside the app is the Dazzi binary, so a test run opened a
+second copy of the app that never exited and the AI Search turn hung. `ELECTRON_RUN_AS_NODE`
+cannot be set app-wide (new windows then fail to load). `src/main/automation-runtime.ts`
+wraps just those two actions: `process.execPath` is swapped for a real Node
+(`resolveNodeBinary`: the bundled `<tools>/node`, else the first `node` on `PATH`) for the
+synchronous start of the call, where the librarian reads it before its first `await`, and
+put back before anything else runs. With no Node found the action answers the model with
+an error instead of starting anything; `list`, `save`, `delete` and `uninstall_service`
+start no program and are untouched. `runAutomationToolOnNode` throws if the agent has no
+such tool, so a librarian that moves it fails loudly. Pinned by `test/automation-runtime.test.ts`
+and proven live by `scripts/manual-qa/run-qa-finder-automations-live.mjs`.
+
+A `running` daemon whose lock directory outlived a killed process still reads as
+running (`isAutomationDaemonRunning` uses `staleMs: 0` upstream).
+
 ## AI Search attachments
 
 Drop files, folders, or links on an AI Search tab's panel, on an AI Search tab

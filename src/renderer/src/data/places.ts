@@ -3,8 +3,8 @@
  * (`fs.locations`): Favorites (the Finder/Explorer standard folders), Cloud (the
  * drives connected to the OS — one row per account), and Locations (the boot
  * disk plus every mounted volume / drive letter). Nothing here is a fixed list;
- * a section with no rows is not rendered — the only app row is the AI Search
- * entry that heads Favorites (DESIGN.md §1.3a).
+ * a section with no rows is not rendered — the app rows are AI Search and
+ * Automations, which head Favorites (DESIGN.md §1.3a, §1.3c).
  *
  * The status dot beside a cloud row is NOT data: it is driven by the live
  * datasource status the shell reads from `settings.sourcesList`, keyed by the
@@ -31,10 +31,11 @@ import {
 	Sparkles,
 	Tag,
 	Trash2,
+	Zap,
 	type LucideIcon,
 } from "lucide-react";
 import { tagPath, type FsLocation, type FsLocationIcon, type FsTag, type FsTagColor } from "../../../shared/fs-contract";
-import { AI_SEARCH_PATH } from "../state/tabs";
+import { AI_SEARCH_PATH, AUTOMATIONS_PATH } from "../state/tabs";
 
 export interface NavItem {
 	readonly label: string;
@@ -46,8 +47,8 @@ export interface NavItem {
 	readonly available: boolean;
 	/** A mounted volume the row offers to unmount. */
 	readonly ejectable: boolean;
-	/** An app view instead of a folder: "aiSearch" turns the focused tab into AI Search. */
-	readonly view?: "aiSearch";
+	/** An app view instead of a folder: "aiSearch" turns the focused tab into AI Search, "automations" into the rules list. */
+	readonly view?: "aiSearch" | "automations";
 	/** A Finder tag's virtual folder: the row draws this colour as its dot (0 = a tag with no colour). */
 	readonly tag?: { readonly name: string; readonly color: FsTagColor };
 }
@@ -80,10 +81,10 @@ const ICONS: Readonly<Record<FsLocationIcon, LucideIcon>> = {
 };
 
 /**
- * The one app row in the sidebar, at the top of Favorites: it is not a
- * location, and clicking it turns the focused tab into an AI Search tab
- * (DESIGN.md §1.3a). Its `path` is the tab model's virtual AI Search path, so
- * the row can sit in the same active-path comparison as the OS places.
+ * The two app rows in the sidebar, at the top of Favorites: they are not
+ * locations, and clicking one turns the focused tab into an AI Search tab or the
+ * automation rules (DESIGN.md §1.3a, §1.3c). Each `path` is the tab model's virtual
+ * path, so the row can sit in the same active-path comparison as the OS places.
  */
 const AI_SEARCH_ITEM: NavItem = {
 	label: "AI Search",
@@ -92,6 +93,15 @@ const AI_SEARCH_ITEM: NavItem = {
 	available: true,
 	ejectable: false,
 	view: "aiSearch",
+};
+
+const AUTOMATIONS_ITEM: NavItem = {
+	label: "Automations",
+	path: AUTOMATIONS_PATH,
+	icon: Zap,
+	available: true,
+	ejectable: false,
+	view: "automations",
 };
 
 const SECTIONS: readonly (readonly [FsLocation["section"], string])[] = [
@@ -117,7 +127,7 @@ export function navGroups(locations: readonly FsLocation[], tags: readonly FsTag
 				available: location.available,
 				ejectable: location.ejectable,
 			}));
-		if (section === "favorites") items.unshift(AI_SEARCH_ITEM);
+		if (section === "favorites") items.unshift(AI_SEARCH_ITEM, AUTOMATIONS_ITEM);
 		if (items.length > 0) groups.push({ label, items });
 	}
 	if (tags.length > 0) {

@@ -55,6 +55,8 @@ const CENTERED = "mx-auto w-full max-w-[820px]";
 export interface AiDockHandle {
 	/** Seed the composer with `text` and send it at once. */
 	sendQuery(text: string): void;
+	/** Leave `text` in the composer unsent and focus it: the person finishes the sentence and sends it. */
+	prefill(text: string): void;
 	/** Append draft attachments and focus the composer. */
 	attach(atts: readonly ChatAttachment[]): void;
 	/**
@@ -600,6 +602,10 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 			if (trimmed.length === 0 || searchIdRef.current !== null) return;
 			setQuery(trimmed);
 			void runSearch(trimmed, attachmentsRef.current);
+		},
+		prefill(text: string): void {
+			setQuery(text);
+			ensureFocus();
 		},
 		attach(atts: readonly ChatAttachment[]): void {
 			setAttachments((current) => mergeAttachments(current, atts));

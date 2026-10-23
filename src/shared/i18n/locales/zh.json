@@ -26,7 +26,8 @@
     "movies": "影片",
     "pictures": "图像",
     "trash": "废纸篓",
-    "eject": "推出的“{{name}}”"
+    "eject": "推出的“{{name}}”",
+    "automations": "自动化"
   },
   "toolbar": {
     "back": "返回",
@@ -257,6 +258,142 @@
       "last7Days": "过去 7 天",
       "last30Days": "过去 30 天",
       "older": "更早"
+    }
+  },
+  "automations": {
+    "list": "自动化规则",
+    "columns": {
+      "name": "名称",
+      "folder": "监视文件夹",
+      "lastRun": "上次运行",
+      "status": "状态"
+    },
+    "empty": {
+      "title": "还没有自动化",
+      "body": "预先决定当文件出现或变化时 Dazzi 要做什么。",
+      "add": "在 AI 搜索中添加规则"
+    },
+    "errors": {
+      "config": "无法读取规则文件",
+      "configHint": "请在 AI 搜索中修正规则，或直接编辑该文件。"
+    },
+    "daemon": {
+      "on": "正在后台运行",
+      "off": "已关闭 · 规则不会运行",
+      "unknown": "无法确认后台服务是否在运行",
+      "turnOn": "开启",
+      "turnOff": "关闭",
+      "busy": "处理中…",
+      "count": "{{count}} 条规则"
+    },
+    "menu": {
+      "preview": "快速查看",
+      "edit": "在 AI 搜索中编辑",
+      "reveal": "在自动化标签页中显示",
+      "add": "在 AI 搜索中添加新规则…",
+      "openFolder": "打开监视文件夹",
+      "delete": "删除"
+    },
+    "inspector": {
+      "empty": "选择一条规则后\n摘要会显示在这里。",
+      "edit": "用 AI 编辑",
+      "delete": "删除",
+      "summary": "摘要",
+      "showAll": "全部信息",
+      "showLess": "简略",
+      "when": "何时",
+      "what": "执行",
+      "problem": "问题",
+      "watchedFolders": "监视文件夹",
+      "patterns": "文件模式",
+      "excluded": "排除",
+      "none": "无",
+      "command": "命令",
+      "ruleId": "规则 ID",
+      "neverRan": "尚未运行",
+      "ranOk": "{{time}}运行 · 成功",
+      "ranFail": "{{time}}运行 · 失败",
+      "folderSection": "此文件夹的自动化",
+      "agentAccess": "AI 权限",
+      "agentProfile": "AI 配置"
+    },
+    "quickLook": {
+      "when": "何时",
+      "what": "执行",
+      "folders": "目标文件夹",
+      "edit": "在 AI 搜索中编辑",
+      "close": "关闭",
+      "ranFail": "{{time}}运行 · {{reason}}"
+    },
+    "confirm": {
+      "title": "要删除规则“{{title}}”吗？",
+      "message": "只会删除这条规则，文件夹和文件保持不变。",
+      "action": "删除"
+    },
+    "toast": {
+      "deleted": "已删除规则“{{title}}”",
+      "undo": "撤销",
+      "restored": "已恢复规则“{{title}}”"
+    },
+    "kinds": {
+      "screenshot": "截图",
+      "all": "所有文件",
+      "image": "图片",
+      "text": "文本",
+      "noun": "{{kinds}}文件",
+      "allNoun": "文件",
+      "more": "{{kinds}}等{{count}}种"
+    },
+    "trigger": {
+      "create": "{{kind}}新建时",
+      "createUpdate": "{{kind}}新建或修改时",
+      "any": "{{kind}}每次变化时",
+      "update": "{{kind}}被修改时",
+      "delete": "{{kind}}被删除时",
+      "createDelete": "{{kind}}新建或删除时",
+      "updateDelete": "{{kind}}被修改或删除时"
+    },
+    "whenIn": "在{{folder}}中，{{trigger}}",
+    "foldersMore": "{{first}}等{{count}}处",
+    "title": {
+      "rule": "{{trigger}} → {{action}}",
+      "created": "新{{kinds}}",
+      "createdAll": "新文件",
+      "changed": "{{kinds}}变更",
+      "changedAll": "文件变更"
+    },
+    "action": {
+      "refresh": "更新搜索索引",
+      "search": "交给 Dazzi",
+      "run": "运行 {{name}}",
+      "agent": "由 AI 处理"
+    },
+    "what": {
+      "refresh": "让搜索索引保持最新",
+      "program": "由 {{name}} 处理"
+    },
+    "time": {
+      "now": "刚刚"
+    },
+    "lastRun": {
+      "never": "尚未运行",
+      "ok": "{{time}} · 成功",
+      "fail": "{{time}} · 失败"
+    },
+    "fail": {
+      "timeout": "超时",
+      "missing": "找不到程序“{{name}}”",
+      "code": "错误代码 {{code}}",
+      "signal": "被信号 {{signal}} 中断",
+      "unknown": "未知错误"
+    },
+    "prompt": {
+      "edit": "请修改这条自动化规则 — {{id}}（{{when}}）。要修改的内容: ",
+      "add": "请创建一个新的自动化规则。何时、对哪些文件、做什么: "
+    },
+    "agent": {
+      "reads": "仅读取",
+      "writes": "可以修改文件"
     }
   },
   "osMenu": {
@@ -1211,6 +1348,17 @@
         "serversNotObject": "\"mcpServers\" 必须是对象。",
         "duplicate": "已存在名为 \"{{name}}\" 的服务器。",
         "unknownServer": "找不到名为 \"{{name}}\" 的服务器。"
+      }
+    },
+    "automations": {
+      "errors": {
+        "unreadable": "无法读取自动化规则文件：{{reason}}",
+        "unknownRule": "找不到规则“{{id}}”。",
+        "cliFailed": "无法检查自动化状态：{{reason}}",
+        "cliMissing": "找不到 AutoRAG 命令行工具。",
+        "nodeMissing": "测试自动化规则或启动后台服务需要 Node，但在这台电脑上没有找到。",
+        "invalidRemoval": "要恢复的规则格式不正确。",
+        "duplicateRule": "规则“{{id}}”已存在，无法恢复。"
       }
     }
   },

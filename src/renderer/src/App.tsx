@@ -9,6 +9,9 @@ import type { ChatAttachment, CitationEvidence } from "../../shared/search-contr
 import type { OsRendererRequest } from "../../shared/os-request-contract";
 import type { FsLocationIcon } from "../../shared/fs-contract";
 import { AiSearchPanel, type AiDockHandle } from "./components/AiSearchPanel";
+import { AutomationInspector } from "./components/AutomationInspector";
+import { AutomationQuickLook } from "./components/AutomationQuickLook";
+import { AutomationsContext } from "./components/AutomationsTab";
 import { FinderPane, type PaneShell } from "./components/FinderPane";
 import { Inspector, type InspectorFamily } from "./components/Inspector";
 import { ContextMenu } from "./components/primitives/ContextMenu";
@@ -25,14 +28,19 @@ import { isTagPath, tagNameOf } from "../../shared/fs-contract";
 import { useFinderSource } from "./hooks/useFinderSource";
 import { TagCatalogContext, useTagCatalogLoader } from "./hooks/useTagCatalog";
 import { createControllerStore, usePaneController } from "./hooks/usePaneControllers";
+import { useAutomations } from "./hooks/useAutomations";
+import { useAutomationsShell } from "./hooks/useAutomationsShell";
+import { deliverToDock, mergeDelivery, type AiDelivery, type AiDeliveryRequest } from "./state/ai-delivery";
 import { attachmentsFromDrop, isAttachmentDrag } from "./state/attachments";
 import { toolbarShareControl, type FileActionTarget } from "./state/file-actions";
 import { sessionEvidencePaths } from "./state/evidence";
+import { inspectorEntryFor } from "./state/inspector-target";
+import { ruleTitle } from "./state/automations";
 import { watchSetFor } from "./state/live";
 import { loadListColumns, saveListColumns, type ListColumnsState } from "./state/list-columns";
 import { basename, dirname } from "./state/paths";
 import { requestSettingsCategory } from "./state/settings-navigation";
-import { aiPanelTabs, AI_SEARCH_PATH, SETTINGS_PATH } from "./state/tabs";
+import { aiPanelTabs, AI_SEARCH_PATH, AUTOMATIONS_PATH, SETTINGS_PATH } from "./state/tabs";
 import { allTabs, canCloseWorkspaceTab, createWorkspace, focusPane, moveTab, resizeSplit, type Workspace } from "./state/workspace";
 import { cn } from "./lib/cn";
 
@@ -312,25 +320,12 @@ export function App(): ReactElement {
 	 * until the effect below finds the focused tab's panel handle.
 	 */
 	const aiHandlesRef = useRef(new Map<number, AiDockHandle>());
-	const aiPendingRef = useRef<{
-		readonly attach: readonly ChatAttachment[];
-		readonly query: string | null;
-		/** "AI 요약" targets sent with their own summary run, never as drafts. */
-		readonly summarize: readonly ChatAttachment[];
-	} | null>(null);
+	const aiPendingRef = useRef<AiDelivery | null>(null);
 	const [aiDelivery, setAiDelivery] = useState(0);
-	const deliverToAi = useCallback(
-		(request: { readonly attach?: readonly ChatAttachment[]; readonly query?: string; readonly summarize?: readonly ChatAttachment[] }) => {
-			const pending = aiPendingRef.current;
-			aiPendingRef.current = {
-				attach: [...(pending?.attach ?? []), ...(request.attach ?? [])],
-				query: request.query ?? pending?.query ?? null,
-				summarize: [...(pending?.summarize ?? []), ...(request.summarize ?? [])],
-			};
-			setAiDelivery((tick) => tick + 1);
-		},
-		[],
-	);
+	const deliverToAi = useCallback((request: AiDeliveryRequest) => {
+		aiPendingRef.current = mergeDelivery(aiPendingRef.current, request);
+		setAiDelivery((tick) => tick + 1);
+	}, []);
 
 	const focusedPane = workspace.panes.find((pane) => pane.id === focusedPaneId);
 	const focusedTab = focusedPane?.tabs.find((tab) => tab.id === focusedPane.activeId) ?? null;
@@ -355,13 +350,7 @@ export function App(): ReactElement {
 		aiPendingRef.current = null;
 		const handle = activeAiTabId === null ? undefined : aiHandlesRef.current.get(activeAiTabId);
 		if (handle === undefined) return;
-		if (pending.summarize.length > 0) {
-			handle.summarize(pending.summarize);
-			return;
-		}
-		if (pending.attach.length > 0) handle.attach(pending.attach);
-		if (pending.query !== null) handle.sendQuery(pending.query);
-		else handle.focusComposer();
+		deliverToDock(handle, pending);
 	}, [aiDelivery, activeAiTabId]);
 
 	/** The window-level callbacks every pane shares: one stable object, so panes re-render only for their own state. */
@@ -501,15 +490,6 @@ export function App(): ReactElement {
 		deliverToAi({});
 	}, [deliverToAi, finder]);
 
-	/** Inspector action bar: open, share, archive, and edits all run through the focused pane's controller. */
-	const runInspectorAction = useCallback(
-		(target: FileActionTarget, anchor: ActionAnchor | null) => {
-			const entry = finder?.focusedEntry ?? null;
-			if (entry !== null) finder?.runEntryAction(entry, target, anchor);
-		},
-		[finder],
-	);
-
 	const selectEvidence = useCallback(
 		(number: number) => {
 			// A citation chip with no evidence entry must never open a different
@@ -603,14 +583,50 @@ export function App(): ReactElement {
 
 	const path = finder?.path ?? focusedTab?.path ?? "";
 	const aiTabActive = path === AI_SEARCH_PATH;
+	const automationsTabActive = path === AUTOMATIONS_PATH;
+	const { view: automationsView, store: automationsStore } = useAutomations();
+	/** The row selected, else (in a folder some rule watches) the folder itself, so its rules show with nothing selected. */
+	const inspectorEntry = inspectorEntryFor({
+		focused,
+		selectedCount: finder?.selection.keys.length ?? 0,
+		searching: finder?.searching ?? false,
+		path,
+		rules: automationsView.state.rules,
+	});
+	/** Inspector action bar: open, share, archive, and edits all run through the focused pane's controller. */
+	const runInspectorAction = useCallback(
+		(target: FileActionTarget, anchor: ActionAnchor | null) => {
+			if (inspectorEntry !== null) finder?.runEntryAction(inspectorEntry, target, anchor);
+		},
+		[finder, inspectorEntry],
+	);
+	/** Edit and add leave the list for a new AI Search tab whose composer holds a draft: nothing is sent for the person. */
+	const openAiDraft = useCallback(
+		(draft: string) => {
+			finder?.openAiSearch();
+			deliverToAi({ draft });
+		},
+		[deliverToAi, finder],
+	);
+	const automations = useAutomationsShell({
+		store: automationsStore,
+		view: automationsView,
+		active: automationsTabActive,
+		openAiDraft,
+		openFolder: (folder) => finder?.openFolder(folder),
+		showInList: () => finder?.showAutomations(),
+		onError: setToast,
+	});
 	const toolbarTitle =
 		path === SETTINGS_PATH
 			? t("settings.title")
-			: aiTabActive
-				? t("places.aiSearch")
-				: finder?.searching === true
-					? t("finderComponents.searchTitle", { query: finder.query })
-					: isTagPath(path) ? tagNameOf(path) : basename(path);
+			: automationsTabActive
+				? t("places.automations")
+				: aiTabActive
+					? t("places.aiSearch")
+					: finder?.searching === true
+						? t("finderComponents.searchTitle", { query: finder.query })
+						: isTagPath(path) ? tagNameOf(path) : basename(path);
 
 	/** The sidebar AI Search item: a drop turns the focused tab into AI Search with the files attached. */
 	const aiSearchDrop = {
@@ -641,6 +657,7 @@ export function App(): ReactElement {
 
 	return (
 		<TagCatalogContext value={tagCatalog}>
+		<AutomationsContext value={automations}>
 		<div className="desk flex h-full bg-window">
 			<div
 				className="window relative grid flex-1 min-w-0 bg-window overflow-hidden"
@@ -649,10 +666,10 @@ export function App(): ReactElement {
 				{sidebarVisible ? (
 					<Sidebar
 						groups={finder?.navGroups ?? []}
-						activePath={aiTabActive ? AI_SEARCH_PATH : (finder?.activeNavPath ?? null)}
+						activePath={aiTabActive ? AI_SEARCH_PATH : automationsTabActive ? AUTOMATIONS_PATH : (finder?.activeNavPath ?? null)}
 						settingsActive={path === SETTINGS_PATH}
 						showHotkeys={SHOW_HOTKEYS}
-						onNavigate={(item) => (item.view === "aiSearch" ? showAiSearch() : finder?.navigateNav(item))}
+						onNavigate={(item) => (item.view === "aiSearch" ? showAiSearch() : item.view === "automations" ? finder?.showAutomations() : finder?.navigateNav(item))}
 						onEject={(item) => finder?.ejectNav(item)}
 						onOpenSettings={() => finder?.openSettings()}
 						onHideSidebar={() => setSidebarVisible(false)}
@@ -758,11 +775,14 @@ export function App(): ReactElement {
 								})
 							}
 						/>
-						{inspectorVisible ? (
+						{inspectorVisible && automationsTabActive ? (
+							<AutomationInspector rule={automations.selectedRule} onEdit={automations.edit} onDelete={automations.askDelete} />
+						) : inspectorVisible ? (
 							<Inspector
-								entry={focused}
+								entry={inspectorEntry}
 								entries={finder?.selectedEntries ?? []}
 								indexStatus={focused !== null ? (finder?.indexStatusFor(focused.path) ?? null) : null}
+								folderInView={focused === null && inspectorEntry !== null}
 								onToggleIndex={(entry) => finder?.toggleIndex(entry)}
 								onTrash={(entry) => finder?.trashEntry(entry)}
 								onCopyPath={(entry) => finder?.copyEntryPath(entry)}
@@ -781,11 +801,14 @@ export function App(): ReactElement {
 								imageActions={imageActions}
 								evidenceFolderCount={localEvidencePaths.length}
 								onOpenEvidenceFolder={() => finder?.openEvidenceFolder(localEvidencePaths)}
+								automations={{ rules: automationsView.state.rules, onEdit: automations.edit, onDelete: automations.askDelete, onMenu: automations.openRuleMenu }}
 							/>
 						) : null}
 					</div>
 				</div>
-				{toast === null ? null : <Toast message={toast} />}
+				{toast === null && automations.undoToast === null ? null : (
+					<Toast message={automations.undoToast?.message ?? toast ?? ""} action={automations.undoToast === null ? undefined : { label: t("automations.toast.undo"), onAction: () => void automations.undoToast?.onUndo() }} />
+				)}
 				{sidebarVisible ? (
 					<PaneGrip
 						position={{ left: sidebarWidth - 3 }}
@@ -831,7 +854,25 @@ export function App(): ReactElement {
 					onCancel={() => finder?.cancelCloseEvidenceFolder()}
 				/>
 			) : null}
+			{automations.confirm === null ? null : (
+				<ConfirmDialog
+					title={t("automations.confirm.title", { title: ruleTitle(automations.confirm) })}
+					message={t("automations.confirm.message")}
+					confirmLabel={t("automations.confirm.action")}
+					cancelLabel={t("common.cancel")}
+					danger
+					onConfirm={() => void automations.confirmDelete()}
+					onCancel={automations.cancelDelete}
+				/>
+			)}
+			{automations.menu === null ? null : (
+				<ContextMenu cursor={automations.menu.cursor} entries={automations.menu.entries} onSelect={automations.menuSelect} onClose={automations.closeMenu} />
+			)}
+			{automations.preview === null ? null : (
+				<AutomationQuickLook rule={automations.preview} onClose={automations.closePreview} onEdit={automations.edit} />
+			)}
 		</div>
+		</AutomationsContext>
 		</TagCatalogContext>
 	);
 }

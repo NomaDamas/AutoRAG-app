@@ -34,6 +34,8 @@ import { readRawConfigObject, resolveConfigPath, writeConfigObject } from "@auto
 import { DEFAULT_CODE_FOLDER_NAMES, isJsonObject, SETTINGS_CHANNELS } from "../shared/settings-contract";
 import { LOCAL_REFRESH_METHODS } from "./index-refresh";
 import { INDEX_ACTIVITY_CHANNELS } from "../shared/index-activity-contract";
+import { AUTOMATION_CHANNELS } from "../shared/automation-contract";
+import { automationsHome, createAutomationService, librarianCommand, runLibrarianCli } from "./automation-service";
 import { createIndexActivityService } from "./index-activity";
 import { APP_UPDATE_CHANNELS } from "../shared/update-contract";
 import type { AppUpdaterService } from "./app-updater";
@@ -81,6 +83,7 @@ import {
 	registerActionsIpcHandlers,
 	registerAnalyticsIpcHandlers,
 	registerAppUpdateIpcHandlers,
+	registerAutomationIpcHandlers,
 	registerDragOutIpcHandlers,
 	registerIndexActivityIpcHandlers,
 	registerModelDownloadIpcHandlers,
@@ -685,6 +688,19 @@ app.whenReady().then(async () => {
 		sendToMainWindow(INDEX_ACTIVITY_CHANNELS.changed, snapshot);
 	});
 	app.once("will-quit", stopIndexActivity);
+	const automations = createAutomationService({
+		home: () => automationsHome(process.env, homedir()),
+		// The daemon's login service records whichever node ran the install, so it is never this process's own binary.
+		run: (args) => {
+			const librarian = librarianCommand({ resourcesPath: process.resourcesPath, env: process.env, platform: process.platform });
+			return runLibrarianCli(librarian.command, [...librarian.args, ...args], process.env);
+		},
+	});
+	registerAutomationIpcHandlers(automations);
+	const stopAutomations = automations.start((snapshot) => {
+		sendToMainWindow(AUTOMATION_CHANNELS.changed, snapshot);
+	});
+	app.once("will-quit", stopAutomations);
 	registerOsRequestIpcHandlers(osRequests);
 	// The in-app right-click → 서비스 submenu: what macOS offers for the selection, and performing one.
 	registerServicesIpcHandlers(createServicesService());

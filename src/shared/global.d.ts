@@ -14,6 +14,7 @@ import type { SmartIndexingBridge } from "./smart-indexing-contract";
 import type { SettingsBridge } from "./settings-contract";
 import type { ServicesBridge } from "./services-contract";
 import type { AppUpdateBridge } from "./update-contract";
+import type { AutomationBridge } from "./automation-contract";
 
 declare global {
 	interface Window {
@@ -23,6 +24,7 @@ declare global {
 			readonly analytics: AnalyticsBridge;
 			readonly appUpdate: AppUpdateBridge;
 			readonly account: AccountBridge;
+			readonly automations: AutomationBridge;
 			readonly indexActivity: IndexActivityBridge;
 			readonly live: LiveBridge;
 			readonly modelDownload: ModelDownloadBridge;

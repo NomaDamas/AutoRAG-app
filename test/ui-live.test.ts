@@ -113,12 +113,15 @@ describe("live renderer state", () => {
 		]);
 	});
 
-	it("treats Settings and the empty path as having no folder to list or watch", () => {
+	it("treats every app view and the empty path as having no folder to list or watch", () => {
 		// Regression: focus resync listed the literal path "Settings"
 		// (fs:listDir 'Settings' ENOENT) because only the empty path was skipped.
 		expect(isFilesystemPath("Settings")).toBe(false);
+		expect(isFilesystemPath("AI Search")).toBe(false);
+		expect(isFilesystemPath("Automations")).toBe(false);
 		expect(isFilesystemPath("")).toBe(false);
 		expect(isFilesystemPath("/Users/me/Documents")).toBe(true);
+		expect(watchSetFor([{ path: "Automations" }, { path: "AI Search" }, { path: "/Users/me/Documents" }])).toEqual(["/Users/me/Documents"]);
 	});
 
 	it("applies only delete events to the optimistic listing", () => {

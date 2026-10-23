@@ -26,7 +26,8 @@
     "movies": "ムービー",
     "pictures": "ピクチャ",
     "trash": "ゴミ箱",
-    "eject": "\"{{name}}\"を取り出す"
+    "eject": "\"{{name}}\"を取り出す",
+    "automations": "自動化"
   },
   "toolbar": {
     "back": "戻る",
@@ -257,6 +258,142 @@
       "last7Days": "過去7日間",
       "last30Days": "過去30日間",
       "older": "それ以前"
+    }
+  },
+  "automations": {
+    "list": "自動化ルール",
+    "columns": {
+      "name": "名前",
+      "folder": "監視フォルダ",
+      "lastRun": "最終実行",
+      "status": "状態"
+    },
+    "empty": {
+      "title": "自動化はまだありません",
+      "body": "ファイルが作られたり変更されたりしたときに Dazzi がすることを決めておきましょう。",
+      "add": "AI 検索でルールを追加"
+    },
+    "errors": {
+      "config": "ルールファイルを読み込めません",
+      "configHint": "AI 検索でルールを直すか、ファイルを直接編集してください。"
+    },
+    "daemon": {
+      "on": "バックグラウンドで実行中",
+      "off": "オフ · ルールは実行されません",
+      "unknown": "バックグラウンド実行の状態を確認できません",
+      "turnOn": "オンにする",
+      "turnOff": "オフにする",
+      "busy": "処理中…",
+      "count": "ルール {{count}} 件"
+    },
+    "menu": {
+      "preview": "クイックルック",
+      "edit": "AI 検索で編集",
+      "reveal": "自動化タブで表示",
+      "add": "AI 検索で新しいルールを追加…",
+      "openFolder": "監視フォルダを開く",
+      "delete": "削除"
+    },
+    "inspector": {
+      "empty": "ルールを選択すると\nここに概要が表示されます。",
+      "edit": "AI で編集",
+      "delete": "削除",
+      "summary": "概要",
+      "showAll": "すべて表示",
+      "showLess": "簡易表示",
+      "when": "いつ",
+      "what": "すること",
+      "problem": "問題",
+      "watchedFolders": "監視フォルダ",
+      "patterns": "ファイルパターン",
+      "excluded": "除外",
+      "none": "なし",
+      "command": "コマンド",
+      "ruleId": "ルール ID",
+      "neverRan": "まだ実行されていません",
+      "ranOk": "{{time}}に実行 · 成功",
+      "ranFail": "{{time}}に実行 · 失敗",
+      "folderSection": "このフォルダの自動化",
+      "agentAccess": "AI の権限",
+      "agentProfile": "AI プロファイル"
+    },
+    "quickLook": {
+      "when": "いつ",
+      "what": "すること",
+      "folders": "対象フォルダ",
+      "edit": "AI 検索で編集",
+      "close": "閉じる",
+      "ranFail": "{{time}}に実行 · {{reason}}"
+    },
+    "confirm": {
+      "title": "ルール「{{title}}」を削除しますか?",
+      "message": "ルールだけが削除され、フォルダとファイルはそのまま残ります。",
+      "action": "削除"
+    },
+    "toast": {
+      "deleted": "ルール「{{title}}」を削除しました",
+      "undo": "取り消す",
+      "restored": "ルール「{{title}}」を元に戻しました"
+    },
+    "kinds": {
+      "screenshot": "スクリーンショット",
+      "all": "すべてのファイル",
+      "image": "画像",
+      "text": "テキスト",
+      "noun": "{{kinds}}ファイル",
+      "allNoun": "ファイル",
+      "more": "{{kinds}} ほか{{count}}種類"
+    },
+    "trigger": {
+      "create": "{{kind}}が新しく作られたとき",
+      "createUpdate": "{{kind}}が作られたり変更されたりしたとき",
+      "any": "{{kind}}が変わるたび",
+      "update": "{{kind}}が変更されたとき",
+      "delete": "{{kind}}が削除されたとき",
+      "createDelete": "{{kind}}が作られたり削除されたりしたとき",
+      "updateDelete": "{{kind}}が変更されたり削除されたりしたとき"
+    },
+    "whenIn": "{{folder}}で{{trigger}}",
+    "foldersMore": "{{first}} ほか{{count}}か所",
+    "title": {
+      "rule": "{{trigger}} → {{action}}",
+      "created": "新しい{{kinds}}",
+      "createdAll": "新しいファイル",
+      "changed": "{{kinds}}の変更",
+      "changedAll": "ファイルの変更"
+    },
+    "action": {
+      "refresh": "検索インデックスを更新",
+      "search": "Dazzi に任せる",
+      "run": "{{name}}を実行",
+      "agent": "AI に任せる"
+    },
+    "what": {
+      "refresh": "検索インデックスを最新の状態にする",
+      "program": "{{name}}で処理"
+    },
+    "time": {
+      "now": "たった今"
+    },
+    "lastRun": {
+      "never": "まだ実行されていません",
+      "ok": "{{time}} · 成功",
+      "fail": "{{time}} · 失敗"
+    },
+    "fail": {
+      "timeout": "タイムアウト",
+      "missing": "プログラム「{{name}}」が見つかりません",
+      "code": "エラーコード {{code}}",
+      "signal": "シグナル {{signal}} で中断",
+      "unknown": "不明なエラー"
+    },
+    "prompt": {
+      "edit": "この自動化ルールを修正してください — {{id}}（{{when}}）。変更する内容: ",
+      "add": "新しい自動化ルールを作成してください。いつ、どのファイルに、何をするか: "
+    },
+    "agent": {
+      "reads": "読み取りのみ",
+      "writes": "ファイルを変更できる"
     }
   },
   "osMenu": {
@@ -1211,6 +1348,17 @@
         "serversNotObject": "\"mcpServers\" はオブジェクトである必要があります。",
         "duplicate": "\"{{name}}\" というサーバーはすでにあります。",
         "unknownServer": "\"{{name}}\" というサーバーが見つかりません。"
+      }
+    },
+    "automations": {
+      "errors": {
+        "unreadable": "自動化ルールファイルを読み込めません: {{reason}}",
+        "unknownRule": "ルール「{{id}}」が見つかりません。",
+        "cliFailed": "自動化の状態を確認できませんでした: {{reason}}",
+        "cliMissing": "AutoRAG のコマンドラインツールが見つかりません。",
+        "nodeMissing": "自動化ルールのテストやバックグラウンドサービスの起動には Node が必要ですが、このコンピューターでは見つかりませんでした。",
+        "invalidRemoval": "元に戻すルールの形式が正しくありません。",
+        "duplicateRule": "ルール「{{id}}」がすでにあるため、元に戻せません。"
       }
     }
   },

@@ -15,6 +15,7 @@
 
 import {
 	AI_SEARCH_PATH,
+	AUTOMATIONS_PATH,
 	createTabsState,
 	evacuateTabs,
 	focusAiSearchTab,
@@ -23,6 +24,7 @@ import {
 	openOrSelectFolderTab,
 	openTabAt,
 	SETTINGS_PATH,
+	showAutomationsInActiveTab,
 	type FinderTab,
 	type TabsState,
 } from "./tabs";
@@ -536,6 +538,13 @@ export function openOrSelectSettingsInWorkspace(ws: Workspace): Workspace {
 	const existing = allTabs(ws).find((tab) => tab.path === SETTINGS_PATH);
 	if (existing !== undefined) return focusTab(ws, existing.id);
 	return updatePaneTabs(ws, ws.focusedPaneId, (state) => openTabAt(state, SETTINGS_PATH));
+}
+
+/** Sidebar 자동화 / "자동화 탭에서 보기": the open Automations tab wherever it is, else the focused tab turns into it. */
+export function openOrSelectAutomationsInWorkspace(ws: Workspace): Workspace {
+	const existing = allTabs(ws).find((tab) => tab.path === AUTOMATIONS_PATH);
+	if (existing !== undefined) return focusTab(ws, existing.id);
+	return updatePaneTabs(ws, ws.focusedPaneId, showAutomationsInActiveTab);
 }
 
 /** `dazzi <folder>`: the tab showing the folder wherever it is, else a new tab in the focused pane. */

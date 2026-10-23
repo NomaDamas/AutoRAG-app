@@ -237,9 +237,20 @@ export const SETTINGS_PATH = "Settings";
  */
 export const AI_SEARCH_PATH = "AI Search";
 
+/**
+ * The file-automation rules, listed as a tab like Settings (DESIGN.md §1.3c). The
+ * path is never a folder; the rules come from the librarian's rules file.
+ */
+export const AUTOMATIONS_PATH = "Automations";
+
 /** Paths a tab shows that are app views, not folders: never listed, watched, or dropped into. */
 export function isVirtualTabPath(path: string): boolean {
-	return path === SETTINGS_PATH || path === AI_SEARCH_PATH;
+	return path === SETTINGS_PATH || path === AI_SEARCH_PATH || path === AUTOMATIONS_PATH;
+}
+
+/** Sidebar "자동화": the focused tab becomes the rules list; Back returns to where it was. */
+export function showAutomationsInActiveTab(state: TabsState): TabsState {
+	return activeTab(state).path === AUTOMATIONS_PATH ? state : navigateTab(state, AUTOMATIONS_PATH);
 }
 
 export function openOrSelectSettingsTab(state: TabsState): TabsState {
@@ -308,6 +319,9 @@ export function tabTitle(tab: { readonly path: string }, view: { readonly isActi
 	}
 	if (tab.path === AI_SEARCH_PATH) {
 		return t("places.aiSearch");
+	}
+	if (tab.path === AUTOMATIONS_PATH) {
+		return t("places.automations");
 	}
 	const query = view.query.trim();
 	if (view.isActive && query !== "") {

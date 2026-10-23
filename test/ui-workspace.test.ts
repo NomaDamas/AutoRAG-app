@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AI_SEARCH_PATH, navigateTab, openEvidenceFolderTab, openTabAt, SETTINGS_PATH } from "../src/renderer/src/state/tabs";
+import { AI_SEARCH_PATH, AUTOMATIONS_PATH, navigateTab, openEvidenceFolderTab, openTabAt, SETTINGS_PATH } from "../src/renderer/src/state/tabs";
 import {
 	canCloseWorkspaceTab,
 	canDropTab,
@@ -11,6 +11,7 @@ import {
 	focusAiSearchInWorkspace,
 	focusPane,
 	moveTab,
+	openOrSelectAutomationsInWorkspace,
 	openOrSelectSettingsInWorkspace,
 	reopenClosedTab,
 	paneOf,
@@ -383,5 +384,24 @@ describe("Evidence Folder workspace lifecycle", () => {
 		const evTabId = tabId(ws, 1, evidenceRoot);
 		ws = moveTab(ws, evTabId, { kind: "split", paneId: 1, edge: "right" });
 		expect(paneOf(ws, 2).tabs[0]?.evidenceFolder).toBe(evidenceRoot);
+	});
+});
+
+describe("the Automations tab in the workspace", () => {
+	it("selects an open Automations tab in another pane instead of opening a second one", () => {
+		let ws = withTabs(createWorkspace("/a"), 1, AUTOMATIONS_PATH, "/b");
+		ws = moveTab(ws, tabId(ws, 1, "/b"), { kind: "split", paneId: 1, edge: "right" });
+		const next = openOrSelectAutomationsInWorkspace(ws);
+		expect(next.focusedPaneId).toBe(1);
+		expect(activePath(next, 1)).toBe(AUTOMATIONS_PATH);
+		expect(next.panes.flatMap((pane) => pane.tabs).filter((tab) => tab.path === AUTOMATIONS_PATH)).toHaveLength(1);
+		expect(activePath(openOrSelectAutomationsInWorkspace(sideBySide()), 2)).toBe(AUTOMATIONS_PATH);
+	});
+
+	it("never remembers a closed Automations tab for ⇧⌘T", () => {
+		let ws = withTabs(createWorkspace("/a"), 1, AUTOMATIONS_PATH);
+		ws = closeWorkspaceTab(ws, tabId(ws, 1, AUTOMATIONS_PATH));
+		expect(ws.closedTabs).toEqual([]);
+		expect(reopenClosedTab(ws)).toBe(ws);
 	});
 });
