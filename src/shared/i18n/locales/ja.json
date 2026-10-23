@@ -313,7 +313,9 @@
       "neverRan": "まだ実行されていません",
       "ranOk": "{{time}}に実行 · 成功",
       "ranFail": "{{time}}に実行 · 失敗",
-      "folderSection": "このフォルダの自動化"
+      "folderSection": "このフォルダの自動化",
+      "agentAccess": "AI の権限",
+      "agentProfile": "AI プロファイル"
     },
     "quickLook": {
       "when": "いつ",
@@ -363,7 +365,8 @@
     "action": {
       "refresh": "検索インデックスを更新",
       "search": "Dazzi に任せる",
-      "run": "{{name}}を実行"
+      "run": "{{name}}を実行",
+      "agent": "AI に任せる"
     },
     "what": {
       "refresh": "検索インデックスを最新の状態にする",
@@ -387,6 +390,10 @@
     "prompt": {
       "edit": "この自動化ルールを修正してください — {{id}}（{{when}}）。変更する内容: ",
       "add": "新しい自動化ルールを作成してください。いつ、どのファイルに、何をするか: "
+    },
+    "agent": {
+      "reads": "読み取りのみ",
+      "writes": "ファイルを変更できる"
     }
   },
   "osMenu": {

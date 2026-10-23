@@ -12,7 +12,7 @@ import { useState, type ReactElement, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type { AutomationRule } from "../../../shared/automation-contract";
 import { cn } from "../lib/cn";
-import { actionShort, failReason, foldersText, relativeTime, ruleTitle, runTone, whatText, whenText } from "../state/automations";
+import { actionShort, agentAccessText, failReason, foldersText, relativeTime, ruleTitle, runTone, whatText, whenText } from "../state/automations";
 import { ChevronRightIcon, FolderGlyph, PencilIcon, RefreshIcon, SparklesIcon, TrashIcon, ZapIcon } from "./icons";
 import { StatusDot } from "./primitives/StatusDot";
 
@@ -24,6 +24,7 @@ export interface AutomationInspectorProps {
 
 /** A rule's action as its glyph: the search index refresh, an AI Search run, or any other program. */
 export function AutomationActionGlyph({ rule, size = 20 }: { readonly rule: AutomationRule; readonly size?: number }): ReactElement {
+	if (rule.agent !== undefined) return <SparklesIcon size={size} />;
 	if (rule.run[0] === "autorag" && rule.run[1] === "refresh") return <RefreshIcon size={size} />;
 	if (rule.run[0] === "autorag" && rule.run[1] === "search") return <SparklesIcon size={size} />;
 	return <ZapIcon size={size} />;
@@ -51,6 +52,7 @@ export function AutomationInspector({ rule, onEdit, onDelete }: AutomationInspec
 function RuleBody({ rule, onEdit, onDelete }: { readonly rule: AutomationRule; readonly onEdit: (rule: AutomationRule) => void; readonly onDelete: (rule: AutomationRule) => void }): ReactElement {
 	const { t } = useTranslation();
 	const [expanded, setExpanded] = useState(false);
+	const access = agentAccessText(rule);
 	const run = rule.lastRun;
 	const tone = runTone(run);
 	const failed = tone === "fail";
@@ -121,6 +123,7 @@ function RuleBody({ rule, onEdit, onDelete }: { readonly rule: AutomationRule; r
 				<dl className="m-0">
 					<InfoRow label={t("automations.inspector.when")} value={whenText(rule)} />
 					<InfoRow label={t("automations.inspector.what")} value={whatText(rule)} />
+					{access === null ? null : <InfoRow label={t("automations.inspector.agentAccess")} value={access} />}
 					{failed && run !== null ? <InfoRow label={t("automations.inspector.problem")} value={failReason(run)} failed /> : null}
 					{expanded ? (
 						<>
@@ -130,7 +133,11 @@ function RuleBody({ rule, onEdit, onDelete }: { readonly rule: AutomationRule; r
 								label={t("automations.inspector.excluded")}
 								value={rule.exclude.length === 0 ? t("automations.inspector.none") : rule.exclude.join(", ")}
 							/>
-							<InfoRow label={t("automations.inspector.command")} value={rule.run.join(" ")} mono />
+							{rule.agent === undefined ? (
+								<InfoRow label={t("automations.inspector.command")} value={rule.run.join(" ")} mono />
+							) : (
+								<InfoRow label={t("automations.inspector.agentProfile")} value={rule.agent.profile} mono />
+							)}
 							<InfoRow label={t("automations.inspector.ruleId")} value={rule.id} />
 						</>
 					) : null}

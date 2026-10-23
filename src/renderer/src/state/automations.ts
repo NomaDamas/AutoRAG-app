@@ -152,6 +152,7 @@ function isAutorag(rule: AutomationRule, subcommand: string): boolean {
 }
 
 export function actionShort(rule: AutomationRule): string {
+	if (rule.agent !== undefined) return t("automations.action.agent");
 	if (isAutorag(rule, "refresh")) return t("automations.action.refresh");
 	if (isAutorag(rule, "search")) return t("automations.action.search");
 	return t("automations.action.run", { name: commandName(rule) });
@@ -187,10 +188,20 @@ function shortInstruction(text: string): string {
 
 /** What the rule does. `full` keeps the whole instruction: Quick Look and cards have room, the inspector does not. */
 export function whatText(rule: AutomationRule, { full = false }: { readonly full?: boolean } = {}): string {
+	if (rule.agent !== undefined) return `“${full ? rule.agent.task : shortInstruction(rule.agent.task)}”`;
 	if (isAutorag(rule, "refresh")) return t("automations.what.refresh");
 	const instruction = rule.run[2];
 	if (isAutorag(rule, "search") && instruction !== undefined) return `“${full ? instruction : shortInstruction(instruction)}”`;
 	return t("automations.what.program", { name: commandName(rule) });
+}
+
+/** Profiles the librarian registers that may change files; every other profile only reads. */
+const WRITING_PROFILES: ReadonlySet<string> = new Set(["file-organizer"]);
+
+/** What an agent rule is allowed to do to files, or null for a rule that runs a command. */
+export function agentAccessText(rule: AutomationRule): string | null {
+	if (rule.agent === undefined) return null;
+	return t(WRITING_PROFILES.has(rule.agent.profile) ? "automations.agent.writes" : "automations.agent.reads");
 }
 
 /* ---------------------------------------------------------------- last run -- */

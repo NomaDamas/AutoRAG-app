@@ -203,6 +203,29 @@ describe("AutomationInspector", () => {
 		expect(value("제외")).toBe("**/archive/**");
 	});
 
+	it("shows an AI rule's access in the summary, and its profile instead of an empty command", () => {
+		const reader = rule({ run: [], agent: { profile: "file-triage", task: "Summarize each new PDF in three lines" } });
+		act(() => root.render(<AutomationInspector rule={reader} onEdit={noop} onDelete={noop} />));
+		expect(value("하는 일")).toBe(whatText(reader));
+		expect(value("AI 권한")).toBe("읽기만 함");
+
+		click(button("전체 정보"));
+		expect(value("명령")).toBeUndefined();
+		expect(value("AI 프로필")).toBe("file-triage");
+
+		const writer = rule({ run: [], agent: { profile: "file-organizer", task: "Move each new PDF into a folder" } });
+		act(() => root.render(<AutomationInspector rule={writer} onEdit={noop} onDelete={noop} />));
+		expect(value("AI 권한")).toBe("파일을 바꿀 수 있음");
+	});
+
+	it("does not show AI rows for a rule that runs a command", () => {
+		act(() => root.render(<AutomationInspector rule={rule()} onEdit={noop} onDelete={noop} />));
+		click(button("전체 정보"));
+		expect(value("AI 권한")).toBeUndefined();
+		expect(value("AI 프로필")).toBeUndefined();
+		expect(value("명령")).toBe("autorag search Summarize the document");
+	});
+
 	it("edits and deletes through the chips", () => {
 		const shown = rule();
 		const edits: AutomationRule[] = [];

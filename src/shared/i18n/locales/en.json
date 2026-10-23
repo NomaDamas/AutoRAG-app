@@ -313,7 +313,9 @@
       "neverRan": "Has not run yet",
       "ranOk": "Ran {{time}} · succeeded",
       "ranFail": "Ran {{time}} · failed",
-      "folderSection": "Automations on this folder"
+      "folderSection": "Automations on this folder",
+      "agentAccess": "AI access",
+      "agentProfile": "AI profile"
     },
     "quickLook": {
       "when": "When",
@@ -363,7 +365,8 @@
     "action": {
       "refresh": "Refresh search index",
       "search": "Hand to Dazzi",
-      "run": "Run {{name}}"
+      "run": "Run {{name}}",
+      "agent": "Handled by AI"
     },
     "what": {
       "refresh": "Brings the search index up to date",
@@ -387,6 +390,10 @@
     "prompt": {
       "edit": "Edit this automation rule — {{id}} ({{when}}). What to change: ",
       "add": "Create a new automation rule. When, on which files, and what to do: "
+    },
+    "agent": {
+      "reads": "Reads only",
+      "writes": "Can change files"
     }
   },
   "osMenu": {

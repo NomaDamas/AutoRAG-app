@@ -313,7 +313,9 @@
       "neverRan": "尚未运行",
       "ranOk": "{{time}}运行 · 成功",
       "ranFail": "{{time}}运行 · 失败",
-      "folderSection": "此文件夹的自动化"
+      "folderSection": "此文件夹的自动化",
+      "agentAccess": "AI 权限",
+      "agentProfile": "AI 配置"
     },
     "quickLook": {
       "when": "何时",
@@ -363,7 +365,8 @@
     "action": {
       "refresh": "更新搜索索引",
       "search": "交给 Dazzi",
-      "run": "运行 {{name}}"
+      "run": "运行 {{name}}",
+      "agent": "由 AI 处理"
     },
     "what": {
       "refresh": "让搜索索引保持最新",
@@ -387,6 +390,10 @@
     "prompt": {
       "edit": "请修改这条自动化规则 — {{id}}（{{when}}）。要修改的内容: ",
       "add": "请创建一个新的自动化规则。何时、对哪些文件、做什么: "
+    },
+    "agent": {
+      "reads": "仅读取",
+      "writes": "可以修改文件"
     }
   },
   "osMenu": {

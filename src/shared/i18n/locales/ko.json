@@ -313,7 +313,9 @@
       "neverRan": "아직 실행되지 않았어요",
       "ranOk": "{{time}} 실행 · 성공",
       "ranFail": "{{time}} 실행 · 실패",
-      "folderSection": "이 폴더의 자동화"
+      "folderSection": "이 폴더의 자동화",
+      "agentAccess": "AI 권한",
+      "agentProfile": "AI 프로필"
     },
     "quickLook": {
       "when": "언제",
@@ -363,7 +365,8 @@
     "action": {
       "refresh": "검색 색인 최신화",
       "search": "Dazzi에게 맡기기",
-      "run": "{{name}} 실행"
+      "run": "{{name}} 실행",
+      "agent": "AI가 처리하기"
     },
     "what": {
       "refresh": "검색 색인을 최신으로 맞춤",
@@ -387,6 +390,10 @@
     "prompt": {
       "edit": "이 자동화 규칙을 수정해줘 — {{id}} ({{when}}). 바꿀 내용: ",
       "add": "새 자동화 규칙을 만들어줘. 언제, 어떤 파일에, 무엇을 할지: "
+    },
+    "agent": {
+      "reads": "읽기만 함",
+      "writes": "파일을 바꿀 수 있음"
     }
   },
   "osMenu": {

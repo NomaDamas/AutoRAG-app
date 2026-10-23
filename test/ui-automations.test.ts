@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
 	actionShort,
 	addPrompt,
+	agentAccessText,
 	editPrompt,
 	failReason,
 	folderLabel,
@@ -126,6 +127,41 @@ describe("the sentence a person reads", () => {
 		for (const language of ["en", "ja", "zh"] as const) {
 			await setAppLanguage(language);
 			const text = [ruleTitle(rule()), whenText(rule()), whatText(rule({ run: ["autorag", "refresh"] }))].join(" ");
+			expect(text, language).not.toMatch(/[\uac00-\ud7a3]/);
+			expect(text, language).not.toContain("automations.");
+		}
+	});
+});
+
+describe("a rule that runs an AI agent", () => {
+	const triage = rule({
+		include: ["**/*.pdf"],
+		run: [],
+		agent: { profile: "file-triage", task: "Summarize each new PDF in three lines" },
+	});
+	const organizer = rule({ run: [], agent: { profile: "file-organizer", task: "Move each new PDF into a folder named for its year" } });
+
+	it("names the action as the AI doing it, not as a program called nothing", () => {
+		expect(actionShort(triage)).toBe("AI가 처리하기");
+		expect(ruleTitle(triage)).toBe("새 PDF → AI가 처리하기");
+	});
+
+	it("says what the agent was asked, in full for a card and cut for a narrow list", () => {
+		expect(whatText(triage, { full: true })).toBe("“Summarize each new PDF in three lines”");
+		expect(whatText(organizer)).toBe("“Move each new PDF into…”");
+		expect(whatText(organizer, { full: true })).toBe("“Move each new PDF into a folder named for its year”");
+	});
+
+	it("says whether the agent only reads or may change files", () => {
+		expect(agentAccessText(triage)).toBe("읽기만 함");
+		expect(agentAccessText(organizer)).toBe("파일을 바꿀 수 있음");
+		expect(agentAccessText(rule())).toBeNull();
+	});
+
+	it("reads in every interface language", async () => {
+		for (const language of ["en", "ja", "zh"] as const) {
+			await setAppLanguage(language);
+			const text = [ruleTitle(triage), whatText(triage), agentAccessText(triage), agentAccessText(organizer)].join(" ");
 			expect(text, language).not.toMatch(/[\uac00-\ud7a3]/);
 			expect(text, language).not.toContain("automations.");
 		}

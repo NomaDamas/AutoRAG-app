@@ -319,6 +319,22 @@ describe("createAutomationService snapshot", () => {
 		expect(mapped.rules[0]?.lastRun?.startedAt).toBe(Date.parse("2026-10-23T10:00:00.000Z"));
 	});
 
+	it("reads a rule that runs an AI agent instead of a command", async () => {
+		const dir = await home();
+		const agentRule: Record<string, unknown> = {
+			...rule("triage"),
+			agent: { profile: "file-triage", task: "Summarize each new PDF in three lines", retrieval: { searchAll: false, datasources: [] } },
+		};
+		delete agentRule.run;
+		await writeRules(dir, [agentRule, rule("plain")]);
+		const cli = fakeCli(dir, { status: () => ok(statusOf({ dir, automations: [agentRule, rule("plain")] })) });
+		const rules = (await service(dir, cli).snapshot()).rules;
+
+		expect(rules[0]).toMatchObject({ id: "triage", run: [], agent: { profile: "file-triage", task: "Summarize each new PDF in three lines" } });
+		expect(rules[1]?.agent).toBeUndefined();
+		expect(rules[1]?.run).toEqual(["echo", "hi"]);
+	});
+
 	it("leaves an existing but empty rules file to the librarian", async () => {
 		const dir = await home();
 		await writeFile(rulesPath(dir), "");

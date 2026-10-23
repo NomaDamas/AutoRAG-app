@@ -144,6 +144,12 @@ function runOf(value: unknown): AutomationRun | null {
 	};
 }
 
+/** The `agent` a rule runs instead of a command; absent when the rule has none or it is not the shape the librarian writes. */
+function agentOf(value: unknown): Pick<AutomationRule, "agent"> {
+	if (!isJsonObject(value) || typeof value.profile !== "string" || typeof value.task !== "string") return {};
+	return { agent: { profile: value.profile, task: value.task } };
+}
+
 function ruleOf(value: unknown): AutomationRule | null {
 	if (!isJsonObject(value) || typeof value.id !== "string") return null;
 	const events = textArray(value.events).filter((event): event is AutomationRule["events"][number] => event === "create" || event === "update" || event === "delete");
@@ -154,6 +160,7 @@ function ruleOf(value: unknown): AutomationRule | null {
 		include: textArray(value.include),
 		exclude: textArray(value.exclude),
 		run: textArray(value.run),
+		...agentOf(value.agent),
 		appendFiles: value.appendFiles === true,
 		debounceMs: typeof value.debounceMs === "number" ? value.debounceMs : 0,
 		timeoutMs: typeof value.timeoutMs === "number" ? value.timeoutMs : 0,

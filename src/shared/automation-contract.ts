@@ -31,6 +31,16 @@ export interface AutomationRun {
 	readonly error?: string;
 }
 
+/**
+ * What an agent rule runs: a profile the librarian registers in code (`file-triage` only reads,
+ * `file-organizer` may change files) and the instruction it gets for each batch of changes.
+ * The rules file carries only the profile's id, so a rule cannot grant an agent more than its profile allows.
+ */
+export interface AutomationAgent {
+	readonly profile: string;
+	readonly task: string;
+}
+
 /** A rule as the librarian parses it (`~` expanded, defaults filled) plus its last run. */
 export interface AutomationRule {
 	readonly id: string;
@@ -40,8 +50,10 @@ export interface AutomationRule {
 	/** Globs relative to a watched folder. */
 	readonly include: readonly string[];
 	readonly exclude: readonly string[];
-	/** The command's argv, run without a shell. */
+	/** The command's argv, run without a shell. Empty for a rule that runs an agent instead. */
 	readonly run: readonly string[];
+	/** Set when the rule starts an AI agent profile on each batch of changes instead of running a command. */
+	readonly agent?: AutomationAgent;
 	readonly appendFiles: boolean;
 	readonly debounceMs: number;
 	readonly timeoutMs: number;

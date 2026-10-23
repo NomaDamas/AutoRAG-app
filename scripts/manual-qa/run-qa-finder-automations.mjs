@@ -309,6 +309,26 @@ async function english() {
 		await page.waitForSelector(ROW(ruleD.id), { timeout: 20_000 });
 		check("a rule added outside the app appears without a click", (await text(page, ROW(ruleD.id))).includes("New Word → Refresh search index"), await text(page, ROW(ruleD.id)));
 		check("the count follows", (await text(page, "[data-daemon]")).includes("Rules: 4"));
+
+		// 8b. A rule that runs an AI agent (librarian af6e5de): the real CLI parses it, the app names it as the AI's work.
+		const ruleE = { id: "agent-triage", paths: [NOTES], events: ["create"], include: ["**/*.pdf"], agent: { profile: "file-organizer", task: "Move each new PDF into a folder named for its year" } };
+		writeRules([ruleA, ruleB, ruleC, ruleD, ruleE]);
+		await page.waitForSelector(ROW(ruleE.id), { timeout: 20_000 });
+		const agentRow = await text(page, ROW(ruleE.id));
+		check("an AI rule reads as the AI's work, not as a program with no name", agentRow.includes("New PDF → Handled by AI") && !/Run\s*$|Handled by\s*$/.test(agentRow), agentRow);
+		await page.locator(ROW(ruleE.id)).click();
+		await page.waitForSelector(`${INSPECTOR} >> text=Can change files`);
+		inspector = await text(page, INSPECTOR);
+		check("its inspector says what was asked and whether it may change files", inspector.includes("“Move each new PDF into…”") && inspector.includes("AI access") && inspector.includes("Can change files"), inspector);
+		await page.keyboard.press("Space");
+		await page.waitForSelector('[role="dialog"]');
+		const agentCard = await text(page, '[role="dialog"]');
+		check("Quick Look shows the whole instruction", agentCard.includes("Move each new PDF into a folder named for its year"), agentCard);
+		await sleep(350);
+		await page.screenshot({ path: join(EVIDENCE, "08c-agent-rule-en.png") });
+		await page.keyboard.press("Escape");
+		writeRules([ruleA, ruleB, ruleC, ruleD]);
+		await page.waitForSelector(ROW(ruleA.id), { timeout: 20_000 });
 		writeFileSync(RULES, `${JSON.stringify({ automations: [{ ...ruleA, note: "not a librarian field" }] }, null, 2)}\n`);
 		await page.waitForSelector("text=The rules file cannot be read", { timeout: 20_000 });
 		const broken = await text(page, "[data-rules-body]");
