@@ -2,7 +2,7 @@ import { stat } from "node:fs/promises";
 import { isAbsolute } from "node:path";
 import type { AgentSession } from "@earendil-works/pi-coding-agent";
 import type { SmartExclusion, SmartIndexingEvent } from "../shared/smart-indexing-contract";
-import { createProfileSession, type ProfileModel } from "./agents/agent-factory";
+import { createProfileSession, type ProfileModel } from "@autorag/librarian/profiles";
 import { createFolderSurvey } from "./agents/profiles/folder-stats";
 import { createProposalCollector, type ExclusionProposal, type ReplyLanguage, smartIndexingProfile } from "./agents/profiles/smart-indexing";
 import { type FolderScanOptions, scanFolder } from "./onboarding-scan";

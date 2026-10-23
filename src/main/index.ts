@@ -71,7 +71,7 @@ import { migrateLegacyEmbedding } from "./embedding-migration";
 import { createEmbeddingSettingsService } from "./embedding-settings-service";
 import { createMcpSettingsService } from "./mcp-settings-service";
 import { createDefaultAgentFactory, createSearchService } from "./search-service";
-import { resolveAppSessionModel } from "./agents/app-model";
+import { resolveConfiguredSessionModel } from "@autorag/librarian/profiles";
 import { createSmartIndexingService } from "./smart-indexing-service";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { createSettingsService } from "./settings-service";
@@ -727,7 +727,7 @@ app.whenReady().then(async () => {
 	registerSmartIndexingIpcHandlers(
 		createSmartIndexingService({
 			send: (event) => sendToMainWindow(SMART_INDEXING_CHANNELS.event, event),
-			resolveModel: () => resolveAppSessionModel(process.env, process.cwd(), getAgentDir()),
+			resolveModel: () => resolveConfiguredSessionModel(process.env, process.cwd(), getAgentDir()),
 			agentDir: getAgentDir(),
 			env: process.env,
 			language: () => currentLanguage,

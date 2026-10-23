@@ -4,7 +4,7 @@ import { defineTool, type ToolDefinition } from "@earendil-works/pi-coding-agent
 import { Type } from "typebox";
 import type { AppSettings } from "../../../shared/settings-contract";
 import { DEFAULT_CODE_FOLDER_NAMES } from "../../../shared/settings-contract";
-import type { AgentProfile } from "../agent-factory";
+import type { AgentProfile } from "@autorag/librarian/profiles";
 import type { FolderSurvey } from "./folder-stats";
 
 /**

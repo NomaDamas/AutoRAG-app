@@ -10,8 +10,7 @@ import {
 import { readRawConfigObject, resolveAgentModel, resolveConfigPath, type CliConfig } from "@autorag/librarian/core";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { isJsonObject } from "../shared/settings-contract";
-import { applyDazziThinkingLevels } from "./dazzi-session-auth";
-import { resolveSessionModel } from "./agents/app-model";
+import { applyDazziThinkingLevels, resolveSessionModel } from "@autorag/librarian/profiles";
 import { applyAppIndexing, readAppIndexing } from "./app-indexing";
 import { ensureEmbeddingForConfig } from "./embedding-daemon";
 import { agentOptionsForSemantic, applySemanticPolicyToAgent } from "./semantic-policy";
@@ -566,7 +565,7 @@ export function createDefaultAgentFactory(): () => Promise<SearchAgent> {
 		// A semantic search embeds its query through the local server; a server still loading at launch is waited for here.
 		if (readAppIndexing(raw).semanticSearch) await ensureEmbeddingForConfig(raw);
 		// The model and credentials come from the one resolver every agent in the
-		// app shares (see agents/app-model.ts): fresh on every agent build.
+		// app shares (`resolveSessionModel` in @autorag/librarian/profiles): fresh on every agent build.
 		const resolved = await resolveSessionModel(effective, input.env, input.cwd, getAgentDir());
 		const agentDir = input.env.PI_CODING_AGENT_DIR ?? getAgentDir();
 		syncCalendarMcpConfig(raw, raw, agentDir);
