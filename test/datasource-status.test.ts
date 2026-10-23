@@ -167,6 +167,21 @@ describe("createDataSourceStatusService", () => {
 		expect(slack?.install).toMatchObject({ state: "installed", path: cli });
 	});
 
+	it("reports a configured executable path that does not exist as missing, even when the same CLI is on PATH", async () => {
+		// Given slacrawl is on PATH, but the user pointed the connection at a path that holds nothing
+		const fixture = await createFixtureWithOnlySlacrawlOnPath();
+		const wrong = join(fixture.root, "elsewhere", "slacrawl");
+		await writeConfig(fixture, { slack: { connector: { binaryPath: wrong } } });
+
+		// When the status is listed
+		const [slack] = (await createDataSourceStatusService({ env: fixture.env, cwd: fixture.root }).list()).sources;
+
+		// Then the wrong path is reported, not a silent fallback to the CLI that PATH happens to hold
+		expect(slack?.install).toMatchObject({ state: "missing", binary: "slacrawl", path: null });
+		expect(slack?.install.detail).toContain(wrong);
+		expect(slack?.status).toBe("attention");
+	});
+
 	it("still treats an exact CLI name as executable on POSIX", async () => {
 		// Given the existing extensionless script on PATH
 		const fixture = await createFixtureWithOnlySlacrawlOnPath();
