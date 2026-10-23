@@ -598,19 +598,23 @@ window. Search results are not live.
 
 AI Search is answered by the AutoRAG agent (`@autorag/librarian`). Every other
 agent in the app is a plain pi session built by one factory,
-`src/main/agents/agent-factory.ts`, from an `AgentProfile`:
+`createProfileSession` from `@autorag/librarian/profiles`, from an `AgentProfile`.
+The factory lives in the librarian so that the app's helper agents and the
+librarian's file-triggered automations (`agent` rules in `automations.json`) are
+built the same way:
 
 | Per profile | Shared by all |
 |---|---|
-| system prompt, tool names (pi built-ins such as `read ls find grep`, which open any path on the machine, so a profile that must stay inside a folder uses none), custom tools, thinking level, whether pi loads AGENTS.md / skills / extensions (each off unless the profile asks) | the model and its credentials, resolved by `agents/app-model.ts` from the same config AI Search uses; pi's `auth.json` / `models.json` in the agent dir, so one sign-in serves every agent |
+| system prompt, tool names (pi built-ins such as `read ls find grep`, which open any path on the machine, so a profile that must stay inside a folder uses none), custom tools, thinking level, whether pi loads AGENTS.md / skills / extensions (each off unless the profile asks) | the model and its credentials, resolved by the librarian's `resolveSessionModel` / `resolveConfiguredSessionModel` from the same config AI Search uses; pi's `auth.json` / `models.json` in the agent dir, so one sign-in serves every agent |
 
 A session is in memory and disposed by its caller: nothing is written to the
 agent dir or the working directory, and the user's own pi settings never apply.
-Profiles live in `src/main/agents/profiles/`; the first is smart indexing
+A profile session never reads or writes AutoRAG's retrieval memory.
+App profiles live in `src/main/agents/profiles/`; the first is smart indexing
 (thinking `low`; looks only through `folder_survey` and `list_folder`, answers
 only through a `propose_exclusions` tool that validates paths). A new profile adds one file there and, if it needs
-a UI, its own service and bridge. `test/agent-factory.test.ts` pins what the
-model is offered; it runs on pi's faux provider.
+a UI, its own service and bridge. The factory's own tests (what the model is
+offered, on pi's faux provider) live in the librarian, in `test/profiles/`.
 
 ## AI Search attachments
 
