@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import type { AgentProfile } from "../src/main/agents/agent-factory";
+import type { AgentProfile } from "@autorag/librarian/profiles";
 import { createFolderSurvey } from "../src/main/agents/profiles/folder-stats";
 import { createProposalCollector, smartIndexingProfile } from "../src/main/agents/profiles/smart-indexing";
 
