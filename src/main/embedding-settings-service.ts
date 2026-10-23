@@ -58,6 +58,11 @@ export interface EmbeddingSettingsDeps {
 	readonly localSpec: () => Promise<LocalSpecVerdict>;
 	/** Test seam for the server probe. */
 	readonly fetchImpl?: typeof fetch;
+	/**
+	 * Whether the signed-in plan includes cloud embeddings (Pro and Max): `null` while signed out or before the
+	 * server confirmed the plan (the sign-in check reports that), `false` for Free and Air.
+	 */
+	readonly cloudEmbeddings: () => Promise<boolean | null>;
 }
 
 /** The model is fixed: Qwen3-Embedding-0.6B at 1024 dimensions, whichever server runs it. Changing it is not offered. */
@@ -89,7 +94,7 @@ const SIDECAR_TEMPLATES: Record<string, true> = { kakao: true, slack: true, tele
  * differs is where it runs: nowhere (keyword-only), on this computer through MinSync, in the Dazzi cloud, or on
  * a server the user runs or pays for.
  */
-export function embeddingProfiles(spec: LocalSpecVerdict = { eligible: true }): readonly EmbeddingProfile[] {
+export function embeddingProfiles(spec: LocalSpecVerdict = { eligible: true }, cloudEmbeddings: boolean | null = true): readonly EmbeddingProfile[] {
 	const fixed = { model: MODEL, dimension: DIMENSION, queryPrefix: "", passagePrefix: "" } as const;
 	return [
 		{
@@ -113,13 +118,13 @@ export function embeddingProfiles(spec: LocalSpecVerdict = { eligible: true }): 
 			unavailable: spec.eligible ? null : localSpecMessage(spec, tByName),
 			...fixed,
 		},
-		{ id: "dazzi", kind: "dazzi", label: t("main.embedding.profiles.dazzi.label"), description: t("main.embedding.profiles.dazzi.description"), baseUrl: DEFAULT_ACCOUNT_BASE_URL, unavailable: null, ...fixed },
+		{ id: "dazzi", kind: "dazzi", label: t("main.embedding.profiles.dazzi.label"), description: t("main.embedding.profiles.dazzi.description"), baseUrl: DEFAULT_ACCOUNT_BASE_URL, unavailable: cloudEmbeddings === false ? t("main.embedding.profiles.dazzi.planRequired") : null, ...fixed },
 		{ id: "byok", kind: "byok", label: t("main.embedding.profiles.byok.label"), description: t("main.embedding.profiles.byok.description"), baseUrl: null, unavailable: null, ...fixed },
 	];
 }
 
-function findProfile(profileId: string, spec?: LocalSpecVerdict): EmbeddingProfile | undefined {
-	return embeddingProfiles(spec).find((profile) => profile.id === profileId);
+function findProfile(profileId: string, spec?: LocalSpecVerdict, cloudEmbeddings?: boolean | null): EmbeddingProfile | undefined {
+	return embeddingProfiles(spec, cloudEmbeddings).find((profile) => profile.id === profileId);
 }
 
 function isLoopbackUrl(value: string): boolean {
@@ -259,7 +264,7 @@ export function createEmbeddingSettingsService(deps: EmbeddingSettingsDeps): Emb
 	};
 
 	const resolveChoice = async (request: EmbeddingChangeRequest): Promise<{ choice: EmbeddingChoice } | { error: string }> => {
-		const profile = findProfile(request.profileId, await deps.localSpec());
+		const profile = findProfile(request.profileId, await deps.localSpec(), await deps.cloudEmbeddings());
 		if (profile === undefined) return { error: t("main.embedding.errors.unknownProfile", { id: request.profileId }) };
 		// The spec guard: a machine below the minimum never gets the on-device model, however the request arrived.
 		if (profile.unavailable !== null) return { error: profile.unavailable };
@@ -341,7 +346,7 @@ export function createEmbeddingSettingsService(deps: EmbeddingSettingsDeps): Emb
 			configExists: existsSync(path),
 			error,
 			current: { profileId: choice.profile.id, embedder: choice.profile.kind === "none" ? asJsonObject(readEmbedder(deps.env, deps.cwd)) : deriveEmbedder(choice, accountBaseUrl()) },
-			profiles: embeddingProfiles(await deps.localSpec()),
+			profiles: embeddingProfiles(await deps.localSpec(), await deps.cloudEmbeddings()),
 			sources: [],
 		};
 		const sources = await deps.dataSources.list();
@@ -359,7 +364,7 @@ export function createEmbeddingSettingsService(deps: EmbeddingSettingsDeps): Emb
 				configExists: existsSync(path),
 				error: null,
 				current: { profileId, embedder: asJsonObject(embedder) },
-				profiles: embeddingProfiles(await deps.localSpec()),
+				profiles: embeddingProfiles(await deps.localSpec(), await deps.cloudEmbeddings()),
 				sources: [],
 			};
 			const sources = await deps.dataSources.list();
@@ -376,7 +381,7 @@ export function createEmbeddingSettingsService(deps: EmbeddingSettingsDeps): Emb
 					configExists: existsSync(configPath()),
 					error: resolved.error,
 					current: { profileId: currentProfileId(embedder, readSemantic(deps.env, deps.cwd), accountBaseUrl()), embedder: asJsonObject(embedder) },
-					profiles: embeddingProfiles(await deps.localSpec()),
+					profiles: embeddingProfiles(await deps.localSpec(), await deps.cloudEmbeddings()),
 					sources: [],
 				};
 			}

@@ -1273,7 +1273,8 @@
         },
         "dazzi": {
           "label": "Dazzi cloud",
-          "description": "Uses the hosted embedding with your Dazzi account. Requires sign-in, and document text is sent to Dazzi's servers."
+          "description": "Uses the hosted embedding with your Dazzi account. Requires sign-in, and document text is sent to Dazzi's servers.",
+          "planRequired": "Available on Pro and above (Pro, Max)."
         },
         "byok": {
           "label": "My own server (OpenAI / TEI compatible)",
@@ -1722,68 +1723,41 @@
       "description": "Your Dazzi account and sign-in status.",
       "profileTitle": "Profile",
       "accountName": "Dazzi Account",
-      "accountHint": "Sign-in happens in your system browser; this app never receives your password.",
       "signingIn": "Signing in in the browser…",
-      "signedIn": "Signed in",
       "signedOut": "Not signed in",
-      "email": "Email",
-      "emailHint": "The account email confirmed by the server.",
       "offline": "Could not reach the server; showing the last confirmed information.",
       "signOut": "Sign Out",
       "signIn": "Sign In",
-      "hintSignedIn": "Deletes the key stored on this Mac. You can revoke it from the API keys screen on the Dazzi website.",
-      "hintSignedOut": "A browser opens; approve there and you'll return to this app.",
       "signInBrowser": "Sign In in Browser",
       "managedDesc": "Use this account's managed models for AI Search.",
       "managedName": "Use Managed Models",
-      "managedHint": "Changes Dazzi settings so AI Search uses this account's models. Your manually entered API key settings are replaced by this step.",
+      "managedHint": "Use this account's models for AI search.",
       "useManaged": "Use Account Models",
-      "planDescription": "Check your Dazzi plan and this week's AI usage.",
+      "planDescription": "Your current plan and this week's AI usage.",
       "currentPlan": "Current Plan",
-      "currentPlanHintSignedIn": "The plan confirmed by the server.",
-      "currentPlanHintSignedOut": "Sign in first to see your plan.",
       "trialing": " · Trialing",
       "cancelScheduled": "Cancellation is scheduled. You can use the current plan until {{date}}.",
       "pastDue": "Payment failed. Check your payment method in the billing portal.",
-      "inUse": "In use",
-      "openCheckout": "Open Checkout Page",
-      "billingTitle": "Billing",
-      "billingHint": "Manage payment methods, receipts, and cancellations/refunds in the billing portal.",
-      "openPortal": "Open Billing Portal",
       "usageTitle": "This Week's Usage",
-      "usageName": "AI Usage",
-      "usageHint": "Weekly credits deducted when you use Dazzi plan models.",
+      "usageName": "AI usage",
       "usageMeterAria": "Weekly credit usage",
       "usageUnavailable": "Could not load usage",
-      "creditsLeft": "Credits Left",
-      "creditsLeftHint": "When you reach the limit, requests are rejected until the next weekly reset.",
       "requestLimit": "Request Limit",
-      "requestLimitHint": "Requests per minute for each plan.",
       "requestsPerMinute": "{{count}}/min",
-      "plan": {
-        "free": {
-          "price": "Free",
-          "perks": "$0.50 credit/week · 10/min"
-        },
-        "air": {
-          "price": "$4/mo",
-          "perks": "$1 credit/week · 60/min"
-        },
-        "pro": {
-          "price": "$20/mo",
-          "perks": "$5 credit/week · 240/min"
-        }
-      },
       "legal": {
         "title": "Terms & Policies",
-        "description": "The same documents as the web sign-in page. They open in your browser.",
-        "rowName": "View documents",
-        "rowHint": "Server terms, privacy policy (per-model data handling), acceptable use policy, and the subprocessor list.",
         "terms": "Terms of Service",
         "privacy": "Privacy Policy",
         "acceptableUse": "Acceptable Use Policy",
         "subprocessors": "Subprocessors"
-      }
+      },
+      "manageName": "Plan & billing",
+      "openDashboard": "Open dashboard",
+      "resetsIn": "Time until reset",
+      "resetsAt": "Resets at",
+      "resetInDays": "{{days}}d {{hours}}h",
+      "resetInHours": "{{hours}}h {{minutes}}m",
+      "resetInMinutes": "{{minutes}}m"
     },
     "ai": {
       "description": "Connect AI services and choose the model for each role.",

@@ -593,6 +593,11 @@ app.whenReady().then(async () => {
 		localSpec,
 		credentials,
 		modelReady: () => modelDownload.status().state === "ready",
+		// `accountService` is created further down; the service only calls this once the app is running.
+		cloudEmbeddings: async () => {
+			const status = await accountService.status();
+			return status.state === "signedIn" && status.account !== null ? status.account.embeddings : null;
+		},
 	});
 	// Bring the local model up in the background for the config the user has; search degrades to keywords until it answers.
 	void ensureEmbeddingForConfig(existsSync(autoragConfigPath()) ? readRawConfigObject(autoragConfigPath()) : {});

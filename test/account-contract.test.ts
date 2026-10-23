@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ACCOUNT_LEGAL_ROUTES, accountLegalUrl } from "../src/shared/account-contract";
+import { ACCOUNT_LEGAL_ROUTES, accountDashboardUrl, accountLegalUrl, nextWeeklyReset, splitRemaining } from "../src/shared/account-contract";
 
 describe("accountLegalUrl", () => {
 	it("serves the server's legal routes", () => {
@@ -22,5 +22,30 @@ describe("accountLegalUrl", () => {
 		expect(accountLegalUrl(undefined, "privacy")).toBe("https://api.dazziapp.com/privacy");
 		expect(accountLegalUrl(null, "subprocessors")).toBe("https://api.dazziapp.com/subprocessors");
 		expect(accountLegalUrl("   ", "privacy")).toBe("https://api.dazziapp.com/privacy");
+	});
+});
+
+describe("accountDashboardUrl", () => {
+	it("points at the dashboard of the account server", () => {
+		expect(accountDashboardUrl("https://api.dazziapp.com")).toBe("https://api.dazziapp.com/dashboard");
+		expect(accountDashboardUrl("https://staging.example/")).toBe("https://staging.example/dashboard");
+		expect(accountDashboardUrl(undefined)).toBe("https://api.dazziapp.com/dashboard");
+	});
+});
+
+describe("nextWeeklyReset", () => {
+	it("is the next Monday 00:00 UTC, never the current instant", () => {
+		expect(nextWeeklyReset(new Date("2026-10-23T09:30:00Z")).toISOString()).toBe("2026-10-26T00:00:00.000Z");
+		expect(nextWeeklyReset(new Date("2026-10-25T23:59:59Z")).toISOString()).toBe("2026-10-26T00:00:00.000Z");
+		expect(nextWeeklyReset(new Date("2026-10-26T00:00:00Z")).toISOString()).toBe("2026-11-02T00:00:00.000Z");
+		expect(nextWeeklyReset(new Date("2026-12-30T12:00:00Z")).toISOString()).toBe("2027-01-04T00:00:00.000Z");
+	});
+});
+
+describe("splitRemaining", () => {
+	it("splits into days, hours and minutes, rounding a partial minute up", () => {
+		expect(splitRemaining(2 * 86_400_000 + 3 * 3_600_000 + 4 * 60_000)).toEqual({ days: 2, hours: 3, minutes: 4 });
+		expect(splitRemaining(30_000)).toEqual({ days: 0, hours: 0, minutes: 1 });
+		expect(splitRemaining(-5)).toEqual({ days: 0, hours: 0, minutes: 0 });
 	});
 });

@@ -18,14 +18,13 @@ export const ACCOUNT_CHANNELS = {
 	cancelSignIn: "account:cancelSignIn",
 	signOut: "account:signOut",
 	checkout: "account:checkout",
-	portal: "account:portal",
 	useManagedModel: "account:useManagedModel",
 	/** main → renderer event carrying one {@link AccountStatus}. */
 	changed: "account:changed",
 } as const;
 
 /** Plans the hosted service sells. BYOK is not an account plan: it needs no account. */
-export type AccountPlanId = "free" | "air" | "pro";
+export type AccountPlanId = "free" | "air" | "pro" | "max";
 
 /** Plans that need a checkout. */
 export type PaidPlanId = "air" | "pro";
@@ -55,6 +54,12 @@ export function accountLegalUrl(baseUrl: string | null | undefined, route: Accou
 	return `${root}${ACCOUNT_LEGAL_ROUTES[route]}`;
 }
 
+/** The hosted dashboard: plan changes, billing, receipts and API keys. */
+export function accountDashboardUrl(baseUrl: string | null | undefined): string {
+	const configured = typeof baseUrl === "string" ? baseUrl.trim() : "";
+	return `${(configured.length > 0 ? configured : DEFAULT_ACCOUNT_BASE_URL).replace(/\/+$/u, "")}/dashboard`;
+}
+
 export interface AccountSnapshot {
 	readonly email: string;
 	readonly plan: AccountPlanId;
@@ -69,6 +74,8 @@ export interface AccountSnapshot {
 	readonly creditsUsedCents: number;
 	readonly creditsLimitCents: number;
 	readonly creditPeriod: string;
+	/** The plan includes cloud embeddings (Pro and Max), as the server reports it. */
+	readonly embeddings: boolean;
 	readonly requestsPerMinute: number;
 	/** Which hosted actions the server has configured. */
 	readonly billing: { readonly air: boolean; readonly pro: boolean; readonly portal: boolean };
@@ -104,18 +111,29 @@ export interface AccountBridge {
 	signOut(): Promise<AccountStatus>;
 	/** Opens the hosted checkout for the plan in the system browser. */
 	checkout(plan: PaidPlanId): Promise<void>;
-	/** Opens the hosted billing portal (cancel, refund, payment method). */
-	portal(): Promise<void>;
 	/** Points the AutoRAG agent at the managed models of this account. */
 	useManagedModel(): Promise<ManagedModelResult>;
 	onChanged(listener: (status: AccountStatus) => void): () => void;
 }
 
-const PLAN_RANK: Readonly<Record<AccountPlanId, number>> = { free: 0, air: 1, pro: 2 };
+const PLAN_RANK: Readonly<Record<AccountPlanId, number>> = { free: 0, air: 1, pro: 2, max: 3 };
 
 /** True when `have` already includes everything `want` offers. */
 export function planCovers(have: AccountPlanId, want: AccountPlanId): boolean {
 	return PLAN_RANK[have] >= PLAN_RANK[want];
+}
+
+/** Weekly credits reset on Monday 00:00 UTC (the server's ISO-week bucket); the first such instant after `now`. */
+export function nextWeeklyReset(now: Date): Date {
+	const day = now.getUTCDay();
+	const daysUntilMonday = (8 - day) % 7 || 7;
+	return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + daysUntilMonday));
+}
+
+/** A duration split for display; minutes round up so the last minute never reads "0". */
+export function splitRemaining(ms: number): { readonly days: number; readonly hours: number; readonly minutes: number } {
+	const total = Math.max(0, Math.ceil(ms / 60_000));
+	return { days: Math.floor(total / 1440), hours: Math.floor((total % 1440) / 60), minutes: total % 60 };
 }
 
 /** Provider id the hosted plan registers under (the librarian's `dazzi` provider). */
