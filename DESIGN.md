@@ -34,6 +34,7 @@ its file. The default is light and the choice survives restart.
 The application is not an isolated AI chatbot; it is a **living macOS Finder browser enhanced with continuous grounded AI assistance**.
 - **Material & Surfaces:** Soft translucent sidebar with backdrop blur (`blur(18px)`), crisp white canvas, clean 1px hairline dividers (`--border: #E3E3EA` / `#D9DADD`).
 - **Restraint & Typography:** Bold type is strictly reserved for primary titles and top-level section headers (`font-weight: 600`). All setting item labels, descriptions, and list rows maintain comfortable regular weights (`font-weight: 400` / `500`).
+- **One bundled typeface:** The UI is set in Pretendard Variable (SIL OFL 1.1), shipped in `src/renderer/styles/fonts/` and declared in `fonts.css`, so Latin and Korean glyph widths — and with them line breaks and the fit of fixed-size controls — are identical on every OS. `--font-sans` starts with it; the OS UI fonts after it only cover glyphs it lacks. `body` sets `font-variant-ligatures: none` because Pretendard rewrites `1x2` as `1×2`, and file names must be drawn as stored.
 - **Permanent Multi-Pane Architecture:** 
   - Left navigation (Sidebar) lists the live OS places in three groups (`Favorites`, `Cloud`, `Locations`), with **AI Search** above Recents; see §1.5.
   - Center area hosts the tab strip. A tab shows a folder, Settings, or the AI Search chat — AI Search is a tab, not a bottom dock.
