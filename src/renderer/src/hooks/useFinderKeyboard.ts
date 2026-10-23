@@ -167,6 +167,8 @@ export interface FinderKeyboardInput {
 		openSettings(): void;
 		focusComposer(): void;
 		quickLookSelection(): void;
+		/** Closes the open Quick Look panel; false when none is open. */
+		closeOpenQuickLook(): boolean;
 		stepColumns(direction: ColumnDirection): void;
 		/** Select `path` alone and scroll it into view. */
 		focusPath(path: string): void;
@@ -199,6 +201,16 @@ export function useFinderKeyboard(input: FinderKeyboardInput): void {
 		if (!focused) return;
 		const onKeyDown = (event: globalThis.KeyboardEvent): void => {
 			const target = event.target;
+			const typing =
+				target instanceof HTMLElement &&
+				(target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable || target.closest('[role="menu"]') !== null);
+			const plain = !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey;
+			// Space closes an open preview wherever focus is. The panel an evidence title opens has no
+			// row to toggle, and the focused title button would otherwise press itself and reopen it.
+			if (event.key === " " && plain && !typing && actions.closeOpenQuickLook()) {
+				event.preventDefault();
+				return;
+			}
 			if (
 				target instanceof HTMLElement &&
 				target.tagName === "BUTTON" &&
@@ -209,9 +221,6 @@ export function useFinderKeyboard(input: FinderKeyboardInput): void {
 			) {
 				return;
 			}
-			const typing =
-				target instanceof HTMLElement &&
-				(target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable || target.closest('[role="menu"]') !== null);
 			const action = resolveKeyAction(
 				{
 					key: event.key,

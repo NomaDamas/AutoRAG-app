@@ -28,6 +28,7 @@ import { prettyJsonLines } from "../shared/jsonl";
 import { bplistToXml, isBinaryPlist } from "../shared/plist";
 import type { PreviewDocument } from "../shared/contract";
 import { formatFinderSize } from "../shared/format";
+import { locateLines } from "../shared/text-marks";
 import { SMALL_BUTTON, Segmented, TOOL_BUTTON, ToolbarSlot, useChrome } from "./chrome";
 import { FallbackView } from "./fallback";
 import { CopyIcon, DesktopIcon, MobileIcon, SourceIcon, WrapIcon } from "./icons";
@@ -150,9 +151,23 @@ function highlightLines(text: string, grammar: string | null): readonly string[]
 	return [...head, ...highlightLines(text.slice(cut), null)];
 }
 
-function LineChunk({ lines, start }: { readonly lines: readonly string[]; readonly start: number }): ReactElement {
+function LineChunk({
+	lines,
+	start,
+	marked,
+	firstMarked,
+}: {
+	readonly lines: readonly string[];
+	readonly start: number;
+	readonly marked: ReadonlySet<number>;
+	readonly firstMarked: number | undefined;
+}): ReactElement {
 	const ref = useRef<HTMLDivElement | null>(null);
-	const [shown, setShown] = useState(start === 0);
+	const hasMark = useMemo(() => lines.some((_line, index) => marked.has(start + index)), [lines, start, marked]);
+	const [shown, setShown] = useState(start === 0 || hasMark);
+	useEffect(() => {
+		if (hasMark) setShown(true);
+	}, [hasMark]);
 	useEffect(() => {
 		const node = ref.current;
 		if (shown || node === null) return;
@@ -166,19 +181,42 @@ function LineChunk({ lines, start }: { readonly lines: readonly string[]; readon
 		observer.observe(node);
 		return () => observer.disconnect();
 	}, [shown]);
+	useLayoutEffect(() => {
+		if (!shown || firstMarked === undefined || firstMarked < start || firstMarked >= start + lines.length) return;
+		const row = ref.current?.querySelector<HTMLElement>('[data-evidence-mark="first"]');
+		const scroller = row?.closest<HTMLElement>(".ql-lines");
+		if (row === null || row === undefined || scroller === null || scroller === undefined) return;
+		scroller.scrollTop = Math.max(0, row.offsetTop - scroller.clientHeight * 0.25);
+	}, [shown, firstMarked, start, lines.length]);
 	const html = useMemo(
-		() => (shown ? lines.map((line, index) => `<div class="ql-line"><span class="ql-ln">${start + index + 1}</span><span class="ql-lc">${line === "" ? " " : line}</span></div>`).join("") : ""),
-		[shown, lines, start],
+		() =>
+			shown
+				? lines
+						.map((line, index) => {
+							const lineIndex = start + index;
+							const mark = marked.has(lineIndex) ? ` ql-line--marked" data-evidence-mark="${lineIndex === firstMarked ? "first" : "rest"}` : "";
+							return `<div class="ql-line${mark}"><span class="ql-ln">${lineIndex + 1}</span><span class="ql-lc">${line === "" ? " " : line}</span></div>`;
+						})
+						.join("")
+				: "",
+		[shown, lines, start, marked, firstMarked],
 	);
 	if (!shown) return <div ref={ref} className="ql-chunk" style={{ height: `calc(${lines.length} * 1lh)` }} />;
 	return <div ref={ref} className="ql-chunk" dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
+const NO_MARKS: ReadonlySet<number> = new Set();
+
 /**
  * Numbered lines of already-escaped HTML. Long files render in chunks as they
- * scroll near, so opening a 100k-line log costs one chunk, not the file.
+ * scroll near, so opening a 100k-line log costs one chunk, not the file. A
+ * chunk holding a `marked` line renders up front and scrolls its first mark into view.
  */
-export function LineList({ lines }: { readonly lines: readonly string[] }): ReactElement {
+export function LineList({ lines, marked = NO_MARKS }: { readonly lines: readonly string[]; readonly marked?: ReadonlySet<number> }): ReactElement {
+	const firstMarked = useMemo(() => {
+		const [first] = marked;
+		return first;
+	}, [marked]);
 	const chunks = useMemo(() => {
 		const out: { readonly start: number; readonly lines: readonly string[] }[] = [];
 		for (let start = 0; start < lines.length; start += CHUNK_LINES) out.push({ start, lines: lines.slice(start, start + CHUNK_LINES) });
@@ -187,7 +225,7 @@ export function LineList({ lines }: { readonly lines: readonly string[] }): Reac
 	return (
 		<>
 			{chunks.map((chunk) => (
-				<LineChunk key={chunk.start} start={chunk.start} lines={chunk.lines} />
+				<LineChunk key={chunk.start} start={chunk.start} lines={chunk.lines} marked={marked} firstMarked={firstMarked} />
 			))}
 		</>
 	);
@@ -227,11 +265,11 @@ const FOOTER = "flex flex-none items-center gap-14 px-16 border-t-[0.5px] border
  * Xcode-style colours on the paper material, wrap and copy in the toolbar,
  * and a footer with language, encoding, line ending, and line count.
  */
-export function TextView({ file }: { readonly file: PreviewDocument }): ReactElement {
+export function TextView({ file, anchor = null }: { readonly file: PreviewDocument; readonly anchor?: readonly string[] | null }): ReactElement {
 	const { t } = useTranslation();
 	const decoded = useDecodedText(file);
 	if (decoded === null) return <FallbackView file={file} note={t("quickLook.code.readFailed")} />;
-	return <CodeBody file={file} decoded={decoded} sizeNote={null} />;
+	return <CodeBody file={file} decoded={decoded} sizeNote={null} anchor={anchor} />;
 }
 
 /**
@@ -239,11 +277,22 @@ export function TextView({ file }: { readonly file: PreviewDocument }): ReactEle
  * `sizeNote` replaces the footer's size label when the viewer cut the text
  * itself (JSON Lines stops after a record count, not a byte count).
  */
-export function CodeBody({ file, decoded, sizeNote }: { readonly file: PreviewDocument; readonly decoded: DecodedText; readonly sizeNote: string | null }): ReactElement {
+export function CodeBody({
+	file,
+	decoded,
+	sizeNote,
+	anchor = null,
+}: {
+	readonly file: PreviewDocument;
+	readonly decoded: DecodedText;
+	readonly sizeNote: string | null;
+	readonly anchor?: readonly string[] | null;
+}): ReactElement {
 	const { t, i18n } = useTranslation();
 	const { report } = useChrome();
 	const language = LANGUAGES[file.ext] ?? PLAIN;
 	const lines = useMemo(() => highlightLines(decoded.text, language.grammar), [decoded, language.grammar]);
+	const marked = useMemo(() => (anchor === null || anchor.length === 0 ? NO_MARKS : locateLines(decoded.text, anchor)), [decoded.text, anchor]);
 	const [wrap, setWrap] = useState(true);
 	const { copied, copy } = useCopy(decoded.text);
 	// The window still has the previous file's size here, so measure the lines themselves, not the scroller.
@@ -267,7 +316,7 @@ export function CodeBody({ file, decoded, sizeNote }: { readonly file: PreviewDo
 			</ToolbarSlot>
 			<div className="ql-lines ql-lines--code flex-1 min-h-0 overflow-auto pt-12 pb-18 bg-ql-paper font-ql-mono text-[12.5px] leading-[1.62] select-text" data-wrap={wrap}>
 				<div ref={contentRef}>
-					<LineList lines={lines} />
+					<LineList lines={lines} marked={marked} />
 				</div>
 			</div>
 			<footer className={`${FOOTER} h-30`}>
@@ -279,6 +328,11 @@ export function CodeBody({ file, decoded, sizeNote }: { readonly file: PreviewDo
 				<span>{decoded.ending}</span>
 				<span>{t("quickLook.code.lines", { count: lines.length.toLocaleString(i18n.language) })}</span>
 				<span className="flex-1" />
+				{anchor === null || anchor.length === 0 ? null : (
+					<span className="ql-code__evidence" data-evidence-state={marked.size > 0 ? "found" : "missing"}>
+						{marked.size > 0 ? t("quickLook.evidence.found") : t("quickLook.evidence.missing")}
+					</span>
+				)}
 				<span>{size}</span>
 			</footer>
 		</>

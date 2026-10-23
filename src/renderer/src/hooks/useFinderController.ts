@@ -1314,6 +1314,14 @@ export function useFinderController(
 		presentQuickLook({ path: entry.path, name: entry.name });
 	});
 
+	/** Space with a preview open closes it, whatever opened it (a row, or an evidence title with no row to toggle). */
+	const closeOpenQuickLook = useLatestCallback((): boolean => {
+		const quickLook = quickLookRef.current;
+		if (quickLook === undefined || !quickLook.isQuickLookOpen()) return false;
+		quickLook.closeQuickLook();
+		return true;
+	});
+
 	const moveSelectionBy = useLatestCallback(
 		(delta: 1 | -1) => {
 			const next = moveSelection(orderedKeys, selection, delta);
@@ -1837,6 +1845,7 @@ export function useFinderController(
 			openSettings,
 			focusComposer,
 			quickLookSelection,
+			closeOpenQuickLook,
 			stepColumns,
 			focusPath,
 			moveTo,
@@ -1867,6 +1876,7 @@ export function useFinderController(
 			openSettings,
 			focusComposer,
 			quickLookSelection,
+			closeOpenQuickLook,
 			stepColumns,
 			focusPath,
 			moveTo,

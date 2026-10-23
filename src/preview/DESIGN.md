@@ -151,7 +151,13 @@ still has the previous file's size when they lay out.
   out), wrap and copy in the toolbar, and a footer with language, encoding
   (UTF-8, BOM, UTF-16, EUC-KR fallback), line ending, and line count. Only the
   first 512KB is highlighted; lines render in 400-line chunks as they scroll
-  near.
+  near. With an `anchor` (AI Search evidence) `locateLines` marks the cited
+  source lines (`.ql-line--marked`), renders their chunk up front however far
+  down the file it is, and scrolls to the first marked line; the footer carries
+  the found/missing note. The Markdown source pane takes the same marks, and
+  the rendered page paints the cited passage through the CSS Highlight API
+  (`dom-marks.ts`, `::highlight(ql-evidence)`), matching the shared locator
+  against the page's text nodes, and scrolls to it.
 - **Markdown** — coloured source and the rendered page side by side (원본 ·
   나란히 · 렌더링), with a footer counting lines, words, headings, tables, and
   code blocks. Raw HTML in Markdown is reduced to an allowlist in an inert
@@ -350,6 +356,11 @@ focus. Arrow Up/Down move the Finder selection and retarget the preview.
 When the preview window itself has focus, the main process intercepts Up/Down,
 Space, and Escape in `before-input-event`, so a focused control still closes
 and navigates. Left/Right stay with the page, where media seeks.
+
+An evidence title in the right sidebar opens the panel with no Finder row to
+toggle, and the title button keeps focus. The Finder's keydown handler
+(`useFinderKeyboard`) therefore closes an open preview on a plain Space first,
+before its button and AI Search tab filters, unless the target is a text field.
 
 Media is cleared when the window hides, which stops playback. Previewed pages
 can never navigate the window or open new ones.
