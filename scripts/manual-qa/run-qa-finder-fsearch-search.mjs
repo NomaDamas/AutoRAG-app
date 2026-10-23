@@ -13,7 +13,9 @@ import { finderWindow, launchFinder, ROOT } from "./launch-finder.mjs";
  *   2. "파일 이름" answers from the index over the whole machine — it finds a
  *      file the disk walk cannot reach (outside the scanned sidebar places);
  *   3. the scope bar's folder pill narrows the search to the folder in view;
- *   4. the daemon is still live while the app is running.
+ *   4. the daemon is still live while the app is running;
+ *   5. a folder macOS spelled in decomposed Hangul (NFD) is found by the
+ *      composed (NFC) query a user types, and by the decomposed one.
  *
  * Run `bun run build` first. Evidence lands in the ignored `.omo/` tree.
  */
@@ -42,6 +44,8 @@ const pidFile = join(userDataDir, "fsearch", "watch.pid");
 const docsFolder = join(home, "Documents", RUN_ID);
 const insideName = `${RUN_ID}-inside.md`;
 const outsideName = `${RUN_ID}-outside.md`;
+const HANGUL = "보안";
+const nfdFolder = join(home, "Documents", HANGUL.normalize("NFD"));
 
 const fsearch = (args) =>
 	spawnSync("fsearch-cli", args, { encoding: "utf8", env: { ...process.env, XDG_DATA_HOME: xdg } });
@@ -53,6 +57,7 @@ function daemonLive() {
 
 mkdirSync(docsFolder, { recursive: true });
 mkdirSync(join(home, "elsewhere"), { recursive: true });
+mkdirSync(nfdFolder, { recursive: true });
 writeFileSync(join(docsFolder, insideName), "# inside\n");
 writeFileSync(join(home, "elsewhere", outsideName), "outside the scanned places\n");
 
@@ -144,6 +149,27 @@ try {
 
 	// 4. The daemon is still live while the app runs (keep-alive, not one-shot).
 	check("the watch daemon is live after searching", daemonLive(), `live=${daemonLive()}`);
+
+	// 5. A decomposed (NFD) Hangul folder is found by either spelling of the query.
+	await page.locator(".sidebar__item", { hasText: ALL_LABEL }).first().click().catch(() => undefined);
+	for (const [label, query] of [
+		["composed (NFC)", HANGUL.normalize("NFC")],
+		["decomposed (NFD)", HANGUL.normalize("NFD")],
+	]) {
+		await search.click();
+		await search.fill(query);
+		await search.press("Enter");
+		await page.waitForSelector(".scope", { timeout: 15000 });
+		await page.waitForFunction(
+			(wanted) => [...document.querySelectorAll('[role="row"] .row__label')].some((row) => row.textContent?.normalize("NFC") === wanted),
+			HANGUL.normalize("NFC"),
+			{ timeout: 15000 },
+		).catch(() => undefined);
+		await sleep(400);
+		const rows = (await rowNames()).map((name) => name.normalize("NFC"));
+		check(`a ${label} query finds the decomposed Hangul folder`, rows.includes(HANGUL.normalize("NFC")), JSON.stringify(rows));
+		await page.screenshot({ path: join(EVIDENCE, `03-hangul-${label.includes("NFC") ? "nfc" : "nfd"}.png`) });
+	}
 } catch (error) {
 	console.error(`capture failed: ${String(error).slice(0, 400)}`);
 	failures.push("harness error");

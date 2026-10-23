@@ -254,7 +254,8 @@ async function walkForSearch(dir: string, depth: number, context: SearchContext)
 	for (const dirent of dirents) {
 		if (context.results.length >= SEARCH_MAX_RESULTS) return;
 		const fullPath = join(dir, dirent.name);
-		if (dirent.name.toLowerCase().includes(context.needle)) {
+		// macOS stores Hangul names decomposed (NFD); compare in one form so a typed (NFC) query matches.
+		if (dirent.name.normalize("NFC").toLowerCase().includes(context.needle)) {
 			try {
 				context.results.push({
 					entry: await buildFsEntry(fullPath, context.platform),
@@ -644,7 +645,7 @@ export function createFsService(deps: FsServiceDeps): FsService {
 	 * restricts both to one folder subtree — the "파일 이름" chip's folder.
 	 */
 	async function search(query: string, options?: FsSearchOptions, signal?: AbortSignal): Promise<readonly FsSearchResult[]> {
-		const needle = query.trim().toLowerCase();
+		const needle = query.trim().normalize("NFC").toLowerCase();
 		if (needle.length === 0) return [];
 		const rawScope = options?.scope?.trim();
 		const scope = rawScope !== undefined && rawScope.length > 0 ? rawScope : undefined;

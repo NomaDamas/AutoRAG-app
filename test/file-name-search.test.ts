@@ -7,6 +7,7 @@ import {
 	createFileNameSearch,
 	escapeSearchRegex,
 	everythingRegexQuery,
+	fsearchRegexQuery,
 	type EverythingSearchClient,
 	type FileNameRunResult,
 	type FileNameSearchRunner,
@@ -97,7 +98,39 @@ describe("escapeSearchRegex", () => {
 	});
 });
 
+describe("fsearchRegexQuery", () => {
+	const nfc = "보안".normalize("NFC");
+	const nfd = "보안".normalize("NFD");
+
+	it("leaves a query with a single Unicode form as the plain escaped substring", () => {
+		expect(fsearchRegexQuery("report.final")).toBe("report\\.final");
+	});
+
+	it("matches both the composed and the decomposed spelling of Hangul", () => {
+		const expected = `(?:${nfc}|${nfd})`;
+		expect(fsearchRegexQuery(nfc)).toBe(expected);
+		// Typed as separate jamo, the same alternation is sent, so the spelling the user types does not matter.
+		expect(fsearchRegexQuery(nfd)).toBe(expected);
+	});
+
+	it("escapes regex metacharacters inside each alternative", () => {
+		expect(fsearchRegexQuery(`${nfc}(1)`)).toBe(`(?:${nfc}\\(1\\)|${nfd}\\(1\\))`);
+	});
+});
+
 describe("fsearch backend", () => {
+	it("sends the NFC|NFD alternation so a decomposed folder name is found", async () => {
+		const fake = freshFsearchFake();
+		const decomposed = "/data/Documents/" + "보안".normalize("NFD");
+		fake.state.searchStdout = jsonLine(decomposed) + `{"done":true,"num_results":1,"num_returned":1}`;
+
+		const paths = await fsearchBackend(fake).search("보안".normalize("NFC"));
+
+		expect(paths).toEqual([decomposed]);
+		const search = fake.calls.find((call) => call.args[0] === "search");
+		expect(search?.args.at(-1)).toBe(`(?:${"보안".normalize("NFC")}|${"보안".normalize("NFD")})`);
+	});
+
 	it("searches the fsearch-cli default database and returns the matching paths", async () => {
 		const fake = freshFsearchFake();
 		fake.state.searchStdout = jsonLine("/data/Documents/report-final.txt") + `{"done":true,"num_results":1,"num_returned":1}`;

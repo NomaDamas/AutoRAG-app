@@ -118,6 +118,20 @@ export function escapeSearchRegex(text: string): string {
 }
 
 /**
+ * Regex for the fsearch index. macOS stores Hangul file names decomposed (NFD)
+ * while typed queries are composed (NFC), and the index compares bytes, so a
+ * name matches only when the query uses the same form. Sending both forms as
+ * an alternation finds either spelling; a query that has one form (ASCII)
+ * stays the plain escaped substring.
+ */
+export function fsearchRegexQuery(text: string): string {
+	const trimmed = text.trim();
+	const forms = [...new Set([trimmed.normalize("NFC"), trimmed.normalize("NFD")])];
+	if (forms.length === 1) return escapeSearchRegex(trimmed);
+	return `(?:${forms.map(escapeSearchRegex).join("|")})`;
+}
+
+/**
  * Everything's `regex:` search function is the working regex surface on the
  * bundled ES build (`-regex` answers nothing there). A bare space ends the
  * function's argument, so spaces become `\x20` to keep a literal substring.
@@ -200,7 +214,7 @@ function createFsearchBackend(deps: FileNameSearchDeps, warn: (message: string) 
 			const dbPath = await resolveDatabase(binaryPath);
 			if (dbPath === undefined) return null;
 			const request = {
-				query: escapeSearchRegex(query.trim()),
+				query: fsearchRegexQuery(query),
 				regex: true,
 				maxResults: SEARCH_MAX_RESULTS,
 				...(scope === undefined ? {} : { path: scope }),
