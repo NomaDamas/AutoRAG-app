@@ -34,6 +34,7 @@ import { deliverToDock, mergeDelivery, type AiDelivery, type AiDeliveryRequest }
 import { attachmentsFromDrop, isAttachmentDrag } from "./state/attachments";
 import { toolbarShareControl, type FileActionTarget } from "./state/file-actions";
 import { sessionEvidencePaths } from "./state/evidence";
+import { inspectorEntryFor } from "./state/inspector-target";
 import { ruleTitle } from "./state/automations";
 import { watchSetFor } from "./state/live";
 import { loadListColumns, saveListColumns, type ListColumnsState } from "./state/list-columns";
@@ -489,15 +490,6 @@ export function App(): ReactElement {
 		deliverToAi({});
 	}, [deliverToAi, finder]);
 
-	/** Inspector action bar: open, share, archive, and edits all run through the focused pane's controller. */
-	const runInspectorAction = useCallback(
-		(target: FileActionTarget, anchor: ActionAnchor | null) => {
-			const entry = finder?.focusedEntry ?? null;
-			if (entry !== null) finder?.runEntryAction(entry, target, anchor);
-		},
-		[finder],
-	);
-
 	const selectEvidence = useCallback(
 		(number: number) => {
 			// A citation chip with no evidence entry must never open a different
@@ -593,6 +585,21 @@ export function App(): ReactElement {
 	const aiTabActive = path === AI_SEARCH_PATH;
 	const automationsTabActive = path === AUTOMATIONS_PATH;
 	const { view: automationsView, store: automationsStore } = useAutomations();
+	/** The row selected, else (in a folder some rule watches) the folder itself, so its rules show with nothing selected. */
+	const inspectorEntry = inspectorEntryFor({
+		focused,
+		selectedCount: finder?.selection.keys.length ?? 0,
+		searching: finder?.searching ?? false,
+		path,
+		rules: automationsView.state.rules,
+	});
+	/** Inspector action bar: open, share, archive, and edits all run through the focused pane's controller. */
+	const runInspectorAction = useCallback(
+		(target: FileActionTarget, anchor: ActionAnchor | null) => {
+			if (inspectorEntry !== null) finder?.runEntryAction(inspectorEntry, target, anchor);
+		},
+		[finder, inspectorEntry],
+	);
 	/** Edit and add leave the list for a new AI Search tab whose composer holds a draft: nothing is sent for the person. */
 	const openAiDraft = useCallback(
 		(draft: string) => {
@@ -772,9 +779,10 @@ export function App(): ReactElement {
 							<AutomationInspector rule={automations.selectedRule} onEdit={automations.edit} onDelete={automations.askDelete} />
 						) : inspectorVisible ? (
 							<Inspector
-								entry={focused}
+								entry={inspectorEntry}
 								entries={finder?.selectedEntries ?? []}
 								indexStatus={focused !== null ? (finder?.indexStatusFor(focused.path) ?? null) : null}
+								folderInView={focused === null && inspectorEntry !== null}
 								onToggleIndex={(entry) => finder?.toggleIndex(entry)}
 								onTrash={(entry) => finder?.trashEntry(entry)}
 								onCopyPath={(entry) => finder?.copyEntryPath(entry)}

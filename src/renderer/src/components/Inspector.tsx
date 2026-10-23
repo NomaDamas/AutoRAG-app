@@ -133,6 +133,12 @@ export interface InspectorProps {
 		/** Right click on a rule row: its menu, at the pointer. Absent leaves the browser's menu alone. */
 		readonly onMenu?: (rule: AutomationRule, at: { readonly x: number; readonly y: number }) => void;
 	};
+	/**
+	 * `entry` is the folder the pane shows, standing in because nothing is selected (see
+	 * state/inspector-target.ts), not a row the person picked: its size and times are not
+	 * known here, and it is not offered for the Trash.
+	 */
+	readonly folderInView?: boolean;
 }
 
 const HEAD_BUTTON =
@@ -173,6 +179,7 @@ export function Inspector({
 	onToast,
 	imageActions,
 	automations,
+	folderInView = false,
 }: InspectorProps): ReactElement {
 	const { t } = useTranslation();
 	return (
@@ -207,6 +214,7 @@ export function Inspector({
 					onAction={onAction}
 					loadOpenWithApplications={loadOpenWithApplications}
 					automations={automations}
+					folderInView={folderInView}
 				/>
 			)}
 		</aside>
@@ -226,6 +234,7 @@ function InfoHalf({
 	onAction,
 	loadOpenWithApplications,
 	automations,
+	folderInView,
 }: {
 	readonly entry: FinderEntry | null;
 	readonly indexStatus: IndexStatus | null;
@@ -239,6 +248,7 @@ function InfoHalf({
 	readonly onAction: (target: FileActionTarget, anchor: ActionAnchor | null) => void;
 	readonly loadOpenWithApplications: (entry: FinderEntry) => Promise<readonly OpenWithApplication[]>;
 	readonly automations?: InspectorProps["automations"];
+	readonly folderInView: boolean;
 }): ReactElement {
 	const [brief, setBrief] = useState(false);
 	const [details, setDetails] = useState<FsFileDetails | null>(null);
@@ -283,7 +293,7 @@ function InfoHalf({
 					<PreviewPaper entry={entry} />
 					<div className="preview-title text-body font-semibold text-ink leading-[1.3] [overflow-wrap:anywhere]">{entry.name}</div>
 					<div className="preview-sub mt-4 text-meta text-ink-muted">
-						{kindLabelOf(entry)} · {sizeLabelOf(entry)} · {dateLabelOf(entry)}
+						{folderInView ? kindLabelOf(entry) : `${kindLabelOf(entry)} · ${sizeLabelOf(entry)} · ${dateLabelOf(entry)}`}
 					</div>
 
 					<div className="chip-row flex flex-wrap gap-6 mt-12 mb-16">
@@ -293,9 +303,11 @@ function InfoHalf({
 								{included ? t("contextMenu.includeInIndex") : t("contextMenu.excludeFromIndex")}
 							</Chip>
 						) : null}
-						<Chip onClick={() => onTrash(entry)}>
-							<TrashIcon size={12} />{t("contextMenu.trashShort")}
-						</Chip>
+						{folderInView ? null : (
+							<Chip onClick={() => onTrash(entry)}>
+								<TrashIcon size={12} />{t("contextMenu.trashShort")}
+							</Chip>
+						)}
 						<Chip onClick={() => onCopyPath(entry)}>
 							<CopyIcon size={12} />{t("contextMenu.copyPath")}
 						</Chip>

@@ -7,6 +7,7 @@ import { AutomationRulesSection } from "../src/renderer/src/components/Automatio
 import { Inspector } from "../src/renderer/src/components/Inspector";
 import type { FinderEntry } from "../src/renderer/src/data/entries";
 import { actionShort, lastRunText, ruleTitle, whatText, whenText } from "../src/renderer/src/state/automations";
+import { kindLabelOf } from "../src/renderer/src/state/entry-values";
 import { NO_CAPABILITIES } from "../src/shared/actions-contract";
 import type { AutomationRule, AutomationRun } from "../src/shared/automation-contract";
 import { setAppLanguage } from "../src/shared/i18n";
@@ -87,7 +88,11 @@ function ruleRow(title: string): HTMLElement | undefined {
 	return [...host.querySelectorAll<HTMLElement>('[role="button"]')].find((element) => (element.textContent ?? "").includes(title));
 }
 
-function inspector(entry: FinderEntry, automations?: { rules: readonly AutomationRule[]; onEdit: (rule: AutomationRule) => void; onDelete: (rule: AutomationRule) => void }): React.ReactElement {
+function inspector(
+	entry: FinderEntry,
+	automations?: { rules: readonly AutomationRule[]; onEdit: (rule: AutomationRule) => void; onDelete: (rule: AutomationRule) => void },
+	extra: { readonly folderInView?: boolean } = {},
+): React.ReactElement {
 	return (
 		<Inspector
 			entry={entry}
@@ -110,6 +115,7 @@ function inspector(entry: FinderEntry, automations?: { rules: readonly Automatio
 			onToast={noop}
 			imageActions={{ onOpenImage: noop, onOpenUrl: noop }}
 			{...(automations === undefined ? {} : { automations })}
+			{...extra}
 		/>
 	);
 }
@@ -347,5 +353,23 @@ describe("Inspector's folder automations", () => {
 		act(() => root.render(inspector(file("/Users/jeffrey/Downloads/report.pdf"), { rules: [rule()], onEdit: noop, onDelete: noop })));
 		expect(text()).toContain("report.pdf");
 		expect(text()).not.toContain("이 폴더의 자동화");
+	});
+
+	it("shows the folder in view without a Trash chip and without dashes for what it does not know, and still lists its rules", () => {
+		const watching = rule();
+		const entry = { ...folder("/Users/jeffrey/Downloads"), mtimeMs: Number.NaN };
+		act(() => root.render(inspector(entry, { rules: [watching], onEdit: noop, onDelete: noop }, { folderInView: true })));
+
+		expect(text()).toContain("이 폴더의 자동화");
+		expect(text()).toContain(ruleTitle(watching));
+		expect(button("휴지통")).toBeUndefined();
+		expect(button("경로 복사")).toBeDefined();
+		expect(host.querySelector(".preview-sub")?.textContent).toBe(kindLabelOf(entry));
+	});
+
+	it("keeps the Trash chip and the full subtitle for a folder that is selected", () => {
+		act(() => root.render(inspector(folder("/Users/jeffrey/Downloads"), { rules: [rule()], onEdit: noop, onDelete: noop })));
+		expect(button("휴지통")).toBeDefined();
+		expect(host.querySelector(".preview-sub")?.textContent).toContain("·");
 	});
 });

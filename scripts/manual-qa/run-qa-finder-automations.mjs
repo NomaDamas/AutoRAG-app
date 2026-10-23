@@ -282,6 +282,26 @@ async function english() {
 		await page.waitForSelector(COMPOSER);
 		check("a folder rule row edits through a new AI draft", (await tabs(page)).filter((tab) => tab.ai).length === aiTabs + 1 && (await page.locator(COMPOSER).inputValue()).includes("downloads-pdf-summary"));
 
+		// 7b. Inside the watched folder with nothing selected, the panel is about the folder, not empty.
+		await sidebarItem(page, "QA").click();
+		await page.waitForSelector(`[data-path="${cssAttr(DOWNLOADS)}"]`);
+		await page.locator(`[data-path="${cssAttr(DOWNLOADS)}"]`).dblclick();
+		await page.waitForSelector(`[data-path="${cssAttr(join(DOWNLOADS, "report.pdf"))}"]`);
+		check("entering a folder leaves nothing selected", (await page.locator('[role="row"][aria-selected="true"], [data-path][aria-selected="true"]').count()) === 0);
+		await page.waitForSelector(`${INSPECTOR} >> text=Automations on this folder`);
+		inspector = await text(page, INSPECTOR);
+		check("with nothing selected a watched folder shows its rules", inspector.includes("New PDF → Hand to Dazzi") && inspector.includes("New HWP → Run hwp5-qa-missing") && !inspector.includes("Markdown changes"), inspector);
+		check("the folder in view has no Trash chip and no made-up size or date", (await page.locator(`${INSPECTOR} button`, { hasText: /^Trash$/ }).count()) === 0 && !/1970|Jan 1,/.test(inspector) && /Folder/.test(inspector), inspector);
+		await sleep(350);
+		await page.screenshot({ path: join(EVIDENCE, "08b-folder-no-selection-en.png") });
+		await page.locator(`${INSPECTOR} [role="button"]`, { hasText: "New PDF" }).click();
+		await page.waitForSelector(COMPOSER);
+		check("a rule row there edits through a new AI draft too", (await page.locator(COMPOSER).inputValue()).includes("downloads-pdf-summary"));
+		await sidebarItem(page, "Documents").click();
+		await page.waitForSelector(`[data-path]`, { timeout: 15_000 }).catch(() => undefined);
+		await sleep(500);
+		check("a folder nothing watches keeps the empty panel", !(await text(page, INSPECTOR)).includes("Automations on this folder"), await text(page, INSPECTOR));
+
 		// 8. A change behind the app's back, then a file the librarian refuses.
 		await openAutomations(page);
 		const ruleD = { id: "agent-made", paths: [PROJECTS], events: ["create"], include: ["**/*.docx"], run: ["autorag", "refresh"] };
