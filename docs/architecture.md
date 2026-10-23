@@ -494,6 +494,11 @@ resumes at the same step.
   `workspacePath` at the app's cwd seed is moved to `<AutoRAG home>/workspace`.
   The Finder opens once the first index succeeds or the user chooses to continue
   in the background.
+  The status the screen shows has one writer for its final state: the poll tick
+  (every second, reading `refresh-progress.json`, the parsed mirror and MinSync's
+  `progress.jsonl`) reads first and applies its snapshot only if its run is still
+  the live one and still `running`, so a tick that straddles the end of the refresh
+  can no longer turn a `failed` or `success` back into `running`.
 
 Account and plan are real. The account step signs in through the system
 browser (OAuth 2.0 authorization code + PKCE over a loopback redirect, RFC 8252)
