@@ -64,6 +64,10 @@ jobs:
         run: node scripts/sync-librarian.mjs
       - name: Install dependencies
         run: bun install --frozen-lockfile
+      # electron-builder compiles build/icon.icon (the full-bleed macOS 26 app icon) with actool 26+;
+      # the runner's default Xcode (16.4) cannot, and the build would fail.
+      - name: Select Xcode 26
+        run: sudo xcode-select -s /Applications/Xcode_26.3.app
       - name: Stamp version
         run: node scripts/release/set-version.mjs "$RELEASE_TAG"
 

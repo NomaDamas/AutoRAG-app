@@ -23,7 +23,7 @@
  */
 
 import { spawnSync } from "node:child_process";
-import { existsSync, rmSync } from "node:fs";
+import { copyFileSync, existsSync, rmSync } from "node:fs";
 import { PLATFORMS, decomposeNonAsciiNames, pruneNativeForPlatform, systemTar } from "./scripts/release/lib.mjs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -79,7 +79,9 @@ const config = {
 			{ target: "dmg", arch: ["arm64"] },
 			{ target: "zip", arch: ["arm64"] },
 		],
-		icon: "build/icon.icns",
+		// Icon Composer bundle (scripts/brand/make-mac-icon.mjs): macOS 26 draws a legacy .icns inside a grey plate. electron-builder
+		// compiles it to Assets.car and an icns for older macOS.
+		icon: "build/icon.icon",
 		hardenedRuntime: true,
 		gatekeeperAssess: false,
 		entitlements: "build/entitlements.mac.plist",
@@ -137,6 +139,9 @@ const config = {
 		const resources = windows ? join(context.appOutDir, "resources") : join(context.appOutDir, `${context.packager.appInfo.productFilename}.app`, "Contents", "Resources");
 		pruneNativeForPlatform(join(resources, "app", "node_modules"), PLATFORMS[platformId]);
 		if (!windows) {
+			// macOS 26 draws the Assets.car compiled from build/icon.icon (mac.icon); macOS before 26 reads icon.icns,
+			// and the one actool derives from the .icon stops at 256 px. Ship the full-size set for those.
+			copyFileSync(join(root, "build", "icon.icns"), join(resources, "icon.icns"));
 			// Finder copies an app out of the dmg with decomposed names; sign them that way (see the helper).
 			const renamed = decomposeNonAsciiNames(resources);
 			console.log(`  • decomposed ${renamed} non-ASCII file name(s) to NFD before signing`);

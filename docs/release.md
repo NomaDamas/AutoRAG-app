@@ -401,7 +401,8 @@ A Mac with the Developer ID certificate in its login keychain builds, signs and
 notarizes the dmg in about 20 minutes against roughly 35 on a hosted runner. Build it
 there, attach it to a draft release, then publish; the workflow sees the dmg already
 attached, skips its own Mac build (`macos`), and `mac-prebuilt` mirrors the local files to
-R2 and points `latest/` at them. Windows still builds in CI.
+R2 and points `latest/` at them. Windows still builds in CI. The Mac needs Xcode 26 or newer
+(`actool --version`): electron-builder compiles `build/icon.icon` with it.
 
 ```sh
 node scripts/release/set-version.mjs v1.2.3
