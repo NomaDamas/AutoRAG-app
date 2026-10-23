@@ -857,9 +857,10 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 								<SteerBubble key={steer.id} steer={steer} labels={steerLabels} />
 							))}
 							{thinking ? (
-								<div className="water-wave-thinking my-6 flex items-center gap-8 text-meta text-ink-muted">
-									<span className="size-7 flex-none rounded-full bg-info-dot animate-[pulseDot_1.4s_ease-in-out_infinite]" />
-									<span className="min-w-0 truncate">{t("aiSearch.thinking")}{progress === "" ? "" : ` ${progress}`}</span>
+								<div className="water-wave-thinking my-6 flex items-center text-meta text-ink-muted" role="status">
+									<span className="shimmer min-w-0 truncate" title={progress === "" ? undefined : progress}>
+										{progress === "" ? t("aiSearch.thinking") : progress}
+									</span>
 								</div>
 							) : null}
 

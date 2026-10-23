@@ -10,9 +10,9 @@ const staged = join(root, ".upstream", "librarian-package");
 const installed = join(root, "node_modules", "@autorag", "librarian");
 const remote = "https://github.com/Marker-Inc-Korea/AutoRAG.git";
 // A release tag, or a full commit SHA while the librarian has no tag that carries what the app needs.
-// 02c36c2 is the 2.11.1 release commit: v2.11.0 plus file automations (`autorag automate`, the
-// `manage_automations` agent tool), which the app's 자동화 view reads and the agent edits.
-const librarianRef = "02c36c26cfa86e165f3bb732e9d6827e1ab47b53";
+// Pinned to the librarian commit that adds @autorag/librarian/profiles (helper-agent factory, automation agent rules) until a release tag carries it.
+// It contains 02c36c2 (2.11.1: file automations, `autorag automate`, the agent's `manage_automations`), which the app's 자동화 view reads and the agent edits.
+const librarianRef = "af6e5defcc11fafbcb1cff162b68d35378e078ca";
 
 function run(command, args, cwd = root) {
 	const result = spawnSync(command, args, { cwd, stdio: "inherit" });

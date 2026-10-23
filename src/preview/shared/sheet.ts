@@ -1,4 +1,5 @@
 import { read, utils } from "xlsx";
+import { decodeText } from "./code";
 
 /** Rows and columns the sheet panel draws; nothing past them is ever shown. */
 export const SHEET_MAX_ROWS = 100;
@@ -49,7 +50,8 @@ function rowCount(ref: string | undefined): number {
  *   but no cells), then one pass for the chosen sheet that stops after
  *   {@link SHEET_READ_ROWS} rows. A file with several large sheets costs what
  *   a small one does.
- * - Anything else is a delimited text table: one sheet, read in one pass that
+ * - Anything else is a delimited text table: decoded to a string first (see
+ *   `decodeText`), then one sheet read in one pass that
  *   stops after {@link SHEET_READ_ROWS} rows. A names pass would scan the whole
  *   file (1.4s for 28MB) to learn the one name it is about to be given anyway.
  */
@@ -58,7 +60,12 @@ export function readSheetPreview(bytes: Uint8Array, index: number): SheetPreview
 	const container = (data[0] === 0x50 && data[1] === 0x4b) || (data[0] === 0xd0 && data[1] === 0xcf);
 	const names = container ? read(data, { type: "array", bookSheets: true }).SheetNames : null;
 	const chosen = names === null || names[index] === undefined ? 0 : index;
-	const book = read(data, { type: "array", sheetRows: SHEET_READ_ROWS, ...(container ? { sheets: chosen } : {}) });
+	// SheetJS reads text from bytes as Latin-1 unless a byte order mark says otherwise, which
+	// garbles every Hangul csv/tsv saved without one. Decode the text here (BOM, UTF-8, then
+	// CP949) and hand it over as a string, which it takes as is.
+	const book = container
+		? read(data, { type: "array", sheetRows: SHEET_READ_ROWS, sheets: chosen })
+		: read(decodeText(data).text, { type: "string", sheetRows: SHEET_READ_ROWS });
 	const known = names ?? book.SheetNames;
 	const name = known[chosen];
 	const grid = name === undefined ? undefined : book.Sheets[name];
