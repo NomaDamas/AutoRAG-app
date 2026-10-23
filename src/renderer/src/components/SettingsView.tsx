@@ -8,7 +8,7 @@
  * page the writers it needs, so a write from one page reconciles the others.
  */
 
-import { useCallback, useEffect, useMemo, useState, type ReactElement } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import type { LocaleKey } from "../../../shared/i18n/core";
 import { Copy, CreditCard, FileText, Folder, Globe, Plug, RefreshCw, Search, Server, Settings, Sparkles, User, type LucideIcon } from "lucide-react";
@@ -124,6 +124,9 @@ export function SettingsView({ initialCategory = "general", onSettingsChanged }:
 	const [sources, setSources] = useState<DataSourcesSnapshot | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [loading, setLoading] = useState(true);
+	/** False until the first datasource scan has answered (or failed): the pages say "checking" instead of "none". */
+	const [sourcesReady, setSourcesReady] = useState(false);
+	const scanSeq = useRef(0);
 
 	// The sidebar's indexing block asks for a page from outside; honour a request made before this view mounted.
 	useEffect(() => {
@@ -139,26 +142,44 @@ export function SettingsView({ initialCategory = "general", onSettingsChanged }:
 		if (id !== undefined) window.autorag?.analytics?.track("settings_page_viewed", { page: id });
 	}, [category]);
 
+	/**
+	 * Ask for the datasource state. It runs a status command per backend CLI, so it is the slow call (hundreds of
+	 * milliseconds, more with many connections); nothing the first screen shows depends on it. Only the newest scan's
+	 * answer is kept, so a slow earlier scan can never overwrite a later one. Resolves to that answer, else null.
+	 */
+	const scan = useCallback((): Promise<DataSourcesSnapshot | null> => {
+		const id = ++scanSeq.current;
+		return autorag.settings.sourcesList().then(
+			(list) => {
+				if (id !== scanSeq.current) return null;
+				setSources(list);
+				setSourcesReady(true);
+				return list;
+			},
+			() => {
+				if (id === scanSeq.current) setSourcesReady(true);
+				return null;
+			},
+		);
+	}, []);
+
 	const load = useCallback(async (): Promise<void> => {
 		setLoading(true);
+		// Started before the cheap reads, not after them: the page opens on those and the scan fills in behind it.
+		const scanning = scan();
 		try {
 			const [app, config] = await Promise.all([autorag.settings.get(), autorag.settings.configGet()]);
 			setAppSettings(app);
 			setSnapshot(config);
 			setError(config.error);
-			try {
-				const list = await autorag.settings.sourcesList();
-				setSources(list);
-				setError((current) => current ?? list.error);
-			} catch {
-				setSources(null);
-			}
+			setLoading(false);
+			const list = await scanning;
+			if (list !== null) setError((current) => current ?? list.error);
 		} catch (cause) {
 			setError(errorMessage(cause));
-		} finally {
 			setLoading(false);
 		}
-	}, []);
+	}, [scan]);
 	useEffect(() => {
 		void load();
 	}, [load]);
@@ -167,8 +188,8 @@ export function SettingsView({ initialCategory = "general", onSettingsChanged }:
 	const saveSnapshot = useCallback((next: AutoRagConfigSnapshot): void => {
 		setSnapshot(next);
 		setError(next.error);
-		void autorag.settings.sourcesList().then(setSources, () => undefined);
-	}, []);
+		void scan();
+	}, [scan]);
 
 	const sourceAlias = sourceAliasOf(category);
 	useEffect(() => {
@@ -202,7 +223,7 @@ export function SettingsView({ initialCategory = "general", onSettingsChanged }:
 	const content = ((): ReactElement => {
 		if (loading || appSettings === null || snapshot === null) return <p className="linear-section-desc">{t("common.loading")}</p>;
 		const page = normalizeCategory(category);
-		if (sourceAlias !== null) return <SourceDetailPage key={sourceAlias} snapshot={snapshot} onSaved={saveSnapshot} alias={sourceAlias} sources={sources} setSources={setSources} />;
+		if (sourceAlias !== null) return <SourceDetailPage key={sourceAlias} snapshot={snapshot} onSaved={saveSnapshot} alias={sourceAlias} sources={sources} sourcesPending={!sourcesReady} setSources={setSources} />;
 		switch (page) {
 			case "account":
 				return <AccountPage />;
@@ -215,7 +236,7 @@ export function SettingsView({ initialCategory = "general", onSettingsChanged }:
 			case "web":
 				return <WebPage snapshot={snapshot} onSaved={saveSnapshot} />;
 			case "indexing":
-				return <IndexingPage snapshot={snapshot} onSaved={saveSnapshot} sources={sources} setSources={setSources} onOpenSource={(alias) => setCategory(alias.length === 0 ? "scope" : `source:${alias}`)} />;
+				return <IndexingPage snapshot={snapshot} onSaved={saveSnapshot} sources={sources} sourcesPending={!sourcesReady} setSources={setSources} onOpenSource={(alias) => setCategory(alias.length === 0 ? "scope" : `source:${alias}`)} />;
 			case "scope":
 				return <ScopePage snapshot={snapshot} onSaved={saveSnapshot} />;
 			case "reading":
@@ -232,7 +253,7 @@ export function SettingsView({ initialCategory = "general", onSettingsChanged }:
 			case "mcp":
 				return <McpPage />;
 			default:
-				return <AppsPage snapshot={snapshot} onSaved={saveSnapshot} sources={sources} onOpenSource={(alias) => setCategory(`source:${alias}`)} />;
+				return <AppsPage snapshot={snapshot} onSaved={saveSnapshot} sources={sources} sourcesPending={!sourcesReady} onOpenSource={(alias) => setCategory(`source:${alias}`)} />;
 		}
 	})();
 

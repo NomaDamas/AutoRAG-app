@@ -32,7 +32,7 @@ const snapshot: AutoRagConfigSnapshot = { configPath: "/x/config.json", configEx
 
 function render(platform: string): void {
 	Reflect.set(globalThis, "autorag", { platform, settings: {} });
-	act(() => root.render(<AppsPage snapshot={snapshot} onSaved={vi.fn()} sources={null} onOpenSource={vi.fn()} />));
+	act(() => root.render(<AppsPage snapshot={snapshot} onSaved={vi.fn()} sources={null} sourcesPending={false} onOpenSource={vi.fn()} />));
 }
 
 const galleryRow = (title: string): HTMLElement | undefined =>

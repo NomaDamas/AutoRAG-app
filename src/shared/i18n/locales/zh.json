@@ -2186,6 +2186,7 @@
       "off": "关闭",
       "inUse": "使用中",
       "syncing": "更新中…",
+      "checking": "检查中…",
       "justNow": "刚刚",
       "minutesAgo": "{{count}} 分钟前",
       "hoursAgo": "{{count}} 小时前",

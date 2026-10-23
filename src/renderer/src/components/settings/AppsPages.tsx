@@ -115,12 +115,15 @@ export function IndexingPage({
 	snapshot,
 	onSaved,
 	sources,
+	sourcesPending,
 	setSources,
 	onOpenSource,
 }: {
 	readonly snapshot: AutoRagConfigSnapshot;
 	readonly onSaved: (next: AutoRagConfigSnapshot) => void;
 	readonly sources: DataSourcesSnapshot | null;
+	/** The first datasource scan has not answered yet: `sources` is unknown, not empty. */
+	readonly sourcesPending: boolean;
 	readonly setSources: (next: DataSourcesSnapshot) => void;
 	readonly onOpenSource: (alias: string) => void;
 }): ReactElement {
@@ -302,7 +305,7 @@ export function IndexingPage({
 						</div>
 					))}
 				</div>
-				{rows.length === 0 ? <Note>{t("settingsSources.indexing.empty")}</Note> : null}
+				{rows.length === 0 ? <Note>{sourcesPending ? t("settingsSources.common.checking") : t("settingsSources.indexing.empty")}</Note> : null}
 				<ScheduleNote status={schedule} />
 				<div className="settings-sync-footer">
 					<span className="settings-list-meta">{t("settingsSources.indexing.footer")}</span>
@@ -387,11 +390,14 @@ export function AppsPage({
 	snapshot,
 	onSaved,
 	sources,
+	sourcesPending,
 	onOpenSource,
 }: {
 	readonly snapshot: AutoRagConfigSnapshot;
 	readonly onSaved: (next: AutoRagConfigSnapshot) => void;
 	readonly sources: DataSourcesSnapshot | null;
+	/** The first datasource scan has not answered yet: `sources` is unknown, not empty. */
+	readonly sourcesPending: boolean;
 	readonly onOpenSource: (alias: string) => void;
 }): ReactElement {
 	useTranslation();
@@ -418,7 +424,7 @@ export function AppsPage({
 			<SettingsPageHead title={t("settingsSources.apps.title")} description={t("settingsSources.apps.desc")} />
 			{addError !== null ? <div className="settings-error" role="alert">{addError}</div> : null}
 			<Section title={t("settingsSources.apps.myConnections")}>
-				{rows.length === 0 ? <Note>{t("settingsSources.apps.empty")}</Note> : null}
+				{rows.length === 0 ? <Note>{sourcesPending ? t("settingsSources.common.checking") : t("settingsSources.apps.empty")}</Note> : null}
 				<div className="settings-list">
 					{rows.map((row) => (
 						<button type="button" className="settings-list-row" key={row.id} onClick={() => onOpenSource(row.id)}>
@@ -483,12 +489,15 @@ export function SourceDetailPage({
 	onSaved,
 	alias,
 	sources,
+	sourcesPending,
 	setSources,
 }: {
 	readonly snapshot: AutoRagConfigSnapshot;
 	readonly onSaved: (next: AutoRagConfigSnapshot) => void;
 	readonly alias: string;
 	readonly sources: DataSourcesSnapshot | null;
+	/** The first datasource scan has not answered yet: `sources` is unknown, not empty. */
+	readonly sourcesPending: boolean;
 	readonly setSources: (next: DataSourcesSnapshot) => void;
 }): ReactElement {
 	useTranslation();
@@ -594,7 +603,7 @@ export function SourceDetailPage({
 				<Row name={t("settingsSources.sourceDetail.refreshName")} hint={row !== null && row.index.indexedAt !== null ? t("settingsSources.sourceDetail.refreshLast", { date: new Date(row.index.indexedAt).toLocaleString() }) : t("settingsSources.sourceDetail.refreshNever")}>
 					<span className="settings-status">
 						<StatusDot tone={row === null ? "off" : sourceTone(row)} />
-						{row === null ? t("settingsSources.sourceDetail.stateNone") : sourceMeta(row)}
+						{row === null ? (sourcesPending ? t("settingsSources.common.checking") : t("settingsSources.sourceDetail.stateNone")) : sourceMeta(row)}
 					</span>
 					<button type="button" className="linear-btn settings-btn-quiet" disabled={busy || row === null} onClick={() => void syncNow()}>{t("settingsSources.indexing.rowRefreshTitle")}</button>
 				</Row>

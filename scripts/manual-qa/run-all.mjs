@@ -61,6 +61,7 @@ const LANES = [
 	{ name: "datasource-status", script: "run-qa-finder-datasource-status.mjs", timeout: 240 },
 	{ name: "models-status", script: "run-qa-finder-models-status.mjs", timeout: 240 },
 	{ name: "settings-redesign", script: "run-qa-settings-redesign.mjs", timeout: 300 },
+	{ name: "settings-open-latency", script: "run-qa-settings-open-latency.mjs", timeout: 240 },
 	{ name: "refresh-schedule", script: "run-qa-refresh-schedule.mjs", timeout: 300 },
 	{ name: "global-appearance", script: "run-qa-global-appearance.mjs", timeout: 300 },
 	{ name: "quick-look-reference", script: "run-qa-quick-look-reference.mjs", timeout: 420 },
