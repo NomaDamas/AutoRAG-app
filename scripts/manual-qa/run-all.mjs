@@ -47,6 +47,7 @@ const LANES = [
 	{ name: "external-drop", script: "run-qa-finder-external-drop.mjs", timeout: 300 },
 	{ name: "share", script: "run-qa-finder-share.mjs", timeout: 300 },
 	{ name: "nav-guard", script: "run-qa-finder-nav-guard.mjs", timeout: 240 },
+	{ name: "no-console-flash", script: "run-qa-finder-no-console-flash.mjs", timeout: 300 },
 	{ name: "dupey-cache", script: "run-qa-finder-dupey-cache.mjs", timeout: 600 },
 	{ name: "trash-prune", script: "run-qa-finder-trash-prune.mjs", timeout: 480 },
 	{ name: "trash-restore", script: "run-qa-finder-trash-restore.mjs", timeout: 480 },

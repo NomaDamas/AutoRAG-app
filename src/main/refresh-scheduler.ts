@@ -20,7 +20,7 @@ export type CommandRunner = (command: string, args: readonly string[], input?: s
 
 export function runCommand(command: string, args: readonly string[], input?: string): Promise<CommandResult> {
 	return new Promise((resolve) => {
-		const child = execFile(command, [...args], { timeout: 30_000, maxBuffer: 4 * 1024 * 1024 }, (error, stdout, stderr) => {
+		const child = execFile(command, [...args], { timeout: 30_000, maxBuffer: 4 * 1024 * 1024, windowsHide: true }, (error, stdout, stderr) => {
 			const code = error === null ? 0 : typeof error.code === "number" ? error.code : 1;
 			resolve({ code, stdout: String(stdout), stderr: String(stderr) || (error?.message ?? "") });
 		});

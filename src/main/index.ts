@@ -567,7 +567,7 @@ app.whenReady().then(async () => {
 		// so a custom --user-data-dir run (dev, QA) is the one its own menu entries reach.
 		appArgs: [...(app.isPackaged ? [] : [app.getAppPath()]), `--user-data-dir=${app.getPath("userData")}`],
 		run: async (command, args) => {
-			await execFileAsync(command, [...args]);
+			await execFileAsync(command, [...args], { windowsHide: true });
 		},
 	});
 	const autoRagConfig = createAutoRagConfigService({ env: process.env, cwd: process.cwd() });
