@@ -114,8 +114,6 @@ async function start(): Promise<Harness> {
 		detectSources: async () => ({ sources: [] }),
 		gitToken: async () => null,
 		useManagedModel: async () => undefined,
-		detectModels: async () => [],
-		verifyModel: async () => ({ ok: false, error: "unused" }),
 		send: (channel, payload) => {
 			if (channel !== ONBOARDING_CHANNELS.indexProgress) return;
 			const status = payload as IndexingStatus;
@@ -139,7 +137,7 @@ async function start(): Promise<Harness> {
 		onComplete: () => undefined,
 	};
 	const service = createOnboardingService(deps);
-	await service.startIndexing({ folders: ["/Users/me/Documents"], sources: [], plan: "free", model: null });
+	await service.startIndexing({ folders: ["/Users/me/Documents"], sources: [], plan: "free" });
 	// One poll interval elapses: that tick reads the progress file and is now held inside `stat`.
 	await vi.advanceTimersByTimeAsync(1000);
 	expect(gate.progressCalls).toBe(1);

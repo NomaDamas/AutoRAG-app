@@ -54,7 +54,6 @@ import { createFolderScanCoordinator, supportedExtensionsFromRegistry } from "./
 import { createAccountService } from "./account-service";
 import { createOnboardingService, type OnboardingService } from "./onboarding-service";
 import { detectSources } from "./onboarding-sources";
-import { detectModelProviders, verifyModel as verifyModelRequest } from "./onboarding-models";
 import { FS_CHANNELS } from "../shared/fs-contract";
 import dockIconPath from "../../build/icon.png?asset";
 import windowIconPath from "../../build/icons/512x512.png?asset";
@@ -884,13 +883,6 @@ app.whenReady().then(async () => {
 				return null;
 			}
 		},
-		detectModels: () =>
-			detectModelProviders({ env: process.env, credentials, fetchFn: fetch, modelsCatalog: () => autoRagConfig.modelsCatalog() }),
-		verifyModel: (request) =>
-			verifyModelRequest(
-				{ env: process.env, credentials, fetchFn: fetch, modelsCatalog: () => autoRagConfig.modelsCatalog() },
-				request,
-			),
 		send: sendToMainWindow,
 		openExternal: (url) => shell.openExternal(url),
 		relaunch: () => {

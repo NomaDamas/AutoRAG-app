@@ -7,8 +7,6 @@ import { DEFAULT_ACCOUNT_BASE_URL } from "../shared/account-contract";
 import { readDazziPlanCredential } from "./dazzi-plan-credential";
 import {
 	ONBOARDING_CHANNELS,
-	type ByokProviderId,
-	type DetectedModelProvider,
 	type DetectedSource,
 	type EmbedMode,
 	type EmbeddingInfo,
@@ -27,15 +25,12 @@ import {
 	type SourceDetection,
 	type SourceFacts,
 	type SourceId,
-	type ModelVerifyRequest,
-	type ModelVerifyResult,
 } from "../shared/onboarding-contract";
 import type { AppSettings, ConfigRefreshResult } from "../shared/settings-contract";
 import { isJsonObject } from "../shared/settings-contract";
 import { tByName, t } from "../shared/i18n/core";
 import { localSpecMessage, type LocalSpecVerdict } from "../shared/local-embedding-spec";
 import { applyIndexingConfig, buildDatasourceEntries } from "./onboarding-config";
-import { PROVIDER_ENV_NAME } from "./onboarding-models";
 import { computeIndexingProgress } from "./onboarding-progress";
 import type { ProviderCredentialService } from "./provider-credentials";
 import { localEmbeddingModel } from "./embedding-daemon";
@@ -103,8 +98,6 @@ export interface OnboardingServiceDeps {
 	readonly gitToken: () => Promise<string | null>;
 	/** Points the AutoRAG agent at the signed-in account's managed models (managed plans only). */
 	readonly useManagedModel: () => Promise<unknown>;
-	readonly detectModels: () => Promise<readonly DetectedModelProvider[]>;
-	readonly verifyModel: (request: ModelVerifyRequest) => Promise<ModelVerifyResult>;
 	readonly send: (channel: string, payload: unknown) => void;
 	readonly openExternal: (url: string) => Promise<void>;
 	readonly relaunch: () => void;
@@ -147,8 +140,6 @@ export interface OnboardingService {
 	embedding(): Promise<EmbeddingInfo>;
 	/** Starts a streamed probe (restarting any in flight); finds are pushed as `sourceDetected`, then `sourcesDone`. */
 	detectSources(): Promise<void>;
-	detectModels(): Promise<readonly DetectedModelProvider[]>;
-	verifyModel(request: unknown): Promise<ModelVerifyResult>;
 	startIndexing(request: unknown): Promise<IndexingStatus>;
 	indexStatus(): Promise<IndexingStatus>;
 	/** Sync: is a first index running right now (quit-confirmation gate). */
@@ -183,14 +174,6 @@ const STEP_IDS: Readonly<Record<string, true>> = {
 };
 const PLAN_IDS: Readonly<Record<string, true>> = { free: true, air: true, pro: true, byok: true };
 const EMBED_MODES: Readonly<Record<string, true>> = { none: true, local: true, cloud: true };
-const BYOK_PROVIDERS: Readonly<Record<string, true>> = {
-	anthropic: true,
-	openai: true,
-	openrouter: true,
-	google: true,
-	ollama: true,
-	"openai-compatible": true,
-};
 const SOURCE_IDS: Readonly<Record<string, true>> = {
 	kakao: true,
 	slack: true,
@@ -257,8 +240,7 @@ function isModelChoice(value: unknown): value is OnboardingModelChoice {
 	return (
 		isJsonObject(value) &&
 		typeof value.provider === "string" &&
-		BYOK_PROVIDERS[value.provider] === true &&
-		typeof value.baseUrl === "string" &&
+		value.provider.length > 0 &&
 		typeof value.modelId === "string" &&
 		typeof value.verified === "boolean"
 	);
@@ -295,20 +277,6 @@ function isIndexingRequest(value: unknown): value is IndexingRequest {
 		if (!isJsonObject(source) || typeof source.id !== "string" || SOURCE_IDS[source.id] !== true) return false;
 	}
 	if (typeof value.plan !== "string" || PLAN_IDS[value.plan] !== true) return false;
-	const model = value.model;
-	if (model !== null) {
-		if (!isJsonObject(model) || typeof model.provider !== "string" || BYOK_PROVIDERS[model.provider] !== true) return false;
-		if (typeof model.modelId !== "string") return false;
-		if (model.baseUrl !== null && typeof model.baseUrl !== "string") return false;
-	}
-	return true;
-}
-
-function isModelVerifyRequest(value: unknown): value is ModelVerifyRequest {
-	if (!isJsonObject(value)) return false;
-	if (typeof value.provider !== "string" || BYOK_PROVIDERS[value.provider] !== true) return false;
-	if (value.apiKey !== null && typeof value.apiKey !== "string") return false;
-	if (value.baseUrl !== null && typeof value.baseUrl !== "string") return false;
 	return true;
 }
 
@@ -654,11 +622,6 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 			};
 			void promise.then(done, done);
 		},
-		detectModels: () => deps.detectModels(),
-		verifyModel: async (request) => {
-			if (!isModelVerifyRequest(request)) throw new TypeError("onboarding:verifyModel expects a valid request");
-			return deps.verifyModel(request);
-		},
 		startIndexing: async (request) => {
 			if (!isIndexingRequest(request)) throw new TypeError("onboarding:startIndexing expects a valid request");
 			if (refreshPromise !== null) return status;
@@ -686,7 +649,6 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 			};
 			// Keyword-only writes no embedder at all; a local run keeps one the user already configured.
 			const embedder = embedMode === "none" ? null : embedMode === "cloud" ? cloudEmbedder : configured ? null : { id: EMBEDDER_ID, dimension: EMBEDDER_DIMENSION };
-			const modelProvider = request.model === null ? null : (request.model.provider as ByokProviderId);
 			const next = applyIndexingConfig({
 				raw,
 				folders: request.folders,
@@ -702,20 +664,6 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 					typeof raw.workspacePath !== "string" || raw.workspacePath === deps.cwd
 						? join(deps.env.AUTORAG_HOME?.trim() || join(deps.home, ".autorag"), "workspace")
 						: null,
-				model:
-					request.model === null
-						? null
-						: {
-								provider: request.model.provider,
-								modelId: request.model.modelId,
-								// pi's catalog carries no Ollama models, so the agent reaches it as an
-								// OpenAI-compatible endpoint; without a base URL it could not resolve.
-								baseUrl:
-									modelProvider === "ollama" && (request.model.baseUrl ?? "") === ""
-										? "http://127.0.0.1:11434/v1"
-										: request.model.baseUrl,
-								envName: modelProvider === null ? null : PROVIDER_ENV_NAME[modelProvider],
-							},
 			});
 			// The spec guard: the first index would run the on-device model on this computer. The renderer already hides
 			// the option; this holds when it is bypassed. A server of the user's own runs elsewhere and is never gated.

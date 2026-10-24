@@ -383,7 +383,9 @@ app at a local capture server and asserts the rules above over HTTP.
 
 A fresh install opens onboarding instead of the Finder: welcome, permissions,
 account, folders, smart scan, smart-indexing scope, embedding, data sources,
-plan, the model step (BYOK only), and the first index. The screens port
+plan, and the first index. A BYOK user also gets the model step: right after the
+account (before any folder is scanned, because the smart scan runs on that model),
+or after the plan for a signed-in user who only picks BYOK there. The screens port
 `docs/design-reference/onboarding/onboarding-prototype.html`; the draft is saved
 after every change, so a relaunch (for example after granting Full Disk Access)
 resumes at the same step.
@@ -483,12 +485,19 @@ resumes at the same step.
   in are skipped. GitHub requires authentication and at least one discovered
   repository; empty or failed repo discovery does not offer a source that would
   fail its first sync.
-- **Model** (BYOK) verifies the provider key against the provider's API and
-  stores it in the encrypted credential store, never in `config.json`.
+- **Model** (BYOK) is Settings → AI 모델's connect flow in onboarding clothes
+  (`components/settings/ProviderConnect.tsx`, `ModelPicker.tsx`): any provider Pi
+  can sign in to (OAuth, API key) or a local/custom OpenAI-compatible server. The
+  credential lands in Pi's `auth.json` and the chosen answer model in the shared
+  `config.json` (`model.*`, through `modelConfigUpdates`) the moment it is picked,
+  so the smart scan can run on it and Settings shows exactly the same provider and
+  model afterwards. The draft only remembers the choice; the config is the authority
+  (`onboarding/model-choice.ts`).
 - **Indexing** writes `searchPaths`, the embedder (only when none is set), the
   enabled datasources (`kakao` is indexed by the librarian's read-only sidecar over
   lazykatok's archive with the shared embedder, so `lazykatok index` and its
-  fastembed pipeline never run), and the BYOK model into the shared config, then runs
+  fastembed pipeline never run) into the shared config (the BYOK model is already
+  there from the model step), then runs
   the local refresh (`parsed`, `minsync`) and syncs enabled datasources in the
   background once local indexing and onboarding complete. A config still pointing its
   `workspacePath` at the app's cwd seed is moved to `<AutoRAG home>/workspace`.

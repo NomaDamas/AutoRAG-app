@@ -1,12 +1,12 @@
 import { join } from "node:path";
-import type { ByokProviderId, SourceFacts, SourceId } from "../shared/onboarding-contract";
+import type { SourceFacts, SourceId } from "../shared/onboarding-contract";
 import { isJsonObject } from "../shared/settings-contract";
 
 /**
  * Writes the onboarding choices into the shared AutoRAG config the CLI, TUI,
  * serve, and this app all resolve. Pure over its inputs (a raw config object
  * in, the next one out) so the merge rules — search paths replace, embedder only
- * when absent, datasource aliases merge, BYOK model — are
+ * when absent, datasource aliases merge — are
  * unit-testable without touching disk.
  */
 
@@ -15,13 +15,6 @@ export interface EmbedderChoice {
 	readonly dimension: number;
 	readonly baseUrl?: string;
 	readonly apiKeyEnv?: string;
-}
-
-export interface ByokModelChoice {
-	readonly provider: ByokProviderId;
-	readonly modelId: string;
-	readonly baseUrl: string | null;
-	readonly envName: string | null;
 }
 
 /**
@@ -48,7 +41,6 @@ export interface ApplyIndexingConfigInput {
 	readonly semanticSearch?: boolean;
 	/** Folders to leave out; kept after any exclusions the config already has. */
 	readonly excludePaths?: readonly string[];
-	readonly model: ByokModelChoice | null;
 }
 
 function obsidianAlias(index: number): string {
@@ -143,16 +135,6 @@ export function applyIndexingConfig(input: ApplyIndexingConfigInput): Record<str
 		const appIndexing = input.semanticSearch ? rest : { ...rest, semanticSearch: false };
 		if (Object.keys(appIndexing).length > 0) raw.appIndexing = appIndexing;
 		else delete raw.appIndexing;
-	}
-	if (input.model !== null) {
-		raw.model = {
-			provider: input.model.provider,
-			id: input.model.modelId,
-			...(input.model.baseUrl !== null && input.model.baseUrl.length > 0
-				? { baseUrl: input.model.baseUrl, api: "openai-completions" }
-				: {}),
-			...(input.model.envName !== null ? { apiKeyEnv: input.model.envName } : {}),
-		};
 	}
 	const entries = buildDatasourceEntries(input.datasources, input.home);
 	if (Object.keys(entries).length > 0) {

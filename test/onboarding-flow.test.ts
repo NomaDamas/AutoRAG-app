@@ -28,7 +28,7 @@ const stubTranslate: Translate = (key, options) => (options === undefined ? key 
 
 describe("onboarding flow", () => {
 	it("orders steps for a local, unconfirmed plan", () => {
-		expect(buildFlow("pro", false, "local")).toEqual([
+		expect(buildFlow("pro", false, "local", false)).toEqual([
 			"welcome",
 			"permissions",
 			"account",
@@ -43,7 +43,7 @@ describe("onboarding flow", () => {
 	});
 
 	it("drops the plan once confirmed and puts the plan before sources for cloud", () => {
-		expect(buildFlow("pro", true, "local")).toEqual([
+		expect(buildFlow("pro", true, "local", false)).toEqual([
 			"welcome",
 			"permissions",
 			"account",
@@ -54,7 +54,7 @@ describe("onboarding flow", () => {
 			"sources",
 			"indexing",
 		]);
-		expect(buildFlow("pro", false, "cloud")).toEqual([
+		expect(buildFlow("pro", false, "cloud", false)).toEqual([
 			"welcome",
 			"permissions",
 			"account",
@@ -69,7 +69,7 @@ describe("onboarding flow", () => {
 	});
 
 	it("treats the keyword-only mode like local embedding for ordering", () => {
-		expect(buildFlow("pro", false, "none")).toEqual([
+		expect(buildFlow("pro", false, "none", false)).toEqual([
 			"welcome",
 			"permissions",
 			"account",
@@ -81,7 +81,40 @@ describe("onboarding flow", () => {
 			"plan",
 			"indexing",
 		]);
-		expect(buildFlow("byok", false, "none")).toEqual([
+		expect(buildFlow("byok", false, "none", false)).toEqual([
+			"welcome",
+			"permissions",
+			"account",
+			"model",
+			"folders",
+			"smartScan",
+			"smartScope",
+			"embedding",
+			"sources",
+			"plan",
+			"indexing",
+		]);
+	});
+
+	it("connects the BYOK model right after the account step, before the smart scan needs it", () => {
+		const flow = buildFlow("byok", true, "local", false);
+		expect(flow).toEqual([
+			"welcome",
+			"permissions",
+			"account",
+			"model",
+			"folders",
+			"smartScan",
+			"smartScope",
+			"embedding",
+			"sources",
+			"indexing",
+		]);
+		expect(flow.indexOf("model")).toBeLessThan(flow.indexOf("smartScan"));
+	});
+
+	it("keeps the model step after the plan for a signed-in user who picks BYOK there, because the scan already ran", () => {
+		expect(buildFlow("byok", false, "local", true)).toEqual([
 			"welcome",
 			"permissions",
 			"account",
@@ -96,19 +129,11 @@ describe("onboarding flow", () => {
 		]);
 	});
 
-	it("adds the model step only for BYOK", () => {
-		expect(buildFlow("byok", true, "local")).toEqual([
-			"welcome",
-			"permissions",
-			"account",
-			"folders",
-			"smartScan",
-			"smartScope",
-			"embedding",
-			"sources",
-			"model",
-			"indexing",
-		]);
+	it("has no model step for managed plans", () => {
+		for (const plan of ["free", "air", "pro"] as const) {
+			expect(buildFlow(plan, false, "local", false)).not.toContain("model");
+			expect(buildFlow(plan, true, "cloud", true)).not.toContain("model");
+		}
 	});
 
 	it("allows selecting cloud embedding only when signed in to Dazzi", () => {

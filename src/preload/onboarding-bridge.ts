@@ -32,8 +32,6 @@ export function createOnboardingBridge(ipcRenderer: IpcRenderer): OnboardingBrid
 		detectSources: () => ipcRenderer.invoke(ONBOARDING_CHANNELS.detectSources),
 		onSourceDetected: (listener) => subscribe(ipcRenderer, ONBOARDING_CHANNELS.sourceDetected, listener),
 		onSourcesDone: (listener) => subscribe<null>(ipcRenderer, ONBOARDING_CHANNELS.sourcesDone, () => listener()),
-		detectModels: () => ipcRenderer.invoke(ONBOARDING_CHANNELS.detectModels),
-		verifyModel: (request) => ipcRenderer.invoke(ONBOARDING_CHANNELS.verifyModel, request),
 		startIndexing: (request) => ipcRenderer.invoke(ONBOARDING_CHANNELS.startIndexing, request),
 		indexStatus: () => ipcRenderer.invoke(ONBOARDING_CHANNELS.indexStatus),
 		onIndexProgress: (listener) => subscribe(ipcRenderer, ONBOARDING_CHANNELS.indexProgress, listener),

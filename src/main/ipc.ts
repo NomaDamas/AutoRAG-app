@@ -323,8 +323,6 @@ export function registerOnboardingIpcHandlers(service: OnboardingService): void 
 	});
 	ipcMain.handle(ONBOARDING_CHANNELS.embedding, () => service.embedding());
 	ipcMain.handle(ONBOARDING_CHANNELS.detectSources, () => service.detectSources());
-	ipcMain.handle(ONBOARDING_CHANNELS.detectModels, () => service.detectModels());
-	ipcMain.handle(ONBOARDING_CHANNELS.verifyModel, (_event, request: unknown) => service.verifyModel(request));
 	ipcMain.handle(ONBOARDING_CHANNELS.startIndexing, (_event, request: unknown) => service.startIndexing(request));
 	ipcMain.handle(ONBOARDING_CHANNELS.indexStatus, () => service.indexStatus());
 	ipcMain.handle(ONBOARDING_CHANNELS.complete, () => service.complete());

@@ -2271,13 +2271,6 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 	font-size: 10px;
 }
 
-.onb .model-rows {
-	display: flex;
-	flex-direction: column;
-	gap: 8px;
-	margin-top: 14px;
-}
-
 .onb .model-row {
 	display: flex;
 	align-items: center;
@@ -2349,35 +2342,53 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 	font-size: 9px;
 }
 
-.onb .provider-chips {
-	display: flex;
-	gap: 6px;
-	flex-wrap: wrap;
-	margin: 9px 0;
+.onb .model-card {
+	padding: 14px;
 }
 
-.onb .provider-chip {
-	padding: 6px 8px;
-	border: 1px solid var(--onb-border);
-	border-radius: 6px;
-	background: var(--onb-bg-card);
-	color: var(--onb-muted);
-	font-size: 9.5px;
+.onb .model-services {
+	margin-bottom: 10px;
 }
 
-.onb .provider-chip.selected {
-	border-color: var(--onb-blue);
-	background: var(--onb-blue-soft);
+.onb .model-services .detected-row > :last-child:not(div) {
+	margin-left: auto;
 	color: var(--onb-blue);
 }
 
-.onb .key-row {
-	display: flex;
-	gap: 7px;
+.onb .model-overlays {
+	display: contents;
 }
 
-.onb .key-row .input {
-	font-family: ui-monospace,monospace;
+.onb .model-empty {
+	margin: 4px 0 10px;
+	color: var(--onb-muted);
+	font-size: 10px;
+}
+
+.onb .model-connect {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	margin-top: 8px;
+}
+
+.onb .model-trigger {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	max-width: 70%;
+}
+
+.onb .model-trigger > span {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.onb .model-status {
+	margin: 10px 0 0;
+	color: var(--onb-muted);
+	font-size: 10px;
 }
 
 .onb .secure-note {
