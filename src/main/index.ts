@@ -52,6 +52,7 @@ import { refreshAutoragIndex, resolveEffectiveConfig } from "./index-refresh";
 import { terminateMinSyncChildren } from "./minsync-watchdog";
 import { createFolderScanCoordinator, supportedExtensionsFromRegistry } from "./onboarding-scan";
 import { createAccountService } from "./account-service";
+import { quotaBlock } from "./quota-guard";
 import { createOnboardingService, type OnboardingService } from "./onboarding-service";
 import { detectSources } from "./onboarding-sources";
 import { detectModelProviders, verifyModel as verifyModelRequest } from "./onboarding-models";
@@ -538,6 +539,19 @@ app.whenReady().then(async () => {
 		interaction: interactionHub,
 		// The settings service is built further down; an agent is only built long after startup.
 		approvalMode: async () => (await settingsService.get()).approvalMode,
+		// A run on the Dazzi plan's model with the week's credits used up is not sent: the server would refuse every request of it.
+		preflight: async () => {
+			const block = await quotaBlock({
+				modelProvider: async () => {
+					const configPath = autoragConfigPath();
+					const model = existsSync(configPath) ? readRawConfigObject(configPath).model : undefined;
+					return isJsonObject(model) && typeof model.provider === "string" ? model.provider : undefined;
+				},
+				account: accountService,
+				now: () => new Date(),
+			});
+			return block === null ? null : t("main.search.quotaExhausted", { date: block.resetsAt.toLocaleString(currentLanguage, { dateStyle: "medium", timeStyle: "short" }) });
+		},
 	});
 	registerSearchIpcHandlers(searchService);
 	registerInteractionIpcHandlers({

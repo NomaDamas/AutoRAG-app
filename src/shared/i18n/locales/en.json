@@ -1210,6 +1210,9 @@
       "yes": "Yes",
       "no": "No"
     },
+    "search": {
+      "quotaExhausted": "This week's Dazzi credits are used up, so nothing was sent. They come back on {{date}}. Upgrade your plan, or choose another model provider in Settings, to keep asking."
+    },
     "action": {
       "unsupportedResize": "This format cannot be resized.",
       "unsupportedOptimize": "This format cannot be size-optimized.",

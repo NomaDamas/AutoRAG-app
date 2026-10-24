@@ -708,10 +708,11 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	// panel of that run shows it: another tab's panel has a different run id.
 	const interactionRequest = searchId === null ? null : frontRequest(interactionQueue, searchId);
 	visibleRequestRef.current = interactionRequest;
-	const { skeleton, thinking } = answerViewState({
+	const { skeleton, narration, thinking } = answerViewState({
 		pending: searching,
 		quickReady,
 		deepReady,
+		hasProgress: progress !== "",
 	});
 	const showEmpty = submittedQuery === null && error === null && !quickReady && !deepReady;
 	const steersBeforeQuick = steers.filter((steer) => steer.timing === "before-quick");
@@ -885,6 +886,13 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 								</div>
 							) : skeleton ? (
 								<div className="flex flex-col gap-8">
+									{narration ? (
+										<div className="water-wave-thinking my-2 flex items-center text-meta text-ink-muted" role="status">
+											<span className="shimmer min-w-0 truncate" title={progress}>
+												{progress}
+											</span>
+										</div>
+									) : null}
 									<span className="skeleton block h-8 w-[85%] rounded-4 bg-[linear-gradient(90deg,var(--bg-input),var(--bg-window),var(--bg-input))] bg-[length:200%_100%] animate-shimmer" />
 									<span className="skeleton block h-8 w-[65%] rounded-4 bg-[linear-gradient(90deg,var(--bg-input),var(--bg-window),var(--bg-input))] bg-[length:200%_100%] animate-shimmer" />
 								</div>

@@ -12,7 +12,7 @@ import { useCallback, useEffect, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { ExternalLink } from "lucide-react";
 import type { AccountPlanId, AccountSnapshot, AccountStatus } from "../../../../shared/account-contract";
-import { accountDashboardUrl, accountLegalUrl, nextWeeklyReset, splitRemaining, type AccountLegalRoute } from "../../../../shared/account-contract";
+import { accountDashboardUrl, accountLegalUrl, creditsResetAt, splitRemaining, type AccountLegalRoute } from "../../../../shared/account-contract";
 import { Note, Row, Section, SettingsPageHead } from "./SettingsKit";
 
 function openExternal(url: string): void {
@@ -126,7 +126,7 @@ export function PlanPage(): ReactElement {
 	const limitCents = account?.creditsLimitCents ?? 0;
 	const percent = limitCents > 0 ? Math.min(100, Math.round(((account?.creditsUsedCents ?? 0) / limitCents) * 100)) : 0;
 	const renewal = account?.periodEnd == null ? null : new Date(account.periodEnd).toLocaleDateString();
-	const reset = nextWeeklyReset(now);
+	const reset = creditsResetAt(account, now);
 	const left = splitRemaining(reset.getTime() - now.getTime());
 	const remaining =
 		left.days > 0

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ACCOUNT_LEGAL_ROUTES, accountDashboardUrl, accountLegalUrl, nextWeeklyReset, splitRemaining } from "../src/shared/account-contract";
+import { ACCOUNT_LEGAL_ROUTES, accountDashboardUrl, accountLegalUrl, creditsResetAt, nextWeeklyReset, splitRemaining } from "../src/shared/account-contract";
 
 describe("accountLegalUrl", () => {
 	it("serves the server's legal routes", () => {
@@ -39,6 +39,21 @@ describe("nextWeeklyReset", () => {
 		expect(nextWeeklyReset(new Date("2026-10-25T23:59:59Z")).toISOString()).toBe("2026-10-26T00:00:00.000Z");
 		expect(nextWeeklyReset(new Date("2026-10-26T00:00:00Z")).toISOString()).toBe("2026-11-02T00:00:00.000Z");
 		expect(nextWeeklyReset(new Date("2026-12-30T12:00:00Z")).toISOString()).toBe("2027-01-04T00:00:00.000Z");
+	});
+});
+
+describe("creditsResetAt", () => {
+	const now = new Date("2026-10-24T06:00:00Z");
+
+	it("is the instant the server reports, which is not a fixed weekday", () => {
+		// The server's week runs from the account's own period start (a Tuesday 07:15 UTC here), not Monday 00:00.
+		expect(creditsResetAt({ creditsResetsAt: "2026-10-27T07:15:01.883Z" }, now).toISOString()).toBe("2026-10-27T07:15:01.883Z");
+	});
+
+	it("falls back to the next Monday 00:00 UTC when the server sent none, or something unreadable, or there is no account", () => {
+		expect(creditsResetAt({ creditsResetsAt: null }, now).toISOString()).toBe("2026-10-26T00:00:00.000Z");
+		expect(creditsResetAt({ creditsResetsAt: "soon" }, now).toISOString()).toBe("2026-10-26T00:00:00.000Z");
+		expect(creditsResetAt(null, now).toISOString()).toBe("2026-10-26T00:00:00.000Z");
 	});
 });
 

@@ -1043,3 +1043,61 @@ describe("createSearchService interaction", () => {
 		expect(agent.setApprovalMode).toHaveBeenLastCalledWith("auto");
 	});
 });
+
+describe("createSearchService preflight", () => {
+	it("refuses a run the preflight stops: the person is told why, and no agent is built or asked", async () => {
+		const agentFactory = vi.fn(() => createFakeAgent(async function*() {}));
+		const { events, send } = collectEvents();
+		const store = await createStore();
+		const service = createSearchService({
+			agentFactory,
+			chatStore: store,
+			send,
+			now,
+			preflight: async () => "Weekly credits are used up.",
+		});
+
+		await service.start("search-q", "chat-q", "what is in a.txt", []);
+
+		expect(events).toEqual([
+			{ type: "error", searchId: "search-q", message: "Weekly credits are used up." },
+			{ type: "done", searchId: "search-q" },
+		]);
+		expect(agentFactory).not.toHaveBeenCalled();
+		// The question stays in the chat, so the person can ask it again once the credits are back.
+		expect((await store.get("chat-q"))?.messages.map((message) => message.role)).toEqual(["user"]);
+	});
+
+	it("runs as usual when the preflight has nothing to say", async () => {
+		const agent = createFakeAgent(async function*() {
+			yield { type: "complete", response: createResponse("session-ok", "Fine", 1) };
+		});
+		const { events, send } = collectEvents();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send, now, preflight: async () => null });
+
+		await service.start("search-ok", "chat-ok", "question", []);
+
+		expect(events.some((event) => event.type === "quick")).toBe(true);
+		expect(events.some((event) => event.type === "error")).toBe(false);
+	});
+
+	it("does not let a failing preflight stop the run: the server still has the last word", async () => {
+		const agent = createFakeAgent(async function*() {
+			yield { type: "complete", response: createResponse("session-pf", "Fine", 1) };
+		});
+		const { events, send } = collectEvents();
+		const service = createSearchService({
+			agentFactory: () => agent,
+			chatStore: await createStore(),
+			send,
+			now,
+			preflight: async () => {
+				throw new Error("account lookup blew up");
+			},
+		});
+
+		await service.start("search-pf", "chat-pf", "question", []);
+
+		expect(events.some((event) => event.type === "quick")).toBe(true);
+	});
+});

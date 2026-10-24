@@ -224,6 +224,7 @@ describe("planHeld", () => {
 			creditsUsedCents: 0,
 			creditsLimitCents: 50,
 			creditPeriod: "2026-W41",
+			creditsResetsAt: null,
 			embeddings: plan === "pro",
 			requestsPerMinute: 10,
 			billing: { air: true, pro: true, portal: false },

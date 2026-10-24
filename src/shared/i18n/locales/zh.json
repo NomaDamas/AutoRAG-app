@@ -1210,6 +1210,9 @@
       "yes": "是",
       "no": "否"
     },
+    "search": {
+      "quotaExhausted": "本周的 Dazzi 额度已用完，因此没有发送请求。额度将在 {{date}} 恢复。升级套餐，或在设置中选择其他模型提供方，即可继续使用。"
+    },
     "action": {
       "unsupportedResize": "此格式不支持调整大小。",
       "unsupportedOptimize": "此格式不支持容量优化。",

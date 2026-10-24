@@ -89,6 +89,11 @@ export interface SearchServiceDeps {
 	readonly interaction?: InteractionHub;
 	/** The approval mode in force, read when a chat's agent is built. Absent: {@link DEFAULT_APPROVAL_MODE}. */
 	readonly approvalMode?: () => Promise<ApprovalMode>;
+	/**
+	 * Asked before a run builds its agent or sends anything to a model: a message (already in the person's language)
+	 * refuses the run and is shown as its error, null lets it go. A preflight that throws never stops a run.
+	 */
+	readonly preflight?: () => Promise<string | null>;
 }
 
 interface SearchRun {
@@ -461,6 +466,22 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 				updatedAt: at,
 				messages: [...(existing?.messages ?? []), userMessage],
 			});
+			let refusal: string | null = null;
+			try {
+				refusal = (await deps.preflight?.()) ?? null;
+			} catch {
+				// Not knowing is not a reason to refuse: the run goes ahead and the model's server has the last word.
+			}
+			if (refusal !== null) {
+				active.delete(searchId);
+				if (!run.cancelled) {
+					reportFinished(run, "failed");
+					emit({ type: "error", searchId, message: refusal });
+					emit({ type: "done", searchId });
+				}
+				run.resolveFinish();
+				return;
+			}
 			let agent: SearchAgent;
 			try {
 				// A bad config (e.g. a search root that no longer exists) throws
