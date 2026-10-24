@@ -29,6 +29,8 @@ import { useTranslation } from "react-i18next";
 import { previewStreamUrl } from "../../../preview/shared/contract";
 import { hwpFirstPageUrl } from "../../../preview/ui/rhwp";
 import { firstPageTile } from "../lib/first-page-tile";
+import { previewLoaderFor } from "../lib/preview-loader";
+import { hostPlatform } from "../lib/shortcuts";
 import type { ActionAnchor, ActionCapabilities, OpenWithApplication } from "../../../shared/actions-contract";
 import type { AutomationRule } from "../../../shared/automation-contract";
 import type { FsFileDetails } from "../../../shared/fs-contract";
@@ -426,17 +428,16 @@ function usePreviewState(entry: FinderEntry): {
 		const mtimeMs = entry.mtimeMs;
 		if (!fetchable) return;
 		const path = entry.path;
-		// The OS thumbnailers draw nothing for HWP without Hancom's plug-in; rhwp draws the first page here.
-		// Windows has no PDF thumbnailer either: when the OS answers nothing, pdf.js draws page one.
-		const hwp = /\.hwpx?$/i.test(path);
+		// The OS thumbnailers draw nothing for HWP without Hancom's plug-in, and Windows answers a PDF with a generic
+		// icon: rhwp and pdf.js draw the first page here (`preview-loader.ts`).
 		const osPreview = window.autorag?.fs?.previewIcon;
-		const load =
-			hwp
-				? hwpFirstPageUrl
-				: osPreview !== undefined && /\.pdf$/i.test(path)
-					? async (file: string, version: number): Promise<string | null> => (await osPreview(file, version)) ?? (await firstPageTile(file, version, PREVIEW_PAPER_WIDTH))
-					: osPreview;
-		if (load === undefined) return;
+		if (osPreview === undefined) return;
+		const load = previewLoaderFor(path, {
+			platform: hostPlatform(),
+			os: osPreview,
+			page: (file, version) => firstPageTile(file, version, PREVIEW_PAPER_WIDTH),
+			hwp: hwpFirstPageUrl,
+		});
 		let cancelled = false;
 		const settle = (next: PreviewState): void => {
 			previewCache.set(identity, next);
