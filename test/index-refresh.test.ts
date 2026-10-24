@@ -380,3 +380,52 @@ describe("refreshAutoragIndex in keyword-only mode (appIndexing.semanticSearch: 
 		expect(datasourceConfigs.at(-1)).toBeUndefined();
 	});
 });
+
+describe("refreshAutoragIndex embedder preflight", () => {
+	async function remoteFixture(embedder: Record<string, unknown>): Promise<{ readonly env: NodeJS.ProcessEnv; readonly cwd: string }> {
+		const root = await mkdtemp(join(tmpdir(), "autorag-index-refresh-"));
+		directories.push(root);
+		const docs = join(root, "docs");
+		await mkdir(docs, { recursive: true });
+		const configPath = join(root, "config.json");
+		await writeFile(configPath, JSON.stringify({ searchPaths: [docs], workspacePath: join(root, "workspace"), minSync: { enabled: true, embedder } }));
+		return { env: { HOME: root, AUTORAG_CONFIG: configPath }, cwd: root };
+	}
+	const remote = { id: "openai:acme/embed-small", baseUrl: "https://gateway.example/api/v1", dimension: 3, apiKeyEnv: "OPENAI_API_KEY" };
+
+	it("fails with the embedder's own reason, and never starts parsing, when the embedder is unusable", async () => {
+		const preflightFetch = vi.fn(async () => new Response("Not Found", { status: 404 })) as unknown as typeof fetch;
+		vi.stubEnv("OPENAI_API_KEY", "sk-test");
+
+		const outcome = await refreshAutoragIndex({ ...(await remoteFixture(remote)), preflightFetch });
+
+		expect(outcome).toMatchObject({ ok: false, scanned: 0, written: 0 });
+		expect(outcome.error).toContain("/v1");
+		expect(outcome.diagnostics).toEqual([expect.objectContaining({ code: "embedder-preflight-failed", severity: "error" })]);
+		expect(refresh).not.toHaveBeenCalled();
+		expect(syncMinSync).not.toHaveBeenCalled();
+		vi.unstubAllEnvs();
+	});
+
+	it("runs the refresh when the embedder answers", async () => {
+		const preflightFetch = vi.fn(async () => new Response(JSON.stringify({ data: [{ embedding: [1, 2, 3] }] }), { status: 200 })) as unknown as typeof fetch;
+		vi.stubEnv("OPENAI_API_KEY", "sk-test");
+		refresh.mockResolvedValue(result(undefined));
+
+		const outcome = await refreshAutoragIndex({ ...(await remoteFixture({ ...remote, baseUrl: "https://gateway.example/api" })), preflightFetch });
+
+		expect(outcome).toMatchObject({ ok: true, error: null });
+		expect(refresh).toHaveBeenCalledTimes(1);
+		vi.unstubAllEnvs();
+	});
+
+	it("does not probe a refresh that never reaches MinSync", async () => {
+		const preflightFetch = vi.fn() as unknown as typeof fetch;
+		refresh.mockResolvedValue(result(undefined));
+
+		await refreshAutoragIndex({ ...(await remoteFixture(remote)), preflightFetch }, ["parsed"]);
+
+		expect(preflightFetch).not.toHaveBeenCalled();
+		expect(refresh).toHaveBeenCalledTimes(1);
+	});
+});
