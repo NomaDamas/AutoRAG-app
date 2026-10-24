@@ -236,6 +236,7 @@
     "generatingDeep": "詳細な回答を生成中…",
     "askDazzi": "Dazziに質問する",
     "stop": "停止",
+    "openPlan": "サブスクリプションと使用量を開く",
     "thinking": "思考中…",
     "workedFor": "{{time}}間回答を生成",
     "reviewing": "質問を確認中…",

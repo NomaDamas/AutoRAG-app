@@ -1054,7 +1054,7 @@ describe("createSearchService preflight", () => {
 			chatStore: store,
 			send,
 			now,
-			preflight: async () => "Weekly credits are used up.",
+			preflight: async () => ({ message: "Weekly credits are used up." }),
 		});
 
 		await service.start("search-q", "chat-q", "what is in a.txt", []);
@@ -1099,5 +1099,22 @@ describe("createSearchService preflight", () => {
 		await service.start("search-pf", "chat-pf", "question", []);
 
 		expect(events.some((event) => event.type === "quick")).toBe(true);
+	});
+});
+
+describe("createSearchService preflight action", () => {
+	it("passes the action a refusal carries on to the panel, so it can offer the way out", async () => {
+		const { events, send } = collectEvents();
+		const service = createSearchService({
+			agentFactory: () => createFakeAgent(async function*() {}),
+			chatStore: await createStore(),
+			send,
+			now,
+			preflight: async () => ({ message: "Weekly credits are used up.", action: "open-plan" }),
+		});
+
+		await service.start("search-action", "chat-action", "question", []);
+
+		expect(events[0]).toEqual({ type: "error", searchId: "search-action", message: "Weekly credits are used up.", action: "open-plan" });
 	});
 });

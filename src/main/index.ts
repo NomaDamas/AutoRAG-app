@@ -550,7 +550,12 @@ app.whenReady().then(async () => {
 				account: accountService,
 				now: () => new Date(),
 			});
-			return block === null ? null : t("main.search.quotaExhausted", { date: block.resetsAt.toLocaleString(currentLanguage, { dateStyle: "medium", timeStyle: "short" }) });
+			return block === null
+				? null
+				: {
+						message: t("main.search.quotaExhausted", { date: block.resetsAt.toLocaleString(currentLanguage, { dateStyle: "medium", timeStyle: "short" }) }),
+						action: "open-plan",
+					};
 		},
 	});
 	registerSearchIpcHandlers(searchService);

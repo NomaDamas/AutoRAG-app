@@ -24,6 +24,7 @@ import type {
 	ChatRecord,
 	ChatMessageUser,
 	SearchBridge,
+	SearchErrorAction,
 	SearchStreamEvent,
 } from "../shared/search-contract";
 import { SEARCH_CHANNELS } from "../shared/search-contract";
@@ -90,10 +91,17 @@ export interface SearchServiceDeps {
 	/** The approval mode in force, read when a chat's agent is built. Absent: {@link DEFAULT_APPROVAL_MODE}. */
 	readonly approvalMode?: () => Promise<ApprovalMode>;
 	/**
-	 * Asked before a run builds its agent or sends anything to a model: a message (already in the person's language)
-	 * refuses the run and is shown as its error, null lets it go. A preflight that throws never stops a run.
+	 * Asked before a run builds its agent or sends anything to a model: a refusal (its message already in the person's
+	 * language, and the action the panel offers for it) stops the run and is shown as its error, null lets it go.
+	 * A preflight that throws never stops a run.
 	 */
-	readonly preflight?: () => Promise<string | null>;
+	readonly preflight?: () => Promise<SearchRefusal | null>;
+}
+
+/** Why a run was not started, as the person is told. */
+export interface SearchRefusal {
+	readonly message: string;
+	readonly action?: SearchErrorAction;
 }
 
 interface SearchRun {
@@ -466,7 +474,7 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 				updatedAt: at,
 				messages: [...(existing?.messages ?? []), userMessage],
 			});
-			let refusal: string | null = null;
+			let refusal: SearchRefusal | null = null;
 			try {
 				refusal = (await deps.preflight?.()) ?? null;
 			} catch {
@@ -476,7 +484,7 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 				active.delete(searchId);
 				if (!run.cancelled) {
 					reportFinished(run, "failed");
-					emit({ type: "error", searchId, message: refusal });
+					emit({ type: "error", searchId, message: refusal.message, ...(refusal.action === undefined ? {} : { action: refusal.action }) });
 					emit({ type: "done", searchId });
 				}
 				run.resolveFinish();

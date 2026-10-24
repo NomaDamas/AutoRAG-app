@@ -236,6 +236,7 @@
     "generatingDeep": "정밀 답변 작성 중…",
     "askDazzi": "Dazzi에게 물어보기",
     "stop": "중지",
+    "openPlan": "구독 및 사용량 열기",
     "thinking": "생각하는 중…",
     "workedFor": "{{time}} 동안 답변 생성",
     "reviewing": "질문 검토 중…",

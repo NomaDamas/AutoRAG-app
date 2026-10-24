@@ -236,6 +236,7 @@
     "generatingDeep": "Generating deep answer…",
     "askDazzi": "Ask Dazzi",
     "stop": "Stop",
+    "openPlan": "Open Subscription & Usage",
     "thinking": "Thinking…",
     "workedFor": "Worked for {{time}}",
     "reviewing": "Reviewing the query.",

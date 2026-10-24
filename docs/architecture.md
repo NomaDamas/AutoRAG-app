@@ -677,6 +677,21 @@ of the message box (`src/shared/interaction-contract.ts` is the contract).
   in steps) or an approval card (what the call does, the command, four answers; initial focus on Deny, Esc
   denies, Enter never approves). Stop stays reachable on the card. Pure logic: `state/interaction.ts`.
 
+### What the panel shows while a run works, and an exhausted plan
+
+- **Loading shimmer.** The two grey bars show while a run is live and no answer text exists (`answerViewState`). A message that
+  goes on to call a tool is a progress note, not the answer: its streamed draft is withdrawn at the tool call and the bars
+  return. The note arrives as `progress`, and `narration` shows it as a readable line above the bars until an answer starts, so a
+  run that is reading files is not silent animation.
+- **Weekly credits.** The Dazzi server answers a run whose weekly credits are used up with `429 insufficient_quota` and bills nothing,
+  but the agent treats each 429 as a rate limit: its judgment-model calls and model request are retried and the server's raw JSON
+  ends up in the answer. `quota-guard.ts` (the search service's `preflight`) asks the account first: when the model is the `dazzi`
+  provider and the last read shows the credits used up, it re-reads `GET /v1/account` (a reset or an upgrade since the last read is
+  not held against the person) and refuses the run only on what the server confirmed; offline, an unreadable account or a lookup error lets
+  the run go, since the server has the last word. The refusal names the reset time and carries an `open-plan` action (`SearchErrorAction` on the `error` event): the panel's notice (`RunErrorNotice`) shows a button that opens Settings on Subscription & Usage (`requestSettingsCategory("plan")`). That time is the server's `credits.resets_at`
+  (`AccountSnapshot.creditsResetsAt`): the server's week starts when the account's period did, so it is not a fixed weekday; Monday
+  00:00 UTC (`nextWeeklyReset`) is only the fallback for a server that sends none. The Plan page uses the same `creditsResetAt`.
+
 On-device checks: `scripts/manual-qa/run-qa-finder-ai-search-interaction.mjs` (scripted model: every card and
 answer path, files on disk, what the model receives) and `run-qa-live-ai-search-interaction.mjs` (a real model
 through the Dazzi account decides to ask and to delete).

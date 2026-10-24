@@ -16,6 +16,7 @@ import type {
 	ChatAttachment,
 	ChatSummary,
 	CitationEvidence,
+	SearchErrorAction,
 	SearchStreamEvent,
 } from "../../../shared/search-contract";
 import type { InteractionRequest } from "../../../shared/interaction-contract";
@@ -42,6 +43,7 @@ import { iconButtonClass } from "./primitives/icon-button";
 import { FileTile } from "./primitives/FileTile";
 import { ApprovalModeMenu, useApprovalMode } from "./ApprovalModeMenu";
 import { InteractionDock } from "./InteractionDock";
+import { RunErrorNotice } from "./RunErrorNotice";
 
 const autorag = window.autorag;
 
@@ -89,6 +91,8 @@ export interface AiSearchPanelProps {
 	readonly imageActions: ImageActions;
 	/** The Interface language setting: "AI 요약" asks in this language. */
 	readonly language: SummaryLanguage;
+	/** Goes to Settings → Subscription & Usage: the weekly credits are used up and the error offers the way there. */
+	readonly onOpenPlan: () => void;
 }
 
 /** The parent folder of a local attachment, derived from its absolute path. */
@@ -103,7 +107,7 @@ function formatElapsed(ms: number): string {
 }
 
 export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(function AiSearchPanel(
-	{ active, visible, selectedEvidence, onSelectEvidence, onPublish, imageActions, language },
+	{ active, visible, selectedEvidence, onSelectEvidence, onPublish, imageActions, language, onOpenPlan },
 	ref,
 ): ReactElement {
 	const { t } = useTranslation();
@@ -123,6 +127,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		setSearchIdState(value);
 	};
 	const [error, setError] = useState<string | null>(null);
+	/** The action the main process attached to `error` (shown only while that same message is on screen). */
+	const [errorAction, setErrorAction] = useState<{ readonly message: string; readonly action: SearchErrorAction } | null>(null);
 	const { mode: approvalMode, setMode: changeMode } = useApprovalMode();
 	/** The agent's open requests, oldest first, across every search this panel hosts. */
 	const [interactionQueue, setInteractionQueue] = useState<InteractionQueue>(EMPTY_QUEUE);
@@ -260,6 +266,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 					break;
 				case "error":
 					setError(event.message);
+					setErrorAction(event.action === undefined ? null : { message: event.message, action: event.action });
 					setProgress("");
 					setSteers(settleSteers);
 					setSearchId(null);
@@ -861,7 +868,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 						</div>
 					)}
 
-					{error === null ? null : <div className="rounded-10 border border-danger-border bg-danger-bg-soft px-14 py-10 text-body text-danger-text">{error}</div>}
+					{error === null ? null : <RunErrorNotice message={error} action={errorAction?.message === error ? errorAction.action : null} onOpenPlan={onOpenPlan} />}
 
 					{steersBeforeQuick.map((steer) => (
 						<SteerBubble key={steer.id} steer={steer} labels={steerLabels} />

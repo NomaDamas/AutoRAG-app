@@ -236,6 +236,7 @@
     "generatingDeep": "正在撰写深度回答…",
     "askDazzi": "向 Dazzi 提问",
     "stop": "停止",
+    "openPlan": "打开订阅与用量",
     "thinking": "思考中…",
     "workedFor": "思考耗时 {{time}}",
     "reviewing": "正在核对提问…",

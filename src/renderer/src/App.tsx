@@ -773,6 +773,10 @@ export function App(): ReactElement {
 												onPublish={publishEvidence}
 												imageActions={imageActions}
 												language={language}
+												onOpenPlan={() => {
+													requestSettingsCategory("plan");
+													finder?.openSettings();
+												}}
 											/>
 										</div>
 									);
