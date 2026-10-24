@@ -13,6 +13,25 @@ export interface ZipEntry {
 /** A ZIP's central directory stores at most this many entries (the 16-bit count in the end record). */
 const MAX_ENTRIES = 0xffff;
 
+/**
+ * An entry name as the reader should show it, always NFC. Bit 11 of the flags says UTF-8; without it ZIP means
+ * CP437, but Korean Windows Explorer writes CP949, and Info-ZIP/Python write UTF-8 without the flag. So strict UTF-8
+ * is tried first (a CP949 name is almost never valid UTF-8), then CP949 (`euc-kr` is the WHATWG label for it), and
+ * a name that is neither is read as lossy UTF-8. macOS writes NFD, Windows and Linux NFC: normalizing makes the
+ * same Korean name one string whatever made the archive.
+ */
+export function decodeZipName(raw: Uint8Array, utf8Flag: boolean): string {
+	const labels = utf8Flag ? ["utf-8"] : ["utf-8", "euc-kr"];
+	for (const label of labels) {
+		try {
+			return new TextDecoder(label, { fatal: true }).decode(raw).normalize("NFC");
+		} catch {
+			// Not this encoding; try the next.
+		}
+	}
+	return new TextDecoder("utf-8", { fatal: false }).decode(raw).normalize("NFC");
+}
+
 /** MS-DOS date/time pair as ZIP stores it; null for the zeroed or out-of-range stamps some tools write. */
 function dosTime(date: number, time: number): number | null {
 	const month = (date >> 5) & 15;
@@ -70,9 +89,10 @@ export function listZipEntries(bytes: Uint8Array, base = 0): readonly ZipEntry[]
 		const nameLength = u16(bytes, offset + 28);
 		const extraLength = u16(bytes, offset + 30);
 		const commentLength = u16(bytes, offset + 32);
+		const utf8Flag = (u16(bytes, offset + 8) & 0x0800) !== 0;
 		const headerOffset = u32(bytes, offset + 42);
 		const nameStart = offset + 46;
-		const name = new TextDecoder("utf-8", { fatal: false }).decode(bytes.subarray(nameStart, nameStart + nameLength));
+		const name = decodeZipName(bytes.subarray(nameStart, nameStart + nameLength), utf8Flag);
 		entries.push({ name, compressedSize, uncompressedSize, modified, method, headerOffset });
 		offset = nameStart + nameLength + extraLength + commentLength;
 	}
