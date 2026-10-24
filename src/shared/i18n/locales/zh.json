@@ -113,6 +113,18 @@
       "edit": "前往路径",
       "invalid": "请输入要前往的路径",
       "notFound": "找不到 \"{{path}}\""
+    },
+    "convert": {
+      "title": "转换为其他格式",
+      "message": "将“{{name}}”转换为“{{newName}}”。原文件怎么处理？",
+      "keep": "保留原文件",
+      "replace": "替换原文件",
+      "replaceHint": "替换后，原文件会移到废纸篓。",
+      "working": "正在转换为“{{newName}}”…",
+      "workingHint": "首次转换时需要下载转换引擎，可能会花更长时间。",
+      "progressAria": "转换进行中",
+      "unsupported": "不支持从 {{from}} 转换为 {{to}}，因此名称没有更改。",
+      "replaced": "{{name}} — 已转换，原文件已移到废纸篓"
     }
   },
   "contextMenu": {
@@ -1213,7 +1225,8 @@
       "invalidPaths": "文件路径无效。",
       "unknownAction": "未知的文件操作。",
       "invalidAnchor": "共享位置无效。",
-      "invalidServiceRequest": "服务请求无效。"
+      "invalidServiceRequest": "服务请求无效。",
+      "invalidConversionRequest": "转换请求无效。"
     },
     "dialogs": {
       "notificationBody": "通知已开启。",
@@ -1369,6 +1382,18 @@
         "invalidRemoval": "要恢复的规则格式不正确。",
         "duplicateRule": "规则“{{id}}”已存在，无法恢复。"
       }
+    },
+    "convert": {
+      "notConvertible": "{{name}} 无法转换为 {{extension}} 格式。",
+      "invalidName": "不能用作转换后文件的名称：{{name}}",
+      "sourceMissing": "找不到要转换的文件：{{name}}",
+      "nameTaken": "已存在名为“{{name}}”的文件或文件夹",
+      "cancelled": "已取消转换 {{name}}。",
+      "failed": "无法转换 {{name}}：{{reason}}",
+      "unknownReason": "未知错误",
+      "noOutput": "转换为 {{name}} 没有生成文件。",
+      "done": "{{name}} — 已转换",
+      "doneFolder": "{{name}} — 已转换（文件夹中有 {{count}} 个文件）"
     }
   },
   "quickLook": {

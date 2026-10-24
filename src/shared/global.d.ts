@@ -3,6 +3,7 @@ import type { AccountBridge } from "./account-contract";
 import type { AnalyticsBridge } from "./analytics-contract";
 import type { ActionsBridge } from "./actions-contract";
 import type { AutoRagBridge } from "./bridge";
+import type { ConversionBridge } from "./conversion-contract";
 import type { FsBridge } from "./fs-contract";
 import type { IndexActivityBridge } from "./index-activity-contract";
 import type { LiveBridge } from "./live-contract";
@@ -25,6 +26,7 @@ declare global {
 			readonly appUpdate: AppUpdateBridge;
 			readonly account: AccountBridge;
 			readonly automations: AutomationBridge;
+			readonly conversion: ConversionBridge;
 			readonly indexActivity: IndexActivityBridge;
 			readonly live: LiveBridge;
 			readonly modelDownload: ModelDownloadBridge;
