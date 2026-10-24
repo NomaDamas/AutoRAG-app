@@ -1915,14 +1915,14 @@ export function useFinderController(
 				const active = current.id === pane.activeId;
 				return {
 					id: current.id,
-					title: tabTitle(current, { isActive: active, query }),
+					title: current.path === trashLocationPath ? t("places.trash") : tabTitle(current, { isActive: active, query }),
 					active,
 					flash: current.flash,
 					aiSearch: current.path === AI_SEARCH_PATH,
 				};
 			}),
 		// `t` changes identity with the language, so fixed titles (Settings, AI Search) re-translate.
-		[pane, query, t],
+		[pane, query, t, trashLocationPath],
 	);
 
 	const contextMenuEntries = useMemo<readonly FinderMenuEntry[]>(() => {
