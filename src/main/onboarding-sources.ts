@@ -1,6 +1,8 @@
 import { join } from "node:path";
+import { kakaoSupported } from "../shared/messenger-platform";
 import type { DetectedSource, SourceDetection, SourceId } from "../shared/onboarding-contract";
 import { isJsonObject } from "../shared/settings-contract";
+import { ensureMessengerConfig } from "./messenger-config";
 
 /**
  * The sources step lists only connectors that are already installed, signed in,
@@ -26,7 +28,11 @@ export interface SourceDetectionDeps {
 	readonly readFileText: (path: string) => Promise<string>;
 }
 
-const SOURCE_ORDER: readonly SourceId[] = ["kakao", "slack", "discord", "telegram", "whatsapp", "mailcrawl", "github", "obsidian"];
+/** Every connector the step can find on this host, in display order; KakaoTalk is a Mac-only app. */
+function sourceOrder(platform: NodeJS.Platform): readonly SourceId[] {
+	const all: readonly SourceId[] = ["kakao", "slack", "discord", "telegram", "whatsapp", "mailcrawl", "github", "obsidian"];
+	return kakaoSupported(platform) ? all : all.filter((id) => id !== "kakao");
+}
 const GITHUB_REPO_LIMIT = 5;
 const MAILCRAWL_ACCOUNT_LIMIT = 5;
 /** mailcrawl's own instance-id rule; an account outside it cannot be registered. */
@@ -98,7 +104,7 @@ function parseCount(output: string): number {
 
 /** KakaoTalk for Mac: the app, its container, a cached or verifiable login, and readable db files. */
 async function detectKakao(deps: SourceDetectionDeps): Promise<DetectedSource | null> {
-	if (deps.platform !== "darwin") return null;
+	if (!kakaoSupported(deps.platform)) return null;
 	const doctor = await runJsonObject(deps, "lazykatok", ["doctor", "--macos-probe", "--json"]);
 	const adapter = isJsonObject(doctor?.source_adapter) ? doctor.source_adapter : null;
 	const macos = isJsonObject(adapter?.macos) ? adapter.macos : null;
@@ -118,6 +124,8 @@ async function detectKakao(deps: SourceDetectionDeps): Promise<DetectedSource | 
 
 async function detectSlack(deps: SourceDetectionDeps): Promise<DetectedSource | null> {
 	if (!(await hasCommand(deps, "slacrawl"))) return null;
+	// Windows: slacrawl cannot find Slack Desktop by itself; its default config is pointed at it first.
+	await ensureMessengerConfig("slacrawl", deps);
 	const query = async (sql: string): Promise<number> => {
 		try {
 			return parseCount(await deps.run("slacrawl", ["--format", "json", "sql", sql]));
@@ -126,10 +134,20 @@ async function detectSlack(deps: SourceDetectionDeps): Promise<DetectedSource | 
 		}
 	};
 	const workspaces = await query("select count(*) as n from workspaces");
-	if (workspaces <= 0) return null;
-	const channels = await query("select count(*) as n from channels");
-	const messages = await query("select count(*) as n from messages");
-	return { id: "slack", facts: { workspaces, channels, messages } };
+	if (workspaces > 0) {
+		const channels = await query("select count(*) as n from channels");
+		const messages = await query("select count(*) as n from messages");
+		return { id: "slack", facts: { workspaces, channels, messages } };
+	}
+	// Nothing archived yet. On Windows the desktop app itself is the source: `doctor` reports how many workspaces
+	// it has signed in, and the first index imports them with `sync --source wiretap`.
+	if (deps.platform !== "win32") return null;
+	const doctor = await runJsonObject(deps, "slacrawl", ["--json", "doctor"]);
+	const desktop = isJsonObject(doctor?.desktop_source) ? doctor.desktop_source : null;
+	const summary = isJsonObject(desktop?.summary) ? desktop.summary : null;
+	if (desktop === null || desktop.available !== true) return null;
+	const signedIn = positiveInt(summary?.workspace_count);
+	return signedIn > 0 ? { id: "slack", facts: { workspaces: signedIn } } : null;
 }
 
 /**
@@ -138,6 +156,8 @@ async function detectSlack(deps: SourceDetectionDeps): Promise<DetectedSource | 
  * both are required here too, plus a dry run that finds messages to import.
  */
 async function detectDiscord(deps: SourceDetectionDeps): Promise<DetectedSource | null> {
+	// Windows: `doctor` stops at "config file not found" and never reports the database; an existing config fixes that.
+	await ensureMessengerConfig("discrawl", deps);
 	const doctor = await runJsonObject(deps, "discrawl", ["--json", "doctor"]);
 	if (doctor === null || doctor.config !== "ok" || doctor.database !== "ok") return null;
 	const tap = await runJsonObject(deps, "discrawl", ["--json", "wiretap", "--dry-run"]);
@@ -236,7 +256,7 @@ async function detectObsidian(deps: SourceDetectionDeps): Promise<DetectedSource
  * Probes every connector concurrently and reports each usable one through
  * `onFound` the moment its own probe finishes, so a fast probe (KakaoTalk,
  * WhatsApp: ~0.2s) is never held back by a slow one (IMAP login: seconds). The
- * resolved value is the full list in `SOURCE_ORDER`, for callers that need all
+ * resolved value is the full list in `sourceOrder`, for callers that need all
  * the facts at once (the indexing handoff).
  */
 export async function detectSources(
@@ -254,7 +274,7 @@ export async function detectSources(
 		obsidian: detectObsidian,
 	};
 	const results = await Promise.all(
-		SOURCE_ORDER.map(async (id) => {
+		sourceOrder(deps.platform).map(async (id) => {
 			const source = await detectors[id](deps).catch(() => null);
 			if (source !== null) onFound?.(source);
 			return source;

@@ -146,23 +146,23 @@ describe("tabTitle", () => {
 	const tab = { path: "Documents/Finance/2026 Q3" };
 
 	it("shows the last path segment", () => {
-		expect(tabTitle(tab, { isActive: false, query: "" })).toBe("2026 Q3");
+		expect(tabTitle(tab, { query: "" })).toBe("2026 Q3");
 	});
 
-	it("shows the search query on the active tab", () => {
-		expect(tabTitle(tab, { isActive: true, query: "예산" })).toBe('"예산" 검색');
+	it("shows the tab's own search query", () => {
+		expect(tabTitle(tab, { query: "예산" })).toBe('"예산" 검색');
 	});
 
-	it("ignores the query on inactive tabs", () => {
-		expect(tabTitle(tab, { isActive: false, query: "예산" })).toBe("2026 Q3");
+	it("keeps the folder name when the tab's own query is blank", () => {
+		expect(tabTitle(tab, { query: "  " })).toBe("2026 Q3");
 	});
 
 	it("titles Settings in the Interface language and ignores the search query", async () => {
-		expect(tabTitle({ path: SETTINGS_PATH }, { isActive: true, query: "model" })).toBe("설정");
+		expect(tabTitle({ path: SETTINGS_PATH }, { query: "model" })).toBe("설정");
 		await setAppLanguage("en");
 		try {
-			expect(tabTitle({ path: SETTINGS_PATH }, { isActive: true, query: "model" })).toBe("Settings");
-			expect(tabTitle(tab, { isActive: true, query: "budget" })).toBe('Search "budget"');
+			expect(tabTitle({ path: SETTINGS_PATH }, { query: "model" })).toBe("Settings");
+			expect(tabTitle(tab, { query: "budget" })).toBe('Search "budget"');
 		} finally {
 			await setAppLanguage("ko");
 		}
@@ -191,7 +191,7 @@ describe("openOrSelectSettingsTab", () => {
 
 describe("AI Search tabs", () => {
 	it("titles an AI Search tab and ignores the search query", () => {
-		expect(tabTitle({ path: AI_SEARCH_PATH }, { isActive: true, query: "budget" })).toBe("AI 검색");
+		expect(tabTitle({ path: AI_SEARCH_PATH }, { query: "budget" })).toBe("AI 검색");
 	});
 
 	it("treats Settings and AI Search as virtual paths, never folders", () => {
@@ -355,9 +355,9 @@ describe("openOrSelectFolderTab (dazzi <folder>)", () => {
 
 describe("Automations tabs", () => {
 	it("titles an Automations tab in the interface language and ignores the search query", async () => {
-		expect(tabTitle({ path: AUTOMATIONS_PATH }, { isActive: true, query: "budget" })).toBe("자동화");
+		expect(tabTitle({ path: AUTOMATIONS_PATH }, { query: "budget" })).toBe("자동화");
 		await setAppLanguage("en");
-		expect(tabTitle({ path: AUTOMATIONS_PATH }, { isActive: true, query: "budget" })).toBe("Automations");
+		expect(tabTitle({ path: AUTOMATIONS_PATH }, { query: "budget" })).toBe("Automations");
 		await setAppLanguage("ko");
 	});
 
