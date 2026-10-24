@@ -48,6 +48,15 @@ export function volumeLabel(path: string): string {
 	return "Macintosh HD";
 }
 
+/**
+ * The drive (`C:\`) or share (`\\server\share\`) a Windows path sits on, or null for any other path. The path bar
+ * shows it as the top folder of every Windows location, not only of the ones under `Users`.
+ */
+export function windowsRootPath(path: string): string | null {
+	const root = pathRoot(path);
+	return root !== null && root.separator === "\\" ? root.prefix : null;
+}
+
 function separatorOf(path: string): "/" | "\\" {
 	const root = pathRoot(path);
 	if (root !== null) {
