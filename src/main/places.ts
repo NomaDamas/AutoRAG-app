@@ -29,6 +29,7 @@ import { basename, join, win32 } from "node:path";
 import type { FsLocation, FsLocationIcon } from "../shared/fs-contract";
 import type { KnownFolders } from "../shared/fs-worker-contract";
 import { errorMessage, hasErrorCode, isAvailable, pathExists } from "./fs-entry";
+import { POWERSHELL_UTF8_OUTPUT } from "./powershell-output";
 
 /** Runs one OS command and resolves its stdout; rejects with stderr (or the spawn error) verbatim. */
 export type PlaceCommandRunner = (command: string, args: readonly string[]) => Promise<string>;
@@ -167,6 +168,7 @@ interface LogicalDisk {
 }
 
 const LOGICAL_DISKS_SCRIPT =
+	`${POWERSHELL_UTF8_OUTPUT}; ` +
 	"Get-CimInstance Win32_LogicalDisk | Select-Object DeviceID,VolumeName,DriveType,ProviderName | ConvertTo-Json -Compress";
 
 /** powershell.exe flags ahead of the `-Command` script. */

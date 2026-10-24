@@ -313,7 +313,8 @@ export function aiPanelTabs(
 	return kept.length === mounted.length && added.length === 0 ? mounted : [...kept, ...added];
 }
 
-export function tabTitle(tab: { readonly path: string }, view: { readonly isActive: boolean; readonly query: string }): string {
+/** `view.query` is the search text of this very tab (searches are per tab), not of whichever tab is in front. */
+export function tabTitle(tab: { readonly path: string }, view: { readonly query: string }): string {
 	if (tab.path === SETTINGS_PATH) {
 		return t("places.settings");
 	}
@@ -324,7 +325,7 @@ export function tabTitle(tab: { readonly path: string }, view: { readonly isActi
 		return t("places.automations");
 	}
 	const query = view.query.trim();
-	if (view.isActive && query !== "") {
+	if (query !== "") {
 		return t("finderComponents.searchTitle", { query });
 	}
 	return isTagPath(tab.path) ? tagNameOf(tab.path) : basename(tab.path) || tab.path;
