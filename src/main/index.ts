@@ -107,6 +107,7 @@ import { installCli } from "./cli-install";
 import { initErrorReporting, setErrorReportingEnabled } from "./error-reporting";
 import { readErrorReportingEnabled } from "./error-report-core";
 import { createAnalytics, createInstallIdStore, readUsageAnalyticsEnabled, resolveAnalyticsTarget, settingChangeEvents } from "./analytics-core";
+import { hasInWindowMenuBar, mainWindowChrome, windowControlsOverlay, type WindowPhase } from "./window-chrome";
 import { createPostHogSink } from "./analytics";
 
 const execFileAsync = promisify(execFile);
@@ -208,8 +209,8 @@ function createMainWindow(devLabel: DevLabel | null, appearance: AppAppearance, 
 		title: formatWindowTitle(APP_FULL_NAME, APP_VERSION, devLabel),
 		// Windows and Linux take the window/taskbar icon here; macOS uses the bundle icon (the Dock icon below when unpackaged).
 		...(process.platform === "darwin" ? {} : { icon: windowIconPath }),
-		// v7: traffic lights overlay the sidebar header / toolbar (macOS-native chrome).
-		titleBarStyle: "hiddenInset",
+		// The native title strip is gone on every OS (see `window-chrome.ts`): macOS keeps its traffic lights, Windows/Linux get the window controls only.
+		...mainWindowChrome(process.platform, appearance, pending ? "onboarding" : "finder"),
 		webPreferences: {
 			preload: join(import.meta.dirname, "../preload/index.mjs"),
 			contextIsolation: true,
@@ -222,6 +223,9 @@ function createMainWindow(devLabel: DevLabel | null, appearance: AppAppearance, 
 			],
 		},
 	});
+
+	// No `File Edit View Window` strip inside the window on Windows/Linux: nothing here is reachable only through it.
+	if (hasInWindowMenuBar(process.platform)) window.removeMenu();
 
 	// The renderer's static <title> would otherwise replace the window title.
 	window.webContents.on("page-title-updated", (event) => {
@@ -245,6 +249,12 @@ let fsWorker: FsWorkerHost | null = null;
 let providerAuthService: ProviderAuthService | null = null;
 let mainWindow: BrowserWindow | null = null;
 let currentAppearance: AppAppearance = "light";
+/** What the main window's page shows now; the window-controls overlay is as tall as that page's top bar. */
+let windowPhase: WindowPhase = "finder";
+function syncWindowControls(): void {
+	if (!hasInWindowMenuBar(process.platform) || mainWindow === null || mainWindow.isDestroyed()) return;
+	mainWindow.setTitleBarOverlay(windowControlsOverlay(currentAppearance, windowPhase));
+}
 let currentLanguage: AppSettings["language"] = "ko";
 function sendToMainWindow(channel: string, payload: unknown): void {
 	if (mainWindow === null || mainWindow.isDestroyed()) return;
@@ -535,6 +545,8 @@ app.whenReady().then(async () => {
 		currentAppearance = appearance;
 		nativeTheme.themeSource = appearance;
 		sendToAllWindows(APPEARANCE_CHANNELS.changed, appearance);
+		// The Windows/Linux window buttons are drawn by the window, not the page: recolor their symbols with the theme.
+		syncWindowControls();
 	};
 	/** Main's own messages, the fs worker's, and Quick Look follow the Interface language; the Finder applies it itself. */
 	const applyLanguage = (language: AppSettings["language"]): void => {
@@ -932,6 +944,8 @@ app.whenReady().then(async () => {
 			analytics.track("onboarding_completed", {});
 			const window = mainWindow;
 			if (window === null || window.isDestroyed()) return;
+			windowPhase = "finder";
+			syncWindowControls();
 			// Centering can move a border-spanning window onto another display.
 			// Apply the target size both before and after centering so the Finder
 			// hand-off uses the display where the window actually ended up.
@@ -948,6 +962,7 @@ app.whenReady().then(async () => {
 	});
 	registerOnboardingIpcHandlers(onboardingService);
 	const openMainWindow = (): BrowserWindow => {
+		windowPhase = onboardingService.pending() ? "onboarding" : "finder";
 		const window = createMainWindow(devLabel, currentAppearance, onboardingService.pending());
 		const clearWatchSet = (): void => {
 			void workerHost.client.call("setWatchSet", [[]]);

@@ -21,6 +21,7 @@ import type {
 } from "../../../shared/onboarding-contract";
 import type { LocalSpecVerdict } from "../../../shared/local-embedding-spec";
 import { CLOUD_FILES_PER_MINUTE, LOCAL_FILES_PER_MINUTE, NONE_FILES_PER_MINUTE, NONE_MIN_MINUTES } from "../../../shared/onboarding-contract";
+import { datasourceSupported } from "../../../shared/messenger-platform";
 
 export type { EmbedMode };
 
@@ -405,10 +406,15 @@ const CONNECTABLE_BRANDS: readonly { readonly brand: string; readonly label: str
 	{ brand: "googledrive", label: "Google Drive" },
 ];
 
-/** "Connect later" chips: every connectable brand the probes did not already find. */
-export function connectableLater(detected: readonly { readonly id: SourceId }[]): readonly { readonly brand: string; readonly label: string }[] {
+/** "Connect later" chips: every connectable brand the probes did not already find, minus the ones this OS cannot run (KakaoTalk off macOS). */
+export function connectableLater(
+	detected: readonly { readonly id: SourceId }[],
+	platform: string = "darwin",
+): readonly { readonly brand: string; readonly label: string }[] {
 	const found = new Set<SourceId>(detected.map((source) => source.id));
-	return CONNECTABLE_BRANDS.filter((entry) => entry.sourceId === undefined || !found.has(entry.sourceId));
+	return CONNECTABLE_BRANDS.filter(
+		(entry) => (entry.sourceId === undefined || !found.has(entry.sourceId)) && (entry.sourceId === undefined || datasourceSupported(entry.sourceId, platform)),
+	);
 }
 
 /** The welcome feature card's source-token grid order. */

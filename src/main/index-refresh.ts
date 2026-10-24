@@ -15,6 +15,7 @@ import {
 } from "./embedding-batch";
 import { ensureEmbeddingForConfig, localModelMissing } from "./embedding-daemon";
 import { createMinSyncWatchdog, EMBEDDING_STALL_RETRIES, runWithStallRetry } from "./minsync-watchdog";
+import { ensureMessengerConfigsFor } from "./messenger-config";
 import { takeSharedParseFailures } from "./parse-isolation";
 import { runWithRecovery } from "./refresh-recovery";
 import { findUnavailableRoots } from "./search-roots";
@@ -112,6 +113,10 @@ async function runRefresh(
 	}
 	// Everything that embeds during this run (MinSync, mailcrawl, the chat sidecars) finds the local server by its state files.
 	if (semantic) await ensureEmbeddingForConfig(raw);
+	// Windows: discrawl/slacrawl cannot find the messenger apps' data without a config at their default path.
+	if (selected.includes("datasources")) {
+		await ensureMessengerConfigsFor(raw.datasources, { platform: process.platform, env: deps.env, home: deps.env.USERPROFILE ?? deps.env.HOME ?? "" });
+	}
 	// A refresh re-walks the folders, so a dot-folder created minutes ago is excluded too.
 	const effective = await applyAppIndexing(resolveConfigReadOnly(input), raw, { fresh: true, configPath });
 	const diagnostics: ConfigRefreshDiagnostic[] = [];

@@ -2273,6 +2273,9 @@
       "appDownload": "下载 {{name}}",
       "appNeeded": "需要",
       "appInstalled": "已安装",
+      "appHintMissingPc": "要获取 {{name}} 内容，此电脑上必须安装 {{name}} 应用。",
+      "appHintInstalledPc": "从此电脑上的 {{name}} 应用获取内容。",
+      "appUnknown": "未检查",
       "refreshName": "刷新",
       "refreshLast": "上次刷新 {{date}}",
       "refreshNever": "尚未获取任何内容。",
@@ -2288,7 +2291,8 @@
       "removeHint": "仅从 Dazzi 搜索中移除，源应用的数据不会被删除。",
       "confirmTitle": "要断开此连接吗？",
       "confirmBody": "将把 '{{alias}}' 连接从 Dazzi 搜索中移除。源应用的数据不会被删除。",
-      "macOnlyNote": "Apple 日历和提醒事项只能通过 macOS 的 EventKit 读取，因此此连接在这台电脑上无效。"
+      "macOnlyNote": "Apple 日历和提醒事项只能通过 macOS 的 EventKit 读取，因此此连接在这台电脑上无效。",
+      "kakaoOnlyNote": "KakaoTalk 通过仅支持 Mac 应用的 lazykatok 读取，因此此连接在这台电脑上无效。"
     },
     "scope": {
       "title": "搜索范围",
