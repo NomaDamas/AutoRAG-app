@@ -74,7 +74,7 @@ export function parseKindStdout(stdout: string): string | null {
 
 function defaultRun(query: KindQuery): Promise<string | null> {
 	return new Promise((resolve, reject) => {
-		execFile(query.command, [...query.args], { timeout: KIND_TIMEOUT_MS, maxBuffer: KIND_MAX_BUFFER }, (error, stdout) => {
+		execFile(query.command, [...query.args], { timeout: KIND_TIMEOUT_MS, maxBuffer: KIND_MAX_BUFFER, windowsHide: true }, (error, stdout) => {
 			if (error) {
 				reject(error);
 				return;

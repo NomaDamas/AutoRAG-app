@@ -893,6 +893,15 @@ Bin) and scripts that genuinely need macOS log a skip instead of failing.
 Lane logs and `summary.json` land in `.omo/evidence/win-qa/`. The sweep also
 runs in CI (`.github/workflows/qa-windows.yml`).
 
+Every helper program the app starts on Windows (PowerShell for the Kind
+column, `tasklist`, `schtasks`, `reg`, `dupey`, the file-action tools) is
+started with `windowsHide: true`; without it Windows flashes a black console
+window each time one starts, and opening a folder starts one for every
+extension it has not seen. `test/windows-hidden-console.test.ts` pins the
+option, and the `no-console-flash` lane (`run-qa-finder-no-console-flash.mjs`)
+double-clicks in and out of folders while a watcher process polls for visible
+console windows, after proving the watcher catches a deliberately unhidden one.
+
 ## Releases and installers
 
 Publishing a GitHub release builds `Dazzi-<version>-arm64.dmg` and
