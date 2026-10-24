@@ -113,6 +113,18 @@
       "edit": "Go to path",
       "invalid": "Enter a path to go to",
       "notFound": "\"{{path}}\" can't be found"
+    },
+    "convert": {
+      "title": "Convert to another format",
+      "message": "Convert “{{name}}” to “{{newName}}”. What should happen to the original?",
+      "keep": "Keep original",
+      "replace": "Replace original",
+      "replaceHint": "Replacing moves the original to the Trash.",
+      "working": "Converting to “{{newName}}”…",
+      "workingHint": "The first conversion can take longer while the conversion engine downloads.",
+      "progressAria": "Conversion in progress",
+      "unsupported": "Converting {{from}} to {{to}} is not supported, so the name was not changed.",
+      "replaced": "{{name}} — converted; the original moved to the Trash"
     }
   },
   "contextMenu": {
@@ -1213,7 +1225,8 @@
       "invalidPaths": "The file path is invalid.",
       "unknownAction": "Unknown file action.",
       "invalidAnchor": "The share anchor is invalid.",
-      "invalidServiceRequest": "The service request is invalid."
+      "invalidServiceRequest": "The service request is invalid.",
+      "invalidConversionRequest": "The conversion request is invalid."
     },
     "dialogs": {
       "notificationBody": "Notifications are on.",
@@ -1369,6 +1382,18 @@
         "invalidRemoval": "The rule to restore is not in a valid format.",
         "duplicateRule": "A rule named “{{id}}” already exists, so it cannot be restored."
       }
+    },
+    "convert": {
+      "notConvertible": "{{name}} cannot be converted to {{extension}}.",
+      "invalidName": "Not usable as the name of the converted file: {{name}}",
+      "sourceMissing": "The file to convert could not be found: {{name}}",
+      "nameTaken": "A file or folder named \"{{name}}\" already exists",
+      "cancelled": "Conversion of {{name}} was cancelled.",
+      "failed": "Could not convert {{name}}: {{reason}}",
+      "unknownReason": "unknown error",
+      "noOutput": "Converting to {{name}} produced no file.",
+      "done": "{{name}} — converted",
+      "doneFolder": "{{name}} — converted ({{count}} files in a folder)"
     }
   },
   "quickLook": {

@@ -20,6 +20,8 @@ import { APP_UPDATE_CHANNELS } from "../shared/update-contract";
 import { ANALYTICS_CHANNELS } from "../shared/analytics-contract";
 import type { AppUpdaterService } from "./app-updater";
 import type { ActionService } from "./action-service";
+import type { ConversionService } from "./conversion-service";
+import { CONVERSION_CHANNELS, isConversionRequest } from "../shared/conversion-contract";
 import type { Analytics } from "./analytics-core";
 import type { IndexActivityService } from "./index-activity";
 import type { AutomationService } from "./automation-service";
@@ -81,6 +83,22 @@ export function registerActionsIpcHandlers(service: ActionService): void {
 		if (!isActionPaths(paths)) throw new Error(t("main.ipc.invalidPaths"));
 		if (!isActionAnchor(anchor)) throw new Error(t("main.ipc.invalidAnchor"));
 		return service.share(paths, anchor, BrowserWindow.fromWebContents(event.sender));
+	});
+}
+
+/** Convert-on-rename: ask what a rename means, run the conversion into the new name, or stop one. */
+export function registerConversionIpcHandlers(service: ConversionService): void {
+	ipcMain.handle(CONVERSION_CHANNELS.plan, (_event, oldName: unknown, newName: unknown) => {
+		if (typeof oldName !== "string" || typeof newName !== "string") throw new Error(t("main.ipc.invalidConversionRequest"));
+		return service.plan(oldName, newName);
+	});
+	ipcMain.handle(CONVERSION_CHANNELS.run, (_event, request: unknown) => {
+		if (!isConversionRequest(request)) throw new Error(t("main.ipc.invalidConversionRequest"));
+		return service.run(request);
+	});
+	ipcMain.handle(CONVERSION_CHANNELS.cancel, (_event, id: unknown) => {
+		if (typeof id !== "string") throw new Error(t("main.ipc.invalidConversionRequest"));
+		return service.cancel(id);
 	});
 }
 
