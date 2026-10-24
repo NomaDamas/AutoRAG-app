@@ -69,9 +69,12 @@ model is present. `stage-tools.mjs` still stages a copy under
 packages it.
 
 "Newest" is resolved at build time, so each release ships current dependencies.
-Three tools carry a hard version floor — `minsync` ≥ 0.4.11, `@nomadamas/mailcrawl`
-≥ 0.2.2, `lazykatok` ≥ 0.3.3 — each the first release that carries the shared
-`minsync serve` embedding route; the stager fails rather than ship an older one.
+Three tools carry a hard version floor (`scripts/release/version-floors.mjs`, with
+the reason for each): `minsync` ≥ 0.4.12, `@nomadamas/mailcrawl` ≥ 0.2.2,
+`lazykatok` ≥ 0.3.3. All three reach the shared `minsync serve` embedding route;
+0.4.12 is also the first MinSync that keeps one failed chunk from aborting a
+healthy sync and cuts remote inputs below the model's context. The stager fails
+rather than ship an older one.
 `components-<platform>.json` on the release lists exactly what shipped (name,
 version, source, sha256), and the build fails rather than ship a download that
 does not match its published digest.

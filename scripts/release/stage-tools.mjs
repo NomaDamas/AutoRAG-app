@@ -49,6 +49,7 @@ import {
 	mb,
 	run,
 } from "./lib.mjs";
+import { VERSION_FLOORS, assertVersionFloor } from "./version-floors.mjs";
 
 const args = process.argv.slice(2);
 const flag = (name) => args.includes(name);
@@ -87,39 +88,6 @@ function installBinary(from, name) {
 	return destination;
 }
 
-/**
- * Hard version floors: the first release of each tool that carries the shared
- * `minsync serve` embedding daemon the app now starts at launch.
- *  - `minsync` 0.4.11 adds `minsync serve` (the loopback embedding server).
- *  - `@nomadamas/mailcrawl` 0.2.2 gains the openai/tei providers, so it can embed
- *    through the daemon's OpenAI route instead of loading its own model.
- *  - `lazykatok` 0.3.3 gains the OpenAI-compatible embedder, the same route.
- * A resolved version below its floor fails the stage instead of shipping a tool
- * that cannot reach the daemon (and would embed in-process or not at all).
- */
-const VERSION_FLOORS = {
-	minsync: "0.4.11",
-	"@nomadamas/mailcrawl": "0.2.2",
-	lazykatok: "0.3.3",
-};
-
-/** Compare dotted numeric versions: `a > b` -> positive, `a < b` -> negative, equal -> 0. */
-function compareVersions(a, b) {
-	const left = a.split(".").map((part) => Number.parseInt(part, 10) || 0);
-	const right = b.split(".").map((part) => Number.parseInt(part, 10) || 0);
-	for (let index = 0; index < Math.max(left.length, right.length); index += 1) {
-		const diff = (left[index] ?? 0) - (right[index] ?? 0);
-		if (diff !== 0) return diff;
-	}
-	return 0;
-}
-
-/** Fail the stage when a resolved tool is older than the floor that carries the shared embedding daemon. */
-function assertVersionFloor(name, version, floor) {
-	if (compareVersions(version, floor) < 0) {
-		throw new Error(`${name} ${version} is below the required ${floor}: this build embeds through the \`minsync serve\` daemon, which ${name} ${floor} is the first to support. Pin a newer ${name} or wait for its release.`);
-	}
-}
 
 /** Newest GitHub release asset matching `pattern`; the server-side sha256 digest verifies the download. */
 async function githubAsset(repo, pattern) {
