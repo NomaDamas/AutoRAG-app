@@ -86,7 +86,7 @@
   --ql-hud-pill: rgba(255,255,255,0.16);
   --ql-hud-track: rgba(255,255,255,0.25);
   --ql-hud-badge: rgba(20,20,22,0.5);
-  --ql-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", "Apple SD Gothic Neo", "Segoe UI", "Malgun Gothic", "Noto Sans KR", sans-serif;
+  --ql-font: "Pretendard Variable", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", "Apple SD Gothic Neo", "Segoe UI", "Malgun Gothic", "Noto Sans KR", sans-serif;
   --ql-font-mono: "SF Mono", ui-monospace, Menlo, Consolas, "Cascadia Mono", "JetBrains Mono", "D2Coding", "Noto Sans KR", monospace;
   --backdrop-ql-hud: blur(24px) saturate(180%);
   --backdrop-ql-float: blur(20px) saturate(180%);
@@ -235,7 +235,7 @@
   --vtag-exact-text: #B45309;
 
   /* -------------------------------------------------------------- §3 Typography */
-  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Apple SD Gothic Neo", Pretendard, system-ui, sans-serif;
+  --font-sans: "Pretendard Variable", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Apple SD Gothic Neo", "Segoe UI", "Malgun Gothic", system-ui, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
 
   --font-size-title: 18px;

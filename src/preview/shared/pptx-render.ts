@@ -23,7 +23,7 @@ export interface PptxDom {
 	createElement(tag: string): PptxDomElement;
 }
 
-const FONT_FALLBACK = ['"Apple SD Gothic Neo"', '"Malgun Gothic"', '"Noto Sans KR"', "sans-serif"];
+const FONT_FALLBACK = ['"Pretendard Variable"', '"Apple SD Gothic Neo"', '"Malgun Gothic"', '"Noto Sans KR"', "sans-serif"];
 const CJK_FONT = FONT_FALLBACK.join(", ");
 
 function px(emu: number): number {

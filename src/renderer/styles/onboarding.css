@@ -1974,12 +1974,6 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 	filter: drop-shadow(0 16px 28px rgba(0,0,0,.6));
 }
 
-@media (prefers-reduced-motion: reduce) {
-	.onb .si-roaming-loupe {
-		animation: none;
-	}
-}
-
 /* ------------------------------------ embedding choice (none / local / remote)
  * The three modes are compared on the same two axes (power needed, accuracy):
  * a meter's length shows the value's size, its colour whether that value is
@@ -2762,12 +2756,22 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 	}
 }
 
+/* Reduced motion. Chromium reports it when the OS has animation off (on Windows: Settings > Accessibility > Visual
+ * effects > Animation effects, which many PCs ship with off). Decorative loops stop after one pass: shortening only the
+ * duration of an infinite animation restarts it every 0.01 ms and the element strobes. Progress indicators keep moving,
+ * because a spinner or magnifier that stands still reads as a hang. */
 @media (prefers-reduced-motion:reduce) {
-	.onb *,
-	.onb *:before,
-	.onb *:after {
+	.onb *:not(.spin, .si-roaming-loupe),
+	.onb *:not(.spin, .si-roaming-loupe):before,
+	.onb *:not(.spin, .si-roaming-loupe):after {
 		animation-duration: .01ms!important;
+		animation-iteration-count: 1!important;
 		transition-duration: .01ms!important;
+	}
+
+	/* The shine would stay parked at the bar's left edge once its single pass is over. */
+	.onb .ix-bar>span:after {
+		display: none;
 	}
 }
 
