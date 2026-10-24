@@ -2298,6 +2298,9 @@
       "appDownload": "Download {{name}}",
       "appNeeded": "Required",
       "appInstalled": "Installed",
+      "appHintMissingPc": "To fetch {{name}} content, the {{name}} app must be installed on this computer.",
+      "appHintInstalledPc": "Content is fetched from the {{name}} app on this computer.",
+      "appUnknown": "Not checked",
       "refreshName": "Refresh",
       "refreshLast": "Last refreshed {{date}}",
       "refreshNever": "No content fetched yet.",
@@ -2313,7 +2316,8 @@
       "removeHint": "Removed only from Dazzi search; the source app's data is not deleted.",
       "confirmTitle": "Disconnect this connection?",
       "confirmBody": "The '{{alias}}' connection will be removed from Dazzi search. The source app's data is not deleted.",
-      "macOnlyNote": "Apple Calendar and Reminders can only be read through EventKit on macOS, so this connection is inactive on this computer."
+      "macOnlyNote": "Apple Calendar and Reminders can only be read through EventKit on macOS, so this connection is inactive on this computer.",
+      "kakaoOnlyNote": "KakaoTalk is read through lazykatok, which only works with the Mac app, so this connection is inactive on this computer."
     },
     "scope": {
       "title": "Search scope",

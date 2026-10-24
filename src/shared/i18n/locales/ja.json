@@ -2298,6 +2298,9 @@
       "appDownload": "{{name}} をダウンロード",
       "appNeeded": "必要",
       "appInstalled": "インストール済み",
+      "appHintMissingPc": "{{name}} の内容を取り込むには、このコンピューターに {{name}} アプリのインストールが必要です。",
+      "appHintInstalledPc": "このコンピューターの {{name}} アプリから内容を取り込みます。",
+      "appUnknown": "未確認",
       "refreshName": "更新",
       "refreshLast": "最終更新 {{date}}",
       "refreshNever": "まだ内容を取得していません。",
@@ -2313,7 +2316,8 @@
       "removeHint": "Dazzi の検索からのみ削除され、元のアプリのデータは消えません。",
       "confirmTitle": "接続を解除しますか？",
       "confirmBody": "'{{alias}}' 接続を Dazzi の検索から削除します。元のアプリのデータは消えません。",
-      "macOnlyNote": "Apple カレンダーとリマインダーは macOS の EventKit でのみ読み取れるため、このコンピューターでは接続は無効です。"
+      "macOnlyNote": "Apple カレンダーとリマインダーは macOS の EventKit でのみ読み取れるため、このコンピューターでは接続は無効です。",
+      "kakaoOnlyNote": "カカオトークは Mac アプリでのみ動作する lazykatok で読み取るため、このコンピューターでは接続は無効です。"
     },
     "scope": {
       "title": "検索範囲",

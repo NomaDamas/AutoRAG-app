@@ -72,7 +72,7 @@ describe("tag locations", () => {
 	});
 
 	it("titles a tag tab with the tag's name and words its empty state", () => {
-		expect(tabTitle({ path: tagPath("Research") }, { isActive: false, query: "" })).toBe("Research");
+		expect(tabTitle({ path: tagPath("Research") }, { query: "" })).toBe("Research");
 		expect(emptyStateText("", tagPath("Work"))).toBe('"Work" 태그가 붙은 항목이 없습니다');
 	});
 

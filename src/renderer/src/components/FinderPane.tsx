@@ -1,4 +1,5 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent, type ReactElement } from "react";
+import { useTranslation } from "react-i18next";
 import type { AppSettings } from "../../../shared/settings-contract";
 import { isTagPath, RECENTS_PATH, tagNameOf } from "../../../shared/fs-contract";
 import type { FinderSource } from "../data/source";
@@ -83,6 +84,7 @@ export const FinderPane = memo(function FinderPane({
 	draggingTabId,
 	shell,
 }: FinderPaneProps): ReactElement {
+	const { t } = useTranslation();
 	const binding = useMemo(() => ({ pane, focused, canCloseTabs, update: shell.update }), [pane, focused, canCloseTabs, shell]);
 	const finder = useFinderController(shell.source, shell.directoryData, binding, {
 		showHiddenFiles,
@@ -400,7 +402,7 @@ export const FinderPane = memo(function FinderPane({
 						)}
 						<PathBar
 							path={finder.path}
-							crumbs={breadcrumbTrail(finder.path, Number.MAX_SAFE_INTEGER)}
+							crumbs={finder.inTrashLocation ? [{ label: t("places.trash"), path: finder.path, separator: false, isLast: true }] : breadcrumbTrail(finder.path, Number.MAX_SAFE_INTEGER)}
 							selectedName={focusedEntry !== null && focusedEntry.kind === "file" ? focusedEntry.name : null}
 							onNavigate={finder.navigate}
 							onGoToPath={finder.goToPath}

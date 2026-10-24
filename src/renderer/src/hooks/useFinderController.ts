@@ -404,7 +404,24 @@ export function useFinderController(
 		(change: (state: TabsState) => TabsState) => updateWorkspace((workspace) => updatePaneTabs(workspace, paneId, change)),
 		[updateWorkspace, paneId],
 	);
-	const [query, setQueryValue] = useState("");
+	/**
+	 * The search box text belongs to a tab: switching tabs shows that tab's own search (or its folder), instead of
+	 * carrying the active tab's query along and moving the "검색" title onto whichever tab was clicked.
+	 */
+	const [queries, setQueries] = useState<ReadonlyMap<number, string>>(() => new Map());
+	const activeTabIdRef = useRef(tabsState.activeId);
+	activeTabIdRef.current = tabsState.activeId;
+	const query = queries.get(tabsState.activeId) ?? "";
+	const setQueryValue = useCallback((value: string, tabId?: number) => {
+		const id = tabId ?? activeTabIdRef.current;
+		setQueries((current) => {
+			if ((current.get(id) ?? "") === value) return current;
+			const next = new Map(current);
+			if (value === "") next.delete(id);
+			else next.set(id, value);
+			return next;
+		});
+	}, []);
 	const [searchScope, setSearchScope] = useState<SearchScope>("all");
 	const [sort, setSort] = useState<SortState | null>(null);
 	/** The toolbar Group control's criterion; the views render section headers for it. */
@@ -1482,7 +1499,7 @@ export function useFinderController(
 			const target = tabsRef.current.find((current) => current.id === tabId);
 			if (target === undefined) return;
 			updateWorkspace((workspace) => focusTab(workspace, tabId));
-			setQueryValue("");
+			setQueryValue("", tabId);
 			transferDropped(paths, target.path, copy);
 		});
 
@@ -1985,14 +2002,14 @@ export function useFinderController(
 				const active = current.id === pane.activeId;
 				return {
 					id: current.id,
-					title: tabTitle(current, { isActive: active, query }),
+					title: current.path === trashLocationPath ? t("places.trash") : tabTitle(current, { query: queries.get(current.id) ?? "" }),
 					active,
 					flash: current.flash,
 					aiSearch: current.path === AI_SEARCH_PATH,
 				};
 			}),
 		// `t` changes identity with the language, so fixed titles (Settings, AI Search) re-translate.
-		[pane, query, t],
+		[pane, queries, t, trashLocationPath],
 	);
 
 	const contextMenuEntries = useMemo<readonly FinderMenuEntry[]>(() => {

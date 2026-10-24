@@ -631,7 +631,9 @@ export function App(): ReactElement {
 					? t("places.aiSearch")
 					: finder?.searching === true
 						? t("finderComponents.searchTitle", { query: finder.query })
-						: isTagPath(path) ? tagNameOf(path) : basename(path);
+						: finder?.inTrashLocation === true
+							? t("places.trash")
+							: isTagPath(path) ? tagNameOf(path) : basename(path);
 
 	/** The sidebar AI Search item: a drop turns the focused tab into AI Search with the files attached. */
 	const aiSearchDrop = {
