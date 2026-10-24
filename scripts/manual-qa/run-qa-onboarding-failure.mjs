@@ -8,14 +8,14 @@
 //
 // AUTORAG_HOME and AUTORAG_CONFIG point inside a temp dir, so the user's own config
 // and index are never touched. Screenshots go to QA_OUT (or .omo/evidence/).
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { saveMirrorIndex } from "@autorag/librarian";
 import { finderWindow, launchFinder, ROOT } from "./launch-finder.mjs";
-import { rmRetry } from "./platform.mjs";
+import { homeDir, rmRetry } from "./platform.mjs";
 
 const EVIDENCE = process.env.QA_OUT ?? join(ROOT, ".omo/evidence/onboarding-failure");
 mkdirSync(EVIDENCE, { recursive: true });
@@ -55,6 +55,55 @@ async function closedPort() {
 	const server = await listen(() => undefined);
 	await server.close();
 	return server.port;
+}
+
+/** Listens on a given port (one a scenario had closed before), to bring a server back. */
+async function listenOn(port, handler) {
+	const server = createServer(handler);
+	await new Promise((resolve, reject) => {
+		server.once("error", reject);
+		server.listen(port, "127.0.0.1", resolve);
+	});
+	return { port, url: `http://127.0.0.1:${port}`, close: () => new Promise((resolve) => (server.closeAllConnections(), server.close(resolve))) };
+}
+
+/** A deterministic 1024-dimension vector per text: enough for MinSync to build a real index over it. */
+function vectorOf(text) {
+	let seed = 0;
+	for (const char of text) seed = (seed * 31 + char.codePointAt(0)) >>> 0;
+	return Array.from({ length: 1024 }, (_, index) => Math.sin(seed + index * 0.37) / Math.sqrt(512));
+}
+/** A working OpenAI-compatible embedder; `hits` collects the requests it answered, so a scenario can prove it was really used. */
+const embeddingServer = (hits) => (request, response) => {
+	let body = "";
+	request.on("data", (chunk) => {
+		body += chunk;
+	});
+	request.on("end", () => {
+		hits.push(request.url);
+		if (!request.url?.endsWith("/embeddings")) {
+			response.writeHead(404, { "content-type": "application/json" });
+			response.end(JSON.stringify({ error: { message: "not found" } }));
+			return;
+		}
+		const parsed = JSON.parse(body || "{}");
+		const inputs = Array.isArray(parsed.input) ? parsed.input : [parsed.input ?? ""];
+		response.writeHead(200, { "content-type": "application/json" });
+		response.end(JSON.stringify({ object: "list", model: parsed.model, data: inputs.map((text, index) => ({ object: "embedding", index, embedding: vectorOf(String(text)) })) }));
+	});
+};
+
+/** A 32 MB RAM disk (macOS): a volume that really fills up. */
+function ramDisk() {
+	const attach = spawnSync("hdiutil", ["attach", "-nomount", "ram://65536"], { encoding: "utf8" });
+	const device = attach.stdout.trim().split(/\s+/u)[0] ?? "";
+	if (attach.status !== 0 || device === "") throw new Error(`could not create the RAM disk: ${attach.stderr}`);
+	const erase = spawnSync("diskutil", ["erasevolume", "HFS+", "QARAM", device], { encoding: "utf8" });
+	if (erase.status !== 0) {
+		spawnSync("hdiutil", ["detach", device, "-force"]);
+		throw new Error(`could not format the RAM disk: ${erase.stdout} ${erase.stderr}`);
+	}
+	return { device, mount: "/Volumes/QARAM", detach: () => spawnSync("hdiutil", ["detach", device, "-force"]) };
 }
 
 /** One fresh profile, resumed at the indexing step with the given choices. */
@@ -115,7 +164,10 @@ async function stop(state) {
 	state.app = null;
 }
 
+/** `bun run qa script <file> <text>` runs only the scenarios whose name contains <text>. */
+const ONLY = process.argv[2]?.trim() ?? "";
 async function scenario(name, run) {
+	if (ONLY !== "" && !name.includes(ONLY)) return;
 	console.log(`\n== ${name}`);
 	const state = { work: null, app: null };
 	try {
@@ -391,6 +443,163 @@ await scenario("a model that cannot be downloaded: retried by itself, one way on
 	check("title says the model could not be downloaded", (await text(page, ".onb .ix-title")).includes("모델을 받지 못했어요"), await text(page, ".onb .ix-title"));
 	await checkPausedShape(page, "model", { button: "이어서 받기", link: ["임베딩 방식 바꾸기", "일단 Dazzi 열기"] });
 	await shot(page, "12-model-paused");
+});
+
+// 5b. Recovery, for real: the thing that stopped the index is put right while the app is running, and the
+// screens have to notice and carry on without the user redoing anything.
+
+// The embedder is back during the pause: it retries by itself, the pause ends, the index finishes through the
+// restored server, and the app opens with nothing left over.
+await scenario("recovery: the embedder comes back during the pause and the index finishes by itself", async (state) => {
+	const port = await closedPort();
+	Object.assign(state, profile({ embed: "local", embedder: { id: EMBED_ID, dimension: 1024, baseUrl: `http://127.0.0.1:${port}`, apiKeyEnv: "OPENAI_API_KEY" } }));
+	const page = await start(state, { env: { OPENAI_API_KEY: "sk-qa" } });
+	await paused(page);
+	check("it starts paused on the lost connection", (await text(page, ".onb .ix-title")).includes("연결이 끊겼어요"), await text(page, ".onb .ix-title"));
+	const hits = [];
+	const server = await listenOn(port, embeddingServer(hits));
+	try {
+		await page.waitForSelector(".onb .ix.done", { timeout: 90_000 });
+		check("the connection came back and the index finished with no click", true);
+		check("MinSync really embedded through the restored server", hits.length > 1, `${hits.length} requests`);
+		const run = await status(page);
+		check("the run ended as a success with nothing recorded as failed", run.state === "success" && run.failure === null, JSON.stringify({ state: run.state, failure: run.failure }));
+		await shot(page, "16-recovery-offline-back-done");
+		await page.locator(".onb .ix-open-btn").click();
+		await page.waitForSelector(".onb", { state: "detached", timeout: 15_000 });
+		await sleep(1500);
+		const after = await problem(page);
+		check("nothing is left behind in the app", after.failure === null && after.skipped === 0, JSON.stringify(after));
+		check("no banner in the Finder", (await page.locator('[role="alert"]').count()) === 0);
+		check("no renderer errors", state.errors.length === 0, state.errors.slice(0, 3).join(" | "));
+	} finally {
+		await server.close();
+	}
+});
+
+// The user opened the app anyway; the embedder comes back later; the banner's one button puts everything right.
+await scenario("recovery: the banner's button fixes it once the embedder is back", async (state) => {
+	const port = await closedPort();
+	Object.assign(state, profile({ embed: "local", embedder: { id: EMBED_ID, dimension: 1024, baseUrl: `http://127.0.0.1:${port}`, apiKeyEnv: "OPENAI_API_KEY" } }));
+	const page = await start(state, { env: { OPENAI_API_KEY: "sk-qa" } });
+	await paused(page);
+	await page.locator(".onb .ix-links button", { hasText: "일단 Dazzi 열기" }).click();
+	await page.waitForSelector(".onb", { state: "detached", timeout: 15_000 });
+	await page.waitForSelector('[role="alert"]', { timeout: 20_000 });
+	// What a user sees: the keyword index runs first (the sidebar shows progress), then the problem block returns.
+	await until(async () => (await page.locator('.sidebar__activity[data-tone="error"]').count()) === 1, 90_000, "the problem block after the keyword index");
+	await sleep(1500);
+	await shot(page, "17-recovery-banner-before");
+	const hits = [];
+	const server = await listenOn(port, embeddingServer(hits));
+	try {
+		await page.locator('[role="alert"] button', { hasText: "지금 다시 시도" }).click();
+		await shot(page, "18-recovery-banner-retrying");
+		await until(async () => {
+			const now = await problem(page);
+			return !now.retrying && now.failure === null;
+		}, 240_000, "the retry from the banner to clear the problem");
+		check("the banner's retry cleared the recorded problem", true);
+		check("MinSync really embedded through the restored server", hits.length > 1, `${hits.length} requests`);
+		await until(async () => (await page.locator('[role="alert"]').count()) === 0, 10_000, "the banner to leave");
+		check("the banner is gone", true);
+		await until(async () => (await page.locator('.sidebar__activity[data-tone="error"]').count()) === 0, 10_000, "the problem block to leave");
+		check("the sidebar no longer shows an error", true);
+		await sleep(5000);
+		await shot(page, "19-recovery-banner-after");
+		await page.locator(".sidebar__item--settings").click();
+		await page.waitForSelector(".settings-sidebar", { timeout: 10_000 });
+		await page.locator(".settings-sidebar .settings-nav-item", { hasText: "인덱싱" }).click();
+		await page.waitForSelector(".settings-sync-row", { timeout: 10_000 });
+		check("Settings > indexing no longer says it stopped", !(await page.locator(".settings-view").innerText()).includes("인덱싱 멈춤"));
+		await shot(page, "20-recovery-settings-after");
+		check("no renderer errors", state.errors.length === 0, state.errors.slice(0, 3).join(" | "));
+	} finally {
+		await server.close();
+	}
+});
+
+// A volume that really fills up: the download writes until the OS answers ENOSPC.
+await scenario("a real full disk: told apart from every other download failure, and the way on works", async (state) => {
+	if (process.platform !== "darwin") {
+		console.log("INFO a RAM disk is macOS-only; skipped");
+		return;
+	}
+	const ram = ramDisk();
+	try {
+		Object.assign(state, profile({ embed: "local" }));
+		const page = await start(state, { env: { FASTEMBED_CACHE_DIR: join(ram.mount, "models") } });
+		await paused(page, 240_000);
+		const run = await status(page);
+		check("a volume that is really full is classified as a full disk", run.failure?.reason === "disk-full" && run.failure?.code === "embedding-model-download-failed", JSON.stringify(run.failure));
+		check("title says there is not enough storage", (await text(page, ".onb .ix-title")).includes("저장 공간이 부족해요"), await text(page, ".onb .ix-title"));
+		await checkPausedShape(page, "disk", { button: "공간 확보했어요, 이어서 받기", link: ["임베딩 방식 바꾸기", "일단 Dazzi 열기"] });
+		check("a full disk is not retried by itself", !/\d+초 뒤/u.test(await text(page, ".onb .ix-sub")), await text(page, ".onb .ix-sub"));
+		await shot(page, "21-disk-full-paused");
+		// The way on that needs no space: keyword-only search.
+		await page.locator(".onb .ix-links button", { hasText: "임베딩 방식 바꾸기" }).click();
+		await page.waitForSelector(".onb .em-card", { timeout: 10_000 });
+		check("the embedding choice opens with the reason", (await page.locator(".onb .plan-callout.warn").innerText()).includes("저장 공간"), await text(page, ".onb .plan-callout.warn"));
+		await shot(page, "22-disk-full-embedding-step");
+		await page.locator(".onb .em-card").nth(0).click();
+		await page.locator(".onb .footer button.primary").click();
+		await page.waitForSelector(".onb .ix.done", { timeout: 120_000 });
+		check("choosing keyword-only finishes the index on the same full disk", true);
+		await shot(page, "23-disk-full-keyword-done");
+		check("no renderer errors", state.errors.length === 0, state.errors.slice(0, 3).join(" | "));
+	} finally {
+		await stop(state);
+		ram.detach();
+	}
+});
+
+// A model whose download was never finished: the pause says so, Dazzi opens anyway, and the banner's
+// "resume" completes the model and runs the real on-device embedding.
+await scenario("recovery: an unfinished model is completed from the banner and the real local index runs", async (state) => {
+	const cached = process.env.FASTEMBED_CACHE_DIR?.trim() || join(homeDir(), ".cache", "minsync", "models");
+	if (!existsSync(join(cached, "models--Qwen--Qwen3-Embedding-0.6B", "refs", "main"))) throw new Error(`no cached model at ${cached}; the runner copies the host's cache into the guest`);
+	Object.assign(state, profile({ embed: "local" }));
+	const models = join(state.work, "models");
+	cpSync(cached, models, { recursive: true, dereference: true });
+	const refs = join(models, "models--Qwen--Qwen3-Embedding-0.6B", "refs");
+	rmSync(join(refs, "main"));
+	chmodSync(refs, 0o555);
+	const page = await start(state, { env: { FASTEMBED_CACHE_DIR: models } });
+	try {
+		await paused(page, 300_000);
+		const run = await status(page);
+		check("a model that cannot be completed is a model-download stop", run.failure?.reason === "model-download", JSON.stringify(run.failure));
+		check("title says the model could not be downloaded", (await text(page, ".onb .ix-title")).includes("모델을 받지 못했어요"), await text(page, ".onb .ix-title"));
+		await page.locator(".onb .ix-links button", { hasText: "일단 Dazzi 열기" }).click();
+		await page.waitForSelector(".onb", { state: "detached", timeout: 15_000 });
+		await page.waitForSelector('[role="alert"]', { timeout: 20_000 });
+		check("the banner offers to resume the download", (await text(page, '[role="alert"]')).includes("이어서 받기"), await text(page, '[role="alert"]'));
+		await until(async () => (await page.locator('.sidebar__activity[data-tone="error"]').count()) === 1, 120_000, "the problem block after the keyword index");
+		await shot(page, "24-model-banner-before");
+		// What the user does to fix it, then the one button.
+		chmodSync(refs, 0o755);
+		await page.locator('[role="alert"] button', { hasText: "이어서 받기" }).click();
+		await until(async () => {
+			const now = await problem(page);
+			return !now.retrying && now.failure === null;
+		}, 600_000, "the resumed download and the local index to finish");
+		check("the banner's resume cleared the problem", true);
+		check("the model was completed on disk", existsSync(join(refs, "main")));
+		const minsyncDir = join(state.autoragHome, "workspace", ".autorag", "minsync", ".minsync");
+		const cursor = existsSync(join(minsyncDir, "cursor.json")) ? readFileSync(join(minsyncDir, "cursor.json"), "utf8") : "";
+		check("MinSync synced with the on-device Qwen3 model (its own cursor names it)", cursor.includes("Qwen/Qwen3-Embedding-0.6B"), cursor.slice(0, 200));
+		check("the vector store holds the document", existsSync(join(minsyncDir, "store", "documents.lance")), minsyncDir);
+		await until(async () => (await page.locator('[role="alert"]').count()) === 0, 10_000, "the banner to leave");
+		await sleep(5000);
+		await shot(page, "25-model-banner-after");
+		check("no renderer errors", state.errors.length === 0, state.errors.slice(0, 3).join(" | "));
+	} finally {
+		try {
+			chmodSync(refs, 0o755);
+		} catch {
+			// The folder may already be gone.
+		}
+	}
 });
 
 // 6. The same stops in English and Japanese (the longest strings), on fresh profiles that start in them.
