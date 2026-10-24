@@ -14,7 +14,7 @@ import { useTranslation } from "react-i18next";
 import { HardDrive, Home } from "lucide-react";
 import { cn } from "../lib/cn";
 import { fitPathBar, sameFit, type PathFit, type SegmentFit } from "../state/path-fit";
-import { volumeLabel, type Crumb } from "../state/paths";
+import { volumeLabel, windowsRootPath, type Crumb } from "../state/paths";
 import { kindFromExtension } from "../state/kinds";
 import { FileTile } from "./primitives/FileTile";
 
@@ -82,10 +82,13 @@ export function PathBar({
 	const { t } = useTranslation();
 	const first = crumbs[0];
 	const local = first?.label === "Users";
+	const driveRoot = windowsRootPath(path);
 	const segments: PathSegment[] = [];
-	if (local && first !== undefined) {
-		// Derive the volume from the path so Windows shows "C:" (or its share),
-		// not the macOS boot-volume label.
+	if (driveRoot !== null) {
+		// A Windows drive or share is the top folder of every location on it (D:\Data as well as C:\Users\me), and a place to go.
+		segments.push({ key: "$disk", label: volumeLabel(path), path: driveRoot, icon: <HardDrive size={14} strokeWidth={1.8} /> });
+	} else if (local && first !== undefined) {
+		// The macOS boot volume is shown above a "Users"-rooted path as a plain label.
 		segments.push({ key: "$disk", label: volumeLabel(first.path), path: null, icon: <HardDrive size={14} strokeWidth={1.8} /> });
 	}
 	crumbs.forEach((crumb, index) => {
