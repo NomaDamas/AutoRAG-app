@@ -17,6 +17,7 @@ import { Inspector, type InspectorFamily } from "./components/Inspector";
 import { ContextMenu } from "./components/primitives/ContextMenu";
 import { Toast } from "./components/primitives/Toast";
 import { ConfirmDialog } from "./components/primitives/ConfirmDialog";
+import { ConvertRenameDialog } from "./components/primitives/ConvertRenameDialog";
 import { Sidebar } from "./components/Sidebar";
 import type { SearchMode } from "./components/SidebarSearch";
 import { Toolbar } from "./components/Toolbar";
@@ -839,6 +840,13 @@ export function App(): ReactElement {
 					entries={finder.contextMenuEntries}
 					onSelect={finder.runMenuAction}
 					onClose={finder.closeContextMenu}
+				/>
+			)}
+			{finder?.convertRename == null ? null : (
+				<ConvertRenameDialog
+					state={finder.convertRename}
+					onConvert={(keepOriginal) => finder?.confirmConvertRename(keepOriginal)}
+					onCancel={() => finder?.cancelConvertRename()}
 				/>
 			)}
 			{finder?.emptyTrashConfirm === true ? (
