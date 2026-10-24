@@ -436,6 +436,65 @@
       "finalizing": "마무리하는 중"
     }
   },
+  "indexProblem": {
+    "retrying": "다시 시도하는 중이에요",
+    "fixEmbedding": "임베딩 방식 바꾸기",
+    "action": {
+      "retryNow": "지금 다시 시도",
+      "resume": "이어서 받기",
+      "recheck": "다시 확인"
+    },
+    "card": {
+      "failed": "인덱싱 멈춤"
+    },
+    "item": {
+      "embedding": "임베딩",
+      "folder": "폴더",
+      "skipped": "건너뛴 파일"
+    },
+    "embedderConfig": {
+      "title": "의미 검색을 쓸 수 없어요",
+      "side": "의미 검색 준비 중단",
+      "sideDetail": "임베딩 설정 확인 필요",
+      "detail": "설정 확인 필요"
+    },
+    "embedderOffline": {
+      "title": "연결을 기다리는 중이에요",
+      "side": "연결 기다리는 중",
+      "sideDetail": "임베딩 · 연결 확인 필요",
+      "detail": "연결 확인 필요"
+    },
+    "modelDownload": {
+      "title": "모델 내려받기가 멈췄어요",
+      "side": "모델 내려받기 멈춤",
+      "sideDetail": "이어서 받기 필요",
+      "detail": "내려받기 중단"
+    },
+    "diskFull": {
+      "title": "저장 공간이 부족해요",
+      "side": "저장 공간 부족",
+      "sideDetail": "공간 확보 후 다시 시도",
+      "detail": "저장 공간 부족"
+    },
+    "folderUnreadable": {
+      "title": "‘{{folder}}’ 폴더를 읽을 수 없어요",
+      "titleMany": "폴더 {{count}}개를 읽을 수 없어요",
+      "side": "폴더를 읽을 수 없어요",
+      "sideDetailMany": "{{count}}개 폴더"
+    },
+    "unknown": {
+      "title": "의미 검색 준비가 멈췄어요",
+      "side": "임베딩 멈춤",
+      "sideDetail": "원인 미확인",
+      "detail": "원인 미확인"
+    },
+    "skipped": {
+      "title": "{{count}}개 파일을 건너뛰었어요",
+      "side": "{{count}}개 파일 건너뜀",
+      "sideDetail": "다음 새로 고침에서 재시도",
+      "row": "{{count}}개 · 다음 새로 고침에서 자동으로 다시 시도해요"
+    }
+  },
   "confirm": {
     "emptyTrashTitle": "휴지통 비우기",
     "emptyTrashMessage": "휴지통의 모든 항목이 영구 삭제됩니다. 이 작업은 되돌릴 수 없습니다.",
@@ -727,7 +786,12 @@
       "minutes": "약 {{minutes}}분",
       "cached": "준비됨",
       "downloadUnknown": "확인 중",
-      "cloudConsent": "선택한 폴더의 문서 본문이 임베딩 처리를 위해 Dazzi 서버로 전송되는 것에 동의합니다. 처리 후 보관하지 않습니다."
+      "cloudConsent": "선택한 폴더의 문서 본문이 임베딩 처리를 위해 Dazzi 서버로 전송되는 것에 동의합니다. 처리 후 보관하지 않습니다.",
+      "pausedNotice": {
+        "config": "선택한 임베딩 방식을 쓸 수 없어서 멈췄어요",
+        "disk": "저장 공간이 모자라 모델을 받지 못했어요",
+        "default": "임베딩을 이어가지 못했어요"
+      }
     },
     "sources": {
       "eyebrow": "데이터 소스",
@@ -870,8 +934,6 @@
       "tipDot": "팁 {{index}}",
       "done": "인덱싱 완료",
       "doneDetail": "{{files}}개 파일 · 데이터 소스 {{sources}}개",
-      "failedTitle": "인덱싱 중단",
-      "failedDetail": "인덱싱을 완료하지 못했습니다.",
       "waiting": "시작 대기 중",
       "waitingNote": "첫 인덱싱을 준비하고 있습니다.",
       "running": "{{phase}}…",
@@ -899,16 +961,59 @@
       "metaProgress": "{{processed}} / {{total}}개 파일",
       "gateOkTitle": "이제 종료해도 괜찮아요",
       "gateOkDetail": "{{files}}개 파일을 모두 읽었어요. 새로 바뀐 파일은 백그라운드에서 이어서 읽습니다.",
-      "gateFailTitle": "인덱싱을 완료하지 못했습니다",
-      "gateFailDetail": "다시 시도하면 이어서 진행합니다.",
       "gateTitleMac": "Dazzi를 종료하거나 Mac을 끄지 마세요",
       "gateTitlePc": "Dazzi를 종료하거나 PC를 끄지 마세요",
       "gateDetailMac": "첫 인덱싱은 오래 걸립니다. 종료하면 진행이 멈춰요. 전원 어댑터를 연결하고 덮개를 열어 두세요.",
       "gateDetailWindows": "첫 인덱싱은 오래 걸립니다. 종료하면 진행이 멈춰요. 전원을 연결해 두세요.",
       "gateLocked": "완료되면 열 수 있어요",
       "open": "Dazzi 열기",
-      "retry": "다시 시도",
-      "startInBackground": "백그라운드에서 계속하고 바로 시작하기"
+      "startInBackground": "백그라운드에서 계속하고 바로 시작하기",
+      "skipped": "{{count}}개 파일은 건너뛰었어요",
+      "gateOkDetailPartial": "나머지는 모두 검색할 수 있어요. 새로 바뀐 파일은 백그라운드에서 이어서 읽습니다.",
+      "pause": {
+        "config": {
+          "title": "임베딩을 쓸 수 없어요",
+          "line": "임베딩 설정을 확인해 주세요"
+        },
+        "offline": {
+          "title": "연결이 끊겼어요",
+          "line": "연결되면 자동으로 이어서 해요"
+        },
+        "model": {
+          "title": "모델을 받지 못했어요",
+          "line": "연결되면 이어서 받아요"
+        },
+        "disk": {
+          "title": "저장 공간이 부족해요",
+          "line": "공간을 확보하면 이어서 받을 수 있어요"
+        },
+        "unknown": {
+          "title": "임베딩이 멈췄어요",
+          "line": "다시 시도하거나 임베딩 방식을 바꿀 수 있어요"
+        },
+        "folder": {
+          "title": "‘{{folder}}’ 폴더를 읽을 수 없어요",
+          "titleMany": "폴더 {{count}}개를 읽을 수 없어요",
+          "line": "드라이브를 연결하면 자동으로 이어져요"
+        },
+        "exit": {
+          "retry": "다시 시도",
+          "retryNow": "지금 다시 시도",
+          "recheck": "다시 확인",
+          "resume": "이어서 받기",
+          "resumeDisk": "공간 확보했어요, 이어서 받기",
+          "changeEmbedding": "임베딩 방식 바꾸기",
+          "exclude": "‘{{folder}}’ 빼고 계속",
+          "excludeMany": "읽을 수 없는 폴더 빼고 계속",
+          "openAnyway": "일단 Dazzi 열기"
+        },
+        "line": {
+          "retrying": "다시 시도하는 중이에요",
+          "countdown": "{{seconds}}초 뒤 자동으로 다시 시도해요",
+          "exhausted": "자동 재시도를 멈췄어요 · 직접 다시 시도해 주세요",
+          "again": "같은 이유로 또 멈췄어요"
+        }
+      }
     },
     "tips": {
       "1": {

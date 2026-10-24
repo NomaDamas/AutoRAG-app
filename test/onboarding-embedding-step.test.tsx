@@ -139,6 +139,8 @@ function harness(options: {
 		setModelBaseUrl: noop,
 		verifyModel: noop,
 		startIndexing: noop,
+		changeEmbedding: noop,
+		excludeFolders: noop,
 		finish: noop,
 		finishInBackground: noop,
 		setTipIndex: noop,

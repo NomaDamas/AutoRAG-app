@@ -15,6 +15,7 @@ import { ONBOARDING_CHANNELS } from "../shared/onboarding-contract";
 import { isServiceRunRequest, SERVICES_CHANNELS } from "../shared/services-contract";
 import { t } from "../shared/i18n/core";
 import { INDEX_ACTIVITY_CHANNELS } from "../shared/index-activity-contract";
+import { INDEX_PROBLEM_CHANNELS } from "../shared/index-problem-contract";
 import { AUTOMATION_CHANNELS, type AutomationRemoval } from "../shared/automation-contract";
 import { APP_UPDATE_CHANNELS } from "../shared/update-contract";
 import { ANALYTICS_CHANNELS } from "../shared/analytics-contract";
@@ -22,6 +23,7 @@ import type { AppUpdaterService } from "./app-updater";
 import type { ActionService } from "./action-service";
 import type { Analytics } from "./analytics-core";
 import type { IndexActivityService } from "./index-activity";
+import type { IndexProblemService } from "./index-problem-service";
 import type { AutomationService } from "./automation-service";
 import { MODEL_DOWNLOAD_CHANNELS } from "../shared/model-download-contract";
 import type { ModelDownloadService } from "./model-download";
@@ -338,6 +340,13 @@ export function registerOsRequestIpcHandlers(service: OsRequestService): void {
 /** The renderer's one read of what is indexing right now; changes are pushed by the main process. */
 export function registerIndexActivityIpcHandlers(service: IndexActivityService): void {
 	ipcMain.handle(INDEX_ACTIVITY_CHANNELS.get, () => service.snapshot());
+}
+
+/** What is still wrong with the index (sidebar block, banner, Settings card); changes are pushed by the main process. */
+export function registerIndexProblemIpcHandlers(service: IndexProblemService): void {
+	ipcMain.handle(INDEX_PROBLEM_CHANNELS.get, () => service.get());
+	ipcMain.handle(INDEX_PROBLEM_CHANNELS.retry, () => service.retry());
+	ipcMain.handle(INDEX_PROBLEM_CHANNELS.dismiss, () => service.dismiss());
 }
 
 /** Validate a restore payload: the entry itself is checked by the service, the index here. */

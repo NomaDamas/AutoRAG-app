@@ -1,12 +1,14 @@
 /** Step 9 — the immersive first-index screen, driven by the real IndexingStatus. */
 
-import type { CSSProperties, ReactElement } from "react";
+import { useEffect, useRef, type CSSProperties, type ReactElement } from "react";
 import { cn } from "../lib/cn";
 import { downloadPercent } from "../state/model-download";
 import { TIPS, formatSize, indexingPhases, phaseIndex, resolveEmbed, canSelectCloudEmbedding, type TipArt } from "./flow";
 import { BrandMark, brandVars, Icon } from "./marks";
 import { TipArt as TipArtView } from "./parts";
 import type { OnboardingCtx } from "./context";
+import type { PauseExit } from "./pause";
+import { usePauseControl, type PauseControl } from "./usePauseControl";
 
 interface FloatSpec {
 	readonly x: number;
@@ -149,11 +151,69 @@ function TipCard({ ctx }: { readonly ctx: OnboardingCtx }): ReactElement {
 	);
 }
 
+/** The run stopped: the scene held still, one reason, one button, and the other ways on as quiet links. */
+function PauseView({ ctx, pause }: { readonly ctx: OnboardingCtx; readonly pause: PauseControl }): ReactElement | null {
+	const { t } = ctx;
+	const { spec } = pause;
+	const [button, ...links] = pause.exits;
+	const runRef = useRef(pause.run);
+	runRef.current = pause.run;
+	// Enter presses the button even when focus sits on the page rather than on a control.
+	useEffect(() => {
+		if (button === undefined) return;
+		const onKeyDown = (event: KeyboardEvent): void => {
+			if (event.key !== "Enter" || event.defaultPrevented) return;
+			const tag = (document.activeElement as HTMLElement | null)?.tagName;
+			if (tag === "BUTTON" || tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+			runRef.current(button);
+		};
+		window.addEventListener("keydown", onKeyDown);
+		return () => window.removeEventListener("keydown", onKeyDown);
+	}, [button]);
+	if (spec === null || button === undefined) return null;
+	const labelOf = (exit: PauseExit): string => {
+		if (exit === "retry") return t(spec.retryLabel.key, spec.retryLabel.vars);
+		if (exit === "excludeFolders") return spec.excludeLabel === undefined ? "" : t(spec.excludeLabel.key, spec.excludeLabel.vars);
+		return t(`onboarding.indexing.pause.exit.${exit}`);
+	};
+	const progress = Math.floor(pause.progress);
+	return (
+		<section className="ix paused">
+			<IxLines />
+			<IxFloats />
+			<span className="ix-hero">
+				<Icon name={spec.icon} size={26} />
+			</span>
+			<h1 className="ix-title">{t(spec.title.key, spec.title.vars)}</h1>
+			<p className={cn("ix-sub", pause.line.tone === "again" && "again")} role="status" aria-live="polite">
+				{t(pause.line.key, pause.line.vars)}
+			</p>
+			{progress > 0 ? (
+				<div className="ix-bar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}>
+					<span style={{ width: `${progress}%` }} />
+					<i className="ix-stop" style={{ left: `${progress}%` }} />
+				</div>
+			) : null}
+			<button key={button} type="button" className="ix-cta" autoFocus onClick={() => pause.run(button)}>
+				{labelOf(button)} <span className="kbd">↵</span>
+			</button>
+			<div className="ix-links">
+				{links.map((exit) => (
+					<button key={exit} type="button" onClick={() => pause.run(exit)}>
+						{labelOf(exit)}
+					</button>
+				))}
+			</div>
+		</section>
+	);
+}
+
 export function IndexingScreen({ ctx }: { readonly ctx: OnboardingCtx }): ReactElement {
 	const { t, indexStatus, platform } = ctx;
 	const status = indexStatus;
+	const pause = usePauseControl(ctx);
+	if (pause.spec !== null) return <PauseView ctx={ctx} pause={pause} />;
 	const success = status?.state === "success";
-	const failed = status?.state === "failed";
 	const running = status?.state === "running";
 	// The first index of on-device embedding waits for the model: while its download runs, that is the progress.
 	const download = ctx.modelDownload.status;
@@ -167,6 +227,9 @@ export function IndexingScreen({ ctx }: { readonly ctx: OnboardingCtx }): ReactE
 	const totalFiles = status?.totalFiles ?? 0;
 	const processed = status?.processedFiles ?? 0;
 	const sources = status?.sources ?? [];
+	// Files the run finished without are not "read"; the screen says how many they were instead of counting them.
+	const skipped = success ? (status?.skipped ?? 0) : 0;
+	const readFiles = Math.max(0, totalFiles - skipped);
 
 	const phaseLabel = phase === null ? t("onboarding.indexing.phaseLabel.parsed") : t(`onboarding.indexing.phaseLabel.${phase}`);
 	let statusDetail: string;
@@ -188,18 +251,8 @@ export function IndexingScreen({ ctx }: { readonly ctx: OnboardingCtx }): ReactE
 				<span>
 					<strong>{t("onboarding.indexing.done")}</strong>
 					<small>
-						{t("onboarding.indexing.doneDetail", { files: totalFiles.toLocaleString(), sources: sources.length })}
+						{t("onboarding.indexing.doneDetail", { files: readFiles.toLocaleString(), sources: sources.length })}
 					</small>
-				</span>
-			</>
-		);
-	} else if (failed) {
-		statusPill = (
-			<>
-				<Icon name="triangle-alert" size={16} />
-				<span>
-					<strong>{t("onboarding.indexing.failedTitle")}</strong>
-					<small>{status?.error ?? t("onboarding.indexing.failedDetail")}</small>
 				</span>
 			</>
 		);
@@ -255,7 +308,7 @@ export function IndexingScreen({ ctx }: { readonly ctx: OnboardingCtx }): ReactE
 				<span>·</span>
 				<span>{totalMinutes === null ? t("onboarding.indexing.metaDone") : t("onboarding.indexing.metaTotal", { minutes: totalMinutes })}</span>
 				<span>·</span>
-				<span>{t("onboarding.indexing.metaFiles", { count: totalFiles.toLocaleString() })}</span>
+				<span>{t("onboarding.indexing.metaFiles", { count: readFiles.toLocaleString() })}</span>
 			</>
 		);
 	} else {
@@ -307,24 +360,11 @@ export function IndexingScreen({ ctx }: { readonly ctx: OnboardingCtx }): ReactE
 							<Icon name="circle-check" size={18} />
 							<span>
 								<strong>{t("onboarding.indexing.gateOkTitle")}</strong>
-								<small>{t("onboarding.indexing.gateOkDetail", { files: totalFiles.toLocaleString() })}</small>
+								<small>{skipped > 0 ? t("onboarding.indexing.gateOkDetailPartial") : t("onboarding.indexing.gateOkDetail", { files: readFiles.toLocaleString() })}</small>
 							</span>
 						</div>
 						<button type="button" className="ix-open-btn" onClick={ctx.finish}>
 							{t("onboarding.indexing.open")} <span className="kbd">↵</span>
-						</button>
-					</>
-				) : failed ? (
-					<>
-						<div className="ix-notice warn">
-							<Icon name="triangle-alert" size={18} />
-							<span>
-								<strong>{t("onboarding.indexing.gateFailTitle")}</strong>
-								<small>{status?.error ?? t("onboarding.indexing.gateFailDetail")}</small>
-							</span>
-						</div>
-						<button type="button" className="ix-open-btn" onClick={ctx.startIndexing}>
-							<Icon name="refresh-cw" size={13} /> {t("onboarding.indexing.retry")}
 						</button>
 					</>
 				) : (
@@ -346,8 +386,16 @@ export function IndexingScreen({ ctx }: { readonly ctx: OnboardingCtx }): ReactE
 					</>
 				)}
 			</div>
-			<TipCard ctx={ctx} />
-			{!success && !failed ? (
+			{success && skipped > 0 ? (
+				<div className="ix-skipline">
+					<span className="ix-skippill">
+						<Icon name="triangle-alert" size={13} /> {t("onboarding.indexing.skipped", { count: skipped.toLocaleString() })}
+					</span>
+				</div>
+			) : (
+				<TipCard ctx={ctx} />
+			)}
+			{!success ? (
 				<button type="button" className="ix-bg-start" onClick={ctx.finishInBackground}>
 					{t("onboarding.indexing.startInBackground")}
 				</button>

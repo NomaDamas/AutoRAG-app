@@ -87,6 +87,8 @@ export function onboardingCtx(overrides: Partial<OnboardingCtx> = {}): Onboardin
 		setModelBaseUrl: noop,
 		verifyModel: noop,
 		startIndexing: noop,
+		changeEmbedding: noop,
+		excludeFolders: noop,
 		finish: noop,
 		finishInBackground: noop,
 		setTipIndex: noop,

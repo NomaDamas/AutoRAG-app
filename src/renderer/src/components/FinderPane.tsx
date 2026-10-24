@@ -11,6 +11,7 @@ import { attachmentsFromDrop, isAttachmentDrag, isFileTransferDrag, isFinderDrag
 import { backgroundDropDir, dropTransferOp } from "../state/file-transfer";
 import { listFixedWidth, resetListColumns, setListColumnWidth, toggleListColumn, type ListColumnKey, type ListColumnsState } from "../state/list-columns";
 import { basename, breadcrumbTrail } from "../state/paths";
+import { requestSettingsCategory } from "../state/settings-navigation";
 import { AI_SEARCH_PATH, AUTOMATIONS_PATH, isVirtualTabPath, SETTINGS_PATH } from "../state/tabs";
 import { focusPane, type Pane, type Workspace } from "../state/workspace";
 import { AutomationsTab } from "./AutomationsTab";
@@ -19,6 +20,7 @@ import { ColumnHeader } from "./ColumnHeader";
 import { FileList } from "./FileList";
 import type { BackgroundDropHandlers, RowCallbacks } from "./FileRow";
 import { IconGrid } from "./IconGrid";
+import { IndexProblemBanner } from "./IndexProblemBanner";
 import { PathBar } from "./PathBar";
 import { ScopeBar } from "./ScopeBar";
 import { SettingsView } from "./SettingsView";
@@ -328,6 +330,13 @@ export const FinderPane = memo(function FinderPane({
 								onScopeChange={finder.setSearchScope}
 							/>
 						) : null}
+						<IndexProblemBanner
+							onFixEmbedding={() => {
+								// The embedding choice lives on Settings > AI.
+								requestSettingsCategory("ai");
+								finder.openSettings();
+							}}
+						/>
 						{finder.layout === "icons" ? (
 							<IconGrid
 								sections={finder.stackSections}

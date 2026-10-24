@@ -107,6 +107,8 @@ async function start(): Promise<Harness> {
 		configPath: join(directory, "config.json"),
 		localSpec: async () => ({ eligible: true }),
 		ensureLocalModel: async () => null,
+		recordIndex: () => undefined,
+		refreshKeyword: async () => undefined,
 		resolveWorkspacePath: async () => directory,
 		refresh: () => refreshing.promise,
 		credentials: { list: async () => [], set: async () => [], remove: async () => [], load: async () => [] },
