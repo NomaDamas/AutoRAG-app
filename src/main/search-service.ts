@@ -35,6 +35,7 @@ import type { RunInteraction } from "./host-ui";
 import type { InteractionHub } from "./interaction-hub";
 import { type ApprovalMode, DEFAULT_APPROVAL_MODE } from "../shared/interaction-contract";
 import type { ChatStore } from "./chat-store";
+import { t } from "../shared/i18n/core";
 import { durationBucket, type Analytics } from "./analytics-core";
 
 /**
@@ -227,6 +228,18 @@ function createLiveStreamMapper(searchId: string, emit: (event: SearchStreamEven
 	};
 }
 
+/**
+ * The one progress sentence the librarian writes itself (`searchDocumentsStream` opens every run with it, in English).
+ * Every other `progress` text is the model's: the intent it gave a tool call, or what it said before calling one, in the
+ * language it answers in. The panel shows the translated sentence from the moment a run starts, so the English one must
+ * not replace it.
+ */
+const LIBRARIAN_OPENING_NOTE = "Reviewing the query.";
+
+function progressText(text: string): string {
+	return text === LIBRARIAN_OPENING_NOTE ? t("aiSearch.reviewing") : text;
+}
+
 function errorText(error: unknown): string {
 	return error instanceof Error ? `${error.name}: ${error.message}` : String(error);
 }
@@ -369,7 +382,7 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 				if (run.cancelled) return;
 				switch (event.type) {
 					case "progress":
-						emit({ type: "progress", searchId: run.searchId, text: event.text });
+						emit({ type: "progress", searchId: run.searchId, text: progressText(event.text) });
 						break;
 					case "preliminary": {
 						run.sessionId = event.response.sessionId;

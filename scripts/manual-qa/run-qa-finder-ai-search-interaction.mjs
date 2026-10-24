@@ -307,8 +307,8 @@ await finished();
 check("Full runs the call without asking", !existsSync(file("old-draft.txt")) && (await approval.count()) === 0);
 seed();
 
-// What the agent says it is doing stays on screen while it works with no answer text yet (a message that goes on to
-// call a tool is a progress note: its streamed draft is taken back, and the shimmer used to come back with nothing to read).
+// What the agent says it is doing stays on screen as the one shimmering line while it works with no answer text yet (a message
+// that goes on to call a tool is a progress note: its streamed draft is taken back, and nothing else animates in its place).
 script([
 	{ text: "Looking through the Downloads folder.", tool: "bash", args: { command: "sleep 3" } },
 	{ text: "Done." },
@@ -317,7 +317,7 @@ script([
 await ask("organize the downloads");
 await page.waitForFunction(() => [...document.querySelectorAll(".water-wave-thinking")].some((el) => (el.textContent ?? "").includes("Looking through the Downloads folder.")), null, { timeout: 15_000 });
 check("the agent's progress note is on screen while it works", true);
-check("the shimmer lines are there with it, and the note is readable text, not a bare animation", (await panel.locator(".skeleton").count()) === 2 && (await panel.locator(".water-wave-thinking").first().innerText()).includes("Downloads"));
+check("the shimmering note is the only loading indicator: no grey placeholder bars", (await panel.locator(".skeleton").count()) === 0 && (await panel.locator(".water-wave-thinking .shimmer").count()) === 1 && (await panel.locator(".water-wave-thinking").first().innerText()).includes("Downloads"));
 await shot("06b-progress-note");
 await finished();
 await chooseMode("Auto");
@@ -475,8 +475,21 @@ await koPage.locator(".sidebar__item").first().click();
 // The panel's own label is translated too, so this part finds it by structure, not by its English name.
 await koPage.waitForSelector("form.composer input", { timeout: 30_000 });
 await koPage.evaluate(() => window.autorag.interaction.setMode("ask"));
-script(deleteOld);
 const koPanel = koPage.locator("body");
+const koIdle = () => koPage.waitForFunction(() => document.querySelector("form.composer input") !== null && document.querySelector('button[aria-label="중지"]') === null, null, { timeout: 60_000 });
+// The first words of every run are the librarian's own English sentence; the app shows them in the interface language.
+script([{ text: "빠른 답변", delayMs: 2500 }, { text: "검증된 답변" }]);
+await koPanel.locator("form.composer input").first().click();
+await koPage.keyboard.type("안녕");
+await koPage.keyboard.press("Enter");
+const koRow = koPanel.locator(".water-wave-thinking");
+await koRow.first().waitFor();
+const koNote = await koRow.first().innerText();
+check("the opening note is in Korean, not the librarian's English", /[가-힣]/.test(koNote) && !/Reviewing/i.test(koNote), koNote);
+check("it is the one shimmering line, with no grey bars", (await koRow.count()) === 1 && (await koPanel.locator(".skeleton").count()) === 0);
+await koPage.screenshot({ path: join(EVIDENCE, "10c-opening-note-ko.png") });
+await koIdle();
+script(deleteOld);
 await koPanel.locator("form.composer input").first().click();
 await koPage.keyboard.type("오래된 초안 지워줘");
 await koPage.keyboard.press("Enter");

@@ -14,6 +14,7 @@ import {
 	resolveWebSearchConfig,
 	type LiveAgentEvent,
 } from "../src/main/search-service";
+import { setAppLanguage, t } from "../src/shared/i18n/core";
 import { SEARCH_CHANNELS, type ChatRecord, type SearchStreamEvent } from "../src/shared/search-contract";
 
 interface TestResponse {
@@ -113,7 +114,7 @@ describe("createSearchService", () => {
 	it("maps the preliminary stream event to a Quick phase", async () => {
 		const quickResponse = createResponse("session-quick", "**Quick** answer [1]", 2);
 		const agent = createFakeAgent(async function*() {
-			yield { type: "progress", sessionId: "", query: "refund approval", text: "Reviewing the query." };
+			yield { type: "progress", sessionId: "", query: "refund approval", text: "Checking the refund policy." };
 			yield { type: "preliminary", response: quickResponse };
 		});
 		const { events, send } = collectEvents();
@@ -128,7 +129,7 @@ describe("createSearchService", () => {
 
 		const progress = events.find((event) => event.type === "progress");
 		assert(progress !== undefined);
-		expect(progress).toEqual({ type: "progress", searchId: "search-1", text: "Reviewing the query." });
+		expect(progress).toEqual({ type: "progress", searchId: "search-1", text: "Checking the refund policy." });
 		const quick = events.find((event) => event.type === "quick");
 		assert(quick !== undefined);
 		expect(quick.searchId).toBe("search-1");
@@ -1116,5 +1117,43 @@ describe("createSearchService preflight action", () => {
 		await service.start("search-action", "chat-action", "question", []);
 
 		expect(events[0]).toEqual({ type: "error", searchId: "search-action", message: "Weekly credits are used up.", action: "open-plan" });
+	});
+});
+
+describe("createSearchService progress text", () => {
+	it("shows the librarian's fixed English opening note in the interface language, and leaves the model's own notes alone", async () => {
+		await setAppLanguage("ko");
+		const agent = createFakeAgent(async function*() {
+			// The librarian opens every stream with this English sentence; what follows is what the model wrote.
+			yield { type: "progress", sessionId: "", query: "q", text: "Reviewing the query." };
+			yield { type: "progress", sessionId: "s", query: "q", text: "다운로드 폴더를 살펴보는 중입니다." };
+			yield { type: "complete", response: createResponse("session-progress", "Done", 1) };
+		});
+		const { events, send } = collectEvents();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send, now });
+
+		await service.start("search-progress", "chat-progress", "q", []);
+
+		const texts = events.flatMap((event) => (event.type === "progress" ? [event.text] : []));
+		expect(texts).toEqual([t("aiSearch.reviewing"), "다운로드 폴더를 살펴보는 중입니다."]);
+		expect(texts[0]).not.toBe("Reviewing the query.");
+	});
+
+	it("translates it into each interface language", async () => {
+		const seen: string[] = [];
+		for (const language of ["en", "ja", "zh", "ko"] as const) {
+			await setAppLanguage(language);
+			const agent = createFakeAgent(async function*() {
+				yield { type: "progress", sessionId: "", query: "q", text: "Reviewing the query." };
+				yield { type: "complete", response: createResponse("session-lang", "Done", 1) };
+			});
+			const { events, send } = collectEvents();
+			const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send, now });
+			await service.start(`search-${language}`, `chat-${language}`, "q", []);
+			const first = events.find((event) => event.type === "progress");
+			seen.push(first?.type === "progress" ? first.text : "");
+		}
+		expect(new Set(seen).size).toBe(4);
+		expect(seen[0]).toBe("Reviewing the query.");
 	});
 });

@@ -679,10 +679,17 @@ of the message box (`src/shared/interaction-contract.ts` is the contract).
 
 ### What the panel shows while a run works, and an exhausted plan
 
-- **Loading shimmer.** The two grey bars show while a run is live and no answer text exists (`answerViewState`). A message that
-  goes on to call a tool is a progress note, not the answer: its streamed draft is withdrawn at the tool call and the bars
-  return. The note arrives as `progress`, and `narration` shows it as a readable line above the bars until an answer starts, so a
-  run that is reading files is not silent animation.
+- **One loading indicator.** While a run is live and the Deep answer has not started, the panel shows one shimmering text line
+  (`answerViewState`, the `shimmer` utility), in the same place whether or not Quick text exists: what the agent is doing, or
+  "Thinking…" before it has said anything. There are no grey placeholder bars. A message that goes on to call a tool is a progress
+  note, not the answer: its streamed draft is withdrawn at the tool call and its text becomes the line, so a run that is reading
+  files is never a bare animation. Stop clears the line at once.
+- **Where the line's words come from.** `progress` events carry three kinds of text. The librarian writes exactly one of them
+  itself, in English: `Reviewing the query.`, the first event of every `searchDocumentsStream` (`agent.ts`); the search service
+  swaps it for `aiSearch.reviewing` in the interface language (the panel shows that same string from the moment a run starts,
+  and the English one would otherwise replace it). The other two are the model's own words, passed through as written: the
+  `intent` it gave a tool call (intent tracing), and the text it wrote before calling one. The panel's own fixed strings
+  (`aiSearch.thinking`, `aiSearch.reviewing`) are translated in all four languages.
 - **Weekly credits.** The Dazzi server answers a run whose weekly credits are used up with `429 insufficient_quota` and bills nothing,
   but the agent treats each 429 as a rate limit: its judgment-model calls and model request are retried and the server's raw JSON
   ends up in the answer. `quota-guard.ts` (the search service's `preflight`) asks the account first: when the model is the `dazzi`
