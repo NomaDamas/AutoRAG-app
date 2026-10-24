@@ -308,6 +308,20 @@ describe("pptx model", () => {
 		expect(byTag(element, "canvas")).toHaveLength(0);
 	});
 
+	it("draws a slide in the bundled UI font before any machine font", () => {
+		const deck = model({ "ppt/slides/slide2.xml": slide(`${EMPTY_TREE}${titleShape("안녕하세요")}`) });
+		const element = render(deck, 0);
+		const run = byTag(element, "span").find((span) => span.textContent === "안녕하세요" && (span.getAttribute("style") ?? "").includes("font-family"));
+		const family = /font-family:([^;]+)/.exec(run?.getAttribute("style") ?? "")?.[1] ?? "";
+		const names = family.split(",").map((name) => name.trim().replace(/^"|"$/g, ""));
+		const bundled = names.indexOf("Pretendard Variable");
+		expect(bundled).toBeGreaterThanOrEqual(0);
+		for (const machineFont of ["Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR"]) {
+			expect(bundled).toBeLessThan(names.indexOf(machineFont));
+		}
+		expect(names[names.length - 1]).toBe("sans-serif");
+	});
+
 	it("answers null when no presentation can be read", () => {
 		expect(buildPptxDeck(new Uint8Array([1, 2, 3, 4]), parseXml)).toBeNull();
 		expect(buildPptxDeck(zipSync({ "notes/a.txt": strToU8("hi") }), parseXml)).toBeNull();

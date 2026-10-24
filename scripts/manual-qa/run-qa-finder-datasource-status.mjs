@@ -46,17 +46,23 @@ const writeConfig = (datasources) => writeFileSync(configPath, `${JSON.stringify
 	jikji: false,
 	datasources,
 }, null, 2)}\n`);
+// "CLI not installed" must not depend on what this machine has. The app appends the standard tool
+// directories (`~/.cargo/bin`, `/opt/homebrew/bin`, `/usr/local/bin`, ...) to PATH at startup so a
+// Finder-launched build finds user-installed CLIs, and the lane cannot hide absolute directories
+// like those: a host with rclone or telecrawl installed would report them installed. So the two
+// "missing" connections point their executable path (the Settings "Executable path" field) at a file
+// that does not exist; a configured path is authoritative and never falls back to PATH.
+const NOT_INSTALLED = (name) => join(bin, `${name}-not-installed`);
 writeConfig({
 	slack: { description: "Team Slack" },
-	"my-drive": { type: "cloud-drive", connector: { remote: "drive:" } },
+	"my-drive": { type: "cloud-drive", connector: { remote: "drive:", binaryPath: NOT_INSTALLED("rclone") } },
 	github: { connector: { repos: ["octo/repo"] } },
-	telegram: false,
+	telegram: { enabled: false, connector: { binaryPath: NOT_INSTALLED("telecrawl") } },
 	foo: {},
 });
 
-// Pin the PATH like the POSIX branch: the fake `slacrawl` must be the only
-// datasource CLI visible, or a host-installed rclone/telecrawl flips the
-// "install: missing" assertions. System32 stays for Windows system lookups.
+// The PATH still holds only the fake `slacrawl`, so no other datasource CLI is found by name.
+// System32 stays for Windows system lookups.
 const windowsPath = `${bin};${process.env.SystemRoot ?? "C:\\Windows"}\\System32;${process.env.SystemRoot ?? "C:\\Windows"}`;
 const env = { AUTORAG_CONFIG: configPath, AUTORAG_HOME: root, PATH: IS_WIN ? windowsPath : `${bin}:/usr/bin:/bin`, GITHUB_TOKEN: "", AUTORAG_SKIP_DUPEY_CHECK: "1" };
 const agentSkills = () =>
