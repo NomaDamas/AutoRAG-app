@@ -5,6 +5,7 @@ import type { ActionsBridge } from "./actions-contract";
 import type { AutoRagBridge } from "./bridge";
 import type { FsBridge } from "./fs-contract";
 import type { IndexActivityBridge } from "./index-activity-contract";
+import type { InteractionBridge } from "./interaction-contract";
 import type { LiveBridge } from "./live-contract";
 import type { ModelDownloadBridge } from "./model-download-contract";
 import type { OnboardingBridge } from "./onboarding-contract";
@@ -26,6 +27,7 @@ declare global {
 			readonly account: AccountBridge;
 			readonly automations: AutomationBridge;
 			readonly indexActivity: IndexActivityBridge;
+			readonly interaction: InteractionBridge;
 			readonly live: LiveBridge;
 			readonly modelDownload: ModelDownloadBridge;
 			readonly onboarding: OnboardingBridge;

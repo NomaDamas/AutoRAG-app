@@ -73,6 +73,8 @@ import { migrateLegacyEmbedding } from "./embedding-migration";
 import { createEmbeddingSettingsService } from "./embedding-settings-service";
 import { createMcpSettingsService } from "./mcp-settings-service";
 import { createDefaultAgentFactory, createSearchService } from "./search-service";
+import { createInteractionHub } from "./interaction-hub";
+import { INTERACTION_CHANNELS, type ApprovalMode } from "../shared/interaction-contract";
 import { resolveConfiguredSessionModel } from "@autorag/librarian/profiles";
 import { createSmartIndexingService } from "./smart-indexing-service";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
@@ -86,6 +88,7 @@ import {
 	registerAutomationIpcHandlers,
 	registerDragOutIpcHandlers,
 	registerIndexActivityIpcHandlers,
+	registerInteractionIpcHandlers,
 	registerModelDownloadIpcHandlers,
 	registerOnboardingIpcHandlers,
 	registerOsRequestIpcHandlers,
@@ -523,13 +526,26 @@ app.whenReady().then(async () => {
 	const applyScanInterval = (minutes: number): void => {
 		void workerHost.client.call("setScanInterval", [minutes]).catch((error: unknown) => console.error("[fs-worker] scan interval:", error));
 	};
+	const interactionHub = createInteractionHub({
+		emitRequest: (request) => sendToMainWindow(INTERACTION_CHANNELS.request, request),
+		emitClosed: (event) => sendToMainWindow(INTERACTION_CHANNELS.closed, event),
+	});
 	const searchService = createSearchService({
 		agentFactory: createDefaultAgentFactory(),
 		chatStore: createChatStore({ directory: join(app.getPath("userData"), "chat-history") }),
 		send: sendToMainWindow,
 		analytics,
+		interaction: interactionHub,
+		// The settings service is built further down; an agent is only built long after startup.
+		approvalMode: async () => (await settingsService.get()).approvalMode,
 	});
 	registerSearchIpcHandlers(searchService);
+	registerInteractionIpcHandlers({
+		hub: interactionHub,
+		getMode: async () => (await settingsService.get()).approvalMode,
+		setMode: async (mode) => (await settingsService.set({ approvalMode: mode })).approvalMode,
+	});
+	let appliedApprovalMode: ApprovalMode | null = null;
 	let previousSettings: AppSettings | null = null;
 	const applyAppearance = (appearance: AppAppearance): void => {
 		currentAppearance = appearance;
@@ -664,6 +680,11 @@ app.whenReady().then(async () => {
 			analytics.setEnabled(settings.usageAnalytics);
 			if (previousSettings !== null) for (const change of settingChangeEvents(previousSettings, settings)) analytics.track("settings_changed", change);
 			previousSettings = settings;
+			if (appliedApprovalMode !== settings.approvalMode) {
+				appliedApprovalMode = settings.approvalMode;
+				searchService.setApprovalMode(settings.approvalMode);
+				sendToAllWindows(INTERACTION_CHANNELS.modeChanged, settings.approvalMode);
+			}
 			setErrorReportingEnabled(settings.errorReporting);
 			applyAppearance(settings.appearance);
 			applyLanguage(settings.language);

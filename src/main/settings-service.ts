@@ -16,6 +16,7 @@ import type {
 	SettingsBridge,
 } from "../shared/settings-contract";
 import { DEFAULT_SETTINGS } from "../shared/settings-contract";
+import { isApprovalMode } from "../shared/interaction-contract";
 import type { AutoRagConfigService } from "./autorag-config-service";
 import type { DataSourceStatusService } from "./datasource-status";
 import type { ModelStatusService } from "./model-status";
@@ -66,7 +67,12 @@ async function loadState(path: string, defaults: AppSettings): Promise<SettingsS
 		const state = parsed as Partial<SettingsState>;
 		const persisted: Partial<AppSettings> = state.settings ?? {};
 		return {
-			settings: { ...defaults, ...persisted, appearance: persisted.appearance === "dark" ? "dark" : "light" },
+			settings: {
+				...defaults,
+				...persisted,
+				appearance: persisted.appearance === "dark" ? "dark" : "light",
+				approvalMode: isApprovalMode(persisted.approvalMode) ? persisted.approvalMode : defaults.approvalMode,
+			},
 			permissions: state.permissions ?? {},
 		};
 	} catch {
@@ -131,7 +137,8 @@ export function createSettingsService(deps: SettingsServiceDeps): SettingsBridge
 			}
 			const state = await mutate((current) => {
 				const appearance = patch.appearance === "dark" || patch.appearance === "light" ? patch.appearance : current.settings.appearance;
-				current.settings = { ...current.settings, ...patch, appearance };
+				const approvalMode = isApprovalMode(patch.approvalMode) ? patch.approvalMode : current.settings.approvalMode;
+				current.settings = { ...current.settings, ...patch, appearance, approvalMode };
 			});
 			deps.onSettingsChanged?.(state.settings);
 			return state.settings;

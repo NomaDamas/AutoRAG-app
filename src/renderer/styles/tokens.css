@@ -320,6 +320,9 @@
   --w-search-field: 236px;
   --w-access-menu: 248px;
   --w-context-menu: 220px;
+  /* The AI Search approval-mode popover: wider than the row context menu so each
+   * mode's one-line description fits under its label. */
+  --w-interaction-menu: 316px;
   --w-history: 360px;
   --w-requests: 420px;
   --w-quicklook: 760px;

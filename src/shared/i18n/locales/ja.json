@@ -260,6 +260,58 @@
       "older": "それ以前"
     }
   },
+  "interaction": {
+    "mode": {
+      "menuLabel": "ファイル変更の承認",
+      "triggerAria": "ファイル変更の承認モード",
+      "ask": {
+        "label": "確認",
+        "desc": "shell・書き込み・編集の各呼び出しの前に確認します。承認なしには何も実行されず、読み取りと検索は確認しません。"
+      },
+      "auto": {
+        "label": "自動",
+        "desc": "Dazzi の判断モデルが安全な変更は通し、既存ファイルへの変更で判断に迷うものだけ確認します。"
+      },
+      "full": {
+        "label": "すべて許可",
+        "desc": "確認せずにファイルを変更します。"
+      }
+    },
+    "stop": "停止",
+    "skip": "スキップ",
+    "submit": "送信",
+    "next": "次へ",
+    "back": "戻る",
+    "step": "{{current}} / {{total}}",
+    "answeredCount": "{{answered}} / {{total}} 回答済み",
+    "showMore": "もっと見る",
+    "showLess": "折りたたむ",
+    "writeOwn": "自分で回答を入力",
+    "answerPlaceholder": "回答を入力",
+    "questionAria": "Dazzi からの質問",
+    "approval": {
+      "headlineChange": "Dazzi がファイルを変更しようとしています — 許可しますか？",
+      "headlineRun": "Dazzi が実行しようとしています — 許可しますか？"
+    },
+    "category": {
+      "delete": "削除",
+      "move": "移動",
+      "rename": "名前の変更",
+      "overwrite": "上書き",
+      "edit": "編集",
+      "unclear": "分類できません"
+    },
+    "allowOnce": "今回だけ許可",
+    "allowSession": {
+      "categories": "このセッションではこの種の変更をすべて許可",
+      "unclassified": "このセッションでは分類できない呼び出しをすべて許可",
+      "all": "このセッションではこのような呼び出しをすべて許可"
+    },
+    "deny": "拒否",
+    "denyWithNote": "拒否してモデルに伝える…",
+    "notePlaceholder": "代わりにどうしますか？（例：コピーで作業）",
+    "sendNote": "送信"
+  },
   "automations": {
     "list": "自動化ルール",
     "columns": {
@@ -1154,6 +1206,10 @@
     }
   },
   "main": {
+    "interaction": {
+      "yes": "はい",
+      "no": "いいえ"
+    },
     "action": {
       "unsupportedResize": "この形式はサイズ変更に対応していません。",
       "unsupportedOptimize": "この形式は容量の最適化に対応していません。",

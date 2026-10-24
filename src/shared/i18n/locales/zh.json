@@ -260,6 +260,58 @@
       "older": "更早"
     }
   },
+  "interaction": {
+    "mode": {
+      "menuLabel": "文件更改审批",
+      "triggerAria": "文件更改审批模式",
+      "ask": {
+        "label": "询问",
+        "desc": "在每次 shell、写入或编辑调用前询问。未经批准不会执行任何操作；读取和搜索不会询问。"
+      },
+      "auto": {
+        "label": "自动",
+        "desc": "Dazzi 的判断模型会放行安全的更改，只对不确定的现有文件更改进行询问。"
+      },
+      "full": {
+        "label": "全部允许",
+        "desc": "无需询问即可更改文件。"
+      }
+    },
+    "stop": "停止",
+    "skip": "跳过",
+    "submit": "发送",
+    "next": "下一步",
+    "back": "上一步",
+    "step": "{{current}} / {{total}}",
+    "answeredCount": "已回答 {{answered}} / {{total}}",
+    "showMore": "显示更多",
+    "showLess": "收起",
+    "writeOwn": "自己输入答案",
+    "answerPlaceholder": "输入你的答案",
+    "questionAria": "Dazzi 的提问",
+    "approval": {
+      "headlineChange": "Dazzi 想更改你的文件——允许吗？",
+      "headlineRun": "Dazzi 想运行这个——允许吗？"
+    },
+    "category": {
+      "delete": "删除",
+      "move": "移动",
+      "rename": "重命名",
+      "overwrite": "覆盖",
+      "edit": "修改",
+      "unclear": "无法判断"
+    },
+    "allowOnce": "仅允许这一次",
+    "allowSession": {
+      "categories": "本会话允许此类全部更改",
+      "unclassified": "本会话允许所有无法分类的调用",
+      "all": "本会话允许所有此类调用"
+    },
+    "deny": "拒绝",
+    "denyWithNote": "拒绝并告诉模型…",
+    "notePlaceholder": "应该改做什么？（例如：在副本上操作）",
+    "sendNote": "发送"
+  },
   "automations": {
     "list": "自动化规则",
     "columns": {
@@ -1154,6 +1206,10 @@
     }
   },
   "main": {
+    "interaction": {
+      "yes": "是",
+      "no": "否"
+    },
     "action": {
       "unsupportedResize": "此格式不支持调整大小。",
       "unsupportedOptimize": "此格式不支持容量优化。",

@@ -59,6 +59,7 @@ const SETTINGS: AppSettings = {
 	showHiddenFiles: false,
 	dupeyScanIntervalMinutes: 60,
 	osMenuIntegration: false,
+	approvalMode: "auto",
 };
 
 const directories: string[] = [];
