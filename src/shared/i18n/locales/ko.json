@@ -2273,6 +2273,9 @@
       "appDownload": "{{name}} 다운로드",
       "appNeeded": "필요",
       "appInstalled": "설치됨",
+      "appHintMissingPc": "{{name}} 내용을 가져오려면 이 컴퓨터에 {{name}} 앱이 설치되어 있어야 합니다.",
+      "appHintInstalledPc": "이 컴퓨터의 {{name}} 앱에서 내용을 가져옵니다.",
+      "appUnknown": "확인 안 됨",
       "refreshName": "최신화",
       "refreshLast": "마지막 최신화 {{date}}",
       "refreshNever": "아직 내용을 가져오지 않았습니다.",
@@ -2288,7 +2291,8 @@
       "removeHint": "Dazzi 검색에서만 제거되며 원본 앱의 데이터는 지워지지 않습니다.",
       "confirmTitle": "연결을 해제할까요?",
       "confirmBody": "'{{alias}}' 연결이 Dazzi 검색에서 제거됩니다. 원본 앱의 데이터는 지워지지 않습니다.",
-      "macOnlyNote": "Apple 캘린더와 미리알림은 macOS의 EventKit으로만 읽을 수 있어, 이 컴퓨터에서는 연결되지 않습니다."
+      "macOnlyNote": "Apple 캘린더와 미리알림은 macOS의 EventKit으로만 읽을 수 있어, 이 컴퓨터에서는 연결되지 않습니다.",
+      "kakaoOnlyNote": "카카오톡은 Mac 앱에서만 읽을 수 있는 lazykatok으로 가져오기 때문에, 이 컴퓨터에서는 연결되지 않습니다."
     },
     "scope": {
       "title": "검색 범위",

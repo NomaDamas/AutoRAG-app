@@ -9,6 +9,7 @@ import {
 	pathSegments,
 	resolvePathInput,
 	volumeLabel,
+	windowsRootPath,
 	whereSegments,
 } from "../src/renderer/src/state/paths";
 
@@ -189,6 +190,20 @@ describe("volumeLabel", () => {
 
 	it("derives the UNC share prefix for a network path", () => {
 		expect(volumeLabel("\\\\server\\share\\Users\\me")).toBe("\\\\server\\share");
+	});
+});
+
+describe("windowsRootPath", () => {
+	it("names the drive or share a Windows path sits on, for any folder on it", () => {
+		expect(windowsRootPath("C:\\Users\\me")).toBe("C:\\");
+		expect(windowsRootPath("d:/Data/x")).toBe("d:\\");
+		expect(windowsRootPath("E:\\")).toBe("E:\\");
+		expect(windowsRootPath("\\\\server\\share\\a")).toBe("\\\\server\\share\\");
+	});
+
+	it("is null for POSIX and relative paths", () => {
+		expect(windowsRootPath("/Users/jeffrey")).toBeNull();
+		expect(windowsRootPath("Documents/Finance")).toBeNull();
 	});
 });
 
