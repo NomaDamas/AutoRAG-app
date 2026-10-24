@@ -89,6 +89,16 @@ second datasource or model configuration. The sidebar is searchable and grouped:
     past-question memory ranks by keywords only. Local file content is found by
     Jikji and the file-name tools.
   - *Status*: a parsed file counts as included, since nothing is staged into MinSync.
+- **Embedder preflight** — before a refresh that includes `minsync` parses a single
+  document, `embedder-preflight.ts` sends one embedding request to a remote
+  (`openai:` or `tei:`) embedder, built the way MinSync builds its own: `baseUrl` +
+  `/v1/embeddings` with the key from `OPENAI_API_KEY` (the only variable MinSync
+  reads for `openai:`; `apiKeyEnv` does not change that), or `baseUrl` + `/embed` for
+  TEI. A wrong base URL (a trailing `/v1` doubles the path and answers 404), a key
+  MinSync cannot read, an empty balance, or a vector of the wrong dimension fails the
+  refresh with `embedder-preflight-failed` and the provider's own reason, instead of
+  after the whole parse phase (about an hour on 85k files). Native embedders and
+  runtime profiles have nothing to reach over the network and are not probed.
 - **Embedding batch size** — an embedding request that cannot finish (the local
   server's request cap answers 413, a user's own server may time out with 504).
   When a refresh's MinSync step fails with that timeout (or skips a file on a
@@ -484,6 +494,11 @@ resumes at the same step.
   `workspacePath` at the app's cwd seed is moved to `<AutoRAG home>/workspace`.
   The Finder opens once the first index succeeds or the user chooses to continue
   in the background.
+  The status the screen shows has one writer for its final state: the poll tick
+  (every second, reading `refresh-progress.json`, the parsed mirror and MinSync's
+  `progress.jsonl`) reads first and applies its snapshot only if its run is still
+  the live one and still `running`, so a tick that straddles the end of the refresh
+  can no longer turn a `failed` or `success` back into `running`.
 
 Account and plan are real. The account step signs in through the system
 browser (OAuth 2.0 authorization code + PKCE over a loopback redirect, RFC 8252)

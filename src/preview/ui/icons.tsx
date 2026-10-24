@@ -101,7 +101,7 @@ export function SkipIcon({ direction }: { readonly direction: "back" | "forward"
 		<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
 			<path d={back ? "M4.5 12a7.5 7.5 0 1 0 2.4-5.5" : "M19.5 12a7.5 7.5 0 1 1-2.4-5.5"} />
 			<path d={back ? "M6.6 3.4v3.6h3.6" : "M17.4 3.4v3.6h-3.6"} />
-			<text x={back ? 12.4 : 11.6} y="15.4" textAnchor="middle" fontSize="7.5" fontWeight="700" fill="currentColor" stroke="none" fontFamily="-apple-system, 'Segoe UI', Helvetica, sans-serif">
+			<text x={back ? 12.4 : 11.6} y="15.4" textAnchor="middle" fontSize="7.5" fontWeight="700" fill="currentColor" stroke="none" fontFamily="'Pretendard Variable', -apple-system, 'Segoe UI', Helvetica, sans-serif">
 				15
 			</text>
 		</svg>
@@ -189,7 +189,7 @@ export function FileGlyph({ label, scale = 1 }: { readonly label: string; readon
 			<rect x="39" y="46" width="13" height="8" fill="#2b2b2e" />
 			<rect x="26" y="58" width="13" height="8" fill="#2b2b2e" />
 			<rect x="33" y="70" width="12" height="16" rx="2" fill="#2b2b2e" />
-			<text x="89" y="194" textAnchor="middle" fontFamily="-apple-system, 'Helvetica Neue', 'Segoe UI', sans-serif" fontSize="26" fontWeight="700" fill="#5a5a5e">
+			<text x="89" y="194" textAnchor="middle" fontFamily="'Pretendard Variable', -apple-system, 'Helvetica Neue', 'Segoe UI', sans-serif" fontSize="26" fontWeight="700" fill="#5a5a5e">
 				{label}
 			</text>
 		</svg>

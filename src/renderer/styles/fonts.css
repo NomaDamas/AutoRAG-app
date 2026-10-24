@@ -1,0 +1,20 @@
+/* ============================================================================
+ * Bundled UI typeface.
+ *
+ * Pretendard Variable (SIL OFL 1.1, license text in fonts/Pretendard-OFL.txt)
+ * ships inside the app so Latin and Korean glyph widths — and with them line
+ * breaks and the fit of fixed-size controls — are identical on macOS, Windows,
+ * and Linux instead of following whatever UI font each OS has installed.
+ *
+ * `--font-sans` in tokens.css starts with this family; the OS UI fonts after it
+ * only cover glyphs Pretendard lacks. `font-display: block` keeps text hidden
+ * for the (local-file) load instead of flashing a fallback with other metrics.
+ * ========================================================================== */
+
+@font-face {
+	font-family: "Pretendard Variable";
+	font-weight: 45 920;
+	font-style: normal;
+	font-display: block;
+	src: url("./fonts/PretendardVariable.woff2") format("woff2-variations");
+}
