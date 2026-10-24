@@ -1245,7 +1245,15 @@
       "retried": "A temporary file system error ({{code}}) occurred; the refresh was retried {{retries}} time(s).",
       "filesLeftOut": "{{files}} file(s) that kept failing with {{code}} were left out of this refresh. They will be tried again on the next one.",
       "parseKilled": "{{timedOut}} file(s) were skipped for exceeding the time limit and {{crashed}} because the parser stopped. They will be tried again on the next refresh.",
-      "modelMissing": "Indexing was skipped because the on-device embedding model has not been downloaded yet. Download it in Settings → AI Models → Document Understanding Model."
+      "modelMissing": "Indexing was skipped because the on-device embedding model has not been downloaded yet. Download it in Settings → AI Models → Document Understanding Model.",
+      "preflightMissingKey": "The embedder {{id}} needs an API key, but {{env}} is not set. Set it before indexing.",
+      "preflightKeyEnvIgnored": "The embedder {{id}} sets apiKeyEnv to {{configured}}, but the indexer reads its key only from {{env}}, and {{env}} is not set. Put the key in {{env}}.",
+      "preflightBaseUrlV1": "The embedder answered 404 at {{url}}. The indexer adds /v1/embeddings itself, so a base URL ending in /v1 doubles it. Use {{suggested}} instead.",
+      "preflightStatus": "The embedder at {{url}} refused the test request: HTTP {{status}} {{detail}}",
+      "preflightUnreachable": "Cannot reach the embedder at {{url}}: {{reason}}",
+      "preflightTimeout": "The embedder at {{url}} did not answer the test request within {{seconds}} s.",
+      "preflightNoVector": "The embedder at {{url}} answered the test request without a usable vector.",
+      "preflightDimension": "The embedder at {{url}} returned a vector of {{actual}} numbers, but the config declares {{expected}}."
     },
     "worker": {
       "unknownFormat": "Unknown file format: {{format}}",

@@ -5,6 +5,7 @@ import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { readDazziPlanCredential } from "./dazzi-plan-credential";
 import type { ConfigRefreshDiagnostic, ConfigRefreshResult } from "../shared/settings-contract";
 import { APP_INDEXING_CAPABILITIES, applyAppIndexing, readAppIndexing } from "./app-indexing";
+import { preflightEmbedder } from "./embedder-preflight";
 import {
 	embedderKind,
 	isEmbeddingTimeout,
@@ -34,6 +35,8 @@ export interface AutoragRefreshDeps {
 	readonly cwd: string;
 	/** Test seam: waits between retries of a transient file error; production uses `RECOVERY_BACKOFF_MS`. */
 	readonly recoveryBackoffMs?: readonly number[];
+	/** Test seam for the embedder preflight request; production uses the global `fetch`. */
+	readonly preflightFetch?: typeof fetch;
 }
 
 export const REFRESH_METHODS: Record<RefreshMethod, true> = {
@@ -146,6 +149,26 @@ async function runRefresh(
 			(await readDazziPlanCredential(getAgentDir()));
 		if (typeof bridged === "string" && bridged.length > 0) {
 			process.env.OPENAI_API_KEY = bridged;
+		}
+	}
+	// One embedding request before any document is parsed: a remote embedder that cannot
+	// work would otherwise fail only when MinSync starts, after the whole parse phase.
+	if (selected.includes("minsync")) {
+		const preflight = await preflightEmbedder(effective.minSync?.embedder, {
+			env: process.env,
+			...(deps.preflightFetch === undefined ? {} : { fetchImpl: deps.preflightFetch }),
+		});
+		if (!preflight.ok) {
+			return {
+				ok: false,
+				methods: selected,
+				scanned: 0,
+				written: 0,
+				deleted: 0,
+				skipped: 0,
+				diagnostics: [{ code: "embedder-preflight-failed", severity: "error", message: preflight.message }],
+				error: preflight.message,
+			};
 		}
 	}
 	try {
