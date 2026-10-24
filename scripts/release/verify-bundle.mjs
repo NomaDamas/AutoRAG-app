@@ -90,6 +90,7 @@ const VERSION_ARGS = {
 	"lark-cli": ["--version"],
 	lazykatok: ["--help"],
 	"fsearch-cli": ["--version"],
+	"filee-cli": ["--version"],
 	kordoc: ["--version"],
 	mailcrawl: ["--help"],
 };
@@ -137,6 +138,17 @@ if (!win) {
 	if (stray.length > 0) failures += 1;
 	process.stdout.write(`${stray.length === 0 ? "ok  " : "FAIL"} fsearch-cli links only system libraries and tools/lib${stray.length === 0 ? "" : `  <- ${stray.join(", ")}`}\n`);
 }
+
+// filee-cli: the librarian's `convert_files` backend. `--no-install` forbids an engine download and the
+// bundled libraries do the work, so a pass proves the whole self-contained layout runs from `tools/bin`
+// (on macOS through the symlink, which .NET resolves to the real publish folder) with no network and no
+// engine: Markdown -> HTML uses its Markdig library, and PNG -> BMP loads the bundled Magick.Native engine.
+const filee = join(bin, `filee-cli${exe}`);
+writeFileSync(join(home, "verify-filee.md"), "# verify\n\nDazzi bundle check.\n");
+check("filee-cli converts markdown offline", filee, ["convert", join(home, "verify-filee.md"), "--to", "html", "--no-install"], { expect: /Converted 1 of 1/u });
+const pixel = join(home, "verify-filee.png");
+writeFileSync(pixel, Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64"));
+check("filee-cli converts an image with its bundled engine", filee, ["convert", pixel, "--to", "bmp", "--no-install"], { expect: /Converted 1 of 1/u });
 
 // Behaviour, not just version output.
 check("kordoc parses a document", join(bin, `kordoc${exe}`), ["--help"], { expect: /kordoc|Usage|usage/i });
