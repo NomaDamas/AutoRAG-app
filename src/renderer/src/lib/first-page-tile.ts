@@ -11,8 +11,8 @@ import { hostPlatform } from "./shortcuts";
  * macOS Quick Look thumbnails both. Windows has no PDF or HWP thumbnail provider unless a reader installs one
  * (`nativeImage.createThumbnailFromPath` fails with "Failed to get thumbnail from local thumbnail cache reference"),
  * so those rows showed a letter tile although the Quick Look window and the Info panel can draw the document. The
- * same engines (pdf.js, rhwp) draw the first page here, into a small PNG. Linux keeps its type icon from the main
- * process; only a row the OS left without any icon is drawn.
+ * same engines (pdf.js, rhwp) draw the first page here, into a small PNG. The main process still answers with the
+ * OS's generic type icon for these files, so the drawn page takes that icon's place and the icon is the fallback.
  */
 
 /** One page render at a time per slot: a folder of PDFs must not starve the listing of CPU. */
@@ -97,12 +97,12 @@ export function firstPageTile(path: string, mtimeMs: number, width: number): Pro
 	return pending;
 }
 
-/** True for a row this module draws when the OS gave it no tile icon. */
+/** True for a PDF/HWP row on a platform whose OS has no first-page thumbnail for it. */
 export function wantsFirstPageTile(entry: FinderEntry): boolean {
-	return hostPlatform() !== "darwin" && entry.kind === "file" && entry.iconUrl === undefined && hasFileVersion(entry) && FIRST_PAGE_EXTENSION.test(entry.name);
+	return hostPlatform() !== "darwin" && entry.kind === "file" && hasFileVersion(entry) && FIRST_PAGE_EXTENSION.test(entry.name);
 }
 
-/** The row's first-page tile once drawn; null while drawing, when the OS already supplied an icon, or on failure. */
+/** The row's first-page tile once drawn; null while drawing, on macOS, or when the page cannot be drawn. */
 export function useFirstPageTile(entry: FinderEntry, width: number): string | null {
 	const wanted = wantsFirstPageTile(entry);
 	const [url, setUrl] = useState<string | null>(null);
