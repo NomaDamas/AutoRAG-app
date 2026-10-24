@@ -83,6 +83,7 @@ import {
 	registerActionsIpcHandlers,
 	registerAnalyticsIpcHandlers,
 	registerAppUpdateIpcHandlers,
+	registerConversionIpcHandlers,
 	registerAutomationIpcHandlers,
 	registerDragOutIpcHandlers,
 	registerIndexActivityIpcHandlers,
@@ -95,6 +96,7 @@ import {
 	registerSettingsIpcHandlers,
 } from "./ipc";
 import { createActionService } from "./action-service";
+import { createFileeConversionService, readFileeSettings } from "./conversion-service";
 import { createServicesService } from "./services-service";
 import { DEFAULT_SCAN_INTERVAL_MINUTES } from "./version-family-service";
 import { execFile } from "node:child_process";
@@ -709,6 +711,8 @@ app.whenReady().then(async () => {
 	registerOsRequestIpcHandlers(osRequests);
 	// The in-app right-click → 서비스 submenu: what macOS offers for the selection, and performing one.
 	registerServicesIpcHandlers(createServicesService());
+	// Renaming a file to another format's extension converts it (Filee); the settings are the shared AutoRAG config's `filee` block.
+	registerConversionIpcHandlers(createFileeConversionService(() => readFileeSettings(autoragConfigPath())));
 	const settings = await settingsService.get();
 	appliedLaunchAtLogin = settings.launchAtLogin;
 	applyAppearance(settings.appearance);

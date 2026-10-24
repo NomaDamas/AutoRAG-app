@@ -36,7 +36,8 @@ import {
 } from "../state/context-menu";
 import type { NewFileFormatId } from "../../../shared/new-file-contract";
 import { planTransfer } from "../state/file-transfer";
-import type { FileActionTarget } from "../state/file-actions";
+import { fileExtension, type FileActionTarget } from "../state/file-actions";
+import type { ConvertRenameState } from "../state/convert-rename";
 import { batchToast, emptyStateText, emptyTrashToast, historyToast, indexToast } from "../state/format";
 import { evidenceSourceUrl, findEvidenceSource } from "../state/evidence";
 import type { FocusZone } from "../state/keymap";
@@ -254,6 +255,12 @@ export interface FinderController {
 	cancelEmptyTrash(): void;
 	/** Whether the 휴지통 비우기 confirm is showing. */
 	readonly emptyTrashConfirm: boolean;
+	/** The rename that would convert the file, waiting for the keep/replace answer or running; null when none. */
+	readonly convertRename: ConvertRenameState | null;
+	/** Convert into the new name: keep the original, or replace it (the original moves to the Trash). */
+	confirmConvertRename(keepOriginal: boolean): void;
+	/** Drop the pending question, or stop the conversion that is running. */
+	cancelConvertRename(): void;
 	/** Open a temporary Evidence Folder in a new tab with the session's local evidence files. */
 	openEvidenceFolder(paths: readonly string[]): void;
 	/** Whether the close-Evidence-Folder confirm modal is showing. */
@@ -416,6 +423,8 @@ export function useFinderController(
 	const menuServicesToken = useRef(0);
 	/** The 휴지통 비우기 confirm: destructive, so it never runs without an explicit click. */
 	const [emptyTrashConfirm, setEmptyTrashConfirm] = useState(false);
+	/** A rename to another format's extension: asks keep-or-replace, then converts. */
+	const [convertRename, setConvertRename] = useState<ConvertRenameState | null>(null);
 	/** Tab id of an Evidence Folder tab awaiting close confirmation; null when none is pending. */
 	const [closingEvidenceTabId, setClosingEvidenceTabId] = useState<number | null>(null);
 	const [flashPath, setFlashPath] = useState<string | null>(null);
@@ -1679,13 +1688,70 @@ export function useFinderController(
 		if (next === current) {
 			return;
 		}
-		source
-			.rename(editing.path, next)
-			.then(() => {
-				pruneColumns([editing.path]);
-				refresh();
+		const renameOnly = (): void => {
+			source
+				.rename(editing.path, next)
+				.then(() => {
+					pruneColumns([editing.path]);
+					refresh();
+				})
+				.catch(reportError);
+		};
+		const entry = viewEntries.find((candidate) => candidate.path === editing.path);
+		// Only a file that changes its extension can become another format; every other rename never asks main.
+		if (entry?.kind !== "file" || fileExtension(current) === fileExtension(next)) {
+			renameOnly();
+			return;
+		}
+		source.conversion
+			.plan(current, next)
+			.then((plan) => {
+				switch (plan.kind) {
+					case "rename":
+						renameOnly();
+						return;
+					case "unsupported":
+						showToast(t("finder.convert.unsupported", { from: plan.from, to: plan.to }));
+						return;
+					case "convert":
+						setConvertRename({ id: crypto.randomUUID(), path: editing.path, name: current, newName: next, from: plan.from, to: plan.to, working: false });
+						return;
+				}
 			})
 			.catch(reportError);
+	});
+
+	const confirmConvertRename = useLatestCallback((keepOriginal: boolean) => {
+		const pending = convertRename;
+		if (pending === null || pending.working) return;
+		setConvertRename({ ...pending, working: true });
+		source.conversion
+			.run({ id: pending.id, path: pending.path, newName: pending.newName })
+			.then(async (outcome) => {
+				if (keepOriginal) {
+					showToast(outcome.note);
+					return;
+				}
+				const trashed = await source.trash([pending.path]);
+				dropRemoved(trashed.ok);
+				showToast(trashed.failed.length === 0 ? t("finder.convert.replaced", { name: basename(outcome.output) }) : batchToast("trash", trashed));
+			})
+			.catch(reportError)
+			.finally(() => {
+				setConvertRename(null);
+				refresh();
+			});
+	});
+
+	const cancelConvertRename = useLatestCallback(() => {
+		const pending = convertRename;
+		if (pending === null) return;
+		if (pending.working) {
+			// The running conversion rejects as cancelled; its handler closes the dialog.
+			void source.conversion.cancel(pending.id).catch(reportError);
+			return;
+		}
+		setConvertRename(null);
 	});
 
 	/** ⌘R: inline rename of the single focused row, the same state the context menu's 이름 변경 starts. */
@@ -1754,6 +1820,10 @@ export function useFinderController(
 		});
 
 	const dismiss = useLatestCallback(() => {
+		if (convertRename !== null) {
+			cancelConvertRename();
+			return;
+		}
 		if (closingEvidenceTabId !== null) {
 			setClosingEvidenceTabId(null);
 			return;
@@ -2069,6 +2139,9 @@ export function useFinderController(
 		confirmEmptyTrash,
 		cancelEmptyTrash,
 		emptyTrashConfirm,
+		convertRename,
+		confirmConvertRename,
+		cancelConvertRename,
 		openEvidenceFolder,
 		closeEvidenceFolderConfirm: closingEvidenceTabId !== null,
 		confirmCloseEvidenceFolder,

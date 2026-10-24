@@ -815,6 +815,46 @@ folder in view, a folder-only service is offered for a folder and not a file,
 and (when Keka is installed) Keka's group opens a visible second-level popout
 whose *Send to Keka* launches Keka. The probe is removed afterwards.
 
+## Converting a file by renaming it
+
+Type another format's extension into a file's name (`회의록.hwpx` → `회의록.pdf`)
+and Dazzi converts the file with Filee instead of only relabelling it. A dialog
+asks first: **원본 유지** writes the converted file beside the original;
+**원본 덮어쓰기** writes it and moves the original to the Trash (recoverable, and it
+is the app's ordinary trash, so ⌘Z-style restores still apply). Cancel and Esc
+change nothing. While it runs the same dialog shows an indeterminate bar and its
+Cancel stops the Filee process.
+
+- **When it triggers.** Only a *file* whose extension changes between two
+  present, different formats. A folder, a rename with the same extension (or only a
+  different spelling of it: `jpg`/`jpeg`, `htm`/`html`), a name with no extension
+  on either side, and any rename while `filee.enabled` is `false` stay plain renames and
+  never reach main.
+- **What counts as convertible.** `planConversion` (`src/main/conversion-plan.ts`)
+  answers offline from the librarian's route matrix (`SOURCE_FAMILIES`,
+  `reachableTargets`, the table the agent's `convert_files` plans with) plus Filee's other
+  spellings (`src/main/conversion-aliases.ts`, generated from `filee formats <ext>` by
+  `scripts/gen-conversion-aliases.mjs`). If the source has no route to the new
+  extension, or either extension is one Filee does not know, nothing is renamed and a toast says that
+  converting `{from}` to `{to}` is not supported.
+- **How it runs.** `src/main/conversion-service.ts` resolves `filee-cli` through the
+  librarian (the config's `filee.binaryPath`, `filee` on PATH, then the managed copy under
+  `<AUTORAG_HOME>/tools/filee-cli`, downloaded on the first conversion unless
+  `filee.autoInstall` is `false`) and runs `convertWithFilee` into a hidden
+  `.dazzi-convert-*` folder beside the source. The result is renamed out of it under the
+  name the user typed (so the typed stem wins, not the source's) and the staging folder is
+  removed, on success, failure and cancel alike. A result of several files (a PDF to
+  PNG gives one image per page) goes into a folder named after the new name. The source is
+  never modified; an existing name is refused before Filee starts.
+- **Settings.** The `filee` block of the shared AutoRAG config (`enabled`, `binaryPath`,
+  `autoInstall`, `timeoutMs`, `dataDir`) governs the agent and the app alike.
+- **Bridge.** `window.autorag.conversion` (`src/shared/conversion-contract.ts`):
+  `plan(oldName, newName)`, `run({ id, path, newName })`, `cancel(id)`.
+
+`run-qa-finder-convert-rename.mjs` drives this in the built app against the real
+`filee-cli`: hwpx → pdf with both answers, a typed stem that differs from the source's, Cancel and
+Esc, an unsupported route (mp3 → pdf), a same-format rename, and no leftover staging folder.
+
 ## Manual QA
 
 The Finder QA scripts are under `scripts/manual-qa/`. Build first, then run a
