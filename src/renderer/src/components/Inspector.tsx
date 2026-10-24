@@ -28,6 +28,7 @@ import { useEffect, useState, type MouseEvent as ReactMouseEvent, type ReactElem
 import { useTranslation } from "react-i18next";
 import { previewStreamUrl } from "../../../preview/shared/contract";
 import { hwpFirstPageUrl } from "../../../preview/ui/rhwp";
+import { firstPageTile } from "../lib/first-page-tile";
 import type { ActionAnchor, ActionCapabilities, OpenWithApplication } from "../../../shared/actions-contract";
 import type { AutomationRule } from "../../../shared/automation-contract";
 import type { FsFileDetails } from "../../../shared/fs-contract";
@@ -388,6 +389,8 @@ const previewCache = new Map<string, PreviewState>();
  * protocol URLs, so only the most recent ones stay in `previewCache`.
  */
 const HWP_PREVIEW_KEEP = 24;
+/** The Info panel paper is drawn at the OS preview tier: 640px. */
+const PREVIEW_PAPER_WIDTH = 640;
 const hwpIdentities: string[] = [];
 
 function rememberHwp(identity: string): void {
@@ -424,13 +427,21 @@ function usePreviewState(entry: FinderEntry): {
 		if (!fetchable) return;
 		const path = entry.path;
 		// The OS thumbnailers draw nothing for HWP without Hancom's plug-in; rhwp draws the first page here.
+		// Windows has no PDF thumbnailer either: when the OS answers nothing, pdf.js draws page one.
 		const hwp = /\.hwpx?$/i.test(path);
-		const load = hwp ? hwpFirstPageUrl : window.autorag?.fs?.previewIcon;
+		const osPreview = window.autorag?.fs?.previewIcon;
+		const load =
+			hwp
+				? hwpFirstPageUrl
+				: osPreview !== undefined && /\.pdf$/i.test(path)
+					? async (file: string, version: number): Promise<string | null> => (await osPreview(file, version)) ?? (await firstPageTile(file, version, PREVIEW_PAPER_WIDTH))
+					: osPreview;
 		if (load === undefined) return;
 		let cancelled = false;
 		const settle = (next: PreviewState): void => {
 			previewCache.set(identity, next);
-			if (hwp) rememberHwp(identity);
+			// A drawn page is a data URL of tens of KB: only the most recent stay cached.
+			if (next.url?.startsWith("data:") === true) rememberHwp(identity);
 			if (!cancelled) setState(next);
 		};
 		void load(path, mtimeMs)

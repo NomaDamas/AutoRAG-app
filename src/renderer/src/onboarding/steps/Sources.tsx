@@ -4,12 +4,13 @@ import type { ReactElement } from "react";
 import { Icon } from "../marks";
 import { BrandChip, Eyebrow, Multiline, SourceIcon, SplitScreen, Switch } from "../parts";
 import { connectableLater, sourceDetail } from "../flow";
+import { hostPlatform } from "../../lib/shortcuts";
 import type { OnboardingCtx } from "../context";
 
 export function SourcesStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElement {
 	const { t, sources, sourcesChecking, draft } = ctx;
 	// Brands the user can still connect later: everything the probes did not find.
-	const more = connectableLater(sources);
+	const more = connectableLater(sources, hostPlatform());
 
 	return (
 		<SplitScreen

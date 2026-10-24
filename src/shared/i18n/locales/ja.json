@@ -1245,7 +1245,15 @@
       "retried": "一時的なファイルシステムエラー({{code}})が発生したため、更新を {{retries}} 回再試行しました。",
       "filesLeftOut": "{{code}} エラーが続いたファイル {{files}} 件を今回の更新から除外しました。次回の更新で再試行します。",
       "parseKilled": "制限時間を超えたファイル {{timedOut}} 件と、パーサーが停止したファイル {{crashed}} 件をスキップしました。次回の更新で再試行します。",
-      "modelMissing": "このコンピューター用の埋め込みモデルがまだダウンロードされていないため、インデックス作成をスキップしました。設定 → AI モデル → 文書理解モデルでダウンロードしてください。"
+      "modelMissing": "このコンピューター用の埋め込みモデルがまだダウンロードされていないため、インデックス作成をスキップしました。設定 → AI モデル → 文書理解モデルでダウンロードしてください。",
+      "preflightMissingKey": "エンベッダー {{id}} には API キーが必要ですが、{{env}} が設定されていません。インデックス作成の前に設定してください。",
+      "preflightKeyEnvIgnored": "エンベッダー {{id}} は apiKeyEnv に {{configured}} を指定していますが、インデクサーはキーを {{env}} からしか読まず、{{env}} が設定されていません。キーを {{env}} に設定してください。",
+      "preflightBaseUrlV1": "{{url}} のエンベッダーが 404 を返しました。インデクサーは /v1/embeddings を自分で付け足すため、/v1 で終わるベース URL ではパスが二重になります。{{suggested}} を使ってください。",
+      "preflightStatus": "{{url}} のエンベッダーがテストリクエストを拒否しました: HTTP {{status}} {{detail}}",
+      "preflightUnreachable": "{{url}} のエンベッダーに接続できません: {{reason}}",
+      "preflightTimeout": "{{url}} のエンベッダーが {{seconds}} 秒以内にテストリクエストへ応答しませんでした。",
+      "preflightNoVector": "{{url}} のエンベッダーが、使えるベクトルのないままテストリクエストに応答しました。",
+      "preflightDimension": "{{url}} のエンベッダーが {{actual}} 個の数値のベクトルを返しましたが、設定では {{expected}} です。"
     },
     "worker": {
       "unknownFormat": "不明なファイル形式です: {{format}}",
@@ -2265,6 +2273,9 @@
       "appDownload": "{{name}} をダウンロード",
       "appNeeded": "必要",
       "appInstalled": "インストール済み",
+      "appHintMissingPc": "{{name}} の内容を取り込むには、このコンピューターに {{name}} アプリのインストールが必要です。",
+      "appHintInstalledPc": "このコンピューターの {{name}} アプリから内容を取り込みます。",
+      "appUnknown": "未確認",
       "refreshName": "更新",
       "refreshLast": "最終更新 {{date}}",
       "refreshNever": "まだ内容を取得していません。",
@@ -2280,7 +2291,8 @@
       "removeHint": "Dazzi の検索からのみ削除され、元のアプリのデータは消えません。",
       "confirmTitle": "接続を解除しますか？",
       "confirmBody": "'{{alias}}' 接続を Dazzi の検索から削除します。元のアプリのデータは消えません。",
-      "macOnlyNote": "Apple カレンダーとリマインダーは macOS の EventKit でのみ読み取れるため、このコンピューターでは接続は無効です。"
+      "macOnlyNote": "Apple カレンダーとリマインダーは macOS の EventKit でのみ読み取れるため、このコンピューターでは接続は無効です。",
+      "kakaoOnlyNote": "カカオトークは Mac アプリでのみ動作する lazykatok で読み取るため、このコンピューターでは接続は無効です。"
     },
     "scope": {
       "title": "検索範囲",

@@ -403,6 +403,8 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 	let workspacePath: string | null = null;
 	let phase: IndexingPhase | null = null;
 	let phaseStartedAt = 0;
+	/** Bumped by every `startIndexing`; a poll tick belongs to the run it began in and is dropped once that run is over. */
+	let runId = 0;
 	let selectedFolders: readonly string[] = [];
 	/** Files of the folders the user left out in smart indexing; the pre-scans still count them. */
 	let excludedFiles = 0;
@@ -459,10 +461,21 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 		return text === null ? { text: null, signature: previousSignature } : { text, signature };
 	}
 
+	/**
+	 * One poll. The reads are asynchronous and may straddle the end of the run (or the start of the next
+	 * one), so nothing is changed until they are all done, and then only if this run is still the live one
+	 * and still running: `finish()` is the only writer of a final state, and a late tick can neither undo it
+	 * nor leak an old run's counters into a new one.
+	 */
 	async function tick(): Promise<void> {
 		if (workspacePath === null) return;
-		const progressPath = join(workspacePath, ".autorag", "refresh-progress.json");
-		const progressRead = readIfChanged(progressPath, progressSignature);
+		const ownRun = runId;
+		const root = join(workspacePath, ".autorag");
+		// Synchronous reads: an async read keeps the file open across event-loop turns, which fails the librarian's rename on Windows.
+		const progressRead = readIfChanged(join(root, "refresh-progress.json"), progressSignature);
+		const parsedRead = readIfChanged(join(root, "parsed", "index.json"), parsedSignature);
+		const minsyncRead = readIfChanged(join(root, "minsync", ".minsync", "progress.jsonl"), minsyncSignature);
+		if (ownRun !== runId || status.state !== "running") return;
 		if (progressRead.text !== null) {
 			progressSignature = progressRead.signature;
 			let parsed: unknown;
@@ -479,14 +492,12 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 				}
 			}
 		}
-		const parsedPath = join(workspacePath, ".autorag", "parsed", "index.json");
-		const parsedRead = readIfChanged(parsedPath, parsedSignature);
+
 		if (parsedRead.text !== null) {
 			parsedSignature = parsedRead.signature;
 			parsedSnapshot = readParsedMirror(parsedRead.text);
 		}
-		const minsyncPath = join(workspacePath, ".autorag", "minsync", ".minsync", "progress.jsonl");
-		const minsyncRead = readIfChanged(minsyncPath, minsyncSignature);
+
 		if (minsyncRead.text !== null) {
 			minsyncSignature = minsyncRead.signature;
 			embeddedFiles = Math.max(embeddedFiles, countMinSyncProgress(minsyncRead.text));
@@ -745,6 +756,7 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 			});
 			sourceNames = request.sources.map((source) => SOURCE_LABELS[source.id]);
 			pendingDatasourceAliases = Object.keys(buildDatasourceEntries(datasources, deps.home));
+			runId += 1;
 			localIndexDone = false;
 			phase = null;
 			progressSignature = "";

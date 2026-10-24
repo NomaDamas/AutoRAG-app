@@ -86,7 +86,7 @@
   --ql-hud-pill: rgba(255,255,255,0.16);
   --ql-hud-track: rgba(255,255,255,0.25);
   --ql-hud-badge: rgba(20,20,22,0.5);
-  --ql-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", "Apple SD Gothic Neo", "Segoe UI", "Malgun Gothic", "Noto Sans KR", sans-serif;
+  --ql-font: "Pretendard Variable", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", "Apple SD Gothic Neo", "Segoe UI", "Malgun Gothic", "Noto Sans KR", sans-serif;
   --ql-font-mono: "SF Mono", ui-monospace, Menlo, Consolas, "Cascadia Mono", "JetBrains Mono", "D2Coding", "Noto Sans KR", monospace;
   --backdrop-ql-hud: blur(24px) saturate(180%);
   --backdrop-ql-float: blur(20px) saturate(180%);
@@ -235,7 +235,7 @@
   --vtag-exact-text: #B45309;
 
   /* -------------------------------------------------------------- §3 Typography */
-  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Apple SD Gothic Neo", Pretendard, system-ui, sans-serif;
+  --font-sans: "Pretendard Variable", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Apple SD Gothic Neo", "Segoe UI", "Malgun Gothic", system-ui, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
 
   --font-size-title: 18px;
@@ -310,6 +310,9 @@
   /* v7 window grid columns (sidebar / finder / inspector). */
   --w-sidebar: 180px;
   --w-inspector: 300px;
+
+  /* Width the window-controls overlay covers at the page's top-right (Windows/Linux, src/main/window-chrome.ts). */
+  --window-controls-gutter: 0px;
 
   /* ----------------------------------------------------------- §4 Component grids */
   --grid-file-row: minmax(0,1fr) 100px 60px 96px 66px;
@@ -515,4 +518,11 @@ html[data-appearance="dark"] {
     --ql-md-heading: #5AC8FA;
     --ql-md-list: #FF9F0A;
     --ql-md-quote: rgba(235,235,245,0.6);
+}
+
+/* Windows and Linux draw their own minimize / maximize / close over the top-right corner of the page; the top bars
+ * stop short of them. `titlebar-area-*` only resolve where that overlay exists, and macOS (traffic lights on the
+ * left) keeps 0. */
+html:not([data-platform="darwin"]) {
+  --window-controls-gutter: calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw));
 }

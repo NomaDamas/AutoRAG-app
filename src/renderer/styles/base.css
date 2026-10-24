@@ -33,6 +33,10 @@ body {
 	background: var(--bg-desk);
 	color: var(--text-primary);
 	font-family: var(--font-sans);
+	/* Pretendard turns `1x2` into `1×2` through contextual substitution. File
+	 * names and paths must be drawn exactly as stored, so substitution is off
+	 * for the whole document. */
+	font-variant-ligatures: none;
 	font-size: var(--font-size-body);
 	line-height: var(--leading-body);
 	overflow: hidden;

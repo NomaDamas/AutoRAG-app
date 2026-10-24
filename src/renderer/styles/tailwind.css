@@ -49,6 +49,7 @@
 
 @import "tailwindcss/theme.css" layer(theme);
 
+@import "./fonts.css";
 @import "./tokens.css";
 
 /* `@source` paths are relative to this file. electron-vite sets the renderer's
