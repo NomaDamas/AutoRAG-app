@@ -1,4 +1,4 @@
-import { readFile, stat } from "node:fs/promises";
+import { stat } from "node:fs/promises";
 import { join } from "node:path";
 import {
 	IDLE_INDEX_ACTIVITY,
@@ -11,6 +11,7 @@ import {
 } from "../shared/index-activity-contract";
 import { isJsonObject } from "../shared/settings-contract";
 import { readActivity, type ActivityRecord } from "./index-activity-journal";
+import { readLibrarianFile } from "./librarian-file";
 
 /**
  * One view of "what is indexing right now", merged from the three places that
@@ -248,9 +249,8 @@ export function createIndexActivityService(deps: IndexActivityDeps): IndexActivi
 
 	async function poll(): Promise<IndexActivitySnapshot> {
 		const root = await workspacePath();
-		const text = root === null ? null : await readFile(join(root, ".autorag", "refresh-progress.json"), "utf8").catch(() => null);
-		const minsyncLog =
-			root === null ? null : await readFile(join(root, ".autorag", "minsync", ".minsync", "progress.jsonl"), "utf8").catch(() => null);
+		const text = root === null ? null : readLibrarianFile(join(root, ".autorag", "refresh-progress.json"));
+		const minsyncLog = root === null ? null : readLibrarianFile(join(root, ".autorag", "minsync", ".minsync", "progress.jsonl"));
 		const minsyncLines = minsyncLog === null ? 0 : minsyncLog.split("\n").filter((line) => line.trim().length > 0).length;
 		current = deriveIndexActivity({
 			progress: text === null ? null : parseRefreshProgress(text),
