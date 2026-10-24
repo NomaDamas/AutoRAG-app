@@ -10,12 +10,20 @@ import { cn } from "../../lib/cn";
 import { Icon } from "../marks";
 import { Eyebrow } from "../parts";
 import { localSpecMessage } from "../../../../shared/local-embedding-spec";
+import type { IndexFailureReason } from "../../../../shared/index-failure";
 import { canSelectCloudEmbedding, embedCards, formatSize, localEmbeddingAllowed, resolveEmbed, scanTotals, type EmbedCard } from "../flow";
 import type { OnboardingCtx } from "../context";
 import { ModelDownloadPanel } from "../../components/ModelDownloadPanel";
 
 /** The four pips every meter shows, whether or not they are lit. */
 const PIPS = [1, 2, 3, 4];
+
+/** Which line says why the index stopped when the user comes here to fix it. */
+function pausedNoticeKey(reason: IndexFailureReason | undefined): "config" | "disk" | "default" {
+	if (reason === "embedder-config") return "config";
+	if (reason === "disk-full") return "disk";
+	return "default";
+}
 
 export function EmbeddingStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElement {
 	const { t, draft, scans, embedding, platform, account } = ctx;
@@ -148,6 +156,12 @@ export function EmbeddingStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactEl
 				<Eyebrow icon="search">{t("onboarding.embedding.eyebrow")}</Eyebrow>
 				<h1>{t("onboarding.embedding.title")}</h1>
 			</div>
+			{draft.resumeAt === "indexing" ? (
+				<div className="plan-callout warn" role="status">
+					<Icon name="triangle-alert" size={14} />
+					<span>{t(`onboarding.embedding.pausedNotice.${pausedNoticeKey(ctx.indexStatus?.failure?.reason)}`)}</span>
+				</div>
+			) : null}
 			<div ref={listRef} className="em-cards" role="radiogroup" aria-label={t("onboarding.embedding.groupLabel")}>
 				{cards.map(renderCard)}
 			</div>

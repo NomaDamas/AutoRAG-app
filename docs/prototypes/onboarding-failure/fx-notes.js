@@ -19,9 +19,9 @@ function notesHtml() {
 
 	<section><h2>종류와 화면 (이슈 표 + 원인 미확인)</h2>
 	<table><tr><th>종류</th><th>시안 버튼</th><th>누르는 버튼</th><th>자동으로 하는 일</th><th>앱이 구분하는 근거</th></tr>
-		<tr><td>설정 오류</td><td>설정 오류</td><td>임베딩 방식 바꾸기</td><td>없음 (문서를 읽기 전에 멈춤)</td><td><code>embedder-preflight-failed</code> (PR #274, 아직 미병합)</td></tr>
+		<tr><td>설정 오류</td><td>설정 오류</td><td>임베딩 방식 바꾸기</td><td>없음 (문서를 읽기 전에 멈춤)</td><td><code>embedder-preflight-failed</code> + 진단의 <code>reason</code> 토큰(<code>unreachable</code>·<code>timeout</code>·<code>server-error</code>는 연결 문제, 나머지는 설정 문제)</td></tr>
 		<tr><td>일시 오류</td><td>일시 오류</td><td>지금 다시 시도</td><td>8초마다 자동 재시도, 최대 6번</td><td>코드가 아니라 메시지: <code>isEmbeddingTimeout()</code>(embedding-batch.ts) + <code>checkNetwork()</code></td></tr>
-		<tr><td>환경 문제</td><td>환경 · 폴더 / 디스크</td><td>다시 확인 / 이어서 받기</td><td>폴더는 3초마다 확인, 모델은 이어받기</td><td>폴더: <code>search-root-unavailable</code>. 디스크: 코드가 없어 <code>modelDownloadFailed</code> 문자열의 <code>ENOSPC</code>를 읽어야 합니다(새 진단 코드 제안).</td></tr>
+		<tr><td>환경 문제</td><td>환경 · 폴더 / 디스크</td><td>다시 확인 / 이어서 받기</td><td>폴더는 3초마다 확인, 모델은 이어받기</td><td>폴더: <code>search-root-unavailable</code>(진단의 <code>folders</code>). 디스크: <code>embedding-model-download-failed</code>의 <code>reason: disk-full</code>(Node의 <code>ENOSPC</code>로만 판정).</td></tr>
 		<tr><td>원인 미확인</td><td>원인 미확인</td><td>다시 시도</td><td>없음</td><td>위에 없는 모든 것</td></tr>
 		<tr><td>부분 실패</td><td>부분 실패</td><td>Dazzi 열기 (끝난 화면)</td><td>다음 새로 고침에서 재시도</td><td><code>parse-killed</code>, <code>files-left-out</code>, <code>minsync-file-skipped</code></td></tr></table></section>
 
@@ -45,9 +45,9 @@ function notesHtml() {
 		<li>${u("앱 안 화면은 토큰으로 흉내 낸 목업입니다. 새 요소는 ‘파일 목록 위 배너’와 ‘설정 안 임베딩 방식 선택’입니다.")}</li>
 		<li>${u("이슈의 ‘실패한 단계를 단계 표시줄에 반영’과 ‘접어 둔 자세히’는 두지 않았습니다. 멈춘 곳은 막대의 점 하나가 전부입니다. 유지할지는 정해야 합니다.")}</li></ul></section>
 
-	<section><h2>이 시안을 코드로 옮기면 (이 시안은 코드를 바꾸지 않습니다)</h2><ul>
-		<li><code>onboarding-service.ts</code>: <code>settle</code>에 diagnostics를 넘기고, <code>IndexingStatus</code>에 <code>failure: { kind, code, stage, kept } | null</code>와 <code>skipped</code> 요약을 추가합니다. <code>state.json</code>에 마지막 실패를 저장해 재실행 때 한 번만 조용히 재시도한 뒤 같은 화면을 보여줍니다.</li>
-		<li><code>IndexingScreen.tsx</code>: <code>failed</code> 분기를 이 시안의 멈춤 화면으로 교체하고, 끝난 화면에 건너뛴 파일 한 줄을 붙입니다. 새 CSS는 <code>onboarding.css</code> 맨 아래 ‘States the prototype has no design for’에 넣습니다(<code>prototype.css</code> 2부가 그대로 옮겨집니다).</li>
-		<li>앱 안: 사이드바 블록은 실패일 때 15초 제한을 없애고(해결되거나 닫을 때까지), 파일 목록 배너와 <code>retryIndex</code> 핸들러를 만듭니다.</li>
-		<li>번역: 문구가 짧아져 키가 줄었습니다. ko/en/ja/zh 네 파일에 같은 키로 추가합니다. 이 시안의 한국어는 아직 i18n 키가 아닙니다.</li></ul></section>`;
+	<section><h2>코드로 옮긴 결과 (이 시안은 구현의 설계 기준입니다)</h2><ul>
+		<li><code>onboarding-service.ts</code>: <code>finish</code>가 진단을 받아 <code>IndexingStatus</code>에 <code>failure: { reason, folders, code } | null</code>와 <code>skipped</code>를 싣습니다. 분류는 <code>index-failure.ts</code>가 앱이 직접 내보내는 진단 코드와 <code>reason</code>·<code>folders</code> 필드만 읽어 합니다(원문은 읽지 않고 로그에만 남깁니다). 재실행하면 임시저장된 단계가 <code>indexing</code>이라 같은 실행을 다시 시작하고, 같은 이유로 멈추면 같은 화면이 다시 나옵니다.</li>
+		<li><code>IndexingScreen.tsx</code> · <code>pause.ts</code> · <code>usePauseControl.ts</code>: <code>failed</code> 분기를 이 시안의 멈춤 화면으로 교체했습니다. 이유별 화면, 자동 재시도, 반복 시 버튼 교체는 <code>pause.ts</code>의 순수 함수로 단위 테스트합니다. 끝난 화면에는 건너뛴 파일 한 줄이 붙습니다. CSS는 <code>onboarding.css</code> 맨 아래입니다.</li>
+		<li>앱 안: <code>index-problem-service.ts</code>가 마지막 실행의 실패와 건너뛴 수를 <code>&lt;userData&gt;/index-problem.json</code>에 저장하고(재실행해도 남습니다), 사이드바 블록 · 파일 목록 위 배너 · 설정 &gt; 인덱싱 카드가 같은 기록을 읽습니다. “일단 Dazzi 열기”는 키워드 인덱스를 바로 시작합니다.</li>
+		<li>번역: ko/en/ja/zh 네 파일에 같은 키(<code>onboarding.indexing.pause.*</code>, <code>indexProblem.*</code>)로 넣었습니다. 실제 앱에서 실패를 만들어 확인하는 QA는 <code>scripts/manual-qa/run-qa-onboarding-failure.mjs</code>입니다.</li></ul></section>`;
 }

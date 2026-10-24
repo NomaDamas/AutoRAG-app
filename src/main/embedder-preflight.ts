@@ -23,7 +23,10 @@ export interface PreflightEmbedder {
 	readonly profile?: string;
 }
 
-export type PreflightOutcome = { readonly ok: true } | { readonly ok: false; readonly message: string };
+/** Why a probe failed, as a token the app can act on without reading `message`. */
+export type PreflightFailureReason = "missing-key" | "key-env-ignored" | "timeout" | "unreachable" | "base-url-v1" | "rejected" | "server-error" | "no-vector" | "dimension";
+
+export type PreflightOutcome = { readonly ok: true } | { readonly ok: false; readonly reason: PreflightFailureReason; readonly message: string };
 
 export interface PreflightDeps {
 	/** The environment MinSync inherits: it reads `OPENAI_API_KEY` from here and nowhere else. */
@@ -76,13 +79,13 @@ export async function preflightEmbedder(embedder: PreflightEmbedder | undefined,
 	if (kind === "openai") {
 		const key = deps.env[OPENAI_KEY_ENV];
 		if (typeof key !== "string" || key.length === 0) {
-			const configured = embedder.apiKeyEnv;
+			const ignored = embedder.apiKeyEnv !== undefined && embedder.apiKeyEnv !== OPENAI_KEY_ENV;
 			return {
 				ok: false,
-				message:
-					configured !== undefined && configured !== OPENAI_KEY_ENV
-						? t("main.refresh.preflightKeyEnvIgnored", { id, configured, env: OPENAI_KEY_ENV })
-						: t("main.refresh.preflightMissingKey", { id, env: OPENAI_KEY_ENV }),
+				reason: ignored ? "key-env-ignored" : "missing-key",
+				message: ignored
+					? t("main.refresh.preflightKeyEnvIgnored", { id, configured: embedder.apiKeyEnv, env: OPENAI_KEY_ENV })
+					: t("main.refresh.preflightMissingKey", { id, env: OPENAI_KEY_ENV }),
 			};
 		}
 		headers.authorization = `Bearer ${key}`;
@@ -103,29 +106,31 @@ export async function preflightEmbedder(embedder: PreflightEmbedder | undefined,
 		response = await fetchImpl(url, { method: "POST", headers, body: JSON.stringify(body), signal: AbortSignal.timeout(timeoutMs) });
 	} catch (error) {
 		if (error instanceof Error && error.name === "TimeoutError") {
-			return { ok: false, message: t("main.refresh.preflightTimeout", { url: baseUrl, seconds: Math.round(timeoutMs / 1000) }) };
+			return { ok: false, reason: "timeout", message: t("main.refresh.preflightTimeout", { url: baseUrl, seconds: Math.round(timeoutMs / 1000) }) };
 		}
-		return { ok: false, message: t("main.refresh.preflightUnreachable", { url: baseUrl, reason: error instanceof Error ? error.message : String(error) }) };
+		return { ok: false, reason: "unreachable", message: t("main.refresh.preflightUnreachable", { url: baseUrl, reason: error instanceof Error ? error.message : String(error) }) };
 	}
 
 	if (!response.ok) {
 		const suggested = response.status === 404 ? withoutV1(baseUrl) : null;
-		if (suggested !== null) return { ok: false, message: t("main.refresh.preflightBaseUrlV1", { url: baseUrl, suggested }) };
-		return { ok: false, message: t("main.refresh.preflightStatus", { url: baseUrl, status: response.status, detail: detailOf(await response.text().catch(() => "")) }) };
+		if (suggested !== null) return { ok: false, reason: "base-url-v1", message: t("main.refresh.preflightBaseUrlV1", { url: baseUrl, suggested }) };
+		// 5xx and 429 mean the server could not answer now; any other status is the server refusing this request.
+		const reason = response.status >= 500 || response.status === 429 ? "server-error" : "rejected";
+		return { ok: false, reason, message: t("main.refresh.preflightStatus", { url: baseUrl, status: response.status, detail: detailOf(await response.text().catch(() => "")) }) };
 	}
 
 	let parsed: unknown;
 	try {
 		parsed = await response.json();
 	} catch {
-		return { ok: false, message: t("main.refresh.preflightNoVector", { url: baseUrl }) };
+		return { ok: false, reason: "no-vector", message: t("main.refresh.preflightNoVector", { url: baseUrl }) };
 	}
 	const vector = vectorOf(parsed, kind);
 	if (!Array.isArray(vector) || vector.length === 0 || vector.some((value) => typeof value !== "number")) {
-		return { ok: false, message: t("main.refresh.preflightNoVector", { url: baseUrl }) };
+		return { ok: false, reason: "no-vector", message: t("main.refresh.preflightNoVector", { url: baseUrl }) };
 	}
 	if (embedder.dimension !== undefined && vector.length !== embedder.dimension) {
-		return { ok: false, message: t("main.refresh.preflightDimension", { url: baseUrl, actual: vector.length, expected: embedder.dimension }) };
+		return { ok: false, reason: "dimension", message: t("main.refresh.preflightDimension", { url: baseUrl, actual: vector.length, expected: embedder.dimension }) };
 	}
 	return { ok: true };
 }

@@ -141,6 +141,14 @@ function reconcileAccountDraft(current: OnboardingDraft, status: AccountStatus |
 	return current;
 }
 
+/** The draft with the one-way return to the index cleared (it is set only while fixing what stopped the first index). */
+function leaveDetour(draft: OnboardingDraft): OnboardingDraft {
+	const { resumeAt, ...rest } = draft;
+	return resumeAt === undefined ? draft : rest;
+}
+
+const trimTrailingSeparators = (path: string): string => path.replace(/[\\/]+$/u, "");
+
 export function Onboarding({ onComplete }: { readonly onComplete: () => void }): ReactElement {
 	const { t: translateFn } = useTranslation();
 	// The onboarding copy lives under a fixed `onboarding` namespace tree; a loose
@@ -372,10 +380,14 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 					: null,
 			...(excludePaths.length > 0 ? { excludePaths, excludedFiles } : {}),
 		};
-		void bridge.startIndexing(request).then((status) => {
-			setIndexStatus(status);
-		});
-	}, []);
+		void bridge
+			.startIndexing(request)
+			.then((status) => {
+				setIndexStatus(status);
+			})
+			// A refusal (a machine below the local spec, an unreadable config) would otherwise leave a stopped screen with no word.
+			.catch((error: unknown) => showToast(ipcMessage(error)));
+	}, [showToast]);
 
 	const refreshAccount = useCallback((): void => {
 		setPaying(true);
@@ -408,15 +420,18 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 		const signedIn = accountRef.current?.state === "signedIn";
 		const embed = resolveEmbed(current.embed, signedIn, localAllowedRef.current);
 		const list = buildFlow(current.plan, shouldSkipPlanStep(current.planConfirmed, embed, accountRef.current), embed);
-		const target = list[list.indexOf(current.stepId) + 1];
+		// Leaving the embedding choice that a stopped index sent the user to goes straight back to the index.
+		const detour = current.resumeAt === "indexing" && current.stepId === "embedding";
+		const target = detour ? "indexing" : list[list.indexOf(current.stepId) + 1];
 		const consent = usageConsentOnLeaving(current.stepId, shareUsageRef.current);
 		const errorConsent = errorReportsConsentOnLeaving(current.stepId, shareErrorsRef.current);
 		if (consent !== null && errorConsent !== null) {
 			// A failed save leaves both settings at their default (off): the safe direction.
 			void autorag.settings.set({ usageAnalytics: consent, errorReporting: errorConsent }).catch((error: unknown) => console.error("[onboarding] privacy choices not saved:", error));
 		}
+		if (detour) setIndexStatus(null);
 		setDraft({
-			...current,
+			...(detour ? leaveDetour(current) : current),
 			...(current.stepId === "plan" ? { planConfirmed: true } : {}),
 			...(target === undefined ? {} : { stepId: target }),
 		});
@@ -425,6 +440,11 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 	const back = useCallback((): void => {
 		const current = draftRef.current;
 		if (current === null) {
+			return;
+		}
+		if (current.resumeAt === "indexing" && current.stepId === "embedding") {
+			setIndexStatus(null);
+			setDraft({ ...leaveDetour(current), stepId: "indexing" });
 			return;
 		}
 		const signedIn = accountRef.current?.state === "signedIn";
@@ -463,6 +483,36 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 		}
 		void bridge.complete().then(onComplete);
 	}, [onComplete]);
+
+	const changeEmbedding = useCallback((): void => {
+		const current = draftRef.current;
+		if (current === null) {
+			return;
+		}
+		setDraft({ ...current, stepId: "embedding", resumeAt: "indexing" });
+	}, []);
+
+	const excludeFolders = useCallback(
+		(paths: readonly string[]): void => {
+			const current = draftRef.current;
+			if (current === null) {
+				return;
+			}
+			const left = new Set(paths.map(trimTrailingSeparators));
+			const folders = current.folders.map((folder) => (left.has(trimTrailingSeparators(folder.path)) ? { ...folder, selected: false } : folder));
+			if (!folders.some((folder) => folder.selected)) {
+				// Nothing is left to index: choose folders again.
+				setDraft({ ...current, folders, stepId: "folders" });
+				return;
+			}
+			const updated = { ...current, folders };
+			// `startIndexing` reads the draft through the ref, which a render would update only afterwards.
+			draftRef.current = updated;
+			setDraft(updated);
+			startIndexing();
+		},
+		[startIndexing],
+	);
 
 	// Step entry: permissions polling, folder pre-scan, connector/model detection.
 	const stepId = draft?.stepId ?? "welcome";
@@ -604,7 +654,12 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 	}, [stepId, draft, patch]);
 
 	useEffect(() => {
-		if (stepId !== "indexing" || indexingRef.current) {
+		if (stepId !== "indexing") {
+			// Leaving the index (a pause sent the user to fix the embedding) means entering it again starts a new run.
+			indexingRef.current = false;
+			return;
+		}
+		if (indexingRef.current) {
 			return;
 		}
 		indexingRef.current = true;
@@ -625,7 +680,8 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 			}
 			if (event.key === "Enter" && !typing) {
 				if (keyboard.current.stepId === "indexing") {
-					keyboard.current.finish();
+					// A stopped run's button takes Enter itself (the pause screen); only a finished or running one is handled here.
+					if (indexStatusRef.current?.state !== "failed") keyboard.current.finish();
 				} else if (keyboard.current.currentAdvance()) {
 					keyboard.current.next();
 				}
@@ -993,6 +1049,8 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 				});
 		},
 		startIndexing,
+		changeEmbedding,
+		excludeFolders,
 		finish,
 		finishInBackground,
 		setTipIndex,

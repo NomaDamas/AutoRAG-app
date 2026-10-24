@@ -114,6 +114,10 @@ export interface OnboardingCtx {
 	verifyModel(provider?: ByokProviderId): void;
 
 	startIndexing(): void;
+	/** Opens the embedding choice from a stopped first index; leaving it returns straight to the index. */
+	changeEmbedding(): void;
+	/** Leaves the given (unreadable) folders out of the index and starts it again; with none left it goes back to choosing folders. */
+	excludeFolders(paths: readonly string[]): void;
 	finish(): void;
 	finishInBackground(): void;
 	setTipIndex(index: number): void;

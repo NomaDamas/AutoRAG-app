@@ -436,6 +436,65 @@
       "finalizing": "仕上げ中"
     }
   },
+  "indexProblem": {
+    "retrying": "再試行しています",
+    "fixEmbedding": "埋め込み方式を変更",
+    "action": {
+      "retryNow": "今すぐ再試行",
+      "resume": "ダウンロードを再開",
+      "recheck": "もう一度確認"
+    },
+    "card": {
+      "failed": "インデックス停止"
+    },
+    "item": {
+      "embedding": "埋め込み",
+      "folder": "フォルダ",
+      "skipped": "スキップしたファイル"
+    },
+    "embedderConfig": {
+      "title": "意味検索を利用できません",
+      "side": "意味検索の準備を停止",
+      "sideDetail": "埋め込み設定の確認が必要",
+      "detail": "設定の確認が必要"
+    },
+    "embedderOffline": {
+      "title": "接続を待っています",
+      "side": "接続を待機中",
+      "sideDetail": "埋め込み · 接続の確認が必要",
+      "detail": "接続の確認が必要"
+    },
+    "modelDownload": {
+      "title": "モデルのダウンロードが止まりました",
+      "side": "モデルのダウンロード停止",
+      "sideDetail": "ダウンロードの再開が必要",
+      "detail": "ダウンロード停止"
+    },
+    "diskFull": {
+      "title": "保存容量が不足しています",
+      "side": "保存容量が不足",
+      "sideDetail": "容量を空けて再試行",
+      "detail": "保存容量が不足"
+    },
+    "folderUnreadable": {
+      "title": "‘{{folder}}’ フォルダを読み取れません",
+      "titleMany": "{{count}} 個のフォルダを読み取れません",
+      "side": "フォルダを読み取れません",
+      "sideDetailMany": "{{count}} 個のフォルダ"
+    },
+    "unknown": {
+      "title": "意味検索の準備が止まりました",
+      "side": "埋め込み停止",
+      "sideDetail": "原因不明",
+      "detail": "原因不明"
+    },
+    "skipped": {
+      "title": "{{count}} 個のファイルをスキップしました",
+      "side": "{{count}} 個のファイルをスキップ",
+      "sideDetail": "次の更新で再試行",
+      "row": "{{count}} 個 · 次の更新で自動的に再試行します"
+    }
+  },
   "confirm": {
     "emptyTrashTitle": "ゴミ箱を空にする",
     "emptyTrashMessage": "ゴミ箱内のすべての項目が完全に削除されます。この操作は取り消せません。",
@@ -727,7 +786,12 @@
       "minutes": "約{{minutes}}分",
       "cached": "準備完了",
       "downloadUnknown": "確認中",
-      "cloudConsent": "選択したフォルダの文書本文が埋め込み処理のためにDazziサーバーへ送信されることに同意します。処理後は保持されません。"
+      "cloudConsent": "選択したフォルダの文書本文が埋め込み処理のためにDazziサーバーへ送信されることに同意します。処理後は保持されません。",
+      "pausedNotice": {
+        "config": "選択した埋め込み方式を利用できず停止しました",
+        "disk": "空き容量が足りずモデルをダウンロードできませんでした",
+        "default": "埋め込みを続行できませんでした"
+      }
     },
     "sources": {
       "eyebrow": "データソース",
@@ -870,8 +934,6 @@
       "tipDot": "ヒント {{index}}",
       "done": "インデックス作成完了",
       "doneDetail": "{{files}}ファイル · データソース{{sources}}件",
-      "failedTitle": "インデックス作成が中断",
-      "failedDetail": "インデックス作成を完了できませんでした。",
       "waiting": "開始待ち",
       "waitingNote": "最初のインデックス作成を準備しています。",
       "running": "{{phase}}…",
@@ -899,16 +961,59 @@
       "metaProgress": "{{processed}} / {{total}}ファイル",
       "gateOkTitle": "もう終了しても大丈夫です",
       "gateOkDetail": "{{files}}ファイルをすべて読み込みました。新しく変更されたファイルはバックグラウンドで続けて読み込みます。",
-      "gateFailTitle": "インデックス作成を完了できませんでした",
-      "gateFailDetail": "再試行すると続きから進みます。",
       "gateTitleMac": "Dazziを終了したりMacの電源を切らないでください",
       "gateTitlePc": "Dazziを終了したりPCの電源を切らないでください",
       "gateDetailMac": "最初のインデックス作成は時間がかかります。終了すると進行が止まります。電源アダプターを接続し、フタを開けたままにしてください。",
       "gateDetailWindows": "最初のインデックス作成は時間がかかります。終了すると進行が止まります。電源に接続したままにしてください。",
       "gateLocked": "完了すると開けます",
       "open": "Dazziを開く",
-      "retry": "再試行",
-      "startInBackground": "バックグラウンドで続けてすぐに始める"
+      "startInBackground": "バックグラウンドで続けてすぐに始める",
+      "skipped": "{{count}}ファイルはスキップしました",
+      "gateOkDetailPartial": "それ以外はすべて検索できます。新しく変更されたファイルはバックグラウンドで続けて読み込みます。",
+      "pause": {
+        "config": {
+          "title": "埋め込みを利用できません",
+          "line": "埋め込みの設定を確認してください"
+        },
+        "offline": {
+          "title": "接続が切れました",
+          "line": "接続されると自動で再開します"
+        },
+        "model": {
+          "title": "モデルをダウンロードできませんでした",
+          "line": "接続されるとダウンロードを再開します"
+        },
+        "disk": {
+          "title": "ストレージの空き容量が足りません",
+          "line": "空き容量を確保するとダウンロードを再開できます"
+        },
+        "unknown": {
+          "title": "埋め込みが停止しました",
+          "line": "もう一度試すか、埋め込み方式を変更できます"
+        },
+        "folder": {
+          "title": "「{{folder}}」フォルダを読み取れません",
+          "titleMany": "{{count}}個のフォルダを読み取れません",
+          "line": "ドライブを接続すると自動で再開します"
+        },
+        "exit": {
+          "retry": "もう一度試す",
+          "retryNow": "今すぐ再試行",
+          "recheck": "再確認",
+          "resume": "ダウンロードを再開",
+          "resumeDisk": "空き容量を確保しました、再開",
+          "changeEmbedding": "埋め込み方式を変更",
+          "exclude": "「{{folder}}」を除いて続行",
+          "excludeMany": "読み取れないフォルダを除いて続行",
+          "openAnyway": "とりあえずDazziを開く"
+        },
+        "line": {
+          "retrying": "再試行しています",
+          "countdown": "{{seconds}}秒後に自動で再試行します",
+          "exhausted": "自動再試行を停止しました · 手動で再試行してください",
+          "again": "同じ理由でまた停止しました"
+        }
+      }
     },
     "tips": {
       "1": {

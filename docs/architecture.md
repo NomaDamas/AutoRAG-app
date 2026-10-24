@@ -559,6 +559,32 @@ import into their own stores the same way, and Obsidian reads the real vaults.
 Detection and the first sync are real by
 design; they never touch other apps' data beyond their own store.
 
+**A first index that stops.** `IndexingStatus` carries `failure` (`reason`, the
+unreadable `folders`, the deciding diagnostic `code`) when the run failed, and
+`skipped` when it finished. `classifyIndexFailure` (`src/main/index-failure.ts`)
+reads only what the app itself emits: `search-root-unavailable` (with `folders`),
+`embedder-preflight-failed` and `embedding-model-download-failed` (each with a
+`reason` token the app sets, never parsed from a message), `embedding-model-missing`,
+plus the two checks the app already trusts, `isEmbeddingTimeout` and Node's own
+`ENOSPC`. Anything else is `unknown`; the raw text stays in the log, never on a
+screen. Files a run left out are counted from `files-left-out` and `parse-killed`
+(their `count`) and from each `minsync-file-skipped` (one file). The renderer's
+`onboarding/pause.ts` maps each reason to its screen: the button, the links, the
+automatic retry (offline embedder or model download: every 8 s, up to 6 times;
+unreadable folder: every 3 s while the screen is open). Fixing the embedding from a
+pause sets `draft.resumeAt = "indexing"`, so leaving that step returns straight to
+the index. "Open Dazzi anyway" after a failed first run starts a keyword-only refresh
+(`parsed`, `jikji`; no embedder) so the app is not empty.
+
+After onboarding, `index-problem-service.ts` keeps the last run's failure and skipped
+count in `<userData>/index-problem.json` and pushes it as `window.autorag.indexProblem`;
+the sidebar block, the banner above the file list and the Settings indexing card read
+it. A clean run from onboarding, Settings (manual refresh) or the surfaces' own retry
+clears it; a clean OS-scheduled refresh clears the failure but not the skipped count,
+which that job does not report; the user can dismiss it. `run-qa-onboarding-failure.mjs`
+makes each failure for real (a fake embedder that answers 402 or is not there, a
+folder that disappears, an unwritable workspace) and walks every way out.
+
 ## Live filesystem sync
 
 Folders shown in open tabs are watched for changes made by other apps. A
