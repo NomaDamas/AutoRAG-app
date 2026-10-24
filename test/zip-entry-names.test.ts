@@ -62,6 +62,20 @@ describe("zip entry names", () => {
 	});
 });
 
+describe("archive top level", () => {
+	it("treats the backslash a Windows tool wrote as a path separator (PowerShell 5.1 Compress-Archive)", () => {
+		const summary = summarizeArchive(
+			[
+				{ name: "보고서\\요약본.md", size: 1, modified: 1 },
+				{ name: "보고서\\한글 문서.txt", size: 1, modified: 2 },
+			],
+			6,
+		);
+		expect(summary.itemCount).toBe(1);
+		expect(summary.items).toEqual([{ name: "보고서", folder: true, ext: "" }]);
+	});
+});
+
 describe("tar entry names", () => {
 	it("returns NFC names", () => {
 		const header = new Uint8Array(512);

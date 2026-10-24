@@ -31,7 +31,7 @@ export interface ArchiveSummary {
 export function summarizeArchive(entries: readonly ArchiveEntry[], limit: number): ArchiveSummary {
 	const tops = new Map<string, { folder: boolean; modified: number }>();
 	for (const entry of entries) {
-		const parts = entry.name.replace(/^(\.?\/)+/, "").split("/").filter((part) => part !== "");
+		const parts = entry.name.replace(/\\/g, "/").replace(/^(\.?\/)+/, "").split("/").filter((part) => part !== "");
 		const head = parts[0];
 		if (head === undefined || head.startsWith(".") || head === "__MACOSX") continue;
 		const folder = parts.length > 1 || entry.name.endsWith("/");
