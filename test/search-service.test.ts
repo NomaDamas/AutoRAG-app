@@ -4,6 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createChatStore, type ChatStore } from "../src/main/chat-store";
+import type { RunInteraction } from "../src/main/host-ui";
+import { createInteractionHub } from "../src/main/interaction-hub";
+import type { InteractionAnswer, InteractionRequest } from "../src/shared/interaction-contract";
 import { buildAgentOptions, type CliConfig } from "@autorag/librarian";
 import {
 	createSearchService,
@@ -938,5 +941,105 @@ describe("resolveWebSearchConfig", () => {
 
 		expect(resolveWebSearchConfig({ webSearch: { enabled: false } })).toEqual({ enabled: false });
 		expect(buildAgentOptions({ ...baseConfig, webSearch: resolveWebSearchConfig({ webSearch: { enabled: false } }) }).webSearch).toBe(false);
+	});
+});
+
+describe("createSearchService interaction", () => {
+	function hubFor(requests: InteractionRequest[]) {
+		return createInteractionHub({ emitRequest: (request) => requests.push(request), emitClosed: () => undefined });
+	}
+	const question = {
+		kind: "question",
+		questions: [{ question: "Which?", options: [{ title: "A" }], allowMultiple: false, allowFreeform: false }],
+	} as const;
+
+	it("lets the agent ask the person while the run streams, and stops asking once it ended", async () => {
+		const requests: InteractionRequest[] = [];
+		const hub = hubFor(requests);
+		let bound: RunInteraction | undefined;
+		let answer: InteractionAnswer | undefined;
+		const agent = {
+			...createFakeAgent(async function*() {
+				answer = await bound?.open(question);
+				yield { type: "complete", response: createResponse("session-ask", "Done", 1) };
+			}),
+			bindRun: vi.fn((run: RunInteraction | undefined) => {
+				bound = run;
+			}),
+		};
+		const { send } = collectEvents();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send, now, interaction: hub });
+
+		const run = service.start("search-ask", "chat-ask", "which one", []);
+		await vi.waitFor(() => expect(requests).toHaveLength(1));
+		expect(requests[0]).toMatchObject({ kind: "question", searchId: "search-ask" });
+		hub.answer(requests[0]?.id ?? "", { kind: "question", answers: [{ kind: "selection", selections: ["A"] }] });
+		await run;
+
+		expect(answer).toEqual({ kind: "question", answers: [{ kind: "selection", selections: ["A"] }] });
+		expect(bound).toBeUndefined();
+		expect(hub.pending()).toHaveLength(0);
+	});
+
+	it("closes the open question when the run is stopped, so the agent is not left waiting", async () => {
+		const requests: InteractionRequest[] = [];
+		const hub = hubFor(requests);
+		let bound: RunInteraction | undefined;
+		let answered: Promise<InteractionAnswer> | undefined;
+		const agent = {
+			...createFakeAgent(async function*() {
+				answered = bound?.open(question);
+				await answered;
+				yield { type: "complete", response: createResponse("session-stop", "Never", 1) };
+			}),
+			bindRun: (run: RunInteraction | undefined) => {
+				bound = run;
+			},
+		};
+		const { send } = collectEvents();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send, now, interaction: hub });
+
+		const run = service.start("search-stop", "chat-stop", "which one", []);
+		await vi.waitFor(() => expect(requests).toHaveLength(1));
+		await service.cancel("search-stop");
+		await run;
+
+		await expect(answered).resolves.toEqual({ kind: "cancel" });
+		expect(hub.pending()).toHaveLength(0);
+		expect(agent.abort).toHaveBeenCalled();
+	});
+
+	it("starts every agent in the mode in force, and moves running agents when it changes", async () => {
+		const first = { ...createFakeAgent(async function*() {}), setApprovalMode: vi.fn() };
+		const second = { ...createFakeAgent(async function*() {}), setApprovalMode: vi.fn() };
+		const agents = [first, second];
+		const { send } = collectEvents();
+		const service = createSearchService({
+			agentFactory: () => agents.shift() ?? second,
+			chatStore: await createStore(),
+			send,
+			now,
+			approvalMode: async () => "ask",
+		});
+
+		await service.start("search-a", "chat-a", "one", []);
+		expect(first.setApprovalMode).toHaveBeenLastCalledWith("ask");
+
+		service.setApprovalMode("full");
+		expect(first.setApprovalMode).toHaveBeenLastCalledWith("full");
+
+		// A chat opened afterwards starts in what the person chose, not in what was stored at launch.
+		await service.start("search-b", "chat-b", "two", []);
+		expect(second.setApprovalMode).toHaveBeenLastCalledWith("full");
+	});
+
+	it("falls back to auto when nothing says otherwise", async () => {
+		const agent = { ...createFakeAgent(async function*() {}), setApprovalMode: vi.fn() };
+		const { send } = collectEvents();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send, now });
+
+		await service.start("search-c", "chat-c", "one", []);
+
+		expect(agent.setApprovalMode).toHaveBeenLastCalledWith("auto");
 	});
 });

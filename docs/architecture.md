@@ -631,6 +631,56 @@ only through a `propose_exclusions` tool that validates paths). A new profile ad
 a UI, its own service and bridge. The factory's own tests (what the model is
 offered, on pi's faux provider) live in the librarian, in `test/profiles/`.
 
+## AI Search approvals and questions
+
+librarian v2.12 gives the agent two ways to stop and ask the person: a **file-change approval gate** (a pi
+extension on every `bash`, `write`, `edit` and saved-automation call) and the **`ask_user` tool**. Both are
+built for the librarian's terminal UI and ask through pi's `ctx.ui` (`select`, `input`); a search run in the app
+has no terminal, so the app supplies the surface itself and the question appears in the AI Search panel in place
+of the message box (`src/shared/interaction-contract.ts` is the contract).
+
+- **Modes.** `AppSettings.approvalMode` (`ask` | `auto` | `full`, default `auto`; persisted by the settings
+  service, which refuses any other value) is chosen in the menu at the left of the message box. `ask` puts every
+  shell/write/edit call to the person; `auto` lets Jev (the judgment model) approve what the request clearly
+  covers and asks about the rest — with no Jev backend every call is unclassified and is asked about, as in
+  the TUI; `full` never asks. `main/index.ts` applies a change to every chat's agent
+  (`InteractiveSearchAgent.setApprovalMode` → the librarian's `permissionControl.set`, which also ends the
+  session's "allow all of this kind" grants) and to agents built later, and tells every window.
+  `AUTORAG_PERMISSION_MODE` and `permissionMode` in the shared config feed the librarian's own default only;
+  the app's setting overrides them.
+- **Hub.** `interaction-hub.ts` owns the open requests (`QuestionRequest` | `ApprovalRequest`, each tied to a
+  run's `searchId`). A request resolves with the window's answer (checked against the request at the IPC
+  boundary with a typebox schema: an id or shape it does not know is refused and the request stays open), a
+  dismissal, the run's abort signal, Stop (`search-service` closes the run's requests before aborting it), or the
+  run ending. A panel that mounts late reads `interaction.pending()`.
+- **Gate dialogs.** `host-ui.ts` is the `ExtensionUIContext` handed to the run's pi session. The gate's
+  `select` (title `heading / categories / $ call`, choices `Allow once`, the session grant, `Deny`, `Deny and
+  tell the model…`) is parsed back into an `ApprovalRequest` (`parseApprovalDialog`); any other `select`, `input`
+  or `confirm` becomes a single-choice or text question. "Deny and tell the model" carries the person's note,
+  which answers the gate's follow-up `input`. `custom()` returns `undefined`, as pi does for hosts without a TUI.
+- **Where the UI is bound.** The librarian's headless search session has no UI and no option to give it one, so
+  `agent-interaction.ts` wraps the instance's private `createSearchSession` (type erased from the package's
+  declarations) and calls `session.extensionRunner.setUIContext(ui, "rpc")`, which is what pi documents the
+  runner for. A librarian release that renames the method fails at agent construction; `test/interactive-search-agent.test.ts`
+  drives the real agent (v2.12 gate and tools on pi's scripted model) through the hub. Binding is per run:
+  `search-service` calls `agent.bindRun(...)` before the stream and clears it after, so between runs nobody can
+  be asked and the gate blocks instead of waiting.
+- **`ask_user`.** `ask-user-tool.ts` registers a tool of the same name and parameters as the librarian's
+  (`pi-ask-user`, whose terminal component the app cannot draw) through the agent's `tools` option, so the
+  librarian's system prompt, which names `ask_user` when such a tool exists, describes it to the model.
+  Results use the words the model has seen: `User answered: …`, `User cancelled the question`,
+  `User answered N of M questions:`. `executionMode` is sequential, so no other call of the turn runs before the
+  person answered. The librarian offers the tool only in its terminal session, so its fast and direct phase
+  prompts do not name `ask_user` as the one tool they allow; the verification pass has it.
+- **Panel.** `InteractionDock` replaces the composer's form for the run it belongs to (draft text and attachments
+  stay in the panel's state): a question card (single/multiple choice with descriptions, free text, 2–4 together
+  in steps) or an approval card (what the call does, the command, four answers; initial focus on Deny, Esc
+  denies, Enter never approves). Stop stays reachable on the card. Pure logic: `state/interaction.ts`.
+
+On-device checks: `scripts/manual-qa/run-qa-finder-ai-search-interaction.mjs` (scripted model: every card and
+answer path, files on disk, what the model receives) and `run-qa-live-ai-search-interaction.mjs` (a real model
+through the Dazzi account decides to ask and to delete).
+
 ## File automations
 
 The librarian (v2.11.1 and later) runs file automations itself: rules live in
@@ -858,9 +908,22 @@ runs in CI (`.github/workflows/qa-windows.yml`).
 Publishing a GitHub release builds `Dazzi-<version>-arm64.dmg` and
 `Dazzi-Setup-<version>-x64.exe` and attaches them to it. Each installer carries
 the app plus every program it drives (the `autorag` agent, minsync, jikji, dupey,
-the datasource crawlers, rhwp, kordoc, Node and npm-based CLIs). The local
-Qwen3 embedding model is not bundled: the app downloads it on demand into
+the datasource crawlers, rhwp, `filee-cli`, kordoc, Node and npm-based CLIs). The
+local Qwen3 embedding model is not bundled: the app downloads it on demand into
 MinSync's model cache (`src/main/model-download.ts`), so the installer is one
 download and the model is fetched when local embedding is chosen. See
 [`release.md`](release.md) for the contents, the signing secrets to
 configure, and how to rehearse a release.
+
+`filee-cli` is the conversion CLI the librarian's `convert_files` tool runs. The
+librarian downloads it into its own home on first use unless it finds
+`filee`/`filee-cli` on `PATH`, so the installer stages the librarian's pinned
+version beside the other tools and `<resources>/tools/bin` being first on `PATH`
+is the whole integration — an offline install converts files without reaching
+GitHub. `filee-cli` is a self-contained .NET program (an apphost with sibling
+assemblies and its bundled 7-Zip/rhwp engines), so it ships as a
+`<resources>/tools/filee-cli/` folder with a relative `tools/bin/filee-cli`
+symlink on macOS and flattened into `tools/bin` on Windows. `filee-cli`'s own
+conversion engines (LibreOffice, Pandoc, FFmpeg, Ghostscript, calibre) are not
+bundled: it downloads one into its data directory the first time a conversion
+needs it.

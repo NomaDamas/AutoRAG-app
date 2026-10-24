@@ -54,6 +54,7 @@ installs one file and nothing else:
 | `dupey`, `jikji`, `clawgallery` | newest crates.io release, compiled on the build machine | |
 | `lazykatok` | newest GitHub release of `changeroa/lazykatok` (macOS only: KakaoTalk for macOS) | the release archive `lazykatok-<version>-aarch64-apple-darwin.tar.gz`, download verified against the sha256 GitHub publishes. The stager refuses a build below 0.3.3, the first with the OpenAI-compatible embedder, so it embeds through the daemon's OpenAI route |
 | `fsearch-cli` | `NomaDamas/fsearch-mac` via its Homebrew tap (macOS only) | fast file-name index. Homebrew links it to `/opt/homebrew/...`, so the stager copies it with its 16 dylibs into `tools/{bin,lib}` and re-points them at `@executable_path/../lib`. Needs `brew install nomadamas/fsearch-mac/fsearch-mac` on the build Mac (the stager runs it if missing; it compiles GTK, so the first run is slow). GPL-2.0-or-later: license and notice ship in `tools/licenses/fsearch-mac` |
+| `filee-cli` | the librarian's pinned release (`FILEE_CLI_VERSION` / `FILEE_CLI_ASSETS`), taken from `NomaDamas/filee-cli` — never resolved from `latest` | the conversion CLI behind the agent's `convert_files` tool. The librarian downloads this exact archive into its home on first use unless it finds the binary on `PATH`; staging it is what makes an offline install convert. It is a self-contained .NET program (an apphost plus its assemblies and `engines/`), so it ships as a folder: `tools/filee-cli`, linked from `tools/bin` on macOS (a relative symlink .NET resolves through the real path) and flattened into `tools/bin` on Windows (a real `filee-cli.exe` beside its siblings — never a `.cmd` shim Node cannot spawn). MIT; license and third-party notices in `tools/licenses/filee-cli`. **Filee's own engines are not bundled** (see below) |
 | Kiwi library + base model: **0.24.0 on macOS, 0.22.2 on Windows** | `bab2min/Kiwi` releases `v0.24.0` / `v0.22.2`, pinned by sha256 | MinSync's `multilingual` BM25 tokenizer (the librarian always asks for it) loads these by path; without them every Korean particle form (`환불정책과`) stops matching its stem. Staged to `tools/kiwi/{lib,models}`, and `bundled-tools.ts` sets `KIWI_LIBRARY_PATH`/`KIWI_MODEL_PATH` unless the user set one. **macOS 0.24.0 is Apache-2.0** (the first release that is): LICENSE and NOTICE ship in `tools/licenses/kiwi`. **Windows 0.22.2 is LGPL-2.1-or-later and is shipped unmodified** (the official release assets, never rebuilt or repackaged): LICENSE, `LGPL-2.1.txt` and a `SOURCE.txt` (unmodified statement, asset hashes, source location) ship in `tools/licenses/kiwi`. 0.22.2 on Windows because MinSync 0.4.11 crashed there with 0.23.2 and 0.24.0 (`0xC0000005` in `sync`; checked on a GitHub Windows runner) and works with 0.22.2; `kiwi_config_t` and `kiwi_analyze_option_t` grew in 0.23. Revisit when MinSync's Windows CI moves off 0.22.2 |
 | Everything + ES (Windows only) | the librarian's own `vendor/everything` | the Windows equivalent of fsearch; already inside the app, hash-checked and unpacked on first use |
 | `mailcrawl`, `kordoc` | newest npm release, installed with the bundled Node | native add-ons are fetched for the bundled Node's ABI. `mailcrawl` — the stager refuses it below 0.2.2 — embeds through the daemon's OpenAI route |
@@ -68,8 +69,10 @@ model is present. `stage-tools.mjs` still stages a copy under
 `build/stage/<platform>/verify-model` for `verify-bundle.mjs` only; nothing
 packages it.
 
-"Newest" is resolved at build time, so each release ships current dependencies.
-Three tools carry a hard version floor (`scripts/release/version-floors.mjs`, with
+"Newest" is resolved at build time, so each release ships current dependencies;
+`filee-cli` is the exception and follows the librarian's own pin, so the staged
+copy is the exact version (`FILEE_CLI_VERSION`) the librarian would otherwise
+download. Three tools carry a hard version floor (`scripts/release/version-floors.mjs`, with
 the reason for each): `minsync` ≥ 0.4.12, `@nomadamas/mailcrawl` ≥ 0.2.2,
 `lazykatok` ≥ 0.3.3. All three reach the shared `minsync serve` embedding route;
 0.4.12 is also the first MinSync that keeps one failed chunk from aborting a
@@ -90,6 +93,12 @@ does not match its published digest.
 * npm CLIs (`mailcrawl`, `kordoc`) and `autorag` are launched through a tiny
   native launcher (`scripts/release/shim`) that runs the bundled Node. Windows
   cannot spawn a script by name; this makes them real executables on both platforms.
+* `convert_files` runs the bundled `filee-cli` through the same `PATH` entry, so
+  the agent converts files with no download. `filee-cli`'s own engines
+  (LibreOffice, Pandoc, FFmpeg, Ghostscript, calibre) are **not** bundled: the
+  tool downloads one into its data directory the first time a conversion needs
+  it, so those conversions still need network once, then work offline. Images,
+  Markdown, PDF, HWP and the rest are handled by the libraries inside the binary.
 * The native Qwen3 embedding model (`Qwen/Qwen3-Embedding-0.6B`) is not bundled.
   The app downloads it when the user chooses local embedding in onboarding or
   switches to it in Settings (`src/main/model-download.ts`): the pinned revision
@@ -119,6 +128,7 @@ does not match its published digest.
 ### Deliberately not bundled
 
 * `llama.cpp` (`llama-server`) and the `Q8_0` GGUF embedding weights: the local model is served by MinSync's own `minsync serve` daemon (started and stopped by the app) directly on the downloaded `Qwen/Qwen3-Embedding-0.6B` safetensors — Metal on macOS, CPU on Windows — so no llama.cpp runtime or GGUF copy ships for embeddings.
+* `filee-cli`'s conversion engines: LibreOffice, Pandoc, Ghostscript, FFmpeg and calibre. `filee-cli` itself ships so `convert_files` works offline; an engine is downloaded by the tool into its own data directory the first time a conversion needs one (for example DOCX → PDF, or any video or audio format), so that first conversion needs network and later ones do not.
 * Other platforms' native add-ons. Intel Macs, Windows on ARM and Linux are not shipped, and `pruneNativeForPlatform` in `lib.mjs` deletes the prebuilt add-ons those targets need from the bundled npm tree on each staged platform.
 ## Install time
 

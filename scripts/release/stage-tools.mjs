@@ -9,12 +9,17 @@
  *   tools/bin/        the dependency CLIs, each a real executable
  *   tools/node/       Node 24 LTS + npm (also the runtime of the npm-based CLIs)
  *   tools/npm/        mailcrawl, kordoc and their node_modules
+ *   tools/filee-cli/  the librarian's pinned filee-cli (.NET publish output); on macOS
+ *                     tools/bin/filee-cli links to it, on Windows its files are flattened into tools/bin
+ *   tools/licenses/   license/notice files that travel with a tool
  *   tools/manifest.json   what was staged: name, version, source, sha256
  *   verify-model/     native Qwen3-Embedding-0.6B checkpoint, for verify-bundle only
  *
  * Versions are resolved at run time from the publishers' "latest" (GitHub
  * releases, crates.io, npm, nodejs.org), so every release ships the newest
- * dependencies; manifest.json records exactly what that was.
+ * dependencies; manifest.json records exactly what that was. filee-cli is the
+ * exception: it is staged at the version @autorag/librarian pins, so the bundle
+ * matches what the librarian would otherwise download on first use.
  *
  * The embedding model is NOT part of the installer: the app downloads it on
  * demand. `verify-model/` exists only so `verify-bundle.mjs` can run an offline
@@ -26,15 +31,19 @@
  * Windows x64 machine.
  */
 
-import { chmodSync, copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, relative } from "node:path";
 import { pathToFileURL } from "node:url";
+// The librarian pins filee-cli (version, asset names, sha256) and would download it on first use;
+// staging it here, from the same constants, is what makes an offline install convert files.
+import { FILEE_CLI_VERSION, fileeBinaryName, selectFileeAsset } from "@autorag/librarian";
 import {
 	BUILD_DIR,
 	CACHE_DIR,
 	PLATFORMS,
 	ROOT,
 	dirSizeBytes,
+	folderToolLayout,
 	pruneNativeForPlatform,
 	pruneDeadWeight,
 	download,
@@ -292,6 +301,64 @@ async function stageAutoragCli() {
 	record({ name: "autorag", version: manifest.version, source: "@autorag/librarian (public origin/main, built by scripts/sync-librarian.mjs)" });
 }
 
+// The filee-cli archive's license and prose files: staged beside the tool (tools/licenses/filee-cli),
+// never in the run tree, so tools/bin (and, on Windows, the flattened .NET files) stay executable-only.
+const FILEE_PROSE = ["LICENSE", "README.md", "THIRD-PARTY-NOTICES.md", "UPSTREAM.md"];
+
+/**
+ * filee-cli: the conversion CLI behind the librarian's `convert_files` tool.
+ * The librarian downloads this pinned archive into its own home on first use
+ * unless it finds `filee`/`filee-cli` on `PATH`; staging it here means an
+ * offline install converts without ever reaching GitHub. Version, asset name
+ * and sha256 come from @autorag/librarian's own constants, so the bundle is
+ * exactly what the librarian would have installed.
+ *
+ * It is a self-contained .NET program (an apphost plus a few hundred sibling
+ * assemblies and native libraries; `engines/` holds the 7-Zip and rhwp builds
+ * some conversions need), so it cannot be copied as one binary. Its layout in
+ * `tools/bin` is chosen per platform by `folderToolLayout`: a relative symlink
+ * to the folder on macOS, flattened files on Windows. filee-cli's own engines
+ * (LibreOffice, Pandoc, FFmpeg, Ghostscript, calibre) are NOT bundled — the tool
+ * downloads one, into its data directory, the first time a conversion needs it.
+ */
+async function stageFileeCli() {
+	const asset = selectFileeAsset(target.os, target.arch);
+	const binary = fileeBinaryName(target.os);
+	const file = await download(asset.url, asset.name, asset.sha256);
+	const unpacked = join(CACHE_DIR, "x", `filee-cli-${FILEE_CLI_VERSION}-${target.os}-${target.arch}`);
+	extract(file.path, unpacked);
+	const folders = readdirSync(unpacked, { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => join(unpacked, entry.name));
+	if (folders.length !== 1) throw new Error(`filee-cli: ${asset.name} should unpack to one folder, found ${folders.length}`);
+	const [publish] = folders;
+	if (!existsSync(join(publish, binary))) throw new Error(`filee-cli: ${binary} is not in ${asset.name}`);
+
+	const licenseDir = join(TOOLS, "licenses", "filee-cli");
+	rmSync(licenseDir, { recursive: true, force: true });
+	mkdirSync(licenseDir, { recursive: true });
+	for (const name of FILEE_PROSE) if (existsSync(join(publish, name))) copyFileSync(join(publish, name), join(licenseDir, name));
+	if (existsSync(join(publish, "licenses"))) cpSync(join(publish, "licenses"), join(licenseDir, "licenses"), { recursive: true });
+
+	mkdirSync(BIN, { recursive: true });
+	const layout = folderToolLayout(target.os, "filee-cli", binary);
+	if (layout.mode === "flatten") {
+		// A real filee-cli.exe (not a .cmd shim Node cannot spawn) must sit in tools/bin with its siblings.
+		for (const entry of readdirSync(publish)) {
+			if (entry === "licenses" || FILEE_PROSE.includes(entry)) continue;
+			cpSync(join(publish, entry), join(BIN, entry), { recursive: true });
+		}
+	} else {
+		const bundle = join(TOOLS, layout.folder);
+		rmSync(bundle, { recursive: true, force: true });
+		cpSync(publish, bundle, { recursive: true });
+		rmSync(join(bundle, "licenses"), { recursive: true, force: true });
+		for (const name of FILEE_PROSE) rmSync(join(bundle, name), { force: true });
+		const link = join(BIN, binary);
+		rmSync(link, { force: true });
+		symlinkSync(layout.linkTarget, link);
+	}
+	record({ name: "filee-cli", version: FILEE_CLI_VERSION, source: `github.com/NomaDamas/filee-cli ${asset.name} (librarian pin, sha256 from the release SHA256SUMS)`, sha256: file.sha256, verifiedAgainstPublisherDigest: true });
+}
+
 /**
  * Kiwi (Korean morphological analyzer). MinSync's `multilingual` BM25 tokenizer loads the native library
  * and base model at run time (`kiwi-rs`, dlopen / LoadLibrary) and neither ships with MinSync; without
@@ -463,6 +530,7 @@ for (const item of GO_CRAWLERS) {
 }
 for (const item of CARGO_BINARIES) if (wanted(item.name)) await stageCargoBinary(item);
 if (target.os === "darwin" && wanted("fsearch-cli")) await stageFsearch();
+if (wanted("filee-cli")) await stageFileeCli();
 if (wanted("kiwi")) await stageKiwi();
 if (!flag("--skip-verify-model") && wanted("verify-model")) await stageVerifyModel();
 
