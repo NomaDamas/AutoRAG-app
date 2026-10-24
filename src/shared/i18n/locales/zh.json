@@ -1245,7 +1245,15 @@
       "retried": "出现临时文件系统错误({{code}}),刷新已重试 {{retries}} 次。",
       "filesLeftOut": "有 {{files}} 个文件持续出现 {{code}} 错误,已从本次刷新中排除,将在下次刷新时重试。",
       "parseKilled": "有 {{timedOut}} 个文件因超时、{{crashed}} 个文件因解析器中止而被跳过,将在下次刷新时重试。",
-      "modelMissing": "由于尚未下载本机嵌入模型,已跳过建立索引。请在“设置 → AI 模型 → 文档理解模型”中下载。"
+      "modelMissing": "由于尚未下载本机嵌入模型,已跳过建立索引。请在“设置 → AI 模型 → 文档理解模型”中下载。",
+      "preflightMissingKey": "嵌入器 {{id}} 需要 API 密钥,但未设置 {{env}}。请在建立索引前设置。",
+      "preflightKeyEnvIgnored": "嵌入器 {{id}} 的 apiKeyEnv 指定为 {{configured}},但索引器只从 {{env}} 读取密钥,而 {{env}} 未设置。请把密钥放进 {{env}}。",
+      "preflightBaseUrlV1": "{{url}} 处的嵌入器返回了 404。索引器会自行追加 /v1/embeddings,因此以 /v1 结尾的基础 URL 会使路径重复。请改用 {{suggested}}。",
+      "preflightStatus": "{{url}} 处的嵌入器拒绝了测试请求:HTTP {{status}} {{detail}}",
+      "preflightUnreachable": "无法连接到 {{url}} 处的嵌入器:{{reason}}",
+      "preflightTimeout": "{{url}} 处的嵌入器在 {{seconds}} 秒内没有响应测试请求。",
+      "preflightNoVector": "{{url}} 处的嵌入器响应了测试请求,但没有可用的向量。",
+      "preflightDimension": "{{url}} 处的嵌入器返回了 {{actual}} 个数字的向量,但配置中声明的是 {{expected}}。"
     },
     "worker": {
       "unknownFormat": "未知的文件格式：{{format}}",
