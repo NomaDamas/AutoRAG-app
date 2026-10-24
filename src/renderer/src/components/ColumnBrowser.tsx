@@ -6,7 +6,6 @@ import { useScrollWindow } from "../hooks/useScrollWindow";
 import { useDirectoryData, useEntrySidecar } from "../hooks/useDirectoryData";
 import { cn } from "../lib/cn";
 import { COLUMN_ROW_HEIGHT } from "../state/columns";
-import { fileKindOf } from "../state/entry-values";
 import { GROUP_HEADER_HEIGHT, groupedLayout, groupedWindow, type GroupSection } from "../state/grouping";
 import { basename } from "../state/paths";
 import { LIST_OVERSCAN } from "../state/virtual";
@@ -15,7 +14,7 @@ import { isHiddenName } from "../state/visibility";
 import { ChevronRightIcon } from "./icons";
 import { GroupHeader } from "./GroupHeader";
 import { type BackgroundDropHandlers, type RowCallbacks, VersionTag } from "./FileRow";
-import { FileTile } from "./primitives/FileTile";
+import { EntryTile } from "./primitives/EntryTile";
 import { TagDots } from "./primitives/TagDot";
 import { useTagCatalog } from "../hooks/useTagCatalog";
 import { tagDotsOf } from "../state/tags";
@@ -339,7 +338,7 @@ function ColumnRow({
 			onDragOver={(event) => callbacks.onDragOver(entry, event)}
 			onDrop={(event) => callbacks.onDrop(entry, event)}
 		>
-			<FileTile kind={fileKindOf(entry)} iconUrl={entry.iconUrl} size={16} />
+			<EntryTile entry={entry} size={16} />
 			{renameDraft === null ? (
 				<span className="col-name flex-1 min-w-0 overflow-hidden whitespace-nowrap text-ellipsis text-sm">
 					{entry.name}
@@ -360,5 +359,5 @@ function ColumnRow({
 /** A row's tile with the icon the sidecar holds for it. */
 function SidecarTile({ entry, size }: { readonly entry: FinderEntry; readonly size: 16 | 18 | 22 }): ReactElement {
 	const resolved = useEntrySidecar(useDirectoryData().sidecar, entry).entry;
-	return <FileTile kind={fileKindOf(resolved)} iconUrl={resolved.iconUrl} size={size} />;
+	return <EntryTile entry={resolved} size={size} />;
 }
