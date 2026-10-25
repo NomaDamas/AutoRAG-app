@@ -37,7 +37,7 @@ jobs:
     # job (and losing the uploaded evidence) while still bounding a hang.
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
