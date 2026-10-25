@@ -17,6 +17,10 @@
 //   2. Ask: the model is asked to delete a file with a shell command. The approval card shows the command;
 //      Deny keeps the file; Allow once deletes it.
 //   3. Full: the same request deletes the file with no card.
+//   4. Auto with Dazzi's judgment model: the same request is let through, or asked about with the reason.
+//   5. All of the above happen in ONE chat, which is one model conversation: the model is told a codeword and
+//      answers it from memory in the next question, and again after the app is quit and started on the same
+//      profile (the chat is opened from History; its session file is resumed).
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { request as httpsRequest } from "node:https";
@@ -26,25 +30,33 @@ import { AI_PANEL, finderWindow, launchFinder, openAiSearch, ROOT } from "./laun
 
 const REAL_API = "https://api.dazziapp.com";
 const MODEL_ID = process.env.QA_LIVE_MODEL?.trim() || "z-ai/glm-5.3-flash";
+// QA_OPENROUTER_MODEL=<id> runs the same scenarios against that OpenRouter model instead of the Dazzi plan (no Dazzi account needed).
+// Pick an LLM from OpenRouter's live catalog, https://openrouter.ai/api/v1/models, never from memory.
+const OPENROUTER_MODEL = process.env.QA_OPENROUTER_MODEL?.trim() || "";
 const EVIDENCE = process.env.QA_OUT ?? join(ROOT, ".omo/evidence/live-ai-search-interaction");
 mkdirSync(EVIDENCE, { recursive: true });
 
-function realToken() {
-	const fromEnv = process.env.QA_DAZZI_TOKEN?.trim();
+/** The key of `provider` for the throwaway profile: from the environment, else the developer's own `~/.pi/agent/auth.json` (read at run time, never written anywhere). */
+function realToken(provider, envName, field) {
+	const fromEnv = process.env[envName]?.trim();
 	if (fromEnv) return fromEnv;
 	const authPath = join(homedir(), ".pi", "agent", "auth.json");
 	if (!existsSync(authPath)) return null;
 	try {
-		const entry = JSON.parse(readFileSync(authPath, "utf8")).dazzi;
-		return typeof entry?.access === "string" && entry.access.length > 0 ? entry.access : null;
+		const entry = JSON.parse(readFileSync(authPath, "utf8"))[provider];
+		return typeof entry?.[field] === "string" && entry[field].length > 0 ? entry[field] : null;
 	} catch {
 		return null;
 	}
 }
 
-const TOKEN = realToken();
+const TOKEN = OPENROUTER_MODEL === "" ? realToken("dazzi", "QA_DAZZI_TOKEN", "access") : realToken("openrouter", "QA_OPENROUTER_KEY", "access");
 if (TOKEN === null) {
-	console.error("A Dazzi account key is required: set QA_DAZZI_TOKEN or sign in to Dazzi on this machine.");
+	console.error(
+		OPENROUTER_MODEL === ""
+			? "A Dazzi account key is required: set QA_DAZZI_TOKEN or sign in to Dazzi on this machine."
+			: "An OpenRouter key is required: set QA_OPENROUTER_KEY or add one to ~/.pi/agent/auth.json.",
+	);
 	process.exit(2);
 }
 
@@ -75,7 +87,7 @@ const seed = () => {
 seed();
 writeFileSync(
 	CONFIG,
-	`${JSON.stringify({ searchPaths: [DOCS], workspacePath: join(WORK, "workspace"), memoryPath: join(WORK, "memory.json"), minSync: { enabled: true, autoInstall: true, embedder: { id: "native:Qwen/Qwen3-Embedding-0.6B", dimension: 1024 } }, jikji: false }, null, 2)}\n`,
+	`${JSON.stringify({ searchPaths: [DOCS], workspacePath: join(WORK, "workspace"), memoryPath: join(WORK, "memory.json"), minSync: { enabled: true, autoInstall: true, embedder: { id: "native:Qwen/Qwen3-Embedding-0.6B", dimension: 1024 } }, jikji: false, ...(OPENROUTER_MODEL === "" ? {} : { jev: false, webSearch: false, queryDecomposition: false }) }, null, 2)}\n`,
 );
 
 const forwarded = [];
@@ -115,18 +127,18 @@ const env = {
 	ELECTRON_RENDERER_URL: "",
 	AUTORAG_PERMISSION_MODE: "",
 	PATH: `${join(AUTORAG_HOME, "bin")}:${process.env.PATH ?? ""}`,
-	OPENROUTER_API_KEY: "",
+	OPENROUTER_API_KEY: OPENROUTER_MODEL === "" ? "" : TOKEN,
 	OPENAI_API_KEY: "",
 	ANTHROPIC_API_KEY: "",
 };
 
-const app = await launchFinder({ userDataDir: join(WORK, "user-data"), env });
+let app = await launchFinder({ userDataDir: join(WORK, "user-data"), env });
 try {
 	app.process().stderr?.on("data", (chunk) => {
 		const text = String(chunk).trim();
 		if (/\[account\]|\[providers\]|No API key|permission/i.test(text)) console.log(`[main:err] ${text.slice(0, 300)}`);
 	});
-	const page = await finderWindow(app, 30_000);
+	let page = await finderWindow(app, 30_000);
 	page.setDefaultTimeout(30_000);
 	page.on("pageerror", (error) => console.log(`[pageerror] ${String(error).slice(0, 300)}`));
 	await app.evaluate(({ shell }) => {
@@ -135,28 +147,43 @@ try {
 		};
 	});
 
-	const status = await page.evaluate(() => window.autorag.account.signIn());
-	check("Dazzi sign-in completes", status.state === "signedIn", `${status.state} ${status.error ?? ""}`);
 	const cfg = JSON.parse(readFileSync(CONFIG, "utf8"));
-	cfg.model = {
-		provider: "dazzi",
-		id: MODEL_ID,
-		name: MODEL_ID,
-		baseUrl: `${baseUrl}/v1`,
-		api: "openai-responses",
-		reasoning: true,
-		input: ["text", "image"],
-		contextWindow: 1048576,
-		maxTokens: 32000,
-	};
+	if (OPENROUTER_MODEL === "") {
+		const status = await page.evaluate(() => window.autorag.account.signIn());
+		check("Dazzi sign-in completes", status.state === "signedIn", `${status.state} ${status.error ?? ""}`);
+		cfg.model = {
+			provider: "dazzi",
+			id: MODEL_ID,
+			name: MODEL_ID,
+			baseUrl: `${baseUrl}/v1`,
+			api: "openai-responses",
+			reasoning: true,
+			input: ["text", "image"],
+			contextWindow: 1048576,
+			maxTokens: 32000,
+		};
+	} else {
+		cfg.model = {
+			provider: "openrouter-qa",
+			id: OPENROUTER_MODEL,
+			name: OPENROUTER_MODEL,
+			baseUrl: "https://openrouter.ai/api/v1",
+			api: "openai-completions",
+			apiKeyEnv: "OPENROUTER_API_KEY",
+			reasoning: false,
+			input: ["text"],
+			contextWindow: 262144,
+			maxTokens: 16000,
+		};
+	}
 	writeFileSync(CONFIG, `${JSON.stringify(cfg, null, 2)}\n`);
-	console.log(`model: ${MODEL_ID}`);
+	console.log(`model: ${OPENROUTER_MODEL === "" ? MODEL_ID : `${OPENROUTER_MODEL} (OpenRouter)`}`);
 
 	await openAiSearch(page);
-	const panel = page.locator(AI_PANEL);
-	const composer = panel.locator('input[aria-label="Ask Dazzi"]');
-	const approval = panel.locator('[role="alertdialog"]');
-	const question = panel.locator('[role="dialog"]');
+	let panel = page.locator(AI_PANEL);
+	let composer = panel.locator('input[aria-label="Ask Dazzi"]');
+	let approval = panel.locator('[role="alertdialog"]');
+	let question = panel.locator('[role="dialog"]');
 	const shot = async (name) => {
 		await page.waitForTimeout(450);
 		await page.screenshot({ path: join(EVIDENCE, `${name}.png`) });
@@ -167,7 +194,10 @@ try {
 			null,
 			{ timeout: 300_000 },
 		);
-	const send = async (text) => {
+	// A chat is one model conversation: what an earlier question's Deny or answer taught the model is in its context for the next. Scenarios that
+	// must not depend on each other start a new chat (`fresh`); the memory scenario at the end deliberately does not.
+	const send = async (text, { fresh = false } = {}) => {
+		if (fresh) await panel.locator('button[aria-label="New chat"]').click();
 		await composer.click();
 		await page.keyboard.type(text);
 		await page.keyboard.press("Enter");
@@ -250,23 +280,23 @@ try {
 
 	// ── 2. Ask: the model's shell calls reach the person. ────────────────────
 	await chooseMode("Ask");
-	await send(deleteRequest);
+	await send(deleteRequest, { fresh: true });
 	const denied = await resolveCards("Deny");
 	check("the approval card shows the model's command", denied.length > 0 && denied.some((card) => card.includes(DOCS)), denied.map((card) => card.slice(0, 120).replace(/\s+/g, " ")).join(" || "));
 	check("Deny keeps the file", existsSync(file("old-draft.txt")));
 	check("no run error after Deny", (await runError()) === "", await runError());
 	await shot("live-04-after-deny");
 
-	await send(deleteRequest);
+	await send(deleteRequest, { fresh: true });
 	const allowed = await resolveCards("Allow once");
-	console.log(`Allow once answered ${allowed.length} card(s)`);
+	console.log(`Allow once answered ${allowed.length} card(s); model said: ${(await answerText()).replace(/\s+/g, " ").slice(-300)}`);
 	check("Allow once lets the delete run", !existsSync(file("old-draft.txt")), `cards=${allowed.length}`);
 	check("no run error after Allow", (await runError()) === "", await runError());
 
 	// ── 3. Full: no card. ────────────────────────────────────────────────────
 	seed();
 	await chooseMode("Full");
-	await send(deleteRequest);
+	await send(deleteRequest, { fresh: true });
 	const shownInFull = await resolveCards("Deny");
 	console.log(`Full: model said: ${(await answerText()).replace(/\s+/g, " ").slice(-400)}`);
 	// The gate is what Full switches off; what the model then does with the file (rm, or the trash its rules prefer) is its own call.
@@ -277,12 +307,45 @@ try {
 	// ── 4. Auto with Dazzi's judgment model (Jev): an explicit request that covers the call is let through, or asked about with Jev's reason. ──
 	seed();
 	await chooseMode("Auto");
-	await send(deleteRequest);
+	await send(deleteRequest, { fresh: true });
 	const inAuto = await resolveCards("Allow once");
-	console.log(`Auto asked ${inAuto.length} time(s)${inAuto.length > 0 ? `: ${inAuto[0].replace(/\s+/g, " ").slice(0, 300)}` : " (Jev let it through)"}`);
+	console.log(`Auto asked ${inAuto.length} time(s)${inAuto.length > 0 ? `: ${inAuto[0].replace(/\s+/g, " ").slice(0, 300)}` : " (Jev let it through)"}; model said: ${(await answerText()).replace(/\s+/g, " ").slice(-300)}`);
 	check("Auto removes the file the person explicitly asked to delete (Jev let it through or the person allowed it)", !existsSync(file("old-draft.txt")), `asked=${inAuto.length}`);
 	check("no run error in Auto", (await runError()) === "", await runError());
-	check("the model request went through the Dazzi service", forwarded.some((entry) => entry.startsWith("POST /v1/")), forwarded.slice(-3).join(", "));
+	if (OPENROUTER_MODEL === "") check("the model request went through the Dazzi service", forwarded.some((entry) => entry.startsWith("POST /v1/")), forwarded.slice(-3).join(", "));
+
+	// ── 5. The chat is one conversation: the model remembers what the person told it, and still does after a restart. ──
+	// The chat the last scenario ended in is used as it is. A fact given now is not in any file, so only the conversation can supply it.
+	const lastAnswer = async () => ((await page.locator(".assistant-msg .assistant-prose").last().innerText({ timeout: 5000 }).catch(() => "")) ?? "").trim();
+	await send("Remember this for the rest of our conversation: the codeword is PERIWINKLE-7. Reply with just OK.");
+	await resolveCards("Deny");
+	await send("What is the codeword I gave you? Answer from memory, do not use any tool. One word.");
+	await resolveCards("Deny");
+	const remembered = await lastAnswer();
+	console.log(`remembered: ${remembered.replace(/\s+/g, " ").slice(0, 200)}`);
+	check("a follow-up is answered from the chat's earlier turns", /PERIWINKLE-7/i.test(remembered), remembered.slice(0, 160));
+	check("no run error in the follow-up", (await runError()) === "", await runError());
+	await shot("live-05-remembered");
+
+	await app.close();
+	app = await launchFinder({ userDataDir: join(WORK, "user-data"), env });
+	page = await finderWindow(app, 30_000);
+	page.setDefaultTimeout(30_000);
+	await openAiSearch(page);
+	panel = page.locator(AI_PANEL);
+	composer = panel.locator('input[aria-label="Ask Dazzi"]');
+	approval = panel.locator('[role="alertdialog"]');
+	question = panel.locator('[role="dialog"]');
+	await panel.locator('button[aria-label="Chat history"]').click();
+	await panel.locator(".history-item").first().click();
+	await panel.locator(".history").waitFor({ state: "detached" });
+	await send("After the restart: what was the codeword? Answer from memory, do not use any tool. One word.");
+	await resolveCards("Deny");
+	const afterRestart = await lastAnswer();
+	console.log(`after restart: ${afterRestart.replace(/\s+/g, " ").slice(0, 200)}`);
+	check("after a restart the same chat still remembers", /PERIWINKLE-7/i.test(afterRestart), afterRestart.slice(0, 160));
+	check("no run error after the restart", (await runError()) === "", await runError());
+	await shot("live-06-after-restart");
 } catch (error) {
 	check("run completed", false, String(error).slice(0, 600));
 } finally {

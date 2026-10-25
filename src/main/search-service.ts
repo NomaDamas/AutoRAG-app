@@ -20,6 +20,7 @@ import type {
 	AnswerPhase,
 	AnswerPhaseName,
 	ChatAttachment,
+	ChatMessage,
 	ChatMessageAssistant,
 	ChatRecord,
 	ChatMessageUser,
@@ -29,12 +30,13 @@ import type {
 } from "../shared/search-contract";
 import { SEARCH_CHANNELS } from "../shared/search-contract";
 import { buildAttachmentContext } from "./attachment-context";
-import { InteractiveSearchAgent } from "./interactive-search-agent";
+import { InteractiveSearchAgent, type OpenedSession, type OpenSessionOptions, type SeedTurn } from "./interactive-search-agent";
 import { createAgentInteraction } from "./agent-interaction";
 import type { RunInteraction } from "./host-ui";
 import type { InteractionHub } from "./interaction-hub";
 import { type ApprovalMode, DEFAULT_APPROVAL_MODE } from "../shared/interaction-contract";
 import type { ChatStore } from "./chat-store";
+import type { ChatSessionIndex } from "./chat-sessions";
 import { t } from "../shared/i18n/core";
 import { durationBucket, type Analytics } from "./analytics-core";
 
@@ -76,6 +78,13 @@ type SearchAgent = {
 	readonly bindRun?: (run: RunInteraction | undefined) => void;
 	/** Applies the approval mode to this agent's file-change gate. */
 	readonly setApprovalMode?: (mode: ApprovalMode) => void;
+	/**
+	 * Opens the chat's model conversation: resumes `resumeFile`, else starts one with `seed` (the chat's earlier turns)
+	 * already in it. Without it each question is a separate model session.
+	 */
+	readonly openSession?: (options: OpenSessionOptions) => Promise<OpenedSession>;
+	/** Ends the conversation's session in this process; its file stays for a later resume. */
+	readonly closeSession?: () => Promise<void>;
 };
 
 export interface SearchServiceDeps {
@@ -97,12 +106,34 @@ export interface SearchServiceDeps {
 	 * A preflight that throws never stops a run.
 	 */
 	readonly preflight?: () => Promise<SearchRefusal | null>;
+	/** Where each chat's conversation file is remembered; without it a chat's conversation lasts only while the app runs. */
+	readonly sessions?: ChatSessionIndex;
 }
 
 /** Why a run was not started, as the person is told. */
 export interface SearchRefusal {
 	readonly message: string;
 	readonly action?: SearchErrorAction;
+}
+
+/**
+ * The finished turns of a chat, for a conversation that has no session file to resume. A question counts with the
+ * answer the person ended up with (Deep over Quick); a corrected-while-running message belongs to the turn it
+ * corrected, and a turn that was stopped before any answer carries nothing over.
+ */
+function seedTurnsOf(messages: readonly ChatMessage[]): SeedTurn[] {
+	const turns: SeedTurn[] = [];
+	let question: string | undefined;
+	for (const message of messages) {
+		if (message.role === "user") {
+			if (message.steer === undefined) question = message.text;
+			continue;
+		}
+		const answer = (message.deep?.answer ?? message.quick?.answer ?? "").trim();
+		if (question !== undefined && answer !== "") turns.push({ question, answer });
+		question = undefined;
+	}
+	return turns;
 }
 
 interface SearchRun {
@@ -278,6 +309,8 @@ const MAX_CHAT_AGENTS = 8;
 export interface SearchService extends SearchBridge {
 	/** Applies the approval mode to every chat's agent, running or built later. */
 	setApprovalMode(mode: ApprovalMode): void;
+	/** Ends every open conversation (the app is quitting); the session files stay. */
+	dispose(): Promise<void>;
 }
 
 export function createSearchService(deps: SearchServiceDeps): SearchService {
@@ -285,15 +318,15 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 	const active = new Map<string, SearchRun>();
 
 	/**
-	 * One agent per chat: the librarian keys its conversation memory ("everything
-	 * judged earlier in this conversation") to the agent instance, so a follow-up
-	 * in the same chat must reach the same agent. Only the New chat button starts
-	 * a new chat id, and with it a new agent. Oldest chats are evicted past the cap.
+	 * One agent, and with it one model conversation, per chat: a follow-up reaches the agent that holds the chat's
+	 * earlier questions and answers. Only the New chat button starts a new chat id, and with it a new conversation.
+	 * Past the cap the oldest chats that are not answering are closed; their session files stay, and asking in such a
+	 * chat again resumes from its file.
 	 */
 	const agents = new Map<string, SearchAgent>();
 	/** The mode the person last chose; agents built after that start in it. */
 	let chosenMode: ApprovalMode | undefined;
-	async function agentFor(chatId: string): Promise<SearchAgent> {
+	async function agentFor(chatId: string, earlier: readonly ChatMessage[]): Promise<SearchAgent> {
 		const cached = agents.get(chatId);
 		if (cached !== undefined) {
 			// Re-insert so the Map's order is least recently used first.
@@ -302,11 +335,37 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 			return cached;
 		}
 		const built = await deps.agentFactory();
-		const initialMode = deps.approvalMode === undefined ? DEFAULT_APPROVAL_MODE : await deps.approvalMode();
-		built.setApprovalMode?.(chosenMode ?? initialMode);
+		try {
+			const initialMode = deps.approvalMode === undefined ? DEFAULT_APPROVAL_MODE : await deps.approvalMode();
+			built.setApprovalMode?.(chosenMode ?? initialMode);
+			if (built.openSession !== undefined && deps.sessions !== undefined) {
+				// The chat's own conversation file if it kept one; else a new conversation that starts with what the chat
+				// already holds (a chat from before conversations were kept, or one whose file is gone).
+				const resumeFile = (await deps.sessions.fileFor(chatId)) ?? undefined;
+				const opened = await built.openSession({ resumeFile, seed: resumeFile === undefined ? seedTurnsOf(earlier) : [] });
+				if (opened.sessionFile !== undefined) await deps.sessions.remember(chatId, opened.sessionFile);
+			}
+		} catch (error) {
+			await built.closeSession?.().catch(() => undefined);
+			throw error;
+		}
 		agents.set(chatId, built);
-		for (const stale of [...agents.keys()].slice(0, Math.max(0, agents.size - MAX_CHAT_AGENTS))) agents.delete(stale);
+		const answering = new Set([...active.values()].map((run) => run.agent));
+		const surplus = [...agents.keys()].slice(0, Math.max(0, agents.size - MAX_CHAT_AGENTS));
+		for (const stale of surplus) {
+			const agent = agents.get(stale);
+			if (agent === undefined || answering.has(agent)) continue;
+			agents.delete(stale);
+			void agent.closeSession?.().catch(() => undefined);
+		}
 		return built;
+	}
+
+	/** Ends every open conversation, waiting for each; one that fails to close does not stop the others. */
+	async function closeAgents(): Promise<void> {
+		const open = [...agents.values()];
+		agents.clear();
+		await Promise.allSettled(open.map((agent) => agent.closeSession?.()));
 	}
 
 	const emit = (event: SearchStreamEvent): void => deps.send(SEARCH_CHANNELS.event, event);
@@ -507,7 +566,7 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 			try {
 				// A bad config (e.g. a search root that no longer exists) throws
 				// here; the panel must show it instead of waiting forever.
-				agent = await agentFor(chatId);
+				agent = await agentFor(chatId, existing?.messages ?? []);
 			} catch (error) {
 				active.delete(searchId);
 				if (!run.cancelled) {
@@ -553,8 +612,13 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 		historyList: () => deps.chatStore.list(),
 		historyGet: (chatId) => deps.chatStore.get(chatId),
 		historySearch: (query) => deps.chatStore.search(query),
-		historyClear: () => deps.chatStore.clear(),
+		historyClear: async () => {
+			await closeAgents();
+			await deps.sessions?.clear();
+			await deps.chatStore.clear();
+		},
 		onEvent: () => () => undefined,
+		dispose: closeAgents,
 	};
 }
 
@@ -626,7 +690,11 @@ async function resolveDecomposition(
 	return { model: applyDazziThinkingLevels(resolved.model), ...(apiKey === undefined ? {} : { apiKey }) };
 }
 
-export function createDefaultAgentFactory(): () => Promise<SearchAgent> {
+/**
+ * `sessionDir` is where pi keeps each chat's conversation file: an app-owned folder, so the files move with the
+ * app's data and "clear history" can delete exactly them.
+ */
+export function createDefaultAgentFactory(options: { readonly sessionDir: string }): () => Promise<SearchAgent> {
 	return async () => {
 		const input = { flags: {}, env: process.env, cwd: process.cwd() };
 		const config = resolveConfigReadOnly(input);
@@ -650,17 +718,18 @@ export function createDefaultAgentFactory(): () => Promise<SearchAgent> {
 		// The decomposition model's thinking is upstream-fixed off; only the
 		// two-phase answer model takes config thinking.fast/final.
 		const thinking = readThinking(raw);
-		const options: AutoRAGAgentOptions = {
+		const agentOptions: AutoRAGAgentOptions = {
 			...buildAgentOptions(effective),
 			model: resolved.model,
 			piAgentDir: agentDir,
+			piSessionDir: options.sessionDir,
 			...(resolved.apiKey !== undefined ? { apiKey: resolved.apiKey } : {}),
 			...(resolved.providerApiKeys !== undefined ? { providerApiKeys: resolved.providerApiKeys } : {}),
 			...(decomposition !== undefined ? { queryDecomposition: decomposition } : {}),
 			...(thinking !== undefined ? { thinking } : {}),
 		};
 		const semantic = readAppIndexing(raw).semanticSearch;
-		const agent = new InteractiveSearchAgent(agentOptionsForSemantic(options, semantic), createAgentInteraction());
+		const agent = new InteractiveSearchAgent(agentOptionsForSemantic(agentOptions, semantic), createAgentInteraction());
 		applySemanticPolicyToAgent(agent, semantic);
 		// `manage_automations` starts programs by asking for "this Node"; in the app that would be the app itself.
 		runAutomationToolOnNode(agent, () => resolveNodeBinary({ resourcesPath: process.resourcesPath ?? "", env: process.env, platform: process.platform }));

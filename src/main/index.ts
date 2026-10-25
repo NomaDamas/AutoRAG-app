@@ -63,6 +63,7 @@ import { FS_CHANNELS } from "../shared/fs-contract";
 import dockIconPath from "../../build/icon.png?asset";
 import windowIconPath from "../../build/icons/512x512.png?asset";
 import { APP_FULL_NAME, APP_VERSION, formatWindowTitle, type DevLabel } from "../shared/app-info";
+import { createChatSessionIndex } from "./chat-sessions";
 import { createChatStore } from "./chat-store";
 import { createDataSourceStatusService } from "./datasource-status";
 import { readDevLabel, resolveClonePath } from "./dev-label";
@@ -552,9 +553,12 @@ app.whenReady().then(async () => {
 		emitRequest: (request) => sendToMainWindow(INTERACTION_CHANNELS.request, request),
 		emitClosed: (event) => sendToMainWindow(INTERACTION_CHANNELS.closed, event),
 	});
+	// Each chat's model conversation is a pi session file; the index remembers which file is whose.
+	const chatSessionsDirectory = join(app.getPath("userData"), "chat-sessions");
 	const searchService = createSearchService({
-		agentFactory: createDefaultAgentFactory(),
+		agentFactory: createDefaultAgentFactory({ sessionDir: chatSessionsDirectory }),
 		chatStore: createChatStore({ directory: join(app.getPath("userData"), "chat-history") }),
+		sessions: createChatSessionIndex({ directory: chatSessionsDirectory }),
 		send: sendToMainWindow,
 		analytics,
 		interaction: interactionHub,
@@ -1130,7 +1134,7 @@ app.whenReady().then(async () => {
 	app.once("will-quit", (event) => {
 		event.preventDefault();
 		// minsync outlives the app and keeps its lock; stop it so the next launch can resume instead of failing on the lock.
-		void Promise.all([stopEmbeddingDaemon().then(() => terminateMinSyncChildren()), workerHost.dispose(), analytics.shutdown()])
+		void Promise.all([stopEmbeddingDaemon().then(() => terminateMinSyncChildren()), workerHost.dispose(), analytics.shutdown(), searchService.dispose()])
 			.catch((error: unknown) => console.error("[fs-worker] dispose on quit failed:", error))
 			.finally(() => app.exit(0));
 	});

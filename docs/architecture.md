@@ -705,11 +705,11 @@ of the message box (`src/shared/interaction-contract.ts` is the contract).
   tell the model…`) is parsed back into an `ApprovalRequest` (`parseApprovalDialog`); any other `select`, `input`
   or `confirm` becomes a single-choice or text question. "Deny and tell the model" carries the person's note,
   which answers the gate's follow-up `input`. `custom()` returns `undefined`, as pi does for hosts without a TUI.
-- **Where the UI is bound.** The librarian's headless search session has no UI and no option to give it one, so
-  `agent-interaction.ts` wraps the instance's private `createSearchSession` (type erased from the package's
-  declarations) and calls `session.extensionRunner.setUIContext(ui, "rpc")`, which is what pi documents the
-  runner for. A librarian release that renames the method fails at agent construction; `test/interactive-search-agent.test.ts`
-  drives the real agent (v2.12 gate and tools on pi's scripted model) through the hub. Binding is per run:
+- **Where the UI is bound.** A chat's conversation is a pi session the app opens itself (next section), and the
+  UI is bound to it through pi's own mechanism: `session.bindExtensions({ uiContext, mode: "rpc" })`, which is what
+  pi's RPC mode does, and again after every session switch (`setRebindSession`). The tool `ask_user` and the gate
+  therefore reach the person on the bound session. `test/interactive-search-agent.test.ts` drives the real agent
+  (v2.12 gate and tools on pi's scripted model) through the hub. The question belongs to a run:
   `search-service` calls `agent.bindRun(...)` before the stream and clears it after, so between runs nobody can
   be asked and the gate blocks instead of waiting.
 - **`ask_user`.** `ask-user-tool.ts` registers a tool of the same name and parameters as the librarian's
@@ -723,6 +723,28 @@ of the message box (`src/shared/interaction-contract.ts` is the contract).
   stay in the panel's state): a question card (single/multiple choice with descriptions, free text, 2–4 together
   in steps) or an approval card (what the call does, the command, four answers; initial focus on Deny, Esc
   denies, Enter never approves). Stop stays reachable on the card. Pure logic: `state/interaction.ts`.
+
+### One conversation per chat
+
+Until v2.12 the app ran each question through the librarian's search session, which is created fresh per search:
+the model of a follow-up never saw the earlier turns (only the librarian's evidence ledger carried over), and no
+question could reach the approval gate's or `ask_user`'s UI. A chat is now one pi session
+(`createPiInteractiveRuntime`, the runtime the librarian's TUI uses), opened by `InteractiveSearchAgent.openSession`
+and kept for the chat's life:
+
+- **What the model sees.** The first question is the librarian's prompt (attachments in front, as before); a
+  follow-up is a message of the same session, so the earlier questions, answers and tool results are in the model's
+  context. The librarian assumes its terminal hook recorded the person's words for Jev; a host that searches itself
+  has to do that (`userRequests.record`, reached by name: a private field), which `searchDocuments` does for every
+  question. Without it `auto` could never approve a change the person asked for.
+- **After a restart.** `chat-sessions.ts` keeps `index.json` beside the session files (`<userData>/chat-sessions`):
+  chat id → file name. `search-service` resumes from that file when it exists (`switchSession`). A chat from before
+  this change, or one whose file is gone, starts a new conversation seeded with its finished turns
+  (`seedTurnsOf`: Deep answer over Quick, a steer belongs to the turn it corrected, a stopped turn carries
+  nothing). A file pi cannot read starts a new conversation instead of failing the chat.
+- **Lifetime.** At most eight conversations are open; past that the oldest chat that is not answering is closed
+  (its file stays, asking again resumes it). Quitting waits for every open one (`SearchService.dispose`); "clear
+  history" closes them and deletes the folder.
 
 ### What the panel shows while a run works, and an exhausted plan
 
@@ -747,8 +769,11 @@ of the message box (`src/shared/interaction-contract.ts` is the contract).
   00:00 UTC (`nextWeeklyReset`) is only the fallback for a server that sends none. The Plan page uses the same `creditsResetAt`.
 
 On-device checks: `scripts/manual-qa/run-qa-finder-ai-search-interaction.mjs` (scripted model: every card and
-answer path, files on disk, what the model receives) and `run-qa-live-ai-search-interaction.mjs` (a real model
-through the Dazzi account decides to ask and to delete).
+answer path, files on disk, what the model receives), `run-qa-finder-ai-search-conversation.mjs` (scripted model
+that records every request: a follow-up carries the chat's earlier turns, the same after quitting and starting the
+app again, the approval card on a resumed chat, a chat without a session file seeded from its turns, New chat sends
+nothing of another, clearing history deletes the files) and `run-qa-live-ai-search-interaction.mjs` (a real model
+through the Dazzi account decides to ask and to delete, remembers a codeword across questions, and after a restart).
 
 ## File automations
 

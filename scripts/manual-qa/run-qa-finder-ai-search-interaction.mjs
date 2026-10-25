@@ -196,7 +196,10 @@ const pending = () => page.evaluate(() => window.autorag.interaction.pending());
 // The run is over when the message box is back and not in its "running" state (the Stop button): while a card is open the box is not on screen at all.
 const finished = () =>
 	page.waitForFunction(() => document.querySelector('input[aria-label="Ask Dazzi"]') !== null && document.querySelector('button[aria-label="Stop"]') === null, null, { timeout: 60_000 });
+// Every scenario below scripts a chat's FIRST question (the librarian answers it in two phases, Quick then Deep). A later question of the same
+// chat is a plain turn of the conversation, so each one starts a new chat; the conversation lane covers follow-ups and the gate on them.
 const ask = async (text) => {
+	await panel.locator('button[aria-label="New chat"]').click();
 	await composer.click();
 	await page.keyboard.type(text);
 	await page.keyboard.press("Enter");
@@ -235,9 +238,7 @@ check("the choice is stored in the app settings", existsSync(settingsFile) && JS
 // ── 2. Ask: the approval card. ────────────────────────────────────────────
 const deleteOld = [{ text: "Looking at it." }, { tool: "bash", args: { command: `rm ${file("old-draft.txt")}` } }, { text: "Handled." }];
 script(deleteOld);
-await composer.click();
-await page.keyboard.type("remove the stale draft");
-await page.keyboard.press("Enter");
+await ask("remove the stale draft");
 await approval.waitFor();
 check("the approval card replaces the message box", (await composer.count()) === 0);
 const cardText = await approval.innerText();
@@ -490,6 +491,8 @@ check("it is the one shimmering line, with no grey bars", (await koRow.count()) 
 await koPage.screenshot({ path: join(EVIDENCE, "10c-opening-note-ko.png") });
 await koIdle();
 script(deleteOld);
+// The scripted steps are a first question's (Quick, then Deep); a later question of the same chat is a plain conversation turn.
+await koPanel.locator('button[aria-label="새 대화"]').click();
 await koPanel.locator("form.composer input").first().click();
 await koPage.keyboard.type("오래된 초안 지워줘");
 await koPage.keyboard.press("Enter");
