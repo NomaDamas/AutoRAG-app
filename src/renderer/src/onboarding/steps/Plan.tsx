@@ -39,21 +39,13 @@ export function PlanStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElement
 	const promoOpen = promoAsked || ctx.promoCode.length > 0;
 
 	return (
-		<section className="screen center">
+		<section className="screen center plan-screen">
 			<div className="screen-copy">
 				<Eyebrow icon="zap">{t("onboarding.plan.eyebrow")}</Eyebrow>
 				<h1>{planHeld(draft.plan, account) ? t("onboarding.plan.titleReady") : t("onboarding.plan.title")}</h1>
 				<p>
 					<Multiline text={cloud ? (proHeld ? t("onboarding.plan.leadCloudReady") : t("onboarding.plan.leadCloud")) : t("onboarding.plan.lead")} />
 				</p>
-				{needsAccount ? (
-					<p className="auth-note" role="status">
-						{t("onboarding.plan.signInFirst")}{" "}
-						<button type="button" className="secondary" onClick={() => ctx.setStep("account")}>
-							{t("onboarding.plan.signInAction")}
-						</button>
-					</p>
-				) : null}
 			</div>
 			<div className="plan-list">
 				{PLANS.map((plan) => {
@@ -93,9 +85,17 @@ export function PlanStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElement
 					);
 				})}
 			</div>
-			{buying ? (
-				<div className="promo">
-					{promoOpen ? (
+			{/* Always rendered, so the screen keeps its height (and its centring) whatever plan is picked. */}
+			<div className="promo">
+				{needsAccount ? (
+					<p className="auth-note" role="status">
+						{t("onboarding.plan.signInFirst")}{" "}
+						<button type="button" className="secondary" onClick={() => ctx.setStep("account")}>
+							{t("onboarding.plan.signInAction")}
+						</button>
+					</p>
+				) : buying ? (
+					promoOpen ? (
 						<>
 							<input
 								name="promo-code"
@@ -122,9 +122,9 @@ export function PlanStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElement
 						<button type="button" className="promo-toggle" onClick={() => setPromoAsked(true)}>
 							{t("onboarding.plan.promo.prompt")}
 						</button>
-					)}
-				</div>
-			) : null}
+					)
+				) : null}
+			</div>
 		</section>
 	);
 }

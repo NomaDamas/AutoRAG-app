@@ -512,7 +512,11 @@ credits), never the
 key. The plan step is five plain cards (Free, Air, Pro, Max, BYOK: name, price,
 who it is for), in the order and with the audiences the service describes; the
 Pro card carries a "7-day free trial" pill, and a Free card keeps the one
-training disclosure. Air, Pro and Max open the service's hosted checkout in the
+training disclosure. The screen is centred in the stage top and bottom, and the
+line under the cards (sign-in prompt, promo link or field) is always present, so
+choosing another plan never moves anything. The footer is a three-column grid
+(back, progress, primary) so the progress dashes sit on the window's centre line
+on every step. Air, Pro and Max open the service's hosted checkout in the
 browser (the server withholds the trial from a mailbox that already had one),
 carrying the promo code if the user asked for the field ("Have a promo code?":
 `discount_code`, a token of letters, digits, `-` and `_`; the server refuses an

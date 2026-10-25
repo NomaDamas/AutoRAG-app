@@ -154,6 +154,35 @@ describe("plan step", () => {
 		expect(host.querySelector(".promo-error")).toBeNull();
 	});
 
+	it("asks a signed-out visitor to sign in for a paid plan, in the slot below the cards, and only then", () => {
+		render({ plan: "pro", account: null });
+		expect(host.querySelector(".promo .auth-note")).not.toBeNull();
+		expect(promoToggle()).toBeNull();
+
+		render({ plan: "free", account: null });
+		expect(host.querySelector(".auth-note")).toBeNull();
+
+		render({ plan: "pro", account: account("free") });
+		expect(host.querySelector(".auth-note")).toBeNull();
+		expect(promoToggle()).not.toBeNull();
+	});
+
+	it("sends a signed-out visitor to the account step", () => {
+		const setStep = vi.fn();
+		render({ plan: "max", account: null, setStep });
+
+		act(() => host.querySelector<HTMLButtonElement>(".auth-note button")?.click());
+
+		expect(setStep).toHaveBeenCalledWith("account");
+	});
+
+	it("keeps the slot below the cards whatever the plan, so the screen never jumps", () => {
+		for (const plan of ["free", "air", "pro", "max", "byok"] as const) {
+			render({ plan, account: null });
+			expect(host.querySelector(".promo"), plan).not.toBeNull();
+		}
+	});
+
 	it("narrows the choice to Pro and Max when remote embedding is chosen", () => {
 		render({ plan: "pro", draft: { ...BASE_DRAFT, stepId: "plan", plan: "pro", embed: "cloud" } });
 

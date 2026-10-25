@@ -88,7 +88,16 @@ try {
 	};
 	const size = await windowSize();
 	check("onboarding window opens at the onboarding size", fits(size, [1120, 720]) && size.min[0] === 960, JSON.stringify(size));
-	const shot = (name) => page.locator(".onb").screenshot({ path: join(EVIDENCE, `${name}.png`) });
+	// Every screenshot also checks the footer: the progress dashes sit on the window's centre line whatever the width of the back and primary buttons.
+	const shot = async (name) => {
+		const offset = await page.evaluate(() => {
+			const dashes = document.querySelector(".onb .footer .progress-dashes")?.getBoundingClientRect();
+			const window_ = document.querySelector(".onb")?.getBoundingClientRect();
+			return dashes && window_ ? Math.abs(dashes.left + dashes.width / 2 - (window_.left + window_.width / 2)) : null;
+		});
+		if (offset !== null) check(`progress dashes are centred on ${name}`, offset <= 0.5, `${offset.toFixed(2)}px off`);
+		await page.locator(".onb").screenshot({ path: join(EVIDENCE, `${name}.png`) });
+	};
 	const primary = page.locator(".onb .footer button.primary");
 	const heading = () => page.locator(".onb .screen h1").first().innerText();
 
@@ -224,10 +233,19 @@ try {
 	// plan: with no account, a paid plan stays gated behind sign-in (no checkout,
 	// no charge); BYOK needs no account and keeps the lane offline.
 	await page.waitForSelector(".onb .plan-card");
+	await page.waitForTimeout(400);
+	// The plan screen's content is centred in the stage, top and bottom.
+	const gaps = await page.evaluate(() => {
+		const stage = document.querySelector(".onb .stage").getBoundingClientRect();
+		const content = document.querySelector(".onb .screen .eyebrow").getBoundingClientRect();
+		const last = document.querySelector(".onb .screen .promo").getBoundingClientRect();
+		return { top: content.top - stage.top, bottom: stage.bottom - last.bottom };
+	});
+	check("plan content is centred between the title bar and the footer", Math.abs(gaps.top - gaps.bottom) <= 2, JSON.stringify(gaps));
 	await shot("07-plan");
 	await page.locator(".onb .plan-card").nth(2).click();
 	check("a paid plan without an account cannot continue", await primary.isDisabled());
-	check("the plan step says to sign in first", (await page.locator(".onb .screen-copy .auth-note").count()) === 1);
+	check("the plan step says to sign in first", (await page.locator(".onb .screen .promo .auth-note").count()) === 1);
 	await shot("07b-plan-needs-account");
 	// BYOK against the local stub: real verification request, real encrypted
 	// key storage, real config write.

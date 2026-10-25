@@ -147,6 +147,13 @@ html[data-appearance="dark"] .onb {
 	padding-top: 31px;
 }
 
+/* The plan screen is centred in the stage top and bottom, not hung from the top. */
+.onb .screen.plan-screen {
+	justify-content: center;
+	padding-top: 34px;
+	padding-bottom: 34px;
+}
+
 .onb .screen.center .screen-copy {
 	text-align: center;
 	max-width: 670px;
@@ -287,8 +294,10 @@ html[data-appearance="dark"] .onb {
 	opacity: .7;
 }
 
+/* Back | progress | primary: the outer columns are equal, so the progress stays on the window's centre line whatever the primary's label is. */
 .onb .footer {
-	display: flex;
+	display: grid;
+	grid-template-columns: minmax(0,1fr) auto minmax(0,1fr);
 	align-items: center;
 	gap: 16px;
 	padding: 0 17px;
@@ -298,6 +307,7 @@ html[data-appearance="dark"] .onb {
 
 .onb .back-btn {
 	display: grid;
+	justify-self: start;
 	place-items: center;
 	width: 30px;
 	height: 30px;
@@ -316,7 +326,6 @@ html[data-appearance="dark"] .onb {
 	display: flex;
 	align-items: center;
 	gap: 5px;
-	flex: 1;
 	justify-content: center;
 }
 
@@ -342,6 +351,7 @@ html[data-appearance="dark"] .onb {
 }
 
 .onb .footer .primary {
+	justify-self: end;
 	min-width: 104px;
 }
 /* App mark and mini surfaces */
@@ -778,6 +788,14 @@ html[data-appearance="dark"] .onb .source-icon.brand {
 	text-align: center;
 }
 
+.onb .promo .auth-note {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin: 0;
+	font-size: 11.5px;
+}
+
 .onb .status-card {
 	display: flex;
 	align-items: center;
@@ -946,12 +964,11 @@ html[data-appearance="dark"] .onb .source-icon.brand {
 
 /* Promo code: a quiet text link that turns into a small pill field when asked for. */
 .onb .promo {
+	position: relative;
 	display: flex;
-	flex-direction: column;
 	align-items: center;
 	justify-content: center;
-	gap: 6px;
-	min-height: 32px;
+	height: 32px;
 	margin-top: 18px;
 }
 
@@ -998,8 +1015,13 @@ html[data-appearance="dark"] .onb .source-icon.brand {
 }
 
 .onb .promo-error {
+	position: absolute;
+	top: calc(100% + 4px);
+	left: 0;
+	right: 0;
 	color: var(--onb-red);
 	font-size: 10px;
+	text-align: center;
 }
 
 .onb .pay-summary {
