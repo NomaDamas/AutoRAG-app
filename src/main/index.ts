@@ -123,8 +123,8 @@ const execFileAsync = promisify(execFile);
 initErrorReporting({ dsn: import.meta.env.MAIN_VITE_SENTRY_DSN, enabled: readErrorReportingEnabled(app.getPath("userData")), version: APP_VERSION, packaged: app.isPackaged });
 
 /**
- * Usage statistics: opt-in, anonymous, content-free (see `analytics-core.ts`). Off until the user turns it on in
- * Settings, read from disk because the settings service loads later. A build with no PostHog key has no sink and sends nothing.
+ * Usage statistics: anonymous, content-free (see `analytics-core.ts`). Off until the user has continued from onboarding's
+ * welcome step with the box ticked, or turned it on in Settings; read from disk because the settings service loads later. A build with no PostHog key has no sink and sends nothing.
  */
 const analyticsTarget = resolveAnalyticsTarget({
 	packaged: app.isPackaged,

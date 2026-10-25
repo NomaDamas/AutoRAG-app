@@ -291,10 +291,11 @@ exiting. QA lane: `scripts/manual-qa/run-qa-finder-fs-worker-crash.mjs`
 
 Dazzi sends a report to the maintainers' Sentry project when something breaks,
 so a stuck or failed index is seen without the user filing an issue. It is
-**opt-in** (`errorReporting` defaults to off): the first onboarding step carries
-a second unticked checkbox next to the usage-statistics one, and Settings → 일반
-→ 개인정보 → "오류 보고서 보내기" has the same choice as a switch. Continuing from
-the welcome step saves both checkboxes; closing the window there saves nothing.
+asked once, on the first onboarding step: a checkbox that is **ticked by
+default** sits next to the usage-statistics one, and Settings → 일반 → 개인정보 →
+"오류 보고서 보내기" has the same choice as a switch. `errorReporting` is stored
+off until the user continues from the welcome step, which saves both checkboxes
+as they stand; closing the window there saves nothing.
 Until it is on, every event is dropped before it is queued, and
 `readErrorReportingEnabled` reads the setting as off unless it is exactly `true`.
 There is no per-report prompt.
@@ -331,17 +332,18 @@ Tracing, replay, logs and user feedback are not enabled.
 ## Usage statistics (PostHog)
 
 Separate from error reports: Settings → 일반 → 개인정보 has a second switch,
-`usageAnalytics`, **off by default** (opt-in). It answers "which features are
-used", never "what is in them".
+`usageAnalytics`, stored **off** until the user continues from the welcome step.
+It answers "which features are used", never "what is in them".
 
-How a user opts in: the first onboarding step (welcome) carries a small,
-**unticked** checkbox with a link to the Privacy Policy, and Settings → 일반 →
+How it is chosen: the first onboarding step (welcome) carries a small checkbox
+with a link to the Privacy Policy, **ticked by default**, and Settings → 일반 →
 개인정보 has the same choice as a switch. Continuing from the welcome step saves
 the checkbox's value to `usageAnalytics`; closing the window there saves
-nothing. Either way nothing is sent until the user ticks or switches it on, so
-consent is an affirmative act, as the EU's GDPR/ePrivacy rules require. The
-Privacy Policy (served from the landing-page repo) must name the desktop app's
-usage statistics before EU users are served.
+nothing, so nothing is sent before the user has continued. Because the box is
+pre-ticked, continuing is not by itself an affirmative opt-in under the EU's
+GDPR/ePrivacy rules (see `docs/compliance/eu-status.md`). The Privacy Policy
+(served from the landing-page repo) must name the desktop app's usage statistics
+before EU users are served.
 
 What is sent, and only after the user turns it on: `app_opened`,
 `settings_changed` (a setting's name and `on`/`off` or its enum value),

@@ -182,10 +182,10 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 	const [paying, setPaying] = useState(false);
 	const [indexStatus, setIndexStatus] = useState<IndexingStatus | null>(null);
 	const [smartRun, setSmartRun] = useState<SmartRun>(initialSmartRun);
-	// Unticked: usage statistics are opt-in (an EU user's consent must be an affirmative act).
-	const [shareUsage, setShareUsage] = useState(false);
-	// Unticked too: error reports are opt-in, a separate purpose with its own consent.
-	const [shareErrors, setShareErrors] = useState(false);
+	// Ticked by default: the welcome step offers anonymous usage statistics on. Nothing is saved until the user continues from that step.
+	const [shareUsage, setShareUsage] = useState(true);
+	// Ticked too, independently: error reports are a separate purpose with their own box.
+	const [shareErrors, setShareErrors] = useState(true);
 
 	const draftRef = useRef<OnboardingDraft | null>(null);
 	/** The run whose result may still land in the draft; null once it was cancelled or the step was left. */
@@ -205,8 +205,8 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 	const localAllowedRef = useRef(false);
 	const modelsRef = useRef(false);
 	const indexingRef = useRef(false);
-	const shareUsageRef = useRef(false);
-	const shareErrorsRef = useRef(false);
+	const shareUsageRef = useRef(true);
+	const shareErrorsRef = useRef(true);
 
 	// Synced during render, not in an effect: deferred callbacks (the sign-in
 	// auto-advance, keyboard handler) must see the state of the latest render.
@@ -426,7 +426,7 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 		const consent = usageConsentOnLeaving(current.stepId, shareUsageRef.current);
 		const errorConsent = errorReportsConsentOnLeaving(current.stepId, shareErrorsRef.current);
 		if (consent !== null && errorConsent !== null) {
-			// A failed save leaves both settings at their default (off): the safe direction.
+			// A failed save leaves both settings at their stored default (off), so nothing is sent without a saved choice.
 			void autorag.settings.set({ usageAnalytics: consent, errorReporting: errorConsent }).catch((error: unknown) => console.error("[onboarding] privacy choices not saved:", error));
 		}
 		if (detour) setIndexStatus(null);

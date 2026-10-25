@@ -155,14 +155,14 @@ export function primaryLabelKey(stepId: OnboardingStepId, plan: PlanId, held: bo
 /**
  * The value to save for "usage statistics" when the user leaves `stepId`, or
  * null when that step records nothing. Consent is the act of continuing from
- * the step that shows the checkbox: closing the window there saves nothing, and
- * the setting stays at its default (off).
+ * the step that shows the checkbox (ticked by default there): closing the
+ * window there saves nothing, and the stored setting stays at its default (off).
  */
 export function usageConsentOnLeaving(stepId: OnboardingStepId, checked: boolean): boolean | null {
 	return stepId === "welcome" ? checked : null;
 }
 
-/** Same rule for "error reports": the value to save when the user leaves `stepId`, or null. Default stays off. */
+/** Same rule for "error reports": the value to save when the user leaves `stepId`, or null. The stored default stays off until then. */
 export function errorReportsConsentOnLeaving(stepId: OnboardingStepId, checked: boolean): boolean | null {
 	return stepId === "welcome" ? checked : null;
 }
