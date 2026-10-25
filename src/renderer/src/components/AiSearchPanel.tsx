@@ -23,6 +23,7 @@ import type { InteractionRequest } from "../../../shared/interaction-contract";
 import { composerAction, deliverSteers, restoreChat, settleSteers, type SteerItem } from "../state/steering";
 import { closeRequest, EMPTY_QUEUE, frontRequest, mergePending, openRequest, type InteractionQueue } from "../state/interaction";
 import { isImageOnlyLine, parseAnswerBlocks, parseInline, type AnswerBlock, type InlineSegment } from "../state/answer-markdown";
+import { CodeBlock } from "./CodeBlock";
 import { summaryRequest, type SummaryLanguage } from "../state/ai-summary";
 import { answerViewState } from "../state/answer-view";
 import { attachmentsFromDrop, isAttachmentDrag, mergeAttachments } from "../state/attachments";
@@ -1322,7 +1323,7 @@ function AnswerBlockView({
 	readonly imageActions: ImageActions;
 }): ReactElement {
 	if (block.kind === "code") {
-		return <pre className="m-0 overflow-auto whitespace-pre rounded-6 border border-border bg-code px-10 py-8 font-mono text-caption text-ink-body">{block.text}</pre>;
+		return <CodeBlock text={block.text} language={block.language} className="m-0 overflow-auto whitespace-pre rounded-6 border border-border bg-code px-10 py-8 font-mono text-caption text-ink-body" />;
 	}
 	if (block.kind === "table") {
 		return (

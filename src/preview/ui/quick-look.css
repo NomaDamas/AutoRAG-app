@@ -7,6 +7,9 @@
  * strings (highlighted code lines, rendered Markdown).
  * ========================================================================== */
 
+/* Syntax colours for `.ql-lines`, shared with the Finder's code blocks. */
+@import "./syntax.css";
+
 /* The preview is a transparent window over the Finder. This has to beat the app's
  * desk backdrop in base.css. It does so on two counts: this file is unlayered
  * while base.css now sits in `layer(base)`, and this selector also out-specifies
@@ -75,81 +78,6 @@ body.quick-look-page #root {
 .ql-lines[data-wrap="false"] .ql-lc {
 	white-space: pre;
 	overflow-wrap: normal;
-}
-
-/* ------------------------------------------------------------ Syntax colours
- * highlight.js classes mapped onto the reference's Xcode palette. */
-.ql-lines .hljs-keyword,
-.ql-lines .hljs-literal,
-.ql-lines .hljs-selector-tag,
-.ql-lines .hljs-meta .hljs-keyword {
-	color: var(--ql-syntax-keyword);
-	font-weight: 600;
-}
-
-.ql-lines .hljs-string,
-.ql-lines .hljs-regexp,
-.ql-lines .hljs-char,
-.ql-lines .hljs-addition {
-	color: var(--ql-syntax-string);
-}
-
-.ql-lines .hljs-number,
-.ql-lines .hljs-symbol {
-	color: var(--ql-syntax-number);
-}
-
-.ql-lines .hljs-comment,
-.ql-lines .hljs-quote,
-.ql-lines .hljs-deletion {
-	color: var(--ql-syntax-comment);
-	font-style: italic;
-}
-
-.ql-lines .hljs-title.function_,
-.ql-lines .hljs-section,
-.ql-lines .ql-call {
-	color: var(--ql-syntax-function);
-}
-
-.ql-lines .hljs-built_in,
-.ql-lines .hljs-type,
-.ql-lines .hljs-attr,
-.ql-lines .hljs-attribute,
-.ql-lines .hljs-selector-class,
-.ql-lines .hljs-selector-id {
-	color: var(--ql-syntax-builtin);
-}
-
-.ql-lines .hljs-title,
-.ql-lines .hljs-title.class_,
-.ql-lines .hljs-variable.constant_,
-.ql-lines .hljs-variable.language_,
-.ql-lines .ql-const {
-	color: var(--ql-syntax-constant);
-}
-
-.ql-lines .hljs-meta,
-.ql-lines .hljs-punctuation {
-	color: var(--ql-syntax-punctuation);
-}
-
-/* HTML source: tags in the keyword colour, attributes purple, values red, as the reference. */
-.ql-lines .hljs-tag {
-	color: var(--ql-syntax-punctuation);
-}
-
-.ql-lines .hljs-tag .hljs-name {
-	color: var(--ql-syntax-keyword);
-	font-weight: 400;
-}
-
-.ql-lines .hljs-tag .hljs-attr {
-	color: var(--ql-syntax-builtin);
-}
-
-.ql-lines .hljs-tag .hljs-string {
-	color: var(--ql-syntax-string);
 }
 
 /* Markdown source roles (src/preview/shared/markdown-source.ts). */

@@ -1,0 +1,79 @@
+/* ============================================================================
+ * Syntax colours — highlight.js classes mapped onto the reference's Xcode
+ * palette (`--ql-syntax-*` in tokens.css). Shared by Quick Look's numbered
+ * code lines (`.ql-lines`) and the code blocks of AI Search answers and
+ * evidence excerpts (`.hl-code`), so one source reads the same in both.
+ * ========================================================================== */
+
+:is(.ql-lines, .hl-code) .hljs-keyword,
+:is(.ql-lines, .hl-code) .hljs-literal,
+:is(.ql-lines, .hl-code) .hljs-selector-tag,
+:is(.ql-lines, .hl-code) .hljs-meta .hljs-keyword {
+	color: var(--ql-syntax-keyword);
+	font-weight: 600;
+}
+
+:is(.ql-lines, .hl-code) .hljs-string,
+:is(.ql-lines, .hl-code) .hljs-regexp,
+:is(.ql-lines, .hl-code) .hljs-char,
+:is(.ql-lines, .hl-code) .hljs-addition {
+	color: var(--ql-syntax-string);
+}
+
+:is(.ql-lines, .hl-code) .hljs-number,
+:is(.ql-lines, .hl-code) .hljs-symbol {
+	color: var(--ql-syntax-number);
+}
+
+:is(.ql-lines, .hl-code) .hljs-comment,
+:is(.ql-lines, .hl-code) .hljs-quote,
+:is(.ql-lines, .hl-code) .hljs-deletion {
+	color: var(--ql-syntax-comment);
+	font-style: italic;
+}
+
+:is(.ql-lines, .hl-code) .hljs-title.function_,
+:is(.ql-lines, .hl-code) .hljs-section,
+:is(.ql-lines, .hl-code) .ql-call {
+	color: var(--ql-syntax-function);
+}
+
+:is(.ql-lines, .hl-code) .hljs-built_in,
+:is(.ql-lines, .hl-code) .hljs-type,
+:is(.ql-lines, .hl-code) .hljs-attr,
+:is(.ql-lines, .hl-code) .hljs-attribute,
+:is(.ql-lines, .hl-code) .hljs-selector-class,
+:is(.ql-lines, .hl-code) .hljs-selector-id {
+	color: var(--ql-syntax-builtin);
+}
+
+:is(.ql-lines, .hl-code) .hljs-title,
+:is(.ql-lines, .hl-code) .hljs-title.class_,
+:is(.ql-lines, .hl-code) .hljs-variable.constant_,
+:is(.ql-lines, .hl-code) .hljs-variable.language_,
+:is(.ql-lines, .hl-code) .ql-const {
+	color: var(--ql-syntax-constant);
+}
+
+:is(.ql-lines, .hl-code) .hljs-meta,
+:is(.ql-lines, .hl-code) .hljs-punctuation {
+	color: var(--ql-syntax-punctuation);
+}
+
+/* HTML source: tags in the keyword colour, attributes purple, values red, as the reference. */
+:is(.ql-lines, .hl-code) .hljs-tag {
+	color: var(--ql-syntax-punctuation);
+}
+
+:is(.ql-lines, .hl-code) .hljs-tag .hljs-name {
+	color: var(--ql-syntax-keyword);
+	font-weight: 400;
+}
+
+:is(.ql-lines, .hl-code) .hljs-tag .hljs-attr {
+	color: var(--ql-syntax-builtin);
+}
+
+:is(.ql-lines, .hl-code) .hljs-tag .hljs-string {
+	color: var(--ql-syntax-string);
+}

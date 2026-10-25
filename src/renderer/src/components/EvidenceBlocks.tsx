@@ -18,6 +18,7 @@ import { isImageOnlyLine, parseAnswerBlocks, parseInline, type AnswerBlock, type
 import { splitExcerpt, type ExcerptPart } from "../state/excerpt-format";
 import { ImageRow, lineImages, type ImageActions } from "./AnswerImage";
 import { AnswerLink } from "./AnswerLink";
+import { CodeBlock } from "./CodeBlock";
 import { PipeTable, TABLE, TABLE_WRAP } from "./PipeTable";
 
 /** Where an excerpt came from, for resolving and opening its images. */
@@ -136,7 +137,7 @@ function EvidenceBlock({ block, images }: { readonly block: AnswerBlock; readonl
 		case "quote":
 			return <InlineWithImages text={block.text} images={images} className="evidence__block evidence__block--quote text-caption leading-read text-ink-muted pl-10 shadow-[inset_2px_0_0_var(--border)] [&_strong]:text-ink [&_strong]:font-semibold" />;
 		case "code":
-			return <pre className="evidence__block evidence__block--code m-0 font-mono text-badge leading-read text-ink-body py-8 px-10 rounded-6 bg-code border border-border overflow-auto whitespace-pre [&_strong]:text-ink [&_strong]:font-semibold">{block.text}</pre>;
+			return <CodeBlock text={block.text} language={block.language} className="evidence__block evidence__block--code m-0 font-mono text-badge leading-read text-ink-body py-8 px-10 rounded-6 bg-code border border-border overflow-auto whitespace-pre" />;
 		case "table":
 			return <PipeTable table={block} renderLine={(line) => renderInline(parseInline(line), images.actions.onOpenUrl)} wrapClassName="evidence__block evidence__block--table" />;
 		default:
