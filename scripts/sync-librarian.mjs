@@ -10,10 +10,10 @@ const staged = join(root, ".upstream", "librarian-package");
 const installed = join(root, "node_modules", "@autorag", "librarian");
 const remote = "https://github.com/Marker-Inc-Korea/AutoRAG.git";
 // A release tag, or a full commit SHA while the librarian has no tag that carries what the app needs.
-// This SHA is public `main` after v2.12.0, pinned until the next release tag ships (switch `librarianRef` to that tag then): hybrid-first retrieval
-// (one method per datasource, `FallbackRetrievalMethod`; MinSync's vector method leaves the registry), the Jev `direct` route folded into `extra`, and
-// v2.12.0's permission gate (ask/auto/full), `ask_user`, and `convert_files` on top of v2.11.1 (file automations, `autorag automate`, `@autorag/librarian/profiles`).
-const librarianRef = "d8aafc8acac1884dd8c45de2ab3ed5ba81e94ea6";
+// v2.13.0 adds hybrid-first retrieval (one `FallbackRetrievalMethod` per datasource; MinSync's vector method leaves the method registry), folds the Jev
+// `direct` route into `extra`, offers the public web as a Jev datasource, and loads the `organize` / `autorag-setup` skills into the turn (`internal-skills/`),
+// on top of v2.12.0 (permission gate ask/auto/full, `ask_user`, `convert_files`) and v2.11.1 (file automations, `autorag automate`, `@autorag/librarian/profiles`).
+const librarianRef = "v2.13.0";
 
 function run(command, args, cwd = root) {
 	const result = spawnSync(command, args, { cwd, stdio: "inherit" });
