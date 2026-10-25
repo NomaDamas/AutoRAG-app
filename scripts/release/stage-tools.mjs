@@ -56,6 +56,8 @@ import {
 	latestRelease,
 	log,
 	mb,
+	parseRpaths,
+	resolveDylibRef,
 	run,
 } from "./lib.mjs";
 import { VERSION_FLOORS, assertVersionFloor } from "./version-floors.mjs";
@@ -180,8 +182,8 @@ async function stageFsearch() {
 			.map((line) => line.trim().split(" ")[0])
 			.filter((name) => name.length > 0);
 	const isSystem = (name) => name.startsWith("/usr/lib/") || name.startsWith("/System/");
-	// @loader_path references (ICU's data library) resolve against the file that names them.
-	const resolveRef = (name, referrer) => (name.startsWith("@loader_path/") ? join(dirname(referrer), name.slice("@loader_path/".length)) : name.startsWith("@") ? null : name);
+	// Siblings are named `@loader_path/x` (ICU's data library) or `@rpath/x` (brotli, in current Homebrew bottles); both resolve against the file that names them.
+	const rpathsOf = (file) => parseRpaths(run("otool", ["-l", file], { capture: true }));
 
 	const copied = new Map(); // real source path -> staged file name
 	const queue = [source];
@@ -189,7 +191,7 @@ async function stageFsearch() {
 		const file = queue.pop();
 		for (const name of linked(file)) {
 			if (isSystem(name)) continue;
-			const resolved = resolveRef(name, file);
+			const resolved = resolveDylibRef(name, file, rpathsOf(file));
 			if (resolved === null) continue;
 			const real = realpathSync(resolved);
 			if (copied.has(real)) continue;

@@ -278,6 +278,40 @@ export function systemTar() {
 	return process.platform === "win32" ? join(process.env.SystemRoot ?? "C:\\Windows", "System32", "tar.exe") : "tar";
 }
 
+/** The `LC_RPATH` entries of an `otool -l` listing, in load order. */
+export function parseRpaths(listing) {
+	const paths = [];
+	let inRpath = false;
+	for (const line of listing.split("\n")) {
+		const trimmed = line.trim();
+		if (trimmed.startsWith("cmd ")) inRpath = trimmed === "cmd LC_RPATH";
+		else if (inRpath && trimmed.startsWith("path ")) paths.push(trimmed.slice("path ".length).replace(/ \(offset \d+\)$/, ""));
+	}
+	return paths;
+}
+
+/**
+ * Where a dylib that `referrer` links resolves on disk, for copying it beside the binary.
+ * `@loader_path/x` is relative to the referrer; `@rpath/x` is tried against each of the referrer's own
+ * rpaths (current Homebrew bottles name their siblings this way: brotli's decoder links
+ * `@rpath/libbrotlicommon.1.dylib` with rpath `@loader_path/../lib`); an absolute path stays as it is.
+ * `@executable_path` is only meaningful for the main binary, so it yields null. An `@rpath` reference no
+ * rpath resolves throws: skipping it would still re-point it into tools/lib, where nothing was copied.
+ */
+export function resolveDylibRef(name, referrer, rpaths, exists = existsSync) {
+	const directory = dirname(referrer);
+	if (name.startsWith("@loader_path/")) return join(directory, name.slice("@loader_path/".length));
+	if (name.startsWith("@rpath/")) {
+		const rest = name.slice("@rpath/".length);
+		for (const rpath of rpaths) {
+			const candidate = join(rpath.replace(/^@loader_path/, directory), rest);
+			if (exists(candidate)) return candidate;
+		}
+		throw new Error(`${referrer} links ${name}, which none of its rpaths resolves (${rpaths.join(", ") || "none"})`);
+	}
+	return name.startsWith("@") ? null : name;
+}
+
 export function dirSizeBytes(root) {
 	let total = 0;
 	const stack = [root];
