@@ -1,4 +1,5 @@
 import type { CliConfig } from "@autorag/librarian/core";
+import { isKakaoEntry, kakaoSupported } from "../shared/messenger-platform";
 import { isJsonObject } from "../shared/settings-contract";
 import { isCalendarDatasourceEntry } from "./calendar-mcp";
 
@@ -41,13 +42,15 @@ export function withMediaIndexDisabled(jikji: CliConfig["jikji"]): CliConfig["ji
 }
 
 /** The same config with Tesseract off for local files and every datasource connector, and Jikji's media index off. */
-export function withIndexingPoliciesApplied(config: CliConfig): CliConfig {
+export function withIndexingPoliciesApplied(config: CliConfig, platform: string = process.platform): CliConfig {
 	const datasources =
 		config.datasources === undefined
 			? undefined
 			: Object.fromEntries(
 					Object.entries(config.datasources)
 						.filter(([id, entry]) => !isCalendarDatasourceEntry(id, entry))
+						// KakaoTalk reads the Mac app: a row inherited from a Mac config never runs where lazykatok cannot.
+						.filter(([id, entry]) => kakaoSupported(platform) || !isKakaoEntry(id, entry))
 						.map(([id, entry]) => [id, withConnectorOcrDisabled(entry)]),
 				);
 	const jikji = withMediaIndexDisabled(config.jikji);

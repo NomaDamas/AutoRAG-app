@@ -15,6 +15,7 @@ import {
 } from "./embedding-batch";
 import { ensureEmbeddingForConfig, localModelMissing } from "./embedding-daemon";
 import { createMinSyncWatchdog, EMBEDDING_STALL_RETRIES, runWithStallRetry } from "./minsync-watchdog";
+import { ensureMessengerConfigsFor } from "./messenger-config";
 import { takeSharedParseFailures } from "./parse-isolation";
 import { runWithRecovery } from "./refresh-recovery";
 import { findUnavailableRoots } from "./search-roots";
@@ -112,6 +113,10 @@ async function runRefresh(
 	}
 	// Everything that embeds during this run (MinSync, mailcrawl, the chat sidecars) finds the local server by its state files.
 	if (semantic) await ensureEmbeddingForConfig(raw);
+	// Windows: discrawl/slacrawl cannot find the messenger apps' data without a config at their default path.
+	if (selected.includes("datasources")) {
+		await ensureMessengerConfigsFor(raw.datasources, { platform: process.platform, env: deps.env, home: deps.env.USERPROFILE ?? deps.env.HOME ?? "" });
+	}
 	// A refresh re-walks the folders, so a dot-folder created minutes ago is excluded too.
 	const effective = await applyAppIndexing(resolveConfigReadOnly(input), raw, { fresh: true, configPath });
 	const diagnostics: ConfigRefreshDiagnostic[] = [];
@@ -128,7 +133,7 @@ async function runRefresh(
 				written: 0,
 				deleted: 0,
 				skipped: 0,
-				diagnostics: [{ code: "search-root-unavailable", severity: "error", message }],
+				diagnostics: [{ code: "search-root-unavailable", severity: "error", message, folders: problems.map((problem) => problem.root) }],
 				error: message,
 			};
 		}
@@ -161,7 +166,7 @@ async function runRefresh(
 				written: 0,
 				deleted: 0,
 				skipped: 0,
-				diagnostics: [{ code: "embedder-preflight-failed", severity: "error", message: preflight.message }],
+				diagnostics: [{ code: "embedder-preflight-failed", severity: "error", message: preflight.message, reason: preflight.reason }],
 				error: preflight.message,
 			};
 		}
@@ -187,6 +192,7 @@ async function runRefresh(
 			diagnostics.push({
 				code: recovered.quarantined.length > 0 ? "files-left-out" : "refresh-retried",
 				severity: "warning",
+				...(recovered.quarantined.length > 0 ? { count: recovered.quarantined.length } : {}),
 				message: t(recovered.quarantined.length > 0 ? "main.refresh.filesLeftOut" : "main.refresh.retried", { files: recovered.quarantined.length, retries: recovered.retries, code: recovered.code ?? "" }),
 			});
 		}
@@ -201,7 +207,7 @@ async function runRefresh(
 		// The librarian reports every failed parse with one generic message; what killed the file is only known here.
 		const killed = takeSharedParseFailures();
 		if (killed.timedOut > 0 || killed.crashed > 0) {
-			diagnostics.push({ code: "parse-killed", severity: "warning", message: t("main.refresh.parseKilled", { timedOut: killed.timedOut, crashed: killed.crashed }) });
+			diagnostics.push({ code: "parse-killed", severity: "warning", message: t("main.refresh.parseKilled", { timedOut: killed.timedOut, crashed: killed.crashed }), count: killed.timedOut + killed.crashed });
 		}
 		const toDiagnostic = (diagnostic: { readonly code: unknown; readonly severity: ConfigRefreshDiagnostic["severity"]; readonly message: string }): ConfigRefreshDiagnostic => ({
 			code: String(diagnostic.code),

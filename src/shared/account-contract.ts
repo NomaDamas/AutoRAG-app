@@ -94,6 +94,11 @@ export interface AccountSnapshot {
 	readonly creditsUsedCents: number;
 	readonly creditsLimitCents: number;
 	readonly creditPeriod: string;
+	/**
+	 * ISO 8601: when the weekly credits come back, as the server reports it (`credits.resets_at`). The server's week
+	 * starts when the account's period did, so this is not a fixed weekday; null from a server that sends none.
+	 */
+	readonly creditsResetsAt: string | null;
 	/** The plan includes cloud embeddings (Pro and Max), as the server reports it. */
 	readonly embeddings: boolean;
 	readonly requestsPerMinute: number;
@@ -143,11 +148,21 @@ export function planCovers(have: AccountPlanId, want: AccountPlanId): boolean {
 	return PLAN_RANK[have] >= PLAN_RANK[want];
 }
 
-/** Weekly credits reset on Monday 00:00 UTC (the server's ISO-week bucket); the first such instant after `now`. */
+/**
+ * The calendar guess at the weekly reset: Monday 00:00 UTC, the first such instant after `now`. The server's own week
+ * starts when the account's period did, so this is only the fallback for a server that sends no reset time
+ * (see {@link creditsResetAt}).
+ */
 export function nextWeeklyReset(now: Date): Date {
 	const day = now.getUTCDay();
 	const daysUntilMonday = (8 - day) % 7 || 7;
 	return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + daysUntilMonday));
+}
+
+/** When the account's weekly credits come back: the server's own instant, else {@link nextWeeklyReset}. */
+export function creditsResetAt(account: Pick<AccountSnapshot, "creditsResetsAt"> | null, now: Date): Date {
+	const reported = account?.creditsResetsAt == null ? Number.NaN : Date.parse(account.creditsResetsAt);
+	return Number.isNaN(reported) ? nextWeeklyReset(now) : new Date(reported);
 }
 
 /** A duration split for display; minutes round up so the last minute never reads "0". */

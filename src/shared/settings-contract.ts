@@ -5,6 +5,8 @@
  * Persistence lives in the main process under Electron's userData dir.
  */
 
+import { type ApprovalMode, DEFAULT_APPROVAL_MODE } from "./interaction-contract";
+
 export const SETTINGS_CHANNELS = {
 	get: "settings:get",
 	set: "settings:set",
@@ -68,11 +70,11 @@ export interface AppSettings {
 	readonly launchAtLogin: boolean;
 	readonly showInMenuBar: boolean;
 	readonly autoInstallUpdates: boolean;
-	/** Crash and indexing-failure reports go to the maintainers (no file paths, names or document text). Off by default: opt-in, asked on the first onboarding step. */
+	/** Crash and indexing-failure reports go to the maintainers (no file paths, names or document text). Stored off until the user continues from the first onboarding step, whose box is ticked by default. */
 	readonly errorReporting: boolean;
 	/**
 	 * Anonymous product-usage statistics (which features are used, never what is in them) go to the maintainers.
-	 * Off by default: it is opt-in, and independent of `errorReporting`.
+	 * Stored off until the user continues from the first onboarding step, whose box is ticked by default; independent of `errorReporting`.
 	 */
 	readonly usageAnalytics: boolean;
 	/** Off: dot-prefixed files never appear. On: they appear, rendered dimmed. */
@@ -81,6 +83,12 @@ export interface AppSettings {
 	readonly dupeyScanIntervalMinutes: number;
 	/** The OS file-menu entries ("Ask AutoRAG", "Show in AutoRAG") are installed: macOS Quick Actions, Windows Explorer verbs. */
 	readonly osMenuIntegration: boolean;
+	/**
+	 * How much the AI Search agent may do to existing files without asking (librarian v2.12 permission modes):
+	 * `ask` approves every shell/write/edit call, `auto` lets Jev approve what the request covers and asks about the
+	 * rest, `full` never asks. Chosen in the AI Search message box; applies to every agent, running or later.
+	 */
+	readonly approvalMode: ApprovalMode;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -94,6 +102,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
 	showHiddenFiles: false,
 	dupeyScanIntervalMinutes: 60,
 	osMenuIntegration: false,
+	approvalMode: DEFAULT_APPROVAL_MODE,
 };
 
 /** Whether the backend a datasource needs is present on this machine. */
@@ -459,6 +468,12 @@ export interface ConfigRefreshDiagnostic {
 	readonly code: string;
 	readonly severity: "info" | "warning" | "error";
 	readonly message: string;
+	/** A stable token the app sets itself where the cause matters (`embedder-preflight-failed`, `embedding-model-download-failed`); never parsed from a message. */
+	readonly reason?: string;
+	/** Files this diagnostic says were left out of the run (`files-left-out`, `parse-killed`). */
+	readonly count?: number;
+	/** Folders this diagnostic is about (`search-root-unavailable`). */
+	readonly folders?: readonly string[];
 }
 
 /** Outcome of a manual AutoRAGLite index refresh, with its diagnostics. */

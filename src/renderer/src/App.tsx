@@ -17,6 +17,7 @@ import { Inspector, type InspectorFamily } from "./components/Inspector";
 import { ContextMenu } from "./components/primitives/ContextMenu";
 import { Toast } from "./components/primitives/Toast";
 import { ConfirmDialog } from "./components/primitives/ConfirmDialog";
+import { ConvertRenameDialog } from "./components/primitives/ConvertRenameDialog";
 import { Sidebar } from "./components/Sidebar";
 import type { SearchMode } from "./components/SidebarSearch";
 import { Toolbar } from "./components/Toolbar";
@@ -630,7 +631,9 @@ export function App(): ReactElement {
 					? t("places.aiSearch")
 					: finder?.searching === true
 						? t("finderComponents.searchTitle", { query: finder.query })
-						: isTagPath(path) ? tagNameOf(path) : basename(path);
+						: finder?.inTrashLocation === true
+							? t("places.trash")
+							: isTagPath(path) ? tagNameOf(path) : basename(path);
 
 	/** The sidebar AI Search item: a drop turns the focused tab into AI Search with the files attached. */
 	const aiSearchDrop = {
@@ -773,6 +776,10 @@ export function App(): ReactElement {
 												onPublish={publishEvidence}
 												imageActions={imageActions}
 												language={language}
+												onOpenPlan={() => {
+													requestSettingsCategory("plan");
+													finder?.openSettings();
+												}}
 											/>
 										</div>
 									);
@@ -837,6 +844,13 @@ export function App(): ReactElement {
 					entries={finder.contextMenuEntries}
 					onSelect={finder.runMenuAction}
 					onClose={finder.closeContextMenu}
+				/>
+			)}
+			{finder?.convertRename == null ? null : (
+				<ConvertRenameDialog
+					state={finder.convertRename}
+					onConvert={(keepOriginal) => finder?.confirmConvertRename(keepOriginal)}
+					onCancel={() => finder?.cancelConvertRename()}
 				/>
 			)}
 			{finder?.emptyTrashConfirm === true ? (

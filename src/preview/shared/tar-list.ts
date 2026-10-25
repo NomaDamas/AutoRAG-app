@@ -12,7 +12,7 @@ function readField(bytes: Uint8Array, offset: number, length: number): string {
 	let end = offset;
 	const stop = Math.min(bytes.length, offset + length);
 	while (end < stop && bytes[end] !== 0) end += 1;
-	return new TextDecoder("utf-8", { fatal: false }).decode(bytes.subarray(offset, end));
+	return new TextDecoder("utf-8", { fatal: false }).decode(bytes.subarray(offset, end)).normalize("NFC");
 }
 
 function readOctal(bytes: Uint8Array, offset: number, length: number): number {
@@ -33,7 +33,7 @@ function readPax(bytes: Uint8Array): { readonly path: string | null; readonly mt
 		if (equals < 0) continue;
 		const key = record.slice(0, equals);
 		const value = record.slice(equals + 1);
-		if (key === "path") path = value;
+		if (key === "path") path = value.normalize("NFC");
 		if (key === "mtime" && Number.isFinite(Number(value))) mtime = Math.round(Number(value) * 1000);
 	}
 	return { path, mtime };

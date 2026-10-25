@@ -6,15 +6,12 @@
 
 import type { AccountStatus } from "../../../shared/account-contract";
 import type {
-	ByokProviderId,
-	DetectedModelProvider,
 	DetectedSource,
 	EmbedMode,
 	EmbeddingInfo,
 	FolderCandidate,
 	FolderScan,
 	IndexingStatus,
-	ModelOption,
 	OnboardingDraft,
 	OnboardingStepId,
 	PermissionStatus,
@@ -45,14 +42,6 @@ export interface OnboardingCtx {
 	readonly sources: readonly DetectedSource[];
 	/** Source probes are still running; more rows may arrive. */
 	readonly sourcesChecking: boolean;
-	readonly models: readonly DetectedModelProvider[];
-	readonly modelKey: string;
-	readonly modelBaseUrl: string;
-	readonly modelOptions: readonly ModelOption[];
-	/** A verification round-trip is in flight. */
-	readonly verifying: boolean;
-	/** The last verification error, cleared on the next attempt. */
-	readonly modelError: string | null;
 	readonly indexStatus: IndexingStatus | null;
 	/** Null until the main process answered the first status call. */
 	readonly account: AccountStatus | null;
@@ -111,12 +100,11 @@ export interface OnboardingCtx {
 	openNotificationSettings(): void;
 	checkNetwork(): void;
 
-	setModelProvider(provider: ByokProviderId): void;
-	setModelKey(value: string): void;
-	setModelBaseUrl(value: string): void;
-	verifyModel(provider?: ByokProviderId): void;
-
 	startIndexing(): void;
+	/** Opens the embedding choice from a stopped first index; leaving it returns straight to the index. */
+	changeEmbedding(): void;
+	/** Leaves the given (unreadable) folders out of the index and starts it again; with none left it goes back to choosing folders. */
+	excludeFolders(paths: readonly string[]): void;
 	finish(): void;
 	finishInBackground(): void;
 	setTipIndex(index: number): void;

@@ -33,7 +33,7 @@ const FREE_ACCOUNT = {
 	trialing: false,
 	cancel_scheduled: false,
 	period_end: null,
-	credits: { used_cents: 12, limit_cents: 50, period: "2026-W41" },
+	credits: { used_cents: 12, limit_cents: 50, period: "2026-W41", resets_at: "2026-10-27T07:15:01.883Z" },
 	limits: { requests_per_minute: 10 },
 	embeddings: false,
 	billing: { air: true, pro: true, max: true, portal: false },
@@ -238,6 +238,8 @@ describe("sign in", () => {
 			plan: "free",
 			creditsUsedCents: 12,
 			creditsLimitCents: 50,
+			// The server's own reset instant, not a calendar guess: its week starts when the account's period did.
+			creditsResetsAt: "2026-10-27T07:15:01.883Z",
 			requestsPerMinute: 10,
 			billing: { air: true, pro: true, max: true, portal: false },
 		});

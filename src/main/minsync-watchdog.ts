@@ -59,7 +59,7 @@ const run = promisify(execFile);
 export async function sampleMinSyncProcesses(): Promise<MinSyncProcess[]> {
 	try {
 		if (process.platform === "win32") {
-			const { stdout } = await run("tasklist", ["/FO", "CSV", "/NH", "/V", "/FI", "IMAGENAME eq minsync.exe"]);
+			const { stdout } = await run("tasklist", ["/FO", "CSV", "/NH", "/V", "/FI", "IMAGENAME eq minsync.exe"], { windowsHide: true });
 			return parseTasklistCsv(stdout);
 		}
 		const { stdout } = await run("ps", ["-A", "-o", "pid=,ppid=,time=,comm="]);

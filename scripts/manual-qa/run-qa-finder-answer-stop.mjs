@@ -90,10 +90,9 @@ const readState = ([panel]) => {
 		settled:
 			input !== null &&
 			!input.disabled &&
-			root.querySelector(".skeleton") === null &&
 			root.querySelector(".water-wave-thinking") === null &&
 			(root.textContent ?? "").includes("Generation stopped."),
-		generating: root.querySelector(".skeleton") !== null || root.querySelector(".water-wave-thinking") !== null,
+		generating: root.querySelector(".water-wave-thinking") !== null,
 		inputDisabled: input?.disabled ?? null,
 		stoppedNotice: (root.textContent ?? "").includes("Generation stopped."),
 		error: root.querySelector(".text-danger-text")?.textContent ?? "",
@@ -141,8 +140,7 @@ try {
 				return (
 					input !== null &&
 					!input.disabled &&
-					root.querySelector(".skeleton") === null &&
-					root.querySelector(".water-wave-thinking") === null &&
+							root.querySelector(".water-wave-thinking") === null &&
 					(root.textContent ?? "").includes("Generation stopped.")
 				);
 			},

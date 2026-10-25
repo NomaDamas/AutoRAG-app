@@ -55,6 +55,7 @@ const DEFAULT_SETTINGS: AppSettings = {
 	showHiddenFiles: false,
 	dupeyScanIntervalMinutes: 60,
 	osMenuIntegration: false,
+	approvalMode: "auto",
 };
 
 function makeDeps(userDataDir: string, env: NodeJS.ProcessEnv = {}): OnboardingServiceDeps {
@@ -75,13 +76,14 @@ function makeDeps(userDataDir: string, env: NodeJS.ProcessEnv = {}): OnboardingS
 		resolveWorkspacePath: async () => userDataDir,
 		refresh: async () => ({ ok: true, methods: [], scanned: 0, written: 0, deleted: 0, skipped: 0, diagnostics: [], error: null }),
 		ensureLocalModel: async () => null,
+		recordIndex: () => undefined,
+		refreshKeyword: async () => undefined,
 		credentials: { list: async () => [], set: async () => [], remove: async () => [], load: async () => [] },
 		settings: { get: async () => DEFAULT_SETTINGS, set: async (patch) => ({ ...DEFAULT_SETTINGS, ...patch }) },
 		detectSources: async () => ({ sources: [] }),
 		gitToken: async () => null,
 		useManagedModel: async () => undefined,
-		detectModels: async () => [],
-		verifyModel: async () => ({ ok: false, error: "unused" }),
+		checkModel: async () => ({ ok: true, latencyMs: 1 }),
 		send: () => undefined,
 		openExternal: async () => undefined,
 		relaunch: () => undefined,
@@ -180,7 +182,6 @@ describe("createOnboardingService persistence", () => {
 			folders: ["/Users/me/Documents"],
 			sources: [{ id: "slack" }],
 			plan: "byok",
-			model: null,
 		});
 		expect(status.state).toBe("running");
 		expect(requestedMethods).toEqual([["parsed", "minsync"]]);
@@ -227,7 +228,6 @@ describe("createOnboardingService persistence", () => {
 			folders: ["/Users/me/Documents"],
 			sources: [],
 			plan: "byok",
-			model: null,
 		});
 		for (let tick = 0; tick < 100 && service.isIndexing(); tick += 1) await flush();
 
@@ -244,12 +244,12 @@ describe("createOnboardingService persistence", () => {
 		const service = createOnboardingService({ ...makeDeps(directory), localSpec: async () => weak });
 
 		expect((await service.embedding()).localSpec).toEqual(weak);
-		await expect(service.startIndexing({ folders: ["/Users/me/Documents"], embed: "local", sources: [], plan: "free", model: null })).rejects.toThrow(/Apple M2/u);
+		await expect(service.startIndexing({ folders: ["/Users/me/Documents"], embed: "local", sources: [], plan: "free" })).rejects.toThrow(/Apple M2/u);
 		expect(service.isIndexing()).toBe(false);
 		await expect(readFile(join(directory, "config.json"), "utf8")).rejects.toThrow();
 
 		// Keyword-only search needs no model, so the same machine can still index.
-		await service.startIndexing({ folders: ["/Users/me/Documents"], embed: "none", sources: [], plan: "free", model: null });
+		await service.startIndexing({ folders: ["/Users/me/Documents"], embed: "none", sources: [], plan: "free" });
 		for (let tick = 0; tick < 100 && service.isIndexing(); tick += 1) await flush();
 		service.dispose();
 	});
@@ -260,7 +260,7 @@ describe("createOnboardingService persistence", () => {
 	});
 
 	describe("the on-device model download", () => {
-		const request = { folders: ["/Users/me/Documents"], sources: [], plan: "free", model: null } as const;
+		const request = { folders: ["/Users/me/Documents"], sources: [], plan: "free" } as const;
 
 		it("waits for the model before the first index and refreshes once it is there", async () => {
 			const directory = await workDir();
@@ -357,6 +357,157 @@ describe("createOnboardingService persistence", () => {
 		});
 	});
 
+	it("saves and resumes a draft whose model comes from any provider the Settings page can connect", async () => {
+		const directory = await workDir();
+		const service = createOnboardingService(makeDeps(directory));
+		const draft: OnboardingDraft = { ...DRAFT, plan: "byok", stepId: "model", model: { provider: "openai-codex", modelId: "gpt-x", verified: true } };
+		await service.save(draft);
+		expect((await createOnboardingService(makeDeps(directory)).load()).draft).toEqual(draft);
+		await expect(service.save({ ...draft, model: { provider: "", modelId: "gpt-x", verified: true } })).rejects.toThrow();
+	});
+
+	it("resumes a draft saved on the role step, and runs the model check through the injected caller", async () => {
+		const directory = await workDir();
+		const calls: string[] = [];
+		const service = createOnboardingService({ ...makeDeps(directory), checkModel: async () => (calls.push("check"), { ok: false, error: "401" }) });
+		const draft: OnboardingDraft = { ...DRAFT, plan: "byok", stepId: "roles", model: { provider: "custom-x", modelId: "m", verified: true } };
+		await service.save(draft);
+		expect((await createOnboardingService(makeDeps(directory)).load()).draft).toEqual(draft);
+		expect(await service.checkModel()).toEqual({ ok: false, error: "401" });
+		expect(calls).toEqual(["check"]);
+	});
+
+	it("leaves the model connected on the model step alone when the BYOK first index starts, and never swaps in the Dazzi account's", async () => {
+		const directory = await workDir();
+		const configured = { provider: "anthropic", id: "claude-x", apiKeyEnv: "ANTHROPIC_API_KEY" };
+		await writeFile(join(directory, "config.json"), JSON.stringify({ model: configured }), "utf8");
+		let managed = 0;
+		const service = createOnboardingService({ ...makeDeps(directory), useManagedModel: async () => void (managed += 1) });
+		await service.startIndexing({ folders: ["/Users/me/Documents"], embed: "none", sources: [], plan: "byok" });
+		for (let tick = 0; tick < 100 && service.isIndexing(); tick += 1) await flush();
+		expect(JSON.parse(await readFile(join(directory, "config.json"), "utf8")).model).toEqual(configured);
+		expect(managed).toBe(0);
+		service.dispose();
+	});
+
+	describe("how a first index ends", () => {
+		const request = { folders: ["/Users/me/Documents"], sources: [], plan: "free" } as const;
+		const settled = async (service: ReturnType<typeof createOnboardingService>): Promise<void> => {
+			for (let tick = 0; tick < 100 && service.isIndexing(); tick += 1) await flush();
+		};
+		const result = (patch: Partial<ConfigRefreshResult>): ConfigRefreshResult => ({
+			ok: true,
+			methods: ["parsed", "minsync"],
+			scanned: 0,
+			written: 0,
+			deleted: 0,
+			skipped: 0,
+			diagnostics: [],
+			error: null,
+			...patch,
+		});
+
+		it("says what stopped a failed run and shows no skipped files", async () => {
+			const directory = await workDir();
+			const service = createOnboardingService({
+				...makeDeps(directory),
+				refresh: async () =>
+					result({
+						ok: false,
+						error: "HTTP 402",
+						diagnostics: [{ code: "embedder-preflight-failed", severity: "error", message: "HTTP 402", reason: "rejected" }],
+					}),
+			});
+			await service.startIndexing({ ...request, embed: "cloud" });
+			await settled(service);
+			const status = await service.indexStatus();
+			expect(status.state).toBe("failed");
+			expect(status.failure).toEqual({ reason: "embedder-config", folders: [], code: "embedder-preflight-failed" });
+			expect(status.skipped).toBe(0);
+			expect(status.remainingMinutes).toBeNull();
+			service.dispose();
+		});
+
+		it("tells a full disk from any other failed download", async () => {
+			const directory = await workDir();
+			const service = createOnboardingService({ ...makeDeps(directory), ensureLocalModel: async () => "write failed (ENOSPC: no space left on device)" });
+			await service.startIndexing({ ...request, embed: "local" });
+			await settled(service);
+			expect((await service.indexStatus()).failure?.reason).toBe("disk-full");
+
+			const offline = createOnboardingService({ ...makeDeps(await workDir()), ensureLocalModel: async () => "no network" });
+			await offline.startIndexing({ ...request, embed: "local" });
+			await settled(offline);
+			expect((await offline.indexStatus()).failure?.reason).toBe("model-download");
+			service.dispose();
+			offline.dispose();
+		});
+
+		it("counts the files a successful run left out", async () => {
+			const directory = await workDir();
+			const service = createOnboardingService({
+				...makeDeps(directory),
+				refresh: async () =>
+					result({
+						diagnostics: [
+							{ code: "files-left-out", severity: "warning", message: "x", count: 4 },
+							{ code: "parse-killed", severity: "warning", message: "x", count: 2 },
+							{ code: "minsync-file-skipped", severity: "warning", message: "x" },
+						],
+					}),
+			});
+			await service.startIndexing({ ...request, embed: "local" });
+			await settled(service);
+			const status = await service.indexStatus();
+			expect(status.state).toBe("success");
+			expect(status.skipped).toBe(7);
+			expect(status.failure).toBeNull();
+			service.dispose();
+		});
+
+		it("hands the finished run to the Finder's problem record", async () => {
+			const directory = await workDir();
+			const recorded: Array<{ ok: boolean; error: string | null }> = [];
+			const service = createOnboardingService({
+				...makeDeps(directory),
+				refresh: async () => result({ ok: false, error: "boom" }),
+				recordIndex: (outcome) => recorded.push({ ok: outcome.ok, error: outcome.error }),
+			});
+			await service.startIndexing({ ...request, embed: "local" });
+			await settled(service);
+			expect(recorded).toEqual([{ ok: false, error: "boom" }]);
+			service.dispose();
+		});
+
+		it("starts the keyword index when Dazzi is opened after a failed run, and not after a good one", async () => {
+			let keyword = 0;
+			const failed = createOnboardingService({
+				...makeDeps(await workDir()),
+				refresh: async () => result({ ok: false, error: "boom" }),
+				refreshKeyword: async () => {
+					keyword += 1;
+				},
+			});
+			await failed.startIndexing({ ...request, embed: "local" });
+			await settled(failed);
+			await failed.complete();
+			expect(keyword).toBe(1);
+
+			const good = createOnboardingService({
+				...makeDeps(await workDir()),
+				refreshKeyword: async () => {
+					keyword += 1;
+				},
+			});
+			await good.startIndexing({ ...request, embed: "local" });
+			await settled(good);
+			await good.complete();
+			expect(keyword).toBe(1);
+			failed.dispose();
+			good.dispose();
+		});
+	});
+
 	it("saves and reloads a draft that chose keyword-only search", async () => {
 		const directory = await workDir();
 		const service = createOnboardingService(makeDeps(directory));
@@ -367,7 +518,7 @@ describe("createOnboardingService persistence", () => {
 	it("indexes keyword-only with embed=none: no embedder is written, semantic search is switched off, and a later local run switches it back on", async () => {
 		const directory = await workDir();
 		const service = createOnboardingService(makeDeps(directory));
-		await service.startIndexing({ folders: ["/Users/me/Documents"], embed: "none", sources: [], plan: "free", model: null });
+		await service.startIndexing({ folders: ["/Users/me/Documents"], embed: "none", sources: [], plan: "free" });
 		for (let tick = 0; tick < 100 && service.isIndexing(); tick += 1) await flush();
 		const read = async (): Promise<{ minSync?: { embedder?: unknown }; appIndexing?: Record<string, unknown> }> =>
 			JSON.parse(await readFile(join(directory, "config.json"), "utf8"));
@@ -378,7 +529,7 @@ describe("createOnboardingService persistence", () => {
 		service.dispose();
 
 		const again = createOnboardingService(makeDeps(directory));
-		await again.startIndexing({ folders: ["/Users/me/Documents"], embed: "local", sources: [], plan: "free", model: null });
+		await again.startIndexing({ folders: ["/Users/me/Documents"], embed: "local", sources: [], plan: "free" });
 		for (let tick = 0; tick < 100 && again.isIndexing(); tick += 1) await flush();
 		const local = await read();
 		expect(local.minSync?.embedder).toEqual({ id: "native:Qwen/Qwen3-Embedding-0.6B", dimension: 1024 });
@@ -427,7 +578,6 @@ describe("createOnboardingService persistence", () => {
 			embed: "none",
 			sources: [],
 			plan: "free",
-			model: null,
 			excludePaths: ["/Users/me/Documents/Zoom"],
 			excludedFiles: 3,
 		});
@@ -443,7 +593,7 @@ describe("createOnboardingService persistence", () => {
 	it("refuses an indexing request whose exclusions are not absolute paths or whose excluded count is not a count", async () => {
 		const directory = await workDir();
 		const service = createOnboardingService(makeDeps(directory));
-		const base = { folders: ["/Users/me/Documents"], embed: "none" as const, sources: [], plan: "free" as const, model: null };
+		const base = { folders: ["/Users/me/Documents"], embed: "none" as const, sources: [], plan: "free" as const };
 
 		await expect(service.startIndexing({ ...base, excludePaths: ["relative/Zoom"] })).rejects.toThrow();
 		await expect(service.startIndexing({ ...base, excludedFiles: -1 })).rejects.toThrow();
@@ -461,7 +611,7 @@ describe("createOnboardingService persistence", () => {
 		);
 		const service = createOnboardingService({ ...makeDeps(directory), folderTotals: () => 2 });
 
-		await service.startIndexing({ folders: [documents], embed: "none", sources: [], plan: "free", model: null });
+		await service.startIndexing({ folders: [documents], embed: "none", sources: [], plan: "free" });
 		for (let tick = 0; tick < 50 && service.isIndexing(); tick += 1) await new Promise((resolve) => setTimeout(resolve, 5));
 
 		expect(await service.indexStatus()).toMatchObject({ state: "success", progress: 100, totalFiles: 2, processedFiles: 2, recentFile: "b.md", recentFolder: "Documents" });
@@ -479,7 +629,7 @@ describe("createOnboardingService persistence", () => {
 				completedCalls += 1;
 			},
 		});
-		await service.startIndexing({ folders: ["/Users/me/Documents"], sources: [], plan: "byok", model: null });
+		await service.startIndexing({ folders: ["/Users/me/Documents"], sources: [], plan: "byok" });
 		expect(service.pending()).toBe(true);
 		expect(service.isIndexing()).toBe(true);
 
@@ -519,7 +669,6 @@ describe("createOnboardingService persistence", () => {
 			folders: ["/Users/me/Documents"],
 			sources: [{ id: "mailcrawl" }, { id: "obsidian" }],
 			plan: "free",
-			model: null,
 		});
 
 		// Completing onboarding while local indexing is still in flight waits for local indexing to finish first.
@@ -551,7 +700,6 @@ describe("createOnboardingService persistence", () => {
 			folders: ["/Users/me/Documents"],
 			sources: [{ id: "whatsapp" }],
 			plan: "free",
-			model: null,
 		});
 		for (let tick = 0; tick < 100 && service.isIndexing(); tick += 1) await flush();
 		// Not completed yet -> datasources have not started.
@@ -583,7 +731,6 @@ describe("createOnboardingService persistence", () => {
 			folders: ["/Users/me/Documents"],
 			sources: [{ id: "whatsapp" }],
 			plan: "free",
-			model: null,
 		});
 		await service.complete();
 		gate.resolve({ ok: false, methods: ["parsed", "minsync"], scanned: 0, written: 0, deleted: 0, skipped: 0, diagnostics: [], error: "disk full" });
@@ -597,7 +744,7 @@ describe("createOnboardingService persistence", () => {
 		const run = async (plan: "free" | "air" | "pro" | "byok", useManagedModel: () => Promise<unknown>): Promise<void> => {
 			const directory = await workDir();
 			const service = createOnboardingService({ ...makeDeps(directory), useManagedModel });
-			await service.startIndexing({ folders: ["/Users/me/Documents"], sources: [], plan, model: null });
+			await service.startIndexing({ folders: ["/Users/me/Documents"], sources: [], plan });
 			service.dispose();
 		};
 		for (const plan of ["free", "air", "pro"] as const) await run(plan, async () => managedCalls.push(plan));
@@ -615,7 +762,7 @@ describe("createOnboardingService persistence", () => {
 			},
 		});
 
-		const status = await service.startIndexing({ folders: ["/Users/me/Documents"], sources: [], plan: "pro", model: null });
+		const status = await service.startIndexing({ folders: ["/Users/me/Documents"], sources: [], plan: "pro" });
 
 		expect(status.state).toBe("running");
 		service.dispose();
@@ -649,7 +796,6 @@ describe("createOnboardingService persistence", () => {
 			embed: "cloud",
 			sources: [],
 			plan: "pro",
-			model: null,
 		});
 		const written = JSON.parse(await readFile(join(directory, "config.json"), "utf8")) as {
 			minSync?: { embedder?: Record<string, unknown> };
@@ -687,7 +833,6 @@ describe("createOnboardingService persistence", () => {
 			embed: "local",
 			sources: [],
 			plan: "pro",
-			model: null,
 		});
 		service2.dispose();
 		const rewritten = JSON.parse(await readFile(join(directory, "config.json"), "utf8")) as {
@@ -776,7 +921,7 @@ describe("createOnboardingService source detection", () => {
 		});
 
 		await service.detectSources();
-		await service.startIndexing({ folders: ["/Users/me/Documents"], sources: [{ id: "whatsapp" }], plan: "free", model: null });
+		await service.startIndexing({ folders: ["/Users/me/Documents"], sources: [{ id: "whatsapp" }], plan: "free" });
 
 		expect(probes).toBe(1);
 		const written = JSON.parse(await readFile(join(directory, "config.json"), "utf8")) as { datasources: Record<string, unknown> };

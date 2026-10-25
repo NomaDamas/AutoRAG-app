@@ -36,6 +36,7 @@ import { realpath } from "node:fs/promises";
 import { EMBEDDED_THUMBNAIL_EXTENSIONS, readEmbeddedThumbnail } from "../preview/node/odf";
 import { errorMessage } from "./fs-entry";
 import { ICON_SIZE, iconUrl } from "./icon-protocol";
+import { extractVideoFrame, isVideoFrameExtension } from "./video-frame";
 import { createPriorityGate, type PriorityGate } from "./priority-gate";
 
 /** Tile tier edge in px, defined beside the URL contract; re-exported for the listing code. */
@@ -155,6 +156,12 @@ export interface IconProviderDeps {
 	readonly thumbnail?: (path: string, size: number) => Promise<Uint8Array | null>;
 	/** OS type icon PNG bytes, or null; defaults to Electron app.getFileIcon. */
 	readonly systemIcon?: (path: string) => Promise<Uint8Array | null>;
+	/**
+	 * One decoded video frame (PNG) at the tier edge, for containers the OS has
+	 * no decoder for (mkv, webm, ogv, avi); null when none can be drawn. Defaults
+	 * to ffmpeg. A null or failure falls through to the OS thumbnail and type icon.
+	 */
+	readonly videoFrame?: (path: string, size: number) => Promise<Uint8Array | null>;
 	/** Cap on the selected targets for a single call; defaults to ICON_LIMIT. */
 	readonly limit?: number;
 	/** Native thumbnail calls at once across calls; defaults to THUMBNAIL_CONCURRENCY. */
@@ -286,6 +293,7 @@ export function createIconProvider(deps: IconProviderDeps = {}): IconSource {
 	const usesNativeThumbnails = platform === "darwin" || platform === "win32";
 	const thumbnail = deps.thumbnail ?? defaultThumbnail;
 	const systemIcon = deps.systemIcon ?? defaultSystemIcon;
+	const videoFrame = deps.videoFrame ?? extractVideoFrame;
 	const limit = Math.max(0, Math.floor(deps.limit ?? ICON_LIMIT));
 	const thumbnailConcurrency = positive(deps.thumbnailConcurrency ?? THUMBNAIL_CONCURRENCY, THUMBNAIL_CONCURRENCY);
 	const previewConcurrency = positive(deps.previewConcurrency ?? PREVIEW_CONCURRENCY, PREVIEW_CONCURRENCY);
@@ -328,6 +336,24 @@ export function createIconProvider(deps: IconProviderDeps = {}): IconSource {
 	}
 
 	/**
+	 * An ffmpeg-drawn frame for the containers the OS cannot decode, on the same
+	 * bounded lane as a native thumbnail; null (no ffmpeg, no decodable frame, a
+	 * failure logged verbatim, or any other container) leaves the OS chain to answer.
+	 */
+	async function generateVideoFrame(target: IconTarget, gate: PriorityGate, priority: number): Promise<Uint8Array | null> {
+		if (!isVideoFrameExtension(target.ext)) return null;
+		await gate.acquire(priority);
+		try {
+			return await withTimeout(videoFrame(target.path, target.size ?? ICON_SIZE), thumbnailTimeoutMs, "video frame");
+		} catch (error) {
+			warn(`file-icon: video frame for ${target.path} failed: ${errorMessage(error)}`);
+			return null;
+		} finally {
+			gate.release();
+		}
+	}
+
+	/**
 	 * macOS/Windows: in-process Quick Look thumbnails first, then the OS type
 	 * icon for every file the thumbnail API produced nothing for (Windows has no
 	 * native thumbnail for most documents, so without the fallback those rows
@@ -341,7 +367,11 @@ export function createIconProvider(deps: IconProviderDeps = {}): IconSource {
 	): Promise<void> {
 		await Promise.all(
 			targets.map(async (target): Promise<void> => {
-				let bytes: Uint8Array | null = null;
+				let bytes: Uint8Array | null = await generateVideoFrame(target, gate, priority);
+				if (bytes !== null) {
+					resolve(cacheKey(target), bytes);
+					return;
+				}
 				await gate.acquire(priority);
 				try {
 					bytes = await withTimeout(thumbnail(target.path, target.size ?? ICON_SIZE), thumbnailTimeoutMs, "thumbnail");
@@ -364,10 +394,12 @@ export function createIconProvider(deps: IconProviderDeps = {}): IconSource {
 		targets: readonly IconTarget[],
 		resolve: (key: string, bytes: Uint8Array | null) => void,
 		priority: number,
+		gate: PriorityGate,
 	): Promise<void> {
 		await Promise.all(
 			targets.map(async (target): Promise<void> => {
-				resolve(cacheKey(target), await generateSystemIcon(target, priority));
+				const frame = await generateVideoFrame(target, gate, priority);
+				resolve(cacheKey(target), frame ?? (await generateSystemIcon(target, priority)));
 			}),
 		);
 	}
@@ -398,7 +430,7 @@ export function createIconProvider(deps: IconProviderDeps = {}): IconSource {
 		// first page (OpenDocument, `.potx`), which is read the same way everywhere.
 		const thumbnailed = usesNativeThumbnails ? missing : missing.filter((target) => EMBEDDED_THUMBNAIL_EXTENSIONS.has(target.ext.toLowerCase()));
 		const systemOnly = usesNativeThumbnails ? [] : missing.filter((target) => !EMBEDDED_THUMBNAIL_EXTENSIONS.has(target.ext.toLowerCase()));
-		const generation = Promise.all([runThumbnails(thumbnailed, resolve, gate, priority), runSystem(systemOnly, resolve, priority)]).then(() => undefined);
+		const generation = Promise.all([runThumbnails(thumbnailed, resolve, gate, priority), runSystem(systemOnly, resolve, priority, gate)]).then(() => undefined);
 		void generation.catch((error: unknown) => {
 			// Pool-level failure: the whole batch degrades to "no icon".
 			warn(`file-icon: icon generation failed for ${missing.length} file(s): ${errorMessage(error)}`);

@@ -179,6 +179,11 @@ export class AttachmentContextAgent extends AutoRAGAgent {
 		this.#attachmentContext = context;
 	}
 
+	/** The context set for the next run ("" for none), for a subclass that delivers it another way. */
+	protected get attachmentContext(): string {
+		return this.#attachmentContext;
+	}
+
 	override buildFastAnswerPrompt(query: string, options: RetrievalOptions, baseline: string): string {
 		const prompt = super.buildFastAnswerPrompt(query, options, baseline);
 		return this.#attachmentContext === "" ? prompt : `${this.#attachmentContext}\n\n${prompt}`;

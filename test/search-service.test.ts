@@ -4,6 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createChatStore, type ChatStore } from "../src/main/chat-store";
+import type { RunInteraction } from "../src/main/host-ui";
+import { createInteractionHub } from "../src/main/interaction-hub";
+import type { InteractionAnswer, InteractionRequest } from "../src/shared/interaction-contract";
 import { buildAgentOptions, type CliConfig } from "@autorag/librarian";
 import {
 	createSearchService,
@@ -11,6 +14,7 @@ import {
 	resolveWebSearchConfig,
 	type LiveAgentEvent,
 } from "../src/main/search-service";
+import { setAppLanguage, t } from "../src/shared/i18n/core";
 import { SEARCH_CHANNELS, type ChatRecord, type SearchStreamEvent } from "../src/shared/search-contract";
 
 interface TestResponse {
@@ -110,7 +114,7 @@ describe("createSearchService", () => {
 	it("maps the preliminary stream event to a Quick phase", async () => {
 		const quickResponse = createResponse("session-quick", "**Quick** answer [1]", 2);
 		const agent = createFakeAgent(async function*() {
-			yield { type: "progress", sessionId: "", query: "refund approval", text: "Reviewing the query." };
+			yield { type: "progress", sessionId: "", query: "refund approval", text: "Checking the refund policy." };
 			yield { type: "preliminary", response: quickResponse };
 		});
 		const { events, send } = collectEvents();
@@ -125,7 +129,7 @@ describe("createSearchService", () => {
 
 		const progress = events.find((event) => event.type === "progress");
 		assert(progress !== undefined);
-		expect(progress).toEqual({ type: "progress", searchId: "search-1", text: "Reviewing the query." });
+		expect(progress).toEqual({ type: "progress", searchId: "search-1", text: "Checking the refund policy." });
 		const quick = events.find((event) => event.type === "quick");
 		assert(quick !== undefined);
 		expect(quick.searchId).toBe("search-1");
@@ -938,5 +942,400 @@ describe("resolveWebSearchConfig", () => {
 
 		expect(resolveWebSearchConfig({ webSearch: { enabled: false } })).toEqual({ enabled: false });
 		expect(buildAgentOptions({ ...baseConfig, webSearch: resolveWebSearchConfig({ webSearch: { enabled: false } }) }).webSearch).toBe(false);
+	});
+});
+
+describe("createSearchService interaction", () => {
+	function hubFor(requests: InteractionRequest[]) {
+		return createInteractionHub({ emitRequest: (request) => requests.push(request), emitClosed: () => undefined });
+	}
+	const question = {
+		kind: "question",
+		questions: [{ question: "Which?", options: [{ title: "A" }], allowMultiple: false, allowFreeform: false }],
+	} as const;
+
+	it("lets the agent ask the person while the run streams, and stops asking once it ended", async () => {
+		const requests: InteractionRequest[] = [];
+		const hub = hubFor(requests);
+		let bound: RunInteraction | undefined;
+		let answer: InteractionAnswer | undefined;
+		const agent = {
+			...createFakeAgent(async function*() {
+				answer = await bound?.open(question);
+				yield { type: "complete", response: createResponse("session-ask", "Done", 1) };
+			}),
+			bindRun: vi.fn((run: RunInteraction | undefined) => {
+				bound = run;
+			}),
+		};
+		const { send } = collectEvents();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send, now, interaction: hub });
+
+		const run = service.start("search-ask", "chat-ask", "which one", []);
+		await vi.waitFor(() => expect(requests).toHaveLength(1));
+		expect(requests[0]).toMatchObject({ kind: "question", searchId: "search-ask" });
+		hub.answer(requests[0]?.id ?? "", { kind: "question", answers: [{ kind: "selection", selections: ["A"] }] });
+		await run;
+
+		expect(answer).toEqual({ kind: "question", answers: [{ kind: "selection", selections: ["A"] }] });
+		expect(bound).toBeUndefined();
+		expect(hub.pending()).toHaveLength(0);
+	});
+
+	it("closes the open question when the run is stopped, so the agent is not left waiting", async () => {
+		const requests: InteractionRequest[] = [];
+		const hub = hubFor(requests);
+		let bound: RunInteraction | undefined;
+		let answered: Promise<InteractionAnswer> | undefined;
+		const agent = {
+			...createFakeAgent(async function*() {
+				answered = bound?.open(question);
+				await answered;
+				yield { type: "complete", response: createResponse("session-stop", "Never", 1) };
+			}),
+			bindRun: (run: RunInteraction | undefined) => {
+				bound = run;
+			},
+		};
+		const { send } = collectEvents();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send, now, interaction: hub });
+
+		const run = service.start("search-stop", "chat-stop", "which one", []);
+		await vi.waitFor(() => expect(requests).toHaveLength(1));
+		await service.cancel("search-stop");
+		await run;
+
+		await expect(answered).resolves.toEqual({ kind: "cancel" });
+		expect(hub.pending()).toHaveLength(0);
+		expect(agent.abort).toHaveBeenCalled();
+	});
+
+	it("starts every agent in the mode in force, and moves running agents when it changes", async () => {
+		const first = { ...createFakeAgent(async function*() {}), setApprovalMode: vi.fn() };
+		const second = { ...createFakeAgent(async function*() {}), setApprovalMode: vi.fn() };
+		const agents = [first, second];
+		const { send } = collectEvents();
+		const service = createSearchService({
+			agentFactory: () => agents.shift() ?? second,
+			chatStore: await createStore(),
+			send,
+			now,
+			approvalMode: async () => "ask",
+		});
+
+		await service.start("search-a", "chat-a", "one", []);
+		expect(first.setApprovalMode).toHaveBeenLastCalledWith("ask");
+
+		service.setApprovalMode("full");
+		expect(first.setApprovalMode).toHaveBeenLastCalledWith("full");
+
+		// A chat opened afterwards starts in what the person chose, not in what was stored at launch.
+		await service.start("search-b", "chat-b", "two", []);
+		expect(second.setApprovalMode).toHaveBeenLastCalledWith("full");
+	});
+
+	it("falls back to auto when nothing says otherwise", async () => {
+		const agent = { ...createFakeAgent(async function*() {}), setApprovalMode: vi.fn() };
+		const { send } = collectEvents();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send, now });
+
+		await service.start("search-c", "chat-c", "one", []);
+
+		expect(agent.setApprovalMode).toHaveBeenLastCalledWith("auto");
+	});
+});
+
+describe("createSearchService preflight", () => {
+	it("refuses a run the preflight stops: the person is told why, and no agent is built or asked", async () => {
+		const agentFactory = vi.fn(() => createFakeAgent(async function*() {}));
+		const { events, send } = collectEvents();
+		const store = await createStore();
+		const service = createSearchService({
+			agentFactory,
+			chatStore: store,
+			send,
+			now,
+			preflight: async () => ({ message: "Weekly credits are used up." }),
+		});
+
+		await service.start("search-q", "chat-q", "what is in a.txt", []);
+
+		expect(events).toEqual([
+			{ type: "error", searchId: "search-q", message: "Weekly credits are used up." },
+			{ type: "done", searchId: "search-q" },
+		]);
+		expect(agentFactory).not.toHaveBeenCalled();
+		// The question stays in the chat, so the person can ask it again once the credits are back.
+		expect((await store.get("chat-q"))?.messages.map((message) => message.role)).toEqual(["user"]);
+	});
+
+	it("runs as usual when the preflight has nothing to say", async () => {
+		const agent = createFakeAgent(async function*() {
+			yield { type: "complete", response: createResponse("session-ok", "Fine", 1) };
+		});
+		const { events, send } = collectEvents();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send, now, preflight: async () => null });
+
+		await service.start("search-ok", "chat-ok", "question", []);
+
+		expect(events.some((event) => event.type === "quick")).toBe(true);
+		expect(events.some((event) => event.type === "error")).toBe(false);
+	});
+
+	it("does not let a failing preflight stop the run: the server still has the last word", async () => {
+		const agent = createFakeAgent(async function*() {
+			yield { type: "complete", response: createResponse("session-pf", "Fine", 1) };
+		});
+		const { events, send } = collectEvents();
+		const service = createSearchService({
+			agentFactory: () => agent,
+			chatStore: await createStore(),
+			send,
+			now,
+			preflight: async () => {
+				throw new Error("account lookup blew up");
+			},
+		});
+
+		await service.start("search-pf", "chat-pf", "question", []);
+
+		expect(events.some((event) => event.type === "quick")).toBe(true);
+	});
+});
+
+describe("createSearchService preflight action", () => {
+	it("passes the action a refusal carries on to the panel, so it can offer the way out", async () => {
+		const { events, send } = collectEvents();
+		const service = createSearchService({
+			agentFactory: () => createFakeAgent(async function*() {}),
+			chatStore: await createStore(),
+			send,
+			now,
+			preflight: async () => ({ message: "Weekly credits are used up.", action: "open-plan" }),
+		});
+
+		await service.start("search-action", "chat-action", "question", []);
+
+		expect(events[0]).toEqual({ type: "error", searchId: "search-action", message: "Weekly credits are used up.", action: "open-plan" });
+	});
+});
+
+describe("createSearchService progress text", () => {
+	it("shows the librarian's fixed English opening note in the interface language, and leaves the model's own notes alone", async () => {
+		await setAppLanguage("ko");
+		const agent = createFakeAgent(async function*() {
+			// The librarian opens every stream with this English sentence; what follows is what the model wrote.
+			yield { type: "progress", sessionId: "", query: "q", text: "Reviewing the query." };
+			yield { type: "progress", sessionId: "s", query: "q", text: "다운로드 폴더를 살펴보는 중입니다." };
+			yield { type: "complete", response: createResponse("session-progress", "Done", 1) };
+		});
+		const { events, send } = collectEvents();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send, now });
+
+		await service.start("search-progress", "chat-progress", "q", []);
+
+		const texts = events.flatMap((event) => (event.type === "progress" ? [event.text] : []));
+		expect(texts).toEqual([t("aiSearch.reviewing"), "다운로드 폴더를 살펴보는 중입니다."]);
+		expect(texts[0]).not.toBe("Reviewing the query.");
+	});
+
+	it("translates it into each interface language", async () => {
+		const seen: string[] = [];
+		for (const language of ["en", "ja", "zh", "ko"] as const) {
+			await setAppLanguage(language);
+			const agent = createFakeAgent(async function*() {
+				yield { type: "progress", sessionId: "", query: "q", text: "Reviewing the query." };
+				yield { type: "complete", response: createResponse("session-lang", "Done", 1) };
+			});
+			const { events, send } = collectEvents();
+			const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send, now });
+			await service.start(`search-${language}`, `chat-${language}`, "q", []);
+			const first = events.find((event) => event.type === "progress");
+			seen.push(first?.type === "progress" ? first.text : "");
+		}
+		expect(new Set(seen).size).toBe(4);
+		expect(seen[0]).toBe("Reviewing the query.");
+	});
+});
+
+describe("createSearchService conversations", () => {
+	interface Opened {
+		readonly resumeFile: string | undefined;
+		readonly seed: readonly { readonly question: string; readonly answer: string }[];
+	}
+
+	function conversationAgent(file = "/sessions/new-1.jsonl") {
+		const opened: Opened[] = [];
+		const agent = {
+			...createFakeAgent(async function*() {
+				yield { type: "complete", response: createResponse("session-c", "An answer", 1) };
+			}),
+			openSession: vi.fn(async (options: { resumeFile?: string | undefined; seed?: Opened["seed"] | undefined } = {}) => {
+				opened.push({ resumeFile: options.resumeFile, seed: options.seed ?? [] });
+				return { sessionFile: options.resumeFile ?? file, resumed: options.resumeFile !== undefined, seeded: options.seed?.length ?? 0 };
+			}),
+			closeSession: vi.fn(async () => undefined),
+		};
+		return { agent, opened };
+	}
+
+	function fakeSessions(files: Record<string, string> = {}) {
+		const remembered = new Map<string, string>(Object.entries(files));
+		return {
+			remembered,
+			index: {
+				fileFor: vi.fn(async (chatId: string) => remembered.get(chatId) ?? null),
+				remember: vi.fn(async (chatId: string, file: string) => void remembered.set(chatId, file)),
+				clear: vi.fn(async () => remembered.clear()),
+			},
+		};
+	}
+
+	it("starts a chat's first question in a new conversation and remembers where it is kept", async () => {
+		const { agent, opened } = conversationAgent("/sessions/chat-1.jsonl");
+		const sessions = fakeSessions();
+		const { send } = collectEvents();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send, now, sessions: sessions.index });
+
+		await service.start("search-1", "chat-1", "hello", []);
+
+		expect(opened).toEqual([{ resumeFile: undefined, seed: [] }]);
+		expect(sessions.remembered.get("chat-1")).toBe("/sessions/chat-1.jsonl");
+	});
+
+	it("resumes the conversation a chat kept when the app was restarted", async () => {
+		const { agent, opened } = conversationAgent();
+		const sessions = fakeSessions({ "chat-1": "/sessions/kept.jsonl" });
+		const { send } = collectEvents();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send, now, sessions: sessions.index });
+
+		await service.start("search-1", "chat-1", "and then?", []);
+
+		expect(opened).toEqual([{ resumeFile: "/sessions/kept.jsonl", seed: [] }]);
+	});
+
+	it("keeps one conversation per chat: a second question reuses the open one", async () => {
+		const { agent, opened } = conversationAgent();
+		const sessions = fakeSessions();
+		const { send } = collectEvents();
+		const factory = vi.fn(() => agent);
+		const service = createSearchService({ agentFactory: factory, chatStore: await createStore(), send, now, sessions: sessions.index });
+
+		await service.start("search-1", "chat-1", "first", []);
+		await service.start("search-2", "chat-1", "second", []);
+
+		expect(factory).toHaveBeenCalledTimes(1);
+		expect(opened).toHaveLength(1);
+	});
+
+	it("opens a chat that has history but no conversation with its earlier turns already in it", async () => {
+		const { agent, opened } = conversationAgent();
+		const sessions = fakeSessions();
+		const store = await createStore();
+		const at = "2026-10-01T00:00:00.000Z";
+		const phase = (answer: string) => ({ answer, evidence: [] });
+		await store.save({
+			id: "chat-old",
+			title: "old",
+			snippet: "",
+			updatedAt: at,
+			messages: [
+				{ role: "user", text: "my name is Moyaho", attachments: [], at },
+				{ role: "assistant", sessionId: "s1", quick: phase("Hello Moyaho (quick)"), deep: phase("Hello Moyaho (deep)"), stopped: false, at },
+				// A correction sent during a run is not a turn of its own.
+				{ role: "user", text: "only 2026 please", attachments: [], at, steer: "before-quick" },
+				{ role: "user", text: "is the sky blue?", attachments: [], at },
+				{ role: "assistant", sessionId: "s2", quick: phase("Yes (quick only)"), deep: null, stopped: false, at },
+				// A run that was stopped before it answered has nothing to carry over.
+				{ role: "user", text: "and the sea?", attachments: [], at },
+				{ role: "assistant", sessionId: "s3", quick: null, deep: null, stopped: true, at },
+			],
+		});
+		const { send } = collectEvents();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: store, send, now, sessions: sessions.index });
+
+		await service.start("search-1", "chat-old", "and the moon?", []);
+
+		expect(opened).toEqual([
+			{
+				resumeFile: undefined,
+				seed: [
+					{ question: "my name is Moyaho", answer: "Hello Moyaho (deep)" },
+					{ question: "is the sky blue?", answer: "Yes (quick only)" },
+				],
+			},
+		]);
+	});
+
+	it("does not seed from the question being asked now", async () => {
+		const { agent, opened } = conversationAgent();
+		const { send } = collectEvents();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send, now, sessions: fakeSessions().index });
+
+		await service.start("search-1", "chat-new", "the very first question", []);
+
+		expect(opened[0]?.seed).toEqual([]);
+	});
+
+	it("shows the error and ends the run when the conversation cannot be opened", async () => {
+		const { agent } = conversationAgent();
+		agent.openSession.mockRejectedValueOnce(new Error("cannot start the model session"));
+		const { events, send } = collectEvents();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send, now, sessions: fakeSessions().index });
+
+		await service.start("search-1", "chat-1", "hello", []);
+
+		expect(events).toEqual([
+			{ type: "error", searchId: "search-1", message: "Error: cannot start the model session" },
+			{ type: "done", searchId: "search-1" },
+		]);
+		expect(agent.searchDocumentsStream).not.toHaveBeenCalled();
+	});
+
+	it("closes the conversation of the chat it forgets once more than eight are open, and keeps its file", async () => {
+		const agents = Array.from({ length: 9 }, (_, position) => conversationAgent(`/sessions/${position}.jsonl`).agent);
+		const sessions = fakeSessions();
+		const { send } = collectEvents();
+		const queue = [...agents];
+		const service = createSearchService({
+			agentFactory: () => queue.shift() ?? agents[0]!,
+			chatStore: await createStore(),
+			send,
+			now,
+			sessions: sessions.index,
+		});
+
+		for (const position of agents.keys()) await service.start(`search-${position}`, `chat-${position}`, "q", []);
+
+		expect(agents[0]?.closeSession).toHaveBeenCalledTimes(1);
+		expect(agents[8]?.closeSession).not.toHaveBeenCalled();
+		// Its file is still known: the chat resumes from it when asked again.
+		expect(sessions.remembered.get("chat-0")).toBe("/sessions/0.jsonl");
+		expect(sessions.index.clear).not.toHaveBeenCalled();
+	});
+
+	it("ends every conversation and deletes the session files when the history is cleared", async () => {
+		const { agent } = conversationAgent();
+		const sessions = fakeSessions();
+		const { send } = collectEvents();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send, now, sessions: sessions.index });
+		await service.start("search-1", "chat-1", "hello", []);
+
+		await service.historyClear();
+
+		expect(agent.closeSession).toHaveBeenCalledTimes(1);
+		expect(sessions.index.clear).toHaveBeenCalledTimes(1);
+		expect(await service.historyList()).toEqual([]);
+	});
+
+	it("ends every open conversation when the app quits", async () => {
+		const { agent } = conversationAgent();
+		const { send } = collectEvents();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send, now, sessions: fakeSessions().index });
+		await service.start("search-1", "chat-1", "hello", []);
+
+		await service.dispose();
+
+		expect(agent.closeSession).toHaveBeenCalledTimes(1);
 	});
 });

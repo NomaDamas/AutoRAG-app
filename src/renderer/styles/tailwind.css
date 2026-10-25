@@ -343,6 +343,7 @@
 	--container-search-field: var(--w-search-field);
 	--container-access-menu: var(--w-access-menu);
 	--container-context-menu: var(--w-context-menu);
+	--container-interaction-menu: var(--w-interaction-menu);
 	--container-history: var(--w-history);
 	--container-requests: var(--w-requests);
 	--container-quicklook: var(--w-quicklook);

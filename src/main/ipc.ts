@@ -7,6 +7,8 @@ import {
 } from "../shared/actions-contract";
 import { FS_CHANNELS } from "../shared/fs-contract";
 import { SEARCH_CHANNELS, type SearchBridge } from "../shared/search-contract";
+import { INTERACTION_CHANNELS, isApprovalMode, type ApprovalMode } from "../shared/interaction-contract";
+import type { InteractionHub } from "./interaction-hub";
 import { SMART_INDEXING_CHANNELS } from "../shared/smart-indexing-contract";
 import { OS_REQUEST_CHANNELS } from "../shared/os-request-contract";
 import { SETTINGS_CHANNELS, type EmbeddingChangeRequest, type JsonValue, type McpServerInput, type ProviderAuthKind, type ProviderServerInput, type SettingsBridge } from "../shared/settings-contract";
@@ -15,13 +17,17 @@ import { ONBOARDING_CHANNELS } from "../shared/onboarding-contract";
 import { isServiceRunRequest, SERVICES_CHANNELS } from "../shared/services-contract";
 import { t } from "../shared/i18n/core";
 import { INDEX_ACTIVITY_CHANNELS } from "../shared/index-activity-contract";
+import { INDEX_PROBLEM_CHANNELS } from "../shared/index-problem-contract";
 import { AUTOMATION_CHANNELS, type AutomationRemoval } from "../shared/automation-contract";
 import { APP_UPDATE_CHANNELS } from "../shared/update-contract";
 import { ANALYTICS_CHANNELS } from "../shared/analytics-contract";
 import type { AppUpdaterService } from "./app-updater";
 import type { ActionService } from "./action-service";
+import type { ConversionService } from "./conversion-service";
+import { CONVERSION_CHANNELS, isConversionRequest } from "../shared/conversion-contract";
 import type { Analytics } from "./analytics-core";
 import type { IndexActivityService } from "./index-activity";
+import type { IndexProblemService } from "./index-problem-service";
 import type { AutomationService } from "./automation-service";
 import { MODEL_DOWNLOAD_CHANNELS } from "../shared/model-download-contract";
 import type { ModelDownloadService } from "./model-download";
@@ -84,6 +90,22 @@ export function registerActionsIpcHandlers(service: ActionService): void {
 	});
 }
 
+/** Convert-on-rename: ask what a rename means, run the conversion into the new name, or stop one. */
+export function registerConversionIpcHandlers(service: ConversionService): void {
+	ipcMain.handle(CONVERSION_CHANNELS.plan, (_event, oldName: unknown, newName: unknown) => {
+		if (typeof oldName !== "string" || typeof newName !== "string") throw new Error(t("main.ipc.invalidConversionRequest"));
+		return service.plan(oldName, newName);
+	});
+	ipcMain.handle(CONVERSION_CHANNELS.run, (_event, request: unknown) => {
+		if (!isConversionRequest(request)) throw new Error(t("main.ipc.invalidConversionRequest"));
+		return service.run(request);
+	});
+	ipcMain.handle(CONVERSION_CHANNELS.cancel, (_event, id: unknown) => {
+		if (typeof id !== "string") throw new Error(t("main.ipc.invalidConversionRequest"));
+		return service.cancel(id);
+	});
+}
+
 /** The OS Services submenu: list what the system offers for a selection, and perform one. */
 export function registerServicesIpcHandlers(service: ServicesService): void {
 	ipcMain.handle(SERVICES_CHANNELS.list, (_event, paths: unknown) => {
@@ -94,6 +116,25 @@ export function registerServicesIpcHandlers(service: ServicesService): void {
 		if (typeof id !== "string" || !isServiceRunRequest(id, paths)) throw new Error(t("main.ipc.invalidServiceRequest"));
 		return service.run(id, paths);
 	});
+}
+
+export interface InteractionIpcDeps {
+	readonly hub: InteractionHub;
+	getMode(): Promise<ApprovalMode>;
+	setMode(mode: ApprovalMode): Promise<ApprovalMode>;
+}
+
+export function registerInteractionIpcHandlers(deps: InteractionIpcDeps): void {
+	ipcMain.handle(INTERACTION_CHANNELS.getMode, () => deps.getMode());
+	ipcMain.handle(INTERACTION_CHANNELS.setMode, (_event, mode: unknown) => {
+		if (!isApprovalMode(mode)) throw new TypeError("interaction:setMode expects ask, auto or full");
+		return deps.setMode(mode);
+	});
+	ipcMain.handle(INTERACTION_CHANNELS.pending, () => deps.hub.pending());
+	// The hub checks the answer against the request it names; an id or shape it does not know is just refused.
+	ipcMain.handle(INTERACTION_CHANNELS.answer, (_event, id: unknown, answer: unknown) =>
+		typeof id === "string" ? deps.hub.answer(id, answer) : false,
+	);
 }
 
 export function registerSearchIpcHandlers(service: SearchBridge): void {
@@ -324,8 +365,7 @@ export function registerOnboardingIpcHandlers(service: OnboardingService): void 
 	});
 	ipcMain.handle(ONBOARDING_CHANNELS.embedding, () => service.embedding());
 	ipcMain.handle(ONBOARDING_CHANNELS.detectSources, () => service.detectSources());
-	ipcMain.handle(ONBOARDING_CHANNELS.detectModels, () => service.detectModels());
-	ipcMain.handle(ONBOARDING_CHANNELS.verifyModel, (_event, request: unknown) => service.verifyModel(request));
+	ipcMain.handle(ONBOARDING_CHANNELS.checkModel, () => service.checkModel());
 	ipcMain.handle(ONBOARDING_CHANNELS.startIndexing, (_event, request: unknown) => service.startIndexing(request));
 	ipcMain.handle(ONBOARDING_CHANNELS.indexStatus, () => service.indexStatus());
 	ipcMain.handle(ONBOARDING_CHANNELS.complete, () => service.complete());
@@ -339,6 +379,13 @@ export function registerOsRequestIpcHandlers(service: OsRequestService): void {
 /** The renderer's one read of what is indexing right now; changes are pushed by the main process. */
 export function registerIndexActivityIpcHandlers(service: IndexActivityService): void {
 	ipcMain.handle(INDEX_ACTIVITY_CHANNELS.get, () => service.snapshot());
+}
+
+/** What is still wrong with the index (sidebar block, banner, Settings card); changes are pushed by the main process. */
+export function registerIndexProblemIpcHandlers(service: IndexProblemService): void {
+	ipcMain.handle(INDEX_PROBLEM_CHANNELS.get, () => service.get());
+	ipcMain.handle(INDEX_PROBLEM_CHANNELS.retry, () => service.retry());
+	ipcMain.handle(INDEX_PROBLEM_CHANNELS.dismiss, () => service.dismiss());
 }
 
 /** Validate a restore payload: the entry itself is checked by the service, the index here. */

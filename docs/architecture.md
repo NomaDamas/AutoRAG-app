@@ -291,10 +291,11 @@ exiting. QA lane: `scripts/manual-qa/run-qa-finder-fs-worker-crash.mjs`
 
 Dazzi sends a report to the maintainers' Sentry project when something breaks,
 so a stuck or failed index is seen without the user filing an issue. It is
-**opt-in** (`errorReporting` defaults to off): the first onboarding step carries
-a second unticked checkbox next to the usage-statistics one, and Settings → 일반
-→ 개인정보 → "오류 보고서 보내기" has the same choice as a switch. Continuing from
-the welcome step saves both checkboxes; closing the window there saves nothing.
+asked once, on the first onboarding step: a checkbox that is **ticked by
+default** sits next to the usage-statistics one, and Settings → 일반 → 개인정보 →
+"오류 보고서 보내기" has the same choice as a switch. `errorReporting` is stored
+off until the user continues from the welcome step, which saves both checkboxes
+as they stand; closing the window there saves nothing.
 Until it is on, every event is dropped before it is queued, and
 `readErrorReportingEnabled` reads the setting as off unless it is exactly `true`.
 There is no per-report prompt.
@@ -331,17 +332,18 @@ Tracing, replay, logs and user feedback are not enabled.
 ## Usage statistics (PostHog)
 
 Separate from error reports: Settings → 일반 → 개인정보 has a second switch,
-`usageAnalytics`, **off by default** (opt-in). It answers "which features are
-used", never "what is in them".
+`usageAnalytics`, stored **off** until the user continues from the welcome step.
+It answers "which features are used", never "what is in them".
 
-How a user opts in: the first onboarding step (welcome) carries a small,
-**unticked** checkbox with a link to the Privacy Policy, and Settings → 일반 →
+How it is chosen: the first onboarding step (welcome) carries a small checkbox
+with a link to the Privacy Policy, **ticked by default**, and Settings → 일반 →
 개인정보 has the same choice as a switch. Continuing from the welcome step saves
 the checkbox's value to `usageAnalytics`; closing the window there saves
-nothing. Either way nothing is sent until the user ticks or switches it on, so
-consent is an affirmative act, as the EU's GDPR/ePrivacy rules require. The
-Privacy Policy (served from the landing-page repo) must name the desktop app's
-usage statistics before EU users are served.
+nothing, so nothing is sent before the user has continued. Because the box is
+pre-ticked, continuing is not by itself an affirmative opt-in under the EU's
+GDPR/ePrivacy rules (see `docs/compliance/eu-status.md`). The Privacy Policy
+(served from the landing-page repo) must name the desktop app's usage statistics
+before EU users are served.
 
 What is sent, and only after the user turns it on: `app_opened`,
 `settings_changed` (a setting's name and `on`/`off` or its enum value),
@@ -383,7 +385,10 @@ app at a local capture server and asserts the rules above over HTTP.
 
 A fresh install opens onboarding instead of the Finder: welcome, permissions,
 account, folders, smart scan, smart-indexing scope, embedding, data sources,
-plan, the model step (BYOK only), and the first index. The screens port
+plan, and the first index. A BYOK user also gets the model step: right after the
+account (before any folder is scanned, because the smart scan runs on that model),
+or after the plan for a signed-in user who only picks BYOK there, and a role step
+(reranker and Jev) right before the first index. The screens port
 `docs/design-reference/onboarding/onboarding-prototype.html`; the draft is saved
 after every change, so a relaunch (for example after granting Full Disk Access)
 resumes at the same step.
@@ -483,12 +488,28 @@ resumes at the same step.
   in are skipped. GitHub requires authentication and at least one discovered
   repository; empty or failed repo discovery does not offer a source that would
   fail its first sync.
-- **Model** (BYOK) verifies the provider key against the provider's API and
-  stores it in the encrypted credential store, never in `config.json`.
+- **Model** (BYOK) is Settings → AI 모델's connect flow in onboarding clothes
+  (`components/settings/ProviderConnect.tsx`, `ModelPicker.tsx`): any provider Pi
+  can sign in to (OAuth, API key) or a local/custom OpenAI-compatible server. The
+  credential lands in Pi's `auth.json` and the chosen answer model in the shared
+  `config.json` (`model.*`, through `modelConfigUpdates`) the moment it is picked,
+  so the smart scan can run on it and Settings shows exactly the same provider and
+  model afterwards. The draft only remembers the choice; the config is the authority
+  (`onboarding/model-choice.ts`). The step cannot be left until the saved model has
+  answered a real call (`main/model-health.ts`, `onboarding:checkModel`: the same
+  resolution and credentials the smart scan and AI Search use, one 16-token reply,
+  30 s limit); a refusal shows the provider's own message and a retry button, and
+  `draft.model.verified` is only ever set by that answer.
+- **Roles** (BYOK, right before indexing) picks the reranker and Jev, which a Dazzi
+  plan would provide, from the connected services that serve them
+  (`shared/ai-roles.ts`); each can be left alone or turned off, and a role no
+  connected service offers says so. They are written through the same config
+  helpers Settings uses (`jevConfigUpdates`, `rerankConfigUpdates`).
 - **Indexing** writes `searchPaths`, the embedder (only when none is set), the
   enabled datasources (`kakao` is indexed by the librarian's read-only sidecar over
   lazykatok's archive with the shared embedder, so `lazykatok index` and its
-  fastembed pipeline never run), and the BYOK model into the shared config, then runs
+  fastembed pipeline never run) into the shared config (the BYOK model is already
+  there from the model step), then runs
   the local refresh (`parsed`, `minsync`) and syncs enabled datasources in the
   background once local indexing and onboarding complete. A config still pointing its
   `workspacePath` at the app's cwd seed is moved to `<AutoRAG home>/workspace`.
@@ -570,6 +591,32 @@ import into their own stores the same way, and Obsidian reads the real vaults.
 Detection and the first sync are real by
 design; they never touch other apps' data beyond their own store.
 
+**A first index that stops.** `IndexingStatus` carries `failure` (`reason`, the
+unreadable `folders`, the deciding diagnostic `code`) when the run failed, and
+`skipped` when it finished. `classifyIndexFailure` (`src/main/index-failure.ts`)
+reads only what the app itself emits: `search-root-unavailable` (with `folders`),
+`embedder-preflight-failed` and `embedding-model-download-failed` (each with a
+`reason` token the app sets, never parsed from a message), `embedding-model-missing`,
+plus the two checks the app already trusts, `isEmbeddingTimeout` and Node's own
+`ENOSPC`. Anything else is `unknown`; the raw text stays in the log, never on a
+screen. Files a run left out are counted from `files-left-out` and `parse-killed`
+(their `count`) and from each `minsync-file-skipped` (one file). The renderer's
+`onboarding/pause.ts` maps each reason to its screen: the button, the links, the
+automatic retry (offline embedder or model download: every 8 s, up to 6 times;
+unreadable folder: every 3 s while the screen is open). Fixing the embedding from a
+pause sets `draft.resumeAt = "indexing"`, so leaving that step returns straight to
+the index. "Open Dazzi anyway" after a failed first run starts a keyword-only refresh
+(`parsed`, `jikji`; no embedder) so the app is not empty.
+
+After onboarding, `index-problem-service.ts` keeps the last run's failure and skipped
+count in `<userData>/index-problem.json` and pushes it as `window.autorag.indexProblem`;
+the sidebar block, the banner above the file list and the Settings indexing card read
+it. A clean run from onboarding, Settings (manual refresh) or the surfaces' own retry
+clears it; a clean OS-scheduled refresh clears the failure but not the skipped count,
+which that job does not report; the user can dismiss it. `run-qa-onboarding-failure.mjs`
+makes each failure for real (a fake embedder that answers 402 or is not there, a
+folder that disappears, an unwritable workspace) and walks every way out.
+
 ## Live filesystem sync
 
 Folders shown in open tabs are watched for changes made by other apps. A
@@ -641,6 +688,103 @@ App profiles live in `src/main/agents/profiles/`; the first is smart indexing
 only through a `propose_exclusions` tool that validates paths). A new profile adds one file there and, if it needs
 a UI, its own service and bridge. The factory's own tests (what the model is
 offered, on pi's faux provider) live in the librarian, in `test/profiles/`.
+
+## AI Search approvals and questions
+
+librarian v2.12 gives the agent two ways to stop and ask the person: a **file-change approval gate** (a pi
+extension on every `bash`, `write`, `edit` and saved-automation call) and the **`ask_user` tool**. Both are
+built for the librarian's terminal UI and ask through pi's `ctx.ui` (`select`, `input`); a search run in the app
+has no terminal, so the app supplies the surface itself and the question appears in the AI Search panel in place
+of the message box (`src/shared/interaction-contract.ts` is the contract).
+
+- **Modes.** `AppSettings.approvalMode` (`ask` | `auto` | `full`, default `auto`; persisted by the settings
+  service, which refuses any other value) is chosen in the menu at the left of the message box. `ask` puts every
+  shell/write/edit call to the person; `auto` lets Jev (the judgment model) approve what the request clearly
+  covers and asks about the rest — with no Jev backend every call is unclassified and is asked about, as in
+  the TUI; `full` never asks. `main/index.ts` applies a change to every chat's agent
+  (`InteractiveSearchAgent.setApprovalMode` → the librarian's `permissionControl.set`, which also ends the
+  session's "allow all of this kind" grants) and to agents built later, and tells every window.
+  `AUTORAG_PERMISSION_MODE` and `permissionMode` in the shared config feed the librarian's own default only;
+  the app's setting overrides them.
+- **Hub.** `interaction-hub.ts` owns the open requests (`QuestionRequest` | `ApprovalRequest`, each tied to a
+  run's `searchId`). A request resolves with the window's answer (checked against the request at the IPC
+  boundary with a typebox schema: an id or shape it does not know is refused and the request stays open), a
+  dismissal, the run's abort signal, Stop (`search-service` closes the run's requests before aborting it), or the
+  run ending. A panel that mounts late reads `interaction.pending()`.
+- **Gate dialogs.** `host-ui.ts` is the `ExtensionUIContext` handed to the run's pi session. The gate's
+  `select` (title `heading / categories / $ call`, choices `Allow once`, the session grant, `Deny`, `Deny and
+  tell the model…`) is parsed back into an `ApprovalRequest` (`parseApprovalDialog`); any other `select`, `input`
+  or `confirm` becomes a single-choice or text question. "Deny and tell the model" carries the person's note,
+  which answers the gate's follow-up `input`. `custom()` returns `undefined`, as pi does for hosts without a TUI.
+- **Where the UI is bound.** A chat's conversation is a pi session the app opens itself (next section), and the
+  UI is bound to it through pi's own mechanism: `session.bindExtensions({ uiContext, mode: "rpc" })`, which is what
+  pi's RPC mode does, and again after every session switch (`setRebindSession`). The tool `ask_user` and the gate
+  therefore reach the person on the bound session. `test/interactive-search-agent.test.ts` drives the real agent
+  (v2.12 gate and tools on pi's scripted model) through the hub. The question belongs to a run:
+  `search-service` calls `agent.bindRun(...)` before the stream and clears it after, so between runs nobody can
+  be asked and the gate blocks instead of waiting.
+- **`ask_user`.** `ask-user-tool.ts` registers a tool of the same name and parameters as the librarian's
+  (`pi-ask-user`, whose terminal component the app cannot draw) through the agent's `tools` option, so the
+  librarian's system prompt, which names `ask_user` when such a tool exists, describes it to the model.
+  Results use the words the model has seen: `User answered: …`, `User cancelled the question`,
+  `User answered N of M questions:`. `executionMode` is sequential, so no other call of the turn runs before the
+  person answered. The librarian offers the tool only in its terminal session, so its fast and direct phase
+  prompts do not name `ask_user` as the one tool they allow; the verification pass has it.
+- **Panel.** `InteractionDock` replaces the composer's form for the run it belongs to (draft text and attachments
+  stay in the panel's state): a question card (single/multiple choice with descriptions, free text, 2–4 together
+  in steps) or an approval card (what the call does, the command, four answers; initial focus on Deny, Esc
+  denies, Enter never approves). Stop stays reachable on the card. Pure logic: `state/interaction.ts`.
+
+### One conversation per chat
+
+Until v2.12 the app ran each question through the librarian's search session, which is created fresh per search:
+the model of a follow-up never saw the earlier turns (only the librarian's evidence ledger carried over), and no
+question could reach the approval gate's or `ask_user`'s UI. A chat is now one pi session
+(`createPiInteractiveRuntime`, the runtime the librarian's TUI uses), opened by `InteractiveSearchAgent.openSession`
+and kept for the chat's life:
+
+- **What the model sees.** The first question is the librarian's prompt (attachments in front, as before); a
+  follow-up is a message of the same session, so the earlier questions, answers and tool results are in the model's
+  context. The librarian assumes its terminal hook recorded the person's words for Jev; a host that searches itself
+  has to do that (`userRequests.record`, reached by name: a private field), which `searchDocuments` does for every
+  question. Without it `auto` could never approve a change the person asked for.
+- **After a restart.** `chat-sessions.ts` keeps `index.json` beside the session files (`<userData>/chat-sessions`):
+  chat id → file name. `search-service` resumes from that file when it exists (`switchSession`). A chat from before
+  this change, or one whose file is gone, starts a new conversation seeded with its finished turns
+  (`seedTurnsOf`: Deep answer over Quick, a steer belongs to the turn it corrected, a stopped turn carries
+  nothing). A file pi cannot read starts a new conversation instead of failing the chat.
+- **Lifetime.** At most eight conversations are open; past that the oldest chat that is not answering is closed
+  (its file stays, asking again resumes it). Quitting waits for every open one (`SearchService.dispose`); "clear
+  history" closes them and deletes the folder.
+
+### What the panel shows while a run works, and an exhausted plan
+
+- **One loading indicator.** While a run is live and the Deep answer has not started, the panel shows one shimmering text line
+  (`answerViewState`, the `shimmer` utility), in the same place whether or not Quick text exists: what the agent is doing, or
+  "Thinking…" before it has said anything. There are no grey placeholder bars. A message that goes on to call a tool is a progress
+  note, not the answer: its streamed draft is withdrawn at the tool call and its text becomes the line, so a run that is reading
+  files is never a bare animation. Stop clears the line at once.
+- **Where the line's words come from.** `progress` events carry three kinds of text. The librarian writes exactly one of them
+  itself, in English: `Reviewing the query.`, the first event of every `searchDocumentsStream` (`agent.ts`); the search service
+  swaps it for `aiSearch.reviewing` in the interface language (the panel shows that same string from the moment a run starts,
+  and the English one would otherwise replace it). The other two are the model's own words, passed through as written: the
+  `intent` it gave a tool call (intent tracing), and the text it wrote before calling one. The panel's own fixed strings
+  (`aiSearch.thinking`, `aiSearch.reviewing`) are translated in all four languages.
+- **Weekly credits.** The Dazzi server answers a run whose weekly credits are used up with `429 insufficient_quota` and bills nothing,
+  but the agent treats each 429 as a rate limit: its judgment-model calls and model request are retried and the server's raw JSON
+  ends up in the answer. `quota-guard.ts` (the search service's `preflight`) asks the account first: when the model is the `dazzi`
+  provider and the last read shows the credits used up, it re-reads `GET /v1/account` (a reset or an upgrade since the last read is
+  not held against the person) and refuses the run only on what the server confirmed; offline, an unreadable account or a lookup error lets
+  the run go, since the server has the last word. The refusal names the reset time and carries an `open-plan` action (`SearchErrorAction` on the `error` event): the panel's notice (`RunErrorNotice`) shows a button that opens Settings on Subscription & Usage (`requestSettingsCategory("plan")`). That time is the server's `credits.resets_at`
+  (`AccountSnapshot.creditsResetsAt`): the server's week starts when the account's period did, so it is not a fixed weekday; Monday
+  00:00 UTC (`nextWeeklyReset`) is only the fallback for a server that sends none. The Plan page uses the same `creditsResetAt`.
+
+On-device checks: `scripts/manual-qa/run-qa-finder-ai-search-interaction.mjs` (scripted model: every card and
+answer path, files on disk, what the model receives), `run-qa-finder-ai-search-conversation.mjs` (scripted model
+that records every request: a follow-up carries the chat's earlier turns, the same after quitting and starting the
+app again, the approval card on a resumed chat, a chat without a session file seeded from its turns, New chat sends
+nothing of another, clearing history deletes the files) and `run-qa-live-ai-search-interaction.mjs` (a real model
+through the Dazzi account decides to ask and to delete, remembers a codeword across questions, and after a restart).
 
 ## File automations
 
@@ -826,6 +970,46 @@ folder in view, a folder-only service is offered for a folder and not a file,
 and (when Keka is installed) Keka's group opens a visible second-level popout
 whose *Send to Keka* launches Keka. The probe is removed afterwards.
 
+## Converting a file by renaming it
+
+Type another format's extension into a file's name (`회의록.hwpx` → `회의록.pdf`)
+and Dazzi converts the file with Filee instead of only relabelling it. A dialog
+asks first: **원본 유지** writes the converted file beside the original;
+**원본 덮어쓰기** writes it and moves the original to the Trash (recoverable, and it
+is the app's ordinary trash, so ⌘Z-style restores still apply). Cancel and Esc
+change nothing. While it runs the same dialog shows an indeterminate bar and its
+Cancel stops the Filee process.
+
+- **When it triggers.** Only a *file* whose extension changes between two
+  present, different formats. A folder, a rename with the same extension (or only a
+  different spelling of it: `jpg`/`jpeg`, `htm`/`html`), a name with no extension
+  on either side, and any rename while `filee.enabled` is `false` stay plain renames and
+  never reach main.
+- **What counts as convertible.** `planConversion` (`src/main/conversion-plan.ts`)
+  answers offline from the librarian's route matrix (`SOURCE_FAMILIES`,
+  `reachableTargets`, the table the agent's `convert_files` plans with) plus Filee's other
+  spellings (`src/main/conversion-aliases.ts`, generated from `filee formats <ext>` by
+  `scripts/gen-conversion-aliases.mjs`). If the source has no route to the new
+  extension, or either extension is one Filee does not know, nothing is renamed and a toast says that
+  converting `{from}` to `{to}` is not supported.
+- **How it runs.** `src/main/conversion-service.ts` resolves `filee-cli` through the
+  librarian (the config's `filee.binaryPath`, `filee` on PATH, then the managed copy under
+  `<AUTORAG_HOME>/tools/filee-cli`, downloaded on the first conversion unless
+  `filee.autoInstall` is `false`) and runs `convertWithFilee` into a hidden
+  `.dazzi-convert-*` folder beside the source. The result is renamed out of it under the
+  name the user typed (so the typed stem wins, not the source's) and the staging folder is
+  removed, on success, failure and cancel alike. A result of several files (a PDF to
+  PNG gives one image per page) goes into a folder named after the new name. The source is
+  never modified; an existing name is refused before Filee starts.
+- **Settings.** The `filee` block of the shared AutoRAG config (`enabled`, `binaryPath`,
+  `autoInstall`, `timeoutMs`, `dataDir`) governs the agent and the app alike.
+- **Bridge.** `window.autorag.conversion` (`src/shared/conversion-contract.ts`):
+  `plan(oldName, newName)`, `run({ id, path, newName })`, `cancel(id)`.
+
+`run-qa-finder-convert-rename.mjs` drives this in the built app against the real
+`filee-cli`: hwpx → pdf with both answers, a typed stem that differs from the source's, Cancel and
+Esc, an unsupported route (mp3 → pdf), a same-format rename, and no leftover staging folder.
+
 ## Manual QA
 
 The Finder QA scripts are under `scripts/manual-qa/`. Build first, then run a
@@ -864,14 +1048,44 @@ Bin) and scripts that genuinely need macOS log a skip instead of failing.
 Lane logs and `summary.json` land in `.omo/evidence/win-qa/`. The sweep also
 runs in CI (`.github/workflows/qa-windows.yml`).
 
+Every helper program the app starts on Windows (PowerShell for the Kind
+column, `tasklist`, `schtasks`, `reg`, `dupey`, the file-action tools) is
+started with `windowsHide: true`; without it Windows flashes a black console
+window each time one starts, and opening a folder starts one for every
+extension it has not seen. `test/windows-hidden-console.test.ts` pins the
+option, and the `no-console-flash` lane (`run-qa-finder-no-console-flash.mjs`)
+double-clicks in and out of folders while a watcher process polls for visible
+console windows, after proving the watcher catches a deliberately unhidden one.
+
+`windowsHide` cannot reach a process a native module starts itself. With no
+backend named, `@parcel/watcher` runs `popen("watchman ...")` on every
+subscribe, which starts `cmd.exe` and flashed a console window each time a
+folder was opened. `src/main/watch-backend.ts` therefore names the native
+`windows` backend on Windows (`test/watch-backend.test.ts`). Any new native
+module that shells out needs the same check; the `no-console-flash` lane is
+what catches it.
+
 ## Releases and installers
 
 Publishing a GitHub release builds `Dazzi-<version>-arm64.dmg` and
 `Dazzi-Setup-<version>-x64.exe` and attaches them to it. Each installer carries
 the app plus every program it drives (the `autorag` agent, minsync, jikji, dupey,
-the datasource crawlers, rhwp, kordoc, Node and npm-based CLIs). The local
-Qwen3 embedding model is not bundled: the app downloads it on demand into
+the datasource crawlers, rhwp, `filee-cli`, kordoc, Node and npm-based CLIs). The
+local Qwen3 embedding model is not bundled: the app downloads it on demand into
 MinSync's model cache (`src/main/model-download.ts`), so the installer is one
 download and the model is fetched when local embedding is chosen. See
 [`release.md`](release.md) for the contents, the signing secrets to
 configure, and how to rehearse a release.
+
+`filee-cli` is the conversion CLI the librarian's `convert_files` tool runs. The
+librarian downloads it into its own home on first use unless it finds
+`filee`/`filee-cli` on `PATH`, so the installer stages the librarian's pinned
+version beside the other tools and `<resources>/tools/bin` being first on `PATH`
+is the whole integration — an offline install converts files without reaching
+GitHub. `filee-cli` is a self-contained .NET program (an apphost with sibling
+assemblies and its bundled 7-Zip/rhwp engines), so it ships as a
+`<resources>/tools/filee-cli/` folder with a relative `tools/bin/filee-cli`
+symlink on macOS and flattened into `tools/bin` on Windows. `filee-cli`'s own
+conversion engines (LibreOffice, Pandoc, FFmpeg, Ghostscript, calibre) are not
+bundled: it downloads one into its data directory the first time a conversion
+needs it.

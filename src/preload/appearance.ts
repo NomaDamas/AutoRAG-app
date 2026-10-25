@@ -31,6 +31,8 @@ function applyAppearance(value: AppAppearance): boolean {
 	const dataset: unknown = documentElement["dataset"];
 	if (!isObject(dataset)) return false;
 	dataset["appearance"] = value;
+	// Stylesheets branch on the host OS here (window-controls overlay gutter), the same way they branch on appearance.
+	dataset["platform"] = process.platform;
 	return true;
 }
 

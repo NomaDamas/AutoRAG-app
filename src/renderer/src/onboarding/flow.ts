@@ -21,6 +21,7 @@ import type {
 } from "../../../shared/onboarding-contract";
 import type { LocalSpecVerdict } from "../../../shared/local-embedding-spec";
 import { CLOUD_FILES_PER_MINUTE, LOCAL_FILES_PER_MINUTE, NONE_FILES_PER_MINUTE, NONE_MIN_MINUTES } from "../../../shared/onboarding-contract";
+import { datasourceSupported } from "../../../shared/messenger-platform";
 
 export type { EmbedMode };
 
@@ -30,12 +31,20 @@ export type Translate = (key: string, options?: Record<string, unknown>) => stri
  * The prototype's `flow()`: cloud embedding puts the plan step right after
  * embedding; the keyword-only and local modes put it after the sources step.
  * A confirmed plan (or an already active Air/Pro subscription) drops out of the
- * list, and the model step only exists for BYOK.
+ * list, and the model and role steps only exist for BYOK.
+ *
+ * The smart scan runs on the agent's model, so a user who chose BYOK on the
+ * account step (not signed in) connects that model right after it, before any
+ * folder is scanned. A signed-in user who only picks BYOK on the plan step has
+ * already scanned with the account's model; theirs comes after the plan. Someone
+ * who brings their own key and skips the Dazzi plan also picks the reranker and
+ * Jev, which the plan would otherwise provide, right before the first index.
  */
-export function buildFlow(plan: PlanId, planConfirmed: boolean, embed: EmbedMode): OnboardingStepId[] {
+export function buildFlow(plan: PlanId, planConfirmed: boolean, embed: EmbedMode, signedIn: boolean): OnboardingStepId[] {
 	const mid: OnboardingStepId[] = embed === "cloud" ? ["plan", "sources"] : ["sources", "plan"];
-	const tail: OnboardingStepId[] = plan === "byok" ? ["model", "indexing"] : ["indexing"];
-	const head: OnboardingStepId[] = ["welcome", "permissions", "account", "folders", "smartScan", "smartScope", "embedding"];
+	const modelFirst = plan === "byok" && !signedIn;
+	const tail: OnboardingStepId[] = plan !== "byok" ? ["indexing"] : modelFirst ? ["roles", "indexing"] : ["model", "roles", "indexing"];
+	const head: OnboardingStepId[] = ["welcome", "permissions", "account", ...(modelFirst ? (["model"] as const) : []), "folders", "smartScan", "smartScope", "embedding"];
 	return head.concat(planConfirmed ? mid.filter((id) => id !== "plan") : mid).concat(tail);
 }
 
@@ -162,14 +171,14 @@ export function primaryLabelKey(stepId: OnboardingStepId, plan: PlanId, held: bo
 /**
  * The value to save for "usage statistics" when the user leaves `stepId`, or
  * null when that step records nothing. Consent is the act of continuing from
- * the step that shows the checkbox: closing the window there saves nothing, and
- * the setting stays at its default (off).
+ * the step that shows the checkbox (ticked by default there): closing the
+ * window there saves nothing, and the stored setting stays at its default (off).
  */
 export function usageConsentOnLeaving(stepId: OnboardingStepId, checked: boolean): boolean | null {
 	return stepId === "welcome" ? checked : null;
 }
 
-/** Same rule for "error reports": the value to save when the user leaves `stepId`, or null. Default stays off. */
+/** Same rule for "error reports": the value to save when the user leaves `stepId`, or null. The stored default stays off until then. */
 export function errorReportsConsentOnLeaving(stepId: OnboardingStepId, checked: boolean): boolean | null {
 	return stepId === "welcome" ? checked : null;
 }
@@ -413,10 +422,15 @@ const CONNECTABLE_BRANDS: readonly { readonly brand: string; readonly label: str
 	{ brand: "googledrive", label: "Google Drive" },
 ];
 
-/** "Connect later" chips: every connectable brand the probes did not already find. */
-export function connectableLater(detected: readonly { readonly id: SourceId }[]): readonly { readonly brand: string; readonly label: string }[] {
+/** "Connect later" chips: every connectable brand the probes did not already find, minus the ones this OS cannot run (KakaoTalk off macOS). */
+export function connectableLater(
+	detected: readonly { readonly id: SourceId }[],
+	platform: string = "darwin",
+): readonly { readonly brand: string; readonly label: string }[] {
 	const found = new Set<SourceId>(detected.map((source) => source.id));
-	return CONNECTABLE_BRANDS.filter((entry) => entry.sourceId === undefined || !found.has(entry.sourceId));
+	return CONNECTABLE_BRANDS.filter(
+		(entry) => (entry.sourceId === undefined || !found.has(entry.sourceId)) && (entry.sourceId === undefined || datasourceSupported(entry.sourceId, platform)),
+	);
 }
 
 /** The welcome feature card's source-token grid order. */

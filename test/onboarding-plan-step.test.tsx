@@ -40,6 +40,7 @@ function account(plan: AccountPlanId, trialing = false): AccountStatus {
 			creditsUsedCents: 0,
 			creditsLimitCents: 50,
 			creditPeriod: "2026-W43",
+			creditsResetsAt: null,
 			embeddings: true,
 			requestsPerMinute: 10,
 			billing: { air: true, pro: true, max: true, portal: false },
