@@ -32,6 +32,7 @@ const LANES = [
 	{ name: "folder-tree", script: "run-qa-finder-folder-tree.mjs", timeout: 240 },
 	{ name: "recents", script: "run-qa-finder-recents.mjs", timeout: 300 },
 	{ name: "thumbnails", script: "run-qa-finder-thumbnails.mjs", timeout: 240 },
+	{ name: "video-thumbnails", script: "run-qa-finder-video-thumbnails.mjs", timeout: 300 },
 	{ name: "thumbnail-scroll", script: "run-qa-finder-thumbnail-scroll.mjs", timeout: 300 },
 	{ name: "live-sync", script: "run-qa-finder-live-sync.mjs", timeout: 900 },
 	{ name: "sidebar-search", script: "run-qa-finder-sidebar-search.mjs", timeout: 240 },
