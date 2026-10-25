@@ -50,7 +50,8 @@ let app;
 try {
 	app = await launchFinder({ userDataDir, env: { HOME: home } });
 	const page = await finderWindow(app);
-	await page.setViewportSize({ width: 1500, height: 900 }).catch(() => {});
+	// Windows applies the emulated 1500px viewport to a 1440px window, which slides the Inspector resize handle over the Group button.
+	if (process.platform !== "win32") await page.setViewportSize({ width: 1500, height: 900 }).catch(() => {});
 	await page.waitForSelector(".toolbar-title", { timeout: 30000 });
 	await page.getByRole("group", { name: "View" }).getByRole("button", { name: "List" }).click();
 	await page.getByLabel("Places").getByRole("button", { name: "Documents", exact: true }).click();

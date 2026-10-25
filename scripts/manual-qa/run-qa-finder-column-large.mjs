@@ -64,7 +64,7 @@ const check = (label, ok, detail) => {
 	console.log(`${ok ? "PASS" : "FAIL"}  ${label}${detail === undefined ? "" : ` :: ${detail}`}`);
 };
 
-const pane = (page) => page.locator(`.column[data-path="${BIG.replaceAll('"', '\\"')}"]`);
+const pane = (page) => page.locator(`.column[data-path="${cssAttr(BIG)}"]`);
 
 const runs = [];
 try {

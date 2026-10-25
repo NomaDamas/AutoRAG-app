@@ -37,7 +37,7 @@
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, sep } from "node:path";
 import { finderWindow, launchFinder, ROOT } from "./launch-finder.mjs";
 import { sleep, cssAttr } from "./platform.mjs";
 
@@ -173,7 +173,7 @@ const sinceMark = (page, kind, expected) =>
 				const first = rows[0]?.getAttribute("data-path");
 				return first === expected ? performance.now() - globalThis.__largeMark : null;
 			},
-			{ kind, prefix: `${BIG}/`, expected },
+			{ kind, prefix: `${BIG}${sep}`, expected },
 			{ polling: "raf", timeout: 60_000 },
 		)
 		.then((handle) => handle.jsonValue())
@@ -195,7 +195,7 @@ try {
 				const hold = ipcMain._invokeHandlers.get("fs-worker:qaHoldEnrichment");
 				if (hold === undefined) throw new Error("fs-worker:qaHoldEnrichment is not registered (AUTORAG_FS_WORKER_QA=1)");
 				await hold({}, prefix, ["enrichEntries", "finderMetadata"]);
-			}, `${BIG}/`);
+			}, `${BIG}${sep}`);
 			const cdp = await page.context().newCDPSession(page);
 			await cdp.send("HeapProfiler.enable");
 			await cdp.send("Performance.enable");
@@ -235,7 +235,7 @@ try {
 				cdp.on("HeapProfiler.addHeapSnapshotChunk", onChunk);
 				await cdp.send("HeapProfiler.takeHeapSnapshot", { reportProgress: false });
 				cdp.off("HeapProfiler.addHeapSnapshotChunk", onChunk);
-				snapshotRows = analyzeRows(JSON.parse(chunks.join("")), `${BIG}/`);
+				snapshotRows = analyzeRows(JSON.parse(chunks.join("")), `${BIG}${sep}`);
 			}
 
 			const sortButton = (index) => page.locator(".col-header__sort").nth(index);
