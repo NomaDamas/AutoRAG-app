@@ -27,7 +27,9 @@
     "pictures": "ピクチャ",
     "trash": "ゴミ箱",
     "eject": "\"{{name}}\"を取り出す",
-    "automations": "自動化"
+    "automations": "自動化",
+    "moviesWindows": "ビデオ",
+    "trashWindows": "ごみ箱"
   },
   "toolbar": {
     "back": "戻る",
@@ -1884,7 +1886,7 @@
       "appLanguage": "アプリの言語",
       "appLanguageHint": "メニューと設定で使用する言語です。",
       "finderTitle": "Finder",
-      "finderDesc": "Mac のファイル閲覧画面の動作です。",
+      "finderDesc": "ファイル閲覧画面の動作です。",
       "showHiddenFiles": "隠しファイルを表示",
       "showHiddenFilesHint": "ドット(.)で始まるシステムファイルを Finder に表示します。",
       "launchTitle": "起動と更新",

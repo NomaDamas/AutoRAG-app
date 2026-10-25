@@ -27,7 +27,9 @@
     "pictures": "Pictures",
     "trash": "Trash",
     "eject": "Eject \"{{name}}\"",
-    "automations": "Automations"
+    "automations": "Automations",
+    "moviesWindows": "Videos",
+    "trashWindows": "Recycle Bin"
   },
   "toolbar": {
     "back": "Back",
@@ -1884,7 +1886,7 @@
       "appLanguage": "App Language",
       "appLanguageHint": "Language used for menus and settings.",
       "finderTitle": "Finder",
-      "finderDesc": "Behavior of the Mac file browsing screen.",
+      "finderDesc": "Behavior of the file browsing screen.",
       "showHiddenFiles": "Show Hidden Files",
       "showHiddenFilesHint": "Show system files that start with a dot (.) in Finder.",
       "launchTitle": "Startup & Updates",
