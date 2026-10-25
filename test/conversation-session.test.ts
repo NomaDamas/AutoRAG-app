@@ -279,7 +279,7 @@ describe("what the person said reaches Jev's approval judgment", () => {
 		await h.agent.searchDocuments("hello there");
 
 		// The follow-up asks for the deletion; the model answers with a shell call, then a closing sentence.
-		h.script({ tool: "bash", args: { command: `rm ${file}` } }, "Deleted it.");
+		h.script({ tool: "bash", args: { command: `rm ${file.replaceAll("\\", "/")}` } }, "Deleted it.");
 		await h.agent.searchDocuments("please delete report.pdf");
 
 		// Jev approved on what was said, so nobody was asked, and the call ran.

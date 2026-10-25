@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, watch, writeFileSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
 	automationsHome,
@@ -207,26 +207,28 @@ async function baselineDone(probed: () => number): Promise<void> {
 
 describe("automationsHome", () => {
 	it("resolves a trimmed AUTORAG_HOME and falls back to <home>/.autorag", () => {
-		expect(automationsHome({ AUTORAG_HOME: "  /tmp/custom-home \n" }, "/Users/tester")).toBe("/tmp/custom-home");
-		expect(automationsHome({ AUTORAG_HOME: "" }, "/Users/tester")).toBe("/Users/tester/.autorag");
-		expect(automationsHome({}, "/Users/tester")).toBe("/Users/tester/.autorag");
+		expect(automationsHome({ AUTORAG_HOME: "  /tmp/custom-home \n" }, "/Users/tester")).toBe(resolve("/tmp/custom-home"));
+		expect(automationsHome({ AUTORAG_HOME: "" }, "/Users/tester")).toBe(join("/Users/tester", ".autorag"));
+		expect(automationsHome({}, "/Users/tester")).toBe(join("/Users/tester", ".autorag"));
 		expect(automationsHome({ AUTORAG_HOME: "relative/state" }, "/Users/tester")).toBe(join(process.cwd(), "relative/state"));
 	});
 });
 
 describe("librarianCommand", () => {
-	const installedCli = "/Applications/Dazzi.app/Contents/Resources/app/node_modules/@autorag/librarian/dist/cli/index.js";
 	const installedEntry = "/Applications/Dazzi.app/Contents/Resources/app/node_modules/@autorag/librarian/dist/index.js";
+	// The command builds the CLI path with the host's separators, so the expectation does too.
+	const installedCli = join(dirname(installedEntry), "cli", "index.js");
+	const bundledNode = join("/Applications/Dazzi.app/Contents/Resources", "tools", "node");
 
 	it("runs the installed CLI under the bundled node when the installer shipped one", () => {
 		const command = librarianCommand({
 			resourcesPath: "/Applications/Dazzi.app/Contents/Resources",
 			env: {},
 			platform: "darwin",
-			exists: (path) => path === "/Applications/Dazzi.app/Contents/Resources/tools/node" || path === installedCli,
+			exists: (path) => path === bundledNode || path === installedCli,
 			resolvePackage: () => installedEntry,
 		});
-		expect(command).toEqual({ command: "/Applications/Dazzi.app/Contents/Resources/tools/node/bin/node", args: [installedCli] });
+		expect(command).toEqual({ command: join(bundledNode, "bin", "node"), args: [installedCli] });
 	});
 
 	it("honours AUTORAG_TOOLS_DIR and the Windows binary name", () => {
