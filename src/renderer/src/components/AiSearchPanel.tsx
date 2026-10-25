@@ -27,6 +27,7 @@ import { summaryRequest, type SummaryLanguage } from "../state/ai-summary";
 import { answerViewState } from "../state/answer-view";
 import { attachmentsFromDrop, isAttachmentDrag, mergeAttachments } from "../state/attachments";
 import { ImageRow, lineImages, type ImageActions } from "./AnswerImage";
+import { AnswerLink } from "./AnswerLink";
 import { PipeTable } from "./PipeTable";
 import {
 	collectSessionEvidence,
@@ -1228,17 +1229,19 @@ export function ProseBlocks({
 	);
 }
 
-/** Inline segments of one answer line: bold, code, image paths as written, and citation chips. */
+/** Inline segments of one answer line: bold, code, image paths as written, citation chips, and web links. */
 function AnswerInline({
 	segments: parsed,
 	selected,
 	unresolved,
 	onCitation,
+	onOpenUrl,
 }: {
 	readonly segments: readonly InlineSegment[];
 	readonly selected: number | null;
 	readonly unresolved: readonly number[];
 	readonly onCitation: (number: number) => void;
+	readonly onOpenUrl: (url: string) => void;
 }): ReactElement {
 	return (
 		<>
@@ -1291,6 +1294,12 @@ function AnswerInline({
 								{segment.number}
 							</button>
 						);
+					case "link":
+						return (
+							<AnswerLink key={`${index}`} url={segment.url} onOpenUrl={onOpenUrl}>
+								<AnswerInline segments={segment.children} selected={selected} unresolved={unresolved} onCitation={onCitation} onOpenUrl={onOpenUrl} />
+							</AnswerLink>
+						);
 					default:
 						return <span key={`${index}`}>{segment.text}</span>;
 				}
@@ -1316,10 +1325,16 @@ function AnswerBlockView({
 		return <pre className="m-0 overflow-auto whitespace-pre rounded-6 border border-border bg-code px-10 py-8 font-mono text-caption text-ink-body">{block.text}</pre>;
 	}
 	if (block.kind === "table") {
-		return <PipeTable table={block} tableClassName="text-caption" renderLine={(line) => <AnswerInline segments={parseInline(line)} selected={selected} unresolved={unresolved} onCitation={onCitation} />} />;
+		return (
+			<PipeTable
+				table={block}
+				tableClassName="text-caption"
+				renderLine={(line) => <AnswerInline segments={parseInline(line)} selected={selected} unresolved={unresolved} onCitation={onCitation} onOpenUrl={imageActions.onOpenUrl} />}
+			/>
+		);
 	}
 	const parsed = parseInline(block.text);
-	const segments = <AnswerInline segments={parsed} selected={selected} unresolved={unresolved} onCitation={onCitation} />;
+	const segments = <AnswerInline segments={parsed} selected={selected} unresolved={unresolved} onCitation={onCitation} onOpenUrl={imageActions.onOpenUrl} />;
 	const images = lineImages(parsed);
 	let line: ReactElement;
 	switch (block.kind) {

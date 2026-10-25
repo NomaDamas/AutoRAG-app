@@ -31,6 +31,13 @@ export type InlineSegment =
 			readonly alt: string;
 			/** How the answer spelled it: `![alt](ref)`, `` `path` ``, or a bare path. */
 			readonly source: "markdown" | "code" | "bare";
+	  }
+	| {
+			readonly kind: "link";
+			/** The normalized `http(s)` URL the link opens. */
+			readonly url: string;
+			/** What the link shows: its markdown label, or the URL as written. Never holds another link. */
+			readonly children: readonly InlineSegment[];
 	  };
 
 /** Extensions that name an image file, decodable by Chromium or not. */
@@ -39,11 +46,15 @@ const IMAGE_FILE = new RegExp(`\\.(?:${IMAGE_EXTENSIONS})$`, "iu");
 
 /**
  * One inline token. Alternatives in order: markdown image (`<ref>` form, then
- * plain), bold, code, citation, and a bare absolute image path. The bare path
+ * plain), bold, code, markdown link and `<url>` autolink (http(s) only, so
+ * `[1](3쪽)`, `[x](./a.md)` and `[x](javascript:…)` keep their old reading),
+ * citation, a bare absolute image path, and a bare http(s) URL. The bare path
  * must start a word (so the tail of a relative `사진/a.png` never reads as
  * `/a.png`), may not contain whitespace, and ends at the first image extension
  * not followed by more name characters, so Korean particles ("…/a.png에") and
- * a sentence-final period stay outside the path.
+ * a sentence-final period stay outside the path. A bare URL is the longest run
+ * of ASCII URL characters (RFC 3986), so a Korean particle ("…/docs에서") ends
+ * it too; `trimUrl` then drops sentence punctuation from its end.
  */
 const INLINE = new RegExp(
 	[
@@ -51,8 +62,11 @@ const INLINE = new RegExp(
 		String.raw`!\[([^\]]*)\]\(\s*([^)\s]+(?:\s+[^)\s"]+)*?)(?:\s+"[^"]*")?\s*\)`,
 		String.raw`\*\*([^*]+)\*\*`,
 		"`([^`]+)`",
+		String.raw`\[([^\[\]]+)\]\(\s*(?:<(https?:\/\/[^<>\s]+)>|(https?:\/\/(?:[^\s()<>]|\([^\s()<>]*\))+))(?:\s+"[^"]*")?\s*\)`,
+		String.raw`<(https?:\/\/[^<>\s]+)>`,
 		String.raw`\[([1-9]\d*)\]`,
 		String.raw`(?<![\p{L}\p{N}_/.:~\\-])((?:\/|[A-Za-z]:\\)[^\s"'<>()\[\]*` + "`" + String.raw`]*?\.(?:${IMAGE_EXTENSIONS}))(?!\.?[A-Za-z0-9])`,
+		String.raw`(?<![A-Za-z0-9_])(https?:\/\/[A-Za-z0-9\-._~:/?#@!$&'()*+,;=%]+)`,
 	].join("|"),
 	"giu",
 );
@@ -64,7 +78,34 @@ function isImageReference(text: string): boolean {
 	return webUrl(trimmed) !== null || isAbsolutePath(trimmed) || /^file:\/\//iu.test(trimmed);
 }
 
-/** Split an inline string into text / bold / code / citation / image segments. */
+/**
+ * A bare URL without the sentence around it: trailing `. , ; : ! ? ' *` end
+ * the sentence, not the URL, and so does a `)` with no `(` in the URL to close.
+ */
+function trimUrl(raw: string): string {
+	let url = raw;
+	for (;;) {
+		const last = url.at(-1);
+		const closesOuterParen = last === ")" && url.split(")").length > url.split("(").length;
+		if (last === undefined || !(closesOuterParen || ".,;:!?'*".includes(last))) return url;
+		url = url.slice(0, -1);
+	}
+}
+
+/** A link label cannot hold another link: a URL written as its own label reads as plain text. */
+function labelSegments(label: string): readonly InlineSegment[] {
+	return parseInline(label).flatMap((segment) => (segment.kind === "link" ? segment.children : [segment]));
+}
+
+/** `**` around a link: the weight moves onto what the link shows. */
+function embolden(segments: readonly InlineSegment[]): readonly InlineSegment[] {
+	return segments.map((segment): InlineSegment => {
+		if (segment.kind === "text") return { kind: "bold", text: segment.text };
+		return segment.kind === "link" ? { ...segment, children: embolden(segment.children) } : segment;
+	});
+}
+
+/** Split an inline string into text / bold / code / link / citation / image segments. */
 export function parseInline(text: string): readonly InlineSegment[] {
 	const segments: InlineSegment[] = [];
 	let cursor = 0;
@@ -73,21 +114,34 @@ export function parseInline(text: string): readonly InlineSegment[] {
 		if (index > cursor) {
 			segments.push({ kind: "text", text: text.slice(cursor, index) });
 		}
-		const [, angleAlt, angleRef, alt, ref, bold, code, citation, bare] = match;
+		const [, angleAlt, angleRef, alt, ref, bold, code, label, labelAngleUrl, labelUrl, autolink, citation, bare, bareUrl] = match;
+		let length = match[0].length;
 		if (angleRef !== undefined) {
 			segments.push({ kind: "image", target: angleRef.trim(), alt: angleAlt ?? "", source: "markdown" });
 		} else if (ref !== undefined) {
 			segments.push({ kind: "image", target: ref, alt: alt ?? "", source: "markdown" });
 		} else if (bold !== undefined) {
-			segments.push({ kind: "bold", text: bold });
+			const inner = parseInline(bold);
+			segments.push(...(inner.some((segment) => segment.kind === "link") ? embolden(inner) : [{ kind: "bold", text: bold } as const]));
 		} else if (code !== undefined) {
 			segments.push(isImageReference(code) ? { kind: "image", target: code.trim(), alt: "", source: "code" } : { kind: "code", text: code });
+		} else if (label !== undefined) {
+			const url = webUrl(labelAngleUrl ?? labelUrl ?? "");
+			segments.push(url === null ? { kind: "text", text: match[0] } : { kind: "link", url, children: labelSegments(label) });
+		} else if (autolink !== undefined) {
+			const url = webUrl(autolink);
+			segments.push(url === null ? { kind: "text", text: match[0] } : { kind: "link", url, children: [{ kind: "text", text: autolink }] });
 		} else if (citation !== undefined) {
 			segments.push({ kind: "citation", number: Number(citation) });
 		} else if (bare !== undefined) {
 			segments.push({ kind: "image", target: bare, alt: "", source: "bare" });
+		} else if (bareUrl !== undefined) {
+			const written = trimUrl(bareUrl);
+			const url = webUrl(written);
+			length = written.length;
+			segments.push(url === null ? { kind: "text", text: written } : { kind: "link", url, children: [{ kind: "text", text: written }] });
 		}
-		cursor = index + match[0].length;
+		cursor = index + length;
 	}
 	if (cursor < text.length) {
 		segments.push({ kind: "text", text: text.slice(cursor) });

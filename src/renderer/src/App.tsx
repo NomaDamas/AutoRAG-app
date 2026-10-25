@@ -482,7 +482,7 @@ export function App(): ReactElement {
 		}
 	}, [osQueueTick, finder, deliverToAi]);
 
-	/** Answer and evidence images: a local picture opens in Quick Look; a web image's page (never fetched) in the OS browser. */
+	/** Answer and evidence images and links: a local picture opens in Quick Look; a web image's page (never fetched) or a web link opens in the OS browser. */
 	const revealEvidence = finder?.revealEvidence;
 	const imageActions = useMemo(
 		() => ({ onOpenImage: openQuickLook, onOpenUrl: (target: string) => revealEvidence?.(target) }),
