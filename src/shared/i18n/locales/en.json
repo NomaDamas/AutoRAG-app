@@ -498,6 +498,7 @@
       "sources": "Data sources",
       "plan": "Plan",
       "model": "AI model",
+      "roles": "Search helpers",
       "indexing": "Indexing"
     },
     "stepLabel": {
@@ -510,6 +511,7 @@
       "embedding": "Continue",
       "sources": "Continue",
       "model": "Continue",
+      "roles": "Continue",
       "indexing": "Continue"
     },
     "welcome": {
@@ -836,7 +838,7 @@
     "model": {
       "eyebrow": "AI model",
       "title": "Connect the model you'll use",
-      "lead": "Connect any provider you already have — an API key, a subscription sign-in, or a server on your computer — then choose the model.",
+      "lead": "Connect any provider you already have — an API key, a subscription sign-in, or a server on your computer — then choose the model. It has to answer a real call before you can continue.",
       "note": "Saved to Settings → AI models, so you can change it there any time.",
       "connectedTitle": "Connected services",
       "none": "No service connected yet.",
@@ -845,7 +847,11 @@
       "pick": "Choose a model",
       "needService": "Connect a service first",
       "unready": "Choose a model to continue.",
-      "ready": "✓ Ready · {{model}} will answer your questions."
+      "ready": "✓ Ready · {{model}} answered in {{seconds}}s.",
+      "checking": "Checking that {{model}} answers…",
+      "failed": "{{model}} did not answer: {{error}}",
+      "readyResumed": "✓ Ready · {{model}} will answer your questions.",
+      "retry": "Check again"
     },
     "indexing": {
       "tip": "Tip",
@@ -985,6 +991,13 @@
       "planActive": "The {{plan}} plan is active.",
       "signInFailed": "Couldn't sign in.",
       "notIndexed": "Finish indexing to open Dazzi."
+    },
+    "roles": {
+      "eyebrow": "Search helpers",
+      "title": "Choose the reranker and Jev",
+      "lead": "A Dazzi plan would provide these. With your own keys, pick them from the services you connected — or leave them as they are.",
+      "note": "Saved to Settings → AI models, so you can change them there any time.",
+      "unavailable": "None of your connected services offer this. Connect OpenRouter in Settings to use it."
     }
   },
   "finderComponents": {

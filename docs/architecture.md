@@ -385,7 +385,8 @@ A fresh install opens onboarding instead of the Finder: welcome, permissions,
 account, folders, smart scan, smart-indexing scope, embedding, data sources,
 plan, and the first index. A BYOK user also gets the model step: right after the
 account (before any folder is scanned, because the smart scan runs on that model),
-or after the plan for a signed-in user who only picks BYOK there. The screens port
+or after the plan for a signed-in user who only picks BYOK there, and a role step
+(reranker and Jev) right before the first index. The screens port
 `docs/design-reference/onboarding/onboarding-prototype.html`; the draft is saved
 after every change, so a relaunch (for example after granting Full Disk Access)
 resumes at the same step.
@@ -492,7 +493,16 @@ resumes at the same step.
   `config.json` (`model.*`, through `modelConfigUpdates`) the moment it is picked,
   so the smart scan can run on it and Settings shows exactly the same provider and
   model afterwards. The draft only remembers the choice; the config is the authority
-  (`onboarding/model-choice.ts`).
+  (`onboarding/model-choice.ts`). The step cannot be left until the saved model has
+  answered a real call (`main/model-health.ts`, `onboarding:checkModel`: the same
+  resolution and credentials the smart scan and AI Search use, one 16-token reply,
+  30 s limit); a refusal shows the provider's own message and a retry button, and
+  `draft.model.verified` is only ever set by that answer.
+- **Roles** (BYOK, right before indexing) picks the reranker and Jev, which a Dazzi
+  plan would provide, from the connected services that serve them
+  (`shared/ai-roles.ts`); each can be left alone or turned off, and a role no
+  connected service offers says so. They are written through the same config
+  helpers Settings uses (`jevConfigUpdates`, `rerankConfigUpdates`).
 - **Indexing** writes `searchPaths`, the embedder (only when none is set), the
   enabled datasources (`kakao` is indexed by the librarian's read-only sidecar over
   lazykatok's archive with the shared embedder, so `lazykatok index` and its

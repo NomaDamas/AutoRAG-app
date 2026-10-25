@@ -17,6 +17,7 @@ import {
 	type IndexingStatus,
 	type NetworkCheck,
 	type OnboardingDraft,
+	type ModelCheckResult,
 	type OnboardingModelChoice,
 	type OnboardingSnapshot,
 	type OnboardingSourceChoice,
@@ -98,6 +99,8 @@ export interface OnboardingServiceDeps {
 	readonly gitToken: () => Promise<string | null>;
 	/** Points the AutoRAG agent at the signed-in account's managed models (managed plans only). */
 	readonly useManagedModel: () => Promise<unknown>;
+	/** Calls the saved answer model once and reports whether it answered. */
+	readonly checkModel: () => Promise<ModelCheckResult>;
 	readonly send: (channel: string, payload: unknown) => void;
 	readonly openExternal: (url: string) => Promise<void>;
 	readonly relaunch: () => void;
@@ -140,6 +143,7 @@ export interface OnboardingService {
 	embedding(): Promise<EmbeddingInfo>;
 	/** Starts a streamed probe (restarting any in flight); finds are pushed as `sourceDetected`, then `sourcesDone`. */
 	detectSources(): Promise<void>;
+	checkModel(): Promise<ModelCheckResult>;
 	startIndexing(request: unknown): Promise<IndexingStatus>;
 	indexStatus(): Promise<IndexingStatus>;
 	/** Sync: is a first index running right now (quit-confirmation gate). */
@@ -170,6 +174,7 @@ const STEP_IDS: Readonly<Record<string, true>> = {
 	sources: true,
 	plan: true,
 	model: true,
+	roles: true,
 	indexing: true,
 };
 const PLAN_IDS: Readonly<Record<string, true>> = { free: true, air: true, pro: true, byok: true };
@@ -622,6 +627,7 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 			};
 			void promise.then(done, done);
 		},
+		checkModel: () => deps.checkModel(),
 		startIndexing: async (request) => {
 			if (!isIndexingRequest(request)) throw new TypeError("onboarding:startIndexing expects a valid request");
 			if (refreshPromise !== null) return status;

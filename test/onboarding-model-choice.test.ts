@@ -19,8 +19,8 @@ const provider = (id: string, over: Partial<ProviderSummary> = {}): ProviderSumm
 });
 
 describe("reconcileModelChoice", () => {
-	it("takes the answer model from the config when its provider is connected", () => {
-		expect(reconcileModelChoice({ model: { provider: "openai", id: "m-1" } }, [provider("openai")])).toEqual({ provider: "openai", modelId: "m-1", verified: true });
+	it("takes the answer model from the config when its provider is connected, still unchecked", () => {
+		expect(reconcileModelChoice({ model: { provider: "openai", id: "m-1" } }, [provider("openai")])).toEqual({ provider: "openai", modelId: "m-1", verified: false });
 	});
 
 	it("is null when no model is configured or its provider lost its credential", () => {

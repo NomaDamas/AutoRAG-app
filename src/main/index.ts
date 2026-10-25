@@ -73,6 +73,8 @@ import { createEmbeddingSettingsService } from "./embedding-settings-service";
 import { createMcpSettingsService } from "./mcp-settings-service";
 import { createDefaultAgentFactory, createSearchService } from "./search-service";
 import { resolveConfiguredSessionModel } from "@autorag/librarian/profiles";
+import { completeSimple } from "@earendil-works/pi-ai/compat";
+import { checkModelHealth } from "./model-health";
 import { createSmartIndexingService } from "./smart-indexing-service";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { createSettingsService } from "./settings-service";
@@ -302,6 +304,9 @@ async function checkNetworkReachability(): Promise<NetworkCheck> {
  * signed-in accounts. A hung probe still costs at most this long.
  */
 const SOURCE_PROBE_TIMEOUT_MS = 15_000;
+
+/** Longest the onboarding model check waits for the chosen model to answer one short prompt. */
+const MODEL_CHECK_TIMEOUT_MS = 30_000;
 
 /** Runs one OS command with a deadline (5s by default); rejects with stderr (or the spawn error). */
 function runCommand(command: string, args: readonly string[], timeoutMs = 5000): Promise<string> {
@@ -883,6 +888,13 @@ app.whenReady().then(async () => {
 				return null;
 			}
 		},
+		checkModel: () =>
+			checkModelHealth({
+				resolveModel: () => resolveConfiguredSessionModel(process.env, process.cwd(), getAgentDir()),
+				complete: completeSimple,
+				timeoutMs: MODEL_CHECK_TIMEOUT_MS,
+				now: Date.now,
+			}),
 		send: sendToMainWindow,
 		openExternal: (url) => shell.openExternal(url),
 		relaunch: () => {

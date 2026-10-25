@@ -67,6 +67,7 @@ import { SmartScopeStep } from "./steps/SmartScope";
 import { ModelStep } from "./steps/Model";
 import { PermissionsStep } from "./steps/Permissions";
 import { PlanStep } from "./steps/Plan";
+import { RolesStep } from "./steps/Roles";
 import { SourcesStep } from "./steps/Sources";
 import { WelcomeStep } from "./steps/Welcome";
 
@@ -957,6 +958,8 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 				return <PlanStep ctx={ctx} />;
 			case "model":
 				return <ModelStep ctx={ctx} />;
+			case "roles":
+				return <RolesStep ctx={ctx} />;
 			case "indexing":
 				return <IndexingScreen ctx={ctx} />;
 		}

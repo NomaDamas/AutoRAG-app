@@ -2385,6 +2385,43 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 	white-space: nowrap;
 }
 
+.onb .model-status.ready {
+	color: var(--onb-blue);
+}
+
+.onb .model-status.failed {
+	color: var(--onb-red);
+}
+
+.onb .model-retry {
+	margin-top: 8px;
+}
+
+.onb .role-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 12px 4px;
+	border-top: 1px solid var(--onb-divider);
+}
+
+.onb .role-row:first-child {
+	border-top: 0;
+}
+
+.onb .role-copy strong {
+	display: block;
+	font-size: 11px;
+}
+
+.onb .role-copy small {
+	display: block;
+	margin-top: 3px;
+	color: var(--onb-muted);
+	font-size: 9.5px;
+}
+
 .onb .model-status {
 	margin: 10px 0 0;
 	color: var(--onb-muted);

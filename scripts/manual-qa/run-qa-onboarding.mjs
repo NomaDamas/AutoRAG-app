@@ -53,6 +53,8 @@ const check = (name, ok, detail = "") => {
 // connect form, the model choice and the smart scan all run offline on the real
 // request paths.
 const stubHits = [];
+// While true the stub's chat endpoint refuses, as a provider does for a retired model or a bad key.
+let stubRefuses = true;
 const stubChunk = (delta, finish) =>
 	`data: ${JSON.stringify({ id: "qa", object: "chat.completion.chunk", created: 1, model: "qa-stub-model", choices: [{ index: 0, delta, finish_reason: finish }] })}\n\n`;
 const stub = createServer((request, response) => {
@@ -61,7 +63,17 @@ const stub = createServer((request, response) => {
 		let body = "";
 		request.on("data", (chunk) => (body += chunk));
 		request.on("end", () => {
+			if (stubRefuses) {
+				response.writeHead(401, { "content-type": "application/json" });
+				response.end(JSON.stringify({ error: { message: "qa stub refuses this model", type: "invalid_request_error" } }));
+				return;
+			}
 			response.writeHead(200, { "content-type": "text/event-stream" });
+			// The model check sends no tools and only wants an answer.
+			if (!body.includes('"tools"')) {
+				response.end(stubChunk({ role: "assistant", content: "OK" }, null) + stubChunk({}, "stop") + "data: [DONE]\n\n");
+				return;
+			}
 			// First turn: the smart-scan agent reports that nothing needs to be left out; once the tool result is back, it stops.
 			const reported = body.includes('"role":"tool"');
 			const toolCall = { index: 0, id: "call_qa", type: "function", function: { name: "propose_exclusions", arguments: '{"exclusions":[]}' } };
@@ -162,8 +174,17 @@ try {
 	await serverFields.nth(2).fill("sk-qa-stub");
 	await page.locator(".settings-modal .settings-btn-primary").click();
 	await page.waitForSelector(".settings-modal", { state: "detached", timeout: 15_000 });
-	await page.waitForFunction(() => !document.querySelector(".onb .footer button.primary")?.disabled, null, { timeout: 15_000 });
 	check("the only model the server offers is chosen by itself", (await page.locator("[data-model-trigger]").innerText()).includes("qa-stub-model"));
+	// The model is called for real before the step can be left: this one refuses, so the step stays closed and says why.
+	await page.waitForSelector("[data-model-retry]", { timeout: 15_000 });
+	check("a model that refuses the call keeps the step closed", await primary.isDisabled());
+	check("the refusal is shown to the user", (await page.locator(".model-status").innerText()).includes("qa stub refuses this model"), await page.locator(".model-status").innerText());
+	await shot("03c2-model-refused");
+	stubRefuses = false;
+	await page.locator("[data-model-retry]").click();
+	await page.waitForFunction(() => !document.querySelector(".onb .footer button.primary")?.disabled, null, { timeout: 15_000 });
+	check("checking again after the model works opens the step", await primary.isEnabled());
+	check("the retry button goes away once it answers", (await page.locator("[data-model-retry]").count()) === 0);
 	check("the connection used the entered key", stubHits.includes("Bearer sk-qa-stub"), JSON.stringify(stubHits));
 	await shot("03d-model-ready");
 	// What onboarding connected is what Settings knows: same Pi credentials, same config.
@@ -283,6 +304,14 @@ try {
 	await shot("07b-plan-needs-account");
 	// BYOK again: its model was connected right after the account, so the plan leads straight to the index.
 	await page.locator(".onb .plan-card").nth(3).click();
+	await primary.click();
+
+	// roles: without a Dazzi plan the reranker and Jev are chosen here, from what was connected.
+	await page.waitForSelector("[data-role-trigger]", { timeout: 10_000 });
+	check("a BYOK user is asked about the reranker and Jev before indexing", (await page.locator("[data-role-trigger]").count()) === 2);
+	check("a connected service that serves neither says so instead of offering an empty menu", (await page.locator("[data-role-unavailable]").count()) === 2);
+	check("the role step can be left without choosing", await primary.isEnabled());
+	await shot("07d-roles");
 	await primary.click();
 
 	// indexing: real first index; gate opens only on success, while subtle bottom button allows background start.

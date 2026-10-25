@@ -114,6 +114,7 @@ async function start(): Promise<Harness> {
 		detectSources: async () => ({ sources: [] }),
 		gitToken: async () => null,
 		useManagedModel: async () => undefined,
+		checkModel: async () => ({ ok: true, latencyMs: 1 }),
 		send: (channel, payload) => {
 			if (channel !== ONBOARDING_CHANNELS.indexProgress) return;
 			const status = payload as IndexingStatus;

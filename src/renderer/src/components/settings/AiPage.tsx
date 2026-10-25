@@ -22,9 +22,10 @@ import { AppIcon, FloatingMenu, ModalActions, ModalShell, Note, Row, Section, Se
 import { asRecord, errorText, getAt, stringOf, useConfigWriter } from "./configSupport";
 import { ConnectMenu, useProviderConnect } from "./ProviderConnect";
 import { RolePicker } from "./ModelPicker";
+import { jevLabel, jevOptionsFor, rerankLabel, rerankOptionsFor } from "./roleSupport";
 import { EmbeddingPicker } from "./EmbeddingPicker";
-import { jevBackendFor, jevModelsFor, rerankModelsFor } from "../../../../shared/ai-roles";
-import { isAllowedAgentApi, modelConfigUpdates } from "../../../../shared/model-config";
+import { jevBackendFor } from "../../../../shared/ai-roles";
+import { isAllowedAgentApi, jevConfigUpdates, modelConfigUpdates, rerankConfigUpdates } from "../../../../shared/model-config";
 import { providerConnectRoute, withoutAutorag } from "../../../../shared/account-contract";
 
 const settings = window.autorag.settings;
@@ -51,11 +52,6 @@ const DECOMPOSITION_SPECIALS = [
 
 /** Jev and rerank disable by writing `false` to their block. */
 const OFF_SPECIALS = [{ value: "off", labelKey: "settingsCore.ai.off" }] as const;
-
-/** Build a catalog entry for a static Jev/rerank model so pickers reuse one shape. */
-function staticCatalogEntry(provider: ProviderSummary, id: string, name: string): ModelCatalogEntry {
-	return { provider: provider.id, id, name, api: "", available: true, baseUrl: provider.baseUrl, apiKeyEnv: provider.apiKeyEnv ?? null };
-}
 
 interface MenuState {
 	readonly kind: "connect" | "provider" | "picker" | "thinking";
@@ -104,14 +100,8 @@ export function AiPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 	// Jev/rerank are not general LLM roles: offer only the backends/providers
 	// that actually serve them, with the model ids each accepts. The AutoRAG
 	// plan comes first because `connected` is already ordered that way.
-	const jevOptions = useMemo(
-		() => connected.flatMap((provider) => jevModelsFor(provider.id).map((model) => ({ provider, model: staticCatalogEntry(provider, model.id, model.label) }))),
-		[connected],
-	);
-	const rerankOptions = useMemo(
-		() => connected.flatMap((provider) => rerankModelsFor(provider.id).map((model) => ({ provider, model: staticCatalogEntry(provider, model.id, model.label) }))),
-		[connected],
-	);
+	const jevOptions = useMemo(() => jevOptionsFor(connected), [connected]);
+	const rerankOptions = useMemo(() => rerankOptionsFor(connected), [connected]);
 
 	function closeMenu(): void {
 		setMenu(null);
@@ -131,15 +121,6 @@ export function AiPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 		if (baseUrl.length > 0) model.baseUrl = baseUrl;
 		if (env.length > 0) model.apiKeyEnv = env;
 		void run([{ path: ["queryDecomposition"], value: { model } }]);
-	}
-
-	function writeJev(entry: ModelCatalogEntry): void {
-		const backend = jevBackendFor(entry.provider);
-		void run([{ path: ["jev"], value: { model: entry.id, ...(backend === undefined ? {} : { backend }) } }]);
-	}
-
-	function writeRerank(entry: ModelCatalogEntry): void {
-		void run([{ path: ["rerank"], value: { enabled: true, provider: entry.provider, model: entry.id } }]);
 	}
 
 	/** Sign in to the AutoRAG plan through the account service (browser PKCE, encrypted key, adopted defaults). */
@@ -265,8 +246,8 @@ export function AiPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 				<RoleRow role="answer" label={t("settingsCore.ai.answerModel")} hint={t("settingsCore.ai.answerHint")} current={answerLabel(snapshot, t)} onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "answer" })} thinking={{ onOpen: (anchor) => setMenu({ kind: "thinking", anchor }) }} />
 				<p className="settings-subsection-title">{t("settingsCore.ai.subSearchAssistant")}</p>
 				<RoleRow role="decomposition" label={t("settingsCore.ai.role.decomposition")} hint={t("settingsCore.ai.decompositionHint")} current={decompositionLabel(snapshot, t)} onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "decomposition" })} />
-				<RoleRow role="jev" label={t("settingsCore.ai.jevModel")} hint={t("settingsCore.ai.jevHint")} current={jevLabel(snapshot, t)} onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "jev" })} />
-				<RoleRow role="rerank" label={t("settingsCore.ai.rerankModel")} hint={t("settingsCore.ai.rerankHint")} current={rerankLabel(snapshot, t)} onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "rerank" })} />
+				<RoleRow role="jev" label={t("settingsCore.ai.jevModel")} hint={t("settingsCore.ai.jevHint")} current={jevLabel(snapshot.config, t)} onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "jev" })} />
+				<RoleRow role="rerank" label={t("settingsCore.ai.rerankModel")} hint={t("settingsCore.ai.rerankHint")} current={rerankLabel(snapshot.config, t)} onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "rerank" })} />
 				<p className="settings-subsection-title">{t("settingsCore.ai.subDocUnderstanding")}</p>
 				<EmbeddingPicker />
 			</Section>
@@ -293,8 +274,8 @@ export function AiPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 							onPick={(entry) => {
 								closeMenu();
 								if (menu.arg === "decomposition") writeDecomposition(entry);
-								else if (menu.arg === "jev") writeJev(entry);
-								else if (menu.arg === "rerank") writeRerank(entry);
+								else if (menu.arg === "jev") void run(jevConfigUpdates(entry));
+								else if (menu.arg === "rerank") void run(rerankConfigUpdates(entry));
 								else writeModel(entry);
 							}}
 							onSpecial={(special) => {
@@ -351,20 +332,6 @@ function decompositionLabel(snapshot: AutoRagConfigSnapshot, t: TFunction): stri
 	if (raw === undefined) return t("settingsCore.ai.defaultModel");
 	const model = asRecord(asRecord(raw)?.model);
 	return stringOf(model?.name) || stringOf(model?.id) || t("settingsCore.ai.defaultModel");
-}
-
-function jevLabel(snapshot: AutoRagConfigSnapshot, t: TFunction): string {
-	const raw = getAt(snapshot.config, ["jev"]);
-	if (raw === false) return t("settingsCore.ai.off");
-	if (raw === undefined) return t("settingsCore.ai.auto");
-	return stringOf(asRecord(raw)?.model) || t("settingsCore.ai.auto");
-}
-
-function rerankLabel(snapshot: AutoRagConfigSnapshot, t: TFunction): string {
-	const raw = getAt(snapshot.config, ["rerank"]);
-	if (raw === false) return t("settingsCore.ai.off");
-	if (raw === undefined || raw === true) return t("settingsCore.ai.defaultValue");
-	return stringOf(asRecord(raw)?.model) || t("settingsCore.ai.defaultValue");
 }
 
 function thinkingValue(snapshot: AutoRagConfigSnapshot): string {

@@ -1,3 +1,4 @@
+import { jevBackendFor } from "./ai-roles";
 import type { AutoRagConfigUpdate, ModelCatalogEntry } from "./settings-contract";
 
 /**
@@ -35,4 +36,15 @@ export function modelConfigUpdates(entry: ModelCatalogEntry): AutoRagConfigUpdat
 		baseUrl.length > 0 ? { path: ["model", "baseUrl"], value: baseUrl } : { path: ["model", "baseUrl"], remove: true },
 		env.length > 0 ? { path: ["model", "apiKeyEnv"], value: env } : { path: ["model", "apiKeyEnv"], remove: true },
 	];
+}
+
+/** The leaf write that makes `entry` the Jev model, with the backend its provider serves. */
+export function jevConfigUpdates(entry: ModelCatalogEntry): AutoRagConfigUpdate[] {
+	const backend = jevBackendFor(entry.provider);
+	return [{ path: ["jev"], value: { model: entry.id, ...(backend === undefined ? {} : { backend }) } }];
+}
+
+/** The leaf write that enables the reranker on the provider and model `entry` names. */
+export function rerankConfigUpdates(entry: ModelCatalogEntry): AutoRagConfigUpdate[] {
+	return [{ path: ["rerank"], value: { enabled: true, provider: entry.provider, model: entry.id } }];
 }

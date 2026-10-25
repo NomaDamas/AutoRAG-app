@@ -18,8 +18,9 @@ const bridge = vi.hoisted(() => {
 		providerLoginStart: vi.fn(),
 		credentialsSet: vi.fn(),
 	};
-	Reflect.set(globalThis, "autorag", { platform: "darwin", settings, account: { signIn: vi.fn(), signOut: vi.fn() }, fs: { openUrl: vi.fn() } });
-	return settings;
+	const onboarding = { checkModel: vi.fn() };
+	Reflect.set(globalThis, "autorag", { platform: "darwin", settings, onboarding, account: { signIn: vi.fn(), signOut: vi.fn() }, fs: { openUrl: vi.fn() } });
+	return { settings, onboarding };
 });
 
 Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
@@ -70,9 +71,10 @@ const click = async (element: Element | null): Promise<void> => {
 
 beforeEach(async () => {
 	await setAppLanguage("en");
-	for (const fn of Object.values(bridge)) fn.mockReset();
-	bridge.onProviderLoginEvent.mockReturnValue(() => undefined);
-	bridge.configPatch.mockImplementation(async () => config());
+	for (const fn of [...Object.values(bridge.settings), bridge.onboarding.checkModel]) fn.mockReset();
+	bridge.onboarding.checkModel.mockResolvedValue({ ok: true, latencyMs: 420 });
+	bridge.settings.onProviderLoginEvent.mockReturnValue(() => undefined);
+	bridge.settings.configPatch.mockImplementation(async () => config());
 	host = document.createElement("div");
 	document.body.append(host);
 	root = createRoot(host);
@@ -85,8 +87,8 @@ afterEach(() => {
 
 describe("ModelStep", () => {
 	it("lists the providers Settings knows as connected, never the Dazzi plan, and offers to connect more", async () => {
-		bridge.providersList.mockResolvedValue([provider("openai", [model("openai", "a"), model("openai", "b")]), provider("dazzi", [model("dazzi", "z")]), provider("groq", [model("groq", "g")], { authConfigured: false })]);
-		bridge.configGet.mockResolvedValue(config());
+		bridge.settings.providersList.mockResolvedValue([provider("openai", [model("openai", "a"), model("openai", "b")]), provider("dazzi", [model("dazzi", "z")]), provider("groq", [model("groq", "g")], { authConfigured: false })]);
+		bridge.settings.configGet.mockResolvedValue(config());
 		await render(byokDraft());
 		expect(host.querySelector('[data-provider-row="openai"]')).not.toBeNull();
 		expect(host.querySelector('[data-provider-row="dazzi"]')).toBeNull();
@@ -96,50 +98,89 @@ describe("ModelStep", () => {
 
 	it("saves the picked model into the shared config, where Settings reads it, and marks the choice ready", async () => {
 		const pick = model("openai", "b");
-		bridge.providersList.mockResolvedValue([provider("openai", [model("openai", "a"), pick])]);
-		bridge.configGet.mockResolvedValue(config());
+		bridge.settings.providersList.mockResolvedValue([provider("openai", [model("openai", "a"), pick])]);
+		bridge.settings.configGet.mockResolvedValue(config());
 		const { patch } = await render(byokDraft());
 		await click(host.querySelector("[data-model-trigger]"));
 		await click(host.querySelector('[data-model-id="openai/b"]'));
-		expect(bridge.configPatch).toHaveBeenCalledWith(
+		expect(bridge.settings.configPatch).toHaveBeenCalledWith(
 			expect.arrayContaining([
 				{ path: ["model", "provider"], value: "openai" },
 				{ path: ["model", "id"], value: "b" },
 			]),
 		);
-		expect(patch).toHaveBeenCalledWith({ model: { provider: "openai", modelId: "b", verified: true } });
+		// Saved first, and only ready once that very model has answered a real call.
+		expect(patch).toHaveBeenNthCalledWith(1, { model: { provider: "openai", modelId: "b", verified: false } });
+		expect(bridge.onboarding.checkModel).toHaveBeenCalledTimes(1);
+		expect(patch).toHaveBeenLastCalledWith({ model: { provider: "openai", modelId: "b", verified: true } });
+	});
+
+	it("keeps the step closed when the chosen model does not answer, and says why", async () => {
+		bridge.onboarding.checkModel.mockResolvedValue({ ok: false, error: "401 invalid api key" });
+		bridge.settings.providersList.mockResolvedValue([provider("openai", [model("openai", "a"), model("openai", "b")])]);
+		bridge.settings.configGet.mockResolvedValue(config());
+		const { patch } = await render(byokDraft());
+		await click(host.querySelector("[data-model-trigger]"));
+		await click(host.querySelector('[data-model-id="openai/b"]'));
+		expect(patch).not.toHaveBeenCalledWith({ model: expect.objectContaining({ verified: true }) });
+		expect(host.textContent).toContain("401 invalid api key");
+		expect(host.querySelector("[data-model-retry]")).not.toBeNull();
+	});
+
+	it("lets the user run the check again after a failure, and opens the step once it passes", async () => {
+		bridge.onboarding.checkModel.mockResolvedValueOnce({ ok: false, error: "timeout" }).mockResolvedValueOnce({ ok: true, latencyMs: 90 });
+		bridge.settings.providersList.mockResolvedValue([provider("openai", [model("openai", "a"), model("openai", "b")])]);
+		bridge.settings.configGet.mockResolvedValue(config());
+		const { patch } = await render(byokDraft());
+		await click(host.querySelector("[data-model-trigger]"));
+		await click(host.querySelector('[data-model-id="openai/b"]'));
+		await click(host.querySelector("[data-model-retry]"));
+		expect(bridge.onboarding.checkModel).toHaveBeenCalledTimes(2);
+		expect(patch).toHaveBeenLastCalledWith({ model: { provider: "openai", modelId: "b", verified: true } });
+		expect(host.querySelector("[data-model-retry]")).toBeNull();
 	});
 
 	it("adopts the answer model already in the config, so a returning user is not asked again", async () => {
-		bridge.providersList.mockResolvedValue([provider("openai", [model("openai", "a"), model("openai", "b")])]);
-		bridge.configGet.mockResolvedValue(config({ model: { provider: "openai", id: "a" } }));
+		bridge.settings.providersList.mockResolvedValue([provider("openai", [model("openai", "a"), model("openai", "b")])]);
+		bridge.settings.configGet.mockResolvedValue(config({ model: { provider: "openai", id: "a" } }));
 		const { patch } = await render(byokDraft());
-		expect(patch).toHaveBeenCalledWith({ model: { provider: "openai", modelId: "a", verified: true } });
-		expect(bridge.configPatch).not.toHaveBeenCalled();
+		expect(bridge.settings.configPatch).not.toHaveBeenCalled();
+		// What the config already holds still has to answer before the step opens.
+		expect(patch).toHaveBeenNthCalledWith(1, { model: { provider: "openai", modelId: "a", verified: false } });
+		expect(bridge.onboarding.checkModel).toHaveBeenCalledTimes(1);
+		expect(patch).toHaveBeenLastCalledWith({ model: { provider: "openai", modelId: "a", verified: true } });
 	});
 
 	it("drops a choice the config no longer backs, so the step cannot be passed on a stale draft", async () => {
-		bridge.providersList.mockResolvedValue([provider("openai", [model("openai", "a"), model("openai", "b")])]);
-		bridge.configGet.mockResolvedValue(config());
+		bridge.settings.providersList.mockResolvedValue([provider("openai", [model("openai", "a"), model("openai", "b")])]);
+		bridge.settings.configGet.mockResolvedValue(config());
 		const { patch } = await render(byokDraft({ model: { provider: "openai", modelId: "a", verified: true } }));
 		expect(patch).toHaveBeenCalledWith({ model: null });
 	});
 
+	it("does not re-check a resumed draft whose verified model the config still backs", async () => {
+		bridge.settings.providersList.mockResolvedValue([provider("openai", [model("openai", "a"), model("openai", "b")])]);
+		bridge.settings.configGet.mockResolvedValue(config({ model: { provider: "openai", id: "a" } }));
+		const { patch } = await render(byokDraft({ model: { provider: "openai", modelId: "a", verified: true } }));
+		expect(patch).not.toHaveBeenCalled();
+		expect(bridge.onboarding.checkModel).not.toHaveBeenCalled();
+	});
+
 	it("selects the only model on offer by itself", async () => {
-		bridge.providersList.mockResolvedValue([provider("local", [model("local", "only")])]);
-		bridge.configGet.mockResolvedValue(config());
+		bridge.settings.providersList.mockResolvedValue([provider("local", [model("local", "only")])]);
+		bridge.settings.configGet.mockResolvedValue(config());
 		const { patch } = await render(byokDraft());
-		expect(bridge.configPatch).toHaveBeenCalledWith(expect.arrayContaining([{ path: ["model", "id"], value: "only" }]));
-		expect(patch).toHaveBeenCalledWith({ model: { provider: "local", modelId: "only", verified: true } });
+		expect(bridge.settings.configPatch).toHaveBeenCalledWith(expect.arrayContaining([{ path: ["model", "id"], value: "only" }]));
+		expect(patch).toHaveBeenLastCalledWith({ model: { provider: "local", modelId: "only", verified: true } });
 	});
 
 	it("opens the same connect menu as Settings, with every provider kind it offers", async () => {
-		bridge.providersList.mockResolvedValue([
+		bridge.settings.providersList.mockResolvedValue([
 			provider("anthropic", [], { authConfigured: false, authKinds: ["oauth", "api_key"], subscription: true }),
 			provider("openrouter", [], { authConfigured: false }),
 			provider("ollama", [], { authConfigured: false, kind: "local", authKinds: [] }),
 		]);
-		bridge.configGet.mockResolvedValue(config());
+		bridge.settings.configGet.mockResolvedValue(config());
 		await render(byokDraft());
 		await click(host.querySelector("[data-connect-service]"));
 		const menu = document.body.textContent ?? "";

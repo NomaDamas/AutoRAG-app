@@ -498,6 +498,7 @@
       "sources": "数据源",
       "plan": "套餐",
       "model": "AI 模型",
+      "roles": "检索辅助模型",
       "indexing": "索引"
     },
     "stepLabel": {
@@ -510,6 +511,7 @@
       "embedding": "继续",
       "sources": "继续",
       "model": "继续",
+      "roles": "继续",
       "indexing": "继续"
     },
     "welcome": {
@@ -836,7 +838,7 @@
     "model": {
       "eyebrow": "AI 模型",
       "title": "连接要使用的模型",
-      "lead": "连接你已有的服务（API 密钥、订阅账号登录或本机上的服务器），然后选择模型。",
+      "lead": "连接你已有的服务（API 密钥、订阅账号登录或本机上的服务器），然后选择模型。它必须能响应一次真实调用，才能继续。",
       "note": "会保存到「设置 → AI 模型」，之后可随时更改。",
       "connectedTitle": "已连接的服务",
       "none": "尚未连接任何服务。",
@@ -845,7 +847,11 @@
       "pick": "选择模型",
       "needService": "请先连接服务",
       "unready": "请选择模型以继续。",
-      "ready": "✓ 已就绪 · 将由 {{model}} 回答。"
+      "ready": "✓ 已就绪 · {{model}} 在 {{seconds}} 秒内响应。",
+      "checking": "正在确认 {{model}} 是否响应…",
+      "failed": "{{model}} 没有响应：{{error}}",
+      "readyResumed": "✓ 已就绪 · 将由 {{model}} 回答。",
+      "retry": "重新检查"
     },
     "indexing": {
       "tip": "小技巧",
@@ -985,6 +991,13 @@
       "planActive": "{{plan}} 套餐已生效。",
       "signInFailed": "无法登录。",
       "notIndexed": "索引完成后才能打开 Dazzi。"
+    },
+    "roles": {
+      "eyebrow": "检索辅助模型",
+      "title": "选择重排序与判断模型",
+      "lead": "使用 Dazzi 套餐时会默认提供。使用自己的密钥时，请从已连接的服务中选择，或保持现状。",
+      "note": "会保存到「设置 → AI 模型」，之后可随时更改。",
+      "unavailable": "已连接的服务中没有提供该模型的。在设置中连接 OpenRouter 即可使用。"
     }
   },
   "finderComponents": {

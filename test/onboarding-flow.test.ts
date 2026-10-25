@@ -92,6 +92,7 @@ describe("onboarding flow", () => {
 			"embedding",
 			"sources",
 			"plan",
+			"roles",
 			"indexing",
 		]);
 	});
@@ -108,6 +109,7 @@ describe("onboarding flow", () => {
 			"smartScope",
 			"embedding",
 			"sources",
+			"roles",
 			"indexing",
 		]);
 		expect(flow.indexOf("model")).toBeLessThan(flow.indexOf("smartScan"));
@@ -125,14 +127,26 @@ describe("onboarding flow", () => {
 			"sources",
 			"plan",
 			"model",
+			"roles",
 			"indexing",
 		]);
 	});
 
-	it("has no model step for managed plans", () => {
+	it("has no model or role step for managed plans", () => {
 		for (const plan of ["free", "air", "pro"] as const) {
-			expect(buildFlow(plan, false, "local", false)).not.toContain("model");
-			expect(buildFlow(plan, true, "cloud", true)).not.toContain("model");
+			for (const flow of [buildFlow(plan, false, "local", false), buildFlow(plan, true, "cloud", true)]) {
+				expect(flow).not.toContain("model");
+				expect(flow).not.toContain("roles");
+			}
+		}
+	});
+
+	it("lets a BYOK user pick the reranker and Jev right before indexing, however the flow is ordered", () => {
+		for (const signedIn of [false, true]) {
+			for (const embed of ["none", "local", "cloud"] as const) {
+				const flow = buildFlow("byok", false, embed, signedIn);
+				expect(flow.slice(-2)).toEqual(["roles", "indexing"]);
+			}
 		}
 	});
 
@@ -442,6 +456,22 @@ describe("indexing phases", () => {
 		expect(phaseIndex("local", "finalizing")).toBe(2);
 		expect(phaseIndex("none", "parsed")).toBe(0);
 		expect(phaseIndex("none", "finalizing")).toBe(1);
+	});
+});
+
+describe("footer labels", () => {
+	it("exist in every language for every step any flow can show", async () => {
+		const steps = new Set(
+			(["free", "pro", "byok"] as const).flatMap((plan) => [true, false].flatMap((signedIn) => (["none", "cloud"] as const).flatMap((embed) => buildFlow(plan, false, embed, signedIn)))),
+		);
+		for (const language of ["en", "ko", "ja", "zh"]) {
+			const { default: locale } = (await import(`../src/shared/i18n/locales/${language}.json`)) as { default: { onboarding: { stepLabel: Record<string, string> } } };
+			for (const step of steps) {
+				const key = primaryLabelKey(step, "free", false);
+				if (step === "plan") continue;
+				expect(locale.onboarding.stepLabel[key.split(".").pop() ?? ""], `${language} ${key}`).toBeTruthy();
+			}
+		}
 	});
 });
 

@@ -47,6 +47,8 @@ export const ONBOARDING_CHANNELS = {
 	sourceDetected: "onboarding:sourceDetected",
 	/** main → renderer event (no payload) once every probe has finished. */
 	sourcesDone: "onboarding:sourcesDone",
+	/** Asks the model saved as the answer model for a short reply, to prove it can be called. */
+	checkModel: "onboarding:checkModel",
 	startIndexing: "onboarding:startIndexing",
 	indexStatus: "onboarding:indexStatus",
 	/** main → renderer event carrying one {@link IndexingStatus}. */
@@ -81,6 +83,7 @@ export type OnboardingStepId =
 	| "sources"
 	| "plan"
 	| "model"
+	| "roles"
 	| "indexing";
 
 /**
@@ -234,6 +237,9 @@ export interface SourceDetection {
 /** Listener for one connector that finished probing as usable. */
 export type DetectedSourceListener = (source: DetectedSource) => void;
 
+/** Whether the saved answer model answered a real call, and how long it took or why not. */
+export type ModelCheckResult = { readonly ok: true; readonly latencyMs: number } | { readonly ok: false; readonly error: string };
+
 export interface IndexingRequest {
 	readonly folders: readonly string[];
 	readonly embed?: EmbedMode;
@@ -298,6 +304,8 @@ export interface OnboardingBridge {
 	detectSources(): Promise<void>;
 	onSourceDetected(listener: DetectedSourceListener): () => void;
 	onSourcesDone(listener: () => void): () => void;
+	/** Calls the saved answer model once; the model step stays closed until this passes. */
+	checkModel(): Promise<ModelCheckResult>;
 	/** Writes the choices into the shared AutoRAG config and starts the first index (reused while running). */
 	startIndexing(request: IndexingRequest): Promise<IndexingStatus>;
 	indexStatus(): Promise<IndexingStatus>;

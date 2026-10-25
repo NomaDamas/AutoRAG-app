@@ -10,7 +10,7 @@ import type { OnboardingModelChoice } from "../../../shared/onboarding-contract"
 import type { AutoRagConfigSnapshot, ModelCatalogEntry, ProviderSummary } from "../../../shared/settings-contract";
 import { isJsonObject } from "../../../shared/settings-contract";
 
-/** The answer model in `config` as a ready choice, or null when none is set or its provider is not connected. */
+/** The answer model in `config` as a choice that has not answered a call yet, or null when none is set or its provider is not connected. */
 export function reconcileModelChoice(config: AutoRagConfigSnapshot["config"], providers: readonly ProviderSummary[]): OnboardingModelChoice | null {
 	const model = config.model;
 	if (!isJsonObject(model)) return null;
@@ -20,7 +20,7 @@ export function reconcileModelChoice(config: AutoRagConfigSnapshot["config"], pr
 	// The Dazzi plan has its own step; it is never a bring-your-own-key model.
 	if (provider === AUTORAG_PROVIDER_ID) return null;
 	if (!providers.some((candidate) => candidate.id === provider && candidate.authConfigured)) return null;
-	return { provider, modelId: id, verified: true };
+	return { provider, modelId: id, verified: false };
 }
 
 /** The one model on offer, so the step can choose it without asking; null when there is none or a choice to make. */

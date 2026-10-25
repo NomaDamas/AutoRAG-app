@@ -80,6 +80,7 @@ function makeDeps(userDataDir: string, env: NodeJS.ProcessEnv = {}): OnboardingS
 		detectSources: async () => ({ sources: [] }),
 		gitToken: async () => null,
 		useManagedModel: async () => undefined,
+		checkModel: async () => ({ ok: true, latencyMs: 1 }),
 		send: () => undefined,
 		openExternal: async () => undefined,
 		relaunch: () => undefined,
@@ -345,6 +346,17 @@ describe("createOnboardingService persistence", () => {
 		await service.save(draft);
 		expect((await createOnboardingService(makeDeps(directory)).load()).draft).toEqual(draft);
 		await expect(service.save({ ...draft, model: { provider: "", modelId: "gpt-x", verified: true } })).rejects.toThrow();
+	});
+
+	it("resumes a draft saved on the role step, and runs the model check through the injected caller", async () => {
+		const directory = await workDir();
+		const calls: string[] = [];
+		const service = createOnboardingService({ ...makeDeps(directory), checkModel: async () => (calls.push("check"), { ok: false, error: "401" }) });
+		const draft: OnboardingDraft = { ...DRAFT, plan: "byok", stepId: "roles", model: { provider: "custom-x", modelId: "m", verified: true } };
+		await service.save(draft);
+		expect((await createOnboardingService(makeDeps(directory)).load()).draft).toEqual(draft);
+		expect(await service.checkModel()).toEqual({ ok: false, error: "401" });
+		expect(calls).toEqual(["check"]);
 	});
 
 	it("leaves the model connected on the model step alone when the BYOK first index starts, and never swaps in the Dazzi account's", async () => {

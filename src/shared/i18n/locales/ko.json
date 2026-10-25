@@ -498,6 +498,7 @@
       "sources": "데이터 소스",
       "plan": "플랜",
       "model": "AI 모델",
+      "roles": "검색 보조 모델",
       "indexing": "인덱싱"
     },
     "stepLabel": {
@@ -510,6 +511,7 @@
       "embedding": "계속",
       "sources": "계속",
       "model": "계속",
+      "roles": "계속",
       "indexing": "계속"
     },
     "welcome": {
@@ -836,7 +838,7 @@
     "model": {
       "eyebrow": "AI 모델",
       "title": "사용할 모델을 연결하세요",
-      "lead": "API 키, 구독 계정 로그인, 내 컴퓨터의 서버 등 이미 가진 서비스를 연결한 다음 모델을 고르세요.",
+      "lead": "API 키, 구독 계정 로그인, 내 컴퓨터의 서버 등 이미 가진 서비스를 연결한 다음 모델을 고르세요. 실제 호출에 응답해야 다음으로 넘어갈 수 있어요.",
       "note": "설정 → AI 모델에 저장되므로 나중에 언제든 바꿀 수 있어요.",
       "connectedTitle": "연결된 서비스",
       "none": "아직 연결된 서비스가 없어요.",
@@ -845,7 +847,11 @@
       "pick": "모델 선택",
       "needService": "먼저 서비스를 연결하세요",
       "unready": "계속하려면 모델을 선택하세요.",
-      "ready": "✓ 준비 완료 · {{model}} 모델이 답변합니다."
+      "ready": "✓ 준비 완료 · {{model}}이(가) {{seconds}}초 만에 응답했어요.",
+      "checking": "{{model}}이(가) 응답하는지 확인하는 중…",
+      "failed": "{{model}}이(가) 응답하지 않았어요: {{error}}",
+      "readyResumed": "✓ 준비 완료 · {{model}} 모델이 답변합니다.",
+      "retry": "다시 확인"
     },
     "indexing": {
       "tip": "꿀팁",
@@ -985,6 +991,13 @@
       "planActive": "{{plan}} 플랜이 적용되었습니다.",
       "signInFailed": "로그인하지 못했습니다.",
       "notIndexed": "인덱싱이 끝나야 Dazzi를 열 수 있어요."
+    },
+    "roles": {
+      "eyebrow": "검색 보조 모델",
+      "title": "재정렬·판단 모델을 고르세요",
+      "lead": "Dazzi 요금제를 쓰면 기본으로 제공되는 모델이에요. 내 키를 쓴다면 연결한 서비스에서 고르거나 그대로 두세요.",
+      "note": "설정 → AI 모델에 저장되므로 나중에 언제든 바꿀 수 있어요.",
+      "unavailable": "연결한 서비스 중에는 이 모델을 제공하는 곳이 없어요. 설정에서 OpenRouter를 연결하면 쓸 수 있어요."
     }
   },
   "finderComponents": {
