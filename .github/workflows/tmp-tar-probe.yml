@@ -1,0 +1,38 @@
+name: tmp tar probe
+on: workflow_dispatch
+jobs:
+  probe:
+    runs-on: windows-2022
+    steps:
+      - name: probe
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Continue"
+          $sys = Join-Path $env:SystemRoot "System32\tar.exe"
+          & $sys --version
+          Write-Host "ANSI code page: $([System.Text.Encoding]::Default.CodePage); OEM: $([Console]::OutputEncoding.CodePage)"
+          $root = Join-Path $env:RUNNER_TEMP "probe"
+          New-Item -ItemType Directory -Force "$root\ascii" | Out-Null
+          New-Item -ItemType Directory -Force "$root\korean" | Out-Null
+          Set-Content "$root\ascii\a.txt" "x"
+          $name = -join ([char]0xAC04, [char]0xC774, [char]0xAE30, [char]0xC548, [char]0xBB38) + "_" + (-join ([char]0xC11C, [char]0xC2DD)) + ".hwpx"
+          Set-Content "$root\korean\$name" "x"
+          function Try-Tar($label, $exe, $tarArgs) {
+            & $exe @tarArgs
+            Write-Host "RESULT $label exit=$LASTEXITCODE"
+          }
+          Try-Tar "bsdtar ascii" $sys @("-cf", "$root\a.tar", "-C", $root, "ascii")
+          Try-Tar "bsdtar korean" $sys @("-cf", "$root\k.tar", "-C", $root, "korean")
+          Try-Tar "bsdtar korean ustar" $sys @("--format", "ustar", "-cf", "$root\k2.tar", "-C", $root, "korean")
+          Try-Tar "bsdtar korean pax" $sys @("--format", "pax", "-cf", "$root\k3.tar", "-C", $root, "korean")
+          Try-Tar "bsdtar korean list-file" $sys @("-cf", "$root\k4.tar", "-C", $root, "-T", "NUL")
+          $git = "C:\Program Files\Git\usr\bin\tar.exe"
+          if (Test-Path $git) {
+            & $git --version | Select-Object -First 1
+            Try-Tar "gnutar korean" $git @("--force-local", "-cf", "$root\k5.tar", "-C", $root, "korean")
+          }
+          Remove-Item "$root\korean" -Recurse -Force
+          Try-Tar "bsdtar extract k.tar" $sys @("-xf", "$root\k.tar", "-C", $root)
+          Get-ChildItem "$root\korean" -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "EXTRACTED $($_.Name)" }
+          Remove-Item "$root\korean" -Recurse -Force -ErrorAction SilentlyContinue
+          if (Test-Path "$root\k5.tar") { Try-Tar "bsdtar extract gnutar k5.tar" $sys @("-xf", "$root\k5.tar", "-C", $root); Get-ChildItem "$root\korean" -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "EXTRACTED5 $($_.Name)" } }
