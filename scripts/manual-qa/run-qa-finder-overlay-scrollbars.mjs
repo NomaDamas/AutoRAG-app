@@ -22,7 +22,8 @@ const EVIDENCE = join(ROOT, ".omo/evidence/ai-finder-app/qa-overlay-scrollbars")
 rmSync(EVIDENCE, { recursive: true, force: true });
 mkdirSync(EVIDENCE, { recursive: true });
 
-const home = join(tmpdir(), "ulw-scroll-qa-home");
+// A short home path on Windows: the Info panel wraps "Where"/"Path" and would overflow even for a tiny file with a long profile folder.
+const home = join(process.platform === "win32" ? `${process.env.SystemDrive ?? "C:"}\\` : tmpdir(), "ulw-scroll-qa-home");
 rmSync(home, { recursive: true, force: true });
 mkdirSync(home, { recursive: true });
 
@@ -114,9 +115,10 @@ try {
 		fitting.bodyClientWidth === scrolling.bodyClientWidth,
 		`fitting=${fitting.bodyClientWidth}px scrolling=${scrolling.bodyClientWidth}px`,
 	);
+	// Only macOS has overlay scrollbars; elsewhere the bar is thin and its gutter is reserved up front (the checks above).
 	check(
 		"the scrollbar consumes no layout width (overlay)",
-		scrolling.verticalBarWidth === 0,
+		process.platform !== "darwin" || scrolling.verticalBarWidth === 0,
 		`vertical bar width=${scrolling.verticalBarWidth}px`,
 	);
 	check(

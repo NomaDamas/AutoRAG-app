@@ -179,6 +179,19 @@ small {
  * them untouched keeps the macOS-native overlay scrollbars that float above
  * the content (System Settings → Show scroll bars is respected). */
 
+/* Windows and Linux have no overlay scrollbars: Chromium draws the classic bar with arrow buttons in a 15px
+ * gutter, and the flag that enables overlay bars cannot be set from the main process (Chromium reads feature flags
+ * before main runs). The standard thin bar keeps the bar quiet and without buttons, and `scrollbar-gutter: stable`
+ * reserves its room so content does not shift when a panel starts or stops scrolling. macOS keeps its own bars. */
+html:not([data-platform="darwin"]) * {
+	scrollbar-width: thin;
+	scrollbar-color: rgb(128 128 134 / 0.5) transparent;
+}
+
+html:not([data-platform="darwin"]) .inspector-body {
+	scrollbar-gutter: stable;
+}
+
 /* §8 Constraint 4 — focus is always visible. */
 :focus-visible {
 	outline: 2px solid var(--accent);
