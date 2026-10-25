@@ -68,11 +68,11 @@ export interface AppSettings {
 	readonly launchAtLogin: boolean;
 	readonly showInMenuBar: boolean;
 	readonly autoInstallUpdates: boolean;
-	/** Crash and indexing-failure reports go to the maintainers (no file paths, names or document text). Off by default: opt-in, asked on the first onboarding step. */
+	/** Crash and indexing-failure reports go to the maintainers (no file paths, names or document text). Stored off until the user continues from the first onboarding step, whose box is ticked by default. */
 	readonly errorReporting: boolean;
 	/**
 	 * Anonymous product-usage statistics (which features are used, never what is in them) go to the maintainers.
-	 * Off by default: it is opt-in, and independent of `errorReporting`.
+	 * Stored off until the user continues from the first onboarding step, whose box is ticked by default; independent of `errorReporting`.
 	 */
 	readonly usageAnalytics: boolean;
 	/** Off: dot-prefixed files never appear. On: they appear, rendered dimmed. */

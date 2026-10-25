@@ -13,7 +13,7 @@ Roles: NomaDamas is controller for account, usage and security data and acts on
 the user's behalf for the content of requests. The Privacy Policy, Terms and
 Subprocessors pages live in the `Dazzi` repository (`src/app/(legal)`).
 
-Covered by the Privacy Policy: desktop error reports, opt-in usage statistics,
+Covered by the Privacy Policy: desktop error reports, usage statistics,
 update checks, off-device flows, Art. 6 legal bases, data-subject rights,
 retention criteria, transfers, and the Sentry and Cloudflare subprocessors.
 
@@ -21,7 +21,7 @@ Open, and not fixable by documentation alone:
 
 | Item | Why it is open |
 |---|---|
-| Error reports | Now opt-in: default off, asked with an unticked checkbox on the first onboarding step, switchable in Settings. Limitation: a settings file saved by an earlier build may already hold `errorReporting: true` (the store writes every default on any change), and that cannot be told apart from a deliberate choice, so those installs keep reporting until the user turns it off. |
+| Error reports and usage statistics | Both checkboxes on the first onboarding step are **ticked by default**, saved when the user continues, and switchable in Settings; nothing is saved if the window is closed there. A pre-ticked box is not valid consent under the GDPR/ePrivacy rules for EU users (CJEU C-673/17, Planet49), so either serve this default only outside the EEA or leave the boxes unticked for EU users. Limitation: a settings file saved by an earlier build may already hold `errorReporting: true` (the store writes every default on any change), and that cannot be told apart from a deliberate choice, so those installs keep reporting until the user turns it off. |
 | In-app wording | Fixed: `onboarding.account.authNote` no longer says Dazzi stores no request content (the Free plan may use Input and Output to improve the Service), and the Settings embedding hint no longer says document content never leaves the Mac (Pro cloud embedding sends it). `cloudBulletNoStore` and `cloudConsent` stay: cloud embedding is Pro-only, where nothing is stored or used for training. |
 | Account deletion | Email only (`privacy@dazziapp.com`). The GDPR allows this; there is no in-app or dashboard delete. |
 | Provider transfer mechanisms | Verified for every provider except DeepInfra (see `data-flows.md`). DeepInfra receives cloud-embedding text and has no public DPA, SCC or DPF statement; get a DPA with SCCs or stop sending EEA traffic there. |
