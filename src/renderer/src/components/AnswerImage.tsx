@@ -20,7 +20,7 @@ import { ImageEditIcon, LinkIcon } from "./icons";
 export interface ImageActions {
 	/** Open a local image in Quick Look. */
 	readonly onOpenImage: (target: QuickLookTarget) => void;
-	/** Open a web image's page in the OS browser. */
+	/** Open a web page in the OS browser: a web image's page, or a link in the answer text. */
 	readonly onOpenUrl: (url: string) => void;
 }
 

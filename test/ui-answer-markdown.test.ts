@@ -220,3 +220,121 @@ describe("imageTarget", () => {
 		expect(imageTarget("javascript:alert(1)//a.png", "/docs")).toEqual({ kind: "unresolved", text: "javascript:alert(1)//a.png" });
 	});
 });
+
+const text = (value: string) => ({ kind: "text", text: value }) as const;
+const link = (url: string, ...children: readonly unknown[]) => ({ kind: "link", url, children });
+
+describe("parseInline web links", () => {
+	it("turns [label](https://…) into a link segment whose label is the visible text", () => {
+		expect(parseInline("자세한 내용은 [공식 문서](https://example.com/docs)를 참고하세요.")).toEqual([
+			text("자세한 내용은 "),
+			link("https://example.com/docs", text("공식 문서")),
+			text("를 참고하세요."),
+		]);
+	});
+
+	it("keeps bold and code inside a link label", () => {
+		expect(parseInline("[**중요** `v2`](https://example.com)")).toEqual([
+			link("https://example.com/", { kind: "bold", text: "중요" }, text(" "), { kind: "code", text: "v2" }),
+		]);
+	});
+
+	it("reads [1](https://…) as a link labelled 1, not as a citation chip", () => {
+		expect(parseInline("근거 [1](https://example.com/a)")).toEqual([text("근거 "), link("https://example.com/a", text("1"))]);
+	});
+
+	it("accepts an optional title and an angle-bracket destination", () => {
+		expect(parseInline('[a](https://example.com/a "제목") [b](<https://example.com/b>)')).toEqual([
+			link("https://example.com/a", text("a")),
+			text(" "),
+			link("https://example.com/b", text("b")),
+		]);
+	});
+
+	it("keeps balanced parentheses inside the destination", () => {
+		expect(parseInline("[위키](https://en.wikipedia.org/wiki/Foo_(bar))")).toEqual([link("https://en.wikipedia.org/wiki/Foo_(bar)", text("위키"))]);
+	});
+
+	it("does not nest: a bare URL used as its own label is one link", () => {
+		expect(parseInline("[https://example.com/x](https://example.com/x)")).toEqual([link("https://example.com/x", text("https://example.com/x"))]);
+	});
+
+	it("links a bold-wrapped link and keeps the weight on its label", () => {
+		expect(parseInline("**[Dazzi](https://example.com)** 소개")).toEqual([link("https://example.com/", { kind: "bold", text: "Dazzi" }), text(" 소개")]);
+	});
+
+	it("only links http(s) destinations: other schemes and paths stay as written", () => {
+		for (const source of ["[x](javascript:alert(1))", "[x](file:///etc/passwd)", "[x](mailto:a@b.co)", "[x](./notes.md)", "[x](/Users/me/a.txt)", "[x](data:text/html,hi)"]) {
+			expect(parseInline(source).some((segment) => segment.kind === "link")).toBe(false);
+		}
+		expect(parseInline("[1](3쪽)")).toEqual([{ kind: "citation", number: 1 }, text("(3쪽)")]);
+	});
+
+	it("leaves a web image and an inline-code URL alone", () => {
+		expect(parseInline("![로고](https://example.com/a.png)")).toEqual([{ kind: "image", target: "https://example.com/a.png", alt: "로고", source: "markdown" }]);
+		expect(parseInline("`https://example.com`")).toEqual([{ kind: "code", text: "https://example.com" }]);
+	});
+});
+
+describe("parseInline bare URLs", () => {
+	it("links a bare http(s) URL and shows it as written", () => {
+		expect(parseInline("문서: https://example.com/docs?q=a&b=1#top 입니다")).toEqual([
+			text("문서: "),
+			link("https://example.com/docs?q=a&b=1#top", text("https://example.com/docs?q=a&b=1#top")),
+			text(" 입니다"),
+		]);
+	});
+
+	it("keeps the normalized href apart from the text as written", () => {
+		expect(parseInline("http://Example.com")).toEqual([link("http://example.com/", text("http://Example.com"))]);
+	});
+
+	it("stops at Korean particles: only ASCII URL characters belong to the URL", () => {
+		expect(parseInline("https://example.com/docs에서 확인")).toEqual([link("https://example.com/docs", text("https://example.com/docs")), text("에서 확인")]);
+	});
+
+	it("leaves sentence punctuation and quotes outside the URL", () => {
+		for (const [source, url, rest] of [
+			["https://example.com/a.", "https://example.com/a", "."],
+			["https://example.com/a,", "https://example.com/a", ","],
+			["https://example.com/a!?", "https://example.com/a", "!?"],
+			['"https://example.com/a"', "https://example.com/a", '"'],
+			["(https://example.com/a)", "https://example.com/a", ")"],
+			["*https://example.com/a*", "https://example.com/a", "*"],
+		] as const) {
+			const segments = parseInline(source);
+			const found = segments.find((segment) => segment.kind === "link");
+			expect(found, source).toEqual(link(url, text(url)));
+			expect(segments.at(-1), source).toEqual(text(rest));
+		}
+	});
+
+	it("keeps a closing parenthesis that balances one inside the URL", () => {
+		expect(parseInline("(https://en.wikipedia.org/wiki/Foo_(bar))")).toEqual([
+			text("("),
+			link("https://en.wikipedia.org/wiki/Foo_(bar)", text("https://en.wikipedia.org/wiki/Foo_(bar)")),
+			text(")"),
+		]);
+	});
+
+	it("links <https://…> without its angle brackets", () => {
+		expect(parseInline("<https://example.com/a> 참고")).toEqual([link("https://example.com/a", text("https://example.com/a")), text(" 참고")]);
+	});
+
+	it("links every URL in a line", () => {
+		const urls = parseInline("https://a.example/x 와 https://b.example/y")
+			.filter((segment) => segment.kind === "link")
+			.map((segment) => segment.url);
+		expect(urls).toEqual(["https://a.example/x", "https://b.example/y"]);
+	});
+
+	it("does not link a URL glued to a preceding word, a scheme-less host, or another scheme", () => {
+		for (const source of ["xhttps://example.com", "www.example.com", "example.com/docs", "ftp://example.com", "javascript:alert(1)", "https://", "https:// example.com"]) {
+			expect(parseInline(source).some((segment) => segment.kind === "link"), source).toBe(false);
+		}
+	});
+
+	it("links a bold-wrapped bare URL", () => {
+		expect(parseInline("**https://example.com/a**")).toEqual([link("https://example.com/a", { kind: "bold", text: "https://example.com/a" })]);
+	});
+});

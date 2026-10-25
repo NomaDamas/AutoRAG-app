@@ -17,6 +17,7 @@ import { webUrl } from "../../../shared/fs-contract";
 import { isImageOnlyLine, parseAnswerBlocks, parseInline, type AnswerBlock, type InlineSegment } from "../state/answer-markdown";
 import { splitExcerpt, type ExcerptPart } from "../state/excerpt-format";
 import { ImageRow, lineImages, type ImageActions } from "./AnswerImage";
+import { AnswerLink } from "./AnswerLink";
 import { PipeTable, TABLE, TABLE_WRAP } from "./PipeTable";
 
 /** Where an excerpt came from, for resolving and opening its images. */
@@ -47,7 +48,7 @@ function ExcerptPartView({ part, images }: { readonly part: ExcerptPart; readonl
 		case "html":
 			return <HtmlPart html={part.html} images={images} />;
 		case "table":
-			return <PipeTable table={part} renderLine={(line) => renderInline(parseInline(line))} wrapClassName="evidence__block evidence__block--table" />;
+			return <PipeTable table={part} renderLine={(line) => renderInline(parseInline(line), images.actions.onOpenUrl)} wrapClassName="evidence__block evidence__block--table" />;
 		default:
 			return (
 				<>
@@ -79,9 +80,9 @@ function HtmlPart({ html, images }: { readonly html: string; readonly images: Ex
 	return <div className={HTML_FLOW} onClick={onClick} dangerouslySetInnerHTML={{ __html: safe }} />;
 }
 
-/** Render one line of inline markdown: text, **bold**, `code`, [n] cites, and image references as written. */
-export function renderInline(segments: readonly InlineSegment[]): readonly ReactElement[] {
-	return segments.map((segment, index) => <InlineSegmentView key={`${index}`} segment={segment} />);
+/** Render one line of inline markdown: text, **bold**, `code`, [n] cites, web links, and image references as written. */
+export function renderInline(segments: readonly InlineSegment[], onOpenUrl: (url: string) => void): readonly ReactElement[] {
+	return segments.map((segment, index) => <InlineSegmentView key={`${index}`} segment={segment} onOpenUrl={onOpenUrl} />);
 }
 
 /** A line of inline markdown followed by the images it references. */
@@ -96,7 +97,7 @@ export function InlineWithImages({
 }): ReactElement {
 	const segments = parseInline(text);
 	const figures = lineImages(segments);
-	const line = <div className={className}>{renderInline(segments)}</div>;
+	const line = <div className={className}>{renderInline(segments, images.actions.onOpenUrl)}</div>;
 	if (figures.length === 0) return line;
 	return (
 		<>
@@ -114,7 +115,7 @@ function EvidenceBlock({ block, images }: { readonly block: AnswerBlock; readonl
 				<>
 					<div className="evidence__block evidence__block--heading text-body font-semibold text-ink pt-4 [&_strong]:text-ink [&_strong]:font-semibold">
 						<span className="evidence__block-prefix text-ink-muted font-regular">## </span>
-						{renderInline(segments)}
+						{renderInline(segments, images.actions.onOpenUrl)}
 					</div>
 					<ImageRow images={lineImages(segments)} folder={images.folder} captioned actions={images.actions} />
 				</>
@@ -126,7 +127,7 @@ function EvidenceBlock({ block, images }: { readonly block: AnswerBlock; readonl
 				<>
 					<div className="evidence__block evidence__block--list flex gap-8 text-caption leading-read text-ink-body [&_strong]:text-ink [&_strong]:font-semibold">
 						<span className="evidence__block-prefix text-ink-muted font-regular [.evidence\_\_block--list_&]:flex-none">–</span>
-						<span>{renderInline(segments)}</span>
+						<span>{renderInline(segments, images.actions.onOpenUrl)}</span>
 					</div>
 					<ImageRow images={lineImages(segments)} folder={images.folder} captioned actions={images.actions} />
 				</>
@@ -137,13 +138,13 @@ function EvidenceBlock({ block, images }: { readonly block: AnswerBlock; readonl
 		case "code":
 			return <pre className="evidence__block evidence__block--code m-0 font-mono text-badge leading-read text-ink-body py-8 px-10 rounded-6 bg-code border border-border overflow-auto whitespace-pre [&_strong]:text-ink [&_strong]:font-semibold">{block.text}</pre>;
 		case "table":
-			return <PipeTable table={block} renderLine={(line) => renderInline(parseInline(line))} wrapClassName="evidence__block evidence__block--table" />;
+			return <PipeTable table={block} renderLine={(line) => renderInline(parseInline(line), images.actions.onOpenUrl)} wrapClassName="evidence__block evidence__block--table" />;
 		default:
 			return <InlineWithImages text={block.text} images={images} className="evidence__block evidence__block--paragraph text-caption leading-read text-ink-body text-pretty [&_strong]:text-ink [&_strong]:font-semibold" />;
 	}
 }
 
-function InlineSegmentView({ segment }: { readonly segment: InlineSegment }): ReactElement | null {
+function InlineSegmentView({ segment, onOpenUrl }: { readonly segment: InlineSegment; readonly onOpenUrl: (url: string) => void }): ReactElement | null {
 	switch (segment.kind) {
 		case "bold":
 			return <strong>{segment.text}</strong>;
@@ -159,6 +160,8 @@ function InlineSegmentView({ segment }: { readonly segment: InlineSegment }): Re
 			) : (
 				<span className="break-all">{segment.target}</span>
 			);
+		case "link":
+			return <AnswerLink url={segment.url} onOpenUrl={onOpenUrl}>{renderInline(segment.children, onOpenUrl)}</AnswerLink>;
 		default:
 			return <>{segment.text}</>;
 	}
