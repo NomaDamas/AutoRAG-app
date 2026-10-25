@@ -175,7 +175,7 @@ variables → Actions → Variables), as JSON:
 
 | Variable | Hosted (default) | Own machine |
 |---|---|---|
-| `RELEASE_RUNNER_MAC` | `"macos-15"` | `["self-hosted","macOS","ARM64"]` |
+| `RELEASE_RUNNER_MAC` | `"macos-26"` | `["self-hosted","macOS","ARM64"]` |
 | `RELEASE_RUNNER_WIN` | `"windows-2022"` | `["self-hosted","Windows","X64","autorag-qa"]` |
 
 Fix billing and leave both unset, or register your own machines. A Mac runner:

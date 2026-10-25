@@ -23,8 +23,8 @@
  */
 
 import { spawnSync } from "node:child_process";
-import { copyFileSync, existsSync, rmSync } from "node:fs";
-import { PLATFORMS, decomposeNonAsciiNames, pruneNativeForPlatform, systemTar } from "./scripts/release/lib.mjs";
+import { copyFileSync, existsSync } from "node:fs";
+import { PLATFORMS, decomposeNonAsciiNames, nonAsciiRoots, pruneNativeForPlatform, pruneToLoose, systemTar, tarExcludeArgs } from "./scripts/release/lib.mjs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -148,10 +148,14 @@ const config = {
 			return;
 		}
 		// Windows: the small-file trees ship as one tar that build/installer.nsh unpacks (see the notes there).
+		// bsdtar crashes on a non-ASCII file name, so a directory holding one (kordoc's Korean-named templates)
+		// stays out of the tar and ships loose, where NSIS writes it with its Unicode name.
 		const trees = ["app/node_modules", "tools/npm", "tools/node"];
-		const tar = spawnSync(systemTar(), ["-cf", join(resources, "payload.tar"), "-C", resources, ...trees], { stdio: "inherit" });
+		const loose = nonAsciiRoots(resources, trees);
+		if (loose.length > 0) console.log(`  • kept ${loose.length} director${loose.length === 1 ? "y" : "ies"} with non-ASCII file names out of payload.tar: ${loose.join(", ")}`);
+		const tar = spawnSync(systemTar(), ["-cf", join(resources, "payload.tar"), "-C", resources, ...tarExcludeArgs(loose), ...trees], { stdio: "inherit" });
 		if (tar.status !== 0) throw new Error(`creating payload.tar failed (tar exit ${tar.status})`);
-		for (const tree of trees) rmSync(join(resources, tree), { recursive: true, force: true });
+		pruneToLoose(resources, trees, loose);
 	},
 
 	// Cloudflare's custom-domain edge answers a multi-range request with 400 (single ranges get 206),

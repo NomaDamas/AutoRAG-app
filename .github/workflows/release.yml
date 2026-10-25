@@ -35,7 +35,7 @@ env:
   AUTORAG_UPDATE_FEED_URL: ${{ vars.R2_BUCKET != '' && 'https://dl.nomadamas.org/latest/' || '' }}
 
 # Runners are repository variables (Settings > Secrets and variables > Actions > Variables) holding
-# a JSON value: RELEASE_RUNNER_MAC / RELEASE_RUNNER_WIN = "macos-15" or ["self-hosted","macOS","ARM64"].
+# a JSON value: RELEASE_RUNNER_MAC / RELEASE_RUNNER_WIN = "macos-26" or ["self-hosted","macOS","ARM64"].
 # Unset = GitHub-hosted. docs/release.md explains when to point them at your own machines.
 
 jobs:
@@ -43,7 +43,7 @@ jobs:
     # A release that already carries the Mac dmg was built locally (docs/release.md → "Local Mac
     # release"); mac-prebuilt mirrors it instead of building a second, different one.
     if: ${{ github.event_name != 'release' || !contains(join(github.event.release.assets.*.name, ','), '-arm64.dmg') }}
-    runs-on: ${{ fromJSON(vars.RELEASE_RUNNER_MAC || '"macos-15"') }}
+    runs-on: ${{ fromJSON(vars.RELEASE_RUNNER_MAC || '"macos-26"') }}
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
@@ -64,8 +64,9 @@ jobs:
         run: node scripts/sync-librarian.mjs
       - name: Install dependencies
         run: bun install --frozen-lockfile
-      # electron-builder compiles build/icon.icon (the full-bleed macOS 26 app icon) with actool 26+;
-      # the runner's default Xcode (16.4) cannot, and the build would fail.
+      # electron-builder compiles build/icon.icon (the full-bleed macOS 26 app icon) with actool 26+, and
+      # actool 26 only runs on a macOS 26 host: on macos-15 it dies in ibtoold ("AssetCatalogAgent-AssetRuntime",
+      # v0.2.0 run 40191409034), and the macos-15 default Xcode (16.4) cannot compile it at all.
       - name: Select Xcode 26
         run: sudo xcode-select -s /Applications/Xcode_26.3.app
       - name: Stamp version

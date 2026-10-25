@@ -278,6 +278,82 @@ export function systemTar() {
 	return process.platform === "win32" ? join(process.env.SystemRoot ?? "C:\\Windows", "System32", "tar.exe") : "tar";
 }
 
+/** The `LC_RPATH` entries of an `otool -l` listing, in load order. */
+export function parseRpaths(listing) {
+	const paths = [];
+	let inRpath = false;
+	for (const line of listing.split("\n")) {
+		const trimmed = line.trim();
+		if (trimmed.startsWith("cmd ")) inRpath = trimmed === "cmd LC_RPATH";
+		else if (inRpath && trimmed.startsWith("path ")) paths.push(trimmed.slice("path ".length).replace(/ \(offset \d+\)$/, ""));
+	}
+	return paths;
+}
+
+/**
+ * Where a dylib that `referrer` links resolves on disk, for copying it beside the binary.
+ * `@loader_path/x` is relative to the referrer; `@rpath/x` is tried against each of the referrer's own
+ * rpaths (current Homebrew bottles name their siblings this way: brotli's decoder links
+ * `@rpath/libbrotlicommon.1.dylib` with rpath `@loader_path/../lib`); an absolute path stays as it is.
+ * `@executable_path` is only meaningful for the main binary, so it yields null. An `@rpath` reference no
+ * rpath resolves throws: skipping it would still re-point it into tools/lib, where nothing was copied.
+ */
+export function resolveDylibRef(name, referrer, rpaths, exists = existsSync) {
+	const directory = dirname(referrer);
+	if (name.startsWith("@loader_path/")) return join(directory, name.slice("@loader_path/".length));
+	if (name.startsWith("@rpath/")) {
+		const rest = name.slice("@rpath/".length);
+		for (const rpath of rpaths) {
+			const candidate = join(rpath.replace(/^@loader_path/, directory), rest);
+			if (exists(candidate)) return candidate;
+		}
+		throw new Error(`${referrer} links ${name}, which none of its rpaths resolves (${rpaths.join(", ") || "none"})`);
+	}
+	return name.startsWith("@") ? null : name;
+}
+
+/**
+ * The directories of `trees` (relative to `root`, "/" separated, always ASCII) that must stay out of the Windows
+ * payload tar: the highest directory that directly holds an entry whose name is not ASCII.
+ * Windows' bsdtar (3.8.9 on the windows-2022 runner) dies with an access violation archiving such a name (kordoc
+ * ships Korean-named templates) and cannot extract one either, so these directories ship as loose files, which
+ * the NSIS installer writes with Unicode names.
+ */
+export function nonAsciiRoots(root, trees) {
+	const found = [];
+	const visit = (relative) => {
+		const entries = readdirSync(join(root, relative), { withFileTypes: true });
+		if (entries.some((entry) => /[^\x00-\x7f]/u.test(entry.name))) {
+			found.push(relative);
+			return;
+		}
+		for (const entry of entries) if (entry.isDirectory()) visit(`${relative}/${entry.name}`);
+	};
+	for (const tree of trees) if (existsSync(join(root, tree))) visit(tree);
+	return found.sort();
+}
+
+/** `tar --exclude` arguments for `paths`; bsdtar reads `\`, `[`, `]`, `*` and `?` in a pattern as glob syntax. */
+export function tarExcludeArgs(paths) {
+	return paths.map((path) => `--exclude=${path.replace(/[\\[\]*?]/gu, "\\$&")}`);
+}
+
+/**
+ * After the tar is built, drop what it carries: each tree goes, except the loose directories and the
+ * directories on the way down to them.
+ */
+export function pruneToLoose(root, trees, loose) {
+	const purge = (relative) => {
+		if (loose.includes(relative)) return;
+		if (!loose.some((path) => path.startsWith(`${relative}/`))) {
+			rmSync(join(root, relative), { recursive: true, force: true });
+			return;
+		}
+		for (const name of readdirSync(join(root, relative))) purge(`${relative}/${name}`);
+	};
+	for (const tree of trees) purge(tree);
+}
+
 export function dirSizeBytes(root) {
 	let total = 0;
 	const stack = [root];
