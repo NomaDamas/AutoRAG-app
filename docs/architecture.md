@@ -509,12 +509,14 @@ credential (mode 0600), the single place the librarian reads the hosted plan
 from, so the app and the librarian cannot disagree about being signed in; the
 renderer sees an `AccountStatus` (email, plan, subscription state, weekly
 credits), never the
-key. The plan step lists Free, Air, Pro, Max and BYOK in the order and with the
-audiences the service describes. Air, Pro and Max open the service's hosted
-checkout in the browser (Pro starts with a 7-day free trial that the server
-withholds from a mailbox that already had one), carrying the promo code typed on
-the step (`discount_code`, a token of letters, digits, `-` and `_`; the server
-refuses an unknown one and the app shows its reason). The plan step continues
+key. The plan step is five plain cards (Free, Air, Pro, Max, BYOK: name, price,
+who it is for), in the order and with the audiences the service describes; the
+Pro card carries a "7-day free trial" pill, and a Free card keeps the one
+training disclosure. Air, Pro and Max open the service's hosted checkout in the
+browser (the server withholds the trial from a mailbox that already had one),
+carrying the promo code if the user asked for the field ("Have a promo code?":
+`discount_code`, a token of letters, digits, `-` and `_`; the server refuses an
+unknown one and the app shows its reason). The plan step continues
 once the server reports that plan; cancel, refund, and the
 payment method live in the hosted billing portal (Settings › 구독 및 사용량).
 Skipping the account is the BYOK path.

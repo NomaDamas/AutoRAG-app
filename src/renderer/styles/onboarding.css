@@ -812,10 +812,10 @@ html[data-appearance="dark"] .onb .source-icon.brand {
 .onb .plan-list {
 	display: grid;
 	grid-template-columns: repeat(5,minmax(0,1fr));
-	gap: 10px;
+	gap: 12px;
 	width: 100%;
-	max-width: 1080px;
-	margin: 18px auto 0;
+	max-width: 1040px;
+	margin: 30px auto 0;
 }
 
 .onb .plan-card {
@@ -823,9 +823,9 @@ html[data-appearance="dark"] .onb .source-icon.brand {
 	display: flex;
 	flex-direction: column;
 	min-width: 0;
-	padding: 16px 15px 14px;
+	padding: 18px 16px 16px;
 	border: 1px solid var(--onb-border);
-	border-radius: 12px;
+	border-radius: 14px;
 	background: var(--onb-bg-card);
 	cursor: pointer;
 	transition: border .15s,background .15s,box-shadow .15s,transform .15s;
@@ -834,6 +834,10 @@ html[data-appearance="dark"] .onb .source-icon.brand {
 .onb .plan-card:hover {
 	border-color: color-mix(in srgb,var(--onb-blue) 45%,var(--onb-border));
 	transform: translateY(-1px);
+}
+
+.onb .plan-card.has-trial {
+	border-color: color-mix(in srgb,var(--onb-blue) 55%,var(--onb-border));
 }
 
 .onb .plan-card.selected {
@@ -852,9 +856,25 @@ html[data-appearance="dark"] .onb .source-icon.brand {
 	transform: none;
 }
 
+/* The trial is the one thing that should be seen at a glance: a solid pill straddling the card's top edge. */
+.onb .plan-trial {
+	position: absolute;
+	top: -12px;
+	left: 16px;
+	padding: 4px 10px;
+	border-radius: 999px;
+	background: var(--onb-blue);
+	box-shadow: 0 3px 8px color-mix(in srgb,var(--onb-blue) 35%,transparent);
+	color: #fff;
+	font-size: 11px;
+	font-weight: 700;
+	letter-spacing: -.01em;
+	white-space: nowrap;
+}
+
 .onb .radio {
 	position: absolute;
-	top: 15px;
+	top: 18px;
 	right: 14px;
 	width: 16px;
 	height: 16px;
@@ -875,32 +895,24 @@ html[data-appearance="dark"] .onb .source-icon.brand {
 	font-weight: 600;
 }
 
-.onb .plan-name small {
-	padding: 3px 6px;
-	border-radius: 4px;
-	background: var(--onb-blue);
-	color: #fff;
-	font-size: 8px;
-	font-weight: 600;
-}
-
 .onb .plan-price {
 	display: flex;
 	align-items: baseline;
 	gap: 4px;
-	margin-top: 12px;
+	margin-top: 10px;
 	color: var(--onb-ink);
 }
 
 .onb .plan-price b {
-	font-size: 26px;
+	font-size: 28px;
 	line-height: 1.1;
 	font-weight: 650;
 	letter-spacing: -.03em;
 }
 
 .onb .plan-price b.sm {
-	font-size: 18px;
+	font-size: 17px;
+	line-height: 1.5;
 	letter-spacing: -.02em;
 }
 
@@ -909,114 +921,85 @@ html[data-appearance="dark"] .onb .source-icon.brand {
 	font-size: 11px;
 }
 
-.onb .plan-note {
-	margin-top: 4px;
-	color: var(--onb-muted);
-	font-size: 9.5px;
-}
-
-.onb .plan-note.trial {
-	color: var(--onb-blue);
-	font-weight: 600;
-}
-
-.onb .plan-trial {
-	align-self: flex-start;
-	margin-top: 6px;
-}
-
-.onb .promo-box {
-	display: flex;
-	flex-direction: column;
-	gap: 5px;
-	width: 100%;
-	max-width: 360px;
-	margin: 16px auto 0;
-	color: var(--onb-muted);
-	font-size: 10px;
+.onb .plan-desc {
+	margin-top: 10px;
+	color: var(--onb-body);
+	font-size: 11.5px;
 	line-height: 1.5;
 }
 
-.onb .promo-box label {
-	color: var(--onb-body);
-	font-size: 10.5px;
+.onb .plan-note {
+	margin-top: 8px;
+	color: var(--onb-blue);
+	font-size: 10px;
 	font-weight: 600;
 }
 
-.onb .promo-box input.input {
-	flex: none;
-	height: 34px;
-	padding: 0 10px;
+/* The one disclosure the Free card keeps (Terms §5: paid plans never train on it, Free may). */
+.onb .plan-training {
+	margin-top: auto;
+	padding-top: 12px;
+	color: var(--onb-faint);
+	font-size: 9.5px;
+	line-height: 1.4;
+}
+
+/* Promo code: a quiet text link that turns into a small pill field when asked for. */
+.onb .promo {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	min-height: 32px;
+	margin-top: 18px;
+}
+
+.onb .promo-toggle {
+	padding: 6px 10px;
+	border: 0;
+	border-radius: 999px;
+	background: transparent;
+	color: var(--onb-muted);
+	font-size: 11px;
+	text-decoration: underline;
+	text-underline-offset: 3px;
+	text-decoration-color: color-mix(in srgb,var(--onb-muted) 40%,transparent);
+	transition: color .15s,background .15s;
+}
+
+.onb .promo-toggle:hover {
+	background: var(--onb-bg-input);
+	color: var(--onb-ink);
+}
+
+.onb .promo-input {
+	width: 220px;
+	height: 32px;
+	padding: 0 14px;
 	border: 1px solid var(--onb-border);
-	border-radius: 7px;
+	border-radius: 999px;
 	background: var(--onb-bg-card);
 	color: var(--onb-ink);
 	font-size: 12px;
+	text-align: center;
 }
 
-.onb .promo-box input[aria-invalid="true"] {
+.onb .promo-input:focus-visible {
+	border-color: var(--onb-blue);
+	outline: 0;
+	box-shadow: 0 0 0 3px color-mix(in srgb,var(--onb-blue) 18%,transparent);
+}
+
+.onb .promo-input[aria-invalid="true"],
+.onb .promo-input[aria-invalid="true"]:focus-visible {
 	border-color: var(--onb-red);
+	box-shadow: 0 0 0 3px color-mix(in srgb,var(--onb-red) 14%,transparent);
 }
 
-.onb .promo-box .promo-error {
+.onb .promo-error {
 	color: var(--onb-red);
-}
-
-.onb .plan-desc {
-	margin-top: 11px;
-	padding-top: 11px;
-	border-top: 1px solid var(--onb-divider);
-	color: var(--onb-body);
-	font-size: 11px;
-	font-weight: 600;
-}
-
-.onb .plan-features {
-	display: flex;
-	flex-direction: column;
-	gap: 6px;
-	margin: 9px 0 0;
-	padding: 0;
-	list-style: none;
-	color: var(--onb-muted);
 	font-size: 10px;
-	line-height: 1.4;
-}
-
-.onb .plan-features li {
-	display: flex;
-	gap: 6px;
-}
-
-.onb .plan-features li:before {
-	content: "✓";
-	flex: none;
-	color: var(--onb-green);
-	font-weight: 700;
-}
-
-/* One-line plan-training note (Terms §5: paid plans never train on it, Free may). */
-.onb .plan-training {
-	margin-top: 8px;
-	color: var(--onb-faint);
-	font-size: 9px;
-	line-height: 1.4;
-}
-
-.onb .plan-meta {
-	display: flex;
-	gap: 5px;
-	flex-wrap: wrap;
-	margin-top: auto;
-	padding-top: 13px;
-}
-
-.onb .meta-chip {
-	padding: 4px 6px;
-	border-radius: 5px;
-	background: var(--onb-bg-input);
-	color: var(--onb-muted);
-	font-size: 9px;
 }
 
 .onb .pay-summary {
@@ -1040,26 +1023,6 @@ html[data-appearance="dark"] .onb .source-icon.brand {
 .onb .pay-summary small {
 	color: var(--onb-muted);
 	font-size: 10px;
-}
-
-.onb .plan-callout {
-	display: flex;
-	align-items: flex-start;
-	gap: 8px;
-	width: 100%;
-	max-width: 1080px;
-	margin-top: 16px;
-	padding: 10px 12px;
-	border: 1px solid color-mix(in srgb,var(--onb-blue) 25%,var(--onb-border));
-	border-radius: 8px;
-	background: var(--onb-blue-soft);
-	color: var(--onb-blue);
-	font-size: 10px;
-	line-height: 1.45;
-}
-
-.onb .plan-callout svg {
-	flex: none;
 }
 
 .onb .pay-lead {

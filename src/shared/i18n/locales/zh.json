@@ -762,11 +762,9 @@
       "eyebrow": "套餐",
       "title": "你打算如何使用？",
       "titleReady": "套餐已就绪",
-      "lead": "套餐决定每周的 AI 额度。可稍后在设置中更改。",
-      "leadCloud": "已选择远程嵌入。开始 7 天 Pro 免费试用（Max 也可以）即可继续。",
+      "lead": "请选择套餐。可随时在设置中更改。",
+      "leadCloud": "远程嵌入需要 Pro 或 Max。Pro 可先免费试用 7 天。",
       "leadCloudReady": "可以使用远程嵌入。请继续下一步。",
-      "cloudCallout": "远程嵌入需要 Pro 或 Max。绑定银行卡后，Pro 的前 7 天免费。",
-      "badgeRecommended": "推荐",
       "badgeTrial": "试用进行中",
       "badgeSubscribed": "已订阅",
       "perMonth": "/ 月",
@@ -776,82 +774,45 @@
       "noteHeld": "此账户正在使用",
       "noteTrialing": "试用中 · 至 {{date}}",
       "noteCancelScheduled": "已预约取消 · 可用至 {{date}}",
-      "signInFirst": "付费套餐需要账户。请先登录。",
+      "signInFirst": "付费套餐需要先登录。",
       "signInAction": "登录",
       "plan": {
         "free": {
           "name": "Free",
           "price": "免费",
-          "note": "无需银行卡即可开始",
           "tag": "想先试试 Dazzi 的用户",
-          "chip": "提问会发送至 Dazzi 模型",
-          "training": "输入与输出可能用于改进服务",
-          "feature": {
-            "a": "聊天、嵌入、重排序和 Jev",
-            "b": "少量每周额度"
-          }
+          "training": "输入与输出可能用于改进服务"
         },
         "air": {
           "name": "Air",
           "price": "$4",
           "note": "每月 $4 · 随时取消",
-          "tag": "已经在使用其他 AI 订阅的用户",
-          "chip": "提问会发送至 Dazzi 模型",
-          "training": "Dazzi 不会将输入与输出用于模型训练",
-          "feature": {
-            "a": "聊天、嵌入、重排序和 Jev",
-            "b": "更多的每周额度",
-            "c": "LLM 使用你自己的 AI 订阅（推荐）"
-          }
+          "tag": "已经在使用其他 AI 订阅的用户"
         },
         "pro": {
           "name": "Pro",
           "price": "$20",
           "note": "绑定银行卡可免费 7 天，之后每月 $20",
           "tag": "不想再订阅其他 AI、希望 Dazzi 开箱即用的用户",
-          "chip": "问题将发送到 Dazzi 模型",
-          "training": "Dazzi 不会将输入与输出用于模型训练",
-          "feature": {
-            "a": "聊天、Jev、嵌入和重排序",
-            "b": "无需再订阅其他服务",
-            "c": "大得多的每周用量"
-          },
           "trial": "7 天免费试用"
         },
         "max": {
           "name": "Max",
           "price": "$200",
           "note": "每月 $200 · 随时取消",
-          "tag": "Pro 的 10 倍额度",
-          "chip": "提问会发送至 Dazzi 模型",
-          "training": "Dazzi 不会将输入与输出用于模型训练",
-          "feature": {
-            "a": "每周用量是 Pro 的 10 倍",
-            "b": "为全天高强度使用而设计",
-            "c": "包含 Pro 的全部功能"
-          }
+          "tag": "Pro 的 10 倍额度"
         },
         "byok": {
           "name": "BYOK",
           "price": "仅 API 费用",
-          "note": "直接向提供商付费",
-          "tag": "用自己的密钥直接连接",
-          "chip": "需要输入 API 密钥",
-          "training": "遵循您所选服务商的政策",
-          "feature": {
-            "a": "本地嵌入或关闭",
-            "b": "自行选择提供商和模型",
-            "c": "仅向所选提供商发送请求"
-          }
+          "tag": "用自己的密钥直接连接"
         }
       },
       "checkoutMax": "打开 Max 结算页面",
-      "trialNote": "Pro 的 7 天免费试用需要绑定银行卡，每人限一次。试用结束前取消则不会扣费。",
       "promo": {
+        "prompt": "有优惠码？",
         "label": "优惠码",
-        "placeholder": "优惠码（可选）",
-        "hint": "将在结算页面生效。",
-        "invalid": "仅限字母、数字、- 和 _（最多 64 个字符）。"
+        "invalid": "仅限字母、数字、- 和 _。"
       }
     },
     "model": {

@@ -762,11 +762,9 @@
       "eyebrow": "Plan",
       "title": "How will you use it?",
       "titleReady": "Your plan is ready",
-      "lead": "Your plan sets your weekly AI credits. You can change it later in Settings.",
-      "leadCloud": "You chose remote embedding. Start the 7-day Pro trial (Max works too) and continue right away.",
+      "lead": "Pick a plan. You can change it anytime in Settings.",
+      "leadCloud": "Remote embedding needs Pro or Max. Pro starts with 7 days free.",
       "leadCloudReady": "Remote embedding is ready to use. Continue to the next step.",
-      "cloudCallout": "Remote embedding needs Pro or Max. Pro's first 7 days are free with a card.",
-      "badgeRecommended": "Recommended",
       "badgeTrial": "Trial in progress",
       "badgeSubscribed": "Subscribed",
       "perMonth": "/ mo",
@@ -776,82 +774,45 @@
       "noteHeld": "Active on this account",
       "noteTrialing": "Trial · until {{date}}",
       "noteCancelScheduled": "Cancels · usable until {{date}}",
-      "signInFirst": "Paid plans need an account. Sign in first.",
+      "signInFirst": "Sign in to pick a paid plan.",
       "signInAction": "Sign in",
       "plan": {
         "free": {
           "name": "Free",
           "price": "Free",
-          "note": "Start right away, no card",
           "tag": "To try Dazzi out",
-          "chip": "Questions are sent to Dazzi models",
-          "training": "Inputs and outputs may be used to improve the service",
-          "feature": {
-            "a": "Chat, embeddings, reranking & Jev",
-            "b": "A small weekly credit allowance"
-          }
+          "training": "Inputs and outputs may be used to improve the service"
         },
         "air": {
           "name": "Air",
           "price": "$4",
           "note": "$4/mo · cancel anytime",
-          "tag": "For people who already use another AI subscription",
-          "chip": "Questions are sent to Dazzi models",
-          "training": "Dazzi does not use inputs and outputs to train models",
-          "feature": {
-            "a": "Chat, embeddings, reranking & Jev",
-            "b": "A larger weekly credit allowance",
-            "c": "Use your own AI subscription for the LLM (recommended)"
-          }
+          "tag": "For people who already use another AI subscription"
         },
         "pro": {
           "name": "Pro",
           "price": "$20",
           "note": "7 days free with a card, then $20/mo",
           "tag": "For people who want Dazzi to just work, with no other AI subscription",
-          "chip": "Questions are sent to Dazzi models",
-          "training": "Dazzi does not use inputs and outputs to train models",
-          "feature": {
-            "a": "Chat, Jev, embeddings and reranking",
-            "b": "Nothing else to subscribe to",
-            "c": "A much larger weekly allowance"
-          },
           "trial": "7-day free trial"
         },
         "max": {
           "name": "Max",
           "price": "$200",
           "note": "$200/mo · cancel anytime",
-          "tag": "10x Pro's quota",
-          "chip": "Questions are sent to Dazzi models",
-          "training": "Dazzi does not use inputs and outputs to train models",
-          "feature": {
-            "a": "10x the weekly usage of Pro",
-            "b": "Built for heavy, all-day use",
-            "c": "Everything in Pro"
-          }
+          "tag": "10x Pro's quota"
         },
         "byok": {
           "name": "BYOK",
           "price": "API costs only",
-          "note": "Pay the provider directly",
-          "tag": "Connect directly with your own key",
-          "chip": "API key required",
-          "training": "Follows the policy of the provider you choose",
-          "feature": {
-            "a": "Local embedding or off",
-            "b": "Choose the provider and model yourself",
-            "c": "Requests sent only to your chosen provider"
-          }
+          "tag": "Connect directly with your own key"
         }
       },
       "checkoutMax": "Open the Max checkout page",
-      "trialNote": "The 7-day Pro trial needs a card and is available once per person. Cancel before it ends and you pay nothing.",
       "promo": {
+        "prompt": "Have a promo code?",
         "label": "Promo code",
-        "placeholder": "Promo code (optional)",
-        "hint": "Applied on the checkout page.",
-        "invalid": "Use only letters, numbers, - and _ (up to 64 characters)."
+        "invalid": "Letters, numbers, - and _ only."
       }
     },
     "model": {

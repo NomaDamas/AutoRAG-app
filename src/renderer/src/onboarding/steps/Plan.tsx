@@ -1,27 +1,27 @@
 /** Step 7 — plan choice. Free/BYOK continue; Air/Pro/Max open the hosted checkout in the browser, where Pro starts with a free trial. */
 
-import type { ReactElement } from "react";
+import { useState, type ReactElement } from "react";
 import { isPaidPlanId, parsePromoCode } from "../../../../shared/account-contract";
 import type { PlanId } from "../../../../shared/onboarding-contract";
 import { i18n } from "../../../../shared/i18n";
 import { cn } from "../../lib/cn";
-import { Icon } from "../marks";
 import { Eyebrow, Multiline } from "../parts";
 import type { OnboardingCtx } from "../context";
 import { canSelectCloudEmbedding, isPlanSelectable, planHeld } from "../flow";
+
 interface PlanDefinition {
 	readonly id: PlanId;
+	/** Billed monthly: the price is followed by "/ mo". */
 	readonly per: boolean;
-	readonly featureKeys: readonly string[];
 }
 
 /** The order the hosted service lists its plans in, then the bring-your-own-key path. */
 const PLANS: readonly PlanDefinition[] = [
-	{ id: "free", per: false, featureKeys: ["a", "b"] },
-	{ id: "air", per: true, featureKeys: ["a", "b", "c"] },
-	{ id: "pro", per: true, featureKeys: ["a", "b", "c"] },
-	{ id: "max", per: true, featureKeys: ["a", "b", "c"] },
-	{ id: "byok", per: false, featureKeys: ["a", "b", "c"] },
+	{ id: "free", per: false },
+	{ id: "air", per: true },
+	{ id: "pro", per: true },
+	{ id: "max", per: true },
+	{ id: "byok", per: false },
 ];
 
 export function PlanStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElement {
@@ -34,6 +34,9 @@ export function PlanStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElement
 	const proHeld = planHeld("pro", account);
 	const buying = isPaidPlanId(draft.plan) && !planHeld(draft.plan, account);
 	const promoInvalid = !parsePromoCode(ctx.promoCode).ok;
+	// The code is asked for on request; one already typed stays in view.
+	const [promoAsked, setPromoAsked] = useState(false);
+	const promoOpen = promoAsked || ctx.promoCode.length > 0;
 
 	return (
 		<section className="screen center">
@@ -52,95 +55,74 @@ export function PlanStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElement
 					</p>
 				) : null}
 			</div>
-			{cloud && !proHeld ? (
-				<div className="plan-callout">
-					<Icon name="cloud" size={14} />
-					<span>{t("onboarding.plan.cloudCallout")}</span>
-				</div>
-			) : null}
 			<div className="plan-list">
 				{PLANS.map((plan) => {
 					const selectable = isPlanSelectable(plan.id, cloud ? "cloud" : "local");
 					const held = planHeld(plan.id, account) && snapshot?.plan === plan.id;
 					const selected = draft.plan === plan.id;
-					let badge: ReactElement | null = null;
-					if (held) {
-						badge = (
-							<span className="tag rec">
-								{snapshot?.trialing === true ? t("onboarding.plan.badgeTrial") : t("onboarding.plan.badgeSubscribed")}
-							</span>
-						);
-					} else if (plan.id === "pro") {
-						badge = <small>{t("onboarding.plan.badgeRecommended")}</small>;
-					}
 					const offersTrial = plan.id === "pro" && !held;
-					let note = t(`onboarding.plan.plan.${plan.id}.note`);
+					let status: string | null = null;
 					if (held && snapshot !== null) {
-						if (snapshot.cancelScheduled) note = t("onboarding.plan.noteCancelScheduled", { date });
-						else if (snapshot.trialing) note = t("onboarding.plan.noteTrialing", { date });
-						else note = t("onboarding.plan.noteHeld");
+						if (snapshot.cancelScheduled) status = t("onboarding.plan.noteCancelScheduled", { date });
+						else if (snapshot.trialing) status = t("onboarding.plan.noteTrialing", { date });
+						else status = t("onboarding.plan.noteHeld");
 					}
 					return (
 						<div
 							key={plan.id}
-							className={cn("plan-card", selected && "selected", !selectable && "disabled")}
+							className={cn("plan-card", selected && "selected", !selectable && "disabled", offersTrial && "has-trial")}
 							aria-disabled={!selectable}
 							onClick={() => {
 								if (selectable) ctx.choosePlan(plan.id);
 							}}
 						>
+							{offersTrial ? <span className="plan-trial">{t("onboarding.plan.plan.pro.trial")}</span> : null}
 							<span className="radio" />
 							<div className="plan-name">
 								{t(`onboarding.plan.plan.${plan.id}.name`)}
-								{badge}
+								{held ? <span className="tag rec">{snapshot?.trialing === true ? t("onboarding.plan.badgeTrial") : t("onboarding.plan.badgeSubscribed")}</span> : null}
 							</div>
 							<div className="plan-price">
-								<b className={plan.per || plan.id === "free" ? "" : "sm"}>
-									{t(`onboarding.plan.plan.${plan.id}.price`)}
-								</b>
+								<b className={plan.per || plan.id === "free" ? "" : "sm"}>{t(`onboarding.plan.plan.${plan.id}.price`)}</b>
 								{plan.per ? <span>{t("onboarding.plan.perMonth")}</span> : null}
 							</div>
-							<div className={cn("plan-note", offersTrial && "trial")}>{note}</div>
-							{offersTrial ? <span className="tag rec plan-trial">{t("onboarding.plan.plan.pro.trial")}</span> : null}
 							<div className="plan-desc">{t(`onboarding.plan.plan.${plan.id}.tag`)}</div>
-							<ul className="plan-features">
-								{plan.featureKeys.map((key) => (
-									<li key={key}>{t(`onboarding.plan.plan.${plan.id}.feature.${key}`)}</li>
-								))}
-							</ul>
-							<div className="plan-training">{t(`onboarding.plan.plan.${plan.id}.training`)}</div>
-							<div className="plan-meta">
-								<span className="meta-chip">{t(`onboarding.plan.plan.${plan.id}.chip`)}</span>
-							</div>
+							{status === null ? null : <div className="plan-note">{status}</div>}
+							{plan.id === "free" ? <div className="plan-training">{t("onboarding.plan.plan.free.training")}</div> : null}
 						</div>
 					);
 				})}
 			</div>
 			{buying ? (
-				<div className="promo-box">
-					<label htmlFor="onb-promo-code">{t("onboarding.plan.promo.label")}</label>
-					<input
-						id="onb-promo-code"
-						className="input"
-						name="promo-code"
-						type="text"
-						autoComplete="off"
-						autoCapitalize="off"
-						spellCheck={false}
-						maxLength={100}
-						value={ctx.promoCode}
-						placeholder={t("onboarding.plan.promo.placeholder")}
-						aria-invalid={promoInvalid}
-						onChange={(event) => ctx.setPromoCode(event.target.value)}
-					/>
-					{promoInvalid ? (
-						<small className="promo-error" role="alert">
-							{t("onboarding.plan.promo.invalid")}
-						</small>
+				<div className="promo">
+					{promoOpen ? (
+						<>
+							<input
+								name="promo-code"
+								className="promo-input"
+								type="text"
+								autoFocus={promoAsked}
+								autoComplete="off"
+								autoCapitalize="off"
+								spellCheck={false}
+								maxLength={100}
+								value={ctx.promoCode}
+								placeholder={t("onboarding.plan.promo.label")}
+								aria-label={t("onboarding.plan.promo.label")}
+								aria-invalid={promoInvalid}
+								onChange={(event) => ctx.setPromoCode(event.target.value)}
+							/>
+							{promoInvalid ? (
+								<small className="promo-error" role="alert">
+									{t("onboarding.plan.promo.invalid")}
+								</small>
+							) : null}
+						</>
 					) : (
-						<small>{t("onboarding.plan.promo.hint")}</small>
+						<button type="button" className="promo-toggle" onClick={() => setPromoAsked(true)}>
+							{t("onboarding.plan.promo.prompt")}
+						</button>
 					)}
-					{draft.plan === "pro" ? <small>{t("onboarding.plan.trialNote")}</small> : null}
 				</div>
 			) : null}
 		</section>

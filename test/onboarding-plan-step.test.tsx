@@ -67,12 +67,20 @@ describe("plan step", () => {
 		]);
 	});
 
-	it("says on the Pro card that it starts with a free trial", () => {
+	it("puts the free trial on the Pro card as its own call-out, once", () => {
 		render();
 
-		const pro = cards()[2];
-		expect(pro?.textContent).toContain("onboarding.plan.plan.pro.trial");
-		expect(cards().filter((card) => card.textContent?.includes("onboarding.plan.plan.pro.trial"))).toHaveLength(1);
+		const ribbons = [...host.querySelectorAll(".plan-trial")];
+		expect(ribbons).toHaveLength(1);
+		expect(cards()[2]?.contains(ribbons[0] ?? null)).toBe(true);
+		expect(ribbons[0]?.textContent).toBe("onboarding.plan.plan.pro.trial");
+	});
+
+	it("stops offering the trial once the account holds Pro, and says what it is in", () => {
+		render({ plan: "pro", account: account("pro", true) });
+
+		expect(host.querySelector(".plan-trial")).toBeNull();
+		expect(cards()[2]?.textContent).toContain("onboarding.plan.badgeTrial");
 	});
 
 	it("marks only the chosen card, and picking a card chooses its plan", () => {
@@ -84,28 +92,48 @@ describe("plan step", () => {
 		expect(choosePlan).toHaveBeenCalledWith("air");
 	});
 
-	it("asks for a promo code for every paid plan the account does not hold yet", () => {
+	const promoToggle = (): HTMLButtonElement | null => host.querySelector<HTMLButtonElement>("button.promo-toggle");
+	const promoInput = (): HTMLInputElement | null => host.querySelector<HTMLInputElement>('input[name="promo-code"]');
+
+	it("keeps the promo code out of the way until asked, for every paid plan not held yet", () => {
 		for (const plan of ["air", "pro", "max"] as const) {
 			render({ plan });
-			expect(host.querySelector('input[name="promo-code"]'), plan).not.toBeNull();
+			expect(promoToggle(), plan).not.toBeNull();
+			expect(promoInput(), plan).toBeNull();
 		}
+	});
+
+	it("opens the promo field on request", () => {
+		render({ plan: "pro" });
+
+		act(() => promoToggle()?.click());
+
+		expect(promoInput()).not.toBeNull();
+		expect(promoToggle()).toBeNull();
+	});
+
+	it("shows a code that is already typed, so it is never hidden from the person who typed it", () => {
+		render({ plan: "max", promoCode: "WELCOME-7" });
+
+		expect(promoInput()?.value).toBe("WELCOME-7");
 	});
 
 	it("offers no promo code where nothing is bought", () => {
 		for (const plan of ["free", "byok"] as const) {
 			render({ plan });
-			expect(host.querySelector('input[name="promo-code"]'), plan).toBeNull();
+			expect(promoToggle(), plan).toBeNull();
+			expect(promoInput(), plan).toBeNull();
 		}
 		render({ plan: "pro", account: account("pro") });
-		expect(host.querySelector('input[name="promo-code"]')).toBeNull();
+		expect(promoToggle()).toBeNull();
 		render({ plan: "air", account: account("max") });
-		expect(host.querySelector('input[name="promo-code"]')).toBeNull();
+		expect(promoToggle()).toBeNull();
 	});
 
 	it("hands what is typed to the controller", () => {
 		const setPromoCode = vi.fn();
-		render({ plan: "pro", setPromoCode });
-		const input = host.querySelector<HTMLInputElement>('input[name="promo-code"]');
+		render({ plan: "pro", promoCode: "W", setPromoCode });
+		const input = promoInput();
 
 		act(() => {
 			const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
@@ -118,11 +146,11 @@ describe("plan step", () => {
 
 	it("flags a malformed code before anything is sent", () => {
 		render({ plan: "pro", promoCode: "two words" });
-		expect(host.querySelector('input[name="promo-code"]')?.getAttribute("aria-invalid")).toBe("true");
+		expect(promoInput()?.getAttribute("aria-invalid")).toBe("true");
 		expect(host.querySelector(".promo-error")).not.toBeNull();
 
 		render({ plan: "pro", promoCode: "WELCOME-7" });
-		expect(host.querySelector('input[name="promo-code"]')?.getAttribute("aria-invalid")).toBe("false");
+		expect(promoInput()?.getAttribute("aria-invalid")).toBe("false");
 		expect(host.querySelector(".promo-error")).toBeNull();
 	});
 
