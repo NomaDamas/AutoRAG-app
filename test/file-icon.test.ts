@@ -602,6 +602,124 @@ describe("createIconProvider", () => {
 	});
 });
 
+describe("videos Quick Look cannot draw", () => {
+	const FRAME = new Uint8Array([9, 9, 9]);
+
+	it("takes the tile from a decoded video frame on macOS, never asking Quick Look", async () => {
+		// Given a macOS provider with a frame extractor and a native generator that records calls
+		const framed: Array<[string, number]> = [];
+		const native: string[] = [];
+		const provider = createIconProvider({
+			platform: "darwin",
+			videoFrame: async (path, size) => {
+				framed.push([path, size]);
+				return FRAME;
+			},
+			thumbnail: async (path) => {
+				native.push(path);
+				return BYTES;
+			},
+		});
+
+		// When an mkv, a webm and an mp4 are listed
+		const icons = await provider.icons([target("/v/a.mkv"), target("/v/b.webm"), target("/v/c.mp4")]);
+
+		// Then only the containers Quick Look has no decoder for went through the frame extractor
+		expect(framed.map(([path]) => path).sort()).toEqual(["/v/a.mkv", "/v/b.webm"]);
+		expect(native).toEqual(["/v/c.mp4"]);
+		expect(icons.get("/v/a.mkv")).toBe(iconUrl("/v/a.mkv", MTIME));
+		expect(provider.read("/v/a.mkv", MTIME)).toEqual(FRAME);
+		expect(provider.read("/v/c.mp4", MTIME)).toEqual(BYTES);
+	});
+
+	it("falls back to Quick Look and then the type icon when no frame can be decoded", async () => {
+		// Given an extractor that finds nothing (no ffmpeg, or an undecodable file)
+		const native: string[] = [];
+		const provider = createIconProvider({
+			platform: "darwin",
+			videoFrame: async () => null,
+			thumbnail: async (path) => {
+				native.push(path);
+				return path.endsWith("a.mkv") ? BYTES : null;
+			},
+			systemIcon: async () => new Uint8Array([7]),
+		});
+
+		// When two videos are listed
+		await provider.icons([target("/v/a.mkv"), target("/v/b.webm")]);
+
+		// Then the old chain still answers: Quick Look, then the OS type icon
+		expect(native.sort()).toEqual(["/v/a.mkv", "/v/b.webm"]);
+		expect(provider.read("/v/a.mkv", MTIME)).toEqual(BYTES);
+		expect(provider.read("/v/b.webm", MTIME)).toEqual(new Uint8Array([7]));
+	});
+
+	it("logs a failed extraction verbatim and keeps the batch going", async () => {
+		// Given an extractor that fails for one file
+		const warnings: string[] = [];
+		const provider = createIconProvider({
+			platform: "darwin",
+			videoFrame: async (path) => {
+				if (path.endsWith("bad.mkv")) throw new Error("Invalid data found when processing input");
+				return FRAME;
+			},
+			thumbnail: async () => null,
+			systemIcon: async () => null,
+			warn: (message) => {
+				warnings.push(message);
+			},
+		});
+
+		// When the broken and a healthy video are listed
+		const icons = await provider.icons([target("/v/bad.mkv"), target("/v/ok.webm")]);
+
+		// Then the healthy one is served and the failure is surfaced
+		expect([...icons.keys()]).toEqual(["/v/ok.webm"]);
+		expect(warnings.join("\n")).toContain("Invalid data found when processing input");
+	});
+
+	it("asks for the large frame when the Inspector previews a video", async () => {
+		// Given a provider with a frame extractor
+		const sizes: number[] = [];
+		const provider = createIconProvider({
+			platform: "darwin",
+			videoFrame: async (_path, size) => {
+				sizes.push(size);
+				return FRAME;
+			},
+			thumbnail: async () => null,
+		});
+
+		// When the Inspector previews an mkv
+		const url = await provider.preview(target("/v/a.mkv"));
+
+		// Then the frame is decoded at the 640px tier and served under that tier's URL
+		expect(sizes).toEqual([PREVIEW_ICON_SIZE]);
+		expect(url).toBe(iconUrl("/v/a.mkv", MTIME, PREVIEW_ICON_SIZE));
+		expect(provider.read("/v/a.mkv", MTIME, PREVIEW_ICON_SIZE)).toEqual(FRAME);
+	});
+
+	it("draws the frame on Linux too, where no OS thumbnailer exists", async () => {
+		// Given a Linux provider
+		const system: string[] = [];
+		const provider = createIconProvider({
+			platform: "linux",
+			videoFrame: async (path) => (path.endsWith(".webm") ? FRAME : null),
+			systemIcon: async (path) => {
+				system.push(path);
+				return BYTES;
+			},
+		});
+
+		// When a webm and an mkv with no decodable frame are listed
+		await provider.icons([target("/v/a.webm"), target("/v/b.mkv")]);
+
+		// Then the webm shows its frame and only the undecodable one uses the type icon
+		expect(provider.read("/v/a.webm", MTIME)).toEqual(FRAME);
+		expect(system).toEqual(["/v/b.mkv"]);
+	});
+});
+
 describe("preview tier", () => {
 	it("generates the preview at the large size and returns a size-carrying URL", async () => {
 		// Given a macOS provider whose generator records the requested sizes
