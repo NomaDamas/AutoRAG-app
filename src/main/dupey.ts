@@ -17,7 +17,7 @@ export type DupeyVersionRunner = () => Promise<string>;
 
 function runDupeyVersion(): Promise<string> {
 	return new Promise((resolve, reject) => {
-		const child = spawn("dupey", ["--version"], { stdio: ["ignore", "pipe", "pipe"] });
+		const child = spawn("dupey", ["--version"], { stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
 		let stdout = "";
 		let stderr = "";
 		child.stdout.on("data", (chunk: Buffer) => {
