@@ -44,9 +44,10 @@ describe("KakaoTalk is a macOS-only source", () => {
 
 	it("is never probed on Windows, even when a lazykatok binary happens to be on PATH", async () => {
 		const probed: string[] = [];
+		// detectSources writes the discrawl/slacrawl configs under `home`; a made-up path would land in the checkout (or another user's profile).
 		const result = await detectSources({
 			platform: "win32",
-			home: "C:\\Users\\u",
+			home: await home(),
 			env: {},
 			run: async (command) => {
 				probed.push(command);
