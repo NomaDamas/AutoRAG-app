@@ -17,6 +17,10 @@
 //   2. Ask: the model is asked to delete a file with a shell command. The approval card shows the command;
 //      Deny keeps the file; Allow once deletes it.
 //   3. Full: the same request deletes the file with no card.
+//   4. Auto with Dazzi's judgment model: the same request is let through, or asked about with the reason.
+//   5. All of the above happen in ONE chat, which is one model conversation: the model is told a codeword and
+//      answers it from memory in the next question, and again after the app is quit and started on the same
+//      profile (the chat is opened from History; its session file is resumed).
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { request as httpsRequest } from "node:https";
@@ -120,13 +124,13 @@ const env = {
 	ANTHROPIC_API_KEY: "",
 };
 
-const app = await launchFinder({ userDataDir: join(WORK, "user-data"), env });
+let app = await launchFinder({ userDataDir: join(WORK, "user-data"), env });
 try {
 	app.process().stderr?.on("data", (chunk) => {
 		const text = String(chunk).trim();
 		if (/\[account\]|\[providers\]|No API key|permission/i.test(text)) console.log(`[main:err] ${text.slice(0, 300)}`);
 	});
-	const page = await finderWindow(app, 30_000);
+	let page = await finderWindow(app, 30_000);
 	page.setDefaultTimeout(30_000);
 	page.on("pageerror", (error) => console.log(`[pageerror] ${String(error).slice(0, 300)}`));
 	await app.evaluate(({ shell }) => {
@@ -153,10 +157,10 @@ try {
 	console.log(`model: ${MODEL_ID}`);
 
 	await openAiSearch(page);
-	const panel = page.locator(AI_PANEL);
-	const composer = panel.locator('input[aria-label="Ask Dazzi"]');
-	const approval = panel.locator('[role="alertdialog"]');
-	const question = panel.locator('[role="dialog"]');
+	let panel = page.locator(AI_PANEL);
+	let composer = panel.locator('input[aria-label="Ask Dazzi"]');
+	let approval = panel.locator('[role="alertdialog"]');
+	let question = panel.locator('[role="dialog"]');
 	const shot = async (name) => {
 		await page.waitForTimeout(450);
 		await page.screenshot({ path: join(EVIDENCE, `${name}.png`) });
@@ -283,6 +287,39 @@ try {
 	check("Auto removes the file the person explicitly asked to delete (Jev let it through or the person allowed it)", !existsSync(file("old-draft.txt")), `asked=${inAuto.length}`);
 	check("no run error in Auto", (await runError()) === "", await runError());
 	check("the model request went through the Dazzi service", forwarded.some((entry) => entry.startsWith("POST /v1/")), forwarded.slice(-3).join(", "));
+
+	// ── 5. The chat is one conversation: the model remembers what the person told it, and still does after a restart. ──
+	// Everything above ran in this one chat. A fact given now is not in any file, so only the conversation can supply it.
+	const lastAnswer = async () => ((await page.locator(".assistant-msg .assistant-prose").last().innerText({ timeout: 5000 }).catch(() => "")) ?? "").trim();
+	await send("Remember this for the rest of our conversation: the codeword is PERIWINKLE-7. Reply with just OK.");
+	await resolveCards("Deny");
+	await send("What is the codeword I gave you? Answer from memory, do not use any tool. One word.");
+	await resolveCards("Deny");
+	const remembered = await lastAnswer();
+	console.log(`remembered: ${remembered.replace(/\s+/g, " ").slice(0, 200)}`);
+	check("a follow-up is answered from the chat's earlier turns", /PERIWINKLE-7/i.test(remembered), remembered.slice(0, 160));
+	check("no run error in the follow-up", (await runError()) === "", await runError());
+	await shot("live-05-remembered");
+
+	await app.close();
+	app = await launchFinder({ userDataDir: join(WORK, "user-data"), env });
+	page = await finderWindow(app, 30_000);
+	page.setDefaultTimeout(30_000);
+	await openAiSearch(page);
+	panel = page.locator(AI_PANEL);
+	composer = panel.locator('input[aria-label="Ask Dazzi"]');
+	approval = panel.locator('[role="alertdialog"]');
+	question = panel.locator('[role="dialog"]');
+	await panel.locator('button[aria-label="Chat history"]').click();
+	await panel.locator(".history-item").first().click();
+	await panel.locator(".history").waitFor({ state: "detached" });
+	await send("After the restart: what was the codeword? Answer from memory, do not use any tool. One word.");
+	await resolveCards("Deny");
+	const afterRestart = await lastAnswer();
+	console.log(`after restart: ${afterRestart.replace(/\s+/g, " ").slice(0, 200)}`);
+	check("after a restart the same chat still remembers", /PERIWINKLE-7/i.test(afterRestart), afterRestart.slice(0, 160));
+	check("no run error after the restart", (await runError()) === "", await runError());
+	await shot("live-06-after-restart");
 } catch (error) {
 	check("run completed", false, String(error).slice(0, 600));
 } finally {

@@ -1157,3 +1157,185 @@ describe("createSearchService progress text", () => {
 		expect(seen[0]).toBe("Reviewing the query.");
 	});
 });
+
+describe("createSearchService conversations", () => {
+	interface Opened {
+		readonly resumeFile: string | undefined;
+		readonly seed: readonly { readonly question: string; readonly answer: string }[];
+	}
+
+	function conversationAgent(file = "/sessions/new-1.jsonl") {
+		const opened: Opened[] = [];
+		const agent = {
+			...createFakeAgent(async function*() {
+				yield { type: "complete", response: createResponse("session-c", "An answer", 1) };
+			}),
+			openSession: vi.fn(async (options: { resumeFile?: string | undefined; seed?: Opened["seed"] | undefined } = {}) => {
+				opened.push({ resumeFile: options.resumeFile, seed: options.seed ?? [] });
+				return { sessionFile: options.resumeFile ?? file, resumed: options.resumeFile !== undefined, seeded: options.seed?.length ?? 0 };
+			}),
+			closeSession: vi.fn(async () => undefined),
+		};
+		return { agent, opened };
+	}
+
+	function fakeSessions(files: Record<string, string> = {}) {
+		const remembered = new Map<string, string>(Object.entries(files));
+		return {
+			remembered,
+			index: {
+				fileFor: vi.fn(async (chatId: string) => remembered.get(chatId) ?? null),
+				remember: vi.fn(async (chatId: string, file: string) => void remembered.set(chatId, file)),
+				clear: vi.fn(async () => remembered.clear()),
+			},
+		};
+	}
+
+	it("starts a chat's first question in a new conversation and remembers where it is kept", async () => {
+		const { agent, opened } = conversationAgent("/sessions/chat-1.jsonl");
+		const sessions = fakeSessions();
+		const { send } = collectEvents();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send, now, sessions: sessions.index });
+
+		await service.start("search-1", "chat-1", "hello", []);
+
+		expect(opened).toEqual([{ resumeFile: undefined, seed: [] }]);
+		expect(sessions.remembered.get("chat-1")).toBe("/sessions/chat-1.jsonl");
+	});
+
+	it("resumes the conversation a chat kept when the app was restarted", async () => {
+		const { agent, opened } = conversationAgent();
+		const sessions = fakeSessions({ "chat-1": "/sessions/kept.jsonl" });
+		const { send } = collectEvents();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send, now, sessions: sessions.index });
+
+		await service.start("search-1", "chat-1", "and then?", []);
+
+		expect(opened).toEqual([{ resumeFile: "/sessions/kept.jsonl", seed: [] }]);
+	});
+
+	it("keeps one conversation per chat: a second question reuses the open one", async () => {
+		const { agent, opened } = conversationAgent();
+		const sessions = fakeSessions();
+		const { send } = collectEvents();
+		const factory = vi.fn(() => agent);
+		const service = createSearchService({ agentFactory: factory, chatStore: await createStore(), send, now, sessions: sessions.index });
+
+		await service.start("search-1", "chat-1", "first", []);
+		await service.start("search-2", "chat-1", "second", []);
+
+		expect(factory).toHaveBeenCalledTimes(1);
+		expect(opened).toHaveLength(1);
+	});
+
+	it("opens a chat that has history but no conversation with its earlier turns already in it", async () => {
+		const { agent, opened } = conversationAgent();
+		const sessions = fakeSessions();
+		const store = await createStore();
+		const at = "2026-10-01T00:00:00.000Z";
+		const phase = (answer: string) => ({ answer, evidence: [] });
+		await store.save({
+			id: "chat-old",
+			title: "old",
+			snippet: "",
+			updatedAt: at,
+			messages: [
+				{ role: "user", text: "my name is Moyaho", attachments: [], at },
+				{ role: "assistant", sessionId: "s1", quick: phase("Hello Moyaho (quick)"), deep: phase("Hello Moyaho (deep)"), stopped: false, at },
+				// A correction sent during a run is not a turn of its own.
+				{ role: "user", text: "only 2026 please", attachments: [], at, steer: "before-quick" },
+				{ role: "user", text: "is the sky blue?", attachments: [], at },
+				{ role: "assistant", sessionId: "s2", quick: phase("Yes (quick only)"), deep: null, stopped: false, at },
+				// A run that was stopped before it answered has nothing to carry over.
+				{ role: "user", text: "and the sea?", attachments: [], at },
+				{ role: "assistant", sessionId: "s3", quick: null, deep: null, stopped: true, at },
+			],
+		});
+		const { send } = collectEvents();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: store, send, now, sessions: sessions.index });
+
+		await service.start("search-1", "chat-old", "and the moon?", []);
+
+		expect(opened).toEqual([
+			{
+				resumeFile: undefined,
+				seed: [
+					{ question: "my name is Moyaho", answer: "Hello Moyaho (deep)" },
+					{ question: "is the sky blue?", answer: "Yes (quick only)" },
+				],
+			},
+		]);
+	});
+
+	it("does not seed from the question being asked now", async () => {
+		const { agent, opened } = conversationAgent();
+		const { send } = collectEvents();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send, now, sessions: fakeSessions().index });
+
+		await service.start("search-1", "chat-new", "the very first question", []);
+
+		expect(opened[0]?.seed).toEqual([]);
+	});
+
+	it("shows the error and ends the run when the conversation cannot be opened", async () => {
+		const { agent } = conversationAgent();
+		agent.openSession.mockRejectedValueOnce(new Error("cannot start the model session"));
+		const { events, send } = collectEvents();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send, now, sessions: fakeSessions().index });
+
+		await service.start("search-1", "chat-1", "hello", []);
+
+		expect(events).toEqual([
+			{ type: "error", searchId: "search-1", message: "Error: cannot start the model session" },
+			{ type: "done", searchId: "search-1" },
+		]);
+		expect(agent.searchDocumentsStream).not.toHaveBeenCalled();
+	});
+
+	it("closes the conversation of the chat it forgets once more than eight are open, and keeps its file", async () => {
+		const agents = Array.from({ length: 9 }, (_, position) => conversationAgent(`/sessions/${position}.jsonl`).agent);
+		const sessions = fakeSessions();
+		const { send } = collectEvents();
+		const queue = [...agents];
+		const service = createSearchService({
+			agentFactory: () => queue.shift() ?? agents[0]!,
+			chatStore: await createStore(),
+			send,
+			now,
+			sessions: sessions.index,
+		});
+
+		for (const position of agents.keys()) await service.start(`search-${position}`, `chat-${position}`, "q", []);
+
+		expect(agents[0]?.closeSession).toHaveBeenCalledTimes(1);
+		expect(agents[8]?.closeSession).not.toHaveBeenCalled();
+		// Its file is still known: the chat resumes from it when asked again.
+		expect(sessions.remembered.get("chat-0")).toBe("/sessions/0.jsonl");
+		expect(sessions.index.clear).not.toHaveBeenCalled();
+	});
+
+	it("ends every conversation and deletes the session files when the history is cleared", async () => {
+		const { agent } = conversationAgent();
+		const sessions = fakeSessions();
+		const { send } = collectEvents();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send, now, sessions: sessions.index });
+		await service.start("search-1", "chat-1", "hello", []);
+
+		await service.historyClear();
+
+		expect(agent.closeSession).toHaveBeenCalledTimes(1);
+		expect(sessions.index.clear).toHaveBeenCalledTimes(1);
+		expect(await service.historyList()).toEqual([]);
+	});
+
+	it("ends every open conversation when the app quits", async () => {
+		const { agent } = conversationAgent();
+		const { send } = collectEvents();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send, now, sessions: fakeSessions().index });
+		await service.start("search-1", "chat-1", "hello", []);
+
+		await service.dispose();
+
+		expect(agent.closeSession).toHaveBeenCalledTimes(1);
+	});
+});

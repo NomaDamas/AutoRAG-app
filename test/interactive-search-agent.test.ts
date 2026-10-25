@@ -33,7 +33,7 @@ interface ToolResult {
 	readonly text: string;
 }
 
-function build(mode: ApprovalMode, responses: FauxResponseStep[], respond: (request: InteractionRequest) => InteractionAnswer) {
+async function build(mode: ApprovalMode, responses: FauxResponseStep[], respond: (request: InteractionRequest) => InteractionAnswer) {
 	const registration = registerFauxProvider({ api: `faux-dazzi-${randomUUID()}`, models: [{ id: "interactive" }] });
 	registration.setResponses(responses);
 	disposers.push(() => registration.unregister());
@@ -69,6 +69,9 @@ function build(mode: ApprovalMode, responses: FauxResponseStep[], respond: (requ
 		createAgentInteraction(),
 	);
 	agent.setApprovalMode(mode);
+	// The chat's conversation is what the host UI is bound to: nothing can be asked before it is open.
+	await agent.openSession();
+	disposers.push(() => agent.closeSession());
 	agent.bindRun({ open: (body, signal) => hub.open("run-1", body, signal) });
 
 	const results: ToolResult[] = [];
@@ -96,7 +99,7 @@ describe("file-change gate through the app's interaction hub", () => {
 	it("ask mode: the person is asked before the shell runs, and Deny keeps the file", async () => {
 		const file = join(root, "report.pdf");
 		writeFileSync(file, "x");
-		const t = build("ask", removeFile(file), () => ({ kind: "approval", choice: "deny" }));
+		const t = await build("ask", removeFile(file), () => ({ kind: "approval", choice: "deny" }));
 
 		await t.agent.searchDocuments("delete the report");
 
@@ -109,7 +112,7 @@ describe("file-change gate through the app's interaction hub", () => {
 	it("ask mode: Allow once lets the call run", async () => {
 		const file = join(root, "report.pdf");
 		writeFileSync(file, "x");
-		const t = build("ask", removeFile(file), () => ({ kind: "approval", choice: "allow-once" }));
+		const t = await build("ask", removeFile(file), () => ({ kind: "approval", choice: "allow-once" }));
 
 		await t.agent.searchDocuments("delete the report");
 
@@ -120,7 +123,7 @@ describe("file-change gate through the app's interaction hub", () => {
 	it("passes the person's note to the model when they deny with one", async () => {
 		const file = join(root, "report.pdf");
 		writeFileSync(file, "x");
-		const t = build("ask", removeFile(file), () => ({ kind: "approval", choice: "deny-with-note", note: "work on a copy instead" }));
+		const t = await build("ask", removeFile(file), () => ({ kind: "approval", choice: "deny-with-note", note: "work on a copy instead" }));
 
 		await t.agent.searchDocuments("delete the report");
 
@@ -132,7 +135,7 @@ describe("file-change gate through the app's interaction hub", () => {
 	it("full mode never asks, and switching to it mid-session stops the questions", async () => {
 		const file = join(root, "report.pdf");
 		writeFileSync(file, "x");
-		const t = build("ask", removeFile(file), () => ({ kind: "approval", choice: "deny" }));
+		const t = await build("ask", removeFile(file), () => ({ kind: "approval", choice: "deny" }));
 		t.agent.setApprovalMode("full");
 
 		await t.agent.searchDocuments("delete the report");
@@ -144,7 +147,7 @@ describe("file-change gate through the app's interaction hub", () => {
 	it("auto mode with no judgment model asks about the call instead of letting it through", async () => {
 		const file = join(root, "report.pdf");
 		writeFileSync(file, "x");
-		const t = build("auto", removeFile(file), () => ({ kind: "approval", choice: "deny" }));
+		const t = await build("auto", removeFile(file), () => ({ kind: "approval", choice: "deny" }));
 
 		await t.agent.searchDocuments("delete the report");
 
@@ -156,7 +159,7 @@ describe("file-change gate through the app's interaction hub", () => {
 	it("blocks the call when nobody is bound to answer (between runs), rather than waiting forever", async () => {
 		const file = join(root, "report.pdf");
 		writeFileSync(file, "x");
-		const t = build("ask", removeFile(file), () => ({ kind: "approval", choice: "allow-once" }));
+		const t = await build("ask", removeFile(file), () => ({ kind: "approval", choice: "allow-once" }));
 		t.agent.bindRun(undefined);
 
 		await t.agent.searchDocuments("delete the report");
@@ -174,7 +177,7 @@ describe("ask_user through the app's interaction hub", () => {
 	};
 
 	it("shows the model's question and hands the chosen option back as the tool result", async () => {
-		const t = build("auto", toolThenFinish("ask_user", askReport), () => ({
+		const t = await build("auto", toolThenFinish("ask_user", askReport), () => ({
 			kind: "question",
 			answers: [{ kind: "selection", selections: ["Q4"] }],
 		}));
@@ -198,7 +201,7 @@ describe("ask_user through the app's interaction hub", () => {
 	});
 
 	it("tells the model the person cancelled instead of inventing an answer", async () => {
-		const t = build("auto", toolThenFinish("ask_user", askReport), () => ({ kind: "cancel" }));
+		const t = await build("auto", toolThenFinish("ask_user", askReport), () => ({ kind: "cancel" }));
 
 		await t.agent.searchDocuments("summarize the report");
 
