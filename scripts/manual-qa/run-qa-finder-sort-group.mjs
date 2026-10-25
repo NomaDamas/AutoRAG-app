@@ -13,9 +13,10 @@
 import { mkdirSync, mkdtempSync, utimesSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { finderWindow, launchFinder } from "./launch-finder.mjs";
 
-const ROOT = new URL("../../", import.meta.url).pathname.replace(/\/$/, "");
+const ROOT = fileURLToPath(new URL("../../", import.meta.url)).replace(/[\\/]$/, "");
 const EVIDENCE = join(ROOT, ".omo/evidence/ai-finder-app/qa-sort-group");
 mkdirSync(EVIDENCE, { recursive: true });
 
