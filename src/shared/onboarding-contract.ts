@@ -19,6 +19,7 @@
  */
 
 import type { LocalSpecVerdict } from "./local-embedding-spec";
+import type { IndexFailure } from "./index-failure";
 import type { SmartExclusion } from "./smart-indexing-contract";
 
 export const ONBOARDING_CHANNELS = {
@@ -145,6 +146,11 @@ export interface OnboardingDraft {
 	readonly smartScope?: readonly SmartExclusion[];
 	/** The folders the AI looked through to produce `smartScope`; a folder selected later that is not here was never analysed. */
 	readonly smartScopeRoots?: readonly string[];
+	/**
+	 * Set while the user is on an earlier step only to fix what stopped the first index (the embedding choice):
+	 * leaving that step goes straight back to the index instead of on through the flow.
+	 */
+	readonly resumeAt?: "indexing";
 }
 
 export interface OnboardingSnapshot {
@@ -293,6 +299,10 @@ export interface IndexingStatus {
 	/** Most recently read file name, and the display name of the selected folder it is under. */
 	readonly recentFile: string | null;
 	readonly recentFolder: string | null;
+	/** Why a failed run stopped; `null` unless `state` is `failed`. */
+	readonly failure: IndexFailure | null;
+	/** Files a finished run left out (read errors, parser timeouts, files MinSync skipped); `0` unless `state` is `success`. */
+	readonly skipped: number;
 	/** Display names of the data sources being indexed. */
 	readonly sources: readonly string[];
 	readonly startedAt: string | null;

@@ -459,6 +459,12 @@ export interface ConfigRefreshDiagnostic {
 	readonly code: string;
 	readonly severity: "info" | "warning" | "error";
 	readonly message: string;
+	/** A stable token the app sets itself where the cause matters (`embedder-preflight-failed`, `embedding-model-download-failed`); never parsed from a message. */
+	readonly reason?: string;
+	/** Files this diagnostic says were left out of the run (`files-left-out`, `parse-killed`). */
+	readonly count?: number;
+	/** Folders this diagnostic is about (`search-root-unavailable`). */
+	readonly folders?: readonly string[];
 }
 
 /** Outcome of a manual AutoRAGLite index refresh, with its diagnostics. */

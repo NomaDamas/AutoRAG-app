@@ -120,6 +120,35 @@ describe("preflightEmbedder", () => {
 		if (!outcome.ok) expect(outcome.message).toContain("https://gateway.example/api");
 	});
 
+	it.each([
+		[401, "rejected"],
+		[402, "rejected"],
+		[404, "rejected"],
+		[429, "server-error"],
+		[500, "server-error"],
+		[503, "server-error"],
+	])("tells a %i answer apart as '%s', so the app can decide to wait or to change a setting", async (status, reason) => {
+		const outcome = await preflightEmbedder(openai, { env: { OPENAI_API_KEY: "k" }, fetchImpl: respond(status, { error: { message: "x" } }).fetchImpl });
+		expect(outcome).toMatchObject({ ok: false, reason });
+	});
+
+	it("gives every other failure its own reason", async () => {
+		const env = { OPENAI_API_KEY: "k" };
+		const never = (async () => {
+			throw new TypeError("fetch failed");
+		}) as typeof fetch;
+		const timeout = (async () => {
+			throw Object.assign(new Error("timed out"), { name: "TimeoutError" });
+		}) as typeof fetch;
+		expect(await preflightEmbedder(openai, { env: {}, fetchImpl: never })).toMatchObject({ reason: "missing-key" });
+		expect(await preflightEmbedder({ ...openai, apiKeyEnv: "OPENROUTER_API_KEY" }, { env: {}, fetchImpl: never })).toMatchObject({ reason: "key-env-ignored" });
+		expect(await preflightEmbedder(openai, { env, fetchImpl: never })).toMatchObject({ reason: "unreachable" });
+		expect(await preflightEmbedder(openai, { env, fetchImpl: timeout })).toMatchObject({ reason: "timeout" });
+		expect(await preflightEmbedder({ ...openai, baseUrl: "https://gateway.example/api/v1" }, { env, fetchImpl: respond(404, "Not Found").fetchImpl })).toMatchObject({ reason: "base-url-v1" });
+		expect(await preflightEmbedder(openai, { env, fetchImpl: respond(200, { data: [] }).fetchImpl })).toMatchObject({ reason: "no-vector" });
+		expect(await preflightEmbedder({ ...openai, dimension: 1024 }, { env, fetchImpl: respond(200, vectors).fetchImpl })).toMatchObject({ reason: "dimension" });
+	});
+
 	it("probes a tei: embedder at /embed without a key", async () => {
 		const server = respond(200, [[0.1, 0.2, 0.3]]);
 

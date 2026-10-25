@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="ko" data-appearance="light">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Dazzi · 첫 인덱싱 실패 시안 (#283)</title>
+    <!-- The real stylesheets: the running and finished screens are the shipped ones; only prototype.css is new. -->
+    <link rel="stylesheet" href="../../../src/renderer/styles/tokens.css">
+    <link rel="stylesheet" href="../../../src/renderer/styles/onboarding.css">
+    <link rel="stylesheet" href="./prototype.css">
+    <script src="../../design-reference/onboarding/brands.js" defer></script>
+    <script src="../settings/lucide-icons.js" defer></script>
+    <script src="./fx-data.js" defer></script>
+    <script src="./fx-views.js" defer></script>
+    <script src="./fx-notes.js" defer></script>
+    <script src="./fx-main.js" defer></script>
+  </head>
+  <body>
+    <header class="review-bar" id="reviewBar"></header>
+    <div class="stage-wrap">
+      <div class="onb-frame" id="onbFrame">
+        <span class="proto-traffic" aria-hidden="true"><i></i><i></i><i></i></span>
+        <div class="onb immersive" id="onb">
+          <header class="titlebar"><div class="window-title" id="winTitle"></div></header>
+          <div class="stage" id="stage"></div>
+          <footer class="footer" id="footer"></footer>
+          <div class="toast" id="onbToast" role="status"></div>
+        </div>
+      </div>
+      <div class="app-win" id="appWin" hidden></div>
+    </div>
+    <section class="notes" id="notes" hidden></section>
+  </body>
+</html>

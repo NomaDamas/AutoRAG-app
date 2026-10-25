@@ -133,7 +133,7 @@ async function runRefresh(
 				written: 0,
 				deleted: 0,
 				skipped: 0,
-				diagnostics: [{ code: "search-root-unavailable", severity: "error", message }],
+				diagnostics: [{ code: "search-root-unavailable", severity: "error", message, folders: problems.map((problem) => problem.root) }],
 				error: message,
 			};
 		}
@@ -166,7 +166,7 @@ async function runRefresh(
 				written: 0,
 				deleted: 0,
 				skipped: 0,
-				diagnostics: [{ code: "embedder-preflight-failed", severity: "error", message: preflight.message }],
+				diagnostics: [{ code: "embedder-preflight-failed", severity: "error", message: preflight.message, reason: preflight.reason }],
 				error: preflight.message,
 			};
 		}
@@ -192,6 +192,7 @@ async function runRefresh(
 			diagnostics.push({
 				code: recovered.quarantined.length > 0 ? "files-left-out" : "refresh-retried",
 				severity: "warning",
+				...(recovered.quarantined.length > 0 ? { count: recovered.quarantined.length } : {}),
 				message: t(recovered.quarantined.length > 0 ? "main.refresh.filesLeftOut" : "main.refresh.retried", { files: recovered.quarantined.length, retries: recovered.retries, code: recovered.code ?? "" }),
 			});
 		}
@@ -206,7 +207,7 @@ async function runRefresh(
 		// The librarian reports every failed parse with one generic message; what killed the file is only known here.
 		const killed = takeSharedParseFailures();
 		if (killed.timedOut > 0 || killed.crashed > 0) {
-			diagnostics.push({ code: "parse-killed", severity: "warning", message: t("main.refresh.parseKilled", { timedOut: killed.timedOut, crashed: killed.crashed }) });
+			diagnostics.push({ code: "parse-killed", severity: "warning", message: t("main.refresh.parseKilled", { timedOut: killed.timedOut, crashed: killed.crashed }), count: killed.timedOut + killed.crashed });
 		}
 		const toDiagnostic = (diagnostic: { readonly code: unknown; readonly severity: ConfigRefreshDiagnostic["severity"]; readonly message: string }): ConfigRefreshDiagnostic => ({
 			code: String(diagnostic.code),
