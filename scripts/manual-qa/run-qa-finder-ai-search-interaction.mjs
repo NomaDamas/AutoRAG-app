@@ -28,7 +28,7 @@ import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join, delimiter } from "node:path";
 import { AI_PANEL, finderWindow, launchFinder, openAiSearch, ROOT } from "./launch-finder.mjs";
-import { rmRetry } from "./platform.mjs";
+import { rmRetry, writeMinsyncStub } from "./platform.mjs";
 
 const EVIDENCE = process.env.QA_OUT ?? join(ROOT, ".omo/evidence/ai-finder-app/qa-ai-search-interaction");
 mkdirSync(EVIDENCE, { recursive: true });
@@ -57,9 +57,7 @@ mkdirSync(join(WORK, "workspace"), { recursive: true });
 mkdirSync(join(AUTORAG_HOME, "bin"), { recursive: true });
 mkdirSync(AGENT_DIR, { recursive: true });
 // No MinSync here: a stub that exits at once keeps the index out of the way of the scenarios.
-const minsyncStub = join(AUTORAG_HOME, "bin", "minsync");
-writeFileSync(minsyncStub, "#!/bin/sh\nexit 0\n");
-chmodSync(minsyncStub, 0o755);
+writeMinsyncStub(join(AUTORAG_HOME, "bin"));
 const file = (name) => join(DOCS, name);
 const seed = () => {
 	writeFileSync(file("old-draft.txt"), "stale draft\n");
@@ -236,13 +234,15 @@ const settingsFile = join(USER_DATA, "settings", "settings-state.json");
 check("the choice is stored in the app settings", existsSync(settingsFile) && JSON.parse(readFileSync(settingsFile, "utf8")).settings.approvalMode === "ask");
 
 // ── 2. Ask: the approval card. ────────────────────────────────────────────
-const deleteOld = [{ text: "Looking at it." }, { tool: "bash", args: { command: `rm ${file("old-draft.txt")}` } }, { text: "Handled." }];
+// The model's shell is bash (Git Bash on Windows), where an unquoted backslash path loses its separators.
+const shellPath = (path) => path.replaceAll("\\", "/");
+const deleteOld = [{ text: "Looking at it." }, { tool: "bash", args: { command: `rm ${shellPath(file("old-draft.txt"))}` } }, { text: "Handled." }];
 script(deleteOld);
 await ask("remove the stale draft");
 await approval.waitFor();
 check("the approval card replaces the message box", (await composer.count()) === 0);
 const cardText = await approval.innerText();
-check("the card names the call", cardText.includes(`rm ${file("old-draft.txt")}`), cardText.slice(0, 200));
+check("the card names the call", cardText.includes(`rm ${shellPath(file("old-draft.txt"))}`), cardText.slice(0, 200));
 check("the card offers the four answers", ["Allow once", "Deny"].every((label) => cardText.includes(label)) && /session/i.test(cardText) && /tell the model/i.test(cardText));
 await shot("02-approval-card-ask");
 await approval.getByRole("button", { name: "Deny", exact: true }).click();
