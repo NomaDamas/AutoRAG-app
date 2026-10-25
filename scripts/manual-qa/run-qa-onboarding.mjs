@@ -91,7 +91,11 @@ const stubUrl = `http://127.0.0.1:${stub.address().port}/v1`;
 const PI_AGENT_DIR = join(WORK, "pi-agent");
 mkdirSync(PI_AGENT_DIR, { recursive: true });
 const ko = JSON.parse(readFileSync(join(ROOT, "src/shared/i18n/locales/ko.json"), "utf8"));
+// A provider key in the host's environment (an OPENAI_API_KEY on a developer machine) would show that provider as
+// already connected; the lane starts from nothing connected, so every such key is blanked.
+const blankedKeys = Object.fromEntries(Object.keys(process.env).filter((name) => /_API_KEY$/u.test(name)).map((name) => [name, ""]));
 const env = {
+	...blankedKeys,
 	// Pi's credentials and the provider list live here: the lane never touches the developer's own sign-ins.
 	PI_CODING_AGENT_DIR: PI_AGENT_DIR,
 	AUTORAG_HOME,

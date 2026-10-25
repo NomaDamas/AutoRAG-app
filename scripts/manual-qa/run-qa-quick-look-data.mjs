@@ -102,7 +102,8 @@ try {
 	}
 	const text = async () => (await preview.locator("body").innerText()) ?? "";
 
-	// SQLite
+	// SQLite. The clock starts once the listing shows the file: the first listing after launch is the app's startup, not the preview.
+	await main.getByRole("row", { name: /shop\.sqlite/ }).first().waitFor({ timeout: 30_000 });
 	const started = Date.now();
 	await open("shop.sqlite", () => document.querySelectorAll(".ql-data__grid tbody tr").length > 0);
 	await preview.screenshot({ path: join(EVIDENCE, "sqlite-first.png") });
