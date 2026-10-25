@@ -1,5 +1,8 @@
 name: tmp tar probe
-on: workflow_dispatch
+on:
+  push:
+    branches: [fix/release-0.2.0-build]
+    paths: [.github/workflows/tmp-tar-probe.yml]
 jobs:
   probe:
     runs-on: windows-2022
