@@ -69,12 +69,12 @@ second datasource or model configuration. The sidebar is searchable and grouped:
   search; the shared config file otherwise stays as the user left it, `minSync.embedder`
   included, so choosing a model again needs no re-entry). `semantic-policy.ts`
   applies it to the config the app hands to the librarian, because the librarian
-  (v2.10.x, 733e8a0) has no switch for it:
+  has no switch for it:
   - *Refresh*: `minsync` is replaced by `parsed` + `jikji`, so MinSync never runs, no
     model is loaded or downloaded, and no `.minsync` index is built.
   - *Datasources*: the kakao/slack/telegram/whatsapp sidecars get
     `connector.sidecar.semantic: false` (BM25 only), Discord answers from FTS,
-    ClawGallery skips its visual vector sync, and for the duration of a refresh the
+    ClawGallery skips its visual vector sync and pins `defaultMode: "keyword"`, and for the duration of a refresh the
     embedding steps the librarian runs unconditionally (mailcrawl `index`,
     discrawl `embed`) are successful no-ops; their sync and update steps still run.
     The Obsidian source is left unindexed instead: MinSync indexes a vault into a
@@ -83,8 +83,14 @@ second datasource or model configuration. The sidebar is searchable and grouped:
     the librarian (Marker-Inc-Korea/AutoRAG#1936) maps to the gist skill's own
     switch: no vector index and no `<name>-semantic` method. The pre-#1936
     prototype patch for it is gone with the v2.10.4 pin.
-  - *Search*: the agent's vector and hybrid methods (MinSync's, and every
-    datasource's) answer nothing without being run, so there is no "method failed"
+  - *Search*: MinSync's vector and hybrid methods answer nothing without being run
+    (the agent keeps its vector method outside the method registry, so
+    `semantic-policy.ts` reaches it through the agent's `minSyncMethod`, and refuses
+    to run keyword-only when a librarian release moves it). The shared embedder reports
+    no endpoint, so a datasource's hybrid-first method (mailcrawl, the kakao CLI) fails
+    its hybrid search with `embedding-unavailable` and answers from its own keyword
+    search; the app drops the pipeline's `onFallback` for it, so that deliberate
+    fallback is not reported as a failed method. There is no "method failed"
     diagnostic for an index that is deliberately absent, and the agent's
     past-question memory ranks by keywords only. Local file content is found by
     Jikji and the file-name tools.

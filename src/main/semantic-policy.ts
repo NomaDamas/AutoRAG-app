@@ -1,6 +1,7 @@
 import {
 	DiscrawlClient,
 	MailcrawlClient,
+	type AutoRAGAgentOptions,
 	type CliConfig,
 	type RefreshMethod,
 	type RetrievalMethod,
@@ -12,13 +13,17 @@ import { isJsonObject } from "../shared/settings-contract";
  *
  * With `appIndexing.semanticSearch: false` nothing in the app embeds text and no
  * retrieval method ranks by meaning: MinSync never runs, every datasource that
- * can skip its embedding step does, and the vector and hybrid methods answer
- * nothing. The shared config file is left alone, like `indexing-policy`: the
- * policy is applied to the config the app hands to the librarian.
+ * can skip its embedding step does, MinSync's vector and hybrid methods answer
+ * nothing, and the shared embedder reports no endpoint, so a datasource's
+ * hybrid-first method falls back to its own keyword search.
+ * The shared config file is left alone, like `indexing-policy`: the policy is
+ * applied to the config the app hands to the librarian.
  *
- * The librarian (v2.11.x) has no switch for this, so the policy works with what
- * it exposes: refresh method selection, per-datasource connector options, and
- * the public retrieval registry and client classes.
+ * The librarian has no switch for this, so the policy works with what it
+ * exposes: refresh method selection, per-datasource connector options, the
+ * public retrieval registry, the shared embedder, client classes, and the one
+ * member of the agent the registry does not reach (`agentMinSyncVectorMethod`;
+ * a test fails when a librarian release moves it).
  */
 
 /** Retrieval method types that rank by embeddings, alone or fused with keywords. */
@@ -54,7 +59,7 @@ function entryWithoutSemantic(alias: string, entry: unknown): unknown {
 	if (template === "discord") return { ...entry, connector: { ...connector, defaultMode: "fts" } };
 	// The librarian maps `connector.semantic: false` to the gist skill's own switch (AutoRAG#1936): no vector index, no semantic method.
 	if (template === "github-gist" || template === "hister") return { ...entry, connector: { ...connector, semantic: false } };
-	if (template === "clawgallery") return { ...entry, connector: { ...connector, syncVisual: false } };
+	if (template === "clawgallery") return { ...entry, connector: { ...connector, syncVisual: false, defaultMode: "keyword" } };
 	// An Obsidian vault is indexed by MinSync, which cannot index without an embedder; keyword-only mode runs none.
 	if (template === "obsidian") return { ...entry, enabled: false };
 	return entry;
@@ -67,17 +72,39 @@ export function withSemanticPolicyApplied(config: CliConfig, semantic: boolean):
 	return { ...config, datasources: datasources as NonNullable<CliConfig["datasources"]> };
 }
 
+function isRetrievalMethod(value: unknown): value is RetrievalMethod {
+	return typeof value === "object" && value !== null && "describe" in value && typeof value.describe === "function" && "retrieve" in value && typeof value.retrieve === "function";
+}
+
+function isManagedEmbedder(value: unknown): value is NonNullable<AutoRAGAgentOptions["embedder"]> {
+	return typeof value === "object" && value !== null && "describeEndpoint" in value && typeof value.describeEndpoint === "function";
+}
+
 /**
- * Makes every vector and hybrid method in the registry answer nothing without
- * running it. Descriptors are untouched, so tool listings stay truthful, and no
- * "method failed" diagnostic reaches the agent for an index that is deliberately
- * absent. Returns the names it neutralized.
+ * Makes every vector and hybrid method in the registry stop ranking by meaning.
+ *
+ * A method answers nothing without running, except a hybrid method that belongs to a datasource. Since the librarian
+ * searches hybrid-first, that one method is the datasource's whole search: it leads with the hybrid and answers from
+ * keyword search when the hybrid throws, which it does while the embedder reports no endpoint (`agentOptionsForSemantic`).
+ * It keeps running, and the pipeline is not told its fallback happened, because here that is the mode working, not a
+ * failed method.
+ *
+ * Descriptors are untouched, so tool listings stay truthful, and no "method failed" diagnostic reaches the agent for an
+ * index that is deliberately absent. Returns the names of the methods it silenced.
  */
 export function neutralizeSemanticMethods(registry: { list(): RetrievalMethod[] }): readonly string[] {
 	const names: string[] = [];
 	for (const method of registry.list()) {
-		const { name, type } = method.describe();
+		const { name, type, datasourceId } = method.describe();
 		if (SEMANTIC_TYPES[type] !== true) continue;
+		if (type === "hybrid" && datasourceId !== undefined) {
+			const retrieve = method.retrieve.bind(method);
+			method.retrieve = (query, options) => {
+				const { onFallback: _deliberate, ...rest } = options;
+				return retrieve(query, rest);
+			};
+			continue;
+		}
 		method.retrieve = async () => [];
 		names.push(name);
 	}
@@ -137,12 +164,39 @@ export async function runWithoutSemanticIndexing<T>(work: () => Promise<T>): Pro
 	}
 }
 
-/** Agent options for keyword-only mode: past-question memory search ranks by keywords too. */
+/**
+ * Agent options for keyword-only mode. Past-question memory search ranks by keywords too, and the shared embedder
+ * reports no endpoint: the datasource CLIs (mailcrawl, lazykatok) then fail their hybrid and semantic searches with
+ * `embedding-unavailable` instead of embedding with their own native model or a running `minsync serve`, so a hybrid-first
+ * datasource method answers from its keyword search. The datasource skills hold this same embedder instance, which is why
+ * it is changed in place.
+ */
 export function agentOptionsForSemantic<T extends object>(options: T, semantic: boolean): T & { readonly memoryEmbedder?: false } {
-	return semantic ? options : { ...options, memoryEmbedder: false };
+	if (semantic) return options;
+	if ("embedder" in options && isManagedEmbedder(options.embedder)) options.embedder.describeEndpoint = async () => undefined;
+	return { ...options, memoryEmbedder: false };
 }
 
-/** Silences the agent's vector and hybrid methods in keyword-only mode. */
+/**
+ * The MinSync vector method the agent keeps for itself: the search pre-fetch and the `semantic_search_local_docs` tool
+ * read it directly. Hybrid-first retrieval (librarian after v2.12.0) leaves it out of the registry, so the registry no
+ * longer reaches it. Undefined when the agent has no such member.
+ */
+export function agentMinSyncVectorMethod(agent: object): RetrievalMethod | undefined {
+	const found: unknown = Reflect.get(agent, "minSyncMethod");
+	return isRetrievalMethod(found) ? found : undefined;
+}
+
+/**
+ * Silences the agent's vector and hybrid methods in keyword-only mode: the registry's, and the vector method the agent
+ * holds outside it. Throws instead of searching by meaning when the librarian no longer exposes that method.
+ */
 export function applySemanticPolicyToAgent(agent: { getMethodRegistry(): { list(): RetrievalMethod[] } }, semantic: boolean): void {
-	if (!semantic) neutralizeSemanticMethods(agent.getMethodRegistry());
+	if (semantic) return;
+	const vector = agentMinSyncVectorMethod(agent);
+	if (vector === undefined) {
+		throw new Error("Keyword-only mode cannot silence MinSync's vector method: the librarian's agent has no `minSyncMethod` member any more.");
+	}
+	const methods = new Set([...agent.getMethodRegistry().list(), vector]);
+	neutralizeSemanticMethods({ list: () => [...methods] });
 }

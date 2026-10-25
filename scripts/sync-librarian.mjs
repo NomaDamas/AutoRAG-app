@@ -10,9 +10,10 @@ const staged = join(root, ".upstream", "librarian-package");
 const installed = join(root, "node_modules", "@autorag", "librarian");
 const remote = "https://github.com/Marker-Inc-Korea/AutoRAG.git";
 // A release tag, or a full commit SHA while the librarian has no tag that carries what the app needs.
-// v2.12.0 adds the permission gate (ask/auto/full), `ask_user`, and `convert_files` (Filee conversion: `convertWithFilee`, `resolveFileeOptions`, the route matrix) on top of v2.11.1
-// (file automations, `autorag automate`, `@autorag/librarian/profiles`), which the app's 자동화 view reads and the agent edits.
-const librarianRef = "v2.12.0";
+// This SHA is public `main` after v2.12.0, pinned until the next release tag ships (switch `librarianRef` to that tag then): hybrid-first retrieval
+// (one method per datasource, `FallbackRetrievalMethod`; MinSync's vector method leaves the registry), the Jev `direct` route folded into `extra`, and
+// v2.12.0's permission gate (ask/auto/full), `ask_user`, and `convert_files` on top of v2.11.1 (file automations, `autorag automate`, `@autorag/librarian/profiles`).
+const librarianRef = "d8aafc8acac1884dd8c45de2ab3ed5ba81e94ea6";
 
 function run(command, args, cwd = root) {
 	const result = spawnSync(command, args, { cwd, stdio: "inherit" });
