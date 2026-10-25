@@ -569,6 +569,7 @@
       "sources": "データソース",
       "plan": "プラン",
       "model": "AIモデル",
+      "roles": "検索サポートモデル",
       "indexing": "インデックス作成"
     },
     "stepLabel": {
@@ -581,6 +582,7 @@
       "embedding": "続ける",
       "sources": "続ける",
       "model": "続ける",
+      "roles": "続ける",
       "indexing": "続ける"
     },
     "welcome": {
@@ -912,32 +914,20 @@
     "model": {
       "eyebrow": "AIモデル",
       "title": "使用するモデルを接続してください",
-      "lead": "検出された接続を使うか、プロバイダーとAPIキーを選択してください。",
-      "note": "キーは暗号化して保存され、設定ファイルには記録されません。",
-      "detectedTitle": "検出された接続",
-      "localRuntime": "ローカルランタイム",
-      "storedCredential": "保存済みの資格情報",
-      "use": "使用",
-      "provider": {
-        "anthropic": "Anthropic",
-        "openai": "OpenAI",
-        "openrouter": "OpenRouter",
-        "google": "Google",
-        "ollama": "Ollama",
-        "openai-compatible": "OpenAI互換"
-      },
-      "baseUrlPlaceholder": "https://example.com/v1",
-      "keyPlaceholder": "APIキーを入力",
-      "verify": "接続を確認",
-      "verifying": "確認中…",
-      "verified": "✓ 接続完了 · おすすめのモデルが選択されました。",
-      "unverified": "キーは暗号化して保存され、設定ファイルには記録されません。",
-      "error": "接続に失敗: {{error}}",
-      "advanced": "詳細設定",
+      "lead": "APIキー、サブスクリプションのサインイン、お使いのコンピューター上のサーバーなど、すでにお持ちのサービスを接続してから、モデルを選びます。実際の呼び出しに応答するまで次へ進めません。",
+      "note": "設定 → AIモデルに保存されるので、あとからいつでも変更できます。",
+      "connectedTitle": "接続済みのサービス",
+      "none": "接続されたサービスはまだありません。",
+      "connect": "サービスを接続",
       "modelRow": "モデル",
-      "recommended": "プロバイダーのおすすめモデル",
-      "reasoningRow": "推論レベル（生成モデルのみ）",
-      "reasoningValue": "モデルの既定値"
+      "pick": "モデルを選択",
+      "needService": "先にサービスを接続してください",
+      "unready": "続けるにはモデルを選択してください。",
+      "ready": "✓ 準備完了 · {{model}} が {{seconds}} 秒で応答しました。",
+      "checking": "{{model}} が応答するか確認しています…",
+      "failed": "{{model}} が応答しませんでした: {{error}}",
+      "readyResumed": "✓ 準備完了 · {{model}} が回答します。",
+      "retry": "もう一度確認"
     },
     "indexing": {
       "tip": "ヒント",
@@ -1115,10 +1105,16 @@
       "networkOk": "ネットワーク接続を確認しました。",
       "networkFail": "ネットワークに接続できません。",
       "fdaPending": "アプリを再度開くと権限が適用されます。",
-      "verified": "接続を確認しました。",
       "planActive": "{{plan}}プランが有効になりました。",
       "signInFailed": "ログインできませんでした。",
       "notIndexed": "インデックス作成が終わらないとDazziを開けません。"
+    },
+    "roles": {
+      "eyebrow": "検索サポートモデル",
+      "title": "リランカーと判断モデルを選択",
+      "lead": "Dazzi のプランなら標準で提供されます。ご自身のキーを使う場合は、接続したサービスから選ぶか、そのままにしてください。",
+      "note": "設定 → AIモデルに保存されるので、あとからいつでも変更できます。",
+      "unavailable": "接続中のサービスにはこのモデルがありません。設定で OpenRouter を接続すると使えます。"
     }
   },
   "finderComponents": {

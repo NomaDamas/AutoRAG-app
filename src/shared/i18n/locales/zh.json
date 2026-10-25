@@ -569,6 +569,7 @@
       "sources": "数据源",
       "plan": "套餐",
       "model": "AI 模型",
+      "roles": "检索辅助模型",
       "indexing": "索引"
     },
     "stepLabel": {
@@ -581,6 +582,7 @@
       "embedding": "继续",
       "sources": "继续",
       "model": "继续",
+      "roles": "继续",
       "indexing": "继续"
     },
     "welcome": {
@@ -912,32 +914,20 @@
     "model": {
       "eyebrow": "AI 模型",
       "title": "连接要使用的模型",
-      "lead": "使用检测到的连接，或选择提供商和 API 密钥。",
-      "note": "密钥会加密存储，不会写入配置文件。",
-      "detectedTitle": "检测到的连接",
-      "localRuntime": "本地运行时",
-      "storedCredential": "已保存的凭据",
-      "use": "使用",
-      "provider": {
-        "anthropic": "Anthropic",
-        "openai": "OpenAI",
-        "openrouter": "OpenRouter",
-        "google": "Google",
-        "ollama": "Ollama",
-        "openai-compatible": "OpenAI 兼容"
-      },
-      "baseUrlPlaceholder": "https://example.com/v1",
-      "keyPlaceholder": "输入 API 密钥",
-      "verify": "测试连接",
-      "verifying": "检查中…",
-      "verified": "✓ 连接完成 · 已选择推荐模型。",
-      "unverified": "密钥会加密存储，不会写入配置文件。",
-      "error": "连接失败：{{error}}",
-      "advanced": "高级设置",
+      "lead": "连接你已有的服务（API 密钥、订阅账号登录或本机上的服务器），然后选择模型。它必须能响应一次真实调用，才能继续。",
+      "note": "会保存到「设置 → AI 模型」，之后可随时更改。",
+      "connectedTitle": "已连接的服务",
+      "none": "尚未连接任何服务。",
+      "connect": "连接服务",
       "modelRow": "模型",
-      "recommended": "提供商推荐模型",
-      "reasoningRow": "推理级别（仅生成模型）",
-      "reasoningValue": "模型默认值"
+      "pick": "选择模型",
+      "needService": "请先连接服务",
+      "unready": "请选择模型以继续。",
+      "ready": "✓ 已就绪 · {{model}} 在 {{seconds}} 秒内响应。",
+      "checking": "正在确认 {{model}} 是否响应…",
+      "failed": "{{model}} 没有响应：{{error}}",
+      "readyResumed": "✓ 已就绪 · 将由 {{model}} 回答。",
+      "retry": "重新检查"
     },
     "indexing": {
       "tip": "小技巧",
@@ -1115,10 +1105,16 @@
       "networkOk": "已确认网络连接。",
       "networkFail": "无法连接到网络。",
       "fdaPending": "重新打开应用后权限将生效。",
-      "verified": "已确认连接。",
       "planActive": "{{plan}} 套餐已生效。",
       "signInFailed": "无法登录。",
       "notIndexed": "索引完成后才能打开 Dazzi。"
+    },
+    "roles": {
+      "eyebrow": "检索辅助模型",
+      "title": "选择重排序与判断模型",
+      "lead": "使用 Dazzi 套餐时会默认提供。使用自己的密钥时，请从已连接的服务中选择，或保持现状。",
+      "note": "会保存到「设置 → AI 模型」，之后可随时更改。",
+      "unavailable": "已连接的服务中没有提供该模型的。在设置中连接 OpenRouter 即可使用。"
     }
   },
   "finderComponents": {

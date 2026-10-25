@@ -31,12 +31,20 @@ export type Translate = (key: string, options?: Record<string, unknown>) => stri
  * The prototype's `flow()`: cloud embedding puts the plan step right after
  * embedding; the keyword-only and local modes put it after the sources step.
  * A confirmed plan (or an already active Air/Pro subscription) drops out of the
- * list, and the model step only exists for BYOK.
+ * list, and the model and role steps only exist for BYOK.
+ *
+ * The smart scan runs on the agent's model, so a user who chose BYOK on the
+ * account step (not signed in) connects that model right after it, before any
+ * folder is scanned. A signed-in user who only picks BYOK on the plan step has
+ * already scanned with the account's model; theirs comes after the plan. Someone
+ * who brings their own key and skips the Dazzi plan also picks the reranker and
+ * Jev, which the plan would otherwise provide, right before the first index.
  */
-export function buildFlow(plan: PlanId, planConfirmed: boolean, embed: EmbedMode): OnboardingStepId[] {
+export function buildFlow(plan: PlanId, planConfirmed: boolean, embed: EmbedMode, signedIn: boolean): OnboardingStepId[] {
 	const mid: OnboardingStepId[] = embed === "cloud" ? ["plan", "sources"] : ["sources", "plan"];
-	const tail: OnboardingStepId[] = plan === "byok" ? ["model", "indexing"] : ["indexing"];
-	const head: OnboardingStepId[] = ["welcome", "permissions", "account", "folders", "smartScan", "smartScope", "embedding"];
+	const modelFirst = plan === "byok" && !signedIn;
+	const tail: OnboardingStepId[] = plan !== "byok" ? ["indexing"] : modelFirst ? ["roles", "indexing"] : ["model", "roles", "indexing"];
+	const head: OnboardingStepId[] = ["welcome", "permissions", "account", ...(modelFirst ? (["model"] as const) : []), "folders", "smartScan", "smartScope", "embedding"];
 	return head.concat(planConfirmed ? mid.filter((id) => id !== "plan") : mid).concat(tail);
 }
 

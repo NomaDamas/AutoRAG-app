@@ -14,8 +14,6 @@ import {
 } from "react";
 import type { AccountStatus } from "../../../shared/account-contract";
 import type {
-	ByokProviderId,
-	DetectedModelProvider,
 	DetectedSource,
 	EmbedMode,
 	EmbeddingInfo,
@@ -23,7 +21,6 @@ import type {
 	FolderScan,
 	IndexingRequest,
 	IndexingStatus,
-	ModelOption,
 	OnboardingDraft,
 	OnboardingStepId,
 	PermissionStatus,
@@ -70,6 +67,7 @@ import { SmartScopeStep } from "./steps/SmartScope";
 import { ModelStep } from "./steps/Model";
 import { PermissionsStep } from "./steps/Permissions";
 import { PlanStep } from "./steps/Plan";
+import { RolesStep } from "./steps/Roles";
 import { SourcesStep } from "./steps/Sources";
 import { WelcomeStep } from "./steps/Welcome";
 
@@ -170,11 +168,6 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 	// Done, not "checking": the step's first frame must already show the checking line,
 	// never the empty result that would flash before the probe effect runs.
 	const [sourcesDone, setSourcesDone] = useState(false);
-	const [models, setModels] = useState<readonly DetectedModelProvider[]>([]);
-	const [modelKey, setModelKey] = useState("");
-	const [modelOptions, setModelOptions] = useState<readonly ModelOption[]>([]);
-	const [verifying, setVerifying] = useState(false);
-	const [modelError, setModelError] = useState<string | null>(null);
 	const [overlay, setOverlay] = useState<OverlayKind | null>(null);
 	const [toast, setToast] = useState<string | null>(null);
 	const [tipIndex, setTipIndex] = useState(0);
@@ -194,7 +187,6 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 	/** The folders the run in flight was started on; they are saved with its result. */
 	const smartRootsRef = useRef<readonly string[]>([]);
 	const permissionRef = useRef<PermissionStatus | null>(null);
-	const modelKeyRef = useRef("");
 	const accountRef = useRef<AccountStatus | null>(null);
 	const overlayRef = useRef<OverlayKind | null>(null);
 	const toastTimer = useRef<number | null>(null);
@@ -203,7 +195,6 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 	const sourcesRef = useRef(false);
 	/** Whether this machine may run local embedding; false until its verdict arrives, and for good below the spec. */
 	const localAllowedRef = useRef(false);
-	const modelsRef = useRef(false);
 	const indexingRef = useRef(false);
 	const shareUsageRef = useRef(true);
 	const shareErrorsRef = useRef(true);
@@ -217,9 +208,6 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 	permissionRef.current = permission;
 	accountRef.current = account;
 	localAllowedRef.current = localEmbeddingAllowed(embedding?.localSpec ?? null);
-	useEffect(() => {
-		modelKeyRef.current = modelKey;
-	}, [modelKey]);
 	useEffect(() => {
 		overlayRef.current = overlay;
 	}, [overlay]);
@@ -358,7 +346,7 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 	const flow =
 		draft === null
 			? []
-			: buildFlow(draft.plan, shouldSkipPlanStep(draft.planConfirmed, currentEmbed, account), currentEmbed);
+			: buildFlow(draft.plan, shouldSkipPlanStep(draft.planConfirmed, currentEmbed, account), currentEmbed, canSelectCloudEmbedding(account));
 
 	const startIndexing = useCallback((): void => {
 		const current = draftRef.current;
@@ -374,10 +362,6 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 			embed,
 			sources: current.sources.filter((source) => source.on).map((source) => ({ id: source.id })),
 			plan: current.plan,
-			model:
-				current.plan === "byok" && current.model !== null
-					? { provider: current.model.provider, modelId: current.model.modelId, baseUrl: current.model.baseUrl === "" ? null : current.model.baseUrl }
-					: null,
 			...(excludePaths.length > 0 ? { excludePaths, excludedFiles } : {}),
 		};
 		void bridge
@@ -419,7 +403,7 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 		}
 		const signedIn = accountRef.current?.state === "signedIn";
 		const embed = resolveEmbed(current.embed, signedIn, localAllowedRef.current);
-		const list = buildFlow(current.plan, shouldSkipPlanStep(current.planConfirmed, embed, accountRef.current), embed);
+		const list = buildFlow(current.plan, shouldSkipPlanStep(current.planConfirmed, embed, accountRef.current), embed, signedIn);
 		// Leaving the embedding choice that a stopped index sent the user to goes straight back to the index.
 		const detour = current.resumeAt === "indexing" && current.stepId === "embedding";
 		const target = detour ? "indexing" : list[list.indexOf(current.stepId) + 1];
@@ -449,7 +433,7 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 		}
 		const signedIn = accountRef.current?.state === "signedIn";
 		const embed = resolveEmbed(current.embed, signedIn, localAllowedRef.current);
-		const list = buildFlow(current.plan, shouldSkipPlanStep(current.planConfirmed, embed, accountRef.current), embed);
+		const list = buildFlow(current.plan, shouldSkipPlanStep(current.planConfirmed, embed, accountRef.current), embed, signedIn);
 		const index = list.indexOf(current.stepId);
 		if (index > 0) {
 			const target = list[index - 1];
@@ -534,7 +518,7 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 	// Pre-scan every candidate on the folders step; on a resume past it, still scan the
 	// selected folders so later steps' totals and ETA are real.
 	useEffect(() => {
-		if (stepId === "welcome" || stepId === "permissions" || stepId === "account") {
+		if (stepId === "welcome" || stepId === "permissions" || stepId === "account" || stepId === "model") {
 			return;
 		}
 		const wanted =
@@ -638,20 +622,6 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 			offDone();
 		};
 	}, [stepId]);
-
-	useEffect(() => {
-		if (stepId !== "model" || modelsRef.current) {
-			return;
-		}
-		modelsRef.current = true;
-		void bridge.detectModels().then(setModels);
-	}, [stepId]);
-
-	useEffect(() => {
-		if (stepId === "model" && draft !== null && draft.model === null && draft.plan === "byok") {
-			patch({ model: { provider: "anthropic", baseUrl: "", modelId: "", verified: false } });
-		}
-	}, [stepId, draft, patch]);
 
 	useEffect(() => {
 		if (stepId !== "indexing") {
@@ -777,12 +747,6 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 		modelDownload,
 		sources: detectedSources,
 		sourcesChecking: !sourcesDone,
-		models,
-		modelKey,
-		modelBaseUrl: draft?.model?.baseUrl ?? "",
-		modelOptions,
-		verifying,
-		modelError,
 		indexStatus,
 		account,
 		paying,
@@ -960,7 +924,7 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 			}
 			// BYOK cannot use the cloud embedder, so cloud falls back; a chosen mode stays.
 			const embed = resolveEmbed(current.embed, false, localAllowedRef.current);
-			const list = buildFlow("byok", current.planConfirmed, embed);
+			const list = buildFlow("byok", current.planConfirmed, embed, false);
 			const target = list[list.indexOf(current.stepId) + 1];
 			setDraft({ ...current, embed, cloudConsent: false, plan: "byok", ...(target === undefined ? {} : { stepId: target }) });
 		},
@@ -1002,51 +966,6 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 					showToast(t("onboarding.toast.networkFail"));
 				}
 			});
-		},
-		setModelProvider: (provider: ByokProviderId) => {
-			setModelError(null);
-			setModelOptions([]);
-			patch({
-				model: { provider, baseUrl: draftRef.current?.model?.baseUrl ?? "", modelId: "", verified: false },
-			});
-		},
-		setModelKey,
-		setModelBaseUrl: (value) =>
-			patch({
-				model: {
-					provider: draftRef.current?.model?.provider ?? "anthropic",
-					baseUrl: value,
-					modelId: draftRef.current?.model?.modelId ?? "",
-					verified: draftRef.current?.model?.verified ?? false,
-				},
-			}),
-		verifyModel: (providerOverride) => {
-			const current = draftRef.current;
-			const provider = providerOverride ?? current?.model?.provider ?? "anthropic";
-			setVerifying(true);
-			setModelError(null);
-			void bridge
-				.verifyModel({
-					provider,
-					apiKey: modelKeyRef.current === "" ? null : modelKeyRef.current,
-					baseUrl: provider === "openai-compatible" ? (current?.model?.baseUrl ?? null) : null,
-				})
-				.then((result) => {
-					setVerifying(false);
-					if (result.ok) {
-						setModelOptions(result.models);
-						patch({
-							model: { provider, baseUrl: current?.model?.baseUrl ?? "", modelId: result.recommended, verified: true },
-						});
-						showToast(t("onboarding.toast.verified"));
-					} else {
-						setModelError(result.error);
-					}
-				})
-				.catch((error: unknown) => {
-					setVerifying(false);
-					setModelError(error instanceof Error ? error.message : String(error));
-				});
 		},
 		startIndexing,
 		changeEmbedding,
@@ -1097,6 +1016,8 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 				return <PlanStep ctx={ctx} />;
 			case "model":
 				return <ModelStep ctx={ctx} />;
+			case "roles":
+				return <RolesStep ctx={ctx} />;
 			case "indexing":
 				return <IndexingScreen ctx={ctx} />;
 		}

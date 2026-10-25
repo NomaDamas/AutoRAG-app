@@ -569,6 +569,7 @@
       "sources": "데이터 소스",
       "plan": "플랜",
       "model": "AI 모델",
+      "roles": "검색 보조 모델",
       "indexing": "인덱싱"
     },
     "stepLabel": {
@@ -581,6 +582,7 @@
       "embedding": "계속",
       "sources": "계속",
       "model": "계속",
+      "roles": "계속",
       "indexing": "계속"
     },
     "welcome": {
@@ -912,32 +914,20 @@
     "model": {
       "eyebrow": "AI 모델",
       "title": "사용할 모델을 연결하세요",
-      "lead": "감지된 연결을 사용하거나 제공업체와 API 키를 선택하세요.",
-      "note": "키는 암호화되어 저장되며 설정 파일에는 기록되지 않습니다.",
-      "detectedTitle": "감지된 연결",
-      "localRuntime": "로컬 런타임",
-      "storedCredential": "저장된 자격 증명",
-      "use": "사용",
-      "provider": {
-        "anthropic": "Anthropic",
-        "openai": "OpenAI",
-        "openrouter": "OpenRouter",
-        "google": "Google",
-        "ollama": "Ollama",
-        "openai-compatible": "OpenAI 호환"
-      },
-      "baseUrlPlaceholder": "https://example.com/v1",
-      "keyPlaceholder": "API 키 입력",
-      "verify": "연결 확인",
-      "verifying": "확인 중…",
-      "verified": "✓ 연결 완료 · 추천 모델이 선택되었습니다.",
-      "unverified": "키는 암호화되어 저장되고 설정 파일에는 기록되지 않습니다.",
-      "error": "연결 실패: {{error}}",
-      "advanced": "고급 설정",
+      "lead": "API 키, 구독 계정 로그인, 내 컴퓨터의 서버 등 이미 가진 서비스를 연결한 다음 모델을 고르세요. 실제 호출에 응답해야 다음으로 넘어갈 수 있어요.",
+      "note": "설정 → AI 모델에 저장되므로 나중에 언제든 바꿀 수 있어요.",
+      "connectedTitle": "연결된 서비스",
+      "none": "아직 연결된 서비스가 없어요.",
+      "connect": "서비스 연결",
       "modelRow": "모델",
-      "recommended": "제공업체 추천 모델",
-      "reasoningRow": "추론 레벨 (생성 모델만)",
-      "reasoningValue": "모델 기본값"
+      "pick": "모델 선택",
+      "needService": "먼저 서비스를 연결하세요",
+      "unready": "계속하려면 모델을 선택하세요.",
+      "ready": "✓ 준비 완료 · {{model}}이(가) {{seconds}}초 만에 응답했어요.",
+      "checking": "{{model}}이(가) 응답하는지 확인하는 중…",
+      "failed": "{{model}}이(가) 응답하지 않았어요: {{error}}",
+      "readyResumed": "✓ 준비 완료 · {{model}} 모델이 답변합니다.",
+      "retry": "다시 확인"
     },
     "indexing": {
       "tip": "꿀팁",
@@ -1115,10 +1105,16 @@
       "networkOk": "네트워크 연결을 확인했습니다.",
       "networkFail": "네트워크에 연결할 수 없습니다.",
       "fdaPending": "앱을 다시 열면 권한이 적용됩니다.",
-      "verified": "연결을 확인했습니다.",
       "planActive": "{{plan}} 플랜이 적용되었습니다.",
       "signInFailed": "로그인하지 못했습니다.",
       "notIndexed": "인덱싱이 끝나야 Dazzi를 열 수 있어요."
+    },
+    "roles": {
+      "eyebrow": "검색 보조 모델",
+      "title": "재정렬·판단 모델을 고르세요",
+      "lead": "Dazzi 요금제를 쓰면 기본으로 제공되는 모델이에요. 내 키를 쓴다면 연결한 서비스에서 고르거나 그대로 두세요.",
+      "note": "설정 → AI 모델에 저장되므로 나중에 언제든 바꿀 수 있어요.",
+      "unavailable": "연결한 서비스 중에는 이 모델을 제공하는 곳이 없어요. 설정에서 OpenRouter를 연결하면 쓸 수 있어요."
     }
   },
   "finderComponents": {

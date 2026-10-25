@@ -28,7 +28,7 @@ const stubTranslate: Translate = (key, options) => (options === undefined ? key 
 
 describe("onboarding flow", () => {
 	it("orders steps for a local, unconfirmed plan", () => {
-		expect(buildFlow("pro", false, "local")).toEqual([
+		expect(buildFlow("pro", false, "local", false)).toEqual([
 			"welcome",
 			"permissions",
 			"account",
@@ -43,7 +43,7 @@ describe("onboarding flow", () => {
 	});
 
 	it("drops the plan once confirmed and puts the plan before sources for cloud", () => {
-		expect(buildFlow("pro", true, "local")).toEqual([
+		expect(buildFlow("pro", true, "local", false)).toEqual([
 			"welcome",
 			"permissions",
 			"account",
@@ -54,7 +54,7 @@ describe("onboarding flow", () => {
 			"sources",
 			"indexing",
 		]);
-		expect(buildFlow("pro", false, "cloud")).toEqual([
+		expect(buildFlow("pro", false, "cloud", false)).toEqual([
 			"welcome",
 			"permissions",
 			"account",
@@ -69,7 +69,7 @@ describe("onboarding flow", () => {
 	});
 
 	it("treats the keyword-only mode like local embedding for ordering", () => {
-		expect(buildFlow("pro", false, "none")).toEqual([
+		expect(buildFlow("pro", false, "none", false)).toEqual([
 			"welcome",
 			"permissions",
 			"account",
@@ -81,23 +81,42 @@ describe("onboarding flow", () => {
 			"plan",
 			"indexing",
 		]);
-		expect(buildFlow("byok", false, "none")).toEqual([
+		expect(buildFlow("byok", false, "none", false)).toEqual([
 			"welcome",
 			"permissions",
 			"account",
+			"model",
 			"folders",
 			"smartScan",
 			"smartScope",
 			"embedding",
 			"sources",
 			"plan",
-			"model",
+			"roles",
 			"indexing",
 		]);
 	});
 
-	it("adds the model step only for BYOK", () => {
-		expect(buildFlow("byok", true, "local")).toEqual([
+	it("connects the BYOK model right after the account step, before the smart scan needs it", () => {
+		const flow = buildFlow("byok", true, "local", false);
+		expect(flow).toEqual([
+			"welcome",
+			"permissions",
+			"account",
+			"model",
+			"folders",
+			"smartScan",
+			"smartScope",
+			"embedding",
+			"sources",
+			"roles",
+			"indexing",
+		]);
+		expect(flow.indexOf("model")).toBeLessThan(flow.indexOf("smartScan"));
+	});
+
+	it("keeps the model step after the plan for a signed-in user who picks BYOK there, because the scan already ran", () => {
+		expect(buildFlow("byok", false, "local", true)).toEqual([
 			"welcome",
 			"permissions",
 			"account",
@@ -106,9 +125,29 @@ describe("onboarding flow", () => {
 			"smartScope",
 			"embedding",
 			"sources",
+			"plan",
 			"model",
+			"roles",
 			"indexing",
 		]);
+	});
+
+	it("has no model or role step for managed plans", () => {
+		for (const plan of ["free", "air", "pro"] as const) {
+			for (const flow of [buildFlow(plan, false, "local", false), buildFlow(plan, true, "cloud", true)]) {
+				expect(flow).not.toContain("model");
+				expect(flow).not.toContain("roles");
+			}
+		}
+	});
+
+	it("lets a BYOK user pick the reranker and Jev right before indexing, however the flow is ordered", () => {
+		for (const signedIn of [false, true]) {
+			for (const embed of ["none", "local", "cloud"] as const) {
+				const flow = buildFlow("byok", false, embed, signedIn);
+				expect(flow.slice(-2)).toEqual(["roles", "indexing"]);
+			}
+		}
 	});
 
 	it("allows selecting cloud embedding only when signed in to Dazzi", () => {
@@ -417,6 +456,22 @@ describe("indexing phases", () => {
 		expect(phaseIndex("local", "finalizing")).toBe(2);
 		expect(phaseIndex("none", "parsed")).toBe(0);
 		expect(phaseIndex("none", "finalizing")).toBe(1);
+	});
+});
+
+describe("footer labels", () => {
+	it("exist in every language for every step any flow can show", async () => {
+		const steps = new Set(
+			(["free", "pro", "byok"] as const).flatMap((plan) => [true, false].flatMap((signedIn) => (["none", "cloud"] as const).flatMap((embed) => buildFlow(plan, false, embed, signedIn)))),
+		);
+		for (const language of ["en", "ko", "ja", "zh"]) {
+			const { default: locale } = (await import(`../src/shared/i18n/locales/${language}.json`)) as { default: { onboarding: { stepLabel: Record<string, string> } } };
+			for (const step of steps) {
+				const key = primaryLabelKey(step, "free", false);
+				if (step === "plan") continue;
+				expect(locale.onboarding.stepLabel[key.split(".").pop() ?? ""], `${language} ${key}`).toBeTruthy();
+			}
+		}
 	});
 });
 

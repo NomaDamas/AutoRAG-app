@@ -2275,13 +2275,6 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 	font-size: 10px;
 }
 
-.onb .model-rows {
-	display: flex;
-	flex-direction: column;
-	gap: 8px;
-	margin-top: 14px;
-}
-
 .onb .model-row {
 	display: flex;
 	align-items: center;
@@ -2353,35 +2346,90 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 	font-size: 9px;
 }
 
-.onb .provider-chips {
-	display: flex;
-	gap: 6px;
-	flex-wrap: wrap;
-	margin: 9px 0;
+.onb .model-card {
+	padding: 14px;
 }
 
-.onb .provider-chip {
-	padding: 6px 8px;
-	border: 1px solid var(--onb-border);
-	border-radius: 6px;
-	background: var(--onb-bg-card);
+.onb .model-services {
+	margin-bottom: 10px;
+}
+
+.onb .model-services .detected-row > :last-child:not(div) {
+	margin-left: auto;
+	color: var(--onb-blue);
+}
+
+.onb .model-overlays {
+	display: contents;
+}
+
+.onb .model-empty {
+	margin: 4px 0 10px;
+	color: var(--onb-muted);
+	font-size: 10px;
+}
+
+.onb .model-connect {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	margin-top: 8px;
+}
+
+.onb .model-trigger {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	max-width: 70%;
+}
+
+.onb .model-trigger > span {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.onb .model-status.ready {
+	color: var(--onb-blue);
+}
+
+.onb .model-status.failed {
+	color: var(--onb-red);
+}
+
+.onb .model-retry {
+	margin-top: 8px;
+}
+
+.onb .role-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 12px 4px;
+	border-top: 1px solid var(--onb-divider);
+}
+
+.onb .role-row:first-child {
+	border-top: 0;
+}
+
+.onb .role-copy strong {
+	display: block;
+	font-size: 11px;
+}
+
+.onb .role-copy small {
+	display: block;
+	margin-top: 3px;
 	color: var(--onb-muted);
 	font-size: 9.5px;
 }
 
-.onb .provider-chip.selected {
-	border-color: var(--onb-blue);
-	background: var(--onb-blue-soft);
-	color: var(--onb-blue);
-}
-
-.onb .key-row {
-	display: flex;
-	gap: 7px;
-}
-
-.onb .key-row .input {
-	font-family: ui-monospace,monospace;
+.onb .model-status {
+	margin: 10px 0 0;
+	color: var(--onb-muted);
+	font-size: 10px;
 }
 
 .onb .secure-note {
