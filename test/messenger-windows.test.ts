@@ -44,10 +44,13 @@ describe("KakaoTalk is a macOS-only source", () => {
 
 	it("is never probed on Windows, even when a lazykatok binary happens to be on PATH", async () => {
 		const probed: string[] = [];
+		// Detecting on win32 writes discrawl's default config under the home, so the home must be a real temp directory:
+		// a Windows-style path is only a relative path on the machine running the test, and the file lands in the checkout.
+		const root = await home();
 		const result = await detectSources({
 			platform: "win32",
-			home: "C:\\Users\\u",
-			env: {},
+			home: root,
+			env: { LOCALAPPDATA: join(root, "AppData", "Local"), APPDATA: join(root, "AppData", "Roaming") },
 			run: async (command) => {
 				probed.push(command);
 				throw new Error("not found");
