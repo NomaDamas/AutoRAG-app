@@ -32,6 +32,28 @@ describe("bundled tools on PATH", () => {
 		expect(env.PATH).toBe("/usr/bin");
 	});
 
+	it("never takes a tools directory from the working directory when there is no resources path (plain Node)", () => {
+		const work = temp();
+		mkdirSync(join(work, "tools", "bin"), { recursive: true });
+		const before = process.cwd();
+		process.chdir(work);
+		try {
+			const env: NodeJS.ProcessEnv = { PATH: "/usr/bin" };
+			expect(applyBundledTools({ resourcesPath: "", env })).toBeNull();
+			expect(env.PATH).toBe("/usr/bin");
+		} finally {
+			process.chdir(before);
+		}
+	});
+
+	it("uses AUTORAG_TOOLS_DIR as the tools root when there is no resources path", () => {
+		const tools = temp();
+		mkdirSync(join(tools, "bin"), { recursive: true });
+		const env: NodeJS.ProcessEnv = { PATH: "/usr/bin", AUTORAG_TOOLS_DIR: tools };
+		expect(applyBundledTools({ resourcesPath: "", env })).toBe(tools);
+		expect(env.PATH?.split(delimiter)[0]).toBe(join(tools, "bin"));
+	});
+
 	it("augments a minimal launchd/Finder PATH with standard user and system tool directories when requested", () => {
 		const env: NodeJS.ProcessEnv = { HOME: "/Users/test", PATH: "/usr/bin:/bin" };
 		applyBundledTools({ resourcesPath: temp(), env, platform: "darwin", augmentUserPaths: true });

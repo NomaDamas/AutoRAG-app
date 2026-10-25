@@ -6,6 +6,7 @@
  */
 
 import { type ApprovalMode, DEFAULT_APPROVAL_MODE } from "./interaction-contract";
+import type { McpLaunch, McpPlatform } from "./mcp-connect";
 
 export const SETTINGS_CHANNELS = {
 	get: "settings:get",
@@ -45,6 +46,7 @@ export const SETTINGS_CHANNELS = {
 	mcpGet: "mcp:get",
 	mcpUpsert: "mcp:upsert",
 	mcpRemove: "mcp:remove",
+	mcpConnectInfo: "mcp:connectInfo",
 	sourcesSync: "sources:sync",
 	refreshScheduleGet: "refreshSchedule:get",
 	refreshScheduleApply: "refreshSchedule:apply",
@@ -452,6 +454,16 @@ export interface McpServerInput {
 	readonly replaces?: string;
 }
 
+/**
+ * How another agent starts Dazzi's own MCP server: the launch (`command`, `args`, `env`) as this run resolves
+ * it, plus the platform the paste targets so the snippets quote for the right shell.
+ */
+export interface McpConnectInfo extends McpLaunch {
+	/** False when this build has no server entry to start (a partial build); there is then nothing to copy. */
+	readonly available: boolean;
+	readonly platform: McpPlatform;
+}
+
 /** Outcome of syncing one datasource against its own index. */
 export interface DataSourceSyncResult {
 	readonly id: string;
@@ -592,4 +604,6 @@ export interface SettingsBridge {
 	/** Adds a server (no `replaces`) or edits/renames one (`replaces` is its current name); the whole entry is validated first. */
 	mcpUpsert(input: McpServerInput): Promise<McpSnapshot>;
 	mcpRemove(name: string): Promise<McpSnapshot>;
+	/** What another agent runs to use Dazzi's own MCP server. */
+	mcpConnectInfo(): Promise<McpConnectInfo>;
  }

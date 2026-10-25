@@ -1,9 +1,8 @@
 /**
- * Settings → MCP 서버.
- *
- * Edits the agent's `mcp.json` through the `mcp*` bridge calls. The main process
- * validates and keeps whatever this form does not manage (`oauth`, `toolExposure`, …),
- * so an entry written by hand survives an edit made here.
+ * Settings → MCP 서버, in two directions: `McpConnectSection` lets other agents use Dazzi's own MCP server,
+ * and the list below edits the agent's `mcp.json` through the `mcp*` bridge calls so Dazzi can use
+ * other servers. The main process validates and keeps whatever this form does not manage
+ * (`oauth`, `toolExposure`, …), so an entry written by hand survives an edit made here.
  */
 
 import { useCallback, useEffect, useState, type ReactElement } from "react";
@@ -13,6 +12,7 @@ import { Pencil, Plus, Trash2 } from "lucide-react";
 import type { JsonObject, JsonValue, McpExposure, McpServerRow, McpSnapshot } from "../../../../shared/settings-contract";
 import { Switch } from "../primitives/Switch";
 import { errorText } from "./configSupport";
+import { McpConnectSection } from "./McpConnectSection";
 import { ModalActions, ModalShell, Note, Row, Section, SettingsPageHead, StatusDot } from "./SettingsKit";
 
 const settings = window.autorag.settings;
@@ -157,10 +157,11 @@ export function McpPage(): ReactElement {
 	return (
 		<>
 			<SettingsPageHead title={t("settingsCore.mcp.title")} description={t("settingsCore.mcp.desc")} />
+			<McpConnectSection />
 			{error !== null ? <div className="settings-error" role="alert">{error}</div> : null}
 			{broken ? <div className="settings-error" role="alert">{`${t("settingsCore.mcp.fileError")} ${snapshot?.error ?? ""}`}</div> : null}
-			<Note>{t("settingsCore.mcp.trust")}</Note>
 			<Section title={t("settingsCore.mcp.listTitle")} description={t("settingsCore.mcp.listDesc")}>
+				<Note>{t("settingsCore.mcp.trust")}</Note>
 				{snapshot !== null && snapshot.servers.length === 0 && !broken ? <p className="linear-section-desc">{t("settingsCore.mcp.empty")}</p> : null}
 				{(snapshot?.servers ?? []).map((row) => (
 					<div key={row.name} className="settings-list-row" data-mcp-server={row.name}>

@@ -261,6 +261,30 @@ second datasource or model configuration. The sidebar is searchable and grouped:
   and an exposure (`codemode` default, `deferred`, `direct`, `hidden`); changes
   apply from the next session, so no process is managed here.
 
+  The first section of the same page, **다른 에이전트에 연결**, goes the other
+  way: it hands out what Claude Code, Codex, Gemini CLI, Cursor and the like
+  need to start Dazzi's own MCP server (the librarian's stdio server: search,
+  file-name search, duplicates, index status). The server is
+  `out/main/mcp-server.js` (`src/main/mcp-server.ts`), which finds the
+  librarian's `dist/mcp/index.js` by path because the package's exports map
+  does not list it. It runs on a real Node — the bundled `<tools>/node`, else
+  the first `node` on `PATH` — and not on the app's own binary, because Gemini
+  CLI strips `ELECTRON_RUN_AS_NODE` from a server's environment and the app
+  would start instead. `src/main/mcp-connect-info.ts` resolves the launch: the
+  Node, the entry, and an environment that holds only `AUTORAG_TOOLS_DIR` (when
+  the install bundles tools, so the server puts `<tools>/bin` on `PATH` as the
+  app does; an empty resources path never reads a `tools/` from the working
+  directory) plus the `AUTORAG_HOME` / `AUTORAG_CONFIG` the app itself runs
+  with, so both read one index. `src/shared/mcp-connect.ts` turns that into the
+  pasted text — `claude mcp add --scope user`, `codex mcp add --env`,
+  `gemini mcp add --scope user -e`, or the `mcpServers` JSON — and the manual
+  tab copies one value per row; clicking the text or the button copies it. The
+  Read-only switch adds `AUTORAG_MCP_READ_ONLY=1`, which makes the server
+  withhold `autorag.refresh` and `autorag.report`. The switch is not stored.
+  `scripts/manual-qa/run-qa-finder-mcp-connect.mjs` drives the page and starts
+  the copied launch as an agent would; `scripts/manual-qa/run-qa-mcp-clients.mjs`
+  pastes each line into the installed `claude`, `gemini` and `codex`.
+
 Every edit is a validated leaf write that preserves unrelated and unknown
 config keys. Secrets never enter `config.json`: `/login` stores keys and OAuth
 tokens in Pi's `auth.json`, and credential-only keys (for example

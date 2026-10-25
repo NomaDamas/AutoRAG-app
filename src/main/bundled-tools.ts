@@ -14,11 +14,15 @@ import { join, posix, win32 } from "node:path";
  * `KIWI_MODEL_PATH` (see {@link applyBundledKiwi}).
  */
 
-/** `<resources>/tools`, or null when this run has no bundled tools (development). */
+/**
+ * `<resources>/tools`, or null when this run has no bundled tools (development). A run without a resources path
+ * (plain Node, as an agent starts the MCP server) has no `<resources>/tools` either: an empty path must not turn
+ * into `tools/` under whatever directory the process happens to be in.
+ */
 function bundledToolsRoot(input: { readonly resourcesPath: string; readonly env: NodeJS.ProcessEnv }): string | null {
 	const override = input.env.AUTORAG_TOOLS_DIR?.trim() ?? "";
-	const root = override.length > 0 ? override : join(input.resourcesPath, "tools");
-	return existsSync(join(root, "bin")) ? root : null;
+	const root = override.length > 0 ? override : input.resourcesPath.length > 0 ? join(input.resourcesPath, "tools") : "";
+	return root.length > 0 && existsSync(join(root, "bin")) ? root : null;
 }
 
 /**

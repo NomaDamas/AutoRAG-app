@@ -1198,6 +1198,139 @@
 	user-select: text;
 }
 
+/* ------------------------------------------------ Connect other agents --- */
+
+/* The agent switch: a recessed track with the chosen agent lifted onto the window surface. */
+.settings-view .settings-seg {
+	display: inline-flex;
+	max-width: 100%;
+	overflow-x: auto;
+	scrollbar-width: none;
+	gap: var(--space-2);
+	margin: var(--space-4) 0 var(--space-10);
+	padding: var(--space-2);
+	border-radius: var(--radius-7);
+	background: var(--bg-input);
+}
+
+.settings-view .settings-seg-item {
+	height: 26px;
+	padding: 0 var(--space-12);
+	border: 0;
+	border-radius: var(--radius-5);
+	background: transparent;
+	color: var(--text-muted);
+	font-size: 12.5px;
+	font-weight: var(--weight-medium);
+	white-space: nowrap;
+	cursor: pointer;
+	transition:
+		background var(--dur-menu) var(--ease-out),
+		color var(--dur-menu) var(--ease-out);
+}
+
+.settings-view .settings-seg-item:hover {
+	color: var(--text-primary);
+}
+
+.settings-view .settings-seg-item.is-active {
+	background: var(--bg-window);
+	color: var(--text-primary);
+	box-shadow: var(--shadow-ql-segment);
+}
+
+/* What to paste. Clicking the text copies it; selecting part of it with the mouse does not. */
+.settings-view .settings-snippet {
+	margin: 0;
+	padding: var(--space-12) var(--space-14);
+	border: 1px solid var(--border-divider);
+	border-radius: var(--radius-8);
+	background: var(--bg-code);
+	color: var(--text-primary);
+	font-family: var(--font-mono);
+	font-size: 12px;
+	line-height: 1.6;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	user-select: text;
+	cursor: copy;
+	transition: border-color var(--dur-menu) var(--ease-out);
+}
+
+.settings-view .settings-snippet:hover {
+	border-color: var(--border-strong);
+}
+
+.settings-view .settings-snippet code {
+	font: inherit;
+}
+
+.settings-view .settings-snippet-foot {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-12);
+	margin-top: var(--space-8);
+}
+
+.settings-view .settings-snippet-hint {
+	margin: 0;
+	color: var(--text-muted);
+	font-size: var(--font-size-meta);
+	line-height: 1.45;
+}
+
+.settings-view .settings-list + .settings-snippet-hint {
+	margin-top: var(--space-8);
+}
+
+.settings-view .settings-copy-btn {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+}
+
+.settings-view .settings-copy-btn:has(.is-done) {
+	border-color: var(--ok-border);
+}
+
+.settings-view .settings-copy-mark {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	gap: var(--space-6);
+	white-space: nowrap;
+}
+
+.settings-view .settings-copy-mark.is-done {
+	color: var(--ok-text);
+}
+
+/* The manual tab: one value per row, the whole row copies it. */
+.settings-view .settings-field .settings-copy-mark {
+	color: var(--text-faint);
+	font-size: var(--font-size-meta);
+}
+
+.settings-view .settings-field:hover .settings-copy-mark {
+	color: var(--accent-text);
+}
+
+.settings-view .settings-field .settings-copy-mark.is-done {
+	color: var(--ok-text);
+}
+
+.settings-view .settings-field-value {
+	display: block;
+	margin-top: var(--space-2);
+	color: var(--text-body);
+	font-family: var(--font-mono);
+	font-size: 12px;
+	line-height: 1.5;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
 /* ------------------------------------------------------ Account & plan --- */
 
 .settings-view .settings-avatar {

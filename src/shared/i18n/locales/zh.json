@@ -1845,7 +1845,7 @@
         "reading": "文档读取 语言 解析器 OCR",
         "duplicates": "重复文件 版本 整理 dupey",
         "apps": "连接 应用 数据源 即时通讯 邮件 云盘",
-        "mcp": "mcp 服务器 工具 连接 扩展 外部工具 codemode 智能体"
+        "mcp": "mcp 服务器 工具 连接 扩展 外部工具 codemode 智能体 claude codex gemini cursor 复制"
       },
       "mcp": "MCP 服务器"
     },
@@ -2097,8 +2097,8 @@
     },
     "mcp": {
       "title": "MCP 服务器",
-      "desc": "连接外部 MCP 服务器后，搜索和对话即可使用它们的工具。",
-      "listTitle": "已连接的服务器",
+      "desc": "将 Dazzi 连接到其他智能体，也可将外部 MCP 服务器连接到 Dazzi。",
+      "listTitle": "已连接到 Dazzi 的服务器",
       "listDesc": "服务器会在搜索或对话开始时连接。更改从下一次搜索起生效。",
       "add": "添加服务器",
       "empty": "尚未连接任何 MCP 服务器。",
@@ -2149,6 +2149,30 @@
         "badLine": "无法读取这一行：\"{{line}}\"。",
         "removeTitle": "删除 \"{{name}}\"？",
         "removeBody": "该服务器会从配置文件中删除。服务器自己保存的数据不受影响。"
+      },
+      "connect": {
+        "title": "连接其他智能体",
+        "desc": "让 Claude Code、Codex 等智能体搜索 Dazzi 已建立索引的文档。复制下面的内容并粘贴到智能体中。",
+        "tabsAria": "选择智能体",
+        "tabManual": "手动填写",
+        "copy": "复制",
+        "copied": "已复制",
+        "copyFailed": "复制失败，请重试。",
+        "unavailable": "无法在此计算机上启动 Dazzi 的 MCP 服务器，没有可复制的内容。",
+        "hint": {
+          "terminal": "粘贴到终端并运行，即可在智能体中注册。",
+          "json": "添加到智能体的 MCP 配置文件（mcpServers）中，Cursor、Claude Desktop 等使用这种格式。",
+          "manual": "上面没有的智能体，请逐项复制这些值，填入它的添加 MCP 服务器界面。"
+        },
+        "field": {
+          "name": "名称",
+          "transport": "连接方式",
+          "command": "命令",
+          "args": "参数",
+          "env": "环境变量"
+        },
+        "readOnly": "只读",
+        "readOnlyHint": "隐藏刷新索引和保存报告的工具，让智能体只能搜索。"
       }
     }
   },
