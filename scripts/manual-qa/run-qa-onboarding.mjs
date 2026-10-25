@@ -231,7 +231,7 @@ try {
 	await shot("07b-plan-needs-account");
 	// BYOK against the local stub: real verification request, real encrypted
 	// key storage, real config write.
-	await page.locator(".onb .plan-card").nth(3).click();
+	await page.locator(".onb .plan-card").last().click();
 	await primary.click();
 	await page.waitForSelector(".onb .provider-chips", { timeout: 5000 });
 	await shot("07c-model");

@@ -5,6 +5,7 @@ import {
 	bySourceOrder,
 	canAdvance,
 	canSelectCloudEmbedding,
+	cloudPlanFor,
 	connectableLater,
 	embedCards,
 	etaMinutes,
@@ -162,6 +163,7 @@ describe("onboarding flow", () => {
 			embed: "local",
 			cloudConsent: false,
 			plan: "pro",
+			promoValid: true,
 			modelVerified: false,
 		} as const;
 		expect(canAdvance(base)).toBe(true);
@@ -196,6 +198,15 @@ describe("onboarding flow", () => {
 		expect(canAdvance({ ...base, stepId: "plan", embed: "cloud", plan: "free", signedIn: true })).toBe(false);
 		expect(canAdvance({ ...base, stepId: "plan", embed: "cloud", plan: "byok", signedIn: true })).toBe(false);
 		expect(canAdvance({ ...base, stepId: "plan", embed: "cloud", plan: "pro", signedIn: true })).toBe(true);
+		// A malformed promo code holds back the checkout it would be sent with; it never blocks a plan that buys nothing.
+		expect(canAdvance({ ...base, stepId: "plan", plan: "pro", signedIn: true, promoValid: false })).toBe(false);
+		expect(canAdvance({ ...base, stepId: "plan", plan: "max", signedIn: true, promoValid: false })).toBe(false);
+		expect(canAdvance({ ...base, stepId: "plan", plan: "free", signedIn: true, promoValid: false })).toBe(true);
+		expect(canAdvance({ ...base, stepId: "plan", plan: "byok", promoValid: false })).toBe(true);
+		// Max includes everything Pro does, so it is a valid cloud choice too.
+		expect(canAdvance({ ...base, stepId: "plan", embed: "cloud", plan: "max", signedIn: true })).toBe(true);
+		expect(canAdvance({ ...base, stepId: "plan", plan: "max" })).toBe(false);
+		expect(canAdvance({ ...base, stepId: "plan", plan: "max", signedIn: true })).toBe(true);
 	});
 
 	it("labels the plan primary button by what the account already holds", () => {
@@ -205,11 +216,13 @@ describe("onboarding flow", () => {
 		expect(primaryLabelKey("plan", "pro", true)).toBe("onboarding.plan.continue");
 		expect(primaryLabelKey("plan", "pro", false)).toBe("onboarding.plan.checkoutPro");
 		expect(primaryLabelKey("plan", "air", false)).toBe("onboarding.plan.checkoutAir");
+		expect(primaryLabelKey("plan", "max", false)).toBe("onboarding.plan.checkoutMax");
+		expect(primaryLabelKey("plan", "max", true)).toBe("onboarding.plan.continue");
 	});
 });
 
 describe("planHeld", () => {
-	const signedIn = (plan: "free" | "air" | "pro"): AccountStatus => ({
+	const signedIn = (plan: "free" | "air" | "pro" | "max"): AccountStatus => ({
 		state: "signedIn",
 		offline: false,
 		error: null,
@@ -224,9 +237,9 @@ describe("planHeld", () => {
 			creditsUsedCents: 0,
 			creditsLimitCents: 50,
 			creditPeriod: "2026-W41",
-			embeddings: plan === "pro",
+			embeddings: plan === "pro" || plan === "max",
 			requestsPerMinute: 10,
-			billing: { air: true, pro: true, portal: false },
+			billing: { air: true, pro: true, max: true, portal: false },
 		},
 	});
 
@@ -236,6 +249,30 @@ describe("planHeld", () => {
 		expect(planHeld("air", signedIn("pro"))).toBe(true);
 		expect(planHeld("pro", signedIn("air"))).toBe(false);
 		expect(planHeld("pro", signedIn("pro"))).toBe(true);
+		expect(planHeld("max", signedIn("pro"))).toBe(false);
+		expect(planHeld("max", signedIn("max"))).toBe(true);
+		expect(planHeld("pro", signedIn("max"))).toBe(true);
+		expect(planHeld("air", signedIn("max"))).toBe(true);
+	});
+
+	it("holds Max only through a Max account", () => {
+		expect(planHeld("max", null)).toBe(false);
+		expect(planHeld("max", signedIn("free"))).toBe(false);
+	});
+
+	it("keeps a Max account on Max when cloud embedding asks for Pro", () => {
+		expect(cloudPlanFor("max")).toBe("max");
+		expect(cloudPlanFor("pro")).toBe("pro");
+		expect(cloudPlanFor("air")).toBe("pro");
+		expect(cloudPlanFor("free")).toBe("pro");
+		expect(cloudPlanFor(undefined)).toBe("pro");
+	});
+
+	it("lets Pro and Max, and only them, pick cloud embedding", () => {
+		expect(isPlanSelectable("max", "cloud")).toBe(true);
+		expect(isPlanSelectable("pro", "cloud")).toBe(true);
+		expect(isPlanSelectable("air", "cloud")).toBe(false);
+		expect(isPlanSelectable("max", "local")).toBe(true);
 	});
 
 	it("never holds a plan without a confirmed account, and free/BYOK are never held", () => {
@@ -258,6 +295,8 @@ describe("planHeld", () => {
 		expect(shouldSkipPlanStep(false, "cloud", signedIn("air"))).toBe(false);
 		expect(shouldSkipPlanStep(false, "cloud", signedIn("pro"))).toBe(true);
 		expect(shouldSkipPlanStep(true, "cloud", signedIn("free"))).toBe(true);
+		expect(shouldSkipPlanStep(false, "local", signedIn("max"))).toBe(true);
+		expect(shouldSkipPlanStep(false, "cloud", signedIn("max"))).toBe(true);
 	});
 });
 

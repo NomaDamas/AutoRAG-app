@@ -762,60 +762,73 @@
       "eyebrow": "Plan",
       "title": "How will you use it?",
       "titleReady": "Your plan is ready",
-      "lead": "Your plan sets your AI usage, and remote embedding is only available on Pro. You can change it later in Settings.",
-      "leadCloud": "You chose remote embedding. Start the 7-day Pro trial and continue right away.",
+      "lead": "Your plan sets your weekly AI credits. You can change it later in Settings.",
+      "leadCloud": "You chose remote embedding. Start the 7-day Pro trial (Max works too) and continue right away.",
       "leadCloudReady": "Remote embedding is ready to use. Continue to the next step.",
-      "cloudCallout": "Remote embedding is only available on the Pro plan. Register a card and the first 7 days are free.",
+      "cloudCallout": "Remote embedding needs Pro or Max. Pro's first 7 days are free with a card.",
       "badgeRecommended": "Recommended",
       "badgeTrial": "Trial in progress",
       "badgeSubscribed": "Subscribed",
       "perMonth": "/ mo",
       "continue": "Continue with this plan",
-      "checkoutPro": "Open the Pro checkout page",
+      "checkoutPro": "Start the 7-day free trial of Pro",
       "checkoutAir": "Open the Air checkout page",
       "noteHeld": "Active on this account",
       "noteTrialing": "Trial · until {{date}}",
       "noteCancelScheduled": "Cancels · usable until {{date}}",
-      "signInFirst": "Air and Pro need an account. Sign in first.",
+      "signInFirst": "Paid plans need an account. Sign in first.",
       "signInAction": "Sign in",
       "plan": {
         "free": {
           "name": "Free",
           "price": "Free",
           "note": "Start right away, no card",
-          "tag": "Start light",
+          "tag": "To try Dazzi out",
           "chip": "Questions are sent to Dazzi models",
           "training": "Inputs and outputs may be used to improve the service",
           "feature": {
-            "a": "Local embedding or off",
-            "b": "Managed AI models · basic usage",
-            "c": "Full use of Finder and search"
+            "a": "Chat, embeddings, reranking & Jev",
+            "b": "A small weekly credit allowance"
           }
         },
         "air": {
           "name": "Air",
           "price": "$4",
           "note": "$4/mo · cancel anytime",
-          "tag": "Light everyday use",
+          "tag": "For people who already use another AI subscription",
           "chip": "Questions are sent to Dazzi models",
           "training": "Dazzi does not use inputs and outputs to train models",
           "feature": {
-            "a": "Local embedding or off",
-            "b": "Managed AI models · generous usage",
-            "c": "Everything in Free"
+            "a": "Chat, embeddings, reranking & Jev",
+            "b": "A larger weekly credit allowance",
+            "c": "Use your own AI subscription for the LLM (recommended)"
           }
         },
         "pro": {
           "name": "Pro",
           "price": "$20",
-          "note": "$20/mo · cancel anytime",
-          "tag": "Fastest first indexing",
+          "note": "7 days free with a card, then $20/mo",
+          "tag": "For people who want Dazzi to just work, with no other AI subscription",
           "chip": "Questions are sent to Dazzi models",
           "training": "Dazzi does not use inputs and outputs to train models",
           "feature": {
-            "a": "Remote embedding available",
-            "b": "Managed AI models · highest usage",
-            "c": "Everything in Air"
+            "a": "Chat, Jev, embeddings and reranking",
+            "b": "Nothing else to subscribe to",
+            "c": "A much larger weekly allowance"
+          },
+          "trial": "7-day free trial"
+        },
+        "max": {
+          "name": "Max",
+          "price": "$200",
+          "note": "$200/mo · cancel anytime",
+          "tag": "10x Pro's quota",
+          "chip": "Questions are sent to Dazzi models",
+          "training": "Dazzi does not use inputs and outputs to train models",
+          "feature": {
+            "a": "10x the weekly usage of Pro",
+            "b": "Built for heavy, all-day use",
+            "c": "Everything in Pro"
           }
         },
         "byok": {
@@ -831,6 +844,14 @@
             "c": "Requests sent only to your chosen provider"
           }
         }
+      },
+      "checkoutMax": "Open the Max checkout page",
+      "trialNote": "The 7-day Pro trial needs a card and is available once per person. Cancel before it ends and you pay nothing.",
+      "promo": {
+        "label": "Promo code",
+        "placeholder": "Promo code (optional)",
+        "hint": "Applied on the checkout page.",
+        "invalid": "Use only letters, numbers, - and _ (up to 64 characters)."
       }
     },
     "model": {
@@ -981,8 +1002,7 @@
         "action": "Quit and reopen"
       },
       "pay": {
-        "proTitle": "Pro checkout",
-        "airTitle": "Air checkout",
+        "title": "{{plan}} checkout",
         "lead": "Payment happens on the checkout page in your browser. You never enter card details in this app.",
         "waiting": "This window updates automatically once you finish paying.",
         "reopen": "Reopen the checkout page",
@@ -1334,7 +1354,8 @@
       "signInTimedOut": "Sign-in timed out. Try again.",
       "noModels": "Your Dazzi plan lists no models.",
       "invalidState": "Invalid sign-in state.",
-      "missingCode": "Missing sign-in code."
+      "missingCode": "Missing sign-in code.",
+      "invalidPromoCode": "That promo code is not valid. Use only letters, numbers, - and _."
     },
     "modelDownload": {
       "errors": {

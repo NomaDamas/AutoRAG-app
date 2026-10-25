@@ -36,7 +36,7 @@ const FREE_ACCOUNT = {
 	credits: { used_cents: 12, limit_cents: 50, period: "2026-W41" },
 	limits: { requests_per_minute: 10 },
 	embeddings: false,
-	billing: { air: true, pro: true, portal: false },
+	billing: { air: true, pro: true, max: true, portal: false },
 };
 
 const CATALOG = {
@@ -112,7 +112,8 @@ async function startFakeServer(): Promise<FakeServer> {
 			}
 			if (path === "/v1/account/checkout" && request.method === "POST") {
 				const body = await readBody(request);
-				return reply(response, 200, { url: `https://checkout.example/${String(body.plan)}` });
+				const discount = typeof body.discount_code === "string" ? `?discount=${body.discount_code}` : "";
+				return reply(response, 200, { url: `https://checkout.example/${String(body.plan)}${discount}` });
 			}
 			reply(response, 404, { error: { message: "not found", type: "invalid_request_error", code: "not_found" } });
 		})();
@@ -238,7 +239,7 @@ describe("sign in", () => {
 			creditsUsedCents: 12,
 			creditsLimitCents: 50,
 			requestsPerMinute: 10,
-			billing: { air: true, pro: true, portal: false },
+			billing: { air: true, pro: true, max: true, portal: false },
 		});
 		expect(creds.store.size).toBe(0);
 		// The same token is bridged into Pi's `auth.json` as the plan credential
@@ -375,7 +376,7 @@ describe("status and refresh", () => {
 
 	it("maps trial, scheduled cancel and the period end", async () => {
 		await service.signIn();
-		fake.account = { ...FREE_ACCOUNT, plan: "pro", status: "scheduled_cancel", cancel_scheduled: true, period_end: "2026-11-01T00:00:00.000Z", limits: { requests_per_minute: 240 }, billing: { air: true, pro: true, portal: true } };
+		fake.account = { ...FREE_ACCOUNT, plan: "pro", status: "scheduled_cancel", cancel_scheduled: true, period_end: "2026-11-01T00:00:00.000Z", limits: { requests_per_minute: 240 }, billing: { air: true, pro: true, max: true, portal: true } };
 
 		const status = await service.refresh();
 
@@ -695,6 +696,40 @@ describe("hosted billing", () => {
 		await service.checkout("pro");
 
 		expect(opened.at(-1)).toBe("https://checkout.example/pro");
+	});
+
+	it("checks out Max like any other paid plan", async () => {
+		await service.signIn();
+
+		await service.checkout("max");
+
+		expect(opened.at(-1)).toBe("https://checkout.example/max");
+	});
+
+	it("sends the promo code with the checkout, and nothing when there is none", async () => {
+		await service.signIn();
+
+		await service.checkout("pro", "WELCOME-7");
+		expect(opened.at(-1)).toBe("https://checkout.example/pro?discount=WELCOME-7");
+
+		await service.checkout("pro", "   ");
+		expect(opened.at(-1)).toBe("https://checkout.example/pro");
+	});
+
+	it("refuses a malformed promo code without calling the server", async () => {
+		await service.signIn();
+		const before = fake.requests.length;
+
+		await expect(service.checkout("air", "two words")).rejects.toThrow();
+
+		expect(fake.requests).toHaveLength(before);
+	});
+
+	it("surfaces the server's refusal of a promo code", async () => {
+		await service.signIn();
+		fake.failNext.set("/v1/account/checkout", { status: 400, body: { error: { message: "That promo code is not valid for this plan", type: "invalid_request_error", code: "invalid_discount_code" } } });
+
+		await expect(service.checkout("pro", "NOPE")).rejects.toThrow("That promo code is not valid for this plan");
 	});
 
 	it("surfaces the server's refusal and opens nothing", async () => {

@@ -811,10 +811,10 @@ html[data-appearance="dark"] .onb .source-icon.brand {
 
 .onb .plan-list {
 	display: grid;
-	grid-template-columns: repeat(4,minmax(0,1fr));
+	grid-template-columns: repeat(5,minmax(0,1fr));
 	gap: 10px;
 	width: 100%;
-	max-width: 960px;
+	max-width: 1080px;
 	margin: 18px auto 0;
 }
 
@@ -920,6 +920,48 @@ html[data-appearance="dark"] .onb .source-icon.brand {
 	font-weight: 600;
 }
 
+.onb .plan-trial {
+	align-self: flex-start;
+	margin-top: 6px;
+}
+
+.onb .promo-box {
+	display: flex;
+	flex-direction: column;
+	gap: 5px;
+	width: 100%;
+	max-width: 360px;
+	margin: 16px auto 0;
+	color: var(--onb-muted);
+	font-size: 10px;
+	line-height: 1.5;
+}
+
+.onb .promo-box label {
+	color: var(--onb-body);
+	font-size: 10.5px;
+	font-weight: 600;
+}
+
+.onb .promo-box input.input {
+	flex: none;
+	height: 34px;
+	padding: 0 10px;
+	border: 1px solid var(--onb-border);
+	border-radius: 7px;
+	background: var(--onb-bg-card);
+	color: var(--onb-ink);
+	font-size: 12px;
+}
+
+.onb .promo-box input[aria-invalid="true"] {
+	border-color: var(--onb-red);
+}
+
+.onb .promo-box .promo-error {
+	color: var(--onb-red);
+}
+
 .onb .plan-desc {
 	margin-top: 11px;
 	padding-top: 11px;
@@ -1005,7 +1047,7 @@ html[data-appearance="dark"] .onb .source-icon.brand {
 	align-items: flex-start;
 	gap: 8px;
 	width: 100%;
-	max-width: 960px;
+	max-width: 1080px;
 	margin-top: 16px;
 	padding: 10px 12px;
 	border: 1px solid color-mix(in srgb,var(--onb-blue) 25%,var(--onb-border));

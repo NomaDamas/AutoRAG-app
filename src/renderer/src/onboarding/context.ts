@@ -57,6 +57,8 @@ export interface OnboardingCtx {
 	/** Null until the main process answered the first status call. */
 	readonly account: AccountStatus | null;
 	readonly paying: boolean;
+	/** What the user typed into the plan step's promo code field; sent with the checkout, never saved. */
+	readonly promoCode: string;
 	readonly tipIndex: number;
 	/** The welcome step's "send anonymous usage statistics" checkbox; saved to Settings when the user continues from that step. */
 	readonly shareUsage: boolean;
@@ -92,12 +94,13 @@ export interface OnboardingCtx {
 	setSourceOn(id: SourceId, on: boolean): void;
 
 	choosePlan(plan: PlanId): void;
+	setPromoCode(code: string): void;
 	signIn(): void;
 	cancelSignIn(): void;
 	signOut(): void;
 	/** The no-account path: pick BYOK and move on. */
 	skipAccount(): void;
-	/** Re-reads the account and opens the hosted checkout for the chosen paid plan. */
+	/** Opens the hosted checkout for the chosen paid plan, with the promo code when one is typed. */
 	openCheckout(): void;
 	/** Re-reads the account from the server (the pay overlay's "check payment"). */
 	refreshAccount(): void;

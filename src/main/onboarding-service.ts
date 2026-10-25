@@ -181,7 +181,7 @@ const STEP_IDS: Readonly<Record<string, true>> = {
 	model: true,
 	indexing: true,
 };
-const PLAN_IDS: Readonly<Record<string, true>> = { free: true, air: true, pro: true, byok: true };
+const PLAN_IDS: Readonly<Record<string, true>> = { free: true, air: true, pro: true, max: true, byok: true };
 const EMBED_MODES: Readonly<Record<string, true>> = { none: true, local: true, cloud: true };
 const BYOK_PROVIDERS: Readonly<Record<string, true>> = {
 	anthropic: true,

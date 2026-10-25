@@ -12,7 +12,7 @@ import {
 	useState,
 	type ReactElement,
 } from "react";
-import type { AccountStatus } from "../../../shared/account-contract";
+import { isPaidPlanId, parsePromoCode, type AccountStatus } from "../../../shared/account-contract";
 import type {
 	ByokProviderId,
 	DetectedModelProvider,
@@ -41,6 +41,7 @@ import {
 	localEmbeddingAllowed,
 	errorReportsConsentOnLeaving,
 	isPlanSelectable,
+	cloudPlanFor,
 	planHeld,
 	primaryLabelKey,
 	resolveEmbed,
@@ -117,9 +118,9 @@ function reconcileAccountDraft(current: OnboardingDraft, status: AccountStatus |
 	}
 	const embed = resolveEmbed(current.embed, true, localAllowed);
 	const subPlan = status.account?.plan;
-	if (subPlan === "air" || subPlan === "pro") {
-		const nextPlan: PlanId = embed === "cloud" ? "pro" : subPlan;
-		if (embed === "cloud" && subPlan !== "pro") {
+	if (isPaidPlanId(subPlan)) {
+		const nextPlan: PlanId = embed === "cloud" ? cloudPlanFor(subPlan) : subPlan;
+		if (embed === "cloud" && subPlan === "air") {
 			const nextStepId: OnboardingStepId =
 				current.stepId === "sources" || current.stepId === "indexing" ? "plan" : current.stepId;
 			if (current.plan === nextPlan && current.stepId === nextStepId && !current.planConfirmed) return current;
@@ -172,6 +173,10 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 	const [tipIndex, setTipIndex] = useState(0);
 	const [account, setAccount] = useState<AccountStatus | null>(null);
 	const [paying, setPaying] = useState(false);
+	// Typed on the plan step and sent with the checkout; deliberately not part of the saved draft.
+	const [promoCode, setPromoCode] = useState("");
+	const promoCodeRef = useRef(promoCode);
+	promoCodeRef.current = promoCode;
 	const [indexStatus, setIndexStatus] = useState<IndexingStatus | null>(null);
 	const [smartRun, setSmartRun] = useState<SmartRun>(initialSmartRun);
 	// Unticked: usage statistics are opt-in (an EU user's consent must be an affirmative act).
@@ -342,6 +347,7 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 			embed,
 			cloudConsent: current.cloudConsent === true,
 			plan: current.plan,
+			promoValid: parsePromoCode(promoCodeRef.current).ok || planHeld(current.plan, accountRef.current),
 			modelVerified: current.model?.verified === true,
 		});
 	}, []);
@@ -385,24 +391,38 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 			.finally(() => setPaying(false));
 	}, [showToast]);
 
-	const openCheckout = useCallback((): void => {
+	/** Resolves true once the checkout page is open in the browser; a refusal (a bad promo code, an existing subscription) is toasted and resolves false. */
+	const openCheckout = useCallback(async (): Promise<boolean> => {
 		const plan = draftRef.current?.plan;
-		if (plan !== "air" && plan !== "pro") {
-			return;
+		if (!isPaidPlanId(plan)) {
+			return false;
 		}
-		void autorag.account.checkout(plan).catch((error: unknown) => showToast(ipcMessage(error)));
-	}, [showToast]);
+		const promo = parsePromoCode(promoCodeRef.current);
+		if (!promo.ok) {
+			showToast(t("onboarding.plan.promo.invalid"));
+			return false;
+		}
+		try {
+			await autorag.account.checkout(plan, promo.code ?? undefined);
+			return true;
+		} catch (error) {
+			showToast(ipcMessage(error));
+			return false;
+		}
+	}, [showToast, t]);
 
 	const next = useCallback((): void => {
 		const current = draftRef.current;
 		if (current === null || !currentAdvance()) {
 			return;
 		}
-		if (current.stepId === "plan" && (current.plan === "air" || current.plan === "pro") && !planHeld(current.plan, accountRef.current)) {
+		if (current.stepId === "plan" && isPaidPlanId(current.plan) && !planHeld(current.plan, accountRef.current)) {
+			// The waiting overlay only makes sense once the checkout page is really open.
 			if (overlayRef.current !== "pay") {
-				openCheckout();
+				void openCheckout().then((opened) => {
+					if (opened) setOverlay("pay");
+				});
 			}
-			setOverlay("pay");
 			return;
 		}
 		const signedIn = accountRef.current?.state === "signedIn";
@@ -683,9 +703,9 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 					setDraft((current) => {
 						if (current === null) return current;
 						const nextPlan: PlanId =
-							subPlan === "air" || subPlan === "pro"
+							isPaidPlanId(subPlan)
 								? current.embed === "cloud"
-									? "pro"
+									? cloudPlanFor(subPlan)
 									: subPlan
 								: current.plan === "byok"
 									? "pro"
@@ -730,6 +750,7 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 		indexStatus,
 		account,
 		paying,
+		promoCode,
 		tipIndex,
 		shareUsage,
 		setShareUsage,
@@ -861,8 +882,8 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 				const subPlan = accountRef.current?.state === "signedIn" ? accountRef.current.account?.plan : undefined;
 				const nextPlan: PlanId =
 					embed === "cloud"
-						? "pro"
-						: subPlan === "air" || subPlan === "pro"
+						? cloudPlanFor(subPlan)
+						: isPaidPlanId(subPlan)
 							? subPlan
 							: current.plan;
 				return {
@@ -879,6 +900,7 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 			patch({
 				sources: (draftRef.current?.sources ?? []).map((source) => (source.id === id ? { ...source, on } : source)),
 			}),
+		setPromoCode,
 		choosePlan: (plan: PlanId) => {
 			const current = draftRef.current;
 			const embed = resolveEmbed(current?.embed, canSelectCloudEmbedding(accountRef.current), localAllowedRef.current);
@@ -908,7 +930,9 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 			const target = list[list.indexOf(current.stepId) + 1];
 			setDraft({ ...current, embed, cloudConsent: false, plan: "byok", ...(target === undefined ? {} : { stepId: target }) });
 		},
-		openCheckout,
+		openCheckout: () => {
+			void openCheckout();
+		},
 		refreshAccount,
 		setLaunchAtLogin: (enabled) => {
 			patch({ launchAtLogin: enabled });
@@ -1226,12 +1250,12 @@ function renderOverlay(kind: OverlayKind | null, h: OverlayHandlers): ReactEleme
 				</div>
 			);
 		case "pay": {
-			const pro = h.ctx.draft.plan === "pro";
+			const plan = h.ctx.draft.plan;
 			return (
 				<div className="modal" style={{ width: 460 }}>
 					<div className="modal-head">
 						<Icon name="key-round" size={15} />
-						<strong>{pro ? t("onboarding.overlay.pay.proTitle") : t("onboarding.overlay.pay.airTitle")}</strong>
+						<strong>{t("onboarding.overlay.pay.title", { plan: t(`onboarding.plan.plan.${plan}.name`) })}</strong>
 						<button type="button" className="quiet" onClick={h.onClose}>
 							<Icon name="x" size={15} />
 						</button>
@@ -1239,8 +1263,8 @@ function renderOverlay(kind: OverlayKind | null, h: OverlayHandlers): ReactEleme
 					<div className="modal-body">
 						<p className="pay-lead">{t("onboarding.overlay.pay.lead")}</p>
 						<div className="pay-summary">
-							<span>{t(`onboarding.plan.plan.${pro ? "pro" : "air"}.name`)}</span>
-							<small>{t(`onboarding.plan.plan.${pro ? "pro" : "air"}.note`)}</small>
+							<span>{t(`onboarding.plan.plan.${plan}.name`)}</span>
+							<small>{t(`onboarding.plan.plan.${plan}.note`)}</small>
 						</div>
 						<p className="pay-demo">{t("onboarding.overlay.pay.waiting")}</p>
 						<div className="modal-actions">

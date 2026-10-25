@@ -10,7 +10,7 @@ import { SEARCH_CHANNELS, type SearchBridge } from "../shared/search-contract";
 import { SMART_INDEXING_CHANNELS } from "../shared/smart-indexing-contract";
 import { OS_REQUEST_CHANNELS } from "../shared/os-request-contract";
 import { SETTINGS_CHANNELS, type EmbeddingChangeRequest, type JsonValue, type McpServerInput, type ProviderAuthKind, type ProviderServerInput, type SettingsBridge } from "../shared/settings-contract";
-import { ACCOUNT_CHANNELS } from "../shared/account-contract";
+import { ACCOUNT_CHANNELS, isPaidPlanId } from "../shared/account-contract";
 import { ONBOARDING_CHANNELS } from "../shared/onboarding-contract";
 import { isServiceRunRequest, SERVICES_CHANNELS } from "../shared/services-contract";
 import { t } from "../shared/i18n/core";
@@ -293,9 +293,10 @@ export function registerAccountIpcHandlers(service: AccountService): void {
 	ipcMain.handle(ACCOUNT_CHANNELS.signIn, () => service.signIn());
 	ipcMain.handle(ACCOUNT_CHANNELS.cancelSignIn, () => service.cancelSignIn());
 	ipcMain.handle(ACCOUNT_CHANNELS.signOut, () => service.signOut());
-	ipcMain.handle(ACCOUNT_CHANNELS.checkout, (_event, plan: unknown) => {
-		if (plan !== "air" && plan !== "pro") throw new TypeError("account:checkout expects \"air\" or \"pro\"");
-		return service.checkout(plan);
+	ipcMain.handle(ACCOUNT_CHANNELS.checkout, (_event, plan: unknown, promoCode: unknown) => {
+		if (!isPaidPlanId(plan)) throw new TypeError("account:checkout expects \"air\", \"pro\" or \"max\"");
+		if (promoCode !== undefined && typeof promoCode !== "string") throw new TypeError("account:checkout expects the promo code as a string");
+		return service.checkout(plan, promoCode);
 	});
 	ipcMain.handle(ACCOUNT_CHANNELS.useManagedModel, () => service.useManagedModel());
 }

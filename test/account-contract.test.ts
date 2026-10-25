@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ACCOUNT_LEGAL_ROUTES, accountDashboardUrl, accountLegalUrl, nextWeeklyReset, splitRemaining } from "../src/shared/account-contract";
+import { ACCOUNT_LEGAL_ROUTES, accountDashboardUrl, accountLegalUrl, isPaidPlanId, nextWeeklyReset, parsePromoCode, splitRemaining } from "../src/shared/account-contract";
 
 describe("accountLegalUrl", () => {
 	it("serves the server's legal routes", () => {
@@ -47,5 +47,33 @@ describe("splitRemaining", () => {
 		expect(splitRemaining(2 * 86_400_000 + 3 * 3_600_000 + 4 * 60_000)).toEqual({ days: 2, hours: 3, minutes: 4 });
 		expect(splitRemaining(30_000)).toEqual({ days: 0, hours: 0, minutes: 1 });
 		expect(splitRemaining(-5)).toEqual({ days: 0, hours: 0, minutes: 0 });
+	});
+});
+
+describe("isPaidPlanId", () => {
+	it("accepts exactly the plans the hosted checkout sells", () => {
+		expect(["air", "pro", "max"].every(isPaidPlanId)).toBe(true);
+		expect(["free", "byok", "", "PRO", null, undefined, 3].some(isPaidPlanId)).toBe(false);
+	});
+});
+
+describe("parsePromoCode", () => {
+	it("treats an absent or blank code as no code", () => {
+		expect(parsePromoCode(undefined)).toEqual({ ok: true, code: null });
+		expect(parsePromoCode("")).toEqual({ ok: true, code: null });
+		expect(parsePromoCode("   ")).toEqual({ ok: true, code: null });
+	});
+
+	it("trims a well-formed code and keeps its case", () => {
+		expect(parsePromoCode("  Dazzi-2026_X ")).toEqual({ ok: true, code: "Dazzi-2026_X" });
+		expect(parsePromoCode("A".repeat(64))).toEqual({ ok: true, code: "A".repeat(64) });
+	});
+
+	it("rejects what the server would reject before anything is sent", () => {
+		expect(parsePromoCode("A".repeat(65))).toEqual({ ok: false });
+		expect(parsePromoCode("two words")).toEqual({ ok: false });
+		expect(parsePromoCode("café")).toEqual({ ok: false });
+		expect(parsePromoCode("a/b?c=d")).toEqual({ ok: false });
+		expect(parsePromoCode(42)).toEqual({ ok: false });
 	});
 });

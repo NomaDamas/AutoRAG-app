@@ -92,7 +92,7 @@ export type OnboardingStepId =
  */
 export type EmbedMode = "none" | "local" | "cloud";
 
-export type PlanId = "free" | "air" | "pro" | "byok";
+export type PlanId = "free" | "air" | "pro" | "max" | "byok";
 export type ByokProviderId = "anthropic" | "openai" | "openrouter" | "google" | "ollama" | "openai-compatible";
 
 /**

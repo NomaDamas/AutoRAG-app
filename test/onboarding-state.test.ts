@@ -130,6 +130,21 @@ describe("createOnboardingService persistence", () => {
 		expect(snapshot.draft).toEqual(DRAFT);
 	});
 
+	it("keeps a draft that chose any listed plan, Max included, and refuses an unknown one", async () => {
+		const directory = await workDir();
+		for (const plan of ["free", "air", "pro", "max", "byok"] as const) {
+			await createOnboardingService(makeDeps(directory)).save({ ...DRAFT, plan });
+			expect((await createOnboardingService(makeDeps(directory)).load()).draft?.plan).toBe(plan);
+		}
+		await expect(createOnboardingService(makeDeps(directory)).save({ ...DRAFT, plan: "ultra" })).rejects.toThrow();
+	});
+
+	it("starts indexing for an account on Max", async () => {
+		const directory = await workDir();
+		const service = createOnboardingService(makeDeps(directory));
+		await expect(service.startIndexing({ folders: ["/Users/me/Documents"], embed: "none", sources: [], plan: "max", model: null })).resolves.toBeDefined();
+	});
+
 	it("rejects a malformed draft", async () => {
 		const directory = await workDir();
 		const service = createOnboardingService(makeDeps(directory));

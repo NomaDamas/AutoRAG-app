@@ -10,6 +10,7 @@ import {
 	ACCOUNT_CHANNELS,
 	AUTORAG_PROVIDER_ID,
 	DEFAULT_ACCOUNT_BASE_URL,
+	parsePromoCode,
 	shouldAdoptManagedModel,
 	type AccountPlanId,
 	type AccountSnapshot,
@@ -62,7 +63,7 @@ export interface AccountService {
 	signIn(): Promise<AccountStatus>;
 	cancelSignIn(): Promise<AccountStatus>;
 	signOut(): Promise<AccountStatus>;
-	checkout(plan: PaidPlanId): Promise<void>;
+	checkout(plan: PaidPlanId, promoCode?: string): Promise<void>;
 	useManagedModel(): Promise<ManagedModelResult>;
 	/** Aborts a sign-in in flight so its loopback listener closes (app quit). */
 	dispose(): Promise<void>;
@@ -121,7 +122,7 @@ function parseAccount(body: unknown): AccountSnapshot | null {
 		// Older servers omit the flag; embeddings were always Pro-and-up.
 		embeddings: typeof body.embeddings === "boolean" ? body.embeddings : plan === "pro" || plan === "max",
 		requestsPerMinute: readNumber(limits.requests_per_minute, 0),
-		billing: { air: billing.air === true, pro: billing.pro === true, portal: billing.portal === true },
+		billing: { air: billing.air === true, pro: billing.pro === true, max: billing.max === true, portal: billing.portal === true },
 	};
 }
 
@@ -540,7 +541,11 @@ export function createAccountService(deps: AccountServiceDeps): AccountService {
 			}
 			return publish();
 		},
-		checkout: (plan) => openHostedUrl("/v1/account/checkout", { plan }),
+		checkout: async (plan, promoCode) => {
+			const promo = parsePromoCode(promoCode);
+			if (!promo.ok) throw new Error(t("main.account.invalidPromoCode"));
+			await openHostedUrl("/v1/account/checkout", { plan, ...(promo.code === null ? {} : { discount_code: promo.code }) });
+		},
 		useManagedModel: () => applyManagedModel(),
 	};
 }
