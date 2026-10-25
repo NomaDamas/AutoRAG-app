@@ -49,5 +49,6 @@ export function createSettingsBridge(ipcRenderer: IpcRenderer): SettingsBridge {
 		mcpGet: () => ipcRenderer.invoke(SETTINGS_CHANNELS.mcpGet),
 		mcpUpsert: (input) => ipcRenderer.invoke(SETTINGS_CHANNELS.mcpUpsert, input),
 		mcpRemove: (name) => ipcRenderer.invoke(SETTINGS_CHANNELS.mcpRemove, name),
+		mcpConnectInfo: () => ipcRenderer.invoke(SETTINGS_CHANNELS.mcpConnectInfo),
 	};
 }

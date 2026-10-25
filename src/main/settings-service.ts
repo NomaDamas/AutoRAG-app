@@ -12,6 +12,7 @@ import type {
 	ProviderLoginEvent,
 	ProviderServerInput,
 	ResolvedPermission,
+	McpConnectInfo,
 	McpServerInput,
 	SettingsBridge,
 } from "../shared/settings-contract";
@@ -51,6 +52,8 @@ export interface SettingsServiceDeps {
 	readonly embedding?: EmbeddingSettingsService;
 	readonly refreshScheduler?: RefreshScheduler;
 	readonly mcp?: McpSettingsService;
+	/** How another agent starts Dazzi's own MCP server. */
+	readonly mcpConnect?: () => McpConnectInfo;
 	readonly onProviderLoginEvent?: (event: ProviderLoginEvent) => void;
 	readonly onSettingsChanged?: (settings: AppSettings) => void;
 	/** The interface language a profile without a stored choice starts in (the OS language); Korean when omitted. */
@@ -125,6 +128,10 @@ export function createSettingsService(deps: SettingsServiceDeps): SettingsBridge
 	const requireMcp = (): McpSettingsService => {
 		if (deps.mcp === undefined) throw new Error("MCP settings are unavailable");
 		return deps.mcp;
+	};
+	const requireMcpConnect = (): (() => McpConnectInfo) => {
+		if (deps.mcpConnect === undefined) throw new Error("MCP connection info is unavailable");
+		return deps.mcpConnect;
 	};
 
 	return {
@@ -208,5 +215,6 @@ export function createSettingsService(deps: SettingsServiceDeps): SettingsBridge
 		mcpGet: () => requireMcp().get(),
 		mcpUpsert: (input: McpServerInput) => requireMcp().upsert(input),
 		mcpRemove: (name: string) => requireMcp().remove(name),
+		mcpConnectInfo: async () => requireMcpConnect()(),
 	};
 }

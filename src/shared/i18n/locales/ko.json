@@ -1845,7 +1845,7 @@
         "reading": "문서 읽기 언어 파서",
         "duplicates": "중복 파일 버전 정리 dupey",
         "apps": "연결 앱 데이터소스 메신저 메일 클라우드",
-        "mcp": "mcp 서버 도구 연결 확장 외부 도구 codemode 에이전트"
+        "mcp": "mcp 서버 도구 연결 확장 외부 도구 codemode 에이전트 claude codex gemini cursor 복사"
       },
       "mcp": "MCP 서버"
     },
@@ -2097,8 +2097,8 @@
     },
     "mcp": {
       "title": "MCP 서버",
-      "desc": "외부 MCP 서버를 연결하면 검색과 대화에서 그 서버의 도구를 쓸 수 있습니다.",
-      "listTitle": "연결된 서버",
+      "desc": "Dazzi를 다른 에이전트에 연결하고, 외부 MCP 서버를 Dazzi에 연결합니다.",
+      "listTitle": "Dazzi에 연결된 서버",
       "listDesc": "서버는 검색이나 대화를 시작할 때 연결됩니다. 변경 사항은 다음 검색부터 적용됩니다.",
       "add": "서버 추가",
       "empty": "아직 연결한 MCP 서버가 없습니다.",
@@ -2149,6 +2149,30 @@
         "badLine": "\"{{line}}\" 줄을 읽을 수 없습니다.",
         "removeTitle": "\"{{name}}\" 서버를 삭제할까요?",
         "removeBody": "설정 파일에서 이 서버가 지워집니다. 서버가 저장한 데이터는 그대로입니다."
+      },
+      "connect": {
+        "title": "다른 에이전트에 연결",
+        "desc": "Claude Code, Codex 같은 에이전트가 Dazzi로 색인한 문서를 검색할 수 있게 합니다. 아래 내용을 복사해 에이전트에 붙여 넣으세요.",
+        "tabsAria": "에이전트 선택",
+        "tabManual": "직접 입력",
+        "copy": "복사",
+        "copied": "복사됨",
+        "copyFailed": "복사하지 못했습니다. 다시 시도해 주세요.",
+        "unavailable": "이 컴퓨터에서는 Dazzi MCP 서버를 시작할 수 없어 복사할 내용이 없습니다.",
+        "hint": {
+          "terminal": "터미널에 붙여 넣어 실행하면 에이전트에 등록됩니다.",
+          "json": "에이전트의 MCP 설정 파일(mcpServers)에 추가하세요. Cursor, Claude Desktop 등에서 쓰는 형식입니다.",
+          "manual": "위에 없는 에이전트는 값을 하나씩 복사해 MCP 서버 추가 화면에 입력하세요."
+        },
+        "field": {
+          "name": "이름",
+          "transport": "연결 방식",
+          "command": "명령어",
+          "args": "인수",
+          "env": "환경 변수"
+        },
+        "readOnly": "읽기 전용",
+        "readOnlyHint": "색인 새로고침과 리포트 저장 도구를 숨겨, 에이전트가 검색만 하게 합니다."
       }
     }
   },

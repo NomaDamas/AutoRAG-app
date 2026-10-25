@@ -1845,7 +1845,7 @@
         "reading": "document reading language parser OCR",
         "duplicates": "duplicate files versions cleanup dupey",
         "apps": "connections apps data sources messenger mail cloud",
-        "mcp": "mcp server tools connect extension external tools codemode agent"
+        "mcp": "mcp server tools connect extension external tools codemode agent claude codex gemini cursor copy"
       },
       "mcp": "MCP Servers"
     },
@@ -2097,8 +2097,8 @@
     },
     "mcp": {
       "title": "MCP Servers",
-      "desc": "Connect external MCP servers so searches and chats can use their tools.",
-      "listTitle": "Connected servers",
+      "desc": "Connect Dazzi to other agents, and connect external MCP servers to Dazzi.",
+      "listTitle": "Servers connected to Dazzi",
       "listDesc": "Servers connect when a search or chat starts. Changes apply from the next search.",
       "add": "Add server",
       "empty": "No MCP servers connected yet.",
@@ -2149,6 +2149,30 @@
         "badLine": "Cannot read the line \"{{line}}\".",
         "removeTitle": "Remove \"{{name}}\"?",
         "removeBody": "The server is deleted from the config file. Data the server stored is left alone."
+      },
+      "connect": {
+        "title": "Connect other agents",
+        "desc": "Let agents such as Claude Code and Codex search the documents Dazzi has indexed. Copy what's below and paste it into the agent.",
+        "tabsAria": "Choose an agent",
+        "tabManual": "Manual",
+        "copy": "Copy",
+        "copied": "Copied",
+        "copyFailed": "Couldn't copy. Please try again.",
+        "unavailable": "Dazzi's MCP server can't be started on this computer, so there is nothing to copy.",
+        "hint": {
+          "terminal": "Paste it into a terminal and run it to register Dazzi with the agent.",
+          "json": "Add it to the agent's MCP config file (mcpServers), the format Cursor, Claude Desktop and others use.",
+          "manual": "For an agent not listed above, copy the values one by one into its add-MCP-server screen."
+        },
+        "field": {
+          "name": "Name",
+          "transport": "Connection",
+          "command": "Command",
+          "args": "Arguments",
+          "env": "Environment"
+        },
+        "readOnly": "Read-only",
+        "readOnlyHint": "Hides the index-refresh and report-saving tools so the agent can only search."
       }
     }
   },
