@@ -12,27 +12,19 @@ jobs:
         run: |
           $ErrorActionPreference = "Continue"
           $sys = Join-Path $env:SystemRoot "System32\tar.exe"
-          $git = "C:\Program Files\Git\usr\bin\tar.exe"
           $root = Join-Path $env:RUNNER_TEMP "probe"
-          New-Item -ItemType Directory -Force "$root\korean\sub" | Out-Null
-          New-Item -ItemType Directory -Force "$root\plain" | Out-Null
-          $name = -join ([char]0xAC04, [char]0xC774, [char]0xAE30, [char]0xC548, [char]0xBB38) + "_" + (-join ([char]0xC11C, [char]0xC2DD)) + ".hwpx"
-          Set-Content "$root\korean\sub\$name" "x"
-          Set-Content "$root\plain\a.txt" "x"
-          function Codes($dir) { Get-ChildItem $dir -Recurse -File | ForEach-Object { "$($_.FullName.Substring($dir.Length)) :: " + (($_.Name.ToCharArray() | ForEach-Object { '{0:X4}' -f [int]$_ }) -join ' ') } }
-          function Try-Tar($label, $exe, $tarArgs) { & $exe @tarArgs; Write-Host "RESULT $label exit=$LASTEXITCODE" }
-          Write-Host "ORIGINAL: $(Codes "$root\korean")"
-          # 1. GNU tar, pax format, then extract with bsdtar
-          Try-Tar "gnutar posix create" $git @("--force-local", "--format=posix", "-cf", "$root\g.tar", "-C", $root, "korean", "plain")
-          New-Item -ItemType Directory -Force "$root\out1" | Out-Null
-          Try-Tar "bsdtar extract posix" $sys @("-xf", "$root\g.tar", "-C", "$root\out1")
-          Write-Host "AFTER-POSIX: $(Codes "$root\out1\korean")"
-          # 2. bsdtar with a file list that names the Korean file
-          Set-Content -Encoding utf8 "$root\list.txt" @("korean/sub/$name", "plain/a.txt")
-          Try-Tar "bsdtar -T list" $sys @("-cf", "$root\l.tar", "-C", $root, "-T", "$root\list.txt")
-          # 3. bsdtar --exclude the korean dir, to prove only that file crashes it
-          Try-Tar "bsdtar plain only" $sys @("-cf", "$root\p.tar", "-C", $root, "plain")
-          # 4. bsdtar via the system wide path with long-path prefix
-          Try-Tar "bsdtar korean with hdrcharset" $sys @("--options", "hdrcharset=UTF-8", "-cf", "$root\h.tar", "-C", $root, "korean")
-          # 5. node-based tar? check node + tar package availability
-          node --version
+          New-Item -ItemType Directory -Force "$root\app\node_modules\kordoc\templates" | Out-Null
+          New-Item -ItemType Directory -Force "$root\app\node_modules\kordoc\dist" | Out-Null
+          New-Item -ItemType Directory -Force "$root\tools\node" | Out-Null
+          $name = -join ([char]0xAC04, [char]0xC774, [char]0xAE30, [char]0xC548, [char]0xBB38) + ".hwpx"
+          Set-Content "$root\app\node_modules\kordoc\templates\$name" "x"
+          Set-Content "$root\app\node_modules\kordoc\templates\plain.json" "x"
+          Set-Content "$root\app\node_modules\kordoc\dist\index.js" "x"
+          Set-Content "$root\tools\node\node.exe" "x"
+          function Try-Tar($label, $tarArgs) { & $sys @tarArgs; Write-Host "RESULT $label exit=$LASTEXITCODE" }
+          Try-Tar "exclude dir" @("-cf", "$root\e.tar", "-C", $root, "--exclude=app/node_modules/kordoc/templates", "app/node_modules", "tools/node")
+          Write-Host "LISTING:"; & $sys -tf "$root\e.tar"
+          Try-Tar "extract" @("-xf", "$root\e.tar", "-C", "$root\x")
+          New-Item -ItemType Directory -Force "$root\x" | Out-Null
+          Try-Tar "extract2" @("-xf", "$root\e.tar", "-C", "$root\x")
+          Get-ChildItem "$root\x" -Recurse -File | ForEach-Object { Write-Host "EXTRACTED $($_.FullName.Substring($root.Length))" }
