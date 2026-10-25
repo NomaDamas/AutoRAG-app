@@ -119,6 +119,11 @@ const EXTENSION_KINDS: Readonly<Record<string, FileKind>> = {
 	eml: "mail",
 };
 
+/** Whether the extension has its own entry; the rest fall back to the md tile. */
+export function isKnownExtension(extension: string): boolean {
+	return EXTENSION_KINDS[extension.toLowerCase()] !== undefined;
+}
+
 export function kindFromExtension(extension: string): FileKind {
 	return EXTENSION_KINDS[extension.toLowerCase()] ?? "md";
 }

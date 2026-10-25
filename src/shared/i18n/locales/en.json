@@ -1317,7 +1317,8 @@
       "noRating": "No Rating",
       "stars": "{{count}} Stars",
       "star": "1 Star"
-    }
+    },
+    "kindByExtension": "{{ext}} File"
   },
   "main": {
     "interaction": {

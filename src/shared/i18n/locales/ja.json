@@ -1317,7 +1317,8 @@
       "noRating": "評価なし",
       "stars": "星{{count}}つ",
       "star": "星1つ"
-    }
+    },
+    "kindByExtension": "{{ext}} ファイル"
   },
   "main": {
     "interaction": {

@@ -1317,7 +1317,8 @@
       "noRating": "등급 없음",
       "stars": "별 {{count}}개",
       "star": "별 1개"
-    }
+    },
+    "kindByExtension": "{{ext}} 파일"
   },
   "main": {
     "interaction": {

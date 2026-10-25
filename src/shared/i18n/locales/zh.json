@@ -1317,7 +1317,8 @@
       "noRating": "无评分",
       "stars": "{{count}} 星",
       "star": "1 星"
-    }
+    },
+    "kindByExtension": "{{ext}} 文件"
   },
   "main": {
     "interaction": {
