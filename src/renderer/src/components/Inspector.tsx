@@ -28,6 +28,9 @@ import { useEffect, useState, type MouseEvent as ReactMouseEvent, type ReactElem
 import { useTranslation } from "react-i18next";
 import { previewStreamUrl } from "../../../preview/shared/contract";
 import { hwpFirstPageUrl } from "../../../preview/ui/rhwp";
+import { firstPageTile } from "../lib/first-page-tile";
+import { previewLoaderFor } from "../lib/preview-loader";
+import { hostPlatform } from "../lib/shortcuts";
 import type { ActionAnchor, ActionCapabilities, OpenWithApplication } from "../../../shared/actions-contract";
 import type { AutomationRule } from "../../../shared/automation-contract";
 import type { FsFileDetails } from "../../../shared/fs-contract";
@@ -388,6 +391,8 @@ const previewCache = new Map<string, PreviewState>();
  * protocol URLs, so only the most recent ones stay in `previewCache`.
  */
 const HWP_PREVIEW_KEEP = 24;
+/** The Info panel paper is drawn at the OS preview tier: 640px. */
+const PREVIEW_PAPER_WIDTH = 640;
 const hwpIdentities: string[] = [];
 
 function rememberHwp(identity: string): void {
@@ -423,14 +428,21 @@ function usePreviewState(entry: FinderEntry): {
 		const mtimeMs = entry.mtimeMs;
 		if (!fetchable) return;
 		const path = entry.path;
-		// The OS thumbnailers draw nothing for HWP without Hancom's plug-in; rhwp draws the first page here.
-		const hwp = /\.hwpx?$/i.test(path);
-		const load = hwp ? hwpFirstPageUrl : window.autorag?.fs?.previewIcon;
-		if (load === undefined) return;
+		// The OS thumbnailers draw nothing for HWP without Hancom's plug-in, and Windows answers a PDF with a generic
+		// icon: rhwp and pdf.js draw the first page here (`preview-loader.ts`).
+		const osPreview = window.autorag?.fs?.previewIcon;
+		if (osPreview === undefined) return;
+		const load = previewLoaderFor(path, {
+			platform: hostPlatform(),
+			os: osPreview,
+			page: (file, version) => firstPageTile(file, version, PREVIEW_PAPER_WIDTH),
+			hwp: hwpFirstPageUrl,
+		});
 		let cancelled = false;
 		const settle = (next: PreviewState): void => {
 			previewCache.set(identity, next);
-			if (hwp) rememberHwp(identity);
+			// A drawn page is a data URL of tens of KB: only the most recent stay cached.
+			if (next.url?.startsWith("data:") === true) rememberHwp(identity);
 			if (!cancelled) setState(next);
 		};
 		void load(path, mtimeMs)

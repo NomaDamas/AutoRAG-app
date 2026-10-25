@@ -205,7 +205,7 @@ export function defaultRun(
 	execFile(
 		command,
 		[...args],
-		{ timeout: options?.timeoutMs ?? COMMAND_TIMEOUT_MS, maxBuffer: COMMAND_MAX_BUFFER },
+		{ timeout: options?.timeoutMs ?? COMMAND_TIMEOUT_MS, maxBuffer: COMMAND_MAX_BUFFER, windowsHide: true },
 		(error, stdout, stderr) => {
 			if (error !== null) {
 				const detail = stderr.trim();

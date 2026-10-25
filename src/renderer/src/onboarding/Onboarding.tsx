@@ -14,8 +14,6 @@ import {
 } from "react";
 import type { AccountStatus } from "../../../shared/account-contract";
 import type {
-	ByokProviderId,
-	DetectedModelProvider,
 	DetectedSource,
 	EmbedMode,
 	EmbeddingInfo,
@@ -23,7 +21,6 @@ import type {
 	FolderScan,
 	IndexingRequest,
 	IndexingStatus,
-	ModelOption,
 	OnboardingDraft,
 	OnboardingStepId,
 	PermissionStatus,
@@ -70,6 +67,7 @@ import { SmartScopeStep } from "./steps/SmartScope";
 import { ModelStep } from "./steps/Model";
 import { PermissionsStep } from "./steps/Permissions";
 import { PlanStep } from "./steps/Plan";
+import { RolesStep } from "./steps/Roles";
 import { SourcesStep } from "./steps/Sources";
 import { WelcomeStep } from "./steps/Welcome";
 
@@ -141,6 +139,14 @@ function reconcileAccountDraft(current: OnboardingDraft, status: AccountStatus |
 	return current;
 }
 
+/** The draft with the one-way return to the index cleared (it is set only while fixing what stopped the first index). */
+function leaveDetour(draft: OnboardingDraft): OnboardingDraft {
+	const { resumeAt, ...rest } = draft;
+	return resumeAt === undefined ? draft : rest;
+}
+
+const trimTrailingSeparators = (path: string): string => path.replace(/[\\/]+$/u, "");
+
 export function Onboarding({ onComplete }: { readonly onComplete: () => void }): ReactElement {
 	const { t: translateFn } = useTranslation();
 	// The onboarding copy lives under a fixed `onboarding` namespace tree; a loose
@@ -162,11 +168,6 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 	// Done, not "checking": the step's first frame must already show the checking line,
 	// never the empty result that would flash before the probe effect runs.
 	const [sourcesDone, setSourcesDone] = useState(false);
-	const [models, setModels] = useState<readonly DetectedModelProvider[]>([]);
-	const [modelKey, setModelKey] = useState("");
-	const [modelOptions, setModelOptions] = useState<readonly ModelOption[]>([]);
-	const [verifying, setVerifying] = useState(false);
-	const [modelError, setModelError] = useState<string | null>(null);
 	const [overlay, setOverlay] = useState<OverlayKind | null>(null);
 	const [toast, setToast] = useState<string | null>(null);
 	const [tipIndex, setTipIndex] = useState(0);
@@ -174,10 +175,10 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 	const [paying, setPaying] = useState(false);
 	const [indexStatus, setIndexStatus] = useState<IndexingStatus | null>(null);
 	const [smartRun, setSmartRun] = useState<SmartRun>(initialSmartRun);
-	// Unticked: usage statistics are opt-in (an EU user's consent must be an affirmative act).
-	const [shareUsage, setShareUsage] = useState(false);
-	// Unticked too: error reports are opt-in, a separate purpose with its own consent.
-	const [shareErrors, setShareErrors] = useState(false);
+	// Ticked by default: the welcome step offers anonymous usage statistics on. Nothing is saved until the user continues from that step.
+	const [shareUsage, setShareUsage] = useState(true);
+	// Ticked too, independently: error reports are a separate purpose with their own box.
+	const [shareErrors, setShareErrors] = useState(true);
 
 	const draftRef = useRef<OnboardingDraft | null>(null);
 	/** The run whose result may still land in the draft; null once it was cancelled or the step was left. */
@@ -186,7 +187,6 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 	/** The folders the run in flight was started on; they are saved with its result. */
 	const smartRootsRef = useRef<readonly string[]>([]);
 	const permissionRef = useRef<PermissionStatus | null>(null);
-	const modelKeyRef = useRef("");
 	const accountRef = useRef<AccountStatus | null>(null);
 	const overlayRef = useRef<OverlayKind | null>(null);
 	const toastTimer = useRef<number | null>(null);
@@ -195,10 +195,9 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 	const sourcesRef = useRef(false);
 	/** Whether this machine may run local embedding; false until its verdict arrives, and for good below the spec. */
 	const localAllowedRef = useRef(false);
-	const modelsRef = useRef(false);
 	const indexingRef = useRef(false);
-	const shareUsageRef = useRef(false);
-	const shareErrorsRef = useRef(false);
+	const shareUsageRef = useRef(true);
+	const shareErrorsRef = useRef(true);
 
 	// Synced during render, not in an effect: deferred callbacks (the sign-in
 	// auto-advance, keyboard handler) must see the state of the latest render.
@@ -209,9 +208,6 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 	permissionRef.current = permission;
 	accountRef.current = account;
 	localAllowedRef.current = localEmbeddingAllowed(embedding?.localSpec ?? null);
-	useEffect(() => {
-		modelKeyRef.current = modelKey;
-	}, [modelKey]);
 	useEffect(() => {
 		overlayRef.current = overlay;
 	}, [overlay]);
@@ -350,7 +346,7 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 	const flow =
 		draft === null
 			? []
-			: buildFlow(draft.plan, shouldSkipPlanStep(draft.planConfirmed, currentEmbed, account), currentEmbed);
+			: buildFlow(draft.plan, shouldSkipPlanStep(draft.planConfirmed, currentEmbed, account), currentEmbed, canSelectCloudEmbedding(account));
 
 	const startIndexing = useCallback((): void => {
 		const current = draftRef.current;
@@ -366,16 +362,16 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 			embed,
 			sources: current.sources.filter((source) => source.on).map((source) => ({ id: source.id })),
 			plan: current.plan,
-			model:
-				current.plan === "byok" && current.model !== null
-					? { provider: current.model.provider, modelId: current.model.modelId, baseUrl: current.model.baseUrl === "" ? null : current.model.baseUrl }
-					: null,
 			...(excludePaths.length > 0 ? { excludePaths, excludedFiles } : {}),
 		};
-		void bridge.startIndexing(request).then((status) => {
-			setIndexStatus(status);
-		});
-	}, []);
+		void bridge
+			.startIndexing(request)
+			.then((status) => {
+				setIndexStatus(status);
+			})
+			// A refusal (a machine below the local spec, an unreadable config) would otherwise leave a stopped screen with no word.
+			.catch((error: unknown) => showToast(ipcMessage(error)));
+	}, [showToast]);
 
 	const refreshAccount = useCallback((): void => {
 		setPaying(true);
@@ -407,16 +403,19 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 		}
 		const signedIn = accountRef.current?.state === "signedIn";
 		const embed = resolveEmbed(current.embed, signedIn, localAllowedRef.current);
-		const list = buildFlow(current.plan, shouldSkipPlanStep(current.planConfirmed, embed, accountRef.current), embed);
-		const target = list[list.indexOf(current.stepId) + 1];
+		const list = buildFlow(current.plan, shouldSkipPlanStep(current.planConfirmed, embed, accountRef.current), embed, signedIn);
+		// Leaving the embedding choice that a stopped index sent the user to goes straight back to the index.
+		const detour = current.resumeAt === "indexing" && current.stepId === "embedding";
+		const target = detour ? "indexing" : list[list.indexOf(current.stepId) + 1];
 		const consent = usageConsentOnLeaving(current.stepId, shareUsageRef.current);
 		const errorConsent = errorReportsConsentOnLeaving(current.stepId, shareErrorsRef.current);
 		if (consent !== null && errorConsent !== null) {
-			// A failed save leaves both settings at their default (off): the safe direction.
+			// A failed save leaves both settings at their stored default (off), so nothing is sent without a saved choice.
 			void autorag.settings.set({ usageAnalytics: consent, errorReporting: errorConsent }).catch((error: unknown) => console.error("[onboarding] privacy choices not saved:", error));
 		}
+		if (detour) setIndexStatus(null);
 		setDraft({
-			...current,
+			...(detour ? leaveDetour(current) : current),
 			...(current.stepId === "plan" ? { planConfirmed: true } : {}),
 			...(target === undefined ? {} : { stepId: target }),
 		});
@@ -427,9 +426,14 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 		if (current === null) {
 			return;
 		}
+		if (current.resumeAt === "indexing" && current.stepId === "embedding") {
+			setIndexStatus(null);
+			setDraft({ ...leaveDetour(current), stepId: "indexing" });
+			return;
+		}
 		const signedIn = accountRef.current?.state === "signedIn";
 		const embed = resolveEmbed(current.embed, signedIn, localAllowedRef.current);
-		const list = buildFlow(current.plan, shouldSkipPlanStep(current.planConfirmed, embed, accountRef.current), embed);
+		const list = buildFlow(current.plan, shouldSkipPlanStep(current.planConfirmed, embed, accountRef.current), embed, signedIn);
 		const index = list.indexOf(current.stepId);
 		if (index > 0) {
 			const target = list[index - 1];
@@ -464,6 +468,36 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 		void bridge.complete().then(onComplete);
 	}, [onComplete]);
 
+	const changeEmbedding = useCallback((): void => {
+		const current = draftRef.current;
+		if (current === null) {
+			return;
+		}
+		setDraft({ ...current, stepId: "embedding", resumeAt: "indexing" });
+	}, []);
+
+	const excludeFolders = useCallback(
+		(paths: readonly string[]): void => {
+			const current = draftRef.current;
+			if (current === null) {
+				return;
+			}
+			const left = new Set(paths.map(trimTrailingSeparators));
+			const folders = current.folders.map((folder) => (left.has(trimTrailingSeparators(folder.path)) ? { ...folder, selected: false } : folder));
+			if (!folders.some((folder) => folder.selected)) {
+				// Nothing is left to index: choose folders again.
+				setDraft({ ...current, folders, stepId: "folders" });
+				return;
+			}
+			const updated = { ...current, folders };
+			// `startIndexing` reads the draft through the ref, which a render would update only afterwards.
+			draftRef.current = updated;
+			setDraft(updated);
+			startIndexing();
+		},
+		[startIndexing],
+	);
+
 	// Step entry: permissions polling, folder pre-scan, connector/model detection.
 	const stepId = draft?.stepId ?? "welcome";
 	useEffect(() => {
@@ -484,7 +518,7 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 	// Pre-scan every candidate on the folders step; on a resume past it, still scan the
 	// selected folders so later steps' totals and ETA are real.
 	useEffect(() => {
-		if (stepId === "welcome" || stepId === "permissions" || stepId === "account") {
+		if (stepId === "welcome" || stepId === "permissions" || stepId === "account" || stepId === "model") {
 			return;
 		}
 		const wanted =
@@ -590,21 +624,12 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 	}, [stepId]);
 
 	useEffect(() => {
-		if (stepId !== "model" || modelsRef.current) {
+		if (stepId !== "indexing") {
+			// Leaving the index (a pause sent the user to fix the embedding) means entering it again starts a new run.
+			indexingRef.current = false;
 			return;
 		}
-		modelsRef.current = true;
-		void bridge.detectModels().then(setModels);
-	}, [stepId]);
-
-	useEffect(() => {
-		if (stepId === "model" && draft !== null && draft.model === null && draft.plan === "byok") {
-			patch({ model: { provider: "anthropic", baseUrl: "", modelId: "", verified: false } });
-		}
-	}, [stepId, draft, patch]);
-
-	useEffect(() => {
-		if (stepId !== "indexing" || indexingRef.current) {
+		if (indexingRef.current) {
 			return;
 		}
 		indexingRef.current = true;
@@ -625,7 +650,8 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 			}
 			if (event.key === "Enter" && !typing) {
 				if (keyboard.current.stepId === "indexing") {
-					keyboard.current.finish();
+					// A stopped run's button takes Enter itself (the pause screen); only a finished or running one is handled here.
+					if (indexStatusRef.current?.state !== "failed") keyboard.current.finish();
 				} else if (keyboard.current.currentAdvance()) {
 					keyboard.current.next();
 				}
@@ -721,12 +747,6 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 		modelDownload,
 		sources: detectedSources,
 		sourcesChecking: !sourcesDone,
-		models,
-		modelKey,
-		modelBaseUrl: draft?.model?.baseUrl ?? "",
-		modelOptions,
-		verifying,
-		modelError,
 		indexStatus,
 		account,
 		paying,
@@ -904,7 +924,7 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 			}
 			// BYOK cannot use the cloud embedder, so cloud falls back; a chosen mode stays.
 			const embed = resolveEmbed(current.embed, false, localAllowedRef.current);
-			const list = buildFlow("byok", current.planConfirmed, embed);
+			const list = buildFlow("byok", current.planConfirmed, embed, false);
 			const target = list[list.indexOf(current.stepId) + 1];
 			setDraft({ ...current, embed, cloudConsent: false, plan: "byok", ...(target === undefined ? {} : { stepId: target }) });
 		},
@@ -947,52 +967,9 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 				}
 			});
 		},
-		setModelProvider: (provider: ByokProviderId) => {
-			setModelError(null);
-			setModelOptions([]);
-			patch({
-				model: { provider, baseUrl: draftRef.current?.model?.baseUrl ?? "", modelId: "", verified: false },
-			});
-		},
-		setModelKey,
-		setModelBaseUrl: (value) =>
-			patch({
-				model: {
-					provider: draftRef.current?.model?.provider ?? "anthropic",
-					baseUrl: value,
-					modelId: draftRef.current?.model?.modelId ?? "",
-					verified: draftRef.current?.model?.verified ?? false,
-				},
-			}),
-		verifyModel: (providerOverride) => {
-			const current = draftRef.current;
-			const provider = providerOverride ?? current?.model?.provider ?? "anthropic";
-			setVerifying(true);
-			setModelError(null);
-			void bridge
-				.verifyModel({
-					provider,
-					apiKey: modelKeyRef.current === "" ? null : modelKeyRef.current,
-					baseUrl: provider === "openai-compatible" ? (current?.model?.baseUrl ?? null) : null,
-				})
-				.then((result) => {
-					setVerifying(false);
-					if (result.ok) {
-						setModelOptions(result.models);
-						patch({
-							model: { provider, baseUrl: current?.model?.baseUrl ?? "", modelId: result.recommended, verified: true },
-						});
-						showToast(t("onboarding.toast.verified"));
-					} else {
-						setModelError(result.error);
-					}
-				})
-				.catch((error: unknown) => {
-					setVerifying(false);
-					setModelError(error instanceof Error ? error.message : String(error));
-				});
-		},
 		startIndexing,
+		changeEmbedding,
+		excludeFolders,
 		finish,
 		finishInBackground,
 		setTipIndex,
@@ -1039,6 +1016,8 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 				return <PlanStep ctx={ctx} />;
 			case "model":
 				return <ModelStep ctx={ctx} />;
+			case "roles":
+				return <RolesStep ctx={ctx} />;
 			case "indexing":
 				return <IndexingScreen ctx={ctx} />;
 		}

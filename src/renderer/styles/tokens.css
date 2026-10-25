@@ -311,6 +311,9 @@
   --w-sidebar: 180px;
   --w-inspector: 300px;
 
+  /* Width the window-controls overlay covers at the page's top-right (Windows/Linux, src/main/window-chrome.ts). */
+  --window-controls-gutter: 0px;
+
   /* ----------------------------------------------------------- §4 Component grids */
   --grid-file-row: minmax(0,1fr) 100px 60px 96px 66px;
   --grid-source-row: 28px 1fr 150px 28px 36px;
@@ -518,4 +521,11 @@ html[data-appearance="dark"] {
     --ql-md-heading: #5AC8FA;
     --ql-md-list: #FF9F0A;
     --ql-md-quote: rgba(235,235,245,0.6);
+}
+
+/* Windows and Linux draw their own minimize / maximize / close over the top-right corner of the page; the top bars
+ * stop short of them. `titlebar-area-*` only resolve where that overlay exists, and macOS (traffic lights on the
+ * left) keeps 0. */
+html:not([data-platform="darwin"]) {
+  --window-controls-gutter: calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw));
 }

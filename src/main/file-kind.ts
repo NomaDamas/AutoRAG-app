@@ -9,6 +9,7 @@
 import { execFile } from "node:child_process";
 import { lstat, stat } from "node:fs/promises";
 import { errorMessage, hasErrorCode } from "./fs-entry";
+import { POWERSHELL_UTF8_OUTPUT } from "./powershell-output";
 
 export interface KindQuery {
 	readonly command: string;
@@ -39,6 +40,7 @@ const KIND_MAX_BUFFER = 1 << 20;
 function windowsKindScript(path: string): string {
 	const literal = path.replace(/'/g, "''");
 	return [
+		POWERSHELL_UTF8_OUTPUT,
 		`$path = '${literal}'`,
 		"$ext = [System.IO.Path]::GetExtension($path)",
 		"if ([string]::IsNullOrEmpty($ext)) { return }",
@@ -72,7 +74,7 @@ export function parseKindStdout(stdout: string): string | null {
 
 function defaultRun(query: KindQuery): Promise<string | null> {
 	return new Promise((resolve, reject) => {
-		execFile(query.command, [...query.args], { timeout: KIND_TIMEOUT_MS, maxBuffer: KIND_MAX_BUFFER }, (error, stdout) => {
+		execFile(query.command, [...query.args], { timeout: KIND_TIMEOUT_MS, maxBuffer: KIND_MAX_BUFFER, windowsHide: true }, (error, stdout) => {
 			if (error) {
 				reject(error);
 				return;

@@ -121,6 +121,16 @@ html[data-appearance="dark"] .onb {
 	color: var(--onb-muted);
 }
 
+/* Off macOS the window controls overlay (src/main/window-chrome.ts) sits in this band and the title is not repeated:
+ * the band stays as the 42px drag strip they live in, with the gutter they cover kept free. */
+html:not([data-platform="darwin"]) .onb .window-title {
+	visibility: hidden;
+}
+
+html:not([data-platform="darwin"]) .onb .titlebar {
+	padding-right: calc(15px + var(--window-controls-gutter));
+}
+
 .onb .stage {
 	min-height: 0;
 	overflow: auto;
@@ -1964,12 +1974,6 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 	filter: drop-shadow(0 16px 28px rgba(0,0,0,.6));
 }
 
-@media (prefers-reduced-motion: reduce) {
-	.onb .si-roaming-loupe {
-		animation: none;
-	}
-}
-
 /* ------------------------------------ embedding choice (none / local / remote)
  * The three modes are compared on the same two axes (power needed, accuracy):
  * a meter's length shows the value's size, its colour whether that value is
@@ -2271,13 +2275,6 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 	font-size: 10px;
 }
 
-.onb .model-rows {
-	display: flex;
-	flex-direction: column;
-	gap: 8px;
-	margin-top: 14px;
-}
-
 .onb .model-row {
 	display: flex;
 	align-items: center;
@@ -2349,35 +2346,90 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 	font-size: 9px;
 }
 
-.onb .provider-chips {
-	display: flex;
-	gap: 6px;
-	flex-wrap: wrap;
-	margin: 9px 0;
+.onb .model-card {
+	padding: 14px;
 }
 
-.onb .provider-chip {
-	padding: 6px 8px;
-	border: 1px solid var(--onb-border);
-	border-radius: 6px;
-	background: var(--onb-bg-card);
+.onb .model-services {
+	margin-bottom: 10px;
+}
+
+.onb .model-services .detected-row > :last-child:not(div) {
+	margin-left: auto;
+	color: var(--onb-blue);
+}
+
+.onb .model-overlays {
+	display: contents;
+}
+
+.onb .model-empty {
+	margin: 4px 0 10px;
+	color: var(--onb-muted);
+	font-size: 10px;
+}
+
+.onb .model-connect {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	margin-top: 8px;
+}
+
+.onb .model-trigger {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	max-width: 70%;
+}
+
+.onb .model-trigger > span {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.onb .model-status.ready {
+	color: var(--onb-blue);
+}
+
+.onb .model-status.failed {
+	color: var(--onb-red);
+}
+
+.onb .model-retry {
+	margin-top: 8px;
+}
+
+.onb .role-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 12px 4px;
+	border-top: 1px solid var(--onb-divider);
+}
+
+.onb .role-row:first-child {
+	border-top: 0;
+}
+
+.onb .role-copy strong {
+	display: block;
+	font-size: 11px;
+}
+
+.onb .role-copy small {
+	display: block;
+	margin-top: 3px;
 	color: var(--onb-muted);
 	font-size: 9.5px;
 }
 
-.onb .provider-chip.selected {
-	border-color: var(--onb-blue);
-	background: var(--onb-blue-soft);
-	color: var(--onb-blue);
-}
-
-.onb .key-row {
-	display: flex;
-	gap: 7px;
-}
-
-.onb .key-row .input {
-	font-family: ui-monospace,monospace;
+.onb .model-status {
+	margin: 10px 0 0;
+	color: var(--onb-muted);
+	font-size: 10px;
 }
 
 .onb .secure-note {
@@ -2752,12 +2804,22 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 	}
 }
 
+/* Reduced motion. Chromium reports it when the OS has animation off (on Windows: Settings > Accessibility > Visual
+ * effects > Animation effects, which many PCs ship with off). Decorative loops stop after one pass: shortening only the
+ * duration of an infinite animation restarts it every 0.01 ms and the element strobes. Progress indicators keep moving,
+ * because a spinner or magnifier that stands still reads as a hang. */
 @media (prefers-reduced-motion:reduce) {
-	.onb *,
-	.onb *:before,
-	.onb *:after {
+	.onb *:not(.spin, .si-roaming-loupe),
+	.onb *:not(.spin, .si-roaming-loupe):before,
+	.onb *:not(.spin, .si-roaming-loupe):after {
 		animation-duration: .01ms!important;
+		animation-iteration-count: 1!important;
 		transition-duration: .01ms!important;
+	}
+
+	/* The shine would stay parked at the bar's left edge once its single pass is over. */
+	.onb .ix-bar>span:after {
+		display: none;
 	}
 }
 
@@ -3816,33 +3878,6 @@ html[data-appearance="light"] .onb .ix-cite {
  * using the existing `--onb-*` variables.
  * ------------------------------------------------------------------------ */
 
-/* A failed first index: the warn palette in place of the ok/notice default. */
-.onb .ix-notice.warn {
-	border-color: rgba(255,69,58,.34);
-	background: rgba(255,69,58,.1);
-}
-
-.onb .ix-notice.warn svg {
-	color: #ff453a;
-}
-
-.onb .ix-notice.warn strong {
-	color: #ffd0cc;
-}
-
-html[data-appearance="light"] .onb .ix-notice.warn {
-	border-color: rgba(255,59,48,.3);
-	background: rgba(255,59,48,.08);
-}
-
-html[data-appearance="light"] .onb .ix-notice.warn svg {
-	color: #d70015;
-}
-
-html[data-appearance="light"] .onb .ix-notice.warn strong {
-	color: #b3261e;
-}
-
 /* Subtle bottom link on the indexing screen to continue in the background and open the app immediately. */
 .onb .ix-bg-start {
 	margin-top: 14px;
@@ -3874,4 +3909,227 @@ html[data-appearance="light"] .onb .ix-bg-start {
 html[data-appearance="light"] .onb .ix-bg-start:hover {
 	color: #172033;
 	text-decoration-color: rgba(23, 32, 51, 0.45);
+}
+
+/* ------------------------------------------------------------------------
+ * First-index pause (#283). A run that stopped is the same indexing screen with the
+ * scene held still and one calm amber light: icon, title, one reason line, one
+ * button, up to two quiet links. Palette: dark first, light below.
+ * docs/prototypes/onboarding-failure/ is the design reference.
+ * ------------------------------------------------------------------------ */
+
+.onb .ix {
+	--pause-ink: #f5f5f7;
+	--pause-sub: rgba(255,255,255,.6);
+	--pause-line: rgba(255,255,255,.12);
+	--pause-warn: #ffb340;
+	--pause-warn-soft: rgba(255,159,10,.12);
+	--pause-warn-line: rgba(255,159,10,.34);
+	--pause-warn-ink: #ffe2b8;
+}
+
+html[data-appearance="light"] .onb .ix {
+	--pause-ink: #172033;
+	--pause-sub: #64748b;
+	--pause-line: #dbe3ee;
+	--pause-warn: #b45f06;
+	--pause-warn-soft: rgba(255,248,231,.9);
+	--pause-warn-line: #f1c16d;
+	--pause-warn-ink: #7c4a00;
+}
+
+.onb .ix.paused {
+	padding-top: 40px;
+	background: radial-gradient(ellipse 55% 45% at 50% 40%,rgba(255,159,10,.1),transparent 70%),#0a0a0c;
+}
+
+html[data-appearance="light"] .onb .ix.paused {
+	background: radial-gradient(ellipse 58% 46% at 50% 38%,rgba(245,158,11,.13),transparent 70%),#f5f7fb;
+}
+
+.onb .ix.paused .ix-lines path {
+	animation-play-state: paused;
+	stroke: rgba(255,159,10,.14);
+}
+
+html[data-appearance="light"] .onb .ix.paused .ix-lines path {
+	stroke: rgba(160,104,20,.16);
+}
+
+.onb .ix.paused .ix-float {
+	animation-play-state: paused;
+}
+
+.onb .ix.paused .ix-title {
+	max-width: 560px;
+	font-size: 32px;
+	overflow-wrap: anywhere;
+}
+
+.onb .ix.paused .ix-bar {
+	width: 220px;
+	margin: 22px 0 0;
+}
+
+.onb .ix.paused .ix-bar>span {
+	background: linear-gradient(90deg,rgba(255,159,10,.45),#ffb340);
+	box-shadow: 0 0 14px rgba(255,159,10,.45);
+}
+
+html[data-appearance="light"] .onb .ix.paused .ix-bar>span {
+	background: linear-gradient(90deg,#f1b45a,#d98a1c);
+	box-shadow: 0 0 12px rgba(217,138,28,.3);
+}
+
+.onb .ix.paused .ix-bar>span:after {
+	display: none;
+}
+
+/* Where the run stopped, on the bar. */
+.onb .ix-stop {
+	position: absolute;
+	top: 50%;
+	width: 10px;
+	height: 10px;
+	margin: -5px 0 0 -5px;
+	border-radius: 50%;
+	background: var(--pause-warn);
+	box-shadow: 0 0 0 4px var(--pause-warn-soft),0 0 0 1px var(--pause-warn-line);
+}
+
+.onb .ix-hero {
+	display: grid;
+	place-items: center;
+	width: 60px;
+	height: 60px;
+	margin-bottom: 20px;
+	border: 1px solid var(--pause-warn-line);
+	border-radius: 18px;
+	background: var(--pause-warn-soft);
+	color: var(--pause-warn);
+	box-shadow: 0 0 0 8px color-mix(in srgb,var(--pause-warn) 7%,transparent),0 12px 32px color-mix(in srgb,var(--pause-warn) 18%,transparent);
+	animation: onb-rise .3s ease-out;
+}
+
+.onb .ix-sub {
+	max-width: 520px;
+	margin: 10px 0 0;
+	color: var(--pause-sub);
+	font-size: 14px;
+	line-height: 1.5;
+	text-align: center;
+	font-variant-numeric: tabular-nums;
+	overflow-wrap: anywhere;
+}
+
+.onb .ix-sub.again {
+	color: var(--pause-warn);
+	font-weight: 600;
+}
+
+.onb .ix-cta {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	max-width: 100%;
+	height: 42px;
+	margin-top: 30px;
+	padding: 0 22px;
+	border: 0;
+	border-radius: 12px;
+	background: #fff;
+	color: #0a0a0c;
+	font-size: 14px;
+	font-weight: 600;
+	white-space: nowrap;
+	cursor: pointer;
+	box-shadow: 0 0 0 1px rgba(255,255,255,.25),0 10px 30px rgba(0,0,0,.35);
+	animation: onb-ixpop .45s cubic-bezier(.2,1.5,.4,1);
+}
+
+.onb .ix-cta:hover {
+	background: #f0f0f3;
+}
+
+.onb .ix-cta .kbd {
+	margin-left: 2px;
+}
+
+html[data-appearance="light"] .onb .ix-cta {
+	background: #0a64d8;
+	color: #fff;
+	box-shadow: 0 0 0 1px rgba(10,100,216,.15),0 10px 25px rgba(10,100,216,.25);
+}
+
+html[data-appearance="light"] .onb .ix-cta:hover {
+	background: #007aff;
+}
+
+.onb .ix-links {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: center;
+	margin-top: 14px;
+}
+
+.onb .ix-links button {
+	padding: 3px 12px;
+	border: 0;
+	background: transparent;
+	color: var(--pause-sub);
+	font-size: 12.5px;
+	cursor: pointer;
+}
+
+.onb .ix-links button:hover {
+	color: var(--pause-ink);
+}
+
+.onb .ix-links button+button {
+	border-left: 1px solid var(--pause-line);
+}
+
+/* Finished with files left out: the finished screen plus one pill where the tip would be. */
+.onb .ix-skipline {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 10px;
+	margin-top: 18px;
+	animation: onb-rise .3s ease-out;
+}
+
+.onb .ix-skippill {
+	display: inline-flex;
+	align-items: center;
+	gap: 7px;
+	padding: 6px 12px;
+	border: 1px solid var(--pause-warn-line);
+	border-radius: 999px;
+	background: var(--pause-warn-soft);
+	color: var(--pause-warn-ink);
+	font-size: 12px;
+	font-weight: 600;
+}
+
+/* The embedding step reached from a pause: one short line saying why. */
+.onb .plan-callout.warn {
+	border-color: color-mix(in srgb,var(--onb-orange) 40%,var(--onb-border));
+	background: var(--onb-orange-bg);
+	color: var(--onb-body);
+	font-size: 11px;
+}
+
+.onb .plan-callout.warn svg {
+	margin-top: 1px;
+	color: var(--onb-orange);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.onb .ix-hero,
+	.onb .ix-cta,
+	.onb .ix-skipline {
+		animation: none;
+	}
 }

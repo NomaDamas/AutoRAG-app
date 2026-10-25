@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, realpathSync } from "node:fs";
-import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { basename, join, sep } from "node:path";
 import { readRawConfigObject, writeConfigObject } from "@autorag/librarian/core";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
@@ -7,8 +7,6 @@ import { DEFAULT_ACCOUNT_BASE_URL } from "../shared/account-contract";
 import { readDazziPlanCredential } from "./dazzi-plan-credential";
 import {
 	ONBOARDING_CHANNELS,
-	type ByokProviderId,
-	type DetectedModelProvider,
 	type DetectedSource,
 	type EmbedMode,
 	type EmbeddingInfo,
@@ -19,6 +17,7 @@ import {
 	type IndexingStatus,
 	type NetworkCheck,
 	type OnboardingDraft,
+	type ModelCheckResult,
 	type OnboardingModelChoice,
 	type OnboardingSnapshot,
 	type OnboardingSourceChoice,
@@ -27,19 +26,19 @@ import {
 	type SourceDetection,
 	type SourceFacts,
 	type SourceId,
-	type ModelVerifyRequest,
-	type ModelVerifyResult,
 } from "../shared/onboarding-contract";
-import type { AppSettings, ConfigRefreshResult } from "../shared/settings-contract";
+import type { AppSettings, ConfigRefreshDiagnostic, ConfigRefreshResult } from "../shared/settings-contract";
 import { isJsonObject } from "../shared/settings-contract";
 import { tByName, t } from "../shared/i18n/core";
 import { localSpecMessage, type LocalSpecVerdict } from "../shared/local-embedding-spec";
 import { applyIndexingConfig, buildDatasourceEntries } from "./onboarding-config";
-import { PROVIDER_ENV_NAME } from "./onboarding-models";
 import { computeIndexingProgress } from "./onboarding-progress";
 import type { ProviderCredentialService } from "./provider-credentials";
 import { localEmbeddingModel } from "./embedding-daemon";
+import { readLibrarianFile, statLibrarianFile } from "./librarian-file";
 import { minSyncModelCacheRoot, modelFilesPresent, modelTotalBytes, nativeQwen3Spec } from "./model-download";
+import { classifyIndexFailure, modelDownloadFailure, skippedFileCount } from "./index-failure";
+import type { RunOutcome } from "./index-problem-service";
 
 /**
  * The main-process half of onboarding: everything that touches the OS or the
@@ -92,6 +91,10 @@ export interface OnboardingServiceDeps {
 	 * model download service) when it is not. Resolves null when it is there, else the reason it could not be.
 	 */
 	readonly ensureLocalModel: () => Promise<string | null>;
+	/** Reports how a first-index run ended, so the Finder keeps showing a problem after onboarding is over. */
+	readonly recordIndex: (outcome: RunOutcome) => void;
+	/** Keyword-only index (parsed mirror + Jikji, no embedding): what "open Dazzi anyway" starts after a failed first run. */
+	readonly refreshKeyword: () => Promise<unknown>;
 	/** Background datasource sync triggered once both onboarding and the local index have completed. */
 	readonly syncDatasources?: (aliases: readonly string[]) => Promise<void>;
 	readonly credentials: ProviderCredentialService;
@@ -103,8 +106,8 @@ export interface OnboardingServiceDeps {
 	readonly gitToken: () => Promise<string | null>;
 	/** Points the AutoRAG agent at the signed-in account's managed models (managed plans only). */
 	readonly useManagedModel: () => Promise<unknown>;
-	readonly detectModels: () => Promise<readonly DetectedModelProvider[]>;
-	readonly verifyModel: (request: ModelVerifyRequest) => Promise<ModelVerifyResult>;
+	/** Calls the saved answer model once and reports whether it answered. */
+	readonly checkModel: () => Promise<ModelCheckResult>;
 	readonly send: (channel: string, payload: unknown) => void;
 	readonly openExternal: (url: string) => Promise<void>;
 	readonly relaunch: () => void;
@@ -147,8 +150,7 @@ export interface OnboardingService {
 	embedding(): Promise<EmbeddingInfo>;
 	/** Starts a streamed probe (restarting any in flight); finds are pushed as `sourceDetected`, then `sourcesDone`. */
 	detectSources(): Promise<void>;
-	detectModels(): Promise<readonly DetectedModelProvider[]>;
-	verifyModel(request: unknown): Promise<ModelVerifyResult>;
+	checkModel(): Promise<ModelCheckResult>;
 	startIndexing(request: unknown): Promise<IndexingStatus>;
 	indexStatus(): Promise<IndexingStatus>;
 	/** Sync: is a first index running right now (quit-confirmation gate). */
@@ -179,18 +181,11 @@ const STEP_IDS: Readonly<Record<string, true>> = {
 	sources: true,
 	plan: true,
 	model: true,
+	roles: true,
 	indexing: true,
 };
 const PLAN_IDS: Readonly<Record<string, true>> = { free: true, air: true, pro: true, byok: true };
 const EMBED_MODES: Readonly<Record<string, true>> = { none: true, local: true, cloud: true };
-const BYOK_PROVIDERS: Readonly<Record<string, true>> = {
-	anthropic: true,
-	openai: true,
-	openrouter: true,
-	google: true,
-	ollama: true,
-	"openai-compatible": true,
-};
 const SOURCE_IDS: Readonly<Record<string, true>> = {
 	kakao: true,
 	slack: true,
@@ -257,8 +252,7 @@ function isModelChoice(value: unknown): value is OnboardingModelChoice {
 	return (
 		isJsonObject(value) &&
 		typeof value.provider === "string" &&
-		BYOK_PROVIDERS[value.provider] === true &&
-		typeof value.baseUrl === "string" &&
+		value.provider.length > 0 &&
 		typeof value.modelId === "string" &&
 		typeof value.verified === "boolean"
 	);
@@ -280,6 +274,7 @@ function isOnboardingDraft(value: unknown): value is OnboardingDraft {
 	if (value.model !== null && !isModelChoice(value.model)) return false;
 	if (value.smartScope !== undefined && (!Array.isArray(value.smartScope) || !value.smartScope.every(isSmartExclusionChoice))) return false;
 	if (value.smartScopeRoots !== undefined && (!Array.isArray(value.smartScopeRoots) || !value.smartScopeRoots.every(isAbsoluteString))) return false;
+	if (value.resumeAt !== undefined && value.resumeAt !== "indexing") return false;
 	return true;
 }
 
@@ -295,20 +290,6 @@ function isIndexingRequest(value: unknown): value is IndexingRequest {
 		if (!isJsonObject(source) || typeof source.id !== "string" || SOURCE_IDS[source.id] !== true) return false;
 	}
 	if (typeof value.plan !== "string" || PLAN_IDS[value.plan] !== true) return false;
-	const model = value.model;
-	if (model !== null) {
-		if (!isJsonObject(model) || typeof model.provider !== "string" || BYOK_PROVIDERS[model.provider] !== true) return false;
-		if (typeof model.modelId !== "string") return false;
-		if (model.baseUrl !== null && typeof model.baseUrl !== "string") return false;
-	}
-	return true;
-}
-
-function isModelVerifyRequest(value: unknown): value is ModelVerifyRequest {
-	if (!isJsonObject(value)) return false;
-	if (typeof value.provider !== "string" || BYOK_PROVIDERS[value.provider] !== true) return false;
-	if (value.apiKey !== null && typeof value.apiKey !== "string") return false;
-	if (value.baseUrl !== null && typeof value.baseUrl !== "string") return false;
 	return true;
 }
 
@@ -336,6 +317,8 @@ const IDLE_STATUS: IndexingStatus = {
 	startedAt: null,
 	finishedAt: null,
 	error: null,
+	failure: null,
+	skipped: 0,
 };
 
 /** Map a librarian refresh phase to a local onboarding contract phase (`jikji`/search phases fold into finalizing). */
@@ -451,15 +434,13 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 	const folderNameFor = (sourcePath: string): string | null =>
 		folderRoots.find(({ root }) => sourcePath === root || sourcePath.startsWith(`${root}${sep}`))?.name ?? null;
 
-	async function readIfChanged(path: string, previousSignature: string): Promise<{ text: string | null; signature: string }> {
-		try {
-			const info = await stat(path);
-			const signature = `${info.mtimeMs}:${info.size}`;
-			if (signature === previousSignature) return { text: null, signature };
-			return { text: await readFile(path, "utf8"), signature };
-		} catch {
-			return { text: null, signature: previousSignature };
-		}
+	function readIfChanged(path: string, previousSignature: string): { text: string | null; signature: string } {
+		const info = statLibrarianFile(path);
+		if (info === null) return { text: null, signature: previousSignature };
+		const signature = `${info.mtimeMs}:${info.size}`;
+		if (signature === previousSignature) return { text: null, signature };
+		const text = readLibrarianFile(path);
+		return text === null ? { text: null, signature: previousSignature } : { text, signature };
 	}
 
 	/**
@@ -472,9 +453,10 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 		if (workspacePath === null) return;
 		const ownRun = runId;
 		const root = join(workspacePath, ".autorag");
-		const progressRead = await readIfChanged(join(root, "refresh-progress.json"), progressSignature);
-		const parsedRead = await readIfChanged(join(root, "parsed", "index.json"), parsedSignature);
-		const minsyncRead = await readIfChanged(join(root, "minsync", ".minsync", "progress.jsonl"), minsyncSignature);
+		// Synchronous reads: an async read keeps the file open across event-loop turns, which fails the librarian's rename on Windows.
+		const progressRead = readIfChanged(join(root, "refresh-progress.json"), progressSignature);
+		const parsedRead = readIfChanged(join(root, "parsed", "index.json"), parsedSignature);
+		const minsyncRead = readIfChanged(join(root, "minsync", ".minsync", "progress.jsonl"), minsyncSignature);
 		if (ownRun !== runId || status.state !== "running") return;
 		if (progressRead.text !== null) {
 			progressSignature = progressRead.signature;
@@ -492,10 +474,12 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 				}
 			}
 		}
+
 		if (parsedRead.text !== null) {
 			parsedSignature = parsedRead.signature;
 			parsedSnapshot = readParsedMirror(parsedRead.text);
 		}
+
 		if (minsyncRead.text !== null) {
 			minsyncSignature = minsyncRead.signature;
 			embeddedFiles = Math.max(embeddedFiles, countMinSyncProgress(minsyncRead.text));
@@ -532,7 +516,7 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 		powerBlockerId = null;
 	}
 
-	function finish(ok: boolean, error: string | null): void {
+	function finish(ok: boolean, error: string | null, diagnostics: readonly ConfigRefreshDiagnostic[]): void {
 		stopPolling();
 		refreshPromise = null;
 		localIndexDone = ok;
@@ -541,8 +525,17 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 		if (indexing !== undefined) stateFile = { ...stateFile, indexing: { ...indexing, finishedAt } };
 		void persist().catch(warnPersistFailed);
 		status = ok
-			? { ...status, state: "success", progress: 100, remainingMinutes: null, finishedAt, error: null }
-			: { ...status, state: "failed", remainingMinutes: null, finishedAt, error: error ?? t("main.onboarding.indexingFailed") };
+			? { ...status, state: "success", progress: 100, remainingMinutes: null, finishedAt, error: null, failure: null, skipped: skippedFileCount(diagnostics) }
+			: {
+					...status,
+					state: "failed",
+					remainingMinutes: null,
+					finishedAt,
+					error: error ?? t("main.onboarding.indexingFailed"),
+					failure: classifyIndexFailure({ diagnostics, error }),
+					skipped: 0,
+				};
+		deps.recordIndex({ ok, error, diagnostics });
 		emitStatus();
 		maybeStartBackgroundDatasources();
 	}
@@ -654,11 +647,7 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 			};
 			void promise.then(done, done);
 		},
-		detectModels: () => deps.detectModels(),
-		verifyModel: async (request) => {
-			if (!isModelVerifyRequest(request)) throw new TypeError("onboarding:verifyModel expects a valid request");
-			return deps.verifyModel(request);
-		},
+		checkModel: () => deps.checkModel(),
 		startIndexing: async (request) => {
 			if (!isIndexingRequest(request)) throw new TypeError("onboarding:startIndexing expects a valid request");
 			if (refreshPromise !== null) return status;
@@ -686,7 +675,6 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 			};
 			// Keyword-only writes no embedder at all; a local run keeps one the user already configured.
 			const embedder = embedMode === "none" ? null : embedMode === "cloud" ? cloudEmbedder : configured ? null : { id: EMBEDDER_ID, dimension: EMBEDDER_DIMENSION };
-			const modelProvider = request.model === null ? null : (request.model.provider as ByokProviderId);
 			const next = applyIndexingConfig({
 				raw,
 				folders: request.folders,
@@ -702,20 +690,6 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 					typeof raw.workspacePath !== "string" || raw.workspacePath === deps.cwd
 						? join(deps.env.AUTORAG_HOME?.trim() || join(deps.home, ".autorag"), "workspace")
 						: null,
-				model:
-					request.model === null
-						? null
-						: {
-								provider: request.model.provider,
-								modelId: request.model.modelId,
-								// pi's catalog carries no Ollama models, so the agent reaches it as an
-								// OpenAI-compatible endpoint; without a base URL it could not resolve.
-								baseUrl:
-									modelProvider === "ollama" && (request.model.baseUrl ?? "") === ""
-										? "http://127.0.0.1:11434/v1"
-										: request.model.baseUrl,
-								envName: modelProvider === null ? null : PROVIDER_ENV_NAME[modelProvider],
-							},
 			});
 			// The spec guard: the first index would run the on-device model on this computer. The renderer already hides
 			// the option; this holds when it is bypassed. A server of the user's own runs elsewhere and is never gated.
@@ -776,30 +750,31 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 			powerBlockerId = deps.startPowerSaveBlocker();
 			pollTimer = setInterval(() => void tick().catch(() => undefined), POLL_INTERVAL_MS);
 			// A keyword-only run can end before the first poll: read the mirror once more so the final status counts what it read.
-			const settle = async (ok: boolean, error: string | null): Promise<void> => {
+			const settle = async (result: ConfigRefreshResult): Promise<void> => {
 				await tick().catch(() => undefined);
-				finish(ok, error);
+				finish(result.ok, result.error, result.diagnostics);
 			};
 			// The first index embeds on this computer when the config now names the local model: its weights have to be
 			// here first, or `minsync` would fetch them itself without telling anyone how far it got.
 			const needsModel = embedMode !== "none" && localEmbeddingModel(next) !== null;
 			const run = async (): Promise<ConfigRefreshResult> => {
 				const missing = needsModel ? await deps.ensureLocalModel() : null;
-				if (missing !== null) {
-					const error = t("main.onboarding.modelDownloadFailed", { error: missing });
-					return { ok: false, methods, scanned: 0, written: 0, deleted: 0, skipped: 0, diagnostics: [], error };
-				}
+				if (missing !== null) return { ok: false, methods, scanned: 0, written: 0, deleted: 0, skipped: 0, ...modelDownloadFailure(missing) };
 				return deps.refresh(methods);
 			};
 			refreshPromise = run()
-				.then((result) => settle(result.ok, result.error))
-				.catch((error: unknown) => settle(false, error instanceof Error ? error.message : String(error)));
+				.then(settle)
+				.catch((error: unknown) => settle({ ok: false, methods, scanned: 0, written: 0, deleted: 0, skipped: 0, diagnostics: [], error: error instanceof Error ? error.message : String(error) }));
 			return status;
 		},
 		indexStatus: async () => status,
 		isIndexing: () => refreshPromise !== null,
 		complete: async () => {
 			if (!pending) return;
+			// Opening the app after a failed first index must not leave it empty: start the keyword index, which needs no embedder.
+			if (status.state === "failed") {
+				void deps.refreshKeyword().catch((error: unknown) => console.warn("[onboarding] the keyword index after a failed first run failed:", error));
+			}
 			stateFile = { ...stateFile, completed: true };
 			pending = false;
 			clearInterval(pollTimer ?? undefined);

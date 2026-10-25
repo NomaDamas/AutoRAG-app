@@ -9,6 +9,7 @@
 
 import { NO_CAPABILITIES, type ActionsBridge } from "../../../shared/actions-contract";
 import { NO_SERVICES, type ServicesBridge } from "../../../shared/services-contract";
+import { NO_CONVERSION, type ConversionBridge } from "../../../shared/conversion-contract";
 import { RECENTS_PATH, type FsBatchResult, type FsBridge, type FsClipboard, type FsEnrichmentTarget, type FsEntryEnrichment, type FsFinderEnrichment, type FsHistoryOperation, type FsLocation, type FsLocationIcon, type FsOpError, type FsRecordedOperation, type FsSearchOptions, type FsTagCatalog, type FsTagChange, type FsUndoOutcome, type FsVersionFamiliesResult } from "../../../shared/fs-contract";
 import { newFileFormat, type NewFileFormatId } from "../../../shared/new-file-contract";
 import { t } from "../../../shared/i18n/core";
@@ -58,6 +59,8 @@ export interface FinderSource {
 	readonly actions: ActionsBridge;
 	/** The OS services (macOS right-click → 서비스) for a selection; empty off macOS and in fixtures. */
 	readonly services: ServicesBridge;
+	/** Convert-on-rename: what a rename to another extension means, and the conversion itself. */
+	readonly conversion: ConversionBridge;
 	setWatchSet(dirs: readonly string[]): Promise<void>;
 	onLive(listener: (message: LiveMessage) => void): () => void;
 	/**
@@ -168,6 +171,7 @@ export function createBridgeSource(
 	live?: LiveBridge,
 	actions: ActionsBridge = UNAVAILABLE_ACTIONS,
 	services: ServicesBridge = NO_SERVICES,
+	conversion: ConversionBridge = NO_CONVERSION,
 ): FinderSource {
 	const mapVersionFamiliesResult = (result: FsVersionFamiliesResult): VersionFamiliesResult => ({
 		families: result.families.map((family) => ({
@@ -191,6 +195,7 @@ export function createBridgeSource(
 		initialPath,
 		actions,
 		services,
+		conversion,
 		setWatchSet: (dirs) => live?.setWatchSet(dirs) ?? Promise.resolve(),
 		onLive: (listener) => {
 			return live?.onMessage((message) => listener({
@@ -462,6 +467,7 @@ export function createFixtureSource(): FinderSource {
 		initialPath: FIXTURE_INITIAL_PATH,
 		actions: UNAVAILABLE_ACTIONS,
 		services: NO_SERVICES,
+		conversion: NO_CONVERSION,
 		setWatchSet: resolve,
 		onLive: () => () => {},
 		onReconnect: () => () => {},

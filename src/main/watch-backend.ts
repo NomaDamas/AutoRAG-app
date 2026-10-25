@@ -1,4 +1,5 @@
 import parcelWatcher from "@parcel/watcher";
+import type ParcelWatcher from "@parcel/watcher";
 import type { FsChange } from "../shared/live-contract";
 
 export interface WatchBackend {
@@ -20,10 +21,26 @@ export interface WatchBackend {
  */
 const NESTED_PATH_IGNORE = /[/\\]/;
 
-export function createParcelWatchBackend(): WatchBackend {
+/** The slice of `@parcel/watcher` the backend uses; tests pass a recording fake. */
+export interface ParcelWatcherLike {
+	subscribe(dir: string, callback: ParcelWatcher.SubscribeCallback, options?: ParcelWatcher.Options): Promise<ParcelWatcher.AsyncSubscription>;
+}
+
+export interface ParcelWatchBackendDeps {
+	readonly watcher?: ParcelWatcherLike;
+	readonly platform?: NodeJS.Platform;
+}
+
+export function createParcelWatchBackend(deps: ParcelWatchBackendDeps = {}): WatchBackend {
+	const watcher = deps.watcher ?? parcelWatcher;
+	// Left to choose, @parcel/watcher probes for Watchman on every subscribe with
+	// `popen("watchman ...")`. On Windows that starts `cmd.exe` outside Node, where
+	// no `windowsHide` applies, so a console window flashed each time a folder was
+	// opened. Naming the native backend skips the probe.
+	const native: ParcelWatcher.Options = (deps.platform ?? process.platform) === "win32" ? { backend: "windows" } : {};
 	return {
 		async subscribe(dir, onEvents, onError) {
-			const subscription = await parcelWatcher.subscribe(
+			const subscription = await watcher.subscribe(
 				dir,
 				(error, events) => {
 					if (error !== null) {
@@ -32,7 +49,7 @@ export function createParcelWatchBackend(): WatchBackend {
 					}
 					onEvents(events.map(({ path, type }) => ({ path, type })));
 				},
-				{ ignore: [NESTED_PATH_IGNORE] },
+				{ ...native, ignore: [NESTED_PATH_IGNORE] },
 			);
 			return () => subscription.unsubscribe();
 		},

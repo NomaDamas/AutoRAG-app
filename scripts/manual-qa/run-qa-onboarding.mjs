@@ -48,17 +48,52 @@ const check = (name, ok, detail = "") => {
 	if (!ok) failures.push(name);
 };
 
-// A local OpenAI-compatible endpoint for the BYOK step: records the auth header
-// and lists one model, so verification exercises the real request path offline.
+// A local OpenAI-compatible endpoint for the BYOK step: records the auth header,
+// lists one model and answers a chat completion with one short reply, so the
+// connect form, the model choice and the smart scan all run offline on the real
+// request paths.
 const stubHits = [];
+// While true the stub's chat endpoint refuses, as a provider does for a retired model or a bad key.
+let stubRefuses = true;
+const stubChunk = (delta, finish) =>
+	`data: ${JSON.stringify({ id: "qa", object: "chat.completion.chunk", created: 1, model: "qa-stub-model", choices: [{ index: 0, delta, finish_reason: finish }] })}\n\n`;
 const stub = createServer((request, response) => {
 	stubHits.push(request.headers.authorization ?? "");
+	if (request.method === "POST" && request.url?.endsWith("/chat/completions")) {
+		let body = "";
+		request.on("data", (chunk) => (body += chunk));
+		request.on("end", () => {
+			if (stubRefuses) {
+				response.writeHead(401, { "content-type": "application/json" });
+				response.end(JSON.stringify({ error: { message: "qa stub refuses this model", type: "invalid_request_error" } }));
+				return;
+			}
+			response.writeHead(200, { "content-type": "text/event-stream" });
+			// The model check sends no tools and only wants an answer.
+			if (!body.includes('"tools"')) {
+				response.end(stubChunk({ role: "assistant", content: "OK" }, null) + stubChunk({}, "stop") + "data: [DONE]\n\n");
+				return;
+			}
+			// First turn: the smart-scan agent reports that nothing needs to be left out; once the tool result is back, it stops.
+			const reported = body.includes('"role":"tool"');
+			const toolCall = { index: 0, id: "call_qa", type: "function", function: { name: "propose_exclusions", arguments: '{"exclusions":[]}' } };
+			response.end(
+				(reported ? stubChunk({ role: "assistant", content: "Done." }, null) + stubChunk({}, "stop") : stubChunk({ role: "assistant", tool_calls: [toolCall] }, null) + stubChunk({}, "tool_calls")) + "data: [DONE]\n\n",
+			);
+		});
+		return;
+	}
 	response.writeHead(request.url === "/v1/models" ? 200 : 404, { "content-type": "application/json" });
 	response.end(JSON.stringify({ object: "list", data: [{ id: "qa-stub-model", object: "model" }] }));
 });
 await new Promise((resolve) => stub.listen(0, "127.0.0.1", resolve));
 const stubUrl = `http://127.0.0.1:${stub.address().port}/v1`;
+const PI_AGENT_DIR = join(WORK, "pi-agent");
+mkdirSync(PI_AGENT_DIR, { recursive: true });
+const ko = JSON.parse(readFileSync(join(ROOT, "src/shared/i18n/locales/ko.json"), "utf8"));
 const env = {
+	// Pi's credentials and the provider list live here: the lane never touches the developer's own sign-ins.
+	PI_CODING_AGENT_DIR: PI_AGENT_DIR,
 	AUTORAG_HOME,
 	AUTORAG_CONFIG: CONFIG,
 	AUTORAG_SKIP_DUPEY_CHECK: "1",
@@ -122,9 +157,48 @@ try {
 	check("signing in is gated until an account exists", await primary.isDisabled());
 	await shot("03-account");
 	await page.locator(".onb .auth-card .action-row button.secondary").click();
+
+	// model: BYOK connects its model before any folder is scanned, because the smart scan runs on it.
+	await page.waitForSelector(".onb .model-card", { timeout: 6000 });
+	check("skipping the account (BYOK) advances to the model step, before the folders", true);
+	await shot("03b-model-empty");
+	check("the model step is gated until a model is chosen", await primary.isDisabled());
+	check("the model picker is disabled while nothing is connected", await page.locator("[data-model-trigger]").isDisabled());
+	await page.locator("[data-connect-service]").click();
+	await page.locator(".settings-menu-item", { hasText: ko.settingsCore.ai.menu.addCustom }).click();
+	await page.waitForSelector(".settings-modal");
+	await shot("03c-model-server-form");
+	const serverFields = page.locator(".settings-modal input");
+	await serverFields.nth(0).fill("QA stub");
+	await serverFields.nth(1).fill(stubUrl);
+	await serverFields.nth(2).fill("sk-qa-stub");
+	await page.locator(".settings-modal .settings-btn-primary").click();
+	await page.waitForSelector(".settings-modal", { state: "detached", timeout: 15_000 });
+	check("the only model the server offers is chosen by itself", (await page.locator("[data-model-trigger]").innerText()).includes("qa-stub-model"));
+	// The model is called for real before the step can be left: this one refuses, so the step stays closed and says why.
+	await page.waitForSelector("[data-model-retry]", { timeout: 15_000 });
+	check("a model that refuses the call keeps the step closed", await primary.isDisabled());
+	check("the refusal is shown to the user", (await page.locator(".model-status").innerText()).includes("qa stub refuses this model"), await page.locator(".model-status").innerText());
+	await shot("03c2-model-refused");
+	stubRefuses = false;
+	await page.locator("[data-model-retry]").click();
+	await page.waitForFunction(() => !document.querySelector(".onb .footer button.primary")?.disabled, null, { timeout: 15_000 });
+	check("checking again after the model works opens the step", await primary.isEnabled());
+	check("the retry button goes away once it answers", (await page.locator("[data-model-retry]").count()) === 0);
+	check("the connection used the entered key", stubHits.includes("Bearer sk-qa-stub"), JSON.stringify(stubHits));
+	await shot("03d-model-ready");
+	// What onboarding connected is what Settings knows: same Pi credentials, same config.
+	const known = await page.evaluate(async () => {
+		const providers = await window.autorag.settings.providersList();
+		const config = (await window.autorag.settings.configGet()).config;
+		return { providers: providers.filter((provider) => provider.authConfigured).map((provider) => provider.id), model: config.model ?? null };
+	});
+	check("Settings lists the provider connected here", known.providers.some((id) => known.model?.provider === id), JSON.stringify(known));
+	check("the shared config already holds the chosen model", known.model?.id === "qa-stub-model", JSON.stringify(known.model));
+	await primary.click();
 	// folders: swap the real candidates for fixtures picked through the dialog.
 	await page.waitForSelector(".onb .folder-grid", { timeout: 6000 });
-	check("skipping the account (BYOK) advances to folders", true);
+	check("the model step advances to folders", true);
 	await app.evaluate(({ dialog }, paths) => {
 		dialog.showOpenDialog = async () => ({ canceled: false, filePaths: paths });
 	}, [DESK, DOCS]);
@@ -139,17 +213,16 @@ try {
 	await shot("04-folders");
 	await primary.click();
 
-	// smart scan: the AI looks through the folders just chosen. This lane has no model, so the
-	// analysis fails visibly and the step stays usable (the real run is run-qa-smart-indexing).
+	// smart scan: the AI looks through the folders just chosen, on the model connected before them.
 	await page.waitForSelector(".onb .si-minimal-scan", { timeout: 6000 });
 	check("folders advance to the smart scan", true);
-	await page.waitForSelector(".onb .si-scan-error", { timeout: 30_000 });
-	check("with no model the scan says it failed and offers a retry", (await page.locator(".onb .si-scan-retry").count()) === 1);
-	check("the scan step can still be left", await primary.isEnabled());
+	await page.waitForFunction(() => document.querySelector(".onb .si-scan-note") !== null || document.querySelector(".onb .si-scan-error") !== null, null, { timeout: 60_000 });
+	check("the scan ran on the connected model instead of failing for want of one", (await page.locator(".onb .si-scan-error").count()) === 0, await page.locator(".onb .si-scan-error").innerText().catch(() => ""));
+	check("the scan step can be left", await primary.isEnabled());
 	await shot("04b-smart-scan");
 	await primary.click();
 
-	// smart-indexing scope: the chosen folders as blue pills, nothing proposed without a model.
+	// smart-indexing scope: the chosen folders as blue pills, nothing proposed by the stub model.
 	await page.waitForSelector(".onb .si-dual-panels", { timeout: 6000 });
 	check("the scope screen follows the scan", true);
 	check("it lists exactly the two chosen folders", (await page.locator(".onb .si-panel.blue .si-pill").count()) === 2);
@@ -161,7 +234,7 @@ try {
 	// embedding: the prototype's three cards; the cloud one is disabled while signed out.
 	await page.waitForSelector(".onb .em-card");
 	check("the three embedding modes are offered", (await page.locator(".onb .em-card").count()) === 3);
-	check("cloud embedding is offered as unavailable", (await page.locator(".onb .em-card.disabled").count()) === 1);
+	check("cloud embedding is offered as unavailable", (await page.locator('.onb .em-card[data-value="cloud"].disabled').count()) === 1);
 	check("keyword-only is the preselected default", (await page.locator(".onb .em-card").nth(0).getAttribute("aria-checked")) === "true");
 	await shot("05-embedding");
 	await page.locator(".onb .em-card").nth(EMBED_CARD).click();
@@ -229,19 +302,16 @@ try {
 	check("a paid plan without an account cannot continue", await primary.isDisabled());
 	check("the plan step says to sign in first", (await page.locator(".onb .screen-copy .auth-note").count()) === 1);
 	await shot("07b-plan-needs-account");
-	// BYOK against the local stub: real verification request, real encrypted
-	// key storage, real config write.
+	// BYOK again: its model was connected right after the account, so the plan leads straight to the index.
 	await page.locator(".onb .plan-card").nth(3).click();
 	await primary.click();
-	await page.waitForSelector(".onb .provider-chips", { timeout: 5000 });
-	await shot("07c-model");
-	check("model step gates on verification", await primary.isDisabled());
-	await page.locator(".onb .provider-chip").last().click();
-	await page.locator('.onb .key-row input[type="text"]').fill(stubUrl);
-	await page.locator('.onb .key-row input[type="password"]').fill("sk-qa-stub");
-	await page.locator(".onb .key-row button.secondary").click();
-	await page.waitForFunction(() => !document.querySelector(".onb .footer button.primary")?.disabled, null, { timeout: 10_000 });
-	check("stub endpoint verifies with the entered key", stubHits.includes("Bearer sk-qa-stub"), JSON.stringify(stubHits));
+
+	// roles: without a Dazzi plan the reranker and Jev are chosen here, from what was connected.
+	await page.waitForSelector("[data-role-trigger]", { timeout: 10_000 });
+	check("a BYOK user is asked about the reranker and Jev before indexing", (await page.locator("[data-role-trigger]").count()) === 2);
+	check("a connected service that serves neither says so instead of offering an empty menu", (await page.locator("[data-role-unavailable]").count()) === 2);
+	check("the role step can be left without choosing", await primary.isEnabled());
+	await shot("07d-roles");
 	await primary.click();
 
 	// indexing: real first index; gate opens only on success, while subtle bottom button allows background start.
@@ -260,22 +330,18 @@ try {
 	await page.waitForFunction(
 		() => {
 			const button = document.querySelector(".onb .ix-open-btn");
-			return (button instanceof HTMLButtonElement && !button.disabled) || document.querySelector(".onb .ix-notice.warn") !== null;
+			return (button instanceof HTMLButtonElement && !button.disabled) || document.querySelector(".onb .ix.paused") !== null;
 		},
 		null,
 		{ timeout: 600_000 },
 	);
-	const failed = await page.locator(".onb .ix-notice.warn").count();
-	check("first index succeeds", failed === 0, failed ? await page.locator(".onb .ix-notice.warn").innerText() : "");
+	const failed = await page.locator(".onb .ix.paused").count();
+	check("first index succeeds", failed === 0, failed ? await page.locator(".onb .ix.paused").innerText() : "");
 	check("subtle background-start button hides once indexing finishes", (await page.locator(".onb .ix-bg-start").count()) === 0);
 	const raw = JSON.parse(readFileSync(CONFIG, "utf8"));
 	check(
-		"BYOK model written with base URL and key env name (no key in config)",
-		raw.model?.provider === "openai-compatible" &&
-			raw.model?.id === "qa-stub-model" &&
-			raw.model?.baseUrl === stubUrl &&
-			raw.model?.apiKeyEnv === "OPENAI_COMPATIBLE_API_KEY" &&
-			!JSON.stringify(raw).includes("sk-qa-stub"),
+		"the connected model survived the first index, with its base URL and no key in the config",
+		raw.model?.id === "qa-stub-model" && raw.model?.baseUrl === stubUrl && !JSON.stringify(raw).includes("sk-qa-stub"),
 		JSON.stringify(raw.model),
 	);
 	if (requestedSource.length > 0) {

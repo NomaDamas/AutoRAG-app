@@ -2,7 +2,6 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactElemen
 import { useTranslation } from "react-i18next";
 import type { FinderEntry } from "../data/entries";
 import { cn } from "../lib/cn";
-import { fileKindOf } from "../state/entry-values";
 import { tileLabel } from "../state/format";
 import { GROUP_HEADER_HEIGHT, groupedLayout, groupedWindow, type GroupSection } from "../state/grouping";
 import type { StackRow, VersionFamilyError } from "../state/version-family";
@@ -13,7 +12,7 @@ import { useScrollWindow } from "../hooks/useScrollWindow";
 import { useMarquee } from "../hooks/useMarquee";
 import { GroupHeader } from "./GroupHeader";
 import { type BackgroundDropHandlers, type RowCallbacks } from "./FileRow";
-import { FileTile } from "./primitives/FileTile";
+import { EntryTile } from "./primitives/EntryTile";
 import { TagDots } from "./primitives/TagDot";
 import { useTagCatalog } from "../hooks/useTagCatalog";
 import { tagDotsOf } from "../state/tags";
@@ -326,7 +325,7 @@ function IconTile({
 					child && "rounded-8 shadow-[inset_0_0_0_1px_var(--border-strong)]",
 				)}
 			>
-				<FileTile kind={fileKindOf(entry)} iconUrl={entry.iconUrl} large />
+				<EntryTile entry={entry} large />
 				{stackCount > 0 ? (
 					<button
 						type="button"

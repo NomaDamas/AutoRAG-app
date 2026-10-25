@@ -19,6 +19,7 @@
  */
 
 import type { LocalSpecVerdict } from "./local-embedding-spec";
+import type { IndexFailure } from "./index-failure";
 import type { SmartExclusion } from "./smart-indexing-contract";
 
 export const ONBOARDING_CHANNELS = {
@@ -47,8 +48,8 @@ export const ONBOARDING_CHANNELS = {
 	sourceDetected: "onboarding:sourceDetected",
 	/** main → renderer event (no payload) once every probe has finished. */
 	sourcesDone: "onboarding:sourcesDone",
-	detectModels: "onboarding:detectModels",
-	verifyModel: "onboarding:verifyModel",
+	/** Asks the model saved as the answer model for a short reply, to prove it can be called. */
+	checkModel: "onboarding:checkModel",
 	startIndexing: "onboarding:startIndexing",
 	indexStatus: "onboarding:indexStatus",
 	/** main → renderer event carrying one {@link IndexingStatus}. */
@@ -83,6 +84,7 @@ export type OnboardingStepId =
 	| "sources"
 	| "plan"
 	| "model"
+	| "roles"
 	| "indexing";
 
 /**
@@ -93,7 +95,6 @@ export type OnboardingStepId =
 export type EmbedMode = "none" | "local" | "cloud";
 
 export type PlanId = "free" | "air" | "pro" | "byok";
-export type ByokProviderId = "anthropic" | "openai" | "openrouter" | "google" | "ollama" | "openai-compatible";
 
 /**
  * Connectors the sources step can detect as installed, signed in, and holding data.
@@ -112,12 +113,15 @@ export interface OnboardingSourceChoice {
 	readonly on: boolean;
 }
 
+/**
+ * The bring-your-own-key answer model. The Settings config is the authority
+ * (the model step writes it there); the draft only remembers which model it was.
+ */
 export interface OnboardingModelChoice {
-	readonly provider: ByokProviderId;
-	/** Only for `openai-compatible`; "" otherwise. */
-	readonly baseUrl: string;
-	/** Chosen model id; "" until a verification returned the list. */
+	/** A provider id from Settings → AI 모델 (any Pi runtime, local or custom server). */
+	readonly provider: string;
 	readonly modelId: string;
+	/** Set once the provider is connected and the model is saved in the config. */
 	readonly verified: boolean;
 }
 
@@ -145,6 +149,11 @@ export interface OnboardingDraft {
 	readonly smartScope?: readonly SmartExclusion[];
 	/** The folders the AI looked through to produce `smartScope`; a folder selected later that is not here was never analysed. */
 	readonly smartScopeRoots?: readonly string[];
+	/**
+	 * Set while the user is on an earlier step only to fix what stopped the first index (the embedding choice):
+	 * leaving that step goes straight back to the index instead of on through the flow.
+	 */
+	readonly resumeAt?: "indexing";
 }
 
 export interface OnboardingSnapshot {
@@ -234,43 +243,14 @@ export interface SourceDetection {
 /** Listener for one connector that finished probing as usable. */
 export type DetectedSourceListener = (source: DetectedSource) => void;
 
-export interface DetectedModelProvider {
-	readonly provider: ByokProviderId;
-	/** Where the credential/runtime was found. */
-	readonly origin: "env" | "stored" | "local";
-	/** API-key variable the credential lives in (null for a local runtime). */
-	readonly envName: string | null;
-}
-
-export interface ModelOption {
-	readonly id: string;
-	readonly name: string;
-}
-
-export interface ModelVerifyRequest {
-	readonly provider: ByokProviderId;
-	/** Null: verify the credential already in the environment / encrypted store. */
-	readonly apiKey: string | null;
-	/** Required for `openai-compatible`; ignored otherwise. */
-	readonly baseUrl: string | null;
-}
-
-export type ModelVerifyResult =
-	| {
-			readonly ok: true;
-			readonly envName: string | null;
-			readonly models: readonly ModelOption[];
-			readonly recommended: string;
-	  }
-	| { readonly ok: false; readonly error: string };
+/** Whether the saved answer model answered a real call, and how long it took or why not. */
+export type ModelCheckResult = { readonly ok: true; readonly latencyMs: number } | { readonly ok: false; readonly error: string };
 
 export interface IndexingRequest {
 	readonly folders: readonly string[];
 	readonly embed?: EmbedMode;
 	readonly sources: readonly { readonly id: SourceId }[];
 	readonly plan: PlanId;
-	/** BYOK only. */
-	readonly model: { readonly provider: ByokProviderId; readonly modelId: string; readonly baseUrl: string | null } | null;
 	/** Folders the user left out of the index (smart indexing); added to the config's `excludePaths`. */
 	readonly excludePaths?: readonly string[];
 	/** Files the pre-scans counted inside `excludePaths`, so the first index's total and ETA match what it reads. */
@@ -293,6 +273,10 @@ export interface IndexingStatus {
 	/** Most recently read file name, and the display name of the selected folder it is under. */
 	readonly recentFile: string | null;
 	readonly recentFolder: string | null;
+	/** Why a failed run stopped; `null` unless `state` is `failed`. */
+	readonly failure: IndexFailure | null;
+	/** Files a finished run left out (read errors, parser timeouts, files MinSync skipped); `0` unless `state` is `success`. */
+	readonly skipped: number;
 	/** Display names of the data sources being indexed. */
 	readonly sources: readonly string[];
 	readonly startedAt: string | null;
@@ -330,9 +314,8 @@ export interface OnboardingBridge {
 	detectSources(): Promise<void>;
 	onSourceDetected(listener: DetectedSourceListener): () => void;
 	onSourcesDone(listener: () => void): () => void;
-	detectModels(): Promise<readonly DetectedModelProvider[]>;
-	/** Calls the provider; on success an entered key is stored encrypted, never in config. */
-	verifyModel(request: ModelVerifyRequest): Promise<ModelVerifyResult>;
+	/** Calls the saved answer model once; the model step stays closed until this passes. */
+	checkModel(): Promise<ModelCheckResult>;
 	/** Writes the choices into the shared AutoRAG config and starts the first index (reused while running). */
 	startIndexing(request: IndexingRequest): Promise<IndexingStatus>;
 	indexStatus(): Promise<IndexingStatus>;

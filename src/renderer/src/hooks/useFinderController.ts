@@ -36,7 +36,8 @@ import {
 } from "../state/context-menu";
 import type { NewFileFormatId } from "../../../shared/new-file-contract";
 import { planTransfer } from "../state/file-transfer";
-import type { FileActionTarget } from "../state/file-actions";
+import { fileExtension, type FileActionTarget } from "../state/file-actions";
+import type { ConvertRenameState } from "../state/convert-rename";
 import { batchToast, emptyStateText, emptyTrashToast, historyToast, indexToast } from "../state/format";
 import { evidenceSourceUrl, findEvidenceSource } from "../state/evidence";
 import type { FocusZone } from "../state/keymap";
@@ -254,6 +255,12 @@ export interface FinderController {
 	cancelEmptyTrash(): void;
 	/** Whether the 휴지통 비우기 confirm is showing. */
 	readonly emptyTrashConfirm: boolean;
+	/** The rename that would convert the file, waiting for the keep/replace answer or running; null when none. */
+	readonly convertRename: ConvertRenameState | null;
+	/** Convert into the new name: keep the original, or replace it (the original moves to the Trash). */
+	confirmConvertRename(keepOriginal: boolean): void;
+	/** Drop the pending question, or stop the conversion that is running. */
+	cancelConvertRename(): void;
 	/** Open a temporary Evidence Folder in a new tab with the session's local evidence files. */
 	openEvidenceFolder(paths: readonly string[]): void;
 	/** Whether the close-Evidence-Folder confirm modal is showing. */
@@ -397,7 +404,24 @@ export function useFinderController(
 		(change: (state: TabsState) => TabsState) => updateWorkspace((workspace) => updatePaneTabs(workspace, paneId, change)),
 		[updateWorkspace, paneId],
 	);
-	const [query, setQueryValue] = useState("");
+	/**
+	 * The search box text belongs to a tab: switching tabs shows that tab's own search (or its folder), instead of
+	 * carrying the active tab's query along and moving the "검색" title onto whichever tab was clicked.
+	 */
+	const [queries, setQueries] = useState<ReadonlyMap<number, string>>(() => new Map());
+	const activeTabIdRef = useRef(tabsState.activeId);
+	activeTabIdRef.current = tabsState.activeId;
+	const query = queries.get(tabsState.activeId) ?? "";
+	const setQueryValue = useCallback((value: string, tabId?: number) => {
+		const id = tabId ?? activeTabIdRef.current;
+		setQueries((current) => {
+			if ((current.get(id) ?? "") === value) return current;
+			const next = new Map(current);
+			if (value === "") next.delete(id);
+			else next.set(id, value);
+			return next;
+		});
+	}, []);
 	const [searchScope, setSearchScope] = useState<SearchScope>("all");
 	const [sort, setSort] = useState<SortState | null>(null);
 	/** The toolbar Group control's criterion; the views render section headers for it. */
@@ -416,6 +440,8 @@ export function useFinderController(
 	const menuServicesToken = useRef(0);
 	/** The 휴지통 비우기 confirm: destructive, so it never runs without an explicit click. */
 	const [emptyTrashConfirm, setEmptyTrashConfirm] = useState(false);
+	/** A rename to another format's extension: asks keep-or-replace, then converts. */
+	const [convertRename, setConvertRename] = useState<ConvertRenameState | null>(null);
 	/** Tab id of an Evidence Folder tab awaiting close confirmation; null when none is pending. */
 	const [closingEvidenceTabId, setClosingEvidenceTabId] = useState<number | null>(null);
 	const [flashPath, setFlashPath] = useState<string | null>(null);
@@ -1473,7 +1499,7 @@ export function useFinderController(
 			const target = tabsRef.current.find((current) => current.id === tabId);
 			if (target === undefined) return;
 			updateWorkspace((workspace) => focusTab(workspace, tabId));
-			setQueryValue("");
+			setQueryValue("", tabId);
 			transferDropped(paths, target.path, copy);
 		});
 
@@ -1679,13 +1705,70 @@ export function useFinderController(
 		if (next === current) {
 			return;
 		}
-		source
-			.rename(editing.path, next)
-			.then(() => {
-				pruneColumns([editing.path]);
-				refresh();
+		const renameOnly = (): void => {
+			source
+				.rename(editing.path, next)
+				.then(() => {
+					pruneColumns([editing.path]);
+					refresh();
+				})
+				.catch(reportError);
+		};
+		const entry = viewEntries.find((candidate) => candidate.path === editing.path);
+		// Only a file that changes its extension can become another format; every other rename never asks main.
+		if (entry?.kind !== "file" || fileExtension(current) === fileExtension(next)) {
+			renameOnly();
+			return;
+		}
+		source.conversion
+			.plan(current, next)
+			.then((plan) => {
+				switch (plan.kind) {
+					case "rename":
+						renameOnly();
+						return;
+					case "unsupported":
+						showToast(t("finder.convert.unsupported", { from: plan.from, to: plan.to }));
+						return;
+					case "convert":
+						setConvertRename({ id: crypto.randomUUID(), path: editing.path, name: current, newName: next, from: plan.from, to: plan.to, working: false });
+						return;
+				}
 			})
 			.catch(reportError);
+	});
+
+	const confirmConvertRename = useLatestCallback((keepOriginal: boolean) => {
+		const pending = convertRename;
+		if (pending === null || pending.working) return;
+		setConvertRename({ ...pending, working: true });
+		source.conversion
+			.run({ id: pending.id, path: pending.path, newName: pending.newName })
+			.then(async (outcome) => {
+				if (keepOriginal) {
+					showToast(outcome.note);
+					return;
+				}
+				const trashed = await source.trash([pending.path]);
+				dropRemoved(trashed.ok);
+				showToast(trashed.failed.length === 0 ? t("finder.convert.replaced", { name: basename(outcome.output) }) : batchToast("trash", trashed));
+			})
+			.catch(reportError)
+			.finally(() => {
+				setConvertRename(null);
+				refresh();
+			});
+	});
+
+	const cancelConvertRename = useLatestCallback(() => {
+		const pending = convertRename;
+		if (pending === null) return;
+		if (pending.working) {
+			// The running conversion rejects as cancelled; its handler closes the dialog.
+			void source.conversion.cancel(pending.id).catch(reportError);
+			return;
+		}
+		setConvertRename(null);
 	});
 
 	/** ⌘R: inline rename of the single focused row, the same state the context menu's 이름 변경 starts. */
@@ -1754,6 +1837,10 @@ export function useFinderController(
 		});
 
 	const dismiss = useLatestCallback(() => {
+		if (convertRename !== null) {
+			cancelConvertRename();
+			return;
+		}
 		if (closingEvidenceTabId !== null) {
 			setClosingEvidenceTabId(null);
 			return;
@@ -1915,14 +2002,14 @@ export function useFinderController(
 				const active = current.id === pane.activeId;
 				return {
 					id: current.id,
-					title: tabTitle(current, { isActive: active, query }),
+					title: current.path === trashLocationPath ? t("places.trash") : tabTitle(current, { query: queries.get(current.id) ?? "" }),
 					active,
 					flash: current.flash,
 					aiSearch: current.path === AI_SEARCH_PATH,
 				};
 			}),
 		// `t` changes identity with the language, so fixed titles (Settings, AI Search) re-translate.
-		[pane, query, t],
+		[pane, queries, t, trashLocationPath],
 	);
 
 	const contextMenuEntries = useMemo<readonly FinderMenuEntry[]>(() => {
@@ -2069,6 +2156,9 @@ export function useFinderController(
 		confirmEmptyTrash,
 		cancelEmptyTrash,
 		emptyTrashConfirm,
+		convertRename,
+		confirmConvertRename,
+		cancelConvertRename,
 		openEvidenceFolder,
 		closeEvidenceFolderConfirm: closingEvidenceTabId !== null,
 		confirmCloseEvidenceFolder,
