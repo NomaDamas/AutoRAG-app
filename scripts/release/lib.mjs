@@ -312,6 +312,48 @@ export function resolveDylibRef(name, referrer, rpaths, exists = existsSync) {
 	return name.startsWith("@") ? null : name;
 }
 
+/**
+ * The directories of `trees` (relative to `root`, "/" separated, always ASCII) that must stay out of the Windows
+ * payload tar: the highest directory that directly holds an entry whose name is not ASCII.
+ * Windows' bsdtar (3.8.9 on the windows-2022 runner) dies with an access violation archiving such a name (kordoc
+ * ships Korean-named templates) and cannot extract one either, so these directories ship as loose files, which
+ * the NSIS installer writes with Unicode names.
+ */
+export function nonAsciiRoots(root, trees) {
+	const found = [];
+	const visit = (relative) => {
+		const entries = readdirSync(join(root, relative), { withFileTypes: true });
+		if (entries.some((entry) => /[^\x00-\x7f]/u.test(entry.name))) {
+			found.push(relative);
+			return;
+		}
+		for (const entry of entries) if (entry.isDirectory()) visit(`${relative}/${entry.name}`);
+	};
+	for (const tree of trees) if (existsSync(join(root, tree))) visit(tree);
+	return found.sort();
+}
+
+/** `tar --exclude` arguments for `paths`; bsdtar reads `\`, `[`, `]`, `*` and `?` in a pattern as glob syntax. */
+export function tarExcludeArgs(paths) {
+	return paths.map((path) => `--exclude=${path.replace(/[\\[\]*?]/gu, "\\$&")}`);
+}
+
+/**
+ * After the tar is built, drop what it carries: each tree goes, except the loose directories and the
+ * directories on the way down to them.
+ */
+export function pruneToLoose(root, trees, loose) {
+	const purge = (relative) => {
+		if (loose.includes(relative)) return;
+		if (!loose.some((path) => path.startsWith(`${relative}/`))) {
+			rmSync(join(root, relative), { recursive: true, force: true });
+			return;
+		}
+		for (const name of readdirSync(join(root, relative))) purge(`${relative}/${name}`);
+	};
+	for (const tree of trees) purge(tree);
+}
+
 export function dirSizeBytes(root) {
 	let total = 0;
 	const stack = [root];
