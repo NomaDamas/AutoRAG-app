@@ -94,7 +94,7 @@ export type OnboardingStepId =
  */
 export type EmbedMode = "none" | "local" | "cloud";
 
-export type PlanId = "free" | "air" | "pro" | "byok";
+export type PlanId = "free" | "air" | "pro" | "max" | "byok";
 
 /**
  * Connectors the sources step can detect as installed, signed in, and holding data.

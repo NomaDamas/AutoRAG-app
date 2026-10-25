@@ -465,9 +465,9 @@ resumes at the same step.
   Dazzi cloud embedding (`openai:qwen/qwen3-embedding-0.6b` on the Dazzi
   endpoint) once the user is signed in to Dazzi and gives explicit consent.
   Choosing cloud embedding places the plan step immediately after embedding and
-  restricts plan selection to Pro; when the signed-in account already holds an
-  active paid subscription (Air/Pro for local, Pro for cloud), the plan step is
-  skipped automatically.
+  restricts plan selection to Pro and Max; when the signed-in account already
+  holds an active paid subscription (Air, Pro or Max for local; Pro or Max for
+  cloud), the plan step is skipped automatically.
 - **Data sources** list only usable connectors, and every one starts off. The
   probes run in parallel and each row appears the moment its own probe finishes
   (fast ones first); a "checking" line stays under the list until all of them are
@@ -530,8 +530,19 @@ credential (mode 0600), the single place the librarian reads the hosted plan
 from, so the app and the librarian cannot disagree about being signed in; the
 renderer sees an `AccountStatus` (email, plan, subscription state, weekly
 credits), never the
-key. Air and Pro open the service's hosted checkout in the browser, and the plan
-step continues once the server reports that plan; cancel, refund, and the
+key. The plan step is five plain cards (Free, Air, Pro, Max, BYOK: name, price,
+who it is for), in the order and with the audiences the service describes; the
+Pro card carries a "7-day free trial" pill, and a Free card keeps the one
+training disclosure. The screen is centred in the stage top and bottom, and the
+line under the cards (sign-in prompt, promo link or field) is always present, so
+choosing another plan never moves anything. The footer is a three-column grid
+(back, progress, primary) so the progress dashes sit on the window's centre line
+on every step. Air, Pro and Max open the service's hosted checkout in the
+browser (the server withholds the trial from a mailbox that already had one),
+carrying the promo code if the user asked for the field ("Have a promo code?":
+`discount_code`, a token of letters, digits, `-` and `_`; the server refuses an
+unknown one and the app shows its reason). The plan step continues
+once the server reports that plan; cancel, refund, and the
 payment method live in the hosted billing portal (Settings › 구독 및 사용량).
 Skipping the account is the BYOK path.
 

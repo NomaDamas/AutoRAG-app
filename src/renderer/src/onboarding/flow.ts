@@ -8,8 +8,8 @@
  * in the locale files.
  */
 
-import type { AccountStatus } from "../../../shared/account-contract";
-import { planCovers } from "../../../shared/account-contract";
+import type { AccountPlanId, AccountStatus } from "../../../shared/account-contract";
+import { isPaidPlanId, planCovers } from "../../../shared/account-contract";
 import type {
 	EmbedMode,
 	FolderScan,
@@ -79,21 +79,26 @@ export function localEmbeddingAllowed(localSpec: LocalSpecVerdict | null): boole
 	return localSpec?.eligible === true;
 }
 
-/** When cloud embedding is selected, only the Pro plan is available on the plan step. */
+/** When cloud embedding is selected, only Pro and Max (which includes everything in Pro) are available on the plan step. */
 export function isPlanSelectable(plan: PlanId, embed: EmbedMode): boolean {
-	return embed === "cloud" ? plan === "pro" : true;
+	return embed === "cloud" ? plan === "pro" || plan === "max" : true;
+}
+
+/** The plan the draft takes when cloud embedding is chosen: Pro, unless the account already holds Max. */
+export function cloudPlanFor(held: AccountPlanId | undefined): PlanId {
+	return held === "max" ? "max" : "pro";
 }
 
 /**
  * Whether the plan step should be skipped in the onboarding flow.
  * Already confirmed, or the signed-in account already holds a paid subscription
- * (Air or Pro for local embedding; Pro for cloud embedding).
+ * (any paid plan for local embedding; Pro or Max for cloud embedding).
  */
 export function shouldSkipPlanStep(planConfirmed: boolean, embed: EmbedMode, status: AccountStatus | null): boolean {
 	if (planConfirmed) return true;
 	const activePlan = status?.state === "signedIn" ? status.account?.plan : undefined;
-	if (embed === "cloud") return activePlan === "pro";
-	return activePlan === "air" || activePlan === "pro";
+	if (embed === "cloud") return activePlan === "pro" || activePlan === "max";
+	return isPaidPlanId(activePlan);
 }
 export interface AdvanceState {
 	readonly stepId: OnboardingStepId;
@@ -106,6 +111,8 @@ export interface AdvanceState {
 	readonly embed: EmbedMode;
 	readonly cloudConsent: boolean;
 	readonly plan: PlanId;
+	/** The promo code typed for the checkout is empty or well-formed, or there is no checkout to send it with. */
+	readonly promoValid: boolean;
 	readonly modelVerified: boolean;
 }
 
@@ -119,6 +126,7 @@ export function canAdvance(state: AdvanceState): boolean {
 			return state.signedIn || state.plan === "byok";
 		case "plan":
 			if (!isPlanSelectable(state.plan, state.embed)) return false;
+			if (isPaidPlanId(state.plan) && !state.promoValid) return false;
 			return state.signedIn || state.plan === "byok";
 		case "smartScan":
 			// The folders were chosen in the step before; the next screen is where the AI's proposals are reviewed.
@@ -138,10 +146,10 @@ export function canAdvance(state: AdvanceState): boolean {
 
 /**
  * True when the signed-in account's plan already includes `plan`. Free and BYOK
- * need nothing from the account, so only Air and Pro can be "held".
+ * need nothing from the account, so only the paid plans can be "held".
  */
 export function planHeld(plan: PlanId, status: AccountStatus | null): boolean {
-	if (plan !== "air" && plan !== "pro") return false;
+	if (!isPaidPlanId(plan)) return false;
 	return status?.state === "signedIn" && status.account !== null && planCovers(status.account.plan, plan);
 }
 
@@ -157,7 +165,7 @@ export function primaryLabelKey(stepId: OnboardingStepId, plan: PlanId, held: bo
 	if (held || plan === "free" || plan === "byok") {
 		return "onboarding.plan.continue";
 	}
-	return plan === "pro" ? "onboarding.plan.checkoutPro" : "onboarding.plan.checkoutAir";
+	return plan === "pro" ? "onboarding.plan.checkoutPro" : plan === "max" ? "onboarding.plan.checkoutMax" : "onboarding.plan.checkoutAir";
 }
 
 /**

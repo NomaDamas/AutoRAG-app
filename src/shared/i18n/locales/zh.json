@@ -893,75 +893,57 @@
       "eyebrow": "套餐",
       "title": "你打算如何使用？",
       "titleReady": "套餐已就绪",
-      "lead": "套餐决定 AI 用量，远程嵌入仅 Pro 可用。可稍后在设置中更改。",
-      "leadCloud": "已选择远程嵌入。开始 7 天 Pro 免费试用即可继续。",
+      "lead": "请选择套餐。可随时在设置中更改。",
+      "leadCloud": "远程嵌入需要 Pro 或 Max。Pro 可先免费试用 7 天。",
       "leadCloudReady": "可以使用远程嵌入。请继续下一步。",
-      "cloudCallout": "远程嵌入仅限 Pro 套餐使用。绑定银行卡即可免费使用 7 天。",
-      "badgeRecommended": "推荐",
       "badgeTrial": "试用进行中",
       "badgeSubscribed": "已订阅",
       "perMonth": "/ 月",
       "continue": "使用此套餐继续",
-      "checkoutPro": "打开 Pro 结算页面",
+      "checkoutPro": "开始 Pro 7 天免费试用",
       "checkoutAir": "打开 Air 结算页面",
       "noteHeld": "此账户正在使用",
       "noteTrialing": "试用中 · 至 {{date}}",
       "noteCancelScheduled": "已预约取消 · 可用至 {{date}}",
-      "signInFirst": "Air 和 Pro 需要账户。请先登录。",
+      "signInFirst": "付费套餐需要先登录。",
       "signInAction": "登录",
       "plan": {
         "free": {
           "name": "Free",
           "price": "免费",
-          "note": "无需银行卡即可开始",
-          "tag": "轻松上手",
-          "chip": "提问会发送至 Dazzi 模型",
-          "training": "输入与输出可能用于改进服务",
-          "feature": {
-            "a": "本地嵌入或关闭",
-            "b": "托管 AI 模型 · 基础用量",
-            "c": "完整使用 Finder 和搜索功能"
-          }
+          "tag": "想先试试 Dazzi 的用户",
+          "training": "输入与输出可能用于改进服务"
         },
         "air": {
           "name": "Air",
           "price": "$4",
           "note": "每月 $4 · 随时取消",
-          "tag": "每天轻松使用",
-          "chip": "提问会发送至 Dazzi 模型",
-          "training": "Dazzi 不会将输入与输出用于模型训练",
-          "feature": {
-            "a": "本地嵌入或关闭",
-            "b": "托管 AI 模型 · 充足用量",
-            "c": "包含 Free 的全部功能"
-          }
+          "tag": "已经在使用其他 AI 订阅的用户"
         },
         "pro": {
           "name": "Pro",
           "price": "$20",
-          "note": "每月 $20 · 随时取消",
-          "tag": "最快的首次索引",
-          "chip": "问题将发送到 Dazzi 模型",
-          "training": "Dazzi 不会将输入与输出用于模型训练",
-          "feature": {
-            "a": "可使用远程嵌入",
-            "b": "托管 AI 模型 · 最高用量",
-            "c": "包含 Air 的全部功能"
-          }
+          "note": "绑定银行卡可免费 7 天，之后每月 $20",
+          "tag": "不想再订阅其他 AI、希望 Dazzi 开箱即用的用户",
+          "trial": "7 天免费试用"
+        },
+        "max": {
+          "name": "Max",
+          "price": "$200",
+          "note": "每月 $200 · 随时取消",
+          "tag": "Pro 的 10 倍额度"
         },
         "byok": {
           "name": "BYOK",
           "price": "仅 API 费用",
-          "note": "直接向提供商付费",
-          "tag": "用自己的密钥直接连接",
-          "chip": "需要输入 API 密钥",
-          "training": "遵循您所选服务商的政策",
-          "feature": {
-            "a": "本地嵌入或关闭",
-            "b": "自行选择提供商和模型",
-            "c": "仅向所选提供商发送请求"
-          }
+          "tag": "用自己的密钥直接连接"
         }
+      },
+      "checkoutMax": "打开 Max 结算页面",
+      "promo": {
+        "prompt": "有优惠码？",
+        "label": "优惠码",
+        "invalid": "仅限字母、数字、- 和 _。"
       }
     },
     "model": {
@@ -1141,8 +1123,7 @@
         "action": "退出并重新打开"
       },
       "pay": {
-        "proTitle": "Pro 结算",
-        "airTitle": "Air 结算",
+        "title": "{{plan}} 结算",
         "lead": "付款在浏览器的结算页面完成。不会在此应用中输入银行卡信息。",
         "waiting": "完成付款后，此窗口会自动更新。",
         "reopen": "重新打开结算页面",
@@ -1508,7 +1489,8 @@
       "signInTimedOut": "登录超时，请重试。",
       "noModels": "你的 Dazzi 套餐没有可用的模型。",
       "invalidState": "登录状态值无效。",
-      "missingCode": "缺少登录代码。"
+      "missingCode": "缺少登录代码。",
+      "invalidPromoCode": "优惠码格式无效。仅限字母、数字、- 和 _。"
     },
     "modelDownload": {
       "errors": {

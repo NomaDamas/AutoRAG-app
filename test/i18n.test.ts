@@ -35,7 +35,7 @@ describe("i18n configuration and locale keys", () => {
 	});
 
 	/** Names that read the same in every language: products, brands, plan tiers, URLs, and bare placeholders. */
-	const NAME_ONLY = /^(?:[\s\W\d]|KakaoTalk|Slack|Discord|Telegram|WhatsApp|GitHub|Obsidian|Anthropic|OpenAI|OpenRouter|Google|Ollama|Free|Air|Pro|BYOK|https?:\/\/\S+|\{\{\w+\}\})*$/u;
+	const NAME_ONLY = /^(?:[\s\W\d]|KakaoTalk|Slack|Discord|Telegram|WhatsApp|GitHub|Obsidian|Anthropic|OpenAI|OpenRouter|Google|Ollama|Free|Air|Pro|Max|BYOK|https?:\/\/\S+|\{\{\w+\}\})*$/u;
 
 	it("translates every onboarding string in ja and zh instead of leaving English or Korean copy behind", () => {
 		const english = leaves(resources.en.translation);

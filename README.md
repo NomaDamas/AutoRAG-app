@@ -126,7 +126,7 @@ Connect the apps you already talk in; Dazzi searches them alongside your files.
   agree to it in the app.
 - **Keys stay encrypted.** Sign-in tokens and API keys live in the system's
   encrypted store, never in a config file.
-- **Bring your own model.** Use Dazzi's managed models (Free, Air, Pro), or
+- **Bring your own model.** Use Dazzi's managed models (Free, Air, Pro, Max), or
   connect your own provider key and pay them directly.
 
 ## Develop

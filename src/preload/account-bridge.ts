@@ -9,7 +9,7 @@ export function createAccountBridge(ipcRenderer: IpcRenderer): AccountBridge {
 		signIn: () => ipcRenderer.invoke(ACCOUNT_CHANNELS.signIn),
 		cancelSignIn: () => ipcRenderer.invoke(ACCOUNT_CHANNELS.cancelSignIn),
 		signOut: () => ipcRenderer.invoke(ACCOUNT_CHANNELS.signOut),
-		checkout: (plan) => ipcRenderer.invoke(ACCOUNT_CHANNELS.checkout, plan),
+		checkout: (plan, promoCode) => ipcRenderer.invoke(ACCOUNT_CHANNELS.checkout, plan, promoCode),
 		useManagedModel: () => ipcRenderer.invoke(ACCOUNT_CHANNELS.useManagedModel),
 		onChanged: (listener) => {
 			const handler = (_event: IpcRendererEvent, status: AccountStatus): void => listener(status);

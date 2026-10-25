@@ -16,7 +16,7 @@ function account(patch: Partial<AccountSnapshot> = {}): AccountSnapshot {
 		creditsResetsAt: "2026-10-27T07:15:01.883Z",
 		embeddings: false,
 		requestsPerMinute: 10,
-		billing: { air: true, pro: true, portal: false },
+		billing: { air: true, pro: true, max: true, portal: false },
 		...patch,
 	};
 }

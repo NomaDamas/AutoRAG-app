@@ -26,8 +26,28 @@ export const ACCOUNT_CHANNELS = {
 /** Plans the hosted service sells. BYOK is not an account plan: it needs no account. */
 export type AccountPlanId = "free" | "air" | "pro" | "max";
 
-/** Plans that need a checkout. */
-export type PaidPlanId = "air" | "pro";
+/** Plans that need a checkout, cheapest first. */
+export const PAID_PLAN_IDS = ["air", "pro", "max"] as const;
+export type PaidPlanId = (typeof PAID_PLAN_IDS)[number];
+
+export function isPaidPlanId(value: unknown): value is PaidPlanId {
+	return typeof value === "string" && (PAID_PLAN_IDS as readonly string[]).includes(value);
+}
+
+export type PromoCodeInput = { readonly ok: true; readonly code: string | null } | { readonly ok: false };
+
+/**
+ * A promo code as the hosted checkout accepts it: a short token of letters,
+ * digits, `_` and `-`. An absent or blank code means none; anything else is
+ * refused here so a malformed one never leaves the app.
+ */
+export function parsePromoCode(value: unknown): PromoCodeInput {
+	if (value === undefined || value === null) return { ok: true, code: null };
+	if (typeof value !== "string") return { ok: false };
+	const code = value.trim();
+	if (code.length === 0) return { ok: true, code: null };
+	return /^[A-Za-z0-9_-]{1,64}$/u.test(code) ? { ok: true, code } : { ok: false };
+}
 
 /** Server root used when `AUTORAG_BASE_URL` is unset. */
 export const DEFAULT_ACCOUNT_BASE_URL = "https://api.dazziapp.com";
@@ -83,7 +103,7 @@ export interface AccountSnapshot {
 	readonly embeddings: boolean;
 	readonly requestsPerMinute: number;
 	/** Which hosted actions the server has configured. */
-	readonly billing: { readonly air: boolean; readonly pro: boolean; readonly portal: boolean };
+	readonly billing: { readonly air: boolean; readonly pro: boolean; readonly max: boolean; readonly portal: boolean };
 }
 
 export interface AccountStatus {
@@ -114,8 +134,8 @@ export interface AccountBridge {
 	cancelSignIn(): Promise<AccountStatus>;
 	/** Removes the stored key; the key stays valid on the server until revoked from its dashboard. */
 	signOut(): Promise<AccountStatus>;
-	/** Opens the hosted checkout for the plan in the system browser. */
-	checkout(plan: PaidPlanId): Promise<void>;
+	/** Opens the hosted checkout for the plan in the system browser, with a promo code when one is given. */
+	checkout(plan: PaidPlanId, promoCode?: string): Promise<void>;
 	/** Points the AutoRAG agent at the managed models of this account. */
 	useManagedModel(): Promise<ManagedModelResult>;
 	onChanged(listener: (status: AccountStatus) => void): () => void;
