@@ -99,7 +99,7 @@ describe("parseAnswerBlocks", () => {
 			{ kind: "list", text: "둘째 항목" },
 			{ kind: "list", text: "순서 항목" },
 			{ kind: "quote", text: "인용 문장" },
-			{ kind: "code", text: "line1\nline2 [3]" },
+			{ kind: "code", text: "line1\nline2 [3]", language: null },
 			{ kind: "paragraph", text: "마무리 **강조**" },
 		]);
 	});
@@ -108,13 +108,22 @@ describe("parseAnswerBlocks", () => {
 		const blocks = parseAnswerBlocks("앞\n\n```\not{json}\n");
 		expect(blocks).toEqual([
 			{ kind: "paragraph", text: "앞" },
-			{ kind: "code", text: "ot{json}" },
+			{ kind: "code", text: "ot{json}", language: null },
 		]);
 	});
 
-	it("keeps a fence language line intact (```json opens the block)", () => {
-		const blocks = parseAnswerBlocks("```json\n{\"a\":1}\n```");
-		expect(blocks).toEqual([{ kind: "code", text: "{\"a\":1}" }]);
+	it("reads the fence info string as the code language (```json opens a json block)", () => {
+		expect(parseAnswerBlocks("```json\n{\"a\":1}\n```")).toEqual([{ kind: "code", text: "{\"a\":1}", language: "json" }]);
+	});
+
+	it("takes the first word of the info string, lowercased, and unwraps {.lang} forms", () => {
+		expect(parseAnswerBlocks("```Python title=\"a.py\"\nx = 1\n```")).toEqual([{ kind: "code", text: "x = 1", language: "python" }]);
+		expect(parseAnswerBlocks("```{.ts}\nlet a\n```")).toEqual([{ kind: "code", text: "let a", language: "ts" }]);
+		expect(parseAnswerBlocks("```   \nplain\n```")).toEqual([{ kind: "code", text: "plain", language: null }]);
+	});
+
+	it("keeps the language of an unterminated fence", () => {
+		expect(parseAnswerBlocks("```bash\nls -la")).toEqual([{ kind: "code", text: "ls -la", language: "bash" }]);
 	});
 
 	it("parses a GFM pipe table into a table block with header, alignment, and rows", () => {
@@ -138,7 +147,7 @@ describe("parseAnswerBlocks", () => {
 
 	it("does not read a pipe table inside a code fence as a table", () => {
 		const blocks = parseAnswerBlocks("```\n| a | b |\n|---|---|\n| 1 | 2 |\n```");
-		expect(blocks).toEqual([{ kind: "code", text: "| a | b |\n|---|---|\n| 1 | 2 |" }]);
+		expect(blocks).toEqual([{ kind: "code", text: "| a | b |\n|---|---|\n| 1 | 2 |", language: null }]);
 	});
 
 	it("keeps a lone line with a pipe as a paragraph and ends a table at the first non-table line", () => {

@@ -229,10 +229,12 @@ export function splitAnswerParagraphs(answer: string): readonly string[] {
 		.filter((chunk) => chunk.length > 0);
 }
 
-export type AnswerBlockKind = "heading" | "list" | "quote" | "code" | "paragraph";
+export type AnswerBlockKind = "heading" | "list" | "quote" | "paragraph";
 
 export type AnswerBlock =
 	| { readonly kind: AnswerBlockKind; readonly text: string }
+	/** A fenced code block; `language` is the first word of the fence's info string, lowercased. */
+	| { readonly kind: "code"; readonly text: string; readonly language: string | null }
 	/** A GFM pipe table; cells are inline markdown. */
 	| { readonly kind: "table"; readonly header: PipeTablePart["header"]; readonly align: PipeTablePart["align"]; readonly rows: PipeTablePart["rows"] };
 
@@ -240,6 +242,13 @@ const HEADING = /^#{1,6}\s+/u;
 const LIST = /^\s*(?:[-*•]|\d+[.)])\s+/u;
 const QUOTE = /^>\s?/u;
 const FENCE = /^```/u;
+
+/** The language word of an opening fence line: ```` ```python title="a.py" ````, ```` ```{.ts} ````. */
+function fenceLanguage(line: string): string | null {
+	const word = line.slice(3).trim().split(/\s+/u)[0] ?? "";
+	const name = word.replace(/^\{\.?/u, "").replace(/\}$/u, "").replace(/^\./u, "").toLowerCase();
+	return name === "" ? null : name;
+}
 
 /**
  * Block-level markdown over an answer or an evidence excerpt. Contiguous plain
@@ -250,6 +259,7 @@ export function parseAnswerBlocks(markdown: string): readonly AnswerBlock[] {
 	const blocks: AnswerBlock[] = [];
 	const lines = markdown.split("\n");
 	let inFence = false;
+	let language: string | null = null;
 	let fence: string[] = [];
 	let index = 0;
 	while (index < lines.length) {
@@ -266,11 +276,12 @@ export function parseAnswerBlocks(markdown: string): readonly AnswerBlock[] {
 		index += 1;
 		if (FENCE.test(raw)) {
 			if (inFence) {
-				blocks.push({ kind: "code", text: fence.join("\n") });
+				blocks.push({ kind: "code", text: fence.join("\n"), language });
 				fence = [];
 				inFence = false;
 			} else {
 				inFence = true;
+				language = fenceLanguage(raw);
 			}
 			continue;
 		}
@@ -293,7 +304,7 @@ export function parseAnswerBlocks(markdown: string): readonly AnswerBlock[] {
 		}
 	}
 	if (inFence) {
-		blocks.push({ kind: "code", text: fence.join("\n").replace(/\n+$/u, "") });
+		blocks.push({ kind: "code", text: fence.join("\n").replace(/\n+$/u, ""), language });
 	}
 	return blocks;
 }

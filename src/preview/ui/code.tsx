@@ -1,29 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
-import hljs from "highlight.js/lib/core";
-import bash from "highlight.js/lib/languages/bash";
-import c from "highlight.js/lib/languages/c";
-import cpp from "highlight.js/lib/languages/cpp";
-import csharp from "highlight.js/lib/languages/csharp";
-import css from "highlight.js/lib/languages/css";
-import diff from "highlight.js/lib/languages/diff";
-import go from "highlight.js/lib/languages/go";
-import ini from "highlight.js/lib/languages/ini";
-import java from "highlight.js/lib/languages/java";
-import javascript from "highlight.js/lib/languages/javascript";
-import json from "highlight.js/lib/languages/json";
-import kotlin from "highlight.js/lib/languages/kotlin";
-import lua from "highlight.js/lib/languages/lua";
-import php from "highlight.js/lib/languages/php";
-import python from "highlight.js/lib/languages/python";
-import ruby from "highlight.js/lib/languages/ruby";
-import rust from "highlight.js/lib/languages/rust";
-import sql from "highlight.js/lib/languages/sql";
-import swift from "highlight.js/lib/languages/swift";
-import typescript from "highlight.js/lib/languages/typescript";
-import xml from "highlight.js/lib/languages/xml";
-import yaml from "highlight.js/lib/languages/yaml";
-import { decodeText, lineEnding, splitHighlighted, type TextEncodingName } from "../shared/code";
+import { decodeText, lineEnding, type TextEncodingName } from "../shared/code";
 import { prettyJsonLines } from "../shared/jsonl";
 import { bplistToXml, isBinaryPlist } from "../shared/plist";
 import type { PreviewDocument } from "../shared/contract";
@@ -32,98 +9,8 @@ import { locateLines } from "../shared/text-marks";
 import { SMALL_BUTTON, Segmented, TOOL_BUTTON, ToolbarSlot, useChrome } from "./chrome";
 import { FallbackView } from "./fallback";
 import { CopyIcon, DesktopIcon, MobileIcon, SourceIcon, WrapIcon } from "./icons";
+import { highlightLines, LANGUAGES, PLAIN } from "./highlight";
 
-hljs.registerLanguage("bash", bash);
-hljs.registerLanguage("c", c);
-hljs.registerLanguage("cpp", cpp);
-hljs.registerLanguage("csharp", csharp);
-hljs.registerLanguage("css", css);
-hljs.registerLanguage("diff", diff);
-hljs.registerLanguage("go", go);
-hljs.registerLanguage("ini", ini);
-hljs.registerLanguage("java", java);
-hljs.registerLanguage("javascript", javascript);
-hljs.registerLanguage("json", json);
-hljs.registerLanguage("kotlin", kotlin);
-hljs.registerLanguage("lua", lua);
-hljs.registerLanguage("php", php);
-hljs.registerLanguage("python", python);
-hljs.registerLanguage("ruby", ruby);
-hljs.registerLanguage("rust", rust);
-hljs.registerLanguage("sql", sql);
-hljs.registerLanguage("swift", swift);
-hljs.registerLanguage("typescript", typescript);
-hljs.registerLanguage("xml", xml);
-hljs.registerLanguage("yaml", yaml);
-
-/** A grammar, the footer's name for it, and its dot (GitHub Linguist colours; Python's is the reference's). */
-interface Language {
-	readonly grammar: string | null;
-	readonly label: string;
-	readonly dot: string;
-}
-
-const PLAIN: Language = { grammar: null, label: "Plain Text", dot: "#8e8e93" };
-
-const LANGUAGES: Readonly<Record<string, Language>> = {
-	py: { grammar: "python", label: "Python 3", dot: "#f2b134" },
-	pyw: { grammar: "python", label: "Python 3", dot: "#f2b134" },
-	js: { grammar: "javascript", label: "JavaScript", dot: "#f1e05a" },
-	jsx: { grammar: "javascript", label: "JavaScript", dot: "#f1e05a" },
-	mjs: { grammar: "javascript", label: "JavaScript", dot: "#f1e05a" },
-	cjs: { grammar: "javascript", label: "JavaScript", dot: "#f1e05a" },
-	ts: { grammar: "typescript", label: "TypeScript", dot: "#3178c6" },
-	tsx: { grammar: "typescript", label: "TypeScript", dot: "#3178c6" },
-	mts: { grammar: "typescript", label: "TypeScript", dot: "#3178c6" },
-	cts: { grammar: "typescript", label: "TypeScript", dot: "#3178c6" },
-	json: { grammar: "json", label: "JSON", dot: "#8e8e93" },
-	jsonc: { grammar: "json", label: "JSON", dot: "#8e8e93" },
-	jsonl: { grammar: "json", label: "JSON Lines", dot: "#8e8e93" },
-	ndjson: { grammar: "json", label: "JSON Lines", dot: "#8e8e93" },
-	plist: { grammar: "xml", label: "Property List", dot: "#0060ac" },
-	xml: { grammar: "xml", label: "XML", dot: "#0060ac" },
-	html: { grammar: "xml", label: "HTML", dot: "#e34c26" },
-	htm: { grammar: "xml", label: "HTML", dot: "#e34c26" },
-	xhtml: { grammar: "xml", label: "HTML", dot: "#e34c26" },
-	svg: { grammar: "xml", label: "SVG", dot: "#ff9a00" },
-	vue: { grammar: "xml", label: "Vue", dot: "#41b883" },
-	svelte: { grammar: "xml", label: "Svelte", dot: "#ff3e00" },
-	css: { grammar: "css", label: "CSS", dot: "#663399" },
-	scss: { grammar: "css", label: "SCSS", dot: "#c6538c" },
-	less: { grammar: "css", label: "Less", dot: "#1d365d" },
-	go: { grammar: "go", label: "Go", dot: "#00add8" },
-	rs: { grammar: "rust", label: "Rust", dot: "#dea584" },
-	java: { grammar: "java", label: "Java", dot: "#b07219" },
-	c: { grammar: "c", label: "C", dot: "#555555" },
-	h: { grammar: "c", label: "C", dot: "#555555" },
-	cpp: { grammar: "cpp", label: "C++", dot: "#f34b7d" },
-	cc: { grammar: "cpp", label: "C++", dot: "#f34b7d" },
-	cxx: { grammar: "cpp", label: "C++", dot: "#f34b7d" },
-	hpp: { grammar: "cpp", label: "C++", dot: "#f34b7d" },
-	hh: { grammar: "cpp", label: "C++", dot: "#f34b7d" },
-	cs: { grammar: "csharp", label: "C#", dot: "#178600" },
-	rb: { grammar: "ruby", label: "Ruby", dot: "#701516" },
-	php: { grammar: "php", label: "PHP", dot: "#4f5d95" },
-	sh: { grammar: "bash", label: "Shell", dot: "#89e051" },
-	bash: { grammar: "bash", label: "Shell", dot: "#89e051" },
-	zsh: { grammar: "bash", label: "Shell", dot: "#89e051" },
-	sql: { grammar: "sql", label: "SQL", dot: "#e38c00" },
-	yml: { grammar: "yaml", label: "YAML", dot: "#cb171e" },
-	yaml: { grammar: "yaml", label: "YAML", dot: "#cb171e" },
-	toml: { grammar: "ini", label: "TOML", dot: "#9c4221" },
-	ini: { grammar: "ini", label: "INI", dot: "#d1dbe0" },
-	cfg: { grammar: "ini", label: "INI", dot: "#d1dbe0" },
-	conf: { grammar: "ini", label: "INI", dot: "#d1dbe0" },
-	kt: { grammar: "kotlin", label: "Kotlin", dot: "#a97bff" },
-	kts: { grammar: "kotlin", label: "Kotlin", dot: "#a97bff" },
-	swift: { grammar: "swift", label: "Swift", dot: "#f05138" },
-	lua: { grammar: "lua", label: "Lua", dot: "#000080" },
-	diff: { grammar: "diff", label: "Diff", dot: "#8e8e93" },
-	patch: { grammar: "diff", label: "Diff", dot: "#8e8e93" },
-};
-
-/** highlight.js runs on at most this much text; the rest of a long file stays plain. */
-const HIGHLIGHT_CAP = 512 * 1024;
 /** Lines rendered per chunk; a chunk renders once it scrolls within reach. */
 const CHUNK_LINES = 400;
 /** Panel sizes from the reference: code 840 wide; HTML a 980 × 720 page (674 below the toolbar). */
@@ -131,25 +18,6 @@ const CODE_WIDTH = 840;
 const HTML_SIZE = { width: 980, height: 674 } as const;
 /** Vertical chrome around the code lines: 12 + 18 padding and the 30px footer. */
 const CODE_CHROME = 12 + 18 + 30;
-
-const ESCAPES: Readonly<Record<string, string>> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#x27;" };
-
-export function escapeHtml(text: string): string {
-	return text.replace(/[&<>"']/g, (char) => ESCAPES[char] ?? char);
-}
-
-/** One HTML string per line: highlighted up to the cap, escaped plain text after it. */
-function highlightLines(text: string, grammar: string | null): readonly string[] {
-	if (grammar === null) {
-		const lines = text.split("\n");
-		if (lines.length > 1 && lines.at(-1) === "") lines.pop();
-		return lines.map(escapeHtml);
-	}
-	const cut = text.length <= HIGHLIGHT_CAP ? text.length : text.lastIndexOf("\n", HIGHLIGHT_CAP) + 1;
-	const head = splitHighlighted(hljs.highlight(text.slice(0, cut), { language: grammar, ignoreIllegals: true }).value);
-	if (cut >= text.length) return head;
-	return [...head, ...highlightLines(text.slice(cut), null)];
-}
 
 function LineChunk({
 	lines,

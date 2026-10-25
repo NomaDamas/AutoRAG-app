@@ -23,3 +23,7 @@
 /* Onboarding - first-run flow, a scoped port of the onboarding reference
  * (DESIGN.md §3a). Every rule sits under `.onb`. */
 @import "./onboarding.css" layer(base);
+
+/* Syntax colours for code blocks in AI Search answers and evidence excerpts
+ * (`.hl-code`); shared with Quick Look's code lines. */
+@import "../../preview/ui/syntax.css" layer(base);
