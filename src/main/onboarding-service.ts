@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, realpathSync } from "node:fs";
-import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { basename, join, sep } from "node:path";
 import { readRawConfigObject, writeConfigObject } from "@autorag/librarian/core";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
@@ -39,6 +39,7 @@ import { PROVIDER_ENV_NAME } from "./onboarding-models";
 import { computeIndexingProgress } from "./onboarding-progress";
 import type { ProviderCredentialService } from "./provider-credentials";
 import { localEmbeddingModel } from "./embedding-daemon";
+import { readLibrarianFile, statLibrarianFile } from "./librarian-file";
 import { minSyncModelCacheRoot, modelFilesPresent, modelTotalBytes, nativeQwen3Spec } from "./model-download";
 import { classifyIndexFailure, modelDownloadFailure, skippedFileCount } from "./index-failure";
 import type { RunOutcome } from "./index-problem-service";
@@ -460,15 +461,13 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 	const folderNameFor = (sourcePath: string): string | null =>
 		folderRoots.find(({ root }) => sourcePath === root || sourcePath.startsWith(`${root}${sep}`))?.name ?? null;
 
-	async function readIfChanged(path: string, previousSignature: string): Promise<{ text: string | null; signature: string }> {
-		try {
-			const info = await stat(path);
-			const signature = `${info.mtimeMs}:${info.size}`;
-			if (signature === previousSignature) return { text: null, signature };
-			return { text: await readFile(path, "utf8"), signature };
-		} catch {
-			return { text: null, signature: previousSignature };
-		}
+	function readIfChanged(path: string, previousSignature: string): { text: string | null; signature: string } {
+		const info = statLibrarianFile(path);
+		if (info === null) return { text: null, signature: previousSignature };
+		const signature = `${info.mtimeMs}:${info.size}`;
+		if (signature === previousSignature) return { text: null, signature };
+		const text = readLibrarianFile(path);
+		return text === null ? { text: null, signature: previousSignature } : { text, signature };
 	}
 
 	/**
@@ -481,9 +480,10 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 		if (workspacePath === null) return;
 		const ownRun = runId;
 		const root = join(workspacePath, ".autorag");
-		const progressRead = await readIfChanged(join(root, "refresh-progress.json"), progressSignature);
-		const parsedRead = await readIfChanged(join(root, "parsed", "index.json"), parsedSignature);
-		const minsyncRead = await readIfChanged(join(root, "minsync", ".minsync", "progress.jsonl"), minsyncSignature);
+		// Synchronous reads: an async read keeps the file open across event-loop turns, which fails the librarian's rename on Windows.
+		const progressRead = readIfChanged(join(root, "refresh-progress.json"), progressSignature);
+		const parsedRead = readIfChanged(join(root, "parsed", "index.json"), parsedSignature);
+		const minsyncRead = readIfChanged(join(root, "minsync", ".minsync", "progress.jsonl"), minsyncSignature);
 		if (ownRun !== runId || status.state !== "running") return;
 		if (progressRead.text !== null) {
 			progressSignature = progressRead.signature;
@@ -501,10 +501,12 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 				}
 			}
 		}
+
 		if (parsedRead.text !== null) {
 			parsedSignature = parsedRead.signature;
 			parsedSnapshot = readParsedMirror(parsedRead.text);
 		}
+
 		if (minsyncRead.text !== null) {
 			minsyncSignature = minsyncRead.signature;
 			embeddedFiles = Math.max(embeddedFiles, countMinSyncProgress(minsyncRead.text));

@@ -2,7 +2,7 @@ import { useEffect, type ChangeEvent, type DragEvent, type KeyboardEvent, type M
 import { useTranslation } from "react-i18next";
 import type { FinderEntry } from "../data/entries";
 import { useDirectoryData, useEntrySidecar } from "../hooks/useDirectoryData";
-import { dateLabelOf, fileKindOf, kindLabelOf, locationOf, sizeLabelOf } from "../state/entry-values";
+import { dateLabelOf, kindLabelOf, locationOf, sizeLabelOf } from "../state/entry-values";
 import type { Disclosure } from "../state/folder-tree";
 import { LIST_COLUMN_OPTIONS, type ListColumnKey, type ListColumnsState, listGridTemplate } from "../state/list-columns";
 import { basename, dirname } from "../state/paths";
@@ -10,7 +10,7 @@ import { VERSION_TAG_KEYS, type VersionRelation } from "../state/version-family"
 import { isHiddenName } from "../state/visibility";
 import { cn } from "../lib/cn";
 import { CheckIcon } from "./icons";
-import { FileTile } from "./primitives/FileTile";
+import { EntryTile } from "./primitives/EntryTile";
 import { TagDots } from "./primitives/TagDot";
 import { useTagCatalog } from "../hooks/useTagCatalog";
 import { tagDotsOf } from "../state/tags";
@@ -240,7 +240,7 @@ export function FileRow({
 				) : (
 					<span className="flex-none w-[13px]" aria-hidden="true" />
 				)}
-				<FileTile kind={fileKindOf(entry)} iconUrl={entry.iconUrl} />
+				<EntryTile entry={entry} />
 				{renameDraft === null ? (
 					<span
 						className={cn(

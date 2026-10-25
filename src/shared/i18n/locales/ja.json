@@ -113,6 +113,18 @@
       "edit": "パスへ移動",
       "invalid": "移動先のパスを入力してください",
       "notFound": "\"{{path}}\" が見つかりません"
+    },
+    "convert": {
+      "title": "別の形式に変換",
+      "message": "「{{name}}」を「{{newName}}」に変換します。元のファイルはどうしますか？",
+      "keep": "元のファイルを残す",
+      "replace": "元のファイルを置き換える",
+      "replaceHint": "置き換えると元のファイルはゴミ箱に移動します。",
+      "working": "「{{newName}}」に変換しています…",
+      "workingHint": "最初の変換では変換エンジンのダウンロードのため時間がかかることがあります。",
+      "progressAria": "変換中",
+      "unsupported": "{{from}} から {{to}} への変換には対応していないため、名前は変更されませんでした。",
+      "replaced": "{{name}} — 変換しました。元のファイルはゴミ箱に移動しました"
     }
   },
   "contextMenu": {
@@ -1318,7 +1330,8 @@
       "invalidPaths": "ファイルパスが正しくありません。",
       "unknownAction": "不明なファイル操作です。",
       "invalidAnchor": "共有位置が正しくありません。",
-      "invalidServiceRequest": "サービスリクエストが正しくありません。"
+      "invalidServiceRequest": "サービスリクエストが正しくありません。",
+      "invalidConversionRequest": "変換リクエストが正しくありません。"
     },
     "dialogs": {
       "notificationBody": "通知がオンになりました。",
@@ -1474,6 +1487,18 @@
         "invalidRemoval": "元に戻すルールの形式が正しくありません。",
         "duplicateRule": "ルール「{{id}}」がすでにあるため、元に戻せません。"
       }
+    },
+    "convert": {
+      "notConvertible": "{{name}} は {{extension}} 形式に変換できません。",
+      "invalidName": "変換後のファイル名として使えません: {{name}}",
+      "sourceMissing": "変換するファイルが見つかりません: {{name}}",
+      "nameTaken": "「{{name}}」という名前のファイルまたはフォルダがすでにあります",
+      "cancelled": "{{name}} の変換をキャンセルしました。",
+      "failed": "{{name}} を変換できませんでした: {{reason}}",
+      "unknownReason": "不明なエラー",
+      "noOutput": "{{name}} への変換でファイルが作成されませんでした。",
+      "done": "{{name}} — 変換しました",
+      "doneFolder": "{{name}} — 変換しました（フォルダに{{count}}個のファイル）"
     }
   },
   "quickLook": {
@@ -2378,6 +2403,9 @@
       "appDownload": "{{name}} をダウンロード",
       "appNeeded": "必要",
       "appInstalled": "インストール済み",
+      "appHintMissingPc": "{{name}} の内容を取り込むには、このコンピューターに {{name}} アプリのインストールが必要です。",
+      "appHintInstalledPc": "このコンピューターの {{name}} アプリから内容を取り込みます。",
+      "appUnknown": "未確認",
       "refreshName": "更新",
       "refreshLast": "最終更新 {{date}}",
       "refreshNever": "まだ内容を取得していません。",
@@ -2393,7 +2421,8 @@
       "removeHint": "Dazzi の検索からのみ削除され、元のアプリのデータは消えません。",
       "confirmTitle": "接続を解除しますか？",
       "confirmBody": "'{{alias}}' 接続を Dazzi の検索から削除します。元のアプリのデータは消えません。",
-      "macOnlyNote": "Apple カレンダーとリマインダーは macOS の EventKit でのみ読み取れるため、このコンピューターでは接続は無効です。"
+      "macOnlyNote": "Apple カレンダーとリマインダーは macOS の EventKit でのみ読み取れるため、このコンピューターでは接続は無効です。",
+      "kakaoOnlyNote": "カカオトークは Mac アプリでのみ動作する lazykatok で読み取るため、このコンピューターでは接続は無効です。"
     },
     "scope": {
       "title": "検索範囲",
