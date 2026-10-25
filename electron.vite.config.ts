@@ -29,11 +29,13 @@ export default defineConfig({
 				// the main process forks (`src/main/fs-worker-host.ts`). The archive
 				// worker is a Node worker_thread the extractor spawns for the wasm
 				// engine; it keeps the `.mjs` name so the source and the build share
-				// one spawn URL. The refresh job is the entry an OS-scheduled task runs
-				// in plain Node (`ELECTRON_RUN_AS_NODE`), so it must never import electron.
+				// one spawn URL. The refresh job is the entry an OS-scheduled task runs in plain Node
+				// (`ELECTRON_RUN_AS_NODE`), and the MCP server the one other agents start on a real Node,
+				// so neither may ever import electron.
 				input: {
 					index: resolve(import.meta.dirname, "src/main/index.ts"),
 					"refresh-job": resolve(import.meta.dirname, "src/main/refresh-job.ts"),
+					"mcp-server": resolve(import.meta.dirname, "src/main/mcp-server.ts"),
 					"fs-worker": resolve(import.meta.dirname, "src/fs-worker/index.ts"),
 					"archive-worker": resolve(import.meta.dirname, "src/main/archive-worker.mjs"),
 					"parse-worker": resolve(import.meta.dirname, "src/main/parse-worker.mjs"),

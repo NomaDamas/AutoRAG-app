@@ -325,6 +325,7 @@ export function registerSettingsIpcHandlers(service: SettingsBridge): void {
 	ipcMain.handle(SETTINGS_CHANNELS.mcpGet, () => service.mcpGet());
 	ipcMain.handle(SETTINGS_CHANNELS.mcpUpsert, (_event, input: unknown) => service.mcpUpsert(requireMcpServerInput(input)));
 	ipcMain.handle(SETTINGS_CHANNELS.mcpRemove, (_event, name: unknown) => service.mcpRemove(requireNonEmptyString(name, "MCP server name")));
+	ipcMain.handle(SETTINGS_CHANNELS.mcpConnectInfo, () => service.mcpConnectInfo());
 }
 
 /** AutoRAG account: the plan is the only renderer-supplied payload and is validated here. */

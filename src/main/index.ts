@@ -77,6 +77,7 @@ import { configureEmbeddingDaemon, ensureEmbeddingForConfig, stopEmbeddingDaemon
 import { migrateLegacyEmbedding } from "./embedding-migration";
 import { createEmbeddingSettingsService } from "./embedding-settings-service";
 import { createMcpSettingsService } from "./mcp-settings-service";
+import { resolveMcpConnectInfo } from "./mcp-connect-info";
 import { createDefaultAgentFactory, createSearchService } from "./search-service";
 import { createInteractionHub } from "./interaction-hub";
 import { INTERACTION_CHANNELS, type ApprovalMode } from "../shared/interaction-contract";
@@ -764,6 +765,7 @@ app.whenReady().then(async () => {
 		providers: providerAuth,
 		embedding: embeddingService,
 		mcp: createMcpSettingsService({ agentDir: () => getAgentDir() }),
+		mcpConnect: () => resolveMcpConnectInfo({ resourcesPath: process.resourcesPath, entryPath: join(import.meta.dirname, "mcp-server.js"), env: process.env, platform: process.platform }),
 		applyOsMenu: async (next, previous) => {
 			if (next.osMenuIntegration) {
 				if (!previous.osMenuIntegration || next.language !== previous.language) await osMenu.install(menuLabels(next.language));
