@@ -248,7 +248,7 @@ describe("a chat is one model conversation", () => {
 });
 
 describe("what the person said reaches Jev's approval judgment", () => {
-	/** Jev that routes every question `direct`, classifies nothing as risky, and keeps the state of every permission request. */
+	/** Jev that routes every question `extra` (no retrieval, every tool available), classifies nothing as risky, and keeps the state of every permission request. */
 	function jevThatRecords(): { backend: JevBackend; states: string[] } {
 		const states: string[] = [];
 		const backend: JevBackend = {
@@ -258,7 +258,7 @@ describe("what the person said reaches Jev's approval judgment", () => {
 					states.push(typeof request.state === "string" ? request.state : JSON.stringify(request.state));
 				}
 				const answer = (question: BackendRequest["questions"][number]): RawAnswer => {
-					if (question.id === "route") return { answer: "direct", distribution: { local: 0.05, web: 0.05, direct: 0.9 }, confidence: 0.9 };
+					if (question.id === "route") return { answer: "extra", distribution: { local: 0.05, organize: 0.05, extra: 0.9 }, confidence: 0.9 };
 					if (question.id === "permission_gate") return { answer: "allow", distribution: { allow: 0.97, deny: 0.03 }, confidence: 0.97 };
 					if (question.id.startsWith("permission_")) return { answer: question.id === "permission_delete" ? 0.95 : 0.02 };
 					return { answer: 0.05 };
