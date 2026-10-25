@@ -42,6 +42,10 @@ import type { AppUpdaterService } from "./app-updater";
 import { createAppUpdateHost, installCheckForUpdatesMenuItem } from "./app-update-host";
 import { createActivityJournal, journalSingleRun, LOCAL_ITEM, sourceItem } from "./index-activity-journal";
 import { busyMessage, lockDataSources } from "./locked-datasources";
+import { createIndexProblemService } from "./index-problem-service";
+import { modelDownloadFailure } from "./index-failure";
+import { INDEX_PROBLEM_CHANNELS } from "../shared/index-problem-contract";
+import type { RefreshLockHolder } from "./refresh-lock";
 import { schedulePaths, withRefreshLock } from "./refresh-schedule";
 import { createRefreshScheduler } from "./refresh-scheduler";
 import { createIconProvider } from "./file-icon";
@@ -84,9 +88,11 @@ import {
 	registerActionsIpcHandlers,
 	registerAnalyticsIpcHandlers,
 	registerAppUpdateIpcHandlers,
+	registerConversionIpcHandlers,
 	registerAutomationIpcHandlers,
 	registerDragOutIpcHandlers,
 	registerIndexActivityIpcHandlers,
+	registerIndexProblemIpcHandlers,
 	registerModelDownloadIpcHandlers,
 	registerOnboardingIpcHandlers,
 	registerOsRequestIpcHandlers,
@@ -96,6 +102,7 @@ import {
 	registerSettingsIpcHandlers,
 } from "./ipc";
 import { createActionService } from "./action-service";
+import { createFileeConversionService, readFileeSettings } from "./conversion-service";
 import { createServicesService } from "./services-service";
 import { DEFAULT_SCAN_INTERVAL_MINUTES } from "./version-family-service";
 import { execFile } from "node:child_process";
@@ -108,6 +115,7 @@ import { installCli } from "./cli-install";
 import { initErrorReporting, setErrorReportingEnabled } from "./error-reporting";
 import { readErrorReportingEnabled } from "./error-report-core";
 import { createAnalytics, createInstallIdStore, readUsageAnalyticsEnabled, resolveAnalyticsTarget, settingChangeEvents } from "./analytics-core";
+import { hasInWindowMenuBar, mainWindowChrome, windowControlsOverlay, type WindowPhase } from "./window-chrome";
 import { createPostHogSink } from "./analytics";
 
 const execFileAsync = promisify(execFile);
@@ -116,8 +124,8 @@ const execFileAsync = promisify(execFile);
 initErrorReporting({ dsn: import.meta.env.MAIN_VITE_SENTRY_DSN, enabled: readErrorReportingEnabled(app.getPath("userData")), version: APP_VERSION, packaged: app.isPackaged });
 
 /**
- * Usage statistics: opt-in, anonymous, content-free (see `analytics-core.ts`). Off until the user turns it on in
- * Settings, read from disk because the settings service loads later. A build with no PostHog key has no sink and sends nothing.
+ * Usage statistics: anonymous, content-free (see `analytics-core.ts`). Off until the user has continued from onboarding's
+ * welcome step with the box ticked, or turned it on in Settings; read from disk because the settings service loads later. A build with no PostHog key has no sink and sends nothing.
  */
 const analyticsTarget = resolveAnalyticsTarget({
 	packaged: app.isPackaged,
@@ -209,8 +217,8 @@ function createMainWindow(devLabel: DevLabel | null, appearance: AppAppearance, 
 		title: formatWindowTitle(APP_FULL_NAME, APP_VERSION, devLabel),
 		// Windows and Linux take the window/taskbar icon here; macOS uses the bundle icon (the Dock icon below when unpackaged).
 		...(process.platform === "darwin" ? {} : { icon: windowIconPath }),
-		// v7: traffic lights overlay the sidebar header / toolbar (macOS-native chrome).
-		titleBarStyle: "hiddenInset",
+		// The native title strip is gone on every OS (see `window-chrome.ts`): macOS keeps its traffic lights, Windows/Linux get the window controls only.
+		...mainWindowChrome(process.platform, appearance, pending ? "onboarding" : "finder"),
 		webPreferences: {
 			preload: join(import.meta.dirname, "../preload/index.mjs"),
 			contextIsolation: true,
@@ -223,6 +231,9 @@ function createMainWindow(devLabel: DevLabel | null, appearance: AppAppearance, 
 			],
 		},
 	});
+
+	// No `File Edit View Window` strip inside the window on Windows/Linux: nothing here is reachable only through it.
+	if (hasInWindowMenuBar(process.platform)) window.removeMenu();
 
 	// The renderer's static <title> would otherwise replace the window title.
 	window.webContents.on("page-title-updated", (event) => {
@@ -246,6 +257,12 @@ let fsWorker: FsWorkerHost | null = null;
 let providerAuthService: ProviderAuthService | null = null;
 let mainWindow: BrowserWindow | null = null;
 let currentAppearance: AppAppearance = "light";
+/** What the main window's page shows now; the window-controls overlay is as tall as that page's top bar. */
+let windowPhase: WindowPhase = "finder";
+function syncWindowControls(): void {
+	if (!hasInWindowMenuBar(process.platform) || mainWindow === null || mainWindow.isDestroyed()) return;
+	mainWindow.setTitleBarOverlay(windowControlsOverlay(currentAppearance, windowPhase));
+}
 let currentLanguage: AppSettings["language"] = "ko";
 function sendToMainWindow(channel: string, payload: unknown): void {
 	if (mainWindow === null || mainWindow.isDestroyed()) return;
@@ -539,6 +556,8 @@ app.whenReady().then(async () => {
 		currentAppearance = appearance;
 		nativeTheme.themeSource = appearance;
 		sendToAllWindows(APPEARANCE_CHANNELS.changed, appearance);
+		// The Windows/Linux window buttons are drawn by the window, not the page: recolor their symbols with the theme.
+		syncWindowControls();
 	};
 	/** Main's own messages, the fs worker's, and Quick Look follow the Interface language; the Finder applies it itself. */
 	const applyLanguage = (language: AppSettings["language"]): void => {
@@ -589,6 +608,62 @@ app.whenReady().then(async () => {
 		},
 	});
 	registerModelDownloadIpcHandlers(modelDownload);
+	/** Downloads the on-device model when it is not here yet; `null` once it is, else the reason it is not. */
+	const ensureLocalModel = async (): Promise<string | null> => {
+		await modelDownload.start();
+		const done = await modelDownload.settled();
+		return done.state === "ready" ? null : (done.error ?? t("main.modelDownload.errors.cancelled"));
+	};
+	const busyResult =
+		(methods: readonly string[] | undefined) =>
+		(holder: RefreshLockHolder): ConfigRefreshResult => ({
+			ok: false,
+			methods: methods ?? LOCAL_REFRESH_METHODS,
+			scanned: 0,
+			written: 0,
+			deleted: 0,
+			skipped: 0,
+			diagnostics: [],
+			error: busyMessage(holder),
+		});
+	/** One local-index run under the shared refresh lock, journaled so it shows in the indexing progress. */
+	const runLocalIndex = <Busy extends ConfigRefreshResult | null>(
+		owner: string,
+		methods: readonly string[] | undefined,
+		onBusy: (holder: RefreshLockHolder) => Busy,
+		onResult: (result: ConfigRefreshResult) => void = () => undefined,
+	): Promise<ConfigRefreshResult | Busy> =>
+		withRefreshLock<ConfigRefreshResult | Busy>(
+			schedulePath.lock,
+			owner,
+			() =>
+				journalSingleRun(createActivityJournal(schedulePath.activity, { owner }), LOCAL_ITEM, async () => {
+					const result = await refreshConfig(methods);
+					onResult(result);
+					return result;
+				}),
+			onBusy,
+		);
+	// What is still wrong with the index once onboarding is over: kept across relaunches, shown by the Finder's sidebar, banner and Settings card.
+	const indexProblem = createIndexProblemService({
+		filePath: join(app.getPath("userData"), "index-problem.json"),
+		send: (problem) => sendToMainWindow(INDEX_PROBLEM_CHANNELS.changed, problem),
+		run: async () => {
+			let result = await runLocalIndex("manual-refresh", undefined, () => null);
+			// The on-device model is fetched here, with progress and a way to stop it, before MinSync would fetch it silently.
+			if (result?.diagnostics.some((diagnostic) => diagnostic.code === "embedding-model-missing") === true) {
+				const missing = await ensureLocalModel();
+				if (missing !== null) return { ok: false, ...modelDownloadFailure(missing) };
+				result = await runLocalIndex("manual-refresh", undefined, () => null);
+			}
+			return result;
+		},
+	});
+	registerIndexProblemIpcHandlers(indexProblem);
+	// A run from Settings that reached the folders tells whether the index works now.
+	const recordLocalRun = (result: ConfigRefreshResult): void => {
+		if (result.methods.includes("parsed") || result.methods.includes("minsync")) indexProblem.record(result);
+	};
 	const embeddingService = createEmbeddingSettingsService({
 		env: process.env,
 		cwd: process.cwd(),
@@ -644,13 +719,7 @@ app.whenReady().then(async () => {
 		dataSources: lockedDataSources,
 		models: createModelStatusService({ env: process.env, cwd: process.cwd() }),
 		config: autoRagConfig,
-		refreshConfig: (methods) =>
-			withRefreshLock(
-				schedulePath.lock,
-				"manual-refresh",
-				() => journalSingleRun(createActivityJournal(schedulePath.activity, { owner: "manual-refresh" }), LOCAL_ITEM, () => refreshConfig(methods)),
-				(holder) => ({ ok: false, methods: methods ?? LOCAL_REFRESH_METHODS, scanned: 0, written: 0, deleted: 0, skipped: 0, diagnostics: [], error: busyMessage(holder) }),
-			),
+		refreshConfig: (methods) => runLocalIndex("manual-refresh", methods, busyResult(methods), recordLocalRun),
 		refreshScheduler,
 		credentials,
 		providers: providerAuth,
@@ -695,6 +764,10 @@ app.whenReady().then(async () => {
 	registerIndexActivityIpcHandlers(indexActivity);
 	const stopIndexActivity = indexActivity.start((snapshot) => {
 		sendToMainWindow(INDEX_ACTIVITY_CHANNELS.changed, snapshot);
+		// The OS-scheduled job finished a clean local refresh: whatever stopped the first index is over.
+		if (snapshot.state === "done" && snapshot.origin === "scheduled" && snapshot.items.some((item) => item.kind === "local" && item.state === "done")) {
+			indexProblem.clearFailure();
+		}
 	});
 	app.once("will-quit", stopIndexActivity);
 	const automations = createAutomationService({
@@ -713,6 +786,8 @@ app.whenReady().then(async () => {
 	registerOsRequestIpcHandlers(osRequests);
 	// The in-app right-click → 서비스 submenu: what macOS offers for the selection, and performing one.
 	registerServicesIpcHandlers(createServicesService());
+	// Renaming a file to another format's extension converts it (Filee); the settings are the shared AutoRAG config's `filee` block.
+	registerConversionIpcHandlers(createFileeConversionService(() => readFileeSettings(autoragConfigPath())));
 	const settings = await settingsService.get();
 	appliedLaunchAtLogin = settings.launchAtLogin;
 	applyAppearance(settings.appearance);
@@ -820,18 +895,11 @@ app.whenReady().then(async () => {
 		},
 		configPath: autoragConfigPath(),
 		resolveWorkspacePath: async () => (await resolveEffectiveConfig({ env: process.env, cwd: process.cwd() })).config.workspacePath,
-		ensureLocalModel: async () => {
-			await modelDownload.start();
-			const done = await modelDownload.settled();
-			return done.state === "ready" ? null : (done.error ?? t("main.modelDownload.errors.cancelled"));
-		},
-		refresh: (methods) =>
-			withRefreshLock(
-				schedulePath.lock,
-				"onboarding-index",
-				() => journalSingleRun(createActivityJournal(schedulePath.activity, { owner: "onboarding-index" }), LOCAL_ITEM, () => refreshConfig(methods)),
-				(holder) => ({ ok: false, methods: methods ?? LOCAL_REFRESH_METHODS, scanned: 0, written: 0, deleted: 0, skipped: 0, diagnostics: [], error: busyMessage(holder) }),
-			),
+		ensureLocalModel,
+		refresh: (methods) => runLocalIndex("onboarding-index", methods, busyResult(methods)),
+		recordIndex: (outcome) => indexProblem.record(outcome),
+		// Opening Dazzi after a failed first index: index the keywords now, which needs no embedder (not recorded: it says nothing about the embedder).
+		refreshKeyword: () => runLocalIndex("onboarding-index", ["parsed", "jikji"], () => null),
 		syncDatasources: async (aliases) => {
 			if (aliases.length === 0) return;
 			for (;;) {
@@ -936,6 +1004,8 @@ app.whenReady().then(async () => {
 			analytics.track("onboarding_completed", {});
 			const window = mainWindow;
 			if (window === null || window.isDestroyed()) return;
+			windowPhase = "finder";
+			syncWindowControls();
 			// Centering can move a border-spanning window onto another display.
 			// Apply the target size both before and after centering so the Finder
 			// hand-off uses the display where the window actually ended up.
@@ -952,6 +1022,7 @@ app.whenReady().then(async () => {
 	});
 	registerOnboardingIpcHandlers(onboardingService);
 	const openMainWindow = (): BrowserWindow => {
+		windowPhase = onboardingService.pending() ? "onboarding" : "finder";
 		const window = createMainWindow(devLabel, currentAppearance, onboardingService.pending());
 		const clearWatchSet = (): void => {
 			void workerHost.client.call("setWatchSet", [[]]);

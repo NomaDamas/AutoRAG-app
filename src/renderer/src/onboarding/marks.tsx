@@ -22,6 +22,7 @@ import {
 	Check,
 	ChevronDown,
 	ChevronLeft,
+	CircleAlert,
 	CircleCheck,
 	CircleDashed,
 	Cloud,
@@ -36,6 +37,7 @@ import {
 	FileText,
 	Folder,
 	FolderSearch,
+	FolderX,
 	GitBranch,
 	HardDrive,
 	Hand,
@@ -74,6 +76,7 @@ import {
 	TriangleAlert,
 	UserRound,
 	WandSparkles,
+	WifiOff,
 	X,
 	Zap,
 	type LucideIcon,
@@ -144,6 +147,9 @@ const ICONS: Record<string, LucideIcon> = {
 	"notebook-pen": NotebookPen,
 	rss: Rss,
 	"app-window": AppWindow,
+	"circle-alert": CircleAlert,
+	"folder-x": FolderX,
+	"wifi-off": WifiOff,
 };
 
 interface IconProps {

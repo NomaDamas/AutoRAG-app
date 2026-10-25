@@ -330,13 +330,13 @@ try {
 	await page.waitForFunction(
 		() => {
 			const button = document.querySelector(".onb .ix-open-btn");
-			return (button instanceof HTMLButtonElement && !button.disabled) || document.querySelector(".onb .ix-notice.warn") !== null;
+			return (button instanceof HTMLButtonElement && !button.disabled) || document.querySelector(".onb .ix.paused") !== null;
 		},
 		null,
 		{ timeout: 600_000 },
 	);
-	const failed = await page.locator(".onb .ix-notice.warn").count();
-	check("first index succeeds", failed === 0, failed ? await page.locator(".onb .ix-notice.warn").innerText() : "");
+	const failed = await page.locator(".onb .ix.paused").count();
+	check("first index succeeds", failed === 0, failed ? await page.locator(".onb .ix.paused").innerText() : "");
 	check("subtle background-start button hides once indexing finishes", (await page.locator(".onb .ix-bg-start").count()) === 0);
 	const raw = JSON.parse(readFileSync(CONFIG, "utf8"));
 	check(

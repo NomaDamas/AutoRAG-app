@@ -113,6 +113,18 @@
       "edit": "前往路径",
       "invalid": "请输入要前往的路径",
       "notFound": "找不到 \"{{path}}\""
+    },
+    "convert": {
+      "title": "转换为其他格式",
+      "message": "将“{{name}}”转换为“{{newName}}”。原文件怎么处理？",
+      "keep": "保留原文件",
+      "replace": "替换原文件",
+      "replaceHint": "替换后，原文件会移到废纸篓。",
+      "working": "正在转换为“{{newName}}”…",
+      "workingHint": "首次转换时需要下载转换引擎，可能会花更长时间。",
+      "progressAria": "转换进行中",
+      "unsupported": "不支持从 {{from}} 转换为 {{to}}，因此名称没有更改。",
+      "replaced": "{{name}} — 已转换，原文件已移到废纸篓"
     }
   },
   "contextMenu": {
@@ -436,6 +448,65 @@
       "finalizing": "即将完成"
     }
   },
+  "indexProblem": {
+    "retrying": "正在重试",
+    "fixEmbedding": "更改嵌入方式",
+    "action": {
+      "retryNow": "立即重试",
+      "resume": "继续下载",
+      "recheck": "再次检查"
+    },
+    "card": {
+      "failed": "索引已停止"
+    },
+    "item": {
+      "embedding": "嵌入",
+      "folder": "文件夹",
+      "skipped": "跳过的文件"
+    },
+    "embedderConfig": {
+      "title": "无法使用语义搜索",
+      "side": "语义搜索准备已中止",
+      "sideDetail": "需要检查嵌入设置",
+      "detail": "需要检查设置"
+    },
+    "embedderOffline": {
+      "title": "正在等待连接",
+      "side": "正在等待连接",
+      "sideDetail": "嵌入 · 需要检查连接",
+      "detail": "需要检查连接"
+    },
+    "modelDownload": {
+      "title": "模型下载已中断",
+      "side": "模型下载中断",
+      "sideDetail": "需要继续下载",
+      "detail": "下载中断"
+    },
+    "diskFull": {
+      "title": "存储空间不足",
+      "side": "存储空间不足",
+      "sideDetail": "释放空间后重试",
+      "detail": "存储空间不足"
+    },
+    "folderUnreadable": {
+      "title": "无法读取‘{{folder}}’文件夹",
+      "titleMany": "无法读取 {{count}} 个文件夹",
+      "side": "无法读取文件夹",
+      "sideDetailMany": "{{count}} 个文件夹"
+    },
+    "unknown": {
+      "title": "语义搜索准备已停止",
+      "side": "嵌入已停止",
+      "sideDetail": "原因不明",
+      "detail": "原因不明"
+    },
+    "skipped": {
+      "title": "跳过了 {{count}} 个文件",
+      "side": "已跳过 {{count}} 个文件",
+      "sideDetail": "下次刷新时重试",
+      "row": "{{count}} 个 · 下次刷新时会自动重试"
+    }
+  },
   "confirm": {
     "emptyTrashTitle": "清倒废纸篓",
     "emptyTrashMessage": "废纸篓中的所有项目将被永久删除。此操作无法撤销。",
@@ -729,7 +800,12 @@
       "minutes": "约 {{minutes}} 分钟",
       "cached": "已就绪",
       "downloadUnknown": "检查中",
-      "cloudConsent": "我同意将所选文件夹中的文档正文发送至 Dazzi 服务器进行嵌入处理。处理后不会保留。"
+      "cloudConsent": "我同意将所选文件夹中的文档正文发送至 Dazzi 服务器进行嵌入处理。处理后不会保留。",
+      "pausedNotice": {
+        "config": "所选嵌入方式不可用，已暂停",
+        "disk": "存储空间不足，无法下载模型",
+        "default": "嵌入无法继续"
+      }
     },
     "sources": {
       "eyebrow": "数据源",
@@ -860,8 +936,6 @@
       "tipDot": "技巧 {{index}}",
       "done": "索引完成",
       "doneDetail": "{{files}} 个文件 · {{sources}} 个数据源",
-      "failedTitle": "索引中断",
-      "failedDetail": "未能完成索引。",
       "waiting": "等待开始",
       "waitingNote": "正在准备首次索引。",
       "running": "{{phase}}…",
@@ -889,16 +963,59 @@
       "metaProgress": "{{processed}} / {{total}} 个文件",
       "gateOkTitle": "现在可以退出了",
       "gateOkDetail": "已读取全部 {{files}} 个文件。新更改的文件会在后台继续读取。",
-      "gateFailTitle": "未能完成索引",
-      "gateFailDetail": "重试后将从断点继续。",
       "gateTitleMac": "请勿退出 Dazzi 或关闭 Mac",
       "gateTitlePc": "请勿退出 Dazzi 或关闭电脑",
       "gateDetailMac": "首次索引耗时较长。退出会中断进度。请连接电源适配器并保持屏幕开启。",
       "gateDetailWindows": "首次索引耗时较长。退出会中断进度。请保持连接电源。",
       "gateLocked": "完成后即可打开",
       "open": "打开 Dazzi",
-      "retry": "重试",
-      "startInBackground": "在后台继续并立即开始使用"
+      "startInBackground": "在后台继续并立即开始使用",
+      "skipped": "已跳过 {{count}} 个文件",
+      "gateOkDetailPartial": "其余文件均可搜索。新更改的文件会在后台继续读取。",
+      "pause": {
+        "config": {
+          "title": "无法使用嵌入",
+          "line": "请检查嵌入设置"
+        },
+        "offline": {
+          "title": "连接已断开",
+          "line": "连接恢复后会自动继续"
+        },
+        "model": {
+          "title": "无法下载模型",
+          "line": "连接恢复后会继续下载"
+        },
+        "disk": {
+          "title": "存储空间不足",
+          "line": "腾出空间后即可继续下载"
+        },
+        "unknown": {
+          "title": "嵌入已停止",
+          "line": "可以重试，或更改嵌入方式"
+        },
+        "folder": {
+          "title": "无法读取“{{folder}}”文件夹",
+          "titleMany": "无法读取 {{count}} 个文件夹",
+          "line": "连接驱动器后会自动继续"
+        },
+        "exit": {
+          "retry": "重试",
+          "retryNow": "立即重试",
+          "recheck": "重新检查",
+          "resume": "继续下载",
+          "resumeDisk": "已腾出空间，继续下载",
+          "changeEmbedding": "更改嵌入方式",
+          "exclude": "跳过“{{folder}}”继续",
+          "excludeMany": "跳过无法读取的文件夹继续",
+          "openAnyway": "先打开 Dazzi"
+        },
+        "line": {
+          "retrying": "正在重试",
+          "countdown": "{{seconds}} 秒后自动重试",
+          "exhausted": "已停止自动重试 · 请手动重试",
+          "again": "又因同样的原因停止了"
+        }
+      }
     },
     "tips": {
       "1": {
@@ -1209,7 +1326,8 @@
       "invalidPaths": "文件路径无效。",
       "unknownAction": "未知的文件操作。",
       "invalidAnchor": "共享位置无效。",
-      "invalidServiceRequest": "服务请求无效。"
+      "invalidServiceRequest": "服务请求无效。",
+      "invalidConversionRequest": "转换请求无效。"
     },
     "dialogs": {
       "notificationBody": "通知已开启。",
@@ -1365,6 +1483,18 @@
         "invalidRemoval": "要恢复的规则格式不正确。",
         "duplicateRule": "规则“{{id}}”已存在，无法恢复。"
       }
+    },
+    "convert": {
+      "notConvertible": "{{name}} 无法转换为 {{extension}} 格式。",
+      "invalidName": "不能用作转换后文件的名称：{{name}}",
+      "sourceMissing": "找不到要转换的文件：{{name}}",
+      "nameTaken": "已存在名为“{{name}}”的文件或文件夹",
+      "cancelled": "已取消转换 {{name}}。",
+      "failed": "无法转换 {{name}}：{{reason}}",
+      "unknownReason": "未知错误",
+      "noOutput": "转换为 {{name}} 没有生成文件。",
+      "done": "{{name}} — 已转换",
+      "doneFolder": "{{name}} — 已转换（文件夹中有 {{count}} 个文件）"
     }
   },
   "quickLook": {
@@ -2269,6 +2399,9 @@
       "appDownload": "下载 {{name}}",
       "appNeeded": "需要",
       "appInstalled": "已安装",
+      "appHintMissingPc": "要获取 {{name}} 内容，此电脑上必须安装 {{name}} 应用。",
+      "appHintInstalledPc": "从此电脑上的 {{name}} 应用获取内容。",
+      "appUnknown": "未检查",
       "refreshName": "刷新",
       "refreshLast": "上次刷新 {{date}}",
       "refreshNever": "尚未获取任何内容。",
@@ -2284,7 +2417,8 @@
       "removeHint": "仅从 Dazzi 搜索中移除，源应用的数据不会被删除。",
       "confirmTitle": "要断开此连接吗？",
       "confirmBody": "将把 '{{alias}}' 连接从 Dazzi 搜索中移除。源应用的数据不会被删除。",
-      "macOnlyNote": "Apple 日历和提醒事项只能通过 macOS 的 EventKit 读取，因此此连接在这台电脑上无效。"
+      "macOnlyNote": "Apple 日历和提醒事项只能通过 macOS 的 EventKit 读取，因此此连接在这台电脑上无效。",
+      "kakaoOnlyNote": "KakaoTalk 通过仅支持 Mac 应用的 lazykatok 读取，因此此连接在这台电脑上无效。"
     },
     "scope": {
       "title": "搜索范围",

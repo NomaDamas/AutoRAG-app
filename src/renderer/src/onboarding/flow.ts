@@ -21,6 +21,7 @@ import type {
 } from "../../../shared/onboarding-contract";
 import type { LocalSpecVerdict } from "../../../shared/local-embedding-spec";
 import { CLOUD_FILES_PER_MINUTE, LOCAL_FILES_PER_MINUTE, NONE_FILES_PER_MINUTE, NONE_MIN_MINUTES } from "../../../shared/onboarding-contract";
+import { datasourceSupported } from "../../../shared/messenger-platform";
 
 export type { EmbedMode };
 
@@ -162,14 +163,14 @@ export function primaryLabelKey(stepId: OnboardingStepId, plan: PlanId, held: bo
 /**
  * The value to save for "usage statistics" when the user leaves `stepId`, or
  * null when that step records nothing. Consent is the act of continuing from
- * the step that shows the checkbox: closing the window there saves nothing, and
- * the setting stays at its default (off).
+ * the step that shows the checkbox (ticked by default there): closing the
+ * window there saves nothing, and the stored setting stays at its default (off).
  */
 export function usageConsentOnLeaving(stepId: OnboardingStepId, checked: boolean): boolean | null {
 	return stepId === "welcome" ? checked : null;
 }
 
-/** Same rule for "error reports": the value to save when the user leaves `stepId`, or null. Default stays off. */
+/** Same rule for "error reports": the value to save when the user leaves `stepId`, or null. The stored default stays off until then. */
 export function errorReportsConsentOnLeaving(stepId: OnboardingStepId, checked: boolean): boolean | null {
 	return stepId === "welcome" ? checked : null;
 }
@@ -413,10 +414,15 @@ const CONNECTABLE_BRANDS: readonly { readonly brand: string; readonly label: str
 	{ brand: "googledrive", label: "Google Drive" },
 ];
 
-/** "Connect later" chips: every connectable brand the probes did not already find. */
-export function connectableLater(detected: readonly { readonly id: SourceId }[]): readonly { readonly brand: string; readonly label: string }[] {
+/** "Connect later" chips: every connectable brand the probes did not already find, minus the ones this OS cannot run (KakaoTalk off macOS). */
+export function connectableLater(
+	detected: readonly { readonly id: SourceId }[],
+	platform: string = "darwin",
+): readonly { readonly brand: string; readonly label: string }[] {
 	const found = new Set<SourceId>(detected.map((source) => source.id));
-	return CONNECTABLE_BRANDS.filter((entry) => entry.sourceId === undefined || !found.has(entry.sourceId));
+	return CONNECTABLE_BRANDS.filter(
+		(entry) => (entry.sourceId === undefined || !found.has(entry.sourceId)) && (entry.sourceId === undefined || datasourceSupported(entry.sourceId, platform)),
+	);
 }
 
 /** The welcome feature card's source-token grid order. */

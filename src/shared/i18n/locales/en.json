@@ -113,6 +113,18 @@
       "edit": "Go to path",
       "invalid": "Enter a path to go to",
       "notFound": "\"{{path}}\" can't be found"
+    },
+    "convert": {
+      "title": "Convert to another format",
+      "message": "Convert “{{name}}” to “{{newName}}”. What should happen to the original?",
+      "keep": "Keep original",
+      "replace": "Replace original",
+      "replaceHint": "Replacing moves the original to the Trash.",
+      "working": "Converting to “{{newName}}”…",
+      "workingHint": "The first conversion can take longer while the conversion engine downloads.",
+      "progressAria": "Conversion in progress",
+      "unsupported": "Converting {{from}} to {{to}} is not supported, so the name was not changed.",
+      "replaced": "{{name}} — converted; the original moved to the Trash"
     }
   },
   "contextMenu": {
@@ -436,6 +448,65 @@
       "finalizing": "Finishing up"
     }
   },
+  "indexProblem": {
+    "retrying": "Retrying now",
+    "fixEmbedding": "Change embedding method",
+    "action": {
+      "retryNow": "Try again now",
+      "resume": "Continue download",
+      "recheck": "Check again"
+    },
+    "card": {
+      "failed": "Indexing stopped"
+    },
+    "item": {
+      "embedding": "Embedding",
+      "folder": "Folder",
+      "skipped": "Skipped files"
+    },
+    "embedderConfig": {
+      "title": "Semantic search isn’t available",
+      "side": "Semantic search paused",
+      "sideDetail": "Check the embedding settings",
+      "detail": "Check the settings"
+    },
+    "embedderOffline": {
+      "title": "Waiting for a connection",
+      "side": "Waiting for a connection",
+      "sideDetail": "Embedding · check the connection",
+      "detail": "Check the connection"
+    },
+    "modelDownload": {
+      "title": "The model download stopped",
+      "side": "Model download stopped",
+      "sideDetail": "Continue the download",
+      "detail": "Download stopped"
+    },
+    "diskFull": {
+      "title": "Not enough disk space",
+      "side": "Not enough disk space",
+      "sideDetail": "Free up space, then try again",
+      "detail": "Not enough disk space"
+    },
+    "folderUnreadable": {
+      "title": "Can’t read the ‘{{folder}}’ folder",
+      "titleMany": "Can’t read {{count}} folders",
+      "side": "A folder can’t be read",
+      "sideDetailMany": "{{count}} folders"
+    },
+    "unknown": {
+      "title": "Preparing semantic search stopped",
+      "side": "Embedding stopped",
+      "sideDetail": "Cause unknown",
+      "detail": "Cause unknown"
+    },
+    "skipped": {
+      "title": "{{count}} files were skipped",
+      "side": "{{count}} files skipped",
+      "sideDetail": "Retried on the next refresh",
+      "row": "{{count}} · retried automatically on the next refresh"
+    }
+  },
   "confirm": {
     "emptyTrashTitle": "Empty Trash",
     "emptyTrashMessage": "All items in the Trash will be permanently deleted. This cannot be undone.",
@@ -729,7 +800,12 @@
       "minutes": "~{{minutes}} min",
       "cached": "Ready",
       "downloadUnknown": "Checking",
-      "cloudConsent": "I agree that the contents of documents in the selected folders will be sent to Dazzi servers for embedding. Nothing is stored after processing."
+      "cloudConsent": "I agree that the contents of documents in the selected folders will be sent to Dazzi servers for embedding. Nothing is stored after processing.",
+      "pausedNotice": {
+        "config": "Indexing stopped because the chosen embedding isn't available",
+        "disk": "Not enough storage space to download the model",
+        "default": "Embedding couldn't continue"
+      }
     },
     "sources": {
       "eyebrow": "Data sources",
@@ -860,8 +936,6 @@
       "tipDot": "Tip {{index}}",
       "done": "Indexing complete",
       "doneDetail": "{{files}} files · {{sources}} data sources",
-      "failedTitle": "Indexing stopped",
-      "failedDetail": "Indexing couldn't be completed.",
       "waiting": "Waiting to start",
       "waitingNote": "Preparing the first index.",
       "running": "{{phase}}…",
@@ -889,16 +963,59 @@
       "metaProgress": "{{processed}} / {{total}} files",
       "gateOkTitle": "You can quit now",
       "gateOkDetail": "We've read all {{files}} files. Newly changed files continue to be read in the background.",
-      "gateFailTitle": "Indexing couldn't be completed",
-      "gateFailDetail": "Try again and it'll continue where it left off.",
       "gateTitleMac": "Don't quit Dazzi or turn off your Mac",
       "gateTitlePc": "Don't quit Dazzi or turn off your PC",
       "gateDetailMac": "The first index takes a while. Quitting stops progress. Plug in the power adapter and keep the lid open.",
       "gateDetailWindows": "The first index takes a while. Quitting stops progress. Keep it plugged in.",
       "gateLocked": "Opens once it's done",
       "open": "Open Dazzi",
-      "retry": "Try again",
-      "startInBackground": "Continue in background and start right away"
+      "startInBackground": "Continue in background and start right away",
+      "skipped": "{{count}} files were skipped",
+      "gateOkDetailPartial": "Everything else is searchable. Newly changed files continue to be read in the background.",
+      "pause": {
+        "config": {
+          "title": "Embedding isn't available",
+          "line": "Check your embedding settings"
+        },
+        "offline": {
+          "title": "Connection lost",
+          "line": "It continues by itself once you're connected"
+        },
+        "model": {
+          "title": "Couldn't download the model",
+          "line": "The download resumes once you're connected"
+        },
+        "disk": {
+          "title": "Not enough storage space",
+          "line": "Free up space and the download can continue"
+        },
+        "unknown": {
+          "title": "Embedding stopped",
+          "line": "Try again, or change how documents are embedded"
+        },
+        "folder": {
+          "title": "Can't read the “{{folder}}” folder",
+          "titleMany": "Can't read {{count}} folders",
+          "line": "It continues by itself once the drive is connected"
+        },
+        "exit": {
+          "retry": "Try again",
+          "retryNow": "Try now",
+          "recheck": "Check again",
+          "resume": "Resume download",
+          "resumeDisk": "I freed up space, resume",
+          "changeEmbedding": "Change embedding",
+          "exclude": "Continue without “{{folder}}”",
+          "excludeMany": "Continue without the unreadable folders",
+          "openAnyway": "Open Dazzi anyway"
+        },
+        "line": {
+          "retrying": "Trying again…",
+          "countdown": "Trying again automatically in {{seconds}}s",
+          "exhausted": "Stopped retrying automatically · try again yourself",
+          "again": "Stopped for the same reason again"
+        }
+      }
     },
     "tips": {
       "1": {
@@ -1209,7 +1326,8 @@
       "invalidPaths": "The file path is invalid.",
       "unknownAction": "Unknown file action.",
       "invalidAnchor": "The share anchor is invalid.",
-      "invalidServiceRequest": "The service request is invalid."
+      "invalidServiceRequest": "The service request is invalid.",
+      "invalidConversionRequest": "The conversion request is invalid."
     },
     "dialogs": {
       "notificationBody": "Notifications are on.",
@@ -1365,6 +1483,18 @@
         "invalidRemoval": "The rule to restore is not in a valid format.",
         "duplicateRule": "A rule named “{{id}}” already exists, so it cannot be restored."
       }
+    },
+    "convert": {
+      "notConvertible": "{{name}} cannot be converted to {{extension}}.",
+      "invalidName": "Not usable as the name of the converted file: {{name}}",
+      "sourceMissing": "The file to convert could not be found: {{name}}",
+      "nameTaken": "A file or folder named \"{{name}}\" already exists",
+      "cancelled": "Conversion of {{name}} was cancelled.",
+      "failed": "Could not convert {{name}}: {{reason}}",
+      "unknownReason": "unknown error",
+      "noOutput": "Converting to {{name}} produced no file.",
+      "done": "{{name}} — converted",
+      "doneFolder": "{{name}} — converted ({{count}} files in a folder)"
     }
   },
   "quickLook": {
@@ -2269,6 +2399,9 @@
       "appDownload": "Download {{name}}",
       "appNeeded": "Required",
       "appInstalled": "Installed",
+      "appHintMissingPc": "To fetch {{name}} content, the {{name}} app must be installed on this computer.",
+      "appHintInstalledPc": "Content is fetched from the {{name}} app on this computer.",
+      "appUnknown": "Not checked",
       "refreshName": "Refresh",
       "refreshLast": "Last refreshed {{date}}",
       "refreshNever": "No content fetched yet.",
@@ -2284,7 +2417,8 @@
       "removeHint": "Removed only from Dazzi search; the source app's data is not deleted.",
       "confirmTitle": "Disconnect this connection?",
       "confirmBody": "The '{{alias}}' connection will be removed from Dazzi search. The source app's data is not deleted.",
-      "macOnlyNote": "Apple Calendar and Reminders can only be read through EventKit on macOS, so this connection is inactive on this computer."
+      "macOnlyNote": "Apple Calendar and Reminders can only be read through EventKit on macOS, so this connection is inactive on this computer.",
+      "kakaoOnlyNote": "KakaoTalk is read through lazykatok, which only works with the Mac app, so this connection is inactive on this computer."
     },
     "scope": {
       "title": "Search scope",

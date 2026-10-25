@@ -1,4 +1,5 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent, type ReactElement } from "react";
+import { useTranslation } from "react-i18next";
 import type { AppSettings } from "../../../shared/settings-contract";
 import { isTagPath, RECENTS_PATH, tagNameOf } from "../../../shared/fs-contract";
 import type { FinderSource } from "../data/source";
@@ -11,6 +12,7 @@ import { attachmentsFromDrop, isAttachmentDrag, isFileTransferDrag, isFinderDrag
 import { backgroundDropDir, dropTransferOp } from "../state/file-transfer";
 import { listFixedWidth, resetListColumns, setListColumnWidth, toggleListColumn, type ListColumnKey, type ListColumnsState } from "../state/list-columns";
 import { basename, breadcrumbTrail } from "../state/paths";
+import { requestSettingsCategory } from "../state/settings-navigation";
 import { AI_SEARCH_PATH, AUTOMATIONS_PATH, isVirtualTabPath, SETTINGS_PATH } from "../state/tabs";
 import { focusPane, type Pane, type Workspace } from "../state/workspace";
 import { AutomationsTab } from "./AutomationsTab";
@@ -19,6 +21,8 @@ import { ColumnHeader } from "./ColumnHeader";
 import { FileList } from "./FileList";
 import type { BackgroundDropHandlers, RowCallbacks } from "./FileRow";
 import { IconGrid } from "./IconGrid";
+import { IndexProblemBanner } from "./IndexProblemBanner";
+import { HEADER_VIEWPORT_CLASS, LIST_COLUMN_CLASS, followScrollLeft } from "./list-scroll";
 import { PathBar } from "./PathBar";
 import { ScopeBar } from "./ScopeBar";
 import { SettingsView } from "./SettingsView";
@@ -83,6 +87,7 @@ export const FinderPane = memo(function FinderPane({
 	draggingTabId,
 	shell,
 }: FinderPaneProps): ReactElement {
+	const { t } = useTranslation();
 	const binding = useMemo(() => ({ pane, focused, canCloseTabs, update: shell.update }), [pane, focused, canCloseTabs, shell]);
 	const finder = useFinderController(shell.source, shell.directoryData, binding, {
 		showHiddenFiles,
@@ -91,6 +96,13 @@ export const FinderPane = memo(function FinderPane({
 		onFocusComposer: shell.onFocusComposer,
 		onToast: shell.onToast,
 	});
+	const headerViewportRef = useRef<HTMLDivElement>(null);
+	// The list is the one sideways scroller; the column header follows it (`list-scroll.ts`).
+	const listElement = finder.listRef.current;
+	useLayoutEffect(() => {
+		const header = headerViewportRef.current;
+		return listElement === null || header === null ? undefined : followScrollLeft(listElement, header);
+	}, [listElement, finder.layout]);
 	const finderRef = useRef(finder);
 	finderRef.current = finder;
 	useLayoutEffect(() => {
@@ -328,6 +340,13 @@ export const FinderPane = memo(function FinderPane({
 								onScopeChange={finder.setSearchScope}
 							/>
 						) : null}
+						<IndexProblemBanner
+							onFixEmbedding={() => {
+								// The embedding choice lives on Settings > AI.
+								requestSettingsCategory("ai");
+								finder.openSettings();
+							}}
+						/>
 						{finder.layout === "icons" ? (
 							<IconGrid
 								sections={finder.stackSections}
@@ -366,7 +385,8 @@ export const FinderPane = memo(function FinderPane({
 								callbacks={rowCallbacks}
 							/>
 						) : (
-							<div className="flex min-h-0 flex-1 flex-col overflow-x-auto">
+							<div className={LIST_COLUMN_CLASS}>
+								<div ref={headerViewportRef} className={HEADER_VIEWPORT_CLASS}>
 								<ColumnHeader
 									sort={finder.sort}
 									searching={finder.searching}
@@ -377,6 +397,7 @@ export const FinderPane = memo(function FinderPane({
 									onResetColumns={() => shell.setListColumns(() => resetListColumns())}
 									onResizeColumn={(key: string, px: number) => shell.setListColumns((current) => setListColumnWidth(current, key, px))}
 								/>
+								</div>
 								<FileList
 									sections={finder.stackSections}
 									listPath={finder.path}
@@ -400,7 +421,7 @@ export const FinderPane = memo(function FinderPane({
 						)}
 						<PathBar
 							path={finder.path}
-							crumbs={breadcrumbTrail(finder.path, Number.MAX_SAFE_INTEGER)}
+							crumbs={finder.inTrashLocation ? [{ label: t("places.trash"), path: finder.path, separator: false, isLast: true }] : breadcrumbTrail(finder.path, Number.MAX_SAFE_INTEGER)}
 							selectedName={focusedEntry !== null && focusedEntry.kind === "file" ? focusedEntry.name : null}
 							onNavigate={finder.navigate}
 							onGoToPath={finder.goToPath}

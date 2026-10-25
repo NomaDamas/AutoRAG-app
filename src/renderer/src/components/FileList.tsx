@@ -1,6 +1,7 @@
 import { useRef, type ReactElement, type RefObject } from "react";
 import { FileRow, type BackgroundDropHandlers, type RowCallbacks } from "./FileRow";
 import { GroupHeader } from "./GroupHeader";
+import { LIST_SCROLLER_CLASS } from "./list-scroll";
 import { cn } from "../lib/cn";
 import type { TreeRow } from "../state/folder-tree";
 import { GROUP_HEADER_HEIGHT, groupedLayout, groupedWindow, type GroupSection } from "../state/grouping";
@@ -100,7 +101,7 @@ export function FileList({
 
 	return (
 		<div
-			className={cn("list flex-1 min-h-0 py-0 overflow-auto", dropBackground && "bg-accent-drop-hover")}
+			className={cn(LIST_SCROLLER_CLASS, dropBackground && "bg-accent-drop-hover")}
 			ref={listRef}
 			style={{ minWidth: minWidth ?? undefined }}
 			onDragOver={background.onDragOver}

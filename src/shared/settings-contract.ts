@@ -68,11 +68,11 @@ export interface AppSettings {
 	readonly launchAtLogin: boolean;
 	readonly showInMenuBar: boolean;
 	readonly autoInstallUpdates: boolean;
-	/** Crash and indexing-failure reports go to the maintainers (no file paths, names or document text). Off by default: opt-in, asked on the first onboarding step. */
+	/** Crash and indexing-failure reports go to the maintainers (no file paths, names or document text). Stored off until the user continues from the first onboarding step, whose box is ticked by default. */
 	readonly errorReporting: boolean;
 	/**
 	 * Anonymous product-usage statistics (which features are used, never what is in them) go to the maintainers.
-	 * Off by default: it is opt-in, and independent of `errorReporting`.
+	 * Stored off until the user continues from the first onboarding step, whose box is ticked by default; independent of `errorReporting`.
 	 */
 	readonly usageAnalytics: boolean;
 	/** Off: dot-prefixed files never appear. On: they appear, rendered dimmed. */
@@ -459,6 +459,12 @@ export interface ConfigRefreshDiagnostic {
 	readonly code: string;
 	readonly severity: "info" | "warning" | "error";
 	readonly message: string;
+	/** A stable token the app sets itself where the cause matters (`embedder-preflight-failed`, `embedding-model-download-failed`); never parsed from a message. */
+	readonly reason?: string;
+	/** Files this diagnostic says were left out of the run (`files-left-out`, `parse-killed`). */
+	readonly count?: number;
+	/** Folders this diagnostic is about (`search-root-unavailable`). */
+	readonly folders?: readonly string[];
 }
 
 /** Outcome of a manual AutoRAGLite index refresh, with its diagnostics. */

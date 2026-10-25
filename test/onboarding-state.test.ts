@@ -75,6 +75,8 @@ function makeDeps(userDataDir: string, env: NodeJS.ProcessEnv = {}): OnboardingS
 		resolveWorkspacePath: async () => userDataDir,
 		refresh: async () => ({ ok: true, methods: [], scanned: 0, written: 0, deleted: 0, skipped: 0, diagnostics: [], error: null }),
 		ensureLocalModel: async () => null,
+		recordIndex: () => undefined,
+		refreshKeyword: async () => undefined,
 		credentials: { list: async () => [], set: async () => [], remove: async () => [], load: async () => [] },
 		settings: { get: async () => DEFAULT_SETTINGS, set: async (patch) => ({ ...DEFAULT_SETTINGS, ...patch }) },
 		detectSources: async () => ({ sources: [] }),
@@ -370,6 +372,124 @@ describe("createOnboardingService persistence", () => {
 		expect(JSON.parse(await readFile(join(directory, "config.json"), "utf8")).model).toEqual(configured);
 		expect(managed).toBe(0);
 		service.dispose();
+	});
+
+	describe("how a first index ends", () => {
+		const request = { folders: ["/Users/me/Documents"], sources: [], plan: "free" } as const;
+		const settled = async (service: ReturnType<typeof createOnboardingService>): Promise<void> => {
+			for (let tick = 0; tick < 100 && service.isIndexing(); tick += 1) await flush();
+		};
+		const result = (patch: Partial<ConfigRefreshResult>): ConfigRefreshResult => ({
+			ok: true,
+			methods: ["parsed", "minsync"],
+			scanned: 0,
+			written: 0,
+			deleted: 0,
+			skipped: 0,
+			diagnostics: [],
+			error: null,
+			...patch,
+		});
+
+		it("says what stopped a failed run and shows no skipped files", async () => {
+			const directory = await workDir();
+			const service = createOnboardingService({
+				...makeDeps(directory),
+				refresh: async () =>
+					result({
+						ok: false,
+						error: "HTTP 402",
+						diagnostics: [{ code: "embedder-preflight-failed", severity: "error", message: "HTTP 402", reason: "rejected" }],
+					}),
+			});
+			await service.startIndexing({ ...request, embed: "cloud" });
+			await settled(service);
+			const status = await service.indexStatus();
+			expect(status.state).toBe("failed");
+			expect(status.failure).toEqual({ reason: "embedder-config", folders: [], code: "embedder-preflight-failed" });
+			expect(status.skipped).toBe(0);
+			expect(status.remainingMinutes).toBeNull();
+			service.dispose();
+		});
+
+		it("tells a full disk from any other failed download", async () => {
+			const directory = await workDir();
+			const service = createOnboardingService({ ...makeDeps(directory), ensureLocalModel: async () => "write failed (ENOSPC: no space left on device)" });
+			await service.startIndexing({ ...request, embed: "local" });
+			await settled(service);
+			expect((await service.indexStatus()).failure?.reason).toBe("disk-full");
+
+			const offline = createOnboardingService({ ...makeDeps(await workDir()), ensureLocalModel: async () => "no network" });
+			await offline.startIndexing({ ...request, embed: "local" });
+			await settled(offline);
+			expect((await offline.indexStatus()).failure?.reason).toBe("model-download");
+			service.dispose();
+			offline.dispose();
+		});
+
+		it("counts the files a successful run left out", async () => {
+			const directory = await workDir();
+			const service = createOnboardingService({
+				...makeDeps(directory),
+				refresh: async () =>
+					result({
+						diagnostics: [
+							{ code: "files-left-out", severity: "warning", message: "x", count: 4 },
+							{ code: "parse-killed", severity: "warning", message: "x", count: 2 },
+							{ code: "minsync-file-skipped", severity: "warning", message: "x" },
+						],
+					}),
+			});
+			await service.startIndexing({ ...request, embed: "local" });
+			await settled(service);
+			const status = await service.indexStatus();
+			expect(status.state).toBe("success");
+			expect(status.skipped).toBe(7);
+			expect(status.failure).toBeNull();
+			service.dispose();
+		});
+
+		it("hands the finished run to the Finder's problem record", async () => {
+			const directory = await workDir();
+			const recorded: Array<{ ok: boolean; error: string | null }> = [];
+			const service = createOnboardingService({
+				...makeDeps(directory),
+				refresh: async () => result({ ok: false, error: "boom" }),
+				recordIndex: (outcome) => recorded.push({ ok: outcome.ok, error: outcome.error }),
+			});
+			await service.startIndexing({ ...request, embed: "local" });
+			await settled(service);
+			expect(recorded).toEqual([{ ok: false, error: "boom" }]);
+			service.dispose();
+		});
+
+		it("starts the keyword index when Dazzi is opened after a failed run, and not after a good one", async () => {
+			let keyword = 0;
+			const failed = createOnboardingService({
+				...makeDeps(await workDir()),
+				refresh: async () => result({ ok: false, error: "boom" }),
+				refreshKeyword: async () => {
+					keyword += 1;
+				},
+			});
+			await failed.startIndexing({ ...request, embed: "local" });
+			await settled(failed);
+			await failed.complete();
+			expect(keyword).toBe(1);
+
+			const good = createOnboardingService({
+				...makeDeps(await workDir()),
+				refreshKeyword: async () => {
+					keyword += 1;
+				},
+			});
+			await good.startIndexing({ ...request, embed: "local" });
+			await settled(good);
+			await good.complete();
+			expect(keyword).toBe(1);
+			failed.dispose();
+			good.dispose();
+		});
 	});
 
 	it("saves and reloads a draft that chose keyword-only search", async () => {

@@ -11,8 +11,9 @@
  *   C. a relaunch keeps the same anonymous id and sends `app_opened`;
  *   D. turning it off deletes the id and sends nothing more (not even what was
  *      still queued); turning it on again starts a different id;
- *   F. onboarding's welcome checkbox is unticked by default, saves nothing until
- *      the user continues, and only a ticked box turns anything on;
+ *   F. onboarding's welcome checkboxes (usage statistics and error reports) are
+ *      ticked by default, save nothing until the user continues, save each box's
+ *      value when continuing, and an unticked box stays off;
  *   E. only `/batch/` is ever requested (no flags, config or decide traffic).
  * The capture server stands in for PostHog through the unpackaged-run override
  * `AUTORAG_ANALYTICS_KEY` / `AUTORAG_ANALYTICS_HOST`. No model key is needed.
@@ -236,13 +237,14 @@ let idB = "";
 	check("D2: the new id is not the old one", fresh.length > 0 && fresh.every((event) => event.id !== idB));
 }
 
-// ── F. onboarding: the welcome checkbox is the consent ──────────────────────
-// Unticked by default (consent must be an affirmative act); the choice is saved only when the user continues.
-const usageChecked = (page) => page.locator(".onb .usage-consent input").first().isChecked();
+// ── F. onboarding: the welcome checkboxes are the consent ───────────────────
+// Both are ticked by default; the choice is saved only when the user continues, as each box stands.
+const consentBoxes = (page) => page.locator(".onb .usage-consent input");
+const boxStates = async (page) => [await consentBoxes(page).nth(0).isChecked(), await consentBoxes(page).nth(1).isChecked()];
 const welcome = async (profile, language) => {
 	const app = await launch(profile, language, true);
 	const page = await finderWindow(app, 20_000);
-	await page.locator(".onb .usage-consent input").first().waitFor({ timeout: 20_000 });
+	await consentBoxes(page).first().waitFor({ timeout: 20_000 });
 	await sleep(900); // the step fades in
 	return { app, page };
 };
@@ -250,42 +252,65 @@ const welcome = async (profile, language) => {
 // F1: Korean, look and leave without continuing.
 const profileF1 = join(WORK, "profile-f1");
 {
+	const before = countBefore();
 	const { app, page } = await welcome(profileF1, "ko");
-	check("F1: the usage-statistics checkbox is unticked by default", !(await usageChecked(page)));
-	check("F1: it links to the privacy policy", (await page.locator(".onb .usage-consent .inline-link").count()) === 2);
-	await page.screenshot({ path: join(OUT, "f1-ko-welcome-unticked.png") });
+	check("F1: there are two privacy checkboxes", (await consentBoxes(page).count()) === 2);
+	check("F1: both checkboxes are ticked by default", (await boxStates(page)).every(Boolean), JSON.stringify(await boxStates(page)));
+	check("F1: each links to the privacy policy", (await page.locator(".onb .usage-consent .inline-link").count()) === 2);
+	await page.screenshot({ path: join(OUT, "f1-ko-welcome-ticked-by-default.png") });
 	await app.close();
-	check("F1: closing the window without continuing saves no consent", savedSettings(profileF1).usageAnalytics !== true);
+	check("F1: closing the window without continuing saves no consent", savedSettings(profileF1).usageAnalytics !== true && savedSettings(profileF1).errorReporting !== true);
+	check("F1: nothing was sent and no id was created", sentEvents().length === before && !existsSync(idFile(profileF1)));
 }
 
-// F2: tick the box and continue.
+// F2: continue with both boxes as they come.
 const profileF2 = join(WORK, "profile-f2");
 {
 	const before = countBefore();
 	const { app, page } = await welcome(profileF2, "ko");
-	await page.locator(".onb .usage-consent input").first().check();
-	check("F2: the box can be ticked", await usageChecked(page));
-	check("F2: nothing is saved before continuing", savedSettings(profileF2).usageAnalytics !== true);
-	await page.screenshot({ path: join(OUT, "f2-ko-welcome-ticked.png") });
+	check("F2: nothing is saved before continuing", savedSettings(profileF2).usageAnalytics !== true && savedSettings(profileF2).errorReporting !== true);
 	await page.locator(".onb .footer button.primary").click();
-	await until(() => savedSettings(profileF2).usageAnalytics === true, 5000, "the onboarding consent to be saved");
-	check("F2: continuing with the box ticked turns usage statistics on", savedSettings(profileF2).usageAnalytics === true);
+	await until(() => savedSettings(profileF2).usageAnalytics === true && savedSettings(profileF2).errorReporting === true, 5000, "the onboarding consent to be saved");
+	check("F2: continuing with the default boxes turns usage statistics on", savedSettings(profileF2).usageAnalytics === true);
+	check("F2: continuing with the default boxes turns error reports on", savedSettings(profileF2).errorReporting === true);
+	await sleep(1500);
 	await app.close();
 	const fresh = sentEvents().slice(before);
 	check("F2: the consent itself is reported once it is given", fresh.some((event) => event.name === "settings_changed" && event.properties.setting === "usageAnalytics" && event.properties.value === "on"), fresh.map((event) => event.name).join(", "));
 }
 
-// F3: continue without touching the box.
+// F3: untick both, then continue: both stay off and nothing is sent.
 const profileF3 = join(WORK, "profile-f3");
 {
 	const before = countBefore();
 	const { app, page } = await welcome(profileF3, "en");
+	await consentBoxes(page).nth(0).uncheck();
+	await consentBoxes(page).nth(1).uncheck();
+	check("F3: both boxes can be unticked", (await boxStates(page)).every((state) => !state), JSON.stringify(await boxStates(page)));
+	await page.screenshot({ path: join(OUT, "f3-en-welcome-unticked.png") });
 	await page.locator(".onb .footer button.primary").click();
-	await until(() => savedSettings(profileF3).usageAnalytics === false, 5000, "the declined choice to be saved");
+	await until(() => savedSettings(profileF3).usageAnalytics === false && savedSettings(profileF3).errorReporting === false, 5000, "the declined choices to be saved");
 	await sleep(1500);
 	await app.close();
-	check("F3: continuing with the box untouched keeps usage statistics off", savedSettings(profileF3).usageAnalytics === false);
+	check("F3: unticking both keeps usage statistics off", savedSettings(profileF3).usageAnalytics === false);
+	check("F3: unticking both keeps error reports off", savedSettings(profileF3).errorReporting === false);
 	check("F3: nothing was sent and no id was created", sentEvents().length === before && !existsSync(idFile(profileF3)));
+}
+
+// F4: untick only usage statistics: the two choices are independent.
+const profileF4 = join(WORK, "profile-f4");
+{
+	const before = countBefore();
+	const { app, page } = await welcome(profileF4, "en");
+	await consentBoxes(page).nth(0).uncheck();
+	check("F4: only the usage box changed", JSON.stringify(await boxStates(page)) === "[false,true]", JSON.stringify(await boxStates(page)));
+	await page.locator(".onb .footer button.primary").click();
+	await until(() => savedSettings(profileF4).errorReporting === true, 5000, "the error-report choice to be saved");
+	await sleep(1500);
+	await app.close();
+	check("F4: usage statistics stay off", savedSettings(profileF4).usageAnalytics === false);
+	check("F4: error reports are on", savedSettings(profileF4).errorReporting === true);
+	check("F4: no usage events were sent and no id was created", sentEvents().length === before && !existsSync(idFile(profileF4)));
 }
 
 // ── E. the only traffic is event batches ────────────────────────────────────
@@ -298,5 +323,5 @@ if (failures.length > 0) {
 	console.log(`\nFAILED: ${failures.length} check(s)\n- ${failures.join("\n- ")}`);
 	process.exitCode = 1;
 } else {
-	console.log("\nPASS: usage statistics are opt-in, anonymous and content-free");
+	console.log("\nPASS: usage statistics are anonymous and content-free, and the onboarding checkboxes behave as chosen");
 }

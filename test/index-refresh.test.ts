@@ -255,6 +255,7 @@ describe("refreshAutoragIndex against unreliable folders and files", () => {
 
 		expect(outcome).toMatchObject({ ok: false, deleted: 0 });
 		expect(outcome.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(["search-root-unavailable"]);
+		expect(outcome.diagnostics[0]?.folders).toEqual([expect.stringContaining("docs")]);
 		expect(outcome.error).toContain("30");
 		expect(refresh).not.toHaveBeenCalled();
 	});
@@ -288,6 +289,7 @@ describe("refreshAutoragIndex against unreliable folders and files", () => {
 
 		expect(outcome.ok).toBe(true);
 		expect(outcome.diagnostics.map((diagnostic) => diagnostic.code)).toContain("files-left-out");
+		expect(outcome.diagnostics.find((diagnostic) => diagnostic.code === "files-left-out")?.count).toBe(1);
 		expect(excludes.at(-1)).toContain(locked);
 		expect(excludes[0]).not.toContain(locked);
 	});
@@ -401,7 +403,7 @@ describe("refreshAutoragIndex embedder preflight", () => {
 
 		expect(outcome).toMatchObject({ ok: false, scanned: 0, written: 0 });
 		expect(outcome.error).toContain("/v1");
-		expect(outcome.diagnostics).toEqual([expect.objectContaining({ code: "embedder-preflight-failed", severity: "error" })]);
+		expect(outcome.diagnostics).toEqual([expect.objectContaining({ code: "embedder-preflight-failed", severity: "error", reason: "base-url-v1" })]);
 		expect(refresh).not.toHaveBeenCalled();
 		expect(syncMinSync).not.toHaveBeenCalled();
 		vi.unstubAllEnvs();

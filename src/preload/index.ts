@@ -3,6 +3,7 @@ import { createAccountBridge } from "./account-bridge";
 import { createAnalyticsBridge } from "./analytics-bridge";
 import { createAppUpdateBridge } from "./app-update-bridge";
 import { createAutomationBridge } from "./automation-bridge";
+import { createConversionBridge } from "./conversion-bridge";
 import { contextBridge, ipcRenderer, webUtils } from "electron";
 import { createBridge } from "../shared/bridge";
 import type { DevLabel } from "../shared/app-info";
@@ -10,6 +11,7 @@ import { createPreviewBridge } from "../preview/node/bridge";
 import { createActionsBridge } from "./actions-bridge";
 import { createFsBridge } from "./fs-bridge";
 import { createIndexActivityBridge } from "./index-activity-bridge";
+import { createIndexProblemBridge } from "./index-problem-bridge";
 import { createLiveBridge } from "./live-bridge";
 import { createModelDownloadBridge } from "./model-download-bridge";
 import { createOnboardingBridge } from "./onboarding-bridge";
@@ -43,7 +45,9 @@ contextBridge.exposeInMainWorld("autorag", {
 	appUpdate: createAppUpdateBridge(ipcRenderer),
 	account: createAccountBridge(ipcRenderer),
 	automations: createAutomationBridge(ipcRenderer),
+	conversion: createConversionBridge(ipcRenderer),
 	indexActivity: createIndexActivityBridge(ipcRenderer),
+	indexProblem: createIndexProblemBridge(ipcRenderer),
 	live: createLiveBridge(fsWorker),
 	modelDownload: createModelDownloadBridge(ipcRenderer),
 	onboarding: createOnboardingBridge(ipcRenderer),

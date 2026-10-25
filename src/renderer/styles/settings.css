@@ -1384,6 +1384,14 @@
 	text-align: right;
 }
 
+/* The ways out of a problem the last run left behind (issue #283). */
+.settings-view .settings-problem-actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-8);
+}
+
 /* The on-device embedding model's download, shared by onboarding and Settings: app tokens only, so both themes and both surfaces match. */
 .model-dl {
 	display: flex;

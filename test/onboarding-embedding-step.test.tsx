@@ -129,6 +129,8 @@ function harness(options: {
 		openNotificationSettings: noop,
 		checkNetwork: noop,
 		startIndexing: noop,
+		changeEmbedding: noop,
+		excludeFolders: noop,
 		finish: noop,
 		finishInBackground: noop,
 		setTipIndex: noop,
